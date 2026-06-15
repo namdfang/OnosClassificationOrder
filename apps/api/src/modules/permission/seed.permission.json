@@ -1,0 +1,39 @@
+[
+    {
+      "permissionId": "0",
+      "description": "Permission to view product details",
+      "action": "View",
+      "status": "Active"
+    },
+    {
+      "permissionId": "1",
+      "description": "Permission to edit product details",
+      "action": "Edit",
+      "status": "Active"
+    },
+    {
+      "permissionId": "2",
+      "description": "Permission to create new products",
+      "action": "Create",
+      "status": "Active"
+    },
+    {
+      "permissionId": "3",
+      "description": "Permission to view tracking information",
+      "action": "View",
+      "status": "Active"
+    },
+    {
+      "permissionId": "4",
+      "description": "Permission to create new tracking entries",
+      "action": "Create",
+      "status": "Active"
+    },
+    {
+      "permissionId": "5",
+      "description": "Permission to edit tracking information",
+      "action": "Edit",
+      "status": "Active"
+    }
+  ]
+  

@@ -1,0 +1,39 @@
+name: Develop Frontend Docker CI
+
+on:
+  push:
+    branches:
+      - develop
+
+jobs:
+  checkout-code:
+    runs-on: self-hosted
+
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v3
+
+  deploy-docker:
+    runs-on: self-hosted
+    needs: checkout-code
+    steps:
+      - name: Kill the running container with name tiktokshop-folinas-fe-develop
+        run: |
+          docker stop tiktokshop-folinas-fe-develop || true
+          docker rm tiktokshop-folinas-fe-develop || true
+
+      - name: Copy .env file to the root of the project
+        run: |
+          cp ~/actions-runner/env_files/dev/.env .env
+
+      - name: Build the Docker image
+        run: |
+          docker build -t tiktokshop-folinas-fe-develop .
+
+      - name: stop running container running on port 2001
+        run: |
+          docker stop $(docker ps | grep ':2001->' | awk '{ print $1 }') || true
+
+      - name: Run Docker container
+        run: |
+          docker run --name tiktokshop-folinas-fe-develop -p 2001:5173 -d --restart unless-stopped tiktokshop-folinas-fe-develop

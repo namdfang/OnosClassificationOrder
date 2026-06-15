@@ -1,0 +1,8 @@
+{
+  "fields": {
+    "isEmail": "Email không hợp lệ"
+  },
+  "userNotFound": "Tài khoản không tồn tại",
+  "passwordIncorrect": "Mật khẩu không chính xác",
+  "departmentNotFound": "Phòng ban không tồn tại"
+}

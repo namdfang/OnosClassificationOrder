@@ -1,0 +1,9 @@
+{
+  "fields": {
+    "isEmail": "Invalid Email",
+    "isString": "Must be string"
+  },
+  "userNotFound": "User not found",
+  "passwordIncorrect": "Password incorrect",
+  "departmentNotFound": "Department not found"
+}

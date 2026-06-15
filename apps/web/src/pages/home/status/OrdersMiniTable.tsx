@@ -1,0 +1,223 @@
+import React, { useEffect, useMemo, useState } from 'react';
+import { History } from 'lucide-react';
+
+import { Button } from '@/components/ui/button';
+import { Spinner } from '@/components/common/Spinner';
+import { Pagination } from '@/components/common/Pagination';
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from '@/components/ui/table';
+import { TooltipProvider } from '@/components/ui/tooltip';
+import { ImagePreviewDialog } from '@/components/common/ImagePreviewDialog';
+import { OrderLogTimelineDialog } from '@/components/orders/OrderLogTimelineDialog';
+import {
+  WORKSHOP_COLS,
+  type WorkshopOrderRow,
+  type WorkshopRenderCtx,
+} from '@/components/orders/workshopTableConfig';
+import { RepositoryRemote } from '@/services';
+import { handleAxiosError } from '@/utils';
+import { usePermission } from '@/hooks/usePermission';
+import { cn } from '@/utils/cn';
+
+const DEFAULT_PAGE_SIZE = 20;
+
+interface Props {
+  /** Query string built by useStatusFilter, e.g. "?printStatus=ok&..." */
+  queryString: string;
+}
+
+export function OrdersMiniTable({ queryString }: Props) {
+  const { canViewField, canEditField } = usePermission();
+  const [rows, setRows] = useState<WorkshopOrderRow[]>([]);
+  const [total, setTotal] = useState(0);
+  const [loading, setLoading] = useState(false);
+  const [page, setPage] = useState(1);
+  const [pageSize, setPageSize] = useState(DEFAULT_PAGE_SIZE);
+  const [preview, setPreview] = useState<{ url: string; originalUrl?: string; title: string } | null>(null);
+  const [history, setHistory] = useState<{ id: string; productionId: string } | null>(null);
+
+  const fetchData = async () => {
+    const sep = queryString ? '&' : '?';
+    // sort=grouped → BE clusters rows by (type, size, fabric, createdAt).
+    // Intra-cluster frequency sort is applied client-side below.
+    const q = `${queryString}${sep}page=${page}&limit=${pageSize}&sort=grouped`;
+    try {
+      setLoading(true);
+      const res = await RepositoryRemote.order.getOrders(q);
+      setRows((res.data?.data || []) as WorkshopOrderRow[]);
+      setTotal(res.data?.total || 0);
+    } catch (err) {
+      handleAxiosError(err);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    setPage(1);
+  }, [queryString, pageSize]);
+
+  useEffect(() => {
+    fetchData();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [queryString, page, pageSize]);
+
+  const patchRow = (id: string, p: Partial<WorkshopOrderRow>) =>
+    setRows((prev) => prev.map((r) => (r._id === id ? { ...r, ...p } : r)));
+
+  const openPreview = (url: string, title: string, originalUrl?: string) =>
+    setPreview({ url, originalUrl, title });
+
+  const visibleCols = useMemo(
+    () => WORKSHOP_COLS.filter((c) => !c.perm || canViewField(c.key)),
+    [canViewField],
+  );
+
+  const ctx: WorkshopRenderCtx = { canEditField, patchRow, openPreview };
+
+  // Re-sort rows on the current page: same product clustered (preserved from
+  // BE order), inside each cluster rows ordered by combo (size+fabric+mockup)
+  // duplicate count desc → workshop sees heaviest combos first.
+  const sortedRows = useMemo(() => {
+    const comboKey = (r: WorkshopOrderRow) =>
+      `${r.type || ''}|${r.size || ''}|${r.fabricType || ''}|${r.mockupOriginalUrl || r.mockupUrl || ''}`;
+    const comboCount = new Map<string, number>();
+    for (const r of rows) comboCount.set(comboKey(r), (comboCount.get(comboKey(r)) || 0) + 1);
+
+    const buckets = new Map<string, WorkshopOrderRow[]>();
+    const typeOrder: string[] = [];
+    for (const r of rows) {
+      const t = r.type || '(không có tên)';
+      if (!buckets.has(t)) {
+        buckets.set(t, []);
+        typeOrder.push(t);
+      }
+      buckets.get(t)!.push(r);
+    }
+    for (const [, list] of buckets) {
+      list.sort((a, b) => {
+        const ca = comboCount.get(comboKey(a)) || 1;
+        const cb = comboCount.get(comboKey(b)) || 1;
+        if (cb !== ca) return cb - ca;
+        return comboKey(a).localeCompare(comboKey(b));
+      });
+    }
+    return typeOrder.flatMap((t) => buckets.get(t)!);
+  }, [rows]);
+
+  const isRefetching = loading && rows.length > 0;
+
+  return (
+    <TooltipProvider delayDuration={200}>
+      <div className="rounded-lg border border-border bg-card overflow-hidden relative">
+        {/* Indeterminate progress strip at top while loading */}
+        <div
+          className={cn(
+            'absolute top-0 left-0 right-0 h-0.5 overflow-hidden bg-primary/10 pointer-events-none transition-opacity duration-200 z-10',
+            loading ? 'opacity-100' : 'opacity-0',
+          )}
+        >
+          <div className="h-full w-1/4 bg-primary animate-indeterminate-bar" />
+        </div>
+
+        <div className="border-b border-border px-3 py-2 flex items-center justify-between">
+          <h3 className="text-sm font-semibold flex items-center gap-2">
+            Danh sách đơn ({total})
+            {isRefetching && <Spinner size={11} className="text-muted-foreground" />}
+          </h3>
+        </div>
+        <div
+          className={cn(
+            'overflow-x-auto transition-opacity duration-300',
+            isRefetching && 'opacity-60',
+          )}
+        >
+          <Table>
+            <TableHeader>
+              <TableRow>
+                {visibleCols.map((c) => (
+                  <TableHead key={c.key} className={cn('whitespace-nowrap text-xs', c.width)}>
+                    {c.label}
+                  </TableHead>
+                ))}
+                <TableHead className="w-10"></TableHead>
+              </TableRow>
+            </TableHeader>
+            <TableBody>
+              {loading && rows.length === 0 && (
+                <TableRow>
+                  <TableCell colSpan={visibleCols.length + 1} className="text-center py-8">
+                    <Spinner size={18} className="text-muted-foreground" />
+                  </TableCell>
+                </TableRow>
+              )}
+              {!loading && rows.length === 0 && (
+                <TableRow>
+                  <TableCell
+                    colSpan={visibleCols.length + 1}
+                    className="text-center py-8 text-sm text-muted-foreground"
+                  >
+                    Không có đơn nào phù hợp filter
+                  </TableCell>
+                </TableRow>
+              )}
+              {sortedRows.map((row) => (
+                <TableRow key={row._id}>
+                  {visibleCols.map((c) => (
+                    <TableCell key={c.key} className="py-2">
+                      {c.render(row, ctx)}
+                    </TableCell>
+                  ))}
+                  <TableCell>
+                    <Button
+                      variant="ghost"
+                      size="icon"
+                      title="Lịch sử"
+                      onClick={() => setHistory({ id: row._id, productionId: row.productionId })}
+                    >
+                      <History size={13} className="text-muted-foreground" />
+                    </Button>
+                  </TableCell>
+                </TableRow>
+              ))}
+            </TableBody>
+          </Table>
+        </div>
+
+        {total > 0 && (
+          <div className="border-t border-border p-2">
+            <Pagination
+              page={page}
+              pageSize={pageSize}
+              total={total}
+              onChange={(p, ps) => {
+                setPage(p);
+                setPageSize(ps);
+              }}
+            />
+          </div>
+        )}
+
+        <ImagePreviewDialog
+          open={!!preview}
+          onOpenChange={(o) => !o && setPreview(null)}
+          url={preview?.url}
+          originalUrl={preview?.originalUrl}
+          title={preview?.title}
+        />
+        <OrderLogTimelineDialog
+          open={!!history}
+          onOpenChange={(o) => !o && setHistory(null)}
+          orderId={history?.id}
+          productionId={history?.productionId}
+        />
+      </div>
+    </TooltipProvider>
+  );
+}

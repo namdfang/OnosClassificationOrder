@@ -1,0 +1,13 @@
+{
+  "$schema": "https://json.schemastore.org/tsconfig",
+  "extends": "./tsconfig.json",
+  "compilerOptions": {
+    "paths": {
+      "@ui": ["./index.ts"],
+      "@ui/*": ["./*"],
+      "@shared/*": ["../shared"]
+    }
+  },
+  "include": ["**/*.ts"],
+  "exclude": ["node_modules", "test", "**/*spec.ts", "dist"]
+}

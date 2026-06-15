@@ -1,0 +1,70 @@
+import React, { useEffect, useState } from 'react';
+import { BarChart3, ClipboardList } from 'lucide-react';
+import { useSearchParams } from 'react-router-dom';
+
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
+
+import OrderStatsTab from './OrderStatsTab';
+import OrderStatusTab from './OrderStatusTab';
+
+const TABS = ['stats', 'status'] as const;
+type TabKey = (typeof TABS)[number];
+
+export default function Home() {
+  const [searchParams, setSearchParams] = useSearchParams();
+  const initial = (searchParams.get('tab') as TabKey) || 'stats';
+  const [activeTab, setActiveTab] = useState<TabKey>(TABS.includes(initial) ? initial : 'stats');
+
+  useEffect(() => {
+    const fromUrl = searchParams.get('tab') as TabKey;
+    if (fromUrl && TABS.includes(fromUrl) && fromUrl !== activeTab) {
+      setActiveTab(fromUrl);
+    }
+  }, [searchParams]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  const handleTabChange = (val: string) => {
+    setActiveTab(val as TabKey);
+    setSearchParams((prev) => {
+      const sp = new URLSearchParams(prev);
+      sp.set('tab', val);
+      // Switching between dashboard tabs should reset status filter so URL
+      // stays clean per-tab.
+      if (val === 'stats') {
+        ['printStatus', 'printStatusNote', 'toolResult', 'toolResultNote', 'errorFile', 'assignee', 'assigneeNote', 'factoryId', 'machineTypeId', 'readyForFulfill', 'createdFrom', 'createdTo', 'search'].forEach((k) => sp.delete(k));
+      }
+      return sp;
+    }, { replace: true });
+  };
+
+  return (
+    <div className="space-y-6">
+      <div className="flex items-center gap-3">
+        <div className="w-10 h-10 rounded-xl bg-indigo-50 dark:bg-indigo-900/20 flex items-center justify-center">
+          <BarChart3 size={20} className="text-indigo-600" />
+        </div>
+        <div>
+          <h1 className="text-2xl font-bold text-foreground">Dashboard</h1>
+          <p className="text-sm text-muted-foreground">Tổng quan hoạt động xưởng</p>
+        </div>
+      </div>
+
+      <Tabs value={activeTab} onValueChange={handleTabChange} className="w-full">
+        <TabsList>
+          <TabsTrigger value="stats" className="gap-1.5">
+            <BarChart3 size={14} /> Thống kê đơn & sản phẩm
+          </TabsTrigger>
+          <TabsTrigger value="status" className="gap-1.5">
+            <ClipboardList size={14} /> Tình trạng đơn hàng
+          </TabsTrigger>
+        </TabsList>
+
+        <TabsContent value="stats">
+          <OrderStatsTab />
+        </TabsContent>
+        <TabsContent value="status">
+          <OrderStatusTab />
+        </TabsContent>
+      </Tabs>
+    </div>
+  );
+}

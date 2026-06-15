@@ -1,0 +1,16 @@
+/* Global resets — keep minimal, shadcn theme/globals.css handles the rest */
+
+ol,
+ul {
+  list-style: none;
+}
+
+input::-webkit-outer-spin-button,
+input::-webkit-inner-spin-button {
+  -webkit-appearance: none;
+  margin: 0;
+}
+
+input[type='number'] {
+  -moz-appearance: textfield;
+}

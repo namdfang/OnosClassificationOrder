@@ -1,0 +1,39 @@
+name: Production Frontend Docker CI
+
+on:
+  push:
+    branches:
+      - main
+
+jobs:
+  checkout-code:
+    runs-on: self-hosted
+
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v3
+
+  deploy-docker:
+    runs-on: self-hosted
+    needs: checkout-code
+    steps:
+      - name: Kill the running container with name tiktokshop-folinas-fe-production
+        run: |
+          docker stop tiktokshop-folinas-fe-production || true
+          docker rm tiktokshop-folinas-fe-production || true
+
+      - name: Copy .env file to the root of the project
+        run: |
+          cp ~/actions-runner/env_files/production/.env .env
+
+      - name: Build the Docker image
+        run: |
+          docker build -t tiktokshop-folinas-fe-production .
+
+      - name: stop running container running on port 5173
+        run: |
+          docker stop $(docker ps | grep ':5173->' | awk '{ print $1 }') || true
+
+      - name: Run Docker container
+        run: |
+          docker run --name tiktokshop-folinas-fe-production -p 5173:5173 -d --restart unless-stopped tiktokshop-folinas-fe-production

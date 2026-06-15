@@ -1,0 +1,63 @@
+import { BadRequestException, Injectable, NotFoundException, OnModuleInit } from '@nestjs/common';
+import type {
+  CreateMachineTypeDto,
+  GetMachineTypesDto,
+  GetMachineTypesResDto,
+  MachineType,
+  UpdateMachineTypeDto,
+} from 'shared';
+
+import { MachineTypeRepository } from './machine-type.repository';
+
+const DEFAULT_MACHINE_TYPES: Array<Pick<MachineType, 'name' | 'shortName' | 'isActive'>> = [
+  { name: 'In và cắt laser', shortName: 'ICL', isActive: true },
+  { name: 'In và ép nhiệt', shortName: 'IEN', isActive: true },
+  { name: 'Hàng thêu', shortName: 'HT', isActive: true },
+];
+
+@Injectable()
+export class MachineTypeService implements OnModuleInit {
+  constructor(private readonly machineTypeRepository: MachineTypeRepository) {}
+
+  async onModuleInit() {
+    for (const m of DEFAULT_MACHINE_TYPES) {
+      const existing = await this.machineTypeRepository.findOne({ shortName: m.shortName });
+      if (!existing) {
+        await this.machineTypeRepository.create(m);
+      }
+    }
+  }
+
+  async getMachineTypes(dto: GetMachineTypesDto): Promise<GetMachineTypesResDto> {
+    const { page, limit, sort, order, search, isActive } = dto;
+    const filter: Record<string, unknown> = {};
+    if (search) filter.$or = [{ name: { $regex: search, $options: 'i' } }, { shortName: { $regex: search, $options: 'i' } }];
+    if (typeof isActive === 'boolean') filter.isActive = isActive;
+
+    const { data, total } = await this.machineTypeRepository.findAllAndCount(filter, {
+      paging: { skip: limit * (page - 1), limit },
+      sort: { [sort || 'createdAt']: order === 'asc' ? 1 : -1 },
+    });
+
+    return { success: true, data, total };
+  }
+
+  async findByShortName(shortName: string) {
+    return this.machineTypeRepository.findOne({ shortName: shortName.toUpperCase() });
+  }
+
+  async createMachineType(dto: CreateMachineTypeDto) {
+    const existing = await this.machineTypeRepository.findOne({ shortName: dto.shortName.toUpperCase() });
+    if (existing) throw new BadRequestException('MachineType shortName already exists');
+    return this.machineTypeRepository.create({ ...dto, shortName: dto.shortName.toUpperCase(), isActive: dto.isActive ?? true });
+  }
+
+  async updateMachineType(id: string, dto: UpdateMachineTypeDto) {
+    const m = await this.machineTypeRepository.findOneAndUpdate(
+      { _id: id },
+      { ...dto, ...(dto.shortName ? { shortName: dto.shortName.toUpperCase() } : {}) },
+    );
+    if (!m) throw new NotFoundException('MachineType not found');
+    return m;
+  }
+}

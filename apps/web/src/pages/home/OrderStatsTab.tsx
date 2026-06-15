@@ -1,0 +1,1113 @@
+import React, { useEffect, useMemo, useState } from 'react';
+import {
+  ChevronDown,
+  ChevronRight,
+  ChevronsDown,
+  ChevronsUp,
+  Crown,
+  DollarSign,
+  Factory,
+  Medal,
+  Package,
+  Search,
+  ShoppingCart,
+  Trophy,
+  Truck,
+  User as UserIcon,
+} from 'lucide-react';
+import { Cell, Pie, PieChart, ResponsiveContainer, Sector, Tooltip as RechartsTooltip } from 'recharts';
+
+import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
+import { Label } from '@/components/ui/label';
+import { Badge } from '@/components/ui/badge';
+import { Spinner } from '@/components/common/Spinner';
+import { cn } from '@/utils/cn';
+import { RepositoryRemote } from '@/services';
+import { handleAxiosError } from '@/utils';
+import { useAuthStore } from '../../store/authStore';
+
+interface MockupSummary {
+  url: string;
+  originalUrl?: string;
+  count: number;
+}
+
+interface SizeSummary {
+  size: string;
+  count: number;
+}
+
+interface TypeSummary {
+  type: string;
+  quantity: number;
+  minCost: number;
+  maxCost: number;
+  productionCost: number;
+  shippingCost: number;
+  totalCost: number;
+  uniqueMockupCount: number;
+  duplicateMockupCount: number;
+  sizes: SizeSummary[];
+  mockups: MockupSummary[];
+  duplicateMockups: MockupSummary[];
+}
+
+interface MachineTypeBreakdown {
+  machineTypeId?: string;
+  machineTypeName: string;
+  machineTypeShortName?: string;
+  quantity: number;
+  percentage: number;
+}
+
+interface FactoryBreakdown {
+  factoryId?: string;
+  factoryName: string;
+  factoryShortName?: string;
+  quantity: number;
+  percentage: number;
+  byMachineType: MachineTypeBreakdown[];
+}
+
+interface UserBreakdown {
+  userSku?: string;
+  userEmail?: string;
+  orderCount: number;
+  totalQuantity: number;
+  totalProductionCost: number;
+  totalShippingCost: number;
+  totalCost: number;
+}
+
+interface Dashboard {
+  totals: {
+    totalOrders: number;
+    totalQuantity: number;
+    totalProductionCost: number;
+    totalShippingCost: number;
+    totalCost: number;
+  };
+  byType: TypeSummary[];
+  byFactory: FactoryBreakdown[];
+  byUser: UserBreakdown[];
+  filter: { startDate?: string; endDate?: string; searchType?: string; searchUser?: string };
+}
+
+function formatCurrency(n: number): string {
+  return `$${n.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+}
+
+function formatNumber(n: number): string {
+  return n.toLocaleString('en-US');
+}
+
+function todayISO(): string {
+  return new Date().toISOString().slice(0, 10);
+}
+
+/**
+ * Grid template columns for the Production Type table — applied to both the
+ * header row and each data row so they line up.
+ *
+ *   [chevron 32px] [type name flexible] [qty 80] [min 90] [max 90]
+ *   [production 110] [shipping 110] [total 100] [mockups 130]
+ */
+const GRID_COLS_CLASS =
+  'grid grid-cols-[32px_minmax(180px,1fr)_80px_90px_90px_110px_110px_100px_130px]';
+
+function daysAgoISO(days: number): string {
+  const d = new Date();
+  d.setDate(d.getDate() - days);
+  return d.toISOString().slice(0, 10);
+}
+
+interface MetricCardProps {
+  label: string;
+  value: string | number;
+  sub?: string;
+  icon: React.ReactNode;
+  loading?: boolean;
+}
+
+function MetricCard({ label, value, sub, icon, loading }: MetricCardProps) {
+  if (loading) {
+    return <div className="rounded-lg bg-muted/40 animate-pulse h-[68px]" />;
+  }
+
+  return (
+    <div className="rounded-lg bg-card border border-border px-3 py-2.5 hover:bg-muted/20 transition-colors">
+      <div className="flex items-center gap-1.5 text-muted-foreground mb-1">
+        <span className="opacity-60 shrink-0">{icon}</span>
+        <span className="text-[11px] font-medium truncate">{label}</span>
+      </div>
+      <p className="text-lg font-semibold tracking-tight tabular-nums text-foreground leading-tight">
+        {value}
+      </p>
+      {sub && <p className="text-[10px] text-muted-foreground truncate mt-0.5">{sub}</p>}
+    </div>
+  );
+}
+
+export default function OrderStatsTab() {
+  const { profile } = useAuthStore();
+  const [loading, setLoading] = useState(false);
+  const [data, setData] = useState<Dashboard | null>(null);
+  const [startDate, setStartDate] = useState<string>(daysAgoISO(30));
+  const [endDate, setEndDate] = useState<string>(todayISO());
+  const [searchType, setSearchType] = useState<string>('');
+  const [searchUser, setSearchUser] = useState<string>('');
+  const [expanded, setExpanded] = useState<Set<string>>(new Set());
+
+  const fetchDashboard = async (override?: { searchUser?: string }) => {
+    try {
+      setLoading(true);
+      const params = new URLSearchParams();
+      if (startDate) params.set('startDate', startDate);
+      if (endDate) params.set('endDate', endDate);
+      if (searchType.trim()) params.set('searchType', searchType.trim());
+      const effectiveSearchUser = override?.searchUser !== undefined ? override.searchUser : searchUser;
+      if (effectiveSearchUser.trim()) params.set('searchUser', effectiveSearchUser.trim());
+      const resp = await RepositoryRemote.order.getDashboard(`?${params.toString()}`);
+      setData(resp.data.data);
+    } catch (error) {
+      handleAxiosError(error);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const applyCustomerFilter = (u: { userSku?: string; userEmail?: string }) => {
+    const term = u.userEmail || u.userSku || '';
+    setSearchUser(term);
+    fetchDashboard({ searchUser: term });
+  };
+
+  useEffect(() => {
+    fetchDashboard();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  const toggleExpand = (type: string) => {
+    setExpanded((prev) => {
+      const next = new Set(prev);
+      if (next.has(type)) next.delete(type);
+      else next.add(type);
+      return next;
+    });
+  };
+
+  const setRangePreset = (days: number) => {
+    setStartDate(daysAgoISO(days));
+    setEndDate(todayISO());
+  };
+
+  const t = data?.totals;
+
+  const dateRangeLabel = useMemo(() => {
+    if (!startDate && !endDate) return 'Tất cả';
+    return `${startDate || '...'} → ${endDate || '...'}`;
+  }, [startDate, endDate]);
+
+  // Show dim overlay only on refetches (when we already have data) — not on
+  // the initial load, since skeletons handle that.
+  const isRefetching = loading && !!data;
+
+  return (
+    <div className="space-y-5 max-w-[1440px] mx-auto relative">
+      {/* Indeterminate top progress bar — visible on every fetch */}
+      <div
+        className={cn(
+          'absolute top-0 left-0 right-0 h-0.5 overflow-hidden rounded-full bg-primary/10 pointer-events-none transition-opacity duration-200',
+          loading ? 'opacity-100' : 'opacity-0',
+        )}
+      >
+        <div className="h-full w-1/4 bg-primary rounded-full animate-indeterminate-bar" />
+      </div>
+
+      {/* Title row — minimal */}
+      <div className="flex items-baseline justify-between gap-4">
+        <div>
+          <h1 className="text-3xl font-semibold tracking-tight text-foreground">
+            Bảng điều khiển
+          </h1>
+          <p className="text-sm text-muted-foreground mt-1">
+            Theo dõi sản xuất {dateRangeLabel.toLowerCase()}
+            {profile?.fullName ? ` · xin chào, ${profile.fullName.split(' ')[0]}` : ''}
+          </p>
+        </div>
+        <div className="text-xs text-muted-foreground hidden sm:flex items-center gap-1.5">
+          <span className="relative flex h-2 w-2">
+            <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75" />
+            <span className="relative inline-flex rounded-full h-2 w-2 bg-emerald-500" />
+          </span>
+          Cập nhật tức thì
+        </div>
+      </div>
+
+      {/* Filter strip — single row, ghost styling */}
+      <div className="flex items-center gap-2 flex-wrap p-1 rounded-xl bg-muted/30">
+        <div className="flex items-center gap-1 px-2 py-1.5">
+          <Input
+            type="date"
+            value={startDate}
+            onChange={(e) => setStartDate(e.target.value)}
+            className="w-[140px] h-8 border-0 bg-transparent shadow-none focus-visible:ring-1"
+          />
+          <span className="text-muted-foreground text-xs">→</span>
+          <Input
+            type="date"
+            value={endDate}
+            onChange={(e) => setEndDate(e.target.value)}
+            className="w-[140px] h-8 border-0 bg-transparent shadow-none focus-visible:ring-1"
+          />
+        </div>
+
+        <div className="h-6 w-px bg-border" />
+
+        <div className="flex items-center gap-1">
+          {[7, 30, 90].map((d) => (
+            <button
+              key={d}
+              type="button"
+              onClick={() => setRangePreset(d)}
+              className="text-xs h-7 px-2.5 rounded-md hover:bg-background transition-colors text-muted-foreground hover:text-foreground"
+            >
+              {d}d
+            </button>
+          ))}
+        </div>
+
+        <div className="h-6 w-px bg-border" />
+
+        <div className="relative flex-1 min-w-[180px]">
+          <Search size={13} className="absolute left-2.5 top-1/2 -translate-y-1/2 text-muted-foreground" />
+          <Input
+            placeholder="Lọc theo tên sản phẩm…"
+            value={searchType}
+            onChange={(e) => setSearchType(e.target.value)}
+            onKeyDown={(e) => e.key === 'Enter' && fetchDashboard()}
+            className="h-8 pl-8 border-0 bg-transparent shadow-none focus-visible:ring-1"
+          />
+        </div>
+
+        <div className="relative flex-1 min-w-[180px]">
+          <UserIcon size={13} className="absolute left-2.5 top-1/2 -translate-y-1/2 text-muted-foreground" />
+          <Input
+            placeholder="Lọc theo SKU hoặc email khách…"
+            value={searchUser}
+            onChange={(e) => setSearchUser(e.target.value)}
+            onKeyDown={(e) => e.key === 'Enter' && fetchDashboard()}
+            className="h-8 pl-8 border-0 bg-transparent shadow-none focus-visible:ring-1"
+          />
+        </div>
+
+        <Button onClick={() => fetchDashboard()} disabled={loading} size="sm" className="h-8">
+          {loading ? <Spinner size={12} /> : null}
+          Áp dụng
+        </Button>
+      </div>
+
+      {/* Compact stats — 4 small boxes in one row */}
+      <div
+        className={cn(
+          'grid grid-cols-2 sm:grid-cols-4 gap-2 transition-opacity duration-300',
+          isRefetching && 'opacity-60',
+        )}
+      >
+        <MetricCard
+          label="Tổng đơn"
+          value={t ? formatNumber(t.totalOrders) : '—'}
+          sub={t ? `${formatNumber(t.totalQuantity)} sản phẩm` : undefined}
+          icon={<Package size={12} />}
+          loading={loading && !data}
+        />
+        <MetricCard
+          label="Chi phí sản xuất"
+          value={t ? formatCurrency(t.totalProductionCost) : '—'}
+          icon={<Package size={12} />}
+          loading={loading && !data}
+        />
+        <MetricCard
+          label="Chi phí vận chuyển"
+          value={t ? formatCurrency(t.totalShippingCost) : '—'}
+          icon={<Truck size={12} />}
+          loading={loading && !data}
+        />
+        <MetricCard
+          label="Tổng chi phí"
+          value={t ? formatCurrency(t.totalCost) : '—'}
+          sub={t && t.totalOrders > 0 ? `TB ${formatCurrency(t.totalCost / t.totalOrders)}/đơn` : undefined}
+          icon={<DollarSign size={12} />}
+          loading={loading && !data}
+        />
+      </div>
+
+      {/* Two-column: Factory allocation + Top users */}
+      <div
+        className={cn(
+          'grid grid-cols-1 lg:grid-cols-2 gap-4 transition-opacity duration-300',
+          isRefetching && 'opacity-60',
+        )}
+      >
+        <FactoryDistribution byFactory={data?.byFactory || []} loading={loading} />
+        <TopUsersCard
+          byUser={data?.byUser || []}
+          loading={loading}
+          activeUserKey={searchUser.trim()}
+          onSelectCustomer={applyCustomerFilter}
+        />
+      </div>
+
+      {/* Production type breakdown */}
+      <div
+        className={cn(
+          'rounded-xl border border-border overflow-hidden bg-card transition-opacity duration-300',
+          isRefetching && 'opacity-60',
+        )}
+      >
+        <div className="px-5 py-4 flex items-end justify-between gap-3 flex-wrap">
+          <div>
+            <h2 className="text-base font-semibold text-foreground">Chi tiết theo loại sản phẩm</h2>
+            <p className="text-xs text-muted-foreground mt-0.5">
+              Click vào dòng để xem chi tiết size, mockup, và mockup trùng lặp
+            </p>
+          </div>
+          <div className="flex items-center gap-2">
+            {searchUser.trim() && (
+              <span className="inline-flex items-center gap-1.5 text-xs bg-violet-100 dark:bg-violet-500/15 text-violet-700 dark:text-violet-300 px-2 py-1 rounded-md">
+                <UserIcon size={12} />
+                <span className="font-medium">Khách: {searchUser.trim()}</span>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setSearchUser('');
+                    fetchDashboard({ searchUser: '' });
+                  }}
+                  className="ml-1 hover:text-violet-900 dark:hover:text-violet-100"
+                  title="Bỏ lọc khách"
+                >
+                  ✕
+                </button>
+              </span>
+            )}
+            {data && (
+              <span className="text-xs text-muted-foreground">
+                <span className="tabular-nums font-semibold text-foreground">{data.byType.length}</span>{' '}
+                loại sản phẩm
+              </span>
+            )}
+          </div>
+        </div>
+
+        {/* Scroll container — sticky header + sticky summary inside */}
+        <div className="max-h-[600px] overflow-y-auto border-t border-border">
+        {/* Column headers */}
+        <div className={GRID_COLS_CLASS + ' gap-2 px-3 py-2 bg-muted/40 backdrop-blur text-[10px] tracking-wide font-medium text-muted-foreground items-center sticky top-0 z-20'}>
+          <div></div>
+          <div>Sản phẩm</div>
+          <div className="text-right">Số lượng</div>
+          <div className="text-right">Min</div>
+          <div className="text-right">Max</div>
+          <div className="text-right">Sản xuất</div>
+          <div className="text-right">Vận chuyển</div>
+          <div className="text-right">Tổng</div>
+          <div className="text-center">Mockup</div>
+        </div>
+
+        {/* Body */}
+        {loading && !data && (
+          <div className="divide-y divide-border">
+            {[0, 1, 2, 3].map((i) => (
+              <div key={i} className="px-3 py-3 flex items-center gap-3">
+                <div className="w-3 h-3 rounded bg-muted animate-pulse" />
+                <div className="flex-1 h-4 rounded bg-muted/60 animate-pulse" style={{ maxWidth: `${60 - i * 8}%` }} />
+                <div className="w-12 h-4 rounded bg-muted/60 animate-pulse" />
+                <div className="w-16 h-4 rounded bg-muted/60 animate-pulse" />
+                <div className="w-20 h-4 rounded bg-muted/60 animate-pulse" />
+              </div>
+            ))}
+          </div>
+        )}
+
+        {!loading && (!data || data.byType.length === 0) && (
+          <div className="text-center py-16 text-muted-foreground text-sm">
+            <Package size={32} className="mx-auto mb-3 opacity-30" strokeWidth={1.5} />
+            Chưa có đơn nào trong khoảng thời gian này.
+          </div>
+        )}
+
+        {!loading &&
+          data?.byType.map((row) => {
+            const isExpanded = expanded.has(row.type);
+            return (
+              <div key={row.type} className="border-b border-border last:border-b-0">
+                {/* Summary row — sticky to viewport top while THIS group is in view */}
+                <div
+                  onClick={() => toggleExpand(row.type)}
+                  className={cn(
+                    GRID_COLS_CLASS,
+                    'gap-2 px-3 py-2.5 items-center cursor-pointer transition-colors text-sm group',
+                    isExpanded
+                      ? 'sticky top-[30px] z-10 bg-card shadow-sm border-b border-border'
+                      : 'hover:bg-muted/30',
+                  )}
+                >
+                  <div className="text-muted-foreground">
+                    {isExpanded ? <ChevronDown size={14} /> : <ChevronRight size={14} />}
+                  </div>
+                  <div className="font-medium min-w-0 text-foreground group-hover:text-foreground">
+                    <span className="line-clamp-2 leading-snug">{row.type}</span>
+                  </div>
+                  <div className="text-right font-semibold tabular-nums">{formatNumber(row.quantity)}</div>
+                  <div className="text-right tabular-nums text-muted-foreground">{formatCurrency(row.minCost)}</div>
+                  <div className="text-right tabular-nums text-muted-foreground">{formatCurrency(row.maxCost)}</div>
+                  <div className="text-right tabular-nums">{formatCurrency(row.productionCost)}</div>
+                  <div className="text-right tabular-nums text-muted-foreground">{formatCurrency(row.shippingCost)}</div>
+                  <div className="text-right font-semibold tabular-nums">{formatCurrency(row.totalCost)}</div>
+                  <div className="text-center text-xs">
+                    <span className="font-semibold tabular-nums">{row.uniqueMockupCount}</span>
+                    {row.duplicateMockupCount > 0 && (
+                      <span className="ml-1.5 text-amber-700 dark:text-amber-400">
+                        · {row.duplicateMockupCount} trùng
+                      </span>
+                    )}
+                  </div>
+                </div>
+
+                {isExpanded && (
+                  <div className="bg-muted/30">
+                    <ExpandedDetails row={row} />
+                  </div>
+                )}
+              </div>
+            );
+          })}
+        </div>
+      </div>
+
+    </div>
+  );
+}
+
+/**
+ * Tonal palette — shades of indigo + teal pulled from Tailwind, slightly
+ * desaturated. Cohesive look instead of the rainbow effect we had before.
+ * Workshop staff scan by VALUE first, color second — so we keep hues calm.
+ */
+const PIE_COLORS = [
+  '#4338ca', // indigo-700
+  '#0e7490', // cyan-700
+  '#15803d', // green-700
+  '#a16207', // yellow-700
+  '#7c3aed', // violet-600
+  '#0f766e', // teal-700
+  '#b45309', // amber-700
+  '#9d174d', // pink-800
+  '#475569', // slate-600
+  '#374151', // gray-700
+];
+
+/**
+ * Active slice renderer for Recharts Pie.
+ *
+ * Instead of an ugly black border on the active slice, we "lift" it by
+ * extending the outer radius +6px and adding a soft outer ring in the slice's
+ * own color (alpha 30%). Looks much cleaner than a stark stroke.
+ */
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+function renderActiveSlice(props: any) {
+  const { cx, cy, innerRadius, outerRadius, startAngle, endAngle, fill } = props;
+  return (
+    <g>
+      {/* Outer halo ring — slice color at low alpha for soft glow */}
+      <Sector
+        cx={cx}
+        cy={cy}
+        innerRadius={outerRadius + 2}
+        outerRadius={outerRadius + 10}
+        startAngle={startAngle}
+        endAngle={endAngle}
+        fill={fill}
+        opacity={0.25}
+      />
+      {/* Lifted main slice */}
+      <Sector
+        cx={cx}
+        cy={cy}
+        innerRadius={innerRadius}
+        outerRadius={outerRadius + 4}
+        startAngle={startAngle}
+        endAngle={endAngle}
+        fill={fill}
+        stroke="hsl(var(--background))"
+        strokeWidth={2}
+      />
+    </g>
+  );
+}
+
+type TopLimit = 3 | 5 | 10 | 'all';
+
+/**
+ * Generate stable color from a name (so the same user always gets the same
+ * avatar tint). Hash string → hue.
+ */
+function hashColor(str: string): { bg: string; text: string } {
+  let hash = 0;
+  for (let i = 0; i < str.length; i++) {
+    hash = str.charCodeAt(i) + ((hash << 5) - hash);
+  }
+  const hue = Math.abs(hash) % 360;
+  return {
+    bg: `hsl(${hue}, 65%, 88%)`,
+    text: `hsl(${hue}, 50%, 30%)`,
+  };
+}
+
+function getInitials(s: string): string {
+  const parts = s.trim().split(/[\s@._-]+/).filter(Boolean);
+  if (parts.length === 0) return '?';
+  if (parts.length === 1) return parts[0].slice(0, 2).toUpperCase();
+  return (parts[0][0] + parts[parts.length - 1][0]).toUpperCase();
+}
+
+function RankBadge({ rank }: { rank: number }) {
+  if (rank === 1) {
+    return <Medal size={20} className="fill-amber-400 text-amber-700" strokeWidth={1.5} />;
+  }
+  if (rank === 2) {
+    return <Medal size={20} className="fill-slate-300 text-slate-600" strokeWidth={1.5} />;
+  }
+  if (rank === 3) {
+    return <Medal size={20} className="fill-orange-300 text-orange-700" strokeWidth={1.5} />;
+  }
+  return (
+    <span className="text-sm font-medium text-muted-foreground/60 tabular-nums">{rank}</span>
+  );
+}
+
+interface TopUsersCardProps {
+  byUser: UserBreakdown[];
+  loading: boolean;
+  /** Current `searchUser` value — used to highlight the active customer row. */
+  activeUserKey: string;
+  onSelectCustomer: (u: { userSku?: string; userEmail?: string; displayName: string }) => void;
+}
+
+function TopUsersCard({ byUser, loading, activeUserKey, onSelectCustomer }: TopUsersCardProps) {
+  const [limit, setLimit] = useState<TopLimit>(5);
+
+  const sliced = limit === 'all' ? byUser : byUser.slice(0, limit);
+  const maxOrders = sliced.length > 0 ? sliced[0].orderCount : 1;
+
+  const limitOptions: TopLimit[] = [3, 5, 10, 'all'];
+
+  return (
+    <div className="rounded-xl border border-border bg-card flex flex-col">
+      <div className="px-5 py-4 flex items-end justify-between gap-3">
+        <div className="flex items-center gap-2.5">
+          <div className="w-9 h-9 rounded-lg bg-violet-100 dark:bg-violet-500/15 flex items-center justify-center">
+            <Crown size={18} className="text-violet-600 dark:text-violet-400" strokeWidth={2} />
+          </div>
+          <div>
+            <h2 className="text-base font-semibold text-foreground">Khách hàng top đơn</h2>
+            <p className="text-xs text-muted-foreground mt-0.5">
+              {byUser.length} khách đặt hàng trong kỳ
+            </p>
+          </div>
+        </div>
+        <div className="flex items-center bg-muted/40 rounded-md p-0.5">
+          {limitOptions.map((opt) => (
+            <button
+              key={String(opt)}
+              type="button"
+              onClick={() => setLimit(opt)}
+              className={cn(
+                'text-xs h-6 px-2 rounded transition-colors tabular-nums',
+                limit === opt
+                  ? 'bg-background text-foreground shadow-sm font-medium'
+                  : 'text-muted-foreground hover:text-foreground',
+              )}
+            >
+              {opt === 'all' ? 'Tất cả' : opt}
+            </button>
+          ))}
+        </div>
+      </div>
+
+      <div className="px-5 pb-4 flex-1 overflow-auto max-h-[460px]">
+        {loading && !byUser.length && (
+          <div className="space-y-3">
+            {[0, 1, 2, 3, 4].map((i) => (
+              <div key={i} className="flex items-center gap-3">
+                <div className="w-5 h-5 rounded bg-muted animate-pulse" />
+                <div className="w-9 h-9 rounded-full bg-muted animate-pulse" />
+                <div className="flex-1 space-y-1.5">
+                  <div className="h-3 rounded bg-muted/60 animate-pulse" style={{ width: `${60 - i * 5}%` }} />
+                  <div className="h-1.5 rounded bg-muted/40 animate-pulse" />
+                </div>
+                <div className="w-16 h-3 rounded bg-muted/60 animate-pulse" />
+              </div>
+            ))}
+          </div>
+        )}
+
+        {!loading && byUser.length === 0 && (
+          <div className="text-center py-10 text-sm text-muted-foreground">
+            <Trophy size={28} className="mx-auto mb-2 opacity-30" strokeWidth={1.5} />
+            Chưa có khách hàng nào trong kỳ.
+          </div>
+        )}
+
+        {!loading && byUser.length > 0 && (
+          <div className="space-y-3.5">
+            {sliced.map((u, i) => {
+              const ratio = maxOrders > 0 ? (u.orderCount / maxOrders) * 100 : 0;
+              const rank = i + 1;
+              const displayName = u.userSku || u.userEmail || '?';
+              const avatarColors = hashColor(displayName);
+              const isActive =
+                !!activeUserKey &&
+                (activeUserKey === u.userEmail || activeUserKey === u.userSku);
+              return (
+                <button
+                  key={`${u.userEmail || u.userSku || rank}`}
+                  type="button"
+                  onClick={() =>
+                    onSelectCustomer({
+                      userSku: u.userSku,
+                      userEmail: u.userEmail,
+                      displayName,
+                    })
+                  }
+                  className={cn(
+                    'group w-full flex items-center gap-3 -mx-2 px-2 py-1 rounded-md transition-colors text-left cursor-pointer',
+                    isActive
+                      ? 'bg-violet-100/70 dark:bg-violet-500/15 ring-1 ring-violet-300 dark:ring-violet-500/40'
+                      : 'hover:bg-muted/40 active:bg-muted/60',
+                  )}
+                >
+                  {/* Rank — medal for top 3, number for rest */}
+                  <div className="w-5 shrink-0 flex items-center justify-center">
+                    <RankBadge rank={rank} />
+                  </div>
+
+                  {/* Avatar circle with initials */}
+                  <div
+                    className="w-9 h-9 rounded-full shrink-0 flex items-center justify-center text-xs font-semibold ring-1 ring-black/5"
+                    style={{ backgroundColor: avatarColors.bg, color: avatarColors.text }}
+                    title={u.userEmail || ''}
+                  >
+                    {getInitials(displayName)}
+                  </div>
+
+                  {/* Name + email + progress bar */}
+                  <div className="flex-1 min-w-0">
+                    <p className="font-medium text-foreground truncate text-sm leading-tight">
+                      {displayName}
+                    </p>
+                    {u.userEmail && u.userEmail !== displayName && (
+                      <p className="text-[11px] text-muted-foreground truncate leading-tight mt-0.5">
+                        {u.userEmail}
+                      </p>
+                    )}
+                    <div className="mt-1.5 h-1.5 bg-muted/60 rounded-full overflow-hidden max-w-[200px]">
+                      <div
+                        className="h-full bg-violet-500 rounded-full transition-all"
+                        style={{ width: `${ratio}%` }}
+                      />
+                    </div>
+                  </div>
+
+                  {/* Count on right */}
+                  <div className="shrink-0 text-right">
+                    <p className="text-sm font-semibold text-violet-600 dark:text-violet-400 tabular-nums">
+                      {u.orderCount} đơn
+                    </p>
+                    <p className="text-[10px] text-muted-foreground tabular-nums">
+                      {formatCurrency(u.totalCost)}
+                    </p>
+                  </div>
+                </button>
+              );
+            })}
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
+function FactoryDistribution({
+  byFactory,
+  loading,
+}: {
+  byFactory: FactoryBreakdown[];
+  loading: boolean;
+}) {
+  const [hoveredIdx, setHoveredIdx] = useState<number | null>(null);
+
+  // Default to first factory if nothing hovered
+  const activeIdx = hoveredIdx ?? 0;
+  const activeFactory = byFactory[activeIdx];
+  const machineData = activeFactory?.byMachineType || [];
+
+  const factoryChartData = byFactory.map((f) => ({
+    name: f.factoryShortName || f.factoryName,
+    fullName: f.factoryName,
+    value: f.quantity,
+    percentage: f.percentage,
+  }));
+
+  const machineChartData = machineData.map((m) => ({
+    name: m.machineTypeShortName || m.machineTypeName,
+    fullName: m.machineTypeName,
+    value: m.quantity,
+    percentage: m.percentage,
+  }));
+
+  return (
+    <div className="rounded-xl border border-border bg-card flex flex-col">
+      <div className="px-5 py-4">
+        <div className="flex items-end justify-between gap-3">
+          <div className="flex items-center gap-2.5">
+            <div className="w-9 h-9 rounded-lg bg-sky-100 dark:bg-sky-500/15 flex items-center justify-center">
+              <Factory size={18} className="text-sky-600 dark:text-sky-400" strokeWidth={2} />
+            </div>
+            <div>
+              <h2 className="text-base font-semibold text-foreground">Phân bổ theo xưởng</h2>
+              <p className="text-xs text-muted-foreground mt-0.5">
+                Di chuột vào xưởng để xem loại in chi tiết
+              </p>
+            </div>
+          </div>
+          {byFactory.length > 0 && (
+            <span className="text-xs text-muted-foreground">
+              <span className="tabular-nums font-semibold text-foreground">{byFactory.length}</span>{' '}
+              xưởng
+            </span>
+          )}
+        </div>
+      </div>
+
+      {loading && !byFactory.length && (
+        <div className="px-5 pb-5 grid grid-cols-2 gap-4">
+          {[0, 1].map((i) => (
+            <div key={i} className="flex flex-col items-center gap-3">
+              <div className="w-[160px] h-[160px] rounded-full bg-muted animate-pulse" />
+              <div className="flex gap-2">
+                <div className="w-14 h-5 rounded bg-muted animate-pulse" />
+                <div className="w-14 h-5 rounded bg-muted animate-pulse" />
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
+
+      {!loading && byFactory.length === 0 && (
+        <div className="text-center py-16 text-muted-foreground text-sm">
+          <Factory size={32} className="mx-auto mb-3 opacity-30" strokeWidth={1.5} />
+          Chưa có dữ liệu xưởng. Hãy import đơn và mapping cấu hình sản phẩm.
+        </div>
+      )}
+
+      {!loading && byFactory.length > 0 && (
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-4 px-5 pb-5">
+          {/* Left: Factory pie */}
+          <div className="flex flex-col items-center">
+            <h3 className="text-xs font-medium text-muted-foreground mb-2">
+              Xưởng sản xuất
+            </h3>
+            <div className="w-full h-[220px] [&_.recharts-sector]:outline-none [&_.recharts-sector:focus]:outline-none [&_.recharts-pie]:outline-none [&_path:focus]:outline-none [&_path]:outline-none">
+              <ResponsiveContainer width="100%" height="100%">
+                <PieChart>
+                  <Pie
+                    data={factoryChartData}
+                    dataKey="value"
+                    nameKey="name"
+                    cx="50%"
+                    cy="50%"
+                    outerRadius={70}
+                    innerRadius={42}
+                    paddingAngle={2}
+                    activeIndex={activeIdx}
+                    activeShape={renderActiveSlice}
+                    onMouseEnter={(_, index) => setHoveredIdx(index)}
+                  >
+                    {factoryChartData.map((_, i) => (
+                      <Cell
+                        key={i}
+                        fill={PIE_COLORS[i % PIE_COLORS.length]}
+                        stroke="hsl(var(--background))"
+                        strokeWidth={2}
+                      />
+                    ))}
+                  </Pie>
+                  <RechartsTooltip content={<PieTooltip />} />
+                </PieChart>
+              </ResponsiveContainer>
+            </div>
+            <div className="flex flex-wrap justify-center gap-2 mt-2">
+              {factoryChartData.map((f, i) => {
+                const color = PIE_COLORS[i % PIE_COLORS.length];
+                const isActive = i === activeIdx;
+                return (
+                  <button
+                    key={f.name}
+                    type="button"
+                    onMouseEnter={() => setHoveredIdx(i)}
+                    className={cn(
+                      'inline-flex items-center gap-1.5 px-2 py-1 rounded-md text-xs cursor-pointer border transition-all',
+                      isActive ? 'shadow-sm' : 'border-transparent hover:bg-accent/50',
+                    )}
+                    style={
+                      isActive
+                        ? {
+                            borderColor: color,
+                            backgroundColor: `${color}1a`, // 10% alpha
+                          }
+                        : undefined
+                    }
+                  >
+                    <span className="w-3 h-3 rounded-sm" style={{ backgroundColor: color }} />
+                    <span className="font-medium">{f.name}</span>
+                    <span className="text-muted-foreground">· {f.percentage}%</span>
+                  </button>
+                );
+              })}
+            </div>
+          </div>
+
+          {/* Right: Machine type pie of active factory */}
+          <div className="flex flex-col items-center">
+            <h3 className="text-xs font-medium text-muted-foreground mb-2 text-center">
+              Loại in: <span className="text-foreground font-semibold">{activeFactory?.factoryName || '—'}</span>
+            </h3>
+            {machineChartData.length === 0 ? (
+              <div className="h-[220px] flex items-center justify-center text-xs text-muted-foreground">
+                Không có loại in
+              </div>
+            ) : (
+              <>
+                <div className="w-full h-[220px] [&_.recharts-sector]:outline-none [&_.recharts-sector:focus]:outline-none [&_.recharts-pie]:outline-none [&_path:focus]:outline-none [&_path]:outline-none">
+                  <ResponsiveContainer width="100%" height="100%">
+                    <PieChart>
+                      <Pie
+                        data={machineChartData}
+                        dataKey="value"
+                        nameKey="name"
+                        cx="50%"
+                        cy="50%"
+                        outerRadius={70}
+                        innerRadius={42}
+                        paddingAngle={2}
+                      >
+                        {machineChartData.map((_, i) => (
+                          <Cell
+                            key={i}
+                            fill={PIE_COLORS[(i + 3) % PIE_COLORS.length]}
+                            stroke="hsl(var(--background))"
+                            strokeWidth={2}
+                          />
+                        ))}
+                      </Pie>
+                      <RechartsTooltip content={<PieTooltip />} />
+                    </PieChart>
+                  </ResponsiveContainer>
+                </div>
+                <div className="flex flex-wrap justify-center gap-2 mt-2">
+                  {machineChartData.map((m, i) => (
+                    <span
+                      key={m.name}
+                      className="inline-flex items-center gap-1.5 px-2 py-1 rounded-md text-xs border border-transparent"
+                    >
+                      <span
+                        className="w-3 h-3 rounded-sm"
+                        style={{ backgroundColor: PIE_COLORS[(i + 3) % PIE_COLORS.length] }}
+                      />
+                      <span className="font-medium">{m.name}</span>
+                      <span className="text-muted-foreground">· {m.percentage}%</span>
+                    </span>
+                  ))}
+                </div>
+              </>
+            )}
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+function PieTooltip({ active, payload }: any) {
+  if (!active || !payload?.length) return null;
+  const p = payload[0].payload;
+  return (
+    <div className="bg-popover border border-border rounded-md shadow-md p-2 text-xs">
+      <p className="font-semibold text-foreground">{p.fullName}</p>
+      <p className="text-muted-foreground">
+        {p.value.toLocaleString()} items · {p.percentage}%
+      </p>
+    </div>
+  );
+}
+
+function ExpandedDetails({ row }: { row: TypeSummary }) {
+  const [fullView, setFullView] = useState(false);
+
+  // List container: when fullView=true → no max-height (show all inline);
+  // when false → compact with scroll.
+  const listClass = fullView
+    ? 'space-y-2'
+    : 'space-y-2 max-h-[280px] overflow-y-auto pr-2';
+
+  // Sizes panel is small (typically 3-8 items) → always shown in full.
+  // The toggle affects only the heavy Mockup panels.
+  return (
+    <div className="border-t border-border">
+      <div className="flex items-center justify-between px-5 pt-3 pb-1">
+        <p className="text-[11px] text-muted-foreground">
+          {fullView ? 'Đã mở rộng tất cả' : 'Đang thu gọn — cuộn trong panel để xem thêm'}
+        </p>
+        <button
+          type="button"
+          onClick={() => setFullView((v) => !v)}
+          className="inline-flex items-center gap-1 text-xs text-muted-foreground hover:text-foreground transition-colors h-7 px-2"
+        >
+          {fullView ? <ChevronsUp size={12} /> : <ChevronsDown size={12} />}
+          {fullView ? 'Thu gọn' : 'Mở rộng hết'}
+        </button>
+      </div>
+
+      <div className="p-5 pt-2 grid grid-cols-1 md:grid-cols-3 gap-6">
+        {/* Sizes */}
+        <div>
+          <h4 className="text-xs font-medium text-muted-foreground mb-3 flex items-center justify-between">
+            <span>Phân bổ size</span>
+            <span className="tabular-nums">{row.sizes.length} size</span>
+          </h4>
+          {row.sizes.length === 0 ? (
+            <p className="text-xs text-muted-foreground">Chưa có dữ liệu size</p>
+          ) : (
+            <div className="space-y-1.5">
+              {row.sizes.map((s) => {
+                const maxCount = Math.max(...row.sizes.map((x) => x.count));
+                const pct = maxCount > 0 ? (s.count / maxCount) * 100 : 0;
+                return (
+                  <div key={s.size} className="space-y-0.5">
+                    <div className="flex items-center justify-between text-xs">
+                      <span className="font-mono font-medium text-foreground w-10">{s.size}</span>
+                      <span className="tabular-nums text-muted-foreground">
+                        <span className="font-semibold text-foreground">{s.count}</span> items
+                      </span>
+                    </div>
+                    <div className="h-1 bg-muted/50 rounded-full overflow-hidden">
+                      <div
+                        className="h-full bg-foreground/70 rounded-full"
+                        style={{ width: `${pct}%` }}
+                      />
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          )}
+        </div>
+
+        {/* Mockups */}
+        <div>
+          <h4 className="text-xs font-medium text-muted-foreground mb-3 flex items-center justify-between">
+            <span>Mockup đã dùng</span>
+            <span className="tabular-nums">{row.mockups.length} mockup</span>
+          </h4>
+          {row.mockups.length === 0 ? (
+            <p className="text-xs text-muted-foreground">Chưa có mockup</p>
+          ) : (
+            <div className={listClass}>
+              {row.mockups.map((m) => (
+                <a
+                  key={m.url}
+                  href={m.originalUrl || m.url}
+                  target="_blank"
+                  rel="noreferrer"
+                  className="flex items-center gap-2 group"
+                >
+                  <img
+                    src={m.url}
+                    alt="mockup"
+                    className="w-10 h-10 object-cover rounded border border-border shrink-0"
+                    loading="lazy"
+                    decoding="async"
+                    referrerPolicy="no-referrer"
+                    onError={(e) => {
+                      (e.currentTarget as HTMLImageElement).style.display = 'none';
+                    }}
+                  />
+                  <div className="flex-1 min-w-0">
+                    <p className="text-[11px] text-muted-foreground truncate font-mono group-hover:text-foreground">
+                      {m.url.split('/').pop()}
+                    </p>
+                    <Badge variant={m.count > 1 ? 'warning' : 'secondary'} className="mt-0.5">
+                      ×{m.count}
+                    </Badge>
+                  </div>
+                </a>
+              ))}
+            </div>
+          )}
+        </div>
+
+        {/* Duplicate mockups */}
+        <div>
+          <h4 className="text-xs font-medium text-muted-foreground mb-3 flex items-center justify-between">
+            <span>Mockup bị trùng</span>
+            {row.duplicateMockups.length > 0 ? (
+              <span className="tabular-nums text-amber-700 dark:text-amber-400">
+                {row.duplicateMockups.length} trùng
+              </span>
+            ) : (
+              <span className="tabular-nums text-emerald-700 dark:text-emerald-400">Không có</span>
+            )}
+          </h4>
+          {row.duplicateMockups.length === 0 ? (
+            <p className="text-xs text-muted-foreground">Tốt — không có mockup trùng lặp</p>
+          ) : (
+            <div className={listClass}>
+              {row.duplicateMockups.map((m) => (
+                <a
+                  key={m.url}
+                  href={m.originalUrl || m.url}
+                  target="_blank"
+                  rel="noreferrer"
+                  className="flex items-center gap-2 p-2 rounded bg-amber-50 dark:bg-amber-900/10 border border-amber-200 dark:border-amber-900/30 hover:bg-amber-100 dark:hover:bg-amber-900/20"
+                >
+                  <img
+                    src={m.url}
+                    alt="dup"
+                    className="w-10 h-10 object-cover rounded border border-border shrink-0"
+                    loading="lazy"
+                    decoding="async"
+                    referrerPolicy="no-referrer"
+                    onError={(e) => {
+                      (e.currentTarget as HTMLImageElement).style.display = 'none';
+                    }}
+                  />
+                  <div className="flex-1 min-w-0">
+                    <p className="text-[11px] text-muted-foreground truncate font-mono">
+                      {m.url.split('/').pop()}
+                    </p>
+                    <Badge variant="warning" className="mt-0.5">
+                      ×{m.count} dùng
+                    </Badge>
+                  </div>
+                </a>
+              ))}
+            </div>
+          )}
+        </div>
+      </div>
+    </div>
+  );
+}

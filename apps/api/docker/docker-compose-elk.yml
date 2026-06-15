@@ -1,0 +1,57 @@
+version: '3.2'
+services:
+  elasticsearch:
+    image: docker.elastic.co/elasticsearch/elasticsearch:8.7.1
+    environment:
+      - discovery.type=single-node
+      - http.host=0.0.0.0
+      - transport.host=0.0.0.0
+      - ES_JAVA_OPTS=-Xms1g -Xmx1g
+      - xpack.security.enabled=true
+      - xpack.security.enrollment.enabled=true
+      - xpack.security.authc.api_key.enabled=true
+      - cluster.name=elasticsearch
+      - ELASTICSEARCH_USERNAME=${ELASTIC_USERNAME}
+      - ELASTICSEARCH_PASSWORD=${ELASTIC_PASSWORD}
+    volumes:
+      - ${ELASTIC_DATA_PATH}:/usr/share/elasticsearch/data
+      - ${ELASTIC_LOG_PATH}:/usr/share/elasticsearch/logs/docker-cluster.log
+    command:
+      - /bin/bash
+      - -c
+      - |
+        sudo chown 1000:1000 /usr/share/elasticsearch/data
+        bin/elasticsearch-users useradd ${ELASTIC_USERNAME} -p ${ELASTIC_PASSWORD} -r kibana_system,superuser
+        bin/elasticsearch
+    ports:
+      - ${ELASTICSEARCH_PORT}:9200
+    networks:
+      - printsel
+
+  kibana:
+    image: docker.elastic.co/kibana/kibana:8.7.1
+    environment:
+      - xpack.fleet.agents.enabled=true
+      - ELASTICSEARCH_USERNAME=${ELASTIC_USERNAME}
+      - ELASTICSEARCH_PASSWORD=${ELASTIC_PASSWORD}
+    networks:
+      - printsel
+    ports:
+      - ${KIBANA_PORT}:5601
+    depends_on:
+      - elasticsearch
+
+  filebeat:
+    image: docker.elastic.co/beats/filebeat:8.7.1
+    volumes:
+      - ./filebeat.yml:/usr/share/filebeat/filebeat.yml
+      - ../logs:/usr/share/filebeat/logs
+    depends_on:
+      - elasticsearch
+      - kibana
+    networks:
+      - printsel
+
+networks:
+  printsel:
+    driver: bridge

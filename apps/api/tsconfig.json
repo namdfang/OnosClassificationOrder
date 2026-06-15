@@ -1,0 +1,26 @@
+{
+  "$schema": "https://json.schemastore.org/tsconfig",
+  "extends": "../../packages/tsconfig/nestjs.json",
+  "compilerOptions": {
+    "strict": true,
+    "outDir": "./dist",
+    "baseUrl": ".",
+    "sourceRoot": "./src",
+    "paths": {
+      "@/*": ["./src/*"],
+      "@core/*": ["../../packages/core/*"],
+      "@shared/*": ["../../packages/shared/*"],
+    },
+    "declaration": true,
+    "declarationMap": true,
+  },
+  "ts-node": {
+    "require": ["tsconfig-paths/register"],
+  },
+  "include": [
+    "src/**/*.ts",
+    "vite.config.ts",
+    "../../../TPrint/tebprint-be/packages/core/services/onosexpress.service.ts",
+  ],
+  "exclude": ["node_modules", "src/metadata.ts", "dist"],
+}
