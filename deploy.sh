@@ -33,8 +33,7 @@ NODE_ENV=production pm2 reload ecosystem.config.cjs --update-env
 pm2 save >/dev/null
 
 echo "→ Deploying Web static files..."
-sudo rm -rf "$WEB_DIR"/*
-sudo cp -r "$REPO_DIR"/apps/web/dist-prod/* "$WEB_DIR"/
-sudo chown -R www-data:www-data "$WEB_DIR"
+rm -rf "$WEB_DIR"/*
+cp -r "$REPO_DIR"/apps/web/dist-prod/* "$WEB_DIR"/
 
 echo "✅ Deploy complete — commit $(git -C "$REPO_DIR" rev-parse --short HEAD)"

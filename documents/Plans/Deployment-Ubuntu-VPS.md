@@ -255,7 +255,9 @@ Tách **3 thư mục riêng** cho 3 vai trò khác nhau:
 /var/www/onosfactory-web/   ← FE static (Nginx serve) — owned: www-data
 ```
 
-> **Lý do tách `onosfactory-web` ra:** Nginx user (`www-data`) chỉ cần đọc file FE, không cần (và không nên) có quyền vào repo. Mỗi lần deploy, `deploy.sh` copy `apps/web/dist-prod/*` → `onosfactory-web/` và `chown www-data` lại.
+> **Lý do tách `onosfactory-web` ra:** Nginx root cố định tại 1 path, không phụ thuộc cấu trúc repo. Đổi tên folder `dist-prod` (nếu sau này Vite đổi config) không phải sửa Nginx.
+>
+> Owner của `onosfactory-web` = **deploy user** (không phải `www-data`). Nginx (`www-data`) đọc file qua quyền "other" — vì Vite output mặc định mode `644` (file) + `755` (dir), world-readable. Cách này đỡ phải `sudo` mỗi lần deploy.
 
 ```bash
 # Repo dir + log dir
@@ -265,9 +267,9 @@ cd /var/www/onosfactory
 git clone <repo-url> current
 cd current
 
-# FE static dir (www-data sẽ owner sau deploy đầu)
+# FE static dir — owner = deploy user (KHÔNG phải www-data)
 sudo mkdir -p /var/www/onosfactory-web
-sudo chown -R www-data:www-data /var/www/onosfactory-web
+sudo chown -R $USER:$USER /var/www/onosfactory-web
 ```
 
 ---
@@ -704,21 +706,13 @@ NODE_ENV=production pnpm seed
 ssh user@vps
 cd /var/www/onosfactory/current
 chmod +x deploy.sh
+
+# Đảm bảo owner của /var/www/onosfactory-web là deploy user (không phải www-data).
+# Nginx www-data đọc file qua quyền "other" (Vite output mode 644/755).
+sudo chown -R $USER:$USER /var/www/onosfactory-web
 ```
 
-Đồng thời tạo sudoers entry cho user (vì script cần `sudo cp` + `sudo chown` lên `/var/www/onosfactory-web` mà không hỏi password):
-
-```bash
-sudo visudo -f /etc/sudoers.d/onosfactory-deploy
-```
-
-Paste (đổi `<USER>` thành tên user của bạn):
-
-```
-<USER> ALL=(ALL) NOPASSWD: /bin/rm -rf /var/www/onosfactory-web/*, /bin/cp -r /var/www/onosfactory/current/apps/web/dist-prod/* /var/www/onosfactory-web/, /bin/chown -R www-data\:www-data /var/www/onosfactory-web
-```
-
-> Restrict chỉ cho 3 lệnh cụ thể trên đúng path — đỡ rủi ro hơn `ALL=(ALL) NOPASSWD: ALL`.
+> Không cần sudoers entry — `deploy.sh` không gọi `sudo` vì user đã là owner của cả `current/` lẫn `onosfactory-web/`.
 
 ### 10.2 Mỗi lần deploy
 
@@ -736,7 +730,7 @@ Script chạy tuần tự (fail-fast với `set -e`):
 4. `pnpm build:api` (turbo build → `dist-prod/main.js`)
 5. `pnpm build:web` (Vite build → `dist-prod/`)
 6. `pm2 reload ecosystem.config.cjs --update-env` + `pm2 save`
-7. Sync `apps/web/dist-prod/*` → `/var/www/onosfactory-web/` + `chown www-data:www-data` (Nginx pick up tự động vì root cố định)
+7. Sync `apps/web/dist-prod/*` → `/var/www/onosfactory-web/` (Nginx pick up tự động vì root cố định)
 
 ### 10.3 Rollback nhanh
 
