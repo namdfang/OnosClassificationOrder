@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { Upload, FileText } from 'lucide-react';
 import { toast } from 'sonner';
+import * as XLSX from 'xlsx';
 
 import { Button } from '@/components/ui/button';
 import { Textarea } from '@/components/ui/textarea';
@@ -28,8 +29,29 @@ export function ImportOrderTab({ onImported }: ImportOrderTabProps) {
   const parsedCount = parseOrderRows(text).length;
 
   const handleFile = async (file: File) => {
-    const content = await file.text();
-    setText(content);
+    const ext = file.name.toLowerCase().split('.').pop() || '';
+    try {
+      if (ext === 'xlsx' || ext === 'xls' || ext === 'csv') {
+        // SheetJS đọc XLSX (binary) và CSV (text, auto-detect delimiter / quoted cell).
+        // Convert sheet đầu thành TSV string để reuse parseOrderRows (split '\t').
+        const buf = await file.arrayBuffer();
+        const wb = XLSX.read(buf, { type: 'array' });
+        const sheetName = wb.SheetNames[0];
+        if (!sheetName) {
+          toast.error('File rỗng — không có sheet nào');
+          return;
+        }
+        const tsv = XLSX.utils.sheet_to_csv(wb.Sheets[sheetName], { FS: '\t' });
+        setText(tsv);
+      } else {
+        // .tsv / .txt / không có extension → đọc raw text, giả định sẵn tab-separated
+        setText(await file.text());
+      }
+    } catch (err) {
+      toast.error('Không đọc được file. Kiểm tra format .xlsx / .csv / .tsv / .txt.');
+      // eslint-disable-next-line no-console
+      console.error(err);
+    }
   };
 
   const handleImport = async () => {
@@ -61,14 +83,14 @@ export function ImportOrderTab({ onImported }: ImportOrderTabProps) {
           <div>
             <h3 className="text-sm font-semibold text-foreground">Paste data từ Google Sheets / Excel</h3>
             <p className="text-xs text-muted-foreground mt-0.5">
-              Sao chép cả khối (gồm header) từ sheet rồi paste vào đây. Hoặc upload file .tsv / .txt.
+              Sao chép cả khối (gồm header) từ sheet rồi paste vào đây. Hoặc upload file .xlsx / .csv / .tsv / .txt.
               Loại vải sẽ tự gán từ cấu hình sản phẩm.
             </p>
           </div>
           <label className="cursor-pointer">
             <input
               type="file"
-              accept=".tsv,.txt,.csv"
+              accept=".xlsx,.xls,.csv,.tsv,.txt"
               className="hidden"
               onChange={(e) => {
                 const f = e.target.files?.[0];

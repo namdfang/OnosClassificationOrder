@@ -27,7 +27,7 @@ function PrivateRoute() {
 
 function App() {
   return (
-    <BrowserRouter basename={import.meta.env.VITE_PROD ? '/app' : ''}>
+    <BrowserRouter>
       <Routes>
         <Route path="/" element={<PrivateRoute />}>
           <Route path="/" element={<MainLayout />}>
