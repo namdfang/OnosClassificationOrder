@@ -244,21 +244,30 @@ Xong §0 — môi trường VPS sẵn sàng. Sang §1.
 
 ## 1. Layout thư mục trên VPS
 
-Chọn 1 đường dẫn cố định, ví dụ `/var/www/onosfactory`:
+Tách **3 thư mục riêng** cho 3 vai trò khác nhau:
 
 ```
 /var/www/onosfactory/
-├── current/           ← clone repo vào đây
-├── shared-uploads/    ← (optional) nếu sau này dùng local storage
-└── logs/              ← log PM2 + Nginx access/error
+├── current/            ← repo (clone vào đây) — owned: $USER
+├── logs/               ← log PM2 + Nginx
+└── shared-uploads/     ← (optional) local upload storage
+
+/var/www/onosfactory-web/   ← FE static (Nginx serve) — owned: www-data
 ```
 
+> **Lý do tách `onosfactory-web` ra:** Nginx user (`www-data`) chỉ cần đọc file FE, không cần (và không nên) có quyền vào repo. Mỗi lần deploy, `deploy.sh` copy `apps/web/dist-prod/*` → `onosfactory-web/` và `chown www-data` lại.
+
 ```bash
+# Repo dir + log dir
 sudo mkdir -p /var/www/onosfactory/logs
 sudo chown -R $USER:$USER /var/www/onosfactory
 cd /var/www/onosfactory
 git clone <repo-url> current
 cd current
+
+# FE static dir (www-data sẽ owner sau deploy đầu)
+sudo mkdir -p /var/www/onosfactory-web
+sudo chown -R www-data:www-data /var/www/onosfactory-web
 ```
 
 ---
@@ -506,7 +515,7 @@ server {
     listen 80;
     server_name app.your-domain.com;
 
-    root /var/www/onosfactory/current/apps/web/dist-prod;
+    root /var/www/onosfactory-web;
     index index.html;
 
     # SPA fallback — react-router cần
@@ -687,48 +696,66 @@ NODE_ENV=production pnpm seed
 
 ## 10. Quy trình deploy lần kế tiếp (sau lần đầu)
 
+Đóng gói trong `deploy.sh` ở repo root.
+
+### 10.1 Setup lần đầu (chỉ làm 1 lần)
+
 ```bash
-# 1. SSH vào VPS
 ssh user@vps
-
 cd /var/www/onosfactory/current
-
-# 2. Pull code mới (commit clean trước, không stash)
-git fetch
-git status                         # verify clean
-git checkout main
-git pull --ff-only
-
-# 3. Cài deps nếu lockfile đổi
-pnpm install --frozen-lockfile
-
-# 4. Build shared TRƯỚC (DTO mới sẽ cần)
-pnpm --filter shared build
-
-# 5. Build BE + FE
-pnpm --filter ./apps/api build
-pnpm --filter ./apps/web build
-
-# 6. Reload BE (zero-downtime)
-cd apps/api
-pm2 reload ecosystem.config.cjs
-pm2 logs onosfactory-api --lines 50    # verify boot OK
-
-# 7. FE static — Nginx tự pick lên (vì đường dẫn root không đổi)
-# Nếu user đang mở trang cũ → service worker sẽ tự fetch sw.js mới và reload
+chmod +x deploy.sh
 ```
 
-### Rollback nhanh
+Đồng thời tạo sudoers entry cho user (vì script cần `sudo cp` + `sudo chown` lên `/var/www/onosfactory-web` mà không hỏi password):
+
+```bash
+sudo visudo -f /etc/sudoers.d/onosfactory-deploy
+```
+
+Paste (đổi `<USER>` thành tên user của bạn):
+
+```
+<USER> ALL=(ALL) NOPASSWD: /bin/rm -rf /var/www/onosfactory-web/*, /bin/cp -r /var/www/onosfactory/current/apps/web/dist-prod/* /var/www/onosfactory-web/, /bin/chown -R www-data\:www-data /var/www/onosfactory-web
+```
+
+> Restrict chỉ cho 3 lệnh cụ thể trên đúng path — đỡ rủi ro hơn `ALL=(ALL) NOPASSWD: ALL`.
+
+### 10.2 Mỗi lần deploy
+
+```bash
+ssh user@vps
+cd /var/www/onosfactory/current
+./deploy.sh
+```
+
+Script chạy tuần tự (fail-fast với `set -e`):
+
+1. `git pull origin main`
+2. `pnpm install --frozen-lockfile`
+3. `pnpm --filter shared build` — bắt buộc trước (DTO mới sẽ cần)
+4. `pnpm build:api` (turbo build → `dist-prod/main.js`)
+5. `pnpm build:web` (Vite build → `dist-prod/`)
+6. `pm2 reload ecosystem.config.cjs --update-env` + `pm2 save`
+7. Sync `apps/web/dist-prod/*` → `/var/www/onosfactory-web/` + `chown www-data:www-data` (Nginx pick up tự động vì root cố định)
+
+### 10.3 Rollback nhanh
 
 ```bash
 cd /var/www/onosfactory/current
 git log --oneline -10
-git checkout <commit-trước>
-pnpm --filter shared build && pnpm --filter ./apps/api build && pnpm --filter ./apps/web build
-cd apps/api && pm2 reload ecosystem.config.cjs
+git checkout <commit-hash-cũ>
+./deploy.sh    # build + reload với code đã checkout
+# Sau đó: git checkout main để quay về head trước khi push fix
 ```
 
-> **Sau đó** mới điều tra commit lỗi, sửa, push lại. Đừng vừa rollback vừa debug ở prod.
+> Đừng vừa rollback vừa debug ở prod. Rollback xong, sửa commit lỗi ở local, test, push, deploy lại.
+
+### 10.4 Khi nào KHÔNG dùng deploy.sh
+
+- **Lần deploy đầu tiên** — chạy tay theo §1–§7 vì cần setup `.env`, Nginx, certbot, seed admin.
+- **Migration MongoDB schema** — chạy migration script bằng tay TRƯỚC, rồi mới `./deploy.sh`.
+- **Đổi PM2 ecosystem config** (vd. `max_memory_restart`) — `pm2 reload` đôi khi không apply; dùng `pm2 delete <name> && pm2 start ecosystem.config.cjs`.
+- **Đổi env BE** (vd. swap MongoDB URI) — sửa `.env.production` xong, chạy `./deploy.sh` (script có `--update-env` cho PM2).
 
 ---
 
