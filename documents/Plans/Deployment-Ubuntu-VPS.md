@@ -63,11 +63,11 @@ lsb_release -cs       # noble = 24.04 | jammy = 22.04 | focal = 20.04
 
 **Chọn version MongoDB theo OS:**
 
-| Ubuntu | MongoDB version | Codename trong URL |
-|--------|-----------------|--------------------|
+| Ubuntu        | MongoDB version                  | Codename trong URL      |
+| ------------- | -------------------------------- | ----------------------- |
 | 24.04 (noble) | **8.0** (7.0 chưa có repo noble) | `noble/mongodb-org/8.0` |
-| 22.04 (jammy) | 7.0 hoặc 8.0 | `jammy/mongodb-org/7.0` |
-| 20.04 (focal) | 7.0 | `focal/mongodb-org/7.0` |
+| 22.04 (jammy) | 7.0 hoặc 8.0                     | `jammy/mongodb-org/7.0` |
+| 20.04 (focal) | 7.0                              | `focal/mongodb-org/7.0` |
 
 Block dưới mặc định **MongoDB 7.0 + jammy**. Trên Ubuntu 24.04 → đổi `7.0`→`8.0`, `jammy`→`noble` trong cả URL key, URL repo, và path keyring.
 
@@ -125,14 +125,14 @@ mongod --version                # v7.0.x
 
 **Troubleshoot lỗi hay gặp khi cài Mongo:**
 
-| Lỗi | Nguyên nhân | Fix |
-|-----|-------------|-----|
-| `NO_PUBKEY ...` lúc `apt update` | GPG keyring rỗng (curl fail silently) | `sudo rm` keyring → tải lại bằng `wget -qO- ... \| sudo gpg --dearmor -o ...` |
-| `Malformed entry ... (Suite)` | repo file thiếu space giữa `ubuntu` và codename (dính chữ) | `sudo sed -i 's\|ubuntu<codename>\|ubuntu <codename>\|'` hoặc sửa nano |
-| `Malformed entry ... (Component)` | Giống trên | Giống trên |
-| `Unable to locate package mongodb-org` | Sai codename **HOẶC** chưa `sudo apt update` sau khi sửa repo | Verify `cat` file + chạy lại `apt update` |
-| `Unable to locate package mongodb-org` trên Ubuntu 24.04 với repo `7.0/noble` | MongoDB 7.0 không có release `noble` | Chuyển sang `8.0` — đổi URL key + repo + keyring path |
-| `BadValue: security.keyFile is required when authorization is enabled with replica sets` | Bật cả `replication` + `authorization` cần `keyFile` cho internal auth của RS | Xem §8.1 — sinh keyfile và thêm `security.keyFile: /etc/mongo-keyfile` |
+| Lỗi                                                                                      | Nguyên nhân                                                                   | Fix                                                                           |
+| ---------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------- | ----------------------------------------------------------------------------- |
+| `NO_PUBKEY ...` lúc `apt update`                                                         | GPG keyring rỗng (curl fail silently)                                         | `sudo rm` keyring → tải lại bằng `wget -qO- ... \| sudo gpg --dearmor -o ...` |
+| `Malformed entry ... (Suite)`                                                            | repo file thiếu space giữa `ubuntu` và codename (dính chữ)                    | `sudo sed -i 's\|ubuntu<codename>\|ubuntu <codename>\|'` hoặc sửa nano        |
+| `Malformed entry ... (Component)`                                                        | Giống trên                                                                    | Giống trên                                                                    |
+| `Unable to locate package mongodb-org`                                                   | Sai codename **HOẶC** chưa `sudo apt update` sau khi sửa repo                 | Verify `cat` file + chạy lại `apt update`                                     |
+| `Unable to locate package mongodb-org` trên Ubuntu 24.04 với repo `7.0/noble`            | MongoDB 7.0 không có release `noble`                                          | Chuyển sang `8.0` — đổi URL key + repo + keyring path                         |
+| `BadValue: security.keyFile is required when authorization is enabled with replica sets` | Bật cả `replication` + `authorization` cần `keyFile` cho internal auth của RS | Xem §8.1 — sinh keyfile và thêm `security.keyFile: /etc/mongo-keyfile`        |
 
 **Bật replica set** (bắt buộc — code dùng transactions, `DB_URI` có `?replicaSet=rs0`):
 
@@ -622,7 +622,7 @@ sudo systemctl status mongod      # active (running)
 
 ```bash
 # Lưu ý: PHẢI dùng single quote vì password có ! / $ / ` / \
-mongosh 'mongodb://onosfactory:<DB-Password>@127.0.0.1:27017/onosfactory-prod?authSource=onosfactory-prod' --eval 'db.runCommand({ping:1})'
+mongosh 'mongodb://onosfactory:Dieuanh1108!@127.0.0.1:27017/onosfactory-prod?authSource=onosfactory-prod' --eval 'db.runCommand({ping:1})'
 # { ok: 1 }
 ```
 
@@ -805,3 +805,5 @@ Cron mẫu cho mongodump:
 - [ ] Smoke test: login → vào `/dashboard?tab=factory` → bấm "Xuất Excel" → kiểm tra file `.xlsx` tải về có 4 loại sheet
 - [ ] Smoke test: vào `/orders` → tab Import → paste 1 dòng test → verify upsert + auto-derive fabricType
 - [ ] Verify timezone server = `Asia/Ho_Chi_Minh` (`timedatectl`)
+
+mongorestore --uri='mongodb://onosfactory:Dieuanh1108@127.0.0.1:27017/?replicaSet=rs0&authSource=onosfactory-prod' --gzip --drop --nsFrom='onos-classifycation._' --nsTo='onosfactory-prod._' /tmp/onosfactory-\*/
