@@ -43,6 +43,7 @@ export const PERMISSION_CATALOG: PermissionItem[] = [
   // ─── Order actions ──────────────────────────────────────────────
   { code: 'order.import',              label: 'Import đơn hàng',           group: 'order' },
   { code: 'order.delete',              label: 'Xóa đơn hàng',              group: 'order' },
+  { code: 'order.transfer',            label: 'Chuyển xưởng',              group: 'order' },
   { code: 'order.view_admin_table',    label: 'Thấy bảng Admin (cũ)',      group: 'order' },
   { code: 'order.view_workshop_table', label: 'Thấy bảng Workshop (mới)',  group: 'order' },
 
@@ -121,6 +122,9 @@ export const DEFAULT_ROLE_PERMISSIONS: Partial<Record<RoleType, string[]>> = {
     'order.view_workshop_table',
     'order.field.printStatus.view',     'order.field.printStatus.edit',
     'order.field.printStatusNote.view', 'order.field.printStatusNote.edit',
+    // Fulfillment cần đọc + sửa Note kết quả Tool để cập nhật tình trạng đơn
+    // sau khi in.
+    'order.field.toolResultNote.view', 'order.field.toolResultNote.edit',
     'order.field.fabricType.view',
   ],
 };

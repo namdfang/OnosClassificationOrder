@@ -16,11 +16,11 @@ import { Spinner } from '@/components/common/Spinner';
 import { RepositoryRemote } from '@/services';
 import { handleAxiosError } from '@/utils';
 
-const EXAMPLE = `Tên đầy đủ sản phẩm có tool Rập	Tên viết tắt	Loại máy tính chạy sản phẩm 694	Máy	Xưởng
-all over print christmas ugly sweater	CHRISTMAS		IEN	ML
-aop women's briefs	WOM		ICL	US
-all-over print kids and youth baseball jersey	BRKIDS		HT	TN
-all-over print football jersey	FB		IEN	ML`;
+const EXAMPLE = `Tên đầy đủ sản phẩm có tool Rập	Tên viết tắt	Loại máy tính chạy sản phẩm 694	Máy	Xưởng	Loại vải	Kết quả Tool
+all over print christmas ugly sweater	CHRISTMAS		IEN	ML	Cotton Jersey	Có Tool
+aop women's briefs	WOM		ICL	US	Polyester Jersey:	Không có Tool
+all-over print kids and youth baseball jersey	BRKIDS		HT	TN	2D	Có Tool
+all-over print football jersey	FB		IEN	ML	G5000	Không có Tool`;
 
 interface ParsedRow {
   fullName: string;
@@ -28,6 +28,8 @@ interface ParsedRow {
   computerType?: string;
   machineCode: string;
   factoryCode: string;
+  fabricLabel?: string;
+  toolResultLabel?: string;
 }
 
 function parseRows(raw: string): ParsedRow[] {
@@ -38,18 +40,27 @@ function parseRows(raw: string): ParsedRow[] {
 
   if (lines.length === 0) return [];
 
-  // Skip header if first row's last cell isn't a known factory code
-  const firstCols = lines[0].split('\t');
-  const lastCol = (firstCols[firstCols.length - 1] || '').toUpperCase();
-  const startIdx = ['ML', 'TN', 'US'].includes(lastCol) ? 0 : 1;
+  // Skip header if first row's 5th cell isn't a known factory code (header
+  // would have "Xưởng" or similar at that position).
+  const firstCols = lines[0].split('\t').map((c) => c.trim());
+  const fifth = (firstCols[4] || '').toUpperCase();
+  const startIdx = ['ML', 'TN', 'US'].includes(fifth) ? 0 : 1;
 
   const rows: ParsedRow[] = [];
   for (let i = startIdx; i < lines.length; i++) {
     const cols = lines[i].split('\t').map((c) => c.trim());
     if (cols.length < 5) continue;
-    const [fullName, shortName, computerType, machineCode, factoryCode] = cols;
+    const [fullName, shortName, computerType, machineCode, factoryCode, fabricLabel, toolResultLabel] = cols;
     if (!fullName || !shortName || !machineCode || !factoryCode) continue;
-    rows.push({ fullName, shortName, computerType: computerType || undefined, machineCode, factoryCode });
+    rows.push({
+      fullName,
+      shortName,
+      computerType: computerType || undefined,
+      machineCode,
+      factoryCode,
+      fabricLabel: fabricLabel || undefined,
+      toolResultLabel: toolResultLabel || undefined,
+    });
   }
   return rows;
 }
@@ -75,9 +86,10 @@ export function ImportProductConfigDialog({ open, onOpenChange, onSuccess }: Imp
       setLoading(true);
       const resp = await RepositoryRemote.productConfig.importProductConfigs({ rows });
       const { imported, updated, skipped } = resp.data.data;
-      toast.success(`Imported ${imported}, updated ${updated}, skipped ${skipped.length}`);
+      toast.success(`Imported ${imported}, updated ${updated}, ${skipped.length} cảnh báo`);
       if (skipped.length > 0) {
-        console.warn('Skipped rows:', skipped);
+        // eslint-disable-next-line no-console
+        console.warn('Import warnings:', skipped);
       }
       setText('');
       onOpenChange(false);
@@ -91,12 +103,14 @@ export function ImportProductConfigDialog({ open, onOpenChange, onSuccess }: Imp
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-w-2xl">
+      <DialogContent className="max-w-3xl">
         <DialogHeader>
           <DialogTitle>Import Product Config</DialogTitle>
           <DialogDescription>
-            Paste dữ liệu từ Excel (tab-separated). Hàng đầu là header, các cột: Tên đầy đủ — Tên viết tắt — Loại máy tính
-            (optional) — Máy (IEN/ICL/HT) — Xưởng (ML/TN/US).
+            Paste dữ liệu từ Excel (tab-separated). 7 cột: <b>Tên đầy đủ</b> — <b>Tên viết tắt</b> —{' '}
+            <b>Loại máy tính</b> (optional) — <b>Máy</b> (IEN/ICL/HT...) — <b>Xưởng</b> (ML/TN/US) —{' '}
+            <b>Loại vải</b> (Cotton Jersey, Polyester Jersey, 2D, G5000…) — <b>Kết quả Tool</b> (Có Tool / Không có Tool).
+            Hệ thống match label theo tên trong Workshop Config (case-insensitive).
           </DialogDescription>
         </DialogHeader>
 

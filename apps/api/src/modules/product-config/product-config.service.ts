@@ -7,9 +7,11 @@ import type {
   ImportProductConfigResDto,
   UpdateProductConfigDto,
 } from 'shared';
+import { WorkshopConfigCategory } from 'shared';
 
 import { FactoryService } from '../factory/factory.service';
 import { MachineTypeService } from '../machine-type/machine-type.service';
+import { WorkshopConfigRepository } from '../workshop-config/workshop-config.repository';
 import { ProductConfigRepository } from './product-config.repository';
 
 @Injectable()
@@ -18,7 +20,30 @@ export class ProductConfigService {
     private readonly productConfigRepository: ProductConfigRepository,
     private readonly factoryService: FactoryService,
     private readonly machineTypeService: MachineTypeService,
+    private readonly workshopConfigRepository: WorkshopConfigRepository,
   ) {}
+
+  /**
+   * Resolve a human-readable Vietnamese label (e.g. "Cotton Jersey",
+   * "Polyester Jersey:", "Có Tool") to its workshop_config `code`. Tolerates
+   * trailing punctuation and case differences so import data copied from
+   * spreadsheets doesn't have to be sanitized first.
+   */
+  private async resolveWorkshopCode(
+    category: WorkshopConfigCategory,
+    label?: string,
+  ): Promise<string | undefined> {
+    if (!label) return undefined;
+    const cleaned = label.replace(/[\s:.,;]+$/, '').trim();
+    if (!cleaned) return undefined;
+    // Case-insensitive exact match on `name`.
+    const escaped = cleaned.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+    const found = await this.workshopConfigRepository.findOne({
+      category,
+      name: { $regex: '^' + escaped + '$', $options: 'i' },
+    });
+    return found?.code;
+  }
 
   async getProductConfigs(dto: GetProductConfigsDto): Promise<GetProductConfigsResDto> {
     const { page, limit, sort, order, search, factoryId, machineTypeId } = dto;
@@ -84,12 +109,36 @@ export class ProductConfigService {
         continue;
       }
 
+      const fabricCode = await this.resolveWorkshopCode(
+        WorkshopConfigCategory.FabricType,
+        row.fabricLabel,
+      );
+      if (row.fabricLabel && !fabricCode) {
+        // Don't skip — just warn. The row still imports without fabric.
+        skipped.push({
+          row: i + 1,
+          reason: `Loại vải "${row.fabricLabel}" không khớp workshop_config — bỏ qua field này`,
+        });
+      }
+      const toolCode = await this.resolveWorkshopCode(
+        WorkshopConfigCategory.ToolResult,
+        row.toolResultLabel,
+      );
+      if (row.toolResultLabel && !toolCode) {
+        skipped.push({
+          row: i + 1,
+          reason: `Kết quả Tool "${row.toolResultLabel}" không khớp workshop_config — bỏ qua field này`,
+        });
+      }
+
       const data = {
         fullName: row.fullName.trim(),
         shortName: row.shortName.trim().toUpperCase(),
         computerType: row.computerType?.trim() || undefined,
         machineTypeId: machineType._id,
         factoryId: factory._id,
+        ...(fabricCode ? { fabricType: fabricCode } : {}),
+        ...(toolCode ? { toolResult: toolCode } : {}),
       };
 
       const existing = await this.productConfigRepository.findOne({ fullName: data.fullName });

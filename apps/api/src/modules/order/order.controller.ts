@@ -2,8 +2,11 @@ import { Body, Controller, Delete, Get, HttpCode, HttpStatus, Param, Patch, Post
 import { ApiOkResponse, ApiOperation, ApiTags } from '@nestjs/swagger';
 import { AuthUser } from 'core';
 import {
+  BulkTransferOrderDto,
   BulkUpdateOrderFieldDto,
   BulkUpdateOrderFieldResDto,
+  GetFactoryOverviewDto,
+  GetFactoryOverviewResDto,
   GetGroupedProductionOrdersResDto,
   GetImportSummaryDto,
   GetImportSummaryResDto,
@@ -19,6 +22,8 @@ import {
   ImportProductionOrdersResDto,
   ResDto,
   RoleType,
+  TransferOrderDto,
+  TransferOrderResDto,
   UpdateOrderFieldDto,
   UpdateOrderFieldResDto,
 } from 'shared';
@@ -76,8 +81,11 @@ export class OrderController {
   @ApiOperation({ summary: 'Order dashboard with per-type breakdown' })
   @HttpCode(HttpStatus.OK)
   @ApiOkResponse({ type: GetOrderDashboardResDto })
-  async getDashboard(@Query() dto: GetOrderDashboardDto): Promise<GetOrderDashboardResDto> {
-    return this.orderService.getDashboard(dto);
+  async getDashboard(
+    @Query() dto: GetOrderDashboardDto,
+    @AuthUser() user: UserDocument,
+  ): Promise<GetOrderDashboardResDto> {
+    return this.orderService.getDashboard(dto, user?.role?.name);
   }
 
   @Get('status-overview')
@@ -113,6 +121,70 @@ export class OrderController {
   @ApiOkResponse({ type: GetImportSummaryResDto })
   async getImportSummary(@Query() dto: GetImportSummaryDto): Promise<GetImportSummaryResDto> {
     return this.orderService.getImportSummary(dto);
+  }
+
+  @Post('backfill-fabric')
+  @Auth(ORDER_WRITE_ROLES)
+  @ApiOperation({
+    summary: 'Re-derive order.fabricType from productConfig — for orders missing fabric',
+  })
+  @HttpCode(HttpStatus.OK)
+  @ApiOkResponse({ type: ResDto })
+  async backfillOrderFabric(): Promise<{ success: true; data: { scanned: number; updated: number } }> {
+    const result = await this.orderService.backfillOrderFabric();
+    return { success: true, data: result };
+  }
+
+  @Get('export')
+  @Auth(ORDER_VIEW_ROLES)
+  @ApiOperation({ summary: 'Return ALL orders matching filter (no pagination) for spreadsheet export' })
+  @HttpCode(HttpStatus.OK)
+  async exportOrders(
+    @Query() dto: GetProductionOrdersDto,
+    @AuthUser() user: UserDocument,
+  ) {
+    return this.orderService.exportOrders(dto, user?.role?.name);
+  }
+
+  @Get('factory-overview')
+  @Auth(ORDER_VIEW_ROLES)
+  @ApiOperation({ summary: 'Factory transfer dashboard — totals + flow matrix' })
+  @HttpCode(HttpStatus.OK)
+  @ApiOkResponse({ type: GetFactoryOverviewResDto })
+  async getFactoryOverview(
+    @Query() dto: GetFactoryOverviewDto,
+    @AuthUser() user: UserDocument,
+  ): Promise<GetFactoryOverviewResDto> {
+    return this.orderService.getFactoryOverview(dto, user?.role?.name);
+  }
+
+  @Patch('bulk-transfer')
+  @Auth(ORDER_WRITE_ROLES)
+  @ApiOperation({ summary: 'Transfer multiple orders to another factory' })
+  @HttpCode(HttpStatus.OK)
+  @ApiOkResponse({ type: TransferOrderResDto })
+  async bulkTransferOrders(
+    @Body() dto: BulkTransferOrderDto,
+    @AuthUser() user: UserDocument,
+    @ClientIp() ip: string,
+    @UserAgent() userAgent: string,
+  ): Promise<TransferOrderResDto> {
+    return this.orderService.bulkTransferOrders(dto, { user, ip, userAgent });
+  }
+
+  @Patch(':id/transfer')
+  @Auth(ORDER_WRITE_ROLES)
+  @ApiOperation({ summary: 'Transfer a single order to another factory' })
+  @HttpCode(HttpStatus.OK)
+  @ApiOkResponse({ type: TransferOrderResDto })
+  async transferOrder(
+    @Param('id') id: string,
+    @Body() dto: TransferOrderDto,
+    @AuthUser() user: UserDocument,
+    @ClientIp() ip: string,
+    @UserAgent() userAgent: string,
+  ): Promise<TransferOrderResDto> {
+    return this.orderService.transferOrder(id, dto, { user, ip, userAgent });
   }
 
   @Post('import')

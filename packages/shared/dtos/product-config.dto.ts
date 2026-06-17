@@ -13,6 +13,8 @@ export const ProductConfigZod = BaseEntityZod.extend({
   factoryId: IDZod,
   /** workshop_config code (category=fabric_type). Default fabric used at import. */
   fabricType: z.string().max(60).optional(),
+  /** workshop_config code (category=tool_result). Default tool status at import. */
+  toolResult: z.string().max(60).optional(),
 });
 export type ProductConfig = z.infer<typeof ProductConfigZod>;
 
@@ -34,6 +36,7 @@ export const CreateProductConfigZod = z.object({
   machineTypeId: ProductConfigZod.shape.machineTypeId,
   factoryId: ProductConfigZod.shape.factoryId,
   fabricType: ProductConfigZod.shape.fabricType,
+  toolResult: ProductConfigZod.shape.toolResult,
 });
 export class CreateProductConfigDto extends createZodDto(extendApi(CreateProductConfigZod)) {}
 
@@ -48,6 +51,7 @@ export const UpdateProductConfigZod = z.object({
   machineTypeId: ProductConfigZod.shape.machineTypeId.optional(),
   factoryId: ProductConfigZod.shape.factoryId.optional(),
   fabricType: ProductConfigZod.shape.fabricType,
+  toolResult: ProductConfigZod.shape.toolResult,
 });
 export class UpdateProductConfigDto extends createZodDto(extendApi(UpdateProductConfigZod)) {}
 
@@ -61,6 +65,10 @@ export const ImportProductConfigRowZod = z.object({
   computerType: z.string().optional(),
   machineCode: z.string().min(1),
   factoryCode: z.string().min(1),
+  /** Vietnamese label ("Cotton Jersey", "Polyester Jersey:"…) — resolved server-side. */
+  fabricLabel: z.string().optional(),
+  /** Vietnamese label ("Có Tool" / "Không có Tool") — resolved server-side. */
+  toolResultLabel: z.string().optional(),
 });
 export type ImportProductConfigRow = z.infer<typeof ImportProductConfigRowZod>;
 

@@ -58,6 +58,11 @@ export const ProductionOrderZod = BaseEntityZod.extend({
   productConfigId: IDZod.optional(),
   factoryId: IDZod.optional(),
   machineTypeId: IDZod.optional(),
+  /**
+   * Factory the order was originally mapped to at import time. Compared with
+   * `factoryId` to detect transfers (e.g. ML→TN). Set once, never changes.
+   */
+  originalFactoryId: IDZod.optional(),
 
   // Workshop fields (Phase 2) — values are workshop_config codes
   printStatus: z.string().optional(),
@@ -104,6 +109,26 @@ export const GetProductionOrdersZod = PageQueryZod.extend({
   toolResultNote: z.string().optional(),
   assignee: z.string().optional(),
   errorFile: z.string().optional(),
+  /** Exact match (CSV) — used by the factory tab product filter. */
+  type: z.string().optional(),
+  /** Comma-separated workshop_config codes for fabric_type. */
+  fabricType: z.string().optional(),
+  /** Comma-separated workshop_config codes for tool_result. */
+  toolResult: z.string().optional(),
+
+  /**
+   * Factory transfer filter. Values:
+   *   "transferred-in:<factoryId>"  — orders whose current factory is `id`
+   *                                   but originalFactoryId is different
+   *                                   (i.e. received from another factory).
+   *   "transferred-out:<factoryId>" — orders originally at `id` but now
+   *                                   running at another factory.
+   *   "transferred"                 — any inter-factory transfer.
+   *   "pure"                        — originalFactoryId == factoryId (no transfer).
+   */
+  transferStatus: z.string().optional(),
+  /** Comma-separated factoryIds — filter by ORIGINAL factory. */
+  originalFactoryId: z.string().optional(),
 
   // Date range on createdAt (yyyy-mm-dd). Designer/Fulfillment have a server-
   // enforced "today only" default; passing these overrides UI date pickers.
@@ -339,3 +364,112 @@ export class GetImportSummaryDto extends createZodDto(extendApi(GetImportSummary
 
 export const GetImportSummaryResZod = ResZod.extend({ data: ImportSummaryZod });
 export class GetImportSummaryResDto extends createZodDto(extendApi(GetImportSummaryResZod)) {}
+
+//
+// Factory transfer — move orders between factories without losing their origin.
+//
+export const TransferOrderZod = z.object({
+  targetFactoryId: IDZod,
+  /** Free-text reason logged with the audit entry. */
+  reason: z.string().max(200).optional(),
+});
+export class TransferOrderDto extends createZodDto(extendApi(TransferOrderZod)) {}
+
+export const BulkTransferOrderZod = z.object({
+  ids: IDZod.array().min(1),
+  targetFactoryId: IDZod,
+  reason: z.string().max(200).optional(),
+});
+export class BulkTransferOrderDto extends createZodDto(extendApi(BulkTransferOrderZod)) {}
+
+export const TransferOrderResZod = ResZod.extend({
+  data: z.object({ matched: z.number(), modified: z.number() }),
+});
+export class TransferOrderResDto extends createZodDto(extendApi(TransferOrderResZod)) {}
+
+//
+// Factory overview — used by the new "Đơn hàng theo xưởng" dashboard tab.
+//
+
+/** Option list shown in the factory tab filter selects + Summary breakdowns. */
+export const FactoryFilterOptionZod = z.object({
+  value: z.string(),
+  label: z.string(),
+  count: z.number(),
+});
+export type FactoryFilterOption = z.infer<typeof FactoryFilterOptionZod>;
+
+export const FactoryOverviewCellZod = z.object({
+  factoryId: z.string(),
+  factoryName: z.string(),
+  factoryShortName: z.string().optional(),
+  /** Total orders CURRENTLY producing here. */
+  total: z.number(),
+  /** Pure orders (no transfer) currently here. */
+  pure: z.number(),
+  /** Orders received from other factories (transferred in). */
+  transferredIn: z.number(),
+  /** Orders that ORIGINATED here but are now elsewhere (transferred out). */
+  transferredOut: z.number(),
+  /** Distinct `type` values currently here. */
+  productCount: z.number(),
+  /** Distinct `fabricType` values currently here. */
+  fabricCount: z.number(),
+  /** Distinct `machineTypeId` values currently here. */
+  machineCount: z.number(),
+  /** Orders here whose `toolResult` resolves to a "has tool" code. */
+  withToolCount: z.number(),
+  /** Top-N per-dimension breakdowns used by the Summary sub-tab. */
+  breakdowns: z.object({
+    products: FactoryFilterOptionZod.array(),
+    fabrics: FactoryFilterOptionZod.array(),
+    sizes: FactoryFilterOptionZod.array(),
+    toolResults: FactoryFilterOptionZod.array(),
+  }),
+});
+export type FactoryOverviewCell = z.infer<typeof FactoryOverviewCellZod>;
+
+export const FactoryFlowZod = z.object({
+  fromFactoryId: z.string(),
+  fromName: z.string(),
+  fromShortName: z.string().optional(),
+  toFactoryId: z.string(),
+  toName: z.string(),
+  toShortName: z.string().optional(),
+  count: z.number(),
+  totalQuantity: z.number(),
+});
+export type FactoryFlow = z.infer<typeof FactoryFlowZod>;
+
+export const FactoryOverviewZod = z.object({
+  factories: FactoryOverviewCellZod.array(),
+  flows: FactoryFlowZod.array(),
+  totals: z.object({
+    total: z.number(),
+    transferred: z.number(),
+    pure: z.number(),
+  }),
+  /** Distinct values within the date range — used to populate filter selects. */
+  availableFilters: z.object({
+    products: FactoryFilterOptionZod.array(),
+    fabrics: FactoryFilterOptionZod.array(),
+    toolResults: FactoryFilterOptionZod.array(),
+    machineTypes: FactoryFilterOptionZod.array(),
+  }),
+});
+export type FactoryOverview = z.infer<typeof FactoryOverviewZod>;
+
+export const GetFactoryOverviewZod = z.object({
+  createdFrom: z.string().optional(),
+  createdTo: z.string().optional(),
+  /**
+   * When set, scopes the filter dropdowns (`availableFilters`) to orders
+   * currently at this factory. The 3 factory cards + flow matrix stay
+   * unscoped so the global view is preserved.
+   */
+  factoryId: z.string().optional(),
+});
+export class GetFactoryOverviewDto extends createZodDto(extendApi(GetFactoryOverviewZod)) {}
+
+export const GetFactoryOverviewResZod = ResZod.extend({ data: FactoryOverviewZod });
+export class GetFactoryOverviewResDto extends createZodDto(extendApi(GetFactoryOverviewResZod)) {}

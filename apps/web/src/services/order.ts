@@ -1,6 +1,8 @@
 import type {
+  BulkTransferOrderDto,
   BulkUpdateOrderFieldDto,
   ImportProductionOrdersDto,
+  TransferOrderDto,
   UpdateOrderFieldDto,
 } from 'shared';
 import { callApi } from '../apis';
@@ -46,6 +48,26 @@ const getOrdersGrouped = (query: string = '') => {
   return callApi(`/${CONFIG.API_VERSION}/orders/grouped${query}`, 'get');
 };
 
+const getFactoryOverview = (query: string = '') => {
+  return callApi(`/${CONFIG.API_VERSION}/orders/factory-overview${query}`, 'get');
+};
+
+const transferOrder = (id: string, data: TransferOrderDto) => {
+  return callApi(`/${CONFIG.API_VERSION}/orders/${id}/transfer`, 'patch', data);
+};
+
+const bulkTransferOrders = (data: BulkTransferOrderDto) => {
+  return callApi(`/${CONFIG.API_VERSION}/orders/bulk-transfer`, 'patch', data);
+};
+
+const backfillFabric = () => {
+  return callApi(`/${CONFIG.API_VERSION}/orders/backfill-fabric`, 'post');
+};
+
+const exportOrders = (query: string = '') => {
+  return callApi(`/${CONFIG.API_VERSION}/orders/export${query}`, 'get');
+};
+
 export const order = {
   getOrders,
   importOrders,
@@ -57,4 +79,9 @@ export const order = {
   getStatusOverview,
   getImportSummary,
   getOrdersGrouped,
+  getFactoryOverview,
+  transferOrder,
+  bulkTransferOrders,
+  backfillFabric,
+  exportOrders,
 };

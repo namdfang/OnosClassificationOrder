@@ -27,6 +27,7 @@ const ACTION_BADGE: Record<ProductionOrderLogAction, { label: string; variant: '
   bulk_update: { label: 'Bulk', variant: 'default' },
   import: { label: 'Import', variant: 'outline' },
   delete: { label: 'Xóa', variant: 'destructive' },
+  transfer: { label: 'Chuyển xưởng', variant: 'warning' },
 };
 
 const FIELD_LABEL: Record<string, string> = {

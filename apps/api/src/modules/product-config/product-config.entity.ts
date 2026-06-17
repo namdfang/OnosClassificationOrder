@@ -26,6 +26,10 @@ export class ProductConfigEntity extends DatabaseEntityAbstract {
   /** workshop_config code (category=fabric_type). Default fabric for orders mapped to this product. */
   @Prop({ trim: true })
   fabricType?: string;
+
+  /** workshop_config code (category=tool_result). Default tool status — copied to order.toolResult at import. */
+  @Prop({ trim: true })
+  toolResult?: string;
 }
 
 assertSameType<ProductConfig, ProductConfigEntity>();

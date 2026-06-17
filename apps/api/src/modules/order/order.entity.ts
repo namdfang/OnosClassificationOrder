@@ -134,6 +134,14 @@ export class OrderEntity extends DatabaseEntityAbstract {
   @Prop({ ref: 'FactoryEntity', index: true })
   factoryId?: string;
 
+  /**
+   * Original factory at import time. `factoryId` mutates on transfer, this one
+   * doesn't — drives the "transferred from ML to TN" classification in the
+   * factory dashboard. Backfilled to equal `factoryId` for legacy rows.
+   */
+  @Prop({ ref: 'FactoryEntity', index: true })
+  originalFactoryId?: string;
+
   @Prop({ ref: 'MachineTypeEntity', index: true })
   machineTypeId?: string;
 
@@ -181,6 +189,13 @@ export const OrderSchema = SchemaFactory.createForClass(OrderEntity);
 OrderSchema.virtual('factory', {
   ref: 'FactoryEntity',
   localField: 'factoryId',
+  foreignField: '_id',
+  justOne: true,
+});
+
+OrderSchema.virtual('originalFactory', {
+  ref: 'FactoryEntity',
+  localField: 'originalFactoryId',
   foreignField: '_id',
   justOne: true,
 });

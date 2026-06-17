@@ -1,13 +1,14 @@
 import React, { useEffect, useState } from 'react';
-import { BarChart3, ClipboardList } from 'lucide-react';
+import { BarChart3, ClipboardList, Factory } from 'lucide-react';
 import { useSearchParams } from 'react-router-dom';
 
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 
+import OrderFactoryTab from './OrderFactoryTab';
 import OrderStatsTab from './OrderStatsTab';
 import OrderStatusTab from './OrderStatusTab';
 
-const TABS = ['stats', 'status'] as const;
+const TABS = ['stats', 'status', 'factory'] as const;
 type TabKey = (typeof TABS)[number];
 
 export default function Home() {
@@ -56,6 +57,9 @@ export default function Home() {
           <TabsTrigger value="status" className="gap-1.5">
             <ClipboardList size={14} /> Tình trạng đơn hàng
           </TabsTrigger>
+          <TabsTrigger value="factory" className="gap-1.5">
+            <Factory size={14} /> Đơn hàng theo xưởng
+          </TabsTrigger>
         </TabsList>
 
         <TabsContent value="stats">
@@ -63,6 +67,9 @@ export default function Home() {
         </TabsContent>
         <TabsContent value="status">
           <OrderStatusTab />
+        </TabsContent>
+        <TabsContent value="factory">
+          <OrderFactoryTab />
         </TabsContent>
       </Tabs>
     </div>

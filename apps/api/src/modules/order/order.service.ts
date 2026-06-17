@@ -1,13 +1,25 @@
-import { BadRequestException, ForbiddenException, Inject, Injectable, NotFoundException } from '@nestjs/common';
+import {
+  BadRequestException,
+  ForbiddenException,
+  Inject,
+  Injectable,
+  NotFoundException,
+  OnModuleInit,
+} from '@nestjs/common';
 import { InjectModel } from '@nestjs/mongoose';
 import { Model } from 'mongoose';
 import type {
+  BulkTransferOrderDto,
   BulkUpdateOrderFieldDto,
   BulkUpdateOrderFieldResDto,
   BreakdownBucket,
   DesignFields,
   FactoryBreakdown,
   FactoryBucket,
+  FactoryFlow,
+  FactoryOverviewCell,
+  GetFactoryOverviewDto,
+  GetFactoryOverviewResDto,
   GetGroupedProductionOrdersResDto,
   GetImportSummaryDto,
   GetImportSummaryResDto,
@@ -28,6 +40,8 @@ import type {
   OrderStatusOverview,
   OrderWorkshopField,
   SizeSummary,
+  TransferOrderDto,
+  TransferOrderResDto,
   TypeSummary,
   UpdateOrderFieldDto,
   UpdateOrderFieldResDto,
@@ -64,7 +78,9 @@ const FIELD_EDIT_ROLES: Record<OrderWorkshopField, RoleType[]> = {
   printStatus: [...ADMIN_ROLES, RoleType.Fulfillment],
   printStatusNote: [...ADMIN_ROLES, RoleType.Fulfillment],
   toolResult: [...ADMIN_ROLES, RoleType.Designer],
-  toolResultNote: [...ADMIN_ROLES, RoleType.Designer],
+  // Fulfillment chỉnh được "Note kq Tool" (= toolResultNote) để cập nhật
+  // tình trạng đơn sau khi in xong.
+  toolResultNote: [...ADMIN_ROLES, RoleType.Designer, RoleType.Fulfillment],
   errorFile: [...ADMIN_ROLES, RoleType.Designer],
   errorFileNote: [...ADMIN_ROLES, RoleType.Designer],
   assignee: [...ADMIN_ROLES, RoleType.Designer],
@@ -79,7 +95,7 @@ const ORDER_LIST_CACHE_PREFIX = 'orders:list:';
 const ORDER_LIST_CACHE_TTL_SECONDS = 60;
 
 @Injectable()
-export class OrderService {
+export class OrderService implements OnModuleInit {
   constructor(
     private readonly orderRepository: OrderRepository,
     private readonly productConfigRepository: ProductConfigRepository,
@@ -89,6 +105,23 @@ export class OrderService {
     @Inject('winston') private readonly logger: Logger,
     private readonly redisCacheService: RedisCacheService,
   ) {}
+
+  /**
+   * One-shot backfill — every order has an `originalFactoryId` so the factory
+   * transfer dashboard can tell "still here" vs "received from elsewhere".
+   * Legacy rows imported before this field existed copy their current
+   * `factoryId` into the new column (treats them as "pure", never transferred).
+   */
+  async onModuleInit() {
+    const result = await this.orderModel.updateMany(
+      { originalFactoryId: { $exists: false }, factoryId: { $exists: true, $ne: null } },
+      [{ $set: { originalFactoryId: '$factoryId' } }],
+    );
+    if (result.modifiedCount > 0) {
+      // eslint-disable-next-line no-console
+      console.log(`[order-backfill] originalFactoryId set on ${result.modifiedCount} legacy rows`);
+    }
+  }
 
   /**
    * Per-role visibility filter, applied on top of any client-side query filters.
@@ -215,6 +248,36 @@ export class OrderService {
       filter.toolResultNote = { $in: dto.toolResultNote.split(',').filter(Boolean) };
     if (dto.assignee) filter.assignee = { $in: dto.assignee.split(',').filter(Boolean) };
     if (dto.errorFile) filter.errorFile = { $in: dto.errorFile.split(',').filter(Boolean) };
+    // Factory tab filters — exact product name / fabric code / tool code.
+    if (dto.type) filter.type = { $in: dto.type.split(',').filter(Boolean) };
+    if (dto.fabricType) filter.fabricType = { $in: dto.fabricType.split(',').filter(Boolean) };
+    if (dto.toolResult) filter.toolResult = { $in: dto.toolResult.split(',').filter(Boolean) };
+
+    // Transfer filters — let the factory tab slice orders by direction.
+    if (dto.originalFactoryId) {
+      filter.originalFactoryId = { $in: dto.originalFactoryId.split(',').filter(Boolean) };
+    }
+    if (dto.transferStatus) {
+      // Supported tokens:
+      //   "transferred"             → originalFactoryId !== factoryId
+      //   "pure"                    → originalFactoryId == factoryId
+      //   "transferred-in:<fid>"    → factoryId=fid AND originalFactoryId != fid
+      //   "transferred-out:<fid>"   → originalFactoryId=fid AND factoryId != fid
+      const tok = dto.transferStatus.trim();
+      if (tok === 'transferred') {
+        filter.$expr = { $ne: ['$originalFactoryId', '$factoryId'] };
+      } else if (tok === 'pure') {
+        filter.$expr = { $eq: ['$originalFactoryId', '$factoryId'] };
+      } else if (tok.startsWith('transferred-in:')) {
+        const fid = tok.slice('transferred-in:'.length);
+        filter.factoryId = fid;
+        filter.$expr = { $ne: ['$originalFactoryId', '$factoryId'] };
+      } else if (tok.startsWith('transferred-out:')) {
+        const fid = tok.slice('transferred-out:'.length);
+        filter.originalFactoryId = fid;
+        filter.$expr = { $ne: ['$originalFactoryId', '$factoryId'] };
+      }
+    }
     return filter;
   }
 
@@ -257,6 +320,30 @@ export class OrderService {
     //   .catch(() => undefined);
 
     return result;
+  }
+
+  /**
+   * Export EVERY order matching the current filter (no pagination). Used by
+   * the "Đơn hàng theo xưởng" tab to dump the visible scope to a spreadsheet.
+   * Populates factory / machineType / productConfig so FE can render names
+   * without an extra lookup. Caller is responsible for capping payload — the
+   * filter (date range + factory + product/fabric/tool/machine) should keep
+   * this bounded to a few thousand rows in practice.
+   */
+  async exportOrders(
+    dto: GetProductionOrdersDto,
+    roleName?: RoleType,
+  ): Promise<{ success: true; data: unknown[]; total: number }> {
+    const filter = this.buildOrderListFilter(dto, roleName);
+    const data = await this.orderRepository.findAll(filter, {
+      sort: { type: 1, size: 1, fabricType: 1, createdAt: -1 },
+      populate: [
+        { path: 'factory', select: ['name', 'shortName'] },
+        { path: 'machineType', select: ['name', 'shortName'] },
+        { path: 'productConfig', select: ['fullName', 'shortName'] },
+      ],
+    });
+    return { success: true, data: data as unknown[], total: data.length };
   }
 
   /**
@@ -355,7 +442,10 @@ export class OrderService {
    * Mockups are bucketed by URL string — `count > 1` means duplicate (same
    * mockup image used across multiple orders).
    */
-  async getDashboard(dto: GetOrderDashboardDto): Promise<GetOrderDashboardResDto> {
+  async getDashboard(
+    dto: GetOrderDashboardDto,
+    roleName?: RoleType,
+  ): Promise<GetOrderDashboardResDto> {
     // [cache disabled]
     // const cacheKey = `orders:dashboard:${Buffer.from(JSON.stringify(dto)).toString('base64')}`;
     // try {
@@ -364,6 +454,11 @@ export class OrderService {
     // } catch { /* fall through */ }
 
     const match: Record<string, unknown> = {};
+    // Fulfillment chỉ xử lý đơn đã Ok (Designer đã đánh dấu) — apply ở mọi
+    // aggregation để cards / breakdown / byUser cũng phản ánh đúng scope.
+    if (roleName === RoleType.Fulfillment) {
+      match.readyForFulfill = true;
+    }
     if (dto.startDate || dto.endDate) {
       const range: Record<string, Date> = {};
       if (dto.startDate) range.$gte = new Date(dto.startDate);
@@ -372,7 +467,11 @@ export class OrderService {
         end.setHours(23, 59, 59, 999);
         range.$lte = end;
       }
-      match.orderAt = range;
+      // Filter by `createdAt` (import time) — `orderAt` is when the customer
+      // placed the order at the marketplace and can be days/weeks earlier,
+      // which doesn't match what users expect when picking "today" on the
+      // production dashboard.
+      match.createdAt = range;
     }
 
     if (dto.searchType?.trim()) {
@@ -940,6 +1039,473 @@ export class OrderService {
     };
   }
 
+  /**
+   * Move a single order to a different factory. Only `factoryId` mutates; the
+   * `originalFactoryId` stays pinned to where it was first imported so the
+   * dashboard can show "received from ML" vs "originally here".
+   */
+  async transferOrder(
+    id: string,
+    dto: TransferOrderDto,
+    ctx?: AuditContext,
+  ): Promise<TransferOrderResDto> {
+    const order = await this.orderRepository.findOne({ _id: id });
+    if (!order) throw new NotFoundException('Order not found');
+    if (order.factoryId === dto.targetFactoryId) {
+      return { success: true, data: { matched: 1, modified: 0 } };
+    }
+    const before = { factoryId: order.factoryId };
+    await this.orderRepository.findOneAndUpdate({ _id: id }, { factoryId: dto.targetFactoryId });
+    void this.orderLogService.write({
+      orderId: id,
+      action: 'transfer',
+      before,
+      after: { factoryId: dto.targetFactoryId, reason: dto.reason },
+      ctx,
+    });
+    void this.invalidateListCache();
+    return { success: true, data: { matched: 1, modified: 1 } };
+  }
+
+  async bulkTransferOrders(
+    dto: BulkTransferOrderDto,
+    ctx?: AuditContext,
+  ): Promise<TransferOrderResDto> {
+    // Skip rows already at target so we don't write no-op logs.
+    const eligible = await this.orderModel
+      .find({ _id: { $in: dto.ids }, factoryId: { $ne: dto.targetFactoryId } })
+      .select({ _id: 1, factoryId: 1 })
+      .lean();
+    const eligibleIds = eligible.map((o) => String(o._id));
+    if (eligibleIds.length === 0) {
+      return { success: true, data: { matched: dto.ids.length, modified: 0 } };
+    }
+    const res = await this.orderModel.updateMany(
+      { _id: { $in: eligibleIds } },
+      { $set: { factoryId: dto.targetFactoryId } },
+    );
+    void this.orderLogService.writeMany(
+      eligible.map((o) => ({
+        orderId: String(o._id),
+        action: 'transfer' as const,
+        before: { factoryId: o.factoryId },
+        after: { factoryId: dto.targetFactoryId, reason: dto.reason },
+        ctx,
+      })),
+    );
+    void this.invalidateListCache();
+    return {
+      success: true,
+      data: { matched: dto.ids.length, modified: res.modifiedCount || 0 },
+    };
+  }
+
+  /**
+   * Dashboard payload for the "Đơn hàng theo xưởng" tab.
+   *  - `factories[i]` = totals at factory i + how many transferred in/out
+   *  - `flows[]` = origin→current pairs with non-trivial count
+   *  - `totals` = grand total + transferred + pure
+   */
+  async getFactoryOverview(
+    dto: GetFactoryOverviewDto,
+    roleName?: RoleType,
+  ): Promise<GetFactoryOverviewResDto> {
+    const match: Record<string, unknown> = {};
+    // Fulfillment chỉ thấy đơn đã Ok — apply scope cho cells + flow + dropdowns.
+    if (roleName === RoleType.Fulfillment) {
+      match.readyForFulfill = true;
+    }
+    if (dto.createdFrom || dto.createdTo) {
+      const range: Record<string, Date> = {};
+      if (dto.createdFrom) range.$gte = new Date(dto.createdFrom);
+      if (dto.createdTo) {
+        const end = new Date(dto.createdTo);
+        end.setHours(23, 59, 59, 999);
+        range.$lte = end;
+      }
+      match.createdAt = range;
+    }
+    // Need both IDs present to classify; unmapped orders are excluded.
+    match.factoryId = { $exists: true, $ne: null };
+    match.originalFactoryId = { $exists: true, $ne: null };
+
+    type FlowRow = { _id: { from: string; to: string }; count: number; totalQuantity: number };
+    const flowRows = await this.orderModel.aggregate<FlowRow>([
+      { $match: match },
+      {
+        $group: {
+          _id: { from: '$originalFactoryId', to: '$factoryId' },
+          count: { $sum: 1 },
+          totalQuantity: { $sum: { $ifNull: ['$quantity', 1] } },
+        },
+      },
+      { $sort: { count: -1 } },
+    ]);
+
+    // One bulk fetch for factory names — both endpoints of every flow.
+    const factoryIds = Array.from(
+      new Set(flowRows.flatMap((f) => [f._id.from, f._id.to]).filter(Boolean)),
+    );
+    const factoryDocs = factoryIds.length
+      ? await (this.orderModel.db.collection('factories') as unknown as {
+          find: (q: Record<string, unknown>) => {
+            toArray: () => Promise<Array<{ _id: unknown; name: string; shortName?: string }>>;
+          };
+        })
+          .find({ _id: { $in: factoryIds } })
+          .toArray()
+      : [];
+    const fmap = new Map<string, { name: string; shortName?: string }>();
+    for (const f of factoryDocs) {
+      fmap.set(String(f._id), { name: f.name, shortName: f.shortName });
+    }
+
+    // Build per-factory totals from flowRows.
+    const cellMap = new Map<string, FactoryOverviewCell>();
+    const ensureCell = (fid: string): FactoryOverviewCell => {
+      let cell = cellMap.get(fid);
+      if (!cell) {
+        const meta = fmap.get(fid) || { name: 'Unknown', shortName: undefined };
+        cell = {
+          factoryId: fid,
+          factoryName: meta.name,
+          factoryShortName: meta.shortName,
+          total: 0,
+          pure: 0,
+          transferredIn: 0,
+          transferredOut: 0,
+          productCount: 0,
+          fabricCount: 0,
+          machineCount: 0,
+          withToolCount: 0,
+          breakdowns: { products: [], fabrics: [], sizes: [], toolResults: [] },
+        };
+        cellMap.set(fid, cell);
+      }
+      return cell;
+    };
+
+    let grandTotal = 0;
+    let transferred = 0;
+    let pure = 0;
+    for (const r of flowRows) {
+      grandTotal += r.count;
+      const from = r._id.from;
+      const to = r._id.to;
+      const isPure = from === to;
+      if (isPure) {
+        pure += r.count;
+        const cell = ensureCell(to);
+        cell.total += r.count;
+        cell.pure += r.count;
+      } else {
+        transferred += r.count;
+        const cellTo = ensureCell(to);
+        cellTo.total += r.count;
+        cellTo.transferredIn += r.count;
+        const cellFrom = ensureCell(from);
+        cellFrom.transferredOut += r.count;
+      }
+    }
+
+    const flows: FactoryFlow[] = flowRows
+      .filter((r) => r._id.from !== r._id.to)
+      .map((r) => {
+        const fmeta = fmap.get(r._id.from) || { name: '?', shortName: undefined };
+        const tmeta = fmap.get(r._id.to) || { name: '?', shortName: undefined };
+        return {
+          fromFactoryId: r._id.from,
+          fromName: fmeta.name,
+          fromShortName: fmeta.shortName,
+          toFactoryId: r._id.to,
+          toName: tmeta.name,
+          toShortName: tmeta.shortName,
+          count: r.count,
+          totalQuantity: r.totalQuantity,
+        };
+      });
+
+    // ─── Per-factory stats: distinct products/fabrics + with-tool counts ───
+    // Tool codes whose `name` starts with "Có" mean the product has a tool.
+    // We resolve once and keep the IDs for an aggregation match.
+    const toolHasCodes = (
+      await this.workshopConfigRepository.findAll({
+        category: WorkshopConfigCategory.ToolResult,
+        name: { $regex: '^Có', $options: 'i' },
+      })
+    ).map((d) => d.code);
+
+    type StatRow = {
+      _id: string;
+      productCount: number;
+      fabricCount: number;
+      machineCount: number;
+      withToolCount: number;
+    };
+    const statRows = await this.orderModel.aggregate<StatRow>([
+      { $match: match },
+      {
+        $group: {
+          _id: '$factoryId',
+          types: { $addToSet: '$type' },
+          fabrics: { $addToSet: '$fabricType' },
+          machines: { $addToSet: '$machineTypeId' },
+          withToolCount: {
+            $sum: { $cond: [{ $in: ['$toolResult', toolHasCodes] }, 1, 0] },
+          },
+        },
+      },
+      {
+        $project: {
+          _id: 1,
+          productCount: {
+            $size: { $filter: { input: '$types', as: 't', cond: { $and: [{ $ne: ['$$t', null] }, { $ne: ['$$t', ''] }] } } },
+          },
+          fabricCount: {
+            $size: { $filter: { input: '$fabrics', as: 'f', cond: { $and: [{ $ne: ['$$f', null] }, { $ne: ['$$f', ''] }] } } },
+          },
+          machineCount: {
+            $size: { $filter: { input: '$machines', as: 'm', cond: { $and: [{ $ne: ['$$m', null] }, { $ne: ['$$m', ''] }] } } },
+          },
+          withToolCount: 1,
+        },
+      },
+    ]);
+    for (const s of statRows) {
+      const cell = cellMap.get(s._id);
+      if (!cell) continue;
+      cell.productCount = s.productCount;
+      cell.fabricCount = s.fabricCount;
+      cell.machineCount = s.machineCount;
+      cell.withToolCount = s.withToolCount;
+    }
+
+    // ─── Per-factory dimension breakdowns (Summary sub-tab) ─────────────
+    // Group by (factoryId, field) and count, then bucket into per-factory
+    // top-N lists. We pull these 4 aggregations in parallel.
+    type BreakdownRow = { _id: { factory: string; v: string }; count: number };
+    const breakdownPipeline = (field: string, filterOut: { $ne?: unknown } = {}) => [
+      { $match: { ...match, [field]: { $exists: true, $ne: null, $nin: [''], ...filterOut } } },
+      { $group: { _id: { factory: '$factoryId', v: `$${field}` }, count: { $sum: 1 } } },
+      { $sort: { count: -1 as const } },
+    ];
+    const [productBd, fabricBd, sizeBd, toolBd] = await Promise.all([
+      this.orderModel.aggregate<BreakdownRow>(breakdownPipeline('type')),
+      this.orderModel.aggregate<BreakdownRow>(breakdownPipeline('fabricType')),
+      this.orderModel.aggregate<BreakdownRow>(breakdownPipeline('size')),
+      this.orderModel.aggregate<BreakdownRow>(breakdownPipeline('toolResult')),
+    ]);
+    // Resolve fabric + tool codes → names. Product type + size are raw strings.
+    const fabricMetaMap = new Map<string, string>(
+      (await this.workshopConfigRepository.findAll({ category: WorkshopConfigCategory.FabricType })).map(
+        (d) => [d.code, d.name],
+      ),
+    );
+    const toolMetaMap = new Map<string, string>(
+      (await this.workshopConfigRepository.findAll({ category: WorkshopConfigCategory.ToolResult })).map(
+        (d) => [d.code, d.name],
+      ),
+    );
+    const pushBd = (
+      rows: BreakdownRow[],
+      key: 'products' | 'fabrics' | 'sizes' | 'toolResults',
+      label: (v: string) => string,
+      limit = 20,
+    ) => {
+      const perFactory = new Map<string, BreakdownRow[]>();
+      for (const r of rows) {
+        const arr = perFactory.get(r._id.factory) || [];
+        arr.push(r);
+        perFactory.set(r._id.factory, arr);
+      }
+      for (const [fid, list] of perFactory) {
+        const cell = cellMap.get(fid);
+        if (!cell) continue;
+        cell.breakdowns[key] = list.slice(0, limit).map((r) => ({
+          value: r._id.v,
+          label: label(r._id.v),
+          count: r.count,
+        }));
+      }
+    };
+    pushBd(productBd, 'products', (v) => v);
+    pushBd(fabricBd, 'fabrics', (v) => fabricMetaMap.get(v) || v);
+    pushBd(sizeBd, 'sizes', (v) => v);
+    pushBd(toolBd, 'toolResults', (v) => toolMetaMap.get(v) || v);
+
+    // ─── Filter selects: distinct values across the date range ──────────
+    // When the user picks a factory chip, scope the dropdown options to
+    // orders currently at that factory so counts match what they'll see in
+    // the order list below. Cards + flow totals stay unscoped (global view).
+    const filterMatch: Record<string, unknown> = { ...match };
+    if (dto.factoryId) filterMatch.factoryId = dto.factoryId;
+
+    type OptionRow = { _id: string; count: number };
+    const [typeRows, fabricRows, toolRows, machineRows] = await Promise.all([
+      this.orderModel.aggregate<OptionRow>([
+        { $match: { ...filterMatch, type: { $exists: true, $ne: null, $nin: [''] } } },
+        { $group: { _id: '$type', count: { $sum: 1 } } },
+        { $sort: { count: -1 } },
+      ]),
+      this.orderModel.aggregate<OptionRow>([
+        { $match: { ...filterMatch, fabricType: { $exists: true, $ne: null, $nin: [''] } } },
+        { $group: { _id: '$fabricType', count: { $sum: 1 } } },
+        { $sort: { count: -1 } },
+      ]),
+      this.orderModel.aggregate<OptionRow>([
+        { $match: { ...filterMatch, toolResult: { $exists: true, $ne: null, $nin: [''] } } },
+        { $group: { _id: '$toolResult', count: { $sum: 1 } } },
+        { $sort: { count: -1 } },
+      ]),
+      this.orderModel.aggregate<OptionRow>([
+        { $match: { ...filterMatch, machineTypeId: { $exists: true, $ne: null, $nin: [''] } } },
+        { $group: { _id: '$machineTypeId', count: { $sum: 1 } } },
+        { $sort: { count: -1 } },
+      ]),
+    ]);
+
+    // Resolve machineTypeId → name via the machineTypes collection.
+    const machineIds = machineRows.map((r) => r._id);
+    const machineDocs = machineIds.length
+      ? await (this.orderModel.db.collection('machineTypes') as unknown as {
+          find: (q: Record<string, unknown>) => {
+            toArray: () => Promise<Array<{ _id: unknown; name: string; shortName?: string }>>;
+          };
+        })
+          .find({ _id: { $in: machineIds } })
+          .toArray()
+      : [];
+    const machineNameMap = new Map<string, string>();
+    for (const m of machineDocs) {
+      machineNameMap.set(
+        String(m._id),
+        m.shortName ? `${m.shortName} · ${m.name}` : m.name,
+      );
+    }
+
+    // Resolve fabric/tool codes → human-readable names.
+    const fabricNameMap = new Map<string, string>(
+      (
+        await this.workshopConfigRepository.findAll({
+          category: WorkshopConfigCategory.FabricType,
+        })
+      ).map((d) => [d.code, d.name]),
+    );
+    const toolNameMap = new Map<string, string>(
+      (
+        await this.workshopConfigRepository.findAll({
+          category: WorkshopConfigCategory.ToolResult,
+        })
+      ).map((d) => [d.code, d.name]),
+    );
+
+    return {
+      success: true,
+      data: {
+        factories: Array.from(cellMap.values()).sort((a, b) => b.total - a.total),
+        flows,
+        totals: { total: grandTotal, transferred, pure },
+        availableFilters: {
+          products: typeRows.map((r) => ({ value: r._id, label: r._id, count: r.count })),
+          fabrics: fabricRows.map((r) => ({
+            value: r._id,
+            label: fabricNameMap.get(r._id) || r._id,
+            count: r.count,
+          })),
+          toolResults: toolRows.map((r) => ({
+            value: r._id,
+            label: toolNameMap.get(r._id) || r._id,
+            count: r.count,
+          })),
+          machineTypes: machineRows.map((r) => ({
+            value: r._id,
+            label: machineNameMap.get(r._id) || r._id,
+            count: r.count,
+          })),
+        },
+      },
+    };
+  }
+
+  /**
+   * Re-derive `fabricType` AND `toolResult` from product config for orders
+   * that don't have these set yet. Non-destructive: existing values are kept,
+   * we only fill blanks.
+   *
+   * Called manually from `/products` after admin edits fabric/tool defaults,
+   * to backfill the rows already in the DB without forcing a re-import.
+   */
+  async backfillOrderFabric(): Promise<{ scanned: number; updated: number }> {
+    type Row = { _id: unknown; setFabric?: string; setTool?: string };
+    const rows = await this.orderModel.aggregate<Row>([
+      {
+        $match: {
+          productConfigId: { $exists: true, $ne: null },
+          $or: [
+            { fabricType: { $exists: false } },
+            { fabricType: null },
+            { fabricType: '' },
+            { toolResult: { $exists: false } },
+            { toolResult: null },
+            { toolResult: '' },
+          ],
+        },
+      },
+      {
+        $lookup: {
+          from: 'productConfigs',
+          localField: 'productConfigId',
+          foreignField: '_id',
+          as: 'pc',
+        },
+      },
+      { $unwind: '$pc' },
+      {
+        $project: {
+          _id: 1,
+          // Only emit if the order field is blank AND product has a value.
+          setFabric: {
+            $cond: [
+              {
+                $and: [
+                  { $or: [{ $eq: ['$fabricType', null] }, { $eq: ['$fabricType', ''] }, { $eq: [{ $type: '$fabricType' }, 'missing'] }] },
+                  { $ne: [{ $ifNull: ['$pc.fabricType', ''] }, ''] },
+                ],
+              },
+              '$pc.fabricType',
+              null,
+            ],
+          },
+          setTool: {
+            $cond: [
+              {
+                $and: [
+                  { $or: [{ $eq: ['$toolResult', null] }, { $eq: ['$toolResult', ''] }, { $eq: [{ $type: '$toolResult' }, 'missing'] }] },
+                  { $ne: [{ $ifNull: ['$pc.toolResult', ''] }, ''] },
+                ],
+              },
+              '$pc.toolResult',
+              null,
+            ],
+          },
+        },
+      },
+      { $match: { $or: [{ setFabric: { $ne: null } }, { setTool: { $ne: null } }] } },
+    ]);
+
+    let updated = 0;
+    for (const r of rows) {
+      const patch: Record<string, unknown> = {};
+      if (r.setFabric) patch.fabricType = r.setFabric;
+      if (r.setTool) patch.toolResult = r.setTool;
+      if (Object.keys(patch).length === 0) continue;
+      await this.orderModel.updateOne({ _id: r._id }, { $set: patch });
+      updated++;
+    }
+    void this.invalidateListCache();
+    return { scanned: rows.length, updated };
+  }
+
   async deleteOrder(id: string, ctx?: AuditContext) {
     const o = await this.orderRepository.findOne({ _id: id });
     if (!o) throw new NotFoundException('Order not found');
@@ -1162,6 +1728,7 @@ export class OrderService {
         let factoryId: string | undefined;
         let machineTypeId: string | undefined;
         let fabricType: string | undefined;
+        let toolResult: string | undefined;
 
         if (row.type?.trim()) {
           const pc = await this.productConfigRepository.findOne({
@@ -1173,6 +1740,7 @@ export class OrderService {
             factoryId = pc.factoryId;
             machineTypeId = pc.machineTypeId;
             fabricType = pc.fabricType || undefined;
+            toolResult = pc.toolResult || undefined;
             mapped++;
           } else {
             unmapped++;
@@ -1217,14 +1785,20 @@ export class OrderService {
           productConfigId,
           factoryId,
           machineTypeId,
-          fabricType,
         };
+        // Insert-only fields: fabric + toolResult are *defaults* derived from
+        // product config. If the workshop already overrode them on a previous
+        // run, re-import shouldn't blow those edits away. `originalFactoryId`
+        // is pinned for the same reason (a transferred order keeps its origin).
+        const insertOnly: Record<string, unknown> = { originalFactoryId: factoryId };
+        if (fabricType) insertOnly.fabricType = fabricType;
+        if (toolResult) insertOnly.toolResult = toolResult;
 
         // Atomic upsert by productionId — includes soft-deleted records
         const existed = await this.orderModel.exists({ productionId: data.productionId });
         const upserted = await this.orderModel.findOneAndUpdate(
           { productionId: data.productionId },
-          { $set: data, $setOnInsert: { createdAt: new Date() } },
+          { $set: data, $setOnInsert: { createdAt: new Date(), ...insertOnly } },
           { upsert: true, new: true },
         );
         if (existed) {

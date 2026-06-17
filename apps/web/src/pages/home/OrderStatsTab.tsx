@@ -103,7 +103,12 @@ function formatNumber(n: number): string {
 }
 
 function todayISO(): string {
-  return new Date().toISOString().slice(0, 10);
+  // Local date — avoid UTC shift that turns morning hours into yesterday.
+  const d = new Date();
+  const yyyy = d.getFullYear();
+  const mm = String(d.getMonth() + 1).padStart(2, '0');
+  const dd = String(d.getDate()).padStart(2, '0');
+  return `${yyyy}-${mm}-${dd}`;
 }
 
 /**
@@ -119,7 +124,10 @@ const GRID_COLS_CLASS =
 function daysAgoISO(days: number): string {
   const d = new Date();
   d.setDate(d.getDate() - days);
-  return d.toISOString().slice(0, 10);
+  const yyyy = d.getFullYear();
+  const mm = String(d.getMonth() + 1).padStart(2, '0');
+  const dd = String(d.getDate()).padStart(2, '0');
+  return `${yyyy}-${mm}-${dd}`;
 }
 
 interface MetricCardProps {
@@ -153,7 +161,8 @@ export default function OrderStatsTab() {
   const { profile } = useAuthStore();
   const [loading, setLoading] = useState(false);
   const [data, setData] = useState<Dashboard | null>(null);
-  const [startDate, setStartDate] = useState<string>(daysAgoISO(30));
+  // Default range = today only. Widen via the 7d/30d/90d preset chips.
+  const [startDate, setStartDate] = useState<string>(todayISO());
   const [endDate, setEndDate] = useState<string>(todayISO());
   const [searchType, setSearchType] = useState<string>('');
   const [searchUser, setSearchUser] = useState<string>('');

@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useRef } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import { useSearchParams } from 'react-router-dom';
 
 export type StatusFilterCategory =
@@ -37,45 +37,36 @@ const CSV_KEYS: StatusFilterCategory[] = [
 ];
 
 function todayISO() {
+  // Use local date components — `Date.toISOString()` converts to UTC, which
+  // returns yesterday's date in UTC+ timezones during morning hours.
   const d = new Date();
-  d.setHours(0, 0, 0, 0);
-  return d.toISOString().slice(0, 10);
-}
-function daysAgoISO(n: number) {
-  const d = new Date();
-  d.setDate(d.getDate() - n);
-  d.setHours(0, 0, 0, 0);
-  return d.toISOString().slice(0, 10);
+  const yyyy = d.getFullYear();
+  const mm = String(d.getMonth() + 1).padStart(2, '0');
+  const dd = String(d.getDate()).padStart(2, '0');
+  return `${yyyy}-${mm}-${dd}`;
 }
 
 /**
- * Filter state stored in URL search params so refresh / share keeps the view.
- * Default range = last 7 days (matches BE Designer/Fulfill window).
+ * Status-tab filter state. Workshop-flow filters (printStatus, assignee...)
+ * round-trip through the URL so deep links + tab switches preserve them.
+ * Date range is intentionally local-only — workshop staff want a fresh "today"
+ * every mount; URL-shared dates from a previous session caused stale views.
  */
 export function useStatusFilter() {
   const [searchParams, setSearchParams] = useSearchParams();
 
-  // One-shot cleanup: if URL has a stale `createdTo` (older than today), drop
-  // the date params so the dashboard falls back to default (last 7 days
-  // ending today). Without this, a URL bookmarked yesterday silently misses
-  // every order created today.
-  const staleCleanupDone = useRef(false);
+  // Dates live in component state, NOT URL — always default to today on mount.
+  const [createdFrom, setCreatedFrom] = useState<string>(todayISO());
+  const [createdTo, setCreatedTo] = useState<string>(todayISO());
+
+  // Belt + suspenders: even if HMR preserved a stale state across a hot edit,
+  // force both inputs back to today on the very first mount. Runs once.
   useEffect(() => {
-    if (staleCleanupDone.current) return;
-    staleCleanupDone.current = true;
-    const urlTo = searchParams.get('createdTo');
-    if (urlTo && urlTo < todayISO()) {
-      setSearchParams(
-        (prev) => {
-          const sp = new URLSearchParams(prev);
-          sp.delete('createdFrom');
-          sp.delete('createdTo');
-          return sp;
-        },
-        { replace: true },
-      );
-    }
-  }, [searchParams, setSearchParams]);
+    const today = todayISO();
+    setCreatedFrom(today);
+    setCreatedTo(today);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   const filter: StatusFilter = useMemo(() => {
     const f: StatusFilter = {
@@ -94,18 +85,16 @@ export function useStatusFilter() {
     const factoryId = searchParams.get('factoryId');
     const machineTypeId = searchParams.get('machineTypeId');
     const ready = searchParams.get('readyForFulfill');
-    const from = searchParams.get('createdFrom') || daysAgoISO(7);
-    const to = searchParams.get('createdTo') || todayISO();
     const search = searchParams.get('search') || undefined;
     if (factoryId) f.factoryId = factoryId;
     if (machineTypeId) f.machineTypeId = machineTypeId;
     if (ready === 'true') f.readyForFulfill = true;
     else if (ready === 'false') f.readyForFulfill = false;
-    f.createdFrom = from;
-    f.createdTo = to;
+    f.createdFrom = createdFrom;
+    f.createdTo = createdTo;
     f.search = search;
     return f;
-  }, [searchParams]);
+  }, [searchParams, createdFrom, createdTo]);
 
   const writeParams = useCallback(
     (mutator: (sp: URLSearchParams) => void) => {
@@ -138,6 +127,15 @@ export function useStatusFilter() {
 
   const setScalar = useCallback(
     (key: 'factoryId' | 'machineTypeId' | 'createdFrom' | 'createdTo' | 'search', value: string | undefined) => {
+      // Dates: local state. Others: URL.
+      if (key === 'createdFrom') {
+        setCreatedFrom(value || todayISO());
+        return;
+      }
+      if (key === 'createdTo') {
+        setCreatedTo(value || todayISO());
+        return;
+      }
       writeParams((sp) => {
         if (value === undefined || value === '') sp.delete(key);
         else sp.set(key, value);
@@ -162,10 +160,10 @@ export function useStatusFilter() {
       sp.delete('factoryId');
       sp.delete('machineTypeId');
       sp.delete('readyForFulfill');
-      sp.delete('createdFrom');
-      sp.delete('createdTo');
       sp.delete('search');
     });
+    setCreatedFrom(todayISO());
+    setCreatedTo(todayISO());
   }, [writeParams]);
 
   const queryString = useMemo(() => {

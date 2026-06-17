@@ -24,6 +24,8 @@ export type WorkshopOrderRow = {
   inProductionAt?: string;
   factory?: { name?: string; shortName?: string };
   machineType?: { name?: string; shortName?: string };
+  originalFactoryId?: string;
+  factoryId?: string;
   isMapped?: boolean;
   productConfig?: { fullName?: string };
 
