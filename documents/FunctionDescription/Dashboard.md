@@ -1,17 +1,23 @@
 # Dashboard — Function Description
 
-> **File FE:** `apps/web/src/pages/home/index.tsx` (Tabs wrapper)
+> **File FE:** `apps/web/src/pages/home/index.tsx` (Tabs wrapper, 3 tab: `stats|status|factory`)
 > **Tab A — Thống kê:** `apps/web/src/pages/home/OrderStatsTab.tsx`
 > **Tab B — Tình trạng:** `apps/web/src/pages/home/OrderStatusTab.tsx` + `status/{KpiCard,BreakdownCard,FilterChipBar,OrdersMiniTable,useStatusFilter}.tsx`
-> **File BE:** `apps/api/src/modules/order/order.service.ts` → `getDashboard()`, `getStatusOverview()`
-> **Route:** `/dashboard?tab=stats|status`
-> **API:** `GET /v1/orders/dashboard`, `GET /v1/orders/status-overview`
+> **Tab C — Đơn theo xưởng:** `apps/web/src/pages/home/OrderFactoryTab.tsx` + `apps/web/src/pages/home/exportOrders.ts` (XLSX builder)
+> **File BE:** `apps/api/src/modules/order/order.service.ts` → `getDashboard()`, `getStatusOverview()`, `getFactoryOverview()`, `exportOrders()`, `transferOrder()`, `bulkTransferOrders()`
+> **Route:** `/dashboard?tab=stats|status|factory`
+> **API:**
+>  - `GET /v1/orders/dashboard` (Tab A)
+>  - `GET /v1/orders/status-overview` (Tab B)
+>  - `GET /v1/orders/factory-overview` (Tab C)
+>  - `GET /v1/orders/export` (Tab C — full-list export, không phân trang)
+>  - `PATCH /v1/orders/:id/transfer` + `PATCH /v1/orders/bulk-transfer` (Tab C — chuyển xưởng)
 
 ---
 
 ## 1. Overview
 
-Dashboard chia 2 tab độc lập:
+Dashboard chia 3 tab độc lập:
 
 ### Tab A — "Thống kê đơn & sản phẩm" (cũ)
 Tổng quan đơn theo kỳ thời gian:
@@ -31,6 +37,18 @@ Thống kê + drill-down theo workshop fields:
 - **Mini order list** (20 row/page) lọc theo filter hiện tại, có inline edit theo permission
 
 Data từ `GET /v1/orders/status-overview` + `GET /v1/orders` (list).
+
+### Tab C — "Đơn hàng theo xưởng" (Phase 7)
+Dashboard chuyển xưởng + xuất Excel + filter chiều sâu:
+- **3 Factory cards** (ML / TN / US) — mỗi card: tổng đơn đang sản xuất tại đó, pure, nhận từ xưởng khác, đã chuyển đi, distinct product/fabric/machine count, withTool count
+- **Flow visualization** — danh sách luồng `(Từ xưởng → Đến xưởng, count, totalQuantity)`
+- **Filter chip bar** factory `Tất cả / Đang ở ML / Đang ở TN / Đang ở US` + 4 select filter (Sản phẩm / Loại vải / Loại máy / Kết quả Tool) auto-scope theo factory chip đã chọn
+- **Bảng đơn 20 cột** (reuse `WORKSHOP_COLS`) — cell inline edit theo permission
+- **Bulk transfer** — checkbox row → toolbar `Send` mở Transfer dialog (chọn xưởng đích + lý do, tối đa 200 ký tự)
+- **Xuất Excel** — bypass phân trang, gom toàn bộ đơn theo filter hiện tại + overview thành workbook .xlsx multi-sheet
+- Date filters mặc định **= hôm nay** (`createdFrom = createdTo = todayISO()`) mỗi lần mount
+
+Data từ `GET /v1/orders/factory-overview` + `GET /v1/orders?sort=grouped&...` + `GET /v1/orders/export` (khi bấm Xuất Excel).
 
 ---
 
@@ -181,7 +199,9 @@ $facet {
 
 ## 7. Permissions
 
-Page mở cho mọi role có `page.dashboard` (Admin, Manager, Support, Designer, Fulfillment). Decorator BE: `@Auth(ORDER_VIEW_ROLES)` cho cả 2 endpoint dashboard/statusOverview.
+Page mở cho mọi role có `page.dashboard` (Admin, Manager, Support, Designer, Fulfillment). Decorator BE: `@Auth(ORDER_VIEW_ROLES)` cho 3 endpoint `dashboard` / `status-overview` / `factory-overview` / `export`.
+
+Tab C — **chuyển xưởng** (`/:id/transfer`, `/bulk-transfer`) gắn `@Auth(ORDER_WRITE_ROLES)` (SuperAdmin / Admin / Manager / Support). FE check thêm bằng `isAdmin || has('order.transfer')` để ẩn checkbox + nút bulk transfer khỏi Designer/Fulfillment.
 
 ---
 
@@ -227,7 +247,7 @@ Response:
 |------|-----|
 | Admin / Manager / Support | Tổng đơn · Hôm nay · Chờ Ok Tool · Sẵn sàng in · Đã in xong · Lỗi cần xử lý |
 | Designer | Cần check · Ok hôm nay · Đơn lỗi · Tổng (range) |
-| Fulfillment | Sẵn sàng in · Đã in xong · Đơn hôm nay · Tổng (range) **+ mini KPI từng máy** |
+| Fulfillment | Sẵn sàng in · Đã in xong · Đơn hôm nay · Tổng (range) **+ mini KPI từng máy**. Cell `toolResultNote` (Note kq Tool 1) hiển thị inline-edit để Fulfillment cập nhật tình trạng đơn sau khi in. |
 
 ### 8.4 Breakdown card visibility
 
@@ -238,6 +258,8 @@ Mỗi card render conditional theo `usePermission().canViewField(field)`:
 - Admin / Manager: thấy tất cả
 
 Factory + MachineType breakdown chỉ hiển thị cho user có `order.view_admin_table` hoặc isAdmin.
+
+**Lưu ý mặc định range:** từ Phase 7, `useStatusFilter` mặc định **hôm nay** (`todayISO()` dùng local-date components, không phải `toISOString()`) thay vì 7 ngày để khớp hành vi với Tab A/C. Designer/Fulfill vẫn được BE giữ cửa sổ 7 ngày qua `buildVisibilityFilter` nếu client không gửi date override.
 
 ### 8.5 Filter state — `useStatusFilter` hook
 
@@ -278,3 +300,125 @@ Optimistic update qua callback `onUpdated(newValue)` → patch row local state. 
 | Workshop name resolve | 1 bulk fetch all configs vào Map; lookup O(1) |
 | URL state thay vì component state | Refresh / back-forward không mất filter |
 | Optimistic update cell | Không re-fetch toàn list khi sửa 1 field |
+
+---
+
+## 10. Tab C — Đơn hàng theo xưởng (Phase 7)
+
+### 10.1 Khái niệm chuyển xưởng
+
+Mỗi order có 2 field factory:
+- `factoryId` — xưởng **hiện tại** đang sản xuất (mutable qua transfer).
+- `originalFactoryId` — xưởng **gốc** tại lúc import (immutable, backfill bằng `factoryId` cho legacy rows ở `OrderService.onModuleInit()`).
+
+Phân loại đơn:
+- **Pure** — `factoryId === originalFactoryId` (chưa chuyển).
+- **Transferred** — `factoryId !== originalFactoryId`.
+  - Với từng xưởng X: `transferredIn` = đơn `factoryId=X, originalFactoryId≠X`; `transferredOut` = `originalFactoryId=X, factoryId≠X`.
+
+### 10.2 Endpoint `GET /v1/orders/factory-overview`
+
+Query: `createdFrom`, `createdTo`, `factoryId?` (chỉ scope `availableFilters` — cards + flow giữ global).
+
+Response `FactoryOverview` (shared DTO `production-order.dto.ts`):
+```ts
+{
+  totals: { total, transferred, pure },
+  factories: FactoryOverviewCell[],  // 1 cell / factory
+  flows: FactoryFlow[],              // origin→current pairs (count > 0, from ≠ to)
+  availableFilters: {
+    products:    { value, label, count }[],
+    fabrics:     { ... },
+    toolResults: { ... },
+    machineTypes:{ ... }
+  }
+}
+
+FactoryOverviewCell = {
+  factoryId, factoryName, factoryShortName,
+  total, pure, transferredIn, transferredOut,
+  productCount, fabricCount, machineCount, withToolCount,
+  breakdowns: { products, fabrics, sizes, toolResults }  // top 20 mỗi dimension
+}
+```
+
+Aggregation chính (`OrderService.getFactoryOverview`):
+1. `$match` theo `createdAt` range + `factoryId, originalFactoryId` đều tồn tại + (`readyForFulfill=true` nếu role là Fulfillment).
+2. `$group` theo `(originalFactoryId, factoryId)` → bảng flow.
+3. Bulk fetch tên factory từ collection `factories`.
+4. Duyệt flow rows để xây `cellMap` (pure / in / out / total).
+5. Aggregation song song:
+   - **statRows** — distinct types/fabrics/machines + withToolCount per factory (`toolResult ∈ toolHasCodes` với `toolHasCodes = workshop_config { category=tool_result, name ~ '^Có' }`).
+   - **4 breakdownRows** — group `(factoryId, value)` cho products / fabrics / sizes / toolResults.
+   - **4 optionRows** — distinct values theo `filterMatch` (= match + `factoryId` nếu user đã chọn chip).
+6. Resolve fabric/tool codes → name qua `WorkshopConfigRepository.findAll({ category })`, machine ID → `shortName · name` qua collection `machineTypes`.
+
+### 10.3 Endpoint `GET /v1/orders/export`
+
+Cùng filter shape như `GET /v1/orders` (kế thừa `buildOrderListFilter` + `buildVisibilityFilter`), **bỏ phân trang**, populate `factory / machineType / productConfig`. FE giới hạn payload bằng cách giữ filter chặt (date range + factory chip + selects).
+
+Sort `{ type:1, size:1, fabricType:1, createdAt:-1 }` để file Excel xuất ra đã nhóm sẵn.
+
+### 10.4 Endpoint chuyển xưởng
+
+| Method | Path | Body | Mô tả |
+|--------|------|------|-------|
+| PATCH | `/v1/orders/:id/transfer` | `{ targetFactoryId, reason? }` | Đổi `factoryId` cho 1 order; nếu trùng target trả `modified: 0`. |
+| PATCH | `/v1/orders/bulk-transfer` | `{ ids[], targetFactoryId, reason? }` | Pre-filter ID đã ở target (skip no-op), `updateMany` phần còn lại. |
+
+Cả 2 đều:
+- Ghi `OrderLog` `action='transfer'` (xem `OrderLog.md`) với `before={factoryId}`, `after={factoryId, reason}`.
+- Gọi `invalidateListCache()` để clear cache `orders:list:*`.
+
+### 10.5 UI components Tab C
+
+| Section | Component | Mô tả |
+|---------|-----------|-------|
+| Date range bar | `Input type=date` x2 + `RefreshCw` + `Download` | Default = today. Nút `Tải lại` re-fetch overview + rows. |
+| Factory cards | `FactoryCard` (3 cards horizontal) | Click số chính → set `filterMode={kind:'at', factoryId}`. Click ô "Nhận từ xưởng khác" / "Đã chuyển đi" → `{kind:'in'\|'out', factoryId}`. |
+| Flow visualization | Button rows | `[fromShortName] → [toShortName]` + `count + totalQuantity`. Click → filter `{kind:'in', factoryId=to}`. |
+| Filter chip bar | `FilterChip` (`Tất cả` + 1 chip/factory) + 4 `SelectFilter` | Selects auto-reset khi đổi factory chip để tránh combo zero-result. |
+| Bulk toolbar | Toolbar sticky khi `selected.size > 0` | Chỉ render khi `canTransfer = isAdmin \|\| has('order.transfer')`. |
+| Table | `Table` với 1 cột "Xưởng (đang / gốc)" + `WORKSHOP_COLS` filtered theo `canViewField` + cột History | Row có `originalFactoryId !== factoryId` hiện badge `warning` + `← Gốc: shortName`. |
+| `TransferDialog` | `Dialog` | Select target + Input lý do (max 200). Gọi `bulkTransferOrders({ids, targetFactoryId, reason})`. |
+
+### 10.6 Filter mode → query params
+
+`FilterMode` (FE-only union):
+- `{kind:'all'}` → không gửi `factoryId`/`transferStatus`.
+- `{kind:'at', factoryId}` → `?factoryId=…` (đơn đang ở X).
+- `{kind:'in', factoryId}` → `?transferStatus=transferred-in:<fid>`.
+- `{kind:'out', factoryId}` → `?transferStatus=transferred-out:<fid>`.
+
+BE (`OrderService.buildOrderListFilter`) parse `transferStatus` thành `$expr` so sánh `originalFactoryId` vs `factoryId`. Xem `Orders.md §7.x` để biết các token (`transferred / pure / transferred-in:<fid> / transferred-out:<fid>`).
+
+### 10.7 Excel export — multi-sheet workbook
+
+File: `apps/web/src/pages/home/exportOrders.ts` (dùng `xlsx` SheetJS).
+
+Hàm chính: `buildWorkbook(orders, overview, { resolve })` → `XLSX.WorkBook`. Resolve workshop codes thành tên người dùng qua `useWorkshopConfigStore.resolve`. Tải về qua `downloadWorkbook(filename, wb)` → `XLSX.writeFile(..., { bookType:'xlsx' })`.
+
+Cấu trúc workbook:
+
+| Sheet | Mô tả | Cấu trúc |
+|-------|-------|----------|
+| **Tổng quan** | Snapshot scope hiện tại | TỔNG QUAN (total/pure/transferred) → bảng `(Xưởng, Mã, Tổng, Pure, Nhận vào, Chuyển đi, Sản phẩm, Loại vải, Loại máy, Có tool)` → bảng `LUỒNG CHUYỂN XƯỞNG (Từ, Đến, Số đơn, Tổng sản phẩm)`. |
+| **Breakdown** | Long-form pivotable | 4 cột `(Xưởng, Loại, Giá trị, Số đơn)` × mỗi factory × `{Sản phẩm, Loại vải, Size, Kết quả Tool}`. |
+| **Chi tiết đơn** | Detail dump 21 cột | Production ID · User SKU · Size · Trạng thái in · Note Trạng thái in · Kết quả Tool · Note kq Tool 1 · File sửa lỗi · Ghi chú file lỗi · Color · Người thực hiện · Note người thực hiện · Type · Mockup · Design Front · Order ID · In Production At · Type.1 · Nhà máy · Phòng · Loại vải. |
+| **[shortName]** × N | 1 sheet / factory (`sanitizeSheetName` cắt 31 ký tự + thay `:\/?*[]` → `_`) | Header xưởng + dòng `(Tổng, Pure, Nhận vào, Chuyển đi)` + bảng 4 cột song song `Sản phẩm / Loại vải / Size / Kết quả Tool`. |
+
+Tên file: `don-hang-YYYY-MM-DD-HH-MM-SS.xlsx` (timestamp lấy bằng `toLocaleString('sv-SE')` → ISO-like local time).
+
+Trước khi gọi: nếu `data.length === 0` toast warning, không build workbook.
+
+### 10.8 Performance Tab C
+
+| Tối ưu | Vị trí |
+|--------|--------|
+| Tránh re-fetch overview khi đổi page/pageSize | `overviewQuery` chỉ phụ thuộc `(createdFrom, createdTo, filterMode)` |
+| Reset `selectFilters` khi đổi factory chip | `useEffect([filterMode])` — tránh combo zero-result phải debug |
+| Workshop config store load 1 lần | `useEffect` check `loaded` trước khi gọi `load()` |
+| Bulk transfer pre-filter | Skip ID đã ở target → không ghi log no-op |
+| Indeterminate progress bar khi `rowsLoading` | Giữ UI mượt thay vì block toàn bảng |
+| Sort `grouped` trên list | BE sort `(type, size, fabricType)` để đơn cùng combo gom liền nhau |
+| Export bypass phân trang nhưng giữ visibility filter | BE chia query → tránh client tải 10k rows × 20 page |
