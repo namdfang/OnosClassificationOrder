@@ -25,10 +25,7 @@ export async function bootstrap(): Promise<NestFastifyApplication> {
     }),
     {
       cors: {
-        origin: process.env.ALLOWED_ORIGINS?.split(',') || [
-          'http://localhost:5173',
-          'https://marlen-nonpermeable-taren.ngrok-free.dev',
-        ],
+        origin: process.env.ALLOWED_ORIGINS?.split(',') || ['http://localhost:5173', 'https://onosfactory.com'],
         methods: 'GET,HEAD,PUT,PATCH,POST,DELETE',
         preflightContinue: false,
         optionsSuccessStatus: 204,

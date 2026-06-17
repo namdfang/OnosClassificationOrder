@@ -69,41 +69,70 @@ lsb_release -cs       # noble = 24.04 | jammy = 22.04 | focal = 20.04
 | 22.04 (jammy) | 7.0 hoặc 8.0 | `jammy/mongodb-org/7.0` |
 | 20.04 (focal) | 7.0 | `focal/mongodb-org/7.0` |
 
-Hướng dẫn dưới dùng **MongoDB 8.0 + Ubuntu 24.04** (noble). Đổi `8.0` ↔ `7.0` và codename cho phù hợp.
+Block dưới mặc định **MongoDB 7.0 + jammy**. Trên Ubuntu 24.04 → đổi `7.0`→`8.0`, `jammy`→`noble` trong cả URL key, URL repo, và path keyring.
 
 ```bash
-# 1) Tải GPG key vào file tạm + verify không rỗng
-curl -fsSL https://www.mongodb.org/static/pgp/server-8.0.asc -o /tmp/mongo-8.0.asc
-ls -lh /tmp/mongo-8.0.asc       # phải ~3-5KB, KHÔNG được 0 byte
+# 1) Import GPG key
+curl -fsSL https://www.mongodb.org/static/pgp/server-7.0.asc | \
+  sudo gpg -o /usr/share/keyrings/mongodb-server-7.0.gpg --dearmor
 
-# 2) Dearmor sang keyring binary
-sudo gpg --dearmor -o /usr/share/keyrings/mongodb-server-8.0.gpg /tmp/mongo-8.0.asc
-ls -lh /usr/share/keyrings/mongodb-server-8.0.gpg
+#   curl -fsSL https://www.mongodb.org/static/pgp/server-7.0.asc
+# -----BEGIN PGP PUBLIC KEY BLOCK-----
+# Version: GnuPG v1
 
-# 3) Add repo. CHÚ Ý: "ubuntu noble" PHẢI có space giữa.
-#    Nếu tee bị dính chữ "ubuntunoble" → mở nano sửa tay hoặc:
-#    sudo sed -i 's|ubuntunoble|ubuntu noble|' /etc/apt/sources.list.d/mongodb-org-8.0.list
-echo "deb [ arch=amd64,arm64 signed-by=/usr/share/keyrings/mongodb-server-8.0.gpg ] https://repo.mongodb.org/apt/ubuntu noble/mongodb-org/8.0 multiverse" | \
-  sudo tee /etc/apt/sources.list.d/mongodb-org-8.0.list
-cat /etc/apt/sources.list.d/mongodb-org-8.0.list   # verify "ubuntu noble" rời nhau
+# mQINBGPILWABEACqeWP/ktugdlWEyk7YTXo3n19+5Om4AlSdIyKv49vAlKtzCfMA
+# QkZq3mfvjXiKMuLnL2VeElAJQIYcPoqnHf6tJbdrNv4AX2uI1cTsvGW7YS/2WNwJ
+# C/+vBa4o+yA2CG/MVWZRbtOjkFF/W07yRFtNHAcgdmpIjdWgSnPQr9eIqLuWXIhy
+# H7EerKsba227Vd/HfvKnAy30Unlsdywy7wi1FupzGJck0TPoOVGmsSpSyIQu9A4Z
+# uC6TE/NcJHvaN0JuHwM+bQo9oWirGsZ1NCoVqSY8/sasdUc7T9r90MbUcH674YAR
+# 8OKYVBzU0wch4VTFhfHZecKHQnZf+V4dmP9oXnu4fY0/0w3l4jaew7Ind7kPg3yN
+# hvgAkBK8yRAbSu1NOtHDNiRoHGEQFgct6trVOvCqHbN/VToLNtGk0rhKGOp8kuSF
+# OJ02PJPxF3/zHGP8n8khCjUJcrilYPqRghZC8ZWnCj6GJVg6WjwLi+hPwNMi8xK6
+# cjKhRW3eCy5Wcn73PzVBX9f7fSeFDJec+IfS47eNkxunHAOUMXa2+D+1xSWgEfK0
+# PClfyWPgLIXY2pGQ6v8l3A6P5gJv4o38/E1h1RTcO3H1Z6cgZLIORZHPyAj50SPQ
+# cjzftEcz56Pl/Cyw3eMYC3qlbABBgsdeb6KB6G5dkNxI4or3MgmxcwfnkwARAQAB
+# tDdNb25nb0RCIDcuMCBSZWxlYXNlIFNpZ25pbmcgS2V5IDxwYWNrYWdpbmdAbW9u
+# Z29kYi5jb20+iQI+BBMBAgAoBQJjyC1gAhsDBQkJZgGABgsJCAcDAgYVCAIJCgsE
+# FgIDAQIeAQIXgAAKCRAWDSa7F4W6OM+eD/sE7KbJyRNWyPCRTqqJXrXvyPqZtbFX
+# 8sio0lQ8ghn4f7lmb7LnFroUsmBeWaYirM8O3b2+iQ9oj4GeR3gbRZsEhFXQfL54
+# SfrmG9hrWWpJllgPP7Six+jrzcjvkf1TENqw4jRP+cJhuihH1Gfizo9ktwwoN9Yr
+# m7vgh+focEEmx8dysS38ApLxKlUEfTsE9bYsClgqyY1yrt3v4IpGbf66yfyBHNgY
+# sObR3sngDRVbap7PwNyREGsuAFfKr/Dr37HfrjY7nsn3vH7hbDpSBh+H7a0b/chS
+# mM60aaG4biWpvmSC7uxA/t0gz+NQuC4HL+qyNPUxvyIO+TwlaXfCI6ixazyrH+1t
+# F7Bj5mVsne7oeWjRrSz85jK3Tpn9tj3Fa7PCDA6auAlPK8Upbhuoajev4lIydNd2
+# 70yO0idm/FtpX5a8Ck7KSHDvEnXpN70imayoB4Fs2Kigi2BdZOOdib16o5F/9cx9
+# piNa7HotHCLTfR6xRmelGEPWKspU1Sm7u2A5vWgjfSab99hiNQ89n+I7BcK1M3R1
+# w/ckl6qBtcxz4Py+7jYIJL8BYz2tdreWbdzWzjv+XQ8ZgOaMxhL9gtlfyYqeGfnp
+# hYW8LV7a9pavxV2tLuVjMM+05ut/d38IkTV7OSJgisbSGcmycXIzxsipyXJVGMZt
+# MFw3quqJhQMRsA==
+# =gbRM
+# -----END PGP PUBLIC KEY BLOCK-----
 
-# 4) Cài + start
+# 2) Add repo. CHÚ Ý: "ubuntu jammy" phải có SPACE giữa.
+#    Tee đôi khi paste dính → mở nano sửa tay hoặc:
+#    sudo sed -i 's|ubuntujammy|ubuntu jammy|' /etc/apt/sources.list.d/mongodb-org-7.0.list
+echo "deb [ arch=amd64,arm64 signed-by=/usr/share/keyrings/mongodb-server-7.0.gpg ] https://repo.mongodb.org/apt/ubuntu jammy/mongodb-org/7.0 multiverse" | \
+  sudo tee /etc/apt/sources.list.d/mongodb-org-7.0.list
+cat /etc/apt/sources.list.d/mongodb-org-7.0.list   # verify "ubuntu jammy" rời nhau
+
+# 3) Cài + start
 sudo apt update
 sudo apt install -y mongodb-org
 sudo systemctl enable --now mongod
 sudo systemctl status mongod    # active (running) — Ctrl+C để thoát
-mongod --version                # v8.0.x
+mongod --version                # v7.0.x
 ```
 
-**Troubleshoot lỗi hay gặp:**
+**Troubleshoot lỗi hay gặp khi cài Mongo:**
 
 | Lỗi | Nguyên nhân | Fix |
 |-----|-------------|-----|
 | `NO_PUBKEY ...` lúc `apt update` | GPG keyring rỗng (curl fail silently) | `sudo rm` keyring → tải lại bằng `wget -qO- ... \| sudo gpg --dearmor -o ...` |
-| `Malformed entry ... (Suite)` | repo file thiếu space giữa `ubuntu` và codename | `sudo sed -i 's\|ubuntunoble\|ubuntu noble\|'` (hoặc sửa nano) |
-| `Malformed entry ... (Component)` | giống trên, parse sai sau khi dính | giống trên |
-| `Unable to locate package mongodb-org` | Sai codename **HOẶC** chưa `sudo apt update` sau khi sửa | Verify `cat` file + chạy lại `apt update` |
-| `Unable to locate package mongodb-org` trên Ubuntu 24.04 với repo 7.0 | MongoDB 7.0 không có release `noble` | Chuyển sang `8.0` (URL + key + repo) |
+| `Malformed entry ... (Suite)` | repo file thiếu space giữa `ubuntu` và codename (dính chữ) | `sudo sed -i 's\|ubuntu<codename>\|ubuntu <codename>\|'` hoặc sửa nano |
+| `Malformed entry ... (Component)` | Giống trên | Giống trên |
+| `Unable to locate package mongodb-org` | Sai codename **HOẶC** chưa `sudo apt update` sau khi sửa repo | Verify `cat` file + chạy lại `apt update` |
+| `Unable to locate package mongodb-org` trên Ubuntu 24.04 với repo `7.0/noble` | MongoDB 7.0 không có release `noble` | Chuyển sang `8.0` — đổi URL key + repo + keyring path |
+| `BadValue: security.keyFile is required when authorization is enabled with replica sets` | Bật cả `replication` + `authorization` cần `keyFile` cho internal auth của RS | Xem §8.1 — sinh keyfile và thêm `security.keyFile: /etc/mongo-keyfile` |
 
 **Bật replica set** (bắt buộc — code dùng transactions, `DB_URI` có `?replicaSet=rs0`):
 
@@ -115,7 +144,7 @@ Sửa 2 block sau (giữ các block khác):
 
 ```yaml
 net:
-  bindIp: 127.0.0.1           # chỉ nghe localhost — KHÔNG đổi thành 0.0.0.0
+  bindIp: 127.0.0.1 # chỉ nghe localhost — KHÔNG đổi thành 0.0.0.0
 
 replication:
   replSetName: rs0
@@ -533,6 +562,10 @@ Certbot tự sửa block server thành HTTPS + redirect HTTP → HTTPS. Auto-ren
 
 ### 8.1 MongoDB — tạo user app
 
+**Thứ tự bắt buộc:** tạo user TRƯỚC khi bật `authorization` (nếu bật auth trước → không vào được mongosh để tạo).
+
+#### 8.1.a Tạo user app (khi auth chưa bật)
+
 ```bash
 mongosh
 ```
@@ -543,30 +576,64 @@ Trong mongosh:
 use onosfactory-prod
 db.createUser({
   user: "onosfactory",
-  pwd: "<DB-Password-Mạnh>",
+  pwd: "<DB-Password>",
   roles: [{ role: "readWrite", db: "onosfactory-prod" }]
 })
+// Tạo thêm 1 admin user để recovery sau này
+use admin
+db.createUser({ user: "root", pwd: "<Root-Password>", roles: ["root"] })
 exit
 ```
 
-Update `DB_URI` trong `.env.production` (§3):
+#### 8.1.b Sinh keyfile cho replica set internal auth
 
-```
-DB_URI=mongodb://onosfactory:<DB-Password-Mạnh>@127.0.0.1:27017/onosfactory-prod?replicaSet=rs0&directConnection=true&authSource=onosfactory-prod
+Mongo bắt buộc `keyFile` khi bật auth **+** replica set, kể cả single-node. Bỏ bước này → mongod fail boot với `BadValue: security.keyFile is required when authorization is enabled with replica sets`.
+
+```bash
+sudo openssl rand -base64 756 | sudo tee /etc/mongo-keyfile > /dev/null
+sudo chown mongodb:mongodb /etc/mongo-keyfile
+sudo chmod 400 /etc/mongo-keyfile
+ls -l /etc/mongo-keyfile
+# -r-------- 1 mongodb mongodb 1024 ... /etc/mongo-keyfile
 ```
 
-Bật auth trong `/etc/mongod.conf`:
+#### 8.1.c Bật auth trong `/etc/mongod.conf`
+
+```bash
+sudo nano /etc/mongod.conf
+```
+
+Block `security` phải có **đủ 2 dòng**, indent 2 space:
 
 ```yaml
 security:
   authorization: enabled
+  keyFile: /etc/mongo-keyfile
 ```
+
+Restart + verify:
 
 ```bash
 sudo systemctl restart mongod
-mongosh "mongodb://onosfactory:<pwd>@127.0.0.1:27017/onosfactory-prod?replicaSet=rs0&authSource=onosfactory-prod" --eval 'db.runCommand({ping:1})'
+sudo systemctl status mongod      # active (running)
+```
+
+#### 8.1.d Test connect bằng user app
+
+```bash
+# Lưu ý: PHẢI dùng single quote vì password có ! / $ / ` / \
+mongosh 'mongodb://onosfactory:<DB-Password>@127.0.0.1:27017/onosfactory-prod?authSource=onosfactory-prod' --eval 'db.runCommand({ping:1})'
 # { ok: 1 }
 ```
+
+#### 8.1.e Update `.env.production` (§3)
+
+```
+DB_URI=mongodb://onosfactory:<DB-Password>@127.0.0.1:27017/onosfactory-prod?replicaSet=rs0&directConnection=true&authSource=onosfactory-prod
+```
+
+> File `.env` đọc bằng dotenv, không qua shell → KHÔNG cần quote, KHÔNG cần escape `!`/`$`/`` ` ``.
+> Nhưng mọi lệnh CLI (`mongosh`, `mongodump`, `mongorestore`) **luôn dùng single quote** quanh URI.
 
 ### 8.2 Redis
 
