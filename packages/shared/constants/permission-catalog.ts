@@ -66,6 +66,8 @@ export const PERMISSION_CATALOG: PermissionItem[] = [
   { code: 'order.field.assigneeNote.edit',    label: 'Note người thực hiện',  group: 'order_field', field: 'assigneeNote',    mode: 'edit' },
   { code: 'order.field.fabricType.view',      label: 'Loại vải',              group: 'order_field', field: 'fabricType',      mode: 'view' },
   { code: 'order.field.fabricType.edit',      label: 'Loại vải',              group: 'order_field', field: 'fabricType',      mode: 'edit' },
+  { code: 'order.field.machineNumber.view',   label: 'Máy',                   group: 'order_field', field: 'machineNumber',   mode: 'view' },
+  { code: 'order.field.machineNumber.edit',   label: 'Máy',                   group: 'order_field', field: 'machineNumber',   mode: 'edit' },
   { code: 'order.field.productionError.view',     label: 'Lỗi xưởng',             group: 'order_field', field: 'productionError',     mode: 'view' },
   { code: 'order.field.productionError.edit',     label: 'Lỗi xưởng',             group: 'order_field', field: 'productionError',     mode: 'edit' },
   { code: 'order.field.productionErrorNote.view', label: 'Mô tả lỗi xưởng',       group: 'order_field', field: 'productionErrorNote', mode: 'view' },
@@ -106,6 +108,7 @@ export const DEFAULT_ROLE_PERMISSIONS: Partial<Record<RoleType, string[]>> = {
     'order.field.assignee.view',
     'order.field.assigneeNote.view',
     'order.field.fabricType.view',
+    'order.field.machineNumber.view',
     'order.field.productionError.view',
     'order.field.productionErrorNote.view',
     'order.log.view',
@@ -121,6 +124,7 @@ export const DEFAULT_ROLE_PERMISSIONS: Partial<Record<RoleType, string[]>> = {
     'order.field.assignee.view',       'order.field.assignee.edit',
     'order.field.assigneeNote.view',   'order.field.assigneeNote.edit',
     'order.field.fabricType.view',
+    'order.field.machineNumber.view',     'order.field.machineNumber.edit',
     'order.field.productionError.view',
     'order.field.productionErrorNote.view',
   ],
@@ -134,6 +138,7 @@ export const DEFAULT_ROLE_PERMISSIONS: Partial<Record<RoleType, string[]>> = {
     // sau in báo qua productionError thay vì toolResultNote.
     'order.field.toolResultNote.view',
     'order.field.fabricType.view',
+    'order.field.machineNumber.view',       'order.field.machineNumber.edit',
     // Fulfillment báo lỗi xưởng + mô tả lỗi.
     'order.field.productionError.view',     'order.field.productionError.edit',
     'order.field.productionErrorNote.view', 'order.field.productionErrorNote.edit',

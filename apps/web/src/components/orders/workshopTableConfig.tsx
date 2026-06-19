@@ -38,6 +38,7 @@ export type WorkshopOrderRow = {
   assignee?: string;
   assigneeNote?: string;
   fabricType?: string;
+  machineNumber?: string;
   productionError?: string;
   productionErrorNote?: string;
 };
@@ -153,6 +154,22 @@ export const WORKSHOP_COLS: WorkshopColMeta[] = [
         value={r.fabricType}
         canEdit={ctx.canEditField('fabricType')}
         onUpdated={(v) => ctx.patchRow(r._id, { fabricType: v ?? undefined })}
+      />
+    ),
+  },
+  {
+    key: 'machineNumber',
+    label: 'Máy',
+    perm: 'order.field.machineNumber.view',
+    width: 'min-w-[100px]',
+    render: (r, ctx) => (
+      <ColorBadgeSelectCell
+        orderId={r._id}
+        field="machineNumber"
+        category={WorkshopConfigCategory.Machine}
+        value={r.machineNumber}
+        canEdit={ctx.canEditField('machineNumber')}
+        onUpdated={(v) => ctx.patchRow(r._id, { machineNumber: v ?? undefined })}
       />
     ),
   },

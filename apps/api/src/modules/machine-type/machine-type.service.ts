@@ -46,6 +46,23 @@ export class MachineTypeService implements OnModuleInit {
     return this.machineTypeRepository.findOne({ shortName: shortName.toUpperCase() });
   }
 
+  /**
+   * Match a free-text department/printer label ("IN và CẮT LASER") against
+   * either `name` or `shortName`, case-insensitive.
+   */
+  async findByLabel(label: string) {
+    const cleaned = label.trim();
+    if (!cleaned) return null;
+    const escaped = cleaned.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+    const byShortName = await this.machineTypeRepository.findOne({
+      shortName: cleaned.toUpperCase(),
+    });
+    if (byShortName) return byShortName;
+    return this.machineTypeRepository.findOne({
+      name: { $regex: '^' + escaped + '$', $options: 'i' },
+    });
+  }
+
   async createMachineType(dto: CreateMachineTypeDto) {
     const existing = await this.machineTypeRepository.findOne({ shortName: dto.shortName.toUpperCase() });
     if (existing) throw new BadRequestException('MachineType shortName already exists');

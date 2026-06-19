@@ -13,7 +13,7 @@
 
 Workshop Config là **danh mục dùng chung** cho các trường nghiệp vụ trong bảng Order (Trạng thái in, Note kết quả Tool, File sửa lỗi, Người thực hiện...). Mọi giá trị select trên Order table workshop đều resolve từ module này theo cặp `(category, code)`.
 
-Module có 8 category, mỗi category có một trong 2 mode hiển thị:
+Module có 10 category, mỗi category có một trong 2 mode hiển thị:
 
 | Category | Mode | Mục đích |
 |----------|------|----------|
@@ -24,7 +24,9 @@ Module có 8 category, mỗi category có một trong 2 mode hiển thị:
 | `error_file_type` | icon | Loại file lỗi (Thân trước, Thân sau, Trụ...) |
 | `assignee` | icon | Tên người thực hiện |
 | `assignee_note` | icon | Trạng thái xử lý (Ok / Lỗi / Không có tool) |
-| `fabric_type` | icon | Loại vải / blank (Cotton Jersey, Polyester Jersey, 2D, G5000, G18500, G18000, C1717) |
+| `fabric_type` | icon | Loại vải / blank (POLY 2 DA, MÈ 64, LỤA 4B, LỤA VÂN GỖ, THUN LẠNH, NỈ BÔNG, MÈ CARO, LỤA NGỌC TRAI, LƯỚI, THÔ MỘC, LỤA, CANVAS, THUN BỘT, PHI BÓNG, 60% COTTON 40% POLY, LÔNG- CHĂN, ÁO: LỤA 4B- QUẦN: MÈ CARO, VẢI MÈ MỚI, MIX VẢI + LƯỚI, MÈ CA SẤU, THÊU, GIẢ LEN) |
+| `machine` | color badge | Các máy in vật lý trong xưởng (94, 27, 56) — dùng làm dropdown cho cột "Máy" ở ProductConfig |
+| `production_error` | color badge | Lý do xưởng báo lỗi đơn hàng |
 
 ---
 

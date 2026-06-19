@@ -2,7 +2,7 @@ import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import { ArrowRight, Download, Factory, History, RefreshCw, Send } from 'lucide-react';
 import { useSearchParams } from 'react-router-dom';
 import { toast } from 'sonner';
-import type { FactoryFilterOption, FactoryOverview, FactoryOverviewCell } from 'shared';
+import type { FactoryOverview, FactoryOverviewCell } from 'shared';
 
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
@@ -11,6 +11,7 @@ import { Label } from '@/components/ui/label';
 import { Spinner } from '@/components/common/Spinner';
 import { PaginationBar } from '@/components/common/PaginationBar';
 import { DateRangePicker } from '@/components/common/DateRangePicker';
+import { SelectFilter } from '@/components/common/SelectFilter';
 import {
   Dialog,
   DialogContent,
@@ -50,13 +51,17 @@ type FilterMode =
   | { kind: 'in'; factoryId: string }   // transferred-in to factoryId
   | { kind: 'out'; factoryId: string }  // transferred-out from factoryId
   | { kind: 'print'; factoryId: string; stage: PrintStage }
-  | { kind: 'error'; factoryId: string }; // đơn lỗi xưởng tại factoryId
+  | { kind: 'error'; factoryId: string } // đơn lỗi xưởng tại factoryId
+  | { kind: 'unmapped' };                // đơn chưa map xưởng nào
 
 interface SelectFilters {
   type: string;
   fabric: string;
   tool: string;
+  /** machineTypeId — "Phòng" (loại máy in). */
   machine: string;
+  /** workshop_config code (category=machine) — số máy thực. */
+  machineNumber: string;
 }
 
 function todayISO() {
@@ -75,9 +80,10 @@ const DEFAULT_PAGE_SIZE = 20;
 // Ví dụ URL khôi phục đầy đủ:
 //   /dashboard?tab=factory&ffrom=2026-06-18&fto=2026-06-18&ffactory=<id>&fstage=printed&ftype=Tee
 function parseFilterModeFromURL(sp: URLSearchParams): FilterMode {
+  const mode = sp.get('fmode');
+  if (mode === 'unmapped') return { kind: 'unmapped' };
   const fid = sp.get('ffactory');
   const stage = sp.get('fstage') as PrintStage | null;
-  const mode = sp.get('fmode');
   if (!fid) return { kind: 'all' };
   if (stage === 'printed' || stage === 'printing' || stage === 'not-printed') {
     return { kind: 'print', factoryId: fid, stage };
@@ -118,6 +124,7 @@ export default function OrderFactoryTab() {
     fabric: searchParams.get('ffabric') || '',
     tool: searchParams.get('ftool') || '',
     machine: searchParams.get('fmachine') || '',
+    machineNumber: searchParams.get('fmnum') || '',
   }));
 
   const [rows, setRows] = useState<WorkshopOrderRow[]>([]);
@@ -149,7 +156,9 @@ export default function OrderFactoryTab() {
         sp.delete('ffactory');
         sp.delete('fmode');
         sp.delete('fstage');
-        if (filterMode.kind !== 'all') {
+        if (filterMode.kind === 'unmapped') {
+          sp.set('fmode', 'unmapped');
+        } else if (filterMode.kind !== 'all') {
           sp.set('ffactory', filterMode.factoryId);
           if (filterMode.kind === 'print') {
             sp.set('fstage', filterMode.stage);
@@ -164,6 +173,7 @@ export default function OrderFactoryTab() {
         selectFilters.fabric ? sp.set('ffabric', selectFilters.fabric) : sp.delete('ffabric');
         selectFilters.tool ? sp.set('ftool', selectFilters.tool) : sp.delete('ftool');
         selectFilters.machine ? sp.set('fmachine', selectFilters.machine) : sp.delete('fmachine');
+        selectFilters.machineNumber ? sp.set('fmnum', selectFilters.machineNumber) : sp.delete('fmnum');
         // Pagination
         page > 1 ? sp.set('fpage', String(page)) : sp.delete('fpage');
         pageSize !== DEFAULT_PAGE_SIZE ? sp.set('fsize', String(pageSize)) : sp.delete('fsize');
@@ -181,6 +191,8 @@ export default function OrderFactoryTab() {
   // shrink to match the selected factory chip. Print-stage filter cũng dùng
   // factory scope vì luôn gắn với 1 xưởng cụ thể, và truyền thêm printStage
   // để BE thu hẹp availableFilters chỉ còn options của stage đó.
+  // Faceted filters (type/fabric/tool/...) cũng được pass lên — BE dùng pattern
+  // "exclude-own-facet" để mỗi dropdown count theo các filter khác đang active.
   const overviewQuery = useMemo(() => {
     const sp = new URLSearchParams();
     if (createdFrom) sp.set('createdFrom', createdFrom);
@@ -194,8 +206,16 @@ export default function OrderFactoryTab() {
     if (filterMode.kind === 'error') {
       sp.set('hasError', 'true');
     }
+    if (filterMode.kind === 'unmapped') {
+      sp.set('unmapped', 'true');
+    }
+    if (selectFilters.type) sp.set('type', selectFilters.type);
+    if (selectFilters.fabric) sp.set('fabricType', selectFilters.fabric);
+    if (selectFilters.tool) sp.set('toolResult', selectFilters.tool);
+    if (selectFilters.machine) sp.set('machineTypeId', selectFilters.machine);
+    if (selectFilters.machineNumber) sp.set('machineNumber', selectFilters.machineNumber);
     return sp.toString();
-  }, [createdFrom, createdTo, filterMode]);
+  }, [createdFrom, createdTo, filterMode, selectFilters]);
 
   const fetchOverview = useCallback(async () => {
     try {
@@ -229,10 +249,12 @@ export default function OrderFactoryTab() {
       sp.set('factoryId', filterMode.factoryId);
       sp.set('hasError', 'true');
     }
+    if (filterMode.kind === 'unmapped') sp.set('unmapped', 'true');
     if (selectFilters.type) sp.set('type', selectFilters.type);
     if (selectFilters.fabric) sp.set('fabricType', selectFilters.fabric);
     if (selectFilters.tool) sp.set('toolResult', selectFilters.tool);
     if (selectFilters.machine) sp.set('machineTypeId', selectFilters.machine);
+    if (selectFilters.machineNumber) sp.set('machineNumber', selectFilters.machineNumber);
     try {
       setRowsLoading(true);
       const res = await RepositoryRemote.order.getOrders('?' + sp.toString());
@@ -265,7 +287,7 @@ export default function OrderFactoryTab() {
       isFirstRender.current = false;
       return;
     }
-    setSelectFilters({ type: '', fabric: '', tool: '', machine: '' });
+    setSelectFilters({ type: '', fabric: '', tool: '', machine: '', machineNumber: '' });
   }, [filterMode]);
 
   useEffect(() => {
@@ -322,10 +344,12 @@ export default function OrderFactoryTab() {
       sp.set('factoryId', filterMode.factoryId);
       sp.set('hasError', 'true');
     }
+    if (filterMode.kind === 'unmapped') sp.set('unmapped', 'true');
     if (selectFilters.type) sp.set('type', selectFilters.type);
     if (selectFilters.fabric) sp.set('fabricType', selectFilters.fabric);
     if (selectFilters.tool) sp.set('toolResult', selectFilters.tool);
     if (selectFilters.machine) sp.set('machineTypeId', selectFilters.machine);
+    if (selectFilters.machineNumber) sp.set('machineNumber', selectFilters.machineNumber);
     try {
       setExportLoading(true);
       const res = await RepositoryRemote.order.exportOrders('?' + sp.toString());
@@ -498,6 +522,19 @@ export default function OrderFactoryTab() {
                 </FilterChip>
               );
             })}
+            {overview && overview.totals.unmapped > 0 && (
+              <FilterChip
+                active={filterMode.kind === 'unmapped'}
+                onClick={() =>
+                  setFilterMode(filterMode.kind === 'unmapped' ? { kind: 'all' } : { kind: 'unmapped' })
+                }
+              >
+                <span className="inline-flex items-center gap-1">
+                  <span className="w-1.5 h-1.5 rounded-full bg-amber-500" />
+                  Chưa xác định xưởng ({overview.totals.unmapped})
+                </span>
+              </FilterChip>
+            )}
             {filterMode.kind === 'print' && (
               <FilterChip active onClick={() => setFilterMode({ kind: 'all' })}>
                 {filterMode.stage === 'printed' ? 'Đã in xong' : filterMode.stage === 'printing' ? 'Đang in' : 'Chưa in'}
@@ -512,14 +549,15 @@ export default function OrderFactoryTab() {
               selectFilters.type ||
               selectFilters.fabric ||
               selectFilters.tool ||
-              selectFilters.machine) && (
+              selectFilters.machine ||
+              selectFilters.machineNumber) && (
               <Button
                 variant="ghost"
                 size="sm"
                 className="text-xs h-7 ml-auto"
                 onClick={() => {
                   setFilterMode({ kind: 'all' });
-                  setSelectFilters({ type: '', fabric: '', tool: '', machine: '' });
+                  setSelectFilters({ type: '', fabric: '', tool: '', machine: '', machineNumber: '' });
                 }}
               >
                 Xóa lọc
@@ -530,7 +568,7 @@ export default function OrderFactoryTab() {
           {/* Select filters — options come from BE `availableFilters`
               reflecting only what's present in the date range, so user never
               sees options that yield empty results. */}
-          <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
+          <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-2">
             <SelectFilter
               label="Sản phẩm"
               value={selectFilters.type}
@@ -544,10 +582,16 @@ export default function OrderFactoryTab() {
               options={overview?.availableFilters.fabrics || []}
             />
             <SelectFilter
-              label="Loại máy"
+              label="Phòng"
               value={selectFilters.machine}
               onChange={(v) => setSelectFilters((s) => ({ ...s, machine: v }))}
               options={overview?.availableFilters.machineTypes || []}
+            />
+            <SelectFilter
+              label="Máy"
+              value={selectFilters.machineNumber}
+              onChange={(v) => setSelectFilters((s) => ({ ...s, machineNumber: v }))}
+              options={overview?.availableFilters.machines || []}
             />
             <SelectFilter
               label="Kết quả Tool"
@@ -801,7 +845,7 @@ function FactoryCard({
         <p className="text-[11px] text-muted-foreground">đang sản xuất tại đây</p>
       </button>
       {/* Per-factory mini stats */}
-      <div className="grid grid-cols-4 gap-1 text-[10px] mb-2 pb-2 border-b border-border">
+      <div className="grid grid-cols-5 gap-1 text-[10px] mb-2 pb-2 border-b border-border">
         <div className="text-center">
           <p className="font-bold tabular-nums text-sm text-foreground">{cell.productCount}</p>
           <p className="text-muted-foreground">sản phẩm</p>
@@ -812,6 +856,10 @@ function FactoryCard({
         </div>
         <div className="text-center">
           <p className="font-bold tabular-nums text-sm text-foreground">{cell.machineCount}</p>
+          <p className="text-muted-foreground">phòng</p>
+        </div>
+        <div className="text-center">
+          <p className="font-bold tabular-nums text-sm text-foreground">{cell.actualMachineCount}</p>
           <p className="text-muted-foreground">loại máy</p>
         </div>
         <div className="text-center">
@@ -909,41 +957,6 @@ function PrintStageBtn({
       <p className="text-[10px] text-muted-foreground">{label}</p>
       <p className={cn('text-sm font-bold tabular-nums', toneClasses.count)}>{count}</p>
     </button>
-  );
-}
-
-function SelectFilter({
-  label,
-  value,
-  onChange,
-  options,
-}: {
-  label: string;
-  value: string;
-  onChange: (v: string) => void;
-  options: FactoryFilterOption[];
-}) {
-  return (
-    <div>
-      <label className="text-[10px] text-muted-foreground uppercase tracking-wide font-medium">
-        {label}
-      </label>
-      <select
-        value={value}
-        onChange={(e) => onChange(e.target.value)}
-        className={cn(
-          'mt-1 w-full rounded-md border bg-background px-2 py-1.5 text-xs focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring',
-          value ? 'border-primary' : 'border-input',
-        )}
-      >
-        <option value="">— Tất cả ({options.reduce((s, o) => s + o.count, 0)}) —</option>
-        {options.map((o) => (
-          <option key={o.value} value={o.value}>
-            {o.label} ({o.count})
-          </option>
-        ))}
-      </select>
-    </div>
   );
 }
 

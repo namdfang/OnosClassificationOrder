@@ -30,4 +30,8 @@ const reorder = (data: ReorderWorkshopConfigDto) => {
   return callApi(`/${CONFIG.API_VERSION}/workshop-config/reorder`, 'patch', data);
 };
 
-export const workshopConfig = { getAll, list, create, update, remove, reorder };
+const resetCategory = (category: string) => {
+  return callApi(`/${CONFIG.API_VERSION}/workshop-config/reset/${category}`, 'post');
+};
+
+export const workshopConfig = { getAll, list, create, update, remove, reorder, resetCategory };

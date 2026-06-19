@@ -40,9 +40,9 @@ Data từ `GET /v1/orders/status-overview` + `GET /v1/orders` (list).
 
 ### Tab C — "Đơn hàng theo xưởng" (Phase 7)
 Dashboard chuyển xưởng + xuất Excel + filter chiều sâu:
-- **3 Factory cards** (ML / TN / US) — mỗi card: tổng đơn đang sản xuất tại đó, pure, nhận từ xưởng khác, đã chuyển đi, distinct product/fabric/machine count, withTool count
+- **3 Factory cards** (ML / TN / US) — mỗi card: tổng đơn đang sản xuất tại đó, pure, nhận từ xưởng khác, đã chuyển đi, **5 mini stats** (sản phẩm / loại vải / **phòng** = distinct machineTypeId / **loại máy** = distinct workshop_config.machine code / có tool)
 - **Flow visualization** — danh sách luồng `(Từ xưởng → Đến xưởng, count, totalQuantity)`
-- **Filter chip bar** factory `Tất cả / Đang ở ML / Đang ở TN / Đang ở US` + 4 select filter (Sản phẩm / Loại vải / Loại máy / Kết quả Tool) auto-scope theo factory chip đã chọn
+- **Filter chip bar** factory `Tất cả / Đang ở ML / Đang ở TN / Đang ở US / Chưa xác định xưởng (count)` + **5 select filter** (Sản phẩm / Loại vải / **Phòng** = machineTypeId / **Máy** = workshop_config.machine code / Kết quả Tool) auto-scope theo factory chip đã chọn. Chip "Chưa xác định xưởng" → list endpoint nhận `unmapped=true` → `{$or: [factoryId null, $exists false]}`. Overview trả về `totals.unmapped` đếm riêng (`countDocuments` ngoài pipeline `matchMapped`). 5 select filter dùng **faceted-search pattern**: BE nhận đủ 5 facet, mỗi dropdown aggregate bằng `scopeMatch + (facetFilters trừ field hiện tại)` qua helper `buildFacetMatch(excludeKey)` — count phản ánh đúng cross-filter.
 - **Bảng đơn 20 cột** (reuse `WORKSHOP_COLS`) — cell inline edit theo permission
 - **Bulk transfer** — checkbox row → toolbar `Send` mở Transfer dialog (chọn xưởng đích + lý do, tối đa 200 ký tự)
 - **Xuất Excel** — bypass phân trang, gom toàn bộ đơn theo filter hiện tại + overview thành workbook .xlsx multi-sheet

@@ -48,6 +48,10 @@ const getOrdersGrouped = (query: string = '') => {
   return callApi(`/${CONFIG.API_VERSION}/orders/grouped${query}`, 'get');
 };
 
+const getWorkshopFilters = (query: string = '') => {
+  return callApi(`/${CONFIG.API_VERSION}/orders/workshop-filters${query}`, 'get');
+};
+
 const getFactoryOverview = (query: string = '') => {
   return callApi(`/${CONFIG.API_VERSION}/orders/factory-overview${query}`, 'get');
 };
@@ -79,6 +83,7 @@ export const order = {
   getStatusOverview,
   getImportSummary,
   getOrdersGrouped,
+  getWorkshopFilters,
   getFactoryOverview,
   transferOrder,
   bulkTransferOrders,

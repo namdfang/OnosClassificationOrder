@@ -16,50 +16,57 @@ import { Spinner } from '@/components/common/Spinner';
 import { RepositoryRemote } from '@/services';
 import { handleAxiosError } from '@/utils';
 
-const EXAMPLE = `Tên đầy đủ sản phẩm có tool Rập	Tên viết tắt	Loại máy tính chạy sản phẩm 694	Máy	Xưởng	Loại vải	Kết quả Tool
-all over print christmas ugly sweater	CHRISTMAS		IEN	ML	Cotton Jersey	Có Tool
-aop women's briefs	WOM		ICL	US	Polyester Jersey:	Không có Tool
-all-over print kids and youth baseball jersey	BRKIDS		HT	TN	2D	Có Tool
-all-over print football jersey	FB		IEN	ML	G5000	Không có Tool`;
+const EXAMPLE = `Tên đầy đủ sản phẩm có tool Rập	Tên viết tắt	Máy	Xưởng	Loại vải	Kết quả Tool	Phòng
+All-over Print Hockey Jersey	hockey Jersey thường	94	MÊ LINH	POLY 2 DA		IN và CẮT LASER
+All-Over Print V-neck Soccer Jersey	T-shirt cổ tim	27	MÊ LINH	MÈ 64		IN và CẮT LASER
+AOP Long-Sleeve Polo Collar Football Jersey	POLO MXC DÀI TAY		MÊ LINH	MÈ 64	không tool	IN và CẮT LASER
+Rectangle Fence Flag	cờ bán nguyệt	94	MÊ LINH	LỤA 4B		IN và CẮT LASER`;
 
 interface ParsedRow {
   fullName: string;
   shortName: string;
-  computerType?: string;
-  machineCode: string;
-  factoryCode: string;
+  machineNumber?: string;
+  factoryLabel: string;
   fabricLabel?: string;
   toolResultLabel?: string;
+  departmentLabel: string;
 }
+
+const HEADER_KEYWORDS = ['tên đầy đủ', 'tên viết tắt', 'máy', 'xưởng', 'loại vải', 'phòng'];
 
 function parseRows(raw: string): ParsedRow[] {
   const lines = raw
     .split(/\r?\n/)
-    .map((l) => l.trim())
-    .filter(Boolean);
+    .map((l) => l.replace(/\r$/, ''))
+    .filter((l) => l.trim().length > 0);
 
   if (lines.length === 0) return [];
 
-  // Skip header if first row's 5th cell isn't a known factory code (header
-  // would have "Xưởng" or similar at that position).
-  const firstCols = lines[0].split('\t').map((c) => c.trim());
-  const fifth = (firstCols[4] || '').toUpperCase();
-  const startIdx = ['ML', 'TN', 'US'].includes(fifth) ? 0 : 1;
+  const firstLower = lines[0].toLowerCase();
+  const startIdx = HEADER_KEYWORDS.some((kw) => firstLower.includes(kw)) ? 1 : 0;
 
   const rows: ParsedRow[] = [];
   for (let i = startIdx; i < lines.length; i++) {
     const cols = lines[i].split('\t').map((c) => c.trim());
-    if (cols.length < 5) continue;
-    const [fullName, shortName, computerType, machineCode, factoryCode, fabricLabel, toolResultLabel] = cols;
-    if (!fullName || !shortName || !machineCode || !factoryCode) continue;
+    if (cols.length < 7) continue;
+    const [
+      fullName,
+      shortName,
+      machineNumber,
+      factoryLabel,
+      fabricLabel,
+      toolResultLabel,
+      departmentLabel,
+    ] = cols;
+    if (!fullName || !shortName || !factoryLabel || !departmentLabel) continue;
     rows.push({
       fullName,
       shortName,
-      computerType: computerType || undefined,
-      machineCode,
-      factoryCode,
+      machineNumber: machineNumber || undefined,
+      factoryLabel,
       fabricLabel: fabricLabel || undefined,
       toolResultLabel: toolResultLabel || undefined,
+      departmentLabel,
     });
   }
   return rows;
@@ -78,7 +85,7 @@ export function ImportProductConfigDialog({ open, onOpenChange, onSuccess }: Imp
   const handleImport = async () => {
     const rows = parseRows(text);
     if (rows.length === 0) {
-      toast.error('Không parse được dòng nào. Kiểm tra format (cột cách nhau bằng Tab).');
+      toast.error('Không parse được dòng nào. Kiểm tra format (đủ 7 cột, cách nhau bằng Tab).');
       return;
     }
 
@@ -107,10 +114,11 @@ export function ImportProductConfigDialog({ open, onOpenChange, onSuccess }: Imp
         <DialogHeader>
           <DialogTitle>Import Product Config</DialogTitle>
           <DialogDescription>
-            Paste dữ liệu từ Excel (tab-separated). 7 cột: <b>Tên đầy đủ</b> — <b>Tên viết tắt</b> —{' '}
-            <b>Loại máy tính</b> (optional) — <b>Máy</b> (IEN/ICL/HT...) — <b>Xưởng</b> (ML/TN/US) —{' '}
-            <b>Loại vải</b> (Cotton Jersey, Polyester Jersey, 2D, G5000…) — <b>Kết quả Tool</b> (Có Tool / Không có Tool).
-            Hệ thống match label theo tên trong Workshop Config (case-insensitive).
+            Paste dữ liệu từ Excel (tab-separated). 7 cột theo thứ tự: <b>Tên đầy đủ</b> —{' '}
+            <b>Tên viết tắt</b> — <b>Máy</b> (số máy, vd 94/27, để trống = không có tool) —{' '}
+            <b>Xưởng</b> (vd "MÊ LINH") — <b>Loại vải</b> (POLY 2 DA, MÈ 64, LỤA 4B, LỤA VÂN GỖ…) —{' '}
+            <b>Kết quả Tool</b> (để trống = có tool; "không tool" = không có tool) — <b>Phòng</b>{' '}
+            (loại máy in, vd "IN và CẮT LASER"). Hệ thống match label theo tên (case-insensitive).
           </DialogDescription>
         </DialogHeader>
 

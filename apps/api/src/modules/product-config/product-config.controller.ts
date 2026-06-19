@@ -70,4 +70,14 @@ export class ProductConfigController {
   async importProductConfigs(@Body() dto: ImportProductConfigDto): Promise<ImportProductConfigResDto> {
     return this.productConfigService.importProductConfigs(dto);
   }
+
+  @Delete('all')
+  @Auth([RoleType.SuperAdmin, RoleType.Admin])
+  @ApiOperation({ summary: 'Hard-delete every product config (start fresh)' })
+  @HttpCode(HttpStatus.OK)
+  @ApiOkResponse({ type: ResDto })
+  async clearAll(): Promise<ResDto> {
+    const data = await this.productConfigService.clearAll();
+    return { success: true, data };
+  }
 }

@@ -8,7 +8,7 @@
 > **File BE:** `apps/api/src/modules/order/`
 > **Route:** `/orders`
 > **API:**
->  - `GET /v1/orders` · `GET /v1/orders/grouped` · `GET /v1/orders/import-summary`
+>  - `GET /v1/orders` · `GET /v1/orders/grouped` · `GET /v1/orders/workshop-filters` · `GET /v1/orders/import-summary`
 >  - `GET /v1/orders/export` (full-list, không phân trang — xem `Dashboard.md §10.3`)
 >  - `GET /v1/orders/factory-overview` (xem `Dashboard.md §10.2`)
 >  - `POST /v1/orders/import` · `POST /v1/orders/backfill-fabric` · `POST /v1/orders/refresh-image-urls`
@@ -377,6 +377,7 @@ Render tab tương ứng. User chỉ có 1 trong các quyền → 1 tab; có nhi
 | 1 | productionId | Composite (Production ID + Order ID + In Production At) | luôn |
 | 2 | mockupTypeSize | `ImageThumbCell` + Type + Size/Color | luôn |
 | 3 | **fabricType** | `IconSelectCell` (category `fabric_type`) — Phase 7 | `order.field.fabricType.view` |
+| 3b | **machineNumber** | `ColorBadgeSelectCell` (category `machine`) — badge có color (94/27/56…). Lấy từ ProductConfig khi import; xưởng có thể click sửa nếu phải chuyển máy in giữa chừng. | `order.field.machineNumber.view` / `.edit` |
 | 4 | printStatus | `ColorBadgeSelectCell` | `order.field.printStatus.view` |
 | 5 | printStatusNote | `IconSelectCell` | `order.field.printStatusNote.view` |
 | 6 | toolResult | `IconSelectCell` | `order.field.toolResult.view` |
@@ -405,17 +406,21 @@ Mỗi cell tự đọc `canEditField(field)` từ `usePermission()`:
 - Có quyền → click sửa được.
 - Không → readonly hiển thị giá trị.
 
+### 10.2b Selection (Phase tiếp theo Phase 7.2)
+
+- **Header global checkbox** (cũ): tick/untick toàn bộ rows hiện tại trên page.
+- **Group checkbox**: mỗi row tiêu đề sản phẩm có 1 checkbox riêng (state `all` / `some` indeterminate / `none`) → tick toàn bộ đơn của nhóm. Badge `N/M chọn` hiển thị khi nhóm có ít nhất 1 đơn được chọn.
+- **Shift+click range** (Excel/Google Sheets style): user click checkbox đầu, giữ `Shift`, click checkbox khác → mọi row giữa 2 vị trí được set theo state mới của row vừa click. Anchor (`lastClickedId`) update mỗi lần click. Range chỉ tính các order ĐANG HIỂN THỊ (group đã collapse → bỏ qua). Thứ tự range đọc từ memo `visibleOrderedIds` phải khớp với thứ tự render xuống body (same sort: `comboCount` desc → key asc).
+
 ### 10.3 Filter bar
 
-Render conditional theo `order.field.X.view`:
-- `printStatus` — `<MultiSelectFilter renderType="color">` (Phase 7.2 — thay thế FilterChips dàn ngang trước đây)
-- `toolResultNote` — `<MultiSelectFilter renderType="color">`
-- `assignee` — `<MultiSelectFilter renderType="text">`
-- `productionError` — `<MultiSelectFilter renderType="color">` (Phase 8 — lỗi xưởng)
-- Search productionId / userSku / orderId / type (debounced 300ms)
-- `<DateRangePicker>` — 8 preset quick + 2 input custom + popover gói gọn (Phase 7.2)
+Render conditional theo `order.field.X.view` — dùng `<SelectFilter>` (single-select, native HTML + count badge). Options + count đến từ BE endpoint `GET /v1/orders/workshop-filters` theo **faceted-search pattern**:
+- BE method `getWorkshopAvailableFilters(dto, role)` — với mỗi facet, build `buildOrderListFilter` sau khi strip facet đó khỏi dto, rồi `$group` field tương ứng. Count phản ánh subset đã narrow theo các facet khác đang active.
+- 8 facet support: `fabricType` / `machineNumber` / `printStatus` / `toolResult` / `toolResultNote` / `errorFile` / `assignee` / `productionError`. Cell hiển thị phụ thuộc permission `order.field.X.view`.
+- Search productionId / userSku / orderId / type (debounced 300ms).
+- `<DateRangePicker>` — 8 preset quick + 2 input custom + popover gói gọn (Phase 7.2).
 
-Filter gửi qua query string `?printStatus=code1,code2&...&createdFrom=...`. Service split CSV.
+Filter gửi qua query string `?printStatus=code&fabricType=code&...`. Service nhận chuỗi đơn (`$in` vẫn dùng split CSV — single value vẫn parse được).
 
 **URL state persistence** (Phase 7.2): tất cả filter sync ↔ URL params với prefix `w` (workshop) để F5 / share link giữ nguyên state:
 

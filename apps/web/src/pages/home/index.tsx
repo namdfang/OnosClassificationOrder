@@ -8,12 +8,12 @@ import OrderFactoryTab from './OrderFactoryTab';
 import OrderStatsTab from './OrderStatsTab';
 import OrderStatusTab from './OrderStatusTab';
 
-const TABS = ['stats', 'status', 'factory'] as const;
+const TABS = ['factory', 'stats', 'status',] as const;
 type TabKey = (typeof TABS)[number];
 
 export default function Home() {
   const [searchParams, setSearchParams] = useSearchParams();
-  const initial = (searchParams.get('tab') as TabKey) || 'stats';
+  const initial = (searchParams.get('tab') as TabKey) || 'factory';
   const [activeTab, setActiveTab] = useState<TabKey>(TABS.includes(initial) ? initial : 'stats');
 
   useEffect(() => {
@@ -62,14 +62,14 @@ export default function Home() {
 
       <Tabs value={activeTab} onValueChange={handleTabChange} className="w-full">
         <TabsList>
+          <TabsTrigger value="factory" className="gap-1.5">
+            <Factory size={14} /> Đơn hàng theo xưởng
+          </TabsTrigger>
           <TabsTrigger value="stats" className="gap-1.5">
             <BarChart3 size={14} /> Thống kê đơn & sản phẩm
           </TabsTrigger>
           <TabsTrigger value="status" className="gap-1.5">
             <ClipboardList size={14} /> Tình trạng đơn hàng
-          </TabsTrigger>
-          <TabsTrigger value="factory" className="gap-1.5">
-            <Factory size={14} /> Đơn hàng theo xưởng
           </TabsTrigger>
         </TabsList>
 

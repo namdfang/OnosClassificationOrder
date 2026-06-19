@@ -15,7 +15,7 @@ export class ProductConfigEntity extends DatabaseEntityAbstract {
   shortName: string;
 
   @Prop({ trim: true })
-  computerType?: string;
+  machineNumber?: string;
 
   @Prop({ required: true, ref: 'MachineTypeEntity', index: true })
   machineTypeId: string;

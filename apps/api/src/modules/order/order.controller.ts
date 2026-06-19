@@ -26,6 +26,7 @@ import {
   TransferOrderResDto,
   UpdateOrderFieldDto,
   UpdateOrderFieldResDto,
+  WorkshopAvailableFiltersResDto,
 } from 'shared';
 
 import { Auth, ClientIp, UserAgent } from '@/decorators';
@@ -112,6 +113,20 @@ export class OrderController {
     @AuthUser() user: UserDocument,
   ): Promise<GetGroupedProductionOrdersResDto> {
     return this.orderService.getOrdersGroupedByType(dto, user?.role?.name);
+  }
+
+  @Get('workshop-filters')
+  @Auth(ORDER_VIEW_ROLES)
+  @ApiOperation({
+    summary: 'Aggregate workshop dropdown options + count theo cross-facet pattern',
+  })
+  @HttpCode(HttpStatus.OK)
+  @ApiOkResponse({ type: WorkshopAvailableFiltersResDto })
+  async getWorkshopFilters(
+    @Query() dto: GetProductionOrdersDto,
+    @AuthUser() user: UserDocument,
+  ): Promise<WorkshopAvailableFiltersResDto> {
+    return this.orderService.getWorkshopAvailableFilters(dto, user?.role?.name);
   }
 
   @Get('import-summary')

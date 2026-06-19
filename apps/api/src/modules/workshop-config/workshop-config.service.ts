@@ -122,6 +122,29 @@ export class WorkshopConfigService implements OnModuleInit {
   }
 
   /**
+   * Hard-delete every row in a category and re-insert from seed. Used when the
+   * admin wants the dropdown to match the seed list exactly (e.g. after a
+   * cleanup), so manually-added or auto-created entries get wiped.
+   */
+  async resetCategory(
+    category: WorkshopConfigCategory,
+  ): Promise<{ removed: number; inserted: number }> {
+    const removed = await this.model.deleteMany({ category });
+    const seed = WORKSHOP_CONFIG_SEED.filter((s) => s.category === category);
+    let inserted = 0;
+    for (const item of seed) {
+      try {
+        await this.repo.create({ ...item, isActive: true });
+        inserted++;
+      } catch (err) {
+        // eslint-disable-next-line no-console
+        console.warn(`[workshop-reset] ${item.category}/${item.code}: ${(err as Error).message}`);
+      }
+    }
+    return { removed: removed.deletedCount ?? 0, inserted };
+  }
+
+  /**
    * Group by (category, code), keep oldest doc (by createdAt asc + _id asc),
    * permanently delete the rest. Returns counts per category.
    */

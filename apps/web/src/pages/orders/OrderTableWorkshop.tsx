@@ -1,13 +1,14 @@
-import React, { useEffect, useMemo, useState } from 'react';
-import { ChevronDown, ChevronRight, History, RefreshCw, Search } from 'lucide-react';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
+import { ChevronDown, ChevronRight, History, MousePointerClick, RefreshCw, Search } from 'lucide-react';
 import { useSearchParams } from 'react-router-dom';
+import type { WorkshopAvailableFilters } from 'shared';
 
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { PaginationBar } from '@/components/common/PaginationBar';
 import { DateRangePicker } from '@/components/common/DateRangePicker';
-import { MultiSelectFilter } from '@/components/common/MultiSelectFilter';
+import { SelectFilter } from '@/components/common/SelectFilter';
 import { Spinner } from '@/components/common/Spinner';
 import { ImagePreviewDialog } from '@/components/common/ImagePreviewDialog';
 import {
@@ -57,11 +58,9 @@ export function OrderTableWorkshop() {
   const loadConfig = useWorkshopConfigStore((s) => s.load);
   const configLoaded = useWorkshopConfigStore((s) => s.loaded);
 
-  // URL params (prefix `w` = workshop). F5 giữ nguyên filter. Multi-select
-  // filter dùng CSV để serialize.
+  // URL params (prefix `w` = workshop). F5 giữ nguyên filter. Single-select
+  // mỗi facet sau khi chuyển sang SelectFilter — multi-value support removed.
   const [searchParams, setSearchParams] = useSearchParams();
-  const csvToArr = (raw: string | null): string[] =>
-    raw ? raw.split(',').filter(Boolean) : [];
 
   const [items, setItems] = useState<OrderRow[]>([]);
   const [total, setTotal] = useState(0);
@@ -81,6 +80,14 @@ export function OrderTableWorkshop() {
   const [search, setSearch] = useState(() => searchParams.get('wsearch') || '');
   const debouncedSearch = useDebounce(search, 300);
   const [selected, setSelected] = useState<Set<string>>(new Set());
+  /** Anchor cho shift+click range-select. Update mỗi lần user click checkbox. */
+  const [lastClickedId, setLastClickedId] = useState<string | null>(null);
+  /**
+   * Bắt shiftKey ở mousedown (chạy TRƯỚC native checkbox toggle), đọc lại
+   * trong onChange. Không thể đọc shiftKey từ onChange synthetic event vì
+   * change event không carry modifier keys.
+   */
+  const shiftKeyRef = useRef(false);
   const [preview, setPreview] = useState<{ url: string; originalUrl?: string; title: string } | null>(null);
   const [historyTarget, setHistoryTarget] = useState<{ id: string; productionId: string } | null>(null);
   const [collapsedTypes, setCollapsedTypes] = useState<Set<string>>(new Set());
@@ -93,18 +100,30 @@ export function OrderTableWorkshop() {
       return next;
     });
 
-  // Filters by workshop code (multi)
-  const [filterPrintStatus, setFilterPrintStatus] = useState<string[]>(
-    () => csvToArr(searchParams.get('wprint')),
+  // Filters by workshop code — single value mỗi facet.
+  const [filterPrintStatus, setFilterPrintStatus] = useState<string>(
+    () => searchParams.get('wprint') || '',
   );
-  const [filterToolResultNote, setFilterToolResultNote] = useState<string[]>(
-    () => csvToArr(searchParams.get('wnote')),
+  const [filterToolResultNote, setFilterToolResultNote] = useState<string>(
+    () => searchParams.get('wnote') || '',
   );
-  const [filterAssignee, setFilterAssignee] = useState<string[]>(
-    () => csvToArr(searchParams.get('wassign')),
+  const [filterAssignee, setFilterAssignee] = useState<string>(
+    () => searchParams.get('wassign') || '',
   );
-  const [filterProductionError, setFilterProductionError] = useState<string[]>(
-    () => csvToArr(searchParams.get('werror')),
+  const [filterProductionError, setFilterProductionError] = useState<string>(
+    () => searchParams.get('werror') || '',
+  );
+  const [filterFabricType, setFilterFabricType] = useState<string>(
+    () => searchParams.get('wfabric') || '',
+  );
+  const [filterMachineNumber, setFilterMachineNumber] = useState<string>(
+    () => searchParams.get('wmnum') || '',
+  );
+  const [filterToolResult, setFilterToolResult] = useState<string>(
+    () => searchParams.get('wtool') || '',
+  );
+  const [filterErrorFile, setFilterErrorFile] = useState<string>(
+    () => searchParams.get('werrfile') || '',
   );
 
   // Sync state → URL (replace). Strip default/empty values.
@@ -113,13 +132,16 @@ export function OrderTableWorkshop() {
       (prev) => {
         const sp = new URLSearchParams(prev);
         search ? sp.set('wsearch', search) : sp.delete('wsearch');
-        // Date luôn ghi vào URL (kể cả khi == today) để URL phản ánh đúng state.
         createdFrom ? sp.set('wfrom', createdFrom) : sp.delete('wfrom');
         createdTo ? sp.set('wto', createdTo) : sp.delete('wto');
-        filterPrintStatus.length > 0 ? sp.set('wprint', filterPrintStatus.join(',')) : sp.delete('wprint');
-        filterToolResultNote.length > 0 ? sp.set('wnote', filterToolResultNote.join(',')) : sp.delete('wnote');
-        filterAssignee.length > 0 ? sp.set('wassign', filterAssignee.join(',')) : sp.delete('wassign');
-        filterProductionError.length > 0 ? sp.set('werror', filterProductionError.join(',')) : sp.delete('werror');
+        filterPrintStatus ? sp.set('wprint', filterPrintStatus) : sp.delete('wprint');
+        filterToolResultNote ? sp.set('wnote', filterToolResultNote) : sp.delete('wnote');
+        filterAssignee ? sp.set('wassign', filterAssignee) : sp.delete('wassign');
+        filterProductionError ? sp.set('werror', filterProductionError) : sp.delete('werror');
+        filterFabricType ? sp.set('wfabric', filterFabricType) : sp.delete('wfabric');
+        filterMachineNumber ? sp.set('wmnum', filterMachineNumber) : sp.delete('wmnum');
+        filterToolResult ? sp.set('wtool', filterToolResult) : sp.delete('wtool');
+        filterErrorFile ? sp.set('werrfile', filterErrorFile) : sp.delete('werrfile');
         page > 1 ? sp.set('wpage', String(page)) : sp.delete('wpage');
         pageSize !== DEFAULT_PAGE_SIZE ? sp.set('wsize', String(pageSize)) : sp.delete('wsize');
         return sp;
@@ -134,12 +156,16 @@ export function OrderTableWorkshop() {
     filterToolResultNote,
     filterAssignee,
     filterProductionError,
+    filterFabricType,
+    filterMachineNumber,
+    filterToolResult,
+    filterErrorFile,
     page,
     pageSize,
     setSearchParams,
   ]);
 
-  const byCategory = useWorkshopConfigStore((s) => s.byCategory);
+  const [workshopFilters, setWorkshopFilters] = useState<WorkshopAvailableFilters | null>(null);
 
   useEffect(() => {
     if (!configLoaded) loadConfig();
@@ -158,20 +184,28 @@ export function OrderTableWorkshop() {
     Array<{ type: string; totalOrders: number; totalQuantity: number; orders: OrderRow[] }>
   >([]);
 
-  const fetchData = async () => {
+  const buildFilterParams = (): URLSearchParams => {
     const params = new URLSearchParams();
-    params.set('page', String(page));
-    params.set('limit', String(pageSize));
     if (debouncedSearch.trim()) params.set('search', debouncedSearch.trim());
-    if (filterPrintStatus.length > 0) params.set('printStatus', filterPrintStatus.join(','));
-    if (filterToolResultNote.length > 0) params.set('toolResultNote', filterToolResultNote.join(','));
-    if (filterAssignee.length > 0) params.set('assignee', filterAssignee.join(','));
-    if (filterProductionError.length > 0) params.set('productionError', filterProductionError.join(','));
+    if (filterPrintStatus) params.set('printStatus', filterPrintStatus);
+    if (filterToolResultNote) params.set('toolResultNote', filterToolResultNote);
+    if (filterAssignee) params.set('assignee', filterAssignee);
+    if (filterProductionError) params.set('productionError', filterProductionError);
+    if (filterFabricType) params.set('fabricType', filterFabricType);
+    if (filterMachineNumber) params.set('machineNumber', filterMachineNumber);
+    if (filterToolResult) params.set('toolResult', filterToolResult);
+    if (filterErrorFile) params.set('errorFile', filterErrorFile);
     if (createdFrom) params.set('createdFrom', createdFrom);
     if (createdTo) params.set('createdTo', createdTo);
+    return params;
+  };
+
+  const fetchData = async () => {
+    const params = buildFilterParams();
+    params.set('page', String(page));
+    params.set('limit', String(pageSize));
 
     try {
-      setLoading(true);
       const res = await RepositoryRemote.order.getOrdersGrouped('?' + params.toString());
       const grouped = (res.data?.data || []) as Array<{
         type: string;
@@ -188,15 +222,38 @@ export function OrderTableWorkshop() {
       setCollapsedTypes(new Set(grouped.map((g) => g.type || '(không có tên)')));
     } catch (err) {
       handleAxiosError(err);
-    } finally {
-      setLoading(false);
+    }
+  };
+
+  const fetchFilters = async () => {
+    const params = buildFilterParams();
+    try {
+      const res = await RepositoryRemote.order.getWorkshopFilters('?' + params.toString());
+      setWorkshopFilters((res.data?.data || null) as WorkshopAvailableFilters | null);
+    } catch (err) {
+      handleAxiosError(err);
     }
   };
 
   useEffect(() => {
-    fetchData();
+    setLoading(true);
+    Promise.all([fetchData(), fetchFilters()]).finally(() => setLoading(false));
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [page, pageSize, debouncedSearch, filterPrintStatus.join(','), filterToolResultNote.join(','), filterAssignee.join(','), filterProductionError.join(','), createdFrom, createdTo]);
+  }, [
+    page,
+    pageSize,
+    debouncedSearch,
+    filterPrintStatus,
+    filterToolResultNote,
+    filterAssignee,
+    filterProductionError,
+    filterFabricType,
+    filterMachineNumber,
+    filterToolResult,
+    filterErrorFile,
+    createdFrom,
+    createdTo,
+  ]);
 
   const patchRow = (id: string, patch: Partial<OrderRow>) => {
     setItems((prev) => prev.map((r) => (r._id === id ? { ...r, ...patch } : r)));
@@ -218,6 +275,93 @@ export function OrderTableWorkshop() {
     setSelected((prev) => {
       if (prev.size === items.length) return new Set();
       return new Set(items.map((it) => it._id));
+    });
+  };
+
+  /**
+   * Flat ordered list of currently visible order IDs (đã skip groups bị
+   * collapse). Phải khớp THỨ TỰ render dưới body — anchor index = idx trong
+   * mảng này. Dùng cho shift+click range select.
+   */
+  const visibleOrderedIds = useMemo(() => {
+    const out: string[] = [];
+    for (const g of groups) {
+      const t = g.type || '(không có tên)';
+      if (collapsedTypes.has(t)) continue;
+      const comboCount = new Map<string, number>();
+      for (const r of g.orders) {
+        const k = `${r.size || ''}|${r.fabricType || ''}|${r.mockupOriginalUrl || r.mockupUrl || ''}`;
+        comboCount.set(k, (comboCount.get(k) || 0) + 1);
+      }
+      const sorted = [...g.orders].sort((a, b) => {
+        const ka = `${a.size || ''}|${a.fabricType || ''}|${a.mockupOriginalUrl || a.mockupUrl || ''}`;
+        const kb = `${b.size || ''}|${b.fabricType || ''}|${b.mockupOriginalUrl || b.mockupUrl || ''}`;
+        const ca = comboCount.get(ka) || 1;
+        const cb = comboCount.get(kb) || 1;
+        if (cb !== ca) return cb - ca;
+        return ka.localeCompare(kb);
+      });
+      for (const r of sorted) out.push(r._id);
+    }
+    return out;
+  }, [groups, collapsedTypes]);
+
+  /**
+   * Excel-style range select. Native checkbox toggle chạy bình thường (visual
+   * sync chính xác), state sync ở onChange. shiftKey lấy từ ref đã set ở
+   * mousedown vì change event không carry modifier keys.
+   *
+   * Trước đó dùng preventDefault trên onClick → React skip update DOM `checked`
+   * cho row vừa click → state đúng nhưng UI miss tick row cuối.
+   */
+  const handleCheckboxChange = (id: string) => {
+    const isShift = shiftKeyRef.current;
+    shiftKeyRef.current = false;
+    if (isShift && lastClickedId && lastClickedId !== id) {
+      const lastIdx = visibleOrderedIds.indexOf(lastClickedId);
+      const curIdx = visibleOrderedIds.indexOf(id);
+      if (lastIdx >= 0 && curIdx >= 0) {
+        const [from, to] = lastIdx < curIdx ? [lastIdx, curIdx] : [curIdx, lastIdx];
+        const range = visibleOrderedIds.slice(from, to + 1);
+        // Native đã toggle row hiện tại — newState = trạng thái sau toggle.
+        const newState = !selected.has(id);
+        setSelected((prev) => {
+          const next = new Set(prev);
+          for (const rid of range) {
+            if (newState) next.add(rid);
+            else next.delete(rid);
+          }
+          return next;
+        });
+        setLastClickedId(id);
+        return;
+      }
+    }
+    toggleRow(id);
+    setLastClickedId(id);
+  };
+
+  type GroupSelectionState = 'all' | 'some' | 'none';
+  const groupSelectionState = (orders: OrderRow[]): GroupSelectionState => {
+    const total = orders.length;
+    if (total === 0) return 'none';
+    let count = 0;
+    for (const o of orders) if (selected.has(o._id)) count++;
+    if (count === 0) return 'none';
+    if (count === total) return 'all';
+    return 'some';
+  };
+
+  const toggleGroupSelection = (orders: OrderRow[]) => {
+    const state = groupSelectionState(orders);
+    setSelected((prev) => {
+      const next = new Set(prev);
+      if (state === 'all') {
+        for (const o of orders) next.delete(o._id);
+      } else {
+        for (const o of orders) next.add(o._id);
+      }
+      return next;
     });
   };
 
@@ -249,7 +393,15 @@ export function OrderTableWorkshop() {
                 }}
               />
             </div>
-            <Button variant="outline" size="sm" onClick={fetchData} disabled={loading}>
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => {
+                setLoading(true);
+                Promise.all([fetchData(), fetchFilters()]).finally(() => setLoading(false));
+              }}
+              disabled={loading}
+            >
               <RefreshCw size={13} className={loading ? 'animate-spin' : ''} />
               Tải lại
             </Button>
@@ -268,41 +420,69 @@ export function OrderTableWorkshop() {
             )}
           </div>
 
-          <div className="flex items-center gap-2 flex-wrap">
+          <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-2">
+            {has('order.field.fabricType.view') && (
+              <SelectFilter
+                label="Loại vải"
+                value={filterFabricType}
+                onChange={setFilterFabricType}
+                options={workshopFilters?.fabricType || []}
+              />
+            )}
+            {has('order.field.machineNumber.view') && (
+              <SelectFilter
+                label="Máy"
+                value={filterMachineNumber}
+                onChange={setFilterMachineNumber}
+                options={workshopFilters?.machineNumber || []}
+              />
+            )}
             {has('order.field.printStatus.view') && (
-              <MultiSelectFilter
+              <SelectFilter
                 label="Trạng thái in"
-                options={byCategory.print_status || []}
                 value={filterPrintStatus}
                 onChange={setFilterPrintStatus}
-                renderType="color"
+                options={workshopFilters?.printStatus || []}
+              />
+            )}
+            {has('order.field.toolResult.view') && (
+              <SelectFilter
+                label="Kết quả Tool"
+                value={filterToolResult}
+                onChange={setFilterToolResult}
+                options={workshopFilters?.toolResult || []}
               />
             )}
             {has('order.field.toolResultNote.view') && (
-              <MultiSelectFilter
+              <SelectFilter
                 label="Note kq Tool"
-                options={byCategory.tool_result_note || []}
                 value={filterToolResultNote}
                 onChange={setFilterToolResultNote}
-                renderType="color"
+                options={workshopFilters?.toolResultNote || []}
+              />
+            )}
+            {has('order.field.errorFile.view') && (
+              <SelectFilter
+                label="File sửa lỗi"
+                value={filterErrorFile}
+                onChange={setFilterErrorFile}
+                options={workshopFilters?.errorFile || []}
               />
             )}
             {has('order.field.assignee.view') && (
-              <MultiSelectFilter
+              <SelectFilter
                 label="Người thực hiện"
-                options={byCategory.assignee || []}
                 value={filterAssignee}
                 onChange={setFilterAssignee}
-                renderType="text"
+                options={workshopFilters?.assignee || []}
               />
             )}
             {has('order.field.productionError.view') && (
-              <MultiSelectFilter
+              <SelectFilter
                 label="Lỗi xưởng"
-                options={byCategory.production_error || []}
                 value={filterProductionError}
                 onChange={setFilterProductionError}
-                renderType="color"
+                options={workshopFilters?.productionError || []}
               />
             )}
           </div>
@@ -320,6 +500,25 @@ export function OrderTableWorkshop() {
           }}
         />
 
+        {/* Selection hint — chỉ hiện khi user chưa chọn gì để tránh nhiễu sau
+            khi đã quen với feature. */}
+        {selected.size === 0 && items.length > 0 && (
+          <div className="flex items-start gap-2 rounded-md border border-dashed border-border bg-muted/30 px-3 py-2 text-[11px] text-muted-foreground">
+            <MousePointerClick size={13} className="mt-0.5 shrink-0 text-primary" />
+            <div className="space-y-0.5">
+              <p>
+                <span className="font-medium text-foreground">Mẹo chọn nhiều đơn:</span>{' '}
+                Tick checkbox cạnh tên sản phẩm để chọn toàn bộ đơn của sản phẩm đó.
+              </p>
+              <p>
+                Tick 1 đơn, giữ{' '}
+                <kbd className="rounded border border-border bg-background px-1 py-0.5 font-mono text-[10px]">Shift</kbd>{' '}
+                rồi click checkbox khác để chọn nhanh tất cả đơn ở giữa (giống Excel / Google Sheets).
+              </p>
+            </div>
+          </div>
+        )}
+
         {/* Table */}
         <div className="rounded-lg border border-border bg-card overflow-hidden">
           <div className="overflow-x-auto">
@@ -331,6 +530,7 @@ export function OrderTableWorkshop() {
                       type="checkbox"
                       checked={items.length > 0 && selected.size === items.length}
                       onChange={toggleAll}
+                      title="Tick để chọn toàn bộ đơn trên trang này"
                     />
                   </TableHead>
                   {visibleCols.map((c) => (
@@ -381,13 +581,26 @@ export function OrderTableWorkshop() {
                         return ka.localeCompare(kb);
                       });
 
+                  const groupState = groupSelectionState(g.orders);
                   return (
                     <React.Fragment key={t}>
-                      <TableRow
-                        className="bg-muted/40 hover:bg-muted/50 cursor-pointer"
-                        onClick={() => toggleType(t)}
-                      >
-                        <TableCell colSpan={visibleCols.length + 2} className="py-1.5">
+                      <TableRow className="bg-muted/40 hover:bg-muted/50">
+                        <TableCell className="py-1.5" onClick={(e) => e.stopPropagation()}>
+                          <input
+                            type="checkbox"
+                            checked={groupState === 'all'}
+                            ref={(el) => {
+                              if (el) el.indeterminate = groupState === 'some';
+                            }}
+                            onChange={() => toggleGroupSelection(g.orders)}
+                            title={`Tick toàn bộ ${g.orders.length} đơn của sản phẩm này`}
+                          />
+                        </TableCell>
+                        <TableCell
+                          colSpan={visibleCols.length + 1}
+                          className="py-1.5 cursor-pointer"
+                          onClick={() => toggleType(t)}
+                        >
                           <div className="flex items-center gap-2 text-xs">
                             {collapsed ? (
                               <ChevronRight size={14} className="text-muted-foreground" />
@@ -398,6 +611,11 @@ export function OrderTableWorkshop() {
                             <Badge variant="secondary" className="font-mono">
                               {g.totalOrders} đơn
                             </Badge>
+                            {groupState !== 'none' && (
+                              <Badge variant="success" className="font-mono text-[10px]">
+                                {g.orders.filter((o) => selected.has(o._id)).length}/{g.orders.length} chọn
+                              </Badge>
+                            )}
                             {maxCombo > 1 && (
                               <Badge
                                 variant="warning"
@@ -426,7 +644,12 @@ export function OrderTableWorkshop() {
                               <input
                                 type="checkbox"
                                 checked={selected.has(row._id)}
-                                onChange={() => toggleRow(row._id)}
+                                onMouseDown={(e) => {
+                                  shiftKeyRef.current = e.shiftKey;
+                                }}
+                                onClick={(e) => e.stopPropagation()}
+                                onChange={() => handleCheckboxChange(row._id)}
+                                title="Shift+click để chọn cả range tới checkbox trước đó"
                               />
                             </TableCell>
                             {visibleCols.map((c) => (

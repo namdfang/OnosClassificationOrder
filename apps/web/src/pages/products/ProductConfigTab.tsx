@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react';
-import { Plus, RotateCw, Trash2 } from 'lucide-react';
+import { Eraser, Plus, RotateCw, Trash2 } from 'lucide-react';
 import { toast } from 'sonner';
 import { WorkshopConfigCategory } from 'shared';
 
@@ -24,7 +24,7 @@ interface ProductConfigRow {
   _id: string;
   fullName: string;
   shortName: string;
-  computerType?: string;
+  machineNumber?: string;
   fabricType?: string;
   toolResult?: string;
   factory?: { name: string; shortName: string };
@@ -41,6 +41,9 @@ export function ProductConfigTab() {
   );
   const toolOptions = useWorkshopConfigStore(
     (s) => s.byCategory[WorkshopConfigCategory.ToolResult] || [],
+  );
+  const machineOptions = useWorkshopConfigStore(
+    (s) => s.byCategory[WorkshopConfigCategory.Machine] || [],
   );
   const loadConfig = useWorkshopConfigStore((s) => s.load);
   const configLoaded = useWorkshopConfigStore((s) => s.loaded);
@@ -100,6 +103,18 @@ export function ProductConfigTab() {
     }
   };
 
+  const handleClearAll = async () => {
+    if (!confirm('Xóa toàn bộ Product Config? Hành động này không thể hoàn tác.')) return;
+    try {
+      const res = await RepositoryRemote.productConfig.clearAllProductConfigs();
+      const removed = res.data.data?.removed ?? 0;
+      toast.success(`Đã xóa ${removed} product config`);
+      fetchData();
+    } catch (error) {
+      handleAxiosError(error);
+    }
+  };
+
   return (
     <div className="space-y-4">
       <div className="flex items-center justify-between gap-3">
@@ -117,15 +132,19 @@ export function ProductConfigTab() {
               try {
                 const res = await RepositoryRemote.order.backfillFabric();
                 const { scanned, updated } = res.data.data;
-                toast.success(`Đã cập nhật loại vải cho ${updated}/${scanned} đơn`);
+                toast.success(`Đã backfill ${updated}/${scanned} đơn (loại vải / tool / máy)`);
               } catch (error) {
                 handleAxiosError(error);
               }
             }}
-            title="Sau khi set Loại vải / Kết quả Tool cho sản phẩm, click để áp dụng cho các đơn đã import (idempotent — không ghi đè giá trị đã có)"
+            title="Sau khi set Loại vải / Kết quả Tool / Máy cho sản phẩm, click để áp dụng cho các đơn đã import (idempotent — không ghi đè giá trị đã có)"
           >
             <RotateCw size={14} />
-            Backfill vải + tool cho đơn
+            Backfill vải + tool + máy cho đơn
+          </Button>
+          <Button variant="outline" onClick={handleClearAll} title="Xóa toàn bộ product config — dùng khi bắt đầu lại từ đầu">
+            <Eraser size={14} />
+            Xóa tất cả
           </Button>
           <Button onClick={() => setImportOpen(true)}>
             <Plus size={14} />
@@ -140,7 +159,8 @@ export function ProductConfigTab() {
             <TableRow>
               <TableHead>Tên sản phẩm</TableHead>
               <TableHead>Viết tắt</TableHead>
-              <TableHead>Máy</TableHead>
+              <TableHead className="w-20">Máy</TableHead>
+              <TableHead>Phòng</TableHead>
               <TableHead>Xưởng</TableHead>
               <TableHead className="min-w-[160px]">Loại vải</TableHead>
               <TableHead className="min-w-[140px]">Kết quả Tool</TableHead>
@@ -150,14 +170,14 @@ export function ProductConfigTab() {
           <TableBody>
             {loading && (
               <TableRow>
-                <TableCell colSpan={7} className="text-center py-8">
+                <TableCell colSpan={8} className="text-center py-8">
                   <Spinner size={20} className="text-muted-foreground" />
                 </TableCell>
               </TableRow>
             )}
             {!loading && items.length === 0 && (
               <TableRow>
-                <TableCell colSpan={7} className="text-center py-8 text-muted-foreground">
+                <TableCell colSpan={8} className="text-center py-8 text-muted-foreground">
                   Chưa có product config nào. Click "Import từ Excel" để bắt đầu.
                 </TableCell>
               </TableRow>
@@ -168,6 +188,24 @@ export function ProductConfigTab() {
                   <TableCell className="font-medium">{it.fullName}</TableCell>
                   <TableCell>
                     <Badge variant="outline">{it.shortName}</Badge>
+                  </TableCell>
+                  <TableCell>
+                    {it.machineNumber ? (() => {
+                      const m = machineOptions.find((o) => o.code === it.machineNumber);
+                      if (m?.color) {
+                        return (
+                          <Badge
+                            className="font-normal border"
+                            style={{ backgroundColor: m.color, color: '#fff', borderColor: m.color }}
+                          >
+                            {m.name}
+                          </Badge>
+                        );
+                      }
+                      return <Badge variant="secondary">{m?.name ?? it.machineNumber}</Badge>;
+                    })() : (
+                      <span className="text-muted-foreground text-xs">—</span>
+                    )}
                   </TableCell>
                   <TableCell>
                     {it.machineType ? (
@@ -228,7 +266,14 @@ export function ProductConfigTab() {
         </Table>
       </div>
 
-      <ImportProductConfigDialog open={importOpen} onOpenChange={setImportOpen} onSuccess={fetchData} />
+      <ImportProductConfigDialog
+        open={importOpen}
+        onOpenChange={setImportOpen}
+        onSuccess={() => {
+          fetchData();
+          loadConfig(true);
+        }}
+      />
     </div>
   );
 }

@@ -8,7 +8,8 @@ import { IDZod } from '..';
 export const ProductConfigZod = BaseEntityZod.extend({
   fullName: z.string().min(1).max(300),
   shortName: z.string().min(1).max(60),
-  computerType: z.string().max(60).optional(),
+  /** Machine number/identifier (e.g. "94", "27"). Empty → product has no tool. */
+  machineNumber: z.string().max(60).optional(),
   machineTypeId: IDZod,
   factoryId: IDZod,
   /** workshop_config code (category=fabric_type). Default fabric used at import. */
@@ -32,7 +33,7 @@ export class GetProductConfigsResDto extends createZodDto(extendApi(GetProductCo
 export const CreateProductConfigZod = z.object({
   fullName: ProductConfigZod.shape.fullName,
   shortName: ProductConfigZod.shape.shortName,
-  computerType: ProductConfigZod.shape.computerType,
+  machineNumber: ProductConfigZod.shape.machineNumber,
   machineTypeId: ProductConfigZod.shape.machineTypeId,
   factoryId: ProductConfigZod.shape.factoryId,
   fabricType: ProductConfigZod.shape.fabricType,
@@ -47,7 +48,7 @@ export class CreateProductConfigResDto extends createZodDto(extendApi(CreateProd
 export const UpdateProductConfigZod = z.object({
   fullName: ProductConfigZod.shape.fullName.optional(),
   shortName: ProductConfigZod.shape.shortName.optional(),
-  computerType: ProductConfigZod.shape.computerType,
+  machineNumber: ProductConfigZod.shape.machineNumber,
   machineTypeId: ProductConfigZod.shape.machineTypeId.optional(),
   factoryId: ProductConfigZod.shape.factoryId.optional(),
   fabricType: ProductConfigZod.shape.fabricType,
@@ -62,13 +63,16 @@ export class UpdateProductConfigResDto extends createZodDto(extendApi(UpdateProd
 export const ImportProductConfigRowZod = z.object({
   fullName: z.string().min(1),
   shortName: z.string().min(1),
-  computerType: z.string().optional(),
-  machineCode: z.string().min(1),
-  factoryCode: z.string().min(1),
-  /** Vietnamese label ("Cotton Jersey", "Polyester Jersey:"…) — resolved server-side. */
+  /** Machine number ("94", "27"). Empty → product has no tool. */
+  machineNumber: z.string().optional(),
+  /** Factory name ("MÊ LINH", "MÊ LINH"…) — matched server-side, "Xưởng " prefix tolerant. */
+  factoryLabel: z.string().min(1),
+  /** Vietnamese label ("POLY 2 DA", "MÈ 64"…) — resolved server-side via workshop_config. */
   fabricLabel: z.string().optional(),
-  /** Vietnamese label ("Có Tool" / "Không có Tool") — resolved server-side. */
+  /** Vietnamese label ("Có Tool" / "Không có Tool"). Empty → defaults derived from machineNumber. */
   toolResultLabel: z.string().optional(),
+  /** Department / printer type ("IN và CẮT LASER") — matched against MachineType.name. */
+  departmentLabel: z.string().min(1),
 });
 export type ImportProductConfigRow = z.infer<typeof ImportProductConfigRowZod>;
 

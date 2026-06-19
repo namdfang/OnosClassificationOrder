@@ -15,6 +15,8 @@ const TABS: { key: WorkshopConfigCategory; label: string; description: string }[
   { key: WorkshopConfigCategory.Assignee, label: 'Người thực hiện', description: 'Danh sách nhân sự (hiển thị icon)' },
   { key: WorkshopConfigCategory.AssigneeNote, label: 'Note người thực hiện', description: 'Trạng thái xử lý (hiển thị icon)' },
   { key: WorkshopConfigCategory.FabricType, label: 'Loại vải', description: 'Loại vải / blank dùng cho đơn (hiển thị icon)' },
+  { key: WorkshopConfigCategory.Machine, label: 'Loại máy', description: 'Các máy in trong xưởng — số máy (94, 27, 56…) (hiển thị badge màu)' },
+  { key: WorkshopConfigCategory.ProductionError, label: 'Lỗi sản xuất', description: 'Lý do xưởng báo lỗi đơn hàng (hiển thị badge màu)' },
 ];
 
 export default function WorkshopConfigPage() {

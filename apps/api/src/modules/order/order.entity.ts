@@ -177,6 +177,10 @@ export class OrderEntity extends DatabaseEntityAbstract {
   @Prop({ index: true })
   fabricType?: string;
 
+  /** workshop_config code (category=machine). Auto-filled from product config at import. */
+  @Prop({ index: true })
+  machineNumber?: string;
+
   // ─── Production error (Phase 8) ─────────────────────────────────
   // Xưởng báo lỗi đơn hàng (sai size, in lệch, máy hỏng...). Khi
   // `productionError` được set tức là đơn đang ở trạng thái lỗi xưởng;

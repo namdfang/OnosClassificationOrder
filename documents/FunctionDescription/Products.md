@@ -11,12 +11,12 @@
 
 Module **Products** quản lý 3 entity liên quan đến cấu hình sản xuất:
 
-- **Product Config** — map `shortName` (SKU type) → `factory` + `machineType` + `computerType`
-- **Factory** — danh sách xưởng sản xuất (PT, ZK, GG...)
-- **Machine Type** — danh sách loại in / loại máy (DTG, DTF, EMB, SUB...)
+- **Product Config** — map `fullName` (tên đầy đủ sản phẩm) → `factory` + `machineType` (phòng / loại máy in) + `machineNumber` (số máy) + default `fabricType` + default `toolResult`
+- **Factory** — danh sách xưởng sản xuất (mặc định ML/TN/US)
+- **Machine Type** — danh sách "Phòng" / loại máy in (ICL / IEN / HT…)
 
 UI chia 2 tab:
-- **Config tab** — CRUD product config + import từ Google Sheets
+- **Config tab** — CRUD product config + import từ Google Sheets + xóa toàn bộ
 - **Xưởng tab** — CRUD factory & machine type (2 bảng chia đôi màn hình)
 
 ---
@@ -26,53 +26,58 @@ UI chia 2 tab:
 ### 2.1 Tính năng
 | Chức năng | Mô tả |
 |-----------|-------|
-| List | Bảng phân trang `pageSize=20`, sort theo `createdAt` desc |
-| Search | Substring match `shortName` (uppercase) |
-| Filter | Dropdown factory + machineType |
-| Create | Dialog form: `fullName`, `shortName`, `computerType`, `factoryId`, `machineTypeId` |
-| Edit | Click row → mở dialog cùng form, prefilled |
-| Delete | Confirm dialog → soft delete (`deletedAt`) |
-| Import | Dialog paste data từ Google Sheets (tab-separated) → bulk upsert by `shortName` |
+| List | Bảng phân trang `limit=100`, sort theo `createdAt` desc |
+| Search | Substring match `fullName` hoặc `shortName` (case-insensitive) |
+| Filter | Query string `factoryId`, `machineTypeId` |
+| Inline edit | Dropdown chọn `fabricType` + `toolResult` cho mỗi dòng → PATCH `/v1/product-configs/:id` |
+| Delete (1 dòng) | Confirm → soft delete (`deletedAt`) |
+| **Xóa tất cả** | Confirm → DELETE `/v1/product-configs/all` (hard-delete `deleteMany({})`) — dùng khi reset từ đầu |
+| Import | Dialog paste 7 cột tab-separated → bulk upsert by `fullName` |
 
 ### 2.2 Schema `ProductConfigEntity`
 ```ts
 {
-  fullName: string;       // Tên đầy đủ (vd: "Unisex T-Shirt - Cotton 200gsm")
-  shortName: string;      // SKU type uppercase, unique (vd: "UNI-TSHIRT-COT200")
-  computerType?: string;  // Loại máy tính/tool (optional)
-  factoryId: ObjectId;    // ref FactoryEntity
-  machineTypeId: ObjectId;// ref MachineTypeEntity
-  fabricType?: string;    // workshop_config code (category=fabric_type) — default fabric for orders mapping vào sản phẩm này
+  fullName: string;        // Tên đầy đủ (vd: "All-over Print Hockey Jersey"), unique key khi upsert
+  shortName: string;       // Tên viết tắt uppercase
+  machineNumber?: string;  // Số máy in (vd "94", "27"). Empty ⇒ sản phẩm không có tool
+  factoryId: ObjectId;     // ref FactoryEntity (xưởng — vd Mê Linh / Thái Nguyên / US)
+  machineTypeId: ObjectId; // ref MachineTypeEntity (phòng — loại máy in: ICL / IEN / HT)
+  fabricType?: string;     // workshop_config code (category=fabric_type) — default fabric copy vào order
+  toolResult?: string;     // workshop_config code (category=tool_result) — default tool status copy vào order
 }
 ```
 
-Cột `fabricType` cho phép admin set sẵn loại vải mặc định cho mỗi product. Khi import order khớp `type` → product, BE auto-copy `fabricType` vào order, để tab "Tổng hợp đơn theo ngày" group được. UI bảng config có dropdown chọn fabric inline (lưu PATCH `/v1/product-configs/:id`).
+Cột `fabricType` + `toolResult` cho phép admin set sẵn loại vải / kết quả tool mặc định. Khi import order khớp `type` → product, BE auto-copy 2 cột này vào order (chỉ insert, không ghi đè), để Workshop view group được. UI bảng config có dropdown chọn fabric / tool inline.
 
 ### 2.3 Import flow (`ImportProductConfigDialog.tsx`)
 ```
 User paste TSV vào textarea
-  → parseRows() chia tab + dòng, validate header
-  → Preview table (10 dòng đầu)
+  → parseRows() detect header bằng keyword ("Tên đầy đủ", "Phòng"…) → skip dòng đầu nếu match
+  → Preview số dòng hợp lệ
   → Submit → POST /v1/product-configs/import
-  → BE upsert by shortName → trả về { created, updated, skipped[] }
-  → Toast: "Đã tạo X / cập nhật Y / bỏ qua Z"
+  → BE upsert by fullName → trả về { imported, updated, skipped[] }
+  → Toast: "Imported X, updated Y, Z cảnh báo" + console.warn nếu có skip
 ```
 
-Schema TSV chấp nhận (header bắt buộc):
+Schema TSV (7 cột, tab-separated):
 ```
-fullName | shortName | computerType | factory | machineType
+Tên đầy đủ | Tên viết tắt | Máy | Xưởng | Loại vải | Kết quả Tool | Phòng
 ```
-- `factory` / `machineType` nhập **shortName** (BE tự lookup ObjectId)
-- Nếu factory/machineType chưa tồn tại → skip + log lý do
+- **Máy** (`machineNumber`) — vd "94", "27". Empty ⇒ default `toolResult = no-tool`. **Không khớp ⇒ auto-create** entry trong `workshop_config.machine` (code `machine-{slug}`, color xám `#6B7280`); ProductConfig lưu workshop_config code. FE resolve code → name + color qua `workshopConfigStore` để render badge.
+- **Xưởng** (`factoryLabel`) — match `FactoryService.findByLabel()`: tolerant với prefix "Xưởng " và case (vd "MÊ LINH" match "Xưởng Mê Linh"). Match shortName trước, fallback regex name.
+- **Loại vải** (`fabricLabel`) — match `workshop_config` (category=fabric_type) qua `name` case-insensitive. **Không khớp ⇒ auto-create** entry mới (slugified code, icon `Shirt`, isActive=true) rồi gán cho product. Sau import FE force-reload `workshopConfigStore` để dropdown thấy fabric mới.
+- **Kết quả Tool** (`toolResultLabel`) — match workshop_config (category=tool_result). Empty ⇒ default `has-tool` nếu Máy có giá trị. Empty + Máy trống ⇒ default `no-tool`.
+- **Phòng** (`departmentLabel`) — match `MachineTypeService.findByLabel()`: shortName trước, fallback name case-insensitive (vd "IN và CẮT LASER" match "In và cắt laser"). Không khớp ⇒ skip dòng.
 
 ---
 
 ## 3. Tab `Xưởng` (`apps/web/src/pages/products/FactoryTab.tsx`)
 
 ### 3.1 Layout
-Chia đôi grid 2 cột:
-- **Trái:** bảng Factory
-- **Phải:** bảng MachineType
+3 bảng xếp dọc (`space-y-6`):
+- **Xưởng** (Factory) — CRUD shortName/name/isActive
+- **Loại máy** (MachineType / Phòng) — CRUD shortName/name/isActive
+- **Loại vải** (Fabric — workshop_config category=fabric_type) — CRUD code/name/icon/isActive, dùng `IconPicker` và slugify tự động. Sync `workshopConfigStore`. Đây là **cùng dataset** với tab Loại vải ở trang Workshop Config, đặt ở đây để admin tiện thao tác sau khi import. Có nút **"Reset từ seed"** → `POST /v1/workshop-config/reset/fabric_type` hard-delete toàn bộ category rồi re-insert 22 fabric từ `WORKSHOP_CONFIG_SEED` (POLY 2 DA, MÈ 64, LỤA 4B, LỤA VÂN GỖ, THUN LẠNH, NỈ BÔNG, MÈ CARO, LỤA NGỌC TRAI, LƯỚI, THÔ MỘC, LỤA, CANVAS, THUN BỘT, PHI BÓNG, 60% COTTON 40% POLY, LÔNG- CHĂN, ÁO: LỤA 4B- QUẦN: MÈ CARO, VẢI MÈ MỚI, MIX VẢI + LƯỚI, MÈ CA SẤU, THÊU, GIẢ LEN).
 
 ### 3.2 Factory CRUD
 | Field | Type | Validation |
@@ -121,12 +126,12 @@ Khi BE khởi động, `FactoryService.onModuleInit()` + `MachineTypeService.onM
 ### 5.1 Product Config
 | Method | Path | Body / Query | Mô tả |
 |--------|------|--------------|-------|
-| GET | `/v1/product-configs` | `?page&pageSize&search&factoryId&machineTypeId` | List + filter |
+| GET | `/v1/product-configs` | `?page&limit&search&factoryId&machineTypeId` | List + filter |
 | POST | `/v1/product-configs` | CreateProductConfigDto | Tạo |
 | PATCH | `/v1/product-configs/:id` | UpdateProductConfigDto | Update |
-| DELETE | `/v1/product-configs/:id` | — | Soft delete |
-| POST | `/v1/product-configs/import` | `{ rows: [] }` | Bulk upsert by shortName |
-| GET | `/v1/product-configs/by-type/:type` | — | Resolve khi mapping order |
+| DELETE | `/v1/product-configs/:id` | — | Soft delete 1 dòng |
+| DELETE | `/v1/product-configs/all` | — | Hard delete toàn bộ (SuperAdmin/Admin) — trả về `{ removed }` |
+| POST | `/v1/product-configs/import` | `{ rows: [] }` | Bulk upsert by fullName |
 
 ### 5.2 Factory & MachineType
 | Method | Path | Mô tả |

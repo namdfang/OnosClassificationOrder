@@ -9,9 +9,11 @@ import {
   GetWorkshopConfigsResDto,
   ReorderWorkshopConfigDto,
   ReorderWorkshopConfigResDto,
+  ResDto,
   RoleType,
   UpdateWorkshopConfigDto,
   UpdateWorkshopConfigResDto,
+  WorkshopConfigCategory,
 } from 'shared';
 
 import { Auth } from '@/decorators';
@@ -29,6 +31,16 @@ export class WorkshopConfigController {
   @HttpCode(HttpStatus.OK)
   async dedupe() {
     const data = await this.service.dedupe();
+    return { success: true, data };
+  }
+
+  @Post('reset/:category')
+  @Auth([RoleType.SuperAdmin, RoleType.Admin])
+  @ApiOperation({ summary: 'Wipe a category and re-insert from seed' })
+  @HttpCode(HttpStatus.OK)
+  @ApiOkResponse({ type: ResDto })
+  async resetCategory(@Param('category') category: WorkshopConfigCategory): Promise<ResDto> {
+    const data = await this.service.resetCategory(category);
     return { success: true, data };
   }
 

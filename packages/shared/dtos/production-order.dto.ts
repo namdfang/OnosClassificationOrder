@@ -75,6 +75,8 @@ export const ProductionOrderZod = BaseEntityZod.extend({
   assigneeNote: z.string().optional(),
   /** workshop_config code (category=fabric_type). Auto-filled at import from product config. */
   fabricType: z.string().optional(),
+  /** workshop_config code (category=machine). Auto-filled at import from product config. */
+  machineNumber: z.string().optional(),
 
   // ─── Production error (Phase 8) ────────────────────────────────
   // Xưởng báo lỗi sau khi đã in / chuẩn bị in: chọn lý do lỗi (code thuộc
@@ -100,6 +102,7 @@ export const ORDER_WORKSHOP_FIELDS = [
   'assignee',
   'assigneeNote',
   'fabricType',
+  'machineNumber',
   'productionError',
   'productionErrorNote',
 ] as const;
@@ -126,6 +129,10 @@ export const GetProductionOrdersZod = PageQueryZod.extend({
   toolResult: z.string().optional(),
   /** Comma-separated workshop_config codes for production_error. */
   productionError: z.string().optional(),
+  /** Comma-separated workshop_config codes for machine (numéro máy). */
+  machineNumber: z.string().optional(),
+  /** Truthy → chỉ lấy đơn chưa map xưởng (factoryId null / không có). */
+  unmapped: z.coerce.boolean().optional(),
   /**
    * Truthy → chỉ lấy đơn có lỗi xưởng (productionError set, khác null/empty).
    * Falsy → chỉ lấy đơn không có lỗi. Bỏ qua khi không có giá trị.
@@ -440,8 +447,10 @@ export const FactoryOverviewCellZod = z.object({
   productCount: z.number(),
   /** Distinct `fabricType` values currently here. */
   fabricCount: z.number(),
-  /** Distinct `machineTypeId` values currently here. */
+  /** Distinct `machineTypeId` values currently here — semantically "Phòng" / loại máy in. */
   machineCount: z.number(),
+  /** Distinct `machineNumber` values currently here — số máy thực (94, 27, 56…). */
+  actualMachineCount: z.number(),
   /** Orders here whose `toolResult` resolves to a "has tool" code. */
   withToolCount: z.number(),
   /** Đã in xong — printStatus là 1 trong PRINTED_MACHINE_CODES. */
@@ -481,13 +490,18 @@ export const FactoryOverviewZod = z.object({
     total: z.number(),
     transferred: z.number(),
     pure: z.number(),
+    /** Đơn nằm trong date range nhưng chưa map xưởng (factoryId null). */
+    unmapped: z.number(),
   }),
   /** Distinct values within the date range — used to populate filter selects. */
   availableFilters: z.object({
     products: FactoryFilterOptionZod.array(),
     fabrics: FactoryFilterOptionZod.array(),
     toolResults: FactoryFilterOptionZod.array(),
+    /** machineTypeId — semantically "Phòng" (loại máy in). */
     machineTypes: FactoryFilterOptionZod.array(),
+    /** workshop_config.machine codes — số máy thực. */
+    machines: FactoryFilterOptionZod.array(),
   }),
 });
 export type FactoryOverview = z.infer<typeof FactoryOverviewZod>;
@@ -513,8 +527,52 @@ export const GetFactoryOverviewZod = z.object({
    * "Đang in"). `true` → `productionError $exists & != ''`.
    */
   hasError: z.coerce.boolean().optional(),
+  /**
+   * Optional — scope tất cả `availableFilters` về đơn chưa map xưởng. Mutually
+   * exclusive với `factoryId`/`printStage`/`hasError` trên FE (chip "Chưa xác
+   * định xưởng" thay cho chip xưởng).
+   */
+  unmapped: z.coerce.boolean().optional(),
+  /**
+   * Faceted select filters — used to narrow OTHER `availableFilters` so the
+   * dropdown counts reflect the current cross-filter scope. Each facet excludes
+   * its own field when computing its options (so user can switch values).
+   */
+  type: z.string().optional(),
+  fabricType: z.string().optional(),
+  toolResult: z.string().optional(),
+  machineTypeId: z.string().optional(),
+  machineNumber: z.string().optional(),
 });
 export class GetFactoryOverviewDto extends createZodDto(extendApi(GetFactoryOverviewZod)) {}
 
 export const GetFactoryOverviewResZod = ResZod.extend({ data: FactoryOverviewZod });
 export class GetFactoryOverviewResDto extends createZodDto(extendApi(GetFactoryOverviewResZod)) {}
+
+/**
+ * Faceted filter options cho workshop table view. BE compute count theo
+ * cross-facet (loại trừ chính facet đó khỏi filter để user thấy được tất cả
+ * lựa chọn của facet đó nhưng các facet khác đã narrow theo selection).
+ *
+ * Khai báo cuối file vì phụ thuộc `FactoryFilterOptionZod` (định nghĩa ở mục
+ * Factory overview). Tsup bundle theo thứ tự source — đặt trước sẽ sinh
+ * `Cannot read properties of undefined (reading 'array')` lúc require.
+ */
+export const WorkshopAvailableFiltersResZod = ResZod.extend({
+  data: z.object({
+    printStatus: FactoryFilterOptionZod.array(),
+    toolResultNote: FactoryFilterOptionZod.array(),
+    assignee: FactoryFilterOptionZod.array(),
+    productionError: FactoryFilterOptionZod.array(),
+    fabricType: FactoryFilterOptionZod.array(),
+    machineNumber: FactoryFilterOptionZod.array(),
+    toolResult: FactoryFilterOptionZod.array(),
+    errorFile: FactoryFilterOptionZod.array(),
+  }),
+});
+export class WorkshopAvailableFiltersResDto extends createZodDto(
+  extendApi(WorkshopAvailableFiltersResZod),
+) {}
+export type WorkshopAvailableFilters = z.infer<
+  typeof WorkshopAvailableFiltersResZod
+>['data'];

@@ -70,6 +70,7 @@ const FIELD_CONFIG_CATEGORY: Record<OrderWorkshopField, WorkshopConfigCategory |
   assignee: WorkshopConfigCategory.Assignee,
   assigneeNote: WorkshopConfigCategory.AssigneeNote,
   fabricType: WorkshopConfigCategory.FabricType,
+  machineNumber: WorkshopConfigCategory.Machine,
   productionError: WorkshopConfigCategory.ProductionError,
   productionErrorNote: null, // free text
 };
@@ -89,6 +90,9 @@ const FIELD_EDIT_ROLES: Record<OrderWorkshopField, RoleType[]> = {
   assigneeNote: [...ADMIN_ROLES, RoleType.Designer],
   // Fabric is admin-managed (it's a product attribute, not a workshop status).
   fabricType: ADMIN_ROLES,
+  // Máy: xưởng (Designer + Fulfillment) tự đổi máy nếu phải chuyển máy in,
+  // không cần đợi admin sửa ProductConfig + backfill lại.
+  machineNumber: [...ADMIN_ROLES, RoleType.Designer, RoleType.Fulfillment],
   // Fulfillment (xưởng) là người báo lỗi sản xuất → cần quyền edit.
   productionError: [...ADMIN_ROLES, RoleType.Fulfillment],
   productionErrorNote: [...ADMIN_ROLES, RoleType.Fulfillment],
@@ -269,6 +273,21 @@ export class OrderService implements OnModuleInit {
     if (dto.type) filter.type = { $in: dto.type.split(',').filter(Boolean) };
     if (dto.fabricType) filter.fabricType = { $in: dto.fabricType.split(',').filter(Boolean) };
     if (dto.toolResult) filter.toolResult = { $in: dto.toolResult.split(',').filter(Boolean) };
+    if (dto.machineNumber) {
+      filter.machineNumber = { $in: dto.machineNumber.split(',').filter(Boolean) };
+    }
+    if (dto.unmapped === true) {
+      // Đơn chưa map xưởng — factoryId null hoặc không tồn tại.
+      const unmappedClause = [{ factoryId: { $exists: false } }, { factoryId: null }];
+      if (filter.$or) {
+        // Đã có $or từ filter khác (vd printStage=not-printed) — chuyển sang $and
+        // để cả hai điều kiện cùng phải đúng.
+        filter.$and = [{ $or: filter.$or }, { $or: unmappedClause }];
+        delete filter.$or;
+      } else {
+        filter.$or = unmappedClause;
+      }
+    }
     if (dto.productionError) {
       filter.productionError = { $in: dto.productionError.split(',').filter(Boolean) };
     } else if (dto.hasError === true) {
@@ -1175,13 +1194,25 @@ export class OrderService implements OnModuleInit {
       }
       match.createdAt = range;
     }
-    // Need both IDs present to classify; unmapped orders are excluded.
-    match.factoryId = { $exists: true, $ne: null };
-    match.originalFactoryId = { $exists: true, $ne: null };
+    // `matchMapped` đếm/aggregate đơn đã map xưởng — Cards/flow/stats đều
+    // cần `factoryId` để classify. `match` (chưa gắn) dùng cho `unmapped`
+    // count và optional dropdown khi user chọn chip "Chưa xác định".
+    const matchMapped: Record<string, unknown> = {
+      ...match,
+      factoryId: { $exists: true, $ne: null },
+      originalFactoryId: { $exists: true, $ne: null },
+    };
+
+    // Đơn chưa map xưởng trong cùng date range — đếm độc lập, dùng cho chip
+    // "Chưa xác định xưởng" trên FE.
+    const unmappedCount = await this.orderModel.countDocuments({
+      ...match,
+      $or: [{ factoryId: { $exists: false } }, { factoryId: null }],
+    });
 
     type FlowRow = { _id: { from: string; to: string }; count: number; totalQuantity: number };
     const flowRows = await this.orderModel.aggregate<FlowRow>([
-      { $match: match },
+      { $match: matchMapped },
       {
         $group: {
           _id: { from: '$originalFactoryId', to: '$factoryId' },
@@ -1227,6 +1258,7 @@ export class OrderService implements OnModuleInit {
           productCount: 0,
           fabricCount: 0,
           machineCount: 0,
+          actualMachineCount: 0,
           withToolCount: 0,
           printedCount: 0,
           printingCount: 0,
@@ -1294,6 +1326,7 @@ export class OrderService implements OnModuleInit {
       productCount: number;
       fabricCount: number;
       machineCount: number;
+      actualMachineCount: number;
       withToolCount: number;
       printedCount: number;
       printingCount: number;
@@ -1301,13 +1334,16 @@ export class OrderService implements OnModuleInit {
       errorCount: number;
     };
     const statRows = await this.orderModel.aggregate<StatRow>([
-      { $match: match },
+      { $match: matchMapped },
       {
         $group: {
           _id: '$factoryId',
           types: { $addToSet: '$type' },
           fabrics: { $addToSet: '$fabricType' },
+          // `machines` (legacy name) đếm machineTypeId → đây là "Phòng" / loại
+          // máy in. `actualMachines` đếm machineNumber → số máy thực (94/27/56).
           machines: { $addToSet: '$machineTypeId' },
+          actualMachines: { $addToSet: '$machineNumber' },
           withToolCount: {
             $sum: { $cond: [{ $in: ['$toolResult', toolHasCodes] }, 1, 0] },
           },
@@ -1351,6 +1387,9 @@ export class OrderService implements OnModuleInit {
           machineCount: {
             $size: { $filter: { input: '$machines', as: 'm', cond: { $and: [{ $ne: ['$$m', null] }, { $ne: ['$$m', ''] }] } } },
           },
+          actualMachineCount: {
+            $size: { $filter: { input: '$actualMachines', as: 'a', cond: { $and: [{ $ne: ['$$a', null] }, { $ne: ['$$a', ''] }] } } },
+          },
           withToolCount: 1,
           printedCount: 1,
           printingCount: 1,
@@ -1365,6 +1404,7 @@ export class OrderService implements OnModuleInit {
       cell.productCount = s.productCount;
       cell.fabricCount = s.fabricCount;
       cell.machineCount = s.machineCount;
+      cell.actualMachineCount = s.actualMachineCount;
       cell.withToolCount = s.withToolCount;
       cell.printedCount = s.printedCount;
       cell.printingCount = s.printingCount;
@@ -1377,7 +1417,7 @@ export class OrderService implements OnModuleInit {
     // top-N lists. We pull these 4 aggregations in parallel.
     type BreakdownRow = { _id: { factory: string; v: string }; count: number };
     const breakdownPipeline = (field: string, filterOut: { $ne?: unknown } = {}) => [
-      { $match: { ...match, [field]: { $exists: true, $ne: null, $nin: [''], ...filterOut } } },
+      { $match: { ...matchMapped, [field]: { $exists: true, $ne: null, $nin: [''], ...filterOut } } },
       { $group: { _id: { factory: '$factoryId', v: `$${field}` }, count: { $sum: 1 } } },
       { $sort: { count: -1 as const } },
     ];
@@ -1426,49 +1466,105 @@ export class OrderService implements OnModuleInit {
     pushBd(toolBd, 'toolResults', (v) => toolMetaMap.get(v) || v);
 
     // ─── Filter selects: distinct values across the date range ──────────
-    // When the user picks a factory chip OR a print stage button, scope the
-    // dropdown options to orders matching that scope so user only sees
-    // values that yield non-empty results. Cards + flow totals stay
-    // unscoped (global view).
-    const filterMatch: Record<string, unknown> = { ...match };
-    if (dto.factoryId) filterMatch.factoryId = dto.factoryId;
+    // Cross-facet scope: each dropdown counts options applying ALL active
+    // filters EXCEPT its own field, so the user can switch values within that
+    // facet while other facets reflect the narrowed subset. Cards + flow
+    // totals stay unscoped (global view).
+    const scopeMatch: Record<string, unknown> =
+      dto.unmapped === true
+        ? {
+            ...match,
+            $or: [{ factoryId: { $exists: false } }, { factoryId: null }],
+          }
+        : { ...matchMapped };
+    if (dto.factoryId && dto.unmapped !== true) scopeMatch.factoryId = dto.factoryId;
     if (dto.printStage === 'printed') {
-      filterMatch.printStatus = { $in: PRINTED_MACHINE_CODES };
+      scopeMatch.printStatus = { $in: PRINTED_MACHINE_CODES };
     } else if (dto.printStage === 'printing') {
-      filterMatch.printStatus = { $exists: true, $nin: [null, '', ...PRINTED_MACHINE_CODES] };
+      scopeMatch.printStatus = { $exists: true, $nin: [null, '', ...PRINTED_MACHINE_CODES] };
     } else if (dto.printStage === 'not-printed') {
-      filterMatch.$or = [
+      const printNotClause = [
         { printStatus: { $exists: false } },
         { printStatus: { $in: [null, ''] } },
       ];
+      if (scopeMatch.$or) {
+        scopeMatch.$and = [{ $or: scopeMatch.$or }, { $or: printNotClause }];
+        delete scopeMatch.$or;
+      } else {
+        scopeMatch.$or = printNotClause;
+      }
     }
-    // Khi user click "Lỗi xưởng" trên card, FE truyền `hasError=true` cùng
-    // `factoryId`. availableFilters phải scope theo đơn lỗi để dropdown chỉ
-    // hiện options tồn tại trong tập đơn lỗi đó.
     if (dto.hasError === true) {
-      filterMatch.productionError = { $exists: true, $nin: [null, ''] };
+      scopeMatch.productionError = { $exists: true, $nin: [null, ''] };
     }
 
+    /** Faceted filters set by the user via the select dropdowns. */
+    const facetFilters: Record<string, unknown> = {};
+    if (dto.type) facetFilters.type = { $in: dto.type.split(',').filter(Boolean) };
+    if (dto.fabricType) {
+      facetFilters.fabricType = { $in: dto.fabricType.split(',').filter(Boolean) };
+    }
+    if (dto.toolResult) {
+      facetFilters.toolResult = { $in: dto.toolResult.split(',').filter(Boolean) };
+    }
+    if (dto.machineTypeId) facetFilters.machineTypeId = dto.machineTypeId;
+    if (dto.machineNumber) {
+      facetFilters.machineNumber = { $in: dto.machineNumber.split(',').filter(Boolean) };
+    }
+    const buildFacetMatch = (excludeKey: keyof typeof facetFilters) => {
+      const out: Record<string, unknown> = { ...scopeMatch };
+      for (const [k, v] of Object.entries(facetFilters)) {
+        if (k === excludeKey) continue;
+        out[k] = v;
+      }
+      return out;
+    };
+
     type OptionRow = { _id: string; count: number };
-    const [typeRows, fabricRows, toolRows, machineRows] = await Promise.all([
+    const [typeRows, fabricRows, toolRows, machineRows, actualMachineRows] = await Promise.all([
       this.orderModel.aggregate<OptionRow>([
-        { $match: { ...filterMatch, type: { $exists: true, $ne: null, $nin: [''] } } },
+        { $match: { ...buildFacetMatch('type'), type: { $exists: true, $ne: null, $nin: [''] } } },
         { $group: { _id: '$type', count: { $sum: 1 } } },
         { $sort: { count: -1 } },
       ]),
       this.orderModel.aggregate<OptionRow>([
-        { $match: { ...filterMatch, fabricType: { $exists: true, $ne: null, $nin: [''] } } },
+        {
+          $match: {
+            ...buildFacetMatch('fabricType'),
+            fabricType: { $exists: true, $ne: null, $nin: [''] },
+          },
+        },
         { $group: { _id: '$fabricType', count: { $sum: 1 } } },
         { $sort: { count: -1 } },
       ]),
       this.orderModel.aggregate<OptionRow>([
-        { $match: { ...filterMatch, toolResult: { $exists: true, $ne: null, $nin: [''] } } },
+        {
+          $match: {
+            ...buildFacetMatch('toolResult'),
+            toolResult: { $exists: true, $ne: null, $nin: [''] },
+          },
+        },
         { $group: { _id: '$toolResult', count: { $sum: 1 } } },
         { $sort: { count: -1 } },
       ]),
       this.orderModel.aggregate<OptionRow>([
-        { $match: { ...filterMatch, machineTypeId: { $exists: true, $ne: null, $nin: [''] } } },
+        {
+          $match: {
+            ...buildFacetMatch('machineTypeId'),
+            machineTypeId: { $exists: true, $ne: null, $nin: [''] },
+          },
+        },
         { $group: { _id: '$machineTypeId', count: { $sum: 1 } } },
+        { $sort: { count: -1 } },
+      ]),
+      this.orderModel.aggregate<OptionRow>([
+        {
+          $match: {
+            ...buildFacetMatch('machineNumber'),
+            machineNumber: { $exists: true, $ne: null, $nin: [''] },
+          },
+        },
+        { $group: { _id: '$machineNumber', count: { $sum: 1 } } },
         { $sort: { count: -1 } },
       ]),
     ]);
@@ -1507,13 +1603,21 @@ export class OrderService implements OnModuleInit {
         })
       ).map((d) => [d.code, d.name]),
     );
+    // Resolve machineNumber workshop_config codes → human-readable numbers.
+    const actualMachineNameMap = new Map<string, string>(
+      (
+        await this.workshopConfigRepository.findAll({
+          category: WorkshopConfigCategory.Machine,
+        })
+      ).map((d) => [d.code, d.name]),
+    );
 
     return {
       success: true,
       data: {
         factories: Array.from(cellMap.values()).sort((a, b) => b.total - a.total),
         flows,
-        totals: { total: grandTotal, transferred, pure },
+        totals: { total: grandTotal, transferred, pure, unmapped: unmappedCount },
         availableFilters: {
           products: typeRows.map((r) => ({ value: r._id, label: r._id, count: r.count })),
           fabrics: fabricRows.map((r) => ({
@@ -1531,21 +1635,142 @@ export class OrderService implements OnModuleInit {
             label: machineNameMap.get(r._id) || r._id,
             count: r.count,
           })),
+          machines: actualMachineRows.map((r) => ({
+            value: r._id,
+            label: actualMachineNameMap.get(r._id) || r._id,
+            count: r.count,
+          })),
         },
       },
     };
   }
 
   /**
-   * Re-derive `fabricType` AND `toolResult` from product config for orders
-   * that don't have these set yet. Non-destructive: existing values are kept,
-   * we only fill blanks.
+   * Aggregate workshop facet counts using cross-facet pattern: for each facet
+   * (printStatus / toolResultNote / assignee / productionError / fabricType /
+   * machineNumber / toolResult / errorFile) aggregate over `buildOrderListFilter`
+   * minus the facet's own CSV filter, so user thấy được tất cả options của
+   * facet đó nhưng count đã narrow theo các facet khác đang active.
+   */
+  async getWorkshopAvailableFilters(
+    dto: GetProductionOrdersDto,
+    roleName?: RoleType,
+  ): Promise<{
+    success: true;
+    data: {
+      printStatus: Array<{ value: string; label: string; count: number }>;
+      toolResultNote: Array<{ value: string; label: string; count: number }>;
+      assignee: Array<{ value: string; label: string; count: number }>;
+      productionError: Array<{ value: string; label: string; count: number }>;
+      fabricType: Array<{ value: string; label: string; count: number }>;
+      machineNumber: Array<{ value: string; label: string; count: number }>;
+      toolResult: Array<{ value: string; label: string; count: number }>;
+      errorFile: Array<{ value: string; label: string; count: number }>;
+    };
+  }> {
+    type FacetKey =
+      | 'printStatus'
+      | 'toolResultNote'
+      | 'assignee'
+      | 'productionError'
+      | 'fabricType'
+      | 'machineNumber'
+      | 'toolResult'
+      | 'errorFile';
+
+    const FACET_KEYS: FacetKey[] = [
+      'printStatus',
+      'toolResultNote',
+      'assignee',
+      'productionError',
+      'fabricType',
+      'machineNumber',
+      'toolResult',
+      'errorFile',
+    ];
+
+    type OptionRow = { _id: string; count: number };
+    const aggregateFacet = async (excludeKey: FacetKey, field: FacetKey) => {
+      const sanitizedDto = { ...dto, [excludeKey]: undefined } as GetProductionOrdersDto;
+      const baseFilter = this.buildOrderListFilter(sanitizedDto, roleName);
+      const facetMatch = {
+        ...baseFilter,
+        [field]: { $exists: true, $ne: null, $nin: [''] },
+      };
+      return this.orderModel.aggregate<OptionRow>([
+        { $match: facetMatch },
+        { $group: { _id: `$${field}`, count: { $sum: 1 } } },
+        { $sort: { count: -1 } },
+      ]);
+    };
+
+    const [
+      printStatusRows,
+      toolResultNoteRows,
+      assigneeRows,
+      productionErrorRows,
+      fabricTypeRows,
+      machineNumberRows,
+      toolResultRows,
+      errorFileRows,
+    ] = await Promise.all(FACET_KEYS.map((k) => aggregateFacet(k, k)));
+
+    const nameMap = async (category: WorkshopConfigCategory) =>
+      new Map<string, string>(
+        (await this.workshopConfigRepository.findAll({ category })).map((d) => [d.code, d.name]),
+      );
+    const [
+      printStatusMap,
+      toolResultNoteMap,
+      assigneeMap,
+      productionErrorMap,
+      fabricTypeMap,
+      machineNumberMap,
+      toolResultMap,
+      errorFileMap,
+    ] = await Promise.all([
+      nameMap(WorkshopConfigCategory.PrintStatus),
+      nameMap(WorkshopConfigCategory.ToolResultNote),
+      nameMap(WorkshopConfigCategory.Assignee),
+      nameMap(WorkshopConfigCategory.ProductionError),
+      nameMap(WorkshopConfigCategory.FabricType),
+      nameMap(WorkshopConfigCategory.Machine),
+      nameMap(WorkshopConfigCategory.ToolResult),
+      nameMap(WorkshopConfigCategory.ErrorFileType),
+    ]);
+    const toOption = (m: Map<string, string>) => (r: OptionRow) => ({
+      value: r._id,
+      label: m.get(r._id) || r._id,
+      count: r.count,
+    });
+
+    return {
+      success: true,
+      data: {
+        printStatus: printStatusRows.map(toOption(printStatusMap)),
+        toolResultNote: toolResultNoteRows.map(toOption(toolResultNoteMap)),
+        assignee: assigneeRows.map(toOption(assigneeMap)),
+        productionError: productionErrorRows.map(toOption(productionErrorMap)),
+        fabricType: fabricTypeRows.map(toOption(fabricTypeMap)),
+        machineNumber: machineNumberRows.map(toOption(machineNumberMap)),
+        toolResult: toolResultRows.map(toOption(toolResultMap)),
+        errorFile: errorFileRows.map(toOption(errorFileMap)),
+      },
+    };
+  }
+
+  /**
+   * Re-derive `fabricType`, `toolResult`, AND `machineNumber` from product
+   * config for orders that don't have these set yet. Non-destructive: existing
+   * values are kept, we only fill blanks.
    *
-   * Called manually from `/products` after admin edits fabric/tool defaults,
-   * to backfill the rows already in the DB without forcing a re-import.
+   * Called manually from `/products` after admin edits fabric/tool/machine
+   * defaults, to backfill the rows already in the DB without forcing a
+   * re-import. Particularly important for `machineNumber` since it was added
+   * after the initial release — every legacy order needs to be filled.
    */
   async backfillOrderFabric(): Promise<{ scanned: number; updated: number }> {
-    type Row = { _id: unknown; setFabric?: string; setTool?: string };
+    type Row = { _id: unknown; setFabric?: string; setTool?: string; setMachineNumber?: string };
     const rows = await this.orderModel.aggregate<Row>([
       {
         $match: {
@@ -1557,6 +1782,9 @@ export class OrderService implements OnModuleInit {
             { toolResult: { $exists: false } },
             { toolResult: null },
             { toolResult: '' },
+            { machineNumber: { $exists: false } },
+            { machineNumber: null },
+            { machineNumber: '' },
           ],
         },
       },
@@ -1597,9 +1825,29 @@ export class OrderService implements OnModuleInit {
               null,
             ],
           },
+          setMachineNumber: {
+            $cond: [
+              {
+                $and: [
+                  { $or: [{ $eq: ['$machineNumber', null] }, { $eq: ['$machineNumber', ''] }, { $eq: [{ $type: '$machineNumber' }, 'missing'] }] },
+                  { $ne: [{ $ifNull: ['$pc.machineNumber', ''] }, ''] },
+                ],
+              },
+              '$pc.machineNumber',
+              null,
+            ],
+          },
         },
       },
-      { $match: { $or: [{ setFabric: { $ne: null } }, { setTool: { $ne: null } }] } },
+      {
+        $match: {
+          $or: [
+            { setFabric: { $ne: null } },
+            { setTool: { $ne: null } },
+            { setMachineNumber: { $ne: null } },
+          ],
+        },
+      },
     ]);
 
     let updated = 0;
@@ -1607,6 +1855,7 @@ export class OrderService implements OnModuleInit {
       const patch: Record<string, unknown> = {};
       if (r.setFabric) patch.fabricType = r.setFabric;
       if (r.setTool) patch.toolResult = r.setTool;
+      if (r.setMachineNumber) patch.machineNumber = r.setMachineNumber;
       if (Object.keys(patch).length === 0) continue;
       await this.orderModel.updateOne({ _id: r._id }, { $set: patch });
       updated++;
@@ -1838,6 +2087,7 @@ export class OrderService implements OnModuleInit {
         let machineTypeId: string | undefined;
         let fabricType: string | undefined;
         let toolResult: string | undefined;
+        let machineNumber: string | undefined;
 
         if (row.type?.trim()) {
           const pc = await this.productConfigRepository.findOne({
@@ -1850,6 +2100,7 @@ export class OrderService implements OnModuleInit {
             machineTypeId = pc.machineTypeId;
             fabricType = pc.fabricType || undefined;
             toolResult = pc.toolResult || undefined;
+            machineNumber = pc.machineNumber || undefined;
             mapped++;
           } else {
             unmapped++;
@@ -1895,13 +2146,14 @@ export class OrderService implements OnModuleInit {
           factoryId,
           machineTypeId,
         };
-        // Insert-only fields: fabric + toolResult are *defaults* derived from
-        // product config. If the workshop already overrode them on a previous
-        // run, re-import shouldn't blow those edits away. `originalFactoryId`
-        // is pinned for the same reason (a transferred order keeps its origin).
+        // Insert-only fields: fabric + toolResult + machineNumber are *defaults*
+        // derived from product config. If the workshop already overrode them on
+        // a previous run, re-import shouldn't blow those edits away.
+        // `originalFactoryId` is pinned for the same reason.
         const insertOnly: Record<string, unknown> = { originalFactoryId: factoryId };
         if (fabricType) insertOnly.fabricType = fabricType;
         if (toolResult) insertOnly.toolResult = toolResult;
+        if (machineNumber) insertOnly.machineNumber = machineNumber;
 
         // Atomic upsert by productionId — includes soft-deleted records
         const existed = await this.orderModel.exists({ productionId: data.productionId });

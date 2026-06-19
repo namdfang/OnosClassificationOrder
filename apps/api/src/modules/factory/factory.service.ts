@@ -52,6 +52,24 @@ export class FactoryService implements OnModuleInit {
     return this.factoryRepository.findOne({ shortName: shortName.toUpperCase() });
   }
 
+  /**
+   * Match a free-text factory label from a spreadsheet against either `name`
+   * or `shortName`. Tolerates the "Xưởng " prefix and case differences so that
+   * "MÊ LINH", "mê linh", and "Xưởng Mê Linh" all resolve to the same row.
+   */
+  async findByLabel(label: string) {
+    const cleaned = label.replace(/^x[uư][oơ]ng\s+/i, '').trim();
+    if (!cleaned) return null;
+    const escaped = cleaned.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+    const byShortName = await this.factoryRepository.findOne({
+      shortName: cleaned.toUpperCase(),
+    });
+    if (byShortName) return byShortName;
+    return this.factoryRepository.findOne({
+      name: { $regex: '(?:^|\\s)' + escaped + '$', $options: 'i' },
+    });
+  }
+
   async createFactory(dto: CreateFactoryDto) {
     const existing = await this.factoryRepository.findOne({ shortName: dto.shortName.toUpperCase() });
     if (existing) throw new BadRequestException('Factory shortName already exists');
