@@ -16,6 +16,10 @@ export const GetOrderStatusOverviewZod = z.object({
   errorFile: z.string().optional(),
   assignee: z.string().optional(),
   assigneeNote: z.string().optional(),
+  /** Comma-separated workshop_config codes for production_error. */
+  productionError: z.string().optional(),
+  /** true → chỉ lấy đơn có lỗi xưởng. false → chỉ đơn không lỗi. */
+  hasError: z.coerce.boolean().optional(),
   factoryId: IDZod.optional(),
   machineTypeId: IDZod.optional(),
   readyForFulfill: z.coerce.boolean().optional(),
@@ -76,6 +80,7 @@ export const OrderStatusOverviewZod = z.object({
     toolResult: BreakdownBucketZod.array(),
     toolResultNote: BreakdownBucketZod.array(),
     errorFile: BreakdownBucketZod.array(),
+    productionError: BreakdownBucketZod.array(),
     assignee: BreakdownBucketZod.array(),
     assigneeNote: BreakdownBucketZod.array(),
     factory: FactoryBucketZod.array(),

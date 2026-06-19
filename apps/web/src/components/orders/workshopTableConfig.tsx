@@ -38,6 +38,8 @@ export type WorkshopOrderRow = {
   assignee?: string;
   assigneeNote?: string;
   fabricType?: string;
+  productionError?: string;
+  productionErrorNote?: string;
 };
 
 export interface WorkshopRenderCtx {
@@ -247,6 +249,38 @@ export const WORKSHOP_COLS: WorkshopColMeta[] = [
         canEdit={ctx.canEditField('errorFileNote')}
         onUpdated={(v) => ctx.patchRow(r._id, { errorFileNote: v ?? undefined })}
         tooltipLabel="Ghi chú file lỗi"
+      />
+    ),
+  },
+  {
+    key: 'productionError',
+    label: 'Lỗi xưởng',
+    perm: 'order.field.productionError.view',
+    width: 'min-w-[140px]',
+    render: (r, ctx) => (
+      <ColorBadgeSelectCell
+        orderId={r._id}
+        field="productionError"
+        category={WorkshopConfigCategory.ProductionError}
+        value={r.productionError}
+        canEdit={ctx.canEditField('productionError')}
+        onUpdated={(v) => ctx.patchRow(r._id, { productionError: v ?? undefined })}
+      />
+    ),
+  },
+  {
+    key: 'productionErrorNote',
+    label: 'Mô tả lỗi xưởng',
+    perm: 'order.field.productionErrorNote.view',
+    width: 'min-w-[180px]',
+    render: (r, ctx) => (
+      <TextEditCell
+        orderId={r._id}
+        field="productionErrorNote"
+        value={r.productionErrorNote}
+        canEdit={ctx.canEditField('productionErrorNote')}
+        onUpdated={(v) => ctx.patchRow(r._id, { productionErrorNote: v ?? undefined })}
+        tooltipLabel="Mô tả lỗi xưởng"
       />
     ),
   },

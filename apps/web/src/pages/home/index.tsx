@@ -28,10 +28,21 @@ export default function Home() {
     setSearchParams((prev) => {
       const sp = new URLSearchParams(prev);
       sp.set('tab', val);
-      // Switching between dashboard tabs should reset status filter so URL
-      // stays clean per-tab.
-      if (val === 'stats') {
+      // Mỗi tab có namespace riêng (xem hook / component tương ứng):
+      //   stats:   sfrom, sto, stype, suser
+      //   status:  printStatus*, toolResult*, errorFile, assignee*, factoryId,
+      //            machineTypeId, readyForFulfill, createdFrom, createdTo, search
+      //   factory: ffrom, fto, ffactory, fmode, fstage, ftype, ffabric, ftool,
+      //            fmachine, fpage, fsize
+      // Đổi tab → strip param của 2 tab kia để URL không lẫn.
+      if (val !== 'stats') {
+        ['sfrom', 'sto', 'stype', 'suser'].forEach((k) => sp.delete(k));
+      }
+      if (val !== 'status') {
         ['printStatus', 'printStatusNote', 'toolResult', 'toolResultNote', 'errorFile', 'assignee', 'assigneeNote', 'factoryId', 'machineTypeId', 'readyForFulfill', 'createdFrom', 'createdTo', 'search'].forEach((k) => sp.delete(k));
+      }
+      if (val !== 'factory') {
+        ['ffrom', 'fto', 'ffactory', 'fmode', 'fstage', 'ftype', 'ffabric', 'ftool', 'fmachine', 'fpage', 'fsize'].forEach((k) => sp.delete(k));
       }
       return sp;
     }, { replace: true });

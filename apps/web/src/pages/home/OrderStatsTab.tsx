@@ -23,9 +23,12 @@ import { Label } from '@/components/ui/label';
 import { Badge } from '@/components/ui/badge';
 import { Spinner } from '@/components/common/Spinner';
 import { cn } from '@/utils/cn';
+import { useSearchParams } from 'react-router-dom';
+import { DateRangePicker } from '@/components/common/DateRangePicker';
 import { RepositoryRemote } from '@/services';
 import { handleAxiosError } from '@/utils';
 import { useAuthStore } from '../../store/authStore';
+import { usePermission } from '@/hooks/usePermission';
 
 interface MockupSummary {
   url: string;
@@ -117,9 +120,14 @@ function todayISO(): string {
  *
  *   [chevron 32px] [type name flexible] [qty 80] [min 90] [max 90]
  *   [production 110] [shipping 110] [total 100] [mockups 130]
+ *
+ * `_NO_PRICE` bỏ 5 cột giá (min/max/sản xuất/vận chuyển/tổng) — Designer +
+ * Fulfillment chỉ thấy tên/quantity/mockup.
  */
 const GRID_COLS_CLASS =
   'grid grid-cols-[32px_minmax(180px,1fr)_80px_90px_90px_110px_110px_100px_130px]';
+const GRID_COLS_CLASS_NO_PRICE =
+  'grid grid-cols-[32px_minmax(180px,1fr)_80px_130px]';
 
 function daysAgoISO(days: number): string {
   const d = new Date();
@@ -159,14 +167,41 @@ function MetricCard({ label, value, sub, icon, loading }: MetricCardProps) {
 
 export default function OrderStatsTab() {
   const { profile } = useAuthStore();
+  // Hide cost/price stats for Designer + Fulfillment — họ chỉ cần số lượng đơn,
+  // không cần thấy doanh thu. Admin/Manager/Support thấy đầy đủ.
+  const { roleName } = usePermission();
+  const hidePrice = roleName === 'Designer' || roleName === 'Fulfillment';
+  // Designer không cần "phân bổ theo xưởng" — họ không quan tâm xưởng nào in.
+  // Fulfillment thì vẫn thấy vì cần biết workload từng xưởng.
+  const hideFactoryDist = roleName === 'Designer';
+  // URL params (prefix `s` = stats). F5 / share link giữ nguyên date + search.
+  // Default = today + empty search → strip khỏi URL để URL gọn.
+  const [searchParams, setSearchParams] = useSearchParams();
+
   const [loading, setLoading] = useState(false);
   const [data, setData] = useState<Dashboard | null>(null);
   // Default range = today only. Widen via the 7d/30d/90d preset chips.
-  const [startDate, setStartDate] = useState<string>(todayISO());
-  const [endDate, setEndDate] = useState<string>(todayISO());
-  const [searchType, setSearchType] = useState<string>('');
-  const [searchUser, setSearchUser] = useState<string>('');
+  const [startDate, setStartDate] = useState<string>(() => searchParams.get('sfrom') || todayISO());
+  const [endDate, setEndDate] = useState<string>(() => searchParams.get('sto') || todayISO());
+  const [searchType, setSearchType] = useState<string>(() => searchParams.get('stype') || '');
+  const [searchUser, setSearchUser] = useState<string>(() => searchParams.get('suser') || '');
   const [expanded, setExpanded] = useState<Set<string>>(new Set());
+
+  // Sync state → URL. Date luôn ghi (kể cả today) để URL reflect state.
+  // Search strip khi rỗng.
+  useEffect(() => {
+    setSearchParams(
+      (prev) => {
+        const sp = new URLSearchParams(prev);
+        startDate ? sp.set('sfrom', startDate) : sp.delete('sfrom');
+        endDate ? sp.set('sto', endDate) : sp.delete('sto');
+        searchType ? sp.set('stype', searchType) : sp.delete('stype');
+        searchUser ? sp.set('suser', searchUser) : sp.delete('suser');
+        return sp;
+      },
+      { replace: true },
+    );
+  }, [startDate, endDate, searchType, searchUser, setSearchParams]);
 
   const fetchDashboard = async (override?: { searchUser?: string }) => {
     try {
@@ -204,11 +239,6 @@ export default function OrderStatsTab() {
       else next.add(type);
       return next;
     });
-  };
-
-  const setRangePreset = (days: number) => {
-    setStartDate(daysAgoISO(days));
-    setEndDate(todayISO());
   };
 
   const t = data?.totals;
@@ -256,35 +286,15 @@ export default function OrderStatsTab() {
 
       {/* Filter strip — single row, ghost styling */}
       <div className="flex items-center gap-2 flex-wrap p-1 rounded-xl bg-muted/30">
-        <div className="flex items-center gap-1 px-2 py-1.5">
-          <Input
-            type="date"
-            value={startDate}
-            onChange={(e) => setStartDate(e.target.value)}
-            className="w-[140px] h-8 border-0 bg-transparent shadow-none focus-visible:ring-1"
+        <div className="px-2 py-1.5">
+          <DateRangePicker
+            from={startDate}
+            to={endDate}
+            onChange={(f, t) => {
+              setStartDate(f);
+              setEndDate(t);
+            }}
           />
-          <span className="text-muted-foreground text-xs">→</span>
-          <Input
-            type="date"
-            value={endDate}
-            onChange={(e) => setEndDate(e.target.value)}
-            className="w-[140px] h-8 border-0 bg-transparent shadow-none focus-visible:ring-1"
-          />
-        </div>
-
-        <div className="h-6 w-px bg-border" />
-
-        <div className="flex items-center gap-1">
-          {[7, 30, 90].map((d) => (
-            <button
-              key={d}
-              type="button"
-              onClick={() => setRangePreset(d)}
-              className="text-xs h-7 px-2.5 rounded-md hover:bg-background transition-colors text-muted-foreground hover:text-foreground"
-            >
-              {d}d
-            </button>
-          ))}
         </div>
 
         <div className="h-6 w-px bg-border" />
@@ -317,10 +327,11 @@ export default function OrderStatsTab() {
         </Button>
       </div>
 
-      {/* Compact stats — 4 small boxes in one row */}
+      {/* Compact stats — 4 small boxes when full, only "Tổng đơn" when hidePrice */}
       <div
         className={cn(
-          'grid grid-cols-2 sm:grid-cols-4 gap-2 transition-opacity duration-300',
+          'grid gap-2 transition-opacity duration-300',
+          hidePrice ? 'grid-cols-1 sm:grid-cols-2' : 'grid-cols-2 sm:grid-cols-4',
           isRefetching && 'opacity-60',
         )}
       >
@@ -331,42 +342,55 @@ export default function OrderStatsTab() {
           icon={<Package size={12} />}
           loading={loading && !data}
         />
-        <MetricCard
-          label="Chi phí sản xuất"
-          value={t ? formatCurrency(t.totalProductionCost) : '—'}
-          icon={<Package size={12} />}
-          loading={loading && !data}
-        />
-        <MetricCard
-          label="Chi phí vận chuyển"
-          value={t ? formatCurrency(t.totalShippingCost) : '—'}
-          icon={<Truck size={12} />}
-          loading={loading && !data}
-        />
-        <MetricCard
-          label="Tổng chi phí"
-          value={t ? formatCurrency(t.totalCost) : '—'}
-          sub={t && t.totalOrders > 0 ? `TB ${formatCurrency(t.totalCost / t.totalOrders)}/đơn` : undefined}
-          icon={<DollarSign size={12} />}
-          loading={loading && !data}
-        />
+        {!hidePrice && (
+          <>
+            <MetricCard
+              label="Chi phí sản xuất"
+              value={t ? formatCurrency(t.totalProductionCost) : '—'}
+              icon={<Package size={12} />}
+              loading={loading && !data}
+            />
+            <MetricCard
+              label="Chi phí vận chuyển"
+              value={t ? formatCurrency(t.totalShippingCost) : '—'}
+              icon={<Truck size={12} />}
+              loading={loading && !data}
+            />
+            <MetricCard
+              label="Tổng chi phí"
+              value={t ? formatCurrency(t.totalCost) : '—'}
+              sub={t && t.totalOrders > 0 ? `TB ${formatCurrency(t.totalCost / t.totalOrders)}/đơn` : undefined}
+              icon={<DollarSign size={12} />}
+              loading={loading && !data}
+            />
+          </>
+        )}
       </div>
 
-      {/* Two-column: Factory allocation + Top users */}
-      <div
-        className={cn(
-          'grid grid-cols-1 lg:grid-cols-2 gap-4 transition-opacity duration-300',
-          isRefetching && 'opacity-60',
-        )}
-      >
-        <FactoryDistribution byFactory={data?.byFactory || []} loading={loading} />
-        <TopUsersCard
-          byUser={data?.byUser || []}
-          loading={loading}
-          activeUserKey={searchUser.trim()}
-          onSelectCustomer={applyCustomerFilter}
-        />
-      </div>
+      {/* Factory allocation + Top users — Designer ẩn cả 2 (không quan tâm
+          xưởng + không thấy khách hàng), Fulfillment chỉ thấy Factory. */}
+      {(!hideFactoryDist || !hidePrice) && (
+        <div
+          className={cn(
+            'grid grid-cols-1 gap-4 transition-opacity duration-300',
+            !hidePrice && !hideFactoryDist && 'lg:grid-cols-2',
+            isRefetching && 'opacity-60',
+          )}
+        >
+          {!hideFactoryDist && (
+            <FactoryDistribution byFactory={data?.byFactory || []} loading={loading} />
+          )}
+          {!hidePrice && (
+            <TopUsersCard
+              byUser={data?.byUser || []}
+              loading={loading}
+              activeUserKey={searchUser.trim()}
+              onSelectCustomer={applyCustomerFilter}
+              hidePrice={hidePrice}
+            />
+          )}
+        </div>
+      )}
 
       {/* Production type breakdown */}
       <div
@@ -412,15 +436,19 @@ export default function OrderStatsTab() {
         {/* Scroll container — sticky header + sticky summary inside */}
         <div className="max-h-[600px] overflow-y-auto border-t border-border">
         {/* Column headers */}
-        <div className={GRID_COLS_CLASS + ' gap-2 px-3 py-2 bg-muted/40 backdrop-blur text-[10px] tracking-wide font-medium text-muted-foreground items-center sticky top-0 z-20'}>
+        <div className={(hidePrice ? GRID_COLS_CLASS_NO_PRICE : GRID_COLS_CLASS) + ' gap-2 px-3 py-2 bg-muted/40 backdrop-blur text-[10px] tracking-wide font-medium text-muted-foreground items-center sticky top-0 z-20'}>
           <div></div>
           <div>Sản phẩm</div>
           <div className="text-right">Số lượng</div>
-          <div className="text-right">Min</div>
-          <div className="text-right">Max</div>
-          <div className="text-right">Sản xuất</div>
-          <div className="text-right">Vận chuyển</div>
-          <div className="text-right">Tổng</div>
+          {!hidePrice && (
+            <>
+              <div className="text-right">Min</div>
+              <div className="text-right">Max</div>
+              <div className="text-right">Sản xuất</div>
+              <div className="text-right">Vận chuyển</div>
+              <div className="text-right">Tổng</div>
+            </>
+          )}
           <div className="text-center">Mockup</div>
         </div>
 
@@ -455,7 +483,7 @@ export default function OrderStatsTab() {
                 <div
                   onClick={() => toggleExpand(row.type)}
                   className={cn(
-                    GRID_COLS_CLASS,
+                    hidePrice ? GRID_COLS_CLASS_NO_PRICE : GRID_COLS_CLASS,
                     'gap-2 px-3 py-2.5 items-center cursor-pointer transition-colors text-sm group',
                     isExpanded
                       ? 'sticky top-[30px] z-10 bg-card shadow-sm border-b border-border'
@@ -469,11 +497,15 @@ export default function OrderStatsTab() {
                     <span className="line-clamp-2 leading-snug">{row.type}</span>
                   </div>
                   <div className="text-right font-semibold tabular-nums">{formatNumber(row.quantity)}</div>
-                  <div className="text-right tabular-nums text-muted-foreground">{formatCurrency(row.minCost)}</div>
-                  <div className="text-right tabular-nums text-muted-foreground">{formatCurrency(row.maxCost)}</div>
-                  <div className="text-right tabular-nums">{formatCurrency(row.productionCost)}</div>
-                  <div className="text-right tabular-nums text-muted-foreground">{formatCurrency(row.shippingCost)}</div>
-                  <div className="text-right font-semibold tabular-nums">{formatCurrency(row.totalCost)}</div>
+                  {!hidePrice && (
+                    <>
+                      <div className="text-right tabular-nums text-muted-foreground">{formatCurrency(row.minCost)}</div>
+                      <div className="text-right tabular-nums text-muted-foreground">{formatCurrency(row.maxCost)}</div>
+                      <div className="text-right tabular-nums">{formatCurrency(row.productionCost)}</div>
+                      <div className="text-right tabular-nums text-muted-foreground">{formatCurrency(row.shippingCost)}</div>
+                      <div className="text-right font-semibold tabular-nums">{formatCurrency(row.totalCost)}</div>
+                    </>
+                  )}
                   <div className="text-center text-xs">
                     <span className="font-semibold tabular-nums">{row.uniqueMockupCount}</span>
                     {row.duplicateMockupCount > 0 && (
@@ -602,9 +634,11 @@ interface TopUsersCardProps {
   /** Current `searchUser` value — used to highlight the active customer row. */
   activeUserKey: string;
   onSelectCustomer: (u: { userSku?: string; userEmail?: string; displayName: string }) => void;
+  /** Designer + Fulfillment không thấy totalCost mỗi row. */
+  hidePrice?: boolean;
 }
 
-function TopUsersCard({ byUser, loading, activeUserKey, onSelectCustomer }: TopUsersCardProps) {
+function TopUsersCard({ byUser, loading, activeUserKey, onSelectCustomer, hidePrice }: TopUsersCardProps) {
   const [limit, setLimit] = useState<TopLimit>(5);
 
   const sliced = limit === 'all' ? byUser : byUser.slice(0, limit);
@@ -734,9 +768,15 @@ function TopUsersCard({ byUser, loading, activeUserKey, onSelectCustomer }: TopU
                     <p className="text-sm font-semibold text-violet-600 dark:text-violet-400 tabular-nums">
                       {u.orderCount} đơn
                     </p>
-                    <p className="text-[10px] text-muted-foreground tabular-nums">
-                      {formatCurrency(u.totalCost)}
-                    </p>
+                    {hidePrice ? (
+                      <p className="text-[10px] text-muted-foreground tabular-nums">
+                        {u.totalQuantity} sản phẩm
+                      </p>
+                    ) : (
+                      <p className="text-[10px] text-muted-foreground tabular-nums">
+                        {formatCurrency(u.totalCost)}
+                      </p>
+                    )}
                   </div>
                 </button>
               );

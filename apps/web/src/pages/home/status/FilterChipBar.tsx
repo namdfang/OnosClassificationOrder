@@ -1,8 +1,8 @@
 import React from 'react';
-import { Calendar, X } from 'lucide-react';
+import { X } from 'lucide-react';
 
 import { Button } from '@/components/ui/button';
-import { Input } from '@/components/ui/input';
+import { DateRangePicker } from '@/components/common/DateRangePicker';
 import { useWorkshopConfigStore } from '@/store/workshopConfigStore';
 import { WorkshopConfigCategory } from 'shared';
 import { cn } from '@/utils/cn';
@@ -16,6 +16,7 @@ const CATEGORY_LABEL: Record<StatusFilterCategory, string> = {
   toolResult: 'Tool',
   toolResultNote: 'Note Tool',
   errorFile: 'File lỗi',
+  productionError: 'Lỗi xưởng',
   assignee: 'Người TH',
   assigneeNote: 'Note người TH',
 };
@@ -26,6 +27,7 @@ const CATEGORY_TO_WS: Record<StatusFilterCategory, WorkshopConfigCategory> = {
   toolResult: WorkshopConfigCategory.ToolResult,
   toolResultNote: WorkshopConfigCategory.ToolResultNote,
   errorFile: WorkshopConfigCategory.ErrorFileType,
+  productionError: WorkshopConfigCategory.ProductionError,
   assignee: WorkshopConfigCategory.Assignee,
   assigneeNote: WorkshopConfigCategory.AssigneeNote,
 };
@@ -35,10 +37,11 @@ interface Props {
   isActive: boolean;
   onToggle: (cat: StatusFilterCategory, code: string) => void;
   onScalar: (key: 'createdFrom' | 'createdTo', value: string | undefined) => void;
+  onHasError: (value: boolean | undefined) => void;
   onClearAll: () => void;
 }
 
-export function FilterChipBar({ filter, isActive, onToggle, onScalar, onClearAll }: Props) {
+export function FilterChipBar({ filter, isActive, onToggle, onScalar, onHasError, onClearAll }: Props) {
   const resolve = useWorkshopConfigStore((s) => s.resolve);
 
   const chips: Array<{ cat: StatusFilterCategory; code: string; label: string; color?: string; icon?: string }> = [];
@@ -58,23 +61,29 @@ export function FilterChipBar({ filter, isActive, onToggle, onScalar, onClearAll
   return (
     <div className="rounded-lg border border-border bg-card p-3 space-y-2">
       <div className="flex items-center gap-2 flex-wrap">
-        <div className="inline-flex items-center gap-1.5 text-xs text-muted-foreground">
-          <Calendar size={13} />
-          <span>Từ</span>
-          <Input
-            type="date"
-            value={filter.createdFrom || ''}
-            onChange={(e) => onScalar('createdFrom', e.target.value || undefined)}
-            className="h-8 w-[140px] text-xs"
-          />
-          <span>đến</span>
-          <Input
-            type="date"
-            value={filter.createdTo || ''}
-            onChange={(e) => onScalar('createdTo', e.target.value || undefined)}
-            className="h-8 w-[140px] text-xs"
-          />
-        </div>
+        <DateRangePicker
+          from={filter.createdFrom || ''}
+          to={filter.createdTo || ''}
+          onChange={(from, to) => {
+            onScalar('createdFrom', from || undefined);
+            onScalar('createdTo', to || undefined);
+          }}
+        />
+        {/* Quick toggle: lỗi cần xử lý — gồm các đơn có productionError set
+            (xưởng đã báo lỗi). Nếu user đã pin code lỗi cụ thể, vẫn cho ẩn
+            chip này vì code-level filter mạnh hơn. */}
+        <button
+          type="button"
+          onClick={() => onHasError(filter.hasError ? undefined : true)}
+          className={cn(
+            'inline-flex items-center gap-1.5 px-2 py-1 rounded-md border text-xs transition-colors',
+            filter.hasError
+              ? 'border-rose-400 bg-rose-50/70 text-rose-700 dark:bg-rose-500/10 dark:text-rose-400 font-medium'
+              : 'border-border bg-background text-muted-foreground hover:text-foreground',
+          )}
+        >
+          Lỗi cần xử lý
+        </button>
         {isActive && (
           <Button variant="ghost" size="sm" onClick={onClearAll} className="text-xs h-7 ml-auto">
             <X size={12} /> Xóa toàn bộ filter

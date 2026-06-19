@@ -24,6 +24,8 @@ const FIELD_TO_CATEGORY: Record<OrderWorkshopField, WorkshopConfigCategory | nul
   assignee: 'assignee' as WorkshopConfigCategory,
   assigneeNote: 'assignee_note' as WorkshopConfigCategory,
   fabricType: 'fabric_type' as WorkshopConfigCategory,
+  productionError: 'production_error' as WorkshopConfigCategory,
+  productionErrorNote: null,
 };
 
 const FIELD_LABEL: Record<OrderWorkshopField, string> = {
@@ -36,6 +38,8 @@ const FIELD_LABEL: Record<OrderWorkshopField, string> = {
   assignee: 'Người thực hiện',
   assigneeNote: 'Note người thực hiện',
   fabricType: 'Loại vải',
+  productionError: 'Lỗi xưởng',
+  productionErrorNote: 'Mô tả lỗi xưởng',
 };
 
 interface Props {

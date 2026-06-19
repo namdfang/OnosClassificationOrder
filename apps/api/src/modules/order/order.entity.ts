@@ -177,6 +177,17 @@ export class OrderEntity extends DatabaseEntityAbstract {
   @Prop({ index: true })
   fabricType?: string;
 
+  // ─── Production error (Phase 8) ─────────────────────────────────
+  // Xưởng báo lỗi đơn hàng (sai size, in lệch, máy hỏng...). Khi
+  // `productionError` được set tức là đơn đang ở trạng thái lỗi xưởng;
+  // dashboard + filter dùng `{ $exists: true, $ne: null, $ne: '' }`
+  // để liệt kê.
+  @Prop({ index: true })
+  productionError?: string;
+
+  @Prop()
+  productionErrorNote?: string;
+
   // Derived: true when toolResultNote === 'ok' (Designer marks an order ready
   // for the Fulfillment role to pick up). Service recomputes this on every
   // toolResultNote update and on import.

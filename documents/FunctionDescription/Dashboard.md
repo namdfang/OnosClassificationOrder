@@ -338,6 +338,12 @@ FactoryOverviewCell = {
   factoryId, factoryName, factoryShortName,
   total, pure, transferredIn, transferredOut,
   productCount, fabricCount, machineCount, withToolCount,
+  // 3 print stage — disjoint, cộng lại = total (Phase 7.1)
+  notPrintedCount,   // printStatus null/empty
+  printingCount,     // printStatus tồn tại nhưng KHÔNG ∈ PRINTED_MACHINE_CODES
+  printedCount,      // printStatus ∈ PRINTED_MACHINE_CODES
+  // Lỗi xưởng — Phase 8. Đếm độc lập với 3 print stage.
+  errorCount,        // productionError tồn tại và khác empty
   breakdowns: { products, fabrics, sizes, toolResults }  // top 20 mỗi dimension
 }
 ```
@@ -375,7 +381,7 @@ Cả 2 đều:
 | Section | Component | Mô tả |
 |---------|-----------|-------|
 | Date range bar | `Input type=date` x2 + `RefreshCw` + `Download` | Default = today. Nút `Tải lại` re-fetch overview + rows. |
-| Factory cards | `FactoryCard` (3 cards horizontal) | Click số chính → set `filterMode={kind:'at', factoryId}`. Click ô "Nhận từ xưởng khác" / "Đã chuyển đi" → `{kind:'in'\|'out', factoryId}`. |
+| Factory cards | `FactoryCard` (3 cards horizontal) | Click số chính → set `filterMode={kind:'at', factoryId}`. Click ô "Nhận từ xưởng khác" / "Đã chuyển đi" → `{kind:'in'\|'out', factoryId}`. 3 button "Chưa in / Đang in / Đã in xong" → `{kind:'print', factoryId, stage}` để drill-down list theo trạng thái in. |
 | Flow visualization | Button rows | `[fromShortName] → [toShortName]` + `count + totalQuantity`. Click → filter `{kind:'in', factoryId=to}`. |
 | Filter chip bar | `FilterChip` (`Tất cả` + 1 chip/factory) + 4 `SelectFilter` | Selects auto-reset khi đổi factory chip để tránh combo zero-result. |
 | Bulk toolbar | Toolbar sticky khi `selected.size > 0` | Chỉ render khi `canTransfer = isAdmin \|\| has('order.transfer')`. |
@@ -389,6 +395,7 @@ Cả 2 đều:
 - `{kind:'at', factoryId}` → `?factoryId=…` (đơn đang ở X).
 - `{kind:'in', factoryId}` → `?transferStatus=transferred-in:<fid>`.
 - `{kind:'out', factoryId}` → `?transferStatus=transferred-out:<fid>`.
+- `{kind:'print', factoryId, stage}` → `?factoryId=…&printStage=printed|printing|not-printed` (drill-down theo trạng thái in tại xưởng X).
 
 BE (`OrderService.buildOrderListFilter`) parse `transferStatus` thành `$expr` so sánh `originalFactoryId` vs `factoryId`. Xem `Orders.md §7.x` để biết các token (`transferred / pure / transferred-in:<fid> / transferred-out:<fid>`).
 
@@ -422,3 +429,194 @@ Trước khi gọi: nếu `data.length === 0` toast warning, không build workbo
 | Indeterminate progress bar khi `rowsLoading` | Giữ UI mượt thay vì block toàn bảng |
 | Sort `grouped` trên list | BE sort `(type, size, fabricType)` để đơn cùng combo gom liền nhau |
 | Export bypass phân trang nhưng giữ visibility filter | BE chia query → tránh client tải 10k rows × 20 page |
+
+### 10.9 Print stage drill-down (Phase 7.1)
+
+3 button trong mỗi `FactoryCard` — disjoint, cộng lại = `total`:
+
+| Button | Định nghĩa BE | Tone (FE) |
+|--------|----------------|-----------|
+| **Chưa in** | `printStatus` null/empty/missing | slate |
+| **Đang in** | `printStatus` tồn tại, KHÔNG ∈ `PRINTED_MACHINE_CODES` | sky |
+| **Đã in xong** | `printStatus` ∈ `PRINTED_MACHINE_CODES` = `['machine-1', 'machine-2', 'machine-3', 'machine-4', 'machine-94']` | emerald |
+
+Constant `PRINTED_MACHINE_CODES` ở module-level `order.service.ts` — dùng chung giữa `getStatusOverview()`, `getFactoryOverview()` (statRows aggregation), và `buildOrderListFilter()` (filter `printStage` query) để 3 chỗ luôn nhất quán.
+
+Click button → `FilterMode = { kind: 'print', factoryId, stage }`:
+- Bảng đơn lọc theo xưởng đó + stage.
+- Chip "Đang ở Xưởng X" cũng active (vì scope vẫn ở xưởng).
+- 4 select filter `availableFilters` (sản phẩm/vải/máy/tool) thu hẹp về options thực sự có trong (xưởng × stage) — `GetFactoryOverviewDto.printStage` thread xuống `filterMatch`.
+
+Click chip "Đang ở X" lúc đang ở print mode → switch về `kind:'at'` (giữ xưởng, bỏ stage). Click button stage đang active → reset về `kind:'all'`.
+
+### 10.10 Lỗi xưởng (Phase 8)
+
+Xưởng (role Fulfillment) báo lỗi đơn hàng sau khi nhận file: chọn mã lý do (workshop_config `category=production_error`) + nhập mô tả tự do.
+
+**Schema** (`OrderEntity`):
+```ts
+productionError?: string;       // code (wrong-size / wrong-color / print-misalign / fabric-damage / machine-jam / other...)
+productionErrorNote?: string;   // free text mô tả chi tiết
+```
+
+Đơn được coi là "có lỗi" ⇔ `productionError` tồn tại và khác `null` / `''`. Không có boolean flag riêng — chỉ check sự tồn tại của `productionError`.
+
+**Mã lý do default** (seed `workshop-config.seed.ts`, color badge):
+
+| Code | Tên hiển thị | Màu |
+|------|--------------|-----|
+| `wrong-size` | Sai size | `#EF4444` |
+| `wrong-color` | Sai màu | `#F97316` |
+| `wrong-fabric` | Sai loại vải | `#F59E0B` |
+| `print-misalign` | In lệch | `#DC2626` |
+| `print-blur` | In mờ/nhòe | `#B91C1C` |
+| `fabric-damage` | Vải lỗi/rách | `#A855F7` |
+| `wrong-design` | Sai design | `#7C3AED` |
+| `missing-design` | Thiếu file design | `#9333EA` |
+| `machine-jam` | Máy lỗi/kẹt | `#0EA5E9` |
+| `other` | Lỗi khác | `#64748B` |
+
+**Permission codes** (catalog):
+- `order.field.productionError.view / .edit` — Fulfillment + admin.
+- `order.field.productionErrorNote.view / .edit` — Fulfillment + admin.
+
+**Filter trên list endpoint** (`GetProductionOrdersDto`):
+- `productionError=wrong-size,print-misalign` — CSV codes.
+- `hasError=true` — tất cả đơn có productionError. (`hasError=false` không support — không lọc tức là "tất cả".)
+
+**Factory tab — nút "Lỗi xưởng" thay vị trí "Đang in":**
+
+| Ô (mỗi card) | Filter mode | Query |
+|--------------|-------------|-------|
+| Chưa in | `{kind:'print', stage:'not-printed'}` | `factoryId + printStage` |
+| **Lỗi xưởng** (mới) | `{kind:'error', factoryId}` | `factoryId + hasError=true` |
+| Đã in xong | `{kind:'print', stage:'printed'}` | `factoryId + printStage` |
+
+Card hiện `cell.errorCount` ở giữa (tone `rose`); active khi `filterMode.kind === 'error' && factoryId match`. Chip "Đang ở Xưởng X" cũng active đồng thời (giữ context xưởng).
+
+URL params: `fmode=error&ffactory=<id>` (cùng namespace `f*` với các filter khác của Tab C).
+
+**Status tab (Tab B):**
+- Toggle nhanh "Lỗi cần xử lý" (button rose) trong `<FilterChipBar>` — đặt `hasError=true` URL param.
+- Breakdown card "Lỗi xưởng" hiện 10 lý do hàng đầu (mode color). Click code → toggle `productionError` CSV filter.
+- KPI "Lỗi cần xử lý" giờ đếm cả `productionError` (cộng dồn với `toolResultNote='error'` và `errorFile != null`).
+
+**Cách aggregation đếm `errorCount`** (`getFactoryOverview` statRows):
+```js
+errorCount: { $sum: { $cond: [
+  { $ne: [{ $ifNull: ['$productionError', ''] }, ''] }, 1, 0
+]}}
+```
+
+---
+
+## 11. URL state persistence (Phase 7.2)
+
+### 11.1 Param namespace per tab
+
+Mỗi tab có **prefix riêng** để các param không clash khi user switch tab. Parent `home/index.tsx` `handleTabChange` strip param của 2 tab kia mỗi lần đổi tab.
+
+| Tab | Prefix | Params |
+|-----|--------|--------|
+| Stats (`OrderStatsTab`) | `s` | `sfrom`, `sto`, `stype`, `suser` |
+| Status (`useStatusFilter`) | _không prefix_ | `createdFrom`, `createdTo`, `printStatus`, `printStatusNote`, `toolResult`, `toolResultNote`, `errorFile`, `assignee`, `assigneeNote`, `factoryId`, `machineTypeId`, `readyForFulfill`, `search` |
+| Factory (`OrderFactoryTab`) | `f` | `ffrom`, `fto`, `ffactory`, `fmode`, `fstage`, `ftype`, `ffabric`, `ftool`, `fmachine`, `fpage`, `fsize` |
+
+### 11.2 Pattern sync state ↔ URL
+
+Mỗi tab dùng pattern thống nhất:
+
+```ts
+// 1) Initial state đọc URL → fallback default
+const [createdFrom, setCreatedFrom] = useState(
+  () => searchParams.get('ffrom') || todayISO()
+);
+
+// 2) Sync ngược state → URL (1 useEffect, replace để không spam history)
+useEffect(() => {
+  setSearchParams((prev) => {
+    const sp = new URLSearchParams(prev);
+    // Date LUÔN ghi vào URL (kể cả today) để URL reflect đúng state user thấy.
+    createdFrom ? sp.set('ffrom', createdFrom) : sp.delete('ffrom');
+    // ... các param khác
+    return sp;
+  }, { replace: true });
+}, [createdFrom, ...]);
+
+// 3) Guard `isFirstRender ref` cho useEffect cleanup (vd. setPage(1) khi
+//    filterMode đổi) — skip render đầu để không ghi đè URL params mới load.
+```
+
+### 11.3 Phân loại param: strip default vs always-write
+
+| Loại | Quy tắc | Lý do |
+|------|---------|-------|
+| **Date** (`*from`, `*to`, `createdFrom/To`) | **Luôn ghi vào URL** (kể cả today) | URL phải hiển thị explicit ngày đang xem để share link / copy URL không gây nhầm |
+| **Filter chips/selects** (workshop codes, factory, stage, ...) | Strip khi rỗng/default | URL gọn khi không filter |
+| **Pagination** (`*page`, `*size`) | Strip khi `page=1`/`size=20` | Default state không cần param |
+| **Search** | Strip khi rỗng | Default state không cần param |
+
+### 11.4 Default = today cho mọi date filter
+
+4 tab (Stats / Status / Factory + Workshop tab ở Orders module) đều default `createdFrom = createdTo = todayISO()`. Helper `todayISO()` dùng local date components — KHÔNG dùng `toISOString()` (UTC) vì sẽ lệch ngày khi ở Việt Nam buổi sáng.
+
+### 11.5 Ví dụ URL khôi phục đầy đủ
+
+```
+/dashboard?tab=stats&sfrom=2026-06-15&sto=2026-06-18&stype=Tee&suser=user@gmail
+/dashboard?tab=status&createdFrom=2026-06-15&createdTo=2026-06-18&printStatus=in-progress&factoryId=...
+/dashboard?tab=factory&ffrom=2026-06-15&fto=2026-06-18&ffactory=...&fstage=printed&ftype=Hoodie
+```
+
+F5 cả 3 URL trên đều khôi phục đúng state → user share link không lo mất filter.
+
+---
+
+## 12. UI components dùng chung (Phase 7.2)
+
+### 12.1 `<DateRangePicker>` — `apps/web/src/components/common/DateRangePicker.tsx`
+
+Popover gói gọn cả 8 preset + 2 input "Từ/đến" trong 1 trigger button.
+
+- **Trigger**: `<Button>` hiển thị smart label
+  - Khớp preset → tên preset (vd. "Tuần này")
+  - Range custom → `dd/mm/yy → dd/mm/yy`
+  - Rỗng → placeholder
+- **Popover content**:
+  - Grid 4×2 nút preset (Hôm nay / Hôm qua / Tuần này / Tuần trước / Tháng này / Tháng trước / Năm nay / Năm trước) — click preset → apply ngay + đóng popover.
+  - 2 `<Input type="date">` với buffer state `(draftFrom, draftTo)` — gõ KHÔNG trigger fetch, đợi "Áp dụng".
+  - Nút "Xóa" (nếu `clearable && hasValue`) reset `('', '')`.
+- Preset definitions: `apps/web/src/utils/dateRangePresets.ts` (`DATE_PRESETS` + `matchPreset()`). Tuần bắt đầu thứ Hai (ISO/VN).
+
+Đã thay thế block `2 Input + nút preset` ở 4 chỗ: Stats / Status / Factory tab + `OrderTableWorkshop`.
+
+### 12.2 `<PaginationBar>` — `apps/web/src/components/common/PaginationBar.tsx`
+
+Wrapper đóng gói `<Pagination>` + khung phù hợp cho top/bottom của table.
+
+```tsx
+<PaginationBar position="top" {...paginationProps} />
+<div className="rounded-lg border border-border bg-card">
+  <Table>...</Table>
+  <PaginationBar position="bottom" {...paginationProps} />
+</div>
+```
+
+- `position="top"` → standalone card có viền + nền (đặt trên cụm table).
+- `position="bottom"` → dải có `border-t` (đặt trong card của table).
+- Auto ẩn khi `total <= 0` hoặc `loading=true` (tránh nhấp nháy).
+
+Áp dụng cho 4 table: `ListOrderTab`, `OrderTableWorkshop`, `OrderFactoryTab`, `OrdersMiniTable` (tất cả đều có top + bottom).
+
+### 12.3 `<MultiSelectFilter>` — `apps/web/src/components/common/MultiSelectFilter.tsx`
+
+Popover multi-select thay thế cho "FilterChips dàn ngang chiếm chiều ngang".
+
+- **Trigger button**: `Label: A, B +N` + badge số đếm khi có chọn.
+- **Popover content**: search bar + checkbox list + footer "Chọn tất cả · N/Total".
+- `renderType='color'` → chấm tròn màu trước tên (khớp `workshop_config.color`).
+- Auto ẩn khi `options.length === 0`.
+
+> **Lưu ý hook order**: tất cả `useMemo` PHẢI khai báo TRƯỚC `if (options.length === 0) return null` để tránh React error "Rendered more hooks than during the previous render" khi options load async.
+
+Đã thay thế `FilterChips` (custom inline) trong `OrderTableWorkshop` cho 3 filter `printStatus` / `toolResultNote` / `assignee`.

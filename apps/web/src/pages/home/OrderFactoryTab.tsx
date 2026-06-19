@@ -1,5 +1,6 @@
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import { ArrowRight, Download, Factory, History, RefreshCw, Send } from 'lucide-react';
+import { useSearchParams } from 'react-router-dom';
 import { toast } from 'sonner';
 import type { FactoryFilterOption, FactoryOverview, FactoryOverviewCell } from 'shared';
 
@@ -8,7 +9,8 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Spinner } from '@/components/common/Spinner';
-import { Pagination } from '@/components/common/Pagination';
+import { PaginationBar } from '@/components/common/PaginationBar';
+import { DateRangePicker } from '@/components/common/DateRangePicker';
 import {
   Dialog,
   DialogContent,
@@ -40,11 +42,15 @@ import { cn } from '@/utils/cn';
 
 import { buildWorkbook, downloadWorkbook, type ExportableOrder } from './exportOrders';
 
+type PrintStage = 'printed' | 'printing' | 'not-printed';
+
 type FilterMode =
   | { kind: 'all' }
   | { kind: 'at'; factoryId: string }
   | { kind: 'in'; factoryId: string }   // transferred-in to factoryId
-  | { kind: 'out'; factoryId: string }; // transferred-out from factoryId
+  | { kind: 'out'; factoryId: string }  // transferred-out from factoryId
+  | { kind: 'print'; factoryId: string; stage: PrintStage }
+  | { kind: 'error'; factoryId: string }; // đơn lỗi xưởng tại factoryId
 
 interface SelectFilters {
   type: string;
@@ -65,9 +71,27 @@ function todayISO() {
 
 const DEFAULT_PAGE_SIZE = 20;
 
+// URL params dùng prefix `f` (factory) để không clash với param của status tab.
+// Ví dụ URL khôi phục đầy đủ:
+//   /dashboard?tab=factory&ffrom=2026-06-18&fto=2026-06-18&ffactory=<id>&fstage=printed&ftype=Tee
+function parseFilterModeFromURL(sp: URLSearchParams): FilterMode {
+  const fid = sp.get('ffactory');
+  const stage = sp.get('fstage') as PrintStage | null;
+  const mode = sp.get('fmode');
+  if (!fid) return { kind: 'all' };
+  if (stage === 'printed' || stage === 'printing' || stage === 'not-printed') {
+    return { kind: 'print', factoryId: fid, stage };
+  }
+  if (mode === 'error') return { kind: 'error', factoryId: fid };
+  if (mode === 'in') return { kind: 'in', factoryId: fid };
+  if (mode === 'out') return { kind: 'out', factoryId: fid };
+  return { kind: 'at', factoryId: fid };
+}
+
 export default function OrderFactoryTab() {
   const { canViewField, canEditField, has, isAdmin } = usePermission();
   const canTransfer = isAdmin || has('order.transfer');
+  const [searchParams, setSearchParams] = useSearchParams();
 
   // Inline cells (fabric / tool / printStatus / assignee …) resolve their
   // dropdown options + labels through the workshop config store — make sure
@@ -81,40 +105,95 @@ export default function OrderFactoryTab() {
 
   // Date filters default to today on every mount. Workshop staff scan
   // "today's orders" by default; widen the range manually if needed.
-  const [createdFrom, setCreatedFrom] = useState(todayISO());
-  const [createdTo, setCreatedTo] = useState(todayISO());
+  // F5 / reload đọc lại từ URL params nếu có.
+  const [createdFrom, setCreatedFrom] = useState(() => searchParams.get('ffrom') || todayISO());
+  const [createdTo, setCreatedTo] = useState(() => searchParams.get('fto') || todayISO());
 
   const [overview, setOverview] = useState<FactoryOverview | null>(null);
   const [overviewLoading, setOverviewLoading] = useState(false);
 
-  const [filterMode, setFilterMode] = useState<FilterMode>({ kind: 'all' });
-  const [selectFilters, setSelectFilters] = useState<SelectFilters>({
-    type: '',
-    fabric: '',
-    tool: '',
-    machine: '',
-  });
+  const [filterMode, setFilterMode] = useState<FilterMode>(() => parseFilterModeFromURL(searchParams));
+  const [selectFilters, setSelectFilters] = useState<SelectFilters>(() => ({
+    type: searchParams.get('ftype') || '',
+    fabric: searchParams.get('ffabric') || '',
+    tool: searchParams.get('ftool') || '',
+    machine: searchParams.get('fmachine') || '',
+  }));
 
   const [rows, setRows] = useState<WorkshopOrderRow[]>([]);
   const [total, setTotal] = useState(0);
   const [rowsLoading, setRowsLoading] = useState(false);
   const [exportLoading, setExportLoading] = useState(false);
   const resolveWorkshop = useWorkshopConfigStore((s) => s.resolve);
-  const [page, setPage] = useState(1);
-  const [pageSize, setPageSize] = useState(DEFAULT_PAGE_SIZE);
+  const [page, setPage] = useState(() => {
+    const p = Number(searchParams.get('fpage'));
+    return Number.isFinite(p) && p > 0 ? p : 1;
+  });
+  const [pageSize, setPageSize] = useState(() => {
+    const s = Number(searchParams.get('fsize'));
+    return Number.isFinite(s) && s > 0 ? s : DEFAULT_PAGE_SIZE;
+  });
   const [selected, setSelected] = useState<Set<string>>(new Set());
+
+  // Sync state → URL (replace để không spam history). Mỗi state đổi → cập
+  // nhật URL, F5 sẽ đọc lại đúng. Date LUÔN ghi vào URL (kể cả today) để
+  // URL reflect đúng state user thấy; page/size default thì strip để gọn.
+  useEffect(() => {
+    setSearchParams(
+      (prev) => {
+        const sp = new URLSearchParams(prev);
+        // Date luôn ghi
+        createdFrom ? sp.set('ffrom', createdFrom) : sp.delete('ffrom');
+        createdTo ? sp.set('fto', createdTo) : sp.delete('fto');
+        // Filter mode
+        sp.delete('ffactory');
+        sp.delete('fmode');
+        sp.delete('fstage');
+        if (filterMode.kind !== 'all') {
+          sp.set('ffactory', filterMode.factoryId);
+          if (filterMode.kind === 'print') {
+            sp.set('fstage', filterMode.stage);
+          } else if (filterMode.kind === 'error') {
+            sp.set('fmode', 'error');
+          } else if (filterMode.kind !== 'at') {
+            sp.set('fmode', filterMode.kind);
+          }
+        }
+        // Select filters
+        selectFilters.type ? sp.set('ftype', selectFilters.type) : sp.delete('ftype');
+        selectFilters.fabric ? sp.set('ffabric', selectFilters.fabric) : sp.delete('ffabric');
+        selectFilters.tool ? sp.set('ftool', selectFilters.tool) : sp.delete('ftool');
+        selectFilters.machine ? sp.set('fmachine', selectFilters.machine) : sp.delete('fmachine');
+        // Pagination
+        page > 1 ? sp.set('fpage', String(page)) : sp.delete('fpage');
+        pageSize !== DEFAULT_PAGE_SIZE ? sp.set('fsize', String(pageSize)) : sp.delete('fsize');
+        return sp;
+      },
+      { replace: true },
+    );
+  }, [createdFrom, createdTo, filterMode, selectFilters, page, pageSize, setSearchParams]);
 
   const [preview, setPreview] = useState<{ url: string; originalUrl?: string; title: string } | null>(null);
   const [historyTarget, setHistoryTarget] = useState<{ id: string; productionId: string } | null>(null);
   const [transferDialog, setTransferDialog] = useState<{ ids: string[] } | null>(null);
 
   // Overview query — includes the factory scope so dropdown options below
-  // shrink to match the selected factory chip.
+  // shrink to match the selected factory chip. Print-stage filter cũng dùng
+  // factory scope vì luôn gắn với 1 xưởng cụ thể, và truyền thêm printStage
+  // để BE thu hẹp availableFilters chỉ còn options của stage đó.
   const overviewQuery = useMemo(() => {
     const sp = new URLSearchParams();
     if (createdFrom) sp.set('createdFrom', createdFrom);
     if (createdTo) sp.set('createdTo', createdTo);
-    if (filterMode.kind === 'at') sp.set('factoryId', filterMode.factoryId);
+    if (filterMode.kind === 'at' || filterMode.kind === 'print' || filterMode.kind === 'error') {
+      sp.set('factoryId', filterMode.factoryId);
+    }
+    if (filterMode.kind === 'print') {
+      sp.set('printStage', filterMode.stage);
+    }
+    if (filterMode.kind === 'error') {
+      sp.set('hasError', 'true');
+    }
     return sp.toString();
   }, [createdFrom, createdTo, filterMode]);
 
@@ -142,6 +221,14 @@ export default function OrderFactoryTab() {
     if (filterMode.kind === 'at') sp.set('factoryId', filterMode.factoryId);
     if (filterMode.kind === 'in') sp.set('transferStatus', `transferred-in:${filterMode.factoryId}`);
     if (filterMode.kind === 'out') sp.set('transferStatus', `transferred-out:${filterMode.factoryId}`);
+    if (filterMode.kind === 'print') {
+      sp.set('factoryId', filterMode.factoryId);
+      sp.set('printStage', filterMode.stage);
+    }
+    if (filterMode.kind === 'error') {
+      sp.set('factoryId', filterMode.factoryId);
+      sp.set('hasError', 'true');
+    }
     if (selectFilters.type) sp.set('type', selectFilters.type);
     if (selectFilters.fabric) sp.set('fabricType', selectFilters.fabric);
     if (selectFilters.tool) sp.set('toolResult', selectFilters.tool);
@@ -162,7 +249,11 @@ export default function OrderFactoryTab() {
     fetchOverview();
   }, [fetchOverview]);
 
+  // Skip 2 cleanup useEffect dưới đây trong mount đầu — nếu không sẽ ghi đè
+  // state đã đọc từ URL (vd. F5 với `?fpage=3&ftype=Tee` sẽ bị reset về 1+rỗng).
+  const isFirstRender = React.useRef(true);
   useEffect(() => {
+    if (isFirstRender.current) return;
     setPage(1);
   }, [filterMode, pageSize, selectFilters]);
 
@@ -170,6 +261,10 @@ export default function OrderFactoryTab() {
   // Stale selections (e.g. a product that only exists at the previous factory)
   // would silently return zero rows — clear them so the new scope is honest.
   useEffect(() => {
+    if (isFirstRender.current) {
+      isFirstRender.current = false;
+      return;
+    }
     setSelectFilters({ type: '', fabric: '', tool: '', machine: '' });
   }, [filterMode]);
 
@@ -219,6 +314,14 @@ export default function OrderFactoryTab() {
     if (filterMode.kind === 'at') sp.set('factoryId', filterMode.factoryId);
     if (filterMode.kind === 'in') sp.set('transferStatus', `transferred-in:${filterMode.factoryId}`);
     if (filterMode.kind === 'out') sp.set('transferStatus', `transferred-out:${filterMode.factoryId}`);
+    if (filterMode.kind === 'print') {
+      sp.set('factoryId', filterMode.factoryId);
+      sp.set('printStage', filterMode.stage);
+    }
+    if (filterMode.kind === 'error') {
+      sp.set('factoryId', filterMode.factoryId);
+      sp.set('hasError', 'true');
+    }
     if (selectFilters.type) sp.set('type', selectFilters.type);
     if (selectFilters.fabric) sp.set('fabricType', selectFilters.fabric);
     if (selectFilters.tool) sp.set('toolResult', selectFilters.tool);
@@ -252,19 +355,13 @@ export default function OrderFactoryTab() {
       <div className="space-y-4">
         {/* Date range + refresh */}
         <div className="rounded-lg border border-border bg-card p-3 flex items-center gap-2 flex-wrap">
-          <label className="text-xs text-muted-foreground">Từ</label>
-          <Input
-            type="date"
-            value={createdFrom}
-            onChange={(e) => setCreatedFrom(e.target.value)}
-            className="h-9 text-xs w-[140px]"
-          />
-          <label className="text-xs text-muted-foreground">đến</label>
-          <Input
-            type="date"
-            value={createdTo}
-            onChange={(e) => setCreatedTo(e.target.value)}
-            className="h-9 text-xs w-[140px]"
+          <DateRangePicker
+            from={createdFrom}
+            to={createdTo}
+            onChange={(f, t) => {
+              setCreatedFrom(f);
+              setCreatedTo(t);
+            }}
           />
           <Button
             variant="outline"
@@ -378,15 +475,39 @@ export default function OrderFactoryTab() {
             >
               Tất cả
             </FilterChip>
-            {(overview?.factories || []).map((f) => (
-              <FilterChip
-                key={`at-${f.factoryId}`}
-                active={filterMode.kind === 'at' && filterMode.factoryId === f.factoryId}
-                onClick={() => setFilterMode({ kind: 'at', factoryId: f.factoryId })}
-              >
-                Đang ở {f.factoryShortName || f.factoryName}
+            {(overview?.factories || []).map((f) => {
+              // Chip "Đang ở X" hiện active khi user chọn factory chip HOẶC
+              // đang ở print-stage / lỗi-xưởng drill-down của factory đó —
+              // cả 3 mode đều giới hạn data về xưởng X.
+              const atOrPrint =
+                (filterMode.kind === 'at' || filterMode.kind === 'print' || filterMode.kind === 'error') &&
+                filterMode.factoryId === f.factoryId;
+              return (
+                <FilterChip
+                  key={`at-${f.factoryId}`}
+                  active={atOrPrint}
+                  onClick={() =>
+                    setFilterMode(
+                      atOrPrint && filterMode.kind === 'at'
+                        ? { kind: 'all' }
+                        : { kind: 'at', factoryId: f.factoryId },
+                    )
+                  }
+                >
+                  Đang ở {f.factoryShortName || f.factoryName}
+                </FilterChip>
+              );
+            })}
+            {filterMode.kind === 'print' && (
+              <FilterChip active onClick={() => setFilterMode({ kind: 'all' })}>
+                {filterMode.stage === 'printed' ? 'Đã in xong' : filterMode.stage === 'printing' ? 'Đang in' : 'Chưa in'}
               </FilterChip>
-            ))}
+            )}
+            {filterMode.kind === 'error' && (
+              <FilterChip active onClick={() => setFilterMode({ kind: 'all' })}>
+                Lỗi xưởng
+              </FilterChip>
+            )}
             {(filterMode.kind !== 'all' ||
               selectFilters.type ||
               selectFilters.fabric ||
@@ -454,6 +575,18 @@ export default function OrderFactoryTab() {
             </Button>
           </div>
         )}
+
+        <PaginationBar
+          position="top"
+          page={page}
+          pageSize={pageSize}
+          total={total}
+          loading={rowsLoading && rows.length === 0}
+          onChange={(p, ps) => {
+            setPage(p);
+            setPageSize(ps);
+          }}
+        />
 
         {/* Orders table */}
         <div className="rounded-lg border border-border bg-card overflow-hidden relative">
@@ -577,19 +710,17 @@ export default function OrderFactoryTab() {
             </Table>
           </div>
 
-          {total > 0 && (
-            <div className="border-t border-border p-2">
-              <Pagination
-                page={page}
-                pageSize={pageSize}
-                total={total}
-                onChange={(p, ps) => {
-                  setPage(p);
-                  setPageSize(ps);
-                }}
-              />
-            </div>
-          )}
+          <PaginationBar
+            position="bottom"
+            page={page}
+            pageSize={pageSize}
+            total={total}
+            loading={rowsLoading && rows.length === 0}
+            onChange={(p, ps) => {
+              setPage(p);
+              setPageSize(ps);
+            }}
+          />
         </div>
 
         <ImagePreviewDialog
@@ -630,6 +761,15 @@ function FactoryCard({
   const isAt = filterMode.kind === 'at' && filterMode.factoryId === cell.factoryId;
   const isIn = filterMode.kind === 'in' && filterMode.factoryId === cell.factoryId;
   const isOut = filterMode.kind === 'out' && filterMode.factoryId === cell.factoryId;
+  const isError = filterMode.kind === 'error' && filterMode.factoryId === cell.factoryId;
+  const activeStage =
+    filterMode.kind === 'print' && filterMode.factoryId === cell.factoryId
+      ? filterMode.stage
+      : null;
+  const togglePrint = (stage: PrintStage) =>
+    onFilter(activeStage === stage ? { kind: 'all' } : { kind: 'print', factoryId: cell.factoryId, stage });
+  const toggleError = () =>
+    onFilter(isError ? { kind: 'all' } : { kind: 'error', factoryId: cell.factoryId });
   return (
     <div
       className={cn(
@@ -681,6 +821,31 @@ function FactoryCard({
           <p className="text-muted-foreground">có tool</p>
         </div>
       </div>
+      {/* Print pipeline — Chưa in / Lỗi xưởng / Đã in xong. "Đang in" tạm
+          bỏ; ô giữa giờ là số đơn xưởng báo lỗi (productionError set). */}
+      <div className="grid grid-cols-3 gap-1.5 text-xs mb-2">
+        <PrintStageBtn
+          label="Chưa in"
+          count={cell.notPrintedCount}
+          active={activeStage === 'not-printed'}
+          onClick={() => togglePrint('not-printed')}
+          tone="slate"
+        />
+        <PrintStageBtn
+          label="Lỗi xưởng"
+          count={cell.errorCount}
+          active={isError}
+          onClick={toggleError}
+          tone="rose"
+        />
+        <PrintStageBtn
+          label="Đã in xong"
+          count={cell.printedCount}
+          active={activeStage === 'printed'}
+          onClick={() => togglePrint('printed')}
+          tone="emerald"
+        />
+      </div>
       <div className="grid grid-cols-2 gap-2 text-xs">
         <button
           type="button"
@@ -710,6 +875,40 @@ function FactoryCard({
         </button>
       </div>
     </div>
+  );
+}
+
+function PrintStageBtn({
+  label,
+  count,
+  active,
+  onClick,
+  tone,
+}: {
+  label: string;
+  count: number;
+  active: boolean;
+  onClick: () => void;
+  tone: 'slate' | 'sky' | 'emerald' | 'rose';
+}) {
+  const toneClasses = {
+    slate: { active: 'border-slate-400 bg-slate-50/60 dark:bg-slate-500/10', count: 'text-slate-700 dark:text-slate-300' },
+    sky:    { active: 'border-sky-400 bg-sky-50/60 dark:bg-sky-500/10',       count: 'text-sky-700 dark:text-sky-300' },
+    emerald:{ active: 'border-emerald-400 bg-emerald-50/60 dark:bg-emerald-500/10', count: 'text-emerald-700 dark:text-emerald-400' },
+    rose:   { active: 'border-rose-400 bg-rose-50/60 dark:bg-rose-500/10',           count: 'text-rose-700 dark:text-rose-400' },
+  }[tone];
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      className={cn(
+        'rounded-md border px-2 py-1.5 text-left transition-colors',
+        active ? toneClasses.active : 'border-border hover:bg-muted/30',
+      )}
+    >
+      <p className="text-[10px] text-muted-foreground">{label}</p>
+      <p className={cn('text-sm font-bold tabular-nums', toneClasses.count)}>{count}</p>
+    </button>
   );
 }
 

@@ -7,6 +7,7 @@ export type StatusFilterCategory =
   | 'toolResult'
   | 'toolResultNote'
   | 'errorFile'
+  | 'productionError'
   | 'assignee'
   | 'assigneeNote';
 
@@ -16,11 +17,14 @@ export type StatusFilter = {
   toolResult: string[];
   toolResultNote: string[];
   errorFile: string[];
+  productionError: string[];
   assignee: string[];
   assigneeNote: string[];
   factoryId?: string;
   machineTypeId?: string;
   readyForFulfill?: boolean;
+  /** Toggle nhanh "đơn lỗi cần xử lý" — set hasError=true. */
+  hasError?: boolean;
   createdFrom?: string;
   createdTo?: string;
   search?: string;
@@ -32,6 +36,7 @@ const CSV_KEYS: StatusFilterCategory[] = [
   'toolResult',
   'toolResultNote',
   'errorFile',
+  'productionError',
   'assignee',
   'assigneeNote',
 ];
@@ -47,26 +52,33 @@ function todayISO() {
 }
 
 /**
- * Status-tab filter state. Workshop-flow filters (printStatus, assignee...)
- * round-trip through the URL so deep links + tab switches preserve them.
- * Date range is intentionally local-only — workshop staff want a fresh "today"
- * every mount; URL-shared dates from a previous session caused stale views.
+ * Status-tab filter state. ALL filters (workshop codes, factory, date range,
+ * search...) round-trip through the URL so F5 / deep links / tab switches
+ * preserve them. Default date = today — strip khỏi URL khi user không sửa.
  */
 export function useStatusFilter() {
   const [searchParams, setSearchParams] = useSearchParams();
 
-  // Dates live in component state, NOT URL — always default to today on mount.
-  const [createdFrom, setCreatedFrom] = useState<string>(todayISO());
-  const [createdTo, setCreatedTo] = useState<string>(todayISO());
+  // Dates đọc URL → fallback today. Sync ngược lên URL ở useEffect bên dưới.
+  const [createdFrom, setCreatedFrom] = useState<string>(
+    () => searchParams.get('createdFrom') || todayISO(),
+  );
+  const [createdTo, setCreatedTo] = useState<string>(
+    () => searchParams.get('createdTo') || todayISO(),
+  );
 
-  // Belt + suspenders: even if HMR preserved a stale state across a hot edit,
-  // force both inputs back to today on the very first mount. Runs once.
+  // Sync date → URL. Luôn ghi (kể cả today) để URL reflect state user thấy.
   useEffect(() => {
-    const today = todayISO();
-    setCreatedFrom(today);
-    setCreatedTo(today);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+    setSearchParams(
+      (prev) => {
+        const sp = new URLSearchParams(prev);
+        createdFrom ? sp.set('createdFrom', createdFrom) : sp.delete('createdFrom');
+        createdTo ? sp.set('createdTo', createdTo) : sp.delete('createdTo');
+        return sp;
+      },
+      { replace: true },
+    );
+  }, [createdFrom, createdTo, setSearchParams]);
 
   const filter: StatusFilter = useMemo(() => {
     const f: StatusFilter = {
@@ -75,6 +87,7 @@ export function useStatusFilter() {
       toolResult: [],
       toolResultNote: [],
       errorFile: [],
+      productionError: [],
       assignee: [],
       assigneeNote: [],
     };
@@ -85,11 +98,13 @@ export function useStatusFilter() {
     const factoryId = searchParams.get('factoryId');
     const machineTypeId = searchParams.get('machineTypeId');
     const ready = searchParams.get('readyForFulfill');
+    const hasError = searchParams.get('hasError');
     const search = searchParams.get('search') || undefined;
     if (factoryId) f.factoryId = factoryId;
     if (machineTypeId) f.machineTypeId = machineTypeId;
     if (ready === 'true') f.readyForFulfill = true;
     else if (ready === 'false') f.readyForFulfill = false;
+    if (hasError === 'true') f.hasError = true;
     f.createdFrom = createdFrom;
     f.createdTo = createdTo;
     f.search = search;
@@ -154,12 +169,23 @@ export function useStatusFilter() {
     [writeParams],
   );
 
+  const setHasError = useCallback(
+    (value: boolean | undefined) => {
+      writeParams((sp) => {
+        if (value === true) sp.set('hasError', 'true');
+        else sp.delete('hasError');
+      });
+    },
+    [writeParams],
+  );
+
   const clearAll = useCallback(() => {
     writeParams((sp) => {
       for (const k of CSV_KEYS) sp.delete(k);
       sp.delete('factoryId');
       sp.delete('machineTypeId');
       sp.delete('readyForFulfill');
+      sp.delete('hasError');
       sp.delete('search');
     });
     setCreatedFrom(todayISO());
@@ -175,6 +201,7 @@ export function useStatusFilter() {
     if (filter.machineTypeId) params.set('machineTypeId', filter.machineTypeId);
     if (typeof filter.readyForFulfill === 'boolean')
       params.set('readyForFulfill', String(filter.readyForFulfill));
+    if (filter.hasError) params.set('hasError', 'true');
     if (filter.createdFrom) params.set('createdFrom', filter.createdFrom);
     if (filter.createdTo) params.set('createdTo', filter.createdTo);
     if (filter.search) params.set('search', filter.search);
@@ -188,9 +215,10 @@ export function useStatusFilter() {
       !!filter.factoryId ||
       !!filter.machineTypeId ||
       typeof filter.readyForFulfill === 'boolean' ||
+      filter.hasError === true ||
       !!filter.search,
     [filter],
   );
 
-  return { filter, queryString, isActive, toggle, setScalar, setReady, clearAll };
+  return { filter, queryString, isActive, toggle, setScalar, setReady, setHasError, clearAll };
 }

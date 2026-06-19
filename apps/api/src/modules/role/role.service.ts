@@ -21,6 +21,7 @@ export class RoleService implements OnModuleInit {
         // that was soft-deleted previously — the unique index on `name` doesn't
         // exclude soft-deleted rows.
         const existing = await this.roleRepository.findOne({ name: roleName }, { withDeleted: true });
+        const defaults = DEFAULT_ROLE_PERMISSIONS[roleName] || [];
 
         if (!existing) {
           await this.roleRepository.create({
@@ -28,21 +29,37 @@ export class RoleService implements OnModuleInit {
             description: `${roleName} (system)`,
             status: Status.Active,
             permissionIds: [],
-            permissionCodes: DEFAULT_ROLE_PERMISSIONS[roleName] || [],
+            permissionCodes: defaults,
             isSystem: true,
           });
           // eslint-disable-next-line no-console
-          console.log(`[role-seed] created ${roleName} with ${DEFAULT_ROLE_PERMISSIONS[roleName]?.length || 0} permissions`);
+          console.log(`[role-seed] created ${roleName} with ${defaults.length} permissions`);
           continue;
         }
 
+        // System role = catalog là source of truth. Mỗi lần boot ta sync
+        // `permissionCodes` về đúng default — feature mới thêm vào catalog tự
+        // propagate, quyền bị rút (vd. Phase 8 bỏ `toolResultNote.edit` của
+        // Fulfillment) cũng được áp luôn. Nếu admin muốn role custom thì
+        // tạo role mới với `isSystem=false` thay vì sửa system role.
         const patch: Record<string, unknown> = {};
         if (!existing.isSystem) patch.isSystem = true;
         if (existing.deletedAt) patch.deletedAt = null;
+        const currentCodes = (existing.permissionCodes || []).slice().sort();
+        const targetCodes = defaults.slice().sort();
+        const codesDiffer =
+          currentCodes.length !== targetCodes.length ||
+          currentCodes.some((c, i) => c !== targetCodes[i]);
+        if (codesDiffer) patch.permissionCodes = defaults;
+
         if (Object.keys(patch).length > 0) {
           await this.roleRepository.findOneAndUpdate({ _id: existing._id }, patch);
           // eslint-disable-next-line no-console
-          console.log(`[role-seed] restored/flagged ${roleName} (${Object.keys(patch).join(', ')})`);
+          console.log(
+            `[role-seed] sync ${roleName} (${Object.keys(patch).join(', ')})${
+              codesDiffer ? ` — ${defaults.length} codes` : ''
+            }`,
+          );
         }
       } catch (err) {
         // Don't crash app on seed race / duplicate key — the role exists, that's good enough.

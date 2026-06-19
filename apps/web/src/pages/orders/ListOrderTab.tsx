@@ -1,5 +1,6 @@
 import React, { memo, useCallback, useEffect, useState } from 'react';
 import { History, Trash2, Image as ImageIcon } from 'lucide-react';
+import { useSearchParams } from 'react-router-dom';
 import { toast } from 'sonner';
 
 import { Button } from '@/components/ui/button';
@@ -14,7 +15,7 @@ import {
   TableRow,
 } from '@/components/ui/table';
 import { Spinner } from '@/components/common/Spinner';
-import { Pagination } from '@/components/common/Pagination';
+import { PaginationBar } from '@/components/common/PaginationBar';
 import { ImagePreviewDialog } from '@/components/common/ImagePreviewDialog';
 import { OrderLogTimelineDialog } from '@/components/orders/OrderLogTimelineDialog';
 import { CopyButton } from '@/components/common/CopyButton';
@@ -385,15 +386,47 @@ const OrderRowItem = memo(
 );
 
 export function ListOrderTab({ refreshKey }: ListOrderTabProps) {
+  // URL params (prefix `l` = list). F5 giữ nguyên filter — default values
+  // bị strip khỏi URL để URL gọn khi chưa filter gì.
+  const [searchParams, setSearchParams] = useSearchParams();
+
   const [items, setItems] = useState<OrderRow[]>([]);
   const [total, setTotal] = useState(0);
   const [loading, setLoading] = useState(false);
-  const [search, setSearch] = useState('');
-  const [filterMapped, setFilterMapped] = useState<'all' | 'mapped' | 'unmapped'>('all');
-  const [page, setPage] = useState(1);
-  const [pageSize, setPageSize] = useState(DEFAULT_PAGE_SIZE);
+  const [search, setSearch] = useState(() => searchParams.get('lsearch') || '');
+  const [filterMapped, setFilterMapped] = useState<'all' | 'mapped' | 'unmapped'>(() => {
+    const v = searchParams.get('lmapped');
+    return v === 'mapped' || v === 'unmapped' ? v : 'all';
+  });
+  const [filterError, setFilterError] = useState<boolean>(
+    () => searchParams.get('lerror') === 'true',
+  );
+  const [page, setPage] = useState(() => {
+    const p = Number(searchParams.get('lpage'));
+    return Number.isFinite(p) && p > 0 ? p : 1;
+  });
+  const [pageSize, setPageSize] = useState(() => {
+    const s = Number(searchParams.get('lsize'));
+    return Number.isFinite(s) && s > 0 ? s : DEFAULT_PAGE_SIZE;
+  });
   const [preview, setPreview] = useState<{ url: string; originalUrl?: string; title: string } | null>(null);
   const [historyTarget, setHistoryTarget] = useState<{ id: string; productionId: string } | null>(null);
+
+  // Sync state → URL. Strip default values để URL gọn.
+  useEffect(() => {
+    setSearchParams(
+      (prev) => {
+        const sp = new URLSearchParams(prev);
+        search ? sp.set('lsearch', search) : sp.delete('lsearch');
+        filterMapped !== 'all' ? sp.set('lmapped', filterMapped) : sp.delete('lmapped');
+        filterError ? sp.set('lerror', 'true') : sp.delete('lerror');
+        page > 1 ? sp.set('lpage', String(page)) : sp.delete('lpage');
+        pageSize !== DEFAULT_PAGE_SIZE ? sp.set('lsize', String(pageSize)) : sp.delete('lsize');
+        return sp;
+      },
+      { replace: true },
+    );
+  }, [search, filterMapped, filterError, page, pageSize, setSearchParams]);
 
   const fetchData = async () => {
     try {
@@ -402,6 +435,7 @@ export function ListOrderTab({ refreshKey }: ListOrderTabProps) {
       if (search) params.set('search', search);
       if (filterMapped === 'mapped') params.set('isMapped', 'true');
       if (filterMapped === 'unmapped') params.set('isMapped', 'false');
+      if (filterError) params.set('hasError', 'true');
       const resp = await RepositoryRemote.order.getOrders(`?${params.toString()}`);
       setItems(resp.data.data || []);
       setTotal(resp.data.total || 0);
@@ -415,11 +449,17 @@ export function ListOrderTab({ refreshKey }: ListOrderTabProps) {
   useEffect(() => {
     fetchData();
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [refreshKey, filterMapped, page, pageSize]);
+  }, [refreshKey, filterMapped, filterError, page, pageSize]);
 
+  // Skip lần render đầu — nếu không sẽ ghi đè `lpage` đọc từ URL khi F5.
+  const isFirstRender = React.useRef(true);
   useEffect(() => {
+    if (isFirstRender.current) {
+      isFirstRender.current = false;
+      return;
+    }
     setPage(1);
-  }, [filterMapped]);
+  }, [filterMapped, filterError]);
 
   const handleSearch = () => {
     setPage(1);
@@ -451,18 +491,16 @@ export function ListOrderTab({ refreshKey }: ListOrderTabProps) {
     [],
   );
 
-  const paginationControl =
-    !loading && total > 0 ? (
-      <Pagination
-        page={page}
-        pageSize={pageSize}
-        total={total}
-        onChange={(p, ps) => {
-          setPage(p);
-          setPageSize(ps);
-        }}
-      />
-    ) : null;
+  const paginationProps = {
+    page,
+    pageSize,
+    total,
+    loading,
+    onChange: (p: number, ps: number) => {
+      setPage(p);
+      setPageSize(ps);
+    },
+  };
 
   return (
     <TooltipProvider delayDuration={300}>
@@ -497,10 +535,18 @@ export function ListOrderTab({ refreshKey }: ListOrderTabProps) {
             >
               Chưa mapping
             </Button>
+            <Button
+              variant={filterError ? 'destructive' : 'outline'}
+              size="sm"
+              onClick={() => setFilterError((v) => !v)}
+              title="Chỉ hiện đơn xưởng đã báo lỗi"
+            >
+              Lỗi xưởng
+            </Button>
           </div>
         </div>
 
-        {paginationControl && <div className="rounded-lg border border-border bg-card p-3">{paginationControl}</div>}
+        <PaginationBar position="top" {...paginationProps} />
 
         <div className="rounded-lg border border-border bg-card">
           <Table>
@@ -544,7 +590,7 @@ export function ListOrderTab({ refreshKey }: ListOrderTabProps) {
             </TableBody>
           </Table>
 
-          {paginationControl && <div className="border-t border-border p-3">{paginationControl}</div>}
+          <PaginationBar position="bottom" {...paginationProps} />
         </div>
 
         <ImagePreviewDialog

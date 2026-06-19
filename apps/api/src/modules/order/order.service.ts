@@ -70,6 +70,8 @@ const FIELD_CONFIG_CATEGORY: Record<OrderWorkshopField, WorkshopConfigCategory |
   assignee: WorkshopConfigCategory.Assignee,
   assigneeNote: WorkshopConfigCategory.AssigneeNote,
   fabricType: WorkshopConfigCategory.FabricType,
+  productionError: WorkshopConfigCategory.ProductionError,
+  productionErrorNote: null, // free text
 };
 
 const ADMIN_ROLES: RoleType[] = [RoleType.SuperAdmin, RoleType.Admin, RoleType.Manager];
@@ -78,18 +80,31 @@ const FIELD_EDIT_ROLES: Record<OrderWorkshopField, RoleType[]> = {
   printStatus: [...ADMIN_ROLES, RoleType.Fulfillment],
   printStatusNote: [...ADMIN_ROLES, RoleType.Fulfillment],
   toolResult: [...ADMIN_ROLES, RoleType.Designer],
-  // Fulfillment chỉnh được "Note kq Tool" (= toolResultNote) để cập nhật
-  // tình trạng đơn sau khi in xong.
-  toolResultNote: [...ADMIN_ROLES, RoleType.Designer, RoleType.Fulfillment],
+  // Note kq Tool 1 chỉ Designer + admin sửa. Fulfillment XEM để biết đơn đã
+  // OK chưa; báo lỗi sau in dùng `productionError` riêng (xem dưới).
+  toolResultNote: [...ADMIN_ROLES, RoleType.Designer],
   errorFile: [...ADMIN_ROLES, RoleType.Designer],
   errorFileNote: [...ADMIN_ROLES, RoleType.Designer],
   assignee: [...ADMIN_ROLES, RoleType.Designer],
   assigneeNote: [...ADMIN_ROLES, RoleType.Designer],
   // Fabric is admin-managed (it's a product attribute, not a workshop status).
   fabricType: ADMIN_ROLES,
+  // Fulfillment (xưởng) là người báo lỗi sản xuất → cần quyền edit.
+  productionError: [...ADMIN_ROLES, RoleType.Fulfillment],
+  productionErrorNote: [...ADMIN_ROLES, RoleType.Fulfillment],
 };
 
 const READY_FOR_FULFILL_CODE = 'ok';
+
+/**
+ * Mã printStatus đại diện cho đơn đã in xong qua máy đó. Workshop set
+ * printStatus = "machine-N" để đánh dấu đơn vừa in xong qua máy N. Bất kỳ
+ * code nào khác (vd. "in-progress", "queued") coi như đang in.
+ *
+ * Dùng chung giữa `getStatusOverview()`, `getFactoryOverview()`, và filter
+ * `printStage` của list orders để 3 chỗ luôn nhất quán.
+ */
+const PRINTED_MACHINE_CODES = ['machine-1', 'machine-2', 'machine-3', 'machine-4', 'machine-94'];
 
 const ORDER_LIST_CACHE_PREFIX = 'orders:list:';
 const ORDER_LIST_CACHE_TTL_SECONDS = 60;
@@ -204,6 +219,8 @@ export class OrderService implements OnModuleInit {
       toolResultNote: dto.toolResultNote,
       assignee: dto.assignee,
       errorFile: dto.errorFile,
+      productionError: dto.productionError,
+      hasError: dto.hasError,
       createdFrom: dto.createdFrom,
       createdTo: dto.createdTo,
       role: roleName ?? '',
@@ -252,6 +269,14 @@ export class OrderService implements OnModuleInit {
     if (dto.type) filter.type = { $in: dto.type.split(',').filter(Boolean) };
     if (dto.fabricType) filter.fabricType = { $in: dto.fabricType.split(',').filter(Boolean) };
     if (dto.toolResult) filter.toolResult = { $in: dto.toolResult.split(',').filter(Boolean) };
+    if (dto.productionError) {
+      filter.productionError = { $in: dto.productionError.split(',').filter(Boolean) };
+    } else if (dto.hasError === true) {
+      // hasError=true → đơn có lỗi xưởng (productionError set khác empty).
+      // hasError=false không được hỗ trợ: dùng "không lọc" để xem đơn không
+      // lỗi (tránh đụng `$or` với filter search/printStage).
+      filter.productionError = { $exists: true, $nin: [null, ''] };
+    }
 
     // Transfer filters — let the factory tab slice orders by direction.
     if (dto.originalFactoryId) {
@@ -276,6 +301,18 @@ export class OrderService implements OnModuleInit {
         const fid = tok.slice('transferred-out:'.length);
         filter.originalFactoryId = fid;
         filter.$expr = { $ne: ['$originalFactoryId', '$factoryId'] };
+      }
+    }
+    if (dto.printStage) {
+      // Mã printStatus được set bằng tên máy in khi đơn đã in xong — bất kỳ
+      // mã nào không thuộc danh sách này coi như "đang in" (đã pick lên máy
+      // chưa done). Null/empty = chưa in.
+      if (dto.printStage === 'printed') {
+        filter.printStatus = { $in: PRINTED_MACHINE_CODES };
+      } else if (dto.printStage === 'printing') {
+        filter.printStatus = { $exists: true, $nin: [null, '', ...PRINTED_MACHINE_CODES] };
+      } else if (dto.printStage === 'not-printed') {
+        filter.$or = [{ printStatus: { $exists: false } }, { printStatus: { $in: [null, ''] } }];
       }
     }
     return filter;
@@ -781,6 +818,11 @@ export class OrderService implements OnModuleInit {
     if (dto.errorFile) baseMatch.errorFile = { $in: dto.errorFile.split(',').filter(Boolean) };
     if (dto.assignee) baseMatch.assignee = { $in: dto.assignee.split(',').filter(Boolean) };
     if (dto.assigneeNote) baseMatch.assigneeNote = { $in: dto.assigneeNote.split(',').filter(Boolean) };
+    if (dto.productionError) {
+      baseMatch.productionError = { $in: dto.productionError.split(',').filter(Boolean) };
+    } else if (dto.hasError === true) {
+      baseMatch.productionError = { $exists: true, $nin: [null, ''] };
+    }
     if (dto.factoryId) baseMatch.factoryId = dto.factoryId;
     if (dto.machineTypeId) baseMatch.machineTypeId = dto.machineTypeId;
     if (typeof dto.readyForFulfill === 'boolean') baseMatch.readyForFulfill = dto.readyForFulfill;
@@ -803,8 +845,6 @@ export class OrderService implements OnModuleInit {
       { $sort: { count: -1 as const } },
     ];
 
-    const PRINTED_MACHINE_CODES = ['machine-1', 'machine-2', 'machine-3', 'machine-4', 'machine-94'];
-
     const [agg] = await this.orderModel.aggregate([
       { $match: baseMatch },
       {
@@ -818,7 +858,15 @@ export class OrderService implements OnModuleInit {
           ready: [{ $match: { readyForFulfill: true } }, { $count: 'n' }],
           done: [{ $match: { printStatus: { $in: PRINTED_MACHINE_CODES } } }, { $count: 'n' }],
           errors: [
-            { $match: { $or: [{ toolResultNote: 'error' }, { errorFile: { $ne: null, $exists: true } }] } },
+            {
+              $match: {
+                $or: [
+                  { toolResultNote: 'error' },
+                  { errorFile: { $ne: null, $exists: true } },
+                  { productionError: { $exists: true, $nin: [null, ''] } },
+                ],
+              },
+            },
             { $count: 'n' },
           ],
           printStatus: groupByField('printStatus'),
@@ -826,6 +874,7 @@ export class OrderService implements OnModuleInit {
           toolResult: groupByField('toolResult'),
           toolResultNote: groupByField('toolResultNote'),
           errorFile: groupByField('errorFile'),
+          productionError: groupByField('productionError'),
           assignee: groupByField('assignee'),
           assigneeNote: groupByField('assigneeNote'),
           factory: groupByField('factoryId'),
@@ -933,6 +982,7 @@ export class OrderService implements OnModuleInit {
       toolResult: mapBreakdown(WorkshopConfigCategory.ToolResult, agg.toolResult),
       toolResultNote: mapBreakdown(WorkshopConfigCategory.ToolResultNote, agg.toolResultNote),
       errorFile: mapBreakdown(WorkshopConfigCategory.ErrorFileType, agg.errorFile),
+      productionError: mapBreakdown(WorkshopConfigCategory.ProductionError, agg.productionError),
       assignee: mapBreakdown(WorkshopConfigCategory.Assignee, agg.assignee),
       assigneeNote: mapBreakdown(WorkshopConfigCategory.AssigneeNote, agg.assigneeNote),
       factory: factoryBreakdown,
@@ -1178,6 +1228,10 @@ export class OrderService implements OnModuleInit {
           fabricCount: 0,
           machineCount: 0,
           withToolCount: 0,
+          printedCount: 0,
+          printingCount: 0,
+          notPrintedCount: 0,
+          errorCount: 0,
           breakdowns: { products: [], fabrics: [], sizes: [], toolResults: [] },
         };
         cellMap.set(fid, cell);
@@ -1241,6 +1295,10 @@ export class OrderService implements OnModuleInit {
       fabricCount: number;
       machineCount: number;
       withToolCount: number;
+      printedCount: number;
+      printingCount: number;
+      notPrintedCount: number;
+      errorCount: number;
     };
     const statRows = await this.orderModel.aggregate<StatRow>([
       { $match: match },
@@ -1252,6 +1310,32 @@ export class OrderService implements OnModuleInit {
           machines: { $addToSet: '$machineTypeId' },
           withToolCount: {
             $sum: { $cond: [{ $in: ['$toolResult', toolHasCodes] }, 1, 0] },
+          },
+          // 3 print stage — disjoint, cộng lại = total
+          printedCount: {
+            $sum: { $cond: [{ $in: ['$printStatus', PRINTED_MACHINE_CODES] }, 1, 0] },
+          },
+          printingCount: {
+            $sum: {
+              $cond: [
+                {
+                  $and: [
+                    { $ne: [{ $ifNull: ['$printStatus', ''] }, ''] },
+                    { $not: [{ $in: ['$printStatus', PRINTED_MACHINE_CODES] }] },
+                  ],
+                },
+                1,
+                0,
+              ],
+            },
+          },
+          notPrintedCount: {
+            $sum: { $cond: [{ $eq: [{ $ifNull: ['$printStatus', ''] }, ''] }, 1, 0] },
+          },
+          // Lỗi xưởng — đếm độc lập với 3 print stage (một đơn có thể vừa
+          // chưa in vừa được báo lỗi, hoặc đã in xong nhưng phát hiện lỗi).
+          errorCount: {
+            $sum: { $cond: [{ $ne: [{ $ifNull: ['$productionError', ''] }, ''] }, 1, 0] },
           },
         },
       },
@@ -1268,6 +1352,10 @@ export class OrderService implements OnModuleInit {
             $size: { $filter: { input: '$machines', as: 'm', cond: { $and: [{ $ne: ['$$m', null] }, { $ne: ['$$m', ''] }] } } },
           },
           withToolCount: 1,
+          printedCount: 1,
+          printingCount: 1,
+          notPrintedCount: 1,
+          errorCount: 1,
         },
       },
     ]);
@@ -1278,6 +1366,10 @@ export class OrderService implements OnModuleInit {
       cell.fabricCount = s.fabricCount;
       cell.machineCount = s.machineCount;
       cell.withToolCount = s.withToolCount;
+      cell.printedCount = s.printedCount;
+      cell.printingCount = s.printingCount;
+      cell.notPrintedCount = s.notPrintedCount;
+      cell.errorCount = s.errorCount;
     }
 
     // ─── Per-factory dimension breakdowns (Summary sub-tab) ─────────────
@@ -1334,11 +1426,28 @@ export class OrderService implements OnModuleInit {
     pushBd(toolBd, 'toolResults', (v) => toolMetaMap.get(v) || v);
 
     // ─── Filter selects: distinct values across the date range ──────────
-    // When the user picks a factory chip, scope the dropdown options to
-    // orders currently at that factory so counts match what they'll see in
-    // the order list below. Cards + flow totals stay unscoped (global view).
+    // When the user picks a factory chip OR a print stage button, scope the
+    // dropdown options to orders matching that scope so user only sees
+    // values that yield non-empty results. Cards + flow totals stay
+    // unscoped (global view).
     const filterMatch: Record<string, unknown> = { ...match };
     if (dto.factoryId) filterMatch.factoryId = dto.factoryId;
+    if (dto.printStage === 'printed') {
+      filterMatch.printStatus = { $in: PRINTED_MACHINE_CODES };
+    } else if (dto.printStage === 'printing') {
+      filterMatch.printStatus = { $exists: true, $nin: [null, '', ...PRINTED_MACHINE_CODES] };
+    } else if (dto.printStage === 'not-printed') {
+      filterMatch.$or = [
+        { printStatus: { $exists: false } },
+        { printStatus: { $in: [null, ''] } },
+      ];
+    }
+    // Khi user click "Lỗi xưởng" trên card, FE truyền `hasError=true` cùng
+    // `factoryId`. availableFilters phải scope theo đơn lỗi để dropdown chỉ
+    // hiện options tồn tại trong tập đơn lỗi đó.
+    if (dto.hasError === true) {
+      filterMatch.productionError = { $exists: true, $nin: [null, ''] };
+    }
 
     type OptionRow = { _id: string; count: number };
     const [typeRows, fabricRows, toolRows, machineRows] = await Promise.all([

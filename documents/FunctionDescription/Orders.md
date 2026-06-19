@@ -212,6 +212,11 @@ Sau import (hoặc khi đổi date), `ImportOrderTab` gọi endpoint này để 
   assignee?: string;           // index
   assigneeNote?: string;
   fabricType?: string;         // workshop_config code (category=fabric_type), index — derived từ productConfig.fabricType lúc import (Phase 7)
+
+  // ─── Production error (Phase 8) — xưởng báo lỗi đơn hàng ───
+  productionError?: string;    // workshop_config code (category=production_error), index. Set khác null/empty ⇒ đơn ở trạng thái "có lỗi".
+  productionErrorNote?: string;// free text mô tả chi tiết lỗi
+
   readyForFulfill: boolean;    // derived = (toolResultNote === 'ok'), default false, index
 }
 ```
@@ -232,7 +237,7 @@ Tất cả workshop fields lưu **code** từ `WorkshopConfigEntity`. FE render 
 
 ### 5.2 Indexes
 - `productionId` (unique) — dedupe import
-- `type`, `orderId`, `externalId`, `isMapped`, `factoryId`, `originalFactoryId`, `machineTypeId`, `printStatus`, `toolResultNote`, `assignee`, `fabricType`, `readyForFulfill` — filter + aggregation perf
+- `type`, `orderId`, `externalId`, `isMapped`, `factoryId`, `originalFactoryId`, `machineTypeId`, `printStatus`, `toolResultNote`, `assignee`, `fabricType`, `productionError`, `readyForFulfill` — filter + aggregation perf
 
 ### 5.3 Virtuals
 - `factory` (`factoryId` → `FactoryEntity`)
@@ -281,6 +286,9 @@ Ngoài các filter cơ bản (`createdFrom/To`, `factoryId`, `machineTypeId`, `p
 | `fabricType` | CSV codes | Lọc theo nhiều fabric. |
 | `originalFactoryId` | CSV IDs | Lọc theo xưởng gốc. |
 | `transferStatus` | token | `transferred` · `pure` · `transferred-in:<factoryId>` · `transferred-out:<factoryId>`. Build `$expr` so sánh `originalFactoryId` vs `factoryId`. |
+| `printStage` | enum | `printed` · `printing` · `not-printed`. Mutually exclusive — Dashboard Tab C drill-down 3 button trên `FactoryCard`. Định nghĩa "đã in xong" = `printStatus ∈ PRINTED_MACHINE_CODES` (`['machine-1','machine-2','machine-3','machine-4','machine-94']`). |
+| `productionError` | CSV codes | (Phase 8) Lọc theo lý do lỗi xưởng (`wrong-size`, `print-misalign`, ...). |
+| `hasError` | boolean | (Phase 8) `true` → đơn có `productionError` set. `false` không hỗ trợ (dùng cách không truyền filter). |
 | `sort` | `'grouped'` | Sort `(type, size, fabricType, createdAt desc)` thay vì `createdAt` mặc định — để combo trùng nhau gom liền nhau (Workshop dùng để in batch chung). |
 
 ---
@@ -288,10 +296,10 @@ Ngoài các filter cơ bản (`createdFrom/To`, `factoryId`, `machineTypeId`, `p
 ## 8. Inline / bulk update (Phase 2)
 
 ### 8.1 Whitelist field
-9 field trong `ORDER_WORKSHOP_FIELDS` (shared):
-`printStatus`, `printStatusNote`, `toolResult`, `toolResultNote`, `errorFile`, `errorFileNote`, `assignee`, `assigneeNote`, `fabricType`.
+11 field trong `ORDER_WORKSHOP_FIELDS` (shared):
+`printStatus`, `printStatusNote`, `toolResult`, `toolResultNote`, `errorFile`, `errorFileNote`, `assignee`, `assigneeNote`, `fabricType`, `productionError`, `productionErrorNote`.
 
-Mỗi field có category workshop_config tương ứng trong `FIELD_CONFIG_CATEGORY` (BE), trừ `errorFileNote` (free text).
+Mỗi field có category workshop_config tương ứng trong `FIELD_CONFIG_CATEGORY` (BE), trừ 2 free-text field: `errorFileNote` và `productionErrorNote`.
 
 ### 8.2 Role allow-list per field (`FIELD_EDIT_ROLES`)
 
@@ -299,10 +307,11 @@ Mỗi field có category workshop_config tương ứng trong `FIELD_CONFIG_CATEG
 |-------|:-------------:|:-------:|:--------:|:-----------:|
 | printStatus / printStatusNote | ✅ | ❌ | ❌ | ✅ |
 | toolResult | ✅ | ❌ | ✅ | ❌ |
-| **toolResultNote** | ✅ | ❌ | ✅ | ✅ (Phase 7 — Fulfillment cập nhật sau in) |
+| **toolResultNote** | ✅ | ❌ | ✅ | ❌ (xem only — Phase 8 đã rút quyền edit; báo lỗi sau in dùng `productionError`) |
 | errorFile / errorFileNote | ✅ | ❌ | ✅ | ❌ |
 | assignee / assigneeNote | ✅ | ❌ | ✅ | ❌ |
 | **fabricType** | ✅ (admin-managed) | ❌ | ❌ | ❌ |
+| **productionError / productionErrorNote** | ✅ | ❌ (view) | ❌ (view) | ✅ (Phase 8 — xưởng báo lỗi) |
 
 Support được xem nhưng không sửa — controller cho qua, service `assertCanEditField` chặn ở field level.
 
@@ -354,6 +363,11 @@ const canImport       = has('order.import');
 
 Render tab tương ứng. User chỉ có 1 trong các quyền → 1 tab; có nhiều quyền (Admin) → cả 3 tab.
 
+`handleTabChange` (Phase 7.2) strip param của 2 tab kia khi switch tab để URL không lẫn lộn:
+- Switch sang `list` → strip `w*`.
+- Switch sang `workshop` → strip `l*`.
+- Switch sang `import` → strip cả 2 (import tab không có filter).
+
 ### 10.2 `OrderTableWorkshop.tsx`
 
 #### Cấu trúc cột (định nghĩa tập trung trong `apps/web/src/components/orders/workshopTableConfig.tsx` → `WORKSHOP_COLS`)
@@ -369,11 +383,13 @@ Render tab tương ứng. User chỉ có 1 trong các quyền → 1 tab; có nhi
 | 7 | toolResultNote | `ColorBadgeSelectCell` (label = "Note kq Tool 1") | `order.field.toolResultNote.view` |
 | 8 | errorFile | `IconSelectCell` | `order.field.errorFile.view` |
 | 9 | errorFileNote | `TextEditCell` | `order.field.errorFileNote.view` |
-| 10 | assignee | `IconSelectCell` | `order.field.assignee.view` |
-| 11 | assigneeNote | `IconSelectCell` | `order.field.assigneeNote.view` |
-| 12 | userSku | text + CopyButton | luôn |
-| 13 | typeFullName | text (`productConfig.fullName`) | luôn |
-| 14 | factoryMachine | badge `factory.name` + badge `machineType.name` (gộp 2 dòng) | luôn |
+| 10 | **productionError** | `ColorBadgeSelectCell` (category `production_error`) — Phase 8 | `order.field.productionError.view` |
+| 11 | **productionErrorNote** | `TextEditCell` — mô tả lỗi free text — Phase 8 | `order.field.productionErrorNote.view` |
+| 12 | assignee | `IconSelectCell` | `order.field.assignee.view` |
+| 13 | assigneeNote | `IconSelectCell` | `order.field.assigneeNote.view` |
+| 14 | userSku | text + CopyButton | luôn |
+| 15 | typeFullName | text (`productConfig.fullName`) | luôn |
+| 16 | factoryMachine | badge `factory.name` + badge `machineType.name` (gộp 2 dòng) | luôn |
 
 `WORKSHOP_COLS` được reuse bởi cả Tab `OrderTableWorkshop` (apps/web/src/pages/orders) **và** Dashboard Tab C `OrderFactoryTab`. Dashboard Tab C thêm 1 cột "Xưởng (đang / gốc)" ở đầu để hiển thị badge transfer.
 
@@ -382,7 +398,7 @@ Render tab tương ứng. User chỉ có 1 trong các quyền → 1 tab; có nhi
 - **`SelectPopover`** — shared popover với "Bỏ chọn" + list options.
 - **`ColorBadgeSelectCell`** — badge nền `workshop_config.color`. Click → popover → PATCH `/v1/orders/:id/field`. Hiển thị spinner trong khi save, toast success/error. Update optimistic qua callback `onUpdated(newCode)` để patch row local.
 - **`IconSelectCell`** — chip màu nhẹ + icon Lucide từ `workshop_config.icon`. Cùng flow.
-- **`TextEditCell`** — Input inline (chỉ cho `errorFileNote`). Commit khi `blur` hoặc `Enter`, `Escape` revert.
+- **`TextEditCell`** — Input inline (dùng cho `errorFileNote` và `productionErrorNote`). Commit khi `blur` hoặc `Enter`, `Escape` revert.
 - **`ImageThumbCell`** — thumb 36px (variant `s200`), click mở `ImagePreviewDialog`.
 
 Mỗi cell tự đọc `canEditField(field)` từ `usePermission()`:
@@ -392,12 +408,29 @@ Mỗi cell tự đọc `canEditField(field)` từ `usePermission()`:
 ### 10.3 Filter bar
 
 Render conditional theo `order.field.X.view`:
-- `printStatus` (multi, badge màu)
-- `toolResultNote` (multi, badge màu)
-- `assignee` (multi, text)
-+ Search productionId/userSku/orderId/type
+- `printStatus` — `<MultiSelectFilter renderType="color">` (Phase 7.2 — thay thế FilterChips dàn ngang trước đây)
+- `toolResultNote` — `<MultiSelectFilter renderType="color">`
+- `assignee` — `<MultiSelectFilter renderType="text">`
+- `productionError` — `<MultiSelectFilter renderType="color">` (Phase 8 — lỗi xưởng)
+- Search productionId / userSku / orderId / type (debounced 300ms)
+- `<DateRangePicker>` — 8 preset quick + 2 input custom + popover gói gọn (Phase 7.2)
 
 Filter gửi qua query string `?printStatus=code1,code2&...&createdFrom=...`. Service split CSV.
+
+**URL state persistence** (Phase 7.2): tất cả filter sync ↔ URL params với prefix `w` (workshop) để F5 / share link giữ nguyên state:
+
+| Param | Default (strip URL khi == default) | Mapping |
+|-------|------------------------------------|---------|
+| `wsearch` | `''` | search |
+| `wfrom` / `wto` | **today** (always-write, kể cả today) | `createdFrom` / `createdTo` |
+| `wprint` | `[]` | CSV `printStatus` codes |
+| `wnote` | `[]` | CSV `toolResultNote` codes |
+| `wassign` | `[]` | CSV `assignee` codes |
+| `werror` | `[]` | CSV `productionError` codes (Phase 8) |
+| `wpage` | `1` | trang |
+| `wsize` | `20` | dòng/trang |
+
+Workshop tab dùng date always-write vào URL (kể cả today) để URL hiển thị explicit ngày đang xem — tránh user share link mà không biết filter ngày nào. Các param khác strip khi rỗng/default.
 
 ### 10.4 Bulk edit (`BulkEditToolbar`)
 
@@ -422,6 +455,21 @@ const { has, canViewField, canEditField, canViewAdminTable, canViewWorkshopTable
 | Debounce search 300ms | `useDebounce(search, 300)` |
 | Service Worker cache ảnh CDN | `apps/web/public/sw.js` |
 | BE cache key gắn `role` | Tránh Designer thấy cache của Admin |
+| `<PaginationBar position="top|bottom">` | Phân trang ở CẢ trên + dưới table, dùng chung `paginationProps` object — user không phải kéo lên/xuống mỗi lần đổi trang. |
+
+### 10.7 List tab — URL state persistence
+
+`ListOrderTab.tsx` dùng prefix `l` cho param:
+
+| Param | Default | Mapping |
+|-------|---------|---------|
+| `lsearch` | `''` | search Production ID / Order ID / SKU |
+| `lmapped` | `all` | `all` / `mapped` / `unmapped` |
+| `lerror` | `false` | toggle "Lỗi xưởng" — gửi `hasError=true` (Phase 8) |
+| `lpage` | `1` | trang |
+| `lsize` | `20` | dòng/trang |
+
+Pattern sync state ↔ URL giống Dashboard Tab Factory (xem `Dashboard.md §11`).
 
 ---
 

@@ -50,7 +50,7 @@ const ICONS: Record<KpiKey, LucideIcon> = {
 
 export default function OrderStatusTab() {
   const { roleName, isAdmin, has, canViewField } = usePermission();
-  const { filter, queryString, isActive, toggle, setScalar, clearAll } = useStatusFilter();
+  const { filter, queryString, isActive, toggle, setScalar, setHasError, clearAll } = useStatusFilter();
 
   const [overview, setOverview] = useState<OrderStatusOverview | null>(null);
   const [loading, setLoading] = useState(false);
@@ -105,7 +105,7 @@ export default function OrderStatusTab() {
     // Admin / Manager / Support
     return [
       { key: 'total' as KpiKey, label: 'Tổng đơn', value: t.total, accent: 'default' as const, icon: ICONS.total },
-      { key: 'today' as KpiKey, label: 'Hôm nay', value: t.today, accent: 'primary' as const, icon: ICONS.today },
+      // { key: 'today' as KpiKey, label: 'Hôm nay', value: t.today, accent: 'primary' as const, icon: ICONS.today },
       { key: 'pendingToolOk' as KpiKey, label: 'Chờ Ok Tool', value: t.pendingToolOk, hint: 'Designer chưa check', accent: 'warning' as const, icon: ICONS.pendingToolOk },
       { key: 'ready' as KpiKey, label: 'Sẵn sàng in', value: t.readyForFulfill, accent: 'primary' as const, icon: ICONS.ready },
       { key: 'done' as KpiKey, label: 'Đã in xong', value: t.done, accent: 'success' as const, icon: ICONS.done },
@@ -122,6 +122,7 @@ export default function OrderStatusTab() {
   const showToolResult = canViewField('toolResult');
   const showToolNote = canViewField('toolResultNote');
   const showErrorFile = canViewField('errorFile');
+  const showProductionError = canViewField('productionError');
   const showAssignee = canViewField('assignee');
   const showAssigneeNote = canViewField('assigneeNote');
 
@@ -148,28 +149,28 @@ export default function OrderStatusTab() {
       >
         {kpis.length > 0
           ? kpis.map((k) => (
-              <KpiCard
-                key={k.key}
-                label={k.label}
-                value={k.value}
-                hint={k.hint}
-                accent={k.accent}
-                icon={k.icon}
-                loading={loading && !overview}
-              />
-            ))
+            <KpiCard
+              key={k.key}
+              label={k.label}
+              value={k.value}
+              hint={k.hint}
+              accent={k.accent}
+              icon={k.icon}
+              loading={loading && !overview}
+            />
+          ))
           : [0, 1, 2, 3, 4, 5].map((i) => (
-              // Placeholder skeletons while overview loads (or when fetch
-              // failed and overview is null) — prevents the page from
-              // appearing blank.
-              <KpiCard
-                key={`__skeleton-${i}`}
-                label={loading ? 'Đang tải...' : 'Chưa có dữ liệu'}
-                value={0}
-                accent="default"
-                loading={loading}
-              />
-            ))}
+            // Placeholder skeletons while overview loads (or when fetch
+            // failed and overview is null) — prevents the page from
+            // appearing blank.
+            <KpiCard
+              key={`__skeleton-${i}`}
+              label={loading ? 'Đang tải...' : 'Chưa có dữ liệu'}
+              value={0}
+              accent="default"
+              loading={loading}
+            />
+          ))}
       </div>
 
       {/* Per-machine mini cards for Fulfill */}
@@ -193,6 +194,7 @@ export default function OrderStatusTab() {
         isActive={isActive}
         onToggle={toggle}
         onScalar={(k, v) => setScalar(k, v)}
+        onHasError={setHasError}
         onClearAll={clearAll}
       />
 
@@ -247,6 +249,15 @@ export default function OrderStatusTab() {
               selectedCodes={filter.errorFile}
               onToggle={(c) => toggle('errorFile', c)}
               mode="icon"
+            />
+          )}
+          {showProductionError && overview.breakdown.productionError.length > 0 && (
+            <BreakdownCard
+              title="Lỗi xưởng"
+              items={overview.breakdown.productionError}
+              selectedCodes={filter.productionError}
+              onToggle={(c) => toggle('productionError', c)}
+              mode="color"
             />
           )}
           {showAssignee && overview.breakdown.assignee.length > 0 && (

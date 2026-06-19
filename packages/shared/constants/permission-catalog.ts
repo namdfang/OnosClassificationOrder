@@ -66,6 +66,10 @@ export const PERMISSION_CATALOG: PermissionItem[] = [
   { code: 'order.field.assigneeNote.edit',    label: 'Note người thực hiện',  group: 'order_field', field: 'assigneeNote',    mode: 'edit' },
   { code: 'order.field.fabricType.view',      label: 'Loại vải',              group: 'order_field', field: 'fabricType',      mode: 'view' },
   { code: 'order.field.fabricType.edit',      label: 'Loại vải',              group: 'order_field', field: 'fabricType',      mode: 'edit' },
+  { code: 'order.field.productionError.view',     label: 'Lỗi xưởng',             group: 'order_field', field: 'productionError',     mode: 'view' },
+  { code: 'order.field.productionError.edit',     label: 'Lỗi xưởng',             group: 'order_field', field: 'productionError',     mode: 'edit' },
+  { code: 'order.field.productionErrorNote.view', label: 'Mô tả lỗi xưởng',       group: 'order_field', field: 'productionErrorNote', mode: 'view' },
+  { code: 'order.field.productionErrorNote.edit', label: 'Mô tả lỗi xưởng',       group: 'order_field', field: 'productionErrorNote', mode: 'edit' },
 
   // ─── Workshop config ────────────────────────────────────────────
   { code: 'workshop.manage', label: 'Quản lý danh mục xưởng', group: 'workshop' },
@@ -102,6 +106,8 @@ export const DEFAULT_ROLE_PERMISSIONS: Partial<Record<RoleType, string[]>> = {
     'order.field.assignee.view',
     'order.field.assigneeNote.view',
     'order.field.fabricType.view',
+    'order.field.productionError.view',
+    'order.field.productionErrorNote.view',
     'order.log.view',
   ],
 
@@ -115,6 +121,8 @@ export const DEFAULT_ROLE_PERMISSIONS: Partial<Record<RoleType, string[]>> = {
     'order.field.assignee.view',       'order.field.assignee.edit',
     'order.field.assigneeNote.view',   'order.field.assigneeNote.edit',
     'order.field.fabricType.view',
+    'order.field.productionError.view',
+    'order.field.productionErrorNote.view',
   ],
 
   [RoleType.Fulfillment]: [
@@ -122,10 +130,13 @@ export const DEFAULT_ROLE_PERMISSIONS: Partial<Record<RoleType, string[]>> = {
     'order.view_workshop_table',
     'order.field.printStatus.view',     'order.field.printStatus.edit',
     'order.field.printStatusNote.view', 'order.field.printStatusNote.edit',
-    // Fulfillment cần đọc + sửa Note kết quả Tool để cập nhật tình trạng đơn
-    // sau khi in.
-    'order.field.toolResultNote.view', 'order.field.toolResultNote.edit',
+    // Fulfillment chỉ XEM Note kq Tool 1 (Designer là người sửa). Tình trạng
+    // sau in báo qua productionError thay vì toolResultNote.
+    'order.field.toolResultNote.view',
     'order.field.fabricType.view',
+    // Fulfillment báo lỗi xưởng + mô tả lỗi.
+    'order.field.productionError.view',     'order.field.productionError.edit',
+    'order.field.productionErrorNote.view', 'order.field.productionErrorNote.edit',
   ],
 };
 

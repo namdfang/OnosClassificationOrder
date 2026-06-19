@@ -3,7 +3,7 @@ import { History } from 'lucide-react';
 
 import { Button } from '@/components/ui/button';
 import { Spinner } from '@/components/common/Spinner';
-import { Pagination } from '@/components/common/Pagination';
+import { PaginationBar } from '@/components/common/PaginationBar';
 import {
   Table,
   TableBody,
@@ -113,8 +113,21 @@ export function OrdersMiniTable({ queryString }: Props) {
 
   const isRefetching = loading && rows.length > 0;
 
+  const paginationProps = {
+    page,
+    pageSize,
+    total,
+    loading: loading && rows.length === 0,
+    onChange: (p: number, ps: number) => {
+      setPage(p);
+      setPageSize(ps);
+    },
+  };
+
   return (
     <TooltipProvider delayDuration={200}>
+      <div className="space-y-3">
+      <PaginationBar position="top" {...paginationProps} />
       <div className="rounded-lg border border-border bg-card overflow-hidden relative">
         {/* Indeterminate progress strip at top while loading */}
         <div
@@ -189,20 +202,8 @@ export function OrdersMiniTable({ queryString }: Props) {
             </TableBody>
           </Table>
         </div>
-
-        {total > 0 && (
-          <div className="border-t border-border p-2">
-            <Pagination
-              page={page}
-              pageSize={pageSize}
-              total={total}
-              onChange={(p, ps) => {
-                setPage(p);
-                setPageSize(ps);
-              }}
-            />
-          </div>
-        )}
+        <PaginationBar position="bottom" {...paginationProps} />
+      </div>
 
         <ImagePreviewDialog
           open={!!preview}

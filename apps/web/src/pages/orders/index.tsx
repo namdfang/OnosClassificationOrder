@@ -41,9 +41,23 @@ export default function Orders() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [searchParams, tabs]);
 
+  // Param prefix per tab (xem ListOrderTab / OrderTableWorkshop). Khi đổi tab,
+  // strip param của tab khác để URL không lẫn lộn.
+  const LIST_PARAMS = ['lsearch', 'lmapped', 'lpage', 'lsize'];
+  const WORKSHOP_PARAMS = ['wsearch', 'wfrom', 'wto', 'wprint', 'wnote', 'wassign', 'wpage', 'wsize'];
+
   const handleTabChange = (val: string) => {
     setActiveTab(val as TabKey);
-    setSearchParams({ tab: val }, { replace: true });
+    setSearchParams(
+      (prev) => {
+        const sp = new URLSearchParams(prev);
+        sp.set('tab', val);
+        if (val !== 'list') LIST_PARAMS.forEach((k) => sp.delete(k));
+        if (val !== 'workshop') WORKSHOP_PARAMS.forEach((k) => sp.delete(k));
+        return sp;
+      },
+      { replace: true },
+    );
   };
 
   if (tabs.length === 0) {

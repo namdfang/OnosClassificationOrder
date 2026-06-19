@@ -64,6 +64,18 @@ export const WORKSHOP_CONFIG_SEED: WorkshopConfigSeed[] = [
   { category: WorkshopConfigCategory.AssigneeNote, code: 'error', name: 'Lỗi', icon: 'XCircle', order: 1 },
   { category: WorkshopConfigCategory.AssigneeNote, code: 'ok', name: 'Ok', icon: 'CheckCircle', order: 2 },
 
+  // production_error (color badge) — xưởng báo lý do lỗi đơn hàng
+  { category: WorkshopConfigCategory.ProductionError, code: 'wrong-size', name: 'Sai size', color: '#EF4444', order: 0 },
+  { category: WorkshopConfigCategory.ProductionError, code: 'wrong-color', name: 'Sai màu', color: '#F97316', order: 1 },
+  { category: WorkshopConfigCategory.ProductionError, code: 'wrong-fabric', name: 'Sai loại vải', color: '#F59E0B', order: 2 },
+  { category: WorkshopConfigCategory.ProductionError, code: 'print-misalign', name: 'In lệch', color: '#DC2626', order: 3 },
+  { category: WorkshopConfigCategory.ProductionError, code: 'print-blur', name: 'In mờ/nhòe', color: '#B91C1C', order: 4 },
+  { category: WorkshopConfigCategory.ProductionError, code: 'fabric-damage', name: 'Vải lỗi/rách', color: '#A855F7', order: 5 },
+  { category: WorkshopConfigCategory.ProductionError, code: 'wrong-design', name: 'Sai design', color: '#7C3AED', order: 6 },
+  { category: WorkshopConfigCategory.ProductionError, code: 'missing-design', name: 'Thiếu file design', color: '#9333EA', order: 7 },
+  { category: WorkshopConfigCategory.ProductionError, code: 'machine-jam', name: 'Máy lỗi/kẹt', color: '#0EA5E9', order: 8 },
+  { category: WorkshopConfigCategory.ProductionError, code: 'other', name: 'Lỗi khác', color: '#64748B', order: 9 },
+
   // fabric_type (icon) — unique fabric / blank codes used in production
   { category: WorkshopConfigCategory.FabricType, code: 'cotton-jersey', name: 'Cotton Jersey', icon: 'Shirt', order: 0 },
   { category: WorkshopConfigCategory.FabricType, code: 'polyester-jersey', name: 'Polyester Jersey', icon: 'Shirt', order: 1 },

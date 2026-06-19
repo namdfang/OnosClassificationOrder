@@ -1,10 +1,13 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import { ChevronDown, ChevronRight, History, RefreshCw, Search } from 'lucide-react';
+import { useSearchParams } from 'react-router-dom';
 
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
-import { Pagination } from '@/components/common/Pagination';
+import { PaginationBar } from '@/components/common/PaginationBar';
+import { DateRangePicker } from '@/components/common/DateRangePicker';
+import { MultiSelectFilter } from '@/components/common/MultiSelectFilter';
 import { Spinner } from '@/components/common/Spinner';
 import { ImagePreviewDialog } from '@/components/common/ImagePreviewDialog';
 import {
@@ -39,19 +42,43 @@ const COLS = WORKSHOP_COLS;
 // in the collapsed view; user can drill in via chevron.
 const DEFAULT_PAGE_SIZE = 20;
 
+function todayISO(): string {
+  // Local date components — KHÔNG dùng toISOString() (UTC) vì sẽ trả hôm
+  // trước khi ở UTC+ buổi sáng.
+  const d = new Date();
+  const yyyy = d.getFullYear();
+  const mm = String(d.getMonth() + 1).padStart(2, '0');
+  const dd = String(d.getDate()).padStart(2, '0');
+  return `${yyyy}-${mm}-${dd}`;
+}
+
 export function OrderTableWorkshop() {
   const { has, canViewField, canEditField } = usePermission();
   const loadConfig = useWorkshopConfigStore((s) => s.load);
   const configLoaded = useWorkshopConfigStore((s) => s.loaded);
 
+  // URL params (prefix `w` = workshop). F5 giữ nguyên filter. Multi-select
+  // filter dùng CSV để serialize.
+  const [searchParams, setSearchParams] = useSearchParams();
+  const csvToArr = (raw: string | null): string[] =>
+    raw ? raw.split(',').filter(Boolean) : [];
+
   const [items, setItems] = useState<OrderRow[]>([]);
   const [total, setTotal] = useState(0);
   const [loading, setLoading] = useState(false);
-  const [page, setPage] = useState(1);
-  const [pageSize, setPageSize] = useState(DEFAULT_PAGE_SIZE);
-  const [createdFrom, setCreatedFrom] = useState('');
-  const [createdTo, setCreatedTo] = useState('');
-  const [search, setSearch] = useState('');
+  const [page, setPage] = useState(() => {
+    const p = Number(searchParams.get('wpage'));
+    return Number.isFinite(p) && p > 0 ? p : 1;
+  });
+  const [pageSize, setPageSize] = useState(() => {
+    const s = Number(searchParams.get('wsize'));
+    return Number.isFinite(s) && s > 0 ? s : DEFAULT_PAGE_SIZE;
+  });
+  // Default = today (workshop dùng "đơn hôm nay" làm view chính). User vẫn
+  // có thể chọn range khác hoặc clear hẳn qua DateRangePicker.
+  const [createdFrom, setCreatedFrom] = useState(() => searchParams.get('wfrom') || todayISO());
+  const [createdTo, setCreatedTo] = useState(() => searchParams.get('wto') || todayISO());
+  const [search, setSearch] = useState(() => searchParams.get('wsearch') || '');
   const debouncedSearch = useDebounce(search, 300);
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const [preview, setPreview] = useState<{ url: string; originalUrl?: string; title: string } | null>(null);
@@ -67,9 +94,50 @@ export function OrderTableWorkshop() {
     });
 
   // Filters by workshop code (multi)
-  const [filterPrintStatus, setFilterPrintStatus] = useState<string[]>([]);
-  const [filterToolResultNote, setFilterToolResultNote] = useState<string[]>([]);
-  const [filterAssignee, setFilterAssignee] = useState<string[]>([]);
+  const [filterPrintStatus, setFilterPrintStatus] = useState<string[]>(
+    () => csvToArr(searchParams.get('wprint')),
+  );
+  const [filterToolResultNote, setFilterToolResultNote] = useState<string[]>(
+    () => csvToArr(searchParams.get('wnote')),
+  );
+  const [filterAssignee, setFilterAssignee] = useState<string[]>(
+    () => csvToArr(searchParams.get('wassign')),
+  );
+  const [filterProductionError, setFilterProductionError] = useState<string[]>(
+    () => csvToArr(searchParams.get('werror')),
+  );
+
+  // Sync state → URL (replace). Strip default/empty values.
+  useEffect(() => {
+    setSearchParams(
+      (prev) => {
+        const sp = new URLSearchParams(prev);
+        search ? sp.set('wsearch', search) : sp.delete('wsearch');
+        // Date luôn ghi vào URL (kể cả khi == today) để URL phản ánh đúng state.
+        createdFrom ? sp.set('wfrom', createdFrom) : sp.delete('wfrom');
+        createdTo ? sp.set('wto', createdTo) : sp.delete('wto');
+        filterPrintStatus.length > 0 ? sp.set('wprint', filterPrintStatus.join(',')) : sp.delete('wprint');
+        filterToolResultNote.length > 0 ? sp.set('wnote', filterToolResultNote.join(',')) : sp.delete('wnote');
+        filterAssignee.length > 0 ? sp.set('wassign', filterAssignee.join(',')) : sp.delete('wassign');
+        filterProductionError.length > 0 ? sp.set('werror', filterProductionError.join(',')) : sp.delete('werror');
+        page > 1 ? sp.set('wpage', String(page)) : sp.delete('wpage');
+        pageSize !== DEFAULT_PAGE_SIZE ? sp.set('wsize', String(pageSize)) : sp.delete('wsize');
+        return sp;
+      },
+      { replace: true },
+    );
+  }, [
+    search,
+    createdFrom,
+    createdTo,
+    filterPrintStatus,
+    filterToolResultNote,
+    filterAssignee,
+    filterProductionError,
+    page,
+    pageSize,
+    setSearchParams,
+  ]);
 
   const byCategory = useWorkshopConfigStore((s) => s.byCategory);
 
@@ -98,6 +166,7 @@ export function OrderTableWorkshop() {
     if (filterPrintStatus.length > 0) params.set('printStatus', filterPrintStatus.join(','));
     if (filterToolResultNote.length > 0) params.set('toolResultNote', filterToolResultNote.join(','));
     if (filterAssignee.length > 0) params.set('assignee', filterAssignee.join(','));
+    if (filterProductionError.length > 0) params.set('productionError', filterProductionError.join(','));
     if (createdFrom) params.set('createdFrom', createdFrom);
     if (createdTo) params.set('createdTo', createdTo);
 
@@ -127,7 +196,7 @@ export function OrderTableWorkshop() {
   useEffect(() => {
     fetchData();
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [page, pageSize, debouncedSearch, filterPrintStatus.join(','), filterToolResultNote.join(','), filterAssignee.join(','), createdFrom, createdTo]);
+  }, [page, pageSize, debouncedSearch, filterPrintStatus.join(','), filterToolResultNote.join(','), filterAssignee.join(','), filterProductionError.join(','), createdFrom, createdTo]);
 
   const patchRow = (id: string, patch: Partial<OrderRow>) => {
     setItems((prev) => prev.map((r) => (r._id === id ? { ...r, ...patch } : r)));
@@ -170,40 +239,15 @@ export function OrderTableWorkshop() {
               />
             </div>
             <div className="flex items-center gap-1.5">
-              <label className="text-xs text-muted-foreground">Từ</label>
-              <Input
-                type="date"
-                value={createdFrom}
-                onChange={(e) => {
-                  setCreatedFrom(e.target.value);
+              <DateRangePicker
+                from={createdFrom}
+                to={createdTo}
+                onChange={(f, t) => {
+                  setCreatedFrom(f);
+                  setCreatedTo(t);
                   setPage(1);
                 }}
-                className="h-9 text-xs w-[140px]"
               />
-              <label className="text-xs text-muted-foreground">đến</label>
-              <Input
-                type="date"
-                value={createdTo}
-                onChange={(e) => {
-                  setCreatedTo(e.target.value);
-                  setPage(1);
-                }}
-                className="h-9 text-xs w-[140px]"
-              />
-              {(createdFrom || createdTo) && (
-                <Button
-                  variant="ghost"
-                  size="sm"
-                  onClick={() => {
-                    setCreatedFrom('');
-                    setCreatedTo('');
-                    setPage(1);
-                  }}
-                  className="text-xs h-8"
-                >
-                  Clear
-                </Button>
-              )}
             </div>
             <Button variant="outline" size="sm" onClick={fetchData} disabled={loading}>
               <RefreshCw size={13} className={loading ? 'animate-spin' : ''} />
@@ -224,9 +268,9 @@ export function OrderTableWorkshop() {
             )}
           </div>
 
-          <div className="flex items-center gap-3 flex-wrap text-xs">
+          <div className="flex items-center gap-2 flex-wrap">
             {has('order.field.printStatus.view') && (
-              <FilterChips
+              <MultiSelectFilter
                 label="Trạng thái in"
                 options={byCategory.print_status || []}
                 value={filterPrintStatus}
@@ -235,7 +279,7 @@ export function OrderTableWorkshop() {
               />
             )}
             {has('order.field.toolResultNote.view') && (
-              <FilterChips
+              <MultiSelectFilter
                 label="Note kq Tool"
                 options={byCategory.tool_result_note || []}
                 value={filterToolResultNote}
@@ -244,7 +288,7 @@ export function OrderTableWorkshop() {
               />
             )}
             {has('order.field.assignee.view') && (
-              <FilterChips
+              <MultiSelectFilter
                 label="Người thực hiện"
                 options={byCategory.assignee || []}
                 value={filterAssignee}
@@ -252,8 +296,29 @@ export function OrderTableWorkshop() {
                 renderType="text"
               />
             )}
+            {has('order.field.productionError.view') && (
+              <MultiSelectFilter
+                label="Lỗi xưởng"
+                options={byCategory.production_error || []}
+                value={filterProductionError}
+                onChange={setFilterProductionError}
+                renderType="color"
+              />
+            )}
           </div>
         </div>
+
+        <PaginationBar
+          position="top"
+          page={page}
+          pageSize={pageSize}
+          total={total}
+          loading={loading}
+          onChange={(p, ps) => {
+            setPage(p);
+            setPageSize(ps);
+          }}
+        />
 
         {/* Table */}
         <div className="rounded-lg border border-border bg-card overflow-hidden">
@@ -400,19 +465,17 @@ export function OrderTableWorkshop() {
             </Table>
           </div>
 
-          {!loading && total > 0 && (
-            <div className="border-t border-border p-3">
-              <Pagination
-                page={page}
-                pageSize={pageSize}
-                total={total}
-                onChange={(p, ps) => {
-                  setPage(p);
-                  setPageSize(ps);
-                }}
-              />
-            </div>
-          )}
+          <PaginationBar
+            position="bottom"
+            page={page}
+            pageSize={pageSize}
+            total={total}
+            loading={loading}
+            onChange={(p, ps) => {
+              setPage(p);
+              setPageSize(ps);
+            }}
+          />
         </div>
 
         <BulkEditToolbar
@@ -443,54 +506,3 @@ export function OrderTableWorkshop() {
   );
 }
 
-interface FilterChipsProps {
-  label: string;
-  options: Array<{ _id?: string; code: string; name: string; color?: string }>;
-  value: string[];
-  onChange: (codes: string[]) => void;
-  renderType: 'color' | 'text';
-}
-
-function FilterChips({ label, options, value, onChange, renderType }: FilterChipsProps) {
-  if (options.length === 0) return null;
-  const set = new Set(value);
-  const toggle = (code: string) => {
-    const next = new Set(set);
-    if (next.has(code)) next.delete(code);
-    else next.add(code);
-    onChange(Array.from(next));
-  };
-  return (
-    <div className="flex items-center gap-1.5 flex-wrap">
-      <span className="text-muted-foreground">{label}:</span>
-      {options.map((opt) => {
-        const isOn = set.has(opt.code);
-        return (
-          <button
-            key={opt.code}
-            type="button"
-            onClick={() => toggle(opt.code)}
-            className={cn(
-              'inline-flex items-center gap-1 px-1.5 py-0.5 rounded border text-[11px]',
-              isOn
-                ? 'border-transparent text-white'
-                : 'border-border bg-background text-muted-foreground hover:text-foreground',
-            )}
-            style={isOn && renderType === 'color' && opt.color ? { backgroundColor: opt.color } : undefined}
-          >
-            {opt.name}
-          </button>
-        );
-      })}
-      {value.length > 0 && (
-        <button
-          type="button"
-          onClick={() => onChange([])}
-          className="text-[10px] text-muted-foreground underline ml-1"
-        >
-          Clear
-        </button>
-      )}
-    </div>
-  );
-}

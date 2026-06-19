@@ -76,6 +76,13 @@ export const ProductionOrderZod = BaseEntityZod.extend({
   /** workshop_config code (category=fabric_type). Auto-filled at import from product config. */
   fabricType: z.string().optional(),
 
+  // ─── Production error (Phase 8) ────────────────────────────────
+  // Xưởng báo lỗi sau khi đã in / chuẩn bị in: chọn lý do lỗi (code thuộc
+  // category=production_error) + mô tả tự do. Đơn được coi là "có lỗi" khi
+  // `productionError` được set (mọi nơi check: $exists + $ne ''/null).
+  productionError: z.string().optional(),
+  productionErrorNote: z.string().optional(),
+
   // Derived: toolResultNote === 'ok'
   readyForFulfill: z.boolean().default(false),
 });
@@ -93,6 +100,8 @@ export const ORDER_WORKSHOP_FIELDS = [
   'assignee',
   'assigneeNote',
   'fabricType',
+  'productionError',
+  'productionErrorNote',
 ] as const;
 export type OrderWorkshopField = (typeof ORDER_WORKSHOP_FIELDS)[number];
 export const OrderWorkshopFieldZod = z.enum(ORDER_WORKSHOP_FIELDS);
@@ -115,6 +124,13 @@ export const GetProductionOrdersZod = PageQueryZod.extend({
   fabricType: z.string().optional(),
   /** Comma-separated workshop_config codes for tool_result. */
   toolResult: z.string().optional(),
+  /** Comma-separated workshop_config codes for production_error. */
+  productionError: z.string().optional(),
+  /**
+   * Truthy → chỉ lấy đơn có lỗi xưởng (productionError set, khác null/empty).
+   * Falsy → chỉ lấy đơn không có lỗi. Bỏ qua khi không có giá trị.
+   */
+  hasError: z.coerce.boolean().optional(),
 
   /**
    * Factory transfer filter. Values:
@@ -129,6 +145,15 @@ export const GetProductionOrdersZod = PageQueryZod.extend({
   transferStatus: z.string().optional(),
   /** Comma-separated factoryIds — filter by ORIGINAL factory. */
   originalFactoryId: z.string().optional(),
+
+  /**
+   * Print pipeline stage. Mutually exclusive with each other. Used by
+   * Dashboard Tab C per-factory drill-down (Đang in / Chưa in / Đã in xong).
+   *   "printed"      — printStatus ∈ PRINTED_MACHINE_CODES (đã in xong)
+   *   "printing"     — printStatus tồn tại nhưng không phải done code (đang in)
+   *   "not-printed"  — printStatus null/empty (chưa in)
+   */
+  printStage: z.enum(['printed', 'printing', 'not-printed']).optional(),
 
   // Date range on createdAt (yyyy-mm-dd). Designer/Fulfillment have a server-
   // enforced "today only" default; passing these overrides UI date pickers.
@@ -419,6 +444,14 @@ export const FactoryOverviewCellZod = z.object({
   machineCount: z.number(),
   /** Orders here whose `toolResult` resolves to a "has tool" code. */
   withToolCount: z.number(),
+  /** Đã in xong — printStatus là 1 trong PRINTED_MACHINE_CODES. */
+  printedCount: z.number(),
+  /** Đang in — printStatus tồn tại nhưng không phải done code. */
+  printingCount: z.number(),
+  /** Chưa in — printStatus null/empty. */
+  notPrintedCount: z.number(),
+  /** Lỗi xưởng — productionError tồn tại và khác empty. Disjoint với 3 print stage. */
+  errorCount: z.number(),
   /** Top-N per-dimension breakdowns used by the Summary sub-tab. */
   breakdowns: z.object({
     products: FactoryFilterOptionZod.array(),
@@ -468,6 +501,18 @@ export const GetFactoryOverviewZod = z.object({
    * unscoped so the global view is preserved.
    */
   factoryId: z.string().optional(),
+  /**
+   * Optional — further scope `availableFilters` by print pipeline stage so
+   * dropdowns only show products/fabrics/etc that exist in that stage at
+   * the selected factory. Same enum as `printStage` on list endpoint.
+   */
+  printStage: z.enum(['printed', 'printing', 'not-printed']).optional(),
+  /**
+   * Optional — scope `availableFilters` chỉ về đơn có lỗi xưởng (Phase 8).
+   * Mutually exclusive với printStage trên FE (chip "Lỗi xưởng" thay vị trí
+   * "Đang in"). `true` → `productionError $exists & != ''`.
+   */
+  hasError: z.coerce.boolean().optional(),
 });
 export class GetFactoryOverviewDto extends createZodDto(extendApi(GetFactoryOverviewZod)) {}
 

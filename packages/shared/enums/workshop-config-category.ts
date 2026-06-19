@@ -7,6 +7,7 @@ export enum WorkshopConfigCategory {
   Assignee = 'assignee',
   AssigneeNote = 'assignee_note',
   FabricType = 'fabric_type',
+  ProductionError = 'production_error',
 }
 
 export const WORKSHOP_CONFIG_CATEGORIES = Object.values(WorkshopConfigCategory);
@@ -22,4 +23,5 @@ export const WORKSHOP_CONFIG_MODE: Record<WorkshopConfigCategory, WorkshopConfig
   [WorkshopConfigCategory.Assignee]: 'icon',
   [WorkshopConfigCategory.AssigneeNote]: 'icon',
   [WorkshopConfigCategory.FabricType]: 'icon',
+  [WorkshopConfigCategory.ProductionError]: 'color',
 };
