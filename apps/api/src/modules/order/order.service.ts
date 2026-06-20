@@ -52,10 +52,12 @@ import { Logger } from 'winston';
 
 import { canonicalDriveUrl, processImageUrl, transformDriveUrl } from '@/utils/transform-drive-url';
 
+import { FactoryRepository } from '../factory/factory.repository';
 import { OrderLogService } from '../order-log/order-log.service';
 import type { AuditContext } from '../order-log/order-log.service';
 import { ProductConfigRepository } from '../product-config/product-config.repository';
 import { RedisCacheService } from '../redis-cache/redis-cache.service';
+import { TelegramNotificationService } from '../telegram-notification/telegram-notification.service';
 import { WorkshopConfigRepository } from '../workshop-config/workshop-config.repository';
 import { OrderEntity, OrderDocument } from './order.entity';
 import { OrderRepository } from './order.repository';
@@ -123,6 +125,8 @@ export class OrderService implements OnModuleInit {
     @InjectModel(OrderEntity.name) private readonly orderModel: Model<OrderDocument>,
     @Inject('winston') private readonly logger: Logger,
     private readonly redisCacheService: RedisCacheService,
+    private readonly factoryRepository: FactoryRepository,
+    private readonly telegramNotificationService: TelegramNotificationService,
   ) {}
 
   /**
@@ -2061,11 +2065,14 @@ export class OrderService implements OnModuleInit {
   }
 
   async importOrders(dto: ImportProductionOrdersDto, ctx?: AuditContext): Promise<ImportProductionOrdersResDto> {
+    const startedAt = new Date();
     const skipped: Array<{ row: number; reason: string }> = [];
     let imported = 0;
     let updated = 0;
     let mapped = 0;
     let unmapped = 0;
+    const factoryCount = new Map<string, number>();
+    let unassignedFactoryCount = 0;
     const logRows: Array<{
       orderId: string;
       action: 'create' | 'update';
@@ -2107,6 +2114,12 @@ export class OrderService implements OnModuleInit {
           }
         } else {
           unmapped++;
+        }
+
+        if (factoryId) {
+          factoryCount.set(factoryId, (factoryCount.get(factoryId) ?? 0) + 1);
+        } else {
+          unassignedFactoryCount++;
         }
 
         const data = {
@@ -2194,7 +2207,55 @@ export class OrderService implements OnModuleInit {
     );
 
     void this.invalidateListCache();
+
+    void this.sendImportSummaryNotification({
+      factoryCount,
+      unassignedFactoryCount,
+      imported,
+      updated,
+      skippedCount: skipped.length,
+      startedAt,
+      ctx,
+    });
+
     return { success: true, data: { imported, updated, mapped, unmapped, skipped } };
+  }
+
+  private async sendImportSummaryNotification(args: {
+    factoryCount: Map<string, number>;
+    unassignedFactoryCount: number;
+    imported: number;
+    updated: number;
+    skippedCount: number;
+    startedAt: Date;
+    ctx?: AuditContext;
+  }): Promise<void> {
+    try {
+      const ids = [...args.factoryCount.keys()];
+      const factories = ids.length > 0 ? await this.factoryRepository.findAll({ _id: { $in: ids } }) : [];
+      const nameById = new Map(factories.map((f) => [String(f._id), f.name]));
+
+      const byFactory = ids.map((id) => ({
+        name: nameById.get(id) ?? `#${id.slice(-6)}`,
+        count: args.factoryCount.get(id) ?? 0,
+      }));
+
+      await this.telegramNotificationService.notifyImportSummary({
+        triggeredBy: args.ctx?.user
+          ? { email: args.ctx.user.email, fullName: args.ctx.user.fullName }
+          : undefined,
+        totals: { imported: args.imported, updated: args.updated, skipped: args.skippedCount },
+        byFactory,
+        unassignedFactoryCount: args.unassignedFactoryCount,
+        startedAt: args.startedAt,
+        finishedAt: new Date(),
+      });
+    } catch (error) {
+      this.logger.warn({
+        message: '[order.import] telegram notification failed',
+        error: error instanceof Error ? error.message : String(error),
+      });
+    }
   }
 }
 

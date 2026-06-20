@@ -136,6 +136,7 @@ export class ApiConfigService {
       channelId: this.getString('TELEGRAM_CHANNEL_ID'),
       scanNotificationChannelId: this.getString('TELEGRAM_SCAN_NOTIFICATION_CHANNEL_ID'),
       notificationChannelId: this.getString('TELEGRAM_NOTIFICATION_CHANNEL_ID'),
+      notificationEnabled: process.env.TELEGRAM_NOTIFICATION_ENABLED === 'true',
     };
   }
 
