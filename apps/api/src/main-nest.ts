@@ -25,7 +25,11 @@ export async function bootstrap(): Promise<NestFastifyApplication> {
     }),
     {
       cors: {
-        origin: process.env.ALLOWED_ORIGINS?.split(',') || ['http://localhost:5173', 'https://onosfactory.com'],
+        origin: process.env.ALLOWED_ORIGINS?.split(',') || [
+          'http://localhost:5173',
+          'https://onosfactory.com',
+          'https://api.onosfactory.com',
+        ],
         methods: 'GET,HEAD,PUT,PATCH,POST,DELETE',
         preflightContinue: false,
         optionsSuccessStatus: 204,

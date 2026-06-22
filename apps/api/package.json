@@ -40,6 +40,7 @@
   "dependencies": {
     "@anatine/zod-nestjs": "^2.0.8",
     "@anatine/zod-openapi": "^2.2.5",
+    "@aws-sdk/client-s3": "^3.717.0",
     "@elastic/elasticsearch": "^6.8.8",
     "@faker-js/faker": "^8.2.0",
     "@fastify/multipart": "^8.0.0",
