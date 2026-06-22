@@ -45,6 +45,8 @@ interface FormState {
   color?: string;
   icon?: string;
   isActive: boolean;
+  /** Required khi category=production_error. */
+  errorSource?: 'designer' | 'factory';
 }
 
 const slugify = (s: string) =>
@@ -65,6 +67,10 @@ export function CategoryEditor({ category, mode }: Props) {
   const { byCategory, load, loaded, loading, upsertItem, removeItem } = useWorkshopConfigStore();
   const items = byCategory[category] || [];
 
+  // Chỉ category `production_error` cần errorSource (designer/factory) để
+  // dashboard stats phân loại lỗi.
+  const needsErrorSource = (category as string) === 'production_error';
+
   const [form, setForm] = useState<FormState>({ open: false, mode: 'create', code: '', name: '', isActive: true });
   const [saving, setSaving] = useState(false);
   const [confirmDelete, setConfirmDelete] = useState<WorkshopConfig | null>(null);
@@ -74,7 +80,16 @@ export function CategoryEditor({ category, mode }: Props) {
   }, [loaded, loading, load]);
 
   const openCreate = () =>
-    setForm({ open: true, mode: 'create', code: '', name: '', color: mode === 'color' ? '#3B82F6' : undefined, icon: mode === 'icon' ? 'User' : undefined, isActive: true });
+    setForm({
+      open: true,
+      mode: 'create',
+      code: '',
+      name: '',
+      color: mode === 'color' ? '#3B82F6' : undefined,
+      icon: mode === 'icon' ? 'User' : undefined,
+      isActive: true,
+      errorSource: needsErrorSource ? 'factory' : undefined,
+    });
 
   const openEdit = (item: WorkshopConfig) =>
     setForm({
@@ -86,6 +101,7 @@ export function CategoryEditor({ category, mode }: Props) {
       color: item.color,
       icon: item.icon,
       isActive: item.isActive,
+      errorSource: (item as { errorSource?: 'designer' | 'factory' }).errorSource,
     });
 
   const handleNameChange = (name: string) => {
@@ -109,6 +125,10 @@ export function CategoryEditor({ category, mode }: Props) {
       toast.error('Hãy chọn icon');
       return;
     }
+    if (needsErrorSource && !form.errorSource) {
+      toast.error('Phải chọn lỗi do designer hay do xưởng');
+      return;
+    }
     try {
       setSaving(true);
       if (form.mode === 'create') {
@@ -119,6 +139,7 @@ export function CategoryEditor({ category, mode }: Props) {
           color: mode === 'color' ? form.color : undefined,
           icon: mode === 'icon' ? form.icon : undefined,
           isActive: form.isActive,
+          errorSource: needsErrorSource ? form.errorSource : undefined,
         };
         const res = await RepositoryRemote.workshopConfig.create(payload);
         upsertItem(res.data.data);
@@ -130,6 +151,7 @@ export function CategoryEditor({ category, mode }: Props) {
           color: mode === 'color' ? form.color : undefined,
           icon: mode === 'icon' ? form.icon : undefined,
           isActive: form.isActive,
+          errorSource: needsErrorSource ? form.errorSource : undefined,
         });
         upsertItem(res.data.data);
         toast.success('Đã cập nhật');
@@ -210,7 +232,12 @@ export function CategoryEditor({ category, mode }: Props) {
                     </span>
                   )}
                 </TableCell>
-                <TableCell className="font-medium">{it.name}</TableCell>
+                <TableCell className="font-medium">
+                  {it.name}
+                  {needsErrorSource && (
+                    <ErrorSourceBadge source={(it as { errorSource?: 'designer' | 'factory' }).errorSource} />
+                  )}
+                </TableCell>
                 <TableCell className="font-mono text-xs text-muted-foreground">{it.code}</TableCell>
                 <TableCell>
                   {it.isActive ? (
@@ -268,6 +295,39 @@ export function CategoryEditor({ category, mode }: Props) {
                 <IconPicker value={form.icon} onChange={(i) => setForm({ ...form, icon: i })} />
               </div>
             )}
+            {needsErrorSource && (
+              <div className="space-y-2">
+                <Label>Loại lỗi *</Label>
+                <div className="flex gap-2">
+                  <button
+                    type="button"
+                    onClick={() => setForm({ ...form, errorSource: 'designer' })}
+                    className={`flex-1 px-3 py-2 rounded-md border text-xs font-medium transition-colors ${
+                      form.errorSource === 'designer'
+                        ? 'border-violet-500 bg-violet-50 text-violet-700 dark:bg-violet-500/10 dark:text-violet-300'
+                        : 'border-border bg-background text-muted-foreground hover:border-violet-300'
+                    }`}
+                  >
+                    Do designer làm
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setForm({ ...form, errorSource: 'factory' })}
+                    className={`flex-1 px-3 py-2 rounded-md border text-xs font-medium transition-colors ${
+                      form.errorSource === 'factory'
+                        ? 'border-sky-500 bg-sky-50 text-sky-700 dark:bg-sky-500/10 dark:text-sky-300'
+                        : 'border-border bg-background text-muted-foreground hover:border-sky-300'
+                    }`}
+                  >
+                    Do xưởng làm
+                  </button>
+                </div>
+                <p className="text-[11px] text-muted-foreground">
+                  Lỗi do designer → trigger trạng thái "Cần làm lại" cho task của designer.
+                  Dashboard thống kê phân biệt 2 loại.
+                </p>
+              </div>
+            )}
             <div className="flex items-center justify-between rounded-md border border-border p-3">
               <Label>Hoạt động</Label>
               <Switch
@@ -307,5 +367,27 @@ export function CategoryEditor({ category, mode }: Props) {
         </DialogContent>
       </Dialog>
     </div>
+  );
+}
+
+function ErrorSourceBadge({ source }: { source?: 'designer' | 'factory' }) {
+  if (!source) {
+    return (
+      <span className="ml-2 text-[9px] font-semibold px-1.5 py-0.5 rounded bg-rose-100 text-rose-700 dark:bg-rose-500/20">
+        ? CHƯA GÁN
+      </span>
+    );
+  }
+  if (source === 'designer') {
+    return (
+      <span className="ml-2 text-[9px] font-semibold px-1.5 py-0.5 rounded bg-violet-100 text-violet-700 dark:bg-violet-500/20 dark:text-violet-300">
+        DES
+      </span>
+    );
+  }
+  return (
+    <span className="ml-2 text-[9px] font-semibold px-1.5 py-0.5 rounded bg-sky-100 text-sky-700 dark:bg-sky-500/20 dark:text-sky-300">
+      XƯỞNG
+    </span>
   );
 }

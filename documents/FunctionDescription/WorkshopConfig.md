@@ -13,7 +13,7 @@
 
 Workshop Config là **danh mục dùng chung** cho các trường nghiệp vụ trong bảng Order (Trạng thái in, Note kết quả Tool, File sửa lỗi, Người thực hiện...). Mọi giá trị select trên Order table workshop đều resolve từ module này theo cặp `(category, code)`.
 
-Module có 10 category, mỗi category có một trong 2 mode hiển thị:
+Module có **9 category** (giảm 1 từ Phase Designer-Task-Workflow Phase 6 — bỏ `assignee`), mỗi category có một trong 2 mode hiển thị:
 
 | Category | Mode | Mục đích |
 |----------|------|----------|
@@ -22,11 +22,12 @@ Module có 10 category, mỗi category có một trong 2 mode hiển thị:
 | `tool_result` | icon | Có/không có tool |
 | `tool_result_note` | color badge | Ok / Lỗi / Không có file PDF |
 | `error_file_type` | icon | Loại file lỗi (Thân trước, Thân sau, Trụ...) |
-| `assignee` | icon | Tên người thực hiện |
 | `assignee_note` | icon | Trạng thái xử lý (Ok / Lỗi / Không có tool) |
 | `fabric_type` | icon | Loại vải / blank (POLY 2 DA, MÈ 64, LỤA 4B, LỤA VÂN GỖ, THUN LẠNH, NỈ BÔNG, MÈ CARO, LỤA NGỌC TRAI, LƯỚI, THÔ MỘC, LỤA, CANVAS, THUN BỘT, PHI BÓNG, 60% COTTON 40% POLY, LÔNG- CHĂN, ÁO: LỤA 4B- QUẦN: MÈ CARO, VẢI MÈ MỚI, MIX VẢI + LƯỚI, MÈ CA SẤU, THÊU, GIẢ LEN) |
 | `machine` | color badge | Các máy in vật lý trong xưởng (94, 27, 56) — dùng làm dropdown cho cột "Máy" ở ProductConfig |
-| `production_error` | color badge | Lý do xưởng báo lỗi đơn hàng |
+| `production_error` | color badge | Lý do xưởng báo lỗi đơn hàng. **Required `errorSource`** = `designer | factory` để dashboard stats phân loại. |
+
+> **⚠️ Phase Designer-Task-Workflow Phase 6** đã **xoá category `assignee`**. Identity model designer giờ dùng `user._id` trực tiếp — picker "Người thực hiện" load thẳng từ `/v1/designer/team`. `WorkshopConfigService.onModuleInit()` chạy `deleteMany({ category: 'assignee' })` 1 lần khi boot (idempotent). Xem `DesignerTaskWorkflow.md §1`.
 
 ---
 
@@ -34,13 +35,14 @@ Module có 10 category, mỗi category có một trong 2 mode hiển thị:
 
 ```ts
 {
-  category: WorkshopConfigCategory;  // enum 7 giá trị (string)
+  category: WorkshopConfigCategory;  // enum 9 giá trị (string)
   code: string;                      // slug, unique trong category — lưu vào Order
   name: string;                      // label hiển thị
   color?: string;                    // hex, dùng cho mode 'color'
   icon?: string;                     // tên Lucide icon, dùng cho mode 'icon'
   order: number;                     // sort
   isActive: boolean;
+  errorSource?: 'designer' | 'factory';  // CHỈ category=production_error. Required khi tạo/sửa row production_error. 'designer' trigger rework auto cho task designer; 'factory' chỉ ghi stats.
 }
 // unique index (category, code)
 ```
@@ -74,9 +76,17 @@ Module có 10 category, mỗi category có một trong 2 mode hiển thị:
 - **tool_result:** Có Tool / Không có Tool (icon Wrench/WrenchOff)
 - **tool_result_note:** Không có tool (gray), Lỗi (red), Ok (green), Không có file PDF (orange)
 - **error_file_type:** 12 loại — Không khớp, Thân trước, Thân sau, Trụ, 2 tay, Nẹp áo, Cổ viền, Dấu, Quần, Không may viền tay áo, Hỏi des khách, Temp
-- **assignee:** 8 người — Huy, H Anh, An, K Anh, Hạnh, Nga, Phương Anh, Hương
+- **~~assignee~~** ❌ (đã bỏ category — dùng `user._id` trực tiếp qua `/designer/team`)
 - **assignee_note:** Không có tool, Lỗi, Ok
-- **fabric_type:** 7 mã — Cotton Jersey, Polyester Jersey, 2D, G5000, G18500, G18000, C1717
+- **fabric_type:** 22 mã — POLY 2 DA, MÈ 64, LỤA 4B, ... (xem section 1)
+- **machine:** 3 máy — 94, 27, 56 (color badge)
+- **production_error:** 10 lý do với `errorSource` flag:
+  - **`designer` source**: `wrong-design`, `missing-design` (Sai design, Thiếu file design)
+  - **`factory` source**: `wrong-size`, `wrong-color`, `wrong-fabric`, `print-misalign`, `print-blur`, `fabric-damage`, `machine-jam`, `other`
+
+**Auto-backfill `errorSource`** khi boot: `onModuleInit` check row production_error chưa có flag → update với value từ seed (idempotent — chỉ update khi DB chưa có).
+
+**Auto-cleanup `assignee` category**: `onModuleInit` chạy `deleteMany({ category: 'assignee' })` mỗi boot. Idempotent.
 
 ---
 
@@ -88,11 +98,19 @@ Module có 10 category, mỗi category có một trong 2 mode hiển thị:
 - Mỗi tab render component `CategoryEditor` với prop `category` + `mode: 'color' | 'icon'`.
 
 ### 5.2 `CategoryEditor.tsx`
-- Bảng các mục: cột Hiển thị (badge màu hoặc icon), Tên, Mã, Trạng thái, Action.
-- Nút **Thêm** → mở Dialog form: Tên + Mã (auto-slug từ tên) + ColorPicker / IconPicker + switch isActive.
-- Nút **Sửa** trên mỗi row → mở cùng Dialog ở chế độ edit.
+- Bảng các mục: cột Hiển thị (badge màu hoặc icon), Tên (+ **badge `DES`/`XƯỞNG`/`? CHƯA GÁN`** cạnh tên khi category=production_error), Mã, Trạng thái, Action.
+- Nút **Thêm** → mở Dialog form: Tên + Mã (auto-slug từ tên) + ColorPicker / IconPicker + **2 button toggle "Do designer"/"Do xưởng"** (chỉ hiện cho category=production_error, required) + switch isActive.
+- Nút **Sửa** trên mỗi row → mở cùng Dialog ở chế độ edit (pre-fill `errorSource` nếu có).
+- Validate: production_error phải chọn errorSource trước khi save (toast error nếu thiếu).
 - Nút **Xóa** → Confirm dialog → soft delete + xóa khỏi store.
 - Tất cả thay đổi push qua `workshopConfigStore.upsertItem / removeItem` để giữ cache đồng bộ.
+
+**ErrorSourceBadge** (component nội bộ trong `CategoryEditor.tsx`):
+- `designer` → violet badge "DES"
+- `factory` → sky badge "XƯỞNG"
+- `undefined` → rose badge "? CHƯA GÁN" (cảnh báo data legacy chưa fill)
+
+Picker option list trên cell `productionError` của workshop table cũng dùng cùng badge (xem `Orders.md §10.2` cột productionError).
 
 ### 5.3 `ColorPicker.tsx`
 - Popover Radix.

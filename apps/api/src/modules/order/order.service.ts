@@ -1,5 +1,7 @@
+import { InjectQueue } from '@nestjs/bullmq';
 import {
   BadRequestException,
+  ConflictException,
   ForbiddenException,
   Inject,
   Injectable,
@@ -7,11 +9,22 @@ import {
   OnModuleInit,
 } from '@nestjs/common';
 import { InjectModel } from '@nestjs/mongoose';
+import { Queue } from 'bullmq';
 import { Model } from 'mongoose';
 import type {
+  BulkAssignDesignerDto,
+  BulkAssignDesignerPreviewDto,
+  BulkAssignDesignerPreviewResDto,
+  BulkAssignDesignerResDto,
   BulkTransferOrderDto,
   BulkUpdateOrderFieldDto,
   BulkUpdateOrderFieldResDto,
+  DesignerBreakdownResDto,
+  DesignerStatusCounts,
+  GetErrorLogDto,
+  GetErrorLogResDto,
+  SetProductionErrorDto,
+  SetProductionErrorResDto,
   BreakdownBucket,
   DesignFields,
   FactoryBreakdown,
@@ -47,17 +60,30 @@ import type {
   UpdateOrderFieldResDto,
   UserBreakdown,
 } from 'shared';
-import { RoleType, WorkshopConfigCategory } from 'shared';
+import {
+  DESIGNER_REASSIGNABLE_STATUSES,
+  DesignerStatus,
+  RoleType,
+  WorkshopConfigCategory,
+} from 'shared';
 import { Logger } from 'winston';
 
 import { canonicalDriveUrl, processImageUrl, transformDriveUrl } from '@/utils/transform-drive-url';
 
+import { DesignImageService } from '../design-image/design-image.service';
+import {
+  DESIGN_IMAGE_QUEUE,
+  DesignImageJobData,
+} from '../design-image/design-image.processor';
 import { FactoryRepository } from '../factory/factory.repository';
+import { OrderLogRepository } from '../order-log/order-log.repository';
 import { OrderLogService } from '../order-log/order-log.service';
 import type { AuditContext } from '../order-log/order-log.service';
 import { ProductConfigRepository } from '../product-config/product-config.repository';
 import { RedisCacheService } from '../redis-cache/redis-cache.service';
+import { RoleRepository } from '../role/role.repository';
 import { TelegramNotificationService } from '../telegram-notification/telegram-notification.service';
+import { UserEntity } from '../user/user.entity';
 import { WorkshopConfigRepository } from '../workshop-config/workshop-config.repository';
 import { OrderEntity, OrderDocument } from './order.entity';
 import { OrderRepository } from './order.repository';
@@ -69,7 +95,9 @@ const FIELD_CONFIG_CATEGORY: Record<OrderWorkshopField, WorkshopConfigCategory |
   toolResultNote: WorkshopConfigCategory.ToolResultNote,
   errorFile: WorkshopConfigCategory.ErrorFileType,
   errorFileNote: null, // free text
-  assignee: WorkshopConfigCategory.Assignee,
+  // assignee đã chuyển sang lưu user._id (không qua workshop_config). Validate
+  // qua `assertAssigneeUserValid` thay vì `assertValueAllowed`.
+  assignee: null,
   assigneeNote: WorkshopConfigCategory.AssigneeNote,
   fabricType: WorkshopConfigCategory.FabricType,
   machineNumber: WorkshopConfigCategory.Machine,
@@ -82,22 +110,26 @@ const ADMIN_ROLES: RoleType[] = [RoleType.SuperAdmin, RoleType.Admin, RoleType.M
 const FIELD_EDIT_ROLES: Record<OrderWorkshopField, RoleType[]> = {
   printStatus: [...ADMIN_ROLES, RoleType.Fulfillment],
   printStatusNote: [...ADMIN_ROLES, RoleType.Fulfillment],
-  toolResult: [...ADMIN_ROLES, RoleType.Designer],
-  // Note kq Tool 1 chỉ Designer + admin sửa. Fulfillment XEM để biết đơn đã
-  // OK chưa; báo lỗi sau in dùng `productionError` riêng (xem dưới).
-  toolResultNote: [...ADMIN_ROLES, RoleType.Designer],
-  errorFile: [...ADMIN_ROLES, RoleType.Designer],
-  errorFileNote: [...ADMIN_ROLES, RoleType.Designer],
-  assignee: [...ADMIN_ROLES, RoleType.Designer],
-  assigneeNote: [...ADMIN_ROLES, RoleType.Designer],
+  toolResult: [...ADMIN_ROLES, RoleType.DesignerLeader, RoleType.Designer],
+  // Phase 3 Designer-Task-Workflow: `toolResultNote` không cho sub-designer sửa
+  // tay nữa — derive auto khi designer transition 'complete' (state machine set
+  // 'ok'). Leader/Admin vẫn override được nếu cần.
+  toolResultNote: [...ADMIN_ROLES, RoleType.DesignerLeader],
+  errorFile: [...ADMIN_ROLES, RoleType.DesignerLeader, RoleType.Designer],
+  errorFileNote: [...ADMIN_ROLES, RoleType.DesignerLeader, RoleType.Designer],
+  // Phase 3: chỉ Leader/Admin assign task. Sub-designer transition qua endpoint
+  // riêng `POST /orders/:id/designer-transition`.
+  assignee: [...ADMIN_ROLES, RoleType.DesignerLeader],
+  assigneeNote: [...ADMIN_ROLES, RoleType.DesignerLeader, RoleType.Designer],
   // Fabric is admin-managed (it's a product attribute, not a workshop status).
   fabricType: ADMIN_ROLES,
-  // Máy: xưởng (Designer + Fulfillment) tự đổi máy nếu phải chuyển máy in,
+  // Máy: xưởng (Leader/Designer/Fulfillment) tự đổi máy nếu phải chuyển máy in,
   // không cần đợi admin sửa ProductConfig + backfill lại.
-  machineNumber: [...ADMIN_ROLES, RoleType.Designer, RoleType.Fulfillment],
+  machineNumber: [...ADMIN_ROLES, RoleType.DesignerLeader, RoleType.Designer, RoleType.Fulfillment],
   // Fulfillment (xưởng) là người báo lỗi sản xuất → cần quyền edit.
   productionError: [...ADMIN_ROLES, RoleType.Fulfillment],
   productionErrorNote: [...ADMIN_ROLES, RoleType.Fulfillment],
+  productionErrorSource: [...ADMIN_ROLES, RoleType.DesignerLeader, RoleType.Fulfillment],
 };
 
 const READY_FOR_FULFILL_CODE = 'ok';
@@ -122,12 +154,31 @@ export class OrderService implements OnModuleInit {
     private readonly productConfigRepository: ProductConfigRepository,
     private readonly workshopConfigRepository: WorkshopConfigRepository,
     private readonly orderLogService: OrderLogService,
+    private readonly orderLogRepository: OrderLogRepository,
     @InjectModel(OrderEntity.name) private readonly orderModel: Model<OrderDocument>,
     @Inject('winston') private readonly logger: Logger,
     private readonly redisCacheService: RedisCacheService,
     private readonly factoryRepository: FactoryRepository,
     private readonly telegramNotificationService: TelegramNotificationService,
+    private readonly designImageService: DesignImageService,
+    @InjectQueue(DESIGN_IMAGE_QUEUE) private readonly designQueue: Queue<DesignImageJobData>,
+    @InjectModel(UserEntity.name) private readonly userModel: Model<UserEntity>,
+    private readonly roleRepository: RoleRepository,
   ) {}
+
+  /** Validate giá trị assignee là userId hợp lệ (user role=Designer, active). */
+  private async assertAssigneeUserValid(userId: string | null): Promise<void> {
+    if (!userId) return;
+    const designerRole = await this.roleRepository.findOne({ name: RoleType.Designer });
+    const u = await this.userModel
+      .findOne({ _id: userId, roleId: designerRole?._id }, { _id: 1 })
+      .lean();
+    if (!u) {
+      throw new BadRequestException(
+        `User ${userId} không phải sub-designer hợp lệ (không tìm thấy hoặc không phải role Designer).`,
+      );
+    }
+  }
 
   /**
    * One-shot backfill — every order has an `originalFactoryId` so the factory
@@ -144,6 +195,25 @@ export class OrderService implements OnModuleInit {
       // eslint-disable-next-line no-console
       console.log(`[order-backfill] originalFactoryId set on ${result.modifiedCount} legacy rows`);
     }
+
+    // Backfill productionFirstErrorAt cho đơn legacy đang lỗi mà chưa có
+    // timestamp. Heuristic: dùng updatedAt làm best-effort start time (đơn
+    // đang lỗi → updatedAt gần đây nhất là lần xưởng đánh lỗi/cập nhật).
+    // Idempotent — chỉ set khi field chưa tồn tại.
+    const firstErrorRes = await this.orderModel.updateMany(
+      {
+        productionError: { $exists: true, $nin: [null, ''] },
+        productionFirstErrorAt: { $in: [null, undefined] },
+        $or: [{ toolResultNote: { $ne: 'ok' } }, { toolResultNote: { $exists: false } }],
+      },
+      [{ $set: { productionFirstErrorAt: '$updatedAt' } }],
+    );
+    if (firstErrorRes.modifiedCount > 0) {
+      // eslint-disable-next-line no-console
+      console.log(
+        `[order-backfill] productionFirstErrorAt set on ${firstErrorRes.modifiedCount} legacy error rows`,
+      );
+    }
   }
 
   /**
@@ -155,7 +225,14 @@ export class OrderService implements OnModuleInit {
    *
    * `readyForFulfill` is ALWAYS enforced for Fulfillment regardless of query.
    */
-  private buildVisibilityFilter(roleName?: RoleType, dto?: GetProductionOrdersDto): Record<string, unknown> {
+  private buildVisibilityFilter(
+    roleName?: RoleType,
+    dto?: GetProductionOrdersDto,
+    /** = user._id của Designer (sub) — dùng để filter task của mình. */
+    assigneeUserId?: string,
+    /** = user.factoryId của Fulfillment — scope đơn ở factory này hoặc transfer từ factory này. */
+    fulfillmentFactoryId?: string,
+  ): Record<string, unknown> {
     const filter: Record<string, unknown> = {};
 
     const endOfToday = new Date();
@@ -177,10 +254,23 @@ export class OrderService implements OnModuleInit {
     };
 
     if (roleName === RoleType.Designer) {
-      filter.createdAt = hasDateOverride ? buildRange() : { $gte: startOfWindow, $lte: endOfToday };
+      // Sub-designer chỉ thấy task của mình (assignee = user._id).
+      filter.assignee = assigneeUserId || '__no_user__';
+      if (hasDateOverride) filter.createdAt = buildRange();
     } else if (roleName === RoleType.Fulfillment) {
       filter.createdAt = hasDateOverride ? buildRange() : { $gte: startOfWindow, $lte: endOfToday };
       filter.readyForFulfill = true;
+      // Per-factory scope: thấy đơn đang ở xưởng mình HOẶC đơn đã transfer từ
+      // xưởng mình đi nơi khác (origin = mình). Nếu user chưa gán factoryId →
+      // trả empty thay vì rò rỉ data.
+      if (fulfillmentFactoryId) {
+        filter.$or = [
+          { factoryId: fulfillmentFactoryId },
+          { originalFactoryId: fulfillmentFactoryId },
+        ];
+      } else {
+        filter.factoryId = '__no_factory__';
+      }
     } else if (hasDateOverride) {
       const range: Record<string, Date> = {};
       if (dto?.createdFrom) range.$gte = new Date(dto.createdFrom);
@@ -253,8 +343,15 @@ export class OrderService implements OnModuleInit {
   private buildOrderListFilter(
     dto: GetProductionOrdersDto,
     roleName?: RoleType,
+    assigneeCode?: string,
+    fulfillmentFactoryId?: string,
   ): Record<string, unknown> {
-    const filter: Record<string, unknown> = this.buildVisibilityFilter(roleName, dto);
+    const filter: Record<string, unknown> = this.buildVisibilityFilter(
+      roleName,
+      dto,
+      assigneeCode,
+      fulfillmentFactoryId,
+    );
     if (dto.search) {
       filter.$or = [
         { productionId: { $regex: dto.search, $options: 'i' } },
@@ -271,7 +368,6 @@ export class OrderService implements OnModuleInit {
     if (dto.printStatus) filter.printStatus = { $in: dto.printStatus.split(',').filter(Boolean) };
     if (dto.toolResultNote)
       filter.toolResultNote = { $in: dto.toolResultNote.split(',').filter(Boolean) };
-    if (dto.assignee) filter.assignee = { $in: dto.assignee.split(',').filter(Boolean) };
     if (dto.errorFile) filter.errorFile = { $in: dto.errorFile.split(',').filter(Boolean) };
     // Factory tab filters — exact product name / fabric code / tool code.
     if (dto.type) filter.type = { $in: dto.type.split(',').filter(Boolean) };
@@ -279,6 +375,40 @@ export class OrderService implements OnModuleInit {
     if (dto.toolResult) filter.toolResult = { $in: dto.toolResult.split(',').filter(Boolean) };
     if (dto.machineNumber) {
       filter.machineNumber = { $in: dto.machineNumber.split(',').filter(Boolean) };
+    }
+    if (dto.designerStatus) {
+      const codes = dto.designerStatus.split(',').filter(Boolean);
+      // Token đặc biệt __none__ ↔ chưa có field (data legacy)
+      const hasNone = codes.includes('__none__');
+      const real = codes.filter((c) => c !== '__none__');
+      if (hasNone && real.length === 0) {
+        filter.designerStatus = { $exists: false };
+      } else if (hasNone) {
+        filter.$or = [
+          ...(Array.isArray(filter.$or) ? (filter.$or as unknown[]) : []),
+          { designerStatus: { $exists: false } },
+          { designerStatus: { $in: real } },
+        ];
+      } else {
+        filter.designerStatus = { $in: real };
+      }
+    }
+    if (dto.assignee) {
+      // Override block phía dưới — nếu user chọn __none__ token, lọc đơn chưa gán.
+      const codes = dto.assignee.split(',').filter(Boolean);
+      const hasNone = codes.includes('__none__');
+      const real = codes.filter((c) => c !== '__none__');
+      if (hasNone && real.length === 0) {
+        filter.assignee = { $in: [null, ''] };
+      } else if (hasNone) {
+        filter.$or = [
+          ...(Array.isArray(filter.$or) ? (filter.$or as unknown[]) : []),
+          { assignee: { $in: [null, ''] } },
+          { assignee: { $in: real } },
+        ];
+      } else {
+        filter.assignee = { $in: real };
+      }
     }
     if (dto.unmapped === true) {
       // Đơn chưa map xưởng — factoryId null hoặc không tồn tại.
@@ -341,7 +471,12 @@ export class OrderService implements OnModuleInit {
     return filter;
   }
 
-  async getOrders(dto: GetProductionOrdersDto, roleName?: RoleType): Promise<GetProductionOrdersResDto> {
+  async getOrders(
+    dto: GetProductionOrdersDto,
+    roleName?: RoleType,
+    assigneeCode?: string,
+    fulfillmentFactoryId?: string,
+  ): Promise<GetProductionOrdersResDto> {
     // [cache disabled] Re-enable by uncommenting the block below + the cache
     // write at the end of this method.
     // const cacheKey = this.buildListCacheKey(dto, roleName);
@@ -353,7 +488,7 @@ export class OrderService implements OnModuleInit {
     void roleName; // keep the var read so we can re-enable the cache key later
 
     const { page, limit, sort, order } = dto;
-    const filter = this.buildOrderListFilter(dto, roleName);
+    const filter = this.buildOrderListFilter(dto, roleName, assigneeCode, fulfillmentFactoryId);
 
     // Special sort mode `grouped` — keep orders of the same product clustered
     // (type → size → fabric, newest first within tie) so the workshop table
@@ -393,8 +528,10 @@ export class OrderService implements OnModuleInit {
   async exportOrders(
     dto: GetProductionOrdersDto,
     roleName?: RoleType,
+    assigneeCode?: string,
+    fulfillmentFactoryId?: string,
   ): Promise<{ success: true; data: unknown[]; total: number }> {
-    const filter = this.buildOrderListFilter(dto, roleName);
+    const filter = this.buildOrderListFilter(dto, roleName, assigneeCode, fulfillmentFactoryId);
     const data = await this.orderRepository.findAll(filter, {
       sort: { type: 1, size: 1, fabricType: 1, createdAt: -1 },
       populate: [
@@ -419,9 +556,11 @@ export class OrderService implements OnModuleInit {
   async getOrdersGroupedByType(
     dto: GetProductionOrdersDto,
     roleName?: RoleType,
+    assigneeCode?: string,
+    fulfillmentFactoryId?: string,
   ): Promise<GetGroupedProductionOrdersResDto> {
     const { page, limit } = dto;
-    const filter = this.buildOrderListFilter(dto, roleName);
+    const filter = this.buildOrderListFilter(dto, roleName, assigneeCode, fulfillmentFactoryId);
 
     // 1) Count distinct types matching the filter (for pagination total).
     const totalAgg = await this.orderModel.aggregate([
@@ -827,12 +966,16 @@ export class OrderService implements OnModuleInit {
   async getStatusOverview(
     dto: GetOrderStatusOverviewDto,
     roleName?: RoleType,
+    assigneeCode?: string,
+    fulfillmentFactoryId?: string,
   ): Promise<GetOrderStatusOverviewResDto> {
     // Build base match — same filters as list, including visibility rule.
-    const baseMatch = this.buildVisibilityFilter(roleName, {
-      createdFrom: dto.createdFrom,
-      createdTo: dto.createdTo,
-    } as GetProductionOrdersDto);
+    const baseMatch = this.buildVisibilityFilter(
+      roleName,
+      { createdFrom: dto.createdFrom, createdTo: dto.createdTo } as GetProductionOrdersDto,
+      assigneeCode,
+      fulfillmentFactoryId,
+    );
 
     if (dto.printStatus) baseMatch.printStatus = { $in: dto.printStatus.split(',').filter(Boolean) };
     if (dto.printStatusNote) baseMatch.printStatusNote = { $in: dto.printStatusNote.split(',').filter(Boolean) };
@@ -1182,11 +1325,20 @@ export class OrderService implements OnModuleInit {
   async getFactoryOverview(
     dto: GetFactoryOverviewDto,
     roleName?: RoleType,
+    fulfillmentFactoryId?: string,
   ): Promise<GetFactoryOverviewResDto> {
     const match: Record<string, unknown> = {};
     // Fulfillment chỉ thấy đơn đã Ok — apply scope cho cells + flow + dropdowns.
     if (roleName === RoleType.Fulfillment) {
       match.readyForFulfill = true;
+      if (fulfillmentFactoryId) {
+        match.$or = [
+          { factoryId: fulfillmentFactoryId },
+          { originalFactoryId: fulfillmentFactoryId },
+        ];
+      } else {
+        match.factoryId = '__no_factory__';
+      }
     }
     if (dto.createdFrom || dto.createdTo) {
       const range: Record<string, Date> = {};
@@ -1659,6 +1811,8 @@ export class OrderService implements OnModuleInit {
   async getWorkshopAvailableFilters(
     dto: GetProductionOrdersDto,
     roleName?: RoleType,
+    assigneeCode?: string,
+    fulfillmentFactoryId?: string,
   ): Promise<{
     success: true;
     data: {
@@ -1680,7 +1834,8 @@ export class OrderService implements OnModuleInit {
       | 'fabricType'
       | 'machineNumber'
       | 'toolResult'
-      | 'errorFile';
+      | 'errorFile'
+      | 'designerStatus';
 
     const FACET_KEYS: FacetKey[] = [
       'printStatus',
@@ -1691,12 +1846,13 @@ export class OrderService implements OnModuleInit {
       'machineNumber',
       'toolResult',
       'errorFile',
+      'designerStatus',
     ];
 
     type OptionRow = { _id: string; count: number };
     const aggregateFacet = async (excludeKey: FacetKey, field: FacetKey) => {
       const sanitizedDto = { ...dto, [excludeKey]: undefined } as GetProductionOrdersDto;
-      const baseFilter = this.buildOrderListFilter(sanitizedDto, roleName);
+      const baseFilter = this.buildOrderListFilter(sanitizedDto, roleName, assigneeCode);
       const facetMatch = {
         ...baseFilter,
         [field]: { $exists: true, $ne: null, $nin: [''] },
@@ -1717,6 +1873,7 @@ export class OrderService implements OnModuleInit {
       machineNumberRows,
       toolResultRows,
       errorFileRows,
+      designerStatusRows,
     ] = await Promise.all(FACET_KEYS.map((k) => aggregateFacet(k, k)));
 
     const nameMap = async (category: WorkshopConfigCategory) =>
@@ -1726,7 +1883,6 @@ export class OrderService implements OnModuleInit {
     const [
       printStatusMap,
       toolResultNoteMap,
-      assigneeMap,
       productionErrorMap,
       fabricTypeMap,
       machineNumberMap,
@@ -1735,13 +1891,35 @@ export class OrderService implements OnModuleInit {
     ] = await Promise.all([
       nameMap(WorkshopConfigCategory.PrintStatus),
       nameMap(WorkshopConfigCategory.ToolResultNote),
-      nameMap(WorkshopConfigCategory.Assignee),
       nameMap(WorkshopConfigCategory.ProductionError),
       nameMap(WorkshopConfigCategory.FabricType),
       nameMap(WorkshopConfigCategory.Machine),
       nameMap(WorkshopConfigCategory.ToolResult),
       nameMap(WorkshopConfigCategory.ErrorFileType),
     ]);
+
+    // Resolve assignee userId → fullName cho label friendly (chỉ những userId
+    // có trong facet rows). Userid không tìm thấy → fallback last 4 chars.
+    const assigneeUserIds = assigneeRows.map((r) => r._id).filter(Boolean);
+    const assigneeUsers = assigneeUserIds.length
+      ? await this.userModel
+          .find({ _id: { $in: assigneeUserIds } }, { _id: 1, fullName: 1 })
+          .lean()
+      : [];
+    const assigneeMap = new Map<string, string>(
+      assigneeUsers.map((u) => [String(u._id), u.fullName]),
+    );
+
+    // Designer status — i18n labels VN.
+    const DESIGNER_STATUS_LABELS: Record<string, string> = {
+      unassigned: 'Chưa gán',
+      assigned: 'Cần làm',
+      'in-progress': 'Đang làm',
+      done: 'Đã xong',
+      rejected: 'Đã trả',
+      rework: 'Cần làm lại',
+    };
+
     const toOption = (m: Map<string, string>) => (r: OptionRow) => ({
       value: r._id,
       label: m.get(r._id) || r._id,
@@ -1753,12 +1931,21 @@ export class OrderService implements OnModuleInit {
       data: {
         printStatus: printStatusRows.map(toOption(printStatusMap)),
         toolResultNote: toolResultNoteRows.map(toOption(toolResultNoteMap)),
-        assignee: assigneeRows.map(toOption(assigneeMap)),
+        assignee: assigneeRows.map((r) => ({
+          value: r._id,
+          label: assigneeMap.get(r._id) || `#${String(r._id).slice(-4)}`,
+          count: r.count,
+        })),
         productionError: productionErrorRows.map(toOption(productionErrorMap)),
         fabricType: fabricTypeRows.map(toOption(fabricTypeMap)),
         machineNumber: machineNumberRows.map(toOption(machineNumberMap)),
         toolResult: toolResultRows.map(toOption(toolResultMap)),
         errorFile: errorFileRows.map(toOption(errorFileMap)),
+        designerStatus: designerStatusRows.map((r) => ({
+          value: r._id,
+          label: DESIGNER_STATUS_LABELS[r._id] || r._id,
+          count: r.count,
+        })),
       },
     };
   }
@@ -1896,7 +2083,11 @@ export class OrderService implements OnModuleInit {
     ctx?: AuditContext,
   ): Promise<UpdateOrderFieldResDto> {
     this.assertCanEditField(dto.field, roleName);
-    await this.assertValueAllowed(dto.field, dto.value);
+    if (dto.field === 'assignee') {
+      await this.assertAssigneeUserValid(dto.value);
+    } else {
+      await this.assertValueAllowed(dto.field, dto.value);
+    }
 
     const before = await this.orderRepository.findOneById(id);
     if (!before) throw new NotFoundException('Order not found');
@@ -1906,9 +2097,112 @@ export class OrderService implements OnModuleInit {
 
     if (dto.field === 'toolResultNote') {
       patch.readyForFulfill = normalized === READY_FOR_FULFILL_CODE;
+      // Khi xưởng đánh 'ok' → đơn hết lỗi → rời tab "Nhật ký bù lỗi".
+      if (normalized === READY_FOR_FULFILL_CODE) {
+        patch.productionFirstErrorAt = null;
+      }
     }
 
-    const updated = await this.orderRepository.findOneAndUpdate({ _id: id }, patch);
+    // ─── Designer-Task-Workflow Phase 3 hooks ──────────────────────
+    // 1) assignee → auto-set designerStatus + timestamps, block reassign khi
+    //    đang in-progress/done/rework.
+    if (dto.field === 'assignee') {
+      const currentDesignerStatus =
+        ((before as unknown as { designerStatus?: DesignerStatus }).designerStatus) ||
+        DesignerStatus.Unassigned;
+      if (!DESIGNER_REASSIGNABLE_STATUSES.includes(currentDesignerStatus)) {
+        throw new ConflictException(
+          `Không reassign được — task đang '${currentDesignerStatus}'. Yêu cầu designer hoàn thành hoặc reset trước.`,
+        );
+      }
+      if (normalized) {
+        patch.designerStatus = DesignerStatus.Assigned;
+        patch.designerAssignedAt = new Date();
+        // Clear reject reason khi assign lại (kể cả cùng người), tránh để rác
+        // từ vòng reject trước.
+        patch.designerRejectedReason = null;
+        patch.designerRejectedAt = null;
+      } else {
+        // Clear assignee → trở về unassigned + xoá tất cả timestamps designer.
+        patch.designerStatus = DesignerStatus.Unassigned;
+        patch.designerAssignedAt = null;
+        patch.designerStartedAt = null;
+        patch.designerCompletedAt = null;
+        patch.designerRejectedAt = null;
+        patch.designerReworkAt = null;
+        patch.designerRejectedReason = null;
+        patch.designerReworkCount = 0;
+      }
+    }
+
+    // 2) productionError → auto-fill productionErrorSource từ config (user
+    //    override sau qua updateField('productionErrorSource')). Đồng thời:
+    //    - Set toolResultNote='error' để xưởng nhìn thấy ngay (đếm số lần
+    //      qua productionErrorCount để cell hiển thị "Lỗi ×N")
+    //    - readyForFulfill GIỮ NGUYÊN (= true) để fulfillment vẫn thấy đơn
+    //      lỗi trong list mặc định, không cần switch filter
+    //    - Nếu source='designer' VÀ task đang done → auto rework.
+    let autoReworkApplied = false;
+    let incProductionErrorCount = false;
+    if (dto.field === 'productionError') {
+      if (normalized) {
+        const cfg = await this.workshopConfigRepository.findOne({
+          category: WorkshopConfigCategory.ProductionError,
+          code: normalized,
+        });
+        const errorSource = (cfg as unknown as { errorSource?: string } | null)?.errorSource;
+        if (errorSource === 'designer' || errorSource === 'factory') {
+          patch.productionErrorSource = errorSource;
+        }
+        // Set toolResultNote='error' + bump counter — signal cho fulfillment.
+        patch.toolResultNote = 'error';
+        patch.readyForFulfill = false;
+        incProductionErrorCount = true;
+        // Set productionFirstErrorAt CHỈ khi field chưa có giá trị (vào lỗi
+        // lần đầu của cycle hiện tại). Các lần báo lỗi tiếp theo trong cùng
+        // cycle KHÔNG reset — cycle mới chỉ sau khi đơn rời log (toolResultNote='ok'
+        // hoặc productionError=null) → field bị clear → lần lỗi kế tiếp set lại.
+        const beforeFirstErrorAt =
+          (before as unknown as { productionFirstErrorAt?: Date }).productionFirstErrorAt;
+        if (!beforeFirstErrorAt) patch.productionFirstErrorAt = new Date();
+        const currentDesignerStatus =
+          ((before as unknown as { designerStatus?: DesignerStatus }).designerStatus) ||
+          DesignerStatus.Unassigned;
+        if (errorSource === 'designer' && currentDesignerStatus === DesignerStatus.Done) {
+          patch.designerStatus = DesignerStatus.Rework;
+          patch.designerReworkAt = new Date();
+          autoReworkApplied = true;
+        }
+      } else {
+        // Clear productionError → cũng clear source. Counter giữ nguyên
+        // (lịch sử) — toolResultNote giữ nguyên để designer chủ động chỉnh.
+        // Đơn rời nhật ký bù lỗi → clear productionFirstErrorAt.
+        patch.productionErrorSource = null;
+        patch.productionFirstErrorAt = null;
+      }
+    }
+
+    // 3) productionErrorSource user manually set → cũng có thể trigger rework
+    //    nếu user đổi từ 'factory' → 'designer' và task đang done.
+    if (dto.field === 'productionErrorSource' && normalized === 'designer') {
+      const currentDesignerStatus =
+        ((before as unknown as { designerStatus?: DesignerStatus }).designerStatus) ||
+        DesignerStatus.Unassigned;
+      if (currentDesignerStatus === DesignerStatus.Done) {
+        patch.designerStatus = DesignerStatus.Rework;
+        patch.designerReworkAt = new Date();
+        autoReworkApplied = true;
+      }
+    }
+
+    // Tách $inc / $set vì autoReworkApplied cần $inc.
+    const mongoUpdate: Record<string, unknown> = { $set: patch };
+    const incOps: Record<string, number> = {};
+    if (autoReworkApplied) incOps.designerReworkCount = 1;
+    if (incProductionErrorCount) incOps.productionErrorCount = 1;
+    if (Object.keys(incOps).length > 0) mongoUpdate.$inc = incOps;
+
+    const updated = await this.orderModel.findOneAndUpdate({ _id: id }, mongoUpdate, { new: true });
     if (!updated) throw new NotFoundException('Order not found');
 
     void this.orderLogService.write({
@@ -1919,6 +2213,17 @@ export class OrderService implements OnModuleInit {
       after: normalized,
       ctx,
     });
+
+    if (autoReworkApplied) {
+      void this.orderLogService.write({
+        orderId: id,
+        action: 'update',
+        field: 'designerStatus',
+        before: DesignerStatus.Done,
+        after: DesignerStatus.Rework,
+        ctx,
+      });
+    }
 
     void this.invalidateListCache();
 
@@ -1936,12 +2241,47 @@ export class OrderService implements OnModuleInit {
     ctx?: AuditContext,
   ): Promise<BulkUpdateOrderFieldResDto> {
     this.assertCanEditField(dto.field, roleName);
-    await this.assertValueAllowed(dto.field, dto.value);
+    if (dto.field === 'assignee') {
+      await this.assertAssigneeUserValid(dto.value);
+    } else {
+      await this.assertValueAllowed(dto.field, dto.value);
+    }
 
     const normalized = dto.value === '' ? null : dto.value;
     const patch: Record<string, unknown> = { [dto.field]: normalized };
     if (dto.field === 'toolResultNote') {
       patch.readyForFulfill = normalized === READY_FOR_FULFILL_CODE;
+      if (normalized === READY_FOR_FULFILL_CODE) {
+        patch.productionFirstErrorAt = null;
+      }
+    }
+
+    // Bulk assignee → mirror updateField: chỉ assign cho order ở trạng thái
+    // reassignable; orders đang in-progress/done/rework sẽ KHÔNG match filter
+    // và returned matchedCount thấp hơn ids.length để FE biết phần nào bị bỏ.
+    let extraMatchFilter: Record<string, unknown> | null = null;
+    if (dto.field === 'assignee') {
+      if (normalized) {
+        patch.designerStatus = 'assigned';
+        patch.designerAssignedAt = new Date();
+        patch.designerRejectedReason = null;
+        patch.designerRejectedAt = null;
+      } else {
+        patch.designerStatus = 'unassigned';
+        patch.designerAssignedAt = null;
+        patch.designerStartedAt = null;
+        patch.designerCompletedAt = null;
+        patch.designerRejectedAt = null;
+        patch.designerReworkAt = null;
+        patch.designerRejectedReason = null;
+        patch.designerReworkCount = 0;
+      }
+      extraMatchFilter = {
+        $or: [
+          { designerStatus: { $exists: false } },
+          { designerStatus: { $in: DESIGNER_REASSIGNABLE_STATUSES } },
+        ],
+      };
     }
 
     // Snapshot before-values for the audit log. Cheap because we only need the
@@ -1950,7 +2290,12 @@ export class OrderService implements OnModuleInit {
       .find({ _id: { $in: dto.ids }, deletedAt: { $exists: false } }, { _id: 1, [dto.field]: 1 })
       .lean();
 
-    const result = await this.orderModel.updateMany({ _id: { $in: dto.ids }, deletedAt: { $exists: false } }, { $set: patch });
+    const matchFilter: Record<string, unknown> = {
+      _id: { $in: dto.ids },
+      deletedAt: { $exists: false },
+    };
+    if (extraMatchFilter) Object.assign(matchFilter, extraMatchFilter);
+    const result = await this.orderModel.updateMany(matchFilter, { $set: patch });
 
     void this.orderLogService.writeMany(
       beforeDocs.map((doc) => ({
@@ -1974,6 +2319,31 @@ export class OrderService implements OnModuleInit {
     };
   }
 
+  /**
+   * Single-order fetch cho detail dialog. Designer (sub) chỉ get được task
+   * có `assignee = user._id`. Roles khác (Admin/Leader/...) bypass.
+   */
+  async getOrderById(
+    id: string,
+    roleName?: RoleType,
+    userId?: string,
+  ): Promise<{ success: true; data: unknown }> {
+    const doc = await this.orderModel
+      .findById(id)
+      .populate('factory', 'name shortName')
+      .populate('machineType', 'name shortName')
+      .populate('productConfig', 'fullName shortName')
+      .lean();
+    if (!doc) throw new NotFoundException('Order not found');
+
+    if (roleName === RoleType.Designer) {
+      if (!userId || (doc as { assignee?: string }).assignee !== userId) {
+        throw new ForbiddenException('Task không thuộc bạn.');
+      }
+    }
+    return { success: true, data: doc };
+  }
+
   async getLogs(orderId: string, dto: import('shared').GetOrderLogsDto) {
     return this.orderLogService.listByOrder(orderId, dto);
   }
@@ -1982,29 +2352,57 @@ export class OrderService implements OnModuleInit {
    * Split designs into display URLs + original URLs.
    * Returns undefined for empty inputs.
    */
+  /**
+   * Trả về:
+   *   - `designsOriginal` = URL raw user paste (luôn giữ để fallback).
+   *   - `designs` = chỉ set khi R2 chưa active (legacy Teehub URL transform).
+   *                Khi R2 active, để rỗng — worker BullMQ sẽ ghi sau khi
+   *                download/encode/upload xong.
+   *   - `designsStatus` = `'pending'` cho mọi field có URL khi R2 active.
+   *   - `designJobs[]` = list job cần enqueue (caller gọi addBulk).
+   */
   private processDesigns(
     input?: DesignFields,
     ctx?: string,
-  ): { designs?: DesignFields; designsOriginal?: DesignFields } {
-    if (!input) return {};
-    const display: DesignFields = {};
+  ): {
+    designs?: DesignFields;
+    designsOriginal?: DesignFields;
+    designsStatus?: Record<string, 'pending'>;
+    designJobs: Array<{ designKey: string; sourceUrl: string }>;
+  } {
+    if (!input) return { designJobs: [] };
     const original: DesignFields = {};
+    const designsStatus: Record<string, 'pending'> = {};
+    const designJobs: Array<{ designKey: string; sourceUrl: string }> = [];
+    const r2Enabled = this.designImageService.isEnabled();
+    const displayLegacy: DesignFields = {};
     let hasAny = false;
     for (const [k, v] of Object.entries(input)) {
-      if (v && typeof v === 'string' && v.trim()) {
-        const raw = v.trim();
-        const { url, originalUrl } = processImageUrl(raw, { keepOriginal: true });
+      if (!v || typeof v !== 'string' || !v.trim()) continue;
+      const raw = v.trim();
+      original[k as keyof DesignFields] = raw;
+      hasAny = true;
+      if (r2Enabled) {
+        designsStatus[k] = 'pending';
+        designJobs.push({ designKey: k, sourceUrl: raw });
+      } else {
+        // Fallback path: dùng transform Teehub cũ tránh ảnh hỏng khi chưa
+        // cấu hình R2.
+        const { url } = processImageUrl(raw, { keepOriginal: true });
         if (url !== raw) {
           // eslint-disable-next-line no-console
-          console.log(`[transform] ${ctx ?? ''} designs.${k}: ${raw} → ${url}`);
+          console.log(`[transform-legacy] ${ctx ?? ''} designs.${k}: ${raw} → ${url}`);
         }
-        display[k as keyof DesignFields] = url;
-        original[k as keyof DesignFields] = originalUrl;
-        hasAny = true;
+        displayLegacy[k as keyof DesignFields] = url;
       }
     }
-    if (!hasAny) return {};
-    return { designs: display, designsOriginal: original };
+    if (!hasAny) return { designJobs: [] };
+    return {
+      designs: r2Enabled ? undefined : displayLegacy,
+      designsOriginal: original,
+      designsStatus: r2Enabled ? designsStatus : undefined,
+      designJobs,
+    };
   }
 
   /**
@@ -2078,6 +2476,14 @@ export class OrderService implements OnModuleInit {
       action: 'create' | 'update';
       after: Record<string, unknown>;
     }> = [];
+    /**
+     * Dedup theo `${designKey}::${sourceUrl}` → 2 đơn cùng design URL chỉ enqueue 1 job.
+     * Worker sẽ updateMany cho cả 2 sau khi xử lý xong.
+     */
+    const designJobMap = new Map<
+      string,
+      { designKey: string; sourceUrl: string; orderIds: Set<string> }
+    >();
 
     for (let i = 0; i < dto.rows.length; i++) {
       const row = dto.rows[i];
@@ -2122,6 +2528,8 @@ export class OrderService implements OnModuleInit {
           unassignedFactoryCount++;
         }
 
+        const { designJobs, ...designData } = this.processDesigns(row.designs, row.productionId);
+
         const data = {
           productionId: row.productionId.trim(),
           userSku: row.userSku?.trim(),
@@ -2147,7 +2555,7 @@ export class OrderService implements OnModuleInit {
           quantity: row.quantity ?? 1,
           baseCost: row.baseCost,
           shipCost: row.shipCost,
-          ...this.processDesigns(row.designs, row.productionId),
+          ...designData,
           status: row.status?.trim(),
           orderId: row.orderId?.trim(),
           externalId: row.externalId?.trim(),
@@ -2181,8 +2589,21 @@ export class OrderService implements OnModuleInit {
           imported++;
         }
         if (upserted?._id) {
+          const orderIdStr = String(upserted._id);
+          // Gom design job sau khi đã có orderId thật. Dedup theo
+          // (designKey, sourceUrl) — 2 đơn cùng URL chỉ tạo 1 job, worker
+          // updateMany cho cả 2.
+          for (const job of designJobs) {
+            const key = `${job.designKey}::${job.sourceUrl}`;
+            let entry = designJobMap.get(key);
+            if (!entry) {
+              entry = { designKey: job.designKey, sourceUrl: job.sourceUrl, orderIds: new Set() };
+              designJobMap.set(key, entry);
+            }
+            entry.orderIds.add(orderIdStr);
+          }
           logRows.push({
-            orderId: String(upserted._id),
+            orderId: orderIdStr,
             action: existed ? 'update' : 'create',
             after: { productionId: data.productionId, type: data.type, isMapped },
           });
@@ -2207,6 +2628,24 @@ export class OrderService implements OnModuleInit {
     );
 
     void this.invalidateListCache();
+
+    // Enqueue design image jobs sau khi import xong — fire-and-forget vì
+    // user không cần đợi worker xong mới thấy response. Khi R2 chưa active,
+    // designJobMap luôn rỗng.
+    if (designJobMap.size > 0) {
+      const jobs = Array.from(designJobMap.values()).map((entry) => ({
+        name: `import-${entry.designKey}`,
+        data: {
+          sourceUrl: entry.sourceUrl,
+          orderIds: Array.from(entry.orderIds),
+          designKey: entry.designKey,
+        } satisfies DesignImageJobData,
+      }));
+      void this.designQueue.addBulk(jobs).catch((err) => {
+        // eslint-disable-next-line no-console
+        console.error(`[design-image] addBulk failed (${jobs.length} jobs):`, err);
+      });
+    }
 
     void this.sendImportSummaryNotification({
       factoryCount,
@@ -2256,6 +2695,794 @@ export class OrderService implements OnModuleInit {
         error: error instanceof Error ? error.message : String(error),
       });
     }
+  }
+
+  /**
+   * Pre-flight check cho bulk assign designer — không update DB, trả stats
+   * để FE confirm. Đếm theo `designerStatus` hiện tại và group đơn đã gán
+   * cho ai.
+   */
+  async bulkAssignDesignerPreview(
+    dto: BulkAssignDesignerPreviewDto,
+  ): Promise<BulkAssignDesignerPreviewResDto> {
+    const docs = await this.orderModel
+      .find(
+        { _id: { $in: dto.ids } },
+        { _id: 1, productionId: 1, assignee: 1, designerStatus: 1 },
+      )
+      .lean();
+
+    const byStatus = {
+      unassigned: 0,
+      assigned: 0,
+      inProgress: 0,
+      done: 0,
+      rejected: 0,
+      rework: 0,
+    };
+    const assigneeCounts = new Map<string, number>();
+    let blocked = 0;
+    let eligible = 0;
+
+    for (const o of docs) {
+      const status =
+        ((o as { designerStatus?: DesignerStatus }).designerStatus as DesignerStatus) ||
+        DesignerStatus.Unassigned;
+      switch (status) {
+        case DesignerStatus.Unassigned:
+          byStatus.unassigned++;
+          break;
+        case DesignerStatus.Assigned:
+          byStatus.assigned++;
+          break;
+        case DesignerStatus.InProgress:
+          byStatus.inProgress++;
+          break;
+        case DesignerStatus.Done:
+          byStatus.done++;
+          break;
+        case DesignerStatus.Rejected:
+          byStatus.rejected++;
+          break;
+        case DesignerStatus.Rework:
+          byStatus.rework++;
+          break;
+      }
+      if (DESIGNER_REASSIGNABLE_STATUSES.includes(status)) {
+        eligible++;
+      } else {
+        blocked++;
+      }
+      const a = (o as { assignee?: string }).assignee;
+      if (a) assigneeCounts.set(a, (assigneeCounts.get(a) || 0) + 1);
+    }
+
+    // Resolve fullName từ users collection.
+    const userIds = [...assigneeCounts.keys()];
+    const nameMap = new Map<string, string>();
+    if (userIds.length > 0) {
+      const users = await this.userModel
+        .find({ _id: { $in: userIds } }, { _id: 1, fullName: 1 })
+        .lean();
+      for (const u of users) {
+        nameMap.set(String(u._id), u.fullName);
+      }
+    }
+
+    const alreadyAssigned = [...assigneeCounts.entries()]
+      .map(([userId, count]) => ({
+        userId,
+        fullName: nameMap.get(userId),
+        count,
+      }))
+      .sort((a, b) => b.count - a.count);
+
+    return {
+      success: true,
+      data: {
+        total: docs.length,
+        byStatus,
+        alreadyAssigned,
+        blockedCount: blocked,
+        eligibleCount: eligible,
+      },
+    };
+  }
+
+  /**
+   * Apply bulk assign designer. Skip orders đang in-progress/done/rework +
+   * trả về detail list để FE thông báo. Khi `reassignOthers=false`, BE thêm
+   * skip cho đơn đã assign cho người khác (FE confirm rồi gửi true).
+   */
+  async bulkAssignDesigner(
+    dto: BulkAssignDesignerDto,
+    roleName?: RoleType,
+    ctx?: AuditContext,
+  ): Promise<BulkAssignDesignerResDto> {
+    this.assertCanEditField('assignee', roleName);
+    await this.assertAssigneeUserValid(dto.userId);
+
+    const docs = await this.orderModel
+      .find(
+        { _id: { $in: dto.ids }, deletedAt: { $exists: false } },
+        { _id: 1, productionId: 1, assignee: 1, designerStatus: 1 },
+      )
+      .lean();
+
+    const skipped: { orderId: string; productionId: string; reason: string }[] = [];
+    const eligibleIds: string[] = [];
+
+    for (const o of docs) {
+      const orderId = String(o._id);
+      const productionId = String((o as { productionId?: string }).productionId || orderId);
+      const status =
+        ((o as { designerStatus?: DesignerStatus }).designerStatus as DesignerStatus) ||
+        DesignerStatus.Unassigned;
+      const currentAssignee = (o as { assignee?: string }).assignee;
+
+      if (!DESIGNER_REASSIGNABLE_STATUSES.includes(status)) {
+        skipped.push({
+          orderId,
+          productionId,
+          reason: `Đang '${status}' — không thể reassign. Yêu cầu designer hoàn thành trước.`,
+        });
+        continue;
+      }
+      if (
+        currentAssignee &&
+        currentAssignee !== dto.userId &&
+        !dto.reassignOthers
+      ) {
+        skipped.push({
+          orderId,
+          productionId,
+          reason: `Đã gán cho designer khác — bật "Ghi đè" nếu muốn assign lại.`,
+        });
+        continue;
+      }
+      eligibleIds.push(orderId);
+    }
+
+    let modified = 0;
+    if (eligibleIds.length > 0) {
+      const patch: Record<string, unknown> = {
+        assignee: dto.userId,
+        designerStatus: DesignerStatus.Assigned,
+        designerAssignedAt: new Date(),
+        designerRejectedReason: null,
+        designerRejectedAt: null,
+      };
+      const result = await this.orderModel.updateMany(
+        { _id: { $in: eligibleIds } },
+        { $set: patch },
+      );
+      modified = result.modifiedCount || 0;
+
+      void this.orderLogService.writeMany(
+        eligibleIds.map((orderId) => ({
+          orderId,
+          action: 'bulk_update' as const,
+          field: 'assignee',
+          before: null,
+          after: dto.userId,
+          ctx,
+        })),
+      );
+
+      void this.invalidateListCache();
+    }
+
+    return {
+      success: true,
+      data: {
+        matched: docs.length,
+        modified,
+        skipped,
+      },
+    };
+  }
+
+  /**
+   * Designer breakdown summary cho trang /orders (Admin/Leader). Trả về:
+   *   - `scoped`: KPI count theo filter hiện tại
+   *   - `overall`: KPI count toàn bộ (ignore filter) — dùng làm baseline
+   *   - `perDesigner`: matrix mỗi user × 6 status (chỉ trong scope filter)
+   *
+   * Sub-designer KHÔNG được gọi endpoint này (auth ở controller).
+   */
+  async getDesignerBreakdown(
+    dto: GetProductionOrdersDto,
+    roleName?: RoleType,
+    fulfillmentFactoryId?: string,
+  ): Promise<DesignerBreakdownResDto> {
+    // Scoped match — áp đầy đủ filter của list.
+    const scopedFilter = this.buildOrderListFilter(dto, roleName, undefined, fulfillmentFactoryId);
+    // Overall match — bỏ tất cả workshop filter, giữ visibility (date) cho nhất quán.
+    const overallFilter = this.buildVisibilityFilter(
+      roleName,
+      { createdFrom: dto.createdFrom, createdTo: dto.createdTo } as GetProductionOrdersDto,
+      undefined,
+      fulfillmentFactoryId,
+    );
+
+    const countByStatus = async (match: Record<string, unknown>): Promise<DesignerStatusCounts> => {
+      const agg = await this.orderModel.aggregate<{ _id: string | null; count: number }>([
+        { $match: match },
+        {
+          $group: {
+            _id: { $ifNull: ['$designerStatus', 'unassigned'] },
+            count: { $sum: 1 },
+          },
+        },
+      ]);
+      const out: DesignerStatusCounts = {
+        unassigned: 0,
+        assigned: 0,
+        inProgress: 0,
+        done: 0,
+        rejected: 0,
+        rework: 0,
+        total: 0,
+      };
+      for (const r of agg) {
+        const k = (r._id || 'unassigned') as string;
+        switch (k) {
+          case 'unassigned':
+            out.unassigned += r.count;
+            break;
+          case 'assigned':
+            out.assigned += r.count;
+            break;
+          case 'in-progress':
+            out.inProgress += r.count;
+            break;
+          case 'done':
+            out.done += r.count;
+            break;
+          case 'rejected':
+            out.rejected += r.count;
+            break;
+          case 'rework':
+            out.rework += r.count;
+            break;
+        }
+        out.total += r.count;
+      }
+      return out;
+    };
+
+    const [scoped, overall] = await Promise.all([
+      countByStatus(scopedFilter),
+      countByStatus(overallFilter),
+    ]);
+
+    // Per-designer matrix — group (assignee, designerStatus) trong scope filter.
+    const matrixAgg = await this.orderModel.aggregate<{
+      _id: { uid: string | null; status: string | null };
+      count: number;
+    }>([
+      { $match: scopedFilter },
+      {
+        $group: {
+          _id: {
+            uid: { $ifNull: ['$assignee', null] },
+            status: { $ifNull: ['$designerStatus', 'unassigned'] },
+          },
+          count: { $sum: 1 },
+        },
+      },
+    ]);
+
+    // Auto-include designer users (role=Designer) chưa có task nào → row count 0.
+    const designerRole = await this.roleRepository.findOne({ name: RoleType.Designer });
+    const teamUsers = designerRole
+      ? await this.userModel
+          .find({ roleId: designerRole._id }, { _id: 1, fullName: 1, email: 1 })
+          .lean()
+      : [];
+
+    const userIds = new Set<string>();
+    let hasUnassigned = false;
+    for (const r of matrixAgg) {
+      if (r._id.uid) userIds.add(r._id.uid);
+      else hasUnassigned = true;
+    }
+    for (const u of teamUsers) userIds.add(String(u._id));
+
+    const userMap = new Map<string, { fullName: string; email?: string }>();
+    for (const u of teamUsers) userMap.set(String(u._id), { fullName: u.fullName, email: u.email });
+
+    const blankCounts = (): DesignerStatusCounts => ({
+      unassigned: 0,
+      assigned: 0,
+      inProgress: 0,
+      done: 0,
+      rejected: 0,
+      rework: 0,
+      total: 0,
+    });
+
+    const rows = new Map<
+      string,
+      { userId: string; fullName: string; email?: string; counts: DesignerStatusCounts }
+    >();
+    for (const uid of userIds) {
+      const u = userMap.get(uid);
+      rows.set(uid, {
+        userId: uid,
+        fullName: u?.fullName || `#${uid.slice(-4)}`,
+        email: u?.email,
+        counts: blankCounts(),
+      });
+    }
+    if (hasUnassigned) {
+      rows.set('__unassigned__', {
+        userId: '__unassigned__',
+        fullName: 'Chưa gán',
+        counts: blankCounts(),
+      });
+    }
+
+    for (const r of matrixAgg) {
+      const key = r._id.uid || '__unassigned__';
+      const row = rows.get(key);
+      if (!row) continue;
+      const s = r._id.status || 'unassigned';
+      row.counts.total += r.count;
+      switch (s) {
+        case 'unassigned':
+          row.counts.unassigned += r.count;
+          break;
+        case 'assigned':
+          row.counts.assigned += r.count;
+          break;
+        case 'in-progress':
+          row.counts.inProgress += r.count;
+          break;
+        case 'done':
+          row.counts.done += r.count;
+          break;
+        case 'rejected':
+          row.counts.rejected += r.count;
+          break;
+        case 'rework':
+          row.counts.rework += r.count;
+          break;
+      }
+    }
+
+    const perDesigner = [...rows.values()].sort((a, b) => b.counts.total - a.counts.total);
+
+    return {
+      success: true,
+      data: { scoped, overall, perDesigner },
+    };
+  }
+
+  /**
+   * Atomic set 3 field productionError + productionErrorSource + productionErrorNote.
+   * Cần thiết khi user chọn code "Lỗi khác" → bắt buộc source + note để stats
+   * phân loại chính xác và xưởng ghi rõ chi tiết. Auto-fill source từ config
+   * nếu user không truyền (cho code có flag rõ).
+   */
+  async setProductionError(
+    id: string,
+    dto: SetProductionErrorDto,
+    roleName?: RoleType,
+    ctx?: AuditContext,
+  ): Promise<SetProductionErrorResDto> {
+    this.assertCanEditField('productionError', roleName);
+    const before = await this.orderRepository.findOneById(id);
+    if (!before) throw new NotFoundException('Order not found');
+
+    let finalSource = dto.source;
+    if (dto.code) {
+      // Validate code tồn tại
+      const cfg = await this.workshopConfigRepository.findOne({
+        category: WorkshopConfigCategory.ProductionError,
+        code: dto.code,
+      });
+      if (!cfg) throw new BadRequestException(`Invalid productionError code: ${dto.code}`);
+      const cfgSource = (cfg as unknown as { errorSource?: 'designer' | 'factory' } | null)?.errorSource;
+
+      // 'other' code → bắt buộc user pick source + note (BE defense).
+      if (dto.code === 'other') {
+        if (!finalSource) {
+          throw new BadRequestException('Code "Lỗi khác" bắt buộc chọn lỗi do designer hay do xưởng.');
+        }
+        if (!dto.note || !dto.note.trim()) {
+          throw new BadRequestException('Code "Lỗi khác" bắt buộc nhập mô tả lỗi.');
+        }
+      } else {
+        // Auto-fill source từ config nếu user không pass.
+        if (!finalSource && cfgSource) finalSource = cfgSource;
+      }
+    } else {
+      // Clear hẳn lỗi.
+      finalSource = undefined;
+    }
+
+    const patch: Record<string, unknown> = {
+      productionError: dto.code,
+      productionErrorSource: finalSource ?? null,
+      productionErrorNote: dto.note ?? null,
+    };
+
+    // Khi set code mới (non-null) → toolResultNote='error' cho xưởng nhìn thấy
+    // ngay + bump counter. Clear (code=null) → giữ nguyên toolResultNote.
+    let incProductionErrorCount = false;
+    if (dto.code) {
+      patch.toolResultNote = 'error';
+      patch.readyForFulfill = false;
+      incProductionErrorCount = true;
+      const beforeFirstErrorAt =
+        (before as unknown as { productionFirstErrorAt?: Date }).productionFirstErrorAt;
+      if (!beforeFirstErrorAt) patch.productionFirstErrorAt = new Date();
+    } else {
+      // Clear lỗi → đơn rời nhật ký bù lỗi.
+      patch.productionFirstErrorAt = null;
+    }
+
+    // Auto-rework nếu source='designer' và task đang done.
+    let autoReworkApplied = false;
+    if (finalSource === 'designer') {
+      const currentDesignerStatus =
+        ((before as unknown as { designerStatus?: DesignerStatus }).designerStatus) ||
+        DesignerStatus.Unassigned;
+      if (currentDesignerStatus === DesignerStatus.Done) {
+        patch.designerStatus = DesignerStatus.Rework;
+        patch.designerReworkAt = new Date();
+        autoReworkApplied = true;
+      }
+    }
+
+    const mongoUpdate: Record<string, unknown> = { $set: patch };
+    const incOps: Record<string, number> = {};
+    if (autoReworkApplied) incOps.designerReworkCount = 1;
+    if (incProductionErrorCount) incOps.productionErrorCount = 1;
+    if (Object.keys(incOps).length > 0) mongoUpdate.$inc = incOps;
+
+    const updated = await this.orderModel.findOneAndUpdate({ _id: id }, mongoUpdate, { new: true });
+    if (!updated) throw new NotFoundException('Order not found');
+
+    void this.orderLogService.writeMany([
+      {
+        orderId: id,
+        action: 'update',
+        field: 'productionError',
+        before: (before as unknown as Record<string, unknown>).productionError ?? null,
+        after: dto.code,
+        ctx,
+      },
+      {
+        orderId: id,
+        action: 'update',
+        field: 'productionErrorSource',
+        before: (before as unknown as Record<string, unknown>).productionErrorSource ?? null,
+        after: finalSource ?? null,
+        ctx,
+      },
+      {
+        orderId: id,
+        action: 'update',
+        field: 'productionErrorNote',
+        before: (before as unknown as Record<string, unknown>).productionErrorNote ?? null,
+        after: dto.note ?? null,
+        ctx,
+      },
+    ]);
+
+    void this.invalidateListCache();
+    return { success: true, data: updated };
+  }
+
+  /**
+   * Tab "Nhật ký bù lỗi" — danh sách đơn đang ở trạng thái lỗi xưởng
+   * (productionError set, toolResultNote chưa 'ok'). Sort theo
+   * `productionFirstErrorAt` ASC để đơn nằm lâu nhất hiện đầu tiên.
+   *
+   * Visibility: cùng quy tắc như list orders.
+   *   - Designer chỉ thấy đơn assignee = userId
+   *   - Fulfillment chỉ thấy đơn factory của mình
+   *   - Admin/Manager/DesignerLeader thấy hết
+   *
+   * `byUrgency` tính trên TOÀN bộ scope (bỏ qua pagination) để FE hiện badge
+   * count theo mức độ khẩn.
+   */
+  async getErrorLog(
+    dto: GetErrorLogDto,
+    roleName?: RoleType,
+    assigneeUserId?: string,
+    fulfillmentFactoryId?: string,
+  ): Promise<GetErrorLogResDto> {
+    const filter: Record<string, unknown> = {};
+    filter.productionError = { $exists: true, $nin: [null, ''] };
+    filter.productionFirstErrorAt = { $exists: true, $ne: null };
+    filter.deletedAt = { $exists: false };
+
+    if (roleName === RoleType.Designer) {
+      filter.assignee = assigneeUserId || '__no_user__';
+    } else if (roleName === RoleType.Fulfillment) {
+      if (fulfillmentFactoryId) {
+        filter.$or = [
+          { factoryId: fulfillmentFactoryId },
+          { originalFactoryId: fulfillmentFactoryId },
+        ];
+      } else {
+        filter.factoryId = '__no_factory__';
+      }
+    }
+
+    if (dto.search) {
+      const search = { $regex: dto.search, $options: 'i' };
+      const searchOr: Array<Record<string, unknown>> = [
+        { productionId: search },
+        { userSku: search },
+        { userEmail: search },
+        { orderId: search },
+        { type: search },
+      ];
+      if (filter.$or) {
+        filter.$and = [{ $or: filter.$or }, { $or: searchOr }];
+        delete filter.$or;
+      } else {
+        filter.$or = searchOr;
+      }
+    }
+
+    if (dto.assignee) {
+      const codes = dto.assignee.split(',').filter(Boolean);
+      const hasNone = codes.includes('__none__');
+      const real = codes.filter((c) => c !== '__none__');
+      if (hasNone && real.length === 0) {
+        filter.assignee = { $in: [null, ''] };
+      } else if (hasNone) {
+        const assigneeOr = [{ assignee: { $in: [null, ''] } }, { assignee: { $in: real } }];
+        if (filter.$and) {
+          (filter.$and as Array<unknown>).push({ $or: assigneeOr });
+        } else if (filter.$or) {
+          filter.$and = [{ $or: filter.$or }, { $or: assigneeOr }];
+          delete filter.$or;
+        } else {
+          filter.$or = assigneeOr;
+        }
+      } else {
+        filter.assignee = { $in: real };
+      }
+    }
+    if (dto.fabricType) {
+      filter.fabricType = { $in: dto.fabricType.split(',').filter(Boolean) };
+    }
+    if (dto.toolResult) {
+      filter.toolResult = { $in: dto.toolResult.split(',').filter(Boolean) };
+    }
+    if (dto.productionError) {
+      filter.productionError = {
+        $in: dto.productionError.split(',').filter(Boolean),
+      };
+    }
+    if (dto.productionErrorSource) {
+      const sources = dto.productionErrorSource
+        .split(',')
+        .filter((s) => s === 'designer' || s === 'factory');
+      if (sources.length) filter.productionErrorSource = { $in: sources };
+    }
+    if (dto.factoryId && roleName !== RoleType.Fulfillment) {
+      filter.factoryId = { $in: dto.factoryId.split(',').filter(Boolean) };
+    }
+
+    // Urgency filter — compute date thresholds.
+    const now = Date.now();
+    const DAY = 24 * 60 * 60 * 1000;
+    if (dto.urgency) {
+      const levels = dto.urgency.split(',').filter(Boolean);
+      const ranges: Array<{ $gt?: Date; $lte?: Date }> = [];
+      for (const lvl of levels) {
+        if (lvl === 'new') {
+          ranges.push({ $gt: new Date(now - 1 * DAY) });
+        } else if (lvl === 'attention') {
+          ranges.push({ $gt: new Date(now - 2 * DAY), $lte: new Date(now - 1 * DAY) });
+        } else if (lvl === 'urgent') {
+          ranges.push({ $gt: new Date(now - 3 * DAY), $lte: new Date(now - 2 * DAY) });
+        } else if (lvl === 'critical') {
+          ranges.push({ $lte: new Date(now - 3 * DAY) });
+        }
+      }
+      if (ranges.length === 1) {
+        filter.productionFirstErrorAt = { ...(filter.productionFirstErrorAt as object), ...ranges[0] };
+      } else if (ranges.length > 1) {
+        const urgencyOr = ranges.map((r) => ({ productionFirstErrorAt: r }));
+        if (filter.$and) {
+          (filter.$and as Array<unknown>).push({ $or: urgencyOr });
+        } else if (filter.$or) {
+          filter.$and = [{ $or: filter.$or }, { $or: urgencyOr }];
+          delete filter.$or;
+        } else {
+          filter.$or = urgencyOr;
+        }
+      }
+    }
+
+    const { page, limit } = dto;
+    const skip = limit * ((page || 1) - 1);
+
+    // Aggregate by urgency in parallel with the page query. Use same filter
+    // MINUS the urgency clause so badge counts reflect "if user expanded
+    // selection" (sticky filters).
+    const countFilter: Record<string, unknown> = { ...filter };
+    delete countFilter.productionFirstErrorAt;
+    countFilter.productionFirstErrorAt = { $exists: true, $ne: null };
+    // Remove urgency-driven $and clause if any.
+    if (Array.isArray(countFilter.$and)) {
+      countFilter.$and = (countFilter.$and as Array<{ $or?: unknown[] }>).filter((c) => {
+        const or = c.$or as Array<Record<string, unknown>> | undefined;
+        if (!or) return true;
+        return !or.every((x) => x.productionFirstErrorAt !== undefined);
+      });
+      if ((countFilter.$and as unknown[]).length === 0) delete countFilter.$and;
+    }
+
+    const [pageRes, urgencyAgg] = await Promise.all([
+      this.orderRepository.findAllAndCount(filter, {
+        paging: { skip, limit },
+        sort: { productionFirstErrorAt: 1 },
+        populate: [
+          { path: 'factory', select: ['name', 'shortName'] },
+          { path: 'machineType', select: ['name', 'shortName'] },
+        ],
+      }),
+      this.orderModel.aggregate<{ _id: string; count: number }>([
+        { $match: countFilter },
+        {
+          $project: {
+            ageMs: { $subtract: [new Date(), '$productionFirstErrorAt'] },
+          },
+        },
+        {
+          $project: {
+            bucket: {
+              $switch: {
+                branches: [
+                  { case: { $lt: ['$ageMs', DAY] }, then: 'new' },
+                  { case: { $lt: ['$ageMs', 2 * DAY] }, then: 'attention' },
+                  { case: { $lt: ['$ageMs', 3 * DAY] }, then: 'urgent' },
+                ],
+                default: 'critical',
+              },
+            },
+          },
+        },
+        { $group: { _id: '$bucket', count: { $sum: 1 } } },
+      ]),
+    ]);
+
+    const byUrgency = { new: 0, attention: 0, urgent: 0, critical: 0 };
+    for (const row of urgencyAgg) {
+      if (row._id === 'new' || row._id === 'attention' || row._id === 'urgent' || row._id === 'critical') {
+        byUrgency[row._id] = row.count;
+      }
+    }
+
+    return { success: true, data: pageRes.data, total: pageRes.total, byUrgency };
+  }
+
+  /**
+   * Backfill `designerStatus` + 5 timestamps cho order cũ. Idempotent —
+   * chỉ áp khi order chưa có `designerStatus` (Mongoose default cũng là
+   * `unassigned` nhưng default đó áp khi load, không lưu vào doc cũ).
+   *
+   * Heuristic suy luận:
+   *   - assignee không có → 'unassigned'
+   *   - có productionError với errorSource='designer' → 'rework'
+   *   - toolResultNote === 'ok'                       → 'done'
+   *   - còn lại                                       → 'assigned'
+   *
+   * Timestamps:
+   *   - designerAssignedAt = log đầu tiên field='assignee' (sau '' → có code)
+   *   - designerCompletedAt = log cuối field='toolResultNote' (chuyển sang 'ok')
+   *   - designerReworkAt = log cuối field='productionError' (set khác empty)
+   *   - designerStartedAt = midpoint (assignedAt + completedAt)/2 nếu thiếu
+   *
+   * Trả về `{ scanned, updated, skipped }`.
+   */
+  async backfillDesignerStatus(): Promise<{
+    scanned: number;
+    updated: number;
+    skipped: number;
+  }> {
+    // 1) Build map errorCode → errorSource từ workshop_config.
+    const errorConfigs = await this.workshopConfigRepository.findAll({
+      category: WorkshopConfigCategory.ProductionError,
+    });
+    const errorSourceMap = new Map<string, string | undefined>();
+    for (const cfg of errorConfigs as Array<{ code: string; errorSource?: string }>) {
+      errorSourceMap.set(cfg.code, cfg.errorSource);
+    }
+
+    // 2) Quét order — chỉ những đơn chưa có `designerStatus` (đảm bảo idempotent).
+    const orders = await this.orderModel
+      .find({ designerStatus: { $exists: false } })
+      .lean();
+
+    let updated = 0;
+    let skipped = 0;
+
+    for (const o of orders) {
+      const orderId = String(o._id);
+      const assignee = (o as { assignee?: string }).assignee;
+      const toolResultNote = (o as { toolResultNote?: string }).toolResultNote;
+      const productionError = (o as { productionError?: string }).productionError;
+
+      let nextStatus: DesignerStatus = DesignerStatus.Unassigned;
+      if (!assignee) {
+        nextStatus = DesignerStatus.Unassigned;
+      } else if (productionError && errorSourceMap.get(productionError) === 'designer') {
+        nextStatus = DesignerStatus.Rework;
+      } else if (toolResultNote === READY_FOR_FULFILL_CODE) {
+        nextStatus = DesignerStatus.Done;
+      } else {
+        nextStatus = DesignerStatus.Assigned;
+      }
+
+      const patch: Record<string, unknown> = { designerStatus: nextStatus };
+
+      // Look up logs once per order (N+1 — OK cho one-shot backfill).
+      const logs = await this.orderLogRepository.findAll(
+        { orderId },
+        { sort: { createdAt: 1 } },
+      );
+
+      const assignLog = logs.find(
+        (l) => l.field === 'assignee' && !!l.after,
+      );
+      const completeLog = [...logs]
+        .reverse()
+        .find((l) => l.field === 'toolResultNote' && l.after === READY_FOR_FULFILL_CODE);
+      const reworkLog = [...logs]
+        .reverse()
+        .find((l) => l.field === 'productionError' && !!l.after);
+
+      const createdAt = (o as { createdAt?: Date }).createdAt;
+      const updatedAt = (o as { updatedAt?: Date }).updatedAt;
+
+      if (nextStatus !== DesignerStatus.Unassigned) {
+        patch.designerAssignedAt =
+          (assignLog as { createdAt?: Date } | undefined)?.createdAt ?? createdAt;
+      }
+      if (nextStatus === DesignerStatus.Done || nextStatus === DesignerStatus.Rework) {
+        patch.designerCompletedAt =
+          (completeLog as { createdAt?: Date } | undefined)?.createdAt ?? updatedAt;
+        const assignedAt = patch.designerAssignedAt as Date | undefined;
+        const completedAt = patch.designerCompletedAt as Date | undefined;
+        if (assignedAt && completedAt && completedAt.getTime() > assignedAt.getTime()) {
+          patch.designerStartedAt = new Date(
+            assignedAt.getTime() + (completedAt.getTime() - assignedAt.getTime()) / 2,
+          );
+        } else {
+          patch.designerStartedAt = assignedAt;
+        }
+      }
+      if (nextStatus === DesignerStatus.Rework) {
+        patch.designerReworkAt =
+          (reworkLog as { createdAt?: Date } | undefined)?.createdAt ?? updatedAt;
+        patch.designerReworkCount = 1;
+      }
+
+      try {
+        await this.orderModel.updateOne({ _id: orderId }, { $set: patch });
+        updated++;
+      } catch (err) {
+        skipped++;
+        this.logger.warn({
+          message: `[backfill-designer] ${orderId} failed: ${
+            (err as Error).message
+          }`,
+        });
+      }
+    }
+
+    void this.invalidateListCache();
+    return { scanned: orders.length, updated, skipped };
   }
 }
 

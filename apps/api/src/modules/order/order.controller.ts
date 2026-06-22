@@ -2,9 +2,18 @@ import { Body, Controller, Delete, Get, HttpCode, HttpStatus, Param, Patch, Post
 import { ApiOkResponse, ApiOperation, ApiTags } from '@nestjs/swagger';
 import { AuthUser } from 'core';
 import {
+  BulkAssignDesignerDto,
+  BulkAssignDesignerPreviewDto,
+  BulkAssignDesignerPreviewResDto,
+  BulkAssignDesignerResDto,
   BulkTransferOrderDto,
   BulkUpdateOrderFieldDto,
   BulkUpdateOrderFieldResDto,
+  DesignerBreakdownResDto,
+  GetErrorLogDto,
+  GetErrorLogResDto,
+  SetProductionErrorDto,
+  SetProductionErrorResDto,
   GetFactoryOverviewDto,
   GetFactoryOverviewResDto,
   GetGroupedProductionOrdersResDto,
@@ -39,16 +48,25 @@ const ORDER_VIEW_ROLES = [
   RoleType.Admin,
   RoleType.Manager,
   RoleType.Support,
+  RoleType.DesignerLeader,
   RoleType.Designer,
   RoleType.Fulfillment,
 ];
 
-const ORDER_WRITE_ROLES = [RoleType.SuperAdmin, RoleType.Admin, RoleType.Manager, RoleType.Support];
+const ORDER_WRITE_ROLES = [
+  RoleType.SuperAdmin,
+  RoleType.Admin,
+  RoleType.Manager,
+  RoleType.Support,
+  RoleType.DesignerLeader,
+  RoleType.Fulfillment,
+];
 
 const ORDER_FIELD_EDIT_ROLES = [
   RoleType.SuperAdmin,
   RoleType.Admin,
   RoleType.Manager,
+  RoleType.DesignerLeader,
   RoleType.Designer,
   RoleType.Fulfillment,
 ];
@@ -74,7 +92,7 @@ export class OrderController {
     @Query() dto: GetProductionOrdersDto,
     @AuthUser() user: UserDocument,
   ): Promise<GetProductionOrdersResDto> {
-    return this.orderService.getOrders(dto, user?.role?.name);
+    return this.orderService.getOrders(dto, user?.role?.name, user?._id ? String(user._id) : undefined, user?.factoryId);
   }
 
   @Get('dashboard')
@@ -98,7 +116,7 @@ export class OrderController {
     @Query() dto: GetOrderStatusOverviewDto,
     @AuthUser() user: UserDocument,
   ): Promise<GetOrderStatusOverviewResDto> {
-    return this.orderService.getStatusOverview(dto, user?.role?.name);
+    return this.orderService.getStatusOverview(dto, user?.role?.name, user?._id ? String(user._id) : undefined, user?.factoryId);
   }
 
   @Get('grouped')
@@ -112,7 +130,7 @@ export class OrderController {
     @Query() dto: GetProductionOrdersDto,
     @AuthUser() user: UserDocument,
   ): Promise<GetGroupedProductionOrdersResDto> {
-    return this.orderService.getOrdersGroupedByType(dto, user?.role?.name);
+    return this.orderService.getOrdersGroupedByType(dto, user?.role?.name, user?._id ? String(user._id) : undefined, user?.factoryId);
   }
 
   @Get('workshop-filters')
@@ -126,7 +144,7 @@ export class OrderController {
     @Query() dto: GetProductionOrdersDto,
     @AuthUser() user: UserDocument,
   ): Promise<WorkshopAvailableFiltersResDto> {
-    return this.orderService.getWorkshopAvailableFilters(dto, user?.role?.name);
+    return this.orderService.getWorkshopAvailableFilters(dto, user?.role?.name, user?._id ? String(user._id) : undefined, user?.factoryId);
   }
 
   @Get('import-summary')
@@ -158,7 +176,7 @@ export class OrderController {
     @Query() dto: GetProductionOrdersDto,
     @AuthUser() user: UserDocument,
   ) {
-    return this.orderService.exportOrders(dto, user?.role?.name);
+    return this.orderService.exportOrders(dto, user?.role?.name, user?._id ? String(user._id) : undefined, user?.factoryId);
   }
 
   @Get('factory-overview')
@@ -170,7 +188,7 @@ export class OrderController {
     @Query() dto: GetFactoryOverviewDto,
     @AuthUser() user: UserDocument,
   ): Promise<GetFactoryOverviewResDto> {
-    return this.orderService.getFactoryOverview(dto, user?.role?.name);
+    return this.orderService.getFactoryOverview(dto, user?.role?.name, user?.factoryId);
   }
 
   @Patch('bulk-transfer')
@@ -230,6 +248,100 @@ export class OrderController {
     return this.orderService.bulkUpdateField(dto, user?.role?.name, { user, ip, userAgent });
   }
 
+  @Get('designer-breakdown')
+  @Auth([RoleType.SuperAdmin, RoleType.Admin, RoleType.Manager, RoleType.DesignerLeader])
+  @ApiOperation({
+    summary:
+      'Designer KPI + matrix per-user theo filter hiện tại + overall baseline. Cho Admin/Leader.',
+  })
+  @HttpCode(HttpStatus.OK)
+  @ApiOkResponse({ type: DesignerBreakdownResDto })
+  async getDesignerBreakdown(
+    @Query() dto: GetProductionOrdersDto,
+    @AuthUser() user: UserDocument,
+  ): Promise<DesignerBreakdownResDto> {
+    return this.orderService.getDesignerBreakdown(dto, user?.role?.name, user?.factoryId);
+  }
+
+  @Get('error-log')
+  @Auth(ORDER_VIEW_ROLES)
+  @ApiOperation({
+    summary:
+      'Nhật ký bù lỗi — đơn đang lỗi xưởng, sort theo thời gian lỗi cũ nhất; áp dụng visibility theo role.',
+  })
+  @HttpCode(HttpStatus.OK)
+  @ApiOkResponse({ type: GetErrorLogResDto })
+  async getErrorLog(
+    @Query() dto: GetErrorLogDto,
+    @AuthUser() user: UserDocument,
+  ): Promise<GetErrorLogResDto> {
+    return this.orderService.getErrorLog(
+      dto,
+      user?.role?.name,
+      user?._id ? String(user._id) : undefined,
+      user?.factoryId,
+    );
+  }
+
+  @Post('bulk-assign-designer-preview')
+  @Auth([
+    RoleType.SuperAdmin,
+    RoleType.Admin,
+    RoleType.Manager,
+    RoleType.DesignerLeader,
+  ])
+  @ApiOperation({
+    summary:
+      'Pre-flight preview cho bulk assign designer — count theo status hiện tại + ai đang ôm task.',
+  })
+  @HttpCode(HttpStatus.OK)
+  @ApiOkResponse({ type: BulkAssignDesignerPreviewResDto })
+  async bulkAssignDesignerPreview(
+    @Body() dto: BulkAssignDesignerPreviewDto,
+  ): Promise<BulkAssignDesignerPreviewResDto> {
+    return this.orderService.bulkAssignDesignerPreview(dto);
+  }
+
+  @Post('bulk-assign-designer')
+  @Auth([
+    RoleType.SuperAdmin,
+    RoleType.Admin,
+    RoleType.Manager,
+    RoleType.DesignerLeader,
+  ])
+  @ApiOperation({
+    summary:
+      'Bulk assign 1 designer cho N đơn. Skip đơn đang in-progress/done/rework + trả skipped list. Set reassignOthers=true để override đơn đã gán cho người khác.',
+  })
+  @HttpCode(HttpStatus.OK)
+  @ApiOkResponse({ type: BulkAssignDesignerResDto })
+  async bulkAssignDesigner(
+    @Body() dto: BulkAssignDesignerDto,
+    @AuthUser() user: UserDocument,
+    @ClientIp() ip: string,
+    @UserAgent() userAgent: string,
+  ): Promise<BulkAssignDesignerResDto> {
+    return this.orderService.bulkAssignDesigner(dto, user?.role?.name, { user, ip, userAgent });
+  }
+
+  @Post(':id/set-production-error')
+  @Auth(ORDER_FIELD_EDIT_ROLES)
+  @ApiOperation({
+    summary:
+      'Atomic set productionError + source + note. Code="other" bắt buộc source + note (BE validate).',
+  })
+  @HttpCode(HttpStatus.OK)
+  @ApiOkResponse({ type: SetProductionErrorResDto })
+  async setProductionError(
+    @Param('id') id: string,
+    @Body() dto: SetProductionErrorDto,
+    @AuthUser() user: UserDocument,
+    @ClientIp() ip: string,
+    @UserAgent() userAgent: string,
+  ): Promise<SetProductionErrorResDto> {
+    return this.orderService.setProductionError(id, dto, user?.role?.name, { user, ip, userAgent });
+  }
+
   @Patch(':id/field')
   @Auth(ORDER_FIELD_EDIT_ROLES)
   @ApiOperation({ summary: 'Inline update a single workshop field' })
@@ -252,6 +364,17 @@ export class OrderController {
   @ApiOkResponse({ type: GetOrderLogsResDto })
   async getLogs(@Param('id') id: string, @Query() dto: GetOrderLogsDto): Promise<GetOrderLogsResDto> {
     return this.orderService.getLogs(id, dto);
+  }
+
+  @Get(':id')
+  @Auth(ORDER_VIEW_ROLES)
+  @ApiOperation({ summary: 'Get single order — full info cho detail dialog.' })
+  @HttpCode(HttpStatus.OK)
+  async getOrderById(
+    @Param('id') id: string,
+    @AuthUser() user: UserDocument,
+  ): Promise<{ success: true; data: unknown }> {
+    return this.orderService.getOrderById(id, user?.role?.name, user?._id ? String(user._id) : undefined, user?.factoryId);
   }
 
   @Delete(':id')
@@ -278,6 +401,19 @@ export class OrderController {
   @ApiOkResponse({ type: ResDto })
   async refreshImageUrls(): Promise<ResDto> {
     const result = await this.orderService.refreshImageUrls();
+    return { success: true, data: result };
+  }
+
+  @Post('backfill-designer-status')
+  @Auth([RoleType.SuperAdmin, RoleType.Admin])
+  @ApiOperation({
+    summary:
+      'Infer designerStatus + timestamps for legacy orders from assignee + toolResultNote + OrderLog (idempotent).',
+  })
+  @HttpCode(HttpStatus.OK)
+  @ApiOkResponse({ type: ResDto })
+  async backfillDesignerStatus(): Promise<ResDto> {
+    const result = await this.orderService.backfillDesignerStatus();
     return { success: true, data: result };
   }
 }

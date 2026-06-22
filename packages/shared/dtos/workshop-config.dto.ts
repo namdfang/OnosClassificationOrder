@@ -11,6 +11,14 @@ const HexColorZod = z
   .string()
   .regex(/^#([0-9a-fA-F]{6}|[0-9a-fA-F]{3})$/, 'color must be hex like #ff0000');
 
+/**
+ * Production-error có thêm flag `errorSource` (chỉ áp dụng cho category
+ * `production_error`). `'designer'` → khi xưởng set error này, đơn auto chuyển
+ * `designerStatus='rework'`; `'factory'` → chỉ ghi nhận stats, không trigger rework.
+ */
+export const ErrorSourceZod = z.enum(['designer', 'factory']);
+export type ErrorSource = z.infer<typeof ErrorSourceZod>;
+
 export const WorkshopConfigZod = BaseEntityZod.extend({
   category: WorkshopConfigCategoryZod,
   code: z.string().min(1).max(60),
@@ -19,6 +27,8 @@ export const WorkshopConfigZod = BaseEntityZod.extend({
   icon: z.string().max(60).optional(),
   order: z.number().int().nonnegative().default(0),
   isActive: z.boolean().default(true),
+  /** Chỉ dùng khi category=production_error. */
+  errorSource: ErrorSourceZod.optional(),
 });
 export type WorkshopConfig = z.infer<typeof WorkshopConfigZod>;
 
@@ -47,6 +57,7 @@ export const CreateWorkshopConfigZod = z.object({
   icon: z.string().max(60).optional(),
   order: WorkshopConfigZod.shape.order.optional(),
   isActive: WorkshopConfigZod.shape.isActive.optional(),
+  errorSource: ErrorSourceZod.optional(),
 });
 export class CreateWorkshopConfigDto extends createZodDto(extendApi(CreateWorkshopConfigZod)) {}
 
@@ -61,6 +72,7 @@ export const UpdateWorkshopConfigZod = z.object({
   icon: z.string().max(60).optional(),
   order: WorkshopConfigZod.shape.order.optional(),
   isActive: WorkshopConfigZod.shape.isActive.optional(),
+  errorSource: ErrorSourceZod.optional(),
 });
 export class UpdateWorkshopConfigDto extends createZodDto(extendApi(UpdateWorkshopConfigZod)) {}
 

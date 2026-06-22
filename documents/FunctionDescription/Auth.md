@@ -55,8 +55,12 @@ User vào /login
 
 ### 3.2 `user/`
 - CRUD user
-- Field: `email`, `fullName`, `password` (bcryptjs hash), `roleType`, `customRoleId`, `departmentId`, `isActive`
+- Field: `email`, `fullName`, `password` (bcryptjs hash), `roleType`, `customRoleId`, `departmentId`, `isActive`, `factoryId?` (ref FactoryEntity), `telegramChatId?`, `hireDate?`
 - Endpoint: `/v1/users` (GET list, POST create, PATCH :id, DELETE :id)
+- **`factoryId` required khi role=Fulfillment** (BE validate trong `createUser` + `adminUpdateUser`; throw 400 nếu thiếu). Per-factory scope: Fulfillment user chỉ thấy đơn ở `factoryId` hoặc `originalFactoryId` của mình (xem `Orders.md §7`)
+- `telegramChatId` + `hireDate` dùng cho `/designer/team` page (Designer/DesignerLeader role)
+- `getUserById` projection bao gồm: `_id, status, email, fullName, departmentId, factoryId, telegramChatId, hireDate, role, customRole, rateLimitBypass, forcePassChange` — đảm bảo `AuthUser()` decorator có đủ field cho visibility filter
+- ⚠️ Phase Designer-Task-Workflow Phase 6 **xoá** field `user.assigneeCode` — designer identity model giờ dùng `user._id` trực tiếp (Order.assignee = user._id)
 
 ### 3.3 `role/`
 - **Static enum** `RoleType` từ `shared`: SuperAdmin / Admin / Manager / User
@@ -159,16 +163,26 @@ Hệ thống dùng **catalog tĩnh** trong `packages/shared/constants/permission
 | `admin` | `user.manage`, `role.manage` | Quản trị user/role. |
 | `audit` | `order.log.view` | Xem timeline thay đổi đơn hàng. |
 
-### 7.2 Preset 4+ role mặc định (`DEFAULT_ROLE_PERMISSIONS`)
+### 7.2 Preset role mặc định (`DEFAULT_ROLE_PERMISSIONS`)
 
 | Role | Page | Order action | Field view | Field edit | Khác |
 |------|------|--------------|-----------|-----------|------|
 | SuperAdmin / Admin / Manager | tất cả | tất cả | tất cả | tất cả | tất cả |
 | Support | dashboard / orders / products | `order.import`, `order.view_workshop_table` | tất cả | ❌ | `order.log.view` |
-| Designer | dashboard / orders | `order.view_workshop_table` | tool* / errorFile* / assignee* | tool* / errorFile* / assignee* | ❌ |
-| Fulfillment | dashboard / orders | `order.view_workshop_table` | printStatus* | printStatus* | ❌ |
+| **DesignerLeader** | dashboard / orders / workshop_config / **designer_team** / **designer_stats** / my_tasks | `order.import`, `order.transfer`, `order.delete`, `order.view_workshop_table` | tất cả designer/order field + designerStatus | `assignee` + `toolResultNote` + `productionErrorSource` + machineNumber + tool/errorFile* + assigneeNote | `designer.team.manage`, `designer.task.assign`, `designer.task.override`, `order.log.view` |
+| **Designer** (sub) | dashboard / orders / **my_tasks** | `order.view_workshop_table` | tool* / errorFile* / assigneeNote* / designerStatus / productionError | tool / errorFile* / errorFileNote / assigneeNote / machineNumber (**KHÔNG** edit assignee + toolResultNote — BE auto derive khi state machine `complete`) | `designer.task.transition` |
+| Fulfillment | dashboard / orders | `order.view_workshop_table`, `order.transfer` | printStatus* / machineNumber / productionError* / **productionErrorSource** | printStatus* / machineNumber / productionError* / **productionErrorSource** | ❌ |
 
 > `*` = cả 2 sub-permission `view` + `edit` của field đó.
+
+**Phase Designer-Task-Workflow** đổi role landscape:
+- Thêm role `DesignerLeader` (quản lý sub-designer + assign + xem stats)
+- Role `Designer` cũ trở thành **sub-designer** — quyền giảm: bỏ `assignee.edit` + `toolResultNote.edit` (BE auto derive qua state machine), thêm `designer.task.transition`
+- Migration: chạy `POST /v1/designer/migrate-leader` (Admin) một lần để promote 1 user Designer cũ duy nhất → DesignerLeader role + đổi email sang `designerleader@onospod.com`
+
+**Field-level perm mới** (Phase Fulfillment per-factory + ProductionErrorSource):
+- `order.field.designerStatus.view` — read-only badge trong workshop table
+- `order.field.productionErrorSource.view/.edit` — picker designer/factory
 
 ### 7.3 RoleEntity (Phase 5 extension)
 
@@ -184,7 +198,7 @@ class RoleEntity {
 }
 ```
 
-`RoleService.onModuleInit()` seed 6 system role (SuperAdmin, Admin, Manager, Support, Designer, Fulfillment) với preset tương ứng. Role đã tồn tại không bị overwrite — chỉ thiếu `isSystem` mới được flip về true.
+`RoleService.onModuleInit()` seed **7 system role** (SuperAdmin, Admin, Manager, Support, **DesignerLeader**, Designer, Fulfillment) với preset tương ứng. Phase Designer-Task-Workflow đổi `SYSTEM_ROLES`: thêm DesignerLeader đứng trước Designer. Role đã tồn tại trên DB **bị overwrite về preset mới mỗi boot** (sync catalog là source of truth) — admin muốn role custom phải tạo role mới với `isSystem=false`.
 
 ### 7.4 Endpoints quản lý role (mới)
 
@@ -211,9 +225,13 @@ class RoleEntity {
 ## 8. Frontend UI Phase 5
 
 ### 8.1 `/users` (rebuild)
-- Table list user (Name, Email, Role badge, Switch trạng thái, action Sửa / Xóa).
-- Dialog Thêm/Sửa: fullName, email, password (chỉ khi tạo), select role.
-- Service: `RepositoryRemote.users.{createUser, adminUpdateUser, adminDeleteUser, toggleActive}`.
+- Table list user (Name, Email, Role badge + **Factory badge** khi role=Fulfillment, Switch trạng thái, action Sửa / Xóa).
+- Dialog Thêm/Sửa: fullName, email, password (chỉ khi tạo), select role, **conditional Factory dropdown** (chỉ hiện khi role được chọn === Fulfillment, required, load từ `/v1/factories`).
+- Form validate: nếu role=Fulfillment mà chưa pick factoryId → toast error + block submit. BE cũng enforce (defense).
+- Reset `factoryId` về `''` khi user đổi role sang ≠ Fulfillment (tránh data thừa).
+- Service: `RepositoryRemote.users.{createUser, adminUpdateUser, adminDeleteUser, toggleActive}` + `RepositoryRemote.factory.getFactories()`.
+
+> Designer team (sub-designer) management dùng page riêng `/designer/team` — xem `DesignerTaskWorkflow.md §4.1`. Page `/users` tổng dành cho mọi role; admin tạo sub-designer ở đâu cũng được, nhưng `/designer/team` UX tối ưu hơn (random password gen, hireDate, telegramChatId, count task active).
 
 ### 8.2 `/roles` (rebuild)
 - Table list role (Name, Description, số permissions, badge System).
@@ -230,6 +248,7 @@ class RoleEntity {
 - Hàm `filterMenuByPermissions(groups, codes, isAdmin)` lọc theo `profile.role.permissionCodes`.
 - Admin / SuperAdmin bypass (full menu) — tránh khóa cứng nếu seed lỗi.
 - `getUserById` projection thêm `role.permissionCodes` + `role.isSystem` để FE nhận đủ data từ `/v1/auth/me`.
+- Item `Orders` có 3 child: `List Order` (`?tab=list`), `Nhật ký bù lỗi` (`?tab=error-log`), `Import Order` (`?tab=import`). Active state detect qua `isLinkActive(linkPath, currentPath, currentSearch)` — so sánh path + query subset, nên link có `?tab=` vẫn highlight đúng.
 
 > ⚠️ Cache Redis `user:${id}` và `user:info:${id}` giữ payload cũ. Sau khi deploy Phase 5, admin gọi `POST /v1/users/:id/clear-user-cache` hoặc đợi TTL để FE thấy permission mới.
 

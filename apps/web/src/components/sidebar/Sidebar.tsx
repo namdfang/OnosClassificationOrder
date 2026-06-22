@@ -1,4 +1,5 @@
 import {
+  AlertTriangle,
   Bell,
   Building2,
   ChevronDown,
@@ -9,6 +10,7 @@ import {
   List,
   LogOut,
   Package,
+  Palette,
   Settings,
   ShieldCheck,
   ShieldHalf,
@@ -63,10 +65,13 @@ const NAV_GROUPS: NavGroup[] = [
         perm: 'page.orders',
         children: [
           { key: 'orders-list', label: 'List Order', to: `${PATHS.ORDERS}?tab=list`, icon: <List size={14} /> },
+          { key: 'orders-error-log', label: 'Nhật ký bù lỗi', to: `${PATHS.ORDERS}?tab=error-log`, icon: <AlertTriangle size={14} /> },
           { key: 'orders-import', label: 'Import Order', to: `${PATHS.ORDERS}?tab=import`, icon: <FileDown size={14} />, perm: 'order.import' },
         ],
       },
       { key: PATHS.WORKSHOP_CONFIG, label: 'Quản lý xưởng', to: PATHS.WORKSHOP_CONFIG, icon: <Factory size={17} />, perm: 'workshop.manage' },
+      { key: PATHS.MY_TASKS, label: 'Task của tôi', to: PATHS.MY_TASKS, icon: <List size={17} />, perm: 'page.my_tasks' },
+      { key: PATHS.DESIGNER_TEAM, label: 'Team Designer', to: PATHS.DESIGNER_TEAM, icon: <Palette size={17} />, perm: 'page.designer_team' },
       { key: PATHS.NOTIFICATIONS, label: 'Notifications', to: PATHS.NOTIFICATIONS, icon: <Bell size={17} /> },
       { key: PATHS.ACCOUNT, label: 'My account', to: PATHS.ACCOUNT, icon: <User size={17} /> },
     ],

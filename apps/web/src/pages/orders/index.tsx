@@ -6,10 +6,11 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { usePermission } from '@/hooks/usePermission';
 
 import { ListOrderTab } from './ListOrderTab';
+import { ErrorLogTab } from './ErrorLogTab';
 import { ImportOrderTab } from './ImportOrderTab';
 import { OrderTableWorkshop } from './OrderTableWorkshop';
 
-const ALL_TABS = ['list', 'workshop', 'import'] as const;
+const ALL_TABS = ['list', 'error-log', 'workshop', 'import'] as const;
 type TabKey = (typeof ALL_TABS)[number];
 
 export default function Orders() {
@@ -22,6 +23,9 @@ export default function Orders() {
   const tabs = useMemo(() => {
     const out: { key: TabKey; label: string }[] = [];
     if (adminVisible) out.push({ key: 'list', label: 'List Order' });
+    // Nhật ký bù lỗi — hiển thị cho mọi role có quyền xem orders (kể cả
+    // Designer/Fulfillment; visibility filter ở BE đảm bảo scope đúng).
+    out.push({ key: 'error-log', label: 'Nhật ký bù lỗi' });
     if (workshopVisible) out.push({ key: 'workshop', label: 'Bảng Workshop' });
     if (canImport) out.push({ key: 'import', label: 'Import Order' });
     return out;
@@ -41,10 +45,21 @@ export default function Orders() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [searchParams, tabs]);
 
-  // Param prefix per tab (xem ListOrderTab / OrderTableWorkshop). Khi đổi tab,
-  // strip param của tab khác để URL không lẫn lộn.
+  // Param prefix per tab (xem ListOrderTab / OrderTableWorkshop / ErrorLogTab).
+  // Khi đổi tab, strip param của tab khác để URL không lẫn lộn.
   const LIST_PARAMS = ['lsearch', 'lmapped', 'lpage', 'lsize'];
   const WORKSHOP_PARAMS = ['wsearch', 'wfrom', 'wto', 'wprint', 'wnote', 'wassign', 'wpage', 'wsize'];
+  const ERROR_LOG_PARAMS = [
+    'esearch',
+    'eassign',
+    'efabric',
+    'etool',
+    'ecode',
+    'esource',
+    'eurg',
+    'epage',
+    'esize',
+  ];
 
   const handleTabChange = (val: string) => {
     setActiveTab(val as TabKey);
@@ -54,6 +69,7 @@ export default function Orders() {
         sp.set('tab', val);
         if (val !== 'list') LIST_PARAMS.forEach((k) => sp.delete(k));
         if (val !== 'workshop') WORKSHOP_PARAMS.forEach((k) => sp.delete(k));
+        if (val !== 'error-log') ERROR_LOG_PARAMS.forEach((k) => sp.delete(k));
         return sp;
       },
       { replace: true },
@@ -94,6 +110,10 @@ export default function Orders() {
             <ListOrderTab refreshKey={refreshKey} />
           </TabsContent>
         )}
+
+        <TabsContent value="error-log">
+          <ErrorLogTab />
+        </TabsContent>
 
         {workshopVisible && (
           <TabsContent value="workshop">

@@ -24,6 +24,21 @@ export class WorkshopConfigService implements OnModuleInit {
   ) {}
 
   async onModuleInit() {
+    // One-shot cleanup: bỏ category 'assignee' khỏi DB. Sau khi Designer
+    // Task Workflow Phase 6 chuyển sang dùng userId trực tiếp, category này
+    // không còn ý nghĩa. `deleteMany` idempotent — boot lần 2 chỉ tốn 1 query
+    // không-match.
+    try {
+      const r = await this.model.deleteMany({ category: 'assignee' as WorkshopConfigCategory });
+      if (r.deletedCount && r.deletedCount > 0) {
+        // eslint-disable-next-line no-console
+        console.log(`[workshop-seed] dropped legacy 'assignee' category: ${r.deletedCount} rows`);
+      }
+    } catch (err) {
+      // eslint-disable-next-line no-console
+      console.warn('[workshop-seed] assignee cleanup failed:', (err as Error).message);
+    }
+
     for (const item of WORKSHOP_CONFIG_SEED) {
       try {
         // withDeleted so soft-deleted rows don't trick us into inserting a
@@ -34,8 +49,17 @@ export class WorkshopConfigService implements OnModuleInit {
         );
         if (!existing) {
           await this.repo.create({ ...item, isActive: true });
-        } else if (existing.deletedAt) {
-          await this.repo.findOneAndUpdate({ _id: existing._id }, { deletedAt: null });
+        } else {
+          const patch: Record<string, unknown> = {};
+          if (existing.deletedAt) patch.deletedAt = null;
+          // Backfill errorSource cho row production_error đã tồn tại trước
+          // khi Phase 1 thêm flag (idempotent — chỉ update khi DB chưa có).
+          if (item.errorSource && !existing.errorSource) {
+            patch.errorSource = item.errorSource;
+          }
+          if (Object.keys(patch).length > 0) {
+            await this.repo.findOneAndUpdate({ _id: existing._id }, patch);
+          }
         }
       } catch (err) {
         // Don't crash on dup-key races — the row exists, that's enough.

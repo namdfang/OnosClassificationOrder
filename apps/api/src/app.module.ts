@@ -24,6 +24,7 @@ import { WinstonModule } from '@/modules/winston/winston.module';
 import { ActionModule } from './modules/actions/action.module';
 import { AmqpModule } from './modules/amqp/amqp.module';
 import { DepartmentModule } from './modules/departments/department.module';
+import { DesignerModule } from './modules/designer/designer.module';
 import { FactoryModule } from './modules/factory/factory.module';
 import { MachineTypeModule } from './modules/machine-type/machine-type.module';
 import { OrderModule } from './modules/order/order.module';
@@ -61,6 +62,7 @@ import { FastifyThrottlerGuard } from './guards/fastify-throttler.guard';
     WorkshopConfigModule,
     OrderModule,
     OrderLogModule,
+    DesignerModule,
     TelegramNotificationModule,
     NotificationModule,
     ActionModule,

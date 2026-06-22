@@ -69,6 +69,49 @@ export class ApiConfigService {
     return this.getString('DB_URI');
   }
 
+  /**
+   * R2 (Cloudflare) config. Lenient — chỉ active khi đủ 4 field cốt lõi
+   * (account/key/secret/bucket/publicBase). Thiếu → trả `null` để
+   * DesignImageService skip queue, importOrders fallback giữ URL gốc thẳng.
+   */
+  get r2Config(): null | {
+    accountId: string;
+    accessKeyId: string;
+    secretAccessKey: string;
+    bucket: string;
+    publicBase: string;
+    maxDownloadMb: number;
+    previewMaxDim: number;
+    previewQuality: number;
+    thumbDim: number;
+    thumbQuality: number;
+    queueConcurrency: number;
+  } {
+    const accountId = this.configService.get<string>('R2_ACCOUNT_ID') || '';
+    const accessKeyId = this.configService.get<string>('R2_ACCESS_KEY_ID') || '';
+    const secretAccessKey = this.configService.get<string>('R2_SECRET_ACCESS_KEY') || '';
+    const bucket = this.configService.get<string>('R2_BUCKET') || '';
+    const publicBase = (this.configService.get<string>('R2_PUBLIC_BASE') || '').replace(/\/$/, '');
+    if (!accountId || !accessKeyId || !secretAccessKey || !bucket || !publicBase) return null;
+    const num = (k: string, fb: number) => {
+      const v = Number(this.configService.get<string>(k));
+      return Number.isFinite(v) && v > 0 ? v : fb;
+    };
+    return {
+      accountId,
+      accessKeyId,
+      secretAccessKey,
+      bucket,
+      publicBase,
+      maxDownloadMb: num('R2_MAX_DOWNLOAD_MB', 120),
+      previewMaxDim: num('R2_PREVIEW_MAX_DIM', 1000),
+      previewQuality: num('R2_PREVIEW_QUALITY', 80),
+      thumbDim: num('R2_THUMB_DIM', 300),
+      thumbQuality: num('R2_THUMB_QUALITY', 70),
+      queueConcurrency: num('DESIGN_QUEUE_CONCURRENCY', 3),
+    };
+  }
+
   get awsS3Config() {
     return {
       bucketRegion: this.getString('AWS_S3_BUCKET_REGION'),

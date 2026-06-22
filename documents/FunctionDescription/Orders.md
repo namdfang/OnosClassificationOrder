@@ -1,18 +1,23 @@
 # Orders — Function Description
 
 > **File FE:** `apps/web/src/pages/orders/index.tsx` (Tabs wrapper, route theo permission)
-> **File FE tabs:** `ListOrderTab.tsx` (Admin), `OrderTableWorkshop.tsx` (Designer/Fulfill/Support), `ImportOrderTab.tsx`, `parseOrders.ts`
-> **Cell components:** `apps/web/src/components/orders/cells/{ColorBadgeSelectCell,IconSelectCell,TextEditCell,ImageThumbCell,SelectPopover}.tsx`
-> **Bulk edit:** `apps/web/src/components/orders/BulkEditToolbar.tsx`
+> **File FE tabs:** `ListOrderTab.tsx` (Admin), `ErrorLogTab.tsx` (mọi role — Nhật ký bù lỗi), `OrderTableWorkshop.tsx` (Designer/Fulfill/Support), `ImportOrderTab.tsx`, `parseOrders.ts`
+> **Cell components:** `apps/web/src/components/orders/cells/{ColorBadgeSelectCell,IconSelectCell,TextEditCell,ImageThumbCell,SelectPopover,AssigneeSelectCell,ProductionErrorSelectCell,ProductionErrorOtherDialog,ErrorSourceCell}.tsx`
+> **Bulk edit:** `apps/web/src/components/orders/BulkEditToolbar.tsx` + `AssignDesignerDialog.tsx`
 > **Workshop columns (shared with Dashboard Tab C):** `apps/web/src/components/orders/workshopTableConfig.tsx` (`WORKSHOP_COLS` + `WorkshopOrderRow` + `WorkshopRenderCtx`)
+> **Designer KPI panel (Admin/Leader):** `apps/web/src/pages/orders/DesignerSummaryPanel.tsx`
 > **File BE:** `apps/api/src/modules/order/`
 > **Route:** `/orders`
 > **API:**
->  - `GET /v1/orders` · `GET /v1/orders/grouped` · `GET /v1/orders/workshop-filters` · `GET /v1/orders/import-summary`
+>  - `GET /v1/orders` · `GET /v1/orders/:id` · `GET /v1/orders/grouped` · `GET /v1/orders/workshop-filters` · `GET /v1/orders/import-summary` · `GET /v1/orders/error-log`
 >  - `GET /v1/orders/export` (full-list, không phân trang — xem `Dashboard.md §10.3`)
 >  - `GET /v1/orders/factory-overview` (xem `Dashboard.md §10.2`)
->  - `POST /v1/orders/import` · `POST /v1/orders/backfill-fabric` · `POST /v1/orders/refresh-image-urls`
+>  - `GET /v1/orders/designer-breakdown` (KPI panel Designer — xem `DesignerTaskWorkflow.md §2.5`)
+>  - `POST /v1/orders/import` · `POST /v1/orders/backfill-fabric` · `POST /v1/orders/backfill-designer-status` · `POST /v1/orders/refresh-image-urls`
 >  - `PATCH /v1/orders/:id/field` · `PATCH /v1/orders/bulk-field`
+>  - `POST /v1/orders/:id/set-production-error` (atomic — bắt buộc khi code='other')
+>  - `POST /v1/orders/bulk-assign-designer-preview` + `POST /v1/orders/bulk-assign-designer`
+>  - `POST /v1/orders/:id/designer-transition` · `POST /v1/designer/bulk-transition` (xem `DesignerTaskWorkflow.md`)
 >  - `PATCH /v1/orders/:id/transfer` · `PATCH /v1/orders/bulk-transfer`
 >  - `GET /v1/orders/:id/logs` · `DELETE /v1/orders/:id`
 
@@ -23,6 +28,7 @@
 Module **Orders** quản lý đơn hàng sản xuất từ hệ thống ngoài (Google Sheets / TikTok / Etsy export...). UI chia tab động theo quyền của user:
 
 - **Tab List Order** — bảng admin cũ (card row, preview mockup/design, copy URL). Cần `order.view_admin_table`.
+- **Tab Nhật ký bù lỗi** — danh sách đơn đang chờ xử lý lỗi (xem `§14`). Hiển thị cho mọi role có quyền xem orders; visibility BE tự scope theo role. **Sidebar có entry riêng** `Orders → Nhật ký bù lỗi` link thẳng vào `?tab=error-log`.
 - **Tab Bảng Workshop** — bảng nghiệp vụ 20 cột với inline select / bulk edit. Cần `order.view_workshop_table`.
 - **Tab Import Order** — paste TSV từ Google Sheets → parse → preview → bulk import. Cần `order.import`.
 
@@ -159,6 +165,7 @@ Sau import (hoặc khi đổi date), `ImportOrderTab` gọi endpoint này để 
 | GET | `/v1/orders/export` | Trả toàn bộ đơn theo filter, **không phân trang**. Dùng cho Excel export Tab C. |
 | GET | `/v1/orders/import-summary?date=YYYY-MM-DD` | Bảng tổng hợp `(type, size, fabricType)` theo ngày import. Phase 5. |
 | GET | `/v1/orders/:id/logs` | Audit timeline 1 order (xem `OrderLog.md`) |
+| GET | `/v1/orders/error-log` | Tab "Nhật ký bù lỗi" — đơn đang chờ xử lý lỗi (productionError set, toolResultNote≠ok). Sort theo `productionFirstErrorAt` ASC. Trả thêm `byUrgency`. Visibility theo role (Fulfillment scope factory, Designer scope assignee). Xem `§14`. |
 | POST | `/v1/orders/import` | Bulk upsert. `ORDER_WRITE_ROLES` (Admin / Manager / Support). |
 | POST | `/v1/orders/backfill-fabric` | Re-derive `fabricType` + `toolResult` từ product config cho đơn còn thiếu (non-destructive). |
 | POST | `/v1/orders/refresh-image-urls` | Re-apply transformDriveUrl cho tất cả order (backfill cũ). |
@@ -209,15 +216,26 @@ Sau import (hoặc khi đổi date), `ImportOrderTab` gọi endpoint này để 
   toolResultNote?: string;     // index — quan trọng vì điều khiển readyForFulfill
   errorFile?: string;
   errorFileNote?: string;      // free text
-  assignee?: string;           // index
+  assignee?: string;           // = user._id (string). Phase Designer-Task-Workflow Phase 6 đổi từ workshop_config code → userId thuần. Index.
   assigneeNote?: string;
   fabricType?: string;         // workshop_config code (category=fabric_type), index — derived từ productConfig.fabricType lúc import (Phase 7)
+  machineNumber?: string;      // workshop_config code (category=machine), index
 
-  // ─── Production error (Phase 8) — xưởng báo lỗi đơn hàng ───
+  // ─── Production error (Phase 8 + Fulfillment per-factory) — xưởng báo lỗi đơn hàng ───
   productionError?: string;    // workshop_config code (category=production_error), index. Set khác null/empty ⇒ đơn ở trạng thái "có lỗi".
   productionErrorNote?: string;// free text mô tả chi tiết lỗi
+  productionErrorSource?: 'designer' | 'factory'; // index. Auto-fill từ workshop_config.errorSource khi user set productionError; user override được. 'other' bắt buộc user pick (BE 400 nếu thiếu).
+  productionErrorCount: number;// default 0. $inc mỗi lần xưởng set productionError (cumulative, không reset). FE hiển thị "Lỗi ×N" trên cell toolResultNote khi count ≥ 2.
+  productionFirstErrorAt?: Date; // index. Set khi `productionError` chuyển null→value (và field chưa có giá trị) → mốc bắt đầu "đang chờ xử lý lỗi" của cycle hiện tại. Clear (=null) khi đơn rời tab "Nhật ký bù lỗi": `toolResultNote='ok'` HOẶC `productionError` được clear. Dùng cho sort + tính mức độ khẩn cấp (24h/48h/72h).
 
-  readyForFulfill: boolean;    // derived = (toolResultNote === 'ok'), default false, index
+  // ─── Designer task workflow (xem DesignerTaskWorkflow.md) ───
+  designerStatus: DesignerStatus;   // enum, default unassigned, index
+  designerAssignedAt?, designerStartedAt?, designerFirstStartedAt?, designerCompletedAt?, designerRejectedAt?, designerReworkAt?: Date;
+  designerRejectedReason?: string;
+  designerReworkCount: number;      // $inc khi xưởng báo lỗi designer
+  designerWorkMs: number;           // cumulative work time (ms), $inc khi complete
+
+  readyForFulfill: boolean;    // derived = (toolResultNote === 'ok' OR productionError set). default false, index. Mềm hoá invariant: khi xưởng báo lỗi (toolResultNote='error') vẫn giữ true để fulfillment thấy trong list mặc định.
 }
 ```
 
@@ -237,7 +255,7 @@ Tất cả workshop fields lưu **code** từ `WorkshopConfigEntity`. FE render 
 
 ### 5.2 Indexes
 - `productionId` (unique) — dedupe import
-- `type`, `orderId`, `externalId`, `isMapped`, `factoryId`, `originalFactoryId`, `machineTypeId`, `printStatus`, `toolResultNote`, `assignee`, `fabricType`, `productionError`, `readyForFulfill` — filter + aggregation perf
+- `type`, `orderId`, `externalId`, `isMapped`, `factoryId`, `originalFactoryId`, `machineTypeId`, `printStatus`, `toolResultNote`, `assignee`, `fabricType`, `machineNumber`, `productionError`, `productionErrorSource`, `designerStatus`, `readyForFulfill` — filter + aggregation perf
 
 ### 5.3 Virtuals
 - `factory` (`factoryId` → `FactoryEntity`)
@@ -265,17 +283,19 @@ Variants:
 
 ---
 
-## 7. Visibility theo role (Phase 2)
+## 7. Visibility theo role (Phase 2 + Fulfillment per-factory)
 
-Mỗi request `GET /v1/orders` đi qua `OrderService.buildVisibilityFilter(roleName, dto)` để giới hạn tập kết quả trước khi áp filter của client:
+Mỗi request `GET /v1/orders` đi qua `OrderService.buildVisibilityFilter(roleName, dto, assigneeUserId?, fulfillmentFactoryId?)` để giới hạn tập kết quả trước khi áp filter của client:
 
 | Role | Filter mặc định |
 |------|------------------|
-| `SuperAdmin` / `Admin` / `Manager` / `Support` | Không giới hạn (có thể truyền `createdFrom`/`createdTo` để filter ngày) |
-| `Designer` | `createdAt` ∈ [7 ngày gần nhất] — override được bằng query |
-| `Fulfillment` | `createdAt` ∈ [7 ngày gần nhất] **AND** `readyForFulfill = true` — chỉ date override được, `readyForFulfill` luôn enforce |
+| `SuperAdmin` / `Admin` / `Manager` / `Support` / `DesignerLeader` | Không giới hạn (có thể truyền `createdFrom`/`createdTo` để filter ngày) |
+| `Designer` (sub) | `assignee = user._id` — chỉ thấy task của mình (KHÔNG ép date window, đã narrow bởi assignee). Phase Designer-Task-Workflow Phase 6 đổi từ `assigneeCode` → `user._id`. |
+| `Fulfillment` | `createdAt` ∈ [7 ngày gần nhất] **AND** `readyForFulfill = true` **AND** `$or: [{factoryId: user.factoryId}, {originalFactoryId: user.factoryId}]` — Per-factory scope (cả 2 xưởng thấy đơn transfer). Nếu user chưa gán `factoryId` → filter trả empty (an toàn). |
 
-`readyForFulfill` được set bằng service: mỗi lần `updateField(toolResultNote)` chạy, nếu value mới là `'ok'` → `readyForFulfill=true`, ngược lại false. Bulk update làm tương tự. Đây là lifecycle handoff Designer → Fulfillment.
+`readyForFulfill` semantic mềm hoá: vẫn `true` khi xưởng báo lỗi (`toolResultNote='error'`) — để fulfillment thấy đơn lỗi trong list mặc định mà không cần switch filter. Set lifecycle: `complete` action (state machine designer) set `toolResultNote='ok'` + `readyForFulfill=true`; user clear `toolResultNote` qua updateField trực tiếp mới set false.
+
+Controller pass `user._id` + `user.factoryId` cho tất cả endpoint GET. Xem `DesignerTaskWorkflow.md §5.5`.
 
 ### 7.x Query filter mở rộng
 
@@ -296,34 +316,63 @@ Ngoài các filter cơ bản (`createdFrom/To`, `factoryId`, `machineTypeId`, `p
 ## 8. Inline / bulk update (Phase 2)
 
 ### 8.1 Whitelist field
-11 field trong `ORDER_WORKSHOP_FIELDS` (shared):
-`printStatus`, `printStatusNote`, `toolResult`, `toolResultNote`, `errorFile`, `errorFileNote`, `assignee`, `assigneeNote`, `fabricType`, `productionError`, `productionErrorNote`.
+13 field trong `ORDER_WORKSHOP_FIELDS` (shared):
+`printStatus`, `printStatusNote`, `toolResult`, `toolResultNote`, `errorFile`, `errorFileNote`, `assignee`, `assigneeNote`, `fabricType`, `machineNumber`, `productionError`, `productionErrorNote`, `productionErrorSource`.
 
-Mỗi field có category workshop_config tương ứng trong `FIELD_CONFIG_CATEGORY` (BE), trừ 2 free-text field: `errorFileNote` và `productionErrorNote`.
+Mỗi field có category workshop_config tương ứng trong `FIELD_CONFIG_CATEGORY` (BE) trừ:
+- Free-text: `errorFileNote`, `productionErrorNote`
+- `assignee` — value là `user._id` (validate qua `assertAssigneeUserValid`, không workshop_config)
+- `productionErrorSource` — enum cố định `designer | factory`
 
 ### 8.2 Role allow-list per field (`FIELD_EDIT_ROLES`)
 
-| Field | Admin/Manager | Support | Designer | Fulfillment |
-|-------|:-------------:|:-------:|:--------:|:-----------:|
-| printStatus / printStatusNote | ✅ | ❌ | ❌ | ✅ |
-| toolResult | ✅ | ❌ | ✅ | ❌ |
-| **toolResultNote** | ✅ | ❌ | ✅ | ❌ (xem only — Phase 8 đã rút quyền edit; báo lỗi sau in dùng `productionError`) |
-| errorFile / errorFileNote | ✅ | ❌ | ✅ | ❌ |
-| assignee / assigneeNote | ✅ | ❌ | ✅ | ❌ |
-| **fabricType** | ✅ (admin-managed) | ❌ | ❌ | ❌ |
-| **productionError / productionErrorNote** | ✅ | ❌ (view) | ❌ (view) | ✅ (Phase 8 — xưởng báo lỗi) |
+| Field | Admin/Manager | Support | DesignerLeader | Designer (sub) | Fulfillment |
+|-------|:-------------:|:-------:|:--------------:|:--------------:|:-----------:|
+| printStatus / printStatusNote | ✅ | ❌ | ❌ | ❌ | ✅ |
+| toolResult | ✅ | ❌ | ✅ | ✅ | ❌ |
+| **toolResultNote** | ✅ | ❌ | ✅ | ❌ (BE auto derive khi state machine complete) | ❌ |
+| errorFile / errorFileNote | ✅ | ❌ | ✅ | ✅ | ❌ |
+| **assignee** | ✅ | ❌ | ✅ | ❌ (BE đặt qua state machine) | ❌ |
+| assigneeNote | ✅ | ❌ | ✅ | ✅ | ❌ |
+| **fabricType** | ✅ (admin-managed) | ❌ | ❌ | ❌ | ❌ |
+| **machineNumber** | ✅ | ❌ | ✅ | ✅ | ✅ |
+| **productionError / productionErrorNote** | ✅ | ❌ (view) | ❌ (view) | ❌ (view) | ✅ (Phase 8) |
+| **productionErrorSource** | ✅ | ❌ (view) | ✅ | ❌ (view) | ✅ |
 
 Support được xem nhưng không sửa — controller cho qua, service `assertCanEditField` chặn ở field level.
 
 `fabricType` được coi như product-attribute (không phải workshop status) nên chỉ Admin / Manager / SuperAdmin sửa được; mặc định auto-derive từ product config tại lúc import.
 
-### 8.3 Flow `updateField(id, dto, roleName)`
+### 8.3 Flow `updateField(id, dto, roleName)` — hooks tự động
 1. `assertCanEditField` — 403 nếu role không nằm trong allow-list của field.
-2. `assertValueAllowed` — nếu field có `FIELD_CONFIG_CATEGORY`, lookup `WorkshopConfig { category, code, isActive }`; missing → 400.
+2. Field validation:
+   - `assignee`: `assertAssigneeUserValid(value)` — check user exists + role=Designer (BE)
+   - Field khác có `FIELD_CONFIG_CATEGORY`: lookup `WorkshopConfig { category, code, isActive }`
+   - Missing → 400.
 3. `findOneById` → 404 nếu không tồn tại.
-4. `$set { [field]: value }`; nếu field là `toolResultNote` thì set thêm `readyForFulfill = (value === 'ok')`.
+4. `$set { [field]: value }` + hooks:
+   - **`toolResultNote`**: set `readyForFulfill = (value === 'ok')`; nếu value='ok' → clear `productionFirstErrorAt` (đơn rời tab Nhật ký bù lỗi)
+   - **`assignee`**: 
+     - Block 409 nếu `designerStatus ∉ {unassigned, assigned, rejected}` (đang in-progress/done/rework)
+     - Set value: `designerStatus='assigned'`, `designerAssignedAt=now`, clear reject fields
+     - Clear value: reset tất cả designer* fields về null/0
+   - **`productionError`** (xem `DesignerTaskWorkflow.md §5.3`):
+     - Lookup workshop_config.errorSource → auto-fill `productionErrorSource`
+     - Set `toolResultNote='error'` + `$inc productionErrorCount` (signal cho xưởng + counter cho "Lỗi ×N")
+     - Nếu `productionFirstErrorAt` chưa có giá trị → set = `now` (mốc bắt đầu cycle lỗi hiện tại cho tab Nhật ký bù lỗi)
+     - Clear value (=null) → clear cả `productionErrorSource` + `productionFirstErrorAt`
+     - Nếu source=designer + status=done → auto rework + `$inc designerReworkCount`
+   - **`productionErrorSource`**: nếu set 'designer' + status=done → auto rework
 5. `findOneAndUpdate` trả document mới.
-6. `invalidateListCache` (fire-and-forget).
+6. Audit log per field. Auto-rework cũng log riêng.
+7. `invalidateListCache` (fire-and-forget).
+
+### 8.3.1 Atomic `setProductionError(id, dto)` — POST `/v1/orders/:id/set-production-error`
+Wrapper riêng cho việc set 3 field cùng lúc (productionError + source + note). Bắt buộc khi user pick code='other':
+- BE 400 nếu code='other' mà thiếu source HOẶC note
+- Code khác: auto-fill source từ config nếu user không pass
+- Trigger cùng hook (toolResultNote='error', `$inc productionErrorCount`, auto-rework)
+- Log 3 entries (1 cho mỗi field)
 
 Phase 3 đã thêm bước push `OrderLog` cho mọi `updateField` / `bulkUpdateField` / `transferOrder` / `bulkTransferOrders` (xem `OrderLog.md`).
 
@@ -381,13 +430,15 @@ Render tab tương ứng. User chỉ có 1 trong các quyền → 1 tab; có nhi
 | 4 | printStatus | `ColorBadgeSelectCell` | `order.field.printStatus.view` |
 | 5 | printStatusNote | `IconSelectCell` | `order.field.printStatusNote.view` |
 | 6 | toolResult | `IconSelectCell` | `order.field.toolResult.view` |
-| 7 | toolResultNote | `ColorBadgeSelectCell` (label = "Note kq Tool 1") | `order.field.toolResultNote.view` |
+| 7 | **toolResultNote** | `ColorBadgeSelectCell` + suffix badge **"×N"** (rose) khi `productionErrorCount >= 2` AND value='error'. Signal cho fulfillment rằng đơn đã bị báo lỗi nhiều lần. | `order.field.toolResultNote.view` |
 | 8 | errorFile | `IconSelectCell` | `order.field.errorFile.view` |
 | 9 | errorFileNote | `TextEditCell` | `order.field.errorFileNote.view` |
-| 10 | **productionError** | `ColorBadgeSelectCell` (category `production_error`) — Phase 8 | `order.field.productionError.view` |
-| 11 | **productionErrorNote** | `TextEditCell` — mô tả lỗi free text — Phase 8 | `order.field.productionErrorNote.view` |
-| 12 | assignee | `IconSelectCell` | `order.field.assignee.view` |
+| 10 | **productionError** | `ProductionErrorSelectCell` (category `production_error`). Pick code='other' → mở `ProductionErrorOtherDialog` bắt buộc source + note. Popover options có badge "DES"/"XƯỞNG"/"CẦN CHI TIẾT". | `order.field.productionError.view` |
+| 10b | **productionErrorSource** | `ErrorSourceCell` (label "Loại lỗi") — picker designer/factory. Auto-fill từ workshop_config; user override khi cần. | `order.field.productionErrorSource.view` |
+| 11 | **productionErrorNote** | `TextEditCell` — mô tả lỗi free text | `order.field.productionErrorNote.view` |
+| 12 | **assignee** | `AssigneeSelectCell` — picker user từ designer team (`designerTeamStore`), value = `user._id`, display = `fullName`. KHÔNG còn dùng workshop_config. | `order.field.assignee.view` |
 | 13 | assigneeNote | `IconSelectCell` | `order.field.assigneeNote.view` |
+| 13b | **designerStatus** | Read-only badge color 6 state (Chưa gán/Cần làm/Đang làm/Đã xong/Đã trả/Cần làm lại) + suffix "×N" khi `designerReworkCount > 0`. | `order.field.designerStatus.view` |
 | 14 | userSku | text + CopyButton | luôn |
 | 15 | typeFullName | text (`productConfig.fullName`) | luôn |
 | 16 | factoryMachine | badge `factory.name` + badge `machineType.name` (gộp 2 dòng) | luôn |
@@ -415,12 +466,15 @@ Mỗi cell tự đọc `canEditField(field)` từ `usePermission()`:
 ### 10.3 Filter bar
 
 Render conditional theo `order.field.X.view` — dùng `<SelectFilter>` (single-select, native HTML + count badge). Options + count đến từ BE endpoint `GET /v1/orders/workshop-filters` theo **faceted-search pattern**:
-- BE method `getWorkshopAvailableFilters(dto, role)` — với mỗi facet, build `buildOrderListFilter` sau khi strip facet đó khỏi dto, rồi `$group` field tương ứng. Count phản ánh subset đã narrow theo các facet khác đang active.
-- 8 facet support: `fabricType` / `machineNumber` / `printStatus` / `toolResult` / `toolResultNote` / `errorFile` / `assignee` / `productionError`. Cell hiển thị phụ thuộc permission `order.field.X.view`.
+- BE method `getWorkshopAvailableFilters(dto, role, assigneeCode?, fulfillmentFactoryId?)` — với mỗi facet, build `buildOrderListFilter` sau khi strip facet đó khỏi dto, rồi `$group` field tương ứng. Count phản ánh subset đã narrow theo các facet khác đang active.
+- **9 facet** support: `fabricType` / `machineNumber` / `printStatus` / `toolResult` / `toolResultNote` / `errorFile` / `assignee` / `productionError` / `designerStatus`. Cell hiển thị phụ thuộc permission `order.field.X.view`.
+- `assignee` facet labels **resolve fullName từ users collection** (BE lookup users theo userIds trong facet rows). Value vẫn = user._id.
+- `designerStatus` facet labels VN (Chưa gán/Cần làm/Đang làm/Đã xong/Đã trả/Cần làm lại).
+- Token đặc biệt `__none__` cho assignee + designerStatus filter: trả đơn chưa gán (`assignee in [null,'']`) hoặc chưa có designerStatus (`$exists: false`).
 - Search productionId / userSku / orderId / type (debounced 300ms).
 - `<DateRangePicker>` — 8 preset quick + 2 input custom + popover gói gọn (Phase 7.2).
 
-Filter gửi qua query string `?printStatus=code&fabricType=code&...`. Service nhận chuỗi đơn (`$in` vẫn dùng split CSV — single value vẫn parse được).
+Filter gửi qua query string `?printStatus=code&fabricType=code&designerStatus=...&...`. Service nhận chuỗi đơn (`$in` vẫn dùng split CSV — single value vẫn parse được).
 
 **URL state persistence** (Phase 7.2): tất cả filter sync ↔ URL params với prefix `w` (workshop) để F5 / share link giữ nguyên state:
 
@@ -439,9 +493,24 @@ Workshop tab dùng date always-write vào URL (kể cả today) để URL hiển
 
 ### 10.4 Bulk edit (`BulkEditToolbar`)
 
-- Cột checkbox đầu mỗi row + select-all header.
-- Khi chọn ít nhất 1 row → toolbar nổi sticky bottom: "Đã chọn N · Bulk update · Bỏ chọn".
-- Dialog confirm: chọn field (chỉ field user có `edit` perm) + giá trị (workshop config select hoặc text). Apply → `PATCH /v1/orders/bulk-field`. Toast "Đã update X/Y đơn".
+- Cột checkbox đầu mỗi row + select-all header + shift+click range select.
+- Khi chọn ít nhất 1 row → toolbar nổi sticky bottom: "Đã chọn N · Bulk update · **Gán design** (Leader/Admin) · Bỏ chọn".
+- **"Bulk update" dialog**: chọn field (chỉ field user có `edit` perm, EXCEPT `assignee` — bị BLACKLIST khỏi dropdown vì đã có dialog "Gán design" riêng) + giá trị → `PATCH /v1/orders/bulk-field`. Toast "Đã update X/Y đơn".
+- **"Gán design" button** (`AssignDesignerDialog`): chỉ hiện khi `canEditField('assignee')`. Pre-flight `POST /bulk-assign-designer-preview` → dialog hiển thị 6 KPI status box + alreadyAssigned list (fullName + count) + designer dropdown (load từ `/designer/team`). Detect conflict đa-người → banner cảnh báo + "Ghi đè & Gán". Submit `POST /bulk-assign-designer { ids, userId, reassignOthers }` → skip + report. Xem `DesignerTaskWorkflow.md §2.2`.
+
+### 10.4b Designer KPI panel (Admin/Manager/Leader)
+
+Trên cùng tab **List Order** + tab **Bảng Workshop** khi user có quyền `page.designer_stats` hoặc `designer.task.assign`:
+
+Render `<DesignerSummaryPanel filterQs={...} onClickCell={...}>`:
+- 6 KPI button-card (Chưa gán/Cần làm/Cần làm lại/Đang làm/Đã xong/Đã trả) — click → set filter list (`assignee` / `designerStatus`)
+- Bảng matrix per-designer collapsible — click cell → set filter list. Click tên designer → chỉ set `assignee`
+- Toggle "Xem theo filter / Xem tổng" swap scoped ↔ overall counts
+- Data từ `GET /v1/orders/designer-breakdown` (cùng filter shape với list)
+
+Filter `Designer` SelectFilter có option **"Chưa gán"** (`__none__`); filter `TT Designer` SelectFilter mới với 6 option theo `DesignerStatus` enum.
+
+Xem `DesignerTaskWorkflow.md §2.5` + §4.4.
 
 ### 10.5 Hook `usePermission` (`apps/web/src/hooks/usePermission.ts`)
 
@@ -541,3 +610,123 @@ Response (`ImportSummaryZod`):
 - Pipeline `$lookup productConfigs → $set` 2 field conditional.
 - Trả `{ scanned, updated }` để UI log số đơn được fix.
 - Gọi từ `/products` sau khi admin cập nhật fabric/tool default trong product config.
+
+---
+
+## 14. Tab `Nhật ký bù lỗi` (`ErrorLogTab.tsx`)
+
+> **File FE:** `apps/web/src/pages/orders/ErrorLogTab.tsx`
+> **Endpoint:** `GET /v1/orders/error-log`
+> **Service BE:** `order.service.ts → getErrorLog(dto, role, userId?, factoryId?)`
+
+### 14.1 Mục đích
+
+Danh sách đơn **đang chờ xử lý lỗi xưởng** — tách hẳn khỏi list orders mặc định để workshop / designer / fulfillment dễ pin xử lý theo độ ưu tiên. Đơn sort theo `productionFirstErrorAt` ASC nên đơn nằm lâu nhất xuất hiện đầu tiên.
+
+**Điều kiện vào tab:** `productionError ≠ null/''` AND `productionFirstErrorAt` đã set.
+
+**Điều kiện rời tab** (hook tự động, xem `§8.3`):
+- `toolResultNote='ok'` — xưởng xác nhận xử lý xong → clear `productionFirstErrorAt`
+- HOẶC `productionError` được clear
+
+→ Cycle lỗi tiếp theo (nếu có) sẽ set lại `productionFirstErrorAt = now` từ đầu.
+
+### 14.2 Mức độ khẩn cấp (24h calendar)
+
+Tính client-side từ `now - productionFirstErrorAt`:
+
+| Mức độ | Ngưỡng | Màu | Mô tả |
+|--------|--------|-----|-------|
+| **Mới** | < 24h | Sky | Vừa báo lỗi, trong ngày |
+| **Cần làm** | 24h – 48h | Amber | Đã 1 ngày, cần ưu tiên |
+| **Gấp** | 48h – 72h | Orange | Đã 2 ngày, sắp critical |
+| **Khẩn cấp** | ≥ 72h | Rose (animate-pulse) | Đã ≥ 3 ngày — flash đỏ |
+
+Header tab có 4 chip filter mức độ + count. Click chip để toggle filter; chỉ 1 mức độ active tại 1 lúc.
+
+### 14.3 Visibility
+
+| Role | Scope |
+|------|-------|
+| SuperAdmin / Admin / Manager / DesignerLeader / Support | Toàn bộ đơn lỗi |
+| **Fulfillment** | Chỉ đơn `factoryId = user.factoryId` HOẶC `originalFactoryId = user.factoryId` |
+| **Designer (sub)** | Chỉ đơn `assignee = user._id` |
+
+BE filter ở `getErrorLog()` áp visibility cùng quy tắc với list orders. Tab visible cho mọi role có quyền xem orders.
+
+### 14.4 Filters
+
+| Filter | Field | Source |
+|--------|-------|--------|
+| Search | `productionId / userSku / userEmail / orderId / type` | text |
+| Người thực hiện | `assignee` (CSV user._id, token `__none__` = chưa gán) | `designerTeamStore` |
+| Loại vải | `fabricType` (CSV code) | `workshopConfigStore.fabric_type` |
+| Kết quả Tool | `toolResult` (CSV code) | `workshopConfigStore.tool_result` |
+| Mã lỗi | `productionError` (CSV code) | `workshopConfigStore.production_error` |
+| Nguồn lỗi | `productionErrorSource` (CSV `designer\|factory`) | static |
+| Mức độ | `urgency` (CSV `new\|attention\|urgent\|critical`) | chip filter |
+
+Mỗi filter đổi → reset về page 1. URL state persist với prefix `e*` (`esearch`, `eassign`, `efabric`, `etool`, `ecode`, `esource`, `eurg`, `epage`, `esize`).
+
+### 14.5 Bảng
+
+Cột (reuse từ `WORKSHOP_COLS` của `workshopTableConfig.tsx` nhưng filter chỉ các key liên quan):
+
+| Cột | Cell |
+|-----|------|
+| Mức độ | Badge `new/attention/urgent/critical` |
+| Đã chờ | Duration text `Nd Mh` + thời điểm bắt đầu |
+| Production ID | `WORKSHOP_COLS.productionId` cell (copy + tooltip) |
+| Sản phẩm | `WORKSHOP_COLS.mockupTypeSize` cell (thumb + type + size) |
+| Loại vải | `WORKSHOP_COLS.fabricType` (IconSelectCell) |
+| Tool | `WORKSHOP_COLS.toolResult` (IconSelectCell) |
+| Người thực hiện | `WORKSHOP_COLS.assignee` (AssigneeSelectCell) |
+| Lỗi xưởng | `WORKSHOP_COLS.productionError` (ProductionErrorSelectCell) |
+| Nguồn | `WORKSHOP_COLS.productionErrorSource` (ErrorSourceCell) |
+| Số lần lỗi | Badge `×N` (= `productionErrorCount`) |
+| (action) | History button → `OrderLogTimelineDialog` |
+
+Cell vẫn cho phép inline edit (theo `FIELD_EDIT_ROLES`) — workshop/designer có thể clear lỗi hoặc đổi source trực tiếp từ tab này.
+
+### 14.6 Response shape
+
+```ts
+GET /v1/orders/error-log?... → {
+  success: true,
+  data: ProductionOrder[],       // page items, sort productionFirstErrorAt ASC
+  total: number,                 // tổng đơn match filter (cho pagination)
+  byUrgency: {                   // count theo mức độ, scope = filter HIỆN TẠI trừ chip urgency
+    new: number,
+    attention: number,
+    urgent: number,
+    critical: number,
+  }
+}
+```
+
+`byUrgency` tính qua `$switch` trong aggregation BE (xem `getErrorLog`). Sticky filter — `byUrgency` không bị thu hẹp bởi chip urgency hiện tại, để user nhìn thấy đủ 4 mức độ và biết click chip nào.
+
+### 14.7 Backfill cho legacy
+
+`OrderService.onModuleInit()` có thêm 1 step idempotent:
+```ts
+updateMany(
+  {
+    productionError: { $exists: true, $nin: [null, ''] },
+    productionFirstErrorAt: { $in: [null, undefined] },
+    $or: [{ toolResultNote: { $ne: 'ok' } }, { toolResultNote: { $exists: false } }],
+  },
+  [{ $set: { productionFirstErrorAt: '$updatedAt' } }],
+)
+```
+
+→ Đơn legacy đang lỗi nhưng chưa có `productionFirstErrorAt` được set = `updatedAt` (best-effort). Đơn lỗi tương lai dùng `now` chính xác từ hook.
+
+### 14.8 Permissions
+
+| Action | Role |
+|--------|------|
+| Vào tab | mọi role trong `ORDER_VIEW_ROLES` (Admin/Manager/Support/DesignerLeader/Designer/Fulfillment) |
+| Edit cell | theo `FIELD_EDIT_ROLES` từng field (xem `§8.2`) |
+| Filter factory | không expose — Admin/Manager xem all, role khác bị visibility filter scope |
+

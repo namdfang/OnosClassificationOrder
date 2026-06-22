@@ -1,18 +1,22 @@
 import React, { useEffect, useState } from 'react';
-import { BarChart3, ClipboardList, Factory } from 'lucide-react';
+import { BarChart3, ClipboardList, Factory, Palette } from 'lucide-react';
 import { useSearchParams } from 'react-router-dom';
 
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
+import { usePermission } from '@/hooks/usePermission';
 
+import DesignerStatsTab from './DesignerStatsTab';
 import OrderFactoryTab from './OrderFactoryTab';
 import OrderStatsTab from './OrderStatsTab';
 import OrderStatusTab from './OrderStatusTab';
 
-const TABS = ['factory', 'stats', 'status',] as const;
+const TABS = ['factory', 'stats', 'status', 'designer'] as const;
 type TabKey = (typeof TABS)[number];
 
 export default function Home() {
   const [searchParams, setSearchParams] = useSearchParams();
+  const { has } = usePermission();
+  const canSeeDesigner = has('page.designer_stats');
   const initial = (searchParams.get('tab') as TabKey) || 'factory';
   const [activeTab, setActiveTab] = useState<TabKey>(TABS.includes(initial) ? initial : 'stats');
 
@@ -71,6 +75,11 @@ export default function Home() {
           <TabsTrigger value="status" className="gap-1.5">
             <ClipboardList size={14} /> Tình trạng đơn hàng
           </TabsTrigger>
+          {canSeeDesigner && (
+            <TabsTrigger value="designer" className="gap-1.5">
+              <Palette size={14} /> Designer
+            </TabsTrigger>
+          )}
         </TabsList>
 
         <TabsContent value="stats">
@@ -82,6 +91,11 @@ export default function Home() {
         <TabsContent value="factory">
           <OrderFactoryTab />
         </TabsContent>
+        {canSeeDesigner && (
+          <TabsContent value="designer">
+            <DesignerStatsTab />
+          </TabsContent>
+        )}
       </Tabs>
     </div>
   );

@@ -11,6 +11,7 @@ import { machineType } from './machineType';
 import { productConfig } from './productConfig';
 import { order } from './order';
 import { workshopConfig } from './workshopConfig';
+import { designer } from './designer';
 
 export const RepositoryRemote = {
   auth,
@@ -26,4 +27,5 @@ export const RepositoryRemote = {
   productConfig,
   order,
   workshopConfig,
+  designer,
 };

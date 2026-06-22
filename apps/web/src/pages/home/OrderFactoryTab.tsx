@@ -551,18 +551,18 @@ export default function OrderFactoryTab() {
               selectFilters.tool ||
               selectFilters.machine ||
               selectFilters.machineNumber) && (
-              <Button
-                variant="ghost"
-                size="sm"
-                className="text-xs h-7 ml-auto"
-                onClick={() => {
-                  setFilterMode({ kind: 'all' });
-                  setSelectFilters({ type: '', fabric: '', tool: '', machine: '', machineNumber: '' });
-                }}
-              >
-                Xóa lọc
-              </Button>
-            )}
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  className="text-xs h-7 ml-auto"
+                  onClick={() => {
+                    setFilterMode({ kind: 'all' });
+                    setSelectFilters({ type: '', fabric: '', tool: '', machine: '', machineNumber: '' });
+                  }}
+                >
+                  Xóa lọc
+                </Button>
+              )}
           </div>
 
           {/* Select filters — options come from BE `availableFilters`
@@ -880,7 +880,7 @@ function FactoryCard({
           tone="slate"
         />
         <PrintStageBtn
-          label="Lỗi xưởng"
+          label="Lỗi"
           count={cell.errorCount}
           active={isError}
           onClick={toggleError}
@@ -941,9 +941,9 @@ function PrintStageBtn({
 }) {
   const toneClasses = {
     slate: { active: 'border-slate-400 bg-slate-50/60 dark:bg-slate-500/10', count: 'text-slate-700 dark:text-slate-300' },
-    sky:    { active: 'border-sky-400 bg-sky-50/60 dark:bg-sky-500/10',       count: 'text-sky-700 dark:text-sky-300' },
-    emerald:{ active: 'border-emerald-400 bg-emerald-50/60 dark:bg-emerald-500/10', count: 'text-emerald-700 dark:text-emerald-400' },
-    rose:   { active: 'border-rose-400 bg-rose-50/60 dark:bg-rose-500/10',           count: 'text-rose-700 dark:text-rose-400' },
+    sky: { active: 'border-sky-400 bg-sky-50/60 dark:bg-sky-500/10', count: 'text-sky-700 dark:text-sky-300' },
+    emerald: { active: 'border-emerald-400 bg-emerald-50/60 dark:bg-emerald-500/10', count: 'text-emerald-700 dark:text-emerald-400' },
+    rose: { active: 'border-rose-400 bg-rose-50/60 dark:bg-rose-500/10', count: 'text-rose-700 dark:text-rose-400' },
   }[tone];
   return (
     <button

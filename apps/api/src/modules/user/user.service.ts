@@ -88,6 +88,11 @@ export class UserService {
           fullName: 1,
           departmentId: 1,
           forcePassChange: 1,
+          // Designer team workflow — Telegram + hireDate hiển thị ở /designer/team.
+          telegramChatId: 1,
+          hireDate: 1,
+          // Fulfillment per-factory scope.
+          factoryId: 1,
           role: {
             name: 1,
             permissionCodes: 1,
@@ -160,6 +165,9 @@ export class UserService {
           status: 1,
           departmentId: 1,
           forcePassChange: 1,
+          telegramChatId: 1,
+          hireDate: 1,
+          factoryId: 1,
           avatar: {
             url: 1,
             previewUrl: 1,
@@ -243,6 +251,13 @@ export class UserService {
 
     if (!role) {
       throw new BadRequestException('Invalid role');
+    }
+
+    // Fulfillment user phải gán factoryId — scope visibility.
+    if (role.name === RoleType.Fulfillment && !createUserDto.factoryId) {
+      throw new BadRequestException(
+        'User Fulfillment phải gán xưởng (factoryId) — chọn xưởng trong form.',
+      );
     }
 
     const newUserData = {
@@ -487,9 +502,21 @@ export class UserService {
     const target = await this.userRepository.findOneById(targetId);
     if (!target) throw new NotFoundException('User not found');
 
+    // Resolve final role để check Fulfillment factoryId required.
+    let finalRoleName: string | undefined;
     if (dto.roleId) {
       const role = await this.roleRepository.findOneById(dto.roleId);
       if (!role) throw new BadRequestException('Invalid role');
+      finalRoleName = role.name;
+    } else {
+      const cur = await this.roleRepository.findOneById(target.roleId);
+      finalRoleName = cur?.name;
+    }
+    const finalFactoryId = dto.factoryId !== undefined ? dto.factoryId : target.factoryId;
+    if (finalRoleName === RoleType.Fulfillment && !finalFactoryId) {
+      throw new BadRequestException(
+        'User Fulfillment phải gán xưởng (factoryId) — chọn xưởng trong form.',
+      );
     }
 
     const updated = await this.userRepository.findOneAndUpdate({ _id: targetId }, dto);

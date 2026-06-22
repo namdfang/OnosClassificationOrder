@@ -1,7 +1,10 @@
 import type {
+  BulkAssignDesignerDto,
+  BulkAssignDesignerPreviewDto,
   BulkTransferOrderDto,
   BulkUpdateOrderFieldDto,
   ImportProductionOrdersDto,
+  SetProductionErrorDto,
   TransferOrderDto,
   UpdateOrderFieldDto,
 } from 'shared';
@@ -72,6 +75,26 @@ const exportOrders = (query: string = '') => {
   return callApi(`/${CONFIG.API_VERSION}/orders/export${query}`, 'get');
 };
 
+const getDesignerBreakdown = (query: string = '') => {
+  return callApi(`/${CONFIG.API_VERSION}/orders/designer-breakdown${query}`, 'get');
+};
+
+const bulkAssignDesignerPreview = (data: BulkAssignDesignerPreviewDto) => {
+  return callApi(`/${CONFIG.API_VERSION}/orders/bulk-assign-designer-preview`, 'post', data);
+};
+
+const bulkAssignDesigner = (data: BulkAssignDesignerDto) => {
+  return callApi(`/${CONFIG.API_VERSION}/orders/bulk-assign-designer`, 'post', data);
+};
+
+const setProductionError = (id: string, data: SetProductionErrorDto) => {
+  return callApi(`/${CONFIG.API_VERSION}/orders/${id}/set-production-error`, 'post', data);
+};
+
+const getErrorLog = (query: string = '') => {
+  return callApi(`/${CONFIG.API_VERSION}/orders/error-log${query}`, 'get');
+};
+
 export const order = {
   getOrders,
   importOrders,
@@ -89,4 +112,9 @@ export const order = {
   bulkTransferOrders,
   backfillFabric,
   exportOrders,
+  getDesignerBreakdown,
+  bulkAssignDesignerPreview,
+  bulkAssignDesigner,
+  setProductionError,
+  getErrorLog,
 };

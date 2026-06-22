@@ -7,6 +7,7 @@ export type WorkshopConfigSeed = {
   color?: string;
   icon?: string;
   order: number;
+  errorSource?: 'designer' | 'factory';
 };
 
 export const WORKSHOP_CONFIG_SEED: WorkshopConfigSeed[] = [
@@ -49,32 +50,24 @@ export const WORKSHOP_CONFIG_SEED: WorkshopConfigSeed[] = [
   { category: WorkshopConfigCategory.ErrorFileType, code: 'ask-designer', name: 'Hỏi des khách', icon: 'MessageCircleQuestion', order: 10 },
   { category: WorkshopConfigCategory.ErrorFileType, code: 'temp', name: 'Temp', icon: 'Clock', order: 11 },
 
-  // assignee (icon)
-  { category: WorkshopConfigCategory.Assignee, code: 'huy', name: 'Huy', icon: 'User', order: 0 },
-  { category: WorkshopConfigCategory.Assignee, code: 'h-anh', name: 'H Anh', icon: 'User', order: 1 },
-  { category: WorkshopConfigCategory.Assignee, code: 'an', name: 'An', icon: 'User', order: 2 },
-  { category: WorkshopConfigCategory.Assignee, code: 'k-anh', name: 'K Anh', icon: 'User', order: 3 },
-  { category: WorkshopConfigCategory.Assignee, code: 'hanh', name: 'Hạnh', icon: 'User', order: 4 },
-  { category: WorkshopConfigCategory.Assignee, code: 'nga', name: 'Nga', icon: 'User', order: 5 },
-  { category: WorkshopConfigCategory.Assignee, code: 'phuong-anh', name: 'Phương Anh', icon: 'User', order: 6 },
-  { category: WorkshopConfigCategory.Assignee, code: 'huong', name: 'Hương', icon: 'User', order: 7 },
-
   // assignee_note (icon)
   { category: WorkshopConfigCategory.AssigneeNote, code: 'no-tool', name: 'Không có tool', icon: 'Ban', order: 0 },
   { category: WorkshopConfigCategory.AssigneeNote, code: 'error', name: 'Lỗi', icon: 'XCircle', order: 1 },
   { category: WorkshopConfigCategory.AssigneeNote, code: 'ok', name: 'Ok', icon: 'CheckCircle', order: 2 },
 
-  // production_error (color badge) — xưởng báo lý do lỗi đơn hàng
-  { category: WorkshopConfigCategory.ProductionError, code: 'wrong-size', name: 'Sai size', color: '#EF4444', order: 0 },
-  { category: WorkshopConfigCategory.ProductionError, code: 'wrong-color', name: 'Sai màu', color: '#F97316', order: 1 },
-  { category: WorkshopConfigCategory.ProductionError, code: 'wrong-fabric', name: 'Sai loại vải', color: '#F59E0B', order: 2 },
-  { category: WorkshopConfigCategory.ProductionError, code: 'print-misalign', name: 'In lệch', color: '#DC2626', order: 3 },
-  { category: WorkshopConfigCategory.ProductionError, code: 'print-blur', name: 'In mờ/nhòe', color: '#B91C1C', order: 4 },
-  { category: WorkshopConfigCategory.ProductionError, code: 'fabric-damage', name: 'Vải lỗi/rách', color: '#A855F7', order: 5 },
-  { category: WorkshopConfigCategory.ProductionError, code: 'wrong-design', name: 'Sai design', color: '#7C3AED', order: 6 },
-  { category: WorkshopConfigCategory.ProductionError, code: 'missing-design', name: 'Thiếu file design', color: '#9333EA', order: 7 },
-  { category: WorkshopConfigCategory.ProductionError, code: 'machine-jam', name: 'Máy lỗi/kẹt', color: '#0EA5E9', order: 8 },
-  { category: WorkshopConfigCategory.ProductionError, code: 'other', name: 'Lỗi khác', color: '#64748B', order: 9 },
+  // production_error (color badge) — xưởng báo lý do lỗi đơn hàng.
+  // `errorSource='designer'` → đơn auto chuyển designerStatus='rework' khi
+  // xưởng set code này. `'factory'` chỉ ghi stats.
+  { category: WorkshopConfigCategory.ProductionError, code: 'wrong-size', name: 'Sai size', color: '#EF4444', order: 0, errorSource: 'factory' },
+  { category: WorkshopConfigCategory.ProductionError, code: 'wrong-color', name: 'Sai màu', color: '#F97316', order: 1, errorSource: 'factory' },
+  { category: WorkshopConfigCategory.ProductionError, code: 'wrong-fabric', name: 'Sai loại vải', color: '#F59E0B', order: 2, errorSource: 'factory' },
+  { category: WorkshopConfigCategory.ProductionError, code: 'print-misalign', name: 'In lệch', color: '#DC2626', order: 3, errorSource: 'factory' },
+  { category: WorkshopConfigCategory.ProductionError, code: 'print-blur', name: 'In mờ/nhòe', color: '#B91C1C', order: 4, errorSource: 'factory' },
+  { category: WorkshopConfigCategory.ProductionError, code: 'fabric-damage', name: 'Vải lỗi/rách', color: '#A855F7', order: 5, errorSource: 'factory' },
+  { category: WorkshopConfigCategory.ProductionError, code: 'wrong-design', name: 'Sai design', color: '#7C3AED', order: 6, errorSource: 'designer' },
+  { category: WorkshopConfigCategory.ProductionError, code: 'missing-design', name: 'Thiếu file design', color: '#9333EA', order: 7, errorSource: 'designer' },
+  { category: WorkshopConfigCategory.ProductionError, code: 'machine-jam', name: 'Máy lỗi/kẹt', color: '#0EA5E9', order: 8, errorSource: 'factory' },
+  { category: WorkshopConfigCategory.ProductionError, code: 'other', name: 'Lỗi khác', color: '#64748B', order: 9, errorSource: 'factory' },
 
   // fabric_type (icon) — full list of fabrics / blanks used in production
   { category: WorkshopConfigCategory.FabricType, code: 'poly-2-da', name: 'POLY 2 DA', icon: 'Shirt', order: 0 },

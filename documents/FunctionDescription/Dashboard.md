@@ -1,23 +1,25 @@
 # Dashboard — Function Description
 
-> **File FE:** `apps/web/src/pages/home/index.tsx` (Tabs wrapper, 3 tab: `stats|status|factory`)
+> **File FE:** `apps/web/src/pages/home/index.tsx` (Tabs wrapper, 4 tab: `stats|status|factory|designer`)
 > **Tab A — Thống kê:** `apps/web/src/pages/home/OrderStatsTab.tsx`
 > **Tab B — Tình trạng:** `apps/web/src/pages/home/OrderStatusTab.tsx` + `status/{KpiCard,BreakdownCard,FilterChipBar,OrdersMiniTable,useStatusFilter}.tsx`
 > **Tab C — Đơn theo xưởng:** `apps/web/src/pages/home/OrderFactoryTab.tsx` + `apps/web/src/pages/home/exportOrders.ts` (XLSX builder)
-> **File BE:** `apps/api/src/modules/order/order.service.ts` → `getDashboard()`, `getStatusOverview()`, `getFactoryOverview()`, `exportOrders()`, `transferOrder()`, `bulkTransferOrders()`
-> **Route:** `/dashboard?tab=stats|status|factory`
+> **Tab D — Designer:** `apps/web/src/pages/home/DesignerStatsTab.tsx` — Leader/Admin only (perm `page.designer_stats`)
+> **File BE:** `apps/api/src/modules/order/order.service.ts` → `getDashboard()`, `getStatusOverview()`, `getFactoryOverview()`, `exportOrders()`, `transferOrder()`, `bulkTransferOrders()` + `apps/api/src/modules/designer/designer-stats.service.ts` → `getPerformance()`, `getTimeline()`, `getErrorStats()`
+> **Route:** `/dashboard?tab=stats|status|factory|designer`
 > **API:**
 >  - `GET /v1/orders/dashboard` (Tab A)
 >  - `GET /v1/orders/status-overview` (Tab B)
 >  - `GET /v1/orders/factory-overview` (Tab C)
 >  - `GET /v1/orders/export` (Tab C — full-list export, không phân trang)
 >  - `PATCH /v1/orders/:id/transfer` + `PATCH /v1/orders/bulk-transfer` (Tab C — chuyển xưởng)
+>  - `GET /v1/designer/performance` + `/timeline/:userId` + `GET /v1/orders/error-stats` (Tab D)
 
 ---
 
 ## 1. Overview
 
-Dashboard chia 3 tab độc lập:
+Dashboard chia 4 tab độc lập (Tab D chỉ Leader/Admin/Manager):
 
 ### Tab A — "Thống kê đơn & sản phẩm" (cũ)
 Tổng quan đơn theo kỳ thời gian:
@@ -49,6 +51,40 @@ Dashboard chuyển xưởng + xuất Excel + filter chiều sâu:
 - Date filters mặc định **= hôm nay** (`createdFrom = createdTo = todayISO()`) mỗi lần mount
 
 Data từ `GET /v1/orders/factory-overview` + `GET /v1/orders?sort=grouped&...` + `GET /v1/orders/export` (khi bấm Xuất Excel).
+
+### Tab D — "Designer" (Phase Designer-Task-Workflow Phase 5)
+
+**Chỉ hiển thị khi user có perm `page.designer_stats`** (DesignerLeader / Admin / Manager). Xem `DesignerTaskWorkflow.md` để hiểu workflow tổng.
+
+Layout 3 section:
+
+**1. Leaderboard table** (`<Table>` shadcn) — sort theo `completedInPeriod` desc, auto-include sub-designer chưa có task (row count 0):
+
+| Cột | Mô tả |
+|-----|-------|
+| # | Rank |
+| Designer | fullName + email |
+| Cần làm / Đang làm / Đã xong | Snapshot count theo `designerStatus` hiện tại (Đã xong filter trong period) |
+| Trả (hiện) / L.lại (hiện) | Snapshot — task đang ở status rejected/rework |
+| **Tổng trả / Tổng l.lại** | **Cumulative** — đếm số LẦN transition tới rejected/rework trong period từ OrderLog (kể cả task đã chuyển trạng thái sau đó) |
+| Avg phản hồi | Trung bình `designerFirstStartedAt − designerAssignedAt` (phút). Fallback `designerStartedAt` cho legacy. |
+| Avg làm | Trung bình `designerWorkMs` (cumulative cycle-by-cycle). Fallback `designerCompletedAt − designerStartedAt` cho legacy. |
+| Tỉ lệ lỗi | `designerReworkCount` trung bình / completed → badge color (xanh / vàng / đỏ) |
+
+Click row → set `selectedUserId` → reload timeline chart.
+
+**2. Timeline per-designer** (Recharts `LineChart`, 4 series: assigned / started / completed / rework):
+- Dropdown chọn designer (default = top leaderboard)
+- Bucket per-day timezone Asia/Ho_Chi_Minh, fill mọi ngày trong period kể cả 0
+- 4 line colors: zinc / indigo / emerald / amber
+- Data từ `GET /v1/designer/timeline/:userId`
+
+**3. Error source pie + breakdown** (Recharts `PieChart`):
+- 3 slice: designer (violet) / factory (sky) / unknown (slate) — split theo `order.productionErrorSource`
+- List dưới: từng productionError code với count + dot color theo source
+- Data từ `GET /v1/orders/error-stats`
+
+**Period switcher** `today | 7d | 30d | custom` — ảnh hưởng cả 3 section. Custom có 2 date input.
 
 ---
 

@@ -2,6 +2,7 @@ import { Prop, raw, SchemaFactory } from '@nestjs/mongoose';
 import { DatabaseEntity, DatabaseEntityAbstract } from 'core';
 import type { HydratedDocument } from 'mongoose';
 import type { DesignFields } from 'shared';
+import { DESIGNER_STATUSES, DesignerStatus } from 'shared';
 
 import type { FactoryDocument } from '../factory/factory.entity';
 import type { MachineTypeDocument } from '../machine-type/machine-type.entity';
@@ -107,6 +108,36 @@ export class OrderEntity extends DatabaseEntityAbstract {
   })
   designsOriginal?: DesignFields;
 
+  /**
+   * Trạng thái xử lý R2 cho từng vị trí design. Set khi import → worker cập
+   * nhật. Value: `'pending' | 'ready' | 'failed'`. Không có status → coi như
+   * legacy data (URL trong `designs.{k}` là URL gốc / Teehub cũ).
+   */
+  @Prop({
+    _id: false,
+    type: raw({
+      front: String,
+      back: String,
+      sleeve: String,
+      hood: String,
+      folder: String,
+      placket: String,
+      chestLeft: String,
+      chestRight: String,
+      left: String,
+      right: String,
+      sleeveLeft: String,
+      sleeveRight: String,
+      leftUpperSleeve: String,
+      rightUpperSleeve: String,
+      leftCuff: String,
+      rightCuff: String,
+      frontEmbroidery: String,
+      backEmbroidery: String,
+    }),
+  })
+  designsStatus?: Record<keyof DesignFields, 'pending' | 'ready' | 'failed' | undefined>;
+
   @Prop()
   status?: string;
 
@@ -192,11 +223,67 @@ export class OrderEntity extends DatabaseEntityAbstract {
   @Prop()
   productionErrorNote?: string;
 
+  /**
+   * Phân loại nguồn lỗi cho dashboard stats (Phase Fulfillment per-factory).
+   * Auto-fill từ workshop_config.errorSource khi user set productionError;
+   * cho phép override.
+   */
+  @Prop({ type: String, enum: ['designer', 'factory'], index: true })
+  productionErrorSource?: 'designer' | 'factory';
+
+  /** Đếm số lần xưởng đã set productionError. Display "Lỗi ×N" trên cell. */
+  @Prop({ required: true, default: 0 })
+  productionErrorCount: number;
+
+  /**
+   * Thời điểm đơn LẦN ĐẦU bị xưởng đánh productionError trong cycle hiện tại.
+   * Set khi `productionError` chuyển từ null → value (và field chưa có giá trị).
+   * Clear (= unset) khi đơn rời nhật ký bù lỗi: `toolResultNote === 'ok'`
+   * hoặc `productionError` được clear. Dùng cho tab Nhật ký bù lỗi để sort
+   * theo thời gian lỗi cũ nhất + tính mức độ khẩn (24h/48h/72h).
+   */
+  @Prop({ index: true })
+  productionFirstErrorAt?: Date;
+
   // Derived: true when toolResultNote === 'ok' (Designer marks an order ready
   // for the Fulfillment role to pick up). Service recomputes this on every
   // toolResultNote update and on import.
   @Prop({ required: true, default: false, index: true })
   readyForFulfill: boolean;
+
+  // ─── Designer task workflow (Phase 1 Designer-Task-Workflow) ─────
+  /**
+   * State machine — default 'unassigned'. Mọi transition đi qua endpoint
+   * `POST /orders/:id/designer-transition` (state machine + auto side effects).
+   * Reassign chỉ cho khi status ∈ {unassigned, assigned, rejected}.
+   */
+  @Prop({
+    type: String,
+    enum: DESIGNER_STATUSES,
+    default: DesignerStatus.Unassigned,
+    required: true,
+    index: true,
+  })
+  designerStatus: DesignerStatus;
+
+  @Prop() designerAssignedAt?: Date;
+  /** Start time của cycle hiện tại — reset mỗi lần start/restart. */
+  @Prop() designerStartedAt?: Date;
+  /** Start time của lần đầu — set 1 lần (immutable). Dùng cho response time. */
+  @Prop() designerFirstStartedAt?: Date;
+  @Prop() designerCompletedAt?: Date;
+  @Prop() designerRejectedAt?: Date;
+  @Prop() designerReworkAt?: Date;
+
+  @Prop({ trim: true })
+  designerRejectedReason?: string;
+
+  @Prop({ required: true, default: 0 })
+  designerReworkCount: number;
+
+  /** Cumulative work time (ms) — $inc khi complete. */
+  @Prop({ required: true, default: 0 })
+  designerWorkMs: number;
 }
 
 export const OrderSchema = SchemaFactory.createForClass(OrderEntity);

@@ -39,6 +39,9 @@ export const PERMISSION_CATALOG: PermissionItem[] = [
   { code: 'page.workshop_config', label: 'Truy cập Workshop Config',     group: 'page' },
   { code: 'page.users',           label: 'Truy cập User Management',     group: 'page' },
   { code: 'page.roles',           label: 'Truy cập Role Management',     group: 'page' },
+  { code: 'page.designer_team',   label: 'Quản lý team designer (leader)', group: 'page' },
+  { code: 'page.my_tasks',        label: 'Task của tôi (designer)',      group: 'page' },
+  { code: 'page.designer_stats',  label: 'Stats designer (leader)',      group: 'page' },
 
   // ─── Order actions ──────────────────────────────────────────────
   { code: 'order.import',              label: 'Import đơn hàng',           group: 'order' },
@@ -72,6 +75,15 @@ export const PERMISSION_CATALOG: PermissionItem[] = [
   { code: 'order.field.productionError.edit',     label: 'Lỗi xưởng',             group: 'order_field', field: 'productionError',     mode: 'edit' },
   { code: 'order.field.productionErrorNote.view', label: 'Mô tả lỗi xưởng',       group: 'order_field', field: 'productionErrorNote', mode: 'view' },
   { code: 'order.field.productionErrorNote.edit', label: 'Mô tả lỗi xưởng',       group: 'order_field', field: 'productionErrorNote', mode: 'edit' },
+  { code: 'order.field.productionErrorSource.view', label: 'Loại lỗi (des/xưởng)', group: 'order_field', field: 'productionErrorSource', mode: 'view' },
+  { code: 'order.field.productionErrorSource.edit', label: 'Loại lỗi (des/xưởng)', group: 'order_field', field: 'productionErrorSource', mode: 'edit' },
+  { code: 'order.field.designerStatus.view',      label: 'Trạng thái designer',   group: 'order_field', field: 'designerStatus',      mode: 'view' },
+
+  // ─── Designer workflow ──────────────────────────────────────────
+  { code: 'designer.team.manage',     label: 'Tạo/sửa/xoá sub-designer',                group: 'admin' },
+  { code: 'designer.task.assign',     label: 'Assign task cho sub-designer',            group: 'order' },
+  { code: 'designer.task.transition', label: 'Transition trạng thái task của bản thân', group: 'order' },
+  { code: 'designer.task.override',   label: 'Override transition (leader/admin)',      group: 'order' },
 
   // ─── Workshop config ────────────────────────────────────────────
   { code: 'workshop.manage', label: 'Quản lý danh mục xưởng', group: 'workshop' },
@@ -114,19 +126,51 @@ export const DEFAULT_ROLE_PERMISSIONS: Partial<Record<RoleType, string[]>> = {
     'order.log.view',
   ],
 
-  [RoleType.Designer]: [
+  // DesignerLeader — quản lý team + assign task + xem stats. Có toàn bộ quyền
+  // order như Admin (trừ phần infra như user.manage / role.manage chung).
+  [RoleType.DesignerLeader]: [
     'page.dashboard', 'page.orders',
+    'page.designer_team', 'page.designer_stats', 'page.my_tasks',
+    'page.workshop_config',
+    'order.import', 'order.delete', 'order.transfer',
     'order.view_workshop_table',
-    'order.field.toolResult.view',     'order.field.toolResult.edit',
-    'order.field.toolResultNote.view', 'order.field.toolResultNote.edit',
-    'order.field.errorFile.view',      'order.field.errorFile.edit',
-    'order.field.errorFileNote.view',  'order.field.errorFileNote.edit',
-    'order.field.assignee.view',       'order.field.assignee.edit',
-    'order.field.assigneeNote.view',   'order.field.assigneeNote.edit',
+    'order.field.printStatus.view',     'order.field.printStatus.edit',
+    'order.field.printStatusNote.view', 'order.field.printStatusNote.edit',
+    'order.field.toolResult.view',      'order.field.toolResult.edit',
+    'order.field.toolResultNote.view',  'order.field.toolResultNote.edit',
+    'order.field.errorFile.view',       'order.field.errorFile.edit',
+    'order.field.errorFileNote.view',   'order.field.errorFileNote.edit',
+    'order.field.assignee.view',        'order.field.assignee.edit',
+    'order.field.assigneeNote.view',    'order.field.assigneeNote.edit',
     'order.field.fabricType.view',
-    'order.field.machineNumber.view',     'order.field.machineNumber.edit',
+    'order.field.machineNumber.view',   'order.field.machineNumber.edit',
     'order.field.productionError.view',
     'order.field.productionErrorNote.view',
+    'order.field.productionErrorSource.view',
+    'order.field.designerStatus.view',
+    'designer.team.manage',
+    'designer.task.assign',
+    'designer.task.override',
+    'order.log.view',
+  ],
+
+  // Designer (sub) — chỉ thấy task của mình, không sửa toolResultNote
+  // (BE auto derive khi transition done), không assign cho ai khác.
+  [RoleType.Designer]: [
+    'page.dashboard', 'page.orders', 'page.my_tasks',
+    'order.view_workshop_table',
+    'order.field.toolResult.view',     'order.field.toolResult.edit',
+    'order.field.toolResultNote.view', // VIEW only — BE derive khi done
+    'order.field.errorFile.view',      'order.field.errorFile.edit',
+    'order.field.errorFileNote.view',  'order.field.errorFileNote.edit',
+    'order.field.assignee.view',       // VIEW only — Leader assign
+    'order.field.assigneeNote.view',   'order.field.assigneeNote.edit',
+    'order.field.fabricType.view',
+    'order.field.machineNumber.view',
+    'order.field.productionError.view',
+    'order.field.productionErrorNote.view',
+    'order.field.designerStatus.view',
+    'designer.task.transition',
   ],
 
   [RoleType.Fulfillment]: [
@@ -139,9 +183,10 @@ export const DEFAULT_ROLE_PERMISSIONS: Partial<Record<RoleType, string[]>> = {
     'order.field.toolResultNote.view',
     'order.field.fabricType.view',
     'order.field.machineNumber.view',       'order.field.machineNumber.edit',
-    // Fulfillment báo lỗi xưởng + mô tả lỗi.
+    // Fulfillment báo lỗi xưởng + mô tả lỗi + loại lỗi.
     'order.field.productionError.view',     'order.field.productionError.edit',
     'order.field.productionErrorNote.view', 'order.field.productionErrorNote.edit',
+    'order.field.productionErrorSource.view', 'order.field.productionErrorSource.edit',
   ],
 };
 
@@ -151,6 +196,7 @@ export const SYSTEM_ROLES: RoleType[] = [
   RoleType.Admin,
   RoleType.Manager,
   RoleType.Support,
+  RoleType.DesignerLeader,
   RoleType.Designer,
   RoleType.Fulfillment,
 ];

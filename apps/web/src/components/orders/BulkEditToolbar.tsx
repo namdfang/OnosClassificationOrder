@@ -1,5 +1,5 @@
 import React, { useMemo, useState } from 'react';
-import { CheckCircle2, X } from 'lucide-react';
+import { CheckCircle2, UserPlus, X } from 'lucide-react';
 import { toast } from 'sonner';
 import type { OrderWorkshopField, WorkshopConfigCategory } from 'shared';
 import { ORDER_WORKSHOP_FIELDS } from 'shared';
@@ -12,6 +12,7 @@ import { useWorkshopConfigStore } from '@/store/workshopConfigStore';
 import { handleAxiosError } from '@/utils';
 import { usePermission } from '@/hooks/usePermission';
 
+import { AssignDesignerDialog } from './AssignDesignerDialog';
 import { LucideIcon } from '@/pages/workshop-config/IconPicker';
 
 const FIELD_TO_CATEGORY: Record<OrderWorkshopField, WorkshopConfigCategory | null> = {
@@ -21,9 +22,12 @@ const FIELD_TO_CATEGORY: Record<OrderWorkshopField, WorkshopConfigCategory | nul
   toolResultNote: 'tool_result_note' as WorkshopConfigCategory,
   errorFile: 'error_file_type' as WorkshopConfigCategory,
   errorFileNote: null,
-  assignee: 'assignee' as WorkshopConfigCategory,
+  // Assignee đã chuyển sang userId — bulk update dùng "Gán design" dialog
+  // riêng, không qua workshop_config dropdown.
+  assignee: null,
   assigneeNote: 'assignee_note' as WorkshopConfigCategory,
   fabricType: 'fabric_type' as WorkshopConfigCategory,
+  machineNumber: 'machine' as WorkshopConfigCategory,
   productionError: 'production_error' as WorkshopConfigCategory,
   productionErrorNote: null,
 };
@@ -38,9 +42,13 @@ const FIELD_LABEL: Record<OrderWorkshopField, string> = {
   assignee: 'Người thực hiện',
   assigneeNote: 'Note người thực hiện',
   fabricType: 'Loại vải',
+  machineNumber: 'Máy',
   productionError: 'Lỗi xưởng',
   productionErrorNote: 'Mô tả lỗi xưởng',
 };
+
+/** Bulk update dropdown SKIP assignee — đã có dialog "Gán design" riêng. */
+const BULK_UPDATE_BLACKLIST: OrderWorkshopField[] = ['assignee'];
 
 interface Props {
   selectedIds: string[];
@@ -53,13 +61,17 @@ export function BulkEditToolbar({ selectedIds, onClear, onApplied }: Props) {
   const byCategory = useWorkshopConfigStore((s) => s.byCategory);
 
   const [open, setOpen] = useState(false);
+  const [assignOpen, setAssignOpen] = useState(false);
   const [field, setField] = useState<OrderWorkshopField | ''>('');
   const [value, setValue] = useState<string>('');
   const [saving, setSaving] = useState(false);
   const [freeText, setFreeText] = useState('');
 
   const editableFields = useMemo(
-    () => ORDER_WORKSHOP_FIELDS.filter((f) => canEditField(f)),
+    () =>
+      ORDER_WORKSHOP_FIELDS.filter(
+        (f) => canEditField(f) && !BULK_UPDATE_BLACKLIST.includes(f),
+      ),
     [canEditField],
   );
 
@@ -103,11 +115,23 @@ export function BulkEditToolbar({ selectedIds, onClear, onApplied }: Props) {
           <Button size="sm" onClick={() => setOpen(true)} disabled={editableFields.length === 0}>
             Bulk update
           </Button>
+          {canEditField('assignee') && (
+            <Button size="sm" variant="secondary" onClick={() => setAssignOpen(true)}>
+              <UserPlus size={14} /> Gán design
+            </Button>
+          )}
           <Button size="sm" variant="ghost" onClick={onClear}>
             <X size={14} /> Bỏ chọn
           </Button>
         </div>
       </div>
+
+      <AssignDesignerDialog
+        open={assignOpen}
+        selectedIds={selectedIds}
+        onClose={() => setAssignOpen(false)}
+        onApplied={onApplied}
+      />
 
       <Dialog open={open} onOpenChange={setOpen}>
         <DialogContent>

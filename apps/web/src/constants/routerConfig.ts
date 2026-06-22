@@ -12,6 +12,8 @@ const Departments = lazy(() => import('../pages/departments'));
 const Roles = lazy(() => import('../pages/roles'));
 const CustomRoles = lazy(() => import('../pages/custom-roles'));
 const Notifications = lazy(() => import('../pages/notifications'));
+const DesignerTeam = lazy(() => import('../pages/designer/team'));
+const MyTasks = lazy(() => import('../pages/designer/my-tasks'));
 
 type RouterConfig = {
   path: (typeof PATHS)[keyof typeof PATHS];
@@ -30,4 +32,6 @@ export const routerConfig: RouterConfig[] = [
   { path: PATHS.ROLES, component: Roles },
   { path: PATHS.CUSTOM_ROLES, component: CustomRoles },
   { path: PATHS.NOTIFICATIONS, component: Notifications },
+  { path: PATHS.DESIGNER_TEAM, component: DesignerTeam },
+  { path: PATHS.MY_TASKS, component: MyTasks },
 ];

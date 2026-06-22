@@ -1,18 +1,30 @@
 import React, { useState } from 'react';
 import { Check } from 'lucide-react';
-import type { WorkshopConfig } from 'shared';
 
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { cn } from '@/utils/cn';
 
+/** Shape tối thiểu cell cần — workshop_config items hoặc designer team items
+ *  đều fit. `code` là giá trị truyền vào onSelect (workshop_config code hoặc
+ *  user._id tuỳ caller). */
+export type SelectOption = {
+  _id: string;
+  code: string;
+  name: string;
+  color?: string;
+  icon?: string;
+  /** Chỉ workshop_config category=production_error: hiển thị badge cạnh tên trong popover. */
+  errorSource?: 'designer' | 'factory';
+};
+
 interface Props {
-  options: WorkshopConfig[];
+  options: SelectOption[];
   value?: string | null;
   onSelect: (code: string | null) => void;
   triggerClassName?: string;
   children: React.ReactNode; // the trigger UI (badge / icon button)
   disabled?: boolean;
-  renderOption: (item: WorkshopConfig, isSelected: boolean) => React.ReactNode;
+  renderOption: (item: SelectOption, isSelected: boolean) => React.ReactNode;
 }
 
 /**

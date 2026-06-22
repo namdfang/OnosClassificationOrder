@@ -13,6 +13,11 @@ export const PATHS = {
   ROLES: '/roles',
   CUSTOM_ROLES: '/custom-roles',
 
+  // Designer Task Workflow (Phase 2+)
+  DESIGNER_TEAM: '/designer/team',
+  MY_TASKS: '/my-tasks',
+  DESIGNER_STATS: '/designer/stats',
+
   NOTIFICATIONS: '/notifications',
 
   LOGIN: '/login',

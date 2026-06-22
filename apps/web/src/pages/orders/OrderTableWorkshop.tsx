@@ -22,6 +22,7 @@ import {
 import { TooltipProvider } from '@/components/ui/tooltip';
 import { BulkEditToolbar } from '@/components/orders/BulkEditToolbar';
 import { OrderLogTimelineDialog } from '@/components/orders/OrderLogTimelineDialog';
+import { DesignerSummaryPanel } from './DesignerSummaryPanel';
 import {
   WORKSHOP_COLS,
   type WorkshopOrderRow,
@@ -125,6 +126,9 @@ export function OrderTableWorkshop() {
   const [filterErrorFile, setFilterErrorFile] = useState<string>(
     () => searchParams.get('werrfile') || '',
   );
+  const [filterDesignerStatus, setFilterDesignerStatus] = useState<string>(
+    () => searchParams.get('wdstatus') || '',
+  );
 
   // Sync state → URL (replace). Strip default/empty values.
   useEffect(() => {
@@ -142,6 +146,7 @@ export function OrderTableWorkshop() {
         filterMachineNumber ? sp.set('wmnum', filterMachineNumber) : sp.delete('wmnum');
         filterToolResult ? sp.set('wtool', filterToolResult) : sp.delete('wtool');
         filterErrorFile ? sp.set('werrfile', filterErrorFile) : sp.delete('werrfile');
+        filterDesignerStatus ? sp.set('wdstatus', filterDesignerStatus) : sp.delete('wdstatus');
         page > 1 ? sp.set('wpage', String(page)) : sp.delete('wpage');
         pageSize !== DEFAULT_PAGE_SIZE ? sp.set('wsize', String(pageSize)) : sp.delete('wsize');
         return sp;
@@ -160,6 +165,7 @@ export function OrderTableWorkshop() {
     filterMachineNumber,
     filterToolResult,
     filterErrorFile,
+    filterDesignerStatus,
     page,
     pageSize,
     setSearchParams,
@@ -195,6 +201,7 @@ export function OrderTableWorkshop() {
     if (filterMachineNumber) params.set('machineNumber', filterMachineNumber);
     if (filterToolResult) params.set('toolResult', filterToolResult);
     if (filterErrorFile) params.set('errorFile', filterErrorFile);
+    if (filterDesignerStatus) params.set('designerStatus', filterDesignerStatus);
     if (createdFrom) params.set('createdFrom', createdFrom);
     if (createdTo) params.set('createdTo', createdTo);
     return params;
@@ -251,6 +258,7 @@ export function OrderTableWorkshop() {
     filterMachineNumber,
     filterToolResult,
     filterErrorFile,
+    filterDesignerStatus,
     createdFrom,
     createdTo,
   ]);
@@ -367,9 +375,70 @@ export function OrderTableWorkshop() {
 
   const renderCtx: RenderCtx = { canEditField, patchRow, openPreview };
 
+  // Designer summary chỉ hiện cho role có quyền xem stats designer.
+  const canSeeDesignerSummary = has('page.designer_stats') || has('designer.task.assign');
+
+  // Inject "Chưa gán" option vào assignee SelectFilter (token __none__).
+  const assigneeOptions = useMemo(() => {
+    const base = workshopFilters?.assignee || [];
+    // Đã có __none__ từ BE thì giữ nguyên; chưa có thì prepend option fake với
+    // count tính từ /designer-breakdown — đơn giản hoá: chỉ thêm static option.
+    if (base.find((o) => o.value === '__none__')) return base;
+    return [{ value: '__none__', label: 'Chưa gán', count: 0 }, ...base];
+  }, [workshopFilters?.assignee]);
+
+  const designerStatusOptions = workshopFilters?.designerStatus || [];
+
+  /**
+   * Click cell trong summary panel → set filter list. userId='__none__' tương
+   * ứng "Chưa gán" (token BE); status null = chỉ filter assignee.
+   */
+  const handleSummaryCellClick = (
+    userId: string | null,
+    status:
+      | 'assigned'
+      | 'in-progress'
+      | 'done'
+      | 'rejected'
+      | 'rework'
+      | 'unassigned'
+      | null,
+  ) => {
+    if (userId !== null) setFilterAssignee(userId);
+    if (status !== null) setFilterDesignerStatus(status);
+    setPage(1);
+  };
+
+  // Build qs để pass vào panel — cùng shape với buildFilterParams nhưng
+  // KHÔNG include `page/limit` (panel scoped theo filter, không pagination).
+  const summaryFilterQs = useMemo(() => {
+    return buildFilterParams().toString();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [
+    debouncedSearch,
+    filterPrintStatus,
+    filterToolResultNote,
+    filterAssignee,
+    filterProductionError,
+    filterFabricType,
+    filterMachineNumber,
+    filterToolResult,
+    filterErrorFile,
+    filterDesignerStatus,
+    createdFrom,
+    createdTo,
+  ]);
+
   return (
     <TooltipProvider delayDuration={200}>
       <div className="space-y-4">
+        {canSeeDesignerSummary && (
+          <DesignerSummaryPanel
+            filterQs={summaryFilterQs}
+            onClickCell={handleSummaryCellClick}
+          />
+        )}
+
         {/* Filter bar */}
         <div className="rounded-lg border border-border bg-card p-3 space-y-3">
           <div className="flex items-center gap-2 flex-wrap">
@@ -474,7 +543,15 @@ export function OrderTableWorkshop() {
                 label="Người thực hiện"
                 value={filterAssignee}
                 onChange={setFilterAssignee}
-                options={workshopFilters?.assignee || []}
+                options={assigneeOptions}
+              />
+            )}
+            {canSeeDesignerSummary && (
+              <SelectFilter
+                label="TT Designer"
+                value={filterDesignerStatus}
+                onChange={setFilterDesignerStatus}
+                options={designerStatusOptions}
               />
             )}
             {has('order.field.productionError.view') && (

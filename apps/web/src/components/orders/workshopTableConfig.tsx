@@ -1,12 +1,15 @@
 import React from 'react';
-import { WorkshopConfigCategory } from 'shared';
+import { DesignerStatus, WorkshopConfigCategory } from 'shared';
 
 import { Badge } from '@/components/ui/badge';
 import { CopyButton } from '@/components/common/CopyButton';
 import { Hint } from '@/components/common/Hint';
+import { AssigneeSelectCell } from '@/components/orders/cells/AssigneeSelectCell';
 import { ColorBadgeSelectCell } from '@/components/orders/cells/ColorBadgeSelectCell';
+import { ErrorSourceCell } from '@/components/orders/cells/ErrorSourceCell';
 import { IconSelectCell } from '@/components/orders/cells/IconSelectCell';
 import { ImageThumbCell } from '@/components/orders/cells/ImageThumbCell';
+import { ProductionErrorSelectCell } from '@/components/orders/cells/ProductionErrorSelectCell';
 import { TextEditCell } from '@/components/orders/cells/TextEditCell';
 
 export type WorkshopOrderRow = {
@@ -20,6 +23,8 @@ export type WorkshopOrderRow = {
   mockupOriginalUrl?: string;
   designs?: { front?: string } & Record<string, string | undefined>;
   designsOriginal?: { front?: string } & Record<string, string | undefined>;
+  /** Trạng thái pipeline R2 cho từng vị trí design (Design-R2-Pipeline). */
+  designsStatus?: Partial<Record<string, 'pending' | 'ready' | 'failed'>>;
   orderId?: string;
   inProductionAt?: string;
   factory?: { name?: string; shortName?: string };
@@ -41,6 +46,54 @@ export type WorkshopOrderRow = {
   machineNumber?: string;
   productionError?: string;
   productionErrorNote?: string;
+  productionErrorSource?: 'designer' | 'factory';
+  productionErrorCount?: number;
+
+  // Phase 3 Designer-Task-Workflow
+  designerStatus?: DesignerStatus;
+  designerAssignedAt?: string;
+  designerStartedAt?: string;
+  designerCompletedAt?: string;
+  designerRejectedAt?: string;
+  designerReworkAt?: string;
+  designerRejectedReason?: string;
+  designerReworkCount?: number;
+};
+
+const DESIGNER_STATUS_META: Record<
+  DesignerStatus,
+  { label: string; cls: string; tooltip: string }
+> = {
+  [DesignerStatus.Unassigned]: {
+    label: 'Chưa gán',
+    cls: 'bg-zinc-100 text-zinc-600 dark:bg-zinc-800 dark:text-zinc-300',
+    tooltip: 'Chưa assign cho designer nào',
+  },
+  [DesignerStatus.Assigned]: {
+    label: 'Đã gán',
+    cls: 'bg-zinc-200 text-zinc-700 dark:bg-zinc-700 dark:text-zinc-200',
+    tooltip: 'Designer được giao, chưa nhận làm',
+  },
+  [DesignerStatus.InProgress]: {
+    label: 'Đang làm',
+    cls: 'bg-indigo-100 text-indigo-700 dark:bg-indigo-900/40 dark:text-indigo-300',
+    tooltip: 'Designer đang xử lý',
+  },
+  [DesignerStatus.Done]: {
+    label: 'Đã xong',
+    cls: 'bg-emerald-100 text-emerald-700 dark:bg-emerald-900/40 dark:text-emerald-300',
+    tooltip: 'Designer hoàn thành — toolResultNote auto = ok',
+  },
+  [DesignerStatus.Rejected]: {
+    label: 'Đã trả',
+    cls: 'bg-rose-100 text-rose-700 dark:bg-rose-900/40 dark:text-rose-300',
+    tooltip: 'Designer trả lại task — leader cần re-assign',
+  },
+  [DesignerStatus.Rework]: {
+    label: 'Cần làm lại',
+    cls: 'bg-amber-100 text-amber-700 dark:bg-amber-900/40 dark:text-amber-300',
+    tooltip: 'Xưởng báo lỗi do design — chính designer này làm lại',
+  },
 };
 
 export interface WorkshopRenderCtx {
@@ -226,16 +279,30 @@ export const WORKSHOP_COLS: WorkshopColMeta[] = [
     label: 'Note kq Tool 1',
     perm: 'order.field.toolResultNote.view',
     width: 'min-w-[160px]',
-    render: (r, ctx) => (
-      <ColorBadgeSelectCell
-        orderId={r._id}
-        field="toolResultNote"
-        category={WorkshopConfigCategory.ToolResultNote}
-        value={r.toolResultNote}
-        canEdit={ctx.canEditField('toolResultNote')}
-        onUpdated={(v) => ctx.patchRow(r._id, { toolResultNote: v ?? undefined })}
-      />
-    ),
+    render: (r, ctx) => {
+      const showCount =
+        r.toolResultNote === 'error' && (r.productionErrorCount || 0) >= 2;
+      return (
+        <span className="inline-flex items-center gap-1.5">
+          <ColorBadgeSelectCell
+            orderId={r._id}
+            field="toolResultNote"
+            category={WorkshopConfigCategory.ToolResultNote}
+            value={r.toolResultNote}
+            canEdit={ctx.canEditField('toolResultNote')}
+            onUpdated={(v) => ctx.patchRow(r._id, { toolResultNote: v ?? undefined })}
+          />
+          {showCount && (
+            <span
+              className="text-[10px] font-bold px-1.5 py-0.5 rounded bg-rose-100 text-rose-700 dark:bg-rose-500/20 dark:text-rose-300"
+              title={`Xưởng đã báo lỗi ${r.productionErrorCount} lần trên đơn này`}
+            >
+              ×{r.productionErrorCount}
+            </span>
+          )}
+        </span>
+      );
+    },
   },
   {
     key: 'errorFile',
@@ -275,13 +342,36 @@ export const WORKSHOP_COLS: WorkshopColMeta[] = [
     perm: 'order.field.productionError.view',
     width: 'min-w-[140px]',
     render: (r, ctx) => (
-      <ColorBadgeSelectCell
+      <ProductionErrorSelectCell
         orderId={r._id}
-        field="productionError"
         category={WorkshopConfigCategory.ProductionError}
         value={r.productionError}
+        errorSourceValue={r.productionErrorSource}
+        errorNoteValue={r.productionErrorNote}
         canEdit={ctx.canEditField('productionError')}
-        onUpdated={(v) => ctx.patchRow(r._id, { productionError: v ?? undefined })}
+        onUpdated={(code, source, note) =>
+          ctx.patchRow(r._id, {
+            productionError: code ?? undefined,
+            // Khi code='other', dialog luôn pass source + note; còn lại giữ
+            // hiện trạng (BE auto-fill source qua updateField hook).
+            ...(source !== undefined ? { productionErrorSource: source } : {}),
+            ...(note !== undefined ? { productionErrorNote: note } : {}),
+          })
+        }
+      />
+    ),
+  },
+  {
+    key: 'productionErrorSource',
+    label: 'Loại lỗi',
+    perm: 'order.field.productionErrorSource.view',
+    width: 'min-w-[110px]',
+    render: (r, ctx) => (
+      <ErrorSourceCell
+        orderId={r._id}
+        value={r.productionErrorSource}
+        canEdit={ctx.canEditField('productionErrorSource')}
+        onUpdated={(v) => ctx.patchRow(r._id, { productionErrorSource: v ?? undefined })}
       />
     ),
   },
@@ -307,15 +397,35 @@ export const WORKSHOP_COLS: WorkshopColMeta[] = [
     perm: 'order.field.assignee.view',
     width: 'min-w-[140px]',
     render: (r, ctx) => (
-      <IconSelectCell
+      <AssigneeSelectCell
         orderId={r._id}
-        field="assignee"
-        category={WorkshopConfigCategory.Assignee}
         value={r.assignee}
         canEdit={ctx.canEditField('assignee')}
         onUpdated={(v) => ctx.patchRow(r._id, { assignee: v ?? undefined })}
       />
     ),
+  },
+  {
+    key: 'designerStatus',
+    label: 'TT Designer',
+    perm: 'order.field.designerStatus.view',
+    width: 'min-w-[110px]',
+    render: (r) => {
+      const status = (r.designerStatus as DesignerStatus) || DesignerStatus.Unassigned;
+      const meta = DESIGNER_STATUS_META[status];
+      const rework = r.designerReworkCount && r.designerReworkCount > 0
+        ? ` · ${r.designerReworkCount}×`
+        : '';
+      return (
+        <Hint content={meta.tooltip} forceRich>
+          <span
+            className={`inline-flex items-center px-2 py-0.5 rounded-md text-[11px] font-medium ${meta.cls} cursor-help`}
+          >
+            {meta.label}{rework}
+          </span>
+        </Hint>
+      );
+    },
   },
   {
     key: 'assigneeNote',

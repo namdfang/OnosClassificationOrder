@@ -35,6 +35,7 @@ interface UserRow {
   roleId?: string;
   status?: string;
   role?: Role;
+  factoryId?: string;
 }
 
 interface FormState {
@@ -45,29 +46,56 @@ interface FormState {
   email: string;
   password: string;
   roleId: string;
+  factoryId: string;
 }
 
-const EMPTY_FORM: FormState = { open: false, mode: 'create', fullName: '', email: '', password: '', roleId: '' };
+interface FactoryRow {
+  _id: string;
+  name: string;
+  shortName?: string;
+}
+
+const EMPTY_FORM: FormState = {
+  open: false,
+  mode: 'create',
+  fullName: '',
+  email: '',
+  password: '',
+  roleId: '',
+  factoryId: '',
+};
 
 export default function UsersPage() {
   const [items, setItems] = useState<UserRow[]>([]);
   const [roles, setRoles] = useState<Role[]>([]);
+  const [factories, setFactories] = useState<FactoryRow[]>([]);
   const [loading, setLoading] = useState(false);
   const [form, setForm] = useState<FormState>(EMPTY_FORM);
   const [saving, setSaving] = useState(false);
   const [confirmDelete, setConfirmDelete] = useState<UserRow | null>(null);
 
   const roleMap = useMemo(() => Object.fromEntries(roles.map((r) => [r._id, r])), [roles]);
+  const factoryMap = useMemo(
+    () => Object.fromEntries(factories.map((f) => [f._id, f])),
+    [factories],
+  );
+  /** True nếu role được chọn trong form là Fulfillment → bắt buộc nhập factoryId. */
+  const isFulfillmentRole = useMemo(() => {
+    const r = roleMap[form.roleId];
+    return r?.name === 'Fulfillment';
+  }, [roleMap, form.roleId]);
 
   const fetchAll = async () => {
     try {
       setLoading(true);
-      const [uRes, rRes] = await Promise.all([
+      const [uRes, rRes, fRes] = await Promise.all([
         RepositoryRemote.users.getUsers('?page=1&limit=200'),
         RepositoryRemote.roles.getRoles('?page=1&limit=50'),
+        RepositoryRemote.factory.getFactories(),
       ]);
       setItems((uRes.data?.data || []) as UserRow[]);
       setRoles((rRes.data?.data || []) as Role[]);
+      setFactories((fRes.data?.data || []) as FactoryRow[]);
     } catch (err) {
       handleAxiosError(err);
     } finally {
@@ -91,6 +119,7 @@ export default function UsersPage() {
       email: it.email,
       password: '',
       roleId: it.roleId || '',
+      factoryId: it.factoryId || '',
     });
 
   const handleSubmit = async () => {
@@ -102,6 +131,10 @@ export default function UsersPage() {
       toast.error('Mật khẩu phải có ít nhất 8 ký tự');
       return;
     }
+    if (isFulfillmentRole && !form.factoryId) {
+      toast.error('Role Fulfillment phải chọn xưởng');
+      return;
+    }
     try {
       setSaving(true);
       if (form.mode === 'create') {
@@ -111,6 +144,7 @@ export default function UsersPage() {
           password: form.password,
           roleId: form.roleId,
           otherPermissionIds: [],
+          factoryId: form.factoryId || undefined,
         } as any);
         toast.success('Đã tạo user');
       } else if (form.id) {
@@ -118,6 +152,7 @@ export default function UsersPage() {
           fullName: form.fullName,
           email: form.email,
           roleId: form.roleId,
+          factoryId: form.factoryId || undefined,
         } as any);
         toast.success('Đã cập nhật');
       }
@@ -205,12 +240,18 @@ export default function UsersPage() {
             )}
             {items.map((it) => {
               const role = it.role || roleMap[it.roleId || ''];
+              const factory = it.factoryId ? factoryMap[it.factoryId] : undefined;
               return (
                 <TableRow key={it._id}>
                   <TableCell className="font-medium">{it.fullName}</TableCell>
                   <TableCell className="text-muted-foreground">{it.email}</TableCell>
                   <TableCell>
                     {role ? <Badge variant="outline">{role.name}</Badge> : <span className="text-muted-foreground text-xs">—</span>}
+                    {factory && role?.name === 'Fulfillment' && (
+                      <Badge variant="secondary" className="ml-1 text-[10px]">
+                        {factory.shortName || factory.name}
+                      </Badge>
+                    )}
                   </TableCell>
                   <TableCell>
                     <div className="flex items-center gap-2">
@@ -271,7 +312,14 @@ export default function UsersPage() {
               <Label>Role</Label>
               <select
                 value={form.roleId}
-                onChange={(e) => setForm({ ...form, roleId: e.target.value })}
+                onChange={(e) =>
+                  setForm({
+                    ...form,
+                    roleId: e.target.value,
+                    // Khi đổi role ≠ Fulfillment thì clear factoryId tránh data thừa.
+                    factoryId: roleMap[e.target.value]?.name === 'Fulfillment' ? form.factoryId : '',
+                  })
+                }
                 className="w-full h-9 rounded-md border border-input bg-background px-3 text-sm"
               >
                 {roles.map((r) => (
@@ -281,6 +329,28 @@ export default function UsersPage() {
                 ))}
               </select>
             </div>
+            {isFulfillmentRole && (
+              <div className="space-y-2">
+                <Label>Xưởng *</Label>
+                <select
+                  value={form.factoryId}
+                  onChange={(e) => setForm({ ...form, factoryId: e.target.value })}
+                  className="w-full h-9 rounded-md border border-input bg-background px-3 text-sm"
+                >
+                  <option value="">— Chọn xưởng —</option>
+                  {factories.map((f) => (
+                    <option key={f._id} value={f._id}>
+                      {f.name}
+                      {f.shortName ? ` (${f.shortName})` : ''}
+                    </option>
+                  ))}
+                </select>
+                <p className="text-[11px] text-muted-foreground">
+                  User Fulfillment chỉ xem được đơn ở xưởng này (hoặc đơn đã transfer từ
+                  xưởng này đi).
+                </p>
+              </div>
+            )}
           </div>
           <DialogFooter>
             <Button variant="outline" onClick={() => setForm(EMPTY_FORM)}>

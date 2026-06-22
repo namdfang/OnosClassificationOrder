@@ -25,6 +25,14 @@ export class WorkshopConfigEntity extends DatabaseEntityAbstract {
 
   @Prop({ required: true, default: true })
   isActive: boolean;
+
+  /**
+   * Chỉ dùng cho category=production_error.
+   * - `'designer'` → khi xưởng set lỗi này, đơn auto chuyển designerStatus='rework'.
+   * - `'factory'`  → chỉ ghi stats, không trigger rework.
+   */
+  @Prop({ type: String, enum: ['designer', 'factory'] })
+  errorSource?: 'designer' | 'factory';
 }
 
 export const WorkshopConfigSchema = SchemaFactory.createForClass(WorkshopConfigEntity);

@@ -166,6 +166,22 @@ export class UserEntity extends DatabaseEntityAbstract {
     default: [],
   })
   priceGroupIds?: string[];
+
+  /** Per-user Telegram chat ID (sẽ dùng cho notification phase sau). */
+  @Prop()
+  telegramChatId?: string;
+
+  /** Ngày vào làm — hiển thị ở /designer/team. */
+  @Prop()
+  hireDate?: Date;
+
+  /**
+   * Required khi role=Fulfillment — scope user chỉ thấy đơn ở factory này
+   * (filter `factoryId == X || originalFactoryId == X`). User role khác có
+   * thể không có. Validate ở UserService.create/update.
+   */
+  @Prop({ ref: 'FactoryEntity', index: true })
+  factoryId?: string;
 }
 
 assertSameType<User, UserEntity>();

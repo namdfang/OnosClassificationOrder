@@ -60,6 +60,16 @@ export const UserZod = BaseEntityZod.extend({
 
   // Pricing
   priceGroupIds: z.array(IDZod).optional(),
+
+  /** Per-user Telegram chat ID — leader nhập hộ hoặc user tự cập nhật ở /account. */
+  telegramChatId: z.string().optional(),
+  /** Ngày vào làm — hiển thị ở /designer/team. Optional. */
+  hireDate: z.date().optional(),
+  /**
+   * Required khi role=Fulfillment (BE enforce). User Fulfillment scope chỉ
+   * thấy đơn ở factory này (current factoryId hoặc originalFactoryId).
+   */
+  factoryId: IDZod.optional(),
 });
 export type User = z.infer<typeof UserZod>;
 
@@ -92,6 +102,9 @@ export const UpdateUserZod = z.object({
   providerId: UserZod.shape.providerId.optional(),
   avatarId: UserZod.shape.avatarId.optional(),
   priceGroupIds: UserZod.shape.priceGroupIds,
+  telegramChatId: UserZod.shape.telegramChatId,
+  hireDate: UserZod.shape.hireDate,
+  factoryId: UserZod.shape.factoryId,
 });
 export class UpdateUserDto extends createZodDto(extendApi(UpdateUserZod)) {}
 export const UpdateUserResZod = ResZod.extend({
@@ -119,6 +132,9 @@ export const CreateUserZod = z.object({
   departmentId: UserZod.shape.departmentId.optional(),
   providerId: UserZod.shape.providerId.optional(),
   password: UserZod.shape.password,
+  telegramChatId: UserZod.shape.telegramChatId,
+  hireDate: UserZod.shape.hireDate,
+  factoryId: UserZod.shape.factoryId,
 });
 export type CreateUser = z.infer<typeof CreateUserZod>;
 export class CreateUserDto extends createZodDto(extendApi(CreateUserZod)) {}

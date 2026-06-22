@@ -21,9 +21,15 @@ import { OrderLogTimelineDialog } from '@/components/orders/OrderLogTimelineDial
 import { CopyButton } from '@/components/common/CopyButton';
 import { Hint } from '@/components/common/Hint';
 import { TooltipProvider } from '@/components/ui/tooltip';
+import { SelectFilter } from '@/components/common/SelectFilter';
 import { RepositoryRemote } from '@/services';
 import { handleAxiosError } from '@/utils';
 import { smallThumb } from '@/utils/driveThumb';
+import { usePermission } from '@/hooks/usePermission';
+
+import { DesignerSummaryPanel } from './DesignerSummaryPanel';
+
+type FilterOption = { value: string; label: string; count: number };
 
 interface DesignFields {
   front?: string;
@@ -401,6 +407,20 @@ export function ListOrderTab({ refreshKey }: ListOrderTabProps) {
   const [filterError, setFilterError] = useState<boolean>(
     () => searchParams.get('lerror') === 'true',
   );
+  // Designer summary filters — Admin / Leader.
+  const [filterAssignee, setFilterAssignee] = useState<string>(
+    () => searchParams.get('lassign') || '',
+  );
+  const [filterDesignerStatus, setFilterDesignerStatus] = useState<string>(
+    () => searchParams.get('ldstatus') || '',
+  );
+  const [filterOptions, setFilterOptions] = useState<{
+    assignee: FilterOption[];
+    designerStatus: FilterOption[];
+  }>({ assignee: [], designerStatus: [] });
+  const { has } = usePermission();
+  const canSeeDesignerSummary = has('page.designer_stats') || has('designer.task.assign');
+
   const [page, setPage] = useState(() => {
     const p = Number(searchParams.get('lpage'));
     return Number.isFinite(p) && p > 0 ? p : 1;
@@ -420,22 +440,34 @@ export function ListOrderTab({ refreshKey }: ListOrderTabProps) {
         search ? sp.set('lsearch', search) : sp.delete('lsearch');
         filterMapped !== 'all' ? sp.set('lmapped', filterMapped) : sp.delete('lmapped');
         filterError ? sp.set('lerror', 'true') : sp.delete('lerror');
+        filterAssignee ? sp.set('lassign', filterAssignee) : sp.delete('lassign');
+        filterDesignerStatus ? sp.set('ldstatus', filterDesignerStatus) : sp.delete('ldstatus');
         page > 1 ? sp.set('lpage', String(page)) : sp.delete('lpage');
         pageSize !== DEFAULT_PAGE_SIZE ? sp.set('lsize', String(pageSize)) : sp.delete('lsize');
         return sp;
       },
       { replace: true },
     );
-  }, [search, filterMapped, filterError, page, pageSize, setSearchParams]);
+  }, [search, filterMapped, filterError, filterAssignee, filterDesignerStatus, page, pageSize, setSearchParams]);
+
+  /** Build filter params dùng cho cả fetchData, fetchFilters, summary panel. */
+  const buildFilterParams = (): URLSearchParams => {
+    const params = new URLSearchParams();
+    if (search) params.set('search', search);
+    if (filterMapped === 'mapped') params.set('isMapped', 'true');
+    if (filterMapped === 'unmapped') params.set('isMapped', 'false');
+    if (filterError) params.set('hasError', 'true');
+    if (filterAssignee) params.set('assignee', filterAssignee);
+    if (filterDesignerStatus) params.set('designerStatus', filterDesignerStatus);
+    return params;
+  };
 
   const fetchData = async () => {
     try {
       setLoading(true);
-      const params = new URLSearchParams({ page: String(page), limit: String(pageSize) });
-      if (search) params.set('search', search);
-      if (filterMapped === 'mapped') params.set('isMapped', 'true');
-      if (filterMapped === 'unmapped') params.set('isMapped', 'false');
-      if (filterError) params.set('hasError', 'true');
+      const params = buildFilterParams();
+      params.set('page', String(page));
+      params.set('limit', String(pageSize));
       const resp = await RepositoryRemote.order.getOrders(`?${params.toString()}`);
       setItems(resp.data.data || []);
       setTotal(resp.data.total || 0);
@@ -446,10 +478,37 @@ export function ListOrderTab({ refreshKey }: ListOrderTabProps) {
     }
   };
 
+  const fetchFilters = async () => {
+    if (!canSeeDesignerSummary) return;
+    try {
+      const params = buildFilterParams();
+      const res = await RepositoryRemote.order.getWorkshopFilters(`?${params.toString()}`);
+      const data = (res.data?.data || {}) as {
+        assignee?: FilterOption[];
+        designerStatus?: FilterOption[];
+      };
+      setFilterOptions({
+        assignee: data.assignee || [],
+        designerStatus: data.designerStatus || [],
+      });
+    } catch {
+      /* silent */
+    }
+  };
+
   useEffect(() => {
     fetchData();
+    fetchFilters();
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [refreshKey, filterMapped, filterError, page, pageSize]);
+  }, [
+    refreshKey,
+    filterMapped,
+    filterError,
+    filterAssignee,
+    filterDesignerStatus,
+    page,
+    pageSize,
+  ]);
 
   // Skip lần render đầu — nếu không sẽ ghi đè `lpage` đọc từ URL khi F5.
   const isFirstRender = React.useRef(true);
@@ -459,7 +518,7 @@ export function ListOrderTab({ refreshKey }: ListOrderTabProps) {
       return;
     }
     setPage(1);
-  }, [filterMapped, filterError]);
+  }, [filterMapped, filterError, filterAssignee, filterDesignerStatus]);
 
   const handleSearch = () => {
     setPage(1);
@@ -502,9 +561,42 @@ export function ListOrderTab({ refreshKey }: ListOrderTabProps) {
     },
   };
 
+  // Inject "Chưa gán" option vào assignee.
+  const assigneeOptions = canSeeDesignerSummary
+    ? filterOptions.assignee.find((o) => o.value === '__none__')
+      ? filterOptions.assignee
+      : [{ value: '__none__', label: 'Chưa gán', count: 0 }, ...filterOptions.assignee]
+    : [];
+
+  const summaryFilterQs = buildFilterParams().toString();
+
+  /** Click cell trong panel → set filter list. */
+  const handleSummaryCellClick = (
+    userId: string | null,
+    status:
+      | 'assigned'
+      | 'in-progress'
+      | 'done'
+      | 'rejected'
+      | 'rework'
+      | 'unassigned'
+      | null,
+  ) => {
+    if (userId !== null) setFilterAssignee(userId);
+    if (status !== null) setFilterDesignerStatus(status);
+    setPage(1);
+  };
+
   return (
     <TooltipProvider delayDuration={300}>
       <div className="space-y-4">
+        {canSeeDesignerSummary && (
+          <DesignerSummaryPanel
+            filterQs={summaryFilterQs}
+            onClickCell={handleSummaryCellClick}
+          />
+        )}
+
         <div className="flex items-center justify-between gap-3 flex-wrap">
           <Input
             placeholder="Tìm Production ID, Order ID, SKU, email…"
@@ -545,6 +637,37 @@ export function ListOrderTab({ refreshKey }: ListOrderTabProps) {
             </Button>
           </div>
         </div>
+
+        {canSeeDesignerSummary && (
+          <div className="grid grid-cols-2 md:grid-cols-4 gap-2 rounded-md border border-border bg-card p-2.5">
+            <SelectFilter
+              label="Designer"
+              value={filterAssignee}
+              onChange={setFilterAssignee}
+              options={assigneeOptions}
+            />
+            <SelectFilter
+              label="TT Designer"
+              value={filterDesignerStatus}
+              onChange={setFilterDesignerStatus}
+              options={filterOptions.designerStatus}
+            />
+            {(filterAssignee || filterDesignerStatus) && (
+              <div className="flex items-end">
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  onClick={() => {
+                    setFilterAssignee('');
+                    setFilterDesignerStatus('');
+                  }}
+                >
+                  Xoá filter designer
+                </Button>
+              </div>
+            )}
+          </div>
+        )}
 
         <PaginationBar position="top" {...paginationProps} />
 

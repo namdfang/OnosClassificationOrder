@@ -56,7 +56,10 @@ function Login() {
           /* fall back to login payload */
         }
 
-        navigate(PATHS.HOME);
+        // Sub-designer login → vào thẳng /my-tasks (Kanban Phase 4). Các role
+        // khác dùng dashboard chung.
+        const roleName = (loginInfo.user as { role?: { name?: string } })?.role?.name;
+        navigate(roleName === 'Designer' ? PATHS.MY_TASKS : PATHS.HOME);
         toast.success('Welcome back');
       }
     } catch (error) {

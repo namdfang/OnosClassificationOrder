@@ -14,7 +14,9 @@ export enum RoleType {
 
   Accountant = 'Accountant',
 
-  // For Folinas designers
+  // Designer team — Leader assigns tasks + sees stats; Designer (sub) handles
+  // their own tasks via /my-tasks. Migrate cũ: 1 user Designer → DesignerLeader.
+  DesignerLeader = 'DesignerLeader',
   Designer = 'Designer',
 
   // Logistics

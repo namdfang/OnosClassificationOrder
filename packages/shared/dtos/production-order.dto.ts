@@ -2,8 +2,12 @@ import { createZodDto } from '@anatine/zod-nestjs';
 import { extendApi } from '@anatine/zod-openapi';
 import { z } from 'zod';
 
+import { DesignerStatus, DesignerTransitionAction } from '@shared/enums';
 import { BaseEntityZod, PageQueryZod, PageResZod, ResZod } from '@shared/types';
 import { IDZod } from '..';
+
+export const DesignerStatusZod = z.nativeEnum(DesignerStatus);
+export const DesignerTransitionActionZod = z.nativeEnum(DesignerTransitionAction);
 
 export const DesignFieldsZod = z.object({
   front: z.string().optional(),
@@ -27,6 +31,31 @@ export const DesignFieldsZod = z.object({
 });
 export type DesignFields = z.infer<typeof DesignFieldsZod>;
 
+/** Trạng thái pipeline R2 cho từng vị trí design (Phase 6 Design-R2-Pipeline). */
+export const DesignStatusZod = z.enum(['pending', 'ready', 'failed']);
+export type DesignStatus = z.infer<typeof DesignStatusZod>;
+export const DesignsStatusFieldsZod = z.object({
+  front: DesignStatusZod.optional(),
+  back: DesignStatusZod.optional(),
+  sleeve: DesignStatusZod.optional(),
+  hood: DesignStatusZod.optional(),
+  folder: DesignStatusZod.optional(),
+  placket: DesignStatusZod.optional(),
+  chestLeft: DesignStatusZod.optional(),
+  chestRight: DesignStatusZod.optional(),
+  left: DesignStatusZod.optional(),
+  right: DesignStatusZod.optional(),
+  sleeveLeft: DesignStatusZod.optional(),
+  sleeveRight: DesignStatusZod.optional(),
+  leftUpperSleeve: DesignStatusZod.optional(),
+  rightUpperSleeve: DesignStatusZod.optional(),
+  leftCuff: DesignStatusZod.optional(),
+  rightCuff: DesignStatusZod.optional(),
+  frontEmbroidery: DesignStatusZod.optional(),
+  backEmbroidery: DesignStatusZod.optional(),
+});
+export type DesignsStatusFields = z.infer<typeof DesignsStatusFieldsZod>;
+
 export const ProductionOrderZod = BaseEntityZod.extend({
   productionId: z.string().min(1),
   userSku: z.string().optional(),
@@ -46,6 +75,7 @@ export const ProductionOrderZod = BaseEntityZod.extend({
   shipCost: z.number().optional(),
   designs: DesignFieldsZod.optional(),
   designsOriginal: DesignFieldsZod.optional(),
+  designsStatus: DesignsStatusFieldsZod.optional(),
   status: z.string().optional(),
   orderId: z.string().optional(),
   externalId: z.string().optional(),
@@ -71,6 +101,9 @@ export const ProductionOrderZod = BaseEntityZod.extend({
   toolResultNote: z.string().optional(),
   errorFile: z.string().optional(),
   errorFileNote: z.string().optional(),
+  /** = user._id của sub-designer được gán. Set qua bulk-assign-designer
+   *  hoặc field update assignee. Designer-Task-Workflow Phase 6 đổi từ
+   *  workshop_config code → userId thuần. */
   assignee: z.string().optional(),
   assigneeNote: z.string().optional(),
   /** workshop_config code (category=fabric_type). Auto-filled at import from product config. */
@@ -84,9 +117,60 @@ export const ProductionOrderZod = BaseEntityZod.extend({
   // `productionError` được set (mọi nơi check: $exists + $ne ''/null).
   productionError: z.string().optional(),
   productionErrorNote: z.string().optional(),
+  /**
+   * Phân loại nguồn lỗi cho dashboard stats. Auto-fill từ
+   * workshop_config.errorSource khi user set productionError. User có thể
+   * override khi cần (vd. "Lỗi khác" — ambiguous code).
+   */
+  productionErrorSource: z.enum(['designer', 'factory']).optional(),
+  /**
+   * Đếm số lần xưởng đã set productionError trên đơn này. $inc mỗi lần
+   * updateField('productionError', non-null) hoặc setProductionError. Dùng để
+   * hiển thị "Lỗi ×N" trên cell toolResultNote khi xưởng báo lỗi lần thứ N.
+   */
+  productionErrorCount: z.number().int().nonnegative().default(0),
+  /**
+   * Thời điểm đơn lần ĐẦU vào trạng thái lỗi trong cycle hiện tại. Set khi
+   * `productionError` chuyển null → value (và field chưa có giá trị). Clear
+   * khi `toolResultNote='ok'` hoặc `productionError` được clear (đơn rời tab
+   * "Nhật ký bù lỗi"). Dùng để sort + tính mức độ khẩn.
+   */
+  productionFirstErrorAt: z.date().optional(),
 
   // Derived: toolResultNote === 'ok'
   readyForFulfill: z.boolean().default(false),
+
+  // ─── Designer task workflow (Phase 1 Designer-Task-Workflow) ─────
+  /** State machine; default 'unassigned' khi import; set bởi transition endpoint. */
+  designerStatus: DesignerStatusZod.default(DesignerStatus.Unassigned),
+  /** Khi leader assign lần đầu — reset khi reassign sang sub khác. */
+  designerAssignedAt: z.date().optional(),
+  /**
+   * Start time của CYCLE hiện tại. Reset mỗi lần `start`/`restart` (per-cycle).
+   * Dùng để tính work delta khi `complete` (now - startedAt) → cộng vào
+   * `designerWorkMs`.
+   */
+  designerStartedAt: z.date().optional(),
+  /**
+   * Start time của LẦN ĐẦU — set 1 lần khi `start` lần đầu, immutable.
+   * Dùng để tính avgResponseMin chính xác (firstStartedAt - assignedAt).
+   */
+  designerFirstStartedAt: z.date().optional(),
+  /** Khi sub bấm "Hoàn thành" — overwrite mỗi lần done (rework xong vẫn update). */
+  designerCompletedAt: z.date().optional(),
+  /** Khi sub bấm "Trả lại". Set kèm `designerRejectedReason`. */
+  designerRejectedAt: z.date().optional(),
+  /** Khi xưởng set productionError có errorSource='designer'. */
+  designerReworkAt: z.date().optional(),
+  /** Free-text reason sub-designer nhập khi reject (max 500). */
+  designerRejectedReason: z.string().optional(),
+  /** Số lần đơn này bị xưởng báo lỗi designer → rework. */
+  designerReworkCount: z.number().int().nonnegative().default(0),
+  /**
+   * Cumulative thời gian designer LÀM thật (ms) — tổng các cycle (lần đầu +
+   * rework). $inc khi `complete`. Dùng trực tiếp cho avgWorkMin stats.
+   */
+  designerWorkMs: z.number().int().nonnegative().default(0),
 });
 export type ProductionOrder = z.infer<typeof ProductionOrderZod>;
 
@@ -105,6 +189,7 @@ export const ORDER_WORKSHOP_FIELDS = [
   'machineNumber',
   'productionError',
   'productionErrorNote',
+  'productionErrorSource',
 ] as const;
 export type OrderWorkshopField = (typeof ORDER_WORKSHOP_FIELDS)[number];
 export const OrderWorkshopFieldZod = z.enum(ORDER_WORKSHOP_FIELDS);
@@ -131,6 +216,11 @@ export const GetProductionOrdersZod = PageQueryZod.extend({
   productionError: z.string().optional(),
   /** Comma-separated workshop_config codes for machine (numéro máy). */
   machineNumber: z.string().optional(),
+  /**
+   * Designer state filter — CSV của DesignerStatus value. Hỗ trợ token đặc
+   * biệt `__none__` để lọc đơn chưa có designerStatus (data legacy).
+   */
+  designerStatus: z.string().optional(),
   /** Truthy → chỉ lấy đơn chưa map xưởng (factoryId null / không có). */
   unmapped: z.coerce.boolean().optional(),
   /**
@@ -361,6 +451,92 @@ export const BulkUpdateOrderFieldResZod = ResZod.extend({
 export class BulkUpdateOrderFieldResDto extends createZodDto(extendApi(BulkUpdateOrderFieldResZod)) {}
 
 //
+// Bulk assign designer — wrapper riêng cho assignee với pre-flight stats +
+// detailed skipped report. Reuse được bulk-field nhưng UX gọn hơn nhiều khi
+// gắn cho 1 designer cụ thể.
+//
+export const BulkAssignDesignerPreviewZod = z.object({
+  ids: IDZod.array().min(1),
+});
+export class BulkAssignDesignerPreviewDto extends createZodDto(
+  extendApi(BulkAssignDesignerPreviewZod),
+) {}
+
+export const BulkAssignDesignerPreviewResZod = ResZod.extend({
+  data: z.object({
+    total: z.number(),
+    /** Đếm theo designerStatus hiện tại của các đơn được chọn. */
+    byStatus: z.object({
+      unassigned: z.number(),
+      assigned: z.number(),
+      inProgress: z.number(),
+      done: z.number(),
+      rejected: z.number(),
+      rework: z.number(),
+    }),
+    /** Đơn đã được gán cho designer khác (assignee != null). */
+    alreadyAssigned: z
+      .object({
+        userId: z.string(),
+        fullName: z.string().optional(),
+        count: z.number(),
+      })
+      .array(),
+    /** Số đơn sẽ bị skip nếu apply (đang in-progress/done/rework). */
+    blockedCount: z.number(),
+    /** Số đơn hợp lệ để assign (unassigned/assigned/rejected). */
+    eligibleCount: z.number(),
+  }),
+});
+export class BulkAssignDesignerPreviewResDto extends createZodDto(
+  extendApi(BulkAssignDesignerPreviewResZod),
+) {}
+
+export const BulkAssignDesignerZod = z.object({
+  ids: IDZod.array().min(1),
+  /** Target user (sub-designer) — = user._id. */
+  userId: IDZod,
+  /** Nếu false (default) → từ chối khi có đơn đã assign cho người khác (an
+   * toàn). FE confirm rồi đặt true để override. */
+  reassignOthers: z.boolean().default(false),
+});
+export class BulkAssignDesignerDto extends createZodDto(extendApi(BulkAssignDesignerZod)) {}
+
+export const BulkAssignDesignerResZod = ResZod.extend({
+  data: z.object({
+    matched: z.number(),
+    modified: z.number(),
+    /** ID + lý do của những đơn không assign được. */
+    skipped: z
+      .object({
+        orderId: z.string(),
+        productionId: z.string(),
+        reason: z.string(),
+      })
+      .array(),
+  }),
+});
+export class BulkAssignDesignerResDto extends createZodDto(extendApi(BulkAssignDesignerResZod)) {}
+
+//
+// Set production error atomic — wrapper riêng cho việc set 3 field cùng lúc
+// (productionError + productionErrorSource + productionErrorNote). Cần thiết
+// khi user chọn code "Lỗi khác" → bắt buộc nhập source + note.
+//
+export const SetProductionErrorZod = z.object({
+  /** Workshop_config code; null = clear hẳn lỗi. */
+  code: z.string().nullable(),
+  /** Required khi code='other' (BE validate). Auto-fill từ config nếu vắng. */
+  source: z.enum(['designer', 'factory']).optional(),
+  /** Required khi code='other' (BE validate). */
+  note: z.string().max(500).optional(),
+});
+export class SetProductionErrorDto extends createZodDto(extendApi(SetProductionErrorZod)) {}
+
+export const SetProductionErrorResZod = ResZod.extend({ data: ProductionOrderZod });
+export class SetProductionErrorResDto extends createZodDto(extendApi(SetProductionErrorResZod)) {}
+
+//
 // Import summary — aggregates orders of a single day across all imports.
 // Workshop uses this to spot duplicate (type, size, fabric) combinations
 // so the same blank batch can be printed together.
@@ -562,12 +738,15 @@ export const WorkshopAvailableFiltersResZod = ResZod.extend({
   data: z.object({
     printStatus: FactoryFilterOptionZod.array(),
     toolResultNote: FactoryFilterOptionZod.array(),
+    /** label = user.fullName (đã resolve); value = user._id; token `__none__` cho đơn chưa gán. */
     assignee: FactoryFilterOptionZod.array(),
     productionError: FactoryFilterOptionZod.array(),
     fabricType: FactoryFilterOptionZod.array(),
     machineNumber: FactoryFilterOptionZod.array(),
     toolResult: FactoryFilterOptionZod.array(),
     errorFile: FactoryFilterOptionZod.array(),
+    /** Designer state — value = DesignerStatus, label hiển thị tiếng Việt. */
+    designerStatus: FactoryFilterOptionZod.array(),
   }),
 });
 export class WorkshopAvailableFiltersResDto extends createZodDto(
@@ -576,3 +755,60 @@ export class WorkshopAvailableFiltersResDto extends createZodDto(
 export type WorkshopAvailableFilters = z.infer<
   typeof WorkshopAvailableFiltersResZod
 >['data'];
+
+/**
+ * Body của `POST /v1/orders/:id/designer-transition`. Server validate action
+ * hợp lệ với state hiện tại + owner constraint (sub-designer chỉ transition
+ * task có `assignee === user.assigneeCode`). Side effects (auto set toolResultNote,
+ * increment reworkCount, log…) handle ở `DesignerTaskService`.
+ */
+export const DesignerTransitionZod = z.object({
+  action: DesignerTransitionActionZod,
+  /** Required khi action='reject', optional cho các action khác. */
+  reason: z.string().max(500).optional(),
+});
+export class DesignerTransitionDto extends createZodDto(extendApi(DesignerTransitionZod)) {}
+
+export const DesignerTransitionResZod = ResZod.extend({ data: ProductionOrderZod });
+export class DesignerTransitionResDto extends createZodDto(extendApi(DesignerTransitionResZod)) {}
+
+//
+// Error log tab — danh sách đơn đang ở trạng thái lỗi xưởng (productionError
+// set, toolResultNote chưa 'ok'), sort theo productionFirstErrorAt ASC để đơn
+// nằm lâu nhất hiển thị đầu tiên. Mức độ khẩn cấp tính client-side từ
+// productionFirstErrorAt theo ngưỡng 24h/48h/72h.
+//
+
+export const ERROR_LOG_URGENCY_LEVELS = ['new', 'attention', 'urgent', 'critical'] as const;
+export type ErrorLogUrgency = (typeof ERROR_LOG_URGENCY_LEVELS)[number];
+export const ErrorLogUrgencyZod = z.enum(ERROR_LOG_URGENCY_LEVELS);
+
+export const GetErrorLogZod = PageQueryZod.extend({
+  /** Comma-separated user._id của designer được gán đơn (`__none__` cho đơn chưa gán). */
+  assignee: z.string().optional(),
+  /** Comma-separated workshop_config codes (fabric_type). */
+  fabricType: z.string().optional(),
+  /** Comma-separated workshop_config codes (tool_result). */
+  toolResult: z.string().optional(),
+  /** Comma-separated workshop_config codes (production_error). */
+  productionError: z.string().optional(),
+  /** Comma-separated 'designer' | 'factory'. */
+  productionErrorSource: z.string().optional(),
+  /** Comma-separated factoryIds. */
+  factoryId: z.string().optional(),
+  /** Comma-separated urgency level. */
+  urgency: z.string().optional(),
+});
+export class GetErrorLogDto extends createZodDto(extendApi(GetErrorLogZod)) {}
+
+export const GetErrorLogResZod = PageResZod.extend({
+  data: ProductionOrderZod.array(),
+  /** Tổng theo mức độ khẩn (bỏ qua pagination). */
+  byUrgency: z.object({
+    new: z.number(),
+    attention: z.number(),
+    urgent: z.number(),
+    critical: z.number(),
+  }),
+});
+export class GetErrorLogResDto extends createZodDto(extendApi(GetErrorLogResZod)) {}

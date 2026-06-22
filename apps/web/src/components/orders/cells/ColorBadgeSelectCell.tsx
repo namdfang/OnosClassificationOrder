@@ -68,13 +68,29 @@ export function ColorBadgeSelectCell({ orderId, field, category, value, canEdit,
       onSelect={handleSelect}
       disabled={!canEdit || saving}
       renderOption={(it) => (
-        <span className="inline-flex items-center gap-2">
-          <span className="inline-block w-3 h-3 rounded" style={{ backgroundColor: it.color || '#888' }} />
-          {it.name}
+        <span className="inline-flex items-center gap-2 w-full">
+          <span className="inline-block w-3 h-3 rounded shrink-0" style={{ backgroundColor: it.color || '#888' }} />
+          <span className="flex-1">{it.name}</span>
+          {it.errorSource && <ErrorSourceTag source={it.errorSource} />}
         </span>
       )}
     >
       {trigger}
     </SelectPopover>
+  );
+}
+
+function ErrorSourceTag({ source }: { source: 'designer' | 'factory' }) {
+  if (source === 'designer') {
+    return (
+      <span className="text-[9px] font-semibold px-1.5 py-0.5 rounded bg-violet-100 text-violet-700 dark:bg-violet-500/20 dark:text-violet-300">
+        DES
+      </span>
+    );
+  }
+  return (
+    <span className="text-[9px] font-semibold px-1.5 py-0.5 rounded bg-sky-100 text-sky-700 dark:bg-sky-500/20 dark:text-sky-300">
+      XƯỞNG
+    </span>
   );
 }
