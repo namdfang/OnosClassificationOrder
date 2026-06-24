@@ -93,8 +93,8 @@ export class ScheduledReportsService {
 
       return true;
     } catch (error) {
-      this.logger.warn({
-        message: `[scheduled-reports] ${name} failed`,
+      this.logger.info({
+        message: `[scheduled-reports][WARN] ${name} failed`,
         error: error instanceof Error ? error.message : String(error),
       });
 

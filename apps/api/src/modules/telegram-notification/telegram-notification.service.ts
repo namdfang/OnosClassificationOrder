@@ -50,8 +50,8 @@ export class TelegramNotificationService {
 
     const channels = this.channelsFor(key);
     if (channels.length === 0) {
-      this.logger.warn({
-        message: `[telegram-notification] ${key} skipped: no channel configured`,
+      this.logger.info({
+        message: `[telegram-notification][WARN] ${key} skipped: no channel configured`,
       });
 
       return;
@@ -68,8 +68,8 @@ export class TelegramNotificationService {
 
     const failures = results.filter((r) => r.status === 'rejected' || (r.status === 'fulfilled' && !r.value));
     if (failures.length > 0) {
-      this.logger.warn({
-        message: `[telegram-notification] ${key} ${failures.length}/${channels.length} channel(s) failed`,
+      this.logger.info({
+        message: `[telegram-notification][WARN] ${key} ${failures.length}/${channels.length} channel(s) failed`,
       });
     }
   }

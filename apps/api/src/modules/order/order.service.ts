@@ -2769,8 +2769,10 @@ export class OrderService implements OnModuleInit {
       updated += 1;
 
       if (warnings.length) {
-        this.logger.warn({
-          message: `[import-rework] row ${rowNum} (${productionId}): ${warnings.join('; ')}`,
+        // Logger config dùng custom level "activity" trên prod → .warn không exist.
+        // Dùng .info (luôn tồn tại) + prefix [WARN] để filter log dễ.
+        this.logger.info({
+          message: `[import-rework][WARN] row ${rowNum} (${productionId}): ${warnings.join('; ')}`,
         });
       }
 
@@ -2833,8 +2835,8 @@ export class OrderService implements OnModuleInit {
         finishedAt: new Date(),
       });
     } catch (error) {
-      this.logger.warn({
-        message: '[order.import] telegram notification failed',
+      this.logger.info({
+        message: '[order.import][WARN] telegram notification failed',
         error: error instanceof Error ? error.message : String(error),
       });
     }
@@ -3616,8 +3618,8 @@ export class OrderService implements OnModuleInit {
         updated++;
       } catch (err) {
         skipped++;
-        this.logger.warn({
-          message: `[backfill-designer] ${orderId} failed: ${
+        this.logger.info({
+          message: `[backfill-designer][WARN] ${orderId} failed: ${
             (err as Error).message
           }`,
         });
