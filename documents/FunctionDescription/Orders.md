@@ -288,6 +288,10 @@ Mỗi request `GET /v1/orders` đi qua `OrderService.buildVisibilityFilter(roleN
 
 > **§7.0 Lưu ý filter ngày (kể từ 2026-06):** DTO `createdFrom` / `createdTo` (cộng `wfrom` / `wto` ở URL Workshop, `ffrom` / `fto` ở Factory dashboard, `startDate` / `endDate` ở Dashboard stats) được giữ tên cũ để không phá URL bookmark, **nhưng thực tế filter trên `orderAt`** (thời gian khách lên đơn ở marketplace) — không còn theo `createdAt` (thời gian import). Đổi vì xưởng cần ưu tiên xử lý theo "ngày khách đặt hàng" thật sự. Áp dụng ở: `buildVisibilityFilter()`, `getDashboard()`, `getStatusOverview()`, `getFactoryOverview()`, `getImportSummary()`.
 > Trường `orderAt` được import từ cột 37 ("Order at") của sheet. Đơn cũ thiếu `orderAt` sẽ bị filter loại khỏi date range — do data hiện tại là test, không backfill.
+>
+> **Timezone (quan trọng):** filter "yyyy-mm-dd" được parse là **VN local midnight** (qua helper `vnDayStart` / `vnDayEnd` ở `order.service.ts`). Lý do: MongoDB lưu UTC, `new Date("2026-06-22")` của JS parse là UTC midnight = 07:00 sáng VN → lệch ngày. Helper thêm offset `+07:00` để filter "ngày 22-06" khớp với đơn có `orderAt` từ `2026-06-21T17:00:00Z` (= 00:00 VN 22-06) đến `2026-06-22T16:59:59Z`. Áp ở mọi nơi build range trong `OrderService`.
+>
+> **Import date parsing:** `parseImportDate()` ở `order.service.ts` parse string từ sheet (vd "2026-06-22 00:30:48") thành Date — **giữ nguyên HH:mm:ss + interpret là VN local** (append `+07:00` nếu chuỗi không có tz). Phía FE `ImportOrderTab.tsx` đọc xlsx với `cellDates: true` + `dateNF: 'yyyy-mm-dd HH:mm:ss'` để SheetJS không truncate time component theo cell display format.
 
 `readyForFulfill` semantic mềm hoá: vẫn `true` khi xưởng báo lỗi (`toolResultNote='error'`) — để fulfillment thấy đơn lỗi trong list mặc định mà không cần switch filter. Set lifecycle: `complete` action (state machine designer) set `toolResultNote='ok'` + `readyForFulfill=true`; user clear `toolResultNote` qua updateField trực tiếp mới set false.
 

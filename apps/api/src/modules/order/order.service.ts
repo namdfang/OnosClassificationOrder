@@ -146,6 +146,47 @@ const PRINTED_MACHINE_CODES = ['machine-1', 'machine-2', 'machine-3', 'machine-4
 const ORDER_LIST_CACHE_PREFIX = 'orders:list:';
 const ORDER_LIST_CACHE_TTL_SECONDS = 60;
 
+/**
+ * Parse `yyyy-mm-dd` (hoặc full ISO) thành UTC Date tương ứng với VN local
+ * midnight / end-of-day. JS `new Date("2026-06-22")` parse là UTC midnight =
+ * 07:00 sáng VN — sai cho user input là "ngày 22-06 theo giờ VN".
+ */
+function vnDayStart(yyyymmdd: string): Date {
+  return new Date(yyyymmdd.slice(0, 10) + 'T00:00:00+07:00');
+}
+function vnDayEnd(yyyymmdd: string): Date {
+  return new Date(yyyymmdd.slice(0, 10) + 'T23:59:59.999+07:00');
+}
+function vnTodayString(): string {
+  const vnNow = new Date(Date.now() + 7 * 60 * 60 * 1000);
+  return vnNow.toISOString().slice(0, 10);
+}
+function vnTodayStart(): Date {
+  return vnDayStart(vnTodayString());
+}
+
+/**
+ * Parse string ngày-giờ từ sheet import. Interpret là **VN local time** nếu
+ * không có tz info — vì khách lên đơn theo giờ VN. Giữ đầy đủ HH:mm:ss.
+ *
+ *  "2026-06-22 00:30:48"        → 2026-06-21T17:30:48Z (VN local)
+ *  "2026-06-22T00:30:48"        → 2026-06-21T17:30:48Z
+ *  "2026-06-22"                 → 2026-06-21T17:00:00Z (00:00 VN)
+ *  "2026-06-22T00:30:48Z"       → 2026-06-22T00:30:48Z (đã có tz, parse thẳng)
+ */
+function parseImportDate(raw?: string): Date | undefined {
+  if (!raw) return undefined;
+  const s = raw.trim();
+  if (!s) return undefined;
+  const iso = s.match(/^(\d{4})-(\d{2})-(\d{2})(?:[T ](\d{2}):(\d{2})(?::(\d{2}(?:\.\d+)?))?)?(Z|[+-]\d{2}:?\d{2})?$/);
+  if (iso) {
+    const [, y, mo, d, h = '00', mi = '00', se = '00', tz] = iso;
+    return new Date(`${y}-${mo}-${d}T${h}:${mi}:${se}${tz ?? '+07:00'}`);
+  }
+  const fallback = new Date(s);
+  return Number.isNaN(fallback.getTime()) ? undefined : fallback;
+}
+
 @Injectable()
 export class OrderService implements OnModuleInit {
   constructor(
@@ -239,21 +280,16 @@ export class OrderService implements OnModuleInit {
   ): Record<string, unknown> {
     const filter: Record<string, unknown> = {};
 
-    const endOfToday = new Date();
-    endOfToday.setHours(23, 59, 59, 999);
-    const startOfWindow = new Date();
-    startOfWindow.setDate(startOfWindow.getDate() - 6); // today + previous 6 = 7-day window
-    startOfWindow.setHours(0, 0, 0, 0);
+    // Date math theo VN tz: window = [VN today − 6 ngày 00:00, VN today 23:59].
+    const todayStart = vnTodayStart();
+    const endOfToday = new Date(todayStart.getTime() + 24 * 60 * 60 * 1000 - 1);
+    const startOfWindow = new Date(todayStart.getTime() - 6 * 24 * 60 * 60 * 1000);
 
     const hasDateOverride = !!(dto?.createdFrom || dto?.createdTo);
     const buildRange = () => {
       const range: Record<string, Date> = {};
-      if (dto?.createdFrom) range.$gte = new Date(dto.createdFrom);
-      if (dto?.createdTo) {
-        const end = new Date(dto.createdTo);
-        end.setHours(23, 59, 59, 999);
-        range.$lte = end;
-      }
+      if (dto?.createdFrom) range.$gte = vnDayStart(dto.createdFrom);
+      if (dto?.createdTo) range.$lte = vnDayEnd(dto.createdTo);
       return range;
     };
 
@@ -276,14 +312,7 @@ export class OrderService implements OnModuleInit {
         filter.factoryId = '__no_factory__';
       }
     } else if (hasDateOverride) {
-      const range: Record<string, Date> = {};
-      if (dto?.createdFrom) range.$gte = new Date(dto.createdFrom);
-      if (dto?.createdTo) {
-        const end = new Date(dto.createdTo);
-        end.setHours(23, 59, 59, 999);
-        range.$lte = end;
-      }
-      filter.orderAt = range;
+      filter.orderAt = buildRange();
     }
 
     return filter;
@@ -664,14 +693,9 @@ export class OrderService implements OnModuleInit {
     }
     if (dto.startDate || dto.endDate) {
       const range: Record<string, Date> = {};
-      if (dto.startDate) range.$gte = new Date(dto.startDate);
-      if (dto.endDate) {
-        const end = new Date(dto.endDate);
-        end.setHours(23, 59, 59, 999);
-        range.$lte = end;
-      }
-      // Filter by `orderAt` — thời gian khách lên đơn (production-relevant).
-      // DTO field names `startDate`/`endDate` kept for URL compatibility.
+      if (dto.startDate) range.$gte = vnDayStart(dto.startDate);
+      if (dto.endDate) range.$lte = vnDayEnd(dto.endDate);
+      // Filter by `orderAt` (VN tz) — thời gian khách lên đơn.
       match.orderAt = range;
     }
 
@@ -1004,8 +1028,7 @@ export class OrderService implements OnModuleInit {
       ];
     }
 
-    const startOfToday = new Date();
-    startOfToday.setHours(0, 0, 0, 0);
+    const startOfToday = vnTodayStart();
 
     const groupByField = (field: string) => [
       { $group: { _id: `$${field}`, count: { $sum: 1 } } },
@@ -1174,10 +1197,9 @@ export class OrderService implements OnModuleInit {
    * first; ties broken by type, size, fabric for stable rendering.
    */
   async getImportSummary(dto: GetImportSummaryDto): Promise<GetImportSummaryResDto> {
-    const dayStart = new Date(dto.date || new Date().toISOString().slice(0, 10));
-    dayStart.setHours(0, 0, 0, 0);
-    const dayEnd = new Date(dayStart);
-    dayEnd.setHours(23, 59, 59, 999);
+    const target = dto.date ? dto.date.slice(0, 10) : vnTodayString();
+    const dayStart = vnDayStart(target);
+    const dayEnd = vnDayEnd(target);
 
     const rows = await this.orderModel.aggregate([
       { $match: { orderAt: { $gte: dayStart, $lte: dayEnd } } },
@@ -1344,13 +1366,9 @@ export class OrderService implements OnModuleInit {
     }
     if (dto.createdFrom || dto.createdTo) {
       const range: Record<string, Date> = {};
-      if (dto.createdFrom) range.$gte = new Date(dto.createdFrom);
-      if (dto.createdTo) {
-        const end = new Date(dto.createdTo);
-        end.setHours(23, 59, 59, 999);
-        range.$lte = end;
-      }
-      // Filter theo `orderAt` (xem comment ở `buildVisibilityFilter`).
+      if (dto.createdFrom) range.$gte = vnDayStart(dto.createdFrom);
+      if (dto.createdTo) range.$lte = vnDayEnd(dto.createdTo);
+      // Filter theo `orderAt` VN tz (xem comment ở `buildVisibilityFilter`).
       match.orderAt = range;
     }
     // `matchMapped` đếm/aggregate đơn đã map xưởng — Cards/flow/stats đều
@@ -2510,8 +2528,8 @@ export class OrderService implements OnModuleInit {
           orderId: row.orderId?.trim(),
           externalId: row.externalId?.trim(),
           referent: row.referent?.trim(),
-          orderAt: row.orderAt ? new Date(row.orderAt) : undefined,
-          inProductionAt: row.inProductionAt ? new Date(row.inProductionAt) : undefined,
+          orderAt: parseImportDate(row.orderAt),
+          inProductionAt: parseImportDate(row.inProductionAt),
           isMapped,
           productConfigId,
           factoryId,

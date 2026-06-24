@@ -33,15 +33,20 @@ export function ImportOrderTab({ onImported }: ImportOrderTabProps) {
     try {
       if (ext === 'xlsx' || ext === 'xls' || ext === 'csv') {
         // SheetJS đọc XLSX (binary) và CSV (text, auto-detect delimiter / quoted cell).
-        // Convert sheet đầu thành TSV string để reuse parseOrderRows (split '\t').
+        // - `cellDates: true` → cell date thành JS Date object thay vì serial number.
+        // - `dateNF: 'yyyy-mm-dd HH:mm:ss'` → format date về ISO-like KÈM giờ phút giây,
+        //   không bị cell display format truncate (ví dụ cell hiển thị "22/06/2026" sẽ vẫn ra "2026-06-22 00:30:48").
         const buf = await file.arrayBuffer();
-        const wb = XLSX.read(buf, { type: 'array' });
+        const wb = XLSX.read(buf, { type: 'array', cellDates: true });
         const sheetName = wb.SheetNames[0];
         if (!sheetName) {
           toast.error('File rỗng — không có sheet nào');
           return;
         }
-        const tsv = XLSX.utils.sheet_to_csv(wb.Sheets[sheetName], { FS: '\t' });
+        const tsv = XLSX.utils.sheet_to_csv(wb.Sheets[sheetName], {
+          FS: '\t',
+          dateNF: 'yyyy-mm-dd HH:mm:ss',
+        });
         setText(tsv);
       } else {
         // .tsv / .txt / không có extension → đọc raw text, giả định sẵn tab-separated

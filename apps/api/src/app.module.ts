@@ -73,7 +73,7 @@ import { FastifyThrottlerGuard } from './guards/fastify-throttler.guard';
     SystemConfigModule,
     ThrottlerModule.forRoot([{
       ttl: 60000,
-      limit: 100,
+      limit: 300,
     }]),
     CacheModule.registerAsync({
       isGlobal: true,
