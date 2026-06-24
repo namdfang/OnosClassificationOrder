@@ -9,13 +9,14 @@ import DesignerStatsTab from './DesignerStatsTab';
 import OrderFactoryTab from './OrderFactoryTab';
 import OrderStatsTab from './OrderStatsTab';
 import OrderStatusTab from './OrderStatusTab';
+import { SendTelegramReportButton } from './SendTelegramReportButton';
 
 const TABS = ['factory', 'stats', 'status', 'designer'] as const;
 type TabKey = (typeof TABS)[number];
 
 export default function Home() {
   const [searchParams, setSearchParams] = useSearchParams();
-  const { has } = usePermission();
+  const { has, isAdmin } = usePermission();
   const canSeeDesigner = has('page.designer_stats');
   const initial = (searchParams.get('tab') as TabKey) || 'factory';
   const [activeTab, setActiveTab] = useState<TabKey>(TABS.includes(initial) ? initial : 'stats');
@@ -58,10 +59,11 @@ export default function Home() {
         <div className="w-10 h-10 rounded-xl bg-indigo-50 dark:bg-indigo-900/20 flex items-center justify-center">
           <BarChart3 size={20} className="text-indigo-600" />
         </div>
-        <div>
+        <div className="flex-1">
           <h1 className="text-2xl font-bold text-foreground">Dashboard</h1>
           <p className="text-sm text-muted-foreground">Tổng quan hoạt động xưởng</p>
         </div>
+        {isAdmin && <SendTelegramReportButton />}
       </div>
 
       <Tabs value={activeTab} onValueChange={handleTabChange} className="w-full">

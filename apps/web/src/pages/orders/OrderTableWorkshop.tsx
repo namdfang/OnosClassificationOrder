@@ -29,6 +29,7 @@ import {
   type WorkshopRenderCtx,
 } from '@/components/orders/workshopTableConfig';
 import { usePermission } from '@/hooks/usePermission';
+import { usePendingDesignsPoll } from '@/hooks/usePendingDesignsPoll';
 import { RepositoryRemote } from '@/services';
 import { useWorkshopConfigStore } from '@/store/workshopConfigStore';
 import { handleAxiosError } from '@/utils';
@@ -89,7 +90,7 @@ export function OrderTableWorkshop() {
    * change event không carry modifier keys.
    */
   const shiftKeyRef = useRef(false);
-  const [preview, setPreview] = useState<{ url: string; originalUrl?: string; title: string } | null>(null);
+  const [preview, setPreview] = useState<{ url: string; originalUrl?: string; title: string; sourceUrl?: string } | null>(null);
   const [historyTarget, setHistoryTarget] = useState<{ id: string; productionId: string } | null>(null);
   const [collapsedTypes, setCollapsedTypes] = useState<Set<string>>(new Set());
 
@@ -267,8 +268,10 @@ export function OrderTableWorkshop() {
     setItems((prev) => prev.map((r) => (r._id === id ? { ...r, ...patch } : r)));
   };
 
-  const openPreview = (url: string, title: string, originalUrl?: string) =>
-    setPreview({ url, originalUrl, title });
+  usePendingDesignsPoll(items, patchRow);
+
+  const openPreview = (url: string, title: string, originalUrl?: string, sourceUrl?: string) =>
+    setPreview({ url, originalUrl, title, sourceUrl });
 
   const toggleRow = (id: string) => {
     setSelected((prev) => {
@@ -793,6 +796,7 @@ export function OrderTableWorkshop() {
           url={preview?.url}
           originalUrl={preview?.originalUrl}
           title={preview?.title}
+          ensurePreviewSource={preview?.sourceUrl}
         />
 
         <OrderLogTimelineDialog

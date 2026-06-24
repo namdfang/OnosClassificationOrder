@@ -1,7 +1,7 @@
 import { createHash } from 'crypto';
 
 /**
- * Design URL helpers — self-hosted R2 strategy (replace transform-drive-url.ts).
+ * Design URL helpers — self-hosted R2 strategy.
  *
  * Pipeline:
  *   1. User paste URL → BE enqueue job

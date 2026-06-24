@@ -48,6 +48,11 @@ export class R2DesignObjectRepository extends DatabaseRepositoryAbstract<
     await this.r2Model.updateOne({ hash }, { $inc: { refCount: by } });
   }
 
+  async incrementSizeBytes(hash: string, by: number): Promise<void> {
+    if (by === 0) return;
+    await this.r2Model.updateOne({ hash }, { $inc: { sizeBytes: by } });
+  }
+
   async getTotalStats(): Promise<{ objectCount: number; totalSizeBytes: number }> {
     const [agg] = await this.r2Model.aggregate<{ _id: null; count: number; sum: number }>([
       { $group: { _id: null, count: { $sum: 1 }, sum: { $sum: '$sizeBytes' } } },

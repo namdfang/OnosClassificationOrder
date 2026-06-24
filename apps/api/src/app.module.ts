@@ -30,6 +30,7 @@ import { MachineTypeModule } from './modules/machine-type/machine-type.module';
 import { OrderModule } from './modules/order/order.module';
 import { OrderLogModule } from './modules/order-log/order-log.module';
 import { ProductConfigModule } from './modules/product-config/product-config.module';
+import { ScheduledReportsModule } from './modules/scheduled-reports/scheduled-reports.module';
 import { TelegramNotificationModule } from './modules/telegram-notification/telegram-notification.module';
 import { WorkshopConfigModule } from './modules/workshop-config/workshop-config.module';
 import { MailModule } from './modules/mail/mail.module';
@@ -64,6 +65,7 @@ import { FastifyThrottlerGuard } from './guards/fastify-throttler.guard';
     OrderLogModule,
     DesignerModule,
     TelegramNotificationModule,
+    ScheduledReportsModule,
     NotificationModule,
     ActionModule,
     MailModule,

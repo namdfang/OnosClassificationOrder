@@ -2,7 +2,7 @@
 
 > **File FE:** `apps/web/src/pages/orders/index.tsx` (Tabs wrapper, route theo permission)
 > **File FE tabs:** `ListOrderTab.tsx` (Admin), `ErrorLogTab.tsx` (mọi role — Nhật ký bù lỗi), `OrderTableWorkshop.tsx` (Designer/Fulfill/Support), `ImportOrderTab.tsx`, `parseOrders.ts`
-> **Cell components:** `apps/web/src/components/orders/cells/{ColorBadgeSelectCell,IconSelectCell,TextEditCell,ImageThumbCell,SelectPopover,AssigneeSelectCell,ProductionErrorSelectCell,ProductionErrorOtherDialog,ErrorSourceCell}.tsx`
+> **Cell components:** `apps/web/src/components/orders/cells/{ColorBadgeSelectCell,IconSelectCell,TextEditCell,ImageThumbCell,DesignThumbsCell,SelectPopover,AssigneeSelectCell,ProductionErrorSelectCell,ProductionErrorOtherDialog,ErrorSourceCell}.tsx`
 > **Bulk edit:** `apps/web/src/components/orders/BulkEditToolbar.tsx` + `AssignDesignerDialog.tsx`
 > **Workshop columns (shared with Dashboard Tab C):** `apps/web/src/components/orders/workshopTableConfig.tsx` (`WORKSHOP_COLS` + `WorkshopOrderRow` + `WorkshopRenderCtx`)
 > **Designer KPI panel (Admin/Leader):** `apps/web/src/pages/orders/DesignerSummaryPanel.tsx`
@@ -13,7 +13,7 @@
 >  - `GET /v1/orders/export` (full-list, không phân trang — xem `Dashboard.md §10.3`)
 >  - `GET /v1/orders/factory-overview` (xem `Dashboard.md §10.2`)
 >  - `GET /v1/orders/designer-breakdown` (KPI panel Designer — xem `DesignerTaskWorkflow.md §2.5`)
->  - `POST /v1/orders/import` · `POST /v1/orders/backfill-fabric` · `POST /v1/orders/backfill-designer-status` · `POST /v1/orders/refresh-image-urls`
+>  - `POST /v1/orders/import` · `POST /v1/orders/backfill-fabric` · `POST /v1/orders/backfill-designer-status`
 >  - `PATCH /v1/orders/:id/field` · `PATCH /v1/orders/bulk-field`
 >  - `POST /v1/orders/:id/set-production-error` (atomic — bắt buộc khi code='other')
 >  - `POST /v1/orders/bulk-assign-designer-preview` + `POST /v1/orders/bulk-assign-designer`
@@ -122,11 +122,12 @@ for (row of rows):
     isMapped=false
     unmapped++
 
-  // Transform URL (mockup + designs)
-  row.mockupOriginalUrl = canonicalDriveUrl(row.mockupUrl)
-  row.mockupUrl = buildTeehubUrl(row.mockupUrl, 's800')
-  row.designsOriginal = clone(row.designs)
-  for key in row.designs: row.designs[key] = buildTeehubUrl(row.designs[key], 's800')
+  // URL pipeline (xem Design-R2-Pipeline.md)
+  //   - mockupUrl = mockupOriginalUrl = raw URL user paste
+  //   - designsOriginal = clone(row.designs)
+  //   - designs.{k}: rỗng + designsStatus.{k}='pending' khi R2 đã configure
+  //     (worker BullMQ ghi sau khi download/encode/upload xong) — nếu R2 chưa
+  //     configure (env R2_* trống) → designs.{k} = raw URL để không transform
 ```
 
 `fabricType` và `toolResult` được **derived từ product config** tại lúc import — workshop không phải gõ tay. Nếu product config thay đổi sau khi import (admin chỉnh fabric default), gọi `POST /v1/orders/backfill-fabric` để re-derive cho các đơn còn thiếu (chỉ điền chỗ trống, **không overwrite** giá trị admin đã chỉnh).
@@ -151,7 +152,7 @@ Sau import (hoặc khi đổi date), `ImportOrderTab` gọi endpoint này để 
 |------|-------|
 | `order.entity.ts` | Schema + 4 virtual (`factory`, `originalFactory`, `machineType`, `productConfig`) |
 | `order.repository.ts` | Extends DatabaseRepositoryAbstract |
-| `order.service.ts` | `getOrders`, `getDashboard`, `getStatusOverview`, `getFactoryOverview`, `getOrdersGroupedByType`, `getImportSummary`, `exportOrders`, `importOrders`, `updateField`, `bulkUpdateField`, `transferOrder`, `bulkTransferOrders`, `backfillOrderFabric`, `deleteOrder`, `refreshImageUrls` |
+| `order.service.ts` | `getOrders`, `getDashboard`, `getStatusOverview`, `getFactoryOverview`, `getOrdersGroupedByType`, `getImportSummary`, `exportOrders`, `importOrders`, `updateField`, `bulkUpdateField`, `transferOrder`, `bulkTransferOrders`, `backfillOrderFabric`, `deleteOrder` |
 | `order.controller.ts` | 16 endpoints (xem §4.2) |
 
 ### 4.2 Endpoints
@@ -168,7 +169,6 @@ Sau import (hoặc khi đổi date), `ImportOrderTab` gọi endpoint này để 
 | GET | `/v1/orders/error-log` | Tab "Nhật ký bù lỗi" — đơn đang chờ xử lý lỗi (productionError set, toolResultNote≠ok). Sort theo `productionFirstErrorAt` ASC. Trả thêm `byUrgency`. Visibility theo role (Fulfillment scope factory, Designer scope assignee). Xem `§14`. |
 | POST | `/v1/orders/import` | Bulk upsert. `ORDER_WRITE_ROLES` (Admin / Manager / Support). |
 | POST | `/v1/orders/backfill-fabric` | Re-derive `fabricType` + `toolResult` từ product config cho đơn còn thiếu (non-destructive). |
-| POST | `/v1/orders/refresh-image-urls` | Re-apply transformDriveUrl cho tất cả order (backfill cũ). |
 | PATCH | `/v1/orders/:id/field` | Inline update 1 workshop field. Phase 2. |
 | PATCH | `/v1/orders/bulk-field` | Bulk apply 1 field cho nhiều order. Phase 2. |
 | PATCH | `/v1/orders/:id/transfer` | Chuyển 1 đơn sang xưởng khác. Phase 7. `ORDER_WRITE_ROLES`. |
@@ -191,14 +191,14 @@ Sau import (hoặc khi đổi date), `ImportOrderTab` gọi endpoint này để 
   type?: string;               // index
   color?: string;
   size?: string;
-  mockupUrl?: string;          // Teehub CDN URL
-  mockupOriginalUrl?: string;  // Drive URL gốc
+  mockupUrl?: string;          // raw URL (Drive/CDN/...) — không transform
+  mockupOriginalUrl?: string;  // = mockupUrl (giữ để FE share/copy)
   printMethod?: string;
   weight?, width?, height?, length?: number;
   quantity: number;            // default 1
   baseCost?, shipCost?: number;
-  designs?: DesignFields;      // CDN URLs
-  designsOriginal?: DesignFields; // Drive URLs gốc
+  designs?: DesignFields;      // R2 CDN URLs (worker ghi sau khi xử lý) hoặc raw URL khi R2 chưa configure
+  designsOriginal?: DesignFields; // Raw URL user paste lúc import
   status?: string;
   orderId?, externalId?: string;
   referent?: string;
@@ -265,21 +265,14 @@ Tất cả workshop fields lưu **code** từ `WorkshopConfigEntity`. FE render 
 
 ---
 
-## 6. URL transformation pipeline
+## 6. URL pipeline (R2 self-hosted)
 
-Mọi mockup/design URL chạy qua `apps/api/src/utils/transform-drive-url.ts`:
+Xem chi tiết: [`documents/Plans/Design-R2-Pipeline.md`](../Plans/Design-R2-Pipeline.md). Tóm tắt:
 
-```
-input: any Drive URL form (uc?id=, file/d/{id}/view, open?id=, drive_link...)
-  → extractDriveId(url) → "{driveFileId}"
-  → buildTeehubUrl(id, variant) → "https://cdn.teehub.io/gimage/{variant}/{id}.webp"
-  → canonicalDriveUrl(url) → "https://drive.google.com/file/d/{id}/view" (original)
-```
-
-Variants:
-- `s200` — thumbnail trong list
-- `s800` — preview dialog mặc định
-- Original — copy/share, mở Drive
+- **Mockup URL**: lưu raw (no transform). `mockupUrl = mockupOriginalUrl = URL user paste`.
+- **Design URL**: nếu R2 đã configure (`R2_*` env đủ) → enqueue BullMQ job `design-image`, worker tải về → resize webp 2 variant → upload R2 → ghi `designs.{k} = https://<R2_PUBLIC_BASE>/designs/preview/{hash}.webp`. Trước khi worker xong, `designsStatus.{k} = 'pending'` (FE show spinner amber).
+- Nếu R2 **chưa** configure → `designs.{k} = designsOriginal.{k} = raw URL`, không tự transform. BE log warning. FE preview có thể không render được URL Drive `?usp=sharing` — phải setup R2 để pipeline hoạt động đầy đủ.
+- Helper: `apps/api/src/utils/design-url.ts` (`extractDriveId`, `hashForR2`, `buildR2Url`, `buildDriveDownloadUrl`).
 
 ---
 
@@ -425,6 +418,7 @@ Render tab tương ứng. User chỉ có 1 trong các quyền → 1 tab; có nhi
 |---|-----|------|-----------------|
 | 1 | productionId | Composite (Production ID + Order ID + In Production At) | luôn |
 | 2 | mockupTypeSize | `ImageThumbCell` + Type + Size/Color | luôn |
+| 2b | **designs** | `DesignThumbsCell` — tối đa 2 thumb inline (32px) + "+N" badge nếu nhiều hơn 2 → click badge mở Popover grid 4 cột tất cả design. Click thumb mở `ImagePreviewDialog`. Tận dụng `ImageThumbCell` cho từng thumb (pending/failed/ready state). | luôn |
 | 3 | **fabricType** | `IconSelectCell` (category `fabric_type`) — Phase 7 | `order.field.fabricType.view` |
 | 3b | **machineNumber** | `ColorBadgeSelectCell` (category `machine`) — badge có color (94/27/56…). Lấy từ ProductConfig khi import; xưởng có thể click sửa nếu phải chuyển máy in giữa chừng. | `order.field.machineNumber.view` / `.edit` |
 | 4 | printStatus | `ColorBadgeSelectCell` | `order.field.printStatus.view` |

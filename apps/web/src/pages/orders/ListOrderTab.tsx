@@ -17,6 +17,7 @@ import {
 import { Spinner } from '@/components/common/Spinner';
 import { PaginationBar } from '@/components/common/PaginationBar';
 import { ImagePreviewDialog } from '@/components/common/ImagePreviewDialog';
+import { DesignThumbsCell } from '@/components/orders/cells/DesignThumbsCell';
 import { OrderLogTimelineDialog } from '@/components/orders/OrderLogTimelineDialog';
 import { CopyButton } from '@/components/common/CopyButton';
 import { Hint } from '@/components/common/Hint';
@@ -26,6 +27,7 @@ import { RepositoryRemote } from '@/services';
 import { handleAxiosError } from '@/utils';
 import { smallThumb } from '@/utils/driveThumb';
 import { usePermission } from '@/hooks/usePermission';
+import { usePendingDesignsPoll } from '@/hooks/usePendingDesignsPoll';
 
 import { DesignerSummaryPanel } from './DesignerSummaryPanel';
 
@@ -76,6 +78,7 @@ interface OrderRow {
   inProductionAt?: string;
   designs?: DesignFields;
   designsOriginal?: DesignFields;
+  designsStatus?: Partial<Record<keyof DesignFields, 'pending' | 'ready' | 'failed'>>;
 }
 
 interface ListOrderTabProps {
@@ -84,48 +87,6 @@ interface ListOrderTabProps {
 
 const DEFAULT_PAGE_SIZE = 20;
 
-const DESIGN_LABELS: Record<keyof DesignFields, { short: string; label: string }> = {
-  front: { short: 'F', label: 'Front' },
-  back: { short: 'B', label: 'Back' },
-  sleeve: { short: 'Sv', label: 'Sleeve' },
-  hood: { short: 'Hd', label: 'Hood' },
-  folder: { short: 'Fd', label: 'Folder' },
-  placket: { short: 'Pk', label: 'Placket' },
-  chestLeft: { short: 'CL', label: 'Chest Left' },
-  chestRight: { short: 'CR', label: 'Chest Right' },
-  left: { short: 'L', label: 'Left' },
-  right: { short: 'R', label: 'Right' },
-  sleeveLeft: { short: 'SL', label: 'Sleeve Left' },
-  sleeveRight: { short: 'SR', label: 'Sleeve Right' },
-  leftUpperSleeve: { short: 'LU', label: 'Left Upper Sleeve' },
-  rightUpperSleeve: { short: 'RU', label: 'Right Upper Sleeve' },
-  leftCuff: { short: 'LC', label: 'Left Cuff' },
-  rightCuff: { short: 'RC', label: 'Right Cuff' },
-  frontEmbroidery: { short: 'FE', label: 'Front Embroidery' },
-  backEmbroidery: { short: 'BE', label: 'Back Embroidery' },
-};
-
-function getDesignEntries(
-  designs?: DesignFields,
-  designsOriginal?: DesignFields,
-): Array<{ key: keyof DesignFields; url: string; originalUrl: string; label: string; short: string }> {
-  if (!designs) return [];
-  const out: Array<{ key: keyof DesignFields; url: string; originalUrl: string; label: string; short: string }> = [];
-  for (const k of Object.keys(DESIGN_LABELS) as Array<keyof DesignFields>) {
-    const url = designs[k];
-    if (url && typeof url === 'string' && url.trim()) {
-      const originalUrl = (designsOriginal?.[k] as string | undefined)?.trim() || url.trim();
-      out.push({
-        key: k,
-        url: url.trim(),
-        originalUrl,
-        label: DESIGN_LABELS[k].label,
-        short: DESIGN_LABELS[k].short,
-      });
-    }
-  }
-  return out;
-}
 
 interface OrderRowItemProps {
   it: OrderRow;
@@ -134,15 +95,9 @@ interface OrderRowItemProps {
   onHistory: (id: string, productionId: string) => void;
 }
 
-const MAX_VISIBLE_DESIGNS = 4;
-
 const OrderRowItem = memo(
   function OrderRowItem({ it, onPreview, onDelete, onHistory }: OrderRowItemProps) {
-    const designs = getDesignEntries(it.designs, it.designsOriginal);
     const variantBits = [it.color, it.size, it.printMethod].filter(Boolean);
-    const [showAllDesigns, setShowAllDesigns] = useState(false);
-    const visibleDesigns = showAllDesigns ? designs : designs.slice(0, MAX_VISIBLE_DESIGNS);
-    const hiddenCount = designs.length - visibleDesigns.length;
     const mockupThumbSrc = smallThumb(it.mockupUrl, 200);
 
     return (
@@ -191,7 +146,7 @@ const OrderRowItem = memo(
                 <img
                   src={mockupThumbSrc}
                   alt="mockup"
-                  className="w-12 h-12 object-cover rounded border border-border hover:ring-2 hover:ring-ring transition-all"
+                  className="w-12 h-12 object-contain rounded border border-border bg-checker bg-checker-sm hover:ring-2 hover:ring-ring transition-all"
                   loading="lazy"
                   decoding="async"
                   referrerPolicy="no-referrer"
@@ -209,59 +164,15 @@ const OrderRowItem = memo(
         </TableCell>
 
         {/* Designs */}
-        {/* <TableCell>
-          {designs.length === 0 ? (
-            <span className="text-muted-foreground text-xs">—</span>
-          ) : (
-            <div className="flex flex-wrap gap-1.5 max-w-[260px] items-center">
-              {visibleDesigns.map((d) => (
-                <Hint key={d.key} content={`${d.label} — Click để xem ảnh đầy đủ`}>
-                  <button
-                    type="button"
-                    onClick={() => onPreview(d.url, `${d.label} — ${it.productionId}`, d.originalUrl)}
-                    className="relative bg-transparent border-none p-0 cursor-pointer group"
-                  >
-                    <img
-                      src={smallThumb(d.url, 100)}
-                      alt={d.label}
-                      className="w-9 h-9 object-cover rounded border border-border group-hover:ring-2 group-hover:ring-ring transition-all"
-                      loading="lazy"
-                      decoding="async"
-                      referrerPolicy="no-referrer"
-                      onError={(e) => {
-                        const img = e.currentTarget as HTMLImageElement;
-                        // eslint-disable-next-line no-console
-                        console.warn(`[design fail] ${it.productionId} · ${d.label}:`, d.url);
-                        img.style.display = 'none';
-                        const sib = img.nextElementSibling as HTMLElement | null;
-                        if (sib) sib.style.display = 'flex';
-                      }}
-                    />
-                    <span
-                      className="w-9 h-9 rounded border border-border bg-muted text-[10px] font-bold text-muted-foreground items-center justify-center"
-                      style={{ display: 'none' }}
-                    >
-                      {d.short}
-                    </span>
-                    <span className="absolute -bottom-1 -right-1 bg-foreground text-background text-[9px] font-bold px-1 rounded leading-tight">
-                      {d.short}
-                    </span>
-                  </button>
-                </Hint>
-              ))}
-              {hiddenCount > 0 && (
-                <button
-                  type="button"
-                  onClick={() => setShowAllDesigns(true)}
-                  title={`Hiện ${hiddenCount} design còn lại`}
-                  className="w-9 h-9 rounded border border-dashed border-border bg-muted hover:bg-accent text-[11px] font-semibold text-muted-foreground hover:text-foreground transition-colors cursor-pointer"
-                >
-                  +{hiddenCount}
-                </button>
-              )}
-            </div>
-          )}
-        </TableCell> */}
+        <TableCell>
+          <DesignThumbsCell
+            designs={it.designs as Record<string, string | undefined> | undefined}
+            designsOriginal={it.designsOriginal as Record<string, string | undefined> | undefined}
+            designsStatus={it.designsStatus}
+            productionId={it.productionId}
+            openPreview={onPreview}
+          />
+        </TableCell>
 
         {/* Product */}
         <TableCell className="max-w-[300px]">
@@ -429,7 +340,7 @@ export function ListOrderTab({ refreshKey }: ListOrderTabProps) {
     const s = Number(searchParams.get('lsize'));
     return Number.isFinite(s) && s > 0 ? s : DEFAULT_PAGE_SIZE;
   });
-  const [preview, setPreview] = useState<{ url: string; originalUrl?: string; title: string } | null>(null);
+  const [preview, setPreview] = useState<{ url: string; originalUrl?: string; title: string; sourceUrl?: string } | null>(null);
   const [historyTarget, setHistoryTarget] = useState<{ id: string; productionId: string } | null>(null);
 
   // Sync state → URL. Strip default values để URL gọn.
@@ -541,9 +452,17 @@ export function ListOrderTab({ refreshKey }: ListOrderTabProps) {
   );
 
   const openPreview = useCallback(
-    (url: string, title: string, originalUrl?: string) => setPreview({ url, originalUrl, title }),
+    (url: string, title: string, originalUrl?: string, sourceUrl?: string) =>
+      setPreview({ url, originalUrl, title, sourceUrl }),
     [],
   );
+
+  const patchRow = useCallback(
+    (id: string, patch: Partial<OrderRow>) =>
+      setItems((prev) => prev.map((r) => (r._id === id ? { ...r, ...patch } : r))),
+    [],
+  );
+  usePendingDesignsPoll(items as Array<{ _id: string; designs?: Record<string, string | undefined>; designsStatus?: Partial<Record<string, 'pending' | 'ready' | 'failed'>> }>, patchRow);
 
   const openHistory = useCallback(
     (id: string, productionId: string) => setHistoryTarget({ id, productionId }),
@@ -677,7 +596,7 @@ export function ListOrderTab({ refreshKey }: ListOrderTabProps) {
               <TableRow>
                 <TableHead className="min-w-[160px]">Order ID</TableHead>
                 <TableHead className="w-16">Mockup</TableHead>
-                {/* <TableHead className="min-w-[180px]">Designs</TableHead> */}
+                <TableHead className="min-w-[110px]">Design</TableHead>
                 <TableHead className="min-w-[260px]">Product</TableHead>
                 <TableHead>SKU / Email</TableHead>
                 <TableHead>Xưởng / Máy</TableHead>
@@ -722,6 +641,7 @@ export function ListOrderTab({ refreshKey }: ListOrderTabProps) {
           url={preview?.url}
           originalUrl={preview?.originalUrl}
           title={preview?.title}
+          ensurePreviewSource={preview?.sourceUrl}
         />
 
         <OrderLogTimelineDialog

@@ -4,8 +4,18 @@ import { Logger } from 'winston';
 
 import { ApiConfigService } from '@/shared/services';
 
+import { formatDesignerReport } from './format/designer-report.formatter';
+import { formatErrorReport } from './format/error-report.formatter';
+import { formatFactoryReport } from './format/factory-report.formatter';
 import { formatImportSummary } from './format/import-summary.formatter';
-import type { ImportSummaryNotification, NotificationChannelKey } from './types';
+import type {
+  DesignerReportNotification,
+  ErrorReportNotification,
+  FactoryReportNotification,
+  ImportSummaryNotification,
+  NotificationChannelKey,
+  TelegramMention,
+} from './types';
 
 @Injectable()
 export class TelegramNotificationService {
@@ -16,38 +26,84 @@ export class TelegramNotificationService {
   ) {}
 
   async notifyImportSummary(payload: ImportSummaryNotification): Promise<void> {
+    const text = formatImportSummary(payload);
+    await this.dispatch('importSummary', text);
+  }
+
+  async notifyDesignerReport(payload: DesignerReportNotification): Promise<void> {
+    const text = withMentions(formatDesignerReport(payload), payload.mentions);
+    await this.dispatch('dailyReport', text);
+  }
+
+  async notifyFactoryReport(payload: FactoryReportNotification): Promise<void> {
+    const text = withMentions(formatFactoryReport(payload), payload.mentions);
+    await this.dispatch('dailyReport', text);
+  }
+
+  async notifyErrorReport(payload: ErrorReportNotification): Promise<void> {
+    const text = withMentions(formatErrorReport(payload), payload.mentions);
+    await this.dispatch('dailyReport', text);
+  }
+
+  private async dispatch(key: NotificationChannelKey, text: string): Promise<void> {
     if (!this.config.telegram.notificationEnabled) return;
 
-    const channelId = this.channelFor('importSummary');
-    if (!channelId) {
+    const channels = this.channelsFor(key);
+    if (channels.length === 0) {
       this.logger.warn({
-        message: '[telegram-notification] importSummary skipped: no channel configured',
+        message: `[telegram-notification] ${key} skipped: no channel configured`,
       });
 
       return;
     }
 
-    const text = formatImportSummary(payload);
-    const ok = await this.telegramService.sendMessageToChannel(channelId, text, {
-      parseMode: 'Markdown',
-      disableWebPagePreview: true,
-    });
+    const results = await Promise.allSettled(
+      channels.map((id) =>
+        this.telegramService.sendMessageToChannel(id, text, {
+          parseMode: 'Markdown',
+          disableWebPagePreview: true,
+        }),
+      ),
+    );
 
-    if (!ok) {
-      this.logger.warn({ message: '[telegram-notification] importSummary send failed' });
+    const failures = results.filter((r) => r.status === 'rejected' || (r.status === 'fulfilled' && !r.value));
+    if (failures.length > 0) {
+      this.logger.warn({
+        message: `[telegram-notification] ${key} ${failures.length}/${channels.length} channel(s) failed`,
+      });
     }
   }
 
-  private channelFor(key: NotificationChannelKey): string | undefined {
+  private channelsFor(key: NotificationChannelKey): string[] {
     const c = this.config.telegram;
+    const csv = (s: string) =>
+      s
+        .split(',')
+        .map((x) => x.trim())
+        .filter(Boolean);
+
     switch (key) {
       case 'importSummary':
       case 'hourlyStats':
-        return c.notificationChannelId || c.channelId || undefined;
+      case 'dailyReport':
+        return csv(c.notificationChannelId || c.channelId || '');
       case 'criticalError':
-        return c.scanNotificationChannelId || c.channelId || undefined;
+        return csv(c.scanNotificationChannelId || c.channelId || '');
       default:
-        return undefined;
+        return [];
     }
   }
+}
+
+function withMentions(text: string, mentions?: TelegramMention[]): string {
+  if (!mentions || mentions.length === 0) return text;
+  const cc = mentions
+    .map((m) => `[${escapeMd(m.displayName)}](tg://user?id=${m.telegramUserId})`)
+    .join(' ');
+
+  return `${text}\n\ncc: ${cc}`;
+}
+
+function escapeMd(s: string): string {
+  return s.replace(/([_*`\[\]])/g, '\\$1');
 }

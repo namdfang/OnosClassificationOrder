@@ -26,6 +26,7 @@ import {
   type WorkshopRenderCtx,
 } from '@/components/orders/workshopTableConfig';
 import { usePermission } from '@/hooks/usePermission';
+import { usePendingDesignsPoll } from '@/hooks/usePendingDesignsPoll';
 import { RepositoryRemote } from '@/services';
 import { useDesignerTeamStore } from '@/store/designerTeamStore';
 import { useWorkshopConfigStore } from '@/store/workshopConfigStore';
@@ -147,6 +148,7 @@ export function ErrorLogTab() {
     url: string;
     originalUrl?: string;
     title: string;
+    sourceUrl?: string;
   } | null>(null);
 
   useEffect(() => {
@@ -229,8 +231,10 @@ export function ErrorLogTab() {
     setItems((prev) => prev.map((r) => (r._id === id ? { ...r, ...patch } : r)));
   };
 
-  const openPreview = (url: string, title: string, originalUrl?: string) =>
-    setPreview({ url, originalUrl, title });
+  usePendingDesignsPoll(items, patchRow);
+
+  const openPreview = (url: string, title: string, originalUrl?: string, sourceUrl?: string) =>
+    setPreview({ url, originalUrl, title, sourceUrl });
 
   const renderCtx: WorkshopRenderCtx = { canEditField, patchRow, openPreview };
 
@@ -240,9 +244,16 @@ export function ErrorLogTab() {
   const visibleCols = useMemo(
     () =>
       WORKSHOP_COLS.filter((c) =>
-        ['productionId', 'mockupTypeSize', 'fabricType', 'toolResult', 'assignee', 'productionError', 'productionErrorSource'].includes(
-          c.key,
-        ),
+        [
+          'productionId',
+          'mockupTypeSize',
+          'designs',
+          'fabricType',
+          'toolResult',
+          'assignee',
+          'productionError',
+          'productionErrorSource',
+        ].includes(c.key),
       ).filter((c) => !c.perm || canViewField(c.key)),
     [canViewField],
   );
@@ -553,6 +564,7 @@ export function ErrorLogTab() {
           url={preview?.url}
           originalUrl={preview?.originalUrl}
           title={preview?.title}
+          ensurePreviewSource={preview?.sourceUrl}
         />
 
         <OrderLogTimelineDialog

@@ -1,0 +1,66 @@
+# ─── Secrets & credentials — Claude TUYỆT ĐỐI không đọc ─────────────
+# Format: gitignore syntax. Claude Code sẽ refuse mọi tool call (Read,
+# Bash cat/grep/etc., Glob, Edit, Write) tới các path match dưới đây.
+
+# Env files (mọi biến thể)
+.env
+.env.*
+!.env.example
+!.env.*.example
+!*.env.example
+
+# Private keys & certificates
+*.pem
+*.key
+*.crt
+*.p12
+*.pfx
+*.cer
+*.der
+*.jks
+id_rsa
+id_rsa.*
+id_dsa
+id_dsa.*
+id_ecdsa
+id_ed25519
+*_rsa
+*_dsa
+known_hosts
+authorized_keys
+
+# Cloud/CI credentials
+**/credentials
+**/credentials.json
+**/credentials.yaml
+**/credentials.yml
+**/service-account*.json
+**/gcp-key*.json
+**/aws-credentials
+.aws/
+.gcloud/
+.kube/config
+
+# Package manager auth tokens
+.npmrc
+.yarnrc
+.yarnrc.yml
+.pypirc
+
+# Generic secret patterns
+**/secret.*
+**/secrets.*
+**/*.secret
+**/*.secret.*
+**/*-secret.*
+
+# Backup / dump files (có thể chứa data nhạy cảm)
+*.sql.gz
+*.dump
+*.bak
+backup/
+backups/
+
+# Personal local config
+.vscode/settings.json
+.idea/workspace.xml

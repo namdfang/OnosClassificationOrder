@@ -12,17 +12,13 @@
  * onospod CDN, etc.) — all other requests (HMR, API, etc.) pass through.
  */
 
-const CACHE_NAME = 'image-cache-v4';
+const CACHE_NAME = 'image-cache-v5';
 
 const CACHEABLE_HOSTS = [
-  // Own R2 CDN — primary source after Design-R2-Pipeline migration.
-  // Cả custom domain + R2.dev subdomain đều cache vì có thể swap qua lại
-  // trong giai đoạn migration.
+  // Own R2 CDN — primary source.
   'cdn.onosfactory.com',
   'r2.dev',
-  // Teehub gimage CDN — legacy, giữ để ảnh import trước migration vẫn cache
-  'cdn.teehub.io',
-  // Legacy direct Drive URLs (fallback khi R2 worker chưa xử lý xong)
+  // Direct Drive URLs (fallback khi R2 chưa configure hoặc worker fail)
   'drive.google.com',
   'drive.usercontent.google.com',
   'lh3.googleusercontent.com',
@@ -30,7 +26,7 @@ const CACHEABLE_HOSTS = [
   'lh5.googleusercontent.com',
   'lh6.googleusercontent.com',
   'googleusercontent.com',
-  // Other CDNs found in our orders data
+  // Other CDNs found in orders data
   'cdn.onospod.com',
   'cdn.podorder.io',
   'podorder.sgp1.digitaloceanspaces.com',

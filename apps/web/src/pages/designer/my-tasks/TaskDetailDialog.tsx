@@ -145,9 +145,9 @@ export function TaskDetailDialog({ orderId, onClose }: Props) {
                         title: `Mockup ${detail.productionId}`,
                       })
                     }
-                    className="block w-32 h-32 rounded border border-border overflow-hidden hover:ring-2 hover:ring-primary/40"
+                    className="block w-32 h-32 rounded border border-border overflow-hidden hover:ring-2 hover:ring-primary/40 bg-checker"
                   >
-                    <img src={detail.mockupUrl} alt="" className="w-full h-full object-cover" loading="lazy" referrerPolicy="no-referrer" />
+                    <img src={detail.mockupUrl} alt="" className="w-full h-full object-contain" loading="lazy" referrerPolicy="no-referrer" />
                   </button>
                 </div>
               )}
@@ -180,7 +180,7 @@ export function TaskDetailDialog({ orderId, onClose }: Props) {
                             <img
                               src={display}
                               alt={k}
-                              className="w-full h-20 object-cover rounded"
+                              className="w-full h-20 object-contain rounded bg-checker bg-checker-sm"
                               loading="lazy"
                               referrerPolicy="no-referrer"
                             />

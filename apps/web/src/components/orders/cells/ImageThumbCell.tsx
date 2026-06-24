@@ -11,27 +11,20 @@ interface Props {
   status?: 'pending' | 'ready' | 'failed';
 }
 
-/**
- * Map URL preview → URL thumb. Hỗ trợ cả 2 schema:
- *   - Own R2: `/designs/preview/{hash}.webp` → `/designs/thumb/{hash}.webp`
- *   - Legacy Teehub: `/gimage/preview/{id}.webp` → `/gimage/thumb/{id}.webp`
- *                    (cũng support `s800` → `s200` cũ hơn)
- */
 function smallThumb(url?: string): string | undefined {
   if (!url) return undefined;
   if (url.includes('/designs/preview/')) return url.replace('/designs/preview/', '/designs/thumb/');
-  if (url.includes('/gimage/preview/')) return url.replace('/gimage/preview/', '/gimage/thumb/');
-  return url.replace('/gimage/s800/', '/gimage/s200/');
+  return url;
 }
 
 export function ImageThumbCell({ url, originalUrl, title, onOpen, size = 36, status }: Props) {
-  // Pending — pipeline R2 đang chạy. Show skeleton + spinner.
-  if (status === 'pending' && !url) {
+  // Pending — pipeline R2 đang chạy. Show skeleton + spinner, disable click.
+  if (status === 'pending') {
     return (
       <span
-        className="inline-flex items-center justify-center rounded border border-dashed border-amber-300 bg-amber-50/40 text-amber-600 dark:bg-amber-500/5"
+        className="inline-flex items-center justify-center rounded border border-dashed border-amber-300 bg-amber-50/40 text-amber-600 dark:bg-amber-500/5 cursor-not-allowed"
         style={{ width: size, height: size }}
-        title="Đang xử lý ảnh trên R2…"
+        title="Đang xử lý ảnh thumb trên R2…"
       >
         <Loader2 size={14} className="animate-spin" />
       </span>
@@ -80,13 +73,13 @@ export function ImageThumbCell({ url, originalUrl, title, onOpen, size = 36, sta
       type="button"
       onClick={() => onOpen?.(url, title || 'Ảnh', originalUrl)}
       title={title}
-      className="inline-block rounded border border-border overflow-hidden hover:ring-2 hover:ring-primary/40 relative group"
+      className="inline-block rounded border border-border overflow-hidden hover:ring-2 hover:ring-primary/40 relative group bg-checker bg-checker-sm"
       style={{ width: size, height: size }}
     >
       <img
         src={smallThumb(url)}
         alt={title || ''}
-        className="w-full h-full object-cover"
+        className="w-full h-full object-contain"
         loading="lazy"
         decoding="async"
         referrerPolicy="no-referrer"

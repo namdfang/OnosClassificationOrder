@@ -183,6 +183,12 @@ export class ApiConfigService {
     };
   }
 
+  get scheduledReports() {
+    return {
+      enabled: process.env.SCHEDULED_REPORTS_ENABLED === 'true',
+    };
+  }
+
   get cdn() {
     return {
       url: this.getString('CDN_URL'),

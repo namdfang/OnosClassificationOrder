@@ -6,6 +6,7 @@ import { CopyButton } from '@/components/common/CopyButton';
 import { Hint } from '@/components/common/Hint';
 import { AssigneeSelectCell } from '@/components/orders/cells/AssigneeSelectCell';
 import { ColorBadgeSelectCell } from '@/components/orders/cells/ColorBadgeSelectCell';
+import { DesignThumbsCell } from '@/components/orders/cells/DesignThumbsCell';
 import { ErrorSourceCell } from '@/components/orders/cells/ErrorSourceCell';
 import { IconSelectCell } from '@/components/orders/cells/IconSelectCell';
 import { ImageThumbCell } from '@/components/orders/cells/ImageThumbCell';
@@ -99,7 +100,11 @@ const DESIGNER_STATUS_META: Record<
 export interface WorkshopRenderCtx {
   canEditField: (field: string) => boolean;
   patchRow: (id: string, patch: Partial<WorkshopOrderRow>) => void;
-  openPreview: (url: string, title: string, originalUrl?: string) => void;
+  /**
+   * `sourceUrl` = URL gốc Drive/CDN (designsOriginal). Dialog dùng để gọi
+   * ensure-preview BE upload preview nếu chưa có.
+   */
+  openPreview: (url: string, title: string, originalUrl?: string, sourceUrl?: string) => void;
 }
 
 export type WorkshopColMeta = {
@@ -193,6 +198,21 @@ export const WORKSHOP_COLS: WorkshopColMeta[] = [
         </div>
       );
     },
+  },
+  {
+    key: 'designs',
+    label: 'Design',
+    perm: null,
+    width: 'min-w-[110px]',
+    render: (r, ctx) => (
+      <DesignThumbsCell
+        designs={r.designs}
+        designsOriginal={r.designsOriginal}
+        designsStatus={r.designsStatus}
+        productionId={r.productionId}
+        openPreview={ctx.openPreview}
+      />
+    ),
   },
   {
     key: 'fabricType',

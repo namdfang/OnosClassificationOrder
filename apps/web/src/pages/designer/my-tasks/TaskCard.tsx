@@ -16,8 +16,7 @@ interface Props {
 function smallThumb(url?: string): string | undefined {
   if (!url) return undefined;
   if (url.includes('/designs/preview/')) return url.replace('/designs/preview/', '/designs/thumb/');
-  if (url.includes('/gimage/preview/')) return url.replace('/gimage/preview/', '/gimage/thumb/');
-  return url.replace('/gimage/s800/', '/gimage/s200/');
+  return url;
 }
 
 function timeStamp(card: Card): { label: string; value: Date | undefined } {
@@ -84,10 +83,10 @@ export function TaskCard({ card, onPreview, onClickProductionId }: Props) {
               if (url) onPreview?.(card.mockupUrl || url, `Mockup ${card.productionId}`, card.mockupOriginalUrl);
             }}
             onPointerDown={(e) => e.stopPropagation()}
-            className="shrink-0 w-14 h-14 rounded border border-border overflow-hidden bg-muted"
+            className="shrink-0 w-14 h-14 rounded border border-border overflow-hidden bg-checker"
             title="Click để xem to"
           >
-            <img src={thumb} alt="" className="w-full h-full object-cover" loading="lazy" referrerPolicy="no-referrer" />
+            <img src={thumb} alt="" className="w-full h-full object-contain" loading="lazy" referrerPolicy="no-referrer" />
           </button>
         ) : (
           <div className="shrink-0 w-14 h-14 rounded border border-dashed border-border bg-muted/40 flex items-center justify-center text-muted-foreground">

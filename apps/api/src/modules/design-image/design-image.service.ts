@@ -17,13 +17,12 @@ import {
   r2KeyFor,
 } from '@/utils/design-url';
 
+import { DesignBufferCache } from './buffer-cache.service';
 import { R2DesignObjectRepository } from './r2-design-object.repository';
 
-export interface ProcessOneResult {
+export interface ProcessResult {
   hash: string;
-  previewUrl: string;
-  thumbUrl: string;
-  /** true → đã có sẵn trên R2 (HEAD hit), không re-encode/re-upload. */
+  url: string;
   cached: boolean;
   sizeBytes: number;
 }
@@ -36,9 +35,9 @@ export class DesignImageService {
   constructor(
     private readonly cfg: ApiConfigService,
     private readonly repo: R2DesignObjectRepository,
+    private readonly bufferCache: DesignBufferCache,
   ) {}
 
-  /** True khi env R2_* đã set đủ → pipeline active. False → caller fallback. */
   isEnabled(): boolean {
     return this.cfg.r2Config !== null;
   }
@@ -55,27 +54,48 @@ export class DesignImageService {
     return this.s3;
   }
 
+  private async headExists(key: string): Promise<boolean> {
+    const c = this.cfg.r2Config!;
+    try {
+      await this.getS3().send(new HeadObjectCommand({ Bucket: c.bucket, Key: key }));
+      return true;
+    } catch (e) {
+      const status = (e as { $metadata?: { httpStatusCode?: number } })?.$metadata?.httpStatusCode;
+      const name = (e as { name?: string })?.name;
+      if (status === 404 || name === 'NotFound' || name === 'NoSuchKey') return false;
+      throw e;
+    }
+  }
+
   /**
-   * Resolve 1 design URL → R2 preview/thumb URL. Idempotent.
-   *
-   * Edge cases:
-   *   - URL đã trỏ về R2 của mình → trả nguyên, không touch R2 lẫn DB.
-   *   - HEAD R2 hit → trả URL không re-process.
-   *   - File > maxDownloadMb → throw → caller mark failed.
+   * Lấy buffer raw cho 1 sourceUrl. Ưu tiên disk cache, fallback download.
+   * Sau khi download lưu vào cache 7 ngày để worker preview tận dụng.
    */
-  async processOne(sourceUrl: string): Promise<ProcessOneResult> {
+  private async getBuffer(sourceUrl: string, hash: string): Promise<Buffer> {
+    const cached = await this.bufferCache.get(hash);
+    if (cached) {
+      this.logger.debug(`Buffer cache HIT for ${hash}`);
+      return cached;
+    }
+    const c = this.cfg.r2Config!;
+    const buf = await this.download(sourceUrl, c.maxDownloadMb);
+    void this.bufferCache.put(hash, buf);
+    return buf;
+  }
+
+  /**
+   * Tier 1 — encode thumb 300×300 + upload. Nhanh, set `ready` cho FE thấy thumb.
+   * Idempotent: HEAD R2 hit → skip toàn bộ.
+   */
+  async processThumb(sourceUrl: string): Promise<ProcessResult> {
     const c = this.cfg.r2Config;
     if (!c) throw new Error('R2 not configured');
 
-    // Skip nếu user paste lại URL R2 cũ của mình.
     if (isOwnR2Url(sourceUrl, c.publicBase)) {
       const hash = sourceUrl.split('/').pop()?.replace('.webp', '') || hashForR2(sourceUrl);
       return {
         hash,
-        previewUrl: sourceUrl.includes('/thumb/')
-          ? sourceUrl.replace('/thumb/', '/preview/')
-          : sourceUrl,
-        thumbUrl: sourceUrl.includes('/preview/')
+        url: sourceUrl.includes('/preview/')
           ? sourceUrl.replace('/preview/', '/thumb/')
           : sourceUrl,
         cached: true,
@@ -84,63 +104,90 @@ export class DesignImageService {
     }
 
     const hash = hashForR2(sourceUrl);
-    const previewKey = r2KeyFor('preview', hash);
     const thumbKey = r2KeyFor('thumb', hash);
-    const s3 = this.getS3();
 
-    // 1. HEAD dedup — nếu đã có thì skip toàn bộ download/encode/upload.
-    try {
-      await s3.send(new HeadObjectCommand({ Bucket: c.bucket, Key: previewKey }));
+    if (await this.headExists(thumbKey)) {
       return {
         hash,
-        previewUrl: buildR2Url(c.publicBase, 'preview', hash),
-        thumbUrl: buildR2Url(c.publicBase, 'thumb', hash),
+        url: buildR2Url(c.publicBase, 'thumb', hash),
         cached: true,
         sizeBytes: 0,
       };
-    } catch (e) {
-      const status = (e as { $metadata?: { httpStatusCode?: number } })?.$metadata?.httpStatusCode;
-      const name = (e as { name?: string })?.name;
-      if (status !== 404 && name !== 'NotFound' && name !== 'NoSuchKey') {
-        throw e;
-      }
     }
 
-    // 2. Download
-    const buffer = await this.download(sourceUrl, c.maxDownloadMb);
+    const buffer = await this.getBuffer(sourceUrl, hash);
+    const thumbBuf = await sharp(buffer, { failOn: 'none' })
+      .rotate()
+      .resize(c.thumbDim, c.thumbDim, { fit: 'inside', withoutEnlargement: true })
+      .webp({ quality: c.thumbQuality })
+      .toBuffer();
 
-    // 3. Compress 2 variants song song.
-    const [previewBuf, thumbBuf] = await Promise.all([
-      sharp(buffer, { failOn: 'none' })
-        .rotate()
-        .resize(c.previewMaxDim, c.previewMaxDim, { fit: 'inside', withoutEnlargement: true })
-        .webp({ quality: c.previewQuality })
-        .toBuffer(),
-      sharp(buffer, { failOn: 'none' })
-        .rotate()
-        .resize(c.thumbDim, c.thumbDim, { fit: 'cover' })
-        .webp({ quality: c.thumbQuality })
-        .toBuffer(),
-    ]);
-
-    // 4. Upload R2 song song.
-    await Promise.all([this.put(previewKey, previewBuf), this.put(thumbKey, thumbBuf)]);
-
-    const sizeBytes = previewBuf.length + thumbBuf.length;
+    await this.put(thumbKey, thumbBuf);
     await this.repo.upsertObject({
       hash,
       sourceUrl,
-      previewKey,
+      previewKey: r2KeyFor('preview', hash),
       thumbKey,
-      sizeBytes,
+      sizeBytes: thumbBuf.length,
     });
 
     return {
       hash,
-      previewUrl: buildR2Url(c.publicBase, 'preview', hash),
-      thumbUrl: buildR2Url(c.publicBase, 'thumb', hash),
+      url: buildR2Url(c.publicBase, 'thumb', hash),
       cached: false,
-      sizeBytes,
+      sizeBytes: thumbBuf.length,
+    };
+  }
+
+  /**
+   * Tier 2 — encode preview 1000×1000 + upload. Chạy background hoặc on-demand.
+   * Idempotent: HEAD R2 hit → skip.
+   */
+  async processPreview(sourceUrl: string): Promise<ProcessResult> {
+    const c = this.cfg.r2Config;
+    if (!c) throw new Error('R2 not configured');
+
+    if (isOwnR2Url(sourceUrl, c.publicBase)) {
+      const hash = sourceUrl.split('/').pop()?.replace('.webp', '') || hashForR2(sourceUrl);
+      return {
+        hash,
+        url: sourceUrl.includes('/thumb/')
+          ? sourceUrl.replace('/thumb/', '/preview/')
+          : sourceUrl,
+        cached: true,
+        sizeBytes: 0,
+      };
+    }
+
+    const hash = hashForR2(sourceUrl);
+    const previewKey = r2KeyFor('preview', hash);
+
+    if (await this.headExists(previewKey)) {
+      return {
+        hash,
+        url: buildR2Url(c.publicBase, 'preview', hash),
+        cached: true,
+        sizeBytes: 0,
+      };
+    }
+
+    const buffer = await this.getBuffer(sourceUrl, hash);
+    const previewBuf = await sharp(buffer, { failOn: 'none' })
+      .rotate()
+      .resize(c.previewMaxDim, c.previewMaxDim, { fit: 'inside', withoutEnlargement: true })
+      .webp({ quality: c.previewQuality })
+      .toBuffer();
+
+    await this.put(previewKey, previewBuf);
+
+    // Increment size lên r2DesignObjects (chỉ thumb gọi upsertObject; preview cộng dồn size).
+    await this.repo.incrementSizeBytes(hash, previewBuf.length);
+
+    return {
+      hash,
+      url: buildR2Url(c.publicBase, 'preview', hash),
+      cached: false,
+      sizeBytes: previewBuf.length,
     };
   }
 
@@ -155,8 +202,7 @@ export class DesignImageService {
     const ct = res.headers.get('content-type') || '';
     if (ct.includes('text/html')) {
       throw new BadRequestException(
-        `Drive trả HTML (file > 100 MB hoặc cần auth): ${url}. ` +
-          `Phase tiếp theo sẽ retry qua Drive API + service account.`,
+        `Drive trả HTML (file > 100 MB hoặc cần auth): ${url}.`,
       );
     }
     const cl = Number(res.headers.get('content-length') || 0);
@@ -182,13 +228,11 @@ export class DesignImageService {
         Key: key,
         Body: body,
         ContentType: 'image/webp',
-        // Hash trong key → object immutable → cache vô hạn ở browser + CDN edge.
         CacheControl: 'public, max-age=31536000, immutable',
       }),
     );
   }
 
-  /** Phase 10 cleanup. */
   async deleteByHash(hash: string): Promise<void> {
     const c = this.cfg.r2Config;
     if (!c) return;

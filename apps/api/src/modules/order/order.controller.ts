@@ -168,6 +168,19 @@ export class OrderController {
     return { success: true, data: result };
   }
 
+  @Post('check-pending')
+  @Auth(ORDER_VIEW_ROLES)
+  @ApiOperation({
+    summary: 'Poll subset of orders for designsStatus updates (R2 pipeline)',
+  })
+  @HttpCode(HttpStatus.OK)
+  async checkPendingDesigns(
+    @Body() body: { ids?: string[] },
+  ): Promise<{ success: true; data: Array<{ _id: string; designs?: Record<string, string>; designsStatus?: Record<string, string> }> }> {
+    const result = await this.orderService.checkPendingDesigns(body?.ids || []);
+    return { success: true, data: result };
+  }
+
   @Get('export')
   @Auth(ORDER_VIEW_ROLES)
   @ApiOperation({ summary: 'Return ALL orders matching filter (no pagination) for spreadsheet export' })
@@ -390,18 +403,6 @@ export class OrderController {
   ): Promise<ResDto> {
     await this.orderService.deleteOrder(id, { user, ip, userAgent });
     return { success: true };
-  }
-
-  @Post('refresh-image-urls')
-  @Auth([RoleType.SuperAdmin, RoleType.Admin])
-  @ApiOperation({
-    summary: 'Re-apply transformDriveUrl to all existing orders (for fixing stale URLs)',
-  })
-  @HttpCode(HttpStatus.OK)
-  @ApiOkResponse({ type: ResDto })
-  async refreshImageUrls(): Promise<ResDto> {
-    const result = await this.orderService.refreshImageUrls();
-    return { success: true, data: result };
   }
 
   @Post('backfill-designer-status')

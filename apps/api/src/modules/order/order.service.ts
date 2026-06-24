@@ -68,11 +68,10 @@ import {
 } from 'shared';
 import { Logger } from 'winston';
 
-import { canonicalDriveUrl, processImageUrl, transformDriveUrl } from '@/utils/transform-drive-url';
-
 import { DesignImageService } from '../design-image/design-image.service';
 import {
-  DESIGN_IMAGE_QUEUE,
+  DESIGN_PREVIEW_QUEUE,
+  DESIGN_THUMB_QUEUE,
   DesignImageJobData,
 } from '../design-image/design-image.processor';
 import { FactoryRepository } from '../factory/factory.repository';
@@ -161,7 +160,8 @@ export class OrderService implements OnModuleInit {
     private readonly factoryRepository: FactoryRepository,
     private readonly telegramNotificationService: TelegramNotificationService,
     private readonly designImageService: DesignImageService,
-    @InjectQueue(DESIGN_IMAGE_QUEUE) private readonly designQueue: Queue<DesignImageJobData>,
+    @InjectQueue(DESIGN_THUMB_QUEUE) private readonly designThumbQueue: Queue<DesignImageJobData>,
+    @InjectQueue(DESIGN_PREVIEW_QUEUE) private readonly designPreviewQueue: Queue<DesignImageJobData>,
     @InjectModel(UserEntity.name) private readonly userModel: Model<UserEntity>,
     private readonly roleRepository: RoleRepository,
   ) {}
@@ -2344,27 +2344,42 @@ export class OrderService implements OnModuleInit {
     return { success: true, data: doc };
   }
 
+  /**
+   * FE polling cho đơn đang xử lý design (R2 pipeline). Trả về subset field
+   * mà status có thể thay đổi để FE patch row trong table mà không refetch full.
+   */
+  async checkPendingDesigns(
+    ids: string[],
+  ): Promise<Array<{ _id: string; designs?: Record<string, string>; designsStatus?: Record<string, string> }>> {
+    if (!ids?.length) return [];
+    const cleanIds = ids.filter((id) => /^[a-f0-9]{24}$/i.test(id)).slice(0, 200);
+    if (!cleanIds.length) return [];
+    const docs = await this.orderModel
+      .find(
+        { _id: { $in: cleanIds } },
+        { _id: 1, designs: 1, designsStatus: 1 },
+      )
+      .lean();
+    return docs.map((d) => ({
+      _id: String(d._id),
+      designs: d.designs as Record<string, string> | undefined,
+      designsStatus: d.designsStatus as Record<string, string> | undefined,
+    }));
+  }
+
   async getLogs(orderId: string, dto: import('shared').GetOrderLogsDto) {
     return this.orderLogService.listByOrder(orderId, dto);
   }
 
   /**
-   * Split designs into display URLs + original URLs.
-   * Returns undefined for empty inputs.
-   */
-  /**
    * Trả về:
-   *   - `designsOriginal` = URL raw user paste (luôn giữ để fallback).
-   *   - `designs` = chỉ set khi R2 chưa active (legacy Teehub URL transform).
-   *                Khi R2 active, để rỗng — worker BullMQ sẽ ghi sau khi
-   *                download/encode/upload xong.
+   *   - `designsOriginal` = URL raw user paste (luôn giữ).
+   *   - `designs` = chỉ rỗng khi R2 active (worker BullMQ ghi sau khi xong);
+   *                khi R2 chưa active → bằng URL gốc (no transform).
    *   - `designsStatus` = `'pending'` cho mọi field có URL khi R2 active.
    *   - `designJobs[]` = list job cần enqueue (caller gọi addBulk).
    */
-  private processDesigns(
-    input?: DesignFields,
-    ctx?: string,
-  ): {
+  private processDesigns(input?: DesignFields): {
     designs?: DesignFields;
     designsOriginal?: DesignFields;
     designsStatus?: Record<string, 'pending'>;
@@ -2375,7 +2390,6 @@ export class OrderService implements OnModuleInit {
     const designsStatus: Record<string, 'pending'> = {};
     const designJobs: Array<{ designKey: string; sourceUrl: string }> = [];
     const r2Enabled = this.designImageService.isEnabled();
-    const displayLegacy: DesignFields = {};
     let hasAny = false;
     for (const [k, v] of Object.entries(input)) {
       if (!v || typeof v !== 'string' || !v.trim()) continue;
@@ -2385,81 +2399,19 @@ export class OrderService implements OnModuleInit {
       if (r2Enabled) {
         designsStatus[k] = 'pending';
         designJobs.push({ designKey: k, sourceUrl: raw });
-      } else {
-        // Fallback path: dùng transform Teehub cũ tránh ảnh hỏng khi chưa
-        // cấu hình R2.
-        const { url } = processImageUrl(raw, { keepOriginal: true });
-        if (url !== raw) {
-          // eslint-disable-next-line no-console
-          console.log(`[transform-legacy] ${ctx ?? ''} designs.${k}: ${raw} → ${url}`);
-        }
-        displayLegacy[k as keyof DesignFields] = url;
       }
     }
     if (!hasAny) return { designJobs: [] };
+    if (!r2Enabled) {
+      // eslint-disable-next-line no-console
+      console.warn('[design] R2 chưa configure — designs lưu URL gốc, sẽ không render được trong <img>. Hãy điền R2_* env và restart API.');
+    }
     return {
-      designs: r2Enabled ? undefined : displayLegacy,
+      designs: r2Enabled ? undefined : { ...original },
       designsOriginal: original,
       designsStatus: r2Enabled ? designsStatus : undefined,
       designJobs,
     };
-  }
-
-  /**
-   * Re-process all existing orders' mockupUrl + designs through the URL
-   * transformation, populating BOTH display URL and originalUrl. Useful for
-   * backfilling data imported before the dual-URL split. Idempotent.
-   *
-   * For existing data we no longer have the user's original URL string, so
-   * `originalUrl` is reconstructed via `canonicalDriveUrl` (a canonical share URL).
-   */
-  async refreshImageUrls(): Promise<{ scanned: number; updated: number }> {
-    const all = await this.orderModel
-      .find({}, { _id: 1, mockupUrl: 1, mockupOriginalUrl: 1, designs: 1, designsOriginal: 1, productionId: 1 })
-      .lean();
-    let updated = 0;
-
-    for (const o of all) {
-      const patch: Record<string, unknown> = {};
-
-      if (o.mockupUrl) {
-        const newDisplay = transformDriveUrl(o.mockupUrl);
-        const newOriginal = canonicalDriveUrl(o.mockupUrl);
-        if (newDisplay !== o.mockupUrl) patch.mockupUrl = newDisplay;
-        if (!o.mockupOriginalUrl || o.mockupOriginalUrl !== newOriginal) patch.mockupOriginalUrl = newOriginal;
-      }
-
-      if (o.designs) {
-        const newDesigns: Record<string, string> = {};
-        const newOriginal: Record<string, string> = {};
-        let designsChanged = false;
-        let originalChanged = false;
-        const existingOriginal: Record<string, string> = (o.designsOriginal as Record<string, string>) || {};
-
-        for (const [k, v] of Object.entries(o.designs)) {
-          if (typeof v === 'string' && v) {
-            const display = transformDriveUrl(v);
-            const original = canonicalDriveUrl(v);
-            newDesigns[k] = display;
-            newOriginal[k] = original;
-            if (display !== v) designsChanged = true;
-            if (!existingOriginal[k] || existingOriginal[k] !== original) originalChanged = true;
-          }
-        }
-        if (designsChanged) patch.designs = newDesigns;
-        if (originalChanged) patch.designsOriginal = newOriginal;
-      }
-
-      if (Object.keys(patch).length > 0) {
-        await this.orderModel.updateOne({ _id: o._id }, { $set: patch });
-        updated++;
-        // eslint-disable-next-line no-console
-        console.log(`[refresh] ${o.productionId}: ${Object.keys(patch).join(', ')}`);
-      }
-    }
-
-    void this.invalidateListCache();
-    return { scanned: all.length, updated };
   }
 
   async importOrders(dto: ImportProductionOrdersDto, ctx?: AuditContext): Promise<ImportProductionOrdersResDto> {
@@ -2528,7 +2480,7 @@ export class OrderService implements OnModuleInit {
           unassignedFactoryCount++;
         }
 
-        const { designJobs, ...designData } = this.processDesigns(row.designs, row.productionId);
+        const { designJobs, ...designData } = this.processDesigns(row.designs);
 
         const data = {
           productionId: row.productionId.trim(),
@@ -2540,12 +2492,7 @@ export class OrderService implements OnModuleInit {
           ...(() => {
             if (!row.mockupUrl) return {};
             const raw = row.mockupUrl.trim();
-            const { url, originalUrl } = processImageUrl(raw, { keepOriginal: true });
-            if (url !== raw) {
-              // eslint-disable-next-line no-console
-              console.log(`[transform] ${row.productionId} mockup: ${raw} → ${url}`);
-            }
-            return { mockupUrl: url, mockupOriginalUrl: originalUrl };
+            return { mockupUrl: raw, mockupOriginalUrl: raw };
           })(),
           printMethod: row.printMethod?.trim(),
           weight: row.weight,
@@ -2629,21 +2576,33 @@ export class OrderService implements OnModuleInit {
 
     void this.invalidateListCache();
 
-    // Enqueue design image jobs sau khi import xong — fire-and-forget vì
-    // user không cần đợi worker xong mới thấy response. Khi R2 chưa active,
+    // Enqueue design image jobs: thumb (ưu tiên cao) + preview (lần lượt, sau).
+    // Fire-and-forget — không block import response. Khi R2 chưa active,
     // designJobMap luôn rỗng.
     if (designJobMap.size > 0) {
-      const jobs = Array.from(designJobMap.values()).map((entry) => ({
-        name: `import-${entry.designKey}`,
+      const thumbJobs = Array.from(designJobMap.values()).map((entry) => ({
+        name: `thumb-${entry.designKey}`,
         data: {
           sourceUrl: entry.sourceUrl,
           orderIds: Array.from(entry.orderIds),
           designKey: entry.designKey,
         } satisfies DesignImageJobData,
       }));
-      void this.designQueue.addBulk(jobs).catch((err) => {
+      const previewJobs = Array.from(designJobMap.values()).map((entry) => ({
+        name: `preview-${entry.designKey}`,
+        data: {
+          sourceUrl: entry.sourceUrl,
+          orderIds: Array.from(entry.orderIds),
+          designKey: entry.designKey,
+        } satisfies DesignImageJobData,
+      }));
+      void this.designThumbQueue.addBulk(thumbJobs).catch((err) => {
         // eslint-disable-next-line no-console
-        console.error(`[design-image] addBulk failed (${jobs.length} jobs):`, err);
+        console.error(`[design-thumb] addBulk failed (${thumbJobs.length} jobs):`, err);
+      });
+      void this.designPreviewQueue.addBulk(previewJobs).catch((err) => {
+        // eslint-disable-next-line no-console
+        console.error(`[design-preview] addBulk failed (${previewJobs.length} jobs):`, err);
       });
     }
 

@@ -95,6 +95,14 @@ const getErrorLog = (query: string = '') => {
   return callApi(`/${CONFIG.API_VERSION}/orders/error-log${query}`, 'get');
 };
 
+const checkPendingDesigns = (ids: string[]) => {
+  return callApi(`/${CONFIG.API_VERSION}/orders/check-pending`, 'post', { ids });
+};
+
+const ensurePreview = (sourceUrl: string) => {
+  return callApi(`/${CONFIG.API_VERSION}/design-image/ensure-preview`, 'post', { sourceUrl });
+};
+
 export const order = {
   getOrders,
   importOrders,
@@ -117,4 +125,6 @@ export const order = {
   bulkAssignDesigner,
   setProductionError,
   getErrorLog,
+  checkPendingDesigns,
+  ensurePreview,
 };

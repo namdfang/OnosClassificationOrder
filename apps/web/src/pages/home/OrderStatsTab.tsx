@@ -1086,7 +1086,7 @@ function ExpandedDetails({ row }: { row: TypeSummary }) {
                   <img
                     src={m.url}
                     alt="mockup"
-                    className="w-10 h-10 object-cover rounded border border-border shrink-0"
+                    className="w-10 h-10 object-contain rounded border border-border bg-checker bg-checker-sm shrink-0"
                     loading="lazy"
                     decoding="async"
                     referrerPolicy="no-referrer"
@@ -1135,7 +1135,7 @@ function ExpandedDetails({ row }: { row: TypeSummary }) {
                   <img
                     src={m.url}
                     alt="dup"
-                    className="w-10 h-10 object-cover rounded border border-border shrink-0"
+                    className="w-10 h-10 object-contain rounded border border-border bg-checker bg-checker-sm shrink-0"
                     loading="lazy"
                     decoding="async"
                     referrerPolicy="no-referrer"
