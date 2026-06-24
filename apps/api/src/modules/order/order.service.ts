@@ -2410,7 +2410,9 @@ export class OrderService implements OnModuleInit {
     const original: DesignFields = {};
     const designsStatus: Record<string, 'pending'> = {};
     const designJobs: Array<{ designKey: string; sourceUrl: string }> = [];
-    const r2Enabled = this.designImageService.isEnabled();
+    // [R2-disabled] tạm thời tắt pipeline R2 vì chậm trên VPS prod.
+    // Restore: `const r2Enabled = this.designImageService.isEnabled();`
+    const r2Enabled = false;
     let hasAny = false;
     for (const [k, v] of Object.entries(input)) {
       if (!v || typeof v !== 'string' || !v.trim()) continue;
@@ -2423,10 +2425,7 @@ export class OrderService implements OnModuleInit {
       }
     }
     if (!hasAny) return { designJobs: [] };
-    if (!r2Enabled) {
-      // eslint-disable-next-line no-console
-      console.warn('[design] R2 chưa configure — designs lưu URL gốc, sẽ không render được trong <img>. Hãy điền R2_* env và restart API.');
-    }
+    // [R2-disabled] không log warn nữa khi tắt chủ động.
     return {
       designs: r2Enabled ? undefined : { ...original },
       designsOriginal: original,

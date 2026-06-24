@@ -172,7 +172,7 @@ const OrderRowItem = memo(
           )}
         </TableCell>
 
-        {/* Designs */}
+        {/* Designs — [R2-disabled] tạm ẩn cùng pipeline R2.
         <TableCell>
           <DesignThumbsCell
             designs={it.designs as Record<string, string | undefined> | undefined}
@@ -182,6 +182,7 @@ const OrderRowItem = memo(
             openPreview={onPreview}
           />
         </TableCell>
+        */}
 
         {/* Product */}
         <TableCell className="max-w-[300px]">
@@ -471,7 +472,8 @@ export function ListOrderTab({ refreshKey }: ListOrderTabProps) {
       setItems((prev) => prev.map((r) => (r._id === id ? { ...r, ...patch } : r))),
     [],
   );
-  usePendingDesignsPoll(items as Array<{ _id: string; designs?: Record<string, string | undefined>; designsStatus?: Partial<Record<string, 'pending' | 'ready' | 'failed'>> }>, patchRow);
+  // [R2-disabled] tạm tắt poll vì pipeline R2 không chạy.
+  // usePendingDesignsPoll(items as Array<{ _id: string; designs?: Record<string, string | undefined>; designsStatus?: Partial<Record<string, 'pending' | 'ready' | 'failed'>> }>, patchRow);
 
   const openHistory = useCallback(
     (id: string, productionId: string) => setHistoryTarget({ id, productionId }),
@@ -605,7 +607,7 @@ export function ListOrderTab({ refreshKey }: ListOrderTabProps) {
               <TableRow>
                 <TableHead className="min-w-[160px]">Order ID</TableHead>
                 <TableHead className="w-16">Mockup</TableHead>
-                <TableHead className="min-w-[110px]">Design</TableHead>
+                {/* [R2-disabled] <TableHead className="min-w-[110px]">Design</TableHead> */}
                 <TableHead className="min-w-[260px]">Product</TableHead>
                 <TableHead>SKU / Email</TableHead>
                 <TableHead>Xưởng / Máy</TableHead>
@@ -616,14 +618,14 @@ export function ListOrderTab({ refreshKey }: ListOrderTabProps) {
             <TableBody>
               {loading && (
                 <TableRow>
-                  <TableCell colSpan={8} className="text-center py-10">
+                  <TableCell colSpan={7} className="text-center py-10">
                     <Spinner size={20} className="text-muted-foreground" />
                   </TableCell>
                 </TableRow>
               )}
               {!loading && items.length === 0 && (
                 <TableRow>
-                  <TableCell colSpan={8} className="text-center py-10 text-muted-foreground text-sm">
+                  <TableCell colSpan={7} className="text-center py-10 text-muted-foreground text-sm">
                     Chưa có order nào. Sang tab "Import Order" để thêm.
                   </TableCell>
                 </TableRow>

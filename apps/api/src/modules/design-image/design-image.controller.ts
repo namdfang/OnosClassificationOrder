@@ -98,11 +98,11 @@ export class DesignImageController {
   async ensurePreview(
     @Body() body: { sourceUrl?: string },
   ): Promise<{ success: true; data: { url: string; cached: boolean } }> {
+    // [R2-disabled] tạm thời trả thẳng sourceUrl, không upload R2.
+    // Restore: bỏ block dưới + uncomment call processPreview.
     const sourceUrl = (body?.sourceUrl || '').trim();
-    if (!sourceUrl) {
-      return { success: true, data: { url: '', cached: false } };
-    }
-    const { url, cached } = await this.imageService.processPreview(sourceUrl);
-    return { success: true, data: { url, cached } };
+    return { success: true, data: { url: sourceUrl, cached: false } };
+    // const { url, cached } = await this.imageService.processPreview(sourceUrl);
+    // return { success: true, data: { url, cached } };
   }
 }

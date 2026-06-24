@@ -204,21 +204,23 @@ export const WORKSHOP_COLS: WorkshopColMeta[] = [
       );
     },
   },
-  {
-    key: 'designs',
-    label: 'Design',
-    perm: null,
-    width: 'min-w-[110px]',
-    render: (r, ctx) => (
-      <DesignThumbsCell
-        designs={r.designs}
-        designsOriginal={r.designsOriginal}
-        designsStatus={r.designsStatus}
-        productionId={r.productionId}
-        openPreview={ctx.openPreview}
-      />
-    ),
-  },
+  // [R2-disabled] tạm ẩn cột Design vì pipeline R2 đang tắt — bật lại
+  // bằng cách uncomment block bên dưới (cùng `processDesigns` ở BE).
+  // {
+  //   key: 'designs',
+  //   label: 'Design',
+  //   perm: null,
+  //   width: 'min-w-[110px]',
+  //   render: (r, ctx) => (
+  //     <DesignThumbsCell
+  //       designs={r.designs}
+  //       designsOriginal={r.designsOriginal}
+  //       designsStatus={r.designsStatus}
+  //       productionId={r.productionId}
+  //       openPreview={ctx.openPreview}
+  //     />
+  //   ),
+  // },
   {
     key: 'fabricType',
     label: 'Loại vải',
