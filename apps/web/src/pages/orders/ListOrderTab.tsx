@@ -25,6 +25,7 @@ import { TooltipProvider } from '@/components/ui/tooltip';
 import { SelectFilter } from '@/components/common/SelectFilter';
 import { RepositoryRemote } from '@/services';
 import { handleAxiosError } from '@/utils';
+import { formatDate } from '@/utils/date';
 import { smallThumb } from '@/utils/driveThumb';
 import { usePermission } from '@/hooks/usePermission';
 import { usePendingDesignsPoll } from '@/hooks/usePendingDesignsPoll';
@@ -130,6 +131,14 @@ const OrderRowItem = memo(
                   </span>
                 </Hint>
               </div>
+            )}
+            {it.orderAt && (
+              <Hint content={`Khách lên đơn: ${formatDate(it.orderAt, 'HH:mm DD/MM/YYYY')}`}>
+                <span className="text-[10px] text-muted-foreground inline-flex items-center gap-1 cursor-help">
+                  <span className="opacity-60">🛒</span>
+                  {formatDate(it.orderAt, 'HH:mm DD/MM/YYYY')}
+                </span>
+              </Hint>
             )}
           </div>
         </TableCell>

@@ -44,8 +44,10 @@ const COLUMN_INDEX = {
 
 function parseNumber(raw: string | undefined): number | undefined {
   if (!raw) return undefined;
-  // Google Sheets exports may use comma as decimal separator (e.g., "6,89")
-  const cleaned = raw.trim().replace(/\./g, '').replace(',', '.');
+  // Giá / kích thước trong sheet luôn < 1000 nên không có thousand separator.
+  // Decimal có thể là "," (VN/Google Sheet) hoặc "." (SheetJS xlsx export).
+  // Chỉ cần normalize "," → "." rồi parse.
+  const cleaned = raw.trim().replace(',', '.');
   const n = Number(cleaned);
   return Number.isFinite(n) ? n : undefined;
 }

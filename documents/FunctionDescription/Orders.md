@@ -138,7 +138,7 @@ for (row of rows):
 
 ### 3.5 Daily summary (`GET /v1/orders/import-summary?date=YYYY-MM-DD`)
 Sau import (hoặc khi đổi date), `ImportOrderTab` gọi endpoint này để hiện bảng "Tổng hợp đơn theo ngày":
-- BE aggregate theo `(type, size, fabricType)` của các order có `createdAt` trong ngày — gộp toàn bộ batch import trong ngày kể cả import 5-10 lần.
+- BE aggregate theo `(type, size, fabricType)` của các order có `orderAt` trong ngày (đổi từ `createdAt` tháng 2026-06) — gộp đơn theo ngày khách đặt, không phải ngày import. Xem §7 lưu ý filter ngày.
 - Sort `orderCount` desc → tổ hợp trùng nhiều nhất xếp đầu (top 3 highlight amber).
 - Mỗi group trả `totalQuantity`, `orderCount`, `sampleProductionIds` (5 cái đầu), `fabricName` (resolve từ workshop_config).
 - UI hiển thị progress bar tương đối theo group có count cao nhất → workshop nhìn ra ngay combo nào cần in batch chung.
@@ -282,9 +282,12 @@ Mỗi request `GET /v1/orders` đi qua `OrderService.buildVisibilityFilter(roleN
 
 | Role | Filter mặc định |
 |------|------------------|
-| `SuperAdmin` / `Admin` / `Manager` / `Support` / `DesignerLeader` | Không giới hạn (có thể truyền `createdFrom`/`createdTo` để filter ngày) |
+| `SuperAdmin` / `Admin` / `Manager` / `Support` / `DesignerLeader` | Không giới hạn (có thể truyền `createdFrom`/`createdTo` để filter ngày — semantics: filter trên `orderAt`, xem §7.0) |
 | `Designer` (sub) | `assignee = user._id` — chỉ thấy task của mình (KHÔNG ép date window, đã narrow bởi assignee). Phase Designer-Task-Workflow Phase 6 đổi từ `assigneeCode` → `user._id`. |
-| `Fulfillment` | `createdAt` ∈ [7 ngày gần nhất] **AND** `readyForFulfill = true` **AND** `$or: [{factoryId: user.factoryId}, {originalFactoryId: user.factoryId}]` — Per-factory scope (cả 2 xưởng thấy đơn transfer). Nếu user chưa gán `factoryId` → filter trả empty (an toàn). |
+| `Fulfillment` | `orderAt` ∈ [7 ngày gần nhất] **AND** `readyForFulfill = true` **AND** `$or: [{factoryId: user.factoryId}, {originalFactoryId: user.factoryId}]` — Per-factory scope (cả 2 xưởng thấy đơn transfer). Nếu user chưa gán `factoryId` → filter trả empty (an toàn). |
+
+> **§7.0 Lưu ý filter ngày (kể từ 2026-06):** DTO `createdFrom` / `createdTo` (cộng `wfrom` / `wto` ở URL Workshop, `ffrom` / `fto` ở Factory dashboard, `startDate` / `endDate` ở Dashboard stats) được giữ tên cũ để không phá URL bookmark, **nhưng thực tế filter trên `orderAt`** (thời gian khách lên đơn ở marketplace) — không còn theo `createdAt` (thời gian import). Đổi vì xưởng cần ưu tiên xử lý theo "ngày khách đặt hàng" thật sự. Áp dụng ở: `buildVisibilityFilter()`, `getDashboard()`, `getStatusOverview()`, `getFactoryOverview()`, `getImportSummary()`.
+> Trường `orderAt` được import từ cột 37 ("Order at") của sheet. Đơn cũ thiếu `orderAt` sẽ bị filter loại khỏi date range — do data hiện tại là test, không backfill.
 
 `readyForFulfill` semantic mềm hoá: vẫn `true` khi xưởng báo lỗi (`toolResultNote='error'`) — để fulfillment thấy đơn lỗi trong list mặc định mà không cần switch filter. Set lifecycle: `complete` action (state machine designer) set `toolResultNote='ok'` + `readyForFulfill=true`; user clear `toolResultNote` qua updateField trực tiếp mới set false.
 
@@ -572,7 +575,7 @@ Decorator: `@Auth(ORDER_WRITE_ROLES)` — chỉ SuperAdmin / Admin / Manager / S
 
 ## 12. Daily import summary (Phase 5)
 
-`GET /v1/orders/import-summary?date=YYYY-MM-DD` — bảng tổng hợp `(type, size, fabricType)` của các order có `createdAt` trong ngày được chỉ định (gộp toàn bộ batch import trong ngày).
+`GET /v1/orders/import-summary?date=YYYY-MM-DD` — bảng tổng hợp `(type, size, fabricType)` của các order có **`orderAt`** trong ngày được chỉ định (gộp theo ngày khách đặt). Tham số `date` vẫn là ngày khách lên đơn.
 
 Response (`ImportSummaryZod`):
 ```ts

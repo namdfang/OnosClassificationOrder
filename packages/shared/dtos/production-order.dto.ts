@@ -252,8 +252,9 @@ export const GetProductionOrdersZod = PageQueryZod.extend({
    */
   printStage: z.enum(['printed', 'printing', 'not-printed']).optional(),
 
-  // Date range on createdAt (yyyy-mm-dd). Designer/Fulfillment have a server-
-  // enforced "today only" default; passing these overrides UI date pickers.
+  // Date range on `orderAt` — thời gian khách lên đơn (yyyy-mm-dd). Tên giữ
+  // là `createdFrom/createdTo` để URL/bookmark cũ không vỡ. Designer/Fulfillment
+  // có 7-day window server-side mặc định; truyền 2 field này sẽ override.
   createdFrom: z.string().optional(),
   createdTo: z.string().optional(),
 });
@@ -683,6 +684,8 @@ export const FactoryOverviewZod = z.object({
 export type FactoryOverview = z.infer<typeof FactoryOverviewZod>;
 
 export const GetFactoryOverviewZod = z.object({
+  // Date range on `orderAt` — tên giữ để URL không phá. Xem comment ở
+  // GetProductionOrdersZod.
   createdFrom: z.string().optional(),
   createdTo: z.string().optional(),
   /**

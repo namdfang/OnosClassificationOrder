@@ -4,6 +4,7 @@ import { DesignerStatus, WorkshopConfigCategory } from 'shared';
 import { Badge } from '@/components/ui/badge';
 import { CopyButton } from '@/components/common/CopyButton';
 import { Hint } from '@/components/common/Hint';
+import { formatDate } from '@/utils/date';
 import { AssigneeSelectCell } from '@/components/orders/cells/AssigneeSelectCell';
 import { ColorBadgeSelectCell } from '@/components/orders/cells/ColorBadgeSelectCell';
 import { DesignThumbsCell } from '@/components/orders/cells/DesignThumbsCell';
@@ -27,6 +28,8 @@ export type WorkshopOrderRow = {
   /** Trạng thái pipeline R2 cho từng vị trí design (Design-R2-Pipeline). */
   designsStatus?: Partial<Record<string, 'pending' | 'ready' | 'failed'>>;
   orderId?: string;
+  /** Thời gian khách lên đơn (lấy từ cột "Order at" trong sheet). */
+  orderAt?: string;
   inProductionAt?: string;
   factory?: { name?: string; shortName?: string };
   machineType?: { name?: string; shortName?: string };
@@ -123,7 +126,8 @@ export const WORKSHOP_COLS: WorkshopColMeta[] = [
     perm: null,
     width: 'min-w-[180px]',
     render: (r) => {
-      const d = r.inProductionAt ? new Date(r.inProductionAt) : null;
+      const orderTxt = r.orderAt ? formatDate(r.orderAt, 'HH:mm DD/MM/YYYY') : null;
+      const prodTxt = r.inProductionAt ? formatDate(r.inProductionAt, 'HH:mm DD/MM/YYYY') : null;
       return (
         <div className="flex flex-col leading-tight gap-0.5">
           <div className="flex items-center gap-1">
@@ -144,18 +148,19 @@ export const WORKSHOP_COLS: WorkshopColMeta[] = [
               </Hint>
             </div>
           )}
-          {d && (
-            <Hint content={`In Production At: ${d.toLocaleString('vi-VN', { hour12: false })}`} forceRich>
+          {orderTxt && (
+            <Hint content={`Khách lên đơn: ${orderTxt}`} forceRich>
+              <span className="text-[10px] text-muted-foreground inline-flex items-center gap-1">
+                <span className="opacity-60">🛒</span>
+                {orderTxt}
+              </span>
+            </Hint>
+          )}
+          {prodTxt && (
+            <Hint content={`In Production At: ${prodTxt}`} forceRich>
               <span className="text-[10px] text-muted-foreground inline-flex items-center gap-1">
                 <span className="opacity-60">📅</span>
-                {d.toLocaleString('vi-VN', {
-                  day: '2-digit',
-                  month: '2-digit',
-                  year: 'numeric',
-                  hour: '2-digit',
-                  minute: '2-digit',
-                  hour12: false,
-                })}
+                {prodTxt}
               </span>
             </Hint>
           )}

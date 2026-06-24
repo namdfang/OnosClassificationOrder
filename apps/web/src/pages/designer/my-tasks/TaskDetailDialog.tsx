@@ -51,6 +51,7 @@ type OrderDetail = {
   designerRejectedReason?: string;
   designerReworkCount?: number;
   createdAt?: string;
+  orderAt?: string;
   inProductionAt?: string;
 };
 
@@ -203,6 +204,9 @@ export function TaskDetailDialog({ orderId, onClose }: Props) {
                   <Calendar size={12} /> Timeline designer
                 </p>
                 <div className="space-y-1 text-xs">
+                  {detail.orderAt && (
+                    <Timeline icon={<Clock size={11} className="text-indigo-500" />} label="Khách lên đơn" value={fmt(detail.orderAt)} />
+                  )}
                   <Timeline icon={<Clock size={11} />} label="Được gán" value={fmt(detail.designerAssignedAt)} />
                   <Timeline icon={<Clock size={11} />} label="Bắt đầu" value={fmt(detail.designerStartedAt)} />
                   <Timeline

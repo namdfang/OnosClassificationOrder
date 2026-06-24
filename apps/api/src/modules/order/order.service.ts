@@ -224,6 +224,10 @@ export class OrderService implements OnModuleInit {
    *  - Fulfillment               → defaults to last 7 days + readyForFulfill, can override date
    *
    * `readyForFulfill` is ALWAYS enforced for Fulfillment regardless of query.
+   *
+   * Date range semantics: the DTO fields `createdFrom`/`createdTo` are kept for
+   * URL/bookmark stability but actually filter on `orderAt` (thời gian khách
+   * lên đơn) — that's the production-relevant time, not the import event time.
    */
   private buildVisibilityFilter(
     roleName?: RoleType,
@@ -256,9 +260,9 @@ export class OrderService implements OnModuleInit {
     if (roleName === RoleType.Designer) {
       // Sub-designer chỉ thấy task của mình (assignee = user._id).
       filter.assignee = assigneeUserId || '__no_user__';
-      if (hasDateOverride) filter.createdAt = buildRange();
+      if (hasDateOverride) filter.orderAt = buildRange();
     } else if (roleName === RoleType.Fulfillment) {
-      filter.createdAt = hasDateOverride ? buildRange() : { $gte: startOfWindow, $lte: endOfToday };
+      filter.orderAt = hasDateOverride ? buildRange() : { $gte: startOfWindow, $lte: endOfToday };
       filter.readyForFulfill = true;
       // Per-factory scope: thấy đơn đang ở xưởng mình HOẶC đơn đã transfer từ
       // xưởng mình đi nơi khác (origin = mình). Nếu user chưa gán factoryId →
@@ -279,7 +283,7 @@ export class OrderService implements OnModuleInit {
         end.setHours(23, 59, 59, 999);
         range.$lte = end;
       }
-      filter.createdAt = range;
+      filter.orderAt = range;
     }
 
     return filter;
@@ -666,11 +670,9 @@ export class OrderService implements OnModuleInit {
         end.setHours(23, 59, 59, 999);
         range.$lte = end;
       }
-      // Filter by `createdAt` (import time) — `orderAt` is when the customer
-      // placed the order at the marketplace and can be days/weeks earlier,
-      // which doesn't match what users expect when picking "today" on the
-      // production dashboard.
-      match.createdAt = range;
+      // Filter by `orderAt` — thời gian khách lên đơn (production-relevant).
+      // DTO field names `startDate`/`endDate` kept for URL compatibility.
+      match.orderAt = range;
     }
 
     if (dto.searchType?.trim()) {
@@ -1016,7 +1018,7 @@ export class OrderService implements OnModuleInit {
       {
         $facet: {
           total: [{ $count: 'n' }],
-          today: [{ $match: { createdAt: { $gte: startOfToday } } }, { $count: 'n' }],
+          today: [{ $match: { orderAt: { $gte: startOfToday } } }, { $count: 'n' }],
           pendingToolOk: [
             { $match: { $or: [{ toolResultNote: { $exists: false } }, { toolResultNote: { $ne: 'ok' } }] } },
             { $count: 'n' },
@@ -1178,7 +1180,7 @@ export class OrderService implements OnModuleInit {
     dayEnd.setHours(23, 59, 59, 999);
 
     const rows = await this.orderModel.aggregate([
-      { $match: { createdAt: { $gte: dayStart, $lte: dayEnd } } },
+      { $match: { orderAt: { $gte: dayStart, $lte: dayEnd } } },
       {
         $group: {
           _id: {
@@ -1348,7 +1350,8 @@ export class OrderService implements OnModuleInit {
         end.setHours(23, 59, 59, 999);
         range.$lte = end;
       }
-      match.createdAt = range;
+      // Filter theo `orderAt` (xem comment ở `buildVisibilityFilter`).
+      match.orderAt = range;
     }
     // `matchMapped` đếm/aggregate đơn đã map xưởng — Cards/flow/stats đều
     // cần `factoryId` để classify. `match` (chưa gắn) dùng cho `unmapped`

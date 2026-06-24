@@ -48,7 +48,7 @@ Dashboard chuyển xưởng + xuất Excel + filter chiều sâu:
 - **Bảng đơn 20 cột** (reuse `WORKSHOP_COLS`) — cell inline edit theo permission
 - **Bulk transfer** — checkbox row → toolbar `Send` mở Transfer dialog (chọn xưởng đích + lý do, tối đa 200 ký tự)
 - **Xuất Excel** — bypass phân trang, gom toàn bộ đơn theo filter hiện tại + overview thành workbook .xlsx multi-sheet
-- Date filters mặc định **= hôm nay** (`createdFrom = createdTo = todayISO()`) mỗi lần mount
+- Date filters mặc định **= hôm nay** (`createdFrom = createdTo = todayISO()`) mỗi lần mount. Tên giữ là `createdFrom/createdTo` nhưng filter theo `orderAt` (ngày khách lên đơn) — xem `Orders.md §7.0`.
 
 Data từ `GET /v1/orders/factory-overview` + `GET /v1/orders?sort=grouped&...` + `GET /v1/orders/export` (khi bấm Xuất Excel).
 
@@ -385,7 +385,7 @@ FactoryOverviewCell = {
 ```
 
 Aggregation chính (`OrderService.getFactoryOverview`):
-1. `$match` theo `createdAt` range + `factoryId, originalFactoryId` đều tồn tại + (`readyForFulfill=true` nếu role là Fulfillment).
+1. `$match` theo `orderAt` range (đổi từ `createdAt` tháng 2026-06 — xem `Orders.md §7.0`) + `factoryId, originalFactoryId` đều tồn tại + (`readyForFulfill=true` nếu role là Fulfillment).
 2. `$group` theo `(originalFactoryId, factoryId)` → bảng flow.
 3. Bulk fetch tên factory từ collection `factories`.
 4. Duyệt flow rows để xây `cellMap` (pure / in / out / total).
