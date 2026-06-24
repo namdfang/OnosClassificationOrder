@@ -36,8 +36,9 @@ const QUEUE_DEFAULTS = {
   providers: [
     DesignBufferCache,
     DesignImageService,
-    DesignThumbProcessor,
-    DesignPreviewProcessor,
+    // [QUEUE-disabled] tạm tắt 2 worker R2 vì sập VPS — restore = uncomment.
+    // DesignThumbProcessor,
+    // DesignPreviewProcessor,
     R2DesignObjectRepository,
   ],
   controllers: [DesignImageController],

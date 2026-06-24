@@ -12,6 +12,7 @@ import { BullMQService } from './bullmq.service';
     }),
     MailModule,
   ],
-  providers: [BullMQProcessor, BullMQService],
+  // [QUEUE-disabled] tạm tắt BullMQProcessor (mail worker) — restore = thêm lại.
+  providers: [/* BullMQProcessor, */ BullMQService],
 })
 export class BullMQModule {}
