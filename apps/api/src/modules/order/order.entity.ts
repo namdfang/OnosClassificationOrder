@@ -141,6 +141,14 @@ export class OrderEntity extends DatabaseEntityAbstract {
   @Prop()
   status?: string;
 
+  // Import file soát hook: errorFileNote chứa "hủy đơn" → set 2 field này
+  // thay cho việc lạm dụng `status` free-text.
+  @Prop({ index: true })
+  cancelledAt?: Date;
+
+  @Prop()
+  cancelReason?: string;
+
   @Prop({ index: true })
   orderId?: string;
 

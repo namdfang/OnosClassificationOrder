@@ -330,6 +330,35 @@ export const ImportProductionOrdersResZod = ResZod.extend({
 export class ImportProductionOrdersResDto extends createZodDto(extendApi(ImportProductionOrdersResZod)) {}
 
 //
+// Import file soát (rework) — update các field QC vào đơn hiện có
+// theo `productionId`. Không tạo đơn mới, chỉ UPDATE.
+//
+export const ImportReworkOrderRowZod = z.object({
+  productionId: z.string().min(1),
+  toolResultNote: z.string().optional(), // sheet không dấu (vd "loi", "ok")
+  errorFile: z.string().optional(),       // sheet không dấu (vd "Vien co")
+  errorFileNote: z.string().optional(),   // free text; "hủy đơn" → cancel
+  assignee: z.string().optional(),        // fullName người thực hiện
+});
+export type ImportReworkOrderRow = z.infer<typeof ImportReworkOrderRowZod>;
+
+export const ImportReworkOrdersZod = z.object({
+  rows: ImportReworkOrderRowZod.array().min(1),
+});
+export class ImportReworkOrdersDto extends createZodDto(extendApi(ImportReworkOrdersZod)) {}
+
+export const ImportReworkOrdersResZod = ResZod.extend({
+  data: z.object({
+    updated: z.number(),         // số đơn cập nhật thành công
+    notFound: z.number(),        // productionId không tồn tại trong DB
+    cancelled: z.number(),       // số đơn bị mark cancel
+    assigneeMatched: z.number(), // số row gán assignee thành công
+    skipped: z.array(z.object({ row: z.number(), reason: z.string() })),
+  }),
+});
+export class ImportReworkOrdersResDto extends createZodDto(extendApi(ImportReworkOrdersResZod)) {}
+
+//
 // Dashboard
 //
 export const GetOrderDashboardZod = z.object({

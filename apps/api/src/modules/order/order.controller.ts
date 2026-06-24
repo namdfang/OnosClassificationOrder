@@ -29,6 +29,8 @@ import {
   GetProductionOrdersResDto,
   ImportProductionOrdersDto,
   ImportProductionOrdersResDto,
+  ImportReworkOrdersDto,
+  ImportReworkOrdersResDto,
   ResDto,
   RoleType,
   TransferOrderDto,
@@ -245,6 +247,20 @@ export class OrderController {
     @UserAgent() userAgent: string,
   ): Promise<ImportProductionOrdersResDto> {
     return this.orderService.importOrders(dto, { user, ip, userAgent });
+  }
+
+  @Post('import-rework')
+  @Auth(ORDER_WRITE_ROLES)
+  @ApiOperation({ summary: 'Import file soát — UPDATE đơn hiện có theo productionId' })
+  @HttpCode(HttpStatus.OK)
+  @ApiOkResponse({ type: ImportReworkOrdersResDto })
+  async importRework(
+    @Body() dto: ImportReworkOrdersDto,
+    @AuthUser() user: UserDocument,
+    @ClientIp() ip: string,
+    @UserAgent() userAgent: string,
+  ): Promise<ImportReworkOrdersResDto> {
+    return this.orderService.importRework(dto, { user, ip, userAgent });
   }
 
   @Patch('bulk-field')

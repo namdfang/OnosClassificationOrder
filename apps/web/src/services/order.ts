@@ -4,6 +4,7 @@ import type {
   BulkTransferOrderDto,
   BulkUpdateOrderFieldDto,
   ImportProductionOrdersDto,
+  ImportReworkOrdersDto,
   SetProductionErrorDto,
   TransferOrderDto,
   UpdateOrderFieldDto,
@@ -17,6 +18,10 @@ const getOrders = (query: string = '') => {
 
 const importOrders = (data: ImportProductionOrdersDto) => {
   return callApi(`/${CONFIG.API_VERSION}/orders/import`, 'post', data);
+};
+
+const importRework = (data: ImportReworkOrdersDto) => {
+  return callApi(`/${CONFIG.API_VERSION}/orders/import-rework`, 'post', data);
 };
 
 const deleteOrder = (id: string) => {
@@ -106,6 +111,7 @@ const ensurePreview = (sourceUrl: string) => {
 export const order = {
   getOrders,
   importOrders,
+  importRework,
   deleteOrder,
   getDashboard,
   updateField,

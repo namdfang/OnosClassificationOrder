@@ -82,15 +82,49 @@ Mỗi đơn hàng gồm:
 
 ## 3. Tab `Import` (`ImportOrderTab.tsx`)
 
+Có **2 mode** (toggle button ở header card):
+- **"Import đơn mới"** (`mode=new`) — flow gốc, parse + upsert đơn mới qua `POST /v1/orders/import`.
+- **"Import file soát"** (`mode=rework`) — UPDATE QC fields cho đơn hiện có qua `POST /v1/orders/import-rework`. Không tạo mới.
+
 ### 3.1 Flow
+
+**Mode `new`:**
 ```
 User paste TSV (Ctrl+V from Google Sheets) vào textarea
-  → parseRows() (parseOrders.ts) chia tab + dòng
+  → parseOrderRows() (parseOrders.ts) chia tab + dòng
   → Header detection (auto match column theo tên)
   → Preview table (50 dòng đầu, scrollable)
   → Submit → POST /v1/orders/import
   → BE upsert by productionId → trả về { imported, updated, mapped, unmapped, skipped[] }
   → Toast + reload list nếu user chuyển tab
+```
+
+**Mode `rework` (file soát):**
+```
+Header sheet (20 cột):
+  Production ID | User SKU | Size | Trang_thai_in | Note_trang_thai_in |
+  ket_qua_tool | Note_kq_Tool | File_sua_loi | Ghi_chu_file_loi |
+  Nguoi_thuc_hien | Note_nguoi_thuc_hien | Type | Color | Mockup |
+  Design Front | Order ID | In Production At | Type.1 | Nhà máy | Phòng
+
+parseReworkOrderRows() chỉ lấy 5 cột: productionId + 4 QC field (toolResultNote,
+errorFile, errorFileNote, assignee). Các cột khác BỎ QUA (không đè dữ liệu cũ).
+
+  → Submit → POST /v1/orders/import-rework
+  → BE `importRework`:
+      1. Preload workshop_config (tool_result_note + error_file_type) + tất cả User.
+      2. Loop từng row → lookup order theo productionId:
+         - Nếu không tồn tại → notFound++ + skipped[].
+         - Match `Note_kq_Tool` (vd "loi") → workshop_config.name normalize → code → set `toolResultNote`.
+         - Match `File_sua_loi` (vd "Vien co") → tương tự.
+         - `Ghi_chu_file_loi` → set `errorFileNote` (raw). Nếu chứa "huy don" (normalize) → set
+           `cancelledAt = new Date()` + `cancelReason = note` (counter `cancelled++`).
+         - Match `Nguoi_thuc_hien` (fullName normalize) → user._id → set `assignee` +
+           `designerStatus='assigned'` + `designerAssignedAt=new Date()` (counter `assigneeMatched++`).
+      3. Cell rỗng → giữ DB cũ. Match fail → skip field đó, log warning, các field còn
+         lại vẫn update (không reject cả row).
+      4. Audit log: `action='bulk_update'`, `field='import_rework'`, before/after = $set object.
+  → Response: { updated, notFound, cancelled, assigneeMatched, skipped[] }
 ```
 
 ### 3.2 Parse logic (`parseOrders.ts`)

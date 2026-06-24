@@ -1,4 +1,4 @@
-import type { ImportProductionOrderRow } from 'shared';
+import type { ImportProductionOrderRow, ImportReworkOrderRow } from 'shared';
 
 const COLUMN_INDEX = {
   productionId: 0,
@@ -118,6 +118,54 @@ export function parseOrderRows(raw: string): ImportProductionOrderRow[] {
       referent: get(COLUMN_INDEX.referent),
       orderAt: get(COLUMN_INDEX.orderAt),
       inProductionAt: get(COLUMN_INDEX.inProductionAt),
+    });
+  }
+
+  return rows;
+}
+
+/**
+ * Parser cho mode "Import file soát". Header sheet:
+ *   Production ID | User SKU | Size | Trang_thai_in | Note_trang_thai_in |
+ *   ket_qua_tool | Note_kq_Tool | File_sua_loi | Ghi_chu_file_loi |
+ *   Nguoi_thuc_hien | Note_nguoi_thuc_hien | Type | Color | Mockup |
+ *   Design Front | Order ID | In Production At | Type.1 | Nhà máy | Phòng
+ *
+ * Chỉ extract 5 cột BE cần (productionId + 4 field QC). Các cột khác bỏ qua.
+ */
+const REWORK_COLUMN_INDEX = {
+  productionId: 0,
+  toolResultNote: 6,
+  errorFile: 7,
+  errorFileNote: 8,
+  assignee: 9,
+};
+
+export function parseReworkOrderRows(raw: string): ImportReworkOrderRow[] {
+  const lines = raw.split(/\r?\n/);
+  const rows: ImportReworkOrderRow[] = [];
+  let pastHeader = false;
+
+  for (const line of lines) {
+    if (!line.trim()) continue;
+    const cols = line.split('\t');
+    const first = cols[0]?.trim();
+    if (!pastHeader) {
+      if (first === 'Production ID') {
+        pastHeader = true;
+        continue;
+      }
+      continue;
+    }
+    if (!first) continue;
+    const get = (i: number) => cols[i]?.trim() || undefined;
+
+    rows.push({
+      productionId: first,
+      toolResultNote: get(REWORK_COLUMN_INDEX.toolResultNote),
+      errorFile: get(REWORK_COLUMN_INDEX.errorFile),
+      errorFileNote: get(REWORK_COLUMN_INDEX.errorFileNote),
+      assignee: get(REWORK_COLUMN_INDEX.assignee),
     });
   }
 

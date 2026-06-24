@@ -45,6 +45,8 @@ import type {
   ImportProductionOrderRow,
   ImportProductionOrdersDto,
   ImportProductionOrdersResDto,
+  ImportReworkOrdersDto,
+  ImportReworkOrdersResDto,
   ImportSummaryGroup,
   MachineBucket,
   MachineKpi,
@@ -174,6 +176,19 @@ function vnTodayStart(): Date {
  *  "2026-06-22"                 → 2026-06-21T17:00:00Z (00:00 VN)
  *  "2026-06-22T00:30:48Z"       → 2026-06-22T00:30:48Z (đã có tz, parse thẳng)
  */
+/** Bỏ dấu tiếng Việt + lowercase + collapse whitespace. Dùng cho match
+ * workshop_config name và user fullName từ sheet (sheet không có dấu). */
+function normalizeVN(s: string): string {
+  return s
+    .normalize('NFD')
+    .replace(/[̀-ͯ]/g, '')
+    .replace(/đ/g, 'd')
+    .replace(/Đ/g, 'D')
+    .toLowerCase()
+    .trim()
+    .replace(/\s+/g, ' ');
+}
+
 function parseImportDate(raw?: string): Date | undefined {
   if (!raw) return undefined;
   const s = raw.trim();
@@ -2637,6 +2652,155 @@ export class OrderService implements OnModuleInit {
     });
 
     return { success: true, data: { imported, updated, mapped, unmapped, skipped } };
+  }
+
+  /**
+   * Import file soát — UPDATE đơn hiện có theo `productionId`. Không tạo mới.
+   *
+   * Fields được update (chỉ khi cell có giá trị, ô trống giữ DB cũ):
+   *  - `toolResultNote`  ← match workshop_config name (bỏ dấu lowercase)
+   *  - `errorFile`       ← match workshop_config name (bỏ dấu lowercase)
+   *  - `errorFileNote`   ← free text; nếu chứa "hủy đơn" → set cancelledAt + cancelReason
+   *  - `assignee`        ← lookup User by fullName normalize → user._id;
+   *                        đồng thời set designerStatus='assigned' + designerAssignedAt.
+   *
+   * Workshop_config / User không match → skip field đó, log warning, các field
+   * khác trong row vẫn update bình thường (không reject cả row).
+   */
+  async importRework(
+    dto: ImportReworkOrdersDto,
+    ctx?: AuditContext,
+  ): Promise<ImportReworkOrdersResDto> {
+    const skipped: Array<{ row: number; reason: string }> = [];
+    let updated = 0;
+    let notFound = 0;
+    let cancelled = 0;
+    let assigneeMatched = 0;
+
+    // Preload workshop_config + users để lookup nhanh.
+    const [toolResultNoteCfgs, errorFileCfgs, allUsers] = await Promise.all([
+      this.workshopConfigRepository.findAll({
+        category: WorkshopConfigCategory.ToolResultNote,
+        isActive: true,
+      }),
+      this.workshopConfigRepository.findAll({
+        category: WorkshopConfigCategory.ErrorFileType,
+        isActive: true,
+      }),
+      this.userModel.find({}, { fullName: 1 }).lean(),
+    ]);
+    const toolResultNoteMap = new Map(
+      toolResultNoteCfgs.map((c) => [normalizeVN(c.name), c.code]),
+    );
+    const errorFileMap = new Map(errorFileCfgs.map((c) => [normalizeVN(c.name), c.code]));
+    const userByName = new Map(
+      allUsers.map((u) => [normalizeVN(u.fullName || ''), String(u._id)]),
+    );
+
+    for (let i = 0; i < dto.rows.length; i++) {
+      const row = dto.rows[i];
+      const rowNum = i + 1;
+      const productionId = row.productionId?.trim();
+      if (!productionId) {
+        skipped.push({ row: rowNum, reason: 'Missing Production ID' });
+        continue;
+      }
+
+      const order = await this.orderModel.findOne({ productionId }).lean();
+      if (!order) {
+        notFound += 1;
+        skipped.push({ row: rowNum, reason: `Production ID không tồn tại: ${productionId}` });
+        continue;
+      }
+
+      const $set: Record<string, unknown> = {};
+      const warnings: string[] = [];
+
+      // 1. toolResultNote
+      if (row.toolResultNote?.trim()) {
+        const key = normalizeVN(row.toolResultNote);
+        const code = toolResultNoteMap.get(key);
+        if (code) $set.toolResultNote = code;
+        else warnings.push(`Note_kq_Tool="${row.toolResultNote}" không match workshop_config`);
+      }
+
+      // 2. errorFile
+      if (row.errorFile?.trim()) {
+        const key = normalizeVN(row.errorFile);
+        const code = errorFileMap.get(key);
+        if (code) $set.errorFile = code;
+        else warnings.push(`File_sua_loi="${row.errorFile}" không match workshop_config`);
+      }
+
+      // 3. errorFileNote + cancel detection
+      if (row.errorFileNote?.trim()) {
+        const noteRaw = row.errorFileNote.trim();
+        $set.errorFileNote = noteRaw;
+        if (normalizeVN(noteRaw).includes('huy don')) {
+          $set.cancelledAt = new Date();
+          $set.cancelReason = noteRaw;
+          cancelled += 1;
+        }
+      }
+
+      // 4. assignee (gán designer)
+      if (row.assignee?.trim()) {
+        const key = normalizeVN(row.assignee);
+        const userId = userByName.get(key);
+        if (userId) {
+          $set.assignee = userId;
+          $set.designerStatus = DesignerStatus.Assigned;
+          $set.designerAssignedAt = new Date();
+          assigneeMatched += 1;
+        } else {
+          warnings.push(`Nguoi_thuc_hien="${row.assignee}" không match user trong DB`);
+        }
+      }
+
+      if (Object.keys($set).length === 0) {
+        skipped.push({
+          row: rowNum,
+          reason: warnings.length ? warnings.join('; ') : 'Không có field hợp lệ để update',
+        });
+        continue;
+      }
+
+      await this.orderModel.updateOne({ _id: order._id }, { $set });
+      updated += 1;
+
+      if (warnings.length) {
+        this.logger.warn({
+          message: `[import-rework] row ${rowNum} (${productionId}): ${warnings.join('; ')}`,
+        });
+      }
+
+      // Audit log — dùng action 'bulk_update' vì 1 row có thể đụng nhiều field.
+      void this.orderLogService.write({
+        orderId: String(order._id),
+        action: 'bulk_update',
+        field: 'import_rework',
+        before: {
+          toolResultNote: order.toolResultNote,
+          errorFile: order.errorFile,
+          errorFileNote: order.errorFileNote,
+          assignee: order.assignee,
+          cancelledAt: order.cancelledAt,
+        },
+        after: $set,
+        ctx,
+      });
+    }
+
+    void this.invalidateListCache();
+
+    this.logger.info({
+      message: `[import-rework] done: updated=${updated} notFound=${notFound} cancelled=${cancelled} assigneeMatched=${assigneeMatched} skipped=${skipped.length}`,
+    });
+
+    return {
+      success: true,
+      data: { updated, notFound, cancelled, assigneeMatched, skipped },
+    };
   }
 
   private async sendImportSummaryNotification(args: {
