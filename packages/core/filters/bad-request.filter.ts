@@ -1,7 +1,7 @@
 import type { ArgumentsHost, ExceptionFilter } from '@nestjs/common';
 import { Catch, HttpStatus, UnprocessableEntityException } from '@nestjs/common';
 import { Reflector } from '@nestjs/core';
-import type { FastifyReply } from 'fastify';
+import type { FastifyReply, FastifyRequest } from 'fastify';
 import { I18nContext, I18nService } from 'nestjs-i18n';
 import { ZodError } from 'zod';
 
@@ -18,6 +18,15 @@ export class UnprocessableEntityFilter implements ExceptionFilter<UnprocessableE
 
     const ctx = host.switchToHttp();
     const response = ctx.getResponse<FastifyReply>();
+    const request = ctx.getRequest<FastifyRequest>();
+
+    // Echo CORS headers — xem comment ở CustomExceptionFilter.
+    const origin = request.headers?.origin as string | undefined;
+    if (origin) {
+      void response.header('Access-Control-Allow-Origin', origin);
+      void response.header('Access-Control-Allow-Credentials', 'true');
+      void response.header('Vary', 'Origin');
+    }
 
     const statusCode = exception.getStatus();
 

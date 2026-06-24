@@ -1,7 +1,7 @@
 import type { ArgumentsHost } from '@nestjs/common';
 import { Catch, HttpException, HttpStatus } from '@nestjs/common';
 import { BaseExceptionFilter } from '@nestjs/core';
-import type { FastifyReply } from 'fastify';
+import type { FastifyReply, FastifyRequest } from 'fastify';
 import { I18nContext, I18nService } from 'nestjs-i18n';
 
 @Catch(HttpException)
@@ -15,10 +15,20 @@ export class CustomExceptionFilter extends BaseExceptionFilter {
 
   async catch(exception: HttpException, host: ArgumentsHost): Promise<void> {
     // console.log("Catch custom filter");
-    
+
     const ctx = host.switchToHttp();
     const response = ctx.getResponse<FastifyReply>();
-    // const request = ctx.getRequest();
+    const request = ctx.getRequest<FastifyRequest>();
+
+    // Echo back CORS headers on error responses — @fastify/cors onSend hook
+    // can miss exception paths (guard throw, etc.), khiến browser báo "CORS
+    // error" thay vì status code thật (429/500/504...). Set thủ công đảm bảo.
+    const origin = request.headers?.origin as string | undefined;
+    if (origin) {
+      void response.header('Access-Control-Allow-Origin', origin);
+      void response.header('Access-Control-Allow-Credentials', 'true');
+      void response.header('Vary', 'Origin');
+    }
 
     const statusCode = exception.getStatus();
     const message = exception.message;
