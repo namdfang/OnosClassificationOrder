@@ -11,6 +11,8 @@ import type { DesignerMyStats, DesignerTaskCard } from 'shared';
 import {
   DesignerStatus,
   DesignerTransitionAction,
+  FulfillmentStage,
+  FulfillmentStageStatus,
   RoleType,
 } from 'shared';
 
@@ -73,6 +75,25 @@ export class DesignerTaskService {
       isFirstStart: !order.designerFirstStartedAt,
       designerStartedAt: order.designerStartedAt,
     });
+
+    // Hook fulfillment 5-stage: designer.complete lần đầu (chưa từng vào
+    // fulfillment) → kích hoạt stage Print với status=waiting. Trường hợp
+    // designer đang trong cycle rework (đẩy về từ fulfillment), giữ nguyên
+    // currentFulfillmentStage của reporter → đơn quay lại đúng stage cũ.
+    if (
+      action === DesignerTransitionAction.Complete &&
+      plan.nextStatus === DesignerStatus.Done &&
+      !order.currentFulfillmentStage
+    ) {
+      const set = (plan.patch.$set ?? {}) as Record<string, unknown>;
+      set.currentFulfillmentStage = FulfillmentStage.Print;
+      set['fulfillmentStages.print'] = {
+        status: FulfillmentStageStatus.Waiting,
+        reworkCount: 0,
+        workMs: 0,
+      };
+      plan.patch.$set = set;
+    }
 
     // findOneAndUpdate với filter expected state → race-safe; nếu trong lúc
     // request đang xử lý mà user khác kéo card sang trạng thái khác thì update
@@ -262,15 +283,15 @@ export class DesignerTaskService {
     const [assignedRaw, inProgressRaw, reworkRaw, doneRaw, rejectedRaw] = await Promise.all([
       this.orderModel
         .find({ ...baseFilter, designerStatus: DesignerStatus.Assigned })
-        .sort({ designerAssignedAt: -1, createdAt: -1 })
+        .sort({ designerAssignedAt: -1, inProductionAt: -1 })
         .lean(),
       this.orderModel
         .find({ ...baseFilter, designerStatus: DesignerStatus.InProgress })
-        .sort({ designerStartedAt: -1, createdAt: -1 })
+        .sort({ designerStartedAt: -1, inProductionAt: -1 })
         .lean(),
       this.orderModel
         .find({ ...baseFilter, designerStatus: DesignerStatus.Rework })
-        .sort({ designerReworkAt: -1, createdAt: -1 })
+        .sort({ designerReworkAt: -1, inProductionAt: -1 })
         .lean(),
       this.orderModel
         .find({
@@ -282,7 +303,7 @@ export class DesignerTaskService {
         .lean(),
       this.orderModel
         .find({ ...baseFilter, designerStatus: DesignerStatus.Rejected })
-        .sort({ designerRejectedAt: -1, createdAt: -1 })
+        .sort({ designerRejectedAt: -1, inProductionAt: -1 })
         .lean(),
     ]);
 

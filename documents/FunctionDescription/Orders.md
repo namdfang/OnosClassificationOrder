@@ -320,7 +320,22 @@ Mỗi request `GET /v1/orders` đi qua `OrderService.buildVisibilityFilter(roleN
 | `Designer` (sub) | `assignee = user._id` — chỉ thấy task của mình (KHÔNG ép date window, đã narrow bởi assignee). Phase Designer-Task-Workflow Phase 6 đổi từ `assigneeCode` → `user._id`. |
 | `Fulfillment` | `orderAt` ∈ [7 ngày gần nhất] **AND** `readyForFulfill = true` **AND** `$or: [{factoryId: user.factoryId}, {originalFactoryId: user.factoryId}]` — Per-factory scope (cả 2 xưởng thấy đơn transfer). Nếu user chưa gán `factoryId` → filter trả empty (an toàn). |
 
-> **§7.0 Lưu ý filter ngày (kể từ 2026-06):** DTO `createdFrom` / `createdTo` (cộng `wfrom` / `wto` ở URL Workshop, `ffrom` / `fto` ở Factory dashboard, `startDate` / `endDate` ở Dashboard stats) được giữ tên cũ để không phá URL bookmark, **nhưng thực tế filter trên `orderAt`** (thời gian khách lên đơn ở marketplace) — không còn theo `createdAt` (thời gian import). Đổi vì xưởng cần ưu tiên xử lý theo "ngày khách đặt hàng" thật sự. Áp dụng ở: `buildVisibilityFilter()`, `getDashboard()`, `getStatusOverview()`, `getFactoryOverview()`, `getImportSummary()`.
+> **§7.0 Lưu ý filter & sort ngày (cập nhật 2026-06):** DTO `createdFrom` / `createdTo` (cộng `wfrom` / `wto` ở URL Workshop, `ffrom` / `fto` ở Factory dashboard, `startDate` / `endDate` ở Dashboard stats) được giữ tên cũ để không phá URL bookmark, **nhưng thực tế filter + sort đều trên `inProductionAt`** (thời gian đơn vào sản xuất theo sheet import).
+>
+> Tiến triển:
+> 1. **Cũ:** filter + sort theo Mongo `createdAt` (thời gian import doc) → đơn cùng batch cluster bất kể thật sự sản xuất khi nào.
+> 2. **Phase 2026-06 sớm:** đổi filter sang `orderAt` (thời gian khách đặt hàng marketplace) cho phù hợp business.
+> 3. **Phase 2026-06 hiện tại:** đồng bộ filter + sort sang `inProductionAt` — manager mở Dashboard "hôm nay" thấy đơn **VÀO sản xuất hôm nay**, không phải đơn khách đặt hôm nay. Đây là metric mà xưởng care nhất (capacity tracking, queue depth).
+>
+> **Áp dụng filter** (5 vị trí trong `order.service.ts`): `buildVisibilityFilter()` (Designer/Fulfillment/general date override), `getDashboard()`, `getStatusOverview()` today count, `getImportSummary()` day group, `getFactoryOverview()`.
+>
+> **Áp dụng sort** (9 vị trí): `getOrders()` (grouped + default), `exportOrders()`, `getOrdersGroupedByType()`, `DesignerTaskService.getMyTasks()` (4 cột kanban), `FulfillmentTaskService.getMyTasks()`.
+>
+> Đơn legacy không có `inProductionAt` → bị loại khỏi date filter + Mongo desc sort đẩy về cuối list — chấp nhận (data cũ là test).
+>
+> Field có `@Prop({ index: true })` trên entity để tránh full collection scan.
+>
+> **Vẫn giữ `createdAt`** ở: `orderLogRepository.findAll({sort:{createdAt:1}})` (audit log chronological), `backfillDesignerStatus()` fallback (one-shot migration), `User.createdAt`, Mongoose auto timestamps. **Vẫn giữ `orderAt`** ở: `parseImportDate(row.orderAt)` (import field từ sheet, lưu cho reference + future analytics).
 > Trường `orderAt` được import từ cột 37 ("Order at") của sheet. Đơn cũ thiếu `orderAt` sẽ bị filter loại khỏi date range — do data hiện tại là test, không backfill.
 >
 > **Timezone (quan trọng):** filter "yyyy-mm-dd" được parse là **VN local midnight** (qua helper `vnDayStart` / `vnDayEnd` ở `order.service.ts`). Lý do: MongoDB lưu UTC, `new Date("2026-06-22")` của JS parse là UTC midnight = 07:00 sáng VN → lệch ngày. Helper thêm offset `+07:00` để filter "ngày 22-06" khớp với đơn có `orderAt` từ `2026-06-21T17:00:00Z` (= 00:00 VN 22-06) đến `2026-06-22T16:59:59Z`. Áp ở mọi nơi build range trong `OrderService`.
@@ -343,7 +358,7 @@ Ngoài các filter cơ bản (`createdFrom/To`, `factoryId`, `machineTypeId`, `p
 | `printStage` | enum | `printed` · `printing` · `not-printed`. Mutually exclusive — Dashboard Tab C drill-down 3 button trên `FactoryCard`. Định nghĩa "đã in xong" = `printStatus ∈ PRINTED_MACHINE_CODES` (`['machine-1','machine-2','machine-3','machine-4','machine-94']`). |
 | `productionError` | CSV codes | (Phase 8) Lọc theo lý do lỗi xưởng (`wrong-size`, `print-misalign`, ...). |
 | `hasError` | boolean | (Phase 8) `true` → đơn có `productionError` set. `false` không hỗ trợ (dùng cách không truyền filter). |
-| `sort` | `'grouped'` | Sort `(type, size, fabricType, createdAt desc)` thay vì `createdAt` mặc định — để combo trùng nhau gom liền nhau (Workshop dùng để in batch chung). |
+| `sort` | `'grouped'` | Sort `(type, size, fabricType, inProductionAt desc)` thay vì `inProductionAt` mặc định — để combo trùng nhau gom liền nhau (Workshop dùng để in batch chung). |
 
 ---
 

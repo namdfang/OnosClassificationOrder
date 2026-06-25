@@ -2,12 +2,68 @@ import { createZodDto } from '@anatine/zod-nestjs';
 import { extendApi } from '@anatine/zod-openapi';
 import { z } from 'zod';
 
-import { DesignerStatus, DesignerTransitionAction } from '@shared/enums';
+import {
+  DesignerStatus,
+  DesignerTransitionAction,
+  FulfillmentStage,
+  FulfillmentStageStatus,
+  FulfillmentTransitionAction,
+} from '@shared/enums';
 import { BaseEntityZod, PageQueryZod, PageResZod, ResZod } from '@shared/types';
 import { IDZod } from '..';
 
 export const DesignerStatusZod = z.nativeEnum(DesignerStatus);
 export const DesignerTransitionActionZod = z.nativeEnum(DesignerTransitionAction);
+
+export const FulfillmentStageZod = z.nativeEnum(FulfillmentStage);
+export const FulfillmentStageStatusZod = z.nativeEnum(FulfillmentStageStatus);
+export const FulfillmentTransitionActionZod = z.nativeEnum(FulfillmentTransitionAction);
+
+/** State per 1 stage (Print/Press/QC/Sew/Pack). */
+export const FulfillmentStageStateZod = z.object({
+  status: FulfillmentStageStatusZod.default(FulfillmentStageStatus.Waiting),
+  /** = user._id của worker đảm nhiệm (resolved từ factory+stage tại thời điểm assign). */
+  assignee: z.string().optional(),
+  assignedAt: z.date().optional(),
+  /** Start của cycle hiện tại — reset mỗi lần start/restart. */
+  startedAt: z.date().optional(),
+  /** Start của LẦN ĐẦU — immutable. Dùng tính response time. */
+  firstStartedAt: z.date().optional(),
+  completedAt: z.date().optional(),
+  reworkAt: z.date().optional(),
+  /** Số lần stage này bị stage sau đẩy về (hoặc nằm trên đường đẩy về). */
+  reworkCount: z.number().int().nonnegative().default(0),
+  reworkReason: z.string().max(500).optional(),
+  /** Stage đã trigger rework-back đẩy về stage này (vd QC đẩy về In). */
+  reworkFromStage: FulfillmentStageZod.optional(),
+  /** Cumulative thời gian làm thực (ms) — $inc khi complete. */
+  workMs: z.number().int().nonnegative().default(0),
+});
+export type FulfillmentStageState = z.infer<typeof FulfillmentStageStateZod>;
+
+export const FulfillmentStagesZod = z.object({
+  print: FulfillmentStageStateZod.optional(),
+  press: FulfillmentStageStateZod.optional(),
+  qc: FulfillmentStageStateZod.optional(),
+  sew: FulfillmentStageStateZod.optional(),
+  pack: FulfillmentStageStateZod.optional(),
+});
+export type FulfillmentStages = z.infer<typeof FulfillmentStagesZod>;
+
+/** 1 dòng lịch sử di chuyển. Push mỗi lần transition. */
+export const FulfillmentTimelineEntryZod = z.object({
+  stage: FulfillmentStageZod,
+  action: FulfillmentTransitionActionZod,
+  fromStatus: FulfillmentStageStatusZod,
+  toStatus: FulfillmentStageStatusZod,
+  byUserId: IDZod,
+  byUserName: z.string().optional(),
+  at: z.date(),
+  /** Khi action=rework-back: target = designer | <stage>. */
+  reworkTarget: z.string().optional(),
+  reason: z.string().max(500).optional(),
+});
+export type FulfillmentTimelineEntry = z.infer<typeof FulfillmentTimelineEntryZod>;
 
 export const DesignFieldsZod = z.object({
   front: z.string().optional(),
@@ -171,6 +227,20 @@ export const ProductionOrderZod = BaseEntityZod.extend({
    * rework). $inc khi `complete`. Dùng trực tiếp cho avgWorkMin stats.
    */
   designerWorkMs: z.number().int().nonnegative().default(0),
+
+  // ─── Fulfillment 5-stage workflow ───────────────────────────────
+  /**
+   * Stage hiện tại đơn đang nằm. null = chưa vào fulfillment (designer chưa
+   * done) HOẶC đã hoàn tất hết 5 stage (xem `fulfillmentCompletedAt`).
+   * Auto set = `print` khi `designerStatus = done`.
+   */
+  currentFulfillmentStage: FulfillmentStageZod.optional(),
+  /** Set khi stage `pack` complete — đơn coi như xong. */
+  fulfillmentCompletedAt: z.date().optional(),
+  /** Per-stage state. Init lazy: stage chỉ có entry khi đã được kích hoạt. */
+  fulfillmentStages: FulfillmentStagesZod.optional(),
+  /** History toàn bộ transition — append-only. UI render timeline. */
+  fulfillmentTimeline: FulfillmentTimelineEntryZod.array().default([]),
 });
 export type ProductionOrder = z.infer<typeof ProductionOrderZod>;
 
@@ -844,3 +914,138 @@ export const GetErrorLogResZod = PageResZod.extend({
   }),
 });
 export class GetErrorLogResDto extends createZodDto(extendApi(GetErrorLogResZod)) {}
+
+//
+// ─── Fulfillment workflow ─────────────────────────────────────────
+//
+
+/**
+ * Body của `POST /v1/orders/:id/fulfillment-transition`.
+ *
+ * State machine theo `(stage, action, currentStatus)`:
+ *   start        : waiting/rework → in-progress (assignee = current user, BE check)
+ *   complete     : in-progress    → done        (cộng workMs, auto-advance stage tiếp)
+ *   rework-back  : in-progress    → waiting     (reporter giữ assignee)
+ *                                target stage   → rework, các stage trung gian → rework
+ *                                currentFulfillmentStage = target
+ *                                target='designer' → reuse designer rework flow
+ *
+ * Validate ở BE: action='rework-back' yêu cầu `target` + `reason`. Target nếu
+ * là FulfillmentStage thì phải có index < current stage; nếu là 'designer'
+ * thì set productionErrorSource='designer'.
+ */
+export const FulfillmentTransitionZod = z.object({
+  stage: FulfillmentStageZod,
+  action: FulfillmentTransitionActionZod,
+  /** Required khi action='rework-back': 'designer' hoặc FulfillmentStage trước stage hiện tại. */
+  target: z.union([z.literal('designer'), FulfillmentStageZod]).optional(),
+  /** Required khi action='rework-back'. */
+  reason: z.string().max(500).optional(),
+});
+export class FulfillmentTransitionDto extends createZodDto(extendApi(FulfillmentTransitionZod)) {}
+
+export const FulfillmentTransitionResZod = ResZod.extend({ data: ProductionOrderZod });
+export class FulfillmentTransitionResDto extends createZodDto(
+  extendApi(FulfillmentTransitionResZod),
+) {}
+
+/**
+ * GET `/v1/fulfillment/my-tasks?tab=waiting|in-progress|rework|watching`.
+ * Stage + factory tự suy từ user đang login (BE filter). User Manager/Admin
+ * có thể override qua query `stage`/`factoryId`.
+ */
+export const FULFILLMENT_TASK_TABS = ['waiting', 'in-progress', 'rework', 'watching'] as const;
+export type FulfillmentTaskTab = (typeof FULFILLMENT_TASK_TABS)[number];
+export const FulfillmentTaskTabZod = z.enum(FULFILLMENT_TASK_TABS);
+
+export const GetFulfillmentMyTasksZod = PageQueryZod.extend({
+  tab: FulfillmentTaskTabZod.default('waiting'),
+  /** Override (Manager/Admin). User Fulfillment không cần set. */
+  stage: FulfillmentStageZod.optional(),
+  factoryId: IDZod.optional(),
+});
+export class GetFulfillmentMyTasksDto extends createZodDto(extendApi(GetFulfillmentMyTasksZod)) {}
+
+export const GetFulfillmentMyTasksResZod = PageResZod.extend({
+  data: ProductionOrderZod.array(),
+  /** Tab counters (4 tab) — bỏ qua pagination. */
+  tabCounts: z.object({
+    waiting: z.number(),
+    inProgress: z.number(),
+    rework: z.number(),
+    watching: z.number(),
+  }),
+});
+export class GetFulfillmentMyTasksResDto extends createZodDto(
+  extendApi(GetFulfillmentMyTasksResZod),
+) {}
+
+/**
+ * Admin team queue (`GET /v1/fulfillment/team/queue?factoryId=`).
+ * Trả về 5 column × N order mỗi column (cap 100 / column).
+ */
+export const FulfillmentQueueColumnZod = z.object({
+  stage: FulfillmentStageZod,
+  /** = users{factoryId, fulfillmentStage}._id (1 user duy nhất hoặc null nếu chưa gán). */
+  workerId: z.string().optional(),
+  workerName: z.string().optional(),
+  /** Counts mỗi status. */
+  counts: z.object({
+    waiting: z.number(),
+    inProgress: z.number(),
+    rework: z.number(),
+    done: z.number(),
+  }),
+  /** Top 100 orders theo orderAt DESC. */
+  orders: ProductionOrderZod.array(),
+});
+export type FulfillmentQueueColumn = z.infer<typeof FulfillmentQueueColumnZod>;
+
+export const GetFulfillmentQueueZod = z.object({
+  factoryId: IDZod,
+});
+export class GetFulfillmentQueueDto extends createZodDto(extendApi(GetFulfillmentQueueZod)) {}
+
+export const GetFulfillmentQueueResZod = ResZod.extend({
+  data: z.object({
+    factoryId: z.string(),
+    factoryName: z.string().optional(),
+    columns: FulfillmentQueueColumnZod.array(),
+  }),
+});
+export class GetFulfillmentQueueResDto extends createZodDto(
+  extendApi(GetFulfillmentQueueResZod),
+) {}
+
+/** Stats — throughput per period (morning/noon/evening hoặc daily/weekly). */
+export const FulfillmentStageStatRowZod = z.object({
+  stage: FulfillmentStageZod,
+  received: z.number(),
+  inProgress: z.number(),
+  done: z.number(),
+  reworkOut: z.number(),
+  reworkIn: z.number(),
+  avgWorkMs: z.number(),
+  backlog: z.number(),
+});
+export type FulfillmentStageStatRow = z.infer<typeof FulfillmentStageStatRowZod>;
+
+export const GetFulfillmentStatsZod = z.object({
+  factoryId: IDZod.optional(),
+  from: z.string().optional(),
+  to: z.string().optional(),
+});
+export class GetFulfillmentStatsDto extends createZodDto(extendApi(GetFulfillmentStatsZod)) {}
+
+export const GetFulfillmentStatsResZod = ResZod.extend({
+  data: z.object({
+    perStage: FulfillmentStageStatRowZod.array(),
+    /** Avg cycle time (ms) toàn flow: designerCompletedAt → fulfillmentCompletedAt. */
+    avgTotalCycleMs: z.number(),
+    /** Đơn pack.done trong range. */
+    completedCount: z.number(),
+  }),
+});
+export class GetFulfillmentStatsResDto extends createZodDto(
+  extendApi(GetFulfillmentStatsResZod),
+) {}

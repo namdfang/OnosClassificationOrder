@@ -18,6 +18,11 @@ export const PATHS = {
   MY_TASKS: '/my-tasks',
   DESIGNER_STATS: '/designer/stats',
 
+  // Fulfillment 5-stage Workflow
+  FULFILLMENT_MY_TASKS: '/fulfillment/my-tasks',
+  FULFILLMENT_TEAM: '/fulfillment/team',
+  FULFILLMENT_STATS: '/fulfillment/stats',
+
   NOTIFICATIONS: '/notifications',
 
   LOGIN: '/login',

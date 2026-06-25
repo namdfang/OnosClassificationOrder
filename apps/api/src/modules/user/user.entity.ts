@@ -2,7 +2,17 @@ import { Prop, raw, SchemaFactory } from '@nestjs/mongoose';
 import { assertSameType, DatabaseEntity, DatabaseEntityAbstract } from 'core';
 import type { CallbackWithoutResultAndOptionalError, HydratedDocument } from 'mongoose';
 import type { User } from 'shared';
-import { CODE_LENGTH, Gender, getObjectValues, ID_LENGTH, PASSWORD_MIN_LENGTH, Status, TelegramConfig } from 'shared';
+import {
+  CODE_LENGTH,
+  FULFILLMENT_STAGES,
+  FulfillmentStage,
+  Gender,
+  getObjectValues,
+  ID_LENGTH,
+  PASSWORD_MIN_LENGTH,
+  Status,
+  TelegramConfig,
+} from 'shared';
 
 import type { CustomRoleDocument } from '../custom-role/custom-role.entity';
 import type { DepartmentDocument } from '../departments/department.entity';
@@ -182,6 +192,14 @@ export class UserEntity extends DatabaseEntityAbstract {
    */
   @Prop({ ref: 'FactoryEntity', index: true })
   factoryId?: string;
+
+  /**
+   * Required khi role=Fulfillment — chỉ định stage worker đảm nhiệm.
+   * BE enforce unique constraint `(factoryId, fulfillmentStage)` qua partial
+   * index ở dưới (chỉ áp dụng khi field tồn tại).
+   */
+  @Prop({ type: String, enum: FULFILLMENT_STAGES, index: true })
+  fulfillmentStage?: FulfillmentStage;
 }
 
 assertSameType<User, UserEntity>();
@@ -246,3 +264,22 @@ UserSchema.pre('save', function (next: CallbackWithoutResultAndOptionalError) {
   this.email = this.email.toLowerCase();
   next();
 });
+
+/**
+ * Mỗi (factoryId, fulfillmentStage) chỉ được đúng 1 user. Partial index để
+ * tránh collide với hàng loạt user khác không phải Fulfillment (fulfillmentStage
+ * null). User Fulfillment có cả 2 field này — tạo trùng → MongoServerError
+ * E11000 → service convert sang BadRequestException ('Stage X tại factory Y đã
+ * có user khác phụ trách').
+ */
+UserSchema.index(
+  { factoryId: 1, fulfillmentStage: 1 },
+  {
+    unique: true,
+    partialFilterExpression: {
+      fulfillmentStage: { $exists: true, $type: 'string' },
+      factoryId: { $exists: true, $type: 'string' },
+    },
+    name: 'unique_factory_fulfillment_stage',
+  },
+);

@@ -72,6 +72,7 @@ const NAV_GROUPS: NavGroup[] = [
       { key: PATHS.WORKSHOP_CONFIG, label: 'Quản lý xưởng', to: PATHS.WORKSHOP_CONFIG, icon: <Factory size={17} />, perm: 'workshop.manage' },
       { key: PATHS.MY_TASKS, label: 'Task của tôi', to: PATHS.MY_TASKS, icon: <List size={17} />, perm: 'page.my_tasks' },
       { key: PATHS.DESIGNER_TEAM, label: 'Team Designer', to: PATHS.DESIGNER_TEAM, icon: <Palette size={17} />, perm: 'page.designer_team' },
+      { key: PATHS.FULFILLMENT_MY_TASKS, label: 'Task Fulfillment', to: PATHS.FULFILLMENT_MY_TASKS, icon: <List size={17} />, perm: 'page.fulfillment_my_tasks' },
       { key: PATHS.NOTIFICATIONS, label: 'Notifications', to: PATHS.NOTIFICATIONS, icon: <Bell size={17} /> },
       { key: PATHS.ACCOUNT, label: 'My account', to: PATHS.ACCOUNT, icon: <User size={17} /> },
     ],

@@ -282,8 +282,10 @@ export class OrderService implements OnModuleInit {
    * `readyForFulfill` is ALWAYS enforced for Fulfillment regardless of query.
    *
    * Date range semantics: the DTO fields `createdFrom`/`createdTo` are kept for
-   * URL/bookmark stability but actually filter on `orderAt` (thời gian khách
-   * lên đơn) — that's the production-relevant time, not the import event time.
+   * URL/bookmark stability but actually filter on `inProductionAt` (thời gian
+   * đơn vào sản xuất theo sheet import) — đây là thời gian liên quan production,
+   * không phải Mongo insert time hay marketplace order time. Áp đồng nhất với
+   * sort key (xem `Orders.md` §7.0b).
    */
   private buildVisibilityFilter(
     roleName?: RoleType,
@@ -311,9 +313,9 @@ export class OrderService implements OnModuleInit {
     if (roleName === RoleType.Designer) {
       // Sub-designer chỉ thấy task của mình (assignee = user._id).
       filter.assignee = assigneeUserId || '__no_user__';
-      if (hasDateOverride) filter.orderAt = buildRange();
+      if (hasDateOverride) filter.inProductionAt = buildRange();
     } else if (roleName === RoleType.Fulfillment) {
-      filter.orderAt = hasDateOverride ? buildRange() : { $gte: startOfWindow, $lte: endOfToday };
+      filter.inProductionAt = hasDateOverride ? buildRange() : { $gte: startOfWindow, $lte: endOfToday };
       filter.readyForFulfill = true;
       // Per-factory scope: thấy đơn đang ở xưởng mình HOẶC đơn đã transfer từ
       // xưởng mình đi nơi khác (origin = mình). Nếu user chưa gán factoryId →
@@ -327,7 +329,7 @@ export class OrderService implements OnModuleInit {
         filter.factoryId = '__no_factory__';
       }
     } else if (hasDateOverride) {
-      filter.orderAt = buildRange();
+      filter.inProductionAt = buildRange();
     }
 
     return filter;
@@ -541,10 +543,14 @@ export class OrderService implements OnModuleInit {
     // Special sort mode `grouped` — keep orders of the same product clustered
     // (type → size → fabric, newest first within tie) so the workshop table
     // mirrors the "Tổng hợp đơn theo ngày" view.
+    //
+    // Default tiebreak / sort key = `inProductionAt` (thời gian đơn vào sản
+    // xuất theo sheet import) thay vì Mongo `createdAt`. Đơn legacy không có
+    // `inProductionAt` → Mongo đẩy về cuối list khi sort desc — chấp nhận.
     const sortSpec: Record<string, 1 | -1> =
       sort === 'grouped'
-        ? { type: 1, size: 1, fabricType: 1, createdAt: -1 }
-        : { [sort || 'createdAt']: order === 'asc' ? 1 : -1 };
+        ? { type: 1, size: 1, fabricType: 1, inProductionAt: -1 }
+        : { [sort || 'inProductionAt']: order === 'asc' ? 1 : -1 };
 
     const { data, total } = await this.orderRepository.findAllAndCount(filter, {
       paging: { skip: limit * (page - 1), limit },
@@ -581,7 +587,7 @@ export class OrderService implements OnModuleInit {
   ): Promise<{ success: true; data: unknown[]; total: number }> {
     const filter = this.buildOrderListFilter(dto, roleName, assigneeCode, fulfillmentFactoryId);
     const data = await this.orderRepository.findAll(filter, {
-      sort: { type: 1, size: 1, fabricType: 1, createdAt: -1 },
+      sort: { type: 1, size: 1, fabricType: 1, inProductionAt: -1 },
       populate: [
         { path: 'factory', select: ['name', 'shortName'] },
         { path: 'machineType', select: ['name', 'shortName'] },
@@ -650,7 +656,7 @@ export class OrderService implements OnModuleInit {
     const orders = await this.orderRepository.findAll(
       { ...filter, $or: typeFilter },
       {
-        sort: { type: 1, size: 1, fabricType: 1, createdAt: -1 },
+        sort: { type: 1, size: 1, fabricType: 1, inProductionAt: -1 },
         populate: [
           { path: 'factory', select: ['name', 'shortName'] },
           { path: 'machineType', select: ['name', 'shortName'] },
@@ -710,8 +716,8 @@ export class OrderService implements OnModuleInit {
       const range: Record<string, Date> = {};
       if (dto.startDate) range.$gte = vnDayStart(dto.startDate);
       if (dto.endDate) range.$lte = vnDayEnd(dto.endDate);
-      // Filter by `orderAt` (VN tz) — thời gian khách lên đơn.
-      match.orderAt = range;
+      // Filter by `inProductionAt` (VN tz) — thời gian đơn vào sản xuất.
+      match.inProductionAt = range;
     }
 
     if (dto.searchType?.trim()) {
@@ -1056,7 +1062,7 @@ export class OrderService implements OnModuleInit {
       {
         $facet: {
           total: [{ $count: 'n' }],
-          today: [{ $match: { orderAt: { $gte: startOfToday } } }, { $count: 'n' }],
+          today: [{ $match: { inProductionAt: { $gte: startOfToday } } }, { $count: 'n' }],
           pendingToolOk: [
             { $match: { $or: [{ toolResultNote: { $exists: false } }, { toolResultNote: { $ne: 'ok' } }] } },
             { $count: 'n' },
@@ -1217,7 +1223,7 @@ export class OrderService implements OnModuleInit {
     const dayEnd = vnDayEnd(target);
 
     const rows = await this.orderModel.aggregate([
-      { $match: { orderAt: { $gte: dayStart, $lte: dayEnd } } },
+      { $match: { inProductionAt: { $gte: dayStart, $lte: dayEnd } } },
       {
         $group: {
           _id: {
@@ -1383,8 +1389,8 @@ export class OrderService implements OnModuleInit {
       const range: Record<string, Date> = {};
       if (dto.createdFrom) range.$gte = vnDayStart(dto.createdFrom);
       if (dto.createdTo) range.$lte = vnDayEnd(dto.createdTo);
-      // Filter theo `orderAt` VN tz (xem comment ở `buildVisibilityFilter`).
-      match.orderAt = range;
+      // Filter theo `inProductionAt` VN tz (xem comment ở `buildVisibilityFilter`).
+      match.inProductionAt = range;
     }
     // `matchMapped` đếm/aggregate đơn đã map xưởng — Cards/flow/stats đều
     // cần `factoryId` để classify. `match` (chưa gắn) dùng cho `unmapped`

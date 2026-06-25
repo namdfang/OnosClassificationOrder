@@ -253,11 +253,20 @@ export class UserService {
       throw new BadRequestException('Invalid role');
     }
 
-    // Fulfillment user phải gán factoryId — scope visibility.
-    if (role.name === RoleType.Fulfillment && !createUserDto.factoryId) {
-      throw new BadRequestException(
-        'User Fulfillment phải gán xưởng (factoryId) — chọn xưởng trong form.',
-      );
+    // Fulfillment user phải gán factoryId + fulfillmentStage — scope visibility
+    // + dispatch transition. Unique constraint `(factoryId, fulfillmentStage)`
+    // được enforce ở DB (partial unique index) — convert E11000 → 400.
+    if (role.name === RoleType.Fulfillment) {
+      if (!createUserDto.factoryId) {
+        throw new BadRequestException(
+          'User Fulfillment phải gán xưởng (factoryId) — chọn xưởng trong form.',
+        );
+      }
+      if (!createUserDto.fulfillmentStage) {
+        throw new BadRequestException(
+          'User Fulfillment phải gán stage (In/Ép/QC/May/Đóng gói) — chọn trong form.',
+        );
+      }
     }
 
     const newUserData = {
@@ -267,7 +276,17 @@ export class UserService {
       userCode: genCode(CODE_LENGTH),
     };
 
-    const newUser = await this.userRepository.create(newUserData);
+    let newUser;
+    try {
+      newUser = await this.userRepository.create(newUserData);
+    } catch (err) {
+      if (isDuplicateStageError(err)) {
+        throw new BadRequestException(
+          `Stage '${createUserDto.fulfillmentStage}' tại xưởng đã có user khác phụ trách — đổi stage hoặc xoá user cũ.`,
+        );
+      }
+      throw err;
+    }
 
     await this.userLogRepository.create({
       actorId: user._id,
@@ -513,13 +532,31 @@ export class UserService {
       finalRoleName = cur?.name;
     }
     const finalFactoryId = dto.factoryId !== undefined ? dto.factoryId : target.factoryId;
-    if (finalRoleName === RoleType.Fulfillment && !finalFactoryId) {
-      throw new BadRequestException(
-        'User Fulfillment phải gán xưởng (factoryId) — chọn xưởng trong form.',
-      );
+    const finalStage = dto.fulfillmentStage !== undefined ? dto.fulfillmentStage : target.fulfillmentStage;
+    if (finalRoleName === RoleType.Fulfillment) {
+      if (!finalFactoryId) {
+        throw new BadRequestException(
+          'User Fulfillment phải gán xưởng (factoryId) — chọn xưởng trong form.',
+        );
+      }
+      if (!finalStage) {
+        throw new BadRequestException(
+          'User Fulfillment phải gán stage (In/Ép/QC/May/Đóng gói) — chọn trong form.',
+        );
+      }
     }
 
-    const updated = await this.userRepository.findOneAndUpdate({ _id: targetId }, dto);
+    let updated;
+    try {
+      updated = await this.userRepository.findOneAndUpdate({ _id: targetId }, dto);
+    } catch (err) {
+      if (isDuplicateStageError(err)) {
+        throw new BadRequestException(
+          `Stage '${finalStage}' tại xưởng đã có user khác phụ trách — đổi stage hoặc xoá user cũ.`,
+        );
+      }
+      throw err;
+    }
     if (!updated) throw new NotFoundException('User not found');
 
     await this.userLogRepository.create({
@@ -568,4 +605,18 @@ export class UserService {
     await this.clearUserCache(targetId);
     return updated;
   }
+}
+
+/**
+ * MongoDB duplicate-key error E11000 từ partial unique index
+ * `unique_factory_fulfillment_stage`. Trả true nếu lỗi đến từ index này.
+ */
+function isDuplicateStageError(err: unknown): boolean {
+  if (!err || typeof err !== 'object') return false;
+  const e = err as { code?: number; keyPattern?: Record<string, unknown>; message?: string };
+  if (e.code !== 11000) return false;
+  if (e.keyPattern?.fulfillmentStage !== undefined && e.keyPattern?.factoryId !== undefined) {
+    return true;
+  }
+  return typeof e.message === 'string' && e.message.includes('unique_factory_fulfillment_stage');
 }

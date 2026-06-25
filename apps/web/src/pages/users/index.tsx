@@ -36,6 +36,7 @@ interface UserRow {
   status?: string;
   role?: Role;
   factoryId?: string;
+  fulfillmentStage?: string;
 }
 
 interface FormState {
@@ -47,6 +48,7 @@ interface FormState {
   password: string;
   roleId: string;
   factoryId: string;
+  fulfillmentStage: string;
 }
 
 interface FactoryRow {
@@ -63,7 +65,16 @@ const EMPTY_FORM: FormState = {
   password: '',
   roleId: '',
   factoryId: '',
+  fulfillmentStage: '',
 };
+
+const FULFILLMENT_STAGE_OPTIONS: { value: string; label: string }[] = [
+  { value: 'print', label: 'In' },
+  { value: 'press', label: 'Ép' },
+  { value: 'qc', label: 'QC' },
+  { value: 'sew', label: 'May' },
+  { value: 'pack', label: 'Đóng gói' },
+];
 
 export default function UsersPage() {
   const [items, setItems] = useState<UserRow[]>([]);
@@ -120,6 +131,7 @@ export default function UsersPage() {
       password: '',
       roleId: it.roleId || '',
       factoryId: it.factoryId || '',
+      fulfillmentStage: it.fulfillmentStage || '',
     });
 
   const handleSubmit = async () => {
@@ -135,6 +147,10 @@ export default function UsersPage() {
       toast.error('Role Fulfillment phải chọn xưởng');
       return;
     }
+    if (isFulfillmentRole && !form.fulfillmentStage) {
+      toast.error('Role Fulfillment phải chọn stage (In/Ép/QC/May/Đóng gói)');
+      return;
+    }
     try {
       setSaving(true);
       if (form.mode === 'create') {
@@ -145,6 +161,7 @@ export default function UsersPage() {
           roleId: form.roleId,
           otherPermissionIds: [],
           factoryId: form.factoryId || undefined,
+          fulfillmentStage: form.fulfillmentStage || undefined,
         } as any);
         toast.success('Đã tạo user');
       } else if (form.id) {
@@ -153,6 +170,7 @@ export default function UsersPage() {
           email: form.email,
           roleId: form.roleId,
           factoryId: form.factoryId || undefined,
+          fulfillmentStage: form.fulfillmentStage || undefined,
         } as any);
         toast.success('Đã cập nhật');
       }
@@ -330,26 +348,47 @@ export default function UsersPage() {
               </select>
             </div>
             {isFulfillmentRole && (
-              <div className="space-y-2">
-                <Label>Xưởng *</Label>
-                <select
-                  value={form.factoryId}
-                  onChange={(e) => setForm({ ...form, factoryId: e.target.value })}
-                  className="w-full h-9 rounded-md border border-input bg-background px-3 text-sm"
-                >
-                  <option value="">— Chọn xưởng —</option>
-                  {factories.map((f) => (
-                    <option key={f._id} value={f._id}>
-                      {f.name}
-                      {f.shortName ? ` (${f.shortName})` : ''}
-                    </option>
-                  ))}
-                </select>
-                <p className="text-[11px] text-muted-foreground">
-                  User Fulfillment chỉ xem được đơn ở xưởng này (hoặc đơn đã transfer từ
-                  xưởng này đi).
-                </p>
-              </div>
+              <>
+                <div className="space-y-2">
+                  <Label>Xưởng *</Label>
+                  <select
+                    value={form.factoryId}
+                    onChange={(e) => setForm({ ...form, factoryId: e.target.value })}
+                    className="w-full h-9 rounded-md border border-input bg-background px-3 text-sm"
+                  >
+                    <option value="">— Chọn xưởng —</option>
+                    {factories.map((f) => (
+                      <option key={f._id} value={f._id}>
+                        {f.name}
+                        {f.shortName ? ` (${f.shortName})` : ''}
+                      </option>
+                    ))}
+                  </select>
+                  <p className="text-[11px] text-muted-foreground">
+                    User Fulfillment chỉ xem được đơn ở xưởng này (hoặc đơn đã transfer từ
+                    xưởng này đi).
+                  </p>
+                </div>
+                <div className="space-y-2">
+                  <Label>Stage Fulfillment *</Label>
+                  <select
+                    value={form.fulfillmentStage}
+                    onChange={(e) => setForm({ ...form, fulfillmentStage: e.target.value })}
+                    className="w-full h-9 rounded-md border border-input bg-background px-3 text-sm"
+                  >
+                    <option value="">— Chọn stage —</option>
+                    {FULFILLMENT_STAGE_OPTIONS.map((s) => (
+                      <option key={s.value} value={s.value}>
+                        {s.label}
+                      </option>
+                    ))}
+                  </select>
+                  <p className="text-[11px] text-muted-foreground">
+                    Mỗi (xưởng, stage) chỉ được 1 user. Đơn đến stage này tự nhảy vào
+                    "Task của tôi" của user.
+                  </p>
+                </div>
+              </>
             )}
           </div>
           <DialogFooter>

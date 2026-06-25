@@ -13,3 +13,4 @@ export * from './tracking';
 export * from './permission-type';
 export * from './workshop-config-category';
 export * from './designer-status';
+export * from './fulfillment-stage';

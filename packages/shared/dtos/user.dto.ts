@@ -16,7 +16,7 @@ import {
   PHONE_MAX_LENGTH,
   // PHONE_MIN_LENGTH,
 } from '@shared/constants';
-import { Gender, Status } from '@shared/enums';
+import { FulfillmentStage, Gender, Status } from '@shared/enums';
 import { getObjectValues } from '..';
 
 const TelegramConfigZod = z.object({
@@ -70,6 +70,13 @@ export const UserZod = BaseEntityZod.extend({
    * thấy đơn ở factory này (current factoryId hoặc originalFactoryId).
    */
   factoryId: IDZod.optional(),
+  /**
+   * Required khi role=Fulfillment — 1 trong 5 stage (print/press/qc/sew/pack).
+   * BE enforce unique constraint `(factoryId, fulfillmentStage)` — chỉ 1 user
+   * Fulfillment per (xưởng, stage). User Fulfillment chỉ thấy đơn đang ở
+   * `currentFulfillmentStage = fulfillmentStage` của mình.
+   */
+  fulfillmentStage: z.nativeEnum(FulfillmentStage).optional(),
 });
 export type User = z.infer<typeof UserZod>;
 
@@ -105,6 +112,7 @@ export const UpdateUserZod = z.object({
   telegramChatId: UserZod.shape.telegramChatId,
   hireDate: UserZod.shape.hireDate,
   factoryId: UserZod.shape.factoryId,
+  fulfillmentStage: UserZod.shape.fulfillmentStage,
 });
 export class UpdateUserDto extends createZodDto(extendApi(UpdateUserZod)) {}
 export const UpdateUserResZod = ResZod.extend({
@@ -135,6 +143,7 @@ export const CreateUserZod = z.object({
   telegramChatId: UserZod.shape.telegramChatId,
   hireDate: UserZod.shape.hireDate,
   factoryId: UserZod.shape.factoryId,
+  fulfillmentStage: UserZod.shape.fulfillmentStage,
 });
 export type CreateUser = z.infer<typeof CreateUserZod>;
 export class CreateUserDto extends createZodDto(extendApi(CreateUserZod)) {}

@@ -42,6 +42,9 @@ export const PERMISSION_CATALOG: PermissionItem[] = [
   { code: 'page.designer_team',   label: 'Quản lý team designer (leader)', group: 'page' },
   { code: 'page.my_tasks',        label: 'Task của tôi (designer)',      group: 'page' },
   { code: 'page.designer_stats',  label: 'Stats designer (leader)',      group: 'page' },
+  { code: 'page.fulfillment_my_tasks', label: 'Task của tôi (fulfillment worker)', group: 'page' },
+  { code: 'page.fulfillment_team',     label: 'Quản lý team fulfillment',          group: 'page' },
+  { code: 'page.fulfillment_stats',    label: 'Stats fulfillment',                 group: 'page' },
 
   // ─── Order actions ──────────────────────────────────────────────
   { code: 'order.import',              label: 'Import đơn hàng',           group: 'order' },
@@ -84,6 +87,11 @@ export const PERMISSION_CATALOG: PermissionItem[] = [
   { code: 'designer.task.assign',     label: 'Assign task cho sub-designer',            group: 'order' },
   { code: 'designer.task.transition', label: 'Transition trạng thái task của bản thân', group: 'order' },
   { code: 'designer.task.override',   label: 'Override transition (leader/admin)',      group: 'order' },
+
+  // ─── Fulfillment workflow ───────────────────────────────────────
+  { code: 'fulfillment.task.transition', label: 'Transition stage của task bản thân',     group: 'order' },
+  { code: 'fulfillment.task.override',   label: 'Override transition (manager/admin)',    group: 'order' },
+  { code: 'fulfillment.team.manage',     label: 'Quản lý worker (factory × stage)',       group: 'admin' },
 
   // ─── Workshop config ────────────────────────────────────────────
   { code: 'workshop.manage', label: 'Quản lý danh mục xưởng', group: 'workshop' },
@@ -175,6 +183,7 @@ export const DEFAULT_ROLE_PERMISSIONS: Partial<Record<RoleType, string[]>> = {
 
   [RoleType.Fulfillment]: [
     'page.dashboard', 'page.orders',
+    'page.fulfillment_my_tasks',
     'order.view_workshop_table',
     'order.field.printStatus.view',     'order.field.printStatus.edit',
     'order.field.printStatusNote.view', 'order.field.printStatusNote.edit',
@@ -187,6 +196,8 @@ export const DEFAULT_ROLE_PERMISSIONS: Partial<Record<RoleType, string[]>> = {
     'order.field.productionError.view',     'order.field.productionError.edit',
     'order.field.productionErrorNote.view', 'order.field.productionErrorNote.edit',
     'order.field.productionErrorSource.view', 'order.field.productionErrorSource.edit',
+    // 5-stage workflow transitions on own task.
+    'fulfillment.task.transition',
   ],
 };
 

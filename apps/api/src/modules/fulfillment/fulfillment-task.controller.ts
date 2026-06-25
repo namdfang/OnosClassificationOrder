@@ -1,0 +1,103 @@
+import { ZodValidationPipe } from '@anatine/zod-nestjs';
+import {
+  Body,
+  Controller,
+  Get,
+  HttpCode,
+  HttpStatus,
+  Inject,
+  Param,
+  Post,
+  Query,
+  UsePipes,
+} from '@nestjs/common';
+import { ApiOkResponse, ApiOperation, ApiTags } from '@nestjs/swagger';
+import { AuthUser } from 'core';
+import {
+  FulfillmentTransitionDto,
+  FulfillmentTransitionResDto,
+  GetFulfillmentMyTasksDto,
+  GetFulfillmentMyTasksResDto,
+  RoleType,
+} from 'shared';
+import { Logger } from 'winston';
+
+import { Auth, ClientIp, UserAgent } from '@/decorators';
+
+import { UserDocument } from '../user/user.entity';
+import { FulfillmentTaskService } from './fulfillment-task.service';
+
+const TRANSITION_ROLES: RoleType[] = [
+  RoleType.SuperAdmin,
+  RoleType.Admin,
+  RoleType.Manager,
+  RoleType.SupportManager,
+  RoleType.Fulfillment,
+];
+
+@Controller()
+@ApiTags('fulfillment')
+@UsePipes(ZodValidationPipe)
+export class FulfillmentTaskController {
+  constructor(
+    private readonly taskService: FulfillmentTaskService,
+    @Inject('winston') private readonly logger: Logger,
+  ) {}
+
+  @Post('orders/:id/fulfillment-transition')
+  @Auth(TRANSITION_ROLES)
+  @ApiOperation({
+    summary:
+      'Trigger fulfillment state-machine transition. Worker chỉ thao tác stage của mình; Manager/Admin override.',
+  })
+  @HttpCode(HttpStatus.OK)
+  @ApiOkResponse({ type: FulfillmentTransitionResDto })
+  async transition(
+    @Param('id') id: string,
+    @Body() dto: FulfillmentTransitionDto,
+    @AuthUser() user: UserDocument,
+    @ClientIp() ip: string,
+    @UserAgent() userAgent: string,
+  ): Promise<FulfillmentTransitionResDto> {
+    this.logger.info({
+      message: JSON.stringify({
+        method: 'POST',
+        url: `/orders/${id}/fulfillment-transition`,
+        userId: user._id,
+        stage: dto.stage,
+        action: dto.action,
+        target: dto.target,
+      }),
+    });
+    const data = await this.taskService.transition(id, user, dto, { user, ip, userAgent });
+    return { success: true, data } as unknown as FulfillmentTransitionResDto;
+  }
+
+  @Get('fulfillment/my-tasks')
+  @Auth(TRANSITION_ROLES)
+  @ApiOperation({ summary: 'My Tasks 4 tab cho worker (waiting/in-progress/rework/watching).' })
+  @HttpCode(HttpStatus.OK)
+  @ApiOkResponse({ type: GetFulfillmentMyTasksResDto })
+  async getMyTasks(
+    @Query() query: GetFulfillmentMyTasksDto,
+    @AuthUser() user: UserDocument,
+  ): Promise<GetFulfillmentMyTasksResDto> {
+    this.logger.info({
+      message: JSON.stringify({
+        method: 'GET',
+        url: '/fulfillment/my-tasks',
+        userId: user._id,
+        tab: query.tab,
+      }),
+    });
+    const result = await this.taskService.getMyTasks(user, query);
+    return {
+      success: true,
+      data: result.data,
+      total: result.total,
+      page: result.page,
+      size: result.size,
+      tabCounts: result.tabCounts,
+    } as unknown as GetFulfillmentMyTasksResDto;
+  }
+}

@@ -12,6 +12,7 @@ import { productConfig } from './productConfig';
 import { order } from './order';
 import { workshopConfig } from './workshopConfig';
 import { designer } from './designer';
+import { fulfillment } from './fulfillment';
 import { reports } from './reports';
 
 export const RepositoryRemote = {
@@ -29,5 +30,6 @@ export const RepositoryRemote = {
   order,
   workshopConfig,
   designer,
+  fulfillment,
   reports,
 };

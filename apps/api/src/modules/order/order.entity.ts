@@ -1,8 +1,15 @@
 import { Prop, raw, SchemaFactory } from '@nestjs/mongoose';
 import { DatabaseEntity, DatabaseEntityAbstract } from 'core';
 import type { HydratedDocument } from 'mongoose';
-import type { DesignFields } from 'shared';
-import { DESIGNER_STATUSES, DesignerStatus } from 'shared';
+import type { DesignFields, FulfillmentStages, FulfillmentTimelineEntry } from 'shared';
+import {
+  DESIGNER_STATUSES,
+  DesignerStatus,
+  FULFILLMENT_STAGE_STATUSES,
+  FULFILLMENT_STAGES,
+  FulfillmentStage,
+  FulfillmentStageStatus,
+} from 'shared';
 
 import type { FactoryDocument } from '../factory/factory.entity';
 import type { MachineTypeDocument } from '../machine-type/machine-type.entity';
@@ -161,7 +168,12 @@ export class OrderEntity extends DatabaseEntityAbstract {
   @Prop()
   orderAt?: Date;
 
-  @Prop()
+  /**
+   * Thời gian đơn vào sản xuất theo sheet import. Đây là **sort key chính**
+   * cho list/grouped/kanban/My Tasks (thay cho Mongo `createdAt`) → cần index
+   * để tránh full collection scan khi dataset > 100k.
+   */
+  @Prop({ index: true })
   inProductionAt?: Date;
 
   @Prop({ default: false, index: true })
@@ -292,6 +304,70 @@ export class OrderEntity extends DatabaseEntityAbstract {
   /** Cumulative work time (ms) — $inc khi complete. */
   @Prop({ required: true, default: 0 })
   designerWorkMs: number;
+
+  // ─── Fulfillment 5-stage workflow ───────────────────────────────
+  /**
+   * Stage hiện tại của đơn. null = chưa vào fulfillment HOẶC đã pack done.
+   * Filter chính cho `getOrders` của user Fulfillment (cùng với `factoryId`).
+   * Auto set = `print` khi `designerStatus` chuyển sang `done` (hook trong
+   * setDesignerStatus complete).
+   */
+  @Prop({ type: String, enum: FULFILLMENT_STAGES, index: true })
+  currentFulfillmentStage?: FulfillmentStage;
+
+  /** Set khi stage `pack.complete`. Đơn coi như xong toàn bộ flow fulfillment. */
+  @Prop({ index: true })
+  fulfillmentCompletedAt?: Date;
+
+  /**
+   * Per-stage state. Lazy init: stage chỉ có entry khi đã được kích hoạt lần
+   * đầu (đơn tới stage đó). Khi rework-back vẫn giữ entry, cộng dồn workMs.
+   */
+  @Prop({
+    _id: false,
+    type: raw({
+      print: { type: Object },
+      press: { type: Object },
+      qc: { type: Object },
+      sew: { type: Object },
+      pack: { type: Object },
+    }),
+  })
+  fulfillmentStages?: FulfillmentStages;
+
+  /**
+   * Append-only timeline ghi nhận mọi transition (start/complete/rework-back)
+   * để FE render lịch sử di chuyển. Push trong cùng update với state change.
+   */
+  @Prop({
+    type: [
+      raw({
+        stage: { type: String, enum: FULFILLMENT_STAGES },
+        action: String,
+        fromStatus: { type: String, enum: FULFILLMENT_STAGE_STATUSES },
+        toStatus: { type: String, enum: FULFILLMENT_STAGE_STATUSES },
+        byUserId: String,
+        byUserName: String,
+        at: Date,
+        reworkTarget: String,
+        reason: String,
+      }),
+    ],
+    default: [],
+  })
+  fulfillmentTimeline: FulfillmentTimelineEntry[];
+}
+
+/**
+ * Helper builder cho tạo state object lúc init stage. Dùng ở
+ * FulfillmentTaskService — nhưng định nghĩa ở entity để giữ shape thống nhất.
+ */
+export function makeEmptyStageState(): FulfillmentStages[keyof FulfillmentStages] {
+  return {
+    status: FulfillmentStageStatus.Waiting,
+    reworkCount: 0,
+    workMs: 0,
+  };
 }
 
 export const OrderSchema = SchemaFactory.createForClass(OrderEntity);
