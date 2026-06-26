@@ -3,7 +3,7 @@ export const CODE_LENGTH = 8;
 
 export const NORMAL_TEXT_MAX_LENGTH = 255;
 
-export const PASSWORD_MIN_LENGTH = 12;
+export const PASSWORD_MIN_LENGTH = 8;
 export const PASSWORD_MAX_LENGTH = 64;
 
 export const NAME_MIN_LENGTH = 2;

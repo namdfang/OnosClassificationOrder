@@ -10,6 +10,7 @@ import { ColorBadgeSelectCell } from '@/components/orders/cells/ColorBadgeSelect
 import { DesignThumbsCell } from '@/components/orders/cells/DesignThumbsCell';
 import { ErrorSourceCell } from '@/components/orders/cells/ErrorSourceCell';
 import { IconSelectCell } from '@/components/orders/cells/IconSelectCell';
+import { MultiIconSelectCell } from '@/components/orders/cells/MultiIconSelectCell';
 import { ImageThumbCell } from '@/components/orders/cells/ImageThumbCell';
 import { ProductionErrorSelectCell } from '@/components/orders/cells/ProductionErrorSelectCell';
 import { TextEditCell } from '@/components/orders/cells/TextEditCell';
@@ -42,7 +43,8 @@ export type WorkshopOrderRow = {
   printStatusNote?: string;
   toolResult?: string;
   toolResultNote?: string;
-  errorFile?: string;
+  /** Multi-select array of workshop_config codes (category=error_file_type). */
+  errorFile?: string[];
   errorFileNote?: string;
   assignee?: string;
   assigneeNote?: string;
@@ -335,14 +337,15 @@ export const WORKSHOP_COLS: WorkshopColMeta[] = [
     key: 'errorFile',
     label: 'File sửa lỗi',
     perm: 'order.field.errorFile.view',
-    width: 'min-w-[140px]',
+    width: 'min-w-[160px]',
     render: (r, ctx) => (
-      <IconSelectCell
+      <MultiIconSelectCell
         orderId={r._id}
         field="errorFile"
         category={WorkshopConfigCategory.ErrorFileType}
         value={r.errorFile}
         canEdit={ctx.canEditField('errorFile')}
+        maxVisible={2}
         onUpdated={(v) => ctx.patchRow(r._id, { errorFile: v ?? undefined })}
       />
     ),

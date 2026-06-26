@@ -28,7 +28,7 @@ export interface ExportableOrder {
   printStatusNote?: string;
   toolResult?: string;
   toolResultNote?: string;
-  errorFile?: string;
+  errorFile?: string[];
   errorFileNote?: string;
   assignee?: string;
   assigneeNote?: string;
@@ -85,6 +85,9 @@ function formatDate(iso?: string): string {
 function buildDetailRow(o: ExportableOrder, ctx: ExportContext): (string | number)[] {
   const resolveName = (cat: WorkshopConfigCategory, code?: string) =>
     code ? ctx.resolve(cat, code)?.name || code : '';
+  /** Multi-code field (vd errorFile array) → join name bằng dấu phẩy. */
+  const resolveNames = (cat: WorkshopConfigCategory, codes?: string[]) =>
+    codes && codes.length > 0 ? codes.map((c) => resolveName(cat, c)).join(', ') : '';
 
   // Workshop_config category codes (string literal) — keep in sync with the
   // shared enum. Using literals avoids the additional import.
@@ -105,7 +108,7 @@ function buildDetailRow(o: ExportableOrder, ctx: ExportContext): (string | numbe
     resolveName(PRINT_STATUS_NOTE, o.printStatusNote),
     resolveName(TOOL_RESULT, o.toolResult),
     resolveName(TOOL_RESULT_NOTE, o.toolResultNote),
-    resolveName(ERROR_FILE, o.errorFile),
+    resolveNames(ERROR_FILE, o.errorFile),
     o.errorFileNote || '',
     o.color || '',
     resolveName(ASSIGNEE, o.assignee),

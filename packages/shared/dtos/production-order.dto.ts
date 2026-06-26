@@ -155,7 +155,12 @@ export const ProductionOrderZod = BaseEntityZod.extend({
   printStatusNote: z.string().optional(),
   toolResult: z.string().optional(),
   toolResultNote: z.string().optional(),
-  errorFile: z.string().optional(),
+  /**
+   * Multi-select workshop_config codes (category=error_file_type). Lưu dạng
+   * array — 1 đơn có thể có nhiều lỗi cần sửa. Legacy data dạng string được
+   * auto-migrate (xem `OrderModule.onModuleInit`).
+   */
+  errorFile: z.array(z.string()).optional(),
   errorFileNote: z.string().optional(),
   /** = user._id của sub-designer được gán. Set qua bulk-assign-designer
    *  hoặc field update assignee. Designer-Task-Workflow Phase 6 đổi từ
@@ -524,11 +529,17 @@ export class GetOrderDashboardResDto extends createZodDto(extendApi(GetOrderDash
 //
 // Phase 2 — Inline / Bulk update workshop field
 //
+/**
+ * `value` accept:
+ *  - `string`         — select code đơn (vd printStatus, toolResult) hoặc
+ *                       free-text errorFileNote.
+ *  - `string[]`       — multi-select field (hiện chỉ `errorFile`). BE tự
+ *                       validate từng item.
+ *  - `null` / empty   — clear value.
+ */
 export const UpdateOrderFieldZod = z.object({
   field: OrderWorkshopFieldZod,
-  // string for select fields (code) or for the lone free-text errorFileNote.
-  // Passing null/empty string clears the value.
-  value: z.string().nullable(),
+  value: z.union([z.string(), z.array(z.string())]).nullable(),
 });
 export class UpdateOrderFieldDto extends createZodDto(extendApi(UpdateOrderFieldZod)) {}
 
@@ -538,7 +549,7 @@ export class UpdateOrderFieldResDto extends createZodDto(extendApi(UpdateOrderFi
 export const BulkUpdateOrderFieldZod = z.object({
   ids: IDZod.array().min(1),
   field: OrderWorkshopFieldZod,
-  value: z.string().nullable(),
+  value: z.union([z.string(), z.array(z.string())]).nullable(),
 });
 export class BulkUpdateOrderFieldDto extends createZodDto(extendApi(BulkUpdateOrderFieldZod)) {}
 

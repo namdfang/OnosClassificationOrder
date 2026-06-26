@@ -212,8 +212,15 @@ export class OrderEntity extends DatabaseEntityAbstract {
   @Prop({ index: true })
   toolResultNote?: string;
 
-  @Prop()
-  errorFile?: string;
+  /**
+   * Multi-select array of workshop_config codes (category=error_file_type).
+   * Legacy data có thể vẫn là string đơn — `OrderModule.onModuleInit` chạy
+   * migration 1 lần convert sang array. Query filter dùng `$in: codes` vẫn
+   * hoạt động với array (Mongo $in match nếu 1 phần tử array khớp). Aggregation
+   * breakdown cần `$unwind` trước `$group`.
+   */
+  @Prop({ type: [String], default: undefined, index: true })
+  errorFile?: string[];
 
   @Prop()
   errorFileNote?: string;

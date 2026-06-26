@@ -1,5 +1,5 @@
 import React, { useEffect, useMemo, useState } from 'react';
-import { Pencil, Plus, RefreshCw, Trash2, Users as UsersIcon } from 'lucide-react';
+import { Eye, EyeOff, Pencil, Plus, RefreshCw, Trash2, Users as UsersIcon } from 'lucide-react';
 import { toast } from 'sonner';
 import type { Role } from 'shared';
 import { Status } from 'shared';
@@ -84,6 +84,7 @@ export default function UsersPage() {
   const [form, setForm] = useState<FormState>(EMPTY_FORM);
   const [saving, setSaving] = useState(false);
   const [confirmDelete, setConfirmDelete] = useState<UserRow | null>(null);
+  const [showPassword, setShowPassword] = useState(false);
 
   const roleMap = useMemo(() => Object.fromEntries(roles.map((r) => [r._id, r])), [roles]);
   const factoryMap = useMemo(
@@ -118,10 +119,13 @@ export default function UsersPage() {
     fetchAll();
   }, []);
 
-  const openCreate = () =>
+  const openCreate = () => {
+    setShowPassword(false);
     setForm({ ...EMPTY_FORM, open: true, mode: 'create', roleId: roles[0]?._id || '' });
+  };
 
-  const openEdit = (it: UserRow) =>
+  const openEdit = (it: UserRow) => {
+    setShowPassword(false);
     setForm({
       open: true,
       mode: 'edit',
@@ -133,6 +137,7 @@ export default function UsersPage() {
       factoryId: it.factoryId || '',
       fulfillmentStage: it.fulfillmentStage || '',
     });
+  };
 
   const handleSubmit = async () => {
     if (!form.fullName.trim() || !form.email.trim() || !form.roleId) {
@@ -141,6 +146,12 @@ export default function UsersPage() {
     }
     if (form.mode === 'create' && form.password.length < 8) {
       toast.error('Mật khẩu phải có ít nhất 8 ký tự');
+      return;
+    }
+    // Edit mode: password optional. Nếu nhập → validate min 8 ký tự, sau khi
+    // update user thành công sẽ gọi /reset-password riêng.
+    if (form.mode === 'edit' && form.password && form.password.length < 8) {
+      toast.error('Mật khẩu mới phải có ít nhất 8 ký tự — hoặc bỏ trống để giữ nguyên');
       return;
     }
     if (isFulfillmentRole && !form.factoryId) {
@@ -172,7 +183,13 @@ export default function UsersPage() {
           factoryId: form.factoryId || undefined,
           fulfillmentStage: form.fulfillmentStage || undefined,
         } as any);
-        toast.success('Đã cập nhật');
+        // Optional reset password — chỉ gọi khi user nhập password mới.
+        if (form.password) {
+          await RepositoryRemote.users.resetPassword({ password: form.password }, form.id);
+          toast.success('Đã cập nhật + đổi mật khẩu');
+        } else {
+          toast.success('Đã cập nhật');
+        }
       }
       setForm(EMPTY_FORM);
       fetchAll();
@@ -315,17 +332,37 @@ export default function UsersPage() {
                 type="email"
               />
             </div>
-            {form.mode === 'create' && (
-              <div className="space-y-2">
-                <Label>Mật khẩu</Label>
+            <div className="space-y-2">
+              <Label>
+                {form.mode === 'create' ? 'Mật khẩu' : 'Đặt lại mật khẩu (tuỳ chọn)'}
+              </Label>
+              <div className="relative">
                 <Input
                   value={form.password}
                   onChange={(e) => setForm({ ...form, password: e.target.value })}
-                  type="password"
-                  placeholder="Tối thiểu 8 ký tự"
+                  type={showPassword ? 'text' : 'password'}
+                  placeholder={
+                    form.mode === 'create' ? 'Tối thiểu 8 ký tự' : 'Bỏ trống nếu không đổi'
+                  }
+                  className="pr-9"
+                  autoComplete={form.mode === 'create' ? 'new-password' : 'off'}
                 />
+                <button
+                  type="button"
+                  tabIndex={-1}
+                  onClick={() => setShowPassword((s) => !s)}
+                  aria-label={showPassword ? 'Ẩn mật khẩu' : 'Hiện mật khẩu'}
+                  className="absolute right-2 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground transition-colors"
+                >
+                  {showPassword ? <EyeOff size={16} /> : <Eye size={16} />}
+                </button>
               </div>
-            )}
+              {form.mode === 'edit' && form.password && (
+                <p className="text-[11px] text-amber-600">
+                  Sẽ ghi đè mật khẩu hiện tại. Tối thiểu 8 ký tự.
+                </p>
+              )}
+            </div>
             <div className="space-y-2">
               <Label>Role</Label>
               <select

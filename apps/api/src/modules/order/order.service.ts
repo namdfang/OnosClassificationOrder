@@ -10,7 +10,7 @@ import {
 } from '@nestjs/common';
 import { InjectModel } from '@nestjs/mongoose';
 import { Queue } from 'bullmq';
-import { Model } from 'mongoose';
+import { Model, PipelineStage } from 'mongoose';
 import type {
   BulkAssignDesignerDto,
   BulkAssignDesignerPreviewDto,
@@ -134,6 +134,39 @@ const FIELD_EDIT_ROLES: Record<OrderWorkshopField, RoleType[]> = {
 };
 
 const READY_FOR_FULFILL_CODE = 'ok';
+
+/** Field workshop có schema array thay vì string đơn. */
+const MULTI_VALUE_FIELDS: OrderWorkshopField[] = ['errorFile'];
+
+/**
+ * Normalize giá trị PATCH cho field workshop trước khi $set vào DB.
+ *
+ * - Multi-value fields (`errorFile`): coerce về `string[]` hoặc null. String
+ *   đơn → wrap thành 1-element array (back-compat client cũ). Array rỗng / null
+ *   / chuỗi rỗng → null (clear).
+ * - Single-value fields: array vào → lấy phần tử đầu hoặc null. String rỗng →
+ *   null. Khác giữ nguyên.
+ */
+function normalizeFieldValue(
+  field: OrderWorkshopField,
+  value: string | string[] | null | undefined,
+): string | string[] | null {
+  if (MULTI_VALUE_FIELDS.includes(field)) {
+    if (value == null) return null;
+    const arr = Array.isArray(value) ? value : [value];
+    // Defensive flatten + filter: phòng client gửi nested array (vd
+    // `[['vien-co']]`) hoặc element non-string. Mặc dù Zod schema đã chặn,
+    // vẫn giữ guard để service không bao giờ ghi shape rác xuống DB.
+    const cleaned = (arr as unknown[])
+      .flat(2) // 2 levels là đủ cho mọi trường hợp realistic
+      .filter((s): s is string => typeof s === 'string' && s.trim().length > 0)
+      .map((s) => s.trim());
+    return cleaned.length > 0 ? cleaned : null;
+  }
+  if (Array.isArray(value)) return value[0]?.trim() || null;
+  if (value === '' || value == null) return null;
+  return value;
+}
 
 /**
  * Mã printStatus đại diện cho đơn đã in xong qua máy đó. Workshop set
@@ -270,6 +303,19 @@ export class OrderService implements OnModuleInit {
         `[order-backfill] productionFirstErrorAt set on ${firstErrorRes.modifiedCount} legacy error rows`,
       );
     }
+
+    // Migrate `errorFile` từ string đơn → array. Idempotent: chỉ chạy với row
+    // có $type='string'. Sau migrate: errorFile luôn là array (hoặc null).
+    const errorFileMigrateRes = await this.orderModel.updateMany(
+      { errorFile: { $type: 'string' } },
+      [{ $set: { errorFile: ['$errorFile'] } }],
+    );
+    if (errorFileMigrateRes.modifiedCount > 0) {
+      // eslint-disable-next-line no-console
+      console.log(
+        `[order-backfill] errorFile migrated to array on ${errorFileMigrateRes.modifiedCount} legacy rows`,
+      );
+    }
   }
 
   /**
@@ -364,13 +410,27 @@ export class OrderService implements OnModuleInit {
     );
   }
 
-  private async assertValueAllowed(field: OrderWorkshopField, value: string | null): Promise<void> {
+  private async assertValueAllowed(
+    field: OrderWorkshopField,
+    value: string | string[] | null,
+  ): Promise<void> {
     if (value === null || value === '') return;
     const category = FIELD_CONFIG_CATEGORY[field];
     if (!category) return; // free text field, no validation
-    const found = await this.workshopConfigRepository.findOne({ category, code: value, isActive: true });
-    if (!found) {
-      throw new BadRequestException(`Invalid value "${value}" for field "${field}"`);
+    const codes = Array.isArray(value) ? value.filter(Boolean) : [value];
+    if (codes.length === 0) return;
+    // Một query lấy tất cả codes hợp lệ → compare set để báo code thiếu.
+    const found = await this.workshopConfigRepository.findAll({
+      category,
+      code: { $in: codes },
+      isActive: true,
+    });
+    const foundCodes = new Set(found.map((f) => f.code));
+    const missing = codes.filter((c) => !foundCodes.has(c));
+    if (missing.length > 0) {
+      throw new BadRequestException(
+        `Invalid value(s) "${missing.join(', ')}" for field "${field}"`,
+      );
     }
   }
 
@@ -1078,6 +1138,18 @@ export class OrderService implements OnModuleInit {
       { $project: { _id: 0, code: '$_id', count: 1 } },
       { $sort: { count: -1 as const } },
     ];
+    /**
+     * Group by 1 array field (vd `errorFile: ['vien-co','lech-mau']`).
+     * `$unwind` mỗi đơn ra N rows (1 per code), rồi $group đếm — kết quả mỗi
+     * code có count = số đơn có code đó trong array. preserveNullAndEmptyArrays
+     * để legacy đơn null/missing vẫn vào nhóm `null` bucket.
+     */
+    const groupByArrayField = (field: string) => [
+      { $unwind: { path: `$${field}`, preserveNullAndEmptyArrays: true } },
+      { $group: { _id: `$${field}`, count: { $sum: 1 } } },
+      { $project: { _id: 0, code: '$_id', count: 1 } },
+      { $sort: { count: -1 as const } },
+    ];
 
     const [agg] = await this.orderModel.aggregate([
       { $match: baseMatch },
@@ -1096,7 +1168,8 @@ export class OrderService implements OnModuleInit {
               $match: {
                 $or: [
                   { toolResultNote: 'error' },
-                  { errorFile: { $ne: null, $exists: true } },
+                  // errorFile array: tồn tại + có ít nhất 1 phần tử (không rỗng).
+                  { errorFile: { $exists: true, $ne: null, $not: { $size: 0 } } },
                   { productionError: { $exists: true, $nin: [null, ''] } },
                 ],
               },
@@ -1107,7 +1180,7 @@ export class OrderService implements OnModuleInit {
           printStatusNote: groupByField('printStatusNote'),
           toolResult: groupByField('toolResult'),
           toolResultNote: groupByField('toolResultNote'),
-          errorFile: groupByField('errorFile'),
+          errorFile: groupByArrayField('errorFile'),
           productionError: groupByField('productionError'),
           assignee: groupByField('assignee'),
           assigneeNote: groupByField('assigneeNote'),
@@ -1914,6 +1987,9 @@ export class OrderService implements OnModuleInit {
     ];
 
     type OptionRow = { _id: string; count: number };
+    // Field array (errorFile) cần $unwind trước $group để mỗi code thành 1 row
+    // (đếm theo số đơn có code đó trong array, không phải đếm chuỗi).
+    const ARRAY_FACET_FIELDS = new Set<FacetKey>(['errorFile']);
     const aggregateFacet = async (excludeKey: FacetKey, field: FacetKey) => {
       const sanitizedDto = { ...dto, [excludeKey]: undefined } as GetProductionOrdersDto;
       const baseFilter = this.buildOrderListFilter(sanitizedDto, roleName, assigneeCode);
@@ -1921,11 +1997,13 @@ export class OrderService implements OnModuleInit {
         ...baseFilter,
         [field]: { $exists: true, $ne: null, $nin: [''] },
       };
-      return this.orderModel.aggregate<OptionRow>([
-        { $match: facetMatch },
-        { $group: { _id: `$${field}`, count: { $sum: 1 } } },
-        { $sort: { count: -1 } },
-      ]);
+      const pipeline: PipelineStage[] = [{ $match: facetMatch }];
+      if (ARRAY_FACET_FIELDS.has(field)) {
+        pipeline.push({ $unwind: { path: `$${field}`, preserveNullAndEmptyArrays: false } });
+      }
+      pipeline.push({ $group: { _id: `$${field}`, count: { $sum: 1 } } });
+      pipeline.push({ $sort: { count: -1 } });
+      return this.orderModel.aggregate<OptionRow>(pipeline);
     };
 
     const [
@@ -2149,7 +2227,9 @@ export class OrderService implements OnModuleInit {
   ): Promise<UpdateOrderFieldResDto> {
     this.assertCanEditField(dto.field, roleName, permissionCodes);
     if (dto.field === 'assignee') {
-      await this.assertAssigneeUserValid(dto.value);
+      // assignee là single-select — array bất hợp lệ.
+      const v = Array.isArray(dto.value) ? dto.value[0] ?? null : dto.value;
+      await this.assertAssigneeUserValid(v ?? null);
     } else {
       await this.assertValueAllowed(dto.field, dto.value);
     }
@@ -2157,7 +2237,7 @@ export class OrderService implements OnModuleInit {
     const before = await this.orderRepository.findOneById(id);
     if (!before) throw new NotFoundException('Order not found');
 
-    const normalized = dto.value === '' ? null : dto.value;
+    const normalized = normalizeFieldValue(dto.field, dto.value);
     const patch: Record<string, unknown> = { [dto.field]: normalized };
 
     if (dto.field === 'toolResultNote') {
@@ -2308,12 +2388,13 @@ export class OrderService implements OnModuleInit {
   ): Promise<BulkUpdateOrderFieldResDto> {
     this.assertCanEditField(dto.field, roleName, permissionCodes);
     if (dto.field === 'assignee') {
-      await this.assertAssigneeUserValid(dto.value);
+      const v = Array.isArray(dto.value) ? dto.value[0] ?? null : dto.value;
+      await this.assertAssigneeUserValid(v ?? null);
     } else {
       await this.assertValueAllowed(dto.field, dto.value);
     }
 
-    const normalized = dto.value === '' ? null : dto.value;
+    const normalized = normalizeFieldValue(dto.field, dto.value);
     const patch: Record<string, unknown> = { [dto.field]: normalized };
     if (dto.field === 'toolResultNote') {
       patch.readyForFulfill = normalized === READY_FOR_FULFILL_CODE;
@@ -2754,11 +2835,13 @@ export class OrderService implements OnModuleInit {
         else warnings.push(`Note_kq_Tool="${row.toolResultNote}" không match workshop_config`);
       }
 
-      // 2. errorFile
+      // 2. errorFile — sheet hiện chỉ có 1 giá trị/cell, wrap thành array để
+      // khớp schema mới (multi-select). Future: nếu sheet cho phép multi thì
+      // split CSV ở đây.
       if (row.errorFile?.trim()) {
         const key = normalizeVN(row.errorFile);
         const code = errorFileMap.get(key);
-        if (code) $set.errorFile = code;
+        if (code) $set.errorFile = [code];
         else warnings.push(`File_sua_loi="${row.errorFile}" không match workshop_config`);
       }
 
