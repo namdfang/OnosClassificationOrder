@@ -264,8 +264,21 @@ export function OrderTableWorkshop() {
     createdTo,
   ]);
 
+  /**
+   * Optimistic update sau khi cell PATCH thành công. Phải đồng bộ CẢ 2 state:
+   *   - `items` (flat list, dùng cho select-all + visibleOrderedIds + poll)
+   *   - `groups` (grouped-by-type, RENDER chính của table — body map từ
+   *     `groups[].orders`). Nếu chỉ update `items` thì UI không đổi cho đến
+   *     khi user F5 (fetchData ghi đè `groups`).
+   */
   const patchRow = (id: string, patch: Partial<OrderRow>) => {
     setItems((prev) => prev.map((r) => (r._id === id ? { ...r, ...patch } : r)));
+    setGroups((prev) =>
+      prev.map((g) => ({
+        ...g,
+        orders: g.orders.map((r) => (r._id === id ? { ...r, ...patch } : r)),
+      })),
+    );
   };
 
   usePendingDesignsPoll(items, patchRow);

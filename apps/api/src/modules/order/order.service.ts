@@ -335,11 +335,33 @@ export class OrderService implements OnModuleInit {
     return filter;
   }
 
-  private assertCanEditField(field: OrderWorkshopField, roleName?: RoleType): void {
+  /**
+   * Gate edit cho 1 field workshop. Logic (theo thứ tự ưu tiên):
+   *   1. SuperAdmin / Admin → bypass (legacy + safety net khi role chưa re-seed
+   *      permissionCodes).
+   *   2. Nếu user có code `order.field.<field>.edit` trong `permissionCodes`
+   *      → cho phép. **Đây là source of truth** — match với FE `usePermission`
+   *      và UI permission catalog. Admin enable code trên role qua UI thì
+   *      role đó edit được luôn (vd. Support enable edit toolResultNote).
+   *   3. Fallback: hard-coded `FIELD_EDIT_ROLES` map (giữ để khỏi vỡ role chưa
+   *      có permissionCodes — sẽ remove khi mọi role đã seed đủ codes).
+   */
+  private assertCanEditField(
+    field: OrderWorkshopField,
+    roleName?: RoleType,
+    permissionCodes?: string[],
+  ): void {
+    if (roleName === RoleType.SuperAdmin || roleName === RoleType.Admin) return;
+
+    const requiredCode = `order.field.${field}.edit`;
+    if (permissionCodes && permissionCodes.includes(requiredCode)) return;
+
     const allowed = FIELD_EDIT_ROLES[field];
-    if (!roleName || !allowed.includes(roleName)) {
-      throw new ForbiddenException(`Role ${roleName ?? 'unknown'} cannot edit field "${field}"`);
-    }
+    if (roleName && allowed.includes(roleName)) return;
+
+    throw new ForbiddenException(
+      `Role '${roleName ?? 'unknown'}' không có quyền edit field "${field}" — cần permission '${requiredCode}'.`,
+    );
   }
 
   private async assertValueAllowed(field: OrderWorkshopField, value: string | null): Promise<void> {
@@ -2123,8 +2145,9 @@ export class OrderService implements OnModuleInit {
     dto: UpdateOrderFieldDto,
     roleName?: RoleType,
     ctx?: AuditContext,
+    permissionCodes?: string[],
   ): Promise<UpdateOrderFieldResDto> {
-    this.assertCanEditField(dto.field, roleName);
+    this.assertCanEditField(dto.field, roleName, permissionCodes);
     if (dto.field === 'assignee') {
       await this.assertAssigneeUserValid(dto.value);
     } else {
@@ -2281,8 +2304,9 @@ export class OrderService implements OnModuleInit {
     dto: BulkUpdateOrderFieldDto,
     roleName?: RoleType,
     ctx?: AuditContext,
+    permissionCodes?: string[],
   ): Promise<BulkUpdateOrderFieldResDto> {
-    this.assertCanEditField(dto.field, roleName);
+    this.assertCanEditField(dto.field, roleName, permissionCodes);
     if (dto.field === 'assignee') {
       await this.assertAssigneeUserValid(dto.value);
     } else {
@@ -2949,8 +2973,9 @@ export class OrderService implements OnModuleInit {
     dto: BulkAssignDesignerDto,
     roleName?: RoleType,
     ctx?: AuditContext,
+    permissionCodes?: string[],
   ): Promise<BulkAssignDesignerResDto> {
-    this.assertCanEditField('assignee', roleName);
+    this.assertCanEditField('assignee', roleName, permissionCodes);
     await this.assertAssigneeUserValid(dto.userId);
 
     const docs = await this.orderModel
@@ -3221,8 +3246,9 @@ export class OrderService implements OnModuleInit {
     dto: SetProductionErrorDto,
     roleName?: RoleType,
     ctx?: AuditContext,
+    permissionCodes?: string[],
   ): Promise<SetProductionErrorResDto> {
-    this.assertCanEditField('productionError', roleName);
+    this.assertCanEditField('productionError', roleName, permissionCodes);
     const before = await this.orderRepository.findOneById(id);
     if (!before) throw new NotFoundException('Order not found');
 

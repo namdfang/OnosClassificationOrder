@@ -64,6 +64,13 @@ const ORDER_WRITE_ROLES = [
   RoleType.Fulfillment,
 ];
 
+/**
+ * Role gate cho các endpoint edit field (route-level). Whitelist rộng — service
+ * sẽ check tiếp field-by-field qua `assertCanEditField()` (ưu tiên
+ * `role.permissionCodes`, fallback `FIELD_EDIT_ROLES` map). Tức là Support
+ * vào được endpoint nhưng chỉ edit được field nào có `order.field.<X>.edit`
+ * trong `role.permissionCodes` (Admin enable qua UI Roles).
+ */
 const ORDER_FIELD_EDIT_ROLES = [
   RoleType.SuperAdmin,
   RoleType.Admin,
@@ -71,6 +78,8 @@ const ORDER_FIELD_EDIT_ROLES = [
   RoleType.DesignerLeader,
   RoleType.Designer,
   RoleType.Fulfillment,
+  RoleType.Support,
+  RoleType.SupportManager,
 ];
 
 const ORDER_LOG_VIEW_ROLES = [
@@ -274,7 +283,12 @@ export class OrderController {
     @ClientIp() ip: string,
     @UserAgent() userAgent: string,
   ): Promise<BulkUpdateOrderFieldResDto> {
-    return this.orderService.bulkUpdateField(dto, user?.role?.name, { user, ip, userAgent });
+    return this.orderService.bulkUpdateField(
+      dto,
+      user?.role?.name,
+      { user, ip, userAgent },
+      user?.role?.permissionCodes,
+    );
   }
 
   @Get('designer-breakdown')
@@ -350,7 +364,12 @@ export class OrderController {
     @ClientIp() ip: string,
     @UserAgent() userAgent: string,
   ): Promise<BulkAssignDesignerResDto> {
-    return this.orderService.bulkAssignDesigner(dto, user?.role?.name, { user, ip, userAgent });
+    return this.orderService.bulkAssignDesigner(
+      dto,
+      user?.role?.name,
+      { user, ip, userAgent },
+      user?.role?.permissionCodes,
+    );
   }
 
   @Post(':id/set-production-error')
@@ -368,7 +387,13 @@ export class OrderController {
     @ClientIp() ip: string,
     @UserAgent() userAgent: string,
   ): Promise<SetProductionErrorResDto> {
-    return this.orderService.setProductionError(id, dto, user?.role?.name, { user, ip, userAgent });
+    return this.orderService.setProductionError(
+      id,
+      dto,
+      user?.role?.name,
+      { user, ip, userAgent },
+      user?.role?.permissionCodes,
+    );
   }
 
   @Patch(':id/field')
@@ -383,7 +408,13 @@ export class OrderController {
     @ClientIp() ip: string,
     @UserAgent() userAgent: string,
   ): Promise<UpdateOrderFieldResDto> {
-    return this.orderService.updateField(id, dto, user?.role?.name, { user, ip, userAgent });
+    return this.orderService.updateField(
+      id,
+      dto,
+      user?.role?.name,
+      { user, ip, userAgent },
+      user?.role?.permissionCodes,
+    );
   }
 
   @Get(':id/logs')
