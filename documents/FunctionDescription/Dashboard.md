@@ -407,10 +407,16 @@ Sort `{ type:1, size:1, fabricType:1, createdAt:-1 }` để file Excel xuất ra
 |--------|------|------|-------|
 | PATCH | `/v1/orders/:id/transfer` | `{ targetFactoryId, reason? }` | Đổi `factoryId` cho 1 order; nếu trùng target trả `modified: 0`. |
 | PATCH | `/v1/orders/bulk-transfer` | `{ ids[], targetFactoryId, reason? }` | Pre-filter ID đã ở target (skip no-op), `updateMany` phần còn lại. |
+| PATCH | `/v1/orders/bulk-assign` | `{ ids[], factoryId, fabricType?, machineTypeId?, machineNumber?, toolResult?, reason? }` | Initial-assign cho đơn **UNMAPPED**. Pre-filter `factoryId` null/missing, `updateMany` set `factoryId + originalFactoryId + 4 optional fields`, log `bulk_update` với before/after từng field thay đổi. Đơn đã có factory bị skip (đếm `matched` nhưng không `modified`). |
 
-Cả 2 đều:
-- Ghi `OrderLog` `action='transfer'` (xem `OrderLog.md`) với `before={factoryId}`, `after={factoryId, reason}`.
+Cả 3 đều:
+- Ghi `OrderLog` (xem `OrderLog.md`) với `before/after` field thay đổi (`transfer` action cho 2 endpoint đầu, `bulk_update` cho `bulk-assign`).
 - Gọi `invalidateListCache()` để clear cache `orders:list:*`.
+
+`bulk-assign` thêm validate:
+- `factoryId` tồn tại qua `FactoryRepository.findOne`.
+- `machineTypeId` (nếu set) qua `MachineTypeRepository.findOne`.
+- `fabricType`, `machineNumber`, `toolResult` (nếu set) qua `assertValueAllowed()` ⇒ workshop_config category tương ứng (`fabric`, `machine`, `tool_result`).
 
 ### 10.5 UI components Tab C
 
@@ -420,9 +426,10 @@ Cả 2 đều:
 | Factory cards | `FactoryCard` (3 cards horizontal) | Click số chính → set `filterMode={kind:'at', factoryId}`. Click ô "Nhận từ xưởng khác" / "Đã chuyển đi" → `{kind:'in'\|'out', factoryId}`. 3 button "Chưa in / Đang in / Đã in xong" → `{kind:'print', factoryId, stage}` để drill-down list theo trạng thái in. |
 | Flow visualization | Button rows | `[fromShortName] → [toShortName]` + `count + totalQuantity`. Click → filter `{kind:'in', factoryId=to}`. |
 | Filter chip bar | `FilterChip` (`Tất cả` + 1 chip/factory) + 4 `SelectFilter` | Selects auto-reset khi đổi factory chip để tránh combo zero-result. |
-| Bulk toolbar | Toolbar sticky khi `selected.size > 0` | Chỉ render khi `canTransfer = isAdmin \|\| has('order.transfer')`. |
-| Table | `Table` với 1 cột "Xưởng (đang / gốc)" + `WORKSHOP_COLS` filtered theo `canViewField` + cột History | Row có `originalFactoryId !== factoryId` hiện badge `warning` + `← Gốc: shortName`. |
+| Bulk toolbar | Toolbar sticky khi `selected.size > 0` | Chỉ render khi `canTransfer = isAdmin \|\| has('order.transfer')`. Nút primary swap theo `selectedAllUnmapped`: tất cả unmapped → **"Gán xưởng"** (mở `AssignFactoryDialog`); ngược lại → **"Chuyển xưởng"**. Hint text giải thích quy tắc. |
+| Table | `Table` với 1 cột "Xưởng (đang / gốc)" + `WORKSHOP_COLS` filtered theo `canViewField` + cột History | Row có `originalFactoryId !== factoryId` hiện badge `warning` + `← Gốc: shortName`. Row chưa map: nếu `canTransfer` → render button `+ Gán xưởng` (mở dialog single mode), ngược lại → badge "Chưa map". |
 | `TransferDialog` | `Dialog` | Select target + Input lý do (max 200). Gọi `bulkTransferOrders({ids, targetFactoryId, reason})`. |
+| `AssignFactoryDialog` | `Dialog` | Initial-assign cho đơn UNMAPPED. Single mode: hiển thị `productionId / type / size / qty + link design (target="_blank" → originalUrl)`; Bulk mode: tiêu đề "Gán xưởng cho N đơn đã chọn". Form: 1 select required (Xưởng) + 4 select optional (Loại vải / Phòng / Máy / Tool). Source options: factory ← `overview.factories`, fabric/machine/tool ← `useWorkshopConfigStore` (full catalog), Phòng ← lazy fetch `machineType.getMachineTypes()` lần đầu open. Gọi `bulkAssignOrders()`. |
 
 ### 10.6 Filter mode → query params
 
@@ -556,7 +563,13 @@ Mỗi tab có **prefix riêng** để các param không clash khi user switch ta
 |-----|--------|--------|
 | Stats (`OrderStatsTab`) | `s` | `sfrom`, `sto`, `stype`, `suser` |
 | Status (`useStatusFilter`) | _không prefix_ | `createdFrom`, `createdTo`, `printStatus`, `printStatusNote`, `toolResult`, `toolResultNote`, `errorFile`, `assignee`, `assigneeNote`, `factoryId`, `machineTypeId`, `readyForFulfill`, `search` |
-| Factory (`OrderFactoryTab`) | `f` | `ffrom`, `fto`, `ffactory`, `fmode`, `fstage`, `ftype`, `ffabric`, `ftool`, `fmachine`, `fpage`, `fsize` |
+| Factory (`OrderFactoryTab`) | `f` | `ffrom`, `fto`, `fview`, `ffactory`, `fmode`, `fstage`, `ftype`, `ffabric`, `ftool`, `fmachine`, `fmnum`, `fpage`, `fsize` |
+
+**`fview` (sub-view) — admin only:**
+- `fview` absent / khác → `by-factory` (default — 3 factory card breakdown).
+- `fview=total` → "Tổng" sub-view: hiển thị 1 `TotalCard` gộp tất cả xưởng (productCount/fabricCount/machineCount lấy từ `availableFilters.*.length` để đếm DISTINCT chuẩn; print/error counts là sum across cells; transferred/pure/unmapped lấy từ `overview.totals`). Click stage button → set `FilterMode.kind = 'print-all'|'error-all'` → fetchRows bỏ `factoryId`, chỉ pass `printStage` hoặc `hasError` → BE filter cross-factory.
+- Non-admin nếu nhận URL với `fview=total` thì init state fallback `by-factory` (guard `v === 'total' && isAdmin`).
+- Khi user toggle sub-view → `handleSwitchView` reset `filterMode → all`, `selectFilters → {}`, `page → 1` để không leak filter cũ qua view mới.
 
 ### 11.2 Pattern sync state ↔ URL
 

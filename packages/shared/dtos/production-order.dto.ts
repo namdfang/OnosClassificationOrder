@@ -706,6 +706,32 @@ export const TransferOrderResZod = ResZod.extend({
 });
 export class TransferOrderResDto extends createZodDto(extendApi(TransferOrderResZod)) {}
 
+/**
+ * Initial-assign factory (+ optional setup fields) cho 1 hoặc nhiều đơn chưa
+ * map xưởng (`factoryId` null). Khác bulk-transfer ở chỗ: chỉ áp dụng cho đơn
+ * UNMAPPED, set luôn `originalFactoryId = factoryId` (đơn coi là "thuần" gốc
+ * tại xưởng này), và gộp set 4 trường tuỳ chọn (loại vải/phòng/máy/tool) trong
+ * 1 update + 1 log entry/đơn.
+ *
+ * Đơn đã có factory thì dùng `bulk-transfer` (route riêng) — endpoint này sẽ
+ * skip đơn đã mapped trong `matched` count.
+ */
+export const BulkAssignOrderZod = z.object({
+  ids: IDZod.array().min(1),
+  factoryId: IDZod,
+  fabricType: z.string().optional(),
+  machineTypeId: IDZod.optional(),
+  machineNumber: z.string().optional(),
+  toolResult: z.string().optional(),
+  reason: z.string().max(200).optional(),
+});
+export class BulkAssignOrderDto extends createZodDto(extendApi(BulkAssignOrderZod)) {}
+
+export const BulkAssignOrderResZod = ResZod.extend({
+  data: z.object({ matched: z.number(), modified: z.number() }),
+});
+export class BulkAssignOrderResDto extends createZodDto(extendApi(BulkAssignOrderResZod)) {}
+
 //
 // Factory overview — used by the new "Đơn hàng theo xưởng" dashboard tab.
 //

@@ -6,6 +6,8 @@ import {
   BulkAssignDesignerPreviewDto,
   BulkAssignDesignerPreviewResDto,
   BulkAssignDesignerResDto,
+  BulkAssignOrderDto,
+  BulkAssignOrderResDto,
   BulkTransferOrderDto,
   BulkUpdateOrderFieldDto,
   BulkUpdateOrderFieldResDto,
@@ -227,6 +229,22 @@ export class OrderController {
     @UserAgent() userAgent: string,
   ): Promise<TransferOrderResDto> {
     return this.orderService.bulkTransferOrders(dto, { user, ip, userAgent });
+  }
+
+  @Patch('bulk-assign')
+  @Auth(ORDER_WRITE_ROLES)
+  @ApiOperation({
+    summary: 'Initial-assign factory + optional setup fields cho đơn UNMAPPED',
+  })
+  @HttpCode(HttpStatus.OK)
+  @ApiOkResponse({ type: BulkAssignOrderResDto })
+  async bulkAssignOrders(
+    @Body() dto: BulkAssignOrderDto,
+    @AuthUser() user: UserDocument,
+    @ClientIp() ip: string,
+    @UserAgent() userAgent: string,
+  ): Promise<BulkAssignOrderResDto> {
+    return this.orderService.bulkAssignOrders(dto, { user, ip, userAgent });
   }
 
   @Patch(':id/transfer')

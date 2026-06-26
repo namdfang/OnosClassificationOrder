@@ -1,6 +1,7 @@
 import type {
   BulkAssignDesignerDto,
   BulkAssignDesignerPreviewDto,
+  BulkAssignOrderDto,
   BulkTransferOrderDto,
   BulkUpdateOrderFieldDto,
   ImportProductionOrdersDto,
@@ -72,6 +73,10 @@ const bulkTransferOrders = (data: BulkTransferOrderDto) => {
   return callApi(`/${CONFIG.API_VERSION}/orders/bulk-transfer`, 'patch', data);
 };
 
+const bulkAssignOrders = (data: BulkAssignOrderDto) => {
+  return callApi(`/${CONFIG.API_VERSION}/orders/bulk-assign`, 'patch', data);
+};
+
 const backfillFabric = () => {
   return callApi(`/${CONFIG.API_VERSION}/orders/backfill-fabric`, 'post');
 };
@@ -124,6 +129,7 @@ export const order = {
   getFactoryOverview,
   transferOrder,
   bulkTransferOrders,
+  bulkAssignOrders,
   backfillFabric,
   exportOrders,
   getDesignerBreakdown,

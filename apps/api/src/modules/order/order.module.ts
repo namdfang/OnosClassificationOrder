@@ -3,6 +3,7 @@ import { MongooseModule } from '@nestjs/mongoose';
 
 import { DesignImageModule } from '../design-image/design-image.module';
 import { FactoryModule } from '../factory/factory.module';
+import { MachineTypeModule } from '../machine-type/machine-type.module';
 import { OrderLogModule } from '../order-log/order-log.module';
 import { ProductConfigModule } from '../product-config/product-config.module';
 import { RedisCacheModule } from '../redis-cache/redis-cache.module';
@@ -28,6 +29,7 @@ import { OrderService } from './order.service';
     OrderLogModule,
     RedisCacheModule,
     FactoryModule,
+    MachineTypeModule,
     TelegramNotificationModule,
     DesignImageModule,
   ],

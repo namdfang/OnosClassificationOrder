@@ -16,6 +16,8 @@ import type {
   BulkAssignDesignerPreviewDto,
   BulkAssignDesignerPreviewResDto,
   BulkAssignDesignerResDto,
+  BulkAssignOrderDto,
+  BulkAssignOrderResDto,
   BulkTransferOrderDto,
   BulkUpdateOrderFieldDto,
   BulkUpdateOrderFieldResDto,
@@ -77,6 +79,7 @@ import {
   DesignImageJobData,
 } from '../design-image/design-image.processor';
 import { FactoryRepository } from '../factory/factory.repository';
+import { MachineTypeRepository } from '../machine-type/machine-type.repository';
 import { OrderLogRepository } from '../order-log/order-log.repository';
 import { OrderLogService } from '../order-log/order-log.service';
 import type { AuditContext } from '../order-log/order-log.service';
@@ -247,6 +250,7 @@ export class OrderService implements OnModuleInit {
     @Inject('winston') private readonly logger: Logger,
     private readonly redisCacheService: RedisCacheService,
     private readonly factoryRepository: FactoryRepository,
+    private readonly machineTypeRepository: MachineTypeRepository,
     private readonly telegramNotificationService: TelegramNotificationService,
     private readonly designImageService: DesignImageService,
     @InjectQueue(DESIGN_THUMB_QUEUE) private readonly designThumbQueue: Queue<DesignImageJobData>,
@@ -1448,6 +1452,98 @@ export class OrderService implements OnModuleInit {
         after: { factoryId: dto.targetFactoryId, reason: dto.reason },
         ctx,
       })),
+    );
+    void this.invalidateListCache();
+    return {
+      success: true,
+      data: { matched: dto.ids.length, modified: res.modifiedCount || 0 },
+    };
+  }
+
+  /**
+   * Initial-assign factory cho đơn UNMAPPED. Khác `bulkTransferOrders` ở 3 điểm:
+   *  1. Chỉ áp dụng cho đơn `factoryId` null (đơn đã mapped sẽ bị skip — đếm
+   *     vào `matched` nhưng không vào `modified`).
+   *  2. Set luôn `originalFactoryId = factoryId` để đơn coi là "thuần" gốc tại
+   *     xưởng này, không hiển thị badge "← Gốc: …" trên FE.
+   *  3. Gộp set 4 trường tuỳ chọn (fabricType/machineTypeId/machineNumber/
+   *     toolResult) trong 1 update + 1 log entry/đơn.
+   *
+   *  Validate: factory + machineType qua repository, fabric/machine/tool qua
+   *  workshop_config (cùng pattern với assertValueAllowed).
+   */
+  async bulkAssignOrders(
+    dto: BulkAssignOrderDto,
+    ctx?: AuditContext,
+  ): Promise<BulkAssignOrderResDto> {
+    const factory = await this.factoryRepository.findOne({ _id: dto.factoryId });
+    if (!factory) throw new BadRequestException('Factory not found');
+
+    if (dto.machineTypeId) {
+      const mt = await this.machineTypeRepository.findOne({ _id: dto.machineTypeId });
+      if (!mt) throw new BadRequestException('Machine type not found');
+    }
+    if (dto.fabricType) await this.assertValueAllowed('fabricType', dto.fabricType);
+    if (dto.machineNumber) await this.assertValueAllowed('machineNumber', dto.machineNumber);
+    if (dto.toolResult) await this.assertValueAllowed('toolResult', dto.toolResult);
+
+    // Skip đơn đã mapped — feature này chỉ cho unmapped. `bulkTransferOrders`
+    // mới handle đổi xưởng cho đơn đã có.
+    const eligible = await this.orderModel
+      .find({
+        _id: { $in: dto.ids },
+        $or: [{ factoryId: { $exists: false } }, { factoryId: null }],
+      })
+      .select({ _id: 1, fabricType: 1, machineTypeId: 1, machineNumber: 1, toolResult: 1 })
+      .lean();
+    const eligibleIds = eligible.map((o) => String(o._id));
+    if (eligibleIds.length === 0) {
+      return { success: true, data: { matched: dto.ids.length, modified: 0 } };
+    }
+
+    const $set: Record<string, unknown> = {
+      factoryId: dto.factoryId,
+      originalFactoryId: dto.factoryId,
+    };
+    if (dto.fabricType) $set.fabricType = dto.fabricType;
+    if (dto.machineTypeId) $set.machineTypeId = dto.machineTypeId;
+    if (dto.machineNumber) $set.machineNumber = dto.machineNumber;
+    if (dto.toolResult) $set.toolResult = dto.toolResult;
+
+    const res = await this.orderModel.updateMany(
+      { _id: { $in: eligibleIds } },
+      { $set },
+    );
+
+    void this.orderLogService.writeMany(
+      eligible.map((o) => {
+        const before: Record<string, unknown> = { factoryId: null };
+        const after: Record<string, unknown> = { factoryId: dto.factoryId };
+        if (dto.fabricType) {
+          before.fabricType = o.fabricType ?? null;
+          after.fabricType = dto.fabricType;
+        }
+        if (dto.machineTypeId) {
+          before.machineTypeId = o.machineTypeId ?? null;
+          after.machineTypeId = dto.machineTypeId;
+        }
+        if (dto.machineNumber) {
+          before.machineNumber = o.machineNumber ?? null;
+          after.machineNumber = dto.machineNumber;
+        }
+        if (dto.toolResult) {
+          before.toolResult = o.toolResult ?? null;
+          after.toolResult = dto.toolResult;
+        }
+        if (dto.reason) after.reason = dto.reason;
+        return {
+          orderId: String(o._id),
+          action: 'bulk_update' as const,
+          before,
+          after,
+          ctx,
+        };
+      }),
     );
     void this.invalidateListCache();
     return {
