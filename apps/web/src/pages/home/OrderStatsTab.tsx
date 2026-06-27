@@ -9,22 +9,18 @@ import {
   Factory,
   Medal,
   Package,
-  Search,
-  ShoppingCart,
   Trophy,
   Truck,
   User as UserIcon,
 } from 'lucide-react';
 import { Cell, Pie, PieChart, ResponsiveContainer, Sector, Tooltip as RechartsTooltip } from 'recharts';
 
-import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
-import { Label } from '@/components/ui/label';
 import { Badge } from '@/components/ui/badge';
-import { Spinner } from '@/components/common/Spinner';
 import { cn } from '@/utils/cn';
 import { useSearchParams } from 'react-router-dom';
-import { DateRangePicker } from '@/components/common/DateRangePicker';
+import { OrderFilterBar } from '@/components/orders/OrderFilterBar';
+import { useDebounce } from '@/hooks/useDebounce';
 import { RepositoryRemote } from '@/services';
 import { handleAxiosError } from '@/utils';
 import { useAuthStore } from '../../store/authStore';
@@ -185,6 +181,10 @@ export default function OrderStatsTab() {
   const [endDate, setEndDate] = useState<string>(() => searchParams.get('sto') || todayISO());
   const [searchType, setSearchType] = useState<string>(() => searchParams.get('stype') || '');
   const [searchUser, setSearchUser] = useState<string>(() => searchParams.get('suser') || '');
+  // Debounce 300ms — đồng bộ với OrderTableWorkshop/ErrorLogTab/OrderFactoryTab.
+  // Tránh refetch mỗi keystroke (BE getDashboard chạy aggregate khá nặng).
+  const debouncedType = useDebounce(searchType, 300);
+  const debouncedUser = useDebounce(searchUser, 300);
   const [expanded, setExpanded] = useState<Set<string>>(new Set());
 
   // Sync state → URL. Date luôn ghi (kể cả today) để URL reflect state.
@@ -209,8 +209,10 @@ export default function OrderStatsTab() {
       const params = new URLSearchParams();
       if (startDate) params.set('startDate', startDate);
       if (endDate) params.set('endDate', endDate);
-      if (searchType.trim()) params.set('searchType', searchType.trim());
-      const effectiveSearchUser = override?.searchUser !== undefined ? override.searchUser : searchUser;
+      const typeTerm = debouncedType.trim();
+      if (typeTerm) params.set('searchType', typeTerm);
+      const effectiveSearchUser =
+        override?.searchUser !== undefined ? override.searchUser : debouncedUser;
       if (effectiveSearchUser.trim()) params.set('searchUser', effectiveSearchUser.trim());
       const resp = await RepositoryRemote.order.getDashboard(`?${params.toString()}`);
       setData(resp.data.data);
@@ -224,13 +226,17 @@ export default function OrderStatsTab() {
   const applyCustomerFilter = (u: { userSku?: string; userEmail?: string }) => {
     const term = u.userEmail || u.userSku || '';
     setSearchUser(term);
+    // Override để fetch ngay với term mới (không đợi debounce 300ms).
     fetchDashboard({ searchUser: term });
   };
 
+  // Auto-fetch khi filter đổi — đồng bộ với 4 bảng order khác (không cần nút
+  // "Áp dụng" riêng nữa). Date đổi → fetch ngay; search đổi → fetch sau khi
+  // debounce settle.
   useEffect(() => {
     fetchDashboard();
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+  }, [startDate, endDate, debouncedType, debouncedUser]);
 
   const toggleExpand = (type: string) => {
     setExpanded((prev) => {
@@ -284,48 +290,37 @@ export default function OrderStatsTab() {
         </div>
       </div>
 
-      {/* Filter strip — single row, ghost styling */}
-      <div className="flex items-center gap-2 flex-wrap p-1 rounded-xl bg-muted/30">
-        <div className="px-2 py-1.5">
-          <DateRangePicker
-            from={startDate}
-            to={endDate}
-            onChange={(f, t) => {
-              setStartDate(f);
-              setEndDate(t);
-            }}
-          />
-        </div>
-
-        <div className="h-6 w-px bg-border" />
-
-        <div className="relative flex-1 min-w-[180px]">
-          <Search size={13} className="absolute left-2.5 top-1/2 -translate-y-1/2 text-muted-foreground" />
-          <Input
-            placeholder="Lọc theo tên sản phẩm…"
-            value={searchType}
-            onChange={(e) => setSearchType(e.target.value)}
-            onKeyDown={(e) => e.key === 'Enter' && fetchDashboard()}
-            className="h-8 pl-8 border-0 bg-transparent shadow-none focus-visible:ring-1"
-          />
-        </div>
-
-        <div className="relative flex-1 min-w-[180px]">
-          <UserIcon size={13} className="absolute left-2.5 top-1/2 -translate-y-1/2 text-muted-foreground" />
-          <Input
-            placeholder="Lọc theo SKU hoặc email khách…"
-            value={searchUser}
-            onChange={(e) => setSearchUser(e.target.value)}
-            onKeyDown={(e) => e.key === 'Enter' && fetchDashboard()}
-            className="h-8 pl-8 border-0 bg-transparent shadow-none focus-visible:ring-1"
-          />
-        </div>
-
-        <Button onClick={() => fetchDashboard()} disabled={loading} size="sm" className="h-8">
-          {loading ? <Spinner size={12} /> : null}
-          Áp dụng
-        </Button>
-      </div>
+      {/* Filter bar — đồng bộ với 4 bảng order khác (`OrderTableWorkshop`,
+          `ErrorLogTab`, `OrderFactoryTab`, `OrderStatusTab`). Search chính
+          dùng cho `searchType` (tên sản phẩm); filter khách hàng đặt trong
+          `topActionsRight` vì stats có 2 search term riêng. */}
+      <OrderFilterBar
+        search={searchType}
+        onSearchChange={setSearchType}
+        searchPlaceholder="Lọc theo tên sản phẩm…"
+        createdFrom={startDate}
+        createdTo={endDate}
+        onDateRangeChange={(f, t) => {
+          setStartDate(f);
+          setEndDate(t);
+        }}
+        onReload={() => fetchDashboard()}
+        loading={loading}
+        topActionsRight={
+          <div className="relative min-w-[220px]">
+            <UserIcon
+              size={13}
+              className="absolute left-2 top-1/2 -translate-y-1/2 text-muted-foreground"
+            />
+            <Input
+              placeholder="Lọc theo SKU hoặc email khách…"
+              value={searchUser}
+              onChange={(e) => setSearchUser(e.target.value)}
+              className="pl-7 h-9 text-sm"
+            />
+          </div>
+        }
+      />
 
       {/* Compact stats — 4 small boxes when full, only "Tổng đơn" when hidePrice */}
       <div

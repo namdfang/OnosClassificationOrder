@@ -1,15 +1,14 @@
 import React, { useEffect, useMemo, useState } from 'react';
-import { AlertTriangle, History, RefreshCw, Search } from 'lucide-react';
+import { AlertTriangle, History } from 'lucide-react';
 import { useSearchParams } from 'react-router-dom';
 import { WorkshopConfigCategory } from 'shared';
 
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
-import { Input } from '@/components/ui/input';
 import { PaginationBar } from '@/components/common/PaginationBar';
-import { SelectFilter } from '@/components/common/SelectFilter';
 import { Spinner } from '@/components/common/Spinner';
 import { ImagePreviewDialog } from '@/components/common/ImagePreviewDialog';
+import { OrderFilterBar, type OrderFilterFacet } from '@/components/orders/OrderFilterBar';
 import {
   Table,
   TableBody,
@@ -33,6 +32,7 @@ import { useWorkshopConfigStore } from '@/store/workshopConfigStore';
 import { handleAxiosError } from '@/utils';
 import { useDebounce } from '@/hooks/useDebounce';
 import { cn } from '@/utils/cn';
+import { NO_TOOL_ROW_CLASS, useIsNoTool } from '@/hooks/useIsNoTool';
 
 type ErrorLogRow = WorkshopOrderRow & { productionFirstErrorAt?: string };
 type UrgencyKey = 'new' | 'attention' | 'urgent' | 'critical';
@@ -132,6 +132,12 @@ export function ErrorLogTab() {
   const [search, setSearch] = useState(() => searchParams.get('esearch') || '');
   const debouncedSearch = useDebounce(search, 300);
 
+  // Date range (inProductionAt, VN tz) — đồng bộ với 3 bảng order khác.
+  // Default empty (= không filter) thay vì today vì error log thường xem
+  // history qua nhiều ngày.
+  const [createdFrom, setCreatedFrom] = useState(() => searchParams.get('efrom') || '');
+  const [createdTo, setCreatedTo] = useState(() => searchParams.get('eto') || '');
+
   const [filterAssignee, setFilterAssignee] = useState(() => searchParams.get('eassign') || '');
   const [filterFabric, setFilterFabric] = useState(() => searchParams.get('efabric') || '');
   const [filterTool, setFilterTool] = useState(() => searchParams.get('etool') || '');
@@ -167,6 +173,8 @@ export function ErrorLogTab() {
         filterErrorCode ? sp.set('ecode', filterErrorCode) : sp.delete('ecode');
         filterSource ? sp.set('esource', filterSource) : sp.delete('esource');
         filterUrgency ? sp.set('eurg', filterUrgency) : sp.delete('eurg');
+        createdFrom ? sp.set('efrom', createdFrom) : sp.delete('efrom');
+        createdTo ? sp.set('eto', createdTo) : sp.delete('eto');
         page > 1 ? sp.set('epage', String(page)) : sp.delete('epage');
         pageSize !== DEFAULT_PAGE_SIZE ? sp.set('esize', String(pageSize)) : sp.delete('esize');
         return sp;
@@ -181,6 +189,8 @@ export function ErrorLogTab() {
     filterErrorCode,
     filterSource,
     filterUrgency,
+    createdFrom,
+    createdTo,
     page,
     pageSize,
     setSearchParams,
@@ -195,6 +205,8 @@ export function ErrorLogTab() {
     if (filterErrorCode) params.set('productionError', filterErrorCode);
     if (filterSource) params.set('productionErrorSource', filterSource);
     if (filterUrgency) params.set('urgency', filterUrgency);
+    if (createdFrom) params.set('createdFrom', createdFrom);
+    if (createdTo) params.set('createdTo', createdTo);
     params.set('page', String(page));
     params.set('limit', String(pageSize));
     setLoading(true);
@@ -225,6 +237,8 @@ export function ErrorLogTab() {
     filterErrorCode,
     filterSource,
     filterUrgency,
+    createdFrom,
+    createdTo,
   ]);
 
   const patchRow = (id: string, patch: Partial<ErrorLogRow>) => {
@@ -237,6 +251,7 @@ export function ErrorLogTab() {
     setPreview({ url, originalUrl, title, sourceUrl });
 
   const renderCtx: WorkshopRenderCtx = { canEditField, patchRow, openPreview };
+  const isNoTool = useIsNoTool();
 
   // Hiển thị bảng đơn giản: productionId, sản phẩm, mockup, người thực hiện,
   // loại vải, tool, lỗi xưởng, source, count. Tận dụng cell editor từ
@@ -367,85 +382,26 @@ export function ErrorLogTab() {
           </div>
         </div>
 
-        <div className="rounded-lg border border-border bg-card p-3 space-y-3">
-          <div className="flex items-center gap-2 flex-wrap">
-            <div className="relative flex-1 min-w-[200px]">
-              <Search
-                size={13}
-                className="absolute left-2 top-1/2 -translate-y-1/2 text-muted-foreground"
-              />
-              <Input
-                placeholder="Tìm Production ID / SKU / Order ID / Type..."
-                value={search}
-                onChange={(e) => setSearch(e.target.value)}
-                className="pl-7 h-9 text-sm"
-              />
-            </div>
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={() => fetchData()}
-              disabled={loading}
-            >
-              <RefreshCw size={13} className={loading ? 'animate-spin' : ''} />
-              Tải lại
-            </Button>
-          </div>
-
-          <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-2">
-            {has('order.field.assignee.view') && (
-              <SelectFilter
-                label="Người thực hiện"
-                value={filterAssignee}
-                onChange={(v) => {
-                  setFilterAssignee(v);
-                  setPage(1);
-                }}
-                options={assigneeOptions}
-              />
-            )}
-            {has('order.field.fabricType.view') && (
-              <SelectFilter
-                label="Loại vải"
-                value={filterFabric}
-                onChange={(v) => {
-                  setFilterFabric(v);
-                  setPage(1);
-                }}
-                options={fabricOptions}
-              />
-            )}
-            {has('order.field.toolResult.view') && (
-              <SelectFilter
-                label="Kết quả Tool"
-                value={filterTool}
-                onChange={(v) => {
-                  setFilterTool(v);
-                  setPage(1);
-                }}
-                options={toolOptions}
-              />
-            )}
-            <SelectFilter
-              label="Mã lỗi"
-              value={filterErrorCode}
-              onChange={(v) => {
-                setFilterErrorCode(v);
-                setPage(1);
-              }}
-              options={errorCodeOptions}
-            />
-            <SelectFilter
-              label="Nguồn lỗi"
-              value={filterSource}
-              onChange={(v) => {
-                setFilterSource(v);
-                setPage(1);
-              }}
-              options={sourceOptions}
-            />
-          </div>
-        </div>
+        <OrderFilterBar
+          search={search}
+          onSearchChange={setSearch}
+          createdFrom={createdFrom}
+          createdTo={createdTo}
+          onDateRangeChange={(f, t) => {
+            setCreatedFrom(f);
+            setCreatedTo(t);
+            setPage(1);
+          }}
+          onReload={() => fetchData()}
+          loading={loading}
+          facets={[
+            { key: 'assignee', label: 'Người thực hiện', value: filterAssignee, onChange: (v) => { setFilterAssignee(v); setPage(1); }, options: assigneeOptions, perm: 'order.field.assignee.view' },
+            { key: 'fabricType', label: 'Loại vải', value: filterFabric, onChange: (v) => { setFilterFabric(v); setPage(1); }, options: fabricOptions, perm: 'order.field.fabricType.view' },
+            { key: 'toolResult', label: 'Kết quả Tool', value: filterTool, onChange: (v) => { setFilterTool(v); setPage(1); }, options: toolOptions, perm: 'order.field.toolResult.view' },
+            { key: 'productionError', label: 'Mã lỗi', value: filterErrorCode, onChange: (v) => { setFilterErrorCode(v); setPage(1); }, options: errorCodeOptions },
+            { key: 'productionErrorSource', label: 'Nguồn lỗi', value: filterSource, onChange: (v) => { setFilterSource(v); setPage(1); }, options: sourceOptions },
+          ] satisfies OrderFilterFacet[]}
+        />
 
         <PaginationBar
           position="top"
@@ -497,7 +453,7 @@ export function ErrorLogTab() {
                   const urg = urgencyOf(row.productionFirstErrorAt);
                   const meta = URGENCY_META[urg];
                   return (
-                    <TableRow key={row._id}>
+                    <TableRow key={row._id} className={cn(isNoTool(row.toolResult) && NO_TOOL_ROW_CLASS)}>
                       <TableCell className="py-2">
                         <Badge className={cn('font-mono text-[11px]', meta.cls)}>
                           {meta.label}

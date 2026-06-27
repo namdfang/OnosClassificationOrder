@@ -24,6 +24,7 @@ import { RepositoryRemote } from '@/services';
 import { handleAxiosError } from '@/utils';
 import { usePermission } from '@/hooks/usePermission';
 import { cn } from '@/utils/cn';
+import { NO_TOOL_ROW_CLASS, useIsNoTool } from '@/hooks/useIsNoTool';
 
 const DEFAULT_PAGE_SIZE = 20;
 
@@ -80,6 +81,7 @@ export function OrdersMiniTable({ queryString }: Props) {
   );
 
   const ctx: WorkshopRenderCtx = { canEditField, patchRow, openPreview };
+  const isNoTool = useIsNoTool();
 
   // Re-sort rows on the current page: same product clustered (preserved from
   // BE order), inside each cluster rows ordered by combo (size+fabric+mockup)
@@ -181,7 +183,7 @@ export function OrdersMiniTable({ queryString }: Props) {
                 </TableRow>
               )}
               {sortedRows.map((row) => (
-                <TableRow key={row._id}>
+                <TableRow key={row._id} className={cn(isNoTool(row.toolResult) && NO_TOOL_ROW_CLASS)}>
                   {visibleCols.map((c) => (
                     <TableCell key={c.key} className="py-2">
                       {c.render(row, ctx)}

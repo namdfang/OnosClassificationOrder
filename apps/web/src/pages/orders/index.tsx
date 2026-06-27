@@ -5,7 +5,7 @@ import { useSearchParams } from 'react-router-dom';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { usePermission } from '@/hooks/usePermission';
 
-import { ListOrderTab } from './ListOrderTab';
+// import { ListOrderTab } from './ListOrderTab'; // [tạm tắt] List Order tab
 import { ErrorLogTab } from './ErrorLogTab';
 import { ImportOrderTab } from './ImportOrderTab';
 import { OrderTableWorkshop } from './OrderTableWorkshop';
@@ -22,11 +22,14 @@ export default function Orders() {
 
   const tabs = useMemo(() => {
     const out: { key: TabKey; label: string }[] = [];
-    if (adminVisible) out.push({ key: 'list', label: 'List Order' });
+    // [tạm tắt] List Order tab — default vào "Bảng Workshop". Bỏ comment để bật lại.
+    // if (adminVisible) out.push({ key: 'list', label: 'List Order' });
+    // Workshop là default tab — push trước "Nhật ký bù lỗi" để `tabs[0]`
+    // (= initial fallback) trỏ vào đây cho role có workshop access.
+    if (workshopVisible) out.push({ key: 'workshop', label: 'Bảng Workshop' });
     // Nhật ký bù lỗi — hiển thị cho mọi role có quyền xem orders (kể cả
     // Designer/Fulfillment; visibility filter ở BE đảm bảo scope đúng).
     out.push({ key: 'error-log', label: 'Nhật ký bù lỗi' });
-    if (workshopVisible) out.push({ key: 'workshop', label: 'Bảng Workshop' });
     if (canImport) out.push({ key: 'import', label: 'Import Order' });
     return out;
   }, [adminVisible, workshopVisible, canImport]);
@@ -105,11 +108,13 @@ export default function Orders() {
           ))}
         </TabsList>
 
+        {/* [tạm tắt] List Order tab — default vào "Nhật ký bù lỗi". Bỏ comment để bật lại.
         {adminVisible && (
           <TabsContent value="list">
             <ListOrderTab refreshKey={refreshKey} />
           </TabsContent>
         )}
+        */}
 
         <TabsContent value="error-log">
           <ErrorLogTab />
@@ -126,7 +131,9 @@ export default function Orders() {
             <ImportOrderTab
               onImported={() => {
                 setRefreshKey((k) => k + 1);
-                handleTabChange(adminVisible ? 'list' : 'workshop');
+                // List Order tab đang tạm tắt → fallback workshop (admin) hoặc
+                // error-log (role khác). Khi bật lại list, đổi về `'list'`.
+                handleTabChange(workshopVisible ? 'workshop' : 'error-log');
               }}
             />
           </TabsContent>

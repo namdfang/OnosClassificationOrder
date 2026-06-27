@@ -937,6 +937,10 @@ export const GetErrorLogZod = PageQueryZod.extend({
   factoryId: z.string().optional(),
   /** Comma-separated urgency level. */
   urgency: z.string().optional(),
+  /** Date range theo `inProductionAt` (VN tz) — đồng bộ với các bảng order
+   *  khác đã dùng `inProductionAt` thay cho `orderAt`. */
+  createdFrom: z.string().optional(),
+  createdTo: z.string().optional(),
 });
 export class GetErrorLogDto extends createZodDto(extendApi(GetErrorLogZod)) {}
 

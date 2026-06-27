@@ -495,6 +495,14 @@ Render tab tương ứng. User chỉ có 1 trong các quyền → 1 tab; có nhi
 
 `WORKSHOP_COLS` được reuse bởi cả Tab `OrderTableWorkshop` (apps/web/src/pages/orders) **và** Dashboard Tab C `OrderFactoryTab`. Dashboard Tab C thêm 1 cột "Xưởng (đang / gốc)" ở đầu để hiển thị badge transfer.
 
+**"No tool" row highlight** (tô nền xanh dương nhạt) — hook `useIsNoTool()` (`apps/web/src/hooks/useIsNoTool.ts`) + class `NO_TOOL_ROW_CLASS = 'bg-sky-50/70 dark:bg-sky-500/10'`. Logic: `toolResult` set + resolve qua `workshopConfigStore` + `name` KHÔNG bắt đầu bằng "Có" (đồng bộ với BE convention ở `order.service.ts:1706` `toolHasCodes` regex `^Có`). Áp dụng tại `<TableRow>` của 4 bảng order:
+- `OrderTableWorkshop` (priority: selected > heaviest-combo > no-tool tint).
+- `OrderFactoryTab` (priority: selected > no-tool tint).
+- `OrdersMiniTable` (selected tint không có → no-tool áp trực tiếp).
+- `ErrorLogTab` (urgency badge ở cell riêng nên row class chỉ no-tool tint).
+
+Row `toolResult` null/empty (chưa check) → KHÔNG tô (tránh hiểu nhầm "chưa biết" thành "không có tool").
+
 #### Cell components (`components/orders/cells/`)
 
 - **`SelectPopover`** — shared popover với "Bỏ chọn" + list options.
@@ -515,7 +523,19 @@ Mỗi cell tự đọc `canEditField(field)` từ `usePermission()`:
 
 ### 10.3 Filter bar
 
-Render conditional theo `order.field.X.view` — dùng `<SelectFilter>` (single-select, native HTML + count badge). Options + count đến từ BE endpoint `GET /v1/orders/workshop-filters` theo **faceted-search pattern**:
+**Đồng bộ via `<OrderFilterBar>` reusable** (`apps/web/src/components/orders/OrderFilterBar.tsx`). Cùng layout dùng ở 4 bảng order: `OrderTableWorkshop` (reference) · `ErrorLogTab` · `OrderFactoryTab` (Dashboard Tab C) · `OrderStatusTab` (Dashboard Tab B). Component:
+- Top row: search input (flex-1) + `<DateRangePicker>` + nút Tải lại + slot `topActionsRight` (view switcher / export / ...).
+- Middle row (optional slot `middleRow`): active chip bar / factory chip bar.
+- Facet grid: 2/3/5 cột responsive, mỗi cell `<SelectFilter>` đã gate qua `usePermission().has(perm)` từ `OrderFilterFacet.perm`.
+
+Mỗi consumer truyền `facets: OrderFilterFacet[]` để cấu hình field set riêng — tránh ép tất cả tab dùng cùng 1 list:
+- `OrderTableWorkshop` — 9 facet workshop chuẩn từ `getWorkshopFilters`.
+- `ErrorLogTab` — 5 facet error-log: assignee · fabricType · toolResult · productionError · productionErrorSource. Date range thêm vào endpoint qua field `createdFrom`/`createdTo` mới trong `GetErrorLogZod` (filter `inProductionAt` VN tz, đồng bộ convention với 3 bảng kia).
+- `OrderFactoryTab` — 5 facet factory-specific: type · fabricType · machineTypeId · machineNumber · toolResult (lấy từ `overview.availableFilters`). Search debounce 300ms, thêm vào `getOrders` qua `search` param.
+- `OrderStatusTab` — không dùng facet grid (BreakdownCard grid bên dưới làm role này với multi-select chip). Chỉ search + date + reload + slot extras ("Lỗi cần xử lý" + active chips + Xóa filter) qua `<StatusFilterTopActions>`/`<StatusActiveChips>` (`apps/web/src/pages/home/status/StatusFilterExtras.tsx`).
+- `OrderStatsTab` — không dùng facet grid (stats hiển thị MetricCard + pie chart, không list đơn). Search chính = `searchType` (tên sản phẩm); `searchUser` (SKU/email khách) chèn vào `topActionsRight` vì stats có 2 search term. Cả 2 search debounce 300ms; auto-fetch khi date hoặc debounced search đổi — bỏ nút "Áp dụng" cũ vì pattern đồng bộ.
+
+**`OrderTableWorkshop` cụ thể** — 9 facet workshop chuẩn từ BE endpoint `GET /v1/orders/workshop-filters` theo **faceted-search pattern**:
 - BE method `getWorkshopAvailableFilters(dto, role, assigneeCode?, fulfillmentFactoryId?)` — với mỗi facet, build `buildOrderListFilter` sau khi strip facet đó khỏi dto, rồi `$group` field tương ứng. Count phản ánh subset đã narrow theo các facet khác đang active.
 - **9 facet** support: `fabricType` / `machineNumber` / `printStatus` / `toolResult` / `toolResultNote` / `errorFile` / `assignee` / `productionError` / `designerStatus`. Cell hiển thị phụ thuộc permission `order.field.X.view`.
 - `assignee` facet labels **resolve fullName từ users collection** (BE lookup users theo userIds trong facet rows). Value vẫn = user._id.

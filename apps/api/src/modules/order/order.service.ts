@@ -3627,6 +3627,15 @@ export class OrderService implements OnModuleInit {
       filter.factoryId = { $in: dto.factoryId.split(',').filter(Boolean) };
     }
 
+    // Date range filter theo `inProductionAt` (VN tz) — đồng bộ với
+    // OrderTableWorkshop / OrderFactoryTab (xem comment ở `buildVisibilityFilter`).
+    if (dto.createdFrom || dto.createdTo) {
+      const range: Record<string, Date> = {};
+      if (dto.createdFrom) range.$gte = vnDayStart(dto.createdFrom);
+      if (dto.createdTo) range.$lte = vnDayEnd(dto.createdTo);
+      filter.inProductionAt = range;
+    }
+
     // Urgency filter — compute date thresholds.
     const now = Date.now();
     const DAY = 24 * 60 * 60 * 1000;

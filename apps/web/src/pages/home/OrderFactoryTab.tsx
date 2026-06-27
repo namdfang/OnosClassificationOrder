@@ -1,5 +1,5 @@
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
-import { ArrowRight, Download, Factory, History, Layers, MapPin, Plus, RefreshCw, Send } from 'lucide-react';
+import { ArrowRight, Download, Factory, History, Layers, MapPin, Plus, Send } from 'lucide-react';
 import { useSearchParams } from 'react-router-dom';
 import { toast } from 'sonner';
 import type { FactoryOverview, FactoryOverviewCell } from 'shared';
@@ -11,8 +11,7 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Spinner } from '@/components/common/Spinner';
 import { PaginationBar } from '@/components/common/PaginationBar';
-import { DateRangePicker } from '@/components/common/DateRangePicker';
-import { SelectFilter } from '@/components/common/SelectFilter';
+import { OrderFilterBar, type OrderFilterFacet } from '@/components/orders/OrderFilterBar';
 import {
   Dialog,
   DialogContent,
@@ -39,8 +38,10 @@ import {
 import { RepositoryRemote } from '@/services';
 import { handleAxiosError } from '@/utils';
 import { usePermission } from '@/hooks/usePermission';
+import { useDebounce } from '@/hooks/useDebounce';
 import { useWorkshopConfigStore } from '@/store/workshopConfigStore';
 import { cn } from '@/utils/cn';
+import { NO_TOOL_ROW_CLASS, useIsNoTool } from '@/hooks/useIsNoTool';
 
 import { buildWorkbook, downloadWorkbook, type ExportableOrder } from './exportOrders';
 
@@ -126,6 +127,11 @@ export default function OrderFactoryTab() {
   const [createdFrom, setCreatedFrom] = useState(() => searchParams.get('ffrom') || todayISO());
   const [createdTo, setCreatedTo] = useState(() => searchParams.get('fto') || todayISO());
 
+  // Search (Production ID / SKU / Order ID / Type) — đồng bộ với 3 bảng order
+  // khác. Debounce 300ms vì BE getOrders chạy aggregate khá nặng.
+  const [search, setSearch] = useState(() => searchParams.get('fsearch') || '');
+  const debouncedSearch = useDebounce(search, 300);
+
   const [overview, setOverview] = useState<FactoryOverview | null>(null);
   const [overviewLoading, setOverviewLoading] = useState(false);
 
@@ -167,6 +173,8 @@ export default function OrderFactoryTab() {
         // Date luôn ghi
         createdFrom ? sp.set('ffrom', createdFrom) : sp.delete('ffrom');
         createdTo ? sp.set('fto', createdTo) : sp.delete('fto');
+        // Search
+        search ? sp.set('fsearch', search) : sp.delete('fsearch');
         // View mode
         viewMode === 'total' ? sp.set('fview', 'total') : sp.delete('fview');
         // Filter mode
@@ -203,7 +211,7 @@ export default function OrderFactoryTab() {
       },
       { replace: true },
     );
-  }, [createdFrom, createdTo, viewMode, filterMode, selectFilters, page, pageSize, setSearchParams]);
+  }, [createdFrom, createdTo, search, viewMode, filterMode, selectFilters, page, pageSize, setSearchParams]);
 
   const [preview, setPreview] = useState<{ url: string; originalUrl?: string; title: string } | null>(null);
   const [historyTarget, setHistoryTarget] = useState<{ id: string; productionId: string } | null>(null);
@@ -288,6 +296,7 @@ export default function OrderFactoryTab() {
     if (selectFilters.tool) sp.set('toolResult', selectFilters.tool);
     if (selectFilters.machine) sp.set('machineTypeId', selectFilters.machine);
     if (selectFilters.machineNumber) sp.set('machineNumber', selectFilters.machineNumber);
+    if (debouncedSearch.trim()) sp.set('search', debouncedSearch.trim());
     try {
       setRowsLoading(true);
       const res = await RepositoryRemote.order.getOrders('?' + sp.toString());
@@ -298,7 +307,7 @@ export default function OrderFactoryTab() {
     } finally {
       setRowsLoading(false);
     }
-  }, [createdFrom, createdTo, page, pageSize, filterMode, selectFilters]);
+  }, [createdFrom, createdTo, page, pageSize, filterMode, selectFilters, debouncedSearch]);
 
   useEffect(() => {
     fetchOverview();
@@ -372,6 +381,7 @@ export default function OrderFactoryTab() {
     setPreview({ url, originalUrl, title });
 
   const ctx: WorkshopRenderCtx = { canEditField, patchRow, openPreview };
+  const isNoTool = useIsNoTool();
 
   const toggleRow = (id: string) =>
     setSelected((prev) => {
@@ -462,81 +472,88 @@ export default function OrderFactoryTab() {
   return (
     <TooltipProvider delayDuration={200}>
       <div className="space-y-4">
-        {/* Date range + refresh */}
-        <div className="rounded-lg border border-border bg-card p-3 flex items-center gap-2 flex-wrap">
-          {/* Admin-only view switcher: "Theo xưởng" (default) vs "Tổng" (gộp). */}
-          {isAdmin && (
-            <div className="inline-flex rounded-md border border-border bg-background p-0.5">
-              <button
-                type="button"
-                onClick={() => handleSwitchView('by-factory')}
-                className={cn(
-                  'inline-flex items-center gap-1.5 px-2.5 h-7 rounded text-xs transition-colors',
-                  viewMode === 'by-factory'
-                    ? 'bg-primary text-primary-foreground font-medium'
-                    : 'text-muted-foreground hover:text-foreground',
-                )}
+        {/* Filter bar — đồng bộ position/layout với OrderTableWorkshop,
+            ErrorLogTab, OrderStatusTab. Field set giữ factory-specific
+            (Sản phẩm/Loại vải/Phòng/Máy/Tool) theo yêu cầu. */}
+        <OrderFilterBar
+          search={search}
+          onSearchChange={setSearch}
+          createdFrom={createdFrom}
+          createdTo={createdTo}
+          onDateRangeChange={(f, t) => {
+            setCreatedFrom(f);
+            setCreatedTo(t);
+          }}
+          onReload={() => {
+            fetchOverview();
+            fetchRows();
+          }}
+          loading={overviewLoading || rowsLoading}
+          topActionsRight={
+            <>
+              {/* Admin-only view switcher: "Theo xưởng" vs "Tổng". */}
+              {isAdmin && (
+                <div className="inline-flex rounded-md border border-border bg-background p-0.5">
+                  <button
+                    type="button"
+                    onClick={() => handleSwitchView('by-factory')}
+                    className={cn(
+                      'inline-flex items-center gap-1.5 px-2.5 h-7 rounded text-xs transition-colors',
+                      viewMode === 'by-factory'
+                        ? 'bg-primary text-primary-foreground font-medium'
+                        : 'text-muted-foreground hover:text-foreground',
+                    )}
+                  >
+                    <Factory size={12} /> Theo xưởng
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => handleSwitchView('total')}
+                    className={cn(
+                      'inline-flex items-center gap-1.5 px-2.5 h-7 rounded text-xs transition-colors',
+                      viewMode === 'total'
+                        ? 'bg-primary text-primary-foreground font-medium'
+                        : 'text-muted-foreground hover:text-foreground',
+                    )}
+                  >
+                    <Layers size={12} /> Tổng
+                  </button>
+                </div>
+              )}
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={handleExport}
+                disabled={exportLoading || rowsLoading}
+                title="Xuất tất cả đơn theo filter hiện tại (bỏ qua phân trang)"
               >
-                <Factory size={12} /> Theo xưởng
-              </button>
-              <button
-                type="button"
-                onClick={() => handleSwitchView('total')}
-                className={cn(
-                  'inline-flex items-center gap-1.5 px-2.5 h-7 rounded text-xs transition-colors',
-                  viewMode === 'total'
-                    ? 'bg-primary text-primary-foreground font-medium'
-                    : 'text-muted-foreground hover:text-foreground',
+                {exportLoading ? (
+                  <Spinner size={13} className="text-muted-foreground" />
+                ) : (
+                  <Download size={13} />
                 )}
-              >
-                <Layers size={12} /> Tổng
-              </button>
-            </div>
-          )}
-          <DateRangePicker
-            from={createdFrom}
-            to={createdTo}
-            onChange={(f, t) => {
-              setCreatedFrom(f);
-              setCreatedTo(t);
-            }}
-          />
-          <Button
-            variant="outline"
-            size="sm"
-            onClick={() => {
-              fetchOverview();
-              fetchRows();
-            }}
-            disabled={overviewLoading || rowsLoading}
-          >
-            <RefreshCw size={13} className={overviewLoading || rowsLoading ? 'animate-spin' : ''} />
-            Tải lại
-          </Button>
-          <Button
-            variant="outline"
-            size="sm"
-            onClick={handleExport}
-            disabled={exportLoading || rowsLoading}
-            title="Xuất tất cả đơn theo filter hiện tại (bỏ qua phân trang)"
-          >
-            {exportLoading ? (
-              <Spinner size={13} className="text-muted-foreground" />
-            ) : (
-              <Download size={13} />
-            )}
-            Xuất Excel
-          </Button>
-          {overview && (
-            <span className="ml-auto text-xs text-muted-foreground">
-              <span className="font-semibold text-foreground tabular-nums">{overview.totals.total}</span> đơn ·{' '}
-              <span className="font-semibold text-amber-700 dark:text-amber-400 tabular-nums">
-                {overview.totals.transferred}
-              </span>{' '}
-              đã chuyển
-            </span>
-          )}
-        </div>
+                Xuất Excel
+              </Button>
+              {overview && (
+                <span className="ml-auto text-xs text-muted-foreground">
+                  <span className="font-semibold text-foreground tabular-nums">{overview.totals.total}</span>{' '}
+                  đơn ·{' '}
+                  <span className="font-semibold text-amber-700 dark:text-amber-400 tabular-nums">
+                    {overview.totals.transferred}
+                  </span>{' '}
+                  đã chuyển
+                </span>
+              )}
+            </>
+          }
+          facets={[
+            { key: 'type', label: 'Sản phẩm', value: selectFilters.type, onChange: (v) => setSelectFilters((s) => ({ ...s, type: v })), options: overview?.availableFilters.products || [] },
+            { key: 'fabricType', label: 'Loại vải', value: selectFilters.fabric, onChange: (v) => setSelectFilters((s) => ({ ...s, fabric: v })), options: overview?.availableFilters.fabrics || [] },
+            { key: 'machineTypeId', label: 'Phòng', value: selectFilters.machine, onChange: (v) => setSelectFilters((s) => ({ ...s, machine: v })), options: overview?.availableFilters.machineTypes || [] },
+            { key: 'machineNumber', label: 'Máy', value: selectFilters.machineNumber, onChange: (v) => setSelectFilters((s) => ({ ...s, machineNumber: v })), options: overview?.availableFilters.machines || [] },
+            { key: 'toolResult', label: 'Kết quả Tool', value: selectFilters.tool, onChange: (v) => setSelectFilters((s) => ({ ...s, tool: v })), options: overview?.availableFilters.toolResults || [] },
+          ] satisfies OrderFilterFacet[]}
+        />
 
 
         {/* Cards section — "Theo xưởng" = 3 factory cards; "Tổng" = 1 aggregate
@@ -700,42 +717,6 @@ export default function OrderFactoryTab() {
                 </Button>
               )}
           </div>
-
-          {/* Select filters — options come from BE `availableFilters`
-              reflecting only what's present in the date range, so user never
-              sees options that yield empty results. */}
-          <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-2">
-            <SelectFilter
-              label="Sản phẩm"
-              value={selectFilters.type}
-              onChange={(v) => setSelectFilters((s) => ({ ...s, type: v }))}
-              options={overview?.availableFilters.products || []}
-            />
-            <SelectFilter
-              label="Loại vải"
-              value={selectFilters.fabric}
-              onChange={(v) => setSelectFilters((s) => ({ ...s, fabric: v }))}
-              options={overview?.availableFilters.fabrics || []}
-            />
-            <SelectFilter
-              label="Phòng"
-              value={selectFilters.machine}
-              onChange={(v) => setSelectFilters((s) => ({ ...s, machine: v }))}
-              options={overview?.availableFilters.machineTypes || []}
-            />
-            <SelectFilter
-              label="Máy"
-              value={selectFilters.machineNumber}
-              onChange={(v) => setSelectFilters((s) => ({ ...s, machineNumber: v }))}
-              options={overview?.availableFilters.machines || []}
-            />
-            <SelectFilter
-              label="Kết quả Tool"
-              value={selectFilters.tool}
-              onChange={(v) => setSelectFilters((s) => ({ ...s, tool: v }))}
-              options={overview?.availableFilters.toolResults || []}
-            />
-          </div>
         </div>
 
         {/* Bulk transfer toolbar */}
@@ -852,7 +833,13 @@ export default function OrderFactoryTab() {
                     row.originalFactoryId !== row.factoryId;
                   const originalMeta = overview?.factories.find((f) => f.factoryId === row.originalFactoryId);
                   return (
-                    <TableRow key={row._id} className={selected.has(row._id) ? 'bg-primary/5' : ''}>
+                    <TableRow
+                      key={row._id}
+                      className={cn(
+                        isNoTool(row.toolResult) && !selected.has(row._id) && NO_TOOL_ROW_CLASS,
+                        selected.has(row._id) && 'bg-primary/5',
+                      )}
+                    >
                       {canTransfer && (
                         <TableCell>
                           <input

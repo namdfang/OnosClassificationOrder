@@ -1,16 +1,14 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
-import { ChevronDown, ChevronRight, History, MousePointerClick, RefreshCw, Search } from 'lucide-react';
+import { ChevronDown, ChevronRight, History, MousePointerClick } from 'lucide-react';
 import { useSearchParams } from 'react-router-dom';
 import type { WorkshopAvailableFilters } from 'shared';
 
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
-import { Input } from '@/components/ui/input';
 import { PaginationBar } from '@/components/common/PaginationBar';
-import { DateRangePicker } from '@/components/common/DateRangePicker';
-import { SelectFilter } from '@/components/common/SelectFilter';
 import { Spinner } from '@/components/common/Spinner';
 import { ImagePreviewDialog } from '@/components/common/ImagePreviewDialog';
+import { OrderFilterBar, type OrderFilterFacet } from '@/components/orders/OrderFilterBar';
 import {
   Table,
   TableBody,
@@ -34,6 +32,7 @@ import { RepositoryRemote } from '@/services';
 import { useWorkshopConfigStore } from '@/store/workshopConfigStore';
 import { handleAxiosError } from '@/utils';
 import { useDebounce } from '@/hooks/useDebounce';
+import { NO_TOOL_ROW_CLASS, useIsNoTool } from '@/hooks/useIsNoTool';
 import { cn } from '@/utils/cn';
 
 // Types and column config live in workshopTableConfig.tsx (shared with OrdersMiniTable).
@@ -390,6 +389,7 @@ export function OrderTableWorkshop() {
   };
 
   const renderCtx: RenderCtx = { canEditField, patchRow, openPreview };
+  const isNoTool = useIsNoTool();
 
   // Designer summary chỉ hiện cho role có quyền xem stats designer.
   const canSeeDesignerSummary = has('page.designer_stats') || has('designer.task.assign');
@@ -455,42 +455,25 @@ export function OrderTableWorkshop() {
           />
         )}
 
-        {/* Filter bar */}
-        <div className="rounded-lg border border-border bg-card p-3 space-y-3">
-          <div className="flex items-center gap-2 flex-wrap">
-            <div className="relative flex-1 min-w-[200px]">
-              <Search size={13} className="absolute left-2 top-1/2 -translate-y-1/2 text-muted-foreground" />
-              <Input
-                placeholder="Tìm Production ID / SKU / Order ID / Type..."
-                value={search}
-                onChange={(e) => setSearch(e.target.value)}
-                className="pl-7 h-9 text-sm"
-              />
-            </div>
-            <div className="flex items-center gap-1.5">
-              <DateRangePicker
-                from={createdFrom}
-                to={createdTo}
-                onChange={(f, t) => {
-                  setCreatedFrom(f);
-                  setCreatedTo(t);
-                  setPage(1);
-                }}
-              />
-            </div>
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={() => {
-                setLoading(true);
-                Promise.all([fetchData(), fetchFilters()]).finally(() => setLoading(false));
-              }}
-              disabled={loading}
-            >
-              <RefreshCw size={13} className={loading ? 'animate-spin' : ''} />
-              Tải lại
-            </Button>
-            {groups.length > 1 && (
+        {/* Filter bar — chuẩn cho mọi bảng order. Cùng layout với ErrorLogTab,
+            OrderFactoryTab, OrderStatusTab (extract qua <OrderFilterBar>). */}
+        <OrderFilterBar
+          search={search}
+          onSearchChange={setSearch}
+          createdFrom={createdFrom}
+          createdTo={createdTo}
+          onDateRangeChange={(f, t) => {
+            setCreatedFrom(f);
+            setCreatedTo(t);
+            setPage(1);
+          }}
+          onReload={() => {
+            setLoading(true);
+            Promise.all([fetchData(), fetchFilters()]).finally(() => setLoading(false));
+          }}
+          loading={loading}
+          topActionsRight={
+            groups.length > 1 ? (
               <Button
                 variant="ghost"
                 size="sm"
@@ -502,84 +485,20 @@ export function OrderTableWorkshop() {
               >
                 {collapsedTypes.size === groups.length ? 'Mở hết' : 'Thu gọn hết'}
               </Button>
-            )}
-          </div>
-
-          <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-2">
-            {has('order.field.fabricType.view') && (
-              <SelectFilter
-                label="Loại vải"
-                value={filterFabricType}
-                onChange={setFilterFabricType}
-                options={workshopFilters?.fabricType || []}
-              />
-            )}
-            {has('order.field.machineNumber.view') && (
-              <SelectFilter
-                label="Máy"
-                value={filterMachineNumber}
-                onChange={setFilterMachineNumber}
-                options={workshopFilters?.machineNumber || []}
-              />
-            )}
-            {has('order.field.printStatus.view') && (
-              <SelectFilter
-                label="Trạng thái in"
-                value={filterPrintStatus}
-                onChange={setFilterPrintStatus}
-                options={workshopFilters?.printStatus || []}
-              />
-            )}
-            {has('order.field.toolResult.view') && (
-              <SelectFilter
-                label="Kết quả Tool"
-                value={filterToolResult}
-                onChange={setFilterToolResult}
-                options={workshopFilters?.toolResult || []}
-              />
-            )}
-            {has('order.field.toolResultNote.view') && (
-              <SelectFilter
-                label="Note kq Tool"
-                value={filterToolResultNote}
-                onChange={setFilterToolResultNote}
-                options={workshopFilters?.toolResultNote || []}
-              />
-            )}
-            {has('order.field.errorFile.view') && (
-              <SelectFilter
-                label="File sửa lỗi"
-                value={filterErrorFile}
-                onChange={setFilterErrorFile}
-                options={workshopFilters?.errorFile || []}
-              />
-            )}
-            {has('order.field.assignee.view') && (
-              <SelectFilter
-                label="Người thực hiện"
-                value={filterAssignee}
-                onChange={setFilterAssignee}
-                options={assigneeOptions}
-              />
-            )}
-            {canSeeDesignerSummary && (
-              <SelectFilter
-                label="TT Designer"
-                value={filterDesignerStatus}
-                onChange={setFilterDesignerStatus}
-                options={designerStatusOptions}
-              />
-            )}
-            {has('order.field.productionError.view') && (
-              <SelectFilter
-                label="Lỗi xưởng"
-                value={filterProductionError}
-                onChange={setFilterProductionError}
-                options={workshopFilters?.productionError || []}
-              />
-            )}
-          </div>
-        </div>
+            ) : null
+          }
+          facets={[
+            { key: 'fabricType', label: 'Loại vải', value: filterFabricType, onChange: setFilterFabricType, options: workshopFilters?.fabricType || [], perm: 'order.field.fabricType.view' },
+            { key: 'machineNumber', label: 'Máy', value: filterMachineNumber, onChange: setFilterMachineNumber, options: workshopFilters?.machineNumber || [], perm: 'order.field.machineNumber.view' },
+            { key: 'printStatus', label: 'Trạng thái in', value: filterPrintStatus, onChange: setFilterPrintStatus, options: workshopFilters?.printStatus || [], perm: 'order.field.printStatus.view' },
+            { key: 'toolResult', label: 'Kết quả Tool', value: filterToolResult, onChange: setFilterToolResult, options: workshopFilters?.toolResult || [], perm: 'order.field.toolResult.view' },
+            { key: 'toolResultNote', label: 'Note kq Tool', value: filterToolResultNote, onChange: setFilterToolResultNote, options: workshopFilters?.toolResultNote || [], perm: 'order.field.toolResultNote.view' },
+            { key: 'errorFile', label: 'File sửa lỗi', value: filterErrorFile, onChange: setFilterErrorFile, options: workshopFilters?.errorFile || [], perm: 'order.field.errorFile.view' },
+            { key: 'assignee', label: 'Người thực hiện', value: filterAssignee, onChange: setFilterAssignee, options: assigneeOptions, perm: 'order.field.assignee.view' },
+            { key: 'designerStatus', label: 'TT Designer', value: filterDesignerStatus, onChange: setFilterDesignerStatus, options: designerStatusOptions, hidden: !canSeeDesignerSummary },
+            { key: 'productionError', label: 'Lỗi xưởng', value: filterProductionError, onChange: setFilterProductionError, options: workshopFilters?.productionError || [], perm: 'order.field.productionError.view' },
+          ] satisfies OrderFilterFacet[]}
+        />
 
         <PaginationBar
           position="top"
@@ -729,8 +648,12 @@ export function OrderTableWorkshop() {
                           <TableRow
                             key={row._id}
                             className={cn(
-                              selected.has(row._id) && 'bg-primary/5',
+                              // Priority: selected > heaviest combo > no-tool tint.
+                              // No-tool tint = soft blue background cho đơn đánh
+                              // dấu "không cần tool" (xem useIsNoTool docstring).
+                              isNoTool(row.toolResult) && !selected.has(row._id) && !isHeaviest && NO_TOOL_ROW_CLASS,
                               isHeaviest && !selected.has(row._id) && 'bg-amber-50/60 dark:bg-amber-500/5',
+                              selected.has(row._id) && 'bg-primary/5',
                             )}
                           >
                             <TableCell>

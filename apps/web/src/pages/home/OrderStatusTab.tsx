@@ -19,10 +19,12 @@ import { usePermission } from '@/hooks/usePermission';
 import { useWorkshopConfigStore } from '@/store/workshopConfigStore';
 import { cn } from '@/utils/cn';
 
+import { OrderFilterBar } from '@/components/orders/OrderFilterBar';
+
 import { KpiCard } from './status/KpiCard';
 import { BreakdownCard } from './status/BreakdownCard';
-import { FilterChipBar } from './status/FilterChipBar';
 import { OrdersMiniTable } from './status/OrdersMiniTable';
+import { StatusActiveChips, StatusFilterTopActions } from './status/StatusFilterExtras';
 import { useStatusFilter } from './status/useStatusFilter';
 
 type KpiKey =
@@ -51,6 +53,16 @@ const ICONS: Record<KpiKey, LucideIcon> = {
 export default function OrderStatusTab() {
   const { roleName, isAdmin, has, canViewField } = usePermission();
   const { filter, queryString, isActive, toggle, setScalar, setHasError, clearAll } = useStatusFilter();
+  const [search, setSearchLocal] = useState<string>(filter.search || '');
+
+  // Sync search → URL through useStatusFilter, debounce 300ms tránh refetch
+  // mỗi keystroke.
+  useEffect(() => {
+    const id = window.setTimeout(() => {
+      setScalar('search', search || undefined);
+    }, 300);
+    return () => window.clearTimeout(id);
+  }, [search, setScalar]);
 
   const [overview, setOverview] = useState<OrderStatusOverview | null>(null);
   const [loading, setLoading] = useState(false);
@@ -188,14 +200,33 @@ export default function OrderStatusTab() {
         </div>
       )}
 
-      {/* Filter chip bar */}
-      <FilterChipBar
-        filter={filter}
-        isActive={isActive}
-        onToggle={toggle}
-        onScalar={(k, v) => setScalar(k, v)}
-        onHasError={setHasError}
-        onClearAll={clearAll}
+      {/* Filter bar — đồng bộ position/layout với 3 bảng order khác. Field set
+          giữ status-specific: search + date + reload + "Lỗi cần xử lý" toggle.
+          Filter chính qua BreakdownCard grid (multi-select chip per facet) bên
+          dưới — đó là USP của tab này, không thay được bằng dropdown đơn. */}
+      <OrderFilterBar
+        search={search}
+        onSearchChange={setSearchLocal}
+        createdFrom={filter.createdFrom}
+        createdTo={filter.createdTo}
+        onDateRangeChange={(f, t) => {
+          setScalar('createdFrom', f || undefined);
+          setScalar('createdTo', t || undefined);
+        }}
+        onReload={fetchOverview}
+        loading={loading}
+        topActionsRight={
+          <StatusFilterTopActions
+            hasError={filter.hasError}
+            isActive={isActive}
+            onHasError={setHasError}
+            onClearAll={() => {
+              clearAll();
+              setSearchLocal('');
+            }}
+          />
+        }
+        middleRow={<StatusActiveChips filter={filter} onToggle={toggle} />}
       />
 
       {/* Breakdown grid */}
