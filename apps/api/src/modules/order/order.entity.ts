@@ -312,7 +312,7 @@ export class OrderEntity extends DatabaseEntityAbstract {
   @Prop({ required: true, default: 0 })
   designerWorkMs: number;
 
-  // ─── Fulfillment 5-stage workflow ───────────────────────────────
+  // ─── Fulfillment 7-stage workflow ───────────────────────────────
   /**
    * Stage hiện tại của đơn. null = chưa vào fulfillment HOẶC đã pack done.
    * Filter chính cho `getOrders` của user Fulfillment (cùng với `factoryId`).
@@ -335,8 +335,10 @@ export class OrderEntity extends DatabaseEntityAbstract {
     type: raw({
       print: { type: Object },
       press: { type: Object },
-      qc: { type: Object },
-      sew: { type: Object },
+      'qc-post-press': { type: Object },
+      'qc-sorting': { type: Object },
+      'sew-in': { type: Object },
+      'sew-out': { type: Object },
       pack: { type: Object },
     }),
   })

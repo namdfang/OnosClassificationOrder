@@ -87,10 +87,12 @@ export class DesignerTaskService {
     ) {
       const set = (plan.patch.$set ?? {}) as Record<string, unknown>;
       set.currentFulfillmentStage = FulfillmentStage.Print;
+      // `waitingAt = now` để user In thấy mốc "Nhận task lúc..." trong card.
       set['fulfillmentStages.print'] = {
         status: FulfillmentStageStatus.Waiting,
         reworkCount: 0,
         workMs: 0,
+        waitingAt: new Date(),
       };
       plan.patch.$set = set;
     }

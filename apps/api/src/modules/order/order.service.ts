@@ -151,15 +151,21 @@ const READY_FOR_FULFILL_CODE = 'ok';
  * $set — nếu apply lên đơn đang chạy giữa flow sẽ ghi đè state hiện tại.
  * Đồng bộ với hook ở `DesignerTaskService.transition()` ~line 83.
  * Xem `documents/FunctionDescription/FulfillmentWorkflow.md` §2.1b.
+ *
+ * Là factory function (không phải const) vì `waitingAt = new Date()` cần
+ * evaluate mỗi lần gọi — const với `as const` sẽ freeze timestamp ở module load.
  */
-const FULFILLMENT_ENTRY_SET = {
-  currentFulfillmentStage: FulfillmentStage.Print,
-  'fulfillmentStages.print': {
-    status: FulfillmentStageStatus.Waiting,
-    reworkCount: 0,
-    workMs: 0,
-  },
-} as const;
+function buildFulfillmentEntrySet(): Record<string, unknown> {
+  return {
+    currentFulfillmentStage: FulfillmentStage.Print,
+    'fulfillmentStages.print': {
+      status: FulfillmentStageStatus.Waiting,
+      reworkCount: 0,
+      workMs: 0,
+      waitingAt: new Date(),
+    },
+  };
+}
 
 /** Field workshop có schema array thay vì string đơn. */
 const MULTI_VALUE_FIELDS: OrderWorkshopField[] = ['errorFile'];
@@ -2369,7 +2375,7 @@ export class OrderService implements OnModuleInit {
         // tránh ghi đè state đang chạy.
         const beforeStage =
           (before as unknown as { currentFulfillmentStage?: string | null }).currentFulfillmentStage;
-        if (!beforeStage) Object.assign(patch, FULFILLMENT_ENTRY_SET);
+        if (!beforeStage) Object.assign(patch, buildFulfillmentEntrySet());
       }
     }
 
@@ -2579,7 +2585,7 @@ export class OrderService implements OnModuleInit {
           deletedAt: { $exists: false },
           currentFulfillmentStage: { $in: [null, undefined] },
         },
-        { $set: FULFILLMENT_ENTRY_SET },
+        { $set: buildFulfillmentEntrySet() },
       );
     }
 
@@ -2979,7 +2985,7 @@ export class OrderService implements OnModuleInit {
             $set.readyForFulfill = true;
             $set.productionFirstErrorAt = null;
             if (!order.currentFulfillmentStage) {
-              Object.assign($set, FULFILLMENT_ENTRY_SET);
+              Object.assign($set, buildFulfillmentEntrySet());
             }
           }
         } else {

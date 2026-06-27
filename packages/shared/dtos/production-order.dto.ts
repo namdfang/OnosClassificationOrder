@@ -25,6 +25,16 @@ export const FulfillmentStageStateZod = z.object({
   /** = user._id của worker đảm nhiệm (resolved từ factory+stage tại thời điểm assign). */
   assignee: z.string().optional(),
   assignedAt: z.date().optional(),
+  /**
+   * Thời điểm stage **nhận task** (vào trạng thái `waiting`). Set khi:
+   *   - Auto-advance từ stage trước complete.
+   *   - Designer.complete entry → set cho `print`.
+   *   - Entry B (manual `toolResultNote='ok'`) → set cho `print`.
+   * KHÔNG set khi rework-back của reporter (reporter chỉ đẩy đi rồi chờ — không
+   * coi như nhận task mới); dùng `reworkAt` cho case quay lại.
+   * FE hiển thị "Nhận task lúc..." trong card tab "Đang chờ".
+   */
+  waitingAt: z.date().optional(),
   /** Start của cycle hiện tại — reset mỗi lần start/restart. */
   startedAt: z.date().optional(),
   /** Start của LẦN ĐẦU — immutable. Dùng tính response time. */
@@ -44,8 +54,10 @@ export type FulfillmentStageState = z.infer<typeof FulfillmentStageStateZod>;
 export const FulfillmentStagesZod = z.object({
   print: FulfillmentStageStateZod.optional(),
   press: FulfillmentStageStateZod.optional(),
-  qc: FulfillmentStageStateZod.optional(),
-  sew: FulfillmentStageStateZod.optional(),
+  'qc-post-press': FulfillmentStageStateZod.optional(),
+  'qc-sorting': FulfillmentStageStateZod.optional(),
+  'sew-in': FulfillmentStageStateZod.optional(),
+  'sew-out': FulfillmentStageStateZod.optional(),
   pack: FulfillmentStageStateZod.optional(),
 });
 export type FulfillmentStages = z.infer<typeof FulfillmentStagesZod>;
@@ -995,7 +1007,7 @@ export class FulfillmentTransitionResDto extends createZodDto(
  * Stage + factory tự suy từ user đang login (BE filter). User Manager/Admin
  * có thể override qua query `stage`/`factoryId`.
  */
-export const FULFILLMENT_TASK_TABS = ['waiting', 'in-progress', 'rework', 'watching'] as const;
+export const FULFILLMENT_TASK_TABS = ['waiting', 'in-progress', 'rework', 'done', 'watching'] as const;
 export type FulfillmentTaskTab = (typeof FULFILLMENT_TASK_TABS)[number];
 export const FulfillmentTaskTabZod = z.enum(FULFILLMENT_TASK_TABS);
 
@@ -1009,11 +1021,12 @@ export class GetFulfillmentMyTasksDto extends createZodDto(extendApi(GetFulfillm
 
 export const GetFulfillmentMyTasksResZod = PageResZod.extend({
   data: ProductionOrderZod.array(),
-  /** Tab counters (4 tab) — bỏ qua pagination. */
+  /** Tab counters (5 tab) — bỏ qua pagination. */
   tabCounts: z.object({
     waiting: z.number(),
     inProgress: z.number(),
     rework: z.number(),
+    done: z.number(),
     watching: z.number(),
   }),
 });

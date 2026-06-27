@@ -2,7 +2,7 @@ import React, { useEffect, useMemo, useState } from 'react';
 import { Eye, EyeOff, Pencil, Plus, RefreshCw, Trash2, Users as UsersIcon } from 'lucide-react';
 import { toast } from 'sonner';
 import type { Role } from 'shared';
-import { Status } from 'shared';
+import { FULFILLMENT_STAGE_LABELS, FULFILLMENT_STAGES, Status } from 'shared';
 
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
@@ -68,13 +68,10 @@ const EMPTY_FORM: FormState = {
   fulfillmentStage: '',
 };
 
-const FULFILLMENT_STAGE_OPTIONS: { value: string; label: string }[] = [
-  { value: 'print', label: 'In' },
-  { value: 'press', label: 'Ép' },
-  { value: 'qc', label: 'QC' },
-  { value: 'sew', label: 'May' },
-  { value: 'pack', label: 'Đóng gói' },
-];
+// Auto-derive từ shared enum để khi thêm/đổi stage 1 chỗ — UI tự cập nhật.
+const FULFILLMENT_STAGE_OPTIONS: { value: string; label: string }[] = FULFILLMENT_STAGES.map(
+  (s) => ({ value: s, label: FULFILLMENT_STAGE_LABELS[s] }),
+);
 
 export default function UsersPage() {
   const [items, setItems] = useState<UserRow[]>([]);

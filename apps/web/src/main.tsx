@@ -4,6 +4,8 @@ import dayjs from 'dayjs';
 import customParseFormat from 'dayjs/plugin/customParseFormat';
 import weekday from 'dayjs/plugin/weekday';
 import localeData from 'dayjs/plugin/localeData';
+import relativeTime from 'dayjs/plugin/relativeTime';
+import 'dayjs/locale/vi';
 import App from './App';
 import './theme/globals.css';
 import './assets/styles/index.css';
@@ -14,6 +16,8 @@ import { registerImageCacheSW } from './utils/registerSW';
 dayjs.extend(customParseFormat);
 dayjs.extend(weekday);
 dayjs.extend(localeData);
+dayjs.extend(relativeTime);
+dayjs.locale('vi');
 
 registerImageCacheSW();
 

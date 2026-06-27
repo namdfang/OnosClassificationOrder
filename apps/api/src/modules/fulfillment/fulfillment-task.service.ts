@@ -236,11 +236,14 @@ export class FulfillmentTaskService {
         if (delta > 0) inc[`fulfillmentStages.${stage}.workMs`] = delta;
 
         // Auto-advance: stage tiếp theo (nếu có). Set waiting bất kể đã từng
-        // done hay chưa — workMs giữ nguyên cumulative cho stage đó.
+        // done hay chưa — workMs giữ nguyên cumulative cho stage đó. `waitingAt`
+        // reset mỗi cycle (rework-back về lại stage này sẽ overwrite) — FE
+        // hiển thị "Nhận task lúc..." cho user trong tab Đang chờ.
         const nextStage = this.nextStage(stage);
         if (nextStage) {
           set.currentFulfillmentStage = nextStage;
           set[`fulfillmentStages.${nextStage}.status`] = FulfillmentStageStatus.Waiting;
+          set[`fulfillmentStages.${nextStage}.waitingAt`] = now;
         } else {
           // pack done → flow xong toàn bộ.
           set.currentFulfillmentStage = null;
@@ -386,7 +389,7 @@ export class FulfillmentTaskService {
     total: number;
     page: number;
     size: number;
-    tabCounts: { waiting: number; inProgress: number; rework: number; watching: number };
+    tabCounts: { waiting: number; inProgress: number; rework: number; done: number; watching: number };
   }> {
     const roleName = user.role?.name as RoleType | undefined;
     const isOverride = roleName ? OVERRIDE_ROLES.includes(roleName) : false;
@@ -459,6 +462,20 @@ export class FulfillmentTaskService {
           currentFulfillmentStage: stage,
           [`fulfillmentStages.${stage}.status`]: FulfillmentStageStatus.Rework,
         };
+      case 'done':
+        // Đơn user đã hoàn thành stage này (đã có completedAt) VÀ đơn đã
+        // rời stage (currentFulfillmentStage > stage hoặc null nếu pack done).
+        // Sort theo completedAt desc khi caller dùng — nhưng giữ sort chung
+        // ở `getMyTasks` (orderAt desc) để code đơn giản. Nếu muốn period filter
+        // (today/7d/30d) → caller truyền vào, hiện chưa cần.
+        return {
+          ...base,
+          [`fulfillmentStages.${stage}.completedAt`]: { $exists: true, $ne: null },
+          $or: [
+            { currentFulfillmentStage: { $ne: stage } },
+            { currentFulfillmentStage: { $in: [null, undefined] } },
+          ],
+        };
       case 'watching':
         // Đơn worker (userId) đã từng rework-back, đang chờ quay lại.
         // Match: timeline có entry stage=mineStage + action=rework-back + byUserId=userId
@@ -487,13 +504,14 @@ export class FulfillmentTaskService {
     base: FilterQuery<OrderEntity>,
     stage: FulfillmentStage,
     userId: string,
-  ): Promise<{ waiting: number; inProgress: number; rework: number; watching: number }> {
-    const [waiting, inProgress, rework, watching] = await Promise.all([
+  ): Promise<{ waiting: number; inProgress: number; rework: number; done: number; watching: number }> {
+    const [waiting, inProgress, rework, done, watching] = await Promise.all([
       this.orderModel.countDocuments(this.applyTabFilter(base, 'waiting', stage, userId)),
       this.orderModel.countDocuments(this.applyTabFilter(base, 'in-progress', stage, userId)),
       this.orderModel.countDocuments(this.applyTabFilter(base, 'rework', stage, userId)),
+      this.orderModel.countDocuments(this.applyTabFilter(base, 'done', stage, userId)),
       this.orderModel.countDocuments(this.applyTabFilter(base, 'watching', stage, userId)),
     ]);
-    return { waiting, inProgress, rework, watching };
+    return { waiting, inProgress, rework, done, watching };
   }
 }

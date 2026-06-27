@@ -344,7 +344,7 @@ Mỗi request `GET /v1/orders` đi qua `OrderService.buildVisibilityFilter(roleN
 
 `readyForFulfill` semantic mềm hoá: vẫn `true` khi xưởng báo lỗi (`toolResultNote='error'`) — để fulfillment thấy đơn lỗi trong list mặc định mà không cần switch filter. Set lifecycle: `complete` action (state machine designer) set `toolResultNote='ok'` + `readyForFulfill=true`; user clear `toolResultNote` qua updateField trực tiếp mới set false.
 
-**Cross-feature — fulfillment entry hook:** Khi `toolResultNote` chuyển sang `'ok'` qua bất kỳ path nào (`updateField`, `bulkUpdateField`, `importRework`) **VÀ** đơn chưa từng vào fulfillment (`!currentFulfillmentStage`) → spread `FULFILLMENT_ENTRY_SET` (`order.service.ts:155`) vào patch để đẩy đơn vào tab "Đang chờ" của user In. Đồng bộ với hook ở `DesignerTaskService.transition(complete)`. Chi tiết xem `FulfillmentWorkflow.md §2.1 + §5.4 Entry B`.
+**Cross-feature — fulfillment entry hook:** Khi `toolResultNote` chuyển sang `'ok'` qua bất kỳ path nào (`updateField`, `bulkUpdateField`, `importRework`) **VÀ** đơn chưa từng vào fulfillment (`!currentFulfillmentStage`) → spread `buildFulfillmentEntrySet()` (`order.service.ts:155`) vào patch để đẩy đơn vào tab "Đang chờ" của user In + set `waitingAt` mốc nhận task. Đồng bộ với hook ở `DesignerTaskService.transition(complete)`. Chi tiết xem `FulfillmentWorkflow.md §2.1 + §5.4 Entry B`.
 
 Controller pass `user._id` + `user.factoryId` cho tất cả endpoint GET. Xem `DesignerTaskWorkflow.md §5.5`.
 

@@ -59,7 +59,8 @@ User vào /login
 - Endpoint: `/v1/users` (GET list, POST create, PATCH :id, DELETE :id)
 - **`factoryId` required khi role=Fulfillment** (BE validate trong `createUser` + `adminUpdateUser`; throw 400 nếu thiếu). Per-factory scope: Fulfillment user chỉ thấy đơn ở `factoryId` hoặc `originalFactoryId` của mình (xem `Orders.md §7`)
 - `telegramChatId` + `hireDate` dùng cho `/designer/team` page (Designer/DesignerLeader role)
-- `getUserById` projection bao gồm: `_id, status, email, fullName, departmentId, factoryId, telegramChatId, hireDate, role, customRole, rateLimitBypass, forcePassChange` — đảm bảo `AuthUser()` decorator có đủ field cho visibility filter
+- `getUserById` projection bao gồm: `_id, status, email, fullName, departmentId, factoryId, fulfillmentStage, telegramChatId, hireDate, role, customRole, rateLimitBypass, forcePassChange` — đảm bảo `AuthUser()` decorator có đủ field cho visibility filter
+- ⚠️ **Gotcha quan trọng:** `getUserById` $project + `getMe` $project là 2 aggregation pipeline **độc lập** — field nào không có trong list sẽ silently `undefined` trên user object. Bất kỳ field mới nào trên `UserEntity` mà BE/FE cần access (qua `@AuthUser()` hoặc `authStore.profile`) đều phải add vào **cả 2** $project. Đã có precedent: thiếu `fulfillmentStage` ở `getUserById` → endpoint `/v1/fulfillment/my-tasks` báo "Thiếu stage" dù user đã được gán đúng. Xem `FulfillmentWorkflow.md §5.6`.
 - ⚠️ Phase Designer-Task-Workflow Phase 6 **xoá** field `user.assigneeCode` — designer identity model giờ dùng `user._id` trực tiếp (Order.assignee = user._id)
 
 ### 3.3 `role/`
