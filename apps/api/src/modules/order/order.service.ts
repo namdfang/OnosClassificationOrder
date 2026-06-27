@@ -12,6 +12,8 @@ import { InjectModel } from '@nestjs/mongoose';
 import { Queue } from 'bullmq';
 import { Model, PipelineStage } from 'mongoose';
 import type {
+  ApplyCuttingFilesDto,
+  ApplyCuttingFilesResDto,
   BulkAssignDesignerDto,
   BulkAssignDesignerPreviewDto,
   BulkAssignDesignerPreviewResDto,
@@ -53,7 +55,14 @@ import type {
   MachineBucket,
   MachineKpi,
   MachineTypeBreakdown,
+  CuttingFileBreakdownRow,
+  CuttingFileConflict,
+  CuttingFileInvalid,
+  CuttingFileMatched,
+  CuttingFileNotFound,
   MockupSummary,
+  PreviewCuttingFilesDto,
+  PreviewCuttingFilesResDto,
   OrderStatusOverview,
   OrderWorkshopField,
   SizeSummary,
@@ -69,12 +78,14 @@ import {
   DesignerStatus,
   FulfillmentStage,
   FulfillmentStageStatus,
+  parseProductionIdFromCuttingFilename,
   RoleType,
   WorkshopConfigCategory,
 } from 'shared';
 import { Logger } from 'winston';
 
 import { DesignImageService } from '../design-image/design-image.service';
+import { DriveFileNameService } from './drive-file-name.service';
 import {
   DESIGN_PREVIEW_QUEUE,
   DESIGN_THUMB_QUEUE,
@@ -286,6 +297,7 @@ export class OrderService implements OnModuleInit {
     @InjectQueue(DESIGN_PREVIEW_QUEUE) private readonly designPreviewQueue: Queue<DesignImageJobData>,
     @InjectModel(UserEntity.name) private readonly userModel: Model<UserEntity>,
     private readonly roleRepository: RoleRepository,
+    private readonly driveFileNameService: DriveFileNameService,
   ) {}
 
   /** Validate giá trị assignee là userId hợp lệ (user role=Designer, active). */
@@ -768,16 +780,24 @@ export class OrderService implements OnModuleInit {
     if (concreteTypes.length > 0) typeFilter.push({ type: { $in: concreteTypes } });
     if (hasUnnamed) typeFilter.push({ type: { $in: [null, ''] } });
 
-    const orders = await this.orderRepository.findAll(
-      { ...filter, $or: typeFilter },
-      {
-        sort: { type: 1, size: 1, fabricType: 1, inProductionAt: -1 },
-        populate: [
-          { path: 'factory', select: ['name', 'shortName'] },
-          { path: 'machineType', select: ['name', 'shortName'] },
-        ],
-      },
-    );
+    // BUG FIX: `{ ...filter, $or: typeFilter }` overwrite filter.$or (search
+    // clause / unmapped clause) → lộ toàn bộ đơn của type ra dù search chỉ
+    // match 1 đơn. Phải merge qua $and để giữ cả 2 điều kiện.
+    const ordersFilter: Record<string, unknown> = { ...filter };
+    const andClauses: unknown[] = [];
+    if (Array.isArray(ordersFilter.$and)) andClauses.push(...(ordersFilter.$and as unknown[]));
+    if (ordersFilter.$or) andClauses.push({ $or: ordersFilter.$or });
+    andClauses.push({ $or: typeFilter });
+    delete ordersFilter.$or;
+    ordersFilter.$and = andClauses;
+
+    const orders = await this.orderRepository.findAll(ordersFilter, {
+      sort: { type: 1, size: 1, fabricType: 1, inProductionAt: -1 },
+      populate: [
+        { path: 'factory', select: ['name', 'shortName'] },
+        { path: 'machineType', select: ['name', 'shortName'] },
+      ],
+    });
 
     // 4) Re-attach orders to their groups in the (count-desc) order.
     const byType = new Map<string, unknown[]>();
@@ -2637,6 +2657,55 @@ export class OrderService implements OnModuleInit {
   }
 
   /**
+   * Quét barcode (máy USB HID) → tìm đơn theo `productionId` exact match
+   * case-insensitive. Workshop dùng để mở dialog gán lỗi cho công đoạn trước.
+   *
+   * Visibility:
+   *   - Designer (sub): chỉ thấy đơn `assignee = user._id`.
+   *   - Fulfillment: chỉ thấy đơn `factoryId = user.factoryId` HOẶC
+   *     `originalFactoryId = user.factoryId`.
+   *   - Roles khác: full access.
+   *
+   * Throws:
+   *   - 404 nếu code rỗng / không tìm thấy / không thuộc scope của role.
+   */
+  async getByProductionId(
+    code: string,
+    roleName?: RoleType,
+    userId?: string,
+    fulfillmentFactoryId?: string,
+  ): Promise<{ success: true; data: unknown }> {
+    const trimmed = (code ?? '').trim();
+    if (!trimmed) throw new NotFoundException('Production ID rỗng.');
+
+    // Exact match case-insensitive — anchor `^...$` để không match phần.
+    const escaped = trimmed.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+    const doc = await this.orderModel
+      .findOne({ productionId: { $regex: `^${escaped}$`, $options: 'i' } })
+      .populate('factory', 'name shortName')
+      .populate('machineType', 'name shortName')
+      .populate('productConfig', 'fullName shortName')
+      .lean();
+    if (!doc) throw new NotFoundException('Không tìm thấy đơn với mã này.');
+
+    if (roleName === RoleType.Designer) {
+      if (!userId || (doc as { assignee?: string }).assignee !== userId) {
+        throw new NotFoundException('Đơn không thuộc phạm vi của bạn.');
+      }
+    } else if (roleName === RoleType.Fulfillment) {
+      const factoryId = (doc as { factoryId?: string }).factoryId;
+      const originalFactoryId = (doc as { originalFactoryId?: string }).originalFactoryId;
+      if (
+        !fulfillmentFactoryId ||
+        (factoryId !== fulfillmentFactoryId && originalFactoryId !== fulfillmentFactoryId)
+      ) {
+        throw new NotFoundException('Đơn không thuộc xưởng của bạn.');
+      }
+    }
+    return { success: true, data: doc };
+  }
+
+  /**
    * FE polling cho đơn đang xử lý design (R2 pipeline). Trả về subset field
    * mà status có thể thay đổi để FE patch row trong table mà không refetch full.
    */
@@ -3910,6 +3979,306 @@ export class OrderService implements OnModuleInit {
 
     void this.invalidateListCache();
     return { scanned: orders.length, updated, skipped };
+  }
+
+  // ─── Cutting File Mapping (post-import flow) ────────────────────
+  // Workflow: user paste list Drive link → BE fetch tên file (public Drive
+  // page) → parse productionId từ filename (`BH-XXXXX-XXXXX-*`) → search đơn
+  // hiện có → trả preview. Bước 2 apply ghi `cuttingFileUrl` + ghi audit log
+  // (action='bulk_update' với field='cuttingFileUrl' để giữ enum cũ).
+
+  async previewCuttingFiles(dto: PreviewCuttingFilesDto): Promise<PreviewCuttingFilesResDto> {
+    const links = Array.from(new Set((dto.links ?? []).map((l) => l.trim()).filter(Boolean)));
+    if (links.length === 0) {
+      throw new BadRequestException('Cần ít nhất 1 link');
+    }
+
+    // Bước 1: fetch tên file concurrent (cap 5) — tránh Drive rate-limit.
+    const CONCURRENCY = 5;
+    type FetchOutcome =
+      | { link: string; status: 'ok'; fileId: string; fileName: string; productionId: string }
+      | { link: string; status: 'no-production-id'; fileId: string; fileName: string }
+      | { link: string; status: 'invalid-url' }
+      | { link: string; status: 'fetch-failed'; fileId: string }
+      | { link: string; status: 'parse-failed'; fileId: string };
+    const outcomes: FetchOutcome[] = new Array(links.length) as FetchOutcome[];
+
+    let cursor = 0;
+    const workers = Array.from({ length: Math.min(CONCURRENCY, links.length) }, async () => {
+      while (true) {
+        const idx = cursor++;
+        if (idx >= links.length) break;
+        const link = links[idx];
+        const res = await this.driveFileNameService.fetchFileName(link);
+        if (res === null) {
+          outcomes[idx] = { link, status: 'invalid-url' };
+          continue;
+        }
+        if ('error' in res) {
+          outcomes[idx] = { link, status: res.error, fileId: res.fileId };
+          continue;
+        }
+        const productionId = parseProductionIdFromCuttingFilename(res.fileName);
+        if (!productionId) {
+          outcomes[idx] = { link, status: 'no-production-id', fileId: res.fileId, fileName: res.fileName };
+          continue;
+        }
+        outcomes[idx] = { link, status: 'ok', fileId: res.fileId, fileName: res.fileName, productionId };
+      }
+    });
+    await Promise.all(workers);
+
+    // Bước 2: split outcomes thành buckets + detect conflicts.
+    const okOutcomes = outcomes.filter((o): o is Extract<FetchOutcome, { status: 'ok' }> => o.status === 'ok');
+    const invalid: CuttingFileInvalid[] = outcomes
+      .filter((o) => o.status !== 'ok')
+      .map((o) => {
+        if (o.status === 'no-production-id') {
+          return { link: o.link, reason: 'no-production-id' as const, fileName: o.fileName };
+        }
+        return { link: o.link, reason: o.status as 'invalid-url' | 'fetch-failed' | 'parse-failed' };
+      });
+
+    // Detect conflict: cùng productionId xuất hiện > 1 link → user phải xoá bớt.
+    const byProductionId = new Map<string, typeof okOutcomes>();
+    for (const o of okOutcomes) {
+      const list = byProductionId.get(o.productionId) ?? [];
+      list.push(o);
+      byProductionId.set(o.productionId, list);
+    }
+    const conflicts: CuttingFileConflict[] = [];
+    const uniqueOutcomes: typeof okOutcomes = [];
+    for (const [productionId, list] of byProductionId.entries()) {
+      if (list.length > 1) {
+        conflicts.push({ productionId, links: list.map((l) => l.link) });
+      } else {
+        uniqueOutcomes.push(list[0]);
+      }
+    }
+
+    // Bước 3: lookup orders theo productionId (case-insensitive exact via $in).
+    const productionIds = uniqueOutcomes.map((o) => o.productionId);
+    const orders = productionIds.length
+      ? await this.orderModel
+          .find(
+            { productionId: { $in: productionIds }, deletedAt: { $exists: false } },
+            {
+              _id: 1,
+              productionId: 1,
+              factoryId: 1,
+              machineTypeId: 1,
+              cuttingFileUrl: 1,
+              cuttingFileName: 1,
+            },
+          )
+          .lean()
+      : [];
+
+    // Lookup factory + machine names (1 query mỗi loại).
+    const factoryIds = Array.from(
+      new Set(orders.map((o) => o.factoryId).filter((x): x is string => !!x)),
+    );
+    const machineIds = Array.from(
+      new Set(orders.map((o) => o.machineTypeId).filter((x): x is string => !!x)),
+    );
+    const [factoriesRaw, machinesRaw] = await Promise.all([
+      factoryIds.length
+        ? this.factoryRepository.findAll({ _id: { $in: factoryIds } } as Record<string, unknown>)
+        : Promise.resolve([] as Array<{ _id: unknown; name?: string; shortName?: string }>),
+      machineIds.length
+        ? this.machineTypeRepository.findAll({ _id: { $in: machineIds } } as Record<string, unknown>)
+        : Promise.resolve([] as Array<{ _id: unknown; name?: string; shortName?: string }>),
+    ]);
+    const factoryNameById = new Map(
+      factoriesRaw.map((f) => [String(f._id), f.shortName || f.name || '—']),
+    );
+    const machineNameById = new Map(
+      machinesRaw.map((m) => [String(m._id), m.shortName || m.name || '—']),
+    );
+
+    const ordersByProductionId = new Map(orders.map((o) => [o.productionId, o]));
+    const matched: CuttingFileMatched[] = [];
+    const notFound: CuttingFileNotFound[] = [];
+    for (const o of uniqueOutcomes) {
+      const order = ordersByProductionId.get(o.productionId);
+      if (!order) {
+        notFound.push({
+          link: o.link,
+          fileId: o.fileId,
+          fileName: o.fileName,
+          productionId: o.productionId,
+        });
+        continue;
+      }
+      matched.push({
+        link: o.link,
+        fileId: o.fileId,
+        fileName: o.fileName,
+        productionId: o.productionId,
+        orderId: String(order._id),
+        factoryId: order.factoryId,
+        factoryName: order.factoryId ? factoryNameById.get(order.factoryId) : undefined,
+        machineTypeId: order.machineTypeId,
+        machineTypeName: order.machineTypeId
+          ? machineNameById.get(order.machineTypeId)
+          : undefined,
+        existingCuttingFileUrl: order.cuttingFileUrl,
+        existingCuttingFileName: order.cuttingFileName,
+      });
+    }
+
+    // Breakdown counts.
+    const byFactoryMap = new Map<string, number>();
+    const byMachineMap = new Map<string, number>();
+    for (const m of matched) {
+      const fk = m.factoryId ?? '__none';
+      byFactoryMap.set(fk, (byFactoryMap.get(fk) ?? 0) + 1);
+      const mk = m.machineTypeId ?? '__none';
+      byMachineMap.set(mk, (byMachineMap.get(mk) ?? 0) + 1);
+    }
+    const byFactory: CuttingFileBreakdownRow[] = Array.from(byFactoryMap.entries()).map(
+      ([id, count]) => ({
+        id: id === '__none' ? null : id,
+        name: id === '__none' ? 'Chưa gán xưởng' : factoryNameById.get(id) ?? '—',
+        count,
+      }),
+    );
+    const byMachineType: CuttingFileBreakdownRow[] = Array.from(byMachineMap.entries()).map(
+      ([id, count]) => ({
+        id: id === '__none' ? null : id,
+        name: id === '__none' ? 'Chưa gán máy' : machineNameById.get(id) ?? '—',
+        count,
+      }),
+    );
+    byFactory.sort((a, b) => b.count - a.count);
+    byMachineType.sort((a, b) => b.count - a.count);
+
+    return {
+      success: true,
+      data: {
+        matched,
+        notFound,
+        invalid,
+        conflicts,
+        summary: {
+          totalLinks: links.length,
+          matched: matched.length,
+          withExistingFile: matched.filter((m) => !!m.existingCuttingFileUrl).length,
+          notFound: notFound.length,
+          invalid: invalid.length,
+          conflicts: conflicts.length,
+          byFactory,
+          byMachineType,
+        },
+      },
+    };
+  }
+
+  async applyCuttingFiles(
+    dto: ApplyCuttingFilesDto,
+    ctx?: AuditContext,
+  ): Promise<ApplyCuttingFilesResDto> {
+    if (!dto.mappings?.length) {
+      throw new BadRequestException('Danh sách mapping rỗng');
+    }
+
+    // Guard: nếu schema chưa biết về cuttingFileUrl/Name (vd entity chưa rebuild,
+    // hoặc hot-reload chưa pickup), Mongoose strict mode sẽ silently strip $set
+    // → bulkWrite "thành công" nhưng DB không có gì. Throw rõ ràng thay vì im lặng.
+    if (!this.orderModel.schema.path('cuttingFileUrl') || !this.orderModel.schema.path('cuttingFileName')) {
+      throw new BadRequestException(
+        'Schema chưa có cuttingFileUrl/cuttingFileName — restart BE để pickup entity mới.',
+      );
+    }
+
+    // Load current rows để: (1) bỏ qua đơn không tồn tại; (2) check overwrite
+    // rule; (3) ghi audit before/after chính xác.
+    const orderIds = dto.mappings.map((m) => m.orderId);
+    const current = await this.orderModel
+      .find(
+        { _id: { $in: orderIds }, deletedAt: { $exists: false } },
+        { _id: 1, cuttingFileUrl: 1, cuttingFileName: 1 },
+      )
+      .lean();
+    const currentById = new Map(current.map((c) => [String(c._id), c]));
+
+    const toUpdate: Array<{
+      orderId: string;
+      before: { cuttingFileUrl?: string; cuttingFileName?: string };
+      after: { cuttingFileUrl: string; cuttingFileName: string };
+    }> = [];
+    const skippedOrderIds: string[] = [];
+
+    for (const m of dto.mappings) {
+      const cur = currentById.get(m.orderId);
+      if (!cur) {
+        skippedOrderIds.push(m.orderId);
+        continue;
+      }
+      if (cur.cuttingFileUrl && !dto.overwrite) {
+        skippedOrderIds.push(m.orderId);
+        continue;
+      }
+      // No-op nếu URL giống nhau — không ghi audit cho việc set lại cùng giá trị.
+      if (cur.cuttingFileUrl === m.cuttingFileUrl && cur.cuttingFileName === m.cuttingFileName) {
+        skippedOrderIds.push(m.orderId);
+        continue;
+      }
+      toUpdate.push({
+        orderId: m.orderId,
+        before: { cuttingFileUrl: cur.cuttingFileUrl, cuttingFileName: cur.cuttingFileName },
+        after: { cuttingFileUrl: m.cuttingFileUrl, cuttingFileName: m.cuttingFileName },
+      });
+    }
+
+    if (toUpdate.length === 0) {
+      return { success: true, data: { updated: 0, skipped: skippedOrderIds.length, skippedOrderIds } };
+    }
+
+    // Bulk write — mỗi đơn 1 op vì cuttingFileUrl khác nhau.
+    const writeRes = await this.orderModel.bulkWrite(
+      toUpdate.map((t) => ({
+        updateOne: {
+          filter: { _id: t.orderId },
+          update: { $set: t.after },
+        },
+      })),
+      { ordered: false },
+    );
+
+    // Defensive: nếu modifiedCount < số op, log để debug. Lý do phổ biến:
+    //   - filter `_id` không match (vd orderId không tồn tại trong DB)
+    //   - $set giá trị giống hệt (Mongo skip update)
+    const modified = (writeRes as { modifiedCount?: number; nModified?: number }).modifiedCount
+      ?? (writeRes as { nModified?: number }).nModified
+      ?? 0;
+    if (modified !== toUpdate.length) {
+      this.logger.warn({
+        message: JSON.stringify({
+          event: 'applyCuttingFiles.partialWrite',
+          expected: toUpdate.length,
+          modified,
+          orderIds: toUpdate.map((t) => t.orderId),
+        }),
+      });
+    }
+
+    void this.orderLogService.writeMany(
+      toUpdate.map((t) => ({
+        orderId: t.orderId,
+        action: 'bulk_update' as const,
+        field: 'cuttingFileUrl',
+        before: t.before,
+        after: { ...t.after, event: 'production-file-mapped' },
+        ctx,
+      })),
+    );
+    void this.invalidateListCache();
+
+    return {
+      success: true,
+      data: { updated: modified, skipped: skippedOrderIds.length, skippedOrderIds },
+    };
   }
 }
 

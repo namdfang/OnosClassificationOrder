@@ -45,6 +45,7 @@ export const PERMISSION_CATALOG: PermissionItem[] = [
   { code: 'page.fulfillment_my_tasks', label: 'Task của tôi (fulfillment worker)', group: 'page' },
   { code: 'page.fulfillment_team',     label: 'Quản lý team fulfillment',          group: 'page' },
   { code: 'page.fulfillment_stats',    label: 'Stats fulfillment',                 group: 'page' },
+  { code: 'page.scan_error',           label: 'Quét mã lỗi (workshop scan)',       group: 'page' },
 
   // ─── Order actions ──────────────────────────────────────────────
   { code: 'order.import',              label: 'Import đơn hàng',           group: 'order' },
@@ -198,6 +199,8 @@ export const DEFAULT_ROLE_PERMISSIONS: Partial<Record<RoleType, string[]>> = {
     'order.field.productionErrorSource.view', 'order.field.productionErrorSource.edit',
     // 5-stage workflow transitions on own task.
     'fulfillment.task.transition',
+    // Quét barcode để gán lỗi nhanh.
+    'page.scan_error',
   ],
 };
 

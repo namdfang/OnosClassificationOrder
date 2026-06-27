@@ -41,6 +41,19 @@ export class OrderEntity extends DatabaseEntityAbstract {
   @Prop()
   mockupOriginalUrl?: string;
 
+  /**
+   * Drive URL của file cutting (.pdf). Set qua flow import riêng
+   * `POST /orders/cutting-files/apply` — KHÔNG set lúc import đơn ban đầu.
+   * Match với đơn qua productionId parse từ filename — pattern 2 chữ cái + "-" +
+   * 5 số + "-" + 5 số (vd `BH-96341-30608-*.pdf`, `ML-12345-67890-*.pdf`).
+   */
+  @Prop()
+  cuttingFileUrl?: string;
+
+  /** Tên file cache (parse 1 lần lúc map) để FE hiển thị mà không phải re-fetch Drive. */
+  @Prop()
+  cuttingFileName?: string;
+
   @Prop()
   printMethod?: string;
 

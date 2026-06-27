@@ -110,6 +110,8 @@ export interface WorkshopRenderCtx {
    * ensure-preview BE upload preview nếu chưa có.
    */
   openPreview: (url: string, title: string, originalUrl?: string, sourceUrl?: string) => void;
+  /** Mở OrderDetailDialog cho đơn (hiện preview file cutting + info). */
+  openDetail?: (orderId: string, productionId: string) => void;
 }
 
 export type WorkshopColMeta = {
@@ -127,18 +129,46 @@ export const WORKSHOP_COLS: WorkshopColMeta[] = [
     label: 'Production / Order',
     perm: null,
     width: 'min-w-[180px]',
-    render: (r) => {
+    render: (r, ctx) => {
       const orderTxt = r.orderAt ? formatDate(r.orderAt, 'HH:mm DD/MM/YYYY') : null;
       const prodTxt = r.inProductionAt ? formatDate(r.inProductionAt, 'HH:mm DD/MM/YYYY') : null;
+      const hasCuttingFile = !!(r as { cuttingFileUrl?: string }).cuttingFileUrl;
       return (
         <div className="flex flex-col leading-tight gap-0.5">
           <div className="flex items-center gap-1">
             <CopyButton value={r.productionId} label="Production ID" iconSize={11} />
-            <Hint content={`Production ID: ${r.productionId}`} forceRich>
-              <span className="font-mono text-[13px] font-semibold text-foreground truncate max-w-[140px]">
-                {r.productionId}
-              </span>
+            <Hint
+              content={
+                ctx.openDetail
+                  ? 'Click để xem chi tiết'
+                  : `Production ID: ${r.productionId}`
+              }
+              forceRich
+            >
+              {ctx.openDetail ? (
+                <button
+                  type="button"
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    ctx.openDetail?.(r._id, r.productionId);
+                  }}
+                  className="font-mono text-[13px] font-semibold text-foreground hover:text-primary hover:underline truncate max-w-[140px] text-left"
+                >
+                  {r.productionId}
+                </button>
+              ) : (
+                <span className="font-mono text-[13px] font-semibold text-foreground truncate max-w-[140px]">
+                  {r.productionId}
+                </span>
+              )}
             </Hint>
+            {hasCuttingFile && (
+              <Hint content="Đã map file cutting" forceRich>
+                <span className="text-emerald-600 dark:text-emerald-400 text-[10px]" aria-label="cutting">
+                  ✂
+                </span>
+              </Hint>
+            )}
           </div>
           {r.orderId && (
             <div className="flex items-center gap-1">

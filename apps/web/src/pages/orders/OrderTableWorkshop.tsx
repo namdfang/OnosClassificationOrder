@@ -19,6 +19,7 @@ import {
 } from '@/components/ui/table';
 import { TooltipProvider } from '@/components/ui/tooltip';
 import { BulkEditToolbar } from '@/components/orders/BulkEditToolbar';
+import { OrderDetailDialog } from '@/components/orders/OrderDetailDialog';
 import { OrderLogTimelineDialog } from '@/components/orders/OrderLogTimelineDialog';
 import { DesignerSummaryPanel } from './DesignerSummaryPanel';
 import {
@@ -91,6 +92,7 @@ export function OrderTableWorkshop() {
   const shiftKeyRef = useRef(false);
   const [preview, setPreview] = useState<{ url: string; originalUrl?: string; title: string; sourceUrl?: string } | null>(null);
   const [historyTarget, setHistoryTarget] = useState<{ id: string; productionId: string } | null>(null);
+  const [detailTarget, setDetailTarget] = useState<{ id: string; productionId: string } | null>(null);
   const [collapsedTypes, setCollapsedTypes] = useState<Set<string>>(new Set());
 
   const toggleType = (t: string) =>
@@ -388,7 +390,9 @@ export function OrderTableWorkshop() {
     });
   };
 
-  const renderCtx: RenderCtx = { canEditField, patchRow, openPreview };
+  const openDetail = (id: string, productionId: string) =>
+    setDetailTarget({ id, productionId });
+  const renderCtx: RenderCtx = { canEditField, patchRow, openPreview, openDetail };
   const isNoTool = useIsNoTool();
 
   // Designer summary chỉ hiện cho role có quyền xem stats designer.
@@ -740,6 +744,13 @@ export function OrderTableWorkshop() {
           onOpenChange={(o) => !o && setHistoryTarget(null)}
           orderId={historyTarget?.id}
           productionId={historyTarget?.productionId}
+        />
+
+        <OrderDetailDialog
+          open={!!detailTarget}
+          onOpenChange={(o) => !o && setDetailTarget(null)}
+          orderId={detailTarget?.id ?? null}
+          productionId={detailTarget?.productionId}
         />
       </div>
     </TooltipProvider>

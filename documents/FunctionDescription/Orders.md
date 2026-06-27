@@ -202,6 +202,8 @@ Sau import (hoặc khi đổi date), `ImportOrderTab` gọi endpoint này để 
 | GET | `/v1/orders/:id/logs` | Audit timeline 1 order (xem `OrderLog.md`) |
 | GET | `/v1/orders/error-log` | Tab "Nhật ký bù lỗi" — đơn đang chờ xử lý lỗi (productionError set, toolResultNote≠ok). Sort theo `productionFirstErrorAt` ASC. Trả thêm `byUrgency`. Visibility theo role (Fulfillment scope factory, Designer scope assignee). Xem `§14`. |
 | POST | `/v1/orders/import` | Bulk upsert. `ORDER_WRITE_ROLES` (Admin / Manager / Support). |
+| POST | `/v1/orders/cutting-files/preview` | Preview cutting-file mapping — fetch tên file từ Drive + parse productionId + match đơn. Xem §15. |
+| POST | `/v1/orders/cutting-files/apply` | Apply mappings (bulk write `cuttingFileUrl/Name`) + audit log event `production-file-mapped`. |
 | POST | `/v1/orders/backfill-fabric` | Re-derive `fabricType` + `toolResult` từ product config cho đơn còn thiếu (non-destructive). |
 | PATCH | `/v1/orders/:id/field` | Inline update 1 workshop field. Phase 2. |
 | PATCH | `/v1/orders/bulk-field` | Bulk apply 1 field cho nhiều order. Phase 2. |
@@ -802,3 +804,86 @@ updateMany(
 | Edit cell | theo `FIELD_EDIT_ROLES` từng field (xem `§8.2`) |
 | Filter factory | không expose — Admin/Manager xem all, role khác bị visibility filter scope |
 
+
+
+---
+
+## 15. Cutting File Mapping (post-import)
+
+> **Flow độc lập** với import đơn. Đơn ban đầu KHÔNG có `cuttingFileUrl` — flow này map link Drive vào đơn dựa trên `productionId` parse từ filename. Pattern filename: `XX-XXXXX-XXXXX-*.pdf` — `XX` = 2 chữ cái A-Z (không cố định, vd `BH`, `ML`, `TN`...), tiếp theo 5 số + 5 số.
+
+### 15.1 Files
+
+**FE:**
+- `apps/web/src/pages/orders/ImportCuttingFilesTab.tsx` — tab UI (paste / xlsx col A → preview → apply)
+- `apps/web/src/components/orders/OrderDetailDialog.tsx` — modal hiện preview file (iframe Drive embed `/file/d/{id}/preview`)
+- `apps/web/src/services/order.ts` → `previewCuttingFiles()` + `applyCuttingFiles()`
+
+**BE:**
+- `apps/api/src/modules/order/drive-file-name.service.ts` — fetch tên file từ Drive public preview page (retry x2, backoff 500ms, concurrency cap 5)
+- `apps/api/src/modules/order/order.service.ts` → `previewCuttingFiles()` + `applyCuttingFiles()`
+- `apps/api/src/modules/order/order.controller.ts` → 2 endpoint mới
+- `apps/api/src/modules/order/order.entity.ts` — field `cuttingFileUrl` + `cuttingFileName`
+
+**Shared:**
+- `packages/shared/dtos/production-order.dto.ts` → `PreviewCuttingFilesDto/Res`, `ApplyCuttingFilesDto/Res`, util `parseProductionIdFromCuttingFilename()`
+
+### 15.2 Luồng
+
+1. **User paste / upload xlsx** list Drive link (1 link/dòng; xlsx lấy cột A, không header).
+2. FE call `POST /v1/orders/cutting-files/preview`.
+3. BE với mỗi link:
+   - Extract Drive fileId (regex `/file/d/{id}/` hoặc `?id={id}`).
+   - Fetch `https://drive.google.com/file/d/{id}/view` (public — no auth).
+   - Parse filename từ HTML (`og:title` → `<title>` → JSON fallback).
+   - Retry x2 với backoff 500ms cho mọi error.
+   - Parse productionId từ filename: regex `^([A-Z]{2}-\d{5}-\d{5})/i`.
+   - Lookup đơn theo productionId (`$in`).
+4. BE trả response 4 bucket:
+   - `matched`: link OK + tìm thấy đơn (kèm `existingCuttingFileUrl` nếu đã có file cũ).
+   - `notFound`: link OK nhưng không có đơn với productionId đó.
+   - `invalid`: URL không hợp lệ / fetch fail / parse fail / không match pattern (2 chữ cái + 5 số + 5 số).
+   - `conflicts`: cùng productionId xuất hiện > 1 link — user phải xoá bớt trước khi apply.
+5. UI hiện summary cards + breakdown by `factory` + `machineType` + 4 collapsible section.
+6. User tick **"Ghi đè file cũ"** (default OFF) → cho phép overwrite các đơn đã có cuttingFileUrl cũ.
+7. User bấm **Mapping** → FE call `POST /v1/orders/cutting-files/apply` với mảng `mappings` (đã filter theo overwrite ở FE).
+8. BE bulk write + ghi `OrderLog` event `production-file-mapped` (`action='bulk_update'`, `field='cuttingFileUrl'`, `after.event='production-file-mapped'`).
+
+### 15.3 Drive name fetch chi tiết
+
+```
+extractFileId → fetchOnce (timeout 8s, browser UA) → parseFileName (3 regex fallback)
+              → retry (x2, backoff 500ms) → outcome: { fileName } | { error: 'fetch-failed' | 'parse-failed' }
+```
+
+**Concurrency:** cap 5 worker song song (xem `previewCuttingFiles` factory). Tránh Drive rate-limit khi user paste 1000+ link.
+
+**Pattern productionId:** parse trong `parseProductionIdFromCuttingFilename` (shared package). 2 chữ cái đầu không cố định — bất kỳ `[A-Z]{2}`:
+```ts
+/^([A-Z]{2}-\d{5}-\d{5})/i
+// BH-96341-30608-M-BR-KL.pdf → "BH-96341-30608"
+// ML-12345-67890-foo.pdf    → "ML-12345-67890"
+```
+
+### 15.4 OrderDetailDialog
+
+- Trigger: click productionId trong Workshop table cell (`workshopTableConfig.tsx` đã wire `ctx.openDetail`).
+- Layout: Info chung + Workshop status + Cutting file preview (iframe `https://drive.google.com/file/d/{id}/preview`).
+- Khi đơn chưa có cuttingFile → hiện hint "Vào tab Import File Cutting để map".
+- Icon ✂ xanh emerald cạnh productionId báo đơn đã có cuttingFile (workshop table cell).
+
+### 15.5 Permissions
+
+| Endpoint | Roles |
+|---|---|
+| `POST /v1/orders/cutting-files/preview` | SuperAdmin, Admin, Manager, Support |
+| `POST /v1/orders/cutting-files/apply` | SuperAdmin, Admin, Manager, Support |
+
+Tab `Import File Cutting` hiển thị khi `permission('order.import')` — đồng bộ với tab Import Order.
+
+### 15.6 Performance notes
+
+- Drive fetch ~ 200ms-1s/link (single attempt). 100 link với concurrency 5 ≈ ~10-20s.
+- Worst-case retry: 3 attempt × 8s timeout = 24s/link → batch lớn (>500 link) nên chia nhỏ.
+- Bulk apply: 1 `bulkWrite` Mongo + 1 `OrderLog.writeMany` — O(N) database write.
+- `cuttingFileUrl` index không cần (chỉ dùng cho display + iframe embed, không query).

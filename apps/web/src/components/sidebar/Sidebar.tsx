@@ -11,6 +11,7 @@ import {
   LogOut,
   Package,
   Palette,
+  ScanLine,
   Settings,
   ShieldCheck,
   ShieldHalf,
@@ -66,6 +67,7 @@ const NAV_GROUPS: NavGroup[] = [
         children: [
           { key: 'orders-list', label: 'List Order', to: `${PATHS.ORDERS}?tab=list`, icon: <List size={14} /> },
           { key: 'orders-error-log', label: 'Nhật ký bù lỗi', to: `${PATHS.ORDERS}?tab=error-log`, icon: <AlertTriangle size={14} /> },
+          { key: 'orders-scan-error', label: 'Quét mã lỗi', to: PATHS.ORDERS_SCAN_ERROR, icon: <ScanLine size={14} />, perm: 'page.scan_error' },
           { key: 'orders-import', label: 'Import Order', to: `${PATHS.ORDERS}?tab=import`, icon: <FileDown size={14} />, perm: 'order.import' },
         ],
       },

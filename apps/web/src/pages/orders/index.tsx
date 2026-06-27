@@ -7,10 +7,11 @@ import { usePermission } from '@/hooks/usePermission';
 
 // import { ListOrderTab } from './ListOrderTab'; // [tạm tắt] List Order tab
 import { ErrorLogTab } from './ErrorLogTab';
+import { ImportCuttingFilesTab } from './ImportCuttingFilesTab';
 import { ImportOrderTab } from './ImportOrderTab';
 import { OrderTableWorkshop } from './OrderTableWorkshop';
 
-const ALL_TABS = ['list', 'error-log', 'workshop', 'import'] as const;
+const ALL_TABS = ['list', 'error-log', 'workshop', 'import', 'cutting-files'] as const;
 type TabKey = (typeof ALL_TABS)[number];
 
 export default function Orders() {
@@ -31,6 +32,7 @@ export default function Orders() {
     // Designer/Fulfillment; visibility filter ở BE đảm bảo scope đúng).
     out.push({ key: 'error-log', label: 'Nhật ký bù lỗi' });
     if (canImport) out.push({ key: 'import', label: 'Import Order' });
+    if (canImport) out.push({ key: 'cutting-files', label: 'Import File Cutting' });
     return out;
   }, [adminVisible, workshopVisible, canImport]);
 
@@ -133,6 +135,17 @@ export default function Orders() {
                 setRefreshKey((k) => k + 1);
                 // List Order tab đang tạm tắt → fallback workshop (admin) hoặc
                 // error-log (role khác). Khi bật lại list, đổi về `'list'`.
+                handleTabChange(workshopVisible ? 'workshop' : 'error-log');
+              }}
+            />
+          </TabsContent>
+        )}
+
+        {canImport && (
+          <TabsContent value="cutting-files">
+            <ImportCuttingFilesTab
+              onApplied={() => {
+                setRefreshKey((k) => k + 1);
                 handleTabChange(workshopVisible ? 'workshop' : 'error-log');
               }}
             />

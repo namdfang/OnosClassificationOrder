@@ -2,6 +2,8 @@ import { Body, Controller, Delete, Get, HttpCode, HttpStatus, Param, Patch, Post
 import { ApiOkResponse, ApiOperation, ApiTags } from '@nestjs/swagger';
 import { AuthUser } from 'core';
 import {
+  ApplyCuttingFilesDto,
+  ApplyCuttingFilesResDto,
   BulkAssignDesignerDto,
   BulkAssignDesignerPreviewDto,
   BulkAssignDesignerPreviewResDto,
@@ -14,6 +16,7 @@ import {
   DesignerBreakdownResDto,
   GetErrorLogDto,
   GetErrorLogResDto,
+  GetOrderByProductionIdResDto,
   SetProductionErrorDto,
   SetProductionErrorResDto,
   GetFactoryOverviewDto,
@@ -33,6 +36,8 @@ import {
   ImportProductionOrdersResDto,
   ImportReworkOrdersDto,
   ImportReworkOrdersResDto,
+  PreviewCuttingFilesDto,
+  PreviewCuttingFilesResDto,
   ResDto,
   RoleType,
   TransferOrderDto,
@@ -290,6 +295,35 @@ export class OrderController {
     return this.orderService.importRework(dto, { user, ip, userAgent });
   }
 
+  // ─── Cutting File Mapping (post-import) ──────────────────────────
+  // Permission: Support + Admin + Manager (theo confirm với user — gọn hơn
+  // ORDER_WRITE_ROLES vì designer/fulfill không cần map file cutting).
+  @Post('cutting-files/preview')
+  @Auth([RoleType.SuperAdmin, RoleType.Admin, RoleType.Manager, RoleType.Support])
+  @ApiOperation({ summary: 'Preview cutting-file mapping — fetch tên file từ Drive + match đơn' })
+  @HttpCode(HttpStatus.OK)
+  @ApiOkResponse({ type: PreviewCuttingFilesResDto })
+  async previewCuttingFiles(
+    @Body() dto: PreviewCuttingFilesDto,
+    @AuthUser() _user: UserDocument,
+  ): Promise<PreviewCuttingFilesResDto> {
+    return this.orderService.previewCuttingFiles(dto);
+  }
+
+  @Post('cutting-files/apply')
+  @Auth([RoleType.SuperAdmin, RoleType.Admin, RoleType.Manager, RoleType.Support])
+  @ApiOperation({ summary: 'Apply cutting-file mappings (bulk write + audit log)' })
+  @HttpCode(HttpStatus.OK)
+  @ApiOkResponse({ type: ApplyCuttingFilesResDto })
+  async applyCuttingFiles(
+    @Body() dto: ApplyCuttingFilesDto,
+    @AuthUser() user: UserDocument,
+    @ClientIp() ip: string,
+    @UserAgent() userAgent: string,
+  ): Promise<ApplyCuttingFilesResDto> {
+    return this.orderService.applyCuttingFiles(dto, { user, ip, userAgent });
+  }
+
   @Patch('bulk-field')
   @Auth(ORDER_FIELD_EDIT_ROLES)
   @ApiOperation({ summary: 'Bulk update a workshop field on multiple orders' })
@@ -442,6 +476,25 @@ export class OrderController {
   @ApiOkResponse({ type: GetOrderLogsResDto })
   async getLogs(@Param('id') id: string, @Query() dto: GetOrderLogsDto): Promise<GetOrderLogsResDto> {
     return this.orderService.getLogs(id, dto);
+  }
+
+  @Get('by-production-id/:code')
+  @Auth(ORDER_VIEW_ROLES)
+  @ApiOperation({
+    summary: 'Lookup đơn theo productionId (workshop quét barcode USB) — exact match case-insensitive.',
+  })
+  @HttpCode(HttpStatus.OK)
+  @ApiOkResponse({ type: GetOrderByProductionIdResDto })
+  async getByProductionId(
+    @Param('code') code: string,
+    @AuthUser() user: UserDocument,
+  ): Promise<GetOrderByProductionIdResDto> {
+    return this.orderService.getByProductionId(
+      code,
+      user?.role?.name,
+      user?._id ? String(user._id) : undefined,
+      user?.factoryId,
+    ) as Promise<GetOrderByProductionIdResDto>;
   }
 
   @Get(':id')

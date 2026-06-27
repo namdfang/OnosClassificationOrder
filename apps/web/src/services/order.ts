@@ -1,4 +1,5 @@
 import type {
+  ApplyCuttingFilesDto,
   BulkAssignDesignerDto,
   BulkAssignDesignerPreviewDto,
   BulkAssignOrderDto,
@@ -6,6 +7,7 @@ import type {
   BulkUpdateOrderFieldDto,
   ImportProductionOrdersDto,
   ImportReworkOrdersDto,
+  PreviewCuttingFilesDto,
   SetProductionErrorDto,
   TransferOrderDto,
   UpdateOrderFieldDto,
@@ -105,12 +107,24 @@ const getErrorLog = (query: string = '') => {
   return callApi(`/${CONFIG.API_VERSION}/orders/error-log${query}`, 'get');
 };
 
+const getByProductionId = (code: string) => {
+  return callApi(`/${CONFIG.API_VERSION}/orders/by-production-id/${encodeURIComponent(code)}`, 'get');
+};
+
 const checkPendingDesigns = (ids: string[]) => {
   return callApi(`/${CONFIG.API_VERSION}/orders/check-pending`, 'post', { ids });
 };
 
 const ensurePreview = (sourceUrl: string) => {
   return callApi(`/${CONFIG.API_VERSION}/design-image/ensure-preview`, 'post', { sourceUrl });
+};
+
+const previewCuttingFiles = (data: PreviewCuttingFilesDto) => {
+  return callApi(`/${CONFIG.API_VERSION}/orders/cutting-files/preview`, 'post', data);
+};
+
+const applyCuttingFiles = (data: ApplyCuttingFilesDto) => {
+  return callApi(`/${CONFIG.API_VERSION}/orders/cutting-files/apply`, 'post', data);
 };
 
 export const order = {
@@ -137,6 +151,9 @@ export const order = {
   bulkAssignDesigner,
   setProductionError,
   getErrorLog,
+  getByProductionId,
   checkPendingDesigns,
   ensurePreview,
+  previewCuttingFiles,
+  applyCuttingFiles,
 };

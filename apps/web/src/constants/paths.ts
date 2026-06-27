@@ -6,6 +6,7 @@ export const PATHS = {
 
   PRODUCTS: '/products',
   ORDERS: '/orders',
+  ORDERS_SCAN_ERROR: '/orders/scan-error',
   WORKSHOP_CONFIG: '/workshop-config',
 
   USERS: '/users',

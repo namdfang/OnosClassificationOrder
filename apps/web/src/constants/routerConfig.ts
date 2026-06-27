@@ -6,6 +6,7 @@ const Settings = lazy(() => import('../pages/settings'));
 const Account = lazy(() => import('../pages/account'));
 const Products = lazy(() => import('../pages/products'));
 const Orders = lazy(() => import('../pages/orders'));
+const OrdersScanError = lazy(() => import('../pages/orders/scan-error'));
 const WorkshopConfig = lazy(() => import('../pages/workshop-config'));
 const Users = lazy(() => import('../pages/users'));
 const Departments = lazy(() => import('../pages/departments'));
@@ -27,6 +28,7 @@ export const routerConfig: RouterConfig[] = [
   { path: PATHS.ACCOUNT, component: Account },
   { path: PATHS.PRODUCTS, component: Products },
   { path: PATHS.ORDERS, component: Orders },
+  { path: PATHS.ORDERS_SCAN_ERROR, component: OrdersScanError },
   { path: PATHS.WORKSHOP_CONFIG, component: WorkshopConfig },
   { path: PATHS.USERS, component: Users },
   { path: PATHS.DEPARTMENTS, component: Departments },

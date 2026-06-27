@@ -12,6 +12,7 @@ import { RoleRepository } from '../role/role.repository';
 import { TelegramNotificationModule } from '../telegram-notification/telegram-notification.module';
 import { UserEntity, UserSchema } from '../user/user.entity';
 import { WorkshopConfigModule } from '../workshop-config/workshop-config.module';
+import { DriveFileNameService } from './drive-file-name.service';
 import { OrderController } from './order.controller';
 import { OrderEntity, OrderSchema } from './order.entity';
 import { OrderRepository } from './order.repository';
@@ -34,7 +35,7 @@ import { OrderService } from './order.service';
     DesignImageModule,
   ],
   controllers: [OrderController],
-  providers: [OrderService, OrderRepository, RoleRepository],
+  providers: [OrderService, OrderRepository, RoleRepository, DriveFileNameService],
   exports: [OrderService],
 })
 export class OrderModule {}

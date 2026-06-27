@@ -133,6 +133,15 @@ export const ProductionOrderZod = BaseEntityZod.extend({
   size: z.string().optional(),
   mockupUrl: z.string().optional(),
   mockupOriginalUrl: z.string().optional(),
+  /**
+   * Drive URL của file cutting (.pdf). KHÔNG set lúc import đơn — populate qua
+   * flow riêng `POST /orders/cutting-files/apply`. Filename gốc dạng
+   * 2 chữ cái + "-" + 5 số + "-" + 5 số (vd `BH-96341-30608-*.pdf`,
+   * `ML-12345-67890-*.pdf`) → parse productionId match đơn.
+   */
+  cuttingFileUrl: z.string().optional(),
+  /** Tên file cache lúc map (FE hiện ở dialog detail mà không re-fetch Drive). */
+  cuttingFileName: z.string().optional(),
   printMethod: z.string().optional(),
   weight: z.number().optional(),
   width: z.number().optional(),
@@ -660,6 +669,16 @@ export const SetProductionErrorResZod = ResZod.extend({ data: ProductionOrderZod
 export class SetProductionErrorResDto extends createZodDto(extendApi(SetProductionErrorResZod)) {}
 
 //
+// Scan barcode lookup — workshop quét máy USB → tìm đơn theo productionId
+// exact match (case-insensitive). Trả về đủ field cho dialog gán lỗi:
+// info đơn + factory + machineType + fulfillmentStages hiện tại.
+//
+export const GetOrderByProductionIdResZod = ResZod.extend({ data: ProductionOrderZod });
+export class GetOrderByProductionIdResDto extends createZodDto(
+  extendApi(GetOrderByProductionIdResZod),
+) {}
+
+//
 // Import summary — aggregates orders of a single day across all imports.
 // Workshop uses this to spot duplicate (type, size, fabric) combinations
 // so the same blank batch can be printed together.
@@ -1103,3 +1122,114 @@ export const GetFulfillmentStatsResZod = ResZod.extend({
 export class GetFulfillmentStatsResDto extends createZodDto(
   extendApi(GetFulfillmentStatsResZod),
 ) {}
+
+// ─── Cutting File mapping (post-import flow) ──────────────────────
+// User dán list Drive link → BE fetch tên file (public Drive page) → parse
+// productionId từ filename (`BH-XXXXX-XXXXX-*`) → match đơn → trả về preview
+// chi tiết. Bước 2 (Apply) chấp nhận overwrite flag để ghi đè đơn đã có file
+// cũ. Xem `documents/FunctionDescription/Orders.md §Cutting File Mapping`.
+
+// Pattern productionId trong filename: 2 chữ cái + "-" + 5 chữ số + "-" + 5 chữ số.
+// 2 chữ cái KHÔNG cố định "BH" — có thể là bất kỳ A-Z (ML, TN, BH...).
+// Ví dụ: `BH-96341-30608-M-BR-KL.pdf`, `ML-12345-67890-...`.
+const CUTTING_FILE_PRODUCTION_ID_REGEX = /^([A-Z]{2}-\d{5}-\d{5})/i;
+export function parseProductionIdFromCuttingFilename(filename: string): string | null {
+  const m = filename.match(CUTTING_FILE_PRODUCTION_ID_REGEX);
+  return m ? m[1].toUpperCase() : null;
+}
+
+export const CuttingFileMatchedZod = z.object({
+  link: z.string(),
+  fileId: z.string(),
+  fileName: z.string(),
+  productionId: z.string(),
+  orderId: IDZod,
+  factoryId: IDZod.optional(),
+  factoryName: z.string().optional(),
+  machineTypeId: IDZod.optional(),
+  machineTypeName: z.string().optional(),
+  /** URL hiện tại nếu đơn đã có file cũ (để FE hiện cảnh báo + ghi đè). */
+  existingCuttingFileUrl: z.string().optional(),
+  existingCuttingFileName: z.string().optional(),
+});
+export type CuttingFileMatched = z.infer<typeof CuttingFileMatchedZod>;
+
+export const CuttingFileNotFoundZod = z.object({
+  link: z.string(),
+  fileId: z.string(),
+  fileName: z.string(),
+  productionId: z.string(),
+});
+export type CuttingFileNotFound = z.infer<typeof CuttingFileNotFoundZod>;
+
+export const CuttingFileInvalidZod = z.object({
+  link: z.string(),
+  /** Vì sao invalid: 'invalid-url' | 'fetch-failed' | 'parse-failed' | 'no-production-id'. */
+  reason: z.enum(['invalid-url', 'fetch-failed', 'parse-failed', 'no-production-id']),
+  fileName: z.string().optional(),
+});
+export type CuttingFileInvalid = z.infer<typeof CuttingFileInvalidZod>;
+
+export const CuttingFileConflictZod = z.object({
+  productionId: z.string(),
+  links: z.string().array(),
+});
+export type CuttingFileConflict = z.infer<typeof CuttingFileConflictZod>;
+
+export const CuttingFileBreakdownRowZod = z.object({
+  /** factoryId nếu nhóm theo xưởng, machineTypeId nếu nhóm theo máy. */
+  id: z.string().nullable(),
+  name: z.string(),
+  count: z.number(),
+});
+export type CuttingFileBreakdownRow = z.infer<typeof CuttingFileBreakdownRowZod>;
+
+export const PreviewCuttingFilesZod = z.object({
+  links: z.string().array().min(1).max(2000),
+});
+export class PreviewCuttingFilesDto extends createZodDto(extendApi(PreviewCuttingFilesZod)) {}
+
+export const PreviewCuttingFilesResZod = ResZod.extend({
+  data: z.object({
+    matched: CuttingFileMatchedZod.array(),
+    notFound: CuttingFileNotFoundZod.array(),
+    invalid: CuttingFileInvalidZod.array(),
+    /** Cùng 1 productionId xuất hiện ở > 1 link — user phải tự xóa bớt. */
+    conflicts: CuttingFileConflictZod.array(),
+    summary: z.object({
+      totalLinks: z.number(),
+      matched: z.number(),
+      withExistingFile: z.number(),
+      notFound: z.number(),
+      invalid: z.number(),
+      conflicts: z.number(),
+      byFactory: CuttingFileBreakdownRowZod.array(),
+      byMachineType: CuttingFileBreakdownRowZod.array(),
+    }),
+  }),
+});
+export class PreviewCuttingFilesResDto extends createZodDto(
+  extendApi(PreviewCuttingFilesResZod),
+) {}
+
+export const ApplyCuttingFileItemZod = z.object({
+  orderId: IDZod,
+  cuttingFileUrl: z.string().min(1),
+  cuttingFileName: z.string().min(1),
+});
+
+export const ApplyCuttingFilesZod = z.object({
+  mappings: ApplyCuttingFileItemZod.array().min(1).max(2000),
+  /** Cho phép ghi đè khi đơn đã có `cuttingFileUrl` cũ — default false. */
+  overwrite: z.boolean().default(false),
+});
+export class ApplyCuttingFilesDto extends createZodDto(extendApi(ApplyCuttingFilesZod)) {}
+
+export const ApplyCuttingFilesResZod = ResZod.extend({
+  data: z.object({
+    updated: z.number(),
+    skipped: z.number(),
+    skippedOrderIds: z.string().array(),
+  }),
+});
+export class ApplyCuttingFilesResDto extends createZodDto(extendApi(ApplyCuttingFilesResZod)) {}
