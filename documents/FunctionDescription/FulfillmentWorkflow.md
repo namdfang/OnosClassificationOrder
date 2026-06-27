@@ -29,11 +29,27 @@ Designer done → In → Ép → QC → May → Đóng gói → completed
 
 ### 2.1 Vào fulfillment lần đầu
 
-1. Designer click "Hoàn thành" task (`designer-transition action=complete`).
-2. Hook trong `DesignerTaskService.transition()` (line ~78): nếu `!order.currentFulfillmentStage` → set:
-   - `currentFulfillmentStage = 'print'`
-   - `fulfillmentStages.print = { status: 'waiting', reworkCount: 0, workMs: 0 }`
-3. User **In** của factory tự thấy đơn trong tab "Đang chờ".
+Có **2 entry point** tương đương — đều dẫn tới việc set `currentFulfillmentStage='print'` + `fulfillmentStages.print = { status: 'waiting', reworkCount: 0, workMs: 0 }` → user In của factory tự thấy đơn trong tab "Đang chờ".
+
+#### Entry A — Designer hoàn thành task (mặc định)
+
+1. Designer click "Hoàn thành" (`designer-transition action=complete`).
+2. Hook trong `DesignerTaskService.transition()` (~line 83): nếu `!order.currentFulfillmentStage` → set entry patch.
+3. Đồng thời `toolResultNote='ok'` + `readyForFulfill=true` được set (side effect).
+
+#### Entry B — Manual set `toolResultNote='ok'` (admin/leader bypass)
+
+Khi admin/leader/support trực tiếp đổi cell **"Note kq Tool 1"** thành `'ok'` (không qua designer state machine) — các path sau cùng kích hoạt fulfillment:
+
+| Path | File | Hành vi |
+|---|---|---|
+| `PATCH /v1/orders/:id` field=`toolResultNote` | `OrderService.updateField()` (`order.service.ts` ~line 2347) | Set `readyForFulfill=true` + `productionFirstErrorAt=null`. Nếu `!before.currentFulfillmentStage` → spread `FULFILLMENT_ENTRY_SET` vào patch. |
+| `PATCH /v1/orders/bulk-update` field=`toolResultNote` | `OrderService.bulkUpdateField()` (`order.service.ts` ~line 2572) | Sau update chính, chạy thêm 1 `updateMany` cho subset `currentFulfillmentStage` null/undefined. |
+| Import xlsx "soát" (`Note_kq_Tool` cell = `ok`) | `OrderService.importRework()` (`order.service.ts` ~line 2929) | Per-row check `!order.currentFulfillmentStage` → merge entry patch vào `$set`. |
+
+**Helper:** `FULFILLMENT_ENTRY_SET` constant ở đầu file (`order.service.ts:155`) — đảm bảo 3 path dùng cùng shape. Đồng bộ với Entry A.
+
+**Đặc biệt:** Entry B chỉ kích hoạt khi `currentFulfillmentStage` đang null/undefined để **tránh ghi đè state đang chạy**. Nếu đơn đã ở stage Press/QC/... mà admin sửa cell ok bằng tay → chỉ flip `readyForFulfill`, không reset state fulfillment.
 
 ### 2.2 Tiến qua từng stage
 
@@ -246,27 +262,70 @@ Cùng pattern designer: `findOneAndUpdate` với filter chứa `expected status`
 
 Common: `cancelledAt: null` + scope theo `user.factoryId`.
 
-### 5.4 Hook designer → fulfillment
+### 5.4 Hook entry → fulfillment
 
-`apps/api/src/modules/designer/designer-task.service.ts` → `transition()`:
+Có 2 entry point gọi vào cùng patch shape — code tham chiếu cùng helper `FULFILLMENT_ENTRY_SET` ở `order.service.ts:155`:
 
 ```ts
-// Hook fulfillment 5-stage
+const FULFILLMENT_ENTRY_SET = {
+  currentFulfillmentStage: FulfillmentStage.Print,
+  'fulfillmentStages.print': {
+    status: FulfillmentStageStatus.Waiting,
+    reworkCount: 0,
+    workMs: 0,
+  },
+} as const;
+```
+
+#### Entry A — Designer complete (`designer-task.service.ts:83`)
+
+```ts
 if (
   action === Complete &&
   plan.nextStatus === Done &&
   !order.currentFulfillmentStage  // chưa từng vào fulfillment
 ) {
   set.currentFulfillmentStage = 'print';
-  set['fulfillmentStages.print'] = {
-    status: 'waiting',
-    reworkCount: 0,
-    workMs: 0,
-  };
+  set['fulfillmentStages.print'] = { status: 'waiting', reworkCount: 0, workMs: 0 };
 }
 ```
 
 Trường hợp designer rework cycle (đẩy từ fulfillment về): `currentFulfillmentStage` đã set sẵn (= reporter stage) → hook không kích hoạt lại → đơn quay lại đúng stage cũ.
+
+#### Entry B — Manual `toolResultNote='ok'` (3 path)
+
+**B1. `OrderService.updateField()`** — single update qua workshop cell:
+```ts
+if (dto.field === 'toolResultNote') {
+  patch.readyForFulfill = normalized === READY_FOR_FULFILL_CODE;
+  if (normalized === READY_FOR_FULFILL_CODE) {
+    patch.productionFirstErrorAt = null;
+    if (!before.currentFulfillmentStage) Object.assign(patch, FULFILLMENT_ENTRY_SET);
+  }
+}
+```
+
+**B2. `OrderService.bulkUpdateField()`** — sau update chính, chạy thêm `updateMany` cho subset chưa vào fulfillment:
+```ts
+if (dto.field === 'toolResultNote' && normalized === READY_FOR_FULFILL_CODE) {
+  await this.orderModel.updateMany(
+    { _id: { $in: dto.ids }, deletedAt: { $exists: false },
+      currentFulfillmentStage: { $in: [null, undefined] } },
+    { $set: FULFILLMENT_ENTRY_SET },
+  );
+}
+```
+
+**B3. `OrderService.importRework()`** — per-row check trong import xlsx:
+```ts
+if (code === READY_FOR_FULFILL_CODE) {
+  $set.readyForFulfill = true;
+  $set.productionFirstErrorAt = null;
+  if (!order.currentFulfillmentStage) Object.assign($set, FULFILLMENT_ENTRY_SET);
+}
+```
+
+**Guard `!currentFulfillmentStage`** đảm bảo không ghi đè state đang chạy — nếu đơn đã ở Press/QC/... mà admin sửa cell ok bằng tay, chỉ flip `readyForFulfill`.
 
 ### 5.5 User service — Fulfillment validation
 
@@ -326,7 +385,8 @@ Worker scope enforce ở BE: `user.fulfillmentStage === body.stage` && `user.fac
 - `apps/api/src/modules/order/order.entity.ts` — 4 field mới + `makeEmptyStageState` helper
 - `apps/api/src/modules/user/user.entity.ts` — `fulfillmentStage` + partial unique index
 - `apps/api/src/modules/user/user.service.ts` — validation + E11000 handler
-- `apps/api/src/modules/designer/designer-task.service.ts` — hook designer.complete
+- `apps/api/src/modules/designer/designer-task.service.ts` — hook entry A (designer.complete)
+- `apps/api/src/modules/order/order.service.ts` — helper `FULFILLMENT_ENTRY_SET` + hook entry B ở `updateField` / `bulkUpdateField` / `importRework`
 
 **Frontend:**
 - `apps/web/src/pages/fulfillment/my-tasks/index.tsx`

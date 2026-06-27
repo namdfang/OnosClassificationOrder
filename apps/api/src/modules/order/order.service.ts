@@ -67,6 +67,8 @@ import type {
 import {
   DESIGNER_REASSIGNABLE_STATUSES,
   DesignerStatus,
+  FulfillmentStage,
+  FulfillmentStageStatus,
   RoleType,
   WorkshopConfigCategory,
 } from 'shared';
@@ -137,6 +139,27 @@ const FIELD_EDIT_ROLES: Record<OrderWorkshopField, RoleType[]> = {
 };
 
 const READY_FOR_FULFILL_CODE = 'ok';
+
+/**
+ * Patch để đẩy đơn vào fulfillment stage Print — entry point thứ 2 ngoài
+ * `DesignerTaskService.transition(complete)`.
+ *
+ * Trigger: `toolResultNote` chuyển sang 'ok' (qua updateField / bulkUpdateField /
+ * importRework) MÀ đơn chưa từng vào fulfillment (`!currentFulfillmentStage`).
+ *
+ * Caller phải tự check `!before.currentFulfillmentStage` trước khi spread vào
+ * $set — nếu apply lên đơn đang chạy giữa flow sẽ ghi đè state hiện tại.
+ * Đồng bộ với hook ở `DesignerTaskService.transition()` ~line 83.
+ * Xem `documents/FunctionDescription/FulfillmentWorkflow.md` §2.1b.
+ */
+const FULFILLMENT_ENTRY_SET = {
+  currentFulfillmentStage: FulfillmentStage.Print,
+  'fulfillmentStages.print': {
+    status: FulfillmentStageStatus.Waiting,
+    reworkCount: 0,
+    workMs: 0,
+  },
+} as const;
 
 /** Field workshop có schema array thay vì string đơn. */
 const MULTI_VALUE_FIELDS: OrderWorkshopField[] = ['errorFile'];
@@ -2341,6 +2364,12 @@ export class OrderService implements OnModuleInit {
       // Khi xưởng đánh 'ok' → đơn hết lỗi → rời tab "Nhật ký bù lỗi".
       if (normalized === READY_FOR_FULFILL_CODE) {
         patch.productionFirstErrorAt = null;
+        // Entry point fulfillment thứ 2 — manual set 'ok' (admin/leader bypass
+        // designer state machine). Chỉ áp khi đơn chưa từng vào fulfillment để
+        // tránh ghi đè state đang chạy.
+        const beforeStage =
+          (before as unknown as { currentFulfillmentStage?: string | null }).currentFulfillmentStage;
+        if (!beforeStage) Object.assign(patch, FULFILLMENT_ENTRY_SET);
       }
     }
 
@@ -2539,6 +2568,20 @@ export class OrderService implements OnModuleInit {
     };
     if (extraMatchFilter) Object.assign(matchFilter, extraMatchFilter);
     const result = await this.orderModel.updateMany(matchFilter, { $set: patch });
+
+    // Entry point fulfillment thứ 2 (bulk variant) — chỉ áp cho subset đơn
+    // chưa từng vào fulfillment để tránh ghi đè state đang chạy. Tách query
+    // riêng vì patch chính áp uniform; ko thể đặt điều kiện per-doc qua updateMany.
+    if (dto.field === 'toolResultNote' && normalized === READY_FOR_FULFILL_CODE) {
+      await this.orderModel.updateMany(
+        {
+          _id: { $in: dto.ids },
+          deletedAt: { $exists: false },
+          currentFulfillmentStage: { $in: [null, undefined] },
+        },
+        { $set: FULFILLMENT_ENTRY_SET },
+      );
+    }
 
     void this.orderLogService.writeMany(
       beforeDocs.map((doc) => ({
@@ -2927,8 +2970,21 @@ export class OrderService implements OnModuleInit {
       if (row.toolResultNote?.trim()) {
         const key = normalizeVN(row.toolResultNote);
         const code = toolResultNoteMap.get(key);
-        if (code) $set.toolResultNote = code;
-        else warnings.push(`Note_kq_Tool="${row.toolResultNote}" không match workshop_config`);
+        if (code) {
+          $set.toolResultNote = code;
+          // Entry point fulfillment thứ 2 (import variant) — match `updateField`
+          // semantics: code='ok' + đơn chưa vào fulfillment → đẩy vào stage Print.
+          // Cũng set readyForFulfill/productionFirstErrorAt cho khớp.
+          if (code === READY_FOR_FULFILL_CODE) {
+            $set.readyForFulfill = true;
+            $set.productionFirstErrorAt = null;
+            if (!order.currentFulfillmentStage) {
+              Object.assign($set, FULFILLMENT_ENTRY_SET);
+            }
+          }
+        } else {
+          warnings.push(`Note_kq_Tool="${row.toolResultNote}" không match workshop_config`);
+        }
       }
 
       // 2. errorFile — sheet hiện chỉ có 1 giá trị/cell, wrap thành array để
