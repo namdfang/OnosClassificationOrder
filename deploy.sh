@@ -24,8 +24,8 @@ pnpm --filter shared build
 echo "→ Building API..."
 pnpm build:api
 
-echo "→ Building Web..."
-pnpm build:web
+echo "→ Building Web (heap cap 1536MB để tránh OS-OOM trên server RAM thấp; swap đã setup 1 lần qua /swapfile)..."
+NODE_HEAP_MB=1536 pnpm build:web
 
 echo "→ Reloading API (PM2)..."
 cd apps/api

@@ -27,6 +27,14 @@ export default defineConfig({
     // Tắt sourcemap prod để giảm peak memory (server hay OOM ở chunk render
     // vì sourcemap JSON parse rất tốn RAM). Dev vẫn có sourcemap qua serve.
     sourcemap: false,
+    // Target esnext = ít transform → ít memory. User browser hiện đại OK.
+    target: 'esnext',
+    // CSS code split: false → 1 file CSS, giảm peak khi rollup combine.
+    cssCodeSplit: true,
+    // Set minify=esbuild (default) — esbuild dùng C++ binary, lighter hơn
+    // terser. Nếu vẫn OOM, set `minify: false` để skip hoàn toàn (bundle
+    // lớn gấp 3, nhưng build pass được với RAM thấp).
+    minify: 'esbuild',
     // Tăng warning limit lên 1MB để giảm noise — chunk thực sự lớn (vendor
     // react/antd) ~700kb gzip vẫn ổn.
     chunkSizeWarningLimit: 1024,
