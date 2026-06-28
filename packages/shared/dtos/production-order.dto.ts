@@ -1026,7 +1026,20 @@ export class FulfillmentTransitionResDto extends createZodDto(
  * Stage + factory tự suy từ user đang login (BE filter). User Manager/Admin
  * có thể override qua query `stage`/`factoryId`.
  */
-export const FULFILLMENT_TASK_TABS = ['waiting', 'in-progress', 'rework', 'done', 'watching'] as const;
+export const FULFILLMENT_TASK_TABS = [
+  'waiting',
+  'in-progress',
+  'rework',
+  'done',
+  'watching',
+  /**
+   * Đơn đã `readyForFulfill=true` nhưng chưa được gán vào Designer
+   * (designerStatus = unassigned, currentFulfillmentStage chưa set). CHỈ visible
+   * cho admin/manager — workers fulfillment không thấy tab này. Admin gán đơn
+   * vào Designer cụ thể → đơn theo flow chuẩn (designer.complete → Print stage).
+   */
+  'unassigned',
+] as const;
 export type FulfillmentTaskTab = (typeof FULFILLMENT_TASK_TABS)[number];
 export const FulfillmentTaskTabZod = z.enum(FULFILLMENT_TASK_TABS);
 
@@ -1048,13 +1061,15 @@ export class GetFulfillmentMyTasksDto extends createZodDto(extendApi(GetFulfillm
 
 export const GetFulfillmentMyTasksResZod = PageResZod.extend({
   data: ProductionOrderZod.array(),
-  /** Tab counters (5 tab) — bỏ qua pagination. */
+  /** Tab counters (6 tab) — bỏ qua pagination. `unassigned` = 0 với worker
+   *  fulfillment (chỉ admin/manager thấy). */
   tabCounts: z.object({
     waiting: z.number(),
     inProgress: z.number(),
     rework: z.number(),
     done: z.number(),
     watching: z.number(),
+    unassigned: z.number(),
   }),
 });
 export class GetFulfillmentMyTasksResDto extends createZodDto(

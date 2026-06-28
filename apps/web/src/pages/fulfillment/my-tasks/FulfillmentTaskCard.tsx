@@ -34,7 +34,7 @@ import { Hint } from '@/components/common/Hint';
  *   - Time stamp + reworkCount + productionErrorNote layout y hệt.
  *   - Type / size / color line.
  */
-type ColKey = 'waiting' | 'in-progress' | 'rework' | 'done' | 'watching';
+type ColKey = 'waiting' | 'in-progress' | 'rework' | 'done' | 'watching' | 'unassigned';
 
 export interface FulfillmentTaskCardProps {
   order: ProductionOrder;
@@ -46,6 +46,8 @@ export interface FulfillmentTaskCardProps {
   onCopyProductionId?: () => void;
   onPreview?: (url: string, title: string, originalUrl?: string) => void;
   onClickProductionId?: () => void;
+  /** Chỉ admin/manager + cột `unassigned`: mở dialog gán designer. */
+  onAssignDesigner?: () => void;
   onStart?: () => void;
   onComplete?: () => void;
   onReportError?: () => void;
@@ -90,6 +92,7 @@ export function FulfillmentTaskCard({
   onCopyProductionId,
   onPreview,
   onClickProductionId,
+  onAssignDesigner,
   onStart,
   onComplete,
   onReportError,
@@ -250,27 +253,38 @@ export function FulfillmentTaskCard({
       </div>
 
       {/* Action buttons inline — opacity-hover cho gọn, mở rộng full khi cần thao tác */}
-      {colKey !== 'watching' && (status === FulfillmentStageStatus.Waiting ||
-        status === FulfillmentStageStatus.Rework ||
-        status === FulfillmentStageStatus.InProgress) && (
-          <div className="flex items-center gap-1.5 pt-2 mt-1 border-t border-border/40">
-            {(status === FulfillmentStageStatus.Waiting || status === FulfillmentStageStatus.Rework) &&
-              onStart && (
-                <CardAction
-                  color="indigo"
-                  icon={PlayCircle}
-                  label="Bắt đầu"
-                  onClick={onStart}
-                />
+      {colKey === 'unassigned' && onAssignDesigner ? (
+        <div className="flex items-center gap-1.5 pt-2 mt-1 border-t border-border/40">
+          <CardAction
+            color="indigo"
+            icon={PlayCircle}
+            label="Gán Designer"
+            onClick={onAssignDesigner}
+          />
+        </div>
+      ) : (
+        colKey !== 'watching' && (status === FulfillmentStageStatus.Waiting ||
+          status === FulfillmentStageStatus.Rework ||
+          status === FulfillmentStageStatus.InProgress) && (
+            <div className="flex items-center gap-1.5 pt-2 mt-1 border-t border-border/40">
+              {(status === FulfillmentStageStatus.Waiting || status === FulfillmentStageStatus.Rework) &&
+                onStart && (
+                  <CardAction
+                    color="indigo"
+                    icon={PlayCircle}
+                    label="Bắt đầu"
+                    onClick={onStart}
+                  />
+                )}
+              {status === FulfillmentStageStatus.InProgress && onComplete && (
+                <CardAction color="emerald" icon={CheckCircle2} label="Hoàn thành" onClick={onComplete} />
               )}
-            {status === FulfillmentStageStatus.InProgress && onComplete && (
-              <CardAction color="emerald" icon={CheckCircle2} label="Hoàn thành" onClick={onComplete} />
-            )}
-            {status === FulfillmentStageStatus.InProgress && onReportError && (
-              <CardAction color="rose" icon={XOctagon} label="Báo lỗi" onClick={onReportError} />
-            )}
-          </div>
-        )}
+              {status === FulfillmentStageStatus.InProgress && onReportError && (
+                <CardAction color="rose" icon={XOctagon} label="Báo lỗi" onClick={onReportError} />
+              )}
+            </div>
+          )
+      )}
     </div>
   );
 }

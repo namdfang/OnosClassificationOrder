@@ -435,14 +435,25 @@ export class FulfillmentTaskService {
     const roleName = user.role?.name as RoleType | undefined;
     const isOverride = roleName ? OVERRIDE_ROLES.includes(roleName) : false;
 
-    const stage = query.stage ?? user.fulfillmentStage;
+    const tab: FulfillmentTaskTab = query.tab ?? 'waiting';
+    // `unassigned` tab — đơn chưa được gán Designer. Chỉ admin/manager
+    // được phép xem để gán; worker không có quyền action này.
+    if (tab === 'unassigned' && !isOverride) {
+      throw new ForbiddenException('Bạn không có quyền xem đơn chưa gán.');
+    }
+
+    // Stage check — `unassigned` không phụ thuộc stage (đơn chưa có stage),
+    // dùng dummy 'print' cho applyTabFilter (param unused trong case này).
+    // Admin/manager không có fulfillmentStage → cho phép bỏ qua. Worker tabs
+    // bắt buộc có stage để biết kanban col.
+    const stage = (query.stage ?? user.fulfillmentStage ?? FulfillmentStage.Print) as FulfillmentStage;
+    if (!query.stage && !user.fulfillmentStage && tab !== 'unassigned' && !isOverride) {
+      throw new BadRequestException('Thiếu stage (user chưa gán fulfillmentStage).');
+    }
     const factoryId = query.factoryId ?? user.factoryId;
-    if (!stage) throw new BadRequestException('Thiếu stage (user chưa gán fulfillmentStage).');
     if (!factoryId && !isOverride) {
       throw new BadRequestException('Thiếu factoryId (user chưa gán factoryId).');
     }
-
-    const tab: FulfillmentTaskTab = query.tab ?? 'waiting';
     const page = query.page && query.page > 0 ? query.page : 1;
     const size = query.size && query.size > 0 ? Math.min(query.size, 100) : 50;
 
@@ -460,7 +471,7 @@ export class FulfillmentTaskService {
         .limit(size)
         .lean(),
       this.orderModel.countDocuments(filter),
-      this.countAllTabs(baseFilter, stage, String(user._id)),
+      this.countAllTabs(baseFilter, stage, String(user._id), isOverride),
     ]);
 
     return {
@@ -572,6 +583,16 @@ export class FulfillmentTaskService {
             { designerStatus: 'rework' },
           ],
         });
+      case 'unassigned':
+        // Đơn đã ready (toolResultNote='ok') nhưng CHƯA vào fulfillment
+        // pipeline (currentFulfillmentStage null) — đơn skip Designer hoặc
+        // pending Designer assignment. Chỉ Admin/Manager thấy → admin gán
+        // designer qua bulk-assign-designer → đơn theo flow chuẩn.
+        // KHÔNG filter theo stage vì đơn chưa có stage.
+        return mergeWithFactoryOr(base, {
+          readyForFulfill: true,
+          currentFulfillmentStage: { $in: [null, undefined] },
+        });
       default:
         return base;
     }
@@ -581,14 +602,26 @@ export class FulfillmentTaskService {
     base: FilterQuery<OrderEntity>,
     stage: FulfillmentStage,
     userId: string,
-  ): Promise<{ waiting: number; inProgress: number; rework: number; done: number; watching: number }> {
-    const [waiting, inProgress, rework, done, watching] = await Promise.all([
+    isOverride: boolean,
+  ): Promise<{
+    waiting: number;
+    inProgress: number;
+    rework: number;
+    done: number;
+    watching: number;
+    unassigned: number;
+  }> {
+    const [waiting, inProgress, rework, done, watching, unassigned] = await Promise.all([
       this.orderModel.countDocuments(this.applyTabFilter(base, 'waiting', stage, userId)),
       this.orderModel.countDocuments(this.applyTabFilter(base, 'in-progress', stage, userId)),
       this.orderModel.countDocuments(this.applyTabFilter(base, 'rework', stage, userId)),
       this.orderModel.countDocuments(this.applyTabFilter(base, 'done', stage, userId)),
       this.orderModel.countDocuments(this.applyTabFilter(base, 'watching', stage, userId)),
+      // Workers không nhìn thấy số unassigned → tiết kiệm 1 countDocuments.
+      isOverride
+        ? this.orderModel.countDocuments(this.applyTabFilter(base, 'unassigned', stage, userId))
+        : Promise.resolve(0),
     ]);
-    return { waiting, inProgress, rework, done, watching };
+    return { waiting, inProgress, rework, done, watching, unassigned };
   }
 }

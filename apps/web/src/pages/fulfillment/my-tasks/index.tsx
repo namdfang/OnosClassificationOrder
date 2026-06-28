@@ -40,6 +40,7 @@ import { DateRangePicker } from '@/components/common/DateRangePicker';
 import { ImagePreviewDialog } from '@/components/common/ImagePreviewDialog';
 import { SelectFilter } from '@/components/common/SelectFilter';
 import { Spinner } from '@/components/common/Spinner';
+import { AssignDesignerDialog } from '@/components/orders/AssignDesignerDialog';
 import { OrderDetailDialog } from '@/components/orders/OrderDetailDialog';
 import { useDebounce } from '@/hooks/useDebounce';
 import { RepositoryRemote } from '@/services';
@@ -64,16 +65,24 @@ import { ReworkBackDialog } from './ReworkBackDialog';
  *   - Filter facets derive client-side từ data đã load (không gọi BE
  *     `myTaskFilters` riêng vì queue per stage < 200 đơn).
  */
-// 4 cột chính trong kanban: waiting / in-progress / rework / done.
-// `watching` không phải column kanban → render qua drawer "Đơn đã đẩy về xử lý"
-// ở dưới (clone pattern Designer's "Đơn đã trả lại").
-type ColKey = 'waiting' | 'in-progress' | 'rework' | 'done';
+// Worker fulfillment: 5 columns (waiting / in-progress / rework / done /
+// watching). Admin/Manager: thêm column `unassigned` (đơn chưa được gán
+// Designer — admin gán qua AssignDesignerDialog).
+type ColKey = 'waiting' | 'in-progress' | 'rework' | 'done' | 'watching' | 'unassigned';
 
 type Columns = Record<ColKey, ProductionOrder[]>;
 
-const EMPTY_COLS: Columns = { waiting: [], 'in-progress': [], rework: [], done: [] };
+const EMPTY_COLS: Columns = {
+  waiting: [],
+  'in-progress': [],
+  rework: [],
+  done: [],
+  watching: [],
+  unassigned: [],
+};
 
-const COL_ORDER: ColKey[] = ['waiting', 'in-progress', 'rework', 'done'];
+const WORKER_COL_ORDER: ColKey[] = ['waiting', 'in-progress', 'rework', 'done', 'watching'];
+const ADMIN_COL_ORDER: ColKey[] = ['unassigned', ...WORKER_COL_ORDER];
 
 type BulkAction = 'start' | 'complete';
 
@@ -113,6 +122,20 @@ const COL_META: Record<
     icon: CheckCircle2,
     accent: 'border-emerald-300 dark:border-emerald-700',
     kpiAccent: 'text-emerald-600',
+    bulk: [],
+  },
+  watching: {
+    label: 'Đang chờ quay lại',
+    icon: RotateCw,
+    accent: 'border-sky-300 dark:border-sky-700',
+    kpiAccent: 'text-sky-600',
+    bulk: [],
+  },
+  unassigned: {
+    label: 'Chưa gán Designer',
+    icon: ListChecks,
+    accent: 'border-rose-300 dark:border-rose-700',
+    kpiAccent: 'text-rose-600',
     bulk: [],
   },
 };
@@ -163,6 +186,13 @@ function sizeRank(raw?: string): number {
 export default function FulfillmentMyTasksPage() {
   const profile = useAuthStore((s) => s.profile);
   const myStage = profile?.fulfillmentStage as FulfillmentStage | undefined;
+  // Admin/Manager/SupportManager (= override roles ở BE) → thấy thêm column
+  // "Chưa gán Designer" + được phép gọi tab=unassigned.
+  const roleName = profile?.role?.name as string | undefined;
+  const isOverrideRole = ['SuperAdmin', 'Admin', 'Manager', 'SupportManager'].includes(
+    roleName ?? '',
+  );
+  const colOrder = isOverrideRole ? ADMIN_COL_ORDER : WORKER_COL_ORDER;
 
   const [columns, setColumns] = useState<Columns>(EMPTY_COLS);
   // Đơn user đã rework-back, đang chờ quay lại — render ở drawer dưới kanban
@@ -208,6 +238,9 @@ export default function FulfillmentMyTasksPage() {
   // Order chi tiết — mở qua click productionId trên card. Reuse component
   // OrderDetailDialog (đã wire link mockup/design dạng URL + cuttingFile preview).
   const [detailOrder, setDetailOrder] = useState<{ id: string; productionId: string } | null>(null);
+  // Assign-designer dialog cho cột `unassigned` (admin-only). Reuse component
+  // bulk-assign existing — single-id list. Reload sau khi gán xong.
+  const [assignDesignerOrderId, setAssignDesignerOrderId] = useState<string | null>(null);
   const handleCopyProductionId = async (order: ProductionOrder) => {
     try {
       await navigator.clipboard.writeText(order.productionId);
@@ -224,25 +257,36 @@ export default function FulfillmentMyTasksPage() {
   const sensors = useSensors(useSensor(PointerSensor, { activationConstraint: { distance: 6 } }));
 
   const load = useCallback(async () => {
-    if (!myStage) return;
+    // Admin không có fulfillmentStage → vẫn cho phép vào page để xem unassigned.
+    // Worker không có stage → return (BE sẽ throw 400).
+    if (!myStage && !isOverrideRole) return;
     setLoading(true);
     try {
       // Truyền date range cho BE — match scope `OrderFactoryTab`. Empty string
       // = user clear → BE coi là explicit "all-time".
       const dateParams = { createdFrom: dateFrom, createdTo: dateTo };
-      const [w, ip, rw, dn, wt] = await Promise.all([
+      // Worker: 5 tabs. Admin: thêm unassigned (gọi song song).
+      const adminUnassignedPromise = isOverrideRole
+        ? RepositoryRemote.fulfillment.myTasks({ tab: 'unassigned', size: 100, ...dateParams })
+        : Promise.resolve({ data: { data: [] } });
+      const [w, ip, rw, dn, wt, un] = await Promise.all([
         RepositoryRemote.fulfillment.myTasks({ tab: 'waiting', size: 100, ...dateParams }),
         RepositoryRemote.fulfillment.myTasks({ tab: 'in-progress', size: 100, ...dateParams }),
         RepositoryRemote.fulfillment.myTasks({ tab: 'rework', size: 100, ...dateParams }),
         RepositoryRemote.fulfillment.myTasks({ tab: 'done', size: 100, ...dateParams }),
         RepositoryRemote.fulfillment.myTasks({ tab: 'watching', size: 100, ...dateParams }),
+        adminUnassignedPromise,
       ]);
       setColumns({
         waiting: w.data.data ?? [],
         'in-progress': ip.data.data ?? [],
         rework: rw.data.data ?? [],
         done: dn.data.data ?? [],
+        watching: wt.data.data ?? [],
+        unassigned: un.data.data ?? [],
       });
+      // Backward compat — `watching` state cũ vẫn để cho `filteredWatching`
+      // hoạt động nếu chỗ nào còn ref (drawer block bị comment ra rồi).
       setWatching(wt.data.data ?? []);
       setSelected(new Set());
       lastClickedRef.current = null;
@@ -251,7 +295,7 @@ export default function FulfillmentMyTasksPage() {
     } finally {
       setLoading(false);
     }
-  }, [myStage, dateFrom, dateTo]);
+  }, [myStage, isOverrideRole, dateFrom, dateTo]);
 
   useEffect(() => {
     void load();
@@ -280,6 +324,8 @@ export default function FulfillmentMyTasksPage() {
       'in-progress': apply(columns['in-progress']),
       rework: apply(columns.rework),
       done: apply(columns.done),
+      watching: apply(columns.watching),
+      unassigned: apply(columns.unassigned),
     };
   }, [columns, debouncedSearch, filters]);
 
@@ -309,7 +355,8 @@ export default function FulfillmentMyTasksPage() {
       ...columns['in-progress'],
       ...columns.rework,
       ...columns.done,
-      ...watching,
+      ...columns.watching,
+      ...columns.unassigned,
     ];
     const facetFor = (
       key: keyof Filters,
@@ -347,7 +394,7 @@ export default function FulfillmentMyTasksPage() {
       toolResult: facetFor('toolResult', (o) => o.toolResult),
       userSku: facetFor('userSku', (o) => o.userSku),
     };
-  }, [columns, watching, filters]);
+  }, [columns, filters]);
 
   // ─── Transition + bulk ────────────────────────────────────────
   const callTransition = async (
@@ -432,13 +479,20 @@ export default function FulfillmentMyTasksPage() {
 
   // ─── Selection helpers ────────────────────────────────────────
   const orderedIdsPerColumn = useMemo(() => {
-    const out: Record<ColKey, string[]> = { waiting: [], 'in-progress': [], rework: [], done: [] };
-    for (const k of COL_ORDER) {
+    const out: Record<ColKey, string[]> = {
+      waiting: [],
+      'in-progress': [],
+      rework: [],
+      done: [],
+      watching: [],
+      unassigned: [],
+    };
+    for (const k of colOrder) {
       const groups = groupByType(filteredColumns[k]);
       for (const [, rows] of groups) for (const r of rows) out[k].push(r._id);
     }
     return out;
-  }, [filteredColumns]);
+  }, [filteredColumns, colOrder]);
 
   const toggleId = (id: string, checked: boolean) => {
     setSelected((prev) => {
@@ -496,7 +550,7 @@ export default function FulfillmentMyTasksPage() {
   // Tính cột nào có ít nhất 1 đơn đã chọn → quyết định bulk action nào hợp lệ.
   const selectedColumns = useMemo(() => {
     const cols = new Set<ColKey>();
-    for (const k of COL_ORDER) {
+    for (const k of colOrder) {
       for (const r of columns[k]) {
         if (selected.has(r._id)) {
           cols.add(k);
@@ -505,7 +559,7 @@ export default function FulfillmentMyTasksPage() {
       }
     }
     return cols;
-  }, [selected, columns]);
+  }, [selected, columns, colOrder]);
 
   const bulkActions = useMemo<BulkAction[]>(() => {
     if (selectedColumns.size !== 1) return [];
@@ -526,6 +580,8 @@ export default function FulfillmentMyTasksPage() {
     'in-progress': filteredColumns['in-progress'].length,
     rework: filteredColumns.rework.length,
     done: filteredColumns.done.length,
+    watching: filteredColumns.watching.length,
+    unassigned: filteredColumns.unassigned.length,
   };
 
   const onPreview = (url: string, title: string, original?: string) =>
@@ -556,8 +612,13 @@ export default function FulfillmentMyTasksPage() {
         </div>
 
         {/* KPI */}
-        <div className="grid grid-cols-2 md:grid-cols-4 gap-2">
-          {COL_ORDER.map((k) => (
+        <div className={cn(
+          'grid gap-2',
+          colOrder.length === 5
+            ? 'grid-cols-2 md:grid-cols-3 xl:grid-cols-5'
+            : 'grid-cols-2 md:grid-cols-3 xl:grid-cols-6',
+        )}>
+          {colOrder.map((k) => (
             <KPI key={k} label={COL_META[k].label} value={counts[k]} accent={COL_META[k].kpiAccent} />
           ))}
         </div>
@@ -670,10 +731,15 @@ export default function FulfillmentMyTasksPage() {
           </div>
         </div>
 
-        {/* Kanban */}
+        {/* Kanban — 5 cột worker / 6 cột admin */}
         <DndContext sensors={sensors} onDragStart={handleDragStart} onDragEnd={handleDragEnd}>
-          <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-3">
-            {COL_ORDER.map((key) => (
+          <div className={cn(
+            'grid gap-3',
+            colOrder.length === 5
+              ? 'grid-cols-1 md:grid-cols-2 xl:grid-cols-5'
+              : 'grid-cols-1 md:grid-cols-2 xl:grid-cols-6',
+          )}>
+            {colOrder.map((key) => (
               <Column
                 key={key}
                 colKey={key}
@@ -684,6 +750,7 @@ export default function FulfillmentMyTasksPage() {
                 copiedOrderId={copiedOrderId}
                 onCopyProductionId={handleCopyProductionId}
                 onClickProductionId={(o) => setDetailOrder({ id: o._id, productionId: o.productionId })}
+                onAssignDesigner={(o) => setAssignDesignerOrderId(o._id)}
                 onStart={(o) => void callTransition(o, FulfillmentTransitionAction.Start)}
                 onComplete={(o) => void callTransition(o, FulfillmentTransitionAction.Complete)}
                 onReportError={(o) => setReworkOrder(o)}
@@ -805,6 +872,19 @@ export default function FulfillmentMyTasksPage() {
           orderId={detailOrder?.id ?? null}
           productionId={detailOrder?.productionId}
         />
+
+        {/* Admin gán designer cho đơn unassigned. Reuse bulk component với
+            list 1 phần tử. Reload cả kanban sau khi gán xong → đơn rời cột
+            unassigned, xuất hiện trong queue designer. */}
+        <AssignDesignerDialog
+          open={!!assignDesignerOrderId}
+          selectedIds={assignDesignerOrderId ? [assignDesignerOrderId] : []}
+          onClose={() => setAssignDesignerOrderId(null)}
+          onApplied={() => {
+            setAssignDesignerOrderId(null);
+            void load();
+          }}
+        />
       </div>
     </TooltipProvider>
   );
@@ -860,6 +940,8 @@ interface ColumnProps {
   copiedOrderId: string | null;
   onCopyProductionId: (o: ProductionOrder) => void;
   onClickProductionId: (o: ProductionOrder) => void;
+  /** Chỉ truyền nếu admin (cột `unassigned`). Card unassigned bind button "Gán Designer". */
+  onAssignDesigner?: (o: ProductionOrder) => void;
   onStart: (o: ProductionOrder) => void;
   onComplete: (o: ProductionOrder) => void;
   onReportError: (o: ProductionOrder) => void;
@@ -877,6 +959,7 @@ function Column({
   copiedOrderId,
   onCopyProductionId,
   onClickProductionId,
+  onAssignDesigner,
   onStart,
   onComplete,
   onReportError,
@@ -1018,6 +1101,11 @@ function Column({
                             isCopied={copiedOrderId === o._id}
                             onCopyProductionId={() => onCopyProductionId(o)}
                             onClickProductionId={() => onClickProductionId(o)}
+                            onAssignDesigner={
+                              colKey === 'unassigned' && onAssignDesigner
+                                ? () => onAssignDesigner(o)
+                                : undefined
+                            }
                             onPreview={onPreview}
                             onStart={() => onStart(o)}
                             onComplete={() => onComplete(o)}
