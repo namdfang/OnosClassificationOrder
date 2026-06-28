@@ -127,22 +127,32 @@ const ADMIN_ROLES: RoleType[] = [RoleType.SuperAdmin, RoleType.Admin, RoleType.M
 const FIELD_EDIT_ROLES: Record<OrderWorkshopField, RoleType[]> = {
   printStatus: [...ADMIN_ROLES, RoleType.Fulfillment],
   printStatusNote: [...ADMIN_ROLES, RoleType.Fulfillment],
-  toolResult: [...ADMIN_ROLES, RoleType.DesignerLeader, RoleType.Designer],
+  // Support cần edit 5 field này (kết quả tool / note / errorFile / note / máy)
+  // permanently — KHÔNG bị reset mỗi lần deploy. Hard-code ở đây = source of
+  // truth (fallback ưu tiên cao hơn permission-catalog vì map này luôn được
+  // check khi `assertCanEditField`). Xem comment §2 ở method dưới.
+  toolResult: [...ADMIN_ROLES, RoleType.Support, RoleType.DesignerLeader, RoleType.Designer],
   // Phase 3 Designer-Task-Workflow: `toolResultNote` không cho sub-designer sửa
   // tay nữa — derive auto khi designer transition 'complete' (state machine set
-  // 'ok'). Leader/Admin vẫn override được nếu cần.
-  toolResultNote: [...ADMIN_ROLES, RoleType.DesignerLeader],
-  errorFile: [...ADMIN_ROLES, RoleType.DesignerLeader, RoleType.Designer],
-  errorFileNote: [...ADMIN_ROLES, RoleType.DesignerLeader, RoleType.Designer],
+  // 'ok'). Leader/Admin/Support vẫn override được nếu cần.
+  toolResultNote: [...ADMIN_ROLES, RoleType.Support, RoleType.DesignerLeader],
+  errorFile: [...ADMIN_ROLES, RoleType.Support, RoleType.DesignerLeader, RoleType.Designer],
+  errorFileNote: [...ADMIN_ROLES, RoleType.Support, RoleType.DesignerLeader, RoleType.Designer],
   // Phase 3: chỉ Leader/Admin assign task. Sub-designer transition qua endpoint
   // riêng `POST /orders/:id/designer-transition`.
   assignee: [...ADMIN_ROLES, RoleType.DesignerLeader],
   assigneeNote: [...ADMIN_ROLES, RoleType.DesignerLeader, RoleType.Designer],
   // Fabric is admin-managed (it's a product attribute, not a workshop status).
   fabricType: ADMIN_ROLES,
-  // Máy: xưởng (Leader/Designer/Fulfillment) tự đổi máy nếu phải chuyển máy in,
-  // không cần đợi admin sửa ProductConfig + backfill lại.
-  machineNumber: [...ADMIN_ROLES, RoleType.DesignerLeader, RoleType.Designer, RoleType.Fulfillment],
+  // Máy: xưởng (Leader/Designer/Fulfillment/Support) tự đổi máy nếu phải chuyển
+  // máy in, không cần đợi admin sửa ProductConfig + backfill lại.
+  machineNumber: [
+    ...ADMIN_ROLES,
+    RoleType.Support,
+    RoleType.DesignerLeader,
+    RoleType.Designer,
+    RoleType.Fulfillment,
+  ],
   // Fulfillment (xưởng) là người báo lỗi sản xuất → cần quyền edit.
   productionError: [...ADMIN_ROLES, RoleType.Fulfillment],
   productionErrorNote: [...ADMIN_ROLES, RoleType.Fulfillment],
