@@ -56,7 +56,7 @@ function todayISO(): string {
 }
 
 export function OrderTableWorkshop() {
-  const { has, canViewField, canEditField } = usePermission();
+  const { has, canViewField, canEditField, roleName } = usePermission();
   const loadConfig = useWorkshopConfigStore((s) => s.load);
   const configLoaded = useWorkshopConfigStore((s) => s.loaded);
 
@@ -179,10 +179,23 @@ export function OrderTableWorkshop() {
     if (!configLoaded) loadConfig();
   }, [configLoaded, loadConfig]);
 
-  const visibleCols = useMemo(
-    () => COLS.filter((c) => !c.perm || canViewField(c.key)),
-    [canViewField],
-  );
+  const visibleCols = useMemo(() => {
+    const filtered = COLS.filter((c) => !c.perm || canViewField(c.key));
+    // Support role muốn 4 cột tool-result/note/error-file/error-note đứng
+    // TRƯỚC `printStatus` (workflow: soát tool → in). Reorder client-side để
+    // không ảnh hưởng layout role khác. Idempotent: chỉ swap nếu thấy đủ.
+    if (roleName !== 'Support') return filtered;
+    const SUPPORT_BEFORE_PRINT = ['toolResult', 'toolResultNote', 'errorFile', 'errorFileNote'];
+    const printIdx = filtered.findIndex((c) => c.key === 'printStatus');
+    if (printIdx < 0) return filtered;
+    const supportCols = SUPPORT_BEFORE_PRINT.map((k) => filtered.find((c) => c.key === k)).filter(
+      (c): c is NonNullable<typeof c> => !!c,
+    );
+    if (supportCols.length === 0) return filtered;
+    const without = filtered.filter((c) => !SUPPORT_BEFORE_PRINT.includes(c.key));
+    const newPrintIdx = without.findIndex((c) => c.key === 'printStatus');
+    return [...without.slice(0, newPrintIdx), ...supportCols, ...without.slice(newPrintIdx)];
+  }, [canViewField, roleName]);
 
   // Server returns groups of products (page = N products, not N rows). We keep
   // the flat `items` list for things like bulk select + checkbox state, but
@@ -541,7 +554,7 @@ export function OrderTableWorkshop() {
             <Table>
               <TableHeader>
                 <TableRow>
-                  <TableHead className="w-8">
+                  <TableHead className="w-8 sticky left-0 z-30 bg-card">
                     <input
                       type="checkbox"
                       checked={items.length > 0 && selected.size === items.length}
@@ -549,8 +562,18 @@ export function OrderTableWorkshop() {
                       title="Tick để chọn toàn bộ đơn trên trang này"
                     />
                   </TableHead>
-                  {visibleCols.map((c) => (
-                    <TableHead key={c.key} className={cn('whitespace-nowrap text-xs', c.width)}>
+                  {visibleCols.map((c, i) => (
+                    <TableHead
+                      key={c.key}
+                      className={cn(
+                        'whitespace-nowrap text-xs',
+                        c.width,
+                        // productionId là cột đầu tiên (i===0) — sticky cạnh
+                        // checkbox để khi scroll ngang vẫn nhìn thấy ID.
+                        // shadow-r mô phỏng viền cho user biết chỗ sticky kết thúc.
+                        i === 0 && 'sticky left-8 z-30 bg-card shadow-[1px_0_0_0_var(--border)]',
+                      )}
+                    >
                       {c.label}
                     </TableHead>
                   ))}
@@ -601,7 +624,10 @@ export function OrderTableWorkshop() {
                   return (
                     <React.Fragment key={t}>
                       <TableRow className="bg-muted/40 hover:bg-muted/50">
-                        <TableCell className="py-1.5" onClick={(e) => e.stopPropagation()}>
+                        <TableCell
+                          className="py-1.5 sticky left-0 z-10 bg-muted/40"
+                          onClick={(e) => e.stopPropagation()}
+                        >
                           <input
                             type="checkbox"
                             checked={groupState === 'all'}
@@ -614,7 +640,7 @@ export function OrderTableWorkshop() {
                         </TableCell>
                         <TableCell
                           colSpan={visibleCols.length + 1}
-                          className="py-1.5 cursor-pointer"
+                          className="py-1.5 cursor-pointer sticky left-8 z-10 bg-muted/40 shadow-[1px_0_0_0_var(--border)]"
                           onClick={() => toggleType(t)}
                         >
                           <div className="flex items-center gap-2 text-xs">
@@ -648,19 +674,30 @@ export function OrderTableWorkshop() {
                         const comboKey = `${row.size || ''}|${row.fabricType || ''}|${row.mockupOriginalUrl || row.mockupUrl || ''}`;
                         const comboN = comboCount.get(comboKey) || 1;
                         const isHeaviest = comboN > 1 && comboN === maxCombo;
+                        // Resolve BG cho row + sticky cells theo cùng rule. Trải
+                        // thẳng bg classes (KHÔNG dùng bg-inherit vì sticky cell
+                        // cần own bg để mask cell scroll phía sau — `inherit`
+                        // không reliable với TR background trong 1 số browser).
+                        const isSel = selected.has(row._id);
+                        const noTool = isNoTool(row.toolResult);
+                        const rowBgClass = isSel
+                          ? 'bg-primary/10 dark:bg-primary/20'
+                          : isHeaviest
+                            ? 'bg-amber-50 dark:bg-amber-500/10'
+                            : noTool
+                              ? 'bg-sky-100 dark:bg-sky-500/20'
+                              : 'bg-card';
                         return (
                           <TableRow
                             key={row._id}
                             className={cn(
-                              // Priority: selected > heaviest combo > no-tool tint.
-                              // No-tool tint = soft blue background cho đơn đánh
-                              // dấu "không cần tool" (xem useIsNoTool docstring).
-                              isNoTool(row.toolResult) && !selected.has(row._id) && !isHeaviest && NO_TOOL_ROW_CLASS,
-                              isHeaviest && !selected.has(row._id) && 'bg-amber-50/60 dark:bg-amber-500/5',
-                              selected.has(row._id) && 'bg-primary/5',
+                              rowBgClass,
+                              // Border-l accent giữ riêng cho no-tool (đặt ngoài
+                              // logic bg để vẫn dùng dù state khác).
+                              noTool && 'border-l-2 border-l-sky-400 dark:border-l-sky-400/60',
                             )}
                           >
-                            <TableCell>
+                            <TableCell className={cn('sticky left-0 z-10', rowBgClass)}>
                               <input
                                 type="checkbox"
                                 checked={selected.has(row._id)}
@@ -672,8 +709,18 @@ export function OrderTableWorkshop() {
                                 title="Shift+click để chọn cả range tới checkbox trước đó"
                               />
                             </TableCell>
-                            {visibleCols.map((c) => (
-                              <TableCell key={c.key} className="py-2">
+                            {visibleCols.map((c, i) => (
+                              <TableCell
+                                key={c.key}
+                                className={cn(
+                                  'py-2',
+                                  i === 0 &&
+                                    cn(
+                                      'sticky left-8 z-10 shadow-[1px_0_0_0_var(--border)]',
+                                      rowBgClass,
+                                    ),
+                                )}
+                              >
                                 <div className="flex items-center gap-1.5">
                                   {c.key === 'mockupTypeSize' && comboN > 1 && (
                                     <Badge

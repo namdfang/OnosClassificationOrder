@@ -136,7 +136,12 @@ export const WORKSHOP_COLS: WorkshopColMeta[] = [
       return (
         <div className="flex flex-col leading-tight gap-0.5">
           <div className="flex items-center gap-1">
-            <CopyButton value={r.productionId} label="Production ID" iconSize={11} />
+            <CopyButton
+              value={r.productionId}
+              label="Production ID"
+              iconSize={15}
+              className="p-1 hover:ring-1 hover:ring-primary/40"
+            />
             <Hint
               content={
                 ctx.openDetail
