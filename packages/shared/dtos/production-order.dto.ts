@@ -1035,6 +1035,14 @@ export const GetFulfillmentMyTasksZod = PageQueryZod.extend({
   /** Override (Manager/Admin). User Fulfillment không cần set. */
   stage: FulfillmentStageZod.optional(),
   factoryId: IDZod.optional(),
+  /**
+   * Date range filter trên `inProductionAt` (YYYY-MM-DD, VN local). Match
+   * semantic của `GetProductionOrdersZod.createdFrom/To` để 2 page (My Tasks
+   * + Factory Tab) cùng scope. BE default = 7 ngày khi cả 2 đều empty;
+   * empty string truyền lên = user clear → all-time.
+   */
+  createdFrom: z.string().optional(),
+  createdTo: z.string().optional(),
 });
 export class GetFulfillmentMyTasksDto extends createZodDto(extendApi(GetFulfillmentMyTasksZod)) {}
 

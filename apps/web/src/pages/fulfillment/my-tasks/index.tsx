@@ -180,11 +180,19 @@ export default function FulfillmentMyTasksPage() {
   const [search, setSearch] = useState('');
   const debouncedSearch = useDebounce(search, 300);
   const [filters, setFilters] = useState<Filters>(EMPTY_FILTERS);
-  // Date range filter trên `inProductionAt` — đồng bộ pattern các bảng khác
-  // (workshop / error-log). Default = hôm nay. Client-side filter vì queue
-  // per stage nhỏ (< 200 đơn).
-  const [dateFrom, setDateFrom] = useState<string>('');
-  const [dateTo, setDateTo] = useState<string>('');
+  // Date range gửi xuống BE — match scope `OrderFactoryTab` (7 ngày). undefined
+  // = chưa pick → BE default 7 ngày. Empty string sau khi user clear =
+  // all-time. Render: nếu undefined → init 7d window để DateRangePicker show.
+  const init7d = useMemo(() => {
+    const d = new Date();
+    const to = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+    const from = new Date(d);
+    from.setDate(from.getDate() - 6);
+    const fromStr = `${from.getFullYear()}-${String(from.getMonth() + 1).padStart(2, '0')}-${String(from.getDate()).padStart(2, '0')}`;
+    return { from: fromStr, to };
+  }, []);
+  const [dateFrom, setDateFrom] = useState<string>(init7d.from);
+  const [dateTo, setDateTo] = useState<string>(init7d.to);
   // "Đã copy search" — giữ trạng thái cho đến khi user đổi value hoặc F5.
   // Reset khi search thay đổi (gồm cả case clear) — đồng bộ ý nghĩa "icon
   // tick = giá trị này đã được copy".
@@ -219,12 +227,15 @@ export default function FulfillmentMyTasksPage() {
     if (!myStage) return;
     setLoading(true);
     try {
+      // Truyền date range cho BE — match scope `OrderFactoryTab`. Empty string
+      // = user clear → BE coi là explicit "all-time".
+      const dateParams = { createdFrom: dateFrom, createdTo: dateTo };
       const [w, ip, rw, dn, wt] = await Promise.all([
-        RepositoryRemote.fulfillment.myTasks({ tab: 'waiting', size: 100 }),
-        RepositoryRemote.fulfillment.myTasks({ tab: 'in-progress', size: 100 }),
-        RepositoryRemote.fulfillment.myTasks({ tab: 'rework', size: 100 }),
-        RepositoryRemote.fulfillment.myTasks({ tab: 'done', size: 100 }),
-        RepositoryRemote.fulfillment.myTasks({ tab: 'watching', size: 100 }),
+        RepositoryRemote.fulfillment.myTasks({ tab: 'waiting', size: 100, ...dateParams }),
+        RepositoryRemote.fulfillment.myTasks({ tab: 'in-progress', size: 100, ...dateParams }),
+        RepositoryRemote.fulfillment.myTasks({ tab: 'rework', size: 100, ...dateParams }),
+        RepositoryRemote.fulfillment.myTasks({ tab: 'done', size: 100, ...dateParams }),
+        RepositoryRemote.fulfillment.myTasks({ tab: 'watching', size: 100, ...dateParams }),
       ]);
       setColumns({
         waiting: w.data.data ?? [],
@@ -240,7 +251,7 @@ export default function FulfillmentMyTasksPage() {
     } finally {
       setLoading(false);
     }
-  }, [myStage]);
+  }, [myStage, dateFrom, dateTo]);
 
   useEffect(() => {
     void load();
@@ -248,22 +259,14 @@ export default function FulfillmentMyTasksPage() {
 
   // ─── Filter application (client-side) ──────────────────────────
   const filteredColumns = useMemo<Columns>(() => {
+    // Date filter giờ chạy BE (xem `load()`) — không filter date ở FE nữa.
     const q = debouncedSearch.trim().toLowerCase();
-    // Range theo VN local — start là 00:00, end là 23:59:59.999 của ngày.
-    const fromMs = dateFrom ? new Date(`${dateFrom}T00:00:00+07:00`).getTime() : null;
-    const toMs = dateTo ? new Date(`${dateTo}T23:59:59.999+07:00`).getTime() : null;
     const apply = (arr: ProductionOrder[]) =>
       arr.filter((o) => {
         if (q) {
           const hit =
             o.productionId?.toLowerCase().includes(q) || o.orderId?.toLowerCase().includes(q);
           if (!hit) return false;
-        }
-        if (fromMs !== null || toMs !== null) {
-          const ts = o.inProductionAt ? new Date(o.inProductionAt).getTime() : null;
-          if (ts === null) return false;
-          if (fromMs !== null && ts < fromMs) return false;
-          if (toMs !== null && ts > toMs) return false;
         }
         if (filters.type && o.type !== filters.type) return false;
         if (filters.fabricType && o.fabricType !== filters.fabricType) return false;
@@ -278,23 +281,15 @@ export default function FulfillmentMyTasksPage() {
       rework: apply(columns.rework),
       done: apply(columns.done),
     };
-  }, [columns, debouncedSearch, filters, dateFrom, dateTo]);
+  }, [columns, debouncedSearch, filters]);
 
   const filteredWatching = useMemo(() => {
     const q = debouncedSearch.trim().toLowerCase();
-    const fromMs = dateFrom ? new Date(`${dateFrom}T00:00:00+07:00`).getTime() : null;
-    const toMs = dateTo ? new Date(`${dateTo}T23:59:59.999+07:00`).getTime() : null;
     return watching.filter((o) => {
       if (q) {
         const hit =
           o.productionId?.toLowerCase().includes(q) || o.orderId?.toLowerCase().includes(q);
         if (!hit) return false;
-      }
-      if (fromMs !== null || toMs !== null) {
-        const ts = o.inProductionAt ? new Date(o.inProductionAt).getTime() : null;
-        if (ts === null) return false;
-        if (fromMs !== null && ts < fromMs) return false;
-        if (toMs !== null && ts > toMs) return false;
       }
       if (filters.type && o.type !== filters.type) return false;
       if (filters.fabricType && o.fabricType !== filters.fabricType) return false;
@@ -303,7 +298,7 @@ export default function FulfillmentMyTasksPage() {
       if (filters.userSku && o.userSku !== filters.userSku) return false;
       return true;
     });
-  }, [watching, debouncedSearch, filters, dateFrom, dateTo]);
+  }, [watching, debouncedSearch, filters]);
 
   // ─── Facet options (count theo data đã filter trừ facet hiện tại) ──
   // Giống pattern faceted search ở Designer — count phản ánh kết quả khi áp

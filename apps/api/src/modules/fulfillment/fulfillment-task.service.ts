@@ -40,6 +40,38 @@ const OVERRIDE_ROLES: RoleType[] = [
   RoleType.SupportManager,
 ];
 
+/** Match `order.service.ts:vnDayStart/End` — local VN ngày 00:00 / 23:59. */
+function vnDayStart(yyyymmdd: string): Date {
+  return new Date(yyyymmdd.slice(0, 10) + 'T00:00:00+07:00');
+}
+function vnDayEnd(yyyymmdd: string): Date {
+  return new Date(yyyymmdd.slice(0, 10) + 'T23:59:59.999+07:00');
+}
+function vnTodayStart(): Date {
+  const vnNow = new Date(Date.now() + 7 * 60 * 60 * 1000);
+  return vnDayStart(vnNow.toISOString().slice(0, 10));
+}
+
+/**
+ * Merge tab-specific filter (có thể chứa `$or`) với base (chứa `$or` factory
+ * scope). Object spread sẽ ghi đè $or → mất scope factory. Gom cả 2 $or qua
+ * $and để Mongo eval (factory $or) AND (tab $or). Các field khác giữ nguyên.
+ */
+function mergeWithFactoryOr<T>(
+  base: FilterQuery<T>,
+  tabFilter: FilterQuery<T>,
+): FilterQuery<T> {
+  const baseOr = base.$or as unknown[] | undefined;
+  const tabOr = tabFilter.$or as unknown[] | undefined;
+  const merged: FilterQuery<T> = { ...base, ...tabFilter };
+  if (baseOr && tabOr) {
+    delete (merged as { $or?: unknown }).$or;
+    const existingAnd = (merged.$and as unknown[] | undefined) ?? [];
+    merged.$and = [...existingAnd, { $or: baseOr }, { $or: tabOr }];
+  }
+  return merged;
+}
+
 /**
  * Fulfillment 5-stage state machine.
  *
@@ -383,7 +415,16 @@ export class FulfillmentTaskService {
    */
   async getMyTasks(
     user: UserDocument,
-    query: { tab?: FulfillmentTaskTab; stage?: FulfillmentStage; factoryId?: string; page?: number; size?: number },
+    query: {
+      tab?: FulfillmentTaskTab;
+      stage?: FulfillmentStage;
+      factoryId?: string;
+      page?: number;
+      size?: number;
+      /** YYYY-MM-DD VN local. Empty string = explicit clear → all-time. */
+      createdFrom?: string;
+      createdTo?: string;
+    },
   ): Promise<{
     data: ProductionOrder[];
     total: number;
@@ -405,7 +446,10 @@ export class FulfillmentTaskService {
     const page = query.page && query.page > 0 ? query.page : 1;
     const size = query.size && query.size > 0 ? Math.min(query.size, 100) : 50;
 
-    const baseFilter = this.buildMyTaskBase(stage, factoryId);
+    const baseFilter = this.buildMyTaskBase(stage, factoryId, {
+      createdFrom: query.createdFrom,
+      createdTo: query.createdTo,
+    });
     const filter = this.applyTabFilter(baseFilter, tab, stage, String(user._id));
 
     const [data, total, tabCounts] = await Promise.all([
@@ -428,11 +472,46 @@ export class FulfillmentTaskService {
     };
   }
 
-  private buildMyTaskBase(stage: FulfillmentStage, factoryId?: string): FilterQuery<OrderEntity> {
-    const f: FilterQuery<OrderEntity> = { cancelledAt: { $in: [null, undefined] } };
-    if (factoryId) f.factoryId = factoryId;
-    // Bao gồm cả đơn không ở stage tôi (cho tab watching) — lọc theo timeline.
+  /**
+   * Base filter cho My Tasks — MATCH SCOPE với `OrderFactoryTab` (factory tab
+   * trên dashboard) để 2 page trả cùng tập đơn:
+   *   - Factory scope: `factoryId == mine` HOẶC `originalFactoryId == mine`
+   *     (gồm cả đơn đã transfer đi từ xưởng tôi). Override role không có
+   *     factoryId → bỏ qua factory filter.
+   *   - Date range: default 7 ngày gần nhất trên `inProductionAt` (giống
+   *     `order.service.ts:buildVisibilityFilter` cho role Fulfillment). User
+   *     truyền `createdFrom`/`createdTo` rỗng = explicit clear → all-time.
+   *   - KHÔNG filter `cancelledAt` để khớp 100% với Factory Tab (per user req).
+   *
+   * `stage` không dùng ở đây (lọc per-tab bởi `applyTabFilter`) — giữ param
+   * cho signature consistency.
+   */
+  private buildMyTaskBase(
+    stage: FulfillmentStage,
+    factoryId?: string,
+    dateRange?: { createdFrom?: string; createdTo?: string },
+  ): FilterQuery<OrderEntity> {
     void stage;
+    const f: FilterQuery<OrderEntity> = {};
+    if (factoryId) {
+      f.$or = [{ factoryId }, { originalFactoryId: factoryId }];
+    }
+    // Date logic: nếu user truyền cả 2 đều undefined → default 7 ngày. Nếu
+    // truyền (kể cả empty string) → coi là explicit override / clear.
+    const hasFrom = dateRange?.createdFrom !== undefined;
+    const hasTo = dateRange?.createdTo !== undefined;
+    if (!hasFrom && !hasTo) {
+      const todayStart = vnTodayStart();
+      const endOfToday = new Date(todayStart.getTime() + 24 * 60 * 60 * 1000 - 1);
+      const startOfWindow = new Date(todayStart.getTime() - 6 * 24 * 60 * 60 * 1000);
+      f.inProductionAt = { $gte: startOfWindow, $lte: endOfToday };
+    } else {
+      const range: Record<string, Date> = {};
+      if (dateRange?.createdFrom) range.$gte = vnDayStart(dateRange.createdFrom);
+      if (dateRange?.createdTo) range.$lte = vnDayEnd(dateRange.createdTo);
+      if (Object.keys(range).length > 0) f.inProductionAt = range;
+      // Nếu cả 2 là empty string → no inProductionAt filter = all-time.
+    }
     return f;
   }
 
@@ -465,24 +544,22 @@ export class FulfillmentTaskService {
       case 'done':
         // Đơn user đã hoàn thành stage này (đã có completedAt) VÀ đơn đã
         // rời stage (currentFulfillmentStage > stage hoặc null nếu pack done).
-        // Sort theo completedAt desc khi caller dùng — nhưng giữ sort chung
-        // ở `getMyTasks` (orderAt desc) để code đơn giản. Nếu muốn period filter
-        // (today/7d/30d) → caller truyền vào, hiện chưa cần.
-        return {
-          ...base,
+        // Merge $or qua $and vì base có $or factory scope (factoryId OR
+        // originalFactoryId) — spread sẽ overwrite mất, dẫn đến lộ data
+        // xưởng khác.
+        return mergeWithFactoryOr(base, {
           [`fulfillmentStages.${stage}.completedAt`]: { $exists: true, $ne: null },
           $or: [
             { currentFulfillmentStage: { $ne: stage } },
             { currentFulfillmentStage: { $in: [null, undefined] } },
           ],
-        };
+        });
       case 'watching':
         // Đơn worker (userId) đã từng rework-back, đang chờ quay lại.
         // Match: timeline có entry stage=mineStage + action=rework-back + byUserId=userId
         // VÀ currentFulfillmentStage != stage mine (đang ở stage trước) HOẶC
-        // designerStatus = rework.
-        return {
-          ...base,
+        // designerStatus = rework. Merge $or giữ scope factory (xem comment 'done').
+        return mergeWithFactoryOr(base, {
           fulfillmentTimeline: {
             $elemMatch: {
               stage,
@@ -494,7 +571,7 @@ export class FulfillmentTaskService {
             { currentFulfillmentStage: { $ne: stage } },
             { designerStatus: 'rework' },
           ],
-        };
+        });
       default:
         return base;
     }
