@@ -15,6 +15,7 @@ import {
   ChevronRight,
   ChevronUp,
   Clock,
+  Copy,
   ListChecks,
   MousePointerClick,
   PlayCircle,
@@ -119,9 +120,43 @@ type Filters = {
   fabricType: string;
   machineNumber: string;
   toolResult: string;
+  userSku: string;
 };
 
-const EMPTY_FILTERS: Filters = { type: '', fabricType: '', machineNumber: '', toolResult: '' };
+const EMPTY_FILTERS: Filters = {
+  type: '',
+  fabricType: '',
+  machineNumber: '',
+  toolResult: '',
+  userSku: '',
+};
+
+/**
+ * Size ordering chuẩn theo nội bộ. Lowercase compare để chấp nhận biến thể
+ * (xxl ↔ 2XL, xxxl ↔ 3XL). Unknown → 99 (đẩy về cuối, vẫn ổn định).
+ */
+const SIZE_RANK: Record<string, number> = {
+  xs: 0,
+  s: 1,
+  m: 2,
+  l: 3,
+  xl: 4,
+  '2xl': 5,
+  xxl: 5,
+  '3xl': 6,
+  xxxl: 6,
+  '4xl': 7,
+  xxxxl: 7,
+  '5xl': 8,
+  xxxxxl: 8,
+  '6xl': 9,
+  '7xl': 10,
+  '8xl': 11,
+};
+function sizeRank(raw?: string): number {
+  if (!raw) return 99;
+  return SIZE_RANK[raw.trim().toLowerCase()] ?? 99;
+}
 
 export default function FulfillmentMyTasksPage() {
   const profile = useAuthStore((s) => s.profile);
@@ -143,6 +178,25 @@ export default function FulfillmentMyTasksPage() {
   const [search, setSearch] = useState('');
   const debouncedSearch = useDebounce(search, 300);
   const [filters, setFilters] = useState<Filters>(EMPTY_FILTERS);
+  // "Đã copy search" — giữ trạng thái cho đến khi user đổi value hoặc F5.
+  // Reset khi search thay đổi (gồm cả case clear) — đồng bộ ý nghĩa "icon
+  // tick = giá trị này đã được copy".
+  const [searchCopied, setSearchCopied] = useState(false);
+  useEffect(() => {
+    setSearchCopied(false);
+  }, [search]);
+
+  // productionId card đã copy gần nhất — chỉ 1 card được tick tại 1 thời điểm
+  // (copy card khác sẽ reset card cũ). Persist cho đến khi F5.
+  const [copiedOrderId, setCopiedOrderId] = useState<string | null>(null);
+  const handleCopyProductionId = async (order: ProductionOrder) => {
+    try {
+      await navigator.clipboard.writeText(order.productionId);
+      setCopiedOrderId(order._id);
+    } catch {
+      toast.error('Không copy được — trình duyệt chặn clipboard');
+    }
+  };
 
   // ─── Selection state ───────────────────────────────────────────
   const [selected, setSelected] = useState<Set<string>>(new Set());
@@ -195,6 +249,7 @@ export default function FulfillmentMyTasksPage() {
         if (filters.fabricType && o.fabricType !== filters.fabricType) return false;
         if (filters.machineNumber && o.machineNumber !== filters.machineNumber) return false;
         if (filters.toolResult && o.toolResult !== filters.toolResult) return false;
+        if (filters.userSku && o.userSku !== filters.userSku) return false;
         return true;
       });
     return {
@@ -217,6 +272,7 @@ export default function FulfillmentMyTasksPage() {
       if (filters.fabricType && o.fabricType !== filters.fabricType) return false;
       if (filters.machineNumber && o.machineNumber !== filters.machineNumber) return false;
       if (filters.toolResult && o.toolResult !== filters.toolResult) return false;
+      if (filters.userSku && o.userSku !== filters.userSku) return false;
       return true;
     });
   }, [watching, debouncedSearch, filters]);
@@ -248,6 +304,7 @@ export default function FulfillmentMyTasksPage() {
           return false;
         if (key !== 'toolResult' && filters.toolResult && o.toolResult !== filters.toolResult)
           return false;
+        if (key !== 'userSku' && filters.userSku && o.userSku !== filters.userSku) return false;
         return true;
       });
       const counts = new Map<string, number>();
@@ -265,6 +322,7 @@ export default function FulfillmentMyTasksPage() {
       fabricType: facetFor('fabricType', (o) => o.fabricType),
       machineNumber: facetFor('machineNumber', (o) => o.machineNumber),
       toolResult: facetFor('toolResult', (o) => o.toolResult),
+      userSku: facetFor('userSku', (o) => o.userSku),
     };
   }, [columns, watching, filters]);
 
@@ -493,19 +551,44 @@ export default function FulfillmentMyTasksPage() {
           </div>
         </div>
 
-        {/* Filter bar */}
-        <div className="grid grid-cols-2 md:grid-cols-5 gap-2 rounded-md border border-border bg-card p-2.5">
+        {/* Filter bar — 6 cột (search + 5 facets) */}
+        <div className="grid grid-cols-2 md:grid-cols-3 xl:grid-cols-6 gap-2 rounded-md border border-border bg-card p-2.5">
           <div>
             <label className="text-[10px] text-muted-foreground uppercase tracking-wide font-medium">
               Search
             </label>
             <div className="relative mt-1">
-              <Search size={12} className="absolute left-2 top-1/2 -translate-y-1/2 text-muted-foreground" />
+              <button
+                type="button"
+                disabled={!search.trim()}
+                title={searchCopied ? 'Đã copy' : 'Copy giá trị search'}
+                onClick={async () => {
+                  const v = search.trim();
+                  if (!v) return;
+                  try {
+                    await navigator.clipboard.writeText(v);
+                    setSearchCopied(true);
+                  } catch {
+                    toast.error('Không copy được — trình duyệt chặn clipboard');
+                  }
+                }}
+                className={cn(
+                  'absolute left-1.5 top-1/2 -translate-y-1/2 inline-flex items-center justify-center w-5 h-5 rounded transition-colors',
+                  search.trim()
+                    ? searchCopied
+                      ? 'text-emerald-600 dark:text-emerald-400'
+                      : 'text-muted-foreground hover:text-foreground hover:bg-muted'
+                    : 'text-muted-foreground/40 cursor-not-allowed',
+                )}
+              >
+                {searchCopied ? <CheckCircle2 size={13} /> : <Copy size={12} />}
+              </button>
+              <Search size={11} className="absolute right-2 top-1/2 -translate-y-1/2 text-muted-foreground/60" />
               <Input
                 value={search}
                 onChange={(e) => setSearch(e.target.value)}
                 placeholder="productionId / orderId"
-                className="h-7 pl-7 text-xs"
+                className="h-7 pl-8 pr-7 text-xs"
               />
             </div>
           </div>
@@ -533,6 +616,12 @@ export default function FulfillmentMyTasksPage() {
             onChange={(v) => setFilters({ ...filters, toolResult: v })}
             options={filterOptions.toolResult}
           />
+          <SelectFilter
+            label="Khách hàng (SKU)"
+            value={filters.userSku}
+            onChange={(v) => setFilters({ ...filters, userSku: v })}
+            options={filterOptions.userSku}
+          />
         </div>
 
         {/* Kanban */}
@@ -546,6 +635,8 @@ export default function FulfillmentMyTasksPage() {
                 myStage={myStage}
                 activeDragId={activeOrder?._id}
                 selected={selected}
+                copiedOrderId={copiedOrderId}
+                onCopyProductionId={handleCopyProductionId}
                 onStart={(o) => void callTransition(o, FulfillmentTransitionAction.Start)}
                 onComplete={(o) => void callTransition(o, FulfillmentTransitionAction.Complete)}
                 onReportError={(o) => setReworkOrder(o)}
@@ -697,6 +788,12 @@ function groupByType(cards: ProductionOrder[]): [string, ProductionOrder[]][] {
     arr.push(r);
     map.set(k, arr);
   }
+  // Sort orders trong cùng 1 type theo size priority (S, M, L, XL, 2XL...).
+  // Tiebreak: giữ thứ tự gốc (BE đã sort theo inProductionAt desc) — dùng
+  // index gốc trong array làm secondary key qua `Array.prototype.sort` stable.
+  for (const [, arr] of map) {
+    arr.sort((a, b) => sizeRank(a.size) - sizeRank(b.size));
+  }
   return [...map.entries()].sort((a, b) => a[0].localeCompare(b[0]));
 }
 
@@ -706,6 +803,8 @@ interface ColumnProps {
   myStage: FulfillmentStage;
   activeDragId?: string;
   selected: Set<string>;
+  copiedOrderId: string | null;
+  onCopyProductionId: (o: ProductionOrder) => void;
   onStart: (o: ProductionOrder) => void;
   onComplete: (o: ProductionOrder) => void;
   onReportError: (o: ProductionOrder) => void;
@@ -720,6 +819,8 @@ function Column({
   myStage,
   activeDragId,
   selected,
+  copiedOrderId,
+  onCopyProductionId,
   onStart,
   onComplete,
   onReportError,
@@ -858,6 +959,8 @@ function Column({
                             order={o}
                             myStage={myStage}
                             colKey={colKey}
+                            isCopied={copiedOrderId === o._id}
+                            onCopyProductionId={() => onCopyProductionId(o)}
                             onPreview={onPreview}
                             onStart={() => onStart(o)}
                             onComplete={() => onComplete(o)}

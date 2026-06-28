@@ -5,6 +5,7 @@ import {
   CheckCircle2,
   ChevronRight,
   Clock,
+  Copy,
   ImageIcon,
   MessageSquareWarning,
   PlayCircle,
@@ -39,6 +40,10 @@ export interface FulfillmentTaskCardProps {
   order: ProductionOrder;
   myStage: FulfillmentStage;
   colKey: ColKey;
+  /** `true` = card này được copy productionId gần nhất → hiện CheckCircle2 xanh
+   *  thay cho Copy icon. State giữ ở parent — chỉ 1 card được tick tại 1 lúc. */
+  isCopied?: boolean;
+  onCopyProductionId?: () => void;
   onPreview?: (url: string, title: string, originalUrl?: string) => void;
   onClickProductionId?: () => void;
   onStart?: () => void;
@@ -81,6 +86,8 @@ export function FulfillmentTaskCard({
   order,
   myStage,
   colKey,
+  isCopied = false,
+  onCopyProductionId,
   onPreview,
   onClickProductionId,
   onStart,
@@ -113,9 +120,8 @@ export function FulfillmentTaskCard({
       style={style}
       {...attributes}
       {...listeners}
-      className={`group rounded-md border bg-card p-2.5 shadow-sm hover:shadow-md transition-shadow ${
-        canDrag ? 'cursor-grab active:cursor-grabbing' : ''
-      } ${isDragging ? 'opacity-50 ring-2 ring-primary/40' : 'border-border'}`}
+      className={`group rounded-md border bg-card p-2.5 shadow-sm hover:shadow-md transition-shadow ${canDrag ? 'cursor-grab active:cursor-grabbing' : ''
+        } ${isDragging ? 'opacity-50 ring-2 ring-primary/40' : 'border-border'}`}
     >
       <div className="flex gap-2.5">
         {thumb ? (
@@ -144,23 +150,45 @@ export function FulfillmentTaskCard({
         )}
 
         <div className="flex-1 min-w-0 space-y-1">
-          {onClickProductionId ? (
-            <button
-              type="button"
-              onClick={(e) => {
-                e.stopPropagation();
-                onClickProductionId();
-              }}
-              onPointerDown={(e) => e.stopPropagation()}
-              className="font-mono text-xs font-semibold text-foreground hover:text-primary hover:underline truncate text-left"
-            >
-              {order.productionId}
-            </button>
-          ) : (
-            <div className="font-mono text-xs font-semibold text-foreground truncate">
-              {order.productionId}
-            </div>
-          )}
+          <div className="flex items-center gap-1 min-w-0">
+            {/* Copy button bên trái productionId — tick xanh persist cho đến khi
+                user copy productionId card khác hoặc F5 (state ở parent). */}
+            <Hint content={isCopied ? 'Đã copy' : 'Copy productionId'} forceRich>
+              <button
+                type="button"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  onCopyProductionId?.();
+                }}
+                onPointerDown={(e) => e.stopPropagation()}
+                className={
+                  isCopied
+                    ? 'shrink-0 inline-flex items-center justify-center w-4 h-4 text-emerald-600 dark:text-emerald-400'
+                    : 'shrink-0 inline-flex items-center justify-center w-4 h-4 text-muted-foreground hover:text-foreground'
+                }
+                aria-label="Copy productionId"
+              >
+                {isCopied ? <CheckCircle2 size={16} /> : <Copy size={15} />}
+              </button>
+            </Hint>
+            {onClickProductionId ? (
+              <button
+                type="button"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  onClickProductionId();
+                }}
+                onPointerDown={(e) => e.stopPropagation()}
+                className="font-mono text-xs font-semibold text-foreground hover:text-primary hover:underline truncate text-left"
+              >
+                {order.productionId}
+              </button>
+            ) : (
+              <div className="font-mono text-xs font-semibold text-foreground truncate">
+                {order.productionId}
+              </div>
+            )}
+          </div>
 
           {order.type && (
             <Hint content={`Type: ${order.type}`} forceRich>
@@ -172,6 +200,14 @@ export function FulfillmentTaskCard({
             {order.color && <> · {order.color}</>}
             {' · '}qty {order.quantity}
           </div>
+          {order.userSku && (
+            <Hint content={`Khách hàng (SKU): ${order.userSku}`} forceRich>
+              <div className="text-[10px] text-muted-foreground line-clamp-1 inline-flex items-center gap-1">
+                <span aria-hidden>📧</span>
+                <span className="truncate">{order.userSku}</span>
+              </div>
+            </Hint>
+          )}
 
           <div className="flex items-center gap-2 text-[10px] text-muted-foreground flex-wrap">
             {ts.value && (
@@ -217,24 +253,24 @@ export function FulfillmentTaskCard({
       {colKey !== 'watching' && (status === FulfillmentStageStatus.Waiting ||
         status === FulfillmentStageStatus.Rework ||
         status === FulfillmentStageStatus.InProgress) && (
-        <div className="flex items-center gap-1.5 pt-2 mt-1 border-t border-border/40">
-          {(status === FulfillmentStageStatus.Waiting || status === FulfillmentStageStatus.Rework) &&
-            onStart && (
-              <CardAction
-                color="indigo"
-                icon={PlayCircle}
-                label="Bắt đầu"
-                onClick={onStart}
-              />
+          <div className="flex items-center gap-1.5 pt-2 mt-1 border-t border-border/40">
+            {(status === FulfillmentStageStatus.Waiting || status === FulfillmentStageStatus.Rework) &&
+              onStart && (
+                <CardAction
+                  color="indigo"
+                  icon={PlayCircle}
+                  label="Bắt đầu"
+                  onClick={onStart}
+                />
+              )}
+            {status === FulfillmentStageStatus.InProgress && onComplete && (
+              <CardAction color="emerald" icon={CheckCircle2} label="Hoàn thành" onClick={onComplete} />
             )}
-          {status === FulfillmentStageStatus.InProgress && onComplete && (
-            <CardAction color="emerald" icon={CheckCircle2} label="Hoàn thành" onClick={onComplete} />
-          )}
-          {status === FulfillmentStageStatus.InProgress && onReportError && (
-            <CardAction color="rose" icon={XOctagon} label="Báo lỗi" onClick={onReportError} />
-          )}
-        </div>
-      )}
+            {status === FulfillmentStageStatus.InProgress && onReportError && (
+              <CardAction color="rose" icon={XOctagon} label="Báo lỗi" onClick={onReportError} />
+            )}
+          </div>
+        )}
     </div>
   );
 }
