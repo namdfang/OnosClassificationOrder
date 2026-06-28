@@ -534,8 +534,12 @@ export class FulfillmentTaskService {
   ): FilterQuery<OrderEntity> {
     switch (tab) {
       case 'waiting':
+        // `readyForFulfill: true` đảm bảo không lộ orphan ngược (đơn từng vào
+        // pipeline rồi toolResultNote toggle khỏi 'ok' → readyForFulfill=false
+        // nhưng stage chưa clear). Match scope với FactoryOverview.
         return {
           ...base,
+          readyForFulfill: true,
           currentFulfillmentStage: stage,
           [`fulfillmentStages.${stage}.status`]: FulfillmentStageStatus.Waiting,
           designerStatus: { $ne: 'rework' },
@@ -543,12 +547,14 @@ export class FulfillmentTaskService {
       case 'in-progress':
         return {
           ...base,
+          readyForFulfill: true,
           currentFulfillmentStage: stage,
           [`fulfillmentStages.${stage}.status`]: FulfillmentStageStatus.InProgress,
         };
       case 'rework':
         return {
           ...base,
+          readyForFulfill: true,
           currentFulfillmentStage: stage,
           [`fulfillmentStages.${stage}.status`]: FulfillmentStageStatus.Rework,
         };
@@ -559,6 +565,7 @@ export class FulfillmentTaskService {
         // originalFactoryId) — spread sẽ overwrite mất, dẫn đến lộ data
         // xưởng khác.
         return mergeWithFactoryOr(base, {
+          readyForFulfill: true,
           [`fulfillmentStages.${stage}.completedAt`]: { $exists: true, $ne: null },
           $or: [
             { currentFulfillmentStage: { $ne: stage } },

@@ -34,9 +34,14 @@
     "reset": "pnpm clean-dist && pnpm --filter ./apps/api i"
   },
   "engines": {
-    "node": ">=18.0.0"
+    "node": ">=18.0.0 <24"
   },
   "packageManager": "pnpm@8.6.10",
+  "pnpm": {
+    "overrides": {
+      "passport": "0.6.0"
+    }
+  },
   "dependencies": {
     "@commitlint/cli": "^18.2.0",
     "@commitlint/config-conventional": "^17.6.6",

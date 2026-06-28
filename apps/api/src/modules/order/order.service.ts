@@ -371,6 +371,65 @@ export class OrderService implements OnModuleInit {
         `[order-backfill] errorFile migrated to array on ${errorFileMigrateRes.modifiedCount} legacy rows`,
       );
     }
+
+    // Cleanup orphan ngược: đơn đã vào pipeline (currentFulfillmentStage=print)
+    // nhưng readyForFulfill=false VÀ worker chưa từng start (no firstStartedAt
+    // tại Print) → clear stage. Nguyên nhân lịch sử: trước fix updateField, khi
+    // admin/support set toolResultNote khỏi 'ok' thì readyForFulfill=false nhưng
+    // stage không reset → FactoryOverview không đếm, my-tasks lại đếm → lệch.
+    // Idempotent.
+    const orphanReverseRes = await this.orderModel.updateMany(
+      {
+        readyForFulfill: false,
+        currentFulfillmentStage: FulfillmentStage.Print,
+        $or: [
+          { 'fulfillmentStages.print.firstStartedAt': { $exists: false } },
+          { 'fulfillmentStages.print.firstStartedAt': null },
+        ],
+      },
+      { $set: { currentFulfillmentStage: null, fulfillmentStages: {} } },
+    );
+    if (orphanReverseRes.modifiedCount > 0) {
+      // eslint-disable-next-line no-console
+      console.log(
+        `[order-backfill] cleared stage on ${orphanReverseRes.modifiedCount} orphan-reverse orders (ready=false + stage=print + chưa start)`,
+      );
+    }
+
+    // Backfill orphan thuận: đơn ready=true (toolResultNote='ok') nhưng
+    // currentFulfillmentStage=null → init Print stage. Nguyên nhân lịch sử:
+    // (a) đơn import / bulk-set ok trước khi hook buildFulfillmentEntrySet
+    // tồn tại; (b) designer complete legacy không trigger hook.
+    // → FactoryOverview đếm, my-tasks worker không đếm → worker miss đơn.
+    // Aggregation pipeline để $ifNull dùng $$NOW khi inProductionAt null.
+    // Idempotent — chỉ áp khi stage chưa init.
+    const orphanForwardRes = await this.orderModel.updateMany(
+      {
+        readyForFulfill: true,
+        currentFulfillmentStage: { $in: [null, undefined] },
+        cancelledAt: { $exists: false },
+        deletedAt: { $exists: false },
+      },
+      [
+        {
+          $set: {
+            currentFulfillmentStage: FulfillmentStage.Print,
+            'fulfillmentStages.print': {
+              status: FulfillmentStageStatus.Waiting,
+              reworkCount: 0,
+              workMs: 0,
+              waitingAt: { $ifNull: ['$inProductionAt', '$$NOW'] },
+            },
+          },
+        },
+      ],
+    );
+    if (orphanForwardRes.modifiedCount > 0) {
+      // eslint-disable-next-line no-console
+      console.log(
+        `[order-backfill] init Print stage cho ${orphanForwardRes.modifiedCount} orphan-forward orders (ready=true + stage=null)`,
+      );
+    }
   }
 
   /**
@@ -553,8 +612,24 @@ export class OrderService implements OnModuleInit {
     if (dto.machineTypeId) filter.machineTypeId = dto.machineTypeId;
     if (dto.status) filter.status = dto.status;
     if (dto.printStatus) filter.printStatus = { $in: dto.printStatus.split(',').filter(Boolean) };
-    if (dto.toolResultNote)
-      filter.toolResultNote = { $in: dto.toolResultNote.split(',').filter(Boolean) };
+    if (dto.toolResultNote) {
+      // Token đặc biệt __none__ ↔ "Chưa soát" (chưa có note kq tool nào set).
+      // Bao gồm field missing, null, hoặc empty string. Mirror logic assignee.
+      const codes = dto.toolResultNote.split(',').filter(Boolean);
+      const hasNone = codes.includes('__none__');
+      const real = codes.filter((c) => c !== '__none__');
+      if (hasNone && real.length === 0) {
+        filter.toolResultNote = { $in: [null, ''] };
+      } else if (hasNone) {
+        filter.$or = [
+          ...(Array.isArray(filter.$or) ? (filter.$or as unknown[]) : []),
+          { toolResultNote: { $in: [null, ''] } },
+          { toolResultNote: { $in: real } },
+        ];
+      } else {
+        filter.toolResultNote = { $in: real };
+      }
+    }
     if (dto.errorFile) filter.errorFile = { $in: dto.errorFile.split(',').filter(Boolean) };
     // Factory tab filters — exact product name / fabric code / tool code.
     if (dto.type) filter.type = { $in: dto.type.split(',').filter(Boolean) };
@@ -2173,6 +2248,30 @@ export class OrderService implements OnModuleInit {
       designerStatusRows,
     ] = await Promise.all(FACET_KEYS.map((k) => aggregateFacet(k, k)));
 
+    // Count "Chưa soát" cho toolResultNote: đơn chưa được gán bất kỳ trạng thái
+    // soát nào (field missing / null / empty string). Áp baseFilter đã strip
+    // toolResultNote filter (cùng pattern faceted với aggregateFacet).
+    const toolResultNoteNoneCount = await (async () => {
+      const sanitizedDto = { ...dto, toolResultNote: undefined } as GetProductionOrdersDto;
+      const baseFilter = this.buildOrderListFilter(sanitizedDto, roleName, assigneeCode);
+      const noneClauses = [
+        { toolResultNote: { $exists: false } },
+        { toolResultNote: null },
+        { toolResultNote: '' },
+      ];
+      let noneMatch: Record<string, unknown>;
+      if (Array.isArray(baseFilter.$or)) {
+        // Đã có $or từ filter khác — chuyển sang $and để giữ semantics AND.
+        const { $or: existingOr, ...rest } = baseFilter as Record<string, unknown> & {
+          $or: unknown[];
+        };
+        noneMatch = { ...rest, $and: [{ $or: existingOr }, { $or: noneClauses }] };
+      } else {
+        noneMatch = { ...baseFilter, $or: noneClauses };
+      }
+      return this.orderModel.countDocuments(noneMatch);
+    })();
+
     const nameMap = async (category: WorkshopConfigCategory) =>
       new Map<string, string>(
         (await this.workshopConfigRepository.findAll({ category })).map((d) => [d.code, d.name]),
@@ -2227,7 +2326,14 @@ export class OrderService implements OnModuleInit {
       success: true,
       data: {
         printStatus: printStatusRows.map(toOption(printStatusMap)),
-        toolResultNote: toolResultNoteRows.map(toOption(toolResultNoteMap)),
+        toolResultNote: [
+          // Prepend "Chưa soát" option. Token __none__ — FE injects nothing nữa.
+          // Skip nếu count=0 để facet không lủng lẳng option rỗng.
+          ...(toolResultNoteNoneCount > 0
+            ? [{ value: '__none__', label: 'Chưa soát', count: toolResultNoteNoneCount }]
+            : []),
+          ...toolResultNoteRows.map(toOption(toolResultNoteMap)),
+        ],
         assignee: assigneeRows.map((r) => ({
           value: r._id,
           label: assigneeMap.get(r._id) || `#${String(r._id).slice(-4)}`,
@@ -2406,6 +2512,22 @@ export class OrderService implements OnModuleInit {
         const beforeStage =
           (before as unknown as { currentFulfillmentStage?: string | null }).currentFulfillmentStage;
         if (!beforeStage) Object.assign(patch, buildFulfillmentEntrySet());
+      } else {
+        // Toggle KHỎI 'ok' (vd về 'no-pdf', 'error', null) → đơn không còn
+        // ready. Nếu đơn đang ở print/waiting và worker chưa bao giờ start
+        // (firstStartedAt missing toàn bộ stages) → clear stage để tránh
+        // orphan ngược (FactoryOverview không đếm nhưng my-tasks lại đếm).
+        // Đơn đã được worker chạm vào → giữ stage, worker tiếp tục xử lý.
+        const beforeStages =
+          (before as unknown as { fulfillmentStages?: Record<string, { firstStartedAt?: Date }> })
+            .fulfillmentStages || {};
+        const anyStageStarted = Object.values(beforeStages).some((s) => !!s?.firstStartedAt);
+        const beforeStage =
+          (before as unknown as { currentFulfillmentStage?: string | null }).currentFulfillmentStage;
+        if (beforeStage && !anyStageStarted) {
+          patch.currentFulfillmentStage = null;
+          patch.fulfillmentStages = {};
+        }
       }
     }
 
@@ -2616,6 +2738,24 @@ export class OrderService implements OnModuleInit {
           currentFulfillmentStage: { $in: [null, undefined] },
         },
         { $set: buildFulfillmentEntrySet() },
+      );
+    }
+
+    // Mirror logic clear stage cho bulk variant — toggle khỏi 'ok' và đơn ở
+    // Print/waiting (chưa có firstStartedAt) → clear stage để tránh orphan
+    // ngược. Đơn đã advance qua Print/đã có worker start → giữ stage.
+    if (dto.field === 'toolResultNote' && normalized !== READY_FOR_FULFILL_CODE) {
+      await this.orderModel.updateMany(
+        {
+          _id: { $in: dto.ids },
+          deletedAt: { $exists: false },
+          currentFulfillmentStage: FulfillmentStage.Print,
+          $or: [
+            { 'fulfillmentStages.print.firstStartedAt': { $exists: false } },
+            { 'fulfillmentStages.print.firstStartedAt': null },
+          ],
+        },
+        { $set: { currentFulfillmentStage: null, fulfillmentStages: {} } },
       );
     }
 
