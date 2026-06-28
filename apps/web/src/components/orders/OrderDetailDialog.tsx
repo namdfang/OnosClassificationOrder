@@ -2,7 +2,9 @@ import React, { useEffect, useState } from 'react';
 import {
   ExternalLink,
   FileText,
+  Image as ImageIcon,
   Info,
+  Link2,
   Loader2,
   ScissorsLineDashed,
 } from 'lucide-react';
@@ -17,6 +19,7 @@ import {
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { CopyButton } from '@/components/common/CopyButton';
+import { ImagePreviewDialog } from '@/components/common/ImagePreviewDialog';
 import { RepositoryRemote } from '@/services';
 import { handleAxiosError } from '@/utils';
 
@@ -46,6 +49,12 @@ function extractDriveFileId(url?: string): string | null {
 export function OrderDetailDialog({ open, onOpenChange, orderId, productionId }: Props) {
   const [loading, setLoading] = useState(false);
   const [order, setOrder] = useState<OrderWithRels | null>(null);
+  // Preview state cho mockup thumbnail — reuse ImagePreviewDialog (zoom + open
+  // original tab). Design files KHÔNG có preview vì chỉ lưu URL Drive (không
+  // có ảnh resize/optimize) — user mở Drive thẳng để xem.
+  const [preview, setPreview] = useState<{ url: string; original?: string; title: string } | null>(
+    null,
+  );
 
   useEffect(() => {
     if (!open || (!orderId && !productionId)) {
@@ -79,6 +88,7 @@ export function OrderDetailDialog({ open, onOpenChange, orderId, productionId }:
   const cuttingFileId = extractDriveFileId(order?.cuttingFileUrl);
 
   return (
+    <>
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="max-w-4xl">
         <DialogHeader>
@@ -140,6 +150,18 @@ export function OrderDetailDialog({ open, onOpenChange, orderId, productionId }:
               />
             </Grid>
 
+            {/* Section: Mockup + Design links — chỉ link, KHÔNG hiển thị ảnh.
+                User click để mở tab mới hoặc copy URL (workflow xưởng cần URL
+                gốc Drive để in/upload chỗ khác, không cần preview ngay tại đây). */}
+            <DesignLinksSection
+              productionId={order.productionId}
+              mockupUrl={order.mockupUrl}
+              mockupOriginalUrl={order.mockupOriginalUrl}
+              designs={order.designs as Record<string, string | undefined> | undefined}
+              designsOriginal={order.designsOriginal as Record<string, string | undefined> | undefined}
+              onPreviewMockup={(url, original, title) => setPreview({ url, original, title })}
+            />
+
             {/* Section: Cutting file preview */}
             <div className="rounded-lg border border-border bg-card">
               <div className="px-4 py-2.5 border-b border-border flex items-center justify-between gap-2">
@@ -192,6 +214,201 @@ export function OrderDetailDialog({ open, onOpenChange, orderId, productionId }:
         )}
       </DialogContent>
     </Dialog>
+
+    <ImagePreviewDialog
+      open={!!preview}
+      onOpenChange={(o) => !o && setPreview(null)}
+      url={preview?.url}
+      originalUrl={preview?.original}
+      title={preview?.title}
+    />
+    </>
+  );
+}
+
+function DesignLinksSection({
+  productionId,
+  mockupUrl,
+  mockupOriginalUrl,
+  designs,
+  designsOriginal,
+  onPreviewMockup,
+}: {
+  productionId: string;
+  mockupUrl?: string;
+  mockupOriginalUrl?: string;
+  designs?: Record<string, string | undefined>;
+  designsOriginal?: Record<string, string | undefined>;
+  onPreviewMockup: (url: string, original: string | undefined, title: string) => void;
+}) {
+  // Gộp position từ cả 2 source — ưu tiên `designsOriginal` (URL Drive gốc)
+  // vì xưởng cần file gốc để in/upload, không phải URL preview optimized.
+  const positions = Array.from(
+    new Set([...Object.keys(designs ?? {}), ...Object.keys(designsOriginal ?? {})]),
+  ).filter((k) => (designsOriginal?.[k] || designs?.[k]));
+
+  // Mockup: thumb dùng URL R2/optimized (`mockupUrl`), preview/copy ưu tiên
+  // `mockupOriginalUrl` (Drive gốc — xưởng cần URL gốc để paste chỗ khác).
+  const mockupThumb = mockupUrl;
+  const mockupLink = mockupOriginalUrl || mockupUrl;
+  const hasAny = positions.length > 0 || !!mockupLink;
+
+  return (
+    <div className="rounded-lg border border-border bg-card">
+      <div className="px-4 py-2.5 border-b border-border flex items-center justify-between">
+        <h4 className="text-sm font-semibold text-foreground inline-flex items-center gap-2">
+          <Link2 size={14} /> Link file
+          {hasAny && (
+            <span className="text-xs text-muted-foreground font-normal">
+              ({positions.length + (mockupLink ? 1 : 0)})
+            </span>
+          )}
+        </h4>
+        <span className="text-[10px] text-muted-foreground italic">
+          Click để mở Drive · Copy để paste chỗ khác
+        </span>
+      </div>
+      {!hasAny ? (
+        <div className="p-6 text-center text-xs text-muted-foreground">
+          Đơn này chưa có link mockup / design.
+        </div>
+      ) : (
+        <div className="divide-y divide-border/40">
+          {mockupLink && (
+            <MockupRow
+              productionId={productionId}
+              thumbUrl={mockupThumb}
+              fullUrl={mockupLink}
+              originalUrl={mockupOriginalUrl}
+              onPreview={onPreviewMockup}
+            />
+          )}
+          <ul className="divide-y divide-border/40">
+            {positions.map((k) => {
+              const url = designsOriginal?.[k] || designs?.[k];
+              if (!url) return null;
+              return (
+                <LinkRow
+                  key={k}
+                  icon={<FileText size={12} />}
+                  label={k}
+                  url={url}
+                  copyLabel={`${k} — ${productionId}`}
+                />
+              );
+            })}
+          </ul>
+        </div>
+      )}
+    </div>
+  );
+}
+
+function MockupRow({
+  productionId,
+  thumbUrl,
+  fullUrl,
+  originalUrl,
+  onPreview,
+}: {
+  productionId: string;
+  thumbUrl?: string;
+  fullUrl: string;
+  originalUrl?: string;
+  onPreview: (url: string, original: string | undefined, title: string) => void;
+}) {
+  const title = `Mockup ${productionId}`;
+  return (
+    <div className="flex items-center gap-3 px-3 py-2 hover:bg-muted/30">
+      <button
+        type="button"
+        onClick={() => onPreview(thumbUrl || fullUrl, originalUrl, title)}
+        className="shrink-0 w-14 h-14 rounded border border-border overflow-hidden bg-checker hover:ring-2 hover:ring-primary/40"
+        title="Click để xem to"
+      >
+        {thumbUrl ? (
+          <img
+            src={thumbUrl}
+            alt=""
+            className="w-full h-full object-contain"
+            loading="lazy"
+            referrerPolicy="no-referrer"
+          />
+        ) : (
+          <div className="w-full h-full flex items-center justify-center text-muted-foreground">
+            <ImageIcon size={16} />
+          </div>
+        )}
+      </button>
+      <span className="shrink-0 text-xs font-semibold text-foreground min-w-[80px] uppercase tracking-wide">
+        Mockup
+      </span>
+      <a
+        href={fullUrl}
+        target="_blank"
+        rel="noopener noreferrer"
+        className="flex-1 min-w-0 font-mono text-xs text-muted-foreground hover:text-primary hover:underline truncate"
+        title={fullUrl}
+      >
+        {fullUrl}
+      </a>
+      <span className="shrink-0 inline-flex items-center gap-1">
+        <CopyButton value={fullUrl} label={title} iconSize={11} />
+        <a
+          href={fullUrl}
+          target="_blank"
+          rel="noopener noreferrer"
+          className="inline-flex items-center justify-center w-5 h-5 text-muted-foreground hover:text-primary"
+          title="Mở tab mới"
+        >
+          <ExternalLink size={11} />
+        </a>
+      </span>
+    </div>
+  );
+}
+
+function LinkRow({
+  icon,
+  label,
+  url,
+  copyLabel,
+}: {
+  icon: React.ReactNode;
+  label: string;
+  url: string;
+  copyLabel: string;
+}) {
+  return (
+    <li className="flex items-center gap-2 px-3 py-2 text-xs hover:bg-muted/30">
+      <span className="shrink-0 inline-flex items-center justify-center w-5 h-5 text-muted-foreground">
+        {icon}
+      </span>
+      <span className="shrink-0 font-semibold text-foreground min-w-[80px] uppercase tracking-wide">
+        {label}
+      </span>
+      <a
+        href={url}
+        target="_blank"
+        rel="noopener noreferrer"
+        className="flex-1 min-w-0 font-mono text-muted-foreground hover:text-primary hover:underline truncate"
+        title={url}
+      >
+        {url}
+      </a>
+      <span className="shrink-0 inline-flex items-center gap-1">
+        <CopyButton value={url} label={copyLabel} iconSize={11} />
+        <a
+          href={url}
+          target="_blank"
+          rel="noopener noreferrer"
+          className="inline-flex items-center justify-center w-5 h-5 text-muted-foreground hover:text-primary"
+          title="Mở tab mới"
+        >
+          <ExternalLink size={11} />
+        </a>
+      </span>
+    </li>
   );
 }
 

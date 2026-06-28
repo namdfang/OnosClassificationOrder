@@ -36,9 +36,11 @@ import {
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { TooltipProvider } from '@/components/ui/tooltip';
+import { DateRangePicker } from '@/components/common/DateRangePicker';
 import { ImagePreviewDialog } from '@/components/common/ImagePreviewDialog';
 import { SelectFilter } from '@/components/common/SelectFilter';
 import { Spinner } from '@/components/common/Spinner';
+import { OrderDetailDialog } from '@/components/orders/OrderDetailDialog';
 import { useDebounce } from '@/hooks/useDebounce';
 import { RepositoryRemote } from '@/services';
 import { useAuthStore } from '@/store/authStore';
@@ -178,6 +180,11 @@ export default function FulfillmentMyTasksPage() {
   const [search, setSearch] = useState('');
   const debouncedSearch = useDebounce(search, 300);
   const [filters, setFilters] = useState<Filters>(EMPTY_FILTERS);
+  // Date range filter trên `inProductionAt` — đồng bộ pattern các bảng khác
+  // (workshop / error-log). Default = hôm nay. Client-side filter vì queue
+  // per stage nhỏ (< 200 đơn).
+  const [dateFrom, setDateFrom] = useState<string>('');
+  const [dateTo, setDateTo] = useState<string>('');
   // "Đã copy search" — giữ trạng thái cho đến khi user đổi value hoặc F5.
   // Reset khi search thay đổi (gồm cả case clear) — đồng bộ ý nghĩa "icon
   // tick = giá trị này đã được copy".
@@ -189,6 +196,10 @@ export default function FulfillmentMyTasksPage() {
   // productionId card đã copy gần nhất — chỉ 1 card được tick tại 1 thời điểm
   // (copy card khác sẽ reset card cũ). Persist cho đến khi F5.
   const [copiedOrderId, setCopiedOrderId] = useState<string | null>(null);
+
+  // Order chi tiết — mở qua click productionId trên card. Reuse component
+  // OrderDetailDialog (đã wire link mockup/design dạng URL + cuttingFile preview).
+  const [detailOrder, setDetailOrder] = useState<{ id: string; productionId: string } | null>(null);
   const handleCopyProductionId = async (order: ProductionOrder) => {
     try {
       await navigator.clipboard.writeText(order.productionId);
@@ -238,12 +249,21 @@ export default function FulfillmentMyTasksPage() {
   // ─── Filter application (client-side) ──────────────────────────
   const filteredColumns = useMemo<Columns>(() => {
     const q = debouncedSearch.trim().toLowerCase();
+    // Range theo VN local — start là 00:00, end là 23:59:59.999 của ngày.
+    const fromMs = dateFrom ? new Date(`${dateFrom}T00:00:00+07:00`).getTime() : null;
+    const toMs = dateTo ? new Date(`${dateTo}T23:59:59.999+07:00`).getTime() : null;
     const apply = (arr: ProductionOrder[]) =>
       arr.filter((o) => {
         if (q) {
           const hit =
             o.productionId?.toLowerCase().includes(q) || o.orderId?.toLowerCase().includes(q);
           if (!hit) return false;
+        }
+        if (fromMs !== null || toMs !== null) {
+          const ts = o.inProductionAt ? new Date(o.inProductionAt).getTime() : null;
+          if (ts === null) return false;
+          if (fromMs !== null && ts < fromMs) return false;
+          if (toMs !== null && ts > toMs) return false;
         }
         if (filters.type && o.type !== filters.type) return false;
         if (filters.fabricType && o.fabricType !== filters.fabricType) return false;
@@ -258,15 +278,23 @@ export default function FulfillmentMyTasksPage() {
       rework: apply(columns.rework),
       done: apply(columns.done),
     };
-  }, [columns, debouncedSearch, filters]);
+  }, [columns, debouncedSearch, filters, dateFrom, dateTo]);
 
   const filteredWatching = useMemo(() => {
     const q = debouncedSearch.trim().toLowerCase();
+    const fromMs = dateFrom ? new Date(`${dateFrom}T00:00:00+07:00`).getTime() : null;
+    const toMs = dateTo ? new Date(`${dateTo}T23:59:59.999+07:00`).getTime() : null;
     return watching.filter((o) => {
       if (q) {
         const hit =
           o.productionId?.toLowerCase().includes(q) || o.orderId?.toLowerCase().includes(q);
         if (!hit) return false;
+      }
+      if (fromMs !== null || toMs !== null) {
+        const ts = o.inProductionAt ? new Date(o.inProductionAt).getTime() : null;
+        if (ts === null) return false;
+        if (fromMs !== null && ts < fromMs) return false;
+        if (toMs !== null && ts > toMs) return false;
       }
       if (filters.type && o.type !== filters.type) return false;
       if (filters.fabricType && o.fabricType !== filters.fabricType) return false;
@@ -275,7 +303,7 @@ export default function FulfillmentMyTasksPage() {
       if (filters.userSku && o.userSku !== filters.userSku) return false;
       return true;
     });
-  }, [watching, debouncedSearch, filters]);
+  }, [watching, debouncedSearch, filters, dateFrom, dateTo]);
 
   // ─── Facet options (count theo data đã filter trừ facet hiện tại) ──
   // Giống pattern faceted search ở Designer — count phản ánh kết quả khi áp
@@ -551,77 +579,100 @@ export default function FulfillmentMyTasksPage() {
           </div>
         </div>
 
-        {/* Filter bar — 6 cột (search + 5 facets) */}
-        <div className="grid grid-cols-2 md:grid-cols-3 xl:grid-cols-6 gap-2 rounded-md border border-border bg-card p-2.5">
-          <div>
-            <label className="text-[10px] text-muted-foreground uppercase tracking-wide font-medium">
-              Search
-            </label>
-            <div className="relative mt-1">
-              <button
-                type="button"
-                disabled={!search.trim()}
-                title={searchCopied ? 'Đã copy' : 'Copy giá trị search'}
-                onClick={async () => {
-                  const v = search.trim();
-                  if (!v) return;
-                  try {
-                    await navigator.clipboard.writeText(v);
-                    setSearchCopied(true);
-                  } catch {
-                    toast.error('Không copy được — trình duyệt chặn clipboard');
-                  }
-                }}
-                className={cn(
-                  'absolute left-1.5 top-1/2 -translate-y-1/2 inline-flex items-center justify-center w-5 h-5 rounded transition-colors',
-                  search.trim()
-                    ? searchCopied
-                      ? 'text-emerald-600 dark:text-emerald-400'
-                      : 'text-muted-foreground hover:text-foreground hover:bg-muted'
-                    : 'text-muted-foreground/40 cursor-not-allowed',
-                )}
-              >
-                {searchCopied ? <CheckCircle2 size={13} /> : <Copy size={12} />}
-              </button>
-              <Search size={11} className="absolute right-2 top-1/2 -translate-y-1/2 text-muted-foreground/60" />
-              <Input
-                value={search}
-                onChange={(e) => setSearch(e.target.value)}
-                placeholder="productionId / orderId"
-                className="h-7 pl-8 pr-7 text-xs"
-              />
+        {/* Filter bar — search + date trên 1 row, các facet ở row dưới */}
+        <div className="rounded-md border border-border bg-card p-2.5 space-y-2">
+          {/* Row 1: Search (flex-1) + DateRangePicker */}
+          <div className="flex flex-wrap items-end gap-2">
+            <div className="flex-1 min-w-[220px]">
+              <label className="text-[10px] text-muted-foreground uppercase tracking-wide font-medium">
+                Search
+              </label>
+              <div className="relative mt-1">
+                <button
+                  type="button"
+                  disabled={!search.trim()}
+                  title={searchCopied ? 'Đã copy' : 'Copy giá trị search'}
+                  onClick={async () => {
+                    const v = search.trim();
+                    if (!v) return;
+                    try {
+                      await navigator.clipboard.writeText(v);
+                      setSearchCopied(true);
+                    } catch {
+                      toast.error('Không copy được — trình duyệt chặn clipboard');
+                    }
+                  }}
+                  className={cn(
+                    'absolute left-1.5 top-1/2 -translate-y-1/2 inline-flex items-center justify-center w-5 h-5 rounded transition-colors',
+                    search.trim()
+                      ? searchCopied
+                        ? 'text-emerald-600 dark:text-emerald-400'
+                        : 'text-muted-foreground hover:text-foreground hover:bg-muted'
+                      : 'text-muted-foreground/40 cursor-not-allowed',
+                  )}
+                >
+                  {searchCopied ? <CheckCircle2 size={13} /> : <Copy size={12} />}
+                </button>
+                <Search size={11} className="absolute right-2 top-1/2 -translate-y-1/2 text-muted-foreground/60" />
+                <Input
+                  value={search}
+                  onChange={(e) => setSearch(e.target.value)}
+                  placeholder="productionId / orderId"
+                  className="h-7 pl-8 pr-7 text-xs"
+                />
+              </div>
+            </div>
+            <div className="min-w-[200px]">
+              {/* <label className="text-[10px] text-muted-foreground uppercase tracking-wide font-medium">
+                Ngày vào sản xuất
+              </label> */}
+              <div className="mt-1">
+                <DateRangePicker
+                  from={dateFrom}
+                  to={dateTo}
+                  onChange={(f, t) => {
+                    setDateFrom(f);
+                    setDateTo(t);
+                  }}
+                  placeholder="Tất cả"
+                />
+              </div>
             </div>
           </div>
-          <SelectFilter
-            label="Sản phẩm"
-            value={filters.type}
-            onChange={(v) => setFilters({ ...filters, type: v })}
-            options={filterOptions.type}
-          />
-          <SelectFilter
-            label="Loại vải"
-            value={filters.fabricType}
-            onChange={(v) => setFilters({ ...filters, fabricType: v })}
-            options={filterOptions.fabricType}
-          />
-          <SelectFilter
-            label="Máy"
-            value={filters.machineNumber}
-            onChange={(v) => setFilters({ ...filters, machineNumber: v })}
-            options={filterOptions.machineNumber}
-          />
-          <SelectFilter
-            label="Kết quả Tool"
-            value={filters.toolResult}
-            onChange={(v) => setFilters({ ...filters, toolResult: v })}
-            options={filterOptions.toolResult}
-          />
-          <SelectFilter
-            label="Khách hàng (SKU)"
-            value={filters.userSku}
-            onChange={(v) => setFilters({ ...filters, userSku: v })}
-            options={filterOptions.userSku}
-          />
+
+          {/* Row 2: 5 facet filters */}
+          <div className="grid grid-cols-2 md:grid-cols-3 xl:grid-cols-5 gap-2">
+            <SelectFilter
+              label="Sản phẩm"
+              value={filters.type}
+              onChange={(v) => setFilters({ ...filters, type: v })}
+              options={filterOptions.type}
+            />
+            <SelectFilter
+              label="Loại vải"
+              value={filters.fabricType}
+              onChange={(v) => setFilters({ ...filters, fabricType: v })}
+              options={filterOptions.fabricType}
+            />
+            <SelectFilter
+              label="Máy"
+              value={filters.machineNumber}
+              onChange={(v) => setFilters({ ...filters, machineNumber: v })}
+              options={filterOptions.machineNumber}
+            />
+            <SelectFilter
+              label="Kết quả Tool"
+              value={filters.toolResult}
+              onChange={(v) => setFilters({ ...filters, toolResult: v })}
+              options={filterOptions.toolResult}
+            />
+            <SelectFilter
+              label="Khách hàng (SKU)"
+              value={filters.userSku}
+              onChange={(v) => setFilters({ ...filters, userSku: v })}
+              options={filterOptions.userSku}
+            />
+          </div>
         </div>
 
         {/* Kanban */}
@@ -637,6 +688,7 @@ export default function FulfillmentMyTasksPage() {
                 selected={selected}
                 copiedOrderId={copiedOrderId}
                 onCopyProductionId={handleCopyProductionId}
+                onClickProductionId={(o) => setDetailOrder({ id: o._id, productionId: o.productionId })}
                 onStart={(o) => void callTransition(o, FulfillmentTransitionAction.Start)}
                 onComplete={(o) => void callTransition(o, FulfillmentTransitionAction.Complete)}
                 onReportError={(o) => setReworkOrder(o)}
@@ -751,6 +803,13 @@ export default function FulfillmentMyTasksPage() {
           originalUrl={preview?.original}
           title={preview?.title}
         />
+
+        <OrderDetailDialog
+          open={!!detailOrder}
+          onOpenChange={(o) => !o && setDetailOrder(null)}
+          orderId={detailOrder?.id ?? null}
+          productionId={detailOrder?.productionId}
+        />
       </div>
     </TooltipProvider>
   );
@@ -805,6 +864,7 @@ interface ColumnProps {
   selected: Set<string>;
   copiedOrderId: string | null;
   onCopyProductionId: (o: ProductionOrder) => void;
+  onClickProductionId: (o: ProductionOrder) => void;
   onStart: (o: ProductionOrder) => void;
   onComplete: (o: ProductionOrder) => void;
   onReportError: (o: ProductionOrder) => void;
@@ -821,6 +881,7 @@ function Column({
   selected,
   copiedOrderId,
   onCopyProductionId,
+  onClickProductionId,
   onStart,
   onComplete,
   onReportError,
@@ -961,6 +1022,7 @@ function Column({
                             colKey={colKey}
                             isCopied={copiedOrderId === o._id}
                             onCopyProductionId={() => onCopyProductionId(o)}
+                            onClickProductionId={() => onClickProductionId(o)}
                             onPreview={onPreview}
                             onStart={() => onStart(o)}
                             onComplete={() => onComplete(o)}
