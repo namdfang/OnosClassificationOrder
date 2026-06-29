@@ -1,29 +1,35 @@
 import React, { useEffect, useState } from 'react';
-import { BarChart3, ClipboardList, Factory, Palette } from 'lucide-react';
+import { BarChart3, ClipboardList, Factory, Palette, Workflow } from 'lucide-react';
 import { useSearchParams } from 'react-router-dom';
 
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { usePermission } from '@/hooks/usePermission';
 
 import DesignerStatsTab from './DesignerStatsTab';
+import LifecycleTab from './LifecycleTab';
 import OrderFactoryTab from './OrderFactoryTab';
 import OrderStatsTab from './OrderStatsTab';
 import OrderStatusTab from './OrderStatusTab';
 import { SendTelegramReportButton } from './SendTelegramReportButton';
 
-const TABS = ['factory', 'stats', 'status', 'designer'] as const;
+const TABS = ['factory', 'stats', 'status', 'lifecycle', 'designer'] as const;
 type TabKey = (typeof TABS)[number];
 
 export default function Home() {
   const [searchParams, setSearchParams] = useSearchParams();
   const { has, isAdmin } = usePermission();
   const canSeeDesigner = has('page.designer_stats');
+  // Tab "Vòng đời đơn" chỉ dành cho Admin/SuperAdmin.
+  const canSeeLifecycle = isAdmin;
+  const isTabAllowed = (t: TabKey) => (t === 'lifecycle' ? canSeeLifecycle : true);
   const initial = (searchParams.get('tab') as TabKey) || 'factory';
-  const [activeTab, setActiveTab] = useState<TabKey>(TABS.includes(initial) ? initial : 'stats');
+  const [activeTab, setActiveTab] = useState<TabKey>(
+    TABS.includes(initial) && isTabAllowed(initial) ? initial : 'stats',
+  );
 
   useEffect(() => {
     const fromUrl = searchParams.get('tab') as TabKey;
-    if (fromUrl && TABS.includes(fromUrl) && fromUrl !== activeTab) {
+    if (fromUrl && TABS.includes(fromUrl) && isTabAllowed(fromUrl) && fromUrl !== activeTab) {
       setActiveTab(fromUrl);
     }
   }, [searchParams]); // eslint-disable-line react-hooks/exhaustive-deps
@@ -48,6 +54,9 @@ export default function Home() {
       }
       if (val !== 'factory') {
         ['ffrom', 'fto', 'fview', 'ffactory', 'fmode', 'fstage', 'ftype', 'ffabric', 'ftool', 'fmachine', 'fmnum', 'fpage', 'fsize'].forEach((k) => sp.delete(k));
+      }
+      if (val !== 'lifecycle') {
+        ['lfrom', 'lto', 'lfactory'].forEach((k) => sp.delete(k));
       }
       return sp;
     }, { replace: true });
@@ -77,6 +86,11 @@ export default function Home() {
           <TabsTrigger value="status" className="gap-1.5">
             <ClipboardList size={14} /> Tình trạng đơn hàng
           </TabsTrigger>
+          {canSeeLifecycle && (
+            <TabsTrigger value="lifecycle" className="gap-1.5">
+              <Workflow size={14} /> Vòng đời đơn
+            </TabsTrigger>
+          )}
           {canSeeDesigner && (
             <TabsTrigger value="designer" className="gap-1.5">
               <Palette size={14} /> Designer
@@ -93,6 +107,11 @@ export default function Home() {
         <TabsContent value="factory">
           <OrderFactoryTab />
         </TabsContent>
+        {canSeeLifecycle && (
+          <TabsContent value="lifecycle">
+            <LifecycleTab />
+          </TabsContent>
+        )}
         {canSeeDesigner && (
           <TabsContent value="designer">
             <DesignerStatsTab />

@@ -1,6 +1,7 @@
 # Dashboard — Function Description
 
-> **File FE:** `apps/web/src/pages/home/index.tsx` (Tabs wrapper, 4 tab: `stats|status|factory|designer`)
+> **File FE:** `apps/web/src/pages/home/index.tsx` (Tabs wrapper, 5 tab: `stats|status|factory|lifecycle|designer`)
+> **Tab "Vòng đời đơn" (`lifecycle`)** — phễu 9 chặng soát tool→thiết kế→7 stage fulfillment. **Doc riêng:** [`OrderLifecycle.md`](OrderLifecycle.md) (API `GET /v1/orders/lifecycle-overview`).
 > **Tab A — Thống kê:** `apps/web/src/pages/home/OrderStatsTab.tsx`
 > **Tab A — Thống kê đơn & sản phẩm:** `apps/web/src/pages/home/OrderStatsTab.tsx`. Filter top bar dùng chung `<OrderFilterBar>` — xem `Orders.md §10.3`. 2 search field (`searchType` main + `searchUser` qua `topActionsRight`); auto-fetch debounce 300ms.
 > **Tab B — Tình trạng:** `apps/web/src/pages/home/OrderStatusTab.tsx` + `status/{KpiCard,BreakdownCard,StatusFilterExtras,OrdersMiniTable,useStatusFilter}.tsx`. Filter top bar dùng chung `<OrderFilterBar>` (apps/web/src/components/orders/OrderFilterBar.tsx) — xem `Orders.md §10.3`.

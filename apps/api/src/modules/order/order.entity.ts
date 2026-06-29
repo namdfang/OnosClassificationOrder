@@ -226,6 +226,14 @@ export class OrderEntity extends DatabaseEntityAbstract {
   toolResultNote?: string;
 
   /**
+   * Thời điểm đơn lần đầu được soát tool (toolResultNote rỗng → có giá trị).
+   * Set ở updateField/bulkUpdateField/importRework. Dùng cho dashboard Vòng đời
+   * (chặng "Soát tool"). Legacy rows backfill = updatedAt trong onModuleInit.
+   */
+  @Prop({ index: true })
+  toolCheckedAt?: Date;
+
+  /**
    * Multi-select array of workshop_config codes (category=error_file_type).
    * Legacy data có thể vẫn là string đơn — `OrderModule.onModuleInit` chạy
    * migration 1 lần convert sang array. Query filter dùng `$in: codes` vẫn

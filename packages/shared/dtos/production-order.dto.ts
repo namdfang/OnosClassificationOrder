@@ -177,6 +177,14 @@ export const ProductionOrderZod = BaseEntityZod.extend({
   toolResult: z.string().optional(),
   toolResultNote: z.string().optional(),
   /**
+   * Thời điểm đơn LẦN ĐẦU được soát tool (toolResultNote chuyển từ rỗng →
+   * có giá trị, qua updateField / bulkUpdateField / importRework). Dùng cho
+   * dashboard Vòng đời đơn (chặng "Soát tool") để tính throughput + thời gian
+   * TB từ lúc vào sản xuất đến lúc soát xong. Legacy rows backfill bằng
+   * `updatedAt` trong `OrderService.onModuleInit`.
+   */
+  toolCheckedAt: z.date().optional(),
+  /**
    * Multi-select workshop_config codes (category=error_file_type). Lưu dạng
    * array — 1 đơn có thể có nhiều lỗi cần sửa. Legacy data dạng string được
    * auto-migrate (xem `OrderModule.onModuleInit`).
@@ -1194,6 +1202,92 @@ export const GetFulfillmentStatsResZod = ResZod.extend({
 });
 export class GetFulfillmentStatsResDto extends createZodDto(
   extendApi(GetFulfillmentStatsResZod),
+) {}
+
+// ─── Lifecycle Overview (dashboard Vòng đời đơn) ──────────────────
+// Phễu 9 chặng: Soát tool → Thiết kế → In → Ép → QC sau ép → QC phân hàng →
+// May nhận → May xuất → Đóng hàng. Mỗi chặng đo snapshot (đang chứa/đang làm/
+// rework/lỗi) + throughput theo kỳ (hoàn thành + thời gian TB). Xem
+// `documents/FunctionDescription/OrderLifecycle.md`.
+
+/** Khóa chặng — 'tool-check' + 'designer' + 7 FulfillmentStage. */
+export const LIFECYCLE_STAGE_KEYS = [
+  'tool-check',
+  'designer',
+  'print',
+  'press',
+  'qc-post-press',
+  'qc-sorting',
+  'sew-in',
+  'sew-out',
+  'pack',
+] as const;
+export type LifecycleStageKey = (typeof LIFECYCLE_STAGE_KEYS)[number];
+
+export const LifecycleStageRowZod = z.object({
+  stage: z.string(),
+  label: z.string(),
+  /** Đang chờ tại chặng này (snapshot). Tool-check = số đơn chưa soát. */
+  backlog: z.number(),
+  /**
+   * Đã tới công đoạn nhưng worker CHƯA bấm Bắt đầu (chờ nhận task).
+   * Designer = `assigned` (đã giao, sub chưa nhận); Fulfillment = `waiting`
+   * (= backlog); Tool-check = 0 (không có khái niệm nhận task).
+   */
+  waitingToStart: z.number(),
+  /** Đang làm (snapshot). Tool-check không có → 0. */
+  inProgress: z.number(),
+  /** Đang rework (snapshot). */
+  rework: z.number(),
+  /** Đang lỗi tại chặng (snapshot). */
+  error: z.number(),
+  /** Đã hoàn thành chặng trong kỳ (throughput theo date range). */
+  doneInRange: z.number(),
+  /** Tổng đơn đã từng qua chặng này (cumulative snapshot). Tool-check = đã soát. */
+  passedTotal: z.number(),
+  /** Thời gian hoàn thành TB (ms) của các đơn done trong kỳ. 0 nếu N/A. */
+  avgWorkMs: z.number(),
+});
+export type LifecycleStageRow = z.infer<typeof LifecycleStageRowZod>;
+
+export const LifecycleTimelineBucketZod = z.object({
+  date: z.string(), // YYYY-MM-DD (VN tz)
+  completed: z.number(),
+});
+export type LifecycleTimelineBucket = z.infer<typeof LifecycleTimelineBucketZod>;
+
+export const LifecycleOverviewZod = z.object({
+  stages: LifecycleStageRowZod.array(),
+  totals: z.object({
+    /** Đơn còn trong pipeline (chưa pack done, chưa hủy). */
+    totalActive: z.number(),
+    /** Đơn pack.done trong kỳ. */
+    completedInRange: z.number(),
+    /** Cycle time TB toàn flow (ms): designerFirstStartedAt/createdAt → fulfillmentCompletedAt. */
+    avgTotalCycleMs: z.number(),
+    /** Chặng tắc nghẽn (backlog lớn nhất) — null nếu pipeline rỗng. */
+    bottleneckStage: z.string().nullable(),
+  }),
+  /** Line chart: số đơn hoàn thành toàn flow mỗi ngày trong kỳ. */
+  completionTimeline: LifecycleTimelineBucketZod.array(),
+  /** Options cho dropdown lọc xưởng (chỉ xưởng có đơn). */
+  factories: z
+    .object({ factoryId: z.string(), factoryName: z.string() })
+    .array(),
+  filter: z.object({ factoryId: z.string().optional(), from: z.string().optional(), to: z.string().optional() }),
+});
+export type LifecycleOverview = z.infer<typeof LifecycleOverviewZod>;
+
+export const GetLifecycleOverviewZod = z.object({
+  factoryId: IDZod.optional(),
+  from: z.string().optional(),
+  to: z.string().optional(),
+});
+export class GetLifecycleOverviewDto extends createZodDto(extendApi(GetLifecycleOverviewZod)) {}
+
+export const GetLifecycleOverviewResZod = ResZod.extend({ data: LifecycleOverviewZod });
+export class GetLifecycleOverviewResDto extends createZodDto(
+  extendApi(GetLifecycleOverviewResZod),
 ) {}
 
 // ─── Cutting File mapping (post-import flow) ──────────────────────

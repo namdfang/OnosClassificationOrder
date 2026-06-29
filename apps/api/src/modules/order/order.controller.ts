@@ -21,6 +21,8 @@ import {
   SetProductionErrorResDto,
   GetFactoryOverviewDto,
   GetFactoryOverviewResDto,
+  GetLifecycleOverviewDto,
+  GetLifecycleOverviewResDto,
   GetGroupedProductionOrdersResDto,
   FulfillmentStatusCountsResDto,
   GetImportSummaryDto,
@@ -233,6 +235,18 @@ export class OrderController {
     @AuthUser() user: UserDocument,
   ): Promise<GetFactoryOverviewResDto> {
     return this.orderService.getFactoryOverview(dto, user?.role?.name, user?.factoryId, user?.fulfillmentStage);
+  }
+
+  @Get('lifecycle-overview')
+  @Auth([RoleType.SuperAdmin, RoleType.Admin])
+  @ApiOperation({ summary: 'Vòng đời đơn — phễu 9 chặng (soát tool → thiết kế → 7 stage fulfillment). Chỉ Admin.' })
+  @HttpCode(HttpStatus.OK)
+  @ApiOkResponse({ type: GetLifecycleOverviewResDto })
+  async getLifecycleOverview(
+    @Query() dto: GetLifecycleOverviewDto,
+    @AuthUser() user: UserDocument,
+  ): Promise<GetLifecycleOverviewResDto> {
+    return this.orderService.getLifecycleOverview(dto, user?.role?.name, user?.factoryId);
   }
 
   @Patch('bulk-transfer')

@@ -63,6 +63,9 @@ import type {
   MockupSummary,
   PreviewCuttingFilesDto,
   PreviewCuttingFilesResDto,
+  GetLifecycleOverviewDto,
+  GetLifecycleOverviewResDto,
+  LifecycleStageRow,
   OrderStatusOverview,
   OrderWorkshopField,
   SizeMatrixRow,
@@ -77,6 +80,8 @@ import type {
 import {
   DESIGNER_REASSIGNABLE_STATUSES,
   DesignerStatus,
+  FULFILLMENT_STAGE_LABELS,
+  FULFILLMENT_STAGES,
   FulfillmentStage,
   FulfillmentStageStatus,
   parseProductionIdFromCuttingFilename,
@@ -370,6 +375,23 @@ export class OrderService implements OnModuleInit {
       // eslint-disable-next-line no-console
       console.log(
         `[order-backfill] errorFile migrated to array on ${errorFileMigrateRes.modifiedCount} legacy rows`,
+      );
+    }
+
+    // Backfill toolCheckedAt cho đơn đã soát (toolResultNote có giá trị) nhưng
+    // chưa có timestamp — best-effort dùng updatedAt. Dashboard Vòng đời chặng
+    // "Soát tool" cần field này để tính throughput + thời gian TB. Idempotent.
+    const toolCheckedBackfill = await this.orderModel.updateMany(
+      {
+        toolResultNote: { $exists: true, $nin: [null, ''] },
+        toolCheckedAt: { $in: [null, undefined] },
+      },
+      [{ $set: { toolCheckedAt: '$updatedAt' } }],
+    );
+    if (toolCheckedBackfill.modifiedCount > 0) {
+      // eslint-disable-next-line no-console
+      console.log(
+        `[order-backfill] toolCheckedAt set on ${toolCheckedBackfill.modifiedCount} legacy soát-tool rows`,
       );
     }
 
@@ -1962,6 +1984,333 @@ export class OrderService implements OnModuleInit {
   }
 
   /**
+   * Dashboard "Vòng đời đơn" — phễu 9 chặng (Soát tool → Thiết kế → 7 stage
+   * Fulfillment). Mỗi chặng: snapshot (đang chứa / đang làm / rework / lỗi) +
+   * throughput theo kỳ (hoàn thành + thời gian TB). Một aggregate $facet duy
+   * nhất gom tất cả. Xem `documents/FunctionDescription/OrderLifecycle.md`.
+   *
+   * Phạm vi xưởng: user Fulfillment bị khóa vào xưởng của họ; role khác lọc tự
+   * do qua `dto.factoryId`. Snapshot KHÔNG lọc ngày (trạng thái hiện tại);
+   * throughput/thời gian lọc theo `from`/`to`.
+   */
+  async getLifecycleOverview(
+    dto: GetLifecycleOverviewDto,
+    roleName?: RoleType,
+    userFactoryId?: string,
+  ): Promise<GetLifecycleOverviewResDto> {
+    const isFactoryBound = roleName === RoleType.Fulfillment;
+    const scopedFactoryId = isFactoryBound ? userFactoryId : dto.factoryId;
+
+    const from = dto.from ? vnDayStart(dto.from) : undefined;
+    const to = dto.to ? vnDayEnd(dto.to) : undefined;
+
+    const match: Record<string, unknown> = {
+      deletedAt: { $exists: false },
+      cancelledAt: { $exists: false },
+    };
+    // Lọc theo NGÀY VÀO SẢN XUẤT của đơn (`inProductionAt`) — để "đơn vào ngày
+    // đó hiện đang tồn ở công đoạn nào". Áp cho TOÀN BỘ dataset (cả snapshot) chứ
+    // không chỉ throughput, đồng bộ với getDashboard/getFactoryOverview.
+    if (from || to) {
+      const range: Record<string, Date> = {};
+      if (from) range.$gte = from;
+      if (to) range.$lte = to;
+      match.inProductionAt = range;
+    }
+    if (isFactoryBound) {
+      if (!userFactoryId) {
+        match.factoryId = '__no_factory__';
+      } else {
+        match.$or = [{ factoryId: userFactoryId }, { originalFactoryId: userFactoryId }];
+      }
+    } else if (dto.factoryId) {
+      match.$or = [{ factoryId: dto.factoryId }, { originalFactoryId: dto.factoryId }];
+    }
+
+    // Expression: `field` (mốc hoàn thành) nằm trong khoảng ngày — dùng cho các
+    // chỉ số throughput (doneInRange / avgWorkMs / timeline) trong NHÓM đơn đã
+    // lọc theo inProductionAt. Missing → false.
+    const inRange = (field: string) => {
+      const f = { $ifNull: [field, null] };
+      const conds: Record<string, unknown>[] = [{ $ne: [f, null] }];
+      if (from) conds.push({ $gte: [f, from] });
+      if (to) conds.push({ $lte: [f, to] });
+      return { $and: conds };
+    };
+
+    // Status của stage hiện tại — key động → lọc entry khớp currentFulfillmentStage
+    // (tránh field-path có dấu gạch như `qc-post-press`).
+    const curStatusExpr = {
+      $let: {
+        vars: {
+          cur: {
+            $arrayElemAt: [
+              {
+                $filter: {
+                  input: { $objectToArray: { $ifNull: ['$fulfillmentStages', {}] } },
+                  cond: { $eq: ['$$this.k', '$currentFulfillmentStage'] },
+                },
+              },
+              0,
+            ],
+          },
+        },
+        in: '$$cur.v.status',
+      },
+    };
+
+    const emptyTool = { $in: [{ $ifNull: ['$toolResultNote', ''] }, ['', null]] };
+    const completedRange: Record<string, unknown> = { $exists: true, $ne: null };
+    if (from) completedRange.$gte = from;
+    if (to) completedRange.$lte = to;
+
+    const [agg] = await this.orderModel.aggregate([
+      { $match: match },
+      {
+        $facet: {
+          tool: [
+            {
+              $group: {
+                _id: null,
+                backlog: { $sum: { $cond: [emptyTool, 1, 0] } },
+                error: { $sum: { $cond: [{ $eq: ['$toolResultNote', 'error'] }, 1, 0] } },
+                passed: { $sum: { $cond: [emptyTool, 0, 1] } },
+                doneInRange: { $sum: { $cond: [inRange('$toolCheckedAt'), 1, 0] } },
+                workSum: {
+                  $sum: {
+                    $cond: [
+                      inRange('$toolCheckedAt'),
+                      { $subtract: ['$toolCheckedAt', { $ifNull: ['$inProductionAt', '$createdAt'] }] },
+                      0,
+                    ],
+                  },
+                },
+                workCnt: { $sum: { $cond: [inRange('$toolCheckedAt'), 1, 0] } },
+              },
+            },
+          ],
+          designer: [
+            {
+              $group: {
+                _id: null,
+                backlog: {
+                  $sum: {
+                    $cond: [
+                      { $in: ['$designerStatus', [DesignerStatus.Unassigned, DesignerStatus.Assigned]] },
+                      1,
+                      0,
+                    ],
+                  },
+                },
+                assigned: {
+                  $sum: { $cond: [{ $eq: ['$designerStatus', DesignerStatus.Assigned] }, 1, 0] },
+                },
+                inProgress: {
+                  $sum: { $cond: [{ $eq: ['$designerStatus', DesignerStatus.InProgress] }, 1, 0] },
+                },
+                rework: { $sum: { $cond: [{ $eq: ['$designerStatus', DesignerStatus.Rework] }, 1, 0] } },
+                error: {
+                  $sum: {
+                    $cond: [
+                      {
+                        $and: [
+                          { $eq: ['$productionErrorSource', 'designer'] },
+                          { $ne: [{ $ifNull: ['$productionError', ''] }, ''] },
+                        ],
+                      },
+                      1,
+                      0,
+                    ],
+                  },
+                },
+                passed: {
+                  $sum: { $cond: [{ $ne: [{ $ifNull: ['$designerCompletedAt', null] }, null] }, 1, 0] },
+                },
+                doneInRange: { $sum: { $cond: [inRange('$designerCompletedAt'), 1, 0] } },
+                workSum: {
+                  $sum: { $cond: [inRange('$designerCompletedAt'), { $ifNull: ['$designerWorkMs', 0] }, 0] },
+                },
+                workCnt: { $sum: { $cond: [inRange('$designerCompletedAt'), 1, 0] } },
+              },
+            },
+          ],
+          fulfillmentSnapshot: [
+            { $match: { currentFulfillmentStage: { $in: FULFILLMENT_STAGES } } },
+            {
+              $group: {
+                _id: '$currentFulfillmentStage',
+                backlog: { $sum: { $cond: [{ $eq: [curStatusExpr, FulfillmentStageStatus.Waiting] }, 1, 0] } },
+                inProgress: {
+                  $sum: { $cond: [{ $eq: [curStatusExpr, FulfillmentStageStatus.InProgress] }, 1, 0] },
+                },
+                rework: { $sum: { $cond: [{ $eq: [curStatusExpr, FulfillmentStageStatus.Rework] }, 1, 0] } },
+                error: { $sum: { $cond: [{ $ne: [{ $ifNull: ['$productionError', ''] }, ''] }, 1, 0] } },
+              },
+            },
+          ],
+          fulfillmentByStage: [
+            { $project: { stages: { $objectToArray: { $ifNull: ['$fulfillmentStages', {}] } } } },
+            { $unwind: '$stages' },
+            {
+              $group: {
+                _id: '$stages.k',
+                passed: { $sum: { $cond: [{ $eq: ['$stages.v.status', FulfillmentStageStatus.Done] }, 1, 0] } },
+                doneInRange: { $sum: { $cond: [inRange('$stages.v.completedAt'), 1, 0] } },
+                workSum: {
+                  $sum: { $cond: [inRange('$stages.v.completedAt'), { $ifNull: ['$stages.v.workMs', 0] }, 0] },
+                },
+                workCnt: { $sum: { $cond: [inRange('$stages.v.completedAt'), 1, 0] } },
+              },
+            },
+          ],
+          totalActive: [
+            { $match: { fulfillmentCompletedAt: { $in: [null, undefined] } } },
+            { $count: 'n' },
+          ],
+          totalCycle: [
+            { $match: { fulfillmentCompletedAt: completedRange } },
+            {
+              $group: {
+                _id: null,
+                count: { $sum: 1 },
+                avgMs: {
+                  $avg: {
+                    $subtract: [
+                      '$fulfillmentCompletedAt',
+                      {
+                        $ifNull: [
+                          '$designerFirstStartedAt',
+                          { $ifNull: ['$designerCompletedAt', '$createdAt'] },
+                        ],
+                      },
+                    ],
+                  },
+                },
+              },
+            },
+          ],
+          completionTimeline: [
+            { $match: { fulfillmentCompletedAt: completedRange } },
+            {
+              $group: {
+                _id: {
+                  $dateToString: {
+                    format: '%Y-%m-%d',
+                    date: '$fulfillmentCompletedAt',
+                    timezone: '+07:00',
+                  },
+                },
+                completed: { $sum: 1 },
+              },
+            },
+            { $sort: { _id: 1 } },
+          ],
+          factories: [
+            { $match: { factoryId: { $exists: true, $nin: [null, ''] } } },
+            { $group: { _id: '$factoryId' } },
+            { $lookup: { from: 'factories', localField: '_id', foreignField: '_id', as: 'f' } },
+            {
+              $project: {
+                _id: 0,
+                factoryId: '$_id',
+                factoryName: { $ifNull: [{ $arrayElemAt: ['$f.name', 0] }, 'Chưa map'] },
+              },
+            },
+            { $sort: { factoryName: 1 } },
+          ],
+        },
+      },
+    ]);
+
+    const avg = (sum: number, cnt: number) => (cnt > 0 ? Math.round(sum / cnt) : 0);
+    const toolRow = agg.tool[0] || {};
+    const designerRow = agg.designer[0] || {};
+    const fSnap = new Map<string, Record<string, number>>(
+      (agg.fulfillmentSnapshot as Array<Record<string, number> & { _id: string }>).map((r) => [r._id, r]),
+    );
+    const fStage = new Map<string, Record<string, number>>(
+      (agg.fulfillmentByStage as Array<Record<string, number> & { _id: string }>).map((r) => [r._id, r]),
+    );
+
+    const stages: LifecycleStageRow[] = [
+      {
+        stage: 'tool-check',
+        label: 'Soát tool',
+        backlog: toolRow.backlog || 0,
+        waitingToStart: 0,
+        inProgress: 0,
+        rework: 0,
+        error: toolRow.error || 0,
+        doneInRange: toolRow.doneInRange || 0,
+        passedTotal: toolRow.passed || 0,
+        avgWorkMs: avg(toolRow.workSum || 0, toolRow.workCnt || 0),
+      },
+      {
+        stage: 'designer',
+        label: 'Thiết kế',
+        backlog: designerRow.backlog || 0,
+        waitingToStart: designerRow.assigned || 0,
+        inProgress: designerRow.inProgress || 0,
+        rework: designerRow.rework || 0,
+        error: designerRow.error || 0,
+        doneInRange: designerRow.doneInRange || 0,
+        passedTotal: designerRow.passed || 0,
+        avgWorkMs: avg(designerRow.workSum || 0, designerRow.workCnt || 0),
+      },
+      ...FULFILLMENT_STAGES.map((s): LifecycleStageRow => {
+        const snap = fSnap.get(s) || {};
+        const tp = fStage.get(s) || {};
+        return {
+          stage: s,
+          label: FULFILLMENT_STAGE_LABELS[s],
+          backlog: snap.backlog || 0,
+          waitingToStart: snap.backlog || 0,
+          inProgress: snap.inProgress || 0,
+          rework: snap.rework || 0,
+          error: snap.error || 0,
+          doneInRange: tp.doneInRange || 0,
+          passedTotal: tp.passed || 0,
+          avgWorkMs: avg(tp.workSum || 0, tp.workCnt || 0),
+        };
+      }),
+    ];
+
+    // Bottleneck = chặng có backlog (đang chứa) lớn nhất.
+    let bottleneckStage: string | null = null;
+    let maxBacklog = 0;
+    for (const r of stages) {
+      if (r.backlog > maxBacklog) {
+        maxBacklog = r.backlog;
+        bottleneckStage = r.stage;
+      }
+    }
+
+    const cycleRow = agg.totalCycle[0];
+    const completionTimeline = (agg.completionTimeline as Array<{ _id: string; completed: number }>).map(
+      (r) => ({ date: r._id, completed: r.completed }),
+    );
+
+    return {
+      success: true,
+      data: {
+        stages,
+        totals: {
+          totalActive: agg.totalActive[0]?.n || 0,
+          completedInRange: cycleRow?.count || 0,
+          avgTotalCycleMs: cycleRow?.avgMs ? Math.round(cycleRow.avgMs) : 0,
+          bottleneckStage,
+        },
+        completionTimeline,
+        factories: (agg.factories as Array<{ factoryId: unknown; factoryName: string }>).map((f) => ({
+          factoryId: String(f.factoryId),
+          factoryName: f.factoryName,
+        })),
+        filter: { factoryId: scopedFactoryId, from: dto.from, to: dto.to },
+      },
+    };
+  }
+
+  /**
    * Dashboard payload for the "Đơn hàng theo xưởng" tab.
    *  - `factories[i]` = totals at factory i + how many transferred in/out
    *  - `flows[]` = origin→current pairs with non-trivial count
@@ -2934,6 +3283,17 @@ export class OrderService implements OnModuleInit {
       }
     }
 
+    // Mốc soát tool — set lần đầu khi toolResultNote chuyển rỗng → có giá trị
+    // (qua field 'toolResultNote' hoặc nhánh productionError set 'error').
+    // Dùng cho dashboard Vòng đời chặng "Soát tool".
+    if (
+      typeof patch.toolResultNote === 'string' &&
+      patch.toolResultNote.trim() &&
+      !(before as unknown as { toolCheckedAt?: Date }).toolCheckedAt
+    ) {
+      patch.toolCheckedAt = new Date();
+    }
+
     // Tách $inc / $set vì autoReworkApplied cần $inc.
     const mongoUpdate: Record<string, unknown> = { $set: patch };
     const incOps: Record<string, number> = {};
@@ -3049,6 +3409,19 @@ export class OrderService implements OnModuleInit {
           currentFulfillmentStage: { $in: [null, undefined] },
         },
         { $set: buildFulfillmentEntrySet() },
+      );
+    }
+
+    // Mốc soát tool (bulk variant) — set toolCheckedAt cho subset đơn chưa có
+    // (first-soát only) khi gán toolResultNote bất kỳ giá trị non-empty.
+    if (typeof normalized === 'string' && normalized.trim() && dto.field === 'toolResultNote') {
+      await this.orderModel.updateMany(
+        {
+          _id: { $in: dto.ids },
+          deletedAt: { $exists: false },
+          toolCheckedAt: { $in: [null, undefined] },
+        },
+        { $set: { toolCheckedAt: new Date() } },
       );
     }
 
@@ -3508,6 +3881,8 @@ export class OrderService implements OnModuleInit {
         const code = toolResultNoteMap.get(key);
         if (code) {
           $set.toolResultNote = code;
+          // Mốc soát tool — set lần đầu (đơn chưa có toolCheckedAt).
+          if (!order.toolCheckedAt) $set.toolCheckedAt = new Date();
           // Entry point fulfillment thứ 2 (import variant) — match `updateField`
           // semantics: code='ok' + đơn chưa vào fulfillment → đẩy vào stage Print.
           // Cũng set readyForFulfill/productionFirstErrorAt cho khớp.
