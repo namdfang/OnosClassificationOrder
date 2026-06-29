@@ -2358,16 +2358,36 @@ export class OrderService implements OnModuleInit {
     }
     matchMapped.originalFactoryId = { $exists: true, $ne: null };
 
+    // Faceted filters (select dropdowns). Áp dụng cho CẢ thẻ xưởng (flow/stats/
+    // breakdown/unmapped) → mỗi xưởng chỉ đếm đơn khớp filter (vd. lọc khách
+    // hàng → mỗi thẻ chỉ tính đơn của khách đó). `availableFilters` vẫn
+    // cross-facet riêng qua `buildFacetMatch` (loại trừ chính field đó).
+    const facetFilters: Record<string, unknown> = {};
+    if (dto.type) facetFilters.type = { $in: dto.type.split(',').filter(Boolean) };
+    if (dto.fabricType) facetFilters.fabricType = { $in: dto.fabricType.split(',').filter(Boolean) };
+    if (dto.toolResult) facetFilters.toolResult = { $in: dto.toolResult.split(',').filter(Boolean) };
+    if (dto.toolResultNote) {
+      facetFilters.toolResultNote = { $in: dto.toolResultNote.split(',').filter(Boolean) };
+    }
+    if (dto.userSku) facetFilters.userSku = { $in: dto.userSku.split(',').filter(Boolean) };
+    if (dto.machineTypeId) facetFilters.machineTypeId = dto.machineTypeId;
+    if (dto.machineNumber) {
+      facetFilters.machineNumber = { $in: dto.machineNumber.split(',').filter(Boolean) };
+    }
+    // Match cho thẻ xưởng = mapped + các facet đang chọn.
+    const cardMatch: Record<string, unknown> = { ...matchMapped, ...facetFilters };
+
     // Đơn chưa map xưởng trong cùng date range — đếm độc lập, dùng cho chip
-    // "Chưa xác định xưởng" trên FE.
+    // "Chưa xác định xưởng" trên FE (cũng tôn trọng facet filter).
     const unmappedCount = await this.orderModel.countDocuments({
       ...match,
+      ...facetFilters,
       $or: [{ factoryId: { $exists: false } }, { factoryId: null }],
     });
 
     type FlowRow = { _id: { from: string; to: string }; count: number; totalQuantity: number };
     const flowRows = await this.orderModel.aggregate<FlowRow>([
-      { $match: matchMapped },
+      { $match: cardMatch },
       {
         $group: {
           _id: { from: '$originalFactoryId', to: '$factoryId' },
@@ -2489,7 +2509,7 @@ export class OrderService implements OnModuleInit {
       errorCount: number;
     };
     const statRows = await this.orderModel.aggregate<StatRow>([
-      { $match: matchMapped },
+      { $match: cardMatch },
       {
         $group: {
           _id: '$factoryId',
@@ -2572,7 +2592,7 @@ export class OrderService implements OnModuleInit {
     // top-N lists. We pull these 4 aggregations in parallel.
     type BreakdownRow = { _id: { factory: string; v: string }; count: number };
     const breakdownPipeline = (field: string, filterOut: { $ne?: unknown } = {}) => [
-      { $match: { ...matchMapped, [field]: { $exists: true, $ne: null, $nin: [''], ...filterOut } } },
+      { $match: { ...cardMatch, [field]: { $exists: true, $ne: null, $nin: [''], ...filterOut } } },
       { $group: { _id: { factory: '$factoryId', v: `$${field}` }, count: { $sum: 1 } } },
       { $sort: { count: -1 as const } },
     ];
@@ -2653,25 +2673,8 @@ export class OrderService implements OnModuleInit {
       scopeMatch.productionError = { $exists: true, $nin: [null, ''] };
     }
 
-    /** Faceted filters set by the user via the select dropdowns. */
-    const facetFilters: Record<string, unknown> = {};
-    if (dto.type) facetFilters.type = { $in: dto.type.split(',').filter(Boolean) };
-    if (dto.fabricType) {
-      facetFilters.fabricType = { $in: dto.fabricType.split(',').filter(Boolean) };
-    }
-    if (dto.toolResult) {
-      facetFilters.toolResult = { $in: dto.toolResult.split(',').filter(Boolean) };
-    }
-    if (dto.toolResultNote) {
-      facetFilters.toolResultNote = { $in: dto.toolResultNote.split(',').filter(Boolean) };
-    }
-    if (dto.userSku) {
-      facetFilters.userSku = { $in: dto.userSku.split(',').filter(Boolean) };
-    }
-    if (dto.machineTypeId) facetFilters.machineTypeId = dto.machineTypeId;
-    if (dto.machineNumber) {
-      facetFilters.machineNumber = { $in: dto.machineNumber.split(',').filter(Boolean) };
-    }
+    // `facetFilters` đã build ở trên (dùng chung cho thẻ xưởng). availableFilters
+    // cross-facet: mỗi dropdown loại trừ chính field của nó.
     const buildFacetMatch = (excludeKey: keyof typeof facetFilters) => {
       const out: Record<string, unknown> = { ...scopeMatch };
       for (const [k, v] of Object.entries(facetFilters)) {
