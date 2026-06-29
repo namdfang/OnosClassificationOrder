@@ -70,6 +70,10 @@ interface SelectFilters {
   machine: string;
   /** workshop_config code (category=machine) — số máy thực. */
   machineNumber: string;
+  /** workshop_config code (category=tool_result_note) — cột "Note kq Tool". */
+  toolNote: string;
+  /** userSku — khách sở hữu đơn. */
+  user: string;
 }
 
 function todayISO() {
@@ -146,6 +150,8 @@ export default function OrderFactoryTab() {
     tool: searchParams.get('ftool') || '',
     machine: searchParams.get('fmachine') || '',
     machineNumber: searchParams.get('fmnum') || '',
+    toolNote: searchParams.get('ftoolnote') || '',
+    user: searchParams.get('fuser') || '',
   }));
 
   const [rows, setRows] = useState<WorkshopOrderRow[]>([]);
@@ -204,6 +210,8 @@ export default function OrderFactoryTab() {
         selectFilters.tool ? sp.set('ftool', selectFilters.tool) : sp.delete('ftool');
         selectFilters.machine ? sp.set('fmachine', selectFilters.machine) : sp.delete('fmachine');
         selectFilters.machineNumber ? sp.set('fmnum', selectFilters.machineNumber) : sp.delete('fmnum');
+        selectFilters.toolNote ? sp.set('ftoolnote', selectFilters.toolNote) : sp.delete('ftoolnote');
+        selectFilters.user ? sp.set('fuser', selectFilters.user) : sp.delete('fuser');
         // Pagination
         page > 1 ? sp.set('fpage', String(page)) : sp.delete('fpage');
         pageSize !== DEFAULT_PAGE_SIZE ? sp.set('fsize', String(pageSize)) : sp.delete('fsize');
@@ -253,6 +261,8 @@ export default function OrderFactoryTab() {
     if (selectFilters.tool) sp.set('toolResult', selectFilters.tool);
     if (selectFilters.machine) sp.set('machineTypeId', selectFilters.machine);
     if (selectFilters.machineNumber) sp.set('machineNumber', selectFilters.machineNumber);
+    if (selectFilters.toolNote) sp.set('toolResultNote', selectFilters.toolNote);
+    if (selectFilters.user) sp.set('userSku', selectFilters.user);
     return sp.toString();
   }, [createdFrom, createdTo, filterMode, selectFilters]);
 
@@ -296,6 +306,8 @@ export default function OrderFactoryTab() {
     if (selectFilters.tool) sp.set('toolResult', selectFilters.tool);
     if (selectFilters.machine) sp.set('machineTypeId', selectFilters.machine);
     if (selectFilters.machineNumber) sp.set('machineNumber', selectFilters.machineNumber);
+    if (selectFilters.toolNote) sp.set('toolResultNote', selectFilters.toolNote);
+    if (selectFilters.user) sp.set('userSku', selectFilters.user);
     if (debouncedSearch.trim()) sp.set('search', debouncedSearch.trim());
     try {
       setRowsLoading(true);
@@ -327,7 +339,7 @@ export default function OrderFactoryTab() {
   const handleSwitchView = useCallback((next: ViewMode) => {
     setViewMode(next);
     setFilterMode({ kind: 'all' });
-    setSelectFilters({ type: '', fabric: '', tool: '', machine: '', machineNumber: '' });
+    setSelectFilters({ type: '', fabric: '', tool: '', machine: '', machineNumber: '', toolNote: '', user: '' });
     setPage(1);
   }, []);
 
@@ -339,7 +351,7 @@ export default function OrderFactoryTab() {
       isFirstRender.current = false;
       return;
     }
-    setSelectFilters({ type: '', fabric: '', tool: '', machine: '', machineNumber: '' });
+    setSelectFilters({ type: '', fabric: '', tool: '', machine: '', machineNumber: '', toolNote: '', user: '' });
   }, [filterMode]);
 
   useEffect(() => {
@@ -445,6 +457,8 @@ export default function OrderFactoryTab() {
     if (selectFilters.tool) sp.set('toolResult', selectFilters.tool);
     if (selectFilters.machine) sp.set('machineTypeId', selectFilters.machine);
     if (selectFilters.machineNumber) sp.set('machineNumber', selectFilters.machineNumber);
+    if (selectFilters.toolNote) sp.set('toolResultNote', selectFilters.toolNote);
+    if (selectFilters.user) sp.set('userSku', selectFilters.user);
     try {
       setExportLoading(true);
       const res = await RepositoryRemote.order.exportOrders('?' + sp.toString());
@@ -552,6 +566,8 @@ export default function OrderFactoryTab() {
             { key: 'machineTypeId', label: 'Phòng', value: selectFilters.machine, onChange: (v) => setSelectFilters((s) => ({ ...s, machine: v })), options: overview?.availableFilters.machineTypes || [] },
             { key: 'machineNumber', label: 'Máy', value: selectFilters.machineNumber, onChange: (v) => setSelectFilters((s) => ({ ...s, machineNumber: v })), options: overview?.availableFilters.machines || [] },
             { key: 'toolResult', label: 'Kết quả Tool', value: selectFilters.tool, onChange: (v) => setSelectFilters((s) => ({ ...s, tool: v })), options: overview?.availableFilters.toolResults || [] },
+            { key: 'toolResultNote', label: 'Note Tool', value: selectFilters.toolNote, onChange: (v) => setSelectFilters((s) => ({ ...s, toolNote: v })), options: overview?.availableFilters.toolResultNotes || [] },
+            { key: 'userSku', label: 'Khách hàng', value: selectFilters.user, onChange: (v) => setSelectFilters((s) => ({ ...s, user: v })), options: overview?.availableFilters.users || [] },
           ] satisfies OrderFilterFacet[]}
         />
 
@@ -703,14 +719,16 @@ export default function OrderFactoryTab() {
               selectFilters.fabric ||
               selectFilters.tool ||
               selectFilters.machine ||
-              selectFilters.machineNumber) && (
+              selectFilters.machineNumber ||
+              selectFilters.toolNote ||
+              selectFilters.user) && (
                 <Button
                   variant="ghost"
                   size="sm"
                   className="text-xs h-7 ml-auto"
                   onClick={() => {
                     setFilterMode({ kind: 'all' });
-                    setSelectFilters({ type: '', fabric: '', tool: '', machine: '', machineNumber: '' });
+                    setSelectFilters({ type: '', fabric: '', tool: '', machine: '', machineNumber: '', toolNote: '', user: '' });
                   }}
                 >
                   Xóa lọc

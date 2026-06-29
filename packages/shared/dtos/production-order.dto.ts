@@ -898,6 +898,10 @@ export const FactoryOverviewZod = z.object({
     machineTypes: FactoryFilterOptionZod.array(),
     /** workshop_config.machine codes — số máy thực. */
     machines: FactoryFilterOptionZod.array(),
+    /** workshop_config.tool_result_note codes — cột "Note kq Tool". */
+    toolResultNotes: FactoryFilterOptionZod.array(),
+    /** userSku (khách sở hữu đơn) — top theo số đơn trong kỳ. */
+    users: FactoryFilterOptionZod.array(),
   }),
 });
 export type FactoryOverview = z.infer<typeof FactoryOverviewZod>;
@@ -939,6 +943,10 @@ export const GetFactoryOverviewZod = z.object({
   type: z.string().optional(),
   fabricType: z.string().optional(),
   toolResult: z.string().optional(),
+  /** workshop_config codes (category=tool_result_note) — cột "Note kq Tool". */
+  toolResultNote: z.string().optional(),
+  /** userSku (khách sở hữu đơn) — CSV. Lọc bảng đơn + thu hẹp dropdown. */
+  userSku: z.string().optional(),
   machineTypeId: z.string().optional(),
   machineNumber: z.string().optional(),
 });

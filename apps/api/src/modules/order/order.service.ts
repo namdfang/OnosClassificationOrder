@@ -2662,6 +2662,12 @@ export class OrderService implements OnModuleInit {
     if (dto.toolResult) {
       facetFilters.toolResult = { $in: dto.toolResult.split(',').filter(Boolean) };
     }
+    if (dto.toolResultNote) {
+      facetFilters.toolResultNote = { $in: dto.toolResultNote.split(',').filter(Boolean) };
+    }
+    if (dto.userSku) {
+      facetFilters.userSku = { $in: dto.userSku.split(',').filter(Boolean) };
+    }
     if (dto.machineTypeId) facetFilters.machineTypeId = dto.machineTypeId;
     if (dto.machineNumber) {
       facetFilters.machineNumber = { $in: dto.machineNumber.split(',').filter(Boolean) };
@@ -2676,7 +2682,15 @@ export class OrderService implements OnModuleInit {
     };
 
     type OptionRow = { _id: string; count: number };
-    const [typeRows, fabricRows, toolRows, machineRows, actualMachineRows] = await Promise.all([
+    const [
+      typeRows,
+      fabricRows,
+      toolRows,
+      machineRows,
+      actualMachineRows,
+      toolNoteRows,
+      userRows,
+    ] = await Promise.all([
       this.orderModel.aggregate<OptionRow>([
         { $match: { ...buildFacetMatch('type'), type: { $exists: true, $ne: null, $nin: [''] } } },
         { $group: { _id: '$type', count: { $sum: 1 } } },
@@ -2722,6 +2736,28 @@ export class OrderService implements OnModuleInit {
         { $group: { _id: '$machineNumber', count: { $sum: 1 } } },
         { $sort: { count: -1 } },
       ]),
+      this.orderModel.aggregate<OptionRow>([
+        {
+          $match: {
+            ...buildFacetMatch('toolResultNote'),
+            toolResultNote: { $exists: true, $ne: null, $nin: [''] },
+          },
+        },
+        { $group: { _id: '$toolResultNote', count: { $sum: 1 } } },
+        { $sort: { count: -1 } },
+      ]),
+      this.orderModel.aggregate<OptionRow>([
+        {
+          $match: {
+            ...buildFacetMatch('userSku'),
+            userSku: { $exists: true, $ne: null, $nin: [''] },
+          },
+        },
+        { $group: { _id: '$userSku', count: { $sum: 1 } } },
+        { $sort: { count: -1 } },
+        // Giới hạn để payload không phình khi có quá nhiều khách.
+        { $limit: 300 },
+      ]),
     ]);
 
     // Resolve machineTypeId → name via the machineTypes collection.
@@ -2766,6 +2802,14 @@ export class OrderService implements OnModuleInit {
         })
       ).map((d) => [d.code, d.name]),
     );
+    // Resolve toolResultNote codes → human-readable ("ok" → "OK", ...).
+    const toolNoteNameMap = new Map<string, string>(
+      (
+        await this.workshopConfigRepository.findAll({
+          category: WorkshopConfigCategory.ToolResultNote,
+        })
+      ).map((d) => [d.code, d.name]),
+    );
 
     return {
       success: true,
@@ -2795,6 +2839,12 @@ export class OrderService implements OnModuleInit {
             label: actualMachineNameMap.get(r._id) || r._id,
             count: r.count,
           })),
+          toolResultNotes: toolNoteRows.map((r) => ({
+            value: r._id,
+            label: toolNoteNameMap.get(r._id) || r._id,
+            count: r.count,
+          })),
+          users: userRows.map((r) => ({ value: r._id, label: r._id, count: r.count })),
         },
       },
     };

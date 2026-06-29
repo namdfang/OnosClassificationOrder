@@ -53,7 +53,7 @@ export default function Home() {
         ['printStatus', 'printStatusNote', 'toolResult', 'toolResultNote', 'errorFile', 'assignee', 'assigneeNote', 'factoryId', 'machineTypeId', 'readyForFulfill', 'createdFrom', 'createdTo', 'search'].forEach((k) => sp.delete(k));
       }
       if (val !== 'factory') {
-        ['ffrom', 'fto', 'fview', 'ffactory', 'fmode', 'fstage', 'ftype', 'ffabric', 'ftool', 'fmachine', 'fmnum', 'fpage', 'fsize'].forEach((k) => sp.delete(k));
+        ['ffrom', 'fto', 'fview', 'ffactory', 'fmode', 'fstage', 'ftype', 'ffabric', 'ftool', 'fmachine', 'fmnum', 'ftoolnote', 'fuser', 'fpage', 'fsize'].forEach((k) => sp.delete(k));
       }
       if (val !== 'lifecycle') {
         ['lfrom', 'lto', 'lfactory'].forEach((k) => sp.delete(k));

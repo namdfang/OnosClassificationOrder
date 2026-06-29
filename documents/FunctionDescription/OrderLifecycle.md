@@ -19,11 +19,12 @@ Soát tool → Thiết kế → In → Ép → QC sau ép → QC phân hàng →
 (support)   (designer)  └────────────────── 7 stage Fulfillment ──────────────────┘
 ```
 
+- **Chỉ Admin / SuperAdmin** thấy tab này (xem §7).
 - **Chặng "Soát tool"** = tài khoản Support soát; "đã soát" = `toolResultNote` có
   giá trị, "chưa soát" = rỗng/null.
-- **Phạm vi xưởng:** user role `Fulfillment` bị **khóa** vào xưởng của họ
-  (`profile.factoryId`); role quản lý (SuperAdmin/Admin/Manager/SupportManager/Support)
-  chọn mọi xưởng qua dropdown. BE enforce trong `getLifecycleOverview` (xem §5).
+- **Lọc xưởng:** admin chọn mọi xưởng qua dropdown (mặc định "Tất cả xưởng").
+  (Service vẫn có nhánh khóa xưởng cho role `Fulfillment` — nhánh phòng hờ vì
+  endpoint hiện đã giới hạn về admin; xem §5/§7.)
 
 ## 2. Luồng hoạt động
 
