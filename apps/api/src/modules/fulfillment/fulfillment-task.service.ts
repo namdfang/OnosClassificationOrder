@@ -293,9 +293,16 @@ export class FulfillmentTaskService {
       }
 
       case FulfillmentTransitionAction.ReworkBack: {
-        if (currentStatus !== FulfillmentStageStatus.InProgress) {
+        // Cho phép báo lỗi từ waiting / in-progress / rework (không bắt buộc
+        // phải Bắt đầu trước). Từ waiting/rework: coi như chưa tính workMs
+        // (startedAt chưa có → delta 0). 'done' không báo lỗi được (đã rời stage).
+        if (
+          currentStatus !== FulfillmentStageStatus.InProgress &&
+          currentStatus !== FulfillmentStageStatus.Waiting &&
+          currentStatus !== FulfillmentStageStatus.Rework
+        ) {
           throw new BadRequestException(
-            `Action 'rework-back' chỉ hợp lệ từ 'in-progress' (current=${currentStatus}).`,
+            `Action 'rework-back' không hợp lệ từ trạng thái '${currentStatus}'.`,
           );
         }
         if (!target) throw new BadRequestException('Field `target` bắt buộc khi rework-back.');

@@ -122,13 +122,23 @@ export default function PrintWorkshopView() {
     const status = printStatusOf(row);
     if (status === FulfillmentStageStatus.Waiting || status === FulfillmentStageStatus.Rework) {
       return (
-        <Button
-          size="sm"
-          className="whitespace-nowrap"
-          onClick={() => void doTransition(row._id, FulfillmentTransitionAction.Start)}
-        >
-          Bắt đầu
-        </Button>
+        <div className="flex items-center gap-1">
+          <Button
+            size="sm"
+            className="whitespace-nowrap"
+            onClick={() => void doTransition(row._id, FulfillmentTransitionAction.Start)}
+          >
+            Bắt đầu
+          </Button>
+          <Button
+            size="sm"
+            variant="destructive"
+            className="whitespace-nowrap"
+            onClick={() => setReworkOrder(row)}
+          >
+            Báo lỗi
+          </Button>
+        </div>
       );
     }
     if (status === FulfillmentStageStatus.InProgress) {

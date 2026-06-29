@@ -45,7 +45,7 @@ export const PERMISSION_CATALOG: PermissionItem[] = [
   { code: 'page.fulfillment_my_tasks', label: 'Task của tôi (fulfillment worker)', group: 'page' },
   { code: 'page.fulfillment_team',     label: 'Quản lý team fulfillment',          group: 'page' },
   { code: 'page.fulfillment_stats',    label: 'Stats fulfillment',                 group: 'page' },
-  { code: 'page.scan_error',           label: 'Quét mã lỗi (workshop scan)',       group: 'page' },
+  { code: 'page.scan_error',           label: 'Quét mã (workshop scan)',           group: 'page' },
 
   // ─── Order actions ──────────────────────────────────────────────
   { code: 'order.import',              label: 'Import đơn hàng',           group: 'order' },

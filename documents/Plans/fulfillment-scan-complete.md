@@ -1,7 +1,7 @@
 # Kế hoạch — Quét barcode → Hoàn thành nhanh stage trên Fulfillment My Tasks
 
-> **Status:** Draft — chờ implement
-> **Page áp dụng:** `apps/web/src/pages/fulfillment/my-tasks/index.tsx`
+> **Status:** ⚠️ Đã triển khai theo hướng KHÁC (2026-06-29) — user chọn **cải tiến page `/orders/scan-error` sẵn có** thay vì thêm modal trên `/fulfillment/my-tasks`. Xem `FulfillmentScanActionDialog.tsx` + mục §1b trong [`ScanError.md`](../FunctionDescription/ScanError.md). Plan này giữ làm tham chiếu quyết định nghiệp vụ (auto start+complete, 2-Enter, block non-task). Khác biệt: non-task **chặn cả Báo lỗi** (user chốt lại), và CHƯA tách helper `scanNormalize.ts`/`ScanModeToggle.tsx`.
+> **Page áp dụng (gốc):** `apps/web/src/pages/fulfillment/my-tasks/index.tsx`
 > **Liên quan:** [`documents/FunctionDescription/ScanError.md`](../FunctionDescription/ScanError.md) (đã có pattern scan tương tự cho gán lỗi), [`documents/FunctionDescription/FulfillmentWorkflow.md`](../FunctionDescription/FulfillmentWorkflow.md) (state machine 7 stage)
 
 ---

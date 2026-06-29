@@ -11,17 +11,19 @@ import {
 } from 'lucide-react';
 import { Navigate } from 'react-router-dom';
 import { toast } from 'sonner';
-import type { ProductionOrder } from 'shared';
+import type { FulfillmentStage, ProductionOrder } from 'shared';
 
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { PATHS } from '@/constants/paths';
 import { usePermission } from '@/hooks/usePermission';
 import { RepositoryRemote } from '@/services';
+import { useAuthStore } from '@/store/authStore';
 import { useWorkshopConfigStore } from '@/store/workshopConfigStore';
 import { cn } from '@/utils/cn';
 
 import { OrderErrorScanDialog } from './OrderErrorScanDialog';
+import { FulfillmentScanActionDialog } from './FulfillmentScanActionDialog';
 
 const MAX_HISTORY = 10;
 const MODE_STORAGE_KEY = 'scan-error-mode';
@@ -60,10 +62,19 @@ export default function OrdersScanErrorPage() {
     return <Navigate to={PATHS.ORDERS} replace />;
   }
 
+  // User Fulfillment → có fulfillmentStage → bật chế độ "Hoàn thành công đoạn".
+  // User không có stage (admin/support…) → giữ luồng gán lỗi như cũ.
+  const profile = useAuthStore((s) => s.profile);
+  const myStage = profile?.fulfillmentStage as FulfillmentStage | undefined;
+  const myFactoryId = profile?.factoryId;
+
   const inputRef = useRef<HTMLInputElement | null>(null);
   const [value, setValue] = useState('');
   const [loading, setLoading] = useState(false);
   const [order, setOrder] = useState<ScannedOrder | null>(null);
+  // Khi user Fulfillment bấm "Báo lỗi" trong dialog công đoạn → chuyển sang
+  // dialog gán lỗi cho cùng đơn đó.
+  const [errorMode, setErrorMode] = useState(false);
   const [history, setHistory] = useState<HistoryEntry[]>([]);
   const [mode, setMode] = useState<ScanMode>(() => {
     if (typeof window === 'undefined') return 'barcode';
@@ -158,8 +169,23 @@ export default function OrdersScanErrorPage() {
     [order, pushHistory],
   );
 
+  const onCompleted = useCallback(
+    (summary: { stageLabel: string }) => {
+      if (!order) return;
+      pushHistory({
+        id: `${Date.now()}`,
+        productionId: order.productionId,
+        at: new Date(),
+        status: 'success',
+        message: `Hoàn thành ${summary.stageLabel}`,
+      });
+    },
+    [order, pushHistory],
+  );
+
   const onClose = useCallback(() => {
     setOrder(null);
+    setErrorMode(false);
     // re-focus input handled by useEffect khi order = null
   }, []);
 
@@ -180,9 +206,11 @@ export default function OrdersScanErrorPage() {
           <ScanLine size={20} />
         </div>
         <div>
-          <h1 className="text-xl font-semibold">Quét mã lỗi</h1>
+          <h1 className="text-xl font-semibold">{myStage ? 'Quét hoàn thành / báo lỗi' : 'Quét mã'}</h1>
           <p className="text-sm text-muted-foreground">
-            Cắm máy quét USB → click vào ô input → quét barcode để mở dialog gán lỗi.
+            {myStage
+              ? 'Cắm máy quét USB → quét barcode. Nếu đơn ở công đoạn của bạn → Enter để Hoàn thành, hoặc bấm Báo lỗi.'
+              : 'Cắm máy quét USB → click vào ô input → quét barcode để mở dialog gán lỗi.'}
           </p>
         </div>
       </div>
@@ -328,9 +356,19 @@ export default function OrdersScanErrorPage() {
         )}
       </div>
 
-      {order && (
-        <OrderErrorScanDialog order={order} onClose={onClose} onSaved={onSaved} />
-      )}
+      {order &&
+        (myStage && !errorMode ? (
+          <FulfillmentScanActionDialog
+            order={order}
+            myStage={myStage}
+            myFactoryId={myFactoryId}
+            onClose={onClose}
+            onCompleted={onCompleted}
+            onReportError={() => setErrorMode(true)}
+          />
+        ) : (
+          <OrderErrorScanDialog order={order} onClose={onClose} onSaved={onSaved} />
+        ))}
     </div>
   );
 }

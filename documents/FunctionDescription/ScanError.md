@@ -1,9 +1,23 @@
 # Scan barcode → Gán lỗi nhanh — Function Description
 
-> **File FE:** `apps/web/src/pages/orders/scan-error/index.tsx` (page) + `OrderErrorScanDialog.tsx` (modal)
+> **File FE:** `apps/web/src/pages/orders/scan-error/index.tsx` (page) + `OrderErrorScanDialog.tsx` (modal gán lỗi) + `FulfillmentScanActionDialog.tsx` (modal hoàn thành/báo lỗi cho công nhân Fulfillment)
 > **File BE:** `apps/api/src/modules/order/order.controller.ts` + `order.service.ts → getByProductionId()`
 > **Route FE:** `/orders/scan-error`
-> **API:** `GET /v1/orders/by-production-id/:code`
+> **API:** `GET /v1/orders/by-production-id/:code`, `POST /v1/orders/:id/fulfillment-transition`
+
+---
+
+## 1b. Chế độ công nhân Fulfillment (quét → Hoàn thành / Báo lỗi)
+
+Khi user có `profile.fulfillmentStage` (công nhân Fulfillment), page chuyển sang luồng thao tác công đoạn thay vì gán lỗi thuần:
+
+- Quét/tra cứu đơn → render `FulfillmentScanActionDialog` (thay vì `OrderErrorScanDialog`).
+- **Đúng task** (`order.currentFulfillmentStage === myStage` **&&** `order.factoryId === profile.factoryId` **&&** status ∈ {waiting, in-progress, rework}): hiển thị chi tiết + badge trạng thái. **Enter = Hoàn thành** — nếu đang chờ/làm lại thì tự `start` rồi `complete` (2 BE call tuần tự); nếu đang làm thì `complete`. Có nút **Báo lỗi** → page set `errorMode=true` → mở `OrderErrorScanDialog` cho cùng đơn (giữ flow gán lỗi + rework-back cũ).
+- **Không phải task** (khác stage / khác xưởng / chưa vào fulfillment / đã done ở stage này): vẫn hiển thị chi tiết + banner đỏ nêu lý do, **chặn mọi thao tác** (không Hoàn thành, không Báo lỗi). Enter = đóng để quét tiếp.
+- Guard double-submit bằng `savingRef`. Sau khi xong → `onClose` reset `order` + `errorMode` → input tự re-focus để quét đơn kế tiếp; append lịch sử "Hoàn thành <stage>".
+- User KHÔNG có stage (admin/support…) → giữ nguyên luồng gán lỗi (`OrderErrorScanDialog`) như mục dưới.
+
+Reuse 100% endpoint cũ (`by-production-id` + `fulfillment-transition` start/complete/rework-back) — không thêm BE. Liên quan: [`FulfillmentWorkflow.md`](FulfillmentWorkflow.md).
 
 ---
 
