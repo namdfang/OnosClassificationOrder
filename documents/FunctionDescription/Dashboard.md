@@ -30,6 +30,7 @@ Tổng quan đơn theo kỳ thời gian:
   - **Lọc theo xưởng**: dropdown "Tất cả xưởng" + từng xưởng (build từ distinct `sizeMatrix[].factoryId`). Lọc client-side; chọn "Tất cả" thì cộng dồn qua mọi xưởng theo type.
   - **Khóa xưởng theo role**: user gắn 1 xưởng (`profile.factoryId`, không thuộc SuperAdmin/Admin/Manager/SupportManager) → `lockedFactoryId` ép bảng chỉ hiển thị xưởng của họ, ẩn dropdown (thay bằng badge tên xưởng). Admin/Manager/Support chọn được mọi xưởng.
   - Dữ liệu từ field mới `sizeMatrix` của `getDashboard` (group sẵn theo factory × type × size ở BE) — không gọi API riêng.
+  - **Nút "Xuất Excel"** (`buildSizeMatrixWorkbook` trong `pages/home/exportOrders.ts`) — xuất đúng bảng đang xem (theo xưởng đã lọc) ra `.xlsx`: dòng tiêu đề (LỆNH SẢN XUẤT — <xưởng> — <khoảng ngày>), header `Sản phẩm | <size…> | Tổng`, dòng cuối = tổng cột. Ô 0 để trống. Reuse `downloadWorkbook`.
 - Bảng nhóm theo **production type** (expand size / mockup / duplicate)
 - Card **Top khách hàng đặt nhiều**
 - Bộ lọc time range + search type + search user

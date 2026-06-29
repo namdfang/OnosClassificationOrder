@@ -6,6 +6,7 @@ import {
   ChevronsUp,
   Crown,
   DollarSign,
+  Download,
   Factory,
   Medal,
   Package,
@@ -25,6 +26,7 @@ import { RepositoryRemote } from '@/services';
 import { handleAxiosError } from '@/utils';
 import { useAuthStore } from '../../store/authStore';
 import { usePermission } from '@/hooks/usePermission';
+import { buildSizeMatrixWorkbook, downloadWorkbook } from './exportOrders';
 
 interface MockupSummary {
   url: string;
@@ -448,6 +450,7 @@ export default function OrderStatsTab() {
         loading={loading}
         isRefetching={isRefetching}
         lockedFactoryId={lockedFactoryId}
+        dateRangeLabel={dateRangeLabel}
       />
 
       {/* Production type breakdown */}
@@ -1232,11 +1235,13 @@ function SizeMatrixTable({
   loading,
   isRefetching,
   lockedFactoryId,
+  dateRangeLabel,
 }: {
   sizeMatrix: SizeMatrixRow[];
   loading: boolean;
   isRefetching: boolean;
   lockedFactoryId?: string;
+  dateRangeLabel: string;
 }) {
   // Danh sách xưởng (distinct) để build dropdown.
   const factories = useMemo(() => {
@@ -1297,6 +1302,22 @@ function SizeMatrixTable({
     ? factories.find((f) => f.id === lockedFactoryId)?.name
     : undefined;
 
+  const handleExport = () => {
+    const factoryLabel = effectiveFactory
+      ? factories.find((f) => f.id === effectiveFactory)?.name || 'Xưởng'
+      : 'Tất cả xưởng';
+    const title = `LỆNH SẢN XUẤT — ${factoryLabel} — ${dateRangeLabel}`;
+    const wb = buildSizeMatrixWorkbook({ title, columns, rows, colTotals, grandTotal });
+    const slug = factoryLabel
+      .normalize('NFD')
+      .replace(/[̀-ͯ]/g, '')
+      .replace(/đ/gi, 'd')
+      .replace(/[^a-zA-Z0-9]+/g, '-')
+      .replace(/^-+|-+$/g, '')
+      .toLowerCase();
+    downloadWorkbook(`so-luong-theo-size_${slug || 'all'}.xlsx`, wb);
+  };
+
   return (
     <div
       className={cn(
@@ -1351,6 +1372,21 @@ function SizeMatrixTable({
               sản phẩm
             </span>
           )}
+          <button
+            type="button"
+            onClick={handleExport}
+            disabled={isEmpty}
+            title="Xuất bảng ra file Excel (.xlsx)"
+            className={cn(
+              'inline-flex items-center gap-1.5 h-8 px-3 text-xs rounded-md border transition-colors',
+              isEmpty
+                ? 'border-border text-muted-foreground/40 cursor-not-allowed'
+                : 'border-emerald-300 dark:border-emerald-700 text-emerald-700 dark:text-emerald-300 hover:bg-emerald-50 dark:hover:bg-emerald-500/10 cursor-pointer',
+            )}
+          >
+            <Download size={13} />
+            Xuất Excel
+          </button>
         </div>
       </div>
 

@@ -318,3 +318,42 @@ export function buildWorkbook(
 export function downloadWorkbook(filename: string, wb: XLSX.WorkBook) {
   XLSX.writeFile(wb, filename, { bookType: 'xlsx' });
 }
+
+export interface SizeMatrixExportRow {
+  type: string;
+  counts: Record<string, number>;
+  total: number;
+}
+
+/**
+ * Workbook cho bảng pivot "Số lượng theo size mỗi sản phẩm" (Dashboard /
+ * OrderStatsTab) — layout giống file lệnh sản xuất: 1 dòng tiêu đề, header
+ * `Sản phẩm | <size...> | Tổng`, mỗi dòng 1 type, dòng cuối là tổng cột.
+ * Ô = 0 để trống cho dễ đọc (giống dấu "–" trên UI).
+ */
+export function buildSizeMatrixWorkbook(params: {
+  title: string;
+  columns: string[];
+  rows: SizeMatrixExportRow[];
+  colTotals: Record<string, number>;
+  grandTotal: number;
+}): XLSX.WorkBook {
+  const { title, columns, rows, colTotals, grandTotal } = params;
+  const wb = XLSX.utils.book_new();
+
+  const aoa: (string | number)[][] = [];
+  aoa.push([title]);
+  aoa.push([]);
+  aoa.push(['Sản phẩm', ...columns, 'Tổng']);
+  for (const r of rows) {
+    aoa.push([r.type, ...columns.map((c) => r.counts[c] || ''), r.total]);
+  }
+  aoa.push(['Tổng', ...columns.map((c) => colTotals[c] || ''), grandTotal]);
+
+  const ws = XLSX.utils.aoa_to_sheet(aoa);
+  ws['!cols'] = [{ wch: 44 }, ...columns.map(() => ({ wch: 6 })), { wch: 9 }];
+  // Merge tiêu đề trải hết các cột.
+  ws['!merges'] = [{ s: { r: 0, c: 0 }, e: { r: 0, c: columns.length + 1 } }];
+  XLSX.utils.book_append_sheet(wb, ws, 'Size theo SP');
+  return wb;
+}
