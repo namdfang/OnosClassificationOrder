@@ -411,6 +411,8 @@ Cùng filter shape như `GET /v1/orders` (kế thừa `buildOrderListFilter` + `
 
 Sort `{ type:1, size:1, fabricType:1, createdAt:-1 }` để file Excel xuất ra đã nhóm sẵn.
 
+Sheet "Chi tiết đơn" resolve code → tên hiển thị qua workshop config store (`buildDetailRow`). Field multi-code `errorFile` (cột "File sửa lỗi") phải đi qua `normalizeCodes()` (flatten nested array `[["code"]]` + coerce string legacy) — MIRROR `MultiIconSelectCell`; nếu không, data lồng mảng sẽ resolve trượt và xuất ra raw code thay vì tên.
+
 ### 10.4 Endpoint chuyển xưởng
 
 | Method | Path | Body | Mô tả |

@@ -82,12 +82,32 @@ function formatDate(iso?: string): string {
   });
 }
 
+/**
+ * Chuẩn hóa value của field multi-code (errorFile) về `string[]` sạch — MIRROR
+ * logic `MultiIconSelectCell`: flatten nested array (`[["code"]]` từ data
+ * legacy/migrate) + coerce string đơn (legacy chưa migrate) → array. Thiếu
+ * bước này, code lồng mảng sẽ resolve trượt → export ra raw code thay vì tên.
+ */
+function normalizeCodes(value: unknown): string[] {
+  if (value == null) return [];
+  if (typeof value === 'string') return value.trim() ? [value.trim()] : [];
+  if (Array.isArray(value)) {
+    return (value as unknown[])
+      .flat(2)
+      .filter((s): s is string => typeof s === 'string' && s.trim().length > 0)
+      .map((s) => s.trim());
+  }
+  return [];
+}
+
 function buildDetailRow(o: ExportableOrder, ctx: ExportContext): (string | number)[] {
   const resolveName = (cat: WorkshopConfigCategory, code?: string) =>
     code ? ctx.resolve(cat, code)?.name || code : '';
-  /** Multi-code field (vd errorFile array) → join name bằng dấu phẩy. */
-  const resolveNames = (cat: WorkshopConfigCategory, codes?: string[]) =>
-    codes && codes.length > 0 ? codes.map((c) => resolveName(cat, c)).join(', ') : '';
+  /** Multi-code field (vd errorFile) → normalize shape rồi join name bằng dấu phẩy. */
+  const resolveNames = (cat: WorkshopConfigCategory, value?: unknown) => {
+    const codes = normalizeCodes(value);
+    return codes.length > 0 ? codes.map((c) => resolveName(cat, c)).join(', ') : '';
+  };
 
   // Workshop_config category codes (string literal) — keep in sync with the
   // shared enum. Using literals avoids the additional import.
