@@ -64,6 +64,10 @@ export type WorkshopOrderRow = {
   designerReworkAt?: string;
   designerRejectedReason?: string;
   designerReworkCount?: number;
+
+  // Fulfillment — dùng cho cột action stage In trên trang Fulfillment print.
+  currentFulfillmentStage?: string | null;
+  fulfillmentStages?: Record<string, ({ status?: string } & Record<string, unknown>) | undefined>;
 };
 
 const DESIGNER_STATUS_META: Record<

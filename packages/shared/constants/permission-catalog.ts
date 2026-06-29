@@ -200,6 +200,15 @@ export const DEFAULT_ROLE_PERMISSIONS: Partial<Record<RoleType, string[]>> = {
     'order.field.productionError.view',     'order.field.productionError.edit',
     'order.field.productionErrorNote.view', 'order.field.productionErrorNote.edit',
     'order.field.productionErrorSource.view', 'order.field.productionErrorSource.edit',
+    // Stage In (print) xem bảng đơn admin-like → cần đủ view các cột còn lại
+    // (chỉ XEM, không edit). Xem documents/Plans/PrintStage-AdminTableView.md §B.
+    'order.field.toolResult.view',
+    'order.field.errorFile.view',
+    'order.field.errorFileNote.view',
+    'order.field.assignee.view',
+    'order.field.assigneeNote.view',
+    'order.field.designerStatus.view',
+    'order.log.view',
     // 5-stage workflow transitions on own task.
     'fulfillment.task.transition',
     // Quét barcode để gán lỗi nhanh.

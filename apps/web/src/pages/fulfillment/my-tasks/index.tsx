@@ -50,6 +50,7 @@ import { cn } from '@/utils/cn';
 
 import { FulfillmentTaskCard } from './FulfillmentTaskCard';
 import { ReworkBackDialog } from './ReworkBackDialog';
+import PrintWorkshopView from './PrintWorkshopView';
 
 /**
  * Kanban 4 cột cho user Fulfillment — đồng bộ visual + UX với
@@ -183,7 +184,18 @@ function sizeRank(raw?: string): number {
   return SIZE_RANK[raw.trim().toLowerCase()] ?? 99;
 }
 
+/**
+ * Dispatcher theo stage: user "In" (print) dùng bảng admin-like
+ * (`PrintWorkshopView`); các stage khác dùng kanban (`FulfillmentKanbanView`).
+ * Chỉ gọi `useAuthStore` rồi rẽ nhánh → không vi phạm Rules of Hooks.
+ */
 export default function FulfillmentMyTasksPage() {
+  const myStage = useAuthStore((s) => s.profile)?.fulfillmentStage as FulfillmentStage | undefined;
+  if (myStage === FulfillmentStage.Print) return <PrintWorkshopView />;
+  return <FulfillmentKanbanView />;
+}
+
+function FulfillmentKanbanView() {
   const profile = useAuthStore((s) => s.profile);
   const myStage = profile?.fulfillmentStage as FulfillmentStage | undefined;
   // Admin/Manager/SupportManager (= override roles ở BE) → thấy thêm column

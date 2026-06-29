@@ -304,6 +304,8 @@ export const GetProductionOrdersZod = PageQueryZod.extend({
   errorFile: z.string().optional(),
   /** Exact match (CSV) — used by the factory tab product filter. */
   type: z.string().optional(),
+  /** Exact match (CSV) — lọc theo SKU khách (bảng phẳng trang "In"). */
+  userSku: z.string().optional(),
   /** Comma-separated workshop_config codes for fabric_type. */
   fabricType: z.string().optional(),
   /** Comma-separated workshop_config codes for tool_result. */
@@ -348,6 +350,19 @@ export const GetProductionOrdersZod = PageQueryZod.extend({
    */
   printStage: z.enum(['printed', 'printing', 'not-printed']).optional(),
 
+  /**
+   * Lọc theo trạng thái stage Fulfillment (dùng cho bảng trang "In" admin-view
+   * — xem FulfillmentWorkflow.md §4.5). Stage suy từ `user.fulfillmentStage`
+   * (mặc định print). `watching` cần userId (= assignee context) để elemMatch
+   * timeline rework-back của chính user.
+   *   waiting / in-progress / rework — currentFulfillmentStage = stage & status tương ứng.
+   *   done                            — stage đã completedAt + đã rời stage.
+   *   watching                        — user đã rework-back, đang chờ quay lại.
+   */
+  fulfillmentStatus: z
+    .enum(['waiting', 'in-progress', 'rework', 'done', 'watching'])
+    .optional(),
+
   // Date range on `orderAt` — thời gian khách lên đơn (yyyy-mm-dd). Tên giữ
   // là `createdFrom/createdTo` để URL/bookmark cũ không vỡ. Designer/Fulfillment
   // có 7-day window server-side mặc định; truyền 2 field này sẽ override.
@@ -380,6 +395,21 @@ export const GetGroupedProductionOrdersResZod = PageResZod.extend({
 });
 export class GetGroupedProductionOrdersResDto extends createZodDto(
   extendApi(GetGroupedProductionOrdersResZod),
+) {}
+
+// Đếm số đơn theo 5 trạng thái stage Fulfillment (bảng trang "In" admin-view).
+export const FulfillmentStatusCountsResZod = ResZod.extend({
+  data: z.object({
+    all: z.number(),
+    waiting: z.number(),
+    inProgress: z.number(),
+    rework: z.number(),
+    done: z.number(),
+    watching: z.number(),
+  }),
+});
+export class FulfillmentStatusCountsResDto extends createZodDto(
+  extendApi(FulfillmentStatusCountsResZod),
 ) {}
 
 //
@@ -931,6 +961,10 @@ export const WorkshopAvailableFiltersResZod = ResZod.extend({
     errorFile: FactoryFilterOptionZod.array(),
     /** Designer state — value = DesignerStatus, label hiển thị tiếng Việt. */
     designerStatus: FactoryFilterOptionZod.array(),
+    /** Tên sản phẩm (type) — value = label = type. Dùng cho bảng phẳng trang "In". */
+    type: FactoryFilterOptionZod.array().optional(),
+    /** SKU khách (userSku) — value = label = userSku. Dùng cho bảng phẳng trang "In". */
+    userSku: FactoryFilterOptionZod.array().optional(),
   }),
 });
 export class WorkshopAvailableFiltersResDto extends createZodDto(

@@ -283,6 +283,35 @@ Thêm vào group "Workflow":
 { key: PATHS.FULFILLMENT_MY_TASKS, label: 'Task Fulfillment', perm: 'page.fulfillment_my_tasks' }
 ```
 
+### 4.5 Stage In (print) — bảng admin-view thay kanban
+
+> Plan gốc: `documents/Plans/PrintStage-AdminTableView.md`.
+
+Riêng user **In** (`role=Fulfillment`, `fulfillmentStage='print'`) **KHÔNG** dùng kanban như các stage khác, mà dùng **bảng phẳng admin-like** (`PrintOrderTable` — file riêng, KHÔNG đụng `OrderTableWorkshop`) để thấy **tất cả đơn mọi xưởng** (gồm đơn lỗi / `toolResultNote != 'ok'` / chưa vào pipeline).
+
+- **Dispatcher** `pages/fulfillment/my-tasks/index.tsx`: nếu `myStage === FulfillmentStage.Print` → render `PrintWorkshopView`; còn lại render `FulfillmentKanbanView` (kanban cũ, đổi tên từ component cũ). Dispatcher chỉ gọi `useAuthStore` rồi rẽ nhánh → không vi phạm Rules of Hooks.
+- **`PrintWorkshopView`** (`pages/fulfillment/my-tasks/PrintWorkshopView.tsx`): thin orchestrator — giữ logic transition + `ReworkBackDialog` + `reloadToken`, render `<PrintOrderTable extraRowAction reloadToken>`.
+  - Action chỉ hiện khi `row.currentFulfillmentStage === 'print'` **và** `row.factoryId === user.factoryId` (khớp BE transition guard — đơn xưởng khác chỉ xem, không thao tác).
+  - Contextual theo `fulfillmentStages.print.status`: `waiting`/`rework` → **Bắt đầu**; `in-progress` → **Hoàn thành** + **Báo lỗi** (mở `ReworkBackDialog`, target chỉ có `designer` vì print là stage đầu).
+  - Sau transition → bump `reloadToken` để `PrintOrderTable` refetch (bảng + count).
+- **`PrintOrderTable`** (`pages/fulfillment/my-tasks/PrintOrderTable.tsx`): bảng **phẳng KHÔNG group sản phẩm** (bỏ expand), self-contained:
+  - Data từ `GET /v1/orders` với `sort=grouped` → sort ưu tiên **type → size → fabric → inProductionAt**. Pagination theo **đơn** (default size 50).
+  - **Thanh chips trạng thái (hàng ngang)**: 6 chip `Tất cả / Đang chờ / Đang làm / Làm lại / Đã xong / Đang chờ quay lại` + số đếm (từ `GET /orders/fulfillment-status-counts`). Click → `statusFilter` → **cả list + facet dropdowns đều narrow theo status** (data qua `getOrders` + facets qua `getWorkshopAvailableFilters`, đều nhận `fulfillmentStatus`). Counts KHÔNG kèm status (đếm đủ 5).
+  - **Filter bar** (`OrderFilterBar`): search + date + **Tên sản phẩm** (`type`) + **Khách hàng** (`userSku`) dạng dropdown có count + các facet workshop (loại vải/máy/trạng thái in/kết quả tool/note/file lỗi/người thực hiện/TT designer/lỗi xưởng).
+  - Cột = `WORKSHOP_COLS` (theo view-permission). Cột action **sticky phải** (prop `extraRowAction`). Highlight no-tool. `reloadToken` prop → ép refetch.
+  - **Chế độ phím ↑↓** (toggle "Chế độ phím ↑↓" cạnh chips, state `keyboardMode` — **mặc định On**): bật → nghe `keydown` window, phím `↑`/`↓` di chuyển `cursorIndex` trong trang + copy `productionId` dòng đó vào clipboard (`navigator.clipboard`). Dòng đang focus có ring + auto `scrollIntoView`. Dòng đã copy hiện ✓ (`copiedIds: Set<_id>`, render `CheckCircle2` cạnh checkbox). Bỏ qua khi target là input/textarea/select. **Persistence**: `copiedIds` reset khi đổi filter/search/date/status/facet (effect KHÔNG phụ thuộc `page`/`reloadToken` → sang trang hoặc reload sau thao tác vẫn giữ ✓); F5 reset tự nhiên. `cursorIndex` reset thêm khi đổi trang.
+  - **Chọn nhiều + bulk CHUYỂN TRẠNG THÁI** (không phải bulk-edit field): checkbox chỉ tick được đơn **hợp lệ** (`isRowSelectable` = đơn của mình + stage In + status chờ/làm lại/đang làm; đơn khác bị disable). Toolbar (`renderBulkBar`) hiện 2 nút riêng **Bắt đầu** (cho đơn chờ/làm lại) + **Hoàn thành** (cho đơn đang làm). Nếu chọn lẫn trạng thái → **popup xác nhận** trước khi chuyển (chỉ áp cho subset hợp lệ với nút đó, số còn lại bỏ qua). Bulk loop `transition` song song → toast gộp.
+- **BE filter + count**:
+  - `GetProductionOrdersZod.fulfillmentStatus` (enum 5 giá trị) + `userSku` (CSV filter). `OrderService.applyFulfillmentStatusFilter()` mirror `FulfillmentTaskService.applyTabFilter` (không ép scope factory/ready; `watching` dùng userId elemMatch timeline). Áp ở `getOrders` + `getOrdersGroupedByType` + `getFulfillmentStatusCounts`.
+  - `GET /v1/orders/fulfillment-status-counts` (`@Auth(ORDER_VIEW_ROLES)`) trả `{all, waiting, inProgress, rework, done, watching}` (all = tổng đơn theo filter, không kèm status).
+  - `getWorkshopAvailableFilters` thêm facet `type` + `userSku` (cho dropdown). `buildOrderListFilter` thêm filter `userSku`.
+- **Visibility BE (admin-like)**: helper `OrderService.isPrintAdminView(roleName, fulfillmentStage)` (true khi Fulfillment + print) bỏ qua `readyForFulfill` + scope factory + window 7 ngày. Áp tại:
+  - `buildVisibilityFilter()` → cover `GET /orders` + `GET /orders/grouped` + `GET /orders/workshop-filters` + `GET /orders/status-overview` + `GET /orders/fulfillment-status-counts`.
+  - `getDashboard()` + `getFactoryOverview()` (Dashboard tab Stats + Factory).
+  - Controller truyền `user?.fulfillmentStage` cho các endpoint trên (gồm `GET /orders`).
+  - **Ngoài scope** (giữ scope Fulfillment cũ): `getErrorLog`, `getByProductionId`, `getDesignerBreakdown`.
+- **Permission**: preset `Fulfillment` được bổ sung các `order.field.*.view` còn thiếu (`toolResult`, `errorFile`, `errorFileNote`, `assignee`, `assigneeNote`, `designerStatus`) + `order.log.view` để hiển thị đủ 16 cột + nút Lịch sử (chỉ **view**, không mở edit). `RoleService.onModuleInit` tự sync khi boot.
+
 ---
 
 ## 5. Backend logic

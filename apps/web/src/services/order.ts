@@ -63,6 +63,10 @@ const getWorkshopFilters = (query: string = '') => {
   return callApi(`/${CONFIG.API_VERSION}/orders/workshop-filters${query}`, 'get');
 };
 
+const getFulfillmentStatusCounts = (query: string = '') => {
+  return callApi(`/${CONFIG.API_VERSION}/orders/fulfillment-status-counts${query}`, 'get');
+};
+
 const getFactoryOverview = (query: string = '') => {
   return callApi(`/${CONFIG.API_VERSION}/orders/factory-overview${query}`, 'get');
 };
@@ -140,6 +144,7 @@ export const order = {
   getImportSummary,
   getOrdersGrouped,
   getWorkshopFilters,
+  getFulfillmentStatusCounts,
   getFactoryOverview,
   transferOrder,
   bulkTransferOrders,

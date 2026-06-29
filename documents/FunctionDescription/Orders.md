@@ -9,7 +9,7 @@
 > **File BE:** `apps/api/src/modules/order/`
 > **Route:** `/orders`
 > **API:**
->  - `GET /v1/orders` · `GET /v1/orders/:id` · `GET /v1/orders/grouped` · `GET /v1/orders/workshop-filters` · `GET /v1/orders/import-summary` · `GET /v1/orders/error-log`
+>  - `GET /v1/orders` · `GET /v1/orders/:id` · `GET /v1/orders/grouped` · `GET /v1/orders/workshop-filters` · `GET /v1/orders/fulfillment-status-counts` · `GET /v1/orders/import-summary` · `GET /v1/orders/error-log`
 >  - `GET /v1/orders/export` (full-list, không phân trang — xem `Dashboard.md §10.3`)
 >  - `GET /v1/orders/factory-overview` (xem `Dashboard.md §10.2`)
 >  - `GET /v1/orders/designer-breakdown` (KPI panel Designer — xem `DesignerTaskWorkflow.md §2.5`)
@@ -198,6 +198,7 @@ Sau import (hoặc khi đổi date), `ImportOrderTab` gọi endpoint này để 
 | GET | `/v1/orders/status-overview` | Aggregation (xem `Dashboard.md` Tab B) |
 | GET | `/v1/orders/factory-overview` | Aggregation (xem `Dashboard.md` Tab C) |
 | GET | `/v1/orders/export` | Trả toàn bộ đơn theo filter, **không phân trang**. Dùng cho Excel export Tab C. |
+| GET | `/v1/orders/fulfillment-status-counts` | Đếm đơn theo 5 trạng thái stage Fulfillment (waiting/in-progress/rework/done/watching) — dùng cho thanh filter trang "In". Xem `FulfillmentWorkflow.md §4.5`. |
 | GET | `/v1/orders/import-summary?date=YYYY-MM-DD` | Bảng tổng hợp `(type, size, fabricType)` theo ngày import. Phase 5. |
 | GET | `/v1/orders/:id/logs` | Audit timeline 1 order (xem `OrderLog.md`) |
 | GET | `/v1/orders/error-log` | Tab "Nhật ký bù lỗi" — đơn đang chờ xử lý lỗi (productionError set, toolResultNote≠ok). Sort theo `productionFirstErrorAt` ASC. Trả thêm `byUrgency`. Visibility theo role (Fulfillment scope factory, Designer scope assignee). Xem `§14`. |
@@ -498,6 +499,15 @@ Render tab tương ứng. User chỉ có 1 trong các quyền → 1 tab; có nhi
 | 16 | factoryMachine | badge `factory.name` + badge `machineType.name` (gộp 2 dòng) | luôn |
 
 `WORKSHOP_COLS` được reuse bởi cả Tab `OrderTableWorkshop` (apps/web/src/pages/orders) **và** Dashboard Tab C `OrderFactoryTab`. Dashboard Tab C thêm 1 cột "Xưởng (đang / gốc)" ở đầu để hiển thị badge transfer.
+
+> **Trang Fulfillment "In"** dùng bảng **phẳng riêng** `PrintOrderTable` (KHÔNG group sản phẩm), KHÔNG reuse `OrderTableWorkshop`. Lấy data từ `GET /v1/orders` (`sort=grouped`). Xem `FulfillmentWorkflow.md §4.5`.
+
+`WorkshopOrderRow` có thêm field optional `currentFulfillmentStage` + `fulfillmentStages` để consumer (PrintOrderTable) quyết định hiển thị action theo trạng thái stage.
+
+**DTO / endpoint liên quan** (dùng bởi `PrintOrderTable`):
+- `GetProductionOrdersDto.fulfillmentStatus` (enum `waiting|in-progress|rework|done|watching`) + `userSku` (CSV filter) — `buildOrderListFilter` + `applyFulfillmentStatusFilter` áp vào `getOrders`/`getOrdersGroupedByType`.
+- `GET /v1/orders/fulfillment-status-counts` → `{all, waiting, inProgress, rework, done, watching}`.
+- `getWorkshopAvailableFilters` thêm facet `type` + `userSku` (dropdown Tên sản phẩm + Khách hàng).
 
 **"No tool" row highlight** (tô nền xanh dương nhạt) — hook `useIsNoTool()` (`apps/web/src/hooks/useIsNoTool.ts`) + class `NO_TOOL_ROW_CLASS = 'bg-sky-50/70 dark:bg-sky-500/10'`. Logic: `toolResult` set + resolve qua `workshopConfigStore` + `name` KHÔNG bắt đầu bằng "Có" (đồng bộ với BE convention ở `order.service.ts:1706` `toolHasCodes` regex `^Có`). Áp dụng tại `<TableRow>` của 4 bảng order:
 - `OrderTableWorkshop` (priority: selected > heaviest-combo > no-tool tint).

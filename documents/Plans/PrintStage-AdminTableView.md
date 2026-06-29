@@ -17,7 +17,7 @@
 | Vấn đề | Quyết định |
 |---|---|
 | Đẩy In→Ép | **Giữ nút action mỗi dòng**. Contextual đúng như card kanban hiện tại: `waiting/rework` → **Bắt đầu**; `in-progress` → **Hoàn thành** + **Báo lỗi**. Không đổi BE state machine. |
-| Phạm vi dữ liệu | **Tất cả đơn mọi xưởng** (bỏ scope factory + bỏ `readyForFulfill` + bỏ default 7 ngày cho riêng user In). |
+| Phạm vi dữ liệu | **Tất cả đơn mọi xưởng** (bỏ scope factory + bỏ `readyForFulfill` + bỏ default 7 ngày cho riêng user In). Áp cho **cả bảng đơn** (`/grouped` + `/workshop-filters`) **và Dashboard** (Stats + Trạng thái + Factory — xem BƯỚC A′). Tab Designer + Nhật ký bù lỗi + Quét mã lỗi: ngoài scope. |
 | Quyền edit | **Giữ nguyên** preset Fulfillment hiện tại (không mở edit thêm). |
 | Cột hiển thị | **Mở đủ 16 cột** = thêm `order.field.*.view` còn thiếu vào preset Fulfillment. |
 | UI | **Tái dùng `OrderTableWorkshop`** (thêm 2 prop optional, không phá admin). |
@@ -179,7 +179,66 @@ return this.orderService.getWorkshopAvailableFilters(
 );
 ```
 
-> **Cân nhắc (optional)**: nếu muốn user In xem admin-like ở **mọi** chỗ (vd `GET /orders` list, `getFactoryOverview`, `getDashboard`), cần áp `isPrintAdminView` ở các method đó nữa. **Trong scope plan này CHỈ cần `/grouped` + `/workshop-filters`** vì đó là 2 endpoint `OrderTableWorkshop` gọi. Các endpoint khác giữ nguyên (không gây lộ data ngoài ý muốn vì trang khác của user In không dùng).
+> **Dashboard**: user In cũng phải xem admin-like ở Dashboard → xem **BƯỚC A′** bên dưới.
+> Các endpoint KHÁC ngoài scope (giữ nguyên scope Fulfillment cũ): `getErrorLog` (tab Nhật ký bù lỗi), `getByProductionId` (quét mã lỗi), `getDesignerBreakdown` (KPI designer — Fulfillment không có quyền). Nếu sau này muốn mở thì áp cùng pattern `isPrintAdminView`.
+
+---
+
+### BƯỚC A′ — Backend: mở Dashboard admin-like cho user In
+
+Dashboard (route FE `/` hoặc `/home`) có 3 tab lấy data scope theo Fulfillment. Áp cùng helper `isPrintAdminView()` (đã định nghĩa ở A2).
+
+**A′1. Stats tab — `getDashboard` (`order.service.ts:919`, branch L933)**
+- Thêm param `fulfillmentStage?`:
+  ```ts
+  async getDashboard(dto, roleName?, fulfillmentStage?: string) { ... }
+  ```
+- Sửa branch L933:
+  ```ts
+  if (roleName === RoleType.Fulfillment && !this.isPrintAdminView(roleName, fulfillmentStage)) {
+    match.readyForFulfill = true;
+  }
+  ```
+- Controller `order.controller.ts:125`:
+  ```ts
+  return this.orderService.getDashboard(dto, user?.role?.name, user?.fulfillmentStage);
+  ```
+
+**A′2. Trạng thái tab — `getStatusOverview` (`order.service.ts:1296`)**
+- Method này áp scope qua `buildVisibilityFilter` (L1303) → chỉ cần **thread `fulfillmentStage`** vào (logic bypass đã có ở A2).
+- Thêm param `fulfillmentStage?` (param thứ 5) + truyền vào `buildVisibilityFilter(roleName, {...}, assigneeCode, fulfillmentFactoryId, fulfillmentStage)`.
+- Controller `order.controller.ts:137`:
+  ```ts
+  return this.orderService.getStatusOverview(
+    dto, user?.role?.name, user?._id ? String(user._id) : undefined,
+    user?.factoryId, user?.fulfillmentStage,            // ⬅️
+  );
+  ```
+
+**A′3. Factory tab — `getFactoryOverview` (`order.service.ts:1758`, branch L1765)**
+- Thêm param `fulfillmentStage?`:
+  ```ts
+  async getFactoryOverview(dto, roleName?, fulfillmentFactoryId?, fulfillmentStage?: string) { ... }
+  ```
+- Bọc nguyên branch Fulfillment L1765-1779 bằng guard:
+  ```ts
+  if (roleName === RoleType.Fulfillment && !this.isPrintAdminView(roleName, fulfillmentStage)) {
+    match.readyForFulfill = true;
+    if (fulfillmentFactoryId) {
+      match.$or = [{ factoryId: fulfillmentFactoryId }, { originalFactoryId: fulfillmentFactoryId }];
+    } else {
+      match.factoryId = '__no_factory__';
+    }
+  }
+  ```
+- Controller `order.controller.ts:222`:
+  ```ts
+  return this.orderService.getFactoryOverview(
+    dto, user?.role?.name, user?.factoryId, user?.fulfillmentStage,   // ⬅️
+  );
+  ```
+
+> **Ngoài scope (giữ nguyên):** `getErrorLog` (L3892, branch L3905/L3970), `getByProductionId` (L2885, branch L2908), `getDesignerBreakdown` (L3592, dùng `buildVisibilityFilter` L3600 — nhưng Fulfillment không có quyền gọi). Nếu muốn mở `errorLog`/`scan` cho user In thì áp cùng `isPrintAdminView`.
 
 ---
 
@@ -370,9 +429,11 @@ export default function PrintWorkshopView() {
 
 **E1. `documents/FunctionDescription/FulfillmentWorkflow.md`**: thêm mục mới (vd §4.5 "Print stage — admin table view"):
 - Trang In hiển thị `OrderTableWorkshop` (table, all-factory, all-status) thay kanban.
-- BE bypass visibility qua `isPrintAdminView()` ở `buildVisibilityFilter`, áp tại `/grouped` + `/workshop-filters`.
+- BE bypass visibility qua `isPrintAdminView()` ở `buildVisibilityFilter`, áp tại `/grouped` + `/workshop-filters` **và Dashboard** (`getDashboard` / `getStatusOverview` / `getFactoryOverview`).
 - Action stage chỉ hiện cho đơn `currentFulfillmentStage==='print'` + cùng factory; transition vẫn qua endpoint cũ.
 - Permission: thêm 6 `*.view` + `order.log.view` vào preset Fulfillment.
+
+**E1b. `documents/FunctionDescription/Dashboard.md`**: note user In (Fulfillment stage=print) xem Dashboard ở phạm vi admin-like (mọi xưởng, gồm đơn chưa ready) qua `isPrintAdminView()`; các stage Fulfillment khác giữ scope cũ.
 
 **E2. `documents/FunctionDescription/Orders.md`**: note `OrderTableWorkshop` nhận thêm prop optional `extraRowAction` / `extraActionLabel` / `reloadToken` (reuse bởi trang Fulfillment In). Cập nhật §10.2.
 
@@ -381,10 +442,11 @@ export default function PrintWorkshopView() {
 ## 3. Thứ tự implement đề xuất
 
 1. **B1** (catalog) — nhỏ, độc lập.
-2. **A2–A6** (BE visibility) — test bằng tài khoản In gọi `/grouped` thấy đơn lỗi/non-ok + xưởng khác.
-3. **C1–C2** (`OrderTableWorkshop` props) — chạy lại admin để chắc không hồi quy.
-4. **D1–D2** (branch + `PrintWorkshopView`).
-5. **E1–E2** (docs).
+2. **A2–A6** (BE visibility bảng đơn) — test tài khoản In gọi `/grouped` thấy đơn lỗi/non-ok + xưởng khác.
+3. **A′1–A′3** (BE Dashboard) — cùng helper `isPrintAdminView`, làm liền sau A vì dùng chung.
+4. **C1–C2** (`OrderTableWorkshop` props) — chạy lại admin để chắc không hồi quy.
+5. **D1–D2** (branch + `PrintWorkshopView`).
+6. **E1–E2** (docs).
 
 ---
 
@@ -394,6 +456,8 @@ export default function PrintWorkshopView() {
 - [ ] Tài khoản In gọi `GET /v1/orders/grouped` (mặc định today) → thấy **mọi xưởng**, gồm đơn `toolResultNote != 'ok'` và đơn `currentFulfillmentStage=null`.
 - [ ] `GET /v1/orders/workshop-filters` trả facet theo tập đơn admin-like (không bị cắt bởi readyForFulfill).
 - [ ] Stage Fulfillment khác (vd tài khoản Ép) gọi `/grouped` → **vẫn bị giới hạn cũ** (readyForFulfill + factory). (Đảm bảo chỉ print được mở.)
+- [ ] Tài khoản In mở Dashboard: tab **Stats** (`/dashboard`), **Trạng thái** (`/status-overview`), **Factory** (`/factory-overview`) → số liệu tính trên **tất cả đơn mọi xưởng** (gồm đơn chưa ready). So sánh với tài khoản admin cùng filter ngày → khớp.
+- [ ] Tài khoản Ép/QC/… mở Dashboard → **vẫn scope cũ** (readyForFulfill + factory).
 - [ ] `POST /fulfillment-transition` của user In trên đơn **xưởng khác** → 403 (BE guard). FE đã ẩn nút nên không gọi tới.
 
 ### FE

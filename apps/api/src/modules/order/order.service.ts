@@ -448,6 +448,114 @@ export class OrderService implements OnModuleInit {
    * không phải Mongo insert time hay marketplace order time. Áp đồng nhất với
    * sort key (xem `Orders.md` §7.0b).
    */
+  /**
+   * User "In" (role=Fulfillment, stage=print) xem bảng đơn + dashboard ở phạm
+   * vi admin-like: KHÔNG ép `readyForFulfill` / scope factory / window 7 ngày.
+   * Xem documents/Plans/PrintStage-AdminTableView.md.
+   */
+  private isPrintAdminView(roleName?: RoleType, fulfillmentStage?: string): boolean {
+    return roleName === RoleType.Fulfillment && fulfillmentStage === FulfillmentStage.Print;
+  }
+
+  /**
+   * Áp filter theo trạng thái stage Fulfillment vào `filter` (mutate). Mirror
+   * `FulfillmentTaskService.applyTabFilter` nhưng KHÔNG ép scope factory/ready
+   * (bảng trang "In" là admin-view). `watching` cần `userId` để elemMatch
+   * timeline rework-back của chính user. Dùng $and để không clobber $or sẵn có.
+   */
+  private applyFulfillmentStatusFilter(
+    filter: Record<string, unknown>,
+    status: 'waiting' | 'in-progress' | 'rework' | 'done' | 'watching',
+    stage?: string,
+    userId?: string,
+  ): void {
+    const stg = stage || FulfillmentStage.Print;
+    const pushAnd = (clause: Record<string, unknown>) => {
+      const and = (filter.$and as unknown[] | undefined) ?? [];
+      and.push(clause);
+      filter.$and = and;
+    };
+    switch (status) {
+      case 'waiting':
+        filter.currentFulfillmentStage = stg;
+        filter[`fulfillmentStages.${stg}.status`] = FulfillmentStageStatus.Waiting;
+        filter.designerStatus = { $ne: 'rework' };
+        break;
+      case 'in-progress':
+        filter.currentFulfillmentStage = stg;
+        filter[`fulfillmentStages.${stg}.status`] = FulfillmentStageStatus.InProgress;
+        break;
+      case 'rework':
+        filter.currentFulfillmentStage = stg;
+        filter[`fulfillmentStages.${stg}.status`] = FulfillmentStageStatus.Rework;
+        break;
+      case 'done':
+        filter[`fulfillmentStages.${stg}.completedAt`] = { $exists: true, $ne: null };
+        pushAnd({
+          $or: [
+            { currentFulfillmentStage: { $ne: stg } },
+            { currentFulfillmentStage: { $in: [null, undefined] } },
+          ],
+        });
+        break;
+      case 'watching':
+        filter.fulfillmentTimeline = {
+          $elemMatch: { stage: stg, action: 'rework-back', byUserId: userId ?? '__no_user__' },
+        };
+        pushAnd({
+          $or: [{ currentFulfillmentStage: { $ne: stg } }, { designerStatus: 'rework' }],
+        });
+        break;
+    }
+  }
+
+  /**
+   * Đếm số đơn theo 5 trạng thái stage Fulfillment (bảng trang "In"). Dùng
+   * cùng base filter với bảng (admin-view khi print) nhưng KHÔNG kèm
+   * `fulfillmentStatus` để đếm đủ cả 5.
+   */
+  async getFulfillmentStatusCounts(
+    dto: GetProductionOrdersDto,
+    roleName?: RoleType,
+    assigneeCode?: string,
+    fulfillmentFactoryId?: string,
+    fulfillmentStage?: string,
+  ): Promise<{
+    success: true;
+    data: {
+      all: number;
+      waiting: number;
+      inProgress: number;
+      rework: number;
+      done: number;
+      watching: number;
+    };
+  }> {
+    const baseDto = { ...dto, fulfillmentStatus: undefined } as GetProductionOrdersDto;
+    const base = this.buildOrderListFilter(
+      baseDto,
+      roleName,
+      assigneeCode,
+      fulfillmentFactoryId,
+      fulfillmentStage,
+    );
+    const statuses = ['waiting', 'in-progress', 'rework', 'done', 'watching'] as const;
+    const [all, waiting, inProgress, rework, done, watching] = await Promise.all([
+      // "Tất cả" = tổng đơn theo filter hiện tại (không kèm fulfillmentStatus).
+      this.orderModel.countDocuments(base),
+      ...statuses.map((s) => {
+        // Clone nông + clone riêng `$and` (nếu có) để pushAnd không mutate base.
+        // KHÔNG tạo `$and: []` rỗng — Mongo cấm `$and` mảng rỗng (lỗi với các
+        // status không thêm $and như waiting/in-progress/rework).
+        const f: Record<string, unknown> = { ...base };
+        if (Array.isArray(base.$and)) f.$and = [...(base.$and as unknown[])];
+        this.applyFulfillmentStatusFilter(f, s, fulfillmentStage, assigneeCode);
+        return this.orderModel.countDocuments(f);
+      }),
+    ]);
+    return { success: true, data: { all, waiting, inProgress, rework, done, watching } };
+  }
+
   private buildVisibilityFilter(
     roleName?: RoleType,
     dto?: GetProductionOrdersDto,
@@ -455,6 +563,8 @@ export class OrderService implements OnModuleInit {
     assigneeUserId?: string,
     /** = user.factoryId của Fulfillment — scope đơn ở factory này hoặc transfer từ factory này. */
     fulfillmentFactoryId?: string,
+    /** = user.fulfillmentStage — stage=print được mở admin-like. */
+    fulfillmentStage?: string,
   ): Record<string, unknown> {
     const filter: Record<string, unknown> = {};
 
@@ -476,18 +586,23 @@ export class OrderService implements OnModuleInit {
       filter.assignee = assigneeUserId || '__no_user__';
       if (hasDateOverride) filter.inProductionAt = buildRange();
     } else if (roleName === RoleType.Fulfillment) {
-      filter.inProductionAt = hasDateOverride ? buildRange() : { $gte: startOfWindow, $lte: endOfToday };
-      filter.readyForFulfill = true;
-      // Per-factory scope: thấy đơn đang ở xưởng mình HOẶC đơn đã transfer từ
-      // xưởng mình đi nơi khác (origin = mình). Nếu user chưa gán factoryId →
-      // trả empty thay vì rò rỉ data.
-      if (fulfillmentFactoryId) {
-        filter.$or = [
-          { factoryId: fulfillmentFactoryId },
-          { originalFactoryId: fulfillmentFactoryId },
-        ];
+      if (this.isPrintAdminView(roleName, fulfillmentStage)) {
+        // User In → xem như admin: chỉ áp date khi user chủ động truyền.
+        if (hasDateOverride) filter.inProductionAt = buildRange();
       } else {
-        filter.factoryId = '__no_factory__';
+        filter.inProductionAt = hasDateOverride ? buildRange() : { $gte: startOfWindow, $lte: endOfToday };
+        filter.readyForFulfill = true;
+        // Per-factory scope: thấy đơn đang ở xưởng mình HOẶC đơn đã transfer từ
+        // xưởng mình đi nơi khác (origin = mình). Nếu user chưa gán factoryId →
+        // trả empty thay vì rò rỉ data.
+        if (fulfillmentFactoryId) {
+          filter.$or = [
+            { factoryId: fulfillmentFactoryId },
+            { originalFactoryId: fulfillmentFactoryId },
+          ];
+        } else {
+          filter.factoryId = '__no_factory__';
+        }
       }
     } else if (hasDateOverride) {
       filter.inProductionAt = buildRange();
@@ -592,12 +707,14 @@ export class OrderService implements OnModuleInit {
     roleName?: RoleType,
     assigneeCode?: string,
     fulfillmentFactoryId?: string,
+    fulfillmentStage?: string,
   ): Record<string, unknown> {
     const filter: Record<string, unknown> = this.buildVisibilityFilter(
       roleName,
       dto,
       assigneeCode,
       fulfillmentFactoryId,
+      fulfillmentStage,
     );
     if (dto.search) {
       filter.$or = [
@@ -634,6 +751,7 @@ export class OrderService implements OnModuleInit {
     if (dto.errorFile) filter.errorFile = { $in: dto.errorFile.split(',').filter(Boolean) };
     // Factory tab filters — exact product name / fabric code / tool code.
     if (dto.type) filter.type = { $in: dto.type.split(',').filter(Boolean) };
+    if (dto.userSku) filter.userSku = { $in: dto.userSku.split(',').filter(Boolean) };
     if (dto.fabricType) filter.fabricType = { $in: dto.fabricType.split(',').filter(Boolean) };
     if (dto.toolResult) filter.toolResult = { $in: dto.toolResult.split(',').filter(Boolean) };
     if (dto.machineNumber) {
@@ -739,6 +857,7 @@ export class OrderService implements OnModuleInit {
     roleName?: RoleType,
     assigneeCode?: string,
     fulfillmentFactoryId?: string,
+    fulfillmentStage?: string,
   ): Promise<GetProductionOrdersResDto> {
     // [cache disabled] Re-enable by uncommenting the block below + the cache
     // write at the end of this method.
@@ -751,7 +870,16 @@ export class OrderService implements OnModuleInit {
     void roleName; // keep the var read so we can re-enable the cache key later
 
     const { page, limit, sort, order } = dto;
-    const filter = this.buildOrderListFilter(dto, roleName, assigneeCode, fulfillmentFactoryId);
+    const filter = this.buildOrderListFilter(
+      dto,
+      roleName,
+      assigneeCode,
+      fulfillmentFactoryId,
+      fulfillmentStage,
+    );
+    if (dto.fulfillmentStatus) {
+      this.applyFulfillmentStatusFilter(filter, dto.fulfillmentStatus, fulfillmentStage, assigneeCode);
+    }
 
     // Special sort mode `grouped` — keep orders of the same product clustered
     // (type → size → fabric, newest first within tie) so the workshop table
@@ -825,9 +953,19 @@ export class OrderService implements OnModuleInit {
     roleName?: RoleType,
     assigneeCode?: string,
     fulfillmentFactoryId?: string,
+    fulfillmentStage?: string,
   ): Promise<GetGroupedProductionOrdersResDto> {
     const { page, limit } = dto;
-    const filter = this.buildOrderListFilter(dto, roleName, assigneeCode, fulfillmentFactoryId);
+    const filter = this.buildOrderListFilter(
+      dto,
+      roleName,
+      assigneeCode,
+      fulfillmentFactoryId,
+      fulfillmentStage,
+    );
+    if (dto.fulfillmentStatus) {
+      this.applyFulfillmentStatusFilter(filter, dto.fulfillmentStatus, fulfillmentStage, assigneeCode);
+    }
 
     // 1) Count distinct types matching the filter (for pagination total).
     const totalAgg = await this.orderModel.aggregate([
@@ -919,6 +1057,7 @@ export class OrderService implements OnModuleInit {
   async getDashboard(
     dto: GetOrderDashboardDto,
     roleName?: RoleType,
+    fulfillmentStage?: string,
   ): Promise<GetOrderDashboardResDto> {
     // [cache disabled]
     // const cacheKey = `orders:dashboard:${Buffer.from(JSON.stringify(dto)).toString('base64')}`;
@@ -930,7 +1069,8 @@ export class OrderService implements OnModuleInit {
     const match: Record<string, unknown> = {};
     // Fulfillment chỉ xử lý đơn đã Ok (Designer đã đánh dấu) — apply ở mọi
     // aggregation để cards / breakdown / byUser cũng phản ánh đúng scope.
-    if (roleName === RoleType.Fulfillment) {
+    // User In (stage=print) xem admin-like → bỏ scope.
+    if (roleName === RoleType.Fulfillment && !this.isPrintAdminView(roleName, fulfillmentStage)) {
       match.readyForFulfill = true;
     }
     if (dto.startDate || dto.endDate) {
@@ -1298,6 +1438,7 @@ export class OrderService implements OnModuleInit {
     roleName?: RoleType,
     assigneeCode?: string,
     fulfillmentFactoryId?: string,
+    fulfillmentStage?: string,
   ): Promise<GetOrderStatusOverviewResDto> {
     // Build base match — same filters as list, including visibility rule.
     const baseMatch = this.buildVisibilityFilter(
@@ -1305,6 +1446,7 @@ export class OrderService implements OnModuleInit {
       { createdFrom: dto.createdFrom, createdTo: dto.createdTo } as GetProductionOrdersDto,
       assigneeCode,
       fulfillmentFactoryId,
+      fulfillmentStage,
     );
 
     if (dto.printStatus) baseMatch.printStatus = { $in: dto.printStatus.split(',').filter(Boolean) };
@@ -1759,10 +1901,12 @@ export class OrderService implements OnModuleInit {
     dto: GetFactoryOverviewDto,
     roleName?: RoleType,
     fulfillmentFactoryId?: string,
+    fulfillmentStage?: string,
   ): Promise<GetFactoryOverviewResDto> {
     const match: Record<string, unknown> = {};
     // Fulfillment chỉ thấy đơn đã Ok — apply scope cho cells + flow + dropdowns.
-    if (roleName === RoleType.Fulfillment) {
+    // User In (stage=print) xem admin-like → bỏ scope.
+    if (roleName === RoleType.Fulfillment && !this.isPrintAdminView(roleName, fulfillmentStage)) {
       match.readyForFulfill = true;
       if (fulfillmentFactoryId) {
         match.$or = [
@@ -2243,6 +2387,7 @@ export class OrderService implements OnModuleInit {
     roleName?: RoleType,
     assigneeCode?: string,
     fulfillmentFactoryId?: string,
+    fulfillmentStage?: string,
   ): Promise<{
     success: true;
     data: {
@@ -2254,6 +2399,9 @@ export class OrderService implements OnModuleInit {
       machineNumber: Array<{ value: string; label: string; count: number }>;
       toolResult: Array<{ value: string; label: string; count: number }>;
       errorFile: Array<{ value: string; label: string; count: number }>;
+      designerStatus: Array<{ value: string; label: string; count: number }>;
+      type: Array<{ value: string; label: string; count: number }>;
+      userSku: Array<{ value: string; label: string; count: number }>;
     };
   }> {
     type FacetKey =
@@ -2265,7 +2413,9 @@ export class OrderService implements OnModuleInit {
       | 'machineNumber'
       | 'toolResult'
       | 'errorFile'
-      | 'designerStatus';
+      | 'designerStatus'
+      | 'type'
+      | 'userSku';
 
     const FACET_KEYS: FacetKey[] = [
       'printStatus',
@@ -2277,6 +2427,8 @@ export class OrderService implements OnModuleInit {
       'toolResult',
       'errorFile',
       'designerStatus',
+      'type',
+      'userSku',
     ];
 
     type OptionRow = { _id: string; count: number };
@@ -2285,7 +2437,22 @@ export class OrderService implements OnModuleInit {
     const ARRAY_FACET_FIELDS = new Set<FacetKey>(['errorFile']);
     const aggregateFacet = async (excludeKey: FacetKey, field: FacetKey) => {
       const sanitizedDto = { ...dto, [excludeKey]: undefined } as GetProductionOrdersDto;
-      const baseFilter = this.buildOrderListFilter(sanitizedDto, roleName, assigneeCode);
+      const baseFilter = this.buildOrderListFilter(
+        sanitizedDto,
+        roleName,
+        assigneeCode,
+        fulfillmentFactoryId,
+        fulfillmentStage,
+      );
+      // Facet narrow theo trạng thái stage đang chọn (bảng phẳng trang "In").
+      if (dto.fulfillmentStatus) {
+        this.applyFulfillmentStatusFilter(
+          baseFilter,
+          dto.fulfillmentStatus,
+          fulfillmentStage,
+          assigneeCode,
+        );
+      }
       const facetMatch = {
         ...baseFilter,
         [field]: { $exists: true, $ne: null, $nin: [''] },
@@ -2309,6 +2476,8 @@ export class OrderService implements OnModuleInit {
       toolResultRows,
       errorFileRows,
       designerStatusRows,
+      typeRows,
+      userSkuRows,
     ] = await Promise.all(FACET_KEYS.map((k) => aggregateFacet(k, k)));
 
     // Count "Chưa soát" cho toolResultNote: đơn chưa được gán bất kỳ trạng thái
@@ -2412,6 +2581,9 @@ export class OrderService implements OnModuleInit {
           label: DESIGNER_STATUS_LABELS[r._id] || r._id,
           count: r.count,
         })),
+        // Tên sản phẩm + SKU khách — label = chính value (không có name map).
+        type: typeRows.map((r) => ({ value: r._id, label: r._id, count: r.count })),
+        userSku: userSkuRows.map((r) => ({ value: r._id, label: r._id, count: r.count })),
       },
     };
   }

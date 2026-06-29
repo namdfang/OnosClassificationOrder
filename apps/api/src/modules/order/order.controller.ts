@@ -22,6 +22,7 @@ import {
   GetFactoryOverviewDto,
   GetFactoryOverviewResDto,
   GetGroupedProductionOrdersResDto,
+  FulfillmentStatusCountsResDto,
   GetImportSummaryDto,
   GetImportSummaryResDto,
   GetOrderDashboardDto,
@@ -110,7 +111,7 @@ export class OrderController {
     @Query() dto: GetProductionOrdersDto,
     @AuthUser() user: UserDocument,
   ): Promise<GetProductionOrdersResDto> {
-    return this.orderService.getOrders(dto, user?.role?.name, user?._id ? String(user._id) : undefined, user?.factoryId);
+    return this.orderService.getOrders(dto, user?.role?.name, user?._id ? String(user._id) : undefined, user?.factoryId, user?.fulfillmentStage);
   }
 
   @Get('dashboard')
@@ -122,7 +123,7 @@ export class OrderController {
     @Query() dto: GetOrderDashboardDto,
     @AuthUser() user: UserDocument,
   ): Promise<GetOrderDashboardResDto> {
-    return this.orderService.getDashboard(dto, user?.role?.name);
+    return this.orderService.getDashboard(dto, user?.role?.name, user?.fulfillmentStage);
   }
 
   @Get('status-overview')
@@ -134,7 +135,7 @@ export class OrderController {
     @Query() dto: GetOrderStatusOverviewDto,
     @AuthUser() user: UserDocument,
   ): Promise<GetOrderStatusOverviewResDto> {
-    return this.orderService.getStatusOverview(dto, user?.role?.name, user?._id ? String(user._id) : undefined, user?.factoryId);
+    return this.orderService.getStatusOverview(dto, user?.role?.name, user?._id ? String(user._id) : undefined, user?.factoryId, user?.fulfillmentStage);
   }
 
   @Get('grouped')
@@ -148,7 +149,7 @@ export class OrderController {
     @Query() dto: GetProductionOrdersDto,
     @AuthUser() user: UserDocument,
   ): Promise<GetGroupedProductionOrdersResDto> {
-    return this.orderService.getOrdersGroupedByType(dto, user?.role?.name, user?._id ? String(user._id) : undefined, user?.factoryId);
+    return this.orderService.getOrdersGroupedByType(dto, user?.role?.name, user?._id ? String(user._id) : undefined, user?.factoryId, user?.fulfillmentStage);
   }
 
   @Get('workshop-filters')
@@ -162,7 +163,19 @@ export class OrderController {
     @Query() dto: GetProductionOrdersDto,
     @AuthUser() user: UserDocument,
   ): Promise<WorkshopAvailableFiltersResDto> {
-    return this.orderService.getWorkshopAvailableFilters(dto, user?.role?.name, user?._id ? String(user._id) : undefined, user?.factoryId);
+    return this.orderService.getWorkshopAvailableFilters(dto, user?.role?.name, user?._id ? String(user._id) : undefined, user?.factoryId, user?.fulfillmentStage);
+  }
+
+  @Get('fulfillment-status-counts')
+  @Auth(ORDER_VIEW_ROLES)
+  @ApiOperation({ summary: 'Đếm đơn theo 5 trạng thái stage Fulfillment (bảng trang In)' })
+  @HttpCode(HttpStatus.OK)
+  @ApiOkResponse({ type: FulfillmentStatusCountsResDto })
+  async getFulfillmentStatusCounts(
+    @Query() dto: GetProductionOrdersDto,
+    @AuthUser() user: UserDocument,
+  ): Promise<FulfillmentStatusCountsResDto> {
+    return this.orderService.getFulfillmentStatusCounts(dto, user?.role?.name, user?._id ? String(user._id) : undefined, user?.factoryId, user?.fulfillmentStage);
   }
 
   @Get('import-summary')
@@ -219,7 +232,7 @@ export class OrderController {
     @Query() dto: GetFactoryOverviewDto,
     @AuthUser() user: UserDocument,
   ): Promise<GetFactoryOverviewResDto> {
-    return this.orderService.getFactoryOverview(dto, user?.role?.name, user?.factoryId);
+    return this.orderService.getFactoryOverview(dto, user?.role?.name, user?.factoryId, user?.fulfillmentStage);
   }
 
   @Patch('bulk-transfer')
