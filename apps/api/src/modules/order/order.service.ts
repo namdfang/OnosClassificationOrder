@@ -929,7 +929,11 @@ export class OrderService implements OnModuleInit {
         { $skip: limit * (page - 1) },
         { $limit: limit },
         { $project: { _id: 1 } },
-      ]);
+      ])
+        // Sort theo field tính toán (__sizeRank) không dùng được index → Mongo
+        // sort in-memory (giới hạn 100MB). allowDiskUse tránh lỗi "Sort exceeded
+        // memory limit" / spike RAM khi tập match lớn (admin / ngày nhiều đơn).
+        .allowDiskUse(true);
       const ids = idRows.map((r) => r._id);
       const [docs, count] = await Promise.all([
         this.orderRepository.findAll({ _id: { $in: ids } }, { populate }),
@@ -1105,6 +1109,7 @@ export class OrderService implements OnModuleInit {
     dto: GetOrderDashboardDto,
     roleName?: RoleType,
     fulfillmentStage?: string,
+    fulfillmentFactoryId?: string,
   ): Promise<GetOrderDashboardResDto> {
     // [cache disabled]
     // const cacheKey = `orders:dashboard:${Buffer.from(JSON.stringify(dto)).toString('base64')}`;
@@ -1114,11 +1119,25 @@ export class OrderService implements OnModuleInit {
     // } catch { /* fall through */ }
 
     const match: Record<string, unknown> = {};
-    // Fulfillment chỉ xử lý đơn đã Ok (Designer đã đánh dấu) — apply ở mọi
-    // aggregation để cards / breakdown / byUser cũng phản ánh đúng scope.
-    // User In (stage=print) xem admin-like → bỏ scope.
-    if (roleName === RoleType.Fulfillment && !this.isPrintAdminView(roleName, fulfillmentStage)) {
-      match.readyForFulfill = true;
+    // Gom các điều kiện $or (factory scope non-print + searchUser) vào $and để
+    // không ghi đè nhau (object chỉ có 1 key `$or`).
+    const andClauses: Record<string, unknown>[] = [];
+
+    // Fulfillment scope theo XƯỞNG. User In (print): thấy mọi trạng thái (bỏ
+    // readyForFulfill) nhưng chỉ xưởng mình (factoryId). Stage khác: đơn đã Ok +
+    // (factoryId hoặc originalFactoryId). → tài khoản nào chỉ thấy đơn xưởng đó.
+    if (roleName === RoleType.Fulfillment) {
+      const printView = this.isPrintAdminView(roleName, fulfillmentStage);
+      if (!printView) match.readyForFulfill = true;
+      if (!fulfillmentFactoryId) {
+        match.factoryId = '__no_factory__';
+      } else if (printView) {
+        match.factoryId = fulfillmentFactoryId;
+      } else {
+        andClauses.push({
+          $or: [{ factoryId: fulfillmentFactoryId }, { originalFactoryId: fulfillmentFactoryId }],
+        });
+      }
     }
     if (dto.startDate || dto.endDate) {
       const range: Record<string, Date> = {};
@@ -1134,11 +1153,15 @@ export class OrderService implements OnModuleInit {
 
     if (dto.searchUser?.trim()) {
       const s = escapeRegex(dto.searchUser.trim());
-      match.$or = [
-        { userSku: { $regex: s, $options: 'i' } },
-        { userEmail: { $regex: s, $options: 'i' } },
-      ];
+      andClauses.push({
+        $or: [
+          { userSku: { $regex: s, $options: 'i' } },
+          { userEmail: { $regex: s, $options: 'i' } },
+        ],
+      });
     }
+
+    if (andClauses.length > 0) match.$and = andClauses;
 
     const totalsAgg = await this.orderModel.aggregate([
       { $match: match },
@@ -1978,11 +2001,13 @@ export class OrderService implements OnModuleInit {
     // `matchMapped` đếm/aggregate đơn đã map xưởng — Cards/flow/stats đều
     // cần `factoryId` để classify. `match` (chưa gắn) dùng cho `unmapped`
     // count và optional dropdown khi user chọn chip "Chưa xác định".
-    const matchMapped: Record<string, unknown> = {
-      ...match,
-      factoryId: { $exists: true, $ne: null },
-      originalFactoryId: { $exists: true, $ne: null },
-    };
+    // QUAN TRỌNG: nếu `match` đã scope cứng `factoryId` (user In = xưởng mình)
+    // thì GIỮ NGUYÊN, KHÔNG ghi đè bằng `{ $exists }` (sẽ lộ mọi xưởng).
+    const matchMapped: Record<string, unknown> = { ...match };
+    if (matchMapped.factoryId === undefined) {
+      matchMapped.factoryId = { $exists: true, $ne: null };
+    }
+    matchMapped.originalFactoryId = { $exists: true, $ne: null };
 
     // Đơn chưa map xưởng trong cùng date range — đếm độc lập, dùng cho chip
     // "Chưa xác định xưởng" trên FE.

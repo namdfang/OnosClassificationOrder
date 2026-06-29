@@ -123,7 +123,7 @@ export class OrderController {
     @Query() dto: GetOrderDashboardDto,
     @AuthUser() user: UserDocument,
   ): Promise<GetOrderDashboardResDto> {
-    return this.orderService.getDashboard(dto, user?.role?.name, user?.fulfillmentStage);
+    return this.orderService.getDashboard(dto, user?.role?.name, user?.fulfillmentStage, user?.factoryId);
   }
 
   @Get('status-overview')
