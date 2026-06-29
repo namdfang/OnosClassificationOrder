@@ -259,7 +259,7 @@ Default preset:
     - In-progress: "Hoàn thành" (emerald) + "Báo lỗi" (rose, mở `ReworkBackDialog`).
     - Watching: ẩn hoàn toàn.
 - **DnD** (`@dnd-kit/core`): `useDraggable` build-in trong card. Chỉ enable cho `waiting`/`rework` → drop vào cột `in-progress` = action `start`. Drag rule khác bị toast warning. `in-progress`/`watching` không draggable (no valid target).
-- **Data fetch**: 5 `Promise.all` calls song song tới `GET /v1/fulfillment/my-tasks?tab=...&size=100` (waiting / in-progress / rework / done / watching). 4 fetch đầu feed 4 cột kanban, fetch thứ 5 feed bottom drawer. Đơn giản hơn add BE endpoint mới vì queue per stage thường < 200 đơn.
+- **Data fetch**: 5 `Promise.all` calls song song tới `GET /v1/fulfillment/my-tasks?tab=...&size=5000` (waiting / in-progress / rework / done / watching). FE load full queue mỗi cột (size=5000) để hiển thị toàn bộ đơn không cắt; BE cap `size` tối đa 5000 (default 50 khi không truyền). 4 fetch đầu feed 4 cột kanban, fetch thứ 5 feed bottom drawer. Đơn giản hơn add BE endpoint mới vì queue per stage thường < 200 đơn.
 - **ImagePreviewDialog** dùng chung với Designer — preview ảnh mockup khi click thumb.
 - Empty state mỗi cột: "Trống" (italic).
 

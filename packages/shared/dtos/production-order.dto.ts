@@ -524,6 +524,19 @@ export const FactoryBreakdownZod = z.object({
 });
 export type FactoryBreakdown = z.infer<typeof FactoryBreakdownZod>;
 
+/**
+ * Phục vụ bảng pivot "Số lượng theo size mỗi sản phẩm" có lọc theo xưởng.
+ * Mỗi row = 1 cặp (factory, type) kèm phân bổ size. FE gom dropdown xưởng từ
+ * distinct factoryId, và pivot type × size theo xưởng đang chọn.
+ */
+export const SizeMatrixRowZod = z.object({
+  factoryId: z.string().optional(),
+  factoryName: z.string(),
+  type: z.string(),
+  sizes: SizeSummaryZod.array(),
+});
+export type SizeMatrixRow = z.infer<typeof SizeMatrixRowZod>;
+
 export const OrderDashboardZod = z.object({
   totals: z.object({
     totalOrders: z.number(),
@@ -534,6 +547,7 @@ export const OrderDashboardZod = z.object({
   }),
   byType: TypeSummaryZod.array(),
   byFactory: FactoryBreakdownZod.array(),
+  sizeMatrix: SizeMatrixRowZod.array(),
   byUser: UserBreakdownZod.array(),
   filter: z.object({
     startDate: z.string().optional(),
@@ -1045,6 +1059,8 @@ export const FulfillmentTaskTabZod = z.enum(FULFILLMENT_TASK_TABS);
 
 export const GetFulfillmentMyTasksZod = PageQueryZod.extend({
   tab: FulfillmentTaskTabZod.default('waiting'),
+  /** Page size — kanban load full queue per cột (default 50, tối đa 5000). */
+  size: z.coerce.number().optional(),
   /** Override (Manager/Admin). User Fulfillment không cần set. */
   stage: FulfillmentStageZod.optional(),
   factoryId: IDZod.optional(),

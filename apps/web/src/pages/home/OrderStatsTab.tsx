@@ -69,6 +69,13 @@ interface FactoryBreakdown {
   byMachineType: MachineTypeBreakdown[];
 }
 
+interface SizeMatrixRow {
+  factoryId?: string;
+  factoryName: string;
+  type: string;
+  sizes: SizeSummary[];
+}
+
 interface UserBreakdown {
   userSku?: string;
   userEmail?: string;
@@ -89,6 +96,7 @@ interface Dashboard {
   };
   byType: TypeSummary[];
   byFactory: FactoryBreakdown[];
+  sizeMatrix: SizeMatrixRow[];
   byUser: UserBreakdown[];
   filter: { startDate?: string; endDate?: string; searchType?: string; searchUser?: string };
 }
@@ -134,6 +142,46 @@ function daysAgoISO(days: number): string {
   return `${yyyy}-${mm}-${dd}`;
 }
 
+/**
+ * Size matrix (bảng pivot sản phẩm × size). Thứ tự cột chuẩn nội bộ:
+ * XS → S → M → L → XL → 2XL …; biến thể XXL/XXXL được normalize về 2XL/3XL để
+ * gom chung 1 cột. Size lạ (không nằm trong map) đẩy về cuối (rank 99).
+ */
+const SIZE_ORDER: Record<string, number> = {
+  XS: 0,
+  S: 1,
+  M: 2,
+  L: 3,
+  XL: 4,
+  '2XL': 5,
+  '3XL': 6,
+  '4XL': 7,
+  '5XL': 8,
+  '6XL': 9,
+  '7XL': 10,
+  '8XL': 11,
+};
+
+const SIZE_ALIAS: Record<string, string> = {
+  XXL: '2XL',
+  XXXL: '3XL',
+  XXXXL: '4XL',
+  XXXXXL: '5XL',
+  XXXXXXL: '6XL',
+  XXXXXXXL: '7XL',
+  XXXXXXXXL: '8XL',
+};
+
+function normalizeSize(raw?: string): string {
+  if (!raw || !raw.trim()) return '—';
+  const s = raw.trim().toUpperCase();
+  return SIZE_ALIAS[s] ?? s;
+}
+
+function sizeOrderRank(label: string): number {
+  return SIZE_ORDER[label] ?? 99;
+}
+
 interface MetricCardProps {
   label: string;
   value: string | number;
@@ -170,6 +218,12 @@ export default function OrderStatsTab() {
   // Designer không cần "phân bổ theo xưởng" — họ không quan tâm xưởng nào in.
   // Fulfillment thì vẫn thấy vì cần biết workload từng xưởng.
   const hideFactoryDist = roleName === 'Designer';
+  // User gắn với 1 xưởng (vd Fulfillment) → khóa bảng size vào xưởng của họ,
+  // không xem được số liệu xưởng khác. Admin/Manager/Support được chọn mọi xưởng.
+  const isOverrideRole = ['SuperAdmin', 'Admin', 'Manager', 'SupportManager'].includes(
+    roleName ?? '',
+  );
+  const lockedFactoryId = !isOverrideRole ? profile?.factoryId : undefined;
   // URL params (prefix `s` = stats). F5 / share link giữ nguyên date + search.
   // Default = today + empty search → strip khỏi URL để URL gọn.
   const [searchParams, setSearchParams] = useSearchParams();
@@ -386,6 +440,15 @@ export default function OrderStatsTab() {
           )}
         </div>
       )}
+
+      {/* Size matrix — số lượng mỗi size theo từng sản phẩm (bảng pivot, lọc xưởng).
+          Đặt TRƯỚC bảng "Chi tiết theo loại sản phẩm" theo yêu cầu. */}
+      <SizeMatrixTable
+        sizeMatrix={data?.sizeMatrix || []}
+        loading={loading}
+        isRefetching={isRefetching}
+        lockedFactoryId={lockedFactoryId}
+      />
 
       {/* Production type breakdown */}
       <div
@@ -1151,6 +1214,221 @@ function ExpandedDetails({ row }: { row: TypeSummary }) {
             </div>
           )}
         </div>
+      </div>
+    </div>
+  );
+}
+
+/**
+ * Bảng pivot: mỗi dòng là 1 sản phẩm (type), mỗi cột là 1 size, ô = số lượng.
+ * Cột cuối = Tổng của dòng, dòng cuối = Tổng của cột. Dữ liệu từ `sizeMatrix`
+ * (group sẵn theo factory × type × size ở BE) — không cần gọi API mới.
+ *
+ * Lọc xưởng: dropdown "Tất cả xưởng" + từng xưởng. User gắn 1 xưởng
+ * (`lockedFactoryId`) bị khóa vào xưởng đó, không xem được xưởng khác.
+ */
+function SizeMatrixTable({
+  sizeMatrix,
+  loading,
+  isRefetching,
+  lockedFactoryId,
+}: {
+  sizeMatrix: SizeMatrixRow[];
+  loading: boolean;
+  isRefetching: boolean;
+  lockedFactoryId?: string;
+}) {
+  // Danh sách xưởng (distinct) để build dropdown.
+  const factories = useMemo(() => {
+    const map = new Map<string, string>();
+    for (const r of sizeMatrix) {
+      const id = r.factoryId || '__unmapped__';
+      if (!map.has(id)) map.set(id, r.factoryName);
+    }
+    return [...map.entries()].map(([id, name]) => ({ id, name }));
+  }, [sizeMatrix]);
+
+  // Xưởng đang chọn. '' = tất cả. User bị khóa → ép về xưởng của họ.
+  const [selectedFactory, setSelectedFactory] = useState<string>('');
+  const effectiveFactory = lockedFactoryId ?? selectedFactory;
+
+  const { columns, rows, colTotals, grandTotal } = useMemo(() => {
+    // Lọc theo xưởng (nếu có), rồi pivot type × size — cộng dồn qua các xưởng
+    // còn lại (khi xem "Tất cả").
+    const scoped = effectiveFactory
+      ? sizeMatrix.filter((r) => (r.factoryId || '__unmapped__') === effectiveFactory)
+      : sizeMatrix;
+
+    const colSet = new Set<string>();
+    const typeMap = new Map<string, { counts: Record<string, number>; total: number }>();
+    for (const r of scoped) {
+      let entry = typeMap.get(r.type);
+      if (!entry) {
+        entry = { counts: {}, total: 0 };
+        typeMap.set(r.type, entry);
+      }
+      for (const s of r.sizes) {
+        const label = normalizeSize(s.size);
+        entry.counts[label] = (entry.counts[label] ?? 0) + s.count;
+        entry.total += s.count;
+        colSet.add(label);
+      }
+    }
+
+    const rows = [...typeMap.entries()]
+      .map(([type, v]) => ({ type, counts: v.counts, total: v.total }))
+      .sort((a, b) => b.total - a.total);
+    const columns = [...colSet].sort(
+      (a, b) => sizeOrderRank(a) - sizeOrderRank(b) || a.localeCompare(b),
+    );
+    const colTotals: Record<string, number> = {};
+    let grandTotal = 0;
+    for (const c of columns) {
+      let sum = 0;
+      for (const r of rows) sum += r.counts[c] ?? 0;
+      colTotals[c] = sum;
+      grandTotal += sum;
+    }
+    return { columns, rows, colTotals, grandTotal };
+  }, [sizeMatrix, effectiveFactory]);
+
+  const isEmpty = rows.length === 0;
+  const lockedFactoryName = lockedFactoryId
+    ? factories.find((f) => f.id === lockedFactoryId)?.name
+    : undefined;
+
+  return (
+    <div
+      className={cn(
+        'rounded-xl border border-border overflow-hidden bg-card transition-opacity duration-300',
+        isRefetching && 'opacity-60',
+      )}
+    >
+      <div className="px-5 py-4 flex items-end justify-between gap-3 flex-wrap">
+        <div>
+          <h2 className="text-base font-semibold text-foreground">Số lượng theo size mỗi sản phẩm</h2>
+          <p className="text-xs text-muted-foreground mt-0.5">
+            Mỗi dòng một sản phẩm, mỗi cột một size — ô trống nghĩa là không có
+          </p>
+        </div>
+        <div className="flex items-center gap-3 flex-wrap">
+          {/* Factory filter — locked users thấy nhãn cố định, còn lại thấy dropdown */}
+          {lockedFactoryId ? (
+            <span className="inline-flex items-center gap-1.5 text-xs bg-sky-100 dark:bg-sky-500/15 text-sky-700 dark:text-sky-300 px-2.5 py-1.5 rounded-md">
+              <Factory size={12} />
+              <span className="font-medium">{lockedFactoryName || 'Xưởng của tôi'}</span>
+            </span>
+          ) : (
+            <div className="relative">
+              <Factory
+                size={13}
+                className="absolute left-2 top-1/2 -translate-y-1/2 text-muted-foreground pointer-events-none"
+              />
+              <select
+                value={selectedFactory}
+                onChange={(e) => setSelectedFactory(e.target.value)}
+                className="h-8 pl-7 pr-7 text-xs rounded-md border border-border bg-background text-foreground appearance-none cursor-pointer hover:bg-muted/30 transition-colors min-w-[160px]"
+              >
+                <option value="">Tất cả xưởng</option>
+                {factories.map((f) => (
+                  <option key={f.id} value={f.id}>
+                    {f.name}
+                  </option>
+                ))}
+              </select>
+              <ChevronDown
+                size={13}
+                className="absolute right-2 top-1/2 -translate-y-1/2 text-muted-foreground pointer-events-none"
+              />
+            </div>
+          )}
+          {!loading && !isEmpty && (
+            <span className="text-xs text-muted-foreground">
+              Tổng:{' '}
+              <span className="tabular-nums font-semibold text-foreground">
+                {formatNumber(grandTotal)}
+              </span>{' '}
+              sản phẩm
+            </span>
+          )}
+        </div>
+      </div>
+
+      <div className="max-h-[600px] overflow-auto border-t border-border">
+        {loading && sizeMatrix.length === 0 ? (
+          <div className="p-6 space-y-3">
+            {[0, 1, 2, 3, 4].map((i) => (
+              <div key={i} className="h-6 rounded bg-muted/50 animate-pulse" />
+            ))}
+          </div>
+        ) : isEmpty ? (
+          <div className="text-center py-16 text-muted-foreground text-sm">
+            <Package size={32} className="mx-auto mb-3 opacity-30" strokeWidth={1.5} />
+            {sizeMatrix.length === 0
+              ? 'Chưa có đơn nào trong khoảng thời gian này.'
+              : 'Xưởng này chưa có dữ liệu trong kỳ.'}
+          </div>
+        ) : (
+          <table className="w-full text-sm border-collapse">
+            <thead>
+              <tr className="bg-muted/40 backdrop-blur text-[11px] tracking-wide font-medium text-muted-foreground">
+                <th className="sticky left-0 top-0 z-20 bg-muted/40 text-left px-3 py-2 min-w-[220px] border-b border-border">
+                  Sản phẩm
+                </th>
+                {columns.map((c) => (
+                  <th
+                    key={c}
+                    className="sticky top-0 z-10 bg-muted/40 text-right px-3 py-2 w-14 font-mono border-b border-border"
+                  >
+                    {c}
+                  </th>
+                ))}
+                <th className="sticky right-0 top-0 z-20 bg-muted/40 text-right px-3 py-2 w-16 border-b border-border">
+                  Tổng
+                </th>
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-border">
+              {rows.map((r) => (
+                <tr key={r.type} className="hover:bg-muted/30 transition-colors">
+                  <td className="sticky left-0 z-10 bg-card text-foreground px-3 py-2 align-top">
+                    <span className="line-clamp-2 leading-snug font-medium">{r.type}</span>
+                  </td>
+                  {columns.map((c) => {
+                    const v = r.counts[c] ?? 0;
+                    return (
+                      <td
+                        key={c}
+                        className={cn(
+                          'text-right px-3 py-2 tabular-nums',
+                          v === 0 ? 'text-muted-foreground/40' : 'text-foreground',
+                        )}
+                      >
+                        {v === 0 ? '–' : formatNumber(v)}
+                      </td>
+                    );
+                  })}
+                  <td className="sticky right-0 z-10 bg-card text-right px-3 py-2 tabular-nums font-semibold">
+                    {formatNumber(r.total)}
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+            <tfoot>
+              <tr className="bg-muted/40 font-semibold text-foreground border-t-2 border-border">
+                <td className="sticky left-0 z-10 bg-muted/40 px-3 py-2">Tổng</td>
+                {columns.map((c) => (
+                  <td key={c} className="text-right px-3 py-2 tabular-nums">
+                    {formatNumber(colTotals[c])}
+                  </td>
+                ))}
+                <td className="sticky right-0 z-10 bg-muted/40 text-right px-3 py-2 tabular-nums">
+                  {formatNumber(grandTotal)}
+                </td>
+              </tr>
+            </tfoot>
+          </table>
+        )}
       </div>
     </div>
   );

@@ -455,7 +455,7 @@ export class FulfillmentTaskService {
       throw new BadRequestException('Thiếu factoryId (user chưa gán factoryId).');
     }
     const page = query.page && query.page > 0 ? query.page : 1;
-    const size = query.size && query.size > 0 ? Math.min(query.size, 100) : 50;
+    const size = query.size && query.size > 0 ? Math.min(query.size, 5000) : 50;
 
     const baseFilter = this.buildMyTaskBase(stage, factoryId, {
       createdFrom: query.createdFrom,

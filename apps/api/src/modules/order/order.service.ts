@@ -65,6 +65,7 @@ import type {
   PreviewCuttingFilesResDto,
   OrderStatusOverview,
   OrderWorkshopField,
+  SizeMatrixRow,
   SizeSummary,
   TransferOrderDto,
   TransferOrderResDto,
@@ -1164,6 +1165,67 @@ export class OrderService implements OnModuleInit {
       })
       .sort((a, b) => b.quantity - a.quantity);
 
+    // Size matrix — quantity per (factory, type, size). FE pivot type × size,
+    // lọc theo xưởng. Group nhỏ gọn (chỉ sum quantity) + lookup tên xưởng.
+    const sizeMatrixAgg = await this.orderModel.aggregate([
+      { $match: match },
+      {
+        $group: {
+          _id: {
+            factoryId: '$factoryId',
+            type: { $ifNull: ['$type', 'Không xác định'] },
+            size: { $ifNull: ['$size', '—'] },
+          },
+          count: { $sum: { $ifNull: ['$quantity', 1] } },
+        },
+      },
+      {
+        $lookup: {
+          from: 'factories',
+          localField: '_id.factoryId',
+          foreignField: '_id',
+          as: 'factory',
+        },
+      },
+      {
+        $project: {
+          factoryId: '$_id.factoryId',
+          factoryName: { $arrayElemAt: ['$factory.name', 0] },
+          type: '$_id.type',
+          size: '$_id.size',
+          count: 1,
+        },
+      },
+    ]);
+
+    // Gom (factory, type) → sizes[]. Key gộp cả factory + type.
+    const sizeMatrixMap = new Map<
+      string,
+      { factoryId?: string; factoryName: string; type: string; sizeMap: Map<string, number> }
+    >();
+    for (const row of sizeMatrixAgg) {
+      const factoryId = (row.factoryId as string) || undefined;
+      const factoryName = (row.factoryName as string) || 'Chưa xác định';
+      const type = (row.type as string) || 'Không xác định';
+      const size = ((row.size as string) || '').trim() || '—';
+      const key = `${factoryId ?? '__unmapped__'}::${type}`;
+      let entry = sizeMatrixMap.get(key);
+      if (!entry) {
+        entry = { factoryId, factoryName, type, sizeMap: new Map() };
+        sizeMatrixMap.set(key, entry);
+      }
+      entry.sizeMap.set(size, (entry.sizeMap.get(size) || 0) + (row.count || 0));
+    }
+
+    const sizeMatrix: SizeMatrixRow[] = Array.from(sizeMatrixMap.values()).map((e) => ({
+      factoryId: e.factoryId,
+      factoryName: e.factoryName,
+      type: e.type,
+      sizes: Array.from(e.sizeMap.entries())
+        .map(([size, count]) => ({ size, count }))
+        .sort((a, b) => compareSize(a.size, b.size)),
+    }));
+
     // User breakdown — grouped by userEmail (primary identifier), falling back
     // to userSku when email is missing. Sorted by orderCount desc.
     const byUserAgg = await this.orderModel.aggregate([
@@ -1204,6 +1266,7 @@ export class OrderService implements OnModuleInit {
         totals,
         byType,
         byFactory,
+        sizeMatrix,
         byUser,
         filter: {
           startDate: dto.startDate,

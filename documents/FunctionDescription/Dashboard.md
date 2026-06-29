@@ -26,6 +26,10 @@ Dashboard chia 4 tab độc lập (Tab D chỉ Leader/Admin/Manager):
 Tổng quan đơn theo kỳ thời gian:
 - 4 metric card (đơn hàng / số lượng / chi phí SX / phí ship)
 - Biểu đồ tròn phân bổ **xưởng → loại máy** (hover drill-down)
+- Bảng **pivot sản phẩm × size** (`SizeMatrixTable`) — đặt **ngay trên** bảng "Chi tiết theo loại sản phẩm". Mỗi dòng 1 type, mỗi cột 1 size (XS→S→M→L→XL→2XL…, biến thể XXL/XXXL normalize về 2XL/3XL qua `normalizeSize`), ô = số lượng (0 → `–` mờ), cột cuối + dòng cuối = Tổng. Header trái + cột Tổng sticky, scroll ngang khi nhiều size.
+  - **Lọc theo xưởng**: dropdown "Tất cả xưởng" + từng xưởng (build từ distinct `sizeMatrix[].factoryId`). Lọc client-side; chọn "Tất cả" thì cộng dồn qua mọi xưởng theo type.
+  - **Khóa xưởng theo role**: user gắn 1 xưởng (`profile.factoryId`, không thuộc SuperAdmin/Admin/Manager/SupportManager) → `lockedFactoryId` ép bảng chỉ hiển thị xưởng của họ, ẩn dropdown (thay bằng badge tên xưởng). Admin/Manager/Support chọn được mọi xưởng.
+  - Dữ liệu từ field mới `sizeMatrix` của `getDashboard` (group sẵn theo factory × type × size ở BE) — không gọi API riêng.
 - Bảng nhóm theo **production type** (expand size / mockup / duplicate)
 - Card **Top khách hàng đặt nhiều**
 - Bộ lọc time range + search type + search user
@@ -140,9 +144,13 @@ User di chuột vào 1 slice xưởng
   },
   byType: TypeSummary[];      // Bảng "Group by Production Type"
   byFactory: FactoryBreakdown[]; // Pie chart + drill-down
+  sizeMatrix: SizeMatrixRow[]; // Bảng pivot size, group theo (factory, type) → sizes[]
   byUser: UserBreakdown[];    // Top users card
   filter: { startDate, endDate, searchType, searchUser }
 }
+
+// SizeMatrixRow = { factoryId?, factoryName, type, sizes: { size, count }[] }
+// BE: aggregate $group {factoryId, type, size} → $lookup factories → gom (factory,type).
 ```
 
 ---

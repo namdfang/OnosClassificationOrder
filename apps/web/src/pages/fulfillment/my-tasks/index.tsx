@@ -267,14 +267,14 @@ export default function FulfillmentMyTasksPage() {
       const dateParams = { createdFrom: dateFrom, createdTo: dateTo };
       // Worker: 5 tabs. Admin: thêm unassigned (gọi song song).
       const adminUnassignedPromise = isOverrideRole
-        ? RepositoryRemote.fulfillment.myTasks({ tab: 'unassigned', size: 100, ...dateParams })
+        ? RepositoryRemote.fulfillment.myTasks({ tab: 'unassigned', size: 5000, ...dateParams })
         : Promise.resolve({ data: { data: [] } });
       const [w, ip, rw, dn, wt, un] = await Promise.all([
-        RepositoryRemote.fulfillment.myTasks({ tab: 'waiting', size: 100, ...dateParams }),
-        RepositoryRemote.fulfillment.myTasks({ tab: 'in-progress', size: 100, ...dateParams }),
-        RepositoryRemote.fulfillment.myTasks({ tab: 'rework', size: 100, ...dateParams }),
-        RepositoryRemote.fulfillment.myTasks({ tab: 'done', size: 100, ...dateParams }),
-        RepositoryRemote.fulfillment.myTasks({ tab: 'watching', size: 100, ...dateParams }),
+        RepositoryRemote.fulfillment.myTasks({ tab: 'waiting', size: 5000, ...dateParams }),
+        RepositoryRemote.fulfillment.myTasks({ tab: 'in-progress', size: 5000, ...dateParams }),
+        RepositoryRemote.fulfillment.myTasks({ tab: 'rework', size: 5000, ...dateParams }),
+        RepositoryRemote.fulfillment.myTasks({ tab: 'done', size: 5000, ...dateParams }),
+        RepositoryRemote.fulfillment.myTasks({ tab: 'watching', size: 5000, ...dateParams }),
         adminUnassignedPromise,
       ]);
       setColumns({
