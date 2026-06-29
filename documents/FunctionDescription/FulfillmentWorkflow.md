@@ -287,7 +287,7 @@ Thêm vào group "Workflow":
 
 > Plan gốc: `documents/Plans/PrintStage-AdminTableView.md`.
 
-Riêng user **In** (`role=Fulfillment`, `fulfillmentStage='print'`) **KHÔNG** dùng kanban như các stage khác, mà dùng **bảng phẳng admin-like** (`PrintOrderTable` — file riêng, KHÔNG đụng `OrderTableWorkshop`) để thấy **tất cả đơn mọi xưởng** (gồm đơn lỗi / `toolResultNote != 'ok'` / chưa vào pipeline).
+Riêng user **In** (`role=Fulfillment`, `fulfillmentStage='print'`) **KHÔNG** dùng kanban như các stage khác, mà dùng **bảng phẳng** (`PrintOrderTable` — file riêng, KHÔNG đụng `OrderTableWorkshop`) để thấy **mọi trạng thái đơn TRONG XƯỞNG MÌNH** (gồm đơn lỗi / `toolResultNote != 'ok'` / chưa vào pipeline). **CHỈ xưởng mình** (`factoryId = user.factoryId`) — không thấy đơn xưởng khác (khác user admin thấy mọi xưởng).
 
 - **Dispatcher** `pages/fulfillment/my-tasks/index.tsx`: nếu `myStage === FulfillmentStage.Print` → render `PrintWorkshopView`; còn lại render `FulfillmentKanbanView` (kanban cũ, đổi tên từ component cũ). Dispatcher chỉ gọi `useAuthStore` rồi rẽ nhánh → không vi phạm Rules of Hooks.
 - **`PrintWorkshopView`** (`pages/fulfillment/my-tasks/PrintWorkshopView.tsx`): thin orchestrator — giữ logic transition + `ReworkBackDialog` + `reloadToken`, render `<PrintOrderTable extraRowAction reloadToken>`.
@@ -305,7 +305,7 @@ Riêng user **In** (`role=Fulfillment`, `fulfillmentStage='print'`) **KHÔNG** d
   - `GetProductionOrdersZod.fulfillmentStatus` (enum 5 giá trị) + `userSku` (CSV filter). `OrderService.applyFulfillmentStatusFilter()` mirror `FulfillmentTaskService.applyTabFilter` (không ép scope factory/ready; `watching` dùng userId elemMatch timeline). Áp ở `getOrders` + `getOrdersGroupedByType` + `getFulfillmentStatusCounts`.
   - `GET /v1/orders/fulfillment-status-counts` (`@Auth(ORDER_VIEW_ROLES)`) trả `{all, waiting, inProgress, rework, done, watching}` (all = tổng đơn theo filter, không kèm status).
   - `getWorkshopAvailableFilters` thêm facet `type` + `userSku` (cho dropdown). `buildOrderListFilter` thêm filter `userSku`.
-- **Visibility BE (admin-like)**: helper `OrderService.isPrintAdminView(roleName, fulfillmentStage)` (true khi Fulfillment + print) bỏ qua `readyForFulfill` + scope factory + window 7 ngày. Áp tại:
+- **Visibility BE**: helper `OrderService.isPrintAdminView(roleName, fulfillmentStage)` (true khi Fulfillment + print) bỏ qua `readyForFulfill` + window 7 ngày **NHƯNG vẫn scope `factoryId = user.factoryId`** (chỉ xưởng mình, dùng equality — KHÔNG gồm `originalFactoryId`). Áp tại:
   - `buildVisibilityFilter()` → cover `GET /orders` + `GET /orders/grouped` + `GET /orders/workshop-filters` + `GET /orders/status-overview` + `GET /orders/fulfillment-status-counts`.
   - `getDashboard()` + `getFactoryOverview()` (Dashboard tab Stats + Factory).
   - Controller truyền `user?.fulfillmentStage` cho các endpoint trên (gồm `GET /orders`).

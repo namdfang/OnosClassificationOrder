@@ -249,7 +249,7 @@ Page mở cho mọi role có `page.dashboard` (Admin, Manager, Support, Designer
 
 Tab C — **chuyển xưởng** (`/:id/transfer`, `/bulk-transfer`) gắn `@Auth(ORDER_WRITE_ROLES)` (SuperAdmin / Admin / Manager / Support). FE check thêm bằng `isAdmin || has('order.transfer')` để ẩn checkbox + nút bulk transfer khỏi Designer/Fulfillment.
 
-**Scope đặc biệt user "In" (Fulfillment stage=print):** mặc định role `Fulfillment` bị giới hạn `readyForFulfill=true` + scope factory trên Dashboard (Stats `getDashboard`, Tab B `getStatusOverview`, Tab C `getFactoryOverview`). Riêng user In được xem **admin-like** (tất cả đơn mọi xưởng, gồm đơn chưa ready) qua helper `OrderService.isPrintAdminView(roleName, fulfillmentStage)` — controller truyền `user?.fulfillmentStage` xuống 3 method này. Các stage Fulfillment khác giữ scope cũ. Xem `FulfillmentWorkflow.md §4.5` + `documents/Plans/PrintStage-AdminTableView.md`.
+**Scope đặc biệt user "In" (Fulfillment stage=print):** mặc định role `Fulfillment` bị giới hạn `readyForFulfill=true` + scope factory. User In được xem **mọi trạng thái** (bỏ `readyForFulfill`, gồm đơn lỗi/chưa ready) qua helper `OrderService.isPrintAdminView(roleName, fulfillmentStage)` **NHƯNG vẫn scope theo xưởng mình** (`factoryId = user.factoryId`) — KHÔNG thấy đơn xưởng khác. Áp ở `getStatusOverview` + `getFactoryOverview` (factory scope) + `getOrders`/grouped/counts. `getDashboard` (Stats) vốn không scope factory cho fulfillment (global) — giữ nguyên. Các stage Fulfillment khác giữ scope cũ. Xem `FulfillmentWorkflow.md §4.5`.
 
 ---
 

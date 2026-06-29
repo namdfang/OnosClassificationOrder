@@ -191,6 +191,7 @@ export function PrintOrderTable({
     p.set('sort', 'grouped'); // ưu tiên type → size → fabric → inProductionAt
     try {
       const res = await RepositoryRemote.order.getOrders('?' + p.toString());
+      // BE đã sort type → sizeRank → fabric → inProductionAt (sort=grouped).
       setItems((res.data?.data || []) as OrderRow[]);
       setTotal(res.data?.total || 0);
     } catch (err) {

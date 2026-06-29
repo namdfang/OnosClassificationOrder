@@ -449,8 +449,9 @@ export class OrderService implements OnModuleInit {
    * sort key (xem `Orders.md` §7.0b).
    */
   /**
-   * User "In" (role=Fulfillment, stage=print) xem bảng đơn + dashboard ở phạm
-   * vi admin-like: KHÔNG ép `readyForFulfill` / scope factory / window 7 ngày.
+   * User "In" (role=Fulfillment, stage=print): xem MỌI trạng thái đơn (bỏ
+   * `readyForFulfill` + window 7 ngày) NHƯNG vẫn scope theo xưởng của mình
+   * (factoryId). Khác user admin (admin thấy mọi xưởng).
    * Xem documents/Plans/PrintStage-AdminTableView.md.
    */
   private isPrintAdminView(roleName?: RoleType, fulfillmentStage?: string): boolean {
@@ -587,8 +588,12 @@ export class OrderService implements OnModuleInit {
       if (hasDateOverride) filter.inProductionAt = buildRange();
     } else if (roleName === RoleType.Fulfillment) {
       if (this.isPrintAdminView(roleName, fulfillmentStage)) {
-        // User In → xem như admin: chỉ áp date khi user chủ động truyền.
+        // User In: thấy MỌI trạng thái (kể cả lỗi / chưa ok), bỏ window 7 ngày
+        // (chỉ áp date khi user chủ động truyền) — NHƯNG vẫn CHỈ trong xưởng
+        // mình. Dùng equality `factoryId` (đơn đang ở xưởng mình); KHÔNG gồm
+        // `originalFactoryId` vì đơn đã transfer đi nơi khác do xưởng kia in.
         if (hasDateOverride) filter.inProductionAt = buildRange();
+        filter.factoryId = fulfillmentFactoryId || '__no_factory__';
       } else {
         filter.inProductionAt = hasDateOverride ? buildRange() : { $gte: startOfWindow, $lte: endOfToday };
         filter.readyForFulfill = true;
@@ -881,28 +886,70 @@ export class OrderService implements OnModuleInit {
       this.applyFulfillmentStatusFilter(filter, dto.fulfillmentStatus, fulfillmentStage, assigneeCode);
     }
 
-    // Special sort mode `grouped` — keep orders of the same product clustered
-    // (type → size → fabric, newest first within tie) so the workshop table
-    // mirrors the "Tổng hợp đơn theo ngày" view.
-    //
-    // Default tiebreak / sort key = `inProductionAt` (thời gian đơn vào sản
-    // xuất theo sheet import) thay vì Mongo `createdAt`. Đơn legacy không có
-    // `inProductionAt` → Mongo đẩy về cuối list khi sort desc — chấp nhận.
-    const sortSpec: Record<string, 1 | -1> =
-      sort === 'grouped'
-        ? { type: 1, size: 1, fabricType: 1, inProductionAt: -1 }
-        : { [sort || 'inProductionAt']: order === 'asc' ? 1 : -1 };
+    const populate = [
+      { path: 'factory', select: ['name', 'shortName'] },
+      { path: 'machineType', select: ['name', 'shortName'] },
+    ];
 
-    const { data, total } = await this.orderRepository.findAllAndCount(filter, {
-      paging: { skip: limit * (page - 1), limit },
-      sort: sortSpec,
-      populate: [
-        { path: 'factory', select: ['name', 'shortName'] },
-        { path: 'machineType', select: ['name', 'shortName'] },
-      ],
-    });
+    let data: unknown[];
+    let total: number;
 
-    const result = { success: true as const, data, total };
+    if (sort === 'grouped') {
+      // Sort theo ƯU TIÊN SIZE (S→M→L→XL→2XL→3XL→4XL→5XL, size khác → cuối) ở
+      // DB để phân trang chuẩn xuyên trang. `.sort()` thường chỉ so sánh chuỗi
+      // ('2XL' < 'L') nên cần aggregation tính `__sizeRank` qua $switch.
+      // Lấy _id đã sort + paginate, rồi populate qua repository (re-order theo _id).
+      const idRows = await this.orderModel.aggregate<{ _id: unknown }>([
+        { $match: filter },
+        { $addFields: { __sz: { $toLower: { $trim: { input: { $ifNull: ['$size', ''] } } } } } },
+        {
+          $addFields: {
+            __sizeRank: {
+              $switch: {
+                branches: [
+                  { case: { $eq: ['$__sz', 'xs'] }, then: 0 },
+                  { case: { $eq: ['$__sz', 's'] }, then: 1 },
+                  { case: { $eq: ['$__sz', 'm'] }, then: 2 },
+                  { case: { $eq: ['$__sz', 'l'] }, then: 3 },
+                  { case: { $eq: ['$__sz', 'xl'] }, then: 4 },
+                  { case: { $in: ['$__sz', ['2xl', 'xxl']] }, then: 5 },
+                  { case: { $in: ['$__sz', ['3xl', 'xxxl']] }, then: 6 },
+                  { case: { $in: ['$__sz', ['4xl', 'xxxxl']] }, then: 7 },
+                  { case: { $in: ['$__sz', ['5xl', 'xxxxxl']] }, then: 8 },
+                  { case: { $eq: ['$__sz', '6xl'] }, then: 9 },
+                  { case: { $eq: ['$__sz', '7xl'] }, then: 10 },
+                  { case: { $eq: ['$__sz', '8xl'] }, then: 11 },
+                ],
+                default: 99,
+              },
+            },
+          },
+        },
+        { $sort: { type: 1, __sizeRank: 1, fabricType: 1, inProductionAt: -1 } },
+        { $skip: limit * (page - 1) },
+        { $limit: limit },
+        { $project: { _id: 1 } },
+      ]);
+      const ids = idRows.map((r) => r._id);
+      const [docs, count] = await Promise.all([
+        this.orderRepository.findAll({ _id: { $in: ids } }, { populate }),
+        this.orderModel.countDocuments(filter),
+      ]);
+      // Aggregation mất thứ tự sau $in → re-order theo `ids`.
+      const byId = new Map((docs as Array<{ _id: unknown }>).map((d) => [String(d._id), d]));
+      data = ids.map((id) => byId.get(String(id))).filter(Boolean) as unknown[];
+      total = count;
+    } else {
+      const res = await this.orderRepository.findAllAndCount(filter, {
+        paging: { skip: limit * (page - 1), limit },
+        sort: { [sort || 'inProductionAt']: order === 'asc' ? 1 : -1 },
+        populate,
+      });
+      data = res.data as unknown[];
+      total = res.total;
+    }
+
+    const result = { success: true as const, data: data as never, total };
 
     // [cache disabled]
     // void this.redisCacheService
@@ -1904,17 +1951,21 @@ export class OrderService implements OnModuleInit {
     fulfillmentStage?: string,
   ): Promise<GetFactoryOverviewResDto> {
     const match: Record<string, unknown> = {};
-    // Fulfillment chỉ thấy đơn đã Ok — apply scope cho cells + flow + dropdowns.
-    // User In (stage=print) xem admin-like → bỏ scope.
-    if (roleName === RoleType.Fulfillment && !this.isPrintAdminView(roleName, fulfillmentStage)) {
-      match.readyForFulfill = true;
-      if (fulfillmentFactoryId) {
+    // Fulfillment scope theo xưởng. User In (stage=print): thấy mọi trạng thái
+    // (bỏ readyForFulfill) nhưng CHỈ xưởng mình (factoryId). Stage khác: chỉ đơn
+    // đã Ok + (factoryId hoặc originalFactoryId).
+    if (roleName === RoleType.Fulfillment) {
+      const printView = this.isPrintAdminView(roleName, fulfillmentStage);
+      if (!printView) match.readyForFulfill = true;
+      if (!fulfillmentFactoryId) {
+        match.factoryId = '__no_factory__';
+      } else if (printView) {
+        match.factoryId = fulfillmentFactoryId;
+      } else {
         match.$or = [
           { factoryId: fulfillmentFactoryId },
           { originalFactoryId: fulfillmentFactoryId },
         ];
-      } else {
-        match.factoryId = '__no_factory__';
       }
     }
     if (dto.createdFrom || dto.createdTo) {
