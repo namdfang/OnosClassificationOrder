@@ -24,6 +24,7 @@ import {
   XCircle,
 } from 'lucide-react';
 import { toast } from 'sonner';
+import { useSearchParams } from 'react-router-dom';
 import type { DesignerMyStats, DesignerTaskCard, DesignerTransitionDto } from 'shared';
 import { DesignerStatus, DesignerTransitionAction } from 'shared';
 
@@ -42,8 +43,6 @@ import { RejectModal } from './RejectModal';
 import { TaskCard } from './TaskCard';
 import { TaskDetailDialog } from './TaskDetailDialog';
 
-type Period = 'today' | '7d' | '30d';
-
 function todayISO(): string {
   const d = new Date();
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
@@ -53,12 +52,6 @@ function daysAgoISO(n: number): string {
   d.setDate(d.getDate() - n);
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
 }
-/** Khoảng ngày cho 3 preset nhanh (đồng bộ với `resolvePeriodRange` ở BE). */
-const PRESET_RANGE: Record<Period, () => { from: string; to: string }> = {
-  today: () => ({ from: todayISO(), to: todayISO() }),
-  '7d': () => ({ from: daysAgoISO(6), to: todayISO() }),
-  '30d': () => ({ from: daysAgoISO(29), to: todayISO() }),
-};
 
 type ColKey = 'assigned' | 'rework' | 'inProgress' | 'done';
 
@@ -139,10 +132,11 @@ export default function MyTasksPage() {
   const [rejected, setRejected] = useState<DesignerTaskCard[]>([]);
   const [showRejected, setShowRejected] = useState(false);
   const [stats, setStats] = useState<DesignerMyStats | null>(null);
-  // Bộ lọc ngày (áp cho cả cột "Đã xong" trên kanban + KPI thống kê). Mặc định
-  // hôm nay — giữ nguyên hành vi cũ. Preset nhanh + DateRangePicker tùy chỉnh.
-  const [dateFrom, setDateFrom] = useState<string>(todayISO());
-  const [dateTo, setDateTo] = useState<string>(todayISO());
+  // Bộ lọc ngày theo `inProductionAt` (kanban 4 cột + facet counts). Mặc định
+  // 7 ngày gần nhất. Lưu vào URL params (`from`/`to`) để F5 giữ lựa chọn.
+  const [searchParams, setSearchParams] = useSearchParams();
+  const [dateFrom, setDateFrom] = useState<string>(() => searchParams.get('from') || daysAgoISO(6));
+  const [dateTo, setDateTo] = useState<string>(() => searchParams.get('to') || todayISO());
   const [loading, setLoading] = useState(false);
   const [fullName, setFullName] = useState<string | undefined>(undefined);
 
@@ -215,7 +209,11 @@ export default function MyTasksPage() {
 
   const fetchFilters = async () => {
     try {
-      const res = await RepositoryRemote.designer.myTaskFilters(filters);
+      const res = await RepositoryRemote.designer.myTaskFilters({
+        ...filters,
+        from: dateFrom || undefined,
+        to: dateTo || undefined,
+      });
       setFilterOptions(
         (res.data?.data || { type: [], fabricType: [], machineNumber: [], toolResult: [] }) as typeof filterOptions,
       );
@@ -223,6 +221,19 @@ export default function MyTasksPage() {
       handleAxiosError(err);
     }
   };
+
+  // Sync ngày → URL params để F5 giữ lựa chọn.
+  useEffect(() => {
+    setSearchParams(
+      (prev) => {
+        const sp = new URLSearchParams(prev);
+        dateFrom ? sp.set('from', dateFrom) : sp.delete('from');
+        dateTo ? sp.set('to', dateTo) : sp.delete('to');
+        return sp;
+      },
+      { replace: true },
+    );
+  }, [dateFrom, dateTo, setSearchParams]);
 
   useEffect(() => {
     fetchTasks();
@@ -456,28 +467,6 @@ export default function MyTasksPage() {
           </div>
 
           <div className="flex items-center gap-2 flex-wrap">
-            <div className="inline-flex rounded-md border border-border overflow-hidden text-xs">
-              {(['today', '7d', '30d'] as Period[]).map((p) => {
-                const r = PRESET_RANGE[p]();
-                const active = dateFrom === r.from && dateTo === r.to;
-                return (
-                  <button
-                    key={p}
-                    type="button"
-                    onClick={() => {
-                      setDateFrom(r.from);
-                      setDateTo(r.to);
-                    }}
-                    className={`px-3 py-1.5 ${active
-                      ? 'bg-primary text-primary-foreground'
-                      : 'bg-background text-muted-foreground hover:bg-muted'
-                      }`}
-                  >
-                    {p === 'today' ? 'Hôm nay' : p === '7d' ? '7 ngày' : '30 ngày'}
-                  </button>
-                );
-              })}
-            </div>
             <DateRangePicker
               from={dateFrom}
               to={dateTo}

@@ -63,7 +63,14 @@ const myTasks = (
 };
 
 const myTaskFilters = (
-  params: { type?: string; fabricType?: string; machineNumber?: string; toolResult?: string } = {},
+  params: {
+    from?: string;
+    to?: string;
+    type?: string;
+    fabricType?: string;
+    machineNumber?: string;
+    toolResult?: string;
+  } = {},
 ) => {
   const qs = new URLSearchParams();
   for (const [k, v] of Object.entries(params)) {

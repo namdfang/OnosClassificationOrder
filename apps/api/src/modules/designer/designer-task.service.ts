@@ -332,6 +332,8 @@ export class DesignerTaskService {
   async getMyTaskFilters(
     user: UserDocument,
     query: {
+      from?: string;
+      to?: string;
       type?: string;
       fabricType?: string;
       machineNumber?: string;
@@ -344,13 +346,19 @@ export class DesignerTaskService {
     toolResult: { value: string; label: string; count: number }[];
   }> {
     const userId = String(user._id);
+    // Đồng bộ với kanban: facet count cũng lọc theo `inProductionAt` trong khoảng.
+    const range = this.resolveDateRange(query.from, query.to);
 
     type FacetKey = 'type' | 'fabricType' | 'machineNumber' | 'toolResult';
     const KEYS: FacetKey[] = ['type', 'fabricType', 'machineNumber', 'toolResult'];
 
     const aggregate = async (excludeKey: FacetKey, field: FacetKey) => {
       const filter = this.buildMyTaskFilter(userId, { ...query, [excludeKey]: undefined });
-      const match = { ...filter, [field]: { $exists: true, $ne: null, $nin: [''] } };
+      const match = {
+        ...filter,
+        inProductionAt: { $gte: range.start, $lte: range.end },
+        [field]: { $exists: true, $ne: null, $nin: [''] },
+      };
       const agg = await this.orderModel.aggregate<{ _id: string; count: number }>([
         { $match: match },
         { $group: { _id: `$${field}`, count: { $sum: 1 } } },

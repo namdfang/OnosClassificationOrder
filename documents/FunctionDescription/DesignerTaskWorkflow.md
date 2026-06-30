@@ -228,9 +228,14 @@ factoryId?: string                // ref FactoryEntity, REQUIRED khi role=Fulfil
 ### 4.2 `/my-tasks` (Sub-designer)
 Xem 2.3 chi tiết.
 
-**Bộ lọc ngày:** 3 preset nhanh (Hôm nay / 7 ngày / 30 ngày) + `<DateRangePicker>` tùy chỉnh (khoảng bất kỳ, như các trang khác). State thống nhất `dateFrom`/`dateTo` (mặc định hôm nay) → gửi `from`/`to` vào `myTasks` + `myStats({period:'custom', from, to})`. Preset highlight khi range khớp.
+**Bộ lọc ngày:** chỉ dùng `<DateRangePicker>` (đã bỏ 3 preset nút Hôm nay/7 ngày/30 ngày). State `dateFrom`/`dateTo` **mặc định 7 ngày gần nhất**, **lưu vào URL params `from`/`to`** (F5 giữ lựa chọn — `useSearchParams`, đọc khi mount + sync khi đổi). Gửi `from`/`to` vào `myTasks` + `myTaskFilters` + `myStats({period:'custom', from, to})`.
 
-**Lọc theo `inProductionAt`:** `getMyTasks` áp `inProductionAt ∈ [from,to]` vào `baseFilter` → **CẢ 4 cột kanban + rejected drawer** chỉ hiện đơn vào sản xuất trong khoảng (đổi từ hành vi cũ: chỉ cột `done` lọc theo `designerCompletedAt`). ⚠️ Đơn open vào sản xuất ngoài khoảng sẽ bị ẩn — chọn khoảng rộng để thấy backlog cũ. **KPI giữ nguyên** (status counts = snapshot hiện tại; `completedInPeriod` vẫn theo `designerCompletedAt` trong period) → có thể lệch nhẹ với cột "Đã xong" của kanban.
+**Lọc theo `inProductionAt`:** áp `inProductionAt ∈ [from,to]` vào:
+- `getMyTasks` (`baseFilter`) → **cả 4 cột kanban + rejected drawer** (header mỗi cột đếm đúng theo filter).
+- `getMyTaskFilters` (facet aggregation) → **số đếm dropdown Sản phẩm/Vải/Máy/Kết quả Tool** cũng đúng theo khoảng ngày.
+- `toCard` trả `inProductionAt` (+ `orderAt`/`updatedAt`) → card hiển thị mốc "SX".
+
+⚠️ Đơn open vào sản xuất ngoài khoảng sẽ bị ẩn — chọn khoảng rộng để thấy backlog cũ. **KPI giữ nguyên** (status counts = snapshot; `completedInPeriod` theo `designerCompletedAt`) → có thể lệch nhẹ với cột "Đã xong".
 
 Components con:
 - `TaskCard` — drag handle, productionId button (mở `TaskDetailDialog`), mockup thumbnail (mở preview), timestamp + reworkCount badge
