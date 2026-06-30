@@ -196,10 +196,11 @@ export const DEFAULT_ROLE_PERMISSIONS: Partial<Record<RoleType, string[]>> = {
     'order.field.toolResultNote.view',
     'order.field.fabricType.view',
     'order.field.machineNumber.view',       'order.field.machineNumber.edit',
-    // Fulfillment báo lỗi xưởng + mô tả lỗi + loại lỗi.
+    // Fulfillment báo lỗi xưởng + mô tả lỗi. "Loại lỗi" (productionErrorSource)
+    // CHỈ XEM — tự fill theo lỗi xưởng (config.errorSource), không cho sửa tay.
     'order.field.productionError.view',     'order.field.productionError.edit',
     'order.field.productionErrorNote.view', 'order.field.productionErrorNote.edit',
-    'order.field.productionErrorSource.view', 'order.field.productionErrorSource.edit',
+    'order.field.productionErrorSource.view',
     // Stage In (print) xem bảng đơn admin-like → cần đủ view các cột còn lại
     // (chỉ XEM, không edit). Xem documents/Plans/PrintStage-AdminTableView.md §B.
     'order.field.toolResult.view',

@@ -52,6 +52,7 @@ import type {
   ImportReworkOrdersDto,
   ImportReworkOrdersResDto,
   ImportSummaryGroup,
+  FulfillmentTimelineEntry,
   MachineBucket,
   MachineKpi,
   MachineTypeBreakdown,
@@ -84,6 +85,7 @@ import {
   FULFILLMENT_STAGES,
   FulfillmentStage,
   FulfillmentStageStatus,
+  FulfillmentTransitionAction,
   parseProductionIdFromCuttingFilename,
   RoleType,
   WorkshopConfigCategory,
@@ -530,6 +532,81 @@ export class OrderService implements OnModuleInit {
         });
         break;
     }
+  }
+
+  /**
+   * Khi worker báo "Lỗi xưởng" loại = designer trên đơn ĐANG ở trong pipeline
+   * fulfillment (qua cell `productionError` hoặc scan) → mirror "rework-back về
+   * designer" của `FulfillmentTaskService` để đơn vào tab "Đang chờ quay lại"
+   * (watching) của chính worker:
+   *   - reporter stage → waiting (reworkCount++), giữ assignee/workMs hiện có.
+   *   - push `fulfillmentTimeline` entry (action=rework-back, target=designer,
+   *     byUserId=worker) — điều kiện match của tab watching.
+   * Sau khi designer complete, hook trong `DesignerTaskService.transition()` set
+   * reporter stage = rework → đơn chuyển sang tab "Cần làm lại" của worker.
+   *
+   * Trả về `null` khi đơn chưa vào fulfillment (`!currentFulfillmentStage`) hoặc
+   * thiếu user context → caller bỏ qua phần fulfillment, chỉ flip designerStatus.
+   */
+  /**
+   * Có nên đẩy đơn về designer (rework) khi worker báo lỗi loại designer không?
+   * Fire khi designer ở done/unassigned/rejected. KHÔNG fire khi đang rework
+   * (tránh báo trùng) hoặc đang in-progress/assigned (designer đang làm dở).
+   */
+  private canReworkBackToDesigner(current: DesignerStatus): boolean {
+    return (
+      current !== DesignerStatus.Rework &&
+      current !== DesignerStatus.InProgress &&
+      current !== DesignerStatus.Assigned
+    );
+  }
+
+  private buildDesignerReworkBackFromError(
+    before: unknown,
+    reason: string | null,
+    ctx?: AuditContext,
+  ): { set: Record<string, unknown>; timelineEntry: FulfillmentTimelineEntry } | null {
+    const b = before as {
+      currentFulfillmentStage?: string | null;
+      fulfillmentStages?: Record<string, { status?: string; reworkCount?: number } | undefined>;
+    };
+    const userId = ctx?.user?._id ? String(ctx.user._id) : undefined;
+    if (!userId) return null;
+    const existingStage = b.currentFulfillmentStage;
+    // Đơn chưa vào pipeline (`currentFulfillmentStage` null) → đưa vào stage Print
+    // (đầu pipeline) để worker In watch được; đơn đã ở stage X → reporter = X.
+    const stage = (existingStage || FulfillmentStage.Print) as FulfillmentStage;
+    const stageState = b.fulfillmentStages?.[stage] ?? {};
+    const fromStatus =
+      (stageState.status as FulfillmentStageStatus) ?? FulfillmentStageStatus.Waiting;
+    const set: Record<string, unknown> = {};
+    if (!existingStage) {
+      // Khởi tạo subdoc stage Print + set currentFulfillmentStage. Sau khi designer
+      // complete, hook designer-complete (currentFulfillmentStage đã set) sẽ flip
+      // status → rework → đơn vào tab "Cần làm lại".
+      set.currentFulfillmentStage = stage;
+      set[`fulfillmentStages.${stage}`] = {
+        status: FulfillmentStageStatus.Waiting,
+        reworkCount: 0,
+        workMs: 0,
+        waitingAt: new Date(),
+      };
+    } else {
+      set[`fulfillmentStages.${stage}.status`] = FulfillmentStageStatus.Waiting;
+      set[`fulfillmentStages.${stage}.reworkCount`] = (stageState.reworkCount ?? 0) + 1;
+    }
+    const timelineEntry: FulfillmentTimelineEntry = {
+      stage,
+      action: FulfillmentTransitionAction.ReworkBack,
+      fromStatus,
+      toStatus: FulfillmentStageStatus.Waiting,
+      byUserId: userId,
+      byUserName: ctx?.user?.fullName,
+      at: new Date(),
+      reworkTarget: 'designer',
+      reason: reason ? reason.slice(0, 500) : undefined,
+    };
+    return { set, timelineEntry };
   }
 
   /**
@@ -3285,6 +3362,7 @@ export class OrderService implements OnModuleInit {
     //    - Nếu source='designer' VÀ task đang done → auto rework.
     let autoReworkApplied = false;
     let incProductionErrorCount = false;
+    let reworkBackTimelineEntry: FulfillmentTimelineEntry | null = null;
     if (dto.field === 'productionError') {
       if (normalized) {
         const cfg = await this.workshopConfigRepository.findOne({
@@ -3309,10 +3387,23 @@ export class OrderService implements OnModuleInit {
         const currentDesignerStatus =
           ((before as unknown as { designerStatus?: DesignerStatus }).designerStatus) ||
           DesignerStatus.Unassigned;
-        if (errorSource === 'designer' && currentDesignerStatus === DesignerStatus.Done) {
+        // Báo lỗi designer → designerStatus='rework' + rework-back về designer
+        // (đơn vào/giữ stage pipeline → tab "Đang chờ quay lại"; xong → "Cần làm lại").
+        // Bỏ qua khi designer đang rework (tránh báo trùng) hoặc đang in-progress/
+        // assigned (designer đang làm dở, không giật). Done/Unassigned/Rejected → fire.
+        if (errorSource === 'designer' && this.canReworkBackToDesigner(currentDesignerStatus)) {
           patch.designerStatus = DesignerStatus.Rework;
           patch.designerReworkAt = new Date();
           autoReworkApplied = true;
+          const rb = this.buildDesignerReworkBackFromError(
+            before,
+            (before as unknown as { productionErrorNote?: string }).productionErrorNote ?? null,
+            ctx,
+          );
+          if (rb) {
+            Object.assign(patch, rb.set);
+            reworkBackTimelineEntry = rb.timelineEntry;
+          }
         }
       } else {
         // Clear productionError → cũng clear source. Counter giữ nguyên
@@ -3329,10 +3420,19 @@ export class OrderService implements OnModuleInit {
       const currentDesignerStatus =
         ((before as unknown as { designerStatus?: DesignerStatus }).designerStatus) ||
         DesignerStatus.Unassigned;
-      if (currentDesignerStatus === DesignerStatus.Done) {
+      if (this.canReworkBackToDesigner(currentDesignerStatus)) {
         patch.designerStatus = DesignerStatus.Rework;
         patch.designerReworkAt = new Date();
         autoReworkApplied = true;
+        const rb = this.buildDesignerReworkBackFromError(
+          before,
+          (before as unknown as { productionErrorNote?: string }).productionErrorNote ?? null,
+          ctx,
+        );
+        if (rb) {
+          Object.assign(patch, rb.set);
+          reworkBackTimelineEntry = rb.timelineEntry;
+        }
       }
     }
 
@@ -3353,6 +3453,9 @@ export class OrderService implements OnModuleInit {
     if (autoReworkApplied) incOps.designerReworkCount = 1;
     if (incProductionErrorCount) incOps.productionErrorCount = 1;
     if (Object.keys(incOps).length > 0) mongoUpdate.$inc = incOps;
+    if (reworkBackTimelineEntry) {
+      mongoUpdate.$push = { fulfillmentTimeline: reworkBackTimelineEntry };
+    }
 
     const updated = await this.orderModel.findOneAndUpdate({ _id: id }, mongoUpdate, { new: true });
     if (!updated) throw new NotFoundException('Order not found');
@@ -4501,14 +4604,20 @@ export class OrderService implements OnModuleInit {
 
     // Auto-rework nếu source='designer' và task đang done.
     let autoReworkApplied = false;
+    let reworkBackTimelineEntry: FulfillmentTimelineEntry | null = null;
     if (finalSource === 'designer') {
       const currentDesignerStatus =
         ((before as unknown as { designerStatus?: DesignerStatus }).designerStatus) ||
         DesignerStatus.Unassigned;
-      if (currentDesignerStatus === DesignerStatus.Done) {
+      if (this.canReworkBackToDesigner(currentDesignerStatus)) {
         patch.designerStatus = DesignerStatus.Rework;
         patch.designerReworkAt = new Date();
         autoReworkApplied = true;
+        const rb = this.buildDesignerReworkBackFromError(before, dto.note ?? null, ctx);
+        if (rb) {
+          Object.assign(patch, rb.set);
+          reworkBackTimelineEntry = rb.timelineEntry;
+        }
       }
     }
 
@@ -4517,6 +4626,9 @@ export class OrderService implements OnModuleInit {
     if (autoReworkApplied) incOps.designerReworkCount = 1;
     if (incProductionErrorCount) incOps.productionErrorCount = 1;
     if (Object.keys(incOps).length > 0) mongoUpdate.$inc = incOps;
+    if (reworkBackTimelineEntry) {
+      mongoUpdate.$push = { fulfillmentTimeline: reworkBackTimelineEntry };
+    }
 
     const updated = await this.orderModel.findOneAndUpdate({ _id: id }, mongoUpdate, { new: true });
     if (!updated) throw new NotFoundException('Order not found');

@@ -117,7 +117,7 @@ Login Designer → auto redirect `/my-tasks` (xem `pages/login/index.tsx`).
 
 ### 2.4 Xưởng báo lỗi → rework cycle
 1. Fulfillment vào `/orders` workshop → cell "Lỗi xưởng" (`ProductionErrorSelectCell`) pick code:
-   - Code thường (vd `wrong-design`): `updateField('productionError', code)` → hook BE auto-fill `productionErrorSource` từ `workshop_config.errorSource`, set `toolResultNote='error'`, `$inc productionErrorCount`. Nếu source=designer + status=done → auto `designerStatus='rework'` + `$inc designerReworkCount`
+   - Code thường (vd `wrong-design`): `updateField('productionError', code)` → hook BE auto-fill `productionErrorSource` từ `workshop_config.errorSource`, set `toolResultNote='error'`, `$inc productionErrorCount`. Nếu source=designer + status=done → auto `designerStatus='rework'` + `$inc designerReworkCount`. **Nếu đơn đang trong pipeline fulfillment** (`currentFulfillmentStage` set) → đồng thời mirror rework-back về designer (reporter stage→waiting + push `fulfillmentTimeline` rework-back) để worker thấy đơn ở tab "Đang chờ quay lại" rồi "Cần làm lại" sau khi designer xong — xem `FulfillmentWorkflow.md` §2.3b.
    - Code `'other'`: mở `ProductionErrorOtherDialog` bắt buộc pick source + nhập note → `POST /orders/:id/set-production-error` atomic (BE validate 400 nếu thiếu)
 2. Designer thấy đơn trong cột "Cần làm lại" với badge ×N + productionErrorNote
 3. Designer drag → "Đang làm" (action=`restart` — reset `designerStartedAt`, giữ `designerFirstStartedAt` + `designerWorkMs` cumulative)
@@ -230,7 +230,9 @@ Xem 2.3 chi tiết.
 
 **Bộ lọc ngày:** chỉ dùng `<DateRangePicker>` (đã bỏ 3 preset nút Hôm nay/7 ngày/30 ngày). State `dateFrom`/`dateTo` **mặc định 7 ngày gần nhất**, **lưu vào URL params `from`/`to`** (F5 giữ lựa chọn — `useSearchParams`, đọc khi mount + sync khi đổi). Gửi `from`/`to` vào `myTasks` + `myTaskFilters` + `myStats({period:'custom', from, to})`.
 
-**Filter bar lưu URL params:** ngoài `from`/`to`, toàn bộ filter bar (`type`/`fabricType`/`machineNumber`/`toolResult`/`userSku` + `search`) cũng **đọc từ URL khi mount + sync vào URL khi đổi** (cùng 1 `useEffect` sync, `search` sync theo `debouncedSearch`) → F5 giữ nguyên cả bộ lọc. `fetchTasks`/`fetchFilters` gửi `...filters` xuống cả 2 endpoint nên các cột bên dưới + count facet đều lọc theo. **Hai endpoint dùng chung `buildMyTaskFilter` + cùng range `inProductionAt`** ⇒ kết quả `/my-tasks` và `/my-task-filters` luôn đồng bộ.
+**Filter bar lưu URL params:** ngoài `from`/`to`, toàn bộ filter bar (`type`/`fabricType`/`machineNumber`/`toolResult`/`toolResultNote`/`userSku` + `search`) cũng **đọc từ URL khi mount + sync vào URL khi đổi** (cùng 1 `useEffect` sync, `search` sync theo `debouncedSearch`) → F5 giữ nguyên cả bộ lọc. `fetchTasks`/`fetchFilters` gửi `...filters` xuống cả 2 endpoint nên các cột bên dưới + count facet đều lọc theo. **Hai endpoint dùng chung `buildMyTaskFilter` + cùng range `inProductionAt`** ⇒ kết quả `/my-tasks` và `/my-task-filters` luôn đồng bộ.
+
+**Chống race khi đổi ngày/filter liên tiếp (seq guard):** `fetchTasks`/`fetchFilters` mỗi lần gọi tăng `tasksSeqRef`/`filtersSeqRef`; khi response về chỉ `setState` nếu `seq` còn là mới nhất, ngược lại bỏ qua. Tránh response cũ về muộn (mạng không đảm bảo thứ tự) ghi đè data mới → trước đây gây "đổi lại ngày thì cột hiển thị loạn". Latency local ~0 nên hiếm lộ; server latency cao lộ rõ.
 
 **Lọc theo `inProductionAt`:** áp `inProductionAt ∈ [from,to]` vào:
 - `getMyTasks` (`baseFilter`) → **cả 4 cột kanban + rejected drawer** (header mỗi cột đếm đúng theo filter).

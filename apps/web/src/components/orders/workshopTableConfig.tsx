@@ -421,9 +421,12 @@ export const WORKSHOP_COLS: WorkshopColMeta[] = [
         onUpdated={(code, source, note) =>
           ctx.patchRow(r._id, {
             productionError: code ?? undefined,
-            // Khi code='other', dialog luôn pass source + note; còn lại giữ
-            // hiện trạng (BE auto-fill source qua updateField hook).
-            ...(source !== undefined ? { productionErrorSource: source } : {}),
+            // Bỏ chọn lỗi xưởng → clear luôn loại lỗi (mirror BE order.service.ts:3318).
+            ...(!code
+              ? { productionErrorSource: undefined }
+              : source !== undefined
+                ? { productionErrorSource: source }
+                : {}),
             ...(note !== undefined ? { productionErrorNote: note } : {}),
           })
         }

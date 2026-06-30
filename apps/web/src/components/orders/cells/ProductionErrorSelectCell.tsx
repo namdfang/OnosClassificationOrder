@@ -59,12 +59,16 @@ export function ProductionErrorSelectCell({
     }
     try {
       setSaving(true);
+      // BE auto-fill `productionErrorSource` từ config.errorSource khi đổi
+      // productionError. Resolve sẵn ở FE để patch cột "Loại lỗi" ngay (không
+      // chờ refetch) → UI đồng bộ với BE.
+      const cfg = resolve(category, newCode || undefined);
       await RepositoryRemote.order.updateField(orderId, {
         field: 'productionError',
         value: newCode,
       });
-      toast.success(newCode ? `Đã đổi → ${resolve(category, newCode)?.name || newCode}` : 'Đã bỏ chọn');
-      onUpdated?.(newCode);
+      toast.success(newCode ? `Đã đổi → ${cfg?.name || newCode}` : 'Đã bỏ chọn');
+      onUpdated?.(newCode, cfg?.errorSource);
     } catch (err) {
       handleAxiosError(err);
     } finally {

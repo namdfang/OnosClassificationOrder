@@ -166,6 +166,48 @@ Hoặc `pnpm dev` chạy watch mode trong shared package.
 
 ---
 
+## 6. ⚠️ "Code đúng nhưng server chạy code cũ" — query param bị Zod strip âm thầm + deploy/PM2 không reload sạch
+
+> Mở rộng #5 sang phần **runtime/deploy**. #5 nói "rebuild dist"; pitfall này về việc **dù dist mới, PROCESS đang chạy vẫn dùng code cũ** và hệ quả **silent** (không có lỗi, param/field biến mất). Tốn nhiều giờ debug trong phiên 2026-06.
+
+### Triệu chứng
+
+- Thêm query param mới (vd. `userSku`, `toolResultNote`) vào FE + BE + shared, typecheck pass, **local chạy mượt**, nhưng **trên server filter không áp dụng** / facet mới không trả về / field response (vd. `inProductionAt`, `toolResultNote`) bị thiếu — **không có error nào**.
+- Hoặc: server **lúc trả field mới lúc không** (intermittent).
+
+### Root cause (3 lớp, hay cộng hưởng)
+
+1. **Global `ZodValidationPipe` (`apps/api/src/main-nest.ts`) strip key lạ.** Pipe gọi `zodSchema.safeParse(query)` rồi `return parseResult.data`. Zod `z.object({...})` **mặc định xóa mọi key không khai báo**. Nếu process đang chạy nắm `GetXxxZod` từ **dist cũ** (chưa có param mới) → param bị **cắt khỏi query trước khi vào controller** → service không bao giờ nhận. **Silent, không lỗi.** (Tương tự: `toCard`/mapper build object field-by-field → field mới chỉ xuất hiện nếu dòng map đó có trong code đang chạy.)
+2. **Process Node cache module trong RAM.** Build lại `dist` trên đĩa **vô tác dụng** cho tới khi **restart process**. Rebuild ≠ reload.
+3. **PM2 cluster `reload` để lại orphan worker.** `pm2 reload` (rolling, cluster mode) có thể spawn worker mới nhưng worker cũ không chết hẳn (graceful shutdown kẹt) → 2 process cùng phục vụ qua listening socket kế thừa → **request rơi ngẫu nhiên vào worker cũ/mới** → "lúc có lúc không". Dấu hiệu: `ps aux | grep start.js` ra **>1 dòng**, `restarts` count cao bất thường.
+
+### Fix
+
+- **Quy trình deploy đúng:** `git pull/reset` → `pnpm --filter shared build` → `pnpm build:api` → **RESTART** (không chỉ rebuild). Verify: `git log -1`, `pm2 list` (uptime ~0), `ps aux | grep start.js` (chỉ 1 dòng).
+- **`deploy.sh` ordering:** reload/restart API **NGAY sau `build:api`, TRƯỚC `build:web`**. Vì `set -e` + `build:web` dễ OOM trên server RAM thấp → nếu web build fail thì script abort **trước** bước reload → API chạy code cũ dù `dist-prod` đã mới. (Đã sửa: dùng `pm2 restart` thay `reload` để kill sạch worker cũ, tránh orphan.)
+- **Orphan PM2:** `kill <pid_cũ>` thủ công, rồi `pm2 delete <app> && pm2 start ecosystem.config.cjs` để chỉ còn 1 bản. Thêm `kill_timeout` vào ecosystem để worker cũ bị SIGKILL khi reload.
+
+### Cách phân biệt nhanh (FE vs BE vs deploy)
+
+- DevTools → Network: request có chứa param mới (vd. `userSku=`) không? **Có** mà kết quả không đổi ⇒ BE strip ⇒ server chạy code cũ ⇒ restart.
+- Gọi endpoint facet (vd. `/my-task-filters`): response **thiếu hẳn key mới** (vd. không có `userSku`) ⇒ service cũ ⇒ chưa deploy. (Response không bị ZodValidationPipe đụng — pipe chỉ validate **input**; key thiếu = do code service.)
+
+### Liên quan timezone (red herring đã gặp)
+
+Khác biệt local/server **không phải lúc nào cũng do timezone.** Phiên 2026-06: nghi server UTC gây lệch ngày, nhưng `timedatectl` cho thấy VPS cũng `+07` → loại. Nguyên nhân thật là code cũ. **Tuy vậy rule vẫn đúng:** filter theo ngày phải hardcode `+07:00` (`new Date(\`${d}T00:00:00+07:00\`)`), KHÔNG dùng `setHours()` (giờ local server) — để đúng bất kể TZ server.
+
+### Rule chung
+
+- Sửa `packages/shared` hoặc BE service → **rebuild + RESTART process**, không chỉ rebuild.
+- Param/field mới "biến mất" mà không có lỗi → nghi ngay **Zod strip do dist cũ** hoặc **process chưa restart**, không phải bug logic.
+- Bug "lúc được lúc không" trên server → nghi **nhiều instance/orphan process** chạy lẫn code cũ + mới.
+
+### Precedent đã xảy ra
+
+- 2026-06: `userSku` + `toolResultNote` filter + `inProductionAt` ở `/designer/my-tasks` — local đúng, server sai/thiếu. Root cause: server chạy bản `designer-task.service.ts` cũ + orphan PM2 worker (`pid` từ hôm trước) + `deploy.sh` reload sau web-build-OOM. Fix: kill orphan + đổi `reload`→`restart` + reorder deploy.
+
+---
+
 ## Khi nào update file này
 
 - Phát hiện bug pattern cross-cutting (ảnh hưởng > 1 module).

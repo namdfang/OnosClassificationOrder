@@ -1,4 +1,5 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
+import { useSearchParams } from 'react-router-dom';
 import { CheckCircle2, History, Keyboard, MousePointerClick } from 'lucide-react';
 import { toast } from 'sonner';
 import type { WorkshopAvailableFilters } from 'shared';
@@ -108,16 +109,25 @@ export function PrintOrderTable({
   const configLoaded = useWorkshopConfigStore((s) => s.loaded);
   const isNoTool = useIsNoTool();
 
+  // URL params (prefix `p` = print). F5 giữ nguyên filter/ngày/search/status/trang.
+  const [searchParams, setSearchParams] = useSearchParams();
+
   const [items, setItems] = useState<OrderRow[]>([]);
   const [total, setTotal] = useState(0);
   const [loading, setLoading] = useState(false);
-  const [page, setPage] = useState(1);
-  const [pageSize, setPageSize] = useState(DEFAULT_PAGE_SIZE);
-  const [createdFrom, setCreatedFrom] = useState(todayISO());
-  const [createdTo, setCreatedTo] = useState(todayISO());
-  const [search, setSearch] = useState('');
+  const [page, setPage] = useState(() => {
+    const p = Number(searchParams.get('ppage'));
+    return Number.isFinite(p) && p > 0 ? p : 1;
+  });
+  const [pageSize, setPageSize] = useState(() => {
+    const s = Number(searchParams.get('psize'));
+    return Number.isFinite(s) && s > 0 ? s : DEFAULT_PAGE_SIZE;
+  });
+  const [createdFrom, setCreatedFrom] = useState(() => searchParams.get('pfrom') ?? todayISO());
+  const [createdTo, setCreatedTo] = useState(() => searchParams.get('pto') ?? todayISO());
+  const [search, setSearch] = useState(() => searchParams.get('psearch') || '');
   const debouncedSearch = useDebounce(search, 300);
-  const [statusFilter, setStatusFilter] = useState('');
+  const [statusFilter, setStatusFilter] = useState(() => searchParams.get('pstatus') || '');
   const [counts, setCounts] = useState<StatusCounts>(EMPTY_COUNTS);
 
   const [selected, setSelected] = useState<Set<string>>(new Set());
@@ -125,11 +135,11 @@ export function PrintOrderTable({
   const shiftKeyRef = useRef(false);
 
   // ─── Keyboard copy mode (chế độ phím ↑↓) ──────────────────────
-  // Bật → dùng phím ↑/↓ để copy Production ID từng dòng. Dòng đã copy hiện ✓,
-  // giữ đến khi đổi filter/search/date/status hoặc F5 (KHÔNG xóa khi sang trang
-  // hay reload sau thao tác). `cursorIndex` = dòng đang focus trong trang.
+  // Bật → dùng phím ↑/↓ để copy Production ID từng dòng. CHỈ dòng vừa copy
+  // (dòng cursor đang trỏ) hiện ✓ — di chuyển cursor → ✓ nhảy theo, dòng cũ
+  // mất tick. `cursorIndex` = dòng đang focus trong trang.
   const [keyboardMode, setKeyboardMode] = useState(true);
-  const [copiedIds, setCopiedIds] = useState<Set<string>>(new Set());
+  const [copiedId, setCopiedId] = useState<string | null>(null);
   const [cursorIndex, setCursorIndex] = useState(-1);
   const cursorRef = useRef(-1);
   useEffect(() => {
@@ -143,18 +153,66 @@ export function PrintOrderTable({
 
   const [workshopFilters, setWorkshopFilters] = useState<WorkshopAvailableFilters | null>(null);
 
-  // Facet filter state.
-  const [fType, setFType] = useState('');
-  const [fUserSku, setFUserSku] = useState('');
-  const [fFabricType, setFFabricType] = useState('');
-  const [fMachineNumber, setFMachineNumber] = useState('');
-  const [fPrintStatus, setFPrintStatus] = useState('');
-  const [fToolResult, setFToolResult] = useState('');
-  const [fToolResultNote, setFToolResultNote] = useState('');
-  const [fErrorFile, setFErrorFile] = useState('');
-  const [fAssignee, setFAssignee] = useState('');
-  const [fDesignerStatus, setFDesignerStatus] = useState('');
-  const [fProductionError, setFProductionError] = useState('');
+  // Facet filter state — khởi tạo từ URL params (F5 giữ nguyên).
+  const [fType, setFType] = useState(() => searchParams.get('ptype') || '');
+  const [fUserSku, setFUserSku] = useState(() => searchParams.get('pusersku') || '');
+  const [fFabricType, setFFabricType] = useState(() => searchParams.get('pfabric') || '');
+  const [fMachineNumber, setFMachineNumber] = useState(() => searchParams.get('pmnum') || '');
+  const [fPrintStatus, setFPrintStatus] = useState(() => searchParams.get('pprint') || '');
+  const [fToolResult, setFToolResult] = useState(() => searchParams.get('ptool') || '');
+  const [fToolResultNote, setFToolResultNote] = useState(() => searchParams.get('pnote') || '');
+  const [fErrorFile, setFErrorFile] = useState(() => searchParams.get('perrfile') || '');
+  const [fAssignee, setFAssignee] = useState(() => searchParams.get('passign') || '');
+  const [fDesignerStatus, setFDesignerStatus] = useState(() => searchParams.get('pdstatus') || '');
+  const [fProductionError, setFProductionError] = useState(() => searchParams.get('perror') || '');
+
+  // Sync state → URL (replace). Ngày luôn ghi (kể cả rỗng khi user clear),
+  // các filter còn lại strip khi rỗng để URL gọn.
+  useEffect(() => {
+    setSearchParams(
+      (prev) => {
+        const sp = new URLSearchParams(prev);
+        search ? sp.set('psearch', search) : sp.delete('psearch');
+        sp.set('pfrom', createdFrom);
+        sp.set('pto', createdTo);
+        statusFilter ? sp.set('pstatus', statusFilter) : sp.delete('pstatus');
+        fType ? sp.set('ptype', fType) : sp.delete('ptype');
+        fUserSku ? sp.set('pusersku', fUserSku) : sp.delete('pusersku');
+        fFabricType ? sp.set('pfabric', fFabricType) : sp.delete('pfabric');
+        fMachineNumber ? sp.set('pmnum', fMachineNumber) : sp.delete('pmnum');
+        fPrintStatus ? sp.set('pprint', fPrintStatus) : sp.delete('pprint');
+        fToolResult ? sp.set('ptool', fToolResult) : sp.delete('ptool');
+        fToolResultNote ? sp.set('pnote', fToolResultNote) : sp.delete('pnote');
+        fErrorFile ? sp.set('perrfile', fErrorFile) : sp.delete('perrfile');
+        fAssignee ? sp.set('passign', fAssignee) : sp.delete('passign');
+        fDesignerStatus ? sp.set('pdstatus', fDesignerStatus) : sp.delete('pdstatus');
+        fProductionError ? sp.set('perror', fProductionError) : sp.delete('perror');
+        page > 1 ? sp.set('ppage', String(page)) : sp.delete('ppage');
+        pageSize !== DEFAULT_PAGE_SIZE ? sp.set('psize', String(pageSize)) : sp.delete('psize');
+        return sp;
+      },
+      { replace: true },
+    );
+  }, [
+    search,
+    createdFrom,
+    createdTo,
+    statusFilter,
+    fType,
+    fUserSku,
+    fFabricType,
+    fMachineNumber,
+    fPrintStatus,
+    fToolResult,
+    fToolResultNote,
+    fErrorFile,
+    fAssignee,
+    fDesignerStatus,
+    fProductionError,
+    page,
+    pageSize,
+    setSearchParams,
+  ]);
 
   useEffect(() => {
     if (!configLoaded) loadConfig();
@@ -300,11 +358,7 @@ export function PrintOrderTable({
   const copyProductionId = async (row: OrderRow) => {
     try {
       await navigator.clipboard.writeText(row.productionId);
-      setCopiedIds((prev) => {
-        const next = new Set(prev);
-        next.add(row._id);
-        return next;
-      });
+      setCopiedId(row._id);
     } catch {
       toast.error('Không copy được — trình duyệt chặn clipboard');
     }
@@ -350,7 +404,7 @@ export function PrintOrderTable({
   // Xóa ✓ + cursor khi đổi filter/search/date/status/facet ("filter khác").
   // KHÔNG phụ thuộc `page`/`reloadToken` → sang trang / reload sau thao tác giữ ✓.
   useEffect(() => {
-    setCopiedIds(new Set());
+    setCopiedId(null);
     setCursorIndex(-1);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [
@@ -474,9 +528,9 @@ export function PrintOrderTable({
               Nhấn{' '}
               <kbd className="rounded border border-border bg-background px-1 py-0.5 font-mono text-[10px]">↑</kbd>{' '}
               <kbd className="rounded border border-border bg-background px-1 py-0.5 font-mono text-[10px]">↓</kbd>{' '}
-              để copy Production ID từng dòng. Dòng đã copy hiện dấu{' '}
-              <CheckCircle2 size={11} className="inline text-emerald-500" /> — giữ đến khi đổi
-              filter hoặc tải lại trang.
+              để copy Production ID từng dòng. Chỉ dòng đang trỏ hiện dấu{' '}
+              <CheckCircle2 size={11} className="inline text-emerald-500" /> — di chuyển
+              cursor thì dấu nhảy theo.
             </p>
           </div>
         )}
@@ -545,7 +599,7 @@ export function PrintOrderTable({
                   const isSel = selected.has(row._id);
                   const selectable = canSelect(row);
                   const noTool = isNoTool(row.toolResult);
-                  const isCopied = copiedIds.has(row._id);
+                  const isCopied = copiedId === row._id;
                   const isCursor = keyboardMode && idx === cursorIndex;
                   const rowBgClass = isSel
                     ? 'bg-primary/10 dark:bg-primary/20'

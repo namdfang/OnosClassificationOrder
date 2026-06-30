@@ -95,6 +95,20 @@ export class DesignerTaskService {
         waitingAt: new Date(),
       };
       plan.patch.$set = set;
+    } else if (
+      action === DesignerTransitionAction.Complete &&
+      plan.nextStatus === DesignerStatus.Done &&
+      order.currentFulfillmentStage
+    ) {
+      // Cycle quay về: đơn đã ở trong fulfillment, bị worker báo lỗi designer
+      // (qua nút "Báo lỗi" hoặc cell "Lỗi xưởng") → designer fix xong. Set
+      // reporter stage = rework để đơn hiện ở tab "Cần làm lại" của worker
+      // (trước đó nằm ở tab "Đang chờ quay lại" nhờ designerStatus=rework).
+      const set = (plan.patch.$set ?? {}) as Record<string, unknown>;
+      const stage = order.currentFulfillmentStage;
+      set[`fulfillmentStages.${stage}.status`] = FulfillmentStageStatus.Rework;
+      set[`fulfillmentStages.${stage}.reworkAt`] = new Date();
+      plan.patch.$set = set;
     }
 
     // findOneAndUpdate với filter expected state → race-safe; nếu trong lúc
