@@ -26,7 +26,7 @@ import {
 import { toast } from 'sonner';
 import { useSearchParams } from 'react-router-dom';
 import type { DesignerMyStats, DesignerTaskCard, DesignerTransitionDto } from 'shared';
-import { DesignerStatus, DesignerTransitionAction } from 'shared';
+import { DesignerStatus, DesignerTransitionAction, WorkshopConfigCategory } from 'shared';
 
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -37,6 +37,7 @@ import { SelectFilter } from '@/components/common/SelectFilter';
 import { Spinner } from '@/components/common/Spinner';
 import { RepositoryRemote } from '@/services';
 import { useDebounce } from '@/hooks/useDebounce';
+import { useWorkshopConfigStore } from '@/store/workshopConfigStore';
 import { handleAxiosError } from '@/utils';
 
 import { RejectModal } from './RejectModal';
@@ -106,6 +107,7 @@ type Filters = {
   fabricType: string;
   machineNumber: string;
   toolResult: string;
+  toolResultNote: string;
   userSku: string;
 };
 
@@ -114,6 +116,7 @@ const EMPTY_FILTERS: Filters = {
   fabricType: '',
   machineNumber: '',
   toolResult: '',
+  toolResultNote: '',
   userSku: '',
 };
 
@@ -154,6 +157,7 @@ export default function MyTasksPage() {
     fabricType: searchParams.get('fabricType') || '',
     machineNumber: searchParams.get('machineNumber') || '',
     toolResult: searchParams.get('toolResult') || '',
+    toolResultNote: searchParams.get('toolResultNote') || '',
     userSku: searchParams.get('userSku') || '',
   }));
   const [filterOptions, setFilterOptions] = useState<{
@@ -161,8 +165,9 @@ export default function MyTasksPage() {
     fabricType: FilterOption[];
     machineNumber: FilterOption[];
     toolResult: FilterOption[];
+    toolResultNote: FilterOption[];
     userSku: FilterOption[];
-  }>({ type: [], fabricType: [], machineNumber: [], toolResult: [], userSku: [] });
+  }>({ type: [], fabricType: [], machineNumber: [], toolResult: [], toolResultNote: [], userSku: [] });
 
   const [search, setSearch] = useState(() => searchParams.get('search') || '');
   const debouncedSearch = useDebounce(search, 300);
@@ -245,7 +250,7 @@ export default function MyTasksPage() {
       if (seq !== filtersSeqRef.current) return;
       // Merge với default rỗng → mọi key luôn là array kể cả khi response BE
       // thiếu facet nào đó (vd. backend cũ chưa có `userSku`) → tránh crash.
-      const empty = { type: [], fabricType: [], machineNumber: [], toolResult: [], userSku: [] };
+      const empty = { type: [], fabricType: [], machineNumber: [], toolResult: [], toolResultNote: [], userSku: [] };
       setFilterOptions({ ...empty, ...(res.data?.data || {}) } as typeof filterOptions);
     } catch (err) {
       if (seq === filtersSeqRef.current) handleAxiosError(err);
@@ -264,6 +269,7 @@ export default function MyTasksPage() {
         setOrDel('fabricType', filters.fabricType);
         setOrDel('machineNumber', filters.machineNumber);
         setOrDel('toolResult', filters.toolResult);
+        setOrDel('toolResultNote', filters.toolResultNote);
         setOrDel('userSku', filters.userSku);
         setOrDel('search', debouncedSearch);
         return sp;
@@ -276,12 +282,28 @@ export default function MyTasksPage() {
     fetchTasks();
     fetchFilters();
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [filters.type, filters.fabricType, filters.machineNumber, filters.toolResult, filters.userSku, debouncedSearch, dateFrom, dateTo]);
+  }, [filters.type, filters.fabricType, filters.machineNumber, filters.toolResult, filters.toolResultNote, filters.userSku, debouncedSearch, dateFrom, dateTo]);
 
   useEffect(() => {
     fetchStats();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [dateFrom, dateTo]);
+
+  // Nạp workshop_config (1 lần) để TaskCard + filter bar resolve label (name)
+  // thay vì hiển thị raw code (đồng bộ với bảng đơn).
+  const loadWorkshopConfig = useWorkshopConfigStore((s) => s.load);
+  useEffect(() => {
+    loadWorkshopConfig();
+  }, [loadWorkshopConfig]);
+
+  // Subscribe byCategory để re-render khi config load xong; map option.value
+  // (code) → name cho dropdown filter. Giữ nguyên value (code) để gửi xuống BE.
+  const byCategory = useWorkshopConfigStore((s) => s.byCategory);
+  const labelOpts = (cat: WorkshopConfigCategory, opts: FilterOption[]): FilterOption[] =>
+    opts.map((o) => ({
+      ...o,
+      label: byCategory[cat]?.find((i) => i.code === o.value)?.name || o.label,
+    }));
 
   const refreshAll = () => {
     fetchTasks();
@@ -547,7 +569,7 @@ export default function MyTasksPage() {
         </div>
 
         {/* Filter bar */}
-        <div className="grid grid-cols-2 md:grid-cols-3 xl:grid-cols-6 gap-2 rounded-md border border-border bg-card p-2.5">
+        <div className="grid grid-cols-2 md:grid-cols-3 xl:grid-cols-7 gap-2 rounded-md border border-border bg-card p-2.5">
           <div>
             <label className="text-[10px] text-muted-foreground uppercase tracking-wide font-medium">
               Search
@@ -572,19 +594,25 @@ export default function MyTasksPage() {
             label="Loại vải"
             value={filters.fabricType}
             onChange={(v) => setFilters({ ...filters, fabricType: v })}
-            options={filterOptions.fabricType}
+            options={labelOpts(WorkshopConfigCategory.FabricType, filterOptions.fabricType)}
           />
           <SelectFilter
             label="Máy"
             value={filters.machineNumber}
             onChange={(v) => setFilters({ ...filters, machineNumber: v })}
-            options={filterOptions.machineNumber}
+            options={labelOpts(WorkshopConfigCategory.Machine, filterOptions.machineNumber)}
           />
           <SelectFilter
             label="Kết quả Tool"
             value={filters.toolResult}
             onChange={(v) => setFilters({ ...filters, toolResult: v })}
-            options={filterOptions.toolResult}
+            options={labelOpts(WorkshopConfigCategory.ToolResult, filterOptions.toolResult)}
+          />
+          <SelectFilter
+            label="Note kq Tool"
+            value={filters.toolResultNote}
+            onChange={(v) => setFilters({ ...filters, toolResultNote: v })}
+            options={labelOpts(WorkshopConfigCategory.ToolResultNote, filterOptions.toolResultNote)}
           />
           <SelectFilter
             label="Khách hàng"
@@ -723,6 +751,22 @@ export default function MyTasksPage() {
   );
 }
 
+// Thứ tự ưu tiên size để các đơn cùng size đứng cạnh nhau trong mỗi nhóm sản phẩm.
+const SIZE_ORDER = ['XS', 'S', 'M', 'L', 'XL', '2XL', '3XL', '4XL', '5XL'];
+const SIZE_ALIAS: Record<string, string> = {
+  XXL: '2XL',
+  XXXL: '3XL',
+  XXXXL: '4XL',
+  XXXXXL: '5XL',
+};
+function sizeRank(size?: string): number {
+  if (!size) return SIZE_ORDER.length + 1; // không có size → dồn cuối
+  const raw = size.trim().toUpperCase();
+  const norm = SIZE_ALIAS[raw] || raw;
+  const i = SIZE_ORDER.indexOf(norm);
+  return i === -1 ? SIZE_ORDER.length : i; // size lạ → trước nhóm "không có size"
+}
+
 function groupByType(cards: DesignerTaskCard[]): [string, DesignerTaskCard[]][] {
   const map = new Map<string, DesignerTaskCard[]>();
   for (const r of cards) {
@@ -730,6 +774,11 @@ function groupByType(cards: DesignerTaskCard[]): [string, DesignerTaskCard[]][] 
     const arr = map.get(k) || [];
     arr.push(r);
     map.set(k, arr);
+  }
+  // Trong mỗi nhóm sản phẩm: sắp xếp theo size ưu tiên XS→5XL (size giống nhau
+  // đứng cạnh nhau). Array.sort ổn định nên cùng size vẫn giữ thứ tự ngày từ BE.
+  for (const [, arr] of map) {
+    arr.sort((a, b) => sizeRank(a.size) - sizeRank(b.size));
   }
   return [...map.entries()].sort((a, b) => a[0].localeCompare(b[0]));
 }

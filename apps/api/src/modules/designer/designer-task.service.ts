@@ -267,6 +267,7 @@ export class DesignerTaskService {
       fabricType?: string;
       machineNumber?: string;
       toolResult?: string;
+      toolResultNote?: string;
       userSku?: string;
       search?: string;
     },
@@ -339,6 +340,7 @@ export class DesignerTaskService {
       fabricType?: string;
       machineNumber?: string;
       toolResult?: string;
+      toolResultNote?: string;
       userSku?: string;
     },
   ): Promise<{
@@ -346,14 +348,15 @@ export class DesignerTaskService {
     fabricType: { value: string; label: string; count: number }[];
     machineNumber: { value: string; label: string; count: number }[];
     toolResult: { value: string; label: string; count: number }[];
+    toolResultNote: { value: string; label: string; count: number }[];
     userSku: { value: string; label: string; count: number }[];
   }> {
     const userId = String(user._id);
     // Đồng bộ với kanban: facet count cũng lọc theo `inProductionAt` trong khoảng.
     const range = this.resolveDateRange(query.from, query.to);
 
-    type FacetKey = 'type' | 'fabricType' | 'machineNumber' | 'toolResult' | 'userSku';
-    const KEYS: FacetKey[] = ['type', 'fabricType', 'machineNumber', 'toolResult', 'userSku'];
+    type FacetKey = 'type' | 'fabricType' | 'machineNumber' | 'toolResult' | 'toolResultNote' | 'userSku';
+    const KEYS: FacetKey[] = ['type', 'fabricType', 'machineNumber', 'toolResult', 'toolResultNote', 'userSku'];
 
     const aggregate = async (excludeKey: FacetKey, field: FacetKey) => {
       const filter = this.buildMyTaskFilter(userId, { ...query, [excludeKey]: undefined });
@@ -370,7 +373,7 @@ export class DesignerTaskService {
       return agg.map((r) => ({ value: r._id, label: r._id, count: r.count }));
     };
 
-    const [typeOpts, fabricOpts, machineOpts, toolOpts, userOpts] = await Promise.all(
+    const [typeOpts, fabricOpts, machineOpts, toolOpts, toolNoteOpts, userOpts] = await Promise.all(
       KEYS.map((k) => aggregate(k, k)),
     );
 
@@ -379,6 +382,7 @@ export class DesignerTaskService {
       fabricType: fabricOpts,
       machineNumber: machineOpts,
       toolResult: toolOpts,
+      toolResultNote: toolNoteOpts,
       userSku: userOpts,
     };
   }
@@ -480,6 +484,7 @@ export class DesignerTaskService {
       fabricType?: string;
       machineNumber?: string;
       toolResult?: string;
+      toolResultNote?: string;
       userSku?: string;
       search?: string;
     },
@@ -492,6 +497,8 @@ export class DesignerTaskService {
       filter.machineNumber = { $in: query.machineNumber.split(',').filter(Boolean) };
     if (query.toolResult)
       filter.toolResult = { $in: query.toolResult.split(',').filter(Boolean) };
+    if (query.toolResultNote)
+      filter.toolResultNote = { $in: query.toolResultNote.split(',').filter(Boolean) };
     if (query.userSku)
       filter.userSku = { $in: query.userSku.split(',').filter(Boolean) };
     if (query.search) {

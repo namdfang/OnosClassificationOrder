@@ -120,6 +120,8 @@ export const GetMyTasksZod = z.object({
   fabricType: z.string().optional(),
   machineNumber: z.string().optional(),
   toolResult: z.string().optional(),
+  /** CSV workshop_config code (category tool_result_note) — lọc theo note kq Tool. */
+  toolResultNote: z.string().optional(),
   /** CSV userSku — lọc theo khách hàng sở hữu đơn. */
   userSku: z.string().optional(),
   /** Free-text search (productionId/orderId). */
@@ -210,6 +212,7 @@ export const GetMyTaskFiltersResZod = ResZod.extend({
     fabricType: FilterOptionZod.array(),
     machineNumber: FilterOptionZod.array(),
     toolResult: FilterOptionZod.array(),
+    toolResultNote: FilterOptionZod.array(),
     userSku: FilterOptionZod.array(),
   }),
 });

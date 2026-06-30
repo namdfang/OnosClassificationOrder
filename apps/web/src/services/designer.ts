@@ -51,6 +51,7 @@ const myTasks = (
     fabricType?: string;
     machineNumber?: string;
     toolResult?: string;
+    toolResultNote?: string;
     userSku?: string;
     search?: string;
   } = {},
@@ -71,6 +72,7 @@ const myTaskFilters = (
     fabricType?: string;
     machineNumber?: string;
     toolResult?: string;
+    toolResultNote?: string;
     userSku?: string;
   } = {},
 ) => {
