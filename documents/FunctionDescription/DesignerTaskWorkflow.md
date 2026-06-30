@@ -93,7 +93,7 @@ Login Designer → auto redirect `/my-tasks` (xem `pages/login/index.tsx`).
 - Mỗi cột group cards theo `type` (sản phẩm), header collapsible với checkbox-all + indeterminate + chevron toggle
 - Mỗi card: thumbnail (click → ImagePreviewDialog), productionId (click → TaskDetailDialog), size/color, timestamp tương ứng state + **mốc "SX" (`inProductionAt`)** + **"Cập nhật" (`updatedAt`)** — mỗi mốc có tooltip (`Hint`) giải thích, badge ×N reworkCount. (`DesignerTaskCardZod` thêm `orderAt`/`inProductionAt`/`updatedAt`; mapper `toCard` map từ order doc.)
 - Cards indent `pl-5 border-l-2` so với group header để visualize hierarchy
-- Filter bar: search + 4 SelectFilter (Sản phẩm/Loại vải/Máy/Tool) cross-faceted từ `/my-task-filters`
+- Filter bar: search + 5 SelectFilter (Sản phẩm/Loại vải/Máy/Tool/**Khách hàng** = `userSku`) cross-faceted từ `/my-task-filters`
 - KPI 6 ô: Cần làm · Cần làm lại · Đang làm · Đã xong · **Đã trả lại** · Phản hồi/Làm
 - Period switcher today/7d/30d ảnh hưởng cột "Đã xong" + completed stats
 
@@ -178,7 +178,7 @@ factoryId?: string                // ref FactoryEntity, REQUIRED khi role=Fulfil
 | POST | `/v1/orders/:id/designer-transition` | Designer/Leader/Admin | Body `{ action, reason? }`. State machine race-safe `findOneAndUpdate({ designerStatus: expected })`. Sub-designer chỉ transition task `assignee=user._id` (owner check). Override roles (Admin/Manager/Leader) bypass |
 | POST | `/v1/designer/bulk-transition` | Same | Bulk N task, per-row state machine, skip + report |
 | GET | `/v1/designer/my-tasks` | Designer/Leader/Admin | Kanban 4 cột + rejected drawer. Filter (type, fabricType, machineNumber, toolResult, search); `from`/`to` lọc **cả 4 cột** theo `inProductionAt` (mặc định today) |
-| GET | `/v1/designer/my-task-filters` | Same | Faceted filter options (4 facets) cross-narrow |
+| GET | `/v1/designer/my-task-filters` | Same | Faceted filter options (5 facets: type/fabricType/machineNumber/toolResult/userSku) cross-narrow + lọc `inProductionAt` |
 | GET | `/v1/designer/my-stats?period=today\|7d\|30d\|custom` | Same | KPI cá nhân (counts + avgResponseMin + avgWorkMin + errorRate) |
 | GET | `/v1/designer/performance?from&to&userId?` | Admin/Manager/Leader | Leaderboard per-user trong period (incl. totalRejected/totalRework từ OrderLog) |
 | GET | `/v1/designer/timeline/:userId?from&to` | Same | Per-day buckets 4 series (assigned/started/completed/rework) cho line chart |
@@ -232,7 +232,7 @@ Xem 2.3 chi tiết.
 
 **Lọc theo `inProductionAt`:** áp `inProductionAt ∈ [from,to]` vào:
 - `getMyTasks` (`baseFilter`) → **cả 4 cột kanban + rejected drawer** (header mỗi cột đếm đúng theo filter).
-- `getMyTaskFilters` (facet aggregation) → **số đếm dropdown Sản phẩm/Vải/Máy/Kết quả Tool** cũng đúng theo khoảng ngày.
+- `getMyTaskFilters` (facet aggregation) → **số đếm dropdown Sản phẩm/Vải/Máy/Kết quả Tool/Khách hàng** cũng đúng theo khoảng ngày.
 - `toCard` trả `inProductionAt` (+ `orderAt`/`updatedAt`) → card hiển thị mốc "SX".
 
 ⚠️ Đơn open vào sản xuất ngoài khoảng sẽ bị ẩn — chọn khoảng rộng để thấy backlog cũ. **KPI giữ nguyên** (status counts = snapshot; `completedInPeriod` theo `designerCompletedAt`) → có thể lệch nhẹ với cột "Đã xong".
@@ -342,7 +342,7 @@ Mỗi transition ghi entry `{ field: 'designerStatus', before, after, action: 'u
 
 - **Designer team list query**: filter `{ roleId: designerRoleId }` + 2 aggregate count tasks (active/completed). 8 designer × ~few hundred tasks → < 50ms.
 - **My tasks query**: 5 song song find with sort, mỗi cột scope user._id + status. Mỗi user thường < 100 task → < 30ms.
-- **Faceted my-task-filters**: 4 aggregate independent (mỗi facet exclude khỏi filter để cross-narrow count đúng). Run parallel ~50ms.
+- **Faceted my-task-filters**: 5 aggregate independent (type/fabricType/machineNumber/toolResult/userSku — mỗi facet exclude khỏi filter để cross-narrow count đúng). Run parallel ~50ms.
 - **Performance leaderboard**: 3 aggregate (status snapshot + completed docs + OrderLog totals) parallel + user/role lookups. 1000 order × 30d → < 200ms.
 - **Auto-rework hook**: thêm 1 workshop_config findOne per `updateField('productionError')`. Cache miss < 10ms (collection nhỏ).
 - **Race-safe transitions**: `findOneAndUpdate filter` cost 1 query (no read-then-write). Concurrent users hiếm trên 1 task — 409 happen edge case.

@@ -267,6 +267,7 @@ export class DesignerTaskService {
       fabricType?: string;
       machineNumber?: string;
       toolResult?: string;
+      userSku?: string;
       search?: string;
     },
   ): Promise<{
@@ -338,19 +339,21 @@ export class DesignerTaskService {
       fabricType?: string;
       machineNumber?: string;
       toolResult?: string;
+      userSku?: string;
     },
   ): Promise<{
     type: { value: string; label: string; count: number }[];
     fabricType: { value: string; label: string; count: number }[];
     machineNumber: { value: string; label: string; count: number }[];
     toolResult: { value: string; label: string; count: number }[];
+    userSku: { value: string; label: string; count: number }[];
   }> {
     const userId = String(user._id);
     // Đồng bộ với kanban: facet count cũng lọc theo `inProductionAt` trong khoảng.
     const range = this.resolveDateRange(query.from, query.to);
 
-    type FacetKey = 'type' | 'fabricType' | 'machineNumber' | 'toolResult';
-    const KEYS: FacetKey[] = ['type', 'fabricType', 'machineNumber', 'toolResult'];
+    type FacetKey = 'type' | 'fabricType' | 'machineNumber' | 'toolResult' | 'userSku';
+    const KEYS: FacetKey[] = ['type', 'fabricType', 'machineNumber', 'toolResult', 'userSku'];
 
     const aggregate = async (excludeKey: FacetKey, field: FacetKey) => {
       const filter = this.buildMyTaskFilter(userId, { ...query, [excludeKey]: undefined });
@@ -367,7 +370,7 @@ export class DesignerTaskService {
       return agg.map((r) => ({ value: r._id, label: r._id, count: r.count }));
     };
 
-    const [typeOpts, fabricOpts, machineOpts, toolOpts] = await Promise.all(
+    const [typeOpts, fabricOpts, machineOpts, toolOpts, userOpts] = await Promise.all(
       KEYS.map((k) => aggregate(k, k)),
     );
 
@@ -376,6 +379,7 @@ export class DesignerTaskService {
       fabricType: fabricOpts,
       machineNumber: machineOpts,
       toolResult: toolOpts,
+      userSku: userOpts,
     };
   }
 
@@ -476,6 +480,7 @@ export class DesignerTaskService {
       fabricType?: string;
       machineNumber?: string;
       toolResult?: string;
+      userSku?: string;
       search?: string;
     },
   ): Record<string, unknown> {
@@ -487,6 +492,8 @@ export class DesignerTaskService {
       filter.machineNumber = { $in: query.machineNumber.split(',').filter(Boolean) };
     if (query.toolResult)
       filter.toolResult = { $in: query.toolResult.split(',').filter(Boolean) };
+    if (query.userSku)
+      filter.userSku = { $in: query.userSku.split(',').filter(Boolean) };
     if (query.search) {
       filter.$or = [
         { productionId: { $regex: query.search, $options: 'i' } },
@@ -606,19 +613,20 @@ export class DesignerTaskService {
   });
 
   private resolveDateRange(from?: string, to?: string): { start: Date; end: Date } {
+    // Biên ngày theo giờ VN (+07:00) — đồng bộ với order.service (vnDayStart/
+    // vnDayEnd). Tránh lệch ngày khi server chạy UTC: 'yyyy-mm-dd' phải hiểu là
+    // NGÀY VN chứ không phải local của server.
+    const vnStart = (d: string) => new Date(`${d.slice(0, 10)}T00:00:00+07:00`);
+    const vnEnd = (d: string) => new Date(`${d.slice(0, 10)}T23:59:59.999+07:00`);
     if (from || to) {
-      const start = from ? new Date(from) : new Date(0);
-      start.setHours(0, 0, 0, 0);
-      const end = to ? new Date(to) : new Date();
-      end.setHours(23, 59, 59, 999);
-      return { start, end };
+      return {
+        start: from ? vnStart(from) : new Date(0),
+        end: to ? vnEnd(to) : new Date(),
+      };
     }
-    // Default: today
-    const start = new Date();
-    start.setHours(0, 0, 0, 0);
-    const end = new Date();
-    end.setHours(23, 59, 59, 999);
-    return { start, end };
+    // Default: hôm nay (theo VN).
+    const vnToday = new Date(Date.now() + 7 * 60 * 60 * 1000).toISOString().slice(0, 10);
+    return { start: vnStart(vnToday), end: vnEnd(vnToday) };
   }
 
   private resolvePeriodRange(

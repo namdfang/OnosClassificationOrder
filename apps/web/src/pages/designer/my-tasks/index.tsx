@@ -106,9 +106,16 @@ type Filters = {
   fabricType: string;
   machineNumber: string;
   toolResult: string;
+  userSku: string;
 };
 
-const EMPTY_FILTERS: Filters = { type: '', fabricType: '', machineNumber: '', toolResult: '' };
+const EMPTY_FILTERS: Filters = {
+  type: '',
+  fabricType: '',
+  machineNumber: '',
+  toolResult: '',
+  userSku: '',
+};
 
 /** Drag rules: từ status `from` sang cột `to` ⇒ action gì (hoặc null). */
 function planTransition(
@@ -146,7 +153,8 @@ export default function MyTasksPage() {
     fabricType: FilterOption[];
     machineNumber: FilterOption[];
     toolResult: FilterOption[];
-  }>({ type: [], fabricType: [], machineNumber: [], toolResult: [] });
+    userSku: FilterOption[];
+  }>({ type: [], fabricType: [], machineNumber: [], toolResult: [], userSku: [] });
 
   const [search, setSearch] = useState('');
   const debouncedSearch = useDebounce(search, 300);
@@ -215,7 +223,7 @@ export default function MyTasksPage() {
         to: dateTo || undefined,
       });
       setFilterOptions(
-        (res.data?.data || { type: [], fabricType: [], machineNumber: [], toolResult: [] }) as typeof filterOptions,
+        (res.data?.data || { type: [], fabricType: [], machineNumber: [], toolResult: [], userSku: [] }) as typeof filterOptions,
       );
     } catch (err) {
       handleAxiosError(err);
@@ -239,7 +247,7 @@ export default function MyTasksPage() {
     fetchTasks();
     fetchFilters();
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [filters.type, filters.fabricType, filters.machineNumber, filters.toolResult, debouncedSearch, dateFrom, dateTo]);
+  }, [filters.type, filters.fabricType, filters.machineNumber, filters.toolResult, filters.userSku, debouncedSearch, dateFrom, dateTo]);
 
   useEffect(() => {
     fetchStats();
@@ -510,7 +518,7 @@ export default function MyTasksPage() {
         </div>
 
         {/* Filter bar */}
-        <div className="grid grid-cols-2 md:grid-cols-5 gap-2 rounded-md border border-border bg-card p-2.5">
+        <div className="grid grid-cols-2 md:grid-cols-3 xl:grid-cols-6 gap-2 rounded-md border border-border bg-card p-2.5">
           <div>
             <label className="text-[10px] text-muted-foreground uppercase tracking-wide font-medium">
               Search
@@ -548,6 +556,12 @@ export default function MyTasksPage() {
             value={filters.toolResult}
             onChange={(v) => setFilters({ ...filters, toolResult: v })}
             options={filterOptions.toolResult}
+          />
+          <SelectFilter
+            label="Khách hàng"
+            value={filters.userSku}
+            onChange={(v) => setFilters({ ...filters, userSku: v })}
+            options={filterOptions.userSku}
           />
         </div>
 

@@ -51,6 +51,7 @@ const myTasks = (
     fabricType?: string;
     machineNumber?: string;
     toolResult?: string;
+    userSku?: string;
     search?: string;
   } = {},
 ) => {
@@ -70,6 +71,7 @@ const myTaskFilters = (
     fabricType?: string;
     machineNumber?: string;
     toolResult?: string;
+    userSku?: string;
   } = {},
 ) => {
   const qs = new URLSearchParams();
