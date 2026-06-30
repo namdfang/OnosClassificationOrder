@@ -52,7 +52,7 @@ State machine 6 trạng thái:
 - `assigned` (leader gán cho user)
 - `in-progress` (sub bấm "Nhận làm")
 - `done` (sub bấm "Hoàn thành" — auto `toolResultNote='ok'` + `readyForFulfill=true`)
-- `rejected` (sub bấm "Trả lại" + reason)
+- `rejected` (sub bấm "Trả lại" + reason — cho phép từ **`assigned` HOẶC `in-progress`**, tức đã kéo sang "Đang làm" vẫn trả lại được)
 - `rework` (xưởng set productionError có errorSource='designer')
 
 **Identity model:** `Order.assignee = user._id` (string). KHÔNG còn dùng workshop_config (category=assignee đã xoá).
@@ -199,7 +199,7 @@ factoryId?: string                // ref FactoryEntity, REQUIRED khi role=Fulfil
 | `assigned` | `start` | `in-progress` | designerStartedAt=now; if isFirstStart → designerFirstStartedAt=now |
 | `rework` | `restart` | `in-progress` | designerStartedAt=now (reset per-cycle) |
 | `in-progress` | `complete` | `done` | designerCompletedAt=now; toolResultNote='ok'; readyForFulfill=true; `$inc designerWorkMs += (now − startedAt)` |
-| `assigned` | `reject` | `rejected` | designerRejectedAt=now; designerRejectedReason=reason |
+| `assigned` **hoặc** `in-progress` | `reject` | `rejected` | designerRejectedAt=now; designerRejectedReason=reason. FE: nút "Trả" hiện ở cả cột Cần làm + Đang làm; bulk reject cho cột Đang làm |
 | `done` → updateField productionError (errorSource=designer) | (auto) | `rework` | designerReworkAt=now; `$inc designerReworkCount` |
 | `done` → updateField productionErrorSource → 'designer' | (auto) | `rework` | Same as above |
 

@@ -89,7 +89,7 @@ const COL_META: Record<
     label: 'Đang làm',
     status: DesignerStatus.InProgress,
     accent: 'border-indigo-300 dark:border-indigo-700',
-    bulk: [DesignerTransitionAction.Complete],
+    bulk: [DesignerTransitionAction.Complete, DesignerTransitionAction.Reject],
   },
   done: {
     label: 'Đã xong',
@@ -857,7 +857,7 @@ function Column({
                           />
                         </div>
 
-                        {colKey === 'assigned' && (
+                        {(colKey === 'assigned' || colKey === 'inProgress') && (
                           <button
                             type="button"
                             onClick={(e) => {
