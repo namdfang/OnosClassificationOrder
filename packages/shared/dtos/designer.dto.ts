@@ -92,6 +92,11 @@ export const DesignerTaskCardZod = z.object({
   machineNumber: z.string().optional(),
   toolResult: z.string().optional(),
   toolResultNote: z.string().optional(),
+  /** Ngày khách lên đơn + ngày vào sản xuất (hiển thị trên card + tooltip). */
+  orderAt: z.date().optional(),
+  inProductionAt: z.date().optional(),
+  /** Thời điểm bản ghi được cập nhật lần cuối (Mongoose timestamps). */
+  updatedAt: z.date().optional(),
   designerStatus: z.nativeEnum(DesignerStatus),
   designerAssignedAt: z.date().optional(),
   designerStartedAt: z.date().optional(),

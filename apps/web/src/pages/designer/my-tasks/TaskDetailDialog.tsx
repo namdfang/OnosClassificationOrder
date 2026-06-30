@@ -207,6 +207,9 @@ export function TaskDetailDialog({ orderId, onClose }: Props) {
                   {detail.orderAt && (
                     <Timeline icon={<Clock size={11} className="text-indigo-500" />} label="Khách lên đơn" value={fmt(detail.orderAt)} />
                   )}
+                  {detail.inProductionAt && (
+                    <Timeline icon={<Clock size={11} className="text-sky-500" />} label="Vào sản xuất" value={fmt(detail.inProductionAt)} />
+                  )}
                   <Timeline icon={<Clock size={11} />} label="Được gán" value={fmt(detail.designerAssignedAt)} />
                   <Timeline icon={<Clock size={11} />} label="Bắt đầu" value={fmt(detail.designerStartedAt)} />
                   <Timeline

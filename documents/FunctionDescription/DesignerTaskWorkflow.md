@@ -91,7 +91,7 @@ Login Designer → auto redirect `/my-tasks` (xem `pages/login/index.tsx`).
 **Layout kanban 4 cột** theo thứ tự **Cần làm → Cần làm lại → Đang làm → Đã xong**:
 - Cột "Cần làm lại" auto **ẩn** khi rỗng (grid switch `xl:grid-cols-4 ↔ xl:grid-cols-3`)
 - Mỗi cột group cards theo `type` (sản phẩm), header collapsible với checkbox-all + indeterminate + chevron toggle
-- Mỗi card: thumbnail (click → ImagePreviewDialog), productionId (click → TaskDetailDialog), size/color, timestamp tương ứng state, badge ×N reworkCount
+- Mỗi card: thumbnail (click → ImagePreviewDialog), productionId (click → TaskDetailDialog), size/color, timestamp tương ứng state + **mốc "SX" (`inProductionAt`)** + **"Cập nhật" (`updatedAt`)** — mỗi mốc có tooltip (`Hint`) giải thích, badge ×N reworkCount. (`DesignerTaskCardZod` thêm `orderAt`/`inProductionAt`/`updatedAt`; mapper `toCard` map từ order doc.)
 - Cards indent `pl-5 border-l-2` so với group header để visualize hierarchy
 - Filter bar: search + 4 SelectFilter (Sản phẩm/Loại vải/Máy/Tool) cross-faceted từ `/my-task-filters`
 - KPI 6 ô: Cần làm · Cần làm lại · Đang làm · Đã xong · **Đã trả lại** · Phản hồi/Làm
@@ -177,7 +177,7 @@ factoryId?: string                // ref FactoryEntity, REQUIRED khi role=Fulfil
 | POST | `/v1/designer/team/:userId/reset-password` | Admin/Leader | Force password change next login |
 | POST | `/v1/orders/:id/designer-transition` | Designer/Leader/Admin | Body `{ action, reason? }`. State machine race-safe `findOneAndUpdate({ designerStatus: expected })`. Sub-designer chỉ transition task `assignee=user._id` (owner check). Override roles (Admin/Manager/Leader) bypass |
 | POST | `/v1/designer/bulk-transition` | Same | Bulk N task, per-row state machine, skip + report |
-| GET | `/v1/designer/my-tasks` | Designer/Leader/Admin | Kanban data 4 cột + rejected drawer, filter params (type, fabricType, machineNumber, toolResult, search, from, to) |
+| GET | `/v1/designer/my-tasks` | Designer/Leader/Admin | Kanban 4 cột + rejected drawer. Filter (type, fabricType, machineNumber, toolResult, search); `from`/`to` lọc **cả 4 cột** theo `inProductionAt` (mặc định today) |
 | GET | `/v1/designer/my-task-filters` | Same | Faceted filter options (4 facets) cross-narrow |
 | GET | `/v1/designer/my-stats?period=today\|7d\|30d\|custom` | Same | KPI cá nhân (counts + avgResponseMin + avgWorkMin + errorRate) |
 | GET | `/v1/designer/performance?from&to&userId?` | Admin/Manager/Leader | Leaderboard per-user trong period (incl. totalRejected/totalRework từ OrderLog) |
@@ -228,11 +228,13 @@ factoryId?: string                // ref FactoryEntity, REQUIRED khi role=Fulfil
 ### 4.2 `/my-tasks` (Sub-designer)
 Xem 2.3 chi tiết.
 
-**Bộ lọc ngày:** 3 preset nhanh (Hôm nay / 7 ngày / 30 ngày) + `<DateRangePicker>` tùy chỉnh (khoảng bất kỳ, như các trang khác). State thống nhất `dateFrom`/`dateTo` (mặc định hôm nay) → gửi `from`/`to` vào `myTasks` (lọc cột **Đã xong**) + `myStats({period:'custom', from, to})` (KPI). Preset highlight khi range khớp.
+**Bộ lọc ngày:** 3 preset nhanh (Hôm nay / 7 ngày / 30 ngày) + `<DateRangePicker>` tùy chỉnh (khoảng bất kỳ, như các trang khác). State thống nhất `dateFrom`/`dateTo` (mặc định hôm nay) → gửi `from`/`to` vào `myTasks` + `myStats({period:'custom', from, to})`. Preset highlight khi range khớp.
+
+**Lọc theo `inProductionAt`:** `getMyTasks` áp `inProductionAt ∈ [from,to]` vào `baseFilter` → **CẢ 4 cột kanban + rejected drawer** chỉ hiện đơn vào sản xuất trong khoảng (đổi từ hành vi cũ: chỉ cột `done` lọc theo `designerCompletedAt`). ⚠️ Đơn open vào sản xuất ngoài khoảng sẽ bị ẩn — chọn khoảng rộng để thấy backlog cũ. **KPI giữ nguyên** (status counts = snapshot hiện tại; `completedInPeriod` vẫn theo `designerCompletedAt` trong period) → có thể lệch nhẹ với cột "Đã xong" của kanban.
 
 Components con:
 - `TaskCard` — drag handle, productionId button (mở `TaskDetailDialog`), mockup thumbnail (mở preview), timestamp + reworkCount badge
-- `TaskDetailDialog` — header status badge + grid info (9 field) + mockup + designs grid 4 cột + timeline 5 timestamp + banner productionError/rejectedReason. Fetch `GET /v1/orders/:id`
+- `TaskDetailDialog` — header status badge + grid info (9 field) + mockup + designs grid 4 cột + timeline (Khách lên đơn `orderAt` → **Vào sản xuất `inProductionAt`** → Được gán → Bắt đầu → Hoàn thành → Cần làm lại/Đã trả lại) + banner productionError/rejectedReason. Fetch `GET /v1/orders/:id`
 - `RejectModal` — textarea reason max 500, dùng chung cho single reject + bulk reject
 
 ### 4.3 Dashboard tab Designer (Leader)

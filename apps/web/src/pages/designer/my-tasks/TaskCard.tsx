@@ -1,6 +1,6 @@
 import React from 'react';
 import { useDraggable } from '@dnd-kit/core';
-import { Clock, ImageIcon, RotateCcw, MessageSquareWarning } from 'lucide-react';
+import { Clock, Factory, History, ImageIcon, RotateCcw, MessageSquareWarning } from 'lucide-react';
 import type { DesignerTaskCard as Card } from 'shared';
 import { DesignerStatus } from 'shared';
 
@@ -46,6 +46,38 @@ function fmtTime(d?: Date): string {
     month: '2-digit',
     hour12: false,
   });
+}
+
+/** Đầy đủ hơn cho tooltip — kèm năm + giây. */
+function fmtFull(d?: Date): string {
+  if (!d) return '—';
+  return new Date(d).toLocaleString('vi-VN', {
+    hour: '2-digit',
+    minute: '2-digit',
+    second: '2-digit',
+    day: '2-digit',
+    month: '2-digit',
+    year: 'numeric',
+    hour12: false,
+  });
+}
+
+/** Giải thích mốc thời gian theo trạng thái — dùng cho tooltip. */
+function statusTimeHint(status: DesignerStatus): string {
+  switch (status) {
+    case DesignerStatus.Assigned:
+      return 'Thời điểm bạn được giao task này';
+    case DesignerStatus.InProgress:
+      return 'Thời điểm bắt đầu làm';
+    case DesignerStatus.Done:
+      return 'Thời điểm hoàn thành';
+    case DesignerStatus.Rework:
+      return 'Thời điểm xưởng báo lỗi (cần làm lại)';
+    case DesignerStatus.Rejected:
+      return 'Thời điểm trả lại task';
+    default:
+      return '';
+  }
 }
 
 export function TaskCard({ card, onPreview, onClickProductionId }: Props) {
@@ -122,9 +154,11 @@ export function TaskCard({ card, onPreview, onClickProductionId }: Props) {
 
           <div className="flex items-center gap-2 text-[10px] text-muted-foreground flex-wrap">
             {ts.value && (
-              <span className="inline-flex items-center gap-1">
-                <Clock size={10} /> {fmtTime(ts.value)}
-              </span>
+              <Hint content={`${statusTimeHint(card.designerStatus)} · ${fmtFull(ts.value)}`} forceRich>
+                <span className="inline-flex items-center gap-1">
+                  <Clock size={10} /> {ts.label} {fmtTime(ts.value)}
+                </span>
+              </Hint>
             )}
             {card.designerReworkCount > 0 && (
               <Hint content={`Đơn này đã rework ${card.designerReworkCount} lần`} forceRich>
@@ -134,6 +168,26 @@ export function TaskCard({ card, onPreview, onClickProductionId }: Props) {
               </Hint>
             )}
           </div>
+
+          {/* Mốc sản xuất + cập nhật cuối — kèm tooltip giải thích từng mốc */}
+          {(card.inProductionAt || card.updatedAt) && (
+            <div className="flex items-center gap-2.5 text-[10px] text-muted-foreground/80 flex-wrap">
+              {card.inProductionAt && (
+                <Hint content={`Ngày đơn vào sản xuất · ${fmtFull(card.inProductionAt)}`} forceRich>
+                  <span className="inline-flex items-center gap-1">
+                    <Factory size={10} className="text-sky-500" /> SX: {fmtTime(card.inProductionAt)}
+                  </span>
+                </Hint>
+              )}
+              {card.updatedAt && (
+                <Hint content={`Lần cập nhật cuối cùng của đơn · ${fmtFull(card.updatedAt)}`} forceRich>
+                  <span className="inline-flex items-center gap-1">
+                    <History size={10} /> Cập nhật: {fmtTime(card.updatedAt)}
+                  </span>
+                </Hint>
+              )}
+            </div>
+          )}
 
           {card.designerStatus === DesignerStatus.Rework && card.productionErrorNote && (
             <div className="flex items-start gap-1 text-[10px] text-amber-700 dark:text-amber-300 bg-amber-50 dark:bg-amber-900/20 rounded px-1.5 py-1">

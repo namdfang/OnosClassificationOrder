@@ -252,9 +252,9 @@ export class DesignerTaskService {
 
   /**
    * Trả task của sub-designer hiện tại, grouped theo `designerStatus` cho
-   * kanban 4 cột. Cột `done` filter trong period (mặc định today). Các cột
-   * khác trả toàn bộ (Assigned/InProgress/Rework không filter date — task
-   * còn open thì designer phải thấy bất kể tuổi).
+   * kanban 4 cột. TẤT CẢ cột (+ rejected drawer) lọc theo `inProductionAt`
+   * trong khoảng `from`/`to` (mặc định today) — "đơn vào sản xuất ngày đó đang
+   * ở cột nào". Đổi từ hành vi cũ (chỉ cột `done` lọc theo `designerCompletedAt`).
    *
    * Reject column trả riêng (drawer dưới kanban) — không pollute "Cần làm".
    */
@@ -283,6 +283,10 @@ export class DesignerTaskService {
     const userId = String(user._id);
     const range = this.resolveDateRange(query.from, query.to);
     const baseFilter = this.buildMyTaskFilter(userId, query);
+    // Lọc theo NGÀY VÀO SẢN XUẤT (`inProductionAt`) cho TẤT CẢ cột kanban (+
+    // rejected drawer): chỉ hiện đơn vào sản xuất trong khoảng đã chọn (mặc
+    // định hôm nay). Trước đây chỉ cột "Đã xong" lọc theo `designerCompletedAt`.
+    baseFilter.inProductionAt = { $gte: range.start, $lte: range.end };
 
     const [assignedRaw, inProgressRaw, reworkRaw, doneRaw, rejectedRaw] = await Promise.all([
       this.orderModel
@@ -298,11 +302,7 @@ export class DesignerTaskService {
         .sort({ designerReworkAt: -1, inProductionAt: -1 })
         .lean(),
       this.orderModel
-        .find({
-          ...baseFilter,
-          designerStatus: DesignerStatus.Done,
-          designerCompletedAt: { $gte: range.start, $lte: range.end },
-        })
+        .find({ ...baseFilter, designerStatus: DesignerStatus.Done })
         .sort({ designerCompletedAt: -1 })
         .lean(),
       this.orderModel
@@ -576,6 +576,9 @@ export class DesignerTaskService {
     color: (o.color as string) || undefined,
     mockupUrl: (o.mockupUrl as string) || undefined,
     mockupOriginalUrl: (o.mockupOriginalUrl as string) || undefined,
+    orderAt: o.orderAt as Date | undefined,
+    inProductionAt: o.inProductionAt as Date | undefined,
+    updatedAt: o.updatedAt as Date | undefined,
     fabricType: (o.fabricType as string) || undefined,
     machineNumber: (o.machineNumber as string) || undefined,
     toolResult: (o.toolResult as string) || undefined,
