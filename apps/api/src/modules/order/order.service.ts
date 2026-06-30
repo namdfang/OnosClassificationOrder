@@ -561,6 +561,20 @@ export class OrderService implements OnModuleInit {
     );
   }
 
+  /**
+   * Đơn có được GÁN designer (bulk/single) theo trạng thái + người ôm không?
+   *  - unassigned/assigned/rejected → được (assigned cho người khác → cần
+   *    `reassignOthers` để ghi đè).
+   *  - rework → CHỈ khi **chưa có ai ôm** (`assignee` rỗng). Có người ôm → KHÔNG
+   *    (đơn đang được làm lại bởi người đó), kể cả khi bật ghi đè.
+   *  - in-progress/done → không.
+   */
+  private canAssignDesignerByStatus(status: DesignerStatus, hasAssignee: boolean): boolean {
+    if (DESIGNER_REASSIGNABLE_STATUSES.includes(status)) return true;
+    if (status === DesignerStatus.Rework && !hasAssignee) return true;
+    return false;
+  }
+
   private buildDesignerReworkBackFromError(
     before: unknown,
     reason: string | null,
@@ -3328,7 +3342,30 @@ export class OrderService implements OnModuleInit {
       const currentDesignerStatus =
         ((before as unknown as { designerStatus?: DesignerStatus }).designerStatus) ||
         DesignerStatus.Unassigned;
-      if (!DESIGNER_REASSIGNABLE_STATUSES.includes(currentDesignerStatus)) {
+      // Đơn đã soát 'ok' (Note kq Tool 1) → không cho gán designer (chỉ chặn khi
+      // GÁN, vẫn cho bỏ chọn). Mirror rule của bulk "Gán design".
+      if (
+        normalized &&
+        (before as unknown as { toolResultNote?: string }).toolResultNote ===
+          READY_FOR_FULFILL_CODE
+      ) {
+        throw new BadRequestException(
+          `Đơn đã 'ok' (Note kq Tool 1) — không cần gán designer.`,
+        );
+      }
+      const beforeAssignee = (before as unknown as { assignee?: string }).assignee;
+      // Đơn cần làm lại đang có người ôm → không gán cho người khác (chỉ chặn
+      // khi GÁN). Rework chưa ai ôm vẫn gán được (mirror bulk "Gán design").
+      if (
+        normalized &&
+        currentDesignerStatus === DesignerStatus.Rework &&
+        beforeAssignee
+      ) {
+        throw new ConflictException(
+          `Đơn cần làm lại đang có người ôm — không gán cho người khác. Chỉ gán được đơn chưa có ai ôm.`,
+        );
+      }
+      if (!this.canAssignDesignerByStatus(currentDesignerStatus, !!beforeAssignee)) {
         throw new ConflictException(
           `Không reassign được — task đang '${currentDesignerStatus}'. Yêu cầu designer hoàn thành hoặc reset trước.`,
         );
@@ -3537,8 +3574,13 @@ export class OrderService implements OnModuleInit {
         $or: [
           { designerStatus: { $exists: false } },
           { designerStatus: { $in: DESIGNER_REASSIGNABLE_STATUSES } },
+          // Cần làm lại CHƯA có ai ôm → cũng gán được (assignee rỗng/missing).
+          { designerStatus: DesignerStatus.Rework, assignee: { $in: [null, ''] } },
         ],
       };
+      // Đơn đã soát 'ok' → không cho GÁN designer (vẫn cho bỏ chọn). Loại khỏi
+      // matchFilter → không update + matchedCount thấp hơn để FE biết bị bỏ.
+      if (normalized) extraMatchFilter.toolResultNote = { $ne: READY_FOR_FULFILL_CODE };
     }
 
     // Snapshot before-values for the audit log. Cheap because we only need the
@@ -4185,7 +4227,7 @@ export class OrderService implements OnModuleInit {
     const docs = await this.orderModel
       .find(
         { _id: { $in: dto.ids } },
-        { _id: 1, productionId: 1, assignee: 1, designerStatus: 1 },
+        { _id: 1, productionId: 1, assignee: 1, designerStatus: 1, toolResultNote: 1 },
       )
       .lean();
 
@@ -4199,12 +4241,25 @@ export class OrderService implements OnModuleInit {
     };
     const assigneeCounts = new Map<string, number>();
     let blocked = 0;
+    let okCount = 0;
+    let noToolCount = 0;
+    let reworkHeldCount = 0;
     let eligible = 0;
+    let eligibleWithTool = 0;
 
     for (const o of docs) {
       const status =
         ((o as { designerStatus?: DesignerStatus }).designerStatus as DesignerStatus) ||
         DesignerStatus.Unassigned;
+      const note = (o as { toolResultNote?: string }).toolResultNote;
+      const assigneeVal = (o as { assignee?: string }).assignee;
+      const hasAssignee = !!assigneeVal;
+      const isOk = note === READY_FOR_FULFILL_CODE;
+      const isUnreviewed = note == null || note === ''; // chưa soát
+      const isReworkHeld = status === DesignerStatus.Rework && hasAssignee;
+      if (isOk) okCount++;
+      if (isUnreviewed) noToolCount++;
+      if (isReworkHeld) reworkHeldCount++;
       switch (status) {
         case DesignerStatus.Unassigned:
           byStatus.unassigned++;
@@ -4225,13 +4280,20 @@ export class OrderService implements OnModuleInit {
           byStatus.rework++;
           break;
       }
-      if (DESIGNER_REASSIGNABLE_STATUSES.includes(status)) {
+      // Phân loại:
+      //  - canAssign (status cho phép) VÀ chưa 'ok' → eligible.
+      //  - rework đang có người ôm → reworkHeldCount (đếm riêng, banner riêng).
+      //  - còn lại không gán được (in-progress/done) → blocked.
+      const canAssign = this.canAssignDesignerByStatus(status, hasAssignee);
+      if (canAssign && !isOk) {
         eligible++;
-      } else {
-        blocked++;
+        if (!isUnreviewed) eligibleWithTool++;
+        // Conflict/override chỉ tính trên đơn eligible đang gán cho người khác
+        // (rework-held KHÔNG eligible nên không vào đây).
+        if (assigneeVal) assigneeCounts.set(assigneeVal, (assigneeCounts.get(assigneeVal) || 0) + 1);
+      } else if (!isReworkHeld) {
+        blocked++; // in-progress/done (rework-held đã đếm riêng)
       }
-      const a = (o as { assignee?: string }).assignee;
-      if (a) assigneeCounts.set(a, (assigneeCounts.get(a) || 0) + 1);
     }
 
     // Resolve fullName từ users collection.
@@ -4261,7 +4323,11 @@ export class OrderService implements OnModuleInit {
         byStatus,
         alreadyAssigned,
         blockedCount: blocked,
+        reworkHeldCount,
+        okCount,
+        noToolCount,
         eligibleCount: eligible,
+        eligibleWithToolCount: eligibleWithTool,
       },
     };
   }
@@ -4283,7 +4349,7 @@ export class OrderService implements OnModuleInit {
     const docs = await this.orderModel
       .find(
         { _id: { $in: dto.ids }, deletedAt: { $exists: false } },
-        { _id: 1, productionId: 1, assignee: 1, designerStatus: 1 },
+        { _id: 1, productionId: 1, assignee: 1, designerStatus: 1, toolResultNote: 1 },
       )
       .lean();
 
@@ -4298,7 +4364,36 @@ export class OrderService implements OnModuleInit {
         DesignerStatus.Unassigned;
       const currentAssignee = (o as { assignee?: string }).assignee;
 
-      if (!DESIGNER_REASSIGNABLE_STATUSES.includes(status)) {
+      const note = (o as { toolResultNote?: string }).toolResultNote;
+      // Đơn đã soát 'ok' (Note kq Tool 1) → KHÔNG gán designer nữa.
+      if (note === READY_FOR_FULFILL_CODE) {
+        skipped.push({
+          orderId,
+          productionId,
+          reason: `Note kq Tool 1 đã 'ok' — không cần gán designer.`,
+        });
+        continue;
+      }
+      // Nút "Chỉ gán đơn đã soát" → bỏ qua đơn chưa soát (note rỗng).
+      if (dto.skipUnreviewed && (note == null || note === '')) {
+        skipped.push({
+          orderId,
+          productionId,
+          reason: `Đơn chưa soát (Note kq Tool 1 trống) — đã chọn chỉ gán đơn đã soát.`,
+        });
+        continue;
+      }
+      // Đơn cần làm lại ĐANG có người ôm → KHÔNG gán cho người khác (kể cả ghi
+      // đè). Chỉ gán được đơn rework chưa có ai ôm.
+      if (status === DesignerStatus.Rework && currentAssignee) {
+        skipped.push({
+          orderId,
+          productionId,
+          reason: `Cần làm lại đang có người ôm — chỉ gán được đơn chưa có ai ôm.`,
+        });
+        continue;
+      }
+      if (!this.canAssignDesignerByStatus(status, !!currentAssignee)) {
         skipped.push({
           orderId,
           productionId,

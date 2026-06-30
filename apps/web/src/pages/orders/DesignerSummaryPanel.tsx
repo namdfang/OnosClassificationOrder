@@ -29,13 +29,13 @@ const STATUS_COLS: {
   cls: string;
   filterValue: 'assigned' | 'in-progress' | 'done' | 'rejected' | 'rework' | 'unassigned';
 }[] = [
-  { key: 'unassigned', label: 'Chưa gán', cls: 'text-zinc-500', filterValue: 'unassigned' },
-  { key: 'assigned', label: 'Cần làm', cls: 'text-zinc-700 dark:text-zinc-200', filterValue: 'assigned' },
-  { key: 'rework', label: 'Cần làm lại', cls: 'text-amber-600 dark:text-amber-400', filterValue: 'rework' },
-  { key: 'inProgress', label: 'Đang làm', cls: 'text-indigo-600 dark:text-indigo-400', filterValue: 'in-progress' },
-  { key: 'done', label: 'Đã xong', cls: 'text-emerald-600 dark:text-emerald-400', filterValue: 'done' },
-  { key: 'rejected', label: 'Đã trả', cls: 'text-rose-600 dark:text-rose-400', filterValue: 'rejected' },
-];
+    { key: 'unassigned', label: 'Chưa gán', cls: 'text-zinc-500', filterValue: 'unassigned' },
+    { key: 'assigned', label: 'Cần làm', cls: 'text-zinc-700 dark:text-zinc-200', filterValue: 'assigned' },
+    { key: 'rework', label: 'Cần làm lại', cls: 'text-amber-600 dark:text-amber-400', filterValue: 'rework' },
+    { key: 'inProgress', label: 'Đang làm', cls: 'text-indigo-600 dark:text-indigo-400', filterValue: 'in-progress' },
+    { key: 'done', label: 'Đã xong', cls: 'text-emerald-600 dark:text-emerald-400', filterValue: 'done' },
+    { key: 'rejected', label: 'Đã trả', cls: 'text-rose-600 dark:text-rose-400', filterValue: 'rejected' },
+  ];
 
 export function DesignerSummaryPanel({ filterQs, onClickCell }: Props) {
   const [data, setData] = useState<Breakdown | null>(null);
@@ -177,16 +177,16 @@ export function DesignerSummaryPanel({ filterQs, onClickCell }: Props) {
                         type="button"
                         onClick={() => onClickCell?.(isUnassigned ? '__none__' : row.userId, null)}
                         className={cn(
-                          'font-medium text-foreground hover:text-primary text-left',
+                          'font-medium text-foreground hover:text-primary text-left flex gap-2',
                           isUnassigned && 'italic text-muted-foreground',
                         )}
                         title="Click filter theo người này"
                       >
-                        {row.fullName}
+                        <div>{row.fullName}</div>
+                        {row.email && (
+                          <div className="text-[10px] text-muted-foreground">- {row.email}</div>
+                        )}
                       </button>
-                      {row.email && (
-                        <div className="text-[10px] text-muted-foreground">{row.email}</div>
-                      )}
                     </td>
                     {STATUS_COLS.map((c) => {
                       const v = row.counts[c.key];

@@ -1,5 +1,5 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
-import { ChevronDown, ChevronRight, History, MousePointerClick } from 'lucide-react';
+import { ChevronDown, ChevronRight, FilterX, History, MousePointerClick, X } from 'lucide-react';
 import { useSearchParams } from 'react-router-dom';
 import type { WorkshopAvailableFilters } from 'shared';
 
@@ -44,6 +44,24 @@ const COLS = WORKSHOP_COLS;
 // Pagination unit is product types (not rows). 20 products fits comfortably
 // in the collapsed view; user can drill in via chevron.
 const DEFAULT_PAGE_SIZE = 20;
+
+// Màu chip cho từng filter (full class string — Tailwind cần static để purge).
+const FILTER_CHIP_COLORS: Record<string, string> = {
+  search: 'bg-slate-100 text-slate-700 border-slate-300 dark:bg-slate-800 dark:text-slate-200 dark:border-slate-600',
+  date: 'bg-emerald-100 text-emerald-700 border-emerald-300 dark:bg-emerald-900/30 dark:text-emerald-300 dark:border-emerald-800',
+  fabricType: 'bg-blue-100 text-blue-700 border-blue-300 dark:bg-blue-900/30 dark:text-blue-300 dark:border-blue-800',
+  machineNumber: 'bg-violet-100 text-violet-700 border-violet-300 dark:bg-violet-900/30 dark:text-violet-300 dark:border-violet-800',
+  printStatus: 'bg-cyan-100 text-cyan-700 border-cyan-300 dark:bg-cyan-900/30 dark:text-cyan-300 dark:border-cyan-800',
+  toolResult: 'bg-amber-100 text-amber-700 border-amber-300 dark:bg-amber-900/30 dark:text-amber-300 dark:border-amber-800',
+  toolResultNote: 'bg-orange-100 text-orange-700 border-orange-300 dark:bg-orange-900/30 dark:text-orange-300 dark:border-orange-800',
+  errorFile: 'bg-rose-100 text-rose-700 border-rose-300 dark:bg-rose-900/30 dark:text-rose-300 dark:border-rose-800',
+  assignee: 'bg-indigo-100 text-indigo-700 border-indigo-300 dark:bg-indigo-900/30 dark:text-indigo-300 dark:border-indigo-800',
+  designerStatus: 'bg-teal-100 text-teal-700 border-teal-300 dark:bg-teal-900/30 dark:text-teal-300 dark:border-teal-800',
+  productionError: 'bg-red-100 text-red-700 border-red-300 dark:bg-red-900/30 dark:text-red-300 dark:border-red-800',
+};
+const FILTER_CHIP_DEFAULT =
+  'bg-zinc-100 text-zinc-700 border-zinc-300 dark:bg-zinc-800 dark:text-zinc-200 dark:border-zinc-600';
+const fmtChipDate = (s: string) => (s ? s.split('-').reverse().slice(0, 2).join('/') : '');
 
 function todayISO(): string {
   // Local date components — KHÔNG dùng toISOString() (UTC) vì sẽ trả hôm
@@ -422,6 +440,96 @@ export function OrderTableWorkshop() {
 
   const designerStatusOptions = workshopFilters?.designerStatus || [];
 
+  // Reset chọn đơn về 0 mỗi khi BẤT KỲ filter nào đổi (search/date/facet).
+  // KHÔNG phụ thuộc page/pageSize → đổi trang vẫn giữ selection.
+  useEffect(() => {
+    setSelected(new Set());
+    setLastClickedId(null);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [
+    debouncedSearch,
+    createdFrom,
+    createdTo,
+    filterPrintStatus,
+    filterToolResultNote,
+    filterAssignee,
+    filterProductionError,
+    filterFabricType,
+    filterMachineNumber,
+    filterToolResult,
+    filterErrorFile,
+    filterDesignerStatus,
+  ]);
+
+  // Định nghĩa facet 1 lần — dùng cho cả OrderFilterBar lẫn chip "đang lọc".
+  const facets: OrderFilterFacet[] = [
+    { key: 'fabricType', label: 'Loại vải', value: filterFabricType, onChange: setFilterFabricType, options: workshopFilters?.fabricType || [], perm: 'order.field.fabricType.view' },
+    { key: 'machineNumber', label: 'Máy', value: filterMachineNumber, onChange: setFilterMachineNumber, options: workshopFilters?.machineNumber || [], perm: 'order.field.machineNumber.view' },
+    { key: 'printStatus', label: 'Trạng thái in', value: filterPrintStatus, onChange: setFilterPrintStatus, options: workshopFilters?.printStatus || [], perm: 'order.field.printStatus.view' },
+    { key: 'toolResult', label: 'Kết quả Tool', value: filterToolResult, onChange: setFilterToolResult, options: workshopFilters?.toolResult || [], perm: 'order.field.toolResult.view' },
+    { key: 'toolResultNote', label: 'Note kq Tool', value: filterToolResultNote, onChange: setFilterToolResultNote, options: workshopFilters?.toolResultNote || [], perm: 'order.field.toolResultNote.view' },
+    { key: 'errorFile', label: 'File sửa lỗi', value: filterErrorFile, onChange: setFilterErrorFile, options: workshopFilters?.errorFile || [], perm: 'order.field.errorFile.view' },
+    { key: 'assignee', label: 'Người thực hiện', value: filterAssignee, onChange: setFilterAssignee, options: assigneeOptions, perm: 'order.field.assignee.view' },
+    { key: 'designerStatus', label: 'TT Designer', value: filterDesignerStatus, onChange: setFilterDesignerStatus, options: designerStatusOptions, hidden: !canSeeDesignerSummary },
+    { key: 'productionError', label: 'Lỗi xưởng', value: filterProductionError, onChange: setFilterProductionError, options: workshopFilters?.productionError || [], perm: 'order.field.productionError.view' },
+  ];
+
+  const isDefaultDate = createdFrom === todayISO() && createdTo === todayISO();
+
+  // Chip "đang lọc" — chỉ facet user thấy được (perm/hidden) + search + date custom.
+  const activeFilters: Array<{
+    key: string;
+    label: string;
+    display: string;
+    color: string;
+    onClear: () => void;
+  }> = [];
+  for (const f of facets) {
+    if (f.hidden || (f.perm && !has(f.perm)) || !f.value) continue;
+    const opt = f.options.find((o) => o.value === f.value);
+    activeFilters.push({
+      key: f.key,
+      label: f.label,
+      display: opt?.label || f.value,
+      color: FILTER_CHIP_COLORS[f.key] || FILTER_CHIP_DEFAULT,
+      onClear: () => { f.onChange(''); setPage(1); },
+    });
+  }
+  if (search.trim()) {
+    activeFilters.push({
+      key: 'search',
+      label: 'Tìm',
+      display: search.trim(),
+      color: FILTER_CHIP_COLORS.search,
+      onClear: () => { setSearch(''); setPage(1); },
+    });
+  }
+  if (!isDefaultDate) {
+    activeFilters.push({
+      key: 'date',
+      label: 'Ngày',
+      display: `${fmtChipDate(createdFrom) || '…'} → ${fmtChipDate(createdTo) || '…'}`,
+      color: FILTER_CHIP_COLORS.date,
+      onClear: () => { setCreatedFrom(todayISO()); setCreatedTo(todayISO()); setPage(1); },
+    });
+  }
+
+  const clearAllFilters = () => {
+    setSearch('');
+    setCreatedFrom(todayISO());
+    setCreatedTo(todayISO());
+    setFilterFabricType('');
+    setFilterMachineNumber('');
+    setFilterPrintStatus('');
+    setFilterToolResult('');
+    setFilterToolResultNote('');
+    setFilterErrorFile('');
+    setFilterAssignee('');
+    setFilterDesignerStatus('');
+    setFilterProductionError('');
+    setPage(1);
+  };
+
   /**
    * Click cell trong summary panel → set filter list. userId='__none__' tương
    * ứng "Chưa gán" (token BE); status null = chỉ filter assignee.
@@ -504,18 +612,44 @@ export function OrderTableWorkshop() {
               </Button>
             ) : null
           }
-          facets={[
-            { key: 'fabricType', label: 'Loại vải', value: filterFabricType, onChange: setFilterFabricType, options: workshopFilters?.fabricType || [], perm: 'order.field.fabricType.view' },
-            { key: 'machineNumber', label: 'Máy', value: filterMachineNumber, onChange: setFilterMachineNumber, options: workshopFilters?.machineNumber || [], perm: 'order.field.machineNumber.view' },
-            { key: 'printStatus', label: 'Trạng thái in', value: filterPrintStatus, onChange: setFilterPrintStatus, options: workshopFilters?.printStatus || [], perm: 'order.field.printStatus.view' },
-            { key: 'toolResult', label: 'Kết quả Tool', value: filterToolResult, onChange: setFilterToolResult, options: workshopFilters?.toolResult || [], perm: 'order.field.toolResult.view' },
-            { key: 'toolResultNote', label: 'Note kq Tool', value: filterToolResultNote, onChange: setFilterToolResultNote, options: workshopFilters?.toolResultNote || [], perm: 'order.field.toolResultNote.view' },
-            { key: 'errorFile', label: 'File sửa lỗi', value: filterErrorFile, onChange: setFilterErrorFile, options: workshopFilters?.errorFile || [], perm: 'order.field.errorFile.view' },
-            { key: 'assignee', label: 'Người thực hiện', value: filterAssignee, onChange: setFilterAssignee, options: assigneeOptions, perm: 'order.field.assignee.view' },
-            { key: 'designerStatus', label: 'TT Designer', value: filterDesignerStatus, onChange: setFilterDesignerStatus, options: designerStatusOptions, hidden: !canSeeDesignerSummary },
-            { key: 'productionError', label: 'Lỗi xưởng', value: filterProductionError, onChange: setFilterProductionError, options: workshopFilters?.productionError || [], perm: 'order.field.productionError.view' },
-          ] satisfies OrderFilterFacet[]}
+          facets={facets}
         />
+
+        {/* Chip "đang lọc" — màu theo từng filter + xoá lẻ + xoá tất cả. */}
+        {activeFilters.length > 0 && (
+          <div className="flex flex-wrap items-center gap-2 rounded-lg border border-border bg-card px-3 py-2">
+            <span className="text-xs font-medium text-muted-foreground">Đang lọc:</span>
+            {activeFilters.map((f) => (
+              <span
+                key={f.key}
+                className={cn(
+                  'inline-flex items-center gap-1 rounded-full border px-2 py-0.5 text-[11px] font-medium',
+                  f.color,
+                )}
+              >
+                <span className="opacity-70">{f.label}:</span>
+                <span className="max-w-[160px] truncate">{f.display}</span>
+                <button
+                  type="button"
+                  onClick={f.onClear}
+                  className="ml-0.5 rounded-full hover:opacity-60"
+                  title={`Bỏ lọc ${f.label}`}
+                >
+                  <X size={11} />
+                </button>
+              </span>
+            ))}
+            <Button
+              variant="ghost"
+              size="sm"
+              className="ml-auto h-7 text-xs text-muted-foreground hover:text-foreground"
+              onClick={clearAllFilters}
+            >
+              <FilterX size={13} className="mr-1" />
+              Xóa tất cả lọc
+            </Button>
+          </div>
+        )}
 
         <PaginationBar
           position="top"

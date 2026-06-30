@@ -491,7 +491,7 @@ Render tab tương ứng. User chỉ có 1 trong các quyền → 1 tab; có nhi
 | 10 | **productionError** | `ProductionErrorSelectCell` (category `production_error`). Pick code='other' → mở `ProductionErrorOtherDialog` bắt buộc source + note. Popover options có badge "DES"/"XƯỞNG"/"CẦN CHI TIẾT". | `order.field.productionError.view` |
 | 10b | **productionErrorSource** | `ErrorSourceCell` (label "Loại lỗi") — picker designer/factory. Auto-fill từ workshop_config; user override khi cần. | `order.field.productionErrorSource.view` |
 | 11 | **productionErrorNote** | `TextEditCell` — mô tả lỗi free text | `order.field.productionErrorNote.view` |
-| 12 | **assignee** | `AssigneeSelectCell` — picker user từ designer team (`designerTeamStore`), value = `user._id`, display = `fullName`. KHÔNG còn dùng workshop_config. | `order.field.assignee.view` |
+| 12 | **assignee** | `AssigneeSelectCell` — picker user từ designer team (`designerTeamStore`), value = `user._id`, display = `fullName`. KHÔNG còn dùng workshop_config. **Đơn `toolResultNote='ok'` → cell khoá (`blockedReason` + tooltip), không gán được** — xem `DesignerTaskWorkflow.md §2.2`. | `order.field.assignee.view` |
 | 13 | assigneeNote | `IconSelectCell` | `order.field.assigneeNote.view` |
 | 13b | **designerStatus** | Read-only badge color 6 state (Chưa gán/Cần làm/Đang làm/Đã xong/Đã trả/Cần làm lại) + suffix "×N" khi `designerReworkCount > 0`. | `order.field.designerStatus.view` |
 | 14 | userSku | text + CopyButton | luôn |
@@ -503,6 +503,12 @@ Render tab tương ứng. User chỉ có 1 trong các quyền → 1 tab; có nhi
 > **Trang Fulfillment "In"** dùng bảng **phẳng riêng** `PrintOrderTable` (KHÔNG group sản phẩm), KHÔNG reuse `OrderTableWorkshop`. Lấy data từ `GET /v1/orders` (`sort=grouped`). Xem `FulfillmentWorkflow.md §4.5`.
 
 `WorkshopOrderRow` có thêm field optional `currentFulfillmentStage` + `fulfillmentStages` để consumer (PrintOrderTable) quyết định hiển thị action theo trạng thái stage.
+
+**Filter chips "Đang lọc" + reset selection** (`OrderTableWorkshop.tsx`):
+- **Reset chọn đơn về 0 khi BẤT KỲ filter nào đổi** (search/date/9 facet) — `useEffect` deps = toàn bộ filter, KHÔNG gồm `page/pageSize` (đổi trang vẫn giữ selection). Tránh gán nhầm đơn không còn hiển thị sau khi đổi filter.
+- **Thanh chip "Đang lọc:"** ngay dưới `OrderFilterBar` — render mỗi filter đang active (facet có value + search + date khi KHÁC mặc định hôm nay) thành 1 chip **màu riêng theo loại** (`FILTER_CHIP_COLORS` — static class cho Tailwind purge), có nút `×` bỏ lẻ từng filter. Chỉ hiện facet user có quyền xem (lọc theo `perm`/`hidden` như `OrderFilterBar`).
+- **Nút "Xóa tất cả lọc"** (`FilterX` icon) → reset toàn bộ facet + search về rỗng, date về hôm nay, page về 1 (selection tự reset qua effect trên). Thanh chỉ hiện khi có ≥1 filter active.
+- `facets` được tách thành 1 `const` dùng chung cho cả `OrderFilterBar` lẫn tính chip (1 nguồn).
 
 **DTO / endpoint liên quan** (dùng bởi `PrintOrderTable`):
 - `GetProductionOrdersDto.fulfillmentStatus` (enum `waiting|in-progress|rework|done|watching`) + `userSku` (CSV filter) — `buildOrderListFilter` + `applyFulfillmentStatusFilter` áp vào `getOrders`/`getOrdersGroupedByType`.
@@ -580,7 +586,7 @@ Workshop tab dùng date always-write vào URL (kể cả today) để URL hiển
 - Cột checkbox đầu mỗi row + select-all header + shift+click range select.
 - Khi chọn ít nhất 1 row → toolbar nổi sticky bottom: "Đã chọn N · Bulk update · **Gán design** (Leader/Admin) · Bỏ chọn".
 - **"Bulk update" dialog**: chọn field (chỉ field user có `edit` perm, EXCEPT `assignee` — bị BLACKLIST khỏi dropdown vì đã có dialog "Gán design" riêng) + giá trị → `PATCH /v1/orders/bulk-field`. Toast "Đã update X/Y đơn".
-- **"Gán design" button** (`AssignDesignerDialog`): chỉ hiện khi `canEditField('assignee')`. Pre-flight `POST /bulk-assign-designer-preview` → dialog hiển thị 6 KPI status box + alreadyAssigned list (fullName + count) + designer dropdown (load từ `/designer/team`). Detect conflict đa-người → banner cảnh báo + "Ghi đè & Gán". Submit `POST /bulk-assign-designer { ids, userId, reassignOthers }` → skip + report. Xem `DesignerTaskWorkflow.md §2.2`.
+- **"Gán design" button** (`AssignDesignerDialog`): chỉ hiện khi `canEditField('assignee')`. Pre-flight `POST /bulk-assign-designer-preview` → dialog hiển thị KPI status + alreadyAssigned + `blockedCount`/`reworkHeldCount`/`okCount`/`noToolCount`/`eligibleCount`/`eligibleWithToolCount` + designer dropdown. **Đơn `toolResultNote='ok'` KHÔNG gán được** (banner đỏ). **Đơn CHƯA soát → banner vàng + 2 nút "Gán tất cả" / "Chỉ gán đơn đã soát"** (`skipUnreviewed`). **Đơn `rework` đang có người ôm → banner + skip** (chỉ gán được đơn rework chưa ai ôm); `in-progress/done` → skip. Conflict đa-người → ghi đè. Submit `POST /bulk-assign-designer { ids, userId, reassignOthers, skipUnreviewed }` → skip + report. Xem `DesignerTaskWorkflow.md §2.2`.
 
 ### 10.4b Designer KPI panel (Admin/Manager/Leader)
 

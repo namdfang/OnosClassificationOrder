@@ -36,7 +36,11 @@ type Preview = {
   };
   alreadyAssigned: { userId: string; fullName?: string; count: number }[];
   blockedCount: number;
+  reworkHeldCount: number;
+  okCount: number;
+  noToolCount: number;
   eligibleCount: number;
+  eligibleWithToolCount: number;
 };
 
 export function AssignDesignerDialog({ open, selectedIds, onClose, onApplied }: Props) {
@@ -78,7 +82,7 @@ export function AssignDesignerDialog({ open, selectedIds, onClose, onApplied }: 
       .reduce((s, a) => s + a.count, 0);
   }, [preview, selectedUserId]);
 
-  const handleSubmit = async (force: boolean) => {
+  const handleSubmit = async (force: boolean, skipUnreviewed = false) => {
     if (!selectedUserId) {
       toast.error('Chọn designer trước.');
       return;
@@ -89,6 +93,7 @@ export function AssignDesignerDialog({ open, selectedIds, onClose, onApplied }: 
         ids: selectedIds,
         userId: selectedUserId,
         reassignOthers: force,
+        skipUnreviewed,
       });
       const data = res.data?.data as {
         matched: number;
@@ -147,8 +152,37 @@ export function AssignDesignerDialog({ open, selectedIds, onClose, onApplied }: 
                 <div className="mt-2 flex items-start gap-2 text-[11px] text-amber-700 dark:text-amber-300 bg-amber-50 dark:bg-amber-900/20 rounded p-2">
                   <AlertTriangle size={12} className="shrink-0 mt-px" />
                   <span>
-                    <strong>{preview.blockedCount}</strong> đơn đang in-progress/done/rework — sẽ bị skip
-                    khi gán.
+                    <strong>{preview.blockedCount}</strong> đơn đang in-progress/done — sẽ bị skip khi
+                    gán.
+                  </span>
+                </div>
+              )}
+              {preview.reworkHeldCount > 0 && (
+                <div className="mt-2 flex items-start gap-2 text-[11px] text-amber-700 dark:text-amber-300 bg-amber-50 dark:bg-amber-900/20 rounded p-2">
+                  <AlertTriangle size={12} className="shrink-0 mt-px" />
+                  <span>
+                    <strong>{preview.reworkHeldCount}</strong> đơn <strong>cần làm lại đang có người
+                    ôm</strong> — không gán cho người khác được, sẽ bị bỏ qua. Chỉ gán được đơn cần làm
+                    lại chưa có ai ôm.
+                  </span>
+                </div>
+              )}
+              {preview.okCount > 0 && (
+                <div className="mt-2 flex items-start gap-2 text-[11px] text-rose-700 dark:text-rose-300 bg-rose-50 dark:bg-rose-900/20 rounded p-2">
+                  <AlertTriangle size={12} className="shrink-0 mt-px" />
+                  <span>
+                    <strong>{preview.okCount}</strong> đơn đã <strong>OK</strong> (Note kq Tool 1) — không
+                    gán được, sẽ bị bỏ qua. Chỉ gán {preview.eligibleCount} đơn còn lại.
+                  </span>
+                </div>
+              )}
+              {preview.noToolCount > 0 && (
+                <div className="mt-2 flex items-start gap-2 text-[11px] text-amber-700 dark:text-amber-300 bg-amber-50 dark:bg-amber-900/20 rounded p-2">
+                  <AlertTriangle size={12} className="shrink-0 mt-px" />
+                  <span>
+                    <strong>{preview.noToolCount}</strong> đơn <strong>chưa soát</strong> (Note kq Tool 1
+                    còn trống). Bạn có chắc muốn gán? Chọn <strong>Gán tất cả</strong> hoặc{' '}
+                    <strong>Chỉ gán đơn đã soát</strong> bên dưới.
                   </span>
                 </div>
               )}
@@ -208,7 +242,7 @@ export function AssignDesignerDialog({ open, selectedIds, onClose, onApplied }: 
                       {conflictCount} đơn đã được gán cho designer khác.
                     </p>
                     <p className="text-amber-700 dark:text-amber-300 mt-0.5">
-                      Bấm <strong>Ghi đè & Gán</strong> để chuyển sang designer mới. Đơn đang
+                      Tiếp tục gán sẽ <strong>ghi đè</strong> sang designer mới. Đơn đang
                       in-progress/done/rework vẫn bị skip.
                     </p>
                   </div>
@@ -222,7 +256,30 @@ export function AssignDesignerDialog({ open, selectedIds, onClose, onApplied }: 
           <Button variant="outline" onClick={onClose} disabled={submitting}>
             Huỷ
           </Button>
-          {conflictCount > 0 ? (
+          {(preview?.noToolCount || 0) > 0 ? (
+            // Có đơn chưa soát → 2 lựa chọn. `force` = conflictCount>0 (ghi đè).
+            <>
+              <Button
+                onClick={() => handleSubmit(conflictCount > 0, true)}
+                disabled={
+                  !selectedUserId || submitting || (preview?.eligibleWithToolCount || 0) === 0
+                }
+                variant="outline"
+              >
+                {submitting && <Spinner size={13} className="mr-1.5" />}
+                Chỉ gán đơn đã soát ({preview?.eligibleWithToolCount || 0})
+              </Button>
+              <Button
+                onClick={() => handleSubmit(conflictCount > 0, false)}
+                disabled={!selectedUserId || submitting || (preview?.eligibleCount || 0) === 0}
+                variant={conflictCount > 0 ? 'destructive' : 'default'}
+              >
+                {submitting && <Spinner size={13} className="mr-1.5" />}
+                <CheckCircle2 size={13} className="mr-1" />
+                Gán tất cả ({preview?.eligibleCount || 0})
+              </Button>
+            </>
+          ) : conflictCount > 0 ? (
             <Button
               onClick={() => handleSubmit(true)}
               disabled={!selectedUserId || submitting || (preview?.eligibleCount || 0) === 0}

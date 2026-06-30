@@ -74,15 +74,38 @@ State machine 6 trạng thái:
 3. Login Leader → `/designer/team` → tạo các sub-designer (chỉ cần fullName + email + password + hireDate + telegramChatId optional). Code/slug đã bỏ — identity = user._id.
 
 ### 2.2 Assign task
+
+> **⛔ Điều kiện gán designer** (helper `canAssignDesignerByStatus(status, hasAssignee)` ở `order.service.ts`, áp **cả BE + FE**, cả 3 đường: per-row cell, bulk dialog, bulk-update field):
+>
+> | designerStatus | Gán được? |
+> |---|---|
+> | `unassigned` / `assigned` / `rejected` | ✅ (assigned cho người khác → cần ghi đè `reassignOthers`) |
+> | `rework` **chưa có ai ôm** (`assignee` rỗng) | ✅ — đơn lỗi xưởng-báo-designer trên đơn unassigned (xem `FulfillmentWorkflow.md §2.3b`) rơi vào nhóm này |
+> | `rework` **đang có người ôm** (`assignee` != null) | ❌ skip + thông báo (kể cả ghi đè) — người đang ôm phải tự làm lại |
+> | `in-progress` / `done` | ❌ |
+>
+> Ngoài ra **đơn `toolResultNote === 'ok'`** (`READY_FOR_FULFILL_CODE`, đã soát xong) → KHÔNG cho gán (chỉ chặn khi GÁN, vẫn cho bỏ chọn).
+
 **Single order**: Leader vào `/orders` workshop table → cell "Người thực hiện" (`AssigneeSelectCell`) → pick user từ dropdown load `/designer/team` cache (zustand `designerTeamStore`). `updateField('assignee')` BE:
-- Set `designerStatus='assigned'`, `designerAssignedAt=now`, clear reject fields
-- Block 409 nếu task đang `in-progress/done/rework`
+- **Đơn `toolResultNote='ok'` + đang gán → `BadRequestException`** "Đơn đã 'ok' — không cần gán designer."
+- **Đơn `rework` đang có người ôm + đang gán → `ConflictException`** "Đơn cần làm lại đang có người ôm — không gán cho người khác."
+- Gán hợp lệ (gồm `rework` chưa ai ôm) → set `designerStatus='assigned'`, `designerAssignedAt=now`, clear reject fields.
+- Block 409 nếu `!canAssignDesignerByStatus` (in-progress/done, hoặc rework-held khi clear).
+- FE: `AssigneeSelectCell` nhận prop `blockedReason` (set khi `r.toolResultNote==='ok'` ở `workshopTableConfig.tsx`) → cell **disabled + opacity-60 + tooltip** lý do.
 
 **Bulk assign**: Workshop table → tick nhiều row → toolbar **"Gán design"** → `AssignDesignerDialog`:
-1. Pre-flight `POST /bulk-assign-designer-preview` trả KPI per status + matrix `alreadyAssigned[]` với fullName
-2. Dialog hiển thị 6 stat box + dropdown designer (fullName + count đang ôm)
-3. Detect conflict (đơn đã assigned cho user khác) → banner cảnh báo, nút "Ghi đè & Gán" (variant destructive)
-4. `POST /bulk-assign-designer { ids, userId, reassignOthers }` → skip task `in-progress/done/rework` + report skipped với reason → toast warning + detail message
+1. Pre-flight `POST /bulk-assign-designer-preview` trả KPI per status + `alreadyAssigned[]` (CHỈ đơn eligible đang gán người khác → conflict/override; KHÔNG gồm rework-held/blocked) + `blockedCount` (in-progress/done) + **`reworkHeldCount`** (rework đang có người ôm) + **`okCount`** + **`noToolCount`** (chưa soát) + `eligibleCount` + `eligibleWithToolCount`.
+2. Dialog banners:
+   - `blockedCount>0` → "X đơn đang in-progress/done — sẽ bị skip."
+   - **`reworkHeldCount>0`** → "X đơn **cần làm lại đang có người ôm** — không gán cho người khác được, sẽ bị bỏ qua. Chỉ gán được đơn cần làm lại chưa có ai ôm."
+   - `okCount>0` → "X đơn đã OK — không gán được… chỉ gán {eligibleCount} còn lại."
+   - `noToolCount>0` → "X đơn **chưa soát**. Bạn có chắc muốn gán?".
+3. Counts: `eligibleCount` = `canAssignDesignerByStatus` && `!ok` (gồm rework-chưa-ôm + chưa soát) → "Gán tất cả". `eligibleWithToolCount` = subset eligible ĐÃ soát → "Chỉ gán đơn đã soát".
+4. **Footer 3 chế độ:**
+   - `noToolCount>0` → **2 nút**: "Chỉ gán đơn đã soát ({eligibleWithToolCount})" (`skipUnreviewed=true`) + "Gán tất cả ({eligibleCount})" (`skipUnreviewed=false`). Conflict → tự ghi đè.
+   - `noToolCount=0` + conflict → "Ghi đè & Gán".
+   - `noToolCount=0` + không conflict → "Gán".
+5. `POST /bulk-assign-designer { ids, userId, reassignOthers, skipUnreviewed }` → skip đơn `ok` + (nếu `skipUnreviewed`) đơn chưa soát + **đơn rework đang có người ôm** ("Cần làm lại đang có người ôm — chỉ gán được đơn chưa có ai ôm.") + đơn in-progress/done → report skipped → toast + detail.
 
 ### 2.3 Sub Designer xử lý task
 
@@ -200,8 +223,9 @@ factoryId?: string                // ref FactoryEntity, REQUIRED khi role=Fulfil
 | `rework` | `restart` | `in-progress` | designerStartedAt=now (reset per-cycle) |
 | `in-progress` | `complete` | `done` | designerCompletedAt=now; toolResultNote='ok'; readyForFulfill=true; `$inc designerWorkMs += (now − startedAt)` |
 | `assigned` **hoặc** `in-progress` | `reject` | `rejected` | designerRejectedAt=now; designerRejectedReason=reason. FE: nút "Trả" hiện ở cả cột Cần làm + Đang làm; bulk reject cho cột Đang làm |
-| `done` → updateField productionError (errorSource=designer) | (auto) | `rework` | designerReworkAt=now; `$inc designerReworkCount` |
-| `done` → updateField productionErrorSource → 'designer' | (auto) | `rework` | Same as above |
+| `done`/`unassigned`/`rejected` → updateField productionError (errorSource=designer) | (auto) | `rework` | designerReworkAt=now; `$inc designerReworkCount`. Đồng thời rework-back về designer + tạo/giữ stage fulfillment → tab "Đang chờ quay lại" (xem `FulfillmentWorkflow.md` §5.4b). Skip khi `rework`/`in-progress`/`assigned` (gate `canReworkBackToDesigner`) |
+| `done`/`unassigned`/`rejected` → updateField productionErrorSource → 'designer' | (auto) | `rework` | Same as above |
+| `done`/`unassigned`/`rejected` → setProductionError (source=designer, scan/dialog) | (auto) | `rework` | Same as above |
 
 ### 3.5 Role/permission catalog (`packages/shared/constants/permission-catalog.ts`)
 
@@ -262,6 +286,7 @@ Xem 2.2.
 - Load designer team từ `designerTeamStore` (lazy fetch 1 lần)
 - Value = user._id, display = fullName (fallback `#{slice(-4)}` nếu user bị xoá)
 - Dùng `SelectPopover` generic-ized với `SelectOption = { _id, code, name, color?, icon?, errorSource? }`
+- Prop `blockedReason?: string` — khi set (vd đơn `toolResultNote='ok'` qua `workshopTableConfig.tsx`) → cell disabled + opacity-60 + tooltip lý do (xem §2.2 chặn gán đơn 'ok')
 
 ### 4.7 `ProductionErrorSelectCell` + `ProductionErrorOtherDialog`
 - Popover option list có badge "DES" (violet) / "XƯỞNG" (sky) cho code có errorSource, "CẦN CHI TIẾT" (rose) cho code='other'

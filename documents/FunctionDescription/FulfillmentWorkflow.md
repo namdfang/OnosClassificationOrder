@@ -108,7 +108,7 @@ Worker KHÔNG bắt buộc dùng nút "Báo lỗi": chọn cell **"Lỗi xưởn
 - **Mới:** reporter stage (`currentFulfillmentStage`) → `status='waiting'` + `reworkCount++`, và **push `fulfillmentTimeline` entry** `{ stage, action:'rework-back', byUserId:<worker>, reworkTarget:'designer', reason:productionErrorNote }` → đơn vào tab **"Đang chờ quay lại"** của worker (điều kiện match của tab watching cần đúng timeline entry này).
 - Sau khi Designer complete → reporter stage = `rework` (như 2.3) → tab **"Cần làm lại"**.
 
-Áp dụng ở `OrderService.updateField()` (field `productionError` / `productionErrorSource`) + `OrderService.setProductionError()` (scan + dialog "Lỗi khác") qua helper chung `buildDesignerReworkBackFromError()`. Chỉ kích hoạt khi đơn đã ở fulfillment + có user context; đơn chưa vào pipeline → chỉ flip `designerStatus` như cũ. **Áp cho mọi stage** (print trở đi), cả PrintOrderTable (chip watching/rework) lẫn kanban (tab watching/rework).
+Áp dụng ở `OrderService.updateField()` (field `productionError` / `productionErrorSource`) + `OrderService.setProductionError()` (scan + dialog "Lỗi khác") qua helper chung `buildDesignerReworkBackFromError()`. Kích hoạt khi `errorSource='designer'` + `canReworkBackToDesigner` + có user context; đơn chưa vào pipeline thì tự khởi tạo stage Print (xem callout "Vị trí stage" trên). **Áp cho mọi stage** (print trở đi), cả PrintOrderTable (chip watching/rework) lẫn kanban (tab watching/rework).
 
 **Ví dụ:** May xuất ra (`sew-out`) báo lỗi đẩy về In (`print`):
 
@@ -455,6 +455,54 @@ if (code === READY_FOR_FULFILL_CODE) {
 
 **Guard `!currentFulfillmentStage`** đảm bảo không ghi đè state đang chạy — nếu đơn đã ở Press/QC/... mà admin sửa cell ok bằng tay, chỉ flip `readyForFulfill`.
 
+### 5.4b Hook báo lỗi designer qua cell → rework-back (watching → cần làm lại)
+
+> Spec UI §2.3b. Mục đích: worker chọn cell "Lỗi xưởng" loại designer → đơn vào tab **"Đang chờ quay lại"** của worker; designer fix xong → tab **"Cần làm lại"**.
+
+**2 helper ở `order.service.ts`:**
+
+```ts
+// Gate: designerStatus nào được phép đẩy về designer khi báo lỗi loại designer.
+private canReworkBackToDesigner(current: DesignerStatus): boolean {
+  return current !== Rework        // tránh báo trùng
+      && current !== InProgress    // designer đang làm dở, không giật
+      && current !== Assigned;     // → fire khi done / unassigned / rejected
+}
+
+// Build patch + timeline entry mirror rework-back target=designer của FulfillmentTaskService.
+private buildDesignerReworkBackFromError(before, reason, ctx) {
+  const userId = ctx?.user?._id; if (!userId) return null;
+  const existingStage = before.currentFulfillmentStage;
+  const stage = existingStage || FulfillmentStage.Print;  // chưa pipeline → vào Print
+  if (!existingStage) {
+    set.currentFulfillmentStage = stage;
+    set['fulfillmentStages.print'] = { status:'waiting', reworkCount:0, workMs:0, waitingAt:now };
+  } else {
+    set[`fulfillmentStages.${stage}.status`] = 'waiting';
+    set[`fulfillmentStages.${stage}.reworkCount`] = (prev ?? 0) + 1;
+  }
+  timelineEntry = { stage, action:'rework-back', byUserId:userId, reworkTarget:'designer', reason };
+  return { set, timelineEntry };
+}
+```
+
+**3 call-site** (đều: nếu `errorSource==='designer'` + `canReworkBackToDesigner` → set `designerStatus='rework'` + `$inc designerReworkCount` + merge `rb.set` vào patch + `$push fulfillmentTimeline rb.timelineEntry`):
+
+| Path | File | Trigger |
+| --- | --- | --- |
+| `updateField` field=`productionError` | `order.service.ts` (~3360) | Cell "Lỗi xưởng" code thường (FE `ProductionErrorSelectCell` → `updateField`) |
+| `updateField` field=`productionErrorSource` | `order.service.ts` (~3395) | Cell "Loại lỗi" đổi tay sang designer (admin) |
+| `setProductionError` | `order.service.ts` (~4520) | Scan barcode + dialog "Lỗi khác" (`POST /set-production-error`) |
+
+**Vòng đời đầy đủ** (đơn `designerStatus='unassigned'`, chưa pipeline):
+
+1. Worker In bấm "Lỗi xưởng" = thiếu file design (designer) → `toolResultNote='error'`, `designerStatus='rework'`, `currentFulfillmentStage='print'`, `fulfillmentStages.print.status='waiting'`, timeline có `rework-back byUserId=worker`.
+2. Tab **"Đang chờ quay lại"** match (timeline + `designerStatus='rework'`). KHÔNG lọt waiting (gate `designerStatus != rework`) / rework (status=waiting).
+3. Leader gán designer → designer start → complete → `designerStatus='done'` + Entry A nhánh `else if` set `fulfillmentStages.print.status='rework'`.
+4. Tab **"Cần làm lại"** match (`currentStage=print` + `status=rework` + `readyForFulfill=true`). Rời watching (`designerStatus != rework`).
+
+**Đồng bộ 2 view:** áp cho cả `PrintOrderTable` (chip qua `applyFulfillmentStatusFilter`) lẫn kanban (tab qua `applyTabFilter`). Lưu ý: chip/tab `watching` lọc theo `byUserId` = người bấm lỗi; do worker In tự bấm trên đơn của xưởng mình nên khớp.
+
 ### 5.5 User service — Fulfillment validation
 
 `createUser` + `adminUpdateUser`:
@@ -536,13 +584,15 @@ Worker scope enforce ở BE: `user.fulfillmentStage === body.stage` && `user.fac
 - `apps/api/src/modules/order/order.entity.ts` — 4 field mới + `makeEmptyStageState` helper
 - `apps/api/src/modules/user/user.entity.ts` — `fulfillmentStage` + partial unique index
 - `apps/api/src/modules/user/user.service.ts` — validation + E11000 handler
-- `apps/api/src/modules/designer/designer-task.service.ts` — hook entry A (designer.complete)
-- `apps/api/src/modules/order/order.service.ts` — helper `buildFulfillmentEntrySet()` + hook entry B ở `updateField` / `bulkUpdateField` / `importRework`
+- `apps/api/src/modules/designer/designer-task.service.ts` — hook entry A (designer.complete) + nhánh `else if` cycle quay về set reporter stage = `rework` (§5.4)
+- `apps/api/src/modules/order/order.service.ts` — helper `buildFulfillmentEntrySet()` + hook entry B ở `updateField` / `bulkUpdateField` / `importRework`; **helper `canReworkBackToDesigner()` + `buildDesignerReworkBackFromError()` + 3 call-site (`updateField` ×2 + `setProductionError`) cho hook báo lỗi designer qua cell (§5.4b)**
 
 **Frontend:**
 
 - `apps/web/src/pages/fulfillment/my-tasks/index.tsx` — kanban 4 cột + DnD
 - `apps/web/src/pages/fulfillment/my-tasks/FulfillmentTaskCard.tsx` — card component dùng chung 4 cột
+- `apps/web/src/pages/fulfillment/my-tasks/PrintOrderTable.tsx` — bảng phẳng stage In (§4.5): chế độ phím ↑↓ (1 dấu ✓ theo cursor) + URL params persistence (prefix `p`, F5 giữ filter/ngày/search/status/trang)
+- `apps/web/src/pages/fulfillment/my-tasks/PrintWorkshopView.tsx` — orchestrator transition + ReworkBackDialog cho stage In
 - `apps/web/src/pages/fulfillment/my-tasks/ReworkBackDialog.tsx`
 - `apps/web/src/services/fulfillment.ts`
 - `apps/web/src/pages/users/index.tsx` — form thêm stage dropdown

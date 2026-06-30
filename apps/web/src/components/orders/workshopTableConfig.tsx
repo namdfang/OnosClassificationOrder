@@ -473,6 +473,9 @@ export const WORKSHOP_COLS: WorkshopColMeta[] = [
         orderId={r._id}
         value={r.assignee}
         canEdit={ctx.canEditField('assignee')}
+        blockedReason={
+          r.toolResultNote === 'ok' ? "Đơn đã 'ok' (Note kq Tool 1) — không cần gán designer" : undefined
+        }
         onUpdated={(v) => ctx.patchRow(r._id, { assignee: v ?? undefined })}
       />
     ),

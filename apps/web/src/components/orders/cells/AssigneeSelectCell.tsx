@@ -15,6 +15,8 @@ interface Props {
   /** Giá trị `assignee` của order — = user._id của sub-designer (hoặc null). */
   value?: string | null;
   canEdit: boolean;
+  /** Nếu set → khoá gán (vd đơn đã 'ok'), hiện lý do qua tooltip. */
+  blockedReason?: string;
   onUpdated?: (newUserId: string | null) => void;
 }
 
@@ -23,7 +25,7 @@ interface Props {
  * dùng user._id làm value. Fullname hiển thị; nếu user bị xoá (không tìm
  * thấy trong store) thì hiển thị fallback ngắn.
  */
-export function AssigneeSelectCell({ orderId, value, canEdit, onUpdated }: Props) {
+export function AssigneeSelectCell({ orderId, value, canEdit, blockedReason, onUpdated }: Props) {
   const members = useDesignerTeamStore((s) => s.members);
   const byId = useDesignerTeamStore((s) => s.byId);
   const loaded = useDesignerTeamStore((s) => s.loaded);
@@ -57,8 +59,9 @@ export function AssigneeSelectCell({ orderId, value, canEdit, onUpdated }: Props
       className={cn(
         'inline-flex items-center gap-1.5 px-2 py-0.5 rounded text-xs whitespace-nowrap',
         current ? 'bg-accent/60 text-foreground' : 'text-muted-foreground',
+        blockedReason && 'opacity-60 cursor-not-allowed',
       )}
-      title={current?.fullName}
+      title={blockedReason || current?.fullName}
     >
       {saving ? <Spinner size={10} className="text-current" /> : <User size={12} />}
       <span className="truncate max-w-[120px]">
@@ -77,7 +80,7 @@ export function AssigneeSelectCell({ orderId, value, canEdit, onUpdated }: Props
       }))}
       value={value || undefined}
       onSelect={handleSelect}
-      disabled={!canEdit || saving}
+      disabled={!canEdit || saving || !!blockedReason}
       renderOption={(it) => (
         <span className="inline-flex items-center gap-2">
           <User size={13} />

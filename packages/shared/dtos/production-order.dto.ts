@@ -666,10 +666,19 @@ export const BulkAssignDesignerPreviewResZod = ResZod.extend({
         count: z.number(),
       })
       .array(),
-    /** Số đơn sẽ bị skip nếu apply (đang in-progress/done/rework). */
+    /** Số đơn sẽ bị skip do status (đang in-progress/done). */
     blockedCount: z.number(),
-    /** Số đơn hợp lệ để assign (unassigned/assigned/rejected). */
+    /** Số đơn 'cần làm lại' đang có người ôm (assignee != null) — KHÔNG gán cho
+     * người khác được, chỉ gán đơn rework chưa có ai ôm. */
+    reworkHeldCount: z.number(),
+    /** Số đơn có `toolResultNote='ok'` — KHÔNG cho gán designer (đã soát ok). */
+    okCount: z.number(),
+    /** Số đơn CHƯA soát (`toolResultNote` rỗng) — gán được nhưng cần confirm. */
+    noToolCount: z.number(),
+    /** Số đơn hợp lệ để assign (reassignable status VÀ toolResultNote != 'ok') — gồm cả chưa soát. */
     eligibleCount: z.number(),
+    /** Subset của eligible nhưng ĐÃ soát (toolResultNote non-empty != 'ok') — dùng cho nút "Chỉ gán đơn đã soát". */
+    eligibleWithToolCount: z.number(),
   }),
 });
 export class BulkAssignDesignerPreviewResDto extends createZodDto(
@@ -683,6 +692,9 @@ export const BulkAssignDesignerZod = z.object({
   /** Nếu false (default) → từ chối khi có đơn đã assign cho người khác (an
    * toàn). FE confirm rồi đặt true để override. */
   reassignOthers: z.boolean().default(false),
+  /** Nếu true → bỏ qua đơn CHƯA soát (`toolResultNote` rỗng). Tương ứng nút
+   * "Chỉ gán đơn đã soát" ở dialog. Default false = gán tất cả. */
+  skipUnreviewed: z.boolean().default(false),
 });
 export class BulkAssignDesignerDto extends createZodDto(extendApi(BulkAssignDesignerZod)) {}
 
