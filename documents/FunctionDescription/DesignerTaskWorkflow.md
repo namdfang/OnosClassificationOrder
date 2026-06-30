@@ -226,7 +226,11 @@ factoryId?: string                // ref FactoryEntity, REQUIRED khi role=Fulfil
   - Sub-designer dropdown trong các dialog assign/bulk dùng cùng `designerTeamStore` cache
 
 ### 4.2 `/my-tasks` (Sub-designer)
-Xem 2.3 chi tiết. Components con:
+Xem 2.3 chi tiết.
+
+**Bộ lọc ngày:** 3 preset nhanh (Hôm nay / 7 ngày / 30 ngày) + `<DateRangePicker>` tùy chỉnh (khoảng bất kỳ, như các trang khác). State thống nhất `dateFrom`/`dateTo` (mặc định hôm nay) → gửi `from`/`to` vào `myTasks` (lọc cột **Đã xong**) + `myStats({period:'custom', from, to})` (KPI). Preset highlight khi range khớp.
+
+Components con:
 - `TaskCard` — drag handle, productionId button (mở `TaskDetailDialog`), mockup thumbnail (mở preview), timestamp + reworkCount badge
 - `TaskDetailDialog` — header status badge + grid info (9 field) + mockup + designs grid 4 cột + timeline 5 timestamp + banner productionError/rejectedReason. Fetch `GET /v1/orders/:id`
 - `RejectModal` — textarea reason max 500, dùng chung cho single reject + bulk reject

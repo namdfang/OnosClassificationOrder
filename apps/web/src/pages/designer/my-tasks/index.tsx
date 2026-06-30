@@ -30,6 +30,7 @@ import { DesignerStatus, DesignerTransitionAction } from 'shared';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { TooltipProvider } from '@/components/ui/tooltip';
+import { DateRangePicker } from '@/components/common/DateRangePicker';
 import { ImagePreviewDialog } from '@/components/common/ImagePreviewDialog';
 import { SelectFilter } from '@/components/common/SelectFilter';
 import { Spinner } from '@/components/common/Spinner';
@@ -42,6 +43,22 @@ import { TaskCard } from './TaskCard';
 import { TaskDetailDialog } from './TaskDetailDialog';
 
 type Period = 'today' | '7d' | '30d';
+
+function todayISO(): string {
+  const d = new Date();
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+}
+function daysAgoISO(n: number): string {
+  const d = new Date();
+  d.setDate(d.getDate() - n);
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+}
+/** Khoảng ngày cho 3 preset nhanh (đồng bộ với `resolvePeriodRange` ở BE). */
+const PRESET_RANGE: Record<Period, () => { from: string; to: string }> = {
+  today: () => ({ from: todayISO(), to: todayISO() }),
+  '7d': () => ({ from: daysAgoISO(6), to: todayISO() }),
+  '30d': () => ({ from: daysAgoISO(29), to: todayISO() }),
+};
 
 type ColKey = 'assigned' | 'rework' | 'inProgress' | 'done';
 
@@ -122,7 +139,10 @@ export default function MyTasksPage() {
   const [rejected, setRejected] = useState<DesignerTaskCard[]>([]);
   const [showRejected, setShowRejected] = useState(false);
   const [stats, setStats] = useState<DesignerMyStats | null>(null);
-  const [period, setPeriod] = useState<Period>('today');
+  // Bộ lọc ngày (áp cho cả cột "Đã xong" trên kanban + KPI thống kê). Mặc định
+  // hôm nay — giữ nguyên hành vi cũ. Preset nhanh + DateRangePicker tùy chỉnh.
+  const [dateFrom, setDateFrom] = useState<string>(todayISO());
+  const [dateTo, setDateTo] = useState<string>(todayISO());
   const [loading, setLoading] = useState(false);
   const [fullName, setFullName] = useState<string | undefined>(undefined);
 
@@ -159,6 +179,8 @@ export default function MyTasksPage() {
       setLoading(true);
       const res = await RepositoryRemote.designer.myTasks({
         ...filters,
+        from: dateFrom || undefined,
+        to: dateTo || undefined,
         search: debouncedSearch || undefined,
       });
       const data = res.data?.data as {
@@ -178,9 +200,13 @@ export default function MyTasksPage() {
     }
   };
 
-  const fetchStats = async (p: Period = period) => {
+  const fetchStats = async () => {
     try {
-      const res = await RepositoryRemote.designer.myStats({ period: p });
+      const res = await RepositoryRemote.designer.myStats({
+        period: 'custom',
+        from: dateFrom || undefined,
+        to: dateTo || undefined,
+      });
       setStats((res.data?.data || null) as DesignerMyStats | null);
     } catch (err) {
       handleAxiosError(err);
@@ -201,16 +227,18 @@ export default function MyTasksPage() {
   useEffect(() => {
     fetchTasks();
     fetchFilters();
-  }, [filters.type, filters.fabricType, filters.machineNumber, filters.toolResult, debouncedSearch]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [filters.type, filters.fabricType, filters.machineNumber, filters.toolResult, debouncedSearch, dateFrom, dateTo]);
 
   useEffect(() => {
-    fetchStats(period);
-  }, [period]);
+    fetchStats();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [dateFrom, dateTo]);
 
   const refreshAll = () => {
     fetchTasks();
     fetchFilters();
-    fetchStats(period);
+    fetchStats();
   };
 
   // Cho mỗi cột → ordered array của id (sau khi đã group by type, để
@@ -427,22 +455,38 @@ export default function MyTasksPage() {
             </div>
           </div>
 
-          <div className="flex items-center gap-2">
+          <div className="flex items-center gap-2 flex-wrap">
             <div className="inline-flex rounded-md border border-border overflow-hidden text-xs">
-              {(['today', '7d', '30d'] as Period[]).map((p) => (
-                <button
-                  key={p}
-                  type="button"
-                  onClick={() => setPeriod(p)}
-                  className={`px-3 py-1.5 ${period === p
-                    ? 'bg-primary text-primary-foreground'
-                    : 'bg-background text-muted-foreground hover:bg-muted'
-                    }`}
-                >
-                  {p === 'today' ? 'Hôm nay' : p === '7d' ? '7 ngày' : '30 ngày'}
-                </button>
-              ))}
+              {(['today', '7d', '30d'] as Period[]).map((p) => {
+                const r = PRESET_RANGE[p]();
+                const active = dateFrom === r.from && dateTo === r.to;
+                return (
+                  <button
+                    key={p}
+                    type="button"
+                    onClick={() => {
+                      setDateFrom(r.from);
+                      setDateTo(r.to);
+                    }}
+                    className={`px-3 py-1.5 ${active
+                      ? 'bg-primary text-primary-foreground'
+                      : 'bg-background text-muted-foreground hover:bg-muted'
+                      }`}
+                  >
+                    {p === 'today' ? 'Hôm nay' : p === '7d' ? '7 ngày' : '30 ngày'}
+                  </button>
+                );
+              })}
             </div>
+            <DateRangePicker
+              from={dateFrom}
+              to={dateTo}
+              clearable={false}
+              onChange={(f, t) => {
+                setDateFrom(f);
+                setDateTo(t);
+              }}
+            />
             <Button variant="ghost" size="sm" onClick={refreshAll} disabled={loading}>
               <RefreshCw size={13} className={loading ? 'animate-spin' : ''} />
             </Button>
