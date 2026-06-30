@@ -222,9 +222,10 @@ export default function MyTasksPage() {
         from: dateFrom || undefined,
         to: dateTo || undefined,
       });
-      setFilterOptions(
-        (res.data?.data || { type: [], fabricType: [], machineNumber: [], toolResult: [], userSku: [] }) as typeof filterOptions,
-      );
+      // Merge với default rỗng → mọi key luôn là array kể cả khi response BE
+      // thiếu facet nào đó (vd. backend cũ chưa có `userSku`) → tránh crash.
+      const empty = { type: [], fabricType: [], machineNumber: [], toolResult: [], userSku: [] };
+      setFilterOptions({ ...empty, ...(res.data?.data || {}) } as typeof filterOptions);
     } catch (err) {
       handleAxiosError(err);
     }

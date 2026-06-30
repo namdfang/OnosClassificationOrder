@@ -17,6 +17,9 @@ interface Props {
  * count phản ánh đúng các filter khác đang active.
  */
 export function SelectFilter({ label, value, onChange, options }: Props) {
+  // Guard: options có thể undefined khi response BE chưa có facet đó (vd. trong
+  // lúc deploy backend mới chưa lên) → tránh crash `.reduce`/`.map` of undefined.
+  const opts = options ?? [];
   return (
     <div>
       <label className="text-[10px] text-muted-foreground uppercase tracking-wide font-medium">
@@ -30,8 +33,8 @@ export function SelectFilter({ label, value, onChange, options }: Props) {
           value ? 'border-primary' : 'border-input',
         )}
       >
-        <option value="">— Tất cả ({options.reduce((s, o) => s + o.count, 0)}) —</option>
-        {options.map((o) => (
+        <option value="">— Tất cả ({opts.reduce((s, o) => s + o.count, 0)}) —</option>
+        {opts.map((o) => (
           <option key={o.value} value={o.value}>
             {o.label} ({o.count})
           </option>
