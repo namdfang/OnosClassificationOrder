@@ -147,7 +147,15 @@ export default function MyTasksPage() {
   const [loading, setLoading] = useState(false);
   const [fullName, setFullName] = useState<string | undefined>(undefined);
 
-  const [filters, setFilters] = useState<Filters>(EMPTY_FILTERS);
+  // Filter bar cũng lưu vào URL params để F5 giữ lựa chọn (đọc 1 lần khi mount).
+  const [filters, setFilters] = useState<Filters>(() => ({
+    ...EMPTY_FILTERS,
+    type: searchParams.get('type') || '',
+    fabricType: searchParams.get('fabricType') || '',
+    machineNumber: searchParams.get('machineNumber') || '',
+    toolResult: searchParams.get('toolResult') || '',
+    userSku: searchParams.get('userSku') || '',
+  }));
   const [filterOptions, setFilterOptions] = useState<{
     type: FilterOption[];
     fabricType: FilterOption[];
@@ -156,7 +164,7 @@ export default function MyTasksPage() {
     userSku: FilterOption[];
   }>({ type: [], fabricType: [], machineNumber: [], toolResult: [], userSku: [] });
 
-  const [search, setSearch] = useState('');
+  const [search, setSearch] = useState(() => searchParams.get('search') || '');
   const debouncedSearch = useDebounce(search, 300);
 
   // Selection state — global Set chứa tất cả id đã chọn. Bulk action chỉ
@@ -231,18 +239,25 @@ export default function MyTasksPage() {
     }
   };
 
-  // Sync ngày → URL params để F5 giữ lựa chọn.
+  // Sync ngày + toàn bộ filter bar (+ search) → URL params để F5 giữ lựa chọn.
   useEffect(() => {
     setSearchParams(
       (prev) => {
         const sp = new URLSearchParams(prev);
-        dateFrom ? sp.set('from', dateFrom) : sp.delete('from');
-        dateTo ? sp.set('to', dateTo) : sp.delete('to');
+        const setOrDel = (k: string, v: string) => (v ? sp.set(k, v) : sp.delete(k));
+        setOrDel('from', dateFrom);
+        setOrDel('to', dateTo);
+        setOrDel('type', filters.type);
+        setOrDel('fabricType', filters.fabricType);
+        setOrDel('machineNumber', filters.machineNumber);
+        setOrDel('toolResult', filters.toolResult);
+        setOrDel('userSku', filters.userSku);
+        setOrDel('search', debouncedSearch);
         return sp;
       },
       { replace: true },
     );
-  }, [dateFrom, dateTo, setSearchParams]);
+  }, [dateFrom, dateTo, filters, debouncedSearch, setSearchParams]);
 
   useEffect(() => {
     fetchTasks();

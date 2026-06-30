@@ -230,6 +230,8 @@ Xem 2.3 chi tiết.
 
 **Bộ lọc ngày:** chỉ dùng `<DateRangePicker>` (đã bỏ 3 preset nút Hôm nay/7 ngày/30 ngày). State `dateFrom`/`dateTo` **mặc định 7 ngày gần nhất**, **lưu vào URL params `from`/`to`** (F5 giữ lựa chọn — `useSearchParams`, đọc khi mount + sync khi đổi). Gửi `from`/`to` vào `myTasks` + `myTaskFilters` + `myStats({period:'custom', from, to})`.
 
+**Filter bar lưu URL params:** ngoài `from`/`to`, toàn bộ filter bar (`type`/`fabricType`/`machineNumber`/`toolResult`/`userSku` + `search`) cũng **đọc từ URL khi mount + sync vào URL khi đổi** (cùng 1 `useEffect` sync, `search` sync theo `debouncedSearch`) → F5 giữ nguyên cả bộ lọc. `fetchTasks`/`fetchFilters` gửi `...filters` xuống cả 2 endpoint nên các cột bên dưới + count facet đều lọc theo. **Hai endpoint dùng chung `buildMyTaskFilter` + cùng range `inProductionAt`** ⇒ kết quả `/my-tasks` và `/my-task-filters` luôn đồng bộ.
+
 **Lọc theo `inProductionAt`:** áp `inProductionAt ∈ [from,to]` vào:
 - `getMyTasks` (`baseFilter`) → **cả 4 cột kanban + rejected drawer** (header mỗi cột đếm đúng theo filter).
 - `getMyTaskFilters` (facet aggregation) → **số đếm dropdown Sản phẩm/Vải/Máy/Kết quả Tool/Khách hàng** cũng đúng theo khoảng ngày.
