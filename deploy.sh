@@ -31,7 +31,7 @@ pnpm build:api
 # trạng dist-prod có code mới nhưng process vẫn chạy code cũ.
 echo "→ Reloading API (PM2)..."
 cd apps/api
-NODE_ENV=production pm2 reload ecosystem.config.cjs --update-env
+NODE_ENV=production pm2 restart ecosystem.config.cjs --update-env
 pm2 save >/dev/null
 cd "$REPO_DIR"
 
