@@ -182,9 +182,17 @@ export default function MyTasksPage() {
 
   const lastClickedRef = useRef<{ colKey: ColKey; id: string } | null>(null);
 
+  // Seq guard chống race: khi đổi ngày/filter liên tiếp, nhiều request chạy
+  // song song. Mạng không đảm bảo thứ tự trả về → response cũ về muộn có thể
+  // ghi đè data mới. Mỗi fetch tăng seq, chỉ response của request MỚI NHẤT
+  // (seq khớp ref) mới được áp dụng.
+  const tasksSeqRef = useRef(0);
+  const filtersSeqRef = useRef(0);
+
   const sensors = useSensors(useSensor(PointerSensor, { activationConstraint: { distance: 6 } }));
 
   const fetchTasks = async () => {
+    const seq = ++tasksSeqRef.current;
     try {
       setLoading(true);
       const res = await RepositoryRemote.designer.myTasks({
@@ -193,6 +201,8 @@ export default function MyTasksPage() {
         to: dateTo || undefined,
         search: debouncedSearch || undefined,
       });
+      // Response cũ đến muộn → bỏ qua, không ghi đè data của request mới hơn.
+      if (seq !== tasksSeqRef.current) return;
       const data = res.data?.data as {
         columns: Columns;
         rejected: DesignerTaskCard[];
@@ -204,9 +214,9 @@ export default function MyTasksPage() {
       setSelected(new Set());
       lastClickedRef.current = null;
     } catch (err) {
-      handleAxiosError(err);
+      if (seq === tasksSeqRef.current) handleAxiosError(err);
     } finally {
-      setLoading(false);
+      if (seq === tasksSeqRef.current) setLoading(false);
     }
   };
 
@@ -224,18 +234,21 @@ export default function MyTasksPage() {
   };
 
   const fetchFilters = async () => {
+    const seq = ++filtersSeqRef.current;
     try {
       const res = await RepositoryRemote.designer.myTaskFilters({
         ...filters,
         from: dateFrom || undefined,
         to: dateTo || undefined,
       });
+      // Response cũ đến muộn → bỏ qua (tránh facet count lệch với data đang hiện).
+      if (seq !== filtersSeqRef.current) return;
       // Merge với default rỗng → mọi key luôn là array kể cả khi response BE
       // thiếu facet nào đó (vd. backend cũ chưa có `userSku`) → tránh crash.
       const empty = { type: [], fabricType: [], machineNumber: [], toolResult: [], userSku: [] };
       setFilterOptions({ ...empty, ...(res.data?.data || {}) } as typeof filterOptions);
     } catch (err) {
-      handleAxiosError(err);
+      if (seq === filtersSeqRef.current) handleAxiosError(err);
     }
   };
 
