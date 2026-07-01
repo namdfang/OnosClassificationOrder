@@ -9,6 +9,7 @@ import {
   useSensor,
   useSensors,
 } from '@dnd-kit/core';
+
 import {
   CheckCircle2,
   ChevronDown,
@@ -109,6 +110,8 @@ type Filters = {
   toolResult: string;
   toolResultNote: string;
   userSku: string;
+  /** CSV các mã file sửa lỗi đã chọn (multi-select). Field mảng trên order. */
+  errorFile: string;
 };
 
 const EMPTY_FILTERS: Filters = {
@@ -118,6 +121,7 @@ const EMPTY_FILTERS: Filters = {
   toolResult: '',
   toolResultNote: '',
   userSku: '',
+  errorFile: '',
 };
 
 /** Drag rules: từ status `from` sang cột `to` ⇒ action gì (hoặc null). */
@@ -159,6 +163,7 @@ export default function MyTasksPage() {
     toolResult: searchParams.get('toolResult') || '',
     toolResultNote: searchParams.get('toolResultNote') || '',
     userSku: searchParams.get('userSku') || '',
+    errorFile: searchParams.get('errorFile') || '',
   }));
   const [filterOptions, setFilterOptions] = useState<{
     type: FilterOption[];
@@ -167,7 +172,8 @@ export default function MyTasksPage() {
     toolResult: FilterOption[];
     toolResultNote: FilterOption[];
     userSku: FilterOption[];
-  }>({ type: [], fabricType: [], machineNumber: [], toolResult: [], toolResultNote: [], userSku: [] });
+    errorFile: FilterOption[];
+  }>({ type: [], fabricType: [], machineNumber: [], toolResult: [], toolResultNote: [], userSku: [], errorFile: [] });
 
   const [search, setSearch] = useState(() => searchParams.get('search') || '');
   const debouncedSearch = useDebounce(search, 300);
@@ -250,7 +256,7 @@ export default function MyTasksPage() {
       if (seq !== filtersSeqRef.current) return;
       // Merge với default rỗng → mọi key luôn là array kể cả khi response BE
       // thiếu facet nào đó (vd. backend cũ chưa có `userSku`) → tránh crash.
-      const empty = { type: [], fabricType: [], machineNumber: [], toolResult: [], toolResultNote: [], userSku: [] };
+      const empty = { type: [], fabricType: [], machineNumber: [], toolResult: [], toolResultNote: [], userSku: [], errorFile: [] };
       setFilterOptions({ ...empty, ...(res.data?.data || {}) } as typeof filterOptions);
     } catch (err) {
       if (seq === filtersSeqRef.current) handleAxiosError(err);
@@ -271,6 +277,7 @@ export default function MyTasksPage() {
         setOrDel('toolResult', filters.toolResult);
         setOrDel('toolResultNote', filters.toolResultNote);
         setOrDel('userSku', filters.userSku);
+        setOrDel('errorFile', filters.errorFile);
         setOrDel('search', debouncedSearch);
         return sp;
       },
@@ -282,7 +289,7 @@ export default function MyTasksPage() {
     fetchTasks();
     fetchFilters();
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [filters.type, filters.fabricType, filters.machineNumber, filters.toolResult, filters.toolResultNote, filters.userSku, debouncedSearch, dateFrom, dateTo]);
+  }, [filters.type, filters.fabricType, filters.machineNumber, filters.toolResult, filters.toolResultNote, filters.userSku, filters.errorFile, debouncedSearch, dateFrom, dateTo]);
 
   useEffect(() => {
     fetchStats();
@@ -569,7 +576,7 @@ export default function MyTasksPage() {
         </div>
 
         {/* Filter bar */}
-        <div className="grid grid-cols-2 md:grid-cols-3 xl:grid-cols-7 gap-2 rounded-md border border-border bg-card p-2.5">
+        <div className="grid grid-cols-2 md:grid-cols-3 xl:grid-cols-8 gap-2 rounded-md border border-border bg-card p-2.5">
           <div>
             <label className="text-[10px] text-muted-foreground uppercase tracking-wide font-medium">
               Search
@@ -619,6 +626,15 @@ export default function MyTasksPage() {
             value={filters.userSku}
             onChange={(v) => setFilters({ ...filters, userSku: v })}
             options={filterOptions.userSku}
+          />
+          {/* File sửa lỗi — single-select (giống OrderTableWorkshop). Options lấy
+              thẳng từ backend facet: `label` đã là name (resolve ở BE), không cần
+              labelOpts/byCategory. Field mảng: BE lọc `$in` khớp đơn chứa mã đã chọn. */}
+          <SelectFilter
+            label="File sửa lỗi"
+            value={filters.errorFile}
+            onChange={(v) => setFilters({ ...filters, errorFile: v })}
+            options={filterOptions.errorFile}
           />
         </div>
 

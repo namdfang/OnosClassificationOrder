@@ -124,6 +124,11 @@ export const GetMyTasksZod = z.object({
   toolResultNote: z.string().optional(),
   /** CSV userSku — lọc theo khách hàng sở hữu đơn. */
   userSku: z.string().optional(),
+  /**
+   * CSV workshop_config code (category error_file_type) — lọc theo File sửa lỗi.
+   * Field mảng trên order: khớp nếu đơn chứa BẤT KỲ mã nào đã chọn (`$in`).
+   */
+  errorFile: z.string().optional(),
   /** Free-text search (productionId/orderId). */
   search: z.string().optional(),
 });
@@ -214,6 +219,7 @@ export const GetMyTaskFiltersResZod = ResZod.extend({
     toolResult: FilterOptionZod.array(),
     toolResultNote: FilterOptionZod.array(),
     userSku: FilterOptionZod.array(),
+    errorFile: FilterOptionZod.array(),
   }),
 });
 export class GetMyTaskFiltersResDto extends createZodDto(

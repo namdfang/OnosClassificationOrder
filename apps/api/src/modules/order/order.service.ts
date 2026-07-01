@@ -381,6 +381,39 @@ export class OrderService implements OnModuleInit {
       );
     }
 
+    // Flatten `errorFile` lồng 2 lớp (legacy `[['collar']]` → `['collar']`) ghi
+    // trước khi có guard `normalizeFieldValue().flat(2)`. Nested array làm hỏng cả
+    // facet ($unwind 1 lần trả về mảng con) lẫn filter ($in không khớp phần tử
+    // mảng). Idempotent: `$elemMatch $type=array` chỉ match doc còn lồng; sau khi
+    // flatten không phần tử nào là array nên lần boot sau không match lại.
+    const errorFileFlattenRes = await this.orderModel.updateMany(
+      { errorFile: { $elemMatch: { $type: 'array' } } },
+      [
+        {
+          $set: {
+            errorFile: {
+              $reduce: {
+                input: '$errorFile',
+                initialValue: [],
+                in: {
+                  $concatArrays: [
+                    '$$value',
+                    { $cond: [{ $isArray: '$$this' }, '$$this', ['$$this']] },
+                  ],
+                },
+              },
+            },
+          },
+        },
+      ],
+    );
+    if (errorFileFlattenRes.modifiedCount > 0) {
+      // eslint-disable-next-line no-console
+      console.log(
+        `[order-backfill] errorFile nested arrays flattened on ${errorFileFlattenRes.modifiedCount} legacy rows`,
+      );
+    }
+
     // Backfill toolCheckedAt cho đơn đã soát (toolResultNote có giá trị) nhưng
     // chưa có timestamp — best-effort dùng updatedAt. Dashboard Vòng đời chặng
     // "Soát tool" cần field này để tính throughput + thời gian TB. Idempotent.

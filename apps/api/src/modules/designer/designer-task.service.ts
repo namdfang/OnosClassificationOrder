@@ -14,12 +14,14 @@ import {
   FulfillmentStage,
   FulfillmentStageStatus,
   RoleType,
+  WorkshopConfigCategory,
 } from 'shared';
 
 import { OrderLogService } from '../order-log/order-log.service';
 import type { AuditContext } from '../order-log/order-log.service';
 import { OrderEntity, OrderDocument } from '../order/order.entity';
 import { UserDocument } from '../user/user.entity';
+import { WorkshopConfigEntity } from '../workshop-config/workshop-config.entity';
 
 const READY_FOR_FULFILL_CODE = 'ok';
 
@@ -45,6 +47,8 @@ const OVERRIDE_ROLES: RoleType[] = [
 export class DesignerTaskService {
   constructor(
     @InjectModel(OrderEntity.name) private readonly orderModel: Model<OrderEntity>,
+    @InjectModel(WorkshopConfigEntity.name)
+    private readonly workshopConfigModel: Model<WorkshopConfigEntity>,
     private readonly orderLogService: OrderLogService,
   ) {}
 
@@ -283,6 +287,7 @@ export class DesignerTaskService {
       toolResult?: string;
       toolResultNote?: string;
       userSku?: string;
+      errorFile?: string;
       search?: string;
     },
   ): Promise<{
@@ -356,6 +361,7 @@ export class DesignerTaskService {
       toolResult?: string;
       toolResultNote?: string;
       userSku?: string;
+      errorFile?: string;
     },
   ): Promise<{
     type: { value: string; label: string; count: number }[];
@@ -364,6 +370,7 @@ export class DesignerTaskService {
     toolResult: { value: string; label: string; count: number }[];
     toolResultNote: { value: string; label: string; count: number }[];
     userSku: { value: string; label: string; count: number }[];
+    errorFile: { value: string; label: string; count: number }[];
   }> {
     const userId = String(user._id);
     // Đồng bộ với kanban: facet count cũng lọc theo `inProductionAt` trong khoảng.
@@ -387,9 +394,38 @@ export class DesignerTaskService {
       return agg.map((r) => ({ value: r._id, label: r._id, count: r.count }));
     };
 
-    const [typeOpts, fabricOpts, machineOpts, toolOpts, toolNoteOpts, userOpts] = await Promise.all(
-      KEYS.map((k) => aggregate(k, k)),
-    );
+    // `errorFile` là field MẢNG → không dùng helper `aggregate()` chung (group
+    // theo `$field` scalar sẽ group cả mảng làm 1 key). Cần `$unwind` trước
+    // `$group`. Exclude chính errorFile khỏi filter (cross-narrow như facet kia).
+    // 1 đơn nhiều loại → đếm ở nhiều option ⇒ tổng option có thể > số đơn (đúng).
+    const errorFileFacet = async () => {
+      const filter = this.buildMyTaskFilter(userId, { ...query, errorFile: undefined });
+      const [agg, cfgs] = await Promise.all([
+        this.orderModel.aggregate<{ _id: string; count: number }>([
+          {
+            $match: {
+              ...filter,
+              inProductionAt: { $gte: range.start, $lte: range.end },
+              errorFile: { $exists: true, $ne: null, $not: { $size: 0 } },
+            },
+          },
+          { $unwind: '$errorFile' },
+          { $match: { errorFile: { $ne: '' } } },
+          { $group: { _id: '$errorFile', count: { $sum: 1 } } },
+          { $sort: { count: -1 } },
+        ]),
+        // Resolve code→name ở BACKEND (như getWorkshopAvailableFilters) — không
+        // phụ thuộc FE workshop_config store cho category error_file_type.
+        this.workshopConfigModel
+          .find({ category: WorkshopConfigCategory.ErrorFileType }, { code: 1, name: 1 })
+          .lean(),
+      ]);
+      const nameMap = new Map<string, string>(cfgs.map((c) => [c.code, c.name]));
+      return agg.map((r) => ({ value: r._id, label: nameMap.get(r._id) || r._id, count: r.count }));
+    };
+
+    const [typeOpts, fabricOpts, machineOpts, toolOpts, toolNoteOpts, userOpts, errorFileOpts] =
+      await Promise.all([...KEYS.map((k) => aggregate(k, k)), errorFileFacet()]);
 
     return {
       type: typeOpts,
@@ -398,6 +434,7 @@ export class DesignerTaskService {
       toolResult: toolOpts,
       toolResultNote: toolNoteOpts,
       userSku: userOpts,
+      errorFile: errorFileOpts,
     };
   }
 
@@ -500,6 +537,7 @@ export class DesignerTaskService {
       toolResult?: string;
       toolResultNote?: string;
       userSku?: string;
+      errorFile?: string;
       search?: string;
     },
   ): Record<string, unknown> {
@@ -515,6 +553,9 @@ export class DesignerTaskService {
       filter.toolResultNote = { $in: query.toolResultNote.split(',').filter(Boolean) };
     if (query.userSku)
       filter.userSku = { $in: query.userSku.split(',').filter(Boolean) };
+    // `errorFile` là field MẢNG trên order → `$in` khớp nếu mảng chứa bất kỳ mã nào.
+    if (query.errorFile)
+      filter.errorFile = { $in: query.errorFile.split(',').filter(Boolean) };
     if (query.search) {
       filter.$or = [
         { productionId: { $regex: query.search, $options: 'i' } },

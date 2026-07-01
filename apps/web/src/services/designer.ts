@@ -53,6 +53,7 @@ const myTasks = (
     toolResult?: string;
     toolResultNote?: string;
     userSku?: string;
+    errorFile?: string;
     search?: string;
   } = {},
 ) => {
@@ -74,6 +75,7 @@ const myTaskFilters = (
     toolResult?: string;
     toolResultNote?: string;
     userSku?: string;
+    errorFile?: string;
   } = {},
 ) => {
   const qs = new URLSearchParams();
