@@ -105,28 +105,13 @@ export class DesignerTaskService {
       order.currentFulfillmentStage
     ) {
       // Cycle quay về: đơn đã ở trong fulfillment, bị worker báo lỗi designer
-      // (qua nút "Báo lỗi" hoặc cell "Lỗi xưởng") → designer fix xong.
+      // (qua nút "Báo lỗi" hoặc cell "Lỗi xưởng") → designer fix xong. Set
+      // reporter stage = rework để đơn hiện ở tab "Cần làm lại" của worker
+      // (trước đó nằm ở tab "Đang chờ quay lại" nhờ designerStatus=rework).
       const set = (plan.patch.$set ?? {}) as Record<string, unknown>;
       const stage = order.currentFulfillmentStage;
-      const stageState = (
-        order.fulfillmentStages as
-          | Record<string, { firstStartedAt?: Date; completedAt?: Date } | undefined>
-          | undefined
-      )?.[stage];
-      // Stage ĐÃ từng chạy thật (worker start/complete rồi mới báo lỗi) → quay lại
-      // để LÀM LẠI → tab "Cần làm lại" (rework). Nhưng nếu stage CHƯA từng chạy
-      // (vd đơn báo lỗi designer khi CHƯA hề in — §2.3b init print=waiting) thì
-      // đây là lần vào ĐẦU TIÊN → phải là "Đang chờ" (waiting), KHÔNG phải rework
-      // (chưa in bao giờ thì không có gì để "làm lại"). Bug cũ: luôn set rework →
-      // đơn in lần đầu kẹt ở "Cần làm lại", user In tưởng không thao tác được.
-      const everWorked = !!(stageState?.firstStartedAt || stageState?.completedAt);
-      if (everWorked) {
-        set[`fulfillmentStages.${stage}.status`] = FulfillmentStageStatus.Rework;
-        set[`fulfillmentStages.${stage}.reworkAt`] = new Date();
-      } else {
-        set[`fulfillmentStages.${stage}.status`] = FulfillmentStageStatus.Waiting;
-        set[`fulfillmentStages.${stage}.waitingAt`] = new Date();
-      }
+      set[`fulfillmentStages.${stage}.status`] = FulfillmentStageStatus.Rework;
+      set[`fulfillmentStages.${stage}.reworkAt`] = new Date();
       plan.patch.$set = set;
     }
 
