@@ -1,6 +1,6 @@
 # Kế hoạch — Bảng "Tổng quan Designer theo ngày" (Dashboard tab Designer)
 
-> **Trạng thái:** 📋 PLAN — chưa implement. Chỉ code khi user xác nhận "implement".
+> **Trạng thái:** ✅ ĐÃ IMPLEMENT (endpoint `GET /v1/designer/daily-overview` + `DesignerDailyOverview.tsx`). Doc chi tiết: `Dashboard.md` §0b + `DesignerTaskWorkflow.md`.
 > **Vị trí:** Dashboard → tab Designer (`apps/web/src/pages/home/DesignerStatsTab.tsx`).
 > **Liên quan:** `Dashboard.md` Tab D, `DesignerTaskWorkflow.md`, ma trận `TeamDailyMatrix.tsx`, biểu đồ `StatusBarCharts.tsx`.
 

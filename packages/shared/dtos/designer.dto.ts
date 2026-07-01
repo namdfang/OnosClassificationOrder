@@ -295,6 +295,74 @@ export class GetTeamDailyBreakdownResDto extends createZodDto(
   extendApi(GetTeamDailyBreakdownResZod),
 ) {}
 
+// ─── Daily overview (bảng 4 hàng: tổng đơn / chưa soát / lỗi / tồn) ──────
+
+export const GetDailyOverviewZod = z.object({
+  days: z.enum(['7', '14', '30']).default('7'),
+  /** Lọc theo sản phẩm (`order.type`). */
+  type: z.string().optional(),
+  /** Lọc theo khách hàng (`order.userSku`). */
+  customer: z.string().optional(),
+});
+export class GetDailyOverviewDto extends createZodDto(extendApi(GetDailyOverviewZod)) {}
+
+export const DailyOverviewErrorNoteZod = z.object({
+  code: z.string(),
+  count: z.number().int().nonnegative(),
+});
+
+export const DailyOverviewRowZod = z.object({
+  day: z.string(),
+  /** Tất cả đơn inProductionAt ngày đó, mọi trạng thái. */
+  total: z.number().int().nonnegative(),
+  /** toolResultNote null/'' (chưa soát tool). */
+  unreviewed: z.number().int().nonnegative(),
+  /** toolResultNote set & != 'ok'. */
+  error: z.number().int().nonnegative(),
+  /** Breakdown theo từng mã note ≠ ok, sort count desc. */
+  errorByNote: DailyOverviewErrorNoteZod.array(),
+  /** designerStatus != done (unassigned+assigned+in-progress+rework+rejected). */
+  backlog: z.number().int().nonnegative(),
+  /** Riêng số đơn unassigned trong ngày (subset của backlog). */
+  unassigned: z.number().int().nonnegative(),
+});
+export type DailyOverviewRow = z.infer<typeof DailyOverviewRowZod>;
+
+export const DailyOverviewBacklogDesignerZod = z.object({
+  userId: z.string(),
+  fullName: z.string(),
+  email: z.string().optional(),
+  assigned: z.number().int().nonnegative(),
+  inProgress: z.number().int().nonnegative(),
+  rework: z.number().int().nonnegative(),
+  rejected: z.number().int().nonnegative(),
+  /** = assigned+inProgress+rework+rejected (chỉ trả khi >0). */
+  total: z.number().int().nonnegative(),
+});
+export type DailyOverviewBacklogDesigner = z.infer<typeof DailyOverviewBacklogDesignerZod>;
+
+export const DailyOverviewColumnTotalsZod = z.object({
+  total: z.number().int().nonnegative(),
+  unreviewed: z.number().int().nonnegative(),
+  error: z.number().int().nonnegative(),
+  backlog: z.number().int().nonnegative(),
+});
+
+export const GetDailyOverviewResZod = ResZod.extend({
+  data: z.object({
+    /** Cột ngày `YYYY-MM-DD` (VN), sort mới → cũ (FE reverse để hiển thị cũ→mới). */
+    days: z.string().array(),
+    rows: DailyOverviewRowZod.array(),
+    /** Tồn per-designer trên toàn window (cho bảng con expand hàng Tồn). */
+    backlogByDesigner: DailyOverviewBacklogDesignerZod.array(),
+    /** Đơn unassigned toàn window — dòng riêng "Chưa gán". */
+    unassignedBacklog: z.number().int().nonnegative(),
+    columnTotals: DailyOverviewColumnTotalsZod,
+    rangeDays: z.number().int().positive(),
+  }),
+});
+export class GetDailyOverviewResDto extends createZodDto(extendApi(GetDailyOverviewResZod)) {}
+
 // ─── Bulk transition (Phase 4 extension) ────────────────────────────
 
 export const DesignerBulkTransitionZod = z.object({

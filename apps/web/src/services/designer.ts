@@ -150,6 +150,14 @@ const breakdownFilters = () => {
   return callApi(`/${CONFIG.API_VERSION}/designer/breakdown-filters`, 'get');
 };
 
+const dailyOverview = (params: { days?: 7 | 14 | 30; type?: string; customer?: string } = {}) => {
+  const qs = new URLSearchParams();
+  qs.set('days', String(params.days || 7));
+  if (params.type) qs.set('type', params.type);
+  if (params.customer) qs.set('customer', params.customer);
+  return callApi(`/${CONFIG.API_VERSION}/designer/daily-overview?${qs.toString()}`, 'get');
+};
+
 const errorStats = (params: { from?: string; to?: string } = {}) => {
   const qs = new URLSearchParams();
   if (params.from) qs.set('from', params.from);
@@ -177,5 +185,6 @@ export const designer = {
   timeline,
   teamDailyBreakdown,
   breakdownFilters,
+  dailyOverview,
   errorStats,
 };

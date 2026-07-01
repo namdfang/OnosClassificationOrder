@@ -33,6 +33,7 @@ import { SelectFilter } from '@/components/common/SelectFilter';
 import { RepositoryRemote } from '@/services';
 import { handleAxiosError } from '@/utils';
 
+import { DesignerDailyOverview } from './DesignerDailyOverview';
 import { StatusBarCharts } from './StatusBarCharts';
 import { TeamDailyMatrix } from './TeamDailyMatrix';
 
@@ -172,8 +173,14 @@ export default function DesignerStatsTab() {
         </div>
       </div>
 
-      {/* Biểu đồ cột: toggle "Theo designer (100%)" / "Theo ngày (số lượng)".
-          Đặt ĐẦU TIÊN để admin thấy ngay toàn cảnh cơ cấu trạng thái. */}
+      {/* Bảng tổng quan N ngày (tổng đơn / chưa soát / lỗi / tồn) — TRÊN CÙNG. */}
+      <DesignerDailyOverview
+        reloadToken={matrixToken}
+        type={filterType || undefined}
+        customer={filterCustomer || undefined}
+      />
+
+      {/* Biểu đồ cột: toggle "Theo designer (100%)" / "Theo ngày (số lượng)". */}
       <StatusBarCharts type={filterType || undefined} customer={filterCustomer || undefined} />
 
       {/* Ma trận toàn team × ngày (7/14/30 riêng) — snapshot đơn chưa xong. */}

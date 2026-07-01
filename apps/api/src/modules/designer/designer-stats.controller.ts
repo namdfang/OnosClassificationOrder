@@ -8,6 +8,8 @@ import {
   GetDesignerTimelineDto,
   GetDesignerTimelineResDto,
   GetBreakdownFiltersResDto,
+  GetDailyOverviewDto,
+  GetDailyOverviewResDto,
   GetErrorStatsDto,
   GetErrorStatsResDto,
   GetTeamDailyBreakdownDto,
@@ -121,6 +123,33 @@ export class DesignerStatsController {
       message: JSON.stringify({ method: 'GET', url: '/designer/breakdown-filters', userId: user._id }),
     });
     const data = await this.statsService.getBreakdownFilters();
+    return { success: true, data };
+  }
+
+  @Get('designer/daily-overview')
+  @Auth(LEADER_ROLES)
+  @ApiOperation({
+    summary: 'Bảng tổng quan N ngày: tổng đơn / chưa soát / lỗi (+breakdown note) / tồn (+per-designer).',
+  })
+  @HttpCode(HttpStatus.OK)
+  @ApiOkResponse({ type: GetDailyOverviewResDto })
+  async getDailyOverview(
+    @Query() query: GetDailyOverviewDto,
+    @AuthUser() user: UserDocument,
+  ): Promise<GetDailyOverviewResDto> {
+    this.logger.info({
+      message: JSON.stringify({
+        method: 'GET',
+        url: '/designer/daily-overview',
+        userId: user._id,
+        days: query.days,
+      }),
+    });
+    const data = await this.statsService.getDailyOverview(
+      Number(query.days),
+      query.type,
+      query.customer,
+    );
     return { success: true, data };
   }
 

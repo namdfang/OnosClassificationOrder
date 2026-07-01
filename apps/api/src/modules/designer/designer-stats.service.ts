@@ -571,6 +571,194 @@ export class DesignerStatsService {
     return { products: toOpts(typeRows), customers: toOpts(customerRows) };
   }
 
+  /**
+   * Bảng tổng quan N ngày (7/14/30) cho tab Designer — 4 hàng:
+   *   1. total     — tất cả đơn inProductionAt ngày đó (mọi trạng thái)
+   *   2. unreviewed— toolResultNote null/'' (chưa soát)
+   *   3. error     — toolResultNote set & != 'ok' (+ breakdown theo mã note)
+   *   4. backlog   — designerStatus != done (tồn: unassigned+assigned+in-progress+rework+rejected)
+   * Kèm backlogByDesigner (per-designer × [assigned,inProgress,rework,rejected]) + unassignedBacklog
+   * cho bảng con khi expand hàng Tồn.
+   */
+  async getDailyOverview(
+    rangeDays: number,
+    type?: string,
+    customer?: string,
+  ): Promise<{
+    days: string[];
+    rows: {
+      day: string;
+      total: number;
+      unreviewed: number;
+      error: number;
+      errorByNote: { code: string; count: number }[];
+      backlog: number;
+      unassigned: number;
+    }[];
+    backlogByDesigner: {
+      userId: string;
+      fullName: string;
+      email?: string;
+      assigned: number;
+      inProgress: number;
+      rework: number;
+      rejected: number;
+      total: number;
+    }[];
+    unassignedBacklog: number;
+    columnTotals: { total: number; unreviewed: number; error: number; backlog: number };
+    rangeDays: number;
+  }> {
+    const MS_DAY = 86_400_000;
+    const vnStart = (d: string) => new Date(`${d}T00:00:00+07:00`);
+    const vnEnd = (d: string) => new Date(`${d}T23:59:59.999+07:00`);
+    const vnToday = new Date(Date.now() + 7 * 60 * 60 * 1000).toISOString().slice(0, 10);
+
+    const days: string[] = [];
+    const baseMs = vnStart(vnToday).getTime();
+    for (let i = 0; i < rangeDays; i++) {
+      days.push(new Date(baseMs - i * MS_DAY + 7 * 60 * 60 * 1000).toISOString().slice(0, 10));
+    }
+    const start = new Date(baseMs - (rangeDays - 1) * MS_DAY);
+    const end = vnEnd(vnToday);
+
+    const extraMatch: Record<string, unknown> = {};
+    if (type) extraMatch.type = type;
+    if (customer) extraMatch.userSku = customer;
+    const baseMatch = { inProductionAt: { $gte: start, $lte: end }, ...extraMatch };
+
+    const dayExpr = { $dateToString: { format: '%Y-%m-%d', date: '$inProductionAt', timezone: '+07:00' } };
+    const noteExpr = { $ifNull: ['$toolResultNote', ''] };
+    const statusExpr = { $ifNull: ['$designerStatus', DesignerStatus.Unassigned] };
+
+    const [rowsAgg, noteAgg, backlogAgg, designerRole] = await Promise.all([
+      // (a) per-day counts
+      this.orderModel.aggregate<{
+        _id: string;
+        total: number;
+        unreviewed: number;
+        error: number;
+        backlog: number;
+        unassigned: number;
+      }>([
+        { $match: baseMatch },
+        {
+          $group: {
+            _id: dayExpr,
+            total: { $sum: 1 },
+            unreviewed: { $sum: { $cond: [{ $eq: [noteExpr, ''] }, 1, 0] } },
+            error: {
+              $sum: {
+                $cond: [{ $and: [{ $ne: [noteExpr, ''] }, { $ne: [noteExpr, 'ok'] }] }, 1, 0],
+              },
+            },
+            backlog: { $sum: { $cond: [{ $ne: [statusExpr, DesignerStatus.Done] }, 1, 0] } },
+            unassigned: {
+              $sum: { $cond: [{ $eq: [statusExpr, DesignerStatus.Unassigned] }, 1, 0] },
+            },
+          },
+        },
+      ]),
+      // (b) errorByNote per day
+      this.orderModel.aggregate<{ _id: { day: string; note: string }; count: number }>([
+        { $match: { ...baseMatch, toolResultNote: { $nin: [null, '', 'ok'] } } },
+        { $group: { _id: { day: dayExpr, note: '$toolResultNote' }, count: { $sum: 1 } } },
+        { $sort: { count: -1 } },
+      ]),
+      // (c) backlog per designer (active statuses có assignee)
+      this.orderModel.aggregate<{ _id: { uid: string; status: DesignerStatus }; count: number }>([
+        {
+          $match: {
+            ...baseMatch,
+            assignee: { $exists: true, $ne: null },
+            designerStatus: {
+              $in: [
+                DesignerStatus.Assigned,
+                DesignerStatus.InProgress,
+                DesignerStatus.Rework,
+                DesignerStatus.Rejected,
+              ],
+            },
+          },
+        },
+        { $group: { _id: { uid: '$assignee', status: '$designerStatus' }, count: { $sum: 1 } } },
+      ]),
+      this.roleRepository.findOne({ name: RoleType.Designer }),
+    ]);
+
+    // errorByNote gom theo ngày
+    const noteByDay = new Map<string, { code: string; count: number }[]>();
+    for (const r of noteAgg) {
+      const list = noteByDay.get(r._id.day) || [];
+      list.push({ code: r._id.note, count: r.count });
+      noteByDay.set(r._id.day, list);
+    }
+
+    const rowMap = new Map(rowsAgg.map((r) => [r._id, r]));
+    const columnTotals = { total: 0, unreviewed: 0, error: 0, backlog: 0 };
+    let unassignedBacklog = 0;
+    const rows = days.map((day) => {
+      const r = rowMap.get(day);
+      const total = r?.total ?? 0;
+      const unreviewed = r?.unreviewed ?? 0;
+      const error = r?.error ?? 0;
+      const backlog = r?.backlog ?? 0;
+      const unassigned = r?.unassigned ?? 0;
+      columnTotals.total += total;
+      columnTotals.unreviewed += unreviewed;
+      columnTotals.error += error;
+      columnTotals.backlog += backlog;
+      unassignedBacklog += unassigned;
+      return { day, total, unreviewed, error, errorByNote: noteByDay.get(day) || [], backlog, unassigned };
+    });
+
+    // Resolve tên designer cho bảng con.
+    const teamUsers = designerRole
+      ? await this.userModel.find({ roleId: designerRole._id }, { _id: 1, fullName: 1, email: 1 }).lean()
+      : [];
+    const nameMap = new Map<string, { fullName: string; email?: string }>();
+    for (const u of teamUsers) nameMap.set(String(u._id), { fullName: u.fullName, email: u.email });
+
+    type BL = { assigned: number; inProgress: number; rework: number; rejected: number };
+    const blMap = new Map<string, BL>();
+    const bump = (uid: string, status: DesignerStatus, n: number) => {
+      const cur = blMap.get(uid) || { assigned: 0, inProgress: 0, rework: 0, rejected: 0 };
+      if (status === DesignerStatus.Assigned) cur.assigned += n;
+      else if (status === DesignerStatus.InProgress) cur.inProgress += n;
+      else if (status === DesignerStatus.Rework) cur.rework += n;
+      else if (status === DesignerStatus.Rejected) cur.rejected += n;
+      blMap.set(uid, cur);
+    };
+    for (const r of backlogAgg) bump(r._id.uid, r._id.status, r.count);
+
+    const missingIds = [...blMap.keys()].filter((id) => !nameMap.has(id));
+    if (missingIds.length > 0) {
+      const extra = await this.userModel
+        .find({ _id: { $in: missingIds } }, { _id: 1, fullName: 1, email: 1 })
+        .lean();
+      for (const u of extra) nameMap.set(String(u._id), { fullName: u.fullName, email: u.email });
+    }
+
+    const backlogByDesigner = [...blMap.entries()]
+      .map(([uid, c]) => {
+        const info = nameMap.get(uid);
+        return {
+          userId: uid,
+          fullName: info?.fullName || `#${uid.slice(-4)}`,
+          email: info?.email,
+          assigned: c.assigned,
+          inProgress: c.inProgress,
+          rework: c.rework,
+          rejected: c.rejected,
+          total: c.assigned + c.inProgress + c.rework + c.rejected,
+        };
+      })
+      .filter((d) => d.total > 0)
+      .sort((a, b) => b.total - a.total || a.fullName.localeCompare(b.fullName));
+
+    return { days, rows, backlogByDesigner, unassignedBacklog, columnTotals, rangeDays };
+  }
+
   private resolveRange(from?: string, to?: string): { start: Date; end: Date } {
     if (!from && !to) {
       const end = new Date();
