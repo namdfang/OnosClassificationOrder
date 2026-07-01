@@ -366,7 +366,11 @@ export class DesignerStatsService {
    * XUẤT ngày đó ĐANG ở từng trạng thái. Focus 3 trạng thái chưa xong
    * (assigned/rework/inProgress) + done kèm. Tự include designer chưa có đơn.
    */
-  async getTeamDailyBreakdown(rangeDays: number): Promise<{
+  async getTeamDailyBreakdown(
+    rangeDays: number,
+    from?: string,
+    to?: string,
+  ): Promise<{
     days: string[];
     rows: {
       userId: string;
@@ -380,21 +384,43 @@ export class DesignerStatsService {
     rangeDays: number;
   }> {
     const MS_DAY = 86_400_000;
+    const DAY_CAP = 100; // giới hạn số cột sinh ra cho range tùy chỉnh rộng.
     const vnStart = (d: string) => new Date(`${d}T00:00:00+07:00`);
     const vnEnd = (d: string) => new Date(`${d}T23:59:59.999+07:00`);
     const vnToday = new Date(Date.now() + 7 * 60 * 60 * 1000).toISOString().slice(0, 10);
-    const baseMs = vnStart(vnToday).getTime();
 
     // Danh sách ngày (mới → cũ) + index map để đổ cell về đúng cột.
     const days: string[] = [];
     const dayIndex = new Map<string, number>();
-    for (let i = 0; i < rangeDays; i++) {
-      const d = new Date(baseMs - i * MS_DAY + 7 * 60 * 60 * 1000).toISOString().slice(0, 10);
-      dayIndex.set(d, i);
-      days.push(d);
+    let start: Date;
+    let end: Date;
+    if (from || to) {
+      // Khoảng tùy chỉnh (cho biểu đồ "theo designer"). Match theo [from,to] đầy
+      // đủ; day-list cap DAY_CAP (chỉ ảnh hưởng cells, KHÔNG ảnh hưởng totals).
+      const f = (from || to)!.slice(0, 10);
+      const t = (to || from)!.slice(0, 10);
+      start = vnStart(f);
+      end = vnEnd(t);
+      const startMs = start.getTime();
+      let cur = vnStart(t).getTime();
+      let i = 0;
+      while (cur >= startMs && i < DAY_CAP) {
+        const d = new Date(cur + 7 * 60 * 60 * 1000).toISOString().slice(0, 10);
+        dayIndex.set(d, i);
+        days.push(d);
+        cur -= MS_DAY;
+        i++;
+      }
+    } else {
+      const baseMs = vnStart(vnToday).getTime();
+      for (let i = 0; i < rangeDays; i++) {
+        const d = new Date(baseMs - i * MS_DAY + 7 * 60 * 60 * 1000).toISOString().slice(0, 10);
+        dayIndex.set(d, i);
+        days.push(d);
+      }
+      start = new Date(baseMs - (rangeDays - 1) * MS_DAY);
+      end = vnEnd(vnToday);
     }
-    const start = new Date(baseMs - (rangeDays - 1) * MS_DAY);
-    const end = vnEnd(vnToday);
 
     type CellKey = 'assigned' | 'rework' | 'inProgress' | 'done';
     const statusKey: Partial<Record<DesignerStatus, CellKey>> = {
@@ -447,28 +473,34 @@ export class DesignerStatsService {
     const nameMap = new Map<string, { fullName: string; email?: string }>();
     for (const u of teamUsers) nameMap.set(String(u._id), { fullName: u.fullName, email: u.email });
 
-    const rowMap = new Map<string, ReturnType<typeof emptyCell>[]>();
+    const KEYS = ['assigned', 'rework', 'inProgress', 'done', 'unfinished'] as const;
+    const rowCells = new Map<string, ReturnType<typeof emptyCell>[]>();
+    const rowTotals = new Map<string, ReturnType<typeof emptyCell>>();
     const ensureRow = (uid: string) => {
-      let cells = rowMap.get(uid);
-      if (!cells) {
-        cells = days.map(() => emptyCell());
-        rowMap.set(uid, cells);
-      }
-      return cells;
+      if (!rowCells.has(uid)) rowCells.set(uid, days.map(() => emptyCell()));
+      if (!rowTotals.has(uid)) rowTotals.set(uid, emptyCell());
     };
     if (designerRole) for (const u of teamUsers) ensureRow(String(u._id));
 
     for (const r of agg) {
       const key = statusKey[r._id.status];
+      if (!key) continue;
+      ensureRow(r._id.uid);
+      // Totals cộng TRỰC TIẾP từ agg → đúng cho mọi khoảng (kể cả day-list bị cap).
+      const tt = rowTotals.get(r._id.uid)!;
+      tt[key] += r.count;
+      if (key !== 'done') tt.unfinished += r.count;
+      // Cells chỉ đổ khi ngày nằm trong day-list (preset ≤30; range cap 100).
       const col = dayIndex.get(r._id.day);
-      if (!key || col === undefined) continue;
-      const cells = ensureRow(r._id.uid);
-      cells[col]![key] += r.count;
-      if (key !== 'done') cells[col]!.unfinished += r.count;
+      if (col !== undefined) {
+        const c = rowCells.get(r._id.uid)![col]!;
+        c[key] += r.count;
+        if (key !== 'done') c.unfinished += r.count;
+      }
     }
 
     // Resolve tên cho assignee ngoài team (nếu có).
-    const missingIds = [...rowMap.keys()].filter((id) => !nameMap.has(id));
+    const missingIds = [...rowTotals.keys()].filter((id) => !nameMap.has(id));
     if (missingIds.length > 0) {
       const extra = await this.userModel.find({ _id: { $in: missingIds } }, { _id: 1, fullName: 1, email: 1 }).lean();
       for (const u of extra) nameMap.set(String(u._id), { fullName: u.fullName, email: u.email });
@@ -476,15 +508,12 @@ export class DesignerStatsService {
 
     const columnTotals = days.map(() => emptyCell());
     const grandTotals = emptyCell();
-    const rows = [...rowMap.entries()].map(([uid, cells]) => {
-      const totals = emptyCell();
+    const rows = [...rowTotals.entries()].map(([uid, totals]) => {
+      const cells = rowCells.get(uid)!;
       cells.forEach((c, i) => {
-        (['assigned', 'rework', 'inProgress', 'done', 'unfinished'] as const).forEach((k) => {
-          totals[k] += c[k];
-          columnTotals[i]![k] += c[k];
-          grandTotals[k] += c[k];
-        });
+        for (const k of KEYS) columnTotals[i]![k] += c[k];
       });
+      for (const k of KEYS) grandTotals[k] += totals[k];
       const info = nameMap.get(uid);
       return {
         userId: uid,

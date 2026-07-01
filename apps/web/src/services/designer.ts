@@ -134,9 +134,11 @@ const timeline = (userId: string, params: { from?: string; to?: string } = {}) =
   );
 };
 
-const teamDailyBreakdown = (params: { days?: 7 | 14 | 30 } = {}) => {
+const teamDailyBreakdown = (params: { days?: 7 | 14 | 30; from?: string; to?: string } = {}) => {
   const qs = new URLSearchParams();
   qs.set('days', String(params.days || 7));
+  if (params.from) qs.set('from', params.from);
+  if (params.to) qs.set('to', params.to);
   return callApi(`/${CONFIG.API_VERSION}/designer/team-daily-breakdown?${qs.toString()}`, 'get');
 };
 

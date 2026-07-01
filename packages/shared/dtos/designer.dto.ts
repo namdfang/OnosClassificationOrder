@@ -247,6 +247,10 @@ export type TeamDailyRow = z.infer<typeof TeamDailyRowZod>;
 
 export const GetTeamDailyBreakdownZod = z.object({
   days: z.enum(['7', '14', '30']).default('7'),
+  /** Nếu truyền `from`/`to` (YYYY-MM-DD, VN) → dùng khoảng tùy chỉnh thay `days`
+   *  (cho biểu đồ "theo designer" có date-range riêng). `days` bị bỏ qua. */
+  from: z.string().optional(),
+  to: z.string().optional(),
 });
 export class GetTeamDailyBreakdownDto extends createZodDto(extendApi(GetTeamDailyBreakdownZod)) {}
 

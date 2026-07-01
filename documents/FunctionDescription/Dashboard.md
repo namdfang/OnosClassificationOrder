@@ -6,7 +6,7 @@
 > **Tab A — Thống kê đơn & sản phẩm:** `apps/web/src/pages/home/OrderStatsTab.tsx`. Filter top bar dùng chung `<OrderFilterBar>` — xem `Orders.md §10.3`. 2 search field (`searchType` main + `searchUser` qua `topActionsRight`); auto-fetch debounce 300ms.
 > **Tab B — Tình trạng:** `apps/web/src/pages/home/OrderStatusTab.tsx` + `status/{KpiCard,BreakdownCard,StatusFilterExtras,OrdersMiniTable,useStatusFilter}.tsx`. Filter top bar dùng chung `<OrderFilterBar>` (apps/web/src/components/orders/OrderFilterBar.tsx) — xem `Orders.md §10.3`.
 > **Tab C — Đơn theo xưởng:** `apps/web/src/pages/home/OrderFactoryTab.tsx` + `apps/web/src/pages/home/exportOrders.ts` (XLSX builder)
-> **Tab D — Designer:** `apps/web/src/pages/home/DesignerStatsTab.tsx` — Leader/Admin only (perm `page.designer_stats`)
+> **Tab D — Designer:** `apps/web/src/pages/home/DesignerStatsTab.tsx` (+ `TeamDailyMatrix.tsx`, `StatusBarCharts.tsx`) — Leader/Admin only (perm `page.designer_stats`)
 > **File BE:** `apps/api/src/modules/order/order.service.ts` → `getDashboard()`, `getStatusOverview()`, `getFactoryOverview()`, `exportOrders()`, `transferOrder()`, `bulkTransferOrders()` + `apps/api/src/modules/designer/designer-stats.service.ts` → `getPerformance()`, `getTimeline()`, `getErrorStats()`, `getTeamDailyBreakdown()`
 > **Route:** `/dashboard?tab=stats|status|factory|designer`
 > **API:**
@@ -63,7 +63,7 @@ Data từ `GET /v1/orders/factory-overview` + `GET /v1/orders?sort=grouped&...` 
 
 **Chỉ hiển thị khi user có perm `page.designer_stats`** (DesignerLeader / Admin / Manager). Xem `DesignerTaskWorkflow.md` để hiểu workflow tổng.
 
-Layout 4 section (thứ tự render trên tab: **Ma trận toàn team → Period switcher → Leaderboard → Timeline → Error pie**). Đánh số dưới đây theo nhóm chức năng, không theo thứ tự dọc:
+Layout 5 section (thứ tự render trên tab: **Biểu đồ cột cơ cấu → Ma trận toàn team → Period switcher → Leaderboard → Timeline → Error pie**). Đánh số dưới đây theo nhóm chức năng, không theo thứ tự dọc:
 
 **1. Leaderboard table** (`<Table>` shadcn) — sort theo `completedInPeriod` desc, auto-include sub-designer chưa có task (row count 0):
 
@@ -87,6 +87,12 @@ Click row → set `selectedUserId` → reload timeline chart.
 - **Sort designer theo `unfinished` desc** (ai tồn nhiều lên đầu), rồi done desc, rồi tên.
 - Data từ `GET /v1/designer/team-daily-breakdown?days=7|14|30`. Refetch khi bấm Refresh của tab (prop `reloadToken` = `matrixToken` bump trong `fetchAll`).
 - **Lưu ý window:** đếm `inProductionAt ∈ [today−(N−1)..today]` → đơn tồn ngoài N ngày ẩn; dùng 14/30 để mở rộng. `done` gộp theo `inProductionAt` (KHÁC "completed in period" của Leaderboard dùng `designerCompletedAt`).
+
+**2b. Biểu đồ cột cơ cấu trạng thái** (`StatusBarCharts.tsx` — 1 card có **toggle**, render **ĐẦU TIÊN trên cùng tab**, trên cả ma trận; Recharts `BarChart` stacked):
+- **Toggle "Theo designer / Theo ngày"** — 1 khu vực biểu đồ, 2 chế độ, chung bộ màu 4 trạng thái (Cần làm zinc `#71717A` · Cần làm lại amber `#F59E0B` · Đang làm indigo `#6366F1` · Đã xong emerald `#10B981`) + legend + custom tooltip (hover hiện **số lượng + %** từng trạng thái + Tổng).
+  - **Theo designer:** mỗi **cột = 1 designer** (chỉ người có đơn), **stack 100%** (`stackOffset="expand"`, YAxis %) → xong hết = 100% xanh. Có **date-range RIÊNG** (`DateRangePicker`, mặc định 30 ngày) → gọi `team-daily-breakdown?from=&to=`, lấy `rows[].totals`.
+  - **Theo ngày:** mỗi **cột = 1 ngày** (cũ→mới trái→phải), **stack số lượng** (`stackOffset="none"`) → thấy khối lượng/ngày. Switcher **7/14/30** + dropdown **lọc theo người** (Tất cả = `columnTotals`; 1 người = `rows[].cells`). Gọi `team-daily-breakdown?days=`.
+- Cả 2 chế độ tái dùng **cùng endpoint** `GET /v1/designer/team-daily-breakdown` (đã bổ sung nhận `from`/`to`; range tùy chỉnh cap 100 cột nhưng `totals` tính TRỰC TIẾP từ agg nên luôn đúng dù cap). Fetch độc lập, seq-guard chống race.
 
 **3. Timeline per-designer** (Recharts `LineChart`, 4 series: assigned / started / completed / rework):
 - Dropdown chọn designer (default = top leaderboard)

@@ -31,6 +31,7 @@ import { Spinner } from '@/components/common/Spinner';
 import { RepositoryRemote } from '@/services';
 import { handleAxiosError } from '@/utils';
 
+import { StatusBarCharts } from './StatusBarCharts';
 import { TeamDailyMatrix } from './TeamDailyMatrix';
 
 type Period = 'today' | '7d' | '30d' | 'custom';
@@ -123,8 +124,11 @@ export default function DesignerStatsTab() {
 
   return (
     <div className="space-y-5">
-      {/* Ma trận toàn team × ngày (7/14/30 riêng) — snapshot đơn chưa xong.
-          Đặt ĐẦU TIÊN để admin thấy ngay toàn cảnh. */}
+      {/* Biểu đồ cột: toggle "Theo designer (100%)" / "Theo ngày (số lượng)".
+          Đặt ĐẦU TIÊN để admin thấy ngay toàn cảnh cơ cấu trạng thái. */}
+      <StatusBarCharts />
+
+      {/* Ma trận toàn team × ngày (7/14/30 riêng) — snapshot đơn chưa xong. */}
       <TeamDailyMatrix reloadToken={matrixToken} />
 
       {/* Period switcher */}

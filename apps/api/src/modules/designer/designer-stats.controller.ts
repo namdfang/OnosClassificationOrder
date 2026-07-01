@@ -93,7 +93,11 @@ export class DesignerStatsController {
         days: query.days,
       }),
     });
-    const data = await this.statsService.getTeamDailyBreakdown(Number(query.days));
+    const data = await this.statsService.getTeamDailyBreakdown(
+      Number(query.days),
+      query.from,
+      query.to,
+    );
     return { success: true, data };
   }
 
