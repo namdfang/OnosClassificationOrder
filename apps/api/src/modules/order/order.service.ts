@@ -2638,6 +2638,10 @@ export class OrderService implements OnModuleInit {
           printingCount: 0,
           notPrintedCount: 0,
           errorCount: 0,
+          designAssignedCount: 0,
+          designUnassignedCount: 0,
+          designDoneCount: 0,
+          designNotDoneCount: 0,
           breakdowns: { products: [], fabrics: [], sizes: [], toolResults: [] },
         };
         cellMap.set(fid, cell);
@@ -2706,6 +2710,10 @@ export class OrderService implements OnModuleInit {
       printingCount: number;
       notPrintedCount: number;
       errorCount: number;
+      designAssignedCount: number;
+      designUnassignedCount: number;
+      designDoneCount: number;
+      designNotDoneCount: number;
     };
     const statRows = await this.orderModel.aggregate<StatRow>([
       { $match: cardMatch },
@@ -2747,6 +2755,25 @@ export class OrderService implements OnModuleInit {
           errorCount: {
             $sum: { $cond: [{ $ne: [{ $ifNull: ['$productionError', ''] }, ''] }, 1, 0] },
           },
+          // Design theo designerStatus: 2 cặp disjoint (mỗi cặp cộng lại = total).
+          designUnassignedCount: {
+            $sum: {
+              $cond: [{ $eq: [{ $ifNull: ['$designerStatus', 'unassigned'] }, 'unassigned'] }, 1, 0],
+            },
+          },
+          designAssignedCount: {
+            $sum: {
+              $cond: [{ $ne: [{ $ifNull: ['$designerStatus', 'unassigned'] }, 'unassigned'] }, 1, 0],
+            },
+          },
+          designDoneCount: {
+            $sum: { $cond: [{ $eq: ['$designerStatus', 'done'] }, 1, 0] },
+          },
+          designNotDoneCount: {
+            $sum: {
+              $cond: [{ $ne: [{ $ifNull: ['$designerStatus', 'unassigned'] }, 'done'] }, 1, 0],
+            },
+          },
         },
       },
       {
@@ -2769,6 +2796,10 @@ export class OrderService implements OnModuleInit {
           printingCount: 1,
           notPrintedCount: 1,
           errorCount: 1,
+          designAssignedCount: 1,
+          designUnassignedCount: 1,
+          designDoneCount: 1,
+          designNotDoneCount: 1,
         },
       },
     ]);
@@ -2784,6 +2815,10 @@ export class OrderService implements OnModuleInit {
       cell.printingCount = s.printingCount;
       cell.notPrintedCount = s.notPrintedCount;
       cell.errorCount = s.errorCount;
+      cell.designAssignedCount = s.designAssignedCount;
+      cell.designUnassignedCount = s.designUnassignedCount;
+      cell.designDoneCount = s.designDoneCount;
+      cell.designNotDoneCount = s.designNotDoneCount;
     }
 
     // ─── Per-factory dimension breakdowns (Summary sub-tab) ─────────────

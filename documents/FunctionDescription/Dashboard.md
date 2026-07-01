@@ -49,7 +49,7 @@ Data từ `GET /v1/orders/status-overview` + `GET /v1/orders` (list).
 
 ### Tab C — "Đơn hàng theo xưởng" (Phase 7)
 Dashboard chuyển xưởng + xuất Excel + filter chiều sâu:
-- **3 Factory cards** (ML / TN / US) — mỗi card: tổng đơn đang sản xuất tại đó, pure, nhận từ xưởng khác, đã chuyển đi, **5 mini stats** (sản phẩm / loại vải / **phòng** = distinct machineTypeId / **loại máy** = distinct workshop_config.machine code / có tool)
+- **3 Factory cards** (ML / TN / US) — mỗi card: tổng đơn đang sản xuất tại đó, pure, nhận từ xưởng khác, đã chuyển đi, **5 mini stats** (sản phẩm / loại vải / **phòng** = distinct machineTypeId / **loại máy** = distinct workshop_config.machine code / có tool), **khối Design 4 số** (được gán / chưa gán / đã xong / chưa xong — theo `designerStatus`, mỗi cặp cộng lại = total)
 - **Flow visualization** — danh sách luồng `(Từ xưởng → Đến xưởng, count, totalQuantity)`
 - **Filter chip bar** factory `Tất cả / Đang ở ML / Đang ở TN / Đang ở US / Chưa xác định xưởng (count)` + **7 select filter** (Sản phẩm / Loại vải / **Phòng** = machineTypeId / **Máy** = workshop_config.machine code / Kết quả Tool / **Note Tool** = `toolResultNote` / **Khách hàng** = `userSku`) auto-scope theo factory chip đã chọn. Chip "Chưa xác định xưởng" → list endpoint nhận `unmapped=true` → `{$or: [factoryId null, $exists false]}`. Overview trả về `totals.unmapped` đếm riêng (`countDocuments` ngoài pipeline `matchMapped`). 7 select filter dùng **faceted-search pattern**: BE nhận đủ facet, mỗi dropdown aggregate bằng `scopeMatch + (facetFilters trừ field hiện tại)` qua helper `buildFacetMatch(excludeKey)` — count phản ánh đúng cross-filter. Options trả trong `availableFilters` (thêm `toolResultNotes` + `users` — userSku giới hạn top 300 theo số đơn). Các facet **scope luôn thẻ xưởng** (flow/stats/breakdown/unmapped đều dùng `cardMatch = matchMapped + facetFilters`) → vd. lọc theo khách hàng thì mỗi thẻ xưởng chỉ đếm đơn của khách đó; đồng thời lọc **bảng đơn chi tiết** (`getOrders`) + thu hẹp count các dropdown khác (cross-facet `buildFacetMatch`). Riêng chip factory/printStage/hasError/unmapped chỉ áp cho bảng chi tiết + `availableFilters`, KHÔNG đổi thẻ xưởng (ma trận flow toàn cục). URL prefix `f` (`ftoolnote`, `fuser`).
 - **Bảng đơn 20 cột** (reuse `WORKSHOP_COLS`) — cell inline edit theo permission
@@ -397,6 +397,11 @@ FactoryOverviewCell = {
   printedCount,      // printStatus ∈ PRINTED_MACHINE_CODES
   // Lỗi xưởng — Phase 8. Đếm độc lập với 3 print stage.
   errorCount,        // productionError tồn tại và khác empty
+  // Design theo designerStatus — 2 cặp disjoint, mỗi cặp cộng lại = total:
+  designAssignedCount,    // designerStatus ≠ unassigned/null (đã từng gán, gồm done)
+  designUnassignedCount,  // designerStatus unassigned/null
+  designDoneCount,        // designerStatus = done
+  designNotDoneCount,     // designerStatus ≠ done
   breakdowns: { products, fabrics, sizes, toolResults }  // top 20 mỗi dimension
 }
 ```

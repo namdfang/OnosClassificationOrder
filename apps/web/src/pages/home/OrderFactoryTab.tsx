@@ -383,6 +383,10 @@ export default function OrderFactoryTab() {
       printingCount: cells.reduce((s, c) => s + c.printingCount, 0),
       notPrintedCount: cells.reduce((s, c) => s + c.notPrintedCount, 0),
       errorCount: cells.reduce((s, c) => s + c.errorCount, 0),
+      designAssignedCount: cells.reduce((s, c) => s + c.designAssignedCount, 0),
+      designUnassignedCount: cells.reduce((s, c) => s + c.designUnassignedCount, 0),
+      designDoneCount: cells.reduce((s, c) => s + c.designDoneCount, 0),
+      designNotDoneCount: cells.reduce((s, c) => s + c.designNotDoneCount, 0),
     };
   }, [overview]);
 
@@ -1070,6 +1074,29 @@ function FactoryCard({
           tone="emerald"
         />
       </div>
+      {/* Design theo designerStatus — 2 cặp (được gán/chưa gán · đã xong/chưa xong),
+          mỗi cặp cộng lại = tổng đơn đang SX tại xưởng. */}
+      <div className="mb-2 pb-2 border-b border-border">
+        <p className="text-[10px] text-muted-foreground mb-1">Design</p>
+        <div className="grid grid-cols-4 gap-1 text-[10px]">
+          <div className="text-center">
+            <p className="font-bold tabular-nums text-sm text-indigo-700 dark:text-indigo-400">{cell.designAssignedCount}</p>
+            <p className="text-muted-foreground">được gán</p>
+          </div>
+          <div className="text-center">
+            <p className="font-bold tabular-nums text-sm text-zinc-600 dark:text-zinc-300">{cell.designUnassignedCount}</p>
+            <p className="text-muted-foreground">chưa gán</p>
+          </div>
+          <div className="text-center">
+            <p className="font-bold tabular-nums text-sm text-emerald-700 dark:text-emerald-400">{cell.designDoneCount}</p>
+            <p className="text-muted-foreground">đã xong</p>
+          </div>
+          <div className="text-center">
+            <p className="font-bold tabular-nums text-sm text-amber-700 dark:text-amber-400">{cell.designNotDoneCount}</p>
+            <p className="text-muted-foreground">chưa xong</p>
+          </div>
+        </div>
+      </div>
       <div className="grid grid-cols-2 gap-2 text-xs">
         <button
           type="button"
@@ -1124,6 +1151,10 @@ function TotalCard({
     printingCount: number;
     notPrintedCount: number;
     errorCount: number;
+    designAssignedCount: number;
+    designUnassignedCount: number;
+    designDoneCount: number;
+    designNotDoneCount: number;
   };
   filterMode: FilterMode;
   onFilter: (m: FilterMode) => void;
@@ -1215,6 +1246,29 @@ function TotalCard({
           onClick={() => togglePrint('printed')}
           tone="emerald"
         />
+      </div>
+
+      {/* Design (gộp) theo designerStatus */}
+      <div className="mb-3 pb-3 border-b border-border">
+        <p className="text-[10px] text-muted-foreground mb-1">Design</p>
+        <div className="grid grid-cols-4 gap-1 text-[10px]">
+          <div className="text-center">
+            <p className="font-bold tabular-nums text-sm text-indigo-700 dark:text-indigo-400">{agg.designAssignedCount}</p>
+            <p className="text-muted-foreground">được gán</p>
+          </div>
+          <div className="text-center">
+            <p className="font-bold tabular-nums text-sm text-zinc-600 dark:text-zinc-300">{agg.designUnassignedCount}</p>
+            <p className="text-muted-foreground">chưa gán</p>
+          </div>
+          <div className="text-center">
+            <p className="font-bold tabular-nums text-sm text-emerald-700 dark:text-emerald-400">{agg.designDoneCount}</p>
+            <p className="text-muted-foreground">đã xong</p>
+          </div>
+          <div className="text-center">
+            <p className="font-bold tabular-nums text-sm text-amber-700 dark:text-amber-400">{agg.designNotDoneCount}</p>
+            <p className="text-muted-foreground">chưa xong</p>
+          </div>
+        </div>
       </div>
 
       {/* Bonus row: pure / transferred / unmapped — read-only mini stats */}

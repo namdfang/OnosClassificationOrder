@@ -869,6 +869,14 @@ export const FactoryOverviewCellZod = z.object({
   notPrintedCount: z.number(),
   /** Lỗi xưởng — productionError tồn tại và khác empty. Disjoint với 3 print stage. */
   errorCount: z.number(),
+  /** Design đã được gán designer (designerStatus ≠ unassigned/null). được gán + chưa gán = total. */
+  designAssignedCount: z.number(),
+  /** Design chưa gán designer (designerStatus unassigned/null). */
+  designUnassignedCount: z.number(),
+  /** Design đã xong (designerStatus = done). đã xong + chưa xong = total. */
+  designDoneCount: z.number(),
+  /** Design chưa xong (designerStatus ≠ done). */
+  designNotDoneCount: z.number(),
   /** Top-N per-dimension breakdowns used by the Summary sub-tab. */
   breakdowns: z.object({
     products: FactoryFilterOptionZod.array(),
