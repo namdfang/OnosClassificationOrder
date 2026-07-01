@@ -59,6 +59,7 @@ const FILTER_CHIP_COLORS: Record<string, string> = {
   assignee: 'bg-indigo-100 text-indigo-700 border-indigo-300 dark:bg-indigo-900/30 dark:text-indigo-300 dark:border-indigo-800',
   designerStatus: 'bg-teal-100 text-teal-700 border-teal-300 dark:bg-teal-900/30 dark:text-teal-300 dark:border-teal-800',
   productionError: 'bg-red-100 text-red-700 border-red-300 dark:bg-red-900/30 dark:text-red-300 dark:border-red-800',
+  userSku: 'bg-fuchsia-100 text-fuchsia-700 border-fuchsia-300 dark:bg-fuchsia-900/30 dark:text-fuchsia-300 dark:border-fuchsia-800',
 };
 const FILTER_CHIP_DEFAULT =
   'bg-zinc-100 text-zinc-700 border-zinc-300 dark:bg-zinc-800 dark:text-zinc-200 dark:border-zinc-600';
@@ -150,6 +151,9 @@ export function OrderTableWorkshop() {
   const [filterDesignerStatus, setFilterDesignerStatus] = useState<string>(
     () => searchParams.get('wdstatus') || '',
   );
+  const [filterUserSku, setFilterUserSku] = useState<string>(
+    () => searchParams.get('wusersku') || '',
+  );
 
   // Sync state → URL (replace). Strip default/empty values.
   useEffect(() => {
@@ -168,6 +172,7 @@ export function OrderTableWorkshop() {
         filterToolResult ? sp.set('wtool', filterToolResult) : sp.delete('wtool');
         filterErrorFile ? sp.set('werrfile', filterErrorFile) : sp.delete('werrfile');
         filterDesignerStatus ? sp.set('wdstatus', filterDesignerStatus) : sp.delete('wdstatus');
+        filterUserSku ? sp.set('wusersku', filterUserSku) : sp.delete('wusersku');
         page > 1 ? sp.set('wpage', String(page)) : sp.delete('wpage');
         pageSize !== DEFAULT_PAGE_SIZE ? sp.set('wsize', String(pageSize)) : sp.delete('wsize');
         return sp;
@@ -187,6 +192,7 @@ export function OrderTableWorkshop() {
     filterToolResult,
     filterErrorFile,
     filterDesignerStatus,
+    filterUserSku,
     page,
     pageSize,
     setSearchParams,
@@ -236,6 +242,7 @@ export function OrderTableWorkshop() {
     if (filterToolResult) params.set('toolResult', filterToolResult);
     if (filterErrorFile) params.set('errorFile', filterErrorFile);
     if (filterDesignerStatus) params.set('designerStatus', filterDesignerStatus);
+    if (filterUserSku) params.set('userSku', filterUserSku);
     if (createdFrom) params.set('createdFrom', createdFrom);
     if (createdTo) params.set('createdTo', createdTo);
     return params;
@@ -293,6 +300,7 @@ export function OrderTableWorkshop() {
     filterToolResult,
     filterErrorFile,
     filterDesignerStatus,
+    filterUserSku,
     createdFrom,
     createdTo,
   ]);
@@ -460,6 +468,7 @@ export function OrderTableWorkshop() {
     filterToolResult,
     filterErrorFile,
     filterDesignerStatus,
+    filterUserSku,
   ]);
 
   // Định nghĩa facet 1 lần — dùng cho cả OrderFilterBar lẫn chip "đang lọc".
@@ -470,6 +479,7 @@ export function OrderTableWorkshop() {
     { key: 'toolResult', label: 'Kết quả Tool', value: filterToolResult, onChange: setFilterToolResult, options: workshopFilters?.toolResult || [], perm: 'order.field.toolResult.view' },
     { key: 'toolResultNote', label: 'Note kq Tool', value: filterToolResultNote, onChange: setFilterToolResultNote, options: workshopFilters?.toolResultNote || [], perm: 'order.field.toolResultNote.view' },
     { key: 'errorFile', label: 'File sửa lỗi', value: filterErrorFile, onChange: setFilterErrorFile, options: workshopFilters?.errorFile || [], perm: 'order.field.errorFile.view' },
+    { key: 'userSku', label: 'Khách hàng', value: filterUserSku, onChange: setFilterUserSku, options: workshopFilters?.userSku || [] },
     { key: 'assignee', label: 'Người thực hiện', value: filterAssignee, onChange: setFilterAssignee, options: assigneeOptions, perm: 'order.field.assignee.view' },
     { key: 'designerStatus', label: 'TT Designer', value: filterDesignerStatus, onChange: setFilterDesignerStatus, options: designerStatusOptions, hidden: !canSeeDesignerSummary },
     { key: 'productionError', label: 'Lỗi xưởng', value: filterProductionError, onChange: setFilterProductionError, options: workshopFilters?.productionError || [], perm: 'order.field.productionError.view' },
@@ -528,6 +538,7 @@ export function OrderTableWorkshop() {
     setFilterAssignee('');
     setFilterDesignerStatus('');
     setFilterProductionError('');
+    setFilterUserSku('');
     setPage(1);
   };
 

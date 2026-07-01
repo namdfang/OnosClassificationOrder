@@ -549,15 +549,15 @@ Mỗi cell tự đọc `canEditField(field)` từ `usePermission()`:
 - Facet grid: 2/3/5 cột responsive, mỗi cell `<SelectFilter>` đã gate qua `usePermission().has(perm)` từ `OrderFilterFacet.perm`.
 
 Mỗi consumer truyền `facets: OrderFilterFacet[]` để cấu hình field set riêng — tránh ép tất cả tab dùng cùng 1 list:
-- `OrderTableWorkshop` — 9 facet workshop chuẩn từ `getWorkshopFilters`.
+- `OrderTableWorkshop` — 10 facet workshop chuẩn từ `getWorkshopFilters`.
 - `ErrorLogTab` — 5 facet error-log: assignee · fabricType · toolResult · productionError · productionErrorSource. Date range thêm vào endpoint qua field `createdFrom`/`createdTo` mới trong `GetErrorLogZod` (filter `inProductionAt` VN tz, đồng bộ convention với 3 bảng kia).
 - `OrderFactoryTab` — 5 facet factory-specific: type · fabricType · machineTypeId · machineNumber · toolResult (lấy từ `overview.availableFilters`). Search debounce 300ms, thêm vào `getOrders` qua `search` param.
 - `OrderStatusTab` — không dùng facet grid (BreakdownCard grid bên dưới làm role này với multi-select chip). Chỉ search + date + reload + slot extras ("Lỗi cần xử lý" + active chips + Xóa filter) qua `<StatusFilterTopActions>`/`<StatusActiveChips>` (`apps/web/src/pages/home/status/StatusFilterExtras.tsx`).
 - `OrderStatsTab` — không dùng facet grid (stats hiển thị MetricCard + pie chart, không list đơn). Search chính = `searchType` (tên sản phẩm); `searchUser` (SKU/email khách) chèn vào `topActionsRight` vì stats có 2 search term. Cả 2 search debounce 300ms; auto-fetch khi date hoặc debounced search đổi — bỏ nút "Áp dụng" cũ vì pattern đồng bộ.
 
-**`OrderTableWorkshop` cụ thể** — 9 facet workshop chuẩn từ BE endpoint `GET /v1/orders/workshop-filters` theo **faceted-search pattern**:
+**`OrderTableWorkshop` cụ thể** — 10 facet workshop chuẩn từ BE endpoint `GET /v1/orders/workshop-filters` theo **faceted-search pattern**:
 - BE method `getWorkshopAvailableFilters(dto, role, assigneeCode?, fulfillmentFactoryId?)` — với mỗi facet, build `buildOrderListFilter` sau khi strip facet đó khỏi dto, rồi `$group` field tương ứng. Count phản ánh subset đã narrow theo các facet khác đang active.
-- **9 facet** support: `fabricType` / `machineNumber` / `printStatus` / `toolResult` / `toolResultNote` / `errorFile` / `assignee` / `productionError` / `designerStatus`. Cell hiển thị phụ thuộc permission `order.field.X.view`.
+- **10 facet** support: `fabricType` / `machineNumber` / `printStatus` / `toolResult` / `toolResultNote` / `errorFile` / **`userSku` (Khách hàng — luôn hiện, không perm)** / `assignee` / `productionError` / `designerStatus`. Cell hiển thị phụ thuộc permission `order.field.X.view` (trừ `userSku` không gate). URL param `wusersku`.
 - `assignee` facet labels **resolve fullName từ users collection** (BE lookup users theo userIds trong facet rows). Value vẫn = user._id.
 - `designerStatus` facet labels VN (Cần làm/Đang làm/Đã xong/Đã trả/Cần làm lại). **Option `unassigned` (Chưa gán) được TÁCH thành 2 token `__unassigned_notool__` ("Chưa gán · không tool", M) + `__unassigned_tool__` ("Chưa gán · có tool", N)** — loại đơn `toolResultNote='ok'`, chia theo `toolResult` "Có tool" (name `^Có`). **M = KPI "Chưa gán không tool" panel Designer** (panel chỉ hiện M; N chỉ ở dropdown). Xem `DesignerTaskWorkflow.md §5.7`.
 - Token đặc biệt `__none__` cho assignee + designerStatus filter: trả đơn chưa gán (`assignee in [null,'']`) hoặc chưa có designerStatus (`$exists: false`).
