@@ -41,11 +41,15 @@ import {
   ImportReworkOrdersDto,
   ImportReworkOrdersResDto,
   PreviewCuttingFilesDto,
+  CancelOrderDto,
+  CancelOrderResDto,
   PreviewCuttingFilesResDto,
   ResDto,
   RoleType,
   TransferOrderDto,
   TransferOrderResDto,
+  UpdateOrderDesignDto,
+  UpdateOrderDesignResDto,
   UpdateOrderFieldDto,
   UpdateOrderFieldResDto,
   WorkshopAvailableFiltersResDto,
@@ -293,6 +297,46 @@ export class OrderController {
     @UserAgent() userAgent: string,
   ): Promise<TransferOrderResDto> {
     return this.orderService.transferOrder(id, dto, { user, ip, userAgent });
+  }
+
+  @Post(':id/cancel')
+  @Auth([RoleType.SuperAdmin, RoleType.Admin])
+  @ApiOperation({ summary: 'Hủy đơn (soft) — chỉ khi chưa bắt đầu in. Admin only.' })
+  @HttpCode(HttpStatus.OK)
+  @ApiOkResponse({ type: CancelOrderResDto })
+  async cancelOrder(
+    @Param('id') id: string,
+    @Body() dto: CancelOrderDto,
+    @AuthUser() user: UserDocument,
+    @ClientIp() ip: string,
+    @UserAgent() userAgent: string,
+  ): Promise<CancelOrderResDto> {
+    const data = await this.orderService.cancelOrder(id, dto, user.role?.name as RoleType, {
+      user,
+      ip,
+      userAgent,
+    });
+    return { success: true, data } as unknown as CancelOrderResDto;
+  }
+
+  @Patch(':id/design')
+  @Auth([RoleType.SuperAdmin, RoleType.Admin])
+  @ApiOperation({ summary: 'Đổi URL mockup/design. Admin only.' })
+  @HttpCode(HttpStatus.OK)
+  @ApiOkResponse({ type: UpdateOrderDesignResDto })
+  async updateOrderDesign(
+    @Param('id') id: string,
+    @Body() dto: UpdateOrderDesignDto,
+    @AuthUser() user: UserDocument,
+    @ClientIp() ip: string,
+    @UserAgent() userAgent: string,
+  ): Promise<UpdateOrderDesignResDto> {
+    const data = await this.orderService.updateOrderDesign(id, dto, user.role?.name as RoleType, {
+      user,
+      ip,
+      userAgent,
+    });
+    return { success: true, data } as unknown as UpdateOrderDesignResDto;
   }
 
   @Post('import')

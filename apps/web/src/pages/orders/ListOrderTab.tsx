@@ -19,6 +19,10 @@ import { PaginationBar } from '@/components/common/PaginationBar';
 import { ImagePreviewDialog } from '@/components/common/ImagePreviewDialog';
 import { DesignThumbsCell } from '@/components/orders/cells/DesignThumbsCell';
 import { OrderLogTimelineDialog } from '@/components/orders/OrderLogTimelineDialog';
+import { OrderRowActionsMenu } from '@/components/orders/OrderRowActionsMenu';
+import type { WorkshopOrderRow } from '@/components/orders/workshopTableConfig';
+import { isCancelled } from '@/utils/orderActions';
+import { CancelledBadge } from '@/components/orders/CancelledBadge';
 import { CopyButton } from '@/components/common/CopyButton';
 import { Hint } from '@/components/common/Hint';
 import { TooltipProvider } from '@/components/ui/tooltip';
@@ -80,6 +84,8 @@ interface OrderRow {
   designs?: DesignFields;
   designsOriginal?: DesignFields;
   designsStatus?: Partial<Record<keyof DesignFields, 'pending' | 'ready' | 'failed'>>;
+  cancelledAt?: string | null;
+  cancelReason?: string;
 }
 
 interface ListOrderTabProps {
@@ -94,15 +100,17 @@ interface OrderRowItemProps {
   onPreview: (url: string, title: string, originalUrl?: string) => void;
   onDelete: (id: string) => void;
   onHistory: (id: string, productionId: string) => void;
+  onChanged: () => void;
 }
 
 const OrderRowItem = memo(
-  function OrderRowItem({ it, onPreview, onDelete, onHistory }: OrderRowItemProps) {
+  function OrderRowItem({ it, onPreview, onDelete, onHistory, onChanged }: OrderRowItemProps) {
     const variantBits = [it.color, it.size, it.printMethod].filter(Boolean);
     const mockupThumbSrc = smallThumb(it.mockupUrl, 200);
+    const cancelled = isCancelled(it);
 
     return (
-      <TableRow>
+      <TableRow className={cancelled ? 'opacity-60' : undefined}>
         {/* Order ID */}
         <TableCell>
           <div className="flex flex-col gap-0.5">
@@ -113,6 +121,7 @@ const OrderRowItem = memo(
                   {it.productionId}
                 </span>
               </Hint>
+              {cancelled && <CancelledBadge reason={it.cancelReason} />}
             </div>
             {it.orderId && (
               <div className="flex items-center gap-1">
@@ -300,6 +309,7 @@ const OrderRowItem = memo(
                 <Trash2 size={14} className="text-destructive" />
               </Button>
             </Hint>
+            <OrderRowActionsMenu order={it as unknown as WorkshopOrderRow} onChanged={onChanged} />
           </div>
         </TableCell>
       </TableRow>
@@ -309,7 +319,8 @@ const OrderRowItem = memo(
     prev.it === next.it &&
     prev.onPreview === next.onPreview &&
     prev.onDelete === next.onDelete &&
-    prev.onHistory === next.onHistory,
+    prev.onHistory === next.onHistory &&
+    prev.onChanged === next.onChanged,
 );
 
 export function ListOrderTab({ refreshKey }: ListOrderTabProps) {
@@ -480,6 +491,12 @@ export function ListOrderTab({ refreshKey }: ListOrderTabProps) {
     [],
   );
 
+  const handleChanged = useCallback(
+    () => fetchData(),
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [],
+  );
+
   const paginationProps = {
     page,
     pageSize,
@@ -638,6 +655,7 @@ export function ListOrderTab({ refreshKey }: ListOrderTabProps) {
                     onPreview={openPreview}
                     onDelete={handleDelete}
                     onHistory={openHistory}
+                    onChanged={handleChanged}
                   />
                 ))}
             </TableBody>

@@ -15,6 +15,9 @@ import {
 import { TooltipProvider } from '@/components/ui/tooltip';
 import { ImagePreviewDialog } from '@/components/common/ImagePreviewDialog';
 import { OrderLogTimelineDialog } from '@/components/orders/OrderLogTimelineDialog';
+import { OrderRowActionsMenu } from '@/components/orders/OrderRowActionsMenu';
+import { isCancelled } from '@/utils/orderActions';
+import { CancelledBadge } from '@/components/orders/CancelledBadge';
 import {
   WORKSHOP_COLS,
   type WorkshopOrderRow,
@@ -183,21 +186,37 @@ export function OrdersMiniTable({ queryString }: Props) {
                 </TableRow>
               )}
               {sortedRows.map((row) => (
-                <TableRow key={row._id} className={cn(isNoTool(row.toolResult) && NO_TOOL_ROW_CLASS)}>
+                <TableRow
+                  key={row._id}
+                  className={cn(
+                    isNoTool(row.toolResult) && NO_TOOL_ROW_CLASS,
+                    isCancelled(row) && 'opacity-60',
+                  )}
+                >
                   {visibleCols.map((c) => (
                     <TableCell key={c.key} className="py-2">
-                      {c.render(row, ctx)}
+                      {c.key === 'productionId' && isCancelled(row) ? (
+                        <div className="flex items-center gap-1.5">
+                          <CancelledBadge reason={row.cancelReason} />
+                          <div className="min-w-0 flex-1">{c.render(row, ctx)}</div>
+                        </div>
+                      ) : (
+                        c.render(row, ctx)
+                      )}
                     </TableCell>
                   ))}
                   <TableCell>
-                    <Button
-                      variant="ghost"
-                      size="icon"
-                      title="Lịch sử"
-                      onClick={() => setHistory({ id: row._id, productionId: row.productionId })}
-                    >
-                      <History size={13} className="text-muted-foreground" />
-                    </Button>
+                    <div className="flex items-center justify-end gap-0.5">
+                      <Button
+                        variant="ghost"
+                        size="icon"
+                        title="Lịch sử"
+                        onClick={() => setHistory({ id: row._id, productionId: row.productionId })}
+                      >
+                        <History size={13} className="text-muted-foreground" />
+                      </Button>
+                      <OrderRowActionsMenu order={row} onChanged={() => fetchData()} />
+                    </div>
                   </TableCell>
                 </TableRow>
               ))}

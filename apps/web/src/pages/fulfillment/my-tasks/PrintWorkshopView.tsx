@@ -15,6 +15,7 @@ import {
 } from '@/components/ui/dialog';
 import { TooltipProvider } from '@/components/ui/tooltip';
 import type { WorkshopOrderRow } from '@/components/orders/workshopTableConfig';
+import { OrderRowActionsMenu } from '@/components/orders/OrderRowActionsMenu';
 import { RepositoryRemote } from '@/services';
 import { useAuthStore } from '@/store/authStore';
 import { handleAxiosError } from '@/utils';
@@ -118,11 +119,12 @@ export default function PrintWorkshopView() {
   };
 
   const renderRowAction = (row: WorkshopOrderRow) => {
-    if (!isMine(row)) return null;
     const status = printStatusOf(row);
-    if (status === FulfillmentStageStatus.Waiting || status === FulfillmentStageStatus.Rework) {
-      return (
-        <div className="flex items-center gap-1">
+    const mine = isMine(row);
+    let stageButtons: React.ReactNode = null;
+    if (mine && (status === FulfillmentStageStatus.Waiting || status === FulfillmentStageStatus.Rework)) {
+      stageButtons = (
+        <>
           <Button
             size="sm"
             className="whitespace-nowrap"
@@ -138,12 +140,11 @@ export default function PrintWorkshopView() {
           >
             Báo lỗi
           </Button>
-        </div>
+        </>
       );
-    }
-    if (status === FulfillmentStageStatus.InProgress) {
-      return (
-        <div className="flex items-center gap-1">
+    } else if (mine && status === FulfillmentStageStatus.InProgress) {
+      stageButtons = (
+        <>
           <Button
             size="sm"
             className="whitespace-nowrap"
@@ -159,10 +160,15 @@ export default function PrintWorkshopView() {
           >
             Báo lỗi
           </Button>
-        </div>
+        </>
       );
     }
-    return null;
+    return (
+      <div className="flex items-center gap-1">
+        {stageButtons}
+        <OrderRowActionsMenu order={row} onChanged={refresh} />
+      </div>
+    );
   };
 
   const renderBulkBar = (selectedRows: WorkshopOrderRow[], clear: () => void) => {

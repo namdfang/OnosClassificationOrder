@@ -22,6 +22,9 @@ import { BulkEditToolbar } from '@/components/orders/BulkEditToolbar';
 import { OrderDetailDialog } from '@/components/orders/OrderDetailDialog';
 import { OrderLogTimelineDialog } from '@/components/orders/OrderLogTimelineDialog';
 import { DesignerBacklogDialog } from '@/components/orders/DesignerBacklogDialog';
+import { OrderRowActionsMenu } from '@/components/orders/OrderRowActionsMenu';
+import { CancelledBadge } from '@/components/orders/CancelledBadge';
+import { isCancelled } from '@/utils/orderActions';
 import { DesignerSummaryPanel } from './DesignerSummaryPanel';
 import {
   WORKSHOP_COLS,
@@ -755,7 +758,7 @@ export function OrderTableWorkshop() {
                       {c.label}
                     </TableHead>
                   ))}
-                  <TableHead className="w-12"></TableHead>
+                  <TableHead className="w-16 sticky right-0 z-30 bg-card"></TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
@@ -873,6 +876,7 @@ export function OrderTableWorkshop() {
                               // Border-l accent giữ riêng cho no-tool (đặt ngoài
                               // logic bg để vẫn dùng dù state khác).
                               noTool && 'border-l-2 border-l-sky-400 dark:border-l-sky-400/60',
+                              isCancelled(row) && 'opacity-60',
                             )}
                           >
                             <TableCell className={cn('sticky left-0 z-10', rowBgClass)}>
@@ -909,19 +913,29 @@ export function OrderTableWorkshop() {
                                       ×{comboN}
                                     </Badge>
                                   )}
+                                  {i === 0 && isCancelled(row) && (
+                                    <CancelledBadge reason={row.cancelReason} />
+                                  )}
                                   <div className="min-w-0 flex-1">{c.render(row, renderCtx)}</div>
                                 </div>
                               </TableCell>
                             ))}
-                            <TableCell>
-                              <Button
-                                variant="ghost"
-                                size="icon"
-                                title="Lịch sử"
-                                onClick={() => setHistoryTarget({ id: row._id, productionId: row.productionId })}
-                              >
-                                <History size={13} className="text-muted-foreground" />
-                              </Button>
+                            <TableCell className={cn('sticky right-0 z-10', rowBgClass)}>
+                              <div className="flex items-center justify-end gap-0.5">
+                                <Button
+                                  variant="ghost"
+                                  size="icon"
+                                  className="h-7 w-7"
+                                  title="Lịch sử"
+                                  onClick={() => setHistoryTarget({ id: row._id, productionId: row.productionId })}
+                                >
+                                  <History size={13} className="text-muted-foreground" />
+                                </Button>
+                                <OrderRowActionsMenu
+                                  order={row}
+                                  onChanged={(u) => patchRow(u._id, u)}
+                                />
+                              </div>
                             </TableCell>
                           </TableRow>
                         );

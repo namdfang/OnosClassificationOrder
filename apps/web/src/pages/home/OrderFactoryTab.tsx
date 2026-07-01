@@ -30,6 +30,9 @@ import {
 import { TooltipProvider } from '@/components/ui/tooltip';
 import { ImagePreviewDialog } from '@/components/common/ImagePreviewDialog';
 import { OrderLogTimelineDialog } from '@/components/orders/OrderLogTimelineDialog';
+import { OrderRowActionsMenu } from '@/components/orders/OrderRowActionsMenu';
+import { isCancelled } from '@/utils/orderActions';
+import { CancelledBadge } from '@/components/orders/CancelledBadge';
 import {
   WORKSHOP_COLS,
   type WorkshopOrderRow,
@@ -860,6 +863,7 @@ export default function OrderFactoryTab() {
                       className={cn(
                         isNoTool(row.toolResult) && !selected.has(row._id) && NO_TOOL_ROW_CLASS,
                         selected.has(row._id) && 'bg-primary/5',
+                        isCancelled(row) && 'opacity-60',
                       )}
                     >
                       {canTransfer && (
@@ -903,20 +907,36 @@ export default function OrderFactoryTab() {
                       </TableCell>
                       {visibleCols.map((c) => (
                         <TableCell key={c.key} className="py-2">
-                          {c.render(row, ctx)}
+                          {c.key === 'productionId' && isCancelled(row) ? (
+                            <div className="flex items-center gap-1.5">
+                              <CancelledBadge reason={row.cancelReason} />
+                              <div className="min-w-0 flex-1">{c.render(row, ctx)}</div>
+                            </div>
+                          ) : (
+                            c.render(row, ctx)
+                          )}
                         </TableCell>
                       ))}
                       <TableCell>
-                        <Button
-                          variant="ghost"
-                          size="icon"
-                          title="Lịch sử"
-                          onClick={() =>
-                            setHistoryTarget({ id: row._id, productionId: row.productionId })
-                          }
-                        >
-                          <History size={13} className="text-muted-foreground" />
-                        </Button>
+                        <div className="flex items-center justify-end gap-0.5">
+                          <Button
+                            variant="ghost"
+                            size="icon"
+                            title="Lịch sử"
+                            onClick={() =>
+                              setHistoryTarget({ id: row._id, productionId: row.productionId })
+                            }
+                          >
+                            <History size={13} className="text-muted-foreground" />
+                          </Button>
+                          <OrderRowActionsMenu
+                            order={row}
+                            onChanged={() => {
+                              fetchOverview();
+                              fetchRows();
+                            }}
+                          />
+                        </div>
                       </TableCell>
                     </TableRow>
                   );

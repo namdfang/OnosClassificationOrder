@@ -5,11 +5,13 @@ import type {
   BulkAssignOrderDto,
   BulkTransferOrderDto,
   BulkUpdateOrderFieldDto,
+  CancelOrderDto,
   ImportProductionOrdersDto,
   ImportReworkOrdersDto,
   PreviewCuttingFilesDto,
   SetProductionErrorDto,
   TransferOrderDto,
+  UpdateOrderDesignDto,
   UpdateOrderFieldDto,
 } from 'shared';
 import { callApi } from '../apis';
@@ -139,6 +141,14 @@ const applyCuttingFiles = (data: ApplyCuttingFilesDto) => {
   return callApi(`/${CONFIG.API_VERSION}/orders/cutting-files/apply`, 'post', data);
 };
 
+const cancelOrder = (id: string, data: CancelOrderDto) => {
+  return callApi(`/${CONFIG.API_VERSION}/orders/${id}/cancel`, 'post', data);
+};
+
+const updateOrderDesign = (id: string, data: UpdateOrderDesignDto) => {
+  return callApi(`/${CONFIG.API_VERSION}/orders/${id}/design`, 'patch', data);
+};
+
 export const order = {
   getOrders,
   importOrders,
@@ -171,4 +181,6 @@ export const order = {
   ensurePreview,
   previewCuttingFiles,
   applyCuttingFiles,
+  cancelOrder,
+  updateOrderDesign,
 };

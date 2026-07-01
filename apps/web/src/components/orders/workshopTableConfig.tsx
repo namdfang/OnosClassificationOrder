@@ -68,6 +68,10 @@ export type WorkshopOrderRow = {
   // Fulfillment — dùng cho cột action stage In trên trang Fulfillment print.
   currentFulfillmentStage?: string | null;
   fulfillmentStages?: Record<string, ({ status?: string } & Record<string, unknown>) | undefined>;
+
+  // Hủy đơn (soft) — badge "Đã hủy" + gate action.
+  cancelledAt?: string | null;
+  cancelReason?: string;
 };
 
 const DESIGNER_STATUS_META: Record<
@@ -189,14 +193,14 @@ export const WORKSHOP_COLS: WorkshopColMeta[] = [
               </Hint>
             </div>
           )}
-          {orderTxt && (
+          {/* {orderTxt && (
             <Hint content={`Khách lên đơn: ${orderTxt}`} forceRich>
               <span className="text-[10px] text-muted-foreground inline-flex items-center gap-1">
                 <span className="opacity-60">🛒</span>
                 {orderTxt}
               </span>
             </Hint>
-          )}
+          )} */}
           {prodTxt && (
             <Hint content={`In Production At: ${prodTxt}`} forceRich>
               <span className="text-[10px] text-muted-foreground inline-flex items-center gap-1">

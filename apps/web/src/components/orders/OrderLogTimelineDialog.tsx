@@ -28,6 +28,8 @@ const ACTION_BADGE: Record<ProductionOrderLogAction, { label: string; variant: '
   import: { label: 'Import', variant: 'outline' },
   delete: { label: 'Xóa', variant: 'destructive' },
   transfer: { label: 'Chuyển xưởng', variant: 'warning' },
+  cancel: { label: 'Hủy đơn', variant: 'destructive' },
+  update_design: { label: 'Đổi design', variant: 'default' },
 };
 
 const FIELD_LABEL: Record<string, string> = {
@@ -45,6 +47,27 @@ function formatValue(v: unknown): string {
   if (v === null || v === undefined) return '—';
   if (typeof v === 'object') return JSON.stringify(v);
   return String(v);
+}
+
+/** Nhãn đẹp cho key snapshot của update_design (`mockupUrl`, `designs.front`, …). */
+function designFieldLabel(key: string): string {
+  if (key === 'mockupUrl') return 'Mockup';
+  return key.replace(/^designs\./, '');
+}
+
+/** Ghép before/after (object keyed theo field) thành list URL cũ→mới. */
+function designChangeEntries(
+  before: unknown,
+  after: unknown,
+): { key: string; before: string; after: string }[] {
+  const b = (before && typeof before === 'object' ? before : {}) as Record<string, unknown>;
+  const a = (after && typeof after === 'object' ? after : {}) as Record<string, unknown>;
+  const keys = Array.from(new Set([...Object.keys(b), ...Object.keys(a)]));
+  return keys.map((key) => ({
+    key,
+    before: b[key] == null ? '' : String(b[key]),
+    after: a[key] == null ? '' : String(a[key]),
+  }));
 }
 
 function formatDate(d: Date | string | undefined): string {
@@ -138,6 +161,31 @@ export function OrderLogTimelineDialog({ open, onOpenChange, orderId, production
                         <span className="text-destructive line-through">{formatValue(log.before)}</span>
                         <span className="mx-2 text-muted-foreground">→</span>
                         <span className="text-emerald-600 dark:text-emerald-400">{formatValue(log.after)}</span>
+                      </div>
+                    )}
+
+                    {/* Đổi design: before/after là object keyed theo field
+                        (mockupUrl / designs.front / ...) → render từng URL cũ→mới. */}
+                    {log.action === 'update_design' && (
+                      <div className="text-xs bg-muted/50 rounded px-2 py-1.5 mb-1 space-y-1.5">
+                        {designChangeEntries(log.before, log.after).map(({ key, before, after }) => (
+                          <div key={key} className="space-y-0.5">
+                            <span className="font-medium text-foreground">{designFieldLabel(key)}</span>
+                            <div className="font-mono break-all">
+                              <span className="text-destructive line-through">{before || '—'}</span>
+                              <span className="mx-1 text-muted-foreground">→</span>
+                              <span className="text-emerald-600 dark:text-emerald-400">{after || '—'}</span>
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+
+                    {/* Hủy đơn: after = lý do. */}
+                    {log.action === 'cancel' && (
+                      <div className="text-xs bg-muted/50 rounded px-2 py-1.5 mb-1">
+                        <span className="text-muted-foreground">Lý do: </span>
+                        <span className="text-foreground">{formatValue(log.after)}</span>
                       </div>
                     )}
 

@@ -4,7 +4,7 @@ import { z } from 'zod';
 
 import { BaseEntityZod, PageQueryZod, PageResZod } from '@shared/types';
 
-export const ORDER_LOG_ACTIONS = ['create', 'update', 'delete', 'import', 'bulk_update', 'transfer'] as const;
+export const ORDER_LOG_ACTIONS = ['create', 'update', 'delete', 'import', 'bulk_update', 'transfer', 'cancel', 'update_design'] as const;
 export type ProductionOrderLogAction = (typeof ORDER_LOG_ACTIONS)[number];
 export const ProductionOrderLogActionZod = z.enum(ORDER_LOG_ACTIONS);
 

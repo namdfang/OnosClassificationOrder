@@ -154,6 +154,9 @@ export const ProductionOrderZod = BaseEntityZod.extend({
   designsOriginal: DesignFieldsZod.optional(),
   designsStatus: DesignsStatusFieldsZod.optional(),
   status: z.string().optional(),
+  /** Đơn bị hủy (soft) — set qua POST /orders/:id/cancel (Admin) hoặc import "hủy đơn". */
+  cancelledAt: z.date().optional(),
+  cancelReason: z.string().optional(),
   orderId: z.string().optional(),
   externalId: z.string().optional(),
   referent: z.string().optional(),
@@ -795,6 +798,27 @@ export const BulkTransferOrderZod = z.object({
   reason: z.string().max(200).optional(),
 });
 export class BulkTransferOrderDto extends createZodDto(extendApi(BulkTransferOrderZod)) {}
+
+// ─── Cancel + Đổi design (Admin) ────────────────────────────────────
+// Hủy đơn: soft cancel (set cancelledAt), CHỈ khi chưa bắt đầu in — xem
+// `canCancelOrder` ở order.service.ts. Đổi design: đổi URL mockup + các vị trí
+// design ĐANG CÓ (lưu raw; URL cũ giữ trong OrderLog).
+
+export const CancelOrderZod = z.object({
+  reason: z.string().min(1).max(200),
+});
+export class CancelOrderDto extends createZodDto(extendApi(CancelOrderZod)) {}
+export const CancelOrderResZod = ResZod.extend({ data: ProductionOrderZod });
+export class CancelOrderResDto extends createZodDto(extendApi(CancelOrderResZod)) {}
+
+export const UpdateOrderDesignZod = z.object({
+  mockupUrl: z.string().max(2000).optional(),
+  /** Chỉ các vị trí gửi lên được ghi đè (partial). */
+  designs: DesignFieldsZod.partial().optional(),
+});
+export class UpdateOrderDesignDto extends createZodDto(extendApi(UpdateOrderDesignZod)) {}
+export const UpdateOrderDesignResZod = ResZod.extend({ data: ProductionOrderZod });
+export class UpdateOrderDesignResDto extends createZodDto(extendApi(UpdateOrderDesignResZod)) {}
 
 export const TransferOrderResZod = ResZod.extend({
   data: z.object({ matched: z.number(), modified: z.number() }),

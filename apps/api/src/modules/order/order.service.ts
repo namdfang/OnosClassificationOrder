@@ -72,9 +72,11 @@ import type {
   OrderWorkshopField,
   SizeMatrixRow,
   SizeSummary,
+  CancelOrderDto,
   TransferOrderDto,
   TransferOrderResDto,
   TypeSummary,
+  UpdateOrderDesignDto,
   UpdateOrderFieldDto,
   UpdateOrderFieldResDto,
   UserBreakdown,
@@ -3479,6 +3481,129 @@ export class OrderService implements OnModuleInit {
     void this.orderLogService.write({ orderId: id, action: 'delete', ctx });
     void this.invalidateListCache();
     return result;
+  }
+
+  // ─── Cancel + Đổi design (Admin only) ─────────────────────────────
+  // Enforce backend: chỉ SuperAdmin/Admin (KHÔNG gồm Manager). Controller đã
+  // `@Auth([SuperAdmin, Admin])` nhưng vẫn check lại trong service cho chắc.
+
+  private assertOrderAdmin(roleName?: RoleType): void {
+    if (roleName !== RoleType.SuperAdmin && roleName !== RoleType.Admin) {
+      throw new ForbiddenException('Chỉ Admin được thực hiện thao tác này.');
+    }
+  }
+
+  /**
+   * Đơn có được HỦY không: chưa hủy sẵn, KHÔNG phải "cần làm lại" (rework), và
+   * CHƯA bắt đầu in — tức chưa vào pipeline (`!currentFulfillmentStage`) HOẶC đang
+   * ở stage Print status=`waiting`. Chặn: đang in / đã in / qua In / rework / đã hủy.
+   * Mirror ở FE `apps/web/src/utils/orderActions.ts` — sửa 1 nơi phải sửa cả 2.
+   */
+  private canCancelOrder(order: {
+    cancelledAt?: Date | null;
+    designerStatus?: string;
+    currentFulfillmentStage?: string | null;
+    fulfillmentStages?: Record<string, { status?: string } | undefined>;
+  }): { ok: boolean; reason?: string } {
+    if (order.cancelledAt) return { ok: false, reason: 'Đơn đã hủy.' };
+    if (order.designerStatus === DesignerStatus.Rework)
+      return { ok: false, reason: 'Đơn đang cần làm lại — không hủy được.' };
+    const stage = order.currentFulfillmentStage;
+    if (!stage) return { ok: true };
+    if (stage !== FulfillmentStage.Print)
+      return { ok: false, reason: 'Đơn đã qua công đoạn In — không hủy được.' };
+    const printStatus = order.fulfillmentStages?.[FulfillmentStage.Print]?.status;
+    if (printStatus === FulfillmentStageStatus.Waiting) return { ok: true };
+    return { ok: false, reason: 'Đơn đã bắt đầu in — không hủy được.' };
+  }
+
+  async cancelOrder(
+    id: string,
+    dto: CancelOrderDto,
+    roleName?: RoleType,
+    ctx?: AuditContext,
+  ): Promise<OrderDocument> {
+    this.assertOrderAdmin(roleName);
+    const order = await this.orderModel.findById(id).lean();
+    if (!order) throw new NotFoundException('Order not found');
+    const check = this.canCancelOrder(
+      order as unknown as Parameters<OrderService['canCancelOrder']>[0],
+    );
+    if (!check.ok) throw new BadRequestException(check.reason);
+
+    const now = new Date();
+    const updated = await this.orderModel.findByIdAndUpdate(
+      id,
+      { $set: { cancelledAt: now, cancelReason: dto.reason } },
+      { new: true },
+    );
+    if (!updated) throw new NotFoundException('Order not found');
+    void this.orderLogService.write({
+      orderId: id,
+      action: 'cancel',
+      field: 'cancelledAt',
+      before: null,
+      after: dto.reason,
+      ctx,
+    });
+    void this.invalidateListCache();
+    return updated;
+  }
+
+  /**
+   * Đổi URL mockup + các vị trí design ĐANG CÓ (client chỉ gửi field muốn đổi).
+   * Lưu raw URL (không qua R2). URL cũ được ghi vào OrderLog (before/after) để tra lại.
+   */
+  async updateOrderDesign(
+    id: string,
+    dto: UpdateOrderDesignDto,
+    roleName?: RoleType,
+    ctx?: AuditContext,
+  ): Promise<OrderDocument> {
+    this.assertOrderAdmin(roleName);
+    const before = await this.orderModel.findById(id).lean();
+    if (!before) throw new NotFoundException('Order not found');
+
+    const set: Record<string, unknown> = {};
+    const beforeSnapshot: Record<string, unknown> = {};
+    const afterSnapshot: Record<string, unknown> = {};
+
+    if (dto.mockupUrl != null) {
+      beforeSnapshot.mockupUrl = (before as { mockupOriginalUrl?: string }).mockupOriginalUrl;
+      set.mockupUrl = dto.mockupUrl;
+      set.mockupOriginalUrl = dto.mockupUrl;
+      afterSnapshot.mockupUrl = dto.mockupUrl;
+    }
+    if (dto.designs) {
+      const prevDesigns = (before as { designsOriginal?: DesignFields; designs?: DesignFields })
+        .designsOriginal ??
+        (before as { designs?: DesignFields }).designs ??
+        {};
+      for (const [k, v] of Object.entries(dto.designs)) {
+        if (v == null) continue;
+        beforeSnapshot[`designs.${k}`] = (prevDesigns as Record<string, string>)[k];
+        set[`designs.${k}`] = v;
+        set[`designsOriginal.${k}`] = v;
+        afterSnapshot[`designs.${k}`] = v;
+      }
+    }
+
+    if (Object.keys(set).length === 0) {
+      throw new BadRequestException('Không có thay đổi design nào để lưu.');
+    }
+
+    const updated = await this.orderModel.findByIdAndUpdate(id, { $set: set }, { new: true });
+    if (!updated) throw new NotFoundException('Order not found');
+    void this.orderLogService.write({
+      orderId: id,
+      action: 'update_design',
+      field: 'designs',
+      before: beforeSnapshot,
+      after: afterSnapshot,
+      ctx,
+    });
+    void this.invalidateListCache();
+    return updated;
   }
 
   /**

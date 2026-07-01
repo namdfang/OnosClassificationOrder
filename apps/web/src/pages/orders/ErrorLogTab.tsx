@@ -19,6 +19,9 @@ import {
 } from '@/components/ui/table';
 import { TooltipProvider } from '@/components/ui/tooltip';
 import { OrderLogTimelineDialog } from '@/components/orders/OrderLogTimelineDialog';
+import { OrderRowActionsMenu } from '@/components/orders/OrderRowActionsMenu';
+import { isCancelled } from '@/utils/orderActions';
+import { CancelledBadge } from '@/components/orders/CancelledBadge';
 import {
   WORKSHOP_COLS,
   type WorkshopOrderRow,
@@ -453,7 +456,13 @@ export function ErrorLogTab() {
                   const urg = urgencyOf(row.productionFirstErrorAt);
                   const meta = URGENCY_META[urg];
                   return (
-                    <TableRow key={row._id} className={cn(isNoTool(row.toolResult) && NO_TOOL_ROW_CLASS)}>
+                    <TableRow
+                      key={row._id}
+                      className={cn(
+                        isNoTool(row.toolResult) && NO_TOOL_ROW_CLASS,
+                        isCancelled(row) && 'opacity-60',
+                      )}
+                    >
                       <TableCell className="py-2">
                         <Badge className={cn('font-mono text-[11px]', meta.cls)}>
                           {meta.label}
@@ -471,7 +480,14 @@ export function ErrorLogTab() {
                       </TableCell>
                       {visibleCols.map((c) => (
                         <TableCell key={c.key} className="py-2">
-                          {c.render(row, renderCtx)}
+                          {c.key === 'productionId' && isCancelled(row) ? (
+                            <div className="flex items-center gap-1.5">
+                              <CancelledBadge reason={row.cancelReason} />
+                              <div className="min-w-0 flex-1">{c.render(row, renderCtx)}</div>
+                            </div>
+                          ) : (
+                            c.render(row, renderCtx)
+                          )}
                         </TableCell>
                       ))}
                       <TableCell className="py-2 text-center">
@@ -483,16 +499,19 @@ export function ErrorLogTab() {
                         </Badge>
                       </TableCell>
                       <TableCell className="py-2">
-                        <Button
-                          variant="ghost"
-                          size="icon"
-                          title="Lịch sử"
-                          onClick={() =>
-                            setHistoryTarget({ id: row._id, productionId: row.productionId })
-                          }
-                        >
-                          <History size={13} className="text-muted-foreground" />
-                        </Button>
+                        <div className="flex items-center justify-end gap-0.5">
+                          <Button
+                            variant="ghost"
+                            size="icon"
+                            title="Lịch sử"
+                            onClick={() =>
+                              setHistoryTarget({ id: row._id, productionId: row.productionId })
+                            }
+                          >
+                            <History size={13} className="text-muted-foreground" />
+                          </Button>
+                          <OrderRowActionsMenu order={row} onChanged={() => fetchData()} />
+                        </div>
                       </TableCell>
                     </TableRow>
                   );
