@@ -174,6 +174,49 @@ export class GetMyStatsDto extends createZodDto(extendApi(GetMyStatsZod)) {}
 export const GetMyStatsResZod = ResZod.extend({ data: DesignerMyStatsZod });
 export class GetMyStatsResDto extends createZodDto(extendApi(GetMyStatsResZod)) {}
 
+// ─── My daily breakdown (per-day status counts, current sub-designer) ─
+// Bảng "Chi tiết theo ngày" trên /my-tasks: gom đơn CỦA CHÍNH USER theo ngày
+// VÀO SẢN XUẤT (`inProductionAt`, tz VN) trong N ngày gần nhất (7/14/30) —
+// focus vào đơn CHƯA XONG (assigned/rework/in-progress) để designer nhìn ra
+// đơn tồn cũ chưa làm. `done` hiển thị kèm (muted) để đối chiếu khối lượng.
+
+export const DesignerDailyBreakdownDayZod = z.object({
+  /** Ngày vào sản xuất `YYYY-MM-DD` (VN). */
+  day: z.string(),
+  /** Số ngày tuổi tính tới hôm nay (>=0). Càng lớn = đơn càng cũ. */
+  ageDays: z.number().int().nonnegative(),
+  assigned: z.number().int().nonnegative(),
+  rework: z.number().int().nonnegative(),
+  inProgress: z.number().int().nonnegative(),
+  done: z.number().int().nonnegative(),
+  /** = assigned + rework + inProgress (đơn chưa làm xong trong ngày). */
+  unfinished: z.number().int().nonnegative(),
+});
+export type DesignerDailyBreakdownDay = z.infer<typeof DesignerDailyBreakdownDayZod>;
+
+export const GetMyDailyBreakdownZod = z.object({
+  /** Cửa sổ ngày gần nhất — chỉ 7/14/30 (string trên query, coerce ở service). */
+  days: z.enum(['7', '14', '30']).default('7'),
+});
+export class GetMyDailyBreakdownDto extends createZodDto(extendApi(GetMyDailyBreakdownZod)) {}
+
+export const GetMyDailyBreakdownResZod = ResZod.extend({
+  data: z.object({
+    /** Chỉ các ngày CÓ đơn (>=1 status). Đã sort mới → cũ. */
+    days: DesignerDailyBreakdownDayZod.array(),
+    totals: z.object({
+      assigned: z.number().int().nonnegative(),
+      rework: z.number().int().nonnegative(),
+      inProgress: z.number().int().nonnegative(),
+      done: z.number().int().nonnegative(),
+      unfinished: z.number().int().nonnegative(),
+    }),
+    /** Echo N (7/14/30). */
+    rangeDays: z.number().int().positive(),
+  }),
+});
+export class GetMyDailyBreakdownResDto extends createZodDto(extendApi(GetMyDailyBreakdownResZod)) {}
+
 // ─── Bulk transition (Phase 4 extension) ────────────────────────────
 
 export const DesignerBulkTransitionZod = z.object({

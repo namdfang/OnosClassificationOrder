@@ -30,6 +30,6 @@ module.exports = [
     script: './start.js',
     instances: getOptionalEnv('APP_INSTANCES') || 1,
     // exec_mode: 'cluster',
-    max_memory_restart: '1G',
+    max_memory_restart: '5G',
   },
 ];
