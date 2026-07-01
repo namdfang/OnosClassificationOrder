@@ -1,7 +1,7 @@
-import React, { useEffect, useState } from 'react';
-import { Eraser, Plus, RotateCw, Trash2 } from 'lucide-react';
+import React, { useEffect, useRef, useState } from 'react';
+import { Eraser, ImageIcon, Pencil, Plus, RotateCw } from 'lucide-react';
 import { toast } from 'sonner';
-import { WorkshopConfigCategory } from 'shared';
+import { PRODUCT_LEVEL_MAP, PRODUCT_LEVELS, WorkshopConfigCategory } from 'shared';
 
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -19,14 +19,18 @@ import { RepositoryRemote } from '@/services';
 import { useWorkshopConfigStore } from '@/store/workshopConfigStore';
 import { handleAxiosError } from '@/utils';
 import { ImportProductConfigDialog } from './ImportProductConfigDialog';
+import { ProductConfigEditDialog } from './ProductConfigEditDialog';
 
-interface ProductConfigRow {
+export interface ProductConfigRow {
   _id: string;
   fullName: string;
   shortName: string;
   machineNumber?: string;
   fabricType?: string;
   toolResult?: string;
+  mockup?: string;
+  level?: number;
+  guide?: string;
   factory?: { name: string; shortName: string };
   machineType?: { name: string; shortName: string };
 }
@@ -36,6 +40,7 @@ export function ProductConfigTab() {
   const [loading, setLoading] = useState(false);
   const [search, setSearch] = useState('');
   const [importOpen, setImportOpen] = useState(false);
+  const [editItem, setEditItem] = useState<ProductConfigRow | null>(null);
   const fabricOptions = useWorkshopConfigStore(
     (s) => s.byCategory[WorkshopConfigCategory.FabricType] || [],
   );
@@ -74,13 +79,54 @@ export function ProductConfigTab() {
     }
   };
 
+  // Giá trị đã lưu (id → {mockup, guide}) để onBlur chỉ PATCH khi thực sự đổi.
+  const savedText = useRef<Record<string, { mockup?: string; guide?: string }>>({});
+
+  const patchField = async (id: string, patch: Partial<ProductConfigRow>) => {
+    setItems((prev) => prev.map((it) => (it._id === id ? { ...it, ...patch } : it)));
+    try {
+      await RepositoryRemote.productConfig.updateProductConfig(id, patch as never);
+    } catch (error) {
+      handleAxiosError(error);
+      fetchData();
+    }
+  };
+
+  const handleLevelChange = (id: string, value: string) => {
+    patchField(id, { level: value ? Number(value) : undefined });
+  };
+
+  // Sau khi lưu từ dialog Edit: merge lạc quan + đồng bộ ref gate text.
+  const applyEdit = (id: string, patch: Partial<ProductConfigRow>) => {
+    setItems((prev) => prev.map((it) => (it._id === id ? { ...it, ...patch } : it)));
+    savedText.current[id] = {
+      mockup: patch.mockup ?? savedText.current[id]?.mockup ?? '',
+      guide: patch.guide ?? savedText.current[id]?.guide ?? '',
+    };
+  };
+
+  // Text field (mockup/guide): gõ chỉ cập nhật local; blur mới lưu nếu đổi.
+  const handleTextInput = (id: string, field: 'mockup' | 'guide', value: string) => {
+    setItems((prev) => prev.map((it) => (it._id === id ? { ...it, [field]: value } : it)));
+  };
+  const handleTextBlur = (id: string, field: 'mockup' | 'guide', value: string) => {
+    const next = value.trim();
+    if ((savedText.current[id]?.[field] || '') === next) return;
+    savedText.current[id] = { ...savedText.current[id], [field]: next };
+    patchField(id, { [field]: next });
+  };
+
   const fetchData = async () => {
     try {
       setLoading(true);
       const params = new URLSearchParams({ page: '1', limit: '100' });
       if (search) params.set('search', search);
       const resp = await RepositoryRemote.productConfig.getProductConfigs(`?${params.toString()}`);
-      setItems(resp.data.data || []);
+      const rows: ProductConfigRow[] = resp.data.data || [];
+      savedText.current = Object.fromEntries(
+        rows.map((r) => [r._id, { mockup: r.mockup || '', guide: r.guide || '' }]),
+      );
+      setItems(rows);
     } catch (error) {
       handleAxiosError(error);
     } finally {
@@ -142,10 +188,10 @@ export function ProductConfigTab() {
             <RotateCw size={14} />
             Backfill vải + tool + máy cho đơn
           </Button>
-          <Button variant="outline" onClick={handleClearAll} title="Xóa toàn bộ product config — dùng khi bắt đầu lại từ đầu">
+          {/* <Button variant="outline" onClick={handleClearAll} title="Xóa toàn bộ product config — dùng khi bắt đầu lại từ đầu">
             <Eraser size={14} />
             Xóa tất cả
-          </Button>
+          </Button> */}
           <Button onClick={() => setImportOpen(true)}>
             <Plus size={14} />
             Import từ Excel
@@ -157,6 +203,7 @@ export function ProductConfigTab() {
         <Table>
           <TableHeader>
             <TableRow>
+              <TableHead className="w-[130px]">Mockup</TableHead>
               <TableHead>Tên sản phẩm</TableHead>
               <TableHead>Viết tắt</TableHead>
               <TableHead className="w-20">Máy</TableHead>
@@ -164,20 +211,21 @@ export function ProductConfigTab() {
               <TableHead>Xưởng</TableHead>
               <TableHead className="min-w-[160px]">Loại vải</TableHead>
               <TableHead className="min-w-[140px]">Kết quả Tool</TableHead>
+              <TableHead className="w-[150px]">Level</TableHead>
               <TableHead className="w-12"></TableHead>
             </TableRow>
           </TableHeader>
           <TableBody>
             {loading && (
               <TableRow>
-                <TableCell colSpan={8} className="text-center py-8">
+                <TableCell colSpan={10} className="text-center py-8">
                   <Spinner size={20} className="text-muted-foreground" />
                 </TableCell>
               </TableRow>
             )}
             {!loading && items.length === 0 && (
               <TableRow>
-                <TableCell colSpan={8} className="text-center py-8 text-muted-foreground">
+                <TableCell colSpan={10} className="text-center py-8 text-muted-foreground">
                   Chưa có product config nào. Click "Import từ Excel" để bắt đầu.
                 </TableCell>
               </TableRow>
@@ -185,6 +233,30 @@ export function ProductConfigTab() {
             {!loading &&
               items.map((it) => (
                 <TableRow key={it._id}>
+                  <TableCell>
+                    <div className="flex flex-col gap-1">
+                      {it.mockup ? (
+                        <a href={it.mockup} target="_blank" rel="noreferrer" title="Mở ảnh mockup">
+                          <img
+                            src={it.mockup}
+                            alt="mockup"
+                            className="w-14 h-14 rounded object-cover border border-border bg-muted"
+                          />
+                        </a>
+                      ) : (
+                        <div className="w-14 h-14 rounded border border-dashed border-border flex items-center justify-center text-muted-foreground">
+                          <ImageIcon size={16} />
+                        </div>
+                      )}
+                      <Input
+                        value={it.mockup || ''}
+                        onChange={(e) => handleTextInput(it._id, 'mockup', e.target.value)}
+                        onBlur={(e) => handleTextBlur(it._id, 'mockup', e.target.value)}
+                        placeholder="URL mockup"
+                        className="h-7 w-[118px] text-xs"
+                      />
+                    </div>
+                  </TableCell>
                   <TableCell className="font-medium">{it.fullName}</TableCell>
                   <TableCell>
                     <Badge variant="outline">{it.shortName}</Badge>
@@ -256,8 +328,43 @@ export function ProductConfigTab() {
                     </select>
                   </TableCell>
                   <TableCell>
-                    <Button variant="ghost" size="icon" onClick={() => handleDelete(it._id)}>
-                      <Trash2 size={14} className="text-destructive" />
+                    <div className="flex items-center gap-1.5">
+                      {it.level ? (
+                        <Badge
+                          className="font-normal border shrink-0"
+                          style={{
+                            backgroundColor: PRODUCT_LEVEL_MAP[it.level]?.color,
+                            color: '#fff',
+                            borderColor: PRODUCT_LEVEL_MAP[it.level]?.color,
+                          }}
+                        >
+                          Lv {it.level}
+                        </Badge>
+                      ) : (
+                        <span className="text-muted-foreground text-xs shrink-0">—</span>
+                      )}
+                      <select
+                        value={it.level ?? ''}
+                        onChange={(e) => handleLevelChange(it._id, e.target.value)}
+                        className="w-full rounded-md border border-input bg-background px-2 py-1 text-xs focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
+                      >
+                        <option value="">— Chưa chọn —</option>
+                        {PRODUCT_LEVELS.map((lv) => (
+                          <option key={lv.value} value={lv.value}>
+                            {lv.label}
+                          </option>
+                        ))}
+                      </select>
+                    </div>
+                  </TableCell>
+                  <TableCell>
+                    <Button
+                      variant="ghost"
+                      size="icon"
+                      onClick={() => setEditItem(it)}
+                      title="Chỉnh sửa sản phẩm"
+                    >
+                      <Pencil size={14} />
                     </Button>
                   </TableCell>
                 </TableRow>
@@ -273,6 +380,16 @@ export function ProductConfigTab() {
           fetchData();
           loadConfig(true);
         }}
+      />
+
+      <ProductConfigEditDialog
+        open={editItem !== null}
+        onOpenChange={(v) => !v && setEditItem(null)}
+        item={editItem}
+        fabricOptions={fabricOptions}
+        toolOptions={toolOptions}
+        onSaved={applyEdit}
+        onDelete={handleDelete}
       />
     </div>
   );

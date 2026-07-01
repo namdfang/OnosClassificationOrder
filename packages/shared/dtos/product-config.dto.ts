@@ -16,6 +16,12 @@ export const ProductConfigZod = BaseEntityZod.extend({
   fabricType: z.string().max(60).optional(),
   /** workshop_config code (category=tool_result). Default tool status at import. */
   toolResult: z.string().max(60).optional(),
+  /** Ảnh/URL mockup sản phẩm — hiển thị cột đầu bảng config. */
+  mockup: z.string().max(1000).optional(),
+  /** Cấp độ sản phẩm 1..10 (PRODUCT_LEVELS) — hiển thị badge màu. */
+  level: z.number().int().min(1).max(10).optional(),
+  /** Hướng dẫn / ghi chú sản phẩm (free-text, nhập ở textarea). */
+  guide: z.string().max(5000).optional(),
 });
 export type ProductConfig = z.infer<typeof ProductConfigZod>;
 
@@ -38,6 +44,9 @@ export const CreateProductConfigZod = z.object({
   factoryId: ProductConfigZod.shape.factoryId,
   fabricType: ProductConfigZod.shape.fabricType,
   toolResult: ProductConfigZod.shape.toolResult,
+  mockup: ProductConfigZod.shape.mockup,
+  level: ProductConfigZod.shape.level,
+  guide: ProductConfigZod.shape.guide,
 });
 export class CreateProductConfigDto extends createZodDto(extendApi(CreateProductConfigZod)) {}
 
@@ -53,6 +62,9 @@ export const UpdateProductConfigZod = z.object({
   factoryId: ProductConfigZod.shape.factoryId.optional(),
   fabricType: ProductConfigZod.shape.fabricType,
   toolResult: ProductConfigZod.shape.toolResult,
+  mockup: ProductConfigZod.shape.mockup,
+  level: ProductConfigZod.shape.level,
+  guide: ProductConfigZod.shape.guide,
 });
 export class UpdateProductConfigDto extends createZodDto(extendApi(UpdateProductConfigZod)) {}
 

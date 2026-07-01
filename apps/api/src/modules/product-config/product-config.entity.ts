@@ -30,6 +30,18 @@ export class ProductConfigEntity extends DatabaseEntityAbstract {
   /** workshop_config code (category=tool_result). Default tool status — copied to order.toolResult at import. */
   @Prop({ trim: true })
   toolResult?: string;
+
+  /** Ảnh/URL mockup sản phẩm — hiển thị cột đầu bảng config. */
+  @Prop({ trim: true })
+  mockup?: string;
+
+  /** Cấp độ sản phẩm 1..10 (PRODUCT_LEVELS) — badge màu. */
+  @Prop({ type: Number, min: 1, max: 10 })
+  level?: number;
+
+  /** Hướng dẫn / ghi chú sản phẩm (free-text). */
+  @Prop({ trim: true })
+  guide?: string;
 }
 
 assertSameType<ProductConfig, ProductConfigEntity>();

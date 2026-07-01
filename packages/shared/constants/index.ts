@@ -20,3 +20,4 @@ export * from './stock-order';
 export * from './feedback';
 export * from './api-key';
 export * from './permission-catalog';
+export * from './product-level';

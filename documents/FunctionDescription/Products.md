@@ -29,8 +29,12 @@ UI chia 2 tab:
 | List | Bảng phân trang `limit=100`, sort theo `createdAt` desc |
 | Search | Substring match `fullName` hoặc `shortName` (case-insensitive) |
 | Filter | Query string `factoryId`, `machineTypeId` |
-| Inline edit | Dropdown chọn `fabricType` + `toolResult` cho mỗi dòng → PATCH `/v1/product-configs/:id` |
-| Delete (1 dòng) | Confirm → soft delete (`deletedAt`) |
+| Inline edit | Dropdown chọn `fabricType` + `toolResult` + `level` cho mỗi dòng, ô nhập `mockup` (URL, cột đầu) → PATCH `/v1/product-configs/:id` |
+| **Mockup** | Cột **đầu tiên** — string URL ảnh; hiển thị thumbnail 56×56 (click mở tab mới) + ô `Input` sửa inline, lưu on-blur khi đổi |
+| **Level** | Select 1 trong **10 level cố định** (`PRODUCT_LEVELS` ở shared) — badge màu gradient dễ→khó (xanh lá `#22C55E` → đỏ đậm `#7F1D1D`). Lưu ngay khi chọn |
+| **Edit dialog** (`ProductConfigEditDialog.tsx`) | Nút ✏️ (`Pencil`) mỗi dòng mở modal chỉnh **mockup + level + fabricType + toolResult + guide** cùng lúc, bấm **Lưu** → 1 PATCH; có nút **Xóa sản phẩm** (destructive) ở footer. **Đây là nơi duy nhất sửa `guide`** (cột Hướng dẫn hiện **tạm ẩn** khỏi bảng). |
+| **Hướng dẫn** (`guide`) | Free-text ghi chú/hướng dẫn sản phẩm — **cột trong bảng tạm ẩn**; chỉ sửa qua Edit dialog (textarea). |
+| Delete (1 dòng) | Nút xóa ở bảng **tạm ẩn**, thay bằng nút Edit; xóa (soft delete `deletedAt`) chuyển vào **footer Edit dialog** |
 | **Xóa tất cả** | Confirm → DELETE `/v1/product-configs/all` (hard-delete `deleteMany({})`) — dùng khi reset từ đầu |
 | Import | Dialog paste 7 cột tab-separated → bulk upsert by `fullName` |
 
@@ -44,8 +48,13 @@ UI chia 2 tab:
   machineTypeId: ObjectId; // ref MachineTypeEntity (phòng — loại máy in: ICL / IEN / HT)
   fabricType?: string;     // workshop_config code (category=fabric_type) — default fabric copy vào order
   toolResult?: string;     // workshop_config code (category=tool_result) — default tool status copy vào order
+  mockup?: string;         // URL ảnh mockup — hiển thị cột đầu bảng config (thumbnail + edit inline)
+  level?: number;          // Cấp độ 1..10 (PRODUCT_LEVELS ở shared) — badge màu gradient
+  guide?: string;          // Hướng dẫn/ghi chú sản phẩm (free-text textarea)
 }
 ```
+
+> **Lưu ý:** `ProductConfigEntity` bị ràng buộc `assertSameType<ProductConfig, ProductConfigEntity>()` (2 chiều) — thêm field mới **BẮT BUỘC** sửa đồng bộ cả `packages/shared/dtos/product-config.dto.ts` (`ProductConfigZod` + Create/Update) lẫn entity, nếu không sẽ fail compile. `service.updateProductConfig` spread `...dto` nên field mới tự pass-through, không cần sửa service. 10 level cố định + màu định nghĩa ở `packages/shared/constants/product-level.ts` (`PRODUCT_LEVELS`, `PRODUCT_LEVEL_MAP`).
 
 Cột `fabricType` + `toolResult` cho phép admin set sẵn loại vải / kết quả tool mặc định. Khi import order khớp `type` → product, BE auto-copy 2 cột này vào order (chỉ insert, không ghi đè), để Workshop view group được. UI bảng config có dropdown chọn fabric / tool inline.
 
