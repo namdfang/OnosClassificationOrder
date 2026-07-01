@@ -15,6 +15,7 @@ import {
   TableRow,
 } from '@/components/ui/table';
 import { Spinner } from '@/components/common/Spinner';
+import { PaginationBar } from '@/components/common/PaginationBar';
 import { RepositoryRemote } from '@/services';
 import { useWorkshopConfigStore } from '@/store/workshopConfigStore';
 import { handleAxiosError } from '@/utils';
@@ -39,6 +40,9 @@ export function ProductConfigTab() {
   const [items, setItems] = useState<ProductConfigRow[]>([]);
   const [loading, setLoading] = useState(false);
   const [search, setSearch] = useState('');
+  const [page, setPage] = useState(1);
+  const [pageSize, setPageSize] = useState(20);
+  const [total, setTotal] = useState(0);
   const [importOpen, setImportOpen] = useState(false);
   const [editItem, setEditItem] = useState<ProductConfigRow | null>(null);
   const fabricOptions = useWorkshopConfigStore(
@@ -119,10 +123,11 @@ export function ProductConfigTab() {
   const fetchData = async () => {
     try {
       setLoading(true);
-      const params = new URLSearchParams({ page: '1', limit: '100' });
+      const params = new URLSearchParams({ page: String(page), limit: String(pageSize) });
       if (search) params.set('search', search);
       const resp = await RepositoryRemote.productConfig.getProductConfigs(`?${params.toString()}`);
       const rows: ProductConfigRow[] = resp.data.data || [];
+      setTotal(resp.data.total || 0);
       savedText.current = Object.fromEntries(
         rows.map((r) => [r._id, { mockup: r.mockup || '', guide: r.guide || '' }]),
       );
@@ -136,7 +141,14 @@ export function ProductConfigTab() {
 
   useEffect(() => {
     fetchData();
-  }, []);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [page, pageSize]);
+
+  // Search → luôn về trang 1 (setPage(1) tự trigger refetch; nếu đang ở 1 thì gọi tay).
+  const handleSearch = () => {
+    if (page !== 1) setPage(1);
+    else fetchData();
+  };
 
   const handleDelete = async (id: string) => {
     if (!confirm('Xoá product config này?')) return;
@@ -155,7 +167,8 @@ export function ProductConfigTab() {
       const res = await RepositoryRemote.productConfig.clearAllProductConfigs();
       const removed = res.data.data?.removed ?? 0;
       toast.success(`Đã xóa ${removed} product config`);
-      fetchData();
+      if (page !== 1) setPage(1);
+      else fetchData();
     } catch (error) {
       handleAxiosError(error);
     }
@@ -168,7 +181,7 @@ export function ProductConfigTab() {
           placeholder="Tìm theo tên hoặc viết tắt…"
           value={search}
           onChange={(e) => setSearch(e.target.value)}
-          onKeyDown={(e) => e.key === 'Enter' && fetchData()}
+          onKeyDown={(e) => e.key === 'Enter' && handleSearch()}
           className="max-w-sm"
         />
         <div className="flex items-center gap-2">
@@ -371,6 +384,17 @@ export function ProductConfigTab() {
               ))}
           </TableBody>
         </Table>
+        <PaginationBar
+          position="bottom"
+          page={page}
+          pageSize={pageSize}
+          total={total}
+          loading={loading && items.length === 0}
+          onChange={(p, ps) => {
+            setPage(p);
+            setPageSize(ps);
+          }}
+        />
       </div>
 
       <ImportProductConfigDialog

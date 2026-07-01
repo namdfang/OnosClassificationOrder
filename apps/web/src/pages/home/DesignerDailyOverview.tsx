@@ -14,7 +14,6 @@ import { handleAxiosError } from '@/utils';
 import { cn } from '@/utils/cn';
 
 type RangeDays = 7 | 14 | 30;
-const RANGES: RangeDays[] = [7, 14, 30];
 const WEEKDAYS = ['CN', 'T2', 'T3', 'T4', 'T5', 'T6', 'T7'];
 
 interface Data {
@@ -34,6 +33,11 @@ const EMPTY: Data = {
 };
 
 interface Props {
+  /** Số ngày (7/14/30) — điều khiển từ switcher ở Bộ lọc chung. */
+  days?: RangeDays;
+  /** Khoảng tùy biến (YYYY-MM-DD) — nếu có cả 2 thì override `days`. */
+  from?: string;
+  to?: string;
   /** Bump để refetch khi tab bấm Refresh. */
   reloadToken?: number;
   /** Filter chung sản phẩm (`order.type`). */
@@ -50,8 +54,7 @@ function fmtHead(day: string): { wd: string; dm: string } {
   };
 }
 
-export function DesignerDailyOverview({ reloadToken, type, customer }: Props) {
-  const [range, setRange] = useState<RangeDays>(7);
+export function DesignerDailyOverview({ days: range = 7, from, to, reloadToken, type, customer }: Props) {
   const [data, setData] = useState<Data>(EMPTY);
   const [loading, setLoading] = useState(false);
   const [expanded, setExpanded] = useState(false);
@@ -71,6 +74,7 @@ export function DesignerDailyOverview({ reloadToken, type, customer }: Props) {
         setLoading(true);
         const res = await RepositoryRemote.designer.dailyOverview({
           days: range,
+          ...(from && to ? { from, to } : {}),
           ...(type ? { type } : {}),
           ...(customer ? { customer } : {}),
         });
@@ -88,9 +92,10 @@ export function DesignerDailyOverview({ reloadToken, type, customer }: Props) {
         if (seq === seqRef.current) setLoading(false);
       }
     })();
-  }, [range, reloadToken, type, customer]);
+  }, [range, from, to, reloadToken, type, customer]);
 
   const { days, rows, backlogByDesigner, unassignedBacklog, columnTotals } = data;
+  const nDays = days.length || range;
 
   const noteName = (code: string) =>
     resolve(WorkshopConfigCategory.ToolResultNote, code)?.name || code;
@@ -107,31 +112,16 @@ export function DesignerDailyOverview({ reloadToken, type, customer }: Props) {
         <div className="flex items-center justify-between gap-3 p-3 border-b border-border flex-wrap">
           <div className="flex items-center gap-2">
             <LayoutList size={16} className="text-indigo-600" />
-            <span className="text-sm font-semibold">Tổng quan {range} ngày</span>
+            <span className="text-sm font-semibold">Tổng quan {nDays} ngày</span>
             <span className="hidden sm:inline text-[11px] text-muted-foreground">
               — theo ngày vào sản xuất
             </span>
-          </div>
-          <div className="flex items-center rounded-md border border-border overflow-hidden">
-            {RANGES.map((r) => (
-              <button
-                key={r}
-                type="button"
-                onClick={() => setRange(r)}
-                className={cn(
-                  'px-2.5 py-1 text-[11px] font-medium transition-colors',
-                  range === r ? 'bg-indigo-600 text-white' : 'text-muted-foreground hover:bg-muted',
-                )}
-              >
-                {r} ngày
-              </button>
-            ))}
           </div>
         </div>
 
         {!loading && days.length === 0 ? (
           <p className="text-xs text-muted-foreground text-center py-10">
-            Không có đơn trong {range} ngày gần nhất.
+            Không có đơn trong khoảng đã chọn.
           </p>
         ) : (
           <div className="overflow-x-auto">
@@ -250,7 +240,7 @@ export function DesignerDailyOverview({ reloadToken, type, customer }: Props) {
         {expanded && (
           <div className="border-t border-border bg-muted/10 p-3">
             <div className="mb-2 text-[11px] font-medium text-muted-foreground">
-              Tồn theo designer ({range} ngày) — tổng {backlogGrand}
+              Tồn theo designer ({nDays} ngày) — tổng {backlogGrand}
             </div>
             {backlogByDesigner.length === 0 && unassignedBacklog === 0 ? (
               <p className="text-xs text-muted-foreground py-2">Không có đơn tồn.</p>

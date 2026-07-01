@@ -2,6 +2,8 @@ import { Injectable } from '@nestjs/common';
 import { InjectModel } from '@nestjs/mongoose';
 import { Model } from 'mongoose';
 import type {
+  AssignBacklogGroup,
+  AssignBacklogOrder,
   DesignerLeaderboardRow,
   DesignerTimelineBucket,
   ErrorStats,
@@ -10,6 +12,7 @@ import { DesignerStatus, RoleType, WorkshopConfigCategory } from 'shared';
 
 import { OrderLogEntity } from '../order-log/order-log.entity';
 import { OrderEntity } from '../order/order.entity';
+import { ProductConfigEntity } from '../product-config/product-config.entity';
 import { RoleRepository } from '../role/role.repository';
 import { UserEntity } from '../user/user.entity';
 import { WorkshopConfigEntity } from '../workshop-config/workshop-config.entity';
@@ -31,6 +34,8 @@ export class DesignerStatsService {
     private readonly workshopConfigModel: Model<WorkshopConfigEntity>,
     @InjectModel(OrderLogEntity.name)
     private readonly orderLogModel: Model<OrderLogEntity>,
+    @InjectModel(ProductConfigEntity.name)
+    private readonly productConfigModel: Model<ProductConfigEntity>,
     private readonly roleRepository: RoleRepository,
   ) {}
 
@@ -584,6 +589,8 @@ export class DesignerStatsService {
     rangeDays: number,
     type?: string,
     customer?: string,
+    from?: string,
+    to?: string,
   ): Promise<{
     days: string[];
     rows: {
@@ -609,18 +616,7 @@ export class DesignerStatsService {
     columnTotals: { total: number; unreviewed: number; error: number; backlog: number };
     rangeDays: number;
   }> {
-    const MS_DAY = 86_400_000;
-    const vnStart = (d: string) => new Date(`${d}T00:00:00+07:00`);
-    const vnEnd = (d: string) => new Date(`${d}T23:59:59.999+07:00`);
-    const vnToday = new Date(Date.now() + 7 * 60 * 60 * 1000).toISOString().slice(0, 10);
-
-    const days: string[] = [];
-    const baseMs = vnStart(vnToday).getTime();
-    for (let i = 0; i < rangeDays; i++) {
-      days.push(new Date(baseMs - i * MS_DAY + 7 * 60 * 60 * 1000).toISOString().slice(0, 10));
-    }
-    const start = new Date(baseMs - (rangeDays - 1) * MS_DAY);
-    const end = vnEnd(vnToday);
+    const { start, end, days } = this.resolveVnWindow(rangeDays, from, to);
 
     const extraMatch: Record<string, unknown> = {};
     if (type) extraMatch.type = type;
@@ -756,7 +752,157 @@ export class DesignerStatsService {
       .filter((d) => d.total > 0)
       .sort((a, b) => b.total - a.total || a.fullName.localeCompare(b.fullName));
 
-    return { days, rows, backlogByDesigner, unassignedBacklog, columnTotals, rangeDays };
+    return { days, rows, backlogByDesigner, unassignedBacklog, columnTotals, rangeDays: days.length };
+  }
+
+  /**
+   * Bảng "Cần gán designer" — đơn `toolResultNote` đã soát & ≠ ok VÀ chưa có
+   * người ôm (unassigned / rejected / rework-chưa-ôm), gom theo sản phẩm
+   * (productConfigId → mockup/level/fullName), đơn chưa map → nhóm "Chưa map".
+   */
+  async getAssignBacklog(
+    rangeDays: number,
+    type?: string,
+    customer?: string,
+    from?: string,
+    to?: string,
+  ): Promise<{ groups: AssignBacklogGroup[]; total: number; rangeDays: number }> {
+    const { start, end, days } = this.resolveVnWindow(rangeDays, from, to);
+
+    const match: Record<string, unknown> = {
+      inProductionAt: { $gte: start, $lte: end },
+      // Đã soát & khác ok (KHÔNG gồm chưa soát null/'').
+      toolResultNote: { $nin: [null, '', 'ok'] },
+      $or: [
+        { designerStatus: DesignerStatus.Unassigned },
+        { designerStatus: DesignerStatus.Rejected },
+        // rework chưa ôm — assignee null/missing.
+        { designerStatus: DesignerStatus.Rework, assignee: { $in: [null] } },
+      ],
+    };
+    if (type) match.type = type;
+    if (customer) match.userSku = customer;
+
+    const orders = await this.orderModel
+      .find(match, {
+        productionId: 1,
+        userSku: 1,
+        size: 1,
+        color: 1,
+        type: 1,
+        mockupUrl: 1,
+        mockupOriginalUrl: 1,
+        toolResultNote: 1,
+        designerStatus: 1,
+        inProductionAt: 1,
+        productConfigId: 1,
+      })
+      .sort({ inProductionAt: -1 })
+      .lean();
+
+    const UNMAPPED = 'unmapped';
+    const grouped = new Map<string, { orderIds: string[]; orders: AssignBacklogOrder[] }>();
+    for (const o of orders as Array<Record<string, unknown>>) {
+      const key = (o.productConfigId as string) || UNMAPPED;
+      const g = grouped.get(key) || { orderIds: [], orders: [] };
+      const id = String(o._id);
+      g.orderIds.push(id);
+      g.orders.push({
+        _id: id,
+        productionId: String(o.productionId ?? ''),
+        userSku: o.userSku as string | undefined,
+        size: o.size as string | undefined,
+        color: o.color as string | undefined,
+        type: o.type as string | undefined,
+        mockupUrl: o.mockupUrl as string | undefined,
+        mockupOriginalUrl: o.mockupOriginalUrl as string | undefined,
+        toolResultNote: o.toolResultNote as string | undefined,
+        designerStatus: o.designerStatus as string | undefined,
+        inProductionAt: o.inProductionAt
+          ? new Date(o.inProductionAt as Date).toISOString()
+          : undefined,
+      });
+      grouped.set(key, g);
+    }
+
+    const cfgIds = [...grouped.keys()].filter((k) => k !== UNMAPPED);
+    const cfgs = cfgIds.length
+      ? await this.productConfigModel
+          .find({ _id: { $in: cfgIds } }, { fullName: 1, shortName: 1, mockup: 1, level: 1 })
+          .lean()
+      : [];
+    const cfgMap = new Map<string, { fullName?: string; shortName?: string; mockup?: string; level?: number }>();
+    for (const c of cfgs as Array<Record<string, unknown>>) {
+      cfgMap.set(String(c._id), {
+        fullName: c.fullName as string,
+        shortName: c.shortName as string,
+        mockup: c.mockup as string,
+        level: c.level as number,
+      });
+    }
+
+    const groups = [...grouped.entries()].map(([key, g]) => {
+      const cfg = key !== UNMAPPED ? cfgMap.get(key) : undefined;
+      return {
+        key,
+        fullName: cfg?.fullName || (key === UNMAPPED ? 'Chưa map' : `#${key.slice(-6)}`),
+        shortName: cfg?.shortName,
+        mockup: cfg?.mockup,
+        level: cfg?.level,
+        count: g.orders.length,
+        orderIds: g.orderIds,
+        orders: g.orders,
+      };
+    });
+
+    // Sort count desc; nhóm "Chưa map" xuống cuối.
+    groups.sort((a, b) => {
+      if (a.key === UNMAPPED) return 1;
+      if (b.key === UNMAPPED) return -1;
+      return b.count - a.count || a.fullName.localeCompare(b.fullName);
+    });
+
+    return { groups, total: orders.length, rangeDays: days.length };
+  }
+
+  /**
+   * Cửa sổ ngày (tz VN) cho overview/assign-backlog. Nếu có cả `from`+`to` →
+   * khoảng tùy biến (cap 60 ngày); ngược lại → N ngày gần nhất. `days` sort
+   * mới→cũ (đồng bộ với FE reverse).
+   */
+  private resolveVnWindow(
+    rangeDays: number,
+    from?: string,
+    to?: string,
+  ): { start: Date; end: Date; days: string[] } {
+    const MS_DAY = 86_400_000;
+    const CAP = 60;
+    const vnStart = (d: string) => new Date(`${d}T00:00:00+07:00`);
+    const vnEnd = (d: string) => new Date(`${d}T23:59:59.999+07:00`);
+    const vnToday = new Date(Date.now() + 7 * 60 * 60 * 1000).toISOString().slice(0, 10);
+    const days: string[] = [];
+
+    if (from && to) {
+      const f = from.slice(0, 10);
+      const t = to.slice(0, 10);
+      const start = vnStart(f);
+      const end = vnEnd(t);
+      const startMs = start.getTime();
+      let cur = vnStart(t).getTime();
+      let i = 0;
+      while (cur >= startMs && i < CAP) {
+        days.push(new Date(cur + 7 * 60 * 60 * 1000).toISOString().slice(0, 10));
+        cur -= MS_DAY;
+        i++;
+      }
+      return { start, end, days };
+    }
+
+    const baseMs = vnStart(vnToday).getTime();
+    for (let i = 0; i < rangeDays; i++) {
+      days.push(new Date(baseMs - i * MS_DAY + 7 * 60 * 60 * 1000).toISOString().slice(0, 10));
+    }
+    return { start: new Date(baseMs - (rangeDays - 1) * MS_DAY), end: vnEnd(vnToday), days };
   }
 
   private resolveRange(from?: string, to?: string): { start: Date; end: Date } {

@@ -7,6 +7,8 @@ import {
   GetDesignerPerformanceResDto,
   GetDesignerTimelineDto,
   GetDesignerTimelineResDto,
+  GetAssignBacklogDto,
+  GetAssignBacklogResDto,
   GetBreakdownFiltersResDto,
   GetDailyOverviewDto,
   GetDailyOverviewResDto,
@@ -149,6 +151,37 @@ export class DesignerStatsController {
       Number(query.days),
       query.type,
       query.customer,
+      query.from,
+      query.to,
+    );
+    return { success: true, data };
+  }
+
+  @Get('designer/assign-backlog')
+  @Auth(LEADER_ROLES)
+  @ApiOperation({
+    summary: 'Đơn cần gán designer (unassigned/rejected/rework-chưa-ôm, note ≠ ok) gom theo sản phẩm.',
+  })
+  @HttpCode(HttpStatus.OK)
+  @ApiOkResponse({ type: GetAssignBacklogResDto })
+  async getAssignBacklog(
+    @Query() query: GetAssignBacklogDto,
+    @AuthUser() user: UserDocument,
+  ): Promise<GetAssignBacklogResDto> {
+    this.logger.info({
+      message: JSON.stringify({
+        method: 'GET',
+        url: '/designer/assign-backlog',
+        userId: user._id,
+        days: query.days,
+      }),
+    });
+    const data = await this.statsService.getAssignBacklog(
+      Number(query.days),
+      query.type,
+      query.customer,
+      query.from,
+      query.to,
     );
     return { success: true, data };
   }

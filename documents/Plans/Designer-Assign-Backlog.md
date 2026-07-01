@@ -1,6 +1,6 @@
 # Kế hoạch — Filter ngày + Bảng "Cần gán designer" (gom theo sản phẩm)
 
-> **Trạng thái:** 📋 PLAN — chưa implement. Chỉ code khi user xác nhận "đồng ý implement".
+> **Trạng thái:** ✅ ĐÃ IMPLEMENT (endpoint `GET /v1/designer/assign-backlog` + `DesignerAssignBacklog.tsx` + switcher 7/14/30 ở filter bar). Doc: `Dashboard.md` §0/§0c + `DesignerTaskWorkflow.md`.
 > **Vị trí:** Dashboard → tab Designer (`DesignerStatsTab.tsx`), dưới bảng `DesignerDailyOverview`.
 > **Liên quan:** `Dashboard.md` Tab D, `DesignerTaskWorkflow.md`, `Products.md` (mockup/level), `workshopTableConfig.tsx`, `AssignDesignerDialog.tsx`.
 

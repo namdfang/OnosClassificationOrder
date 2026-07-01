@@ -26,7 +26,7 @@ UI chia 2 tab:
 ### 2.1 Tính năng
 | Chức năng | Mô tả |
 |-----------|-------|
-| List | Bảng phân trang `limit=100`, sort theo `createdAt` desc |
+| List | Bảng có **phân trang** (`<PaginationBar>`, mặc định `pageSize=20`, đọc `total` từ response), sort theo `createdAt` desc. Search/Xóa tất cả reset về trang 1 |
 | Search | Substring match `fullName` hoặc `shortName` (case-insensitive) |
 | Filter | Query string `factoryId`, `machineTypeId` |
 | Inline edit | Dropdown chọn `fabricType` + `toolResult` + `level` cho mỗi dòng, ô nhập `mockup` (URL, cột đầu) → PATCH `/v1/product-configs/:id` |

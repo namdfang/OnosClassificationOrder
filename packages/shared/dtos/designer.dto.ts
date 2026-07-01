@@ -299,6 +299,9 @@ export class GetTeamDailyBreakdownResDto extends createZodDto(
 
 export const GetDailyOverviewZod = z.object({
   days: z.enum(['7', '14', '30']).default('7'),
+  /** Khoảng tùy biến (YYYY-MM-DD, VN) — nếu truyền cả 2 thì dùng thay `days`. */
+  from: z.string().optional(),
+  to: z.string().optional(),
   /** Lọc theo sản phẩm (`order.type`). */
   type: z.string().optional(),
   /** Lọc theo khách hàng (`order.userSku`). */
@@ -362,6 +365,62 @@ export const GetDailyOverviewResZod = ResZod.extend({
   }),
 });
 export class GetDailyOverviewResDto extends createZodDto(extendApi(GetDailyOverviewResZod)) {}
+
+// ─── Assign backlog (bảng "Cần gán designer" gom theo sản phẩm) ──────
+
+export const GetAssignBacklogZod = z.object({
+  days: z.enum(['7', '14', '30']).default('7'),
+  /** Khoảng tùy biến (YYYY-MM-DD, VN) — nếu truyền cả 2 thì dùng thay `days`. */
+  from: z.string().optional(),
+  to: z.string().optional(),
+  /** Lọc theo sản phẩm (`order.type`). */
+  type: z.string().optional(),
+  /** Lọc theo khách hàng (`order.userSku`). */
+  customer: z.string().optional(),
+});
+export class GetAssignBacklogDto extends createZodDto(extendApi(GetAssignBacklogZod)) {}
+
+/** 1 đơn rút gọn read-only trong nhóm sản phẩm. */
+export const AssignBacklogOrderZod = z.object({
+  _id: z.string(),
+  productionId: z.string(),
+  userSku: z.string().optional(),
+  size: z.string().optional(),
+  color: z.string().optional(),
+  type: z.string().optional(),
+  mockupUrl: z.string().optional(),
+  mockupOriginalUrl: z.string().optional(),
+  toolResultNote: z.string().optional(),
+  designerStatus: z.string().optional(),
+  inProductionAt: z.string().optional(),
+});
+export type AssignBacklogOrder = z.infer<typeof AssignBacklogOrderZod>;
+
+/** 1 nhóm = 1 sản phẩm (productConfig) hoặc "Chưa map". */
+export const AssignBacklogGroupZod = z.object({
+  /** productConfigId | 'unmapped'. */
+  key: z.string(),
+  fullName: z.string(),
+  shortName: z.string().optional(),
+  /** Ảnh mockup sản phẩm (ProductConfig). */
+  mockup: z.string().optional(),
+  /** Level 1..10 (ProductConfig). */
+  level: z.number().int().optional(),
+  count: z.number().int().nonnegative(),
+  /** Toàn bộ id đơn trong nhóm (cho chọn-cả-nhóm + assign). */
+  orderIds: z.string().array(),
+  orders: AssignBacklogOrderZod.array(),
+});
+export type AssignBacklogGroup = z.infer<typeof AssignBacklogGroupZod>;
+
+export const GetAssignBacklogResZod = ResZod.extend({
+  data: z.object({
+    groups: AssignBacklogGroupZod.array(),
+    total: z.number().int().nonnegative(),
+    rangeDays: z.number().int().positive(),
+  }),
+});
+export class GetAssignBacklogResDto extends createZodDto(extendApi(GetAssignBacklogResZod)) {}
 
 // ─── Bulk transition (Phase 4 extension) ────────────────────────────
 

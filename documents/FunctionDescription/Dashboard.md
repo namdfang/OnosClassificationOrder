@@ -6,7 +6,7 @@
 > **Tab A — Thống kê đơn & sản phẩm:** `apps/web/src/pages/home/OrderStatsTab.tsx`. Filter top bar dùng chung `<OrderFilterBar>` — xem `Orders.md §10.3`. 2 search field (`searchType` main + `searchUser` qua `topActionsRight`); auto-fetch debounce 300ms.
 > **Tab B — Tình trạng:** `apps/web/src/pages/home/OrderStatusTab.tsx` + `status/{KpiCard,BreakdownCard,StatusFilterExtras,OrdersMiniTable,useStatusFilter}.tsx`. Filter top bar dùng chung `<OrderFilterBar>` (apps/web/src/components/orders/OrderFilterBar.tsx) — xem `Orders.md §10.3`.
 > **Tab C — Đơn theo xưởng:** `apps/web/src/pages/home/OrderFactoryTab.tsx` + `apps/web/src/pages/home/exportOrders.ts` (XLSX builder)
-> **Tab D — Designer:** `apps/web/src/pages/home/DesignerStatsTab.tsx` (+ `DesignerDailyOverview.tsx`, `TeamDailyMatrix.tsx`, `StatusBarCharts.tsx`) — Admin/Manager/Leader **+ Designer (sub)** (perm `page.designer_stats`)
+> **Tab D — Designer:** `apps/web/src/pages/home/DesignerStatsTab.tsx` (+ `DesignerDailyOverview.tsx`, `DesignerAssignBacklog.tsx`, `TeamDailyMatrix.tsx`, `StatusBarCharts.tsx`) — Admin/Manager/Leader **+ Designer (sub)** (perm `page.designer_stats`)
 > **File BE:** `apps/api/src/modules/order/order.service.ts` → `getDashboard()`, `getStatusOverview()`, `getFactoryOverview()`, `exportOrders()`, `transferOrder()`, `bulkTransferOrders()` + `apps/api/src/modules/designer/designer-stats.service.ts` → `getPerformance()`, `getTimeline()`, `getErrorStats()`, `getTeamDailyBreakdown()`
 > **Route:** `/dashboard?tab=stats|status|factory|designer`
 > **API:**
@@ -63,14 +63,22 @@ Data từ `GET /v1/orders/factory-overview` + `GET /v1/orders?sort=grouped&...` 
 
 **Chỉ hiển thị khi user có perm `page.designer_stats`** (DesignerLeader / Admin / Manager **+ Designer sub** — sub-designer cũng xem được thống kê toàn team). BE: 5 endpoint tab (`designer-stats.controller.ts`, const `LEADER_ROLES`) đã bao gồm `RoleType.Designer`. Xem `DesignerTaskWorkflow.md` để hiểu workflow tổng.
 
-Layout (thứ tự render trên tab: **Bộ lọc chung → Tổng quan N ngày → Biểu đồ cột cơ cấu → Ma trận toàn team → Period switcher → Leaderboard → Timeline → Error pie**). Đánh số dưới đây theo nhóm chức năng, không theo thứ tự dọc:
+Layout (thứ tự render trên tab: **Bộ lọc chung → Tổng quan N ngày → Cần gán designer → Biểu đồ cột cơ cấu → Ma trận toàn team → Period switcher → Leaderboard → Timeline → Error pie**). Đánh số dưới đây theo nhóm chức năng, không theo thứ tự dọc:
 
-**0. Bộ lọc chung sản phẩm + khách hàng** (card `Filter` render **ĐẦU TIÊN trên cùng tab**, trên cả biểu đồ cột & ma trận):
-- 2 dropdown `<SelectFilter>` (native select có count + typeahead): **Sản phẩm** (`order.type`) + **Khách hàng** (`order.userSku`). State `filterType`/`filterCustomer` ở `DesignerStatsTab`, truyền **props `type`/`customer`** xuống CẢ `StatusBarCharts` VÀ `TeamDailyMatrix` → cả 2 refetch khi filter đổi (thêm vào deps `useEffect`).
-- Option list load 1 lần lúc mount từ `GET /v1/designer/breakdown-filters` (distinct `type` + `userSku` của đơn đã gán designer, sort count desc, customer cap 300). Nút **"Xóa lọc"** hiện khi có filter active.
-- **Ảnh hưởng section 0b (tổng quan N ngày) + 2 (ma trận) + 2b (biểu đồ cột)** — KHÔNG ảnh hưởng Leaderboard/Timeline/Error pie (các section này có period switcher riêng).
+**0. Bộ lọc chung sản phẩm + khách hàng + switcher ngày** (card `Filter` render **ĐẦU TIÊN trên cùng tab**):
+- 2 dropdown `<SelectFilter>` (native select có count + typeahead): **Sản phẩm** (`order.type`) + **Khách hàng** (`order.userSku`). State `filterType`/`filterCustomer`, truyền **props `type`/`customer`** xuống StatusBarCharts + TeamDailyMatrix + DesignerDailyOverview + DesignerAssignBacklog.
+- **Switcher 7/14/30** (state `rangeDays`) + **khoảng ngày tùy biến** (`<DateRangePicker>` — popover gói 8 preset + 2 input + Xóa, state `dateFrom`/`dateTo`) — điều khiển **CẢ** `DesignerDailyOverview` VÀ `DesignerAssignBacklog`. Set cả `dateFrom`+`dateTo` → **override 7/14/30** (gửi `from`/`to`); Xóa trong picker quay lại preset. Overview KHÔNG còn switcher nội bộ.
+- Option list load 1 lần lúc mount từ `GET /v1/designer/breakdown-filters`. Nút **"Xóa lọc"** hiện khi có filter active.
+- **Ảnh hưởng section 0b (tổng quan) + 0c (cần gán) + 2 (ma trận) + 2b (biểu đồ cột)** — KHÔNG ảnh hưởng Leaderboard/Timeline/Error pie (period switcher riêng).
 
-**0b. Bảng "Tổng quan N ngày"** (`DesignerDailyOverview.tsx` — render **NGAY DƯỚI bộ lọc, TRÊN biểu đồ cột & ma trận**; switcher **7/14/30** riêng; cột = ngày `inProductionAt` VN, cũ→mới trái→phải; BE trả mới→cũ, FE `reverse()` days+rows):
+**0c. Bảng "Cần gán designer"** (`DesignerAssignBacklog.tsx` — render **NGAY DƯỚI bảng tổng quan**; gom theo sản phẩm):
+- **Pool:** `toolResultNote ∉ [null,'','ok']` (đã soát & ≠ ok) **VÀ** (`unassigned` / `rejected` / `rework chưa ôm` = rework + assignee rỗng).
+- **Gom theo sản phẩm** (`productConfigId` → mockup/level/fullName; đơn chưa map → nhóm **"Chưa map"**). Mỗi nhóm header: checkbox chọn-cả-nhóm (tristate) + thu/mở + **ảnh mockup** (click → `ImagePreviewDialog`) + **badge level** + tên + count.
+- **Mở nhóm** → bảng đơn **rút gọn**: checkbox · ảnh (`ImageThumbCell` zoom) · productionId (+Copy) · size/color · Note Tool (badge) · Trạng thái designer (badge).
+- **Chọn đơn lẻ / cả nhóm** → nút **"Gán design (N)"** mở `AssignDesignerDialog` (tái dùng preview + `bulk-assign-designer`). Gán xong → refetch bảng này + `onAssigned()` bump `matrixToken` → **Tổng quan refetch cập nhật số Tổng tồn/Chưa gán**.
+- Data từ `GET /v1/designer/assign-backlog?days=7|14|30` (+ `type`/`customer`). v1 trả full compact rows (thu/mở chỉ là UI).
+
+**0b. Bảng "Tổng quan N ngày"** (`DesignerDailyOverview.tsx` — render **NGAY DƯỚI bộ lọc, TRÊN bảng cần gán**; nhận `days` từ switcher §0 (bỏ switcher nội bộ); cột = ngày `inProductionAt` VN, cũ→mới trái→phải; BE trả mới→cũ, FE `reverse()` days+rows):
 - **4 hàng chỉ số** (cột cuối = Tổng):
   - **Tổng đơn** — tất cả đơn vào SX ngày đó (mọi trạng thái).
   - **Chưa soát** — `toolResultNote` rỗng/null.
@@ -119,7 +127,7 @@ Click row → set `selectedUserId` → reload timeline chart.
 - List dưới: từng productionError code với count + dot color theo source
 - Data từ `GET /v1/orders/error-stats`
 
-**Period switcher** `today | 7d | 30d | custom` — ảnh hưởng Leaderboard + Timeline + Error pie. Custom có 2 date input. **Ma trận toàn team (section 2) KHÔNG dùng period này** — có switcher 7/14/30 riêng.
+**Period switcher** `today | 7d | 30d | custom` — ảnh hưởng Leaderboard + Timeline + Error pie. Custom có **`<DateRangePresets>`** (Hôm nay/Tuần này/Tháng này… từ `utils/dateRangePresets.ts`) + 2 date input. **Bảng Tổng quan + Cần gán + Ma trận KHÔNG dùng period này** — dùng switcher 7/14/30 ở Bộ lọc chung (hoặc riêng của ma trận).
 
 ---
 

@@ -4,6 +4,7 @@ import { MongooseModule } from '@nestjs/mongoose';
 import { OrderLogEntity, OrderLogSchema } from '../order-log/order-log.entity';
 import { OrderLogModule } from '../order-log/order-log.module';
 import { OrderEntity, OrderSchema } from '../order/order.entity';
+import { ProductConfigEntity, ProductConfigSchema } from '../product-config/product-config.entity';
 import { RoleEntity, RoleSchema } from '../role/role.entity';
 import { RoleRepository } from '../role/role.repository';
 import { UserEntity, UserSchema } from '../user/user.entity';
@@ -38,6 +39,7 @@ import { DesignerTeamService } from './designer-team.service';
     // đăng ký từ RoleModule (@Global), forFeature ở đây không xung đột.
     MongooseModule.forFeature([{ name: RoleEntity.name, schema: RoleSchema }]),
     MongooseModule.forFeature([{ name: OrderLogEntity.name, schema: OrderLogSchema }]),
+    MongooseModule.forFeature([{ name: ProductConfigEntity.name, schema: ProductConfigSchema }]),
   ],
   controllers: [
     DesignerMigrationController,
