@@ -559,7 +559,7 @@ Mỗi consumer truyền `facets: OrderFilterFacet[]` để cấu hình field set
 - BE method `getWorkshopAvailableFilters(dto, role, assigneeCode?, fulfillmentFactoryId?)` — với mỗi facet, build `buildOrderListFilter` sau khi strip facet đó khỏi dto, rồi `$group` field tương ứng. Count phản ánh subset đã narrow theo các facet khác đang active.
 - **9 facet** support: `fabricType` / `machineNumber` / `printStatus` / `toolResult` / `toolResultNote` / `errorFile` / `assignee` / `productionError` / `designerStatus`. Cell hiển thị phụ thuộc permission `order.field.X.view`.
 - `assignee` facet labels **resolve fullName từ users collection** (BE lookup users theo userIds trong facet rows). Value vẫn = user._id.
-- `designerStatus` facet labels VN (Chưa gán/Cần làm/Đang làm/Đã xong/Đã trả/Cần làm lại).
+- `designerStatus` facet labels VN (Cần làm/Đang làm/Đã xong/Đã trả/Cần làm lại). **Option `unassigned` (Chưa gán) được TÁCH thành 2 token `__unassigned_notool__` ("Chưa gán · không tool", M) + `__unassigned_tool__` ("Chưa gán · có tool", N)** — loại đơn `toolResultNote='ok'`, chia theo `toolResult` "Có tool" (name `^Có`). **M = KPI "Chưa gán không tool" panel Designer** (panel chỉ hiện M; N chỉ ở dropdown). Xem `DesignerTaskWorkflow.md §5.7`.
 - Token đặc biệt `__none__` cho assignee + designerStatus filter: trả đơn chưa gán (`assignee in [null,'']`) hoặc chưa có designerStatus (`$exists: false`).
 - Search productionId / userSku / orderId / type (debounced 300ms).
 - `<DateRangePicker>` — 8 preset quick + 2 input custom + popover gói gọn (Phase 7.2).
@@ -593,7 +593,7 @@ Workshop tab dùng date always-write vào URL (kể cả today) để URL hiển
 Trên cùng tab **List Order** + tab **Bảng Workshop** khi user có quyền `page.designer_stats` hoặc `designer.task.assign`:
 
 Render `<DesignerSummaryPanel filterQs={...} onClickCell={...}>`:
-- 6 KPI button-card (Chưa gán/Cần làm/Cần làm lại/Đang làm/Đã xong/Đã trả) — click → set filter list (`assignee` / `designerStatus`)
+- 7 KPI button-card (**Tổng chưa gán** N+M / **Chưa gán không tool** M / Cần làm/Cần làm lại/Đang làm/Đã xong/Đã trả) — click → set filter list (`assignee` / `designerStatus`)
 - Bảng matrix per-designer collapsible — click cell → set filter list. Click tên designer → chỉ set `assignee`
 - Toggle "Xem theo filter / Xem tổng" swap scoped ↔ overall counts
 - Data từ `GET /v1/orders/designer-breakdown` (cùng filter shape với list)

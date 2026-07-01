@@ -230,7 +230,10 @@ export class GetMyTaskFiltersResDto extends createZodDto(
 
 /** KPI counts theo designerStatus. */
 export const DesignerStatusCountsZod = z.object({
+  /** "Chưa gán không tool" — chưa gán & note≠'ok' & KHÔNG "Có tool" (name ^Có). */
   unassigned: z.number().int().nonnegative(),
+  /** Tổng chưa gán = có-tool + không-tool (chưa gán & note≠'ok', cả 2 loại tool). */
+  unassignedAll: z.number().int().nonnegative(),
   assigned: z.number().int().nonnegative(),
   inProgress: z.number().int().nonnegative(),
   done: z.number().int().nonnegative(),

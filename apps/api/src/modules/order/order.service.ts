@@ -860,6 +860,9 @@ export class OrderService implements OnModuleInit {
     assigneeCode?: string,
     fulfillmentFactoryId?: string,
     fulfillmentStage?: string,
+    // ToolResult codes "Có tool" (name ^Có) — chỉ cần khi dto.designerStatus dùng
+    // token tách tool `__unassigned_(no)tool__`. Caller resolve async rồi truyền.
+    toolHasCodes?: string[],
   ): Record<string, unknown> {
     const filter: Record<string, unknown> = this.buildVisibilityFilter(
       roleName,
@@ -911,19 +914,53 @@ export class OrderService implements OnModuleInit {
     }
     if (dto.designerStatus) {
       const codes = dto.designerStatus.split(',').filter(Boolean);
+      // Token tách "Chưa gán" theo tool (dropdown TT Designer + click KPI panel):
+      //  __unassigned_notool__ / __unassigned_tool__ = chưa gán & toolResultNote≠'ok'
+      //  & toolResult KHÔNG/CÓ thuộc nhóm "Có tool" (name ^Có = `toolHasCodes`).
+      //  "Không tool" gồm cả đơn CHƯA soát toolResult ($nin match null/empty/missing).
+      const hasNoTool = codes.includes('__unassigned_notool__');
+      const hasWithTool = codes.includes('__unassigned_tool__');
+      const rest = codes.filter(
+        (c) => c !== '__unassigned_notool__' && c !== '__unassigned_tool__',
+      );
       // Token đặc biệt __none__ ↔ chưa có field (data legacy)
-      const hasNone = codes.includes('__none__');
-      const real = codes.filter((c) => c !== '__none__');
-      if (hasNone && real.length === 0) {
-        filter.designerStatus = { $exists: false };
-      } else if (hasNone) {
-        filter.$or = [
-          ...(Array.isArray(filter.$or) ? (filter.$or as unknown[]) : []),
-          { designerStatus: { $exists: false } },
-          { designerStatus: { $in: real } },
+      const hasNone = rest.includes('__none__');
+      const real = rest.filter((c) => c !== '__none__');
+
+      if (hasNoTool || hasWithTool) {
+        const tc = toolHasCodes ?? [];
+        filter.$and = [
+          ...(Array.isArray(filter.$and) ? (filter.$and as unknown[]) : []),
+          { $or: [{ designerStatus: 'unassigned' }, { designerStatus: { $exists: false } }] },
+          { toolResultNote: { $ne: 'ok' } },
+          hasWithTool ? { toolResult: { $in: tc } } : { toolResult: { $nin: tc } },
         ];
-      } else {
-        filter.designerStatus = { $in: real };
+      }
+
+      if (real.length > 0 || hasNone) {
+        if (hasNone && real.length === 0) {
+          filter.designerStatus = { $exists: false };
+        } else if (hasNone) {
+          filter.$or = [
+            ...(Array.isArray(filter.$or) ? (filter.$or as unknown[]) : []),
+            { designerStatus: { $exists: false } },
+            { designerStatus: { $in: real } },
+          ];
+        } else {
+          filter.designerStatus = { $in: real };
+        }
+        // "Chưa gán" (unassigned/__none__) đơn thuần cũng loại đơn đã soát OK —
+        // đồng bộ KPI panel `getDesignerBreakdown`. Chỉ áp khi CHỈ nhắm unassigned
+        // (không lẫn status khác, tránh loại nhầm đơn 'ok' đã gán). $and push để
+        // không đè filter toolResultNote/$or khác.
+        const onlyUnassigned =
+          (hasNone || real.includes('unassigned')) && real.every((c) => c === 'unassigned');
+        if (onlyUnassigned) {
+          filter.$and = [
+            ...(Array.isArray(filter.$and) ? (filter.$and as unknown[]) : []),
+            { toolResultNote: { $ne: 'ok' } },
+          ];
+        }
       }
     }
     if (dto.assignee) {
@@ -1004,6 +1041,25 @@ export class OrderService implements OnModuleInit {
     return filter;
   }
 
+  /**
+   * ToolResult codes coi là "Có tool" (name bắt đầu "Có", regex `^Có`). Dùng cho
+   * token tách "Chưa gán · có/không tool" (buildOrderListFilter + facet counts).
+   * Collection workshop_config nhỏ → query rẻ; chỉ gọi khi cần (token active hoặc
+   * tính facet designerStatus).
+   */
+  private async resolveToolHasCodes(): Promise<string[]> {
+    const cfgs = await this.workshopConfigRepository.findAll({
+      category: WorkshopConfigCategory.ToolResult,
+      name: { $regex: '^Có', $options: 'i' },
+    });
+    return cfgs.map((d) => d.code);
+  }
+
+  /** True nếu dto.designerStatus dùng token tách tool (cần resolve toolHasCodes). */
+  private needsToolHasCodes(dto: GetProductionOrdersDto): boolean {
+    return !!dto.designerStatus && dto.designerStatus.includes('__unassigned_');
+  }
+
   async getOrders(
     dto: GetProductionOrdersDto,
     roleName?: RoleType,
@@ -1022,12 +1078,16 @@ export class OrderService implements OnModuleInit {
     void roleName; // keep the var read so we can re-enable the cache key later
 
     const { page, limit, sort, order } = dto;
+    const toolHasCodes = this.needsToolHasCodes(dto)
+      ? await this.resolveToolHasCodes()
+      : undefined;
     const filter = this.buildOrderListFilter(
       dto,
       roleName,
       assigneeCode,
       fulfillmentFactoryId,
       fulfillmentStage,
+      toolHasCodes,
     );
     if (dto.fulfillmentStatus) {
       this.applyFulfillmentStatusFilter(filter, dto.fulfillmentStatus, fulfillmentStage, assigneeCode);
@@ -1124,7 +1184,17 @@ export class OrderService implements OnModuleInit {
     assigneeCode?: string,
     fulfillmentFactoryId?: string,
   ): Promise<{ success: true; data: unknown[]; total: number }> {
-    const filter = this.buildOrderListFilter(dto, roleName, assigneeCode, fulfillmentFactoryId);
+    const toolHasCodes = this.needsToolHasCodes(dto)
+      ? await this.resolveToolHasCodes()
+      : undefined;
+    const filter = this.buildOrderListFilter(
+      dto,
+      roleName,
+      assigneeCode,
+      fulfillmentFactoryId,
+      undefined,
+      toolHasCodes,
+    );
     const data = await this.orderRepository.findAll(filter, {
       sort: { type: 1, size: 1, fabricType: 1, inProductionAt: -1 },
       populate: [
@@ -1154,12 +1224,16 @@ export class OrderService implements OnModuleInit {
     fulfillmentStage?: string,
   ): Promise<GetGroupedProductionOrdersResDto> {
     const { page, limit } = dto;
+    const toolHasCodes = this.needsToolHasCodes(dto)
+      ? await this.resolveToolHasCodes()
+      : undefined;
     const filter = this.buildOrderListFilter(
       dto,
       roleName,
       assigneeCode,
       fulfillmentFactoryId,
       fulfillmentStage,
+      toolHasCodes,
     );
     if (dto.fulfillmentStatus) {
       this.applyFulfillmentStatusFilter(filter, dto.fulfillmentStatus, fulfillmentStage, assigneeCode);
@@ -3038,6 +3112,9 @@ export class OrderService implements OnModuleInit {
     // Field array (errorFile) cần $unwind trước $group để mỗi code thành 1 row
     // (đếm theo số đơn có code đó trong array, không phải đếm chuỗi).
     const ARRAY_FACET_FIELDS = new Set<FacetKey>(['errorFile']);
+    // Resolve 1 lần: cần cho (a) facet khác khi dto.designerStatus dùng token tách
+    // tool, (b) tính 2 count "Chưa gán · có/không tool".
+    const toolHasCodes = await this.resolveToolHasCodes();
     const aggregateFacet = async (excludeKey: FacetKey, field: FacetKey) => {
       const sanitizedDto = { ...dto, [excludeKey]: undefined } as GetProductionOrdersDto;
       const baseFilter = this.buildOrderListFilter(
@@ -3046,6 +3123,7 @@ export class OrderService implements OnModuleInit {
         assigneeCode,
         fulfillmentFactoryId,
         fulfillmentStage,
+        toolHasCodes,
       );
       // Facet narrow theo trạng thái stage đang chọn (bảng phẳng trang "In").
       if (dto.fulfillmentStatus) {
@@ -3157,6 +3235,47 @@ export class OrderService implements OnModuleInit {
       count: r.count,
     });
 
+    // 2 count tách "Chưa gán" theo tool (thay option `unassigned` đơn trong dropdown
+    // TT Designer). Population = designerStatus unassigned/missing & toolResultNote≠'ok'
+    // (KHỚP KPI panel "Chưa gán"), chia theo toolResult "Có tool" (name ^Có).
+    // "Không tool" = phần còn lại, GỒM cả đơn chưa soát toolResult. Strip
+    // designerStatus khỏi filter (cross-narrow như facet designerStatus).
+    const unassignedSplit = await (async () => {
+      const sanitizedDto = { ...dto, designerStatus: undefined } as GetProductionOrdersDto;
+      const base = this.buildOrderListFilter(
+        sanitizedDto,
+        roleName,
+        assigneeCode,
+        fulfillmentFactoryId,
+        fulfillmentStage,
+        toolHasCodes,
+      );
+      if (dto.fulfillmentStatus) {
+        this.applyFulfillmentStatusFilter(base, dto.fulfillmentStatus, fulfillmentStage, assigneeCode);
+      }
+      const match = {
+        ...base,
+        $and: [
+          ...(Array.isArray(base.$and) ? (base.$and as unknown[]) : []),
+          { $or: [{ designerStatus: 'unassigned' }, { designerStatus: { $exists: false } }] },
+          { toolResultNote: { $ne: 'ok' } },
+        ],
+      };
+      const agg = await this.orderModel.aggregate<{ withTool: number; total: number }>([
+        { $match: match },
+        {
+          $group: {
+            _id: null,
+            withTool: { $sum: { $cond: [{ $in: ['$toolResult', toolHasCodes] }, 1, 0] } },
+            total: { $sum: 1 },
+          },
+        },
+      ]);
+      const withTool = agg[0]?.withTool ?? 0;
+      const total = agg[0]?.total ?? 0;
+      return { withTool, noTool: total - withTool };
+    })();
+
     return {
       success: true,
       data: {
@@ -3179,11 +3298,33 @@ export class OrderService implements OnModuleInit {
         machineNumber: machineNumberRows.map(toOption(machineNumberMap)),
         toolResult: toolResultRows.map(toOption(toolResultMap)),
         errorFile: errorFileRows.map(toOption(errorFileMap)),
-        designerStatus: designerStatusRows.map((r) => ({
-          value: r._id,
-          label: DESIGNER_STATUS_LABELS[r._id] || r._id,
-          count: r.count,
-        })),
+        // Option `unassigned` đơn được THAY bằng 2 option tách tool (N+M = KPI
+        // "Chưa gán"). Nếu cả 2 = 0 (mọi đơn chưa gán đều 'ok') → không hiện.
+        designerStatus: designerStatusRows.flatMap((r) => {
+          if (r._id === 'unassigned') {
+            return [
+              ...(unassignedSplit.noTool > 0
+                ? [
+                    {
+                      value: '__unassigned_notool__',
+                      label: 'Chưa gán · không tool',
+                      count: unassignedSplit.noTool,
+                    },
+                  ]
+                : []),
+              ...(unassignedSplit.withTool > 0
+                ? [
+                    {
+                      value: '__unassigned_tool__',
+                      label: 'Chưa gán · có tool',
+                      count: unassignedSplit.withTool,
+                    },
+                  ]
+                : []),
+            ];
+          }
+          return [{ value: r._id, label: DESIGNER_STATUS_LABELS[r._id] || r._id, count: r.count }];
+        }),
         // Tên sản phẩm + SKU khách — label = chính value (không có name map).
         type: typeRows.map((r) => ({ value: r._id, label: r._id, count: r.count })),
         userSku: userSkuRows.map((r) => ({ value: r._id, label: r._id, count: r.count })),
@@ -4512,18 +4653,53 @@ export class OrderService implements OnModuleInit {
       fulfillmentFactoryId,
     );
 
+    // "Chưa gán" panel = "Chưa gán KHÔNG tool": chỉ đếm đơn chưa gán & note≠'ok'
+    // & toolResult KHÔNG "Có tool" (name ^Có). Đơn 'ok' hoặc "có tool" chưa gán →
+    // bỏ khỏi bucket (rớt cả unassigned + total). Cần toolHasCodes để phân loại.
+    const toolHasCodes = await this.resolveToolHasCodes();
+
     const countByStatus = async (match: Record<string, unknown>): Promise<DesignerStatusCounts> => {
       const agg = await this.orderModel.aggregate<{ _id: string | null; count: number }>([
         { $match: match },
         {
           $group: {
-            _id: { $ifNull: ['$designerStatus', 'unassigned'] },
+            // Đơn CHƯA GÁN (designerStatus unassigned/null), tách 3 nhánh theo tool:
+            //  - note='ok' → `__skip_unassigned__` (BỎ QUA hẳn, đơn 'ok' không cần designer).
+            //  - "có tool" (toolResult ∈ toolHasCodes) → `__unassigned_withtool__` (N):
+            //    chỉ cộng vào `unassignedAll`, KHÔNG vào `unassigned`/`total`.
+            //  - còn lại (không tool) → `unassigned` (M): vào cả unassigned + unassignedAll + total.
+            // Đơn ĐÃ gán (status khác unassigned) KHÔNG bị ảnh hưởng.
+            _id: {
+              $let: {
+                vars: { ds: { $ifNull: ['$designerStatus', 'unassigned'] } },
+                in: {
+                  $cond: [
+                    { $ne: ['$$ds', 'unassigned'] },
+                    '$$ds',
+                    {
+                      $cond: [
+                        { $eq: ['$toolResultNote', 'ok'] },
+                        '__skip_unassigned__',
+                        {
+                          $cond: [
+                            { $in: ['$toolResult', toolHasCodes] },
+                            '__unassigned_withtool__',
+                            'unassigned',
+                          ],
+                        },
+                      ],
+                    },
+                  ],
+                },
+              },
+            },
             count: { $sum: 1 },
           },
         },
       ]);
       const out: DesignerStatusCounts = {
         unassigned: 0,
+        unassignedAll: 0,
         assigned: 0,
         inProgress: 0,
         done: 0,
@@ -4533,9 +4709,15 @@ export class OrderService implements OnModuleInit {
       };
       for (const r of agg) {
         const k = (r._id || 'unassigned') as string;
+        if (k === '__skip_unassigned__') continue; // đơn 'ok' chưa gán — bỏ hẳn
+        if (k === '__unassigned_withtool__') {
+          out.unassignedAll += r.count; // N: chỉ vào tổng chưa gán
+          continue;
+        }
         switch (k) {
           case 'unassigned':
-            out.unassigned += r.count;
+            out.unassigned += r.count; // M: không tool
+            out.unassignedAll += r.count; // M cũng vào tổng chưa gán
             break;
           case 'assigned':
             out.assigned += r.count;
@@ -4573,7 +4755,33 @@ export class OrderService implements OnModuleInit {
         $group: {
           _id: {
             uid: { $ifNull: ['$assignee', null] },
-            status: { $ifNull: ['$designerStatus', 'unassigned'] },
+            // Cùng logic countByStatus 3 nhánh: unassigned → ok=`__skip_unassigned__`
+            // (bỏ), có-tool=`__unassigned_withtool__` (chỉ unassignedAll), không-tool
+            // =`unassigned` (M). Nhất quán KPI.
+            status: {
+              $let: {
+                vars: { ds: { $ifNull: ['$designerStatus', 'unassigned'] } },
+                in: {
+                  $cond: [
+                    { $ne: ['$$ds', 'unassigned'] },
+                    '$$ds',
+                    {
+                      $cond: [
+                        { $eq: ['$toolResultNote', 'ok'] },
+                        '__skip_unassigned__',
+                        {
+                          $cond: [
+                            { $in: ['$toolResult', toolHasCodes] },
+                            '__unassigned_withtool__',
+                            'unassigned',
+                          ],
+                        },
+                      ],
+                    },
+                  ],
+                },
+              },
+            },
           },
           count: { $sum: 1 },
         },
@@ -4591,6 +4799,9 @@ export class OrderService implements OnModuleInit {
     const userIds = new Set<string>();
     let hasUnassigned = false;
     for (const r of matrixAgg) {
+      // Matrix chỉ hiện "không tool" (M); ok + có-tool chưa gán không lên matrix.
+      if (r._id.status === '__skip_unassigned__' || r._id.status === '__unassigned_withtool__')
+        continue;
       if (r._id.uid) userIds.add(r._id.uid);
       else hasUnassigned = true;
     }
@@ -4601,6 +4812,7 @@ export class OrderService implements OnModuleInit {
 
     const blankCounts = (): DesignerStatusCounts => ({
       unassigned: 0,
+      unassignedAll: 0,
       assigned: 0,
       inProgress: 0,
       done: 0,
@@ -4631,10 +4843,11 @@ export class OrderService implements OnModuleInit {
     }
 
     for (const r of matrixAgg) {
+      const s = r._id.status || 'unassigned';
+      if (s === '__skip_unassigned__' || s === '__unassigned_withtool__') continue; // matrix chỉ M
       const key = r._id.uid || '__unassigned__';
       const row = rows.get(key);
       if (!row) continue;
-      const s = r._id.status || 'unassigned';
       row.counts.total += r.count;
       switch (s) {
         case 'unassigned':

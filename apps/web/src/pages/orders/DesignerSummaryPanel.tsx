@@ -10,10 +10,20 @@ import { cn } from '@/utils/cn';
 interface Props {
   /** Query string của filter list hiện tại (đã build sẵn — không có `?` đầu). */
   filterQs: string;
-  /** Callback FE khi user click cell trong matrix → set filter list. */
+  /** Callback FE khi user click cell trong matrix → set filter list. Token
+   * `__unassigned_notool__` = "Chưa gán · không tool" (KPI strip click). */
   onClickCell?: (
     userId: string | null,
-    designerStatus: 'assigned' | 'in-progress' | 'done' | 'rejected' | 'rework' | 'unassigned' | null,
+    designerStatus:
+      | 'assigned'
+      | 'in-progress'
+      | 'done'
+      | 'rejected'
+      | 'rework'
+      | 'unassigned'
+      | '__unassigned_notool__'
+      | '__unassigned_tool__'
+      | null,
   ) => void;
 }
 
@@ -27,15 +37,32 @@ const STATUS_COLS: {
   key: keyof Omit<DesignerStatusCounts, 'total'>;
   label: string;
   cls: string;
-  filterValue: 'assigned' | 'in-progress' | 'done' | 'rejected' | 'rework' | 'unassigned';
+  filterValue:
+    | 'assigned'
+    | 'in-progress'
+    | 'done'
+    | 'rejected'
+    | 'rework'
+    | 'unassigned'
+    | '__unassigned_notool__';
 }[] = [
-    { key: 'unassigned', label: 'Chưa gán', cls: 'text-zinc-500', filterValue: 'unassigned' },
+    // "Chưa gán" panel = "Chưa gán không tool" (count `unassigned` từ BE đã = M);
+    // filterValue token để click (KPI strip + matrix) lọc đúng nhóm không-tool.
+    { key: 'unassigned', label: 'Chưa gán không tool', cls: 'text-zinc-500', filterValue: '__unassigned_notool__' },
     { key: 'assigned', label: 'Cần làm', cls: 'text-zinc-700 dark:text-zinc-200', filterValue: 'assigned' },
     { key: 'rework', label: 'Cần làm lại', cls: 'text-amber-600 dark:text-amber-400', filterValue: 'rework' },
     { key: 'inProgress', label: 'Đang làm', cls: 'text-indigo-600 dark:text-indigo-400', filterValue: 'in-progress' },
     { key: 'done', label: 'Đã xong', cls: 'text-emerald-600 dark:text-emerald-400', filterValue: 'done' },
     { key: 'rejected', label: 'Đã trả', cls: 'text-rose-600 dark:text-rose-400', filterValue: 'rejected' },
   ];
+
+// KPI strip = "Tổng chưa gán" (N+M, `unassignedAll`) đứng TRƯỚC "Chưa gán không
+// tool" (M), rồi các status khác. Matrix KHÔNG có card tổng (chỉ STATUS_COLS).
+// Click "Tổng chưa gán" → filterValue 'unassigned' = list chưa gán & note≠'ok' (N+M).
+const KPI_COLS: typeof STATUS_COLS = [
+  { key: 'unassignedAll', label: 'Tổng chưa gán', cls: 'text-zinc-600 dark:text-zinc-300', filterValue: 'unassigned' },
+  ...STATUS_COLS,
+];
 
 export function DesignerSummaryPanel({ filterQs, onClickCell }: Props) {
   const [data, setData] = useState<Breakdown | null>(null);
@@ -112,8 +139,8 @@ export function DesignerSummaryPanel({ filterQs, onClickCell }: Props) {
         </div>
       </div>
 
-      <div className="grid grid-cols-3 md:grid-cols-6 gap-2 p-2.5 border-b border-border">
-        {STATUS_COLS.map((c) => {
+      <div className="grid grid-cols-3 md:grid-cols-7 gap-2 p-2.5 border-b border-border">
+        {KPI_COLS.map((c) => {
           const v = counts[c.key];
           const ov = overallCounts ? overallCounts[c.key] : 0;
           return (

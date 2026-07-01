@@ -544,6 +544,8 @@ export function OrderTableWorkshop() {
       | 'rejected'
       | 'rework'
       | 'unassigned'
+      | '__unassigned_notool__'
+      | '__unassigned_tool__'
       | null,
   ) => {
     if (userId !== null) setFilterAssignee(userId);

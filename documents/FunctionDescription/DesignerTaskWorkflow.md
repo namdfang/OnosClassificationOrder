@@ -154,7 +154,7 @@ Login Designer → auto redirect `/my-tasks` (xem `pages/login/index.tsx`).
 **Dashboard tab Designer** (`?tab=designer`): xem `Dashboard.md` mục tab Designer.
 
 **Order list KPI panel** (`DesignerSummaryPanel` trên `/orders` cho Admin/Manager/Leader):
-- KPI 6 button-card (Chưa gán/Cần làm/Cần làm lại/Đang làm/Đã xong/Đã trả) — click → set filter list
+- KPI 7 button-card (**Tổng chưa gán** = N+M / **Chưa gán không tool** = M / Cần làm/Cần làm lại/Đang làm/Đã xong/Đã trả) — click → set filter list
 - Bảng matrix per-designer (collapsible, sort total desc, "Chưa gán" lên đầu) — click cell → set `assignee + designerStatus`
 - Toggle "Xem theo filter/Xem tổng" swap scoped ↔ overall counts
 - Data từ `GET /v1/orders/designer-breakdown` (cùng filter shape với list)
@@ -278,7 +278,7 @@ Xem `Dashboard.md` mục tab D.
 
 ### 4.4 `DesignerSummaryPanel` (trên /orders)
 Trên cùng tab List Order + Bảng Workshop khi user có quyền `page.designer_stats`/`designer.task.assign`:
-- 6 KPI button-card scoped theo filter list. Toggle xem "tổng" (overall, ignore filter)
+- 7 KPI button-card scoped theo filter list (gồm "Tổng chưa gán" + "Chưa gán không tool"). Toggle xem "tổng" (overall, ignore filter)
 - Bảng matrix per-designer collapsible — click cell → set filter list (`handleSummaryCellClick`)
 - Auto refetch khi filter list đổi (cùng query string)
 
@@ -373,6 +373,15 @@ Picker designer/factory cho `order.productionErrorSource`. User override đượ
 - scoped: KPI count theo filter list hiện tại (`buildOrderListFilter`)
 - overall: ignore filter (chỉ visibility/date)
 - perDesigner matrix (assignee × status), auto-include designer + pseudo row `__unassigned__`
+- **"Chưa gán" panel = "Chưa gán KHÔNG tool":** bucket `unassigned` (KPI + matrix) CHỈ đếm đơn `designerStatus ∈ {unassigned,null}` & `toolResultNote≠'ok'` & `toolResult` **KHÔNG** thuộc nhóm "Có tool" (name `^Có` = `resolveToolHasCodes()`). Aggregation 3 nhánh (`$let`/`$cond` trong `$group._id`, cần `toolHasCodes`): unassigned & `ok` → `__skip_unassigned__` (bỏ hẳn); unassigned & "có tool" → `__unassigned_withtool__` (N — chỉ cộng `unassignedAll`); còn lại → `unassigned` (M — vào `unassigned` + `unassignedAll` + `total`). Đơn **đã gán** KHÔNG bị ảnh hưởng. ⇒ `counts.unassigned` = M (= dropdown "Chưa gán · không tool"). Matrix skip cả `__skip_unassigned__` + `__unassigned_withtool__` (chỉ hiện M).
+- **Field `unassignedAll` (mới, shared `DesignerStatusCountsZod`) = N+M** = tổng chưa gán (cả có tool + không tool, vẫn loại 'ok'). KPI strip panel có card **"Tổng chưa gán"** (`KPI_COLS[0]`, key `unassignedAll`) đứng **TRƯỚC** card "Chưa gán không tool"; click → filterValue `'unassigned'` (list = chưa gán & note≠'ok' = N+M). Matrix KHÔNG hiện card tổng (chỉ `STATUS_COLS`).
+- **Filter list khi click "Chưa gán":** `buildOrderListFilter` khi `designerStatus` CHỈ nhắm `unassigned`/`__none__` → push `$and: [{ toolResultNote: { $ne: 'ok' } }]`. (Token `__unassigned_notool__` xử lý riêng — xem dưới.)
+- **Dropdown "TT Designer" tách "Chưa gán" theo tool** (`getWorkshopAvailableFilters`): option `unassigned` đơn được THAY bằng 2 option token:
+  - `__unassigned_notool__` = "Chưa gán · không tool" (M) = chưa gán & `toolResultNote≠'ok'` & `toolResult` **KHÔNG** thuộc nhóm "Có tool", **gồm cả đơn chưa soát toolResult** (`$nin` match null/empty/missing).
+  - `__unassigned_tool__` = "Chưa gán · có tool" (N) = chưa gán & note≠'ok' & `toolResult ∈` nhóm "Có tool".
+  - **M = đúng KPI panel "Chưa gán không tool"** (cùng công thức). N chỉ hiện trong dropdown (không lên panel/total). Count tính bằng 1 aggregate `$cond $in toolHasCodes` (strip `designerStatus` — cross-narrow).
+  - `buildOrderListFilter` nhận param mới `toolHasCodes?: string[]` để xử lý 2 token (caller `getOrders`/`getOrdersGroupedByType`/`exportOrders` resolve async khi `designerStatus` chứa `__unassigned_`; `getWorkshopAvailableFilters` + `getDesignerBreakdown` resolve luôn).
+  - **FE:** ô KPI panel `unassigned` đổi label **"Chưa gán không tool"** + `filterValue='__unassigned_notool__'` → click KPI strip **và** matrix cell đều lọc đúng nhóm không-tool (khớp số M). Chip + SelectFilter resolve label token từ facet options.
 
 ### 5.8 OrderLog audit
 Mỗi transition ghi entry `{ field: 'designerStatus', before, after, action: 'update' }` + side-effect entries (vd `toolResultNote: 'ok'` khi complete). Bulk transition gọi `writeMany`. Backfill design status không ghi log (silent).
