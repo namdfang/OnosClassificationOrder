@@ -36,7 +36,7 @@ pm2 save >/dev/null
 cd "$REPO_DIR"
 
 echo "→ Building Web (heap cap 1536MB để tránh OS-OOM trên server RAM thấp; swap đã setup 1 lần qua /swapfile)..."
-NODE_HEAP_MB=1536 pnpm build:web
+NODE_HEAP_MB=4536 pnpm build:web
 
 echo "→ Deploying Web static files..."
 rm -rf "$WEB_DIR"/*
