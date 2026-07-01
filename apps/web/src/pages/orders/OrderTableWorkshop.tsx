@@ -662,8 +662,11 @@ export function OrderTableWorkshop() {
   const rowVirtualizer = useVirtualizer({
     count: flatItems.length,
     getScrollElement: () => scrollEl,
-    estimateSize: (i) => (flatItems[i]?.kind === 'header' ? 44 : 56),
-    overscan: 10,
+    // Ước lượng SÁT chiều cao thật (row Production/Order thường 2-3 dòng ~68px)
+    // để tổng chiều cao không bị thiếu → không "cụt" hàng cuối khi cuộn tới đáy.
+    // measureElement vẫn tự đo lại chính xác sau khi render.
+    estimateSize: (i) => (flatItems[i]?.kind === 'header' ? 42 : 68),
+    overscan: 12,
     scrollMargin,
     getItemKey: (i) => flatItems[i]?.key ?? i,
   });
@@ -911,7 +914,7 @@ export function OrderTableWorkshop() {
 
   return (
     <TooltipProvider delayDuration={200}>
-      <div className="space-y-4" ref={rootRef}>
+      <div className="space-y-4 pb-24" ref={rootRef}>
         {canSeeDesignerSummary && (
           <div className="space-y-2">
             <div className="flex justify-end">
