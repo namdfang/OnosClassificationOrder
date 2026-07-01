@@ -90,7 +90,7 @@ Trong tab "Đang làm", bấm "Báo lỗi" mở dialog:
 
 | Target               | Effect                                                                                                                                                                                                                                                                                                                                                                              |
 | -------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `'designer'`         | `designerStatus = 'rework'`, `productionErrorSource = 'designer'`, `productionErrorNote = reason`. Reporter stage về status=`waiting` (workMs cộng dồn, reworkCount++), assignee giữ nguyên. Đơn nằm ở tab **"Đang chờ quay lại"** của reporter (match nhờ `designerStatus='rework'`). **Sau khi Designer complete:** hook `DesignerTaskService.transition()` set reporter stage = `rework` → đơn chuyển sang tab **"Cần làm lại"** của reporter (KHÔNG về "Đang chờ"). |
+| `'designer'`         | `designerStatus = 'rework'`, `productionErrorSource = 'designer'`, `productionErrorNote = reason`. Reporter stage về status=`waiting` (workMs cộng dồn, reworkCount++), assignee giữ nguyên. Đơn nằm ở tab **"Đang chờ quay lại"** của reporter (match nhờ `designerStatus='rework'`). **Sau khi Designer complete:** hook `DesignerTaskService.transition()` set reporter stage = `rework` (nếu stage đã từng chạy — `firstStartedAt`/`completedAt`) → tab **"Cần làm lại"**; hoặc `waiting` (nếu stage chưa từng chạy, vd chưa hề in) → tab **"Đang chờ"** (§5.4 Entry A). |
 | `<previous stage X>` | `currentFulfillmentStage = X`. Target stage X + tất cả stage giữa X và reporter → `status='rework'`, `reworkCount++`, `reworkAt=now`, `reworkFromStage = reporter`. Reporter → `status='waiting'`.                                                                                                                                                                              |
 
 #### 2.3b Báo lỗi designer qua cell "Lỗi xưởng" (tương đương rework-back target=designer)
@@ -409,14 +409,25 @@ if (action === Complete && nextStatus === Done && !order.currentFulfillmentStage
   set.currentFulfillmentStage = 'print';
   set['fulfillmentStages.print'] = { status: 'waiting', reworkCount: 0, workMs: 0 };
 } else if (action === Complete && nextStatus === Done && order.currentFulfillmentStage) {
-  // Cycle quay về (đơn bị worker báo lỗi designer rồi designer fix xong):
-  // set reporter stage = rework → đơn vào tab "Cần làm lại" của worker.
-  set[`fulfillmentStages.${order.currentFulfillmentStage}.status`] = 'rework';
-  set[`fulfillmentStages.${order.currentFulfillmentStage}.reworkAt`] = now;
+  // Cycle quay về (đơn bị worker báo lỗi designer rồi designer fix xong).
+  // Phân biệt theo stage ĐÃ từng chạy chưa (firstStartedAt/completedAt):
+  const st = order.fulfillmentStages?.[stage];
+  if (st?.firstStartedAt || st?.completedAt) {
+    // Stage đã chạy thật → LÀM LẠI → tab "Cần làm lại".
+    set[`fulfillmentStages.${stage}.status`] = 'rework';
+    set[`fulfillmentStages.${stage}.reworkAt`] = now;
+  } else {
+    // Stage CHƯA từng chạy (vd đơn báo lỗi designer khi chưa hề in — §2.3b init
+    // print=waiting) → lần vào ĐẦU TIÊN → "Đang chờ" (waiting), KHÔNG rework.
+    set[`fulfillmentStages.${stage}.status`] = 'waiting';
+    set[`fulfillmentStages.${stage}.waitingAt`] = now;
+  }
 }
 ```
 
-Trường hợp designer rework cycle (đẩy từ fulfillment về, qua nút "Báo lỗi" hoặc cell "Lỗi xưởng" §2.3b): `currentFulfillmentStage` đã set sẵn (= reporter stage). Trong lúc designer làm, reporter giữ stage=`waiting` + `designerStatus='rework'` → đơn nằm tab **"Đang chờ quay lại"**. Khi designer complete → nhánh `else if` set reporter stage=`rework` → đơn sang tab **"Cần làm lại"** của worker (đúng stage cũ, KHÔNG về "Đang chờ").
+Trường hợp designer rework cycle (đẩy từ fulfillment về, qua nút "Báo lỗi" hoặc cell "Lỗi xưởng" §2.3b): `currentFulfillmentStage` đã set sẵn (= reporter stage). Trong lúc designer làm, reporter giữ stage=`waiting` + `designerStatus='rework'` → đơn nằm tab **"Đang chờ quay lại"**. Khi designer complete → nhánh `else if` phân biệt theo stage đã chạy chưa:
+- Stage **đã từng chạy thật** (`firstStartedAt`/`completedAt` — worker đã start/complete rồi mới báo lỗi) → set reporter stage=`rework` → tab **"Cần làm lại"**.
+- Stage **CHƯA từng chạy** (đơn báo lỗi designer khi chưa hề in — §2.3b init print=`waiting`) → set reporter stage=`waiting` → tab **"Đang chờ"** (lần vào đầu tiên, không có gì để "làm lại"). **Đây là fix bug: trước đây luôn set `rework` khiến đơn in lần đầu kẹt ở "Cần làm lại", user In tưởng không thao tác được.**
 
 #### Entry B — Manual `toolResultNote='ok'` (3 path)
 
@@ -498,8 +509,8 @@ private buildDesignerReworkBackFromError(before, reason, ctx) {
 
 1. Worker In bấm "Lỗi xưởng" = thiếu file design (designer) → `toolResultNote='error'`, `designerStatus='rework'`, `currentFulfillmentStage='print'`, `fulfillmentStages.print.status='waiting'`, timeline có `rework-back byUserId=worker`.
 2. Tab **"Đang chờ quay lại"** match (timeline + `designerStatus='rework'`). KHÔNG lọt waiting (gate `designerStatus != rework`) / rework (status=waiting).
-3. Leader gán designer → designer start → complete → `designerStatus='done'` + Entry A nhánh `else if` set `fulfillmentStages.print.status='rework'`.
-4. Tab **"Cần làm lại"** match (`currentStage=print` + `status=rework` + `readyForFulfill=true`). Rời watching (`designerStatus != rework`).
+3. Leader gán designer → designer start → complete → `designerStatus='done'` + Entry A nhánh `else if`: vì print **CHƯA từng chạy** (`!firstStartedAt`) → set `fulfillmentStages.print.status='waiting'` (KHÔNG rework).
+4. Tab **"Đang chờ"** match (`currentStage=print` + `status=waiting` + `designerStatus != rework`). Rời watching. User In bấm "Bắt đầu" như đơn in lần đầu. (Nếu print đã từng in dở rồi mới báo lỗi → bước 3 set `rework` → tab "Cần làm lại".)
 
 **Đồng bộ 2 view:** áp cho cả `PrintOrderTable` (chip qua `applyFulfillmentStatusFilter`) lẫn kanban (tab qua `applyTabFilter`). Lưu ý: chip/tab `watching` lọc theo `byUserId` = người bấm lỗi; do worker In tự bấm trên đơn của xưởng mình nên khớp.
 

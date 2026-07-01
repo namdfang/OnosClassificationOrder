@@ -7,7 +7,7 @@ pnpm dev
 cd apps/web/
 pnpm dev
 
-cd Documents/Code/Onos/ToolClassification
+cd ~/Code/ToolClassification
 claude
 
 chmod +x /var/www/onosfactory/current/deploy.sh
