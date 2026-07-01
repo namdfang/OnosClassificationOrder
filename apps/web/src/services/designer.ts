@@ -102,6 +102,12 @@ const myStats = (params: { period?: string; from?: string; to?: string } = {}) =
   return callApi(`/${CONFIG.API_VERSION}/designer/my-stats?${qs.toString()}`, 'get');
 };
 
+const myDailyBreakdown = (params: { days?: 7 | 14 | 30 } = {}) => {
+  const qs = new URLSearchParams();
+  qs.set('days', String(params.days || 7));
+  return callApi(`/${CONFIG.API_VERSION}/designer/my-daily-breakdown?${qs.toString()}`, 'get');
+};
+
 const backfillDesignerStatus = () => {
   return callApi(`/${CONFIG.API_VERSION}/orders/backfill-designer-status`, 'post');
 };
@@ -149,6 +155,7 @@ export const designer = {
   bulkTransition,
   getOrderById,
   myStats,
+  myDailyBreakdown,
   backfillDesignerStatus,
   performance,
   timeline,

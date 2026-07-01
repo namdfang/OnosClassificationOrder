@@ -41,6 +41,7 @@ import { useDebounce } from '@/hooks/useDebounce';
 import { useWorkshopConfigStore } from '@/store/workshopConfigStore';
 import { handleAxiosError } from '@/utils';
 
+import { DailyBreakdownPanel } from './DailyBreakdownPanel';
 import { RejectModal } from './RejectModal';
 import { TaskCard } from './TaskCard';
 import { TaskDetailDialog } from './TaskDetailDialog';
@@ -312,10 +313,15 @@ export default function MyTasksPage() {
       label: byCategory[cat]?.find((i) => i.code === o.value)?.name || o.label,
     }));
 
+  // Bump để DailyBreakdownPanel refetch mỗi khi kanban đổi (transition/refresh)
+  // → số liệu theo ngày luôn đồng bộ với kanban.
+  const [breakdownToken, setBreakdownToken] = useState(0);
+
   const refreshAll = () => {
     fetchTasks();
     fetchFilters();
     fetchStats();
+    setBreakdownToken((t) => t + 1);
   };
 
   // Cho mỗi cột → ordered array của id (sau khi đã group by type, để
@@ -563,6 +569,17 @@ export default function MyTasksPage() {
             />
           </div>
         )}
+
+        {/* Chi tiết theo ngày — panel focus đơn chưa xong (7/14/30 ngày).
+            Click 1 ngày → lọc kanban về đúng ngày đó. */}
+        <DailyBreakdownPanel
+          selectedDay={dateFrom && dateFrom === dateTo ? dateFrom : undefined}
+          onPickDay={(day) => {
+            setDateFrom(day);
+            setDateTo(day);
+          }}
+          reloadToken={breakdownToken}
+        />
 
         {/* Hint */}
         <div className="flex items-start gap-2 rounded-md border border-border bg-muted/30 p-2.5 text-[11px] text-muted-foreground">

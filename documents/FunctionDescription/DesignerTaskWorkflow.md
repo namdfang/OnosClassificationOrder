@@ -3,6 +3,7 @@
 > **File FE:**
 >  - `apps/web/src/pages/designer/team/{index,TeamMemberDialog}.tsx` — Leader CRUD sub-designer
 >  - `apps/web/src/pages/designer/my-tasks/{index,TaskCard,RejectModal,TaskDetailDialog}.tsx` — Sub-designer kanban
+>  - `apps/web/src/pages/designer/my-tasks/DailyBreakdownPanel.tsx` — Panel "Chi tiết theo ngày" (7/14/30) focus đơn chưa xong
 >  - `apps/web/src/pages/home/DesignerStatsTab.tsx` — Dashboard tab leader
 >  - `apps/web/src/pages/orders/DesignerSummaryPanel.tsx` — KPI panel trên /orders cho leader/admin
 >  - `apps/web/src/components/orders/AssignDesignerDialog.tsx` — Bulk assign từ workshop table
@@ -28,7 +29,7 @@
 >  - `GET/POST/PATCH/DELETE /v1/designer/team` + `/:userId/reset-password`
 >  - `POST /v1/orders/:id/designer-transition` (state machine 1 task)
 >  - `POST /v1/designer/bulk-transition` (state machine N task)
->  - `GET /v1/designer/my-tasks` + `/my-task-filters` + `/my-stats`
+>  - `GET /v1/designer/my-tasks` + `/my-task-filters` + `/my-stats` + `/my-daily-breakdown`
 >  - `GET /v1/designer/performance` + `/timeline/:userId`
 >  - `GET /v1/orders/designer-breakdown` (KPI matrix per-user trong /orders)
 >  - `POST /v1/orders/bulk-assign-designer-preview` + `/bulk-assign-designer`
@@ -205,6 +206,7 @@ factoryId?: string                // ref FactoryEntity, REQUIRED khi role=Fulfil
 | GET | `/v1/designer/my-tasks` | Designer/Leader/Admin | Kanban 4 cột + rejected drawer. Filter (type, fabricType, machineNumber, toolResult, search); `from`/`to` lọc **cả 4 cột** theo `inProductionAt` (mặc định today) |
 | GET | `/v1/designer/my-task-filters` | Same | Faceted filter options (7 facets: type/fabricType/machineNumber/toolResult/toolResultNote/userSku scalar + **errorFile mảng qua `$unwind`**) cross-narrow + lọc `inProductionAt` |
 | GET | `/v1/designer/my-stats?period=today\|7d\|30d\|custom` | Same | KPI cá nhân (counts + avgResponseMin + avgWorkMin + errorRate) |
+| GET | `/v1/designer/my-daily-breakdown?days=7\|14\|30` | Same | **Breakdown số đơn CỦA USER theo NGÀY vào sản xuất** (`inProductionAt`, tz VN) trong N ngày gần nhất. Focus đơn **chưa xong** (assigned/rework/in-progress) + `done` kèm để đối chiếu. Trả `days[]` (mỗi ngày: assigned/rework/inProgress/done/unfinished + `ageDays`, sort mới→cũ, chỉ ngày có đơn) + `totals` + `rangeDays`. 1 aggregate `$group` theo `{day,status}`. Xem §4.2b. |
 | GET | `/v1/designer/performance?from&to&userId?` | Admin/Manager/Leader | Leaderboard per-user trong period (incl. totalRejected/totalRework từ OrderLog) |
 | GET | `/v1/designer/timeline/:userId?from&to` | Same | Per-day buckets 4 series (assigned/started/completed/rework) cho line chart |
 | GET | `/v1/orders/error-stats?from&to` | Same | Pie split errorSource (designer/factory/unknown) + breakdown per code |
@@ -272,6 +274,20 @@ Components con:
 - `TaskCard` — drag handle, productionId button (mở `TaskDetailDialog`), mockup thumbnail (mở preview), timestamp + reworkCount badge
 - `TaskDetailDialog` — header status badge + grid info (9 field) + mockup + designs grid 4 cột + timeline (Khách lên đơn `orderAt` → **Vào sản xuất `inProductionAt`** → Được gán → Bắt đầu → Hoàn thành → Cần làm lại/Đã trả lại) + banner productionError/rejectedReason. Fetch `GET /v1/orders/:id`
 - `RejectModal` — textarea reason max 500, dùng chung cho single reject + bulk reject
+
+### 4.2b `DailyBreakdownPanel` — "Chi tiết theo ngày" (trên /my-tasks)
+> File: `apps/web/src/pages/designer/my-tasks/DailyBreakdownPanel.tsx`. Vị trí: **collapsible panel ngay dưới hàng KPI, trên kanban** (mặc định mở). Chỉ đơn CỦA USER hiện tại (scope `/my-daily-breakdown`).
+
+- **Mục đích:** trước đây KPI chỉ hiện tổng; panel này tách số đơn **theo từng ngày vào sản xuất** để designer thấy đơn **chưa làm xong** (đặc biệt đơn tồn cũ).
+- **Switcher `7/14/30 ngày`** (state `range`, độc lập với DateRangePicker của kanban) → fetch riêng, seq-guard chống race khi bấm liên tiếp.
+- **Summary strip:** `Chưa xong` (tổng assigned+rework+inProgress, amber khi >0) + chip Cần làm / Cần làm lại / Đang làm; bên phải `Đã xong` (emerald, muted).
+- **Bảng ngày × trạng thái:** cột `Ngày | Cần làm | Cần làm lại | Đang làm | Đã xong` (`tabular-nums`), sort mới→cũ. Mỗi row:
+  - Nền **tô amber theo mức tồn**: `unfinished>0` → nhạt; `unfinished>0 && ageDays>=3` → đậm hơn + **icon ⚠** trước ngày (đơn tồn cũ).
+  - Date cell: thứ (T2..CN) + dd/MM + `Hint` tuổi (Hôm nay / Hôm qua / N ngày trước). Số 0 hiện `–` (muted).
+  - **Click cả row → lọc kanban về đúng ngày đó** (`onPickDay` set `dateFrom=dateTo=day` ở parent). Row của ngày kanban đang lọc (`from===to===day`) có ring indigo.
+  - Footer sticky `Tổng`.
+- **Đồng bộ:** parent bump `reloadToken` (state `breakdownToken`) trong `refreshAll()` → panel refetch sau mỗi transition/refresh, số liệu khớp kanban.
+- **Lưu ý window:** đếm theo `inProductionAt ∈ [today−(N−1) .. today]` (giống kanban) → đơn tồn ngoài N ngày ẩn; dùng 14/30 để mở rộng.
 
 ### 4.3 Dashboard tab Designer (Leader)
 Xem `Dashboard.md` mục tab D.

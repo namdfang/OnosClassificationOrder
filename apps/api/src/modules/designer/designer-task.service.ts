@@ -642,6 +642,105 @@ export class DesignerTaskService {
     };
   }
 
+  /**
+   * Breakdown số lượng đơn CỦA USER hiện tại theo NGÀY VÀO SẢN XUẤT
+   * (`inProductionAt`, tz VN) trong `rangeDays` ngày gần nhất (7/14/30).
+   * Focus vào đơn CHƯA XONG (assigned/rework/in-progress) — giúp designer thấy
+   * đơn tồn cũ. `done` trả kèm để đối chiếu. Chỉ trả các ngày có >=1 đơn.
+   *
+   * Window theo `inProductionAt` — đồng bộ với cách kanban lọc; đơn tồn quá cũ
+   * (ngoài N ngày) sẽ ẩn → dùng switcher 14/30 để mở rộng.
+   */
+  async getMyDailyBreakdown(
+    user: UserDocument,
+    rangeDays: number,
+  ): Promise<{
+    days: {
+      day: string;
+      ageDays: number;
+      assigned: number;
+      rework: number;
+      inProgress: number;
+      done: number;
+      unfinished: number;
+    }[];
+    totals: { assigned: number; rework: number; inProgress: number; done: number; unfinished: number };
+    rangeDays: number;
+  }> {
+    const userId = String(user._id);
+    const MS_DAY = 86_400_000;
+    // Biên ngày theo giờ VN (+07:00) — đồng bộ resolveDateRange.
+    const vnStart = (d: string) => new Date(`${d}T00:00:00+07:00`);
+    const vnEnd = (d: string) => new Date(`${d}T23:59:59.999+07:00`);
+    const vnToday = new Date(Date.now() + 7 * 60 * 60 * 1000).toISOString().slice(0, 10);
+    const start = new Date(vnStart(vnToday).getTime() - (rangeDays - 1) * MS_DAY);
+    const end = vnEnd(vnToday);
+
+    const agg = await this.orderModel.aggregate<{
+      _id: { day: string; status: DesignerStatus };
+      count: number;
+    }>([
+      {
+        $match: {
+          assignee: userId,
+          inProductionAt: { $gte: start, $lte: end },
+          designerStatus: {
+            $in: [
+              DesignerStatus.Assigned,
+              DesignerStatus.InProgress,
+              DesignerStatus.Rework,
+              DesignerStatus.Done,
+            ],
+          },
+        },
+      },
+      {
+        $group: {
+          _id: {
+            day: { $dateToString: { format: '%Y-%m-%d', date: '$inProductionAt', timezone: '+07:00' } },
+            status: '$designerStatus',
+          },
+          count: { $sum: 1 },
+        },
+      },
+    ]);
+
+    type DayAcc = { day: string; assigned: number; rework: number; inProgress: number; done: number };
+    const statusKey: Partial<Record<DesignerStatus, keyof Omit<DayAcc, 'day'>>> = {
+      [DesignerStatus.Assigned]: 'assigned',
+      [DesignerStatus.Rework]: 'rework',
+      [DesignerStatus.InProgress]: 'inProgress',
+      [DesignerStatus.Done]: 'done',
+    };
+
+    const map = new Map<string, DayAcc>();
+    const totals = { assigned: 0, rework: 0, inProgress: 0, done: 0, unfinished: 0 };
+    for (const r of agg) {
+      const key = statusKey[r._id.status];
+      if (!key) continue;
+      let day = map.get(r._id.day);
+      if (!day) {
+        day = { day: r._id.day, assigned: 0, rework: 0, inProgress: 0, done: 0 };
+        map.set(r._id.day, day);
+      }
+      day[key] += r.count;
+      totals[key] += r.count;
+    }
+    totals.unfinished = totals.assigned + totals.rework + totals.inProgress;
+
+    const todayStartMs = vnStart(vnToday).getTime();
+    const days = [...map.values()]
+      .map((d) => {
+        const unfinished = d.assigned + d.rework + d.inProgress;
+        const ageDays = Math.max(0, Math.round((todayStartMs - vnStart(d.day).getTime()) / MS_DAY));
+        return { ...d, unfinished, ageDays };
+      })
+      // Mới → cũ (ngày lớn lên đầu).
+      .sort((a, b) => (a.day < b.day ? 1 : a.day > b.day ? -1 : 0));
+
+    return { days, totals, rangeDays };
+  }
+
   // ─── Helpers ──────────────────────────────────────────────────────
 
   private toCard = (o: Record<string, unknown>): DesignerTaskCard => ({

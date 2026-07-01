@@ -18,6 +18,8 @@ import {
   DesignerBulkTransitionResDto,
   DesignerTransitionDto,
   DesignerTransitionResDto,
+  GetMyDailyBreakdownDto,
+  GetMyDailyBreakdownResDto,
   GetMyStatsDto,
   GetMyStatsResDto,
   GetMyTaskFiltersResDto,
@@ -151,6 +153,30 @@ export class DesignerTaskController {
       message: JSON.stringify({ method: 'GET', url: '/designer/my-stats', userId: user._id }),
     });
     const data = await this.taskService.getMyStats(user, query.period, query.from, query.to);
+    return { success: true, data };
+  }
+
+  @Get('designer/my-daily-breakdown')
+  @Auth([RoleType.Designer, RoleType.DesignerLeader, RoleType.SuperAdmin, RoleType.Admin])
+  @ApiOperation({
+    summary:
+      'Breakdown số đơn theo ngày (7/14/30) của sub-designer hiện tại — focus đơn chưa xong.',
+  })
+  @HttpCode(HttpStatus.OK)
+  @ApiOkResponse({ type: GetMyDailyBreakdownResDto })
+  async getMyDailyBreakdown(
+    @Query() query: GetMyDailyBreakdownDto,
+    @AuthUser() user: UserDocument,
+  ): Promise<GetMyDailyBreakdownResDto> {
+    this.logger.info({
+      message: JSON.stringify({
+        method: 'GET',
+        url: '/designer/my-daily-breakdown',
+        userId: user._id,
+        days: query.days,
+      }),
+    });
+    const data = await this.taskService.getMyDailyBreakdown(user, Number(query.days));
     return { success: true, data };
   }
 }
