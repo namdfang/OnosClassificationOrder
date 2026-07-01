@@ -31,6 +31,8 @@ import { Spinner } from '@/components/common/Spinner';
 import { RepositoryRemote } from '@/services';
 import { handleAxiosError } from '@/utils';
 
+import { TeamDailyMatrix } from './TeamDailyMatrix';
+
 type Period = 'today' | '7d' | '30d' | 'custom';
 
 const SOURCE_COLORS = {
@@ -62,6 +64,8 @@ export default function DesignerStatsTab() {
   const [timeline, setTimeline] = useState<DesignerTimelineBucket[]>([]);
   const [selectedUserId, setSelectedCode] = useState<string>('');
   const [loading, setLoading] = useState(false);
+  // Bump để TeamDailyMatrix refetch khi bấm Refresh (ma trận dùng range riêng).
+  const [matrixToken, setMatrixToken] = useState(0);
 
   const range = useMemo(
     () => rangeFromPeriod(period, customFrom, customTo),
@@ -78,6 +82,7 @@ export default function DesignerStatsTab() {
       const rows = (perfRes.data?.data || []) as DesignerLeaderboardRow[];
       setLeaderboard(rows);
       setErrorStats((errRes.data?.data || null) as ErrorStats | null);
+      setMatrixToken((t) => t + 1);
       // Default select first designer with most completed
       if (rows.length > 0 && !selectedUserId) {
         setSelectedCode(rows[0].userId);
@@ -118,6 +123,10 @@ export default function DesignerStatsTab() {
 
   return (
     <div className="space-y-5">
+      {/* Ma trận toàn team × ngày (7/14/30 riêng) — snapshot đơn chưa xong.
+          Đặt ĐẦU TIÊN để admin thấy ngay toàn cảnh. */}
+      <TeamDailyMatrix reloadToken={matrixToken} />
+
       {/* Period switcher */}
       <div className="flex items-center justify-between flex-wrap gap-3">
         <div className="inline-flex rounded-md border border-border overflow-hidden text-xs">

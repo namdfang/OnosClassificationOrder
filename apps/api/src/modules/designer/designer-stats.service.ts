@@ -360,6 +360,152 @@ export class DesignerStatsService {
     };
   }
 
+  /**
+   * Ma trận Designer × Ngày (inProductionAt, tz VN) trong N ngày gần nhất
+   * (7/14/30) cho MỌI sub-designer. Snapshot lens — mỗi ô là số đơn VÀO SẢN
+   * XUẤT ngày đó ĐANG ở từng trạng thái. Focus 3 trạng thái chưa xong
+   * (assigned/rework/inProgress) + done kèm. Tự include designer chưa có đơn.
+   */
+  async getTeamDailyBreakdown(rangeDays: number): Promise<{
+    days: string[];
+    rows: {
+      userId: string;
+      fullName: string;
+      email?: string;
+      cells: { assigned: number; rework: number; inProgress: number; done: number; unfinished: number }[];
+      totals: { assigned: number; rework: number; inProgress: number; done: number; unfinished: number };
+    }[];
+    columnTotals: { assigned: number; rework: number; inProgress: number; done: number; unfinished: number }[];
+    grandTotals: { assigned: number; rework: number; inProgress: number; done: number; unfinished: number };
+    rangeDays: number;
+  }> {
+    const MS_DAY = 86_400_000;
+    const vnStart = (d: string) => new Date(`${d}T00:00:00+07:00`);
+    const vnEnd = (d: string) => new Date(`${d}T23:59:59.999+07:00`);
+    const vnToday = new Date(Date.now() + 7 * 60 * 60 * 1000).toISOString().slice(0, 10);
+    const baseMs = vnStart(vnToday).getTime();
+
+    // Danh sách ngày (mới → cũ) + index map để đổ cell về đúng cột.
+    const days: string[] = [];
+    const dayIndex = new Map<string, number>();
+    for (let i = 0; i < rangeDays; i++) {
+      const d = new Date(baseMs - i * MS_DAY + 7 * 60 * 60 * 1000).toISOString().slice(0, 10);
+      dayIndex.set(d, i);
+      days.push(d);
+    }
+    const start = new Date(baseMs - (rangeDays - 1) * MS_DAY);
+    const end = vnEnd(vnToday);
+
+    type CellKey = 'assigned' | 'rework' | 'inProgress' | 'done';
+    const statusKey: Partial<Record<DesignerStatus, CellKey>> = {
+      [DesignerStatus.Assigned]: 'assigned',
+      [DesignerStatus.Rework]: 'rework',
+      [DesignerStatus.InProgress]: 'inProgress',
+      [DesignerStatus.Done]: 'done',
+    };
+    const emptyCell = () => ({ assigned: 0, rework: 0, inProgress: 0, done: 0, unfinished: 0 });
+
+    const [agg, designerRole] = await Promise.all([
+      this.orderModel.aggregate<{
+        _id: { uid: string; day: string; status: DesignerStatus };
+        count: number;
+      }>([
+        {
+          $match: {
+            assignee: { $exists: true, $ne: null },
+            inProductionAt: { $gte: start, $lte: end },
+            designerStatus: {
+              $in: [
+                DesignerStatus.Assigned,
+                DesignerStatus.InProgress,
+                DesignerStatus.Rework,
+                DesignerStatus.Done,
+              ],
+            },
+          },
+        },
+        {
+          $group: {
+            _id: {
+              uid: '$assignee',
+              day: { $dateToString: { format: '%Y-%m-%d', date: '$inProductionAt', timezone: '+07:00' } },
+              status: '$designerStatus',
+            },
+            count: { $sum: 1 },
+          },
+        },
+      ]),
+      this.roleRepository.findOne({ name: RoleType.Designer }),
+    ]);
+
+    const teamUsers = designerRole
+      ? await this.userModel.find({ roleId: designerRole._id }, { _id: 1, fullName: 1, email: 1 }).lean()
+      : [];
+
+    // Tập userId = designer team ∪ assignee xuất hiện trong data (phòng khi có
+    // assignee ngoài role Designer, vd leader tự ôm đơn).
+    const nameMap = new Map<string, { fullName: string; email?: string }>();
+    for (const u of teamUsers) nameMap.set(String(u._id), { fullName: u.fullName, email: u.email });
+
+    const rowMap = new Map<string, ReturnType<typeof emptyCell>[]>();
+    const ensureRow = (uid: string) => {
+      let cells = rowMap.get(uid);
+      if (!cells) {
+        cells = days.map(() => emptyCell());
+        rowMap.set(uid, cells);
+      }
+      return cells;
+    };
+    if (designerRole) for (const u of teamUsers) ensureRow(String(u._id));
+
+    for (const r of agg) {
+      const key = statusKey[r._id.status];
+      const col = dayIndex.get(r._id.day);
+      if (!key || col === undefined) continue;
+      const cells = ensureRow(r._id.uid);
+      cells[col]![key] += r.count;
+      if (key !== 'done') cells[col]!.unfinished += r.count;
+    }
+
+    // Resolve tên cho assignee ngoài team (nếu có).
+    const missingIds = [...rowMap.keys()].filter((id) => !nameMap.has(id));
+    if (missingIds.length > 0) {
+      const extra = await this.userModel.find({ _id: { $in: missingIds } }, { _id: 1, fullName: 1, email: 1 }).lean();
+      for (const u of extra) nameMap.set(String(u._id), { fullName: u.fullName, email: u.email });
+    }
+
+    const columnTotals = days.map(() => emptyCell());
+    const grandTotals = emptyCell();
+    const rows = [...rowMap.entries()].map(([uid, cells]) => {
+      const totals = emptyCell();
+      cells.forEach((c, i) => {
+        (['assigned', 'rework', 'inProgress', 'done', 'unfinished'] as const).forEach((k) => {
+          totals[k] += c[k];
+          columnTotals[i]![k] += c[k];
+          grandTotals[k] += c[k];
+        });
+      });
+      const info = nameMap.get(uid);
+      return {
+        userId: uid,
+        fullName: info?.fullName || `#${uid.slice(-4)}`,
+        email: info?.email,
+        cells,
+        totals,
+      };
+    });
+
+    // Sort: tồn nhiều lên đầu; hết tồn thì theo done desc; rồi tên.
+    rows.sort(
+      (a, b) =>
+        b.totals.unfinished - a.totals.unfinished ||
+        b.totals.done - a.totals.done ||
+        a.fullName.localeCompare(b.fullName),
+    );
+
+    return { days, rows, columnTotals, grandTotals, rangeDays };
+  }
+
   private resolveRange(from?: string, to?: string): { start: Date; end: Date } {
     if (!from && !to) {
       const end = new Date();

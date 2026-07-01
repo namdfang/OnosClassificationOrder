@@ -134,6 +134,12 @@ const timeline = (userId: string, params: { from?: string; to?: string } = {}) =
   );
 };
 
+const teamDailyBreakdown = (params: { days?: 7 | 14 | 30 } = {}) => {
+  const qs = new URLSearchParams();
+  qs.set('days', String(params.days || 7));
+  return callApi(`/${CONFIG.API_VERSION}/designer/team-daily-breakdown?${qs.toString()}`, 'get');
+};
+
 const errorStats = (params: { from?: string; to?: string } = {}) => {
   const qs = new URLSearchParams();
   if (params.from) qs.set('from', params.from);
@@ -159,5 +165,6 @@ export const designer = {
   backfillDesignerStatus,
   performance,
   timeline,
+  teamDailyBreakdown,
   errorStats,
 };

@@ -30,7 +30,7 @@
 >  - `POST /v1/orders/:id/designer-transition` (state machine 1 task)
 >  - `POST /v1/designer/bulk-transition` (state machine N task)
 >  - `GET /v1/designer/my-tasks` + `/my-task-filters` + `/my-stats` + `/my-daily-breakdown`
->  - `GET /v1/designer/performance` + `/timeline/:userId`
+>  - `GET /v1/designer/performance` + `/timeline/:userId` + `/team-daily-breakdown`
 >  - `GET /v1/orders/designer-breakdown` (KPI matrix per-user trong /orders)
 >  - `POST /v1/orders/bulk-assign-designer-preview` + `/bulk-assign-designer`
 >  - `POST /v1/orders/:id/set-production-error` (atomic 3 field — bắt buộc khi 'other')
@@ -209,6 +209,7 @@ factoryId?: string                // ref FactoryEntity, REQUIRED khi role=Fulfil
 | GET | `/v1/designer/my-daily-breakdown?days=7\|14\|30` | Same | **Breakdown số đơn CỦA USER theo NGÀY vào sản xuất** (`inProductionAt`, tz VN) trong N ngày gần nhất. Focus đơn **chưa xong** (assigned/rework/in-progress) + `done` kèm để đối chiếu. Trả `days[]` (mỗi ngày: assigned/rework/inProgress/done/unfinished + `ageDays`, sort mới→cũ, chỉ ngày có đơn) + `totals` + `rangeDays`. 1 aggregate `$group` theo `{day,status}`. Xem §4.2b. |
 | GET | `/v1/designer/performance?from&to&userId?` | Admin/Manager/Leader | Leaderboard per-user trong period (incl. totalRejected/totalRework từ OrderLog) |
 | GET | `/v1/designer/timeline/:userId?from&to` | Same | Per-day buckets 4 series (assigned/started/completed/rework) cho line chart |
+| GET | `/v1/designer/team-daily-breakdown?days=7\|14\|30` | Admin/Manager/Leader | **Ma trận MỌI designer × ngày** (`inProductionAt`, tz VN, snapshot lens). Focus 3 trạng thái chưa xong + done kèm. Trả `days[]` + `rows[]` (mỗi designer: `cells[]` đồng bộ index với `days`, `totals`) + `columnTotals[]` + `grandTotals`. Tự include designer 0 đơn. Cho tab Dashboard Designer (section 2). Xem `Dashboard.md` Tab D §2. |
 | GET | `/v1/orders/error-stats?from&to` | Same | Pie split errorSource (designer/factory/unknown) + breakdown per code |
 | GET | `/v1/orders/designer-breakdown` | Admin/Manager/Leader | KPI scoped/overall + matrix per-designer (cho /orders panel) |
 | GET | `/v1/orders/designer-backlog` | Admin/Manager/Leader | **Tồn đọng** (đơn chưa `done`, gồm unassigned+rejected) gom theo **Designer × Ngày `inProductionAt`** (MỌI ngày). Trả cây `designers[] → days[]` (counts per status + `ageDays`). Cho modal "Chi tiết tồn đọng". |

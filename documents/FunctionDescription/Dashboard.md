@@ -7,7 +7,7 @@
 > **Tab B — Tình trạng:** `apps/web/src/pages/home/OrderStatusTab.tsx` + `status/{KpiCard,BreakdownCard,StatusFilterExtras,OrdersMiniTable,useStatusFilter}.tsx`. Filter top bar dùng chung `<OrderFilterBar>` (apps/web/src/components/orders/OrderFilterBar.tsx) — xem `Orders.md §10.3`.
 > **Tab C — Đơn theo xưởng:** `apps/web/src/pages/home/OrderFactoryTab.tsx` + `apps/web/src/pages/home/exportOrders.ts` (XLSX builder)
 > **Tab D — Designer:** `apps/web/src/pages/home/DesignerStatsTab.tsx` — Leader/Admin only (perm `page.designer_stats`)
-> **File BE:** `apps/api/src/modules/order/order.service.ts` → `getDashboard()`, `getStatusOverview()`, `getFactoryOverview()`, `exportOrders()`, `transferOrder()`, `bulkTransferOrders()` + `apps/api/src/modules/designer/designer-stats.service.ts` → `getPerformance()`, `getTimeline()`, `getErrorStats()`
+> **File BE:** `apps/api/src/modules/order/order.service.ts` → `getDashboard()`, `getStatusOverview()`, `getFactoryOverview()`, `exportOrders()`, `transferOrder()`, `bulkTransferOrders()` + `apps/api/src/modules/designer/designer-stats.service.ts` → `getPerformance()`, `getTimeline()`, `getErrorStats()`, `getTeamDailyBreakdown()`
 > **Route:** `/dashboard?tab=stats|status|factory|designer`
 > **API:**
 >  - `GET /v1/orders/dashboard` (Tab A)
@@ -63,7 +63,7 @@ Data từ `GET /v1/orders/factory-overview` + `GET /v1/orders?sort=grouped&...` 
 
 **Chỉ hiển thị khi user có perm `page.designer_stats`** (DesignerLeader / Admin / Manager). Xem `DesignerTaskWorkflow.md` để hiểu workflow tổng.
 
-Layout 3 section:
+Layout 4 section (thứ tự render trên tab: **Ma trận toàn team → Period switcher → Leaderboard → Timeline → Error pie**). Đánh số dưới đây theo nhóm chức năng, không theo thứ tự dọc:
 
 **1. Leaderboard table** (`<Table>` shadcn) — sort theo `completedInPeriod` desc, auto-include sub-designer chưa có task (row count 0):
 
@@ -80,18 +80,26 @@ Layout 3 section:
 
 Click row → set `selectedUserId` → reload timeline chart.
 
-**2. Timeline per-designer** (Recharts `LineChart`, 4 series: assigned / started / completed / rework):
+**2. Ma trận toàn team × ngày** (`TeamDailyMatrix.tsx` — component riêng, **render ĐẦU TIÊN trên cùng tab**, trên cả period switcher & Leaderboard):
+- **Mục đích:** thấy **MỌI designer theo thời gian + trạng thái** cùng lúc (Leaderboard chỉ có tổng, Timeline chỉ 1 designer). **Snapshot lens theo `inProductionAt`** (giống panel `/my-tasks` §`DesignerTaskWorkflow.md 4.2b` nhưng scope toàn team).
+- **Switcher `7/14/30 ngày` RIÊNG** (state `range` nội bộ, độc lập period switcher của tab) — tránh custom range sinh quá nhiều cột. Seq-guard chống race.
+- **Bảng ma trận full-width** (`table w-full` → cột ngày **giãn hết chiều rộng** khi ít ngày; nhiều ngày → cuộn ngang): cột trái **sticky = Designer** (tên + "chưa xong N · xong M"), header **sticky = các ngày** theo chiều **cũ→mới (quá khứ→hiện tại), trái→phải** (BE trả mới→cũ, FE `reverse()` cả `days`+`cells`+`columnTotals`). Mỗi ô = **4 số mini `Cần làm·Làm lại·Đang làm·Đã xong`** (assigned·rework·inProgress·done, màu zinc/amber/indigo/emerald; cỡ chữ `text-[13px]`), **nền heatmap amber theo tổng chưa xong** của ô (done KHÔNG ảnh hưởng nền); ô rỗng = `·`. **Mỗi con số có tooltip riêng** — dùng **Radix `Hint forceRich`** (bọc `TooltipProvider` ở root component; **KHÔNG** dùng native `title` vì không hiện ổn định) nội dung `"Cần làm/Cần làm lại/Đang làm/Đã xong: N"`. Footer sticky `Tổng/ngày` cũng hiện **4 số breakdown**. Grand summary strip trên đầu.
+- **Sort designer theo `unfinished` desc** (ai tồn nhiều lên đầu), rồi done desc, rồi tên.
+- Data từ `GET /v1/designer/team-daily-breakdown?days=7|14|30`. Refetch khi bấm Refresh của tab (prop `reloadToken` = `matrixToken` bump trong `fetchAll`).
+- **Lưu ý window:** đếm `inProductionAt ∈ [today−(N−1)..today]` → đơn tồn ngoài N ngày ẩn; dùng 14/30 để mở rộng. `done` gộp theo `inProductionAt` (KHÁC "completed in period" của Leaderboard dùng `designerCompletedAt`).
+
+**3. Timeline per-designer** (Recharts `LineChart`, 4 series: assigned / started / completed / rework):
 - Dropdown chọn designer (default = top leaderboard)
 - Bucket per-day timezone Asia/Ho_Chi_Minh, fill mọi ngày trong period kể cả 0
 - 4 line colors: zinc / indigo / emerald / amber
 - Data từ `GET /v1/designer/timeline/:userId`
 
-**3. Error source pie + breakdown** (Recharts `PieChart`):
+**4. Error source pie + breakdown** (Recharts `PieChart`):
 - 3 slice: designer (violet) / factory (sky) / unknown (slate) — split theo `order.productionErrorSource`
 - List dưới: từng productionError code với count + dot color theo source
 - Data từ `GET /v1/orders/error-stats`
 
-**Period switcher** `today | 7d | 30d | custom` — ảnh hưởng cả 3 section. Custom có 2 date input.
+**Period switcher** `today | 7d | 30d | custom` — ảnh hưởng Leaderboard + Timeline + Error pie. Custom có 2 date input. **Ma trận toàn team (section 2) KHÔNG dùng period này** — có switcher 7/14/30 riêng.
 
 ---
 

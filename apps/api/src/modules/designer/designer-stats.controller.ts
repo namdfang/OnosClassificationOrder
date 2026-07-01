@@ -9,6 +9,8 @@ import {
   GetDesignerTimelineResDto,
   GetErrorStatsDto,
   GetErrorStatsResDto,
+  GetTeamDailyBreakdownDto,
+  GetTeamDailyBreakdownResDto,
   RoleType,
 } from 'shared';
 import { Logger } from 'winston';
@@ -68,6 +70,30 @@ export class DesignerStatsController {
       }),
     });
     const data = await this.statsService.getTimeline(userId, query.from, query.to);
+    return { success: true, data };
+  }
+
+  @Get('designer/team-daily-breakdown')
+  @Auth(LEADER_ROLES)
+  @ApiOperation({
+    summary:
+      'Ma trận Designer × Ngày (inProductionAt, 7/14/30) — MỌI designer theo trạng thái, focus đơn chưa xong.',
+  })
+  @HttpCode(HttpStatus.OK)
+  @ApiOkResponse({ type: GetTeamDailyBreakdownResDto })
+  async getTeamDailyBreakdown(
+    @Query() query: GetTeamDailyBreakdownDto,
+    @AuthUser() user: UserDocument,
+  ): Promise<GetTeamDailyBreakdownResDto> {
+    this.logger.info({
+      message: JSON.stringify({
+        method: 'GET',
+        url: '/designer/team-daily-breakdown',
+        userId: user._id,
+        days: query.days,
+      }),
+    });
+    const data = await this.statsService.getTeamDailyBreakdown(Number(query.days));
     return { success: true, data };
   }
 

@@ -217,6 +217,55 @@ export const GetMyDailyBreakdownResZod = ResZod.extend({
 });
 export class GetMyDailyBreakdownResDto extends createZodDto(extendApi(GetMyDailyBreakdownResZod)) {}
 
+// ─── Team daily breakdown (Admin/Leader — MỌI designer × ngày) ───────
+// Ma trận Designer × Ngày (inProductionAt, tz VN) cho tab Dashboard Designer:
+// admin thấy tất cả designer theo thời gian + trạng thái cùng lúc. Snapshot lens
+// (giống my-daily-breakdown nhưng scope toàn team, KHÔNG chỉ 1 user). Mỗi ô focus
+// 3 trạng thái CHƯA XONG (assigned/rework/inProgress) + done kèm (tooltip/totals).
+
+export const TeamDailyCellZod = z.object({
+  assigned: z.number().int().nonnegative(),
+  rework: z.number().int().nonnegative(),
+  inProgress: z.number().int().nonnegative(),
+  done: z.number().int().nonnegative(),
+  /** = assigned + rework + inProgress. */
+  unfinished: z.number().int().nonnegative(),
+});
+export type TeamDailyCell = z.infer<typeof TeamDailyCellZod>;
+
+export const TeamDailyRowZod = z.object({
+  /** = user._id. */
+  userId: z.string(),
+  fullName: z.string(),
+  email: z.string().optional(),
+  /** Cell mỗi ngày, ĐỒNG BỘ index với `days[]` top-level (đã fill 0). */
+  cells: TeamDailyCellZod.array(),
+  /** Tổng theo designer trên toàn window. */
+  totals: TeamDailyCellZod,
+});
+export type TeamDailyRow = z.infer<typeof TeamDailyRowZod>;
+
+export const GetTeamDailyBreakdownZod = z.object({
+  days: z.enum(['7', '14', '30']).default('7'),
+});
+export class GetTeamDailyBreakdownDto extends createZodDto(extendApi(GetTeamDailyBreakdownZod)) {}
+
+export const GetTeamDailyBreakdownResZod = ResZod.extend({
+  data: z.object({
+    /** Cột ngày `YYYY-MM-DD` (VN), sort mới → cũ. */
+    days: z.string().array(),
+    /** Per-designer, sort theo unfinished desc (ai tồn nhiều lên đầu). */
+    rows: TeamDailyRowZod.array(),
+    /** Tổng mỗi ngày (đồng bộ index với `days[]`). */
+    columnTotals: TeamDailyCellZod.array(),
+    grandTotals: TeamDailyCellZod,
+    rangeDays: z.number().int().positive(),
+  }),
+});
+export class GetTeamDailyBreakdownResDto extends createZodDto(
+  extendApi(GetTeamDailyBreakdownResZod),
+) {}
+
 // ─── Bulk transition (Phase 4 extension) ────────────────────────────
 
 export const DesignerBulkTransitionZod = z.object({
