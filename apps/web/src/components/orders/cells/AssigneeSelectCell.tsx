@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import { User } from 'lucide-react';
 import { toast } from 'sonner';
 
@@ -38,6 +38,13 @@ export function AssigneeSelectCell({ orderId, value, canEdit, blockedReason, onU
 
   const current = value ? byId[value] : undefined;
 
+  // Options chỉ đổi khi danh sách member đổi — memo để không cấp phát mảng mới
+  // (+ SelectPopover không nhận prop `options` khác identity) mỗi render.
+  const options = useMemo(
+    () => members.map((m) => ({ _id: m._id, code: m._id, name: m.fullName, icon: 'User' })),
+    [members],
+  );
+
   const handleSelect = async (newId: string | null) => {
     if (newId === (value || null)) return;
     try {
@@ -72,12 +79,7 @@ export function AssigneeSelectCell({ orderId, value, canEdit, blockedReason, onU
 
   return (
     <SelectPopover
-      options={members.map((m) => ({
-        _id: m._id,
-        code: m._id,
-        name: m.fullName,
-        icon: 'User',
-      }))}
+      options={options}
       value={value || undefined}
       onSelect={handleSelect}
       disabled={!canEdit || saving || !!blockedReason}

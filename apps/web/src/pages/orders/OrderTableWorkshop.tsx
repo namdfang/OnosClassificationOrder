@@ -1,6 +1,14 @@
-import React, { useEffect, useMemo, useRef, useState } from 'react';
+import React, {
+  useCallback,
+  useEffect,
+  useLayoutEffect,
+  useMemo,
+  useRef,
+  useState,
+} from 'react';
 import { CalendarClock, ChevronDown, ChevronRight, FilterX, History, MousePointerClick, X } from 'lucide-react';
 import { useSearchParams } from 'react-router-dom';
+import { useVirtualizer } from '@tanstack/react-virtual';
 import type { WorkshopAvailableFilters } from 'shared';
 
 import { Badge } from '@/components/ui/badge';
@@ -28,6 +36,7 @@ import { isCancelled } from '@/utils/orderActions';
 import { DesignerSummaryPanel } from './DesignerSummaryPanel';
 import {
   WORKSHOP_COLS,
+  type WorkshopColMeta,
   type WorkshopOrderRow,
   type WorkshopRenderCtx,
 } from '@/components/orders/workshopTableConfig';
@@ -78,6 +87,147 @@ function todayISO(): string {
   return `${yyyy}-${mm}-${dd}`;
 }
 
+// Combo = (size + loại vải + mockup). Dùng để đếm ×N + highlight combo trùng.
+const comboKeyOf = (r: OrderRow) =>
+  `${r.size || ''}|${r.fabricType || ''}|${r.mockupOriginalUrl || r.mockupUrl || ''}`;
+
+// Virtualization cần cột width CỐ ĐỊNH (table-fixed) để không giật khi cuộn.
+// Lấy số px từ class `min-w-[Npx]` của mỗi cột làm width; fallback 140.
+const CHECKBOX_COL_W = 32; // khớp `w-8` + sticky left-8 của cột productionId
+const ACTIONS_COL_W = 64; // khớp `w-16` cột action cuối
+const parseColWidth = (c: WorkshopColMeta): number => {
+  const m = c.width?.match(/min-w-\[(\d+)px\]/);
+  return m ? Number(m[1]) : 140;
+};
+
+// Scroll thật của app nằm ở `<main className="overflow-auto">` (MainLayout),
+// KHÔNG phải window → virtualizer phải trỏ đúng scroll container này. Tìm
+// ancestor gần nhất có overflow-y auto/scroll; fallback documentElement.
+const getScrollParent = (node: HTMLElement | null): HTMLElement => {
+  let el = node?.parentElement ?? null;
+  while (el) {
+    const oy = getComputedStyle(el).overflowY;
+    if (oy === 'auto' || oy === 'scroll' || oy === 'overlay') return el;
+    el = el.parentElement;
+  }
+  return document.scrollingElement as HTMLElement || document.documentElement;
+};
+
+interface ProductRowProps {
+  row: OrderRow;
+  cols: WorkshopColMeta[];
+  ctx: RenderCtx;
+  comboN: number;
+  isHeaviest: boolean;
+  isSelected: boolean;
+  noTool: boolean;
+  onCheckboxChange: (id: string) => void;
+  onCheckboxMouseDown: (shiftKey: boolean) => void;
+  onHistory: (id: string, productionId: string) => void;
+  patchRow: (id: string, patch: Partial<OrderRow>) => void;
+  /** react-virtual: đo chiều cao thật của row (dynamic size) + map data-index. */
+  measureRef?: (el: HTMLElement | null) => void;
+  dataIndex?: number;
+}
+
+/**
+ * 1 hàng đơn (product row) — `React.memo` để tick checkbox / mở preview / poll
+ * design KHÔNG re-render toàn bảng. Props đều primitive/stable (isSelected,
+ * comboN, noTool…) hoặc callback đã `useCallback` ở parent → shallow-compare
+ * chuẩn. `ctx` (renderCtx) memo ở parent nên identity ổn định.
+ */
+const ProductRow = React.memo(function ProductRow({
+  row,
+  cols,
+  ctx,
+  comboN,
+  isHeaviest,
+  isSelected,
+  noTool,
+  onCheckboxChange,
+  onCheckboxMouseDown,
+  onHistory,
+  patchRow,
+  measureRef,
+  dataIndex,
+}: ProductRowProps) {
+  const cancelled = isCancelled(row);
+  // Memo nội dung cell (c.render) theo [cols, row, ctx] — 3 prop này ổn định
+  // khi row không đổi. Nhờ vậy khi ProductRow re-render CHỈ vì đổi isSelected
+  // (→ đổi rowBgClass sticky), các cell component (IconSelectCell, Assignee…)
+  // KHÔNG render lại vì element ref được cache → React bail subtree.
+  const renderedCells = useMemo(() => cols.map((c) => c.render(row, ctx)), [cols, row, ctx]);
+  // Trải thẳng bg classes (KHÔNG dùng bg-inherit vì sticky cell cần own bg để
+  // mask cell scroll phía sau — `inherit` không reliable với TR background).
+  const rowBgClass = isSelected
+    ? 'bg-primary/10 dark:bg-primary/20'
+    : isHeaviest
+      ? 'bg-amber-50 dark:bg-amber-500/10'
+      : noTool
+        ? 'bg-sky-100 dark:bg-sky-500/20'
+        : 'bg-card';
+  return (
+    <TableRow
+      ref={measureRef}
+      data-index={dataIndex}
+      className={cn(
+        rowBgClass,
+        noTool && 'border-l-2 border-l-sky-400 dark:border-l-sky-400/60',
+        cancelled && 'opacity-60',
+      )}
+    >
+      <TableCell className={cn('sticky left-0 z-10', rowBgClass)}>
+        <input
+          type="checkbox"
+          checked={isSelected}
+          onMouseDown={(e) => onCheckboxMouseDown(e.shiftKey)}
+          onClick={(e) => e.stopPropagation()}
+          onChange={() => onCheckboxChange(row._id)}
+          title="Shift+click để chọn cả range tới checkbox trước đó"
+        />
+      </TableCell>
+      {cols.map((c, i) => (
+        <TableCell
+          key={c.key}
+          className={cn(
+            'py-2',
+            i === 0 &&
+              cn('sticky left-8 z-10 shadow-[1px_0_0_0_var(--border)]', rowBgClass),
+          )}
+        >
+          <div className="flex items-center gap-1.5">
+            {c.key === 'mockupTypeSize' && comboN > 1 && (
+              <Badge
+                variant={isHeaviest ? 'warning' : 'secondary'}
+                className="font-mono text-[10px] px-1 py-0 shrink-0"
+                title={`Có ${comboN} đơn cùng (size + loại vải + mockup) trong sản phẩm này`}
+              >
+                ×{comboN}
+              </Badge>
+            )}
+            {i === 0 && cancelled && <CancelledBadge reason={row.cancelReason} />}
+            <div className="min-w-0 flex-1">{renderedCells[i]}</div>
+          </div>
+        </TableCell>
+      ))}
+      <TableCell className={cn('sticky right-0 z-10', rowBgClass)}>
+        <div className="flex items-center justify-end gap-0.5">
+          <Button
+            variant="ghost"
+            size="icon"
+            className="h-7 w-7"
+            title="Lịch sử"
+            onClick={() => onHistory(row._id, row.productionId)}
+          >
+            <History size={13} className="text-muted-foreground" />
+          </Button>
+          <OrderRowActionsMenu order={row} onChanged={(u) => patchRow(u._id, u)} />
+        </div>
+      </TableCell>
+    </TableRow>
+  );
+});
+
 export function OrderTableWorkshop() {
   const { has, canViewField, canEditField, roleName } = usePermission();
   const loadConfig = useWorkshopConfigStore((s) => s.load);
@@ -118,13 +268,14 @@ export function OrderTableWorkshop() {
   const [detailTarget, setDetailTarget] = useState<{ id: string; productionId: string } | null>(null);
   const [collapsedTypes, setCollapsedTypes] = useState<Set<string>>(new Set());
 
-  const toggleType = (t: string) =>
+  const toggleType = useCallback((t: string) => {
     setCollapsedTypes((prev) => {
       const next = new Set(prev);
       if (next.has(t)) next.delete(t);
       else next.add(t);
       return next;
     });
+  }, []);
 
   // Filters by workshop code — single value mỗi facet.
   const [filterPrintStatus, setFilterPrintStatus] = useState<string>(
@@ -315,7 +466,7 @@ export function OrderTableWorkshop() {
    *     `groups[].orders`). Nếu chỉ update `items` thì UI không đổi cho đến
    *     khi user F5 (fetchData ghi đè `groups`).
    */
-  const patchRow = (id: string, patch: Partial<OrderRow>) => {
+  const patchRow = useCallback((id: string, patch: Partial<OrderRow>) => {
     setItems((prev) => prev.map((r) => (r._id === id ? { ...r, ...patch } : r)));
     setGroups((prev) =>
       prev.map((g) => ({
@@ -323,21 +474,24 @@ export function OrderTableWorkshop() {
         orders: g.orders.map((r) => (r._id === id ? { ...r, ...patch } : r)),
       })),
     );
-  };
+  }, []);
 
   usePendingDesignsPoll(items, patchRow);
 
-  const openPreview = (url: string, title: string, originalUrl?: string, sourceUrl?: string) =>
-    setPreview({ url, originalUrl, title, sourceUrl });
+  const openPreview = useCallback(
+    (url: string, title: string, originalUrl?: string, sourceUrl?: string) =>
+      setPreview({ url, originalUrl, title, sourceUrl }),
+    [],
+  );
 
-  const toggleRow = (id: string) => {
-    setSelected((prev) => {
-      const next = new Set(prev);
-      if (next.has(id)) next.delete(id);
-      else next.add(id);
-      return next;
-    });
-  };
+  const onCheckboxMouseDown = useCallback((shiftKey: boolean) => {
+    shiftKeyRef.current = shiftKey;
+  }, []);
+
+  const onHistory = useCallback(
+    (id: string, productionId: string) => setHistoryTarget({ id, productionId }),
+    [],
+  );
 
   const toggleAll = () => {
     setSelected((prev) => {
@@ -346,33 +500,181 @@ export function OrderTableWorkshop() {
     });
   };
 
+  type DecoratedGroup = {
+    type: string;
+    totalOrders: number;
+    totalQuantity: number;
+    maxCombo: number;
+    sortedOrders: OrderRow[];
+    rowMeta: Map<string, { comboN: number; isHeaviest: boolean }>;
+  };
+
   /**
-   * Flat ordered list of currently visible order IDs (đã skip groups bị
-   * collapse). Phải khớp THỨ TỰ render dưới body — anchor index = idx trong
-   * mảng này. Dùng cho shift+click range select.
+   * Decorate 1 lần khi `groups` đổi: đếm combo (size+vải+mockup) + sort theo
+   * combo desc + meta ×N/heaviest theo rowId. KHÔNG phụ thuộc selection/collapse
+   * → tick checkbox / mở-đóng group KHÔNG tính lại sort. Trước đây comboCount +
+   * sort chạy lại MỖI render ngay trong body (một lần cho render, một lần nữa
+   * trong visibleOrderedIds) → đây là hot-path chính khi bảng nhiều đơn.
+   */
+  const decoratedGroups = useMemo<DecoratedGroup[]>(() => {
+    return groups.map((g) => {
+      const comboCount = new Map<string, number>();
+      for (const r of g.orders) {
+        const k = comboKeyOf(r);
+        comboCount.set(k, (comboCount.get(k) || 0) + 1);
+      }
+      const maxCombo = Math.max(0, ...Array.from(comboCount.values()));
+      const sortedOrders = [...g.orders].sort((a, b) => {
+        const ca = comboCount.get(comboKeyOf(a)) || 1;
+        const cb = comboCount.get(comboKeyOf(b)) || 1;
+        if (cb !== ca) return cb - ca;
+        return comboKeyOf(a).localeCompare(comboKeyOf(b));
+      });
+      const rowMeta = new Map<string, { comboN: number; isHeaviest: boolean }>();
+      for (const r of g.orders) {
+        const n = comboCount.get(comboKeyOf(r)) || 1;
+        rowMeta.set(r._id, { comboN: n, isHeaviest: n > 1 && n === maxCombo });
+      }
+      return {
+        type: g.type || '(không có tên)',
+        totalOrders: g.totalOrders,
+        totalQuantity: g.totalQuantity,
+        maxCombo,
+        sortedOrders,
+        rowMeta,
+      };
+    });
+  }, [groups]);
+
+  /**
+   * Flat ordered list of currently visible order IDs (skip groups bị collapse).
+   * Khớp THỨ TỰ render dưới body — anchor index cho shift+click range select.
    */
   const visibleOrderedIds = useMemo(() => {
     const out: string[] = [];
-    for (const g of groups) {
-      const t = g.type || '(không có tên)';
-      if (collapsedTypes.has(t)) continue;
-      const comboCount = new Map<string, number>();
-      for (const r of g.orders) {
-        const k = `${r.size || ''}|${r.fabricType || ''}|${r.mockupOriginalUrl || r.mockupUrl || ''}`;
-        comboCount.set(k, (comboCount.get(k) || 0) + 1);
-      }
-      const sorted = [...g.orders].sort((a, b) => {
-        const ka = `${a.size || ''}|${a.fabricType || ''}|${a.mockupOriginalUrl || a.mockupUrl || ''}`;
-        const kb = `${b.size || ''}|${b.fabricType || ''}|${b.mockupOriginalUrl || b.mockupUrl || ''}`;
-        const ca = comboCount.get(ka) || 1;
-        const cb = comboCount.get(kb) || 1;
-        if (cb !== ca) return cb - ca;
-        return ka.localeCompare(kb);
-      });
-      for (const r of sorted) out.push(r._id);
+    for (const g of decoratedGroups) {
+      if (collapsedTypes.has(g.type)) continue;
+      for (const r of g.sortedOrders) out.push(r._id);
     }
     return out;
-  }, [groups, collapsedTypes]);
+  }, [decoratedGroups, collapsedTypes]);
+
+  // Refs mirror state để `handleCheckboxChange` giữ identity ổn định (useCallback
+  // deps rỗng) mà vẫn đọc được giá trị mới nhất tại thời điểm click.
+  const selectedRef = useRef(selected);
+  const lastClickedIdRef = useRef(lastClickedId);
+  const visibleOrderedIdsRef = useRef<string[]>(visibleOrderedIds);
+  selectedRef.current = selected;
+  lastClickedIdRef.current = lastClickedId;
+  visibleOrderedIdsRef.current = visibleOrderedIds;
+
+  // Đếm số đơn đã chọn theo product type — cho badge "x/y chọn" + trạng thái
+  // checkbox group header. Memo để không quét toàn bộ orders mỗi render.
+  const selectedCountByType = useMemo(() => {
+    const m = new Map<string, number>();
+    for (const g of decoratedGroups) {
+      let c = 0;
+      for (const r of g.sortedOrders) if (selected.has(r._id)) c++;
+      m.set(g.type, c);
+    }
+    return m;
+  }, [selected, decoratedGroups]);
+
+  // ---- Virtualization (window scroll) --------------------------------------
+  // Flatten groups + rows (theo collapse) thành 1 danh sách phẳng để virtualize:
+  // mỗi item là 'header' (dòng tiêu đề sản phẩm) hoặc 'row' (1 đơn). Cuộn tới
+  // đâu render tới đó → không mount hàng trăm DOM row 1 lúc khi mở nhóm lớn.
+  type FlatItem =
+    | { kind: 'header'; key: string; group: DecoratedGroup }
+    | {
+        kind: 'row';
+        key: string;
+        row: OrderRow;
+        groupType: string;
+        comboN: number;
+        isHeaviest: boolean;
+      };
+  const flatItems = useMemo<FlatItem[]>(() => {
+    const out: FlatItem[] = [];
+    for (const g of decoratedGroups) {
+      out.push({ kind: 'header', key: `h:${g.type}`, group: g });
+      if (collapsedTypes.has(g.type)) continue;
+      for (const row of g.sortedOrders) {
+        const meta = g.rowMeta.get(row._id);
+        out.push({
+          kind: 'row',
+          key: row._id,
+          row,
+          groupType: g.type,
+          comboN: meta?.comboN ?? 1,
+          isHeaviest: meta?.isHeaviest ?? false,
+        });
+      }
+    }
+    return out;
+  }, [decoratedGroups, collapsedTypes]);
+
+  // Cột width cố định (table-fixed) + tổng width bảng cho horizontal scroll.
+  const colWidths = useMemo(() => visibleCols.map(parseColWidth), [visibleCols]);
+  const totalTableWidth = useMemo(
+    () => CHECKBOX_COL_W + colWidths.reduce((s, w) => s + w, 0) + ACTIONS_COL_W,
+    [colWidths],
+  );
+
+  // scrollMargin = offset (tính từ đỉnh document) của <tbody> — nơi row index 0
+  // bắt đầu. Re-measure khi layout phía trên đổi (panel/filter chips) qua
+  // ResizeObserver trên body + window resize (sum getBoundingClientRect().top +
+  // scrollY ổn định khi cuộn → chỉ cần đo lại lúc layout đổi).
+  const rootRef = useRef<HTMLDivElement>(null);
+  const scrollElRef = useRef<HTMLElement | null>(null);
+  const tbodyRef = useRef<HTMLTableSectionElement>(null);
+  const [scrollEl, setScrollEl] = useState<HTMLElement | null>(null);
+  const [scrollMargin, setScrollMargin] = useState(0);
+
+  // Xác định scroll container thật (main.overflow-auto) sau khi mount.
+  useLayoutEffect(() => {
+    const sc = getScrollParent(rootRef.current);
+    scrollElRef.current = sc;
+    setScrollEl(sc);
+  }, []);
+
+  useLayoutEffect(() => {
+    const measure = () => {
+      const body = tbodyRef.current;
+      const sc = scrollElRef.current;
+      if (!body || !sc) return;
+      // Offset của <tbody> trong nội dung cuộn của scroll container (không đổi
+      // khi cuộn vì trừ đi bù cộng scrollTop) — chỉ đo lại khi layout đổi.
+      const margin =
+        body.getBoundingClientRect().top - sc.getBoundingClientRect().top + sc.scrollTop;
+      setScrollMargin(Math.max(0, margin));
+    };
+    measure();
+    const ro = new ResizeObserver(measure);
+    if (document.body) ro.observe(document.body);
+    window.addEventListener('resize', measure);
+    return () => {
+      ro.disconnect();
+      window.removeEventListener('resize', measure);
+    };
+  }, [scrollEl]);
+
+  const rowVirtualizer = useVirtualizer({
+    count: flatItems.length,
+    getScrollElement: () => scrollEl,
+    estimateSize: (i) => (flatItems[i]?.kind === 'header' ? 44 : 56),
+    overscan: 10,
+    scrollMargin,
+    getItemKey: (i) => flatItems[i]?.key ?? i,
+  });
+  const virtualItems = rowVirtualizer.getVirtualItems();
+  const virtualPadTop = virtualItems.length
+    ? virtualItems[0].start - rowVirtualizer.options.scrollMargin
+    : 0;
+  const virtualPadBottom = virtualItems.length
+    ? rowVirtualizer.getTotalSize() - virtualItems[virtualItems.length - 1].end
+    : 0;
+  const fullColSpan = visibleCols.length + 2;
 
   /**
    * Excel-style range select. Native checkbox toggle chạy bình thường (visual
@@ -382,17 +684,19 @@ export function OrderTableWorkshop() {
    * Trước đó dùng preventDefault trên onClick → React skip update DOM `checked`
    * cho row vừa click → state đúng nhưng UI miss tick row cuối.
    */
-  const handleCheckboxChange = (id: string) => {
+  const handleCheckboxChange = useCallback((id: string) => {
     const isShift = shiftKeyRef.current;
     shiftKeyRef.current = false;
-    if (isShift && lastClickedId && lastClickedId !== id) {
-      const lastIdx = visibleOrderedIds.indexOf(lastClickedId);
-      const curIdx = visibleOrderedIds.indexOf(id);
+    const lastClicked = lastClickedIdRef.current;
+    const ordered = visibleOrderedIdsRef.current;
+    if (isShift && lastClicked && lastClicked !== id) {
+      const lastIdx = ordered.indexOf(lastClicked);
+      const curIdx = ordered.indexOf(id);
       if (lastIdx >= 0 && curIdx >= 0) {
         const [from, to] = lastIdx < curIdx ? [lastIdx, curIdx] : [curIdx, lastIdx];
-        const range = visibleOrderedIds.slice(from, to + 1);
+        const range = ordered.slice(from, to + 1);
         // Native đã toggle row hiện tại — newState = trạng thái sau toggle.
-        const newState = !selected.has(id);
+        const newState = !selectedRef.current.has(id);
         setSelected((prev) => {
           const next = new Set(prev);
           for (const rid of range) {
@@ -405,37 +709,38 @@ export function OrderTableWorkshop() {
         return;
       }
     }
-    toggleRow(id);
-    setLastClickedId(id);
-  };
-
-  type GroupSelectionState = 'all' | 'some' | 'none';
-  const groupSelectionState = (orders: OrderRow[]): GroupSelectionState => {
-    const total = orders.length;
-    if (total === 0) return 'none';
-    let count = 0;
-    for (const o of orders) if (selected.has(o._id)) count++;
-    if (count === 0) return 'none';
-    if (count === total) return 'all';
-    return 'some';
-  };
-
-  const toggleGroupSelection = (orders: OrderRow[]) => {
-    const state = groupSelectionState(orders);
     setSelected((prev) => {
       const next = new Set(prev);
-      if (state === 'all') {
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+    setLastClickedId(id);
+  }, []);
+
+  type GroupSelectionState = 'all' | 'some' | 'none';
+
+  const toggleGroupSelection = useCallback((orders: OrderRow[]) => {
+    setSelected((prev) => {
+      const allSelected = orders.length > 0 && orders.every((o) => prev.has(o._id));
+      const next = new Set(prev);
+      if (allSelected) {
         for (const o of orders) next.delete(o._id);
       } else {
         for (const o of orders) next.add(o._id);
       }
       return next;
     });
-  };
+  }, []);
 
-  const openDetail = (id: string, productionId: string) =>
-    setDetailTarget({ id, productionId });
-  const renderCtx: RenderCtx = { canEditField, patchRow, openPreview, openDetail };
+  const openDetail = useCallback(
+    (id: string, productionId: string) => setDetailTarget({ id, productionId }),
+    [],
+  );
+  const renderCtx: RenderCtx = useMemo(
+    () => ({ canEditField, patchRow, openPreview, openDetail }),
+    [canEditField, patchRow, openPreview, openDetail],
+  );
   const isNoTool = useIsNoTool();
 
   // Designer summary chỉ hiện cho role có quyền xem stats designer.
@@ -606,7 +911,7 @@ export function OrderTableWorkshop() {
 
   return (
     <TooltipProvider delayDuration={200}>
-      <div className="space-y-4">
+      <div className="space-y-4" ref={rootRef}>
         {canSeeDesignerSummary && (
           <div className="space-y-2">
             <div className="flex justify-end">
@@ -732,7 +1037,14 @@ export function OrderTableWorkshop() {
         {/* Table */}
         <div className="rounded-lg border border-border bg-card overflow-hidden">
           <div className="overflow-x-auto">
-            <Table>
+            <Table className="table-fixed" style={{ width: totalTableWidth }}>
+              <colgroup>
+                <col style={{ width: CHECKBOX_COL_W }} />
+                {visibleCols.map((c, i) => (
+                  <col key={c.key} style={{ width: colWidths[i] }} />
+                ))}
+                <col style={{ width: ACTIONS_COL_W }} />
+              </colgroup>
               <TableHeader>
                 <TableRow>
                   <TableHead className="w-8 sticky left-0 z-30 bg-card">
@@ -748,7 +1060,6 @@ export function OrderTableWorkshop() {
                       key={c.key}
                       className={cn(
                         'whitespace-nowrap text-xs',
-                        c.width,
                         // productionId là cột đầu tiên (i===0) — sticky cạnh
                         // checkbox để khi scroll ngang vẫn nhìn thấy ID.
                         // shadow-r mô phỏng viền cho user biết chỗ sticky kết thúc.
@@ -761,50 +1072,46 @@ export function OrderTableWorkshop() {
                   <TableHead className="w-16 sticky right-0 z-30 bg-card"></TableHead>
                 </TableRow>
               </TableHeader>
-              <TableBody>
+              <TableBody ref={tbodyRef}>
                 {loading && items.length === 0 && (
                   <TableRow>
-                    <TableCell colSpan={visibleCols.length + 2} className="text-center py-10">
+                    <TableCell colSpan={fullColSpan} className="text-center py-10">
                       <Spinner size={20} className="text-muted-foreground" />
                     </TableCell>
                   </TableRow>
                 )}
                 {!loading && items.length === 0 && (
                   <TableRow>
-                    <TableCell colSpan={visibleCols.length + 2} className="text-center py-10 text-sm text-muted-foreground">
+                    <TableCell colSpan={fullColSpan} className="text-center py-10 text-sm text-muted-foreground">
                       Không có đơn hàng nào phù hợp
                     </TableCell>
                   </TableRow>
                 )}
-                {groups.map((g) => {
-                  const t = g.type || '(không có tên)';
-                  const collapsed = collapsedTypes.has(t);
-
-                  // Per-group: count combos (size+fabric+mockup) to drive ×N
-                  // badges and the "max" highlight. Then sort orders so the
-                  // heaviest combo floats to the top of the section.
-                  const comboCount = new Map<string, number>();
-                  for (const r of g.orders) {
-                    const k = `${r.size || ''}|${r.fabricType || ''}|${r.mockupOriginalUrl || r.mockupUrl || ''}`;
-                    comboCount.set(k, (comboCount.get(k) || 0) + 1);
-                  }
-                  const maxCombo = Math.max(0, ...Array.from(comboCount.values()));
-
-                  const sortedOrders = collapsed
-                    ? []
-                    : [...g.orders].sort((a, b) => {
-                        const ka = `${a.size || ''}|${a.fabricType || ''}|${a.mockupOriginalUrl || a.mockupUrl || ''}`;
-                        const kb = `${b.size || ''}|${b.fabricType || ''}|${b.mockupOriginalUrl || b.mockupUrl || ''}`;
-                        const ca = comboCount.get(ka) || 1;
-                        const cb = comboCount.get(kb) || 1;
-                        if (cb !== ca) return cb - ca;
-                        return ka.localeCompare(kb);
-                      });
-
-                  const groupState = groupSelectionState(g.orders);
-                  return (
-                    <React.Fragment key={t}>
-                      <TableRow className="bg-muted/40 hover:bg-muted/50">
+                {/* Spacer trên — chiều cao phần row phía trên vùng đang thấy. */}
+                {virtualPadTop > 0 && (
+                  <TableRow className="border-0 hover:bg-transparent" style={{ height: virtualPadTop }}>
+                    <TableCell colSpan={fullColSpan} className="p-0 border-0" />
+                  </TableRow>
+                )}
+                {virtualItems.map((vi) => {
+                  const item = flatItems[vi.index];
+                  if (!item) return null;
+                  if (item.kind === 'header') {
+                    const g = item.group;
+                    const selCount = selectedCountByType.get(g.type) || 0;
+                    const groupState: GroupSelectionState =
+                      selCount === 0
+                        ? 'none'
+                        : selCount === g.sortedOrders.length
+                          ? 'all'
+                          : 'some';
+                    return (
+                      <TableRow
+                        key={vi.key}
+                        data-index={vi.index}
+                        ref={rowVirtualizer.measureElement}
+                        className="bg-muted/40 hover:bg-muted/50"
+                      >
                         <TableCell
                           className="py-1.5 sticky left-0 z-10 bg-muted/40"
                           onClick={(e) => e.stopPropagation()}
@@ -815,134 +1122,69 @@ export function OrderTableWorkshop() {
                             ref={(el) => {
                               if (el) el.indeterminate = groupState === 'some';
                             }}
-                            onChange={() => toggleGroupSelection(g.orders)}
-                            title={`Tick toàn bộ ${g.orders.length} đơn của sản phẩm này`}
+                            onChange={() => toggleGroupSelection(g.sortedOrders)}
+                            title={`Tick toàn bộ ${g.sortedOrders.length} đơn của sản phẩm này`}
                           />
                         </TableCell>
                         <TableCell
                           colSpan={visibleCols.length + 1}
                           className="py-1.5 cursor-pointer sticky left-8 z-10 bg-muted/40 shadow-[1px_0_0_0_var(--border)]"
-                          onClick={() => toggleType(t)}
+                          onClick={() => toggleType(g.type)}
                         >
                           <div className="flex items-center gap-2 text-xs">
-                            {collapsed ? (
+                            {collapsedTypes.has(g.type) ? (
                               <ChevronRight size={14} className="text-muted-foreground" />
                             ) : (
                               <ChevronDown size={14} className="text-muted-foreground" />
                             )}
-                            <span className="font-semibold text-foreground line-clamp-1">{t}</span>
+                            <span className="font-semibold text-foreground line-clamp-1">{g.type}</span>
                             <Badge variant="secondary" className="font-mono">
                               {g.totalOrders} đơn
                             </Badge>
                             {groupState !== 'none' && (
                               <Badge variant="success" className="font-mono text-[10px]">
-                                {g.orders.filter((o) => selected.has(o._id)).length}/{g.orders.length} chọn
+                                {selCount}/{g.sortedOrders.length} chọn
                               </Badge>
                             )}
-                            {maxCombo > 1 && (
+                            {g.maxCombo > 1 && (
                               <Badge
                                 variant="warning"
                                 className="font-mono text-[10px]"
                                 title="Combo (size + vải + mockup) trùng nhiều nhất trong nhóm"
                               >
-                                max ×{maxCombo}
+                                max ×{g.maxCombo}
                               </Badge>
                             )}
                           </div>
                         </TableCell>
                       </TableRow>
-                      {sortedOrders.map((row) => {
-                        const comboKey = `${row.size || ''}|${row.fabricType || ''}|${row.mockupOriginalUrl || row.mockupUrl || ''}`;
-                        const comboN = comboCount.get(comboKey) || 1;
-                        const isHeaviest = comboN > 1 && comboN === maxCombo;
-                        // Resolve BG cho row + sticky cells theo cùng rule. Trải
-                        // thẳng bg classes (KHÔNG dùng bg-inherit vì sticky cell
-                        // cần own bg để mask cell scroll phía sau — `inherit`
-                        // không reliable với TR background trong 1 số browser).
-                        const isSel = selected.has(row._id);
-                        const noTool = isNoTool(row.toolResult);
-                        const rowBgClass = isSel
-                          ? 'bg-primary/10 dark:bg-primary/20'
-                          : isHeaviest
-                            ? 'bg-amber-50 dark:bg-amber-500/10'
-                            : noTool
-                              ? 'bg-sky-100 dark:bg-sky-500/20'
-                              : 'bg-card';
-                        return (
-                          <TableRow
-                            key={row._id}
-                            className={cn(
-                              rowBgClass,
-                              // Border-l accent giữ riêng cho no-tool (đặt ngoài
-                              // logic bg để vẫn dùng dù state khác).
-                              noTool && 'border-l-2 border-l-sky-400 dark:border-l-sky-400/60',
-                              isCancelled(row) && 'opacity-60',
-                            )}
-                          >
-                            <TableCell className={cn('sticky left-0 z-10', rowBgClass)}>
-                              <input
-                                type="checkbox"
-                                checked={selected.has(row._id)}
-                                onMouseDown={(e) => {
-                                  shiftKeyRef.current = e.shiftKey;
-                                }}
-                                onClick={(e) => e.stopPropagation()}
-                                onChange={() => handleCheckboxChange(row._id)}
-                                title="Shift+click để chọn cả range tới checkbox trước đó"
-                              />
-                            </TableCell>
-                            {visibleCols.map((c, i) => (
-                              <TableCell
-                                key={c.key}
-                                className={cn(
-                                  'py-2',
-                                  i === 0 &&
-                                    cn(
-                                      'sticky left-8 z-10 shadow-[1px_0_0_0_var(--border)]',
-                                      rowBgClass,
-                                    ),
-                                )}
-                              >
-                                <div className="flex items-center gap-1.5">
-                                  {c.key === 'mockupTypeSize' && comboN > 1 && (
-                                    <Badge
-                                      variant={isHeaviest ? 'warning' : 'secondary'}
-                                      className="font-mono text-[10px] px-1 py-0 shrink-0"
-                                      title={`Có ${comboN} đơn cùng (size + loại vải + mockup) trong sản phẩm này`}
-                                    >
-                                      ×{comboN}
-                                    </Badge>
-                                  )}
-                                  {i === 0 && isCancelled(row) && (
-                                    <CancelledBadge reason={row.cancelReason} />
-                                  )}
-                                  <div className="min-w-0 flex-1">{c.render(row, renderCtx)}</div>
-                                </div>
-                              </TableCell>
-                            ))}
-                            <TableCell className={cn('sticky right-0 z-10', rowBgClass)}>
-                              <div className="flex items-center justify-end gap-0.5">
-                                <Button
-                                  variant="ghost"
-                                  size="icon"
-                                  className="h-7 w-7"
-                                  title="Lịch sử"
-                                  onClick={() => setHistoryTarget({ id: row._id, productionId: row.productionId })}
-                                >
-                                  <History size={13} className="text-muted-foreground" />
-                                </Button>
-                                <OrderRowActionsMenu
-                                  order={row}
-                                  onChanged={(u) => patchRow(u._id, u)}
-                                />
-                              </div>
-                            </TableCell>
-                          </TableRow>
-                        );
-                      })}
-                    </React.Fragment>
+                    );
+                  }
+                  return (
+                    <ProductRow
+                      key={vi.key}
+                      measureRef={rowVirtualizer.measureElement}
+                      dataIndex={vi.index}
+                      row={item.row}
+                      cols={visibleCols}
+                      ctx={renderCtx}
+                      comboN={item.comboN}
+                      isHeaviest={item.isHeaviest}
+                      isSelected={selected.has(item.row._id)}
+                      noTool={isNoTool(item.row.toolResult)}
+                      onCheckboxChange={handleCheckboxChange}
+                      onCheckboxMouseDown={onCheckboxMouseDown}
+                      onHistory={onHistory}
+                      patchRow={patchRow}
+                    />
                   );
                 })}
+                {/* Spacer dưới — chiều cao phần row phía dưới vùng đang thấy. */}
+                {virtualPadBottom > 0 && (
+                  <TableRow className="border-0 hover:bg-transparent" style={{ height: virtualPadBottom }}>
+                    <TableCell colSpan={fullColSpan} className="p-0 border-0" />
+                  </TableRow>
+                )}
               </TableBody>
             </Table>
           </div>

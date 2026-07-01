@@ -27,6 +27,13 @@ export function usePendingDesignsPoll(
 ) {
   const startedAtRef = useRef<number>(0);
   const intervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  // `rows`/`patchRow` đổi reference mỗi render (fetch/patch) → giữ trong ref để
+  // effect KHÔNG tear-down + tạo lại interval liên tục. `tick` đọc giá trị mới
+  // nhất qua ref, nên effect chỉ cần depend vào `hasPending` (boolean).
+  const rowsRef = useRef(rows);
+  const patchRef = useRef(patchRow);
+  rowsRef.current = rows;
+  patchRef.current = patchRow;
 
   const hasPending = rows.some((r) => {
     const st = r.designsStatus;
@@ -40,14 +47,15 @@ export function usePendingDesignsPoll(
         clearInterval(intervalRef.current);
         intervalRef.current = null;
       }
+      startedAtRef.current = 0;
       return;
     }
 
     if (!startedAtRef.current) startedAtRef.current = Date.now();
 
     const tick = async () => {
-      // Reduce id list mỗi lần tick — chỉ poll row còn pending.
-      const pendingIds = rows
+      // Reduce id list mỗi lần tick — chỉ poll row còn pending (đọc rows mới nhất).
+      const pendingIds = rowsRef.current
         .filter((r) =>
           r.designsStatus && Object.values(r.designsStatus).some((v) => v === 'pending'),
         )
@@ -66,7 +74,7 @@ export function usePendingDesignsPoll(
         const res = await RepositoryRemote.order.checkPendingDesigns(pendingIds);
         const items = (res.data?.data || []) as RowWithDesigns[];
         for (const item of items) {
-          patchRow(item._id, {
+          patchRef.current(item._id, {
             designs: item.designs,
             designsStatus: item.designsStatus,
           });
@@ -83,11 +91,5 @@ export function usePendingDesignsPoll(
         intervalRef.current = null;
       }
     };
-  }, [hasPending, rows, patchRow]);
-
-  useEffect(() => {
-    if (!hasPending) {
-      startedAtRef.current = 0;
-    }
   }, [hasPending]);
 }

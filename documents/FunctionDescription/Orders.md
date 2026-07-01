@@ -620,6 +620,10 @@ const { has, canViewField, canEditField, canViewAdminTable, canViewWorkshopTable
 | Service Worker cache ảnh CDN | `apps/web/public/sw.js` |
 | BE cache key gắn `role` | Tránh Designer thấy cache của Admin |
 | `<PaginationBar position="top|bottom">` | Phân trang ở CẢ trên + dưới table, dùng chung `paginationProps` object — user không phải kéo lên/xuống mỗi lần đổi trang. |
+| **Render memo hóa** (tránh re-render cả bảng) | `decoratedGroups`/`selectedCountByType`/`visibleOrderedIds` = `useMemo`; mọi handler (`patchRow`, `openPreview`, `handleCheckboxChange`, `toggleGroupSelection`…) = `useCallback` (dùng functional setState + refs); `renderCtx` = `useMemo`. Combo-count + sort chỉ tính 1 lần theo `[groups]` thay vì mỗi render × 2. |
+| **`ProductRow` = `React.memo`** | Mỗi hàng đơn tách thành component memo, props primitive/stable (`isSelected`, `comboN`, `noTool`, `row`, callbacks). Tick checkbox / mở dialog / poll design KHÔNG re-render toàn bảng, chỉ hàng đổi. Bên trong dùng `renderedCells = useMemo(cols.map(c.render), [cols,row,ctx])` → đổi selection (bg sticky) không render lại các cell component. |
+| **Virtualization (window scroll)** | `useWindowVirtualizer` (`@tanstack/react-virtual`) trên danh sách phẳng `flatItems` (header + row theo collapse). Cuộn cả trang, chỉ render ~hàng đang thấy + 2 spacer row (padTop/padBottom); `measureElement` đo chiều cao thật (dynamic). `scrollMargin` = offset `<tbody>` đo qua `ResizeObserver(document.body)`. Bảng dùng `table-fixed` + `<colgroup>` width cố định (lấy từ `min-w-[…px]` mỗi cột, `parseColWidth`) để cột không giật khi cuộn. Ảnh đã lazy sẵn (`ImageThumbCell` `loading="lazy"`) → chỉ tải khi cuộn tới. |
+| **Poll design ổn định** | `usePendingDesignsPoll`: giữ `rows`/`patchRow` trong ref, effect chỉ depend `[hasPending]` → không tạo lại `setInterval` mỗi lần `items` đổi reference. |
 
 ### 10.7 List tab — URL state persistence
 
