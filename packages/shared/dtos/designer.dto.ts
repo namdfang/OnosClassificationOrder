@@ -258,6 +258,56 @@ export class DesignerBreakdownResDto extends createZodDto(
   extendApi(DesignerBreakdownResZod),
 ) {}
 
+// ─── Backlog tồn đọng theo Designer × Ngày (inProductionAt) ──────────
+// Đơn CHƯA done (gồm unassigned + rejected) gom theo người ôm × ngày vào sản
+// xuất. Dùng cho modal "Chi tiết tồn đọng" trên bảng Workshop.
+
+/** Phân rã trạng thái tồn (KHÔNG có done). */
+export const BacklogStatusCountsZod = z.object({
+  unassigned: z.number().int().nonnegative(),
+  assigned: z.number().int().nonnegative(),
+  inProgress: z.number().int().nonnegative(),
+  rework: z.number().int().nonnegative(),
+  rejected: z.number().int().nonnegative(),
+});
+export type BacklogStatusCounts = z.infer<typeof BacklogStatusCountsZod>;
+
+export const DesignerBacklogDayZod = z.object({
+  /** Ngày vào sản xuất `YYYY-MM-DD` (VN), hoặc `'__nodate__'` khi thiếu `inProductionAt`. */
+  day: z.string(),
+  /** Số ngày tuổi tính tới hôm nay (>=0). `-1` khi `__nodate__`. */
+  ageDays: z.number().int(),
+  total: z.number().int().nonnegative(),
+  byStatus: BacklogStatusCountsZod,
+});
+export type DesignerBacklogDay = z.infer<typeof DesignerBacklogDayZod>;
+
+export const DesignerBacklogRowZod = z.object({
+  /** = user._id, hoặc `'__unassigned__'`. */
+  userId: z.string(),
+  fullName: z.string(),
+  total: z.number().int().nonnegative(),
+  /** Ngày tồn cũ nhất (YYYY-MM-DD) hoặc null. */
+  oldestDay: z.string().nullable(),
+  /** Số ngày tuổi của đơn cũ nhất. */
+  oldestAgeDays: z.number().int(),
+  /** Đã sort ngày cũ → mới. */
+  days: DesignerBacklogDayZod.array(),
+});
+export type DesignerBacklogRow = z.infer<typeof DesignerBacklogRowZod>;
+
+export const DesignerBacklogResZod = ResZod.extend({
+  data: z.object({
+    total: z.number().int().nonnegative(),
+    oldestDay: z.string().nullable(),
+    /** Per-designer, sort theo total tồn desc (Chưa gán đẩy cuối). */
+    designers: DesignerBacklogRowZod.array(),
+  }),
+});
+export class DesignerBacklogResDto extends createZodDto(
+  extendApi(DesignerBacklogResZod),
+) {}
+
 // ─── Stats dashboard (Phase 5) ──────────────────────────────────────
 
 export const DesignerLeaderboardRowZod = z.object({

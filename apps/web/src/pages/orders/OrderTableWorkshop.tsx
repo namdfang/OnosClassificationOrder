@@ -1,5 +1,5 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
-import { ChevronDown, ChevronRight, FilterX, History, MousePointerClick, X } from 'lucide-react';
+import { CalendarClock, ChevronDown, ChevronRight, FilterX, History, MousePointerClick, X } from 'lucide-react';
 import { useSearchParams } from 'react-router-dom';
 import type { WorkshopAvailableFilters } from 'shared';
 
@@ -21,6 +21,7 @@ import { TooltipProvider } from '@/components/ui/tooltip';
 import { BulkEditToolbar } from '@/components/orders/BulkEditToolbar';
 import { OrderDetailDialog } from '@/components/orders/OrderDetailDialog';
 import { OrderLogTimelineDialog } from '@/components/orders/OrderLogTimelineDialog';
+import { DesignerBacklogDialog } from '@/components/orders/DesignerBacklogDialog';
 import { DesignerSummaryPanel } from './DesignerSummaryPanel';
 import {
   WORKSHOP_COLS,
@@ -550,6 +551,23 @@ export function OrderTableWorkshop() {
     setPage(1);
   };
 
+  // Modal "Chi tiết tồn đọng" — click 1 ngày → lọc bảng (assignee + ngày) +
+  // đóng modal để xem danh sách task ngay trên bảng chính.
+  const [backlogOpen, setBacklogOpen] = useState(false);
+  const handleBacklogDrill = (userId: string, day: string, status?: string) => {
+    setFilterAssignee(userId === '__unassigned__' ? '__none__' : userId);
+    setFilterDesignerStatus(status || ''); // status rỗng = mọi trạng thái ngày đó
+    if (day === '__nodate__') {
+      setCreatedFrom('');
+      setCreatedTo('');
+    } else {
+      setCreatedFrom(day);
+      setCreatedTo(day);
+    }
+    setPage(1);
+    setBacklogOpen(false);
+  };
+
   // Build qs để pass vào panel — cùng shape với buildFilterParams nhưng
   // KHÔNG include `page/limit` (panel scoped theo filter, không pagination).
   const summaryFilterQs = useMemo(() => {
@@ -574,10 +592,23 @@ export function OrderTableWorkshop() {
     <TooltipProvider delayDuration={200}>
       <div className="space-y-4">
         {canSeeDesignerSummary && (
-          <DesignerSummaryPanel
-            filterQs={summaryFilterQs}
-            onClickCell={handleSummaryCellClick}
-          />
+          <div className="space-y-2">
+            <div className="flex justify-end">
+              <Button
+                variant="outline"
+                size="sm"
+                className="h-8 text-xs"
+                onClick={() => setBacklogOpen(true)}
+              >
+                <CalendarClock size={14} className="mr-1" />
+                Chi tiết tồn đọng
+              </Button>
+            </div>
+            <DesignerSummaryPanel
+              filterQs={summaryFilterQs}
+              onClickCell={handleSummaryCellClick}
+            />
+          </div>
         )}
 
         {/* Filter bar — chuẩn cho mọi bảng order. Cùng layout với ErrorLogTab,
@@ -932,6 +963,12 @@ export function OrderTableWorkshop() {
           onOpenChange={(o) => !o && setDetailTarget(null)}
           orderId={detailTarget?.id ?? null}
           productionId={detailTarget?.productionId}
+        />
+
+        <DesignerBacklogDialog
+          open={backlogOpen}
+          onClose={() => setBacklogOpen(false)}
+          onDrillDay={handleBacklogDrill}
         />
       </div>
     </TooltipProvider>

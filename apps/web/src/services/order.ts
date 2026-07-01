@@ -99,6 +99,10 @@ const getDesignerBreakdown = (query: string = '') => {
   return callApi(`/${CONFIG.API_VERSION}/orders/designer-breakdown${query}`, 'get');
 };
 
+const getDesignerBacklog = () => {
+  return callApi(`/${CONFIG.API_VERSION}/orders/designer-backlog`, 'get');
+};
+
 const bulkAssignDesignerPreview = (data: BulkAssignDesignerPreviewDto) => {
   return callApi(`/${CONFIG.API_VERSION}/orders/bulk-assign-designer-preview`, 'post', data);
 };
@@ -157,6 +161,7 @@ export const order = {
   backfillFabric,
   exportOrders,
   getDesignerBreakdown,
+  getDesignerBacklog,
   bulkAssignDesignerPreview,
   bulkAssignDesigner,
   setProductionError,

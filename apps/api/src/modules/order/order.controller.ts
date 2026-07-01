@@ -14,6 +14,7 @@ import {
   BulkUpdateOrderFieldDto,
   BulkUpdateOrderFieldResDto,
   DesignerBreakdownResDto,
+  DesignerBacklogResDto,
   GetErrorLogDto,
   GetErrorLogResDto,
   GetOrderByProductionIdResDto,
@@ -383,6 +384,18 @@ export class OrderController {
     @AuthUser() user: UserDocument,
   ): Promise<DesignerBreakdownResDto> {
     return this.orderService.getDesignerBreakdown(dto, user?.role?.name, user?.factoryId);
+  }
+
+  @Get('designer-backlog')
+  @Auth([RoleType.SuperAdmin, RoleType.Admin, RoleType.Manager, RoleType.DesignerLeader])
+  @ApiOperation({
+    summary:
+      'Backlog tồn đọng (đơn chưa done) theo Designer × Ngày vào sản xuất — mọi ngày. Cho Admin/Leader.',
+  })
+  @HttpCode(HttpStatus.OK)
+  @ApiOkResponse({ type: DesignerBacklogResDto })
+  async getDesignerBacklog(@AuthUser() user: UserDocument): Promise<DesignerBacklogResDto> {
+    return this.orderService.getDesignerBacklog(user?.role?.name, user?.factoryId);
   }
 
   @Get('error-log')

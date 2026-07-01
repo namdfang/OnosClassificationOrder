@@ -24,6 +24,7 @@ import type {
   BulkUpdateOrderFieldDto,
   BulkUpdateOrderFieldResDto,
   DesignerBreakdownResDto,
+  DesignerBacklogResDto,
   DesignerStatusCounts,
   GetErrorLogDto,
   GetErrorLogResDto,
@@ -4629,6 +4630,136 @@ export class OrderService implements OnModuleInit {
     return {
       success: true,
       data: { scoped, overall, perDesigner },
+    };
+  }
+
+  /**
+   * Backlog tồn đọng theo Designer × Ngày vào sản xuất (`inProductionAt`).
+   * Đơn CHƯA `done` (gồm unassigned + rejected), MỌI ngày (không filter date —
+   * backlog cần thấy đơn cũ). Trả cây designer → days[] với counts per status.
+   * FE modal hiện counts; click ngày → drill bảng (assignee + date) để xem task.
+   */
+  async getDesignerBacklog(
+    roleName?: RoleType,
+    fulfillmentFactoryId?: string,
+  ): Promise<DesignerBacklogResDto> {
+    const base = this.buildVisibilityFilter(
+      roleName,
+      {} as GetProductionOrdersDto,
+      undefined,
+      fulfillmentFactoryId,
+    );
+    const match: Record<string, unknown> = {
+      ...base,
+      cancelledAt: { $exists: false },
+      designerStatus: { $ne: DesignerStatus.Done }, // $ne 'done' cũng match doc thiếu field
+    };
+
+    const agg = await this.orderModel.aggregate<{
+      _id: { assignee: string; day: string; status: string };
+      count: number;
+    }>([
+      { $match: match },
+      {
+        $group: {
+          _id: {
+            assignee: { $ifNull: ['$assignee', '__unassigned__'] },
+            day: {
+              $cond: [
+                { $ifNull: ['$inProductionAt', false] },
+                { $dateToString: { format: '%Y-%m-%d', date: '$inProductionAt', timezone: '+07:00' } },
+                '__nodate__',
+              ],
+            },
+            status: { $ifNull: ['$designerStatus', DesignerStatus.Unassigned] },
+          },
+          count: { $sum: 1 },
+        },
+      },
+    ]);
+
+    type DayAcc = {
+      day: string;
+      total: number;
+      byStatus: { unassigned: number; assigned: number; inProgress: number; rework: number; rejected: number };
+    };
+    type RowAcc = { userId: string; total: number; days: Map<string, DayAcc> };
+    const rows = new Map<string, RowAcc>();
+    let grandTotal = 0;
+
+    const statusKey: Record<string, keyof DayAcc['byStatus']> = {
+      unassigned: 'unassigned',
+      assigned: 'assigned',
+      'in-progress': 'inProgress',
+      rework: 'rework',
+      rejected: 'rejected',
+    };
+
+    for (const r of agg) {
+      const key = statusKey[r._id.status];
+      if (!key) continue; // bỏ qua status lạ / done (đã loại ở match)
+      const userId = r._id.assignee;
+      let row = rows.get(userId);
+      if (!row) {
+        row = { userId, total: 0, days: new Map() };
+        rows.set(userId, row);
+      }
+      let day = row.days.get(r._id.day);
+      if (!day) {
+        day = { day: r._id.day, total: 0, byStatus: { unassigned: 0, assigned: 0, inProgress: 0, rework: 0, rejected: 0 } };
+        row.days.set(r._id.day, day);
+      }
+      day.byStatus[key] += r.count;
+      day.total += r.count;
+      row.total += r.count;
+      grandTotal += r.count;
+    }
+
+    // Resolve fullName.
+    const userIds = [...rows.keys()].filter((id) => id !== '__unassigned__');
+    const nameMap = new Map<string, string>();
+    if (userIds.length > 0) {
+      const users = await this.userModel.find({ _id: { $in: userIds } }, { _id: 1, fullName: 1 }).lean();
+      for (const u of users) nameMap.set(String(u._id), u.fullName);
+    }
+
+    const today = vnTodayString();
+    const ageOf = (day: string): number => {
+      if (day === '__nodate__') return -1;
+      const ms = vnDayStart(today).getTime() - vnDayStart(day).getTime();
+      return Math.max(0, Math.round(ms / 86_400_000));
+    };
+
+    let globalOldest: string | null = null;
+    const designers = [...rows.values()].map((row) => {
+      const days = [...row.days.values()]
+        .map((d) => ({ day: d.day, ageDays: ageOf(d.day), total: d.total, byStatus: d.byStatus }))
+        // Cũ nhất (age lớn) lên đầu; __nodate__ (age -1) đẩy cuối.
+        .sort((a, b) => b.ageDays - a.ageDays);
+      const realDays = days.filter((d) => d.day !== '__nodate__');
+      const oldestDay = realDays.length > 0 ? realDays[0]!.day : null;
+      const oldestAgeDays = oldestDay ? realDays[0]!.ageDays : -1;
+      if (oldestDay && (!globalOldest || oldestDay < globalOldest)) globalOldest = oldestDay;
+      return {
+        userId: row.userId,
+        fullName: row.userId === '__unassigned__' ? 'Chưa gán' : nameMap.get(row.userId) || `#${row.userId.slice(-4)}`,
+        total: row.total,
+        oldestDay,
+        oldestAgeDays,
+        days,
+      };
+    });
+
+    // Sort designer: total desc, "(Chưa gán)" đẩy cuối.
+    designers.sort((a, b) => {
+      if (a.userId === '__unassigned__') return 1;
+      if (b.userId === '__unassigned__') return -1;
+      return b.total - a.total;
+    });
+
+    return {
+      success: true,
+      data: { total: grandTotal, oldestDay: globalOldest, designers },
     };
   }
 

@@ -207,6 +207,7 @@ factoryId?: string                // ref FactoryEntity, REQUIRED khi role=Fulfil
 | GET | `/v1/designer/timeline/:userId?from&to` | Same | Per-day buckets 4 series (assigned/started/completed/rework) cho line chart |
 | GET | `/v1/orders/error-stats?from&to` | Same | Pie split errorSource (designer/factory/unknown) + breakdown per code |
 | GET | `/v1/orders/designer-breakdown` | Admin/Manager/Leader | KPI scoped/overall + matrix per-designer (cho /orders panel) |
+| GET | `/v1/orders/designer-backlog` | Admin/Manager/Leader | **Tồn đọng** (đơn chưa `done`, gồm unassigned+rejected) gom theo **Designer × Ngày `inProductionAt`** (MỌI ngày). Trả cây `designers[] → days[]` (counts per status + `ageDays`). Cho modal "Chi tiết tồn đọng". |
 | POST | `/v1/orders/bulk-assign-designer-preview` | Same | Pre-flight stats |
 | POST | `/v1/orders/bulk-assign-designer` | Same | Body `{ ids, userId, reassignOthers }`, skip + report |
 | POST | `/v1/orders/:id/set-production-error` | Admin/Manager/Designer/Fulfillment/Leader | Atomic set 3 field, validate code='other' phải có source + note |
@@ -278,6 +279,15 @@ Trên cùng tab List Order + Bảng Workshop khi user có quyền `page.designer
 - 6 KPI button-card scoped theo filter list. Toggle xem "tổng" (overall, ignore filter)
 - Bảng matrix per-designer collapsible — click cell → set filter list (`handleSummaryCellClick`)
 - Auto refetch khi filter list đổi (cùng query string)
+
+### 4.4b `DesignerBacklogDialog` — modal "Chi tiết tồn đọng theo ngày"
+> File: `apps/web/src/components/orders/DesignerBacklogDialog.tsx`. Trigger: nút **"Chi tiết tồn đọng"** cạnh `DesignerSummaryPanel` (gate `canSeeDesignerSummary`) trong `OrderTableWorkshop.tsx`.
+
+- Mở modal → fetch `GET /v1/orders/designer-backlog` (MỌI ngày, không theo filter trang — backlog cần thấy đơn cũ).
+- **Cây 2 cấp** (modal CHỈ hiện counts, không kéo task): Designer (gập, mặc định mở người tồn nhiều nhất) → từng **ngày `inProductionAt`** với badge **màu theo tuổi** (`ageMeta`: hôm nay=xanh, 3-7d=vàng, 8-15d=cam, >15d=đỏ) + tổng + chip mỗi trạng thái (Chưa gán/Đã gán/Đang làm/Làm lại/Đã trả).
+- **Layout rộng** (`max-w-5xl`): designer chia **2 cột** (`lg:grid-cols-2`, round-robin chẵn/lẻ → 2 cột độc lập, card cao không kéo lệch cột kia). Header có nút **"Mở rộng hết / Thu gọn hết"** (`toggleAll`) + ô tìm designer.
+- **Drill xem task ở bảng chính** (`onDrillDay` → `handleBacklogDrill` ở `OrderTableWorkshop`): click **vùng ngày** → lọc `assignee + ngày` (mọi trạng thái); click **1 chip trạng thái** → lọc `assignee + ngày + đúng status đó` (chính xác, loại done). Đóng modal → bảng hiện task; thanh chip "Đang lọc" hiện filter vừa set. `__unassigned__` → map `__none__`; `__nodate__` → clear filter ngày.
+- Header: tổng task chưa xong + ngày cũ nhất + ô tìm designer (lọc client-side).
 
 ### 4.5 `AssignDesignerDialog` (bulk assign từ workshop)
 Xem 2.2.
@@ -364,6 +374,9 @@ Picker designer/factory cho `order.productionErrorSource`. User override đượ
 
 ### 5.8 OrderLog audit
 Mỗi transition ghi entry `{ field: 'designerStatus', before, after, action: 'update' }` + side-effect entries (vd `toolResultNote: 'ok'` khi complete). Bulk transition gọi `writeMany`. Backfill design status không ghi log (silent).
+
+### 5.9 Backlog tồn đọng (`OrderService.getDesignerBacklog`)
+1 aggregate: `$match` (`buildVisibilityFilter` no-date + `cancelledAt` không tồn tại + `designerStatus != done` — `$ne` match cả doc thiếu field = unassigned) → `$group` theo `{ assignee (ifNull `__unassigned__`), day ($dateToString `inProductionAt` tz `+07:00`, thiếu → `__nodate__`), status }`. JS gom thành cây designer → days, tính `ageDays` (vnDayStart today − day), sort ngày cũ→mới + designer total desc (Chưa gán cuối). Resolve `fullName` từ `userModel`. Không kéo task (modal chỉ counts) → payload nhỏ; index `assignee`/`inProductionAt`/`designerStatus` đỡ scan.
 
 ---
 
