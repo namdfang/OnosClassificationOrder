@@ -251,8 +251,33 @@ export const GetTeamDailyBreakdownZod = z.object({
    *  (cho biểu đồ "theo designer" có date-range riêng). `days` bị bỏ qua. */
   from: z.string().optional(),
   to: z.string().optional(),
+  /** Lọc theo sản phẩm (`order.type`). Bỏ trống = tất cả. */
+  type: z.string().optional(),
+  /** Lọc theo khách hàng (`order.userSku`). Bỏ trống = tất cả. */
+  customer: z.string().optional(),
 });
 export class GetTeamDailyBreakdownDto extends createZodDto(extendApi(GetTeamDailyBreakdownZod)) {}
+
+// ─── Filter options cho matrix/biểu đồ designer (sản phẩm + khách hàng) ──
+
+export const BreakdownFilterOptionZod = z.object({
+  value: z.string(),
+  label: z.string(),
+  count: z.number().int().nonnegative(),
+});
+export type BreakdownFilterOption = z.infer<typeof BreakdownFilterOptionZod>;
+
+export const GetBreakdownFiltersResZod = ResZod.extend({
+  data: z.object({
+    /** Danh sách sản phẩm (`order.type`) có đơn đã gán designer, sort count desc. */
+    products: BreakdownFilterOptionZod.array(),
+    /** Danh sách khách hàng (`order.userSku`), sort count desc (cap 300). */
+    customers: BreakdownFilterOptionZod.array(),
+  }),
+});
+export class GetBreakdownFiltersResDto extends createZodDto(
+  extendApi(GetBreakdownFiltersResZod),
+) {}
 
 export const GetTeamDailyBreakdownResZod = ResZod.extend({
   data: z.object({

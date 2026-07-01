@@ -170,6 +170,7 @@ export const DEFAULT_ROLE_PERMISSIONS: Partial<Record<RoleType, string[]>> = {
   // (BE auto derive khi transition done), không assign cho ai khác.
   [RoleType.Designer]: [
     'page.dashboard', 'page.orders', 'page.my_tasks',
+    'page.designer_stats', // xem tab Dashboard Designer (thống kê toàn team)
     'order.view_workshop_table',
     'order.field.toolResult.view',     'order.field.toolResult.edit',
     'order.field.toolResultNote.view', // VIEW only — BE derive khi done

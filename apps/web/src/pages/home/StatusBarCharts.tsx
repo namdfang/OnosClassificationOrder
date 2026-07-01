@@ -48,7 +48,14 @@ function dm(day: string): string {
   return `${String(d.getDate()).padStart(2, '0')}/${String(d.getMonth() + 1).padStart(2, '0')}`;
 }
 
-export function StatusBarCharts() {
+interface Props {
+  /** Filter sản phẩm (`order.type`) — dùng chung toàn tab. */
+  type?: string;
+  /** Filter khách hàng (`order.userSku`) — dùng chung toàn tab. */
+  customer?: string;
+}
+
+export function StatusBarCharts({ type, customer }: Props) {
   const [mode, setMode] = useState<Mode>('designer');
   // Chế độ "theo designer": date-range riêng (mặc định 30 ngày).
   const [dFrom, setDFrom] = useState(daysAgoISO(29));
@@ -66,8 +73,11 @@ export function StatusBarCharts() {
     (async () => {
       try {
         setLoading(true);
-        const params =
-          mode === 'designer' ? { from: dFrom, to: dTo } : { days: range };
+        const params = {
+          ...(mode === 'designer' ? { from: dFrom, to: dTo } : { days: range }),
+          ...(type ? { type } : {}),
+          ...(customer ? { customer } : {}),
+        };
         const res = await RepositoryRemote.designer.teamDailyBreakdown(params);
         if (seq !== seqRef.current) return;
         setData((res.data?.data as Data) || EMPTY);
@@ -77,7 +87,7 @@ export function StatusBarCharts() {
         if (seq === seqRef.current) setLoading(false);
       }
     })();
-  }, [mode, dFrom, dTo, range]);
+  }, [mode, dFrom, dTo, range, type, customer]);
 
   // Chế độ designer: 1 cột / designer (chỉ người có đơn), stack 100%.
   const designerData = useMemo(

@@ -6,7 +6,7 @@
 > **Tab A — Thống kê đơn & sản phẩm:** `apps/web/src/pages/home/OrderStatsTab.tsx`. Filter top bar dùng chung `<OrderFilterBar>` — xem `Orders.md §10.3`. 2 search field (`searchType` main + `searchUser` qua `topActionsRight`); auto-fetch debounce 300ms.
 > **Tab B — Tình trạng:** `apps/web/src/pages/home/OrderStatusTab.tsx` + `status/{KpiCard,BreakdownCard,StatusFilterExtras,OrdersMiniTable,useStatusFilter}.tsx`. Filter top bar dùng chung `<OrderFilterBar>` (apps/web/src/components/orders/OrderFilterBar.tsx) — xem `Orders.md §10.3`.
 > **Tab C — Đơn theo xưởng:** `apps/web/src/pages/home/OrderFactoryTab.tsx` + `apps/web/src/pages/home/exportOrders.ts` (XLSX builder)
-> **Tab D — Designer:** `apps/web/src/pages/home/DesignerStatsTab.tsx` (+ `TeamDailyMatrix.tsx`, `StatusBarCharts.tsx`) — Leader/Admin only (perm `page.designer_stats`)
+> **Tab D — Designer:** `apps/web/src/pages/home/DesignerStatsTab.tsx` (+ `TeamDailyMatrix.tsx`, `StatusBarCharts.tsx`) — Admin/Manager/Leader **+ Designer (sub)** (perm `page.designer_stats`)
 > **File BE:** `apps/api/src/modules/order/order.service.ts` → `getDashboard()`, `getStatusOverview()`, `getFactoryOverview()`, `exportOrders()`, `transferOrder()`, `bulkTransferOrders()` + `apps/api/src/modules/designer/designer-stats.service.ts` → `getPerformance()`, `getTimeline()`, `getErrorStats()`, `getTeamDailyBreakdown()`
 > **Route:** `/dashboard?tab=stats|status|factory|designer`
 > **API:**
@@ -61,9 +61,14 @@ Data từ `GET /v1/orders/factory-overview` + `GET /v1/orders?sort=grouped&...` 
 
 ### Tab D — "Designer" (Phase Designer-Task-Workflow Phase 5)
 
-**Chỉ hiển thị khi user có perm `page.designer_stats`** (DesignerLeader / Admin / Manager). Xem `DesignerTaskWorkflow.md` để hiểu workflow tổng.
+**Chỉ hiển thị khi user có perm `page.designer_stats`** (DesignerLeader / Admin / Manager **+ Designer sub** — sub-designer cũng xem được thống kê toàn team). BE: 5 endpoint tab (`designer-stats.controller.ts`, const `LEADER_ROLES`) đã bao gồm `RoleType.Designer`. Xem `DesignerTaskWorkflow.md` để hiểu workflow tổng.
 
-Layout 5 section (thứ tự render trên tab: **Biểu đồ cột cơ cấu → Ma trận toàn team → Period switcher → Leaderboard → Timeline → Error pie**). Đánh số dưới đây theo nhóm chức năng, không theo thứ tự dọc:
+Layout (thứ tự render trên tab: **Bộ lọc chung → Biểu đồ cột cơ cấu → Ma trận toàn team → Period switcher → Leaderboard → Timeline → Error pie**). Đánh số dưới đây theo nhóm chức năng, không theo thứ tự dọc:
+
+**0. Bộ lọc chung sản phẩm + khách hàng** (card `Filter` render **ĐẦU TIÊN trên cùng tab**, trên cả biểu đồ cột & ma trận):
+- 2 dropdown `<SelectFilter>` (native select có count + typeahead): **Sản phẩm** (`order.type`) + **Khách hàng** (`order.userSku`). State `filterType`/`filterCustomer` ở `DesignerStatsTab`, truyền **props `type`/`customer`** xuống CẢ `StatusBarCharts` VÀ `TeamDailyMatrix` → cả 2 refetch khi filter đổi (thêm vào deps `useEffect`).
+- Option list load 1 lần lúc mount từ `GET /v1/designer/breakdown-filters` (distinct `type` + `userSku` của đơn đã gán designer, sort count desc, customer cap 300). Nút **"Xóa lọc"** hiện khi có filter active.
+- **Chỉ ảnh hưởng section 2 (ma trận) + 2b (biểu đồ cột)** — KHÔNG ảnh hưởng Leaderboard/Timeline/Error pie (các section này có period switcher riêng).
 
 **1. Leaderboard table** (`<Table>` shadcn) — sort theo `completedInPeriod` desc, auto-include sub-designer chưa có task (row count 0):
 
@@ -85,14 +90,14 @@ Click row → set `selectedUserId` → reload timeline chart.
 - **Switcher `7/14/30 ngày` RIÊNG** (state `range` nội bộ, độc lập period switcher của tab) — tránh custom range sinh quá nhiều cột. Seq-guard chống race.
 - **Bảng ma trận full-width** (`table w-full` → cột ngày **giãn hết chiều rộng** khi ít ngày; nhiều ngày → cuộn ngang): cột trái **sticky = Designer** (tên + "chưa xong N · xong M"), header **sticky = các ngày** theo chiều **cũ→mới (quá khứ→hiện tại), trái→phải** (BE trả mới→cũ, FE `reverse()` cả `days`+`cells`+`columnTotals`). Mỗi ô = **4 số mini `Cần làm·Làm lại·Đang làm·Đã xong`** (assigned·rework·inProgress·done, màu zinc/amber/indigo/emerald; cỡ chữ `text-[13px]`), **nền heatmap amber theo tổng chưa xong** của ô (done KHÔNG ảnh hưởng nền); ô rỗng = `·`. **Mỗi con số có tooltip riêng** — dùng **Radix `Hint forceRich`** (bọc `TooltipProvider` ở root component; **KHÔNG** dùng native `title` vì không hiện ổn định) nội dung `"Cần làm/Cần làm lại/Đang làm/Đã xong: N"`. Footer sticky `Tổng/ngày` cũng hiện **4 số breakdown**. Grand summary strip trên đầu.
 - **Sort designer theo `unfinished` desc** (ai tồn nhiều lên đầu), rồi done desc, rồi tên.
-- Data từ `GET /v1/designer/team-daily-breakdown?days=7|14|30`. Refetch khi bấm Refresh của tab (prop `reloadToken` = `matrixToken` bump trong `fetchAll`).
+- Data từ `GET /v1/designer/team-daily-breakdown?days=7|14|30`. Refetch khi bấm Refresh của tab (prop `reloadToken` = `matrixToken` bump trong `fetchAll`) **hoặc khi đổi bộ lọc chung** (props `type`/`customer` → thêm vào query `&type=&customer=`).
 - **Lưu ý window:** đếm `inProductionAt ∈ [today−(N−1)..today]` → đơn tồn ngoài N ngày ẩn; dùng 14/30 để mở rộng. `done` gộp theo `inProductionAt` (KHÁC "completed in period" của Leaderboard dùng `designerCompletedAt`).
 
 **2b. Biểu đồ cột cơ cấu trạng thái** (`StatusBarCharts.tsx` — 1 card có **toggle**, render **ĐẦU TIÊN trên cùng tab**, trên cả ma trận; Recharts `BarChart` stacked):
 - **Toggle "Theo designer / Theo ngày"** — 1 khu vực biểu đồ, 2 chế độ, chung bộ màu 4 trạng thái (Cần làm zinc `#71717A` · Cần làm lại amber `#F59E0B` · Đang làm indigo `#6366F1` · Đã xong emerald `#10B981`) + legend + custom tooltip (hover hiện **số lượng + %** từng trạng thái + Tổng).
   - **Theo designer:** mỗi **cột = 1 designer** (chỉ người có đơn), **stack 100%** (`stackOffset="expand"`, YAxis %) → xong hết = 100% xanh. Có **date-range RIÊNG** (`DateRangePicker`, mặc định 30 ngày) → gọi `team-daily-breakdown?from=&to=`, lấy `rows[].totals`.
   - **Theo ngày:** mỗi **cột = 1 ngày** (cũ→mới trái→phải), **stack số lượng** (`stackOffset="none"`) → thấy khối lượng/ngày. Switcher **7/14/30** + dropdown **lọc theo người** (Tất cả = `columnTotals`; 1 người = `rows[].cells`). Gọi `team-daily-breakdown?days=`.
-- Cả 2 chế độ tái dùng **cùng endpoint** `GET /v1/designer/team-daily-breakdown` (đã bổ sung nhận `from`/`to`; range tùy chỉnh cap 100 cột nhưng `totals` tính TRỰC TIẾP từ agg nên luôn đúng dù cap). Fetch độc lập, seq-guard chống race.
+- Cả 2 chế độ tái dùng **cùng endpoint** `GET /v1/designer/team-daily-breakdown` (đã bổ sung nhận `from`/`to` + `type`/`customer`; range tùy chỉnh cap 100 cột nhưng `totals` tính TRỰC TIẾP từ agg nên luôn đúng dù cap). Nhận props `type`/`customer` từ bộ lọc chung (§0) → refetch khi đổi. Fetch độc lập, seq-guard chống race.
 
 **3. Timeline per-designer** (Recharts `LineChart`, 4 series: assigned / started / completed / rework):
 - Dropdown chọn designer (default = top leaderboard)

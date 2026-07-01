@@ -134,12 +134,20 @@ const timeline = (userId: string, params: { from?: string; to?: string } = {}) =
   );
 };
 
-const teamDailyBreakdown = (params: { days?: 7 | 14 | 30; from?: string; to?: string } = {}) => {
+const teamDailyBreakdown = (
+  params: { days?: 7 | 14 | 30; from?: string; to?: string; type?: string; customer?: string } = {},
+) => {
   const qs = new URLSearchParams();
   qs.set('days', String(params.days || 7));
   if (params.from) qs.set('from', params.from);
   if (params.to) qs.set('to', params.to);
+  if (params.type) qs.set('type', params.type);
+  if (params.customer) qs.set('customer', params.customer);
   return callApi(`/${CONFIG.API_VERSION}/designer/team-daily-breakdown?${qs.toString()}`, 'get');
+};
+
+const breakdownFilters = () => {
+  return callApi(`/${CONFIG.API_VERSION}/designer/breakdown-filters`, 'get');
 };
 
 const errorStats = (params: { from?: string; to?: string } = {}) => {
@@ -168,5 +176,6 @@ export const designer = {
   performance,
   timeline,
   teamDailyBreakdown,
+  breakdownFilters,
   errorStats,
 };

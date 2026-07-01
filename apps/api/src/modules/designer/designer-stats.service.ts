@@ -370,6 +370,8 @@ export class DesignerStatsService {
     rangeDays: number,
     from?: string,
     to?: string,
+    type?: string,
+    customer?: string,
   ): Promise<{
     days: string[];
     rows: {
@@ -431,6 +433,11 @@ export class DesignerStatsService {
     };
     const emptyCell = () => ({ assigned: 0, rework: 0, inProgress: 0, done: 0, unfinished: 0 });
 
+    // Filter sản phẩm / khách hàng (áp dụng chung cho ma trận + 2 biểu đồ cột).
+    const extraMatch: Record<string, unknown> = {};
+    if (type) extraMatch.type = type;
+    if (customer) extraMatch.userSku = customer;
+
     const [agg, designerRole] = await Promise.all([
       this.orderModel.aggregate<{
         _id: { uid: string; day: string; status: DesignerStatus };
@@ -448,6 +455,7 @@ export class DesignerStatsService {
                 DesignerStatus.Done,
               ],
             },
+            ...extraMatch,
           },
         },
         {
@@ -533,6 +541,34 @@ export class DesignerStatsService {
     );
 
     return { days, rows, columnTotals, grandTotals, rangeDays };
+  }
+
+  /**
+   * Danh sách option cho 2 dropdown filter (sản phẩm = `type`, khách hàng =
+   * `userSku`) của tab Designer. Chỉ tính đơn đã gán designer (assignee set) để
+   * khớp phạm vi của ma trận/biểu đồ. Customer cap 300 để payload không phình.
+   */
+  async getBreakdownFilters(): Promise<{
+    products: { value: string; label: string; count: number }[];
+    customers: { value: string; label: string; count: number }[];
+  }> {
+    const scope = { assignee: { $exists: true, $ne: null } };
+    const [typeRows, customerRows] = await Promise.all([
+      this.orderModel.aggregate<{ _id: string; count: number }>([
+        { $match: { ...scope, type: { $exists: true, $nin: [null, ''] } } },
+        { $group: { _id: '$type', count: { $sum: 1 } } },
+        { $sort: { count: -1 } },
+      ]),
+      this.orderModel.aggregate<{ _id: string; count: number }>([
+        { $match: { ...scope, userSku: { $exists: true, $nin: [null, ''] } } },
+        { $group: { _id: '$userSku', count: { $sum: 1 } } },
+        { $sort: { count: -1 } },
+        { $limit: 300 },
+      ]),
+    ]);
+    const toOpts = (rows: { _id: string; count: number }[]) =>
+      rows.map((r) => ({ value: r._id, label: r._id, count: r.count }));
+    return { products: toOpts(typeRows), customers: toOpts(customerRows) };
   }
 
   private resolveRange(from?: string, to?: string): { start: Date; end: Date } {

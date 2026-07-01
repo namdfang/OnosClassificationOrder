@@ -29,6 +29,10 @@ const EMPTY: Data = {
 interface Props {
   /** Bump để refetch khi tab bấm Refresh. */
   reloadToken?: number;
+  /** Filter sản phẩm (`order.type`) — dùng chung toàn tab. */
+  type?: string;
+  /** Filter khách hàng (`order.userSku`) — dùng chung toàn tab. */
+  customer?: string;
 }
 
 function fmtHead(day: string): { wd: string; dm: string } {
@@ -47,7 +51,7 @@ function tint(unfinished: number): string {
   return 'bg-amber-500/[0.22]';
 }
 
-export function TeamDailyMatrix({ reloadToken }: Props) {
+export function TeamDailyMatrix({ reloadToken, type, customer }: Props) {
   const [range, setRange] = useState<RangeDays>(7);
   const [data, setData] = useState<Data>(EMPTY);
   const [loading, setLoading] = useState(false);
@@ -58,7 +62,11 @@ export function TeamDailyMatrix({ reloadToken }: Props) {
     (async () => {
       try {
         setLoading(true);
-        const res = await RepositoryRemote.designer.teamDailyBreakdown({ days: range });
+        const res = await RepositoryRemote.designer.teamDailyBreakdown({
+          days: range,
+          ...(type ? { type } : {}),
+          ...(customer ? { customer } : {}),
+        });
         if (seq !== seqRef.current) return;
         const raw = (res.data?.data as Data) || EMPTY;
         // BE trả ngày mới→cũ. Đảo thành cũ→mới để hiển thị QUÁ KHỨ → HIỆN TẠI
@@ -75,7 +83,7 @@ export function TeamDailyMatrix({ reloadToken }: Props) {
         if (seq === seqRef.current) setLoading(false);
       }
     })();
-  }, [range, reloadToken]);
+  }, [range, reloadToken, type, customer]);
 
   const { days, rows, columnTotals, grandTotals } = data;
 

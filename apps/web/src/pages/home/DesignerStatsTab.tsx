@@ -10,8 +10,9 @@ import {
   XAxis,
   YAxis,
 } from 'recharts';
-import { RefreshCw, Trophy } from 'lucide-react';
+import { Filter, RefreshCw, Trophy, X } from 'lucide-react';
 import type {
+  BreakdownFilterOption,
   DesignerLeaderboardRow,
   DesignerTimelineBucket,
   ErrorStats,
@@ -28,6 +29,7 @@ import {
   TableRow,
 } from '@/components/ui/table';
 import { Spinner } from '@/components/common/Spinner';
+import { SelectFilter } from '@/components/common/SelectFilter';
 import { RepositoryRemote } from '@/services';
 import { handleAxiosError } from '@/utils';
 
@@ -67,6 +69,25 @@ export default function DesignerStatsTab() {
   const [loading, setLoading] = useState(false);
   // Bump để TeamDailyMatrix refetch khi bấm Refresh (ma trận dùng range riêng).
   const [matrixToken, setMatrixToken] = useState(0);
+
+  // Filter dùng chung cho biểu đồ cột + ma trận: sản phẩm (type) + khách (userSku).
+  const [filterType, setFilterType] = useState('');
+  const [filterCustomer, setFilterCustomer] = useState('');
+  const [products, setProducts] = useState<BreakdownFilterOption[]>([]);
+  const [customers, setCustomers] = useState<BreakdownFilterOption[]>([]);
+
+  useEffect(() => {
+    (async () => {
+      try {
+        const res = await RepositoryRemote.designer.breakdownFilters();
+        const data = res.data?.data as { products?: BreakdownFilterOption[]; customers?: BreakdownFilterOption[] };
+        setProducts(data?.products || []);
+        setCustomers(data?.customers || []);
+      } catch (err) {
+        handleAxiosError(err);
+      }
+    })();
+  }, []);
 
   const range = useMemo(
     () => rangeFromPeriod(period, customFrom, customTo),
@@ -124,12 +145,43 @@ export default function DesignerStatsTab() {
 
   return (
     <div className="space-y-5">
+      {/* Filter dùng chung: lọc biểu đồ cột + ma trận theo sản phẩm / khách hàng. */}
+      <div className="rounded-lg border border-border bg-card p-3">
+        <div className="flex items-center gap-2 mb-2">
+          <Filter size={15} className="text-indigo-600" />
+          <span className="text-sm font-semibold">Bộ lọc chung</span>
+          <span className="text-[11px] text-muted-foreground">
+            — áp dụng cho biểu đồ cột + ma trận bên dưới
+          </span>
+          {(filterType || filterCustomer) && (
+            <button
+              type="button"
+              onClick={() => {
+                setFilterType('');
+                setFilterCustomer('');
+              }}
+              className="ml-auto inline-flex items-center gap-1 text-[11px] text-muted-foreground hover:text-foreground"
+            >
+              <X size={12} /> Xóa lọc
+            </button>
+          )}
+        </div>
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-2">
+          <SelectFilter label="Sản phẩm" value={filterType} onChange={setFilterType} options={products} />
+          <SelectFilter label="Khách hàng" value={filterCustomer} onChange={setFilterCustomer} options={customers} />
+        </div>
+      </div>
+
       {/* Biểu đồ cột: toggle "Theo designer (100%)" / "Theo ngày (số lượng)".
           Đặt ĐẦU TIÊN để admin thấy ngay toàn cảnh cơ cấu trạng thái. */}
-      <StatusBarCharts />
+      <StatusBarCharts type={filterType || undefined} customer={filterCustomer || undefined} />
 
       {/* Ma trận toàn team × ngày (7/14/30 riêng) — snapshot đơn chưa xong. */}
-      <TeamDailyMatrix reloadToken={matrixToken} />
+      <TeamDailyMatrix
+        reloadToken={matrixToken}
+        type={filterType || undefined}
+        customer={filterCustomer || undefined}
+      />
 
       {/* Period switcher */}
       <div className="flex items-center justify-between flex-wrap gap-3">

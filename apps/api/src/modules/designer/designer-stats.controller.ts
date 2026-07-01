@@ -7,6 +7,7 @@ import {
   GetDesignerPerformanceResDto,
   GetDesignerTimelineDto,
   GetDesignerTimelineResDto,
+  GetBreakdownFiltersResDto,
   GetErrorStatsDto,
   GetErrorStatsResDto,
   GetTeamDailyBreakdownDto,
@@ -20,11 +21,14 @@ import { Auth } from '@/decorators';
 import { UserDocument } from '../user/user.entity';
 import { DesignerStatsService } from './designer-stats.service';
 
+// Bao gồm cả Designer (sub) để sub-designer cũng xem được tab Dashboard
+// Designer (thống kê toàn team) — gate FE qua perm `page.designer_stats`.
 const LEADER_ROLES = [
   RoleType.SuperAdmin,
   RoleType.Admin,
   RoleType.Manager,
   RoleType.DesignerLeader,
+  RoleType.Designer,
 ];
 
 @Controller()
@@ -97,7 +101,26 @@ export class DesignerStatsController {
       Number(query.days),
       query.from,
       query.to,
+      query.type,
+      query.customer,
     );
+    return { success: true, data };
+  }
+
+  @Get('designer/breakdown-filters')
+  @Auth(LEADER_ROLES)
+  @ApiOperation({
+    summary: 'Option list cho 2 dropdown filter (sản phẩm + khách hàng) của tab Designer.',
+  })
+  @HttpCode(HttpStatus.OK)
+  @ApiOkResponse({ type: GetBreakdownFiltersResDto })
+  async getBreakdownFilters(
+    @AuthUser() user: UserDocument,
+  ): Promise<GetBreakdownFiltersResDto> {
+    this.logger.info({
+      message: JSON.stringify({ method: 'GET', url: '/designer/breakdown-filters', userId: user._id }),
+    });
+    const data = await this.statsService.getBreakdownFilters();
     return { success: true, data };
   }
 
