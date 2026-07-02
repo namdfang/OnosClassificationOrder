@@ -1,6 +1,5 @@
 import React, { useEffect, useState } from 'react';
-import { Calendar, CheckCircle2, Clock, Download, ExternalLink, Package, RotateCcw, ShieldAlert, XCircle } from 'lucide-react';
-import { toast } from 'sonner';
+import { Calendar, CheckCircle2, Clock, ExternalLink, Package, RotateCcw, ShieldAlert, XCircle } from 'lucide-react';
 import { DesignerStatus } from 'shared';
 
 import { Badge } from '@/components/ui/badge';
@@ -70,12 +69,6 @@ function fmt(d?: string): string {
   return new Date(d).toLocaleString('vi-VN', { hour12: false });
 }
 
-/** Đoán đuôi file từ URL (bỏ query/hash) để đặt tên khi tải. */
-function guessExt(url: string): string {
-  const m = url.split(/[?#]/)[0].match(/\.(png|jpe?g|webp|gif|svg|pdf|tiff?|bmp)$/i);
-  return m ? m[0].toLowerCase() : '';
-}
-
 export function TaskDetailDialog({ orderId, onClose }: Props) {
   const [detail, setDetail] = useState<OrderDetail | null>(null);
   const [loading, setLoading] = useState(false);
@@ -85,32 +78,6 @@ export function TaskDetailDialog({ orderId, onClose }: Props) {
   const openInNewTab = (url?: string) => {
     const target = driveViewUrl(url);
     if (target) window.open(target, '_blank', 'noopener,noreferrer');
-  };
-
-  const [downloadingKey, setDownloadingKey] = useState<string | null>(null);
-
-  // Tải ảnh về máy KHÔNG qua server mình: fetch thẳng từ host ảnh ngoài → blob →
-  // tự click <a download>. Host chặn CORS thì fallback mở tab mới để user tự lưu.
-  const handleDownload = async (key: string, url: string, filename: string) => {
-    try {
-      setDownloadingKey(key);
-      const res = await fetch(url, { mode: 'cors', credentials: 'omit', referrerPolicy: 'no-referrer' });
-      if (!res.ok) throw new Error(`HTTP ${res.status}`);
-      const blob = await res.blob();
-      const objUrl = URL.createObjectURL(blob);
-      const a = document.createElement('a');
-      a.href = objUrl;
-      a.download = filename;
-      document.body.appendChild(a);
-      a.click();
-      a.remove();
-      URL.revokeObjectURL(objUrl);
-    } catch {
-      window.open(url, '_blank', 'noopener,noreferrer');
-      toast.message('Ảnh chặn tải trực tiếp (CORS) — đã mở ở tab mới để bạn lưu thủ công.');
-    } finally {
-      setDownloadingKey(null);
-    }
   };
 
   useEffect(() => {
@@ -193,12 +160,17 @@ export function TaskDetailDialog({ orderId, onClose }: Props) {
                 </div>
               )}
 
-              {/* Designs — chỉ hiển thị LINK (không render ảnh) để đỡ tải file
-                  gốc mấy chục MB. Click → mở Drive viewer ở tab mới. */}
+              {/* Designs — hiển thị LINK ảnh (không render ảnh cho đỡ tải file
+                  lớn). Left-click mở tab mới; CHUỘT PHẢI → "Lưu liên kết/ảnh"
+                  để tải về máy (trình duyệt tự tải, không qua server mình).
+                  [Nút "Tải về" tạm ẩn vì ảnh khác-origin bị CORS chặn auto-download.] */}
               {designKeys.length > 0 && (
                 <div>
                   <p className="text-xs font-semibold text-foreground mb-1.5">
                     File design ({designKeys.length})
+                  </p>
+                  <p className="text-[11px] text-muted-foreground mb-1.5">
+                    Chuột phải vào link → "Lưu liên kết thành…" để tải ảnh về máy.
                   </p>
                   <div className="space-y-1">
                     {designKeys.map((k) => {
@@ -211,37 +183,21 @@ export function TaskDetailDialog({ orderId, onClose }: Props) {
                         >
                           <span className="font-medium text-foreground w-14 shrink-0">{k}</span>
                           {raw ? (
-                            <div className="ml-auto flex items-center gap-1.5 shrink-0">
-                              {/* Link ảnh thường (KHÔNG phải Drive) → dùng URL gốc. */}
+                            <>
                               <a
                                 href={raw}
                                 target="_blank"
                                 rel="noopener noreferrer"
-                                title="Mở ảnh design ở tab mới"
-                                className="inline-flex items-center gap-1 rounded border border-border px-2 py-1 text-primary hover:bg-accent"
+                                title="Left-click: mở tab mới · Chuột phải: Lưu liên kết để tải về"
+                                className="inline-flex items-center gap-1 min-w-0 text-primary hover:underline"
                               >
-                                <ExternalLink size={12} /> Mở
+                                <ExternalLink size={12} className="shrink-0" />
+                                <span className="truncate">{raw}</span>
                               </a>
-                              {/* Tải về: fetch blob rồi tự download (không điều hướng
-                                  tab, không qua server mình). CORS chặn → mở tab mới. */}
-                              <button
-                                type="button"
-                                onClick={() =>
-                                  handleDownload(k, raw, `${detail.productionId}_${k}${guessExt(raw)}`)
-                                }
-                                disabled={downloadingKey === k}
-                                title="Tải ảnh design về máy"
-                                className="inline-flex items-center gap-1 rounded border border-border px-2 py-1 text-foreground hover:bg-accent disabled:opacity-60"
-                              >
-                                {downloadingKey === k ? (
-                                  <Spinner size={12} />
-                                ) : (
-                                  <Download size={12} />
-                                )}{' '}
-                                Tải về
-                              </button>
-                              <CopyButton value={raw} label="Link design" iconSize={11} />
-                            </div>
+                              <span className="ml-auto shrink-0">
+                                <CopyButton value={raw} label="Link design" iconSize={11} />
+                              </span>
+                            </>
                           ) : (
                             <span className="ml-auto text-muted-foreground">—</span>
                           )}
