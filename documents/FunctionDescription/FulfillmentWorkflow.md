@@ -142,6 +142,7 @@ Nếu `cancelledAt` được set (từ flow Import file soát), `BadRequestExcep
 | ------ | --------------------------------------- | ------------------------------------------------------------------- | ----------- | ------ | -------------------------------------------------------------------------------------- |
 | `POST` | `/v1/orders/:id/fulfillment-transition` | Trigger state machine. Body: `{ stage, action, target?, reason? }`. |
 | `GET`  | `/v1/fulfillment/my-tasks`              | List 4-tab cho worker hiện tại. Query: `tab=waiting                 | in-progress | rework | watching`, `page`, `size`. Stage + factoryId tự suy từ user (Manager có thể override). |
+| `GET`  | `/v1/fulfillment/daily-overview`        | **Bảng tổng quan theo ngày** cho stage của user. Query: `days=7\|14\|30` hoặc `from`/`to` (VN), `stage?` (override). Trả `days[]` `{day, arrived, done, remaining, rework}` + `columnTotals` + `rangeDays`. Xem §4.6. |
 
 ### 3.2 OrderEntity — fields mới
 
@@ -346,6 +347,18 @@ Riêng user **In** (`role=Fulfillment`, `fulfillmentStage='print'`) **KHÔNG** d
     suy ra từ lỗi xưởng. `RoleService.onModuleInit` revoke quyền khi restart (catalog = source of truth). Vẫn giữ
     `productionError.edit` để worker chọn lỗi xưởng.
 
+### 4.6 Bảng "Tổng quan theo ngày" (`FulfillmentDailyOverview.tsx`) — MỌI stage
+
+Component dùng chung, render **trên** kanban (6 stage) và **trên** bảng In (stage print). Gom đơn theo **`inProductionAt`** (VN) — cùng trục với date-picker + bảng Designer/Soát tool ⇒ 1 đơn nằm cùng cột ngày ở mọi stage, giúp worker biết **ưu tiên** (cohort ngày SX cũ mà "Còn lại/Lỗi" > 0 = làm trước).
+
+- **4 hàng** (phân loại theo `fulfillmentStages.<myStage>.status` HIỆN TẠI): **Đến** (= tổng cohort) · **Đã làm** (status `done`, đã chuyển tiếp) · **Còn lại** (`waiting`+`in-progress`) · **Lỗi cần sửa** (`rework`). Bất biến: `Đến = Đã làm + Còn lại + Lỗi`.
+- Cột = ngày (cũ→mới; BE trả mới→cũ, FE `reverse()`) + cột **Tổng**.
+- **Click 1 ngày** (header hoặc ô) → lọc danh sách bên dưới:
+  - **Kanban** (6 stage): lọc **client-side** các cột theo `vnDay(inProductionAt) === dayFilter`; date-range + bảng tổng quan giữ nguyên. Chip "Đang lọc dd/MM ✕" để bỏ.
+  - **Bảng In** (print): bảng phân trang **server** → không lọc client được → truyền `dayOverride` cho `PrintOrderTable` ép `createdFrom=createdTo=day` (narrow qua query). Chip bỏ giống trên.
+- Data từ `GET /v1/fulfillment/daily-overview`; refetch qua `reloadToken` (bump sau mỗi transition/refresh). Kanban truyền `from`/`to` = date-range hiện tại; bảng In dùng default 7 ngày.
+- **Scope**: đơn đã TỪNG tới stage này (`fulfillmentStages.<stage>.status` tồn tại) trong xưởng user (gồm `originalFactoryId`), loại `deletedAt`/`cancelledAt`. Override role không stage → rỗng.
+
 ---
 
 ## 5. Backend logic
@@ -368,6 +381,10 @@ Pseudocode:
 5. Nếu match miss → 409 (race condition).
 6. orderLogService.write({ field: 'fulfillmentStages.<stage>.status', before, after }).
 ```
+
+### 5.1b `FulfillmentTaskService.getDailyOverview(user, {days, from?, to?, stage?})`
+
+Stage = `query.stage ?? user.fulfillmentStage` (không có → trả rỗng). 1 aggregate: `$match` (factory scope `$or[factoryId, originalFactoryId]` + `inProductionAt ∈ window` + `fulfillmentStages.<stage>.status $exists` + alive) → `$group` theo `$dateToString(inProductionAt, +07:00)` với `$cond` đếm `arrived`/`done`/`remaining`/`rework` theo `status`. `resolveDayWindow` (private, tz VN, cap 60) trả `days[]` mới→cũ + `start`/`end`. Build rows + `columnTotals`.
 
 ### 5.2 Race-safe atomicity
 
@@ -587,15 +604,18 @@ Worker scope enforce ở BE: `user.fulfillmentStage === body.stage` && `user.fac
 **Shared:**
 
 - `packages/shared/enums/fulfillment-stage.ts` — enum + label + order
-- `packages/shared/dtos/production-order.dto.ts` — fulfillment fields + transition DTOs
+- `packages/shared/dtos/production-order.dto.ts` — fulfillment fields + transition DTOs + **`GetFulfillmentDailyOverviewDto`/`FulfillmentDailyRow`/`FulfillmentDailyOverviewResDto`**
+- `apps/web/src/pages/fulfillment/my-tasks/PrintOrderTable.tsx` — + prop `dayOverride` (ép ngày cho bảng In khi click daily overview)
+- `apps/web/src/pages/fulfillment/my-tasks/PrintWorkshopView.tsx` — + daily overview + `dayFilter`→`dayOverride`
+- `apps/web/src/services/fulfillment.ts` — + `dailyOverview()`
 - `packages/shared/dtos/user.dto.ts` — `fulfillmentStage` field
 - `packages/shared/constants/permission-catalog.ts` — 6 permission mới
 
 **Backend:**
 
 - `apps/api/src/modules/fulfillment/fulfillment.module.ts`
-- `apps/api/src/modules/fulfillment/fulfillment-task.service.ts`
-- `apps/api/src/modules/fulfillment/fulfillment-task.controller.ts`
+- `apps/api/src/modules/fulfillment/fulfillment-task.service.ts` — + `getDailyOverview()` + `resolveDayWindow()` (§5.1b)
+- `apps/api/src/modules/fulfillment/fulfillment-task.controller.ts` — + `GET /fulfillment/daily-overview`
 - `apps/api/src/modules/order/order.entity.ts` — 4 field mới + `makeEmptyStageState` helper
 - `apps/api/src/modules/user/user.entity.ts` — `fulfillmentStage` + partial unique index
 - `apps/api/src/modules/user/user.service.ts` — validation + E11000 handler
@@ -604,7 +624,8 @@ Worker scope enforce ở BE: `user.fulfillmentStage === body.stage` && `user.fac
 
 **Frontend:**
 
-- `apps/web/src/pages/fulfillment/my-tasks/index.tsx` — kanban 4 cột + DnD
+- `apps/web/src/pages/fulfillment/my-tasks/index.tsx` — kanban 4 cột + DnD + **daily overview + lọc client theo ngày**
+- `apps/web/src/pages/fulfillment/my-tasks/FulfillmentDailyOverview.tsx` — **bảng "Tổng quan theo ngày" dùng chung (kanban + print), §4.6**
 - `apps/web/src/pages/fulfillment/my-tasks/FulfillmentTaskCard.tsx` — card component dùng chung 4 cột
 - `apps/web/src/pages/fulfillment/my-tasks/PrintOrderTable.tsx` — bảng phẳng stage In (§4.5): chế độ phím ↑↓ (1 dấu ✓ theo cursor) + URL params persistence (prefix `p`, F5 giữ filter/ngày/search/status/trang)
 - `apps/web/src/pages/fulfillment/my-tasks/PrintWorkshopView.tsx` — orchestrator transition + ReworkBackDialog cho stage In

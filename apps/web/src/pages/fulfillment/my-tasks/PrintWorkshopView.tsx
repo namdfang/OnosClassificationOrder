@@ -20,6 +20,7 @@ import { RepositoryRemote } from '@/services';
 import { useAuthStore } from '@/store/authStore';
 import { handleAxiosError } from '@/utils';
 
+import { FulfillmentDailyOverview } from './FulfillmentDailyOverview';
 import { PrintOrderTable } from './PrintOrderTable';
 import { ReworkBackDialog } from './ReworkBackDialog';
 
@@ -39,6 +40,10 @@ export default function PrintWorkshopView() {
   const myFactoryId = profile?.factoryId;
   const [reloadToken, setReloadToken] = useState(0);
   const [reworkOrder, setReworkOrder] = useState<WorkshopOrderRow | null>(null);
+  // Ngày đang lọc từ bảng "Tổng quan theo ngày". Bảng In phân trang server →
+  // narrow qua date (dayOverride) thay vì lọc client-side.
+  const [dayFilter, setDayFilter] = useState('');
+  const toggleDay = (day: string) => setDayFilter((cur) => (cur === day ? '' : day));
   // Popup xác nhận bulk khi chọn lẫn trạng thái.
   const [confirm, setConfirm] = useState<{
     action: BulkAction;
@@ -212,13 +217,22 @@ export default function PrintWorkshopView() {
 
   return (
     <TooltipProvider delayDuration={200}>
-      <PrintOrderTable
-        extraRowAction={renderRowAction}
-        extraActionLabel="Thao tác In"
-        reloadToken={reloadToken}
-        isRowSelectable={isRowSelectable}
-        renderBulkBar={renderBulkBar}
-      />
+      <div className="space-y-4">
+        <FulfillmentDailyOverview
+          stage={FulfillmentStage.Print}
+          reloadToken={reloadToken}
+          dayFilter={dayFilter}
+          onPickDay={toggleDay}
+        />
+        <PrintOrderTable
+          extraRowAction={renderRowAction}
+          extraActionLabel="Thao tác In"
+          reloadToken={reloadToken}
+          isRowSelectable={isRowSelectable}
+          renderBulkBar={renderBulkBar}
+          dayOverride={dayFilter || null}
+        />
+      </div>
 
       {reworkOrder && (
         <ReworkBackDialog

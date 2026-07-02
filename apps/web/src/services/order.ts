@@ -77,6 +77,10 @@ const getLifecycleOverview = (query: string = '') => {
   return callApi(`/${CONFIG.API_VERSION}/orders/lifecycle-overview${query}`, 'get');
 };
 
+const getLifecycleTrack = (code: string) => {
+  return callApi(`/${CONFIG.API_VERSION}/orders/lifecycle-track/${encodeURIComponent(code)}`, 'get');
+};
+
 const transferOrder = (id: string, data: TransferOrderDto) => {
   return callApi(`/${CONFIG.API_VERSION}/orders/${id}/transfer`, 'patch', data);
 };
@@ -165,6 +169,7 @@ export const order = {
   getFulfillmentStatusCounts,
   getFactoryOverview,
   getLifecycleOverview,
+  getLifecycleTrack,
   transferOrder,
   bulkTransferOrders,
   bulkAssignOrders,

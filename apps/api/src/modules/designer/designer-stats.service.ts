@@ -10,6 +10,8 @@ import type {
   ProductBreakdownDesigner,
   ToolCheckCustomerError,
   ToolCheckCustomerStat,
+  ToolCheckDayRow,
+  ToolCheckFacet,
   ToolCheckOrder,
   ToolCheckProductStat,
 } from 'shared';
@@ -1004,6 +1006,7 @@ export class DesignerStatsService {
     customer?: string,
     from?: string,
     to?: string,
+    machineNumber?: string,
   ): Promise<{
     checkedCount: number;
     errorCount: number;
@@ -1012,6 +1015,9 @@ export class DesignerStatsService {
     byProduct: ToolCheckProductStat[];
     byCustomer: ToolCheckCustomerStat[];
     topCustomerError: ToolCheckCustomerError[];
+    days: ToolCheckDayRow[];
+    columnTotals: { unreviewed: number; rework: number };
+    facets: { type: ToolCheckFacet[]; customer: ToolCheckFacet[]; machineNumber: ToolCheckFacet[] };
     rangeDays: number;
   }> {
     const { start, end, days } = this.resolveVnWindow(rangeDays, from, to);
@@ -1019,7 +1025,11 @@ export class DesignerStatsService {
     const withFilters = (m: Record<string, unknown>) => {
       if (type) m.type = type;
       if (customer) m.userSku = customer;
+      if (machineNumber) m.machineNumber = machineNumber;
       return m;
+    };
+    const dayExpr = {
+      $dateToString: { format: '%Y-%m-%d', date: '$inProductionAt', timezone: '+07:00' },
     };
     // `null` khớp cả giá trị null lẫn field vắng mặt → loại đơn đã xoá/hủy.
     const alive = { deletedAt: null, cancelledAt: null };
@@ -1057,11 +1067,44 @@ export class DesignerStatsService {
       productionError: 1,
       productionErrorNote: 1,
       productionErrorCount: 1,
+      machineNumber: 1,
       inProductionAt: 1,
     };
 
-    const [checkedCount, reworkRaw, unreviewedRaw, byProductAgg, byCustomerAgg, topErrAgg] =
-      await Promise.all([
+    // Phạm vi facet = đơn Support quan tâm trong kỳ (chưa soát ∪ tool-check),
+    // KHÔNG áp 3 filter type/customer/machine → dropdown ổn định (chọn xong
+    // options không biến mất). `alive` để loại đơn xoá/hủy.
+    const facetScope = {
+      inProductionAt: inWindow,
+      ...alive,
+      $or: [
+        { toolResultNote: { $in: [null, ''] } },
+        { productionErrorSource: 'tool-check' },
+      ],
+    };
+    const facetAgg = (field: string) =>
+      this.orderModel.aggregate<{ _id: string; count: number }>([
+        { $match: facetScope },
+        { $group: { _id: { $ifNull: [`$${field}`, ''] }, count: { $sum: 1 } } },
+        { $sort: { count: -1 } },
+        { $limit: 200 },
+      ]);
+    const toFacet = (rows: { _id: string; count: number }[]): ToolCheckFacet[] =>
+      rows.filter((r) => r._id !== '').map((r) => ({ value: r._id, count: r.count }));
+
+    const [
+      checkedCount,
+      reworkRaw,
+      unreviewedRaw,
+      byProductAgg,
+      byCustomerAgg,
+      topErrAgg,
+      unreviewedByDay,
+      reworkByDay,
+      typeFacetAgg,
+      customerFacetAgg,
+      machineFacetAgg,
+    ] = await Promise.all([
         this.orderModel.countDocuments(checkedMatch),
         this.orderModel.find(reworkMatch, proj).sort({ inProductionAt: -1 }).limit(LIST_CAP).lean(),
         this.orderModel
@@ -1101,6 +1144,19 @@ export class DesignerStatsService {
           { $sort: { count: -1 } },
           { $limit: 50 },
         ]),
+        // Per-day: chưa soát + In trả về (áp cùng 3 filter type/customer/machine).
+        this.orderModel.aggregate<{ _id: string; count: number }>([
+          { $match: unreviewedMatch },
+          { $group: { _id: dayExpr, count: { $sum: 1 } } },
+        ]),
+        this.orderModel.aggregate<{ _id: string; count: number }>([
+          { $match: reworkMatch },
+          { $group: { _id: dayExpr, count: { $sum: 1 } } },
+        ]),
+        // Facet options (phạm vi Support, KHÔNG áp 3 filter → ổn định).
+        facetAgg('type'),
+        facetAgg('userSku'),
+        facetAgg('machineNumber'),
       ]);
 
     const toOrder = (o: Record<string, unknown>): ToolCheckOrder => ({
@@ -1118,6 +1174,7 @@ export class DesignerStatsService {
       productionError: o.productionError as string | undefined,
       productionErrorNote: o.productionErrorNote as string | undefined,
       productionErrorCount: o.productionErrorCount as number | undefined,
+      machineNumber: o.machineNumber as string | undefined,
       inProductionAt: o.inProductionAt
         ? new Date(o.inProductionAt as Date).toISOString()
         : undefined,
@@ -1171,6 +1228,18 @@ export class DesignerStatsService {
       count: a.count,
     }));
 
+    // Dải theo ngày: căn theo `days` (mới→cũ) từ resolveVnWindow.
+    const unreviewedDayMap = new Map(unreviewedByDay.map((r) => [r._id, r.count]));
+    const reworkDayMap = new Map(reworkByDay.map((r) => [r._id, r.count]));
+    const columnTotals = { unreviewed: 0, rework: 0 };
+    const dayRows: ToolCheckDayRow[] = days.map((day) => {
+      const unreviewed = unreviewedDayMap.get(day) ?? 0;
+      const rework = reworkDayMap.get(day) ?? 0;
+      columnTotals.unreviewed += unreviewed;
+      columnTotals.rework += rework;
+      return { day, unreviewed, rework };
+    });
+
     return {
       checkedCount,
       errorCount: reworkRaw.length,
@@ -1179,6 +1248,13 @@ export class DesignerStatsService {
       byProduct,
       byCustomer,
       topCustomerError,
+      days: dayRows,
+      columnTotals,
+      facets: {
+        type: toFacet(typeFacetAgg),
+        customer: toFacet(customerFacetAgg),
+        machineNumber: toFacet(machineFacetAgg),
+      },
       rangeDays: days.length,
     };
   }

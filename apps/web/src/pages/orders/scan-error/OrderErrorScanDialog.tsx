@@ -38,7 +38,8 @@ import { handleAxiosError } from '@/utils';
 const MAX_NOTE = 500;
 const OTHER_CODE = 'other';
 
-type ReworkTarget = 'none' | 'designer' | FulfillmentStage;
+type ReworkTarget = 'none' | 'designer' | 'tool-check' | FulfillmentStage;
+type ErrorSource = 'designer' | 'factory' | 'tool-check';
 
 type ScannedOrder = ProductionOrder & {
   factory?: { name?: string; shortName?: string };
@@ -70,19 +71,18 @@ export function OrderErrorScanDialog({ order, onClose, onSaved }: Props) {
   }, [currentStage]);
 
   const [code, setCode] = useState<string>('');
-  const [source, setSource] = useState<'designer' | 'factory' | undefined>(undefined);
+  // Mặc định nguồn lỗi + đẩy về = "Soát tool" (theo ToolCheckWorkflow).
+  const [source, setSource] = useState<ErrorSource | undefined>('tool-check');
   const [note, setNote] = useState<string>('');
-  const [reworkTarget, setReworkTarget] = useState<ReworkTarget>('none');
+  const [reworkTarget, setReworkTarget] = useState<ReworkTarget>('tool-check');
   const [saving, setSaving] = useState(false);
 
-  // Pre-fill từ workshop_config khi pick code (mirror BE auto-fill logic)
+  // Pre-fill từ workshop_config khi pick code (mirror BE auto-fill logic).
+  // Không reset khi bỏ chọn code → giữ nguồn mặc định "tool-check".
   useEffect(() => {
-    if (!code) {
-      setSource(undefined);
-      return;
-    }
+    if (!code) return;
     const cfg = sortedOptions.find((o) => o.code === code);
-    if (cfg?.errorSource === 'designer' || cfg?.errorSource === 'factory') {
+    if (cfg?.errorSource === 'designer' || cfg?.errorSource === 'factory' || cfg?.errorSource === 'tool-check') {
       setSource(cfg.errorSource);
     }
   }, [code, sortedOptions]);
@@ -101,18 +101,26 @@ export function OrderErrorScanDialog({ order, onClose, onSaved }: Props) {
     if (!canSubmit) return;
     setSaving(true);
     try {
+      // Đẩy về "Soát tool" ⟺ nguồn lỗi 'tool-check' — setProductionError sẽ tự
+      // đẩy đơn về Support (support-hold), KHÔNG cần fulfillment-transition.
+      const effectiveSource: ErrorSource | undefined =
+        reworkTarget === 'tool-check' ? 'tool-check' : source;
+
       // 1. Always: gán mã lỗi xưởng (kéo theo set toolResultNote='error',
-      //    productionFirstErrorAt, productionErrorCount++).
+      //    productionFirstErrorAt, productionErrorCount++). Nếu source='tool-check'
+      //    → BE tự rework-back về Support.
       await RepositoryRemote.order.setProductionError(order._id, {
         code,
-        source,
+        source: effectiveSource,
         note: note.trim() || undefined,
       });
 
-      // 2. Optional: rework-back về stage trước hoặc designer. Chỉ áp được khi
-      //    đơn đang ở fulfillment workflow (currentFulfillmentStage != null).
+      // 2. Optional: rework-back về stage trước / designer / soát tool.
       let targetLabel = 'Chỉ mark lỗi';
-      if (currentStage && reworkTarget !== 'none') {
+      if (reworkTarget === 'tool-check') {
+        targetLabel = 'Đẩy về Soát tool';
+      } else if (currentStage && reworkTarget !== 'none') {
+        // Rework-back designer / stage trước — cần đơn đang ở fulfillment workflow.
         await RepositoryRemote.fulfillment.transition(order._id, {
           stage: currentStage,
           action: FulfillmentTransitionAction.ReworkBack,
@@ -221,7 +229,11 @@ export function OrderErrorScanDialog({ order, onClose, onSaved }: Props) {
                 )}
                 {order.productionErrorSource && (
                   <span className="px-1.5 py-0.5 rounded bg-rose-200/70 font-normal dark:bg-rose-500/20">
-                    {order.productionErrorSource === 'designer' ? 'Do designer' : 'Do xưởng'}
+                    {order.productionErrorSource === 'designer'
+                      ? 'Do designer'
+                      : order.productionErrorSource === 'tool-check'
+                        ? 'Do soát tool'
+                        : 'Do xưởng'}
                   </span>
                 )}
                 {order.productionErrorCount && order.productionErrorCount > 1 ? (
@@ -281,6 +293,12 @@ export function OrderErrorScanDialog({ order, onClose, onSaved }: Props) {
             </Label>
             <div className="flex gap-2">
               <SourceButton
+                active={source === 'tool-check'}
+                color="amber"
+                onClick={() => setSource('tool-check')}
+                label="Do soát tool"
+              />
+              <SourceButton
                 active={source === 'factory'}
                 color="sky"
                 onClick={() => setSource('factory')}
@@ -296,6 +314,11 @@ export function OrderErrorScanDialog({ order, onClose, onSaved }: Props) {
             {source === 'designer' && (
               <p className="text-[11px] text-amber-600 dark:text-amber-400">
                 Lỗi designer → task tự về "Cần làm lại" cho designer đã làm đơn này.
+              </p>
+            )}
+            {source === 'tool-check' && (
+              <p className="text-[11px] text-amber-600 dark:text-amber-400">
+                Lỗi soát tool → đơn tự đẩy về Support (tab "Soát tool").
               </p>
             )}
           </div>
@@ -320,25 +343,31 @@ export function OrderErrorScanDialog({ order, onClose, onSaved }: Props) {
             </div>
           </div>
 
-          {/* Rework target — chỉ hiện khi đã vào fulfillment */}
-          {currentStage && (
-            <div className="space-y-2 pt-1 border-t">
-              <Label className="text-xs flex items-center gap-1.5">
-                <RotateCcw size={12} />
-                Đẩy về công đoạn <span className="text-muted-foreground font-normal">(tùy chọn)</span>
-              </Label>
-              <div className="flex flex-wrap gap-1.5">
-                {/* <ChipButton
-                  active={reworkTarget === 'none'}
-                  onClick={() => setReworkTarget('none')}
-                  label="Chỉ mark lỗi"
-                /> */}
+          {/* Đẩy về công đoạn — "Soát tool" luôn khả dụng; Designer + stage trước
+              chỉ khi đơn đã vào fulfillment. */}
+          <div className="space-y-2 pt-1 border-t">
+            <Label className="text-xs flex items-center gap-1.5">
+              <RotateCcw size={12} />
+              Đẩy về công đoạn <span className="text-muted-foreground font-normal">(mặc định Soát tool)</span>
+            </Label>
+            <div className="flex flex-wrap gap-1.5">
+              <ChipButton
+                active={reworkTarget === 'tool-check'}
+                onClick={() => {
+                  setReworkTarget('tool-check');
+                  setSource('tool-check');
+                }}
+                label="Soát tool"
+              />
+              {currentStage && (
                 <ChipButton
                   active={reworkTarget === 'designer'}
                   onClick={() => setReworkTarget('designer')}
                   label="Designer"
                 />
-                {previousStages.map((s) => (
+              )}
+              {currentStage &&
+                previousStages.map((s) => (
                   <ChipButton
                     key={s}
                     active={reworkTarget === s}
@@ -346,22 +375,25 @@ export function OrderErrorScanDialog({ order, onClose, onSaved }: Props) {
                     label={FULFILLMENT_STAGE_LABELS[s]}
                   />
                 ))}
-              </div>
-              {reworkTarget !== 'none' && (
+            </div>
+            {reworkTarget === 'tool-check' ? (
+              <p className="text-[11px] text-amber-600 dark:text-amber-400">
+                Đơn sẽ được đẩy về Support (tab "Soát tool")
+              </p>
+            ) : (
+              reworkTarget !== 'none' && (
                 <p className="text-[11px] text-muted-foreground">
                   Mô tả lỗi sẽ được dùng làm lý do rework. Nếu trống, mặc định "Gán lỗi qua màn hình quét".
                 </p>
-              )}
-            </div>
-          )}
-          {!currentStage && (
-            <div className="rounded-md border border-dashed border-amber-300/50 bg-amber-50/40 dark:bg-amber-500/5 p-2 text-[11px] text-amber-700 dark:text-amber-300 flex items-start gap-1.5">
-              <ListChecks size={12} className="mt-0.5 shrink-0" />
-              <span>
-                Đơn chưa vào fulfillment — chỉ có thể mark lỗi, không thể đẩy về công đoạn.
-              </span>
-            </div>
-          )}
+              )
+            )}
+            {!currentStage && reworkTarget !== 'tool-check' && (
+              <div className="rounded-md border border-dashed border-amber-300/50 bg-amber-50/40 dark:bg-amber-500/5 p-2 text-[11px] text-amber-700 dark:text-amber-300 flex items-start gap-1.5">
+                <ListChecks size={12} className="mt-0.5 shrink-0" />
+                <span>Đơn chưa vào fulfillment — chỉ có thể đẩy về Soát tool hoặc mark lỗi.</span>
+              </div>
+            )}
+          </div>
         </div>
 
         <DialogFooter className="gap-2">
@@ -403,15 +435,18 @@ function SourceButton({
   label,
 }: {
   active: boolean;
-  color: 'sky' | 'violet';
+  color: 'sky' | 'violet' | 'amber';
   onClick: () => void;
   label: string;
 }) {
   const activeCls =
     color === 'sky'
       ? 'border-sky-500 bg-sky-50 text-sky-700 dark:bg-sky-500/10 dark:text-sky-300'
-      : 'border-violet-500 bg-violet-50 text-violet-700 dark:bg-violet-500/10 dark:text-violet-300';
-  const hoverCls = color === 'sky' ? 'hover:border-sky-300' : 'hover:border-violet-300';
+      : color === 'violet'
+        ? 'border-violet-500 bg-violet-50 text-violet-700 dark:bg-violet-500/10 dark:text-violet-300'
+        : 'border-amber-500 bg-amber-50 text-amber-700 dark:bg-amber-500/10 dark:text-amber-300';
+  const hoverCls =
+    color === 'sky' ? 'hover:border-sky-300' : color === 'violet' ? 'hover:border-violet-300' : 'hover:border-amber-300';
   return (
     <button
       type="button"

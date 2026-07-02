@@ -89,6 +89,12 @@ interface PrintOrderTableProps {
    * chọn + hàm clear. Nếu không truyền → fallback `BulkEditToolbar` mặc định.
    */
   renderBulkBar?: (selectedRows: OrderRow[], clear: () => void) => React.ReactNode;
+  /**
+   * Khi set (YYYY-MM-DD) → ép `createdFrom=createdTo=dayOverride` cho query
+   * (bảng "Tổng quan theo ngày" click 1 ngày). Vì bảng In phân trang server nên
+   * không lọc client-side được — narrow qua ngày. `null`/undefined = bỏ.
+   */
+  dayOverride?: string | null;
 }
 
 /**
@@ -103,6 +109,7 @@ export function PrintOrderTable({
   reloadToken,
   isRowSelectable,
   renderBulkBar,
+  dayOverride,
 }: PrintOrderTableProps = {}) {
   const { canViewField, canEditField } = usePermission();
   const loadConfig = useWorkshopConfigStore((s) => s.load);
@@ -225,8 +232,11 @@ export function PrintOrderTable({
   const buildBaseParams = (includeStatus: boolean): URLSearchParams => {
     const p = new URLSearchParams();
     if (debouncedSearch.trim()) p.set('search', debouncedSearch.trim());
-    if (createdFrom) p.set('createdFrom', createdFrom);
-    if (createdTo) p.set('createdTo', createdTo);
+    // dayOverride (click 1 ngày ở bảng tổng quan) ép cửa sổ về đúng ngày đó.
+    const effFrom = dayOverride || createdFrom;
+    const effTo = dayOverride || createdTo;
+    if (effFrom) p.set('createdFrom', effFrom);
+    if (effTo) p.set('createdTo', effTo);
     if (fType) p.set('type', fType);
     if (fUserSku) p.set('userSku', fUserSku);
     if (fFabricType) p.set('fabricType', fFabricType);
@@ -298,6 +308,7 @@ export function PrintOrderTable({
     fDesignerStatus,
     fProductionError,
     reloadToken,
+    dayOverride,
   ]);
 
   const patchRow = (id: string, patch: Partial<OrderRow>) =>

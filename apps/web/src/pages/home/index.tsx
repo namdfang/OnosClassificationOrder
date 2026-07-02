@@ -6,6 +6,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { usePermission } from '@/hooks/usePermission';
 
 import DesignerStatsTab from './DesignerStatsTab';
+import LifecycleStrip from './LifecycleStrip';
 import LifecycleTab from './LifecycleTab';
 import OrderFactoryTab from './OrderFactoryTab';
 import OrderStatsTab from './OrderStatsTab';
@@ -20,8 +21,8 @@ export default function Home() {
   const [searchParams, setSearchParams] = useSearchParams();
   const { has, isAdmin } = usePermission();
   const canSeeDesigner = has('page.designer_stats');
-  // Tab "Vòng đời đơn" chỉ dành cho Admin/SuperAdmin.
-  const canSeeLifecycle = isAdmin;
+  // Tab "Vòng đời đơn" chi tiết — mở cho mọi tài khoản (Fulfillment tự khóa xưởng ở BE).
+  const canSeeLifecycle = true;
   // Tab "Soát tool" chỉ Support + Admin.
   const canSeeToolCheck = isAdmin || has('page.tool_check');
   const isTabAllowed = (t: TabKey) =>
@@ -78,6 +79,9 @@ export default function Home() {
         </div>
         {isAdmin && <SendTelegramReportButton />}
       </div>
+
+      {/* Strip vòng đời đơn — gọn, hiện trên đầu mọi tab, cho mọi tài khoản */}
+      <LifecycleStrip />
 
       <Tabs value={activeTab} onValueChange={handleTabChange} className="w-full">
         <TabsList>

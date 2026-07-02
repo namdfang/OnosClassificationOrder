@@ -48,9 +48,16 @@ import { useAuthStore } from '@/store/authStore';
 import { handleAxiosError } from '@/utils';
 import { cn } from '@/utils/cn';
 
+import { FulfillmentDailyOverview } from './FulfillmentDailyOverview';
 import { FulfillmentTaskCard } from './FulfillmentTaskCard';
 import { ReworkBackDialog } from './ReworkBackDialog';
 import PrintWorkshopView from './PrintWorkshopView';
+
+/** ISO → ngày VN (YYYY-MM-DD) để lọc client-side theo cột ngày. */
+function vnDay(iso?: string): string {
+  if (!iso) return '';
+  return new Date(new Date(iso).getTime() + 7 * 3600 * 1000).toISOString().slice(0, 10);
+}
 
 /**
  * Kanban 4 cột cho user Fulfillment — đồng bộ visual + UX với
@@ -235,6 +242,15 @@ function FulfillmentKanbanView() {
   }, []);
   const [dateFrom, setDateFrom] = useState<string>(init7d.from);
   const [dateTo, setDateTo] = useState<string>(init7d.to);
+  // Ngày đang lọc (YYYY-MM-DD VN) từ bảng "Tổng quan theo ngày" — chỉ lọc
+  // client-side các cột kanban, KHÔNG refetch. Reset khi đổi khoảng ngày.
+  const [dayFilter, setDayFilter] = useState('');
+  useEffect(() => {
+    setDayFilter('');
+  }, [dateFrom, dateTo]);
+  const toggleDay = (day: string) => setDayFilter((cur) => (cur === day ? '' : day));
+  // Bump sau mỗi lần load kanban (gồm sau transition) → bảng tổng quan refetch.
+  const [overviewToken, setOverviewToken] = useState(0);
   // "Đã copy search" — giữ trạng thái cho đến khi user đổi value hoặc F5.
   // Reset khi search thay đổi (gồm cả case clear) — đồng bộ ý nghĩa "icon
   // tick = giá trị này đã được copy".
@@ -302,6 +318,7 @@ function FulfillmentKanbanView() {
       setWatching(wt.data.data ?? []);
       setSelected(new Set());
       lastClickedRef.current = null;
+      setOverviewToken((t) => t + 1);
     } catch (err) {
       handleAxiosError(err);
     } finally {
@@ -319,6 +336,7 @@ function FulfillmentKanbanView() {
     const q = debouncedSearch.trim().toLowerCase();
     const apply = (arr: ProductionOrder[]) =>
       arr.filter((o) => {
+        if (dayFilter && vnDay(o.inProductionAt as string | undefined) !== dayFilter) return false;
         if (q) {
           const hit =
             o.productionId?.toLowerCase().includes(q) || o.orderId?.toLowerCase().includes(q);
@@ -339,7 +357,7 @@ function FulfillmentKanbanView() {
       watching: apply(columns.watching),
       unassigned: apply(columns.unassigned),
     };
-  }, [columns, debouncedSearch, filters]);
+  }, [columns, debouncedSearch, filters, dayFilter]);
 
   const filteredWatching = useMemo(() => {
     const q = debouncedSearch.trim().toLowerCase();
@@ -742,6 +760,16 @@ function FulfillmentKanbanView() {
             />
           </div>
         </div>
+
+        {/* Bảng tổng quan theo ngày — click 1 ngày lọc kanban client-side. */}
+        <FulfillmentDailyOverview
+          stage={myStage}
+          from={dateFrom || undefined}
+          to={dateTo || undefined}
+          reloadToken={overviewToken}
+          dayFilter={dayFilter}
+          onPickDay={toggleDay}
+        />
 
         {/* Kanban — 5 cột worker / 6 cột admin */}
         <DndContext sensors={sensors} onDragStart={handleDragStart} onDragEnd={handleDragEnd}>

@@ -9,6 +9,7 @@ import { InjectModel } from '@nestjs/mongoose';
 import type { FilterQuery } from 'mongoose';
 import { Model } from 'mongoose';
 import type {
+  FulfillmentDailyRow,
   FulfillmentStages,
   FulfillmentStageState,
   FulfillmentTaskTab,
@@ -647,5 +648,138 @@ export class FulfillmentTaskService {
         : Promise.resolve(0),
     ]);
     return { waiting, inProgress, rework, done, watching, unassigned };
+  }
+
+  /**
+   * Bảng tổng quan theo ngày cho 1 stage (trang Task Fulfillment). Gom đơn theo
+   * `inProductionAt` (VN) — cùng trục với date-picker + bảng Designer/Soát tool
+   * → 1 đơn nằm cùng cột ngày ở mọi stage, dễ đối chiếu + biết ưu tiên (cohort
+   * ngày SX cũ mà còn "remaining/rework" = làm trước). Phân loại theo
+   * `fulfillmentStages.<stage>.status` HIỆN TẠI.
+   *
+   * Scope: đơn đã TỪNG tới stage này (`fulfillmentStages.<stage>.status` tồn
+   * tại) trong xưởng user (gồm originalFactoryId). Override role không stage →
+   * rỗng.
+   */
+  async getDailyOverview(
+    user: UserDocument,
+    query: { days: number; from?: string; to?: string; stage?: FulfillmentStage },
+  ): Promise<{
+    days: FulfillmentDailyRow[];
+    columnTotals: { arrived: number; done: number; remaining: number; rework: number };
+    rangeDays: number;
+  }> {
+    const empty = {
+      days: [],
+      columnTotals: { arrived: 0, done: 0, remaining: 0, rework: 0 },
+      rangeDays: 0,
+    };
+    const stage = query.stage ?? (user.fulfillmentStage as FulfillmentStage | undefined);
+    if (!stage) return empty;
+
+    const { start, end, days } = this.resolveDayWindow(query.days, query.from, query.to);
+    const factoryId = user.factoryId;
+    const statusPath = `fulfillmentStages.${stage}.status`;
+    const statusRef = `$${statusPath}`;
+
+    const match: FilterQuery<OrderEntity> = {
+      inProductionAt: { $gte: start, $lte: end },
+      [statusPath]: { $exists: true },
+      deletedAt: null,
+      cancelledAt: null,
+    };
+    if (factoryId) match.$or = [{ factoryId }, { originalFactoryId: factoryId }];
+
+    const dayExpr = {
+      $dateToString: { format: '%Y-%m-%d', date: '$inProductionAt', timezone: '+07:00' },
+    };
+    const agg = await this.orderModel.aggregate<{
+      _id: string;
+      arrived: number;
+      done: number;
+      remaining: number;
+      rework: number;
+    }>([
+      { $match: match },
+      {
+        $group: {
+          _id: dayExpr,
+          arrived: { $sum: 1 },
+          done: { $sum: { $cond: [{ $eq: [statusRef, FulfillmentStageStatus.Done] }, 1, 0] } },
+          remaining: {
+            $sum: {
+              $cond: [
+                {
+                  $or: [
+                    { $eq: [statusRef, FulfillmentStageStatus.Waiting] },
+                    { $eq: [statusRef, FulfillmentStageStatus.InProgress] },
+                  ],
+                },
+                1,
+                0,
+              ],
+            },
+          },
+          rework: {
+            $sum: { $cond: [{ $eq: [statusRef, FulfillmentStageStatus.Rework] }, 1, 0] },
+          },
+        },
+      },
+    ]);
+
+    const byDay = new Map(agg.map((r) => [r._id, r]));
+    const columnTotals = { arrived: 0, done: 0, remaining: 0, rework: 0 };
+    const rows: FulfillmentDailyRow[] = days.map((day) => {
+      const r = byDay.get(day);
+      const arrived = r?.arrived ?? 0;
+      const done = r?.done ?? 0;
+      const remaining = r?.remaining ?? 0;
+      const rework = r?.rework ?? 0;
+      columnTotals.arrived += arrived;
+      columnTotals.done += done;
+      columnTotals.remaining += remaining;
+      columnTotals.rework += rework;
+      return { day, arrived, done, remaining, rework };
+    });
+
+    return { days: rows, columnTotals, rangeDays: days.length };
+  }
+
+  /**
+   * Cửa sổ ngày (tz VN) cho daily-overview: `from`+`to` → khoảng tùy biến (cap
+   * 60 ngày), ngược lại N ngày gần nhất. `days` sort mới→cũ (FE reverse).
+   */
+  private resolveDayWindow(
+    rangeDays: number,
+    from?: string,
+    to?: string,
+  ): { start: Date; end: Date; days: string[] } {
+    const MS_DAY = 86_400_000;
+    const CAP = 60;
+    const days: string[] = [];
+    if (from && to) {
+      const start = vnDayStart(from);
+      const end = vnDayEnd(to);
+      let cur = vnDayStart(to).getTime();
+      const startMs = start.getTime();
+      let i = 0;
+      while (cur >= startMs && i < CAP) {
+        days.push(new Date(cur + 7 * 60 * 60 * 1000).toISOString().slice(0, 10));
+        cur -= MS_DAY;
+        i += 1;
+      }
+      return { start, end, days };
+    }
+    const n = Math.max(1, Math.min(rangeDays || 7, CAP));
+    const todayStart = vnTodayStart();
+    const baseMs = todayStart.getTime();
+    for (let i = 0; i < n; i += 1) {
+      days.push(new Date(baseMs - i * MS_DAY + 7 * 60 * 60 * 1000).toISOString().slice(0, 10));
+    }
+    return {
+      start: new Date(baseMs - (n - 1) * MS_DAY),
+      end: new Date(baseMs + MS_DAY - 1),
+      days,
+    };
   }
 }

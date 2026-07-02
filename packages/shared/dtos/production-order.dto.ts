@@ -726,7 +726,7 @@ export const SetProductionErrorZod = z.object({
   /** Workshop_config code; null = clear hẳn lỗi. */
   code: z.string().nullable(),
   /** Required khi code='other' (BE validate). Auto-fill từ config nếu vắng. */
-  source: z.enum(['designer', 'factory']).optional(),
+  source: z.enum(['designer', 'factory', 'tool-check']).optional(),
   /** Required khi code='other' (BE validate). */
   note: z.string().max(500).optional(),
 });
@@ -1169,6 +1169,53 @@ export const GetFulfillmentMyTasksZod = PageQueryZod.extend({
 });
 export class GetFulfillmentMyTasksDto extends createZodDto(extendApi(GetFulfillmentMyTasksZod)) {}
 
+// ─── Fulfillment daily overview (bảng tổng quan theo ngày per-stage) ─────────
+export const GetFulfillmentDailyOverviewZod = z.object({
+  days: z.enum(['7', '14', '30']).default('7'),
+  /** Khoảng tùy biến (YYYY-MM-DD, VN) — nếu truyền cả 2 thì dùng thay `days`. */
+  from: z.string().optional(),
+  to: z.string().optional(),
+  /** Override stage (Manager/Admin). Worker suy từ `user.fulfillmentStage`. */
+  stage: FulfillmentStageZod.optional(),
+});
+export class GetFulfillmentDailyOverviewDto extends createZodDto(
+  extendApi(GetFulfillmentDailyOverviewZod),
+) {}
+
+/**
+ * 1 ngày trong bảng tổng quan stage Fulfillment. Gom theo `inProductionAt` (VN),
+ * phân loại theo `fulfillmentStages.<stage>.status` HIỆN TẠI:
+ *   arrived   = mọi đơn cohort đã tới stage này (= done + remaining + rework)
+ *   done      = status 'done' (đã hoàn thành + chuyển tiếp)
+ *   remaining = status waiting/in-progress (còn phải làm)
+ *   rework    = status 'rework' (stage sau đẩy về, lỗi cần sửa)
+ */
+export const FulfillmentDailyRowZod = z.object({
+  day: z.string(),
+  arrived: z.number().int().nonnegative(),
+  done: z.number().int().nonnegative(),
+  remaining: z.number().int().nonnegative(),
+  rework: z.number().int().nonnegative(),
+});
+export type FulfillmentDailyRow = z.infer<typeof FulfillmentDailyRowZod>;
+
+export const FulfillmentDailyOverviewResZod = ResZod.extend({
+  data: z.object({
+    /** Cột ngày (mới→cũ; FE reverse để cũ→mới). */
+    days: FulfillmentDailyRowZod.array(),
+    columnTotals: z.object({
+      arrived: z.number().int().nonnegative(),
+      done: z.number().int().nonnegative(),
+      remaining: z.number().int().nonnegative(),
+      rework: z.number().int().nonnegative(),
+    }),
+    rangeDays: z.number().int().nonnegative(),
+  }),
+});
+export class FulfillmentDailyOverviewResDto extends createZodDto(
+  extendApi(FulfillmentDailyOverviewResZod),
+) {}
+
 export const GetFulfillmentMyTasksResZod = PageResZod.extend({
   data: ProductionOrderZod.array(),
   /** Tab counters (6 tab) — bỏ qua pagination. `unassigned` = 0 với worker
@@ -1311,6 +1358,8 @@ export type LifecycleTimelineBucket = z.infer<typeof LifecycleTimelineBucketZod>
 export const LifecycleOverviewZod = z.object({
   stages: LifecycleStageRowZod.array(),
   totals: z.object({
+    /** Tổng đơn trong tập đã lọc (theo ngày vào SX + xưởng). */
+    totalOrders: z.number(),
     /** Đơn còn trong pipeline (chưa pack done, chưa hủy). */
     totalActive: z.number(),
     /** Đơn pack.done trong kỳ. */
@@ -1340,6 +1389,42 @@ export class GetLifecycleOverviewDto extends createZodDto(extendApi(GetLifecycle
 export const GetLifecycleOverviewResZod = ResZod.extend({ data: LifecycleOverviewZod });
 export class GetLifecycleOverviewResDto extends createZodDto(
   extendApi(GetLifecycleOverviewResZod),
+) {}
+
+// ─── Lifecycle Track (tra cứu vòng đời 1 đơn theo productionId) ────
+// Strip gọn trên đầu Dashboard: nhập productionId → hành trình đơn đó đã qua
+// chặng nào / đang ở đâu. 9 chặng theo `LIFECYCLE_STAGE_KEYS`.
+
+/** Trạng thái 1 chặng trong hành trình 1 đơn. */
+export const LifecycleTrackStatusZod = z.enum(['done', 'current', 'pending', 'error', 'rework']);
+export type LifecycleTrackStatus = z.infer<typeof LifecycleTrackStatusZod>;
+
+export const LifecycleTrackStageZod = z.object({
+  key: z.string(), // LifecycleStageKey
+  label: z.string(),
+  status: LifecycleTrackStatusZod,
+  /** Mốc thời gian gắn với trạng thái (done→completedAt, current→startedAt/waitingAt). */
+  at: z.date().optional(),
+});
+export type LifecycleTrackStage = z.infer<typeof LifecycleTrackStageZod>;
+
+export const LifecycleTrackZod = z.object({
+  productionId: z.string(),
+  userSku: z.string().optional(),
+  type: z.string().optional(),
+  inProductionAt: z.date().optional(),
+  fulfillmentCompletedAt: z.date().optional(),
+  /** Khóa chặng đơn đang ở (null nếu đã hoàn thành toàn bộ flow). */
+  currentStageKey: z.string().nullable(),
+  /** Đã hoàn thành toàn bộ 9 chặng (pack done). */
+  completed: z.boolean(),
+  stages: LifecycleTrackStageZod.array(), // 9 phần tử theo LIFECYCLE_STAGE_KEYS
+});
+export type LifecycleTrack = z.infer<typeof LifecycleTrackZod>;
+
+export const GetLifecycleTrackResZod = ResZod.extend({ data: LifecycleTrackZod });
+export class GetLifecycleTrackResDto extends createZodDto(
+  extendApi(GetLifecycleTrackResZod),
 ) {}
 
 // ─── Cutting File mapping (post-import flow) ──────────────────────
@@ -1466,6 +1551,8 @@ export const GetToolCheckOverviewZod = z.object({
   type: z.string().optional(),
   /** Lọc theo khách hàng (`order.userSku`). */
   customer: z.string().optional(),
+  /** Lọc theo máy (`order.machineNumber`). */
+  machineNumber: z.string().optional(),
 });
 export class GetToolCheckOverviewDto extends createZodDto(extendApi(GetToolCheckOverviewZod)) {}
 
@@ -1486,9 +1573,27 @@ export const ToolCheckOrderZod = z.object({
   productionError: z.string().optional(),
   productionErrorNote: z.string().optional(),
   productionErrorCount: z.number().int().nonnegative().optional(),
+  machineNumber: z.string().optional(),
   inProductionAt: z.string().optional(),
 });
 export type ToolCheckOrder = z.infer<typeof ToolCheckOrderZod>;
+
+/** 1 ngày trong dải "tổng quan theo ngày" của tab Soát tool. */
+export const ToolCheckDayRowZod = z.object({
+  day: z.string(),
+  /** Đơn chưa soát (toolResultNote rỗng) vào SX ngày đó. */
+  unreviewed: z.number().int().nonnegative(),
+  /** Đơn In trả về (source=tool-check + note=error) vào SX ngày đó. */
+  rework: z.number().int().nonnegative(),
+});
+export type ToolCheckDayRow = z.infer<typeof ToolCheckDayRowZod>;
+
+/** 1 option cho dropdown filter (Sản phẩm / Khách / Máy) — value + số đơn. */
+export const ToolCheckFacetZod = z.object({
+  value: z.string(),
+  count: z.number().int().nonnegative(),
+});
+export type ToolCheckFacet = z.infer<typeof ToolCheckFacetZod>;
 
 /** Lỗi theo sản phẩm (join productConfig để lấy mockup/level). */
 export const ToolCheckProductStatZod = z.object({
@@ -1529,6 +1634,19 @@ export const ToolCheckOverviewResZod = ResZod.extend({
     byProduct: ToolCheckProductStatZod.array(),
     byCustomer: ToolCheckCustomerStatZod.array(),
     topCustomerError: ToolCheckCustomerErrorZod.array(),
+    /** Dải theo ngày (mới→cũ; FE reverse để cũ→mới). */
+    days: ToolCheckDayRowZod.array(),
+    /** Tổng cột cho dải ngày. */
+    columnTotals: z.object({
+      unreviewed: z.number().int().nonnegative(),
+      rework: z.number().int().nonnegative(),
+    }),
+    /** Options cho 3 dropdown filter (phạm vi Support trong kỳ, không cross-narrow). */
+    facets: z.object({
+      type: ToolCheckFacetZod.array(),
+      customer: ToolCheckFacetZod.array(),
+      machineNumber: ToolCheckFacetZod.array(),
+    }),
     rangeDays: z.number().int().positive(),
   }),
 });

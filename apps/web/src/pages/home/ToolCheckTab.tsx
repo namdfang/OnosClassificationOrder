@@ -1,9 +1,11 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
-import { AlertTriangle, FileSearch, PackageSearch, RefreshCw, Users } from 'lucide-react';
+import { AlertTriangle, FileSearch, PackageSearch, RefreshCw, Users, X } from 'lucide-react';
 import { PRODUCT_LEVEL_MAP, WorkshopConfigCategory } from 'shared';
 import type {
   ToolCheckCustomerError,
   ToolCheckCustomerStat,
+  ToolCheckDayRow,
+  ToolCheckFacet,
   ToolCheckOrder,
   ToolCheckProductStat,
 } from 'shared';
@@ -12,6 +14,7 @@ import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { CopyButton } from '@/components/common/CopyButton';
 import { DateRangePicker } from '@/components/common/DateRangePicker';
+import { SelectFilter } from '@/components/common/SelectFilter';
 import { ImagePreviewDialog } from '@/components/common/ImagePreviewDialog';
 import { Spinner } from '@/components/common/Spinner';
 import { ColorBadgeSelectCell } from '@/components/orders/cells/ColorBadgeSelectCell';
@@ -32,10 +35,31 @@ interface Overview {
   byProduct: ToolCheckProductStat[];
   byCustomer: ToolCheckCustomerStat[];
   topCustomerError: ToolCheckCustomerError[];
+  days: ToolCheckDayRow[];
+  columnTotals: { unreviewed: number; rework: number };
+  facets: { type: ToolCheckFacet[]; customer: ToolCheckFacet[]; machineNumber: ToolCheckFacet[] };
   rangeDays: number;
 }
 
 type ListTab = 'rework' | 'unreviewed';
+
+const WEEKDAYS = ['CN', 'T2', 'T3', 'T4', 'T5', 'T6', 'T7'];
+
+/** ISO → ngày VN (YYYY-MM-DD) để lọc client-side theo cột ngày. */
+function vnDay(iso?: string): string {
+  if (!iso) return '';
+  return new Date(new Date(iso).getTime() + 7 * 3600 * 1000).toISOString().slice(0, 10);
+}
+
+function fmtDayHead(day: string): { wd: string; dm: string } {
+  const d = new Date(`${day}T12:00:00+07:00`);
+  return {
+    wd: WEEKDAYS[d.getDay()] ?? '',
+    dm: `${String(d.getDate()).padStart(2, '0')}/${String(d.getMonth() + 1).padStart(2, '0')}`,
+  };
+}
+
+const toOpts = (f: ToolCheckFacet[] = []) => f.map((o) => ({ value: o.value, label: o.value, count: o.count }));
 
 export default function ToolCheckTab() {
   const { canEditField } = usePermission();
@@ -55,6 +79,13 @@ export default function ToolCheckTab() {
     setDateTo('');
   };
 
+  const [filterType, setFilterType] = useState('');
+  const [filterCustomer, setFilterCustomer] = useState('');
+  const [filterMachine, setFilterMachine] = useState('');
+  // Ngày đang lọc (YYYY-MM-DD VN) — click 1 cột trong dải ngày; chỉ lọc DANH
+  // SÁCH client-side, KPI/dải/thống kê giữ nguyên cả kỳ.
+  const [dayFilter, setDayFilter] = useState('');
+
   const [data, setData] = useState<Overview | null>(null);
   const [loading, setLoading] = useState(false);
   const [listTab, setListTab] = useState<ListTab>('rework');
@@ -69,6 +100,9 @@ export default function ToolCheckTab() {
         const res = await RepositoryRemote.designer.toolCheckOverview({
           days: rangeDays,
           ...(customRange ? { from: dateFrom, to: dateTo } : {}),
+          ...(filterType ? { type: filterType } : {}),
+          ...(filterCustomer ? { customer: filterCustomer } : {}),
+          ...(filterMachine ? { machineNumber: filterMachine } : {}),
         });
         if (seq !== seqRef.current) return;
         setData((res.data?.data || null) as Overview | null);
@@ -81,9 +115,11 @@ export default function ToolCheckTab() {
   };
 
   useEffect(() => {
+    // Đổi kỳ/filter → bỏ ngày đang chọn (tránh lọc theo ngày ngoài kỳ mới).
+    setDayFilter('');
     fetchData();
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [rangeDays, dateFrom, dateTo]);
+  }, [rangeDays, dateFrom, dateTo, filterType, filterCustomer, filterMachine]);
 
   // Patch 1 đơn trong cả 2 list (optimistic) sau khi edit cell.
   const patchRow = (id: string, partial: Partial<ToolCheckOrder>) =>
@@ -97,9 +133,16 @@ export default function ToolCheckTab() {
         : prev,
     );
 
-  const reworkList = data?.reworkList || [];
-  const unreviewedList = data?.unreviewedList || [];
+  // Full kỳ (cho KPI). Danh sách hiển thị lọc thêm theo ngày đang chọn.
+  const reworkAll = data?.reworkList || [];
+  const unreviewedAll = data?.unreviewedList || [];
+  const applyDay = (list: ToolCheckOrder[]) =>
+    dayFilter ? list.filter((o) => vnDay(o.inProductionAt) === dayFilter) : list;
+  const reworkList = applyDay(reworkAll);
+  const unreviewedList = applyDay(unreviewedAll);
   const activeList = listTab === 'rework' ? reworkList : unreviewedList;
+
+  const toggleDay = (day: string) => setDayFilter((cur) => (cur === day ? '' : day));
 
   const canEditNote = canEditField('toolResultNote');
   const canEditErrFile = canEditField('errorFile');
@@ -203,12 +246,14 @@ export default function ToolCheckTab() {
   const kpis = useMemo(
     () => [
       { key: 'checked', label: 'Đã soát trong kỳ', value: data?.checkedCount ?? 0, cls: 'text-foreground' },
-      { key: 'rework', label: 'In trả về (cần làm lại)', value: reworkList.length, cls: 'text-amber-600 dark:text-amber-400' },
-      { key: 'unreviewed', label: 'Chưa soát', value: unreviewedList.length, cls: 'text-slate-600 dark:text-slate-400' },
+      { key: 'rework', label: 'In trả về (cần làm lại)', value: reworkAll.length, cls: 'text-amber-600 dark:text-amber-400' },
+      { key: 'unreviewed', label: 'Chưa soát', value: unreviewedAll.length, cls: 'text-slate-600 dark:text-slate-400' },
       { key: 'error', label: 'Lỗi soát tool (đang chờ)', value: data?.errorCount ?? 0, cls: 'text-rose-600 dark:text-rose-400' },
     ],
-    [data, reworkList.length, unreviewedList.length],
+    [data, reworkAll.length, unreviewedAll.length],
   );
+
+  const days = useMemo(() => [...(data?.days || [])].reverse(), [data]);
 
   return (
     <div className="space-y-5">
@@ -249,6 +294,102 @@ export default function ToolCheckTab() {
             <RefreshCw size={13} className={loading ? 'animate-spin' : ''} />
           </Button>
         </div>
+        {/* Hàng filter: Sản phẩm / Khách / Máy — options từ facet BE (cả kỳ). */}
+        <div className="w-full grid grid-cols-1 sm:grid-cols-3 gap-2">
+          <SelectFilter
+            label="Sản phẩm"
+            value={filterType}
+            onChange={setFilterType}
+            options={toOpts(data?.facets.type)}
+          />
+          <SelectFilter
+            label="Khách hàng"
+            value={filterCustomer}
+            onChange={setFilterCustomer}
+            options={toOpts(data?.facets.customer)}
+          />
+          <SelectFilter
+            label="Máy"
+            value={filterMachine}
+            onChange={setFilterMachine}
+            options={toOpts(data?.facets.machineNumber)}
+          />
+        </div>
+      </div>
+
+      {/* Dải tổng quan theo ngày — Chưa soát + In trả về. Click 1 ngày → lọc
+          danh sách bên dưới (client-side); click lại/✕ để bỏ. */}
+      <div className="rounded-lg border border-border bg-card">
+        <div className="flex items-center gap-2 px-3 py-2 border-b border-border">
+          <span className="text-sm font-semibold">Tổng quan theo ngày</span>
+          <span className="hidden sm:inline text-[11px] text-muted-foreground">
+            — bấm 1 ngày để lọc danh sách bên dưới
+          </span>
+          {dayFilter && (
+            <button
+              type="button"
+              onClick={() => setDayFilter('')}
+              className="ml-auto inline-flex items-center gap-1 text-[11px] rounded-full bg-indigo-100 dark:bg-indigo-500/20 text-indigo-700 dark:text-indigo-300 px-2 py-0.5"
+            >
+              Đang lọc {fmtDayHead(dayFilter).dm}
+              <X size={11} />
+            </button>
+          )}
+        </div>
+        {days.length === 0 ? (
+          <p className="text-xs text-muted-foreground text-center py-6">Không có dữ liệu.</p>
+        ) : (
+          <div className="overflow-x-auto">
+            <table className="w-full text-[13px] tabular-nums border-separate border-spacing-0">
+              <thead>
+                <tr>
+                  <th className="sticky left-0 z-20 bg-card text-left font-medium px-3 py-2 border-b border-border min-w-[110px]">
+                    Chỉ số
+                  </th>
+                  {days.map((d) => {
+                    const { wd, dm } = fmtDayHead(d.day);
+                    const active = dayFilter === d.day;
+                    return (
+                      <th
+                        key={d.day}
+                        onClick={() => toggleDay(d.day)}
+                        className={`font-medium px-1.5 py-1.5 border-b border-l border-border text-center min-w-[58px] cursor-pointer transition-colors ${
+                          active ? 'bg-indigo-100 dark:bg-indigo-500/25' : 'bg-card hover:bg-muted/60'
+                        }`}
+                      >
+                        <div className="text-[11px] text-muted-foreground leading-tight">{wd}</div>
+                        <div className="leading-tight font-semibold">{dm}</div>
+                      </th>
+                    );
+                  })}
+                  <th className="bg-muted/30 font-semibold px-2 py-1.5 border-b border-l border-border text-center min-w-[58px]">
+                    Tổng
+                  </th>
+                </tr>
+              </thead>
+              <tbody>
+                <DayMetricRow
+                  label="Chưa soát"
+                  cls="text-slate-600 dark:text-slate-300"
+                  days={days}
+                  dayFilter={dayFilter}
+                  pick={(d) => d.unreviewed}
+                  total={data?.columnTotals.unreviewed ?? 0}
+                  onPick={toggleDay}
+                />
+                <DayMetricRow
+                  label="In trả về"
+                  cls="text-amber-600"
+                  days={days}
+                  dayFilter={dayFilter}
+                  pick={(d) => d.rework}
+                  total={data?.columnTotals.rework ?? 0}
+                  onPick={toggleDay}
+                />
+              </tbody>
+            </table>
+          </div>
+        )}
       </div>
 
       {/* KPI */}
@@ -418,5 +559,53 @@ export default function ToolCheckTab() {
         title={preview?.title}
       />
     </div>
+  );
+}
+
+function DayMetricRow({
+  label,
+  cls,
+  days,
+  dayFilter,
+  pick,
+  total,
+  onPick,
+}: {
+  label: string;
+  cls: string;
+  days: ToolCheckDayRow[];
+  dayFilter: string;
+  pick: (d: ToolCheckDayRow) => number;
+  total: number;
+  onPick: (day: string) => void;
+}) {
+  return (
+    <tr className="group">
+      <td className={`sticky left-0 z-10 bg-card px-3 py-1.5 border-b border-border/60 font-medium ${cls}`}>
+        {label}
+      </td>
+      {days.map((d) => {
+        const v = pick(d);
+        const active = dayFilter === d.day;
+        return (
+          <td
+            key={d.day}
+            onClick={() => onPick(d.day)}
+            className={`border-b border-l border-border/60 text-center px-1 py-1.5 cursor-pointer transition-colors ${
+              active ? 'bg-indigo-100 dark:bg-indigo-500/25' : 'hover:bg-muted/50'
+            }`}
+          >
+            {v === 0 ? (
+              <span className="text-muted-foreground/30">·</span>
+            ) : (
+              <span className={`font-semibold ${cls}`}>{v}</span>
+            )}
+          </td>
+        );
+      })}
+      <td className={`bg-muted/30 border-b border-l border-border text-center px-2 py-1.5 font-semibold ${cls}`}>
+        {total || <span className="text-muted-foreground/40">·</span>}
+      </td>
+    </tr>
   );
 }

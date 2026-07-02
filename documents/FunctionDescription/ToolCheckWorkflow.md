@@ -32,7 +32,9 @@ Bối cảnh: đơn `toolResultNote='ok'` được đẩy thẳng sang In (xem `
 
 Support/Admin mở Dashboard → tab "Soát tool":
 - Filter **thời gian** (7/14/30 + `DateRangePicker`) — lọc theo `inProductionAt` (tz VN).
-- **KPI**: Đã soát trong kỳ · In trả về (cần làm lại) · Chưa soát · Lỗi soát tool đang chờ.
+- **3 filter server-side** (`SelectFilter` — options từ `facets` BE, phạm vi = đơn Support quan tâm cả kỳ `chưa soát ∪ tool-check`, KHÔNG cross-narrow → dropdown ổn định): **Sản phẩm** (`type`) · **Khách hàng** (`userSku`) · **Máy** (`machineNumber`). Đổi filter → refetch, narrow **toàn tab** (KPI + dải ngày + list + thống kê). *(Lưu ý: đơn chưa soát thường chưa gán máy → filter Máy phủ ít cho nhóm chưa soát.)*
+- **KPI**: Đã soát trong kỳ · In trả về (cần làm lại) · Chưa soát · Lỗi soát tool đang chờ (KPI tính **cả kỳ**, KHÔNG đổi khi click ngày).
+- **Dải tổng quan theo ngày** (`days[]` + `columnTotals`): 2 hàng **Chưa soát** + **In trả về**, mỗi cột 1 ngày `inProductionAt` (VN, cũ→mới; BE trả mới→cũ, FE reverse) + cột Tổng. **Click 1 ngày (header hoặc ô) → lọc DANH SÁCH bên dưới client-side** (so `inProductionAt`→ngày VN); click lại / nút "Đang lọc dd/MM ✕" để bỏ. Badge 2 tab list + đơn hiển thị theo ngày đang chọn; KPI/dải/thống kê giữ nguyên. ⚠️ list cap 500/kỳ → nếu 1 ngày vượt cap, số ở dải (đếm chuẩn từ aggregate) có thể > số dòng hiện.
 - **2 nhóm danh sách** (segmented, để support biết làm gì trước):
   1. **Cần làm lại** (In trả về) — ưu tiên (`source=tool-check + note=error`).
   2. **Chưa soát** — backlog (`toolResultNote` rỗng).
@@ -47,7 +49,7 @@ Support/Admin mở Dashboard → tab "Soát tool":
 
 Request `GetToolCheckOverviewDto` (`packages/shared/dtos/production-order.dto.ts`):
 ```ts
-{ days: '7'|'14'|'30'; from?: string; to?: string; type?: string; customer?: string }
+{ days: '7'|'14'|'30'; from?: string; to?: string; type?: string; customer?: string; machineNumber?: string }
 ```
 
 Response `ToolCheckOverviewResDto.data`:
@@ -55,14 +57,23 @@ Response `ToolCheckOverviewResDto.data`:
 {
   checkedCount: number;          // toolCheckedAt ∈ kỳ
   errorCount: number;            // đang chờ support (= reworkList)
-  reworkList: ToolCheckOrder[];  // In trả về (source=tool-check + note=error)
+  reworkList: ToolCheckOrder[];  // In trả về (source=tool-check + note=error) — thêm machineNumber
   unreviewedList: ToolCheckOrder[]; // toolResultNote rỗng
   byProduct: ToolCheckProductStat[];   // {type, fullName?, mockup?, level?, count}
   byCustomer: ToolCheckCustomerStat[]; // {userSku, count}
   topCustomerError: ToolCheckCustomerError[]; // {userSku, code, label?, count}
+  days: ToolCheckDayRow[];       // {day, unreviewed, rework} — dải theo ngày (mới→cũ)
+  columnTotals: { unreviewed: number; rework: number };
+  facets: {                      // options cho 3 dropdown (phạm vi chưa-soát∪tool-check, KHÔNG cross-narrow)
+    type: ToolCheckFacet[];      // {value, count}
+    customer: ToolCheckFacet[];
+    machineNumber: ToolCheckFacet[];
+  };
   rangeDays: number;
 }
 ```
+
+BE `getToolCheckOverview` thêm: 2 aggregate `groupBy day` (unreviewed/rework, áp cùng 3 filter) + 3 aggregate facet (`facetAgg` trên `facetScope` = window + alive + `$or[toolResultNote∈[null,''], productionErrorSource='tool-check']`, KHÔNG áp type/customer/machine). Tất cả gộp vào `Promise.all` sẵn có → 1 round-trip.
 
 `errorSource` (shared `ErrorSourceZod`, entity `WorkshopConfigEntity.errorSource`, `productionErrorSource`) = `'designer' | 'factory' | 'tool-check'`.
 
