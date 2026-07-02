@@ -52,3 +52,14 @@ export function driveViewUrl(url?: string): string {
   const id = extractDriveId(url);
   return id ? `https://drive.google.com/file/d/${id}/view` : url;
 }
+
+/**
+ * URL tải file trực tiếp — Drive → endpoint download của Google (trả file kèm
+ * Content-Disposition attachment cho file "Anyone with link"). KHÔNG qua server
+ * mình. File > 100MB Drive có thể chèn trang confirm virus-scan. Non-Drive → gốc.
+ */
+export function driveDownloadUrl(url?: string): string {
+  if (!url) return '';
+  const id = extractDriveId(url);
+  return id ? `https://drive.usercontent.google.com/download?id=${id}&export=download` : url;
+}

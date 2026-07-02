@@ -4096,7 +4096,34 @@ export class OrderService implements OnModuleInit {
   }
 
   async getLogs(orderId: string, dto: import('shared').GetOrderLogsDto) {
-    return this.orderLogService.listByOrder(orderId, dto);
+    const result = await this.orderLogService.listByOrder(orderId, dto);
+
+    // Log `assignee` lưu raw userId → resolve sang fullName để FE hiển thị tên
+    // (chạy server-side nên đúng cho MỌI viewer, kể cả role không có quyền xem
+    // danh sách designer team). Chỉ áp cho field=assignee.
+    const ids = new Set<string>();
+    for (const log of result.data as Array<Record<string, unknown>>) {
+      if (log.field !== 'assignee') continue;
+      if (typeof log.before === 'string' && log.before) ids.add(log.before);
+      if (typeof log.after === 'string' && log.after) ids.add(log.after);
+    }
+    if (ids.size > 0) {
+      const users = await this.userModel
+        .find({ _id: { $in: Array.from(ids) } }, { _id: 1, fullName: 1 })
+        .lean();
+      const nameById = new Map(users.map((u) => [String(u._id), u.fullName as string]));
+      for (const log of result.data as Array<Record<string, unknown>>) {
+        if (log.field !== 'assignee') continue;
+        if (typeof log.before === 'string' && nameById.has(log.before)) {
+          log.before = nameById.get(log.before);
+        }
+        if (typeof log.after === 'string' && nameById.has(log.after)) {
+          log.after = nameById.get(log.after);
+        }
+      }
+    }
+
+    return result;
   }
 
   /**

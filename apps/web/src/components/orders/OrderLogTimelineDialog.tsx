@@ -1,6 +1,7 @@
 import React, { useEffect, useMemo, useState } from 'react';
-import { History, RefreshCw } from 'lucide-react';
+import { ArrowRight, History, RefreshCw } from 'lucide-react';
 import type { ProductionOrderLog, ProductionOrderLogAction } from 'shared';
+import { WorkshopConfigCategory } from 'shared';
 
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
@@ -12,7 +13,9 @@ import {
 } from '@/components/ui/dialog';
 import { Spinner } from '@/components/common/Spinner';
 import { RepositoryRemote } from '@/services';
+import { useWorkshopConfigStore } from '@/store/workshopConfigStore';
 import { handleAxiosError } from '@/utils';
+import { cn } from '@/utils/cn';
 
 interface Props {
   open: boolean;
@@ -41,12 +44,53 @@ const FIELD_LABEL: Record<string, string> = {
   errorFileNote: 'Ghi chú file lỗi',
   assignee: 'Người thực hiện',
   assigneeNote: 'Note người thực hiện',
+  designerStatus: 'TT Designer',
+  fabricType: 'Loại vải',
+  machineNumber: 'Máy',
+  productionError: 'Lỗi xưởng',
+  productionErrorNote: 'Mô tả lỗi xưởng',
+  productionErrorSource: 'Nguồn lỗi',
+  cancelledAt: 'Hủy đơn',
+  designs: 'Design',
+  mockupUrl: 'Mockup',
 };
 
-function formatValue(v: unknown): string {
-  if (v === null || v === undefined) return '—';
-  if (typeof v === 'object') return JSON.stringify(v);
-  return String(v);
+// Field nào resolve code→name (+ color) qua workshop_config store.
+const FIELD_CATEGORY: Record<string, WorkshopConfigCategory> = {
+  printStatus: WorkshopConfigCategory.PrintStatus,
+  printStatusNote: WorkshopConfigCategory.PrintStatusNote,
+  toolResult: WorkshopConfigCategory.ToolResult,
+  toolResultNote: WorkshopConfigCategory.ToolResultNote,
+  errorFile: WorkshopConfigCategory.ErrorFileType,
+  assigneeNote: WorkshopConfigCategory.AssigneeNote,
+  fabricType: WorkshopConfigCategory.FabricType,
+  machineNumber: WorkshopConfigCategory.Machine,
+  productionError: WorkshopConfigCategory.ProductionError,
+};
+
+// designerStatus là enum → nhãn + màu tiếng Việt (không phải workshop_config).
+const DESIGNER_STATUS_LABELS: Record<string, string> = {
+  unassigned: 'Chưa gán',
+  assigned: 'Đã gán',
+  'in-progress': 'Đang làm',
+  done: 'Đã xong',
+  rejected: 'Đã trả',
+  rework: 'Cần làm lại',
+};
+const DESIGNER_STATUS_COLOR: Record<string, string> = {
+  unassigned: '#a1a1aa',
+  assigned: '#71717a',
+  'in-progress': '#6366f1',
+  done: '#10b981',
+  rejected: '#f43f5e',
+  rework: '#f59e0b',
+};
+const SOURCE_COLOR: Record<string, string> = { designer: '#8b5cf6', factory: '#0ea5e9' };
+
+/** Style tint từ hex `#rrggbb` — chữ = color, nền = color 12% (8-digit hex). */
+function tintStyle(color?: string): React.CSSProperties | undefined {
+  if (!color || !/^#[0-9a-fA-F]{6}$/.test(color)) return undefined;
+  return { color, backgroundColor: `${color}1f` };
 }
 
 /** Nhãn đẹp cho key snapshot của update_design (`mockupUrl`, `designs.front`, …). */
@@ -76,9 +120,45 @@ function formatDate(d: Date | string | undefined): string {
   return date.toLocaleString('vi-VN', { hour12: false });
 }
 
+type Display = { text: string; color?: string };
+
+/** Pill trạng thái — có màu (tint) nếu resolve được, `strike` cho giá trị cũ. */
+function StatusPill({ text, color, strike }: { text: string; color?: string; strike?: boolean }) {
+  const tint = strike ? undefined : tintStyle(color);
+  return (
+    <span
+      style={tint}
+      className={cn(
+        'px-1.5 py-0.5 rounded text-[13px]',
+        strike && 'bg-muted/60 text-muted-foreground line-through decoration-muted-foreground/40',
+        !strike && !tint && 'bg-emerald-50 text-emerald-700 font-medium dark:bg-emerald-500/10 dark:text-emerald-300',
+        !strike && tint && 'font-medium',
+      )}
+    >
+      {text || '—'}
+    </span>
+  );
+}
+
+function DiffRow({ before, after }: { before: Display; after: Display }) {
+  return (
+    <div className="flex items-center gap-1.5 flex-wrap">
+      <StatusPill text={before.text} color={before.color} strike />
+      <ArrowRight size={13} className="text-muted-foreground shrink-0" />
+      <StatusPill text={after.text} color={after.color} />
+    </div>
+  );
+}
+
 export function OrderLogTimelineDialog({ open, onOpenChange, orderId, productionId }: Props) {
   const [logs, setLogs] = useState<ProductionOrderLog[]>([]);
   const [loading, setLoading] = useState(false);
+
+  // Store để resolve code → name + color (workshop_config). Assignee đã được BE
+  // resolve sang tên sẵn trong response nên FE không cần user store.
+  const loadConfig = useWorkshopConfigStore((s) => s.load);
+  const configLoaded = useWorkshopConfigStore((s) => s.loaded);
+  const resolve = useWorkshopConfigStore((s) => s.resolve);
 
   const fetchLogs = async () => {
     if (!orderId) return;
@@ -96,11 +176,37 @@ export function OrderLogTimelineDialog({ open, onOpenChange, orderId, production
   useEffect(() => {
     if (open && orderId) {
       fetchLogs();
+      if (!configLoaded) loadConfig();
     } else if (!open) {
       setLogs([]);
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [open, orderId]);
+
+  // Resolve 1 giá trị field → { tên hiển thị, màu } (KHÔNG hiện code cho user).
+  const resolveDisplay = (field: string | undefined, value: unknown): Display => {
+    if (value === null || value === undefined || value === '') return { text: '—' };
+    if (Array.isArray(value)) {
+      const parts = value.map((v) => resolveDisplay(field, v).text).filter((s) => s && s !== '—');
+      return { text: parts.length ? parts.join(', ') : '—' };
+    }
+    if (typeof value === 'object') return { text: JSON.stringify(value) };
+    const raw = String(value);
+    if (!field) return { text: raw };
+    if (field === 'designerStatus') {
+      return { text: DESIGNER_STATUS_LABELS[raw] || raw, color: DESIGNER_STATUS_COLOR[raw] };
+    }
+    if (field === 'productionErrorSource') {
+      const text = raw === 'designer' ? 'Do designer' : raw === 'factory' ? 'Do xưởng' : raw;
+      return { text, color: SOURCE_COLOR[raw] };
+    }
+    const cat = FIELD_CATEGORY[field];
+    if (cat) {
+      const cfg = resolve(cat, raw);
+      return { text: cfg?.name || raw, color: cfg?.color || undefined };
+    }
+    return { text: raw };
+  };
 
   const headerLabel = useMemo(() => {
     if (productionId) return `Lịch sử thay đổi — ${productionId}`;
@@ -137,44 +243,55 @@ export function OrderLogTimelineDialog({ open, onOpenChange, orderId, production
           )}
 
           {logs.length > 0 && (
-            <ol className="relative border-l border-border ml-3">
+            <div className="space-y-2">
               {logs.map((log) => {
                 const meta = ACTION_BADGE[log.action as ProductionOrderLogAction] || ACTION_BADGE.update;
                 const fieldLabel = log.field ? FIELD_LABEL[log.field] || log.field : null;
+                const isFieldUpdate =
+                  !!log.field && (log.action === 'update' || log.action === 'bulk_update');
                 return (
-                  <li key={log._id} className="ml-4 pb-4 last:pb-0">
-                    <span className="absolute -left-[5px] mt-1.5 w-2.5 h-2.5 rounded-full bg-primary border-2 border-background" />
-                    <div className="flex items-start justify-between gap-2 mb-1">
-                      <div className="flex items-center gap-2 flex-wrap">
+                  <div
+                    key={log._id}
+                    className="rounded-lg border border-border bg-card px-3 py-2.5 space-y-1.5"
+                  >
+                    {/* Header: action + field + thời gian */}
+                    <div className="flex items-start justify-between gap-2">
+                      <div className="flex items-center gap-2 flex-wrap min-w-0">
                         <Badge variant={meta.variant}>{meta.label}</Badge>
                         {fieldLabel && (
-                          <span className="text-sm font-medium text-foreground">{fieldLabel}</span>
+                          <span className="text-sm font-semibold text-foreground truncate">
+                            {fieldLabel}
+                          </span>
                         )}
                       </div>
-                      <span className="text-[11px] text-muted-foreground whitespace-nowrap">
+                      <span className="text-[11px] text-muted-foreground whitespace-nowrap shrink-0">
                         {formatDate(log.createdAt)}
                       </span>
                     </div>
 
-                    {log.field && (log.action === 'update' || log.action === 'bulk_update') && (
-                      <div className="text-xs font-mono bg-muted/50 rounded px-2 py-1.5 mb-1">
-                        <span className="text-destructive line-through">{formatValue(log.before)}</span>
-                        <span className="mx-2 text-muted-foreground">→</span>
-                        <span className="text-emerald-600 dark:text-emerald-400">{formatValue(log.after)}</span>
-                      </div>
+                    {/* Field update: diff cũ → mới (đã resolve name + màu) */}
+                    {isFieldUpdate && (
+                      <DiffRow
+                        before={resolveDisplay(log.field, log.before)}
+                        after={resolveDisplay(log.field, log.after)}
+                      />
                     )}
 
                     {/* Đổi design: before/after là object keyed theo field
                         (mockupUrl / designs.front / ...) → render từng URL cũ→mới. */}
                     {log.action === 'update_design' && (
-                      <div className="text-xs bg-muted/50 rounded px-2 py-1.5 mb-1 space-y-1.5">
+                      <div className="space-y-2">
                         {designChangeEntries(log.before, log.after).map(({ key, before, after }) => (
-                          <div key={key} className="space-y-0.5">
-                            <span className="font-medium text-foreground">{designFieldLabel(key)}</span>
-                            <div className="font-mono break-all">
+                          <div key={key} className="space-y-1">
+                            <span className="text-xs font-medium text-muted-foreground">
+                              {designFieldLabel(key)}
+                            </span>
+                            <div className="text-[11px] font-mono break-all leading-relaxed">
                               <span className="text-destructive line-through">{before || '—'}</span>
                               <span className="mx-1 text-muted-foreground">→</span>
-                              <span className="text-emerald-600 dark:text-emerald-400">{after || '—'}</span>
+                              <span className="text-emerald-600 dark:text-emerald-400">
+                                {after || '—'}
+                              </span>
                             </div>
                           </div>
                         ))}
@@ -183,27 +300,30 @@ export function OrderLogTimelineDialog({ open, onOpenChange, orderId, production
 
                     {/* Hủy đơn: after = lý do. */}
                     {log.action === 'cancel' && (
-                      <div className="text-xs bg-muted/50 rounded px-2 py-1.5 mb-1">
+                      <div className="text-[13px] rounded bg-rose-50 dark:bg-rose-500/10 px-2 py-1">
                         <span className="text-muted-foreground">Lý do: </span>
-                        <span className="text-foreground">{formatValue(log.after)}</span>
+                        <span className="text-foreground">{resolveDisplay(undefined, log.after).text}</span>
                       </div>
                     )}
 
-                    {log.action === 'import' && log.after && (
-                      <div className="text-xs font-mono text-muted-foreground bg-muted/50 rounded px-2 py-1.5 mb-1">
-                        {formatValue(log.after)}
+                    {log.action === 'import' && log.after != null && (
+                      <div className="text-xs text-muted-foreground">
+                        {resolveDisplay(log.field, log.after).text}
                       </div>
                     )}
 
-                    <div className="text-[11px] text-muted-foreground">
-                      {log.userName || log.userEmail || 'system'}
-                      {log.roleCode && <> · <span className="text-foreground/70">{log.roleCode}</span></>}
-                      {log.ip && <> · {log.ip}</>}
+                    {/* Meta: người thực hiện · role · ip */}
+                    <div className="text-[11px] text-muted-foreground flex items-center gap-1 flex-wrap">
+                      <span className="font-medium text-foreground/70">
+                        {log.userName || log.userEmail || 'system'}
+                      </span>
+                      {log.roleCode && <span>· {log.roleCode}</span>}
+                      {log.ip && <span>· {log.ip}</span>}
                     </div>
-                  </li>
+                  </div>
                 );
               })}
-            </ol>
+            </div>
           )}
         </div>
       </DialogContent>

@@ -84,8 +84,7 @@ Trong mọi case, log push **fire-and-forget** (`void`) để không chặn resp
 
 | Quyền | Role |
 |-------|------|
-| Xem log | SuperAdmin / Admin / Manager / Support |
-| Designer / Fulfillment | ❌ (chỉ thấy log của đơn họ đang xử lý — sẽ cấp permission `order.log.view` ở Phase 0 RBAC nếu cần) |
+| Xem log | **Mọi user đã đăng nhập** (`@Auth([])` — RolesGuard pass khi roles rỗng). Trước đây giới hạn SuperAdmin/Admin/Manager/Support; đã mở cho tất cả role vì lịch sử đơn cần cho cả Designer/Fulfillment tra cứu. |
 
 Response: `{ success, data: ProductionOrderLog[], total }`
 
@@ -107,14 +106,20 @@ Response: `{ success, data: ProductionOrderLog[], total }`
 - shadcn `Dialog` max-w-2xl.
 - Header: icon `History` + `Lịch sử thay đổi — {productionId}`.
 - Subhead: số bản ghi + nút "Tải lại".
-- Body: `<ol>` timeline có thanh trục dọc (border-l) + dot ở mỗi entry.
+- Body: **danh sách card** (`space-y-2`, mỗi entry 1 card border) — thay timeline trục dọc cũ cho gọn/dễ nhìn.
 - Mỗi entry:
-  - Badge action (`Tạo` / `Cập nhật` / `Bulk` / `Import` / `Xóa`).
-  - Tên field (label tiếng Việt từ map `FIELD_LABEL`).
-  - Diff `before → after` (mã hex strikethrough đỏ + giá trị mới xanh).
+  - Badge action (`Tạo` / `Cập nhật` / `Bulk` / `Import` / `Xóa` / `Hủy đơn` / `Đổi design`).
+  - Tên field (label tiếng Việt từ map `FIELD_LABEL` — đã bổ sung `designerStatus`→"TT Designer", `productionError`→"Lỗi xưởng", `machineNumber`→"Máy", `fabricType`, `productionErrorSource`… nếu chưa có thì fallback key).
+  - Diff `before → after` render qua `<DiffRow>` + `<StatusPill>`: pill cũ xám gạch ngang + icon `ArrowRight` + pill mới **tô màu theo trạng thái**.
+  - **Value hiển thị NAME + MÀU, không phải code** (`resolveDisplay(field, value) → { text, color }`):
+    - `designerStatus` → nhãn VI (`DESIGNER_STATUS_LABELS`) + màu (`DESIGNER_STATUS_COLOR`: done=emerald, rework=amber, in-progress=indigo, rejected=rose…).
+    - Field workshop_config (`printStatus`, `toolResultNote`, `machineNumber`, `productionError`, `errorFile`…) → `useWorkshopConfigStore.resolve(category, code)` lấy **`.name` + `.color`** (map `FIELD_CATEGORY`). `errorFile` là mảng → resolve từng phần tử, join `, `.
+    - `productionErrorSource` → "Do designer" (violet) / "Do xưởng" (sky).
+    - Màu áp qua `tintStyle(hex)`: chữ = hex, nền = hex + 12% alpha (8-digit hex inline style).
+    - **`assignee` (userId) → tên được resolve ở BACKEND** (`OrderService.getLogs` batch `userModel.find` → thay `before/after` = `fullName`) nên đúng cho MỌI viewer, không phụ thuộc quyền xem designer team. FE không còn dùng designer team store ở dialog này.
   - Footer: `userName · roleCode · ip`.
   - Timestamp định dạng `vi-VN`.
-- Auto-fetch khi `open=true`, clear logs khi đóng.
+- Auto-fetch khi `open=true` + `loadConfig()` / `fetchTeam()` (nếu store chưa load) để resolve name; clear logs khi đóng.
 
 ### 6.3 Cách gọi
 Trong `ListOrderTab.tsx`, mỗi row có nút icon `History`:

@@ -97,13 +97,6 @@ const ORDER_FIELD_EDIT_ROLES = [
   RoleType.SupportManager,
 ];
 
-const ORDER_LOG_VIEW_ROLES = [
-  RoleType.SuperAdmin,
-  RoleType.Admin,
-  RoleType.Manager,
-  RoleType.Support,
-];
-
 @Controller('orders')
 @ApiTags('orders')
 export class OrderController {
@@ -554,7 +547,8 @@ export class OrderController {
   }
 
   @Get(':id/logs')
-  @Auth(ORDER_LOG_VIEW_ROLES)
+  // Lịch sử đơn cho MỌI user đã đăng nhập xem (roles rỗng → RolesGuard pass).
+  @Auth([])
   @ApiOperation({ summary: 'List audit log entries for an order (Phase 3)' })
   @HttpCode(HttpStatus.OK)
   @ApiOkResponse({ type: GetOrderLogsResDto })
