@@ -1,4 +1,5 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import axios from 'axios';
 import {
   DndContext,
   DragEndEvent,
@@ -16,13 +17,18 @@ import {
   ChevronUp,
   Clock,
   Copy,
+  History,
   ListChecks,
+  Loader2,
   MousePointerClick,
   PlayCircle,
   RefreshCw,
   RotateCw,
+  ScanLine,
   Search,
+  Trash2,
   X,
+  XCircle,
 } from 'lucide-react';
 import { toast } from 'sonner';
 import type { FulfillmentTaskTab, FulfillmentTransitionDto, ProductionOrder } from 'shared';
@@ -34,6 +40,12 @@ import {
 } from 'shared';
 
 import { Button } from '@/components/ui/button';
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+} from '@/components/ui/dialog';
 import { Input } from '@/components/ui/input';
 import { TooltipProvider } from '@/components/ui/tooltip';
 import { DateRangePicker } from '@/components/common/DateRangePicker';
@@ -52,11 +64,42 @@ import { FulfillmentDailyOverview } from './FulfillmentDailyOverview';
 import { FulfillmentTaskCard } from './FulfillmentTaskCard';
 import { ReworkBackDialog } from './ReworkBackDialog';
 import PrintWorkshopView from './PrintWorkshopView';
+import { OrderErrorScanDialog } from '../../orders/scan-error/OrderErrorScanDialog';
+import { FulfillmentScanActionDialog } from '../../orders/scan-error/FulfillmentScanActionDialog';
+
+type ScannedOrder = ProductionOrder & {
+  factory?: { name?: string; shortName?: string };
+  machineType?: { name?: string; shortName?: string };
+};
 
 /** ISO → ngày VN (YYYY-MM-DD) để lọc client-side theo cột ngày. */
 function vnDay(iso?: string): string {
   if (!iso) return '';
   return new Date(new Date(iso).getTime() + 7 * 3600 * 1000).toISOString().slice(0, 10);
+}
+
+const BARCODE_PREFIX = 'N-';
+const SEARCH_HISTORY_KEY = 'fulfillment-search-history';
+const MAX_SEARCH_HISTORY = 20;
+
+type SearchHistoryEntry = {
+  id: string;
+  code: string;
+  at: string;
+  status: 'found' | 'not-found';
+};
+
+/**
+ * Ô Search vừa dùng gõ tay vừa nhận máy quét USB (xuất "N-PROD1234<Enter>").
+ * DB lưu `productionId` không có tiền tố → tự bóc "N-"/"n-" ở đầu trước khi
+ * so khớp. So sánh case-insensitive vì máy quét có thể xuất chữ thường.
+ */
+function stripBarcodePrefix(raw: string): string {
+  const trimmed = raw.trim();
+  if (trimmed.slice(0, BARCODE_PREFIX.length).toUpperCase() === BARCODE_PREFIX) {
+    return trimmed.slice(BARCODE_PREFIX.length).trim();
+  }
+  return trimmed;
 }
 
 /**
@@ -228,6 +271,40 @@ function FulfillmentKanbanView() {
   // ─── Filter state ──────────────────────────────────────────────
   const [search, setSearch] = useState('');
   const debouncedSearch = useDebounce(search, 300);
+  const searchInputRef = useRef<HTMLInputElement | null>(null);
+  // ─── Scan → detail/action dialog (clone luồng trang "Quét mã") ──
+  // Enter/quét mã trong ô search → tra cứu chính xác theo productionId → mở
+  // FulfillmentScanActionDialog (Hoàn thành / Báo lỗi). "Báo lỗi" → errorMode
+  // chuyển sang OrderErrorScanDialog.
+  const [scannedOrder, setScannedOrder] = useState<ScannedOrder | null>(null);
+  const [scanErrorMode, setScanErrorMode] = useState(false);
+  const [lookupLoading, setLookupLoading] = useState(false);
+  // Lịch sử tra cứu (mã đã Enter/quét) — persist localStorage, xem qua modal.
+  const [searchHistory, setSearchHistory] = useState<SearchHistoryEntry[]>(() => {
+    if (typeof window === 'undefined') return [];
+    try {
+      const raw = window.localStorage.getItem(SEARCH_HISTORY_KEY);
+      return raw ? (JSON.parse(raw) as SearchHistoryEntry[]) : [];
+    } catch {
+      return [];
+    }
+  });
+  const [historyOpen, setHistoryOpen] = useState(false);
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+    window.localStorage.setItem(SEARCH_HISTORY_KEY, JSON.stringify(searchHistory));
+  }, [searchHistory]);
+  const pushSearchHistory = useCallback((code: string, status: 'found' | 'not-found') => {
+    setSearchHistory((prev) => {
+      const entry: SearchHistoryEntry = {
+        id: `${Date.now()}-${code}`,
+        code,
+        status,
+        at: new Date().toISOString(),
+      };
+      return [entry, ...prev].slice(0, MAX_SEARCH_HISTORY);
+    });
+  }, []);
   const [filters, setFilters] = useState<Filters>(EMPTY_FILTERS);
   // Date range gửi xuống BE — match scope `OrderFactoryTab` (7 ngày). undefined
   // = chưa pick → BE default 7 ngày. Empty string sau khi user clear =
@@ -330,10 +407,51 @@ function FulfillmentKanbanView() {
     void load();
   }, [load]);
 
+  // Tra cứu chính xác 1 đơn theo productionId (đã bóc tiền tố "N-") → mở dialog
+  // thao tác. Reuse RepositoryRemote.order.getByProductionId như trang Quét mã.
+  const handleScanLookup = useCallback(
+    async (raw: string) => {
+      const code = stripBarcodePrefix(raw);
+      if (!code || lookupLoading) return;
+      setLookupLoading(true);
+      try {
+        const res = await RepositoryRemote.order.getByProductionId(code);
+        const data = res.data?.data as ScannedOrder | undefined;
+        if (!data?._id) {
+          toast.error('Không tìm thấy đơn với mã này');
+          pushSearchHistory(code, 'not-found');
+          return;
+        }
+        setScanErrorMode(false);
+        setScannedOrder(data);
+        pushSearchHistory(code, 'found');
+      } catch (err) {
+        const status = axios.isAxiosError(err) ? err.response?.status : undefined;
+        if (status === 404) {
+          toast.error('Không tìm thấy đơn với mã này');
+          pushSearchHistory(code, 'not-found');
+        } else {
+          handleAxiosError(err);
+        }
+      } finally {
+        setLookupLoading(false);
+      }
+    },
+    [lookupLoading, pushSearchHistory],
+  );
+
+  const closeScanDialog = useCallback(() => {
+    setScannedOrder(null);
+    setScanErrorMode(false);
+    // Xong 1 đơn → clear ô search + re-focus để quét đơn kế tiếp.
+    setSearch('');
+    setTimeout(() => searchInputRef.current?.focus(), 80);
+  }, []);
+
   // ─── Filter application (client-side) ──────────────────────────
   const filteredColumns = useMemo<Columns>(() => {
     // Date filter giờ chạy BE (xem `load()`) — không filter date ở FE nữa.
-    const q = debouncedSearch.trim().toLowerCase();
+    const q = stripBarcodePrefix(debouncedSearch).toLowerCase();
     const apply = (arr: ProductionOrder[]) =>
       arr.filter((o) => {
         if (dayFilter && vnDay(o.inProductionAt as string | undefined) !== dayFilter) return false;
@@ -360,7 +478,7 @@ function FulfillmentKanbanView() {
   }, [columns, debouncedSearch, filters, dayFilter]);
 
   const filteredWatching = useMemo(() => {
-    const q = debouncedSearch.trim().toLowerCase();
+    const q = stripBarcodePrefix(debouncedSearch).toLowerCase();
     return watching.filter((o) => {
       if (q) {
         const hit =
@@ -668,45 +786,84 @@ function FulfillmentKanbanView() {
         {/* Filter bar — search + date trên 1 row, các facet ở row dưới */}
         <div className="rounded-md border border-border bg-card p-2.5 space-y-2">
           {/* Row 1: Search (flex-1) + DateRangePicker */}
-          <div className="flex flex-wrap items-end gap-2">
+          <div className="flex flex-wrap items-center gap-2">
             <div className="flex-1 min-w-[220px]">
               <label className="text-[10px] text-muted-foreground uppercase tracking-wide font-medium">
-                Search
+                Tìm / Quét mã
               </label>
-              <div className="relative mt-1">
-                <button
-                  type="button"
-                  disabled={!search.trim()}
-                  title={searchCopied ? 'Đã copy' : 'Copy giá trị search'}
-                  onClick={async () => {
-                    const v = search.trim();
-                    if (!v) return;
-                    try {
-                      await navigator.clipboard.writeText(v);
-                      setSearchCopied(true);
-                    } catch {
-                      toast.error('Không copy được — trình duyệt chặn clipboard');
-                    }
-                  }}
-                  className={cn(
-                    'absolute left-1.5 top-1/2 -translate-y-1/2 inline-flex items-center justify-center w-5 h-5 rounded transition-colors',
-                    search.trim()
-                      ? searchCopied
-                        ? 'text-emerald-600 dark:text-emerald-400'
-                        : 'text-muted-foreground hover:text-foreground hover:bg-muted'
-                      : 'text-muted-foreground/40 cursor-not-allowed',
+              <div className="mt-1 flex items-center gap-1.5">
+                <div className="relative flex-1">
+                  <button
+                    type="button"
+                    disabled={!stripBarcodePrefix(search)}
+                    title={searchCopied ? 'Đã copy' : 'Copy mã đang tìm'}
+                    onClick={async () => {
+                      const v = stripBarcodePrefix(search);
+                      if (!v) return;
+                      try {
+                        await navigator.clipboard.writeText(v);
+                        setSearchCopied(true);
+                      } catch {
+                        toast.error('Không copy được — trình duyệt chặn clipboard');
+                      }
+                    }}
+                    className={cn(
+                      'absolute left-1.5 top-1/2 -translate-y-1/2 inline-flex items-center justify-center w-5 h-5 rounded transition-colors',
+                      stripBarcodePrefix(search)
+                        ? searchCopied
+                          ? 'text-emerald-600 dark:text-emerald-400'
+                          : 'text-muted-foreground hover:text-foreground hover:bg-muted'
+                        : 'text-muted-foreground/40 cursor-not-allowed',
+                    )}
+                  >
+                    {searchCopied ? <CheckCircle2 size={13} /> : <Copy size={12} />}
+                  </button>
+                  {lookupLoading ? (
+                    <Loader2 size={15} className="absolute right-2.5 top-1/2 -translate-y-1/2 text-muted-foreground animate-spin" />
+                  ) : (
+                    <ScanLine size={15} className="absolute right-2.5 top-1/2 -translate-y-1/2 text-muted-foreground/60" />
                   )}
+                  <Input
+                    ref={searchInputRef}
+                    value={search}
+                    onChange={(e) => setSearch(e.target.value)}
+                    onKeyDown={(e) => {
+                      if (e.key === 'Enter') {
+                        e.preventDefault();
+                        void handleScanLookup(search);
+                      }
+                    }}
+                    placeholder="Gõ tay hoặc quét mã (N-…) rồi Enter để mở đơn"
+                    className="h-11 pl-9 pr-9 text-sm font-mono"
+                    disabled={!!scannedOrder}
+                  />
+                </div>
+                {/* Nút mở modal lịch sử tra cứu. */}
+                <Button
+                  type="button"
+                  variant="outline"
+                  onClick={() => setHistoryOpen(true)}
+                  title="Lịch sử tra cứu"
+                  className="relative h-11 w-11 shrink-0 p-0"
                 >
-                  {searchCopied ? <CheckCircle2 size={13} /> : <Copy size={12} />}
-                </button>
-                <Search size={11} className="absolute right-2 top-1/2 -translate-y-1/2 text-muted-foreground/60" />
-                <Input
-                  value={search}
-                  onChange={(e) => setSearch(e.target.value)}
-                  placeholder="productionId / orderId"
-                  className="h-7 pl-8 pr-7 text-xs"
-                />
+                  <History size={17} />
+                  {searchHistory.length > 0 && (
+                    <span className="absolute -top-1.5 -right-1.5 min-w-[16px] h-4 px-1 rounded-full bg-primary text-primary-foreground text-[9px] font-semibold inline-flex items-center justify-center">
+                      {searchHistory.length}
+                    </span>
+                  )}
+                </Button>
               </div>
+              {/* Feedback khi máy quét xuất tiền tố "N-" — cho biết mã thực sẽ tìm. */}
+              {stripBarcodePrefix(search) !== search.trim() && !!search.trim() ? (
+                <p className="mt-1 text-[10px] text-emerald-600 dark:text-emerald-400">
+                  ✓ đã bỏ "{BARCODE_PREFIX}" → tìm: <code className="font-mono">{stripBarcodePrefix(search)}</code>
+                </p>
+              ) : (
+                <p className="mt-1 text-[10px] text-muted-foreground">
+                  Quét mã hoặc Enter → mở đơn để <strong>Hoàn thành</strong> / <strong>Báo lỗi</strong>. Gõ để lọc kanban.
+                </p>
+              )}
             </div>
             <div className="min-w-[200px]">
               {/* <label className="text-[10px] text-muted-foreground uppercase tracking-wide font-medium">
@@ -925,6 +1082,93 @@ function FulfillmentKanbanView() {
             void load();
           }}
         />
+
+        {/* Quét/Enter trong ô search → dialog thao tác (Hoàn thành / Báo lỗi),
+            clone luồng trang "Quét mã". Reload kanban sau mỗi thao tác. */}
+        {scannedOrder &&
+          (scanErrorMode ? (
+            <OrderErrorScanDialog
+              order={scannedOrder}
+              onClose={closeScanDialog}
+              onSaved={() => void load()}
+            />
+          ) : (
+            <FulfillmentScanActionDialog
+              order={scannedOrder}
+              myStage={myStage}
+              myFactoryId={profile?.factoryId}
+              onClose={closeScanDialog}
+              onCompleted={() => void load()}
+              onReportError={() => setScanErrorMode(true)}
+            />
+          ))}
+
+        {/* Modal lịch sử tra cứu — click 1 dòng để tra cứu lại. */}
+        <Dialog open={historyOpen} onOpenChange={setHistoryOpen}>
+          <DialogContent className="max-w-md">
+            <DialogHeader>
+              <DialogTitle className="flex items-center gap-2">
+                <History size={18} className="text-primary" />
+                Lịch sử tra cứu
+                <span className="text-xs font-normal text-muted-foreground">
+                  ({searchHistory.length}/{MAX_SEARCH_HISTORY})
+                </span>
+              </DialogTitle>
+            </DialogHeader>
+            {searchHistory.length === 0 ? (
+              <div className="py-8 text-center text-sm text-muted-foreground">
+                Chưa có lượt tra cứu nào. Quét hoặc gõ mã rồi Enter để bắt đầu.
+              </div>
+            ) : (
+              <>
+                <ul className="divide-y max-h-[60vh] overflow-y-auto -mx-2">
+                  {searchHistory.map((h) => (
+                    <li key={h.id}>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setHistoryOpen(false);
+                          setSearch(h.code);
+                          void handleScanLookup(h.code);
+                        }}
+                        className="w-full flex items-center gap-2.5 px-2 py-2.5 text-left rounded hover:bg-muted transition-colors"
+                      >
+                        <span className="shrink-0">
+                          {h.status === 'found' ? (
+                            <CheckCircle2 size={15} className="text-emerald-500" />
+                          ) : (
+                            <XCircle size={15} className="text-amber-500" />
+                          )}
+                        </span>
+                        <span className="min-w-0 flex-1">
+                          <span className="block font-mono text-sm font-medium truncate">
+                            {h.code}
+                          </span>
+                          <span className="block text-[11px] text-muted-foreground">
+                            {h.status === 'found' ? 'Tìm thấy' : 'Không tìm thấy'}
+                          </span>
+                        </span>
+                        <span className="shrink-0 text-[10px] text-muted-foreground">
+                          {new Date(h.at).toLocaleString('vi-VN', {
+                            day: '2-digit',
+                            month: '2-digit',
+                            hour: '2-digit',
+                            minute: '2-digit',
+                          })}
+                        </span>
+                      </button>
+                    </li>
+                  ))}
+                </ul>
+                <div className="flex justify-end pt-1">
+                  <Button variant="ghost" size="sm" onClick={() => setSearchHistory([])}>
+                    <Trash2 size={13} className="mr-1.5" /> Xoá lịch sử
+                  </Button>
+                </div>
+              </>
+            )}
+          </DialogContent>
+        </Dialog>
       </div>
     </TooltipProvider>
   );

@@ -142,7 +142,7 @@ Nếu `cancelledAt` được set (từ flow Import file soát), `BadRequestExcep
 | ------ | --------------------------------------- | ------------------------------------------------------------------- | ----------- | ------ | -------------------------------------------------------------------------------------- |
 | `POST` | `/v1/orders/:id/fulfillment-transition` | Trigger state machine. Body: `{ stage, action, target?, reason? }`. |
 | `GET`  | `/v1/fulfillment/my-tasks`              | List 4-tab cho worker hiện tại. Query: `tab=waiting                 | in-progress | rework | watching`, `page`, `size`. Stage + factoryId tự suy từ user (Manager có thể override). |
-| `GET`  | `/v1/fulfillment/daily-overview`        | **Bảng tổng quan theo ngày** cho stage của user. Query: `days=7\|14\|30` hoặc `from`/`to` (VN), `stage?` (override). Trả `days[]` `{day, arrived, done, remaining, rework}` + `columnTotals` + `rangeDays`. Xem §4.6. |
+| `GET`  | `/v1/fulfillment/daily-overview`        | **Bảng tổng quan theo ngày** — FULL luồng mọi khâu. Query: `days=7\|14\|30` hoặc `from`/`to` (VN), `stage?` (chỉ để FE highlight). Trả `days[]` `{day, total, toolReviewed, toolUnreviewed, toolOk, designerReceived, designerDone, stages:{<stage>:{arrived,done,remaining,rework}}}` + `columnTotals` (cùng shape) + `rangeDays`. Xem §4.6. |
 
 ### 3.2 OrderEntity — fields mới
 
@@ -245,7 +245,9 @@ Default preset:
 - **KPI bar**: 4 ô (`Đang chờ` / `Đang làm` / `Làm lại` / `Đợi quay lại`) — derive từ length của 4 column. Cùng style với KPI ở Designer page (border-card + label uppercase + value lớn).
 - **Hint bar**: rounded box bg-muted với `MousePointerClick` icon — hướng dẫn checkbox + shift-click + DnD (clone Designer hint).
 - **Filter bar**: grid 5 cell (Search + 4 SelectFilter cho `type`/`fabricType`/`machineNumber`/`toolResult`) — match Designer page.
-  - Search 300ms debounce → match `productionId` / `orderId`.
+  - Search 300ms debounce → match `productionId` / `orderId`. Ô này **vừa gõ tay vừa nhận máy quét USB** (ô to `h-11 text-sm font-mono` giống trang Quét mã): helper `stripBarcodePrefix()` (mirror `normalizeCode` mode barcode ở `scan-error/index.tsx`) tự bóc tiền tố `N-`/`n-` (case-insensitive) ở đầu trước khi so khớp → quét barcode "N-PROD1234" tìm được đơn `PROD1234`. Icon `ScanLine`, hiện hint "✓ đã bỏ N- → tìm: …" khi phát hiện tiền tố; nút copy cũng copy mã đã bóc tiền tố.
+  - **Gõ để lọc kanban live** (debounced) + **Enter/quét mã → mở dialog thao tác** (clone luồng trang "Quét mã"): `handleScanLookup()` gọi `RepositoryRemote.order.getByProductionId(code)` (tra cứu chính xác) → mở `FulfillmentScanActionDialog` (Hoàn thành = tự start+complete / Báo lỗi). Bấm "Báo lỗi" → `scanErrorMode` chuyển sang `OrderErrorScanDialog` (gán `productionError`). Cả 2 dialog reuse component từ `pages/orders/scan-error/`. Sau mỗi thao tác → `load()` reload kanban; đóng dialog → clear + re-focus ô search để quét đơn kế tiếp. Input `disabled` khi dialog mở.
+  - **Nút "Lịch sử tra cứu"** (`History` icon, cạnh ô search, có badge số lượng): mở modal `Dialog` liệt kê `searchHistory` (persist `localStorage` key `fulfillment-search-history`, cap `MAX_SEARCH_HISTORY=20`). Mỗi lượt Enter/quét đẩy 1 entry `{ code, status: 'found'|'not-found', at }`. Click 1 dòng → tra cứu lại (`setSearch` + `handleScanLookup`). Có nút "Xoá lịch sử".
   - Facet options derive client-side bằng pattern faceted (loại trừ chính facet đang tính) → count phản ánh đúng các filter khác.
   - Apply filter client-side trước khi group → DnD/checkbox/kanban đều thấy data đã filter.
 - **Selection + bulk** (clone Designer):
@@ -347,17 +349,23 @@ Riêng user **In** (`role=Fulfillment`, `fulfillmentStage='print'`) **KHÔNG** d
     suy ra từ lỗi xưởng. `RoleService.onModuleInit` revoke quyền khi restart (catalog = source of truth). Vẫn giữ
     `productionError.edit` để worker chọn lỗi xưởng.
 
-### 4.6 Bảng "Tổng quan theo ngày" (`FulfillmentDailyOverview.tsx`) — MỌI stage
+### 4.6 Bảng "Tổng quan theo ngày" (`FulfillmentDailyOverview.tsx`) — FULL luồng, MỌI stage
 
-Component dùng chung, render **trên** kanban (6 stage) và **trên** bảng In (stage print). Gom đơn theo **`inProductionAt`** (VN) — cùng trục với date-picker + bảng Designer/Soát tool ⇒ 1 đơn nằm cùng cột ngày ở mọi stage, giúp worker biết **ưu tiên** (cohort ngày SX cũ mà "Còn lại/Lỗi" > 0 = làm trước).
+Component dùng chung, render **trên** kanban (6 stage) và **trên** bảng In (stage print). Gom **MỌI đơn** theo **`inProductionAt`** (VN) trong xưởng user — cùng trục với bảng Designer/Soát tool ⇒ 1 đơn nằm cùng cột ngày ở mọi khâu, giúp worker biết **ưu tiên** (cohort ngày SX cũ mà "Còn lại/Lỗi" > 0 = làm trước). **Không** giới hạn theo đơn đã tới stage nào → thấy được cả luồng đầu (tool/designer) lẫn đuôi.
 
-- **4 hàng** (phân loại theo `fulfillmentStages.<myStage>.status` HIỆN TẠI): **Đến** (= tổng cohort) · **Đã làm** (status `done`, đã chuyển tiếp) · **Còn lại** (`waiting`+`in-progress`) · **Lỗi cần sửa** (`rework`). Bất biến: `Đến = Đã làm + Còn lại + Lỗi`.
-- Cột = ngày (cũ→mới; BE trả mới→cũ, FE `reverse()`) + cột **Tổng**.
+- **Các hàng** (cột = ngày cũ→mới; BE trả mới→cũ, FE `reverse()` + cột **Tổng**):
+  - **Tổng đơn** — count đơn có `inProductionAt` ngày đó.
+  - **Soát tool** — ô 2 số `đã soát / chưa soát` (`toolResultNote` có nội dung / ∈ {null,''}).
+  - **Designer** — ô 2 số `đã làm / còn lại` (đã làm = `done`; còn lại = `designerReceived − done`; tổng nhận = `designerStatus ≠ unassigned`, ở tooltip).
+  - **7 stage fulfillment** — mỗi stage 1 hàng ô 2 số `đã xong / còn lại` (đã xong = `done`, emerald; còn lại = `arrived − done`, indigo). Hàng công đoạn hiện `0` khi = 0 (thay dấu `·`).
+- **Stage của user** (`stage` prop) → hàng đó **bung 4 hàng nhỏ** `Đến / Đã làm / Còn lại / Lỗi cần sửa` (phân loại theo `fulfillmentStages.<myStage>.status` HIỆN TẠI; `Đến = Đã làm + Còn lại + Lỗi`) và **highlight** (nền indigo, nhãn đậm). Hàng **"Lỗi cần sửa" tô đỏ** (nền + chữ đỏ) cho nổi. Các stage khác **làm mờ** (`opacity-70`, nhãn muted).
+- **Ô 2 số** chia đều 2 bên: `đã xong` (emerald, sát mép trái) `/` `còn lại` (indigo, sát mép phải), slash **căn giữa**; ô **1 số** căn **trái**. `còn lại` = `arrived − done` (chưa hoàn thành, cộng dồn theo cohort). Soát tool: `đã soát`(emerald)`/`chưa soát`(amber). Hàng công đoạn fulfillment hiện `0` khi = 0 (thay `·`).
+- **Tooltip mỗi ô** (`title` HTML, không cần provider) mô tả chi tiết: ngày + tên chỉ số + ý nghĩa từng con số. Cột "Tổng" tip ghi "Tổng cả kỳ".
 - **Click 1 ngày** (header hoặc ô) → lọc danh sách bên dưới:
   - **Kanban** (6 stage): lọc **client-side** các cột theo `vnDay(inProductionAt) === dayFilter`; date-range + bảng tổng quan giữ nguyên. Chip "Đang lọc dd/MM ✕" để bỏ.
   - **Bảng In** (print): bảng phân trang **server** → không lọc client được → truyền `dayOverride` cho `PrintOrderTable` ép `createdFrom=createdTo=day` (narrow qua query). Chip bỏ giống trên.
 - Data từ `GET /v1/fulfillment/daily-overview`; refetch qua `reloadToken` (bump sau mỗi transition/refresh). Kanban truyền `from`/`to` = date-range hiện tại; bảng In dùng default 7 ngày.
-- **Scope**: đơn đã TỪNG tới stage này (`fulfillmentStages.<stage>.status` tồn tại) trong xưởng user (gồm `originalFactoryId`), loại `deletedAt`/`cancelledAt`. Override role không stage → rỗng.
+- **Scope**: mọi đơn trong xưởng user (`$or[factoryId, originalFactoryId]`), loại `deletedAt`/`cancelledAt`. `stage` chỉ để FE highlight — BE trả đủ mọi khâu bất kể stage (override role không stage → vẫn có data, chỉ không highlight).
 
 ---
 
@@ -384,7 +392,7 @@ Pseudocode:
 
 ### 5.1b `FulfillmentTaskService.getDailyOverview(user, {days, from?, to?, stage?})`
 
-Stage = `query.stage ?? user.fulfillmentStage` (không có → trả rỗng). 1 aggregate: `$match` (factory scope `$or[factoryId, originalFactoryId]` + `inProductionAt ∈ window` + `fulfillmentStages.<stage>.status $exists` + alive) → `$group` theo `$dateToString(inProductionAt, +07:00)` với `$cond` đếm `arrived`/`done`/`remaining`/`rework` theo `status`. `resolveDayWindow` (private, tz VN, cap 60) trả `days[]` mới→cũ + `start`/`end`. Build rows + `columnTotals`.
+Trả **FULL luồng** (không giới hạn theo stage). 1 aggregate: `$match` (factory scope `$or[factoryId, originalFactoryId]` + `inProductionAt ∈ window` + alive — **KHÔNG** còn điều kiện `<stage>.status $exists`) → `$group` theo `$dateToString(inProductionAt, +07:00)`. Accumulator `$sum`/`$cond`: `total`, `toolReviewed` (`$strLenCP($ifNull(toolResultNote,'')) > 0`), `toolUnreviewed`, `toolOk` (`=='ok'`), `designerReceived` (`designerStatus ≠ unassigned`), `designerDone`, và **cho cả 7 stage** (gen động qua `FULFILLMENT_STAGES`) key `s_<stage>_{arrived,done,remaining,rework}` (arrived = `$ifNull(status) ≠ null`). `$group` cast `PipelineStage.Group['$group']`. Reshape agg row → `{day, total, tool*, designer*, stages: {<stage>: {arrived,done,remaining,rework}}}` + `columnTotals` (cùng shape). `resolveDayWindow` (private, tz VN, cap 60) trả `days[]` mới→cũ + `start`/`end`. `stage` param chỉ dùng ở FE (highlight).
 
 ### 5.2 Race-safe atomicity
 

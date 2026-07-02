@@ -929,11 +929,11 @@ Mỗi hàng đơn (ở MỌI bảng order + card list) có nút **"..."** (`More
 
 ### 16.2 Điều kiện HỦY (`canCancelOrder`)
 ```
-ok = !cancelledAt && designerStatus !== 'rework'
-  && (!currentFulfillmentStage || (currentFulfillmentStage==='print' && fulfillmentStages.print.status==='waiting'))
+ok = !cancelledAt
 ```
-- **Cho hủy:** chưa vào pipeline In, HOẶC đang ở In status `waiting` (chưa bấm Bắt đầu in).
-- **Chặn** (message/tooltip riêng): đang in (`in-progress`) · đã qua In (`currentFulfillmentStage`≠print) · cần làm lại (`rework`) · đã hủy.
+- **Admin hủy đơn ở BẤT KỲ trạng thái nào** (đã in / ép / QC / may / đóng / rework…) — theo yêu cầu vận hành. Chỉ **chặn** đơn ĐÃ hủy sẵn (không hủy 2 lần).
+- Trước đây gate chặt (chỉ cho hủy khi chưa vào pipeline In hoặc In=`waiting`); đã gỡ theo yêu cầu — Admin toàn quyền hủy (action vốn Admin-only).
+- **Lưu ý side-effect:** hủy đơn ĐANG ở stage giữa (Ép/QC/May…) → đơn vẫn nằm trong queue kanban của worker stage đó (my-tasks KHÔNG filter `cancelledAt` để khớp Factory Tab) nhưng **không thao tác được** (transition throw ở `FulfillmentTaskService` khi `cancelledAt`). Worker thấy card "kẹt". Nếu muốn ẩn hẳn khỏi queue worker cần thêm filter `cancelledAt: null` vào `applyTabFilter` (chưa làm — đụng invariant Factory-Tab parity).
 - **1 nguồn sự thật:** helper `OrderService.canCancelOrder` (BE) ↔ mirror `apps/web/src/utils/orderActions.ts` (`canCancelOrder` — dùng disable + tooltip). Sửa 1 nơi phải sửa cả 2.
 
 ### 16.3 Backend

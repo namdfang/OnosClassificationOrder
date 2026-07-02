@@ -1183,32 +1183,60 @@ export class GetFulfillmentDailyOverviewDto extends createZodDto(
 ) {}
 
 /**
- * 1 ngày trong bảng tổng quan stage Fulfillment. Gom theo `inProductionAt` (VN),
- * phân loại theo `fulfillmentStages.<stage>.status` HIỆN TẠI:
- *   arrived   = mọi đơn cohort đã tới stage này (= done + remaining + rework)
- *   done      = status 'done' (đã hoàn thành + chuyển tiếp)
- *   remaining = status waiting/in-progress (còn phải làm)
+ * Metric 1 stage fulfillment trong 1 ngày (phân loại theo
+ * `fulfillmentStages.<stage>.status` HIỆN TẠI):
+ *   arrived   = mọi đơn cohort đã TỪNG tới stage này (done + remaining + rework)
+ *   done      = status 'done'
+ *   remaining = status waiting/in-progress
  *   rework    = status 'rework' (stage sau đẩy về, lỗi cần sửa)
  */
-export const FulfillmentDailyRowZod = z.object({
-  day: z.string(),
+export const FulfillmentStageMetricZod = z.object({
   arrived: z.number().int().nonnegative(),
   done: z.number().int().nonnegative(),
   remaining: z.number().int().nonnegative(),
   rework: z.number().int().nonnegative(),
 });
+export type FulfillmentStageMetric = z.infer<typeof FulfillmentStageMetricZod>;
+
+/**
+ * 1 ngày trong bảng tổng quan Fulfillment (full luồng). Gom theo `inProductionAt`
+ * (VN), lọc theo xưởng của user. Mỗi ngày bung ra tất cả khâu:
+ *   total          = tổng đơn có inProductionAt ngày đó
+ *   toolReviewed   = đã soát (toolResultNote ∉ {null,''})
+ *   toolUnreviewed = chưa soát (toolResultNote ∈ {null,''})
+ *   toolOk         = toolResultNote === 'ok'
+ *   designerReceived = designerStatus ≠ 'unassigned' (đã được giao)
+ *   designerDone     = designerStatus === 'done'
+ *   stages         = { <stage>: FulfillmentStageMetric } cho cả 7 stage
+ */
+export const FulfillmentDailyRowZod = z.object({
+  day: z.string(),
+  total: z.number().int().nonnegative(),
+  toolReviewed: z.number().int().nonnegative(),
+  toolUnreviewed: z.number().int().nonnegative(),
+  toolOk: z.number().int().nonnegative(),
+  designerReceived: z.number().int().nonnegative(),
+  designerDone: z.number().int().nonnegative(),
+  stages: z.record(z.string(), FulfillmentStageMetricZod),
+});
 export type FulfillmentDailyRow = z.infer<typeof FulfillmentDailyRowZod>;
+
+export const FulfillmentDailyColumnTotalsZod = z.object({
+  total: z.number().int().nonnegative(),
+  toolReviewed: z.number().int().nonnegative(),
+  toolUnreviewed: z.number().int().nonnegative(),
+  toolOk: z.number().int().nonnegative(),
+  designerReceived: z.number().int().nonnegative(),
+  designerDone: z.number().int().nonnegative(),
+  stages: z.record(z.string(), FulfillmentStageMetricZod),
+});
+export type FulfillmentDailyColumnTotals = z.infer<typeof FulfillmentDailyColumnTotalsZod>;
 
 export const FulfillmentDailyOverviewResZod = ResZod.extend({
   data: z.object({
     /** Cột ngày (mới→cũ; FE reverse để cũ→mới). */
     days: FulfillmentDailyRowZod.array(),
-    columnTotals: z.object({
-      arrived: z.number().int().nonnegative(),
-      done: z.number().int().nonnegative(),
-      remaining: z.number().int().nonnegative(),
-      rework: z.number().int().nonnegative(),
-    }),
+    columnTotals: FulfillmentDailyColumnTotalsZod,
     rangeDays: z.number().int().nonnegative(),
   }),
 });

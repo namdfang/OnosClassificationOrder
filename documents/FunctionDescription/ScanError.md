@@ -16,6 +16,7 @@ Khi user có `profile.fulfillmentStage` (công nhân Fulfillment), page chuyển
 - **Không phải task** (khác stage / khác xưởng / chưa vào fulfillment / đã done ở stage này): vẫn hiển thị chi tiết + banner đỏ nêu lý do, **chặn mọi thao tác** (không Hoàn thành, không Báo lỗi). Enter = đóng để quét tiếp.
 - Guard double-submit bằng `savingRef`. Sau khi xong → `onClose` reset `order` + `errorMode` → input tự re-focus để quét đơn kế tiếp; append lịch sử "Hoàn thành <stage>".
 - User KHÔNG có stage (admin/support…) → giữ nguyên luồng gán lỗi (`OrderErrorScanDialog`) như mục dưới.
+- **Layout dialog (to/rộng, `max-w-4xl`)**: 2 cột `md:grid-cols-[1.15fr_1fr]` — **cột trái mockup lớn** (`aspect-square`, click mở ảnh gốc tab mới), **cột phải thông tin chữ lớn**: tên sản phẩm (`text-xl`) + productionId (mono, primary) + SKU; hàng 3 ô lớn Size / Màu / Số lượng (`BigField`); box Xưởng (+ máy) / Công đoạn hiện tại / **Kết quả soát tool** (màu theo `toolResultNote`: rỗng=Chưa soát xám, `ok`=OK xanh, khác=lỗi đỏ); và **Link design** — chip từ `order.designs` (map `DESIGN_LABELS` vị trí→nhãn VN) + file `cuttingFileUrl`, mỗi chip mở tab mới. Banner trạng thái + footer (Báo lỗi / **Hoàn thành (Enter)** hoặc Đóng & quét tiếp) giữ nguyên chức năng Enter.
 
 Reuse 100% endpoint cũ (`by-production-id` + `fulfillment-transition` start/complete/rework-back) — không thêm BE. Liên quan: [`FulfillmentWorkflow.md`](FulfillmentWorkflow.md).
 
