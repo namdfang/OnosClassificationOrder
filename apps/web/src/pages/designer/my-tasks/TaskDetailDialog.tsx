@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react';
-import { Calendar, CheckCircle2, Clock, Image as ImageIcon, Package, RotateCcw, ShieldAlert, XCircle } from 'lucide-react';
+import { Calendar, CheckCircle2, Clock, ExternalLink, Package, RotateCcw, ShieldAlert, XCircle } from 'lucide-react';
 import { DesignerStatus } from 'shared';
 
 import { Badge } from '@/components/ui/badge';
@@ -11,8 +11,8 @@ import {
   DialogTitle,
 } from '@/components/ui/dialog';
 import { CopyButton } from '@/components/common/CopyButton';
-import { ImagePreviewDialog } from '@/components/common/ImagePreviewDialog';
 import { Spinner } from '@/components/common/Spinner';
+import { driveThumbUrl, driveViewUrl } from '@/utils/driveThumb';
 import { RepositoryRemote } from '@/services';
 import { handleAxiosError } from '@/utils';
 
@@ -72,7 +72,13 @@ function fmt(d?: string): string {
 export function TaskDetailDialog({ orderId, onClose }: Props) {
   const [detail, setDetail] = useState<OrderDetail | null>(null);
   const [loading, setLoading] = useState(false);
-  const [preview, setPreview] = useState<{ url: string; title: string; original?: string } | null>(null);
+
+  // Click ảnh → mở tab mới (Drive viewer) thay vì preview trong app → không tải
+  // full file (mấy chục MB) qua server mình.
+  const openInNewTab = (url?: string) => {
+    const target = driveViewUrl(url);
+    if (target) window.open(target, '_blank', 'noopener,noreferrer');
+  };
 
   useEffect(() => {
     if (!orderId) {
@@ -139,59 +145,59 @@ export function TaskDetailDialog({ orderId, onClose }: Props) {
                   <p className="text-xs font-semibold text-foreground mb-1.5">Mockup</p>
                   <button
                     type="button"
-                    onClick={() =>
-                      setPreview({
-                        url: detail.mockupUrl!,
-                        original: detail.mockupOriginalUrl,
-                        title: `Mockup ${detail.productionId}`,
-                      })
-                    }
+                    onClick={() => openInNewTab(detail.mockupOriginalUrl || detail.mockupUrl)}
+                    title="Mở ảnh gốc ở tab mới"
                     className="block w-32 h-32 rounded border border-border overflow-hidden hover:ring-2 hover:ring-primary/40 bg-checker"
                   >
-                    <img src={detail.mockupUrl} alt="" className="w-full h-full object-contain" loading="lazy" referrerPolicy="no-referrer" />
+                    <img
+                      src={driveThumbUrl(detail.mockupOriginalUrl || detail.mockupUrl, 400)}
+                      alt=""
+                      className="w-full h-full object-contain"
+                      loading="lazy"
+                      referrerPolicy="no-referrer"
+                    />
                   </button>
                 </div>
               )}
 
-              {/* Designs */}
+              {/* Designs — chỉ hiển thị LINK (không render ảnh) để đỡ tải file
+                  gốc mấy chục MB. Click → mở Drive viewer ở tab mới. */}
               {designKeys.length > 0 && (
                 <div>
                   <p className="text-xs font-semibold text-foreground mb-1.5">
                     File design ({designKeys.length})
                   </p>
-                  <div className="grid grid-cols-4 gap-2">
+                  <div className="space-y-1">
                     {designKeys.map((k) => {
                       const original = (detail.designsOriginal || {})[k];
-                      const display = (detail.designs || {})[k] || original;
+                      const raw = original || (detail.designs || {})[k];
+                      const href = driveViewUrl(raw);
                       return (
-                        <button
+                        <div
                           key={k}
-                          type="button"
-                          onClick={() =>
-                            display &&
-                            setPreview({
-                              url: display,
-                              original,
-                              title: `${k} — ${detail.productionId}`,
-                            })
-                          }
-                          className="flex flex-col items-center gap-1 rounded border border-border p-1.5 hover:ring-2 hover:ring-primary/40"
+                          className="flex items-center gap-2 text-xs rounded border border-border px-2 py-1.5"
                         >
-                          {display ? (
-                            <img
-                              src={display}
-                              alt={k}
-                              className="w-full h-20 object-contain rounded bg-checker bg-checker-sm"
-                              loading="lazy"
-                              referrerPolicy="no-referrer"
-                            />
+                          <span className="font-medium text-foreground w-14 shrink-0">{k}</span>
+                          {href ? (
+                            <a
+                              href={href}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              className="inline-flex items-center gap-1 text-primary hover:underline min-w-0"
+                              title={raw}
+                            >
+                              <ExternalLink size={12} className="shrink-0" />
+                              <span className="truncate">Mở file design</span>
+                            </a>
                           ) : (
-                            <div className="w-full h-20 flex items-center justify-center bg-muted rounded">
-                              <ImageIcon size={20} className="text-muted-foreground" />
-                            </div>
+                            <span className="text-muted-foreground">—</span>
                           )}
-                          <span className="text-[10px] text-muted-foreground">{k}</span>
-                        </button>
+                          {raw && (
+                            <span className="ml-auto shrink-0">
+                              <CopyButton value={raw} label="Link design" iconSize={11} />
+                            </span>
+                          )}
+                        </div>
                       );
                     })}
                   </div>
@@ -263,14 +269,6 @@ export function TaskDetailDialog({ orderId, onClose }: Props) {
           </div>
         </DialogContent>
       </Dialog>
-
-      <ImagePreviewDialog
-        open={!!preview}
-        onOpenChange={(o) => !o && setPreview(null)}
-        url={preview?.url}
-        originalUrl={preview?.original}
-        title={preview?.title}
-      />
     </>
   );
 }

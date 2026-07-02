@@ -39,7 +39,11 @@ type ScanMode = 'barcode' | 'normal';
 function normalizeCode(raw: string, mode: ScanMode): string {
   const trimmed = raw.trim();
   if (mode !== 'barcode') return trimmed;
-  if (trimmed.startsWith(BARCODE_PREFIX)) return trimmed.slice(BARCODE_PREFIX.length).trim();
+  // Bắt cả prefix viết HOA lẫn thường ("N-" và "n-") — máy quét có thể xuất
+  // chữ thường tuỳ cấu hình. So sánh case-insensitive rồi mới strip.
+  if (trimmed.slice(0, BARCODE_PREFIX.length).toUpperCase() === BARCODE_PREFIX) {
+    return trimmed.slice(BARCODE_PREFIX.length).trim();
+  }
   return trimmed;
 }
 

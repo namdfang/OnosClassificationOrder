@@ -142,6 +142,12 @@ export function OrderErrorScanDialog({ order, onClose, onSaved }: Props) {
   const machineLabel = order.machineType?.shortName || order.machineType?.name || '';
   const stageLabel = currentStage ? FULFILLMENT_STAGE_LABELS[currentStage] : 'Chưa vào fulfillment';
 
+  // Lỗi đã ghi sẵn trên đơn (từ lần quét/gán trước) — hiển thị nổi bật để người
+  // quét biết đơn này đang lỗi gì mà xử lý.
+  const existingErrorName = order.productionError
+    ? sortedOptions.find((o) => o.code === order.productionError)?.name || order.productionError
+    : '';
+
   return (
     <Dialog open onOpenChange={(o) => !o && !saving && onClose()}>
       <DialogContent className="max-w-xl" onKeyDown={(e) => {
@@ -196,6 +202,45 @@ export function OrderErrorScanDialog({ order, onClose, onSaved }: Props) {
             </InfoRow>
           </div>
         </div>
+
+        {/* Lỗi + mô tả đã ghi trên đơn — nổi bật (đỏ) để người quét thấy ngay.
+            Mô tả dài → cắt 2 dòng + tooltip (title) xem đầy đủ. */}
+        {(order.productionErrorNote || existingErrorName) && (
+          <div className="rounded-md border border-rose-300 bg-rose-50 p-2.5 flex items-start gap-2 dark:border-rose-500/40 dark:bg-rose-500/10">
+            <MessageSquareWarning
+              size={15}
+              className="mt-0.5 shrink-0 text-rose-600 dark:text-rose-400"
+            />
+            <div className="min-w-0 flex-1">
+              <p className="text-[11px] font-semibold text-rose-700 dark:text-rose-300 flex items-center gap-1.5 flex-wrap">
+                Lỗi đã ghi trên đơn
+                {existingErrorName && (
+                  <span className="px-1.5 py-0.5 rounded bg-rose-200/70 font-normal dark:bg-rose-500/20">
+                    {existingErrorName}
+                  </span>
+                )}
+                {order.productionErrorSource && (
+                  <span className="px-1.5 py-0.5 rounded bg-rose-200/70 font-normal dark:bg-rose-500/20">
+                    {order.productionErrorSource === 'designer' ? 'Do designer' : 'Do xưởng'}
+                  </span>
+                )}
+                {order.productionErrorCount && order.productionErrorCount > 1 ? (
+                  <span className="px-1.5 py-0.5 rounded bg-rose-200/70 font-mono dark:bg-rose-500/20">
+                    ×{order.productionErrorCount}
+                  </span>
+                ) : null}
+              </p>
+              {order.productionErrorNote && (
+                <p
+                  className="mt-0.5 text-xs text-rose-900 dark:text-rose-100 line-clamp-2 break-words cursor-help"
+                  title={order.productionErrorNote}
+                >
+                  {order.productionErrorNote}
+                </p>
+              )}
+            </div>
+          </div>
+        )}
 
         {/* Form */}
         <div className="space-y-4">
@@ -283,11 +328,11 @@ export function OrderErrorScanDialog({ order, onClose, onSaved }: Props) {
                 Đẩy về công đoạn <span className="text-muted-foreground font-normal">(tùy chọn)</span>
               </Label>
               <div className="flex flex-wrap gap-1.5">
-                <ChipButton
+                {/* <ChipButton
                   active={reworkTarget === 'none'}
                   onClick={() => setReworkTarget('none')}
                   label="Chỉ mark lỗi"
-                />
+                /> */}
                 <ChipButton
                   active={reworkTarget === 'designer'}
                   onClick={() => setReworkTarget('designer')}
