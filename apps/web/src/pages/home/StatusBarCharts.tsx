@@ -1,7 +1,8 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { Bar, BarChart, ResponsiveContainer, Tooltip as RTooltip, XAxis, YAxis } from 'recharts';
-import { BarChart3, CalendarRange, Users } from 'lucide-react';
-import type { TeamDailyCell, TeamDailyRow } from 'shared';
+import { BarChart3, CalendarRange, ImageOff, Users } from 'lucide-react';
+import { PRODUCT_LEVEL_MAP } from 'shared';
+import type { ProductBreakdownDesigner, TeamDailyCell, TeamDailyRow } from 'shared';
 
 import { DateRangePicker } from '@/components/common/DateRangePicker';
 import { RepositoryRemote } from '@/services';
@@ -53,9 +54,13 @@ interface Props {
   type?: string;
   /** Filter khách hàng (`order.userSku`) — dùng chung toàn tab. */
   customer?: string;
+  /** Bộ lọc ngày chung của tab — dùng cho breakdown sản phẩm trong tooltip. */
+  filterDays?: 7 | 14 | 30;
+  filterFrom?: string;
+  filterTo?: string;
 }
 
-export function StatusBarCharts({ type, customer }: Props) {
+export function StatusBarCharts({ type, customer, filterDays, filterFrom, filterTo }: Props) {
   const [mode, setMode] = useState<Mode>('designer');
   // Chế độ "theo designer": date-range riêng (mặc định 30 ngày).
   const [dFrom, setDFrom] = useState(daysAgoISO(29));
@@ -67,6 +72,27 @@ export function StatusBarCharts({ type, customer }: Props) {
   const [data, setData] = useState<Data>(EMPTY);
   const [loading, setLoading] = useState(false);
   const seqRef = useRef(0);
+
+  // Breakdown sản phẩm theo designer (userId → {products,total}) cho tooltip.
+  const [breakdownMap, setBreakdownMap] = useState<Record<string, ProductBreakdownDesigner>>({});
+  const bdSeqRef = useRef(0);
+  useEffect(() => {
+    const seq = ++bdSeqRef.current;
+    (async () => {
+      try {
+        const res = await RepositoryRemote.designer.productBreakdown({
+          ...(filterFrom && filterTo ? { from: filterFrom, to: filterTo } : { days: filterDays || 7 }),
+          ...(type ? { type } : {}),
+          ...(customer ? { customer } : {}),
+        });
+        if (seq !== bdSeqRef.current) return;
+        const list = (res.data?.data?.designers || []) as ProductBreakdownDesigner[];
+        setBreakdownMap(Object.fromEntries(list.map((d) => [d.userId, d])));
+      } catch (err) {
+        if (seq === bdSeqRef.current) handleAxiosError(err);
+      }
+    })();
+  }, [filterDays, filterFrom, filterTo, type, customer]);
 
   useEffect(() => {
     const seq = ++seqRef.current;
@@ -96,6 +122,7 @@ export function StatusBarCharts({ type, customer }: Props) {
         .filter((r) => r.totals.assigned + r.totals.rework + r.totals.inProgress + r.totals.done > 0)
         .map((r) => ({
           name: r.fullName,
+          userId: r.userId,
           assigned: r.totals.assigned,
           rework: r.totals.rework,
           inProgress: r.totals.inProgress,
@@ -227,7 +254,10 @@ export function StatusBarCharts({ type, customer }: Props) {
                   domain={mode === 'designer' ? [0, 1] : undefined}
                   tickFormatter={mode === 'designer' ? (v: number) => `${Math.round(v * 100)}%` : undefined}
                 />
-                <RTooltip cursor={{ fill: 'rgba(0,0,0,0.04)' }} content={<ChartTooltip />} />
+                <RTooltip
+                  cursor={{ fill: 'rgba(0,0,0,0.04)' }}
+                  content={<ChartTooltip breakdown={mode === 'designer' ? breakdownMap : undefined} />}
+                />
                 {STATUS.map((s) => (
                   <Bar key={s.key} dataKey={s.key} stackId="a" fill={s.color} maxBarSize={64} />
                 ))}
@@ -270,20 +300,26 @@ interface TooltipPayloadItem {
   dataKey: string;
   value: number;
   color: string;
+  payload?: { userId?: string };
 }
 function ChartTooltip({
   active,
   payload,
   label,
+  breakdown,
 }: {
   active?: boolean;
   payload?: TooltipPayloadItem[];
   label?: string;
+  /** userId → breakdown sản phẩm (chỉ mode designer). */
+  breakdown?: Record<string, ProductBreakdownDesigner>;
 }) {
   if (!active || !payload?.length) return null;
   const total = payload.reduce((s, p) => s + (p.value || 0), 0);
+  const userId = payload[0]?.payload?.userId;
+  const bd = breakdown && userId ? breakdown[userId] : undefined;
   return (
-    <div className="rounded-md border border-border bg-popover px-2.5 py-1.5 text-[11px] shadow-md">
+    <div className="rounded-md border border-border bg-popover px-2.5 py-1.5 text-[11px] shadow-md max-w-[300px]">
       <div className="font-semibold mb-1">{label}</div>
       {payload.map((p) => (
         <div key={p.dataKey} className="flex items-center justify-between gap-4">
@@ -301,6 +337,42 @@ function ChartTooltip({
         <span>Tổng</span>
         <span className="tabular-nums">{total}</span>
       </div>
+
+      {/* Breakdown sản phẩm — hiển thị HẾT (không scroll để tooltip không biến mất). */}
+      {bd && bd.products.length > 0 && (
+        <div className="mt-2 border-t border-border pt-1.5">
+          <div className="text-[10px] text-muted-foreground mb-1">
+            {bd.products.length} sản phẩm · {bd.total} đơn (theo bộ lọc chung)
+          </div>
+          <div className="space-y-1">
+            {bd.products.map((p) => (
+              <div key={p.type} className="flex items-center gap-1.5">
+                {p.mockup ? (
+                  <img
+                    src={p.mockup}
+                    alt=""
+                    className="w-7 h-7 rounded object-cover border border-border bg-muted shrink-0"
+                  />
+                ) : (
+                  <span className="w-7 h-7 rounded border border-dashed border-border flex items-center justify-center text-muted-foreground shrink-0">
+                    <ImageOff size={11} />
+                  </span>
+                )}
+                {p.level != null && (
+                  <span
+                    className="text-[9px] px-1 py-0.5 rounded text-white shrink-0"
+                    style={{ backgroundColor: PRODUCT_LEVEL_MAP[p.level]?.color }}
+                  >
+                    Lv{p.level}
+                  </span>
+                )}
+                <span className="flex-1 min-w-0 truncate">{p.fullName || p.type}</span>
+                <span className="tabular-nums font-semibold shrink-0">{p.count}</span>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
     </div>
   );
 }

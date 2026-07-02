@@ -12,6 +12,8 @@ import {
   GetBreakdownFiltersResDto,
   GetDailyOverviewDto,
   GetDailyOverviewResDto,
+  GetProductBreakdownDto,
+  GetProductBreakdownResDto,
   GetErrorStatsDto,
   GetErrorStatsResDto,
   GetTeamDailyBreakdownDto,
@@ -177,6 +179,35 @@ export class DesignerStatsController {
       }),
     });
     const data = await this.statsService.getAssignBacklog(
+      Number(query.days),
+      query.type,
+      query.customer,
+      query.from,
+      query.to,
+    );
+    return { success: true, data };
+  }
+
+  @Get('designer/product-breakdown')
+  @Auth(LEADER_ROLES)
+  @ApiOperation({
+    summary: 'Breakdown sản phẩm theo từng designer (số đơn/sản phẩm + level + mockup) cho tooltip.',
+  })
+  @HttpCode(HttpStatus.OK)
+  @ApiOkResponse({ type: GetProductBreakdownResDto })
+  async getProductBreakdown(
+    @Query() query: GetProductBreakdownDto,
+    @AuthUser() user: UserDocument,
+  ): Promise<GetProductBreakdownResDto> {
+    this.logger.info({
+      message: JSON.stringify({
+        method: 'GET',
+        url: '/designer/product-breakdown',
+        userId: user._id,
+        days: query.days,
+      }),
+    });
+    const data = await this.statsService.getProductBreakdown(
       Number(query.days),
       query.type,
       query.customer,

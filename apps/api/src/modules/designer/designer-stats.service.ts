@@ -7,6 +7,7 @@ import type {
   DesignerLeaderboardRow,
   DesignerTimelineBucket,
   ErrorStats,
+  ProductBreakdownDesigner,
 } from 'shared';
 import { DesignerStatus, RoleType, WorkshopConfigCategory } from 'shared';
 
@@ -863,6 +864,112 @@ export class DesignerStatsService {
     });
 
     return { groups, total: orders.length, rangeDays: days.length };
+  }
+
+  /**
+   * Breakdown sản phẩm theo từng designer (cho tooltip biểu đồ Cơ cấu trạng
+   * thái): mỗi designer → list sản phẩm (order.type) họ được gán trong kỳ +
+   * số đơn/sản phẩm + level/mockup (từ ProductConfig). Phạm vi = mọi đơn đã gán
+   * (assigned/in-progress/rework/done).
+   */
+  async getProductBreakdown(
+    rangeDays: number,
+    type?: string,
+    customer?: string,
+    from?: string,
+    to?: string,
+  ): Promise<{ designers: ProductBreakdownDesigner[] }> {
+    const { start, end } = this.resolveVnWindow(rangeDays, from, to);
+
+    const match: Record<string, unknown> = {
+      inProductionAt: { $gte: start, $lte: end },
+      assignee: { $exists: true, $ne: null },
+      designerStatus: {
+        $in: [
+          DesignerStatus.Assigned,
+          DesignerStatus.InProgress,
+          DesignerStatus.Rework,
+          DesignerStatus.Done,
+        ],
+      },
+    };
+    if (type) match.type = type;
+    if (customer) match.userSku = customer;
+
+    const [agg, designerRole] = await Promise.all([
+      this.orderModel.aggregate<{
+        _id: { uid: string; type: string };
+        count: number;
+        cfg: string | null;
+      }>([
+        { $match: match },
+        {
+          $group: {
+            _id: { uid: '$assignee', type: { $ifNull: ['$type', ''] } },
+            count: { $sum: 1 },
+            cfg: { $max: '$productConfigId' },
+          },
+        },
+      ]),
+      this.roleRepository.findOne({ name: RoleType.Designer }),
+    ]);
+
+    const teamUsers = designerRole
+      ? await this.userModel.find({ roleId: designerRole._id }, { _id: 1, fullName: 1 }).lean()
+      : [];
+    const nameMap = new Map<string, string>();
+    for (const u of teamUsers) nameMap.set(String(u._id), u.fullName);
+
+    const cfgIds = [...new Set(agg.map((a) => a.cfg).filter(Boolean))] as string[];
+    const cfgs = cfgIds.length
+      ? await this.productConfigModel
+          .find({ _id: { $in: cfgIds } }, { fullName: 1, shortName: 1, mockup: 1, level: 1 })
+          .lean()
+      : [];
+    const cfgMap = new Map<string, { fullName?: string; shortName?: string; mockup?: string; level?: number }>();
+    for (const c of cfgs as Array<Record<string, unknown>>) {
+      cfgMap.set(String(c._id), {
+        fullName: c.fullName as string,
+        shortName: c.shortName as string,
+        mockup: c.mockup as string,
+        level: c.level as number,
+      });
+    }
+
+    const byUser = new Map<string, ProductBreakdownDesigner>();
+    for (const a of agg) {
+      const uid = a._id.uid;
+      let d = byUser.get(uid);
+      if (!d) {
+        d = { userId: uid, fullName: nameMap.get(uid) || `#${uid.slice(-4)}`, total: 0, products: [] };
+        byUser.set(uid, d);
+      }
+      const cfg = a.cfg ? cfgMap.get(a.cfg) : undefined;
+      d.products.push({
+        type: a._id.type || '(Chưa rõ)',
+        fullName: cfg?.fullName,
+        shortName: cfg?.shortName,
+        mockup: cfg?.mockup,
+        level: cfg?.level,
+        count: a.count,
+      });
+      d.total += a.count;
+    }
+
+    const missingIds = [...byUser.keys()].filter((id) => !nameMap.has(id));
+    if (missingIds.length > 0) {
+      const extra = await this.userModel.find({ _id: { $in: missingIds } }, { _id: 1, fullName: 1 }).lean();
+      for (const u of extra) {
+        const d = byUser.get(String(u._id));
+        if (d) d.fullName = u.fullName;
+      }
+    }
+
+    const designers = [...byUser.values()].map((d) => ({
+      ...d,
+      products: d.products.sort((x, y) => y.count - x.count),
+    }));
+    return { designers };
   }
 
   /**

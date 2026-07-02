@@ -422,6 +422,41 @@ export const GetAssignBacklogResZod = ResZod.extend({
 });
 export class GetAssignBacklogResDto extends createZodDto(extendApi(GetAssignBacklogResZod)) {}
 
+// ─── Product breakdown per designer (tooltip biểu đồ Cơ cấu trạng thái) ──
+
+export const GetProductBreakdownZod = z.object({
+  days: z.enum(['7', '14', '30']).default('7'),
+  from: z.string().optional(),
+  to: z.string().optional(),
+  type: z.string().optional(),
+  customer: z.string().optional(),
+});
+export class GetProductBreakdownDto extends createZodDto(extendApi(GetProductBreakdownZod)) {}
+
+export const ProductBreakdownItemZod = z.object({
+  /** = order.type (định danh sản phẩm hiển thị). */
+  type: z.string(),
+  fullName: z.string().optional(),
+  shortName: z.string().optional(),
+  mockup: z.string().optional(),
+  level: z.number().int().optional(),
+  count: z.number().int().nonnegative(),
+});
+export type ProductBreakdownItem = z.infer<typeof ProductBreakdownItemZod>;
+
+export const ProductBreakdownDesignerZod = z.object({
+  userId: z.string(),
+  fullName: z.string(),
+  total: z.number().int().nonnegative(),
+  products: ProductBreakdownItemZod.array(),
+});
+export type ProductBreakdownDesigner = z.infer<typeof ProductBreakdownDesignerZod>;
+
+export const GetProductBreakdownResZod = ResZod.extend({
+  data: z.object({ designers: ProductBreakdownDesignerZod.array() }),
+});
+export class GetProductBreakdownResDto extends createZodDto(extendApi(GetProductBreakdownResZod)) {}
+
 // ─── Bulk transition (Phase 4 extension) ────────────────────────────
 
 export const DesignerBulkTransitionZod = z.object({

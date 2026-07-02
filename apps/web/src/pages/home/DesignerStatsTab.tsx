@@ -237,7 +237,13 @@ export default function DesignerStatsTab() {
       />
 
       {/* Biểu đồ cột: toggle "Theo designer (100%)" / "Theo ngày (số lượng)". */}
-      <StatusBarCharts type={filterType || undefined} customer={filterCustomer || undefined} />
+      <StatusBarCharts
+        type={filterType || undefined}
+        customer={filterCustomer || undefined}
+        filterDays={rangeDays}
+        filterFrom={dateFrom || undefined}
+        filterTo={dateTo || undefined}
+      />
 
       {/* Ma trận toàn team × ngày (7/14/30 riêng) — snapshot đơn chưa xong. */}
       <TeamDailyMatrix
