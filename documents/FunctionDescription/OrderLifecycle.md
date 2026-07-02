@@ -1,9 +1,9 @@
 # Vòng đời đơn hàng (Order Lifecycle Dashboard) — Function Description
 
-> **File FE:** `apps/web/src/pages/home/LifecycleTab.tsx` (tab thứ 5 trong `apps/web/src/pages/home/index.tsx`)
-> **File BE:** `apps/api/src/modules/order/order.service.ts` → `getLifecycleOverview()`; `order.controller.ts` → `GET /v1/orders/lifecycle-overview`
-> **Route:** `/` (Dashboard) → tab `?tab=lifecycle`
-> **API:** `GET /v1/orders/lifecycle-overview`
+> **File FE:** `apps/web/src/pages/home/LifecycleTab.tsx` (tab chi tiết trong `apps/web/src/pages/home/index.tsx`) + `apps/web/src/pages/home/LifecycleStrip.tsx` (strip gọn trên đầu Dashboard)
+> **File BE:** `apps/api/src/modules/order/order.service.ts` → `getLifecycleOverview()` + `getLifecycleTrack()`; `order.controller.ts` → `GET /v1/orders/lifecycle-overview` + `GET /v1/orders/lifecycle-track/:code`
+> **Route:** `/` (Dashboard) → strip luôn hiện trên đầu + tab `?tab=lifecycle`
+> **API:** `GET /v1/orders/lifecycle-overview`, `GET /v1/orders/lifecycle-track/:code`
 
 ## 1. Overview
 
@@ -19,7 +19,17 @@ Soát tool → Thiết kế → In → Ép → QC sau ép → QC phân hàng →
 (support)   (designer)  └────────────────── 7 stage Fulfillment ──────────────────┘
 ```
 
-- **Chỉ Admin / SuperAdmin** thấy tab này (xem §7).
+- **Mọi tài khoản** đều thấy vòng đời đơn (strip gọn trên đầu + tab chi tiết);
+  tài khoản `Fulfillment` gắn xưởng tự **khóa theo xưởng** (BE), role khác thấy
+  toàn bộ (xem §7).
+- **Strip** (`LifecycleStrip`) hiện trên đầu Dashboard, trên MỌI tab — không cuộn ngang:
+  - **Hàng điều khiển tách riêng:** tiêu đề + ô tra cứu `productionId` + `DateRangePicker`.
+  - **Hàng phễu:** card **"Tổng đơn tất cả"** (`totals.totalOrders` + Đang chạy `totalActive` /
+    Xong kỳ `completedInRange`) → 9 chặng. Mỗi card chặng: **Tổng đơn** (= Chờ + Làm + Lại,
+    đơn đang ở chặng) + 4 chỉ số nhỏ **Chờ** (`backlog`) / **Làm** (`inProgress`) /
+    **Lại** (`rework`) / **Xong** (`passedTotal`). Card bottleneck viền hổ phách.
+  - Nhập `productionId` → hành trình riêng của đơn đó (đã qua ✓ / đang ở ● / chưa tới ○ /
+    lỗi ✕ / rework ↻); ẩn date filter, hiện info đơn + "đang ở …".
 - **Chặng "Soát tool"** = tài khoản Support soát; "đã soát" = `toolResultNote` có
   giá trị, "chưa soát" = rỗng/null.
 - **Lọc xưởng:** admin chọn mọi xưởng qua dropdown (mặc định "Tất cả xưởng").
@@ -42,6 +52,22 @@ Soát tool → Thiết kế → In → Ép → QC sau ép → QC phân hàng →
 | Method | Path | Mô tả |
 |---|---|---|
 | GET | `/v1/orders/lifecycle-overview` | Phễu 9 chặng + KPI + timeline + danh sách xưởng |
+| GET | `/v1/orders/lifecycle-track/:code` | Hành trình 9 chặng của 1 đơn theo `productionId` (cho strip) |
+
+`getLifecycleTrack(code, roleName, userFactoryId)`: `findOne` theo `productionId`
+(exact, case-insensitive), khóa xưởng cho `Fulfillment`. Suy **currentIndex** (0..8)
+từ field sẵn có — ưu tiên `toolResultNote='error'` (support-hold → về chặng 0) >
+`currentFulfillmentStage` (`2 + FULFILLMENT_STAGE_ORDER`) > `designerStatus` >
+`toolResultNote` rỗng. Response `LifecycleTrack`:
+
+```ts
+{
+  productionId; userSku?; type?; inProductionAt?; fulfillmentCompletedAt?;
+  currentStageKey: string | null;   // null nếu completed
+  completed: boolean;
+  stages: { key; label; status: 'done'|'current'|'pending'|'error'|'rework'; at? }[]; // 9 phần tử
+}
+```
 
 Request `GetLifecycleOverviewDto` (`packages/shared/dtos/production-order.dto.ts`):
 
@@ -55,6 +81,7 @@ Response `LifecycleOverview`:
 {
   stages: LifecycleStageRow[];          // 9 chặng theo thứ tự
   totals: {
+    totalOrders: number;                // tổng đơn trong tập đã lọc (facet totalAll)
     totalActive: number;                // đơn chưa pack done, chưa hủy
     completedInRange: number;           // pack.done trong kỳ
     avgTotalCycleMs: number;            // designerFirstStartedAt/createdAt → fulfillmentCompletedAt
@@ -146,8 +173,8 @@ trên collection `orders`:
 
 ## 7. Permissions
 
-- **Chỉ Admin / SuperAdmin** — endpoint `@Auth([RoleType.SuperAdmin, RoleType.Admin])`;
-  FE chỉ render tab khi `usePermission().isAdmin` (gate cả trigger, content + fallback
-  URL `?tab=lifecycle` về tab mặc định nếu không phải admin).
-- (Factory isolation trong service vẫn giữ cho role `Fulfillment` — hiện là nhánh
-  phòng hờ vì endpoint đã khóa về admin.)
+- **Mọi tài khoản** — cả 2 endpoint `@Auth(ORDER_VIEW_ROLES)`; FE render strip +
+  tab chi tiết cho mọi role (`canSeeLifecycle = true`).
+- **Factory isolation** trong service khóa role `Fulfillment` về xưởng của họ
+  (`isFactoryBound`); role khác thấy toàn bộ (hoặc lọc theo dropdown xưởng ở tab
+  chi tiết). Strip không có dropdown xưởng → không truyền `factoryId`, để BE tự lo.

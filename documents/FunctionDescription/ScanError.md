@@ -32,7 +32,7 @@ Mục tiêu: rút ngắn thao tác từ "tìm đơn trong bảng workshop → cl
 | Nghiệp vụ | Endpoint reuse | Tác dụng |
 |---|---|---|
 | Gán mã lỗi xưởng (luôn luôn) | `POST /v1/orders/:id/set-production-error` | Set `productionError` + `productionErrorSource` + `productionErrorNote`. Đơn vào tab "Nhật ký bù lỗi". Hook BE auto-set `toolResultNote='error'`, `productionErrorCount++`, `productionFirstErrorAt` (mốc bắt đầu cycle lỗi). |
-| Đẩy về công đoạn (tùy chọn) | `POST /v1/orders/:id/fulfillment-transition` action=`rework-back` | Đẩy đơn về Designer hoặc 1 stage trước (`print`/`press`/...). Reset state stage đích về `rework`, intermediate stages cũng `rework`. Chỉ áp được khi `currentFulfillmentStage != null`. |
+| Đẩy về công đoạn (mặc định Soát tool) | `POST .../fulfillment-transition` (Designer/stage) **hoặc** `set-production-error` source=`tool-check` (Soát tool) | **Soát tool** (mặc định): không gọi transition — `setProductionError` source=`tool-check` tự đẩy về Support (support-hold). **Designer / stage trước**: `rework-back`, reset stage đích + intermediate về `rework`, chỉ khi `currentFulfillmentStage != null`. |
 
 ---
 
@@ -107,7 +107,7 @@ Có nút "Xoá" clear toàn bộ. Counter mini: Thành công / Không tìm thấ
 
 | Method | Path | Mô tả |
 |---|---|---|
-| `POST` | `/v1/orders/:id/set-production-error` | Atomic set 3 field `productionError` + `source` + `note`. Hook BE: `toolResultNote='error'`, `productionErrorCount++`, set `productionFirstErrorAt`, auto-rework designer nếu `source=designer + designerStatus=done`. |
+| `POST` | `/v1/orders/:id/set-production-error` | Atomic set 3 field `productionError` + `source` (`designer`/`factory`/`tool-check`) + `note`. Hook BE: `toolResultNote='error'`, `productionErrorCount++`, set `productionFirstErrorAt`, auto-rework designer nếu `source=designer + designerStatus=done`, **đẩy về Support nếu `source=tool-check`** (support-hold). |
 | `POST` | `/v1/orders/:id/fulfillment-transition` action=`rework-back` | Đẩy về Designer / stage trước. Reporter stage → waiting (workMs cộng dồn), target → rework, intermediate → rework, `currentFulfillmentStage` = target. |
 
 ### 3.3 DTO mới (shared)
@@ -164,12 +164,13 @@ Page tự `<Navigate to={PATHS.ORDERS}>` nếu user thiếu perm (defense-in-dep
   - Badge "rework ×N" amber nếu `designerReworkCount > 0`.
 - **Form 3 phần**:
   1. **Mã lỗi** *(required)* — chip group từ `useWorkshopConfigStore.byCategory.production_error`, sort theo `order`. Chip 'other' có icon `AlertTriangle`. Active state: bg-rose-500.
-  2. **Nguồn lỗi** *(required)* — 2 button equal-width: Do xưởng (sky) / Do designer (violet). Auto-fill từ `workshop_config.errorSource` khi user chọn code. Hint amber khi pick `designer`: "task tự về Cần làm lại cho designer".
+  2. **Nguồn lỗi** *(required, mặc định "Do soát tool")* — 3 button: **Do soát tool** (amber) / Do xưởng (sky) / Do designer (violet). Auto-fill từ `workshop_config.errorSource` khi user chọn code (bao gồm `tool-check`). Hint amber khi pick `designer` ("task tự về Cần làm lại cho designer") hoặc `tool-check` ("đơn tự đẩy về Support tab Soát tool").
   3. **Mô tả lỗi** — textarea 2 rows, max 500ch, counter. Required khi code='other'.
-- **Optional section** "Đẩy về công đoạn" — chỉ render khi `currentFulfillmentStage != null`:
-  - Chip group: "Chỉ mark lỗi" / "Designer" / N chip cho stage trước.
-  - Hint khi pick target khác "Chỉ mark lỗi": "Mô tả lỗi sẽ được dùng làm lý do rework. Nếu trống, mặc định 'Gán lỗi qua màn hình quét'."
-- **Fallback alert** khi đơn chưa vào fulfillment: amber rounded box với `ListChecks` icon: "Đơn chưa vào fulfillment — chỉ có thể mark lỗi, không thể đẩy về công đoạn."
+- **Section "Đẩy về công đoạn"** *(mặc định "Soát tool")* — luôn render:
+  - Chip **"Soát tool"** LUÔN có (đẩy về Support, kể cả khi đơn chưa vào fulfillment); click cũng set nguồn lỗi = `tool-check`. Chip "Designer" + N chip stage trước chỉ khi `currentFulfillmentStage != null`.
+  - `reworkTarget='tool-check'` → **KHÔNG** gọi `fulfillment-transition`; `setProductionError` với `source='tool-check'` tự đẩy đơn về Support (support-hold). Hint amber tương ứng.
+  - Hint khi pick target stage/designer: "Mô tả lỗi sẽ được dùng làm lý do rework. Nếu trống, mặc định 'Gán lỗi qua màn hình quét'."
+- **Fallback alert** khi đơn chưa vào fulfillment *và* target ≠ Soát tool: amber box `ListChecks`: "Đơn chưa vào fulfillment — chỉ có thể đẩy về Soát tool hoặc mark lỗi."
 - **Footer**: "Huỷ" + "Gán lỗi & Quét tiếp" (primary, disabled khi chưa đủ điều kiện).
 - **Phím tắt**: `Cmd/Ctrl+Enter` submit nhanh khi `canSubmit`.
 

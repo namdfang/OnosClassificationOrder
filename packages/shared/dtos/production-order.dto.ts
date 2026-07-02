@@ -726,7 +726,7 @@ export const SetProductionErrorZod = z.object({
   /** Workshop_config code; null = clear hẳn lỗi. */
   code: z.string().nullable(),
   /** Required khi code='other' (BE validate). Auto-fill từ config nếu vắng. */
-  source: z.enum(['designer', 'factory']).optional(),
+  source: z.enum(['designer', 'factory', 'tool-check']).optional(),
   /** Required khi code='other' (BE validate). */
   note: z.string().max(500).optional(),
 });
@@ -1311,6 +1311,8 @@ export type LifecycleTimelineBucket = z.infer<typeof LifecycleTimelineBucketZod>
 export const LifecycleOverviewZod = z.object({
   stages: LifecycleStageRowZod.array(),
   totals: z.object({
+    /** Tổng đơn trong tập đã lọc (theo ngày vào SX + xưởng). */
+    totalOrders: z.number(),
     /** Đơn còn trong pipeline (chưa pack done, chưa hủy). */
     totalActive: z.number(),
     /** Đơn pack.done trong kỳ. */
@@ -1340,6 +1342,42 @@ export class GetLifecycleOverviewDto extends createZodDto(extendApi(GetLifecycle
 export const GetLifecycleOverviewResZod = ResZod.extend({ data: LifecycleOverviewZod });
 export class GetLifecycleOverviewResDto extends createZodDto(
   extendApi(GetLifecycleOverviewResZod),
+) {}
+
+// ─── Lifecycle Track (tra cứu vòng đời 1 đơn theo productionId) ────
+// Strip gọn trên đầu Dashboard: nhập productionId → hành trình đơn đó đã qua
+// chặng nào / đang ở đâu. 9 chặng theo `LIFECYCLE_STAGE_KEYS`.
+
+/** Trạng thái 1 chặng trong hành trình 1 đơn. */
+export const LifecycleTrackStatusZod = z.enum(['done', 'current', 'pending', 'error', 'rework']);
+export type LifecycleTrackStatus = z.infer<typeof LifecycleTrackStatusZod>;
+
+export const LifecycleTrackStageZod = z.object({
+  key: z.string(), // LifecycleStageKey
+  label: z.string(),
+  status: LifecycleTrackStatusZod,
+  /** Mốc thời gian gắn với trạng thái (done→completedAt, current→startedAt/waitingAt). */
+  at: z.date().optional(),
+});
+export type LifecycleTrackStage = z.infer<typeof LifecycleTrackStageZod>;
+
+export const LifecycleTrackZod = z.object({
+  productionId: z.string(),
+  userSku: z.string().optional(),
+  type: z.string().optional(),
+  inProductionAt: z.date().optional(),
+  fulfillmentCompletedAt: z.date().optional(),
+  /** Khóa chặng đơn đang ở (null nếu đã hoàn thành toàn bộ flow). */
+  currentStageKey: z.string().nullable(),
+  /** Đã hoàn thành toàn bộ 9 chặng (pack done). */
+  completed: z.boolean(),
+  stages: LifecycleTrackStageZod.array(), // 9 phần tử theo LIFECYCLE_STAGE_KEYS
+});
+export type LifecycleTrack = z.infer<typeof LifecycleTrackZod>;
+
+export const GetLifecycleTrackResZod = ResZod.extend({ data: LifecycleTrackZod });
+export class GetLifecycleTrackResDto extends createZodDto(
+  extendApi(GetLifecycleTrackResZod),
 ) {}
 
 // ─── Cutting File mapping (post-import flow) ──────────────────────

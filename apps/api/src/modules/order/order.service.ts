@@ -85,14 +85,17 @@ import {
   DESIGNER_REASSIGNABLE_STATUSES,
   DesignerStatus,
   FULFILLMENT_STAGE_LABELS,
+  FULFILLMENT_STAGE_ORDER,
   FULFILLMENT_STAGES,
   FulfillmentStage,
   FulfillmentStageStatus,
   FulfillmentTransitionAction,
+  LIFECYCLE_STAGE_KEYS,
   parseProductionIdFromCuttingFilename,
   RoleType,
   WorkshopConfigCategory,
 } from 'shared';
+import type { LifecycleTrack, LifecycleTrackStage, LifecycleTrackStatus } from 'shared';
 import { Logger } from 'winston';
 
 import { DesignImageService } from '../design-image/design-image.service';
@@ -2409,6 +2412,7 @@ export class OrderService implements OnModuleInit {
               },
             },
           ],
+          totalAll: [{ $count: 'n' }],
           totalActive: [
             { $match: { fulfillmentCompletedAt: { $in: [null, undefined] } } },
             { $count: 'n' },
@@ -2541,6 +2545,7 @@ export class OrderService implements OnModuleInit {
       data: {
         stages,
         totals: {
+          totalOrders: agg.totalAll[0]?.n || 0,
           totalActive: agg.totalActive[0]?.n || 0,
           completedInRange: cycleRow?.count || 0,
           avgTotalCycleMs: cycleRow?.avgMs ? Math.round(cycleRow.avgMs) : 0,
@@ -4135,6 +4140,118 @@ export class OrderService implements OnModuleInit {
       }
     }
     return { success: true, data: doc };
+  }
+
+  /**
+   * Tra cứu VÒNG ĐỜI của 1 đơn theo productionId — cho strip gọn trên đầu
+   * Dashboard. Trả về 9 chặng (Soát tool → Thiết kế → 7 fulfillment) với trạng
+   * thái done/current/pending/error/rework của TỪNG chặng dựa trên các mốc đã có
+   * trên đơn (toolResultNote/toolCheckedAt, designerStatus, currentFulfillmentStage
+   * + fulfillmentStages, fulfillmentCompletedAt). Fulfillment khóa theo xưởng.
+   */
+  async getLifecycleTrack(
+    code: string,
+    roleName?: RoleType,
+    fulfillmentFactoryId?: string,
+  ): Promise<{ success: true; data: LifecycleTrack }> {
+    const trimmed = (code ?? '').trim();
+    if (!trimmed) throw new NotFoundException('Production ID rỗng.');
+
+    const escaped = trimmed.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+    const doc = await this.orderModel
+      .findOne({ productionId: { $regex: `^${escaped}$`, $options: 'i' } })
+      .select(
+        'productionId userSku type toolResultNote toolCheckedAt designerStatus designerAssignedAt ' +
+          'designerFirstStartedAt designerCompletedAt currentFulfillmentStage fulfillmentStages ' +
+          'fulfillmentCompletedAt inProductionAt factoryId originalFactoryId',
+      )
+      .lean();
+    if (!doc) throw new NotFoundException('Không tìm thấy đơn với mã này.');
+
+    if (roleName === RoleType.Fulfillment) {
+      const factoryId = (doc as { factoryId?: string }).factoryId;
+      const originalFactoryId = (doc as { originalFactoryId?: string }).originalFactoryId;
+      if (
+        !fulfillmentFactoryId ||
+        (factoryId !== fulfillmentFactoryId && originalFactoryId !== fulfillmentFactoryId)
+      ) {
+        throw new NotFoundException('Đơn không thuộc xưởng của bạn.');
+      }
+    }
+
+    const d = doc as {
+      productionId: string;
+      userSku?: string;
+      type?: string;
+      toolResultNote?: string;
+      toolCheckedAt?: Date;
+      designerStatus?: DesignerStatus;
+      designerAssignedAt?: Date;
+      designerFirstStartedAt?: Date;
+      designerCompletedAt?: Date;
+      currentFulfillmentStage?: FulfillmentStage;
+      fulfillmentStages?: Record<string, { status?: FulfillmentStageStatus; waitingAt?: Date; startedAt?: Date; completedAt?: Date }>;
+      fulfillmentCompletedAt?: Date;
+      inProductionAt?: Date;
+    };
+
+    const LABELS: Record<string, string> = {
+      'tool-check': 'Soát tool',
+      designer: 'Thiết kế',
+      ...FULFILLMENT_STAGE_LABELS,
+    };
+
+    const toolEmpty = !d.toolResultNote;
+    const toolError = d.toolResultNote === 'error';
+    const completed = !!d.fulfillmentCompletedAt;
+
+    // Chặng đơn đang đứng (0..8). Ưu tiên lỗi soát tool (support-hold) → về chặng 0.
+    let currentIndex: number;
+    if (completed) currentIndex = LIFECYCLE_STAGE_KEYS.length; // vượt chặng cuối → tất cả done
+    else if (toolError) currentIndex = 0;
+    else if (d.currentFulfillmentStage) currentIndex = 2 + FULFILLMENT_STAGE_ORDER[d.currentFulfillmentStage];
+    else if (d.designerStatus && d.designerStatus !== DesignerStatus.Unassigned)
+      currentIndex = d.designerStatus === DesignerStatus.Done ? 2 : 1;
+    else if (toolEmpty) currentIndex = 0;
+    else currentIndex = 1;
+
+    const atFor = (key: string): Date | undefined => {
+      if (key === 'tool-check') return d.toolCheckedAt;
+      if (key === 'designer') return d.designerCompletedAt ?? d.designerFirstStartedAt ?? d.designerAssignedAt;
+      const st = d.fulfillmentStages?.[key];
+      return st?.completedAt ?? st?.startedAt ?? st?.waitingAt;
+    };
+
+    const stages: LifecycleTrackStage[] = LIFECYCLE_STAGE_KEYS.map((key, idx) => {
+      let status: LifecycleTrackStatus;
+      if (idx < currentIndex) status = 'done';
+      else if (idx > currentIndex) status = 'pending';
+      else {
+        // Chặng hiện tại — overlay lỗi/rework từ state thực tế.
+        status = 'current';
+        if (key === 'tool-check' && toolError) status = 'error';
+        else if (key === 'designer' && d.designerStatus === DesignerStatus.Rework) status = 'rework';
+        else if (idx >= 2) {
+          const st = d.fulfillmentStages?.[key];
+          if (st?.status === FulfillmentStageStatus.Rework) status = 'rework';
+        }
+      }
+      return { key, label: LABELS[key] ?? key, status, at: atFor(key) };
+    });
+
+    return {
+      success: true,
+      data: {
+        productionId: d.productionId,
+        userSku: d.userSku,
+        type: d.type,
+        inProductionAt: d.inProductionAt,
+        fulfillmentCompletedAt: d.fulfillmentCompletedAt,
+        currentStageKey: completed ? null : LIFECYCLE_STAGE_KEYS[currentIndex] ?? null,
+        completed,
+        stages,
+      },
+    };
   }
 
   /**

@@ -24,6 +24,7 @@ import {
   GetFactoryOverviewResDto,
   GetLifecycleOverviewDto,
   GetLifecycleOverviewResDto,
+  GetLifecycleTrackResDto,
   GetGroupedProductionOrdersResDto,
   FulfillmentStatusCountsResDto,
   GetImportSummaryDto,
@@ -236,8 +237,8 @@ export class OrderController {
   }
 
   @Get('lifecycle-overview')
-  @Auth([RoleType.SuperAdmin, RoleType.Admin])
-  @ApiOperation({ summary: 'Vòng đời đơn — phễu 9 chặng (soát tool → thiết kế → 7 stage fulfillment). Chỉ Admin.' })
+  @Auth(ORDER_VIEW_ROLES)
+  @ApiOperation({ summary: 'Vòng đời đơn — phễu 9 chặng (soát tool → thiết kế → 7 stage fulfillment). Fulfillment khóa theo xưởng.' })
   @HttpCode(HttpStatus.OK)
   @ApiOkResponse({ type: GetLifecycleOverviewResDto })
   async getLifecycleOverview(
@@ -245,6 +246,22 @@ export class OrderController {
     @AuthUser() user: UserDocument,
   ): Promise<GetLifecycleOverviewResDto> {
     return this.orderService.getLifecycleOverview(dto, user?.role?.name, user?.factoryId);
+  }
+
+  @Get('lifecycle-track/:code')
+  @Auth(ORDER_VIEW_ROLES)
+  @ApiOperation({ summary: 'Tra cứu vòng đời 1 đơn theo productionId (strip Dashboard). Fulfillment khóa theo xưởng.' })
+  @HttpCode(HttpStatus.OK)
+  @ApiOkResponse({ type: GetLifecycleTrackResDto })
+  async getLifecycleTrack(
+    @Param('code') code: string,
+    @AuthUser() user: UserDocument,
+  ): Promise<GetLifecycleTrackResDto> {
+    return this.orderService.getLifecycleTrack(
+      code,
+      user?.role?.name,
+      user?.factoryId,
+    ) as Promise<GetLifecycleTrackResDto>;
   }
 
   @Patch('bulk-transfer')
