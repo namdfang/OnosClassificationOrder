@@ -1469,7 +1469,8 @@ export const GetToolCheckOverviewZod = z.object({
 });
 export class GetToolCheckOverviewDto extends createZodDto(extendApi(GetToolCheckOverviewZod)) {}
 
-/** 1 đơn rút gọn read-only trong danh sách Soát tool. */
+/** 1 đơn trong danh sách Soát tool — Support edit trực tiếp Note kq Tool /
+ *  File sửa lỗi / Ghi chú file lỗi (mirror bảng đơn theo xưởng). */
 export const ToolCheckOrderZod = z.object({
   _id: z.string(),
   productionId: z.string(),
@@ -1480,8 +1481,11 @@ export const ToolCheckOrderZod = z.object({
   mockupUrl: z.string().optional(),
   mockupOriginalUrl: z.string().optional(),
   toolResultNote: z.string().optional(),
+  errorFile: z.string().array().optional(),
+  errorFileNote: z.string().optional(),
   productionError: z.string().optional(),
   productionErrorNote: z.string().optional(),
+  productionErrorCount: z.number().int().nonnegative().optional(),
   inProductionAt: z.string().optional(),
 });
 export type ToolCheckOrder = z.infer<typeof ToolCheckOrderZod>;

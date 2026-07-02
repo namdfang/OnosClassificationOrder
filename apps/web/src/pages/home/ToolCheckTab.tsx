@@ -1,6 +1,6 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { AlertTriangle, FileSearch, PackageSearch, RefreshCw, Users } from 'lucide-react';
-import { PRODUCT_LEVEL_MAP } from 'shared';
+import { PRODUCT_LEVEL_MAP, WorkshopConfigCategory } from 'shared';
 import type {
   ToolCheckCustomerError,
   ToolCheckCustomerStat,
@@ -14,8 +14,14 @@ import { CopyButton } from '@/components/common/CopyButton';
 import { DateRangePicker } from '@/components/common/DateRangePicker';
 import { ImagePreviewDialog } from '@/components/common/ImagePreviewDialog';
 import { Spinner } from '@/components/common/Spinner';
+import { ColorBadgeSelectCell } from '@/components/orders/cells/ColorBadgeSelectCell';
 import { ImageThumbCell } from '@/components/orders/cells/ImageThumbCell';
+import { MultiIconSelectCell } from '@/components/orders/cells/MultiIconSelectCell';
+import { ProductionErrorSelectCell } from '@/components/orders/cells/ProductionErrorSelectCell';
+import { TextEditCell } from '@/components/orders/cells/TextEditCell';
+import { usePermission } from '@/hooks/usePermission';
 import { RepositoryRemote } from '@/services';
+import { useWorkshopConfigStore } from '@/store/workshopConfigStore';
 import { handleAxiosError } from '@/utils';
 
 interface Overview {
@@ -32,6 +38,13 @@ interface Overview {
 type ListTab = 'rework' | 'unreviewed';
 
 export default function ToolCheckTab() {
+  const { canEditField } = usePermission();
+  const loadConfig = useWorkshopConfigStore((s) => s.load);
+  const configLoaded = useWorkshopConfigStore((s) => s.loaded);
+  useEffect(() => {
+    if (!configLoaded) loadConfig();
+  }, [configLoaded, loadConfig]);
+
   const [rangeDays, setRangeDays] = useState<7 | 14 | 30>(7);
   const [dateFrom, setDateFrom] = useState('');
   const [dateTo, setDateTo] = useState('');
@@ -72,9 +85,120 @@ export default function ToolCheckTab() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [rangeDays, dateFrom, dateTo]);
 
+  // Patch 1 đơn trong cả 2 list (optimistic) sau khi edit cell.
+  const patchRow = (id: string, partial: Partial<ToolCheckOrder>) =>
+    setData((prev) =>
+      prev
+        ? {
+            ...prev,
+            reworkList: prev.reworkList.map((o) => (o._id === id ? { ...o, ...partial } : o)),
+            unreviewedList: prev.unreviewedList.map((o) => (o._id === id ? { ...o, ...partial } : o)),
+          }
+        : prev,
+    );
+
   const reworkList = data?.reworkList || [];
   const unreviewedList = data?.unreviewedList || [];
   const activeList = listTab === 'rework' ? reworkList : unreviewedList;
+
+  const canEditNote = canEditField('toolResultNote');
+  const canEditErrFile = canEditField('errorFile');
+  const canEditErrNote = canEditField('errorFileNote');
+  const canEditProdErr = canEditField('productionError');
+
+  // Render 1 dòng đơn — cột theo thứ tự bảng "Đơn theo xưởng" (mockup → type/size
+  // → Note kq Tool → File sửa lỗi → Ghi chú file lỗi → Lỗi xưởng). Cell edit trực
+  // tiếp giống bảng workshop; đổi Note kq Tool / Lỗi xưởng có thể đổi list → refetch.
+  const renderRow = (o: ToolCheckOrder) => {
+    const showCount = o.toolResultNote === 'error' && (o.productionErrorCount || 0) >= 2;
+    return (
+      <tr key={o._id} className="border-t border-border/40 hover:bg-muted/30 align-middle">
+        <td className="w-12 px-1 py-1.5">
+          <ImageThumbCell
+            url={o.mockupUrl}
+            originalUrl={o.mockupOriginalUrl}
+            title={`Mockup: ${o.productionId}`}
+            onOpen={(url, title, originalUrl) => setPreview({ url, title, originalUrl })}
+          />
+        </td>
+        <td className="px-2 py-1.5">
+          <div className="flex items-center gap-1">
+            <span className="font-medium whitespace-nowrap">{o.productionId}</span>
+            <CopyButton value={o.productionId} label="Production ID" iconSize={11} />
+          </div>
+        </td>
+        <td className="px-2 py-1.5 text-muted-foreground whitespace-nowrap">{o.userSku || '—'}</td>
+        <td className="px-2 py-1.5 text-muted-foreground max-w-[200px] truncate" title={o.type}>
+          {o.type || '—'}
+        </td>
+        <td className="px-2 py-1.5 text-muted-foreground whitespace-nowrap">
+          {o.size || '—'}
+          {o.color ? ` / ${o.color}` : ''}
+        </td>
+        {/* Note kq Tool 1 — edit → 'ok' đẩy đơn về In (đổi list → refetch). */}
+        <td className="px-2 py-1.5">
+          <span className="inline-flex items-center gap-1.5">
+            <ColorBadgeSelectCell
+              orderId={o._id}
+              field="toolResultNote"
+              category={WorkshopConfigCategory.ToolResultNote}
+              value={o.toolResultNote}
+              canEdit={canEditNote}
+              onUpdated={(v) => {
+                patchRow(o._id, { toolResultNote: v ?? undefined });
+                fetchData();
+              }}
+            />
+            {showCount && (
+              <span
+                className="text-[10px] font-bold px-1.5 py-0.5 rounded bg-rose-100 text-rose-700 dark:bg-rose-500/20 dark:text-rose-300"
+                title={`Xưởng đã báo lỗi ${o.productionErrorCount} lần trên đơn này`}
+              >
+                ×{o.productionErrorCount}
+              </span>
+            )}
+          </span>
+        </td>
+        {/* File sửa lỗi */}
+        <td className="px-2 py-1.5">
+          <MultiIconSelectCell
+            orderId={o._id}
+            field="errorFile"
+            category={WorkshopConfigCategory.ErrorFileType}
+            value={o.errorFile}
+            canEdit={canEditErrFile}
+            maxVisible={2}
+            onUpdated={(v) => patchRow(o._id, { errorFile: v ?? undefined })}
+          />
+        </td>
+        {/* Ghi chú file lỗi */}
+        <td className="px-2 py-1.5 min-w-[150px]">
+          <TextEditCell
+            orderId={o._id}
+            field="errorFileNote"
+            value={o.errorFileNote}
+            canEdit={canEditErrNote}
+            onUpdated={(v) => patchRow(o._id, { errorFileNote: v ?? undefined })}
+            tooltipLabel="Ghi chú file lỗi"
+          />
+        </td>
+        {/* Lỗi xưởng */}
+        <td className="px-2 py-1.5">
+          <ProductionErrorSelectCell
+            orderId={o._id}
+            category={WorkshopConfigCategory.ProductionError}
+            value={o.productionError}
+            errorNoteValue={o.productionErrorNote}
+            canEdit={canEditProdErr}
+            onUpdated={(code) => {
+              patchRow(o._id, { productionError: code ?? undefined });
+              fetchData();
+            }}
+          />
+        </td>
+      </tr>
+    );
+  };
 
   const kpis = useMemo(
     () => [
@@ -183,48 +307,19 @@ export default function ToolCheckTab() {
           <div className="overflow-x-auto">
             <table className="w-full text-[13px]">
               <thead>
-                <tr className="border-b border-border/60 text-left text-[11px] uppercase text-muted-foreground">
+                <tr className="border-b border-border/60 text-left text-[11px] uppercase text-muted-foreground whitespace-nowrap">
                   <th className="w-12 px-1 py-2" />
                   <th className="px-2 py-2">Mã đơn</th>
                   <th className="px-2 py-2">Khách</th>
                   <th className="px-2 py-2">Sản phẩm</th>
                   <th className="px-2 py-2">Size/Màu</th>
-                  {listTab === 'rework' && <th className="px-2 py-2">Lý do</th>}
+                  <th className="px-2 py-2">Note kq Tool 1</th>
+                  <th className="px-2 py-2">File sửa lỗi</th>
+                  <th className="px-2 py-2">Ghi chú file lỗi</th>
+                  <th className="px-2 py-2">Lỗi xưởng</th>
                 </tr>
               </thead>
-              <tbody>
-                {activeList.map((o) => (
-                  <tr key={o._id} className="border-t border-border/40 hover:bg-muted/30">
-                    <td className="w-12 px-1 py-1.5">
-                      <ImageThumbCell
-                        url={o.mockupUrl}
-                        originalUrl={o.mockupOriginalUrl}
-                        title={`Mockup: ${o.productionId}`}
-                        onOpen={(url, title, originalUrl) => setPreview({ url, title, originalUrl })}
-                      />
-                    </td>
-                    <td className="px-2 py-1.5">
-                      <div className="flex items-center gap-1">
-                        <span className="font-medium">{o.productionId}</span>
-                        <CopyButton value={o.productionId} label="Production ID" iconSize={11} />
-                      </div>
-                    </td>
-                    <td className="px-2 py-1.5 text-muted-foreground whitespace-nowrap">{o.userSku || '—'}</td>
-                    <td className="px-2 py-1.5 text-muted-foreground max-w-[220px] truncate" title={o.type}>
-                      {o.type || '—'}
-                    </td>
-                    <td className="px-2 py-1.5 text-muted-foreground whitespace-nowrap">
-                      {o.size || '—'}
-                      {o.color ? ` / ${o.color}` : ''}
-                    </td>
-                    {listTab === 'rework' && (
-                      <td className="px-2 py-1.5 text-amber-700 dark:text-amber-300 max-w-[240px] truncate" title={o.productionErrorNote}>
-                        {o.productionErrorNote || '—'}
-                      </td>
-                    )}
-                  </tr>
-                ))}
-              </tbody>
+              <tbody>{activeList.map(renderRow)}</tbody>
             </table>
           </div>
         )}

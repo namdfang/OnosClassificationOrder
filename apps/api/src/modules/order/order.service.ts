@@ -370,6 +370,21 @@ export class OrderService implements OnModuleInit {
       );
     }
 
+    // Cleanup ngược: đơn ĐÃ 'ok' (lỗi đã xử lý xong) nhưng còn dính
+    // productionFirstErrorAt → kẹt lại trong tab "Nhật ký bù lỗi". Xảy ra với đơn
+    // designer fix rework xong qua state-machine `transition(complete)` TRƯỚC KHI
+    // path này clear productionFirstErrorAt (bug đã sửa). Idempotent.
+    const clearFirstErrorRes = await this.orderModel.updateMany(
+      { toolResultNote: 'ok', productionFirstErrorAt: { $exists: true, $ne: null } },
+      { $set: { productionFirstErrorAt: null } },
+    );
+    if (clearFirstErrorRes.modifiedCount > 0) {
+      // eslint-disable-next-line no-console
+      console.log(
+        `[order-backfill] productionFirstErrorAt cleared on ${clearFirstErrorRes.modifiedCount} resolved (ok) rows`,
+      );
+    }
+
     // Migrate `errorFile` từ string đơn → array. Idempotent: chỉ chạy với row
     // có $type='string'. Sau migrate: errorFile luôn là array (hoặc null).
     const errorFileMigrateRes = await this.orderModel.updateMany(
@@ -564,19 +579,27 @@ export class OrderService implements OnModuleInit {
           ],
         });
         break;
-      case 'watching':
+      case 'watching': {
         filter.fulfillmentTimeline = {
           $elemMatch: { stage: stg, action: 'rework-back', byUserId: userId ?? '__no_user__' },
         };
+        // Chỉ giữ khi đơn đang ở stage TRƯỚC stg (chưa quay lại) HOẶC designer
+        // đang sửa. KHÔNG dùng `!= stg` (đơn đã quay về + làm xong + đẩy tiếp ra
+        // stage sau sẽ kẹt lại vĩnh viễn). Mirror `applyTabFilter` case watching.
+        const earlierStages = FULFILLMENT_STAGES.slice(
+          0,
+          FULFILLMENT_STAGES.indexOf(stg as FulfillmentStage),
+        );
         pushAnd({
           $or: [
-            { currentFulfillmentStage: { $ne: stg } },
+            { currentFulfillmentStage: { $in: earlierStages } },
             { designerStatus: 'rework' },
             // Đơn tool-check đang chờ support soát lại (marker source+note).
             { productionErrorSource: 'tool-check', toolResultNote: 'error' },
           ],
         });
         break;
+      }
     }
   }
 
@@ -3929,6 +3952,36 @@ export class OrderService implements OnModuleInit {
     permissionCodes?: string[],
   ): Promise<BulkUpdateOrderFieldResDto> {
     this.assertCanEditField(dto.field, roleName, permissionCodes);
+
+    // Các field có SIDE-EFFECT per-đơn (phụ thuộc state từng đơn) → `updateMany`
+    // uniform không tái hiện được → **delegate loop `updateField`** để bulk hành
+    // xử GIỐNG HỆT sửa tay từng cell:
+    //   - `toolResultNote`      : readyForFulfill + entry fulfillment + clear stage
+    //                             + toolCheckedAt + productionFirstErrorAt.
+    //   - `productionError`     : auto-fill productionErrorSource từ config +
+    //                             toolResultNote='error' + $inc count + rework-back
+    //                             designer/tool-check + timeline.
+    //   - `productionErrorSource`: rework-back designer/tool-check.
+    // (assignee có dialog "Gán design" riêng + skip-semantics → giữ path updateMany.)
+    // Đơn lỗi/không hợp lệ (vd bị chặn) bị skip, không fail cả batch — mirror single.
+    const SIDE_EFFECT_FIELDS = ['toolResultNote', 'productionError', 'productionErrorSource'];
+    if (SIDE_EFFECT_FIELDS.includes(dto.field)) {
+      const value = Array.isArray(dto.value) ? dto.value[0] ?? null : dto.value;
+      let matched = 0;
+      let modified = 0;
+      for (const id of dto.ids) {
+        try {
+          await this.updateField(id, { field: dto.field, value }, roleName, ctx, permissionCodes);
+          matched += 1;
+          modified += 1;
+        } catch {
+          // skip — 1 đơn lỗi không fail cả batch.
+        }
+      }
+      void this.invalidateListCache();
+      return { success: true, data: { matched, modified } };
+    }
+
     if (dto.field === 'assignee') {
       const v = Array.isArray(dto.value) ? dto.value[0] ?? null : dto.value;
       await this.assertAssigneeUserValid(v ?? null);
@@ -3938,12 +3991,9 @@ export class OrderService implements OnModuleInit {
 
     const normalized = normalizeFieldValue(dto.field, dto.value);
     const patch: Record<string, unknown> = { [dto.field]: normalized };
-    if (dto.field === 'toolResultNote') {
-      patch.readyForFulfill = normalized === READY_FOR_FULFILL_CODE;
-      if (normalized === READY_FOR_FULFILL_CODE) {
-        patch.productionFirstErrorAt = null;
-      }
-    }
+    // (Side-effect fields toolResultNote/productionError/productionErrorSource đã
+    //  return sớm ở trên qua delegate updateField — nhánh dưới chỉ còn assignee +
+    //  các field thuần config không side-effect.)
 
     // Bulk assignee → mirror updateField: chỉ assign cho order ở trạng thái
     // reassignable; orders đang in-progress/done/rework sẽ KHÔNG match filter
@@ -3990,51 +4040,6 @@ export class OrderService implements OnModuleInit {
     };
     if (extraMatchFilter) Object.assign(matchFilter, extraMatchFilter);
     const result = await this.orderModel.updateMany(matchFilter, { $set: patch });
-
-    // Entry point fulfillment thứ 2 (bulk variant) — chỉ áp cho subset đơn
-    // chưa từng vào fulfillment để tránh ghi đè state đang chạy. Tách query
-    // riêng vì patch chính áp uniform; ko thể đặt điều kiện per-doc qua updateMany.
-    if (dto.field === 'toolResultNote' && normalized === READY_FOR_FULFILL_CODE) {
-      await this.orderModel.updateMany(
-        {
-          _id: { $in: dto.ids },
-          deletedAt: { $exists: false },
-          currentFulfillmentStage: { $in: [null, undefined] },
-        },
-        { $set: buildFulfillmentEntrySet() },
-      );
-    }
-
-    // Mốc soát tool (bulk variant) — set toolCheckedAt cho subset đơn chưa có
-    // (first-soát only) khi gán toolResultNote bất kỳ giá trị non-empty.
-    if (typeof normalized === 'string' && normalized.trim() && dto.field === 'toolResultNote') {
-      await this.orderModel.updateMany(
-        {
-          _id: { $in: dto.ids },
-          deletedAt: { $exists: false },
-          toolCheckedAt: { $in: [null, undefined] },
-        },
-        { $set: { toolCheckedAt: new Date() } },
-      );
-    }
-
-    // Mirror logic clear stage cho bulk variant — toggle khỏi 'ok' và đơn ở
-    // Print/waiting (chưa có firstStartedAt) → clear stage để tránh orphan
-    // ngược. Đơn đã advance qua Print/đã có worker start → giữ stage.
-    if (dto.field === 'toolResultNote' && normalized !== READY_FOR_FULFILL_CODE) {
-      await this.orderModel.updateMany(
-        {
-          _id: { $in: dto.ids },
-          deletedAt: { $exists: false },
-          currentFulfillmentStage: FulfillmentStage.Print,
-          $or: [
-            { 'fulfillmentStages.print.firstStartedAt': { $exists: false } },
-            { 'fulfillmentStages.print.firstStartedAt': null },
-          ],
-        },
-        { $set: { currentFulfillmentStage: null, fulfillmentStages: {} } },
-      );
-    }
 
     void this.orderLogService.writeMany(
       beforeDocs.map((doc) => ({

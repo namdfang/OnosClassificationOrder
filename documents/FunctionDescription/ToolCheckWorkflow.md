@@ -36,6 +36,7 @@ Support/Admin mở Dashboard → tab "Soát tool":
 - **2 nhóm danh sách** (segmented, để support biết làm gì trước):
   1. **Cần làm lại** (In trả về) — ưu tiên (`source=tool-check + note=error`).
   2. **Chưa soát** — backlog (`toolResultNote` rỗng).
+  - **Cột EDIT trực tiếp** (mirror thứ tự + cell của bảng "Đơn theo xưởng"): Mockup · Mã đơn · Khách · Sản phẩm · Size/Màu · **Note kq Tool 1** (`ColorBadgeSelectCell`) · **File sửa lỗi** (`MultiIconSelectCell`) · **Ghi chú file lỗi** (`TextEditCell`) · **Lỗi xưởng** (`ProductionErrorSelectCell`). Support đổi Note kq Tool → 'ok' ngay tại đây → đơn về In (đổi list → refetch). Edit cell dùng chung `updateField` + `useWorkshopConfigStore` như bảng workshop; gate quyền qua `canEditField`.
 - **Thống kê lỗi** (mọi đơn `source=tool-check` trong kỳ): theo **sản phẩm** (mockup + level), theo **khách hàng** (`userSku`), và **khách × loại lỗi hay gặp nhất**.
 
 ## 3. API / Schema
@@ -75,6 +76,11 @@ Response `ToolCheckOverviewResDto.data`:
 ## 5. Backend logic
 
 - **Hook rework-back tool-check** (`order.service.ts`): helper chung `buildDesignerReworkBackFromError(before, reason, ctx, target='tool-check')` + gate `canReworkBackToSupport(before)` (skip khi đã hold, tránh báo trùng). 3 call-site: `updateField('productionError')`, `updateField('productionErrorSource')`, `setProductionError`.
+- **Bulk edit các field có side-effect** (`bulkUpdateField`): `updateMany` uniform KHÔNG tái hiện được side-effect phụ thuộc state từng đơn. Nên với **`toolResultNote` / `productionError` / `productionErrorSource`** → **delegate loop `updateField` per id** → bulk hành xử GIỐNG HỆT sửa từng cell:
+  - `productionError` = "Thiếu file để in" cho N đơn → cột "Note kq Tool" tự thành **"lỗi"**, cột "Loại lỗi" tự thành **"do soát tool"**, cả N đơn đẩy về Support.
+  - `productionError` loại designer → fire rework-back designer (trước đây bulk bỏ sót).
+  - `toolResultNote`='ok' → readyForFulfill + entry fulfillment/clear stage + toolCheckedAt đúng per-đơn.
+  - `assignee` + các field thuần config (printStatus, fabricType, máy…) giữ path `updateMany` nhanh (không có side-effect / assignee có dialog riêng).
 - **Filter tab In** (`applyFulfillmentStatusFilter` — bảng In `PrintOrderTable`): `waiting` loại trừ `$nor:[{source:'tool-check', note:'error'}]`; `watching` thêm `$or:{source:'tool-check', note:'error'}`. Mirror trong `FulfillmentTaskService.applyTabFilter` (kanban, tab watching — `waiting` đã tự loại nhờ `readyForFulfill:true`).
 - **Stats** (`DesignerStatsService.getToolCheckOverview`): 1 `countDocuments` + 2 `find` (rework/unreviewed, cap 500) + 3 `aggregate` (byProduct với `$max productConfigId` join mockup/level, byCustomer, userSku×code) song song. Loại đơn xoá/hủy bằng `{ deletedAt: null, cancelledAt: null }`. Label loại lỗi resolve từ `workshop_config` (category production_error).
 - **Seed** (`workshop-config.seed.ts` + `WorkshopConfigService.onModuleInit`): tạo `tool-missing-file` idempotent khi boot.

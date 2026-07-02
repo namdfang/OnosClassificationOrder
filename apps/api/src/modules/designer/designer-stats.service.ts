@@ -1041,8 +1041,11 @@ export class DesignerStatsService {
       mockupUrl: 1,
       mockupOriginalUrl: 1,
       toolResultNote: 1,
+      errorFile: 1,
+      errorFileNote: 1,
       productionError: 1,
       productionErrorNote: 1,
+      productionErrorCount: 1,
       inProductionAt: 1,
     };
 
@@ -1099,8 +1102,11 @@ export class DesignerStatsService {
       mockupUrl: o.mockupUrl as string | undefined,
       mockupOriginalUrl: o.mockupOriginalUrl as string | undefined,
       toolResultNote: o.toolResultNote as string | undefined,
+      errorFile: Array.isArray(o.errorFile) ? (o.errorFile as string[]) : undefined,
+      errorFileNote: o.errorFileNote as string | undefined,
       productionError: o.productionError as string | undefined,
       productionErrorNote: o.productionErrorNote as string | undefined,
+      productionErrorCount: o.productionErrorCount as number | undefined,
       inProductionAt: o.inProductionAt
         ? new Date(o.inProductionAt as Date).toISOString()
         : undefined,

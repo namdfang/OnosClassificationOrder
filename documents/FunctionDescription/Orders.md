@@ -263,7 +263,7 @@ Sau import (hoặc khi đổi date), `ImportOrderTab` gọi endpoint này để 
   productionErrorNote?: string;// free text mô tả chi tiết lỗi
   productionErrorSource?: 'designer' | 'factory'; // index. Auto-fill từ workshop_config.errorSource khi user set productionError; user override được. 'other' bắt buộc user pick (BE 400 nếu thiếu).
   productionErrorCount: number;// default 0. $inc mỗi lần xưởng set productionError (cumulative, không reset). FE hiển thị "Lỗi ×N" trên cell toolResultNote khi count ≥ 2.
-  productionFirstErrorAt?: Date; // index. Set khi `productionError` chuyển null→value (và field chưa có giá trị) → mốc bắt đầu "đang chờ xử lý lỗi" của cycle hiện tại. Clear (=null) khi đơn rời tab "Nhật ký bù lỗi": `toolResultNote='ok'` HOẶC `productionError` được clear. Dùng cho sort + tính mức độ khẩn cấp (24h/48h/72h).
+  productionFirstErrorAt?: Date; // index. Set khi `productionError` chuyển null→value (và field chưa có giá trị) → mốc bắt đầu "đang chờ xử lý lỗi" của cycle hiện tại. Clear (=null) khi đơn rời tab "Nhật ký bù lỗi": `toolResultNote='ok'` (qua `updateField`/`bulkUpdateField`/`importRework` **VÀ qua `DesignerTaskService.transition(complete)`** — designer fix rework xong) HOẶC `productionError` được clear. Dùng cho sort + tính mức độ khẩn cấp (24h/48h/72h).
 
   // ─── Designer task workflow (xem DesignerTaskWorkflow.md) ───
   designerStatus: DesignerStatus;   // enum, default unassigned, index

@@ -381,7 +381,7 @@ Cùng pattern designer: `findOneAndUpdate` với filter chứa `expected status`
 | `in-progress` | `currentFulfillmentStage = stage` && `status = in-progress`                                                                                                                                                  |
 | `rework`      | `currentFulfillmentStage = stage` && `status = rework`                                                                                                                                                       |
 | `done`        | `fulfillmentStages.<stage>.completedAt $exists` && (`currentFulfillmentStage != stage` OR `currentFulfillmentStage` null) — đơn user đã hoàn thành stage này VÀ đã rời (auto-advance) HOẶC xong toàn bộ flow |
-| `watching`    | `fulfillmentTimeline.elemMatch({ stage, action: 'rework-back', byUserId: me })` && (`currentFulfillmentStage != stage` OR `designerStatus = 'rework'`)                                                       |
+| `watching`    | `fulfillmentTimeline.elemMatch({ stage, action: 'rework-back', byUserId: me })` && (`currentFulfillmentStage ∈ {stage TRƯỚC stage mình}` OR `designerStatus = 'rework'` OR marker tool-check) — đơn CHƯA quay lại. ⚠️ **KHÔNG dùng `!= stage`**: điều kiện đó còn đúng khi đơn đã quay về + mình làm xong + đẩy TIẾP ra stage sau (currentStage > stage) hoặc hoàn thành hẳn (currentStage=null) → đơn kẹt vĩnh viễn ở "Đang chờ quay lại". Dùng `{$in: FULFILLMENT_STAGES.slice(0, indexOf(stage))}` để chỉ giữ khi đơn thực sự đang ở phía trên. |
 
 Common: `cancelledAt: null` + scope theo `user.factoryId`.
 
