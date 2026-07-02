@@ -14,7 +14,7 @@ export type SelectOption = {
   color?: string;
   icon?: string;
   /** Chỉ workshop_config category=production_error: hiển thị badge cạnh tên trong popover. */
-  errorSource?: 'designer' | 'factory';
+  errorSource?: 'designer' | 'factory' | 'tool-check';
 };
 
 interface Props {

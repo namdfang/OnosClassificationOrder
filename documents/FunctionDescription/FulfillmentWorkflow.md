@@ -110,6 +110,10 @@ Worker KHÔNG bắt buộc dùng nút "Báo lỗi": chọn cell **"Lỗi xưởn
 
 Áp dụng ở `OrderService.updateField()` (field `productionError` / `productionErrorSource`) + `OrderService.setProductionError()` (scan + dialog "Lỗi khác") qua helper chung `buildDesignerReworkBackFromError()`. Kích hoạt khi `errorSource='designer'` + `canReworkBackToDesigner` + có user context; đơn chưa vào pipeline thì tự khởi tạo stage Print (xem callout "Vị trí stage" trên). **Áp cho mọi stage** (print trở đi), cả PrintOrderTable (chip watching/rework) lẫn kanban (tab watching/rework).
 
+#### 2.3c Báo lỗi "do Soát tool" (`errorSource='tool-check'`) — đẩy về Support
+
+Song song 2.3b nhưng target = **Support** (không phải designer): In chọn "Lỗi xưởng" loại `tool-check` (vd "Thiếu file để in") → cùng helper `buildDesignerReworkBackFromError(..., target='tool-check')` + gate `canReworkBackToSupport()`. **KHÔNG** đụng `designerStatus`; marker hold = `productionErrorSource='tool-check' AND toolResultNote='error'`. Đơn nằm tab **"Đang chờ quay lại"** của In (filter `applyFulfillmentStatusFilter`/`applyTabFilter` watching thêm điều kiện marker; waiting loại trừ marker). Support đổi Note kq Tool → 'ok' → marker mất → đơn về "Đang chờ" active của In. Chi tiết: [`ToolCheckWorkflow.md`](ToolCheckWorkflow.md).
+
 **Ví dụ:** May xuất ra (`sew-out`) báo lỗi đẩy về In (`print`):
 
 - `currentFulfillmentStage` chuyển từ `sew-out` → `print`.
@@ -377,7 +381,7 @@ Cùng pattern designer: `findOneAndUpdate` với filter chứa `expected status`
 | `in-progress` | `currentFulfillmentStage = stage` && `status = in-progress`                                                                                                                                                  |
 | `rework`      | `currentFulfillmentStage = stage` && `status = rework`                                                                                                                                                       |
 | `done`        | `fulfillmentStages.<stage>.completedAt $exists` && (`currentFulfillmentStage != stage` OR `currentFulfillmentStage` null) — đơn user đã hoàn thành stage này VÀ đã rời (auto-advance) HOẶC xong toàn bộ flow |
-| `watching`    | `fulfillmentTimeline.elemMatch({ stage, action: 'rework-back', byUserId: me })` && (`currentFulfillmentStage != stage` OR `designerStatus = 'rework'`)                                                       |
+| `watching`    | `fulfillmentTimeline.elemMatch({ stage, action: 'rework-back', byUserId: me })` && (`currentFulfillmentStage ∈ {stage TRƯỚC stage mình}` OR `designerStatus = 'rework'` OR marker tool-check) — đơn CHƯA quay lại. ⚠️ **KHÔNG dùng `!= stage`**: điều kiện đó còn đúng khi đơn đã quay về + mình làm xong + đẩy TIẾP ra stage sau (currentStage > stage) hoặc hoàn thành hẳn (currentStage=null) → đơn kẹt vĩnh viễn ở "Đang chờ quay lại". Dùng `{$in: FULFILLMENT_STAGES.slice(0, indexOf(stage))}` để chỉ giữ khi đơn thực sự đang ở phía trên. |
 
 Common: `cancelledAt: null` + scope theo `user.factoryId`.
 

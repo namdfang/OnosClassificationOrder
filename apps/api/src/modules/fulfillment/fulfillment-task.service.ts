@@ -579,11 +579,18 @@ export class FulfillmentTaskService {
             { currentFulfillmentStage: { $in: [null, undefined] } },
           ],
         });
-      case 'watching':
+      case 'watching': {
         // Đơn worker (userId) đã từng rework-back, đang chờ quay lại.
         // Match: timeline có entry stage=mineStage + action=rework-back + byUserId=userId
-        // VÀ currentFulfillmentStage != stage mine (đang ở stage trước) HOẶC
-        // designerStatus = rework. Merge $or giữ scope factory (xem comment 'done').
+        // VÀ đơn đang ở stage TRƯỚC stage mình (đang được xử lý lại phía trên,
+        // CHƯA quay về mình) HOẶC designerStatus=rework (designer đang sửa).
+        //
+        // ⚠️ Trước đây dùng `currentFulfillmentStage != stage` — SAI: điều kiện
+        // này đúng cả khi đơn ĐÃ quay về + mình làm xong + đẩy TIẾP ra stage sau
+        // (currentStage > stage) → đơn kẹt vĩnh viễn ở "Đang chờ quay lại" (kể cả
+        // khi đơn hoàn thành hẳn, currentStage=null vẫn != stage). Dùng "$in các
+        // stage trước" để chỉ giữ khi đơn thực sự chưa quay lại.
+        const earlierStages = FULFILLMENT_STAGES.slice(0, FULFILLMENT_STAGES.indexOf(stage));
         return mergeWithFactoryOr(base, {
           fulfillmentTimeline: {
             $elemMatch: {
@@ -593,10 +600,13 @@ export class FulfillmentTaskService {
             },
           },
           $or: [
-            { currentFulfillmentStage: { $ne: stage } },
+            { currentFulfillmentStage: { $in: earlierStages } },
             { designerStatus: 'rework' },
+            // Đơn tool-check đang chờ support soát lại (In báo "Thiếu file để in").
+            { productionErrorSource: 'tool-check', toolResultNote: 'error' },
           ],
         });
+      }
       case 'unassigned':
         // Đơn đã ready (toolResultNote='ok') nhưng CHƯA vào fulfillment
         // pipeline (currentFulfillmentStage null) — đơn skip Designer hoặc

@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react';
-import { BarChart3, ClipboardList, Factory, Palette, Workflow } from 'lucide-react';
+import { BarChart3, ClipboardList, Factory, FileSearch, Palette, Workflow } from 'lucide-react';
 import { useSearchParams } from 'react-router-dom';
 
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
@@ -10,9 +10,10 @@ import LifecycleTab from './LifecycleTab';
 import OrderFactoryTab from './OrderFactoryTab';
 import OrderStatsTab from './OrderStatsTab';
 import OrderStatusTab from './OrderStatusTab';
+import ToolCheckTab from './ToolCheckTab';
 import { SendTelegramReportButton } from './SendTelegramReportButton';
 
-const TABS = ['factory', 'stats', 'status', 'lifecycle', 'designer'] as const;
+const TABS = ['factory', 'stats', 'status', 'lifecycle', 'tool-check', 'designer'] as const;
 type TabKey = (typeof TABS)[number];
 
 export default function Home() {
@@ -21,7 +22,10 @@ export default function Home() {
   const canSeeDesigner = has('page.designer_stats');
   // Tab "Vòng đời đơn" chỉ dành cho Admin/SuperAdmin.
   const canSeeLifecycle = isAdmin;
-  const isTabAllowed = (t: TabKey) => (t === 'lifecycle' ? canSeeLifecycle : true);
+  // Tab "Soát tool" chỉ Support + Admin.
+  const canSeeToolCheck = isAdmin || has('page.tool_check');
+  const isTabAllowed = (t: TabKey) =>
+    t === 'lifecycle' ? canSeeLifecycle : t === 'tool-check' ? canSeeToolCheck : true;
   const initial = (searchParams.get('tab') as TabKey) || 'factory';
   const [activeTab, setActiveTab] = useState<TabKey>(
     TABS.includes(initial) && isTabAllowed(initial) ? initial : 'stats',
@@ -91,6 +95,11 @@ export default function Home() {
               <Workflow size={14} /> Vòng đời đơn
             </TabsTrigger>
           )}
+          {canSeeToolCheck && (
+            <TabsTrigger value="tool-check" className="gap-1.5">
+              <FileSearch size={14} /> Soát tool
+            </TabsTrigger>
+          )}
           {canSeeDesigner && (
             <TabsTrigger value="designer" className="gap-1.5">
               <Palette size={14} /> Designer
@@ -110,6 +119,11 @@ export default function Home() {
         {canSeeLifecycle && (
           <TabsContent value="lifecycle">
             <LifecycleTab />
+          </TabsContent>
+        )}
+        {canSeeToolCheck && (
+          <TabsContent value="tool-check">
+            <ToolCheckTab />
           </TabsContent>
         )}
         {canSeeDesigner && (

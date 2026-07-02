@@ -669,7 +669,7 @@ export class GetDesignerTimelineResDto extends createZodDto(
 export const ErrorStatsCodeZod = z.object({
   code: z.string(),
   label: z.string().optional(),
-  errorSource: z.enum(['designer', 'factory']).optional(),
+  errorSource: z.enum(['designer', 'factory', 'tool-check']).optional(),
   count: z.number().int().nonnegative(),
 });
 export type ErrorStatsCode = z.infer<typeof ErrorStatsCodeZod>;

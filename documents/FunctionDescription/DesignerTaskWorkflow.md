@@ -145,6 +145,7 @@ Login Designer → auto redirect `/my-tasks` (xem `pages/login/index.tsx`).
 1. Fulfillment vào `/orders` workshop → cell "Lỗi xưởng" (`ProductionErrorSelectCell`) pick code:
    - Code thường (vd `wrong-design`): `updateField('productionError', code)` → hook BE auto-fill `productionErrorSource` từ `workshop_config.errorSource`, set `toolResultNote='error'`, `$inc productionErrorCount`. Nếu source=designer + status=done → auto `designerStatus='rework'` + `$inc designerReworkCount`. **Nếu đơn đang trong pipeline fulfillment** (`currentFulfillmentStage` set) → đồng thời mirror rework-back về designer (reporter stage→waiting + push `fulfillmentTimeline` rework-back) để worker thấy đơn ở tab "Đang chờ quay lại" rồi "Cần làm lại" sau khi designer xong — xem `FulfillmentWorkflow.md` §2.3b.
    - Code `'other'`: mở `ProductionErrorOtherDialog` bắt buộc pick source + nhập note → `POST /orders/:id/set-production-error` atomic (BE validate 400 nếu thiếu)
+   - Code có `errorSource='tool-check'` (vd "Thiếu file để in"): KHÔNG đụng designer — đẩy về **Support** (soát tool). Xem `ToolCheckWorkflow.md`.
 2. Designer thấy đơn trong cột "Cần làm lại" với badge ×N + productionErrorNote
 3. Designer drag → "Đang làm" (action=`restart` — reset `designerStartedAt`, giữ `designerFirstStartedAt` + `designerWorkMs` cumulative)
 4. Designer drag → "Đã xong" (action=`complete` — `$inc designerWorkMs += (now − startedAt)`, set `toolResultNote='ok'`, `readyForFulfill=true`). Counter `productionErrorCount` không reset
@@ -231,7 +232,7 @@ factoryId?: string                // ref FactoryEntity, REQUIRED khi role=Fulfil
 | `in-progress`/`done`/`rework` → updateField assignee | (block) | — | 409 ConflictException |
 | `assigned` | `start` | `in-progress` | designerStartedAt=now; if isFirstStart → designerFirstStartedAt=now |
 | `rework` | `restart` | `in-progress` | designerStartedAt=now (reset per-cycle) |
-| `in-progress` | `complete` | `done` | designerCompletedAt=now; toolResultNote='ok'; readyForFulfill=true; `$inc designerWorkMs += (now − startedAt)` |
+| `in-progress` | `complete` | `done` | designerCompletedAt=now; toolResultNote='ok'; readyForFulfill=true; **`productionFirstErrorAt=null`** (đơn rời "Nhật ký bù lỗi" — mirror path `updateField(toolResultNote='ok')`; trước đây state-machine bỏ sót nên đơn rework fix xong vẫn kẹt trong error log); `$inc designerWorkMs += (now − startedAt)` |
 | `assigned` **hoặc** `in-progress` | `reject` | `rejected` | designerRejectedAt=now; designerRejectedReason=reason. FE: nút "Trả" hiện ở cả cột Cần làm + Đang làm; bulk reject cho cột Đang làm |
 | `done`/`unassigned`/`rejected` → updateField productionError (errorSource=designer) | (auto) | `rework` | designerReworkAt=now; `$inc designerReworkCount`. Đồng thời rework-back về designer + tạo/giữ stage fulfillment → tab "Đang chờ quay lại" (xem `FulfillmentWorkflow.md` §5.4b). Skip khi `rework`/`in-progress`/`assigned` (gate `canReworkBackToDesigner`) |
 | `done`/`unassigned`/`rejected` → updateField productionErrorSource → 'designer' | (auto) | `rework` | Same as above |

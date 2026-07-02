@@ -52,7 +52,7 @@ export type WorkshopOrderRow = {
   machineNumber?: string;
   productionError?: string;
   productionErrorNote?: string;
-  productionErrorSource?: 'designer' | 'factory';
+  productionErrorSource?: 'designer' | 'factory' | 'tool-check';
   productionErrorCount?: number;
 
   // Phase 3 Designer-Task-Workflow

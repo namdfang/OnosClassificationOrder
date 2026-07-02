@@ -8,17 +8,26 @@ import { handleAxiosError } from '@/utils';
 
 import { SelectPopover } from './SelectPopover';
 
+type ErrSource = 'designer' | 'factory' | 'tool-check';
+
 interface Props {
   orderId: string;
-  value?: 'designer' | 'factory' | null;
+  value?: ErrSource | null;
   canEdit: boolean;
-  onUpdated?: (v: 'designer' | 'factory' | null) => void;
+  onUpdated?: (v: ErrSource | null) => void;
 }
 
 const OPTIONS = [
   { _id: 'designer', code: 'designer', name: 'Do designer', color: '#7C3AED' },
   { _id: 'factory', code: 'factory', name: 'Do xưởng', color: '#0EA5E9' },
+  { _id: 'tool-check', code: 'tool-check', name: 'Do soát tool', color: '#F59E0B' },
 ];
+
+const SOURCE_LABEL: Record<ErrSource, string> = {
+  designer: 'Do designer',
+  factory: 'Do xưởng',
+  'tool-check': 'Do soát tool',
+};
 
 /**
  * Cell pick errorSource cho 1 đơn. Auto-fill từ workshop_config khi user set
@@ -35,8 +44,8 @@ export function ErrorSourceCell({ orderId, value, canEdit, onUpdated }: Props) {
         field: 'productionErrorSource',
         value: newVal,
       });
-      toast.success(newVal ? `Đã đổi → ${newVal === 'designer' ? 'Do designer' : 'Do xưởng'}` : 'Đã bỏ chọn');
-      onUpdated?.(newVal as 'designer' | 'factory' | null);
+      toast.success(newVal ? `Đã đổi → ${SOURCE_LABEL[newVal as ErrSource] ?? newVal}` : 'Đã bỏ chọn');
+      onUpdated?.(newVal as ErrSource | null);
     } catch (err) {
       handleAxiosError(err);
     } finally {
@@ -48,7 +57,9 @@ export function ErrorSourceCell({ orderId, value, canEdit, onUpdated }: Props) {
     ? { label: 'Do designer', cls: 'bg-violet-100 text-violet-700 dark:bg-violet-500/20 dark:text-violet-300' }
     : value === 'factory'
       ? { label: 'Do xưởng', cls: 'bg-sky-100 text-sky-700 dark:bg-sky-500/20 dark:text-sky-300' }
-      : null;
+      : value === 'tool-check'
+        ? { label: 'Do soát tool', cls: 'bg-amber-100 text-amber-700 dark:bg-amber-500/20 dark:text-amber-300' }
+        : null;
 
   const trigger = (
     <span

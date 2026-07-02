@@ -215,7 +215,7 @@ export const ProductionOrderZod = BaseEntityZod.extend({
    * workshop_config.errorSource khi user set productionError. User có thể
    * override khi cần (vd. "Lỗi khác" — ambiguous code).
    */
-  productionErrorSource: z.enum(['designer', 'factory']).optional(),
+  productionErrorSource: z.enum(['designer', 'factory', 'tool-check']).optional(),
   /**
    * Đếm số lần xưởng đã set productionError trên đơn này. $inc mỗi lần
    * updateField('productionError', non-null) hoặc setProductionError. Dùng để
@@ -1452,3 +1452,84 @@ export const ApplyCuttingFilesResZod = ResZod.extend({
   }),
 });
 export class ApplyCuttingFilesResDto extends createZodDto(extendApi(ApplyCuttingFilesResZod)) {}
+
+// ─── Tool-check overview (Dashboard tab Soát tool — Support/Admin) ─────
+// Danh sách đơn support cần xử lý (2 nhóm) + thống kê soát/lỗi theo sản phẩm
+// và khách hàng (userSku). Xem `documents/FunctionDescription/ToolCheckWorkflow.md`.
+
+export const GetToolCheckOverviewZod = z.object({
+  days: z.enum(['7', '14', '30']).default('7'),
+  /** Khoảng tùy biến (YYYY-MM-DD, VN) — nếu truyền cả 2 thì dùng thay `days`. */
+  from: z.string().optional(),
+  to: z.string().optional(),
+  /** Lọc theo sản phẩm (`order.type`). */
+  type: z.string().optional(),
+  /** Lọc theo khách hàng (`order.userSku`). */
+  customer: z.string().optional(),
+});
+export class GetToolCheckOverviewDto extends createZodDto(extendApi(GetToolCheckOverviewZod)) {}
+
+/** 1 đơn trong danh sách Soát tool — Support edit trực tiếp Note kq Tool /
+ *  File sửa lỗi / Ghi chú file lỗi (mirror bảng đơn theo xưởng). */
+export const ToolCheckOrderZod = z.object({
+  _id: z.string(),
+  productionId: z.string(),
+  userSku: z.string().optional(),
+  type: z.string().optional(),
+  size: z.string().optional(),
+  color: z.string().optional(),
+  mockupUrl: z.string().optional(),
+  mockupOriginalUrl: z.string().optional(),
+  toolResultNote: z.string().optional(),
+  errorFile: z.string().array().optional(),
+  errorFileNote: z.string().optional(),
+  productionError: z.string().optional(),
+  productionErrorNote: z.string().optional(),
+  productionErrorCount: z.number().int().nonnegative().optional(),
+  inProductionAt: z.string().optional(),
+});
+export type ToolCheckOrder = z.infer<typeof ToolCheckOrderZod>;
+
+/** Lỗi theo sản phẩm (join productConfig để lấy mockup/level). */
+export const ToolCheckProductStatZod = z.object({
+  type: z.string(),
+  fullName: z.string().optional(),
+  mockup: z.string().optional(),
+  level: z.number().int().optional(),
+  count: z.number().int().nonnegative(),
+});
+export type ToolCheckProductStat = z.infer<typeof ToolCheckProductStatZod>;
+
+/** Lỗi theo khách hàng (userSku). */
+export const ToolCheckCustomerStatZod = z.object({
+  userSku: z.string(),
+  count: z.number().int().nonnegative(),
+});
+export type ToolCheckCustomerStat = z.infer<typeof ToolCheckCustomerStatZod>;
+
+/** Khách hàng × loại lỗi hay gặp nhất. */
+export const ToolCheckCustomerErrorZod = z.object({
+  userSku: z.string(),
+  code: z.string(),
+  label: z.string().optional(),
+  count: z.number().int().nonnegative(),
+});
+export type ToolCheckCustomerError = z.infer<typeof ToolCheckCustomerErrorZod>;
+
+export const ToolCheckOverviewResZod = ResZod.extend({
+  data: z.object({
+    /** Số đơn đã soát (toolCheckedAt ∈ kỳ). */
+    checkedCount: z.number().int().nonnegative(),
+    /** Số đơn đang cần làm lại (In trả về, source=tool-check, note=error). */
+    errorCount: z.number().int().nonnegative(),
+    /** Đơn In trả về "do soát tool" (ưu tiên). */
+    reworkList: ToolCheckOrderZod.array(),
+    /** Đơn chưa soát (toolResultNote rỗng) — backlog. */
+    unreviewedList: ToolCheckOrderZod.array(),
+    byProduct: ToolCheckProductStatZod.array(),
+    byCustomer: ToolCheckCustomerStatZod.array(),
+    topCustomerError: ToolCheckCustomerErrorZod.array(),
+    rangeDays: z.number().int().positive(),
+  }),
+});
+export class ToolCheckOverviewResDto extends createZodDto(extendApi(ToolCheckOverviewResZod)) {}

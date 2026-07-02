@@ -18,6 +18,8 @@ import {
   GetErrorStatsResDto,
   GetTeamDailyBreakdownDto,
   GetTeamDailyBreakdownResDto,
+  GetToolCheckOverviewDto,
+  ToolCheckOverviewResDto,
   RoleType,
 } from 'shared';
 import { Logger } from 'winston';
@@ -35,6 +37,15 @@ const LEADER_ROLES = [
   RoleType.Manager,
   RoleType.DesignerLeader,
   RoleType.Designer,
+];
+
+// Tab "Soát tool" — chỉ Support + quản lý/admin (không phải designer).
+const TOOL_CHECK_ROLES = [
+  RoleType.SuperAdmin,
+  RoleType.Admin,
+  RoleType.Manager,
+  RoleType.SupportManager,
+  RoleType.Support,
 ];
 
 @Controller()
@@ -208,6 +219,35 @@ export class DesignerStatsController {
       }),
     });
     const data = await this.statsService.getProductBreakdown(
+      Number(query.days),
+      query.type,
+      query.customer,
+      query.from,
+      query.to,
+    );
+    return { success: true, data };
+  }
+
+  @Get('designer/tool-check-overview')
+  @Auth(TOOL_CHECK_ROLES)
+  @ApiOperation({
+    summary: 'Tab Soát tool (Support/Admin): đơn In trả về + đơn chưa soát + thống kê lỗi theo sản phẩm/khách.',
+  })
+  @HttpCode(HttpStatus.OK)
+  @ApiOkResponse({ type: ToolCheckOverviewResDto })
+  async getToolCheckOverview(
+    @Query() query: GetToolCheckOverviewDto,
+    @AuthUser() user: UserDocument,
+  ): Promise<ToolCheckOverviewResDto> {
+    this.logger.info({
+      message: JSON.stringify({
+        method: 'GET',
+        url: '/designer/tool-check-overview',
+        userId: user._id,
+        days: query.days,
+      }),
+    });
+    const data = await this.statsService.getToolCheckOverview(
       Number(query.days),
       query.type,
       query.customer,

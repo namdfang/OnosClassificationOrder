@@ -16,7 +16,7 @@ const HexColorZod = z
  * `production_error`). `'designer'` → khi xưởng set error này, đơn auto chuyển
  * `designerStatus='rework'`; `'factory'` → chỉ ghi nhận stats, không trigger rework.
  */
-export const ErrorSourceZod = z.enum(['designer', 'factory']);
+export const ErrorSourceZod = z.enum(['designer', 'factory', 'tool-check']);
 export type ErrorSource = z.infer<typeof ErrorSourceZod>;
 
 export const WorkshopConfigZod = BaseEntityZod.extend({

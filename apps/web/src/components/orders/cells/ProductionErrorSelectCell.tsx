@@ -16,14 +16,14 @@ interface Props {
   category: WorkshopConfigCategory;
   value?: string | null;
   /** Nguồn lỗi hiện tại (pre-fill khi mở dialog "Lỗi khác" lại). */
-  errorSourceValue?: 'designer' | 'factory';
+  errorSourceValue?: 'designer' | 'factory' | 'tool-check';
   /** Note hiện tại (pre-fill dialog). */
   errorNoteValue?: string;
   canEdit: boolean;
   /** Callback patch row sau khi chọn — caller cần update cả 3 field nếu là 'other'. */
   onUpdated?: (
     code: string | null,
-    source?: 'designer' | 'factory',
+    source?: 'designer' | 'factory' | 'tool-check',
     note?: string,
   ) => void;
 }
@@ -117,6 +117,11 @@ export function ProductionErrorSelectCell({
             {it.errorSource === 'factory' && (
               <span className="text-[9px] font-semibold px-1.5 py-0.5 rounded bg-sky-100 text-sky-700 dark:bg-sky-500/20 dark:text-sky-300">
                 XƯỞNG
+              </span>
+            )}
+            {it.errorSource === 'tool-check' && (
+              <span className="text-[9px] font-semibold px-1.5 py-0.5 rounded bg-amber-100 text-amber-700 dark:bg-amber-500/20 dark:text-amber-300">
+                SOÁT TOOL
               </span>
             )}
             {it.code === OTHER_CODE && (

@@ -233,6 +233,11 @@ export class DesignerTaskService {
               designerCompletedAt: now,
               toolResultNote: READY_FOR_FULFILL_CODE,
               readyForFulfill: true,
+              // Designer đã sửa xong lỗi → đơn rời "Nhật ký bù lỗi". Mirror hành
+              // vi của `OrderService.updateField(toolResultNote='ok')` (chỉ path
+              // đó clear, còn state-machine designer trước đây bỏ sót → đơn kẹt
+              // lại trong error log dù đã fix).
+              productionFirstErrorAt: null,
             },
             ...(delta > 0 ? { $inc: { designerWorkMs: delta } } : {}),
           },

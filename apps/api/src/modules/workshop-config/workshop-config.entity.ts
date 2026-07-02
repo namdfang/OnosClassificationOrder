@@ -28,11 +28,12 @@ export class WorkshopConfigEntity extends DatabaseEntityAbstract {
 
   /**
    * Chỉ dùng cho category=production_error.
-   * - `'designer'` → khi xưởng set lỗi này, đơn auto chuyển designerStatus='rework'.
-   * - `'factory'`  → chỉ ghi stats, không trigger rework.
+   * - `'designer'`   → khi xưởng set lỗi này, đơn auto chuyển designerStatus='rework'.
+   * - `'factory'`    → chỉ ghi stats, không trigger rework.
+   * - `'tool-check'` → đẩy về Support (soát tool), vd "Thiếu file để in".
    */
-  @Prop({ type: String, enum: ['designer', 'factory'] })
-  errorSource?: 'designer' | 'factory';
+  @Prop({ type: String, enum: ['designer', 'factory', 'tool-check'] })
+  errorSource?: 'designer' | 'factory' | 'tool-check';
 }
 
 export const WorkshopConfigSchema = SchemaFactory.createForClass(WorkshopConfigEntity);
