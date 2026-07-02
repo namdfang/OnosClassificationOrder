@@ -14,8 +14,10 @@ import {
 import { ApiOkResponse, ApiOperation, ApiTags } from '@nestjs/swagger';
 import { AuthUser } from 'core';
 import {
+  FulfillmentDailyOverviewResDto,
   FulfillmentTransitionDto,
   FulfillmentTransitionResDto,
+  GetFulfillmentDailyOverviewDto,
   GetFulfillmentMyTasksDto,
   GetFulfillmentMyTasksResDto,
   RoleType,
@@ -99,5 +101,31 @@ export class FulfillmentTaskController {
       size: result.size,
       tabCounts: result.tabCounts,
     } as unknown as GetFulfillmentMyTasksResDto;
+  }
+
+  @Get('fulfillment/daily-overview')
+  @Auth(TRANSITION_ROLES)
+  @ApiOperation({ summary: 'Bảng tổng quan theo ngày (Đến/Đã làm/Còn lại/Lỗi) cho stage của tôi.' })
+  @HttpCode(HttpStatus.OK)
+  @ApiOkResponse({ type: FulfillmentDailyOverviewResDto })
+  async getDailyOverview(
+    @Query() query: GetFulfillmentDailyOverviewDto,
+    @AuthUser() user: UserDocument,
+  ): Promise<FulfillmentDailyOverviewResDto> {
+    this.logger.info({
+      message: JSON.stringify({
+        method: 'GET',
+        url: '/fulfillment/daily-overview',
+        userId: user._id,
+        days: query.days,
+      }),
+    });
+    const data = await this.taskService.getDailyOverview(user, {
+      days: Number(query.days),
+      from: query.from,
+      to: query.to,
+      stage: query.stage,
+    });
+    return { success: true, data } as unknown as FulfillmentDailyOverviewResDto;
   }
 }

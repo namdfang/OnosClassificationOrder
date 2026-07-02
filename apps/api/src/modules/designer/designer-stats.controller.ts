@@ -253,6 +253,7 @@ export class DesignerStatsController {
       query.customer,
       query.from,
       query.to,
+      query.machineNumber,
     );
     return { success: true, data };
   }

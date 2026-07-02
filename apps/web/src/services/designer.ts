@@ -187,7 +187,14 @@ const productBreakdown = (
 };
 
 const toolCheckOverview = (
-  params: { days?: 7 | 14 | 30; from?: string; to?: string; type?: string; customer?: string } = {},
+  params: {
+    days?: 7 | 14 | 30;
+    from?: string;
+    to?: string;
+    type?: string;
+    customer?: string;
+    machineNumber?: string;
+  } = {},
 ) => {
   const qs = new URLSearchParams();
   qs.set('days', String(params.days || 7));
@@ -195,6 +202,7 @@ const toolCheckOverview = (
   if (params.to) qs.set('to', params.to);
   if (params.type) qs.set('type', params.type);
   if (params.customer) qs.set('customer', params.customer);
+  if (params.machineNumber) qs.set('machineNumber', params.machineNumber);
   return callApi(`/${CONFIG.API_VERSION}/designer/tool-check-overview?${qs.toString()}`, 'get');
 };
 

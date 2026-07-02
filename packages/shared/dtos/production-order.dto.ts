@@ -1169,6 +1169,53 @@ export const GetFulfillmentMyTasksZod = PageQueryZod.extend({
 });
 export class GetFulfillmentMyTasksDto extends createZodDto(extendApi(GetFulfillmentMyTasksZod)) {}
 
+// ─── Fulfillment daily overview (bảng tổng quan theo ngày per-stage) ─────────
+export const GetFulfillmentDailyOverviewZod = z.object({
+  days: z.enum(['7', '14', '30']).default('7'),
+  /** Khoảng tùy biến (YYYY-MM-DD, VN) — nếu truyền cả 2 thì dùng thay `days`. */
+  from: z.string().optional(),
+  to: z.string().optional(),
+  /** Override stage (Manager/Admin). Worker suy từ `user.fulfillmentStage`. */
+  stage: FulfillmentStageZod.optional(),
+});
+export class GetFulfillmentDailyOverviewDto extends createZodDto(
+  extendApi(GetFulfillmentDailyOverviewZod),
+) {}
+
+/**
+ * 1 ngày trong bảng tổng quan stage Fulfillment. Gom theo `inProductionAt` (VN),
+ * phân loại theo `fulfillmentStages.<stage>.status` HIỆN TẠI:
+ *   arrived   = mọi đơn cohort đã tới stage này (= done + remaining + rework)
+ *   done      = status 'done' (đã hoàn thành + chuyển tiếp)
+ *   remaining = status waiting/in-progress (còn phải làm)
+ *   rework    = status 'rework' (stage sau đẩy về, lỗi cần sửa)
+ */
+export const FulfillmentDailyRowZod = z.object({
+  day: z.string(),
+  arrived: z.number().int().nonnegative(),
+  done: z.number().int().nonnegative(),
+  remaining: z.number().int().nonnegative(),
+  rework: z.number().int().nonnegative(),
+});
+export type FulfillmentDailyRow = z.infer<typeof FulfillmentDailyRowZod>;
+
+export const FulfillmentDailyOverviewResZod = ResZod.extend({
+  data: z.object({
+    /** Cột ngày (mới→cũ; FE reverse để cũ→mới). */
+    days: FulfillmentDailyRowZod.array(),
+    columnTotals: z.object({
+      arrived: z.number().int().nonnegative(),
+      done: z.number().int().nonnegative(),
+      remaining: z.number().int().nonnegative(),
+      rework: z.number().int().nonnegative(),
+    }),
+    rangeDays: z.number().int().nonnegative(),
+  }),
+});
+export class FulfillmentDailyOverviewResDto extends createZodDto(
+  extendApi(FulfillmentDailyOverviewResZod),
+) {}
+
 export const GetFulfillmentMyTasksResZod = PageResZod.extend({
   data: ProductionOrderZod.array(),
   /** Tab counters (6 tab) — bỏ qua pagination. `unassigned` = 0 với worker
@@ -1504,6 +1551,8 @@ export const GetToolCheckOverviewZod = z.object({
   type: z.string().optional(),
   /** Lọc theo khách hàng (`order.userSku`). */
   customer: z.string().optional(),
+  /** Lọc theo máy (`order.machineNumber`). */
+  machineNumber: z.string().optional(),
 });
 export class GetToolCheckOverviewDto extends createZodDto(extendApi(GetToolCheckOverviewZod)) {}
 
@@ -1524,9 +1573,27 @@ export const ToolCheckOrderZod = z.object({
   productionError: z.string().optional(),
   productionErrorNote: z.string().optional(),
   productionErrorCount: z.number().int().nonnegative().optional(),
+  machineNumber: z.string().optional(),
   inProductionAt: z.string().optional(),
 });
 export type ToolCheckOrder = z.infer<typeof ToolCheckOrderZod>;
+
+/** 1 ngày trong dải "tổng quan theo ngày" của tab Soát tool. */
+export const ToolCheckDayRowZod = z.object({
+  day: z.string(),
+  /** Đơn chưa soát (toolResultNote rỗng) vào SX ngày đó. */
+  unreviewed: z.number().int().nonnegative(),
+  /** Đơn In trả về (source=tool-check + note=error) vào SX ngày đó. */
+  rework: z.number().int().nonnegative(),
+});
+export type ToolCheckDayRow = z.infer<typeof ToolCheckDayRowZod>;
+
+/** 1 option cho dropdown filter (Sản phẩm / Khách / Máy) — value + số đơn. */
+export const ToolCheckFacetZod = z.object({
+  value: z.string(),
+  count: z.number().int().nonnegative(),
+});
+export type ToolCheckFacet = z.infer<typeof ToolCheckFacetZod>;
 
 /** Lỗi theo sản phẩm (join productConfig để lấy mockup/level). */
 export const ToolCheckProductStatZod = z.object({
@@ -1567,6 +1634,19 @@ export const ToolCheckOverviewResZod = ResZod.extend({
     byProduct: ToolCheckProductStatZod.array(),
     byCustomer: ToolCheckCustomerStatZod.array(),
     topCustomerError: ToolCheckCustomerErrorZod.array(),
+    /** Dải theo ngày (mới→cũ; FE reverse để cũ→mới). */
+    days: ToolCheckDayRowZod.array(),
+    /** Tổng cột cho dải ngày. */
+    columnTotals: z.object({
+      unreviewed: z.number().int().nonnegative(),
+      rework: z.number().int().nonnegative(),
+    }),
+    /** Options cho 3 dropdown filter (phạm vi Support trong kỳ, không cross-narrow). */
+    facets: z.object({
+      type: ToolCheckFacetZod.array(),
+      customer: ToolCheckFacetZod.array(),
+      machineNumber: ToolCheckFacetZod.array(),
+    }),
     rangeDays: z.number().int().positive(),
   }),
 });

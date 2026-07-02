@@ -1,7 +1,7 @@
 # Dashboard — Function Description
 
 > **File FE:** `apps/web/src/pages/home/index.tsx` (Tabs wrapper, 6 tab: `stats|status|factory|lifecycle|tool-check|designer`)
-> **Tab "Soát tool" (`tool-check`)** — Support/Admin: đơn In trả về "do soát tool" + backlog chưa soát + thống kê lỗi theo sản phẩm/khách. **Doc riêng:** [`ToolCheckWorkflow.md`](ToolCheckWorkflow.md) (API `GET /v1/designer/tool-check-overview`, perm `page.tool_check`, gate `isAdmin || has('page.tool_check')`).
+> **Tab "Soát tool" (`tool-check`)** — Support/Admin: đơn In trả về "do soát tool" + backlog chưa soát + **dải tổng quan theo ngày (Chưa soát/In trả về, click ngày → lọc list)** + **3 filter Sản phẩm/Khách/Máy** + thống kê lỗi theo sản phẩm/khách. **Doc riêng:** [`ToolCheckWorkflow.md`](ToolCheckWorkflow.md) (API `GET /v1/designer/tool-check-overview`, perm `page.tool_check`, gate `isAdmin || has('page.tool_check')`).
 > **Tab "Vòng đời đơn" (`lifecycle`)** — phễu 9 chặng soát tool→thiết kế→7 stage fulfillment. **MỌI tài khoản** (Fulfillment khóa xưởng). **Doc riêng:** [`OrderLifecycle.md`](OrderLifecycle.md) (API `GET /v1/orders/lifecycle-overview`).
 > **Strip "Vòng đời đơn"** (`LifecycleStrip.tsx`) — 1 dòng gọn trên đầu Dashboard, TRÊN mọi tab, cho mọi tài khoản: mặc định mini-phễu backlog theo ngày; nhập `productionId` → hành trình 1 đơn (API `GET /v1/orders/lifecycle-track/:code`). Xem `OrderLifecycle.md`.
 > **Tab A — Thống kê:** `apps/web/src/pages/home/OrderStatsTab.tsx`

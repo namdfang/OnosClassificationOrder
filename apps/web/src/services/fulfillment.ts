@@ -41,7 +41,19 @@ const myTasks = (
   return callApi(`/${CONFIG.API_VERSION}/fulfillment/my-tasks${suffix}`, 'get');
 };
 
+const dailyOverview = (
+  query: { days?: 7 | 14 | 30; from?: string; to?: string; stage?: FulfillmentStage } = {},
+) => {
+  const qs = new URLSearchParams();
+  qs.set('days', String(query.days || 7));
+  if (query.from) qs.set('from', query.from);
+  if (query.to) qs.set('to', query.to);
+  if (query.stage) qs.set('stage', query.stage);
+  return callApi(`/${CONFIG.API_VERSION}/fulfillment/daily-overview?${qs.toString()}`, 'get');
+};
+
 export const fulfillment = {
   transition,
   myTasks,
+  dailyOverview,
 };
