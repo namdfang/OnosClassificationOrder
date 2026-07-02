@@ -595,6 +595,8 @@ export class FulfillmentTaskService {
           $or: [
             { currentFulfillmentStage: { $ne: stage } },
             { designerStatus: 'rework' },
+            // Đơn tool-check đang chờ support soát lại (In báo "Thiếu file để in").
+            { productionErrorSource: 'tool-check', toolResultNote: 'error' },
           ],
         });
       case 'unassigned':

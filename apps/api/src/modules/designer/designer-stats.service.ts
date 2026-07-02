@@ -8,6 +8,10 @@ import type {
   DesignerTimelineBucket,
   ErrorStats,
   ProductBreakdownDesigner,
+  ToolCheckCustomerError,
+  ToolCheckCustomerStat,
+  ToolCheckOrder,
+  ToolCheckProductStat,
 } from 'shared';
 import { DesignerStatus, RoleType, WorkshopConfigCategory } from 'shared';
 
@@ -970,6 +974,196 @@ export class DesignerStatsService {
       products: d.products.sort((x, y) => y.count - x.count),
     }));
     return { designers };
+  }
+
+  /**
+   * Tổng quan tab "Soát tool" (Support/Admin). Trong cửa sổ ngày (inProductionAt,
+   * tz VN, + filter type/customer):
+   *   - reworkList  : đơn In trả về "do soát tool" (source=tool-check + note=error) — ưu tiên
+   *   - unreviewedList: đơn chưa soát (toolResultNote rỗng) — backlog
+   *   - checkedCount : số đơn đã soát trong kỳ (toolCheckedAt ∈ kỳ)
+   *   - errorCount   : số đơn đang chờ support (= reworkList)
+   *   - byProduct / byCustomer / topCustomerError: thống kê lỗi tool-check (mọi
+   *     đơn source=tool-check trong kỳ, cả đang chờ lẫn đã fix) theo sản phẩm /
+   *     khách hàng (userSku) / khách × loại lỗi.
+   */
+  async getToolCheckOverview(
+    rangeDays: number,
+    type?: string,
+    customer?: string,
+    from?: string,
+    to?: string,
+  ): Promise<{
+    checkedCount: number;
+    errorCount: number;
+    reworkList: ToolCheckOrder[];
+    unreviewedList: ToolCheckOrder[];
+    byProduct: ToolCheckProductStat[];
+    byCustomer: ToolCheckCustomerStat[];
+    topCustomerError: ToolCheckCustomerError[];
+    rangeDays: number;
+  }> {
+    const { start, end, days } = this.resolveVnWindow(rangeDays, from, to);
+    const inWindow = { $gte: start, $lte: end };
+    const withFilters = (m: Record<string, unknown>) => {
+      if (type) m.type = type;
+      if (customer) m.userSku = customer;
+      return m;
+    };
+    // `null` khớp cả giá trị null lẫn field vắng mặt → loại đơn đã xoá/hủy.
+    const alive = { deletedAt: null, cancelledAt: null };
+
+    const checkedMatch = withFilters({ toolCheckedAt: inWindow, ...alive });
+    const reworkMatch = withFilters({
+      inProductionAt: inWindow,
+      productionErrorSource: 'tool-check',
+      toolResultNote: 'error',
+      ...alive,
+    });
+    const unreviewedMatch = withFilters({
+      inProductionAt: inWindow,
+      toolResultNote: { $in: [null, ''] },
+      ...alive,
+    });
+    const errMatch = withFilters({
+      inProductionAt: inWindow,
+      productionErrorSource: 'tool-check',
+      ...alive,
+    });
+
+    const LIST_CAP = 500;
+    const proj = {
+      productionId: 1,
+      userSku: 1,
+      type: 1,
+      size: 1,
+      color: 1,
+      mockupUrl: 1,
+      mockupOriginalUrl: 1,
+      toolResultNote: 1,
+      productionError: 1,
+      productionErrorNote: 1,
+      inProductionAt: 1,
+    };
+
+    const [checkedCount, reworkRaw, unreviewedRaw, byProductAgg, byCustomerAgg, topErrAgg] =
+      await Promise.all([
+        this.orderModel.countDocuments(checkedMatch),
+        this.orderModel.find(reworkMatch, proj).sort({ inProductionAt: -1 }).limit(LIST_CAP).lean(),
+        this.orderModel
+          .find(unreviewedMatch, proj)
+          .sort({ inProductionAt: -1 })
+          .limit(LIST_CAP)
+          .lean(),
+        this.orderModel.aggregate<{ _id: string; count: number; cfg: string | null }>([
+          { $match: errMatch },
+          {
+            $group: {
+              _id: { $ifNull: ['$type', ''] },
+              count: { $sum: 1 },
+              cfg: { $max: '$productConfigId' },
+            },
+          },
+          { $sort: { count: -1 } },
+          { $limit: 50 },
+        ]),
+        this.orderModel.aggregate<{ _id: string; count: number }>([
+          { $match: errMatch },
+          { $group: { _id: { $ifNull: ['$userSku', ''] }, count: { $sum: 1 } } },
+          { $sort: { count: -1 } },
+          { $limit: 50 },
+        ]),
+        this.orderModel.aggregate<{ _id: { sku: string; code: string }; count: number }>([
+          { $match: errMatch },
+          {
+            $group: {
+              _id: {
+                sku: { $ifNull: ['$userSku', ''] },
+                code: { $ifNull: ['$productionError', ''] },
+              },
+              count: { $sum: 1 },
+            },
+          },
+          { $sort: { count: -1 } },
+          { $limit: 50 },
+        ]),
+      ]);
+
+    const toOrder = (o: Record<string, unknown>): ToolCheckOrder => ({
+      _id: String(o._id),
+      productionId: String(o.productionId ?? ''),
+      userSku: o.userSku as string | undefined,
+      type: o.type as string | undefined,
+      size: o.size as string | undefined,
+      color: o.color as string | undefined,
+      mockupUrl: o.mockupUrl as string | undefined,
+      mockupOriginalUrl: o.mockupOriginalUrl as string | undefined,
+      toolResultNote: o.toolResultNote as string | undefined,
+      productionError: o.productionError as string | undefined,
+      productionErrorNote: o.productionErrorNote as string | undefined,
+      inProductionAt: o.inProductionAt
+        ? new Date(o.inProductionAt as Date).toISOString()
+        : undefined,
+    });
+
+    // Resolve mockup/level/fullName cho byProduct (join productConfig qua $max cfg).
+    const cfgIds = [...new Set(byProductAgg.map((a) => a.cfg).filter(Boolean))] as string[];
+    const cfgs = cfgIds.length
+      ? await this.productConfigModel
+          .find({ _id: { $in: cfgIds } }, { fullName: 1, mockup: 1, level: 1 })
+          .lean()
+      : [];
+    const cfgMap = new Map<string, { fullName?: string; mockup?: string; level?: number }>();
+    for (const c of cfgs as Array<Record<string, unknown>>) {
+      cfgMap.set(String(c._id), {
+        fullName: c.fullName as string,
+        mockup: c.mockup as string,
+        level: c.level as number,
+      });
+    }
+
+    // Resolve label loại lỗi (workshop_config production_error).
+    const errCfgs = await this.workshopConfigModel
+      .find({ category: WorkshopConfigCategory.ProductionError }, { code: 1, name: 1 })
+      .lean();
+    const errNameMap = new Map<string, string>();
+    for (const c of errCfgs as Array<Record<string, unknown>>) {
+      errNameMap.set(String(c.code), String(c.name));
+    }
+
+    const byProduct: ToolCheckProductStat[] = byProductAgg.map((a) => {
+      const cfg = a.cfg ? cfgMap.get(a.cfg) : undefined;
+      return {
+        type: a._id || '(Chưa rõ)',
+        fullName: cfg?.fullName,
+        mockup: cfg?.mockup,
+        level: cfg?.level,
+        count: a.count,
+      };
+    });
+
+    const byCustomer: ToolCheckCustomerStat[] = byCustomerAgg.map((a) => ({
+      userSku: a._id || '(Chưa rõ)',
+      count: a.count,
+    }));
+
+    const topCustomerError: ToolCheckCustomerError[] = topErrAgg.map((a) => ({
+      userSku: a._id.sku || '(Chưa rõ)',
+      code: a._id.code || '(Chưa rõ)',
+      label: a._id.code ? errNameMap.get(a._id.code) : undefined,
+      count: a.count,
+    }));
+
+    return {
+      checkedCount,
+      errorCount: reworkRaw.length,
+      reworkList: (reworkRaw as Array<Record<string, unknown>>).map(toOrder),
+      unreviewedList: (unreviewedRaw as Array<Record<string, unknown>>).map(toOrder),
+      byProduct,
+      byCustomer,
+      topCustomerError,
+      rangeDays: days.length,
+    };
   }
 
   /**

@@ -541,6 +541,11 @@ export class OrderService implements OnModuleInit {
         filter.currentFulfillmentStage = stg;
         filter[`fulfillmentStages.${stg}.status`] = FulfillmentStageStatus.Waiting;
         filter.designerStatus = { $ne: 'rework' };
+        // Đơn đang chờ Support soát lại (In báo lỗi tool-check) KHÔNG hiện ở
+        // "Đang chờ" active — chỉ ở "Đang chờ quay lại" (watching).
+        pushAnd({
+          $nor: [{ productionErrorSource: 'tool-check', toolResultNote: 'error' }],
+        });
         break;
       case 'in-progress':
         filter.currentFulfillmentStage = stg;
@@ -564,7 +569,12 @@ export class OrderService implements OnModuleInit {
           $elemMatch: { stage: stg, action: 'rework-back', byUserId: userId ?? '__no_user__' },
         };
         pushAnd({
-          $or: [{ currentFulfillmentStage: { $ne: stg } }, { designerStatus: 'rework' }],
+          $or: [
+            { currentFulfillmentStage: { $ne: stg } },
+            { designerStatus: 'rework' },
+            // Đơn tool-check đang chờ support soát lại (marker source+note).
+            { productionErrorSource: 'tool-check', toolResultNote: 'error' },
+          ],
         });
         break;
     }
@@ -611,10 +621,22 @@ export class OrderService implements OnModuleInit {
     return false;
   }
 
+  /**
+   * Đơn có được đẩy về Support (soát tool) khi worker báo lỗi loại `tool-check`
+   * không? Skip khi đơn đang chờ support soát lại (marker
+   * `productionErrorSource='tool-check' AND toolResultNote='error'`) để tránh
+   * báo trùng. Ngoài ra luôn fire.
+   */
+  private canReworkBackToSupport(before: unknown): boolean {
+    const b = before as { productionErrorSource?: string; toolResultNote?: string };
+    return !(b.productionErrorSource === 'tool-check' && b.toolResultNote === 'error');
+  }
+
   private buildDesignerReworkBackFromError(
     before: unknown,
     reason: string | null,
     ctx?: AuditContext,
+    target: 'designer' | 'tool-check' = 'designer',
   ): { set: Record<string, unknown>; timelineEntry: FulfillmentTimelineEntry } | null {
     const b = before as {
       currentFulfillmentStage?: string | null;
@@ -653,7 +675,7 @@ export class OrderService implements OnModuleInit {
       byUserId: userId,
       byUserName: ctx?.user?.fullName,
       at: new Date(),
-      reworkTarget: 'designer',
+      reworkTarget: target,
       reason: reason ? reason.slice(0, 500) : undefined,
     };
     return { set, timelineEntry };
@@ -3742,7 +3764,11 @@ export class OrderService implements OnModuleInit {
           code: normalized,
         });
         const errorSource = (cfg as unknown as { errorSource?: string } | null)?.errorSource;
-        if (errorSource === 'designer' || errorSource === 'factory') {
+        if (
+          errorSource === 'designer' ||
+          errorSource === 'factory' ||
+          errorSource === 'tool-check'
+        ) {
           patch.productionErrorSource = errorSource;
         }
         // Set toolResultNote='error' + bump counter — signal cho fulfillment.
@@ -3777,6 +3803,22 @@ export class OrderService implements OnModuleInit {
             reworkBackTimelineEntry = rb.timelineEntry;
           }
         }
+        // Báo lỗi loại 'tool-check' (vd "Thiếu file để in") → đẩy về Support:
+        // KHÔNG đụng designerStatus; giữ marker (source=tool-check + note=error)
+        // → đơn nằm tab "Đang chờ quay lại" của In; support đổi note='ok' → về
+        // active In. Đồng thời tạo/giữ stage pipeline để In watch được.
+        if (errorSource === 'tool-check' && this.canReworkBackToSupport(before)) {
+          const rb = this.buildDesignerReworkBackFromError(
+            before,
+            (before as unknown as { productionErrorNote?: string }).productionErrorNote ?? null,
+            ctx,
+            'tool-check',
+          );
+          if (rb) {
+            Object.assign(patch, rb.set);
+            reworkBackTimelineEntry = rb.timelineEntry;
+          }
+        }
       } else {
         // Clear productionError → cũng clear source. Counter giữ nguyên
         // (lịch sử) — toolResultNote giữ nguyên để designer chủ động chỉnh.
@@ -3800,6 +3842,24 @@ export class OrderService implements OnModuleInit {
           before,
           (before as unknown as { productionErrorNote?: string }).productionErrorNote ?? null,
           ctx,
+        );
+        if (rb) {
+          Object.assign(patch, rb.set);
+          reworkBackTimelineEntry = rb.timelineEntry;
+        }
+      }
+    }
+
+    // 3b) productionErrorSource user đổi tay sang 'tool-check' → đẩy về Support.
+    if (dto.field === 'productionErrorSource' && normalized === 'tool-check') {
+      if (this.canReworkBackToSupport(before)) {
+        patch.toolResultNote = 'error';
+        patch.readyForFulfill = false;
+        const rb = this.buildDesignerReworkBackFromError(
+          before,
+          (before as unknown as { productionErrorNote?: string }).productionErrorNote ?? null,
+          ctx,
+          'tool-check',
         );
         if (rb) {
           Object.assign(patch, rb.set);
@@ -5213,7 +5273,7 @@ export class OrderService implements OnModuleInit {
     const before = await this.orderRepository.findOneById(id);
     if (!before) throw new NotFoundException('Order not found');
 
-    let finalSource = dto.source;
+    let finalSource: 'designer' | 'factory' | 'tool-check' | undefined = dto.source;
     if (dto.code) {
       // Validate code tồn tại
       const cfg = await this.workshopConfigRepository.findOne({
@@ -5221,7 +5281,7 @@ export class OrderService implements OnModuleInit {
         code: dto.code,
       });
       if (!cfg) throw new BadRequestException(`Invalid productionError code: ${dto.code}`);
-      const cfgSource = (cfg as unknown as { errorSource?: 'designer' | 'factory' } | null)?.errorSource;
+      const cfgSource = (cfg as unknown as { errorSource?: 'designer' | 'factory' | 'tool-check' } | null)?.errorSource;
 
       // 'other' code → bắt buộc user pick source + note (BE defense).
       if (dto.code === 'other') {
@@ -5277,6 +5337,14 @@ export class OrderService implements OnModuleInit {
           Object.assign(patch, rb.set);
           reworkBackTimelineEntry = rb.timelineEntry;
         }
+      }
+    }
+    // Lỗi loại 'tool-check' → đẩy về Support (không đụng designerStatus).
+    if (finalSource === 'tool-check' && this.canReworkBackToSupport(before)) {
+      const rb = this.buildDesignerReworkBackFromError(before, dto.note ?? null, ctx, 'tool-check');
+      if (rb) {
+        Object.assign(patch, rb.set);
+        reworkBackTimelineEntry = rb.timelineEntry;
       }
     }
 

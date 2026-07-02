@@ -186,6 +186,18 @@ const productBreakdown = (
   return callApi(`/${CONFIG.API_VERSION}/designer/product-breakdown?${qs.toString()}`, 'get');
 };
 
+const toolCheckOverview = (
+  params: { days?: 7 | 14 | 30; from?: string; to?: string; type?: string; customer?: string } = {},
+) => {
+  const qs = new URLSearchParams();
+  qs.set('days', String(params.days || 7));
+  if (params.from) qs.set('from', params.from);
+  if (params.to) qs.set('to', params.to);
+  if (params.type) qs.set('type', params.type);
+  if (params.customer) qs.set('customer', params.customer);
+  return callApi(`/${CONFIG.API_VERSION}/designer/tool-check-overview?${qs.toString()}`, 'get');
+};
+
 const errorStats = (params: { from?: string; to?: string } = {}) => {
   const qs = new URLSearchParams();
   if (params.from) qs.set('from', params.from);
@@ -216,5 +228,6 @@ export const designer = {
   dailyOverview,
   assignBacklog,
   productBreakdown,
+  toolCheckOverview,
   errorStats,
 };

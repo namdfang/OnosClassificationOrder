@@ -7,7 +7,7 @@ export type WorkshopConfigSeed = {
   color?: string;
   icon?: string;
   order: number;
-  errorSource?: 'designer' | 'factory';
+  errorSource?: 'designer' | 'factory' | 'tool-check';
 };
 
 export const WORKSHOP_CONFIG_SEED: WorkshopConfigSeed[] = [
@@ -68,6 +68,9 @@ export const WORKSHOP_CONFIG_SEED: WorkshopConfigSeed[] = [
   { category: WorkshopConfigCategory.ProductionError, code: 'missing-design', name: 'Thiếu file design', color: '#9333EA', order: 7, errorSource: 'designer' },
   { category: WorkshopConfigCategory.ProductionError, code: 'machine-jam', name: 'Máy lỗi/kẹt', color: '#0EA5E9', order: 8, errorSource: 'factory' },
   { category: WorkshopConfigCategory.ProductionError, code: 'other', name: 'Lỗi khác', color: '#64748B', order: 9, errorSource: 'factory' },
+  // errorSource='tool-check' → đơn đẩy về Support (soát tool). Mặc định cho
+  // đơn ok sẵn nhưng thiếu file để in — In báo về Support chứ không phải des/xưởng.
+  { category: WorkshopConfigCategory.ProductionError, code: 'tool-missing-file', name: 'Thiếu file để in', color: '#F59E0B', order: 10, errorSource: 'tool-check' },
 
   // fabric_type (icon) — full list of fabrics / blanks used in production
   { category: WorkshopConfigCategory.FabricType, code: 'poly-2-da', name: 'POLY 2 DA', icon: 'Shirt', order: 0 },

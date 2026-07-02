@@ -145,6 +145,7 @@ Login Designer → auto redirect `/my-tasks` (xem `pages/login/index.tsx`).
 1. Fulfillment vào `/orders` workshop → cell "Lỗi xưởng" (`ProductionErrorSelectCell`) pick code:
    - Code thường (vd `wrong-design`): `updateField('productionError', code)` → hook BE auto-fill `productionErrorSource` từ `workshop_config.errorSource`, set `toolResultNote='error'`, `$inc productionErrorCount`. Nếu source=designer + status=done → auto `designerStatus='rework'` + `$inc designerReworkCount`. **Nếu đơn đang trong pipeline fulfillment** (`currentFulfillmentStage` set) → đồng thời mirror rework-back về designer (reporter stage→waiting + push `fulfillmentTimeline` rework-back) để worker thấy đơn ở tab "Đang chờ quay lại" rồi "Cần làm lại" sau khi designer xong — xem `FulfillmentWorkflow.md` §2.3b.
    - Code `'other'`: mở `ProductionErrorOtherDialog` bắt buộc pick source + nhập note → `POST /orders/:id/set-production-error` atomic (BE validate 400 nếu thiếu)
+   - Code có `errorSource='tool-check'` (vd "Thiếu file để in"): KHÔNG đụng designer — đẩy về **Support** (soát tool). Xem `ToolCheckWorkflow.md`.
 2. Designer thấy đơn trong cột "Cần làm lại" với badge ×N + productionErrorNote
 3. Designer drag → "Đang làm" (action=`restart` — reset `designerStartedAt`, giữ `designerFirstStartedAt` + `designerWorkMs` cumulative)
 4. Designer drag → "Đã xong" (action=`complete` — `$inc designerWorkMs += (now − startedAt)`, set `toolResultNote='ok'`, `readyForFulfill=true`). Counter `productionErrorCount` không reset

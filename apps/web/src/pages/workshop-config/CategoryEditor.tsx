@@ -46,7 +46,7 @@ interface FormState {
   icon?: string;
   isActive: boolean;
   /** Required khi category=production_error. */
-  errorSource?: 'designer' | 'factory';
+  errorSource?: 'designer' | 'factory' | 'tool-check';
 }
 
 const slugify = (s: string) =>
@@ -101,7 +101,7 @@ export function CategoryEditor({ category, mode }: Props) {
       color: item.color,
       icon: item.icon,
       isActive: item.isActive,
-      errorSource: (item as { errorSource?: 'designer' | 'factory' }).errorSource,
+      errorSource: (item as { errorSource?: 'designer' | 'factory' | 'tool-check' }).errorSource,
     });
 
   const handleNameChange = (name: string) => {
@@ -235,7 +235,7 @@ export function CategoryEditor({ category, mode }: Props) {
                 <TableCell className="font-medium">
                   {it.name}
                   {needsErrorSource && (
-                    <ErrorSourceBadge source={(it as { errorSource?: 'designer' | 'factory' }).errorSource} />
+                    <ErrorSourceBadge source={(it as { errorSource?: 'designer' | 'factory' | 'tool-check' }).errorSource} />
                   )}
                 </TableCell>
                 <TableCell className="font-mono text-xs text-muted-foreground">{it.code}</TableCell>
@@ -321,10 +321,21 @@ export function CategoryEditor({ category, mode }: Props) {
                   >
                     Do xưởng làm
                   </button>
+                  <button
+                    type="button"
+                    onClick={() => setForm({ ...form, errorSource: 'tool-check' })}
+                    className={`flex-1 px-3 py-2 rounded-md border text-xs font-medium transition-colors ${
+                      form.errorSource === 'tool-check'
+                        ? 'border-amber-500 bg-amber-50 text-amber-700 dark:bg-amber-500/10 dark:text-amber-300'
+                        : 'border-border bg-background text-muted-foreground hover:border-amber-300'
+                    }`}
+                  >
+                    Do soát tool
+                  </button>
                 </div>
                 <p className="text-[11px] text-muted-foreground">
-                  Lỗi do designer → trigger trạng thái "Cần làm lại" cho task của designer.
-                  Dashboard thống kê phân biệt 2 loại.
+                  Lỗi do designer → "Cần làm lại" cho designer. Do soát tool → đẩy về Support
+                  (vd thiếu file để in). Dashboard thống kê phân biệt các loại.
                 </p>
               </div>
             )}
@@ -370,7 +381,7 @@ export function CategoryEditor({ category, mode }: Props) {
   );
 }
 
-function ErrorSourceBadge({ source }: { source?: 'designer' | 'factory' }) {
+function ErrorSourceBadge({ source }: { source?: 'designer' | 'factory' | 'tool-check' }) {
   if (!source) {
     return (
       <span className="ml-2 text-[9px] font-semibold px-1.5 py-0.5 rounded bg-rose-100 text-rose-700 dark:bg-rose-500/20">
@@ -382,6 +393,13 @@ function ErrorSourceBadge({ source }: { source?: 'designer' | 'factory' }) {
     return (
       <span className="ml-2 text-[9px] font-semibold px-1.5 py-0.5 rounded bg-violet-100 text-violet-700 dark:bg-violet-500/20 dark:text-violet-300">
         DES
+      </span>
+    );
+  }
+  if (source === 'tool-check') {
+    return (
+      <span className="ml-2 text-[9px] font-semibold px-1.5 py-0.5 rounded bg-amber-100 text-amber-700 dark:bg-amber-500/20 dark:text-amber-300">
+        SOÁT TOOL
       </span>
     );
   }

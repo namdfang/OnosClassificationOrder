@@ -18,8 +18,9 @@ import { handleAxiosError } from '@/utils';
 interface Props {
   open: boolean;
   orderId: string | null;
-  /** Source/note đã có sẵn của order (pre-fill khi đang edit). */
-  defaultSource?: 'designer' | 'factory';
+  /** Source/note đã có sẵn của order (pre-fill khi đang edit). 'tool-check'
+   *  không phải lựa chọn của dialog "Lỗi khác" → coi như chưa chọn. */
+  defaultSource?: 'designer' | 'factory' | 'tool-check';
   defaultNote?: string;
   onClose: () => void;
   onSaved: (source: 'designer' | 'factory', note: string) => void;
@@ -39,13 +40,15 @@ export function ProductionErrorOtherDialog({
   onClose,
   onSaved,
 }: Props) {
-  const [source, setSource] = useState<'designer' | 'factory' | undefined>(defaultSource);
+  const normSource = (s?: 'designer' | 'factory' | 'tool-check') =>
+    s === 'tool-check' ? undefined : s;
+  const [source, setSource] = useState<'designer' | 'factory' | undefined>(normSource(defaultSource));
   const [note, setNote] = useState(defaultNote || '');
   const [saving, setSaving] = useState(false);
 
   useEffect(() => {
     if (open) {
-      setSource(defaultSource);
+      setSource(normSource(defaultSource));
       setNote(defaultNote || '');
     }
   }, [open, defaultSource, defaultNote]);

@@ -80,11 +80,18 @@ export function ColorBadgeSelectCell({ orderId, field, category, value, canEdit,
   );
 }
 
-function ErrorSourceTag({ source }: { source: 'designer' | 'factory' }) {
+function ErrorSourceTag({ source }: { source: 'designer' | 'factory' | 'tool-check' }) {
   if (source === 'designer') {
     return (
       <span className="text-[9px] font-semibold px-1.5 py-0.5 rounded bg-violet-100 text-violet-700 dark:bg-violet-500/20 dark:text-violet-300">
         DES
+      </span>
+    );
+  }
+  if (source === 'tool-check') {
+    return (
+      <span className="text-[9px] font-semibold px-1.5 py-0.5 rounded bg-amber-100 text-amber-700 dark:bg-amber-500/20 dark:text-amber-300">
+        SOÁT TOOL
       </span>
     );
   }

@@ -110,6 +110,10 @@ Worker KHÔNG bắt buộc dùng nút "Báo lỗi": chọn cell **"Lỗi xưởn
 
 Áp dụng ở `OrderService.updateField()` (field `productionError` / `productionErrorSource`) + `OrderService.setProductionError()` (scan + dialog "Lỗi khác") qua helper chung `buildDesignerReworkBackFromError()`. Kích hoạt khi `errorSource='designer'` + `canReworkBackToDesigner` + có user context; đơn chưa vào pipeline thì tự khởi tạo stage Print (xem callout "Vị trí stage" trên). **Áp cho mọi stage** (print trở đi), cả PrintOrderTable (chip watching/rework) lẫn kanban (tab watching/rework).
 
+#### 2.3c Báo lỗi "do Soát tool" (`errorSource='tool-check'`) — đẩy về Support
+
+Song song 2.3b nhưng target = **Support** (không phải designer): In chọn "Lỗi xưởng" loại `tool-check` (vd "Thiếu file để in") → cùng helper `buildDesignerReworkBackFromError(..., target='tool-check')` + gate `canReworkBackToSupport()`. **KHÔNG** đụng `designerStatus`; marker hold = `productionErrorSource='tool-check' AND toolResultNote='error'`. Đơn nằm tab **"Đang chờ quay lại"** của In (filter `applyFulfillmentStatusFilter`/`applyTabFilter` watching thêm điều kiện marker; waiting loại trừ marker). Support đổi Note kq Tool → 'ok' → marker mất → đơn về "Đang chờ" active của In. Chi tiết: [`ToolCheckWorkflow.md`](ToolCheckWorkflow.md).
+
 **Ví dụ:** May xuất ra (`sew-out`) báo lỗi đẩy về In (`print`):
 
 - `currentFulfillmentStage` chuyển từ `sew-out` → `print`.
