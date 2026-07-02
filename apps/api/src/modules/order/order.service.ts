@@ -3544,9 +3544,9 @@ export class OrderService implements OnModuleInit {
   }
 
   /**
-   * Đơn có được HỦY không: chưa hủy sẵn, KHÔNG phải "cần làm lại" (rework), và
-   * CHƯA bắt đầu in — tức chưa vào pipeline (`!currentFulfillmentStage`) HOẶC đang
-   * ở stage Print status=`waiting`. Chặn: đang in / đã in / qua In / rework / đã hủy.
+   * Đơn có được HỦY không. Admin được hủy đơn ở **BẤT KỲ trạng thái nào** (theo
+   * yêu cầu vận hành: đơn có thể bị hủy dù đã in/ép/may…) — chỉ chặn đơn ĐÃ hủy
+   * sẵn (không hủy 2 lần). Cancel là action Admin-only (`assertOrderAdmin`).
    * Mirror ở FE `apps/web/src/utils/orderActions.ts` — sửa 1 nơi phải sửa cả 2.
    */
   private canCancelOrder(order: {
@@ -3556,15 +3556,7 @@ export class OrderService implements OnModuleInit {
     fulfillmentStages?: Record<string, { status?: string } | undefined>;
   }): { ok: boolean; reason?: string } {
     if (order.cancelledAt) return { ok: false, reason: 'Đơn đã hủy.' };
-    if (order.designerStatus === DesignerStatus.Rework)
-      return { ok: false, reason: 'Đơn đang cần làm lại — không hủy được.' };
-    const stage = order.currentFulfillmentStage;
-    if (!stage) return { ok: true };
-    if (stage !== FulfillmentStage.Print)
-      return { ok: false, reason: 'Đơn đã qua công đoạn In — không hủy được.' };
-    const printStatus = order.fulfillmentStages?.[FulfillmentStage.Print]?.status;
-    if (printStatus === FulfillmentStageStatus.Waiting) return { ok: true };
-    return { ok: false, reason: 'Đơn đã bắt đầu in — không hủy được.' };
+    return { ok: true };
   }
 
   async cancelOrder(

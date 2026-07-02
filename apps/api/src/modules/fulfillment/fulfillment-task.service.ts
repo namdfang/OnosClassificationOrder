@@ -6,10 +6,12 @@ import {
   NotFoundException,
 } from '@nestjs/common';
 import { InjectModel } from '@nestjs/mongoose';
-import type { FilterQuery } from 'mongoose';
+import type { FilterQuery, PipelineStage } from 'mongoose';
 import { Model } from 'mongoose';
 import type {
+  FulfillmentDailyColumnTotals,
   FulfillmentDailyRow,
+  FulfillmentStageMetric,
   FulfillmentStages,
   FulfillmentStageState,
   FulfillmentTaskTab,
@@ -17,6 +19,7 @@ import type {
   ProductionOrder,
 } from 'shared';
 import {
+  DesignerStatus,
   FULFILLMENT_STAGE_ORDER,
   FULFILLMENT_STAGES,
   FulfillmentStage,
@@ -651,40 +654,28 @@ export class FulfillmentTaskService {
   }
 
   /**
-   * Bảng tổng quan theo ngày cho 1 stage (trang Task Fulfillment). Gom đơn theo
-   * `inProductionAt` (VN) — cùng trục với date-picker + bảng Designer/Soát tool
-   * → 1 đơn nằm cùng cột ngày ở mọi stage, dễ đối chiếu + biết ưu tiên (cohort
-   * ngày SX cũ mà còn "remaining/rework" = làm trước). Phân loại theo
-   * `fulfillmentStages.<stage>.status` HIỆN TẠI.
+   * Bảng tổng quan theo ngày (trang Task Fulfillment) — FULL luồng tất cả khâu.
+   * Gom MỌI đơn theo `inProductionAt` (VN) trong xưởng user (gồm originalFactoryId)
+   * → cùng trục ngày với bảng Designer/Soát tool, dễ đối chiếu + biết ưu tiên.
    *
-   * Scope: đơn đã TỪNG tới stage này (`fulfillmentStages.<stage>.status` tồn
-   * tại) trong xưởng user (gồm originalFactoryId). Override role không stage →
-   * rỗng.
+   * Mỗi ngày bung ra: tổng đơn · soát tool (đã/chưa) · tool ok · designer
+   * (nhận/xong) · và với CẢ 7 stage fulfillment metric {arrived,done,remaining,
+   * rework}. FE dùng `query.stage` (= user.fulfillmentStage) chỉ để highlight +
+   * bung 4 hàng cho stage đó — BE trả đủ mọi khâu bất kể stage.
    */
   async getDailyOverview(
     user: UserDocument,
     query: { days: number; from?: string; to?: string; stage?: FulfillmentStage },
   ): Promise<{
     days: FulfillmentDailyRow[];
-    columnTotals: { arrived: number; done: number; remaining: number; rework: number };
+    columnTotals: FulfillmentDailyColumnTotals;
     rangeDays: number;
   }> {
-    const empty = {
-      days: [],
-      columnTotals: { arrived: 0, done: 0, remaining: 0, rework: 0 },
-      rangeDays: 0,
-    };
-    const stage = query.stage ?? (user.fulfillmentStage as FulfillmentStage | undefined);
-    if (!stage) return empty;
-
     const { start, end, days } = this.resolveDayWindow(query.days, query.from, query.to);
     const factoryId = user.factoryId;
-    const statusPath = `fulfillmentStages.${stage}.status`;
-    const statusRef = `$${statusPath}`;
 
     const match: FilterQuery<OrderEntity> = {
       inProductionAt: { $gte: start, $lte: end },
-      [statusPath]: { $exists: true },
       deletedAt: null,
       cancelledAt: null,
     };
@@ -693,53 +684,106 @@ export class FulfillmentTaskService {
     const dayExpr = {
       $dateToString: { format: '%Y-%m-%d', date: '$inProductionAt', timezone: '+07:00' },
     };
-    const agg = await this.orderModel.aggregate<{
-      _id: string;
-      arrived: number;
-      done: number;
-      remaining: number;
-      rework: number;
-    }>([
-      { $match: match },
-      {
-        $group: {
-          _id: dayExpr,
-          arrived: { $sum: 1 },
-          done: { $sum: { $cond: [{ $eq: [statusRef, FulfillmentStageStatus.Done] }, 1, 0] } },
-          remaining: {
-            $sum: {
-              $cond: [
-                {
-                  $or: [
-                    { $eq: [statusRef, FulfillmentStageStatus.Waiting] },
-                    { $eq: [statusRef, FulfillmentStageStatus.InProgress] },
-                  ],
-                },
-                1,
-                0,
-              ],
-            },
-          },
-          rework: {
-            $sum: { $cond: [{ $eq: [statusRef, FulfillmentStageStatus.Rework] }, 1, 0] },
-          },
+    // Đã soát = toolResultNote có nội dung (≠ null và ≠ ''); chưa soát = ngược lại.
+    const reviewedCond = { $gt: [{ $strLenCP: { $ifNull: ['$toolResultNote', ''] } }, 0] };
+
+    const group: Record<string, unknown> = {
+      _id: dayExpr,
+      total: { $sum: 1 },
+      toolReviewed: { $sum: { $cond: [reviewedCond, 1, 0] } },
+      toolUnreviewed: { $sum: { $cond: [reviewedCond, 0, 1] } },
+      toolOk: { $sum: { $cond: [{ $eq: ['$toolResultNote', 'ok'] }, 1, 0] } },
+      designerReceived: {
+        $sum: {
+          $cond: [
+            { $ne: [{ $ifNull: ['$designerStatus', DesignerStatus.Unassigned] }, DesignerStatus.Unassigned] },
+            1,
+            0,
+          ],
         },
       },
-    ]);
+      designerDone: { $sum: { $cond: [{ $eq: ['$designerStatus', DesignerStatus.Done] }, 1, 0] } },
+    };
+    // Metric mỗi stage: arrived = từng tới stage (status tồn tại); done/remaining/rework theo status hiện tại.
+    for (const st of FULFILLMENT_STAGES) {
+      const ref = `$fulfillmentStages.${st}.status`;
+      group[`s_${st}_arrived`] = {
+        $sum: { $cond: [{ $ne: [{ $ifNull: [ref, null] }, null] }, 1, 0] },
+      };
+      group[`s_${st}_done`] = {
+        $sum: { $cond: [{ $eq: [ref, FulfillmentStageStatus.Done] }, 1, 0] },
+      };
+      group[`s_${st}_remaining`] = {
+        $sum: {
+          $cond: [
+            {
+              $or: [
+                { $eq: [ref, FulfillmentStageStatus.Waiting] },
+                { $eq: [ref, FulfillmentStageStatus.InProgress] },
+              ],
+            },
+            1,
+            0,
+          ],
+        },
+      };
+      group[`s_${st}_rework`] = {
+        $sum: { $cond: [{ $eq: [ref, FulfillmentStageStatus.Rework] }, 1, 0] },
+      };
+    }
 
-    const byDay = new Map(agg.map((r) => [r._id, r]));
-    const columnTotals = { arrived: 0, done: 0, remaining: 0, rework: 0 };
+    const agg = await this.orderModel.aggregate<Record<string, number | string>>([
+      { $match: match },
+      { $group: group as PipelineStage.Group['$group'] },
+    ]);
+    const byDay = new Map(agg.map((r) => [String(r._id), r]));
+
+    const emptyMetric = (): FulfillmentStageMetric => ({ arrived: 0, done: 0, remaining: 0, rework: 0 });
+    const columnTotals: FulfillmentDailyColumnTotals = {
+      total: 0,
+      toolReviewed: 0,
+      toolUnreviewed: 0,
+      toolOk: 0,
+      designerReceived: 0,
+      designerDone: 0,
+      stages: Object.fromEntries(FULFILLMENT_STAGES.map((st) => [st, emptyMetric()])),
+    };
+
     const rows: FulfillmentDailyRow[] = days.map((day) => {
       const r = byDay.get(day);
-      const arrived = r?.arrived ?? 0;
-      const done = r?.done ?? 0;
-      const remaining = r?.remaining ?? 0;
-      const rework = r?.rework ?? 0;
-      columnTotals.arrived += arrived;
-      columnTotals.done += done;
-      columnTotals.remaining += remaining;
-      columnTotals.rework += rework;
-      return { day, arrived, done, remaining, rework };
+      const num = (k: string) => Number(r?.[k] ?? 0);
+      const stages: Record<string, FulfillmentStageMetric> = {};
+      for (const st of FULFILLMENT_STAGES) {
+        const m: FulfillmentStageMetric = {
+          arrived: num(`s_${st}_arrived`),
+          done: num(`s_${st}_done`),
+          remaining: num(`s_${st}_remaining`),
+          rework: num(`s_${st}_rework`),
+        };
+        stages[st] = m;
+        const ct = columnTotals.stages[st]!;
+        ct.arrived += m.arrived;
+        ct.done += m.done;
+        ct.remaining += m.remaining;
+        ct.rework += m.rework;
+      }
+      const row: FulfillmentDailyRow = {
+        day,
+        total: num('total'),
+        toolReviewed: num('toolReviewed'),
+        toolUnreviewed: num('toolUnreviewed'),
+        toolOk: num('toolOk'),
+        designerReceived: num('designerReceived'),
+        designerDone: num('designerDone'),
+        stages,
+      };
+      columnTotals.total += row.total;
+      columnTotals.toolReviewed += row.toolReviewed;
+      columnTotals.toolUnreviewed += row.toolUnreviewed;
+      columnTotals.toolOk += row.toolOk;
+      columnTotals.designerReceived += row.designerReceived;
+      columnTotals.designerDone += row.designerDone;
+      return row;
     });
 
     return { days: rows, columnTotals, rangeDays: days.length };
