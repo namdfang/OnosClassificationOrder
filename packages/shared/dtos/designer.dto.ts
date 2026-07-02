@@ -318,15 +318,17 @@ export const DailyOverviewRowZod = z.object({
   day: z.string(),
   /** Tất cả đơn inProductionAt ngày đó, mọi trạng thái. */
   total: z.number().int().nonnegative(),
+  /** toolResultNote === 'ok' (đã soát xong, không lỗi). */
+  ok: z.number().int().nonnegative(),
   /** toolResultNote null/'' (chưa soát tool). */
   unreviewed: z.number().int().nonnegative(),
-  /** toolResultNote set & != 'ok'. */
+  /** toolResultNote set & != '' & != 'ok' (lỗi thật). */
   error: z.number().int().nonnegative(),
   /** Breakdown theo từng mã note ≠ ok, sort count desc. */
   errorByNote: DailyOverviewErrorNoteZod.array(),
-  /** designerStatus != done (unassigned+assigned+in-progress+rework+rejected). */
+  /** toolResultNote != 'ok' = unreviewed + error (chưa soát + lỗi). */
   backlog: z.number().int().nonnegative(),
-  /** Riêng số đơn unassigned trong ngày (subset của backlog). */
+  /** Riêng số đơn designerStatus=unassigned trong ngày (cho bảng xổ "Chưa gán"). */
   unassigned: z.number().int().nonnegative(),
 });
 export type DailyOverviewRow = z.infer<typeof DailyOverviewRowZod>;
@@ -346,6 +348,7 @@ export type DailyOverviewBacklogDesigner = z.infer<typeof DailyOverviewBacklogDe
 
 export const DailyOverviewColumnTotalsZod = z.object({
   total: z.number().int().nonnegative(),
+  ok: z.number().int().nonnegative(),
   unreviewed: z.number().int().nonnegative(),
   error: z.number().int().nonnegative(),
   backlog: z.number().int().nonnegative(),

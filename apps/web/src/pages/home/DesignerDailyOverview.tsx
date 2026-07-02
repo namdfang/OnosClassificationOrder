@@ -21,7 +21,7 @@ interface Data {
   rows: DailyOverviewRow[];
   backlogByDesigner: DailyOverviewBacklogDesigner[];
   unassignedBacklog: number;
-  columnTotals: { total: number; unreviewed: number; error: number; backlog: number };
+  columnTotals: { total: number; ok: number; unreviewed: number; error: number; backlog: number };
 }
 
 const EMPTY: Data = {
@@ -29,7 +29,7 @@ const EMPTY: Data = {
   rows: [],
   backlogByDesigner: [],
   unassignedBacklog: 0,
-  columnTotals: { total: 0, unreviewed: 0, error: 0, backlog: 0 },
+  columnTotals: { total: 0, ok: 0, unreviewed: 0, error: 0, backlog: 0 },
 };
 
 interface Props {
@@ -155,6 +155,14 @@ export function DesignerDailyOverview({ days: range = 7, from, to, reloadToken, 
                   values={rows.map((r) => r.total)}
                   total={columnTotals.total}
                 />
+                {/* 1b. Tổng xong (Note Tool = ok) */}
+                <MetricRow
+                  label="Tổng xong"
+                  hint="Đơn có Note kết quả Tool = 'ok' (đã soát xong, không lỗi)"
+                  values={rows.map((r) => r.ok)}
+                  total={columnTotals.ok}
+                  className="text-emerald-600 dark:text-emerald-400"
+                />
                 {/* 2. Chưa soát */}
                 <MetricRow
                   label="Chưa soát"
@@ -209,7 +217,7 @@ export function DesignerDailyOverview({ days: range = 7, from, to, reloadToken, 
                       Tổng tồn
                     </span>
                     <div className="text-[10px] text-muted-foreground font-normal pl-[18px]">
-                      chưa xong · bấm để xem theo designer
+                      chưa 'ok' = chưa soát + lỗi · bấm để xem theo designer
                     </div>
                   </td>
                   {rows.map((r, i) => (
@@ -239,8 +247,19 @@ export function DesignerDailyOverview({ days: range = 7, from, to, reloadToken, 
         {/* Bảng con: tồn theo designer */}
         {expanded && (
           <div className="border-t border-border bg-muted/10 p-3">
-            <div className="mb-2 text-[11px] font-medium text-muted-foreground">
-              Tồn theo designer ({nDays} ngày) — tổng {backlogGrand}
+            <div className="mb-2 space-y-1">
+              <div className="text-[11px] font-medium text-muted-foreground">
+                Tổng tồn {columnTotals.backlog} = Chưa soát{' '}
+                <span className="text-slate-600 dark:text-slate-300 font-semibold">
+                  {columnTotals.unreviewed}
+                </span>{' '}
+                + Lỗi{' '}
+                <span className="text-rose-600 font-semibold">{columnTotals.error}</span>
+              </div>
+              <div className="text-[10px] text-muted-foreground">
+                Bảng dưới: tồn theo trạng thái designer (đơn đã gán) — lăng kính khác, tổng{' '}
+                {backlogGrand}, có thể lệch với Tổng tồn (không tính đơn chưa soát/chưa gán theo Tool).
+              </div>
             </div>
             {backlogByDesigner.length === 0 && unassignedBacklog === 0 ? (
               <p className="text-xs text-muted-foreground py-2">Không có đơn tồn.</p>

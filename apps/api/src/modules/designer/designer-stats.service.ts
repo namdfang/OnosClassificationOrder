@@ -601,6 +601,7 @@ export class DesignerStatsService {
     rows: {
       day: string;
       total: number;
+      ok: number;
       unreviewed: number;
       error: number;
       errorByNote: { code: string; count: number }[];
@@ -618,7 +619,7 @@ export class DesignerStatsService {
       total: number;
     }[];
     unassignedBacklog: number;
-    columnTotals: { total: number; unreviewed: number; error: number; backlog: number };
+    columnTotals: { total: number; ok: number; unreviewed: number; error: number; backlog: number };
     rangeDays: number;
   }> {
     const { start, end, days } = this.resolveVnWindow(rangeDays, from, to);
@@ -637,6 +638,7 @@ export class DesignerStatsService {
       this.orderModel.aggregate<{
         _id: string;
         total: number;
+        ok: number;
         unreviewed: number;
         error: number;
         backlog: number;
@@ -647,13 +649,20 @@ export class DesignerStatsService {
           $group: {
             _id: dayExpr,
             total: { $sum: 1 },
+            // Đã soát xong, không lỗi (note = 'ok').
+            ok: { $sum: { $cond: [{ $eq: [noteExpr, 'ok'] }, 1, 0] } },
+            // Chưa soát (note rỗng).
             unreviewed: { $sum: { $cond: [{ $eq: [noteExpr, ''] }, 1, 0] } },
+            // Lỗi thật (đã soát & note ≠ 'ok').
             error: {
               $sum: {
                 $cond: [{ $and: [{ $ne: [noteExpr, ''] }, { $ne: [noteExpr, 'ok'] }] }, 1, 0],
               },
             },
-            backlog: { $sum: { $cond: [{ $ne: [statusExpr, DesignerStatus.Done] }, 1, 0] } },
+            // Tổng tồn = chưa 'ok' = chưa soát + lỗi (theo Tool, KHÔNG theo
+            // designerStatus). Đảm bảo total = ok + backlog.
+            backlog: { $sum: { $cond: [{ $ne: [noteExpr, 'ok'] }, 1, 0] } },
+            // Đơn designerStatus=unassigned (cho bảng xổ "Chưa gán").
             unassigned: {
               $sum: { $cond: [{ $eq: [statusExpr, DesignerStatus.Unassigned] }, 1, 0] },
             },
@@ -696,21 +705,23 @@ export class DesignerStatsService {
     }
 
     const rowMap = new Map(rowsAgg.map((r) => [r._id, r]));
-    const columnTotals = { total: 0, unreviewed: 0, error: 0, backlog: 0 };
+    const columnTotals = { total: 0, ok: 0, unreviewed: 0, error: 0, backlog: 0 };
     let unassignedBacklog = 0;
     const rows = days.map((day) => {
       const r = rowMap.get(day);
       const total = r?.total ?? 0;
+      const ok = r?.ok ?? 0;
       const unreviewed = r?.unreviewed ?? 0;
       const error = r?.error ?? 0;
       const backlog = r?.backlog ?? 0;
       const unassigned = r?.unassigned ?? 0;
       columnTotals.total += total;
+      columnTotals.ok += ok;
       columnTotals.unreviewed += unreviewed;
       columnTotals.error += error;
       columnTotals.backlog += backlog;
       unassignedBacklog += unassigned;
-      return { day, total, unreviewed, error, errorByNote: noteByDay.get(day) || [], backlog, unassigned };
+      return { day, total, ok, unreviewed, error, errorByNote: noteByDay.get(day) || [], backlog, unassigned };
     });
 
     // Resolve tên designer cho bảng con.
