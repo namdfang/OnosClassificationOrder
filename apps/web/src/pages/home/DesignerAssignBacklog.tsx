@@ -28,7 +28,7 @@ interface Props {
 
 const STATUS_META: Record<string, { label: string; cls: string }> = {
   unassigned: { label: 'Chưa gán', cls: 'text-slate-600 border-slate-300' },
-  rejected: { label: 'Trả lại', cls: 'text-rose-600 border-rose-300' },
+  rejected: { label: 'Không làm được', cls: 'text-rose-600 border-rose-300' },
   rework: { label: 'Làm lại', cls: 'text-amber-600 border-amber-300' },
 };
 
@@ -115,7 +115,7 @@ export function DesignerAssignBacklog({ days = 7, from, to, type, customer, relo
           <UserPlus size={16} className="text-indigo-600" />
           <span className="text-sm font-semibold">Cần gán designer</span>
           <span className="text-[11px] text-muted-foreground">
-            — {total} đơn (chưa gán / trả lại / làm lại chưa ôm, đã soát ≠ ok)
+            — {total} đơn (chưa gán / không làm được / làm lại chưa ôm, đã soát ≠ ok)
           </span>
         </div>
         {selectedCount > 0 && (

@@ -246,8 +246,8 @@ export class DesignerTaskService {
       }
 
       case DesignerTransitionAction.Reject: {
-        // Cho phép trả lại task từ cả 'assigned' (chưa nhận) lẫn 'in-progress'
-        // (đã nhận làm nhưng muốn trả lại). Giống cột "Cần làm".
+        // Cho phép báo không làm được từ cả 'assigned' (chưa nhận) lẫn
+        // 'in-progress' (đã nhận làm nhưng không làm được). Giống cột "Cần làm".
         if (current !== DesignerStatus.Assigned && current !== DesignerStatus.InProgress) {
           throw new BadRequestException(
             `Action 'reject' chỉ hợp lệ từ trạng thái 'assigned' hoặc 'in-progress' (current=${current}).`,

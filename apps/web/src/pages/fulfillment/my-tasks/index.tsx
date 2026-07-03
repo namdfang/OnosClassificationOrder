@@ -258,7 +258,7 @@ function FulfillmentKanbanView() {
 
   const [columns, setColumns] = useState<Columns>(EMPTY_COLS);
   // Đơn user đã rework-back, đang chờ quay lại — render ở drawer dưới kanban
-  // (giống pattern Designer's "Đơn đã trả lại").
+  // (giống pattern Designer's "File không làm được").
   const [watching, setWatching] = useState<ProductionOrder[]>([]);
   const [showWatching, setShowWatching] = useState(false);
   const [loading, setLoading] = useState(false);
@@ -975,7 +975,7 @@ function FulfillmentKanbanView() {
         )}
 
         {/* Watching drawer — đơn user đã đẩy về xử lý (rework-back), đang
-            chờ quay lại. Clone pattern Designer's "Đơn đã trả lại". */}
+            chờ quay lại. Clone pattern Designer's "File không làm được". */}
         {/* <div className="rounded-md border border-border bg-card">
           <button
             type="button"

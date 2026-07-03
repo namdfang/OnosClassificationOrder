@@ -99,9 +99,9 @@ const DESIGNER_STATUS_META: Record<
     tooltip: 'Designer hoàn thành — toolResultNote auto = ok',
   },
   [DesignerStatus.Rejected]: {
-    label: 'Đã trả',
+    label: 'Không làm được',
     cls: 'bg-rose-100 text-rose-700 dark:bg-rose-900/40 dark:text-rose-300',
-    tooltip: 'Designer trả lại task — leader cần re-assign',
+    tooltip: 'Designer báo file không làm được — leader cần giao lại',
   },
   [DesignerStatus.Rework]: {
     label: 'Cần làm lại',

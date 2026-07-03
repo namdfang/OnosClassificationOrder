@@ -53,7 +53,7 @@ const STATUS_COLS: {
     { key: 'rework', label: 'Cần làm lại', cls: 'text-amber-600 dark:text-amber-400', filterValue: 'rework' },
     { key: 'inProgress', label: 'Đang làm', cls: 'text-indigo-600 dark:text-indigo-400', filterValue: 'in-progress' },
     { key: 'done', label: 'Đã xong', cls: 'text-emerald-600 dark:text-emerald-400', filterValue: 'done' },
-    { key: 'rejected', label: 'Đã trả', cls: 'text-rose-600 dark:text-rose-400', filterValue: 'rejected' },
+    { key: 'rejected', label: 'Không làm được', cls: 'text-rose-600 dark:text-rose-400', filterValue: 'rejected' },
   ];
 
 // KPI strip = "Tổng chưa gán" (N+M, `unassignedAll`) đứng TRƯỚC "Chưa gán không

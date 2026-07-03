@@ -3326,7 +3326,7 @@ export class OrderService implements OnModuleInit {
       assigned: 'Cần làm',
       'in-progress': 'Đang làm',
       done: 'Đã xong',
-      rejected: 'Đã trả',
+      rejected: 'Không làm được',
       rework: 'Cần làm lại',
     };
 

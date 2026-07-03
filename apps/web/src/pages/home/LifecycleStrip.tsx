@@ -2,6 +2,7 @@ import React, { useEffect, useMemo, useState } from 'react';
 import {
   Activity,
   AlertTriangle,
+  BadgeCheck,
   CheckCircle2,
   ChevronRight,
   Circle,
@@ -42,6 +43,7 @@ const STAGE_SHORT: Record<string, string> = {
   'qc-sorting': 'QC kiểm',
   'sew-in': 'May vào',
   'sew-out': 'May ra',
+  'qc-post-sew': 'QC may',
   pack: 'Đóng',
 };
 
@@ -55,6 +57,7 @@ const STAGE_ICON: Record<string, React.ElementType> = {
   'qc-sorting': ListChecks,
   'sew-in': LogIn,
   'sew-out': LogOut,
+  'qc-post-sew': BadgeCheck,
   pack: Package,
   done: PackageCheck,
 };

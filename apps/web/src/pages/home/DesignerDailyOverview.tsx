@@ -272,7 +272,7 @@ export function DesignerDailyOverview({ days: range = 7, from, to, reloadToken, 
                       <BLHead label="Cần làm" className="text-zinc-600 dark:text-zinc-300" />
                       <BLHead label="Đang làm" className="text-indigo-600" />
                       <BLHead label="Làm lại" className="text-amber-600" />
-                      <BLHead label="Trả lại" className="text-rose-500" />
+                      <BLHead label="Không làm được" className="text-rose-500" />
                       <th className="text-center font-semibold px-2 py-1.5">Tổng</th>
                     </tr>
                   </thead>

@@ -74,7 +74,7 @@ const DESIGNER_STATUS_LABELS: Record<string, string> = {
   assigned: 'Đã gán',
   'in-progress': 'Đang làm',
   done: 'Đã xong',
-  rejected: 'Đã trả',
+  rejected: 'Không làm được',
   rework: 'Cần làm lại',
 };
 const DESIGNER_STATUS_COLOR: Record<string, string> = {

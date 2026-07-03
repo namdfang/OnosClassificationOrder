@@ -23,6 +23,7 @@ const STAGE_SHORT: Record<string, string> = {
   'qc-sorting': 'QC kiểm',
   'sew-in': 'May vào',
   'sew-out': 'May ra',
+  'qc-post-sew': 'QC may',
   pack: 'Đóng',
 };
 

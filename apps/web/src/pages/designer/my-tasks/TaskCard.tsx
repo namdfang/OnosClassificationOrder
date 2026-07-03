@@ -33,7 +33,7 @@ function timeStamp(card: Card): { label: string; value: Date | undefined } {
     case DesignerStatus.Rework:
       return { label: 'Lỗi xưởng', value: card.designerReworkAt };
     case DesignerStatus.Rejected:
-      return { label: 'Trả', value: card.designerRejectedAt };
+      return { label: 'Không làm được', value: card.designerRejectedAt };
     default:
       return { label: '', value: undefined };
   }
@@ -77,7 +77,7 @@ function statusTimeHint(status: DesignerStatus): string {
     case DesignerStatus.Rework:
       return 'Thời điểm xưởng báo lỗi (cần làm lại)';
     case DesignerStatus.Rejected:
-      return 'Thời điểm trả lại task';
+      return 'Thời điểm báo không làm được';
     default:
       return '';
   }
@@ -231,7 +231,7 @@ export function TaskCard({ card, onPreview, onClickProductionId }: Props) {
       )}
       {card.designerStatus === DesignerStatus.Rejected && card.designerRejectedReason && (
         <div className="mt-1 text-[10px] text-rose-700 dark:text-rose-300 line-clamp-2">
-          <span className="font-medium">Lý do trả:</span> {card.designerRejectedReason}
+          <span className="font-medium">Lý do không làm được:</span> {card.designerRejectedReason}
         </div>
       )}
     </div>

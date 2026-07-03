@@ -317,9 +317,9 @@ export default function DesignerStatsTab() {
               <TableHead className="w-30 text-center" title="Đang chờ làm — snapshot hiện tại">Cần làm</TableHead>
               <TableHead className="w-30 text-center" title="Đang xử lý — snapshot hiện tại">Đang làm</TableHead>
               <TableHead className="w-30 text-center" title="Đã hoàn thành trong period">Đã xong</TableHead>
-              <TableHead className="w-30 text-center" title="Đang ở trạng thái trả — snapshot">Trả (hiện)</TableHead>
+              <TableHead className="w-30 text-center" title="Đang ở trạng thái không làm được — snapshot">KLĐ (hiện)</TableHead>
               <TableHead className="w-30 text-center" title="Đang ở trạng thái rework — snapshot">L.lại (hiện)</TableHead>
-              <TableHead className="w-30 text-center" title="Tổng số lần đã trả lại trong period (kể cả đã re-assign sau đó)">Tổng trả</TableHead>
+              <TableHead className="w-30 text-center" title="Tổng số lần đã báo không làm được trong period (kể cả đã giao lại sau đó)">Tổng KLĐ</TableHead>
               <TableHead className="w-30 text-center" title="Tổng số lần đã chuyển sang rework trong period (kể cả đã restart xong)">Tổng l.lại</TableHead>
               <TableHead className="w-30 text-center">Avg phản hồi</TableHead>
               <TableHead className="w-30 text-center">Avg làm</TableHead>

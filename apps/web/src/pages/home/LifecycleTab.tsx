@@ -3,6 +3,7 @@ import {
   Activity,
   AlertTriangle,
   CheckCircle2,
+  BadgeCheck,
   ChevronDown,
   ChevronLeft,
   ChevronRight,
@@ -80,6 +81,7 @@ const STAGE_META: Record<string, { icon: React.ElementType; short: string }> = {
   'qc-sorting': { icon: ListChecks, short: 'QC kiểm' },
   'sew-in': { icon: LogIn, short: 'May vào' },
   'sew-out': { icon: LogOut, short: 'May ra' },
+  'qc-post-sew': { icon: BadgeCheck, short: 'QC may' },
   pack: { icon: Package, short: 'Đóng hàng' },
 };
 

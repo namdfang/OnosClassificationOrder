@@ -44,7 +44,7 @@ Tách role Designer cũ (1 account dùng chung) thành **DesignerLeader** + N **
 
 ```
 Leader assign → Sub Designer nhận → làm → hoàn thành
-                                 ↘ trả lại (rejected) → leader re-assign
+                                 ↘ không làm được (rejected) → leader re-assign
 xưởng báo lỗi designer (rework) → sub làm lại → hoàn thành
 ```
 
@@ -53,7 +53,7 @@ State machine 6 trạng thái:
 - `assigned` (leader gán cho user)
 - `in-progress` (sub bấm "Nhận làm")
 - `done` (sub bấm "Hoàn thành" — auto `toolResultNote='ok'` + `readyForFulfill=true`)
-- `rejected` (sub bấm "Trả lại" + reason — cho phép từ **`assigned` HOẶC `in-progress`**, tức đã kéo sang "Đang làm" vẫn trả lại được)
+- `rejected` (sub bấm "Không làm được" + reason — cho phép từ **`assigned` HOẶC `in-progress`**, tức đã kéo sang "Đang làm" vẫn báo không làm được. **Nhãn hiển thị mọi nơi = "Không làm được"**; state key vẫn là `rejected`)
 - `rework` (xưởng set productionError có errorSource='designer')
 
 **Identity model:** `Order.assignee = user._id` (string). KHÔNG còn dùng workshop_config (category=assignee đã xoá).
@@ -120,7 +120,7 @@ Login Designer → auto redirect `/my-tasks` (xem `pages/login/index.tsx`).
 - Filter bar: search + 7 `SelectFilter` single-select (Sản phẩm/Loại vải/Máy/Kết quả Tool/**Note kq Tool** = `toolResultNote`/**Khách hàng** = `userSku`/**File sửa lỗi** = `errorFile`) — cross-faceted từ `/my-task-filters`. **Loại vải/Máy/Kết quả Tool/Note kq Tool/File sửa lỗi hiển thị `name`, KHÔNG hiện raw code** — `value` gửi BE vẫn là code. 4 facet scalar resolve qua `useWorkshopConfigStore.byCategory` (helper `labelOpts`); **`errorFile` dùng thẳng `options=filterOptions.errorFile` (không `labelOpts`/`byCategory`)** vì `label`=name đã resolve **NGAY Ở BACKEND** (`getMyTaskFilters` query `workshop_config` category `error_file_type` → `nameMap`, giống `getWorkshopAvailableFilters`). **Pattern y hệt facet `errorFile` trong `OrderTableWorkshop.tsx`.** Backend: `toolResultNote` thêm vào `buildMyTaskFilter` ($in) + facet KEYS trong `getMyTaskFilters`; shared `GetMyTasksZod.toolResultNote` + `GetMyTaskFiltersResZod.data.toolResultNote`.
   - **File sửa lỗi (`errorFile`) — single-select** (field **mảng** `string[]` trên order): chọn 1 mã → đơn khớp qua `filter.errorFile = { $in: [code] }` (mảng chứa mã đó). Lưu 1 code trong `filters.errorFile` (đồng bộ URL param `errorFile` + F5 giữ). Facet count viết aggregate **riêng có `$unwind: '$errorFile'`** (không dùng helper `aggregate()` scalar chung — 1 đơn nhiều loại đếm ở nhiều option ⇒ tổng option có thể > số đơn, đúng). Shared: `GetMyTasksZod.errorFile` + `GetMyTaskFiltersResZod.data.errorFile`. BE: `buildMyTaskFilter` ($in mảng) + `errorFileFacet()` (inject `WorkshopConfigEntity` model, resolve name) trong `getMyTaskFilters`.
   - **⚠️ Data fix (bắt buộc):** legacy `errorFile` lưu **lồng 2 lớp** `[['collar']]` (ghi trước guard `normalizeFieldValue().flat(2)`) làm HỎNG cả facet (`$unwind` 1 lần trả mảng con `['collar']`) lẫn filter (`$in:['collar']` không khớp phần tử mảng) → dropdown hiện `["collar"]` + lọc ra 0. Fix bằng migration flatten trong `OrderService.onModuleInit()` (`updateMany({ errorFile: { $elemMatch: { $type: 'array' } } }, [ $reduce/$concatArrays flatten ])`, idempotent). Migration này **cũng fix filter `errorFile` của `OrderTableWorkshop`** (chung dữ liệu). Cần **restart API** để chạy onModuleInit.
-- KPI 6 ô: Cần làm · Cần làm lại · Đang làm · Đã xong · **Đã trả lại** · Phản hồi/Làm
+- KPI 6 ô: Cần làm · Cần làm lại · Đang làm · Đã xong · **Không làm được** · Phản hồi/Làm
 - Period switcher today/7d/30d ảnh hưởng cột "Đã xong" + completed stats
 
 **Multi-select**:
@@ -135,11 +135,11 @@ Login Designer → auto redirect `/my-tasks` (xem `pages/login/index.tsx`).
 
 **Bulk action toolbar** sticky bottom khi `selected.size > 0`:
 - Detect cột của items đã chọn:
-  - 1 cột → button theo `COL_META[col].bulk`: Cần làm (Nhận/Trả) · Cần làm lại (Nhận lại) · Đang làm (Hoàn thành) · Đã xong (—)
+  - 1 cột → button theo `COL_META[col].bulk`: Cần làm (Nhận / Không làm được) · Cần làm lại (Nhận lại) · Đang làm (Hoàn thành) · Đã xong (—)
   - Mixed → text "Đơn ở nhiều cột" + clear button only
 - Reject mở `RejectModal` với label "N đơn được chọn" → `POST /designer/bulk-transition { ids, action: 'reject', reason }` → skip per-row + report
 
-**Rejected drawer** dưới kanban: list collapsible đơn đã trả với productionId clickable + reason.
+**Rejected drawer** dưới kanban (tiêu đề "File không làm được"): list collapsible file không làm được với productionId clickable + reason.
 
 ### 2.4 Xưởng báo lỗi → rework cycle
 1. Fulfillment vào `/orders` workshop → cell "Lỗi xưởng" (`ProductionErrorSelectCell`) pick code:
@@ -156,7 +156,7 @@ Login Designer → auto redirect `/my-tasks` (xem `pages/login/index.tsx`).
 **Dashboard tab Designer** (`?tab=designer`): xem `Dashboard.md` mục tab Designer.
 
 **Order list KPI panel** (`DesignerSummaryPanel` trên `/orders` cho Admin/Manager/Leader):
-- KPI 7 button-card (**Tổng chưa gán** = N+M / **Chưa gán không tool** = M / Cần làm/Cần làm lại/Đang làm/Đã xong/Đã trả) — click → set filter list
+- KPI 7 button-card (**Tổng chưa gán** = N+M / **Chưa gán không tool** = M / Cần làm/Cần làm lại/Đang làm/Đã xong/Không làm được) — click → set filter list
 - Bảng matrix per-designer (collapsible, sort total desc, "Chưa gán" lên đầu) — click cell → set `assignee + designerStatus`
 - Toggle "Xem theo filter/Xem tổng" swap scoped ↔ overall counts
 - Data từ `GET /v1/orders/designer-breakdown` (cùng filter shape với list)
@@ -278,7 +278,7 @@ Xem 2.3 chi tiết.
 
 Components con:
 - `TaskCard` — drag handle, productionId button (mở `TaskDetailDialog`), mockup thumbnail (mở preview), timestamp + reworkCount badge
-- `TaskDetailDialog` — header status badge + grid info (9 field) + mockup + designs grid 4 cột + timeline (Khách lên đơn `orderAt` → **Vào sản xuất `inProductionAt`** → Được gán → Bắt đầu → Hoàn thành → Cần làm lại/Đã trả lại) + banner productionError/rejectedReason. Fetch `GET /v1/orders/:id`
+- `TaskDetailDialog` — header status badge + grid info (9 field) + mockup + designs grid 4 cột + timeline (Khách lên đơn `orderAt` → **Vào sản xuất `inProductionAt`** → Được gán → Bắt đầu → Hoàn thành → Cần làm lại/Không làm được) + banner productionError/rejectedReason. Fetch `GET /v1/orders/:id`
 - `RejectModal` — textarea reason max 500, dùng chung cho single reject + bulk reject
 
 ### 4.2b `DailyBreakdownPanel` — "Chi tiết theo ngày" (trên /my-tasks)
@@ -308,7 +308,7 @@ Trên cùng tab List Order + Bảng Workshop khi user có quyền `page.designer
 > File: `apps/web/src/components/orders/DesignerBacklogDialog.tsx`. Trigger: nút **"Chi tiết tồn đọng"** cạnh `DesignerSummaryPanel` (gate `canSeeDesignerSummary`) trong `OrderTableWorkshop.tsx`.
 
 - Mở modal → fetch `GET /v1/orders/designer-backlog` (MỌI ngày, không theo filter trang — backlog cần thấy đơn cũ).
-- **Cây 2 cấp** (modal CHỈ hiện counts, không kéo task): Designer (gập, mặc định mở người tồn nhiều nhất) → từng **ngày `inProductionAt`** với badge **màu theo tuổi** (`ageMeta`: hôm nay=xanh, 3-7d=vàng, 8-15d=cam, >15d=đỏ) + tổng + chip mỗi trạng thái (Chưa gán/Đã gán/Đang làm/Làm lại/Đã trả).
+- **Cây 2 cấp** (modal CHỈ hiện counts, không kéo task): Designer (gập, mặc định mở người tồn nhiều nhất) → từng **ngày `inProductionAt`** với badge **màu theo tuổi** (`ageMeta`: hôm nay=xanh, 3-7d=vàng, 8-15d=cam, >15d=đỏ) + tổng + chip mỗi trạng thái (Chưa gán/Đã gán/Đang làm/Làm lại/Không làm được).
 - **Layout rộng** (`max-w-5xl`): designer chia **2 cột** (`lg:grid-cols-2`, round-robin chẵn/lẻ → 2 cột độc lập, card cao không kéo lệch cột kia). Header có nút **"Mở rộng hết / Thu gọn hết"** (`toggleAll`) + ô tìm designer.
 - **Drill xem task ở bảng chính** (`onDrillDay` → `handleBacklogDrill` ở `OrderTableWorkshop`): click **vùng ngày** → lọc `assignee + ngày` (mọi trạng thái); click **1 chip trạng thái** → lọc `assignee + ngày + đúng status đó` (chính xác, loại done). Đóng modal → bảng hiện task; thanh chip "Đang lọc" hiện filter vừa set. `__unassigned__` → map `__none__`; `__nodate__` → clear filter ngày.
 - Header: tổng task chưa xong + ngày cũ nhất + ô tìm designer (lọc client-side).

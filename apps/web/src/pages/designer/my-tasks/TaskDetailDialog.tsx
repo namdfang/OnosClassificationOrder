@@ -60,7 +60,7 @@ const STATUS_META: Record<DesignerStatus, { label: string; cls: string }> = {
   [DesignerStatus.Assigned]: { label: 'Cần làm', cls: 'bg-zinc-300 text-zinc-800' },
   [DesignerStatus.InProgress]: { label: 'Đang làm', cls: 'bg-indigo-200 text-indigo-800' },
   [DesignerStatus.Done]: { label: 'Đã xong', cls: 'bg-emerald-200 text-emerald-800' },
-  [DesignerStatus.Rejected]: { label: 'Đã trả', cls: 'bg-rose-200 text-rose-800' },
+  [DesignerStatus.Rejected]: { label: 'Không làm được', cls: 'bg-rose-200 text-rose-800' },
   [DesignerStatus.Rework]: { label: 'Cần làm lại', cls: 'bg-amber-200 text-amber-800' },
 };
 
@@ -237,7 +237,7 @@ export function TaskDetailDialog({ orderId, onClose }: Props) {
                   {detail.designerRejectedAt && (
                     <Timeline
                       icon={<XCircle size={11} className="text-rose-600" />}
-                      label="Đã trả lại"
+                      label="Không làm được"
                       value={fmt(detail.designerRejectedAt)}
                     />
                   )}
@@ -259,7 +259,7 @@ export function TaskDetailDialog({ orderId, onClose }: Props) {
 
               {detail.designerRejectedReason && (
                 <div className="rounded-md border border-rose-300 bg-rose-50 dark:bg-rose-900/20 p-2.5">
-                  <p className="text-xs font-medium text-rose-800 dark:text-rose-200">Lý do trả lại</p>
+                  <p className="text-xs font-medium text-rose-800 dark:text-rose-200">Lý do không làm được</p>
                   <p className="text-[11px] text-rose-700 dark:text-rose-300 mt-1">
                     {detail.designerRejectedReason}
                   </p>

@@ -42,10 +42,10 @@ export function RejectModal({ open, productionId, onConfirm, onClose }: Props) {
     <Dialog open={open} onOpenChange={(o) => !o && !submitting && onClose()}>
       <DialogContent className="max-w-md">
         <DialogHeader>
-          <DialogTitle>Trả lại task</DialogTitle>
+          <DialogTitle>Báo file không làm được</DialogTitle>
         </DialogHeader>
         <p className="text-xs text-muted-foreground">
-          Trả task <code className="font-mono">{productionId}</code> về cho leader để re-assign cho người khác.
+          Báo file <code className="font-mono">{productionId}</code> không làm được, chuyển về leader để giao người khác.
           Reason giúp leader hiểu lý do.
         </p>
         <div className="space-y-2">
@@ -66,7 +66,7 @@ export function RejectModal({ open, productionId, onConfirm, onClose }: Props) {
           </Button>
           <Button variant="destructive" onClick={handleConfirm} disabled={submitting}>
             {submitting && <Spinner size={14} className="mr-2" />}
-            Trả lại
+            Không làm được
           </Button>
         </DialogFooter>
       </DialogContent>

@@ -508,7 +508,7 @@ export default function MyTasksPage() {
         action: DesignerTransitionAction.Reject,
         reason: reason || undefined,
       });
-      toast.success('Đã trả lại task');
+      toast.success('Đã báo file không làm được');
       setRejectTarget(null);
       refreshAll();
     } catch (err) {
@@ -561,7 +561,7 @@ export default function MyTasksPage() {
             <KPI label="Cần làm lại" value={stats.reworkCount} accent="text-amber-600" />
             <KPI label="Đang làm" value={stats.inProgressCount} accent="text-indigo-600" />
             <KPI label="Đã xong" value={stats.completedInPeriod} accent="text-emerald-600" />
-            <KPI label="Đã trả lại" value={stats.rejectedCount} accent="text-rose-600" />
+            <KPI label="Không làm được" value={stats.rejectedCount} accent="text-rose-600" />
             <KPI
               label="Phản hồi / làm"
               value={`${stats.avgResponseMin}' / ${stats.avgWorkMin}'`}
@@ -702,13 +702,13 @@ export default function MyTasksPage() {
             onClick={() => setShowRejected((s) => !s)}
             className="w-full flex items-center justify-between p-3 text-xs font-medium text-muted-foreground hover:text-foreground"
           >
-            <span>Đơn đã trả lại ({rejected.length})</span>
+            <span>File không làm được ({rejected.length})</span>
             {showRejected ? <ChevronUp size={14} /> : <ChevronDown size={14} />}
           </button>
           {showRejected && (
             <div className="p-3 pt-0 grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-2">
               {rejected.length === 0 && (
-                <p className="text-xs text-muted-foreground col-span-full">Chưa trả lại đơn nào.</p>
+                <p className="text-xs text-muted-foreground col-span-full">Chưa có file nào báo không làm được.</p>
               )}
               {rejected.map((c) => (
                 <TaskCard key={c._id} card={c} onPreview={onPreview} />
@@ -748,7 +748,7 @@ export default function MyTasksPage() {
                   )}
                   {bulkActions.includes(DesignerTransitionAction.Reject) && (
                     <Button size="sm" variant="destructive" onClick={() => setBulkReject(true)}>
-                      <XCircle size={14} /> Trả lại
+                      <XCircle size={14} /> Không làm được
                     </Button>
                   )}
                 </>
@@ -980,9 +980,9 @@ function Column({
                             }}
                             onPointerDown={(e) => e.stopPropagation()}
                             className="absolute top-1 right-1 text-[10px] text-rose-600 hover:text-rose-700 opacity-0 group-hover:opacity-100 transition-opacity bg-background/80 rounded px-1.5 py-0.5"
-                            title="Trả lại"
+                            title="Không làm được"
                           >
-                            Trả
+                            Không làm được
                           </button>
                         )}
                       </div>

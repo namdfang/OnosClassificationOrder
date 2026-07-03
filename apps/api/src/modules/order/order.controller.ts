@@ -238,7 +238,7 @@ export class OrderController {
 
   @Get('lifecycle-overview')
   @Auth(ORDER_VIEW_ROLES)
-  @ApiOperation({ summary: 'Vòng đời đơn — phễu 9 chặng (soát tool → thiết kế → 7 stage fulfillment). Fulfillment khóa theo xưởng.' })
+  @ApiOperation({ summary: 'Vòng đời đơn — phễu 10 chặng (soát tool → thiết kế → 8 stage fulfillment). Fulfillment khóa theo xưởng.' })
   @HttpCode(HttpStatus.OK)
   @ApiOkResponse({ type: GetLifecycleOverviewResDto })
   async getLifecycleOverview(

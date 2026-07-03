@@ -143,7 +143,7 @@ export function AssignDesignerDialog({ open, selectedIds, onClose, onApplied }: 
               <div className="grid grid-cols-3 gap-2 text-xs">
                 <StatBox label="Chưa gán" value={preview.byStatus.unassigned} cls="text-zinc-600 dark:text-zinc-300" />
                 <StatBox label="Đã gán" value={preview.byStatus.assigned} cls="text-zinc-600 dark:text-zinc-300" />
-                <StatBox label="Đã trả" value={preview.byStatus.rejected} cls="text-rose-600 dark:text-rose-400" />
+                <StatBox label="Không làm được" value={preview.byStatus.rejected} cls="text-rose-600 dark:text-rose-400" />
                 <StatBox label="Đang làm" value={preview.byStatus.inProgress} cls="text-indigo-600 dark:text-indigo-400" />
                 <StatBox label="Đã xong" value={preview.byStatus.done} cls="text-emerald-600 dark:text-emerald-400" />
                 <StatBox label="Cần làm lại" value={preview.byStatus.rework} cls="text-amber-600 dark:text-amber-400" />

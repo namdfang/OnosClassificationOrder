@@ -1,15 +1,17 @@
 /**
- * 7 stage tuần tự sau khi designer mark `done` + readyForFulfill=true.
+ * 8 stage tuần tự sau khi designer mark `done` + readyForFulfill=true.
  *
- *  Print → Press → QCPostPress → QCSorting → SewIn → SewOut → Pack → completed
+ *  Print → Press → QCPostPress → QCSorting → SewIn → SewOut → QCPostSew → Pack → completed
  *
  * Mỗi stage có đúng 1 worker per factory (BE enforce unique constraint
  * `(factoryId, fulfillmentStage)` trên users collection). Đơn auto-assign cho
  * worker đó qua filter `(factoryId, currentFulfillmentStage)` ở `getOrders`.
  *
  * Refactor history: 5 → 7 stage. QC cũ tách thành "QC sau ép" + "QC phân hàng
- * kiểm"; May cũ tách thành "May nhận vào" + "May xuất ra". Đơn cũ với enum cũ
- * (qc / sew) không migrate — chỉ áp cho đơn mới (xem FulfillmentWorkflow.md).
+ * kiểm"; May cũ tách thành "May nhận vào" + "May xuất ra". Sau đó thêm "QC sau
+ * may" (`qc-post-sew`) chèn giữa "May xuất ra" và "Đóng hàng" → 8 stage. Đơn cũ
+ * với enum cũ (qc / sew) không migrate — chỉ áp cho đơn mới (xem
+ * FulfillmentWorkflow.md).
  */
 export enum FulfillmentStage {
   Print = 'print',                  // In
@@ -18,6 +20,7 @@ export enum FulfillmentStage {
   QCSorting = 'qc-sorting',         // QC phân hàng kiểm
   SewIn = 'sew-in',                 // May nhận vào
   SewOut = 'sew-out',               // May xuất ra
+  QCPostSew = 'qc-post-sew',        // QC sau may
   Pack = 'pack',                    // Đóng hàng
 }
 
@@ -28,10 +31,11 @@ export const FULFILLMENT_STAGES: FulfillmentStage[] = [
   FulfillmentStage.QCSorting,
   FulfillmentStage.SewIn,
   FulfillmentStage.SewOut,
+  FulfillmentStage.QCPostSew,
   FulfillmentStage.Pack,
 ];
 
-/** Index 0-6 để compare thứ tự stage (vd rework-back chỉ cho phép target < current). */
+/** Index 0-7 để compare thứ tự stage (vd rework-back chỉ cho phép target < current). */
 export const FULFILLMENT_STAGE_ORDER: Record<FulfillmentStage, number> = {
   [FulfillmentStage.Print]: 0,
   [FulfillmentStage.Press]: 1,
@@ -39,7 +43,8 @@ export const FULFILLMENT_STAGE_ORDER: Record<FulfillmentStage, number> = {
   [FulfillmentStage.QCSorting]: 3,
   [FulfillmentStage.SewIn]: 4,
   [FulfillmentStage.SewOut]: 5,
-  [FulfillmentStage.Pack]: 6,
+  [FulfillmentStage.QCPostSew]: 6,
+  [FulfillmentStage.Pack]: 7,
 };
 
 export const FULFILLMENT_STAGE_LABELS: Record<FulfillmentStage, string> = {
@@ -49,6 +54,7 @@ export const FULFILLMENT_STAGE_LABELS: Record<FulfillmentStage, string> = {
   [FulfillmentStage.QCSorting]: 'QC phân hàng kiểm',
   [FulfillmentStage.SewIn]: 'May nhận vào',
   [FulfillmentStage.SewOut]: 'May xuất ra',
+  [FulfillmentStage.QCPostSew]: 'QC sau may',
   [FulfillmentStage.Pack]: 'Đóng hàng',
 };
 

@@ -17,6 +17,7 @@ import { DateRangePicker } from '@/components/common/DateRangePicker';
 import { SelectFilter } from '@/components/common/SelectFilter';
 import { ImagePreviewDialog } from '@/components/common/ImagePreviewDialog';
 import { Spinner } from '@/components/common/Spinner';
+import { TooltipProvider } from '@/components/ui/tooltip';
 import { ColorBadgeSelectCell } from '@/components/orders/cells/ColorBadgeSelectCell';
 import { ImageThumbCell } from '@/components/orders/cells/ImageThumbCell';
 import { MultiIconSelectCell } from '@/components/orders/cells/MultiIconSelectCell';
@@ -256,6 +257,7 @@ export default function ToolCheckTab() {
   const days = useMemo(() => [...(data?.days || [])].reverse(), [data]);
 
   return (
+    <TooltipProvider delayDuration={200}>
     <div className="space-y-5">
       {/* Filter bar (thời gian) */}
       <div className="rounded-lg border border-border bg-card p-3 flex items-center gap-2 flex-wrap">
@@ -559,6 +561,7 @@ export default function ToolCheckTab() {
         title={preview?.title}
       />
     </div>
+    </TooltipProvider>
   );
 }
 
