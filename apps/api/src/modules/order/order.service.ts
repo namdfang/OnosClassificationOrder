@@ -5035,6 +5035,119 @@ export class OrderService implements OnModuleInit {
   }
 
   /**
+   * Designer TỰ NHẬN (self-claim) N đơn từ pool "cần gán" về CHÍNH MÌNH.
+   *
+   * Khác `bulkAssignDesigner`:
+   *  - `assignee` luôn = người gọi (`ctx.user`), không nhận userId từ ngoài.
+   *  - Chỉ nhận đơn "chưa ai ôm" — tức đang ở pool: designerStatus ∈
+   *    {unassigned, rejected} hoặc (rework & chưa có ai ôm). KHÔNG bao giờ cướp
+   *    đơn người khác đang làm (assigned/in-progress) hay đã xong.
+   *    (Đơn `rejected` vẫn còn `assignee` cũ của người đã trả lại — vẫn tính là
+   *    chưa ai ôm nên nhận được, ghi đè assignee sang người nhận.)
+   *  - Không cần quyền edit field 'assignee' (đây là quyền tự thân của designer,
+   *    chặn ở controller theo role Designer/Leader).
+   *
+   * Ghi `orderLog` (field 'assignee', ctx.user = người nhận + thời điểm) để biết
+   * AI nhận, NHẬN LÚC NÀO.
+   */
+  async claimDesignerTasks(ids: string[], ctx: AuditContext): Promise<BulkAssignDesignerResDto> {
+    const userId = String(ctx.user?._id || '');
+
+    const docs = await this.orderModel
+      .find(
+        { _id: { $in: ids }, deletedAt: { $exists: false } },
+        { _id: 1, productionId: 1, assignee: 1, designerStatus: 1, toolResultNote: 1 },
+      )
+      .lean();
+
+    const skipped: { orderId: string; productionId: string; reason: string }[] = [];
+    const eligibleIds: string[] = [];
+
+    for (const o of docs) {
+      const orderId = String(o._id);
+      const productionId = String((o as { productionId?: string }).productionId || orderId);
+      const status =
+        ((o as { designerStatus?: DesignerStatus }).designerStatus as DesignerStatus) ||
+        DesignerStatus.Unassigned;
+      const currentAssignee = (o as { assignee?: string }).assignee;
+      const note = (o as { toolResultNote?: string }).toolResultNote;
+
+      if (note === READY_FOR_FULFILL_CODE) {
+        skipped.push({
+          orderId,
+          productionId,
+          reason: `Note kq Tool 1 đã 'ok' — không cần designer.`,
+        });
+        continue;
+      }
+      // Pool "chưa ai ôm" = unassigned / rejected (người cũ đã trả lại) / rework
+      // chưa có ai ôm. Các trạng thái còn lại (assigned/in-progress/done, rework
+      // đang có người ôm) → đang có người làm hoặc đã xong, không nhận được.
+      const claimable =
+        status === DesignerStatus.Unassigned ||
+        status === DesignerStatus.Rejected ||
+        (status === DesignerStatus.Rework && !currentAssignee);
+      if (!claimable) {
+        skipped.push({
+          orderId,
+          productionId,
+          reason:
+            status === DesignerStatus.Rework
+              ? `Đơn làm lại đang có người ôm — không nhận được.`
+              : `Đơn đang có người làm hoặc đã xong — không nhận được.`,
+        });
+        continue;
+      }
+      eligibleIds.push(orderId);
+    }
+
+    let modified = 0;
+    if (eligibleIds.length > 0) {
+      const patch: Record<string, unknown> = {
+        assignee: userId,
+        designerStatus: DesignerStatus.Assigned,
+        designerAssignedAt: new Date(),
+        designerRejectedReason: null,
+        designerRejectedAt: null,
+      };
+      // Guard race: chỉ nhận đơn còn ở pool status. Nếu người khác vừa nhận
+      // trước (status → assigned), filter không khớp → không cướp.
+      const result = await this.orderModel.updateMany(
+        {
+          _id: { $in: eligibleIds },
+          designerStatus: {
+            $in: [DesignerStatus.Unassigned, DesignerStatus.Rejected, DesignerStatus.Rework],
+          },
+        },
+        { $set: patch },
+      );
+      modified = result.modifiedCount || 0;
+
+      void this.orderLogService.writeMany(
+        eligibleIds.map((orderId) => ({
+          orderId,
+          action: 'bulk_update' as const,
+          field: 'assignee',
+          before: null,
+          after: userId,
+          ctx,
+        })),
+      );
+
+      void this.invalidateListCache();
+    }
+
+    return {
+      success: true,
+      data: {
+        matched: docs.length,
+        modified,
+        skipped,
+      },
+    };
+  }
+
+  /**
    * Designer breakdown summary cho trang /orders (Admin/Leader). Trả về:
    *   - `scoped`: KPI count theo filter hiện tại
    *   - `overall`: KPI count toàn bộ (ignore filter) — dùng làm baseline

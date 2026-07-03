@@ -13,6 +13,7 @@ import {
   BulkTransferOrderDto,
   BulkUpdateOrderFieldDto,
   BulkUpdateOrderFieldResDto,
+  ClaimDesignerTasksDto,
   DesignerBreakdownResDto,
   DesignerBacklogResDto,
   GetErrorLogDto,
@@ -516,6 +517,29 @@ export class OrderController {
       { user, ip, userAgent },
       user?.role?.permissionCodes,
     );
+  }
+
+  @Post('claim-designer-tasks')
+  @Auth([
+    RoleType.SuperAdmin,
+    RoleType.Admin,
+    RoleType.Manager,
+    RoleType.DesignerLeader,
+    RoleType.Designer,
+  ])
+  @ApiOperation({
+    summary:
+      'Designer TỰ NHẬN (self-claim) N đơn từ pool cần gán về chính mình. Chỉ nhận đơn chưa ai ôm (unassigned/rejected/rework-chưa-ôm). Ghi log ai nhận + lúc nào.',
+  })
+  @HttpCode(HttpStatus.OK)
+  @ApiOkResponse({ type: BulkAssignDesignerResDto })
+  async claimDesignerTasks(
+    @Body() dto: ClaimDesignerTasksDto,
+    @AuthUser() user: UserDocument,
+    @ClientIp() ip: string,
+    @UserAgent() userAgent: string,
+  ): Promise<BulkAssignDesignerResDto> {
+    return this.orderService.claimDesignerTasks(dto.ids, { user, ip, userAgent });
   }
 
   @Post(':id/set-production-error')

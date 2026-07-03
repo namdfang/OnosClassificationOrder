@@ -32,7 +32,7 @@
 >  - `GET /v1/designer/my-tasks` + `/my-task-filters` + `/my-stats` + `/my-daily-breakdown`
 >  - `GET /v1/designer/performance` + `/timeline/:userId` + `/team-daily-breakdown` + `/breakdown-filters` + `/daily-overview` + `/assign-backlog` + `/product-breakdown`
 >  - `GET /v1/orders/designer-breakdown` (KPI matrix per-user trong /orders)
->  - `POST /v1/orders/bulk-assign-designer-preview` + `/bulk-assign-designer`
+>  - `POST /v1/orders/bulk-assign-designer-preview` + `/bulk-assign-designer` + `/claim-designer-tasks` (designer self-claim)
 >  - `POST /v1/orders/:id/set-production-error` (atomic 3 field — bắt buộc khi 'other')
 >  - `POST /v1/orders/backfill-designer-status` (Admin one-shot)
 
@@ -107,6 +107,11 @@ State machine 6 trạng thái:
    - `noToolCount=0` + conflict → "Ghi đè & Gán".
    - `noToolCount=0` + không conflict → "Gán".
 5. `POST /bulk-assign-designer { ids, userId, reassignOthers, skipUnreviewed }` → skip đơn `ok` + (nếu `skipUnreviewed`) đơn chưa soát + **đơn rework đang có người ôm** ("Cần làm lại đang có người ôm — chỉ gán được đơn chưa có ai ôm.") + đơn in-progress/done → report skipped → toast + detail.
+
+**Self-claim (Designer TỰ NHẬN task)**: trên bảng backlog Dashboard §0c (`DesignerAssignBacklog.tsx`), khi người xem là role **`Designer`/`DesignerLeader`** → hiện nút **"Nhận về mình ({N})"** (icon `Grab`) cạnh/thay cho "Gán design" (nút "Gán design" chỉ hiện cho `SuperAdmin/Admin/Manager/DesignerLeader`; Leader thấy cả 2). Tick đơn → "Nhận về mình" → `POST /orders/claim-designer-tasks { ids }` (không preview, toast summary + skipped như bulk-transition).
+- BE `OrderService.claimDesignerTasks(ids, ctx)`: `assignee` **luôn = `ctx.user._id`** (không nhận từ ngoài). Chỉ nhận đơn **chưa ai ôm** — pool status `unassigned` / `rejected` (người cũ đã trả lại, vẫn còn `assignee` cũ nhưng vẫn nhận được → ghi đè) / `rework` chưa có ai ôm; các trạng thái khác skip ("Đơn đang có người làm hoặc đã xong" / "Đơn làm lại đang có người ôm"). Đơn `note='ok'` cũng skip. Patch: `assignee`, `designerStatus='assigned'`, `designerAssignedAt=now`, clear rejected. `updateMany` guard `designerStatus ∈ {unassigned,rejected,rework}` chống race (người khác vừa nhận trước → không cướp).
+- **Log ai nhận / lúc nào**: `orderLog.writeMany` (field `assignee`, `after=userId`, `ctx.user` = người nhận + timestamp) — audit trail giống bulk-assign.
+- KHÔNG cần permission `order.field.assignee.edit` (self-claim là quyền tự thân của designer, chặn ở controller theo role).
 
 ### 2.3 Sub Designer xử lý task
 
@@ -220,6 +225,7 @@ factoryId?: string                // ref FactoryEntity, REQUIRED khi role=Fulfil
 | GET | `/v1/orders/designer-backlog` | Admin/Manager/Leader | **Tồn đọng** (đơn chưa `done`, gồm unassigned+rejected) gom theo **Designer × Ngày `inProductionAt`** (MỌI ngày). Trả cây `designers[] → days[]` (counts per status + `ageDays`). Cho modal "Chi tiết tồn đọng". |
 | POST | `/v1/orders/bulk-assign-designer-preview` | Same | Pre-flight stats |
 | POST | `/v1/orders/bulk-assign-designer` | Same | Body `{ ids, userId, reassignOthers }`, skip + report |
+| POST | `/v1/orders/claim-designer-tasks` | Admin/Manager/Leader/**Designer** | **Self-claim** — designer tự nhận `{ ids }` về CHÍNH MÌNH (`assignee=ctx.user._id`). Chỉ nhận đơn chưa ai ôm (unassigned/rejected/rework-chưa-ôm), skip 'ok' + đang-làm/đã-xong. Ghi orderLog (ai nhận + lúc nào). Xem §2.2. |
 | POST | `/v1/orders/:id/set-production-error` | Admin/Manager/Designer/Fulfillment/Leader | Atomic set 3 field, validate code='other' phải có source + note |
 | POST | `/v1/orders/backfill-designer-status` | Admin | Suy ra designerStatus + timestamps cho order legacy từ assignee + toolResultNote + OrderLog (idempotent) |
 

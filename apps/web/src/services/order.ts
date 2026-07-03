@@ -6,6 +6,7 @@ import type {
   BulkTransferOrderDto,
   BulkUpdateOrderFieldDto,
   CancelOrderDto,
+  ClaimDesignerTasksDto,
   ImportProductionOrdersDto,
   ImportReworkOrdersDto,
   PreviewCuttingFilesDto,
@@ -117,6 +118,10 @@ const bulkAssignDesigner = (data: BulkAssignDesignerDto) => {
   return callApi(`/${CONFIG.API_VERSION}/orders/bulk-assign-designer`, 'post', data);
 };
 
+const claimDesignerTasks = (data: ClaimDesignerTasksDto) => {
+  return callApi(`/${CONFIG.API_VERSION}/orders/claim-designer-tasks`, 'post', data);
+};
+
 const setProductionError = (id: string, data: SetProductionErrorDto) => {
   return callApi(`/${CONFIG.API_VERSION}/orders/${id}/set-production-error`, 'post', data);
 };
@@ -179,6 +184,7 @@ export const order = {
   getDesignerBacklog,
   bulkAssignDesignerPreview,
   bulkAssignDesigner,
+  claimDesignerTasks,
   setProductionError,
   getErrorLog,
   getByProductionId,

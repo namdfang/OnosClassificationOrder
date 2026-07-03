@@ -723,6 +723,12 @@ export const BulkAssignDesignerResZod = ResZod.extend({
 });
 export class BulkAssignDesignerResDto extends createZodDto(extendApi(BulkAssignDesignerResZod)) {}
 
+/** Designer tự nhận (self-claim) N đơn từ pool "cần gán" về chính mình. */
+export const ClaimDesignerTasksZod = z.object({
+  ids: IDZod.array().min(1),
+});
+export class ClaimDesignerTasksDto extends createZodDto(extendApi(ClaimDesignerTasksZod)) {}
+
 //
 // Set production error atomic — wrapper riêng cho việc set 3 field cùng lúc
 // (productionError + productionErrorSource + productionErrorNote). Cần thiết

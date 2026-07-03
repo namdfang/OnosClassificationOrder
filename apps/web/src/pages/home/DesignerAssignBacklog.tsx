@@ -1,5 +1,6 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
-import { ChevronDown, ChevronRight, ImageOff, UserPlus } from 'lucide-react';
+import { ChevronDown, ChevronRight, Grab, ImageOff, UserPlus } from 'lucide-react';
+import { toast } from 'sonner';
 import { PRODUCT_LEVEL_MAP, WorkshopConfigCategory } from 'shared';
 import type { AssignBacklogGroup, AssignBacklogOrder } from 'shared';
 
@@ -10,9 +11,14 @@ import { ImagePreviewDialog } from '@/components/common/ImagePreviewDialog';
 import { ImageThumbCell } from '@/components/orders/cells/ImageThumbCell';
 import { AssignDesignerDialog } from '@/components/orders/AssignDesignerDialog';
 import { RepositoryRemote } from '@/services';
+import { usePermission } from '@/hooks/usePermission';
 import { useWorkshopConfigStore } from '@/store/workshopConfigStore';
 import { handleAxiosError } from '@/utils';
 import { cn } from '@/utils/cn';
+
+// Role được TỰ NHẬN task về mình (self-claim) vs. role được gán cho người khác.
+const CLAIM_SELF_ROLES = ['Designer', 'DesignerLeader'];
+const ASSIGN_OTHERS_ROLES = ['SuperAdmin', 'Admin', 'Manager', 'DesignerLeader'];
 
 interface Props {
   days?: 7 | 14 | 30;
@@ -39,8 +45,13 @@ export function DesignerAssignBacklog({ days = 7, from, to, type, customer, relo
   const [expanded, setExpanded] = useState<Set<string>>(new Set());
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const [assignOpen, setAssignOpen] = useState(false);
+  const [claiming, setClaiming] = useState(false);
   const [preview, setPreview] = useState<{ url?: string; originalUrl?: string; title?: string } | null>(null);
   const seqRef = useRef(0);
+
+  const { roleName } = usePermission();
+  const canClaimSelf = !!roleName && CLAIM_SELF_ROLES.includes(roleName);
+  const canAssignOthers = !!roleName && ASSIGN_OTHERS_ROLES.includes(roleName);
 
   const resolve = useWorkshopConfigStore((s) => s.resolve);
   const loadConfig = useWorkshopConfigStore((s) => s.load);
@@ -107,6 +118,41 @@ export function DesignerAssignBacklog({ days = 7, from, to, type, customer, relo
   const selectedCount = selected.size;
   const selectedIds = useMemo(() => [...selected], [selected]);
 
+  // Designer TỰ NHẬN các đơn đã chọn về chính mình (self-claim). BE chỉ nhận đơn
+  // chưa ai ôm + ghi log ai nhận / lúc nào.
+  const handleClaimSelf = async () => {
+    if (selectedIds.length === 0) return;
+    try {
+      setClaiming(true);
+      const res = await RepositoryRemote.order.claimDesignerTasks({ ids: selectedIds });
+      const data = res.data?.data as {
+        matched: number;
+        modified: number;
+        skipped: { orderId: string; productionId: string; reason: string }[];
+      };
+      const msg = `Đã nhận ${data.modified}/${data.matched} đơn về mình`;
+      if (data.skipped.length === 0) {
+        toast.success(msg);
+      } else {
+        toast.warning(`${msg}. ${data.skipped.length} đơn bị bỏ qua.`, { duration: 6000 });
+        toast.message('Đơn bị bỏ qua', {
+          description: data.skipped
+            .slice(0, 5)
+            .map((s) => `• ${s.productionId}: ${s.reason}`)
+            .join('\n'),
+          duration: 9000,
+        });
+      }
+      setSelected(new Set());
+      fetchData();
+      onAssigned?.();
+    } catch (err) {
+      handleAxiosError(err);
+    } finally {
+      setClaiming(false);
+    }
+  };
+
   return (
     <div className="rounded-lg border border-border bg-card">
       {/* Header */}
@@ -127,10 +173,23 @@ export function DesignerAssignBacklog({ days = 7, from, to, type, customer, relo
             >
               Bỏ chọn ({selectedCount})
             </button>
-            <Button size="sm" onClick={() => setAssignOpen(true)}>
-              <UserPlus size={13} />
-              Gán design ({selectedCount})
-            </Button>
+            {canClaimSelf && (
+              <Button size="sm" onClick={handleClaimSelf} disabled={claiming}>
+                <Grab size={13} />
+                Nhận về mình ({selectedCount})
+              </Button>
+            )}
+            {canAssignOthers && (
+              <Button
+                size="sm"
+                variant={canClaimSelf ? 'outline' : 'default'}
+                onClick={() => setAssignOpen(true)}
+                disabled={claiming}
+              >
+                <UserPlus size={13} />
+                Gán design ({selectedCount})
+              </Button>
+            )}
           </div>
         )}
       </div>
