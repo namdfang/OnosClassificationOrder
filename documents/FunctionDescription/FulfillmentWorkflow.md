@@ -317,8 +317,8 @@ Riêng user **In** (`role=Fulfillment`, `fulfillmentStage='print'`) **KHÔNG** d
 
 - **Dispatcher** `pages/fulfillment/my-tasks/index.tsx`: nếu `myStage === FulfillmentStage.Print` → render `PrintWorkshopView`; còn lại render `FulfillmentKanbanView` (kanban cũ, đổi tên từ component cũ). Dispatcher chỉ gọi `useAuthStore` rồi rẽ nhánh → không vi phạm Rules of Hooks.
 - **`PrintWorkshopView`** (`pages/fulfillment/my-tasks/PrintWorkshopView.tsx`): thin orchestrator — giữ logic transition + `ReworkBackDialog` + `reloadToken`, render `<PrintOrderTable extraRowAction reloadToken>`.
-  - Action chỉ hiện khi `row.currentFulfillmentStage === 'print'` **và** `row.factoryId === user.factoryId` (khớp BE transition guard — đơn xưởng khác chỉ xem, không thao tác).
-  - Contextual theo `fulfillmentStages.print.status`: `waiting`/`rework` → **Bắt đầu**; `in-progress` → **Hoàn thành** + **Báo lỗi** (mở `ReworkBackDialog`, target chỉ có `designer` vì print là stage đầu).
+  - Action (`canPrint`) hiện khi **(1)** `row.toolResultNote === 'ok'` (thay cho check `currentFulfillmentStage === 'print'` cũ — đơn designer coi như xong) **và (2)** `row.factoryId === user.factoryId` (đơn xưởng khác chỉ xem). Đơn `currentFulfillmentStage` lệch (null/khác print do designer done qua path không hook) vẫn hiện nút → BE **self-heal** khi start.
+  - **(3)** Contextual theo `fulfillmentStages.print.status`: `waiting`/`rework` → **Bắt đầu** + **Báo lỗi**; `in-progress` → **Hoàn thành** + **Báo lỗi** (mở `ReworkBackDialog`, target chỉ có `designer` vì print là stage đầu). Status khác (vd `done` = đã in xong) → không nút.
   - Sau transition → bump `reloadToken` để `PrintOrderTable` refetch (bảng + count).
 - **`PrintOrderTable`** (`pages/fulfillment/my-tasks/PrintOrderTable.tsx`): bảng **phẳng KHÔNG group sản phẩm** (bỏ expand), self-contained:
   - Data từ `GET /v1/orders` với `sort=grouped` → sort ưu tiên **type → size → fabric → inProductionAt**. Pagination theo **đơn** (default size 50).
@@ -327,7 +327,7 @@ Riêng user **In** (`role=Fulfillment`, `fulfillmentStage='print'`) **KHÔNG** d
   - **URL params persistence** (prefix `p` = print, dùng `useSearchParams` — mirror pattern `OrderTableWorkshop`): mọi filter ghi lên query string (`psearch`, `pfrom`/`pto`, `pstatus`, `ptype`, `pusersku`, `pfabric`, `pmnum`, `pprint`, `ptool`, `pnote`, `perrfile`, `passign`, `pdstatus`, `perror`, `ppage`, `psize`). Effect sync state→URL (`{ replace: true }`) strip giá trị rỗng cho URL gọn, riêng **ngày luôn ghi** (`pfrom`/`pto` set kể cả rỗng → giữ trạng thái user clear date qua F5). State khởi tạo lazy từ `searchParams.get(...)` → **F5 / mở lại link đều khôi phục nguyên filter + search + ngày + trang**. Ngày đọc bằng `?? todayISO()` (chỉ default về hôm nay khi param vắng mặt hoàn toàn), các filter khác đọc bằng `|| ''`.
   - Cột = `WORKSHOP_COLS` (theo view-permission). Cột action **sticky phải** (prop `extraRowAction`). Highlight no-tool. `reloadToken` prop → ép refetch.
   - **Chế độ phím ↑↓** (toggle "Chế độ phím ↑↓" cạnh chips, state `keyboardMode` — **mặc định On**): bật → nghe `keydown` window, phím `↑`/`↓` di chuyển `cursorIndex` trong trang + copy `productionId` dòng đó vào clipboard (`navigator.clipboard`). Dòng đang focus có ring + auto `scrollIntoView`. **CHỈ dòng vừa copy (cursor đang trỏ) hiện ✓** (`copiedId: string | null` — KHÔNG còn tích lũy Set; mỗi lần copy thay thế giá trị cũ → di chuyển cursor thì ✓ nhảy theo, dòng cũ mất tick), render `CheckCircle2` cạnh checkbox. Bỏ qua khi target là input/textarea/select. `copiedId` reset khi đổi filter/search/date/status/facet; `cursorIndex` reset thêm khi đổi trang.
-  - **Chọn nhiều + bulk CHUYỂN TRẠNG THÁI** (không phải bulk-edit field): checkbox chỉ tick được đơn **hợp lệ** (`isRowSelectable` = đơn của mình + stage In + status chờ/làm lại/đang làm; đơn khác bị disable). Toolbar (`renderBulkBar`) hiện 2 nút riêng **Bắt đầu** (cho đơn chờ/làm lại) + **Hoàn thành** (cho đơn đang làm). Nếu chọn lẫn trạng thái → **popup xác nhận** trước khi chuyển (chỉ áp cho subset hợp lệ với nút đó, số còn lại bỏ qua). Bulk loop `transition` song song → toast gộp.
+  - **Chọn nhiều + bulk CHUYỂN TRẠNG THÁI** (không phải bulk-edit field): checkbox chỉ tick được đơn **hợp lệ** (`isRowSelectable` = `canPrint` [toolResultNote='ok' + đúng xưởng] + status print ∈ chờ/làm lại/đang làm; đơn khác bị disable). Toolbar (`renderBulkBar`) hiện 2 nút riêng **Bắt đầu** (cho đơn chờ/làm lại) + **Hoàn thành** (cho đơn đang làm). Nếu chọn lẫn trạng thái → **popup xác nhận** trước khi chuyển (chỉ áp cho subset hợp lệ với nút đó, số còn lại bỏ qua). Bulk loop `transition` song song → toast gộp.
 - **BE filter + count**:
   - `GetProductionOrdersZod.fulfillmentStatus` (enum 5 giá trị) + `userSku` (CSV filter). `OrderService.applyFulfillmentStatusFilter()` mirror `FulfillmentTaskService.applyTabFilter` (không ép scope factory/ready; `watching` dùng userId elemMatch timeline). Áp ở `getOrders` + `getOrdersGroupedByType` + `getFulfillmentStatusCounts`.
   - `GET /v1/orders/fulfillment-status-counts` (`@Auth(ORDER_VIEW_ROLES)`) trả `{all, waiting, inProgress, rework, done, watching}` (all = tổng đơn theo filter, không kèm status).
@@ -377,6 +377,11 @@ Pseudocode:
 
 ```
 1. findById(orderId) → assert not cancelled, not deleted.
+1b. SELF-HEAL "In": nếu body.stage=print & action=start & order.toolResultNote='ok'
+   & currentFulfillmentStage !== 'print' & print.status !== 'done'
+   → updateOne set currentFulfillmentStage='print' + readyForFulfill=true
+     (+ init print.status='waiting' nếu thiếu; GIỮ nguyên waiting/rework nếu đã có) → reload order.
+   Mục đích: designer done qua path không hook (currentFulfillmentStage lệch) vẫn cho In start.
 2. Role check: nếu không phải override role → user.fulfillmentStage === body.stage
    && order.factoryId === user.factoryId && order.currentFulfillmentStage === body.stage.
 3. resolveTransition() → patch + nextStatus:

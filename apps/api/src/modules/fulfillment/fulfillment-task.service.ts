@@ -116,10 +116,40 @@ export class FulfillmentTaskService {
     },
     ctx: AuditContext,
   ): Promise<OrderDocument> {
-    const order = await this.orderModel.findById(orderId).lean();
+    let order = await this.orderModel.findById(orderId).lean();
     if (!order) throw new NotFoundException('Order not found');
     if (order.cancelledAt) {
       throw new BadRequestException('Đơn đã bị hủy — không thao tác được.');
+    }
+
+    // ── Self-heal "In": đơn đã `toolResultNote='ok'` (designer coi như xong)
+    // nhưng `currentFulfillmentStage` lệch khỏi 'print' (null vì designer done
+    // qua path không hook, hoặc set 'ok' tay) → khi In bấm "Bắt đầu", đưa
+    // `currentFulfillmentStage` về 'print' để luồng start bên dưới chạy được.
+    // GIỮ NGUYÊN status print nếu đã có (waiting/rework); chỉ init khi thiếu.
+    // KHÔNG áp khi print đã 'done' (đơn đã in xong, đang ở stage sau) → không
+    // kéo ngược đơn đã in.
+    if (
+      body.stage === FulfillmentStage.Print &&
+      body.action === FulfillmentTransitionAction.Start &&
+      order.toolResultNote === 'ok' &&
+      order.currentFulfillmentStage !== FulfillmentStage.Print &&
+      (order.fulfillmentStages?.print?.status ?? null) !== FulfillmentStageStatus.Done
+    ) {
+      const cur = (order.fulfillmentStages?.print ?? {}) as FulfillmentStageState;
+      const set: Record<string, unknown> = {
+        readyForFulfill: true,
+        currentFulfillmentStage: FulfillmentStage.Print,
+      };
+      if (!cur.status) {
+        set['fulfillmentStages.print.status'] = FulfillmentStageStatus.Waiting;
+        set['fulfillmentStages.print.waitingAt'] = new Date();
+        set['fulfillmentStages.print.reworkCount'] = cur.reworkCount ?? 0;
+        set['fulfillmentStages.print.workMs'] = cur.workMs ?? 0;
+      }
+      await this.orderModel.updateOne({ _id: orderId }, { $set: set });
+      const reloaded = await this.orderModel.findById(orderId).lean();
+      if (reloaded) order = reloaded;
     }
 
     const roleName = user.role?.name as RoleType | undefined;

@@ -54,15 +54,18 @@ export default function PrintWorkshopView() {
 
   const refresh = () => setReloadToken((t) => t + 1);
 
-  // Đơn thuộc xưởng user + đang ở stage In.
-  const isMine = (row: WorkshopOrderRow) =>
-    row.currentFulfillmentStage === FulfillmentStage.Print &&
+  // Đơn In thao tác được — 2 điều kiện: (1) `toolResultNote='ok'` (thay cho
+  // check `currentFulfillmentStage='print'` cũ) + (2) thuộc xưởng user. Điều
+  // kiện (3) status stage print được check riêng ở nút bên dưới. BE self-heal
+  // đưa `currentFulfillmentStage` về 'print' khi start nếu bị lệch.
+  const canPrint = (row: WorkshopOrderRow) =>
+    row.toolResultNote === 'ok' &&
     !!myFactoryId &&
     String(row.factoryId ?? '') === String(myFactoryId);
 
-  // Tick được: đơn của mình + trạng thái thao tác được (chờ/làm lại/đang làm).
+  // Tick được: đơn In thao tác được + status print ∈ {waiting, rework, in-progress}.
   const isRowSelectable = (row: WorkshopOrderRow) => {
-    if (!isMine(row)) return false;
+    if (!canPrint(row)) return false;
     const s = printStatusOf(row);
     return (
       s === FulfillmentStageStatus.Waiting ||
@@ -125,9 +128,9 @@ export default function PrintWorkshopView() {
 
   const renderRowAction = (row: WorkshopOrderRow) => {
     const status = printStatusOf(row);
-    const mine = isMine(row);
+    const ok = canPrint(row);
     let stageButtons: React.ReactNode = null;
-    if (mine && (status === FulfillmentStageStatus.Waiting || status === FulfillmentStageStatus.Rework)) {
+    if (ok && (status === FulfillmentStageStatus.Waiting || status === FulfillmentStageStatus.Rework)) {
       stageButtons = (
         <>
           <Button
@@ -147,7 +150,7 @@ export default function PrintWorkshopView() {
           </Button>
         </>
       );
-    } else if (mine && status === FulfillmentStageStatus.InProgress) {
+    } else if (ok && status === FulfillmentStageStatus.InProgress) {
       stageButtons = (
         <>
           <Button
