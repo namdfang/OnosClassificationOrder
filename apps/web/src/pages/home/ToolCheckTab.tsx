@@ -8,6 +8,7 @@ import type {
   ToolCheckFacet,
   ToolCheckOrder,
   ToolCheckProductStat,
+  TodayReport,
 } from 'shared';
 
 import { Badge } from '@/components/ui/badge';
@@ -16,6 +17,7 @@ import { CopyButton } from '@/components/common/CopyButton';
 import { DateRangePicker } from '@/components/common/DateRangePicker';
 import { SelectFilter } from '@/components/common/SelectFilter';
 import { ImagePreviewDialog } from '@/components/common/ImagePreviewDialog';
+import { TodayReportCard } from '@/components/common/TodayReportCard';
 import { Spinner } from '@/components/common/Spinner';
 import { ColorBadgeSelectCell } from '@/components/orders/cells/ColorBadgeSelectCell';
 import { ImageThumbCell } from '@/components/orders/cells/ImageThumbCell';
@@ -257,6 +259,15 @@ export default function ToolCheckTab() {
 
   return (
     <div className="space-y-5">
+      {/* Báo cáo hôm nay */}
+      <TodayReportCard
+        title="Báo cáo hôm nay"
+        tiles={['received', 'completed', 'reworkDone', 'errorsFound', 'backlog']}
+        fetcher={() =>
+          RepositoryRemote.designer.toolCheckTodayReport().then((r) => r.data.data as TodayReport)
+        }
+      />
+
       {/* Filter bar (thời gian) */}
       <div className="rounded-lg border border-border bg-card p-3 flex items-center gap-2 flex-wrap">
         <FileSearch size={16} className="text-indigo-600" />

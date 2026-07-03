@@ -7,7 +7,7 @@ import {
 } from '@nestjs/common';
 import { InjectModel } from '@nestjs/mongoose';
 import { Model } from 'mongoose';
-import type { DesignerMyStats, DesignerTaskCard } from 'shared';
+import type { DesignerMyStats, DesignerTaskCard, TodayReport, TodayReportOrder } from 'shared';
 import {
   DesignerStatus,
   DesignerTransitionAction,
@@ -645,6 +645,111 @@ export class DesignerTaskService {
       avgWorkMin: workN > 0 ? Math.round((workSumMs / workN) / 60000) : 0,
       errorRate: completedInPeriod > 0 ? Math.round((reworkSum / completedInPeriod) * 100) / 100 : 0,
     };
+  }
+
+  /**
+   * "Báo cáo hôm nay" cho sub-designer (cố định hôm nay VN). Designer KHÔNG có
+   * ô "tìm được lỗi" (bỏ `errorsFound`) — thay bằng "đơn đã sửa lại".
+   *   - received  : task gán cho tôi hôm nay (`designerAssignedAt`)
+   *   - completed : task tôi hoàn thành hôm nay (`designerCompletedAt`, status done)
+   *   - reworkDone: hoàn thành hôm nay mà từng bị rework (`designerReworkCount>0`)
+   *   - backlog   : tồn hiện tại (assigned/rework/in-progress) + tồn nhận hôm nay
+   */
+  async getMyTodayReport(user: UserDocument): Promise<TodayReport> {
+    const userId = String(user._id);
+    const day = new Date(Date.now() + 7 * 60 * 60 * 1000).toISOString().slice(0, 10);
+    const today = {
+      $gte: new Date(`${day}T00:00:00+07:00`),
+      $lte: new Date(`${day}T23:59:59.999+07:00`),
+    };
+
+    const receivedFilter = {
+      assignee: userId,
+      designerAssignedAt: today,
+      designerStatus: { $ne: DesignerStatus.Unassigned },
+    };
+    const completedFilter = {
+      assignee: userId,
+      designerStatus: DesignerStatus.Done,
+      designerCompletedAt: today,
+    };
+    const reworkDoneFilter = { ...completedFilter, designerReworkCount: { $gt: 0 } };
+    const backlogFilter = {
+      assignee: userId,
+      designerStatus: {
+        $in: [DesignerStatus.Assigned, DesignerStatus.Rework, DesignerStatus.InProgress],
+      },
+    };
+    const backlogTodayFilter = { ...backlogFilter, designerAssignedAt: today };
+
+    const [
+      received,
+      completed,
+      reworkDone,
+      backlogTotal,
+      backlogToday,
+      receivedList,
+      completedList,
+      reworkDoneList,
+      backlogList,
+    ] = await Promise.all([
+      this.orderModel.countDocuments(receivedFilter),
+      this.orderModel.countDocuments(completedFilter),
+      this.orderModel.countDocuments(reworkDoneFilter),
+      this.orderModel.countDocuments(backlogFilter),
+      this.orderModel.countDocuments(backlogTodayFilter),
+      this.fetchDesignerRows(receivedFilter, 'designerAssignedAt'),
+      this.fetchDesignerRows(completedFilter, 'designerCompletedAt'),
+      this.fetchDesignerRows(reworkDoneFilter, 'designerCompletedAt'),
+      this.fetchDesignerRows(backlogFilter, 'designerAssignedAt'),
+    ]);
+
+    return {
+      day,
+      counts: { received, completed, reworkDone, backlogToday, backlogTotal },
+      lists: {
+        received: receivedList,
+        completed: completedList,
+        reworkDone: reworkDoneList,
+        backlog: backlogList,
+      },
+    };
+  }
+
+  /** Query slim rows cho báo cáo designer — cap 500 đơn, `at` từ field chỉ định. */
+  private async fetchDesignerRows(
+    filter: Record<string, unknown>,
+    atField: string,
+  ): Promise<TodayReportOrder[]> {
+    const docs = await this.orderModel
+      .find(filter, {
+        productionId: 1,
+        orderId: 1,
+        type: 1,
+        size: 1,
+        color: 1,
+        mockupUrl: 1,
+        userSku: 1,
+        toolResultNote: 1,
+        [atField]: 1,
+      })
+      .limit(500)
+      .lean();
+    return docs.map((d) => {
+      const rec = d as unknown as Record<string, unknown>;
+      return {
+        _id: String(d._id),
+        productionId: String(rec.productionId ?? ''),
+        orderId: rec.orderId as string | undefined,
+        type: rec.type as string | undefined,
+        size: rec.size as string | undefined,
+        color: rec.color as string | undefined,
+        mockupUrl: rec.mockupUrl as string | undefined,
+        userSku: rec.userSku as string | undefined,
+        toolResultNote: rec.toolResultNote as string | undefined,
+        at: rec[atField] as Date | undefined,
+      };
+    });
   }
 
   /**

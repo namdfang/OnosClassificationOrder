@@ -41,3 +41,4 @@ export * from './workshop-config.dto';
 export * from './order-log.dto';
 export * from './order-status.dto';
 export * from './designer.dto';
+export * from './today-report.dto';

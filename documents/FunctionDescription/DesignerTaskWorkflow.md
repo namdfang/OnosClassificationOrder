@@ -453,3 +453,20 @@ Field-level perms (mới):
 - `RoleService.onModuleInit()` sync role catalog (auto-add DesignerLeader, rút quyền cũ của Designer sub)
 - `WorkshopConfigService.onModuleInit()` `deleteMany({ category: 'assignee' })` 1 lần (legacy category đã bỏ)
 - Cùng onModuleInit backfill `errorSource` cho production_error rows chưa có
+
+---
+
+## Báo cáo hôm nay (Today Report)
+
+Thẻ **`TodayReportCard`** (`apps/web/src/components/common/TodayReportCard.tsx` — dùng chung Soát tool / Designer / Fulfillment) render trên đầu trang `designer/my-tasks` (dưới KPI, trên `DailyBreakdownPanel`). Cố định **hôm nay** (giờ VN). Designer **KHÔNG có ô "Tìm được lỗi"** (thay bằng "Đã sửa lại"). 4 ô bấm được → bấm ô nào hiện list đơn dưới:
+
+| Ô | Định nghĩa | Timestamp |
+|---|---|---|
+| Đã nhận | task gán cho tôi hôm nay | `designerAssignedAt` |
+| Làm được | task tôi hoàn thành hôm nay | `designerCompletedAt` (status=done) |
+| Đã sửa lại | hoàn thành hôm nay & `designerReworkCount>0` | `designerCompletedAt` + `designerReworkCount` |
+| Còn tồn | hôm nay (nhận hôm nay chưa xong) / tổng (assigned+rework+in-progress hiện tại) | `designerStatus` snapshot + `designerAssignedAt` |
+
+- **BE:** `GET /v1/designer/my-today-report` → `DesignerTaskService.getMyTodayReport()` (scope `assignee=me`). `@Auth([Designer, DesignerLeader, SuperAdmin, Admin])`.
+- **FE service:** `RepositoryRemote.designer.myTodayReport()`. `reloadToken={breakdownToken}`.
+- **Shared DTO:** `packages/shared/dtos/today-report.dto.ts` (`TodayReportZod`; `counts.errorsFound`/`lists.errorsFound` = undefined ở Designer).

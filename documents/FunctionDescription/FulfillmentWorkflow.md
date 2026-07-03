@@ -360,7 +360,7 @@ Component dùng chung, render **trên** kanban (6 stage) và **trên** bảng In
   - **7 stage fulfillment** — mỗi stage 1 hàng ô 2 số `đã xong / còn lại` (đã xong = `done`, emerald; còn lại = `arrived − done`, indigo). Hàng công đoạn hiện `0` khi = 0 (thay dấu `·`).
 - **Stage của user** (`stage` prop) → hàng đó **bung 4 hàng nhỏ** `Đến / Đã làm / Còn lại / Lỗi cần sửa` (phân loại theo `fulfillmentStages.<myStage>.status` HIỆN TẠI; `Đến = Đã làm + Còn lại + Lỗi`) và **highlight** (nền indigo, nhãn đậm). Hàng **"Lỗi cần sửa" tô đỏ** (nền + chữ đỏ) cho nổi. Các stage khác **làm mờ** (`opacity-70`, nhãn muted).
 - **Ô 2 số** chia đều 2 bên: `đã xong` (emerald, sát mép trái) `/` `còn lại` (indigo, sát mép phải), slash **căn giữa**; ô **1 số** căn **trái**. `còn lại` = `arrived − done` (chưa hoàn thành, cộng dồn theo cohort). Soát tool: `đã soát`(emerald)`/`chưa soát`(amber). Hàng công đoạn fulfillment hiện `0` khi = 0 (thay `·`).
-- **Tooltip mỗi ô** (`title` HTML, không cần provider) mô tả chi tiết: ngày + tên chỉ số + ý nghĩa từng con số. Cột "Tổng" tip ghi "Tổng cả kỳ".
+- **Tooltip mỗi ô** — hover-card **tự vẽ, hiện NGAY** (state `tip{text,x,y}` + 1 `<div>` `position:fixed` theo con trỏ, không dùng `title` mặc định của trình duyệt). Tự lật trái khi gần mép phải. Nội dung: ngày + tên chỉ số + ý nghĩa từng con số. Cột "Tổng" ghi "Tổng cả kỳ".
 - **Click 1 ngày** (header hoặc ô) → lọc danh sách bên dưới:
   - **Kanban** (6 stage): lọc **client-side** các cột theo `vnDay(inProductionAt) === dayFilter`; date-range + bảng tổng quan giữ nguyên. Chip "Đang lọc dd/MM ✕" để bỏ.
   - **Bảng In** (print): bảng phân trang **server** → không lọc client được → truyền `dayOverride` cho `PrintOrderTable` ép `createdFrom=createdTo=day` (narrow qua query). Chip bỏ giống trên.
@@ -643,3 +643,21 @@ Worker scope enforce ở BE: `user.fulfillmentStage === body.stage` && `user.fac
 - `apps/web/src/constants/paths.ts` — 3 PATH mới
 - `apps/web/src/constants/routerConfig.ts` — lazy route
 - `apps/web/src/components/sidebar/Sidebar.tsx` — entry "Task Fulfillment"
+
+---
+
+## Báo cáo hôm nay (Today Report)
+
+Thẻ **`TodayReportCard`** (`apps/web/src/components/common/TodayReportCard.tsx` — dùng chung 3 nơi: Soát tool / Designer / Fulfillment) render trên đầu trang Task Fulfillment (cả kanban `index.tsx` lẫn `PrintWorkshopView` stage In). Cố định **hôm nay** (giờ VN). 5 ô bấm được → bấm ô nào hiện list đơn của ô đó ngay dưới:
+
+| Ô | Định nghĩa (per stage của user) | Timestamp |
+|---|---|---|
+| Đã nhận | đơn vào công đoạn tôi hôm nay | `fulfillmentStages[stage].waitingAt` |
+| Làm được | đơn tôi hoàn thành hôm nay | `fulfillmentStages[stage].completedAt` |
+| Đã sửa lại | hoàn thành hôm nay & `reworkCount>0` | `completedAt` + `reworkCount` |
+| Tìm được lỗi | đơn tôi báo lỗi/đẩy về hôm nay | `fulfillmentTimeline` $elemMatch (stage, rework-back, byUserId=me, at∈today) |
+| Còn tồn | hôm nay (nhận hôm nay chưa xong) / tổng (waiting+in-progress+rework hiện tại) | `status` snapshot + `waitingAt` |
+
+- **BE:** `GET /v1/fulfillment/my-today-report` → `FulfillmentTaskService.getMyTodayReport()` (factory-scope + stage của user). `@Auth(TRANSITION_ROLES)`.
+- **FE service:** `RepositoryRemote.fulfillment.myTodayReport()`. `reloadToken={overviewToken}` (refetch sau transition).
+- **Shared DTO:** `packages/shared/dtos/today-report.dto.ts` (`TodayReportZod` + `GetTodayReportResDto`).

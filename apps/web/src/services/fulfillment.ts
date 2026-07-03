@@ -52,8 +52,13 @@ const dailyOverview = (
   return callApi(`/${CONFIG.API_VERSION}/fulfillment/daily-overview?${qs.toString()}`, 'get');
 };
 
+const myTodayReport = () => {
+  return callApi(`/${CONFIG.API_VERSION}/fulfillment/my-today-report`, 'get');
+};
+
 export const fulfillment = {
   transition,
   myTasks,
   dailyOverview,
+  myTodayReport,
 };

@@ -19,6 +19,7 @@ import {
   GetTeamDailyBreakdownDto,
   GetTeamDailyBreakdownResDto,
   GetToolCheckOverviewDto,
+  GetTodayReportResDto,
   ToolCheckOverviewResDto,
   RoleType,
 } from 'shared';
@@ -256,6 +257,25 @@ export class DesignerStatsController {
       query.machineNumber,
     );
     return { success: true, data };
+  }
+
+  @Get('designer/tool-check-today-report')
+  @Auth(TOOL_CHECK_ROLES)
+  @ApiOperation({ summary: 'Báo cáo hôm nay tab Soát tool (đã nhận/soát/đã sửa lại/tìm lỗi/còn tồn).' })
+  @HttpCode(HttpStatus.OK)
+  @ApiOkResponse({ type: GetTodayReportResDto })
+  async getToolCheckTodayReport(
+    @AuthUser() user: UserDocument,
+  ): Promise<GetTodayReportResDto> {
+    this.logger.info({
+      message: JSON.stringify({
+        method: 'GET',
+        url: '/designer/tool-check-today-report',
+        userId: user._id,
+      }),
+    });
+    const data = await this.statsService.getToolCheckTodayReport();
+    return { success: true, data } as unknown as GetTodayReportResDto;
   }
 
   @Get('orders/error-stats')

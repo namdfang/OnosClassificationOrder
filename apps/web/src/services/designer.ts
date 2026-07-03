@@ -214,6 +214,14 @@ const errorStats = (params: { from?: string; to?: string } = {}) => {
   return callApi(`/${CONFIG.API_VERSION}/orders/error-stats${suffix}`, 'get');
 };
 
+const myTodayReport = () => {
+  return callApi(`/${CONFIG.API_VERSION}/designer/my-today-report`, 'get');
+};
+
+const toolCheckTodayReport = () => {
+  return callApi(`/${CONFIG.API_VERSION}/designer/tool-check-today-report`, 'get');
+};
+
 export const designer = {
   listTeam,
   createMember,
@@ -238,4 +246,6 @@ export const designer = {
   productBreakdown,
   toolCheckOverview,
   errorStats,
+  myTodayReport,
+  toolCheckTodayReport,
 };

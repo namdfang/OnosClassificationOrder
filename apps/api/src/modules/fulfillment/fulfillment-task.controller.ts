@@ -20,6 +20,7 @@ import {
   GetFulfillmentDailyOverviewDto,
   GetFulfillmentMyTasksDto,
   GetFulfillmentMyTasksResDto,
+  GetTodayReportResDto,
   RoleType,
 } from 'shared';
 import { Logger } from 'winston';
@@ -127,5 +128,24 @@ export class FulfillmentTaskController {
       stage: query.stage,
     });
     return { success: true, data } as unknown as FulfillmentDailyOverviewResDto;
+  }
+
+  @Get('fulfillment/my-today-report')
+  @Auth(TRANSITION_ROLES)
+  @ApiOperation({ summary: 'Báo cáo hôm nay (đã nhận/làm được/đã sửa lại/tìm lỗi/còn tồn) cho stage của tôi.' })
+  @HttpCode(HttpStatus.OK)
+  @ApiOkResponse({ type: GetTodayReportResDto })
+  async getMyTodayReport(
+    @AuthUser() user: UserDocument,
+  ): Promise<GetTodayReportResDto> {
+    this.logger.info({
+      message: JSON.stringify({
+        method: 'GET',
+        url: '/fulfillment/my-today-report',
+        userId: user._id,
+      }),
+    });
+    const data = await this.taskService.getMyTodayReport(user);
+    return { success: true, data } as unknown as GetTodayReportResDto;
   }
 }

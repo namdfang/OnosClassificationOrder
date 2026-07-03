@@ -26,7 +26,7 @@ import {
 } from 'lucide-react';
 import { toast } from 'sonner';
 import { useSearchParams } from 'react-router-dom';
-import type { DesignerMyStats, DesignerTaskCard, DesignerTransitionDto } from 'shared';
+import type { DesignerMyStats, DesignerTaskCard, DesignerTransitionDto, TodayReport } from 'shared';
 import { DesignerStatus, DesignerTransitionAction, WorkshopConfigCategory } from 'shared';
 
 import { Button } from '@/components/ui/button';
@@ -34,6 +34,7 @@ import { Input } from '@/components/ui/input';
 import { TooltipProvider } from '@/components/ui/tooltip';
 import { DateRangePicker } from '@/components/common/DateRangePicker';
 import { ImagePreviewDialog } from '@/components/common/ImagePreviewDialog';
+import { TodayReportCard } from '@/components/common/TodayReportCard';
 import { SelectFilter } from '@/components/common/SelectFilter';
 import { Spinner } from '@/components/common/Spinner';
 import { RepositoryRemote } from '@/services';
@@ -569,6 +570,16 @@ export default function MyTasksPage() {
             />
           </div>
         )}
+
+        {/* Báo cáo hôm nay */}
+        <TodayReportCard
+          title="Báo cáo hôm nay"
+          tiles={['received', 'completed', 'reworkDone', 'backlog']}
+          reloadToken={breakdownToken}
+          fetcher={() =>
+            RepositoryRemote.designer.myTodayReport().then((r) => r.data.data as TodayReport)
+          }
+        />
 
         {/* Chi tiết theo ngày — panel focus đơn chưa xong (7/14/30 ngày).
             Click 1 ngày → lọc kanban về đúng ngày đó. */}

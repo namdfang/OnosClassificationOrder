@@ -14,6 +14,8 @@ import type {
   ToolCheckFacet,
   ToolCheckOrder,
   ToolCheckProductStat,
+  TodayReport,
+  TodayReportOrder,
 } from 'shared';
 import { DesignerStatus, RoleType, WorkshopConfigCategory } from 'shared';
 
@@ -1000,6 +1002,129 @@ export class DesignerStatsService {
    *     đơn source=tool-check trong kỳ, cả đang chờ lẫn đã fix) theo sản phẩm /
    *     khách hàng (userSku) / khách × loại lỗi.
    */
+  /**
+   * "Báo cáo hôm nay" cho tab Soát tool (cố định hôm nay VN):
+   *   - received  : đơn vào SX hôm nay (`inProductionAt`)
+   *   - completed : đơn soát xong hôm nay (`toolCheckedAt`)
+   *   - reworkDone: đơn lỗi tool-check → 'ok' lại hôm nay (qua OrderLog toolResultNote)
+   *   - errorsFound: đơn dính lỗi tool-check hôm nay (`productionFirstErrorAt`)
+   *   - backlog   : chưa soát (toolResultNote rỗng) đã vào SX + phát sinh hôm nay
+   */
+  async getToolCheckTodayReport(): Promise<TodayReport> {
+    const day = new Date(Date.now() + 7 * 60 * 60 * 1000).toISOString().slice(0, 10);
+    const start = new Date(`${day}T00:00:00+07:00`);
+    const end = new Date(`${day}T23:59:59.999+07:00`);
+    const today = { $gte: start, $lte: end };
+    const alive = { deletedAt: null, cancelledAt: null };
+
+    const receivedMatch = { inProductionAt: today, ...alive };
+    const completedMatch = { toolCheckedAt: today, ...alive };
+    const errorsMatch = {
+      productionErrorSource: 'tool-check',
+      toolResultNote: 'error',
+      productionFirstErrorAt: today,
+      ...alive,
+    };
+    const backlogMatch = {
+      toolResultNote: { $in: [null, ''] },
+      inProductionAt: { $lte: end },
+      ...alive,
+    };
+    const backlogTodayMatch = { toolResultNote: { $in: [null, ''] }, inProductionAt: today, ...alive };
+
+    // reworkDone: dựa OrderLog — field toolResultNote đổi từ lỗi → 'ok' trong hôm nay.
+    const okLogs = await this.orderLogModel
+      .find({ field: 'toolResultNote', after: 'ok', createdAt: today }, { orderId: 1, before: 1, createdAt: 1 })
+      .sort({ createdAt: -1 })
+      .limit(2000)
+      .lean();
+    const reworkAtByOrder = new Map<string, Date>();
+    for (const l of okLogs) {
+      const rec = l as unknown as { orderId: string; before?: unknown; createdAt: Date };
+      const before = rec.before;
+      // Chỉ tính khi giá trị cũ là lỗi thực (khác rỗng/ok) → tránh đếm đơn soát
+      // thẳng ra 'ok' (chưa từng lỗi).
+      if (before === null || before === undefined || before === '' || before === 'ok') continue;
+      const oid = String(rec.orderId);
+      if (!reworkAtByOrder.has(oid)) reworkAtByOrder.set(oid, rec.createdAt);
+    }
+    const reworkOrderIds = [...reworkAtByOrder.keys()];
+
+    const [received, completed, errorsFound, backlogTotal, backlogToday, receivedList, completedList, errorsList, backlogList, reworkRows] =
+      await Promise.all([
+        this.orderModel.countDocuments(receivedMatch),
+        this.orderModel.countDocuments(completedMatch),
+        this.orderModel.countDocuments(errorsMatch),
+        this.orderModel.countDocuments(backlogMatch),
+        this.orderModel.countDocuments(backlogTodayMatch),
+        this.fetchToolRows(receivedMatch, 'inProductionAt'),
+        this.fetchToolRows(completedMatch, 'toolCheckedAt'),
+        this.fetchToolRows(errorsMatch, 'productionFirstErrorAt'),
+        this.fetchToolRows(backlogMatch, 'inProductionAt'),
+        reworkOrderIds.length
+          ? this.fetchToolRows({ _id: { $in: reworkOrderIds } }, 'inProductionAt')
+          : Promise.resolve([] as TodayReportOrder[]),
+      ]);
+
+    // Gán `at` cho reworkDone = thời điểm log đổi sang 'ok'.
+    const reworkDoneList = reworkRows.map((r) => ({ ...r, at: reworkAtByOrder.get(r._id) ?? r.at }));
+
+    return {
+      day,
+      counts: {
+        received,
+        completed,
+        reworkDone: reworkOrderIds.length,
+        errorsFound,
+        backlogToday,
+        backlogTotal,
+      },
+      lists: {
+        received: receivedList,
+        completed: completedList,
+        reworkDone: reworkDoneList,
+        errorsFound: errorsList,
+        backlog: backlogList,
+      },
+    };
+  }
+
+  /** Query slim rows cho báo cáo Soát tool — cap 500 đơn, `at` từ field chỉ định. */
+  private async fetchToolRows(
+    match: Record<string, unknown>,
+    atField: string,
+  ): Promise<TodayReportOrder[]> {
+    const docs = await this.orderModel
+      .find(match, {
+        productionId: 1,
+        orderId: 1,
+        type: 1,
+        size: 1,
+        color: 1,
+        mockupUrl: 1,
+        userSku: 1,
+        toolResultNote: 1,
+        [atField]: 1,
+      })
+      .limit(500)
+      .lean();
+    return docs.map((d) => {
+      const rec = d as unknown as Record<string, unknown>;
+      return {
+        _id: String(d._id),
+        productionId: String(rec.productionId ?? ''),
+        orderId: rec.orderId as string | undefined,
+        type: rec.type as string | undefined,
+        size: rec.size as string | undefined,
+        color: rec.color as string | undefined,
+        mockupUrl: rec.mockupUrl as string | undefined,
+        userSku: rec.userSku as string | undefined,
+        toolResultNote: rec.toolResultNote as string | undefined,
+        at: rec[atField] as Date | undefined,
+      };
+    });
+  }
+
   async getToolCheckOverview(
     rangeDays: number,
     type?: string,

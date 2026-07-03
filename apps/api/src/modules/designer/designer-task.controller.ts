@@ -25,6 +25,7 @@ import {
   GetMyTaskFiltersResDto,
   GetMyTasksDto,
   GetMyTasksResDto,
+  GetTodayReportResDto,
   RoleType,
 } from 'shared';
 import { Logger } from 'winston';
@@ -178,5 +179,18 @@ export class DesignerTaskController {
     });
     const data = await this.taskService.getMyDailyBreakdown(user, Number(query.days));
     return { success: true, data };
+  }
+
+  @Get('designer/my-today-report')
+  @Auth([RoleType.Designer, RoleType.DesignerLeader, RoleType.SuperAdmin, RoleType.Admin])
+  @ApiOperation({ summary: 'Báo cáo hôm nay (đã nhận/làm được/đã sửa lại/còn tồn) của sub-designer.' })
+  @HttpCode(HttpStatus.OK)
+  @ApiOkResponse({ type: GetTodayReportResDto })
+  async getMyTodayReport(@AuthUser() user: UserDocument): Promise<GetTodayReportResDto> {
+    this.logger.info({
+      message: JSON.stringify({ method: 'GET', url: '/designer/my-today-report', userId: user._id }),
+    });
+    const data = await this.taskService.getMyTodayReport(user);
+    return { success: true, data } as unknown as GetTodayReportResDto;
   }
 }

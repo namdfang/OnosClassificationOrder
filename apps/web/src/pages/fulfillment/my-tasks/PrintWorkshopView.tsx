@@ -1,10 +1,11 @@
 import React, { useState } from 'react';
 import { CheckCircle2, PlayCircle, X } from 'lucide-react';
 import { toast } from 'sonner';
-import type { FulfillmentTransitionDto, ProductionOrder } from 'shared';
+import type { FulfillmentTransitionDto, ProductionOrder, TodayReport } from 'shared';
 import { FulfillmentStage, FulfillmentStageStatus, FulfillmentTransitionAction } from 'shared';
 
 import { Button } from '@/components/ui/button';
+import { TodayReportCard } from '@/components/common/TodayReportCard';
 import {
   Dialog,
   DialogContent,
@@ -218,6 +219,14 @@ export default function PrintWorkshopView() {
   return (
     <TooltipProvider delayDuration={200}>
       <div className="space-y-4">
+        <TodayReportCard
+          title="Báo cáo hôm nay"
+          tiles={['received', 'completed', 'reworkDone', 'errorsFound', 'backlog']}
+          reloadToken={reloadToken}
+          fetcher={() =>
+            RepositoryRemote.fulfillment.myTodayReport().then((r) => r.data.data as TodayReport)
+          }
+        />
         <FulfillmentDailyOverview
           stage={FulfillmentStage.Print}
           reloadToken={reloadToken}

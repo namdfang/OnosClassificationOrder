@@ -17,6 +17,8 @@ import type {
   FulfillmentTaskTab,
   FulfillmentTimelineEntry,
   ProductionOrder,
+  TodayReport,
+  TodayReportOrder,
 } from 'shared';
 import {
   DesignerStatus,
@@ -825,5 +827,155 @@ export class FulfillmentTaskService {
       end: new Date(baseMs + MS_DAY - 1),
       days,
     };
+  }
+
+  /**
+   * "Báo cáo hôm nay" cho công đoạn fulfillment của user (cố định hôm nay VN):
+   *   - received  : đơn vào công đoạn tôi hôm nay (`waitingAt`)
+   *   - completed : đơn tôi hoàn thành hôm nay (`completedAt`)
+   *   - reworkDone: đơn hoàn thành hôm nay mà từng bị rework (`reworkCount>0`)
+   *   - errorsFound: đơn tôi báo lỗi/đẩy về hôm nay (timeline rework-back byMe)
+   *   - backlog   : tồn hiện tại (waiting/in-progress/rework) + tồn hôm nay
+   */
+  async getMyTodayReport(
+    user: UserDocument,
+    query?: { stage?: FulfillmentStage; factoryId?: string },
+  ): Promise<TodayReport> {
+    const roleName = user.role?.name as RoleType | undefined;
+    const isOverride = roleName ? OVERRIDE_ROLES.includes(roleName) : false;
+    const stage = (query?.stage ?? user.fulfillmentStage) as FulfillmentStage | undefined;
+    const factoryId = query?.factoryId ?? user.factoryId;
+    if (!stage) {
+      throw new BadRequestException('Thiếu stage (user chưa gán fulfillmentStage).');
+    }
+    if (!factoryId && !isOverride) {
+      throw new BadRequestException('Thiếu factoryId (user chưa gán factoryId).');
+    }
+
+    const todayStart = vnTodayStart();
+    const todayEnd = new Date(todayStart.getTime() + 24 * 60 * 60 * 1000 - 1);
+    const day = new Date(Date.now() + 7 * 60 * 60 * 1000).toISOString().slice(0, 10);
+    const today = { $gte: todayStart, $lte: todayEnd };
+
+    const factoryScope: FilterQuery<OrderEntity> = factoryId
+      ? { $or: [{ factoryId }, { originalFactoryId: factoryId }] }
+      : {};
+    const sk = (f: string) => `fulfillmentStages.${stage}.${f}`;
+
+    const receivedFilter: FilterQuery<OrderEntity> = { ...factoryScope, [sk('waitingAt')]: today };
+    const completedFilter: FilterQuery<OrderEntity> = {
+      ...factoryScope,
+      [sk('completedAt')]: today,
+    };
+    const reworkDoneFilter: FilterQuery<OrderEntity> = {
+      ...factoryScope,
+      [sk('completedAt')]: today,
+      [sk('reworkCount')]: { $gt: 0 },
+    };
+    const errorsFilter: FilterQuery<OrderEntity> = {
+      ...factoryScope,
+      fulfillmentTimeline: {
+        $elemMatch: {
+          stage,
+          action: FulfillmentTransitionAction.ReworkBack,
+          byUserId: String(user._id),
+          at: today,
+        },
+      },
+    };
+    const backlogFilter: FilterQuery<OrderEntity> = {
+      ...factoryScope,
+      readyForFulfill: true,
+      currentFulfillmentStage: stage,
+      [sk('status')]: {
+        $in: [
+          FulfillmentStageStatus.Waiting,
+          FulfillmentStageStatus.InProgress,
+          FulfillmentStageStatus.Rework,
+        ],
+      },
+    };
+    const backlogTodayFilter: FilterQuery<OrderEntity> = {
+      ...backlogFilter,
+      [sk('waitingAt')]: today,
+    };
+
+    const [
+      received,
+      completed,
+      reworkDone,
+      errorsFound,
+      backlogTotal,
+      backlogToday,
+      receivedList,
+      completedList,
+      reworkDoneList,
+      errorsList,
+      backlogList,
+    ] = await Promise.all([
+      this.orderModel.countDocuments(receivedFilter),
+      this.orderModel.countDocuments(completedFilter),
+      this.orderModel.countDocuments(reworkDoneFilter),
+      this.orderModel.countDocuments(errorsFilter),
+      this.orderModel.countDocuments(backlogFilter),
+      this.orderModel.countDocuments(backlogTodayFilter),
+      this.fetchTodayRows(receivedFilter, sk('waitingAt')),
+      this.fetchTodayRows(completedFilter, sk('completedAt')),
+      this.fetchTodayRows(reworkDoneFilter, sk('completedAt')),
+      this.fetchTodayRows(errorsFilter, sk('reworkAt')),
+      this.fetchTodayRows(backlogFilter, sk('waitingAt')),
+    ]);
+
+    return {
+      day,
+      counts: { received, completed, reworkDone, errorsFound, backlogToday, backlogTotal },
+      lists: {
+        received: receivedList,
+        completed: completedList,
+        reworkDone: reworkDoneList,
+        errorsFound: errorsList,
+        backlog: backlogList,
+      },
+    };
+  }
+
+  /** Query slim rows cho báo cáo — cap 500 đơn, `at` lấy từ path timestamp. */
+  private async fetchTodayRows(
+    filter: FilterQuery<OrderEntity>,
+    atPath: string,
+  ): Promise<TodayReportOrder[]> {
+    const docs = await this.orderModel
+      .find(filter, {
+        productionId: 1,
+        orderId: 1,
+        type: 1,
+        size: 1,
+        color: 1,
+        mockupUrl: 1,
+        userSku: 1,
+        toolResultNote: 1,
+        [atPath]: 1,
+      })
+      .limit(500)
+      .lean();
+    const stageKey = atPath.split('.')[1];
+    const field = atPath.split('.')[2];
+    return docs.map((d) => {
+      const rec = d as unknown as Record<string, unknown>;
+      const stages = rec.fulfillmentStages as Record<string, Record<string, unknown>> | undefined;
+      const at = stages?.[stageKey]?.[field] as Date | undefined;
+      return {
+        _id: String(d._id),
+        productionId: String(rec.productionId ?? ''),
+        orderId: rec.orderId as string | undefined,
+        type: rec.type as string | undefined,
+        size: rec.size as string | undefined,
+        color: rec.color as string | undefined,
+        mockupUrl: rec.mockupUrl as string | undefined,
+        userSku: rec.userSku as string | undefined,
+        toolResultNote: rec.toolResultNote as string | undefined,
+        at,
+      };
+    });
   }
 }

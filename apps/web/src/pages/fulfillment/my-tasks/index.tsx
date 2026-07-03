@@ -31,7 +31,7 @@ import {
   XCircle,
 } from 'lucide-react';
 import { toast } from 'sonner';
-import type { FulfillmentTaskTab, FulfillmentTransitionDto, ProductionOrder } from 'shared';
+import type { FulfillmentTaskTab, FulfillmentTransitionDto, ProductionOrder, TodayReport } from 'shared';
 import {
   FULFILLMENT_STAGE_LABELS,
   FulfillmentStage,
@@ -50,6 +50,7 @@ import { Input } from '@/components/ui/input';
 import { TooltipProvider } from '@/components/ui/tooltip';
 import { DateRangePicker } from '@/components/common/DateRangePicker';
 import { ImagePreviewDialog } from '@/components/common/ImagePreviewDialog';
+import { TodayReportCard } from '@/components/common/TodayReportCard';
 import { SelectFilter } from '@/components/common/SelectFilter';
 import { Spinner } from '@/components/common/Spinner';
 import { AssignDesignerDialog } from '@/components/orders/AssignDesignerDialog';
@@ -770,6 +771,16 @@ function FulfillmentKanbanView() {
             <KPI key={k} label={COL_META[k].label} value={counts[k]} accent={COL_META[k].kpiAccent} />
           ))}
         </div>
+
+        {/* Báo cáo hôm nay */}
+        <TodayReportCard
+          title="Báo cáo hôm nay"
+          tiles={['received', 'completed', 'reworkDone', 'errorsFound', 'backlog']}
+          reloadToken={overviewToken}
+          fetcher={() =>
+            RepositoryRemote.fulfillment.myTodayReport().then((r) => r.data.data as TodayReport)
+          }
+        />
 
         {/* Hint */}
         <div className="flex items-start gap-2 rounded-md border border-border bg-muted/30 p-2.5 text-[11px] text-muted-foreground">
