@@ -865,23 +865,19 @@ function FulfillmentKanbanView() {
                 </p>
               )}
             </div>
-            <div className="min-w-[200px]">
-              {/* <label className="text-[10px] text-muted-foreground uppercase tracking-wide font-medium">
-                Ngày vào sản xuất
-              </label> */}
-              <div className="mt-1">
-                <DateRangePicker
-                  from={dateFrom}
-                  to={dateTo}
-                  onChange={(f, t) => {
-                    setDateFrom(f);
-                    setDateTo(t);
-                  }}
-                  placeholder="Tất cả"
-                />
-              </div>
-            </div>
           </div>
+
+          {/* Row ngày — thanh preset inline full-width */}
+          <DateRangePicker
+            variant="inline"
+            from={dateFrom}
+            to={dateTo}
+            onChange={(f, t) => {
+              setDateFrom(f);
+              setDateTo(t);
+            }}
+            placeholder="Tất cả"
+          />
 
           {/* Row 2: 5 facet filters */}
           <div className="grid grid-cols-2 md:grid-cols-3 xl:grid-cols-5 gap-2">

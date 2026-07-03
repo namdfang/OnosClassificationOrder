@@ -40,10 +40,8 @@ const STAGE_SHORT: Record<string, string> = {
   print: 'In',
   press: 'Ép',
   'qc-post-press': 'QC ép',
-  'qc-sorting': 'QC kiểm',
   'sew-in': 'May vào',
   'sew-out': 'May ra',
-  'qc-post-sew': 'QC may',
   pack: 'Đóng',
 };
 
@@ -54,10 +52,8 @@ const STAGE_ICON: Record<string, React.ElementType> = {
   print: Printer,
   press: Flame,
   'qc-post-press': ShieldCheck,
-  'qc-sorting': ListChecks,
   'sew-in': LogIn,
   'sew-out': LogOut,
-  'qc-post-sew': BadgeCheck,
   pack: Package,
   done: PackageCheck,
 };

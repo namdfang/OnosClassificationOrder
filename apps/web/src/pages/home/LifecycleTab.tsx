@@ -78,10 +78,8 @@ const STAGE_META: Record<string, { icon: React.ElementType; short: string }> = {
   print: { icon: Printer, short: 'In' },
   press: { icon: Flame, short: 'Ép' },
   'qc-post-press': { icon: ShieldCheck, short: 'QC ép' },
-  'qc-sorting': { icon: ListChecks, short: 'QC kiểm' },
   'sew-in': { icon: LogIn, short: 'May vào' },
   'sew-out': { icon: LogOut, short: 'May ra' },
-  'qc-post-sew': { icon: BadgeCheck, short: 'QC may' },
   pack: { icon: Package, short: 'Đóng hàng' },
 };
 

@@ -55,10 +55,8 @@ export const FulfillmentStagesZod = z.object({
   print: FulfillmentStageStateZod.optional(),
   press: FulfillmentStageStateZod.optional(),
   'qc-post-press': FulfillmentStageStateZod.optional(),
-  'qc-sorting': FulfillmentStageStateZod.optional(),
   'sew-in': FulfillmentStageStateZod.optional(),
   'sew-out': FulfillmentStageStateZod.optional(),
-  'qc-post-sew': FulfillmentStageStateZod.optional(),
   pack: FulfillmentStageStateZod.optional(),
 });
 export type FulfillmentStages = z.infer<typeof FulfillmentStagesZod>;
@@ -1215,7 +1213,7 @@ export type FulfillmentStageMetric = z.infer<typeof FulfillmentStageMetricZod>;
  *   toolOk         = toolResultNote === 'ok'
  *   designerReceived = designerStatus ≠ 'unassigned' (đã được giao)
  *   designerDone     = designerStatus === 'done'
- *   stages         = { <stage>: FulfillmentStageMetric } cho cả 8 stage
+ *   stages         = { <stage>: FulfillmentStageMetric } cho cả 6 stage
  */
 export const FulfillmentDailyRowZod = z.object({
   day: z.string(),
@@ -1340,22 +1338,20 @@ export class GetFulfillmentStatsResDto extends createZodDto(
 ) {}
 
 // ─── Lifecycle Overview (dashboard Vòng đời đơn) ──────────────────
-// Phễu 10 chặng: Soát tool → Thiết kế → In → Ép → QC sau ép → QC phân hàng →
-// May nhận → May xuất → QC sau may → Đóng hàng. Mỗi chặng đo snapshot (đang chứa/đang làm/
+// Phễu 8 chặng: Soát tool → Thiết kế → In → Ép → QC sau ép → May nhận →
+// May xuất → Đóng hàng. Mỗi chặng đo snapshot (đang chứa/đang làm/
 // rework/lỗi) + throughput theo kỳ (hoàn thành + thời gian TB). Xem
 // `documents/FunctionDescription/OrderLifecycle.md`.
 
-/** Khóa chặng — 'tool-check' + 'designer' + 8 FulfillmentStage. */
+/** Khóa chặng — 'tool-check' + 'designer' + 6 FulfillmentStage. */
 export const LIFECYCLE_STAGE_KEYS = [
   'tool-check',
   'designer',
   'print',
   'press',
   'qc-post-press',
-  'qc-sorting',
   'sew-in',
   'sew-out',
-  'qc-post-sew',
   'pack',
 ] as const;
 export type LifecycleStageKey = (typeof LIFECYCLE_STAGE_KEYS)[number];
@@ -1430,7 +1426,7 @@ export class GetLifecycleOverviewResDto extends createZodDto(
 
 // ─── Lifecycle Track (tra cứu vòng đời 1 đơn theo productionId) ────
 // Strip gọn trên đầu Dashboard: nhập productionId → hành trình đơn đó đã qua
-// chặng nào / đang ở đâu. 10 chặng theo `LIFECYCLE_STAGE_KEYS`.
+// chặng nào / đang ở đâu. 8 chặng theo `LIFECYCLE_STAGE_KEYS`.
 
 /** Trạng thái 1 chặng trong hành trình 1 đơn. */
 export const LifecycleTrackStatusZod = z.enum(['done', 'current', 'pending', 'error', 'rework']);
@@ -1453,9 +1449,9 @@ export const LifecycleTrackZod = z.object({
   fulfillmentCompletedAt: z.date().optional(),
   /** Khóa chặng đơn đang ở (null nếu đã hoàn thành toàn bộ flow). */
   currentStageKey: z.string().nullable(),
-  /** Đã hoàn thành toàn bộ 10 chặng (pack done). */
+  /** Đã hoàn thành toàn bộ 8 chặng (pack done). */
   completed: z.boolean(),
-  stages: LifecycleTrackStageZod.array(), // 10 phần tử theo LIFECYCLE_STAGE_KEYS
+  stages: LifecycleTrackStageZod.array(), // 8 phần tử theo LIFECYCLE_STAGE_KEYS
 });
 export type LifecycleTrack = z.infer<typeof LifecycleTrackZod>;
 

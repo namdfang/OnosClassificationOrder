@@ -113,19 +113,21 @@ export function OrderFilterBar({
             />
           </div>
         )}
-        {showDateRange && (
-          <DateRangePicker
-            from={createdFrom}
-            to={createdTo}
-            onChange={onDateRangeChange}
-          />
-        )}
         <Button variant="outline" size="sm" onClick={onReload} disabled={loading}>
           <RefreshCw size={13} className={loading ? 'animate-spin' : ''} />
           Tải lại
         </Button>
         {topActionsRight}
       </div>
+
+      {showDateRange && (
+        <DateRangePicker
+          variant="inline"
+          from={createdFrom}
+          to={createdTo}
+          onChange={onDateRangeChange}
+        />
+      )}
 
       {middleRow}
 

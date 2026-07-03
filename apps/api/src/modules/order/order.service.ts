@@ -509,6 +509,35 @@ export class OrderService implements OnModuleInit {
         `[order-backfill] init Print stage cho ${orphanForwardRes.modifiedCount} orphan-forward orders (ready=true + stage=null)`,
       );
     }
+
+    // Bỏ stage 'qc-sorting' (QC phân hàng kiểm) khỏi pipeline → dời đơn tồn
+    // TIẾN về 'sew-in' (May nhận vào), status=waiting. Idempotent: sau lần đầu
+    // không còn đơn nào ở qc-sorting nên match=0. ('qc-post-sew' chưa có đơn
+    // nào nên không cần migrate — chỉ xoá khỏi enum/schema.)
+    const dropQcSortingRes = await this.orderModel.updateMany(
+      { currentFulfillmentStage: 'qc-sorting' },
+      [
+        {
+          $set: {
+            currentFulfillmentStage: FulfillmentStage.SewIn,
+            'fulfillmentStages.sew-in.status': FulfillmentStageStatus.Waiting,
+            'fulfillmentStages.sew-in.waitingAt': '$$NOW',
+            'fulfillmentStages.sew-in.reworkCount': {
+              $ifNull: ['$fulfillmentStages.sew-in.reworkCount', 0],
+            },
+            'fulfillmentStages.sew-in.workMs': {
+              $ifNull: ['$fulfillmentStages.sew-in.workMs', 0],
+            },
+          },
+        },
+      ],
+    );
+    if (dropQcSortingRes.modifiedCount > 0) {
+      // eslint-disable-next-line no-console
+      console.log(
+        `[order-backfill] migrate ${dropQcSortingRes.modifiedCount} orders qc-sorting → sew-in (waiting)`,
+      );
+    }
   }
 
   /**

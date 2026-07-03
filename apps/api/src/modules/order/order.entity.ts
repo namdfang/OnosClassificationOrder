@@ -357,10 +357,8 @@ export class OrderEntity extends DatabaseEntityAbstract {
       print: { type: Object },
       press: { type: Object },
       'qc-post-press': { type: Object },
-      'qc-sorting': { type: Object },
       'sew-in': { type: Object },
       'sew-out': { type: Object },
-      'qc-post-sew': { type: Object },
       pack: { type: Object },
     }),
   })

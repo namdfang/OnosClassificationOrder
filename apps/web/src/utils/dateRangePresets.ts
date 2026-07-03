@@ -61,6 +61,30 @@ export const DATE_PRESETS: DatePreset[] = [
     },
   },
   {
+    key: 'last-7d',
+    label: '7 ngày',
+    range: () => {
+      const now = new Date();
+      return { from: toISO(addDays(now, -6)), to: toISO(now) };
+    },
+  },
+  {
+    key: 'last-14d',
+    label: '14 ngày',
+    range: () => {
+      const now = new Date();
+      return { from: toISO(addDays(now, -13)), to: toISO(now) };
+    },
+  },
+  {
+    key: 'last-30d',
+    label: '30 ngày',
+    range: () => {
+      const now = new Date();
+      return { from: toISO(addDays(now, -29)), to: toISO(now) };
+    },
+  },
+  {
     key: 'this-week',
     label: 'Tuần này',
     range: () => {
@@ -113,6 +137,21 @@ export const DATE_PRESETS: DatePreset[] = [
     },
   },
 ];
+
+/**
+ * Danh sách preset curated cho thanh inline (`variant='inline'` của
+ * `DateRangePicker`) — đúng thứ tự yêu cầu. Nút "Tùy chỉnh" là item thứ 8,
+ * render riêng (không nằm trong list này).
+ */
+export const QUICK_PRESET_KEYS = [
+  'today',
+  'yesterday',
+  'last-7d',
+  'last-14d',
+  'last-30d',
+  'this-month',
+  'last-month',
+] as const;
 
 /**
  * Tìm preset đang khớp với `(from, to)` hiện tại. Null nếu user chọn range

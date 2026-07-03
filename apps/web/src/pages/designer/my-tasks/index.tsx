@@ -539,20 +539,23 @@ export default function MyTasksPage() {
           </div>
 
           <div className="flex items-center gap-2 flex-wrap">
-            <DateRangePicker
-              from={dateFrom}
-              to={dateTo}
-              clearable={false}
-              onChange={(f, t) => {
-                setDateFrom(f);
-                setDateTo(t);
-              }}
-            />
             <Button variant="ghost" size="sm" onClick={refreshAll} disabled={loading}>
               <RefreshCw size={13} className={loading ? 'animate-spin' : ''} />
             </Button>
           </div>
         </div>
+
+        {/* Thanh ngày — preset inline full-width */}
+        <DateRangePicker
+          variant="inline"
+          from={dateFrom}
+          to={dateTo}
+          clearable={false}
+          onChange={(f, t) => {
+            setDateFrom(f);
+            setDateTo(t);
+          }}
+        />
 
         {/* KPI */}
         {stats && (

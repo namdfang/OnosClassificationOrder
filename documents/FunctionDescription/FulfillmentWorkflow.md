@@ -1,4 +1,4 @@
-# Fulfillment 8-Stage Workflow — Function Description
+# Fulfillment 6-Stage Workflow — Function Description
 
 > **File FE:** `apps/web/src/pages/fulfillment/my-tasks/`, `apps/web/src/services/fulfillment.ts`, `apps/web/src/pages/users/index.tsx` (form chọn `fulfillmentStage`)
 > **File BE:** `apps/api/src/modules/fulfillment/` (full module), hook ở `apps/api/src/modules/designer/designer-task.service.ts` → `transition()` > **Route FE:** `/fulfillment/my-tasks` > **API:** `POST /v1/orders/:id/fulfillment-transition`, `GET /v1/fulfillment/my-tasks`
@@ -7,11 +7,11 @@
 
 ## 1. Overview
 
-Sau khi Designer mark task `done` (`designerStatus === 'done'` + `readyForFulfill === true`), đơn được auto-route qua **8 stage tuần tự** trong phạm vi factory:
+Sau khi Designer mark task `done` (`designerStatus === 'done'` + `readyForFulfill === true`), đơn được auto-route qua **6 stage tuần tự** trong phạm vi factory:
 
 ```
-Designer done → In → Ép → QC sau ép → QC phân hàng kiểm → May nhận vào → May xuất ra → QC sau may → Đóng hàng → completed
-                ↑    ↑       ↑              ↑                  ↑              ↑             ↑            ↑
+Designer done → In → Ép → QC sau ép → May nhận vào → May xuất ra → Đóng hàng → completed
+                ↑    ↑       ↑              ↑              ↑             ↑
               mỗi stage có DUY NHẤT 1 user phụ trách per factory
               (BE enforce unique constraint (factoryId, fulfillmentStage))
 ```
@@ -21,18 +21,16 @@ Designer done → In → Ép → QC sau ép → QC phân hàng kiểm → May nh
 | 1   | In                | `print`         | In tem/mockup                 |
 | 2   | Ép                | `press`         | Ép nhiệt lên vải              |
 | 3   | QC sau ép         | `qc-post-press` | Kiểm hậu ép (chất lượng in)   |
-| 4   | QC phân hàng kiểm | `qc-sorting`    | Phân loại + kiểm hàng tổng    |
-| 5   | May nhận vào      | `sew-in`        | Tiếp nhận hàng vào tổ may     |
-| 6   | May xuất ra       | `sew-out`       | Xuất hàng đã may xong khỏi tổ |
-| 7   | QC sau may        | `qc-post-sew`   | Kiểm hậu may (trước đóng hàng)|
-| 8   | Đóng hàng         | `pack`          | Đóng gói + chuẩn bị ship      |
+| 4   | May nhận vào      | `sew-in`        | Tiếp nhận hàng vào tổ may     |
+| 5   | May xuất ra       | `sew-out`       | Xuất hàng đã may xong khỏi tổ |
+| 6   | Đóng hàng         | `pack`          | Đóng gói + chuẩn bị ship      |
 
-- 2 xưởng × 8 stage = **16 user Fulfillment** trong hệ thống.
+- 2 xưởng × 6 stage = **12 user Fulfillment** trong hệ thống.
 - Đơn đến stage X → tự nhảy vào "Task của tôi" của user X tại factory đó.
 - Mỗi stage có 4 trạng thái: `waiting`, `in-progress`, `done`, `rework`.
 - Khi báo lỗi, có thể đẩy về **Designer** hoặc **bất kỳ stage nào trước** đó.
 
-**Refactor history (5 → 7 → 8 stage):** QC cũ tách thành `qc-post-press` + `qc-sorting`; May cũ tách thành `sew-in` + `sew-out`. `Pack` đổi label "Đóng gói" → "Đóng hàng" (code không đổi). Sau đó thêm `qc-post-sew` ("QC sau may") chèn **giữa `sew-out` và `pack`** (order index dịch: pack 6 → 7). **Không migrate đơn cũ hoặc user cũ** — dữ liệu cũ có `currentFulfillmentStage='qc'`/`'sew'` sẽ trở thành arbitrary string (không nằm trong enum mới) và **mất visibility** trong My Tasks. Đơn đang chạy trước khi thêm `qc-post-sew` sẽ nhảy thẳng `sew-out → pack` như cũ (không bị chèn ngược). Áp dụng cho đơn mới từ thời điểm deploy. Toàn bộ auto-advance/rework-back data-driven qua `FULFILLMENT_STAGES` + `FULFILLMENT_STAGE_ORDER` nên chỉ cần sửa enum nguồn.
+**Refactor history (5 → 7 → 8 → 6 stage):** QC cũ từng tách thành `qc-post-press` + `qc-sorting`; May cũ tách thành `sew-in` + `sew-out`; thêm `qc-post-sew` ("QC sau may"). Sau đó **bỏ `qc-sorting` (QC phân hàng kiểm) + `qc-post-sew` (QC sau may)** → còn 6 stage. `Pack` đổi label "Đóng gói" → "Đóng hàng" (code không đổi). **Xử lý đơn tồn khi bỏ stage:** `qc-post-sew` chưa có đơn nào → xoá thẳng khỏi enum/schema; đơn tồn ở `qc-sorting` **migrate TIẾN về `sew-in`** (status=waiting) — có cả (a) mongo script chạy tay + (b) backfill idempotent trong `OrderService.onModuleInit()` (`updateMany({currentFulfillmentStage:'qc-sorting'}, [{$set: currentFulfillmentStage='sew-in', 'fulfillmentStages.sew-in' waiting}])`, match=0 sau lần đầu). Dữ liệu cũ mang enum đã bỏ (`qc-sorting`/`qc-post-sew`/`qc`/`sew`) không nằm trong enum mới → **mất visibility** nếu không migrate. Toàn bộ auto-advance/rework-back data-driven qua `FULFILLMENT_STAGES` + `FULFILLMENT_STAGE_ORDER` (index đánh lại 0–5) nên chỉ cần sửa enum nguồn. **User worker cũ** `fulfillmentStage IN ('qc-sorting','qc-post-sew')` cần admin reassign/disable tay (không auto-clean).
 
 ---
 
@@ -121,7 +119,6 @@ Song song 2.3b nhưng target = **Support** (không phải designer): In chọn "
 - `fulfillmentStages.print.status: done → rework` (reworkCount++).
 - `fulfillmentStages.press.status: done → rework` (intermediate).
 - `fulfillmentStages['qc-post-press'].status: done → rework` (intermediate).
-- `fulfillmentStages['qc-sorting'].status: done → rework` (intermediate).
 - `fulfillmentStages['sew-in'].status: done → rework` (intermediate).
 - `fulfillmentStages['sew-out'].status: in-progress → waiting` (chờ đơn quay lại).
 - User Print thấy đơn trong tab "Làm lại" → bấm "Bắt đầu" → in-progress.
@@ -151,7 +148,7 @@ Nếu `cancelledAt` được set (từ flow Import file soát), `BadRequestExcep
 // apps/api/src/modules/order/order.entity.ts
 type FulfillmentStage =
   | 'print' | 'press'
-  | 'qc-post-press' | 'qc-sorting'
+  | 'qc-post-press'
   | 'sew-in' | 'sew-out'
   | 'pack';
 
@@ -161,7 +158,6 @@ fulfillmentStages?: {
   print?: StageState;
   press?: StageState;
   'qc-post-press'?: StageState;
-  'qc-sorting'?: StageState;
   'sew-in'?: StageState;
   'sew-out'?: StageState;
   pack?: StageState;
@@ -299,7 +295,7 @@ Default preset:
 
 - Khi role = `Fulfillment` → show 2 select:
   1. **Xưởng** (existing).
-  2. **Stage Fulfillment** (auto-derive từ shared enum: In / Ép / QC sau ép / QC phân hàng kiểm / May nhận vào / May xuất ra / Đóng hàng).
+  2. **Stage Fulfillment** (auto-derive từ shared enum: In / Ép / QC sau ép / May nhận vào / May xuất ra / Đóng hàng).
 - Helper text: "Mỗi (xưởng, stage) chỉ được 1 user".
 
 ### 4.4 Sidebar entry
@@ -346,7 +342,7 @@ Riêng user **In** (`role=Fulfillment`, `fulfillmentStage='print'`) **KHÔNG** d
     `!code` → clear) → cột "Loại lỗi" cập nhật tức thì, không chờ F5. Áp cho mọi bảng dùng `WORKSHOP_COLS` (`PrintOrderTable` +
     `OrderTableWorkshop`).
   - Preset `Fulfillment` **bỏ `order.field.productionErrorSource.edit`** (giữ `.view`) → `ErrorSourceCell` render
-    read-only. Permission theo **role `Fulfillment` (1 role chung cả 8 stage)** nên áp mọi stage — đúng logic vì loại lỗi luôn
+    read-only. Permission theo **role `Fulfillment` (1 role chung cả 6 stage)** nên áp mọi stage — đúng logic vì loại lỗi luôn
     suy ra từ lỗi xưởng. `RoleService.onModuleInit` revoke quyền khi restart (catalog = source of truth). Vẫn giữ
     `productionError.edit` để worker chọn lỗi xưởng.
 
@@ -358,7 +354,7 @@ Component dùng chung, render **trên** kanban (6 stage) và **trên** bảng In
   - **Tổng đơn** — count đơn có `inProductionAt` ngày đó.
   - **Soát tool** — ô 2 số `đã soát / chưa soát` (`toolResultNote` có nội dung / ∈ {null,''}).
   - **Designer** — ô 2 số `đã làm / còn lại` (đã làm = `done`; còn lại = `designerReceived − done`; tổng nhận = `designerStatus ≠ unassigned`, ở tooltip).
-  - **8 stage fulfillment** — mỗi stage 1 hàng ô 2 số `đã xong / còn lại` (đã xong = `done`, emerald; còn lại = `arrived − done`, indigo). Hàng công đoạn hiện `0` khi = 0 (thay dấu `·`).
+  - **6 stage fulfillment** — mỗi stage 1 hàng ô 2 số `đã xong / còn lại` (đã xong = `done`, emerald; còn lại = `arrived − done`, indigo). Hàng công đoạn hiện `0` khi = 0 (thay dấu `·`).
 - **Stage của user** (`stage` prop) → hàng đó **bung 4 hàng nhỏ** `Đến / Đã làm / Còn lại / Lỗi cần sửa` (phân loại theo `fulfillmentStages.<myStage>.status` HIỆN TẠI; `Đến = Đã làm + Còn lại + Lỗi`) và **highlight** (nền indigo, nhãn đậm). Hàng **"Lỗi cần sửa" tô đỏ** (nền + chữ đỏ) cho nổi. Các stage khác **làm mờ** (`opacity-70`, nhãn muted).
 - **Ô 2 số** chia đều 2 bên: `đã xong` (emerald, sát mép trái) `/` `còn lại` (indigo, sát mép phải), slash **căn giữa**; ô **1 số** căn **trái**. `còn lại` = `arrived − done` (chưa hoàn thành, cộng dồn theo cohort). Soát tool: `đã soát`(emerald)`/`chưa soát`(amber). Hàng công đoạn fulfillment hiện `0` khi = 0 (thay `·`).
 - **Tooltip mỗi ô** (`title` HTML, không cần provider) mô tả chi tiết: ngày + tên chỉ số + ý nghĩa từng con số. Cột "Tổng" tip ghi "Tổng cả kỳ".
@@ -398,7 +394,7 @@ Pseudocode:
 
 ### 5.1b `FulfillmentTaskService.getDailyOverview(user, {days, from?, to?, stage?})`
 
-Trả **FULL luồng** (không giới hạn theo stage). 1 aggregate: `$match` (factory scope `$or[factoryId, originalFactoryId]` + `inProductionAt ∈ window` + alive — **KHÔNG** còn điều kiện `<stage>.status $exists`) → `$group` theo `$dateToString(inProductionAt, +07:00)`. Accumulator `$sum`/`$cond`: `total`, `toolReviewed` (`$strLenCP($ifNull(toolResultNote,'')) > 0`), `toolUnreviewed`, `toolOk` (`=='ok'`), `designerReceived` (`designerStatus ≠ unassigned`), `designerDone`, và **cho cả 8 stage** (gen động qua `FULFILLMENT_STAGES`) key `s_<stage>_{arrived,done,remaining,rework}` (arrived = `$ifNull(status) ≠ null`). `$group` cast `PipelineStage.Group['$group']`. Reshape agg row → `{day, total, tool*, designer*, stages: {<stage>: {arrived,done,remaining,rework}}}` + `columnTotals` (cùng shape). `resolveDayWindow` (private, tz VN, cap 60) trả `days[]` mới→cũ + `start`/`end`. `stage` param chỉ dùng ở FE (highlight).
+Trả **FULL luồng** (không giới hạn theo stage). 1 aggregate: `$match` (factory scope `$or[factoryId, originalFactoryId]` + `inProductionAt ∈ window` + alive — **KHÔNG** còn điều kiện `<stage>.status $exists`) → `$group` theo `$dateToString(inProductionAt, +07:00)`. Accumulator `$sum`/`$cond`: `total`, `toolReviewed` (`$strLenCP($ifNull(toolResultNote,'')) > 0`), `toolUnreviewed`, `toolOk` (`=='ok'`), `designerReceived` (`designerStatus ≠ unassigned`), `designerDone`, và **cho cả 6 stage** (gen động qua `FULFILLMENT_STAGES`) key `s_<stage>_{arrived,done,remaining,rework}` (arrived = `$ifNull(status) ≠ null`). `$group` cast `PipelineStage.Group['$group']`. Reshape agg row → `{day, total, tool*, designer*, stages: {<stage>: {arrived,done,remaining,rework}}}` + `columnTotals` (cùng shape). `resolveDayWindow` (private, tz VN, cap 60) trả `days[]` mới→cũ + `start`/`end`. `stage` param chỉ dùng ở FE (highlight).
 
 ### 5.2 Race-safe atomicity
 

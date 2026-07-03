@@ -31,6 +31,7 @@ import {
 import { Spinner } from '@/components/common/Spinner';
 import { SelectFilter } from '@/components/common/SelectFilter';
 import { DateRangePicker } from '@/components/common/DateRangePicker';
+import { DATE_PRESETS } from '@/utils/dateRangePresets';
 import { DateRangePresets } from '@/components/common/DateRangePresets';
 import { RepositoryRemote } from '@/services';
 import { handleAxiosError } from '@/utils';
@@ -77,17 +78,12 @@ export default function DesignerStatsTab() {
   // Filter dùng chung cho biểu đồ cột + ma trận: sản phẩm (type) + khách (userSku).
   const [filterType, setFilterType] = useState('');
   const [filterCustomer, setFilterCustomer] = useState('');
-  // Switcher 7/14/30 (top) điều khiển bảng Tổng quan + Cần gán designer.
-  const [rangeDays, setRangeDays] = useState<7 | 14 | 30>(7);
-  // Khoảng ngày tùy biến — khi set (cả 2) sẽ override 7/14/30.
-  const [dateFrom, setDateFrom] = useState('');
-  const [dateTo, setDateTo] = useState('');
-  const customRange = !!(dateFrom && dateTo);
-  const pickPreset = (d: 7 | 14 | 30) => {
-    setRangeDays(d);
-    setDateFrom('');
-    setDateTo('');
-  };
+  // Model từ/đến (thay nhóm nút 7/14/30 cũ) — mặc định 7 ngày gần nhất. Các bảng
+  // con nhận `days` (7|14|30) + from/to; từ/đến luôn có mặt nên BE dùng from/to,
+  // `days` chỉ là fallback hợp kiểu (truyền hằng 7).
+  const last7 = DATE_PRESETS.find((p) => p.key === 'last-7d')!.range();
+  const [dateFrom, setDateFrom] = useState(() => last7.from);
+  const [dateTo, setDateTo] = useState(() => last7.to);
   const [products, setProducts] = useState<BreakdownFilterOption[]>([]);
   const [customers, setCustomers] = useState<BreakdownFilterOption[]>([]);
 
@@ -168,34 +164,6 @@ export default function DesignerStatsTab() {
           <span className="hidden md:inline text-[11px] text-muted-foreground">
             — áp cho các bảng bên dưới
           </span>
-          {/* Switcher 7/14/30 + khoảng ngày tùy biến — điều khiển Tổng quan + Cần gán. */}
-          <div className="ml-auto flex items-center gap-2 flex-wrap">
-            <div className="flex items-center rounded-md border border-border overflow-hidden">
-              {([7, 14, 30] as const).map((d) => (
-                <button
-                  key={d}
-                  type="button"
-                  onClick={() => pickPreset(d)}
-                  className={`px-2.5 py-1 text-[11px] font-medium transition-colors ${
-                    !customRange && rangeDays === d
-                      ? 'bg-indigo-600 text-white'
-                      : 'text-muted-foreground hover:bg-muted'
-                  }`}
-                >
-                  {d} ngày
-                </button>
-              ))}
-            </div>
-            <DateRangePicker
-              from={dateFrom}
-              to={dateTo}
-              placeholder="Khoảng ngày"
-              onChange={(f, t) => {
-                setDateFrom(f);
-                setDateTo(t);
-              }}
-            />
-          </div>
           {(filterType || filterCustomer) && (
             <button
               type="button"
@@ -209,6 +177,18 @@ export default function DesignerStatsTab() {
             </button>
           )}
         </div>
+        {/* Thanh ngày — preset inline full-width */}
+        <div className="mb-2">
+          <DateRangePicker
+            variant="inline"
+            from={dateFrom}
+            to={dateTo}
+            onChange={(f, t) => {
+              setDateFrom(f);
+              setDateTo(t);
+            }}
+          />
+        </div>
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-2">
           <SelectFilter label="Sản phẩm" value={filterType} onChange={setFilterType} options={products} />
           <SelectFilter label="Khách hàng" value={filterCustomer} onChange={setFilterCustomer} options={customers} />
@@ -217,7 +197,7 @@ export default function DesignerStatsTab() {
 
       {/* Bảng tổng quan N ngày (tổng đơn / chưa soát / lỗi / tồn) — TRÊN CÙNG. */}
       <DesignerDailyOverview
-        days={rangeDays}
+        days={7}
         from={dateFrom || undefined}
         to={dateTo || undefined}
         reloadToken={matrixToken}
@@ -227,7 +207,7 @@ export default function DesignerStatsTab() {
 
       {/* Bảng "Cần gán designer" gom theo sản phẩm — dưới bảng tổng quan. */}
       <DesignerAssignBacklog
-        days={rangeDays}
+        days={7}
         from={dateFrom || undefined}
         to={dateTo || undefined}
         reloadToken={matrixToken}
@@ -240,7 +220,7 @@ export default function DesignerStatsTab() {
       <StatusBarCharts
         type={filterType || undefined}
         customer={filterCustomer || undefined}
-        filterDays={rangeDays}
+        filterDays={7}
         filterFrom={dateFrom || undefined}
         filterTo={dateTo || undefined}
       />

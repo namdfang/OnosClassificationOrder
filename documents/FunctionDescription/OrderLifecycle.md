@@ -7,16 +7,16 @@
 
 ## 1. Overview
 
-Dashboard thống kê **vòng đời đơn** theo 10 chặng tuần tự — cho biết tại mỗi
+Dashboard thống kê **vòng đời đơn** theo 8 chặng tuần tự — cho biết tại mỗi
 công đoạn hiện đang **chứa** bao nhiêu đơn (chờ), **đang làm** bao nhiêu, **lỗi**,
 **rework**, **thời gian hoàn thành trung bình**, và **throughput** (số hoàn thành
 trong kỳ).
 
-Phễu 10 chặng:
+Phễu 8 chặng:
 
 ```
-Soát tool → Thiết kế → In → Ép → QC sau ép → QC phân hàng → May vào → May ra → QC sau may → Đóng hàng → ✅ Hoàn thành
-(support)   (designer)  └────────────────────── 8 stage Fulfillment ──────────────────────┘
+Soát tool → Thiết kế → In → Ép → QC sau ép → May vào → May ra → Đóng hàng → ✅ Hoàn thành
+(support)   (designer)  └──────────────── 6 stage Fulfillment ────────────────┘
 ```
 
 - **Mọi tài khoản** đều thấy vòng đời đơn (strip gọn trên đầu + tab chi tiết);
@@ -30,7 +30,7 @@ Soát tool → Thiết kế → In → Ép → QC sau ép → QC phân hàng →
     Chặng · Trạng thái) + cảnh báo mã không tìm thấy. Click 1 dòng → set `pid`/`debouncedPid` = mã đó →
     strip chuyển sang hành trình đơn đó.
   - **Hàng phễu:** card **"Tổng đơn tất cả"** (`totals.totalOrders` + Đang chạy `totalActive` /
-    Xong kỳ `completedInRange`) → 10 chặng. Mỗi card chặng: **Tổng đơn** (= Chờ + Làm + Lại,
+    Xong kỳ `completedInRange`) → 8 chặng. Mỗi card chặng: **Tổng đơn** (= Chờ + Làm + Lại,
     đơn đang ở chặng) + 4 chỉ số nhỏ **Chờ** (`backlog`) / **Làm** (`inProgress`) /
     **Lại** (`rework`) / **Xong** (`passedTotal`). Card bottleneck viền hổ phách.
   - Nhập `productionId` → hành trình riêng của đơn đó (đã qua ✓ / đang ở ● / chưa tới ○ /
@@ -56,8 +56,8 @@ Soát tool → Thiết kế → In → Ép → QC sau ép → QC phân hàng →
 
 | Method | Path | Mô tả |
 |---|---|---|
-| GET | `/v1/orders/lifecycle-overview` | Phễu 10 chặng + KPI + timeline + danh sách xưởng |
-| GET | `/v1/orders/lifecycle-track/:code` | Hành trình 10 chặng của 1 đơn theo `productionId` (cho strip) |
+| GET | `/v1/orders/lifecycle-overview` | Phễu 8 chặng + KPI + timeline + danh sách xưởng |
+| GET | `/v1/orders/lifecycle-track/:code` | Hành trình 8 chặng của 1 đơn theo `productionId` (cho strip) |
 
 `getLifecycleTrack(code, roleName, userFactoryId)`: `findOne` theo `productionId`
 (exact, case-insensitive), khóa xưởng cho `Fulfillment`. Suy **currentIndex** (0..9)
@@ -84,7 +84,7 @@ Response `LifecycleOverview`:
 
 ```ts
 {
-  stages: LifecycleStageRow[];          // 10 chặng theo thứ tự
+  stages: LifecycleStageRow[];          // 8 chặng theo thứ tự
   totals: {
     totalOrders: number;                // tổng đơn trong tập đã lọc (facet totalAll)
     totalActive: number;                // đơn chưa pack done, chưa hủy

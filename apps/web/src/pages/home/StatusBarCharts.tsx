@@ -171,6 +171,7 @@ export function StatusBarCharts({ type, customer, filterDays, filterFrom, filter
         <div className="flex items-center gap-2 flex-wrap">
           {mode === 'designer' ? (
             <DateRangePicker
+              variant="inline"
               from={dFrom}
               to={dTo}
               clearable={false}

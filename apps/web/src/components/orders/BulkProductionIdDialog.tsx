@@ -20,10 +20,8 @@ const STAGE_SHORT: Record<string, string> = {
   print: 'In',
   press: 'Ép',
   'qc-post-press': 'QC ép',
-  'qc-sorting': 'QC kiểm',
   'sew-in': 'May vào',
   'sew-out': 'May ra',
-  'qc-post-sew': 'QC may',
   pack: 'Đóng',
 };
 

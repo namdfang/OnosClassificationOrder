@@ -31,7 +31,7 @@ Bối cảnh: đơn `toolResultNote='ok'` được đẩy thẳng sang In (xem `
 ### 2.3 Tab Dashboard "Soát tool"
 
 Support/Admin mở Dashboard → tab "Soát tool":
-- Filter **thời gian** (7/14/30 + `DateRangePicker`) — lọc theo `inProductionAt` (tz VN).
+- Filter **thời gian** — `DateRangePicker variant="inline"` (thanh preset ngang full-width: Hôm nay · Hôm qua · 7/14/30 ngày · Tháng này · Tháng trước · Tùy chỉnh), lọc theo `inProductionAt` (tz VN). Model đã đổi `days` → **`from/to`** (mặc định 7 ngày gần nhất = `last-7d`); BE `getToolCheckOverview` khi có `from&&to` dùng window đó (bỏ qua `days`). Xem `DateRangePicker-InlineRedesign.md`.
 - **3 filter server-side** (`SelectFilter` — options từ `facets` BE, phạm vi = đơn Support quan tâm cả kỳ `chưa soát ∪ tool-check`, KHÔNG cross-narrow → dropdown ổn định): **Sản phẩm** (`type`) · **Khách hàng** (`userSku`) · **Máy** (`machineNumber`). Đổi filter → refetch, narrow **toàn tab** (KPI + dải ngày + list + thống kê). *(Lưu ý: đơn chưa soát thường chưa gán máy → filter Máy phủ ít cho nhóm chưa soát.)*
 - **KPI**: Đã soát trong kỳ · In trả về (cần làm lại) · Chưa soát · Lỗi soát tool đang chờ (KPI tính **cả kỳ**, KHÔNG đổi khi click ngày).
 - **Dải tổng quan theo ngày** (`days[]` + `columnTotals`): 2 hàng **Chưa soát** + **In trả về**, mỗi cột 1 ngày `inProductionAt` (VN, cũ→mới; BE trả mới→cũ, FE reverse) + cột Tổng. **Click 1 ngày (header hoặc ô) → lọc DANH SÁCH bên dưới client-side** (so `inProductionAt`→ngày VN); click lại / nút "Đang lọc dd/MM ✕" để bỏ. Badge 2 tab list + đơn hiển thị theo ngày đang chọn; KPI/dải/thống kê giữ nguyên. ⚠️ list cap 500/kỳ → nếu 1 ngày vượt cap, số ở dải (đếm chuẩn từ aggregate) có thể > số dòng hiện.

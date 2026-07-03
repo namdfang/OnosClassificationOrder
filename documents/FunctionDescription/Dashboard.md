@@ -69,7 +69,7 @@ Layout (thứ tự render trên tab: **Bộ lọc chung → Tổng quan N ngày 
 
 **0. Bộ lọc chung sản phẩm + khách hàng + switcher ngày** (card `Filter` render **ĐẦU TIÊN trên cùng tab**):
 - 2 dropdown `<SelectFilter>` (native select có count + typeahead): **Sản phẩm** (`order.type`) + **Khách hàng** (`order.userSku`). State `filterType`/`filterCustomer`, truyền **props `type`/`customer`** xuống StatusBarCharts + TeamDailyMatrix + DesignerDailyOverview + DesignerAssignBacklog.
-- **Switcher 7/14/30** (state `rangeDays`) + **khoảng ngày tùy biến** (`<DateRangePicker>` — popover gói 8 preset + 2 input + Xóa, state `dateFrom`/`dateTo`) — điều khiển **CẢ** `DesignerDailyOverview` VÀ `DesignerAssignBacklog`. Set cả `dateFrom`+`dateTo` → **override 7/14/30** (gửi `from`/`to`); Xóa trong picker quay lại preset. Overview KHÔNG còn switcher nội bộ.
+- **Thanh ngày `<DateRangePicker variant="inline">`** (preset ngang full-width: Hôm nay · Hôm qua · 7/14/30 ngày · Tháng này · Tháng trước · Tùy chỉnh) — state `dateFrom`/`dateTo`, **mặc định 7 ngày gần nhất** (`last-7d`). Điều khiển **CẢ** `DesignerDailyOverview` VÀ `DesignerAssignBacklog` VÀ biểu đồ cột. Đã **bỏ nhóm nút 7/14/30 riêng** (model `rangeDays` cũ) — nay luôn gửi `from`/`to`; prop `days` truyền hằng `7` (BE bỏ qua khi có from/to). Xem `DateRangePicker-InlineRedesign.md`.
 - Option list load 1 lần lúc mount từ `GET /v1/designer/breakdown-filters`. Nút **"Xóa lọc"** hiện khi có filter active.
 - **Ảnh hưởng section 0b (tổng quan) + 0c (cần gán) + 2 (ma trận) + 2b (biểu đồ cột)** — KHÔNG ảnh hưởng Leaderboard/Timeline/Error pie (period switcher riêng).
 

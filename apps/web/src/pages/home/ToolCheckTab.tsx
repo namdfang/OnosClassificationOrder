@@ -14,6 +14,7 @@ import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { CopyButton } from '@/components/common/CopyButton';
 import { DateRangePicker } from '@/components/common/DateRangePicker';
+import { DATE_PRESETS } from '@/utils/dateRangePresets';
 import { SelectFilter } from '@/components/common/SelectFilter';
 import { ImagePreviewDialog } from '@/components/common/ImagePreviewDialog';
 import { Spinner } from '@/components/common/Spinner';
@@ -70,15 +71,10 @@ export default function ToolCheckTab() {
     if (!configLoaded) loadConfig();
   }, [configLoaded, loadConfig]);
 
-  const [rangeDays, setRangeDays] = useState<7 | 14 | 30>(7);
-  const [dateFrom, setDateFrom] = useState('');
-  const [dateTo, setDateTo] = useState('');
-  const customRange = !!(dateFrom && dateTo);
-  const pickPreset = (d: 7 | 14 | 30) => {
-    setRangeDays(d);
-    setDateFrom('');
-    setDateTo('');
-  };
+  // Model từ/đến (thay cho `days` cũ) — mặc định 7 ngày gần nhất (khớp default cũ).
+  const last7 = DATE_PRESETS.find((p) => p.key === 'last-7d')!.range();
+  const [dateFrom, setDateFrom] = useState(() => last7.from);
+  const [dateTo, setDateTo] = useState(() => last7.to);
 
   const [filterType, setFilterType] = useState('');
   const [filterCustomer, setFilterCustomer] = useState('');
@@ -99,8 +95,8 @@ export default function ToolCheckTab() {
       try {
         setLoading(true);
         const res = await RepositoryRemote.designer.toolCheckOverview({
-          days: rangeDays,
-          ...(customRange ? { from: dateFrom, to: dateTo } : {}),
+          from: dateFrom,
+          to: dateTo,
           ...(filterType ? { type: filterType } : {}),
           ...(filterCustomer ? { customer: filterCustomer } : {}),
           ...(filterMachine ? { machineNumber: filterMachine } : {}),
@@ -120,7 +116,7 @@ export default function ToolCheckTab() {
     setDayFilter('');
     fetchData();
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [rangeDays, dateFrom, dateTo, filterType, filterCustomer, filterMachine]);
+  }, [dateFrom, dateTo, filterType, filterCustomer, filterMachine]);
 
   // Patch 1 đơn trong cả 2 list (optimistic) sau khi edit cell.
   const patchRow = (id: string, partial: Partial<ToolCheckOrder>) =>
@@ -266,36 +262,18 @@ export default function ToolCheckTab() {
         <span className="hidden md:inline text-[11px] text-muted-foreground">
           — đơn cần làm lại + backlog chưa soát cho Support
         </span>
-        <div className="ml-auto flex items-center gap-2 flex-wrap">
-          <div className="flex items-center rounded-md border border-border overflow-hidden">
-            {([7, 14, 30] as const).map((d) => (
-              <button
-                key={d}
-                type="button"
-                onClick={() => pickPreset(d)}
-                className={`px-2.5 py-1 text-[11px] font-medium transition-colors ${
-                  !customRange && rangeDays === d
-                    ? 'bg-indigo-600 text-white'
-                    : 'text-muted-foreground hover:bg-muted'
-                }`}
-              >
-                {d} ngày
-              </button>
-            ))}
-          </div>
-          <DateRangePicker
-            from={dateFrom}
-            to={dateTo}
-            placeholder="Khoảng ngày"
-            onChange={(f, t) => {
-              setDateFrom(f);
-              setDateTo(t);
-            }}
-          />
-          <Button variant="ghost" size="sm" onClick={fetchData} disabled={loading}>
-            <RefreshCw size={13} className={loading ? 'animate-spin' : ''} />
-          </Button>
-        </div>
+        <Button variant="ghost" size="sm" className="ml-auto" onClick={fetchData} disabled={loading}>
+          <RefreshCw size={13} className={loading ? 'animate-spin' : ''} />
+        </Button>
+        <DateRangePicker
+          variant="inline"
+          from={dateFrom}
+          to={dateTo}
+          onChange={(f, t) => {
+            setDateFrom(f);
+            setDateTo(t);
+          }}
+        />
         {/* Hàng filter: Sản phẩm / Khách / Máy — options từ facet BE (cả kỳ). */}
         <div className="w-full grid grid-cols-1 sm:grid-cols-3 gap-2">
           <SelectFilter
