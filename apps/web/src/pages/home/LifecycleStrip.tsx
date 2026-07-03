@@ -30,6 +30,7 @@ import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/comp
 import { RepositoryRemote } from '@/services';
 import { cn } from '@/utils/cn';
 import { handleAxiosError } from '@/utils';
+import { BulkProductionIdDialog } from '@/components/orders/BulkProductionIdDialog';
 
 /** Nhãn ngắn cho từng chặng — hiện trên đầu mỗi box. */
 const STAGE_SHORT: Record<string, string> = {
@@ -105,6 +106,7 @@ export default function LifecycleStrip() {
   const [to, setTo] = useState<string>(() => todayISO());
   const [pid, setPid] = useState('');
   const [debouncedPid, setDebouncedPid] = useState('');
+  const [bulkOpen, setBulkOpen] = useState(false);
 
   const [agg, setAgg] = useState<LifecycleOverview | null>(null);
   const [track, setTrack] = useState<LifecycleTrack | null>(null);
@@ -218,6 +220,14 @@ export default function LifecycleStrip() {
             </button>
           )}
         </div>
+        <button
+          type="button"
+          onClick={() => setBulkOpen(true)}
+          title="Tra cứu nhiều Production ID"
+          className="h-7 px-2 inline-flex items-center gap-1 rounded-md border border-border bg-background text-xs text-muted-foreground hover:text-foreground hover:bg-accent"
+        >
+          <ListChecks size={13} /> Nhiều mã
+        </button>
         {!isTrack && (
           <DateRangePicker from={from} to={to} placeholder="Khoảng ngày" onChange={(f, t) => { setFrom(f); setTo(t); }} />
         )}
@@ -367,6 +377,16 @@ export default function LifecycleStrip() {
           </div>
         </TooltipProvider>
       )}
+
+      <BulkProductionIdDialog
+        open={bulkOpen}
+        onOpenChange={setBulkOpen}
+        mode="lookup"
+        onPick={(code) => {
+          setPid(code);
+          setDebouncedPid(code);
+        }}
+      />
     </div>
   );
 }

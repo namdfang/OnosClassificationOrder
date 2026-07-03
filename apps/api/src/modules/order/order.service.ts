@@ -930,6 +930,20 @@ export class OrderService implements OnModuleInit {
         { type: { $regex: dto.search, $options: 'i' } },
       ];
     }
+    if (dto.productionIds) {
+      const ids = dto.productionIds
+        .split(',')
+        .map((s) => s.trim())
+        .filter(Boolean);
+      if (ids.length) {
+        // Exact, case-insensitive per mã — mirror getByProductionId/lifecycle-track.
+        filter.productionId = {
+          $in: ids.map(
+            (id) => new RegExp(`^${id.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}$`, 'i'),
+          ),
+        };
+      }
+    }
     if (typeof dto.isMapped === 'boolean') filter.isMapped = dto.isMapped;
     if (dto.factoryId) filter.factoryId = dto.factoryId;
     if (dto.machineTypeId) filter.machineTypeId = dto.machineTypeId;

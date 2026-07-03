@@ -598,3 +598,84 @@ export const WORKSHOP_COLS: WorkshopColMeta[] = [
     },
   },
 ];
+
+// ─── Cột riêng cho tài khoản In (PrintOrderTable) ───────────────────────────
+// Khác WORKSHOP_COLS 2 điểm:
+//  1. "Loại vải" gộp vào cột Mockup/Type/Size/Color — giá trị nằm DƯỚI Size.
+//  2. 3 cột Lỗi xưởng / Loại lỗi / Mô tả lỗi xưởng dời lên NGAY SAU Note Trạng thái in.
+const printMockupCol: WorkshopColMeta = {
+  key: 'mockupTypeSize',
+  label: 'Mockup / Type / Size / Color / Vải',
+  perm: null,
+  width: 'min-w-[260px] max-w-[320px]',
+  render: (r, ctx) => {
+    const url = r.mockupOriginalUrl || r.mockupUrl;
+    return (
+      <div className="flex items-start gap-2">
+        <div className="flex items-center gap-1 shrink-0">
+          {url && <CopyButton value={url} label="link mockup" iconSize={11} />}
+          <ImageThumbCell
+            url={r.mockupUrl}
+            originalUrl={r.mockupOriginalUrl}
+            title={url ? `Mockup: ${url}` : 'Mockup'}
+            onOpen={ctx.openPreview}
+          />
+        </div>
+        <div className="flex flex-col gap-0.5 min-w-0 flex-1 leading-tight">
+          <Hint content={r.type ? `Type: ${r.type}` : ''} forceRich>
+            <span className="text-xs line-clamp-1 break-all text-foreground">{r.type || '—'}</span>
+          </Hint>
+          <Hint content={`Size / Color: ${r.size || '—'}${r.color ? ' / ' + r.color : ''}`} forceRich>
+            <span className="text-[11px] text-muted-foreground line-clamp-1">
+              {r.size || '—'}
+              {r.color ? <span> / {r.color}</span> : null}
+            </span>
+          </Hint>
+          {/* Loại vải — gộp vào đây, nằm dưới Size (cho tài khoản In). */}
+          <IconSelectCell
+            orderId={r._id}
+            field="fabricType"
+            category={WorkshopConfigCategory.FabricType}
+            value={r.fabricType}
+            canEdit={ctx.canEditField('fabricType')}
+            onUpdated={(v) => ctx.patchRow(r._id, { fabricType: v ?? undefined })}
+          />
+        </div>
+      </div>
+    );
+  },
+};
+
+export const PRINT_COLS: WorkshopColMeta[] = (() => {
+  // Thứ tự dời lên NGAY SAU "Note Trạng thái in": Note kq Tool 1 → 3 cột lỗi xưởng.
+  const MOVED_KEYS = [
+    'toolResultNote',
+    'productionError',
+    'productionErrorSource',
+    'productionErrorNote',
+  ];
+  const movedCols = MOVED_KEYS.map((k) => WORKSHOP_COLS.find((c) => c.key === k)!);
+  // Note Trạng thái in — thu hẹp + rút gọn label (header `whitespace-nowrap` nên
+  // label dài mới là thứ ép cột rộng) để đỡ tốn diện tích. Chỉ trong PRINT_COLS.
+  const narrowPrintStatusNote: WorkshopColMeta = {
+    ...WORKSHOP_COLS.find((c) => c.key === 'printStatusNote')!,
+    label: 'Note TT in',
+    width: 'min-w-[80px] max-w-[120px]',
+  };
+  const result: WorkshopColMeta[] = [];
+  for (const col of WORKSHOP_COLS) {
+    if (col.key === 'fabricType') continue; // đã gộp vào cột mockup
+    if (MOVED_KEYS.includes(col.key)) continue; // dời lên sau printStatusNote
+    if (col.key === 'mockupTypeSize') {
+      result.push(printMockupCol);
+      continue;
+    }
+    if (col.key === 'printStatusNote') {
+      result.push(narrowPrintStatusNote);
+      result.push(...movedCols);
+      continue;
+    }
+    result.push(col);
+  }
+  return result;
+})();

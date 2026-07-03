@@ -54,25 +54,19 @@ export default function PrintWorkshopView() {
 
   const refresh = () => setReloadToken((t) => t + 1);
 
-  // Đơn In thao tác được — 2 điều kiện: (1) `toolResultNote='ok'` (thay cho
-  // check `currentFulfillmentStage='print'` cũ) + (2) thuộc xưởng user. Điều
-  // kiện (3) status stage print được check riêng ở nút bên dưới. BE self-heal
-  // đưa `currentFulfillmentStage` về 'print' khi start nếu bị lệch.
+  // Đơn In thao tác được — CHỈ 2 điều kiện: (1) đúng xưởng user + (2)
+  // `toolResultNote='ok'`. KHÔNG cần stage `print` đã khởi tạo: đơn designer
+  // done qua path không hook (chưa có `currentFulfillmentStage`/`fulfillmentStages`)
+  // vẫn hiện nút → BE self-heal khởi tạo stage khi bấm Bắt đầu.
   const canPrint = (row: WorkshopOrderRow) =>
     row.toolResultNote === 'ok' &&
     !!myFactoryId &&
     String(row.factoryId ?? '') === String(myFactoryId);
 
-  // Tick được: đơn In thao tác được + status print ∈ {waiting, rework, in-progress}.
-  const isRowSelectable = (row: WorkshopOrderRow) => {
-    if (!canPrint(row)) return false;
-    const s = printStatusOf(row);
-    return (
-      s === FulfillmentStageStatus.Waiting ||
-      s === FulfillmentStageStatus.Rework ||
-      s === FulfillmentStageStatus.InProgress
-    );
-  };
+  // Tick được: `canPrint` + chưa in xong (print.status !== done). Gồm cả đơn
+  // chưa init stage (status undefined) → Bắt đầu được.
+  const isRowSelectable = (row: WorkshopOrderRow) =>
+    canPrint(row) && printStatusOf(row) !== FulfillmentStageStatus.Done;
 
   const doTransition = async (
     orderId: string,
@@ -130,7 +124,10 @@ export default function PrintWorkshopView() {
     const status = printStatusOf(row);
     const ok = canPrint(row);
     let stageButtons: React.ReactNode = null;
-    if (ok && (status === FulfillmentStageStatus.Waiting || status === FulfillmentStageStatus.Rework)) {
+    // 'ok' + đúng xưởng + chưa đang làm/đã xong (gồm cả stage chưa init →
+    // status undefined) → "Bắt đầu". "Báo lỗi" chỉ khi stage đã init (status có
+    // giá trị) vì rework-back cần stage tồn tại.
+    if (ok && status !== FulfillmentStageStatus.InProgress && status !== FulfillmentStageStatus.Done) {
       stageButtons = (
         <>
           <Button
@@ -140,14 +137,16 @@ export default function PrintWorkshopView() {
           >
             Bắt đầu
           </Button>
-          <Button
-            size="sm"
-            variant="destructive"
-            className="whitespace-nowrap"
-            onClick={() => setReworkOrder(row)}
-          >
-            Báo lỗi
-          </Button>
+          {status && (
+            <Button
+              size="sm"
+              variant="destructive"
+              className="whitespace-nowrap"
+              onClick={() => setReworkOrder(row)}
+            >
+              Báo lỗi
+            </Button>
+          )}
         </>
       );
     } else if (ok && status === FulfillmentStageStatus.InProgress) {

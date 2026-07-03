@@ -1,5 +1,5 @@
 import React, { memo, useCallback, useEffect, useState } from 'react';
-import { History, Trash2, Image as ImageIcon } from 'lucide-react';
+import { History, Trash2, Image as ImageIcon, ListChecks, X } from 'lucide-react';
 import { useSearchParams } from 'react-router-dom';
 import { toast } from 'sonner';
 
@@ -25,6 +25,7 @@ import { isCancelled } from '@/utils/orderActions';
 import { CancelledBadge } from '@/components/orders/CancelledBadge';
 import { CopyButton } from '@/components/common/CopyButton';
 import { Hint } from '@/components/common/Hint';
+import { BulkProductionIdDialog } from '@/components/orders/BulkProductionIdDialog';
 import { TooltipProvider } from '@/components/ui/tooltip';
 import { SelectFilter } from '@/components/common/SelectFilter';
 import { RepositoryRemote } from '@/services';
@@ -332,6 +333,10 @@ export function ListOrderTab({ refreshKey }: ListOrderTabProps) {
   const [total, setTotal] = useState(0);
   const [loading, setLoading] = useState(false);
   const [search, setSearch] = useState(() => searchParams.get('lsearch') || '');
+  // Lọc bulk theo danh sách productionId (modal). Transient — không sync URL vì
+  // danh sách có thể rất dài.
+  const [bulkIds, setBulkIds] = useState<string[]>([]);
+  const [bulkOpen, setBulkOpen] = useState(false);
   const [filterMapped, setFilterMapped] = useState<'all' | 'mapped' | 'unmapped'>(() => {
     const v = searchParams.get('lmapped');
     return v === 'mapped' || v === 'unmapped' ? v : 'all';
@@ -386,6 +391,7 @@ export function ListOrderTab({ refreshKey }: ListOrderTabProps) {
   const buildFilterParams = (): URLSearchParams => {
     const params = new URLSearchParams();
     if (search) params.set('search', search);
+    if (bulkIds.length) params.set('productionIds', bulkIds.join(','));
     if (filterMapped === 'mapped') params.set('isMapped', 'true');
     if (filterMapped === 'unmapped') params.set('isMapped', 'false');
     if (filterError) params.set('hasError', 'true');
@@ -438,6 +444,7 @@ export function ListOrderTab({ refreshKey }: ListOrderTabProps) {
     filterError,
     filterAssignee,
     filterDesignerStatus,
+    bulkIds,
     page,
     pageSize,
   ]);
@@ -453,8 +460,15 @@ export function ListOrderTab({ refreshKey }: ListOrderTabProps) {
   }, [filterMapped, filterError, filterAssignee, filterDesignerStatus]);
 
   const handleSearch = () => {
+    if (bulkIds.length) setBulkIds([]); // search thường loại bỏ bộ lọc bulk
     setPage(1);
     fetchData();
+  };
+
+  const applyBulk = (ids: string[]) => {
+    setSearch(''); // bulk và search thường loại trừ nhau cho đỡ rối
+    setBulkIds(ids);
+    setPage(1);
   };
 
   const handleDelete = useCallback(
@@ -545,13 +559,32 @@ export function ListOrderTab({ refreshKey }: ListOrderTabProps) {
         )}
 
         <div className="flex items-center justify-between gap-3 flex-wrap">
-          <Input
-            placeholder="Tìm Production ID, Order ID, SKU, email…"
-            value={search}
-            onChange={(e) => setSearch(e.target.value)}
-            onKeyDown={(e) => e.key === 'Enter' && handleSearch()}
-            className="max-w-sm"
-          />
+          <div className="flex items-center gap-2">
+            <Input
+              placeholder="Tìm Production ID, Order ID, SKU, email…"
+              value={search}
+              onChange={(e) => setSearch(e.target.value)}
+              onKeyDown={(e) => e.key === 'Enter' && handleSearch()}
+              className="w-[320px] max-w-full"
+            />
+            <Hint content="Tìm nhiều Production ID cùng lúc">
+              <Button variant="outline" size="icon" onClick={() => setBulkOpen(true)}>
+                <ListChecks size={16} />
+              </Button>
+            </Hint>
+            {bulkIds.length > 0 && (
+              <Badge variant="secondary" className="gap-1 cursor-default">
+                Đang lọc {bulkIds.length} mã
+                <button
+                  type="button"
+                  onClick={() => setBulkIds([])}
+                  className="ml-0.5 hover:text-foreground"
+                >
+                  <X size={12} />
+                </button>
+              </Badge>
+            )}
+          </div>
           <div className="flex items-center gap-2">
             <Button
               variant={filterMapped === 'all' ? 'default' : 'outline'}
@@ -678,6 +711,13 @@ export function ListOrderTab({ refreshKey }: ListOrderTabProps) {
           onOpenChange={(open) => !open && setHistoryTarget(null)}
           orderId={historyTarget?.id}
           productionId={historyTarget?.productionId}
+        />
+
+        <BulkProductionIdDialog
+          open={bulkOpen}
+          onOpenChange={setBulkOpen}
+          mode="filter"
+          onApply={applyBulk}
         />
       </div>
     </TooltipProvider>

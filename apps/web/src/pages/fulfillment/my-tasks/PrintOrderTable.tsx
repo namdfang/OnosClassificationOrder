@@ -22,7 +22,7 @@ import { BulkEditToolbar } from '@/components/orders/BulkEditToolbar';
 import { OrderDetailDialog } from '@/components/orders/OrderDetailDialog';
 import { OrderLogTimelineDialog } from '@/components/orders/OrderLogTimelineDialog';
 import {
-  WORKSHOP_COLS,
+  PRINT_COLS,
   type WorkshopOrderRow,
   type WorkshopRenderCtx,
 } from '@/components/orders/workshopTableConfig';
@@ -35,7 +35,7 @@ import { useIsNoTool } from '@/hooks/useIsNoTool';
 import { cn } from '@/utils/cn';
 
 type OrderRow = WorkshopOrderRow;
-const COLS = WORKSHOP_COLS;
+const COLS = PRINT_COLS;
 const DEFAULT_PAGE_SIZE = 50;
 
 type StatusCounts = {

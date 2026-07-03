@@ -23,7 +23,12 @@ Soát tool → Thiết kế → In → Ép → QC sau ép → QC phân hàng →
   tài khoản `Fulfillment` gắn xưởng tự **khóa theo xưởng** (BE), role khác thấy
   toàn bộ (xem §7).
 - **Strip** (`LifecycleStrip`) hiện trên đầu Dashboard, trên MỌI tab — không cuộn ngang:
-  - **Hàng điều khiển tách riêng:** tiêu đề + ô tra cứu `productionId` + `DateRangePicker`.
+  - **Hàng điều khiển tách riêng:** tiêu đề + ô tra cứu `productionId` + nút **"Nhiều mã"** + `DateRangePicker`.
+  - **Tra cứu nhiều mã:** nút "Nhiều mã" (`ListChecks`) mở `BulkProductionIdDialog` (mode=`lookup`,
+    `apps/web/src/components/orders/BulkProductionIdDialog.tsx`). Dán nhiều `productionId` (mỗi mã 1 dòng) →
+    "Tìm" → gọi `GET /orders?productionIds=<CSV>` → bảng tóm tắt trong modal (Production ID · Sản phẩm ·
+    Chặng · Trạng thái) + cảnh báo mã không tìm thấy. Click 1 dòng → set `pid`/`debouncedPid` = mã đó →
+    strip chuyển sang hành trình đơn đó.
   - **Hàng phễu:** card **"Tổng đơn tất cả"** (`totals.totalOrders` + Đang chạy `totalActive` /
     Xong kỳ `completedInRange`) → 9 chặng. Mỗi card chặng: **Tổng đơn** (= Chờ + Làm + Lại,
     đơn đang ở chặng) + 4 chỉ số nhỏ **Chờ** (`backlog`) / **Làm** (`inProgress`) /

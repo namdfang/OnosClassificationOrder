@@ -51,7 +51,8 @@ Mỗi đơn hàng gồm:
 | List | Card list (không phải table) cho mỗi đơn, pageSize=20 default |
 | Phân trang | Top + bottom (cả 2 chỗ), shadcn `Pagination` |
 | Filter | `isMapped` / `factoryId` / `machineTypeId` / `status` |
-| Search | `productionId`, `userSku`, `userEmail`, `type` |
+| Search | `productionId`, `userSku`, `userEmail`, `type` (1 từ, regex contains) |
+| Tìm bulk Production ID | Nút icon `ListChecks` cạnh ô search → mở `BulkProductionIdDialog` (mode=`filter`). Dán nhiều mã (mỗi mã 1 dòng / phẩy / khoảng trắng) → "Lọc bảng" → set `bulkIds` (state, **không** sync URL) → param `productionIds` (CSV) khi fetch → bảng chính chỉ còn các mã đó. Badge "Đang lọc N mã ✕" để xoá. Bulk và search thường loại trừ nhau. |
 | Preview mockup | Click ảnh → `ImagePreviewDialog` |
 | Preview design | Click thumb design → `ImagePreviewDialog` |
 | Copy URL | CopyButton cho display URL + original URL |
@@ -357,6 +358,7 @@ Ngoài các filter cơ bản (`createdFrom/To`, `factoryId`, `machineTypeId`, `p
 
 | Query param | Format | Mô tả |
 |-------------|--------|-------|
+| `productionIds` | CSV | Bulk lookup — lọc đúng danh sách productionId (exact, case-insensitive qua `$in` regex anchored `^..$`). Dùng bởi `BulkProductionIdDialog`. Build trong `buildOrderListFilter` ngay sau khối `search`. |
 | `fabricType` | CSV codes | Lọc theo nhiều fabric. |
 | `originalFactoryId` | CSV IDs | Lọc theo xưởng gốc. |
 | `transferStatus` | token | `transferred` · `pure` · `transferred-in:<factoryId>` · `transferred-out:<factoryId>`. Build `$expr` so sánh `originalFactoryId` vs `factoryId`. |

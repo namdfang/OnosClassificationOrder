@@ -308,6 +308,13 @@ export const GetProductionOrdersZod = PageQueryZod.extend({
   machineTypeId: IDZod.optional(),
   status: z.string().optional(),
 
+  /**
+   * Bulk lookup — comma-separated list of productionId. Khi có, lọc đúng các mã
+   * này (exact, case-insensitive) qua `$in` regex. Dùng cho modal "Tìm bulk
+   * productionId" (mỗi mã 1 dòng ở FE → join bằng dấu phẩy).
+   */
+  productionIds: z.string().optional(),
+
   // Workshop filters — comma-separated list of workshop_config codes
   printStatus: z.string().optional(),
   toolResultNote: z.string().optional(),
