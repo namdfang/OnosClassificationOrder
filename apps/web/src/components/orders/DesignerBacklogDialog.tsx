@@ -48,7 +48,6 @@ const STATUS_META: Array<{
   { key: 'assigned', code: 'assigned', label: 'Đã gán', cls: 'bg-zinc-200 text-zinc-700 dark:bg-zinc-700 dark:text-zinc-200' },
   { key: 'inProgress', code: 'in-progress', label: 'Đang làm', cls: 'bg-indigo-100 text-indigo-700 dark:bg-indigo-900/40 dark:text-indigo-300' },
   { key: 'rework', code: 'rework', label: 'Làm lại', cls: 'bg-amber-100 text-amber-700 dark:bg-amber-900/40 dark:text-amber-300' },
-  { key: 'rejected', code: 'rejected', label: 'Không làm được', cls: 'bg-rose-100 text-rose-700 dark:bg-rose-900/40 dark:text-rose-300' },
 ];
 
 /** Màu + nhãn theo tuổi đơn (ngày). */

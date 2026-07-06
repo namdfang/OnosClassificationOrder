@@ -588,8 +588,9 @@ export class DesignerStatsService {
    *   1. total     — tất cả đơn inProductionAt ngày đó (mọi trạng thái)
    *   2. unreviewed— toolResultNote null/'' (chưa soát)
    *   3. error     — toolResultNote set & != 'ok' (+ breakdown theo mã note)
-   *   4. backlog   — designerStatus != done (tồn: unassigned+assigned+in-progress+rework+rejected)
-   * Kèm backlogByDesigner (per-designer × [assigned,inProgress,rework,rejected]) + unassignedBacklog
+   *   4. backlog   — toolResultNote != 'ok' (chưa soát + lỗi, theo Tool)
+   * Kèm backlogByDesigner (per-designer × [assigned,inProgress,rework] — "Không
+   * làm được"/rejected KHÔNG tính là tồn) + unassignedBacklog
    * cho bảng con khi expand hàng Tồn.
    */
   async getDailyOverview(
@@ -617,7 +618,6 @@ export class DesignerStatsService {
       assigned: number;
       inProgress: number;
       rework: number;
-      rejected: number;
       total: number;
     }[];
     unassignedBacklog: number;
@@ -677,7 +677,8 @@ export class DesignerStatsService {
         { $group: { _id: { day: dayExpr, note: '$toolResultNote' }, count: { $sum: 1 } } },
         { $sort: { count: -1 } },
       ]),
-      // (c) backlog per designer (active statuses có assignee)
+      // (c) backlog per designer (active statuses có assignee).
+      // "Không làm được" (Rejected) KHÔNG tính là tồn — nằm ở backlog "Cần gán".
       this.orderModel.aggregate<{ _id: { uid: string; status: DesignerStatus }; count: number }>([
         {
           $match: {
@@ -688,7 +689,6 @@ export class DesignerStatsService {
                 DesignerStatus.Assigned,
                 DesignerStatus.InProgress,
                 DesignerStatus.Rework,
-                DesignerStatus.Rejected,
               ],
             },
           },
@@ -733,14 +733,13 @@ export class DesignerStatsService {
     const nameMap = new Map<string, { fullName: string; email?: string }>();
     for (const u of teamUsers) nameMap.set(String(u._id), { fullName: u.fullName, email: u.email });
 
-    type BL = { assigned: number; inProgress: number; rework: number; rejected: number };
+    type BL = { assigned: number; inProgress: number; rework: number };
     const blMap = new Map<string, BL>();
     const bump = (uid: string, status: DesignerStatus, n: number) => {
-      const cur = blMap.get(uid) || { assigned: 0, inProgress: 0, rework: 0, rejected: 0 };
+      const cur = blMap.get(uid) || { assigned: 0, inProgress: 0, rework: 0 };
       if (status === DesignerStatus.Assigned) cur.assigned += n;
       else if (status === DesignerStatus.InProgress) cur.inProgress += n;
       else if (status === DesignerStatus.Rework) cur.rework += n;
-      else if (status === DesignerStatus.Rejected) cur.rejected += n;
       blMap.set(uid, cur);
     };
     for (const r of backlogAgg) bump(r._id.uid, r._id.status, r.count);
@@ -763,8 +762,7 @@ export class DesignerStatsService {
           assigned: c.assigned,
           inProgress: c.inProgress,
           rework: c.rework,
-          rejected: c.rejected,
-          total: c.assigned + c.inProgress + c.rework + c.rejected,
+          total: c.assigned + c.inProgress + c.rework,
         };
       })
       .filter((d) => d.total > 0)

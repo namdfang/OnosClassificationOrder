@@ -340,8 +340,7 @@ export const DailyOverviewBacklogDesignerZod = z.object({
   assigned: z.number().int().nonnegative(),
   inProgress: z.number().int().nonnegative(),
   rework: z.number().int().nonnegative(),
-  rejected: z.number().int().nonnegative(),
-  /** = assigned+inProgress+rework+rejected (chỉ trả khi >0). */
+  /** = assigned+inProgress+rework (chỉ trả khi >0). "Không làm được" (rejected) KHÔNG tính là tồn. */
   total: z.number().int().nonnegative(),
 });
 export type DailyOverviewBacklogDesigner = z.infer<typeof DailyOverviewBacklogDesignerZod>;
@@ -554,16 +553,16 @@ export class DesignerBreakdownResDto extends createZodDto(
 ) {}
 
 // ─── Backlog tồn đọng theo Designer × Ngày (inProductionAt) ──────────
-// Đơn CHƯA done (gồm unassigned + rejected) gom theo người ôm × ngày vào sản
-// xuất. Dùng cho modal "Chi tiết tồn đọng" trên bảng Workshop.
+// Đơn CHƯA done gom theo người ôm × ngày vào sản xuất. "Không làm được"
+// (rejected) KHÔNG tính là tồn (nằm ở backlog "Cần gán" để leader gán lại).
+// Dùng cho modal "Chi tiết tồn đọng" trên bảng Workshop.
 
-/** Phân rã trạng thái tồn (KHÔNG có done). */
+/** Phân rã trạng thái tồn (KHÔNG có done, KHÔNG có rejected). */
 export const BacklogStatusCountsZod = z.object({
   unassigned: z.number().int().nonnegative(),
   assigned: z.number().int().nonnegative(),
   inProgress: z.number().int().nonnegative(),
   rework: z.number().int().nonnegative(),
-  rejected: z.number().int().nonnegative(),
 });
 export type BacklogStatusCounts = z.infer<typeof BacklogStatusCountsZod>;
 

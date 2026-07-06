@@ -86,10 +86,10 @@ Layout (thứ tự render trên tab: **Bộ lọc chung → Tổng quan N ngày 
   - **Tổng xong** — `toolResultNote === 'ok'` (đã soát xong, không lỗi). `ok`. Màu emerald.
   - **Chưa soát** — `toolResultNote` rỗng/null. `unreviewed`.
   - **Tổng lỗi** — `toolResultNote` set & ≠ `''` & ≠ `ok` (lỗi thật); mỗi ô có **tooltip Radix** breakdown theo từng mã note (resolve code→name qua `workshopConfigStore` category `tool_result_note`). `error`.
-  - **Tổng tồn** — `toolResultNote ≠ 'ok'` = **Chưa soát + Tổng lỗi** (`backlog = unreviewed + error`). **Click hàng → xổ bảng con**: header hiện `Tổng tồn = Chưa soát {unreviewed} + Lỗi {error}` + bảng `backlogByDesigner` (designer × Cần làm/Đang làm/Làm lại/Không làm được, theo `designerStatus`) + dòng **"Chưa gán"** (`unassignedBacklog` = `designerStatus=unassigned`); ẩn designer tồn = 0.
+  - **Tổng tồn** — `toolResultNote ≠ 'ok'` = **Chưa soát + Tổng lỗi** (`backlog = unreviewed + error`). **Click hàng → xổ bảng con**: header hiện `Tổng tồn = Chưa soát {unreviewed} + Lỗi {error}` + bảng `backlogByDesigner` (designer × Cần làm/Đang làm/Làm lại, theo `designerStatus`; **"Không làm được"/rejected KHÔNG tính là tồn** — nằm ở backlog "Cần gán") + dòng **"Chưa gán"** (`unassignedBacklog` = `designerStatus=unassigned`); ẩn designer tồn = 0.
 - **Bất biến sạch:** `Tổng đơn = Tổng xong + Tổng tồn`, và `Tổng tồn = Chưa soát + Tổng lỗi`. (Đổi từ định nghĩa cũ `backlog = designerStatus ≠ done` → thuần theo Tool để 2 bất biến này đúng.)
 - Data từ `GET /v1/designer/daily-overview?days=7|14|30` (+ `type`/`customer` từ bộ lọc chung). Nhận `reloadToken` (= `matrixToken`). Seq-guard chống race.
-- **Lưu ý QA:** bảng con "Tồn theo designer" là **lăng kính `designerStatus`** (chỉ đơn ĐÃ gán ở assigned/in-progress/rework/rejected + dòng Chưa gán) → tổng của nó (`backlogGrand`) **có thể lệch** với "Tổng tồn" (theo Tool, gồm cả đơn chưa soát chưa ai xử lý). Đã ghi chú rõ trong header bảng con. Số "Chưa soát" hiển thị luôn để đối chiếu.
+- **Lưu ý QA:** bảng con "Tồn theo designer" là **lăng kính `designerStatus`** (chỉ đơn ĐÃ gán ở assigned/in-progress/rework + dòng Chưa gán; **rejected/"Không làm được" KHÔNG tính**) → tổng của nó (`backlogGrand`) **có thể lệch** với "Tổng tồn" (theo Tool, gồm cả đơn chưa soát chưa ai xử lý). Đã ghi chú rõ trong header bảng con. Số "Chưa soát" hiển thị luôn để đối chiếu.
 
 **1. Leaderboard table** (`<Table>` shadcn) — sort theo `completedInPeriod` desc, auto-include sub-designer chưa có task (row count 0):
 

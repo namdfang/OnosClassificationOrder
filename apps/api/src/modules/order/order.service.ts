@@ -5415,7 +5415,9 @@ export class OrderService implements OnModuleInit {
     const match: Record<string, unknown> = {
       ...base,
       cancelledAt: { $exists: false },
-      designerStatus: { $ne: DesignerStatus.Done }, // $ne 'done' cũng match doc thiếu field
+      // $nin cũng match doc thiếu field (= unassigned). "Không làm được"
+      // (Rejected) KHÔNG tính là tồn — nằm ở backlog "Cần gán" để leader gán lại.
+      designerStatus: { $nin: [DesignerStatus.Done, DesignerStatus.Rejected] },
     };
 
     const agg = await this.orderModel.aggregate<{
@@ -5444,7 +5446,7 @@ export class OrderService implements OnModuleInit {
     type DayAcc = {
       day: string;
       total: number;
-      byStatus: { unassigned: number; assigned: number; inProgress: number; rework: number; rejected: number };
+      byStatus: { unassigned: number; assigned: number; inProgress: number; rework: number };
     };
     type RowAcc = { userId: string; total: number; days: Map<string, DayAcc> };
     const rows = new Map<string, RowAcc>();
@@ -5455,7 +5457,6 @@ export class OrderService implements OnModuleInit {
       assigned: 'assigned',
       'in-progress': 'inProgress',
       rework: 'rework',
-      rejected: 'rejected',
     };
 
     for (const r of agg) {
@@ -5469,7 +5470,7 @@ export class OrderService implements OnModuleInit {
       }
       let day = row.days.get(r._id.day);
       if (!day) {
-        day = { day: r._id.day, total: 0, byStatus: { unassigned: 0, assigned: 0, inProgress: 0, rework: 0, rejected: 0 } };
+        day = { day: r._id.day, total: 0, byStatus: { unassigned: 0, assigned: 0, inProgress: 0, rework: 0 } };
         row.days.set(r._id.day, day);
       }
       day.byStatus[key] += r.count;

@@ -272,7 +272,6 @@ export function DesignerDailyOverview({ days: range = 7, from, to, reloadToken, 
                       <BLHead label="Cần làm" className="text-zinc-600 dark:text-zinc-300" />
                       <BLHead label="Đang làm" className="text-indigo-600" />
                       <BLHead label="Làm lại" className="text-amber-600" />
-                      <BLHead label="Không làm được" className="text-rose-500" />
                       <th className="text-center font-semibold px-2 py-1.5">Tổng</th>
                     </tr>
                   </thead>
@@ -288,7 +287,6 @@ export function DesignerDailyOverview({ days: range = 7, from, to, reloadToken, 
                         <BLCell value={d.assigned} className="text-zinc-700 dark:text-zinc-200" />
                         <BLCell value={d.inProgress} className="text-indigo-600" />
                         <BLCell value={d.rework} className="text-amber-600" />
-                        <BLCell value={d.rejected} className="text-rose-500" />
                         <td className="text-center px-2 py-1.5 font-semibold">{d.total}</td>
                       </tr>
                     ))}
@@ -301,7 +299,6 @@ export function DesignerDailyOverview({ days: range = 7, from, to, reloadToken, 
                             (chưa có designer)
                           </span>
                         </td>
-                        <td className="text-center px-2 py-1.5 text-muted-foreground/40">·</td>
                         <td className="text-center px-2 py-1.5 text-muted-foreground/40">·</td>
                         <td className="text-center px-2 py-1.5 text-muted-foreground/40">·</td>
                         <td className="text-center px-2 py-1.5 text-muted-foreground/40">·</td>
