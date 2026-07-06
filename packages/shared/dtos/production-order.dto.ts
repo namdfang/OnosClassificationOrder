@@ -591,6 +591,9 @@ export const OrderDashboardZod = z.object({
     totalProductionCost: z.number(),
     totalShippingCost: z.number(),
     totalCost: z.number(),
+    /** Số đơn HỦY (cancelledAt set) trong cùng scope xưởng + khoảng inProductionAt.
+     * Không nằm trong totalOrders (đã loại đơn hủy khỏi mọi số liệu). */
+    cancelledOrders: z.number(),
   }),
   byType: TypeSummaryZod.array(),
   byFactory: FactoryBreakdownZod.array(),
@@ -1219,6 +1222,7 @@ export type FulfillmentStageMetric = z.infer<typeof FulfillmentStageMetricZod>;
  *   toolOk         = toolResultNote === 'ok'
  *   designerReceived = designerStatus ≠ 'unassigned' (đã được giao)
  *   designerDone     = designerStatus === 'done'
+ *   designerRework   = designerStatus === 'rework' (lỗi designer cần sửa)
  *   stages         = { <stage>: FulfillmentStageMetric } cho cả 6 stage
  */
 export const FulfillmentDailyRowZod = z.object({
@@ -1229,6 +1233,7 @@ export const FulfillmentDailyRowZod = z.object({
   toolOk: z.number().int().nonnegative(),
   designerReceived: z.number().int().nonnegative(),
   designerDone: z.number().int().nonnegative(),
+  designerRework: z.number().int().nonnegative(),
   stages: z.record(z.string(), FulfillmentStageMetricZod),
 });
 export type FulfillmentDailyRow = z.infer<typeof FulfillmentDailyRowZod>;
@@ -1240,6 +1245,7 @@ export const FulfillmentDailyColumnTotalsZod = z.object({
   toolOk: z.number().int().nonnegative(),
   designerReceived: z.number().int().nonnegative(),
   designerDone: z.number().int().nonnegative(),
+  designerRework: z.number().int().nonnegative(),
   stages: z.record(z.string(), FulfillmentStageMetricZod),
 });
 export type FulfillmentDailyColumnTotals = z.infer<typeof FulfillmentDailyColumnTotalsZod>;
@@ -1407,6 +1413,9 @@ export const LifecycleOverviewZod = z.object({
     avgTotalCycleMs: z.number(),
     /** Chặng tắc nghẽn (backlog lớn nhất) — null nếu pipeline rỗng. */
     bottleneckStage: z.string().nullable(),
+    /** Số đơn HỦY (cancelledAt set) trong cùng window inProductionAt + xưởng.
+     * Đã loại khỏi funnel; đây là số thống kê riêng. */
+    cancelledInRange: z.number(),
   }),
   /** Line chart: số đơn hoàn thành toàn flow mỗi ngày trong kỳ. */
   completionTimeline: LifecycleTimelineBucketZod.array(),
@@ -1429,6 +1438,39 @@ export const GetLifecycleOverviewResZod = ResZod.extend({ data: LifecycleOvervie
 export class GetLifecycleOverviewResDto extends createZodDto(
   extendApi(GetLifecycleOverviewResZod),
 ) {}
+
+// ─── Cancelled orders drill-down (danh sách đơn hủy cho Dashboard) ──
+// Bấm số "Đơn đã hủy" ở tab Stats / LifecycleStrip → mở modal list.
+// Scope = cùng xưởng + khoảng `inProductionAt` như dashboard đang lọc.
+
+export const GetCancelledOrdersZod = z.object({
+  from: z.string().optional(),
+  to: z.string().optional(),
+  factoryId: IDZod.optional(),
+});
+export class GetCancelledOrdersDto extends createZodDto(extendApi(GetCancelledOrdersZod)) {}
+
+export const CancelledOrderRowZod = z.object({
+  _id: z.string(),
+  productionId: z.string(),
+  type: z.string().optional(),
+  size: z.string().optional(),
+  color: z.string().optional(),
+  userSku: z.string().optional(),
+  cancelReason: z.string().optional(),
+  cancelledAt: z.date().optional(),
+  inProductionAt: z.date().optional(),
+  /** Chặng fulfillment lúc bị hủy (null nếu chưa vào fulfillment). */
+  currentFulfillmentStage: z.string().nullable().optional(),
+  designerStatus: z.string().optional(),
+});
+export type CancelledOrderRow = z.infer<typeof CancelledOrderRowZod>;
+
+export const GetCancelledOrdersResZod = ResZod.extend({
+  data: CancelledOrderRowZod.array(),
+  total: z.number(),
+});
+export class GetCancelledOrdersResDto extends createZodDto(extendApi(GetCancelledOrdersResZod)) {}
 
 // ─── Lifecycle Track (tra cứu vòng đời 1 đơn theo productionId) ────
 // Strip gọn trên đầu Dashboard: nhập productionId → hành trình đơn đó đã qua

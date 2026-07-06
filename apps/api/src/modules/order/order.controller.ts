@@ -26,6 +26,8 @@ import {
   GetLifecycleOverviewDto,
   GetLifecycleOverviewResDto,
   GetLifecycleTrackResDto,
+  GetCancelledOrdersDto,
+  GetCancelledOrdersResDto,
   GetGroupedProductionOrdersResDto,
   FulfillmentStatusCountsResDto,
   GetImportSummaryDto,
@@ -247,6 +249,18 @@ export class OrderController {
     @AuthUser() user: UserDocument,
   ): Promise<GetLifecycleOverviewResDto> {
     return this.orderService.getLifecycleOverview(dto, user?.role?.name, user?.factoryId);
+  }
+
+  @Get('cancelled-list')
+  @Auth(ORDER_VIEW_ROLES)
+  @ApiOperation({ summary: 'Danh sách đơn HỦY (drill-down thống kê Dashboard). Scope xưởng + khoảng inProductionAt như dashboard.' })
+  @HttpCode(HttpStatus.OK)
+  @ApiOkResponse({ type: GetCancelledOrdersResDto })
+  async getCancelledOrders(
+    @Query() dto: GetCancelledOrdersDto,
+    @AuthUser() user: UserDocument,
+  ): Promise<GetCancelledOrdersResDto> {
+    return this.orderService.getCancelledOrders(dto, user?.role?.name, user?.factoryId);
   }
 
   @Get('lifecycle-track/:code')

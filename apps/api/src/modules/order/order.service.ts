@@ -67,6 +67,9 @@ import type {
   PreviewCuttingFilesResDto,
   GetLifecycleOverviewDto,
   GetLifecycleOverviewResDto,
+  GetCancelledOrdersDto,
+  GetCancelledOrdersResDto,
+  CancelledOrderRow,
   LifecycleStageRow,
   OrderStatusOverview,
   OrderWorkshopField,
@@ -1477,6 +1480,14 @@ export class OrderService implements OnModuleInit {
 
     if (andClauses.length > 0) match.$and = andClauses;
 
+    // Đơn hủy: LOẠI khỏi MỌI số liệu dashboard (`cancelledAt` không tồn tại) và
+    // đếm RIÊNG (`cancelledOrders`) trong cùng scope xưởng + khoảng inProductionAt.
+    match.cancelledAt = { $exists: false };
+    const cancelledOrders = await this.orderModel.countDocuments({
+      ...match,
+      cancelledAt: { $exists: true },
+    });
+
     const totalsAgg = await this.orderModel.aggregate([
       { $match: match },
       {
@@ -1501,8 +1512,9 @@ export class OrderService implements OnModuleInit {
           totalProductionCost: round2(totalsAgg[0].totalProductionCost),
           totalShippingCost: round2(totalsAgg[0].totalShippingCost),
           totalCost: round2((totalsAgg[0].totalProductionCost || 0) + (totalsAgg[0].totalShippingCost || 0)),
+          cancelledOrders,
         }
-      : { totalOrders: 0, totalQuantity: 0, totalProductionCost: 0, totalShippingCost: 0, totalCost: 0 };
+      : { totalOrders: 0, totalQuantity: 0, totalProductionCost: 0, totalShippingCost: 0, totalCost: 0, cancelledOrders };
 
     // Per-type aggregation: group, collect raw rows to post-process size/mockup
     const byTypeAgg = await this.orderModel.aggregate([
@@ -1832,6 +1844,9 @@ export class OrderService implements OnModuleInit {
       fulfillmentFactoryId,
       fulfillmentStage,
     );
+    // Loại đơn hủy khỏi các bucket trạng thái (bảng đơn chính vẫn giữ đơn hủy vì
+    // dùng chung `buildVisibilityFilter` → chỉ loại tại consumer dashboard này).
+    baseMatch.cancelledAt = { $exists: false };
 
     if (dto.printStatus) baseMatch.printStatus = { $in: dto.printStatus.split(',').filter(Boolean) };
     if (dto.printStatusNote) baseMatch.printStatusNote = { $in: dto.printStatusNote.split(',').filter(Boolean) };
@@ -2319,6 +2334,13 @@ export class OrderService implements OnModuleInit {
       match.$or = [{ factoryId: dto.factoryId }, { originalFactoryId: dto.factoryId }];
     }
 
+    // Đếm RIÊNG đơn hủy trong cùng window inProductionAt + xưởng (funnel đã loại
+    // đơn hủy) → thống kê "Đơn đã hủy" trên strip/dashboard vòng đời.
+    const cancelledInRange = await this.orderModel.countDocuments({
+      ...match,
+      cancelledAt: { $exists: true },
+    });
+
     // Expression: `field` (mốc hoàn thành) nằm trong khoảng ngày — dùng cho các
     // chỉ số throughput (doneInRange / avgWorkMs / timeline) trong NHÓM đơn đã
     // lọc theo inProductionAt. Missing → false.
@@ -2593,6 +2615,7 @@ export class OrderService implements OnModuleInit {
           completedInRange: cycleRow?.count || 0,
           avgTotalCycleMs: cycleRow?.avgMs ? Math.round(cycleRow.avgMs) : 0,
           bottleneckStage,
+          cancelledInRange,
         },
         completionTimeline,
         factories: (agg.factories as Array<{ factoryId: unknown; factoryName: string }>).map((f) => ({
@@ -2602,6 +2625,95 @@ export class OrderService implements OnModuleInit {
         filter: { factoryId: scopedFactoryId, from: dto.from, to: dto.to },
       },
     };
+  }
+
+  /**
+   * Danh sách đơn HỦY (drill-down khi bấm số "Đơn đã hủy" trên Dashboard /
+   * LifecycleStrip). Scope = cùng xưởng + khoảng `inProductionAt` như dashboard.
+   * Cap 500 dòng (log nếu vượt). Sort theo ngày hủy mới nhất.
+   */
+  async getCancelledOrders(
+    dto: GetCancelledOrdersDto,
+    roleName?: RoleType,
+    fulfillmentFactoryId?: string,
+  ): Promise<GetCancelledOrdersResDto> {
+    const from = dto.from ? vnDayStart(dto.from) : undefined;
+    const to = dto.to ? vnDayEnd(dto.to) : undefined;
+
+    const match: Record<string, unknown> = {
+      deletedAt: { $exists: false },
+      cancelledAt: { $exists: true },
+    };
+    if (from || to) {
+      const range: Record<string, Date> = {};
+      if (from) range.$gte = from;
+      if (to) range.$lte = to;
+      match.inProductionAt = range;
+    }
+    const isFactoryBound = roleName === RoleType.Fulfillment;
+    const scopedFactoryId = isFactoryBound ? fulfillmentFactoryId : dto.factoryId;
+    if (isFactoryBound && !fulfillmentFactoryId) {
+      match.factoryId = '__no_factory__';
+    } else if (scopedFactoryId) {
+      match.$or = [{ factoryId: scopedFactoryId }, { originalFactoryId: scopedFactoryId }];
+    }
+
+    type Lean = {
+      _id: unknown;
+      productionId?: string;
+      type?: string;
+      size?: string;
+      color?: string;
+      userSku?: string;
+      cancelReason?: string;
+      cancelledAt?: Date;
+      inProductionAt?: Date;
+      currentFulfillmentStage?: string | null;
+      designerStatus?: string;
+    };
+
+    const CAP = 500;
+    const [rowsRaw, total] = await Promise.all([
+      this.orderModel
+        .find(match, {
+          productionId: 1,
+          type: 1,
+          size: 1,
+          color: 1,
+          userSku: 1,
+          cancelReason: 1,
+          cancelledAt: 1,
+          inProductionAt: 1,
+          currentFulfillmentStage: 1,
+          designerStatus: 1,
+        })
+        .sort({ cancelledAt: -1 })
+        .limit(CAP)
+        .lean(),
+      this.orderModel.countDocuments(match),
+    ]);
+
+    if (total > CAP) {
+      this.logger.warn(
+        `[getCancelledOrders] cắt danh sách: total=${total} > cap=${CAP} (chỉ trả ${CAP} dòng mới nhất).`,
+      );
+    }
+
+    const data: CancelledOrderRow[] = (rowsRaw as unknown as Lean[]).map((o) => ({
+      _id: String(o._id),
+      productionId: String(o.productionId || ''),
+      type: o.type,
+      size: o.size,
+      color: o.color,
+      userSku: o.userSku,
+      cancelReason: o.cancelReason,
+      cancelledAt: o.cancelledAt,
+      inProductionAt: o.inProductionAt,
+      currentFulfillmentStage: o.currentFulfillmentStage ?? null,
+      designerStatus: o.designerStatus,
+    }));
+
+    return { success: true, data, total };
   }
 
   /**
@@ -2641,6 +2753,8 @@ export class OrderService implements OnModuleInit {
       // Filter theo `inProductionAt` VN tz (xem comment ở `buildVisibilityFilter`).
       match.inProductionAt = range;
     }
+    // Loại đơn hủy khỏi mọi số liệu xưởng (matchMapped kế thừa qua spread).
+    match.cancelledAt = { $exists: false };
     // `matchMapped` đếm/aggregate đơn đã map xưởng — Cards/flow/stats đều
     // cần `factoryId` để classify. `match` (chưa gắn) dùng cho `unmapped`
     // count và optional dropdown khi user chọn chip "Chưa xác định".
@@ -5169,6 +5283,9 @@ export class OrderService implements OnModuleInit {
       undefined,
       fulfillmentFactoryId,
     );
+    // Loại đơn hủy khỏi ma trận KPI per-designer (cả scoped + overall).
+    scopedFilter.cancelledAt = { $exists: false };
+    overallFilter.cancelledAt = { $exists: false };
 
     // "Chưa gán" panel = "Chưa gán KHÔNG tool": chỉ đếm đơn chưa gán & note≠'ok'
     // & toolResult KHÔNG "Có tool" (name ^Có). Đơn 'ok' hoặc "có tool" chưa gán →

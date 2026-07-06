@@ -546,7 +546,9 @@ export class DesignerTaskService {
       search?: string;
     },
   ): Record<string, unknown> {
-    const filter: Record<string, unknown> = { assignee: userId };
+    // `cancelledAt: null` — đơn hủy phải biến mất khỏi kanban "Cần làm/Đang
+    // làm/…" của designer, kể cả khi bị hủy giữa chừng.
+    const filter: Record<string, unknown> = { assignee: userId, cancelledAt: null };
     if (query.type) filter.type = { $in: query.type.split(',').filter(Boolean) };
     if (query.fabricType)
       filter.fabricType = { $in: query.fabricType.split(',').filter(Boolean) };
@@ -581,13 +583,14 @@ export class DesignerTaskService {
 
     const [statusAgg, completedAgg] = await Promise.all([
       this.orderModel.aggregate<{ _id: DesignerStatus; count: number }>([
-        { $match: { assignee: userId } },
+        { $match: { assignee: userId, cancelledAt: null } },
         { $group: { _id: '$designerStatus', count: { $sum: 1 } } },
       ]),
       this.orderModel
         .find(
           {
             assignee: userId,
+            cancelledAt: null,
             designerStatus: DesignerStatus.Done,
             designerCompletedAt: { $gte: range.start, $lte: range.end },
           },
@@ -688,6 +691,7 @@ export class DesignerTaskService {
       {
         $match: {
           assignee: userId,
+          cancelledAt: null,
           inProductionAt: { $gte: start, $lte: end },
           designerStatus: {
             $in: [

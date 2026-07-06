@@ -3,6 +3,7 @@ import {
   Activity,
   AlertTriangle,
   BadgeCheck,
+  Ban,
   CheckCircle2,
   ChevronRight,
   Circle,
@@ -32,6 +33,7 @@ import { RepositoryRemote } from '@/services';
 import { cn } from '@/utils/cn';
 import { handleAxiosError } from '@/utils';
 import { BulkProductionIdDialog } from '@/components/orders/BulkProductionIdDialog';
+import { CancelledOrdersDialog } from '@/components/orders/CancelledOrdersDialog';
 
 /** Nhãn ngắn cho từng chặng — hiện trên đầu mỗi box. */
 const STAGE_SHORT: Record<string, string> = {
@@ -106,6 +108,7 @@ export default function LifecycleStrip() {
   const [pid, setPid] = useState('');
   const [debouncedPid, setDebouncedPid] = useState('');
   const [bulkOpen, setBulkOpen] = useState(false);
+  const [cancelledOpen, setCancelledOpen] = useState(false);
 
   const [agg, setAgg] = useState<LifecycleOverview | null>(null);
   const [track, setTrack] = useState<LifecycleTrack | null>(null);
@@ -229,6 +232,21 @@ export default function LifecycleStrip() {
         </button>
         {!isTrack && (
           <DateRangePicker from={from} to={to} placeholder="Khoảng ngày" onChange={(f, t) => { setFrom(f); setTo(t); }} />
+        )}
+        {!isTrack && (
+          <button
+            type="button"
+            onClick={() => setCancelledOpen(true)}
+            title="Xem danh sách đơn đã hủy trong kỳ"
+            className={cn(
+              'h-7 px-2 inline-flex items-center gap-1 rounded-md border text-xs transition-colors',
+              (totals?.cancelledInRange ?? 0) > 0
+                ? 'border-rose-300 dark:border-rose-800 bg-rose-50/60 dark:bg-rose-950/20 text-rose-700 dark:text-rose-300 hover:bg-rose-100/70 dark:hover:bg-rose-950/40'
+                : 'border-border bg-background text-muted-foreground hover:text-foreground hover:bg-accent',
+            )}
+          >
+            <Ban size={13} /> Hủy: <span className="font-semibold tabular-nums">{(totals?.cancelledInRange ?? 0).toLocaleString('en-US')}</span>
+          </button>
         )}
         {isTrack && track && !trackError && (
           <span className="text-xs text-muted-foreground flex items-center gap-2">
@@ -385,6 +403,13 @@ export default function LifecycleStrip() {
           setPid(code);
           setDebouncedPid(code);
         }}
+      />
+
+      <CancelledOrdersDialog
+        open={cancelledOpen}
+        onClose={() => setCancelledOpen(false)}
+        from={from}
+        to={to}
       />
     </div>
   );

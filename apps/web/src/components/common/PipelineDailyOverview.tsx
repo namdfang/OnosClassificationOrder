@@ -34,6 +34,7 @@ const EMPTY_TOTALS: FulfillmentDailyColumnTotals = {
   toolOk: 0,
   designerReceived: 0,
   designerDone: 0,
+  designerRework: 0,
   stages: {},
 };
 
@@ -53,9 +54,9 @@ type Tone = 'neutral' | 'highlight' | 'dim' | 'danger';
 interface RowDesc {
   key: string;
   label: string;
-  /** Hàng con (thụt lề) trong khối stage của user. */
+  /** Hàng con (thụt lề) trong khối stage/lane của user. */
   indent?: boolean;
-  /** Hàng tiêu đề khối stage user — chỉ nhãn, không số. */
+  /** Hàng tiêu đề khối lane user — chỉ nhãn, không số. */
   header?: boolean;
   tone: Tone;
   /** 1 số / ô (căn trái). */
@@ -64,15 +65,26 @@ interface RowDesc {
   /** 2 số / ô: [đã làm, còn lại] — slash căn giữa. */
   dual?: (m: Metrics) => [number, number];
   dualCls?: [string, string];
-  /** Hàng công đoạn: hiện `0` khi giá trị = 0 (thay vì dấu `·`). */
+  /** Hàng công đoạn/lane: hiện `0` khi giá trị = 0 (thay vì dấu `·`). */
   showZero?: boolean;
   /** Tooltip mô tả chi tiết ô (`day` = 'dd/MM' hoặc 'cả kỳ'). */
   tip: (m: Metrics, day: string) => string;
 }
 
+/** Lane highlight (loại trừ lẫn nhau với `stage`). */
+export type OverviewLane = 'tool' | 'designer';
+
 interface Props {
-  /** Stage của user (highlight + bung 4 hàng). Undefined (admin override) → không highlight. */
+  /**
+   * Stage fulfillment của user (highlight + bung 4 hàng). Undefined → không
+   * highlight stage nào. Dùng ở trang Task Fulfillment.
+   */
   stage?: FulfillmentStage;
+  /**
+   * Lane highlight: `'designer'` (trang Designer my-tasks) hoặc `'tool'` (tab Soát
+   * tool). Bung hàng tương ứng thành header + 4 hàng con. Loại trừ với `stage`.
+   */
+  lane?: OverviewLane;
   /** Khoảng ngày (YYYY-MM-DD VN). Rỗng cả 2 → BE default 7 ngày. */
   from?: string;
   to?: string;
@@ -82,22 +94,26 @@ interface Props {
   dayFilter?: string;
   /** Click 1 ngày (header/ô) → toggle lọc danh sách bên dưới. */
   onPickDay?: (day: string) => void;
+  /** Ghi chú phụ trong header (vd nhắc phạm vi toàn cục). Thay caption mặc định. */
+  caption?: React.ReactNode;
 }
 
 /**
- * Bảng tổng quan theo ngày (Task Fulfillment) — FULL luồng tất cả khâu, gom theo
- * `inProductionAt` (VN). Mỗi ngày 1 cột; các hàng: Tổng đơn → Soát tool (đã/chưa
- * soát) → Designer (đã làm/còn lại) → 7 stage (đã xong/còn lại). Stage của user
- * bung 4 hàng Đến/Đã làm/Còn lại/Lỗi cần sửa; "Lỗi cần sửa" tô đỏ. Mỗi ô có
- * tooltip. Ô 2 số chia đều 2 bên (slash giữa); hàng công đoạn hiện `0` khi = 0.
+ * Bảng tổng quan theo ngày FULL luồng (Task Fulfillment / Designer / Soát tool),
+ * gom theo `inProductionAt` (VN) — funnel TOÀN CỤC (không scope assignee). Mỗi
+ * ngày 1 cột; hàng: Tổng đơn → Soát tool (đã/chưa) → Designer (đã làm/còn lại) →
+ * 6 stage (đã xong/còn lại). Lane/stage của user bung 4 hàng con; hàng "Lỗi" tô
+ * đỏ. Mỗi ô có tooltip. Ô 2 số chia đều 2 bên (slash giữa); hàng bung hiện `0`.
  */
-export function FulfillmentDailyOverview({
+export function PipelineDailyOverview({
   stage,
+  lane,
   from,
   to,
   reloadToken,
   dayFilter,
   onPickDay,
+  caption,
 }: Props) {
   const [data, setData] = useState<Data>(EMPTY);
   const [loading, setLoading] = useState(false);
@@ -140,7 +156,60 @@ export function FulfillmentDailyOverview({
         singleCls: 'text-foreground',
         tip: (m, d) => `${d} · Tổng đơn vào sản xuất: ${m.total}`,
       },
-      {
+    ];
+
+    // ─── Lane "Soát tool" ───────────────────────────────────────────────
+    if (lane === 'tool') {
+      list.push({
+        key: 'tool-h',
+        label: 'Soát tool',
+        header: true,
+        tone: 'highlight',
+        tip: (_m, d) => `${d} · Soát tool — công đoạn của bạn`,
+      });
+      list.push({
+        key: 'tool-reviewed',
+        label: 'Đã soát',
+        indent: true,
+        tone: 'highlight',
+        showZero: true,
+        single: (m) => m.toolReviewed,
+        singleCls: 'text-foreground',
+        tip: (m, d) => `${d} · Soát tool / Đã soát: ${m.toolReviewed} — đơn đã có kết quả tool`,
+      });
+      list.push({
+        key: 'tool-ok',
+        label: 'OK',
+        indent: true,
+        tone: 'highlight',
+        showZero: true,
+        single: (m) => m.toolOk,
+        singleCls: EMERALD,
+        tip: (m, d) => `${d} · Soát tool / OK: ${m.toolOk} — đã soát & kết quả 'ok' (sẵn sàng in)`,
+      });
+      list.push({
+        key: 'tool-error',
+        label: 'Lỗi',
+        indent: true,
+        tone: 'danger',
+        showZero: true,
+        single: (m) => Math.max(0, m.toolReviewed - m.toolOk),
+        singleCls: RED,
+        tip: (m, d) =>
+          `${d} · Soát tool / Lỗi: ${Math.max(0, m.toolReviewed - m.toolOk)} — đã soát nhưng kết quả ≠ 'ok'`,
+      });
+      list.push({
+        key: 'tool-unreviewed',
+        label: 'Chưa soát',
+        indent: true,
+        tone: 'highlight',
+        showZero: true,
+        single: (m) => m.toolUnreviewed,
+        singleCls: AMBER,
+        tip: (m, d) => `${d} · Soát tool / Chưa soát: ${m.toolUnreviewed} — chưa kiểm tool`,
+      });
+    } else {
+      list.push({
         key: 'tool',
         label: 'Soát tool',
         tone: 'neutral',
@@ -149,8 +218,63 @@ export function FulfillmentDailyOverview({
         tip: (m, d) =>
           `${d} · Soát tool — Đã soát ${m.toolReviewed} / Chưa soát ${m.toolUnreviewed}. ` +
           `(đã soát = đơn đã có kết quả tool; chưa soát = chưa kiểm)`,
-      },
-      {
+      });
+    }
+
+    // ─── Lane "Designer" ────────────────────────────────────────────────
+    if (lane === 'designer') {
+      list.push({
+        key: 'designer-h',
+        label: 'Designer',
+        header: true,
+        tone: 'highlight',
+        tip: (_m, d) => `${d} · Designer — công đoạn của bạn`,
+      });
+      list.push({
+        key: 'designer-received',
+        label: 'Nhận',
+        indent: true,
+        tone: 'highlight',
+        showZero: true,
+        single: (m) => m.designerReceived,
+        singleCls: 'text-foreground',
+        tip: (m, d) => `${d} · Designer / Nhận: ${m.designerReceived} — đơn đã được giao cho designer`,
+      });
+      list.push({
+        key: 'designer-done',
+        label: 'Đã xong',
+        indent: true,
+        tone: 'highlight',
+        showZero: true,
+        single: (m) => m.designerDone,
+        singleCls: EMERALD,
+        tip: (m, d) => `${d} · Designer / Đã xong: ${m.designerDone} — designerStatus 'done'`,
+      });
+      list.push({
+        key: 'designer-remaining',
+        label: 'Còn lại',
+        indent: true,
+        tone: 'highlight',
+        showZero: true,
+        single: (m) => Math.max(0, m.designerReceived - m.designerDone - m.designerRework),
+        singleCls: INDIGO,
+        tip: (m, d) =>
+          `${d} · Designer / Còn lại: ${Math.max(0, m.designerReceived - m.designerDone - m.designerRework)} — ` +
+          `đã giao chưa xong (cần làm + đang làm, không tính lỗi cần sửa)`,
+      });
+      list.push({
+        key: 'designer-rework',
+        label: 'Lỗi cần sửa',
+        indent: true,
+        tone: 'danger',
+        showZero: true,
+        single: (m) => m.designerRework,
+        singleCls: RED,
+        tip: (m, d) =>
+          `${d} · Designer / Lỗi cần sửa: ${m.designerRework} — xưởng báo lỗi designer, cần làm lại (rework)`,
+      });
+    } else {
+      list.push({
         key: 'designer',
         label: 'Designer',
         tone: 'neutral',
@@ -159,8 +283,10 @@ export function FulfillmentDailyOverview({
         tip: (m, d) =>
           `${d} · Designer — Đã làm ${m.designerDone} / Còn lại ${Math.max(0, m.designerReceived - m.designerDone)} ` +
           `(tổng nhận ${m.designerReceived}). Còn lại = đã giao nhưng chưa xong.`,
-      },
-    ];
+      });
+    }
+
+    // ─── 6 stage fulfillment ────────────────────────────────────────────
     for (const st of FULFILLMENT_STAGES) {
       const label = FULFILLMENT_STAGE_LABELS[st];
       if (st === stage) {
@@ -238,11 +364,11 @@ export function FulfillmentDailyOverview({
       }
     }
     return list;
-  }, [stage]);
+  }, [stage, lane]);
 
   const renderCell = (row: RowDesc, m: Metrics) => {
     if (row.header) return null;
-    // 0: hàng công đoạn (`showZero`) hiện "0" (muted); các hàng khác hiện "·".
+    // 0: hàng bung (`showZero`) hiện "0" (muted); các hàng khác hiện "·".
     const num = (v: number, cls: string) => {
       if (v !== 0) return <span className={cls}>{v}</span>;
       return row.showZero ? (
@@ -295,7 +421,11 @@ export function FulfillmentDailyOverview({
         <CalendarRange size={15} className="text-indigo-600" />
         <span className="text-sm font-semibold">Tổng quan theo ngày</span>
         <span className="hidden md:inline text-[11px] text-muted-foreground">
-          — theo ngày vào SX · ô 2 số = <b className="text-emerald-600">đã xong</b>/<b className="text-indigo-600">còn lại</b> · di chuột vào ô để xem chi tiết · bấm 1 ngày để lọc bên dưới
+          {caption ?? (
+            <>
+              — theo ngày vào SX · ô 2 số = <b className="text-emerald-600">đã xong</b>/<b className="text-indigo-600">còn lại</b> · di chuột vào ô để xem chi tiết · bấm 1 ngày để lọc bên dưới
+            </>
+          )}
         </span>
         {dayFilter && onPickDay && (
           <button

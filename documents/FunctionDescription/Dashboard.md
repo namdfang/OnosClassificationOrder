@@ -186,6 +186,7 @@ User di chuột vào 1 slice xưởng
     totalProductionCost: number;
     totalShippingCost: number;
     totalCost: number;
+    cancelledOrders: number;  // đơn HỦY (đã LOẠI khỏi mọi số liệu trên; đếm riêng cùng scope + inProductionAt)
   },
   byType: TypeSummary[];      // Bảng "Group by Production Type"
   byFactory: FactoryBreakdown[]; // Pie chart + drill-down
@@ -221,6 +222,8 @@ User di chuột vào 1 slice xưởng
 | Sản phẩm | `totals.totalQuantity` | `12,345 cái` |
 | Chi phí SX | `totals.totalProductionCost` | `$12,345.67` |
 | Phí vận chuyển | `totals.totalShippingCost` | `$12,345.67` |
+
+**Card "Đơn đã hủy"** (`Ban`, đỏ khi >0) hàng riêng dưới lưới KPI = `totals.cancelledOrders` — bấm mở `CancelledOrdersDialog` (`GET /orders/cancelled-list?from&to&factoryId`) xem danh sách đơn hủy. Đơn hủy đã bị **loại khỏi toàn bộ số liệu** dashboard/công đoạn (chỉ còn hiện ở bảng đơn chính với badge). Xem `documents/Plans/CancelledOrders-ExcludeFromStages.md`.
 
 ### 4.3 FactoryDistribution (pie chart)
 - Header: icon **Factory** (sky-100 box) + tiêu đề "Phân bổ theo xưởng"

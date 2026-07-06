@@ -533,7 +533,8 @@ export class FulfillmentTaskService {
    *   - Date range: default 7 ngày gần nhất trên `inProductionAt` (giống
    *     `order.service.ts:buildVisibilityFilter` cho role Fulfillment). User
    *     truyền `createdFrom`/`createdTo` rỗng = explicit clear → all-time.
-   *   - KHÔNG filter `cancelledAt` để khớp 100% với Factory Tab (per user req).
+   *   - LOẠI đơn hủy (`cancelledAt: null`) — đơn hủy phải biến mất khỏi mọi
+   *     hàng chờ/đang làm của công đoạn, kể cả khi bị hủy giữa chừng.
    *
    * `stage` không dùng ở đây (lọc per-tab bởi `applyTabFilter`) — giữ param
    * cho signature consistency.
@@ -544,7 +545,7 @@ export class FulfillmentTaskService {
     dateRange?: { createdFrom?: string; createdTo?: string },
   ): FilterQuery<OrderEntity> {
     void stage;
-    const f: FilterQuery<OrderEntity> = {};
+    const f: FilterQuery<OrderEntity> = { cancelledAt: null };
     if (factoryId) {
       f.$or = [{ factoryId }, { originalFactoryId: factoryId }];
     }
@@ -733,6 +734,7 @@ export class FulfillmentTaskService {
         },
       },
       designerDone: { $sum: { $cond: [{ $eq: ['$designerStatus', DesignerStatus.Done] }, 1, 0] } },
+      designerRework: { $sum: { $cond: [{ $eq: ['$designerStatus', DesignerStatus.Rework] }, 1, 0] } },
     };
     // Metric mỗi stage: arrived = từng tới stage (status tồn tại); done/remaining/rework theo status hiện tại.
     for (const st of FULFILLMENT_STAGES) {
@@ -776,6 +778,7 @@ export class FulfillmentTaskService {
       toolOk: 0,
       designerReceived: 0,
       designerDone: 0,
+      designerRework: 0,
       stages: Object.fromEntries(FULFILLMENT_STAGES.map((st) => [st, emptyMetric()])),
     };
 
@@ -805,6 +808,7 @@ export class FulfillmentTaskService {
         toolOk: num('toolOk'),
         designerReceived: num('designerReceived'),
         designerDone: num('designerDone'),
+        designerRework: num('designerRework'),
         stages,
       };
       columnTotals.total += row.total;
@@ -813,6 +817,7 @@ export class FulfillmentTaskService {
       columnTotals.toolOk += row.toolOk;
       columnTotals.designerReceived += row.designerReceived;
       columnTotals.designerDone += row.designerDone;
+      columnTotals.designerRework += row.designerRework;
       return row;
     });
 

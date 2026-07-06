@@ -60,7 +60,7 @@ import { useAuthStore } from '@/store/authStore';
 import { handleAxiosError } from '@/utils';
 import { cn } from '@/utils/cn';
 
-import { FulfillmentDailyOverview } from './FulfillmentDailyOverview';
+import { PipelineDailyOverview } from '@/components/common/PipelineDailyOverview';
 import { FulfillmentTaskCard } from './FulfillmentTaskCard';
 import { ReworkBackDialog } from './ReworkBackDialog';
 import PrintWorkshopView from './PrintWorkshopView';
@@ -915,7 +915,7 @@ function FulfillmentKanbanView() {
         </div>
 
         {/* Bảng tổng quan theo ngày — click 1 ngày lọc kanban client-side. */}
-        <FulfillmentDailyOverview
+        <PipelineDailyOverview
           stage={myStage}
           from={dateFrom || undefined}
           to={dateTo || undefined}

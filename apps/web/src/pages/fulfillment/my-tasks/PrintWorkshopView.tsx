@@ -20,7 +20,7 @@ import { RepositoryRemote } from '@/services';
 import { useAuthStore } from '@/store/authStore';
 import { handleAxiosError } from '@/utils';
 
-import { FulfillmentDailyOverview } from './FulfillmentDailyOverview';
+import { PipelineDailyOverview } from '@/components/common/PipelineDailyOverview';
 import { PrintOrderTable } from './PrintOrderTable';
 import { ReworkBackDialog } from './ReworkBackDialog';
 
@@ -220,7 +220,7 @@ export default function PrintWorkshopView() {
   return (
     <TooltipProvider delayDuration={200}>
       <div className="space-y-4">
-        <FulfillmentDailyOverview
+        <PipelineDailyOverview
           stage={FulfillmentStage.Print}
           reloadToken={reloadToken}
           dayFilter={dayFilter}

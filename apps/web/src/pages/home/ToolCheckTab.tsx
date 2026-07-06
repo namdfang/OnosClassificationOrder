@@ -14,6 +14,7 @@ import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { CopyButton } from '@/components/common/CopyButton';
 import { DateRangePicker } from '@/components/common/DateRangePicker';
+import { PipelineDailyOverview } from '@/components/common/PipelineDailyOverview';
 import { DATE_PRESETS } from '@/utils/dateRangePresets';
 import { SelectFilter } from '@/components/common/SelectFilter';
 import { ImagePreviewDialog } from '@/components/common/ImagePreviewDialog';
@@ -296,6 +297,18 @@ export default function ToolCheckTab() {
           />
         </div>
       </div>
+
+      {/* Tổng quan theo ngày FULL luồng (toàn nhà máy) — highlight lane Soát tool.
+          Ăn cùng filter ngày; click 1 ngày → lọc danh sách bên dưới (dùng chung
+          dayFilter với dải focus phía dưới). */}
+      <PipelineDailyOverview
+        lane="tool"
+        from={dateFrom}
+        to={dateTo}
+        dayFilter={dayFilter || undefined}
+        onPickDay={toggleDay}
+        caption="— TOÀN nhà máy · lane Soát tool được tô đậm · di chuột xem chi tiết · bấm 1 ngày để lọc danh sách"
+      />
 
       {/* Dải tổng quan theo ngày — Chưa soát + In trả về. Click 1 ngày → lọc
           danh sách bên dưới (client-side); click lại/✕ để bỏ. */}

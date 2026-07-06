@@ -8,6 +8,7 @@ import {
   DollarSign,
   Download,
   Factory,
+  Ban,
   Medal,
   Package,
   Trophy,
@@ -21,6 +22,7 @@ import { Badge } from '@/components/ui/badge';
 import { cn } from '@/utils/cn';
 import { useSearchParams } from 'react-router-dom';
 import { OrderFilterBar } from '@/components/orders/OrderFilterBar';
+import { CancelledOrdersDialog } from '@/components/orders/CancelledOrdersDialog';
 import { useDebounce } from '@/hooks/useDebounce';
 import { RepositoryRemote } from '@/services';
 import { handleAxiosError } from '@/utils';
@@ -95,6 +97,7 @@ interface Dashboard {
     totalProductionCost: number;
     totalShippingCost: number;
     totalCost: number;
+    cancelledOrders: number;
   };
   byType: TypeSummary[];
   byFactory: FactoryBreakdown[];
@@ -242,6 +245,7 @@ export default function OrderStatsTab() {
   const debouncedType = useDebounce(searchType, 300);
   const debouncedUser = useDebounce(searchUser, 300);
   const [expanded, setExpanded] = useState<Set<string>>(new Set());
+  const [cancelledOpen, setCancelledOpen] = useState(false);
 
   // Sync state → URL. Date luôn ghi (kể cả today) để URL reflect state.
   // Search strip khi rỗng.
@@ -418,6 +422,41 @@ export default function OrderStatsTab() {
         )}
       </div>
 
+      {/* Đơn đã hủy — thống kê riêng, đã loại khỏi mọi số liệu ở trên. Bấm để
+          xem danh sách đơn hủy trong khoảng đang lọc. */}
+      <button
+        type="button"
+        onClick={() => setCancelledOpen(true)}
+        className={cn(
+          'w-full flex items-center gap-2.5 rounded-lg border px-3 py-2.5 text-left transition-colors',
+          t && t.cancelledOrders > 0
+            ? 'border-rose-300 dark:border-rose-800 bg-rose-50/60 dark:bg-rose-950/20 hover:bg-rose-100/70 dark:hover:bg-rose-950/40'
+            : 'border-border bg-card hover:bg-muted/30',
+          isRefetching && 'opacity-60',
+        )}
+      >
+        <span
+          className={cn(
+            'shrink-0',
+            t && t.cancelledOrders > 0 ? 'text-rose-600 dark:text-rose-400' : 'text-muted-foreground opacity-60',
+          )}
+        >
+          <Ban size={16} />
+        </span>
+        <span className="text-[11px] font-medium text-muted-foreground">Đơn đã hủy</span>
+        <span
+          className={cn(
+            'text-lg font-semibold tabular-nums leading-none',
+            t && t.cancelledOrders > 0 ? 'text-rose-600 dark:text-rose-400' : 'text-foreground',
+          )}
+        >
+          {t ? formatNumber(t.cancelledOrders) : '—'}
+        </span>
+        <span className="ml-auto text-[11px] text-muted-foreground">
+          {t && t.cancelledOrders > 0 ? 'Bấm xem danh sách →' : 'Không có đơn hủy'}
+        </span>
+      </button>
+
       {/* Factory allocation + Top users — Designer ẩn cả 2 (không quan tâm
           xưởng + không thấy khách hàng), Fulfillment chỉ thấy Factory. */}
       {(!hideFactoryDist || !hidePrice) && (
@@ -588,6 +627,13 @@ export default function OrderStatsTab() {
         </div>
       </div>
 
+      <CancelledOrdersDialog
+        open={cancelledOpen}
+        onClose={() => setCancelledOpen(false)}
+        from={startDate}
+        to={endDate}
+        factoryId={lockedFactoryId}
+      />
     </div>
   );
 }

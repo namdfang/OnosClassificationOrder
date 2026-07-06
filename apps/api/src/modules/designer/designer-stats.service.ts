@@ -629,7 +629,8 @@ export class DesignerStatsService {
     const extraMatch: Record<string, unknown> = {};
     if (type) extraMatch.type = type;
     if (customer) extraMatch.userSku = customer;
-    const baseMatch = { inProductionAt: { $gte: start, $lte: end }, ...extraMatch };
+    // `cancelledAt: null` — loại đơn hủy khỏi mọi số liệu tổng quan.
+    const baseMatch = { inProductionAt: { $gte: start, $lte: end }, cancelledAt: null, ...extraMatch };
 
     const dayExpr = { $dateToString: { format: '%Y-%m-%d', date: '$inProductionAt', timezone: '+07:00' } };
     const noteExpr = { $ifNull: ['$toolResultNote', ''] };
@@ -787,6 +788,7 @@ export class DesignerStatsService {
 
     const match: Record<string, unknown> = {
       inProductionAt: { $gte: start, $lte: end },
+      cancelledAt: null, // loại đơn hủy khỏi pool "Cần gán" + self-claim
       // Đã soát & khác ok (KHÔNG gồm chưa soát null/'').
       toolResultNote: { $nin: [null, '', 'ok'] },
       $or: [

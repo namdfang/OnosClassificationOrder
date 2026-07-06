@@ -37,6 +37,20 @@ const TRANSITION_ROLES: RoleType[] = [
   RoleType.Fulfillment,
 ];
 
+// Bảng "Tổng quan theo ngày" (read-only, funnel toàn cục) — dùng chung cho Task
+// Fulfillment + trang Designer my-tasks + tab Soát tool. Rộng hơn TRANSITION_ROLES
+// (thêm Support/Designer/DesignerLeader) vì chỉ đọc, không transition/ghi factory.
+const OVERVIEW_ROLES: RoleType[] = [
+  RoleType.SuperAdmin,
+  RoleType.Admin,
+  RoleType.Manager,
+  RoleType.SupportManager,
+  RoleType.Support,
+  RoleType.Fulfillment,
+  RoleType.DesignerLeader,
+  RoleType.Designer,
+];
+
 @Controller()
 @ApiTags('fulfillment')
 @UsePipes(ZodValidationPipe)
@@ -104,7 +118,7 @@ export class FulfillmentTaskController {
   }
 
   @Get('fulfillment/daily-overview')
-  @Auth(TRANSITION_ROLES)
+  @Auth(OVERVIEW_ROLES)
   @ApiOperation({ summary: 'Bảng tổng quan theo ngày (Đến/Đã làm/Còn lại/Lỗi) cho stage của tôi.' })
   @HttpCode(HttpStatus.OK)
   @ApiOkResponse({ type: FulfillmentDailyOverviewResDto })

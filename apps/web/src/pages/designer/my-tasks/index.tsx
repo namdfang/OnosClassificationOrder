@@ -33,6 +33,7 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { TooltipProvider } from '@/components/ui/tooltip';
 import { DateRangePicker } from '@/components/common/DateRangePicker';
+import { PipelineDailyOverview } from '@/components/common/PipelineDailyOverview';
 import { ImagePreviewDialog } from '@/components/common/ImagePreviewDialog';
 import { SelectFilter } from '@/components/common/SelectFilter';
 import { Spinner } from '@/components/common/Spinner';
@@ -572,6 +573,22 @@ export default function MyTasksPage() {
             />
           </div>
         )}
+
+        {/* Tổng quan theo ngày — funnel TOÀN CỤC (mọi đơn, không chỉ của bạn),
+            highlight lane Designer. Ăn cùng filter ngày; click 1 ngày → lọc về
+            đúng ngày đó. Khác với "Chi tiết theo ngày" bên dưới (chỉ đơn của bạn). */}
+        <PipelineDailyOverview
+          lane="designer"
+          from={dateFrom || undefined}
+          to={dateTo || undefined}
+          reloadToken={breakdownToken}
+          dayFilter={dateFrom && dateFrom === dateTo ? dateFrom : undefined}
+          onPickDay={(day) => {
+            setDateFrom(day);
+            setDateTo(day);
+          }}
+          caption="— TOÀN nhà máy (không chỉ đơn của bạn) · lane Designer được tô đậm · di chuột xem chi tiết · bấm 1 ngày để lọc"
+        />
 
         {/* Chi tiết theo ngày — panel focus đơn chưa xong (7/14/30 ngày).
             Click 1 ngày → lọc kanban về đúng ngày đó. */}

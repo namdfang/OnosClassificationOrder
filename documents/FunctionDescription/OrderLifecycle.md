@@ -23,7 +23,7 @@ Soát tool → Thiết kế → In → Ép → QC sau ép → May vào → May r
   tài khoản `Fulfillment` gắn xưởng tự **khóa theo xưởng** (BE), role khác thấy
   toàn bộ (xem §7).
 - **Strip** (`LifecycleStrip`) hiện trên đầu Dashboard, trên MỌI tab — không cuộn ngang:
-  - **Hàng điều khiển tách riêng:** tiêu đề + ô tra cứu `productionId` + nút **"Nhiều mã"** + `DateRangePicker`.
+  - **Hàng điều khiển tách riêng:** tiêu đề + ô tra cứu `productionId` + nút **"Nhiều mã"** + `DateRangePicker` + chip **"Hủy: N"** (`Ban`, đỏ khi >0) = `totals.cancelledInRange` → bấm mở `CancelledOrdersDialog` (danh sách đơn hủy trong kỳ, `GET /orders/cancelled-list`). Đơn hủy **không** nằm trong phễu — đây là thống kê riêng.
   - **Tra cứu nhiều mã:** nút "Nhiều mã" (`ListChecks`) mở `BulkProductionIdDialog` (mode=`lookup`,
     `apps/web/src/components/orders/BulkProductionIdDialog.tsx`). Dán nhiều `productionId` (mỗi mã 1 dòng) →
     "Tìm" → gọi `GET /orders?productionIds=<CSV>` → bảng tóm tắt trong modal (Production ID · Sản phẩm ·
@@ -56,8 +56,9 @@ Soát tool → Thiết kế → In → Ép → QC sau ép → May vào → May r
 
 | Method | Path | Mô tả |
 |---|---|---|
-| GET | `/v1/orders/lifecycle-overview` | Phễu 8 chặng + KPI + timeline + danh sách xưởng |
+| GET | `/v1/orders/lifecycle-overview` | Phễu 8 chặng + KPI + timeline + danh sách xưởng + `totals.cancelledInRange` |
 | GET | `/v1/orders/lifecycle-track/:code` | Hành trình 8 chặng của 1 đơn theo `productionId` (cho strip) |
+| GET | `/v1/orders/cancelled-list?from&to&factoryId` | Danh sách đơn HỦY (drill-down chip "Hủy" + KPI Stats). Scope xưởng + khoảng `inProductionAt`, sort `cancelledAt` desc, cap 500. `getCancelledOrders()` |
 
 `getLifecycleTrack(code, roleName, userFactoryId)`: `findOne` theo `productionId`
 (exact, case-insensitive), khóa xưởng cho `Fulfillment`. Suy **currentIndex** (0..9)
@@ -91,6 +92,7 @@ Response `LifecycleOverview`:
     completedInRange: number;           // pack.done trong kỳ
     avgTotalCycleMs: number;            // designerFirstStartedAt/createdAt → fulfillmentCompletedAt
     bottleneckStage: string | null;     // chặng có backlog lớn nhất
+    cancelledInRange: number;           // đơn HỦY trong cùng window inProductionAt + xưởng (funnel đã loại; đếm riêng)
   };
   completionTimeline: { date: string; completed: number }[]; // line chart
   factories: { factoryId: string; factoryName: string }[];   // dropdown options

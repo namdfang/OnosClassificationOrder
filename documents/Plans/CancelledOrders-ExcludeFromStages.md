@@ -2,7 +2,7 @@
 
 > **Mục tiêu:** Đơn `cancelledAt` set → biến mất khỏi **mọi hàng chờ / đang làm / cần làm** của tất cả công đoạn (designer + fulfillment) và mọi số liệu công đoạn/dashboard, **kể cả đơn đang dở ở stage bất kỳ**. Đồng thời thêm **thống kê số đơn hủy** ra Dashboard (2 nơi) + **drill-down** xem danh sách.
 >
-> **Trạng thái:** 🟡 CHỜ DUYỆT — chưa implement. Chỉ code khi user xác nhận.
+> **Trạng thái:** ✅ ĐÃ IMPLEMENT. BE net-zero lỗi mới (baseline 31), FE baseline 85, vite build ✓.
 
 ---
 

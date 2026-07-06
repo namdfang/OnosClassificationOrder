@@ -128,7 +128,7 @@ Song song 2.3b nhưng target = **Support** (không phải designer): In chọn "
 
 ### 2.4 Đơn bị hủy
 
-Nếu `cancelledAt` được set (từ flow Import file soát), `BadRequestException` khi transition. My Tasks tự filter `cancelledAt: null`.
+Nếu `cancelledAt` được set (từ flow Import file soát / Admin bấm hủy), `BadRequestException` khi transition. **My Tasks kanban tự loại đơn hủy** — `buildMyTaskBase` set `cancelledAt: null` (trước đây KHÔNG filter "để khớp Factory Tab" → đã sửa: đơn hủy biến mất khỏi mọi cột Chờ/Đang làm/Rework/Done ngay cả khi bị hủy giữa chừng). Xem `documents/Plans/CancelledOrders-ExcludeFromStages.md`.
 
 ---
 
@@ -140,7 +140,7 @@ Nếu `cancelledAt` được set (từ flow Import file soát), `BadRequestExcep
 | ------ | --------------------------------------- | ------------------------------------------------------------------- | ----------- | ------ | -------------------------------------------------------------------------------------- |
 | `POST` | `/v1/orders/:id/fulfillment-transition` | Trigger state machine. Body: `{ stage, action, target?, reason? }`. |
 | `GET`  | `/v1/fulfillment/my-tasks`              | List 4-tab cho worker hiện tại. Query: `tab=waiting                 | in-progress | rework | watching`, `page`, `size`. Stage + factoryId tự suy từ user (Manager có thể override). |
-| `GET`  | `/v1/fulfillment/daily-overview`        | **Bảng tổng quan theo ngày** — FULL luồng mọi khâu. Query: `days=7\|14\|30` hoặc `from`/`to` (VN), `stage?` (chỉ để FE highlight). Trả `days[]` `{day, total, toolReviewed, toolUnreviewed, toolOk, designerReceived, designerDone, stages:{<stage>:{arrived,done,remaining,rework}}}` + `columnTotals` (cùng shape) + `rangeDays`. Xem §4.6. |
+| `GET`  | `/v1/fulfillment/daily-overview`        | **Bảng tổng quan theo ngày** — FULL luồng mọi khâu (`@Auth OVERVIEW_ROLES` — rộng hơn transition, gồm Support/Designer/Leader). Query: `days=7\|14\|30` hoặc `from`/`to` (VN), `stage?` (chỉ để FE highlight). Trả `days[]` `{day, total, toolReviewed, toolUnreviewed, toolOk, designerReceived, designerDone, designerRework, stages:{<stage>:{arrived,done,remaining,rework}}}` + `columnTotals` (cùng shape) + `rangeDays`. Scope theo `factoryId` nếu có, ngược lại toàn cục. Xem §4.6. |
 
 ### 3.2 OrderEntity — fields mới
 
@@ -346,9 +346,9 @@ Riêng user **In** (`role=Fulfillment`, `fulfillmentStage='print'`) **KHÔNG** d
     suy ra từ lỗi xưởng. `RoleService.onModuleInit` revoke quyền khi restart (catalog = source of truth). Vẫn giữ
     `productionError.edit` để worker chọn lỗi xưởng.
 
-### 4.6 Bảng "Tổng quan theo ngày" (`FulfillmentDailyOverview.tsx`) — FULL luồng, MỌI stage
+### 4.6 Bảng "Tổng quan theo ngày" (`components/common/PipelineDailyOverview.tsx`) — FULL luồng, MỌI stage
 
-Component dùng chung, render **trên** kanban (6 stage) và **trên** bảng In (stage print). Gom **MỌI đơn** theo **`inProductionAt`** (VN) trong xưởng user — cùng trục với bảng Designer/Soát tool ⇒ 1 đơn nằm cùng cột ngày ở mọi khâu, giúp worker biết **ưu tiên** (cohort ngày SX cũ mà "Còn lại/Lỗi" > 0 = làm trước). **Không** giới hạn theo đơn đã tới stage nào → thấy được cả luồng đầu (tool/designer) lẫn đuôi.
+Component **dùng chung 3 nơi**: Task Fulfillment (kanban 6 stage + bảng In stage print, prop `stage`), **Designer my-tasks** (prop `lane='designer'`) và **tab Soát tool** (prop `lane='tool'`). Gom **MỌI đơn** theo **`inProductionAt`** (VN) — cùng trục với bảng Designer/Soát tool ⇒ 1 đơn nằm cùng cột ngày ở mọi khâu, giúp worker biết **ưu tiên** (cohort ngày SX cũ mà "Còn lại/Lỗi" > 0 = làm trước). **Không** giới hạn theo đơn đã tới stage nào → thấy được cả luồng đầu (tool/designer) lẫn đuôi.
 
 - **Các hàng** (cột = ngày cũ→mới; BE trả mới→cũ, FE `reverse()` + cột **Tổng**):
   - **Tổng đơn** — count đơn có `inProductionAt` ngày đó.
@@ -356,13 +356,18 @@ Component dùng chung, render **trên** kanban (6 stage) và **trên** bảng In
   - **Designer** — ô 2 số `đã làm / còn lại` (đã làm = `done`; còn lại = `designerReceived − done`; tổng nhận = `designerStatus ≠ unassigned`, ở tooltip).
   - **6 stage fulfillment** — mỗi stage 1 hàng ô 2 số `đã xong / còn lại` (đã xong = `done`, emerald; còn lại = `arrived − done`, indigo). Hàng công đoạn hiện `0` khi = 0 (thay dấu `·`).
 - **Stage của user** (`stage` prop) → hàng đó **bung 4 hàng nhỏ** `Đến / Đã làm / Còn lại / Lỗi cần sửa` (phân loại theo `fulfillmentStages.<myStage>.status` HIỆN TẠI; `Đến = Đã làm + Còn lại + Lỗi`) và **highlight** (nền indigo, nhãn đậm). Hàng **"Lỗi cần sửa" tô đỏ** (nền + chữ đỏ) cho nổi. Các stage khác **làm mờ** (`opacity-70`, nhãn muted).
+- **Lane của user** (`lane` prop, loại trừ với `stage`) → bung hàng tương ứng thành header + 4 hàng con:
+  - `lane='designer'` (trang Designer): **Nhận** (`designerReceived`) / **Đã xong** (`designerDone`) / **Còn lại** (`received − done − rework`) / **Lỗi cần sửa** (`designerRework`, đỏ).
+  - `lane='tool'` (tab Soát tool): **Đã soát** (`toolReviewed`) / **OK** (`toolOk`) / **Lỗi** (`toolReviewed − toolOk`, đỏ) / **Chưa soát** (`toolUnreviewed`). Lane tool suy hết từ field sẵn có (không cần thêm BE).
+- **`caption` prop** (optional) — ghi chú phụ header (Designer/Soát tool nhắc phạm vi **TOÀN nhà máy**, không chỉ đơn của mình).
 - **Ô 2 số** chia đều 2 bên: `đã xong` (emerald, sát mép trái) `/` `còn lại` (indigo, sát mép phải), slash **căn giữa**; ô **1 số** căn **trái**. `còn lại` = `arrived − done` (chưa hoàn thành, cộng dồn theo cohort). Soát tool: `đã soát`(emerald)`/`chưa soát`(amber). Hàng công đoạn fulfillment hiện `0` khi = 0 (thay `·`).
 - **Tooltip mỗi ô** (`title` HTML, không cần provider) mô tả chi tiết: ngày + tên chỉ số + ý nghĩa từng con số. Cột "Tổng" tip ghi "Tổng cả kỳ".
 - **Click 1 ngày** (header hoặc ô) → lọc danh sách bên dưới:
   - **Kanban** (6 stage): lọc **client-side** các cột theo `vnDay(inProductionAt) === dayFilter`; date-range + bảng tổng quan giữ nguyên. Chip "Đang lọc dd/MM ✕" để bỏ.
   - **Bảng In** (print): bảng phân trang **server** → không lọc client được → truyền `dayOverride` cho `PrintOrderTable` ép `createdFrom=createdTo=day` (narrow qua query). Chip bỏ giống trên.
 - Data từ `GET /v1/fulfillment/daily-overview`; refetch qua `reloadToken` (bump sau mỗi transition/refresh). Kanban truyền `from`/`to` = date-range hiện tại; bảng In dùng default 7 ngày.
-- **Scope**: mọi đơn trong xưởng user (`$or[factoryId, originalFactoryId]`), loại `deletedAt`/`cancelledAt`. `stage` chỉ để FE highlight — BE trả đủ mọi khâu bất kể stage (override role không stage → vẫn có data, chỉ không highlight).
+- **Scope**: user CÓ `factoryId` (Fulfillment) → chỉ xưởng đó (`$or[factoryId, originalFactoryId]`); user KHÔNG có factory (Designer/Support/Admin) → **funnel TOÀN CỤC** (mọi xưởng). Luôn loại `deletedAt`/`cancelledAt`. `stage`/`lane` chỉ để FE highlight — BE trả đủ mọi khâu.
+- **Auth endpoint**: `OVERVIEW_ROLES` = SuperAdmin/Admin/Manager/SupportManager/**Support**/Fulfillment/**DesignerLeader**/**Designer** (rộng hơn `TRANSITION_ROLES` vì read-only, không ghi factory). 2 endpoint transition vẫn giữ `TRANSITION_ROLES`.
 
 ---
 
@@ -614,9 +619,12 @@ Worker scope enforce ở BE: `user.fulfillmentStage === body.stage` && `user.fac
 **Shared:**
 
 - `packages/shared/enums/fulfillment-stage.ts` — enum + label + order
-- `packages/shared/dtos/production-order.dto.ts` — fulfillment fields + transition DTOs + **`GetFulfillmentDailyOverviewDto`/`FulfillmentDailyRow`/`FulfillmentDailyOverviewResDto`**
+- `packages/shared/dtos/production-order.dto.ts` — fulfillment fields + transition DTOs + **`GetFulfillmentDailyOverviewDto`/`FulfillmentDailyRow` (+ `designerRework`)/`FulfillmentDailyOverviewResDto`**
 - `apps/web/src/pages/fulfillment/my-tasks/PrintOrderTable.tsx` — + prop `dayOverride` (ép ngày cho bảng In khi click daily overview)
 - `apps/web/src/pages/fulfillment/my-tasks/PrintWorkshopView.tsx` — + daily overview + `dayFilter`→`dayOverride`
+- `apps/web/src/components/common/PipelineDailyOverview.tsx` — bảng dùng chung (prop `stage`/`lane`/`caption`), §4.6
+- `apps/web/src/pages/designer/my-tasks/index.tsx` — + `<PipelineDailyOverview lane="designer">` trên "Chi tiết theo ngày"
+- `apps/web/src/pages/home/ToolCheckTab.tsx` — + `<PipelineDailyOverview lane="tool">` trên dải focus 2 hàng
 - `apps/web/src/services/fulfillment.ts` — + `dailyOverview()`
 - `packages/shared/dtos/user.dto.ts` — `fulfillmentStage` field
 - `packages/shared/constants/permission-catalog.ts` — 6 permission mới
@@ -625,7 +633,7 @@ Worker scope enforce ở BE: `user.fulfillmentStage === body.stage` && `user.fac
 
 - `apps/api/src/modules/fulfillment/fulfillment.module.ts`
 - `apps/api/src/modules/fulfillment/fulfillment-task.service.ts` — + `getDailyOverview()` + `resolveDayWindow()` (§5.1b)
-- `apps/api/src/modules/fulfillment/fulfillment-task.controller.ts` — + `GET /fulfillment/daily-overview`
+- `apps/api/src/modules/fulfillment/fulfillment-task.controller.ts` — + `GET /fulfillment/daily-overview` (`OVERVIEW_ROLES` rộng hơn transition)
 - `apps/api/src/modules/order/order.entity.ts` — 4 field mới + `makeEmptyStageState` helper
 - `apps/api/src/modules/user/user.entity.ts` — `fulfillmentStage` + partial unique index
 - `apps/api/src/modules/user/user.service.ts` — validation + E11000 handler
@@ -635,7 +643,7 @@ Worker scope enforce ở BE: `user.fulfillmentStage === body.stage` && `user.fac
 **Frontend:**
 
 - `apps/web/src/pages/fulfillment/my-tasks/index.tsx` — kanban 4 cột + DnD + **daily overview + lọc client theo ngày**
-- `apps/web/src/pages/fulfillment/my-tasks/FulfillmentDailyOverview.tsx` — **bảng "Tổng quan theo ngày" dùng chung (kanban + print), §4.6**
+- `apps/web/src/components/common/PipelineDailyOverview.tsx` — **bảng "Tổng quan theo ngày" dùng chung 3 nơi (Fulfillment kanban/print + Designer my-tasks + Soát tool), prop `stage`/`lane`/`caption`, §4.6**
 - `apps/web/src/pages/fulfillment/my-tasks/FulfillmentTaskCard.tsx` — card component dùng chung 4 cột
 - `apps/web/src/pages/fulfillment/my-tasks/PrintOrderTable.tsx` — bảng phẳng stage In (§4.5): chế độ phím ↑↓ (1 dấu ✓ theo cursor) + URL params persistence (prefix `p`, F5 giữ filter/ngày/search/status/trang)
 - `apps/web/src/pages/fulfillment/my-tasks/PrintWorkshopView.tsx` — orchestrator transition + ReworkBackDialog cho stage In

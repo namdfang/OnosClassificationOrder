@@ -4,6 +4,7 @@
 >  - `apps/web/src/pages/designer/team/{index,TeamMemberDialog}.tsx` — Leader CRUD sub-designer
 >  - `apps/web/src/pages/designer/my-tasks/{index,TaskCard,RejectModal,TaskDetailDialog}.tsx` — Sub-designer kanban
 >  - `apps/web/src/pages/designer/my-tasks/DailyBreakdownPanel.tsx` — Panel "Chi tiết theo ngày" (7/14/30) focus đơn chưa xong
+>  - `apps/web/src/components/common/PipelineDailyOverview.tsx` — Bảng "Tổng quan theo ngày" FULL luồng (TOÀN nhà máy) `lane='designer'`, render TRÊN "Chi tiết theo ngày" (xem `FulfillmentWorkflow.md §4.6`)
 >  - `apps/web/src/pages/home/DesignerStatsTab.tsx` — Dashboard tab leader
 >  - `apps/web/src/pages/orders/DesignerSummaryPanel.tsx` — KPI panel trên /orders cho leader/admin
 >  - `apps/web/src/components/orders/AssignDesignerDialog.tsx` — Bulk assign từ workshop table
@@ -57,6 +58,8 @@ State machine 6 trạng thái:
 - `rework` (xưởng set productionError có errorSource='designer')
 
 **Identity model:** `Order.assignee = user._id` (string). KHÔNG còn dùng workshop_config (category=assignee đã xoá).
+
+**Đơn hủy (`cancelledAt`):** đã LOẠI khỏi mọi số liệu/queue của designer — my-tasks kanban (`buildMyTaskFilter`), my-stats (`getMyStats`), daily breakdown, tổng quan N ngày (`getDailyOverview`), pool "Cần gán"/self-claim (`getAssignBacklog`), ma trận KPI /orders (`getDesignerBreakdown`) đều thêm `cancelledAt: null`. Xem `documents/Plans/CancelledOrders-ExcludeFromStages.md`.
 
 **Per-cycle work tracking:**
 - `designerStartedAt` reset mỗi cycle (`start`/`restart`)
@@ -268,6 +271,8 @@ factoryId?: string                // ref FactoryEntity, REQUIRED khi role=Fulfil
 
 ### 4.2 `/my-tasks` (Sub-designer)
 Xem 2.3 chi tiết.
+
+**Bảng "Tổng quan theo ngày" (TRÊN "Chi tiết theo ngày"):** `<PipelineDailyOverview lane="designer">` (component dùng chung với Task Fulfillment, xem `FulfillmentWorkflow.md §4.6`). **Funnel TOÀN CỤC** (mọi đơn cả nhà máy, KHÔNG scope assignee — khác `DailyBreakdownPanel` bên dưới vốn chỉ đơn của user) qua endpoint `GET /v1/fulfillment/daily-overview` (auth `OVERVIEW_ROLES` đã gồm Designer). Lane "Designer" bung 4 hàng con: Nhận / Đã xong / Còn lại (`received−done−rework`) / Lỗi cần sửa (`designerRework`). Ăn cùng `dateFrom`/`dateTo`; click 1 ngày → `setDateFrom=setDateTo=day` (thu về đúng ngày, đồng bộ kanban + panel). `reloadToken=breakdownToken` (refetch cùng nhịp). `caption` nhắc phạm vi toàn cục.
 
 **Bộ lọc ngày:** chỉ dùng `<DateRangePicker>` (đã bỏ 3 preset nút Hôm nay/7 ngày/30 ngày). State `dateFrom`/`dateTo` **mặc định 7 ngày gần nhất**, **lưu vào URL params `from`/`to`** (F5 giữ lựa chọn — `useSearchParams`, đọc khi mount + sync khi đổi). Gửi `from`/`to` vào `myTasks` + `myTaskFilters` + `myStats({period:'custom', from, to})`.
 
