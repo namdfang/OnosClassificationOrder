@@ -739,3 +739,14 @@ Popover multi-select thay thế cho "FilterChips dàn ngang chiếm chiều ngan
 > **Lưu ý hook order**: tất cả `useMemo` PHẢI khai báo TRƯỚC `if (options.length === 0) return null` để tránh React error "Rendered more hooks than during the previous render" khi options load async.
 
 Đã thay thế `FilterChips` (custom inline) trong `OrderTableWorkshop` cho 3 filter `printStatus` / `toolResultNote` / `assignee`.
+
+---
+
+## Bổ sung: Tab "Lỗi theo người" (2 chiều)
+
+- **File FE:** `apps/web/src/pages/home/PersonErrorTab.tsx` (tab `person-error` trong `index.tsx`, gate `isAdmin || page.designer_stats || page.tool_check`).
+- **API:** `GET /designer/person-error-overview` + `GET /designer/person-error-orders` (`designer-stats.controller.ts`, role Admin/Manager/DesignerLeader/SupportManager).
+- **Leaderboard 2 chiều** (`DesignerStatsService.getPersonErrorOverview`):
+  - `needFixCount` — đơn lỗi ĐANG cần người đó sửa (bị quy lỗi/phải sửa): fulfillment theo `(factory, currentFulfillmentStage)` → user giữ stage; designer theo `designerStatus=rework` + `assignee`.
+  - `reportedCount` — số lần người đó ĐÃ báo lỗi (đẩy về) trong kỳ, đếm từ `fulfillmentTimeline` (action `rework-back`, `byUserId`).
+- Click 1 dòng → xổ **list đơn lỗi đang cần fix** (`getPersonErrorOrders`, hỗ trợ synthetic id `stage:<factory>:<stage>` cho công đoạn chưa gán người). Loại đơn hủy (`cancelledAt`). Date field: `inProductionAt` (needFix) / `timeline.at` (reported).

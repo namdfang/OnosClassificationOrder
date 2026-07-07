@@ -15,7 +15,6 @@ import {
   FULFILLMENT_STAGE_ORDER,
   FULFILLMENT_STAGES,
   FulfillmentStage,
-  FulfillmentTransitionAction,
   WorkshopConfigCategory,
 } from 'shared';
 
@@ -64,11 +63,18 @@ export function OrderErrorScanDialog({ order, onClose, onSaved }: Props) {
   );
 
   const currentStage = order.currentFulfillmentStage as FulfillmentStage | undefined;
+  const isCompleted = !currentStage && !!order.fulfillmentCompletedAt;
+  // Vị trí xa nhất đơn từng tới → cho phép đẩy về mọi stage TRƯỚC vị trí đó. Đơn
+  // đã hoàn thành fulfillment (currentStage=null nhưng có fulfillmentCompletedAt)
+  // → furthest=Pack → đẩy về In..May xuất (reopen + làm lại toàn chuỗi).
+  const furthest = currentStage ?? (isCompleted ? FulfillmentStage.Pack : undefined);
+  // Đơn đã vào fulfillment HOẶC đã hoàn thành → cho phép rework-back designer/stage.
+  const canReworkBack = !!currentStage || isCompleted;
   const previousStages = useMemo(() => {
-    if (!currentStage) return [] as FulfillmentStage[];
-    const idx = FULFILLMENT_STAGE_ORDER[currentStage];
+    if (!furthest) return [] as FulfillmentStage[];
+    const idx = FULFILLMENT_STAGE_ORDER[furthest];
     return FULFILLMENT_STAGES.filter((s) => FULFILLMENT_STAGE_ORDER[s] < idx);
-  }, [currentStage]);
+  }, [furthest]);
 
   const [code, setCode] = useState<string>('');
   // Mặc định nguồn lỗi + đẩy về = "Soát tool" (theo ToolCheckWorkflow).
@@ -101,40 +107,37 @@ export function OrderErrorScanDialog({ order, onClose, onSaved }: Props) {
     if (!canSubmit) return;
     setSaving(true);
     try {
-      // Đẩy về "Soát tool" ⟺ nguồn lỗi 'tool-check' — setProductionError sẽ tự
-      // đẩy đơn về Support (support-hold), KHÔNG cần fulfillment-transition.
-      const effectiveSource: ErrorSource | undefined =
-        reworkTarget === 'tool-check' ? 'tool-check' : source;
+      // Gộp TẤT CẢ vào 1 lần setProductionError (BE atomic). Nhờ đi qua
+      // setProductionError (không phải fulfillment-transition) nên báo được lỗi cả
+      // đơn ĐÃ đi qua công đoạn mình / đã hoàn thành — không dính stage guard.
+      //  - tool-check / designer: nguồn lỗi drive rework-back (source-based).
+      //  - FulfillmentStage: BE đẩy về stage + làm lại toàn chuỗi (target-based).
+      let effectiveSource: ErrorSource | undefined = source;
+      let apiTarget: 'designer' | 'tool-check' | FulfillmentStage | undefined;
+      let targetLabel = 'Chỉ mark lỗi';
+      if (reworkTarget === 'tool-check') {
+        effectiveSource = 'tool-check';
+        apiTarget = 'tool-check';
+        targetLabel = 'Đẩy về Soát tool';
+      } else if (reworkTarget === 'designer') {
+        effectiveSource = 'designer';
+        apiTarget = 'designer';
+        targetLabel = 'Đẩy về Designer';
+      } else if (reworkTarget !== 'none') {
+        // Đẩy về 1 công đoạn fulfillment trước → nguồn lỗi = xưởng.
+        effectiveSource = 'factory';
+        apiTarget = reworkTarget;
+        targetLabel = `Đẩy về ${FULFILLMENT_STAGE_LABELS[reworkTarget as FulfillmentStage]}`;
+      }
 
-      // 1. Always: gán mã lỗi xưởng (kéo theo set toolResultNote='error',
-      //    productionFirstErrorAt, productionErrorCount++). Nếu source='tool-check'
-      //    → BE tự rework-back về Support.
       await RepositoryRemote.order.setProductionError(order._id, {
         code,
         source: effectiveSource,
         note: note.trim() || undefined,
+        target: apiTarget,
       });
 
-      // 2. Optional: rework-back về stage trước / designer / soát tool.
-      let targetLabel = 'Chỉ mark lỗi';
-      if (reworkTarget === 'tool-check') {
-        targetLabel = 'Đẩy về Soát tool';
-      } else if (currentStage && reworkTarget !== 'none') {
-        // Rework-back designer / stage trước — cần đơn đang ở fulfillment workflow.
-        await RepositoryRemote.fulfillment.transition(order._id, {
-          stage: currentStage,
-          action: FulfillmentTransitionAction.ReworkBack,
-          target: reworkTarget,
-          reason: note.trim() || 'Gán lỗi qua màn hình quét',
-        });
-        targetLabel =
-          reworkTarget === 'designer'
-            ? 'Đẩy về Designer'
-            : `Đẩy về ${FULFILLMENT_STAGE_LABELS[reworkTarget as FulfillmentStage]}`;
-      }
-
-      const errorName =
-        sortedOptions.find((o) => o.code === code)?.name || code;
+      const errorName = sortedOptions.find((o) => o.code === code)?.name || code;
       toast.success(`Đã gán lỗi "${errorName}" · ${targetLabel}`);
       onSaved({ errorName, targetLabel });
       onClose();
@@ -359,14 +362,14 @@ export function OrderErrorScanDialog({ order, onClose, onSaved }: Props) {
                 }}
                 label="Soát tool"
               />
-              {currentStage && (
+              {canReworkBack && (
                 <ChipButton
                   active={reworkTarget === 'designer'}
                   onClick={() => setReworkTarget('designer')}
                   label="Designer"
                 />
               )}
-              {currentStage &&
+              {canReworkBack &&
                 previousStages.map((s) => (
                   <ChipButton
                     key={s}
@@ -387,7 +390,13 @@ export function OrderErrorScanDialog({ order, onClose, onSaved }: Props) {
                 </p>
               )
             )}
-            {!currentStage && reworkTarget !== 'tool-check' && (
+            {isCompleted && reworkTarget !== 'tool-check' && reworkTarget !== 'none' && (
+              <div className="rounded-md border border-dashed border-sky-300/50 bg-sky-50/40 dark:bg-sky-500/5 p-2 text-[11px] text-sky-700 dark:text-sky-300 flex items-start gap-1.5">
+                <RotateCcw size={12} className="mt-0.5 shrink-0" />
+                <span>Đơn đã hoàn thành fulfillment — đẩy về sẽ mở lại đơn & làm lại từ công đoạn đã chọn.</span>
+              </div>
+            )}
+            {!canReworkBack && reworkTarget !== 'tool-check' && (
               <div className="rounded-md border border-dashed border-amber-300/50 bg-amber-50/40 dark:bg-amber-500/5 p-2 text-[11px] text-amber-700 dark:text-amber-300 flex items-start gap-1.5">
                 <ListChecks size={12} className="mt-0.5 shrink-0" />
                 <span>Đơn chưa vào fulfillment — chỉ có thể đẩy về Soát tool hoặc mark lỗi.</span>

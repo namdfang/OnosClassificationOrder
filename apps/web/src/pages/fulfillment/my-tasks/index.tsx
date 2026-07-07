@@ -63,6 +63,7 @@ import { cn } from '@/utils/cn';
 import { PipelineDailyOverview } from '@/components/common/PipelineDailyOverview';
 import { FulfillmentTaskCard } from './FulfillmentTaskCard';
 import { ReworkBackDialog } from './ReworkBackDialog';
+import { StageErrorPanel } from './StageErrorPanel';
 import PrintWorkshopView from './PrintWorkshopView';
 import { OrderErrorScanDialog } from '../../orders/scan-error/OrderErrorScanDialog';
 import { FulfillmentScanActionDialog } from '../../orders/scan-error/FulfillmentScanActionDialog';
@@ -790,6 +791,9 @@ function FulfillmentKanbanView() {
             <KPI key={k} label={COL_META[k].label} value={counts[k]} accent={COL_META[k].kpiAccent} />
           ))}
         </div>
+
+        {/* Ô thống kê lỗi công đoạn — click xổ bảng lỗi theo ngày (inProductionAt). */}
+        <StageErrorPanel stage={myStage} from={dateFrom || undefined} to={dateTo || undefined} reloadToken={overviewToken} />
 
         {/* Hint */}
         <div className="flex items-start gap-2 rounded-md border border-border bg-muted/30 p-2.5 text-[11px] text-muted-foreground">

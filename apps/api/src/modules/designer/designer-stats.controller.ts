@@ -16,12 +16,19 @@ import {
   GetProductBreakdownResDto,
   GetErrorStatsDto,
   GetErrorStatsResDto,
+  GetPersonErrorOrdersDto,
+  GetPersonErrorOverviewDto,
+  GetStageErrorDailyDto,
   GetTeamDailyBreakdownDto,
   GetTeamDailyBreakdownResDto,
   GetToolCheckOverviewDto,
+  PersonErrorOrdersResDto,
+  PersonErrorOverviewResDto,
+  StageErrorDailyResDto,
   ToolCheckOverviewResDto,
   RoleType,
 } from 'shared';
+import type { FulfillmentStage } from 'shared';
 import { Logger } from 'winston';
 
 import { Auth } from '@/decorators';
@@ -46,6 +53,24 @@ const TOOL_CHECK_ROLES = [
   RoleType.Manager,
   RoleType.SupportManager,
   RoleType.Support,
+];
+
+// Tab "Lỗi theo người" — quản lý (không mở cho sub-designer).
+const PERSON_ERROR_ROLES = [
+  RoleType.SuperAdmin,
+  RoleType.Admin,
+  RoleType.Manager,
+  RoleType.DesignerLeader,
+  RoleType.SupportManager,
+];
+
+// Bảng lỗi công đoạn — công nhân Fulfillment (khóa stage/xưởng của họ) + quản lý.
+const STAGE_ERROR_ROLES = [
+  RoleType.SuperAdmin,
+  RoleType.Admin,
+  RoleType.Manager,
+  RoleType.SupportManager,
+  RoleType.Fulfillment,
 ];
 
 @Controller()
@@ -273,6 +298,81 @@ export class DesignerStatsController {
       message: JSON.stringify({ method: 'GET', url: '/orders/error-stats', userId: user._id }),
     });
     const data = await this.statsService.getErrorStats(query.from, query.to);
+    return { success: true, data };
+  }
+
+  @Get('designer/person-error-overview')
+  @Auth(PERSON_ERROR_ROLES)
+  @ApiOperation({
+    summary: 'Lỗi theo người (2 chiều): đang cần fix (bị quy lỗi) + đã báo lỗi trong kỳ.',
+  })
+  @HttpCode(HttpStatus.OK)
+  @ApiOkResponse({ type: PersonErrorOverviewResDto })
+  async getPersonErrorOverview(
+    @Query() query: GetPersonErrorOverviewDto,
+    @AuthUser() user: UserDocument,
+  ): Promise<PersonErrorOverviewResDto> {
+    this.logger.info({
+      message: JSON.stringify({ method: 'GET', url: '/designer/person-error-overview', userId: user._id }),
+    });
+    const data = await this.statsService.getPersonErrorOverview(
+      query.from,
+      query.to,
+      query.days,
+      query.factoryId,
+    );
+    return { success: true, data };
+  }
+
+  @Get('designer/person-error-orders')
+  @Auth(PERSON_ERROR_ROLES)
+  @ApiOperation({ summary: 'Drill-down: đơn lỗi đang cần 1 người sửa.' })
+  @HttpCode(HttpStatus.OK)
+  @ApiOkResponse({ type: PersonErrorOrdersResDto })
+  async getPersonErrorOrders(
+    @Query() query: GetPersonErrorOrdersDto,
+    @AuthUser() user: UserDocument,
+  ): Promise<PersonErrorOrdersResDto> {
+    this.logger.info({
+      message: JSON.stringify({ method: 'GET', url: '/designer/person-error-orders', userId: user._id }),
+    });
+    const { data, total } = await this.statsService.getPersonErrorOrders(
+      query.userId,
+      query.from,
+      query.to,
+      query.days,
+    );
+    return { success: true, data: data as PersonErrorOrdersResDto['data'], total };
+  }
+
+  @Get('fulfillment/stage-error-daily')
+  @Auth(STAGE_ERROR_ROLES)
+  @ApiOperation({ summary: 'Bảng lỗi theo ngày (inProductionAt) cho 1 công đoạn fulfillment.' })
+  @HttpCode(HttpStatus.OK)
+  @ApiOkResponse({ type: StageErrorDailyResDto })
+  async getStageErrorDaily(
+    @Query() query: GetStageErrorDailyDto,
+    @AuthUser() user: UserDocument,
+  ): Promise<StageErrorDailyResDto> {
+    this.logger.info({
+      message: JSON.stringify({ method: 'GET', url: '/fulfillment/stage-error-daily', userId: user._id }),
+    });
+    // Worker Fulfillment: khóa theo stage + xưởng của chính họ. Admin/Manager: theo query.
+    const isOverride = [
+      RoleType.SuperAdmin,
+      RoleType.Admin,
+      RoleType.Manager,
+      RoleType.SupportManager,
+    ].includes(user.role?.name as RoleType);
+    const stage = (isOverride ? query.stage : user.fulfillmentStage) ?? query.stage;
+    const factoryId = isOverride ? query.factoryId : user.factoryId;
+    const data = await this.statsService.getStageErrorDaily(
+      stage as FulfillmentStage,
+      factoryId,
+      query.from,
+      query.to,
+      query.days,
+    );
     return { success: true, data };
   }
 }

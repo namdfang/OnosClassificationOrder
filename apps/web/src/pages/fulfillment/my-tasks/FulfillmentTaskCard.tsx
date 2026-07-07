@@ -64,6 +64,14 @@ function fmtTime(d?: Date | string): string {
   return dayjs(d).format('HH:mm DD/MM');
 }
 
+/** Nhãn nguồn lỗi cho badge — đồng bộ với các cell/scan dialog. */
+function srcLabel(source?: string): string {
+  if (source === 'designer') return 'Do designer';
+  if (source === 'tool-check') return 'Do soát tool';
+  if (source === 'factory') return 'Do xưởng';
+  return 'Lỗi';
+}
+
 /** Mốc thời gian đại diện cho card theo status — đồng bộ pattern với
  *  `pages/designer/my-tasks/TaskCard.timeStamp()`. */
 function timeStamp(
@@ -243,10 +251,36 @@ export function FulfillmentTaskCard({
             </div>
           )}
 
-          {status === FulfillmentStageStatus.Rework && order.productionErrorNote && (
-            <div className="flex items-start gap-1 text-[10px] text-amber-700 dark:text-amber-300 bg-amber-50 dark:bg-amber-900/20 rounded px-1.5 py-1">
-              <MessageSquareWarning size={11} className="shrink-0 mt-px" />
-              <span className="line-clamp-2">{order.productionErrorNote}</span>
+          {/* Badge lỗi tổng quát — hiện ở MỌI cột (waiting/done/fixed/watching...)
+              khi đơn đang mang lỗi, để mọi công đoạn thấy đơn bị lỗi gì + nguồn +
+              đang ở công đoạn nào + note (yêu cầu: ai cũng thấy đơn lỗi). */}
+          {order.productionError && order.toolResultNote === 'error' && (
+            <div className="flex flex-col gap-0.5 text-[10px] text-rose-700 dark:text-rose-300 bg-rose-50 dark:bg-rose-900/20 rounded px-1.5 py-1">
+              <div className="inline-flex items-center gap-1 font-medium flex-wrap">
+                <MessageSquareWarning size={11} className="shrink-0" />
+                <span className="px-1 rounded bg-rose-200/60 dark:bg-rose-500/20">
+                  {srcLabel(order.productionErrorSource)}
+                </span>
+                {currentStage && colKey !== 'watching' && (
+                  <span className="text-rose-600/80 dark:text-rose-300/80">
+                    · đang ở {FULFILLMENT_STAGE_LABELS[currentStage]}
+                  </span>
+                )}
+                {order.designerStatus === 'rework' && colKey !== 'watching' && (
+                  <span className="text-rose-600/80 dark:text-rose-300/80">· đang ở Designer</span>
+                )}
+                {order.productionErrorCount && order.productionErrorCount > 1 ? (
+                  <span className="font-mono">×{order.productionErrorCount}</span>
+                ) : null}
+              </div>
+              {order.productionErrorNote && (
+                <span
+                  className="line-clamp-2 text-rose-900 dark:text-rose-100 cursor-help"
+                  title={order.productionErrorNote}
+                >
+                  {order.productionErrorNote}
+                </span>
+              )}
             </div>
           )}
         </div>

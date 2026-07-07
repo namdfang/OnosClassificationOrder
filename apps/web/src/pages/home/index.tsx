@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react';
-import { BarChart3, ClipboardList, Factory, FileSearch, Palette, Workflow } from 'lucide-react';
+import { BarChart3, ClipboardList, Factory, FileSearch, Palette, TriangleAlert, Workflow } from 'lucide-react';
 import { useSearchParams } from 'react-router-dom';
 
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
@@ -11,10 +11,11 @@ import LifecycleTab from './LifecycleTab';
 import OrderFactoryTab from './OrderFactoryTab';
 import OrderStatsTab from './OrderStatsTab';
 import OrderStatusTab from './OrderStatusTab';
+import PersonErrorTab from './PersonErrorTab';
 import ToolCheckTab from './ToolCheckTab';
 import { SendTelegramReportButton } from './SendTelegramReportButton';
 
-const TABS = ['factory', 'stats', 'status', 'lifecycle', 'tool-check', 'designer'] as const;
+const TABS = ['factory', 'stats', 'status', 'lifecycle', 'tool-check', 'person-error', 'designer'] as const;
 type TabKey = (typeof TABS)[number];
 
 export default function Home() {
@@ -25,8 +26,16 @@ export default function Home() {
   const canSeeLifecycle = true;
   // Tab "Soát tool" chỉ Support + Admin.
   const canSeeToolCheck = isAdmin || has('page.tool_check');
+  // Tab "Lỗi theo người" — quản lý (dùng chung quyền xem thống kê designer/tool).
+  const canSeePersonError = isAdmin || has('page.designer_stats') || has('page.tool_check');
   const isTabAllowed = (t: TabKey) =>
-    t === 'lifecycle' ? canSeeLifecycle : t === 'tool-check' ? canSeeToolCheck : true;
+    t === 'lifecycle'
+      ? canSeeLifecycle
+      : t === 'tool-check'
+        ? canSeeToolCheck
+        : t === 'person-error'
+          ? canSeePersonError
+          : true;
   const initial = (searchParams.get('tab') as TabKey) || 'factory';
   const [activeTab, setActiveTab] = useState<TabKey>(
     TABS.includes(initial) && isTabAllowed(initial) ? initial : 'stats',
@@ -104,6 +113,11 @@ export default function Home() {
               <FileSearch size={14} /> Soát tool
             </TabsTrigger>
           )}
+          {canSeePersonError && (
+            <TabsTrigger value="person-error" className="gap-1.5">
+              <TriangleAlert size={14} /> Lỗi theo người
+            </TabsTrigger>
+          )}
           {canSeeDesigner && (
             <TabsTrigger value="designer" className="gap-1.5">
               <Palette size={14} /> Designer
@@ -128,6 +142,11 @@ export default function Home() {
         {canSeeToolCheck && (
           <TabsContent value="tool-check">
             <ToolCheckTab />
+          </TabsContent>
+        )}
+        {canSeePersonError && (
+          <TabsContent value="person-error">
+            <PersonErrorTab />
           </TabsContent>
         )}
         {canSeeDesigner && (

@@ -372,7 +372,7 @@ export function FulfillmentScanActionDialog({
             <ShieldAlert size={14} className="mt-0.5 shrink-0" />
             <span>
               <strong>Không phải task của bạn.</strong> {blockReason} Nhấn Enter để quét đơn tiếp
-              theo.
+              theo, hoặc bấm <strong>Báo lỗi đơn này</strong> để đẩy về công đoạn trước.
             </span>
           </div>
         )}
@@ -394,9 +394,15 @@ export function FulfillmentScanActionDialog({
               </Button>
             </>
           ) : (
-            <Button onClick={onClose} autoFocus size="lg">
-              Đóng & quét tiếp (Enter)
-            </Button>
+            <>
+              <Button variant="outline" onClick={onReportError} disabled={saving}>
+                <MessageSquareWarning size={15} className="mr-1.5 text-rose-500" />
+                Báo lỗi đơn này
+              </Button>
+              <Button onClick={onClose} autoFocus size="lg">
+                Đóng & quét tiếp (Enter)
+              </Button>
+            </>
           )}
         </DialogFooter>
       </DialogContent>

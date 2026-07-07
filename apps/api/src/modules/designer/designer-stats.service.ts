@@ -7,6 +7,7 @@ import type {
   DesignerLeaderboardRow,
   DesignerTimelineBucket,
   ErrorStats,
+  PersonErrorRow,
   ProductBreakdownDesigner,
   ToolCheckCustomerError,
   ToolCheckCustomerStat,
@@ -15,7 +16,13 @@ import type {
   ToolCheckOrder,
   ToolCheckProductStat,
 } from 'shared';
-import { DesignerStatus, RoleType, WorkshopConfigCategory } from 'shared';
+import {
+  DesignerStatus,
+  FULFILLMENT_STAGE_LABELS,
+  FulfillmentStage,
+  RoleType,
+  WorkshopConfigCategory,
+} from 'shared';
 
 import { OrderLogEntity } from '../order-log/order-log.entity';
 import { OrderEntity } from '../order/order.entity';
@@ -1310,6 +1317,305 @@ export class DesignerStatsService {
       days.push(new Date(baseMs - i * MS_DAY + 7 * 60 * 60 * 1000).toISOString().slice(0, 10));
     }
     return { start: new Date(baseMs - (rangeDays - 1) * MS_DAY), end: vnEnd(vnToday), days };
+  }
+
+  /** Range honoring `days` (nếu không có from/to). Mặc định 30 ngày. */
+  private resolveRangeDays(from?: string, to?: string, days?: number): { start: Date; end: Date } {
+    if (from || to) return this.resolveRange(from, to);
+    if (days && days > 0) {
+      const end = new Date();
+      end.setHours(23, 59, 59, 999);
+      const start = new Date();
+      start.setDate(start.getDate() - (days - 1));
+      start.setHours(0, 0, 0, 0);
+      return { start, end };
+    }
+    return this.resolveRange();
+  }
+
+  /**
+   * Thống kê lỗi theo NGƯỜI, 2 chiều:
+   *  - `needFixCount`: đơn lỗi ĐANG cần người đó sửa (snapshot) = đơn đang mang
+   *    lỗi & đang đứng ở công đoạn người đó phụ trách (fulfillment: theo
+   *    (factory, currentFulfillmentStage); designer: designerStatus=rework +
+   *    assignee). → chiều "bị quy lỗi / phải sửa".
+   *  - `reportedCount`: số lần người đó ĐÃ báo lỗi (đẩy về) trong kỳ, đếm từ
+   *    `fulfillmentTimeline` (action=rework-back, byUserId). → chiều "phát hiện".
+   * Loại đơn hủy (`cancelledAt`). Date field: `inProductionAt` (needFix) /
+   * `timeline.at` (reported).
+   */
+  async getPersonErrorOverview(
+    from?: string,
+    to?: string,
+    days?: number,
+    factoryId?: string,
+  ): Promise<{ rows: PersonErrorRow[]; from?: string; to?: string }> {
+    const range = this.resolveRangeDays(from, to, days);
+    const errBase: Record<string, unknown> = {
+      inProductionAt: { $gte: range.start, $lte: range.end },
+      productionError: { $exists: true, $nin: [null, ''] },
+      toolResultNote: 'error',
+      cancelledAt: null, // match cả thiếu field lẫn null
+      ...(factoryId ? { factoryId } : {}),
+    };
+
+    const [fulfillAgg, designerAgg, reportedAgg, stageUsers] = await Promise.all([
+      // Fulfillment: đơn lỗi đang đứng ở 1 công đoạn (không phải designer rework).
+      this.orderModel.aggregate<{ _id: { factoryId?: string; stage: string }; count: number }>([
+        { $match: { ...errBase, designerStatus: { $ne: 'rework' }, currentFulfillmentStage: { $ne: null } } },
+        { $group: { _id: { factoryId: '$factoryId', stage: '$currentFulfillmentStage' }, count: { $sum: 1 } } },
+      ]),
+      // Designer: đơn đang designerStatus=rework → assignee phải sửa.
+      this.orderModel.aggregate<{ _id: string; count: number }>([
+        { $match: { ...errBase, designerStatus: 'rework', assignee: { $exists: true, $ne: null } } },
+        { $group: { _id: '$assignee', count: { $sum: 1 } } },
+      ]),
+      // Đã báo lỗi trong kỳ (theo thời điểm báo = timeline.at).
+      this.orderModel.aggregate<{ _id: { uid: string; name?: string }; count: number }>([
+        { $match: { fulfillmentTimeline: { $elemMatch: { action: 'rework-back' } }, ...(factoryId ? { factoryId } : {}) } },
+        { $unwind: '$fulfillmentTimeline' },
+        {
+          $match: {
+            'fulfillmentTimeline.action': 'rework-back',
+            'fulfillmentTimeline.at': { $gte: range.start, $lte: range.end },
+            'fulfillmentTimeline.byUserId': { $exists: true, $ne: null },
+          },
+        },
+        { $group: { _id: { uid: '$fulfillmentTimeline.byUserId', name: '$fulfillmentTimeline.byUserName' }, count: { $sum: 1 } } },
+      ]),
+      // Map (factory, stage) → user phụ trách công đoạn đó.
+      this.userModel
+        .find({ fulfillmentStage: { $exists: true, $ne: null } }, { _id: 1, fullName: 1, factoryId: 1, fulfillmentStage: 1 })
+        .lean(),
+    ]);
+
+    const stageUserMap = new Map<string, { id: string; name: string }>();
+    for (const u of stageUsers) {
+      stageUserMap.set(`${String(u.factoryId ?? '')}::${u.fulfillmentStage}`, {
+        id: String(u._id),
+        name: u.fullName,
+      });
+    }
+
+    const rowMap = new Map<string, PersonErrorRow>();
+    const ensure = (userId: string, name: string, roleLabel: string): PersonErrorRow => {
+      let r = rowMap.get(userId);
+      if (!r) {
+        r = { userId, name, roleLabel, needFixCount: 0, reportedCount: 0 };
+        rowMap.set(userId, r);
+      }
+      return r;
+    };
+
+    // Chiều needFix — fulfillment.
+    for (const g of fulfillAgg) {
+      const stage = g._id.stage as FulfillmentStage;
+      const label = FULFILLMENT_STAGE_LABELS[stage] ?? stage;
+      const key = `${String(g._id.factoryId ?? '')}::${stage}`;
+      const su = stageUserMap.get(key);
+      const userId = su?.id ?? `stage:${String(g._id.factoryId ?? '')}:${stage}`;
+      const name = su?.name ?? `Chưa gán · ${label}`;
+      ensure(userId, name, label).needFixCount += g.count;
+    }
+    // Chiều needFix — designer (tên resolve sau).
+    const designerIds = designerAgg.map((g) => g._id).filter(Boolean);
+    for (const g of designerAgg) ensure(g._id, `#${g._id.slice(-4)}`, 'Designer').needFixCount += g.count;
+
+    // Chiều reported.
+    for (const g of reportedAgg) {
+      const uid = g._id.uid;
+      if (!uid) continue;
+      const existing = rowMap.get(uid);
+      const roleLabel = existing?.roleLabel ?? '—';
+      ensure(uid, g._id.name || existing?.name || `#${uid.slice(-4)}`, roleLabel).reportedCount += g.count;
+    }
+
+    // Resolve tên + roleLabel cho các user chưa có tên đẹp (designer assignee +
+    // reporter chưa xuất hiện ở chiều needFix).
+    const needName = [...rowMap.keys()].filter((id) => !id.startsWith('stage:'));
+    if (needName.length > 0) {
+      const users = await this.userModel
+        .find({ _id: { $in: needName } }, { _id: 1, fullName: 1, fulfillmentStage: 1 })
+        .lean();
+      const isDesigner = new Set(designerIds.map(String));
+      for (const u of users) {
+        const r = rowMap.get(String(u._id));
+        if (!r) continue;
+        r.name = u.fullName || r.name;
+        if (r.roleLabel === '—' || r.roleLabel === 'Designer') {
+          if (u.fulfillmentStage) r.roleLabel = FULFILLMENT_STAGE_LABELS[u.fulfillmentStage as FulfillmentStage] ?? r.roleLabel;
+          else if (isDesigner.has(String(u._id))) r.roleLabel = 'Designer';
+        }
+      }
+    }
+
+    const rows = [...rowMap.values()].sort(
+      (a, b) => b.needFixCount - a.needFixCount || b.reportedCount - a.reportedCount || a.name.localeCompare(b.name),
+    );
+    return { rows, from, to };
+  }
+
+  /**
+   * Drill-down: danh sách đơn lỗi ĐANG cần 1 người sửa (từ leaderboard trên).
+   * `userId` có thể là user thật hoặc synthetic `stage:<factory>:<stage>` (công
+   * đoạn chưa gán người).
+   */
+  async getPersonErrorOrders(
+    userId: string,
+    from?: string,
+    to?: string,
+    days?: number,
+  ): Promise<{ data: Record<string, unknown>[]; total: number }> {
+    const range = this.resolveRangeDays(from, to, days);
+    const base: Record<string, unknown> = {
+      inProductionAt: { $gte: range.start, $lte: range.end },
+      productionError: { $exists: true, $nin: [null, ''] },
+      toolResultNote: 'error',
+      cancelledAt: null,
+    };
+
+    let match: Record<string, unknown>;
+    if (userId.startsWith('stage:')) {
+      const [, factory, stage] = userId.split(':');
+      match = { ...base, factoryId: factory || undefined, currentFulfillmentStage: stage, designerStatus: { $ne: 'rework' } };
+    } else {
+      const user = await this.userModel.findById(userId, { fulfillmentStage: 1, factoryId: 1 }).lean();
+      if (user?.fulfillmentStage) {
+        match = {
+          ...base,
+          factoryId: user.factoryId,
+          currentFulfillmentStage: user.fulfillmentStage,
+          designerStatus: { $ne: 'rework' },
+        };
+      } else {
+        // Designer.
+        match = { ...base, assignee: userId, designerStatus: 'rework' };
+      }
+    }
+
+    const proj = {
+      productionId: 1,
+      type: 1,
+      size: 1,
+      color: 1,
+      quantity: 1,
+      mockupUrl: 1,
+      productionError: 1,
+      productionErrorNote: 1,
+      productionErrorSource: 1,
+      currentFulfillmentStage: 1,
+      designerStatus: 1,
+      inProductionAt: 1,
+    };
+    const [data, total] = await Promise.all([
+      this.orderModel.find(match, proj).sort({ inProductionAt: -1 }).limit(500).lean(),
+      this.orderModel.countDocuments(match),
+    ]);
+    return { data: data.map((d) => ({ ...d, _id: String(d._id) })), total };
+  }
+
+  /**
+   * Bảng lỗi theo NGÀY (`inProductionAt`, VN tz) cho 1 công đoạn — hàng = mã lỗi,
+   * cột = ngày. Dùng cho ô "Thống kê lỗi công đoạn" trong trang task fulfillment.
+   */
+  async getStageErrorDaily(
+    stage: FulfillmentStage,
+    factoryId?: string,
+    from?: string,
+    to?: string,
+    days?: number,
+  ): Promise<{
+    days: string[];
+    rows: { code: string; name: string; cells: number[]; total: number }[];
+    columnTotals: number[];
+    grandTotal: number;
+  }> {
+    const MS_DAY = 86_400_000;
+    const DAY_CAP = 100;
+    const vnStartD = (d: string) => new Date(`${d}T00:00:00+07:00`);
+    const vnEndD = (d: string) => new Date(`${d}T23:59:59.999+07:00`);
+    const vnToday = new Date(Date.now() + 7 * 60 * 60 * 1000).toISOString().slice(0, 10);
+
+    const dayList: string[] = [];
+    const dayIndex = new Map<string, number>();
+    let start: Date;
+    let end: Date;
+    if (from || to) {
+      const f = (from || to)!.slice(0, 10);
+      const t = (to || from)!.slice(0, 10);
+      start = vnStartD(f);
+      end = vnEndD(t);
+      let cur = vnStartD(t).getTime();
+      const startMs = start.getTime();
+      let i = 0;
+      while (cur >= startMs && i < DAY_CAP) {
+        const d = new Date(cur + 7 * 60 * 60 * 1000).toISOString().slice(0, 10);
+        dayIndex.set(d, i);
+        dayList.push(d);
+        cur -= MS_DAY;
+        i++;
+      }
+    } else {
+      const rangeDays = days && days > 0 ? days : 7;
+      const baseMs = vnStartD(vnToday).getTime();
+      for (let i = 0; i < rangeDays; i++) {
+        const d = new Date(baseMs - i * MS_DAY + 7 * 60 * 60 * 1000).toISOString().slice(0, 10);
+        dayIndex.set(d, i);
+        dayList.push(d);
+      }
+      start = new Date(baseMs - (rangeDays - 1) * MS_DAY);
+      end = vnEndD(vnToday);
+    }
+
+    const agg = await this.orderModel.aggregate<{ _id: { code: string; day: string }; count: number }>([
+      {
+        $match: {
+          inProductionAt: { $gte: start, $lte: end },
+          currentFulfillmentStage: stage,
+          productionError: { $exists: true, $nin: [null, ''] },
+          toolResultNote: 'error',
+          cancelledAt: null,
+          ...(factoryId ? { factoryId } : {}),
+        },
+      },
+      {
+        $group: {
+          _id: {
+            code: '$productionError',
+            day: { $dateToString: { format: '%Y-%m-%d', date: '$inProductionAt', timezone: '+07:00' } },
+          },
+          count: { $sum: 1 },
+        },
+      },
+    ]);
+
+    // Resolve code → name.
+    const cfgs = await this.workshopConfigModel
+      .find({ category: WorkshopConfigCategory.ProductionError }, { code: 1, name: 1 })
+      .lean();
+    const nameMap = new Map<string, string>();
+    for (const c of cfgs) nameMap.set(c.code, c.name);
+
+    const rowCells = new Map<string, number[]>();
+    const rowTotal = new Map<string, number>();
+    for (const r of agg) {
+      const code = r._id.code;
+      if (!rowCells.has(code)) rowCells.set(code, dayList.map(() => 0));
+      rowTotal.set(code, (rowTotal.get(code) ?? 0) + r.count);
+      const col = dayIndex.get(r._id.day);
+      if (col !== undefined) rowCells.get(code)![col]! += r.count;
+    }
+
+    const columnTotals = dayList.map(() => 0);
+    let grandTotal = 0;
+    const rows = [...rowCells.entries()].map(([code, cells]) => {
+      cells.forEach((v, i) => (columnTotals[i]! += v));
+      const total = rowTotal.get(code) ?? 0;
+      grandTotal += total;
+      return { code, name: nameMap.get(code) || code, cells, total };
+    });
+    rows.sort((a, b) => b.total - a.total || a.name.localeCompare(b.name));
+    return { days: dayList, rows, columnTotals, grandTotal };
   }
 
   private resolveRange(from?: string, to?: string): { start: Date; end: Date } {

@@ -10,7 +10,7 @@
 > 7. **Mỗi công đoạn có ô thống kê lỗi trong trang task** → click hiện bảng lỗi bên dưới.
 > 8. Ưu tiên: **bảng lỗi theo ngày dựa `inProductionAt`**.
 >
-> **Trạng thái:** 🟡 CHỜ DUYỆT — chưa implement. Chỉ code khi user xác nhận.
+> **Trạng thái:** ✅ ĐÃ IMPLEMENT (6 phase). BE tsc=31 / FE tsc=85 (baseline, 0 lỗi mới). Aggregation verified scratch MongoDB. **Cần rebuild shared + restart API.**
 
 ---
 

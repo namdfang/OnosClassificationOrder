@@ -656,3 +656,26 @@ Worker scope enforce ở BE: `user.fulfillmentStage === body.stage` && `user.fac
 - `apps/web/src/constants/paths.ts` — 3 PATH mới
 - `apps/web/src/constants/routerConfig.ts` — lazy route
 - `apps/web/src/components/sidebar/Sidebar.tsx` — entry "Task Fulfillment"
+
+---
+
+## Bổ sung: Báo lỗi toàn cục + Tab "Đang chờ quay lại" theo công đoạn
+
+> Xem kế hoạch chi tiết: [`documents/Plans/UniversalErrorReporting-PerPersonStageStats.md`](../Plans/UniversalErrorReporting-PerPersonStageStats.md).
+
+### 1. Tab "Đang chờ quay lại" (watching) → theo STAGE + XƯỞNG
+- **Trước:** chỉ ĐÚNG người bấm báo lỗi (`byUserId`) mới thấy đơn trong tab watching.
+- **Sau:** **mọi người đang giữ công đoạn đó trong xưởng** đều thấy (đã bỏ điều kiện `byUserId`), kể cả người báo là người khác / đã đổi ca.
+- **Sửa ĐỒNG THỜI 2 chỗ** (nếu lệch → sai count giữa kanban worker và Print-admin view):
+  - `apps/api/src/modules/fulfillment/fulfillment-task.service.ts` → `applyTabFilter` case `watching`.
+  - `apps/api/src/modules/order/order.service.ts` → `applyFulfillmentStatusFilter` case `watching`.
+- Giữ điều kiện "đơn đang ở stage TRƯỚC (`$in earlierStages`) HOẶC designer rework HOẶC tool-check pending" + scope factory. **KHÔNG** dùng `currentFulfillmentStage != stage` (kẹt vĩnh viễn).
+
+### 2. Báo lỗi ĐƠN đã đi qua công đoạn mình / đã hoàn thành
+- Điểm vào **duy nhất**: `OrderService.setProductionError` (không dính stage-guard của `transition`) — thêm field `target` (`SetProductionErrorDto.target: 'designer' | 'tool-check' | FulfillmentStage`).
+- Helper mới `OrderService.buildFulfillmentReworkBack(before, target, reason, ctx)`: xác định `furthest` (currentStage, hoặc Pack nếu đã completed) → set `target..furthest` = `rework` (**làm lại toàn chuỗi**), `currentFulfillmentStage=target`, clear `fulfillmentCompletedAt` nếu reopen. `timelineEntry.stage = user.fulfillmentStage ?? furthest` → đúng công đoạn watch.
+- Enforce chỉ lùi (`targetIdx < furthestIdx`).
+- FE: `pages/fulfillment/my-tasks/FulfillmentTaskCard.tsx` hiện **badge lỗi tổng quát** (nguồn + công đoạn hiện tại + note + ×N) ở MỌI cột khi đơn mang lỗi (`productionError` + `toolResultNote='error'`).
+
+### 3. Ô "Thống kê lỗi công đoạn" trong trang task
+- `pages/fulfillment/my-tasks/StageErrorPanel.tsx` — click xổ **bảng lỗi theo ngày** (`inProductionAt`, VN tz; hàng = mã lỗi, cột = ngày). BE: `GET /fulfillment/stage-error-daily` (khóa stage+xưởng theo user role Fulfillment).

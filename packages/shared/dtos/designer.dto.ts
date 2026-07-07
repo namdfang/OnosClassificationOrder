@@ -3,7 +3,12 @@ import { extendApi } from '@anatine/zod-openapi';
 import { z } from 'zod';
 
 import { IDZod, PASSWORD_MAX_LENGTH, PASSWORD_MIN_LENGTH } from '@shared/constants';
-import { DesignerStatus, DesignerTransitionAction, Status } from '@shared/enums';
+import {
+  DesignerStatus,
+  DesignerTransitionAction,
+  FulfillmentStage,
+  Status,
+} from '@shared/enums';
 import { PageResZod, ResZod } from '@shared/types';
 
 /**
@@ -704,3 +709,95 @@ export class GetErrorStatsDto extends createZodDto(extendApi(GetErrorStatsZod)) 
 
 export const GetErrorStatsResZod = ResZod.extend({ data: ErrorStatsZod });
 export class GetErrorStatsResDto extends createZodDto(extendApi(GetErrorStatsResZod)) {}
+
+// ─── Lỗi theo NGƯỜI (2 chiều) + Lỗi theo CÔNG ĐOẠN theo ngày ──────────
+//
+// Phục vụ:
+//  - Dashboard tab "Lỗi theo người": leaderboard 2 chiều (đang cần fix +
+//    đã báo lỗi) → click 1 người ra list đơn lỗi đang cần fix.
+//  - Trang task fulfillment: ô thống kê lỗi công đoạn mình + bảng lỗi theo
+//    ngày (group `inProductionAt`, VN tz).
+
+export const GetPersonErrorOverviewZod = z.object({
+  from: z.string().optional(),
+  to: z.string().optional(),
+  days: z.coerce.number().int().positive().optional(),
+  factoryId: z.string().optional(),
+});
+export class GetPersonErrorOverviewDto extends createZodDto(extendApi(GetPersonErrorOverviewZod)) {}
+
+export const PersonErrorRowZod = z.object({
+  userId: z.string(),
+  name: z.string(),
+  /** "Designer" hoặc tên công đoạn fulfillment (In / Ép / …). */
+  roleLabel: z.string(),
+  factoryName: z.string().optional(),
+  /** Đơn lỗi ĐANG cần người này sửa (snapshot) — bị quy lỗi / phải sửa. */
+  needFixCount: z.number().int().nonnegative(),
+  /** Số lần người này ĐÃ báo lỗi (đẩy về) trong kỳ — chiều phát hiện. */
+  reportedCount: z.number().int().nonnegative(),
+});
+export type PersonErrorRow = z.infer<typeof PersonErrorRowZod>;
+
+export const PersonErrorOverviewResZod = ResZod.extend({
+  data: z.object({
+    rows: PersonErrorRowZod.array(),
+    from: z.string().optional(),
+    to: z.string().optional(),
+  }),
+});
+export class PersonErrorOverviewResDto extends createZodDto(extendApi(PersonErrorOverviewResZod)) {}
+
+export const GetPersonErrorOrdersZod = z.object({
+  userId: z.string(),
+  from: z.string().optional(),
+  to: z.string().optional(),
+  days: z.coerce.number().int().positive().optional(),
+});
+export class GetPersonErrorOrdersDto extends createZodDto(extendApi(GetPersonErrorOrdersZod)) {}
+
+export const PersonErrorOrderRowZod = z.object({
+  _id: z.string(),
+  productionId: z.string(),
+  type: z.string().optional(),
+  size: z.string().optional(),
+  color: z.string().optional(),
+  quantity: z.number().optional(),
+  mockupUrl: z.string().optional(),
+  productionError: z.string().optional(),
+  productionErrorNote: z.string().optional(),
+  productionErrorSource: z.string().optional(),
+  currentFulfillmentStage: z.string().optional(),
+  designerStatus: z.string().optional(),
+  inProductionAt: z.date().optional(),
+});
+export const PersonErrorOrdersResZod = ResZod.extend({
+  data: PersonErrorOrderRowZod.array(),
+  total: z.number().int().nonnegative(),
+});
+export class PersonErrorOrdersResDto extends createZodDto(extendApi(PersonErrorOrdersResZod)) {}
+
+export const GetStageErrorDailyZod = z.object({
+  stage: z.nativeEnum(FulfillmentStage).optional(),
+  factoryId: z.string().optional(),
+  from: z.string().optional(),
+  to: z.string().optional(),
+  days: z.coerce.number().int().positive().optional(),
+});
+export class GetStageErrorDailyDto extends createZodDto(extendApi(GetStageErrorDailyZod)) {}
+
+export const StageErrorDailyRowZod = z.object({
+  code: z.string(),
+  name: z.string(),
+  cells: z.number().int().nonnegative().array(),
+  total: z.number().int().nonnegative(),
+});
+export const StageErrorDailyResZod = ResZod.extend({
+  data: z.object({
+    days: z.string().array(),
+    rows: StageErrorDailyRowZod.array(),
+    columnTotals: z.number().int().nonnegative().array(),
+    grandTotal: z.number().int().nonnegative(),
+  }),
+});
+export class StageErrorDailyResDto extends createZodDto(extendApi(StageErrorDailyResZod)) {}

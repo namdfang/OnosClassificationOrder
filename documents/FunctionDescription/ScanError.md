@@ -325,3 +325,12 @@ curl -X GET http://localhost:3001/v1/orders/by-production-id/PROD-1234 \
 
 - **2026-06-27** — Initial implementation. Page + modal + BE endpoint + permission. Reuse `setProductionError` + `fulfillment-transition` (rework-back). Pattern A (autoFocus + onPressEnter + auto-refocus).
 - **2026-06-27 (update)** — Thêm **mode toggle** Barcode/Nhập tay (segmented control) + persist trong `localStorage`. Mode barcode: auto-strip tiền tố `N-` qua helper `normalizeCode()`. Live preview chip "Sẽ tra cứu: …" + warning amber khi mode=barcode nhưng thiếu tiền tố. Placeholder + hint + icon đổi theo mode.
+
+---
+
+## Bổ sung: Báo lỗi đơn đã qua công đoạn / đã hoàn thành
+
+- **Công nhân Fulfillment quét 1 đơn KHÔNG phải công đoạn mình** (đã sang stage sau / đã hoàn thành): `FulfillmentScanActionDialog` giờ hiện nút **"Báo lỗi đơn này"** cả khi không phải task của họ → mở `OrderErrorScanDialog`.
+- `OrderErrorScanDialog`:
+  - Đơn **đã hoàn thành fulfillment** (`fulfillmentCompletedAt`, `currentFulfillmentStage=null`) → vẫn chọn được công đoạn đích (furthest=Pack → In..May xuất); báo về sẽ **mở lại đơn + làm lại từ công đoạn đã chọn**.
+  - Gộp về **1 lần** `setProductionError({code, source, note, target})` — bỏ lệnh `fulfillment.transition` riêng (né stage-guard). `target` = FulfillmentStage → BE `buildFulfillmentReworkBack` (làm lại toàn chuỗi); `designer`/`tool-check` vẫn source-driven.

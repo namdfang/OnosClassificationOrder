@@ -629,8 +629,12 @@ export class OrderService implements OnModuleInit {
         });
         break;
       case 'watching': {
+        // Stage-scoped (KHÔNG lọc theo byUserId): mọi người đang giữ công đoạn
+        // này (cùng xưởng — scope factory ở caller) đều thấy đơn đã đẩy về từ
+        // công đoạn này, kể cả người báo là người khác / đã đổi ca.
+        void userId;
         filter.fulfillmentTimeline = {
-          $elemMatch: { stage: stg, action: 'rework-back', byUserId: userId ?? '__no_user__' },
+          $elemMatch: { stage: stg, action: 'rework-back' },
         };
         // Chỉ giữ khi đơn đang ở stage TRƯỚC stg (chưa quay lại) HOẶC designer
         // đang sửa. KHÔNG dùng `!= stg` (đơn đã quay về + làm xong + đẩy tiếp ra
@@ -747,6 +751,82 @@ export class OrderService implements OnModuleInit {
       byUserId: userId,
       byUserName: ctx?.user?.fullName,
       at: new Date(),
+      reworkTarget: target,
+      reason: reason ? reason.slice(0, 500) : undefined,
+    };
+    return { set, timelineEntry };
+  }
+
+  /**
+   * Báo lỗi toàn cục + đẩy đơn về 1 công đoạn fulfillment TRƯỚC (kể cả khi đơn đã
+   * đi qua công đoạn người báo, hoặc đã hoàn thành fulfillment). Generalize
+   * `buildDesignerReworkBackFromError` cho target là FulfillmentStage.
+   *
+   * Nguyên tắc (quyết định #4 — làm lại toàn chuỗi):
+   *  - `furthest` = vị trí xa nhất đơn từng tới = currentFulfillmentStage, hoặc
+   *    Pack nếu đã completed (`fulfillmentCompletedAt`), hoặc Print nếu chưa vào.
+   *  - target PHẢI < furthest (chỉ lùi). target + mọi stage giữa (target, furthest]
+   *    → `rework` + reworkCount++ + reworkFromStage=reporterStage.
+   *  - `currentFulfillmentStage = target`; clear `fulfillmentCompletedAt` nếu reopen.
+   *  - reporterStage cho timeline = user.fulfillmentStage ?? furthest → tab
+   *    "Đang chờ quay lại" của công đoạn đó (Phase 2 — stage-scoped) thấy đơn.
+   *
+   * Trả `null` khi thiếu user context hoặc target không hợp lệ (>= furthest).
+   */
+  private buildFulfillmentReworkBack(
+    before: unknown,
+    target: FulfillmentStage,
+    reason: string | null,
+    ctx?: AuditContext,
+  ): { set: Record<string, unknown>; timelineEntry: FulfillmentTimelineEntry } | null {
+    const b = before as {
+      currentFulfillmentStage?: string | null;
+      fulfillmentCompletedAt?: Date | null;
+      fulfillmentStages?: Record<string, { status?: string; reworkCount?: number } | undefined>;
+    };
+    const userId = ctx?.user?._id ? String(ctx.user._id) : undefined;
+    if (!userId) return null;
+
+    const current = (b.currentFulfillmentStage || undefined) as FulfillmentStage | undefined;
+    const furthest: FulfillmentStage =
+      current ?? (b.fulfillmentCompletedAt ? FulfillmentStage.Pack : FulfillmentStage.Print);
+    const targetIdx = FULFILLMENT_STAGE_ORDER[target];
+    const furthestIdx = FULFILLMENT_STAGE_ORDER[furthest];
+    // Chỉ lùi. Nếu đơn chưa vào pipeline (furthest=Print) và target=Print → không
+    // có gì để lùi → bỏ qua (caller vẫn set productionError bình thường).
+    if (targetIdx >= furthestIdx) return null;
+
+    const now = new Date();
+    const set: Record<string, unknown> = {
+      currentFulfillmentStage: target,
+      readyForFulfill: false,
+    };
+    // Reopen đơn đã hoàn thành.
+    if (b.fulfillmentCompletedAt) set.fulfillmentCompletedAt = null;
+
+    // target + các stage giữa (target, furthest] → rework (làm lại toàn chuỗi).
+    for (let i = targetIdx; i <= furthestIdx; i += 1) {
+      const st = FULFILLMENT_STAGES[i]!;
+      const prev = b.fulfillmentStages?.[st] ?? {};
+      set[`fulfillmentStages.${st}.status`] = FulfillmentStageStatus.Rework;
+      set[`fulfillmentStages.${st}.reworkAt`] = now;
+      set[`fulfillmentStages.${st}.reworkFromStage`] = furthest;
+      set[`fulfillmentStages.${st}.reworkReason`] = reason ? reason.slice(0, 500) : undefined;
+      set[`fulfillmentStages.${st}.reworkCount`] = (prev.reworkCount ?? 0) + 1;
+    }
+
+    // reporterStage = công đoạn user đang giữ (nếu có) để watch; nếu không (admin
+    // /support quét) → dùng furthest (điểm bị chặn xa nhất) để có stage watch.
+    const reporterStage = ((ctx?.user as { fulfillmentStage?: FulfillmentStage } | undefined)
+      ?.fulfillmentStage ?? furthest) as FulfillmentStage;
+    const timelineEntry: FulfillmentTimelineEntry = {
+      stage: reporterStage,
+      action: FulfillmentTransitionAction.ReworkBack,
+      fromStatus: FulfillmentStageStatus.Done,
+      toStatus: FulfillmentStageStatus.Rework,
+      byUserId: userId,
+      byUserName: ctx?.user?.fullName,
+      at: now,
       reworkTarget: target,
       reason: reason ? reason.slice(0, 500) : undefined,
     };
@@ -5748,6 +5828,27 @@ export class OrderService implements OnModuleInit {
     // Lỗi loại 'tool-check' → đẩy về Support (không đụng designerStatus).
     if (finalSource === 'tool-check' && this.canReworkBackToSupport(before)) {
       const rb = this.buildDesignerReworkBackFromError(before, dto.note ?? null, ctx, 'tool-check');
+      if (rb) {
+        Object.assign(patch, rb.set);
+        reworkBackTimelineEntry = rb.timelineEntry;
+      }
+    }
+
+    // Báo lỗi toàn cục: đẩy đơn về 1 công đoạn fulfillment TRƯỚC (kể cả đơn đã đi
+    // qua công đoạn người báo / đã hoàn thành). Chỉ fire khi target là 1 stage
+    // hợp lệ và chưa dựng rework-back từ nhánh designer/tool-check ở trên.
+    if (
+      dto.code &&
+      !reworkBackTimelineEntry &&
+      dto.target &&
+      FULFILLMENT_STAGES.includes(dto.target as FulfillmentStage)
+    ) {
+      const rb = this.buildFulfillmentReworkBack(
+        before,
+        dto.target as FulfillmentStage,
+        dto.note ?? null,
+        ctx,
+      );
       if (rb) {
         Object.assign(patch, rb.set);
         reworkBackTimelineEntry = rb.timelineEntry;

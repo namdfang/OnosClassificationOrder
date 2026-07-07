@@ -630,8 +630,10 @@ export class FulfillmentTaskService {
           ],
         });
       case 'watching': {
-        // Đơn worker (userId) đã từng rework-back, đang chờ quay lại.
-        // Match: timeline có entry stage=mineStage + action=rework-back + byUserId=userId
+        // Đơn đã từng rework-back TỪ công đoạn này, đang chờ quay lại.
+        // Match: timeline có entry stage=mineStage + action=rework-back (KHÔNG lọc
+        // byUserId — stage-scoped: mọi người giữ công đoạn này trong xưởng đều thấy,
+        // kể cả người báo là người khác / đã đổi ca)
         // VÀ đơn đang ở stage TRƯỚC stage mình (đang được xử lý lại phía trên,
         // CHƯA quay về mình) HOẶC designerStatus=rework (designer đang sửa).
         //
@@ -640,13 +642,13 @@ export class FulfillmentTaskService {
         // (currentStage > stage) → đơn kẹt vĩnh viễn ở "Đang chờ quay lại" (kể cả
         // khi đơn hoàn thành hẳn, currentStage=null vẫn != stage). Dùng "$in các
         // stage trước" để chỉ giữ khi đơn thực sự chưa quay lại.
+        void userId;
         const earlierStages = FULFILLMENT_STAGES.slice(0, FULFILLMENT_STAGES.indexOf(stage));
         return mergeWithFactoryOr(base, {
           fulfillmentTimeline: {
             $elemMatch: {
               stage,
               action: FulfillmentTransitionAction.ReworkBack,
-              byUserId: userId,
             },
           },
           $or: [

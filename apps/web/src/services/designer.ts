@@ -214,6 +214,45 @@ const errorStats = (params: { from?: string; to?: string } = {}) => {
   return callApi(`/${CONFIG.API_VERSION}/orders/error-stats${suffix}`, 'get');
 };
 
+const personErrorOverview = (
+  params: { from?: string; to?: string; days?: number; factoryId?: string } = {},
+) => {
+  const qs = new URLSearchParams();
+  if (params.from) qs.set('from', params.from);
+  if (params.to) qs.set('to', params.to);
+  if (params.days) qs.set('days', String(params.days));
+  if (params.factoryId) qs.set('factoryId', params.factoryId);
+  const suffix = qs.toString() ? `?${qs.toString()}` : '';
+  return callApi(`/${CONFIG.API_VERSION}/designer/person-error-overview${suffix}`, 'get');
+};
+
+const personErrorOrders = (params: {
+  userId: string;
+  from?: string;
+  to?: string;
+  days?: number;
+}) => {
+  const qs = new URLSearchParams();
+  qs.set('userId', params.userId);
+  if (params.from) qs.set('from', params.from);
+  if (params.to) qs.set('to', params.to);
+  if (params.days) qs.set('days', String(params.days));
+  return callApi(`/${CONFIG.API_VERSION}/designer/person-error-orders?${qs.toString()}`, 'get');
+};
+
+const stageErrorDaily = (
+  params: { stage?: string; factoryId?: string; from?: string; to?: string; days?: number } = {},
+) => {
+  const qs = new URLSearchParams();
+  if (params.stage) qs.set('stage', params.stage);
+  if (params.factoryId) qs.set('factoryId', params.factoryId);
+  if (params.from) qs.set('from', params.from);
+  if (params.to) qs.set('to', params.to);
+  if (params.days) qs.set('days', String(params.days));
+  const suffix = qs.toString() ? `?${qs.toString()}` : '';
+  return callApi(`/${CONFIG.API_VERSION}/fulfillment/stage-error-daily${suffix}`, 'get');
+};
+
 export const designer = {
   listTeam,
   createMember,
@@ -238,4 +277,7 @@ export const designer = {
   productBreakdown,
   toolCheckOverview,
   errorStats,
+  personErrorOverview,
+  personErrorOrders,
+  stageErrorDaily,
 };

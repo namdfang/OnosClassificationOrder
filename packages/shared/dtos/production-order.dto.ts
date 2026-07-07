@@ -746,6 +746,15 @@ export const SetProductionErrorZod = z.object({
   source: z.enum(['designer', 'factory', 'tool-check']).optional(),
   /** Required khi code='other' (BE validate). */
   note: z.string().max(500).optional(),
+  /**
+   * Đẩy đơn về công đoạn khi báo lỗi (báo lỗi toàn cục qua quét). Cho phép báo
+   * lỗi đơn ĐÃ đi qua công đoạn mình / đã hoàn thành fulfillment.
+   *  - 'designer' / 'tool-check': theo luồng source-driven (đã xử lý qua `source`).
+   *  - 1 FulfillmentStage: đẩy về stage đó + làm lại toàn chuỗi tới vị trí xa nhất.
+   */
+  target: z
+    .union([z.literal('designer'), z.literal('tool-check'), FulfillmentStageZod])
+    .optional(),
 });
 export class SetProductionErrorDto extends createZodDto(extendApi(SetProductionErrorZod)) {}
 
