@@ -373,11 +373,12 @@ export const GetProductionOrdersZod = PageQueryZod.extend({
    * (mặc định print). `watching` cần userId (= assignee context) để elemMatch
    * timeline rework-back của chính user.
    *   waiting / in-progress / rework — currentFulfillmentStage = stage & status tương ứng.
-   *   done                            — stage đã completedAt + đã rời stage.
+   *   done                            — stage đã completedAt + đã rời stage, KHÔNG dính lỗi (reworkCount=0).
+   *   fixed                           — stage đã completedAt + đã rời stage, TỪNG bị đẩy về (reworkCount>0) = "Đã sửa".
    *   watching                        — user đã rework-back, đang chờ quay lại.
    */
   fulfillmentStatus: z
-    .enum(['waiting', 'in-progress', 'rework', 'done', 'watching'])
+    .enum(['waiting', 'in-progress', 'rework', 'done', 'fixed', 'watching'])
     .optional(),
 
   // Date range on `orderAt` — thời gian khách lên đơn (yyyy-mm-dd). Tên giữ
@@ -422,6 +423,7 @@ export const FulfillmentStatusCountsResZod = ResZod.extend({
     inProgress: z.number(),
     rework: z.number(),
     done: z.number(),
+    fixed: z.number(),
     watching: z.number(),
   }),
 });
@@ -1154,6 +1156,8 @@ export const FULFILLMENT_TASK_TABS = [
   'in-progress',
   'rework',
   'done',
+  /** Đã hoàn thành stage này NHƯNG từng bị đẩy về (reworkCount>0) = "Đã sửa". Tách khỏi `done`. */
+  'fixed',
   'watching',
   /**
    * Đơn đã `readyForFulfill=true` nhưng chưa được gán vào Designer
@@ -1204,12 +1208,14 @@ export class GetFulfillmentDailyOverviewDto extends createZodDto(
  *   done      = status 'done'
  *   remaining = status waiting/in-progress
  *   rework    = status 'rework' (stage sau đẩy về, lỗi cần sửa)
+ *   fixed     = status 'done' MÀ reworkCount>0 (đã hoàn thành sau khi sửa lỗi)
  */
 export const FulfillmentStageMetricZod = z.object({
   arrived: z.number().int().nonnegative(),
   done: z.number().int().nonnegative(),
   remaining: z.number().int().nonnegative(),
   rework: z.number().int().nonnegative(),
+  fixed: z.number().int().nonnegative(),
 });
 export type FulfillmentStageMetric = z.infer<typeof FulfillmentStageMetricZod>;
 
@@ -1234,6 +1240,8 @@ export const FulfillmentDailyRowZod = z.object({
   designerReceived: z.number().int().nonnegative(),
   designerDone: z.number().int().nonnegative(),
   designerRework: z.number().int().nonnegative(),
+  /** designerStatus === 'done' MÀ designerReworkCount>0 = "Đã sửa". */
+  designerFixed: z.number().int().nonnegative(),
   stages: z.record(z.string(), FulfillmentStageMetricZod),
 });
 export type FulfillmentDailyRow = z.infer<typeof FulfillmentDailyRowZod>;
@@ -1246,6 +1254,8 @@ export const FulfillmentDailyColumnTotalsZod = z.object({
   designerReceived: z.number().int().nonnegative(),
   designerDone: z.number().int().nonnegative(),
   designerRework: z.number().int().nonnegative(),
+  /** designerStatus === 'done' MÀ designerReworkCount>0 = "Đã sửa". */
+  designerFixed: z.number().int().nonnegative(),
   stages: z.record(z.string(), FulfillmentStageMetricZod),
 });
 export type FulfillmentDailyColumnTotals = z.infer<typeof FulfillmentDailyColumnTotalsZod>;
@@ -1271,6 +1281,7 @@ export const GetFulfillmentMyTasksResZod = PageResZod.extend({
     inProgress: z.number(),
     rework: z.number(),
     done: z.number(),
+    fixed: z.number(),
     watching: z.number(),
     unassigned: z.number(),
   }),

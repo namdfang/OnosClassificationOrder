@@ -119,7 +119,7 @@ function stripBarcodePrefix(raw: string): string {
 // Worker fulfillment: 5 columns (waiting / in-progress / rework / done /
 // watching). Admin/Manager: thêm column `unassigned` (đơn chưa được gán
 // Designer — admin gán qua AssignDesignerDialog).
-type ColKey = 'waiting' | 'in-progress' | 'rework' | 'done' | 'watching' | 'unassigned';
+type ColKey = 'waiting' | 'in-progress' | 'rework' | 'done' | 'fixed' | 'watching' | 'unassigned';
 
 type Columns = Record<ColKey, ProductionOrder[]>;
 
@@ -128,11 +128,19 @@ const EMPTY_COLS: Columns = {
   'in-progress': [],
   rework: [],
   done: [],
+  fixed: [],
   watching: [],
   unassigned: [],
 };
 
-const WORKER_COL_ORDER: ColKey[] = ['waiting', 'in-progress', 'rework', 'done', 'watching'];
+const WORKER_COL_ORDER: ColKey[] = [
+  'waiting',
+  'in-progress',
+  'rework',
+  'done',
+  'fixed',
+  'watching',
+];
 const ADMIN_COL_ORDER: ColKey[] = ['unassigned', ...WORKER_COL_ORDER];
 
 type BulkAction = 'start' | 'complete';
@@ -173,6 +181,13 @@ const COL_META: Record<
     icon: CheckCircle2,
     accent: 'border-emerald-300 dark:border-emerald-700',
     kpiAccent: 'text-emerald-600',
+    bulk: [],
+  },
+  fixed: {
+    label: 'Đã sửa',
+    icon: CheckCircle2,
+    accent: 'border-teal-300 dark:border-teal-700',
+    kpiAccent: 'text-teal-600',
     bulk: [],
   },
   watching: {
@@ -374,11 +389,12 @@ function FulfillmentKanbanView() {
       const adminUnassignedPromise = isOverrideRole
         ? RepositoryRemote.fulfillment.myTasks({ tab: 'unassigned', size: 5000, ...dateParams })
         : Promise.resolve({ data: { data: [] } });
-      const [w, ip, rw, dn, wt, un] = await Promise.all([
+      const [w, ip, rw, dn, fx, wt, un] = await Promise.all([
         RepositoryRemote.fulfillment.myTasks({ tab: 'waiting', size: 5000, ...dateParams }),
         RepositoryRemote.fulfillment.myTasks({ tab: 'in-progress', size: 5000, ...dateParams }),
         RepositoryRemote.fulfillment.myTasks({ tab: 'rework', size: 5000, ...dateParams }),
         RepositoryRemote.fulfillment.myTasks({ tab: 'done', size: 5000, ...dateParams }),
+        RepositoryRemote.fulfillment.myTasks({ tab: 'fixed', size: 5000, ...dateParams }),
         RepositoryRemote.fulfillment.myTasks({ tab: 'watching', size: 5000, ...dateParams }),
         adminUnassignedPromise,
       ]);
@@ -387,6 +403,7 @@ function FulfillmentKanbanView() {
         'in-progress': ip.data.data ?? [],
         rework: rw.data.data ?? [],
         done: dn.data.data ?? [],
+        fixed: fx.data.data ?? [],
         watching: wt.data.data ?? [],
         unassigned: un.data.data ?? [],
       });
@@ -472,6 +489,7 @@ function FulfillmentKanbanView() {
       'in-progress': apply(columns['in-progress']),
       rework: apply(columns.rework),
       done: apply(columns.done),
+      fixed: apply(columns.fixed),
       watching: apply(columns.watching),
       unassigned: apply(columns.unassigned),
     };
@@ -632,6 +650,7 @@ function FulfillmentKanbanView() {
       'in-progress': [],
       rework: [],
       done: [],
+      fixed: [],
       watching: [],
       unassigned: [],
     };
@@ -728,6 +747,7 @@ function FulfillmentKanbanView() {
     'in-progress': filteredColumns['in-progress'].length,
     rework: filteredColumns.rework.length,
     done: filteredColumns.done.length,
+    fixed: filteredColumns.fixed.length,
     watching: filteredColumns.watching.length,
     unassigned: filteredColumns.unassigned.length,
   };
@@ -762,8 +782,8 @@ function FulfillmentKanbanView() {
         {/* KPI */}
         <div className={cn(
           'grid gap-2',
-          colOrder.length === 5
-            ? 'grid-cols-2 md:grid-cols-3 xl:grid-cols-5'
+          colOrder.length === 7
+            ? 'grid-cols-2 md:grid-cols-4 xl:grid-cols-7'
             : 'grid-cols-2 md:grid-cols-3 xl:grid-cols-6',
         )}>
           {colOrder.map((k) => (
@@ -924,12 +944,12 @@ function FulfillmentKanbanView() {
           onPickDay={toggleDay}
         />
 
-        {/* Kanban — 5 cột worker / 6 cột admin */}
+        {/* Kanban — 6 cột worker / 7 cột admin */}
         <DndContext sensors={sensors} onDragStart={handleDragStart} onDragEnd={handleDragEnd}>
           <div className={cn(
             'grid gap-3',
-            colOrder.length === 5
-              ? 'grid-cols-1 md:grid-cols-2 xl:grid-cols-5'
+            colOrder.length === 7
+              ? 'grid-cols-1 md:grid-cols-2 xl:grid-cols-7'
               : 'grid-cols-1 md:grid-cols-2 xl:grid-cols-6',
           )}>
             {colOrder.map((key) => (
@@ -1262,7 +1282,7 @@ function Column({
     });
 
   // Cột done không có checkbox (đã xong rồi — không có bulk action).
-  const showCheckbox = colKey !== 'done';
+  const showCheckbox = colKey !== 'done' && colKey !== 'fixed';
 
   return (
     <div

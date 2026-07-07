@@ -34,7 +34,7 @@ import { Hint } from '@/components/common/Hint';
  *   - Time stamp + reworkCount + productionErrorNote layout y hệt.
  *   - Type / size / color line.
  */
-type ColKey = 'waiting' | 'in-progress' | 'rework' | 'done' | 'watching' | 'unassigned';
+type ColKey = 'waiting' | 'in-progress' | 'rework' | 'done' | 'fixed' | 'watching' | 'unassigned';
 
 export interface FulfillmentTaskCardProps {
   order: ProductionOrder;

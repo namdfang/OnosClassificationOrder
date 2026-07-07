@@ -16,6 +16,7 @@ const EMERALD = 'text-emerald-600 dark:text-emerald-400';
 const AMBER = 'text-amber-600 dark:text-amber-400';
 const RED = 'text-red-600 dark:text-red-400';
 const INDIGO = 'text-indigo-600 dark:text-indigo-400';
+const TEAL = 'text-teal-600 dark:text-teal-400';
 const MUTED = 'text-muted-foreground';
 
 /** Nguồn số liệu 1 cột — dùng chung cho 1 ngày và cột "Tổng" (cùng shape). */
@@ -35,6 +36,7 @@ const EMPTY_TOTALS: FulfillmentDailyColumnTotals = {
   designerReceived: 0,
   designerDone: 0,
   designerRework: 0,
+  designerFixed: 0,
   stages: {},
 };
 
@@ -246,9 +248,22 @@ export function PipelineDailyOverview({
         indent: true,
         tone: 'highlight',
         showZero: true,
-        single: (m) => m.designerDone,
+        single: (m) => Math.max(0, m.designerDone - m.designerFixed),
         singleCls: EMERALD,
-        tip: (m, d) => `${d} · Designer / Đã xong: ${m.designerDone} — designerStatus 'done'`,
+        tip: (m, d) =>
+          `${d} · Designer / Đã xong: ${Math.max(0, m.designerDone - m.designerFixed)} — ` +
+          `hoàn thành KHÔNG dính lỗi (đã trừ ${m.designerFixed} đơn đã sửa)`,
+      });
+      list.push({
+        key: 'designer-fixed',
+        label: 'Đã sửa',
+        indent: true,
+        tone: 'highlight',
+        showZero: true,
+        single: (m) => m.designerFixed,
+        singleCls: TEAL,
+        tip: (m, d) =>
+          `${d} · Designer / Đã sửa: ${m.designerFixed} — hoàn thành SAU KHI sửa lỗi (designerReworkCount>0)`,
       });
       list.push({
         key: 'designer-remaining',
@@ -314,10 +329,22 @@ export function PipelineDailyOverview({
           indent: true,
           tone: 'highlight',
           showZero: true,
-          single: (m) => m.stages[st]?.done ?? 0,
+          single: (m) => Math.max(0, (m.stages[st]?.done ?? 0) - (m.stages[st]?.fixed ?? 0)),
           singleCls: EMERALD,
           tip: (m, d) =>
-            `${d} · ${label} / Đã làm: ${m.stages[st]?.done ?? 0} — đã hoàn thành công đoạn (status done, đã chuyển tiếp)`,
+            `${d} · ${label} / Đã làm: ${Math.max(0, (m.stages[st]?.done ?? 0) - (m.stages[st]?.fixed ?? 0))} — ` +
+            `hoàn thành KHÔNG dính lỗi (đã trừ ${m.stages[st]?.fixed ?? 0} đơn đã sửa)`,
+        });
+        list.push({
+          key: `${st}-fixed`,
+          label: 'Đã sửa',
+          indent: true,
+          tone: 'highlight',
+          showZero: true,
+          single: (m) => m.stages[st]?.fixed ?? 0,
+          singleCls: TEAL,
+          tip: (m, d) =>
+            `${d} · ${label} / Đã sửa: ${m.stages[st]?.fixed ?? 0} — hoàn thành SAU KHI công đoạn từng bị đẩy về (reworkCount>0)`,
         });
         list.push({
           key: `${st}-remaining`,

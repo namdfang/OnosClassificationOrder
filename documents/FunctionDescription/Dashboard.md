@@ -97,7 +97,7 @@ Layout (thứ tự render trên tab: **Bộ lọc chung → Tổng quan N ngày 
 |-----|-------|
 | # | Rank |
 | Designer | fullName + email |
-| Cần làm / Đang làm / Đã xong | Snapshot count theo `designerStatus` hiện tại (Đã xong filter trong period) |
+| Cần làm / Đang làm / Đã xong / **Đã sửa** | Snapshot count theo `designerStatus`; **Đã xong** = `completedInPeriod − fixedInPeriod` (hoàn thành không lỗi trong period); **Đã sửa** (`fixedInPeriod`, teal) = hoàn thành sau khi sửa lỗi (`designerReworkCount>0`) |
 | Trả (hiện) / L.lại (hiện) | Snapshot — task đang ở status rejected/rework |
 | **Tổng trả / Tổng l.lại** | **Cumulative** — đếm số LẦN transition tới rejected/rework trong period từ OrderLog (kể cả task đã chuyển trạng thái sau đó) |
 | Avg phản hồi | Trung bình `designerFirstStartedAt − designerAssignedAt` (phút). Fallback `designerStartedAt` cho legacy. |

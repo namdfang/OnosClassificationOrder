@@ -57,14 +57,14 @@ function daysAgoISO(n: number): string {
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
 }
 
-type ColKey = 'assigned' | 'rework' | 'inProgress' | 'done';
+type ColKey = 'assigned' | 'rework' | 'inProgress' | 'done' | 'fixed';
 
 type Columns = Record<ColKey, DesignerTaskCard[]>;
 
-const EMPTY_COLS: Columns = { assigned: [], rework: [], inProgress: [], done: [] };
+const EMPTY_COLS: Columns = { assigned: [], rework: [], inProgress: [], done: [], fixed: [] };
 
-// THỨ TỰ CỘT yêu cầu: Cần làm → Cần làm lại → Đang làm → Đã xong
-const COL_ORDER: ColKey[] = ['assigned', 'rework', 'inProgress', 'done'];
+// THỨ TỰ CỘT yêu cầu: Cần làm → Cần làm lại → Đang làm → Đã xong → Đã sửa
+const COL_ORDER: ColKey[] = ['assigned', 'rework', 'inProgress', 'done', 'fixed'];
 
 const COL_META: Record<
   ColKey,
@@ -92,6 +92,14 @@ const COL_META: Record<
     label: 'Đã xong',
     status: DesignerStatus.Done,
     accent: 'border-emerald-300 dark:border-emerald-700',
+    bulk: [],
+  },
+  // "Đã sửa" = done nhưng từng bị báo lỗi (designerReworkCount>0). Terminal, không
+  // phải drop target (guard trong planTransition). status giữ Done cho hợp kiểu.
+  fixed: {
+    label: 'Đã sửa',
+    status: DesignerStatus.Done,
+    accent: 'border-teal-300 dark:border-teal-700',
     bulk: [],
   },
 };
@@ -131,6 +139,8 @@ function planTransition(
   from: DesignerStatus,
   to: ColKey,
 ): { action: DesignerTransitionAction; needsReason?: boolean } | null {
+  // "Đã sửa" là cột thống kê (terminal) — không cho kéo thả vào.
+  if (to === 'fixed') return null;
   const target = COL_META[to].status;
   if (target === from) return null;
   if (target === DesignerStatus.InProgress) {
@@ -328,7 +338,13 @@ export default function MyTasksPage() {
   // Cho mỗi cột → ordered array của id (sau khi đã group by type, để
   // shift+click visual order khớp với DOM order).
   const orderedIdsPerColumn = useMemo(() => {
-    const out: Record<ColKey, string[]> = { assigned: [], rework: [], inProgress: [], done: [] };
+    const out: Record<ColKey, string[]> = {
+      assigned: [],
+      rework: [],
+      inProgress: [],
+      done: [],
+      fixed: [],
+    };
     for (const k of COL_ORDER) {
       const groups = groupByType(columns[k]);
       for (const [, rows] of groups) for (const r of rows) out[k].push(r._id);
@@ -459,10 +475,14 @@ export default function MyTasksPage() {
     setColumns((prev) => {
       const card = prev[fromKey].find((c) => c._id === id);
       if (!card) return prev;
+      // Hoàn thành đơn từng bị báo lỗi (reworkCount>0) → vào cột "Đã sửa" thay
+      // vì "Đã xong", khớp với cách BE tách 2 cột (tránh nhấp nháy trước refetch).
+      const destKey: ColKey =
+        to === 'done' && (card.designerReworkCount || 0) > 0 ? 'fixed' : to;
       return {
         ...prev,
         [fromKey]: prev[fromKey].filter((c) => c._id !== id),
-        [to]: [{ ...card, designerStatus: COL_META[to].status }, ...prev[to]],
+        [destKey]: [{ ...card, designerStatus: COL_META[destKey].status }, ...prev[destKey]],
       };
     });
   };
@@ -560,11 +580,16 @@ export default function MyTasksPage() {
 
         {/* KPI */}
         {stats && (
-          <div className="grid grid-cols-2 md:grid-cols-6 gap-2">
+          <div className="grid grid-cols-2 md:grid-cols-7 gap-2">
             <KPI label="Cần làm" value={stats.assignedCount} accent="text-zinc-700 dark:text-zinc-200" />
             <KPI label="Cần làm lại" value={stats.reworkCount} accent="text-amber-600" />
             <KPI label="Đang làm" value={stats.inProgressCount} accent="text-indigo-600" />
-            <KPI label="Đã xong" value={stats.completedInPeriod} accent="text-emerald-600" />
+            <KPI
+              label="Đã xong"
+              value={Math.max(0, stats.completedInPeriod - stats.fixedInPeriod)}
+              accent="text-emerald-600"
+            />
+            <KPI label="Đã sửa" value={stats.fixedInPeriod} accent="text-teal-600" />
             <KPI label="Không làm được" value={stats.rejectedCount} accent="text-rose-600" />
             <KPI
               label="Phản hồi / làm"
@@ -675,15 +700,20 @@ export default function MyTasksPage() {
           />
         </div>
 
-        {/* Kanban — cột rework chỉ render khi có task để dành chỗ cho 3 cột chính */}
+        {/* Kanban — cột "Cần làm lại" + "Đã sửa" chỉ render khi có task (dành chỗ
+            cho các cột chính; KPI vẫn luôn hiện số). */}
         {(() => {
           const visibleCols = COL_ORDER.filter(
-            (k) => k !== 'rework' || columns.rework.length > 0,
+            (k) =>
+              (k !== 'rework' || columns.rework.length > 0) &&
+              (k !== 'fixed' || columns.fixed.length > 0),
           );
-          const gridCls =
-            visibleCols.length === 4
-              ? 'grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-3'
-              : 'grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-3';
+          const gridClsByCount: Record<number, string> = {
+            5: 'grid grid-cols-1 md:grid-cols-2 xl:grid-cols-5 gap-3',
+            4: 'grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-3',
+            3: 'grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-3',
+          };
+          const gridCls = gridClsByCount[visibleCols.length] ?? gridClsByCount[4];
           return (
             <DndContext sensors={sensors} onDragStart={handleDragStart} onDragEnd={handleDragEnd}>
               <div className={gridCls}>

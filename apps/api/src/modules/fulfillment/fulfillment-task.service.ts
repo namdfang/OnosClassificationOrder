@@ -603,12 +603,27 @@ export class FulfillmentTaskService {
       case 'done':
         // Đơn user đã hoàn thành stage này (đã có completedAt) VÀ đơn đã
         // rời stage (currentFulfillmentStage > stage hoặc null nếu pack done).
+        // "Đã xong" = KHÔNG dính lỗi (reworkCount = 0/thiếu) — đơn từng bị đẩy
+        // về (reworkCount>0) tách sang tab 'fixed'.
         // Merge $or qua $and vì base có $or factory scope (factoryId OR
         // originalFactoryId) — spread sẽ overwrite mất, dẫn đến lộ data
         // xưởng khác.
         return mergeWithFactoryOr(base, {
           readyForFulfill: true,
           [`fulfillmentStages.${stage}.completedAt`]: { $exists: true, $ne: null },
+          [`fulfillmentStages.${stage}.reworkCount`]: { $in: [0, null] },
+          $or: [
+            { currentFulfillmentStage: { $ne: stage } },
+            { currentFulfillmentStage: { $in: [null, undefined] } },
+          ],
+        });
+      case 'fixed':
+        // "Đã sửa" = đã hoàn thành stage này SAU KHI stage từng bị đẩy về
+        // (reworkCount>0). Cùng điều kiện 'done' nhưng reworkCount>0.
+        return mergeWithFactoryOr(base, {
+          readyForFulfill: true,
+          [`fulfillmentStages.${stage}.completedAt`]: { $exists: true, $ne: null },
+          [`fulfillmentStages.${stage}.reworkCount`]: { $gt: 0 },
           $or: [
             { currentFulfillmentStage: { $ne: stage } },
             { currentFulfillmentStage: { $in: [null, undefined] } },
@@ -667,21 +682,23 @@ export class FulfillmentTaskService {
     inProgress: number;
     rework: number;
     done: number;
+    fixed: number;
     watching: number;
     unassigned: number;
   }> {
-    const [waiting, inProgress, rework, done, watching, unassigned] = await Promise.all([
+    const [waiting, inProgress, rework, done, fixed, watching, unassigned] = await Promise.all([
       this.orderModel.countDocuments(this.applyTabFilter(base, 'waiting', stage, userId)),
       this.orderModel.countDocuments(this.applyTabFilter(base, 'in-progress', stage, userId)),
       this.orderModel.countDocuments(this.applyTabFilter(base, 'rework', stage, userId)),
       this.orderModel.countDocuments(this.applyTabFilter(base, 'done', stage, userId)),
+      this.orderModel.countDocuments(this.applyTabFilter(base, 'fixed', stage, userId)),
       this.orderModel.countDocuments(this.applyTabFilter(base, 'watching', stage, userId)),
       // Workers không nhìn thấy số unassigned → tiết kiệm 1 countDocuments.
       isOverride
         ? this.orderModel.countDocuments(this.applyTabFilter(base, 'unassigned', stage, userId))
         : Promise.resolve(0),
     ]);
-    return { waiting, inProgress, rework, done, watching, unassigned };
+    return { waiting, inProgress, rework, done, fixed, watching, unassigned };
   }
 
   /**
@@ -735,15 +752,46 @@ export class FulfillmentTaskService {
       },
       designerDone: { $sum: { $cond: [{ $eq: ['$designerStatus', DesignerStatus.Done] }, 1, 0] } },
       designerRework: { $sum: { $cond: [{ $eq: ['$designerStatus', DesignerStatus.Rework] }, 1, 0] } },
+      // "Đã sửa" designer = done MÀ từng bị báo lỗi (designerReworkCount>0).
+      designerFixed: {
+        $sum: {
+          $cond: [
+            {
+              $and: [
+                { $eq: ['$designerStatus', DesignerStatus.Done] },
+                { $gt: [{ $ifNull: ['$designerReworkCount', 0] }, 0] },
+              ],
+            },
+            1,
+            0,
+          ],
+        },
+      },
     };
     // Metric mỗi stage: arrived = từng tới stage (status tồn tại); done/remaining/rework theo status hiện tại.
     for (const st of FULFILLMENT_STAGES) {
       const ref = `$fulfillmentStages.${st}.status`;
+      const reworkCountRef = `$fulfillmentStages.${st}.reworkCount`;
       group[`s_${st}_arrived`] = {
         $sum: { $cond: [{ $ne: [{ $ifNull: [ref, null] }, null] }, 1, 0] },
       };
       group[`s_${st}_done`] = {
         $sum: { $cond: [{ $eq: [ref, FulfillmentStageStatus.Done] }, 1, 0] },
+      };
+      // "Đã sửa" stage = status 'done' MÀ reworkCount>0 (đã hoàn thành sau khi sửa lỗi).
+      group[`s_${st}_fixed`] = {
+        $sum: {
+          $cond: [
+            {
+              $and: [
+                { $eq: [ref, FulfillmentStageStatus.Done] },
+                { $gt: [{ $ifNull: [reworkCountRef, 0] }, 0] },
+              ],
+            },
+            1,
+            0,
+          ],
+        },
       };
       group[`s_${st}_remaining`] = {
         $sum: {
@@ -770,7 +818,13 @@ export class FulfillmentTaskService {
     ]);
     const byDay = new Map(agg.map((r) => [String(r._id), r]));
 
-    const emptyMetric = (): FulfillmentStageMetric => ({ arrived: 0, done: 0, remaining: 0, rework: 0 });
+    const emptyMetric = (): FulfillmentStageMetric => ({
+      arrived: 0,
+      done: 0,
+      remaining: 0,
+      rework: 0,
+      fixed: 0,
+    });
     const columnTotals: FulfillmentDailyColumnTotals = {
       total: 0,
       toolReviewed: 0,
@@ -779,6 +833,7 @@ export class FulfillmentTaskService {
       designerReceived: 0,
       designerDone: 0,
       designerRework: 0,
+      designerFixed: 0,
       stages: Object.fromEntries(FULFILLMENT_STAGES.map((st) => [st, emptyMetric()])),
     };
 
@@ -792,6 +847,7 @@ export class FulfillmentTaskService {
           done: num(`s_${st}_done`),
           remaining: num(`s_${st}_remaining`),
           rework: num(`s_${st}_rework`),
+          fixed: num(`s_${st}_fixed`),
         };
         stages[st] = m;
         const ct = columnTotals.stages[st]!;
@@ -799,6 +855,7 @@ export class FulfillmentTaskService {
         ct.done += m.done;
         ct.remaining += m.remaining;
         ct.rework += m.rework;
+        ct.fixed += m.fixed;
       }
       const row: FulfillmentDailyRow = {
         day,
@@ -809,6 +866,7 @@ export class FulfillmentTaskService {
         designerReceived: num('designerReceived'),
         designerDone: num('designerDone'),
         designerRework: num('designerRework'),
+        designerFixed: num('designerFixed'),
         stages,
       };
       columnTotals.total += row.total;
@@ -818,6 +876,7 @@ export class FulfillmentTaskService {
       columnTotals.designerReceived += row.designerReceived;
       columnTotals.designerDone += row.designerDone;
       columnTotals.designerRework += row.designerRework;
+      columnTotals.designerFixed += row.designerFixed;
       return row;
     });
 

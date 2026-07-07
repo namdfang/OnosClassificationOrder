@@ -127,6 +127,7 @@ export class DesignerStatsService {
           reworkCount: 0,
           rejectedCount: 0,
           completedInPeriod: 0,
+          fixedInPeriod: 0,
           totalRejected: 0,
           totalRework: 0,
           avgResponseMin: 0,
@@ -164,7 +165,15 @@ export class DesignerStatsService {
 
     const completedAgg = new Map<
       string,
-      { responseMs: number; responseN: number; workMs: number; workN: number; reworkSum: number; n: number }
+      {
+        responseMs: number;
+        responseN: number;
+        workMs: number;
+        workN: number;
+        reworkSum: number;
+        n: number;
+        fixedN: number;
+      }
     >();
     for (const o of completedDocs) {
       const uid = (o as { assignee?: string }).assignee;
@@ -176,8 +185,11 @@ export class DesignerStatsService {
         workN: 0,
         reworkSum: 0,
         n: 0,
+        fixedN: 0,
       };
       c.n++;
+      // "Đã sửa" = done trong period MÀ từng bị báo lỗi (designerReworkCount>0).
+      if (((o.designerReworkCount as number) || 0) > 0) c.fixedN++;
       const aAt = o.designerAssignedAt as Date | undefined;
       const sAt = o.designerStartedAt as Date | undefined;
       const fsAt = (o as { designerFirstStartedAt?: Date }).designerFirstStartedAt;
@@ -203,6 +215,7 @@ export class DesignerStatsService {
     for (const [uid, c] of completedAgg) {
       const r = ensureRow(uid);
       r.completedInPeriod = c.n;
+      r.fixedInPeriod = c.fixedN;
       r.avgResponseMin = c.responseN > 0 ? Math.round(c.responseMs / c.responseN / 60000) : 0;
       r.avgWorkMin = c.workN > 0 ? Math.round(c.workMs / c.workN / 60000) : 0;
       r.errorRate = c.n > 0 ? Math.round((c.reworkSum / c.n) * 100) / 100 : 0;

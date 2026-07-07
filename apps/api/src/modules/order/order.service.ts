@@ -576,7 +576,7 @@ export class OrderService implements OnModuleInit {
    */
   private applyFulfillmentStatusFilter(
     filter: Record<string, unknown>,
-    status: 'waiting' | 'in-progress' | 'rework' | 'done' | 'watching',
+    status: 'waiting' | 'in-progress' | 'rework' | 'done' | 'fixed' | 'watching',
     stage?: string,
     userId?: string,
   ): void {
@@ -606,7 +606,21 @@ export class OrderService implements OnModuleInit {
         filter[`fulfillmentStages.${stg}.status`] = FulfillmentStageStatus.Rework;
         break;
       case 'done':
+        // "Đã xong" = hoàn thành KHÔNG dính lỗi (reworkCount=0). Đơn từng bị đẩy
+        // về (reworkCount>0) tách sang 'fixed'.
         filter[`fulfillmentStages.${stg}.completedAt`] = { $exists: true, $ne: null };
+        filter[`fulfillmentStages.${stg}.reworkCount`] = { $in: [0, null] };
+        pushAnd({
+          $or: [
+            { currentFulfillmentStage: { $ne: stg } },
+            { currentFulfillmentStage: { $in: [null, undefined] } },
+          ],
+        });
+        break;
+      case 'fixed':
+        // "Đã sửa" = hoàn thành SAU KHI stage từng bị đẩy về (reworkCount>0).
+        filter[`fulfillmentStages.${stg}.completedAt`] = { $exists: true, $ne: null };
+        filter[`fulfillmentStages.${stg}.reworkCount`] = { $gt: 0 };
         pushAnd({
           $or: [
             { currentFulfillmentStage: { $ne: stg } },
@@ -758,6 +772,7 @@ export class OrderService implements OnModuleInit {
       inProgress: number;
       rework: number;
       done: number;
+      fixed: number;
       watching: number;
     };
   }> {
@@ -769,8 +784,8 @@ export class OrderService implements OnModuleInit {
       fulfillmentFactoryId,
       fulfillmentStage,
     );
-    const statuses = ['waiting', 'in-progress', 'rework', 'done', 'watching'] as const;
-    const [all, waiting, inProgress, rework, done, watching] = await Promise.all([
+    const statuses = ['waiting', 'in-progress', 'rework', 'done', 'fixed', 'watching'] as const;
+    const [all, waiting, inProgress, rework, done, fixed, watching] = await Promise.all([
       // "Tất cả" = tổng đơn theo filter hiện tại (không kèm fulfillmentStatus).
       this.orderModel.countDocuments(base),
       ...statuses.map((s) => {
@@ -783,7 +798,10 @@ export class OrderService implements OnModuleInit {
         return this.orderModel.countDocuments(f);
       }),
     ]);
-    return { success: true, data: { all, waiting, inProgress, rework, done, watching } };
+    return {
+      success: true,
+      data: { all, waiting, inProgress, rework, done, fixed, watching },
+    };
   }
 
   private buildVisibilityFilter(

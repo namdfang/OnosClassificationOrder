@@ -296,7 +296,8 @@ export default function DesignerStatsTab() {
               <TableHead>Designer</TableHead>
               <TableHead className="w-30 text-center" title="Đang chờ làm — snapshot hiện tại">Cần làm</TableHead>
               <TableHead className="w-30 text-center" title="Đang xử lý — snapshot hiện tại">Đang làm</TableHead>
-              <TableHead className="w-30 text-center" title="Đã hoàn thành trong period">Đã xong</TableHead>
+              <TableHead className="w-30 text-center" title="Hoàn thành KHÔNG dính lỗi trong period (đã trừ đơn Đã sửa)">Đã xong</TableHead>
+              <TableHead className="w-30 text-center" title="Hoàn thành SAU KHI sửa lỗi trong period (designerReworkCount>0)">Đã sửa</TableHead>
               <TableHead className="w-30 text-center" title="Đang ở trạng thái không làm được — snapshot">KLĐ (hiện)</TableHead>
               <TableHead className="w-30 text-center" title="Đang ở trạng thái rework — snapshot">L.lại (hiện)</TableHead>
               <TableHead className="w-30 text-center" title="Tổng số lần đã báo không làm được trong period (kể cả đã giao lại sau đó)">Tổng KLĐ</TableHead>
@@ -309,14 +310,14 @@ export default function DesignerStatsTab() {
           <TableBody>
             {loading && leaderboard.length === 0 && (
               <TableRow>
-                <TableCell colSpan={12} className="text-center py-8">
+                <TableCell colSpan={13} className="text-center py-8">
                   <Spinner size={20} className="text-muted-foreground" />
                 </TableCell>
               </TableRow>
             )}
             {!loading && leaderboard.length === 0 && (
               <TableRow>
-                <TableCell colSpan={12} className="text-center py-8 text-sm text-muted-foreground">
+                <TableCell colSpan={13} className="text-center py-8 text-sm text-muted-foreground">
                   Chưa có designer nào hoạt động trong period này.
                 </TableCell>
               </TableRow>
@@ -341,7 +342,10 @@ export default function DesignerStatsTab() {
                     {row.inProgressCount}
                   </TableCell>
                   <TableCell className="text-center font-semibold text-emerald-600 dark:text-emerald-400">
-                    {row.completedInPeriod}
+                    {Math.max(0, row.completedInPeriod - row.fixedInPeriod)}
+                  </TableCell>
+                  <TableCell className="text-center font-semibold text-teal-600 dark:text-teal-400">
+                    {row.fixedInPeriod}
                   </TableCell>
                   <TableCell className="text-center text-rose-600 dark:text-rose-400">
                     {row.rejectedCount}

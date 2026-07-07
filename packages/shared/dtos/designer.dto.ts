@@ -138,7 +138,10 @@ export const MyTasksColumnsZod = z.object({
   assigned: DesignerTaskCardZod.array(),
   inProgress: DesignerTaskCardZod.array(),
   rework: DesignerTaskCardZod.array(),
+  /** Hoàn thành KHÔNG dính lỗi (designerReworkCount = 0). */
   done: DesignerTaskCardZod.array(),
+  /** Hoàn thành SAU KHI sửa lỗi (designerReworkCount > 0) — tách khỏi `done`. */
+  fixed: DesignerTaskCardZod.array(),
 });
 
 export const GetMyTasksResZod = ResZod.extend({
@@ -157,7 +160,11 @@ export const DesignerMyStatsZod = z.object({
   inProgressCount: z.number().int().nonnegative(),
   reworkCount: z.number().int().nonnegative(),
   rejectedCount: z.number().int().nonnegative(),
+  /** Tổng done trong period (gồm cả đã sửa) — giữ nguyên ý nghĩa cũ. */
   completedInPeriod: z.number().int().nonnegative(),
+  /** Done trong period MÀ từng bị báo lỗi (designerReworkCount > 0) = "Đã sửa".
+   *  "Đã xong" thuần = completedInPeriod − fixedInPeriod. */
+  fixedInPeriod: z.number().int().nonnegative(),
   avgResponseMin: z.number().nonnegative(),
   avgWorkMin: z.number().nonnegative(),
   errorRate: z.number().nonnegative(),
@@ -615,6 +622,8 @@ export const DesignerLeaderboardRowZod = z.object({
   reworkCount: z.number().int().nonnegative(),
   rejectedCount: z.number().int().nonnegative(),
   completedInPeriod: z.number().int().nonnegative(),
+  /** Done trong period MÀ từng bị báo lỗi (designerReworkCount > 0) = "Đã sửa". */
+  fixedInPeriod: z.number().int().nonnegative(),
   /** Cumulative — tổng số LẦN đã trả lại TRONG period (đếm event từ OrderLog,
    *  kể cả task đã được re-assign sau đó). */
   totalRejected: z.number().int().nonnegative(),

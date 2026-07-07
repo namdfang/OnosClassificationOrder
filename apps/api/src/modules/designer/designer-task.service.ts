@@ -301,6 +301,7 @@ export class DesignerTaskService {
       inProgress: DesignerTaskCard[];
       rework: DesignerTaskCard[];
       done: DesignerTaskCard[];
+      fixed: DesignerTaskCard[];
     };
     rejected: DesignerTaskCard[];
     userId: string;
@@ -314,28 +315,43 @@ export class DesignerTaskService {
     // định hôm nay). Trước đây chỉ cột "Đã xong" lọc theo `designerCompletedAt`.
     baseFilter.inProductionAt = { $gte: range.start, $lte: range.end };
 
-    const [assignedRaw, inProgressRaw, reworkRaw, doneRaw, rejectedRaw] = await Promise.all([
-      this.orderModel
-        .find({ ...baseFilter, designerStatus: DesignerStatus.Assigned })
-        .sort({ designerAssignedAt: -1, inProductionAt: -1 })
-        .lean(),
-      this.orderModel
-        .find({ ...baseFilter, designerStatus: DesignerStatus.InProgress })
-        .sort({ designerStartedAt: -1, inProductionAt: -1 })
-        .lean(),
-      this.orderModel
-        .find({ ...baseFilter, designerStatus: DesignerStatus.Rework })
-        .sort({ designerReworkAt: -1, inProductionAt: -1 })
-        .lean(),
-      this.orderModel
-        .find({ ...baseFilter, designerStatus: DesignerStatus.Done })
-        .sort({ designerCompletedAt: -1 })
-        .lean(),
-      this.orderModel
-        .find({ ...baseFilter, designerStatus: DesignerStatus.Rejected })
-        .sort({ designerRejectedAt: -1, inProductionAt: -1 })
-        .lean(),
-    ]);
+    const [assignedRaw, inProgressRaw, reworkRaw, doneRaw, fixedRaw, rejectedRaw] =
+      await Promise.all([
+        this.orderModel
+          .find({ ...baseFilter, designerStatus: DesignerStatus.Assigned })
+          .sort({ designerAssignedAt: -1, inProductionAt: -1 })
+          .lean(),
+        this.orderModel
+          .find({ ...baseFilter, designerStatus: DesignerStatus.InProgress })
+          .sort({ designerStartedAt: -1, inProductionAt: -1 })
+          .lean(),
+        this.orderModel
+          .find({ ...baseFilter, designerStatus: DesignerStatus.Rework })
+          .sort({ designerReworkAt: -1, inProductionAt: -1 })
+          .lean(),
+        // "Đã xong" = done KHÔNG dính lỗi (designerReworkCount = 0/thiếu).
+        this.orderModel
+          .find({
+            ...baseFilter,
+            designerStatus: DesignerStatus.Done,
+            designerReworkCount: { $in: [0, null] },
+          })
+          .sort({ designerCompletedAt: -1 })
+          .lean(),
+        // "Đã sửa" = done SAU KHI sửa lỗi (designerReworkCount > 0).
+        this.orderModel
+          .find({
+            ...baseFilter,
+            designerStatus: DesignerStatus.Done,
+            designerReworkCount: { $gt: 0 },
+          })
+          .sort({ designerCompletedAt: -1 })
+          .lean(),
+        this.orderModel
+          .find({ ...baseFilter, designerStatus: DesignerStatus.Rejected })
+          .sort({ designerRejectedAt: -1, inProductionAt: -1 })
+          .lean(),
+      ]);
 
     return {
       columns: {
@@ -343,6 +359,7 @@ export class DesignerTaskService {
         inProgress: inProgressRaw.map(this.toCard),
         rework: reworkRaw.map(this.toCard),
         done: doneRaw.map(this.toCard),
+        fixed: fixedRaw.map(this.toCard),
       },
       rejected: rejectedRaw.map(this.toCard),
       userId,
@@ -638,12 +655,15 @@ export class DesignerTaskService {
     }
 
     const completedInPeriod = completedAgg.length;
+    // "Đã sửa" = done trong period MÀ từng bị báo lỗi (designerReworkCount>0).
+    const fixedInPeriod = completedAgg.filter((o) => (o.designerReworkCount || 0) > 0).length;
     return {
       assignedCount: counts[DesignerStatus.Assigned] || 0,
       inProgressCount: counts[DesignerStatus.InProgress] || 0,
       reworkCount: counts[DesignerStatus.Rework] || 0,
       rejectedCount: counts[DesignerStatus.Rejected] || 0,
       completedInPeriod,
+      fixedInPeriod,
       avgResponseMin: responseN > 0 ? Math.round((responseSumMs / responseN) / 60000) : 0,
       avgWorkMin: workN > 0 ? Math.round((workSumMs / workN) / 60000) : 0,
       errorRate: completedInPeriod > 0 ? Math.round((reworkSum / completedInPeriod) * 100) / 100 : 0,

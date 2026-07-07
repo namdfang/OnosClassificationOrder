@@ -120,15 +120,16 @@ State machine 6 trạng thái:
 
 Login Designer → auto redirect `/my-tasks` (xem `pages/login/index.tsx`).
 
-**Layout kanban 4 cột** theo thứ tự **Cần làm → Cần làm lại → Đang làm → Đã xong**:
-- Cột "Cần làm lại" auto **ẩn** khi rỗng (grid switch `xl:grid-cols-4 ↔ xl:grid-cols-3`)
+**Layout kanban 5 cột** theo thứ tự **Cần làm → Cần làm lại → Đang làm → Đã xong → Đã sửa**:
+- Cột **"Đã xong"** = done KHÔNG dính lỗi (`designerReworkCount = 0`); cột **"Đã sửa"** = done nhưng TỪNG bị báo lỗi rồi hoàn thành (`designerReworkCount > 0`) — 2 cột loại trừ nhau (BE tách sẵn trong `getMyTasks`). Kéo-thả hoàn thành 1 đơn từng bị lỗi → optimistic vào thẳng "Đã sửa".
+- Cột "Cần làm lại" + "Đã sửa" auto **ẩn** khi rỗng (grid switch `xl:grid-cols-5 ↔ 4 ↔ 3`)
 - Mỗi cột group cards theo `type` (sản phẩm), header collapsible với checkbox-all + indeterminate + chevron toggle. **Trong mỗi nhóm sản phẩm sắp xếp theo size ưu tiên XS→S→M→L→XL→2XL→3XL→4XL→5XL** (size giống nhau đứng cạnh nhau) qua `sizeRank()` + `SIZE_ORDER`/`SIZE_ALIAS` trong `groupByType` (sort ổn định, cùng size giữ thứ tự ngày từ BE; size lạ/không có dồn cuối).
 - Mỗi card: thumbnail (click → ImagePreviewDialog), productionId (click → TaskDetailDialog) + **nút copy (`CopyButton`, copy xong hiện dấu tích)**, size/color. **Note kết quả Tool (`toolResultNote`) hiển thị nhỏ ở góc trên cùng bên phải card** (truncate + tooltip) — **resolve label + màu từ `workshop_config` (category `ToolResultNote`) qua `useWorkshopConfigStore`, đồng bộ với `ColorBadgeSelectCell` ở bảng đơn** (badge nền màu config + chữ trắng, hiện `name` thay vì raw code; page gọi `load()` 1 lần để nạp config). Hàng mốc thời gian **dàn ngang full-width dưới mockup** (tiết kiệm khoảng trống): "SX" (`inProductionAt`) + timestamp theo state + "Cập nhật" (`updatedAt`) — mỗi mốc có tooltip (`Hint`) giải thích. (`DesignerTaskCardZod` có `orderAt`/`inProductionAt`/`updatedAt`/`toolResultNote`; mapper `toCard` map từ order doc.)
 - Cards indent `pl-5 border-l-2` so với group header để visualize hierarchy
 - Filter bar: search + 7 `SelectFilter` single-select (Sản phẩm/Loại vải/Máy/Kết quả Tool/**Note kq Tool** = `toolResultNote`/**Khách hàng** = `userSku`/**File sửa lỗi** = `errorFile`) — cross-faceted từ `/my-task-filters`. **Loại vải/Máy/Kết quả Tool/Note kq Tool/File sửa lỗi hiển thị `name`, KHÔNG hiện raw code** — `value` gửi BE vẫn là code. 4 facet scalar resolve qua `useWorkshopConfigStore.byCategory` (helper `labelOpts`); **`errorFile` dùng thẳng `options=filterOptions.errorFile` (không `labelOpts`/`byCategory`)** vì `label`=name đã resolve **NGAY Ở BACKEND** (`getMyTaskFilters` query `workshop_config` category `error_file_type` → `nameMap`, giống `getWorkshopAvailableFilters`). **Pattern y hệt facet `errorFile` trong `OrderTableWorkshop.tsx`.** Backend: `toolResultNote` thêm vào `buildMyTaskFilter` ($in) + facet KEYS trong `getMyTaskFilters`; shared `GetMyTasksZod.toolResultNote` + `GetMyTaskFiltersResZod.data.toolResultNote`.
   - **File sửa lỗi (`errorFile`) — single-select** (field **mảng** `string[]` trên order): chọn 1 mã → đơn khớp qua `filter.errorFile = { $in: [code] }` (mảng chứa mã đó). Lưu 1 code trong `filters.errorFile` (đồng bộ URL param `errorFile` + F5 giữ). Facet count viết aggregate **riêng có `$unwind: '$errorFile'`** (không dùng helper `aggregate()` scalar chung — 1 đơn nhiều loại đếm ở nhiều option ⇒ tổng option có thể > số đơn, đúng). Shared: `GetMyTasksZod.errorFile` + `GetMyTaskFiltersResZod.data.errorFile`. BE: `buildMyTaskFilter` ($in mảng) + `errorFileFacet()` (inject `WorkshopConfigEntity` model, resolve name) trong `getMyTaskFilters`.
   - **⚠️ Data fix (bắt buộc):** legacy `errorFile` lưu **lồng 2 lớp** `[['collar']]` (ghi trước guard `normalizeFieldValue().flat(2)`) làm HỎNG cả facet (`$unwind` 1 lần trả mảng con `['collar']`) lẫn filter (`$in:['collar']` không khớp phần tử mảng) → dropdown hiện `["collar"]` + lọc ra 0. Fix bằng migration flatten trong `OrderService.onModuleInit()` (`updateMany({ errorFile: { $elemMatch: { $type: 'array' } } }, [ $reduce/$concatArrays flatten ])`, idempotent). Migration này **cũng fix filter `errorFile` của `OrderTableWorkshop`** (chung dữ liệu). Cần **restart API** để chạy onModuleInit.
-- KPI 6 ô: Cần làm · Cần làm lại · Đang làm · Đã xong · **Không làm được** · Phản hồi/Làm
+- KPI 7 ô: Cần làm · Cần làm lại · Đang làm · **Đã xong** (`completedInPeriod − fixedInPeriod`) · **Đã sửa** (`fixedInPeriod`, teal) · **Không làm được** · Phản hồi/Làm
 - Period switcher today/7d/30d ảnh hưởng cột "Đã xong" + completed stats
 
 **Multi-select**:
@@ -212,11 +213,11 @@ factoryId?: string                // ref FactoryEntity, REQUIRED khi role=Fulfil
 | POST | `/v1/designer/team/:userId/reset-password` | Admin/Leader | Force password change next login |
 | POST | `/v1/orders/:id/designer-transition` | Designer/Leader/Admin | Body `{ action, reason? }`. State machine race-safe `findOneAndUpdate({ designerStatus: expected })`. Sub-designer chỉ transition task `assignee=user._id` (owner check). Override roles (Admin/Manager/Leader) bypass |
 | POST | `/v1/designer/bulk-transition` | Same | Bulk N task, per-row state machine, skip + report |
-| GET | `/v1/designer/my-tasks` | Designer/Leader/Admin | Kanban 4 cột + rejected drawer. Filter (type, fabricType, machineNumber, toolResult, search); `from`/`to` lọc **cả 4 cột** theo `inProductionAt` (mặc định today) |
+| GET | `/v1/designer/my-tasks` | Designer/Leader/Admin | Kanban 5 cột (`assigned/inProgress/rework/done/fixed`; **done** = reworkCount 0, **fixed** = reworkCount>0) + rejected drawer. Filter (type, fabricType, machineNumber, toolResult, search); `from`/`to` lọc **cả các cột** theo `inProductionAt` (mặc định today) |
 | GET | `/v1/designer/my-task-filters` | Same | Faceted filter options (7 facets: type/fabricType/machineNumber/toolResult/toolResultNote/userSku scalar + **errorFile mảng qua `$unwind`**) cross-narrow + lọc `inProductionAt` |
-| GET | `/v1/designer/my-stats?period=today\|7d\|30d\|custom` | Same | KPI cá nhân (counts + avgResponseMin + avgWorkMin + errorRate) |
+| GET | `/v1/designer/my-stats?period=today\|7d\|30d\|custom` | Same | KPI cá nhân (counts + `completedInPeriod` tổng done + **`fixedInPeriod`** = done reworkCount>0 + avgResponseMin + avgWorkMin + errorRate). "Đã xong" hiển thị = `completedInPeriod − fixedInPeriod` |
 | GET | `/v1/designer/my-daily-breakdown?days=7\|14\|30` | Same | **Breakdown số đơn CỦA USER theo NGÀY vào sản xuất** (`inProductionAt`, tz VN) trong N ngày gần nhất. Focus đơn **chưa xong** (assigned/rework/in-progress) + `done` kèm để đối chiếu. Trả `days[]` (mỗi ngày: assigned/rework/inProgress/done/unfinished + `ageDays`, sort mới→cũ, chỉ ngày có đơn) + `totals` + `rangeDays`. 1 aggregate `$group` theo `{day,status}`. Xem §4.2b. |
-| GET | `/v1/designer/performance?from&to&userId?` | Admin/Manager/Leader/Designer | Leaderboard per-user trong period (incl. totalRejected/totalRework từ OrderLog) |
+| GET | `/v1/designer/performance?from&to&userId?` | Admin/Manager/Leader/Designer | Leaderboard per-user trong period (incl. totalRejected/totalRework từ OrderLog + **`fixedInPeriod`** = done reworkCount>0 → cột "Đã sửa"; "Đã xong" hiển thị = `completedInPeriod − fixedInPeriod`) |
 | GET | `/v1/designer/timeline/:userId?from&to` | Same | Per-day buckets 4 series (assigned/started/completed/rework) cho line chart |
 | GET | `/v1/designer/team-daily-breakdown?days=7\|14\|30` **hoặc** `?from&to` **+ `?type&customer` (optional)** | Admin/Manager/Leader/Designer | **Ma trận MỌI designer × ngày** (`inProductionAt`, tz VN, snapshot lens). Focus 3 trạng thái chưa xong + done kèm. Trả `days[]` + `rows[]` (mỗi designer: `cells[]` đồng bộ index với `days`, `totals`) + `columnTotals[]` + `grandTotals`. Tự include designer 0 đơn. `from/to` (range tùy chỉnh, cap 100 cột; `totals` tính trực tiếp từ agg nên đúng dù cap) cho **biểu đồ "theo designer"**; `days` preset cho ma trận + biểu đồ "theo ngày". **`type` (=`order.type`) + `customer` (=`order.userSku`)** = bộ lọc chung sản phẩm/khách hàng (thêm vào `$match`). Cho tab Dashboard Designer (§0 bộ lọc + §2 ma trận + §2b biểu đồ cột). Xem `Dashboard.md` Tab D. |
 | GET | `/v1/designer/daily-overview?days=7\|14\|30` **hoặc `?from&to`** **+ `?type&customer`** | Admin/Manager/Leader/Designer | **Bảng tổng quan N ngày** (`inProductionAt`, tz VN) — 4 hàng: `total` (mọi đơn) / `unreviewed` (toolResultNote rỗng) / `error` (note ≠ ok, kèm `errorByNote[]`) / `backlog` (designerStatus ≠ done). Kèm `backlogByDesigner[]` (per-designer × assigned/inProgress/rework — **"Không làm được"/rejected KHÔNG tính là tồn**) + `unassignedBacklog` cho bảng con expand hàng Tồn. `type`/`customer` = filter chung. Cho tab Dashboard §0b. Xem `Dashboard.md` Tab D. |
@@ -272,7 +273,7 @@ factoryId?: string                // ref FactoryEntity, REQUIRED khi role=Fulfil
 ### 4.2 `/my-tasks` (Sub-designer)
 Xem 2.3 chi tiết.
 
-**Bảng "Tổng quan theo ngày" (TRÊN "Chi tiết theo ngày"):** `<PipelineDailyOverview lane="designer">` (component dùng chung với Task Fulfillment, xem `FulfillmentWorkflow.md §4.6`). **Funnel TOÀN CỤC** (mọi đơn cả nhà máy, KHÔNG scope assignee — khác `DailyBreakdownPanel` bên dưới vốn chỉ đơn của user) qua endpoint `GET /v1/fulfillment/daily-overview` (auth `OVERVIEW_ROLES` đã gồm Designer). Lane "Designer" bung 4 hàng con: Nhận / Đã xong / Còn lại (`received−done−rework`) / Lỗi cần sửa (`designerRework`). Ăn cùng `dateFrom`/`dateTo`; click 1 ngày → `setDateFrom=setDateTo=day` (thu về đúng ngày, đồng bộ kanban + panel). `reloadToken=breakdownToken` (refetch cùng nhịp). `caption` nhắc phạm vi toàn cục.
+**Bảng "Tổng quan theo ngày" (TRÊN "Chi tiết theo ngày"):** `<PipelineDailyOverview lane="designer">` (component dùng chung với Task Fulfillment, xem `FulfillmentWorkflow.md §4.6`). **Funnel TOÀN CỤC** (mọi đơn cả nhà máy, KHÔNG scope assignee — khác `DailyBreakdownPanel` bên dưới vốn chỉ đơn của user) qua endpoint `GET /v1/fulfillment/daily-overview` (auth `OVERVIEW_ROLES` đã gồm Designer). Lane "Designer" bung 5 hàng con: Nhận / Đã xong (`designerDone−designerFixed`) / **Đã sửa** (`designerFixed`, teal) / Còn lại (`received−done−rework`) / Lỗi cần sửa (`designerRework`). Ăn cùng `dateFrom`/`dateTo`; click 1 ngày → `setDateFrom=setDateTo=day` (thu về đúng ngày, đồng bộ kanban + panel). `reloadToken=breakdownToken` (refetch cùng nhịp). `caption` nhắc phạm vi toàn cục.
 
 **Bộ lọc ngày:** chỉ dùng `<DateRangePicker>` (đã bỏ 3 preset nút Hôm nay/7 ngày/30 ngày). State `dateFrom`/`dateTo` **mặc định 7 ngày gần nhất**, **lưu vào URL params `from`/`to`** (F5 giữ lựa chọn — `useSearchParams`, đọc khi mount + sync khi đổi). Gửi `from`/`to` vào `myTasks` + `myTaskFilters` + `myStats({period:'custom', from, to})`.
 
@@ -387,13 +388,13 @@ Picker designer/factory cho `order.productionErrorSource`. User override đượ
 ### 5.7 Stats aggregation
 
 **`getMyStats`** (sub-designer):
-- snapshot count theo status (current) + completed count trong period
+- snapshot count theo status (current) + completed count trong period + `fixedInPeriod` (completed có reworkCount>0)
 - avgResponseMin: trung bình `designerFirstStartedAt − designerAssignedAt` (fallback `designerStartedAt`)
 - avgWorkMin: trung bình `designerWorkMs` (fallback `(completedAt − startedAt)` cho legacy data)
 
 **`getPerformance`** (leader leaderboard):
 - snapshot count per (assignee, status) → 4 cột (assignedCount, inProgressCount, reworkCount, rejectedCount)
-- completed in period với timestamps + workMs cumulative
+- completed in period với timestamps + workMs cumulative; **`fixedInPeriod`** = subset completed có `designerReworkCount>0` (đếm trong cùng loop completedDocs)
 - Auto-include sub-designer chưa có task (row count 0)
 - `totalRejected` + `totalRework`: aggregate `OrderLog { field='designerStatus', after in [rejected,rework], createdAt in period } → $lookup orders → group by assignee + after`
 

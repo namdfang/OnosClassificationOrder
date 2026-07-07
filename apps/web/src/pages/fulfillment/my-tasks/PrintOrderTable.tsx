@@ -44,6 +44,7 @@ type StatusCounts = {
   inProgress: number;
   rework: number;
   done: number;
+  fixed: number;
   watching: number;
 };
 const EMPTY_COUNTS: StatusCounts = {
@@ -52,6 +53,7 @@ const EMPTY_COUNTS: StatusCounts = {
   inProgress: 0,
   rework: 0,
   done: 0,
+  fixed: 0,
   watching: 0,
 };
 
@@ -62,6 +64,7 @@ const STATUS_TABS: Array<{ value: string; label: string; countKey: keyof StatusC
   { value: 'in-progress', label: 'Đang làm', countKey: 'inProgress', accent: 'text-indigo-600' },
   { value: 'rework', label: 'Làm lại', countKey: 'rework', accent: 'text-amber-600' },
   { value: 'done', label: 'Đã xong', countKey: 'done', accent: 'text-emerald-600' },
+  { value: 'fixed', label: 'Đã sửa', countKey: 'fixed', accent: 'text-teal-600' },
   { value: 'watching', label: 'Đang chờ quay lại', countKey: 'watching', accent: 'text-sky-600' },
 ];
 

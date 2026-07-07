@@ -208,6 +208,28 @@ Khác biệt local/server **không phải lúc nào cũng do timezone.** Phiên 
 
 ---
 
+## §6. `packages/shared` — circular barrel import → bundle phình 74× → `Maximum call stack size exceeded` khi load
+
+### Triệu chứng
+- API crash lúc **khởi động** (require-time), stack trace trỏ vào `zod/lib/helpers/util.js` / `zod/lib/locales/en.js` (red herring — zod chỉ là "giọt nước tràn ly"): `RangeError: Maximum call stack size exceeded`.
+- Load được khi `node --stack-size=2000` (>default ~984) → **hữu hạn nhưng quá sâu**, KHÔNG phải đệ quy vô hạn (schema tự tham chiếu).
+
+### Root cause
+- Leaf files trong `packages/shared` (`dtos/*.dto.ts`, `constants/*.ts`, `utils/*.ts`...) import primitives (`IDZod`, `Status`, `BaseEntityZod`...) từ **`'..'` = entry `index.ts`**. Mà `index.ts` `export * from './dtos'` → **cycle: index → dtos → leaf → index**.
+- tsup/esbuild xử lý cycle-qua-ENTRY-point bằng cách **DUP toàn bộ graph** (mỗi symbol có suffix tăng dần: `ProductionOrderZod`, `...Zod2`, ... `...Zod74` — **74 bản copy**). Bundle `dist/index.cjs` phồng ~21MB. Eval 74 lớp lồng nhau lúc require → tràn stack.
+- **Tích lũy âm thầm:** mỗi file mới thêm `from '..'` tăng bội số. Vượt ngưỡng stack lúc nào không biết → **chỉ lộ khi rebuild `shared`** (dist gitignore, mỗi máy build riêng → máy chưa rebuild vẫn chạy dist cũ nhỏ hơn).
+
+### Fix (đã áp 2026-07)
+- Tách **`packages/shared/internal.ts`** = aggregation barrel (6 dòng `export * from './constants'|'./enums'|...|'./dtos'`). `index.ts` chỉ còn `export * from './internal'` (thin entry).
+- Đổi **mọi** leaf import `from '..'` → **`from '../internal'`** (38 files). Leaf giờ import module **NON-entry** → esbuild dedupe cycle về **1 copy**. Bundle: 21MB → **498KB**, `ProductionOrderZod` 74→**1**, load ở default stack OK (1355 exports).
+
+### Rule chung
+- **TUYỆT ĐỐI KHÔNG** `import ... from '..'` (entry) bên trong `packages/shared`. Dùng **`from '../internal'`** (hoặc import file/sub-barrel cụ thể). Import entry từ trong package = tạo cycle-qua-entry → esbuild dup graph.
+- Sau khi thêm file/DTO vào `shared`: `grep -rn "from '\.\.'" packages/shared --include=*.ts | grep -v dist` phải **= 0**.
+- Sanity sau `pnpm --filter shared build`: `grep -c "^var ProductionOrderZod" packages/shared/dist/index.cjs` phải **= 1** (>1 = cycle tái phát) + `node -e "require('./packages/shared/dist/index.cjs')"` không tràn stack.
+
+---
+
 ## Khi nào update file này
 
 - Phát hiện bug pattern cross-cutting (ảnh hưởng > 1 module).
