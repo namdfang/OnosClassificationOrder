@@ -1,4 +1,4 @@
-import React, { useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import { ListChecks, Loader2, Search } from 'lucide-react';
 
 import { Button } from '@/components/ui/button';
@@ -66,6 +66,11 @@ interface BulkProductionIdDialogProps {
   onApply?: (ids: string[]) => void;
   /** mode=lookup: chọn 1 đơn để xem chi tiết/hành trình. */
   onPick?: (productionId: string) => void;
+  /**
+   * Danh sách mã đang áp (nếu có) — seed lại textarea mỗi lần mở modal để user
+   * thấy & sửa những mã đã dán trước đó thay vì ô trống.
+   */
+  initialIds?: string[];
 }
 
 export function BulkProductionIdDialog({
@@ -74,12 +79,23 @@ export function BulkProductionIdDialog({
   mode,
   onApply,
   onPick,
+  initialIds,
 }: BulkProductionIdDialogProps) {
   const [text, setText] = useState('');
   const [loading, setLoading] = useState(false);
   const [rows, setRows] = useState<LookupRow[] | null>(null);
 
   const ids = useMemo(() => parseProductionIds(text), [text]);
+
+  // Mỗi lần mở modal → seed textarea từ danh sách mã đang áp (mode filter). Chỉ
+  // chạy khi `open` chuyển thành true để không đè lên nội dung user đang gõ.
+  useEffect(() => {
+    if (open) {
+      setText(initialIds && initialIds.length ? initialIds.join('\n') : '');
+      setRows(null);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [open]);
 
   const reset = () => {
     setText('');

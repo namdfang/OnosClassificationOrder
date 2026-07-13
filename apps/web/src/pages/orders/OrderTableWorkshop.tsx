@@ -254,6 +254,9 @@ export function OrderTableWorkshop() {
   const [createdTo, setCreatedTo] = useState(() => searchParams.get('wto') || todayISO());
   const [search, setSearch] = useState(() => searchParams.get('wsearch') || '');
   const debouncedSearch = useDebounce(search, 300);
+  // Lọc bulk theo danh sách productionId (modal "Nhiều mã"). Transient — không
+  // sync URL vì danh sách có thể rất dài. Loại trừ nhau với search thường.
+  const [bulkIds, setBulkIds] = useState<string[]>([]);
   const [selected, setSelected] = useState<Set<string>>(new Set());
   /** Anchor cho shift+click range-select. Update mỗi lần user click checkbox. */
   const [lastClickedId, setLastClickedId] = useState<string | null>(null);
@@ -387,6 +390,7 @@ export function OrderTableWorkshop() {
   const buildFilterParams = (): URLSearchParams => {
     const params = new URLSearchParams();
     if (debouncedSearch.trim()) params.set('search', debouncedSearch.trim());
+    if (bulkIds.length) params.set('productionIds', bulkIds.join(','));
     if (filterPrintStatus) params.set('printStatus', filterPrintStatus);
     if (filterToolResultNote) params.set('toolResultNote', filterToolResultNote);
     if (filterAssignee) params.set('assignee', filterAssignee);
@@ -445,6 +449,7 @@ export function OrderTableWorkshop() {
     page,
     pageSize,
     debouncedSearch,
+    bulkIds,
     filterPrintStatus,
     filterToolResultNote,
     filterAssignee,
@@ -768,6 +773,7 @@ export function OrderTableWorkshop() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [
     debouncedSearch,
+    bulkIds,
     createdFrom,
     createdTo,
     filterPrintStatus,
@@ -826,6 +832,15 @@ export function OrderTableWorkshop() {
       onClear: () => { setSearch(''); setPage(1); },
     });
   }
+  if (bulkIds.length) {
+    activeFilters.push({
+      key: 'bulkIds',
+      label: 'Nhiều mã',
+      display: `${bulkIds.length} mã`,
+      color: FILTER_CHIP_COLORS.search,
+      onClear: () => { setBulkIds([]); setPage(1); },
+    });
+  }
   if (!isDefaultDate) {
     activeFilters.push({
       key: 'date',
@@ -838,6 +853,7 @@ export function OrderTableWorkshop() {
 
   const clearAllFilters = () => {
     setSearch('');
+    setBulkIds([]);
     setCreatedFrom(todayISO());
     setCreatedTo(todayISO());
     setFilterFabricType('');
@@ -899,6 +915,7 @@ export function OrderTableWorkshop() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [
     debouncedSearch,
+    bulkIds,
     filterPrintStatus,
     filterToolResultNote,
     filterAssignee,
@@ -939,7 +956,16 @@ export function OrderTableWorkshop() {
             OrderFactoryTab, OrderStatusTab (extract qua <OrderFilterBar>). */}
         <OrderFilterBar
           search={search}
-          onSearchChange={setSearch}
+          onSearchChange={(v) => {
+            setSearch(v);
+            if (v && bulkIds.length) setBulkIds([]); // search thường loại bỏ lọc bulk
+          }}
+          onBulkApply={(ids) => {
+            setSearch(''); // bulk và search thường loại trừ nhau
+            setBulkIds(ids);
+            setPage(1);
+          }}
+          bulkIds={bulkIds}
           createdFrom={createdFrom}
           createdTo={createdTo}
           onDateRangeChange={(f, t) => {

@@ -25,7 +25,7 @@ import { isCancelled } from '@/utils/orderActions';
 import { CancelledBadge } from '@/components/orders/CancelledBadge';
 import { CopyButton } from '@/components/common/CopyButton';
 import { Hint } from '@/components/common/Hint';
-import { BulkProductionIdDialog } from '@/components/orders/BulkProductionIdDialog';
+import { BulkProductionIdDialog, parseProductionIds } from '@/components/orders/BulkProductionIdDialog';
 import { TooltipProvider } from '@/components/ui/tooltip';
 import { SelectFilter } from '@/components/common/SelectFilter';
 import { RepositoryRemote } from '@/services';
@@ -531,6 +531,9 @@ export function ListOrderTab({ refreshKey }: ListOrderTabProps) {
 
   const summaryFilterQs = buildFilterParams().toString();
 
+  // Số mã parse được từ ô search (đếm để hiện badge "N mã" khi tìm nhiều mã).
+  const searchTokenCount = parseProductionIds(search).length;
+
   /** Click cell trong panel → set filter list. */
   const handleSummaryCellClick = (
     userId: string | null,
@@ -560,13 +563,32 @@ export function ListOrderTab({ refreshKey }: ListOrderTabProps) {
 
         <div className="flex items-center justify-between gap-3 flex-wrap">
           <div className="flex items-center gap-2">
-            <Input
-              placeholder="Tìm Production ID, Order ID, SKU, email…"
-              value={search}
-              onChange={(e) => setSearch(e.target.value)}
-              onKeyDown={(e) => e.key === 'Enter' && handleSearch()}
-              className="w-[320px] max-w-full"
-            />
+            <div className="relative">
+              <Input
+                placeholder="Tìm Production ID, Order ID, SKU, email… (dán nhiều mã cách nhau bằng phẩy/khoảng trắng)"
+                value={search}
+                onChange={(e) => setSearch(e.target.value)}
+                onKeyDown={(e) => e.key === 'Enter' && handleSearch()}
+                onPaste={(e) => {
+                  // Dán 1 cột mã (mỗi mã 1 dòng) từ Google Sheets → gộp xuống dòng
+                  // thành khoảng trắng để ô 1 dòng vẫn giữ đủ mã cho BE tách.
+                  const text = e.clipboardData.getData('text');
+                  if (!/[\r\n\t]/.test(text)) return;
+                  e.preventDefault();
+                  const input = e.currentTarget;
+                  const start = input.selectionStart ?? search.length;
+                  const end = input.selectionEnd ?? search.length;
+                  const normalized = text.replace(/[\r\n\t]+/g, ' ').trim();
+                  setSearch(search.slice(0, start) + normalized + search.slice(end));
+                }}
+                className="w-[340px] max-w-full pr-14"
+              />
+              {searchTokenCount > 1 && (
+                <span className="absolute right-2 top-1/2 -translate-y-1/2 text-[11px] font-medium text-primary pointer-events-none">
+                  {searchTokenCount} mã
+                </span>
+              )}
+            </div>
             <Hint content="Tìm nhiều Production ID cùng lúc">
               <Button variant="outline" size="icon" onClick={() => setBulkOpen(true)}>
                 <ListChecks size={16} />
@@ -718,6 +740,7 @@ export function ListOrderTab({ refreshKey }: ListOrderTabProps) {
           onOpenChange={setBulkOpen}
           mode="filter"
           onApply={applyBulk}
+          initialIds={bulkIds}
         />
       </div>
     </TooltipProvider>

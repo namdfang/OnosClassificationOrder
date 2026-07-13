@@ -1048,13 +1048,8 @@ export class OrderService implements OnModuleInit {
       fulfillmentStage,
     );
     if (dto.search) {
-      filter.$or = [
-        { productionId: { $regex: dto.search, $options: 'i' } },
-        { userSku: { $regex: dto.search, $options: 'i' } },
-        { userEmail: { $regex: dto.search, $options: 'i' } },
-        { orderId: { $regex: dto.search, $options: 'i' } },
-        { type: { $regex: dto.search, $options: 'i' } },
-      ];
+      const searchOr = buildSearchOr(dto.search);
+      if (searchOr.length) filter.$or = searchOr;
     }
     if (dto.productionIds) {
       const ids = dto.productionIds
@@ -1958,13 +1953,8 @@ export class OrderService implements OnModuleInit {
     if (dto.machineTypeId) baseMatch.machineTypeId = dto.machineTypeId;
     if (typeof dto.readyForFulfill === 'boolean') baseMatch.readyForFulfill = dto.readyForFulfill;
     if (dto.search) {
-      baseMatch.$or = [
-        { productionId: { $regex: dto.search, $options: 'i' } },
-        { userSku: { $regex: dto.search, $options: 'i' } },
-        { userEmail: { $regex: dto.search, $options: 'i' } },
-        { orderId: { $regex: dto.search, $options: 'i' } },
-        { type: { $regex: dto.search, $options: 'i' } },
-      ];
+      const searchOr = buildSearchOr(dto.search);
+      if (searchOr.length) baseMatch.$or = searchOr;
     }
 
     const startOfToday = vnTodayStart();
@@ -5970,19 +5960,14 @@ export class OrderService implements OnModuleInit {
     }
 
     if (dto.search) {
-      const search = { $regex: dto.search, $options: 'i' };
-      const searchOr: Array<Record<string, unknown>> = [
-        { productionId: search },
-        { userSku: search },
-        { userEmail: search },
-        { orderId: search },
-        { type: search },
-      ];
-      if (filter.$or) {
-        filter.$and = [{ $or: filter.$or }, { $or: searchOr }];
-        delete filter.$or;
-      } else {
-        filter.$or = searchOr;
+      const searchOr = buildSearchOr(dto.search);
+      if (searchOr.length) {
+        if (filter.$or) {
+          filter.$and = [{ $or: filter.$or }, { $or: searchOr }];
+          delete filter.$or;
+        } else {
+          filter.$or = searchOr;
+        }
       }
     }
 
@@ -6543,6 +6528,26 @@ export class OrderService implements OnModuleInit {
 
 function escapeRegex(s: string): string {
   return s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+}
+
+/**
+ * Build `$or` cho ô search đa mã — mirror `BulkProductionIdDialog`: tách theo
+ * xuống dòng / dấu phẩy / khoảng trắng thành nhiều token. Mỗi token match
+ * contains (case-insensitive) trên 5 field `productionId` / `userSku` /
+ * `userEmail` / `orderId` / `type`. Đơn khớp nếu BẤT KỲ token nào khớp BẤT KỲ
+ * field nào → cho phép dán 1 danh sách mã và tìm tất cả cùng lúc.
+ * Trả `[]` khi search rỗng/chỉ khoảng trắng (caller không set `$or`).
+ */
+function buildSearchOr(search: string): Array<Record<string, unknown>> {
+  const tokens = search
+    .split(/[\s,]+/)
+    .map((s) => s.trim())
+    .filter(Boolean);
+  const fields = ['productionId', 'userSku', 'userEmail', 'orderId', 'type'];
+  return tokens.flatMap((tok) => {
+    const rx = { $regex: escapeRegex(tok), $options: 'i' };
+    return fields.map((f) => ({ [f]: rx }));
+  });
 }
 
 function round2(n: number | undefined): number {

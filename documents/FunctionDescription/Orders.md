@@ -51,8 +51,8 @@ Mỗi đơn hàng gồm:
 | List | Card list (không phải table) cho mỗi đơn, pageSize=20 default |
 | Phân trang | Top + bottom (cả 2 chỗ), shadcn `Pagination` |
 | Filter | `isMapped` / `factoryId` / `machineTypeId` / `status` |
-| Search | `productionId`, `userSku`, `userEmail`, `type` (1 từ, regex contains) |
-| Tìm bulk Production ID | Nút icon `ListChecks` cạnh ô search → mở `BulkProductionIdDialog` (mode=`filter`). Dán nhiều mã (mỗi mã 1 dòng / phẩy / khoảng trắng) → "Lọc bảng" → set `bulkIds` (state, **không** sync URL) → param `productionIds` (CSV) khi fetch → bảng chính chỉ còn các mã đó. Badge "Đang lọc N mã ✕" để xoá. Bulk và search thường loại trừ nhau. |
+| Search | `productionId`, `userSku`, `userEmail`, `orderId`, `type` (regex contains, case-insensitive). **Hỗ trợ nhiều mã**: dán/nhập nhiều token cách nhau bằng khoảng trắng / dấu phẩy (paste 1 cột từ Google Sheets → newline tự đổi thành khoảng trắng) → BE tách token qua `buildSearchOr()` → match nếu BẤT KỲ token nào khớp BẤT KỲ field nào (OR). Badge "N mã" hiện trong ô khi parse ra >1 mã. Enter để tìm. |
+| Tìm bulk Production ID | Nút icon `ListChecks` cạnh ô search → mở `BulkProductionIdDialog` (mode=`filter`). Dán nhiều mã (mỗi mã 1 dòng / phẩy / khoảng trắng) → "Lọc bảng" → set `bulkIds` (state, **không** sync URL) → param `productionIds` (CSV, exact match) khi fetch → bảng chính chỉ còn các mã đó. Badge "Đang lọc N mã ✕" để xoá. Khác ô search ở chỗ: dialog match **exact** từng mã (chỉ `productionId`), ô search match **contains** trên 5 field. Bulk và search thường loại trừ nhau. |
 | Preview mockup | Click ảnh → `ImagePreviewDialog` |
 | Preview design | Click thumb design → `ImagePreviewDialog` |
 | Copy URL | CopyButton cho display URL + original URL |
@@ -358,7 +358,8 @@ Ngoài các filter cơ bản (`createdFrom/To`, `factoryId`, `machineTypeId`, `p
 
 | Query param | Format | Mô tả |
 |-------------|--------|-------|
-| `productionIds` | CSV | Bulk lookup — lọc đúng danh sách productionId (exact, case-insensitive qua `$in` regex anchored `^..$`). Dùng bởi `BulkProductionIdDialog`. Build trong `buildOrderListFilter` ngay sau khối `search`. |
+| `search` | string (nhiều token) | Contains-match (case-insensitive) trên `productionId` / `userSku` / `userEmail` / `orderId` / `type`. **Tách đa mã** qua helper module-scope `buildSearchOr(search)` (`order.service.ts`) — split `/[\s,]+/` → mỗi token 5 clause field → 1 flat `$or` (match nếu BẤT KỲ token khớp BẤT KỲ field). Token được escape regex. Dùng chung bởi cả 3 chỗ build search: `buildOrderListFilter` (list + factory), `getWorkshopAvailableFilters` (facet counts), `buildVisibilityFilter`-path (`~L5972`). **FE**: ô search ở `ListOrderTab` (input riêng) + `<OrderFilterBar>` (shared cho `OrderTableWorkshop` / `ErrorLogTab` / `OrderFactoryTab` / `OrderStatusTab`) — `onPaste` chuẩn hoá newline→khoảng trắng để dán 1 cột mã từ Google Sheets, badge "N mã" khi parse ra >1 mã (`parseProductionIds`). |
+| `productionIds` | CSV | Bulk lookup — lọc đúng danh sách productionId (exact, case-insensitive qua `$in` regex anchored `^..$`). Dùng bởi `BulkProductionIdDialog` (mode filter). Build trong `buildOrderListFilter` ngay sau khối `search`. Khác `search`: exact + chỉ `productionId`. |
 | `fabricType` | CSV codes | Lọc theo nhiều fabric. |
 | `originalFactoryId` | CSV IDs | Lọc theo xưởng gốc. |
 | `transferStatus` | token | `transferred` · `pure` · `transferred-in:<factoryId>` · `transferred-out:<factoryId>`. Build `$expr` so sánh `originalFactoryId` vs `factoryId`. |
@@ -546,9 +547,10 @@ Mỗi cell tự đọc `canEditField(field)` từ `usePermission()`:
 ### 10.3 Filter bar
 
 **Đồng bộ via `<OrderFilterBar>` reusable** (`apps/web/src/components/orders/OrderFilterBar.tsx`). Cùng layout dùng ở 4 bảng order: `OrderTableWorkshop` (reference) · `ErrorLogTab` · `OrderFactoryTab` (Dashboard Tab C) · `OrderStatusTab` (Dashboard Tab B). Component:
-- Top row: search input (flex-1) + `<DateRangePicker>` + nút Tải lại + slot `topActionsRight` (view switcher / export / ...).
+- Top row: search input (flex-1) + nút **"Nhiều mã"** (opt-in) + `<DateRangePicker>` + nút Tải lại + slot `topActionsRight` (view switcher / export / ...).
 - Middle row (optional slot `middleRow`): active chip bar / factory chip bar.
 - Facet grid: 2/3/5 cột responsive, mỗi cell `<SelectFilter>` đã gate qua `usePermission().has(perm)` từ `OrderFilterFacet.perm`.
+- **Nút "Nhiều mã"** (prop `onBulkApply`): chỉ hiện khi caller truyền callback. Mở `BulkProductionIdDialog` (mode=`filter`) — dán danh sách mã mỗi dòng 1 mã (hoặc phẩy/khoảng trắng) → trả mảng mã cho caller set param `productionIds`. `OrderTableWorkshop` wire vào state `bulkIds` (transient, không sync URL), thêm chip "Nhiều mã: N mã" vào thanh "Đang lọc", loại trừ nhau với ô search thường (set cái này clear cái kia). Search input cũng tự nhận đa mã khi dán trực tiếp (xem §7.x `search`) — nút modal chỉ tiện cho danh sách dài nhiều dòng.
 
 Mỗi consumer truyền `facets: OrderFilterFacet[]` để cấu hình field set riêng — tránh ép tất cả tab dùng cùng 1 list:
 - `OrderTableWorkshop` — 10 facet workshop chuẩn từ `getWorkshopFilters`.

@@ -1,10 +1,12 @@
 import React from 'react';
-import { RefreshCw, Search } from 'lucide-react';
+import { ListChecks, RefreshCw, Search } from 'lucide-react';
 
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { DateRangePicker } from '@/components/common/DateRangePicker';
+import { Hint } from '@/components/common/Hint';
 import { SelectFilter } from '@/components/common/SelectFilter';
+import { BulkProductionIdDialog, parseProductionIds } from '@/components/orders/BulkProductionIdDialog';
 import { usePermission } from '@/hooks/usePermission';
 import { cn } from '@/utils/cn';
 
@@ -28,6 +30,15 @@ export interface OrderFilterBarProps {
   onSearchChange?: (v: string) => void;
   searchPlaceholder?: string;
 
+  /**
+   * Bật nút "Tìm nhiều mã" cạnh ô search → mở modal dán danh sách Production ID
+   * (mỗi mã 1 dòng / phẩy / khoảng trắng). Trả mảng mã đã parse cho caller lọc
+   * bảng (thường set param `productionIds`). Bỏ trống → không hiện nút.
+   */
+  onBulkApply?: (ids: string[]) => void;
+  /** Danh sách mã đang áp — seed lại modal khi mở để user thấy mã đã dán. */
+  bulkIds?: string[];
+
   /** Date range picker. Để bật, truyền cả `createdFrom`, `createdTo`, `onDateRangeChange`. */
   createdFrom?: string;
   createdTo?: string;
@@ -49,7 +60,8 @@ export interface OrderFilterBarProps {
   className?: string;
 }
 
-const DEFAULT_SEARCH_PLACEHOLDER = 'Tìm Production ID / SKU / Order ID / Type...';
+const DEFAULT_SEARCH_PLACEHOLDER =
+  'Tìm Production ID / SKU / Order ID / Type… (dán nhiều mã cách nhau bằng phẩy/khoảng trắng)';
 
 /**
  * Filter bar chuẩn cho mọi bảng order. Reusable across:
@@ -71,6 +83,8 @@ export function OrderFilterBar({
   search,
   onSearchChange,
   searchPlaceholder = DEFAULT_SEARCH_PLACEHOLDER,
+  onBulkApply,
+  bulkIds,
   createdFrom,
   createdTo,
   onDateRangeChange,
@@ -82,6 +96,10 @@ export function OrderFilterBar({
   className,
 }: OrderFilterBarProps) {
   const { has } = usePermission();
+  const [bulkOpen, setBulkOpen] = React.useState(false);
+
+  // Đếm số mã parse được từ ô search (hiện badge "N mã" khi tìm nhiều mã).
+  const searchTokenCount = search ? parseProductionIds(search).length : 0;
 
   const showSearch = search !== undefined && onSearchChange !== undefined;
   const showDateRange =
@@ -109,9 +127,34 @@ export function OrderFilterBar({
               placeholder={searchPlaceholder}
               value={search}
               onChange={(e) => onSearchChange(e.target.value)}
-              className="pl-7 h-9 text-sm"
+              onPaste={(e) => {
+                // Dán 1 cột mã (mỗi mã 1 dòng) từ Google Sheets → gộp xuống dòng
+                // thành khoảng trắng để ô 1 dòng vẫn giữ đủ mã cho BE tách token.
+                const text = e.clipboardData.getData('text');
+                if (!/[\r\n\t]/.test(text)) return;
+                e.preventDefault();
+                const input = e.currentTarget;
+                const start = input.selectionStart ?? search.length;
+                const end = input.selectionEnd ?? search.length;
+                const normalized = text.replace(/[\r\n\t]+/g, ' ').trim();
+                onSearchChange(search.slice(0, start) + normalized + search.slice(end));
+              }}
+              className={cn('pl-7 h-9 text-sm', searchTokenCount > 1 && 'pr-12')}
             />
+            {searchTokenCount > 1 && (
+              <span className="absolute right-2 top-1/2 -translate-y-1/2 text-[11px] font-medium text-primary pointer-events-none">
+                {searchTokenCount} mã
+              </span>
+            )}
           </div>
+        )}
+        {showSearch && onBulkApply && (
+          <Hint content="Dán danh sách mã (mỗi Production ID một dòng) để lọc bảng">
+            <Button variant="outline" size="sm" onClick={() => setBulkOpen(true)}>
+              <ListChecks size={14} />
+              Nhiều mã
+            </Button>
+          </Hint>
         )}
         <Button variant="outline" size="sm" onClick={onReload} disabled={loading}>
           <RefreshCw size={13} className={loading ? 'animate-spin' : ''} />
@@ -143,6 +186,16 @@ export function OrderFilterBar({
             />
           ))}
         </div>
+      )}
+
+      {onBulkApply && (
+        <BulkProductionIdDialog
+          open={bulkOpen}
+          onOpenChange={setBulkOpen}
+          mode="filter"
+          onApply={onBulkApply}
+          initialIds={bulkIds}
+        />
       )}
     </div>
   );
