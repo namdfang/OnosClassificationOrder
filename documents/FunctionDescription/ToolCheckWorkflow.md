@@ -25,8 +25,11 @@ Bối cảnh: đơn `toolResultNote='ok'` được đẩy thẳng sang In (xem `
 ### 2.2 Support soát lại → đẩy về In
 
 - Support vào bảng `/orders`, **đổi cell "Note kq Tool" → 'ok'** (chỉ cần thao tác này).
-- `toolResultNote='ok'` → marker mất → đơn **tự quay lại tab "Đang chờ" active của In** (filter tự xử lý, không cần flip stage thủ công). `readyForFulfill=true`, `productionFirstErrorAt=null`.
-- `productionErrorSource='tool-check'` **giữ nguyên** (cho thống kê lịch sử); chỉ `toolResultNote` quyết định trạng thái hold.
+- `toolResultNote='ok'` → marker mất → **re-flow CHẠY LẠI TOÀN CHUỖI từ In** (cập nhật 2026-07). `OrderService.updateField` nhận biết `wasToolCheckHold` (marker cũ) → gỡ `productionErrorSource`, `currentFulfillmentStage=Print`:
+  - Đơn **có designer từng làm** (`assignee` + `designerStatus='done'`) → `designerStatus='rework'` → về **Thiết kế** "Cần làm lại" (designer complete → hook Entry A flip In→rework). `readyForFulfill=false` tới khi designer xong.
+  - Đơn **không designer** → `fulfillmentStages.print.status='rework'` → về **In** "Cần làm lại" luôn. `readyForFulfill=true`.
+- Trong lúc chờ Support soát, các công đoạn đã-xong (Thiết kế/In/…) hiển thị **"Đang chờ quay lại"** (positional watching — xem `FulfillmentWorkflow.md §5.3` + `documents/Plans/UpstreamWatching-ReflowChain.md`).
+- ⚠️ **Giới hạn:** re-flow chỉ kích hoạt qua **`updateField`** (sửa cell — bao gồm bulk delegate). Import xlsx "file soát" set 'ok' trên đơn tool-check-hold KHÔNG re-flow (Support nên soát bằng cell).
 
 ### 2.3 Tab Dashboard "Soát tool"
 

@@ -574,6 +574,20 @@ export class OrderService implements OnModuleInit {
    * (bảng trang "In" là admin-view). `watching` cần `userId` để elemMatch
    * timeline rework-back của chính user. Dùng $and để không clobber $or sẵn có.
    */
+  /**
+   * Các clause "đơn đang ở phía TRƯỚC (upstream) fulfillment-stage `stg`".
+   * ⚠️ Mirror với `FulfillmentTaskService.upstreamClauses` (kanban worker). Đơn
+   * upstream khi: tool-check hold / designer rework / đang ở stage fulfillment trước.
+   */
+  private upstreamOfStageClauses(stg: string): Record<string, unknown>[] {
+    const fi = FULFILLMENT_STAGE_ORDER[stg as FulfillmentStage] ?? 0;
+    return [
+      { productionErrorSource: 'tool-check', toolResultNote: 'error' },
+      { designerStatus: 'rework' },
+      { currentFulfillmentStage: { $in: FULFILLMENT_STAGES.slice(0, fi) } },
+    ];
+  }
+
   private applyFulfillmentStatusFilter(
     filter: Record<string, unknown>,
     status: 'waiting' | 'in-progress' | 'rework' | 'done' | 'fixed' | 'watching',
@@ -606,51 +620,31 @@ export class OrderService implements OnModuleInit {
         filter[`fulfillmentStages.${stg}.status`] = FulfillmentStageStatus.Rework;
         break;
       case 'done':
-        // "Đã xong" = hoàn thành KHÔNG dính lỗi (reworkCount=0). Đơn từng bị đẩy
-        // về (reworkCount>0) tách sang 'fixed'.
+        // "Đã xong" (positional) = hoàn thành, reworkCount=0, đơn đang ở phía SAU
+        // (downstream: KHÔNG upstream & không đang ở stage này). Đơn bị đẩy lùi
+        // phía trên → tab "Đang chờ quay lại". Mirror `applyTabFilter`.
         filter[`fulfillmentStages.${stg}.completedAt`] = { $exists: true, $ne: null };
         filter[`fulfillmentStages.${stg}.reworkCount`] = { $in: [0, null] };
-        pushAnd({
-          $or: [
-            { currentFulfillmentStage: { $ne: stg } },
-            { currentFulfillmentStage: { $in: [null, undefined] } },
-          ],
-        });
+        pushAnd({ $nor: [...this.upstreamOfStageClauses(stg), { currentFulfillmentStage: stg }] });
         break;
       case 'fixed':
-        // "Đã sửa" = hoàn thành SAU KHI stage từng bị đẩy về (reworkCount>0).
+        // "Đã sửa" = hoàn thành SAU KHI từng bị đẩy về (reworkCount>0), đơn downstream.
         filter[`fulfillmentStages.${stg}.completedAt`] = { $exists: true, $ne: null };
         filter[`fulfillmentStages.${stg}.reworkCount`] = { $gt: 0 };
-        pushAnd({
-          $or: [
-            { currentFulfillmentStage: { $ne: stg } },
-            { currentFulfillmentStage: { $in: [null, undefined] } },
-          ],
-        });
+        pushAnd({ $nor: [...this.upstreamOfStageClauses(stg), { currentFulfillmentStage: stg }] });
         break;
       case 'watching': {
-        // Stage-scoped (KHÔNG lọc theo byUserId): mọi người đang giữ công đoạn
-        // này (cùng xưởng — scope factory ở caller) đều thấy đơn đã đẩy về từ
-        // công đoạn này, kể cả người báo là người khác / đã đổi ca.
+        // "Đang chờ quay lại" (positional) = ĐÃ làm stage này (completedAt) HOẶC
+        // chính mình báo lỗi (reporter timeline), VÀ đơn đang ở phía TRƯỚC mình
+        // (upstream). Stage-scoped (KHÔNG lọc byUserId). Mirror `applyTabFilter`.
         void userId;
-        filter.fulfillmentTimeline = {
-          $elemMatch: { stage: stg, action: 'rework-back' },
-        };
-        // Chỉ giữ khi đơn đang ở stage TRƯỚC stg (chưa quay lại) HOẶC designer
-        // đang sửa. KHÔNG dùng `!= stg` (đơn đã quay về + làm xong + đẩy tiếp ra
-        // stage sau sẽ kẹt lại vĩnh viễn). Mirror `applyTabFilter` case watching.
-        const earlierStages = FULFILLMENT_STAGES.slice(
-          0,
-          FULFILLMENT_STAGES.indexOf(stg as FulfillmentStage),
-        );
         pushAnd({
           $or: [
-            { currentFulfillmentStage: { $in: earlierStages } },
-            { designerStatus: 'rework' },
-            // Đơn tool-check đang chờ support soát lại (marker source+note).
-            { productionErrorSource: 'tool-check', toolResultNote: 'error' },
+            { [`fulfillmentStages.${stg}.completedAt`]: { $exists: true, $ne: null } },
+            { fulfillmentTimeline: { $elemMatch: { stage: stg, action: 'rework-back' } } },
           ],
         });
+        pushAnd({ $or: this.upstreamOfStageClauses(stg) });
         break;
       }
     }
@@ -729,19 +723,21 @@ export class OrderService implements OnModuleInit {
       (stageState.status as FulfillmentStageStatus) ?? FulfillmentStageStatus.Waiting;
     const set: Record<string, unknown> = {};
     if (!existingStage) {
-      // Khởi tạo subdoc stage Print + set currentFulfillmentStage. Sau khi designer
-      // complete, hook designer-complete (currentFulfillmentStage đã set) sẽ flip
-      // status → rework → đơn vào tab "Cần làm lại".
-      set.currentFulfillmentStage = stage;
-      set[`fulfillmentStages.${stage}`] = {
+      // Chưa vào pipeline → khởi tạo In waiting. Sau khi target (designer/Support)
+      // xong → đơn re-flow từ In.
+      set.currentFulfillmentStage = FulfillmentStage.Print;
+      set['fulfillmentStages.print'] = {
         status: FulfillmentStageStatus.Waiting,
         reworkCount: 0,
         workMs: 0,
         waitingAt: new Date(),
       };
     } else {
-      set[`fulfillmentStages.${stage}.status`] = FulfillmentStageStatus.Waiting;
-      set[`fulfillmentStages.${stage}.reworkCount`] = (stageState.reworkCount ?? 0) + 1;
+      // Đã trong pipeline → RESET về In để CHẠY LẠI TOÀN CHUỖI (In → … → reporter).
+      // GIỮ `completedAt` các stage (lịch sử) — positional watching lo hiển thị
+      // "Đang chờ quay lại"; auto-advance sẽ reworkCount++ khi đơn quay về từng
+      // stage. KHÔNG đụng status stage reporter (đơn đã rời đó).
+      set.currentFulfillmentStage = FulfillmentStage.Print;
     }
     const timelineEntry: FulfillmentTimelineEntry = {
       stage,
@@ -804,16 +800,16 @@ export class OrderService implements OnModuleInit {
     // Reopen đơn đã hoàn thành.
     if (b.fulfillmentCompletedAt) set.fulfillmentCompletedAt = null;
 
-    // target + các stage giữa (target, furthest] → rework (làm lại toàn chuỗi).
-    for (let i = targetIdx; i <= furthestIdx; i += 1) {
-      const st = FULFILLMENT_STAGES[i]!;
-      const prev = b.fulfillmentStages?.[st] ?? {};
-      set[`fulfillmentStages.${st}.status`] = FulfillmentStageStatus.Rework;
-      set[`fulfillmentStages.${st}.reworkAt`] = now;
-      set[`fulfillmentStages.${st}.reworkFromStage`] = furthest;
-      set[`fulfillmentStages.${st}.reworkReason`] = reason ? reason.slice(0, 500) : undefined;
-      set[`fulfillmentStages.${st}.reworkCount`] = (prev.reworkCount ?? 0) + 1;
-    }
+    // CHỈ target → rework (đơn về đó ngay). Các stage giữa (target, furthest] GIỮ
+    // nguyên `done`/`completedAt` (lịch sử) — positional watching cho chúng vào
+    // "Đang chờ quay lại" khi đơn upstream; auto-advance reworkCount++ khi đơn
+    // thực sự quay về từng stage → "chạy lại toàn chuỗi" mà không double-count.
+    const prevTarget = b.fulfillmentStages?.[target] ?? {};
+    set[`fulfillmentStages.${target}.status`] = FulfillmentStageStatus.Rework;
+    set[`fulfillmentStages.${target}.reworkAt`] = now;
+    set[`fulfillmentStages.${target}.reworkFromStage`] = furthest;
+    set[`fulfillmentStages.${target}.reworkReason`] = reason ? reason.slice(0, 500) : undefined;
+    set[`fulfillmentStages.${target}.reworkCount`] = (prevTarget.reworkCount ?? 0) + 1;
 
     // reporterStage = công đoạn user đang giữ (nếu có) để watch; nếu không (admin
     // /support quét) → dùng furthest (điểm bị chặn xa nhất) để có stage watch.
@@ -3942,12 +3938,41 @@ export class OrderService implements OnModuleInit {
       // Khi xưởng đánh 'ok' → đơn hết lỗi → rời tab "Nhật ký bù lỗi".
       if (normalized === READY_FOR_FULFILL_CODE) {
         patch.productionFirstErrorAt = null;
-        // Entry point fulfillment thứ 2 — manual set 'ok' (admin/leader bypass
-        // designer state machine). Chỉ áp khi đơn chưa từng vào fulfillment để
-        // tránh ghi đè state đang chạy.
-        const beforeStage =
-          (before as unknown as { currentFulfillmentStage?: string | null }).currentFulfillmentStage;
-        if (!beforeStage) Object.assign(patch, buildFulfillmentEntrySet());
+        const b = before as unknown as {
+          currentFulfillmentStage?: string | null;
+          productionErrorSource?: string;
+          toolResultNote?: string;
+          assignee?: string;
+          designerStatus?: DesignerStatus;
+          designerCompletedAt?: Date;
+        };
+        // Support soát XONG đơn bị đẩy về tool-check (marker source+note='error').
+        // → CHẠY LẠI TOÀN CHUỖI từ In. Nếu đơn có designer từng làm → về Thiết kế
+        // "Cần làm lại" trước (designer complete → hook Entry A flip In→rework);
+        // nếu không → về In "Cần làm lại" luôn.
+        const wasToolCheckHold =
+          b.productionErrorSource === 'tool-check' && b.toolResultNote === 'error';
+        if (wasToolCheckHold) {
+          patch.productionErrorSource = null; // gỡ marker
+          const hasDesigner =
+            !!b.assignee && (b.designerStatus === DesignerStatus.Done || !!b.designerCompletedAt);
+          patch.currentFulfillmentStage = FulfillmentStage.Print;
+          if (hasDesigner) {
+            patch.designerStatus = DesignerStatus.Rework;
+            patch.designerReworkAt = new Date();
+            // Chưa ready cho fulfillment tới khi designer làm lại xong (Entry A
+            // set readyForFulfill=true + flip In→rework khi designer complete).
+            patch.readyForFulfill = false;
+          } else {
+            patch['fulfillmentStages.print.status'] = FulfillmentStageStatus.Rework;
+            patch['fulfillmentStages.print.reworkAt'] = new Date();
+          }
+        } else {
+          // Entry point fulfillment thứ 2 — manual set 'ok' (admin/leader bypass
+          // designer state machine). Chỉ áp khi đơn chưa từng vào fulfillment để
+          // tránh ghi đè state đang chạy.
+          if (!b.currentFulfillmentStage) Object.assign(patch, buildFulfillmentEntrySet());
+        }
       } else {
         // Toggle KHỎI 'ok' (vd về 'no-pdf', 'error', null) → đơn không còn
         // ready. Nếu đơn đang ở print/waiting và worker chưa bao giờ start
@@ -5759,6 +5784,12 @@ export class OrderService implements OnModuleInit {
     const before = await this.orderRepository.findOneById(id);
     if (!before) throw new NotFoundException('Order not found');
 
+    // Đơn đã hủy: KHÔNG cho báo lỗi / đẩy về công đoạn trước — cancel là trạng
+    // thái cuối, đơn đã ra khỏi mọi công đoạn (xem CancelledOrders-ExcludeFromStages).
+    if ((before as unknown as { cancelledAt?: Date | null }).cancelledAt) {
+      throw new BadRequestException('Đơn đã hủy — không thể báo lỗi / đẩy về công đoạn trước.');
+    }
+
     let finalSource: 'designer' | 'factory' | 'tool-check' | undefined = dto.source;
     if (dto.code) {
       // Validate code tồn tại
@@ -5921,6 +5952,9 @@ export class OrderService implements OnModuleInit {
     filter.productionError = { $exists: true, $nin: [null, ''] };
     filter.productionFirstErrorAt = { $exists: true, $ne: null };
     filter.deletedAt = { $exists: false };
+    // Đơn đã hủy KHÔNG nằm trong nhật ký bù lỗi (loại khỏi cả trang lẫn đếm mức độ,
+    // vì countFilter clone từ filter).
+    filter.cancelledAt = { $exists: false };
 
     if (roleName === RoleType.Designer) {
       filter.assignee = assigneeUserId || '__no_user__';
@@ -6002,9 +6036,15 @@ export class OrderService implements OnModuleInit {
       filter.inProductionAt = range;
     }
 
-    // Urgency filter — compute date thresholds.
+    // Urgency filter — tuổi đơn tính theo `inProductionAt` (ngày VÀO SẢN XUẤT),
+    // KHÔNG phải ngày báo lỗi (`productionFirstErrorAt`). Snapshot `countFilter`
+    // TRƯỚC khi thêm clause urgency để badge luôn hiện đủ 4 mức (sticky filter).
     const now = Date.now();
     const DAY = 24 * 60 * 60 * 1000;
+
+    const countFilter: Record<string, unknown> = { ...filter };
+    if (Array.isArray(countFilter.$and)) countFilter.$and = [...(countFilter.$and as unknown[])];
+
     if (dto.urgency) {
       const levels = dto.urgency.split(',').filter(Boolean);
       const ranges: Array<{ $gt?: Date; $lte?: Date }> = [];
@@ -6019,11 +6059,11 @@ export class OrderService implements OnModuleInit {
           ranges.push({ $lte: new Date(now - 3 * DAY) });
         }
       }
-      if (ranges.length === 1) {
-        filter.productionFirstErrorAt = { ...(filter.productionFirstErrorAt as object), ...ranges[0] };
-      } else if (ranges.length > 1) {
-        const urgencyOr = ranges.map((r) => ({ productionFirstErrorAt: r }));
-        if (filter.$and) {
+      if (ranges.length) {
+        // Đưa vào clause riêng ($and/$or) — KHÔNG merge vào `filter.inProductionAt`
+        // để tránh đè range của date filter (cùng field).
+        const urgencyOr = ranges.map((r) => ({ inProductionAt: r }));
+        if (Array.isArray(filter.$and)) {
           (filter.$and as Array<unknown>).push({ $or: urgencyOr });
         } else if (filter.$or) {
           filter.$and = [{ $or: filter.$or }, { $or: urgencyOr }];
@@ -6036,22 +6076,6 @@ export class OrderService implements OnModuleInit {
 
     const { page, limit } = dto;
     const skip = limit * ((page || 1) - 1);
-
-    // Aggregate by urgency in parallel with the page query. Use same filter
-    // MINUS the urgency clause so badge counts reflect "if user expanded
-    // selection" (sticky filters).
-    const countFilter: Record<string, unknown> = { ...filter };
-    delete countFilter.productionFirstErrorAt;
-    countFilter.productionFirstErrorAt = { $exists: true, $ne: null };
-    // Remove urgency-driven $and clause if any.
-    if (Array.isArray(countFilter.$and)) {
-      countFilter.$and = (countFilter.$and as Array<{ $or?: unknown[] }>).filter((c) => {
-        const or = c.$or as Array<Record<string, unknown>> | undefined;
-        if (!or) return true;
-        return !or.every((x) => x.productionFirstErrorAt !== undefined);
-      });
-      if ((countFilter.$and as unknown[]).length === 0) delete countFilter.$and;
-    }
 
     const [pageRes, urgencyAgg] = await Promise.all([
       this.orderRepository.findAllAndCount(filter, {
@@ -6066,7 +6090,7 @@ export class OrderService implements OnModuleInit {
         { $match: countFilter },
         {
           $project: {
-            ageMs: { $subtract: [new Date(), '$productionFirstErrorAt'] },
+            ageMs: { $subtract: [new Date(), '$inProductionAt'] },
           },
         },
         {

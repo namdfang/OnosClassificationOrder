@@ -20,8 +20,6 @@ import {
 import { TooltipProvider } from '@/components/ui/tooltip';
 import { OrderLogTimelineDialog } from '@/components/orders/OrderLogTimelineDialog';
 import { OrderRowActionsMenu } from '@/components/orders/OrderRowActionsMenu';
-import { isCancelled } from '@/utils/orderActions';
-import { CancelledBadge } from '@/components/orders/CancelledBadge';
 import {
   WORKSHOP_COLS,
   type WorkshopOrderRow,
@@ -74,18 +72,20 @@ const URGENCY_META: Record<
 
 const DAY_MS = 24 * 60 * 60 * 1000;
 
-function urgencyOf(firstErrorAt?: string): UrgencyKey {
-  if (!firstErrorAt) return 'new';
-  const age = Date.now() - new Date(firstErrorAt).getTime();
+// Mức độ khẩn cấp tính theo tuổi đơn kể từ ngày VÀO SẢN XUẤT (`inProductionAt`),
+// KHÔNG phải ngày báo lỗi.
+function urgencyOf(dateStr?: string): UrgencyKey {
+  if (!dateStr) return 'new';
+  const age = Date.now() - new Date(dateStr).getTime();
   if (age < DAY_MS) return 'new';
   if (age < 2 * DAY_MS) return 'attention';
   if (age < 3 * DAY_MS) return 'urgent';
   return 'critical';
 }
 
-function formatDuration(firstErrorAt?: string): string {
-  if (!firstErrorAt) return '—';
-  const age = Date.now() - new Date(firstErrorAt).getTime();
+function formatDuration(dateStr?: string): string {
+  if (!dateStr) return '—';
+  const age = Date.now() - new Date(dateStr).getTime();
   const days = Math.floor(age / DAY_MS);
   const hours = Math.floor((age % DAY_MS) / (60 * 60 * 1000));
   if (days > 0) return `${days}d ${hours}h`;
@@ -94,11 +94,11 @@ function formatDuration(firstErrorAt?: string): string {
   return `${minutes}m`;
 }
 
-function formatDate(d?: string): string {
+function formatDayOnly(d?: string): string {
   if (!d) return '—';
   const date = new Date(d);
   const pad = (n: number) => String(n).padStart(2, '0');
-  return `${pad(date.getDate())}/${pad(date.getMonth() + 1)} ${pad(date.getHours())}:${pad(date.getMinutes())}`;
+  return `${pad(date.getDate())}/${pad(date.getMonth() + 1)}`;
 }
 
 export function ErrorLogTab() {
@@ -359,10 +359,10 @@ export function ErrorLogTab() {
                   )}
                   title={
                     {
-                      new: '< 24h kể từ khi báo lỗi',
-                      attention: '24h–48h',
-                      urgent: '48h–72h',
-                      critical: '≥ 72h',
+                      new: '< 24h kể từ khi vào sản xuất',
+                      attention: '24h–48h kể từ khi vào sản xuất',
+                      urgent: '48h–72h kể từ khi vào sản xuất',
+                      critical: '≥ 72h kể từ khi vào sản xuất',
                     }[key]
                   }
                 >
@@ -424,7 +424,7 @@ export function ErrorLogTab() {
               <TableHeader>
                 <TableRow>
                   <TableHead className="whitespace-nowrap text-xs w-[140px]">Mức độ</TableHead>
-                  <TableHead className="whitespace-nowrap text-xs w-[140px]">Đã chờ</TableHead>
+                  <TableHead className="whitespace-nowrap text-xs w-[140px]">Tuổi đơn (từ SX)</TableHead>
                   {visibleCols.map((c) => (
                     <TableHead key={c.key} className={cn('whitespace-nowrap text-xs', c.width)}>
                       {c.label}
@@ -453,15 +453,12 @@ export function ErrorLogTab() {
                   </TableRow>
                 )}
                 {items.map((row) => {
-                  const urg = urgencyOf(row.productionFirstErrorAt);
+                  const urg = urgencyOf(row.inProductionAt);
                   const meta = URGENCY_META[urg];
                   return (
                     <TableRow
                       key={row._id}
-                      className={cn(
-                        isNoTool(row.toolResult) && NO_TOOL_ROW_CLASS,
-                        isCancelled(row) && 'opacity-60',
-                      )}
+                      className={cn(isNoTool(row.toolResult) && NO_TOOL_ROW_CLASS)}
                     >
                       <TableCell className="py-2">
                         <Badge className={cn('font-mono text-[11px]', meta.cls)}>
@@ -471,23 +468,16 @@ export function ErrorLogTab() {
                       <TableCell className="py-2">
                         <div className="flex flex-col leading-tight">
                           <span className="text-xs font-mono font-semibold text-foreground">
-                            {formatDuration(row.productionFirstErrorAt)}
+                            {formatDuration(row.inProductionAt)}
                           </span>
                           <span className="text-[10px] text-muted-foreground">
-                            từ {formatDate(row.productionFirstErrorAt)}
+                            vào SX {formatDayOnly(row.inProductionAt)}
                           </span>
                         </div>
                       </TableCell>
                       {visibleCols.map((c) => (
                         <TableCell key={c.key} className="py-2">
-                          {c.key === 'productionId' && isCancelled(row) ? (
-                            <div className="flex items-center gap-1.5">
-                              <CancelledBadge reason={row.cancelReason} />
-                              <div className="min-w-0 flex-1">{c.render(row, renderCtx)}</div>
-                            </div>
-                          ) : (
-                            c.render(row, renderCtx)
-                          )}
+                          {c.render(row, renderCtx)}
                         </TableCell>
                       ))}
                       <TableCell className="py-2 text-center">

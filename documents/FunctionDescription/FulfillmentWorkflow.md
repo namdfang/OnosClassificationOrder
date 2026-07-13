@@ -90,7 +90,9 @@ Trong tab "Đang làm", bấm "Báo lỗi" mở dialog:
 | Target               | Effect                                                                                                                                                                                                                                                                                                                                                                              |
 | -------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | `'designer'`         | `designerStatus = 'rework'`, `productionErrorSource = 'designer'`, `productionErrorNote = reason`. Reporter stage về status=`waiting` (workMs cộng dồn, reworkCount++), assignee giữ nguyên. Đơn nằm ở tab **"Đang chờ quay lại"** của reporter (match nhờ `designerStatus='rework'`). **Sau khi Designer complete:** hook `DesignerTaskService.transition()` set reporter stage = `rework` (nếu stage đã từng chạy — `firstStartedAt`/`completedAt`) → tab **"Cần làm lại"**; hoặc `waiting` (nếu stage chưa từng chạy, vd chưa hề in) → tab **"Đang chờ"** (§5.4 Entry A). |
-| `<previous stage X>` | `currentFulfillmentStage = X`. Target stage X + tất cả stage giữa X và reporter → `status='rework'`, `reworkCount++`, `reworkAt=now`, `reworkFromStage = reporter`. Reporter → `status='waiting'`.                                                                                                                                                                              |
+| `<previous stage X>` | `currentFulfillmentStage = X`. **CHỈ target X** → `status='rework'`, `reworkCount++`, `reworkAt`, `reworkFromStage=reporter` (X hiện tab "Cần làm lại"). **Các stage giữa X và reporter GIỮ `done`/`completedAt`** (lịch sử) → positional tab-filter cho chúng vào **"Đang chờ quay lại"** (watching) khi đơn đang upstream; auto-advance `reworkCount++` khi đơn thực sự quay về từng stage → **"chạy lại toàn chuỗi"** mà không double-count. Reporter → `status='waiting'`. |
+
+> **Chạy lại toàn chuỗi (positional):** thay vì đánh dấu tất cả stage lùi = `rework` ngay (đơn chưa tới nơi), giờ chỉ target = rework; các công đoạn đã-xong phía sau target hiển thị **"Đang chờ quay lại"** cho tới khi đơn re-flow về đúng lượt (mỗi stage khi nhận lại → `reworkCount++` qua auto-advance → hoàn thành → "Đã sửa"). Xem `documents/Plans/UpstreamWatching-ReflowChain.md`.
 
 #### 2.3b Báo lỗi designer qua cell "Lỗi xưởng" (tương đương rework-back target=designer)
 
@@ -111,20 +113,19 @@ Worker KHÔNG bắt buộc dùng nút "Báo lỗi": chọn cell **"Lỗi xưởn
 
 #### 2.3c Báo lỗi "do Soát tool" (`errorSource='tool-check'`) — đẩy về Support
 
-Song song 2.3b nhưng target = **Support** (không phải designer): In chọn "Lỗi xưởng" loại `tool-check` (vd "Thiếu file để in") → cùng helper `buildDesignerReworkBackFromError(..., target='tool-check')` + gate `canReworkBackToSupport()`. **KHÔNG** đụng `designerStatus`; marker hold = `productionErrorSource='tool-check' AND toolResultNote='error'`. Đơn nằm tab **"Đang chờ quay lại"** của In (filter `applyFulfillmentStatusFilter`/`applyTabFilter` watching thêm điều kiện marker; waiting loại trừ marker). Support đổi Note kq Tool → 'ok' → marker mất → đơn về "Đang chờ" active của In. Chi tiết: [`ToolCheckWorkflow.md`](ToolCheckWorkflow.md).
+Song song 2.3b nhưng target = **Support** (không phải designer): worker chọn "Lỗi xưởng" loại `tool-check` (vd "Thiếu file để in") → cùng helper `buildDesignerReworkBackFromError(..., target='tool-check')` + gate `canReworkBackToSupport()`. **KHÔNG** đụng `designerStatus`; marker hold = `productionErrorSource='tool-check' AND toolResultNote='error'`.
+
+> **CHẠY LẠI TOÀN CHUỖI (cập nhật 2026-07):** `buildDesignerReworkBackFromError` giờ **reset `currentFulfillmentStage = Print`** (đơn đã trong pipeline) — giữ `completedAt` các stage (lịch sử). Mọi công đoạn đã-xong (Thiết kế nếu gán + In + …) hiển thị **"Đang chờ quay lại"** (positional watching) trong lúc Support soát. **Support đổi Note kq Tool → 'ok'** (`OrderService.updateField`, nhận biết `wasToolCheckHold` = marker cũ): gỡ marker + **re-flow** — nếu đơn có designer từng làm → `designerStatus='rework'` (về Thiết kế "Cần làm lại" trước; designer complete → hook Entry A flip In→rework); nếu không → `fulfillmentStages.print.status='rework'` (về In "Cần làm lại"). Sau đó In→Ép… chạy lại lần lượt. Xem `documents/Plans/UpstreamWatching-ReflowChain.md` + [`ToolCheckWorkflow.md`](ToolCheckWorkflow.md).
 
 **Ví dụ:** May xuất ra (`sew-out`) báo lỗi đẩy về In (`print`):
 
 - `currentFulfillmentStage` chuyển từ `sew-out` → `print`.
-- `fulfillmentStages.print.status: done → rework` (reworkCount++).
-- `fulfillmentStages.press.status: done → rework` (intermediate).
-- `fulfillmentStages['qc-post-press'].status: done → rework` (intermediate).
-- `fulfillmentStages['sew-in'].status: done → rework` (intermediate).
-- `fulfillmentStages['sew-out'].status: in-progress → waiting` (chờ đơn quay lại).
-- User Print thấy đơn trong tab "Làm lại" → bấm "Bắt đầu" → in-progress.
-- Print xong → Press auto-active → ... → SewOut auto-active sau khi SewIn complete.
-- User SewOut mở tab "Đợi quay lại" → thấy đơn này với badge "Đang ở: <stage hiện tại>" trong suốt quá trình các stage trước chạy lại.
-- Khi SewOut nhận lại → tab "Đang chờ" → bấm "Bắt đầu" lần 2 (workMs cộng dồn, reworkCount của SewOut = 1).
+- `fulfillmentStages.print.status: done → rework` (reworkCount++) — **CHỈ target** → In tab "Cần làm lại".
+- `press` / `qc-post-press` / `sew-in`: **GIỮ `done`/`completedAt`** — positional watching → mỗi công đoạn hiển thị đơn ở tab **"Đang chờ quay lại"** (đơn đang upstream). KHÔNG đánh dấu rework sớm.
+- `fulfillmentStages['sew-out'].status: in-progress → waiting` (reporter, có timeline rework-back → cũng ở "Đang chờ quay lại").
+- User Print bấm "Bắt đầu" → in-progress → Hoàn thành → auto-advance Press: `press.completedAt` đã có (làm lại vòng mới) → **`reworkCount++`** → Press tab "Cần làm lại". Press xong → QC → SewIn → SewOut lần lượt, mỗi cái `reworkCount++` khi nhận lại → hoàn thành → cột "Đã sửa".
+- Suốt quá trình đó, các công đoạn CHƯA tới lượt vẫn ở "Đang chờ quay lại"; công đoạn đang giữ đơn ở "Cần làm lại".
+- Khi SewOut nhận lại → tab "Đang chờ"/"Cần làm lại" → "Bắt đầu" lần 2 (workMs cộng dồn, reworkCount SewOut = 1).
 
 ### 2.4 Đơn bị hủy
 
@@ -412,9 +413,11 @@ Cùng pattern designer: `findOneAndUpdate` với filter chứa `expected status`
 | `waiting`     | `currentFulfillmentStage = stage` && `fulfillmentStages.<stage>.status = waiting` && `designerStatus != 'rework'`                                                                                            |
 | `in-progress` | `currentFulfillmentStage = stage` && `status = in-progress`                                                                                                                                                  |
 | `rework`      | `currentFulfillmentStage = stage` && `status = rework`                                                                                                                                                       |
-| `done`        | `fulfillmentStages.<stage>.completedAt $exists` && **`reworkCount ∈ {0,null}`** && (`currentFulfillmentStage != stage` OR `currentFulfillmentStage` null) — đơn hoàn thành stage KHÔNG dính lỗi, đã rời stage |
-| `fixed`       | Y hệt `done` NHƯNG `fulfillmentStages.<stage>.reworkCount > 0` = **"Đã sửa"** (hoàn thành sau khi stage từng bị đẩy về). Loại trừ với `done`. |
-| `watching`    | `fulfillmentTimeline.elemMatch({ stage, action: 'rework-back', byUserId: me })` && (`currentFulfillmentStage ∈ {stage TRƯỚC stage mình}` OR `designerStatus = 'rework'` OR marker tool-check) — đơn CHƯA quay lại. ⚠️ **KHÔNG dùng `!= stage`**: điều kiện đó còn đúng khi đơn đã quay về + mình làm xong + đẩy TIẾP ra stage sau (currentStage > stage) hoặc hoàn thành hẳn (currentStage=null) → đơn kẹt vĩnh viễn ở "Đang chờ quay lại". Dùng `{$in: FULFILLMENT_STAGES.slice(0, indexOf(stage))}` để chỉ giữ khi đơn thực sự đang ở phía trên. |
+| `done`        | **positional** — `completedAt $exists` && **`reworkCount ∈ {0,null}`** && đơn **downstream** (`$nor: [...upstreamClauses(stage), {currentFulfillmentStage: stage}]`). Đơn bị đẩy lùi phía trên → chuyển sang `watching`, KHÔNG còn ở `done`. |
+| `fixed`       | Y hệt `done` NHƯNG `reworkCount > 0` = **"Đã sửa"** (hoàn thành sau khi stage từng bị đẩy về, đơn downstream). Loại trừ với `done`. |
+| `watching`    | **positional** — (`completedAt $exists` **HOẶC** `fulfillmentTimeline.elemMatch({stage, action:'rework-back'})` [reporter]) **VÀ** đơn **upstream** (`$or: upstreamClauses(stage)`). = "đã làm stage này rồi + đơn đang ở phía TRƯỚC mình" (bất kỳ công đoạn đã-xong nào bị đơn đẩy lùi qua đầu đều vào watching, KHÔNG chỉ người báo lỗi). Bỏ lọc `byUserId` (stage-scoped). |
+
+> **`upstreamClauses(stage)`** (helper `FulfillmentTaskService.upstreamClauses` + mirror `OrderService.upstreamOfStageClauses`) = đơn đang ở phía TRƯỚC `stage`: `$or: [ {productionErrorSource:'tool-check', toolResultNote:'error'} (tool-check hold), {designerStatus:'rework'} (designer đang làm lại), {currentFulfillmentStage: {$in: FULFILLMENT_STAGES.slice(0, indexOf(stage))}} (stage fulfillment trước) ]`. Xem `documents/Plans/UpstreamWatching-ReflowChain.md`.
 
 > `countAllTabs` đếm cả `fixed`; DTO `tabCounts` + `FulfillmentStatusCountsResZod.data` + `GetProductionOrdersZod.fulfillmentStatus` enum đều có `fixed`. Bảng In (`applyFulfillmentStatusFilter` ở `order.service.ts`) mirror cùng logic done/fixed.
 

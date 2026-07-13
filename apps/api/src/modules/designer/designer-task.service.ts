@@ -302,6 +302,7 @@ export class DesignerTaskService {
       rework: DesignerTaskCard[];
       done: DesignerTaskCard[];
       fixed: DesignerTaskCard[];
+      watching: DesignerTaskCard[];
     };
     rejected: DesignerTaskCard[];
     userId: string;
@@ -315,7 +316,14 @@ export class DesignerTaskService {
     // định hôm nay). Trước đây chỉ cột "Đã xong" lọc theo `designerCompletedAt`.
     baseFilter.inProductionAt = { $gte: range.start, $lte: range.end };
 
-    const [assignedRaw, inProgressRaw, reworkRaw, doneRaw, fixedRaw, rejectedRaw] =
+    // Marker "đơn đang giữ ở Soát tool" (In báo thiếu file) → đơn ở phía TRƯỚC
+    // designer (upstream). Task designer đã xong/đang chờ làm lại của đơn này
+    // hiển thị ở cột "Đang chờ quay lại" (watching), KHÔNG ở Đã xong/Cần làm lại
+    // (chưa tới lượt designer — chờ Support soát xong).
+    const toolCheckMarker = { productionErrorSource: 'tool-check', toolResultNote: 'error' };
+    const notMarker = { $nor: [toolCheckMarker] };
+
+    const [assignedRaw, inProgressRaw, reworkRaw, doneRaw, fixedRaw, watchingRaw, rejectedRaw] =
       await Promise.all([
         this.orderModel
           .find({ ...baseFilter, designerStatus: DesignerStatus.Assigned })
@@ -325,14 +333,17 @@ export class DesignerTaskService {
           .find({ ...baseFilter, designerStatus: DesignerStatus.InProgress })
           .sort({ designerStartedAt: -1, inProductionAt: -1 })
           .lean(),
+        // "Cần làm lại" — loại đơn đang giữ ở Soát tool (chờ Support) → watching.
         this.orderModel
-          .find({ ...baseFilter, designerStatus: DesignerStatus.Rework })
+          .find({ ...baseFilter, ...notMarker, designerStatus: DesignerStatus.Rework })
           .sort({ designerReworkAt: -1, inProductionAt: -1 })
           .lean(),
-        // "Đã xong" = done KHÔNG dính lỗi (designerReworkCount = 0/thiếu).
+        // "Đã xong" = done KHÔNG dính lỗi (designerReworkCount = 0/thiếu), đơn
+        // KHÔNG bị đẩy về Soát tool.
         this.orderModel
           .find({
             ...baseFilter,
+            ...notMarker,
             designerStatus: DesignerStatus.Done,
             designerReworkCount: { $in: [0, null] },
           })
@@ -342,10 +353,22 @@ export class DesignerTaskService {
         this.orderModel
           .find({
             ...baseFilter,
+            ...notMarker,
             designerStatus: DesignerStatus.Done,
             designerReworkCount: { $gt: 0 },
           })
           .sort({ designerCompletedAt: -1 })
+          .lean(),
+        // "Đang chờ quay lại" — đơn CỦA MÌNH (assignee scope ở baseFilter) đang
+        // giữ ở Soát tool phía trên; task đã xong/đang chờ làm lại. Sau khi Support
+        // soát xong → chuyển sang "Cần làm lại".
+        this.orderModel
+          .find({
+            ...baseFilter,
+            ...toolCheckMarker,
+            designerStatus: { $in: [DesignerStatus.Done, DesignerStatus.Rework] },
+          })
+          .sort({ inProductionAt: -1 })
           .lean(),
         this.orderModel
           .find({ ...baseFilter, designerStatus: DesignerStatus.Rejected })
@@ -360,6 +383,7 @@ export class DesignerTaskService {
         rework: reworkRaw.map(this.toCard),
         done: doneRaw.map(this.toCard),
         fixed: fixedRaw.map(this.toCard),
+        watching: watchingRaw.map(this.toCard),
       },
       rejected: rejectedRaw.map(this.toCard),
       userId,

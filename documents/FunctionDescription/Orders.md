@@ -719,26 +719,29 @@ Response (`ImportSummaryZod`):
 
 Danh sách đơn **đang chờ xử lý lỗi xưởng** — tách hẳn khỏi list orders mặc định để workshop / designer / fulfillment dễ pin xử lý theo độ ưu tiên. Đơn sort theo `productionFirstErrorAt` ASC nên đơn nằm lâu nhất xuất hiện đầu tiên.
 
-**Điều kiện vào tab:** `productionError ≠ null/''` AND `productionFirstErrorAt` đã set.
+**Điều kiện vào tab:** `productionError ≠ null/''` AND `productionFirstErrorAt` đã set AND **KHÔNG hủy** (`cancelledAt` không tồn tại — `getErrorLog` filter cả trang lẫn `byUrgency` vì `countFilter` clone từ `filter`). Đơn hủy là trạng thái cuối, đã ra khỏi mọi công đoạn (xem `Plans/CancelledOrders-ExcludeFromStages.md`) → FE `ErrorLogTab.tsx` không còn nhánh render `CancelledBadge`/`opacity-60`.
 
 **Điều kiện rời tab** (hook tự động, xem `§8.3`):
 - `toolResultNote='ok'` — xưởng xác nhận xử lý xong → clear `productionFirstErrorAt`
 - HOẶC `productionError` được clear
+- HOẶC đơn bị **hủy** (`cancelledAt` set) → biến mất khỏi nhật ký bù lỗi ngay (không thể báo lỗi thêm — `setProductionError` chặn đơn hủy, xem `ScanError.md §8`)
 
 → Cycle lỗi tiếp theo (nếu có) sẽ set lại `productionFirstErrorAt = now` từ đầu.
 
 ### 14.2 Mức độ khẩn cấp (24h calendar)
 
-Tính client-side từ `now - productionFirstErrorAt`:
+Tính theo **tuổi đơn kể từ ngày VÀO SẢN XUẤT** (`now - inProductionAt`), **KHÔNG** phải ngày báo lỗi (`productionFirstErrorAt`) — đơn vào sản xuất càng lâu mà còn lỗi thì càng ưu tiên. Cột "Tuổi đơn (từ SX)" hiển thị duration + ngày vào SX, khớp với badge mức độ. `inProductionAt` rỗng → xếp mức "Mới" (cả FE `urgencyOf` lẫn BE `$switch` do null < số).
 
-| Mức độ | Ngưỡng | Màu | Mô tả |
+| Mức độ | Ngưỡng (từ `inProductionAt`) | Màu | Mô tả |
 |--------|--------|-----|-------|
-| **Mới** | < 24h | Sky | Vừa báo lỗi, trong ngày |
+| **Mới** | < 24h | Sky | Vừa vào SX, trong ngày |
 | **Cần làm** | 24h – 48h | Amber | Đã 1 ngày, cần ưu tiên |
 | **Gấp** | 48h – 72h | Orange | Đã 2 ngày, sắp critical |
 | **Khẩn cấp** | ≥ 72h | Rose (animate-pulse) | Đã ≥ 3 ngày — flash đỏ |
 
 Header tab có 4 chip filter mức độ + count. Click chip để toggle filter; chỉ 1 mức độ active tại 1 lúc.
+
+**BE (`getErrorLog`):** badge counts (`byUrgency` aggregation) + filter chip đều tính trên `inProductionAt` (aggregation `$subtract: [now, '$inProductionAt']`; filter đẩy range vào clause `$and/$or` riêng theo `inProductionAt`, KHÔNG merge vào `filter.inProductionAt` của date-range để tránh đè). `countFilter` snapshot **trước** khi thêm clause urgency → badge luôn hiện đủ 4 mức. **Sort danh sách vẫn theo `productionFirstErrorAt` ASC** (đơn báo lỗi lâu nhất lên đầu) — độc lập với thang mức độ.
 
 ### 14.3 Visibility
 

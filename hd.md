@@ -25,4 +25,4 @@ ls -lh /tmp/onos-\*.archive
 local-----
 scp nam@157.11.11.111:/tmp/onos-20260628.archive ./
 
-mongorestore --uri="mongodb://localhost:27017/?directConnection=true" --archive=./onos-20260630.archive --gzip --drop --nsFrom='onosfactory-prod._' --nsTo='onos-classifycation._'
+mongorestore --uri="mongodb://localhost:27017/?directConnection=true" --archive=./onos-2026.archive --gzip --drop --nsFrom='onosfactory-prod._' --nsTo='onos-classifycation._'

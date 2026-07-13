@@ -33,6 +33,7 @@ import { RepositoryRemote } from '@/services';
 import { useWorkshopConfigStore } from '@/store/workshopConfigStore';
 import { cn } from '@/utils/cn';
 import { handleAxiosError } from '@/utils';
+import { isCancelled } from '@/utils/orderActions';
 
 const MAX_NOTE = 500;
 const OTHER_CODE = 'other';
@@ -96,11 +97,14 @@ export function OrderErrorScanDialog({ order, onClose, onSaved }: Props) {
   const isOther = code === OTHER_CODE;
   const noteRequired = isOther; // 'other' bắt buộc note (theo rule BE)
   const sourceRequired = isOther || !source; // 'other' bắt buộc, hoặc khi config không có errorSource
+  // Đơn đã hủy → chặn báo lỗi / đẩy về công đoạn trước (mirror guard BE).
+  const orderCancelled = isCancelled(order);
 
   const canSubmit =
     !!code &&
     !!source &&
     (!noteRequired || !!note.trim()) &&
+    !orderCancelled &&
     !saving;
 
   const handleSubmit = async () => {
@@ -213,6 +217,17 @@ export function OrderErrorScanDialog({ order, onClose, onSaved }: Props) {
             </InfoRow>
           </div>
         </div>
+
+        {/* Đơn đã hủy → chặn mọi thao tác báo lỗi / đẩy về công đoạn trước. */}
+        {orderCancelled && (
+          <div className="rounded-md border border-rose-400 bg-rose-100 p-2.5 flex items-start gap-2 dark:border-rose-500/50 dark:bg-rose-500/15">
+            <AlertTriangle size={15} className="mt-0.5 shrink-0 text-rose-600 dark:text-rose-400" />
+            <div className="min-w-0 flex-1 text-xs text-rose-800 dark:text-rose-200">
+              <p className="font-semibold">Đơn đã hủy — không thể báo lỗi</p>
+              <p className="mt-0.5">Đơn hủy đã ra khỏi mọi công đoạn, không đẩy về công đoạn trước được.</p>
+            </div>
+          </div>
+        )}
 
         {/* Lỗi + mô tả đã ghi trên đơn — nổi bật (đỏ) để người quét thấy ngay.
             Mô tả dài → cắt 2 dòng + tooltip (title) xem đầy đủ. */}

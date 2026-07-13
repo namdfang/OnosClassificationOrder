@@ -147,6 +147,12 @@ export const MyTasksColumnsZod = z.object({
   done: DesignerTaskCardZod.array(),
   /** Hoàn thành SAU KHI sửa lỗi (designerReworkCount > 0) — tách khỏi `done`. */
   fixed: DesignerTaskCardZod.array(),
+  /**
+   * "Đang chờ quay lại" — task designer (đã xong/đang chờ làm lại) của đơn đang
+   * bị giữ ở Soát tool phía trên (In báo thiếu file). Chờ Support soát xong →
+   * chuyển sang `rework` ("Cần làm lại"). Chỉ đơn `assignee = chính designer đó`.
+   */
+  watching: DesignerTaskCardZod.array(),
 });
 
 export const GetMyTasksResZod = ResZod.extend({

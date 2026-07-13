@@ -57,14 +57,21 @@ function daysAgoISO(n: number): string {
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
 }
 
-type ColKey = 'assigned' | 'rework' | 'inProgress' | 'done' | 'fixed';
+type ColKey = 'assigned' | 'rework' | 'watching' | 'inProgress' | 'done' | 'fixed';
 
 type Columns = Record<ColKey, DesignerTaskCard[]>;
 
-const EMPTY_COLS: Columns = { assigned: [], rework: [], inProgress: [], done: [], fixed: [] };
+const EMPTY_COLS: Columns = {
+  assigned: [],
+  rework: [],
+  watching: [],
+  inProgress: [],
+  done: [],
+  fixed: [],
+};
 
-// THỨ TỰ CỘT yêu cầu: Cần làm → Cần làm lại → Đang làm → Đã xong → Đã sửa
-const COL_ORDER: ColKey[] = ['assigned', 'rework', 'inProgress', 'done', 'fixed'];
+// THỨ TỰ CỘT: Cần làm → Cần làm lại → Đang chờ quay lại → Đang làm → Đã xong → Đã sửa
+const COL_ORDER: ColKey[] = ['assigned', 'rework', 'watching', 'inProgress', 'done', 'fixed'];
 
 const COL_META: Record<
   ColKey,
@@ -81,6 +88,15 @@ const COL_META: Record<
     status: DesignerStatus.Rework,
     accent: 'border-amber-300 dark:border-amber-700',
     bulk: [DesignerTransitionAction.Restart],
+  },
+  // "Đang chờ quay lại" = task đã xong/đang chờ làm lại của đơn đang bị giữ ở
+  // Soát tool phía trên. Read-only (không kéo/không bulk); Support soát xong →
+  // BE tự chuyển sang "Cần làm lại". status giữ Done cho hợp kiểu.
+  watching: {
+    label: 'Đang chờ quay lại',
+    status: DesignerStatus.Done,
+    accent: 'border-sky-300 dark:border-sky-700',
+    bulk: [],
   },
   inProgress: {
     label: 'Đang làm',
@@ -139,8 +155,9 @@ function planTransition(
   from: DesignerStatus,
   to: ColKey,
 ): { action: DesignerTransitionAction; needsReason?: boolean } | null {
-  // "Đã sửa" là cột thống kê (terminal) — không cho kéo thả vào.
-  if (to === 'fixed') return null;
+  // "Đã sửa" + "Đang chờ quay lại" là cột read-only (terminal / chờ hệ thống) —
+  // không cho kéo thả vào.
+  if (to === 'fixed' || to === 'watching') return null;
   const target = COL_META[to].status;
   if (target === from) return null;
   if (target === DesignerStatus.InProgress) {
@@ -341,6 +358,7 @@ export default function MyTasksPage() {
     const out: Record<ColKey, string[]> = {
       assigned: [],
       rework: [],
+      watching: [],
       inProgress: [],
       done: [],
       fixed: [],
@@ -580,9 +598,10 @@ export default function MyTasksPage() {
 
         {/* KPI */}
         {stats && (
-          <div className="grid grid-cols-2 md:grid-cols-7 gap-2">
+          <div className="grid grid-cols-2 md:grid-cols-8 gap-2">
             <KPI label="Cần làm" value={stats.assignedCount} accent="text-zinc-700 dark:text-zinc-200" />
             <KPI label="Cần làm lại" value={stats.reworkCount} accent="text-amber-600" />
+            <KPI label="Đang chờ quay lại" value={columns.watching.length} accent="text-sky-600" />
             <KPI label="Đang làm" value={stats.inProgressCount} accent="text-indigo-600" />
             <KPI
               label="Đã xong"
@@ -706,9 +725,11 @@ export default function MyTasksPage() {
           const visibleCols = COL_ORDER.filter(
             (k) =>
               (k !== 'rework' || columns.rework.length > 0) &&
+              (k !== 'watching' || columns.watching.length > 0) &&
               (k !== 'fixed' || columns.fixed.length > 0),
           );
           const gridClsByCount: Record<number, string> = {
+            6: 'grid grid-cols-1 md:grid-cols-2 xl:grid-cols-6 gap-3',
             5: 'grid grid-cols-1 md:grid-cols-2 xl:grid-cols-5 gap-3',
             4: 'grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-3',
             3: 'grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-3',

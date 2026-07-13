@@ -310,6 +310,16 @@ export class FulfillmentTaskService {
           set.currentFulfillmentStage = nextStage;
           set[`fulfillmentStages.${nextStage}.status`] = FulfillmentStageStatus.Waiting;
           set[`fulfillmentStages.${nextStage}.waitingAt`] = now;
+          // Nếu stage kế TỪNG hoàn thành (đơn đang chạy lại vòng mới do bị đẩy
+          // lùi phía trên) → đây là "làm lại" → reworkCount++ + reworkAt để khi
+          // hoàn thành lại đơn vào cột "Đã sửa". Flow xuôi bình thường: stage kế
+          // chưa từng done → không tăng.
+          const nextState = stages[nextStage];
+          if (nextState?.completedAt) {
+            set[`fulfillmentStages.${nextStage}.reworkAt`] = now;
+            inc[`fulfillmentStages.${nextStage}.reworkCount`] =
+              (inc[`fulfillmentStages.${nextStage}.reworkCount`] ?? 0) + 1;
+          }
         } else {
           // pack done → flow xong toàn bộ.
           set.currentFulfillmentStage = null;
@@ -390,9 +400,11 @@ export class FulfillmentTaskService {
           );
         }
 
-        // Target stage → rework (sẽ được start lại). Intermediates (giữa target
-        // và reporter, không bao gồm reporter) → rework để worker biết phải làm
-        // lại. workMs giữ nguyên cumulative, reworkCount++ cho từng cái.
+        // Chỉ target → rework (đơn về đó NGAY, chờ Bắt đầu). Các stage trung gian
+        // (giữa target và reporter) GIỮ nguyên `done` + `completedAt` (lịch sử) —
+        // tab-filter positional cho chúng vào "Đang chờ quay lại" khi đơn đang
+        // upstream, và auto-advance sẽ reworkCount++ khi đơn thực sự quay về từng
+        // stage. Tránh đánh dấu rework sớm (đơn chưa tới nơi) + double-count.
         set.currentFulfillmentStage = target;
         set[`fulfillmentStages.${target}.status`] = FulfillmentStageStatus.Rework;
         set[`fulfillmentStages.${target}.reworkAt`] = now;
@@ -400,15 +412,6 @@ export class FulfillmentTaskService {
         set[`fulfillmentStages.${target}.reworkReason`] = reason;
         const targetState = (stages[target] ?? this.emptyState()) as FulfillmentStageState;
         set[`fulfillmentStages.${target}.reworkCount`] = (targetState.reworkCount ?? 0) + 1;
-
-        for (let i = targetIdx + 1; i < reporterIdx; i += 1) {
-          const intStage = FULFILLMENT_STAGES[i]!;
-          const intState = (stages[intStage] ?? this.emptyState()) as FulfillmentStageState;
-          set[`fulfillmentStages.${intStage}.status`] = FulfillmentStageStatus.Rework;
-          set[`fulfillmentStages.${intStage}.reworkAt`] = now;
-          set[`fulfillmentStages.${intStage}.reworkFromStage`] = stage;
-          set[`fulfillmentStages.${intStage}.reworkCount`] = (intState.reworkCount ?? 0) + 1;
-        }
 
         return {
           nextStatus: FulfillmentStageStatus.Waiting,
@@ -568,6 +571,23 @@ export class FulfillmentTaskService {
     return f;
   }
 
+  /**
+   * Các clause "đơn đang ở phía TRƯỚC (upstream) fulfillment-stage `stg`" — dùng
+   * cho positional tab filter (watching/done/fixed). Đơn upstream khi:
+   *  - đang giữ ở tool-check (marker In báo thiếu file),
+   *  - designer đang làm lại (`designerStatus='rework'`),
+   *  - hoặc đang ở 1 stage fulfillment TRƯỚC `stg`.
+   * ⚠️ Mirror với `OrderService.upstreamOfStageClauses` (bảng In).
+   */
+  private upstreamClauses(stg: FulfillmentStage): Record<string, unknown>[] {
+    const fi = FULFILLMENT_STAGE_ORDER[stg];
+    return [
+      { productionErrorSource: 'tool-check', toolResultNote: 'error' },
+      { designerStatus: 'rework' },
+      { currentFulfillmentStage: { $in: FULFILLMENT_STAGES.slice(0, fi) } },
+    ];
+  }
+
   private applyTabFilter(
     base: FilterQuery<OrderEntity>,
     tab: FulfillmentTaskTab,
@@ -601,61 +621,51 @@ export class FulfillmentTaskService {
           [`fulfillmentStages.${stage}.status`]: FulfillmentStageStatus.Rework,
         };
       case 'done':
-        // Đơn user đã hoàn thành stage này (đã có completedAt) VÀ đơn đã
-        // rời stage (currentFulfillmentStage > stage hoặc null nếu pack done).
-        // "Đã xong" = KHÔNG dính lỗi (reworkCount = 0/thiếu) — đơn từng bị đẩy
-        // về (reworkCount>0) tách sang tab 'fixed'.
+        // "Đã xong" (positional) = đã hoàn thành stage này (có completedAt),
+        // KHÔNG dính lỗi (reworkCount 0/thiếu), VÀ đơn đang ở phía SAU mình
+        // (downstream) — tức KHÔNG upstream & không đang ở stage này. Đơn bị đẩy
+        // lùi phía trên (upstream) chuyển sang tab "Đang chờ quay lại".
         // Merge $or qua $and vì base có $or factory scope (factoryId OR
-        // originalFactoryId) — spread sẽ overwrite mất, dẫn đến lộ data
-        // xưởng khác.
+        // originalFactoryId) — spread sẽ overwrite mất, dẫn đến lộ data xưởng khác.
         return mergeWithFactoryOr(base, {
           readyForFulfill: true,
           [`fulfillmentStages.${stage}.completedAt`]: { $exists: true, $ne: null },
           [`fulfillmentStages.${stage}.reworkCount`]: { $in: [0, null] },
-          $or: [
-            { currentFulfillmentStage: { $ne: stage } },
-            { currentFulfillmentStage: { $in: [null, undefined] } },
-          ],
+          $nor: [...this.upstreamClauses(stage), { currentFulfillmentStage: stage }],
         });
       case 'fixed':
-        // "Đã sửa" = đã hoàn thành stage này SAU KHI stage từng bị đẩy về
-        // (reworkCount>0). Cùng điều kiện 'done' nhưng reworkCount>0.
+        // "Đã sửa" = hoàn thành stage này SAU KHI từng bị đẩy về (reworkCount>0),
+        // đơn đang ở phía sau (downstream). Cùng điều kiện 'done' nhưng reworkCount>0.
         return mergeWithFactoryOr(base, {
           readyForFulfill: true,
           [`fulfillmentStages.${stage}.completedAt`]: { $exists: true, $ne: null },
           [`fulfillmentStages.${stage}.reworkCount`]: { $gt: 0 },
-          $or: [
-            { currentFulfillmentStage: { $ne: stage } },
-            { currentFulfillmentStage: { $in: [null, undefined] } },
-          ],
+          $nor: [...this.upstreamClauses(stage), { currentFulfillmentStage: stage }],
         });
       case 'watching': {
-        // Đơn đã từng rework-back TỪ công đoạn này, đang chờ quay lại.
-        // Match: timeline có entry stage=mineStage + action=rework-back (KHÔNG lọc
-        // byUserId — stage-scoped: mọi người giữ công đoạn này trong xưởng đều thấy,
-        // kể cả người báo là người khác / đã đổi ca)
-        // VÀ đơn đang ở stage TRƯỚC stage mình (đang được xử lý lại phía trên,
-        // CHƯA quay về mình) HOẶC designerStatus=rework (designer đang sửa).
+        // "Đang chờ quay lại" (positional) = mình ĐÃ làm stage này (có completedAt)
+        // HOẶC chính mình báo lỗi (reporter timeline) — VÀ đơn đang ở phía TRƯỚC
+        // mình (upstream: tool-check hold / designer rework / stage fulfillment
+        // trước). Stage-scoped (KHÔNG lọc byUserId): mọi người giữ công đoạn này
+        // trong xưởng đều thấy.
         //
-        // ⚠️ Trước đây dùng `currentFulfillmentStage != stage` — SAI: điều kiện
-        // này đúng cả khi đơn ĐÃ quay về + mình làm xong + đẩy TIẾP ra stage sau
-        // (currentStage > stage) → đơn kẹt vĩnh viễn ở "Đang chờ quay lại" (kể cả
-        // khi đơn hoàn thành hẳn, currentStage=null vẫn != stage). Dùng "$in các
-        // stage trước" để chỉ giữ khi đơn thực sự chưa quay lại.
+        // Điểm khác luật cũ: trước chỉ khớp khi CHÍNH stage này là người báo lỗi
+        // (timeline stage=mine). Nay bất kỳ công đoạn đã-xong nào bị đơn đẩy lùi
+        // qua đầu đều vào watching (kể cả khi công đoạn KHÁC báo lỗi).
         void userId;
-        const earlierStages = FULFILLMENT_STAGES.slice(0, FULFILLMENT_STAGES.indexOf(stage));
         return mergeWithFactoryOr(base, {
-          fulfillmentTimeline: {
-            $elemMatch: {
-              stage,
-              action: FulfillmentTransitionAction.ReworkBack,
+          $and: [
+            {
+              $or: [
+                { [`fulfillmentStages.${stage}.completedAt`]: { $exists: true, $ne: null } },
+                {
+                  fulfillmentTimeline: {
+                    $elemMatch: { stage, action: FulfillmentTransitionAction.ReworkBack },
+                  },
+                },
+              ],
             },
-          },
-          $or: [
-            { currentFulfillmentStage: { $in: earlierStages } },
-            { designerStatus: 'rework' },
-            // Đơn tool-check đang chờ support soát lại (In báo "Thiếu file để in").
-            { productionErrorSource: 'tool-check', toolResultNote: 'error' },
+            { $or: this.upstreamClauses(stage) },
           ],
         });
       }
