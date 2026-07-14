@@ -1,4 +1,5 @@
 import axios, { HttpStatusCode } from 'axios';
+import { toast } from 'sonner';
 import { CONFIG } from '../constants';
 import { useAuthStore } from '@/store/authStore';
 import { PATHS } from '@/constants/paths';
@@ -35,6 +36,18 @@ apiAxios.interceptors.response.use(
     if (error?.response?.status === 405) {
       window.location.href = PATHS.ACCOUNT;
       return Promise.reject(new Error('You need to change password'));
+    }
+
+    // Token còn hạn nhưng user đã bị xoá/không tồn tại (JwtStrategy.validate
+    // ném UserNotFoundException) — đẩy logout thay vì chỉ hiện raw i18n key.
+    // Loại trừ chính request /auth/login: backend dùng chung message này cho
+    // cả sai mật khẩu/user inactive khi đăng nhập — không phải phiên bị mất,
+    // để trang login tự hiện lỗi thay vì bị logout/redirect ngay trên chính nó.
+    const isLoginRequest = (error?.config?.url as string | undefined)?.includes('/auth/login');
+    if (!isLoginRequest && error?.response?.data?.message === 'error.userNotFound') {
+      toast.error('Tài khoản không tồn tại hoặc đã bị xoá. Vui lòng đăng nhập lại.');
+      useAuthStore.getState().clearToken();
+      error.__silent = true;
     }
 
     return Promise.reject(error);

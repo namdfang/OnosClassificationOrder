@@ -64,7 +64,15 @@ function Login() {
         toast.success('Welcome back');
       }
     } catch (error) {
-      handleAxiosError(error);
+      // Backend dùng chung 1 i18n key (error.userNotFound) cho mọi lý do đăng
+      // nhập thất bại (sai email/mật khẩu, tài khoản bị khoá) — hiện message
+      // thân thiện thay vì raw key cho người dùng dễ hiểu.
+      const rawMessage = (error as { response?: { data?: { message?: string } } })?.response?.data?.message;
+      if (rawMessage === 'error.userNotFound') {
+        toast.error('Email hoặc mật khẩu không chính xác.');
+      } else {
+        handleAxiosError(error);
+      }
     } finally {
       setLoading(false);
     }
