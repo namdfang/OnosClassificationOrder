@@ -32,8 +32,17 @@ export interface ProductConfigRow {
   mockup?: string;
   level?: number;
   guide?: string;
+  factoryId?: string;
+  machineTypeId?: string;
   factory?: { name: string; shortName: string };
   machineType?: { name: string; shortName: string };
+}
+
+/** Item danh sách Xưởng / Phòng cho dropdown (chỉ cần id + nhãn). */
+export interface RefItem {
+  _id: string;
+  name: string;
+  shortName: string;
 }
 
 export function ProductConfigTab() {
@@ -45,6 +54,9 @@ export function ProductConfigTab() {
   const [total, setTotal] = useState(0);
   const [importOpen, setImportOpen] = useState(false);
   const [editItem, setEditItem] = useState<ProductConfigRow | null>(null);
+  // Danh sách Xưởng / Phòng cho dropdown chỉnh sửa inline + dialog.
+  const [factories, setFactories] = useState<RefItem[]>([]);
+  const [machineTypes, setMachineTypes] = useState<RefItem[]>([]);
   const fabricOptions = useWorkshopConfigStore(
     (s) => s.byCategory[WorkshopConfigCategory.FabricType] || [],
   );
@@ -60,6 +72,62 @@ export function ProductConfigTab() {
   useEffect(() => {
     if (!configLoaded) loadConfig();
   }, [configLoaded, loadConfig]);
+
+  // Load danh sách Xưởng + Phòng 1 lần (cho dropdown chỉnh sửa inline + dialog).
+  useEffect(() => {
+    (async () => {
+      try {
+        const [fRes, mRes] = await Promise.all([
+          RepositoryRemote.factory.getFactories('?page=1&limit=200'),
+          RepositoryRemote.machineType.getMachineTypes('?page=1&limit=200'),
+        ]);
+        setFactories((fRes.data?.data || []) as RefItem[]);
+        setMachineTypes((mRes.data?.data || []) as RefItem[]);
+      } catch (error) {
+        handleAxiosError(error);
+      }
+    })();
+  }, []);
+
+  const handleFactoryChange = async (id: string, factoryId: string) => {
+    if (!factoryId) return; // Xưởng là bắt buộc — không cho về rỗng.
+    const f = factories.find((x) => x._id === factoryId);
+    setItems((prev) =>
+      prev.map((it) =>
+        it._id === id
+          ? { ...it, factoryId, factory: f ? { name: f.name, shortName: f.shortName } : it.factory }
+          : it,
+      ),
+    );
+    try {
+      await RepositoryRemote.productConfig.updateProductConfig(id, { factoryId } as never);
+    } catch (error) {
+      handleAxiosError(error);
+      fetchData();
+    }
+  };
+
+  const handleMachineTypeChange = async (id: string, machineTypeId: string) => {
+    if (!machineTypeId) return; // Phòng là bắt buộc — không cho về rỗng.
+    const m = machineTypes.find((x) => x._id === machineTypeId);
+    setItems((prev) =>
+      prev.map((it) =>
+        it._id === id
+          ? {
+              ...it,
+              machineTypeId,
+              machineType: m ? { name: m.name, shortName: m.shortName } : it.machineType,
+            }
+          : it,
+      ),
+    );
+    try {
+      await RepositoryRemote.productConfig.updateProductConfig(id, { machineTypeId } as never);
+    } catch (error) {
+      handleAxiosError(error);
+      fetchData();
+    }
+  };
 
   const handleFabricChange = async (id: string, value: string) => {
     const newFabric = value || undefined;
@@ -293,24 +361,32 @@ export function ProductConfigTab() {
                     )}
                   </TableCell>
                   <TableCell>
-                    {it.machineType ? (
-                      <span>
-                        <Badge variant="secondary">{it.machineType.shortName}</Badge>{' '}
-                        <span className="text-xs text-muted-foreground">{it.machineType.name}</span>
-                      </span>
-                    ) : (
-                      <span className="text-muted-foreground text-xs">—</span>
-                    )}
+                    <select
+                      value={it.machineTypeId || ''}
+                      onChange={(e) => handleMachineTypeChange(it._id, e.target.value)}
+                      className="w-full min-w-[130px] rounded-md border border-input bg-background px-2 py-1 text-xs focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
+                    >
+                      {!it.machineTypeId && <option value="">— Chưa chọn —</option>}
+                      {machineTypes.map((m) => (
+                        <option key={m._id} value={m._id}>
+                          {m.shortName} · {m.name}
+                        </option>
+                      ))}
+                    </select>
                   </TableCell>
                   <TableCell>
-                    {it.factory ? (
-                      <span>
-                        <Badge variant="secondary">{it.factory.shortName}</Badge>{' '}
-                        <span className="text-xs text-muted-foreground">{it.factory.name}</span>
-                      </span>
-                    ) : (
-                      <span className="text-muted-foreground text-xs">—</span>
-                    )}
+                    <select
+                      value={it.factoryId || ''}
+                      onChange={(e) => handleFactoryChange(it._id, e.target.value)}
+                      className="w-full min-w-[130px] rounded-md border border-input bg-background px-2 py-1 text-xs focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
+                    >
+                      {!it.factoryId && <option value="">— Chưa chọn —</option>}
+                      {factories.map((f) => (
+                        <option key={f._id} value={f._id}>
+                          {f.shortName} · {f.name}
+                        </option>
+                      ))}
+                    </select>
                   </TableCell>
                   <TableCell>
                     <select
@@ -412,6 +488,8 @@ export function ProductConfigTab() {
         item={editItem}
         fabricOptions={fabricOptions}
         toolOptions={toolOptions}
+        factoryOptions={factories}
+        machineTypeOptions={machineTypes}
         onSaved={applyEdit}
         onDelete={handleDelete}
       />

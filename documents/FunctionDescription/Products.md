@@ -29,10 +29,11 @@ UI chia 2 tab:
 | List | Bảng có **phân trang** (`<PaginationBar>`, mặc định `pageSize=20`, đọc `total` từ response), sort theo `createdAt` desc. Search/Xóa tất cả reset về trang 1 |
 | Search | Substring match `fullName` hoặc `shortName` (case-insensitive) |
 | Filter | Query string `factoryId`, `machineTypeId` |
-| Inline edit | Dropdown chọn `fabricType` + `toolResult` + `level` cho mỗi dòng, ô nhập `mockup` (URL, cột đầu) → PATCH `/v1/product-configs/:id` |
+| Inline edit | Dropdown chọn **`factoryId` (Xưởng)** + **`machineTypeId` (Phòng)** + `fabricType` + `toolResult` + `level` cho mỗi dòng, ô nhập `mockup` (URL, cột đầu) → PATCH `/v1/product-configs/:id`. Xưởng/Phòng là **ref bắt buộc** → không có option rỗng (danh sách nạp qua `getFactories`/`getMachineTypes` 1 lần khi mount). |
+| **Xưởng / Phòng** (editable) | Cột **Xưởng** (`factoryId`) + **Phòng** (`machineTypeId`) sửa inline bằng `<select>` (giá trị = id, nhãn `shortName · name`) **và** trong Edit dialog. Update lạc quan (`factoryId`+`factory` / `machineTypeId`+`machineType`), lỗi thì refetch rollback. **Chỉ ảnh hưởng import đơn về sau** — đơn đã import giữ nguyên `factoryId`/`originalFactoryId` (insertOnly + transfer), KHÔNG backfill. BE `updateProductConfig` **validate** `factoryId` (`factoryService.getFactory`) + `machineTypeId` (`machineTypeService.getMachineType`) → 404 nếu id không tồn tại. |
 | **Mockup** | Cột **đầu tiên** — string URL ảnh; hiển thị thumbnail 56×56 (click mở tab mới) + ô `Input` sửa inline, lưu on-blur khi đổi |
 | **Level** | Select 1 trong **10 level cố định** (`PRODUCT_LEVELS` ở shared) — badge màu gradient dễ→khó (xanh lá `#22C55E` → đỏ đậm `#7F1D1D`). Lưu ngay khi chọn |
-| **Edit dialog** (`ProductConfigEditDialog.tsx`) | Nút ✏️ (`Pencil`) mỗi dòng mở modal chỉnh **mockup + level + fabricType + toolResult + guide** cùng lúc, bấm **Lưu** → 1 PATCH; có nút **Xóa sản phẩm** (destructive) ở footer. **Đây là nơi duy nhất sửa `guide`** (cột Hướng dẫn hiện **tạm ẩn** khỏi bảng). |
+| **Edit dialog** (`ProductConfigEditDialog.tsx`) | Nút ✏️ (`Pencil`) mỗi dòng mở modal chỉnh **mockup + level + fabricType + toolResult + Xưởng + Phòng + guide** cùng lúc, bấm **Lưu** → 1 PATCH; có nút **Xóa sản phẩm** (destructive) ở footer. **Đây là nơi duy nhất sửa `guide`** (cột Hướng dẫn hiện **tạm ẩn** khỏi bảng). Nhận thêm props `factoryOptions` / `machineTypeOptions` từ tab. |
 | **Hướng dẫn** (`guide`) | Free-text ghi chú/hướng dẫn sản phẩm — **cột trong bảng tạm ẩn**; chỉ sửa qua Edit dialog (textarea). |
 | Delete (1 dòng) | Nút xóa ở bảng **tạm ẩn**, thay bằng nút Edit; xóa (soft delete `deletedAt`) chuyển vào **footer Edit dialog** |
 | **Xóa tất cả** | Confirm → DELETE `/v1/product-configs/all` (hard-delete `deleteMany({})`) — dùng khi reset từ đầu |

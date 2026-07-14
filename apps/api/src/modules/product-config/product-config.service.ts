@@ -172,6 +172,10 @@ export class ProductConfigService {
   }
 
   async updateProductConfig(id: string, dto: UpdateProductConfigDto) {
+    // Validate ref khi client đổi Xưởng / Phòng (throw 404 nếu id không tồn tại).
+    if (dto.factoryId) await this.factoryService.getFactory(dto.factoryId);
+    if (dto.machineTypeId) await this.machineTypeService.getMachineType(dto.machineTypeId);
+
     const p = await this.productConfigRepository.findOneAndUpdate(
       { _id: id },
       { ...dto, ...(dto.shortName ? { shortName: dto.shortName.toUpperCase() } : {}) },

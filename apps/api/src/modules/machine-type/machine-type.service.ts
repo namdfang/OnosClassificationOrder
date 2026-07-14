@@ -42,6 +42,12 @@ export class MachineTypeService implements OnModuleInit {
     return { success: true, data, total };
   }
 
+  async getMachineType(id: string) {
+    const machineType = await this.machineTypeRepository.findOneById(id);
+    if (!machineType) throw new NotFoundException('MachineType not found');
+    return machineType;
+  }
+
   async findByShortName(shortName: string) {
     return this.machineTypeRepository.findOne({ shortName: shortName.toUpperCase() });
   }
