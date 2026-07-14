@@ -38,9 +38,20 @@ interface DialogState {
 
 const EMPTY_DIALOG: DialogState = { open: false, mode: 'create', member: null };
 
+type StatusFilter = 'active' | 'inactive' | 'all';
+
+const STATUS_FILTERS: { key: StatusFilter; label: string }[] = [
+  { key: 'active', label: 'Đang bật' },
+  { key: 'inactive', label: 'Đã tắt' },
+  { key: 'all', label: 'Tất cả' },
+];
+
 export default function DesignerTeamPage() {
   const [items, setItems] = useState<DesignerTeamMember[]>([]);
   const [loading, setLoading] = useState(false);
+  // Mặc định chỉ hiện designer đang bật. Chọn "Đã tắt" để xem + thống kê người
+  // đã tắt (số task đang làm/đã xong vẫn hiện trên từng dòng).
+  const [statusFilter, setStatusFilter] = useState<StatusFilter>('active');
   const [dialog, setDialog] = useState<DialogState>(EMPTY_DIALOG);
   const [confirmDelete, setConfirmDelete] = useState<DesignerTeamMember | null>(null);
   const [resetTarget, setResetTarget] = useState<DesignerTeamMember | null>(null);
@@ -66,9 +77,19 @@ export default function DesignerTeamPage() {
   const totals = useMemo(() => {
     const active = items.filter((i) => i.status === Status.Active).length;
     const inactive = items.length - active;
-    const totalActiveTasks = items.reduce((s, i) => s + i.activeTaskCount, 0);
+    // Task active toàn team CHỈ tính người đang bật (đúng "thống kê chỉ active").
+    const totalActiveTasks = items
+      .filter((i) => i.status === Status.Active)
+      .reduce((s, i) => s + (i.activeTaskCount ?? 0), 0);
     return { active, inactive, totalActiveTasks };
   }, [items]);
+
+  // Lọc client-side theo trạng thái (fetch luôn tải tất cả để thẻ thống kê chính xác).
+  const displayed = useMemo(() => {
+    if (statusFilter === 'active') return items.filter((i) => i.status === Status.Active);
+    if (statusFilter === 'inactive') return items.filter((i) => i.status !== Status.Active);
+    return items;
+  }, [items, statusFilter]);
 
   const openCreate = () => setDialog({ open: true, mode: 'create', member: null });
   const openEdit = (m: DesignerTeamMember) =>
@@ -77,7 +98,7 @@ export default function DesignerTeamPage() {
   const handleToggle = async (m: DesignerTeamMember) => {
     try {
       await RepositoryRemote.designer.updateMember(m._id, {
-        status: m.status === Status.Active ? Status.Disabled : Status.Active,
+        status: m.status === Status.Active ? Status.Inactive : Status.Active,
       });
       toast.success('Đã đổi trạng thái');
       fetchAll();
@@ -138,8 +159,26 @@ export default function DesignerTeamPage() {
       </div>
 
       <div className="rounded-lg border border-border bg-card">
-        <div className="flex items-center justify-between p-4 border-b border-border">
-          <p className="text-xs text-muted-foreground">{items.length} thành viên</p>
+        <div className="flex items-center justify-between p-4 border-b border-border gap-2 flex-wrap">
+          <div className="flex items-center gap-3">
+            <p className="text-xs text-muted-foreground">{displayed.length} thành viên</p>
+            <div className="flex items-center gap-1 rounded-md border border-border p-0.5">
+              {STATUS_FILTERS.map((f) => (
+                <button
+                  key={f.key}
+                  type="button"
+                  onClick={() => setStatusFilter(f.key)}
+                  className={`px-2.5 py-1 rounded text-xs font-medium transition-colors ${
+                    statusFilter === f.key
+                      ? 'bg-primary text-primary-foreground'
+                      : 'text-muted-foreground hover:text-foreground'
+                  }`}
+                >
+                  {f.label}
+                </button>
+              ))}
+            </div>
+          </div>
           <div className="flex items-center gap-2">
             <Button variant="ghost" size="sm" onClick={fetchAll} disabled={loading}>
               <RefreshCw size={13} className={loading ? 'animate-spin' : ''} />
@@ -171,21 +210,27 @@ export default function DesignerTeamPage() {
                 </TableCell>
               </TableRow>
             )}
-            {!loading && items.length === 0 && (
+            {!loading && displayed.length === 0 && (
               <TableRow>
                 <TableCell colSpan={7} className="text-center py-8 text-sm text-muted-foreground">
-                  Chưa có sub-designer — bấm <strong>+ Thêm sub-designer</strong> ở góc trên.
+                  {items.length === 0 ? (
+                    <>Chưa có sub-designer — bấm <strong>+ Thêm sub-designer</strong> ở góc trên.</>
+                  ) : (
+                    <>Không có designer nào ở trạng thái này.</>
+                  )}
                 </TableCell>
               </TableRow>
             )}
-            {items.map((it) => (
-              <TableRow key={it._id}>
+            {displayed.map((it) => {
+              const activeTasks = it.activeTaskCount ?? 0;
+              return (
+              <TableRow key={it._id} className={it.status !== Status.Active ? 'opacity-60' : undefined}>
                 <TableCell className="font-medium">{it.fullName}</TableCell>
                 <TableCell className="text-muted-foreground">{it.email}</TableCell>
                 <TableCell className="text-center">
-                  {it.activeTaskCount > 0 ? (
+                  {activeTasks > 0 ? (
                     <Badge variant="default" className="bg-indigo-500 hover:bg-indigo-500">
-                      {it.activeTaskCount}
+                      {activeTasks}
                     </Badge>
                   ) : (
                     <span className="text-xs text-muted-foreground">0</span>
@@ -225,16 +270,17 @@ export default function DesignerTeamPage() {
                     size="sm"
                     onClick={() => setConfirmDelete(it)}
                     title="Xoá"
-                    disabled={it.activeTaskCount > 0}
+                    disabled={activeTasks > 0}
                   >
                     <Trash2
                       size={14}
-                      className={it.activeTaskCount > 0 ? 'text-muted-foreground' : 'text-destructive'}
+                      className={activeTasks > 0 ? 'text-muted-foreground' : 'text-destructive'}
                     />
                   </Button>
                 </TableCell>
               </TableRow>
-            ))}
+              );
+            })}
           </TableBody>
         </Table>
       </div>

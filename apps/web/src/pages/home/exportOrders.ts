@@ -254,29 +254,7 @@ export function buildWorkbook(
   for (const o of orders) detailRows.push(buildDetailRow(o, ctx));
   const wsDetail = XLSX.utils.aoa_to_sheet(detailRows);
   // Auto-size — fixed widths tuned for the 21 columns.
-  wsDetail['!cols'] = [
-    { wch: 18 }, // Production ID
-    { wch: 14 }, // User SKU
-    { wch: 8 },  // Size
-    { wch: 16 }, // Trạng thái in
-    { wch: 16 }, // Note Trạng thái in
-    { wch: 14 }, // Kết quả Tool
-    { wch: 14 }, // Note kq Tool 1
-    { wch: 14 }, // File sửa lỗi
-    { wch: 20 }, // Ghi chú file lỗi
-    { wch: 12 }, // Color
-    { wch: 14 }, // Người thực hiện
-    { wch: 16 }, // Note người thực hiện
-    { wch: 36 }, // Type
-    { wch: 36 }, // Mockup
-    { wch: 36 }, // Design Front
-    { wch: 16 }, // Order ID
-    { wch: 18 }, // In Production At
-    { wch: 36 }, // Type.1
-    { wch: 18 }, // Nhà máy
-    { wch: 16 }, // Phòng
-    { wch: 18 }, // Loại vải
-  ];
+  wsDetail['!cols'] = DETAIL_COL_WIDTHS;
   XLSX.utils.book_append_sheet(wb, wsDetail, 'Chi tiết đơn');
 
   // ─── Sheet 4..N: 1 sheet per factory (just that factory's breakdowns) ─
@@ -331,6 +309,50 @@ export function buildWorkbook(
     }
   }
 
+  return wb;
+}
+
+/** Column widths cho sheet "Chi tiết đơn" — dùng chung giữa buildWorkbook và
+ *  buildDetailOnlyWorkbook. */
+const DETAIL_COL_WIDTHS = [
+  { wch: 18 }, // Production ID
+  { wch: 14 }, // User SKU
+  { wch: 8 }, // Size
+  { wch: 16 }, // Trạng thái in
+  { wch: 16 }, // Note Trạng thái in
+  { wch: 14 }, // Kết quả Tool
+  { wch: 14 }, // Note kq Tool 1
+  { wch: 14 }, // File sửa lỗi
+  { wch: 20 }, // Ghi chú file lỗi
+  { wch: 12 }, // Color
+  { wch: 14 }, // Người thực hiện
+  { wch: 16 }, // Note người thực hiện
+  { wch: 36 }, // Type
+  { wch: 36 }, // Mockup
+  { wch: 36 }, // Design Front
+  { wch: 16 }, // Order ID
+  { wch: 18 }, // In Production At
+  { wch: 36 }, // Type.1
+  { wch: 18 }, // Nhà máy
+  { wch: 16 }, // Phòng
+  { wch: 18 }, // Loại vải
+];
+
+/**
+ * Workbook gọn chỉ có **1 sheet "Chi tiết đơn"** — dùng cho export các đơn người
+ * dùng đã tick chọn (BulkEditToolbar). Không có sheet tổng quan/breakdown/xưởng
+ * vì selection không đi kèm `FactoryOverview`.
+ */
+export function buildDetailOnlyWorkbook(
+  orders: ExportableOrder[],
+  ctx: ExportContext,
+): XLSX.WorkBook {
+  const wb = XLSX.utils.book_new();
+  const detailRows: (string | number)[][] = [DETAIL_HEADERS as unknown as string[]];
+  for (const o of orders) detailRows.push(buildDetailRow(o, ctx));
+  const ws = XLSX.utils.aoa_to_sheet(detailRows);
+  ws['!cols'] = DETAIL_COL_WIDTHS;
+  XLSX.utils.book_append_sheet(wb, ws, 'Chi tiết đơn');
   return wb;
 }
 

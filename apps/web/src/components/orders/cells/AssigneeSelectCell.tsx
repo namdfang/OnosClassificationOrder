@@ -1,6 +1,7 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import { User } from 'lucide-react';
 import { toast } from 'sonner';
+import { Status } from 'shared';
 
 import { Spinner } from '@/components/common/Spinner';
 import { RepositoryRemote } from '@/services';
@@ -38,12 +39,16 @@ export function AssigneeSelectCell({ orderId, value, canEdit, blockedReason, onU
 
   const current = value ? byId[value] : undefined;
 
-  // Options chỉ đổi khi danh sách member đổi — memo để không cấp phát mảng mới
-  // (+ SelectPopover không nhận prop `options` khác identity) mỗi render.
-  const options = useMemo(
-    () => members.map((m) => ({ _id: m._id, code: m._id, name: m.fullName, icon: 'User' })),
-    [members],
-  );
+  // Chỉ GÁN được cho designer đang bật (active). Nhưng nếu đơn đang gán cho một
+  // designer đã tắt → vẫn giữ họ trong options để hiển thị đúng tên (không cho
+  // mất assignment lịch sử). Memo để giữ identity mảng (SelectPopover so sánh ref).
+  const options = useMemo(() => {
+    const active = members.filter((m) => m.status === Status.Active);
+    if (current && current.status !== Status.Active && !active.some((m) => m._id === current._id)) {
+      active.push(current);
+    }
+    return active.map((m) => ({ _id: m._id, code: m._id, name: m.fullName, icon: 'User' }));
+  }, [members, current]);
 
   const handleSelect = async (newId: string | null) => {
     if (newId === (value || null)) return;

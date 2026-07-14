@@ -72,6 +72,10 @@ export type WorkshopOrderRow = {
   // Hủy đơn (soft) — badge "Đã hủy" + gate action.
   cancelledAt?: string | null;
   cancelReason?: string;
+
+  // Giữ đơn (hold) — badge "Đang giữ" + khóa mọi thao tác (reversible).
+  heldAt?: string | null;
+  holdReason?: string;
 };
 
 const DESIGNER_STATUS_META: Record<

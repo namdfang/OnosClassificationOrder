@@ -23,6 +23,7 @@ import type {
   BulkTransferOrderDto,
   BulkUpdateOrderFieldDto,
   BulkUpdateOrderFieldResDto,
+  DesignerAssignmentConfig,
   DesignerBreakdownResDto,
   DesignerBacklogResDto,
   DesignerStatusCounts,
@@ -76,6 +77,10 @@ import type {
   SizeMatrixRow,
   SizeSummary,
   CancelOrderDto,
+  HoldOrderDto,
+  HoldOrderResDto,
+  BulkHoldOrderDto,
+  BulkHoldOrderResDto,
   TransferOrderDto,
   TransferOrderResDto,
   TypeSummary,
@@ -85,6 +90,7 @@ import type {
   UserBreakdown,
 } from 'shared';
 import {
+  DESIGNER_ASSIGNMENT_CONFIG_KEY,
   DESIGNER_REASSIGNABLE_STATUSES,
   DesignerStatus,
   FULFILLMENT_STAGE_LABELS,
@@ -96,6 +102,7 @@ import {
   LIFECYCLE_STAGE_KEYS,
   parseProductionIdFromCuttingFilename,
   RoleType,
+  Status,
   WorkshopConfigCategory,
 } from 'shared';
 import type { LifecycleTrack, LifecycleTrackStage, LifecycleTrackStatus } from 'shared';
@@ -116,6 +123,7 @@ import type { AuditContext } from '../order-log/order-log.service';
 import { ProductConfigRepository } from '../product-config/product-config.repository';
 import { RedisCacheService } from '../redis-cache/redis-cache.service';
 import { RoleRepository } from '../role/role.repository';
+import { SystemConfigService } from '../system-config/system-config.service';
 import { TelegramNotificationService } from '../telegram-notification/telegram-notification.service';
 import { UserEntity } from '../user/user.entity';
 import { WorkshopConfigRepository } from '../workshop-config/workshop-config.repository';
@@ -325,18 +333,26 @@ export class OrderService implements OnModuleInit {
     @InjectModel(UserEntity.name) private readonly userModel: Model<UserEntity>,
     private readonly roleRepository: RoleRepository,
     private readonly driveFileNameService: DriveFileNameService,
+    private readonly systemConfigService: SystemConfigService,
   ) {}
 
-  /** Validate giá trị assignee là userId hợp lệ (user role=Designer, active). */
+  /** Validate giá trị assignee là userId hợp lệ (user role=Designer, ĐANG BẬT). */
   private async assertAssigneeUserValid(userId: string | null): Promise<void> {
     if (!userId) return;
     const designerRole = await this.roleRepository.findOne({ name: RoleType.Designer });
     const u = await this.userModel
-      .findOne({ _id: userId, roleId: designerRole?._id }, { _id: 1 })
+      .findOne({ _id: userId, roleId: designerRole?._id }, { _id: 1, status: 1 })
       .lean();
     if (!u) {
       throw new BadRequestException(
         `User ${userId} không phải sub-designer hợp lệ (không tìm thấy hoặc không phải role Designer).`,
+      );
+    }
+    // Không cho gán đơn MỚI cho designer đã tắt (chỉ chặn khi GÁN — đơn cũ đang
+    // gán cho họ vẫn giữ nguyên để không mất lịch sử).
+    if ((u as unknown as { status?: string }).status !== Status.Active) {
+      throw new BadRequestException(
+        `Không gán được: sub-designer này đã bị tắt. Bật lại account hoặc chọn người khác.`,
       );
     }
   }
@@ -1065,7 +1081,17 @@ export class OrderService implements OnModuleInit {
         };
       }
     }
+    if (dto.ids) {
+      const ids = dto.ids
+        .split(',')
+        .map((s) => s.trim())
+        .filter(Boolean);
+      if (ids.length) filter._id = { $in: ids };
+    }
     if (typeof dto.isMapped === 'boolean') filter.isMapped = dto.isMapped;
+    // Toggle "Đang giữ" (workshop): held=true → chỉ đơn giữ; held=false → chỉ
+    // đơn không giữ. Không truyền → hiện cả 2 (đơn giữ chỉ tô xám, không ẩn).
+    if (typeof dto.held === 'boolean') filter.heldAt = { $exists: dto.held };
     if (dto.factoryId) filter.factoryId = dto.factoryId;
     if (dto.machineTypeId) filter.machineTypeId = dto.machineTypeId;
     if (dto.status) filter.status = dto.status;
@@ -1576,6 +1602,12 @@ export class OrderService implements OnModuleInit {
       ...match,
       cancelledAt: { $exists: true },
     });
+    // Đơn đang GIỮ: VẪN nằm trong totalOrders (chỉ tạm dừng) nhưng đếm riêng để
+    // dashboard hiện "Đơn đang giữ". Cùng scope xưởng + khoảng inProductionAt.
+    const heldOrders = await this.orderModel.countDocuments({
+      ...match,
+      heldAt: { $exists: true },
+    });
 
     const totalsAgg = await this.orderModel.aggregate([
       { $match: match },
@@ -1602,8 +1634,9 @@ export class OrderService implements OnModuleInit {
           totalShippingCost: round2(totalsAgg[0].totalShippingCost),
           totalCost: round2((totalsAgg[0].totalProductionCost || 0) + (totalsAgg[0].totalShippingCost || 0)),
           cancelledOrders,
+          heldOrders,
         }
-      : { totalOrders: 0, totalQuantity: 0, totalProductionCost: 0, totalShippingCost: 0, totalCost: 0, cancelledOrders };
+      : { totalOrders: 0, totalQuantity: 0, totalProductionCost: 0, totalShippingCost: 0, totalCost: 0, cancelledOrders, heldOrders };
 
     // Per-type aggregation: group, collect raw rows to post-process size/mockup
     const byTypeAgg = await this.orderModel.aggregate([
@@ -3407,6 +3440,7 @@ export class OrderService implements OnModuleInit {
       designerStatus: Array<{ value: string; label: string; count: number }>;
       type: Array<{ value: string; label: string; count: number }>;
       userSku: Array<{ value: string; label: string; count: number }>;
+      heldCount: number;
     };
   }> {
     type FacetKey =
@@ -3604,9 +3638,27 @@ export class OrderService implements OnModuleInit {
       return { withTool, noTool: total - withTool };
     })();
 
+    // Count đơn đang GIỮ trong scope filter hiện tại (strip `held` để đếm tổng
+    // đơn giữ bất kể toggle đang bật/tắt) → hiện trên nút toggle "Đang giữ".
+    const heldCount = await (async () => {
+      const base = this.buildOrderListFilter(
+        { ...dto, held: undefined } as GetProductionOrdersDto,
+        roleName,
+        assigneeCode,
+        fulfillmentFactoryId,
+        fulfillmentStage,
+        toolHasCodes,
+      );
+      if (dto.fulfillmentStatus) {
+        this.applyFulfillmentStatusFilter(base, dto.fulfillmentStatus, fulfillmentStage, assigneeCode);
+      }
+      return this.orderModel.countDocuments({ ...base, heldAt: { $exists: true } });
+    })();
+
     return {
       success: true,
       data: {
+        heldCount,
         printStatus: printStatusRows.map(toOption(printStatusMap)),
         toolResultNote: [
           // Prepend "Chưa soát" option. Token __none__ — FE injects nothing nữa.
@@ -3833,6 +3885,122 @@ export class OrderService implements OnModuleInit {
     return updated;
   }
 
+  // ─── Giữ đơn (hold / unhold) — ORDER_WRITE_ROLES ──────────────────
+  /**
+   * Guard dùng chung: chặn MỌI thao tác lên đơn đang bị giữ (heldAt set). Gọi ở
+   * đầu updateField / setProductionError / transition designer + fulfillment.
+   * Đơn giữ = tạm dừng — phải mở lại (unhold) trước khi thao tác tiếp.
+   */
+  private assertNotHeld(order: { heldAt?: Date | null }): void {
+    if (order?.heldAt) {
+      throw new BadRequestException(
+        'Đơn đang bị giữ — mở lại (bỏ giữ) trước khi thao tác tiếp.',
+      );
+    }
+  }
+
+  /** Set heldAt + holdReason cho 1 đơn. Chặn giữ 2 lần. */
+  async holdOrder(
+    id: string,
+    dto: HoldOrderDto,
+    _roleName?: RoleType,
+    ctx?: AuditContext,
+  ): Promise<HoldOrderResDto> {
+    const before = await this.orderModel.findById(id).lean();
+    if (!before) throw new NotFoundException('Order not found');
+    if ((before as unknown as { heldAt?: Date | null }).heldAt) {
+      throw new BadRequestException('Đơn đang được giữ rồi.');
+    }
+    if ((before as unknown as { cancelledAt?: Date | null }).cancelledAt) {
+      throw new BadRequestException('Đơn đã hủy — không thể giữ.');
+    }
+    const updated = await this.orderModel.findByIdAndUpdate(
+      id,
+      { $set: { heldAt: new Date(), holdReason: dto.reason ?? '' } },
+      { new: true },
+    );
+    if (!updated) throw new NotFoundException('Order not found');
+    void this.orderLogService.write({
+      orderId: id,
+      action: 'hold',
+      field: 'heldAt',
+      before: null,
+      after: dto.reason ?? '',
+      ctx,
+    });
+    void this.invalidateListCache();
+    return { success: true, data: updated } as unknown as HoldOrderResDto;
+  }
+
+  /** Clear heldAt + holdReason (mở lại đơn). */
+  async unholdOrder(
+    id: string,
+    _roleName?: RoleType,
+    ctx?: AuditContext,
+  ): Promise<HoldOrderResDto> {
+    const before = await this.orderModel.findById(id).lean();
+    if (!before) throw new NotFoundException('Order not found');
+    if (!(before as unknown as { heldAt?: Date | null }).heldAt) {
+      throw new BadRequestException('Đơn không ở trạng thái giữ.');
+    }
+    const updated = await this.orderModel.findByIdAndUpdate(
+      id,
+      { $unset: { heldAt: 1, holdReason: 1 } },
+      { new: true },
+    );
+    if (!updated) throw new NotFoundException('Order not found');
+    void this.orderLogService.write({
+      orderId: id,
+      action: 'unhold',
+      field: 'heldAt',
+      before: (before as unknown as { holdReason?: string }).holdReason ?? '',
+      after: null,
+      ctx,
+    });
+    void this.invalidateListCache();
+    return { success: true, data: updated } as unknown as HoldOrderResDto;
+  }
+
+  /**
+   * Bulk giữ / mở giữ nhiều đơn. `hold=true` chỉ set cho đơn CHƯA giữ và CHƯA
+   * hủy; `hold=false` chỉ clear cho đơn ĐANG giữ. `modified` = số đơn thực đổi.
+   */
+  async bulkSetHold(
+    dto: BulkHoldOrderDto,
+    _roleName?: RoleType,
+    ctx?: AuditContext,
+  ): Promise<BulkHoldOrderResDto> {
+    const baseFilter = {
+      _id: { $in: dto.ids },
+      deletedAt: { $exists: false },
+    } as Record<string, unknown>;
+    let result: { matchedCount: number; modifiedCount: number };
+    if (dto.hold) {
+      result = await this.orderModel.updateMany(
+        { ...baseFilter, heldAt: { $exists: false }, cancelledAt: { $exists: false } },
+        { $set: { heldAt: new Date(), holdReason: dto.reason ?? '' } },
+      );
+    } else {
+      result = await this.orderModel.updateMany(
+        { ...baseFilter, heldAt: { $exists: true } },
+        { $unset: { heldAt: 1, holdReason: 1 } },
+      );
+    }
+    void this.orderLogService.write({
+      orderId: dto.ids.join(','),
+      action: dto.hold ? 'hold' : 'unhold',
+      field: 'heldAt',
+      before: dto.hold ? null : 'bulk',
+      after: dto.hold ? (dto.reason ?? '') : null,
+      ctx,
+    });
+    void this.invalidateListCache();
+    return {
+      success: true,
+      data: { matched: result.matchedCount, modified: result.modifiedCount },
+    };
+  }
+
   /**
    * Đổi URL mockup + các vị trí design ĐANG CÓ (client chỉ gửi field muốn đổi).
    * Lưu raw URL (không qua R2). URL cũ được ghi vào OrderLog (before/after) để tra lại.
@@ -3919,6 +4087,8 @@ export class OrderService implements OnModuleInit {
 
     const before = await this.orderRepository.findOneById(id);
     if (!before) throw new NotFoundException('Order not found');
+    // Đơn đang giữ → khóa mọi chỉnh sửa field (mở lại trước khi thao tác).
+    this.assertNotHeld(before as unknown as { heldAt?: Date | null });
 
     const normalized = normalizeFieldValue(dto.field, dto.value);
     const patch: Record<string, unknown> = { [dto.field]: normalized };
@@ -4204,6 +4374,18 @@ export class OrderService implements OnModuleInit {
 
     void this.invalidateListCache();
 
+    // Soát tool thủ công xong (đặt toolResultNote có giá trị & != 'ok') → auto-gán
+    // designer theo cấu hình xưởng. Engine tự xác minh đủ điều kiện (chưa gán, có
+    // xưởng, xưởng có cấu hình). Bulk toolResultNote delegate qua đây nên cũng phủ.
+    if (
+      dto.field === 'toolResultNote' &&
+      typeof normalized === 'string' &&
+      normalized.trim() &&
+      normalized !== READY_FOR_FULFILL_CODE
+    ) {
+      void this.autoAssignAfterImport([id], ctx);
+    }
+
     return { success: true, data: updated };
   }
 
@@ -4304,6 +4486,8 @@ export class OrderService implements OnModuleInit {
     const matchFilter: Record<string, unknown> = {
       _id: { $in: dto.ids },
       deletedAt: { $exists: false },
+      // Đơn đang giữ → loại khỏi bulk update (matchedCount thấp hơn để FE biết bị bỏ).
+      heldAt: { $exists: false },
     };
     if (extraMatchFilter) Object.assign(matchFilter, extraMatchFilter);
     const result = await this.orderModel.updateMany(matchFilter, { $set: patch });
@@ -4328,6 +4512,143 @@ export class OrderService implements OnModuleInit {
         modified: result.modifiedCount,
       },
     };
+  }
+
+  /**
+   * Chia N phần cho các designer theo trọng số `weights` (tự do, không cần
+   * cộng 100). `baseᵢ = floor(N × wᵢ/Σw)`; **số dư dồn hết cho designer đầu**
+   * (theo yêu cầu "phần dư về designer đầu"). Σw = 0 → chia đều.
+   */
+  private allocateByWeight(n: number, weights: number[]): number[] {
+    const k = weights.length;
+    if (k === 0 || n <= 0) return new Array(k).fill(0);
+    let effective = weights.map((w) => (Number.isFinite(w) && w > 0 ? w : 0));
+    let sum = effective.reduce((a, b) => a + b, 0);
+    if (sum <= 0) {
+      effective = new Array(k).fill(1);
+      sum = k;
+    }
+    const base = effective.map((w) => Math.floor((n * w) / sum));
+    const assigned = base.reduce((a, b) => a + b, 0);
+    base[0] += n - assigned; // phần dư về designer đầu danh sách
+    return base;
+  }
+
+  /**
+   * Auto-gán đơn cho designer theo cấu hình xưởng (`designer_assignment_config`)
+   * SAU khi soát tool xong. Được gọi từ `importRework` + `updateField('toolResultNote')`
+   * (bulk toolResultNote delegate qua updateField nên cũng phủ). Fire-and-forget.
+   *
+   * Ứng viên (tự xác minh lại trên DB, không tin state truyền vào):
+   *   - `toolResultNote` CÓ giá trị & != 'ok' (đã soát, có lỗi cần designer)
+   *   - có `factoryId` (đã map xưởng) & xưởng đó CÓ cấu hình designer
+   *   - chưa ai ôm (`designerStatus='unassigned'`, `assignee` rỗng)
+   *   - không hủy / giữ / xóa
+   * Phân bổ theo lô (floor + dư về đầu) cho các designer Active của xưởng.
+   */
+  private async autoAssignAfterImport(orderIds: string[], ctx?: AuditContext): Promise<void> {
+    try {
+      const ids = Array.from(new Set(orderIds.map((x) => String(x)).filter(Boolean)));
+      if (!ids.length) return;
+
+      const config = await this.systemConfigService.get<DesignerAssignmentConfig>(
+        DESIGNER_ASSIGNMENT_CONFIG_KEY,
+        null,
+      );
+      if (!config?.factories?.length) return;
+
+      const byFactory = new Map<string, { designerId: string; weight: number }[]>();
+      for (const f of config.factories) {
+        if (f?.factoryId && f.designers?.length) {
+          byFactory.set(String(f.factoryId), f.designers.map((d) => ({ designerId: String(d.designerId), weight: d.weight })));
+        }
+      }
+      if (!byFactory.size) return;
+
+      // Xác minh trạng thái thực trên DB (authoritative).
+      const eligible = await this.orderModel
+        .find(
+          {
+            _id: { $in: ids },
+            designerStatus: DesignerStatus.Unassigned,
+            assignee: { $in: [null, ''] },
+            factoryId: { $in: Array.from(byFactory.keys()) },
+            toolResultNote: { $nin: [null, '', READY_FOR_FULFILL_CODE] },
+            cancelledAt: null,
+            heldAt: null,
+            deletedAt: { $exists: false },
+          },
+          { _id: 1, factoryId: 1 },
+        )
+        .lean();
+      if (!eligible.length) return;
+
+      // Chỉ giữ designer đang Active + đúng role Designer.
+      const allDesignerIds = Array.from(
+        new Set(config.factories.flatMap((f) => (f.designers || []).map((d) => String(d.designerId)))),
+      );
+      const designerRole = await this.roleRepository.findOne({ name: RoleType.Designer });
+      const activeUsers = await this.userModel
+        .find({ _id: { $in: allDesignerIds }, roleId: designerRole?._id, status: Status.Active }, { _id: 1 })
+        .lean();
+      const validIds = new Set(activeUsers.map((u) => String(u._id)));
+
+      const groups = new Map<string, string[]>();
+      for (const o of eligible) {
+        const fid = String((o as unknown as { factoryId?: string }).factoryId);
+        if (!groups.has(fid)) groups.set(fid, []);
+        groups.get(fid)!.push(String(o._id));
+      }
+
+      const now = new Date();
+      const logRows: Array<{
+        orderId: string;
+        action: 'update';
+        field: string;
+        before: unknown;
+        after: unknown;
+        ctx?: AuditContext;
+      }> = [];
+
+      for (const [fid, orderList] of groups) {
+        const designers = (byFactory.get(fid) || []).filter((d) => validIds.has(d.designerId));
+        if (!designers.length) continue;
+        const alloc = this.allocateByWeight(orderList.length, designers.map((d) => d.weight));
+        let cursor = 0;
+        for (let i = 0; i < designers.length; i++) {
+          const count = alloc[i];
+          if (count <= 0) continue;
+          const slice = orderList.slice(cursor, cursor + count);
+          cursor += count;
+          if (!slice.length) continue;
+          const designerId = designers[i].designerId;
+          await this.orderModel.updateMany(
+            { _id: { $in: slice }, designerStatus: DesignerStatus.Unassigned },
+            {
+              $set: {
+                assignee: designerId,
+                designerStatus: DesignerStatus.Assigned,
+                designerAssignedAt: now,
+                designerRejectedReason: null,
+                designerRejectedAt: null,
+              },
+            },
+          );
+          for (const oid of slice) {
+            logRows.push({ orderId: oid, action: 'update', field: 'assignee', before: null, after: designerId, ctx });
+          }
+        }
+      }
+
+      if (logRows.length) {
+        void this.orderLogService.writeMany(logRows);
+        void this.invalidateListCache();
+      }
+    } catch (err) {
+      this.logger.info({
+        message: JSON.stringify({ scope: 'autoAssignAfterImport', error: String(err) }),
+      });
+    }
   }
 
   /**
@@ -4839,6 +5160,9 @@ export class OrderService implements OnModuleInit {
     let notFound = 0;
     let cancelled = 0;
     let assigneeMatched = 0;
+    // Đơn vừa được set toolResultNote != 'ok' (soát tool xong) mà KHÔNG gán tay
+    // trong sheet → ứng viên auto-gán designer theo cấu hình xưởng.
+    const autoAssignCandidates: string[] = [];
 
     // Preload workshop_config + users để lookup nhanh.
     const [toolResultNoteCfgs, errorFileCfgs, allUsers] = await Promise.all([
@@ -4948,6 +5272,20 @@ export class OrderService implements OnModuleInit {
       await this.orderModel.updateOne({ _id: order._id }, { $set });
       updated += 1;
 
+      // Ứng viên auto-gán: soát tool xong (note có giá trị & != 'ok'), KHÔNG gán
+      // tay trong sheet, đơn đã có xưởng & chưa ai ôm. Engine xác minh lại trên DB.
+      if (
+        typeof $set.toolResultNote === 'string' &&
+        $set.toolResultNote.trim() &&
+        $set.toolResultNote !== READY_FOR_FULFILL_CODE &&
+        !$set.assignee &&
+        order.factoryId &&
+        (!order.designerStatus || order.designerStatus === DesignerStatus.Unassigned) &&
+        !order.assignee
+      ) {
+        autoAssignCandidates.push(String(order._id));
+      }
+
       if (warnings.length) {
         // Logger config dùng custom level "activity" trên prod → .warn không exist.
         // Dùng .info (luôn tồn tại) + prefix [WARN] để filter log dễ.
@@ -4974,6 +5312,9 @@ export class OrderService implements OnModuleInit {
     }
 
     void this.invalidateListCache();
+
+    // Auto-gán designer theo cấu hình xưởng cho đơn vừa soát tool xong (fire-and-forget).
+    void this.autoAssignAfterImport(autoAssignCandidates, ctx);
 
     this.logger.info({
       message: `[import-rework] done: updated=${updated} notFound=${notFound} cancelled=${cancelled} assigneeMatched=${assigneeMatched} skipped=${skipped.length}`,
@@ -5536,12 +5877,15 @@ export class OrderService implements OnModuleInit {
     ]);
 
     // Auto-include designer users (role=Designer) chưa có task nào → row count 0.
+    // CHỈ designer ĐANG BẬT (status active) — thống kê loại người đã tắt (kể cả
+    // lịch sử). Xem người đã tắt qua bộ lọc "Đã tắt" ở trang Team Designer.
     const designerRole = await this.roleRepository.findOne({ name: RoleType.Designer });
     const teamUsers = designerRole
       ? await this.userModel
-          .find({ roleId: designerRole._id }, { _id: 1, fullName: 1, email: 1 })
+          .find({ roleId: designerRole._id, status: Status.Active }, { _id: 1, fullName: 1, email: 1 })
           .lean()
       : [];
+    const activeIds = new Set(teamUsers.map((u) => String(u._id)));
 
     const userIds = new Set<string>();
     let hasUnassigned = false;
@@ -5549,8 +5893,10 @@ export class OrderService implements OnModuleInit {
       // Matrix chỉ hiện "không tool" (M); ok + có-tool chưa gán không lên matrix.
       if (r._id.status === '__skip_unassigned__' || r._id.status === '__unassigned_withtool__')
         continue;
-      if (r._id.uid) userIds.add(r._id.uid);
-      else hasUnassigned = true;
+      // Loại đơn của designer đã tắt khỏi matrix (chỉ thống kê người active).
+      if (r._id.uid) {
+        if (activeIds.has(r._id.uid)) userIds.add(r._id.uid);
+      } else hasUnassigned = true;
     }
     for (const u of teamUsers) userIds.add(String(u._id));
 
@@ -5779,6 +6125,8 @@ export class OrderService implements OnModuleInit {
     if ((before as unknown as { cancelledAt?: Date | null }).cancelledAt) {
       throw new BadRequestException('Đơn đã hủy — không thể báo lỗi / đẩy về công đoạn trước.');
     }
+    // Đơn đang giữ → khóa báo lỗi / đẩy về công đoạn trước.
+    this.assertNotHeld(before as unknown as { heldAt?: Date | null });
 
     let finalSource: 'designer' | 'factory' | 'tool-check' | undefined = dto.source;
     if (dto.code) {

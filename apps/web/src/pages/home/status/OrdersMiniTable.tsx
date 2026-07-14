@@ -16,8 +16,9 @@ import { TooltipProvider } from '@/components/ui/tooltip';
 import { ImagePreviewDialog } from '@/components/common/ImagePreviewDialog';
 import { OrderLogTimelineDialog } from '@/components/orders/OrderLogTimelineDialog';
 import { OrderRowActionsMenu } from '@/components/orders/OrderRowActionsMenu';
-import { isCancelled } from '@/utils/orderActions';
+import { isCancelled, isHeld } from '@/utils/orderActions';
 import { CancelledBadge } from '@/components/orders/CancelledBadge';
+import { HeldBadge } from '@/components/orders/HeldBadge';
 import {
   WORKSHOP_COLS,
   type WorkshopOrderRow,
@@ -190,14 +191,18 @@ export function OrdersMiniTable({ queryString }: Props) {
                   key={row._id}
                   className={cn(
                     isNoTool(row.toolResult) && NO_TOOL_ROW_CLASS,
-                    isCancelled(row) && 'opacity-60',
+                    (isCancelled(row) || isHeld(row)) && 'opacity-60',
                   )}
                 >
                   {visibleCols.map((c) => (
                     <TableCell key={c.key} className="py-2">
-                      {c.key === 'productionId' && isCancelled(row) ? (
+                      {c.key === 'productionId' && (isCancelled(row) || isHeld(row)) ? (
                         <div className="flex items-center gap-1.5">
-                          <CancelledBadge reason={row.cancelReason} />
+                          {isCancelled(row) ? (
+                            <CancelledBadge reason={row.cancelReason} />
+                          ) : (
+                            <HeldBadge reason={row.holdReason} />
+                          )}
                           <div className="min-w-0 flex-1">{c.render(row, ctx)}</div>
                         </div>
                       ) : (

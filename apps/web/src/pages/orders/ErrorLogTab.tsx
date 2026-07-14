@@ -20,6 +20,9 @@ import {
 import { TooltipProvider } from '@/components/ui/tooltip';
 import { OrderLogTimelineDialog } from '@/components/orders/OrderLogTimelineDialog';
 import { OrderRowActionsMenu } from '@/components/orders/OrderRowActionsMenu';
+import { HeldBadge } from '@/components/orders/HeldBadge';
+import { CancelledBadge } from '@/components/orders/CancelledBadge';
+import { isCancelled, isHeld } from '@/utils/orderActions';
 import {
   WORKSHOP_COLS,
   type WorkshopOrderRow,
@@ -455,10 +458,16 @@ export function ErrorLogTab() {
                 {items.map((row) => {
                   const urg = urgencyOf(row.inProductionAt);
                   const meta = URGENCY_META[urg];
+                  const held = isHeld(row);
+                  const cancelled = isCancelled(row);
+                  const rowCtx = held ? { ...renderCtx, canEditField: () => false } : renderCtx;
                   return (
                     <TableRow
                       key={row._id}
-                      className={cn(isNoTool(row.toolResult) && NO_TOOL_ROW_CLASS)}
+                      className={cn(
+                        isNoTool(row.toolResult) && NO_TOOL_ROW_CLASS,
+                        (held || cancelled) && 'opacity-60',
+                      )}
                     >
                       <TableCell className="py-2">
                         <Badge className={cn('font-mono text-[11px]', meta.cls)}>
@@ -477,7 +486,18 @@ export function ErrorLogTab() {
                       </TableCell>
                       {visibleCols.map((c) => (
                         <TableCell key={c.key} className="py-2">
-                          {c.render(row, renderCtx)}
+                          {c.key === 'productionId' && (held || cancelled) ? (
+                            <div className="flex items-center gap-1.5">
+                              {cancelled ? (
+                                <CancelledBadge reason={row.cancelReason} />
+                              ) : (
+                                <HeldBadge reason={row.holdReason} />
+                              )}
+                              <div className="min-w-0 flex-1">{c.render(row, rowCtx)}</div>
+                            </div>
+                          ) : (
+                            c.render(row, rowCtx)
+                          )}
                         </TableCell>
                       ))}
                       <TableCell className="py-2 text-center">

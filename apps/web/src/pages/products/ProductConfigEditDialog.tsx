@@ -16,7 +16,7 @@ import {
 import { Spinner } from '@/components/common/Spinner';
 import { RepositoryRemote } from '@/services';
 import { handleAxiosError } from '@/utils';
-import type { ProductConfigRow } from './ProductConfigTab';
+import type { ProductConfigRow, RefItem } from './ProductConfigTab';
 
 interface Option {
   code: string;
@@ -29,6 +29,8 @@ interface Props {
   item: ProductConfigRow | null;
   fabricOptions: Option[];
   toolOptions: Option[];
+  factoryOptions: RefItem[];
+  machineTypeOptions: RefItem[];
   /** Cập nhật lạc quan sau khi lưu. */
   onSaved: (id: string, patch: Partial<ProductConfigRow>) => void;
   /** Xoá sản phẩm (đóng dialog sau đó). */
@@ -44,6 +46,8 @@ export function ProductConfigEditDialog({
   item,
   fabricOptions,
   toolOptions,
+  factoryOptions,
+  machineTypeOptions,
   onSaved,
   onDelete,
 }: Props) {
@@ -52,6 +56,8 @@ export function ProductConfigEditDialog({
   const [fabricType, setFabricType] = useState('');
   const [toolResult, setToolResult] = useState('');
   const [guide, setGuide] = useState('');
+  const [factoryId, setFactoryId] = useState('');
+  const [machineTypeId, setMachineTypeId] = useState('');
   const [saving, setSaving] = useState(false);
 
   useEffect(() => {
@@ -61,6 +67,8 @@ export function ProductConfigEditDialog({
       setFabricType(item.fabricType || '');
       setToolResult(item.toolResult || '');
       setGuide(item.guide || '');
+      setFactoryId(item.factoryId || '');
+      setMachineTypeId(item.machineTypeId || '');
     }
   }, [item]);
 
@@ -73,7 +81,15 @@ export function ProductConfigEditDialog({
       fabricType: fabricType || undefined,
       toolResult: toolResult || undefined,
       guide: guide.trim(),
+      // Xưởng / Phòng bắt buộc — chỉ gửi khi có giá trị. Kèm object hiển thị để
+      // merge lạc quan (select ở bảng đọc theo id; badge nếu có đọc theo object).
+      ...(factoryId ? { factoryId } : {}),
+      ...(machineTypeId ? { machineTypeId } : {}),
     };
+    const f = factoryOptions.find((x) => x._id === factoryId);
+    if (f) patch.factory = { name: f.name, shortName: f.shortName };
+    const m = machineTypeOptions.find((x) => x._id === machineTypeId);
+    if (m) patch.machineType = { name: m.name, shortName: m.shortName };
     try {
       setSaving(true);
       await RepositoryRemote.productConfig.updateProductConfig(item._id, patch as never);
@@ -169,6 +185,37 @@ export function ProductConfigEditDialog({
                 {toolOptions.map((opt) => (
                   <option key={opt.code} value={opt.code}>
                     {opt.name}
+                  </option>
+                ))}
+              </select>
+            </div>
+          </div>
+
+          <div className="grid grid-cols-2 gap-3">
+            {/* Xưởng */}
+            <div className="space-y-1.5">
+              <Label>Xưởng</Label>
+              <select value={factoryId} onChange={(e) => setFactoryId(e.target.value)} className={selectCls}>
+                {!factoryId && <option value="">— Chưa chọn —</option>}
+                {factoryOptions.map((f) => (
+                  <option key={f._id} value={f._id}>
+                    {f.shortName} · {f.name}
+                  </option>
+                ))}
+              </select>
+            </div>
+            {/* Phòng */}
+            <div className="space-y-1.5">
+              <Label>Phòng</Label>
+              <select
+                value={machineTypeId}
+                onChange={(e) => setMachineTypeId(e.target.value)}
+                className={selectCls}
+              >
+                {!machineTypeId && <option value="">— Chưa chọn —</option>}
+                {machineTypeOptions.map((m) => (
+                  <option key={m._id} value={m._id}>
+                    {m.shortName} · {m.name}
                   </option>
                 ))}
               </select>

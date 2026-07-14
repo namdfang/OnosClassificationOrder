@@ -43,7 +43,10 @@ export class DesignerTeamController {
   ) {}
 
   @Get()
-  @Auth([RoleType.SuperAdmin, RoleType.Admin, RoleType.Manager, RoleType.DesignerLeader])
+  // Designer (sub) cũng cần list này để chọn người nhận thay khi "báo không làm
+  // được → bàn giao" (RejectModal). Chỉ mở GET read-only; create/update/delete
+  // vẫn giới hạn Admin/Leader.
+  @Auth([RoleType.SuperAdmin, RoleType.Admin, RoleType.Manager, RoleType.DesignerLeader, RoleType.Designer])
   @ApiOperation({ summary: 'List sub-designers + active/done task counts' })
   @HttpCode(HttpStatus.OK)
   @ApiOkResponse({ type: GetDesignerTeamResDto })

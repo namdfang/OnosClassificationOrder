@@ -169,6 +169,18 @@ export class OrderEntity extends DatabaseEntityAbstract {
   @Prop()
   cancelReason?: string;
 
+  /**
+   * Đơn đang bị GIỮ (hold) — set qua POST /orders/:id/hold. Khi set: mọi thao
+   * tác (updateField, transition designer/fulfillment, báo lỗi...) bị chặn ở BE
+   * + FE tô xám cả dòng. REVERSIBLE — clear qua /unhold để tiếp tục. Index để
+   * count "Đơn đang giữ" ở dashboard + toggle filter workshop.
+   */
+  @Prop({ index: true })
+  heldAt?: Date;
+
+  @Prop()
+  holdReason?: string;
+
   @Prop({ index: true })
   orderId?: string;
 
@@ -333,6 +345,24 @@ export class OrderEntity extends DatabaseEntityAbstract {
   @Prop({ required: true, default: 0 })
   designerWorkMs: number;
 
+  /**
+   * Lịch sử "báo không làm được → bàn giao". Mỗi lần 1 designer báo không làm
+   * được, đơn gán thẳng sang designer khác (không còn state `rejected`).
+   * Append-only — NGUỒN thống kê "Không làm được" theo người (`fromUserId`).
+   */
+  @Prop({
+    type: [
+      {
+        fromUserId: { type: String },
+        toUserId: { type: String },
+        reason: { type: String },
+        at: { type: Date },
+      },
+    ],
+    default: undefined,
+  })
+  designerRejections?: { fromUserId: string; toUserId: string; reason?: string; at: Date }[];
+
   // ─── Fulfillment 8-stage workflow ───────────────────────────────
   /**
    * Stage hiện tại của đơn. null = chưa vào fulfillment HOẶC đã pack done.
@@ -400,6 +430,9 @@ export function makeEmptyStageState(): FulfillmentStages[keyof FulfillmentStages
 }
 
 export const OrderSchema = SchemaFactory.createForClass(OrderEntity);
+
+// Thống kê "Không làm được" theo từng người bàn giao.
+OrderSchema.index({ 'designerRejections.fromUserId': 1 });
 
 OrderSchema.virtual('factory', {
   ref: 'FactoryEntity',

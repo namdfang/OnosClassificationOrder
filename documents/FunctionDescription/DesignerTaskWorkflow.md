@@ -45,7 +45,7 @@ Tách role Designer cũ (1 account dùng chung) thành **DesignerLeader** + N **
 
 ```
 Leader assign → Sub Designer nhận → làm → hoàn thành
-                                 ↘ không làm được (rejected) → leader re-assign
+                                 ↘ không làm được → BÀN GIAO thẳng cho designer khác (bắt buộc chọn)
 xưởng báo lỗi designer (rework) → sub làm lại → hoàn thành
 ```
 
@@ -54,7 +54,7 @@ State machine 6 trạng thái:
 - `assigned` (leader gán cho user)
 - `in-progress` (sub bấm "Nhận làm")
 - `done` (sub bấm "Hoàn thành" — auto `toolResultNote='ok'` + `readyForFulfill=true`)
-- `rejected` (sub bấm "Không làm được" + reason — cho phép từ **`assigned` HOẶC `in-progress`**, tức đã kéo sang "Đang làm" vẫn báo không làm được. **Nhãn hiển thị mọi nơi = "Không làm được"**; state key vẫn là `rejected`)
+- `rejected` (**LEGACY** — luồng mới KHÔNG còn tạo state này). "Báo không làm được" giờ = **bàn giao BẮT BUỘC** sang designer khác: đơn chuyển thẳng `assigned` cho người nhận (không nằm ở `rejected`). Lịch sử lưu vào mảng `designerRejections` trên order — xem §2.3b. State cũ chỉ còn ở đơn legacy trước thay đổi.
 - `rework` (xưởng set productionError có errorSource='designer')
 
 **Identity model:** `Order.assignee = user._id` (string). KHÔNG còn dùng workshop_config (category=assignee đã xoá).
@@ -147,9 +147,24 @@ Login Designer → auto redirect `/my-tasks` (xem `pages/login/index.tsx`).
 - Detect cột của items đã chọn:
   - 1 cột → button theo `COL_META[col].bulk`: Cần làm (Nhận / Không làm được) · Cần làm lại (Nhận lại) · Đang làm (Hoàn thành) · Đã xong (—)
   - Mixed → text "Đơn ở nhiều cột" + clear button only
-- Reject mở `RejectModal` với label "N đơn được chọn" → `POST /designer/bulk-transition { ids, action: 'reject', reason }` → skip per-row + report
+- Reject mở `RejectModal` (bắt buộc chọn 1 designer nhận thay cho TẤT CẢ đơn chọn) → `POST /designer/bulk-transition { ids, action: 'reject', reason, targetUserId }` → skip per-row (kể cả đơn `targetUserId` trùng người đang ôm) + report
 
-**Rejected drawer** dưới kanban (tiêu đề "File không làm được"): list collapsible file không làm được với productionId clickable + reason.
+**Rejected drawer** dưới kanban (tiêu đề "File không làm được"): list các đơn **user hiện tại TỪNG báo không làm được rồi bàn giao đi** (query `designerRejections.fromUserId = me`, KHÔNG theo assignee hiện tại) — dùng để tra lại người đó đã không làm được những đơn nào. Lọc theo cùng cửa sổ ngày `inProductionAt` + facet của kanban.
+
+### 2.3b "Báo không làm được" = bàn giao bắt buộc (thay cho `rejected`)
+
+> File: `apps/web/src/pages/designer/my-tasks/RejectModal.tsx` (picker) + `designer-task.service.ts` (`transition`/`bulkTransition` + `resolveTransition` case `Reject`).
+
+1. Designer bấm "Không làm được" (cột **Cần làm** / **Đang làm**, single hoặc bulk) → `RejectModal` **bắt buộc chọn 1 designer nhận thay** (dropdown = sub-designer đang `Active`, **loại chính mình**, kèm số đơn đang ôm để chọn người rảnh — nguồn `designerTeamStore`). Không chọn → nút "Không làm được" **disabled**. Lý do vẫn **tùy chọn**.
+2. Submit → `POST /orders/:id/designer-transition { action:'reject', reason?, targetUserId }` (bulk: `/designer/bulk-transition`).
+3. BE (`resolveTransition` case `Reject`, chỉ hợp lệ từ `assigned`/`in-progress`):
+   - Validate `targetUserId` = sub-designer `Active`, khác `fromUserId` (`assertHandoffTargetValid`).
+   - `fromUserId` = **assignee đang ôm đơn** (người "không làm được"), KHÔNG phải actor (leader có thể thao tác thay).
+   - Patch: `designerStatus='assigned'`, `assignee=targetUserId`, `designerAssignedAt=now`; **reset đồng hồ per-cycle** (`designerStartedAt/FirstStartedAt/CompletedAt=null`) + clear scalar reject cũ; **giữ** `designerReworkCount`/`designerWorkMs` (lịch sử đơn).
+   - `$push designerRejections { fromUserId, toUserId, reason?, at }` — append-only, là **NGUỒN thống kê "Không làm được" theo người**.
+   - `findOneAndUpdate({designerStatus: current})` race-safe; bulk skip nếu `targetUserId === assignee` (no-op).
+4. **Audit (OrderLog)**, actor = người thao tác + timestamp: `designerStatus` (→assigned) + `assignee` (from→to) + `designerRejectedReason` (nội dung lý do). Tra được ở `OrderLogTimelineDialog`.
+5. Đơn rời board người cũ → hiện ở cột **Cần làm** của người nhận. Người cũ vẫn thấy đơn trong **drawer "Không làm được"** + KPI (đếm từ `designerRejections.fromUserId`).
 
 ### 2.4 Xưởng báo lỗi → rework cycle
 1. Fulfillment vào `/orders` workshop → cell "Lỗi xưởng" (`ProductionErrorSelectCell`) pick code:
@@ -187,6 +202,7 @@ designerReworkAt?: Date
 designerRejectedReason?: string
 designerReworkCount: number       // default 0, $inc khi xưởng báo lỗi designer
 designerWorkMs: number            // default 0, cumulative ms, $inc khi complete
+designerRejections?: { fromUserId; toUserId; reason?; at }[]  // lịch sử "không làm được → bàn giao", append-only; nguồn thống kê rejected theo người (index fromUserId)
 
 productionError?: string          // workshop_config code
 productionErrorNote?: string
@@ -212,7 +228,7 @@ factoryId?: string                // ref FactoryEntity, REQUIRED khi role=Fulfil
 | PATCH | `/v1/designer/team/:userId` | Admin/Leader | Update info, block status change/disable nếu còn task active |
 | DELETE | `/v1/designer/team/:userId` | Admin/Leader | Soft delete, block nếu còn task active |
 | POST | `/v1/designer/team/:userId/reset-password` | Admin/Leader | Force password change next login |
-| POST | `/v1/orders/:id/designer-transition` | Designer/Leader/Admin | Body `{ action, reason? }`. State machine race-safe `findOneAndUpdate({ designerStatus: expected })`. Sub-designer chỉ transition task `assignee=user._id` (owner check). Override roles (Admin/Manager/Leader) bypass |
+| POST | `/v1/orders/:id/designer-transition` | Designer/Leader/Admin | Body `{ action, reason?, targetUserId? }` (`targetUserId` **bắt buộc khi action='reject'** — bàn giao, xem §2.3b). State machine race-safe `findOneAndUpdate({ designerStatus: expected })`. Sub-designer chỉ transition task `assignee=user._id` (owner check). Override roles (Admin/Manager/Leader) bypass |
 | POST | `/v1/designer/bulk-transition` | Same | Bulk N task, per-row state machine, skip + report |
 | GET | `/v1/designer/my-tasks` | Designer/Leader/Admin | Kanban 6 cột (`assigned/inProgress/rework/done/fixed/**watching**`; **done** = reworkCount 0, **fixed** = reworkCount>0, **watching** = "Đang chờ quay lại" đơn của mình đang giữ ở Soát tool — xem §2.3) + rejected drawer. Filter (type, fabricType, machineNumber, toolResult, search); `from`/`to` lọc **cả các cột** theo `inProductionAt` (mặc định today) |
 | GET | `/v1/designer/my-task-filters` | Same | Faceted filter options (7 facets: type/fabricType/machineNumber/toolResult/toolResultNote/userSku scalar + **errorFile mảng qua `$unwind`**) cross-narrow + lọc `inProductionAt` |
@@ -244,7 +260,7 @@ factoryId?: string                // ref FactoryEntity, REQUIRED khi role=Fulfil
 | `assigned` | `start` | `in-progress` | designerStartedAt=now; if isFirstStart → designerFirstStartedAt=now |
 | `rework` | `restart` | `in-progress` | designerStartedAt=now (reset per-cycle) |
 | `in-progress` | `complete` | `done` | designerCompletedAt=now; toolResultNote='ok'; readyForFulfill=true; **`productionFirstErrorAt=null`** (đơn rời "Nhật ký bù lỗi" — mirror path `updateField(toolResultNote='ok')`; trước đây state-machine bỏ sót nên đơn rework fix xong vẫn kẹt trong error log); `$inc designerWorkMs += (now − startedAt)` |
-| `assigned` **hoặc** `in-progress` | `reject` | `rejected` | designerRejectedAt=now; designerRejectedReason=reason. FE: nút "Trả" hiện ở cả cột Cần làm + Đang làm; bulk reject cho cột Đang làm |
+| `assigned` **hoặc** `in-progress` | `reject` (kèm `targetUserId` bắt buộc) | `assigned` (**cho người nhận**) | Bàn giao: `assignee=targetUserId`, `designerAssignedAt=now`, reset đồng hồ per-cycle, `$push designerRejections{fromUserId,toUserId,reason,at}`. KHÔNG còn set `rejected`. Xem §2.3b |
 | `done`/`unassigned`/`rejected` → updateField productionError (errorSource=designer) | (auto) | `rework` | designerReworkAt=now; `$inc designerReworkCount`. Đồng thời rework-back về designer + tạo/giữ stage fulfillment → tab "Đang chờ quay lại" (xem `FulfillmentWorkflow.md` §5.4b). Skip khi `rework`/`in-progress`/`assigned` (gate `canReworkBackToDesigner`) |
 | `done`/`unassigned`/`rejected` → updateField productionErrorSource → 'designer' | (auto) | `rework` | Same as above |
 | `done`/`unassigned`/`rejected` → setProductionError (source=designer, scan/dialog) | (auto) | `rework` | Same as above |
@@ -264,12 +280,24 @@ factoryId?: string                // ref FactoryEntity, REQUIRED khi role=Fulfil
 ## 4. UI Components
 
 ### 4.1 `/designer/team` (Leader)
-- 3 stat card: Đang làm · Tạm tắt · Task active toàn team
-- Bảng: Họ tên · Email · Đang làm (badge) · Đã xong · Vào làm · Trạng thái (Switch) · Actions (reset pwd / edit / xoá — Trash disabled khi activeTaskCount > 0)
+- 3 stat card: Đang làm · Tạm tắt · Task active toàn team (**Task active chỉ tính user đang bật**)
+- **Bộ lọc trạng thái** `Đang bật / Đã tắt / Tất cả` (mặc định **Đang bật**): fetch toàn bộ 1 lần rồi lọc client-side (thẻ thống kê vẫn tính trên full list). Đây là chỗ **xem user đã tắt + số task của họ**.
+- Bảng: Họ tên · Email · Đang làm (badge) · Đã xong · Vào làm · Trạng thái (Switch) · Actions (reset pwd / edit / xoá — Trash disabled khi activeTaskCount > 0). Dòng user đã tắt tô mờ (`opacity-60`).
+- **Switch bật/tắt** → `updateMember({ status: Active↔Inactive })`. ⚠️ Giá trị đúng là `Status.Inactive` (`'0'`) — **KHÔNG** dùng `Status.Disabled` (không tồn tại trong enum → gửi `undefined` → BE bỏ qua, toggle không đổi gì; đã sửa cả FE `team/index.tsx` và BE `designer-team.service.ts` `remove()`).
 - `TeamMemberDialog` (mode create/edit):
   - Field: fullName, email, password (chỉ create — có random gen + copy + KeyRound hint), hireDate (date), telegramChatId (optional)
   - Validate email unique BE; block disable/delete khi user còn task active
   - Sub-designer dropdown trong các dialog assign/bulk dùng cùng `designerTeamStore` cache
+
+### 4.1b Active-only cho danh sách + thống kê (user đã tắt)
+
+> Enum `Status` (`packages/shared/enums/commons.ts`): `Active='1'`, `Inactive='0'`, `Pending='-1'`. "Đã tắt" = `status !== Active`.
+
+| Nơi | Loại | Hành vi với user đã tắt |
+|-----|------|--------------------------|
+| **Picker GÁN MỚI** — `AssigneeSelectCell` (inline), `AssignDesignerDialog` (bulk, đã `listTeam(Status.Active)`) | List-chọn | **Ẩn** khỏi options. `AssigneeSelectCell` vẫn giữ user đã tắt trong options **nếu đơn đang gán cho họ** (hiển thị đúng tên, không mất assignment cũ). BE `assertAssigneeUserValid` chặn gán mới cho user không-active (400). |
+| **Filter LỊCH SỬ** — dropdown "Người thực hiện" ở `ErrorLogTab` (store) / `OrderTableWorkshop` / `ListOrderTab` / `PrintOrderTable` (facet BE order-derived) | List-lọc | **Giữ** cả user đã tắt → lọc được đơn cũ theo họ. `designerTeamStore` vẫn `listTeam()` (tải tất cả) để resolve tên đơn cũ. |
+| **Thống kê** — `getDesignerBreakdown` (DesignerSummaryPanel), `getPerformance` (leaderboard), `getDailyOverview`, `getTeamDailyBreakdown`, `getProductBreakdown` | Stats | **Chỉ tính user active** (roster `find({ status: Active })` + drop hàng order-derived có assignee không-active; self-scope `userId` vẫn xem được chính mình). Xem thống kê người đã tắt → dùng bộ lọc "Đã tắt" ở trang Team. |
 
 ### 4.2 `/my-tasks` (Sub-designer)
 Xem 2.3 chi tiết.
@@ -292,7 +320,7 @@ Xem 2.3 chi tiết.
 Components con:
 - `TaskCard` — drag handle, productionId button (mở `TaskDetailDialog`), mockup thumbnail (mở preview), timestamp + reworkCount badge
 - `TaskDetailDialog` — header status badge + grid info (9 field) + mockup + designs grid 4 cột + timeline (Khách lên đơn `orderAt` → **Vào sản xuất `inProductionAt`** → Được gán → Bắt đầu → Hoàn thành → Cần làm lại/Không làm được) + banner productionError/rejectedReason. Fetch `GET /v1/orders/:id`
-- `RejectModal` — textarea reason max 500, dùng chung cho single reject + bulk reject
+- `RejectModal` — **picker chọn designer nhận thay (BẮT BUỘC)** + textarea reason (tùy chọn, max 500). Dùng chung single + bulk. Picker = sub-designer `Active` loại chính mình (từ `designerTeamStore`), kèm số đơn đang ôm. Nút submit disabled tới khi chọn người nhận. Xem §2.3b
 
 ### 4.2b `DailyBreakdownPanel` — "Chi tiết theo ngày" (trên /my-tasks)
 > File: `apps/web/src/pages/designer/my-tasks/DailyBreakdownPanel.tsx`. Vị trí: **collapsible panel ngay dưới hàng KPI, trên kanban** (mặc định mở). Chỉ đơn CỦA USER hiện tại (scope `/my-daily-breakdown`).
@@ -390,6 +418,7 @@ Picker designer/factory cho `order.productionErrorSource`. User override đượ
 
 **`getMyStats`** (sub-designer):
 - snapshot count theo status (current) + completed count trong period + `fixedInPeriod` (completed có reworkCount>0)
+- **`rejectedCount`** = `countDocuments({ 'designerRejections.fromUserId': userId })` (all-time) = số đơn user từng báo không làm được rồi bàn giao đi — KHÔNG còn lấy từ `designerStatus='rejected'`
 - avgResponseMin: trung bình `designerFirstStartedAt − designerAssignedAt` (fallback `designerStartedAt`)
 - avgWorkMin: trung bình `designerWorkMs` (fallback `(completedAt − startedAt)` cho legacy data)
 
@@ -397,7 +426,8 @@ Picker designer/factory cho `order.productionErrorSource`. User override đượ
 - snapshot count per (assignee, status) → 4 cột (assignedCount, inProgressCount, reworkCount, rejectedCount)
 - completed in period với timestamps + workMs cumulative; **`fixedInPeriod`** = subset completed có `designerReworkCount>0` (đếm trong cùng loop completedDocs)
 - Auto-include sub-designer chưa có task (row count 0)
-- `totalRejected` + `totalRework`: aggregate `OrderLog { field='designerStatus', after in [rejected,rework], createdAt in period } → $lookup orders → group by assignee + after`
+- **`totalRework`**: aggregate `OrderLog { field='designerStatus', after='rework', createdAt in period } → $lookup orders → group by assignee`
+- **`totalRejected`**: aggregate `orders` `$unwind designerRejections` → `$match at in period (+ fromUserId nếu scope)` → group by `fromUserId` (quy ĐÚNG người bàn giao, kể cả khi đơn đã sang tay người khác — không dùng OrderLog vì log group theo assignee hiện tại sẽ sai)
 
 **`getErrorStats`**:
 - Group `(productionError, productionErrorSource)` per-order trong period (theo `updatedAt`)

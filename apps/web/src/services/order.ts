@@ -3,9 +3,11 @@ import type {
   BulkAssignDesignerDto,
   BulkAssignDesignerPreviewDto,
   BulkAssignOrderDto,
+  BulkHoldOrderDto,
   BulkTransferOrderDto,
   BulkUpdateOrderFieldDto,
   CancelOrderDto,
+  HoldOrderDto,
   ClaimDesignerTasksDto,
   ImportFromOnosPodDto,
   ImportProductionOrdersDto,
@@ -163,6 +165,18 @@ const cancelOrder = (id: string, data: CancelOrderDto) => {
   return callApi(`/${CONFIG.API_VERSION}/orders/${id}/cancel`, 'post', data);
 };
 
+const holdOrder = (id: string, data: HoldOrderDto) => {
+  return callApi(`/${CONFIG.API_VERSION}/orders/${id}/hold`, 'post', data);
+};
+
+const unholdOrder = (id: string) => {
+  return callApi(`/${CONFIG.API_VERSION}/orders/${id}/unhold`, 'post', {});
+};
+
+const bulkHold = (data: BulkHoldOrderDto) => {
+  return callApi(`/${CONFIG.API_VERSION}/orders/bulk-hold`, 'patch', data);
+};
+
 const updateOrderDesign = (id: string, data: UpdateOrderDesignDto) => {
   return callApi(`/${CONFIG.API_VERSION}/orders/${id}/design`, 'patch', data);
 };
@@ -204,5 +218,8 @@ export const order = {
   previewCuttingFiles,
   applyCuttingFiles,
   cancelOrder,
+  holdOrder,
+  unholdOrder,
+  bulkHold,
   updateOrderDesign,
 };

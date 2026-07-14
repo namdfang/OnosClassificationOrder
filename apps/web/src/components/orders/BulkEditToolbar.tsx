@@ -1,19 +1,26 @@
 import React, { useMemo, useState } from 'react';
-import { CheckCircle2, UserPlus, X } from 'lucide-react';
+import { CheckCircle2, Download, PauseCircle, PlayCircle, UserPlus, X } from 'lucide-react';
 import { toast } from 'sonner';
 import type { OrderWorkshopField, WorkshopConfigCategory } from 'shared';
 import { ORDER_WORKSHOP_FIELDS } from 'shared';
 
 import { Button } from '@/components/ui/button';
 import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
+import { Textarea } from '@/components/ui/textarea';
 import { Spinner } from '@/components/common/Spinner';
 import { RepositoryRemote } from '@/services';
 import { useWorkshopConfigStore } from '@/store/workshopConfigStore';
 import { handleAxiosError } from '@/utils';
 import { usePermission } from '@/hooks/usePermission';
+import { canUserHold } from '@/utils/orderActions';
 
 import { AssignDesignerDialog } from './AssignDesignerDialog';
 import { LucideIcon } from '@/pages/workshop-config/IconPicker';
+import {
+  buildDetailOnlyWorkbook,
+  downloadWorkbook,
+  type ExportableOrder,
+} from '@/pages/home/exportOrders';
 
 const FIELD_TO_CATEGORY: Record<OrderWorkshopField, WorkshopConfigCategory | null> = {
   printStatus: 'print_status' as WorkshopConfigCategory,
@@ -57,8 +64,10 @@ interface Props {
 }
 
 export function BulkEditToolbar({ selectedIds, onClear, onApplied }: Props) {
-  const { canEditField } = usePermission();
+  const { canEditField, roleName } = usePermission();
   const byCategory = useWorkshopConfigStore((s) => s.byCategory);
+  const resolveWorkshop = useWorkshopConfigStore((s) => s.resolve);
+  const canHold = canUserHold(roleName);
 
   const [open, setOpen] = useState(false);
   const [assignOpen, setAssignOpen] = useState(false);
@@ -66,6 +75,51 @@ export function BulkEditToolbar({ selectedIds, onClear, onApplied }: Props) {
   const [value, setValue] = useState<string>('');
   const [saving, setSaving] = useState(false);
   const [freeText, setFreeText] = useState('');
+  const [holdOpen, setHoldOpen] = useState(false);
+  const [holdReason, setHoldReason] = useState('');
+  const [holding, setHolding] = useState(false);
+  const [exporting, setExporting] = useState(false);
+
+  // Export ĐÚNG các đơn đang tick chọn — gọi /orders/export với `ids` (bỏ qua
+  // phân trang, đúng cả khi chọn xuyên trang vì BE lọc theo `_id`). Chỉ 1 sheet
+  // "Chi tiết đơn"; tên workshop_config resolve client-side qua store.
+  const handleExport = async () => {
+    try {
+      setExporting(true);
+      const res = await RepositoryRemote.order.exportOrders('?ids=' + selectedIds.join(','));
+      const data = (res.data?.data || []) as ExportableOrder[];
+      if (data.length === 0) {
+        toast.warning('Không có đơn nào để xuất');
+        return;
+      }
+      const wb = buildDetailOnlyWorkbook(data, { resolve: resolveWorkshop });
+      const stamp = new Date()
+        .toLocaleString('sv-SE', { hour12: false })
+        .replace(/[: ]/g, '-');
+      downloadWorkbook(`don-hang-chon-${stamp}.xlsx`, wb);
+      toast.success(`Đã xuất ${data.length} đơn`);
+    } catch (err) {
+      handleAxiosError(err);
+    } finally {
+      setExporting(false);
+    }
+  };
+
+  const submitHold = async (hold: boolean, reason?: string) => {
+    try {
+      setHolding(true);
+      const res = await RepositoryRemote.order.bulkHold({ ids: selectedIds, hold, reason });
+      const { matched, modified } = res.data?.data || { matched: 0, modified: 0 };
+      toast.success(hold ? `Đã giữ ${modified}/${matched} đơn` : `Đã mở giữ ${modified}/${matched} đơn`);
+      setHoldOpen(false);
+      setHoldReason('');
+      onApplied();
+    } catch (err) {
+      handleAxiosError(err);
+    } finally {
+      setHolding(false);
+    }
+  };
 
   const editableFields = useMemo(
     () =>
@@ -120,6 +174,42 @@ export function BulkEditToolbar({ selectedIds, onClear, onApplied }: Props) {
               <UserPlus size={14} /> Gán design
             </Button>
           )}
+          {canHold && (
+            <>
+              <Button
+                size="sm"
+                variant="outline"
+                className="border-amber-300 text-amber-700 hover:bg-amber-50 dark:border-amber-800 dark:text-amber-300 dark:hover:bg-amber-950/30"
+                onClick={() => setHoldOpen(true)}
+                disabled={holding}
+              >
+                <PauseCircle size={14} /> Giữ đơn
+              </Button>
+              <Button
+                size="sm"
+                variant="ghost"
+                className="text-emerald-700 dark:text-emerald-300"
+                onClick={() => submitHold(false)}
+                disabled={holding}
+              >
+                <PlayCircle size={14} /> Mở giữ
+              </Button>
+            </>
+          )}
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={handleExport}
+            disabled={exporting}
+            title="Xuất Excel các đơn đang chọn"
+          >
+            {exporting ? (
+              <Spinner size={13} className="text-muted-foreground" />
+            ) : (
+              <Download size={13} />
+            )}
+            Xuất Excel
+          </Button>
           <Button size="sm" variant="ghost" onClick={onClear}>
             <X size={14} /> Bỏ chọn
           </Button>
@@ -132,6 +222,36 @@ export function BulkEditToolbar({ selectedIds, onClear, onApplied }: Props) {
         onClose={() => setAssignOpen(false)}
         onApplied={onApplied}
       />
+
+      <Dialog open={holdOpen} onOpenChange={(o) => (o ? setHoldOpen(true) : (setHoldReason(''), setHoldOpen(false)))}>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle>Giữ {selectedIds.length} đơn</DialogTitle>
+          </DialogHeader>
+          <div className="space-y-1.5">
+            <label className="text-xs font-medium text-foreground">Lý do giữ (không bắt buộc)</label>
+            <Textarea
+              value={holdReason}
+              onChange={(e) => setHoldReason(e.target.value.slice(0, 200))}
+              placeholder="VD: chờ khách xác nhận, thiếu vật tư…"
+              rows={3}
+              autoFocus
+            />
+            <p className="text-[11px] text-amber-600 dark:text-amber-400">
+              Đơn giữ sẽ bị khóa mọi thao tác + tô xám cho tới khi mở lại. Đơn đã hủy sẽ bị bỏ qua.
+            </p>
+          </div>
+          <DialogFooter>
+            <Button variant="ghost" onClick={() => setHoldOpen(false)} disabled={holding}>
+              Đóng
+            </Button>
+            <Button onClick={() => submitHold(true, holdReason.trim() || undefined)} disabled={holding}>
+              {holding && <Spinner size={13} className="mr-1.5" />}
+              Giữ đơn
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
 
       <Dialog open={open} onOpenChange={setOpen}>
         <DialogContent>

@@ -21,6 +21,7 @@ import {
   FULFILLMENT_STAGE_LABELS,
   FulfillmentStage,
   RoleType,
+  Status,
   WorkshopConfigCategory,
 } from 'shared';
 
@@ -99,18 +100,23 @@ export class DesignerStatsService {
 
     // 3) Auto-include designer users chưa có task → row 0 trong leaderboard.
     //    Lookup all Designer users + collect userIds from data.
+    // CHỈ designer ĐANG BẬT — leaderboard loại người đã tắt (kể cả lịch sử).
     const designerRole = await this.roleRepository.findOne({ name: RoleType.Designer });
     const teamUsers = designerRole
       ? await this.userModel
-          .find({ roleId: designerRole._id }, { _id: 1, fullName: 1, email: 1 })
+          .find({ roleId: designerRole._id, status: Status.Active }, { _id: 1, fullName: 1, email: 1 })
           .lean()
       : [];
+    // Khi xem stats 1 user cụ thể (self-scope) → luôn cho phép; ngược lại chỉ
+    // tính user active.
+    const activeIds = new Set(teamUsers.map((u) => String(u._id)));
+    const allow = (uid: string) => (userId ? uid === userId : activeIds.has(uid));
 
     const userIds = new Set<string>();
-    for (const row of statusAgg) userIds.add(row._id.uid);
+    for (const row of statusAgg) if (allow(row._id.uid)) userIds.add(row._id.uid);
     for (const o of completedDocs) {
       const a = (o as { assignee?: string }).assignee;
-      if (a) userIds.add(a);
+      if (a && allow(a)) userIds.add(a);
     }
     if (!userId) for (const u of teamUsers) userIds.add(String(u._id));
 
@@ -228,48 +234,56 @@ export class DesignerStatsService {
       r.errorRate = c.n > 0 ? Math.round((c.reworkSum / c.n) * 100) / 100 : 0;
     }
 
-    // ─── Total rejected / rework trong period ──────────────────────
-    // Đếm từ OrderLog (mỗi lần designerStatus chuyển sang rejected/rework
-    // được ghi 1 log). Group theo order.assignee hiện tại — assumption: chưa
-    // reassign (cho test data đủ chính xác).
-    const logMatch: Record<string, unknown> = {
-      field: 'designerStatus',
-      after: { $in: ['rejected', 'rework'] },
-      createdAt: { $gte: range.start, $lte: range.end },
-    };
+    // ─── Total rework trong period ─────────────────────────────────
+    // Đếm từ OrderLog (mỗi lần designerStatus chuyển sang rework ghi 1 log).
+    // Group theo order.assignee hiện tại (đơn rework do người đang ôm sửa).
     const logAgg = await this.orderLogModel.aggregate<{
-      _id: { uid: string; after: 'rejected' | 'rework' };
+      _id: { uid: string };
       count: number;
     }>([
-      { $match: logMatch },
       {
-        $lookup: {
-          from: 'orders',
-          localField: 'orderId',
-          foreignField: '_id',
-          as: 'order',
+        $match: {
+          field: 'designerStatus',
+          after: 'rework',
+          createdAt: { $gte: range.start, $lte: range.end },
         },
       },
+      { $lookup: { from: 'orders', localField: 'orderId', foreignField: '_id', as: 'order' } },
       { $unwind: { path: '$order', preserveNullAndEmptyArrays: false } },
       ...(userId ? [{ $match: { 'order.assignee': userId } as Record<string, unknown> }] : []),
-      {
-        $group: {
-          _id: { uid: '$order.assignee', after: '$after' },
-          count: { $sum: 1 },
-        },
-      },
+      { $group: { _id: { uid: '$order.assignee' }, count: { $sum: 1 } } },
     ]);
-
     for (const row of logAgg) {
       if (!row._id.uid) continue;
-      const r = ensureRow(row._id.uid);
-      if (row._id.after === 'rejected') r.totalRejected = row.count;
-      else if (row._id.after === 'rework') r.totalRework = row.count;
+      ensureRow(row._id.uid).totalRework = row.count;
     }
 
-    return [...rows.values()].sort(
-      (a, b) => b.completedInPeriod - a.completedInPeriod || b.assignedCount - a.assignedCount,
-    );
+    // ─── Total "Không làm được" trong period ───────────────────────
+    // Nguồn = mảng lịch sử `designerRejections` trên order (quy về `fromUserId`
+    // = người bàn giao, ĐÚNG người kể cả khi đơn đã sang tay người khác). Đếm
+    // theo mốc `at` rơi trong kỳ.
+    const rejectedAgg = await this.orderModel.aggregate<{ _id: string; count: number }>([
+      { $match: { designerRejections: { $exists: true, $ne: [] } } },
+      { $unwind: '$designerRejections' },
+      {
+        $match: {
+          'designerRejections.at': { $gte: range.start, $lte: range.end },
+          ...(userId ? { 'designerRejections.fromUserId': userId } : {}),
+        },
+      },
+      { $group: { _id: '$designerRejections.fromUserId', count: { $sum: 1 } } },
+    ]);
+    for (const row of rejectedAgg) {
+      if (!row._id) continue;
+      ensureRow(row._id).totalRejected = row.count;
+    }
+
+    return [...rows.values()]
+      // Loại row của designer đã tắt (ensureRow ở các loop trên có thể tạo lại).
+      .filter((r) => allow(r.userId))
+      .sort(
+        (a, b) => b.completedInPeriod - a.completedInPeriod || b.assignedCount - a.assignedCount,
+      );
   }
 
   async getTimeline(
@@ -504,12 +518,14 @@ export class DesignerStatsService {
       this.roleRepository.findOne({ name: RoleType.Designer }),
     ]);
 
+    // CHỈ designer ĐANG BẬT — thống kê loại người đã tắt.
     const teamUsers = designerRole
-      ? await this.userModel.find({ roleId: designerRole._id }, { _id: 1, fullName: 1, email: 1 }).lean()
+      ? await this.userModel
+          .find({ roleId: designerRole._id, status: Status.Active }, { _id: 1, fullName: 1, email: 1 })
+          .lean()
       : [];
+    const activeIds = new Set(teamUsers.map((u) => String(u._id)));
 
-    // Tập userId = designer team ∪ assignee xuất hiện trong data (phòng khi có
-    // assignee ngoài role Designer, vd leader tự ôm đơn).
     const nameMap = new Map<string, { fullName: string; email?: string }>();
     for (const u of teamUsers) nameMap.set(String(u._id), { fullName: u.fullName, email: u.email });
 
@@ -525,6 +541,8 @@ export class DesignerStatsService {
     for (const r of agg) {
       const key = statusKey[r._id.status];
       if (!key) continue;
+      // Bỏ qua đơn của designer đã tắt (chỉ thống kê người active).
+      if (!activeIds.has(r._id.uid)) continue;
       ensureRow(r._id.uid);
       // Totals cộng TRỰC TIẾP từ agg → đúng cho mọi khoảng (kể cả day-list bị cap).
       const tt = rowTotals.get(r._id.uid)!;
@@ -747,10 +765,13 @@ export class DesignerStatsService {
       return { day, total, ok, unreviewed, error, errorByNote: noteByDay.get(day) || [], backlog, unassigned };
     });
 
-    // Resolve tên designer cho bảng con.
+    // Resolve tên designer cho bảng con — CHỈ designer ĐANG BẬT (thống kê active).
     const teamUsers = designerRole
-      ? await this.userModel.find({ roleId: designerRole._id }, { _id: 1, fullName: 1, email: 1 }).lean()
+      ? await this.userModel
+          .find({ roleId: designerRole._id, status: Status.Active }, { _id: 1, fullName: 1, email: 1 })
+          .lean()
       : [];
+    const activeIds = new Set(teamUsers.map((u) => String(u._id)));
     const nameMap = new Map<string, { fullName: string; email?: string }>();
     for (const u of teamUsers) nameMap.set(String(u._id), { fullName: u.fullName, email: u.email });
 
@@ -774,6 +795,8 @@ export class DesignerStatsService {
     }
 
     const backlogByDesigner = [...blMap.entries()]
+      // Chỉ giữ designer đang bật (loại người đã tắt / assignee ngoài team).
+      .filter(([uid]) => activeIds.has(uid))
       .map(([uid, c]) => {
         const info = nameMap.get(uid);
         return {
@@ -951,9 +974,13 @@ export class DesignerStatsService {
       this.roleRepository.findOne({ name: RoleType.Designer }),
     ]);
 
+    // CHỈ designer ĐANG BẬT — thống kê sản phẩm loại người đã tắt.
     const teamUsers = designerRole
-      ? await this.userModel.find({ roleId: designerRole._id }, { _id: 1, fullName: 1 }).lean()
+      ? await this.userModel
+          .find({ roleId: designerRole._id, status: Status.Active }, { _id: 1, fullName: 1 })
+          .lean()
       : [];
+    const activeIds = new Set(teamUsers.map((u) => String(u._id)));
     const nameMap = new Map<string, string>();
     for (const u of teamUsers) nameMap.set(String(u._id), u.fullName);
 
@@ -976,6 +1003,7 @@ export class DesignerStatsService {
     const byUser = new Map<string, ProductBreakdownDesigner>();
     for (const a of agg) {
       const uid = a._id.uid;
+      if (!activeIds.has(uid)) continue; // bỏ designer đã tắt
       let d = byUser.get(uid);
       if (!d) {
         d = { userId: uid, fullName: nameMap.get(uid) || `#${uid.slice(-4)}`, total: 0, products: [] };

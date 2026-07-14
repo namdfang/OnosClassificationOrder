@@ -33,6 +33,8 @@ const ACTION_BADGE: Record<ProductionOrderLogAction, { label: string; variant: '
   transfer: { label: 'Chuyển xưởng', variant: 'warning' },
   cancel: { label: 'Hủy đơn', variant: 'destructive' },
   update_design: { label: 'Đổi design', variant: 'default' },
+  hold: { label: 'Giữ đơn', variant: 'warning' },
+  unhold: { label: 'Mở giữ', variant: 'success' },
 };
 
 const FIELD_LABEL: Record<string, string> = {
@@ -51,6 +53,7 @@ const FIELD_LABEL: Record<string, string> = {
   productionErrorNote: 'Mô tả lỗi xưởng',
   productionErrorSource: 'Nguồn lỗi',
   cancelledAt: 'Hủy đơn',
+  heldAt: 'Giữ đơn',
   designs: 'Design',
   mockupUrl: 'Mockup',
 };

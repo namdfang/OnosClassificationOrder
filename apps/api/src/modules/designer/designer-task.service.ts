@@ -20,8 +20,10 @@ import {
 import { OrderLogService } from '../order-log/order-log.service';
 import type { AuditContext } from '../order-log/order-log.service';
 import { OrderEntity, OrderDocument } from '../order/order.entity';
-import { UserDocument } from '../user/user.entity';
+import { RoleRepository } from '../role/role.repository';
+import { UserEntity, UserDocument } from '../user/user.entity';
 import { WorkshopConfigEntity } from '../workshop-config/workshop-config.entity';
+import { Status } from 'shared';
 
 const READY_FOR_FULFILL_CODE = 'ok';
 
@@ -47,10 +49,38 @@ const OVERRIDE_ROLES: RoleType[] = [
 export class DesignerTaskService {
   constructor(
     @InjectModel(OrderEntity.name) private readonly orderModel: Model<OrderEntity>,
+    @InjectModel(UserEntity.name) private readonly userModel: Model<UserEntity>,
     @InjectModel(WorkshopConfigEntity.name)
     private readonly workshopConfigModel: Model<WorkshopConfigEntity>,
+    private readonly roleRepository: RoleRepository,
     private readonly orderLogService: OrderLogService,
   ) {}
+
+  /**
+   * Validate designer nhận thay khi "báo không làm được → bàn giao": phải là
+   * sub-designer (role Designer) đang Active và KHÁC chính mình. Mirror
+   * `OrderService.assertAssigneeUserValid`.
+   */
+  private async assertHandoffTargetValid(targetUserId: string, selfUserId: string): Promise<void> {
+    if (!targetUserId) {
+      throw new BadRequestException('Phải chọn designer nhận thay khi báo không làm được.');
+    }
+    if (targetUserId === selfUserId) {
+      throw new BadRequestException('Không thể bàn giao cho chính mình — chọn designer khác.');
+    }
+    const designerRole = await this.roleRepository.findOne({ name: RoleType.Designer });
+    const u = await this.userModel
+      .findOne({ _id: targetUserId, roleId: designerRole?._id }, { _id: 1, status: 1 })
+      .lean();
+    if (!u) {
+      throw new BadRequestException(
+        'Designer nhận thay không hợp lệ (không tìm thấy hoặc không phải sub-designer).',
+      );
+    }
+    if ((u as unknown as { status?: string }).status !== Status.Active) {
+      throw new BadRequestException('Designer nhận thay đã bị tắt — chọn người khác.');
+    }
+  }
 
   async transition(
     orderId: string,
@@ -58,12 +88,16 @@ export class DesignerTaskService {
     action: DesignerTransitionAction,
     reason: string | undefined,
     ctx: AuditContext,
+    targetUserId?: string,
   ): Promise<OrderDocument> {
     const roleName = user.role?.name as RoleType | undefined;
     const isOverride = roleName ? OVERRIDE_ROLES.includes(roleName) : false;
 
     const order = await this.orderModel.findById(orderId).lean();
     if (!order) throw new NotFoundException('Order not found');
+    if ((order as unknown as { heldAt?: Date | null }).heldAt) {
+      throw new BadRequestException('Đơn đang bị giữ — mở lại (bỏ giữ) trước khi thao tác tiếp.');
+    }
 
     if (!isOverride) {
       if (roleName !== RoleType.Designer) {
@@ -74,10 +108,20 @@ export class DesignerTaskService {
       }
     }
 
+    // "Báo không làm được" = bàn giao BẮT BUỘC sang designer khác. `fromUserId`
+    // = người đang ôm đơn (assignee) — người "không làm được"; không phải actor
+    // (leader có thể thao tác thay). Validate target trước khi đổi state.
+    const fromUserId = order.assignee || String(user._id);
+    if (action === DesignerTransitionAction.Reject) {
+      await this.assertHandoffTargetValid(targetUserId || '', fromUserId);
+    }
+
     const currentStatus = (order.designerStatus as DesignerStatus) || DesignerStatus.Unassigned;
     const plan = this.resolveTransition(currentStatus, action, reason, {
       isFirstStart: !order.designerFirstStartedAt,
       designerStartedAt: order.designerStartedAt,
+      targetUserId,
+      fromUserId,
     });
 
     // Hook fulfillment 5-stage: designer.complete lần đầu (chưa từng vào
@@ -150,6 +194,29 @@ export class DesignerTaskService {
       });
     }
 
+    // Handoff "không làm được" — audit thêm: đổi assignee + lý do (actor = người
+    // thao tác; nội dung ghi rõ người bàn giao & người nhận để tra sau).
+    if (action === DesignerTransitionAction.Reject && targetUserId) {
+      void this.orderLogService.writeMany([
+        {
+          orderId,
+          action: 'update',
+          field: 'assignee',
+          before: fromUserId,
+          after: targetUserId,
+          ctx: { ...ctx, user },
+        },
+        {
+          orderId,
+          action: 'update',
+          field: 'designerRejectedReason',
+          before: null,
+          after: reason || '(không nhập lý do)',
+          ctx: { ...ctx, user },
+        },
+      ]);
+    }
+
     return updated;
   }
 
@@ -168,6 +235,9 @@ export class DesignerTaskService {
     context: {
       isFirstStart: boolean;
       designerStartedAt?: Date;
+      /** Chỉ dùng cho action='reject' — designer nhận thay + người bàn giao. */
+      targetUserId?: string;
+      fromUserId?: string;
     },
   ): {
     nextStatus: DesignerStatus;
@@ -246,20 +316,40 @@ export class DesignerTaskService {
       }
 
       case DesignerTransitionAction.Reject: {
-        // Cho phép báo không làm được từ cả 'assigned' (chưa nhận) lẫn
-        // 'in-progress' (đã nhận làm nhưng không làm được). Giống cột "Cần làm".
+        // "Báo không làm được" = BÀN GIAO thẳng sang designer khác (không còn
+        // state `rejected`). Cho phép từ 'assigned' lẫn 'in-progress'. Đơn thành
+        // `assigned` cho người nhận; đồng hồ per-cycle reset để KPI người mới
+        // tính lại từ lúc nhận. Lịch sử đẩy vào `designerRejections` (nguồn
+        // thống kê "Không làm được" theo `fromUserId`).
         if (current !== DesignerStatus.Assigned && current !== DesignerStatus.InProgress) {
           throw new BadRequestException(
             `Action 'reject' chỉ hợp lệ từ trạng thái 'assigned' hoặc 'in-progress' (current=${current}).`,
           );
         }
+        const target = context.targetUserId;
+        if (!target) {
+          throw new BadRequestException('Thiếu designer nhận thay (targetUserId).');
+        }
         return {
-          nextStatus: DesignerStatus.Rejected,
+          nextStatus: DesignerStatus.Assigned,
           patch: {
             $set: {
-              designerStatus: DesignerStatus.Rejected,
-              designerRejectedAt: now,
-              designerRejectedReason: reason || null,
+              designerStatus: DesignerStatus.Assigned,
+              assignee: target,
+              designerAssignedAt: now,
+              designerStartedAt: null,
+              designerFirstStartedAt: null,
+              designerCompletedAt: null,
+              designerRejectedAt: null,
+              designerRejectedReason: null,
+            },
+            $push: {
+              designerRejections: {
+                fromUserId: context.fromUserId || '',
+                toUserId: target,
+                reason: reason || undefined,
+                at: now,
+              },
             },
           },
         };
@@ -316,6 +406,15 @@ export class DesignerTaskService {
     // định hôm nay). Trước đây chỉ cột "Đã xong" lọc theo `designerCompletedAt`.
     baseFilter.inProductionAt = { $gte: range.start, $lte: range.end };
 
+    // Drawer "Không làm được" = đơn user TỪNG báo không làm được rồi bàn giao đi
+    // (giờ assignee đã là người khác) → query theo lịch sử `designerRejections`,
+    // KHÔNG theo assignee hiện tại. Giữ nguyên các facet + cửa sổ ngày.
+    const rejectedFilter: Record<string, unknown> = {
+      ...baseFilter,
+      'designerRejections.fromUserId': userId,
+    };
+    delete rejectedFilter.assignee;
+
     // Marker "đơn đang giữ ở Soát tool" (In báo thiếu file) → đơn ở phía TRƯỚC
     // designer (upstream). Task designer đã xong/đang chờ làm lại của đơn này
     // hiển thị ở cột "Đang chờ quay lại" (watching), KHÔNG ở Đã xong/Cần làm lại
@@ -371,8 +470,8 @@ export class DesignerTaskService {
           .sort({ inProductionAt: -1 })
           .lean(),
         this.orderModel
-          .find({ ...baseFilter, designerStatus: DesignerStatus.Rejected })
-          .sort({ designerRejectedAt: -1, inProductionAt: -1 })
+          .find(rejectedFilter)
+          .sort({ updatedAt: -1, inProductionAt: -1 })
           .lean(),
       ]);
 
@@ -495,6 +594,7 @@ export class DesignerTaskService {
     action: DesignerTransitionAction,
     reason: string | undefined,
     ctx: AuditContext,
+    targetUserId?: string,
   ): Promise<{
     matched: number;
     modified: number;
@@ -505,6 +605,12 @@ export class DesignerTaskService {
     const isOverride =
       !!roleName &&
       [RoleType.SuperAdmin, RoleType.Admin, RoleType.Manager].includes(roleName);
+
+    // Bàn giao "không làm được" hàng loạt → 1 designer nhận cho tất cả. Validate
+    // target 1 lần trước vòng lặp.
+    if (action === DesignerTransitionAction.Reject) {
+      await this.assertHandoffTargetValid(targetUserId || '', userId);
+    }
 
     const docs = await this.orderModel
       .find(
@@ -533,10 +639,18 @@ export class DesignerTaskService {
       }
 
       const current = (o.designerStatus as DesignerStatus) || DesignerStatus.Unassigned;
+      const fromUserId = o.assignee || userId;
+      // Bàn giao cho chính người đang ôm = no-op → skip.
+      if (action === DesignerTransitionAction.Reject && targetUserId === fromUserId) {
+        skipped.push({ orderId, productionId, reason: 'Không thể bàn giao cho chính người đang ôm đơn.' });
+        continue;
+      }
       try {
         const plan = this.resolveTransition(current, action, reason, {
           isFirstStart: !o.designerFirstStartedAt,
           designerStartedAt: o.designerStartedAt,
+          targetUserId,
+          fromUserId,
         });
         const updated = await this.orderModel.findOneAndUpdate(
           { _id: orderId, designerStatus: current },
@@ -565,6 +679,19 @@ export class DesignerTaskService {
             after: plan.sideEffectLog.after,
             ctx: { ...ctx, user },
           });
+        }
+        if (action === DesignerTransitionAction.Reject && targetUserId) {
+          void this.orderLogService.writeMany([
+            { orderId, action: 'update', field: 'assignee', before: fromUserId, after: targetUserId, ctx: { ...ctx, user } },
+            {
+              orderId,
+              action: 'update',
+              field: 'designerRejectedReason',
+              before: null,
+              after: reason || '(không nhập lý do)',
+              ctx: { ...ctx, user },
+            },
+          ]);
         }
       } catch (err) {
         skipped.push({ orderId, productionId, reason: (err as Error).message });
@@ -622,7 +749,7 @@ export class DesignerTaskService {
     const userId = String(user._id);
     const range = this.resolvePeriodRange(period, from, to);
 
-    const [statusAgg, completedAgg] = await Promise.all([
+    const [statusAgg, completedAgg, rejectedByMe] = await Promise.all([
       this.orderModel.aggregate<{ _id: DesignerStatus; count: number }>([
         { $match: { assignee: userId, cancelledAt: null } },
         { $group: { _id: '$designerStatus', count: { $sum: 1 } } },
@@ -645,6 +772,10 @@ export class DesignerTaskService {
           },
         )
         .lean(),
+      // "Không làm được" = số đơn user TỪNG báo không làm được rồi bàn giao đi
+      // (nguồn: lịch sử `designerRejections.fromUserId`, không phụ thuộc assignee
+      // hiện tại). All-time để tra được tổng đã bàn giao.
+      this.orderModel.countDocuments({ 'designerRejections.fromUserId': userId }),
     ]);
 
     const counts: Partial<Record<DesignerStatus, number>> = {};
@@ -685,7 +816,7 @@ export class DesignerTaskService {
       assignedCount: counts[DesignerStatus.Assigned] || 0,
       inProgressCount: counts[DesignerStatus.InProgress] || 0,
       reworkCount: counts[DesignerStatus.Rework] || 0,
-      rejectedCount: counts[DesignerStatus.Rejected] || 0,
+      rejectedCount: rejectedByMe,
       completedInPeriod,
       fixedInPeriod,
       avgResponseMin: responseN > 0 ? Math.round((responseSumMs / responseN) / 60000) : 0,
@@ -824,6 +955,7 @@ export class DesignerTaskService {
     designerWorkMs: (o.designerWorkMs as number) || 0,
     productionError: (o.productionError as string) || undefined,
     productionErrorNote: (o.productionErrorNote as string) || undefined,
+    designerRejections: (o.designerRejections as DesignerTaskCard['designerRejections']) || undefined,
   });
 
   private resolveDateRange(from?: string, to?: string): { start: Date; end: Date } {

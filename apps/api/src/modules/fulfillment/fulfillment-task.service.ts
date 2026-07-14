@@ -121,6 +121,9 @@ export class FulfillmentTaskService {
     if (order.cancelledAt) {
       throw new BadRequestException('Đơn đã bị hủy — không thao tác được.');
     }
+    if ((order as unknown as { heldAt?: Date | null }).heldAt) {
+      throw new BadRequestException('Đơn đang bị giữ — mở lại (bỏ giữ) trước khi thao tác tiếp.');
+    }
 
     // ── Self-heal "In": đơn đã `toolResultNote='ok'` (designer coi như xong)
     // nhưng `currentFulfillmentStage` lệch khỏi 'print' (null vì designer done

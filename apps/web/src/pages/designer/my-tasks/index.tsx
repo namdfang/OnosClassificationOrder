@@ -506,11 +506,15 @@ export default function MyTasksPage() {
   };
 
   // ─── Bulk actions ──────────────────────────────────────────────
-  const callBulk = async (action: DesignerTransitionAction, reason?: string) => {
+  const callBulk = async (
+    action: DesignerTransitionAction,
+    reason?: string,
+    targetUserId?: string,
+  ) => {
     if (selected.size === 0) return;
     try {
       const ids = Array.from(selected);
-      const res = await RepositoryRemote.designer.bulkTransition({ ids, action, reason });
+      const res = await RepositoryRemote.designer.bulkTransition({ ids, action, reason, targetUserId });
       const data = res.data?.data as {
         matched: number;
         modified: number;
@@ -535,19 +539,20 @@ export default function MyTasksPage() {
     }
   };
 
-  const handleBulkReject = (reason: string) => {
-    callBulk(DesignerTransitionAction.Reject, reason);
+  const handleBulkReject = (reason: string, targetUserId: string) => {
+    callBulk(DesignerTransitionAction.Reject, reason, targetUserId);
     setBulkReject(false);
   };
 
-  const handleSingleReject = async (reason: string) => {
+  const handleSingleReject = async (reason: string, targetUserId: string) => {
     if (!rejectTarget) return;
     try {
       await RepositoryRemote.designer.transition(rejectTarget._id, {
         action: DesignerTransitionAction.Reject,
         reason: reason || undefined,
+        targetUserId,
       });
-      toast.success('Đã báo file không làm được');
+      toast.success('Đã bàn giao đơn cho designer khác');
       setRejectTarget(null);
       refreshAll();
     } catch (err) {
@@ -840,7 +845,9 @@ export default function MyTasksPage() {
             setRejectTarget(null);
             setBulkReject(false);
           }}
-          onConfirm={(reason) => (bulkReject ? handleBulkReject(reason) : handleSingleReject(reason))}
+          onConfirm={(reason, targetUserId) =>
+            bulkReject ? handleBulkReject(reason, targetUserId) : handleSingleReject(reason, targetUserId)
+          }
         />
         <TaskDetailDialog orderId={detailId} onClose={() => setDetailId(null)} />
         <ImagePreviewDialog

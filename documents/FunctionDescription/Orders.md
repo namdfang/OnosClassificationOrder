@@ -295,7 +295,7 @@ GET /v1/orders/import-from-onospod/cron
 | GET | `/v1/orders/dashboard` | Aggregation (xem `Dashboard.md` Tab A) — cache 60s |
 | GET | `/v1/orders/status-overview` | Aggregation (xem `Dashboard.md` Tab B) |
 | GET | `/v1/orders/factory-overview` | Aggregation (xem `Dashboard.md` Tab C) |
-| GET | `/v1/orders/export` | Trả toàn bộ đơn theo filter, **không phân trang**. Dùng cho Excel export Tab C. |
+| GET | `/v1/orders/export` | Trả toàn bộ đơn theo filter, **không phân trang**. Dùng cho Excel export Tab C. Nhận thêm param `ids` (CSV `_id`) → xuất đúng đơn đã tick chọn (`BulkEditToolbar`, xem §8.6). |
 | GET | `/v1/orders/fulfillment-status-counts` | Đếm đơn theo 5 trạng thái stage Fulfillment (waiting/in-progress/rework/done/watching) — dùng cho thanh filter trang "In". Xem `FulfillmentWorkflow.md §4.5`. |
 | GET | `/v1/orders/import-summary?date=YYYY-MM-DD` | Bảng tổng hợp `(type, size, fabricType)` theo ngày import. Phase 5. |
 | GET | `/v1/orders/:id/logs` | Audit timeline 1 order (xem `OrderLog.md`) |
@@ -538,6 +538,11 @@ Cùng check permission + validate value, sau đó `updateMany({ _id: { $in: ids 
 ### 8.5 Cache key
 `orders:list:...` được rebuild kèm `role` để Designer / Fulfillment không bị "kế thừa" cache của Admin (visibility filter khác → key khác).
 
+### 8.6 Xuất Excel các đơn đã chọn (`BulkEditToolbar`)
+- Nút **"Xuất Excel"** (`Download`, `variant="outline"`) trong pill nổi `BulkEditToolbar.tsx` — xuất **đúng** các đơn đang tick chọn (không theo filter, đúng cả khi chọn xuyên trang).
+- FE `handleExport`: gọi `RepositoryRemote.order.exportOrders('?ids=' + selectedIds.join(','))` → `buildDetailOnlyWorkbook(data, { resolve })` (`apps/web/src/pages/home/exportOrders.ts`) → `downloadWorkbook('don-hang-chon-<timestamp>.xlsx')`. File chỉ **1 sheet "Chi tiết đơn"** (21 cột giống export xưởng); tên workshop_config resolve client-side qua `workshopConfigStore`.
+- BE: `GET /v1/orders/export` nhận thêm param **`ids`** (CSV các `_id`, `GetProductionOrdersZod.ids`) → `buildOrderListFilter` thêm `filter._id = { $in: ids }`. Dùng chung filter builder với `getOrders`/`exportOrders`.
+
 ---
 
 ## 9. Permissions tổng quát
@@ -550,7 +555,41 @@ Cùng check permission + validate value, sau đó `updateMany({ _id: { $in: ids 
 | Designer | ✅ (7 ngày) | ❌ | ✅ tool / file / assignee fields | ❌ | ❌ |
 | Fulfillment | ✅ (7 ngày + ready) | ❌ | ✅ printStatus / printStatusNote / **toolResultNote** | ❌ | ❌ |
 
-Permission code chi tiết — xem `packages/shared/constants/permission-catalog.ts`. Hook FE: `usePermission()` expose `has(code)`, `canViewField(field)`, `canEditField(field)`, `canViewAdminTable()`, `canViewWorkshopTable()`, `isAdmin`.
+Permission code chi tiết — xem `packages/shared/constants/permission-catalog.ts`. Hook FE: `usePermission()` expose `has(code)`, `canViewField(field)`, `canEditField(field)`, `canViewAdminTable()`, `canViewWorkshopTable()`, `isAdmin`, `roleName`.
+
+---
+
+## 9b. Giữ đơn (Hold / Unhold)
+
+> **Mục tiêu:** Tạm dừng 1 đơn — tô xám cả dòng + **khóa mọi thao tác** (FE + BE) cho tới khi **mở lại**. Khác đơn HỦY (`cancelledAt`): hold **REVERSIBLE** và **KHÔNG** loại đơn khỏi số liệu (chỉ tạm dừng). Ai được giữ: `ORDER_WRITE_ROLES` (Admin/Manager/Support/DesignerLeader/Fulfillment).
+
+### 9b.1 Schema
+- `OrderEntity.heldAt?: Date` (index) + `holdReason?: string` (`order.entity.ts`). Set khác null ⇒ đơn "đang giữ".
+- Shared `ProductionOrderZod`: `heldAt` + `holdReason`. Filter param `held: z.coerce.boolean()` trong `GetProductionOrdersZod` (held=true → chỉ đơn giữ; false → chỉ đơn không giữ; bỏ trống → cả 2).
+- `ORDER_LOG_ACTIONS` thêm `'hold'` + `'unhold'`.
+
+### 9b.2 Endpoints (`@Auth(ORDER_WRITE_ROLES)`)
+| Method | Path | Service | Mô tả |
+|--------|------|---------|-------|
+| POST | `/v1/orders/:id/hold` | `holdOrder` | Set `heldAt=now` + `holdReason`. 400 nếu đã giữ / đã hủy. Log `hold`. |
+| POST | `/v1/orders/:id/unhold` | `unholdOrder` | `$unset heldAt/holdReason`. 400 nếu không đang giữ. Log `unhold`. |
+| PATCH | `/v1/orders/bulk-hold` | `bulkSetHold` | `{ ids, hold: boolean, reason? }`. hold=true chỉ set đơn chưa giữ & chưa hủy; false chỉ clear đơn đang giữ. Trả `{ matched, modified }`. |
+
+### 9b.3 Khóa thao tác (BE guard `assertNotHeld`)
+Đơn `heldAt` set → chặn (400 *"Đơn đang bị giữ — mở lại…"*) ở: `updateField`, `setProductionError`, `DesignerTaskService.transition`, `FulfillmentTaskService.transition`. `bulkUpdateField` (nhánh updateMany) + `bulkAssignDesigner` **loại** đơn giữ qua filter `heldAt: { $exists: false }` → `matched` thấp hơn để FE biết bị bỏ (nhánh side-effect loop `updateField` tự skip vì guard throw). **Không** chặn `/unhold` (để mở lại được).
+
+### 9b.4 Thống kê
+- **Dashboard tab Stats** (`getDashboard` → `totals.heldOrders`): card **"Đơn đang giữ"** (hổ phách) ở `OrderStatsTab.tsx`. VẪN nằm trong `totalOrders` (chỉ tạm dừng, không loại như đơn hủy).
+- **Bảng Workshop** (`getWorkshopAvailableFilters` → `data.heldCount`): nút toggle **"Đang giữ (N)"** ở `topActionsRight` `OrderFilterBar` → set param `held=true` (URL `wheld`) + chip "Trạng thái: Đang giữ".
+
+### 9b.5 Frontend
+- Util `apps/web/src/utils/orderActions.ts`: `isHeld(o)`, `canUserHold(roleName)` (mirror `ORDER_WRITE_ROLES`).
+- `HeldBadge.tsx` (hổ phách "Đang giữ" + reason) — mirror `CancelledBadge`.
+- `HoldOrderDialog.tsx` (giữ 1 đơn, lý do KHÔNG bắt buộc).
+- Tô xám + badge + **cell read-only** (override `ctx.canEditField=()=>false`) ở: `OrderTableWorkshop`, `ErrorLogTab`, `OrdersMiniTable`; tô xám + badge ở `ListOrderTab`.
+- `OrderRowActionsMenu.tsx`: item **"Giữ đơn"** (mở dialog) / **"Mở giữ"** (gọi trực tiếp) cho role `canUserHold`; menu hiện khi `isAdmin || canUserHold`.
+- `BulkEditToolbar.tsx`: nút **"Giữ đơn"** (dialog lý do bulk) + **"Mở giữ"** (bulk trực tiếp) → `RepositoryRemote.order.bulkHold({ ids, hold, reason })`.
+- Service `services/order.ts`: `holdOrder` · `unholdOrder` · `bulkHold`.
 
 ---
 
