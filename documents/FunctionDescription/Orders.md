@@ -198,7 +198,7 @@ Sau import (hoặc khi đổi date), `ImportOrderTab` gọi endpoint này để 
 | GET | `/v1/orders/dashboard` | Aggregation (xem `Dashboard.md` Tab A) — cache 60s |
 | GET | `/v1/orders/status-overview` | Aggregation (xem `Dashboard.md` Tab B) |
 | GET | `/v1/orders/factory-overview` | Aggregation (xem `Dashboard.md` Tab C) |
-| GET | `/v1/orders/export` | Trả toàn bộ đơn theo filter, **không phân trang**. Dùng cho Excel export Tab C. |
+| GET | `/v1/orders/export` | Trả toàn bộ đơn theo filter, **không phân trang**. Dùng cho Excel export Tab C. Nhận thêm param `ids` (CSV `_id`) → xuất đúng đơn đã tick chọn (`BulkEditToolbar`, xem §8.6). |
 | GET | `/v1/orders/fulfillment-status-counts` | Đếm đơn theo 5 trạng thái stage Fulfillment (waiting/in-progress/rework/done/watching) — dùng cho thanh filter trang "In". Xem `FulfillmentWorkflow.md §4.5`. |
 | GET | `/v1/orders/import-summary?date=YYYY-MM-DD` | Bảng tổng hợp `(type, size, fabricType)` theo ngày import. Phase 5. |
 | GET | `/v1/orders/:id/logs` | Audit timeline 1 order (xem `OrderLog.md`) |
@@ -438,6 +438,11 @@ Cùng check permission + validate value, sau đó `updateMany({ _id: { $in: ids 
 
 ### 8.5 Cache key
 `orders:list:...` được rebuild kèm `role` để Designer / Fulfillment không bị "kế thừa" cache của Admin (visibility filter khác → key khác).
+
+### 8.6 Xuất Excel các đơn đã chọn (`BulkEditToolbar`)
+- Nút **"Xuất Excel"** (`Download`, `variant="outline"`) trong pill nổi `BulkEditToolbar.tsx` — xuất **đúng** các đơn đang tick chọn (không theo filter, đúng cả khi chọn xuyên trang).
+- FE `handleExport`: gọi `RepositoryRemote.order.exportOrders('?ids=' + selectedIds.join(','))` → `buildDetailOnlyWorkbook(data, { resolve })` (`apps/web/src/pages/home/exportOrders.ts`) → `downloadWorkbook('don-hang-chon-<timestamp>.xlsx')`. File chỉ **1 sheet "Chi tiết đơn"** (21 cột giống export xưởng); tên workshop_config resolve client-side qua `workshopConfigStore`.
+- BE: `GET /v1/orders/export` nhận thêm param **`ids`** (CSV các `_id`, `GetProductionOrdersZod.ids`) → `buildOrderListFilter` thêm `filter._id = { $in: ids }`. Dùng chung filter builder với `getOrders`/`exportOrders`.
 
 ---
 

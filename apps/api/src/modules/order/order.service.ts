@@ -1069,6 +1069,13 @@ export class OrderService implements OnModuleInit {
         };
       }
     }
+    if (dto.ids) {
+      const ids = dto.ids
+        .split(',')
+        .map((s) => s.trim())
+        .filter(Boolean);
+      if (ids.length) filter._id = { $in: ids };
+    }
     if (typeof dto.isMapped === 'boolean') filter.isMapped = dto.isMapped;
     // Toggle "Đang giữ" (workshop): held=true → chỉ đơn giữ; held=false → chỉ
     // đơn không giữ. Không truyền → hiện cả 2 (đơn giữ chỉ tô xám, không ẩn).

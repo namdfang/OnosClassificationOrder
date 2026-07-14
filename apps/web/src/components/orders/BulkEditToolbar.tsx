@@ -1,5 +1,5 @@
 import React, { useMemo, useState } from 'react';
-import { CheckCircle2, PauseCircle, PlayCircle, UserPlus, X } from 'lucide-react';
+import { CheckCircle2, Download, PauseCircle, PlayCircle, UserPlus, X } from 'lucide-react';
 import { toast } from 'sonner';
 import type { OrderWorkshopField, WorkshopConfigCategory } from 'shared';
 import { ORDER_WORKSHOP_FIELDS } from 'shared';
@@ -16,6 +16,11 @@ import { canUserHold } from '@/utils/orderActions';
 
 import { AssignDesignerDialog } from './AssignDesignerDialog';
 import { LucideIcon } from '@/pages/workshop-config/IconPicker';
+import {
+  buildDetailOnlyWorkbook,
+  downloadWorkbook,
+  type ExportableOrder,
+} from '@/pages/home/exportOrders';
 
 const FIELD_TO_CATEGORY: Record<OrderWorkshopField, WorkshopConfigCategory | null> = {
   printStatus: 'print_status' as WorkshopConfigCategory,
@@ -61,6 +66,7 @@ interface Props {
 export function BulkEditToolbar({ selectedIds, onClear, onApplied }: Props) {
   const { canEditField, roleName } = usePermission();
   const byCategory = useWorkshopConfigStore((s) => s.byCategory);
+  const resolveWorkshop = useWorkshopConfigStore((s) => s.resolve);
   const canHold = canUserHold(roleName);
 
   const [open, setOpen] = useState(false);
@@ -72,6 +78,32 @@ export function BulkEditToolbar({ selectedIds, onClear, onApplied }: Props) {
   const [holdOpen, setHoldOpen] = useState(false);
   const [holdReason, setHoldReason] = useState('');
   const [holding, setHolding] = useState(false);
+  const [exporting, setExporting] = useState(false);
+
+  // Export ĐÚNG các đơn đang tick chọn — gọi /orders/export với `ids` (bỏ qua
+  // phân trang, đúng cả khi chọn xuyên trang vì BE lọc theo `_id`). Chỉ 1 sheet
+  // "Chi tiết đơn"; tên workshop_config resolve client-side qua store.
+  const handleExport = async () => {
+    try {
+      setExporting(true);
+      const res = await RepositoryRemote.order.exportOrders('?ids=' + selectedIds.join(','));
+      const data = (res.data?.data || []) as ExportableOrder[];
+      if (data.length === 0) {
+        toast.warning('Không có đơn nào để xuất');
+        return;
+      }
+      const wb = buildDetailOnlyWorkbook(data, { resolve: resolveWorkshop });
+      const stamp = new Date()
+        .toLocaleString('sv-SE', { hour12: false })
+        .replace(/[: ]/g, '-');
+      downloadWorkbook(`don-hang-chon-${stamp}.xlsx`, wb);
+      toast.success(`Đã xuất ${data.length} đơn`);
+    } catch (err) {
+      handleAxiosError(err);
+    } finally {
+      setExporting(false);
+    }
+  };
 
   const submitHold = async (hold: boolean, reason?: string) => {
     try {
@@ -164,6 +196,20 @@ export function BulkEditToolbar({ selectedIds, onClear, onApplied }: Props) {
               </Button>
             </>
           )}
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={handleExport}
+            disabled={exporting}
+            title="Xuất Excel các đơn đang chọn"
+          >
+            {exporting ? (
+              <Spinner size={13} className="text-muted-foreground" />
+            ) : (
+              <Download size={13} />
+            )}
+            Xuất Excel
+          </Button>
           <Button size="sm" variant="ghost" onClick={onClear}>
             <X size={14} /> Bỏ chọn
           </Button>

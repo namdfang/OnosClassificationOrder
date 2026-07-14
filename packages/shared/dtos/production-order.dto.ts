@@ -321,6 +321,12 @@ export const GetProductionOrdersZod = PageQueryZod.extend({
    */
   productionIds: z.string().optional(),
 
+  /**
+   * Comma-separated list of order `_id` — export/thao tác theo đúng các đơn
+   * người dùng đã tick chọn (BulkEditToolbar "Xuất Excel"). Lọc `_id $in`.
+   */
+  ids: z.string().optional(),
+
   // Workshop filters — comma-separated list of workshop_config codes
   printStatus: z.string().optional(),
   toolResultNote: z.string().optional(),
