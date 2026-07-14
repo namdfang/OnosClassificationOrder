@@ -1,16 +1,18 @@
 import React, { useMemo, useState } from 'react';
-import { CheckCircle2, UserPlus, X } from 'lucide-react';
+import { CheckCircle2, PauseCircle, PlayCircle, UserPlus, X } from 'lucide-react';
 import { toast } from 'sonner';
 import type { OrderWorkshopField, WorkshopConfigCategory } from 'shared';
 import { ORDER_WORKSHOP_FIELDS } from 'shared';
 
 import { Button } from '@/components/ui/button';
 import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
+import { Textarea } from '@/components/ui/textarea';
 import { Spinner } from '@/components/common/Spinner';
 import { RepositoryRemote } from '@/services';
 import { useWorkshopConfigStore } from '@/store/workshopConfigStore';
 import { handleAxiosError } from '@/utils';
 import { usePermission } from '@/hooks/usePermission';
+import { canUserHold } from '@/utils/orderActions';
 
 import { AssignDesignerDialog } from './AssignDesignerDialog';
 import { LucideIcon } from '@/pages/workshop-config/IconPicker';
@@ -57,8 +59,9 @@ interface Props {
 }
 
 export function BulkEditToolbar({ selectedIds, onClear, onApplied }: Props) {
-  const { canEditField } = usePermission();
+  const { canEditField, roleName } = usePermission();
   const byCategory = useWorkshopConfigStore((s) => s.byCategory);
+  const canHold = canUserHold(roleName);
 
   const [open, setOpen] = useState(false);
   const [assignOpen, setAssignOpen] = useState(false);
@@ -66,6 +69,25 @@ export function BulkEditToolbar({ selectedIds, onClear, onApplied }: Props) {
   const [value, setValue] = useState<string>('');
   const [saving, setSaving] = useState(false);
   const [freeText, setFreeText] = useState('');
+  const [holdOpen, setHoldOpen] = useState(false);
+  const [holdReason, setHoldReason] = useState('');
+  const [holding, setHolding] = useState(false);
+
+  const submitHold = async (hold: boolean, reason?: string) => {
+    try {
+      setHolding(true);
+      const res = await RepositoryRemote.order.bulkHold({ ids: selectedIds, hold, reason });
+      const { matched, modified } = res.data?.data || { matched: 0, modified: 0 };
+      toast.success(hold ? `Đã giữ ${modified}/${matched} đơn` : `Đã mở giữ ${modified}/${matched} đơn`);
+      setHoldOpen(false);
+      setHoldReason('');
+      onApplied();
+    } catch (err) {
+      handleAxiosError(err);
+    } finally {
+      setHolding(false);
+    }
+  };
 
   const editableFields = useMemo(
     () =>
@@ -120,6 +142,28 @@ export function BulkEditToolbar({ selectedIds, onClear, onApplied }: Props) {
               <UserPlus size={14} /> Gán design
             </Button>
           )}
+          {canHold && (
+            <>
+              <Button
+                size="sm"
+                variant="outline"
+                className="border-amber-300 text-amber-700 hover:bg-amber-50 dark:border-amber-800 dark:text-amber-300 dark:hover:bg-amber-950/30"
+                onClick={() => setHoldOpen(true)}
+                disabled={holding}
+              >
+                <PauseCircle size={14} /> Giữ đơn
+              </Button>
+              <Button
+                size="sm"
+                variant="ghost"
+                className="text-emerald-700 dark:text-emerald-300"
+                onClick={() => submitHold(false)}
+                disabled={holding}
+              >
+                <PlayCircle size={14} /> Mở giữ
+              </Button>
+            </>
+          )}
           <Button size="sm" variant="ghost" onClick={onClear}>
             <X size={14} /> Bỏ chọn
           </Button>
@@ -132,6 +176,36 @@ export function BulkEditToolbar({ selectedIds, onClear, onApplied }: Props) {
         onClose={() => setAssignOpen(false)}
         onApplied={onApplied}
       />
+
+      <Dialog open={holdOpen} onOpenChange={(o) => (o ? setHoldOpen(true) : (setHoldReason(''), setHoldOpen(false)))}>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle>Giữ {selectedIds.length} đơn</DialogTitle>
+          </DialogHeader>
+          <div className="space-y-1.5">
+            <label className="text-xs font-medium text-foreground">Lý do giữ (không bắt buộc)</label>
+            <Textarea
+              value={holdReason}
+              onChange={(e) => setHoldReason(e.target.value.slice(0, 200))}
+              placeholder="VD: chờ khách xác nhận, thiếu vật tư…"
+              rows={3}
+              autoFocus
+            />
+            <p className="text-[11px] text-amber-600 dark:text-amber-400">
+              Đơn giữ sẽ bị khóa mọi thao tác + tô xám cho tới khi mở lại. Đơn đã hủy sẽ bị bỏ qua.
+            </p>
+          </div>
+          <DialogFooter>
+            <Button variant="ghost" onClick={() => setHoldOpen(false)} disabled={holding}>
+              Đóng
+            </Button>
+            <Button onClick={() => submitHold(true, holdReason.trim() || undefined)} disabled={holding}>
+              {holding && <Spinner size={13} className="mr-1.5" />}
+              Giữ đơn
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
 
       <Dialog open={open} onOpenChange={setOpen}>
         <DialogContent>

@@ -156,6 +156,13 @@ export const ProductionOrderZod = BaseEntityZod.extend({
   /** Đơn bị hủy (soft) — set qua POST /orders/:id/cancel (Admin) hoặc import "hủy đơn". */
   cancelledAt: z.date().optional(),
   cancelReason: z.string().optional(),
+  /**
+   * Đơn đang bị GIỮ (hold) — tạm dừng mọi thao tác cho tới khi mở lại. Set qua
+   * POST /orders/:id/hold, clear qua /unhold (hoặc bulk-hold). Khác `cancelledAt`
+   * ở chỗ REVERSIBLE — mở lại để tiếp tục hoàn thành đơn.
+   */
+  heldAt: z.date().optional(),
+  holdReason: z.string().optional(),
   orderId: z.string().optional(),
   externalId: z.string().optional(),
   referent: z.string().optional(),
@@ -343,6 +350,13 @@ export const GetProductionOrdersZod = PageQueryZod.extend({
    * Falsy → chỉ lấy đơn không có lỗi. Bỏ qua khi không có giá trị.
    */
   hasError: z.coerce.boolean().optional(),
+
+  /**
+   * Truthy → chỉ lấy đơn đang GIỮ (heldAt set). Falsy → chỉ lấy đơn KHÔNG giữ.
+   * Bỏ qua khi không truyền (mặc định hiện cả đơn giữ lẫn không giữ — đơn giữ
+   * chỉ bị tô xám + khóa, không ẩn khỏi list).
+   */
+  held: z.coerce.boolean().optional(),
 
   /**
    * Factory transfer filter. Values:
@@ -596,6 +610,9 @@ export const OrderDashboardZod = z.object({
     /** Số đơn HỦY (cancelledAt set) trong cùng scope xưởng + khoảng inProductionAt.
      * Không nằm trong totalOrders (đã loại đơn hủy khỏi mọi số liệu). */
     cancelledOrders: z.number(),
+    /** Số đơn đang GIỮ (heldAt set) trong cùng scope xưởng + khoảng inProductionAt.
+     * VẪN nằm trong totalOrders (đơn giữ chỉ tạm dừng, không loại khỏi số liệu). */
+    heldOrders: z.number(),
   }),
   byType: TypeSummaryZod.array(),
   byFactory: FactoryBreakdownZod.array(),
@@ -837,6 +854,28 @@ export class CancelOrderDto extends createZodDto(extendApi(CancelOrderZod)) {}
 export const CancelOrderResZod = ResZod.extend({ data: ProductionOrderZod });
 export class CancelOrderResDto extends createZodDto(extendApi(CancelOrderResZod)) {}
 
+// ─── Giữ đơn (hold / unhold) ────────────────────────────────────────
+// Hold: tạm dừng đơn — set heldAt + holdReason, khóa mọi thao tác cho tới khi
+// mở lại (unhold). REVERSIBLE (khác cancel). Bulk: hold/unhold nhiều đơn 1 lần.
+export const HoldOrderZod = z.object({
+  reason: z.string().max(200).optional(),
+});
+export class HoldOrderDto extends createZodDto(extendApi(HoldOrderZod)) {}
+export const HoldOrderResZod = ResZod.extend({ data: ProductionOrderZod });
+export class HoldOrderResDto extends createZodDto(extendApi(HoldOrderResZod)) {}
+
+export const BulkHoldOrderZod = z.object({
+  ids: z.array(IDZod).min(1),
+  /** true = giữ đơn; false = mở giữ. */
+  hold: z.boolean(),
+  reason: z.string().max(200).optional(),
+});
+export class BulkHoldOrderDto extends createZodDto(extendApi(BulkHoldOrderZod)) {}
+export const BulkHoldOrderResZod = ResZod.extend({
+  data: z.object({ matched: z.number(), modified: z.number() }),
+});
+export class BulkHoldOrderResDto extends createZodDto(extendApi(BulkHoldOrderResZod)) {}
+
 export const UpdateOrderDesignZod = z.object({
   mockupUrl: z.string().max(2000).optional(),
   /** Chỉ các vị trí gửi lên được ghi đè (partial). */
@@ -1051,6 +1090,8 @@ export const WorkshopAvailableFiltersResZod = ResZod.extend({
     type: FactoryFilterOptionZod.array().optional(),
     /** SKU khách (userSku) — value = label = userSku. Dùng cho bảng phẳng trang "In". */
     userSku: FactoryFilterOptionZod.array().optional(),
+    /** Số đơn đang GIỮ (heldAt set) trong scope filter hiện tại — cho toggle "Đang giữ" workshop. */
+    heldCount: z.number().optional(),
   }),
 });
 export class WorkshopAvailableFiltersResDto extends createZodDto(

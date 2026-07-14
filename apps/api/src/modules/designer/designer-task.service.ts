@@ -64,6 +64,9 @@ export class DesignerTaskService {
 
     const order = await this.orderModel.findById(orderId).lean();
     if (!order) throw new NotFoundException('Order not found');
+    if ((order as unknown as { heldAt?: Date | null }).heldAt) {
+      throw new BadRequestException('Đơn đang bị giữ — mở lại (bỏ giữ) trước khi thao tác tiếp.');
+    }
 
     if (!isOverride) {
       if (roleName !== RoleType.Designer) {

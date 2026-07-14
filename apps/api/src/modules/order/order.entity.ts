@@ -169,6 +169,18 @@ export class OrderEntity extends DatabaseEntityAbstract {
   @Prop()
   cancelReason?: string;
 
+  /**
+   * Đơn đang bị GIỮ (hold) — set qua POST /orders/:id/hold. Khi set: mọi thao
+   * tác (updateField, transition designer/fulfillment, báo lỗi...) bị chặn ở BE
+   * + FE tô xám cả dòng. REVERSIBLE — clear qua /unhold để tiếp tục. Index để
+   * count "Đơn đang giữ" ở dashboard + toggle filter workshop.
+   */
+  @Prop({ index: true })
+  heldAt?: Date;
+
+  @Prop()
+  holdReason?: string;
+
   @Prop({ index: true })
   orderId?: string;
 

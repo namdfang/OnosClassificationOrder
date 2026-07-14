@@ -11,6 +11,7 @@ import {
   Ban,
   Medal,
   Package,
+  PauseCircle,
   Trophy,
   Truck,
   User as UserIcon,
@@ -98,6 +99,7 @@ interface Dashboard {
     totalShippingCost: number;
     totalCost: number;
     cancelledOrders: number;
+    heldOrders: number;
   };
   byType: TypeSummary[];
   byFactory: FactoryBreakdown[];
@@ -456,6 +458,38 @@ export default function OrderStatsTab() {
           {t && t.cancelledOrders > 0 ? 'Bấm xem danh sách →' : 'Không có đơn hủy'}
         </span>
       </button>
+
+      {/* Đơn đang giữ — vẫn nằm trong tổng số liệu (chỉ tạm dừng, chưa loại). */}
+      <div
+        className={cn(
+          'w-full flex items-center gap-2.5 rounded-lg border px-3 py-2.5',
+          t && t.heldOrders > 0
+            ? 'border-amber-300 dark:border-amber-800 bg-amber-50/60 dark:bg-amber-950/20'
+            : 'border-border bg-card',
+          isRefetching && 'opacity-60',
+        )}
+      >
+        <span
+          className={cn(
+            'shrink-0',
+            t && t.heldOrders > 0 ? 'text-amber-600 dark:text-amber-400' : 'text-muted-foreground opacity-60',
+          )}
+        >
+          <PauseCircle size={16} />
+        </span>
+        <span className="text-[11px] font-medium text-muted-foreground">Đơn đang giữ</span>
+        <span
+          className={cn(
+            'text-lg font-semibold tabular-nums leading-none',
+            t && t.heldOrders > 0 ? 'text-amber-600 dark:text-amber-400' : 'text-foreground',
+          )}
+        >
+          {t ? formatNumber(t.heldOrders) : '—'}
+        </span>
+        <span className="ml-auto text-[11px] text-muted-foreground">
+          {t && t.heldOrders > 0 ? 'Đơn tạm dừng — cần mở lại' : 'Không có đơn giữ'}
+        </span>
+      </div>
 
       {/* Factory allocation + Top users — Designer ẩn cả 2 (không quan tâm
           xưởng + không thấy khách hàng), Fulfillment chỉ thấy Factory. */}

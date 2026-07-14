@@ -6,7 +6,7 @@ import React, {
   useRef,
   useState,
 } from 'react';
-import { CalendarClock, ChevronDown, ChevronRight, FilterX, History, MousePointerClick, X } from 'lucide-react';
+import { CalendarClock, ChevronDown, ChevronRight, FilterX, History, MousePointerClick, PauseCircle, X } from 'lucide-react';
 import { useSearchParams } from 'react-router-dom';
 import { useVirtualizer } from '@tanstack/react-virtual';
 import type { WorkshopAvailableFilters } from 'shared';
@@ -32,7 +32,8 @@ import { OrderLogTimelineDialog } from '@/components/orders/OrderLogTimelineDial
 import { DesignerBacklogDialog } from '@/components/orders/DesignerBacklogDialog';
 import { OrderRowActionsMenu } from '@/components/orders/OrderRowActionsMenu';
 import { CancelledBadge } from '@/components/orders/CancelledBadge';
-import { isCancelled } from '@/utils/orderActions';
+import { HeldBadge } from '@/components/orders/HeldBadge';
+import { isCancelled, isHeld } from '@/utils/orderActions';
 import { DesignerSummaryPanel } from './DesignerSummaryPanel';
 import {
   WORKSHOP_COLS,
@@ -152,11 +153,18 @@ const ProductRow = React.memo(function ProductRow({
   dataIndex,
 }: ProductRowProps) {
   const cancelled = isCancelled(row);
+  const held = isHeld(row);
+  const dim = cancelled || held;
   // Memo nội dung cell (c.render) theo [cols, row, ctx] — 3 prop này ổn định
   // khi row không đổi. Nhờ vậy khi ProductRow re-render CHỈ vì đổi isSelected
   // (→ đổi rowBgClass sticky), các cell component (IconSelectCell, Assignee…)
   // KHÔNG render lại vì element ref được cache → React bail subtree.
-  const renderedCells = useMemo(() => cols.map((c) => c.render(row, ctx)), [cols, row, ctx]);
+  // Đơn đang GIỮ → override canEditField=false cho mọi cell (read-only). Menu
+  // "..." (Mở giữ) nằm ở cột riêng nên vẫn thao tác được.
+  const renderedCells = useMemo(
+    () => cols.map((c) => c.render(row, held ? { ...ctx, canEditField: () => false } : ctx)),
+    [cols, row, ctx, held],
+  );
   // Trải thẳng bg classes (KHÔNG dùng bg-inherit vì sticky cell cần own bg để
   // mask cell scroll phía sau — `inherit` không reliable với TR background).
   const rowBgClass = isSelected
@@ -173,7 +181,8 @@ const ProductRow = React.memo(function ProductRow({
       className={cn(
         rowBgClass,
         noTool && 'border-l-2 border-l-sky-400 dark:border-l-sky-400/60',
-        cancelled && 'opacity-60',
+        held && 'border-l-2 border-l-amber-400 dark:border-l-amber-400/60',
+        dim && 'opacity-60',
       )}
     >
       <TableCell className={cn('sticky left-0 z-10', rowBgClass)}>
@@ -206,6 +215,7 @@ const ProductRow = React.memo(function ProductRow({
               </Badge>
             )}
             {i === 0 && cancelled && <CancelledBadge reason={row.cancelReason} />}
+            {i === 0 && held && !cancelled && <HeldBadge reason={row.holdReason} />}
             <div className="min-w-0 flex-1">{renderedCells[i]}</div>
           </div>
         </TableCell>
@@ -311,6 +321,10 @@ export function OrderTableWorkshop() {
   const [filterUserSku, setFilterUserSku] = useState<string>(
     () => searchParams.get('wusersku') || '',
   );
+  // Toggle "Đang giữ" — chỉ hiện đơn đang bị giữ (heldAt set).
+  const [filterHeld, setFilterHeld] = useState<boolean>(
+    () => searchParams.get('wheld') === 'true',
+  );
 
   // Sync state → URL (replace). Strip default/empty values.
   useEffect(() => {
@@ -330,6 +344,7 @@ export function OrderTableWorkshop() {
         filterErrorFile ? sp.set('werrfile', filterErrorFile) : sp.delete('werrfile');
         filterDesignerStatus ? sp.set('wdstatus', filterDesignerStatus) : sp.delete('wdstatus');
         filterUserSku ? sp.set('wusersku', filterUserSku) : sp.delete('wusersku');
+        filterHeld ? sp.set('wheld', 'true') : sp.delete('wheld');
         page > 1 ? sp.set('wpage', String(page)) : sp.delete('wpage');
         pageSize !== DEFAULT_PAGE_SIZE ? sp.set('wsize', String(pageSize)) : sp.delete('wsize');
         return sp;
@@ -350,6 +365,7 @@ export function OrderTableWorkshop() {
     filterErrorFile,
     filterDesignerStatus,
     filterUserSku,
+    filterHeld,
     page,
     pageSize,
     setSearchParams,
@@ -401,6 +417,7 @@ export function OrderTableWorkshop() {
     if (filterErrorFile) params.set('errorFile', filterErrorFile);
     if (filterDesignerStatus) params.set('designerStatus', filterDesignerStatus);
     if (filterUserSku) params.set('userSku', filterUserSku);
+    if (filterHeld) params.set('held', 'true');
     if (createdFrom) params.set('createdFrom', createdFrom);
     if (createdTo) params.set('createdTo', createdTo);
     return params;
@@ -460,6 +477,7 @@ export function OrderTableWorkshop() {
     filterErrorFile,
     filterDesignerStatus,
     filterUserSku,
+    filterHeld,
     createdFrom,
     createdTo,
   ]);
@@ -786,6 +804,7 @@ export function OrderTableWorkshop() {
     filterErrorFile,
     filterDesignerStatus,
     filterUserSku,
+    filterHeld,
   ]);
 
   // Định nghĩa facet 1 lần — dùng cho cả OrderFilterBar lẫn chip "đang lọc".
@@ -850,10 +869,20 @@ export function OrderTableWorkshop() {
       onClear: () => { setCreatedFrom(todayISO()); setCreatedTo(todayISO()); setPage(1); },
     });
   }
+  if (filterHeld) {
+    activeFilters.push({
+      key: 'held',
+      label: 'Trạng thái',
+      display: 'Đang giữ',
+      color: FILTER_CHIP_COLORS.date,
+      onClear: () => { setFilterHeld(false); setPage(1); },
+    });
+  }
 
   const clearAllFilters = () => {
     setSearch('');
     setBulkIds([]);
+    setFilterHeld(false);
     setCreatedFrom(todayISO());
     setCreatedTo(todayISO());
     setFilterFabricType('');
@@ -925,6 +954,7 @@ export function OrderTableWorkshop() {
     filterToolResult,
     filterErrorFile,
     filterDesignerStatus,
+    filterHeld,
     createdFrom,
     createdTo,
   ]);
@@ -979,19 +1009,39 @@ export function OrderTableWorkshop() {
           }}
           loading={loading}
           topActionsRight={
-            groups.length > 1 ? (
+            <>
               <Button
-                variant="ghost"
+                variant={filterHeld ? 'default' : 'outline'}
                 size="sm"
                 className="text-xs h-8"
                 onClick={() => {
-                  const allTypes = new Set(groups.map((g) => g.type || '(không có tên)'));
-                  setCollapsedTypes((prev) => (prev.size === allTypes.size ? new Set() : allTypes));
+                  setFilterHeld((v) => !v);
+                  setPage(1);
                 }}
+                title="Chỉ hiện đơn đang bị giữ"
               >
-                {collapsedTypes.size === groups.length ? 'Mở hết' : 'Thu gọn hết'}
+                <PauseCircle size={14} className="mr-1" />
+                Đang giữ
+                {typeof workshopFilters?.heldCount === 'number' && workshopFilters.heldCount > 0 && (
+                  <span className="ml-1 rounded-full bg-amber-200 dark:bg-amber-500/30 px-1.5 text-[10px] font-semibold text-amber-800 dark:text-amber-200">
+                    {workshopFilters.heldCount}
+                  </span>
+                )}
               </Button>
-            ) : null
+              {groups.length > 1 && (
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  className="text-xs h-8"
+                  onClick={() => {
+                    const allTypes = new Set(groups.map((g) => g.type || '(không có tên)'));
+                    setCollapsedTypes((prev) => (prev.size === allTypes.size ? new Set() : allTypes));
+                  }}
+                >
+                  {collapsedTypes.size === groups.length ? 'Mở hết' : 'Thu gọn hết'}
+                </Button>
+              )}
+            </>
           }
           facets={facets}
         />

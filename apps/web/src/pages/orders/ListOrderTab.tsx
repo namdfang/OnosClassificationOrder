@@ -21,8 +21,9 @@ import { DesignThumbsCell } from '@/components/orders/cells/DesignThumbsCell';
 import { OrderLogTimelineDialog } from '@/components/orders/OrderLogTimelineDialog';
 import { OrderRowActionsMenu } from '@/components/orders/OrderRowActionsMenu';
 import type { WorkshopOrderRow } from '@/components/orders/workshopTableConfig';
-import { isCancelled } from '@/utils/orderActions';
+import { isCancelled, isHeld } from '@/utils/orderActions';
 import { CancelledBadge } from '@/components/orders/CancelledBadge';
+import { HeldBadge } from '@/components/orders/HeldBadge';
 import { CopyButton } from '@/components/common/CopyButton';
 import { Hint } from '@/components/common/Hint';
 import { BulkProductionIdDialog, parseProductionIds } from '@/components/orders/BulkProductionIdDialog';
@@ -87,6 +88,8 @@ interface OrderRow {
   designsStatus?: Partial<Record<keyof DesignFields, 'pending' | 'ready' | 'failed'>>;
   cancelledAt?: string | null;
   cancelReason?: string;
+  heldAt?: string | null;
+  holdReason?: string;
 }
 
 interface ListOrderTabProps {
@@ -109,9 +112,10 @@ const OrderRowItem = memo(
     const variantBits = [it.color, it.size, it.printMethod].filter(Boolean);
     const mockupThumbSrc = smallThumb(it.mockupUrl, 200);
     const cancelled = isCancelled(it);
+    const held = isHeld(it);
 
     return (
-      <TableRow className={cancelled ? 'opacity-60' : undefined}>
+      <TableRow className={cancelled || held ? 'opacity-60' : undefined}>
         {/* Order ID */}
         <TableCell>
           <div className="flex flex-col gap-0.5">
@@ -123,6 +127,7 @@ const OrderRowItem = memo(
                 </span>
               </Hint>
               {cancelled && <CancelledBadge reason={it.cancelReason} />}
+              {held && !cancelled && <HeldBadge reason={it.holdReason} />}
             </div>
             {it.orderId && (
               <div className="flex items-center gap-1">

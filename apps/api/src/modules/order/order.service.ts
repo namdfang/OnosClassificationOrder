@@ -76,6 +76,10 @@ import type {
   SizeMatrixRow,
   SizeSummary,
   CancelOrderDto,
+  HoldOrderDto,
+  HoldOrderResDto,
+  BulkHoldOrderDto,
+  BulkHoldOrderResDto,
   TransferOrderDto,
   TransferOrderResDto,
   TypeSummary,
@@ -1066,6 +1070,9 @@ export class OrderService implements OnModuleInit {
       }
     }
     if (typeof dto.isMapped === 'boolean') filter.isMapped = dto.isMapped;
+    // Toggle "Đang giữ" (workshop): held=true → chỉ đơn giữ; held=false → chỉ
+    // đơn không giữ. Không truyền → hiện cả 2 (đơn giữ chỉ tô xám, không ẩn).
+    if (typeof dto.held === 'boolean') filter.heldAt = { $exists: dto.held };
     if (dto.factoryId) filter.factoryId = dto.factoryId;
     if (dto.machineTypeId) filter.machineTypeId = dto.machineTypeId;
     if (dto.status) filter.status = dto.status;
@@ -1576,6 +1583,12 @@ export class OrderService implements OnModuleInit {
       ...match,
       cancelledAt: { $exists: true },
     });
+    // Đơn đang GIỮ: VẪN nằm trong totalOrders (chỉ tạm dừng) nhưng đếm riêng để
+    // dashboard hiện "Đơn đang giữ". Cùng scope xưởng + khoảng inProductionAt.
+    const heldOrders = await this.orderModel.countDocuments({
+      ...match,
+      heldAt: { $exists: true },
+    });
 
     const totalsAgg = await this.orderModel.aggregate([
       { $match: match },
@@ -1602,8 +1615,9 @@ export class OrderService implements OnModuleInit {
           totalShippingCost: round2(totalsAgg[0].totalShippingCost),
           totalCost: round2((totalsAgg[0].totalProductionCost || 0) + (totalsAgg[0].totalShippingCost || 0)),
           cancelledOrders,
+          heldOrders,
         }
-      : { totalOrders: 0, totalQuantity: 0, totalProductionCost: 0, totalShippingCost: 0, totalCost: 0, cancelledOrders };
+      : { totalOrders: 0, totalQuantity: 0, totalProductionCost: 0, totalShippingCost: 0, totalCost: 0, cancelledOrders, heldOrders };
 
     // Per-type aggregation: group, collect raw rows to post-process size/mockup
     const byTypeAgg = await this.orderModel.aggregate([
@@ -3407,6 +3421,7 @@ export class OrderService implements OnModuleInit {
       designerStatus: Array<{ value: string; label: string; count: number }>;
       type: Array<{ value: string; label: string; count: number }>;
       userSku: Array<{ value: string; label: string; count: number }>;
+      heldCount: number;
     };
   }> {
     type FacetKey =
@@ -3604,9 +3619,27 @@ export class OrderService implements OnModuleInit {
       return { withTool, noTool: total - withTool };
     })();
 
+    // Count đơn đang GIỮ trong scope filter hiện tại (strip `held` để đếm tổng
+    // đơn giữ bất kể toggle đang bật/tắt) → hiện trên nút toggle "Đang giữ".
+    const heldCount = await (async () => {
+      const base = this.buildOrderListFilter(
+        { ...dto, held: undefined } as GetProductionOrdersDto,
+        roleName,
+        assigneeCode,
+        fulfillmentFactoryId,
+        fulfillmentStage,
+        toolHasCodes,
+      );
+      if (dto.fulfillmentStatus) {
+        this.applyFulfillmentStatusFilter(base, dto.fulfillmentStatus, fulfillmentStage, assigneeCode);
+      }
+      return this.orderModel.countDocuments({ ...base, heldAt: { $exists: true } });
+    })();
+
     return {
       success: true,
       data: {
+        heldCount,
         printStatus: printStatusRows.map(toOption(printStatusMap)),
         toolResultNote: [
           // Prepend "Chưa soát" option. Token __none__ — FE injects nothing nữa.
@@ -3833,6 +3866,122 @@ export class OrderService implements OnModuleInit {
     return updated;
   }
 
+  // ─── Giữ đơn (hold / unhold) — ORDER_WRITE_ROLES ──────────────────
+  /**
+   * Guard dùng chung: chặn MỌI thao tác lên đơn đang bị giữ (heldAt set). Gọi ở
+   * đầu updateField / setProductionError / transition designer + fulfillment.
+   * Đơn giữ = tạm dừng — phải mở lại (unhold) trước khi thao tác tiếp.
+   */
+  private assertNotHeld(order: { heldAt?: Date | null }): void {
+    if (order?.heldAt) {
+      throw new BadRequestException(
+        'Đơn đang bị giữ — mở lại (bỏ giữ) trước khi thao tác tiếp.',
+      );
+    }
+  }
+
+  /** Set heldAt + holdReason cho 1 đơn. Chặn giữ 2 lần. */
+  async holdOrder(
+    id: string,
+    dto: HoldOrderDto,
+    _roleName?: RoleType,
+    ctx?: AuditContext,
+  ): Promise<HoldOrderResDto> {
+    const before = await this.orderModel.findById(id).lean();
+    if (!before) throw new NotFoundException('Order not found');
+    if ((before as unknown as { heldAt?: Date | null }).heldAt) {
+      throw new BadRequestException('Đơn đang được giữ rồi.');
+    }
+    if ((before as unknown as { cancelledAt?: Date | null }).cancelledAt) {
+      throw new BadRequestException('Đơn đã hủy — không thể giữ.');
+    }
+    const updated = await this.orderModel.findByIdAndUpdate(
+      id,
+      { $set: { heldAt: new Date(), holdReason: dto.reason ?? '' } },
+      { new: true },
+    );
+    if (!updated) throw new NotFoundException('Order not found');
+    void this.orderLogService.write({
+      orderId: id,
+      action: 'hold',
+      field: 'heldAt',
+      before: null,
+      after: dto.reason ?? '',
+      ctx,
+    });
+    void this.invalidateListCache();
+    return { success: true, data: updated } as unknown as HoldOrderResDto;
+  }
+
+  /** Clear heldAt + holdReason (mở lại đơn). */
+  async unholdOrder(
+    id: string,
+    _roleName?: RoleType,
+    ctx?: AuditContext,
+  ): Promise<HoldOrderResDto> {
+    const before = await this.orderModel.findById(id).lean();
+    if (!before) throw new NotFoundException('Order not found');
+    if (!(before as unknown as { heldAt?: Date | null }).heldAt) {
+      throw new BadRequestException('Đơn không ở trạng thái giữ.');
+    }
+    const updated = await this.orderModel.findByIdAndUpdate(
+      id,
+      { $unset: { heldAt: 1, holdReason: 1 } },
+      { new: true },
+    );
+    if (!updated) throw new NotFoundException('Order not found');
+    void this.orderLogService.write({
+      orderId: id,
+      action: 'unhold',
+      field: 'heldAt',
+      before: (before as unknown as { holdReason?: string }).holdReason ?? '',
+      after: null,
+      ctx,
+    });
+    void this.invalidateListCache();
+    return { success: true, data: updated } as unknown as HoldOrderResDto;
+  }
+
+  /**
+   * Bulk giữ / mở giữ nhiều đơn. `hold=true` chỉ set cho đơn CHƯA giữ và CHƯA
+   * hủy; `hold=false` chỉ clear cho đơn ĐANG giữ. `modified` = số đơn thực đổi.
+   */
+  async bulkSetHold(
+    dto: BulkHoldOrderDto,
+    _roleName?: RoleType,
+    ctx?: AuditContext,
+  ): Promise<BulkHoldOrderResDto> {
+    const baseFilter = {
+      _id: { $in: dto.ids },
+      deletedAt: { $exists: false },
+    } as Record<string, unknown>;
+    let result: { matchedCount: number; modifiedCount: number };
+    if (dto.hold) {
+      result = await this.orderModel.updateMany(
+        { ...baseFilter, heldAt: { $exists: false }, cancelledAt: { $exists: false } },
+        { $set: { heldAt: new Date(), holdReason: dto.reason ?? '' } },
+      );
+    } else {
+      result = await this.orderModel.updateMany(
+        { ...baseFilter, heldAt: { $exists: true } },
+        { $unset: { heldAt: 1, holdReason: 1 } },
+      );
+    }
+    void this.orderLogService.write({
+      orderId: dto.ids.join(','),
+      action: dto.hold ? 'hold' : 'unhold',
+      field: 'heldAt',
+      before: dto.hold ? null : 'bulk',
+      after: dto.hold ? (dto.reason ?? '') : null,
+      ctx,
+    });
+    void this.invalidateListCache();
+    return {
+      success: true,
+      data: { matched: result.matchedCount, modified: result.modifiedCount },
+    };
+  }
+
   /**
    * Đổi URL mockup + các vị trí design ĐANG CÓ (client chỉ gửi field muốn đổi).
    * Lưu raw URL (không qua R2). URL cũ được ghi vào OrderLog (before/after) để tra lại.
@@ -3919,6 +4068,8 @@ export class OrderService implements OnModuleInit {
 
     const before = await this.orderRepository.findOneById(id);
     if (!before) throw new NotFoundException('Order not found');
+    // Đơn đang giữ → khóa mọi chỉnh sửa field (mở lại trước khi thao tác).
+    this.assertNotHeld(before as unknown as { heldAt?: Date | null });
 
     const normalized = normalizeFieldValue(dto.field, dto.value);
     const patch: Record<string, unknown> = { [dto.field]: normalized };
@@ -4304,6 +4455,8 @@ export class OrderService implements OnModuleInit {
     const matchFilter: Record<string, unknown> = {
       _id: { $in: dto.ids },
       deletedAt: { $exists: false },
+      // Đơn đang giữ → loại khỏi bulk update (matchedCount thấp hơn để FE biết bị bỏ).
+      heldAt: { $exists: false },
     };
     if (extraMatchFilter) Object.assign(matchFilter, extraMatchFilter);
     const result = await this.orderModel.updateMany(matchFilter, { $set: patch });
@@ -5779,6 +5932,8 @@ export class OrderService implements OnModuleInit {
     if ((before as unknown as { cancelledAt?: Date | null }).cancelledAt) {
       throw new BadRequestException('Đơn đã hủy — không thể báo lỗi / đẩy về công đoạn trước.');
     }
+    // Đơn đang giữ → khóa báo lỗi / đẩy về công đoạn trước.
+    this.assertNotHeld(before as unknown as { heldAt?: Date | null });
 
     let finalSource: 'designer' | 'factory' | 'tool-check' | undefined = dto.source;
     if (dto.code) {

@@ -47,6 +47,10 @@ import {
   PreviewCuttingFilesDto,
   CancelOrderDto,
   CancelOrderResDto,
+  HoldOrderDto,
+  HoldOrderResDto,
+  BulkHoldOrderDto,
+  BulkHoldOrderResDto,
   PreviewCuttingFilesResDto,
   ResDto,
   RoleType,
@@ -342,6 +346,49 @@ export class OrderController {
       userAgent,
     });
     return { success: true, data } as unknown as CancelOrderResDto;
+  }
+
+  @Patch('bulk-hold')
+  @Auth(ORDER_WRITE_ROLES)
+  @ApiOperation({ summary: 'Giữ / mở giữ nhiều đơn cùng lúc' })
+  @HttpCode(HttpStatus.OK)
+  @ApiOkResponse({ type: BulkHoldOrderResDto })
+  async bulkSetHold(
+    @Body() dto: BulkHoldOrderDto,
+    @AuthUser() user: UserDocument,
+    @ClientIp() ip: string,
+    @UserAgent() userAgent: string,
+  ): Promise<BulkHoldOrderResDto> {
+    return this.orderService.bulkSetHold(dto, user?.role?.name as RoleType, { user, ip, userAgent });
+  }
+
+  @Post(':id/hold')
+  @Auth(ORDER_WRITE_ROLES)
+  @ApiOperation({ summary: 'Giữ đơn (tạm dừng — khóa mọi thao tác tới khi mở lại)' })
+  @HttpCode(HttpStatus.OK)
+  @ApiOkResponse({ type: HoldOrderResDto })
+  async holdOrder(
+    @Param('id') id: string,
+    @Body() dto: HoldOrderDto,
+    @AuthUser() user: UserDocument,
+    @ClientIp() ip: string,
+    @UserAgent() userAgent: string,
+  ): Promise<HoldOrderResDto> {
+    return this.orderService.holdOrder(id, dto, user?.role?.name as RoleType, { user, ip, userAgent });
+  }
+
+  @Post(':id/unhold')
+  @Auth(ORDER_WRITE_ROLES)
+  @ApiOperation({ summary: 'Mở giữ đơn (tiếp tục hoàn thành)' })
+  @HttpCode(HttpStatus.OK)
+  @ApiOkResponse({ type: HoldOrderResDto })
+  async unholdOrder(
+    @Param('id') id: string,
+    @AuthUser() user: UserDocument,
+    @ClientIp() ip: string,
+    @UserAgent() userAgent: string,
+  ): Promise<HoldOrderResDto> {
+    return this.orderService.unholdOrder(id, user?.role?.name as RoleType, { user, ip, userAgent });
   }
 
   @Patch(':id/design')
