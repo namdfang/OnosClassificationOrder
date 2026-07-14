@@ -1,5 +1,5 @@
 import React, { useMemo, useState } from 'react';
-import { Upload, FileText, FileCheck2, FilePlus2 } from 'lucide-react';
+import { Upload, FileText, FileCheck2, FilePlus2, CloudDownload } from 'lucide-react';
 import { toast } from 'sonner';
 import * as XLSX from 'xlsx';
 
@@ -38,6 +38,7 @@ export function ImportOrderTab({ onImported }: ImportOrderTabProps) {
   const [mode, setMode] = useState<ImportMode>('new');
   const [text, setText] = useState('');
   const [loading, setLoading] = useState(false);
+  const [onosPodLoading, setOnosPodLoading] = useState(false);
   const [lastNewResult, setLastNewResult] = useState<NewImportResult | null>(null);
   const [lastReworkResult, setLastReworkResult] = useState<ReworkImportResult | null>(null);
 
@@ -117,6 +118,37 @@ export function ImportOrderTab({ onImported }: ImportOrderTabProps) {
     }
   };
 
+  const handleImportFromOnosPod = async () => {
+    try {
+      setOnosPodLoading(true);
+      const resp = await RepositoryRemote.order.importFromOnosPod();
+      const result = resp.data.data as NewImportResult & {
+        totalFetched: number;
+        byManufacture: { id: string; name: string; sku: string; fetched: number; error?: string }[];
+      };
+      setLastNewResult(result);
+      setLastReworkResult(null);
+      const manufactureSummary = result.byManufacture
+        .map((m) => `${m.sku}${m.error ? ' (lỗi)' : ''}: ${m.fetched}`)
+        .join(', ');
+      toast.success(
+        `Đã lấy ${result.totalFetched} đơn từ ${result.byManufacture.length} xưởng OnosPod (${manufactureSummary}): ` +
+          `imported ${result.imported}, updated ${result.updated}, mapped ${result.mapped}/${result.mapped + result.unmapped}`,
+      );
+      const failedManufactures = result.byManufacture.filter((m) => m.error);
+      if (failedManufactures.length > 0) {
+        toast.error(
+          `${failedManufactures.length} xưởng lỗi: ${failedManufactures.map((m) => `${m.sku} — ${m.error}`).join('; ')}`,
+        );
+      }
+      onImported();
+    } catch (error) {
+      handleAxiosError(error);
+    } finally {
+      setOnosPodLoading(false);
+    }
+  };
+
   return (
     <div className="space-y-4">
       <div className="rounded-lg border border-border bg-card p-5 space-y-3">
@@ -129,21 +161,35 @@ export function ImportOrderTab({ onImported }: ImportOrderTabProps) {
                 : 'Sheet soát: cập nhật QC fields (kết quả tool, file lỗi, ghi chú, người thực hiện) cho đơn đã có.'}
             </p>
           </div>
-          <label className="cursor-pointer">
-            <input
-              type="file"
-              accept=".xlsx,.xls,.csv,.tsv,.txt"
-              className="hidden"
-              onChange={(e) => {
-                const f = e.target.files?.[0];
-                if (f) handleFile(f);
-              }}
-            />
-            <span className="inline-flex items-center gap-1.5 h-9 px-3 text-sm font-medium rounded-md border border-input bg-background shadow-sm hover:bg-accent">
-              <FileText size={14} />
-              Chọn file
-            </span>
-          </label>
+          <div className="flex items-center gap-2">
+            {mode === 'new' && (
+              <Button
+                type="button"
+                variant="outline"
+                className="h-9"
+                disabled={onosPodLoading}
+                onClick={handleImportFromOnosPod}
+              >
+                {onosPodLoading ? <Spinner size={14} /> : <CloudDownload size={14} />}
+                Lấy đơn từ OnosPod
+              </Button>
+            )}
+            <label className="cursor-pointer">
+              <input
+                type="file"
+                accept=".xlsx,.xls,.csv,.tsv,.txt"
+                className="hidden"
+                onChange={(e) => {
+                  const f = e.target.files?.[0];
+                  if (f) handleFile(f);
+                }}
+              />
+              <span className="inline-flex items-center gap-1.5 h-9 px-3 text-sm font-medium rounded-md border border-input bg-background shadow-sm hover:bg-accent">
+                <FileText size={14} />
+                Chọn file
+              </span>
+            </label>
+          </div>
         </div>
 
         {/* Mode picker */}

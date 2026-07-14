@@ -504,6 +504,48 @@ export const ImportReworkOrdersResZod = ResZod.extend({
 export class ImportReworkOrdersResDto extends createZodDto(extendApi(ImportReworkOrdersResZod)) {}
 
 //
+// Import tự động từ OnosPod QC (qc.onospod.com) — query trực tiếp
+// paginateMrpProduct (status "To Do") rồi map + tái dùng pipeline
+// importOrders() sẵn có. Xem OnospodImportService.
+//
+export const ImportFromOnosPodZod = z.object({
+  // Bỏ trống cả 2 → tự tính theo giờ gọi (giờ VN): trước 12h trưa → từ 12h
+  // trưa HÔM TRƯỚC; từ 12h trưa trở đi → từ 00h00 HÔM NAY. Chỉ truyền start
+  // → end = thời điểm gọi. offset:true để nhận cả "+07:00" lẫn "Z".
+  start: z.string().datetime({ offset: true }).optional(),
+  end: z.string().datetime({ offset: true }).optional(),
+});
+export class ImportFromOnosPodDto extends createZodDto(extendApi(ImportFromOnosPodZod)) {}
+
+export const ImportFromOnosPodResZod = ResZod.extend({
+  data: z.object({
+    imported: z.number(),
+    updated: z.number(),
+    mapped: z.number(),
+    unmapped: z.number(),
+    skipped: z.array(z.object({ row: z.number(), reason: z.string() })),
+    totalFetched: z.number(),
+    // Số productionId trùng lặp trong batch tổng hợp (đã dedupe trước khi
+    // import) — vd cùng đơn xuất hiện ở 2 trang do data dịch chuyển lúc phân
+    // trang, hoặc trùng giữa 2 manufacture.
+    duplicatesInBatch: z.number(),
+    period: z.object({ start: z.string(), end: z.string() }),
+    // Pull từ TẤT CẢ manufacture của account (query `manufactures`) — 1
+    // manufacture lỗi không chặn các manufacture còn lại (xem `error`).
+    byManufacture: z.array(
+      z.object({
+        id: z.string(),
+        name: z.string(),
+        sku: z.string(),
+        fetched: z.number(),
+        error: z.string().optional(),
+      }),
+    ),
+  }),
+});
+export class ImportFromOnosPodResDto extends createZodDto(extendApi(ImportFromOnosPodResZod)) {}
+
+//
 // Dashboard
 //
 export const GetOrderDashboardZod = z.object({
