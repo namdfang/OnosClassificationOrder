@@ -25,6 +25,7 @@ import { ActionModule } from './modules/actions/action.module';
 import { AmqpModule } from './modules/amqp/amqp.module';
 import { DepartmentModule } from './modules/departments/department.module';
 import { DesignerModule } from './modules/designer/designer.module';
+import { DesignerAssignmentModule } from './modules/designer-assignment/designer-assignment.module';
 import { FactoryModule } from './modules/factory/factory.module';
 import { FulfillmentModule } from './modules/fulfillment/fulfillment.module';
 import { MachineTypeModule } from './modules/machine-type/machine-type.module';
@@ -65,6 +66,7 @@ import { FastifyThrottlerGuard } from './guards/fastify-throttler.guard';
     OrderModule,
     OrderLogModule,
     DesignerModule,
+    DesignerAssignmentModule,
     FulfillmentModule,
     TelegramNotificationModule,
     ScheduledReportsModule,

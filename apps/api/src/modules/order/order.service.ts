@@ -23,6 +23,7 @@ import type {
   BulkTransferOrderDto,
   BulkUpdateOrderFieldDto,
   BulkUpdateOrderFieldResDto,
+  DesignerAssignmentConfig,
   DesignerBreakdownResDto,
   DesignerBacklogResDto,
   DesignerStatusCounts,
@@ -89,6 +90,7 @@ import type {
   UserBreakdown,
 } from 'shared';
 import {
+  DESIGNER_ASSIGNMENT_CONFIG_KEY,
   DESIGNER_REASSIGNABLE_STATUSES,
   DesignerStatus,
   FULFILLMENT_STAGE_LABELS,
@@ -121,6 +123,7 @@ import type { AuditContext } from '../order-log/order-log.service';
 import { ProductConfigRepository } from '../product-config/product-config.repository';
 import { RedisCacheService } from '../redis-cache/redis-cache.service';
 import { RoleRepository } from '../role/role.repository';
+import { SystemConfigService } from '../system-config/system-config.service';
 import { TelegramNotificationService } from '../telegram-notification/telegram-notification.service';
 import { UserEntity } from '../user/user.entity';
 import { WorkshopConfigRepository } from '../workshop-config/workshop-config.repository';
@@ -330,6 +333,7 @@ export class OrderService implements OnModuleInit {
     @InjectModel(UserEntity.name) private readonly userModel: Model<UserEntity>,
     private readonly roleRepository: RoleRepository,
     private readonly driveFileNameService: DriveFileNameService,
+    private readonly systemConfigService: SystemConfigService,
   ) {}
 
   /** Validate giá trị assignee là userId hợp lệ (user role=Designer, ĐANG BẬT). */
@@ -4370,6 +4374,18 @@ export class OrderService implements OnModuleInit {
 
     void this.invalidateListCache();
 
+    // Soát tool thủ công xong (đặt toolResultNote có giá trị & != 'ok') → auto-gán
+    // designer theo cấu hình xưởng. Engine tự xác minh đủ điều kiện (chưa gán, có
+    // xưởng, xưởng có cấu hình). Bulk toolResultNote delegate qua đây nên cũng phủ.
+    if (
+      dto.field === 'toolResultNote' &&
+      typeof normalized === 'string' &&
+      normalized.trim() &&
+      normalized !== READY_FOR_FULFILL_CODE
+    ) {
+      void this.autoAssignAfterImport([id], ctx);
+    }
+
     return { success: true, data: updated };
   }
 
@@ -4496,6 +4512,143 @@ export class OrderService implements OnModuleInit {
         modified: result.modifiedCount,
       },
     };
+  }
+
+  /**
+   * Chia N phần cho các designer theo trọng số `weights` (tự do, không cần
+   * cộng 100). `baseᵢ = floor(N × wᵢ/Σw)`; **số dư dồn hết cho designer đầu**
+   * (theo yêu cầu "phần dư về designer đầu"). Σw = 0 → chia đều.
+   */
+  private allocateByWeight(n: number, weights: number[]): number[] {
+    const k = weights.length;
+    if (k === 0 || n <= 0) return new Array(k).fill(0);
+    let effective = weights.map((w) => (Number.isFinite(w) && w > 0 ? w : 0));
+    let sum = effective.reduce((a, b) => a + b, 0);
+    if (sum <= 0) {
+      effective = new Array(k).fill(1);
+      sum = k;
+    }
+    const base = effective.map((w) => Math.floor((n * w) / sum));
+    const assigned = base.reduce((a, b) => a + b, 0);
+    base[0] += n - assigned; // phần dư về designer đầu danh sách
+    return base;
+  }
+
+  /**
+   * Auto-gán đơn cho designer theo cấu hình xưởng (`designer_assignment_config`)
+   * SAU khi soát tool xong. Được gọi từ `importRework` + `updateField('toolResultNote')`
+   * (bulk toolResultNote delegate qua updateField nên cũng phủ). Fire-and-forget.
+   *
+   * Ứng viên (tự xác minh lại trên DB, không tin state truyền vào):
+   *   - `toolResultNote` CÓ giá trị & != 'ok' (đã soát, có lỗi cần designer)
+   *   - có `factoryId` (đã map xưởng) & xưởng đó CÓ cấu hình designer
+   *   - chưa ai ôm (`designerStatus='unassigned'`, `assignee` rỗng)
+   *   - không hủy / giữ / xóa
+   * Phân bổ theo lô (floor + dư về đầu) cho các designer Active của xưởng.
+   */
+  private async autoAssignAfterImport(orderIds: string[], ctx?: AuditContext): Promise<void> {
+    try {
+      const ids = Array.from(new Set(orderIds.map((x) => String(x)).filter(Boolean)));
+      if (!ids.length) return;
+
+      const config = await this.systemConfigService.get<DesignerAssignmentConfig>(
+        DESIGNER_ASSIGNMENT_CONFIG_KEY,
+        null,
+      );
+      if (!config?.factories?.length) return;
+
+      const byFactory = new Map<string, { designerId: string; weight: number }[]>();
+      for (const f of config.factories) {
+        if (f?.factoryId && f.designers?.length) {
+          byFactory.set(String(f.factoryId), f.designers.map((d) => ({ designerId: String(d.designerId), weight: d.weight })));
+        }
+      }
+      if (!byFactory.size) return;
+
+      // Xác minh trạng thái thực trên DB (authoritative).
+      const eligible = await this.orderModel
+        .find(
+          {
+            _id: { $in: ids },
+            designerStatus: DesignerStatus.Unassigned,
+            assignee: { $in: [null, ''] },
+            factoryId: { $in: Array.from(byFactory.keys()) },
+            toolResultNote: { $nin: [null, '', READY_FOR_FULFILL_CODE] },
+            cancelledAt: null,
+            heldAt: null,
+            deletedAt: { $exists: false },
+          },
+          { _id: 1, factoryId: 1 },
+        )
+        .lean();
+      if (!eligible.length) return;
+
+      // Chỉ giữ designer đang Active + đúng role Designer.
+      const allDesignerIds = Array.from(
+        new Set(config.factories.flatMap((f) => (f.designers || []).map((d) => String(d.designerId)))),
+      );
+      const designerRole = await this.roleRepository.findOne({ name: RoleType.Designer });
+      const activeUsers = await this.userModel
+        .find({ _id: { $in: allDesignerIds }, roleId: designerRole?._id, status: Status.Active }, { _id: 1 })
+        .lean();
+      const validIds = new Set(activeUsers.map((u) => String(u._id)));
+
+      const groups = new Map<string, string[]>();
+      for (const o of eligible) {
+        const fid = String((o as unknown as { factoryId?: string }).factoryId);
+        if (!groups.has(fid)) groups.set(fid, []);
+        groups.get(fid)!.push(String(o._id));
+      }
+
+      const now = new Date();
+      const logRows: Array<{
+        orderId: string;
+        action: 'update';
+        field: string;
+        before: unknown;
+        after: unknown;
+        ctx?: AuditContext;
+      }> = [];
+
+      for (const [fid, orderList] of groups) {
+        const designers = (byFactory.get(fid) || []).filter((d) => validIds.has(d.designerId));
+        if (!designers.length) continue;
+        const alloc = this.allocateByWeight(orderList.length, designers.map((d) => d.weight));
+        let cursor = 0;
+        for (let i = 0; i < designers.length; i++) {
+          const count = alloc[i];
+          if (count <= 0) continue;
+          const slice = orderList.slice(cursor, cursor + count);
+          cursor += count;
+          if (!slice.length) continue;
+          const designerId = designers[i].designerId;
+          await this.orderModel.updateMany(
+            { _id: { $in: slice }, designerStatus: DesignerStatus.Unassigned },
+            {
+              $set: {
+                assignee: designerId,
+                designerStatus: DesignerStatus.Assigned,
+                designerAssignedAt: now,
+                designerRejectedReason: null,
+                designerRejectedAt: null,
+              },
+            },
+          );
+          for (const oid of slice) {
+            logRows.push({ orderId: oid, action: 'update', field: 'assignee', before: null, after: designerId, ctx });
+          }
+        }
+      }
+
+      if (logRows.length) {
+        void this.orderLogService.writeMany(logRows);
+        void this.invalidateListCache();
+      }
+    } catch (err) {
+      this.logger.info({
+        message: JSON.stringify({ scope: 'autoAssignAfterImport', error: String(err) }),
+      });
+    }
   }
 
   /**
@@ -5007,6 +5160,9 @@ export class OrderService implements OnModuleInit {
     let notFound = 0;
     let cancelled = 0;
     let assigneeMatched = 0;
+    // Đơn vừa được set toolResultNote != 'ok' (soát tool xong) mà KHÔNG gán tay
+    // trong sheet → ứng viên auto-gán designer theo cấu hình xưởng.
+    const autoAssignCandidates: string[] = [];
 
     // Preload workshop_config + users để lookup nhanh.
     const [toolResultNoteCfgs, errorFileCfgs, allUsers] = await Promise.all([
@@ -5116,6 +5272,20 @@ export class OrderService implements OnModuleInit {
       await this.orderModel.updateOne({ _id: order._id }, { $set });
       updated += 1;
 
+      // Ứng viên auto-gán: soát tool xong (note có giá trị & != 'ok'), KHÔNG gán
+      // tay trong sheet, đơn đã có xưởng & chưa ai ôm. Engine xác minh lại trên DB.
+      if (
+        typeof $set.toolResultNote === 'string' &&
+        $set.toolResultNote.trim() &&
+        $set.toolResultNote !== READY_FOR_FULFILL_CODE &&
+        !$set.assignee &&
+        order.factoryId &&
+        (!order.designerStatus || order.designerStatus === DesignerStatus.Unassigned) &&
+        !order.assignee
+      ) {
+        autoAssignCandidates.push(String(order._id));
+      }
+
       if (warnings.length) {
         // Logger config dùng custom level "activity" trên prod → .warn không exist.
         // Dùng .info (luôn tồn tại) + prefix [WARN] để filter log dễ.
@@ -5142,6 +5312,9 @@ export class OrderService implements OnModuleInit {
     }
 
     void this.invalidateListCache();
+
+    // Auto-gán designer theo cấu hình xưởng cho đơn vừa soát tool xong (fire-and-forget).
+    void this.autoAssignAfterImport(autoAssignCandidates, ctx);
 
     this.logger.info({
       message: `[import-rework] done: updated=${updated} notFound=${notFound} cancelled=${cancelled} assigneeMatched=${assigneeMatched} skipped=${skipped.length}`,
