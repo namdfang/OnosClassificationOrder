@@ -100,6 +100,7 @@ import {
   LIFECYCLE_STAGE_KEYS,
   parseProductionIdFromCuttingFilename,
   RoleType,
+  Status,
   WorkshopConfigCategory,
 } from 'shared';
 import type { LifecycleTrack, LifecycleTrackStage, LifecycleTrackStatus } from 'shared';
@@ -331,16 +332,23 @@ export class OrderService implements OnModuleInit {
     private readonly driveFileNameService: DriveFileNameService,
   ) {}
 
-  /** Validate giá trị assignee là userId hợp lệ (user role=Designer, active). */
+  /** Validate giá trị assignee là userId hợp lệ (user role=Designer, ĐANG BẬT). */
   private async assertAssigneeUserValid(userId: string | null): Promise<void> {
     if (!userId) return;
     const designerRole = await this.roleRepository.findOne({ name: RoleType.Designer });
     const u = await this.userModel
-      .findOne({ _id: userId, roleId: designerRole?._id }, { _id: 1 })
+      .findOne({ _id: userId, roleId: designerRole?._id }, { _id: 1, status: 1 })
       .lean();
     if (!u) {
       throw new BadRequestException(
         `User ${userId} không phải sub-designer hợp lệ (không tìm thấy hoặc không phải role Designer).`,
+      );
+    }
+    // Không cho gán đơn MỚI cho designer đã tắt (chỉ chặn khi GÁN — đơn cũ đang
+    // gán cho họ vẫn giữ nguyên để không mất lịch sử).
+    if ((u as unknown as { status?: string }).status !== Status.Active) {
+      throw new BadRequestException(
+        `Không gán được: sub-designer này đã bị tắt. Bật lại account hoặc chọn người khác.`,
       );
     }
   }
@@ -5696,12 +5704,15 @@ export class OrderService implements OnModuleInit {
     ]);
 
     // Auto-include designer users (role=Designer) chưa có task nào → row count 0.
+    // CHỈ designer ĐANG BẬT (status active) — thống kê loại người đã tắt (kể cả
+    // lịch sử). Xem người đã tắt qua bộ lọc "Đã tắt" ở trang Team Designer.
     const designerRole = await this.roleRepository.findOne({ name: RoleType.Designer });
     const teamUsers = designerRole
       ? await this.userModel
-          .find({ roleId: designerRole._id }, { _id: 1, fullName: 1, email: 1 })
+          .find({ roleId: designerRole._id, status: Status.Active }, { _id: 1, fullName: 1, email: 1 })
           .lean()
       : [];
+    const activeIds = new Set(teamUsers.map((u) => String(u._id)));
 
     const userIds = new Set<string>();
     let hasUnassigned = false;
@@ -5709,8 +5720,10 @@ export class OrderService implements OnModuleInit {
       // Matrix chỉ hiện "không tool" (M); ok + có-tool chưa gán không lên matrix.
       if (r._id.status === '__skip_unassigned__' || r._id.status === '__unassigned_withtool__')
         continue;
-      if (r._id.uid) userIds.add(r._id.uid);
-      else hasUnassigned = true;
+      // Loại đơn của designer đã tắt khỏi matrix (chỉ thống kê người active).
+      if (r._id.uid) {
+        if (activeIds.has(r._id.uid)) userIds.add(r._id.uid);
+      } else hasUnassigned = true;
     }
     for (const u of teamUsers) userIds.add(String(u._id));
 

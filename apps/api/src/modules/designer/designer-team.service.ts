@@ -151,7 +151,7 @@ export class DesignerTeamService {
 
     await this.userModel.updateOne(
       { _id: userId },
-      { $set: { deletedAt: new Date(), status: Status.Disabled } },
+      { $set: { deletedAt: new Date(), status: Status.Inactive } },
     );
   }
 

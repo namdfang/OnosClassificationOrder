@@ -264,12 +264,24 @@ factoryId?: string                // ref FactoryEntity, REQUIRED khi role=Fulfil
 ## 4. UI Components
 
 ### 4.1 `/designer/team` (Leader)
-- 3 stat card: Đang làm · Tạm tắt · Task active toàn team
-- Bảng: Họ tên · Email · Đang làm (badge) · Đã xong · Vào làm · Trạng thái (Switch) · Actions (reset pwd / edit / xoá — Trash disabled khi activeTaskCount > 0)
+- 3 stat card: Đang làm · Tạm tắt · Task active toàn team (**Task active chỉ tính user đang bật**)
+- **Bộ lọc trạng thái** `Đang bật / Đã tắt / Tất cả` (mặc định **Đang bật**): fetch toàn bộ 1 lần rồi lọc client-side (thẻ thống kê vẫn tính trên full list). Đây là chỗ **xem user đã tắt + số task của họ**.
+- Bảng: Họ tên · Email · Đang làm (badge) · Đã xong · Vào làm · Trạng thái (Switch) · Actions (reset pwd / edit / xoá — Trash disabled khi activeTaskCount > 0). Dòng user đã tắt tô mờ (`opacity-60`).
+- **Switch bật/tắt** → `updateMember({ status: Active↔Inactive })`. ⚠️ Giá trị đúng là `Status.Inactive` (`'0'`) — **KHÔNG** dùng `Status.Disabled` (không tồn tại trong enum → gửi `undefined` → BE bỏ qua, toggle không đổi gì; đã sửa cả FE `team/index.tsx` và BE `designer-team.service.ts` `remove()`).
 - `TeamMemberDialog` (mode create/edit):
   - Field: fullName, email, password (chỉ create — có random gen + copy + KeyRound hint), hireDate (date), telegramChatId (optional)
   - Validate email unique BE; block disable/delete khi user còn task active
   - Sub-designer dropdown trong các dialog assign/bulk dùng cùng `designerTeamStore` cache
+
+### 4.1b Active-only cho danh sách + thống kê (user đã tắt)
+
+> Enum `Status` (`packages/shared/enums/commons.ts`): `Active='1'`, `Inactive='0'`, `Pending='-1'`. "Đã tắt" = `status !== Active`.
+
+| Nơi | Loại | Hành vi với user đã tắt |
+|-----|------|--------------------------|
+| **Picker GÁN MỚI** — `AssigneeSelectCell` (inline), `AssignDesignerDialog` (bulk, đã `listTeam(Status.Active)`) | List-chọn | **Ẩn** khỏi options. `AssigneeSelectCell` vẫn giữ user đã tắt trong options **nếu đơn đang gán cho họ** (hiển thị đúng tên, không mất assignment cũ). BE `assertAssigneeUserValid` chặn gán mới cho user không-active (400). |
+| **Filter LỊCH SỬ** — dropdown "Người thực hiện" ở `ErrorLogTab` (store) / `OrderTableWorkshop` / `ListOrderTab` / `PrintOrderTable` (facet BE order-derived) | List-lọc | **Giữ** cả user đã tắt → lọc được đơn cũ theo họ. `designerTeamStore` vẫn `listTeam()` (tải tất cả) để resolve tên đơn cũ. |
+| **Thống kê** — `getDesignerBreakdown` (DesignerSummaryPanel), `getPerformance` (leaderboard), `getDailyOverview`, `getTeamDailyBreakdown`, `getProductBreakdown` | Stats | **Chỉ tính user active** (roster `find({ status: Active })` + drop hàng order-derived có assignee không-active; self-scope `userId` vẫn xem được chính mình). Xem thống kê người đã tắt → dùng bộ lọc "Đã tắt" ở trang Team. |
 
 ### 4.2 `/my-tasks` (Sub-designer)
 Xem 2.3 chi tiết.
