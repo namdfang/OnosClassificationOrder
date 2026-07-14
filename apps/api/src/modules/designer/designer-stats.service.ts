@@ -234,43 +234,48 @@ export class DesignerStatsService {
       r.errorRate = c.n > 0 ? Math.round((c.reworkSum / c.n) * 100) / 100 : 0;
     }
 
-    // ─── Total rejected / rework trong period ──────────────────────
-    // Đếm từ OrderLog (mỗi lần designerStatus chuyển sang rejected/rework
-    // được ghi 1 log). Group theo order.assignee hiện tại — assumption: chưa
-    // reassign (cho test data đủ chính xác).
-    const logMatch: Record<string, unknown> = {
-      field: 'designerStatus',
-      after: { $in: ['rejected', 'rework'] },
-      createdAt: { $gte: range.start, $lte: range.end },
-    };
+    // ─── Total rework trong period ─────────────────────────────────
+    // Đếm từ OrderLog (mỗi lần designerStatus chuyển sang rework ghi 1 log).
+    // Group theo order.assignee hiện tại (đơn rework do người đang ôm sửa).
     const logAgg = await this.orderLogModel.aggregate<{
-      _id: { uid: string; after: 'rejected' | 'rework' };
+      _id: { uid: string };
       count: number;
     }>([
-      { $match: logMatch },
       {
-        $lookup: {
-          from: 'orders',
-          localField: 'orderId',
-          foreignField: '_id',
-          as: 'order',
+        $match: {
+          field: 'designerStatus',
+          after: 'rework',
+          createdAt: { $gte: range.start, $lte: range.end },
         },
       },
+      { $lookup: { from: 'orders', localField: 'orderId', foreignField: '_id', as: 'order' } },
       { $unwind: { path: '$order', preserveNullAndEmptyArrays: false } },
       ...(userId ? [{ $match: { 'order.assignee': userId } as Record<string, unknown> }] : []),
-      {
-        $group: {
-          _id: { uid: '$order.assignee', after: '$after' },
-          count: { $sum: 1 },
-        },
-      },
+      { $group: { _id: { uid: '$order.assignee' }, count: { $sum: 1 } } },
     ]);
-
     for (const row of logAgg) {
       if (!row._id.uid) continue;
-      const r = ensureRow(row._id.uid);
-      if (row._id.after === 'rejected') r.totalRejected = row.count;
-      else if (row._id.after === 'rework') r.totalRework = row.count;
+      ensureRow(row._id.uid).totalRework = row.count;
+    }
+
+    // ─── Total "Không làm được" trong period ───────────────────────
+    // Nguồn = mảng lịch sử `designerRejections` trên order (quy về `fromUserId`
+    // = người bàn giao, ĐÚNG người kể cả khi đơn đã sang tay người khác). Đếm
+    // theo mốc `at` rơi trong kỳ.
+    const rejectedAgg = await this.orderModel.aggregate<{ _id: string; count: number }>([
+      { $match: { designerRejections: { $exists: true, $ne: [] } } },
+      { $unwind: '$designerRejections' },
+      {
+        $match: {
+          'designerRejections.at': { $gte: range.start, $lte: range.end },
+          ...(userId ? { 'designerRejections.fromUserId': userId } : {}),
+        },
+      },
+      { $group: { _id: '$designerRejections.fromUserId', count: { $sum: 1 } } },
+    ]);
+    for (const row of rejectedAgg) {
+      if (!row._id) continue;
+      ensureRow(row._id).totalRejected = row.count;
     }
 
     return [...rows.values()]

@@ -123,6 +123,18 @@ export const DesignsStatusFieldsZod = z.object({
 });
 export type DesignsStatusFields = z.infer<typeof DesignsStatusFieldsZod>;
 
+/** 1 lần designer báo "không làm được" và bàn giao đơn sang người khác. */
+export const DesignerRejectionZod = z.object({
+  /** user._id của designer báo không làm được (người bàn giao). */
+  fromUserId: z.string(),
+  /** user._id của designer nhận thay. */
+  toUserId: z.string(),
+  /** Lý do (tùy chọn, max 500). */
+  reason: z.string().optional(),
+  at: z.date(),
+});
+export type DesignerRejection = z.infer<typeof DesignerRejectionZod>;
+
 export const ProductionOrderZod = BaseEntityZod.extend({
   productionId: z.string().min(1),
   userSku: z.string().optional(),
@@ -270,6 +282,13 @@ export const ProductionOrderZod = BaseEntityZod.extend({
    * rework). $inc khi `complete`. Dùng trực tiếp cho avgWorkMin stats.
    */
   designerWorkMs: z.number().int().nonnegative().default(0),
+  /**
+   * Lịch sử "báo không làm được → bàn giao": mỗi lần 1 designer báo không làm
+   * được, đơn được gán thẳng sang designer khác (không còn state `rejected`).
+   * Append-only — là NGUỒN thống kê "Không làm được" theo từng người (query
+   * `designerRejections.fromUserId`), vì `assignee` hiện tại đã là người nhận.
+   */
+  designerRejections: DesignerRejectionZod.array().optional(),
 
   // ─── Fulfillment 5-stage workflow ───────────────────────────────
   /**
@@ -1115,8 +1134,14 @@ export type WorkshopAvailableFilters = z.infer<
  */
 export const DesignerTransitionZod = z.object({
   action: DesignerTransitionActionZod,
-  /** Required khi action='reject', optional cho các action khác. */
+  /** Lý do (tùy chọn) khi action='reject'. */
   reason: z.string().max(500).optional(),
+  /**
+   * BẮT BUỘC khi action='reject' — user._id của designer nhận thay. Đơn được
+   * gán thẳng sang người này (designerStatus='assigned'), không còn state
+   * `rejected`. Server validate là sub-designer đang Active, khác chính mình.
+   */
+  targetUserId: IDZod.optional(),
 });
 export class DesignerTransitionDto extends createZodDto(extendApi(DesignerTransitionZod)) {}
 

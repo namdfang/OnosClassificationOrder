@@ -114,6 +114,16 @@ export const DesignerTaskCardZod = z.object({
   designerWorkMs: z.number().int().nonnegative().default(0),
   productionError: z.string().optional(),
   productionErrorNote: z.string().optional(),
+  /** Lịch sử "báo không làm được → bàn giao" (cho drawer "Không làm được"). */
+  designerRejections: z
+    .object({
+      fromUserId: z.string(),
+      toUserId: z.string(),
+      reason: z.string().optional(),
+      at: z.date(),
+    })
+    .array()
+    .optional(),
 });
 export type DesignerTaskCard = z.infer<typeof DesignerTaskCardZod>;
 
@@ -482,8 +492,10 @@ export class GetProductBreakdownResDto extends createZodDto(extendApi(GetProduct
 export const DesignerBulkTransitionZod = z.object({
   ids: IDZod.array().min(1),
   action: z.nativeEnum(DesignerTransitionAction),
-  /** Required khi action='reject'. */
+  /** Lý do (tùy chọn) khi action='reject'. */
   reason: z.string().max(500).optional(),
+  /** BẮT BUỘC khi action='reject' — designer nhận thay cho TẤT CẢ đơn đã chọn. */
+  targetUserId: IDZod.optional(),
 });
 export class DesignerBulkTransitionDto extends createZodDto(
   extendApi(DesignerBulkTransitionZod),

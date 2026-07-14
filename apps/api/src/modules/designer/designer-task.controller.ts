@@ -72,11 +72,14 @@ export class DesignerTaskController {
         action: dto.action,
       }),
     });
-    const data = await this.taskService.transition(id, user, dto.action, dto.reason, {
+    const data = await this.taskService.transition(
+      id,
       user,
-      ip,
-      userAgent,
-    });
+      dto.action,
+      dto.reason,
+      { user, ip, userAgent },
+      dto.targetUserId,
+    );
     return { success: true, data };
   }
 
@@ -132,11 +135,14 @@ export class DesignerTaskController {
         count: dto.ids.length,
       }),
     });
-    const data = await this.taskService.bulkTransition(user, dto.ids, dto.action, dto.reason, {
+    const data = await this.taskService.bulkTransition(
       user,
-      ip,
-      userAgent,
-    });
+      dto.ids,
+      dto.action,
+      dto.reason,
+      { user, ip, userAgent },
+      dto.targetUserId,
+    );
     return { success: true, data };
   }
 

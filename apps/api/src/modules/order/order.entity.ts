@@ -345,6 +345,24 @@ export class OrderEntity extends DatabaseEntityAbstract {
   @Prop({ required: true, default: 0 })
   designerWorkMs: number;
 
+  /**
+   * Lịch sử "báo không làm được → bàn giao". Mỗi lần 1 designer báo không làm
+   * được, đơn gán thẳng sang designer khác (không còn state `rejected`).
+   * Append-only — NGUỒN thống kê "Không làm được" theo người (`fromUserId`).
+   */
+  @Prop({
+    type: [
+      {
+        fromUserId: { type: String },
+        toUserId: { type: String },
+        reason: { type: String },
+        at: { type: Date },
+      },
+    ],
+    default: undefined,
+  })
+  designerRejections?: { fromUserId: string; toUserId: string; reason?: string; at: Date }[];
+
   // ─── Fulfillment 8-stage workflow ───────────────────────────────
   /**
    * Stage hiện tại của đơn. null = chưa vào fulfillment HOẶC đã pack done.
@@ -412,6 +430,9 @@ export function makeEmptyStageState(): FulfillmentStages[keyof FulfillmentStages
 }
 
 export const OrderSchema = SchemaFactory.createForClass(OrderEntity);
+
+// Thống kê "Không làm được" theo từng người bàn giao.
+OrderSchema.index({ 'designerRejections.fromUserId': 1 });
 
 OrderSchema.virtual('factory', {
   ref: 'FactoryEntity',
