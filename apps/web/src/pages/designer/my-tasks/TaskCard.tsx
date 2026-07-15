@@ -109,6 +109,15 @@ export function TaskCard({ card, onPreview, onClickProductionId }: Props) {
     ? toolNoteItems.find((i) => i.code === card.toolResultNote)
     : undefined;
 
+  // Resolve mã "File sửa lỗi" (errorFile[], category error_file_type) → name.
+  const errorFileItems = useWorkshopConfigStore(
+    (s) => s.byCategory[WorkshopConfigCategory.ErrorFileType] || [],
+  );
+  const errorFiles = (card.errorFile || []).filter(Boolean);
+  const errorFileLabels = errorFiles.map(
+    (code) => errorFileItems.find((i) => i.code === code)?.name || code,
+  );
+
   return (
     <div
       ref={setNodeRef}
@@ -232,6 +241,27 @@ export function TaskCard({ card, onPreview, onClickProductionId }: Props) {
       {card.designerStatus === DesignerStatus.Rejected && card.designerRejectedReason && (
         <div className="mt-1 text-[10px] text-rose-700 dark:text-rose-300 line-clamp-2">
           <span className="font-medium">Lý do không làm được:</span> {card.designerRejectedReason}
+        </div>
+      )}
+
+      {/* File sửa lỗi (errorFile[]) — badge từng loại; đồng bộ tên với bảng đơn */}
+      {errorFileLabels.length > 0 && (
+        <div className="mt-1 flex flex-wrap items-center gap-1">
+          {errorFileLabels.map((label, i) => (
+            <span
+              key={`${label}-${i}`}
+              className="rounded border border-violet-300 bg-violet-50 px-1.5 py-0.5 text-[9px] font-medium text-violet-700 dark:border-violet-700 dark:bg-violet-900/20 dark:text-violet-300"
+            >
+              {label}
+            </span>
+          ))}
+        </div>
+      )}
+      {/* Ghi chú file lỗi (errorFileNote) */}
+      {card.errorFileNote && (
+        <div className="mt-1 flex items-start gap-1 text-[10px] text-violet-700 dark:text-violet-300">
+          <MessageSquareWarning size={11} className="shrink-0 mt-px" />
+          <span className="line-clamp-2">{card.errorFileNote}</span>
         </div>
       )}
     </div>

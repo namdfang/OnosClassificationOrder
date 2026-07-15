@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from 'react';
-import { Calendar, CheckCircle2, Clock, ExternalLink, Package, RotateCcw, ShieldAlert, XCircle } from 'lucide-react';
-import { DesignerStatus } from 'shared';
+import { Calendar, CheckCircle2, Clock, ExternalLink, FileWarning, Package, RotateCcw, ShieldAlert, XCircle } from 'lucide-react';
+import { DesignerStatus, WorkshopConfigCategory } from 'shared';
 
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
@@ -14,6 +14,7 @@ import { CopyButton } from '@/components/common/CopyButton';
 import { Spinner } from '@/components/common/Spinner';
 import { driveThumbUrl, driveViewUrl } from '@/utils/driveThumb';
 import { RepositoryRemote } from '@/services';
+import { useWorkshopConfigStore } from '@/store/workshopConfigStore';
 import { handleAxiosError } from '@/utils';
 
 interface Props {
@@ -42,6 +43,8 @@ type OrderDetail = {
   toolResultNote?: string;
   productionError?: string;
   productionErrorNote?: string;
+  errorFile?: string[];
+  errorFileNote?: string;
   designerStatus?: DesignerStatus;
   designerAssignedAt?: string;
   designerStartedAt?: string;
@@ -97,6 +100,14 @@ export function TaskDetailDialog({ orderId, onClose }: Props) {
       }
     })();
   }, [orderId]);
+
+  // Resolve mã "File sửa lỗi" (errorFile[], category error_file_type) → name.
+  const errorFileItems = useWorkshopConfigStore(
+    (s) => s.byCategory[WorkshopConfigCategory.ErrorFileType] || [],
+  );
+  const errorFileLabels = (detail?.errorFile || [])
+    .filter(Boolean)
+    .map((code) => errorFileItems.find((i) => i.code === code)?.name || code);
 
   const designs = detail?.designsOriginal || detail?.designs || {};
   const designKeys = Object.keys(designs).filter((k) => designs[k]);
@@ -252,6 +263,32 @@ export function TaskDetailDialog({ orderId, onClose }: Props) {
                   {detail.productionErrorNote && (
                     <p className="text-[11px] text-amber-700 dark:text-amber-300 mt-1">
                       {detail.productionErrorNote}
+                    </p>
+                  )}
+                </div>
+              )}
+
+              {(errorFileLabels.length > 0 || detail.errorFileNote) && (
+                <div className="rounded-md border border-violet-300 dark:border-violet-700 bg-violet-50 dark:bg-violet-900/20 p-2.5">
+                  <p className="text-xs font-medium text-violet-800 dark:text-violet-200 flex items-center gap-1">
+                    <FileWarning size={12} /> File sửa lỗi
+                  </p>
+                  {errorFileLabels.length > 0 && (
+                    <div className="mt-1.5 flex flex-wrap gap-1">
+                      {errorFileLabels.map((label, i) => (
+                        <span
+                          key={`${label}-${i}`}
+                          className="rounded border border-violet-300 bg-white/70 px-1.5 py-0.5 text-[10px] font-medium text-violet-700 dark:border-violet-700 dark:bg-violet-950/30 dark:text-violet-300"
+                        >
+                          {label}
+                        </span>
+                      ))}
+                    </div>
+                  )}
+                  {detail.errorFileNote && (
+                    <p className="text-[11px] text-violet-700 dark:text-violet-300 mt-1.5">
+                      <span className="font-medium">Ghi chú: </span>
+                      {detail.errorFileNote}
                     </p>
                   )}
                 </div>

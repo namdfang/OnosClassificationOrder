@@ -114,6 +114,10 @@ export const DesignerTaskCardZod = z.object({
   designerWorkMs: z.number().int().nonnegative().default(0),
   productionError: z.string().optional(),
   productionErrorNote: z.string().optional(),
+  /** Mã loại file sửa lỗi (category error_file_type) — resolve name ở FE store. */
+  errorFile: z.string().array().optional(),
+  /** Ghi chú file lỗi (free text). */
+  errorFileNote: z.string().optional(),
   /** Lịch sử "báo không làm được → bàn giao" (cho drawer "Không làm được"). */
   designerRejections: z
     .object({

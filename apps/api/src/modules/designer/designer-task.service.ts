@@ -955,6 +955,8 @@ export class DesignerTaskService {
     designerWorkMs: (o.designerWorkMs as number) || 0,
     productionError: (o.productionError as string) || undefined,
     productionErrorNote: (o.productionErrorNote as string) || undefined,
+    errorFile: (o.errorFile as string[]) || undefined,
+    errorFileNote: (o.errorFileNote as string) || undefined,
     designerRejections: (o.designerRejections as DesignerTaskCard['designerRejections']) || undefined,
   });
 
