@@ -178,6 +178,102 @@ Sau import (hoặc khi đổi date), `ImportOrderTab` gọi endpoint này để 
 - Mỗi group trả `totalQuantity`, `orderCount`, `sampleProductionIds` (5 cái đầu), `fabricName` (resolve từ workshop_config).
 - UI hiển thị progress bar tương đối theo group có count cao nhất → workshop nhìn ra ngay combo nào cần in batch chung.
 
+### 3.6 Lấy đơn tự động từ OnosPod QC (nút "Lấy đơn từ OnosPod")
+
+Thay cho thao tác thủ công hàng ngày (8h/17h): vào `qc.onospod.com` bấm export → tải file
+xlsx → paste vào tab Import. Nút "Lấy đơn từ OnosPod" (chỉ hiện ở mode `new`) tự động hoá
+toàn bộ chuỗi này trong 1 click.
+
+**Cách lấy dữ liệu:** query GraphQL `paginateMrpProduct` trực tiếp (KHÔNG dùng cơ chế
+export/tải file — thử ban đầu nhưng mutation `createExportProductionReport` chạy bất đồng
+bộ và không tìm được API polling đúng, xem lịch sử ở git log nếu cần). `paginateMrpProduct`
+trả JSON structured ngay lập tức, nhanh hơn nhiều (~19s cho ~400 đơn/4 manufacture) và
+không cần chờ. Pull từ **TẤT CẢ manufacture** của account (query `manufactures` trước, rồi
+loop tuần tự từng manufacture) — không hardcode 1 manufacture_id.
+
+```
+User bấm "Lấy đơn từ OnosPod"
+  → POST /v1/orders/import-from-onospod (body {} → BE tự tính period theo giờ gọi, xem bên dưới)
+  → OnospodImportService:
+      1. Gọi query `manufactures` lấy danh sách toàn bộ manufacture của account
+         (Bearer token tĩnh lưu trong env `ONOSPOD_QC_API_URL` / `ONOSPOD_QC_BEARER_TOKEN`
+         — đọc qua `ApiConfigService.onospodQcConfig`, trả `null` nếu chưa cấu hình thay
+         vì crash app boot, giống `r2Config`)
+      2. Với TỪNG manufacture (tuần tự, không Promise.all — tránh dồn request): loop
+         page=1.. gọi query `paginateMrpProduct(manufacture_id, status="To Do", start, end,
+         page, perpage=500)` tới khi hết `paginate.total_pages`. 1 manufacture lỗi
+         (network/GraphQL error) KHÔNG chặn các manufacture còn lại — ghi vào
+         `byManufacture[].error`, tiếp tục manufacture tiếp theo.
+      3. Gộp toàn bộ item của mọi manufacture → map từng `MrpProduct` →
+         `ImportProductionOrderRow` (field mapping xác nhận qua test đối chiếu 1:1 với
+         dòng CSV export thật — xem bảng field mapping bên dưới)
+      4. Gọi lại OrderService.importOrders({ rows }) MỘT LẦN cho toàn bộ rows đã gộp —
+         TÁI DÙNG 100% pipeline upsert/mapping/design-job/notification đã có ở §3.1/§3.3
+  → Response giống ImportProductionOrdersResDto + { totalFetched, period, byManufacture[] }
+     (byManufacture: { id, name, sku, fetched, error? } — hiện trên toast FE)
+```
+
+**Field mapping (`MrpProduct` GraphQL → `ImportProductionOrderRow`):**
+
+| Field đích | Nguồn GraphQL | Ghi chú |
+|---|---|---|
+| `productionId` | `increment_id` | |
+| `orderId` | `increment_order_id` | |
+| `userSku` | `auth.identity_label` | |
+| `userEmail` | `auth.email` | |
+| `type` | `product_type.name` | |
+| `mockupUrl` | `src` | |
+| `designs.{key}` | `print.design_{key}.src` (inline fragment `... on LineItemPrint`) | thiếu `folder`, `leftUpperSleeve`, `rightUpperSleeve`, `frontEmbroidery`, `backEmbroidery` — không có field nguồn |
+| `status` | `mrp_status` | luôn filter `status: "To Do"` khi query (chỉ lấy đơn MỚI chưa vào sản xuất) |
+| `quantity` | `quantity` | |
+| `inProductionAt` | `mrp_created_at` (ISO) → format VN local | |
+| `orderAt` | decode timestamp từ 4 byte đầu của `order_id` (ObjectId) → format VN local | **KHÔNG có field ngày riêng** — order_id là Mongo ObjectId, tự chứa timestamp tạo doc |
+| `size` | `print.meta_data` key `"Size"` | nguồn chính thức OnosPod dùng cho export xlsx — nhận mọi giá trị ("5x78in-Pointed", "L"...), KHÔNG dùng heuristic SKU |
+| `color` | `print.meta_data` key `"Color"` | vd "As Design"; null với 1 số sản phẩm |
+| `baseCost` | `price` (parse number) | field gộp, KHÔNG tách được base/ship |
+| `weight`, `width`, `height`, `length`, `shipCost`, `externalId`, `referent` | — | không tìm được field nguồn nào trên schema (đã probe qua GraphQL error "Did you mean" — introspection bị chặn), để trống (đều optional) |
+
+**Dedupe trong batch:** cùng 1 `productionId` có thể lặp lại giữa các trang (data live dịch
+chuyển khi đang phân trang) hoặc giữa 2 manufacture — `dedupeByProductionId()` gom trước khi
+gọi `importOrders()` (giữ bản ghi xuất hiện sau cùng), tránh lệch số liệu `imported`/`updated`.
+Response trả thêm `duplicatesInBatch`. Chống trùng ở tầng DB: `orders.productionId` có
+**unique index** (schema đã khai báo `unique: true` nhưng Mongoose autoIndex không tự tạo trên
+DB restore từ dump — phải `createIndex` tay; nhớ bước này khi restore DB mới) — chặn race
+2 request import đồng thời (cron + nút UI) cùng insert 1 đơn.
+
+**Error semantics (quan trọng cho cron monitoring):**
+- Batch rỗng (không có đơn "To Do" mới — sáng vắng/ngày lễ) → **200 success** với
+  `totalFetched: 0`, KHÔNG phải 400 — tránh báo động giả làm nhờn cảnh báo.
+- MỌI manufacture đều fetch lỗi (token hết hạn, OnosPod down) → **400** kèm message gộp lỗi
+  thật từng manufacture — phân biệt rõ "hỏng thật" với "hết đơn".
+- 1 phần manufacture lỗi → vẫn import phần thành công, lỗi ghi trong `byManufacture[].error`.
+- `start`/`end` nhận cả ISO có offset (`+07:00`) lẫn `Z` (Zod `datetime({offset:true})`).
+  Truyền `start` không kèm `end` → `end` = thời điểm gọi (backfill). Truyền `end` lẻ → 400.
+
+**Lịch chạy do EXTERNAL crontab quản lý** (KHÔNG dùng `@nestjs/schedule` nội bộ — đã bỏ,
+xem git history nếu cần bản cũ) — endpoint public để crontab `curl` trực tiếp, không cần
+config token/env:
+
+```
+GET /v1/orders/import-from-onospod/cron
+```
+
+- **Public — không cần Authorization header** (`@Auth([], [], { public: true })`). `RateLimiterGuard`
+  vẫn áp dụng (per-IP) dù bỏ qua JWT — hạn chế spam nhưng KHÔNG có auth thật; ai biết URL đều
+  gọi được và trigger ghi dữ liệu thật + gọi OnosPod API tốn quota. Chấp nhận đánh đổi này theo
+  yêu cầu "không cần config trong env" — cân nhắc thêm firewall rule giới hạn nguồn gọi nếu cần
+  chặt hơn.
+- **Tự tính period theo giờ gọi thực tế** (`OnospodImportService.resolvePeriod()`, giờ VN):
+  - Gọi **trước 12h trưa** → lấy đơn từ **12h trưa hôm trước** tới hiện tại.
+  - Gọi **từ 12h trưa trở đi** → lấy đơn từ **00h00 hôm nay** tới hiện tại.
+  - Logic này cũng là default khi gọi `POST /v1/orders/import-from-onospod` (nút "Lấy đơn từ
+    OnosPod" trên UI) mà không truyền `start`/`end` — dùng chung 1 rule cho cả 2 đường vào.
+  - Không cộng buffer riêng — biên 12h trưa/00h00 đã đủ rộng cho lịch 2 lần/ngày (8h + 17h),
+    và `importOrders()` upsert theo `productionId` nên overlap giữa các lần gọi không tạo
+    trùng dữ liệu, cứ gọi lại thoải mái nếu nghi ngờ sót đơn.
+- User tự cấu hình crontab hệ thống (hoặc dịch vụ cron ngoài) gọi `curl` vào URL trên đúng
+  8h00 và 17h00 hàng ngày — app không tự chạy cron nội bộ nữa.
+
 ---
 
 ## 4. Backend module `order/`
@@ -188,7 +284,8 @@ Sau import (hoặc khi đổi date), `ImportOrderTab` gọi endpoint này để 
 | `order.entity.ts` | Schema + 4 virtual (`factory`, `originalFactory`, `machineType`, `productConfig`) |
 | `order.repository.ts` | Extends DatabaseRepositoryAbstract |
 | `order.service.ts` | `getOrders`, `getDashboard`, `getStatusOverview`, `getFactoryOverview`, `getOrdersGroupedByType`, `getImportSummary`, `exportOrders`, `importOrders`, `updateField`, `bulkUpdateField`, `transferOrder`, `bulkTransferOrders`, `backfillOrderFabric`, `deleteOrder` |
-| `order.controller.ts` | 16 endpoints (xem §4.2) |
+| `onospod-import.service.ts` | `OnospodImportService.importFromOnosPod()` — query GraphQL `paginateMrpProduct` từ `qc.onospod.com`, map JSON → rows rồi gọi lại `OrderService.importOrders()`. Xem §3.6. |
+| `order.controller.ts` | 18 endpoints (xem §4.2) |
 
 ### 4.2 Endpoints
 | Method | Path | Mô tả |
@@ -204,6 +301,8 @@ Sau import (hoặc khi đổi date), `ImportOrderTab` gọi endpoint này để 
 | GET | `/v1/orders/:id/logs` | Audit timeline 1 order (xem `OrderLog.md`) |
 | GET | `/v1/orders/error-log` | Tab "Nhật ký bù lỗi" — đơn đang chờ xử lý lỗi (productionError set, toolResultNote≠ok). Sort theo `productionFirstErrorAt` ASC. Trả thêm `byUrgency`. Visibility theo role (Fulfillment scope factory, Designer scope assignee). Xem `§14`. |
 | POST | `/v1/orders/import` | Bulk upsert. `ORDER_WRITE_ROLES` (Admin / Manager / Support). |
+| POST | `/v1/orders/import-from-onospod` | Tự động fetch export từ OnosPod QC + import (xem §3.6). `ORDER_WRITE_ROLES`. Body optional `{ start?, end? }` ISO string — mặc định tự tính theo giờ gọi (trước/sau 12h trưa). |
+| GET | `/v1/orders/import-from-onospod/cron` | **Public** (không cần auth) — bản GET không tham số cho external crontab `curl`. Cùng logic period tự tính. Xem §3.6. |
 | POST | `/v1/orders/cutting-files/preview` | Preview cutting-file mapping — fetch tên file từ Drive + parse productionId + match đơn. Xem §15. |
 | POST | `/v1/orders/cutting-files/apply` | Apply mappings (bulk write `cuttingFileUrl/Name`) + audit log event `production-file-mapped`. |
 | POST | `/v1/orders/backfill-fabric` | Re-derive `fabricType` + `toolResult` từ product config cho đơn còn thiếu (non-destructive). |

@@ -9,6 +9,7 @@ import type {
   CancelOrderDto,
   HoldOrderDto,
   ClaimDesignerTasksDto,
+  ImportFromOnosPodDto,
   ImportProductionOrdersDto,
   ImportReworkOrdersDto,
   PreviewCuttingFilesDto,
@@ -30,6 +31,10 @@ const importOrders = (data: ImportProductionOrdersDto) => {
 
 const importRework = (data: ImportReworkOrdersDto) => {
   return callApi(`/${CONFIG.API_VERSION}/orders/import-rework`, 'post', data);
+};
+
+const importFromOnosPod = (data: ImportFromOnosPodDto = {}) => {
+  return callApi(`/${CONFIG.API_VERSION}/orders/import-from-onospod`, 'post', data);
 };
 
 const deleteOrder = (id: string) => {
@@ -180,6 +185,7 @@ export const order = {
   getOrders,
   importOrders,
   importRework,
+  importFromOnosPod,
   deleteOrder,
   getDashboard,
   updateField,

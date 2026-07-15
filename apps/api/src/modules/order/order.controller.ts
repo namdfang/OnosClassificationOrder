@@ -1,6 +1,7 @@
-import { Body, Controller, Delete, Get, HttpCode, HttpStatus, Param, Patch, Post, Query } from '@nestjs/common';
+import { Body, Controller, Delete, Get, HttpCode, HttpStatus, Inject, Param, Patch, Post, Query } from '@nestjs/common';
 import { ApiOkResponse, ApiOperation, ApiTags } from '@nestjs/swagger';
 import { AuthUser } from 'core';
+import { Logger } from 'winston';
 import {
   ApplyCuttingFilesDto,
   ApplyCuttingFilesResDto,
@@ -40,6 +41,8 @@ import {
   GetOrderStatusOverviewResDto,
   GetProductionOrdersDto,
   GetProductionOrdersResDto,
+  ImportFromOnosPodDto,
+  ImportFromOnosPodResDto,
   ImportProductionOrdersDto,
   ImportProductionOrdersResDto,
   ImportReworkOrdersDto,
@@ -66,6 +69,7 @@ import {
 import { Auth, ClientIp, UserAgent } from '@/decorators';
 
 import type { UserDocument } from '../user/user.entity';
+import { OnospodImportService } from './onospod-import.service';
 import { OrderService } from './order.service';
 
 const ORDER_VIEW_ROLES = [
@@ -108,7 +112,11 @@ const ORDER_FIELD_EDIT_ROLES = [
 @Controller('orders')
 @ApiTags('orders')
 export class OrderController {
-  constructor(private readonly orderService: OrderService) {}
+  constructor(
+    private readonly orderService: OrderService,
+    private readonly onospodImportService: OnospodImportService,
+    @Inject('winston') private readonly logger: Logger,
+  ) {}
 
   @Get()
   @Auth(ORDER_VIEW_ROLES)
@@ -437,6 +445,42 @@ export class OrderController {
     @UserAgent() userAgent: string,
   ): Promise<ImportReworkOrdersResDto> {
     return this.orderService.importRework(dto, { user, ip, userAgent });
+  }
+
+  @Post('import-from-onospod')
+  @Auth(ORDER_WRITE_ROLES)
+  @ApiOperation({ summary: 'Fetch production export từ OnosPod QC rồi import đơn (thay thao tác export/paste thủ công)' })
+  @HttpCode(HttpStatus.OK)
+  @ApiOkResponse({ type: ImportFromOnosPodResDto })
+  async importFromOnosPod(
+    @Body() dto: ImportFromOnosPodDto,
+    @AuthUser() user: UserDocument,
+    @ClientIp() ip: string,
+    @UserAgent() userAgent: string,
+  ): Promise<ImportFromOnosPodResDto> {
+    this.logger.info({
+      message: JSON.stringify({ method: 'POST', url: '/orders/import-from-onospod', userId: user._id, body: dto }),
+    });
+    return this.onospodImportService.importFromOnosPod(dto, { user, ip, userAgent });
+  }
+
+  // Public — không cần JWT, để external crontab (curl) gọi trực tiếp không
+  // phải config token/env. Period tự tính theo giờ gọi (resolvePeriod()):
+  // trước 12h trưa → từ 12h trưa hôm trước; từ 12h trưa → từ 00h00 hôm nay.
+  @Get('import-from-onospod/cron')
+  @Auth([], [], { public: true })
+  @ApiOperation({ summary: '[Public] Endpoint cho external crontab gọi tự động import đơn từ OnosPod' })
+  @HttpCode(HttpStatus.OK)
+  @ApiOkResponse({ type: ImportFromOnosPodResDto })
+  async importFromOnosPodCron(
+    @ClientIp() ip: string,
+    @UserAgent() userAgent: string,
+  ): Promise<ImportFromOnosPodResDto> {
+    // Endpoint public không định danh — log ip/userAgent làm audit trace duy nhất.
+    this.logger.info({
+      message: JSON.stringify({ method: 'GET', url: '/orders/import-from-onospod/cron', ip, userAgent }),
+    });
+    return this.onospodImportService.importFromOnosPod({}, { ip, userAgent });
   }
 
   // ─── Cutting File Mapping (post-import) ──────────────────────────

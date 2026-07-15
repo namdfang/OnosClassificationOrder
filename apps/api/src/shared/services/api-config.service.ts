@@ -189,6 +189,18 @@ export class ApiConfigService {
     };
   }
 
+  /**
+   * OnosPod QC production-report export (xem OnospodImportService). Optional
+   * integration — thiếu config → getter trả null, feature tự disable thay vì
+   * crash app boot (giống r2Config).
+   */
+  get onospodQcConfig(): null | { apiUrl: string; bearerToken: string } {
+    const apiUrl = this.configService.get<string>('ONOSPOD_QC_API_URL') || '';
+    const bearerToken = this.configService.get<string>('ONOSPOD_QC_BEARER_TOKEN') || '';
+    if (!apiUrl || !bearerToken) return null;
+    return { apiUrl, bearerToken };
+  }
+
   get cdn() {
     return {
       url: this.getString('CDN_URL'),
