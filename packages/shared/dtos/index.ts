@@ -39,6 +39,8 @@ export * from './product-config.dto';
 export * from './production-order.dto';
 export * from './workshop-config.dto';
 export * from './designer-assignment.dto';
+export * from './customer.dto';
+export * from './customer-assignment.dto';
 export * from './order-log.dto';
 export * from './order-status.dto';
 export * from './designer.dto';

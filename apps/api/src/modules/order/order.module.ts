@@ -10,6 +10,7 @@ import { RedisCacheModule } from '../redis-cache/redis-cache.module';
 import { RoleEntity, RoleSchema } from '../role/role.entity';
 import { RoleRepository } from '../role/role.repository';
 import { SystemConfigModule } from '../system-config/system-config.module';
+import { CustomerAssignmentModule } from '../customer-assignment/customer-assignment.module';
 import { TelegramNotificationModule } from '../telegram-notification/telegram-notification.module';
 import { UserEntity, UserSchema } from '../user/user.entity';
 import { WorkshopConfigModule } from '../workshop-config/workshop-config.module';
@@ -35,6 +36,7 @@ import { OrderService } from './order.service';
     TelegramNotificationModule,
     DesignImageModule,
     SystemConfigModule,
+    CustomerAssignmentModule,
   ],
   controllers: [OrderController],
   providers: [OrderService, OrderRepository, RoleRepository, DriveFileNameService],

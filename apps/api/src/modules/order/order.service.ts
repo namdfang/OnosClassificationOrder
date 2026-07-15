@@ -100,6 +100,7 @@ import {
   FulfillmentStageStatus,
   FulfillmentTransitionAction,
   LIFECYCLE_STAGE_KEYS,
+  customerMatchKey,
   parseProductionIdFromCuttingFilename,
   RoleType,
   Status,
@@ -124,6 +125,7 @@ import { ProductConfigRepository } from '../product-config/product-config.reposi
 import { RedisCacheService } from '../redis-cache/redis-cache.service';
 import { RoleRepository } from '../role/role.repository';
 import { SystemConfigService } from '../system-config/system-config.service';
+import { CustomerAssignmentService } from '../customer-assignment/customer-assignment.service';
 import { TelegramNotificationService } from '../telegram-notification/telegram-notification.service';
 import { UserEntity } from '../user/user.entity';
 import { WorkshopConfigRepository } from '../workshop-config/workshop-config.repository';
@@ -334,6 +336,7 @@ export class OrderService implements OnModuleInit {
     private readonly roleRepository: RoleRepository,
     private readonly driveFileNameService: DriveFileNameService,
     private readonly systemConfigService: SystemConfigService,
+    private readonly customerAssignmentService: CustomerAssignmentService,
   ) {}
 
   /** Validate giá trị assignee là userId hợp lệ (user role=Designer, ĐANG BẬT). */
@@ -4956,6 +4959,10 @@ export class OrderService implements OnModuleInit {
       { designKey: string; sourceUrl: string; orderIds: Set<string> }
     >();
 
+    // Ưu tiên gán xưởng theo khách hàng (nếu config bật): map (userSku,userEmail)
+    // → factoryId ép, override factory của product config. Đọc 1 lần trước loop.
+    const customerOverride = await this.customerAssignmentService.getImportOverride();
+
     for (let i = 0; i < dto.rows.length; i++) {
       const row = dto.rows[i];
       try {
@@ -4991,6 +4998,14 @@ export class OrderService implements OnModuleInit {
           }
         } else {
           unmapped++;
+        }
+
+        // Ưu tiên khách hàng: khớp cặp (userSku, userEmail) → ép factory, bỏ qua
+        // factory của product config. Áp cả đơn chưa map product. Chỉ ép factoryId,
+        // các field khác (machineType/fabric/toolResult/machineNumber) giữ nguyên.
+        if (customerOverride.enabled) {
+          const forced = customerOverride.map.get(customerMatchKey(row.userSku, row.userEmail));
+          if (forced) factoryId = forced;
         }
 
         if (factoryId) {
