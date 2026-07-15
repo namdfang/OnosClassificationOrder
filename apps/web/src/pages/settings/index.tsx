@@ -3,6 +3,7 @@ import { Settings as SettingsIcon } from 'lucide-react';
 
 import { usePermission } from '@/hooks/usePermission';
 import DesignerAssignmentConfig from '@/components/settings/DesignerAssignmentConfig';
+import CustomerAssignmentConfig from '@/components/settings/CustomerAssignmentConfig';
 
 export default function Settings() {
   const { has } = usePermission();
@@ -21,8 +22,13 @@ export default function Settings() {
       </div>
 
       {canManage ? (
-        <div className="bg-white dark:bg-slate-800 rounded-2xl p-6 border border-slate-100 dark:border-slate-700/60">
-          <DesignerAssignmentConfig />
+        <div className="space-y-6">
+          <div className="bg-white dark:bg-slate-800 rounded-2xl p-6 border border-slate-100 dark:border-slate-700/60">
+            <DesignerAssignmentConfig />
+          </div>
+          <div className="bg-white dark:bg-slate-800 rounded-2xl p-6 border border-slate-100 dark:border-slate-700/60">
+            <CustomerAssignmentConfig />
+          </div>
         </div>
       ) : (
         <div className="bg-white dark:bg-slate-800 rounded-2xl p-8 border border-slate-100 dark:border-slate-700/60 text-center">

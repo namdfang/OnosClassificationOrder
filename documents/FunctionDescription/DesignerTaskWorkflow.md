@@ -318,8 +318,8 @@ Xem 2.3 chi tiết.
 ⚠️ Đơn open vào sản xuất ngoài khoảng sẽ bị ẩn — chọn khoảng rộng để thấy backlog cũ. **KPI giữ nguyên** (status counts = snapshot; `completedInPeriod` theo `designerCompletedAt`) → có thể lệch nhẹ với cột "Đã xong".
 
 Components con:
-- `TaskCard` — drag handle, productionId button (mở `TaskDetailDialog`), mockup thumbnail (mở preview), timestamp + reworkCount badge
-- `TaskDetailDialog` — header status badge + grid info (9 field) + mockup + designs grid 4 cột + timeline (Khách lên đơn `orderAt` → **Vào sản xuất `inProductionAt`** → Được gán → Bắt đầu → Hoàn thành → Cần làm lại/Không làm được) + banner productionError/rejectedReason. Fetch `GET /v1/orders/:id`
+- `TaskCard` — drag handle, productionId button (mở `TaskDetailDialog`), mockup thumbnail (mở preview), timestamp + reworkCount badge. Hiển thị thêm (nếu có): **badge "File sửa lỗi"** (`errorFile[]`, resolve name qua `workshop_config` category `error_file_type`) + **"Ghi chú file lỗi"** (`errorFileNote`). Card zod `DesignerTaskCardZod.errorFile/errorFileNote` + `toCard` map từ order
+- `TaskDetailDialog` — header status badge + grid info (9 field) + mockup + designs grid 4 cột + timeline (Khách lên đơn `orderAt` → **Vào sản xuất `inProductionAt`** → Được gán → Bắt đầu → Hoàn thành → Cần làm lại/Không làm được) + banner productionError/rejectedReason + **banner "File sửa lỗi"** (`errorFile[]` badge resolve name qua category `error_file_type` + `errorFileNote`). Fetch `GET /v1/orders/:id`
 - `RejectModal` — **picker chọn designer nhận thay (BẮT BUỘC)** + textarea reason (tùy chọn, max 500). Dùng chung single + bulk. Picker = sub-designer `Active` loại chính mình (từ `designerTeamStore`), kèm số đơn đang ôm. Nút submit disabled tới khi chọn người nhận. Xem §2.3b
 
 ### 4.2b `DailyBreakdownPanel` — "Chi tiết theo ngày" (trên /my-tasks)
