@@ -302,8 +302,8 @@ const OrderRowItem = memo(
           )}
         </TableCell>
 
-        {/* Action */}
-        <TableCell>
+        {/* Thao tác — pin cố định BÊN PHẢI */}
+        <TableCell className="sticky right-0 z-10 bg-card shadow-[-1px_0_0_0_var(--border)]">
           <div className="flex items-center gap-0.5">
             <Hint content="Lịch sử thay đổi">
               <Button variant="ghost" size="icon" onClick={() => onHistory(it._id, it.productionId)}>
@@ -689,7 +689,7 @@ export function ListOrderTab({ refreshKey }: ListOrderTabProps) {
                 <TableHead>SKU / Email</TableHead>
                 <TableHead>Xưởng / Máy</TableHead>
                 <TableHead>Status</TableHead>
-                <TableHead className="w-12"></TableHead>
+                <TableHead className="w-24 sticky right-0 z-20 bg-card"></TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>

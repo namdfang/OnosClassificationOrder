@@ -137,6 +137,51 @@ export type WorkshopColMeta = {
 
 export const WORKSHOP_COLS: WorkshopColMeta[] = [
   {
+    key: 'factoryMachine',
+    label: 'Nhà máy / Phòng',
+    perm: null,
+    width: 'min-w-[180px]',
+    render: (r) => {
+      const hasMapping = !!(r.factory?.name || r.machineType?.name);
+      if (!hasMapping) {
+        return (
+          <Hint
+            content="Type của order không match với product config nào — chưa xác định được xưởng/máy"
+            forceRich
+          >
+            <Badge variant="warning" className="cursor-help">
+              Chưa mapping
+            </Badge>
+          </Hint>
+        );
+      }
+      return (
+        <div className="flex flex-col gap-1">
+          {r.factory?.name && (
+            <Hint
+              content={`Nhà máy: ${r.factory.name}${r.factory.shortName ? ' (mã: ' + r.factory.shortName + ')' : ''}`}
+              forceRich
+            >
+              <Badge variant="success" className="w-fit cursor-help text-[10px] py-0 px-1.5">
+                {r.factory.shortName || '?'} · {r.factory.name || '?'}
+              </Badge>
+            </Hint>
+          )}
+          {r.machineType?.name && (
+            <Hint
+              content={`Phòng: ${r.machineType.name}${r.machineType.shortName ? ' (mã: ' + r.machineType.shortName + ')' : ''}`}
+              forceRich
+            >
+              <Badge variant="secondary" className="w-fit cursor-help text-[10px] py-0 px-1.5">
+                {r.machineType.shortName || '?'} · {r.machineType.name || '?'}
+              </Badge>
+            </Hint>
+          )}
+        </div>
+      );
+    },
+  },
+  {
     key: 'productionId',
     label: 'Production / Order',
     perm: null,
@@ -555,51 +600,6 @@ export const WORKSHOP_COLS: WorkshopColMeta[] = [
         </span>
       </Hint>
     ),
-  },
-  {
-    key: 'factoryMachine',
-    label: 'Nhà máy / Phòng',
-    perm: null,
-    width: 'min-w-[180px]',
-    render: (r) => {
-      const hasMapping = !!(r.factory?.name || r.machineType?.name);
-      if (!hasMapping) {
-        return (
-          <Hint
-            content="Type của order không match với product config nào — chưa xác định được xưởng/máy"
-            forceRich
-          >
-            <Badge variant="warning" className="cursor-help">
-              Chưa mapping
-            </Badge>
-          </Hint>
-        );
-      }
-      return (
-        <div className="flex flex-col gap-1">
-          {r.factory?.name && (
-            <Hint
-              content={`Nhà máy: ${r.factory.name}${r.factory.shortName ? ' (mã: ' + r.factory.shortName + ')' : ''}`}
-              forceRich
-            >
-              <Badge variant="success" className="w-fit cursor-help text-[10px] py-0 px-1.5">
-                {r.factory.shortName || '?'} · {r.factory.name || '?'}
-              </Badge>
-            </Hint>
-          )}
-          {r.machineType?.name && (
-            <Hint
-              content={`Phòng: ${r.machineType.name}${r.machineType.shortName ? ' (mã: ' + r.machineType.shortName + ')' : ''}`}
-              forceRich
-            >
-              <Badge variant="secondary" className="w-fit cursor-help text-[10px] py-0 px-1.5">
-                {r.machineType.shortName || '?'} · {r.machineType.name || '?'}
-              </Badge>
-            </Hint>
-          )}
-        </div>
-      );
-    },
   },
 ];
 

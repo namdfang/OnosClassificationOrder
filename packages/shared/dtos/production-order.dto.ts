@@ -384,6 +384,13 @@ export const GetProductionOrdersZod = PageQueryZod.extend({
   held: z.coerce.boolean().optional(),
 
   /**
+   * Toggle "Đã hủy". Truthy → CHỈ lấy đơn đã hủy (`cancelledAt` set). Bỏ qua khi
+   * không truyền (list mặc định vẫn hiện đơn hủy tô xám). Đơn hủy LUÔN bị loại
+   * khỏi mọi facet count (dropdown filter) trừ khi toggle này bật.
+   */
+  cancelled: z.coerce.boolean().optional(),
+
+  /**
    * Factory transfer filter. Values:
    *   "transferred-in:<factoryId>"  — orders whose current factory is `id`
    *                                   but originalFactoryId is different
@@ -1159,6 +1166,8 @@ export const WorkshopAvailableFiltersResZod = ResZod.extend({
     userSku: FactoryFilterOptionZod.array().optional(),
     /** Số đơn đang GIỮ (heldAt set) trong scope filter hiện tại — cho toggle "Đang giữ" workshop. */
     heldCount: z.number().optional(),
+    /** Số đơn ĐÃ HỦY (cancelledAt set) trong scope filter hiện tại — cho toggle "Đã hủy" workshop. */
+    cancelledCount: z.number().optional(),
   }),
 });
 export class WorkshopAvailableFiltersResDto extends createZodDto(

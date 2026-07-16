@@ -1095,6 +1095,9 @@ export class OrderService implements OnModuleInit {
     // Toggle "Đang giữ" (workshop): held=true → chỉ đơn giữ; held=false → chỉ
     // đơn không giữ. Không truyền → hiện cả 2 (đơn giữ chỉ tô xám, không ẩn).
     if (typeof dto.held === 'boolean') filter.heldAt = { $exists: dto.held };
+    // Toggle "Đã hủy": true → CHỈ đơn đã hủy. Không truyền → giữ nguyên (list
+    // hiện cả đơn hủy tô xám). Facet loại đơn hủy riêng ở getWorkshopAvailableFilters.
+    if (dto.cancelled === true) filter.cancelledAt = { $exists: true };
     if (dto.factoryId) filter.factoryId = dto.factoryId;
     if (dto.machineTypeId) filter.machineTypeId = dto.machineTypeId;
     if (dto.status) filter.status = dto.status;
@@ -3444,6 +3447,7 @@ export class OrderService implements OnModuleInit {
       type: Array<{ value: string; label: string; count: number }>;
       userSku: Array<{ value: string; label: string; count: number }>;
       heldCount: number;
+      cancelledCount: number;
     };
   }> {
     type FacetKey =
@@ -3480,6 +3484,10 @@ export class OrderService implements OnModuleInit {
     // Resolve 1 lần: cần cho (a) facet khác khi dto.designerStatus dùng token tách
     // tool, (b) tính 2 count "Chưa gán · có/không tool".
     const toolHasCodes = await this.resolveToolHasCodes();
+    // Đơn đã hủy KHÔNG tham gia bất kỳ facet count nào (theo yêu cầu) — trừ khi
+    // user bật toggle "Đã hủy" (dto.cancelled=true) để xem riêng phân bố đơn hủy.
+    const excludeCancelled: Record<string, unknown> =
+      dto.cancelled === true ? {} : { cancelledAt: { $exists: false } };
     const aggregateFacet = async (excludeKey: FacetKey, field: FacetKey) => {
       const sanitizedDto = { ...dto, [excludeKey]: undefined } as GetProductionOrdersDto;
       const baseFilter = this.buildOrderListFilter(
@@ -3501,6 +3509,7 @@ export class OrderService implements OnModuleInit {
       }
       const facetMatch = {
         ...baseFilter,
+        ...excludeCancelled,
         [field]: { $exists: true, $ne: null, $nin: [''] },
       };
       const pipeline: PipelineStage[] = [{ $match: facetMatch }];
@@ -3543,9 +3552,9 @@ export class OrderService implements OnModuleInit {
         const { $or: existingOr, ...rest } = baseFilter as Record<string, unknown> & {
           $or: unknown[];
         };
-        noneMatch = { ...rest, $and: [{ $or: existingOr }, { $or: noneClauses }] };
+        noneMatch = { ...rest, ...excludeCancelled, $and: [{ $or: existingOr }, { $or: noneClauses }] };
       } else {
-        noneMatch = { ...baseFilter, $or: noneClauses };
+        noneMatch = { ...baseFilter, ...excludeCancelled, $or: noneClauses };
       }
       return this.orderModel.countDocuments(noneMatch);
     })();
@@ -3620,6 +3629,7 @@ export class OrderService implements OnModuleInit {
       }
       const match = {
         ...base,
+        ...excludeCancelled,
         $and: [
           ...(Array.isArray(base.$and) ? (base.$and as unknown[]) : []),
           { $or: [{ designerStatus: 'unassigned' }, { designerStatus: { $exists: false } }] },
@@ -3655,13 +3665,35 @@ export class OrderService implements OnModuleInit {
       if (dto.fulfillmentStatus) {
         this.applyFulfillmentStatusFilter(base, dto.fulfillmentStatus, fulfillmentStage, assigneeCode);
       }
-      return this.orderModel.countDocuments({ ...base, heldAt: { $exists: true } });
+      return this.orderModel.countDocuments({
+        ...base,
+        ...excludeCancelled,
+        heldAt: { $exists: true },
+      });
+    })();
+
+    // Count đơn ĐÃ HỦY trong scope filter hiện tại (strip `cancelled` toggle để
+    // đếm tổng bất kể toggle bật/tắt) → hiện trên nút toggle "Đã hủy".
+    const cancelledCount = await (async () => {
+      const base = this.buildOrderListFilter(
+        { ...dto, cancelled: undefined } as GetProductionOrdersDto,
+        roleName,
+        assigneeCode,
+        fulfillmentFactoryId,
+        fulfillmentStage,
+        toolHasCodes,
+      );
+      if (dto.fulfillmentStatus) {
+        this.applyFulfillmentStatusFilter(base, dto.fulfillmentStatus, fulfillmentStage, assigneeCode);
+      }
+      return this.orderModel.countDocuments({ ...base, cancelledAt: { $exists: true } });
     })();
 
     return {
       success: true,
       data: {
         heldCount,
+        cancelledCount,
         printStatus: printStatusRows.map(toOption(printStatusMap)),
         toolResultNote: [
           // Prepend "Chưa soát" option. Token __none__ — FE injects nothing nữa.
