@@ -49,6 +49,14 @@ const updateField = (id: string, data: UpdateOrderFieldDto) => {
   return callApi(`/${CONFIG.API_VERSION}/orders/${id}/field`, 'patch', data);
 };
 
+const resolveError = (id: string) => {
+  return callApi(`/${CONFIG.API_VERSION}/orders/${id}/resolve-error`, 'post');
+};
+
+const bulkResolveError = (ids: string[]) => {
+  return callApi(`/${CONFIG.API_VERSION}/orders/bulk-resolve-error`, 'post', { ids });
+};
+
 const bulkUpdateField = (data: BulkUpdateOrderFieldDto) => {
   return callApi(`/${CONFIG.API_VERSION}/orders/bulk-field`, 'patch', data);
 };
@@ -189,6 +197,8 @@ export const order = {
   deleteOrder,
   getDashboard,
   updateField,
+  resolveError,
+  bulkResolveError,
   bulkUpdateField,
   getLogs,
   getStatusOverview,

@@ -607,6 +607,165 @@ export class OrderService implements OnModuleInit {
     ];
   }
 
+  /**
+   * Filter tab Nhật ký lỗi theo GÓC NHÌN CHẶNG của người xem (positional):
+   *  - `todo` = chặng mình còn việc trong chu kỳ lỗi: đơn ĐANG ở chặng mình,
+   *    HOẶC đơn đang ở chặng TRƯỚC (upstream) mà chặng mình đã từng làm / là
+   *    người báo lỗi → "đang chờ quay lại".
+   *  - `done` = chặng mình đã làm lại xong, đơn đã đi qua (downstream).
+   *
+   * Chặng viewer suy từ role: Fulfillment→`fulfillmentStage` (+ khóa xưởng mình),
+   * Support→soát-tool, Designer(Leader)→designer, còn lại (Admin/Manager)→toàn
+   * cục. Mirror positional của `applyFulfillmentStatusFilter`.
+   */
+  private applyErrorLogViewFilter(
+    filter: Record<string, unknown>,
+    tab: 'todo' | 'done',
+    roleName: RoleType | undefined,
+    fulfillmentStage: string | undefined,
+    fulfillmentFactoryId: string | undefined,
+  ): void {
+    const pushAnd = (clause: Record<string, unknown>) => {
+      const and = (filter.$and as unknown[] | undefined) ?? [];
+      and.push(clause);
+      filter.$and = and;
+    };
+    const TOOL_CHECK_MARKER = {
+      productionErrorSource: 'tool-check',
+      toolResultNote: 'error',
+    };
+
+    // ─── Fulfillment (in→đóng): positional theo stage + khóa xưởng ───
+    if (
+      roleName === RoleType.Fulfillment &&
+      fulfillmentStage &&
+      FULFILLMENT_STAGES.includes(fulfillmentStage as FulfillmentStage)
+    ) {
+      const stg = fulfillmentStage;
+      pushAnd({
+        $or: fulfillmentFactoryId
+          ? [{ factoryId: fulfillmentFactoryId }, { originalFactoryId: fulfillmentFactoryId }]
+          : [{ factoryId: '__no_factory__' }],
+      });
+      if (tab === 'todo') {
+        pushAnd({
+          $or: [
+            { currentFulfillmentStage: stg },
+            {
+              $and: [
+                {
+                  $or: [
+                    { [`fulfillmentStages.${stg}.completedAt`]: { $exists: true, $ne: null } },
+                    { fulfillmentTimeline: { $elemMatch: { stage: stg, action: 'rework-back' } } },
+                  ],
+                },
+                { $or: this.upstreamOfStageClauses(stg) },
+              ],
+            },
+          ],
+        });
+      } else {
+        pushAnd({ [`fulfillmentStages.${stg}.completedAt`]: { $exists: true, $ne: null } });
+        pushAnd({ $nor: [...this.upstreamOfStageClauses(stg), { currentFulfillmentStage: stg }] });
+      }
+      return;
+    }
+
+    // ─── Support: chặng soát-tool ───
+    if (roleName === RoleType.Support) {
+      if (tab === 'todo') {
+        pushAnd(TOOL_CHECK_MARKER);
+      } else {
+        pushAnd({ fulfillmentTimeline: { $elemMatch: { reworkTarget: 'tool-check' } } });
+        pushAnd({ $nor: [TOOL_CHECK_MARKER] });
+      }
+      return;
+    }
+
+    // ─── Designer / DesignerLeader: chặng designer ───
+    if (roleName === RoleType.Designer || roleName === RoleType.DesignerLeader) {
+      if (tab === 'todo') {
+        pushAnd({
+          $or: [
+            {
+              designerStatus: {
+                $in: [DesignerStatus.Rework, DesignerStatus.Assigned, DesignerStatus.InProgress],
+              },
+            },
+            { $and: [{ designerCompletedAt: { $exists: true, $ne: null } }, TOOL_CHECK_MARKER] },
+          ],
+        });
+      } else {
+        pushAnd({ designerStatus: DesignerStatus.Done });
+        pushAnd({ currentFulfillmentStage: { $exists: true, $ne: null } });
+        pushAnd({ $nor: [TOOL_CHECK_MARKER] });
+      }
+      return;
+    }
+
+    // ─── Admin/Manager/khác: TOÀN CỤC (read-only) — thấy MỌI đơn lỗi mọi xưởng.
+    // todo = chưa hoàn tất pipeline (còn đang xử lý ở đâu đó); done = đã đóng hàng
+    // xong (`fulfillmentCompletedAt` set). KHÔNG dùng "rework marker" vì bỏ sót đơn
+    // đang waiting/in-progress giữa chuỗi → admin sẽ thấy ít hơn acc theo chặng.
+    if (tab === 'todo') {
+      pushAnd({ $or: [{ fulfillmentCompletedAt: { $exists: false } }, { fulfillmentCompletedAt: null }] });
+    } else {
+      // Đã đóng hàng xong HOẶC Admin đã đánh dấu hoàn thành lỗi thủ công.
+      pushAnd({
+        $or: [
+          { fulfillmentCompletedAt: { $exists: true, $ne: null } },
+          { errorResolvedAt: { $exists: true, $ne: null } },
+        ],
+      });
+    }
+  }
+
+  /**
+   * Admin/Manager "Đánh dấu hoàn thành lỗi" cho đơn tồn đọng → set
+   * `errorResolvedAt` + clear `productionFirstErrorAt`. Đơn rời tab "Cần xử lý"
+   * (mọi role); hiện ở tab "Đã xong" của Admin trong 14 ngày. Đảo ngược tự động
+   * khi đơn bị báo lỗi mới (`setProductionError` clear `errorResolvedAt`).
+   */
+  async resolveError(id: string, ctx?: AuditContext): Promise<{ success: boolean }> {
+    const order = await this.orderModel.findById(id).lean();
+    if (!order) throw new NotFoundException('Order not found');
+    const now = new Date();
+    await this.orderModel.updateOne(
+      { _id: id },
+      { $set: { errorResolvedAt: now, productionFirstErrorAt: null } },
+    );
+    void this.orderLogService.write({
+      orderId: id,
+      action: 'update',
+      field: 'errorResolvedAt',
+      before: null,
+      after: now,
+      ctx,
+    });
+    return { success: true };
+  }
+
+  /** Đánh dấu hoàn thành lỗi HÀNG LOẠT (Admin/Manager) — xem `resolveError`. */
+  async bulkResolveError(ids: string[], ctx?: AuditContext): Promise<{ modified: number }> {
+    if (!ids?.length) return { modified: 0 };
+    const now = new Date();
+    const res = await this.orderModel.updateMany(
+      { _id: { $in: ids } },
+      { $set: { errorResolvedAt: now, productionFirstErrorAt: null } },
+    );
+    void this.orderLogService.writeMany(
+      ids.map((orderId) => ({
+        orderId,
+        action: 'update' as const,
+        field: 'errorResolvedAt',
+        before: null,
+        after: now,
+        ctx,
+      })),
+    );
+    return { modified: res.modifiedCount ?? 0 };
+  }
+
   private applyFulfillmentStatusFilter(
     filter: Record<string, unknown>,
     status: 'waiting' | 'in-progress' | 'rework' | 'done' | 'fixed' | 'watching',
@@ -1095,9 +1254,10 @@ export class OrderService implements OnModuleInit {
     // Toggle "Đang giữ" (workshop): held=true → chỉ đơn giữ; held=false → chỉ
     // đơn không giữ. Không truyền → hiện cả 2 (đơn giữ chỉ tô xám, không ẩn).
     if (typeof dto.held === 'boolean') filter.heldAt = { $exists: dto.held };
-    // Toggle "Đã hủy": true → CHỈ đơn đã hủy. Không truyền → giữ nguyên (list
-    // hiện cả đơn hủy tô xám). Facet loại đơn hủy riêng ở getWorkshopAvailableFilters.
-    if (dto.cancelled === true) filter.cancelledAt = { $exists: true };
+    // Toggle "Đã hủy": true → CHỈ đơn đã hủy; mặc định (không bật) → LOẠI đơn đã
+    // hủy khỏi list + mọi facet. Đơn hủy chỉ xem qua toggle "Đã hủy" (hoặc dialog
+    // "Đơn đã hủy" riêng). Áp cho mọi caller của buildOrderListFilter.
+    filter.cancelledAt = { $exists: dto.cancelled === true };
     if (dto.factoryId) filter.factoryId = dto.factoryId;
     if (dto.machineTypeId) filter.machineTypeId = dto.machineTypeId;
     if (dto.status) filter.status = dto.status;
@@ -6215,6 +6375,8 @@ export class OrderService implements OnModuleInit {
       patch.toolResultNote = 'error';
       patch.readyForFulfill = false;
       incProductionErrorCount = true;
+      // Lỗi MỚI → gỡ dấu "đã hoàn thành lỗi" của Admin để đơn hiện lại ở Cần xử lý.
+      patch.errorResolvedAt = null;
       const beforeFirstErrorAt =
         (before as unknown as { productionFirstErrorAt?: Date }).productionFirstErrorAt;
       if (!beforeFirstErrorAt) patch.productionFirstErrorAt = new Date();
@@ -6332,26 +6494,29 @@ export class OrderService implements OnModuleInit {
     roleName?: RoleType,
     assigneeUserId?: string,
     fulfillmentFactoryId?: string,
+    fulfillmentStage?: string,
   ): Promise<GetErrorLogResDto> {
+    const tab: 'todo' | 'done' = dto.tab === 'done' ? 'done' : 'todo';
     const filter: Record<string, unknown> = {};
+    // "Đơn lỗi" = từng bị báo lỗi (productionError set), hiển thị mọi thời gian;
+    // loại đơn đã hủy / đã xóa. KHÔNG ràng buộc productionFirstErrorAt nữa (đơn
+    // đã qua bước sửa của designer vẫn còn lỗi ở các chặng sau).
     filter.productionError = { $exists: true, $nin: [null, ''] };
-    filter.productionFirstErrorAt = { $exists: true, $ne: null };
     filter.deletedAt = { $exists: false };
-    // Đơn đã hủy KHÔNG nằm trong nhật ký bù lỗi (loại khỏi cả trang lẫn đếm mức độ,
-    // vì countFilter clone từ filter).
     filter.cancelledAt = { $exists: false };
 
-    if (roleName === RoleType.Designer) {
-      filter.assignee = assigneeUserId || '__no_user__';
-    } else if (roleName === RoleType.Fulfillment) {
-      if (fulfillmentFactoryId) {
-        filter.$or = [
-          { factoryId: fulfillmentFactoryId },
-          { originalFactoryId: fulfillmentFactoryId },
-        ];
-      } else {
-        filter.factoryId = '__no_factory__';
-      }
+    // Tab theo góc nhìn chặng của viewer (Cần xử lý / Đã xong) + khóa xưởng cho
+    // Fulfillment. Visibility KHÔNG lọc theo assignee — FE gate nút thao tác.
+    void assigneeUserId;
+    this.applyErrorLogViewFilter(filter, tab, roleName, fulfillmentStage, fulfillmentFactoryId);
+
+    // Tab "Cần xử lý": ẩn đơn Admin đã "Đánh dấu hoàn thành lỗi" (mọi role).
+    // `{errorResolvedAt: null}` khớp cả field thiếu lẫn null.
+    if (tab === 'todo') {
+      filter.errorResolvedAt = null;
+    } else {
+      // Tab "Đã xong": chỉ 14 ngày gần nhất (theo updatedAt).
+      filter.updatedAt = { $gte: new Date(Date.now() - 14 * 24 * 60 * 60 * 1000) };
     }
 
     if (dto.search) {
@@ -6457,10 +6622,14 @@ export class OrderService implements OnModuleInit {
     const { page, limit } = dto;
     const skip = limit * ((page || 1) - 1);
 
+    // Cần xử lý: lỗi cũ nhất trước. Đã xong: mới xử lý xong lên đầu.
+    const sort: Record<string, 1 | -1> =
+      tab === 'done' ? { updatedAt: -1 } : { productionFirstErrorAt: 1 };
+
     const [pageRes, urgencyAgg] = await Promise.all([
       this.orderRepository.findAllAndCount(filter, {
         paging: { skip, limit },
-        sort: { productionFirstErrorAt: 1 },
+        sort,
         populate: [
           { path: 'factory', select: ['name', 'shortName'] },
           { path: 'machineType', select: ['name', 'shortName'] },
