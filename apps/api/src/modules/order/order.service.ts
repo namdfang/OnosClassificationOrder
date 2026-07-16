@@ -1254,9 +1254,10 @@ export class OrderService implements OnModuleInit {
     // Toggle "Đang giữ" (workshop): held=true → chỉ đơn giữ; held=false → chỉ
     // đơn không giữ. Không truyền → hiện cả 2 (đơn giữ chỉ tô xám, không ẩn).
     if (typeof dto.held === 'boolean') filter.heldAt = { $exists: dto.held };
-    // Toggle "Đã hủy": true → CHỈ đơn đã hủy. Không truyền → giữ nguyên (list
-    // hiện cả đơn hủy tô xám). Facet loại đơn hủy riêng ở getWorkshopAvailableFilters.
-    if (dto.cancelled === true) filter.cancelledAt = { $exists: true };
+    // Toggle "Đã hủy": true → CHỈ đơn đã hủy; mặc định (không bật) → LOẠI đơn đã
+    // hủy khỏi list + mọi facet. Đơn hủy chỉ xem qua toggle "Đã hủy" (hoặc dialog
+    // "Đơn đã hủy" riêng). Áp cho mọi caller của buildOrderListFilter.
+    filter.cancelledAt = { $exists: dto.cancelled === true };
     if (dto.factoryId) filter.factoryId = dto.factoryId;
     if (dto.machineTypeId) filter.machineTypeId = dto.machineTypeId;
     if (dto.status) filter.status = dto.status;
