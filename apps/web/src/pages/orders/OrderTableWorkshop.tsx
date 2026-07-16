@@ -658,8 +658,14 @@ export function OrderTableWorkshop() {
 
   // scrollMargin = offset (tính từ đỉnh document) của <tbody> — nơi row index 0
   // bắt đầu. Re-measure khi layout phía trên đổi (panel/filter chips) qua
-  // ResizeObserver trên body + window resize (sum getBoundingClientRect().top +
-  // scrollY ổn định khi cuộn → chỉ cần đo lại lúc layout đổi).
+  // ResizeObserver trên rootRef (bọc TOÀN BỘ nội dung trong scroll container,
+  // KHÔNG dùng document.body — body không co giãn theo nội dung bên trong
+  // scroll container "main.overflow-auto" nên không bắt được thay đổi layout
+  // của filter/banner phía trên bảng, khiến scrollMargin bị "đơ" từ lần đo
+  // đầu tiên → lệch khoảng trắng lớn trên đầu bảng khi thu gọn hết nhóm, vì
+  // sai số cố định (px) trở nên đáng kể so với tổng chiều cao danh sách ngắn)
+  // + window resize (sum getBoundingClientRect().top + scrollY ổn định khi
+  // cuộn → chỉ cần đo lại lúc layout đổi).
   const rootRef = useRef<HTMLDivElement>(null);
   const scrollElRef = useRef<HTMLElement | null>(null);
   const tbodyRef = useRef<HTMLTableSectionElement>(null);
@@ -686,7 +692,7 @@ export function OrderTableWorkshop() {
     };
     measure();
     const ro = new ResizeObserver(measure);
-    if (document.body) ro.observe(document.body);
+    if (rootRef.current) ro.observe(rootRef.current);
     window.addEventListener('resize', measure);
     return () => {
       ro.disconnect();
