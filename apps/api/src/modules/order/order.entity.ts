@@ -316,6 +316,15 @@ export class OrderEntity extends DatabaseEntityAbstract {
   @Prop({ index: true })
   productionFirstErrorAt?: Date;
 
+  /**
+   * Admin/Manager "Đánh dấu hoàn thành lỗi" — đơn lỗi tồn đọng không còn hiển
+   * thị ở tab "Cần xử lý" (loại khỏi mọi role). Clear (= null) khi đơn bị báo
+   * lỗi MỚI (`setProductionError` set code) để nó xuất hiện lại. Đơn resolved
+   * hiện ở tab "Đã xong" của Admin (trong 14 ngày).
+   */
+  @Prop({ index: true })
+  errorResolvedAt?: Date;
+
   // Derived: true when toolResultNote === 'ok' (Designer marks an order ready
   // for the Fulfillment role to pick up). Service recomputes this on every
   // toolResultNote update and on import.

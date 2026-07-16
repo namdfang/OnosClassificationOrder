@@ -124,40 +124,9 @@ export class DesignerTaskService {
       fromUserId,
     });
 
-    // Hook fulfillment 5-stage: designer.complete lần đầu (chưa từng vào
-    // fulfillment) → kích hoạt stage Print với status=waiting. Trường hợp
-    // designer đang trong cycle rework (đẩy về từ fulfillment), giữ nguyên
-    // currentFulfillmentStage của reporter → đơn quay lại đúng stage cũ.
-    if (
-      action === DesignerTransitionAction.Complete &&
-      plan.nextStatus === DesignerStatus.Done &&
-      !order.currentFulfillmentStage
-    ) {
-      const set = (plan.patch.$set ?? {}) as Record<string, unknown>;
-      set.currentFulfillmentStage = FulfillmentStage.Print;
-      // `waitingAt = now` để user In thấy mốc "Nhận task lúc..." trong card.
-      set['fulfillmentStages.print'] = {
-        status: FulfillmentStageStatus.Waiting,
-        reworkCount: 0,
-        workMs: 0,
-        waitingAt: new Date(),
-      };
-      plan.patch.$set = set;
-    } else if (
-      action === DesignerTransitionAction.Complete &&
-      plan.nextStatus === DesignerStatus.Done &&
-      order.currentFulfillmentStage
-    ) {
-      // Cycle quay về: đơn đã ở trong fulfillment, bị worker báo lỗi designer
-      // (qua nút "Báo lỗi" hoặc cell "Lỗi xưởng") → designer fix xong. Set
-      // reporter stage = rework để đơn hiện ở tab "Cần làm lại" của worker
-      // (trước đó nằm ở tab "Đang chờ quay lại" nhờ designerStatus=rework).
-      const set = (plan.patch.$set ?? {}) as Record<string, unknown>;
-      const stage = order.currentFulfillmentStage;
-      set[`fulfillmentStages.${stage}.status`] = FulfillmentStageStatus.Rework;
-      set[`fulfillmentStages.${stage}.reworkAt`] = new Date();
-      plan.patch.$set = set;
-    }
+    // Hook fulfillment khi designer.complete → vào/quay lại pipeline. Dùng CHUNG
+    // với bulkTransition (xem applyCompleteFulfillmentHook).
+    this.applyCompleteFulfillmentHook(order.currentFulfillmentStage, action, plan);
 
     // findOneAndUpdate với filter expected state → race-safe; nếu trong lúc
     // request đang xử lý mà user khác kéo card sang trạng thái khác thì update
@@ -218,6 +187,48 @@ export class DesignerTaskService {
     }
 
     return updated;
+  }
+
+  /**
+   * Hook fulfillment khi designer **HOÀN THÀNH** (mutate `plan.patch.$set`):
+   * - Đơn CHƯA vào fulfillment (`currentFulfillmentStage` rỗng) → kích hoạt stage
+   *   Print `waiting` (đơn lần đầu vào In).
+   * - Đơn ĐÃ trong pipeline (bị đẩy về designer từ 1 stage, reset về Print) → flip
+   *   stage hiện tại sang `rework` để worker thấy ở tab "Cần làm lại" (re-flow toàn
+   *   chuỗi). Xem `documents/Plans/UpstreamWatching-ReflowChain.md` §3.3.
+   *
+   * Dùng CHUNG cho `transition` (đơn lẻ) LẪN `bulkTransition` — nếu chỉ đặt ở path
+   * đơn lẻ thì complete HÀNG LOẠT sẽ để đơn kẹt (`currentFulfillmentStage` set
+   * nhưng stage vẫn `done` → vô hình ở mọi tab In; hoặc chưa bao giờ vào In).
+   */
+  private applyCompleteFulfillmentHook(
+    currentFulfillmentStage: string | null | undefined,
+    action: DesignerTransitionAction,
+    plan: { nextStatus: DesignerStatus; patch: Record<string, unknown> },
+  ): void {
+    if (
+      action !== DesignerTransitionAction.Complete ||
+      plan.nextStatus !== DesignerStatus.Done
+    ) {
+      return;
+    }
+    const set = (plan.patch.$set ?? {}) as Record<string, unknown>;
+    if (!currentFulfillmentStage) {
+      set.currentFulfillmentStage = FulfillmentStage.Print;
+      // `waitingAt = now` để user In thấy mốc "Nhận task lúc..." trong card.
+      set['fulfillmentStages.print'] = {
+        status: FulfillmentStageStatus.Waiting,
+        reworkCount: 0,
+        workMs: 0,
+        waitingAt: new Date(),
+      };
+    } else {
+      // Cycle quay về: đơn đã ở trong fulfillment, bị đẩy về designer → fix xong →
+      // flip stage hiện tại sang rework (trước đó ở tab "Đang chờ quay lại").
+      set[`fulfillmentStages.${currentFulfillmentStage}.status`] = FulfillmentStageStatus.Rework;
+      set[`fulfillmentStages.${currentFulfillmentStage}.reworkAt`] = new Date();
+    }
+    plan.patch.$set = set;
   }
 
   /**
@@ -622,6 +633,7 @@ export class DesignerTaskService {
           designerStatus: 1,
           designerStartedAt: 1,
           designerFirstStartedAt: 1,
+          currentFulfillmentStage: 1,
         },
       )
       .lean();
@@ -652,6 +664,13 @@ export class DesignerTaskService {
           targetUserId,
           fromUserId,
         });
+        // Cùng hook fulfillment như transition đơn lẻ — nếu thiếu, complete hàng
+        // loạt để đơn kẹt (currentStage set nhưng stage vẫn 'done').
+        this.applyCompleteFulfillmentHook(
+          (o as { currentFulfillmentStage?: string | null }).currentFulfillmentStage,
+          action,
+          plan,
+        );
         const updated = await this.orderModel.findOneAndUpdate(
           { _id: orderId, designerStatus: current },
           plan.patch,

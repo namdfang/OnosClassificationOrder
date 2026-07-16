@@ -257,6 +257,8 @@ export const ProductionOrderZod = BaseEntityZod.extend({
    * "Nhật ký bù lỗi"). Dùng để sort + tính mức độ khẩn.
    */
   productionFirstErrorAt: z.date().optional(),
+  /** Admin đánh dấu hoàn thành lỗi tồn đọng → ẩn khỏi tab "Cần xử lý". */
+  errorResolvedAt: z.date().optional(),
 
   // Derived: toolResultNote === 'ok'
   readyForFulfill: z.boolean().default(false),
@@ -393,6 +395,13 @@ export const GetProductionOrdersZod = PageQueryZod.extend({
    * chỉ bị tô xám + khóa, không ẩn khỏi list).
    */
   held: z.coerce.boolean().optional(),
+
+  /**
+   * Toggle "Đã hủy". Truthy → CHỈ lấy đơn đã hủy (`cancelledAt` set). Bỏ qua khi
+   * không truyền (list mặc định vẫn hiện đơn hủy tô xám). Đơn hủy LUÔN bị loại
+   * khỏi mọi facet count (dropdown filter) trừ khi toggle này bật.
+   */
+  cancelled: z.coerce.boolean().optional(),
 
   /**
    * Factory transfer filter. Values:
@@ -1170,6 +1179,8 @@ export const WorkshopAvailableFiltersResZod = ResZod.extend({
     userSku: FactoryFilterOptionZod.array().optional(),
     /** Số đơn đang GIỮ (heldAt set) trong scope filter hiện tại — cho toggle "Đang giữ" workshop. */
     heldCount: z.number().optional(),
+    /** Số đơn ĐÃ HỦY (cancelledAt set) trong scope filter hiện tại — cho toggle "Đã hủy" workshop. */
+    cancelledCount: z.number().optional(),
   }),
 });
 export class WorkshopAvailableFiltersResDto extends createZodDto(
@@ -1212,7 +1223,16 @@ export const ERROR_LOG_URGENCY_LEVELS = ['new', 'attention', 'urgent', 'critical
 export type ErrorLogUrgency = (typeof ERROR_LOG_URGENCY_LEVELS)[number];
 export const ErrorLogUrgencyZod = z.enum(ERROR_LOG_URGENCY_LEVELS);
 
+export const ERROR_LOG_TABS = ['todo', 'done'] as const;
+export type ErrorLogTab = (typeof ERROR_LOG_TABS)[number];
+
 export const GetErrorLogZod = PageQueryZod.extend({
+  /**
+   * Tab theo góc nhìn CHẶNG của người xem:
+   *  - `todo` (mặc định): lỗi chặng mình cần xử lý / đang chờ đơn quay lại.
+   *  - `done`: lỗi chặng mình đã xử lý xong (giới hạn 14 ngày gần nhất).
+   */
+  tab: z.enum(ERROR_LOG_TABS).optional(),
   /** Comma-separated user._id của designer được gán đơn (`__none__` cho đơn chưa gán). */
   assignee: z.string().optional(),
   /** Comma-separated workshop_config codes (fabric_type). */
@@ -1245,6 +1265,13 @@ export const GetErrorLogResZod = PageResZod.extend({
   }),
 });
 export class GetErrorLogResDto extends createZodDto(extendApi(GetErrorLogResZod)) {}
+
+// Admin/Manager đánh dấu hoàn thành lỗi hàng loạt.
+export const BulkResolveErrorZod = z.object({ ids: IDZod.array().min(1) });
+export class BulkResolveErrorDto extends createZodDto(extendApi(BulkResolveErrorZod)) {}
+
+export const BulkResolveErrorResZod = ResZod.extend({ data: z.object({ modified: z.number() }) });
+export class BulkResolveErrorResDto extends createZodDto(extendApi(BulkResolveErrorResZod)) {}
 
 //
 // ─── Fulfillment workflow ─────────────────────────────────────────

@@ -19,6 +19,8 @@ import {
   DesignerBacklogResDto,
   GetErrorLogDto,
   GetErrorLogResDto,
+  BulkResolveErrorDto,
+  BulkResolveErrorResDto,
   GetOrderByProductionIdResDto,
   SetProductionErrorDto,
   SetProductionErrorResDto,
@@ -575,7 +577,44 @@ export class OrderController {
       user?.role?.name,
       user?._id ? String(user._id) : undefined,
       user?.factoryId,
+      user?.fulfillmentStage,
     );
+  }
+
+  @Post(':id/resolve-error')
+  @Auth([RoleType.SuperAdmin, RoleType.Admin, RoleType.Manager])
+  @ApiOperation({ summary: 'Đánh dấu hoàn thành lỗi — ẩn đơn tồn đọng khỏi tab "Cần xử lý"' })
+  @HttpCode(HttpStatus.OK)
+  async resolveError(
+    @Param('id') id: string,
+    @AuthUser() user: UserDocument,
+    @ClientIp() ip: string,
+    @UserAgent() userAgent: string,
+  ): Promise<{ success: boolean }> {
+    this.logger.info({
+      message: JSON.stringify({ method: 'POST', url: `/orders/${id}/resolve-error`, userId: user?._id }),
+    });
+    return this.orderService.resolveError(id, { user, ip, userAgent });
+  }
+
+  @Post('bulk-resolve-error')
+  @Auth([RoleType.SuperAdmin, RoleType.Admin, RoleType.Manager])
+  @ApiOperation({ summary: 'Đánh dấu hoàn thành lỗi HÀNG LOẠT' })
+  @HttpCode(HttpStatus.OK)
+  @ApiOkResponse({ type: BulkResolveErrorResDto })
+  async bulkResolveError(
+    @Body() dto: BulkResolveErrorDto,
+    @AuthUser() user: UserDocument,
+    @ClientIp() ip: string,
+    @UserAgent() userAgent: string,
+  ): Promise<BulkResolveErrorResDto> {
+    this.logger.info({
+      message: JSON.stringify({ method: 'POST', url: '/orders/bulk-resolve-error', count: dto.ids?.length, userId: user?._id }),
+    });
+    return {
+      success: true,
+      data: await this.orderService.bulkResolveError(dto.ids, { user, ip, userAgent }),
+    };
   }
 
   @Post('bulk-assign-designer-preview')

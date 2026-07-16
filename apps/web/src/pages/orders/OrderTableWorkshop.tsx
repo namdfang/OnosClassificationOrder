@@ -6,7 +6,7 @@ import React, {
   useRef,
   useState,
 } from 'react';
-import { CalendarClock, ChevronDown, ChevronRight, FilterX, History, MousePointerClick, PauseCircle, X } from 'lucide-react';
+import { Ban, CalendarClock, ChevronDown, ChevronRight, FilterX, History, MousePointerClick, PauseCircle, X } from 'lucide-react';
 import { useSearchParams } from 'react-router-dom';
 import { useVirtualizer } from '@tanstack/react-virtual';
 import type { WorkshopAvailableFilters } from 'shared';
@@ -325,6 +325,11 @@ export function OrderTableWorkshop() {
   const [filterHeld, setFilterHeld] = useState<boolean>(
     () => searchParams.get('wheld') === 'true',
   );
+  // Toggle "Đã hủy" — chỉ hiện đơn đã hủy (cancelledAt set). Mặc định tắt: đơn
+  // hủy vẫn hiện tô xám trong list nhưng KHÔNG tính vào facet count.
+  const [filterCancelled, setFilterCancelled] = useState<boolean>(
+    () => searchParams.get('wcancel') === 'true',
+  );
 
   // Sync state → URL (replace). Strip default/empty values.
   useEffect(() => {
@@ -345,6 +350,7 @@ export function OrderTableWorkshop() {
         filterDesignerStatus ? sp.set('wdstatus', filterDesignerStatus) : sp.delete('wdstatus');
         filterUserSku ? sp.set('wusersku', filterUserSku) : sp.delete('wusersku');
         filterHeld ? sp.set('wheld', 'true') : sp.delete('wheld');
+        filterCancelled ? sp.set('wcancel', 'true') : sp.delete('wcancel');
         page > 1 ? sp.set('wpage', String(page)) : sp.delete('wpage');
         pageSize !== DEFAULT_PAGE_SIZE ? sp.set('wsize', String(pageSize)) : sp.delete('wsize');
         return sp;
@@ -366,6 +372,7 @@ export function OrderTableWorkshop() {
     filterDesignerStatus,
     filterUserSku,
     filterHeld,
+    filterCancelled,
     page,
     pageSize,
     setSearchParams,
@@ -418,6 +425,7 @@ export function OrderTableWorkshop() {
     if (filterDesignerStatus) params.set('designerStatus', filterDesignerStatus);
     if (filterUserSku) params.set('userSku', filterUserSku);
     if (filterHeld) params.set('held', 'true');
+    if (filterCancelled) params.set('cancelled', 'true');
     if (createdFrom) params.set('createdFrom', createdFrom);
     if (createdTo) params.set('createdTo', createdTo);
     return params;
@@ -478,6 +486,7 @@ export function OrderTableWorkshop() {
     filterDesignerStatus,
     filterUserSku,
     filterHeld,
+    filterCancelled,
     createdFrom,
     createdTo,
   ]);
@@ -808,6 +817,7 @@ export function OrderTableWorkshop() {
     filterDesignerStatus,
     filterUserSku,
     filterHeld,
+    filterCancelled,
   ]);
 
   // Định nghĩa facet 1 lần — dùng cho cả OrderFilterBar lẫn chip "đang lọc".
@@ -879,6 +889,15 @@ export function OrderTableWorkshop() {
       display: 'Đang giữ',
       color: FILTER_CHIP_COLORS.date,
       onClear: () => { setFilterHeld(false); setPage(1); },
+    });
+  }
+  if (filterCancelled) {
+    activeFilters.push({
+      key: 'cancelled',
+      label: 'Trạng thái',
+      display: 'Đã hủy',
+      color: FILTER_CHIP_COLORS.date,
+      onClear: () => { setFilterCancelled(false); setPage(1); },
     });
   }
 
@@ -958,6 +977,7 @@ export function OrderTableWorkshop() {
     filterErrorFile,
     filterDesignerStatus,
     filterHeld,
+    filterCancelled,
     createdFrom,
     createdTo,
   ]);
@@ -1028,6 +1048,24 @@ export function OrderTableWorkshop() {
                 {typeof workshopFilters?.heldCount === 'number' && workshopFilters.heldCount > 0 && (
                   <span className="ml-1 rounded-full bg-amber-200 dark:bg-amber-500/30 px-1.5 text-[10px] font-semibold text-amber-800 dark:text-amber-200">
                     {workshopFilters.heldCount}
+                  </span>
+                )}
+              </Button>
+              <Button
+                variant={filterCancelled ? 'default' : 'outline'}
+                size="sm"
+                className="text-xs h-8"
+                onClick={() => {
+                  setFilterCancelled((v) => !v);
+                  setPage(1);
+                }}
+                title="Chỉ hiện đơn đã hủy (đơn hủy không tính vào bộ lọc)"
+              >
+                <Ban size={14} className="mr-1" />
+                Đã hủy
+                {typeof workshopFilters?.cancelledCount === 'number' && workshopFilters.cancelledCount > 0 && (
+                  <span className="ml-1 rounded-full bg-rose-200 dark:bg-rose-500/30 px-1.5 text-[10px] font-semibold text-rose-800 dark:text-rose-200">
+                    {workshopFilters.cancelledCount}
                   </span>
                 )}
               </Button>

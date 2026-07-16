@@ -1,7 +1,7 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import { ArrowRight, History, RefreshCw } from 'lucide-react';
-import type { ProductionOrderLog, ProductionOrderLogAction } from 'shared';
-import { WorkshopConfigCategory } from 'shared';
+import type { FulfillmentStage, ProductionOrderLog, ProductionOrderLogAction } from 'shared';
+import { FULFILLMENT_STAGE_LABELS, WorkshopConfigCategory } from 'shared';
 
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
@@ -35,6 +35,13 @@ const ACTION_BADGE: Record<ProductionOrderLogAction, { label: string; variant: '
   update_design: { label: 'Đổi design', variant: 'default' },
   hold: { label: 'Giữ đơn', variant: 'warning' },
   unhold: { label: 'Mở giữ', variant: 'success' },
+};
+
+// Import log ghi `after` = object tóm tắt (productionId/type/isMapped/_subAction).
+// `_subAction` = đơn được tạo mới hay cập nhật trong lần import.
+const IMPORT_SUBACTION: Record<string, { label: string; variant: 'default' | 'success' }> = {
+  create: { label: 'Tạo mới', variant: 'success' },
+  update: { label: 'Cập nhật', variant: 'default' },
 };
 
 const FIELD_LABEL: Record<string, string> = {
@@ -89,6 +96,33 @@ const DESIGNER_STATUS_COLOR: Record<string, string> = {
   rework: '#f59e0b',
 };
 const SOURCE_COLOR: Record<string, string> = { designer: '#8b5cf6', factory: '#0ea5e9' };
+
+// Trạng thái công đoạn fulfillment (waiting/in-progress/done/rework) → nhãn + màu.
+const FULFILLMENT_STATUS_LABELS: Record<string, string> = {
+  waiting: 'Chờ làm',
+  'in-progress': 'Đang làm',
+  done: 'Đã xong',
+  rework: 'Cần làm lại',
+};
+const FULFILLMENT_STATUS_COLOR: Record<string, string> = {
+  waiting: '#a1a1aa',
+  'in-progress': '#6366f1',
+  done: '#10b981',
+  rework: '#f59e0b',
+};
+// Field key dạng `fulfillmentStages.<stage>.status` (log của Task Fulfillment).
+const FULFILLMENT_STAGE_STATUS_RE = /^fulfillmentStages\.(.+)\.status$/;
+
+/** Nhãn tiếng Việt cho field key (gồm key động của fulfillment stage). */
+function fieldLabelFor(field: string): string {
+  const m = field.match(FULFILLMENT_STAGE_STATUS_RE);
+  if (m) {
+    const stage = m[1] as FulfillmentStage;
+    return `Công đoạn ${FULFILLMENT_STAGE_LABELS[stage] || m[1]}`;
+  }
+  if (field === 'currentFulfillmentStage') return 'Công đoạn hiện tại';
+  return FIELD_LABEL[field] || field;
+}
 
 /** Style tint từ hex `#rrggbb` — chữ = color, nền = color 12% (8-digit hex). */
 function tintStyle(color?: string): React.CSSProperties | undefined {
@@ -203,12 +237,61 @@ export function OrderLogTimelineDialog({ open, onOpenChange, orderId, production
       const text = raw === 'designer' ? 'Do designer' : raw === 'factory' ? 'Do xưởng' : raw;
       return { text, color: SOURCE_COLOR[raw] };
     }
+    if (field === 'currentFulfillmentStage') {
+      return { text: FULFILLMENT_STAGE_LABELS[raw as FulfillmentStage] || raw };
+    }
+    if (FULFILLMENT_STAGE_STATUS_RE.test(field)) {
+      return { text: FULFILLMENT_STATUS_LABELS[raw] || raw, color: FULFILLMENT_STATUS_COLOR[raw] };
+    }
     const cat = FIELD_CATEGORY[field];
     if (cat) {
       const cfg = resolve(cat, raw);
       return { text: cfg?.name || raw, color: cfg?.color || undefined };
     }
     return { text: raw };
+  };
+
+  // Import: `after` là object tóm tắt → render dễ đọc (không dump JSON).
+  const renderImportPayload = (after: unknown): React.ReactNode => {
+    if (after == null) return null;
+    if (typeof after !== 'object') {
+      return <div className="text-xs text-muted-foreground">{String(after)}</div>;
+    }
+    const o = after as Record<string, unknown>;
+    const sub = typeof o._subAction === 'string' ? IMPORT_SUBACTION[o._subAction] : undefined;
+    const pid = o.productionId != null ? String(o.productionId) : undefined;
+    const type = o.type != null ? String(o.type) : undefined;
+    const isMapped = typeof o.isMapped === 'boolean' ? (o.isMapped as boolean) : undefined;
+    // Các key khác (nếu có) — hiển thị "label: name" để không giấu thông tin.
+    const rest = Object.entries(o).filter(
+      ([k]) => !k.startsWith('_') && !['productionId', 'type', 'isMapped'].includes(k),
+    );
+    return (
+      <div className="space-y-1 text-xs">
+        <div className="flex flex-wrap items-center gap-1.5">
+          {sub && <Badge variant={sub.variant}>{sub.label}</Badge>}
+          {pid && <span className="font-mono text-foreground">{pid}</span>}
+          {type && <span className="text-muted-foreground">· {type}</span>}
+          {isMapped !== undefined && (
+            <span
+              className={cn(
+                'rounded px-1.5 py-0.5 text-[11px] font-medium',
+                isMapped
+                  ? 'bg-emerald-50 text-emerald-700 dark:bg-emerald-500/10 dark:text-emerald-300'
+                  : 'bg-amber-50 text-amber-700 dark:bg-amber-500/10 dark:text-amber-300',
+              )}
+            >
+              {isMapped ? 'Đã map sản phẩm' : 'Chưa map sản phẩm'}
+            </span>
+          )}
+        </div>
+        {rest.map(([k, v]) => (
+          <div key={k} className="text-muted-foreground">
+            {fieldLabelFor(k)}: <span className="text-foreground">{resolveDisplay(k, v).text}</span>
+          </div>
+        ))}
+      </div>
+    );
   };
 
   const headerLabel = useMemo(() => {
@@ -249,7 +332,7 @@ export function OrderLogTimelineDialog({ open, onOpenChange, orderId, production
             <div className="space-y-2">
               {logs.map((log) => {
                 const meta = ACTION_BADGE[log.action as ProductionOrderLogAction] || ACTION_BADGE.update;
-                const fieldLabel = log.field ? FIELD_LABEL[log.field] || log.field : null;
+                const fieldLabel = log.field ? fieldLabelFor(log.field) : null;
                 const isFieldUpdate =
                   !!log.field && (log.action === 'update' || log.action === 'bulk_update');
                 return (
@@ -309,11 +392,7 @@ export function OrderLogTimelineDialog({ open, onOpenChange, orderId, production
                       </div>
                     )}
 
-                    {log.action === 'import' && log.after != null && (
-                      <div className="text-xs text-muted-foreground">
-                        {resolveDisplay(log.field, log.after).text}
-                      </div>
-                    )}
+                    {log.action === 'import' && log.after != null && renderImportPayload(log.after)}
 
                     {/* Meta: người thực hiện · role · ip */}
                     <div className="text-[11px] text-muted-foreground flex items-center gap-1 flex-wrap">
