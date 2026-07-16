@@ -830,7 +830,7 @@ export default function OrderFactoryTab() {
                       {c.label}
                     </TableHead>
                   ))}
-                  <TableHead className="w-10"></TableHead>
+                  <TableHead className="w-20 sticky right-0 z-20 bg-card"></TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
@@ -917,7 +917,8 @@ export default function OrderFactoryTab() {
                           )}
                         </TableCell>
                       ))}
-                      <TableCell>
+                      {/* Thao tác — pin cố định BÊN PHẢI */}
+                      <TableCell className="sticky right-0 z-10 bg-card shadow-[-1px_0_0_0_var(--border)]">
                         <div className="flex items-center justify-end gap-0.5">
                           <Button
                             variant="ghost"

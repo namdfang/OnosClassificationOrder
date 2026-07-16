@@ -109,14 +109,16 @@ Response: `{ success, data: ProductionOrderLog[], total }`
 - Body: **danh sách card** (`space-y-2`, mỗi entry 1 card border) — thay timeline trục dọc cũ cho gọn/dễ nhìn.
 - Mỗi entry:
   - Badge action (`Tạo` / `Cập nhật` / `Bulk` / `Import` / `Xóa` / `Hủy đơn` / `Đổi design`).
-  - Tên field (label tiếng Việt từ map `FIELD_LABEL` — đã bổ sung `designerStatus`→"TT Designer", `productionError`→"Lỗi xưởng", `machineNumber`→"Máy", `fabricType`, `productionErrorSource`… nếu chưa có thì fallback key).
+  - Tên field (label tiếng Việt qua helper `fieldLabelFor(field)`): tra map `FIELD_LABEL` (`designerStatus`→"TT Designer", `productionError`→"Lỗi xưởng", `machineNumber`→"Máy", `fabricType`, `productionErrorSource`…) **+ key động của Task Fulfillment**: `fulfillmentStages.<stage>.status` → **"Công đoạn {tên stage VI}"** (`FULFILLMENT_STAGE_LABELS`, vd `qc-post-press`→"QC sau ép"), `currentFulfillmentStage` → "Công đoạn hiện tại". Fallback = raw key.
   - Diff `before → after` render qua `<DiffRow>` + `<StatusPill>`: pill cũ xám gạch ngang + icon `ArrowRight` + pill mới **tô màu theo trạng thái**.
   - **Value hiển thị NAME + MÀU, không phải code** (`resolveDisplay(field, value) → { text, color }`):
     - `designerStatus` → nhãn VI (`DESIGNER_STATUS_LABELS`) + màu (`DESIGNER_STATUS_COLOR`: done=emerald, rework=amber, in-progress=indigo, rejected=rose…).
     - Field workshop_config (`printStatus`, `toolResultNote`, `machineNumber`, `productionError`, `errorFile`…) → `useWorkshopConfigStore.resolve(category, code)` lấy **`.name` + `.color`** (map `FIELD_CATEGORY`). `errorFile` là mảng → resolve từng phần tử, join `, `.
     - `productionErrorSource` → "Do designer" (violet) / "Do xưởng" (sky).
+    - **Trạng thái công đoạn fulfillment** (`fulfillmentStages.<stage>.status`) → nhãn VI (`FULFILLMENT_STATUS_LABELS`: waiting→"Chờ làm", in-progress→"Đang làm", done→"Đã xong", rework→"Cần làm lại") + màu (`FULFILLMENT_STATUS_COLOR`). `currentFulfillmentStage` (code stage) → tên VI qua `FULFILLMENT_STAGE_LABELS`.
     - Màu áp qua `tintStyle(hex)`: chữ = hex, nền = hex + 12% alpha (8-digit hex inline style).
     - **`assignee` (userId) → tên được resolve ở BACKEND** (`OrderService.getLogs` batch `userModel.find` → thay `before/after` = `fullName`) nên đúng cho MỌI viewer, không phụ thuộc quyền xem designer team. FE không còn dùng designer team store ở dialog này.
+  - **Import** (`action='import'`): `after` là object tóm tắt → render qua `renderImportPayload()` (KHÔNG dump JSON): badge **Tạo mới/Cập nhật** (`_subAction` create/update), `productionId` (mono), `type`, chip **Đã map / Chưa map sản phẩm** (`isMapped`); key lạ khác hiện "label: name".
   - Footer: `userName · roleCode · ip`.
   - Timestamp định dạng `vi-VN`.
 - Auto-fetch khi `open=true` + `loadConfig()` / `fetchTeam()` (nếu store chưa load) để resolve name; clear logs khi đóng.

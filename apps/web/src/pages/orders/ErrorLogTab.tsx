@@ -434,7 +434,7 @@ export function ErrorLogTab() {
                     </TableHead>
                   ))}
                   <TableHead className="whitespace-nowrap text-xs w-[80px]">Số lần lỗi</TableHead>
-                  <TableHead className="whitespace-nowrap text-xs w-[60px]"></TableHead>
+                  <TableHead className="whitespace-nowrap text-xs w-[80px] sticky right-0 z-20 bg-card"></TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
@@ -508,7 +508,8 @@ export function ErrorLogTab() {
                           ×{row.productionErrorCount || 1}
                         </Badge>
                       </TableCell>
-                      <TableCell className="py-2">
+                      {/* Thao tác — pin cố định BÊN PHẢI */}
+                      <TableCell className="py-2 sticky right-0 z-10 bg-card shadow-[-1px_0_0_0_var(--border)]">
                         <div className="flex items-center justify-end gap-0.5">
                           <Button
                             variant="ghost"
