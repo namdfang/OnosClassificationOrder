@@ -548,6 +548,9 @@ export function OrderTableWorkshop() {
       }
       const maxCombo = Math.max(0, ...Array.from(comboCount.values()));
       const sortedOrders = [...g.orders].sort((a, b) => {
+        const pa = a.priority || 0;
+        const pb = b.priority || 0;
+        if (pb !== pa) return pb - pa;
         const ca = comboCount.get(comboKeyOf(a)) || 1;
         const cb = comboCount.get(comboKeyOf(b)) || 1;
         if (cb !== ca) return cb - ca;

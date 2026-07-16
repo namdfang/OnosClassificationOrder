@@ -1,7 +1,8 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
-import { AlertTriangle, FileSearch, PackageSearch, RefreshCw, Users, X } from 'lucide-react';
-import { PRODUCT_LEVEL_MAP, WorkshopConfigCategory } from 'shared';
+import { AlertTriangle, Clock, FileSearch, PackageSearch, RefreshCw, Users, X } from 'lucide-react';
+import { ORDER_PRIORITY_LABELS, PRODUCT_LEVEL_MAP, WorkshopConfigCategory } from 'shared';
 import type {
+  OrderPriority,
   ToolCheckCustomerError,
   ToolCheckCustomerStat,
   ToolCheckDayRow,
@@ -23,12 +24,16 @@ import { TooltipProvider } from '@/components/ui/tooltip';
 import { ColorBadgeSelectCell } from '@/components/orders/cells/ColorBadgeSelectCell';
 import { ImageThumbCell } from '@/components/orders/cells/ImageThumbCell';
 import { MultiIconSelectCell } from '@/components/orders/cells/MultiIconSelectCell';
+import { PriorityBadge } from '@/components/orders/cells/PrioritySelectCell';
 import { ProductionErrorSelectCell } from '@/components/orders/cells/ProductionErrorSelectCell';
 import { TextEditCell } from '@/components/orders/cells/TextEditCell';
+import { useNow } from '@/hooks/useNow';
 import { usePermission } from '@/hooks/usePermission';
 import { RepositoryRemote } from '@/services';
 import { useWorkshopConfigStore } from '@/store/workshopConfigStore';
 import { handleAxiosError } from '@/utils';
+import { cn } from '@/utils/cn';
+import { formatCountdown, getStageDeadline } from '@/utils/priorityEstimate';
 
 interface Overview {
   checkedCount: number;
@@ -40,7 +45,12 @@ interface Overview {
   topCustomerError: ToolCheckCustomerError[];
   days: ToolCheckDayRow[];
   columnTotals: { unreviewed: number; rework: number };
-  facets: { type: ToolCheckFacet[]; customer: ToolCheckFacet[]; machineNumber: ToolCheckFacet[] };
+  facets: {
+    type: ToolCheckFacet[];
+    customer: ToolCheckFacet[];
+    machineNumber: ToolCheckFacet[];
+    priority: ToolCheckFacet[];
+  };
   rangeDays: number;
 }
 
@@ -63,6 +73,13 @@ function fmtDayHead(day: string): { wd: string; dm: string } {
 }
 
 const toOpts = (f: ToolCheckFacet[] = []) => f.map((o) => ({ value: o.value, label: o.value, count: o.count }));
+/** Facet `priority` trả value dạng '1'|'2'|'3' — map sang label tiếng Việt (dropdown "Ưu tiên"). */
+const toPriorityOpts = (f: ToolCheckFacet[] = []) =>
+  f.map((o) => ({
+    value: o.value,
+    label: ORDER_PRIORITY_LABELS[Number(o.value) as OrderPriority] || o.value,
+    count: o.count,
+  }));
 
 export default function ToolCheckTab() {
   const { canEditField } = usePermission();
@@ -80,6 +97,7 @@ export default function ToolCheckTab() {
   const [filterType, setFilterType] = useState('');
   const [filterCustomer, setFilterCustomer] = useState('');
   const [filterMachine, setFilterMachine] = useState('');
+  const [filterPriority, setFilterPriority] = useState('');
   // Ngày đang lọc (YYYY-MM-DD VN) — click 1 cột trong dải ngày; chỉ lọc DANH
   // SÁCH client-side, KPI/dải/thống kê giữ nguyên cả kỳ.
   const [dayFilter, setDayFilter] = useState('');
@@ -89,6 +107,7 @@ export default function ToolCheckTab() {
   const [listTab, setListTab] = useState<ListTab>('rework');
   const [preview, setPreview] = useState<{ url?: string; originalUrl?: string; title?: string } | null>(null);
   const seqRef = useRef(0);
+  const now = useNow(30_000);
 
   const fetchData = () => {
     const seq = ++seqRef.current;
@@ -101,6 +120,7 @@ export default function ToolCheckTab() {
           ...(filterType ? { type: filterType } : {}),
           ...(filterCustomer ? { customer: filterCustomer } : {}),
           ...(filterMachine ? { machineNumber: filterMachine } : {}),
+          ...(filterPriority ? { priority: filterPriority } : {}),
         });
         if (seq !== seqRef.current) return;
         setData((res.data?.data || null) as Overview | null);
@@ -117,7 +137,7 @@ export default function ToolCheckTab() {
     setDayFilter('');
     fetchData();
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [dateFrom, dateTo, filterType, filterCustomer, filterMachine]);
+  }, [dateFrom, dateTo, filterType, filterCustomer, filterMachine, filterPriority]);
 
   // Patch 1 đơn trong cả 2 list (optimistic) sau khi edit cell.
   const patchRow = (id: string, partial: Partial<ToolCheckOrder>) =>
@@ -167,6 +187,30 @@ export default function ToolCheckTab() {
             <span className="font-medium whitespace-nowrap">{o.productionId}</span>
             <CopyButton value={o.productionId} label="Production ID" iconSize={11} />
           </div>
+        </td>
+        <td className="px-2 py-1.5">
+          {(() => {
+            // Cả 2 list (cần làm lại/chưa soát) đều đang chờ bước "tool-check"
+            // — mốc vào bước dùng thẳng `inProductionAt` (không có mốc riêng
+            // "quay lại Support"/"vào hàng chờ soát" trong dữ liệu).
+            const deadline = getStageDeadline(o.priority, 'tool-check', o.inProductionAt);
+            const countdown = deadline ? formatCountdown(deadline, now) : undefined;
+            return (
+              <div className="flex flex-col gap-1 items-start">
+                <PriorityBadge priority={o.priority} />
+                {deadline && countdown && (
+                  <span
+                    className={cn(
+                      'text-[10px] inline-flex items-center gap-1 whitespace-nowrap',
+                      countdown.overdue ? 'text-rose-600 dark:text-rose-400' : 'text-muted-foreground',
+                    )}
+                  >
+                    <Clock size={10} /> {countdown.text}
+                  </span>
+                )}
+              </div>
+            );
+          })()}
         </td>
         <td className="px-2 py-1.5 text-muted-foreground whitespace-nowrap">{o.userSku || '—'}</td>
         <td className="px-2 py-1.5 text-muted-foreground max-w-[200px] truncate" title={o.type}>
@@ -275,8 +319,8 @@ export default function ToolCheckTab() {
             setDateTo(t);
           }}
         />
-        {/* Hàng filter: Sản phẩm / Khách / Máy — options từ facet BE (cả kỳ). */}
-        <div className="w-full grid grid-cols-1 sm:grid-cols-3 gap-2">
+        {/* Hàng filter: Sản phẩm / Khách / Máy / Ưu tiên — options từ facet BE (cả kỳ). */}
+        <div className="w-full grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-2">
           <SelectFilter
             label="Sản phẩm"
             value={filterType}
@@ -294,6 +338,12 @@ export default function ToolCheckTab() {
             value={filterMachine}
             onChange={setFilterMachine}
             options={toOpts(data?.facets.machineNumber)}
+          />
+          <SelectFilter
+            label="Ưu tiên"
+            value={filterPriority}
+            onChange={setFilterPriority}
+            options={toPriorityOpts(data?.facets.priority)}
           />
         </div>
       </div>
@@ -444,6 +494,7 @@ export default function ToolCheckTab() {
                 <tr className="border-b border-border/60 text-left text-[11px] uppercase text-muted-foreground whitespace-nowrap">
                   <th className="w-12 px-1 py-2" />
                   <th className="px-2 py-2">Mã đơn</th>
+                  <th className="px-2 py-2">Ưu tiên</th>
                   <th className="px-2 py-2">Khách</th>
                   <th className="px-2 py-2">Sản phẩm</th>
                   <th className="px-2 py-2">Size/Màu</th>

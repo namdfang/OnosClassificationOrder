@@ -20,6 +20,7 @@ import { ImagePreviewDialog } from '@/components/common/ImagePreviewDialog';
 import { DesignThumbsCell } from '@/components/orders/cells/DesignThumbsCell';
 import { OrderLogTimelineDialog } from '@/components/orders/OrderLogTimelineDialog';
 import { OrderRowActionsMenu } from '@/components/orders/OrderRowActionsMenu';
+import { PrioritySelectCell } from '@/components/orders/cells/PrioritySelectCell';
 import type { WorkshopOrderRow } from '@/components/orders/workshopTableConfig';
 import { isCancelled, isHeld } from '@/utils/orderActions';
 import { CancelledBadge } from '@/components/orders/CancelledBadge';
@@ -76,6 +77,7 @@ interface OrderRow {
   baseCost?: number;
   shipCost?: number;
   status?: string;
+  priority?: number;
   orderId?: string;
   externalId?: string;
   isMapped: boolean;
@@ -105,10 +107,20 @@ interface OrderRowItemProps {
   onDelete: (id: string) => void;
   onHistory: (id: string, productionId: string) => void;
   onChanged: () => void;
+  canEditPriority: boolean;
+  onPriorityUpdated: (id: string, priority: number | null) => void;
 }
 
 const OrderRowItem = memo(
-  function OrderRowItem({ it, onPreview, onDelete, onHistory, onChanged }: OrderRowItemProps) {
+  function OrderRowItem({
+    it,
+    onPreview,
+    onDelete,
+    onHistory,
+    onChanged,
+    canEditPriority,
+    onPriorityUpdated,
+  }: OrderRowItemProps) {
     const variantBits = [it.color, it.size, it.printMethod].filter(Boolean);
     const mockupThumbSrc = smallThumb(it.mockupUrl, 200);
     const cancelled = isCancelled(it);
@@ -302,6 +314,16 @@ const OrderRowItem = memo(
           )}
         </TableCell>
 
+        {/* Ưu tiên */}
+        <TableCell>
+          <PrioritySelectCell
+            orderId={it._id}
+            value={it.priority}
+            canEdit={canEditPriority}
+            onUpdated={(v) => onPriorityUpdated(it._id, v)}
+          />
+        </TableCell>
+
         {/* Action */}
         <TableCell>
           <div className="flex items-center gap-0.5">
@@ -360,7 +382,7 @@ export function ListOrderTab({ refreshKey }: ListOrderTabProps) {
     assignee: FilterOption[];
     designerStatus: FilterOption[];
   }>({ assignee: [], designerStatus: [] });
-  const { has } = usePermission();
+  const { has, canEditField } = usePermission();
   const canSeeDesignerSummary = has('page.designer_stats') || has('designer.task.assign');
 
   const [page, setPage] = useState(() => {
@@ -689,20 +711,21 @@ export function ListOrderTab({ refreshKey }: ListOrderTabProps) {
                 <TableHead>SKU / Email</TableHead>
                 <TableHead>Xưởng / Máy</TableHead>
                 <TableHead>Status</TableHead>
+                <TableHead>Ưu tiên</TableHead>
                 <TableHead className="w-12"></TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
               {loading && (
                 <TableRow>
-                  <TableCell colSpan={7} className="text-center py-10">
+                  <TableCell colSpan={8} className="text-center py-10">
                     <Spinner size={20} className="text-muted-foreground" />
                   </TableCell>
                 </TableRow>
               )}
               {!loading && items.length === 0 && (
                 <TableRow>
-                  <TableCell colSpan={7} className="text-center py-10 text-muted-foreground text-sm">
+                  <TableCell colSpan={8} className="text-center py-10 text-muted-foreground text-sm">
                     Chưa có order nào. Sang tab "Import Order" để thêm.
                   </TableCell>
                 </TableRow>
@@ -716,6 +739,8 @@ export function ListOrderTab({ refreshKey }: ListOrderTabProps) {
                     onDelete={handleDelete}
                     onHistory={openHistory}
                     onChanged={handleChanged}
+                    canEditPriority={canEditField('priority')}
+                    onPriorityUpdated={(id, priority) => patchRow(id, { priority: priority ?? undefined })}
                   />
                 ))}
             </TableBody>

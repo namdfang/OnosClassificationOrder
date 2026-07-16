@@ -35,14 +35,14 @@ Bối cảnh: đơn `toolResultNote='ok'` được đẩy thẳng sang In (xem `
 
 Support/Admin mở Dashboard → tab "Soát tool":
 - Filter **thời gian** — `DateRangePicker variant="inline"` (thanh preset ngang full-width: Hôm nay · Hôm qua · 7/14/30 ngày · Tháng này · Tháng trước · Tùy chỉnh), lọc theo `inProductionAt` (tz VN). Model đã đổi `days` → **`from/to`** (mặc định 7 ngày gần nhất = `last-7d`); BE `getToolCheckOverview` khi có `from&&to` dùng window đó (bỏ qua `days`). Xem `DateRangePicker-InlineRedesign.md`.
-- **3 filter server-side** (`SelectFilter` — options từ `facets` BE, phạm vi = đơn Support quan tâm cả kỳ `chưa soát ∪ tool-check`, KHÔNG cross-narrow → dropdown ổn định): **Sản phẩm** (`type`) · **Khách hàng** (`userSku`) · **Máy** (`machineNumber`). Đổi filter → refetch, narrow **toàn tab** (KPI + dải ngày + list + thống kê). *(Lưu ý: đơn chưa soát thường chưa gán máy → filter Máy phủ ít cho nhóm chưa soát.)*
+- **4 filter server-side** (`SelectFilter` — options từ `facets` BE, phạm vi = đơn Support quan tâm cả kỳ `chưa soát ∪ tool-check`, KHÔNG cross-narrow → dropdown ổn định): **Sản phẩm** (`type`) · **Khách hàng** (`userSku`) · **Máy** (`machineNumber`) · **Ưu tiên** (`priority` — value `'1'|'2'|'3'`, label map qua `ORDER_PRIORITY_LABELS`, hàm `toPriorityOpts` riêng vì facet BE trả code chứ không phải label sẵn). Đổi filter → refetch, narrow **toàn tab** (KPI + dải ngày + list + thống kê). *(Lưu ý: đơn chưa soát thường chưa gán máy → filter Máy phủ ít cho nhóm chưa soát.)*
 - **KPI**: Đã soát trong kỳ · In trả về (cần làm lại) · Chưa soát · Lỗi soát tool đang chờ (KPI tính **cả kỳ**, KHÔNG đổi khi click ngày).
 - **Bảng "Tổng quan theo ngày" FULL luồng** (`<PipelineDailyOverview lane="tool">`, ngay TRÊN dải 2 hàng focus) — component dùng chung với Task Fulfillment (xem `FulfillmentWorkflow.md §4.6`). **Funnel TOÀN CỤC** (mọi đơn cả nhà máy) qua `GET /v1/fulfillment/daily-overview` (auth `OVERVIEW_ROLES` đã gồm Support). Lane "Soát tool" bung 4 hàng con: Đã soát / OK / Lỗi (`reviewed−ok`) / Chưa soát; kèm hàng Designer + 6 stage (dim) để thấy toàn luồng. Ăn cùng `from/to`; click 1 ngày → dùng chung `dayFilter` với dải focus dưới (cùng lọc list client-side).
 - **Dải tổng quan theo ngày (focus)** (`days[]` + `columnTotals`): 2 hàng **Chưa soát** + **In trả về**, mỗi cột 1 ngày `inProductionAt` (VN, cũ→mới; BE trả mới→cũ, FE reverse) + cột Tổng. **Click 1 ngày (header hoặc ô) → lọc DANH SÁCH bên dưới client-side** (so `inProductionAt`→ngày VN); click lại / nút "Đang lọc dd/MM ✕" để bỏ. Badge 2 tab list + đơn hiển thị theo ngày đang chọn; KPI/dải/thống kê giữ nguyên. ⚠️ list cap 500/kỳ → nếu 1 ngày vượt cap, số ở dải (đếm chuẩn từ aggregate) có thể > số dòng hiện.
 - **2 nhóm danh sách** (segmented, để support biết làm gì trước):
   1. **Cần làm lại** (In trả về) — ưu tiên (`source=tool-check + note=error`).
   2. **Chưa soát** — backlog (`toolResultNote` rỗng).
-  - **Cột EDIT trực tiếp** (mirror thứ tự + cell của bảng "Đơn theo xưởng"): Mockup · Mã đơn · Khách · Sản phẩm · Size/Màu · **Note kq Tool 1** (`ColorBadgeSelectCell`) · **File sửa lỗi** (`MultiIconSelectCell`) · **Ghi chú file lỗi** (`TextEditCell`) · **Lỗi xưởng** (`ProductionErrorSelectCell`). Support đổi Note kq Tool → 'ok' ngay tại đây → đơn về In (đổi list → refetch). Edit cell dùng chung `updateField` + `useWorkshopConfigStore` như bảng workshop; gate quyền qua `canEditField`.
+  - **Cột EDIT trực tiếp** (mirror thứ tự + cell của bảng "Đơn theo xưởng"): Mockup · Mã đơn · **Ưu tiên** (`PriorityBadge` + chip đếm ngược `formatCountdown`, chỉ hiển thị — sửa mức ưu tiên ở Bảng Workshop/Tab List, xem `Orders.md §17.2`; estimate bước `tool-check`, mốc `inProductionAt`, xem `Orders.md §17.4`) · Khách · Sản phẩm · Size/Màu · **Note kq Tool 1** (`ColorBadgeSelectCell`) · **File sửa lỗi** (`MultiIconSelectCell`) · **Ghi chú file lỗi** (`TextEditCell`) · **Lỗi xưởng** (`ProductionErrorSelectCell`). Support đổi Note kq Tool → 'ok' ngay tại đây → đơn về In (đổi list → refetch). Edit cell dùng chung `updateField` + `useWorkshopConfigStore` như bảng workshop; gate quyền qua `canEditField`. Cả 2 list sort `priority: -1` trước — đơn ưu tiên luôn lên đầu (xem `Orders.md §17.3`).
 - **Thống kê lỗi** (mọi đơn `source=tool-check` trong kỳ): theo **sản phẩm** (mockup + level), theo **khách hàng** (`userSku`), và **khách × loại lỗi hay gặp nhất**.
 
 ## 3. API / Schema
@@ -53,7 +53,7 @@ Support/Admin mở Dashboard → tab "Soát tool":
 
 Request `GetToolCheckOverviewDto` (`packages/shared/dtos/production-order.dto.ts`):
 ```ts
-{ days: '7'|'14'|'30'; from?: string; to?: string; type?: string; customer?: string; machineNumber?: string }
+{ days: '7'|'14'|'30'; from?: string; to?: string; type?: string; customer?: string; machineNumber?: string; priority?: '1'|'2'|'3' }
 ```
 
 Response `ToolCheckOverviewResDto.data`:
@@ -61,23 +61,24 @@ Response `ToolCheckOverviewResDto.data`:
 {
   checkedCount: number;          // toolCheckedAt ∈ kỳ
   errorCount: number;            // đang chờ support (= reworkList)
-  reworkList: ToolCheckOrder[];  // In trả về (source=tool-check + note=error) — thêm machineNumber
-  unreviewedList: ToolCheckOrder[]; // toolResultNote rỗng
+  reworkList: ToolCheckOrder[];  // In trả về (source=tool-check + note=error) — thêm machineNumber + priority, sort priority:-1 trước
+  unreviewedList: ToolCheckOrder[]; // toolResultNote rỗng — cùng sort priority:-1 trước
   byProduct: ToolCheckProductStat[];   // {type, fullName?, mockup?, level?, count}
   byCustomer: ToolCheckCustomerStat[]; // {userSku, count}
   topCustomerError: ToolCheckCustomerError[]; // {userSku, code, label?, count}
   days: ToolCheckDayRow[];       // {day, unreviewed, rework} — dải theo ngày (mới→cũ)
   columnTotals: { unreviewed: number; rework: number };
-  facets: {                      // options cho 3 dropdown (phạm vi chưa-soát∪tool-check, KHÔNG cross-narrow)
+  facets: {                      // options cho 4 dropdown (phạm vi chưa-soát∪tool-check, KHÔNG cross-narrow)
     type: ToolCheckFacet[];      // {value, count}
     customer: ToolCheckFacet[];
     machineNumber: ToolCheckFacet[];
+    priority: ToolCheckFacet[];  // value = '1'|'2'|'3' (string hoá từ number qua $toString), sort theo _id desc
   };
   rangeDays: number;
 }
 ```
 
-BE `getToolCheckOverview` thêm: 2 aggregate `groupBy day` (unreviewed/rework, áp cùng 3 filter) + 3 aggregate facet (`facetAgg` trên `facetScope` = window + alive + `$or[toolResultNote∈[null,''], productionErrorSource='tool-check']`, KHÔNG áp type/customer/machine). Tất cả gộp vào `Promise.all` sẵn có → 1 round-trip.
+BE `getToolCheckOverview` thêm: 2 aggregate `groupBy day` (unreviewed/rework, áp cùng 4 filter) + 4 aggregate facet (`facetAgg`/`priorityFacetAgg` trên `facetScope` = window + alive + `$or[toolResultNote∈[null,''], productionErrorSource='tool-check']`, KHÔNG áp type/customer/machine/priority). Tất cả gộp vào `Promise.all` sẵn có → 1 round-trip.
 
 `errorSource` (shared `ErrorSourceZod`, entity `WorkshopConfigEntity.errorSource`, `productionErrorSource`) = `'designer' | 'factory' | 'tool-check'`.
 

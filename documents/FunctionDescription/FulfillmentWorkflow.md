@@ -165,6 +165,8 @@ fulfillmentStages?: {
 };
 fulfillmentTimeline: TimelineEntry[];  // append-only history
 
+priority?: OrderPriority;  // 1=Ưu tiên/2=Ưu tiên cao/3=Ưu tiên nhất, optional — xem Orders.md §17. Sort key đầu (priority: -1) ở getMyTasks.
+
 type StageState = {
   status: 'waiting' | 'in-progress' | 'done' | 'rework';
   assignee?: string;          // = user._id
@@ -275,6 +277,7 @@ Default preset:
     - `rework` → `reworkAt` ("Quay lại: ...").
     - Hint tooltip on hover: format absolute + `dayjs.fromNow()` relative VI.
   - **ReworkCount badge** với `RotateCcw` icon (`×N` amber) — match Designer.
+  - **Priority badge** (`PriorityBadge`, `@/components/orders/cells/PrioritySelectCell`) cạnh productionId khi `order.priority` set + **chip hạn dự kiến** (`getStageDeadline(order.priority, myStage, waitingAt|startedAt)`, `@/utils/priorityEstimate`) trong hàng timestamp khi status ∈ {Waiting, InProgress} — đỏ nếu quá hạn. Xem `Orders.md §17`.
   - **Watching badge** (chỉ tab watching): "Đang ở: <stage>" với chevron sky.
   - **Production error note** (chỉ status rework): rounded amber alert box với `MessageSquareWarning` icon — clone từ Designer.
   - **Action buttons** inline ở footer (sub-component `CardAction`):

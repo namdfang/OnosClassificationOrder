@@ -857,8 +857,9 @@ export class DesignerStatsService {
         designerStatus: 1,
         inProductionAt: 1,
         productConfigId: 1,
+        priority: 1,
       })
-      .sort({ inProductionAt: -1 })
+      .sort({ priority: -1, inProductionAt: -1 })
       .lean();
 
     const UNMAPPED = 'unmapped';
@@ -882,6 +883,7 @@ export class DesignerStatsService {
         inProductionAt: o.inProductionAt
           ? new Date(o.inProductionAt as Date).toISOString()
           : undefined,
+        priority: o.priority as AssignBacklogOrder['priority'],
       });
       grouped.set(key, g);
     }
@@ -1055,6 +1057,7 @@ export class DesignerStatsService {
     from?: string,
     to?: string,
     machineNumber?: string,
+    priority?: string,
   ): Promise<{
     checkedCount: number;
     errorCount: number;
@@ -1065,7 +1068,12 @@ export class DesignerStatsService {
     topCustomerError: ToolCheckCustomerError[];
     days: ToolCheckDayRow[];
     columnTotals: { unreviewed: number; rework: number };
-    facets: { type: ToolCheckFacet[]; customer: ToolCheckFacet[]; machineNumber: ToolCheckFacet[] };
+    facets: {
+      type: ToolCheckFacet[];
+      customer: ToolCheckFacet[];
+      machineNumber: ToolCheckFacet[];
+      priority: ToolCheckFacet[];
+    };
     rangeDays: number;
   }> {
     const { start, end, days } = this.resolveVnWindow(rangeDays, from, to);
@@ -1074,6 +1082,7 @@ export class DesignerStatsService {
       if (type) m.type = type;
       if (customer) m.userSku = customer;
       if (machineNumber) m.machineNumber = machineNumber;
+      if (priority) m.priority = Number(priority);
       return m;
     };
     const dayExpr = {
@@ -1117,6 +1126,7 @@ export class DesignerStatsService {
       productionErrorCount: 1,
       machineNumber: 1,
       inProductionAt: 1,
+      priority: 1,
     };
 
     // Phạm vi facet = đơn Support quan tâm trong kỳ (chưa soát ∪ tool-check),
@@ -1139,6 +1149,14 @@ export class DesignerStatsService {
       ]);
     const toFacet = (rows: { _id: string; count: number }[]): ToolCheckFacet[] =>
       rows.filter((r) => r._id !== '').map((r) => ({ value: r._id, count: r.count }));
+    // `priority` là number → $toString để value ra chuỗi giống các facet khác.
+    // Sort theo `_id` desc (cao→thấp) thay vì count để dropdown ổn định theo thứ tự mức.
+    const priorityFacetAgg = () =>
+      this.orderModel.aggregate<{ _id: string; count: number }>([
+        { $match: facetScope },
+        { $group: { _id: { $ifNull: [{ $toString: '$priority' }, ''] }, count: { $sum: 1 } } },
+        { $sort: { _id: -1 } },
+      ]);
 
     const [
       checkedCount,
@@ -1152,12 +1170,17 @@ export class DesignerStatsService {
       typeFacetAgg,
       customerFacetAgg,
       machineFacetAgg,
+      priorityFacetAggRows,
     ] = await Promise.all([
         this.orderModel.countDocuments(checkedMatch),
-        this.orderModel.find(reworkMatch, proj).sort({ inProductionAt: -1 }).limit(LIST_CAP).lean(),
+        this.orderModel
+          .find(reworkMatch, proj)
+          .sort({ priority: -1, inProductionAt: -1 })
+          .limit(LIST_CAP)
+          .lean(),
         this.orderModel
           .find(unreviewedMatch, proj)
-          .sort({ inProductionAt: -1 })
+          .sort({ priority: -1, inProductionAt: -1 })
           .limit(LIST_CAP)
           .lean(),
         this.orderModel.aggregate<{ _id: string; count: number; cfg: string | null }>([
@@ -1201,10 +1224,11 @@ export class DesignerStatsService {
           { $match: reworkMatch },
           { $group: { _id: dayExpr, count: { $sum: 1 } } },
         ]),
-        // Facet options (phạm vi Support, KHÔNG áp 3 filter → ổn định).
+        // Facet options (phạm vi Support, KHÔNG áp 4 filter → ổn định).
         facetAgg('type'),
         facetAgg('userSku'),
         facetAgg('machineNumber'),
+        priorityFacetAgg(),
       ]);
 
     const toOrder = (o: Record<string, unknown>): ToolCheckOrder => ({
@@ -1226,6 +1250,7 @@ export class DesignerStatsService {
       inProductionAt: o.inProductionAt
         ? new Date(o.inProductionAt as Date).toISOString()
         : undefined,
+      priority: o.priority as ToolCheckOrder['priority'],
     });
 
     // Resolve mockup/level/fullName cho byProduct (join productConfig qua $max cfg).
@@ -1302,6 +1327,7 @@ export class DesignerStatsService {
         type: toFacet(typeFacetAgg),
         customer: toFacet(customerFacetAgg),
         machineNumber: toFacet(machineFacetAgg),
+        priority: toFacet(priorityFacetAggRows),
       },
       rangeDays: days.length,
     };
@@ -1536,7 +1562,11 @@ export class DesignerStatsService {
       inProductionAt: 1,
     };
     const [data, total] = await Promise.all([
-      this.orderModel.find(match, proj).sort({ inProductionAt: -1 }).limit(500).lean(),
+      this.orderModel
+        .find(match, proj)
+        .sort({ priority: -1, inProductionAt: -1 })
+        .limit(500)
+        .lean(),
       this.orderModel.countDocuments(match),
     ]);
     return { data: data.map((d) => ({ ...d, _id: String(d._id) })), total };

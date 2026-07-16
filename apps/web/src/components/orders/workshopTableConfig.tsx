@@ -1,10 +1,14 @@
 import React from 'react';
+import { Clock } from 'lucide-react';
 import { DesignerStatus, WorkshopConfigCategory } from 'shared';
 
 import { Badge } from '@/components/ui/badge';
 import { CopyButton } from '@/components/common/CopyButton';
 import { Hint } from '@/components/common/Hint';
+import { useNow } from '@/hooks/useNow';
+import { cn } from '@/utils/cn';
 import { formatDate } from '@/utils/date';
+import { formatCountdown, getActiveStageKey, getStageDeadline } from '@/utils/priorityEstimate';
 import { AssigneeSelectCell } from '@/components/orders/cells/AssigneeSelectCell';
 import { ColorBadgeSelectCell } from '@/components/orders/cells/ColorBadgeSelectCell';
 import { DesignThumbsCell } from '@/components/orders/cells/DesignThumbsCell';
@@ -12,6 +16,7 @@ import { ErrorSourceCell } from '@/components/orders/cells/ErrorSourceCell';
 import { IconSelectCell } from '@/components/orders/cells/IconSelectCell';
 import { MultiIconSelectCell } from '@/components/orders/cells/MultiIconSelectCell';
 import { ImageThumbCell } from '@/components/orders/cells/ImageThumbCell';
+import { PrioritySelectCell } from '@/components/orders/cells/PrioritySelectCell';
 import { ProductionErrorSelectCell } from '@/components/orders/cells/ProductionErrorSelectCell';
 import { TextEditCell } from '@/components/orders/cells/TextEditCell';
 
@@ -39,6 +44,7 @@ export type WorkshopOrderRow = {
   isMapped?: boolean;
   productConfig?: { fullName?: string };
 
+  priority?: number;
   printStatus?: string;
   printStatusNote?: string;
   toolResult?: string;
@@ -135,6 +141,48 @@ export type WorkshopColMeta = {
   render: (row: WorkshopOrderRow, ctx: WorkshopRenderCtx) => React.ReactNode;
 };
 
+/**
+ * Cell "Ưu tiên" tách riêng thành component (thay vì render inline như các
+ * cột khác) vì chip đếm ngược cần `useNow` tick theo thời gian thực — hook chỉ
+ * hợp lệ khi gọi trong 1 component thật, không phải trong hàm `render()` được
+ * gọi lại mỗi hàng (số lần gọi hook sẽ đổi theo số dòng → vi phạm Rules of Hooks).
+ */
+function PriorityCell({ row, ctx }: { row: WorkshopOrderRow; ctx: WorkshopRenderCtx }) {
+  const activeStage = getActiveStageKey(row);
+  const stageState = activeStage
+    ? (row.fulfillmentStages?.[activeStage] as { waitingAt?: string; startedAt?: string } | undefined)
+    : undefined;
+  // Đơn chưa chạy bước nào (unassigned, chưa có designerAssignedAt) → tính
+  // giờ vào production làm mốc bắt đầu đếm ngược, thay vì bỏ trống estimate.
+  const enteredAt =
+    activeStage === 'designer'
+      ? row.designerStartedAt || row.designerAssignedAt || row.inProductionAt
+      : stageState?.startedAt || stageState?.waitingAt;
+  const deadline = activeStage ? getStageDeadline(row.priority, activeStage, enteredAt) : undefined;
+  const now = useNow(30_000);
+  const countdown = deadline ? formatCountdown(deadline, now) : undefined;
+  return (
+    <div className="flex flex-col gap-1 items-start">
+      <PrioritySelectCell
+        orderId={row._id}
+        value={row.priority}
+        canEdit={ctx.canEditField('priority')}
+        onUpdated={(v) => ctx.patchRow(row._id, { priority: v ?? undefined })}
+      />
+      {deadline && countdown && (
+        <span
+          className={cn(
+            'text-[10px] inline-flex items-center gap-1 whitespace-nowrap',
+            countdown.overdue ? 'text-rose-600 dark:text-rose-400' : 'text-muted-foreground',
+          )}
+        >
+          <Clock size={10} /> {countdown.text}
+        </span>
+      )}
+    </div>
+  );
+}
+
 export const WORKSHOP_COLS: WorkshopColMeta[] = [
   {
     key: 'productionId',
@@ -216,6 +264,13 @@ export const WORKSHOP_COLS: WorkshopColMeta[] = [
         </div>
       );
     },
+  },
+  {
+    key: 'priority',
+    label: 'Ưu tiên',
+    perm: 'order.field.priority.view',
+    width: 'min-w-[120px]',
+    render: (r, ctx) => <PriorityCell row={r} ctx={ctx} />,
   },
   {
     key: 'mockupTypeSize',

@@ -7,6 +7,7 @@ import {
   DesignerStatus,
   DesignerTransitionAction,
   FulfillmentStage,
+  OrderPriority,
   Status,
 } from '@shared/enums';
 import { PageResZod, ResZod } from '@shared/types';
@@ -97,6 +98,8 @@ export const DesignerTaskCardZod = z.object({
   machineNumber: z.string().optional(),
   toolResult: z.string().optional(),
   toolResultNote: z.string().optional(),
+  /** Mức ưu tiên (xem `production-order.dto.ts`) — hiện badge + hạn dự kiến trên card. */
+  priority: z.nativeEnum(OrderPriority).optional(),
   /** Ngày khách lên đơn + ngày vào sản xuất (hiển thị trên card + tooltip). */
   orderAt: z.date().optional(),
   inProductionAt: z.date().optional(),
@@ -427,6 +430,8 @@ export const AssignBacklogOrderZod = z.object({
   toolResultNote: z.string().optional(),
   designerStatus: z.string().optional(),
   inProductionAt: z.string().optional(),
+  /** Mức ưu tiên (xem `order-priority.ts`) — hiện badge + estimate (mốc `inProductionAt`, đơn chưa chạy bước nào). */
+  priority: z.nativeEnum(OrderPriority).optional(),
 });
 export type AssignBacklogOrder = z.infer<typeof AssignBacklogOrderZod>;
 

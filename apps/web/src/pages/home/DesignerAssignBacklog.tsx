@@ -1,5 +1,5 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
-import { ChevronDown, ChevronRight, Grab, ImageOff, UserPlus } from 'lucide-react';
+import { ChevronDown, ChevronRight, Clock, Grab, ImageOff, UserPlus } from 'lucide-react';
 import { toast } from 'sonner';
 import { PRODUCT_LEVEL_MAP, WorkshopConfigCategory } from 'shared';
 import type { AssignBacklogGroup, AssignBacklogOrder } from 'shared';
@@ -10,11 +10,14 @@ import { CopyButton } from '@/components/common/CopyButton';
 import { ImagePreviewDialog } from '@/components/common/ImagePreviewDialog';
 import { ImageThumbCell } from '@/components/orders/cells/ImageThumbCell';
 import { AssignDesignerDialog } from '@/components/orders/AssignDesignerDialog';
+import { PriorityBadge } from '@/components/orders/cells/PrioritySelectCell';
 import { RepositoryRemote } from '@/services';
+import { useNow } from '@/hooks/useNow';
 import { usePermission } from '@/hooks/usePermission';
 import { useWorkshopConfigStore } from '@/store/workshopConfigStore';
 import { handleAxiosError } from '@/utils';
 import { cn } from '@/utils/cn';
+import { formatCountdown, getStageDeadline } from '@/utils/priorityEstimate';
 
 // Role được TỰ NHẬN task về mình (self-claim) vs. role được gán cho người khác.
 const CLAIM_SELF_ROLES = ['Designer', 'DesignerLeader'];
@@ -48,6 +51,7 @@ export function DesignerAssignBacklog({ days = 7, from, to, type, customer, relo
   const [claiming, setClaiming] = useState(false);
   const [preview, setPreview] = useState<{ url?: string; originalUrl?: string; title?: string } | null>(null);
   const seqRef = useRef(0);
+  const now = useNow(30_000);
 
   const { roleName } = usePermission();
   const canClaimSelf = !!roleName && CLAIM_SELF_ROLES.includes(roleName);
@@ -297,6 +301,29 @@ export function DesignerAssignBacklog({ days = 7, from, to, type, customer, relo
                                 <span className="font-medium">{o.productionId}</span>
                                 <CopyButton value={o.productionId} label="Production ID" iconSize={11} />
                               </div>
+                            </td>
+                            <td className="px-2 py-1.5">
+                              {(() => {
+                                // Backlog = đơn chưa chạy bước "designer" — mốc vào bước
+                                // dùng thẳng `inProductionAt` (chưa có designerAssignedAt).
+                                const deadline = getStageDeadline(o.priority, 'designer', o.inProductionAt);
+                                const countdown = deadline ? formatCountdown(deadline, now) : undefined;
+                                return (
+                                  <div className="flex flex-col gap-1 items-start">
+                                    <PriorityBadge priority={o.priority} />
+                                    {deadline && countdown && (
+                                      <span
+                                        className={cn(
+                                          'text-[10px] inline-flex items-center gap-1 whitespace-nowrap',
+                                          countdown.overdue ? 'text-rose-600 dark:text-rose-400' : 'text-muted-foreground',
+                                        )}
+                                      >
+                                        <Clock size={10} /> {countdown.text}
+                                      </span>
+                                    )}
+                                  </div>
+                                );
+                              })()}
                             </td>
                             <td className="px-2 py-1.5 text-muted-foreground whitespace-nowrap">
                               {o.size || '—'}

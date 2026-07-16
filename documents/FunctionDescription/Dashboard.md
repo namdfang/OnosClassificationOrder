@@ -76,7 +76,7 @@ Layout (thứ tự render trên tab: **Bộ lọc chung → Tổng quan N ngày 
 **0c. Bảng "Cần gán designer"** (`DesignerAssignBacklog.tsx` — render **NGAY DƯỚI bảng tổng quan**; gom theo sản phẩm):
 - **Pool:** `toolResultNote ∉ [null,'','ok']` (đã soát & ≠ ok) **VÀ** (`unassigned` / `rejected` / `rework chưa ôm` = rework + assignee rỗng).
 - **Gom theo sản phẩm** (`productConfigId` → mockup/level/fullName; đơn chưa map → nhóm **"Chưa map"**). Mỗi nhóm header: checkbox chọn-cả-nhóm (tristate) + thu/mở + **ảnh mockup** (click → `ImagePreviewDialog`) + **badge level** + tên + count.
-- **Mở nhóm** → bảng đơn **rút gọn**: checkbox · ảnh (`ImageThumbCell` zoom) · productionId (+Copy) · size/color · Note Tool (badge) · Trạng thái designer (badge).
+- **Mở nhóm** → bảng đơn **rút gọn**: checkbox · ảnh (`ImageThumbCell` zoom) · productionId (+Copy) · **Ưu tiên** (`PriorityBadge` + chip đếm ngược `formatCountdown`, mốc `inProductionAt` — đơn ở đây luôn CHƯA chạy bước designer nên không cần `designerAssignedAt`, xem `Orders.md §17.4`) · size/color · Note Tool (badge) · Trạng thái designer (badge).
 - **Chọn đơn lẻ / cả nhóm** → nút **"Gán design (N)"** mở `AssignDesignerDialog` (tái dùng preview + `bulk-assign-designer`). Gán xong → refetch bảng này + `onAssigned()` bump `matrixToken` → **Tổng quan refetch cập nhật số Tổng tồn/Chưa gán**.
 - Data từ `GET /v1/designer/assign-backlog?days=7|14|30` (+ `type`/`customer`). v1 trả full compact rows (thu/mở chỉ là UI).
 
