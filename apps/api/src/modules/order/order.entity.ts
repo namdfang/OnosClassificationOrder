@@ -9,6 +9,8 @@ import {
   FULFILLMENT_STAGES,
   FulfillmentStage,
   FulfillmentStageStatus,
+  ORDER_PRIORITIES,
+  OrderPriority,
 } from 'shared';
 
 import type { FactoryDocument } from '../factory/factory.entity';
@@ -220,6 +222,15 @@ export class OrderEntity extends DatabaseEntityAbstract {
 
   @Prop({ ref: 'MachineTypeEntity', index: true })
   machineTypeId?: string;
+
+  /**
+   * Mức ưu tiên (1=thấp, 2=ưu tiên, 3=cao) — số càng cao càng ưu tiên. Không
+   * set = đơn thường, không hiện badge/estimate, không đẩy lên đầu list.
+   * Sửa qua updateField/bulkUpdateField (field `priority`) như mọi field
+   * workshop khác. Index vì đây là sort key chính ở mọi danh sách đơn.
+   */
+  @Prop({ type: Number, enum: ORDER_PRIORITIES, index: true })
+  priority?: OrderPriority;
 
   // ─── Workshop fields (Phase 2) ─────────────────────────────────
   // All values are workshop_config codes (string slugs). Editor cell maps

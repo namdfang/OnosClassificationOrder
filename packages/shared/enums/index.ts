@@ -14,3 +14,4 @@ export * from './permission-type';
 export * from './workshop-config-category';
 export * from './designer-status';
 export * from './fulfillment-stage';
+export * from './order-priority';

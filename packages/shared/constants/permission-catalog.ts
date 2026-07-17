@@ -83,6 +83,8 @@ export const PERMISSION_CATALOG: PermissionItem[] = [
   { code: 'order.field.productionErrorSource.view', label: 'Loại lỗi (des/xưởng)', group: 'order_field', field: 'productionErrorSource', mode: 'view' },
   { code: 'order.field.productionErrorSource.edit', label: 'Loại lỗi (des/xưởng)', group: 'order_field', field: 'productionErrorSource', mode: 'edit' },
   { code: 'order.field.designerStatus.view',      label: 'Trạng thái designer',   group: 'order_field', field: 'designerStatus',      mode: 'view' },
+  { code: 'order.field.priority.view',         label: 'Ưu tiên',               group: 'order_field', field: 'priority',        mode: 'view' },
+  { code: 'order.field.priority.edit',         label: 'Ưu tiên',               group: 'order_field', field: 'priority',        mode: 'edit' },
 
   // ─── Designer workflow ──────────────────────────────────────────
   { code: 'designer.team.manage',     label: 'Tạo/sửa/xoá sub-designer',                group: 'admin' },
@@ -136,6 +138,7 @@ export const DEFAULT_ROLE_PERMISSIONS: Partial<Record<RoleType, string[]>> = {
     'order.field.machineNumber.view',   'order.field.machineNumber.edit',
     'order.field.productionError.view',
     'order.field.productionErrorNote.view',
+    'order.field.priority.view',
     'order.log.view',
   ],
 
@@ -161,6 +164,7 @@ export const DEFAULT_ROLE_PERMISSIONS: Partial<Record<RoleType, string[]>> = {
     'order.field.productionErrorNote.view',
     'order.field.productionErrorSource.view',
     'order.field.designerStatus.view',
+    'order.field.priority.view',        'order.field.priority.edit',
     'designer.team.manage',
     'designer.task.assign',
     'designer.task.override',
@@ -184,6 +188,7 @@ export const DEFAULT_ROLE_PERMISSIONS: Partial<Record<RoleType, string[]>> = {
     'order.field.productionError.view',
     'order.field.productionErrorNote.view',
     'order.field.designerStatus.view',
+    'order.field.priority.view',
     'designer.task.transition',
   ],
 
@@ -211,6 +216,7 @@ export const DEFAULT_ROLE_PERMISSIONS: Partial<Record<RoleType, string[]>> = {
     'order.field.assignee.view',
     'order.field.assigneeNote.view',
     'order.field.designerStatus.view',
+    'order.field.priority.view',
     'order.log.view',
     // 5-stage workflow transitions on own task.
     'fulfillment.task.transition',

@@ -1,8 +1,8 @@
 import React, { useMemo, useState } from 'react';
-import { CheckCircle2, Download, PauseCircle, PlayCircle, UserPlus, X } from 'lucide-react';
+import { CheckCircle2, Download, Flag, PauseCircle, PlayCircle, UserPlus, X } from 'lucide-react';
 import { toast } from 'sonner';
 import type { OrderWorkshopField, WorkshopConfigCategory } from 'shared';
-import { ORDER_WORKSHOP_FIELDS } from 'shared';
+import { ORDER_PRIORITIES, ORDER_PRIORITY_LABELS, ORDER_WORKSHOP_FIELDS } from 'shared';
 
 import { Button } from '@/components/ui/button';
 import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
@@ -37,6 +37,9 @@ const FIELD_TO_CATEGORY: Record<OrderWorkshopField, WorkshopConfigCategory | nul
   machineNumber: 'machine' as WorkshopConfigCategory,
   productionError: 'production_error' as WorkshopConfigCategory,
   productionErrorNote: null,
+  productionErrorSource: null,
+  // Ưu tiên có nút + dialog bulk riêng (giống "Gán design") — không qua dropdown "Bulk update".
+  priority: null,
 };
 
 const FIELD_LABEL: Record<OrderWorkshopField, string> = {
@@ -52,10 +55,12 @@ const FIELD_LABEL: Record<OrderWorkshopField, string> = {
   machineNumber: 'Máy',
   productionError: 'Lỗi xưởng',
   productionErrorNote: 'Mô tả lỗi xưởng',
+  productionErrorSource: 'Loại lỗi (des/xưởng)',
+  priority: 'Ưu tiên',
 };
 
-/** Bulk update dropdown SKIP assignee — đã có dialog "Gán design" riêng. */
-const BULK_UPDATE_BLACKLIST: OrderWorkshopField[] = ['assignee'];
+/** Bulk update dropdown SKIP assignee + priority — đã có nút/dialog riêng ("Gán design" / "Ưu tiên"). */
+const BULK_UPDATE_BLACKLIST: OrderWorkshopField[] = ['assignee', 'priority'];
 
 interface Props {
   selectedIds: string[];
@@ -79,6 +84,9 @@ export function BulkEditToolbar({ selectedIds, onClear, onApplied }: Props) {
   const [holdReason, setHoldReason] = useState('');
   const [holding, setHolding] = useState(false);
   const [exporting, setExporting] = useState(false);
+  const [priorityOpen, setPriorityOpen] = useState(false);
+  const [priorityValue, setPriorityValue] = useState('');
+  const [applyingPriority, setApplyingPriority] = useState(false);
 
   // Export ĐÚNG các đơn đang tick chọn — gọi /orders/export với `ids` (bỏ qua
   // phân trang, đúng cả khi chọn xuyên trang vì BE lọc theo `_id`). Chỉ 1 sheet
@@ -118,6 +126,26 @@ export function BulkEditToolbar({ selectedIds, onClear, onApplied }: Props) {
       handleAxiosError(err);
     } finally {
       setHolding(false);
+    }
+  };
+
+  const submitPriority = async () => {
+    try {
+      setApplyingPriority(true);
+      const res = await RepositoryRemote.order.bulkUpdateField({
+        ids: selectedIds,
+        field: 'priority',
+        value: priorityValue || null,
+      });
+      const { matched, modified } = res.data?.data || { matched: 0, modified: 0 };
+      toast.success(`Đã update ${modified}/${matched} đơn`);
+      setPriorityOpen(false);
+      setPriorityValue('');
+      onApplied();
+    } catch (err) {
+      handleAxiosError(err);
+    } finally {
+      setApplyingPriority(false);
     }
   };
 
@@ -174,6 +202,11 @@ export function BulkEditToolbar({ selectedIds, onClear, onApplied }: Props) {
               <UserPlus size={14} /> Gán design
             </Button>
           )}
+          {canEditField('priority') && (
+            <Button size="sm" variant="secondary" onClick={() => setPriorityOpen(true)}>
+              <Flag size={14} /> Ưu tiên
+            </Button>
+          )}
           {canHold && (
             <>
               <Button
@@ -222,6 +255,42 @@ export function BulkEditToolbar({ selectedIds, onClear, onApplied }: Props) {
         onClose={() => setAssignOpen(false)}
         onApplied={onApplied}
       />
+
+      <Dialog
+        open={priorityOpen}
+        onOpenChange={(o) => (o ? setPriorityOpen(true) : (setPriorityValue(''), setPriorityOpen(false)))}
+      >
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle>Đổi mức ưu tiên {selectedIds.length} đơn</DialogTitle>
+          </DialogHeader>
+          <div className="space-y-1.5">
+            <label className="text-xs font-medium">Mức ưu tiên</label>
+            <select
+              value={priorityValue}
+              onChange={(e) => setPriorityValue(e.target.value)}
+              className="w-full h-9 rounded-md border border-input bg-background px-3 text-sm"
+              autoFocus
+            >
+              <option value="">— Bỏ ưu tiên —</option>
+              {ORDER_PRIORITIES.map((p) => (
+                <option key={p} value={p}>
+                  {ORDER_PRIORITY_LABELS[p]}
+                </option>
+              ))}
+            </select>
+          </div>
+          <DialogFooter>
+            <Button variant="ghost" onClick={() => setPriorityOpen(false)} disabled={applyingPriority}>
+              Đóng
+            </Button>
+            <Button onClick={submitPriority} disabled={applyingPriority}>
+              {applyingPriority && <Spinner size={13} className="mr-1.5" />}
+              Áp dụng
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
 
       <Dialog open={holdOpen} onOpenChange={(o) => (o ? setHoldOpen(true) : (setHoldReason(''), setHoldOpen(false)))}>
         <DialogContent className="sm:max-w-md">

@@ -1111,3 +1111,45 @@ ok = !cancelledAt
 
 ### 16.5 Permissions
 Dùng **role gate `isAdmin`** (SuperAdmin/Admin) cả FE lẫn BE — KHÔNG thêm permission-catalog. Cancel là **soft** (`cancelledAt`), khác `deleteOrder` (`deletedAt`).
+
+## 17. Ưu tiên đơn hàng + hạn dự kiến từng bước
+
+> **File FE:** `apps/web/src/components/orders/cells/PrioritySelectCell.tsx` (`PrioritySelectCell` + `PriorityBadge` + `PRIORITY_META`), `apps/web/src/utils/priorityEstimate.ts` (`getStageDeadline` + `getActiveStageKey` + `formatCountdown`), `apps/web/src/hooks/useNow.ts` (tick chip đếm ngược), cột "Ưu tiên" (`PriorityCell`) trong `apps/web/src/components/orders/workshopTableConfig.tsx`, cell trong `apps/web/src/pages/orders/ListOrderTab.tsx`, nút + dialog bulk riêng trong `apps/web/src/components/orders/BulkEditToolbar.tsx`, cột hiển thị + filter trong `apps/web/src/pages/home/ToolCheckTab.tsx` (`toPriorityOpts`), badge + estimate trong `apps/web/src/pages/home/DesignerAssignBacklog.tsx`
+> **File BE:** `apps/api/src/modules/order/order.entity.ts` (`priority?: OrderPriority`), `apps/api/src/modules/order/order.service.ts` (`FIELD_CONFIG_CATEGORY`/`FIELD_EDIT_ROLES`/`assertPriorityValueValid` + sort `getOrders`/`getOrdersGroupedByType`/`exportOrders`/`getErrorLog`), `apps/api/src/modules/designer/designer-stats.service.ts` (`getToolCheckOverview` — filter `priority` + facet `priorityFacetAgg` + sort; `getAssignBacklog` — projection + map `priority` + sort; `getPersonErrorOrders` sort)
+> **Shared:** `packages/shared/enums/order-priority.ts` (`OrderPriority` 1=Ưu tiên/2=Ưu tiên cao/3=Ưu tiên nhất + `ORDER_PRIORITIES` + `ORDER_PRIORITY_LABELS`), `packages/shared/dtos/production-order.dto.ts` (`priority` trong `ProductionOrderZod` + `'priority'` trong `ORDER_WORKSHOP_FIELDS` + `ORDER_PRIORITY_STAGE_ESTIMATE_HOURS` cạnh `LIFECYCLE_STAGE_KEYS` + `priority` trong `GetToolCheckOverviewZod`/`ToolCheckOrderZod`/`ToolCheckOverviewResZod.facets`), `packages/shared/dtos/designer.dto.ts` (`priority` trong `AssignBacklogOrderZod`)
+> **API:** tái dùng `PATCH /v1/orders/:id/field` + `PATCH /v1/orders/bulk-field` (field=`priority`) — KHÔNG có endpoint riêng. `GET /designer/tool-check-overview` nhận thêm query `priority` ('1'|'2'|'3').
+
+### 17.1 Overview
+3 mức ưu tiên cố định (không qua workshop_config): **Ưu tiên** (1, xanh lam) / **Ưu tiên cao** (2, vàng) / **Ưu tiên nhất** (3, đỏ) — số càng cao càng ưu tiên. Không set = đơn thường (không badge, không estimate, không đẩy lên đầu). Field `priority` được đưa vào `ORDER_WORKSHOP_FIELDS` nên **tái dùng nguyên vẹn** pipeline `updateField`/`bulkUpdateField` (permission gate, audit log, cache invalidate) — chỉ thêm validate riêng (`assertPriorityValueValid`: chỉ nhận `'1'|'2'|'3'`|null) vì đây không phải field workshop_config.
+
+### 17.2 Sửa ưu tiên
+- **Bảng Workshop** (`OrderTableWorkshop.tsx`): cột "Ưu tiên" (đầu bảng, cạnh Production ID) — sửa từng dòng qua `PrioritySelectCell`; **bulk gán** qua nút riêng **"Ưu tiên"** (`Flag` icon) trên `BulkEditToolbar` — mirror pattern nút "Gán design" (`UserPlus` → `AssignDesignerDialog`): mở dialog riêng chọn 1 trong 3 mức/bỏ ưu tiên, KHÔNG nằm trong dropdown "Bulk update" chung (field `priority` nằm trong `BULK_UPDATE_BLACKLIST` cùng `assignee`).
+- **Tab List** (`ListOrderTab.tsx`): cột "Ưu tiên" tương tự (sửa từng dòng), **không có bulk** (tab này không có cơ chế chọn nhiều dòng).
+- **Tab "Soát tool"** (`ToolCheckTab.tsx`, dashboard): chỉ **hiển thị** (`PriorityBadge` + chip đếm ngược, không sửa được ở đây) — cột "Ưu tiên" cạnh "Mã đơn" trong cả 2 list `reworkList`/`unreviewedList` + dropdown filter "Ưu tiên" (4 cột filter cùng hàng với Sản phẩm/Khách hàng/Máy). Estimate tính theo bước `tool-check` (bước đầu `LIFECYCLE_STAGE_KEYS`), mốc `enteredAt` = thẳng `inProductionAt` (không có mốc riêng "vào hàng chờ soát"/"quay lại Support" trong dữ liệu — xem `Orders.md §17.4`). Muốn đổi mức ưu tiên của đơn → sửa ở Bảng Workshop/Tab List.
+- Permission: `order.field.priority.view` / `.edit` (permission-catalog, nhóm `order_field`). Fallback hard-code (`FIELD_EDIT_ROLES.priority`): Admin/SuperAdmin/Manager + DesignerLeader.
+
+### 17.3 Sort — đơn ưu tiên lên đầu
+`priority: -1` là **sort key đầu tiên** (trước mọi sort/trục nhóm khác) ở **toàn bộ danh sách đơn trong dự án** — đơn KHÔNG có `priority` (missing field) tự nhiên xếp cuối khi sort desc, không ảnh hưởng thứ tự đơn thường:
+- `OrderService.getOrders()` (List tab, non-grouped) + nhánh `sort=grouped` (aggregation `$sort` — batch in theo type/size, dùng bởi `OrderFactoryTab`/`PrintOrderTable`/`OrdersMiniTable`: `priority` đứng trước `type`/`__sizeRank` nên đơn ưu tiên trồi lên đầu toàn cục, chấp nhận batch bị chia nhỏ theo type để đơn gấp luôn được in trước) + `exportOrders()` (export "Đơn hàng theo xưởng").
+- `OrderService.getOrdersGroupedByType()` (Workshop table — trong từng nhóm type) + client sort `decoratedGroups` (`OrderTableWorkshop.tsx`, cùng comparator trước combo-count).
+- `OrderService.getErrorLog()` (tab "Nhật ký bù lỗi") — đứng trước sort theo tuổi lỗi `productionFirstErrorAt`.
+- Mọi query kanban: `DesignerTaskService.getMyTasks` (cả 7 cột), `FulfillmentTaskService.getMyTasks`.
+- `DesignerStatsService`: `getAssignBacklog()` (backlog "Cần gán"), `getToolCheckOverview()` (2 list `reworkRaw`/`unreviewedRaw` — tab "Soát tool"), `getPersonErrorOrders()` (drill-down "Lỗi theo người").
+
+**Ngoài phạm vi (cố ý không đụng):** `getCancelledOrders()` (dialog đơn đã hủy) — đơn hủy đã ra khỏi mọi công đoạn sản xuất (xem `CancelledOrders-ExcludeFromStages.md`), ưu tiên không còn ý nghĩa vận hành với đơn đã đóng.
+
+### 17.4 Hạn dự kiến từng bước (estimate) — chip đếm ngược
+Với đơn CÓ priority, hạn dự kiến của bước hiện tại = **thời điểm đơn VÀO bước đó** (`waitingAt`/`startedAt`/`designerAssignedAt` tuỳ bước) **+ số giờ cấu hình** theo `(priority, bước)` — map `ORDER_PRIORITY_STAGE_ESTIMATE_HOURS` (8 bước theo `LIFECYCLE_STAGE_KEYS`: tool-check/designer/6 stage fulfillment). **Hiện tại đặt đồng loạt 4 tiếng** cho mọi bước/mức (`DEFAULT_STAGE_ESTIMATE_HOURS`) — tinh chỉnh sau bằng cách sửa trực tiếp map, không cần đổi code gọi. Tính deadline thuần FE (`getStageDeadline`, `@/utils/priorityEstimate`).
+
+**Đơn CHƯA chạy bước nào** (`designerStatus` rỗng/`unassigned`, chưa có `currentFulfillmentStage`) — vẫn tính là đang chờ bước `designer` (`getActiveStageKey` coi `unassigned`/thiếu status = `designer`) + dùng **`inProductionAt`** (giờ vào sản xuất) làm mốc `enteredAt` khi field entered-at riêng của bước (`designerAssignedAt`/`waitingAt`...) chưa có — cả 3 nơi hiển thị (`PriorityCell`, `TaskCard`, `FulfillmentTaskCard`) đều fallback `... || inProductionAt`. Nhờ vậy đơn mới import/chưa ai nhận vẫn thấy đếm ngược ngay từ lúc vào sản xuất thay vì trống trơn.
+
+**Hiển thị dạng đếm ngược** (không phải giờ tuyệt đối) — `formatCountdown(deadline, now)` (cùng file `priorityEstimate.ts`) trả `"Còn 2h30p"` / `"Quá hạn 45p"` (đỏ, in đậm); hover vào chip mới thấy mốc giờ tuyệt đối (`HH:mm`) qua `Hint`. `now` tick lại mỗi 30s qua hook `useNow` (`@/hooks/useNow.ts`, `setInterval` + `useState`) để chip tự cập nhật real-time không cần refetch.
+- Trong `render()` thuần (không phải component — vd cột `WORKSHOP_COLS`) **KHÔNG được gọi hook trực tiếp** (số hàng đổi → vi phạm Rules of Hooks). Bảng Workshop tách riêng `PriorityCell` (component thật trong `workshopTableConfig.tsx`) rồi `render: (r, ctx) => <PriorityCell row={r} ctx={ctx} />` — Kanban Designer/Fulfillment gọi `useNow` thẳng vì `TaskCard`/`FulfillmentTaskCard` vốn đã là component.
+
+Hiển thị (chip đồng hồ, đỏ nếu quá hạn):
+- **Kanban Designer** (`TaskCard.tsx`): bước `designer`, chỉ khi status ∈ {Assigned, InProgress}.
+- **Kanban Fulfillment** (`FulfillmentTaskCard.tsx`): bước = `myStage`, chỉ khi status ∈ {Waiting, InProgress}.
+- **Bảng Workshop**: cột "Ưu tiên" (`PriorityCell`) tự suy bước hiện tại qua `getActiveStageKey` (ưu tiên `currentFulfillmentStage`, fallback `designer` cho assigned/in-progress/rework/unassigned/thiếu status).
+- **Dashboard → backlog "Cần gán designer"** (`DesignerAssignBacklog.tsx`, xem `Dashboard.md §0c`): bước luôn = `designer`, mốc `enteredAt` = thẳng `inProductionAt` (mọi đơn trong backlog này chưa từng chạy bước designer). `useNow` gọi 1 lần ở component cha, truyền `now` xuống từng dòng trong `.map()`.
+- **Dashboard → tab "Soát tool"** (`ToolCheckTab.tsx`, xem `ToolCheckWorkflow.md §2.3`): bước luôn = `tool-check`, mốc `enteredAt` = thẳng `inProductionAt` (cả `reworkList` lẫn `unreviewedList` — không có mốc riêng "vào hàng chờ soát"/"quay lại Support"). `renderRow` là closure bên trong component (không phải hàm module-level như `WORKSHOP_COLS`) nên đọc thẳng `now` từ state cha, không cần tách component riêng.
+- **Tab List**: KHÔNG hiện estimate (view này không có thông tin bước/stage nào khác để tính mốc).

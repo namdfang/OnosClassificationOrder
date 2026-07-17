@@ -437,16 +437,16 @@ export class DesignerTaskService {
       await Promise.all([
         this.orderModel
           .find({ ...baseFilter, designerStatus: DesignerStatus.Assigned })
-          .sort({ designerAssignedAt: -1, inProductionAt: -1 })
+          .sort({ priority: -1, designerAssignedAt: -1, inProductionAt: -1 })
           .lean(),
         this.orderModel
           .find({ ...baseFilter, designerStatus: DesignerStatus.InProgress })
-          .sort({ designerStartedAt: -1, inProductionAt: -1 })
+          .sort({ priority: -1, designerStartedAt: -1, inProductionAt: -1 })
           .lean(),
         // "Cần làm lại" — loại đơn đang giữ ở Soát tool (chờ Support) → watching.
         this.orderModel
           .find({ ...baseFilter, ...notMarker, designerStatus: DesignerStatus.Rework })
-          .sort({ designerReworkAt: -1, inProductionAt: -1 })
+          .sort({ priority: -1, designerReworkAt: -1, inProductionAt: -1 })
           .lean(),
         // "Đã xong" = done KHÔNG dính lỗi (designerReworkCount = 0/thiếu), đơn
         // KHÔNG bị đẩy về Soát tool.
@@ -457,7 +457,7 @@ export class DesignerTaskService {
             designerStatus: DesignerStatus.Done,
             designerReworkCount: { $in: [0, null] },
           })
-          .sort({ designerCompletedAt: -1 })
+          .sort({ priority: -1, designerCompletedAt: -1 })
           .lean(),
         // "Đã sửa" = done SAU KHI sửa lỗi (designerReworkCount > 0).
         this.orderModel
@@ -467,7 +467,7 @@ export class DesignerTaskService {
             designerStatus: DesignerStatus.Done,
             designerReworkCount: { $gt: 0 },
           })
-          .sort({ designerCompletedAt: -1 })
+          .sort({ priority: -1, designerCompletedAt: -1 })
           .lean(),
         // "Đang chờ quay lại" — đơn CỦA MÌNH (assignee scope ở baseFilter) đang
         // giữ ở Soát tool phía trên; task đã xong/đang chờ làm lại. Sau khi Support
@@ -478,11 +478,11 @@ export class DesignerTaskService {
             ...toolCheckMarker,
             designerStatus: { $in: [DesignerStatus.Done, DesignerStatus.Rework] },
           })
-          .sort({ inProductionAt: -1 })
+          .sort({ priority: -1, inProductionAt: -1 })
           .lean(),
         this.orderModel
           .find(rejectedFilter)
-          .sort({ updatedAt: -1, inProductionAt: -1 })
+          .sort({ priority: -1, updatedAt: -1, inProductionAt: -1 })
           .lean(),
       ]);
 
@@ -977,6 +977,7 @@ export class DesignerTaskService {
     errorFile: (o.errorFile as string[]) || undefined,
     errorFileNote: (o.errorFileNote as string) || undefined,
     designerRejections: (o.designerRejections as DesignerTaskCard['designerRejections']) || undefined,
+    priority: (o.priority as DesignerTaskCard['priority']) || undefined,
   });
 
   private resolveDateRange(from?: string, to?: string): { start: Date; end: Date } {

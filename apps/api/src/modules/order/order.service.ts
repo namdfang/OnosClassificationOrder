@@ -147,6 +147,11 @@ const FIELD_CONFIG_CATEGORY: Record<OrderWorkshopField, WorkshopConfigCategory |
   machineNumber: WorkshopConfigCategory.Machine,
   productionError: WorkshopConfigCategory.ProductionError,
   productionErrorNote: null, // free text
+  // Fixed enum ('designer'|'factory'|'tool-check') — không qua workshop_config.
+  productionErrorSource: null,
+  // Không phải workshop_config — validate riêng qua nhánh `priority` trong
+  // updateField/bulkUpdateField (chỉ nhận '1'|'2'|'3'|null).
+  priority: null,
 };
 
 const ADMIN_ROLES: RoleType[] = [RoleType.SuperAdmin, RoleType.Admin, RoleType.Manager];
@@ -184,6 +189,8 @@ const FIELD_EDIT_ROLES: Record<OrderWorkshopField, RoleType[]> = {
   productionError: [...ADMIN_ROLES, RoleType.Fulfillment],
   productionErrorNote: [...ADMIN_ROLES, RoleType.Fulfillment],
   productionErrorSource: [...ADMIN_ROLES, RoleType.DesignerLeader, RoleType.Fulfillment],
+  // Ưu tiên là quyết định điều phối — chỉ admin-tier + leader gán.
+  priority: [...ADMIN_ROLES, RoleType.DesignerLeader],
 };
 
 const READY_FOR_FULFILL_CODE = 'ok';
@@ -1178,6 +1185,14 @@ export class OrderService implements OnModuleInit {
     }
   }
 
+  /** `priority` không qua workshop_config — chỉ nhận '1'|'2'|'3' hoặc null (bỏ chọn). */
+  private assertPriorityValueValid(value: string | string[] | null): void {
+    const v = Array.isArray(value) ? value[0] ?? null : value;
+    if (v !== null && v !== '' && !['1', '2', '3'].includes(v)) {
+      throw new BadRequestException(`Invalid priority value "${v}"`);
+    }
+  }
+
   private buildListCacheKey(dto: GetProductionOrdersDto, roleName?: RoleType): string {
     const norm = {
       page: dto.page,
@@ -1517,7 +1532,7 @@ export class OrderService implements OnModuleInit {
             },
           },
         },
-        { $sort: { type: 1, __sizeRank: 1, fabricType: 1, inProductionAt: -1 } },
+        { $sort: { priority: -1, type: 1, __sizeRank: 1, fabricType: 1, inProductionAt: -1 } },
         { $skip: limit * (page - 1) },
         { $limit: limit },
         { $project: { _id: 1 } },
@@ -1538,7 +1553,7 @@ export class OrderService implements OnModuleInit {
     } else {
       const res = await this.orderRepository.findAllAndCount(filter, {
         paging: { skip: limit * (page - 1), limit },
-        sort: { [sort || 'inProductionAt']: order === 'asc' ? 1 : -1 },
+        sort: { priority: -1, [sort || 'inProductionAt']: order === 'asc' ? 1 : -1 },
         populate,
       });
       data = res.data as unknown[];
@@ -1581,7 +1596,7 @@ export class OrderService implements OnModuleInit {
       toolHasCodes,
     );
     const data = await this.orderRepository.findAll(filter, {
-      sort: { type: 1, size: 1, fabricType: 1, inProductionAt: -1 },
+      sort: { priority: -1, type: 1, size: 1, fabricType: 1, inProductionAt: -1 },
       populate: [
         { path: 'factory', select: ['name', 'shortName'] },
         { path: 'machineType', select: ['name', 'shortName'] },
@@ -1673,7 +1688,7 @@ export class OrderService implements OnModuleInit {
     ordersFilter.$and = andClauses;
 
     const orders = await this.orderRepository.findAll(ordersFilter, {
-      sort: { type: 1, size: 1, fabricType: 1, inProductionAt: -1 },
+      sort: { priority: -1, type: 1, size: 1, fabricType: 1, inProductionAt: -1 },
       populate: [
         { path: 'factory', select: ['name', 'shortName'] },
         { path: 'machineType', select: ['name', 'shortName'] },
@@ -4284,6 +4299,8 @@ export class OrderService implements OnModuleInit {
       // assignee là single-select — array bất hợp lệ.
       const v = Array.isArray(dto.value) ? dto.value[0] ?? null : dto.value;
       await this.assertAssigneeUserValid(v ?? null);
+    } else if (dto.field === 'priority') {
+      this.assertPriorityValueValid(dto.value);
     } else {
       await this.assertValueAllowed(dto.field, dto.value);
     }
@@ -4295,6 +4312,7 @@ export class OrderService implements OnModuleInit {
 
     const normalized = normalizeFieldValue(dto.field, dto.value);
     const patch: Record<string, unknown> = { [dto.field]: normalized };
+    if (dto.field === 'priority') patch.priority = normalized ? Number(normalized) : null;
 
     if (dto.field === 'toolResultNote') {
       patch.readyForFulfill = normalized === READY_FOR_FULFILL_CODE;
@@ -4649,12 +4667,15 @@ export class OrderService implements OnModuleInit {
     if (dto.field === 'assignee') {
       const v = Array.isArray(dto.value) ? dto.value[0] ?? null : dto.value;
       await this.assertAssigneeUserValid(v ?? null);
+    } else if (dto.field === 'priority') {
+      this.assertPriorityValueValid(dto.value);
     } else {
       await this.assertValueAllowed(dto.field, dto.value);
     }
 
     const normalized = normalizeFieldValue(dto.field, dto.value);
     const patch: Record<string, unknown> = { [dto.field]: normalized };
+    if (dto.field === 'priority') patch.priority = normalized ? Number(normalized) : null;
     // (Side-effect fields toolResultNote/productionError/productionErrorSource đã
     //  return sớm ở trên qua delegate updateField — nhánh dưới chỉ còn assignee +
     //  các field thuần config không side-effect.)
@@ -6663,7 +6684,7 @@ export class OrderService implements OnModuleInit {
     const [pageRes, urgencyAgg] = await Promise.all([
       this.orderRepository.findAllAndCount(filter, {
         paging: { skip, limit },
-        sort,
+        sort: { priority: -1, ...sort },
         populate: [
           { path: 'factory', select: ['name', 'shortName'] },
           { path: 'machineType', select: ['name', 'shortName'] },

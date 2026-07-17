@@ -1,7 +1,10 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
-import { AlertTriangle, FileSearch, PackageSearch, RefreshCw, Users, X } from 'lucide-react';
-import { PRODUCT_LEVEL_MAP, WorkshopConfigCategory } from 'shared';
+import { AlertTriangle, Clock, FileSearch, PackageSearch, RefreshCw, Users, X } from 'lucide-react';
+import { ORDER_PRIORITY_LABELS, PRODUCT_LEVEL_MAP, WorkshopConfigCategory } from 'shared';
 import type {
+  OrderPriority,
+  ToolCheckCustomerError,
+  ToolCheckCustomerStat,
   ToolCheckDayRow,
   ToolCheckErrorRow,
   ToolCheckFacet,
@@ -21,12 +24,16 @@ import { TooltipProvider } from '@/components/ui/tooltip';
 import { ColorBadgeSelectCell } from '@/components/orders/cells/ColorBadgeSelectCell';
 import { ImageThumbCell } from '@/components/orders/cells/ImageThumbCell';
 import { MultiIconSelectCell } from '@/components/orders/cells/MultiIconSelectCell';
+import { PriorityBadge } from '@/components/orders/cells/PrioritySelectCell';
 import { ProductionErrorSelectCell } from '@/components/orders/cells/ProductionErrorSelectCell';
 import { TextEditCell } from '@/components/orders/cells/TextEditCell';
+import { useNow } from '@/hooks/useNow';
 import { usePermission } from '@/hooks/usePermission';
 import { RepositoryRemote } from '@/services';
 import { useWorkshopConfigStore } from '@/store/workshopConfigStore';
 import { handleAxiosError } from '@/utils';
+import { cn } from '@/utils/cn';
+import { formatCountdown, getStageDeadline } from '@/utils/priorityEstimate';
 
 interface Overview {
   checkedCount: number;
@@ -36,7 +43,12 @@ interface Overview {
   errorHistory: ToolCheckErrorRow[];
   days: ToolCheckDayRow[];
   columnTotals: { unreviewed: number; rework: number };
-  facets: { type: ToolCheckFacet[]; customer: ToolCheckFacet[]; machineNumber: ToolCheckFacet[] };
+  facets: {
+    type: ToolCheckFacet[];
+    customer: ToolCheckFacet[];
+    machineNumber: ToolCheckFacet[];
+    priority: ToolCheckFacet[];
+  };
   rangeDays: number;
 }
 
@@ -59,6 +71,13 @@ function fmtDayHead(day: string): { wd: string; dm: string } {
 }
 
 const toOpts = (f: ToolCheckFacet[] = []) => f.map((o) => ({ value: o.value, label: o.value, count: o.count }));
+/** Facet `priority` trả value dạng '1'|'2'|'3' — map sang label tiếng Việt (dropdown "Ưu tiên"). */
+const toPriorityOpts = (f: ToolCheckFacet[] = []) =>
+  f.map((o) => ({
+    value: o.value,
+    label: ORDER_PRIORITY_LABELS[Number(o.value) as OrderPriority] || o.value,
+    count: o.count,
+  }));
 
 /** Key định danh khách = userSku + userEmail (1 khách = cặp này). */
 const custKey = (r: { userSku?: string; userEmail?: string }) => `${r.userSku ?? ''}|||${r.userEmail ?? ''}`;
@@ -79,6 +98,7 @@ export default function ToolCheckTab() {
   const [filterType, setFilterType] = useState('');
   const [filterCustomer, setFilterCustomer] = useState('');
   const [filterMachine, setFilterMachine] = useState('');
+  const [filterPriority, setFilterPriority] = useState('');
   // Ngày đang lọc (YYYY-MM-DD VN) — click 1 cột trong dải ngày; chỉ lọc DANH
   // SÁCH client-side, KPI/dải/thống kê giữ nguyên cả kỳ.
   const [dayFilter, setDayFilter] = useState('');
@@ -92,6 +112,7 @@ export default function ToolCheckTab() {
   const [listTab, setListTab] = useState<ListTab>('rework');
   const [preview, setPreview] = useState<{ url?: string; originalUrl?: string; title?: string } | null>(null);
   const seqRef = useRef(0);
+  const now = useNow(30_000);
 
   const fetchData = () => {
     const seq = ++seqRef.current;
@@ -104,6 +125,7 @@ export default function ToolCheckTab() {
           ...(filterType ? { type: filterType } : {}),
           ...(filterCustomer ? { customer: filterCustomer } : {}),
           ...(filterMachine ? { machineNumber: filterMachine } : {}),
+          ...(filterPriority ? { priority: filterPriority } : {}),
         });
         if (seq !== seqRef.current) return;
         setData((res.data?.data || null) as Overview | null);
@@ -122,17 +144,17 @@ export default function ToolCheckTab() {
     setSelType('');
     fetchData();
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [dateFrom, dateTo, filterType, filterCustomer, filterMachine]);
+  }, [dateFrom, dateTo, filterType, filterCustomer, filterMachine, filterPriority]);
 
   // Patch 1 đơn trong cả 2 list (optimistic) sau khi edit cell.
   const patchRow = (id: string, partial: Partial<ToolCheckOrder>) =>
     setData((prev) =>
       prev
         ? {
-            ...prev,
-            reworkList: prev.reworkList.map((o) => (o._id === id ? { ...o, ...partial } : o)),
-            unreviewedList: prev.unreviewedList.map((o) => (o._id === id ? { ...o, ...partial } : o)),
-          }
+          ...prev,
+          reworkList: prev.reworkList.map((o) => (o._id === id ? { ...o, ...partial } : o)),
+          unreviewedList: prev.unreviewedList.map((o) => (o._id === id ? { ...o, ...partial } : o)),
+        }
         : prev,
     );
 
@@ -172,6 +194,30 @@ export default function ToolCheckTab() {
             <span className="font-medium whitespace-nowrap">{o.productionId}</span>
             <CopyButton value={o.productionId} label="Production ID" iconSize={11} />
           </div>
+        </td>
+        <td className="px-2 py-1.5">
+          {(() => {
+            // Cả 2 list (cần làm lại/chưa soát) đều đang chờ bước "tool-check"
+            // — mốc vào bước dùng thẳng `inProductionAt` (không có mốc riêng
+            // "quay lại Support"/"vào hàng chờ soát" trong dữ liệu).
+            const deadline = getStageDeadline(o.priority, 'tool-check', o.inProductionAt);
+            const countdown = deadline ? formatCountdown(deadline, now) : undefined;
+            return (
+              <div className="flex flex-col gap-1 items-start">
+                <PriorityBadge priority={o.priority} />
+                {deadline && countdown && (
+                  <span
+                    className={cn(
+                      'text-[10px] inline-flex items-center gap-1 whitespace-nowrap',
+                      countdown.overdue ? 'text-rose-600 dark:text-rose-400' : 'text-muted-foreground',
+                    )}
+                  >
+                    <Clock size={10} /> {countdown.text}
+                  </span>
+                )}
+              </div>
+            );
+          })()}
         </td>
         <td className="px-2 py-1.5 text-muted-foreground whitespace-nowrap">{o.userSku || '—'}</td>
         <td className="px-2 py-1.5 text-muted-foreground max-w-[200px] truncate" title={o.type}>
@@ -316,375 +362,377 @@ export default function ToolCheckTab() {
 
   return (
     <TooltipProvider delayDuration={200}>
-    <div className="space-y-5">
-      {/* Filter bar (thời gian) */}
-      <div className="rounded-lg border border-border bg-card p-3 flex items-center gap-2 flex-wrap">
-        <FileSearch size={16} className="text-indigo-600" />
-        <span className="text-sm font-semibold">Soát tool</span>
-        <span className="hidden md:inline text-[11px] text-muted-foreground">
-          — đơn cần làm lại + backlog chưa soát cho Support
-        </span>
-        <Button variant="ghost" size="sm" className="ml-auto" onClick={fetchData} disabled={loading}>
-          <RefreshCw size={13} className={loading ? 'animate-spin' : ''} />
-        </Button>
-        <DateRangePicker
-          variant="inline"
-          from={dateFrom}
-          to={dateTo}
-          onChange={(f, t) => {
-            setDateFrom(f);
-            setDateTo(t);
-          }}
-        />
-        {/* Hàng filter: Sản phẩm / Khách / Máy — options từ facet BE (cả kỳ). */}
-        <div className="w-full grid grid-cols-1 sm:grid-cols-3 gap-2">
-          <SelectFilter
-            label="Sản phẩm"
-            value={filterType}
-            onChange={setFilterType}
-            options={toOpts(data?.facets.type)}
+      <div className="space-y-5">
+        {/* Filter bar (thời gian) */}
+        <div className="rounded-lg border border-border bg-card p-3 flex items-center gap-2 flex-wrap">
+          <FileSearch size={16} className="text-indigo-600" />
+          <span className="text-sm font-semibold">Soát tool</span>
+          <span className="hidden md:inline text-[11px] text-muted-foreground">
+            — đơn cần làm lại + backlog chưa soát cho Support
+          </span>
+          <Button variant="ghost" size="sm" className="ml-auto" onClick={fetchData} disabled={loading}>
+            <RefreshCw size={13} className={loading ? 'animate-spin' : ''} />
+          </Button>
+          <DateRangePicker
+            variant="inline"
+            from={dateFrom}
+            to={dateTo}
+            onChange={(f, t) => {
+              setDateFrom(f);
+              setDateTo(t);
+            }}
           />
-          <SelectFilter
-            label="Khách hàng"
-            value={filterCustomer}
-            onChange={setFilterCustomer}
-            options={toOpts(data?.facets.customer)}
-          />
-          <SelectFilter
-            label="Máy"
-            value={filterMachine}
-            onChange={setFilterMachine}
-            options={toOpts(data?.facets.machineNumber)}
-          />
+          {/* Hàng filter: Sản phẩm / Khách / Máy / Ưu tiên — options từ facet BE (cả kỳ). */}
+          <div className="w-full grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-2">
+            <SelectFilter
+              label="Sản phẩm"
+              value={filterType}
+              onChange={setFilterType}
+              options={toOpts(data?.facets.type)}
+            />
+            <SelectFilter
+              label="Khách hàng"
+              value={filterCustomer}
+              onChange={setFilterCustomer}
+              options={toOpts(data?.facets.customer)}
+            />
+            <SelectFilter
+              label="Máy"
+              value={filterMachine}
+              onChange={setFilterMachine}
+              options={toOpts(data?.facets.machineNumber)}
+            />
+            <SelectFilter
+              label="Ưu tiên"
+              value={filterPriority}
+              onChange={setFilterPriority}
+              options={toPriorityOpts(data?.facets.priority)}
+            />
+          </div>
         </div>
-      </div>
 
-      {/* Tổng quan theo ngày FULL luồng (toàn nhà máy) — highlight lane Soát tool.
+        {/* Tổng quan theo ngày FULL luồng (toàn nhà máy) — highlight lane Soát tool.
           Ăn cùng filter ngày; click 1 ngày → lọc danh sách bên dưới (dùng chung
           dayFilter với dải focus phía dưới). */}
-      <PipelineDailyOverview
-        lane="tool"
-        from={dateFrom}
-        to={dateTo}
-        dayFilter={dayFilter || undefined}
-        onPickDay={toggleDay}
-        caption="— TOÀN nhà máy · lane Soát tool được tô đậm · di chuột xem chi tiết · bấm 1 ngày để lọc danh sách"
-      />
+        <PipelineDailyOverview
+          lane="tool"
+          from={dateFrom}
+          to={dateTo}
+          dayFilter={dayFilter || undefined}
+          onPickDay={toggleDay}
+          caption="— TOÀN nhà máy · lane Soát tool được tô đậm · di chuột xem chi tiết · bấm 1 ngày để lọc danh sách"
+        />
 
-      {/* Dải tổng quan theo ngày — Chưa soát + In trả về. Click 1 ngày → lọc
+        {/* Dải tổng quan theo ngày — Chưa soát + In trả về. Click 1 ngày → lọc
           danh sách bên dưới (client-side); click lại/✕ để bỏ. */}
-      <div className="rounded-lg border border-border bg-card">
-        <div className="flex items-center gap-2 px-3 py-2 border-b border-border">
-          <span className="text-sm font-semibold">Tổng quan theo ngày</span>
-          <span className="hidden sm:inline text-[11px] text-muted-foreground">
-            — bấm 1 ngày để lọc danh sách bên dưới
-          </span>
-          {dayFilter && (
-            <button
-              type="button"
-              onClick={() => setDayFilter('')}
-              className="ml-auto inline-flex items-center gap-1 text-[11px] rounded-full bg-indigo-100 dark:bg-indigo-500/20 text-indigo-700 dark:text-indigo-300 px-2 py-0.5"
-            >
-              Đang lọc {fmtDayHead(dayFilter).dm}
-              <X size={11} />
-            </button>
+        <div className="rounded-lg border border-border bg-card">
+          <div className="flex items-center gap-2 px-3 py-2 border-b border-border">
+            <span className="text-sm font-semibold">Tổng quan theo ngày</span>
+            <span className="hidden sm:inline text-[11px] text-muted-foreground">
+              — bấm 1 ngày để lọc danh sách bên dưới
+            </span>
+            {dayFilter && (
+              <button
+                type="button"
+                onClick={() => setDayFilter('')}
+                className="ml-auto inline-flex items-center gap-1 text-[11px] rounded-full bg-indigo-100 dark:bg-indigo-500/20 text-indigo-700 dark:text-indigo-300 px-2 py-0.5"
+              >
+                Đang lọc {fmtDayHead(dayFilter).dm}
+                <X size={11} />
+              </button>
+            )}
+          </div>
+          {days.length === 0 ? (
+            <p className="text-xs text-muted-foreground text-center py-6">Không có dữ liệu.</p>
+          ) : (
+            <div className="overflow-x-auto">
+              <table className="w-full text-[13px] tabular-nums border-separate border-spacing-0">
+                <thead>
+                  <tr>
+                    <th className="sticky left-0 z-20 bg-card text-left font-medium px-3 py-2 border-b border-border min-w-[110px]">
+                      Chỉ số
+                    </th>
+                    {days.map((d) => {
+                      const { wd, dm } = fmtDayHead(d.day);
+                      const active = dayFilter === d.day;
+                      return (
+                        <th
+                          key={d.day}
+                          onClick={() => toggleDay(d.day)}
+                          className={`font-medium px-1.5 py-1.5 border-b border-l border-border text-center min-w-[58px] cursor-pointer transition-colors ${active ? 'bg-indigo-100 dark:bg-indigo-500/25' : 'bg-card hover:bg-muted/60'
+                            }`}
+                        >
+                          <div className="text-[11px] text-muted-foreground leading-tight">{wd}</div>
+                          <div className="leading-tight font-semibold">{dm}</div>
+                        </th>
+                      );
+                    })}
+                    <th className="bg-muted/30 font-semibold px-2 py-1.5 border-b border-l border-border text-center min-w-[58px]">
+                      Tổng
+                    </th>
+                  </tr>
+                </thead>
+                <tbody>
+                  <DayMetricRow
+                    label="Chưa soát"
+                    cls="text-slate-600 dark:text-slate-300"
+                    days={days}
+                    dayFilter={dayFilter}
+                    pick={(d) => d.unreviewed}
+                    total={data?.columnTotals.unreviewed ?? 0}
+                    onPick={toggleDay}
+                  />
+                  <DayMetricRow
+                    label="In trả về"
+                    cls="text-amber-600"
+                    days={days}
+                    dayFilter={dayFilter}
+                    pick={(d) => d.rework}
+                    total={data?.columnTotals.rework ?? 0}
+                    onPick={toggleDay}
+                  />
+                </tbody>
+              </table>
+            </div>
           )}
         </div>
-        {days.length === 0 ? (
-          <p className="text-xs text-muted-foreground text-center py-6">Không có dữ liệu.</p>
-        ) : (
-          <div className="overflow-x-auto">
-            <table className="w-full text-[13px] tabular-nums border-separate border-spacing-0">
-              <thead>
-                <tr>
-                  <th className="sticky left-0 z-20 bg-card text-left font-medium px-3 py-2 border-b border-border min-w-[110px]">
-                    Chỉ số
-                  </th>
-                  {days.map((d) => {
-                    const { wd, dm } = fmtDayHead(d.day);
-                    const active = dayFilter === d.day;
+
+        {/* KPI */}
+        <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
+          {kpis.map((k) => (
+            <div key={k.key} className="rounded-lg border border-border bg-card p-3">
+              <div className="text-[11px] uppercase tracking-wide text-muted-foreground">{k.label}</div>
+              <div className={`text-2xl font-bold tabular-nums ${k.cls}`}>{k.value}</div>
+            </div>
+          ))}
+        </div>
+
+        {/* Danh sách: 2 nhóm (làm cái nào trước) */}
+        <div className="rounded-lg border border-border bg-card">
+          <div className="flex items-center gap-2 p-3 border-b border-border flex-wrap">
+            <div className="inline-flex rounded-md border border-border overflow-hidden text-xs">
+              <button
+                type="button"
+                onClick={() => setListTab('rework')}
+                className={`px-3 py-1.5 font-medium ${listTab === 'rework'
+                    ? 'bg-amber-500 text-white'
+                    : 'bg-background text-muted-foreground hover:bg-muted'
+                  }`}
+              >
+                Cần làm lại ({reworkList.length})
+              </button>
+              <button
+                type="button"
+                onClick={() => setListTab('unreviewed')}
+                className={`px-3 py-1.5 font-medium ${listTab === 'unreviewed'
+                    ? 'bg-slate-600 text-white'
+                    : 'bg-background text-muted-foreground hover:bg-muted'
+                  }`}
+              >
+                Chưa soát ({unreviewedList.length})
+              </button>
+            </div>
+            <span className="text-[11px] text-muted-foreground">
+              {listTab === 'rework'
+                ? '⚠ Ưu tiên — In trả về do thiếu file. Đổi Note kq Tool → "ok" để đẩy lại In.'
+                : 'Backlog đơn chưa có Note kq Tool.'}
+            </span>
+          </div>
+
+          {loading && !data ? (
+            <div className="py-10 text-center">
+              <Spinner size={20} className="text-muted-foreground" />
+            </div>
+          ) : activeList.length === 0 ? (
+            <p className="text-xs text-muted-foreground text-center py-10">
+              {listTab === 'rework' ? 'Không có đơn In trả về.' : 'Không có đơn chưa soát.'}
+            </p>
+          ) : (
+            <div className="overflow-x-auto">
+              <table className="w-full text-[13px]">
+                <thead>
+                  <tr className="border-b border-border/60 text-left text-[11px] uppercase text-muted-foreground whitespace-nowrap">
+                    <th className="w-12 px-1 py-2" />
+                    <th className="px-2 py-2">Mã đơn</th>
+                    <th className="px-2 py-2">Ưu tiên</th>
+                    <th className="px-2 py-2">Khách</th>
+                    <th className="px-2 py-2">Sản phẩm</th>
+                    <th className="px-2 py-2">Size/Màu</th>
+                    <th className="px-2 py-2">Note kq Tool 1</th>
+                    <th className="px-2 py-2">File sửa lỗi</th>
+                    <th className="px-2 py-2">Ghi chú file lỗi</th>
+                    <th className="px-2 py-2">Lỗi xưởng</th>
+                  </tr>
+                </thead>
+                <tbody>{activeList.map(renderRow)}</tbody>
+              </table>
+            </div>
+          )}
+        </div>
+
+        {/* Thống kê lịch sử lỗi Soát tool (kể cả đơn đã sửa) — đếm ĐƠN riêng biệt.
+          3 cột Khách → Sản phẩm → Loại lỗi, click Khách/Sản phẩm để lọc chéo. */}
+        <div className="rounded-lg border border-border bg-card">
+          <div className="flex items-center gap-2 px-4 py-2.5 border-b border-border flex-wrap">
+            <AlertTriangle size={15} className="text-amber-500" />
+            <span className="text-sm font-semibold">Thống kê lỗi Soát tool</span>
+            <span className="hidden md:inline text-[11px] text-muted-foreground">
+              — đơn từng bị người soát tool đánh Note kq Tool ≠ ok (kể cả đã sửa về ok), theo ngày vào SX · đếm số đơn
+            </span>
+            {(selCust || selType) && (
+              <button
+                type="button"
+                onClick={() => {
+                  setSelCust('');
+                  setSelType('');
+                }}
+                className="ml-auto inline-flex items-center gap-1 text-[11px] rounded-full bg-indigo-100 dark:bg-indigo-500/20 text-indigo-700 dark:text-indigo-300 px-2 py-0.5"
+              >
+                Bỏ lọc chéo
+                <X size={11} />
+              </button>
+            )}
+          </div>
+          <div className="grid grid-cols-1 lg:grid-cols-3 gap-4 p-4">
+            {/* Cột 1 — Khách hàng */}
+            <div>
+              <div className="flex items-center gap-2 mb-3">
+                <Users size={16} className="text-indigo-600" />
+                <h3 className="text-sm font-semibold">Theo khách hàng</h3>
+                {selCust && (
+                  <button
+                    type="button"
+                    onClick={() => setSelCust('')}
+                    className="ml-auto inline-flex items-center gap-1 text-[10px] rounded bg-muted px-1.5 py-0.5 text-muted-foreground"
+                  >
+                    <X size={10} /> bỏ chọn
+                  </button>
+                )}
+              </div>
+              {stats.byCustomer.length === 0 ? (
+                <p className="text-xs text-muted-foreground text-center py-6">Chưa có dữ liệu.</p>
+              ) : (
+                <div className="space-y-0.5 max-h-72 overflow-y-auto">
+                  {stats.byCustomer.map((c) => {
+                    const active = selCust === c.key;
                     return (
-                      <th
-                        key={d.day}
-                        onClick={() => toggleDay(d.day)}
-                        className={`font-medium px-1.5 py-1.5 border-b border-l border-border text-center min-w-[58px] cursor-pointer transition-colors ${
-                          active ? 'bg-indigo-100 dark:bg-indigo-500/25' : 'bg-card hover:bg-muted/60'
-                        }`}
+                      <button
+                        key={c.key}
+                        type="button"
+                        onClick={() => setSelCust((cur) => (cur === c.key ? '' : c.key))}
+                        className={`w-full flex items-center gap-2 text-[13px] rounded px-2 py-1 text-left transition-colors ${active ? 'bg-indigo-100 dark:bg-indigo-500/20' : 'hover:bg-muted/60'
+                          }`}
                       >
-                        <div className="text-[11px] text-muted-foreground leading-tight">{wd}</div>
-                        <div className="leading-tight font-semibold">{dm}</div>
-                      </th>
+                        <div className="flex-1 min-w-0">
+                          <div className="truncate font-medium" title={c.userSku || '(Chưa rõ)'}>
+                            {c.userSku || '(Chưa rõ)'}
+                          </div>
+                          {c.userEmail && (
+                            <div className="truncate text-[11px] text-muted-foreground" title={c.userEmail}>
+                              {c.userEmail}
+                            </div>
+                          )}
+                        </div>
+                        <span className="text-muted-foreground tabular-nums shrink-0">{c.count}</span>
+                      </button>
                     );
                   })}
-                  <th className="bg-muted/30 font-semibold px-2 py-1.5 border-b border-l border-border text-center min-w-[58px]">
-                    Tổng
-                  </th>
-                </tr>
-              </thead>
-              <tbody>
-                <DayMetricRow
-                  label="Chưa soát"
-                  cls="text-slate-600 dark:text-slate-300"
-                  days={days}
-                  dayFilter={dayFilter}
-                  pick={(d) => d.unreviewed}
-                  total={data?.columnTotals.unreviewed ?? 0}
-                  onPick={toggleDay}
-                />
-                <DayMetricRow
-                  label="In trả về"
-                  cls="text-amber-600"
-                  days={days}
-                  dayFilter={dayFilter}
-                  pick={(d) => d.rework}
-                  total={data?.columnTotals.rework ?? 0}
-                  onPick={toggleDay}
-                />
-              </tbody>
-            </table>
-          </div>
-        )}
-      </div>
-
-      {/* KPI */}
-      <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
-        {kpis.map((k) => (
-          <div key={k.key} className="rounded-lg border border-border bg-card p-3">
-            <div className="text-[11px] uppercase tracking-wide text-muted-foreground">{k.label}</div>
-            <div className={`text-2xl font-bold tabular-nums ${k.cls}`}>{k.value}</div>
-          </div>
-        ))}
-      </div>
-
-      {/* Danh sách: 2 nhóm (làm cái nào trước) */}
-      <div className="rounded-lg border border-border bg-card">
-        <div className="flex items-center gap-2 p-3 border-b border-border flex-wrap">
-          <div className="inline-flex rounded-md border border-border overflow-hidden text-xs">
-            <button
-              type="button"
-              onClick={() => setListTab('rework')}
-              className={`px-3 py-1.5 font-medium ${
-                listTab === 'rework'
-                  ? 'bg-amber-500 text-white'
-                  : 'bg-background text-muted-foreground hover:bg-muted'
-              }`}
-            >
-              Cần làm lại ({reworkList.length})
-            </button>
-            <button
-              type="button"
-              onClick={() => setListTab('unreviewed')}
-              className={`px-3 py-1.5 font-medium ${
-                listTab === 'unreviewed'
-                  ? 'bg-slate-600 text-white'
-                  : 'bg-background text-muted-foreground hover:bg-muted'
-              }`}
-            >
-              Chưa soát ({unreviewedList.length})
-            </button>
-          </div>
-          <span className="text-[11px] text-muted-foreground">
-            {listTab === 'rework'
-              ? '⚠ Ưu tiên — In trả về do thiếu file. Đổi Note kq Tool → "ok" để đẩy lại In.'
-              : 'Backlog đơn chưa có Note kq Tool.'}
-          </span>
-        </div>
-
-        {loading && !data ? (
-          <div className="py-10 text-center">
-            <Spinner size={20} className="text-muted-foreground" />
-          </div>
-        ) : activeList.length === 0 ? (
-          <p className="text-xs text-muted-foreground text-center py-10">
-            {listTab === 'rework' ? 'Không có đơn In trả về.' : 'Không có đơn chưa soát.'}
-          </p>
-        ) : (
-          <div className="overflow-x-auto">
-            <table className="w-full text-[13px]">
-              <thead>
-                <tr className="border-b border-border/60 text-left text-[11px] uppercase text-muted-foreground whitespace-nowrap">
-                  <th className="w-12 px-1 py-2" />
-                  <th className="px-2 py-2">Mã đơn</th>
-                  <th className="px-2 py-2">Khách</th>
-                  <th className="px-2 py-2">Sản phẩm</th>
-                  <th className="px-2 py-2">Size/Màu</th>
-                  <th className="px-2 py-2">Note kq Tool 1</th>
-                  <th className="px-2 py-2">File sửa lỗi</th>
-                  <th className="px-2 py-2">Ghi chú file lỗi</th>
-                  <th className="px-2 py-2">Lỗi xưởng</th>
-                </tr>
-              </thead>
-              <tbody>{activeList.map(renderRow)}</tbody>
-            </table>
-          </div>
-        )}
-      </div>
-
-      {/* Thống kê lịch sử lỗi Soát tool (kể cả đơn đã sửa) — đếm ĐƠN riêng biệt.
-          3 cột Khách → Sản phẩm → Loại lỗi, click Khách/Sản phẩm để lọc chéo. */}
-      <div className="rounded-lg border border-border bg-card">
-        <div className="flex items-center gap-2 px-4 py-2.5 border-b border-border flex-wrap">
-          <AlertTriangle size={15} className="text-amber-500" />
-          <span className="text-sm font-semibold">Thống kê lỗi Soát tool</span>
-          <span className="hidden md:inline text-[11px] text-muted-foreground">
-            — đơn từng bị người soát tool đánh Note kq Tool ≠ ok (kể cả đã sửa về ok), theo ngày vào SX · đếm số đơn
-          </span>
-          {(selCust || selType) && (
-            <button
-              type="button"
-              onClick={() => {
-                setSelCust('');
-                setSelType('');
-              }}
-              className="ml-auto inline-flex items-center gap-1 text-[11px] rounded-full bg-indigo-100 dark:bg-indigo-500/20 text-indigo-700 dark:text-indigo-300 px-2 py-0.5"
-            >
-              Bỏ lọc chéo
-              <X size={11} />
-            </button>
-          )}
-        </div>
-        <div className="grid grid-cols-1 lg:grid-cols-3 gap-4 p-4">
-          {/* Cột 1 — Khách hàng */}
-          <div>
-            <div className="flex items-center gap-2 mb-3">
-              <Users size={16} className="text-indigo-600" />
-              <h3 className="text-sm font-semibold">Theo khách hàng</h3>
-              {selCust && (
-                <button
-                  type="button"
-                  onClick={() => setSelCust('')}
-                  className="ml-auto inline-flex items-center gap-1 text-[10px] rounded bg-muted px-1.5 py-0.5 text-muted-foreground"
-                >
-                  <X size={10} /> bỏ chọn
-                </button>
+                </div>
               )}
             </div>
-            {stats.byCustomer.length === 0 ? (
-              <p className="text-xs text-muted-foreground text-center py-6">Chưa có dữ liệu.</p>
-            ) : (
-              <div className="space-y-0.5 max-h-72 overflow-y-auto">
-                {stats.byCustomer.map((c) => {
-                  const active = selCust === c.key;
-                  return (
-                    <button
-                      key={c.key}
-                      type="button"
-                      onClick={() => setSelCust((cur) => (cur === c.key ? '' : c.key))}
-                      className={`w-full flex items-center gap-2 text-[13px] rounded px-2 py-1 text-left transition-colors ${
-                        active ? 'bg-indigo-100 dark:bg-indigo-500/20' : 'hover:bg-muted/60'
-                      }`}
-                    >
-                      <div className="flex-1 min-w-0">
-                        <div className="truncate font-medium" title={c.userSku || '(Chưa rõ)'}>
-                          {c.userSku || '(Chưa rõ)'}
-                        </div>
-                        {c.userEmail && (
-                          <div className="truncate text-[11px] text-muted-foreground" title={c.userEmail}>
-                            {c.userEmail}
-                          </div>
+
+            {/* Cột 2 — Sản phẩm */}
+            <div className="lg:border-l lg:border-border lg:pl-4">
+              <div className="flex items-center gap-2 mb-3">
+                <PackageSearch size={16} className="text-indigo-600" />
+                <h3 className="text-sm font-semibold">Theo sản phẩm</h3>
+                {selType && (
+                  <button
+                    type="button"
+                    onClick={() => setSelType('')}
+                    className="ml-auto inline-flex items-center gap-1 text-[10px] rounded bg-muted px-1.5 py-0.5 text-muted-foreground"
+                  >
+                    <X size={10} /> bỏ chọn
+                  </button>
+                )}
+              </div>
+              {stats.byProduct.length === 0 ? (
+                <p className="text-xs text-muted-foreground text-center py-6">Chưa có dữ liệu.</p>
+              ) : (
+                <div className="space-y-0.5 max-h-72 overflow-y-auto">
+                  {stats.byProduct.map((p) => {
+                    const active = selType === p.key;
+                    return (
+                      <button
+                        key={p.key}
+                        type="button"
+                        onClick={() => setSelType((cur) => (cur === p.key ? '' : p.key))}
+                        className={`w-full flex items-center gap-2 text-[13px] rounded px-2 py-1 text-left transition-colors ${active ? 'bg-indigo-100 dark:bg-indigo-500/20' : 'hover:bg-muted/60'
+                          }`}
+                      >
+                        {p.mockup ? (
+                          <img src={p.mockup} alt="" className="w-7 h-7 rounded object-cover border border-border shrink-0" />
+                        ) : (
+                          <div className="w-7 h-7 rounded border border-dashed border-border shrink-0" />
                         )}
-                      </div>
-                      <span className="text-muted-foreground tabular-nums shrink-0">{c.count}</span>
-                    </button>
-                  );
-                })}
-              </div>
-            )}
-          </div>
-
-          {/* Cột 2 — Sản phẩm */}
-          <div className="lg:border-l lg:border-border lg:pl-4">
-            <div className="flex items-center gap-2 mb-3">
-              <PackageSearch size={16} className="text-indigo-600" />
-              <h3 className="text-sm font-semibold">Theo sản phẩm</h3>
-              {selType && (
-                <button
-                  type="button"
-                  onClick={() => setSelType('')}
-                  className="ml-auto inline-flex items-center gap-1 text-[10px] rounded bg-muted px-1.5 py-0.5 text-muted-foreground"
-                >
-                  <X size={10} /> bỏ chọn
-                </button>
+                        {p.level != null && (
+                          <Badge
+                            className="font-normal border shrink-0 text-[10px]"
+                            style={{
+                              backgroundColor: PRODUCT_LEVEL_MAP[p.level]?.color,
+                              color: '#fff',
+                              borderColor: PRODUCT_LEVEL_MAP[p.level]?.color,
+                            }}
+                          >
+                            Lv {p.level}
+                          </Badge>
+                        )}
+                        <span className="flex-1 min-w-0 truncate" title={p.fullName || p.type || '(Chưa rõ)'}>
+                          {p.fullName || p.type || '(Chưa rõ)'}
+                        </span>
+                        <span className="text-muted-foreground tabular-nums shrink-0">{p.count}</span>
+                      </button>
+                    );
+                  })}
+                </div>
               )}
             </div>
-            {stats.byProduct.length === 0 ? (
-              <p className="text-xs text-muted-foreground text-center py-6">Chưa có dữ liệu.</p>
-            ) : (
-              <div className="space-y-0.5 max-h-72 overflow-y-auto">
-                {stats.byProduct.map((p) => {
-                  const active = selType === p.key;
-                  return (
-                    <button
-                      key={p.key}
-                      type="button"
-                      onClick={() => setSelType((cur) => (cur === p.key ? '' : p.key))}
-                      className={`w-full flex items-center gap-2 text-[13px] rounded px-2 py-1 text-left transition-colors ${
-                        active ? 'bg-indigo-100 dark:bg-indigo-500/20' : 'hover:bg-muted/60'
-                      }`}
-                    >
-                      {p.mockup ? (
-                        <img src={p.mockup} alt="" className="w-7 h-7 rounded object-cover border border-border shrink-0" />
-                      ) : (
-                        <div className="w-7 h-7 rounded border border-dashed border-border shrink-0" />
-                      )}
-                      {p.level != null && (
-                        <Badge
-                          className="font-normal border shrink-0 text-[10px]"
-                          style={{
-                            backgroundColor: PRODUCT_LEVEL_MAP[p.level]?.color,
-                            color: '#fff',
-                            borderColor: PRODUCT_LEVEL_MAP[p.level]?.color,
-                          }}
-                        >
-                          Lv {p.level}
-                        </Badge>
-                      )}
-                      <span className="flex-1 min-w-0 truncate" title={p.fullName || p.type || '(Chưa rõ)'}>
-                        {p.fullName || p.type || '(Chưa rõ)'}
-                      </span>
-                      <span className="text-muted-foreground tabular-nums shrink-0">{p.count}</span>
-                    </button>
-                  );
-                })}
-              </div>
-            )}
-          </div>
 
-          {/* Cột 3 — Loại lỗi */}
-          <div className="lg:border-l lg:border-border lg:pl-4">
-            <div className="flex items-center gap-2 mb-3">
-              <AlertTriangle size={16} className="text-amber-500" />
-              <h3 className="text-sm font-semibold">Theo loại lỗi</h3>
-            </div>
-            {stats.byError.length === 0 ? (
-              <p className="text-xs text-muted-foreground text-center py-6">Chưa có dữ liệu.</p>
-            ) : (
-              <div className="space-y-1 max-h-72 overflow-y-auto">
-                {stats.byError.map((e) => (
-                  <div key={e.code || '(unknown)'} className="flex items-center gap-2 text-[13px] px-2 py-1">
-                    <Badge
-                      variant="outline"
-                      className="font-normal text-amber-700 border-amber-300 dark:text-amber-300 truncate"
-                    >
-                      {e.label || e.code || '(Chưa rõ)'}
-                    </Badge>
-                    <span className="ml-auto text-muted-foreground tabular-nums shrink-0">{e.count}</span>
-                  </div>
-                ))}
+            {/* Cột 3 — Loại lỗi */}
+            <div className="lg:border-l lg:border-border lg:pl-4">
+              <div className="flex items-center gap-2 mb-3">
+                <AlertTriangle size={16} className="text-amber-500" />
+                <h3 className="text-sm font-semibold">Theo loại lỗi</h3>
               </div>
-            )}
+              {stats.byError.length === 0 ? (
+                <p className="text-xs text-muted-foreground text-center py-6">Chưa có dữ liệu.</p>
+              ) : (
+                <div className="space-y-1 max-h-72 overflow-y-auto">
+                  {stats.byError.map((e) => (
+                    <div key={e.code || '(unknown)'} className="flex items-center gap-2 text-[13px] px-2 py-1">
+                      <Badge
+                        variant="outline"
+                        className="font-normal text-amber-700 border-amber-300 dark:text-amber-300 truncate"
+                      >
+                        {e.label || e.code || '(Chưa rõ)'}
+                      </Badge>
+                      <span className="ml-auto text-muted-foreground tabular-nums shrink-0">{e.count}</span>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
           </div>
         </div>
-      </div>
 
-      <ImagePreviewDialog
-        open={preview !== null}
-        onOpenChange={(v) => !v && setPreview(null)}
-        url={preview?.url}
-        originalUrl={preview?.originalUrl}
-        title={preview?.title}
-      />
-    </div>
+        <ImagePreviewDialog
+          open={preview !== null}
+          onOpenChange={(v) => !v && setPreview(null)}
+          url={preview?.url}
+          originalUrl={preview?.originalUrl}
+          title={preview?.title}
+        />
+      </div>
     </TooltipProvider>
   );
 }
@@ -718,9 +766,8 @@ function DayMetricRow({
           <td
             key={d.day}
             onClick={() => onPick(d.day)}
-            className={`border-b border-l border-border/60 text-center px-1 py-1.5 cursor-pointer transition-colors ${
-              active ? 'bg-indigo-100 dark:bg-indigo-500/25' : 'hover:bg-muted/50'
-            }`}
+            className={`border-b border-l border-border/60 text-center px-1 py-1.5 cursor-pointer transition-colors ${active ? 'bg-indigo-100 dark:bg-indigo-500/25' : 'hover:bg-muted/50'
+              }`}
           >
             {v === 0 ? (
               <span className="text-muted-foreground/30">·</span>

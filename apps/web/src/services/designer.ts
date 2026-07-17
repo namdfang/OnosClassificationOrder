@@ -194,6 +194,7 @@ const toolCheckOverview = (
     type?: string;
     customer?: string;
     machineNumber?: string;
+    priority?: string;
   } = {},
 ) => {
   const qs = new URLSearchParams();
@@ -203,6 +204,7 @@ const toolCheckOverview = (
   if (params.type) qs.set('type', params.type);
   if (params.customer) qs.set('customer', params.customer);
   if (params.machineNumber) qs.set('machineNumber', params.machineNumber);
+  if (params.priority) qs.set('priority', params.priority);
   return callApi(`/${CONFIG.API_VERSION}/designer/tool-check-overview?${qs.toString()}`, 'get');
 };
 

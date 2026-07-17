@@ -16,6 +16,9 @@ import type { FulfillmentStageState, ProductionOrder } from 'shared';
 import { FULFILLMENT_STAGE_LABELS, FulfillmentStage, FulfillmentStageStatus } from 'shared';
 
 import { Hint } from '@/components/common/Hint';
+import { PriorityBadge } from '@/components/orders/cells/PrioritySelectCell';
+import { useNow } from '@/hooks/useNow';
+import { formatCountdown, getStageDeadline } from '@/utils/priorityEstimate';
 
 /**
  * Card đơn fulfillment — design ngang hàng `pages/designer/my-tasks/TaskCard.tsx`
@@ -122,6 +125,18 @@ export function FulfillmentTaskCard({
     : undefined;
 
   const ts = timeStamp(state, status);
+  const deadline =
+    status === FulfillmentStageStatus.Waiting || status === FulfillmentStageStatus.InProgress
+      ? getStageDeadline(
+          order.priority,
+          myStage,
+          // Fallback `inProductionAt` cho đơn cũ thiếu mốc waiting/started (đơn chưa chạy bước nào).
+          (status === FulfillmentStageStatus.InProgress ? state?.startedAt : state?.waitingAt) ||
+            order.inProductionAt,
+        )
+      : undefined;
+  const now = useNow(30_000);
+  const countdown = deadline ? formatCountdown(deadline, now) : undefined;
   const url = order.mockupOriginalUrl || order.mockupUrl;
   const thumb = smallThumb(order.mockupUrl);
 
@@ -199,6 +214,7 @@ export function FulfillmentTaskCard({
                 {order.productionId}
               </div>
             )}
+            <PriorityBadge priority={order.priority} />
           </div>
 
           {order.type && (
@@ -225,6 +241,18 @@ export function FulfillmentTaskCard({
               <Hint content={`${ts.label} lúc ${fmtTime(ts.value)} (${dayjs(ts.value).fromNow()})`} forceRich>
                 <span className="inline-flex items-center gap-1">
                   <Clock size={10} /> {ts.label}: {fmtTime(ts.value)}
+                </span>
+              </Hint>
+            )}
+            {deadline && countdown && (
+              <Hint
+                content={`Hạn dự kiến bước ${FULFILLMENT_STAGE_LABELS[myStage]} · ${fmtTime(deadline)}`}
+                forceRich
+              >
+                <span
+                  className={`inline-flex items-center gap-1 ${countdown.overdue ? 'text-rose-600 dark:text-rose-400 font-medium' : ''}`}
+                >
+                  <Clock size={10} /> {countdown.text}
                 </span>
               </Hint>
             )}

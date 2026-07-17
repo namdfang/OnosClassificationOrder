@@ -8,6 +8,8 @@ import {
   FulfillmentStage,
   FulfillmentStageStatus,
   FulfillmentTransitionAction,
+  OrderPriority,
+  ORDER_PRIORITIES,
 } from '@shared/enums';
 import { BaseEntityZod, PageQueryZod, PageResZod, ResZod } from '@shared/types';
 import { IDZod } from '..';
@@ -18,6 +20,8 @@ export const DesignerTransitionActionZod = z.nativeEnum(DesignerTransitionAction
 export const FulfillmentStageZod = z.nativeEnum(FulfillmentStage);
 export const FulfillmentStageStatusZod = z.nativeEnum(FulfillmentStageStatus);
 export const FulfillmentTransitionActionZod = z.nativeEnum(FulfillmentTransitionAction);
+
+export const OrderPriorityZod = z.nativeEnum(OrderPriority);
 
 /** State per 1 stage (Print/Press/QC/Sew/Pack). */
 export const FulfillmentStageStateZod = z.object({
@@ -193,6 +197,12 @@ export const ProductionOrderZod = BaseEntityZod.extend({
   originalFactoryId: IDZod.optional(),
 
   // Workshop fields (Phase 2) — values are workshop_config codes
+  /**
+   * Mức ưu tiên (1=thấp, 2=ưu tiên, 3=cao) — số càng cao càng ưu tiên. Không
+   * set = đơn thường (không hiện badge/estimate, không ưu tiên sort). Sửa qua
+   * `updateField`/`bulkUpdateField` (field `priority`) như mọi field workshop khác.
+   */
+  priority: OrderPriorityZod.optional(),
   printStatus: z.string().optional(),
   printStatusNote: z.string().optional(),
   toolResult: z.string().optional(),
@@ -324,6 +334,7 @@ export const ORDER_WORKSHOP_FIELDS = [
   'productionError',
   'productionErrorNote',
   'productionErrorSource',
+  'priority',
 ] as const;
 export type OrderWorkshopField = (typeof ORDER_WORKSHOP_FIELDS)[number];
 export const OrderWorkshopFieldZod = z.enum(ORDER_WORKSHOP_FIELDS);
@@ -1529,6 +1540,22 @@ export const LIFECYCLE_STAGE_KEYS = [
 ] as const;
 export type LifecycleStageKey = (typeof LIFECYCLE_STAGE_KEYS)[number];
 
+/**
+ * Hạn dự kiến cho từng bước = thời điểm đơn VÀO bước đó + số giờ ở đây, theo
+ * (mức ưu tiên, bước). Trước mắt đặt đồng loạt 4 tiếng cho mọi bước/mức —
+ * tinh chỉnh sau bằng cách sửa trực tiếp map này (không cần đổi code gọi).
+ */
+export const DEFAULT_STAGE_ESTIMATE_HOURS = 4;
+export const ORDER_PRIORITY_STAGE_ESTIMATE_HOURS: Record<
+  OrderPriority,
+  Record<LifecycleStageKey, number>
+> = Object.fromEntries(
+  ORDER_PRIORITIES.map((p) => [
+    p,
+    Object.fromEntries(LIFECYCLE_STAGE_KEYS.map((k) => [k, DEFAULT_STAGE_ESTIMATE_HOURS])),
+  ]),
+) as Record<OrderPriority, Record<LifecycleStageKey, number>>;
+
 export const LifecycleStageRowZod = z.object({
   stage: z.string(),
   label: z.string(),
@@ -1795,6 +1822,8 @@ export const GetToolCheckOverviewZod = z.object({
   customer: z.string().optional(),
   /** Lọc theo máy (`order.machineNumber`). */
   machineNumber: z.string().optional(),
+  /** Lọc theo mức ưu tiên (`order.priority`) — '1'|'2'|'3'. */
+  priority: z.enum(['1', '2', '3']).optional(),
 });
 export class GetToolCheckOverviewDto extends createZodDto(extendApi(GetToolCheckOverviewZod)) {}
 
@@ -1817,6 +1846,8 @@ export const ToolCheckOrderZod = z.object({
   productionErrorCount: z.number().int().nonnegative().optional(),
   machineNumber: z.string().optional(),
   inProductionAt: z.string().optional(),
+  /** Mức ưu tiên (xem `order-priority.ts`) — hiện badge + dùng để filter/sort. */
+  priority: OrderPriorityZod.optional(),
 });
 export type ToolCheckOrder = z.infer<typeof ToolCheckOrderZod>;
 
@@ -1883,6 +1914,7 @@ export const ToolCheckOverviewResZod = ResZod.extend({
       type: ToolCheckFacetZod.array(),
       customer: ToolCheckFacetZod.array(),
       machineNumber: ToolCheckFacetZod.array(),
+      priority: ToolCheckFacetZod.array(),
     }),
     rangeDays: z.number().int().positive(),
   }),

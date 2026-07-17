@@ -513,7 +513,7 @@ export class FulfillmentTaskService {
     const [data, total, tabCounts] = await Promise.all([
       this.orderModel
         .find(filter)
-        .sort({ orderAt: -1, inProductionAt: -1 })
+        .sort({ priority: -1, orderAt: -1, inProductionAt: -1 })
         .skip((page - 1) * size)
         .limit(size)
         .lean(),

@@ -6,8 +6,11 @@ import { DesignerStatus, WorkshopConfigCategory } from 'shared';
 
 import { CopyButton } from '@/components/common/CopyButton';
 import { Hint } from '@/components/common/Hint';
+import { PriorityBadge } from '@/components/orders/cells/PrioritySelectCell';
+import { useNow } from '@/hooks/useNow';
 import { useWorkshopConfigStore } from '@/store/workshopConfigStore';
 import { cn } from '@/utils/cn';
+import { formatCountdown, getStageDeadline } from '@/utils/priorityEstimate';
 
 interface Props {
   card: Card;
@@ -99,6 +102,19 @@ export function TaskCard({ card, onPreview, onClickProductionId }: Props) {
   const url = card.mockupOriginalUrl || card.mockupUrl;
   const thumb = smallThumb(card.mockupUrl);
 
+  const deadline =
+    card.designerStatus === DesignerStatus.Assigned || card.designerStatus === DesignerStatus.InProgress
+      ? getStageDeadline(
+          card.priority,
+          'designer',
+          // Fallback `inProductionAt` cho đơn cũ thiếu mốc gán/bắt đầu (đơn chưa chạy bước nào).
+          (card.designerStatus === DesignerStatus.InProgress ? card.designerStartedAt : card.designerAssignedAt) ||
+            card.inProductionAt,
+        )
+      : undefined;
+  const now = useNow(30_000);
+  const countdown = deadline ? formatCountdown(deadline, now) : undefined;
+
   // Resolve `toolResultNote` (code) → label + màu từ workshop_config, đồng bộ
   // với ColorBadgeSelectCell ở bảng đơn. Subscribe list để re-render khi store
   // load xong (resolve fn ref ổn định nên phải subscribe list mới re-render).
@@ -170,6 +186,7 @@ export function TaskCard({ card, onPreview, onClickProductionId }: Props) {
                 <CopyButton value={card.productionId ?? ''} label={`mã ${card.productionId}`} iconSize={12} />
               </span>
             </div>
+            <PriorityBadge priority={card.priority} />
             {card.toolResultNote && (
               <Hint content={`Note kết quả Tool: ${toolNoteCfg?.name || card.toolResultNote}`} forceRich>
                 <span
@@ -213,6 +230,18 @@ export function TaskCard({ card, onPreview, onClickProductionId }: Props) {
           <Hint content={`${statusTimeHint(card.designerStatus)} · ${fmtFull(ts.value)}`} forceRich>
             <span className="inline-flex items-center gap-1">
               <Clock size={10} /> {ts.label} {fmtTime(ts.value)}
+            </span>
+          </Hint>
+        )}
+        {deadline && countdown && (
+          <Hint content={`Hạn dự kiến bước Thiết kế · ${fmtFull(deadline)}`} forceRich>
+            <span
+              className={cn(
+                'inline-flex items-center gap-1',
+                countdown.overdue && 'text-rose-600 dark:text-rose-400 font-medium',
+              )}
+            >
+              <Clock size={10} /> {countdown.text}
             </span>
           </Hint>
         )}
