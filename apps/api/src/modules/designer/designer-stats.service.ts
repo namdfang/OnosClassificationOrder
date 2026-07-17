@@ -1160,7 +1160,16 @@ export class DesignerStatsService {
         { $sort: { _id: -1 } },
       ]);
 
-    const histProj = { userSku: 1, userEmail: 1, type: 1, productConfigId: 1, mockupUrl: 1, toolCheckErrorNotes: 1 };
+    const histProj = {
+      productionId: 1,
+      userSku: 1,
+      userEmail: 1,
+      type: 1,
+      productConfigId: 1,
+      mockupUrl: 1,
+      toolCheckErrorNotes: 1,
+      errorFileNote: 1,
+    };
 
     const [
       checkedCount,
@@ -1273,12 +1282,14 @@ export class DesignerStatsService {
       const codes = notes.length ? [...new Set(notes)] : [''];
       const base = {
         orderId: oid,
+        productionId: o.productionId as string | undefined,
         userSku: o.userSku as string | undefined,
         userEmail: o.userEmail as string | undefined,
         type: o.type as string | undefined,
         fullName: cfg?.fullName,
         mockup: cfg?.mockup,
         level: cfg?.level,
+        note: (o.errorFileNote as string | undefined) || undefined,
       };
       for (const code of codes) {
         errorHistory.push({ ...base, code, codeLabel: code ? noteNameMap.get(code) : undefined });
