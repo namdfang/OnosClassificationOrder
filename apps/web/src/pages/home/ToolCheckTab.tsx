@@ -1,5 +1,5 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
-import { AlertTriangle, Clock, FileSearch, PackageSearch, RefreshCw, Users, X } from 'lucide-react';
+import { AlertTriangle, ChevronDown, ChevronUp, Clock, FileSearch, PackageSearch, RefreshCw, Users, X } from 'lucide-react';
 import { ORDER_PRIORITY_LABELS, PRODUCT_LEVEL_MAP, WorkshopConfigCategory } from 'shared';
 import type {
   OrderPriority,
@@ -11,6 +11,7 @@ import type {
 
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
+import { Dialog, DialogContent, DialogTitle } from '@/components/ui/dialog';
 import { CopyButton } from '@/components/common/CopyButton';
 import { DateRangePicker } from '@/components/common/DateRangePicker';
 import { PipelineDailyOverview } from '@/components/common/PipelineDailyOverview';
@@ -84,6 +85,7 @@ export default function ToolCheckTab() {
   const { canEditField } = usePermission();
   const loadConfig = useWorkshopConfigStore((s) => s.load);
   const configLoaded = useWorkshopConfigStore((s) => s.loaded);
+  const resolveConfig = useWorkshopConfigStore((s) => s.resolve);
   useEffect(() => {
     if (!configLoaded) loadConfig();
   }, [configLoaded, loadConfig]);
@@ -106,6 +108,19 @@ export default function ToolCheckTab() {
   const [selType, setSelType] = useState('');
   // Loại lỗi (mã note) đang mở panel chi tiết (đơn + note lỗi).
   const [selCode, setSelCode] = useState('');
+  // Mở rộng / ẩn bớt: 3 cột thống kê + bảng chi tiết loại lỗi.
+  const [statsExpanded, setStatsExpanded] = useState(false);
+  const [detailExpanded, setDetailExpanded] = useState(false);
+  // Modal "Xem theo từng khách hàng" (full-screen) + tập khách đang mở rộng.
+  const [customerView, setCustomerView] = useState(false);
+  const [expandedCust, setExpandedCust] = useState<Set<string>>(new Set());
+  const toggleCust = (k: string) =>
+    setExpandedCust((prev) => {
+      const n = new Set(prev);
+      if (n.has(k)) n.delete(k);
+      else n.add(k);
+      return n;
+    });
 
   const [data, setData] = useState<Overview | null>(null);
   const [loading, setLoading] = useState(false);
@@ -364,11 +379,24 @@ export default function ToolCheckTab() {
   // Panel chi tiết 1 loại lỗi (selCode): các ĐƠN dính note đó (dedup theo
   // orderId) + sản phẩm + note lỗi, tôn trọng cross-filter khách/sản phẩm.
   const codeDetail = useMemo(() => {
-    if (!selCode) return { label: '', items: [] as Array<{ orderId: string; productionId?: string; product: string; note?: string; mockup?: string; level?: number }> };
+    type DetailItem = {
+      orderId: string;
+      productionId?: string;
+      product: string;
+      note?: string;
+      errorFile?: string[];
+      mockup?: string;
+      level?: number;
+      mockupUrl?: string;
+      mockupOriginalUrl?: string;
+      size?: string;
+      color?: string;
+    };
+    if (!selCode) return { label: '', items: [] as DetailItem[] };
     const rows = data?.errorHistory ?? [];
     const seen = new Set<string>();
     let label = selCode;
-    const items: Array<{ orderId: string; productionId?: string; product: string; note?: string; mockup?: string; level?: number }> = [];
+    const items: DetailItem[] = [];
     for (const r of rows) {
       if ((r.code || '') !== selCode) continue;
       if (selCust && custKey(r) !== selCust) continue;
@@ -381,12 +409,97 @@ export default function ToolCheckTab() {
         productionId: r.productionId,
         product: r.fullName || r.type || '(Chưa rõ)',
         note: r.note,
+        errorFile: r.errorFile,
         mockup: r.mockup,
         level: r.level ?? undefined,
+        mockupUrl: r.mockupUrl,
+        mockupOriginalUrl: r.mockupOriginalUrl,
+        size: r.size,
+        color: r.color,
       });
     }
+
+    // Sắp xếp: nhóm sản phẩm giống tên đứng cạnh nhau (nhóm nhiều đơn lên đầu);
+    // trong mỗi sản phẩm, nhóm File lỗi giống nhau đứng cạnh nhau (nhiều lên đầu).
+    const efKeyOf = (it: DetailItem) =>
+      it.errorFile && it.errorFile.length ? [...it.errorFile].sort().join('|') : '';
+    const prodCount = new Map<string, number>();
+    const efCountByProd = new Map<string, Map<string, number>>();
+    for (const it of items) {
+      prodCount.set(it.product, (prodCount.get(it.product) ?? 0) + 1);
+      const m = efCountByProd.get(it.product) ?? new Map<string, number>();
+      const ek = efKeyOf(it);
+      m.set(ek, (m.get(ek) ?? 0) + 1);
+      efCountByProd.set(it.product, m);
+    }
+    items.sort((a, b) => {
+      const pc = (prodCount.get(b.product) ?? 0) - (prodCount.get(a.product) ?? 0);
+      if (pc) return pc;
+      const pn = a.product.localeCompare(b.product);
+      if (pn) return pn;
+      const ak = efKeyOf(a);
+      const bk = efKeyOf(b);
+      const ec = (efCountByProd.get(b.product)?.get(bk) ?? 0) - (efCountByProd.get(a.product)?.get(ak) ?? 0);
+      if (ec) return ec;
+      return ak.localeCompare(bk);
+    });
+
     return { label: label || '(Chưa rõ)', items };
   }, [data?.errorHistory, selCode, selCust, selType]);
+
+  // Chế độ "xem theo từng khách hàng": mỗi khách → sản phẩm lỗi + loại lỗi
+  // (đếm đơn riêng biệt), sort nhiều→ít. KHÔNG áp cross-filter (hiện mọi khách).
+  const perCustomer = useMemo(() => {
+    const rows = data?.errorHistory ?? [];
+    type Grp = {
+      key: string;
+      userSku?: string;
+      userEmail?: string;
+      orders: Set<string>;
+      products: Map<string, { product: string; mockup?: string; level?: number; orders: Set<string> }>;
+      codes: Map<string, { code: string; label?: string; orders: Set<string> }>;
+    };
+    const map = new Map<string, Grp>();
+    for (const r of rows) {
+      const k = custKey(r);
+      let g = map.get(k);
+      if (!g) {
+        g = { key: k, userSku: r.userSku, userEmail: r.userEmail, orders: new Set(), products: new Map(), codes: new Map() };
+        map.set(k, g);
+      }
+      g.orders.add(r.orderId);
+      const pk = r.type ?? '';
+      let p = g.products.get(pk);
+      if (!p) {
+        p = { product: r.fullName || r.type || '(Chưa rõ)', mockup: r.mockup, level: r.level ?? undefined, orders: new Set() };
+        g.products.set(pk, p);
+      }
+      p.orders.add(r.orderId);
+      const ck = r.code || '';
+      let c = g.codes.get(ck);
+      if (!c) {
+        c = { code: r.code, label: r.codeLabel, orders: new Set() };
+        g.codes.set(ck, c);
+      }
+      c.orders.add(r.orderId);
+    }
+    return [...map.values()]
+      .map((g) => ({
+        key: g.key,
+        userSku: g.userSku,
+        userEmail: g.userEmail,
+        count: g.orders.size,
+        products: [...g.products.values()]
+          .map((p) => ({ product: p.product, mockup: p.mockup, level: p.level, count: p.orders.size }))
+          .sort((a, b) => b.count - a.count),
+        codes: [...g.codes.values()]
+          .map((c) => ({ code: c.code, label: c.label, count: c.orders.size }))
+          .sort((a, b) => b.count - a.count),
+      }))
+      .sort((a, b) => b.count - a.count);
+  }, [data?.errorHistory]);
+
+  const allCustExpanded = perCustomer.length > 0 && perCustomer.every((c) => expandedCust.has(c.key));
 
   return (
     <TooltipProvider delayDuration={200}>
@@ -543,8 +656,8 @@ export default function ToolCheckTab() {
                 type="button"
                 onClick={() => setListTab('rework')}
                 className={`px-3 py-1.5 font-medium ${listTab === 'rework'
-                    ? 'bg-amber-500 text-white'
-                    : 'bg-background text-muted-foreground hover:bg-muted'
+                  ? 'bg-amber-500 text-white'
+                  : 'bg-background text-muted-foreground hover:bg-muted'
                   }`}
               >
                 Cần làm lại ({reworkList.length})
@@ -553,8 +666,8 @@ export default function ToolCheckTab() {
                 type="button"
                 onClick={() => setListTab('unreviewed')}
                 className={`px-3 py-1.5 font-medium ${listTab === 'unreviewed'
-                    ? 'bg-slate-600 text-white'
-                    : 'bg-background text-muted-foreground hover:bg-muted'
+                  ? 'bg-slate-600 text-white'
+                  : 'bg-background text-muted-foreground hover:bg-muted'
                   }`}
               >
                 Chưa soát ({unreviewedList.length})
@@ -607,19 +720,37 @@ export default function ToolCheckTab() {
             <span className="hidden md:inline text-[11px] text-muted-foreground">
               — đơn từng bị người soát tool đánh Note kq Tool ≠ ok (kể cả đã sửa về ok), theo ngày vào SX · đếm số đơn
             </span>
-            {(selCust || selType) && (
+            <div className="ml-auto flex items-center gap-2">
+              {(selCust || selType) && (
+                <button
+                  type="button"
+                  onClick={() => {
+                    setSelCust('');
+                    setSelType('');
+                  }}
+                  className="inline-flex items-center gap-1 text-[11px] rounded-full bg-indigo-100 dark:bg-indigo-500/20 text-indigo-700 dark:text-indigo-300 px-2 py-0.5"
+                >
+                  Bỏ lọc chéo
+                  <X size={11} />
+                </button>
+              )}
               <button
                 type="button"
-                onClick={() => {
-                  setSelCust('');
-                  setSelType('');
-                }}
-                className="ml-auto inline-flex items-center gap-1 text-[11px] rounded-full bg-indigo-100 dark:bg-indigo-500/20 text-indigo-700 dark:text-indigo-300 px-2 py-0.5"
+                onClick={() => setCustomerView(true)}
+                className="inline-flex items-center gap-1 text-[11px] rounded-md border border-border px-2 py-1 hover:bg-muted transition-colors"
               >
-                Bỏ lọc chéo
-                <X size={11} />
+                <Users size={13} />
+                Xem theo khách hàng
               </button>
-            )}
+              <button
+                type="button"
+                onClick={() => setStatsExpanded((v) => !v)}
+                className="inline-flex items-center gap-1 text-[11px] rounded-md border border-border px-2 py-1 hover:bg-muted transition-colors"
+              >
+                {statsExpanded ? <ChevronUp size={13} /> : <ChevronDown size={13} />}
+                {statsExpanded ? 'Ẩn bớt' : 'Mở rộng'}
+              </button>
+            </div>
           </div>
           <div className="grid grid-cols-1 lg:grid-cols-3 gap-4 p-4">
             {/* Cột 1 — Khách hàng */}
@@ -640,7 +771,7 @@ export default function ToolCheckTab() {
               {stats.byCustomer.length === 0 ? (
                 <p className="text-xs text-muted-foreground text-center py-6">Chưa có dữ liệu.</p>
               ) : (
-                <div className="space-y-0.5 max-h-72 overflow-y-auto">
+                <div className={cn('space-y-0.5', statsExpanded ? '' : 'max-h-72 overflow-y-auto')}>
                   {stats.byCustomer.map((c) => {
                     const active = selCust === c.key;
                     return (
@@ -687,7 +818,7 @@ export default function ToolCheckTab() {
               {stats.byProduct.length === 0 ? (
                 <p className="text-xs text-muted-foreground text-center py-6">Chưa có dữ liệu.</p>
               ) : (
-                <div className="space-y-0.5 max-h-72 overflow-y-auto">
+                <div className={cn('space-y-0.5', statsExpanded ? '' : 'max-h-72 overflow-y-auto')}>
                   {stats.byProduct.map((p) => {
                     const active = selType === p.key;
                     return (
@@ -736,7 +867,7 @@ export default function ToolCheckTab() {
               {stats.byError.length === 0 ? (
                 <p className="text-xs text-muted-foreground text-center py-6">Chưa có dữ liệu.</p>
               ) : (
-                <div className="space-y-0.5 max-h-72 overflow-y-auto">
+                <div className={cn('space-y-0.5', statsExpanded ? '' : 'max-h-72 overflow-y-auto')}>
                   {stats.byError.map((e) => {
                     const active = selCode === (e.code || '');
                     return (
@@ -744,9 +875,8 @@ export default function ToolCheckTab() {
                         key={e.code || '(unknown)'}
                         type="button"
                         onClick={() => setSelCode((cur) => (cur === (e.code || '') ? '' : e.code || ''))}
-                        className={`w-full flex items-center gap-2 text-[13px] rounded px-2 py-1 text-left transition-colors ${
-                          active ? 'bg-amber-100 dark:bg-amber-500/20' : 'hover:bg-muted/60'
-                        }`}
+                        className={`w-full flex items-center gap-2 text-[13px] rounded px-2 py-1 text-left transition-colors ${active ? 'bg-amber-100 dark:bg-amber-500/20' : 'hover:bg-muted/60'
+                          }`}
                       >
                         <Badge
                           variant="outline"
@@ -772,29 +902,50 @@ export default function ToolCheckTab() {
                   {codeDetail.label}
                 </Badge>
                 <span className="text-[11px] text-muted-foreground">{codeDetail.items.length} đơn</span>
-                <button
-                  type="button"
-                  onClick={() => setSelCode('')}
-                  className="ml-auto inline-flex items-center gap-1 text-[11px] rounded bg-muted px-2 py-0.5 text-muted-foreground"
-                >
-                  <X size={11} /> đóng
-                </button>
+                <div className="ml-auto flex items-center gap-2">
+                  <button
+                    type="button"
+                    onClick={() => setDetailExpanded((v) => !v)}
+                    className="inline-flex items-center gap-1 text-[11px] rounded-md border border-border px-2 py-1 hover:bg-muted transition-colors"
+                  >
+                    {detailExpanded ? <ChevronUp size={13} /> : <ChevronDown size={13} />}
+                    {detailExpanded ? 'Ẩn bớt' : 'Mở rộng'}
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setSelCode('')}
+                    className="inline-flex items-center gap-1 text-[11px] rounded bg-muted px-2 py-0.5 text-muted-foreground"
+                  >
+                    <X size={11} /> đóng
+                  </button>
+                </div>
               </div>
               {codeDetail.items.length === 0 ? (
                 <p className="text-xs text-muted-foreground text-center py-4">Không có đơn khớp bộ lọc.</p>
               ) : (
-                <div className="overflow-x-auto max-h-80 overflow-y-auto">
+                <div className={cn('overflow-x-auto', detailExpanded ? '' : 'max-h-80 overflow-y-auto')}>
                   <table className="w-full text-[13px]">
                     <thead>
                       <tr className="border-b border-border/60 text-left text-[11px] uppercase text-muted-foreground whitespace-nowrap">
+                        <th className="w-12 px-1 py-1.5">Ảnh</th>
                         <th className="px-2 py-1.5">Mã đơn</th>
                         <th className="px-2 py-1.5">Sản phẩm</th>
+                        <th className="px-2 py-1.5">Size/Màu</th>
+                        <th className="px-2 py-1.5">File lỗi</th>
                         <th className="px-2 py-1.5">Note lỗi</th>
                       </tr>
                     </thead>
                     <tbody>
                       {codeDetail.items.map((it) => (
                         <tr key={it.orderId} className="border-t border-border/40 hover:bg-muted/30 align-top">
+                          <td className="w-12 px-1 py-1.5">
+                            <ImageThumbCell
+                              url={it.mockupUrl}
+                              originalUrl={it.mockupOriginalUrl}
+                              title={`Mockup: ${it.productionId || ''}`}
+                              onOpen={(url, title, originalUrl) => setPreview({ url, title, originalUrl })}
+                            />
+                          </td>
                           <td className="px-2 py-1.5">
                             <div className="flex items-center gap-1">
                               <span className="font-medium whitespace-nowrap">{it.productionId || '—'}</span>
@@ -825,6 +976,31 @@ export default function ToolCheckTab() {
                               <span className="min-w-0 truncate" title={it.product}>{it.product}</span>
                             </div>
                           </td>
+                          <td className="px-2 py-1.5 text-muted-foreground whitespace-nowrap">
+                            {it.size || '—'}
+                            {it.color ? ` / ${it.color}` : ''}
+                          </td>
+                          <td className="px-2 py-1.5">
+                            {it.errorFile && it.errorFile.length > 0 ? (
+                              <div className="flex flex-wrap gap-1">
+                                {it.errorFile.map((code) => {
+                                  const cfg = resolveConfig(WorkshopConfigCategory.ErrorFileType, code);
+                                  return (
+                                    <Badge
+                                      key={code}
+                                      variant="outline"
+                                      className="font-normal text-[11px] truncate"
+                                      style={cfg?.color ? { color: cfg.color, borderColor: cfg.color } : undefined}
+                                    >
+                                      {cfg?.name || code}
+                                    </Badge>
+                                  );
+                                })}
+                              </div>
+                            ) : (
+                              <span className="text-muted-foreground/50">—</span>
+                            )}
+                          </td>
                           <td className="px-2 py-1.5 text-muted-foreground whitespace-pre-wrap max-w-[360px]">
                             {it.note || <span className="text-muted-foreground/50">—</span>}
                           </td>
@@ -845,6 +1021,124 @@ export default function ToolCheckTab() {
           originalUrl={preview?.originalUrl}
           title={preview?.title}
         />
+
+        {/* Modal full-screen: xem lỗi Soát tool theo TỪNG khách hàng */}
+        <Dialog open={customerView} onOpenChange={setCustomerView}>
+          <DialogContent className="max-w-none w-[92vw] md:w-[60vw] h-screen p-0 gap-0 flex flex-col sm:rounded-none">
+            <div className="flex items-center gap-2 px-5 py-3 border-b border-border shrink-0">
+              <Users size={16} className="text-indigo-600" />
+              <DialogTitle className="text-base">Lỗi Soát tool theo từng khách hàng</DialogTitle>
+              <span className="hidden sm:inline text-[12px] text-muted-foreground">
+                {perCustomer.length} khách · theo ngày vào SX trong kỳ · đếm số đơn (kể cả đã sửa)
+              </span>
+              {perCustomer.length > 0 && (
+                <button
+                  type="button"
+                  onClick={() =>
+                    setExpandedCust(
+                      allCustExpanded ? new Set() : new Set(perCustomer.map((c) => c.key)),
+                    )
+                  }
+                  className="ml-auto mr-8 inline-flex items-center gap-1 text-[11px] rounded-md border border-border px-2 py-1 hover:bg-muted transition-colors"
+                >
+                  {allCustExpanded ? <ChevronUp size={13} /> : <ChevronDown size={13} />}
+                  {allCustExpanded ? 'Ẩn tất cả' : 'Mở rộng tất cả'}
+                </button>
+              )}
+            </div>
+            <div className="flex-1 overflow-y-auto p-4 space-y-3">
+              {perCustomer.length === 0 ? (
+                <p className="text-sm text-muted-foreground text-center py-16">Chưa có dữ liệu.</p>
+              ) : (
+                perCustomer.map((c) => {
+                  const exp = expandedCust.has(c.key);
+                  return (
+                    <div key={c.key} className="rounded-lg border border-border bg-card p-3 pr-5">
+                      <div className="flex items-center gap-2 mb-2 flex-wrap">
+                        <span className="font-bold text-[17px]">{c.userSku || '(Chưa rõ)'}</span>
+                        {c.userEmail && (
+                          <span className="text-[12px] text-muted-foreground">{c.userEmail}</span>
+                        )}
+                        <div className="ml-auto flex items-center gap-3">
+                          <span className="inline-flex items-baseline gap-1 rounded-md bg-rose-100 text-rose-700 border border-rose-300 dark:bg-rose-500/20 dark:text-rose-300 dark:border-rose-500/40 px-2.5 py-1">
+                            <span className="text-lg font-extrabold tabular-nums leading-none">{c.count}</span>
+                            <span className="text-[11px] font-medium">đơn lỗi</span>
+                          </span>
+                          <button
+                            type="button"
+                            onClick={() => toggleCust(c.key)}
+                            className="inline-flex items-center gap-1 text-[11px] rounded-md border border-border px-2 py-1 hover:bg-muted transition-colors"
+                          >
+                            {exp ? <ChevronUp size={13} /> : <ChevronDown size={13} />}
+                            {exp ? 'Ẩn bớt' : 'Mở rộng'}
+                          </button>
+                        </div>
+                      </div>
+                      <div className="grid grid-cols-1 md:grid-cols-2 gap-x-16 gap-y-2">
+                        {/* Sản phẩm lỗi */}
+                        <div>
+                          <div className="text-[11px] uppercase tracking-wide text-muted-foreground mb-1 flex items-center gap-1">
+                            <PackageSearch size={12} /> Sản phẩm lỗi
+                            <span className="text-[14px] font-extrabold tabular-nums text-indigo-600 dark:text-indigo-400 normal-case">
+                              {c.products.length}
+                            </span>
+                          </div>
+                          <div className={cn('space-y-0.5 max-w-xl', exp ? '' : 'max-h-28 overflow-y-auto')}>
+                            {c.products.map((p, i) => (
+                              <div key={`${p.product}-${i}`} className="flex items-center gap-2 text-[13px]">
+                                {p.mockup ? (
+                                  <img src={p.mockup} alt="" className="w-6 h-6 rounded object-cover border border-border shrink-0" />
+                                ) : (
+                                  <div className="w-6 h-6 rounded border border-dashed border-border shrink-0" />
+                                )}
+                                {p.level != null && (
+                                  <Badge
+                                    className="font-normal border shrink-0 text-[10px]"
+                                    style={{
+                                      backgroundColor: PRODUCT_LEVEL_MAP[p.level]?.color,
+                                      color: '#fff',
+                                      borderColor: PRODUCT_LEVEL_MAP[p.level]?.color,
+                                    }}
+                                  >
+                                    Lv {p.level}
+                                  </Badge>
+                                )}
+                                <span className="flex-1 min-w-0 truncate" title={p.product}>{p.product}</span>
+                                <span className="shrink-0 tabular-nums text-[15px] font-extrabold text-indigo-600 dark:text-indigo-400">{p.count}</span>
+                              </div>
+                            ))}
+                          </div>
+                        </div>
+                        {/* Loại lỗi */}
+                        <div>
+                          <div className="text-[11px] uppercase tracking-wide text-muted-foreground mb-1 flex items-center gap-1">
+                            <AlertTriangle size={12} className="text-amber-500" /> Loại lỗi
+                            <span className="text-[14px] font-extrabold tabular-nums text-amber-600 dark:text-amber-400 normal-case">
+                              {c.codes.length}
+                            </span>
+                          </div>
+                          <div className={cn('space-y-1 max-w-xl', exp ? '' : 'max-h-28 overflow-y-auto')}>
+                            {c.codes.map((e, i) => (
+                              <div key={`${e.code}-${i}`} className="flex items-center gap-2 text-[13px]">
+                                <Badge
+                                  variant="outline"
+                                  className="font-normal text-amber-700 border-amber-300 dark:text-amber-300 truncate"
+                                >
+                                  {e.label || e.code || '(Chưa rõ)'}
+                                </Badge>
+                                <span className="ml-auto shrink-0 tabular-nums text-[15px] font-extrabold text-amber-600 dark:text-amber-400">{e.count}</span>
+                              </div>
+                            ))}
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+                  );
+                })
+              )}
+            </div>
+          </DialogContent>
+        </Dialog>
       </div>
     </TooltipProvider>
   );
