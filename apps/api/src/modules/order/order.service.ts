@@ -33,6 +33,7 @@ import type {
   SetProductionErrorResDto,
   BreakdownBucket,
   DesignFields,
+  DesignReviewOrder,
   FactoryBreakdown,
   FactoryBucket,
   FactoryFlow,
@@ -129,6 +130,7 @@ import { CustomerAssignmentService } from '../customer-assignment/customer-assig
 import { TelegramNotificationService } from '../telegram-notification/telegram-notification.service';
 import { UserEntity } from '../user/user.entity';
 import { WorkshopConfigRepository } from '../workshop-config/workshop-config.repository';
+import { mapProductTypeToCode } from './design-review-product-code';
 import { OrderEntity, OrderDocument } from './order.entity';
 import { OrderRepository } from './order.repository';
 
@@ -194,6 +196,14 @@ const FIELD_EDIT_ROLES: Record<OrderWorkshopField, RoleType[]> = {
 };
 
 const READY_FOR_FULFILL_CODE = 'ok';
+
+/**
+ * Lease window cho `getNextDesignReviewOrder()` — client xử lý xong 1 đơn mất
+ * ~1-2 phút (theo khảo sát thực tế); đặt gấp ~1.5x để chừa buffer cho mạng
+ * chậm mà vẫn nhả lại nhanh nếu client crash giữa chừng. Tinh chỉnh sau bằng
+ * cách sửa trực tiếp hằng số này, không cần đổi code gọi.
+ */
+const DESIGN_REVIEW_CLAIM_LEASE_MS = 3 * 60 * 1000;
 
 /**
  * Patch để đẩy đơn vào fulfillment stage Print — entry point thứ 2 ngoài
@@ -4942,6 +4952,131 @@ export class OrderService implements OnModuleInit {
   }
 
   /**
+   * Public API cho tool ngoài duyệt thiết kế (không qua JWT — xem
+   * `@Auth([], [], { public: true })` ở controller), nhiều client gọi song
+   * song để xử lý design. Trả về đúng 1 đơn đang ở "bước đầu tiên" của tiến
+   * trình: CHƯA có Kết quả Tool (`toolResult` rỗng) VÀ CHƯA gán designer
+   * (`designerStatus='unassigned'`) — loại đơn đã hủy/đang giữ VÀ đơn đang
+   * trong lease claim của client khác. Sort `priority desc` rồi
+   * `inProductionAt asc` (đơn nhập trước lấy trước cùng mức ưu tiên), fallback
+   * `createdAt asc` cho đơn thiếu `inProductionAt`.
+   *
+   * LƯU Ý: dùng `toolResult` ("Kết quả Tool" — has-tool/no-tool), KHÔNG phải
+   * `toolResultNote` ("Note kq Tool 1") — field đó giờ CHỈ nhân viên sửa tay,
+   * ngoài luồng automation này.
+   *
+   * Chống trùng: `findOneAndUpdate` claim `designReviewClaimedAt = now` NGAY
+   * trong cùng 1 lệnh atomic (filter + update chạy atomic per-document ở
+   * Mongo) — 2 client gọi cùng lúc không bao giờ nhận trùng đơn dù không có
+   * lock/Redis riêng. Hết lease (`DESIGN_REVIEW_CLAIM_LEASE_MS`) mà đơn vẫn
+   * chưa có `toolResult` (client crash giữa chừng) → tự nhả lại, không cần
+   * endpoint release. Tool gọi lại `POST /design-review/result` để đơn rời
+   * hẳn khỏi hàng đợi này. Xem Orders.md §18.
+   *
+   * `remaining` = tổng số đơn còn cần xử lý (đúng điều kiện "bước đầu tiên" —
+   * KHÔNG xét claim/lease, vì đơn đang bị claim tạm thời vẫn chưa xong việc)
+   * — bao gồm cả đơn vừa trả về trong `data` (chỉ hết tính khi `toolResult`
+   * được set qua `POST /design-review/result`). Count riêng — chạy song song
+   * với `findOneAndUpdate` (`Promise.all`), không ảnh hưởng tính atomic của
+   * claim.
+   */
+  async getNextDesignReviewOrder(): Promise<{
+    success: true;
+    data: DesignReviewOrder | null;
+    remaining: number;
+  }> {
+    const now = new Date();
+    const leaseExpiresBefore = new Date(now.getTime() - DESIGN_REVIEW_CLAIM_LEASE_MS);
+
+    const baseFilter = {
+      deletedAt: { $exists: false },
+      cancelledAt: { $exists: false },
+      heldAt: { $exists: false },
+      toolResult: { $in: [null, ''] },
+      designerStatus: DesignerStatus.Unassigned,
+    };
+
+    const [doc, remaining] = await Promise.all([
+      this.orderModel
+        .findOneAndUpdate(
+          {
+            ...baseFilter,
+            $or: [
+              { designReviewClaimedAt: { $exists: false } },
+              { designReviewClaimedAt: { $lt: leaseExpiresBefore } },
+            ],
+          },
+          { $set: { designReviewClaimedAt: now } },
+          {
+            sort: { priority: -1, inProductionAt: 1, createdAt: 1 },
+            projection: { productionId: 1, orderId: 1, type: 1, color: 1, size: 1, designs: 1 },
+            new: true,
+          },
+        )
+        .lean(),
+      this.orderModel.countDocuments(baseFilter),
+    ]);
+
+    if (!doc) return { success: true, data: null, remaining };
+
+    const d = doc as unknown as {
+      productionId: string;
+      orderId?: string;
+      type?: string;
+      color?: string;
+      size?: string;
+      designs?: DesignFields;
+    };
+
+    return {
+      success: true,
+      data: {
+        productionId: d.productionId,
+        orderId: d.orderId,
+        productCode: mapProductTypeToCode(d.type),
+        attributes: { size: d.size, color: d.color },
+        designs: d.designs ?? {},
+      },
+      remaining,
+    };
+  }
+
+  /**
+   * Public API cho tool ngoài lưu Kết quả Tool (`toolResult`) sau khi xử lý
+   * đơn lấy từ `getNextDesignReviewOrder()` — tương đương thao tác tay ở cột
+   * "Kết quả Tool" (Bảng Workshop). KHÔNG đụng `toolResultNote` ("Note kq Tool
+   * 1") — field đó giờ CHỈ nhân viên sửa tay, ngoài luồng automation này.
+   *
+   * Tra theo `productionId` — khóa duy nhất, luôn có (khác `orderId` = mã đơn
+   * marketplace gốc, KHÔNG unique vì 1 đơn có thể nhiều line item).
+   *
+   * Tái dùng NGUYÊN VẸN `updateField()` (field `toolResult` — KHÔNG có
+   * side-effect hook nào, khác `toolResultNote`) — permission gate
+   * (`assertCanEditField`) bypass bằng role giả `RoleType.SuperAdmin` (an
+   * toàn vì bên trong `updateField`, `roleName` CHỈ đọc ở đúng chỗ đó, không
+   * ảnh hưởng nhánh business logic nào khác). `assertValueAllowed` (value
+   * phải khớp code `workshop_config` category `tool_result` đang active) và
+   * `assertNotHeld` vẫn chạy bình thường.
+   */
+  async setDesignReviewResult(
+    productionId: string,
+    input: { toolResult: string | null },
+    ctx?: AuditContext,
+  ): Promise<UpdateOrderFieldResDto> {
+    const trimmed = (productionId ?? '').trim();
+    if (!trimmed) throw new NotFoundException('Production ID rỗng.');
+
+    const escaped = trimmed.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+    const order = await this.orderModel
+      .findOne({ productionId: { $regex: `^${escaped}$`, $options: 'i' } }, { _id: 1 })
+      .lean();
+    if (!order) throw new NotFoundException('Không tìm thấy đơn với mã này.');
+    const id = String((order as { _id: string })._id);
+
+    return this.updateField(id, { field: 'toolResult', value: input.toolResult }, RoleType.SuperAdmin, ctx);
+  }
+
+  /**
    * Tra cứu VÒNG ĐỜI của 1 đơn theo productionId — cho strip gọn trên đầu
    * Dashboard. Trả về 9 chặng (Soát tool → Thiết kế → 7 fulfillment) với trạng
    * thái done/current/pending/error/rework của TỪNG chặng dựa trên các mốc đã có
@@ -5203,6 +5338,7 @@ export class OrderService implements OnModuleInit {
             factoryId = pc.factoryId;
             machineTypeId = pc.machineTypeId;
             fabricType = pc.fabricType || undefined;
+            // Để tạm, tool ổn sẽ xóa không lưu toolResult vào đơn nữa (xem comment ở khối map product config phía trên).
             toolResult = pc.toolResult || undefined;
             machineNumber = pc.machineNumber || undefined;
             mapped++;
@@ -5265,6 +5401,8 @@ export class OrderService implements OnModuleInit {
         // derived from product config. If the workshop already overrode them on
         // a previous run, re-import shouldn't blow those edits away.
         // `originalFactoryId` is pinned for the same reason.
+        // Để tạm, tool ổn sẽ xóa không lưu toolResult vào đơn nữa (xem comment
+        // ở khối map product config phía trên).
         const insertOnly: Record<string, unknown> = { originalFactoryId: factoryId };
         if (fabricType) insertOnly.fabricType = fabricType;
         if (toolResult) insertOnly.toolResult = toolResult;

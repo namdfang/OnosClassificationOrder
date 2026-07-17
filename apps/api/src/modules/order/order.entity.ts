@@ -257,6 +257,17 @@ export class OrderEntity extends DatabaseEntityAbstract {
   toolCheckedAt?: Date;
 
   /**
+   * Lease claim cho `GET /orders/design-review/next` (tool ngoài duyệt thiết
+   * kế, nhiều client gọi song song). Set atomically trong `findOneAndUpdate`
+   * khi 1 client lấy đơn — đơn đang trong lease (`now - designReviewClaimedAt
+   * < DESIGN_REVIEW_CLAIM_LEASE_MS`) bị loại khỏi query để tránh 2 client
+   * nhận trùng đơn. Hết lease mà chưa có `toolResultNote` (client crash giữa
+   * chừng) → đơn tự nhả lại cho client khác, KHÔNG cần endpoint release riêng.
+   */
+  @Prop({ index: true })
+  designReviewClaimedAt?: Date;
+
+  /**
    * Multi-select array of workshop_config codes (category=error_file_type).
    * Legacy data có thể vẫn là string đơn — `OrderModule.onModuleInit` chạy
    * migration 1 lần convert sang array. Query filter dùng `$in: codes` vẫn
