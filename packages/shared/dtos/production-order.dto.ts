@@ -1887,6 +1887,13 @@ export const ToolCheckErrorRowZod = z.object({
   codeLabel: z.string().optional(),
   /** Ghi chú file lỗi (errorFileNote) — hiển thị ở panel chi tiết loại lỗi. */
   note: z.string().optional(),
+  /** File sửa lỗi (errorFile — mảng mã error_file_type) — panel chi tiết loại lỗi. */
+  errorFile: z.string().array().optional(),
+  /** Ảnh mockup thật + size/màu của đơn — panel chi tiết loại lỗi. */
+  mockupUrl: z.string().optional(),
+  mockupOriginalUrl: z.string().optional(),
+  size: z.string().optional(),
+  color: z.string().optional(),
 });
 export type ToolCheckErrorRow = z.infer<typeof ToolCheckErrorRowZod>;
 
