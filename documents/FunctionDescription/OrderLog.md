@@ -72,7 +72,7 @@ type AuditContext = {
 | `OrderService.deleteOrder(id, ctx)` | `delete` | không có field/before/after |
 | `OrderService.updateField(id, dto, role, ctx)` | `update` | `{ field, before: orderCũ[field], after: newValue }` |
 | `OrderService.bulkUpdateField(dto, role, ctx)` | `bulk_update` | 1 row per matched order, mỗi row có `before/after` riêng |
-| `OrderService.importOrders(dto, ctx)` | `import` | 1 row per inserted/updated order. `after = { productionId, type, isMapped, _subAction: 'create'|'update' }` |
+| `OrderService.importOrders(dto, ctx)` | `import` | 1 row summary per inserted/updated order: `after = { productionId, type, isMapped, _subAction: 'create'|'update' }`. **Re-import đơn đã tồn tại**: thêm 1 row riêng cho MỖI field bị ghi đè giá trị khác so với trước (`field` + `before` + `after` — cùng shape `updateField()` nên FE render diff bình thường). So sánh ổn định qua `stableStringifyForDiff()` (key-sort trước khi stringify, tránh false-positive do thứ tự key object như `designs` khác nhau). Field bị đổi thường gặp: `factoryId`/`machineTypeId`/`type`/`color`/`size`/`designs`/`designsOriginal`/`mockupUrl` — các field này KHÔNG được bảo vệ khỏi ghi đè khi re-import (khác `toolResult`/`fabricType`/`machineNumber` — insert-only), log lại để truy vết thay vì chặn. Xem `Orders.md` phần OnosPod import. |
 
 Trong mọi case, log push **fire-and-forget** (`void`) để không chặn response.
 

@@ -62,7 +62,16 @@ const FIELD_LABEL: Record<string, string> = {
   cancelledAt: 'Hủy đơn',
   heldAt: 'Giữ đơn',
   designs: 'Design',
+  designsOriginal: 'Design gốc',
   mockupUrl: 'Mockup',
+  // Field bị re-import (importOrders) ghi đè — xem OrderLog.md §4.
+  factoryId: 'Xưởng',
+  machineTypeId: 'Loại máy',
+  type: 'Loại sản phẩm',
+  color: 'Màu',
+  size: 'Size',
+  quantity: 'Số lượng',
+  status: 'Trạng thái đơn (OnosPod)',
 };
 
 // Field nào resolve code→name (+ color) qua workshop_config store.

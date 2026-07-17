@@ -332,6 +332,23 @@ function parseImportDate(raw?: string): Date | undefined {
   return Number.isNaN(fallback.getTime()) ? undefined : fallback;
 }
 
+/**
+ * So sánh ổn định (key sort trước khi stringify) cho diff field lúc re-import
+ * (`importOrders()`) — tránh false-positive "đổi" chỉ vì thứ tự key trong
+ * object (vd `designs`) khác nhau giữa 2 lần import dù giá trị thật giống hệt.
+ */
+function stableStringifyForDiff(v: unknown): string {
+  if (v === undefined || v === null) return 'null';
+  if (v instanceof Date) return JSON.stringify(v.toISOString());
+  if (Array.isArray(v)) return `[${v.map(stableStringifyForDiff).join(',')}]`;
+  if (typeof v === 'object') {
+    const obj = v as Record<string, unknown>;
+    const keys = Object.keys(obj).sort();
+    return `{${keys.map((k) => `${JSON.stringify(k)}:${stableStringifyForDiff(obj[k])}`).join(',')}}`;
+  }
+  return JSON.stringify(v);
+}
+
 @Injectable()
 export class OrderService implements OnModuleInit {
   constructor(
@@ -5313,11 +5330,10 @@ export class OrderService implements OnModuleInit {
     let unmapped = 0;
     const factoryCount = new Map<string, number>();
     let unassignedFactoryCount = 0;
-    const logRows: Array<{
-      orderId: string;
-      action: 'create' | 'update';
-      after: Record<string, unknown>;
-    }> = [];
+    const logRows: Array<
+      | { orderId: string; action: 'create' | 'update'; after: Record<string, unknown> }
+      | { orderId: string; field: string; before: unknown; after: unknown }
+    > = [];
     /**
      * Dedup theo `${designKey}::${sourceUrl}` → 2 đơn cùng design URL chỉ enqueue 1 job.
      * Worker sẽ updateMany cho cả 2 sau khi xử lý xong.
@@ -5428,8 +5444,20 @@ export class OrderService implements OnModuleInit {
         if (toolResult) insertOnly.toolResult = toolResult;
         if (machineNumber) insertOnly.machineNumber = machineNumber;
 
-        // Atomic upsert by productionId — includes soft-deleted records
-        const existed = await this.orderModel.exists({ productionId: data.productionId });
+        // Atomic upsert by productionId — includes soft-deleted records.
+        // Fetch `before` snapshot (chỉ các key mà `data` sẽ ghi đè) TRƯỚC
+        // upsert — dùng để diff field lúc re-import (đơn đã tồn tại), ghi
+        // order log khi phát hiện field bị ghi đè giá trị khác (vd `factoryId`
+        // sau khi đã transfer tay, hoặc `designs` sau khi designer sửa tay —
+        // xem comment ở khối map product config phía trên, KHÔNG bảo vệ các
+        // field này khỏi bị re-import ghi đè, chỉ log lại để truy vết).
+        const beforeDoc = await this.orderModel
+          .findOne(
+            { productionId: data.productionId },
+            Object.fromEntries(Object.keys(data).map((k) => [k, 1])),
+          )
+          .lean();
+        const existed = !!beforeDoc;
         const upserted = await this.orderModel.findOneAndUpdate(
           { productionId: data.productionId },
           { $set: data, $setOnInsert: { createdAt: new Date(), ...insertOnly } },
@@ -5454,6 +5482,18 @@ export class OrderService implements OnModuleInit {
             }
             entry.orderIds.add(orderIdStr);
           }
+          if (existed && beforeDoc) {
+            const b = beforeDoc as unknown as Record<string, unknown>;
+            const a = data as unknown as Record<string, unknown>;
+            for (const key of Object.keys(data)) {
+              if (key === 'productionId') continue;
+              const beforeVal = b[key] ?? null;
+              const afterVal = a[key] ?? null;
+              if (stableStringifyForDiff(beforeVal) !== stableStringifyForDiff(afterVal)) {
+                logRows.push({ orderId: orderIdStr, field: key, before: beforeVal, after: afterVal });
+              }
+            }
+          }
           logRows.push({
             orderId: orderIdStr,
             action: existed ? 'update' : 'create',
@@ -5469,14 +5509,21 @@ export class OrderService implements OnModuleInit {
     }
 
     void this.orderLogService.writeMany(
-      logRows.map((r) => ({
-        orderId: r.orderId,
-        action: 'import' as const,
-        // record the actual create/update inside the after payload so the
-        // timeline shows whether this import inserted or updated a row.
-        after: { ...r.after, _subAction: r.action },
-        ctx,
-      })),
+      logRows.map((r) =>
+        'field' in r
+          ? // Diff field bị re-import ghi đè giá trị khác (đơn đã tồn tại) —
+            // cùng shape với updateField() nên FE timeline render được diff
+            // before → after bình thường (fieldLabelFor/resolveDisplay).
+            { orderId: r.orderId, action: 'import' as const, field: r.field, before: r.before, after: r.after, ctx }
+          : {
+              orderId: r.orderId,
+              action: 'import' as const,
+              // record the actual create/update inside the after payload so the
+              // timeline shows whether this import inserted or updated a row.
+              after: { ...r.after, _subAction: r.action },
+              ctx,
+            },
+      ),
     );
 
     void this.invalidateListCache();
