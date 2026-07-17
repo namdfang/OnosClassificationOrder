@@ -1,4 +1,4 @@
-import { Injectable } from '@nestjs/common';
+import { Injectable, Logger } from '@nestjs/common';
 import { InjectModel } from '@nestjs/mongoose';
 import { Model } from 'mongoose';
 import type {
@@ -9,12 +9,10 @@ import type {
   ErrorStats,
   PersonErrorRow,
   ProductBreakdownDesigner,
-  ToolCheckCustomerError,
-  ToolCheckCustomerStat,
   ToolCheckDayRow,
+  ToolCheckErrorRow,
   ToolCheckFacet,
   ToolCheckOrder,
-  ToolCheckProductStat,
 } from 'shared';
 import {
   DesignerStatus,
@@ -42,6 +40,8 @@ import { WorkshopConfigEntity } from '../workshop-config/workshop-config.entity'
  */
 @Injectable()
 export class DesignerStatsService {
+  private readonly logger = new Logger(DesignerStatsService.name);
+
   constructor(
     @InjectModel(OrderEntity.name) private readonly orderModel: Model<OrderEntity>,
     @InjectModel(UserEntity.name) private readonly userModel: Model<UserEntity>,
@@ -1060,9 +1060,7 @@ export class DesignerStatsService {
     errorCount: number;
     reworkList: ToolCheckOrder[];
     unreviewedList: ToolCheckOrder[];
-    byProduct: ToolCheckProductStat[];
-    byCustomer: ToolCheckCustomerStat[];
-    topCustomerError: ToolCheckCustomerError[];
+    errorHistory: ToolCheckErrorRow[];
     days: ToolCheckDayRow[];
     columnTotals: { unreviewed: number; rework: number };
     facets: { type: ToolCheckFacet[]; customer: ToolCheckFacet[]; machineNumber: ToolCheckFacet[] };
@@ -1094,13 +1092,17 @@ export class DesignerStatsService {
       toolResultNote: { $in: [null, ''] },
       ...alive,
     });
-    const errMatch = withFilters({
+    // Lịch sử "lỗi do người soát tool tạo ra" = đơn TỪNG bị đánh Note kq Tool ≠
+    // ok (kể cả đã sửa về 'ok'). Nguồn BỀN VỮNG = field `toolCheckErrorNotes`
+    // (dedup mã note ≠ ok, không bị xoá khi sửa). Lọc kỳ theo `inProductionAt`.
+    const errHistoryMatch = withFilters({
       inProductionAt: inWindow,
-      productionErrorSource: 'tool-check',
+      'toolCheckErrorNotes.0': { $exists: true },
       ...alive,
     });
 
     const LIST_CAP = 500;
+    const HISTORY_CAP = 5000;
     const proj = {
       productionId: 1,
       userSku: 1,
@@ -1140,13 +1142,13 @@ export class DesignerStatsService {
     const toFacet = (rows: { _id: string; count: number }[]): ToolCheckFacet[] =>
       rows.filter((r) => r._id !== '').map((r) => ({ value: r._id, count: r.count }));
 
+    const histProj = { userSku: 1, userEmail: 1, type: 1, productConfigId: 1, mockupUrl: 1, toolCheckErrorNotes: 1 };
+
     const [
       checkedCount,
       reworkRaw,
       unreviewedRaw,
-      byProductAgg,
-      byCustomerAgg,
-      topErrAgg,
+      candidatesRaw,
       unreviewedByDay,
       reworkByDay,
       typeFacetAgg,
@@ -1160,38 +1162,13 @@ export class DesignerStatsService {
           .sort({ inProductionAt: -1 })
           .limit(LIST_CAP)
           .lean(),
-        this.orderModel.aggregate<{ _id: string; count: number; cfg: string | null }>([
-          { $match: errMatch },
-          {
-            $group: {
-              _id: { $ifNull: ['$type', ''] },
-              count: { $sum: 1 },
-              cfg: { $max: '$productConfigId' },
-            },
-          },
-          { $sort: { count: -1 } },
-          { $limit: 50 },
-        ]),
-        this.orderModel.aggregate<{ _id: string; count: number }>([
-          { $match: errMatch },
-          { $group: { _id: { $ifNull: ['$userSku', ''] }, count: { $sum: 1 } } },
-          { $sort: { count: -1 } },
-          { $limit: 50 },
-        ]),
-        this.orderModel.aggregate<{ _id: { sku: string; code: string }; count: number }>([
-          { $match: errMatch },
-          {
-            $group: {
-              _id: {
-                sku: { $ifNull: ['$userSku', ''] },
-                code: { $ifNull: ['$productionError', ''] },
-              },
-              count: { $sum: 1 },
-            },
-          },
-          { $sort: { count: -1 } },
-          { $limit: 50 },
-        ]),
+        // Candidate: đơn từng bị đánh Note kq Tool ≠ ok trong kỳ. Mã note (loại
+        // lỗi) nằm sẵn trong `toolCheckErrorNotes` — không cần join thêm.
+        this.orderModel
+          .find(errHistoryMatch, histProj)
+          .sort({ inProductionAt: -1 })
+          .limit(HISTORY_CAP)
+          .lean(),
         // Per-day: chưa soát + In trả về (áp cùng 3 filter type/customer/machine).
         this.orderModel.aggregate<{ _id: string; count: number }>([
           { $match: unreviewedMatch },
@@ -1228,8 +1205,24 @@ export class DesignerStatsService {
         : undefined,
     });
 
-    // Resolve mockup/level/fullName cho byProduct (join productConfig qua $max cfg).
-    const cfgIds = [...new Set(byProductAgg.map((a) => a.cfg).filter(Boolean))] as string[];
+    const candidates = candidatesRaw as Array<Record<string, unknown>>;
+    if (candidates.length >= HISTORY_CAP) {
+      this.logger.warn(
+        `[tool-check] errorHistory candidate cap ${HISTORY_CAP} reached — thống kê lịch sử lỗi có thể thiếu (thu hẹp kỳ/filter).`,
+      );
+    }
+
+    // Label mã note kq Tool (workshop_config tool_result_note): code → name.
+    const noteCfgs = await this.workshopConfigModel
+      .find({ category: WorkshopConfigCategory.ToolResultNote }, { code: 1, name: 1 })
+      .lean();
+    const noteNameMap = new Map<string, string>();
+    for (const c of noteCfgs as Array<Record<string, unknown>>) {
+      noteNameMap.set(String(c.code), String(c.name));
+    }
+
+    // Resolve mockup/level/fullName theo productConfigId của candidate.
+    const cfgIds = [...new Set(candidates.map((o) => o.productConfigId).filter(Boolean))] as string[];
     const cfgs = cfgIds.length
       ? await this.productConfigModel
           .find({ _id: { $in: cfgIds } }, { fullName: 1, mockup: 1, level: 1 })
@@ -1244,37 +1237,28 @@ export class DesignerStatsService {
       });
     }
 
-    // Resolve label loại lỗi (workshop_config production_error).
-    const errCfgs = await this.workshopConfigModel
-      .find({ category: WorkshopConfigCategory.ProductionError }, { code: 1, name: 1 })
-      .lean();
-    const errNameMap = new Map<string, string>();
-    for (const c of errCfgs as Array<Record<string, unknown>>) {
-      errNameMap.set(String(c.code), String(c.name));
-    }
-
-    const byProduct: ToolCheckProductStat[] = byProductAgg.map((a) => {
-      const cfg = a.cfg ? cfgMap.get(a.cfg) : undefined;
-      return {
-        type: a._id || '(Chưa rõ)',
+    // Flat rows: mỗi (đơn × mã note ≠ ok). Mã note lấy sẵn từ `toolCheckErrorNotes`.
+    const errorHistory: ToolCheckErrorRow[] = [];
+    for (const o of candidates) {
+      const oid = String(o._id);
+      const cfg = o.productConfigId ? cfgMap.get(String(o.productConfigId)) : undefined;
+      const notes = Array.isArray(o.toolCheckErrorNotes)
+        ? (o.toolCheckErrorNotes as string[]).filter(Boolean)
+        : [];
+      const codes = notes.length ? [...new Set(notes)] : [''];
+      const base = {
+        orderId: oid,
+        userSku: o.userSku as string | undefined,
+        userEmail: o.userEmail as string | undefined,
+        type: o.type as string | undefined,
         fullName: cfg?.fullName,
         mockup: cfg?.mockup,
         level: cfg?.level,
-        count: a.count,
       };
-    });
-
-    const byCustomer: ToolCheckCustomerStat[] = byCustomerAgg.map((a) => ({
-      userSku: a._id || '(Chưa rõ)',
-      count: a.count,
-    }));
-
-    const topCustomerError: ToolCheckCustomerError[] = topErrAgg.map((a) => ({
-      userSku: a._id.sku || '(Chưa rõ)',
-      code: a._id.code || '(Chưa rõ)',
-      label: a._id.code ? errNameMap.get(a._id.code) : undefined,
-      count: a.count,
-    }));
+      for (const code of codes) {
+        errorHistory.push({ ...base, code, codeLabel: code ? noteNameMap.get(code) : undefined });
+      }
+    }
 
     // Dải theo ngày: căn theo `days` (mới→cũ) từ resolveVnWindow.
     const unreviewedDayMap = new Map(unreviewedByDay.map((r) => [r._id, r.count]));
@@ -1293,9 +1277,7 @@ export class DesignerStatsService {
       errorCount: reworkRaw.length,
       reworkList: (reworkRaw as Array<Record<string, unknown>>).map(toOrder),
       unreviewedList: (unreviewedRaw as Array<Record<string, unknown>>).map(toOrder),
-      byProduct,
-      byCustomer,
-      topCustomerError,
+      errorHistory,
       days: dayRows,
       columnTotals,
       facets: {

@@ -410,6 +410,27 @@ export class OrderService implements OnModuleInit {
       );
     }
 
+    // Backfill `toolCheckErrorNotes` (lịch sử lỗi do người soát tool đánh Note kq
+    // Tool ≠ ok) từ OrderLog. Idempotent: chỉ chạy khi CHƯA đơn nào có field (lần
+    // deploy đầu); về sau hook trong updateField tự bồi. $set chỉ với đơn chưa có.
+    const tcnBackfilled = await this.orderModel.exists({ 'toolCheckErrorNotes.0': { $exists: true } });
+    if (!tcnBackfilled) {
+      const tcnRows = await this.orderLogRepository.aggregateToolCheckErrorNotes();
+      const tcnOps = tcnRows
+        .filter((r) => r.orderId && Array.isArray(r.notes) && r.notes.length)
+        .map((r) => ({
+          updateOne: {
+            filter: { _id: r.orderId, toolCheckErrorNotes: { $exists: false } },
+            update: { $set: { toolCheckErrorNotes: r.notes } },
+          },
+        }));
+      if (tcnOps.length) {
+        const tcnRes = await this.orderModel.bulkWrite(tcnOps, { ordered: false });
+        // eslint-disable-next-line no-console
+        console.log(`[order-backfill] toolCheckErrorNotes seeded on ${tcnRes.modifiedCount} orders`);
+      }
+    }
+
     // Migrate `errorFile` từ string đơn → array. Idempotent: chỉ chạy với row
     // có $type='string'. Sau migrate: errorFile luôn là array (hoặc null).
     const errorFileMigrateRes = await this.orderModel.updateMany(
@@ -4542,6 +4563,18 @@ export class OrderService implements OnModuleInit {
     if (Object.keys(incOps).length > 0) mongoUpdate.$inc = incOps;
     if (reworkBackTimelineEntry) {
       mongoUpdate.$push = { fulfillmentTimeline: reworkBackTimelineEntry };
+    }
+    // Người soát tool đánh Note kq Tool ≠ ok (và ≠ rỗng) → ghi BỀN VỮNG mã note
+    // vào `toolCheckErrorNotes` (dedup) để thống kê lịch sử lỗi Soát tool kể cả
+    // sau khi đơn được sửa về 'ok'. Chỉ nhánh field='toolResultNote' (thao tác
+    // trực tiếp của người soát) — KHÔNG tính side-effect 'error' do In báo.
+    if (
+      dto.field === 'toolResultNote' &&
+      typeof normalized === 'string' &&
+      normalized.trim() &&
+      normalized !== READY_FOR_FULFILL_CODE
+    ) {
+      mongoUpdate.$addToSet = { toolCheckErrorNotes: normalized };
     }
 
     const updated = await this.orderModel.findOneAndUpdate({ _id: id }, mongoUpdate, { new: true });

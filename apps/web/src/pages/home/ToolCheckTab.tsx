@@ -2,12 +2,10 @@ import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { AlertTriangle, FileSearch, PackageSearch, RefreshCw, Users, X } from 'lucide-react';
 import { PRODUCT_LEVEL_MAP, WorkshopConfigCategory } from 'shared';
 import type {
-  ToolCheckCustomerError,
-  ToolCheckCustomerStat,
   ToolCheckDayRow,
+  ToolCheckErrorRow,
   ToolCheckFacet,
   ToolCheckOrder,
-  ToolCheckProductStat,
 } from 'shared';
 
 import { Badge } from '@/components/ui/badge';
@@ -35,9 +33,7 @@ interface Overview {
   errorCount: number;
   reworkList: ToolCheckOrder[];
   unreviewedList: ToolCheckOrder[];
-  byProduct: ToolCheckProductStat[];
-  byCustomer: ToolCheckCustomerStat[];
-  topCustomerError: ToolCheckCustomerError[];
+  errorHistory: ToolCheckErrorRow[];
   days: ToolCheckDayRow[];
   columnTotals: { unreviewed: number; rework: number };
   facets: { type: ToolCheckFacet[]; customer: ToolCheckFacet[]; machineNumber: ToolCheckFacet[] };
@@ -64,6 +60,9 @@ function fmtDayHead(day: string): { wd: string; dm: string } {
 
 const toOpts = (f: ToolCheckFacet[] = []) => f.map((o) => ({ value: o.value, label: o.value, count: o.count }));
 
+/** Key định danh khách = userSku + userEmail (1 khách = cặp này). */
+const custKey = (r: { userSku?: string; userEmail?: string }) => `${r.userSku ?? ''}|||${r.userEmail ?? ''}`;
+
 export default function ToolCheckTab() {
   const { canEditField } = usePermission();
   const loadConfig = useWorkshopConfigStore((s) => s.load);
@@ -83,6 +82,10 @@ export default function ToolCheckTab() {
   // Ngày đang lọc (YYYY-MM-DD VN) — click 1 cột trong dải ngày; chỉ lọc DANH
   // SÁCH client-side, KPI/dải/thống kê giữ nguyên cả kỳ.
   const [dayFilter, setDayFilter] = useState('');
+  // Cross-filter nội bộ 3 ô thống kê lỗi (client-side, không refetch):
+  // selCust = key `userSku|||userEmail`, selType = mã sản phẩm (`type`).
+  const [selCust, setSelCust] = useState('');
+  const [selType, setSelType] = useState('');
 
   const [data, setData] = useState<Overview | null>(null);
   const [loading, setLoading] = useState(false);
@@ -113,8 +116,10 @@ export default function ToolCheckTab() {
   };
 
   useEffect(() => {
-    // Đổi kỳ/filter → bỏ ngày đang chọn (tránh lọc theo ngày ngoài kỳ mới).
+    // Đổi kỳ/filter → bỏ ngày đang chọn + cross-filter thống kê.
     setDayFilter('');
+    setSelCust('');
+    setSelType('');
     fetchData();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [dateFrom, dateTo, filterType, filterCustomer, filterMachine]);
@@ -252,6 +257,62 @@ export default function ToolCheckTab() {
   );
 
   const days = useMemo(() => [...(data?.days || [])].reverse(), [data]);
+
+  // 3 ô thống kê lỗi Soát tool (lịch sử, kể cả đơn đã sửa). Đếm ĐƠN riêng biệt
+  // (dedup theo orderId). Cross-filter: chọn Khách → lọc Sản phẩm + Loại lỗi;
+  // chọn Sản phẩm → lọc Khách + Loại lỗi.
+  const stats = useMemo(() => {
+    const rows = data?.errorHistory ?? [];
+    const byCust = (r: ToolCheckErrorRow) => !selCust || custKey(r) === selCust;
+    const byType = (r: ToolCheckErrorRow) => !selType || (r.type ?? '') === selType;
+
+    const custMap = new Map<
+      string,
+      { userSku?: string; userEmail?: string; orders: Set<string> }
+    >();
+    const prodMap = new Map<
+      string,
+      { type?: string; fullName?: string; mockup?: string; level?: number; orders: Set<string> }
+    >();
+    const errMap = new Map<string, { code: string; label?: string; orders: Set<string> }>();
+
+    for (const r of rows) {
+      if (byType(r)) {
+        const k = custKey(r);
+        let g = custMap.get(k);
+        if (!g) custMap.set(k, (g = { userSku: r.userSku, userEmail: r.userEmail, orders: new Set() }));
+        g.orders.add(r.orderId);
+      }
+      if (byCust(r)) {
+        const k = r.type ?? '';
+        let g = prodMap.get(k);
+        if (!g)
+          prodMap.set(
+            k,
+            (g = { type: r.type, fullName: r.fullName, mockup: r.mockup, level: r.level, orders: new Set() }),
+          );
+        g.orders.add(r.orderId);
+      }
+      if (byCust(r) && byType(r)) {
+        const k = r.code || '';
+        let g = errMap.get(k);
+        if (!g) errMap.set(k, (g = { code: r.code, label: r.codeLabel, orders: new Set() }));
+        g.orders.add(r.orderId);
+      }
+    }
+
+    return {
+      byCustomer: [...custMap.entries()]
+        .map(([key, g]) => ({ key, userSku: g.userSku, userEmail: g.userEmail, count: g.orders.size }))
+        .sort((a, b) => b.count - a.count),
+      byProduct: [...prodMap.entries()]
+        .map(([key, g]) => ({ key, type: g.type, fullName: g.fullName, mockup: g.mockup, level: g.level, count: g.orders.size }))
+        .sort((a, b) => b.count - a.count),
+      byError: [...errMap.values()]
+        .map((g) => ({ code: g.code, label: g.label, count: g.orders.size }))
+        .sort((a, b) => b.count - a.count),
+    };
+  }, [data?.errorHistory, selCust, selType]);
 
   return (
     <TooltipProvider delayDuration={200}>
@@ -459,88 +520,160 @@ export default function ToolCheckTab() {
         )}
       </div>
 
-      {/* Thống kê lỗi */}
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-5">
-        {/* Theo sản phẩm */}
-        <div className="rounded-lg border border-border bg-card p-4">
-          <div className="flex items-center gap-2 mb-3">
-            <PackageSearch size={16} className="text-indigo-600" />
-            <h3 className="text-sm font-semibold">Lỗi theo sản phẩm</h3>
-          </div>
-          {(data?.byProduct.length ?? 0) === 0 ? (
-            <p className="text-xs text-muted-foreground text-center py-6">Chưa có dữ liệu.</p>
-          ) : (
-            <div className="space-y-1.5 max-h-72 overflow-y-auto">
-              {data!.byProduct.map((p) => (
-                <div key={p.type} className="flex items-center gap-2 text-[13px]">
-                  {p.mockup ? (
-                    <img src={p.mockup} alt="" className="w-7 h-7 rounded object-cover border border-border shrink-0" />
-                  ) : (
-                    <div className="w-7 h-7 rounded border border-dashed border-border shrink-0" />
-                  )}
-                  {p.level != null && (
-                    <Badge
-                      className="font-normal border shrink-0 text-[10px]"
-                      style={{
-                        backgroundColor: PRODUCT_LEVEL_MAP[p.level]?.color,
-                        color: '#fff',
-                        borderColor: PRODUCT_LEVEL_MAP[p.level]?.color,
-                      }}
+      {/* Thống kê lịch sử lỗi Soát tool (kể cả đơn đã sửa) — đếm ĐƠN riêng biệt.
+          3 cột Khách → Sản phẩm → Loại lỗi, click Khách/Sản phẩm để lọc chéo. */}
+      <div className="rounded-lg border border-border bg-card">
+        <div className="flex items-center gap-2 px-4 py-2.5 border-b border-border flex-wrap">
+          <AlertTriangle size={15} className="text-amber-500" />
+          <span className="text-sm font-semibold">Thống kê lỗi Soát tool</span>
+          <span className="hidden md:inline text-[11px] text-muted-foreground">
+            — đơn từng bị người soát tool đánh Note kq Tool ≠ ok (kể cả đã sửa về ok), theo ngày vào SX · đếm số đơn
+          </span>
+          {(selCust || selType) && (
+            <button
+              type="button"
+              onClick={() => {
+                setSelCust('');
+                setSelType('');
+              }}
+              className="ml-auto inline-flex items-center gap-1 text-[11px] rounded-full bg-indigo-100 dark:bg-indigo-500/20 text-indigo-700 dark:text-indigo-300 px-2 py-0.5"
+            >
+              Bỏ lọc chéo
+              <X size={11} />
+            </button>
+          )}
+        </div>
+        <div className="grid grid-cols-1 lg:grid-cols-3 gap-4 p-4">
+          {/* Cột 1 — Khách hàng */}
+          <div>
+            <div className="flex items-center gap-2 mb-3">
+              <Users size={16} className="text-indigo-600" />
+              <h3 className="text-sm font-semibold">Theo khách hàng</h3>
+              {selCust && (
+                <button
+                  type="button"
+                  onClick={() => setSelCust('')}
+                  className="ml-auto inline-flex items-center gap-1 text-[10px] rounded bg-muted px-1.5 py-0.5 text-muted-foreground"
+                >
+                  <X size={10} /> bỏ chọn
+                </button>
+              )}
+            </div>
+            {stats.byCustomer.length === 0 ? (
+              <p className="text-xs text-muted-foreground text-center py-6">Chưa có dữ liệu.</p>
+            ) : (
+              <div className="space-y-0.5 max-h-72 overflow-y-auto">
+                {stats.byCustomer.map((c) => {
+                  const active = selCust === c.key;
+                  return (
+                    <button
+                      key={c.key}
+                      type="button"
+                      onClick={() => setSelCust((cur) => (cur === c.key ? '' : c.key))}
+                      className={`w-full flex items-center gap-2 text-[13px] rounded px-2 py-1 text-left transition-colors ${
+                        active ? 'bg-indigo-100 dark:bg-indigo-500/20' : 'hover:bg-muted/60'
+                      }`}
                     >
-                      Lv {p.level}
+                      <div className="flex-1 min-w-0">
+                        <div className="truncate font-medium" title={c.userSku || '(Chưa rõ)'}>
+                          {c.userSku || '(Chưa rõ)'}
+                        </div>
+                        {c.userEmail && (
+                          <div className="truncate text-[11px] text-muted-foreground" title={c.userEmail}>
+                            {c.userEmail}
+                          </div>
+                        )}
+                      </div>
+                      <span className="text-muted-foreground tabular-nums shrink-0">{c.count}</span>
+                    </button>
+                  );
+                })}
+              </div>
+            )}
+          </div>
+
+          {/* Cột 2 — Sản phẩm */}
+          <div className="lg:border-l lg:border-border lg:pl-4">
+            <div className="flex items-center gap-2 mb-3">
+              <PackageSearch size={16} className="text-indigo-600" />
+              <h3 className="text-sm font-semibold">Theo sản phẩm</h3>
+              {selType && (
+                <button
+                  type="button"
+                  onClick={() => setSelType('')}
+                  className="ml-auto inline-flex items-center gap-1 text-[10px] rounded bg-muted px-1.5 py-0.5 text-muted-foreground"
+                >
+                  <X size={10} /> bỏ chọn
+                </button>
+              )}
+            </div>
+            {stats.byProduct.length === 0 ? (
+              <p className="text-xs text-muted-foreground text-center py-6">Chưa có dữ liệu.</p>
+            ) : (
+              <div className="space-y-0.5 max-h-72 overflow-y-auto">
+                {stats.byProduct.map((p) => {
+                  const active = selType === p.key;
+                  return (
+                    <button
+                      key={p.key}
+                      type="button"
+                      onClick={() => setSelType((cur) => (cur === p.key ? '' : p.key))}
+                      className={`w-full flex items-center gap-2 text-[13px] rounded px-2 py-1 text-left transition-colors ${
+                        active ? 'bg-indigo-100 dark:bg-indigo-500/20' : 'hover:bg-muted/60'
+                      }`}
+                    >
+                      {p.mockup ? (
+                        <img src={p.mockup} alt="" className="w-7 h-7 rounded object-cover border border-border shrink-0" />
+                      ) : (
+                        <div className="w-7 h-7 rounded border border-dashed border-border shrink-0" />
+                      )}
+                      {p.level != null && (
+                        <Badge
+                          className="font-normal border shrink-0 text-[10px]"
+                          style={{
+                            backgroundColor: PRODUCT_LEVEL_MAP[p.level]?.color,
+                            color: '#fff',
+                            borderColor: PRODUCT_LEVEL_MAP[p.level]?.color,
+                          }}
+                        >
+                          Lv {p.level}
+                        </Badge>
+                      )}
+                      <span className="flex-1 min-w-0 truncate" title={p.fullName || p.type || '(Chưa rõ)'}>
+                        {p.fullName || p.type || '(Chưa rõ)'}
+                      </span>
+                      <span className="text-muted-foreground tabular-nums shrink-0">{p.count}</span>
+                    </button>
+                  );
+                })}
+              </div>
+            )}
+          </div>
+
+          {/* Cột 3 — Loại lỗi */}
+          <div className="lg:border-l lg:border-border lg:pl-4">
+            <div className="flex items-center gap-2 mb-3">
+              <AlertTriangle size={16} className="text-amber-500" />
+              <h3 className="text-sm font-semibold">Theo loại lỗi</h3>
+            </div>
+            {stats.byError.length === 0 ? (
+              <p className="text-xs text-muted-foreground text-center py-6">Chưa có dữ liệu.</p>
+            ) : (
+              <div className="space-y-1 max-h-72 overflow-y-auto">
+                {stats.byError.map((e) => (
+                  <div key={e.code || '(unknown)'} className="flex items-center gap-2 text-[13px] px-2 py-1">
+                    <Badge
+                      variant="outline"
+                      className="font-normal text-amber-700 border-amber-300 dark:text-amber-300 truncate"
+                    >
+                      {e.label || e.code || '(Chưa rõ)'}
                     </Badge>
-                  )}
-                  <span className="flex-1 min-w-0 truncate" title={p.fullName || p.type}>
-                    {p.fullName || p.type}
-                  </span>
-                  <span className="text-muted-foreground tabular-nums shrink-0">{p.count}</span>
-                </div>
-              ))}
-            </div>
-          )}
-        </div>
-
-        {/* Theo khách hàng */}
-        <div className="rounded-lg border border-border bg-card p-4">
-          <div className="flex items-center gap-2 mb-3">
-            <Users size={16} className="text-indigo-600" />
-            <h3 className="text-sm font-semibold">Lỗi theo khách hàng</h3>
+                    <span className="ml-auto text-muted-foreground tabular-nums shrink-0">{e.count}</span>
+                  </div>
+                ))}
+              </div>
+            )}
           </div>
-          {(data?.byCustomer.length ?? 0) === 0 ? (
-            <p className="text-xs text-muted-foreground text-center py-6">Chưa có dữ liệu.</p>
-          ) : (
-            <div className="space-y-1 max-h-72 overflow-y-auto">
-              {data!.byCustomer.map((c) => (
-                <div key={c.userSku} className="flex items-center justify-between text-[13px] gap-2">
-                  <span className="truncate" title={c.userSku}>{c.userSku}</span>
-                  <span className="text-muted-foreground tabular-nums shrink-0">{c.count}</span>
-                </div>
-              ))}
-            </div>
-          )}
-        </div>
-
-        {/* Khách × loại lỗi hay gặp nhất */}
-        <div className="rounded-lg border border-border bg-card p-4">
-          <div className="flex items-center gap-2 mb-3">
-            <AlertTriangle size={16} className="text-amber-500" />
-            <h3 className="text-sm font-semibold">Khách hay gặp lỗi nào</h3>
-          </div>
-          {(data?.topCustomerError.length ?? 0) === 0 ? (
-            <p className="text-xs text-muted-foreground text-center py-6">Chưa có dữ liệu.</p>
-          ) : (
-            <div className="space-y-1 max-h-72 overflow-y-auto">
-              {data!.topCustomerError.map((r, i) => (
-                <div key={`${r.userSku}-${r.code}-${i}`} className="flex items-center gap-2 text-[13px]">
-                  <span className="truncate max-w-[45%]" title={r.userSku}>{r.userSku}</span>
-                  <Badge variant="outline" className="font-normal text-amber-700 border-amber-300 dark:text-amber-300 truncate">
-                    {r.label || r.code}
-                  </Badge>
-                  <span className="ml-auto text-muted-foreground tabular-nums shrink-0">{r.count}</span>
-                </div>
-              ))}
-            </div>
-          )}
         </div>
       </div>
 
