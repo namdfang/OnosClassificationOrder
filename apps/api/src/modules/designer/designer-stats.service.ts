@@ -1165,10 +1165,14 @@ export class DesignerStatsService {
       userSku: 1,
       userEmail: 1,
       type: 1,
+      size: 1,
+      color: 1,
       productConfigId: 1,
       mockupUrl: 1,
+      mockupOriginalUrl: 1,
       toolCheckErrorNotes: 1,
       errorFileNote: 1,
+      errorFile: 1,
     };
 
     const [
@@ -1290,6 +1294,11 @@ export class DesignerStatsService {
         mockup: cfg?.mockup,
         level: cfg?.level,
         note: (o.errorFileNote as string | undefined) || undefined,
+        errorFile: Array.isArray(o.errorFile) ? (o.errorFile as string[]).filter(Boolean) : undefined,
+        mockupUrl: o.mockupUrl as string | undefined,
+        mockupOriginalUrl: o.mockupOriginalUrl as string | undefined,
+        size: o.size as string | undefined,
+        color: o.color as string | undefined,
       };
       for (const code of codes) {
         errorHistory.push({ ...base, code, codeLabel: code ? noteNameMap.get(code) : undefined });
