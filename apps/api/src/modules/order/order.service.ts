@@ -417,6 +417,27 @@ export class OrderService implements OnModuleInit {
       );
     }
 
+    // Backfill `toolCheckErrorNotes` (lịch sử lỗi do người soát tool đánh Note kq
+    // Tool ≠ ok) từ OrderLog. Idempotent: chỉ chạy khi CHƯA đơn nào có field (lần
+    // deploy đầu); về sau hook trong updateField tự bồi. $set chỉ với đơn chưa có.
+    const tcnBackfilled = await this.orderModel.exists({ 'toolCheckErrorNotes.0': { $exists: true } });
+    if (!tcnBackfilled) {
+      const tcnRows = await this.orderLogRepository.aggregateToolCheckErrorNotes();
+      const tcnOps = tcnRows
+        .filter((r) => r.orderId && Array.isArray(r.notes) && r.notes.length)
+        .map((r) => ({
+          updateOne: {
+            filter: { _id: r.orderId, toolCheckErrorNotes: { $exists: false } },
+            update: { $set: { toolCheckErrorNotes: r.notes } },
+          },
+        }));
+      if (tcnOps.length) {
+        const tcnRes = await this.orderModel.bulkWrite(tcnOps, { ordered: false });
+        // eslint-disable-next-line no-console
+        console.log(`[order-backfill] toolCheckErrorNotes seeded on ${tcnRes.modifiedCount} orders`);
+      }
+    }
+
     // Migrate `errorFile` từ string đơn → array. Idempotent: chỉ chạy với row
     // có $type='string'. Sau migrate: errorFile luôn là array (hoặc null).
     const errorFileMigrateRes = await this.orderModel.updateMany(
@@ -631,15 +652,12 @@ export class OrderService implements OnModuleInit {
     roleName: RoleType | undefined,
     fulfillmentStage: string | undefined,
     fulfillmentFactoryId: string | undefined,
+    assigneeUserId: string | undefined,
   ): void {
     const pushAnd = (clause: Record<string, unknown>) => {
       const and = (filter.$and as unknown[] | undefined) ?? [];
       and.push(clause);
       filter.$and = and;
-    };
-    const TOOL_CHECK_MARKER = {
-      productionErrorSource: 'tool-check',
-      toolResultNote: 'error',
     };
 
     // ─── Fulfillment (in→đóng): positional theo stage + khóa xưởng ───
@@ -678,34 +696,24 @@ export class OrderService implements OnModuleInit {
       return;
     }
 
-    // ─── Support: chặng soát-tool ───
+    // ─── Support: tab tạm ẩn (soát-tool không còn hiển thị ở đây) ───
     if (roleName === RoleType.Support) {
-      if (tab === 'todo') {
-        pushAnd(TOOL_CHECK_MARKER);
-      } else {
-        pushAnd({ fulfillmentTimeline: { $elemMatch: { reworkTarget: 'tool-check' } } });
-        pushAnd({ $nor: [TOOL_CHECK_MARKER] });
-      }
+      pushAnd({ _id: '__support_hidden__' });
       return;
     }
 
-    // ─── Designer / DesignerLeader: chặng designer ───
+    // ─── Designer / DesignerLeader: đơn bị đẩy lỗi NGƯỢC từ fulfillment về
+    // thiết kế để làm lại (task của mình). Base filter đã yêu cầu đơn đã vào
+    // fulfillment + loại tool-check. ───
     if (roleName === RoleType.Designer || roleName === RoleType.DesignerLeader) {
+      pushAnd({ assignee: assigneeUserId ?? '__no_user__' });
       if (tab === 'todo') {
-        pushAnd({
-          $or: [
-            {
-              designerStatus: {
-                $in: [DesignerStatus.Rework, DesignerStatus.Assigned, DesignerStatus.InProgress],
-              },
-            },
-            { $and: [{ designerCompletedAt: { $exists: true, $ne: null } }, TOOL_CHECK_MARKER] },
-          ],
-        });
+        // Đơn đang nằm ở chặng thiết kế chờ designer sửa.
+        pushAnd({ designerStatus: { $in: [DesignerStatus.Rework, DesignerStatus.InProgress] } });
       } else {
+        // Đã sửa xong (đã đẩy lại vào fulfillment) — chỉ đơn TỪNG bị rework về designer.
         pushAnd({ designerStatus: DesignerStatus.Done });
-        pushAnd({ currentFulfillmentStage: { $exists: true, $ne: null } });
-        pushAnd({ $nor: [TOOL_CHECK_MARKER] });
+        pushAnd({ fulfillmentTimeline: { $elemMatch: { reworkTarget: 'designer' } } });
       }
       return;
     }
@@ -4561,6 +4569,18 @@ export class OrderService implements OnModuleInit {
     if (reworkBackTimelineEntry) {
       mongoUpdate.$push = { fulfillmentTimeline: reworkBackTimelineEntry };
     }
+    // Người soát tool đánh Note kq Tool ≠ ok (và ≠ rỗng) → ghi BỀN VỮNG mã note
+    // vào `toolCheckErrorNotes` (dedup) để thống kê lịch sử lỗi Soát tool kể cả
+    // sau khi đơn được sửa về 'ok'. Chỉ nhánh field='toolResultNote' (thao tác
+    // trực tiếp của người soát) — KHÔNG tính side-effect 'error' do In báo.
+    if (
+      dto.field === 'toolResultNote' &&
+      typeof normalized === 'string' &&
+      normalized.trim() &&
+      normalized !== READY_FOR_FULFILL_CODE
+    ) {
+      mongoUpdate.$addToSet = { toolCheckErrorNotes: normalized };
+    }
 
     const updated = await this.orderModel.findOneAndUpdate({ _id: id }, mongoUpdate, { new: true });
     if (!updated) throw new NotFoundException('Order not found');
@@ -6525,11 +6545,23 @@ export class OrderService implements OnModuleInit {
     filter.productionError = { $exists: true, $nin: [null, ''] };
     filter.deletedAt = { $exists: false };
     filter.cancelledAt = { $exists: false };
+    // CHỈ đơn ĐÃ vào fulfillment (in→ép→…→đóng gói): `currentFulfillmentStage` set.
+    // Loại đơn còn ở soát-tool / thiết kế trước fulfillment.
+    filter.currentFulfillmentStage = { $exists: true, $ne: null };
+    // Bỏ hẳn lỗi nguồn soát-tool khỏi tab này.
+    filter.productionErrorSource = { $ne: 'tool-check' };
 
     // Tab theo góc nhìn chặng của viewer (Cần xử lý / Đã xong) + khóa xưởng cho
-    // Fulfillment. Visibility KHÔNG lọc theo assignee — FE gate nút thao tác.
-    void assigneeUserId;
-    this.applyErrorLogViewFilter(filter, tab, roleName, fulfillmentStage, fulfillmentFactoryId);
+    // Fulfillment. Designer lọc theo assignee (task của mình); các role khác FE
+    // gate nút thao tác.
+    this.applyErrorLogViewFilter(
+      filter,
+      tab,
+      roleName,
+      fulfillmentStage,
+      fulfillmentFactoryId,
+      assigneeUserId,
+    );
 
     // Tab "Cần xử lý": ẩn đơn Admin đã "Đánh dấu hoàn thành lỗi" (mọi role).
     // `{errorResolvedAt: null}` khớp cả field thiếu lẫn null.
@@ -6606,23 +6638,25 @@ export class OrderService implements OnModuleInit {
     // KHÔNG phải ngày báo lỗi (`productionFirstErrorAt`). Snapshot `countFilter`
     // TRƯỚC khi thêm clause urgency để badge luôn hiện đủ 4 mức (sticky filter).
     const now = Date.now();
-    const DAY = 24 * 60 * 60 * 1000;
+    const HOUR = 60 * 60 * 1000;
 
     const countFilter: Record<string, unknown> = { ...filter };
     if (Array.isArray(countFilter.$and)) countFilter.$and = [...(countFilter.$and as unknown[])];
 
+    // Ngưỡng khẩn cấp theo GIỜ kể từ `inProductionAt`:
+    // Mới <2h · Cần làm 2–4h · Gấp 4–6h · Khẩn cấp >6h.
     if (dto.urgency) {
       const levels = dto.urgency.split(',').filter(Boolean);
       const ranges: Array<{ $gt?: Date; $lte?: Date }> = [];
       for (const lvl of levels) {
         if (lvl === 'new') {
-          ranges.push({ $gt: new Date(now - 1 * DAY) });
+          ranges.push({ $gt: new Date(now - 2 * HOUR) });
         } else if (lvl === 'attention') {
-          ranges.push({ $gt: new Date(now - 2 * DAY), $lte: new Date(now - 1 * DAY) });
+          ranges.push({ $gt: new Date(now - 4 * HOUR), $lte: new Date(now - 2 * HOUR) });
         } else if (lvl === 'urgent') {
-          ranges.push({ $gt: new Date(now - 3 * DAY), $lte: new Date(now - 2 * DAY) });
+          ranges.push({ $gt: new Date(now - 6 * HOUR), $lte: new Date(now - 4 * HOUR) });
         } else if (lvl === 'critical') {
-          ranges.push({ $lte: new Date(now - 3 * DAY) });
+          ranges.push({ $lte: new Date(now - 6 * HOUR) });
         }
       }
       if (ranges.length) {
@@ -6668,9 +6702,9 @@ export class OrderService implements OnModuleInit {
             bucket: {
               $switch: {
                 branches: [
-                  { case: { $lt: ['$ageMs', DAY] }, then: 'new' },
-                  { case: { $lt: ['$ageMs', 2 * DAY] }, then: 'attention' },
-                  { case: { $lt: ['$ageMs', 3 * DAY] }, then: 'urgent' },
+                  { case: { $lt: ['$ageMs', 2 * HOUR] }, then: 'new' },
+                  { case: { $lt: ['$ageMs', 4 * HOUR] }, then: 'attention' },
+                  { case: { $lt: ['$ageMs', 6 * HOUR] }, then: 'urgent' },
                 ],
                 default: 'critical',
               },
