@@ -45,7 +45,7 @@ Support/Admin mở Dashboard → tab "Soát tool":
 - **Thống kê lỗi Soát tool** (ô riêng dưới cùng) — **LỖI DO NGƯỜI SOÁT TOOL TẠO RA** = đơn **TỪNG bị đánh `toolResultNote` (Note kq Tool) ≠ ok (≠ rỗng)**, **KỂ CẢ đơn đã sửa về 'ok'** (khác trước chỉ đếm lỗi đang chờ / trạng thái hiện tại). Đếm **số ĐƠN riêng biệt** (dedup theo `orderId`). Lọc kỳ theo `inProductionAt`. 3 cột:
   1. **Theo khách hàng** — mỗi khách = cặp (`userSku`, `userEmail`), kèm số đơn lỗi. Click → lọc chéo cột 2 + 3.
   2. **Theo sản phẩm** — mockup + level + fullName + số đơn. Click → lọc chéo cột 1 + 3.
-  3. **Theo loại lỗi** — mã note ≠ ok (`tool_result_note`: Lỗi / Không có tool / Không có file PDF / …) + số đơn (phản ánh khách/sản phẩm đang chọn).
+  3. **Theo loại lỗi** — mã note ≠ ok (`tool_result_note`: Lỗi / Không có tool / Không có file PDF / …) + số đơn (phản ánh khách/sản phẩm đang chọn). **Bấm 1 loại lỗi → mở panel chi tiết** bên dưới: bảng các ĐƠN dính note đó (dedup theo orderId, tôn trọng cross-filter khách/sản phẩm) — cột **Mã đơn** (+copy) · **Sản phẩm** (mockup+level+tên) · **Note lỗi** (`errorFileNote`). Nút "đóng" để tắt.
   - **Cross-filter client-side**: chọn Khách → 2 cột kia chỉ tính đơn của khách đó; chọn Sản phẩm → 2 cột kia chỉ tính đơn sản phẩm đó; nút "Bỏ lọc chéo". FE tự group từ flat rows `errorHistory` (không refetch), tất cả sort cao→thấp.
   - ⚠️ Chỉ tính thao tác TRỰC TIẾP của người soát (cell `toolResultNote` qua `updateField`/bulk); KHÔNG tính side-effect `toolResultNote='error'` tự set khi In báo "thiếu file" (đó là lỗi do In, thuộc `errorSource='tool-check'`).
 
@@ -69,7 +69,7 @@ Response `ToolCheckOverviewResDto.data`:
   errorCount: number;            // đang chờ support (= reworkList)
   reworkList: ToolCheckOrder[];  // In trả về (source=tool-check + note=error) — thêm machineNumber + priority, sort priority:-1 trước
   unreviewedList: ToolCheckOrder[]; // toolResultNote rỗng — cùng sort priority:-1 trước
-  errorHistory: ToolCheckErrorRow[]; // LỊCH SỬ lỗi do người soát tool đánh (Note kq Tool ≠ ok, kể cả đã sửa) — flat rows: {orderId, userSku?, userEmail?, type?, fullName?, mockup?, level?, code, codeLabel?} (mỗi đơn × mã note ≠ ok; code=mã note, codeLabel=tên từ tool_result_note). FE tự group 3 cột + cross-filter.
+  errorHistory: ToolCheckErrorRow[]; // LỊCH SỬ lỗi do người soát tool đánh (Note kq Tool ≠ ok, kể cả đã sửa) — flat rows: {orderId, productionId?, userSku?, userEmail?, type?, fullName?, mockup?, level?, code, codeLabel?, note?} (mỗi đơn × mã note ≠ ok; code=mã note, codeLabel=tên từ tool_result_note, note=errorFileNote cho panel chi tiết). FE tự group 3 cột + cross-filter + panel chi tiết theo loại lỗi.
   days: ToolCheckDayRow[];       // {day, unreviewed, rework} — dải theo ngày (mới→cũ)
   columnTotals: { unreviewed: number; rework: number };
   facets: {                      // options cho 4 dropdown (phạm vi chưa-soát∪tool-check, KHÔNG cross-narrow)

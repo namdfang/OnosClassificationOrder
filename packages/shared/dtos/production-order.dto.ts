@@ -1876,6 +1876,7 @@ export type ToolCheckFacet = z.infer<typeof ToolCheckFacetZod>;
  */
 export const ToolCheckErrorRowZod = z.object({
   orderId: z.string(),
+  productionId: z.string().optional(),
   userSku: z.string().optional(),
   userEmail: z.string().optional(),
   type: z.string().optional(),
@@ -1884,6 +1885,8 @@ export const ToolCheckErrorRowZod = z.object({
   level: z.number().int().optional(),
   code: z.string(),
   codeLabel: z.string().optional(),
+  /** Ghi chú file lỗi (errorFileNote) — hiển thị ở panel chi tiết loại lỗi. */
+  note: z.string().optional(),
 });
 export type ToolCheckErrorRow = z.infer<typeof ToolCheckErrorRowZod>;
 

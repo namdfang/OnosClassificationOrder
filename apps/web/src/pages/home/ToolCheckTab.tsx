@@ -3,8 +3,6 @@ import { AlertTriangle, Clock, FileSearch, PackageSearch, RefreshCw, Users, X } 
 import { ORDER_PRIORITY_LABELS, PRODUCT_LEVEL_MAP, WorkshopConfigCategory } from 'shared';
 import type {
   OrderPriority,
-  ToolCheckCustomerError,
-  ToolCheckCustomerStat,
   ToolCheckDayRow,
   ToolCheckErrorRow,
   ToolCheckFacet,
@@ -106,6 +104,8 @@ export default function ToolCheckTab() {
   // selCust = key `userSku|||userEmail`, selType = mã sản phẩm (`type`).
   const [selCust, setSelCust] = useState('');
   const [selType, setSelType] = useState('');
+  // Loại lỗi (mã note) đang mở panel chi tiết (đơn + note lỗi).
+  const [selCode, setSelCode] = useState('');
 
   const [data, setData] = useState<Overview | null>(null);
   const [loading, setLoading] = useState(false);
@@ -142,6 +142,7 @@ export default function ToolCheckTab() {
     setDayFilter('');
     setSelCust('');
     setSelType('');
+    setSelCode('');
     fetchData();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [dateFrom, dateTo, filterType, filterCustomer, filterMachine, filterPriority]);
@@ -359,6 +360,33 @@ export default function ToolCheckTab() {
         .sort((a, b) => b.count - a.count),
     };
   }, [data?.errorHistory, selCust, selType]);
+
+  // Panel chi tiết 1 loại lỗi (selCode): các ĐƠN dính note đó (dedup theo
+  // orderId) + sản phẩm + note lỗi, tôn trọng cross-filter khách/sản phẩm.
+  const codeDetail = useMemo(() => {
+    if (!selCode) return { label: '', items: [] as Array<{ orderId: string; productionId?: string; product: string; note?: string; mockup?: string; level?: number }> };
+    const rows = data?.errorHistory ?? [];
+    const seen = new Set<string>();
+    let label = selCode;
+    const items: Array<{ orderId: string; productionId?: string; product: string; note?: string; mockup?: string; level?: number }> = [];
+    for (const r of rows) {
+      if ((r.code || '') !== selCode) continue;
+      if (selCust && custKey(r) !== selCust) continue;
+      if (selType && (r.type ?? '') !== selType) continue;
+      if (r.codeLabel) label = r.codeLabel;
+      if (seen.has(r.orderId)) continue;
+      seen.add(r.orderId);
+      items.push({
+        orderId: r.orderId,
+        productionId: r.productionId,
+        product: r.fullName || r.type || '(Chưa rõ)',
+        note: r.note,
+        mockup: r.mockup,
+        level: r.level ?? undefined,
+      });
+    }
+    return { label: label || '(Chưa rõ)', items };
+  }, [data?.errorHistory, selCode, selCust, selType]);
 
   return (
     <TooltipProvider delayDuration={200}>
@@ -698,31 +726,116 @@ export default function ToolCheckTab() {
               )}
             </div>
 
-            {/* Cột 3 — Loại lỗi */}
+            {/* Cột 3 — Loại lỗi (click để mở chi tiết đơn + note lỗi) */}
             <div className="lg:border-l lg:border-border lg:pl-4">
               <div className="flex items-center gap-2 mb-3">
                 <AlertTriangle size={16} className="text-amber-500" />
                 <h3 className="text-sm font-semibold">Theo loại lỗi</h3>
+                <span className="hidden xl:inline text-[10px] text-muted-foreground">— bấm để xem chi tiết</span>
               </div>
               {stats.byError.length === 0 ? (
                 <p className="text-xs text-muted-foreground text-center py-6">Chưa có dữ liệu.</p>
               ) : (
-                <div className="space-y-1 max-h-72 overflow-y-auto">
-                  {stats.byError.map((e) => (
-                    <div key={e.code || '(unknown)'} className="flex items-center gap-2 text-[13px] px-2 py-1">
-                      <Badge
-                        variant="outline"
-                        className="font-normal text-amber-700 border-amber-300 dark:text-amber-300 truncate"
+                <div className="space-y-0.5 max-h-72 overflow-y-auto">
+                  {stats.byError.map((e) => {
+                    const active = selCode === (e.code || '');
+                    return (
+                      <button
+                        key={e.code || '(unknown)'}
+                        type="button"
+                        onClick={() => setSelCode((cur) => (cur === (e.code || '') ? '' : e.code || ''))}
+                        className={`w-full flex items-center gap-2 text-[13px] rounded px-2 py-1 text-left transition-colors ${
+                          active ? 'bg-amber-100 dark:bg-amber-500/20' : 'hover:bg-muted/60'
+                        }`}
                       >
-                        {e.label || e.code || '(Chưa rõ)'}
-                      </Badge>
-                      <span className="ml-auto text-muted-foreground tabular-nums shrink-0">{e.count}</span>
-                    </div>
-                  ))}
+                        <Badge
+                          variant="outline"
+                          className="font-normal text-amber-700 border-amber-300 dark:text-amber-300 truncate"
+                        >
+                          {e.label || e.code || '(Chưa rõ)'}
+                        </Badge>
+                        <span className="ml-auto text-muted-foreground tabular-nums shrink-0">{e.count}</span>
+                      </button>
+                    );
+                  })}
                 </div>
               )}
             </div>
           </div>
+
+          {/* Panel chi tiết 1 loại lỗi: đơn + sản phẩm + note lỗi */}
+          {selCode && (
+            <div className="border-t border-border px-4 py-3">
+              <div className="flex items-center gap-2 mb-2 flex-wrap">
+                <span className="text-[13px] font-semibold">Chi tiết loại lỗi:</span>
+                <Badge variant="outline" className="font-normal text-amber-700 border-amber-300 dark:text-amber-300">
+                  {codeDetail.label}
+                </Badge>
+                <span className="text-[11px] text-muted-foreground">{codeDetail.items.length} đơn</span>
+                <button
+                  type="button"
+                  onClick={() => setSelCode('')}
+                  className="ml-auto inline-flex items-center gap-1 text-[11px] rounded bg-muted px-2 py-0.5 text-muted-foreground"
+                >
+                  <X size={11} /> đóng
+                </button>
+              </div>
+              {codeDetail.items.length === 0 ? (
+                <p className="text-xs text-muted-foreground text-center py-4">Không có đơn khớp bộ lọc.</p>
+              ) : (
+                <div className="overflow-x-auto max-h-80 overflow-y-auto">
+                  <table className="w-full text-[13px]">
+                    <thead>
+                      <tr className="border-b border-border/60 text-left text-[11px] uppercase text-muted-foreground whitespace-nowrap">
+                        <th className="px-2 py-1.5">Mã đơn</th>
+                        <th className="px-2 py-1.5">Sản phẩm</th>
+                        <th className="px-2 py-1.5">Note lỗi</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {codeDetail.items.map((it) => (
+                        <tr key={it.orderId} className="border-t border-border/40 hover:bg-muted/30 align-top">
+                          <td className="px-2 py-1.5">
+                            <div className="flex items-center gap-1">
+                              <span className="font-medium whitespace-nowrap">{it.productionId || '—'}</span>
+                              {it.productionId && (
+                                <CopyButton value={it.productionId} label="Production ID" iconSize={11} />
+                              )}
+                            </div>
+                          </td>
+                          <td className="px-2 py-1.5">
+                            <div className="flex items-center gap-2">
+                              {it.mockup ? (
+                                <img src={it.mockup} alt="" className="w-6 h-6 rounded object-cover border border-border shrink-0" />
+                              ) : (
+                                <div className="w-6 h-6 rounded border border-dashed border-border shrink-0" />
+                              )}
+                              {it.level != null && (
+                                <Badge
+                                  className="font-normal border shrink-0 text-[10px]"
+                                  style={{
+                                    backgroundColor: PRODUCT_LEVEL_MAP[it.level]?.color,
+                                    color: '#fff',
+                                    borderColor: PRODUCT_LEVEL_MAP[it.level]?.color,
+                                  }}
+                                >
+                                  Lv {it.level}
+                                </Badge>
+                              )}
+                              <span className="min-w-0 truncate" title={it.product}>{it.product}</span>
+                            </div>
+                          </td>
+                          <td className="px-2 py-1.5 text-muted-foreground whitespace-pre-wrap max-w-[360px]">
+                            {it.note || <span className="text-muted-foreground/50">—</span>}
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              )}
+            </div>
+          )}
         </div>
 
         <ImagePreviewDialog
