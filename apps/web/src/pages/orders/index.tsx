@@ -1,6 +1,7 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import { ShoppingCart } from 'lucide-react';
 import { useSearchParams } from 'react-router-dom';
+import { RoleType } from 'shared';
 
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { usePermission } from '@/hooks/usePermission';
@@ -15,11 +16,13 @@ const ALL_TABS = ['list', 'error-log', 'workshop', 'import', 'cutting-files'] as
 type TabKey = (typeof ALL_TABS)[number];
 
 export default function Orders() {
-  const { canViewAdminTable, canViewWorkshopTable, has } = usePermission();
+  const { canViewAdminTable, canViewWorkshopTable, has, roleName } = usePermission();
 
   const adminVisible = canViewAdminTable();
   const workshopVisible = canViewWorkshopTable();
   const canImport = has('order.import');
+  // Support tạm ẩn tab "Nhật ký bù lỗi" — lỗi soát-tool không còn hiển thị ở đây.
+  const errorLogVisible = roleName !== RoleType.Support;
 
   const tabs = useMemo(() => {
     const out: { key: TabKey; label: string }[] = [];
@@ -29,12 +32,12 @@ export default function Orders() {
     // (= initial fallback) trỏ vào đây cho role có workshop access.
     if (workshopVisible) out.push({ key: 'workshop', label: 'Bảng Workshop' });
     // Nhật ký bù lỗi — hiển thị cho mọi role có quyền xem orders (kể cả
-    // Designer/Fulfillment; visibility filter ở BE đảm bảo scope đúng).
-    out.push({ key: 'error-log', label: 'Nhật ký bù lỗi' });
+    // Designer/Fulfillment; visibility filter ở BE đảm bảo scope đúng). Ẩn với Support.
+    if (errorLogVisible) out.push({ key: 'error-log', label: 'Nhật ký bù lỗi' });
     if (canImport) out.push({ key: 'import', label: 'Import Order' });
     if (canImport) out.push({ key: 'cutting-files', label: 'Import File Cutting' });
     return out;
-  }, [adminVisible, workshopVisible, canImport]);
+  }, [adminVisible, workshopVisible, canImport, errorLogVisible]);
 
   const [searchParams, setSearchParams] = useSearchParams();
   const initial = (searchParams.get('tab') as TabKey) || tabs[0]?.key || 'workshop';

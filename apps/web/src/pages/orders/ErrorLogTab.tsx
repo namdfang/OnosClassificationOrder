@@ -29,6 +29,7 @@ import {
 } from '@/components/ui/table';
 import { TooltipProvider } from '@/components/ui/tooltip';
 import { OrderLogTimelineDialog } from '@/components/orders/OrderLogTimelineDialog';
+import { OrderDetailDialog } from '@/components/orders/OrderDetailDialog';
 import { OrderRowActionsMenu } from '@/components/orders/OrderRowActionsMenu';
 import { HeldBadge } from '@/components/orders/HeldBadge';
 import { CancelledBadge } from '@/components/orders/CancelledBadge';
@@ -50,9 +51,16 @@ import { useDebounce } from '@/hooks/useDebounce';
 import { cn } from '@/utils/cn';
 import { NO_TOOL_ROW_CLASS, useIsNoTool } from '@/hooks/useIsNoTool';
 
-type TimelineEntry = { stage?: string; action?: string; byUserName?: string; reworkTarget?: string };
+type TimelineEntry = {
+  stage?: string;
+  action?: string;
+  byUserName?: string;
+  reworkTarget?: string;
+  reason?: string;
+};
 type ErrorLogRow = WorkshopOrderRow & {
   productionFirstErrorAt?: string;
+  productionErrorNote?: string;
   fulfillmentTimeline?: TimelineEntry[];
 };
 type UrgencyKey = 'new' | 'attention' | 'urgent' | 'critical';
@@ -90,14 +98,17 @@ const URGENCY_META: Record<
   },
 };
 
-const DAY_MS = 24 * 60 * 60 * 1000;
+const HOUR_MS = 60 * 60 * 1000;
+const DAY_MS = 24 * HOUR_MS;
 
+// Ngưỡng khẩn cấp theo GIỜ kể từ khi vào sản xuất (`inProductionAt`):
+// Mới <2h · Cần làm 2–4h · Gấp 4–6h · Khẩn cấp >6h.
 function urgencyOf(dateStr?: string): UrgencyKey {
   if (!dateStr) return 'new';
   const age = Date.now() - new Date(dateStr).getTime();
-  if (age < DAY_MS) return 'new';
-  if (age < 2 * DAY_MS) return 'attention';
-  if (age < 3 * DAY_MS) return 'urgent';
+  if (age < 2 * HOUR_MS) return 'new';
+  if (age < 4 * HOUR_MS) return 'attention';
+  if (age < 6 * HOUR_MS) return 'urgent';
   return 'critical';
 }
 
@@ -154,6 +165,16 @@ function reporterInfo(row: ErrorLogRow): { label: string; who: string } | null {
   return null;
 }
 
+// Ghi chú lỗi người báo nhập — ưu tiên reason của rework-back gần nhất, fallback
+// `productionErrorNote` (lỗi set trực tiếp không qua rework-back).
+function errorNote(row: ErrorLogRow): string {
+  const tl = row.fulfillmentTimeline || [];
+  for (let i = tl.length - 1; i >= 0; i--) {
+    if (tl[i].action === 'rework-back' && tl[i].reason) return tl[i].reason as string;
+  }
+  return row.productionErrorNote || '';
+}
+
 export function ErrorLogTab() {
   const { canEditField, canViewField, roleName } = usePermission();
   const profile = useAuthStore((s) => s.profile);
@@ -202,6 +223,7 @@ export function ErrorLogTab() {
   const [filterSource, setFilterSource] = useState(() => searchParams.get('esource') || '');
   const [filterUrgency, setFilterUrgency] = useState(() => searchParams.get('eurg') || '');
   const [historyTarget, setHistoryTarget] = useState<{ id: string; productionId: string } | null>(null);
+  const [detailTarget, setDetailTarget] = useState<{ id: string; productionId: string } | null>(null);
   const [preview, setPreview] = useState<{
     url: string;
     originalUrl?: string;
@@ -310,7 +332,10 @@ export function ErrorLogTab() {
   const openPreview = (url: string, title: string, originalUrl?: string, sourceUrl?: string) =>
     setPreview({ url, originalUrl, title, sourceUrl });
 
-  const renderCtx: WorkshopRenderCtx = { canEditField, patchRow, openPreview };
+  const openDetail = (orderId: string, productionId: string) =>
+    setDetailTarget({ id: orderId, productionId });
+
+  const renderCtx: WorkshopRenderCtx = { canEditField, patchRow, openPreview, openDetail };
   const isNoTool = useIsNoTool();
 
   const designerNameById = useMemo(
@@ -545,7 +570,7 @@ export function ErrorLogTab() {
   };
 
   const totalErrors = byUrgency.new + byUrgency.attention + byUrgency.urgent + byUrgency.critical;
-  const FIXED_COLS = 8; // Mức độ, Tuổi, Xưởng | Chặng, Nêu lỗi, Người sửa, Số lần, Thao tác
+  const FIXED_COLS = 9; // Mức độ, Tuổi, Xưởng | Chặng, Nêu lỗi, Ghi chú lỗi, Người sửa, Số lần, Thao tác
 
   return (
     <TooltipProvider delayDuration={200}>
@@ -558,7 +583,7 @@ export function ErrorLogTab() {
             <div className="flex-1">
               <h2 className="font-semibold text-foreground">Nhật ký bù lỗi</h2>
               <p className="text-xs text-muted-foreground">
-                Lỗi xuyên suốt các công đoạn. Đơn không thuộc công đoạn của bạn hiển thị mờ (chỉ xem).
+                Lỗi các đơn đã vào fulfillment (in → ép → … → đóng gói). Đơn không thuộc công đoạn của bạn hiển thị mờ (chỉ xem).
               </p>
             </div>
           </div>
@@ -677,6 +702,7 @@ export function ErrorLogTab() {
                   ))}
                   <TableHead className="whitespace-nowrap text-xs w-[110px]">Chặng hiện tại</TableHead>
                   <TableHead className="whitespace-nowrap text-xs w-[140px]">Nêu lỗi</TableHead>
+                  <TableHead className="whitespace-nowrap text-xs w-[200px]">Ghi chú lỗi</TableHead>
                   <TableHead className="whitespace-nowrap text-xs w-[110px]">Người sửa</TableHead>
                   <TableHead className="whitespace-nowrap text-xs w-[70px]">Số lần</TableHead>
                   <TableHead className="whitespace-nowrap text-xs w-[160px] sticky right-0 z-20 bg-card"></TableHead>
@@ -770,6 +796,21 @@ export function ErrorLogTab() {
                           <span className="text-[11px] text-muted-foreground">—</span>
                         )}
                       </TableCell>
+                      <TableCell className="py-2 max-w-[200px]">
+                        {(() => {
+                          const note = errorNote(row);
+                          return note ? (
+                            <span
+                              className="text-[11px] text-foreground line-clamp-2 whitespace-pre-wrap break-words"
+                              title={note}
+                            >
+                              {note}
+                            </span>
+                          ) : (
+                            <span className="text-[11px] text-muted-foreground">—</span>
+                          );
+                        })()}
+                      </TableCell>
                       <TableCell className="py-2">
                         <span className="text-[11px] text-foreground truncate">{fixerName(row)}</span>
                       </TableCell>
@@ -844,6 +885,13 @@ export function ErrorLogTab() {
           onOpenChange={(o) => !o && setHistoryTarget(null)}
           orderId={historyTarget?.id}
           productionId={historyTarget?.productionId}
+        />
+
+        <OrderDetailDialog
+          open={!!detailTarget}
+          onOpenChange={(o) => !o && setDetailTarget(null)}
+          orderId={detailTarget?.id ?? null}
+          productionId={detailTarget?.productionId}
         />
 
         {reworkOrder && myStage && (
