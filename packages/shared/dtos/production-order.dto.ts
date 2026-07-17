@@ -876,6 +876,56 @@ export class GetOrderByProductionIdResDto extends createZodDto(
 ) {}
 
 //
+// Design review — public API cho tool ngoài duyệt thiết kế. Trả về 1 đơn ở
+// "bước đầu tiên" (chưa soát tool + chưa gán designer) mỗi lần gọi, ưu tiên
+// cao trước, cùng mức thì đơn nhập trước lấy trước. Xem Orders.md §18.
+//
+export const DesignReviewAttributesZod = z.object({
+  size: z.string().optional(),
+  color: z.string().optional(),
+});
+export type DesignReviewAttributes = z.infer<typeof DesignReviewAttributesZod>;
+
+export const DesignReviewOrderZod = z.object({
+  /** Mã đơn nội bộ — khóa duy nhất, luôn có, dùng để gọi lại các API khác (vd cập nhật toolResultNote). */
+  productionId: z.string(),
+  /** Mã đơn marketplace/sàn (import từ sheet) — có thể rỗng với 1 số đơn. */
+  orderId: z.string().optional(),
+  /** Mã loại sản phẩm map từ `type` (bảng mapping cố định). null nếu `type` không khớp bảng. */
+  productCode: z.string().nullable(),
+  attributes: DesignReviewAttributesZod,
+  designs: DesignFieldsZod,
+});
+export type DesignReviewOrder = z.infer<typeof DesignReviewOrderZod>;
+
+export const GetNextDesignReviewOrderResZod = z.object({
+  success: z.literal(true),
+  /** null khi không còn đơn nào ở bước đầu tiên. */
+  data: DesignReviewOrderZod.nullable(),
+  /** Tổng số đơn còn cần xử lý (bao gồm cả đơn trong `data`) — không tính claim/lease. */
+  remaining: z.number().int().nonnegative(),
+});
+export class GetNextDesignReviewOrderResDto extends createZodDto(
+  extendApi(GetNextDesignReviewOrderResZod),
+) {}
+
+// Design review — lưu Kết quả Tool (workshop_config category=tool_result, vd
+// 'has-tool'/'no-tool'). `null` = xoá giá trị hiện có. KHÔNG có `toolResultNote`
+// ("Note kq Tool 1") — field đó chỉ nhân viên sửa tay, ngoài luồng automation.
+// Định danh bằng `productionId` — khóa duy nhất, luôn có (khác `orderId` = mã
+// đơn marketplace gốc, KHÔNG unique vì 1 đơn có thể nhiều line item).
+export const SetDesignReviewResultZod = z.object({
+  productionId: z.string().min(1),
+  toolResult: z.string().nullable(),
+});
+export class SetDesignReviewResultDto extends createZodDto(extendApi(SetDesignReviewResultZod)) {}
+
+export const SetDesignReviewResultResZod = ResZod.extend({ data: ProductionOrderZod });
+export class SetDesignReviewResultResDto extends createZodDto(
+  extendApi(SetDesignReviewResultResZod),
+) {}
+
+//
 // Import summary — aggregates orders of a single day across all imports.
 // Workshop uses this to spot duplicate (type, size, fabric) combinations
 // so the same blank batch can be printed together.

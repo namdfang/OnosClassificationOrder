@@ -22,6 +22,9 @@ import {
   BulkResolveErrorDto,
   BulkResolveErrorResDto,
   GetOrderByProductionIdResDto,
+  GetNextDesignReviewOrderResDto,
+  SetDesignReviewResultDto,
+  SetDesignReviewResultResDto,
   SetProductionErrorDto,
   SetProductionErrorResDto,
   GetFactoryOverviewDto,
@@ -739,6 +742,56 @@ export class OrderController {
   @ApiOkResponse({ type: GetOrderLogsResDto })
   async getLogs(@Param('id') id: string, @Query() dto: GetOrderLogsDto): Promise<GetOrderLogsResDto> {
     return this.orderService.getLogs(id, dto);
+  }
+
+  // Public — không cần JWT, để tool ngoài duyệt thiết kế gọi trực tiếp. Trả về
+  // 1 đơn ở bước đầu tiên (chưa soát tool + chưa gán designer) mỗi lần gọi,
+  // ưu tiên cao trước. Không định danh caller — log ip/userAgent làm audit
+  // trace duy nhất (giống import-from-onospod/cron). Xem Orders.md §18.
+  @Get('design-review/next')
+  @Auth([], [], { public: true })
+  @ApiOperation({ summary: '[Public] Lấy 1 đơn ở bước đầu tiên cho tool duyệt thiết kế' })
+  @HttpCode(HttpStatus.OK)
+  @ApiOkResponse({ type: GetNextDesignReviewOrderResDto })
+  async getNextDesignReviewOrder(
+    @ClientIp() ip: string,
+    @UserAgent() userAgent: string,
+  ): Promise<GetNextDesignReviewOrderResDto> {
+    this.logger.info({
+      message: JSON.stringify({ method: 'GET', url: '/orders/design-review/next', ip, userAgent }),
+    });
+    return this.orderService.getNextDesignReviewOrder() as Promise<GetNextDesignReviewOrderResDto>;
+  }
+
+  // Public — không cần JWT, để tool ngoài duyệt thiết kế lưu Kết quả Tool
+  // (`toolResult`). KHÔNG đụng `toolResultNote` — field đó chỉ nhân viên sửa
+  // tay. Không định danh caller — log ip/userAgent làm audit trace duy nhất.
+  // Xem Orders.md §18.
+  @Post('design-review/result')
+  @Auth([], [], { public: true })
+  @ApiOperation({ summary: '[Public] Lưu Kết quả Tool (toolResult) từ tool duyệt thiết kế' })
+  @HttpCode(HttpStatus.OK)
+  @ApiOkResponse({ type: SetDesignReviewResultResDto })
+  async setDesignReviewResult(
+    @Body() dto: SetDesignReviewResultDto,
+    @ClientIp() ip: string,
+    @UserAgent() userAgent: string,
+  ): Promise<SetDesignReviewResultResDto> {
+    this.logger.info({
+      message: JSON.stringify({
+        method: 'POST',
+        url: '/orders/design-review/result',
+        productionId: dto.productionId,
+        toolResult: dto.toolResult,
+        ip,
+        userAgent,
+      }),
+    });
+    return this.orderService.setDesignReviewResult(
+      dto.productionId,
+      { toolResult: dto.toolResult },
+      { ip, userAgent },
+    ) as Promise<SetDesignReviewResultResDto>;
   }
 
   @Get('by-production-id/:code')
