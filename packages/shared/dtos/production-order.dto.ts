@@ -1919,30 +1919,26 @@ export const ToolCheckFacetZod = z.object({
 export type ToolCheckFacet = z.infer<typeof ToolCheckFacetZod>;
 
 /** Lỗi theo sản phẩm (join productConfig để lấy mockup/level). */
-export const ToolCheckProductStatZod = z.object({
-  type: z.string(),
+/**
+ * 1 dòng lịch sử lỗi Soát tool: mỗi (đơn × mã lỗi) mà đơn TỪNG bị đánh lỗi
+ * `errorSource='tool-check'` (kể cả đã sửa). FE tự group + cross-filter thành 3
+ * cột Khách → Sản phẩm → Loại lỗi (đếm ĐƠN riêng biệt, dedup theo `orderId`).
+ */
+export const ToolCheckErrorRowZod = z.object({
+  orderId: z.string(),
+  productionId: z.string().optional(),
+  userSku: z.string().optional(),
+  userEmail: z.string().optional(),
+  type: z.string().optional(),
   fullName: z.string().optional(),
   mockup: z.string().optional(),
   level: z.number().int().optional(),
-  count: z.number().int().nonnegative(),
-});
-export type ToolCheckProductStat = z.infer<typeof ToolCheckProductStatZod>;
-
-/** Lỗi theo khách hàng (userSku). */
-export const ToolCheckCustomerStatZod = z.object({
-  userSku: z.string(),
-  count: z.number().int().nonnegative(),
-});
-export type ToolCheckCustomerStat = z.infer<typeof ToolCheckCustomerStatZod>;
-
-/** Khách hàng × loại lỗi hay gặp nhất. */
-export const ToolCheckCustomerErrorZod = z.object({
-  userSku: z.string(),
   code: z.string(),
-  label: z.string().optional(),
-  count: z.number().int().nonnegative(),
+  codeLabel: z.string().optional(),
+  /** Ghi chú file lỗi (errorFileNote) — hiển thị ở panel chi tiết loại lỗi. */
+  note: z.string().optional(),
 });
-export type ToolCheckCustomerError = z.infer<typeof ToolCheckCustomerErrorZod>;
+export type ToolCheckErrorRow = z.infer<typeof ToolCheckErrorRowZod>;
 
 export const ToolCheckOverviewResZod = ResZod.extend({
   data: z.object({
@@ -1954,9 +1950,11 @@ export const ToolCheckOverviewResZod = ResZod.extend({
     reworkList: ToolCheckOrderZod.array(),
     /** Đơn chưa soát (toolResultNote rỗng) — backlog. */
     unreviewedList: ToolCheckOrderZod.array(),
-    byProduct: ToolCheckProductStatZod.array(),
-    byCustomer: ToolCheckCustomerStatZod.array(),
-    topCustomerError: ToolCheckCustomerErrorZod.array(),
+    /**
+     * Lịch sử lỗi Soát tool (kể cả đơn đã sửa) — flat rows để FE dựng 3 cột
+     * Khách → Sản phẩm → Loại lỗi (cross-filter, đếm đơn riêng biệt).
+     */
+    errorHistory: ToolCheckErrorRowZod.array(),
     /** Dải theo ngày (mới→cũ; FE reverse để cũ→mới). */
     days: ToolCheckDayRowZod.array(),
     /** Tổng cột cho dải ngày. */

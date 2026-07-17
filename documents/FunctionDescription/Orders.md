@@ -856,13 +856,17 @@ Response (`ImportSummaryZod`):
 
 > **File FE:** `apps/web/src/pages/orders/ErrorLogTab.tsx`
 > **Endpoint:** `GET /v1/orders/error-log`
-> **Service BE:** `order.service.ts → getErrorLog(dto, role, userId?, factoryId?, fulfillmentStage?)` + helper `applyErrorLogViewFilter(filter, tab, role, stage, factoryId)`
+> **Service BE:** `order.service.ts → getErrorLog(dto, role, userId?, factoryId?, fulfillmentStage?)` + helper `applyErrorLogViewFilter(filter, tab, role, stage, factoryId, assigneeUserId)`
 
-### 14.1 Mục đích — theo dõi lỗi xuyên 8 chặng (positional)
+### 14.1 Mục đích — theo dõi lỗi ĐÃ VÀO FULFILLMENT (positional)
 
-Bảng theo dõi **mọi đơn từng bị báo lỗi** (mọi thời gian), tách theo **góc nhìn CHẶNG của người xem** qua 2 sub-tab. Dùng mô hình vị trí + reflow của [`Plans/UpstreamWatching-ReflowChain.md`](../Plans/UpstreamWatching-ReflowChain.md) — mirror `applyFulfillmentStatusFilter`.
+Bảng theo dõi **đơn từng bị báo lỗi mà ĐÃ vào fulfillment** (in → ép → … → đóng gói), tách theo **góc nhìn CHẶNG của người xem** qua 2 sub-tab. Dùng mô hình vị trí + reflow của [`Plans/UpstreamWatching-ReflowChain.md`](../Plans/UpstreamWatching-ReflowChain.md) — mirror `applyFulfillmentStatusFilter`.
 
-**Điều kiện vào bảng:** `productionError ≠ null/''` AND **KHÔNG hủy/xóa** (`cancelledAt`/`deletedAt` không tồn tại). **KHÔNG** còn ràng buộc `productionFirstErrorAt` (đơn designer sửa xong vẫn còn lỗi ở các chặng sau, phải hiển thị tiếp).
+**Điều kiện vào bảng (base filter, mọi role):**
+- `productionError ≠ null/''` AND **KHÔNG hủy/xóa** (`cancelledAt`/`deletedAt` không tồn tại).
+- **`currentFulfillmentStage` đã set** — CHỈ đơn đã vào fulfillment. Loại đơn còn ở soát-tool / thiết kế trước fulfillment.
+- **`productionErrorSource ≠ 'tool-check'`** — **bỏ hẳn lỗi soát-tool** khỏi tab này (Support tạm ẩn tab — xem `§14.3`).
+- **KHÔNG** ràng buộc `productionFirstErrorAt` (đơn designer sửa xong vẫn còn lỗi ở các chặng sau, phải hiển thị tiếp).
 
 **2 sub-tab (param `tab`, positional theo chặng viewer `S` index `i` so với vị trí đơn `P`):**
 - **`todo` (Cần xử lý)** — chặng `S` còn việc: đơn ĐANG ở `S` (`i==P`, có nút thao tác) HOẶC đơn ở chặng trước mà `S` đã từng làm / là người báo lỗi (`i>P` → "đang chờ quay lại", xám).
@@ -872,16 +876,16 @@ Ví dụ Ép báo lỗi → đẩy về designer: designer/in/ép đều thấy 
 
 Sort `todo` vẫn theo `productionFirstErrorAt` ASC (lỗi cũ nhất trước).
 
-### 14.2 Mức độ khẩn cấp (24h calendar)
+### 14.2 Mức độ khẩn cấp (theo GIỜ)
 
 Tính theo **tuổi đơn kể từ ngày VÀO SẢN XUẤT** (`now - inProductionAt`), **KHÔNG** phải ngày báo lỗi (`productionFirstErrorAt`) — đơn vào sản xuất càng lâu mà còn lỗi thì càng ưu tiên. Cột "Tuổi đơn (từ SX)" hiển thị duration + ngày vào SX, khớp với badge mức độ. `inProductionAt` rỗng → xếp mức "Mới" (cả FE `urgencyOf` lẫn BE `$switch` do null < số).
 
 | Mức độ | Ngưỡng (từ `inProductionAt`) | Màu | Mô tả |
 |--------|--------|-----|-------|
-| **Mới** | < 24h | Sky | Vừa vào SX, trong ngày |
-| **Cần làm** | 24h – 48h | Amber | Đã 1 ngày, cần ưu tiên |
-| **Gấp** | 48h – 72h | Orange | Đã 2 ngày, sắp critical |
-| **Khẩn cấp** | ≥ 72h | Rose (animate-pulse) | Đã ≥ 3 ngày — flash đỏ |
+| **Mới** | < 2h | Sky | Vừa vào SX |
+| **Cần làm** | 2h – 4h | Amber | Cần ưu tiên |
+| **Gấp** | 4h – 6h | Orange | Sắp critical |
+| **Khẩn cấp** | > 6h | Rose (animate-pulse) | Quá 6 giờ — flash đỏ |
 
 Header tab có 4 chip filter mức độ + count. Click chip để toggle filter; chỉ 1 mức độ active tại 1 lúc.
 
@@ -894,11 +898,11 @@ Header tab có 4 chip filter mức độ + count. Click chip để toggle filter
 | Role | Chặng viewer | Phạm vi xưởng | Có nút thao tác khi |
 |------|------|------|------|
 | **Fulfillment** | `user.fulfillmentStage` (in→đóng) | **chỉ xưởng mình** (`factoryId`/`originalFactoryId`) | `currentFulfillmentStage === myStage` & cùng xưởng → Bắt đầu/Hoàn thành/Báo lỗi (`fulfillment.transition` + `ReworkBackDialog`) |
-| **Support** | soát-tool | mọi xưởng | marker tool-check (`productionErrorSource='tool-check'` & `toolResultNote='error'`) → "Đã soát (OK)" (`updateField toolResultNote='ok'`) |
-| **Designer / DesignerLeader** | designer | mọi xưởng | đơn ở designer & `assignee = mình` → Bắt đầu/Hoàn thành (`designer.transition`) |
-| **Admin / Manager / SuperAdmin** | — (toàn cục) | mọi xưởng | thấy MỌI đơn lỗi: `todo` = chưa hoàn tất pipeline (`fulfillmentCompletedAt` chưa set); `done` = đã đóng hàng xong HOẶC đã resolve tay. Nút **"Đánh dấu xong"** (`POST /orders/:id/resolve-error` → `resolveError`) set `errorResolvedAt` → đơn rời "Cần xử lý" (mọi role), hiện ở "Đã xong" của Admin 14 ngày. Đảo tự động khi báo lỗi mới (`setProductionError` clear `errorResolvedAt`). **Bulk:** tab "Cần xử lý" của Admin có cột **checkbox** (+ chọn-tất-cả header) + thanh nổi **"Đánh dấu xong (N)"** → `POST /orders/bulk-resolve-error`. |
+| **Support** | — (**tab tạm ẩn**) | — | Lỗi soát-tool không còn hiển thị ở tab này. BE trả rỗng (`_id: '__support_hidden__'`); FE ẩn tab + sidebar entry (`orders/index.tsx errorLogVisible`, `Sidebar.tsx hideForRoles:['Support']`). |
+| **Designer / DesignerLeader** | designer (đơn bị đẩy lỗi NGƯỢC từ fulfillment về) | **chỉ task của mình** (`assignee = user._id`) | `todo` = `designerStatus ∈ {rework, in-progress}` → Bắt đầu/Hoàn thành (`designer.transition`); `done` = `designerStatus=done` & timeline có `reworkTarget:'designer'` (đã sửa xong, đẩy lại vào fulfillment) |
+| **Admin / Manager / SuperAdmin** | — (toàn cục, trong scope base = đã vào fulfillment) | mọi xưởng | thấy MỌI đơn lỗi fulfillment: `todo` = chưa hoàn tất pipeline (`fulfillmentCompletedAt` chưa set); `done` = đã đóng hàng xong HOẶC đã resolve tay. Nút **"Đánh dấu xong"** (`POST /orders/:id/resolve-error` → `resolveError`) set `errorResolvedAt` → đơn rời "Cần xử lý" (mọi role), hiện ở "Đã xong" của Admin 14 ngày. Đảo tự động khi báo lỗi mới (`setProductionError` clear `errorResolvedAt`). **Bulk:** tab "Cần xử lý" của Admin có cột **checkbox** (+ chọn-tất-cả header) + thanh nổi **"Đánh dấu xong (N)"** → `POST /orders/bulk-resolve-error`. |
 
-FE: đơn KHÔNG thuộc chặng viewer → hàng **xám** (`opacity-50`) + cell read-only + không nút. Visibility KHÔNG lọc theo assignee (mọi role thấy hết đơn trong chặng mình) — chỉ nút thao tác mới gate.
+FE: đơn KHÔNG thuộc chặng viewer → hàng **xám** (`opacity-50`) + cell read-only + không nút. Với Fulfillment/Admin visibility KHÔNG lọc theo assignee (thấy hết đơn trong chặng/scope mình) — chỉ nút thao tác mới gate. Riêng **Designer** visibility LỌC theo `assignee = mình` (chỉ task được đẩy về cho mình).
 
 ### 14.4 Filters
 
@@ -923,13 +927,14 @@ Cột (reuse từ `WORKSHOP_COLS` của `workshopTableConfig.tsx` nhưng filter 
 | Mức độ | Badge `new/attention/urgent/critical` |
 | Tuổi đơn | Duration text `Nd Mh` + ngày vào SX |
 | Xưởng | `factory.shortName` |
-| Production ID | `WORKSHOP_COLS.productionId` cell (copy + tooltip) |
+| Production ID | `WORKSHOP_COLS.productionId` cell (copy + tooltip). **Click mã → mở `OrderDetailDialog`** (fetch qua `getByProductionId`, hiện info + link mockup/design + preview file cutting) — wire qua `renderCtx.openDetail` |
 | Sản phẩm | `WORKSHOP_COLS.mockupTypeSize` cell (thumb + type + size) |
 | Design | `WORKSHOP_COLS.designs` |
 | Lỗi xưởng | `WORKSHOP_COLS.productionError` (ProductionErrorSelectCell) |
 | Nguồn | `WORKSHOP_COLS.productionErrorSource` (ErrorSourceCell) |
 | **Chặng hiện tại** | Badge chặng đơn đang đứng (suy positional: tool-check marker → designer rework → `currentFulfillmentStage` → designer assigned/in-progress) |
 | **Nêu lỗi** | Chặng reporter + người báo (từ `fulfillmentTimeline` entry `rework-back` gần nhất) |
+| **Ghi chú lỗi** | Note người báo nhập — `errorNote(row)`: ưu tiên `reason` của rework-back gần nhất, fallback `productionErrorNote`. Clamp 2 dòng + `title` full text |
 | **Người sửa** | designer `assignee` (nếu ở designer) / `byUserName` timeline của chặng hiện tại / "Support" |
 | Số lần | Badge `×N` (= `productionErrorCount`) |
 | (action) | Nút thao tác theo chặng (§14.3) + History → `OrderLogTimelineDialog` + `OrderRowActionsMenu` |

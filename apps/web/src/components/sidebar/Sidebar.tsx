@@ -37,6 +37,8 @@ interface NavChild {
   icon: React.ReactNode;
   /** Permission code from PERMISSION_CATALOG. Empty = always visible. */
   perm?: string;
+  /** Role names to hide this entry from (bổ sung cho check `perm`). */
+  hideForRoles?: string[];
 }
 
 interface NavItem {
@@ -66,7 +68,7 @@ const NAV_GROUPS: NavGroup[] = [
         perm: 'page.orders',
         children: [
           { key: 'orders-list', label: 'List Order', to: `${PATHS.ORDERS}?tab=list`, icon: <List size={14} /> },
-          { key: 'orders-error-log', label: 'Nhật ký bù lỗi', to: `${PATHS.ORDERS}?tab=error-log`, icon: <AlertTriangle size={14} /> },
+          { key: 'orders-error-log', label: 'Nhật ký bù lỗi', to: `${PATHS.ORDERS}?tab=error-log`, icon: <AlertTriangle size={14} />, hideForRoles: ['Support'] },
           { key: 'orders-scan-error', label: 'Quét mã', to: PATHS.ORDERS_SCAN_ERROR, icon: <ScanLine size={14} />, perm: 'page.scan_error' },
           { key: 'orders-import', label: 'Import Order', to: `${PATHS.ORDERS}?tab=import`, icon: <FileDown size={14} />, perm: 'order.import' },
         ],
@@ -99,8 +101,14 @@ const NAV_GROUPS: NavGroup[] = [
  * SuperAdmin / Admin role names get an explicit bypass since their token may
  * predate the Phase 5 permissionCodes seed.
  */
-function filterMenuByPermissions(groups: NavGroup[], codes: Set<string>, isAdmin: boolean): NavGroup[] {
+function filterMenuByPermissions(
+  groups: NavGroup[],
+  codes: Set<string>,
+  isAdmin: boolean,
+  roleName?: string,
+): NavGroup[] {
   const allow = (perm?: string) => !perm || isAdmin || codes.has(perm);
+  const visibleForRole = (c: NavChild) => !(roleName && c.hideForRoles?.includes(roleName));
   return groups
     .map((g) => ({
       ...g,
@@ -108,7 +116,7 @@ function filterMenuByPermissions(groups: NavGroup[], codes: Set<string>, isAdmin
         .filter((it) => allow(it.perm))
         .map((it) =>
           it.children
-            ? { ...it, children: it.children.filter((c) => allow(c.perm)) }
+            ? { ...it, children: it.children.filter((c) => allow(c.perm) && visibleForRole(c)) }
             : it,
         )
         .filter((it) => !it.children || it.children.length > 0),
@@ -247,8 +255,8 @@ function Sidebar({ collapsed, mobileOpen, onMobileClose }: SidebarProps) {
     [profile?.role?.permissionCodes],
   );
   const navGroups = useMemo(
-    () => filterMenuByPermissions(NAV_GROUPS, permissionCodes, isAdmin),
-    [permissionCodes, isAdmin],
+    () => filterMenuByPermissions(NAV_GROUPS, permissionCodes, isAdmin, roleName),
+    [permissionCodes, isAdmin, roleName],
   );
 
   const handleLogout = async () => {
