@@ -821,7 +821,9 @@ export class OrderController {
     @Param('id') id: string,
     @AuthUser() user: UserDocument,
   ): Promise<{ success: true; data: unknown }> {
-    return this.orderService.getOrderById(id, user?.role?.name, user?._id ? String(user._id) : undefined, user?.factoryId);
+    // KHÔNG truyền factoryId — getOrderById chỉ scope theo Designer (assignee),
+    // không khóa xưởng (tham số thừa trước đây bị JS bỏ qua, giữ nguyên hành vi).
+    return this.orderService.getOrderById(id, user?.role?.name, user?._id ? String(user._id) : undefined);
   }
 
   @Delete(':id')

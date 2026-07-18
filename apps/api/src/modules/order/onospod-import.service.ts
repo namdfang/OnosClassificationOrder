@@ -1,6 +1,6 @@
 import { BadRequestException, Injectable } from '@nestjs/common';
 import axios from 'axios';
-import type { ImportFromOnosPodDto, ImportFromOnosPodResDto } from 'shared';
+import type { DesignFields, ImportFromOnosPodDto, ImportFromOnosPodResDto } from 'shared';
 
 import { ApiConfigService } from '@/shared/services';
 
@@ -25,39 +25,311 @@ const MANUFACTURES_QUERY = `query Manufactures($search: String, $page: Int, $pag
   }
 }`;
 
-const PAGINATE_QUERY = `query PaginateMrpProduct($manufacture_id: String, $page_size: Int, $page: Int, $status: String, $start: String, $end: String) {
-  paginateMrpProduct(manufacture_id: $manufacture_id, page: $page, perpage: $page_size, mrp_status: $status, start: $start, end: $end) {
+// Đồng bộ với query thật của FE admin OnosPod (qc.onospod.com) thay vì tự
+// chọn field tay như trước — tránh lệch schema về sau. Bỏ field
+// `productionStatusSummary` (sibling, không liên quan phân trang, không dùng)
+// + mọi `__typename` (thuần metadata Apollo, không cần cho parse tay bằng
+// axios). Bỏ `production_src` trong fragment `LineItemPrint` — field này LUÔN
+// null trên thực tế, `mapItemToRow()` vẫn đọc `.src` như cũ. THÊM `quantity`
+// + `price` vào fragment `MrpProduct` (FE OnosPod không query 2 field này
+// nhưng `mapItemToRow()` cần cho `quantity`/`baseCost` — verify bằng test
+// gọi thật 2026-07-18: thiếu thì cả 2 về undefined).
+const PAGINATE_QUERY = `query PaginateMrpProduct(
+  $manufacture_id: String
+  $page_size: Int
+  $page: Int
+  $status: String
+  $barcode: String
+  $increment_id: String
+  $start: String
+  $end: String
+  $is_embroidery: Boolean
+  $pattern_status: String
+  $product_type_ids: [String!]
+  $account_id: [String!]
+) {
+  paginateMrpProduct(
+    manufacture_id: $manufacture_id
+    page: $page
+    perpage: $page_size
+    mrp_status: $status
+    barcode: $barcode
+    increment_id: $increment_id
+    is_embroidery: $is_embroidery
+    start: $start
+    end: $end
+    pattern_status: $pattern_status
+    product_type_ids: $product_type_ids
+    account_id: $account_id
+  ) {
     items {
-      order_id
-      increment_id
-      increment_order_id
-      print_method
-      src
-      quantity
-      price
-      product_type { name }
-      mrp_status
-      mrp_created_at
-      auth { identity_label email }
-      print {
-        meta_data { key value }
-        design_front { ... on LineItemPrint { src } }
-        design_back { ... on LineItemPrint { src } }
-        design_sleeve { ... on LineItemPrint { src } }
-        design_hood { ... on LineItemPrint { src } }
-        design_sleeve_left { ... on LineItemPrint { src } }
-        design_sleeve_right { ... on LineItemPrint { src } }
-        design_chest_left { ... on LineItemPrint { src } }
-        design_chest_right { ... on LineItemPrint { src } }
-        design_placket { ... on LineItemPrint { src } }
-        design_left { ... on LineItemPrint { src } }
-        design_right { ... on LineItemPrint { src } }
-        design_left_cuff { ... on LineItemPrint { src } }
-        design_right_cuff { ... on LineItemPrint { src } }
+      ...MrpProduct
+    }
+    paginate {
+      ...Paginate
+    }
+  }
+}
+
+fragment MrpProduct on MrpProduct {
+  _id
+  order_id
+  increment_id
+  increment_order_id
+  batch_id
+  barcode
+  barcode_src
+  print_method
+  qr_to_barcode_count
+  src
+  quantity
+  price
+  product_type {
+    _id
+    name
+    image
+    sku
+  }
+  mrp_log {
+    mrp_status
+    user_id
+    note
+    created_at
+    user {
+      _id
+      identity_label
+      email
+    }
+  }
+  print {
+    front
+    back
+    sleeve
+    hood
+    meta_data {
+      key
+      value
+    }
+    print_areas {
+      key
+      name
+      is_part
+      is_embroidery
+    }
+    print_areas_customs {
+      key
+      name
+      file {
+        _id
+        src
+        image_sizes {
+          name
+          width
+          height
+          url
+        }
+      }
+      is_part
+      is_required
+      is_embroidery
+      barcode
+      barcode_src
+      stitch_count
+      colors {
+        code
+        name
+        hex
       }
     }
-    paginate { total_items current_page total_pages }
+    design_front {
+      ... on LineItemPrint {
+        _id
+        src
+        image_sizes {
+          name
+          width
+          height
+          url
+        }
+      }
+    }
+    design_back {
+      ... on LineItemPrint {
+        _id
+        src
+        image_sizes {
+          name
+          width
+          height
+          url
+        }
+      }
+    }
+    design_sleeve {
+      ... on LineItemPrint {
+        _id
+        src
+        image_sizes {
+          name
+          width
+          height
+          url
+        }
+      }
+    }
+    design_hood {
+      ... on LineItemPrint {
+        _id
+        src
+        image_sizes {
+          name
+          width
+          height
+          url
+        }
+      }
+    }
+    design_sleeve_left {
+      ... on LineItemPrint {
+        _id
+        src
+        image_sizes {
+          name
+          width
+          height
+          url
+        }
+      }
+    }
+    design_sleeve_right {
+      ... on LineItemPrint {
+        _id
+        src
+        image_sizes {
+          name
+          width
+          height
+          url
+        }
+      }
+    }
+    design_chest_left {
+      ... on LineItemPrint {
+        _id
+        src
+        image_sizes {
+          name
+          width
+          height
+          url
+        }
+      }
+    }
+    design_chest_right {
+      ... on LineItemPrint {
+        _id
+        src
+        image_sizes {
+          name
+          width
+          height
+          url
+        }
+      }
+    }
+    design_placket {
+      ... on LineItemPrint {
+        _id
+        src
+        image_sizes {
+          name
+          width
+          height
+          url
+        }
+      }
+    }
+    design_left {
+      ... on LineItemPrint {
+        _id
+        src
+        image_sizes {
+          name
+          width
+          height
+          url
+        }
+      }
+    }
+    design_right {
+      ... on LineItemPrint {
+        _id
+        src
+        image_sizes {
+          name
+          width
+          height
+          url
+        }
+      }
+    }
+    design_left_cuff {
+      ...LineItemPrint
+    }
+    design_right_cuff {
+      ...LineItemPrint
+    }
   }
+  manufacture {
+    _id
+    name
+    sku
+    country
+  }
+  auth {
+    _id
+    identity_label
+    email
+  }
+  is_embroidery
+  mrp_status
+  mrp_created_at
+  mrp_press_completed_at
+  mrp_cut_completed_at
+  mrp_print_completed_at
+  mrp_embroidery_completed_at
+  mrp_sew_completed_at
+  mrp_packing_completed_at
+  press_completed
+  cut_completed
+  print_completed
+  embroidery_completed
+  sew_completed
+  package_completed
+  mrp_design_ready_at
+  mrp_photo_required
+  mrp_actual_photos
+}
+
+fragment LineItemPrint on LineItemPrint {
+  _id
+  src
+  size
+  width
+  height
+  image_sizes {
+    name
+    url
+    width
+    height
+  }
+  task_id
+}
+
+fragment Paginate on Paginate {
+  total_items
+  current_page
+  total_pages
 }`;
 
 type Manufacture = {
@@ -67,8 +339,16 @@ type Manufacture = {
   country?: string;
 };
 
+type MrpPrintAreaCustom = {
+  key?: string | null;
+  name?: string | null;
+  file?: { src?: string | null } | null;
+  is_embroidery?: boolean | null;
+};
+
 type MrpPrint = {
   meta_data?: { key?: string; value?: string | null }[] | null;
+  print_areas_customs?: MrpPrintAreaCustom[] | null;
 } & Record<string, unknown>;
 
 type MrpProductItem = {
@@ -86,17 +366,78 @@ type MrpProductItem = {
   print?: MrpPrint | null;
 };
 
+/**
+ * 18 vị trí design hợp lệ của `DesignFields` (shared) — dùng validate key
+ * quét động từ response, tránh nhặt nhầm key `design_*` lạ ngoài schema đơn.
+ */
+const DESIGN_FIELD_KEYS = new Set<keyof DesignFields>([
+  'front',
+  'back',
+  'sleeve',
+  'hood',
+  'folder',
+  'placket',
+  'chestLeft',
+  'chestRight',
+  'left',
+  'right',
+  'sleeveLeft',
+  'sleeveRight',
+  'leftUpperSleeve',
+  'rightUpperSleeve',
+  'leftCuff',
+  'rightCuff',
+  'frontEmbroidery',
+  'backEmbroidery',
+]);
+
+/**
+ * Quét ĐỘNG mọi key `design_*` trong `item.print` — response chỉ chứa key ở
+ * vị trí đơn CÓ design (không có design → vắng key/null), nên không hardcode
+ * danh sách vị trí như trước. Convert `design_chest_left` → `chestLeft`
+ * (snake→camel) rồi đối chiếu `DESIGN_FIELD_KEYS`; key không thuộc
+ * `DesignFields` bị bỏ qua. Nhờ đó query thêm vị trí mới (vd `design_folder`)
+ * là tự map, không phải sửa code.
+ */
+function extractDesigns(print: MrpPrint | null | undefined): Partial<DesignFields> {
+  const designs: Partial<DesignFields> = {};
+  for (const [key, value] of Object.entries(print || {})) {
+    if (!key.startsWith('design_')) continue;
+    const src = (value as { src?: string | null } | null | undefined)?.src;
+    if (!src) continue;
+    const camel = key
+      .slice('design_'.length)
+      .replace(/_([a-z])/g, (_, c: string) => c.toUpperCase()) as keyof DesignFields;
+    if (DESIGN_FIELD_KEYS.has(camel)) designs[camel] = src;
+  }
+  return designs;
+}
+
 // Field mapping xác nhận qua test tay đối chiếu 1 dòng CSV export thật
 // (xem documents/FunctionDescription/Orders.md §3.6). size/color đọc từ
 // print.meta_data (key "Size"/"Color" — cùng nguồn OnosPod dùng cho file
 // export xlsx). weight/width/height/length/shipCost/externalId KHÔNG tìm
 // được field nguồn nào trên GraphQL schema (đã probe kỹ), để trống (đều
 // optional trong DTO).
+//
+// So với CSV (parseOrders.ts, 18 vị trí design): designs quét động qua
+// `extractDesigns()` — vị trí nào response có key `design_*` là map được.
+// Riêng `frontEmbroidery`/`backEmbroidery` nếu quét động chưa có thì fallback
+// từ `print.print_areas_customs` (entry `is_embroidery=true` + `file.src`,
+// match front/back qua key/name) — nguồn mới có từ khi đồng bộ
+// PAGINATE_QUERY với query thật của FE OnosPod.
 function mapItemToRow(item: MrpProductItem) {
-  const design = (key: string) => (item.print?.[key] as { src?: string } | null | undefined)?.src || undefined;
   const meta = new Map<string, string>();
   for (const m of item.print?.meta_data || []) {
     if (m?.key && m.value) meta.set(m.key.toLowerCase(), m.value);
+  }
+
+  const designs = extractDesigns(item.print);
+  if (!designs.frontEmbroidery) {
+    designs.frontEmbroidery = pickEmbroiderySrc(item.print?.print_areas_customs, 'front');
+  }
+  if (!designs.backEmbroidery) {
+    designs.backEmbroidery = pickEmbroiderySrc(item.print?.print_areas_customs, 'back');
   }
 
   return {
@@ -110,26 +451,27 @@ function mapItemToRow(item: MrpProductItem) {
     printMethod: item.print_method || undefined,
     quantity: typeof item.quantity === 'number' ? item.quantity : undefined,
     baseCost: parsePriceNumber(item.price),
-    designs: {
-      front: design('design_front'),
-      back: design('design_back'),
-      sleeve: design('design_sleeve'),
-      hood: design('design_hood'),
-      sleeveLeft: design('design_sleeve_left'),
-      sleeveRight: design('design_sleeve_right'),
-      chestLeft: design('design_chest_left'),
-      chestRight: design('design_chest_right'),
-      placket: design('design_placket'),
-      left: design('design_left'),
-      right: design('design_right'),
-      leftCuff: design('design_left_cuff'),
-      rightCuff: design('design_right_cuff'),
-    },
+    designs,
     status: item.mrp_status || undefined,
     orderId: item.increment_order_id || undefined,
     orderAt: item.order_id ? formatVnDateTime(objectIdTimestamp(item.order_id)) : undefined,
     inProductionAt: item.mrp_created_at ? formatVnDateTime(new Date(item.mrp_created_at)) : undefined,
   };
+}
+
+// Vùng in custom thêu (embroidery): match "front"/"back" trên key hoặc name
+// (lowercase, defensive — key thực tế có thể là "front_embroidery"/"Front
+// Embroidery"...). Không match → undefined, vô hại.
+function pickEmbroiderySrc(
+  areas: MrpPrintAreaCustom[] | null | undefined,
+  side: 'front' | 'back',
+): string | undefined {
+  for (const area of areas || []) {
+    if (!area.is_embroidery || !area.file?.src) continue;
+    const label = `${area.key || ''} ${area.name || ''}`.toLowerCase();
+    if (label.includes(side)) return area.file.src;
+  }
+  return undefined;
 }
 
 function parsePriceNumber(price: string | null | undefined): number | undefined {
@@ -321,12 +663,10 @@ export class OnospodImportService {
     const vn = new Date(now.getTime() + TZ_OFFSET_MINUTES * 60_000);
     const boundary = new Date(vn);
 
-    if (vn.getUTCHours() < 12) {
+    if (vn.getUTCHours() < 8) {
       boundary.setUTCDate(boundary.getUTCDate() - 1);
-      boundary.setUTCHours(12, 0, 0, 0);
-    } else {
-      boundary.setUTCHours(0, 0, 0, 0);
     }
+    boundary.setUTCHours(0, 0, 0, 0);
 
     const start = new Date(boundary.getTime() - TZ_OFFSET_MINUTES * 60_000);
 

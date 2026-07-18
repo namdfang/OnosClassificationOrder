@@ -11,7 +11,7 @@
 1. **RBAC động** — Admin tạo/sửa/xóa role + cấu hình permission per role (cả menu UI + edit field BE).
 2. **Workshop Config** — danh mục dùng chung cho 7 trường nghiệp vụ.
 3. **Order schema mở rộng** — 8 trường nghiệp vụ mới + lifecycle visibility.
-4. **Order UI đa role** — Admin giữ view cũ; Support/Designer/Fulfill có bảng workshop riêng.
+4. **Order UI đa role** — Admin giữ view cũ; Support/Designer/Fulfill có Danh sách đơn riêng.
 5. **Inline / bulk update** với BE re-check permission.
 6. **Audit log** — mọi thay đổi field đều ghi lại.
 7. **User management** — gán role, quản lý account.
@@ -62,7 +62,7 @@ RoleEntity {
 | Order | `order.import` | Import đơn |
 | Order | `order.delete` | Xóa đơn |
 | Order | `order.view-admin-table` | Thấy bảng admin (cũ) |
-| Order | `order.view-workshop-table` | Thấy bảng workshop (mới) |
+| Order | `order.view-workshop-table` | Thấy Danh sách đơn (mới) |
 | Order field | `order.field.printStatus.view` | Xem Trạng thái in |
 | Order field | `order.field.printStatus.edit` | Sửa Trạng thái in |
 | Order field | `order.field.printStatusNote.view/edit` | Note trạng thái in |

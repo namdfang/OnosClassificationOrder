@@ -51,7 +51,9 @@ export const ProviderCode = {
 } as const;
 export type ProviderCode = (typeof ProviderCode)[keyof typeof ProviderCode];
 
-export const ProviderIcon: Record<ProviderCode, string> = {
+// Partial: nhiều provider mới (VietAnh, PrinteesHub, Fastex, HP...) chưa có
+// icon — data giữ nguyên, chỉ nới type cho khớp thực tế.
+export const ProviderIcon: Partial<Record<ProviderCode, string>> = {
   PRINTSEL: 'https://i.ibb.co/rZktqKF/printsel.png',
   BEEFUN: 'https://www.beefun.vn/wp-content/uploads/2022/07/cropped-favicon-beefun-02-32x32.png',
   ONOS: 'https://www.google.com/s2/favicons?sz=32&domain_url=https%3A%2F%2Fonospod.com%2F',

@@ -26,7 +26,7 @@ Reuse 100% endpoint cũ (`by-production-id` + `fulfillment-transition` start/com
 
 Workshop dùng **máy quét barcode USB** (HID keyboard emulation — không cần driver) để quét mã `productionId` in trên đơn → mở dialog gán lỗi nhanh + tùy chọn đẩy về công đoạn trước.
 
-Mục tiêu: rút ngắn thao tác từ "tìm đơn trong bảng workshop → click cell `productionError` → chọn lỗi → submit" xuống **1 cú quét + 1 click Submit**. Phục vụ tình huống xưởng phát hiện lỗi giữa dây chuyền in/ép/may → cần gán lỗi + đẩy về stage trước fix ngay.
+Mục tiêu: rút ngắn thao tác từ "tìm đơn trong Danh sách đơn → click cell `productionError` → chọn lỗi → submit" xuống **1 cú quét + 1 click Submit**. Phục vụ tình huống xưởng phát hiện lỗi giữa dây chuyền in/ép/may → cần gán lỗi + đẩy về stage trước fix ngay.
 
 **2 nghiệp vụ kết hợp trong 1 dialog:**
 
@@ -298,7 +298,7 @@ curl -X GET http://localhost:3001/v1/orders/by-production-id/PROD-1234 \
 - **Beep / vibrate / animation feedback**: thêm `<audio>` element + `Web Vibration API` cho success/fail. Workshop đỡ nhìn màn hình.
 - **Pattern B (global keyboard listener)**: detect scan dựa trên thời gian keystroke (< 50ms/char). Cho phép quét khi input không focus. Hiện chưa làm vì Pattern A đủ dùng cho workflow page-dedicated.
 - **Lịch sử quét persist**: dùng `localStorage` để giữ giữa session — handy khi workshop quét cả ca rồi review cuối ngày.
-- **Quét → mở trực tiếp bảng workshop filtered theo productionId**: option khác thay vì mở dialog gán lỗi. Tùy thuộc nghiệp vụ.
+- **Quét → mở trực tiếp Danh sách đơn filtered theo productionId**: option khác thay vì mở dialog gán lỗi. Tùy thuộc nghiệp vụ.
 
 ---
 

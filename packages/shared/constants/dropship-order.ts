@@ -40,7 +40,9 @@ export type DropshipOrderType = (typeof DropshipOrderType)[keyof typeof Dropship
 
 // Download front, back artworks, label files
 
-export const DROPSHIP_ORDER_IMPORT_HEADERS: Record<keyof ExcelImportDropShipOrder, string> = {
+// Partial: schema đã thêm `marketplace`/`marketplaceOrderIds` sau khi bảng
+// header này được viết — data giữ nguyên, chỉ nới type cho khớp.
+export const DROPSHIP_ORDER_IMPORT_HEADERS: Partial<Record<keyof ExcelImportDropShipOrder, string>> = {
   orderId: 'Order ID',
   firstName: 'First Name',
   lastName: 'Last Name',

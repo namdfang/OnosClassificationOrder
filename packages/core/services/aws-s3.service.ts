@@ -98,7 +98,15 @@ export class AwsS3Service {
 
     const command = new PutObjectCommand(putObjectParams);
 
-    return await getSignedUrl(this.s3, command, { expiresIn: 3600 });
+    // Cast type-only: version skew `client-s3@^3.717` vs
+    // `s3-request-presigner@^3.369` làm 2 bên khai type `Client`/`Command`
+    // khác nhau — runtime tương thích bình thường. Nâng presigner lên cùng
+    // version là fix gốc (cần cân nhắc riêng, không làm ở đây).
+    return await getSignedUrl(
+      this.s3 as unknown as Parameters<typeof getSignedUrl>[0],
+      command as unknown as Parameters<typeof getSignedUrl>[1],
+      { expiresIn: 3600 },
+    );
   }
 
   async deleteImage(key: string): Promise<ResDto> {

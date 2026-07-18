@@ -33,7 +33,9 @@ export type StockOrderType = (typeof StockOrderType)[keyof typeof StockOrderType
 
 // Download front, back artworks, label files
 
-export const STOCK_ORDER_IMPORT_HEADERS: Record<keyof ExcelImportStockOrder, string> = {
+// `| 'weight'`: cột Weight vẫn nằm trong sheet import nhưng key `weight` đã
+// rời khỏi ExcelImportStockOrder — data giữ nguyên, chỉ nới type cho khớp.
+export const STOCK_ORDER_IMPORT_HEADERS: Partial<Record<keyof ExcelImportStockOrder | 'weight', string>> = {
   seller: 'Seller',
   orderId: 'Order ID',
   name: 'shipping name',

@@ -6,6 +6,10 @@ const Settings = lazy(() => import('../pages/settings'));
 const Account = lazy(() => import('../pages/account'));
 const Products = lazy(() => import('../pages/products'));
 const Orders = lazy(() => import('../pages/orders'));
+const OrdersWorkshop = lazy(() => import('../pages/orders/workshop'));
+const OrdersErrorLog = lazy(() => import('../pages/orders/error-log'));
+const OrdersImport = lazy(() => import('../pages/orders/import'));
+const OrdersCuttingFiles = lazy(() => import('../pages/orders/cutting-files'));
 const OrdersScanError = lazy(() => import('../pages/orders/scan-error'));
 const WorkshopConfig = lazy(() => import('../pages/workshop-config'));
 const Users = lazy(() => import('../pages/users'));
@@ -28,6 +32,10 @@ export const routerConfig: RouterConfig[] = [
   { path: PATHS.ACCOUNT, component: Account },
   { path: PATHS.PRODUCTS, component: Products },
   { path: PATHS.ORDERS, component: Orders },
+  { path: PATHS.ORDERS_WORKSHOP, component: OrdersWorkshop },
+  { path: PATHS.ORDERS_ERROR_LOG, component: OrdersErrorLog },
+  { path: PATHS.ORDERS_IMPORT, component: OrdersImport },
+  { path: PATHS.ORDERS_CUTTING_FILES, component: OrdersCuttingFiles },
   { path: PATHS.ORDERS_SCAN_ERROR, component: OrdersScanError },
   { path: PATHS.WORKSHOP_CONFIG, component: WorkshopConfig },
   { path: PATHS.USERS, component: Users },

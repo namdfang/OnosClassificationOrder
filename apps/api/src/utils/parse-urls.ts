@@ -19,7 +19,13 @@ export function parseUrls<T extends FileDocument>(fileDocument: T) {
     delete fileDocument.isGoogleDrive;
 
     if (fileDocument.url && fileDocument.url.includes('drive.google.com')) {
-      const imageId = UploadService.getGDriveFileId(fileDocument.url);
+      // BROKEN legacy path: `UploadService.getGDriveFileId` đã bị xóa khỏi
+      // service từ lâu — nhánh này chạy tới sẽ TypeError (hành vi sẵn có,
+      // cast type-only để qua type-check, KHÔNG đổi runtime). Ảnh Drive giờ
+      // đi qua pipeline R2 (`utils/design-url.ts:extractDriveId`).
+      const imageId = (
+        UploadService as unknown as { getGDriveFileId(url: string): string }
+      ).getGDriveFileId(fileDocument.url);
 
       fileDocument.url = `https://drive.google.com/uc?export=download&id=${imageId}`;
       fileDocument.previewUrl = `${configService.GDriveCDNUrl}/preview/${imageId}`;

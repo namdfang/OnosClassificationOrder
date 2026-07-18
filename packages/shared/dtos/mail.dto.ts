@@ -42,7 +42,9 @@ export const MailHistoryZod = z.object({
   topic: z.nativeEnum(MailType),
   status: z.nativeEnum(MailStatus),
   subject: z.string().optional(),
-  scheduledTime: z.string().optional(),
+  // Date — khớp MailHistoryEntity (Mongo lưu Date thật, mail.service `.toDate()`);
+  // trước khai `z.string()` sai thực tế làm assertSameType 2 chiều fail.
+  scheduledTime: z.date().optional(),
 });
 export type MailHistory = z.infer<typeof MailHistoryZod>;
 

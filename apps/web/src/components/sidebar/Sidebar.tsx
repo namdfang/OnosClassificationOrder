@@ -12,6 +12,7 @@ import {
   Package,
   Palette,
   ScanLine,
+  Scissors,
   Settings,
   ShieldCheck,
   ShieldHalf,
@@ -67,10 +68,13 @@ const NAV_GROUPS: NavGroup[] = [
         icon: <ShoppingCart size={17} />,
         perm: 'page.orders',
         children: [
-          { key: 'orders-list', label: 'List Order', to: `${PATHS.ORDERS}?tab=list`, icon: <List size={14} /> },
-          { key: 'orders-error-log', label: 'Nhật ký bù lỗi', to: `${PATHS.ORDERS}?tab=error-log`, icon: <AlertTriangle size={14} />, hideForRoles: ['Support'] },
+          // "List Order" (tab cũ) đang tạm tắt (xem pages/orders/ListOrderTab.tsx)
+          // — thay bằng "Danh sách đơn", đúng trang default thật hiện tại.
+          { key: 'orders-workshop', label: 'Danh sách đơn', to: PATHS.ORDERS_WORKSHOP, icon: <List size={14} /> },
+          { key: 'orders-error-log', label: 'Nhật ký bù lỗi', to: PATHS.ORDERS_ERROR_LOG, icon: <AlertTriangle size={14} />, hideForRoles: ['Support'] },
           { key: 'orders-scan-error', label: 'Quét mã', to: PATHS.ORDERS_SCAN_ERROR, icon: <ScanLine size={14} />, perm: 'page.scan_error' },
-          { key: 'orders-import', label: 'Import Order', to: `${PATHS.ORDERS}?tab=import`, icon: <FileDown size={14} />, perm: 'order.import' },
+          { key: 'orders-import', label: 'Import Order', to: PATHS.ORDERS_IMPORT, icon: <FileDown size={14} />, perm: 'order.import' },
+          { key: 'orders-cutting-files', label: 'Import File Cutting', to: PATHS.ORDERS_CUTTING_FILES, icon: <Scissors size={14} />, perm: 'order.import' },
         ],
       },
       { key: PATHS.WORKSHOP_CONFIG, label: 'Quản lý xưởng', to: PATHS.WORKSHOP_CONFIG, icon: <Factory size={17} />, perm: 'workshop.manage' },

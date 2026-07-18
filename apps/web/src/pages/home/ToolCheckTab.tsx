@@ -192,7 +192,7 @@ export default function ToolCheckTab() {
 
   // Render 1 dòng đơn — cột theo thứ tự bảng "Đơn theo xưởng" (mockup → type/size
   // → Note kq Tool → File sửa lỗi → Ghi chú file lỗi → Lỗi xưởng). Cell edit trực
-  // tiếp giống bảng workshop; đổi Note kq Tool / Lỗi xưởng có thể đổi list → refetch.
+  // tiếp giống Danh sách đơn; đổi Note kq Tool / Lỗi xưởng có thể đổi list → refetch.
   const renderRow = (o: ToolCheckOrder) => {
     const showCount = o.toolResultNote === 'error' && (o.productionErrorCount || 0) >= 2;
     return (

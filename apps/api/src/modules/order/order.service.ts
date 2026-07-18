@@ -2365,7 +2365,14 @@ export class OrderService implements OnModuleInit {
       toolResultNote: mapBreakdown(WorkshopConfigCategory.ToolResultNote, agg.toolResultNote),
       errorFile: mapBreakdown(WorkshopConfigCategory.ErrorFileType, agg.errorFile),
       productionError: mapBreakdown(WorkshopConfigCategory.ProductionError, agg.productionError),
-      assignee: mapBreakdown(WorkshopConfigCategory.Assignee, agg.assignee),
+      // Category `assignee` không còn trong WorkshopConfigCategory (assignee
+      // giờ là userId, WorkshopConfig auto-cleanup category này) — giữ nguyên
+      // hành vi cũ: không resolve qua configMap, name = raw code.
+      assignee: (agg.assignee as Array<{ code: string | null; count: number }>).map((r) =>
+        r.code
+          ? { code: r.code, name: r.code, count: r.count }
+          : { code: null, name: 'Chưa phân loại', count: r.count },
+      ),
       assigneeNote: mapBreakdown(WorkshopConfigCategory.AssigneeNote, agg.assigneeNote),
       factory: factoryBreakdown,
       machineType: machineBreakdown,
@@ -3841,7 +3848,7 @@ export class OrderService implements OnModuleInit {
         ...base,
         ...excludeCancelled,
         $and: [
-          ...(Array.isArray(base.$and) ? (base.$and as unknown[]) : []),
+          ...(Array.isArray(base.$and) ? (base.$and as Record<string, unknown>[]) : []),
           { $or: [{ designerStatus: 'unassigned' }, { designerStatus: { $exists: false } }] },
           { toolResultNote: { $ne: 'ok' } },
         ],
@@ -5081,7 +5088,7 @@ export class OrderService implements OnModuleInit {
   /**
    * Public API cho tool ngoài lưu Kết quả Tool (`toolResult`) sau khi xử lý
    * đơn lấy từ `getNextDesignReviewOrder()` — tương đương thao tác tay ở cột
-   * "Kết quả Tool" (Bảng Workshop). KHÔNG đụng `toolResultNote` ("Note kq Tool
+   * "Kết quả Tool" (Danh sách đơn). KHÔNG đụng `toolResultNote` ("Note kq Tool
    * 1") — field đó giờ CHỈ nhân viên sửa tay, ngoài luồng automation này.
    *
    * Tra theo `productionId` — khóa duy nhất, luôn có (khác `orderId` = mã đơn

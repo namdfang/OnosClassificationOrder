@@ -5,7 +5,13 @@ export const PATHS = {
   ACCOUNT: '/account',
 
   PRODUCTS: '/products',
+  // `/orders` (bare) chỉ còn là redirect legacy — mọi trang thật nằm ở route
+  // con riêng, điều hướng qua aside menu (KHÔNG dùng `?tab=` nữa).
   ORDERS: '/orders',
+  ORDERS_WORKSHOP: '/orders/workshop',
+  ORDERS_ERROR_LOG: '/orders/error-log',
+  ORDERS_IMPORT: '/orders/import',
+  ORDERS_CUTTING_FILES: '/orders/cutting-files',
   ORDERS_SCAN_ERROR: '/orders/scan-error',
   WORKSHOP_CONFIG: '/workshop-config',
 

@@ -594,7 +594,7 @@ export class DesignerBreakdownResDto extends createZodDto(
 // ─── Backlog tồn đọng theo Designer × Ngày (inProductionAt) ──────────
 // Đơn CHƯA done gom theo người ôm × ngày vào sản xuất. "Không làm được"
 // (rejected) KHÔNG tính là tồn (nằm ở backlog "Cần gán" để leader gán lại).
-// Dùng cho modal "Chi tiết tồn đọng" trên bảng Workshop.
+// Dùng cho modal "Chi tiết tồn đọng" trên Danh sách đơn.
 
 /** Phân rã trạng thái tồn (KHÔNG có done, KHÔNG có rejected). */
 export const BacklogStatusCountsZod = z.object({

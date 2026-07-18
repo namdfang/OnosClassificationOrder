@@ -65,12 +65,12 @@ function mergeWithFactoryOr<T>(
   base: FilterQuery<T>,
   tabFilter: FilterQuery<T>,
 ): FilterQuery<T> {
-  const baseOr = base.$or as unknown[] | undefined;
-  const tabOr = tabFilter.$or as unknown[] | undefined;
+  const baseOr = base.$or;
+  const tabOr = tabFilter.$or;
   const merged: FilterQuery<T> = { ...base, ...tabFilter };
   if (baseOr && tabOr) {
-    delete (merged as { $or?: unknown }).$or;
-    const existingAnd = (merged.$and as unknown[] | undefined) ?? [];
+    delete merged.$or;
+    const existingAnd = merged.$and ?? [];
     merged.$and = [...existingAnd, { $or: baseOr }, { $or: tabOr }];
   }
   return merged;
