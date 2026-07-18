@@ -34,12 +34,13 @@
     "reset": "pnpm clean-dist && pnpm --filter ./apps/api i"
   },
   "engines": {
-    "node": ">=18.0.0 <24"
+    "node": "20.20.2"
   },
   "packageManager": "pnpm@8.6.10",
   "pnpm": {
     "overrides": {
-      "passport": "0.6.0"
+      "passport": "0.6.0",
+      "@types/node": "20.17.17"
     }
   },
   "dependencies": {

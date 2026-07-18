@@ -589,8 +589,10 @@ export const ImportFromOnosPodResZod = ResZod.extend({
     // trang, hoặc trùng giữa 2 manufacture.
     duplicatesInBatch: z.number(),
     period: z.object({ start: z.string(), end: z.string() }),
-    // Pull từ TẤT CẢ manufacture của account (query `manufactures`) — 1
-    // manufacture lỗi không chặn các manufacture còn lại (xem `error`).
+    // Pull từ TẤT CẢ manufacture của account trong 1 lượt phân trang duy
+    // nhất (không truyền `manufacture_id`) — group lại từ field `manufacture`
+    // có sẵn trên mỗi item, KHÔNG loop gọi riêng từng manufacture nữa nên
+    // `error` giờ luôn rỗng (call fail = throw luôn, xem OnospodImportService).
     byManufacture: z.array(
       z.object({
         id: z.string(),

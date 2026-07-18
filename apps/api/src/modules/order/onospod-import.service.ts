@@ -14,16 +14,10 @@ const TZ_OFFSET_MINUTES = 7 * 60;
 const MRP_STATUS = 'To Do';
 
 const PAGE_SIZE = 500;
-const MAX_PAGES = 200; // an toàn — 200 * 500 = 100k rows, dư sức cho 1 ngày/1 manufacture
-
-const MANUFACTURES_QUERY = `query Manufactures($search: String, $page: Int, $page_size: Int) {
-  manufactures(search: $search, page: $page, page_size: $page_size) {
-    _id
-    name
-    sku
-    country
-  }
-}`;
+// an toàn — 200 * 500 = 100k rows, dư sức cho 1 ngày TOÀN BỘ account (không
+// truyền `manufacture_id` → 1 lượt phân trang gộp mọi manufacture, xem
+// `fetchAllPages()`/`importFromOnosPod()`).
+const MAX_PAGES = 200;
 
 // Đồng bộ với query thật của FE admin OnosPod (qc.onospod.com) thay vì tự
 // chọn field tay như trước — tránh lệch schema về sau. Bỏ field
@@ -332,13 +326,6 @@ fragment Paginate on Paginate {
   total_pages
 }`;
 
-type Manufacture = {
-  _id: string;
-  name: string;
-  sku: string;
-  country?: string;
-};
-
 type MrpPrintAreaCustom = {
   key?: string | null;
   name?: string | null;
@@ -364,6 +351,7 @@ type MrpProductItem = {
   mrp_created_at?: string;
   auth?: { identity_label?: string; email?: string } | null;
   print?: MrpPrint | null;
+  manufacture?: { _id?: string; name?: string; sku?: string } | null;
 };
 
 /**
@@ -502,7 +490,10 @@ function formatVnDateTime(date: Date): string {
  *
  * Query trực tiếp `paginateMrpProduct` (GraphQL) thay vì cơ chế export/tải
  * file bất đồng bộ ban đầu (đã bỏ — không tìm được cách biết khi nào file
- * export sẵn sàng). Trả JSON có sẵn, không cần chờ/poll gì cả.
+ * export sẵn sàng). Trả JSON có sẵn, không cần chờ/poll gì cả. KHÔNG truyền
+ * `manufacture_id` → 1 lượt phân trang gộp mọi manufacture (đã verify: tổng
+ * khớp 100% với gọi riêng từng manufacture) — không cần gọi `manufactures` +
+ * loop như trước.
  *
  * Lịch chạy do EXTERNAL crontab quản lý (không dùng @nestjs/schedule nội bộ)
  * — gọi `GET /v1/orders/import-from-onospod/cron` (public, không cần auth,
@@ -525,39 +516,15 @@ export class OnospodImportService {
     }
 
     const { start, end } = this.resolvePeriod(dto);
-    const manufactures = await this.fetchManufactures(config);
-    if (manufactures.length === 0) {
-      throw new BadRequestException('OnosPod không trả về manufacture nào (query `manufactures` rỗng).');
-    }
 
-    const allItems: MrpProductItem[] = [];
-    const byManufacture: { id: string; name: string; sku: string; fetched: number; error?: string }[] = [];
-
-    // Tuần tự (không Promise.all) để tránh dồn dập request cùng lúc tới
-    // OnosPod — 1 manufacture lỗi không chặn các manufacture còn lại.
-    for (const m of manufactures) {
-      try {
-        const items = await this.fetchAllPages(config, m._id, start, end);
-        allItems.push(...items);
-        byManufacture.push({ id: m._id, name: m.name, sku: m.sku, fetched: items.length });
-      } catch (err) {
-        const message = err instanceof Error ? err.message : 'Unknown error';
-        byManufacture.push({ id: m._id, name: m.name, sku: m.sku, fetched: 0, error: message });
-      }
-    }
+    // KHÔNG truyền `manufacture_id` → OnosPod trả đơn từ TẤT CẢ manufacture
+    // trong 1 lượt phân trang duy nhất (verify bằng test gọi thật 2026-07-18:
+    // tổng `total_items` khớp 100% với cộng dồn từng manufacture riêng lẻ) —
+    // bỏ hẳn bước gọi `manufactures` + loop tuần tự từng manufacture như
+    // trước, mỗi item đã tự mang sẵn field `manufacture{_id,name,sku}`.
+    const allItems = await this.fetchAllPages(config, start, end);
 
     if (allItems.length === 0) {
-      // Phân biệt "hỏng thật" với "hết đơn": nếu MỌI manufacture đều lỗi
-      // (token hết hạn, OnosPod down...) thì phải báo đúng nguyên nhân —
-      // không được nuốt lỗi rồi báo "không có đơn".
-      const failed = byManufacture.filter((m) => m.error);
-      if (failed.length === manufactures.length) {
-        throw new BadRequestException(
-          `OnosPod: tất cả ${failed.length} manufacture đều lỗi — ` +
-            failed.map((m) => `${m.sku}: ${m.error}`).join('; '),
-        );
-      }
-
       // Không có đơn "To Do" mới trong khoảng này — trạng thái BÌNH THƯỜNG
       // (sáng vắng, ngày lễ), đặc biệt với đường cron tự động. Trả success
       // với số 0 thay vì 400 để cron monitoring không báo động giả.
@@ -572,10 +539,16 @@ export class OnospodImportService {
           totalFetched: 0,
           duplicatesInBatch: 0,
           period: { start: start.toISOString(), end: end.toISOString() },
-          byManufacture,
+          byManufacture: [],
         },
       };
     }
+
+    // byManufacture giờ suy ra từ field `manufacture` có sẵn trên MỖI item
+    // (không cần gọi/loop riêng nữa) — chỉ để hiển thị số lượng theo xưởng
+    // trên toast FE, KHÔNG ảnh hưởng mapping xưởng nội bộ (vẫn qua
+    // ProductConfig như CSV, xem `OrderService.importOrders()`).
+    const byManufacture = this.groupByManufacture(allItems);
 
     const { rows, duplicatesInBatch } = this.dedupeByProductionId(allItems.map(mapItemToRow).filter((r) => r.productionId));
 
@@ -591,6 +564,25 @@ export class OnospodImportService {
         byManufacture,
       },
     };
+  }
+
+  private groupByManufacture(
+    items: MrpProductItem[],
+  ): { id: string; name: string; sku: string; fetched: number }[] {
+    const map = new Map<string, { id: string; name: string; sku: string; fetched: number }>();
+    for (const item of items) {
+      const manu = item.manufacture;
+      const key = manu?._id || 'unknown';
+      const entry = map.get(key) ?? {
+        id: manu?._id || 'unknown',
+        name: manu?.name || 'Không xác định',
+        sku: manu?.sku || '—',
+        fetched: 0,
+      };
+      entry.fetched += 1;
+      map.set(key, entry);
+    }
+    return Array.from(map.values());
   }
 
   /**
@@ -610,33 +602,6 @@ export class OnospodImportService {
       byId.set(row.productionId, row);
     }
     return { rows: Array.from(byId.values()), duplicatesInBatch: rows.length - byId.size };
-  }
-
-  private async fetchManufactures(config: { apiUrl: string; bearerToken: string }): Promise<Manufacture[]> {
-    let res;
-    try {
-      res = await axios.post(
-        config.apiUrl,
-        { operationName: 'Manufactures', variables: {}, query: MANUFACTURES_QUERY },
-        {
-          headers: {
-            Authorization: `Bearer ${config.bearerToken}`,
-            'Content-Type': 'application/json',
-          },
-          timeout: 30_000,
-        },
-      );
-    } catch (err) {
-      const message = axios.isAxiosError(err) ? err.message : 'Unknown error';
-      throw new BadRequestException(`Gọi OnosPod (manufactures) thất bại: ${message}`);
-    }
-
-    const gqlErrors = res.data?.errors;
-    if (Array.isArray(gqlErrors) && gqlErrors.length > 0) {
-      throw new BadRequestException(`OnosPod trả lỗi (manufactures): ${gqlErrors.map((e: { message?: string }) => e.message).join('; ')}`);
-    }
-
-    return res.data?.data?.manufactures || [];
   }
 
   /**
@@ -675,7 +640,6 @@ export class OnospodImportService {
 
   private async fetchAllPages(
     config: { apiUrl: string; bearerToken: string },
-    manufactureId: string,
     start: Date,
     end: Date,
   ): Promise<MrpProductItem[]> {
@@ -684,7 +648,7 @@ export class OnospodImportService {
     let totalPages = 1;
 
     do {
-      const pageItems = await this.fetchPage(config, manufactureId, start, end, page, (tp) => {
+      const pageItems = await this.fetchPage(config, start, end, page, (tp) => {
         totalPages = tp;
       });
       items.push(...pageItems);
@@ -694,9 +658,10 @@ export class OnospodImportService {
     return items;
   }
 
+  // Không truyền `manufacture_id` → OnosPod trả đơn từ TẤT CẢ manufacture
+  // (xem comment ở `importFromOnosPod()`).
   private async fetchPage(
     config: { apiUrl: string; bearerToken: string },
-    manufactureId: string,
     start: Date,
     end: Date,
     page: number,
@@ -709,7 +674,6 @@ export class OnospodImportService {
         {
           operationName: 'PaginateMrpProduct',
           variables: {
-            manufacture_id: manufactureId,
             page_size: PAGE_SIZE,
             page,
             status: MRP_STATUS,
@@ -728,7 +692,7 @@ export class OnospodImportService {
       );
     } catch (err) {
       const message = axios.isAxiosError(err) ? err.message : 'Unknown error';
-      throw new BadRequestException(`Gọi OnosPod (manufacture=${manufactureId}, page ${page}) thất bại: ${message}`);
+      throw new BadRequestException(`Gọi OnosPod (page ${page}) thất bại: ${message}`);
     }
 
     const gqlErrors = res.data?.errors;
@@ -738,7 +702,7 @@ export class OnospodImportService {
 
     const result = res.data?.data?.paginateMrpProduct;
     if (!result) {
-      throw new BadRequestException(`OnosPod không trả dữ liệu (manufacture=${manufactureId}, page ${page}).`);
+      throw new BadRequestException(`OnosPod không trả dữ liệu (page ${page}).`);
     }
 
     setTotalPages(result.paginate?.total_pages || 1);

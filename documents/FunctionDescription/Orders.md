@@ -187,30 +187,33 @@ toàn bộ chuỗi này trong 1 click.
 **Cách lấy dữ liệu:** query GraphQL `paginateMrpProduct` trực tiếp (KHÔNG dùng cơ chế
 export/tải file — thử ban đầu nhưng mutation `createExportProductionReport` chạy bất đồng
 bộ và không tìm được API polling đúng, xem lịch sử ở git log nếu cần). `paginateMrpProduct`
-trả JSON structured ngay lập tức, nhanh hơn nhiều (~19s cho ~400 đơn/4 manufacture) và
-không cần chờ. Pull từ **TẤT CẢ manufacture** của account (query `manufactures` trước, rồi
-loop tuần tự từng manufacture) — không hardcode 1 manufacture_id.
+trả JSON structured ngay lập tức, nhanh hơn nhiều và không cần chờ. Pull từ **TẤT CẢ
+manufacture** của account trong **1 lượt phân trang duy nhất** — KHÔNG truyền tham số
+`manufacture_id` (verify bằng test gọi thật 2026-07-18: tổng `total_items` khi bỏ trống
+`manufacture_id` khớp 100% với cộng dồn kết quả gọi riêng từng manufacture: ML 299 + TN 216 +
+GRABINK 15 + 2DUS 0 = 530). Trước đây phải gọi `manufactures` lấy danh sách rồi loop tuần tự
+từng manufacture — đã bỏ, vì mỗi item trả về đã tự mang sẵn field `manufacture{_id,name,sku}`.
 
 ```
 User bấm "Lấy đơn từ OnosPod"
   → POST /v1/orders/import-from-onospod (body {} → BE tự tính period theo giờ gọi, xem bên dưới)
   → OnospodImportService:
-      1. Gọi query `manufactures` lấy danh sách toàn bộ manufacture của account
+      1. Loop page=1.. gọi query `paginateMrpProduct(status="To Do", start, end, page,
+         perpage=500)` — KHÔNG truyền `manufacture_id` — tới khi hết `paginate.total_pages`.
          (Bearer token tĩnh lưu trong env `ONOSPOD_QC_API_URL` / `ONOSPOD_QC_BEARER_TOKEN`
          — đọc qua `ApiConfigService.onospodQcConfig`, trả `null` nếu chưa cấu hình thay
          vì crash app boot, giống `r2Config`)
-      2. Với TỪNG manufacture (tuần tự, không Promise.all — tránh dồn request): loop
-         page=1.. gọi query `paginateMrpProduct(manufacture_id, status="To Do", start, end,
-         page, perpage=500)` tới khi hết `paginate.total_pages`. 1 manufacture lỗi
-         (network/GraphQL error) KHÔNG chặn các manufacture còn lại — ghi vào
-         `byManufacture[].error`, tiếp tục manufacture tiếp theo.
-      3. Gộp toàn bộ item của mọi manufacture → map từng `MrpProduct` →
-         `ImportProductionOrderRow` (field mapping xác nhận qua test đối chiếu 1:1 với
-         dòng CSV export thật — xem bảng field mapping bên dưới)
+      2. Map từng `MrpProduct` → `ImportProductionOrderRow` (field mapping xác nhận qua
+         test đối chiếu 1:1 với dòng CSV export thật — xem bảng field mapping bên dưới)
+      3. `groupByManufacture()` — group lại TẤT CẢ item theo field `manufacture` có sẵn
+         trên mỗi item (KHÔNG gọi/loop riêng) → chỉ để hiển thị số lượng theo manufacture
+         trên toast FE, KHÔNG ảnh hưởng mapping xưởng nội bộ (vẫn qua `ProductConfig` như
+         CSV, xem §3.1/§3.3)
       4. Gọi lại OrderService.importOrders({ rows }) MỘT LẦN cho toàn bộ rows đã gộp —
          TÁI DÙNG 100% pipeline upsert/mapping/design-job/notification đã có ở §3.1/§3.3
   → Response giống ImportProductionOrdersResDto + { totalFetched, period, byManufacture[] }
-     (byManufacture: { id, name, sku, fetched, error? } — hiện trên toast FE)
+     (byManufacture: { id, name, sku, fetched, error? } — hiện trên toast FE; `error` giờ
+     luôn rỗng vì gọi 1 lượt duy nhất, fail = throw luôn thay vì cô lập theo manufacture)
 ```
 
 **Field mapping (`MrpProduct` GraphQL → `ImportProductionOrderRow`):**
@@ -235,19 +238,19 @@ User bấm "Lấy đơn từ OnosPod"
 | `weight`, `width`, `height`, `length`, `shipCost`, `externalId`, `referent` | — | không tìm được field nguồn nào trên schema (đã probe qua GraphQL error "Did you mean" — introspection bị chặn), để trống (đều optional) |
 
 **Dedupe trong batch:** cùng 1 `productionId` có thể lặp lại giữa các trang (data live dịch
-chuyển khi đang phân trang) hoặc giữa 2 manufacture — `dedupeByProductionId()` gom trước khi
-gọi `importOrders()` (giữ bản ghi xuất hiện sau cùng), tránh lệch số liệu `imported`/`updated`.
-Response trả thêm `duplicatesInBatch`. Chống trùng ở tầng DB: `orders.productionId` có
-**unique index** (schema đã khai báo `unique: true` nhưng Mongoose autoIndex không tự tạo trên
-DB restore từ dump — phải `createIndex` tay; nhớ bước này khi restore DB mới) — chặn race
-2 request import đồng thời (cron + nút UI) cùng insert 1 đơn.
+chuyển khi đang phân trang) — `dedupeByProductionId()` gom trước khi gọi `importOrders()`
+(giữ bản ghi xuất hiện sau cùng), tránh lệch số liệu `imported`/`updated`. Response trả thêm
+`duplicatesInBatch`. Chống trùng ở tầng DB: `orders.productionId` có **unique index** (schema
+đã khai báo `unique: true` nhưng Mongoose autoIndex không tự tạo trên DB restore từ dump —
+phải `createIndex` tay; nhớ bước này khi restore DB mới) — chặn race 2 request import đồng
+thời (cron + nút UI) cùng insert 1 đơn.
 
 **Error semantics (quan trọng cho cron monitoring):**
 - Batch rỗng (không có đơn "To Do" mới — sáng vắng/ngày lễ) → **200 success** với
   `totalFetched: 0`, KHÔNG phải 400 — tránh báo động giả làm nhờn cảnh báo.
-- MỌI manufacture đều fetch lỗi (token hết hạn, OnosPod down) → **400** kèm message gộp lỗi
-  thật từng manufacture — phân biệt rõ "hỏng thật" với "hết đơn".
-- 1 phần manufacture lỗi → vẫn import phần thành công, lỗi ghi trong `byManufacture[].error`.
+- Fetch lỗi (token hết hạn, OnosPod down, network) ở BẤT KỲ trang nào → **400**, throw ngay
+  (KHÔNG còn cô lập lỗi theo từng manufacture như trước — giờ chỉ 1 lượt phân trang duy
+  nhất nên fail = fail toàn bộ).
 - `start`/`end` nhận cả ISO có offset (`+07:00`) lẫn `Z` (Zod `datetime({offset:true})`).
   Truyền `start` không kèm `end` → `end` = thời điểm gọi (backfill). Truyền `end` lẻ → 400.
 
