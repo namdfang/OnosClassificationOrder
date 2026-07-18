@@ -1,6 +1,5 @@
-/* eslint-disable @typescript-eslint/ban-types */
-/* eslint-disable @typescript-eslint/no-unsafe-argument */
-/* eslint-disable @typescript-eslint/naming-convention */
+/* eslint-disable @typescript-eslint/no-unsafe-function-type */
+
 /* eslint-disable @typescript-eslint/no-explicit-any */
 import { transformException } from '@core/utils';
 import type { CallHandler, ExecutionContext, NestInterceptor, Type } from '@nestjs/common';

@@ -28,21 +28,16 @@ import {
   RoleType,
 } from 'shared';
 
+import { OrderDocument, OrderEntity } from '../order/order.entity';
 import type { AuditContext } from '../order-log/order-log.service';
 import { OrderLogService } from '../order-log/order-log.service';
-import { OrderDocument, OrderEntity } from '../order/order.entity';
 import { UserDocument, UserEntity } from '../user/user.entity';
 
 /**
  * Role được phép override transition (bỏ qua check assignee). Bình thường
  * worker chỉ transition task của (factory, stage) đúng của mình.
  */
-const OVERRIDE_ROLES: RoleType[] = [
-  RoleType.SuperAdmin,
-  RoleType.Admin,
-  RoleType.Manager,
-  RoleType.SupportManager,
-];
+const OVERRIDE_ROLES: RoleType[] = [RoleType.SuperAdmin, RoleType.Admin, RoleType.Manager, RoleType.SupportManager];
 
 /** Match `order.service.ts:vnDayStart/End` — local VN ngày 00:00 / 23:59. */
 function vnDayStart(yyyymmdd: string): Date {
@@ -61,10 +56,7 @@ function vnTodayStart(): Date {
  * scope). Object spread sẽ ghi đè $or → mất scope factory. Gom cả 2 $or qua
  * $and để Mongo eval (factory $or) AND (tab $or). Các field khác giữ nguyên.
  */
-function mergeWithFactoryOr<T>(
-  base: FilterQuery<T>,
-  tabFilter: FilterQuery<T>,
-): FilterQuery<T> {
+function mergeWithFactoryOr<T>(base: FilterQuery<T>, tabFilter: FilterQuery<T>): FilterQuery<T> {
   const baseOr = base.$or;
   const tabOr = tabFilter.$or;
   const merged: FilterQuery<T> = { ...base, ...tabFilter };
@@ -155,7 +147,7 @@ export class FulfillmentTaskService {
       if (reloaded) order = reloaded;
     }
 
-    const roleName = user.role?.name as RoleType | undefined;
+    const roleName = user.role?.name;
     const isOverride = roleName ? OVERRIDE_ROLES.includes(roleName) : false;
 
     // Worker constraint: stage tham số phải == user.fulfillmentStage và đơn
@@ -207,9 +199,7 @@ export class FulfillmentTaskService {
     );
 
     if (!updated) {
-      throw new ConflictException(
-        'Trạng thái stage vừa thay đổi bởi người khác — refresh và thử lại.',
-      );
+      throw new ConflictException('Trạng thái stage vừa thay đổi bởi người khác — refresh và thử lại.');
     }
 
     void this.orderLogService.write({
@@ -262,13 +252,8 @@ export class FulfillmentTaskService {
 
     switch (action) {
       case FulfillmentTransitionAction.Start: {
-        if (
-          currentStatus !== FulfillmentStageStatus.Waiting &&
-          currentStatus !== FulfillmentStageStatus.Rework
-        ) {
-          throw new BadRequestException(
-            `Action 'start' chỉ hợp lệ từ 'waiting'/'rework' (current=${currentStatus}).`,
-          );
+        if (currentStatus !== FulfillmentStageStatus.Waiting && currentStatus !== FulfillmentStageStatus.Rework) {
+          throw new BadRequestException(`Action 'start' chỉ hợp lệ từ 'waiting'/'rework' (current=${currentStatus}).`);
         }
         const set: Record<string, unknown> = {
           [`fulfillmentStages.${stage}.status`]: FulfillmentStageStatus.InProgress,
@@ -290,13 +275,9 @@ export class FulfillmentTaskService {
 
       case FulfillmentTransitionAction.Complete: {
         if (currentStatus !== FulfillmentStageStatus.InProgress) {
-          throw new BadRequestException(
-            `Action 'complete' chỉ hợp lệ từ 'in-progress' (current=${currentStatus}).`,
-          );
+          throw new BadRequestException(`Action 'complete' chỉ hợp lệ từ 'in-progress' (current=${currentStatus}).`);
         }
-        const delta = stageState.startedAt
-          ? Math.max(0, now.getTime() - new Date(stageState.startedAt).getTime())
-          : 0;
+        const delta = stageState.startedAt ? Math.max(0, now.getTime() - new Date(stageState.startedAt).getTime()) : 0;
         const set: Record<string, unknown> = {
           [`fulfillmentStages.${stage}.status`]: FulfillmentStageStatus.Done,
           [`fulfillmentStages.${stage}.completedAt`]: now,
@@ -348,9 +329,7 @@ export class FulfillmentTaskService {
           currentStatus !== FulfillmentStageStatus.Waiting &&
           currentStatus !== FulfillmentStageStatus.Rework
         ) {
-          throw new BadRequestException(
-            `Action 'rework-back' không hợp lệ từ trạng thái '${currentStatus}'.`,
-          );
+          throw new BadRequestException(`Action 'rework-back' không hợp lệ từ trạng thái '${currentStatus}'.`);
         }
         if (!target) throw new BadRequestException('Field `target` bắt buộc khi rework-back.');
         if (!reason || !reason.trim()) {
@@ -398,9 +377,7 @@ export class FulfillmentTaskService {
         const reporterIdx = FULFILLMENT_STAGE_ORDER[stage];
         const targetIdx = FULFILLMENT_STAGE_ORDER[target];
         if (targetIdx >= reporterIdx) {
-          throw new BadRequestException(
-            `Target stage '${target}' không trước stage hiện tại '${stage}'.`,
-          );
+          throw new BadRequestException(`Target stage '${target}' không trước stage hiện tại '${stage}'.`);
         }
 
         // Chỉ target → rework (đơn về đó NGAY, chờ Bắt đầu). Các stage trung gian
@@ -413,7 +390,7 @@ export class FulfillmentTaskService {
         set[`fulfillmentStages.${target}.reworkAt`] = now;
         set[`fulfillmentStages.${target}.reworkFromStage`] = stage;
         set[`fulfillmentStages.${target}.reworkReason`] = reason;
-        const targetState = (stages[target] ?? this.emptyState()) as FulfillmentStageState;
+        const targetState = stages[target] ?? this.emptyState();
         set[`fulfillmentStages.${target}.reworkCount`] = (targetState.reworkCount ?? 0) + 1;
 
         return {
@@ -479,7 +456,7 @@ export class FulfillmentTaskService {
     size: number;
     tabCounts: { waiting: number; inProgress: number; rework: number; done: number; watching: number };
   }> {
-    const roleName = user.role?.name as RoleType | undefined;
+    const roleName = user.role?.name;
     const isOverride = roleName ? OVERRIDE_ROLES.includes(roleName) : false;
 
     const tab: FulfillmentTaskTab = query.tab ?? 'waiting';
@@ -493,7 +470,7 @@ export class FulfillmentTaskService {
     // dùng dummy 'print' cho applyTabFilter (param unused trong case này).
     // Admin/manager không có fulfillmentStage → cho phép bỏ qua. Worker tabs
     // bắt buộc có stage để biết kanban col.
-    const stage = (query.stage ?? user.fulfillmentStage ?? FulfillmentStage.Print) as FulfillmentStage;
+    const stage = query.stage ?? user.fulfillmentStage ?? FulfillmentStage.Print;
     if (!query.stage && !user.fulfillmentStage && tab !== 'unassigned' && !isOverride) {
       throw new BadRequestException('Thiếu stage (user chưa gán fulfillmentStage).');
     }
@@ -798,10 +775,7 @@ export class FulfillmentTaskService {
         $sum: {
           $cond: [
             {
-              $and: [
-                { $eq: [ref, FulfillmentStageStatus.Done] },
-                { $gt: [{ $ifNull: [reworkCountRef, 0] }, 0] },
-              ],
+              $and: [{ $eq: [ref, FulfillmentStageStatus.Done] }, { $gt: [{ $ifNull: [reworkCountRef, 0] }, 0] }],
             },
             1,
             0,
@@ -812,10 +786,7 @@ export class FulfillmentTaskService {
         $sum: {
           $cond: [
             {
-              $or: [
-                { $eq: [ref, FulfillmentStageStatus.Waiting] },
-                { $eq: [ref, FulfillmentStageStatus.InProgress] },
-              ],
+              $or: [{ $eq: [ref, FulfillmentStageStatus.Waiting] }, { $eq: [ref, FulfillmentStageStatus.InProgress] }],
             },
             1,
             0,
@@ -865,7 +836,7 @@ export class FulfillmentTaskService {
           fixed: num(`s_${st}_fixed`),
         };
         stages[st] = m;
-        const ct = columnTotals.stages[st]!;
+        const ct = columnTotals.stages[st];
         ct.arrived += m.arrived;
         ct.done += m.done;
         ct.remaining += m.remaining;
@@ -902,11 +873,7 @@ export class FulfillmentTaskService {
    * Cửa sổ ngày (tz VN) cho daily-overview: `from`+`to` → khoảng tùy biến (cap
    * 60 ngày), ngược lại N ngày gần nhất. `days` sort mới→cũ (FE reverse).
    */
-  private resolveDayWindow(
-    rangeDays: number,
-    from?: string,
-    to?: string,
-  ): { start: Date; end: Date; days: string[] } {
+  private resolveDayWindow(rangeDays: number, from?: string, to?: string): { start: Date; end: Date; days: string[] } {
     const MS_DAY = 86_400_000;
     const CAP = 60;
     const days: string[] = [];

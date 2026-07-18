@@ -2,23 +2,24 @@ import React from 'react';
 import { Clock } from 'lucide-react';
 import { DesignerStatus, WorkshopConfigCategory } from 'shared';
 
-import { Badge } from '@/components/ui/badge';
 import { CopyButton } from '@/components/common/CopyButton';
 import { Hint } from '@/components/common/Hint';
-import { useNow } from '@/hooks/useNow';
-import { cn } from '@/utils/cn';
-import { formatDate } from '@/utils/date';
-import { formatCountdown, getActiveStageKey, getStageDeadline } from '@/utils/priorityEstimate';
 import { AssigneeSelectCell } from '@/components/orders/cells/AssigneeSelectCell';
 import { ColorBadgeSelectCell } from '@/components/orders/cells/ColorBadgeSelectCell';
-import { DesignThumbsCell } from '@/components/orders/cells/DesignThumbsCell';
 import { ErrorSourceCell } from '@/components/orders/cells/ErrorSourceCell';
 import { IconSelectCell } from '@/components/orders/cells/IconSelectCell';
-import { MultiIconSelectCell } from '@/components/orders/cells/MultiIconSelectCell';
 import { ImageThumbCell } from '@/components/orders/cells/ImageThumbCell';
+import { MultiIconSelectCell } from '@/components/orders/cells/MultiIconSelectCell';
 import { PrioritySelectCell } from '@/components/orders/cells/PrioritySelectCell';
 import { ProductionErrorSelectCell } from '@/components/orders/cells/ProductionErrorSelectCell';
 import { TextEditCell } from '@/components/orders/cells/TextEditCell';
+import { Badge } from '@/components/ui/badge';
+
+import { cn } from '@/utils/cn';
+import { formatDate } from '@/utils/date';
+import { formatCountdown, getActiveStageKey, getStageDeadline } from '@/utils/priorityEstimate';
+
+import { useNow } from '@/hooks/useNow';
 
 export type WorkshopOrderRow = {
   _id: string;
@@ -84,10 +85,7 @@ export type WorkshopOrderRow = {
   holdReason?: string;
 };
 
-const DESIGNER_STATUS_META: Record<
-  DesignerStatus,
-  { label: string; cls: string; tooltip: string }
-> = {
+const DESIGNER_STATUS_META: Record<DesignerStatus, { label: string; cls: string; tooltip: string }> = {
   [DesignerStatus.Unassigned]: {
     label: 'Chưa gán',
     cls: 'bg-zinc-100 text-zinc-600 dark:bg-zinc-800 dark:text-zinc-300',
@@ -193,10 +191,7 @@ export const WORKSHOP_COLS: WorkshopColMeta[] = [
       const hasMapping = !!(r.factory?.name || r.machineType?.name);
       if (!hasMapping) {
         return (
-          <Hint
-            content="Type của order không match với product config nào — chưa xác định được xưởng/máy"
-            forceRich
-          >
+          <Hint content="Type của order không match với product config nào — chưa xác định được xưởng/máy" forceRich>
             <Badge variant="warning" className="cursor-help">
               Chưa mapping
             </Badge>
@@ -247,14 +242,7 @@ export const WORKSHOP_COLS: WorkshopColMeta[] = [
               iconSize={15}
               className="p-1 hover:ring-1 hover:ring-primary/40"
             />
-            <Hint
-              content={
-                ctx.openDetail
-                  ? 'Click để xem chi tiết'
-                  : `Production ID: ${r.productionId}`
-              }
-              forceRich
-            >
+            <Hint content={ctx.openDetail ? 'Click để xem chi tiết' : `Production ID: ${r.productionId}`} forceRich>
               {ctx.openDetail ? (
                 <button
                   type="button"
@@ -284,9 +272,7 @@ export const WORKSHOP_COLS: WorkshopColMeta[] = [
             <div className="flex items-center gap-1">
               <CopyButton value={r.orderId} label="Order ID" iconSize={10} />
               <Hint content={`Order ID: ${r.orderId}`} forceRich>
-                <span className="font-mono text-[10px] text-muted-foreground truncate max-w-[140px]">
-                  {r.orderId}
-                </span>
+                <span className="font-mono text-[10px] text-muted-foreground truncate max-w-[140px]">{r.orderId}</span>
               </Hint>
             </div>
           )}
@@ -338,9 +324,7 @@ export const WORKSHOP_COLS: WorkshopColMeta[] = [
           </div>
           <div className="flex flex-col gap-0.5 min-w-0 flex-1 leading-tight">
             <Hint content={r.type ? `Type: ${r.type}` : ''} forceRich>
-              <span className="text-xs line-clamp-1 break-all text-foreground">
-                {r.type || '—'}
-              </span>
+              <span className="text-xs line-clamp-1 break-all text-foreground">{r.type || '—'}</span>
             </Hint>
             <Hint content={`Size / Color: ${sizeColorText}`} forceRich>
               <span className="text-[11px] text-muted-foreground line-clamp-1">
@@ -456,8 +440,7 @@ export const WORKSHOP_COLS: WorkshopColMeta[] = [
     perm: 'order.field.toolResultNote.view',
     width: 'min-w-[160px]',
     render: (r, ctx) => {
-      const showCount =
-        r.toolResultNote === 'error' && (r.productionErrorCount || 0) >= 2;
+      const showCount = r.toolResultNote === 'error' && (r.productionErrorCount || 0) >= 2;
       return (
         <span className="inline-flex items-center gap-1.5">
           <ColorBadgeSelectCell
@@ -581,9 +564,7 @@ export const WORKSHOP_COLS: WorkshopColMeta[] = [
         orderId={r._id}
         value={r.assignee}
         canEdit={ctx.canEditField('assignee')}
-        blockedReason={
-          r.toolResultNote === 'ok' ? "Đơn đã 'ok' (Note kq Tool 1) — không cần gán designer" : undefined
-        }
+        blockedReason={r.toolResultNote === 'ok' ? "Đơn đã 'ok' (Note kq Tool 1) — không cần gán designer" : undefined}
         onUpdated={(v) => ctx.patchRow(r._id, { assignee: v ?? undefined })}
       />
     ),
@@ -596,15 +577,14 @@ export const WORKSHOP_COLS: WorkshopColMeta[] = [
     render: (r) => {
       const status = (r.designerStatus as DesignerStatus) || DesignerStatus.Unassigned;
       const meta = DESIGNER_STATUS_META[status];
-      const rework = r.designerReworkCount && r.designerReworkCount > 0
-        ? ` · ${r.designerReworkCount}×`
-        : '';
+      const rework = r.designerReworkCount && r.designerReworkCount > 0 ? ` · ${r.designerReworkCount}×` : '';
       return (
         <Hint content={meta.tooltip} forceRich>
           <span
             className={`inline-flex items-center px-2 py-0.5 rounded-md text-[11px] font-medium ${meta.cls} cursor-help`}
           >
-            {meta.label}{rework}
+            {meta.label}
+            {rework}
           </span>
         </Hint>
       );
@@ -650,9 +630,7 @@ export const WORKSHOP_COLS: WorkshopColMeta[] = [
     width: 'min-w-[140px] max-w-[220px]',
     render: (r) => (
       <Hint content={r.productConfig?.fullName ? `Type.1: ${r.productConfig.fullName}` : ''} forceRich>
-        <span className="text-xs line-clamp-1 break-all">
-          {r.productConfig?.fullName || '—'}
-        </span>
+        <span className="text-xs line-clamp-1 break-all">{r.productConfig?.fullName || '—'}</span>
       </Hint>
     ),
   },
@@ -707,12 +685,7 @@ const printMockupCol: WorkshopColMeta = {
 
 export const PRINT_COLS: WorkshopColMeta[] = (() => {
   // Thứ tự dời lên NGAY SAU "Note Trạng thái in": Note kq Tool 1 → 3 cột lỗi xưởng.
-  const MOVED_KEYS = [
-    'toolResultNote',
-    'productionError',
-    'productionErrorSource',
-    'productionErrorNote',
-  ];
+  const MOVED_KEYS = ['toolResultNote', 'productionError', 'productionErrorSource', 'productionErrorNote'];
   const movedCols = MOVED_KEYS.map((k) => WORKSHOP_COLS.find((c) => c.key === k)!);
   // Note Trạng thái in — thu hẹp + rút gọn label (header `whitespace-nowrap` nên
   // label dài mới là thứ ép cột rộng) để đỡ tốn diện tích. Chỉ trong PRINT_COLS.

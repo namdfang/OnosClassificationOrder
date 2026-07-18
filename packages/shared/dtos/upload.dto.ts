@@ -1,7 +1,7 @@
+import { createZodDto } from '@anatine/zod-nestjs';
 import { z } from 'zod';
 
 import { FileType, getObjectValues, IDZod, ImageType, ResZod, Status, UserZod } from '..';
-import { createZodDto } from '@anatine/zod-nestjs';
 
 export const ResImageZod = z.object({
   _id: IDZod,

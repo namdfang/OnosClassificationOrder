@@ -1,4 +1,5 @@
 import type { DesignerAssignmentConfig } from 'shared';
+
 import { callApi } from '../apis';
 import { CONFIG } from '../constants';
 

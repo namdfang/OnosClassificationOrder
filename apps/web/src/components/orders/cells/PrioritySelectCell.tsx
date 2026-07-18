@@ -1,13 +1,15 @@
 import React, { useState } from 'react';
-import { toast } from 'sonner';
 import { ORDER_PRIORITIES, ORDER_PRIORITY_LABELS, OrderPriority } from 'shared';
+import { toast } from 'sonner';
+
+import { RepositoryRemote } from '@/services';
 
 import { Spinner } from '@/components/common/Spinner';
-import { RepositoryRemote } from '@/services';
-import { cn } from '@/utils/cn';
-import { handleAxiosError } from '@/utils';
 
-import { SelectPopover, type SelectOption } from './SelectPopover';
+import { handleAxiosError } from '@/utils';
+import { cn } from '@/utils/cn';
+
+import { type SelectOption, SelectPopover } from './SelectPopover';
 
 export const PRIORITY_META: Record<OrderPriority, { label: string; cls: string; dot: string }> = {
   [OrderPriority.Low]: {
@@ -73,9 +75,7 @@ export function PrioritySelectCell({ orderId, value, canEdit, onUpdated }: Props
     try {
       setSaving(true);
       await RepositoryRemote.order.updateField(orderId, { field: 'priority', value: newCode });
-      toast.success(
-        newValue ? `Đã đổi → ${PRIORITY_META[newValue as OrderPriority].label}` : 'Đã bỏ ưu tiên',
-      );
+      toast.success(newValue ? `Đã đổi → ${PRIORITY_META[newValue as OrderPriority].label}` : 'Đã bỏ ưu tiên');
       onUpdated?.(newValue);
     } catch (err) {
       handleAxiosError(err);
@@ -105,10 +105,7 @@ export function PrioritySelectCell({ orderId, value, canEdit, onUpdated }: Props
       disabled={!canEdit || saving}
       renderOption={(it) => (
         <span className="inline-flex items-center gap-2 w-full">
-          <span
-            className="inline-block w-2 h-2 rounded-full shrink-0"
-            style={{ backgroundColor: it.color }}
-          />
+          <span className="inline-block w-2 h-2 rounded-full shrink-0" style={{ backgroundColor: it.color }} />
           <span className="flex-1">{it.name}</span>
         </span>
       )}

@@ -1,38 +1,46 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
-import { AlertTriangle, ChevronDown, ChevronUp, Clock, FileSearch, PackageSearch, RefreshCw, Users, X } from 'lucide-react';
+import {
+  AlertTriangle,
+  ChevronDown,
+  ChevronUp,
+  Clock,
+  FileSearch,
+  PackageSearch,
+  RefreshCw,
+  Users,
+  X,
+} from 'lucide-react';
+import type { OrderPriority, ToolCheckDayRow, ToolCheckErrorRow, ToolCheckFacet, ToolCheckOrder } from 'shared';
 import { ORDER_PRIORITY_LABELS, PRODUCT_LEVEL_MAP, WorkshopConfigCategory } from 'shared';
-import type {
-  OrderPriority,
-  ToolCheckDayRow,
-  ToolCheckErrorRow,
-  ToolCheckFacet,
-  ToolCheckOrder,
-} from 'shared';
 
-import { Badge } from '@/components/ui/badge';
-import { Button } from '@/components/ui/button';
-import { Dialog, DialogContent, DialogTitle } from '@/components/ui/dialog';
+import { useWorkshopConfigStore } from '@/store/workshopConfigStore';
+
+import { RepositoryRemote } from '@/services';
+
 import { CopyButton } from '@/components/common/CopyButton';
 import { DateRangePicker } from '@/components/common/DateRangePicker';
-import { PipelineDailyOverview } from '@/components/common/PipelineDailyOverview';
-import { DATE_PRESETS } from '@/utils/dateRangePresets';
-import { SelectFilter } from '@/components/common/SelectFilter';
 import { ImagePreviewDialog } from '@/components/common/ImagePreviewDialog';
+import { PipelineDailyOverview } from '@/components/common/PipelineDailyOverview';
+import { SelectFilter } from '@/components/common/SelectFilter';
 import { Spinner } from '@/components/common/Spinner';
-import { TooltipProvider } from '@/components/ui/tooltip';
 import { ColorBadgeSelectCell } from '@/components/orders/cells/ColorBadgeSelectCell';
 import { ImageThumbCell } from '@/components/orders/cells/ImageThumbCell';
 import { MultiIconSelectCell } from '@/components/orders/cells/MultiIconSelectCell';
 import { PriorityBadge } from '@/components/orders/cells/PrioritySelectCell';
 import { ProductionErrorSelectCell } from '@/components/orders/cells/ProductionErrorSelectCell';
 import { TextEditCell } from '@/components/orders/cells/TextEditCell';
-import { useNow } from '@/hooks/useNow';
-import { usePermission } from '@/hooks/usePermission';
-import { RepositoryRemote } from '@/services';
-import { useWorkshopConfigStore } from '@/store/workshopConfigStore';
+import { Badge } from '@/components/ui/badge';
+import { Button } from '@/components/ui/button';
+import { Dialog, DialogContent, DialogTitle } from '@/components/ui/dialog';
+import { TooltipProvider } from '@/components/ui/tooltip';
+
 import { handleAxiosError } from '@/utils';
 import { cn } from '@/utils/cn';
+import { DATE_PRESETS } from '@/utils/dateRangePresets';
 import { formatCountdown, getStageDeadline } from '@/utils/priorityEstimate';
+
+import { useNow } from '@/hooks/useNow';
+import { usePermission } from '@/hooks/usePermission';
 
 interface Overview {
   checkedCount: number;
@@ -167,10 +175,10 @@ export default function ToolCheckTab() {
     setData((prev) =>
       prev
         ? {
-          ...prev,
-          reworkList: prev.reworkList.map((o) => (o._id === id ? { ...o, ...partial } : o)),
-          unreviewedList: prev.unreviewedList.map((o) => (o._id === id ? { ...o, ...partial } : o)),
-        }
+            ...prev,
+            reworkList: prev.reworkList.map((o) => (o._id === id ? { ...o, ...partial } : o)),
+            unreviewedList: prev.unreviewedList.map((o) => (o._id === id ? { ...o, ...partial } : o)),
+          }
         : prev,
     );
 
@@ -311,9 +319,19 @@ export default function ToolCheckTab() {
   const kpis = useMemo(
     () => [
       { key: 'checked', label: 'Đã soát trong kỳ', value: data?.checkedCount ?? 0, cls: 'text-foreground' },
-      { key: 'rework', label: 'In trả về (cần làm lại)', value: reworkAll.length, cls: 'text-amber-600 dark:text-amber-400' },
+      {
+        key: 'rework',
+        label: 'In trả về (cần làm lại)',
+        value: reworkAll.length,
+        cls: 'text-amber-600 dark:text-amber-400',
+      },
       { key: 'unreviewed', label: 'Chưa soát', value: unreviewedAll.length, cls: 'text-slate-600 dark:text-slate-400' },
-      { key: 'error', label: 'Lỗi soát tool (đang chờ)', value: data?.errorCount ?? 0, cls: 'text-rose-600 dark:text-rose-400' },
+      {
+        key: 'error',
+        label: 'Lỗi soát tool (đang chờ)',
+        value: data?.errorCount ?? 0,
+        cls: 'text-rose-600 dark:text-rose-400',
+      },
     ],
     [data, reworkAll.length, unreviewedAll.length],
   );
@@ -328,10 +346,7 @@ export default function ToolCheckTab() {
     const byCust = (r: ToolCheckErrorRow) => !selCust || custKey(r) === selCust;
     const byType = (r: ToolCheckErrorRow) => !selType || (r.type ?? '') === selType;
 
-    const custMap = new Map<
-      string,
-      { userSku?: string; userEmail?: string; orders: Set<string> }
-    >();
+    const custMap = new Map<string, { userSku?: string; userEmail?: string; orders: Set<string> }>();
     const prodMap = new Map<
       string,
       { type?: string; fullName?: string; mockup?: string; level?: number; orders: Set<string> }
@@ -368,7 +383,14 @@ export default function ToolCheckTab() {
         .map(([key, g]) => ({ key, userSku: g.userSku, userEmail: g.userEmail, count: g.orders.size }))
         .sort((a, b) => b.count - a.count),
       byProduct: [...prodMap.entries()]
-        .map(([key, g]) => ({ key, type: g.type, fullName: g.fullName, mockup: g.mockup, level: g.level, count: g.orders.size }))
+        .map(([key, g]) => ({
+          key,
+          type: g.type,
+          fullName: g.fullName,
+          mockup: g.mockup,
+          level: g.level,
+          count: g.orders.size,
+        }))
         .sort((a, b) => b.count - a.count),
       byError: [...errMap.values()]
         .map((g) => ({ code: g.code, label: g.label, count: g.orders.size }))
@@ -421,8 +443,7 @@ export default function ToolCheckTab() {
 
     // Sắp xếp: nhóm sản phẩm giống tên đứng cạnh nhau (nhóm nhiều đơn lên đầu);
     // trong mỗi sản phẩm, nhóm File lỗi giống nhau đứng cạnh nhau (nhiều lên đầu).
-    const efKeyOf = (it: DetailItem) =>
-      it.errorFile && it.errorFile.length ? [...it.errorFile].sort().join('|') : '';
+    const efKeyOf = (it: DetailItem) => (it.errorFile && it.errorFile.length ? [...it.errorFile].sort().join('|') : '');
     const prodCount = new Map<string, number>();
     const efCountByProd = new Map<string, Map<string, number>>();
     for (const it of items) {
@@ -464,14 +485,26 @@ export default function ToolCheckTab() {
       const k = custKey(r);
       let g = map.get(k);
       if (!g) {
-        g = { key: k, userSku: r.userSku, userEmail: r.userEmail, orders: new Set(), products: new Map(), codes: new Map() };
+        g = {
+          key: k,
+          userSku: r.userSku,
+          userEmail: r.userEmail,
+          orders: new Set(),
+          products: new Map(),
+          codes: new Map(),
+        };
         map.set(k, g);
       }
       g.orders.add(r.orderId);
       const pk = r.type ?? '';
       let p = g.products.get(pk);
       if (!p) {
-        p = { product: r.fullName || r.type || '(Chưa rõ)', mockup: r.mockup, level: r.level ?? undefined, orders: new Set() };
+        p = {
+          product: r.fullName || r.type || '(Chưa rõ)',
+          mockup: r.mockup,
+          level: r.level ?? undefined,
+          orders: new Set(),
+        };
         g.products.set(pk, p);
       }
       p.orders.add(r.orderId);
@@ -600,8 +633,9 @@ export default function ToolCheckTab() {
                         <th
                           key={d.day}
                           onClick={() => toggleDay(d.day)}
-                          className={`font-medium px-1.5 py-1.5 border-b border-l border-border text-center min-w-[58px] cursor-pointer transition-colors ${active ? 'bg-indigo-100 dark:bg-indigo-500/25' : 'bg-card hover:bg-muted/60'
-                            }`}
+                          className={`font-medium px-1.5 py-1.5 border-b border-l border-border text-center min-w-[58px] cursor-pointer transition-colors ${
+                            active ? 'bg-indigo-100 dark:bg-indigo-500/25' : 'bg-card hover:bg-muted/60'
+                          }`}
                         >
                           <div className="text-[11px] text-muted-foreground leading-tight">{wd}</div>
                           <div className="leading-tight font-semibold">{dm}</div>
@@ -655,20 +689,22 @@ export default function ToolCheckTab() {
               <button
                 type="button"
                 onClick={() => setListTab('rework')}
-                className={`px-3 py-1.5 font-medium ${listTab === 'rework'
-                  ? 'bg-amber-500 text-white'
-                  : 'bg-background text-muted-foreground hover:bg-muted'
-                  }`}
+                className={`px-3 py-1.5 font-medium ${
+                  listTab === 'rework'
+                    ? 'bg-amber-500 text-white'
+                    : 'bg-background text-muted-foreground hover:bg-muted'
+                }`}
               >
                 Cần làm lại ({reworkList.length})
               </button>
               <button
                 type="button"
                 onClick={() => setListTab('unreviewed')}
-                className={`px-3 py-1.5 font-medium ${listTab === 'unreviewed'
-                  ? 'bg-slate-600 text-white'
-                  : 'bg-background text-muted-foreground hover:bg-muted'
-                  }`}
+                className={`px-3 py-1.5 font-medium ${
+                  listTab === 'unreviewed'
+                    ? 'bg-slate-600 text-white'
+                    : 'bg-background text-muted-foreground hover:bg-muted'
+                }`}
               >
                 Chưa soát ({unreviewedList.length})
               </button>
@@ -779,8 +815,9 @@ export default function ToolCheckTab() {
                         key={c.key}
                         type="button"
                         onClick={() => setSelCust((cur) => (cur === c.key ? '' : c.key))}
-                        className={`w-full flex items-center gap-2 text-[13px] rounded px-2 py-1 text-left transition-colors ${active ? 'bg-indigo-100 dark:bg-indigo-500/20' : 'hover:bg-muted/60'
-                          }`}
+                        className={`w-full flex items-center gap-2 text-[13px] rounded px-2 py-1 text-left transition-colors ${
+                          active ? 'bg-indigo-100 dark:bg-indigo-500/20' : 'hover:bg-muted/60'
+                        }`}
                       >
                         <div className="flex-1 min-w-0">
                           <div className="truncate font-medium" title={c.userSku || '(Chưa rõ)'}>
@@ -826,11 +863,16 @@ export default function ToolCheckTab() {
                         key={p.key}
                         type="button"
                         onClick={() => setSelType((cur) => (cur === p.key ? '' : p.key))}
-                        className={`w-full flex items-center gap-2 text-[13px] rounded px-2 py-1 text-left transition-colors ${active ? 'bg-indigo-100 dark:bg-indigo-500/20' : 'hover:bg-muted/60'
-                          }`}
+                        className={`w-full flex items-center gap-2 text-[13px] rounded px-2 py-1 text-left transition-colors ${
+                          active ? 'bg-indigo-100 dark:bg-indigo-500/20' : 'hover:bg-muted/60'
+                        }`}
                       >
                         {p.mockup ? (
-                          <img src={p.mockup} alt="" className="w-7 h-7 rounded object-cover border border-border shrink-0" />
+                          <img
+                            src={p.mockup}
+                            alt=""
+                            className="w-7 h-7 rounded object-cover border border-border shrink-0"
+                          />
                         ) : (
                           <div className="w-7 h-7 rounded border border-dashed border-border shrink-0" />
                         )}
@@ -875,8 +917,9 @@ export default function ToolCheckTab() {
                         key={e.code || '(unknown)'}
                         type="button"
                         onClick={() => setSelCode((cur) => (cur === (e.code || '') ? '' : e.code || ''))}
-                        className={`w-full flex items-center gap-2 text-[13px] rounded px-2 py-1 text-left transition-colors ${active ? 'bg-amber-100 dark:bg-amber-500/20' : 'hover:bg-muted/60'
-                          }`}
+                        className={`w-full flex items-center gap-2 text-[13px] rounded px-2 py-1 text-left transition-colors ${
+                          active ? 'bg-amber-100 dark:bg-amber-500/20' : 'hover:bg-muted/60'
+                        }`}
                       >
                         <Badge
                           variant="outline"
@@ -957,7 +1000,11 @@ export default function ToolCheckTab() {
                           <td className="px-2 py-1.5">
                             <div className="flex items-center gap-2">
                               {it.mockup ? (
-                                <img src={it.mockup} alt="" className="w-6 h-6 rounded object-cover border border-border shrink-0" />
+                                <img
+                                  src={it.mockup}
+                                  alt=""
+                                  className="w-6 h-6 rounded object-cover border border-border shrink-0"
+                                />
                               ) : (
                                 <div className="w-6 h-6 rounded border border-dashed border-border shrink-0" />
                               )}
@@ -973,7 +1020,9 @@ export default function ToolCheckTab() {
                                   Lv {it.level}
                                 </Badge>
                               )}
-                              <span className="min-w-0 truncate" title={it.product}>{it.product}</span>
+                              <span className="min-w-0 truncate" title={it.product}>
+                                {it.product}
+                              </span>
                             </div>
                           </td>
                           <td className="px-2 py-1.5 text-muted-foreground whitespace-nowrap">
@@ -1034,11 +1083,7 @@ export default function ToolCheckTab() {
               {perCustomer.length > 0 && (
                 <button
                   type="button"
-                  onClick={() =>
-                    setExpandedCust(
-                      allCustExpanded ? new Set() : new Set(perCustomer.map((c) => c.key)),
-                    )
-                  }
+                  onClick={() => setExpandedCust(allCustExpanded ? new Set() : new Set(perCustomer.map((c) => c.key)))}
                   className="ml-auto mr-8 inline-flex items-center gap-1 text-[11px] rounded-md border border-border px-2 py-1 hover:bg-muted transition-colors"
                 >
                   {allCustExpanded ? <ChevronUp size={13} /> : <ChevronDown size={13} />}
@@ -1056,9 +1101,7 @@ export default function ToolCheckTab() {
                     <div key={c.key} className="rounded-lg border border-border bg-card p-3 pr-5">
                       <div className="flex items-center gap-2 mb-2 flex-wrap">
                         <span className="font-bold text-[17px]">{c.userSku || '(Chưa rõ)'}</span>
-                        {c.userEmail && (
-                          <span className="text-[12px] text-muted-foreground">{c.userEmail}</span>
-                        )}
+                        {c.userEmail && <span className="text-[12px] text-muted-foreground">{c.userEmail}</span>}
                         <div className="ml-auto flex items-center gap-3">
                           <span className="inline-flex items-baseline gap-1 rounded-md bg-rose-100 text-rose-700 border border-rose-300 dark:bg-rose-500/20 dark:text-rose-300 dark:border-rose-500/40 px-2.5 py-1">
                             <span className="text-lg font-extrabold tabular-nums leading-none">{c.count}</span>
@@ -1087,7 +1130,11 @@ export default function ToolCheckTab() {
                             {c.products.map((p, i) => (
                               <div key={`${p.product}-${i}`} className="flex items-center gap-2 text-[13px]">
                                 {p.mockup ? (
-                                  <img src={p.mockup} alt="" className="w-6 h-6 rounded object-cover border border-border shrink-0" />
+                                  <img
+                                    src={p.mockup}
+                                    alt=""
+                                    className="w-6 h-6 rounded object-cover border border-border shrink-0"
+                                  />
                                 ) : (
                                   <div className="w-6 h-6 rounded border border-dashed border-border shrink-0" />
                                 )}
@@ -1103,8 +1150,12 @@ export default function ToolCheckTab() {
                                     Lv {p.level}
                                   </Badge>
                                 )}
-                                <span className="flex-1 min-w-0 truncate" title={p.product}>{p.product}</span>
-                                <span className="shrink-0 tabular-nums text-[15px] font-extrabold text-indigo-600 dark:text-indigo-400">{p.count}</span>
+                                <span className="flex-1 min-w-0 truncate" title={p.product}>
+                                  {p.product}
+                                </span>
+                                <span className="shrink-0 tabular-nums text-[15px] font-extrabold text-indigo-600 dark:text-indigo-400">
+                                  {p.count}
+                                </span>
                               </div>
                             ))}
                           </div>
@@ -1126,7 +1177,9 @@ export default function ToolCheckTab() {
                                 >
                                   {e.label || e.code || '(Chưa rõ)'}
                                 </Badge>
-                                <span className="ml-auto shrink-0 tabular-nums text-[15px] font-extrabold text-amber-600 dark:text-amber-400">{e.count}</span>
+                                <span className="ml-auto shrink-0 tabular-nums text-[15px] font-extrabold text-amber-600 dark:text-amber-400">
+                                  {e.count}
+                                </span>
                               </div>
                             ))}
                           </div>
@@ -1163,9 +1216,7 @@ function DayMetricRow({
 }) {
   return (
     <tr className="group">
-      <td className={`sticky left-0 z-10 bg-card px-3 py-1.5 border-b border-border/60 font-medium ${cls}`}>
-        {label}
-      </td>
+      <td className={`sticky left-0 z-10 bg-card px-3 py-1.5 border-b border-border/60 font-medium ${cls}`}>{label}</td>
       {days.map((d) => {
         const v = pick(d);
         const active = dayFilter === d.day;
@@ -1173,8 +1224,9 @@ function DayMetricRow({
           <td
             key={d.day}
             onClick={() => onPick(d.day)}
-            className={`border-b border-l border-border/60 text-center px-1 py-1.5 cursor-pointer transition-colors ${active ? 'bg-indigo-100 dark:bg-indigo-500/25' : 'hover:bg-muted/50'
-              }`}
+            className={`border-b border-l border-border/60 text-center px-1 py-1.5 cursor-pointer transition-colors ${
+              active ? 'bg-indigo-100 dark:bg-indigo-500/25' : 'hover:bg-muted/50'
+            }`}
           >
             {v === 0 ? (
               <span className="text-muted-foreground/30">·</span>

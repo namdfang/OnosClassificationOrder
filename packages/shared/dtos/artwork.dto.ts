@@ -1,8 +1,8 @@
 import { createZodDto } from '@anatine/zod-nestjs';
 import { extendApi } from '@anatine/zod-openapi';
+import { PageQueryZod, PageResZod, ResZod } from '@shared/types';
 import { z } from 'zod';
 
-import { PageQueryZod, PageResZod, ResZod } from '@shared/types';
 import { BaseEntityZod, getObjectValues, ResImageZod, Status } from '..';
 
 export const ResArtworkZod = ResImageZod;

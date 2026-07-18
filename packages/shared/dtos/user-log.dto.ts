@@ -1,7 +1,7 @@
+import { IDZod, UserLogType } from '@shared/constants';
+import { BaseEntityZod } from '@shared/types';
 import { z } from 'zod';
 
-import { BaseEntityZod } from '@shared/types';
-import { IDZod, UserLogType } from '@shared/constants';
 import { getObjectValues } from '..';
 
 //

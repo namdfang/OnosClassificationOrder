@@ -6,8 +6,8 @@ import {
   SaveCustomerAssignmentConfigDto,
 } from 'shared';
 
-import { SystemConfigService } from '../system-config/system-config.service';
 import { CustomerRepository } from '../customer/customer.repository';
+import { SystemConfigService } from '../system-config/system-config.service';
 
 const EMPTY_CONFIG: CustomerAssignmentConfig = { enabled: false, factories: [] };
 
@@ -37,9 +37,7 @@ export class CustomerAssignmentService {
       for (const id of f.customerIds) {
         const cid = String(id);
         if (localSeen.has(cid)) {
-          throw new BadRequestException(
-            'Khách hàng bị lặp trong cùng một xưởng — mỗi khách chỉ khai báo một lần.',
-          );
+          throw new BadRequestException('Khách hàng bị lặp trong cùng một xưởng — mỗi khách chỉ khai báo một lần.');
         }
         localSeen.add(cid);
         if (seen.has(cid)) {

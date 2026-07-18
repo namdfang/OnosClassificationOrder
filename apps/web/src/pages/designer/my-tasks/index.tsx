@@ -1,15 +1,5 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
-import {
-  DndContext,
-  DragEndEvent,
-  DragOverlay,
-  DragStartEvent,
-  PointerSensor,
-  useDroppable,
-  useSensor,
-  useSensors,
-} from '@dnd-kit/core';
-
+import { useSearchParams } from 'react-router-dom';
 import {
   CheckCircle2,
   ChevronDown,
@@ -24,23 +14,27 @@ import {
   X,
   XCircle,
 } from 'lucide-react';
-import { toast } from 'sonner';
-import { useSearchParams } from 'react-router-dom';
 import type { DesignerMyStats, DesignerTaskCard, DesignerTransitionDto } from 'shared';
 import { DesignerStatus, DesignerTransitionAction, WorkshopConfigCategory } from 'shared';
+import { toast } from 'sonner';
+import type { DragEndEvent, DragStartEvent } from '@dnd-kit/core';
+import { DndContext, DragOverlay, PointerSensor, useDroppable, useSensor, useSensors } from '@dnd-kit/core';
 
+import { useWorkshopConfigStore } from '@/store/workshopConfigStore';
+
+import { RepositoryRemote } from '@/services';
+
+import { DateRangePicker } from '@/components/common/DateRangePicker';
+import { ImagePreviewDialog } from '@/components/common/ImagePreviewDialog';
+import { PipelineDailyOverview } from '@/components/common/PipelineDailyOverview';
+import { SelectFilter } from '@/components/common/SelectFilter';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { TooltipProvider } from '@/components/ui/tooltip';
-import { DateRangePicker } from '@/components/common/DateRangePicker';
-import { PipelineDailyOverview } from '@/components/common/PipelineDailyOverview';
-import { ImagePreviewDialog } from '@/components/common/ImagePreviewDialog';
-import { SelectFilter } from '@/components/common/SelectFilter';
-import { Spinner } from '@/components/common/Spinner';
-import { RepositoryRemote } from '@/services';
-import { useDebounce } from '@/hooks/useDebounce';
-import { useWorkshopConfigStore } from '@/store/workshopConfigStore';
+
 import { handleAxiosError } from '@/utils';
+
+import { useDebounce } from '@/hooks/useDebounce';
 
 import { DailyBreakdownPanel } from './DailyBreakdownPanel';
 import { RejectModal } from './RejectModal';
@@ -243,11 +237,13 @@ export default function MyTasksPage() {
       });
       // Response cũ đến muộn → bỏ qua, không ghi đè data của request mới hơn.
       if (seq !== tasksSeqRef.current) return;
-      const data = res.data?.data as {
-        columns: Columns;
-        rejected: DesignerTaskCard[];
-        fullName?: string;
-      } | undefined;
+      const data = res.data?.data as
+        | {
+            columns: Columns;
+            rejected: DesignerTaskCard[];
+            fullName?: string;
+          }
+        | undefined;
       setColumns(data?.columns || EMPTY_COLS);
       setRejected(data?.rejected || []);
       setFullName(data?.fullName);
@@ -285,7 +281,15 @@ export default function MyTasksPage() {
       if (seq !== filtersSeqRef.current) return;
       // Merge với default rỗng → mọi key luôn là array kể cả khi response BE
       // thiếu facet nào đó (vd. backend cũ chưa có `userSku`) → tránh crash.
-      const empty = { type: [], fabricType: [], machineNumber: [], toolResult: [], toolResultNote: [], userSku: [], errorFile: [] };
+      const empty = {
+        type: [],
+        fabricType: [],
+        machineNumber: [],
+        toolResult: [],
+        toolResultNote: [],
+        userSku: [],
+        errorFile: [],
+      };
       setFilterOptions({ ...empty, ...(res.data?.data || {}) } as typeof filterOptions);
     } catch (err) {
       if (seq === filtersSeqRef.current) handleAxiosError(err);
@@ -318,7 +322,18 @@ export default function MyTasksPage() {
     fetchTasks();
     fetchFilters();
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [filters.type, filters.fabricType, filters.machineNumber, filters.toolResult, filters.toolResultNote, filters.userSku, filters.errorFile, debouncedSearch, dateFrom, dateTo]);
+  }, [
+    filters.type,
+    filters.fabricType,
+    filters.machineNumber,
+    filters.toolResult,
+    filters.toolResultNote,
+    filters.userSku,
+    filters.errorFile,
+    debouncedSearch,
+    dateFrom,
+    dateTo,
+  ]);
 
   useEffect(() => {
     fetchStats();
@@ -380,12 +395,7 @@ export default function MyTasksPage() {
     });
   };
 
-  const handleCardCheckbox = (
-    colKey: ColKey,
-    id: string,
-    checked: boolean,
-    withShift: boolean,
-  ) => {
+  const handleCardCheckbox = (colKey: ColKey, id: string, checked: boolean, withShift: boolean) => {
     if (
       withShift &&
       lastClickedRef.current &&
@@ -469,8 +479,7 @@ export default function MyTasksPage() {
   const handleDragEnd = (event: DragEndEvent) => {
     setActiveCard(null);
     const cardId = event.active.id as string;
-    const fromStatus = (event.active.data.current as { status?: DesignerStatus } | undefined)
-      ?.status;
+    const fromStatus = (event.active.data.current as { status?: DesignerStatus } | undefined)?.status;
     const overId = event.over?.id as ColKey | undefined;
     if (!overId || !fromStatus || !COL_META[overId]) return;
 
@@ -495,8 +504,7 @@ export default function MyTasksPage() {
       if (!card) return prev;
       // Hoàn thành đơn từng bị báo lỗi (reworkCount>0) → vào cột "Đã sửa" thay
       // vì "Đã xong", khớp với cách BE tách 2 cột (tránh nhấp nháy trước refetch).
-      const destKey: ColKey =
-        to === 'done' && (card.designerReworkCount || 0) > 0 ? 'fixed' : to;
+      const destKey: ColKey = to === 'done' && (card.designerReworkCount || 0) > 0 ? 'fixed' : to;
       return {
         ...prev,
         [fromKey]: prev[fromKey].filter((c) => c._id !== id),
@@ -506,11 +514,7 @@ export default function MyTasksPage() {
   };
 
   // ─── Bulk actions ──────────────────────────────────────────────
-  const callBulk = async (
-    action: DesignerTransitionAction,
-    reason?: string,
-    targetUserId?: string,
-  ) => {
+  const callBulk = async (action: DesignerTransitionAction, reason?: string, targetUserId?: string) => {
     if (selected.size === 0) return;
     try {
       const ids = Array.from(selected);
@@ -560,8 +564,7 @@ export default function MyTasksPage() {
     }
   };
 
-  const onPreview = (url: string, title: string, original?: string) =>
-    setPreview({ url, title, original });
+  const onPreview = (url: string, title: string, original?: string) => setPreview({ url, title, original });
 
   return (
     <TooltipProvider delayDuration={200}>
@@ -573,9 +576,7 @@ export default function MyTasksPage() {
               <ListChecks size={20} className="text-indigo-600" />
             </div>
             <div>
-              <h1 className="text-xl font-bold text-foreground">
-                Xin chào{fullName ? `, ${fullName}` : ''}
-              </h1>
+              <h1 className="text-xl font-bold text-foreground">Xin chào{fullName ? `, ${fullName}` : ''}</h1>
               <p className="text-xs text-muted-foreground">
                 Kéo thả card để chuyển trạng thái, hoặc tick checkbox để bulk update.
               </p>
@@ -654,19 +655,17 @@ export default function MyTasksPage() {
         <div className="flex items-start gap-2 rounded-md border border-border bg-muted/30 p-2.5 text-[11px] text-muted-foreground">
           <MousePointerClick size={13} className="text-primary shrink-0 mt-0.5" />
           <div>
-            <strong className="text-foreground">Mẹo chọn nhiều đơn:</strong> Tick checkbox cạnh tên
-            sản phẩm để chọn toàn bộ đơn của sản phẩm đó. Hoặc tick 1 đơn, giữ{' '}
-            <kbd className="px-1 bg-background border rounded">Shift</kbd> rồi click checkbox khác
-            (trong cùng cột) để chọn nhanh tất cả đơn ở giữa.
+            <strong className="text-foreground">Mẹo chọn nhiều đơn:</strong> Tick checkbox cạnh tên sản phẩm để chọn
+            toàn bộ đơn của sản phẩm đó. Hoặc tick 1 đơn, giữ{' '}
+            <kbd className="px-1 bg-background border rounded">Shift</kbd> rồi click checkbox khác (trong cùng cột) để
+            chọn nhanh tất cả đơn ở giữa.
           </div>
         </div>
 
         {/* Filter bar */}
         <div className="grid grid-cols-2 md:grid-cols-3 xl:grid-cols-8 gap-2 rounded-md border border-border bg-card p-2.5">
           <div>
-            <label className="text-[10px] text-muted-foreground uppercase tracking-wide font-medium">
-              Search
-            </label>
+            <label className="text-[10px] text-muted-foreground uppercase tracking-wide font-medium">Search</label>
             <div className="relative mt-1">
               <Search size={12} className="absolute left-2 top-1/2 -translate-y-1/2 text-muted-foreground" />
               <Input
@@ -750,9 +749,7 @@ export default function MyTasksPage() {
                     cards={columns[key]}
                     selected={selected}
                     activeDragId={activeCard?._id}
-                    onCheckCard={(id, checked, withShift) =>
-                      handleCardCheckbox(key, id, checked, withShift)
-                    }
+                    onCheckCard={(id, checked, withShift) => handleCardCheckbox(key, id, checked, withShift)}
                     onCheckGroup={toggleGroup}
                     onClickId={(id) => setDetailId(id)}
                     onPreview={onPreview}
@@ -802,9 +799,7 @@ export default function MyTasksPage() {
                 Đã chọn <span className="font-semibold">{selected.size}</span>
               </span>
               {selectedColumns.size > 1 ? (
-                <span className="text-xs text-muted-foreground italic">
-                  (Đơn ở nhiều cột — chỉ bulk cùng 1 cột)
-                </span>
+                <span className="text-xs text-muted-foreground italic">(Đơn ở nhiều cột — chỉ bulk cùng 1 cột)</span>
               ) : (
                 <>
                   {bulkActions.includes(DesignerTransitionAction.Start) && (
@@ -838,9 +833,7 @@ export default function MyTasksPage() {
 
         <RejectModal
           open={!!rejectTarget || bulkReject}
-          productionId={
-            bulkReject ? `${selected.size} đơn được chọn` : rejectTarget?.productionId
-          }
+          productionId={bulkReject ? `${selected.size} đơn được chọn` : rejectTarget?.productionId}
           onClose={() => {
             setRejectTarget(null);
             setBulkReject(false);
@@ -894,15 +887,7 @@ function groupByType(cards: DesignerTaskCard[]): [string, DesignerTaskCard[]][] 
   return [...map.entries()].sort((a, b) => a[0].localeCompare(b[0]));
 }
 
-function KPI({
-  label,
-  value,
-  accent,
-}: {
-  label: string;
-  value: number | string;
-  accent: string;
-}) {
+function KPI({ label, value, accent }: { label: string; value: number | string; accent: string }) {
   return (
     <div className="rounded-md border border-border bg-card p-3">
       <p className="text-[10px] uppercase tracking-wider text-muted-foreground">{label}</p>
@@ -951,8 +936,9 @@ function Column({
   return (
     <div
       ref={setNodeRef}
-      className={`rounded-md border-2 ${meta.accent} bg-muted/30 p-2.5 transition-colors min-h-[200px] flex flex-col gap-2 ${isOver ? 'bg-muted/60' : ''
-        }`}
+      className={`rounded-md border-2 ${meta.accent} bg-muted/30 p-2.5 transition-colors min-h-[200px] flex flex-col gap-2 ${
+        isOver ? 'bg-muted/60' : ''
+      }`}
     >
       <div className="flex items-center justify-between text-xs font-semibold text-foreground">
         <span>{meta.label}</span>
@@ -960,9 +946,7 @@ function Column({
       </div>
 
       <div className="flex-1 space-y-3 overflow-y-auto max-h-[calc(100vh-380px)]">
-        {cards.length === 0 && (
-          <div className="text-[11px] text-muted-foreground italic text-center py-6">Trống</div>
-        )}
+        {cards.length === 0 && <div className="text-[11px] text-muted-foreground italic text-center py-6">Trống</div>}
         {groups.map(([type, rows]) => {
           const selCount = rows.filter((r) => selected.has(r._id)).length;
           const allChecked = rows.length > 0 && selCount === rows.length;
@@ -1014,8 +998,7 @@ function Column({
                     return (
                       <div
                         key={c._id}
-                        className={`relative group transition-opacity ${isDragging ? 'opacity-30' : ''
-                          }`}
+                        className={`relative group transition-opacity ${isDragging ? 'opacity-30' : ''}`}
                       >
                         {/* Checkbox góc — không can thiệp drag (sensor distance=6) */}
                         <div className="absolute top-1.5 left-1.5 z-10">
@@ -1027,7 +1010,7 @@ function Column({
                               (e.currentTarget as HTMLInputElement & { __shift?: boolean }).__shift = me.shiftKey;
                             }}
                             onChange={(e) => {
-                              const ws = ((e.currentTarget as HTMLInputElement & { __shift?: boolean }).__shift) || false;
+                              const ws = (e.currentTarget as HTMLInputElement & { __shift?: boolean }).__shift || false;
                               onCheckCard(c._id, e.currentTarget.checked, ws);
                             }}
                             onPointerDown={(e) => e.stopPropagation()}
@@ -1042,11 +1025,7 @@ function Column({
                               : 'transition-colors'
                           }
                         >
-                          <TaskCard
-                            card={c}
-                            onPreview={onPreview}
-                            onClickProductionId={() => onClickId(c._id)}
-                          />
+                          <TaskCard card={c} onPreview={onPreview} onClickProductionId={() => onClickId(c._id)} />
                         </div>
 
                         {(colKey === 'assigned' || colKey === 'inProgress') && (

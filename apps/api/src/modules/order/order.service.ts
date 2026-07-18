@@ -14,74 +14,73 @@ import { Model, PipelineStage } from 'mongoose';
 import type {
   ApplyCuttingFilesDto,
   ApplyCuttingFilesResDto,
+  BreakdownBucket,
   BulkAssignDesignerDto,
   BulkAssignDesignerPreviewDto,
   BulkAssignDesignerPreviewResDto,
   BulkAssignDesignerResDto,
   BulkAssignOrderDto,
   BulkAssignOrderResDto,
+  BulkHoldOrderDto,
+  BulkHoldOrderResDto,
   BulkTransferOrderDto,
   BulkUpdateOrderFieldDto,
   BulkUpdateOrderFieldResDto,
+  CancelledOrderRow,
+  CancelOrderDto,
+  CuttingFileBreakdownRow,
+  CuttingFileConflict,
+  CuttingFileInvalid,
+  CuttingFileMatched,
+  CuttingFileNotFound,
   DesignerAssignmentConfig,
-  DesignerBreakdownResDto,
   DesignerBacklogResDto,
+  DesignerBreakdownResDto,
   DesignerStatusCounts,
-  GetErrorLogDto,
-  GetErrorLogResDto,
-  SetProductionErrorDto,
-  SetProductionErrorResDto,
-  BreakdownBucket,
   DesignFields,
   DesignReviewOrder,
   FactoryBreakdown,
   FactoryBucket,
   FactoryFlow,
   FactoryOverviewCell,
+  FulfillmentTimelineEntry,
+  GetCancelledOrdersDto,
+  GetCancelledOrdersResDto,
+  GetErrorLogDto,
+  GetErrorLogResDto,
   GetFactoryOverviewDto,
   GetFactoryOverviewResDto,
   GetGroupedProductionOrdersResDto,
   GetImportSummaryDto,
   GetImportSummaryResDto,
+  GetLifecycleOverviewDto,
+  GetLifecycleOverviewResDto,
   GetOrderDashboardDto,
   GetOrderDashboardResDto,
   GetOrderStatusOverviewDto,
   GetOrderStatusOverviewResDto,
   GetProductionOrdersDto,
   GetProductionOrdersResDto,
-  ImportProductionOrderRow,
+  HoldOrderDto,
+  HoldOrderResDto,
   ImportProductionOrdersDto,
   ImportProductionOrdersResDto,
   ImportReworkOrdersDto,
   ImportReworkOrdersResDto,
   ImportSummaryGroup,
-  FulfillmentTimelineEntry,
+  LifecycleStageRow,
   MachineBucket,
   MachineKpi,
   MachineTypeBreakdown,
-  CuttingFileBreakdownRow,
-  CuttingFileConflict,
-  CuttingFileInvalid,
-  CuttingFileMatched,
-  CuttingFileNotFound,
   MockupSummary,
-  PreviewCuttingFilesDto,
-  PreviewCuttingFilesResDto,
-  GetLifecycleOverviewDto,
-  GetLifecycleOverviewResDto,
-  GetCancelledOrdersDto,
-  GetCancelledOrdersResDto,
-  CancelledOrderRow,
-  LifecycleStageRow,
   OrderStatusOverview,
   OrderWorkshopField,
+  PreviewCuttingFilesDto,
+  PreviewCuttingFilesResDto,
+  SetProductionErrorDto,
+  SetProductionErrorResDto,
   SizeMatrixRow,
   SizeSummary,
-  CancelOrderDto,
-  HoldOrderDto,
-  HoldOrderResDto,
-  BulkHoldOrderDto,
-  BulkHoldOrderResDto,
   TransferOrderDto,
   TransferOrderResDto,
   TypeSummary,
@@ -90,7 +89,9 @@ import type {
   UpdateOrderFieldResDto,
   UserBreakdown,
 } from 'shared';
+import type { GetOrderLogsDto, LifecycleTrack, LifecycleTrackStage, LifecycleTrackStatus } from 'shared';
 import {
+  customerMatchKey,
   DESIGNER_ASSIGNMENT_CONFIG_KEY,
   DESIGNER_REASSIGNABLE_STATUSES,
   DesignerStatus,
@@ -101,37 +102,31 @@ import {
   FulfillmentStageStatus,
   FulfillmentTransitionAction,
   LIFECYCLE_STAGE_KEYS,
-  customerMatchKey,
   parseProductionIdFromCuttingFilename,
   RoleType,
   Status,
   WorkshopConfigCategory,
 } from 'shared';
-import type { LifecycleTrack, LifecycleTrackStage, LifecycleTrackStatus } from 'shared';
 import { Logger } from 'winston';
 
+import { CustomerAssignmentService } from '../customer-assignment/customer-assignment.service';
+import { DESIGN_PREVIEW_QUEUE, DESIGN_THUMB_QUEUE, DesignImageJobData } from '../design-image/design-image.processor';
 import { DesignImageService } from '../design-image/design-image.service';
-import { DriveFileNameService } from './drive-file-name.service';
-import {
-  DESIGN_PREVIEW_QUEUE,
-  DESIGN_THUMB_QUEUE,
-  DesignImageJobData,
-} from '../design-image/design-image.processor';
 import { FactoryRepository } from '../factory/factory.repository';
 import { MachineTypeRepository } from '../machine-type/machine-type.repository';
 import { OrderLogRepository } from '../order-log/order-log.repository';
-import { OrderLogService } from '../order-log/order-log.service';
 import type { AuditContext } from '../order-log/order-log.service';
+import { OrderLogService } from '../order-log/order-log.service';
 import { ProductConfigRepository } from '../product-config/product-config.repository';
 import { RedisCacheService } from '../redis-cache/redis-cache.service';
 import { RoleRepository } from '../role/role.repository';
 import { SystemConfigService } from '../system-config/system-config.service';
-import { CustomerAssignmentService } from '../customer-assignment/customer-assignment.service';
 import { TelegramNotificationService } from '../telegram-notification/telegram-notification.service';
 import { UserEntity } from '../user/user.entity';
 import { WorkshopConfigRepository } from '../workshop-config/workshop-config.repository';
 import { mapProductTypeToCode } from './design-review-product-code';
-import { OrderEntity, OrderDocument } from './order.entity';
+import { DriveFileNameService } from './drive-file-name.service';
+import { OrderDocument, OrderEntity } from './order.entity';
 import { OrderRepository } from './order.repository';
 
 const FIELD_CONFIG_CATEGORY: Record<OrderWorkshopField, WorkshopConfigCategory | null> = {
@@ -180,13 +175,7 @@ const FIELD_EDIT_ROLES: Record<OrderWorkshopField, RoleType[]> = {
   fabricType: ADMIN_ROLES,
   // Máy: xưởng (Leader/Designer/Fulfillment/Support) tự đổi máy nếu phải chuyển
   // máy in, không cần đợi admin sửa ProductConfig + backfill lại.
-  machineNumber: [
-    ...ADMIN_ROLES,
-    RoleType.Support,
-    RoleType.DesignerLeader,
-    RoleType.Designer,
-    RoleType.Fulfillment,
-  ],
+  machineNumber: [...ADMIN_ROLES, RoleType.Support, RoleType.DesignerLeader, RoleType.Designer, RoleType.Fulfillment],
   // Fulfillment (xưởng) là người báo lỗi sản xuất → cần quyền edit.
   productionError: [...ADMIN_ROLES, RoleType.Fulfillment],
   productionErrorNote: [...ADMIN_ROLES, RoleType.Fulfillment],
@@ -377,9 +366,7 @@ export class OrderService implements OnModuleInit {
   private async assertAssigneeUserValid(userId: string | null): Promise<void> {
     if (!userId) return;
     const designerRole = await this.roleRepository.findOne({ name: RoleType.Designer });
-    const u = await this.userModel
-      .findOne({ _id: userId, roleId: designerRole?._id }, { _id: 1, status: 1 })
-      .lean();
+    const u = await this.userModel.findOne({ _id: userId, roleId: designerRole?._id }, { _id: 1, status: 1 }).lean();
     if (!u) {
       throw new BadRequestException(
         `User ${userId} không phải sub-designer hợp lệ (không tìm thấy hoặc không phải role Designer).`,
@@ -424,9 +411,7 @@ export class OrderService implements OnModuleInit {
     );
     if (firstErrorRes.modifiedCount > 0) {
       // eslint-disable-next-line no-console
-      console.log(
-        `[order-backfill] productionFirstErrorAt set on ${firstErrorRes.modifiedCount} legacy error rows`,
-      );
+      console.log(`[order-backfill] productionFirstErrorAt set on ${firstErrorRes.modifiedCount} legacy error rows`);
     }
 
     // Cleanup ngược: đơn ĐÃ 'ok' (lỗi đã xử lý xong) nhưng còn dính
@@ -467,15 +452,12 @@ export class OrderService implements OnModuleInit {
 
     // Migrate `errorFile` từ string đơn → array. Idempotent: chỉ chạy với row
     // có $type='string'. Sau migrate: errorFile luôn là array (hoặc null).
-    const errorFileMigrateRes = await this.orderModel.updateMany(
-      { errorFile: { $type: 'string' } },
-      [{ $set: { errorFile: ['$errorFile'] } }],
-    );
+    const errorFileMigrateRes = await this.orderModel.updateMany({ errorFile: { $type: 'string' } }, [
+      { $set: { errorFile: ['$errorFile'] } },
+    ]);
     if (errorFileMigrateRes.modifiedCount > 0) {
       // eslint-disable-next-line no-console
-      console.log(
-        `[order-backfill] errorFile migrated to array on ${errorFileMigrateRes.modifiedCount} legacy rows`,
-      );
+      console.log(`[order-backfill] errorFile migrated to array on ${errorFileMigrateRes.modifiedCount} legacy rows`);
     }
 
     // Flatten `errorFile` lồng 2 lớp (legacy `[['collar']]` → `['collar']`) ghi
@@ -483,27 +465,21 @@ export class OrderService implements OnModuleInit {
     // facet ($unwind 1 lần trả về mảng con) lẫn filter ($in không khớp phần tử
     // mảng). Idempotent: `$elemMatch $type=array` chỉ match doc còn lồng; sau khi
     // flatten không phần tử nào là array nên lần boot sau không match lại.
-    const errorFileFlattenRes = await this.orderModel.updateMany(
-      { errorFile: { $elemMatch: { $type: 'array' } } },
-      [
-        {
-          $set: {
-            errorFile: {
-              $reduce: {
-                input: '$errorFile',
-                initialValue: [],
-                in: {
-                  $concatArrays: [
-                    '$$value',
-                    { $cond: [{ $isArray: '$$this' }, '$$this', ['$$this']] },
-                  ],
-                },
+    const errorFileFlattenRes = await this.orderModel.updateMany({ errorFile: { $elemMatch: { $type: 'array' } } }, [
+      {
+        $set: {
+          errorFile: {
+            $reduce: {
+              input: '$errorFile',
+              initialValue: [],
+              in: {
+                $concatArrays: ['$$value', { $cond: [{ $isArray: '$$this' }, '$$this', ['$$this']] }],
               },
             },
           },
         },
-      ],
-    );
+      },
+    ]);
     if (errorFileFlattenRes.modifiedCount > 0) {
       // eslint-disable-next-line no-console
       console.log(
@@ -523,9 +499,7 @@ export class OrderService implements OnModuleInit {
     );
     if (toolCheckedBackfill.modifiedCount > 0) {
       // eslint-disable-next-line no-console
-      console.log(
-        `[order-backfill] toolCheckedAt set on ${toolCheckedBackfill.modifiedCount} legacy soát-tool rows`,
-      );
+      console.log(`[order-backfill] toolCheckedAt set on ${toolCheckedBackfill.modifiedCount} legacy soát-tool rows`);
     }
 
     // Cleanup orphan ngược: đơn đã vào pipeline (currentFulfillmentStage=print)
@@ -591,29 +565,24 @@ export class OrderService implements OnModuleInit {
     // TIẾN về 'sew-in' (May nhận vào), status=waiting. Idempotent: sau lần đầu
     // không còn đơn nào ở qc-sorting nên match=0. ('qc-post-sew' chưa có đơn
     // nào nên không cần migrate — chỉ xoá khỏi enum/schema.)
-    const dropQcSortingRes = await this.orderModel.updateMany(
-      { currentFulfillmentStage: 'qc-sorting' },
-      [
-        {
-          $set: {
-            currentFulfillmentStage: FulfillmentStage.SewIn,
-            'fulfillmentStages.sew-in.status': FulfillmentStageStatus.Waiting,
-            'fulfillmentStages.sew-in.waitingAt': '$$NOW',
-            'fulfillmentStages.sew-in.reworkCount': {
-              $ifNull: ['$fulfillmentStages.sew-in.reworkCount', 0],
-            },
-            'fulfillmentStages.sew-in.workMs': {
-              $ifNull: ['$fulfillmentStages.sew-in.workMs', 0],
-            },
+    const dropQcSortingRes = await this.orderModel.updateMany({ currentFulfillmentStage: 'qc-sorting' }, [
+      {
+        $set: {
+          currentFulfillmentStage: FulfillmentStage.SewIn,
+          'fulfillmentStages.sew-in.status': FulfillmentStageStatus.Waiting,
+          'fulfillmentStages.sew-in.waitingAt': '$$NOW',
+          'fulfillmentStages.sew-in.reworkCount': {
+            $ifNull: ['$fulfillmentStages.sew-in.reworkCount', 0],
+          },
+          'fulfillmentStages.sew-in.workMs': {
+            $ifNull: ['$fulfillmentStages.sew-in.workMs', 0],
           },
         },
-      ],
-    );
+      },
+    ]);
     if (dropQcSortingRes.modifiedCount > 0) {
       // eslint-disable-next-line no-console
-      console.log(
-        `[order-backfill] migrate ${dropQcSortingRes.modifiedCount} orders qc-sorting → sew-in (waiting)`,
-      );
+      console.log(`[order-backfill] migrate ${dropQcSortingRes.modifiedCount} orders qc-sorting → sew-in (waiting)`);
     }
   }
 
@@ -772,10 +741,7 @@ export class OrderService implements OnModuleInit {
     const order = await this.orderModel.findById(id).lean();
     if (!order) throw new NotFoundException('Order not found');
     const now = new Date();
-    await this.orderModel.updateOne(
-      { _id: id },
-      { $set: { errorResolvedAt: now, productionFirstErrorAt: null } },
-    );
+    await this.orderModel.updateOne({ _id: id }, { $set: { errorResolvedAt: now, productionFirstErrorAt: null } });
     void this.orderLogService.write({
       orderId: id,
       action: 'update',
@@ -891,9 +857,7 @@ export class OrderService implements OnModuleInit {
    */
   private canReworkBackToDesigner(current: DesignerStatus): boolean {
     return (
-      current !== DesignerStatus.Rework &&
-      current !== DesignerStatus.InProgress &&
-      current !== DesignerStatus.Assigned
+      current !== DesignerStatus.Rework && current !== DesignerStatus.InProgress && current !== DesignerStatus.Assigned
     );
   }
 
@@ -939,8 +903,7 @@ export class OrderService implements OnModuleInit {
     // (đầu pipeline) để worker In watch được; đơn đã ở stage X → reporter = X.
     const stage = (existingStage || FulfillmentStage.Print) as FulfillmentStage;
     const stageState = b.fulfillmentStages?.[stage] ?? {};
-    const fromStatus =
-      (stageState.status as FulfillmentStageStatus) ?? FulfillmentStageStatus.Waiting;
+    const fromStatus = (stageState.status as FulfillmentStageStatus) ?? FulfillmentStageStatus.Waiting;
     const set: Record<string, unknown> = {};
     if (!existingStage) {
       // Chưa vào pipeline → khởi tạo In waiting. Sau khi target (designer/Support)
@@ -1033,8 +996,8 @@ export class OrderService implements OnModuleInit {
 
     // reporterStage = công đoạn user đang giữ (nếu có) để watch; nếu không (admin
     // /support quét) → dùng furthest (điểm bị chặn xa nhất) để có stage watch.
-    const reporterStage = ((ctx?.user as { fulfillmentStage?: FulfillmentStage } | undefined)
-      ?.fulfillmentStage ?? furthest) as FulfillmentStage;
+    const reporterStage =
+      (ctx?.user as { fulfillmentStage?: FulfillmentStage } | undefined)?.fulfillmentStage ?? furthest;
     const timelineEntry: FulfillmentTimelineEntry = {
       stage: reporterStage,
       action: FulfillmentTransitionAction.ReworkBack,
@@ -1073,13 +1036,7 @@ export class OrderService implements OnModuleInit {
     };
   }> {
     const baseDto = { ...dto, fulfillmentStatus: undefined } as GetProductionOrdersDto;
-    const base = this.buildOrderListFilter(
-      baseDto,
-      roleName,
-      assigneeCode,
-      fulfillmentFactoryId,
-      fulfillmentStage,
-    );
+    const base = this.buildOrderListFilter(baseDto, roleName, assigneeCode, fulfillmentFactoryId, fulfillmentStage);
     const statuses = ['waiting', 'in-progress', 'rework', 'done', 'fixed', 'watching'] as const;
     const [all, waiting, inProgress, rework, done, fixed, watching] = await Promise.all([
       // "Tất cả" = tổng đơn theo filter hiện tại (không kèm fulfillmentStatus).
@@ -1144,10 +1101,7 @@ export class OrderService implements OnModuleInit {
         // xưởng mình đi nơi khác (origin = mình). Nếu user chưa gán factoryId →
         // trả empty thay vì rò rỉ data.
         if (fulfillmentFactoryId) {
-          filter.$or = [
-            { factoryId: fulfillmentFactoryId },
-            { originalFactoryId: fulfillmentFactoryId },
-          ];
+          filter.$or = [{ factoryId: fulfillmentFactoryId }, { originalFactoryId: fulfillmentFactoryId }];
         } else {
           filter.factoryId = '__no_factory__';
         }
@@ -1170,11 +1124,7 @@ export class OrderService implements OnModuleInit {
    *   3. Fallback: hard-coded `FIELD_EDIT_ROLES` map (giữ để khỏi vỡ role chưa
    *      có permissionCodes — sẽ remove khi mọi role đã seed đủ codes).
    */
-  private assertCanEditField(
-    field: OrderWorkshopField,
-    roleName?: RoleType,
-    permissionCodes?: string[],
-  ): void {
+  private assertCanEditField(field: OrderWorkshopField, roleName?: RoleType, permissionCodes?: string[]): void {
     if (roleName === RoleType.SuperAdmin || roleName === RoleType.Admin) return;
 
     const requiredCode = `order.field.${field}.edit`;
@@ -1188,10 +1138,7 @@ export class OrderService implements OnModuleInit {
     );
   }
 
-  private async assertValueAllowed(
-    field: OrderWorkshopField,
-    value: string | string[] | null,
-  ): Promise<void> {
+  private async assertValueAllowed(field: OrderWorkshopField, value: string | string[] | null): Promise<void> {
     if (value === null || value === '') return;
     const category = FIELD_CONFIG_CATEGORY[field];
     if (!category) return; // free text field, no validation
@@ -1206,9 +1153,7 @@ export class OrderService implements OnModuleInit {
     const foundCodes = new Set(found.map((f) => f.code));
     const missing = codes.filter((c) => !foundCodes.has(c));
     if (missing.length > 0) {
-      throw new BadRequestException(
-        `Invalid value(s) "${missing.join(', ')}" for field "${field}"`,
-      );
+      throw new BadRequestException(`Invalid value(s) "${missing.join(', ')}" for field "${field}"`);
     }
   }
 
@@ -1252,7 +1197,6 @@ export class OrderService implements OnModuleInit {
       // eslint-disable-next-line no-console
       console.log(`[cache] invalidated ${keys.length} order list keys`);
     } catch (error) {
-      // eslint-disable-next-line no-console
       console.warn('[cache] invalidate failed:', error);
     }
   }
@@ -1287,9 +1231,7 @@ export class OrderService implements OnModuleInit {
       if (ids.length) {
         // Exact, case-insensitive per mã — mirror getByProductionId/lifecycle-track.
         filter.productionId = {
-          $in: ids.map(
-            (id) => new RegExp(`^${id.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}$`, 'i'),
-          ),
+          $in: ids.map((id) => new RegExp(`^${id.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}$`, 'i')),
         };
       }
     }
@@ -1347,9 +1289,7 @@ export class OrderService implements OnModuleInit {
       //  "Không tool" gồm cả đơn CHƯA soát toolResult ($nin match null/empty/missing).
       const hasNoTool = codes.includes('__unassigned_notool__');
       const hasWithTool = codes.includes('__unassigned_tool__');
-      const rest = codes.filter(
-        (c) => c !== '__unassigned_notool__' && c !== '__unassigned_tool__',
-      );
+      const rest = codes.filter((c) => c !== '__unassigned_notool__' && c !== '__unassigned_tool__');
       // Token đặc biệt __none__ ↔ chưa có field (data legacy)
       const hasNone = rest.includes('__none__');
       const real = rest.filter((c) => c !== '__none__');
@@ -1380,8 +1320,7 @@ export class OrderService implements OnModuleInit {
         // đồng bộ KPI panel `getDesignerBreakdown`. Chỉ áp khi CHỈ nhắm unassigned
         // (không lẫn status khác, tránh loại nhầm đơn 'ok' đã gán). $and push để
         // không đè filter toolResultNote/$or khác.
-        const onlyUnassigned =
-          (hasNone || real.includes('unassigned')) && real.every((c) => c === 'unassigned');
+        const onlyUnassigned = (hasNone || real.includes('unassigned')) && real.every((c) => c === 'unassigned');
         if (onlyUnassigned) {
           filter.$and = [
             ...(Array.isArray(filter.$and) ? (filter.$and as unknown[]) : []),
@@ -1505,9 +1444,7 @@ export class OrderService implements OnModuleInit {
     void roleName; // keep the var read so we can re-enable the cache key later
 
     const { page, limit, sort, order } = dto;
-    const toolHasCodes = this.needsToolHasCodes(dto)
-      ? await this.resolveToolHasCodes()
-      : undefined;
+    const toolHasCodes = this.needsToolHasCodes(dto) ? await this.resolveToolHasCodes() : undefined;
     const filter = this.buildOrderListFilter(
       dto,
       roleName,
@@ -1533,37 +1470,38 @@ export class OrderService implements OnModuleInit {
       // DB để phân trang chuẩn xuyên trang. `.sort()` thường chỉ so sánh chuỗi
       // ('2XL' < 'L') nên cần aggregation tính `__sizeRank` qua $switch.
       // Lấy _id đã sort + paginate, rồi populate qua repository (re-order theo _id).
-      const idRows = await this.orderModel.aggregate<{ _id: unknown }>([
-        { $match: filter },
-        { $addFields: { __sz: { $toLower: { $trim: { input: { $ifNull: ['$size', ''] } } } } } },
-        {
-          $addFields: {
-            __sizeRank: {
-              $switch: {
-                branches: [
-                  { case: { $eq: ['$__sz', 'xs'] }, then: 0 },
-                  { case: { $eq: ['$__sz', 's'] }, then: 1 },
-                  { case: { $eq: ['$__sz', 'm'] }, then: 2 },
-                  { case: { $eq: ['$__sz', 'l'] }, then: 3 },
-                  { case: { $eq: ['$__sz', 'xl'] }, then: 4 },
-                  { case: { $in: ['$__sz', ['2xl', 'xxl']] }, then: 5 },
-                  { case: { $in: ['$__sz', ['3xl', 'xxxl']] }, then: 6 },
-                  { case: { $in: ['$__sz', ['4xl', 'xxxxl']] }, then: 7 },
-                  { case: { $in: ['$__sz', ['5xl', 'xxxxxl']] }, then: 8 },
-                  { case: { $eq: ['$__sz', '6xl'] }, then: 9 },
-                  { case: { $eq: ['$__sz', '7xl'] }, then: 10 },
-                  { case: { $eq: ['$__sz', '8xl'] }, then: 11 },
-                ],
-                default: 99,
+      const idRows = await this.orderModel
+        .aggregate<{ _id: unknown }>([
+          { $match: filter },
+          { $addFields: { __sz: { $toLower: { $trim: { input: { $ifNull: ['$size', ''] } } } } } },
+          {
+            $addFields: {
+              __sizeRank: {
+                $switch: {
+                  branches: [
+                    { case: { $eq: ['$__sz', 'xs'] }, then: 0 },
+                    { case: { $eq: ['$__sz', 's'] }, then: 1 },
+                    { case: { $eq: ['$__sz', 'm'] }, then: 2 },
+                    { case: { $eq: ['$__sz', 'l'] }, then: 3 },
+                    { case: { $eq: ['$__sz', 'xl'] }, then: 4 },
+                    { case: { $in: ['$__sz', ['2xl', 'xxl']] }, then: 5 },
+                    { case: { $in: ['$__sz', ['3xl', 'xxxl']] }, then: 6 },
+                    { case: { $in: ['$__sz', ['4xl', 'xxxxl']] }, then: 7 },
+                    { case: { $in: ['$__sz', ['5xl', 'xxxxxl']] }, then: 8 },
+                    { case: { $eq: ['$__sz', '6xl'] }, then: 9 },
+                    { case: { $eq: ['$__sz', '7xl'] }, then: 10 },
+                    { case: { $eq: ['$__sz', '8xl'] }, then: 11 },
+                  ],
+                  default: 99,
+                },
               },
             },
           },
-        },
-        { $sort: { priority: -1, type: 1, __sizeRank: 1, fabricType: 1, inProductionAt: -1 } },
-        { $skip: limit * (page - 1) },
-        { $limit: limit },
-        { $project: { _id: 1 } },
-      ])
+          { $sort: { priority: -1, type: 1, __sizeRank: 1, fabricType: 1, inProductionAt: -1 } },
+          { $skip: limit * (page - 1) },
+          { $limit: limit },
+          { $project: { _id: 1 } },
+        ])
         // Sort theo field tính toán (__sizeRank) không dùng được index → Mongo
         // sort in-memory (giới hạn 100MB). allowDiskUse tránh lỗi "Sort exceeded
         // memory limit" / spike RAM khi tập match lớn (admin / ngày nhiều đơn).
@@ -1611,9 +1549,7 @@ export class OrderService implements OnModuleInit {
     assigneeCode?: string,
     fulfillmentFactoryId?: string,
   ): Promise<{ success: true; data: unknown[]; total: number }> {
-    const toolHasCodes = this.needsToolHasCodes(dto)
-      ? await this.resolveToolHasCodes()
-      : undefined;
+    const toolHasCodes = this.needsToolHasCodes(dto) ? await this.resolveToolHasCodes() : undefined;
     const filter = this.buildOrderListFilter(
       dto,
       roleName,
@@ -1651,9 +1587,7 @@ export class OrderService implements OnModuleInit {
     fulfillmentStage?: string,
   ): Promise<GetGroupedProductionOrdersResDto> {
     const { page, limit } = dto;
-    const toolHasCodes = this.needsToolHasCodes(dto)
-      ? await this.resolveToolHasCodes()
-      : undefined;
+    const toolHasCodes = this.needsToolHasCodes(dto) ? await this.resolveToolHasCodes() : undefined;
     const filter = this.buildOrderListFilter(
       dto,
       roleName,
@@ -1675,8 +1609,8 @@ export class OrderService implements OnModuleInit {
     const totalTypes: number = totalAgg[0]?.n || 0;
 
     // 2) Aggregate per-type counts, sort by orderCount desc, paginate by type.
-    const typeAgg: Array<{ _id: string; totalOrders: number; totalQuantity: number }> =
-      await this.orderModel.aggregate([
+    const typeAgg: Array<{ _id: string; totalOrders: number; totalQuantity: number }> = await this.orderModel.aggregate(
+      [
         { $match: filter },
         {
           $group: {
@@ -1689,7 +1623,8 @@ export class OrderService implements OnModuleInit {
         { $sort: { totalOrders: -1, _id: 1 } },
         { $skip: limit * (page - 1) },
         { $limit: limit },
-      ]);
+      ],
+    );
 
     if (typeAgg.length === 0) {
       return { success: true, data: [], total: totalTypes };
@@ -1802,10 +1737,7 @@ export class OrderService implements OnModuleInit {
     if (dto.searchUser?.trim()) {
       const s = escapeRegex(dto.searchUser.trim());
       andClauses.push({
-        $or: [
-          { userSku: { $regex: s, $options: 'i' } },
-          { userEmail: { $regex: s, $options: 'i' } },
-        ],
+        $or: [{ userSku: { $regex: s, $options: 'i' } }, { userEmail: { $regex: s, $options: 'i' } }],
       });
     }
 
@@ -1852,7 +1784,15 @@ export class OrderService implements OnModuleInit {
           cancelledOrders,
           heldOrders,
         }
-      : { totalOrders: 0, totalQuantity: 0, totalProductionCost: 0, totalShippingCost: 0, totalCost: 0, cancelledOrders, heldOrders };
+      : {
+          totalOrders: 0,
+          totalQuantity: 0,
+          totalProductionCost: 0,
+          totalShippingCost: 0,
+          totalCost: 0,
+          cancelledOrders,
+          heldOrders,
+        };
 
     // Per-type aggregation: group, collect raw rows to post-process size/mockup
     const byTypeAgg = await this.orderModel.aggregate([
@@ -2300,9 +2240,11 @@ export class OrderService implements OnModuleInit {
       .map((r) => r.code)
       .filter((c): c is string => !!c);
     const factories = factoryIds.length
-      ? await (this.orderModel.db.collection('factories') as unknown as {
-          find: (q: Record<string, unknown>) => { toArray: () => Promise<Array<{ _id: unknown; name: string }>> };
-        })
+      ? await (
+          this.orderModel.db.collection('factories') as unknown as {
+            find: (q: Record<string, unknown>) => { toArray: () => Promise<Array<{ _id: unknown; name: string }>> };
+          }
+        )
           .find({ _id: { $in: factoryIds } })
           .toArray()
       : [];
@@ -2312,9 +2254,11 @@ export class OrderService implements OnModuleInit {
       .map((r) => r.code)
       .filter((c): c is string => !!c);
     const machineTypes = machineIds.length
-      ? await (this.orderModel.db.collection('machineTypes') as unknown as {
-          find: (q: Record<string, unknown>) => { toArray: () => Promise<Array<{ _id: unknown; name: string }>> };
-        })
+      ? await (
+          this.orderModel.db.collection('machineTypes') as unknown as {
+            find: (q: Record<string, unknown>) => { toArray: () => Promise<Array<{ _id: unknown; name: string }>> };
+          }
+        )
           .find({ _id: { $in: machineIds } })
           .toArray()
       : [];
@@ -2328,18 +2272,19 @@ export class OrderService implements OnModuleInit {
       }),
     );
 
-    const machineBreakdown: MachineBucket[] = (
-      agg.machineType as Array<{ code: string | null; count: number }>
-    ).map((r) => ({
-      machineTypeId: r.code,
-      name: r.code ? machineMap.get(r.code) || r.code : 'Chưa xác định',
-      count: r.count,
-    }));
+    const machineBreakdown: MachineBucket[] = (agg.machineType as Array<{ code: string | null; count: number }>).map(
+      (r) => ({
+        machineTypeId: r.code,
+        name: r.code ? machineMap.get(r.code) || r.code : 'Chưa xác định',
+        count: r.count,
+      }),
+    );
 
     // Per-machine printed/pending KPI for Fulfill role
     const byMachine: MachineKpi[] = PRINTED_MACHINE_CODES.map((code) => {
       const meta = configMap.get(`print_status|${code}`);
-      const printed = (agg.printStatus as Array<{ code: string | null; count: number }>).find((r) => r.code === code)?.count || 0;
+      const printed =
+        (agg.printStatus as Array<{ code: string | null; count: number }>).find((r) => r.code === code)?.count || 0;
       return {
         machineCode: code,
         machineName: meta?.name || code,
@@ -2432,9 +2377,7 @@ export class OrderService implements OnModuleInit {
     ]);
 
     // Resolve fabric codes → labels in one batch lookup.
-    const fabricCodes = Array.from(
-      new Set(rows.map((r: { fabricType: string }) => r.fabricType).filter(Boolean)),
-    );
+    const fabricCodes = Array.from(new Set(rows.map((r: { fabricType: string }) => r.fabricType).filter(Boolean)));
     const fabricMap = new Map<string, string>();
     if (fabricCodes.length > 0) {
       const docs = await this.workshopConfigRepository.findAll({
@@ -2482,11 +2425,7 @@ export class OrderService implements OnModuleInit {
    * `originalFactoryId` stays pinned to where it was first imported so the
    * dashboard can show "received from ML" vs "originally here".
    */
-  async transferOrder(
-    id: string,
-    dto: TransferOrderDto,
-    ctx?: AuditContext,
-  ): Promise<TransferOrderResDto> {
+  async transferOrder(id: string, dto: TransferOrderDto, ctx?: AuditContext): Promise<TransferOrderResDto> {
     const order = await this.orderRepository.findOne({ _id: id });
     if (!order) throw new NotFoundException('Order not found');
     if (order.factoryId === dto.targetFactoryId) {
@@ -2505,10 +2444,7 @@ export class OrderService implements OnModuleInit {
     return { success: true, data: { matched: 1, modified: 1 } };
   }
 
-  async bulkTransferOrders(
-    dto: BulkTransferOrderDto,
-    ctx?: AuditContext,
-  ): Promise<TransferOrderResDto> {
+  async bulkTransferOrders(dto: BulkTransferOrderDto, ctx?: AuditContext): Promise<TransferOrderResDto> {
     // Skip rows already at target so we don't write no-op logs.
     const eligible = await this.orderModel
       .find({ _id: { $in: dto.ids }, factoryId: { $ne: dto.targetFactoryId } })
@@ -2550,10 +2486,7 @@ export class OrderService implements OnModuleInit {
    *  Validate: factory + machineType qua repository, fabric/machine/tool qua
    *  workshop_config (cùng pattern với assertValueAllowed).
    */
-  async bulkAssignOrders(
-    dto: BulkAssignOrderDto,
-    ctx?: AuditContext,
-  ): Promise<BulkAssignOrderResDto> {
+  async bulkAssignOrders(dto: BulkAssignOrderDto, ctx?: AuditContext): Promise<BulkAssignOrderResDto> {
     const factory = await this.factoryRepository.findOne({ _id: dto.factoryId });
     if (!factory) throw new BadRequestException('Factory not found');
 
@@ -2588,10 +2521,7 @@ export class OrderService implements OnModuleInit {
     if (dto.machineNumber) $set.machineNumber = dto.machineNumber;
     if (dto.toolResult) $set.toolResult = dto.toolResult;
 
-    const res = await this.orderModel.updateMany(
-      { _id: { $in: eligibleIds } },
-      { $set },
-    );
+    const res = await this.orderModel.updateMany({ _id: { $in: eligibleIds } }, { $set });
 
     void this.orderLogService.writeMany(
       eligible.map((o) => {
@@ -2749,11 +2679,7 @@ export class OrderService implements OnModuleInit {
                 _id: null,
                 backlog: {
                   $sum: {
-                    $cond: [
-                      { $in: ['$designerStatus', [DesignerStatus.Unassigned, DesignerStatus.Assigned]] },
-                      1,
-                      0,
-                    ],
+                    $cond: [{ $in: ['$designerStatus', [DesignerStatus.Unassigned, DesignerStatus.Assigned]] }, 1, 0],
                   },
                 },
                 assigned: {
@@ -2818,10 +2744,7 @@ export class OrderService implements OnModuleInit {
             },
           ],
           totalAll: [{ $count: 'n' }],
-          totalActive: [
-            { $match: { fulfillmentCompletedAt: { $in: [null, undefined] } } },
-            { $count: 'n' },
-          ],
+          totalActive: [{ $match: { fulfillmentCompletedAt: { $in: [null, undefined] } } }, { $count: 'n' }],
           totalCycle: [
             { $match: { fulfillmentCompletedAt: completedRange } },
             {
@@ -2833,10 +2756,7 @@ export class OrderService implements OnModuleInit {
                     $subtract: [
                       '$fulfillmentCompletedAt',
                       {
-                        $ifNull: [
-                          '$designerFirstStartedAt',
-                          { $ifNull: ['$designerCompletedAt', '$createdAt'] },
-                        ],
+                        $ifNull: ['$designerFirstStartedAt', { $ifNull: ['$designerCompletedAt', '$createdAt'] }],
                       },
                     ],
                   },
@@ -2941,9 +2861,10 @@ export class OrderService implements OnModuleInit {
     }
 
     const cycleRow = agg.totalCycle[0];
-    const completionTimeline = (agg.completionTimeline as Array<{ _id: string; completed: number }>).map(
-      (r) => ({ date: r._id, completed: r.completed }),
-    );
+    const completionTimeline = (agg.completionTimeline as Array<{ _id: string; completed: number }>).map((r) => ({
+      date: r._id,
+      completed: r.completed,
+    }));
 
     return {
       success: true,
@@ -3080,10 +3001,7 @@ export class OrderService implements OnModuleInit {
       } else if (printView) {
         match.factoryId = fulfillmentFactoryId;
       } else {
-        match.$or = [
-          { factoryId: fulfillmentFactoryId },
-          { originalFactoryId: fulfillmentFactoryId },
-        ];
+        match.$or = [{ factoryId: fulfillmentFactoryId }, { originalFactoryId: fulfillmentFactoryId }];
       }
     }
     if (dto.createdFrom || dto.createdTo) {
@@ -3147,15 +3065,15 @@ export class OrderService implements OnModuleInit {
     ]);
 
     // One bulk fetch for factory names — both endpoints of every flow.
-    const factoryIds = Array.from(
-      new Set(flowRows.flatMap((f) => [f._id.from, f._id.to]).filter(Boolean)),
-    );
+    const factoryIds = Array.from(new Set(flowRows.flatMap((f) => [f._id.from, f._id.to]).filter(Boolean)));
     const factoryDocs = factoryIds.length
-      ? await (this.orderModel.db.collection('factories') as unknown as {
-          find: (q: Record<string, unknown>) => {
-            toArray: () => Promise<Array<{ _id: unknown; name: string; shortName?: string }>>;
-          };
-        })
+      ? await (
+          this.orderModel.db.collection('factories') as unknown as {
+            find: (q: Record<string, unknown>) => {
+              toArray: () => Promise<Array<{ _id: unknown; name: string; shortName?: string }>>;
+            };
+          }
+        )
           .find({ _id: { $in: factoryIds } })
           .toArray()
       : [];
@@ -3329,16 +3247,28 @@ export class OrderService implements OnModuleInit {
         $project: {
           _id: 1,
           productCount: {
-            $size: { $filter: { input: '$types', as: 't', cond: { $and: [{ $ne: ['$$t', null] }, { $ne: ['$$t', ''] }] } } },
+            $size: {
+              $filter: { input: '$types', as: 't', cond: { $and: [{ $ne: ['$$t', null] }, { $ne: ['$$t', ''] }] } },
+            },
           },
           fabricCount: {
-            $size: { $filter: { input: '$fabrics', as: 'f', cond: { $and: [{ $ne: ['$$f', null] }, { $ne: ['$$f', ''] }] } } },
+            $size: {
+              $filter: { input: '$fabrics', as: 'f', cond: { $and: [{ $ne: ['$$f', null] }, { $ne: ['$$f', ''] }] } },
+            },
           },
           machineCount: {
-            $size: { $filter: { input: '$machines', as: 'm', cond: { $and: [{ $ne: ['$$m', null] }, { $ne: ['$$m', ''] }] } } },
+            $size: {
+              $filter: { input: '$machines', as: 'm', cond: { $and: [{ $ne: ['$$m', null] }, { $ne: ['$$m', ''] }] } },
+            },
           },
           actualMachineCount: {
-            $size: { $filter: { input: '$actualMachines', as: 'a', cond: { $and: [{ $ne: ['$$a', null] }, { $ne: ['$$a', ''] }] } } },
+            $size: {
+              $filter: {
+                input: '$actualMachines',
+                as: 'a',
+                cond: { $and: [{ $ne: ['$$a', null] }, { $ne: ['$$a', ''] }] },
+              },
+            },
           },
           withToolCount: 1,
           printedCount: 1,
@@ -3387,14 +3317,16 @@ export class OrderService implements OnModuleInit {
     ]);
     // Resolve fabric + tool codes → names. Product type + size are raw strings.
     const fabricMetaMap = new Map<string, string>(
-      (await this.workshopConfigRepository.findAll({ category: WorkshopConfigCategory.FabricType })).map(
-        (d) => [d.code, d.name],
-      ),
+      (await this.workshopConfigRepository.findAll({ category: WorkshopConfigCategory.FabricType })).map((d) => [
+        d.code,
+        d.name,
+      ]),
     );
     const toolMetaMap = new Map<string, string>(
-      (await this.workshopConfigRepository.findAll({ category: WorkshopConfigCategory.ToolResult })).map(
-        (d) => [d.code, d.name],
-      ),
+      (await this.workshopConfigRepository.findAll({ category: WorkshopConfigCategory.ToolResult })).map((d) => [
+        d.code,
+        d.name,
+      ]),
     );
     const pushBd = (
       rows: BreakdownRow[],
@@ -3441,10 +3373,7 @@ export class OrderService implements OnModuleInit {
     } else if (dto.printStage === 'printing') {
       scopeMatch.printStatus = { $exists: true, $nin: [null, '', ...PRINTED_MACHINE_CODES] };
     } else if (dto.printStage === 'not-printed') {
-      const printNotClause = [
-        { printStatus: { $exists: false } },
-        { printStatus: { $in: [null, ''] } },
-      ];
+      const printNotClause = [{ printStatus: { $exists: false } }, { printStatus: { $in: [null, ''] } }];
       if (scopeMatch.$or) {
         scopeMatch.$and = [{ $or: scopeMatch.$or }, { $or: printNotClause }];
         delete scopeMatch.$or;
@@ -3468,15 +3397,7 @@ export class OrderService implements OnModuleInit {
     };
 
     type OptionRow = { _id: string; count: number };
-    const [
-      typeRows,
-      fabricRows,
-      toolRows,
-      machineRows,
-      actualMachineRows,
-      toolNoteRows,
-      userRows,
-    ] = await Promise.all([
+    const [typeRows, fabricRows, toolRows, machineRows, actualMachineRows, toolNoteRows, userRows] = await Promise.all([
       this.orderModel.aggregate<OptionRow>([
         { $match: { ...buildFacetMatch('type'), type: { $exists: true, $ne: null, $nin: [''] } } },
         { $group: { _id: '$type', count: { $sum: 1 } } },
@@ -3549,20 +3470,19 @@ export class OrderService implements OnModuleInit {
     // Resolve machineTypeId → name via the machineTypes collection.
     const machineIds = machineRows.map((r) => r._id);
     const machineDocs = machineIds.length
-      ? await (this.orderModel.db.collection('machineTypes') as unknown as {
-          find: (q: Record<string, unknown>) => {
-            toArray: () => Promise<Array<{ _id: unknown; name: string; shortName?: string }>>;
-          };
-        })
+      ? await (
+          this.orderModel.db.collection('machineTypes') as unknown as {
+            find: (q: Record<string, unknown>) => {
+              toArray: () => Promise<Array<{ _id: unknown; name: string; shortName?: string }>>;
+            };
+          }
+        )
           .find({ _id: { $in: machineIds } })
           .toArray()
       : [];
     const machineNameMap = new Map<string, string>();
     for (const m of machineDocs) {
-      machineNameMap.set(
-        String(m._id),
-        m.shortName ? `${m.shortName} · ${m.name}` : m.name,
-      );
+      machineNameMap.set(String(m._id), m.shortName ? `${m.shortName} · ${m.name}` : m.name);
     }
 
     // Resolve fabric/tool codes → human-readable names.
@@ -3703,8 +3623,7 @@ export class OrderService implements OnModuleInit {
     const toolHasCodes = await this.resolveToolHasCodes();
     // Đơn đã hủy KHÔNG tham gia bất kỳ facet count nào (theo yêu cầu) — trừ khi
     // user bật toggle "Đã hủy" (dto.cancelled=true) để xem riêng phân bố đơn hủy.
-    const excludeCancelled: Record<string, unknown> =
-      dto.cancelled === true ? {} : { cancelledAt: { $exists: false } };
+    const excludeCancelled: Record<string, unknown> = dto.cancelled === true ? {} : { cancelledAt: { $exists: false } };
     const aggregateFacet = async (excludeKey: FacetKey, field: FacetKey) => {
       const sanitizedDto = { ...dto, [excludeKey]: undefined } as GetProductionOrdersDto;
       const baseFilter = this.buildOrderListFilter(
@@ -3717,12 +3636,7 @@ export class OrderService implements OnModuleInit {
       );
       // Facet narrow theo trạng thái stage đang chọn (bảng phẳng trang "In").
       if (dto.fulfillmentStatus) {
-        this.applyFulfillmentStatusFilter(
-          baseFilter,
-          dto.fulfillmentStatus,
-          fulfillmentStage,
-          assigneeCode,
-        );
+        this.applyFulfillmentStatusFilter(baseFilter, dto.fulfillmentStatus, fulfillmentStage, assigneeCode);
       }
       const facetMatch = {
         ...baseFilter,
@@ -3758,11 +3672,7 @@ export class OrderService implements OnModuleInit {
     const toolResultNoteNoneCount = await (async () => {
       const sanitizedDto = { ...dto, toolResultNote: undefined } as GetProductionOrdersDto;
       const baseFilter = this.buildOrderListFilter(sanitizedDto, roleName, assigneeCode);
-      const noneClauses = [
-        { toolResultNote: { $exists: false } },
-        { toolResultNote: null },
-        { toolResultNote: '' },
-      ];
+      const noneClauses = [{ toolResultNote: { $exists: false } }, { toolResultNote: null }, { toolResultNote: '' }];
       let noneMatch: Record<string, unknown>;
       if (Array.isArray(baseFilter.$or)) {
         // Đã có $or từ filter khác — chuyển sang $and để giữ semantics AND.
@@ -3777,9 +3687,7 @@ export class OrderService implements OnModuleInit {
     })();
 
     const nameMap = async (category: WorkshopConfigCategory) =>
-      new Map<string, string>(
-        (await this.workshopConfigRepository.findAll({ category })).map((d) => [d.code, d.name]),
-      );
+      new Map<string, string>((await this.workshopConfigRepository.findAll({ category })).map((d) => [d.code, d.name]));
     const [
       printStatusMap,
       toolResultNoteMap,
@@ -3802,13 +3710,9 @@ export class OrderService implements OnModuleInit {
     // có trong facet rows). Userid không tìm thấy → fallback last 4 chars.
     const assigneeUserIds = assigneeRows.map((r) => r._id).filter(Boolean);
     const assigneeUsers = assigneeUserIds.length
-      ? await this.userModel
-          .find({ _id: { $in: assigneeUserIds } }, { _id: 1, fullName: 1 })
-          .lean()
+      ? await this.userModel.find({ _id: { $in: assigneeUserIds } }, { _id: 1, fullName: 1 }).lean()
       : [];
-    const assigneeMap = new Map<string, string>(
-      assigneeUsers.map((u) => [String(u._id), u.fullName]),
-    );
+    const assigneeMap = new Map<string, string>(assigneeUsers.map((u) => [String(u._id), u.fullName]));
 
     // Designer status — i18n labels VN.
     const DESIGNER_STATUS_LABELS: Record<string, string> = {
@@ -4010,7 +3914,13 @@ export class OrderService implements OnModuleInit {
             $cond: [
               {
                 $and: [
-                  { $or: [{ $eq: ['$fabricType', null] }, { $eq: ['$fabricType', ''] }, { $eq: [{ $type: '$fabricType' }, 'missing'] }] },
+                  {
+                    $or: [
+                      { $eq: ['$fabricType', null] },
+                      { $eq: ['$fabricType', ''] },
+                      { $eq: [{ $type: '$fabricType' }, 'missing'] },
+                    ],
+                  },
                   { $ne: [{ $ifNull: ['$pc.fabricType', ''] }, ''] },
                 ],
               },
@@ -4022,7 +3932,13 @@ export class OrderService implements OnModuleInit {
             $cond: [
               {
                 $and: [
-                  { $or: [{ $eq: ['$toolResult', null] }, { $eq: ['$toolResult', ''] }, { $eq: [{ $type: '$toolResult' }, 'missing'] }] },
+                  {
+                    $or: [
+                      { $eq: ['$toolResult', null] },
+                      { $eq: ['$toolResult', ''] },
+                      { $eq: [{ $type: '$toolResult' }, 'missing'] },
+                    ],
+                  },
                   { $ne: [{ $ifNull: ['$pc.toolResult', ''] }, ''] },
                 ],
               },
@@ -4034,7 +3950,13 @@ export class OrderService implements OnModuleInit {
             $cond: [
               {
                 $and: [
-                  { $or: [{ $eq: ['$machineNumber', null] }, { $eq: ['$machineNumber', ''] }, { $eq: [{ $type: '$machineNumber' }, 'missing'] }] },
+                  {
+                    $or: [
+                      { $eq: ['$machineNumber', null] },
+                      { $eq: ['$machineNumber', ''] },
+                      { $eq: [{ $type: '$machineNumber' }, 'missing'] },
+                    ],
+                  },
                   { $ne: [{ $ifNull: ['$pc.machineNumber', ''] }, ''] },
                 ],
               },
@@ -4046,11 +3968,7 @@ export class OrderService implements OnModuleInit {
       },
       {
         $match: {
-          $or: [
-            { setFabric: { $ne: null } },
-            { setTool: { $ne: null } },
-            { setMachineNumber: { $ne: null } },
-          ],
+          $or: [{ setFabric: { $ne: null } }, { setTool: { $ne: null } }, { setMachineNumber: { $ne: null } }],
         },
       },
     ]);
@@ -4104,18 +4022,11 @@ export class OrderService implements OnModuleInit {
     return { ok: true };
   }
 
-  async cancelOrder(
-    id: string,
-    dto: CancelOrderDto,
-    roleName?: RoleType,
-    ctx?: AuditContext,
-  ): Promise<OrderDocument> {
+  async cancelOrder(id: string, dto: CancelOrderDto, roleName?: RoleType, ctx?: AuditContext): Promise<OrderDocument> {
     this.assertOrderAdmin(roleName);
     const order = await this.orderModel.findById(id).lean();
     if (!order) throw new NotFoundException('Order not found');
-    const check = this.canCancelOrder(
-      order as unknown as Parameters<OrderService['canCancelOrder']>[0],
-    );
+    const check = this.canCancelOrder(order as unknown as Parameters<OrderService['canCancelOrder']>[0]);
     if (!check.ok) throw new BadRequestException(check.reason);
 
     const now = new Date();
@@ -4145,19 +4056,12 @@ export class OrderService implements OnModuleInit {
    */
   private assertNotHeld(order: { heldAt?: Date | null }): void {
     if (order?.heldAt) {
-      throw new BadRequestException(
-        'Đơn đang bị giữ — mở lại (bỏ giữ) trước khi thao tác tiếp.',
-      );
+      throw new BadRequestException('Đơn đang bị giữ — mở lại (bỏ giữ) trước khi thao tác tiếp.');
     }
   }
 
   /** Set heldAt + holdReason cho 1 đơn. Chặn giữ 2 lần. */
-  async holdOrder(
-    id: string,
-    dto: HoldOrderDto,
-    _roleName?: RoleType,
-    ctx?: AuditContext,
-  ): Promise<HoldOrderResDto> {
+  async holdOrder(id: string, dto: HoldOrderDto, _roleName?: RoleType, ctx?: AuditContext): Promise<HoldOrderResDto> {
     const before = await this.orderModel.findById(id).lean();
     if (!before) throw new NotFoundException('Order not found');
     if ((before as unknown as { heldAt?: Date | null }).heldAt) {
@@ -4185,11 +4089,7 @@ export class OrderService implements OnModuleInit {
   }
 
   /** Clear heldAt + holdReason (mở lại đơn). */
-  async unholdOrder(
-    id: string,
-    _roleName?: RoleType,
-    ctx?: AuditContext,
-  ): Promise<HoldOrderResDto> {
+  async unholdOrder(id: string, _roleName?: RoleType, ctx?: AuditContext): Promise<HoldOrderResDto> {
     const before = await this.orderModel.findById(id).lean();
     if (!before) throw new NotFoundException('Order not found');
     if (!(before as unknown as { heldAt?: Date | null }).heldAt) {
@@ -4217,11 +4117,7 @@ export class OrderService implements OnModuleInit {
    * Bulk giữ / mở giữ nhiều đơn. `hold=true` chỉ set cho đơn CHƯA giữ và CHƯA
    * hủy; `hold=false` chỉ clear cho đơn ĐANG giữ. `modified` = số đơn thực đổi.
    */
-  async bulkSetHold(
-    dto: BulkHoldOrderDto,
-    _roleName?: RoleType,
-    ctx?: AuditContext,
-  ): Promise<BulkHoldOrderResDto> {
+  async bulkSetHold(dto: BulkHoldOrderDto, _roleName?: RoleType, ctx?: AuditContext): Promise<BulkHoldOrderResDto> {
     const baseFilter = {
       _id: { $in: dto.ids },
       deletedAt: { $exists: false },
@@ -4243,7 +4139,7 @@ export class OrderService implements OnModuleInit {
       action: dto.hold ? 'hold' : 'unhold',
       field: 'heldAt',
       before: dto.hold ? null : 'bulk',
-      after: dto.hold ? (dto.reason ?? '') : null,
+      after: dto.hold ? dto.reason ?? '' : null,
       ctx,
     });
     void this.invalidateListCache();
@@ -4278,8 +4174,8 @@ export class OrderService implements OnModuleInit {
       afterSnapshot.mockupUrl = dto.mockupUrl;
     }
     if (dto.designs) {
-      const prevDesigns = (before as { designsOriginal?: DesignFields; designs?: DesignFields })
-        .designsOriginal ??
+      const prevDesigns =
+        (before as { designsOriginal?: DesignFields; designs?: DesignFields }).designsOriginal ??
         (before as { designs?: DesignFields }).designs ??
         {};
       for (const [k, v] of Object.entries(dto.designs)) {
@@ -4365,12 +4261,10 @@ export class OrderService implements OnModuleInit {
         // → CHẠY LẠI TOÀN CHUỖI từ In. Nếu đơn có designer từng làm → về Thiết kế
         // "Cần làm lại" trước (designer complete → hook Entry A flip In→rework);
         // nếu không → về In "Cần làm lại" luôn.
-        const wasToolCheckHold =
-          b.productionErrorSource === 'tool-check' && b.toolResultNote === 'error';
+        const wasToolCheckHold = b.productionErrorSource === 'tool-check' && b.toolResultNote === 'error';
         if (wasToolCheckHold) {
           patch.productionErrorSource = null; // gỡ marker
-          const hasDesigner =
-            !!b.assignee && (b.designerStatus === DesignerStatus.Done || !!b.designerCompletedAt);
+          const hasDesigner = !!b.assignee && (b.designerStatus === DesignerStatus.Done || !!b.designerCompletedAt);
           patch.currentFulfillmentStage = FulfillmentStage.Print;
           if (hasDesigner) {
             patch.designerStatus = DesignerStatus.Rework;
@@ -4395,11 +4289,10 @@ export class OrderService implements OnModuleInit {
         // orphan ngược (FactoryOverview không đếm nhưng my-tasks lại đếm).
         // Đơn đã được worker chạm vào → giữ stage, worker tiếp tục xử lý.
         const beforeStages =
-          (before as unknown as { fulfillmentStages?: Record<string, { firstStartedAt?: Date }> })
-            .fulfillmentStages || {};
+          (before as unknown as { fulfillmentStages?: Record<string, { firstStartedAt?: Date }> }).fulfillmentStages ||
+          {};
         const anyStageStarted = Object.values(beforeStages).some((s) => !!s?.firstStartedAt);
-        const beforeStage =
-          (before as unknown as { currentFulfillmentStage?: string | null }).currentFulfillmentStage;
+        const beforeStage = (before as unknown as { currentFulfillmentStage?: string | null }).currentFulfillmentStage;
         if (beforeStage && !anyStageStarted) {
           patch.currentFulfillmentStage = null;
           patch.fulfillmentStages = {};
@@ -4412,27 +4305,16 @@ export class OrderService implements OnModuleInit {
     //    đang in-progress/done/rework.
     if (dto.field === 'assignee') {
       const currentDesignerStatus =
-        ((before as unknown as { designerStatus?: DesignerStatus }).designerStatus) ||
-        DesignerStatus.Unassigned;
+        (before as unknown as { designerStatus?: DesignerStatus }).designerStatus || DesignerStatus.Unassigned;
       // Đơn đã soát 'ok' (Note kq Tool 1) → không cho gán designer (chỉ chặn khi
       // GÁN, vẫn cho bỏ chọn). Mirror rule của bulk "Gán design".
-      if (
-        normalized &&
-        (before as unknown as { toolResultNote?: string }).toolResultNote ===
-          READY_FOR_FULFILL_CODE
-      ) {
-        throw new BadRequestException(
-          `Đơn đã 'ok' (Note kq Tool 1) — không cần gán designer.`,
-        );
+      if (normalized && (before as unknown as { toolResultNote?: string }).toolResultNote === READY_FOR_FULFILL_CODE) {
+        throw new BadRequestException(`Đơn đã 'ok' (Note kq Tool 1) — không cần gán designer.`);
       }
       const beforeAssignee = (before as unknown as { assignee?: string }).assignee;
       // Đơn cần làm lại đang có người ôm → không gán cho người khác (chỉ chặn
       // khi GÁN). Rework chưa ai ôm vẫn gán được (mirror bulk "Gán design").
-      if (
-        normalized &&
-        currentDesignerStatus === DesignerStatus.Rework &&
-        beforeAssignee
-      ) {
+      if (normalized && currentDesignerStatus === DesignerStatus.Rework && beforeAssignee) {
         throw new ConflictException(
           `Đơn cần làm lại đang có người ôm — không gán cho người khác. Chỉ gán được đơn chưa có ai ôm.`,
         );
@@ -4479,11 +4361,7 @@ export class OrderService implements OnModuleInit {
           code: normalized,
         });
         const errorSource = (cfg as unknown as { errorSource?: string } | null)?.errorSource;
-        if (
-          errorSource === 'designer' ||
-          errorSource === 'factory' ||
-          errorSource === 'tool-check'
-        ) {
+        if (errorSource === 'designer' || errorSource === 'factory' || errorSource === 'tool-check') {
           patch.productionErrorSource = errorSource;
         }
         // Set toolResultNote='error' + bump counter — signal cho fulfillment.
@@ -4494,12 +4372,10 @@ export class OrderService implements OnModuleInit {
         // lần đầu của cycle hiện tại). Các lần báo lỗi tiếp theo trong cùng
         // cycle KHÔNG reset — cycle mới chỉ sau khi đơn rời log (toolResultNote='ok'
         // hoặc productionError=null) → field bị clear → lần lỗi kế tiếp set lại.
-        const beforeFirstErrorAt =
-          (before as unknown as { productionFirstErrorAt?: Date }).productionFirstErrorAt;
+        const beforeFirstErrorAt = (before as unknown as { productionFirstErrorAt?: Date }).productionFirstErrorAt;
         if (!beforeFirstErrorAt) patch.productionFirstErrorAt = new Date();
         const currentDesignerStatus =
-          ((before as unknown as { designerStatus?: DesignerStatus }).designerStatus) ||
-          DesignerStatus.Unassigned;
+          (before as unknown as { designerStatus?: DesignerStatus }).designerStatus || DesignerStatus.Unassigned;
         // Báo lỗi designer → designerStatus='rework' + rework-back về designer
         // (đơn vào/giữ stage pipeline → tab "Đang chờ quay lại"; xong → "Cần làm lại").
         // Bỏ qua khi designer đang rework (tránh báo trùng) hoặc đang in-progress/
@@ -4547,8 +4423,7 @@ export class OrderService implements OnModuleInit {
     //    nếu user đổi từ 'factory' → 'designer' và task đang done.
     if (dto.field === 'productionErrorSource' && normalized === 'designer') {
       const currentDesignerStatus =
-        ((before as unknown as { designerStatus?: DesignerStatus }).designerStatus) ||
-        DesignerStatus.Unassigned;
+        (before as unknown as { designerStatus?: DesignerStatus }).designerStatus || DesignerStatus.Unassigned;
       if (this.canReworkBackToDesigner(currentDesignerStatus)) {
         patch.designerStatus = DesignerStatus.Rework;
         patch.designerReworkAt = new Date();
@@ -4821,16 +4696,16 @@ export class OrderService implements OnModuleInit {
       const ids = Array.from(new Set(orderIds.map((x) => String(x)).filter(Boolean)));
       if (!ids.length) return;
 
-      const config = await this.systemConfigService.get<DesignerAssignmentConfig>(
-        DESIGNER_ASSIGNMENT_CONFIG_KEY,
-        null,
-      );
+      const config = await this.systemConfigService.get<DesignerAssignmentConfig>(DESIGNER_ASSIGNMENT_CONFIG_KEY, null);
       if (!config?.factories?.length) return;
 
       const byFactory = new Map<string, { designerId: string; weight: number }[]>();
       for (const f of config.factories) {
         if (f?.factoryId && f.designers?.length) {
-          byFactory.set(String(f.factoryId), f.designers.map((d) => ({ designerId: String(d.designerId), weight: d.weight })));
+          byFactory.set(
+            String(f.factoryId),
+            f.designers.map((d) => ({ designerId: String(d.designerId), weight: d.weight })),
+          );
         }
       }
       if (!byFactory.size) return;
@@ -4883,7 +4758,10 @@ export class OrderService implements OnModuleInit {
       for (const [fid, orderList] of groups) {
         const designers = (byFactory.get(fid) || []).filter((d) => validIds.has(d.designerId));
         if (!designers.length) continue;
-        const alloc = this.allocateByWeight(orderList.length, designers.map((d) => d.weight));
+        const alloc = this.allocateByWeight(
+          orderList.length,
+          designers.map((d) => d.weight),
+        );
         let cursor = 0;
         for (let i = 0; i < designers.length; i++) {
           const count = alloc[i];
@@ -4925,11 +4803,7 @@ export class OrderService implements OnModuleInit {
    * Single-order fetch cho detail dialog. Designer (sub) chỉ get được task
    * có `assignee = user._id`. Roles khác (Admin/Leader/...) bypass.
    */
-  async getOrderById(
-    id: string,
-    roleName?: RoleType,
-    userId?: string,
-  ): Promise<{ success: true; data: unknown }> {
+  async getOrderById(id: string, roleName?: RoleType, userId?: string): Promise<{ success: true; data: unknown }> {
     const doc = await this.orderModel
       .findById(id)
       .populate('factory', 'name shortName')
@@ -4985,10 +4859,7 @@ export class OrderService implements OnModuleInit {
     } else if (roleName === RoleType.Fulfillment) {
       const factoryId = (doc as { factoryId?: string }).factoryId;
       const originalFactoryId = (doc as { originalFactoryId?: string }).originalFactoryId;
-      if (
-        !fulfillmentFactoryId ||
-        (factoryId !== fulfillmentFactoryId && originalFactoryId !== fulfillmentFactoryId)
-      ) {
+      if (!fulfillmentFactoryId || (factoryId !== fulfillmentFactoryId && originalFactoryId !== fulfillmentFactoryId)) {
         throw new NotFoundException('Đơn không thuộc xưởng của bạn.');
       }
     }
@@ -5149,10 +5020,7 @@ export class OrderService implements OnModuleInit {
     if (roleName === RoleType.Fulfillment) {
       const factoryId = (doc as { factoryId?: string }).factoryId;
       const originalFactoryId = (doc as { originalFactoryId?: string }).originalFactoryId;
-      if (
-        !fulfillmentFactoryId ||
-        (factoryId !== fulfillmentFactoryId && originalFactoryId !== fulfillmentFactoryId)
-      ) {
+      if (!fulfillmentFactoryId || (factoryId !== fulfillmentFactoryId && originalFactoryId !== fulfillmentFactoryId)) {
         throw new NotFoundException('Đơn không thuộc xưởng của bạn.');
       }
     }
@@ -5168,7 +5036,10 @@ export class OrderService implements OnModuleInit {
       designerFirstStartedAt?: Date;
       designerCompletedAt?: Date;
       currentFulfillmentStage?: FulfillmentStage;
-      fulfillmentStages?: Record<string, { status?: FulfillmentStageStatus; waitingAt?: Date; startedAt?: Date; completedAt?: Date }>;
+      fulfillmentStages?: Record<
+        string,
+        { status?: FulfillmentStageStatus; waitingAt?: Date; startedAt?: Date; completedAt?: Date }
+      >;
       fulfillmentCompletedAt?: Date;
       inProductionAt?: Date;
     };
@@ -5185,7 +5056,8 @@ export class OrderService implements OnModuleInit {
 
     // Chặng đơn đang đứng (0..8). Ưu tiên lỗi soát tool (support-hold) → về chặng 0.
     let currentIndex: number;
-    if (completed) currentIndex = LIFECYCLE_STAGE_KEYS.length; // vượt chặng cuối → tất cả done
+    if (completed)
+      currentIndex = LIFECYCLE_STAGE_KEYS.length; // vượt chặng cuối → tất cả done
     else if (toolError) currentIndex = 0;
     else if (d.currentFulfillmentStage) currentIndex = 2 + FULFILLMENT_STAGE_ORDER[d.currentFulfillmentStage];
     else if (d.designerStatus && d.designerStatus !== DesignerStatus.Unassigned)
@@ -5243,10 +5115,7 @@ export class OrderService implements OnModuleInit {
     const cleanIds = ids.filter((id) => /^[a-f0-9]{24}$/i.test(id)).slice(0, 200);
     if (!cleanIds.length) return [];
     const docs = await this.orderModel
-      .find(
-        { _id: { $in: cleanIds } },
-        { _id: 1, designs: 1, designsStatus: 1 },
-      )
+      .find({ _id: { $in: cleanIds } }, { _id: 1, designs: 1, designsStatus: 1 })
       .lean();
     return docs.map((d) => ({
       _id: String(d._id),
@@ -5255,7 +5124,7 @@ export class OrderService implements OnModuleInit {
     }));
   }
 
-  async getLogs(orderId: string, dto: import('shared').GetOrderLogsDto) {
+  async getLogs(orderId: string, dto: GetOrderLogsDto) {
     const result = await this.orderLogService.listByOrder(orderId, dto);
 
     // Log `assignee` lưu raw userId → resolve sang fullName để FE hiển thị tên
@@ -5268,10 +5137,8 @@ export class OrderService implements OnModuleInit {
       if (typeof log.after === 'string' && log.after) ids.add(log.after);
     }
     if (ids.size > 0) {
-      const users = await this.userModel
-        .find({ _id: { $in: Array.from(ids) } }, { _id: 1, fullName: 1 })
-        .lean();
-      const nameById = new Map(users.map((u) => [String(u._id), u.fullName as string]));
+      const users = await this.userModel.find({ _id: { $in: Array.from(ids) } }, { _id: 1, fullName: 1 }).lean();
+      const nameById = new Map(users.map((u) => [String(u._id), u.fullName]));
       for (const log of result.data as Array<Record<string, unknown>>) {
         if (log.field !== 'assignee') continue;
         if (typeof log.before === 'string' && nameById.has(log.before)) {
@@ -5345,10 +5212,7 @@ export class OrderService implements OnModuleInit {
      * Dedup theo `${designKey}::${sourceUrl}` → 2 đơn cùng design URL chỉ enqueue 1 job.
      * Worker sẽ updateMany cho cả 2 sau khi xử lý xong.
      */
-    const designJobMap = new Map<
-      string,
-      { designKey: string; sourceUrl: string; orderIds: Set<string> }
-    >();
+    const designJobMap = new Map<string, { designKey: string; sourceUrl: string; orderIds: Set<string> }>();
 
     // Ưu tiên gán xưởng theo khách hàng (nếu config bật): map (userSku,userEmail)
     // → factoryId ép, override factory của product config. Đọc 1 lần trước loop.
@@ -5459,10 +5323,7 @@ export class OrderService implements OnModuleInit {
         // xem comment ở khối map product config phía trên, KHÔNG bảo vệ các
         // field này khỏi bị re-import ghi đè, chỉ log lại để truy vết).
         const beforeDoc = await this.orderModel
-          .findOne(
-            { productionId: data.productionId },
-            Object.fromEntries(Object.keys(data).map((k) => [k, 1])),
-          )
+          .findOne({ productionId: data.productionId }, Object.fromEntries(Object.keys(data).map((k) => [k, 1])))
           .lean();
         const existed = !!beforeDoc;
         const upserted = await this.orderModel.findOneAndUpdate(
@@ -5556,11 +5417,9 @@ export class OrderService implements OnModuleInit {
         } satisfies DesignImageJobData,
       }));
       void this.designThumbQueue.addBulk(thumbJobs).catch((err) => {
-        // eslint-disable-next-line no-console
         console.error(`[design-thumb] addBulk failed (${thumbJobs.length} jobs):`, err);
       });
       void this.designPreviewQueue.addBulk(previewJobs).catch((err) => {
-        // eslint-disable-next-line no-console
         console.error(`[design-preview] addBulk failed (${previewJobs.length} jobs):`, err);
       });
     }
@@ -5591,10 +5450,7 @@ export class OrderService implements OnModuleInit {
    * Workshop_config / User không match → skip field đó, log warning, các field
    * khác trong row vẫn update bình thường (không reject cả row).
    */
-  async importRework(
-    dto: ImportReworkOrdersDto,
-    ctx?: AuditContext,
-  ): Promise<ImportReworkOrdersResDto> {
+  async importRework(dto: ImportReworkOrdersDto, ctx?: AuditContext): Promise<ImportReworkOrdersResDto> {
     const skipped: Array<{ row: number; reason: string }> = [];
     let updated = 0;
     let notFound = 0;
@@ -5616,13 +5472,9 @@ export class OrderService implements OnModuleInit {
       }),
       this.userModel.find({}, { fullName: 1 }).lean(),
     ]);
-    const toolResultNoteMap = new Map(
-      toolResultNoteCfgs.map((c) => [normalizeVN(c.name), c.code]),
-    );
+    const toolResultNoteMap = new Map(toolResultNoteCfgs.map((c) => [normalizeVN(c.name), c.code]));
     const errorFileMap = new Map(errorFileCfgs.map((c) => [normalizeVN(c.name), c.code]));
-    const userByName = new Map(
-      allUsers.map((u) => [normalizeVN(u.fullName || ''), String(u._id)]),
-    );
+    const userByName = new Map(allUsers.map((u) => [normalizeVN(u.fullName || ''), String(u._id)]));
 
     for (let i = 0; i < dto.rows.length; i++) {
       const row = dto.rows[i];
@@ -5786,9 +5638,7 @@ export class OrderService implements OnModuleInit {
       }));
 
       await this.telegramNotificationService.notifyImportSummary({
-        triggeredBy: args.ctx?.user
-          ? { email: args.ctx.user.email, fullName: args.ctx.user.fullName }
-          : undefined,
+        triggeredBy: args.ctx?.user ? { email: args.ctx.user.email, fullName: args.ctx.user.fullName } : undefined,
         totals: { imported: args.imported, updated: args.updated, skipped: args.skippedCount },
         byFactory,
         unassignedFactoryCount: args.unassignedFactoryCount,
@@ -5808,14 +5658,9 @@ export class OrderService implements OnModuleInit {
    * để FE confirm. Đếm theo `designerStatus` hiện tại và group đơn đã gán
    * cho ai.
    */
-  async bulkAssignDesignerPreview(
-    dto: BulkAssignDesignerPreviewDto,
-  ): Promise<BulkAssignDesignerPreviewResDto> {
+  async bulkAssignDesignerPreview(dto: BulkAssignDesignerPreviewDto): Promise<BulkAssignDesignerPreviewResDto> {
     const docs = await this.orderModel
-      .find(
-        { _id: { $in: dto.ids } },
-        { _id: 1, productionId: 1, assignee: 1, designerStatus: 1, toolResultNote: 1 },
-      )
+      .find({ _id: { $in: dto.ids } }, { _id: 1, productionId: 1, assignee: 1, designerStatus: 1, toolResultNote: 1 })
       .lean();
 
     const byStatus = {
@@ -5836,8 +5681,7 @@ export class OrderService implements OnModuleInit {
 
     for (const o of docs) {
       const status =
-        ((o as { designerStatus?: DesignerStatus }).designerStatus as DesignerStatus) ||
-        DesignerStatus.Unassigned;
+        ((o as { designerStatus?: DesignerStatus }).designerStatus as DesignerStatus) || DesignerStatus.Unassigned;
       const note = (o as { toolResultNote?: string }).toolResultNote;
       const assigneeVal = (o as { assignee?: string }).assignee;
       const hasAssignee = !!assigneeVal;
@@ -5887,9 +5731,7 @@ export class OrderService implements OnModuleInit {
     const userIds = [...assigneeCounts.keys()];
     const nameMap = new Map<string, string>();
     if (userIds.length > 0) {
-      const users = await this.userModel
-        .find({ _id: { $in: userIds } }, { _id: 1, fullName: 1 })
-        .lean();
+      const users = await this.userModel.find({ _id: { $in: userIds } }, { _id: 1, fullName: 1 }).lean();
       for (const u of users) {
         nameMap.set(String(u._id), u.fullName);
       }
@@ -5947,8 +5789,7 @@ export class OrderService implements OnModuleInit {
       const orderId = String(o._id);
       const productionId = String((o as { productionId?: string }).productionId || orderId);
       const status =
-        ((o as { designerStatus?: DesignerStatus }).designerStatus as DesignerStatus) ||
-        DesignerStatus.Unassigned;
+        ((o as { designerStatus?: DesignerStatus }).designerStatus as DesignerStatus) || DesignerStatus.Unassigned;
       const currentAssignee = (o as { assignee?: string }).assignee;
 
       const note = (o as { toolResultNote?: string }).toolResultNote;
@@ -5988,11 +5829,7 @@ export class OrderService implements OnModuleInit {
         });
         continue;
       }
-      if (
-        currentAssignee &&
-        currentAssignee !== dto.userId &&
-        !dto.reassignOthers
-      ) {
+      if (currentAssignee && currentAssignee !== dto.userId && !dto.reassignOthers) {
         skipped.push({
           orderId,
           productionId,
@@ -6012,10 +5849,7 @@ export class OrderService implements OnModuleInit {
         designerRejectedReason: null,
         designerRejectedAt: null,
       };
-      const result = await this.orderModel.updateMany(
-        { _id: { $in: eligibleIds } },
-        { $set: patch },
-      );
+      const result = await this.orderModel.updateMany({ _id: { $in: eligibleIds } }, { $set: patch });
       modified = result.modifiedCount || 0;
 
       void this.orderLogService.writeMany(
@@ -6075,8 +5909,7 @@ export class OrderService implements OnModuleInit {
       const orderId = String(o._id);
       const productionId = String((o as { productionId?: string }).productionId || orderId);
       const status =
-        ((o as { designerStatus?: DesignerStatus }).designerStatus as DesignerStatus) ||
-        DesignerStatus.Unassigned;
+        ((o as { designerStatus?: DesignerStatus }).designerStatus as DesignerStatus) || DesignerStatus.Unassigned;
       const currentAssignee = (o as { assignee?: string }).assignee;
       const note = (o as { toolResultNote?: string }).toolResultNote;
 
@@ -6209,11 +6042,7 @@ export class OrderService implements OnModuleInit {
                         { $eq: ['$toolResultNote', 'ok'] },
                         '__skip_unassigned__',
                         {
-                          $cond: [
-                            { $in: ['$toolResult', toolHasCodes] },
-                            '__unassigned_withtool__',
-                            'unassigned',
-                          ],
+                          $cond: [{ $in: ['$toolResult', toolHasCodes] }, '__unassigned_withtool__', 'unassigned'],
                         },
                       ],
                     },
@@ -6236,7 +6065,7 @@ export class OrderService implements OnModuleInit {
         total: 0,
       };
       for (const r of agg) {
-        const k = (r._id || 'unassigned') as string;
+        const k = r._id || 'unassigned';
         if (k === '__skip_unassigned__') continue; // đơn 'ok' chưa gán — bỏ hẳn
         if (k === '__unassigned_withtool__') {
           out.unassignedAll += r.count; // N: chỉ vào tổng chưa gán
@@ -6268,10 +6097,7 @@ export class OrderService implements OnModuleInit {
       return out;
     };
 
-    const [scoped, overall] = await Promise.all([
-      countByStatus(scopedFilter),
-      countByStatus(overallFilter),
-    ]);
+    const [scoped, overall] = await Promise.all([countByStatus(scopedFilter), countByStatus(overallFilter)]);
 
     // Per-designer matrix — group (assignee, designerStatus) trong scope filter.
     const matrixAgg = await this.orderModel.aggregate<{
@@ -6298,11 +6124,7 @@ export class OrderService implements OnModuleInit {
                         { $eq: ['$toolResultNote', 'ok'] },
                         '__skip_unassigned__',
                         {
-                          $cond: [
-                            { $in: ['$toolResult', toolHasCodes] },
-                            '__unassigned_withtool__',
-                            'unassigned',
-                          ],
+                          $cond: [{ $in: ['$toolResult', toolHasCodes] }, '__unassigned_withtool__', 'unassigned'],
                         },
                       ],
                     },
@@ -6331,8 +6153,7 @@ export class OrderService implements OnModuleInit {
     let hasUnassigned = false;
     for (const r of matrixAgg) {
       // Matrix chỉ hiện "không tool" (M); ok + có-tool chưa gán không lên matrix.
-      if (r._id.status === '__skip_unassigned__' || r._id.status === '__unassigned_withtool__')
-        continue;
+      if (r._id.status === '__skip_unassigned__' || r._id.status === '__unassigned_withtool__') continue;
       // Loại đơn của designer đã tắt khỏi matrix (chỉ thống kê người active).
       if (r._id.uid) {
         if (activeIds.has(r._id.uid)) userIds.add(r._id.uid);
@@ -6354,10 +6175,7 @@ export class OrderService implements OnModuleInit {
       total: 0,
     });
 
-    const rows = new Map<
-      string,
-      { userId: string; fullName: string; email?: string; counts: DesignerStatusCounts }
-    >();
+    const rows = new Map<string, { userId: string; fullName: string; email?: string; counts: DesignerStatusCounts }>();
     for (const uid of userIds) {
       const u = userMap.get(uid);
       rows.set(uid, {
@@ -6418,16 +6236,8 @@ export class OrderService implements OnModuleInit {
    * backlog cần thấy đơn cũ). Trả cây designer → days[] với counts per status.
    * FE modal hiện counts; click ngày → drill bảng (assignee + date) để xem task.
    */
-  async getDesignerBacklog(
-    roleName?: RoleType,
-    fulfillmentFactoryId?: string,
-  ): Promise<DesignerBacklogResDto> {
-    const base = this.buildVisibilityFilter(
-      roleName,
-      {} as GetProductionOrdersDto,
-      undefined,
-      fulfillmentFactoryId,
-    );
+  async getDesignerBacklog(roleName?: RoleType, fulfillmentFactoryId?: string): Promise<DesignerBacklogResDto> {
+    const base = this.buildVisibilityFilter(roleName, {} as GetProductionOrdersDto, undefined, fulfillmentFactoryId);
     const match: Record<string, unknown> = {
       ...base,
       cancelledAt: { $exists: false },
@@ -6517,8 +6327,8 @@ export class OrderService implements OnModuleInit {
         // Cũ nhất (age lớn) lên đầu; __nodate__ (age -1) đẩy cuối.
         .sort((a, b) => b.ageDays - a.ageDays);
       const realDays = days.filter((d) => d.day !== '__nodate__');
-      const oldestDay = realDays.length > 0 ? realDays[0]!.day : null;
-      const oldestAgeDays = oldestDay ? realDays[0]!.ageDays : -1;
+      const oldestDay = realDays.length > 0 ? realDays[0].day : null;
+      const oldestAgeDays = oldestDay ? realDays[0].ageDays : -1;
       if (oldestDay && (!globalOldest || oldestDay < globalOldest)) globalOldest = oldestDay;
       return {
         userId: row.userId,
@@ -6610,8 +6420,7 @@ export class OrderService implements OnModuleInit {
       incProductionErrorCount = true;
       // Lỗi MỚI → gỡ dấu "đã hoàn thành lỗi" của Admin để đơn hiện lại ở Cần xử lý.
       patch.errorResolvedAt = null;
-      const beforeFirstErrorAt =
-        (before as unknown as { productionFirstErrorAt?: Date }).productionFirstErrorAt;
+      const beforeFirstErrorAt = (before as unknown as { productionFirstErrorAt?: Date }).productionFirstErrorAt;
       if (!beforeFirstErrorAt) patch.productionFirstErrorAt = new Date();
     } else {
       // Clear lỗi → đơn rời nhật ký bù lỗi.
@@ -6623,8 +6432,7 @@ export class OrderService implements OnModuleInit {
     let reworkBackTimelineEntry: FulfillmentTimelineEntry | null = null;
     if (finalSource === 'designer') {
       const currentDesignerStatus =
-        ((before as unknown as { designerStatus?: DesignerStatus }).designerStatus) ||
-        DesignerStatus.Unassigned;
+        (before as unknown as { designerStatus?: DesignerStatus }).designerStatus || DesignerStatus.Unassigned;
       if (this.canReworkBackToDesigner(currentDesignerStatus)) {
         patch.designerStatus = DesignerStatus.Rework;
         patch.designerReworkAt = new Date();
@@ -6654,12 +6462,7 @@ export class OrderService implements OnModuleInit {
       dto.target &&
       FULFILLMENT_STAGES.includes(dto.target as FulfillmentStage)
     ) {
-      const rb = this.buildFulfillmentReworkBack(
-        before,
-        dto.target as FulfillmentStage,
-        dto.note ?? null,
-        ctx,
-      );
+      const rb = this.buildFulfillmentReworkBack(before, dto.target as FulfillmentStage, dto.note ?? null, ctx);
       if (rb) {
         Object.assign(patch, rb.set);
         reworkBackTimelineEntry = rb.timelineEntry;
@@ -6746,14 +6549,7 @@ export class OrderService implements OnModuleInit {
     // Tab theo góc nhìn chặng của viewer (Cần xử lý / Đã xong) + khóa xưởng cho
     // Fulfillment. Designer lọc theo assignee (task của mình); các role khác FE
     // gate nút thao tác.
-    this.applyErrorLogViewFilter(
-      filter,
-      tab,
-      roleName,
-      fulfillmentStage,
-      fulfillmentFactoryId,
-      assigneeUserId,
-    );
+    this.applyErrorLogViewFilter(filter, tab, roleName, fulfillmentStage, fulfillmentFactoryId, assigneeUserId);
 
     // Tab "Cần xử lý": ẩn đơn Admin đã "Đánh dấu hoàn thành lỗi" (mọi role).
     // `{errorResolvedAt: null}` khớp cả field thiếu lẫn null.
@@ -6808,9 +6604,7 @@ export class OrderService implements OnModuleInit {
       };
     }
     if (dto.productionErrorSource) {
-      const sources = dto.productionErrorSource
-        .split(',')
-        .filter((s) => s === 'designer' || s === 'factory');
+      const sources = dto.productionErrorSource.split(',').filter((s) => s === 'designer' || s === 'factory');
       if (sources.length) filter.productionErrorSource = { $in: sources };
     }
     if (dto.factoryId && roleName !== RoleType.Fulfillment) {
@@ -6870,8 +6664,7 @@ export class OrderService implements OnModuleInit {
     const skip = limit * ((page || 1) - 1);
 
     // Cần xử lý: lỗi cũ nhất trước. Đã xong: mới xử lý xong lên đầu.
-    const sort: Record<string, 1 | -1> =
-      tab === 'done' ? { updatedAt: -1 } : { productionFirstErrorAt: 1 };
+    const sort: Record<string, 1 | -1> = tab === 'done' ? { updatedAt: -1 } : { productionFirstErrorAt: 1 };
 
     const [pageRes, urgencyAgg] = await Promise.all([
       this.orderRepository.findAllAndCount(filter, {
@@ -6951,9 +6744,7 @@ export class OrderService implements OnModuleInit {
     }
 
     // 2) Quét order — chỉ những đơn chưa có `designerStatus` (đảm bảo idempotent).
-    const orders = await this.orderModel
-      .find({ designerStatus: { $exists: false } })
-      .lean();
+    const orders = await this.orderModel.find({ designerStatus: { $exists: false } }).lean();
 
     let updated = 0;
     let skipped = 0;
@@ -6978,44 +6769,32 @@ export class OrderService implements OnModuleInit {
       const patch: Record<string, unknown> = { designerStatus: nextStatus };
 
       // Look up logs once per order (N+1 — OK cho one-shot backfill).
-      const logs = await this.orderLogRepository.findAll(
-        { orderId },
-        { sort: { createdAt: 1 } },
-      );
+      const logs = await this.orderLogRepository.findAll({ orderId }, { sort: { createdAt: 1 } });
 
-      const assignLog = logs.find(
-        (l) => l.field === 'assignee' && !!l.after,
-      );
+      const assignLog = logs.find((l) => l.field === 'assignee' && !!l.after);
       const completeLog = [...logs]
         .reverse()
         .find((l) => l.field === 'toolResultNote' && l.after === READY_FOR_FULFILL_CODE);
-      const reworkLog = [...logs]
-        .reverse()
-        .find((l) => l.field === 'productionError' && !!l.after);
+      const reworkLog = [...logs].reverse().find((l) => l.field === 'productionError' && !!l.after);
 
       const createdAt = (o as { createdAt?: Date }).createdAt;
       const updatedAt = (o as { updatedAt?: Date }).updatedAt;
 
       if (nextStatus !== DesignerStatus.Unassigned) {
-        patch.designerAssignedAt =
-          (assignLog as { createdAt?: Date } | undefined)?.createdAt ?? createdAt;
+        patch.designerAssignedAt = (assignLog as { createdAt?: Date } | undefined)?.createdAt ?? createdAt;
       }
       if (nextStatus === DesignerStatus.Done || nextStatus === DesignerStatus.Rework) {
-        patch.designerCompletedAt =
-          (completeLog as { createdAt?: Date } | undefined)?.createdAt ?? updatedAt;
+        patch.designerCompletedAt = (completeLog as { createdAt?: Date } | undefined)?.createdAt ?? updatedAt;
         const assignedAt = patch.designerAssignedAt as Date | undefined;
         const completedAt = patch.designerCompletedAt as Date | undefined;
         if (assignedAt && completedAt && completedAt.getTime() > assignedAt.getTime()) {
-          patch.designerStartedAt = new Date(
-            assignedAt.getTime() + (completedAt.getTime() - assignedAt.getTime()) / 2,
-          );
+          patch.designerStartedAt = new Date(assignedAt.getTime() + (completedAt.getTime() - assignedAt.getTime()) / 2);
         } else {
           patch.designerStartedAt = assignedAt;
         }
       }
       if (nextStatus === DesignerStatus.Rework) {
-        patch.designerReworkAt =
-          (reworkLog as { createdAt?: Date } | undefined)?.createdAt ?? updatedAt;
+        patch.designerReworkAt = (reworkLog as { createdAt?: Date } | undefined)?.createdAt ?? updatedAt;
         patch.designerReworkCount = 1;
       }
 
@@ -7025,9 +6804,7 @@ export class OrderService implements OnModuleInit {
       } catch (err) {
         skipped++;
         this.logger.info({
-          message: `[backfill-designer][WARN] ${orderId} failed: ${
-            (err as Error).message
-          }`,
+          message: `[backfill-designer][WARN] ${orderId} failed: ${(err as Error).message}`,
         });
       }
     }
@@ -7130,12 +6907,8 @@ export class OrderService implements OnModuleInit {
       : [];
 
     // Lookup factory + machine names (1 query mỗi loại).
-    const factoryIds = Array.from(
-      new Set(orders.map((o) => o.factoryId).filter((x): x is string => !!x)),
-    );
-    const machineIds = Array.from(
-      new Set(orders.map((o) => o.machineTypeId).filter((x): x is string => !!x)),
-    );
+    const factoryIds = Array.from(new Set(orders.map((o) => o.factoryId).filter((x): x is string => !!x)));
+    const machineIds = Array.from(new Set(orders.map((o) => o.machineTypeId).filter((x): x is string => !!x)));
     const [factoriesRaw, machinesRaw] = await Promise.all([
       factoryIds.length
         ? this.factoryRepository.findAll({ _id: { $in: factoryIds } } as Record<string, unknown>)
@@ -7144,12 +6917,8 @@ export class OrderService implements OnModuleInit {
         ? this.machineTypeRepository.findAll({ _id: { $in: machineIds } } as Record<string, unknown>)
         : Promise.resolve([] as Array<{ _id: unknown; name?: string; shortName?: string }>),
     ]);
-    const factoryNameById = new Map(
-      factoriesRaw.map((f) => [String(f._id), f.shortName || f.name || '—']),
-    );
-    const machineNameById = new Map(
-      machinesRaw.map((m) => [String(m._id), m.shortName || m.name || '—']),
-    );
+    const factoryNameById = new Map(factoriesRaw.map((f) => [String(f._id), f.shortName || f.name || '—']));
+    const machineNameById = new Map(machinesRaw.map((m) => [String(m._id), m.shortName || m.name || '—']));
 
     const ordersByProductionId = new Map(orders.map((o) => [o.productionId, o]));
     const matched: CuttingFileMatched[] = [];
@@ -7174,9 +6943,7 @@ export class OrderService implements OnModuleInit {
         factoryId: order.factoryId,
         factoryName: order.factoryId ? factoryNameById.get(order.factoryId) : undefined,
         machineTypeId: order.machineTypeId,
-        machineTypeName: order.machineTypeId
-          ? machineNameById.get(order.machineTypeId)
-          : undefined,
+        machineTypeName: order.machineTypeId ? machineNameById.get(order.machineTypeId) : undefined,
         existingCuttingFileUrl: order.cuttingFileUrl,
         existingCuttingFileName: order.cuttingFileName,
       });
@@ -7191,20 +6958,16 @@ export class OrderService implements OnModuleInit {
       const mk = m.machineTypeId ?? '__none';
       byMachineMap.set(mk, (byMachineMap.get(mk) ?? 0) + 1);
     }
-    const byFactory: CuttingFileBreakdownRow[] = Array.from(byFactoryMap.entries()).map(
-      ([id, count]) => ({
-        id: id === '__none' ? null : id,
-        name: id === '__none' ? 'Chưa gán xưởng' : factoryNameById.get(id) ?? '—',
-        count,
-      }),
-    );
-    const byMachineType: CuttingFileBreakdownRow[] = Array.from(byMachineMap.entries()).map(
-      ([id, count]) => ({
-        id: id === '__none' ? null : id,
-        name: id === '__none' ? 'Chưa gán máy' : machineNameById.get(id) ?? '—',
-        count,
-      }),
-    );
+    const byFactory: CuttingFileBreakdownRow[] = Array.from(byFactoryMap.entries()).map(([id, count]) => ({
+      id: id === '__none' ? null : id,
+      name: id === '__none' ? 'Chưa gán xưởng' : factoryNameById.get(id) ?? '—',
+      count,
+    }));
+    const byMachineType: CuttingFileBreakdownRow[] = Array.from(byMachineMap.entries()).map(([id, count]) => ({
+      id: id === '__none' ? null : id,
+      name: id === '__none' ? 'Chưa gán máy' : machineNameById.get(id) ?? '—',
+      count,
+    }));
     byFactory.sort((a, b) => b.count - a.count);
     byMachineType.sort((a, b) => b.count - a.count);
 
@@ -7229,10 +6992,7 @@ export class OrderService implements OnModuleInit {
     };
   }
 
-  async applyCuttingFiles(
-    dto: ApplyCuttingFilesDto,
-    ctx?: AuditContext,
-  ): Promise<ApplyCuttingFilesResDto> {
+  async applyCuttingFiles(dto: ApplyCuttingFilesDto, ctx?: AuditContext): Promise<ApplyCuttingFilesResDto> {
     if (!dto.mappings?.length) {
       throw new BadRequestException('Danh sách mapping rỗng');
     }
@@ -7241,9 +7001,7 @@ export class OrderService implements OnModuleInit {
     // hoặc hot-reload chưa pickup), Mongoose strict mode sẽ silently strip $set
     // → bulkWrite "thành công" nhưng DB không có gì. Throw rõ ràng thay vì im lặng.
     if (!this.orderModel.schema.path('cuttingFileUrl') || !this.orderModel.schema.path('cuttingFileName')) {
-      throw new BadRequestException(
-        'Schema chưa có cuttingFileUrl/cuttingFileName — restart BE để pickup entity mới.',
-      );
+      throw new BadRequestException('Schema chưa có cuttingFileUrl/cuttingFileName — restart BE để pickup entity mới.');
     }
 
     // Load current rows để: (1) bỏ qua đơn không tồn tại; (2) check overwrite
@@ -7304,9 +7062,10 @@ export class OrderService implements OnModuleInit {
     // Defensive: nếu modifiedCount < số op, log để debug. Lý do phổ biến:
     //   - filter `_id` không match (vd orderId không tồn tại trong DB)
     //   - $set giá trị giống hệt (Mongo skip update)
-    const modified = (writeRes as { modifiedCount?: number; nModified?: number }).modifiedCount
-      ?? (writeRes as { nModified?: number }).nModified
-      ?? 0;
+    const modified =
+      (writeRes as { modifiedCount?: number; nModified?: number }).modifiedCount ??
+      (writeRes as { nModified?: number }).nModified ??
+      0;
     if (modified !== toUpdate.length) {
       this.logger.warn({
         message: JSON.stringify({

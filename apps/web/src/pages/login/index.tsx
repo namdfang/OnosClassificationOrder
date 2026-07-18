@@ -1,16 +1,18 @@
 import React, { useState } from 'react';
-import { useNavigate } from 'react-router-dom';
-import { zodResolver } from '@hookform/resolvers/zod';
 import { useForm } from 'react-hook-form';
-import { z } from 'zod';
+import { useNavigate } from 'react-router-dom';
 import { Eye, EyeOff, Lock, Mail } from 'lucide-react';
 import { toast } from 'sonner';
+import { z } from 'zod';
+import { zodResolver } from '@hookform/resolvers/zod';
 
-import { Button } from '@/components/ui/button';
-import { Input } from '@/components/ui/input';
-import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from '@/components/ui/form';
 import { Spinner } from '@/components/common/Spinner';
+import { Button } from '@/components/ui/button';
+import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from '@/components/ui/form';
+import { Input } from '@/components/ui/input';
+
 import logoUrl from '@/assets/images/logo.png';
+
 import { PATHS } from '../../constants/paths';
 import { RepositoryRemote } from '../../services';
 import { useAuthStore } from '../../store/authStore';
@@ -146,9 +148,7 @@ function Login() {
           </Form>
         </div>
 
-        <p className="text-center text-xs text-muted-foreground mt-6">
-          Protected workspace — authorized access only
-        </p>
+        <p className="text-center text-xs text-muted-foreground mt-6">Protected workspace — authorized access only</p>
       </div>
     </div>
   );

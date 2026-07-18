@@ -1,19 +1,14 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import { Status } from 'shared';
 
-import { Button } from '@/components/ui/button';
-import {
-  Dialog,
-  DialogContent,
-  DialogFooter,
-  DialogHeader,
-  DialogTitle,
-} from '@/components/ui/dialog';
-import { Label } from '@/components/ui/label';
-import { Textarea } from '@/components/ui/textarea';
-import { Spinner } from '@/components/common/Spinner';
 import { useAuthStore } from '@/store/authStore';
 import { useDesignerTeamStore } from '@/store/designerTeamStore';
+
+import { Spinner } from '@/components/common/Spinner';
+import { Button } from '@/components/ui/button';
+import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
+import { Label } from '@/components/ui/label';
+import { Textarea } from '@/components/ui/textarea';
 
 interface Props {
   open: boolean;
@@ -73,8 +68,7 @@ export function RejectModal({ open, productionId, onConfirm, onClose }: Props) {
         </DialogHeader>
         <p className="text-xs text-muted-foreground">
           Báo file <code className="font-mono">{productionId}</code> không làm được và{' '}
-          <strong>bàn giao cho một designer khác</strong> nhận thay. Đơn sẽ chuyển thẳng sang người
-          được chọn.
+          <strong>bàn giao cho một designer khác</strong> nhận thay. Đơn sẽ chuyển thẳng sang người được chọn.
         </p>
 
         <div className="space-y-2">
@@ -95,9 +89,7 @@ export function RejectModal({ open, productionId, onConfirm, onClose }: Props) {
             ))}
           </select>
           {candidates.length === 0 && (
-            <p className="text-[11px] text-amber-600">
-              Không có designer nào khác đang bật để nhận thay.
-            </p>
+            <p className="text-[11px] text-amber-600">Không có designer nào khác đang bật để nhận thay.</p>
           )}
         </div>
 

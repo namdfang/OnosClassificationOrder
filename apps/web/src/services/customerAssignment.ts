@@ -1,4 +1,5 @@
 import type { CustomerAssignmentConfig } from 'shared';
+
 import { callApi } from '../apis';
 import { CONFIG } from '../constants';
 

@@ -1,7 +1,7 @@
 import { Module } from '@nestjs/common';
 
-import { SystemConfigModule } from '../system-config/system-config.module';
 import { CustomerModule } from '../customer/customer.module';
+import { SystemConfigModule } from '../system-config/system-config.module';
 import { CustomerAssignmentController } from './customer-assignment.controller';
 import { CustomerAssignmentService } from './customer-assignment.service';
 

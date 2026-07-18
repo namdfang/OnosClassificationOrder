@@ -1,34 +1,23 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import { KeyRound, Palette, Pencil, Plus, RefreshCw, Trash2 } from 'lucide-react';
-import { toast } from 'sonner';
 import type { DesignerTeamMember } from 'shared';
 import { Status } from 'shared';
+import { toast } from 'sonner';
 
+import { RepositoryRemote } from '@/services';
+
+import { Spinner } from '@/components/common/Spinner';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
-import {
-  Dialog,
-  DialogContent,
-  DialogFooter,
-  DialogHeader,
-  DialogTitle,
-} from '@/components/ui/dialog';
+import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Switch } from '@/components/ui/switch';
-import {
-  Table,
-  TableBody,
-  TableCell,
-  TableHead,
-  TableHeader,
-  TableRow,
-} from '@/components/ui/table';
-import { Spinner } from '@/components/common/Spinner';
-import { RepositoryRemote } from '@/services';
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
+
 import { handleAxiosError } from '@/utils';
 
-import { TeamMemberDialog, type DialogMode } from './TeamMemberDialog';
+import { type DialogMode, TeamMemberDialog } from './TeamMemberDialog';
 
 interface DialogState {
   open: boolean;
@@ -92,8 +81,7 @@ export default function DesignerTeamPage() {
   }, [items, statusFilter]);
 
   const openCreate = () => setDialog({ open: true, mode: 'create', member: null });
-  const openEdit = (m: DesignerTeamMember) =>
-    setDialog({ open: true, mode: 'edit', member: m });
+  const openEdit = (m: DesignerTeamMember) => setDialog({ open: true, mode: 'edit', member: m });
 
   const handleToggle = async (m: DesignerTeamMember) => {
     try {
@@ -146,9 +134,7 @@ export default function DesignerTeamPage() {
         </div>
         <div>
           <h1 className="text-2xl font-bold text-foreground">Team Designer</h1>
-          <p className="text-sm text-muted-foreground">
-            Quản lý sub-designer.
-          </p>
+          <p className="text-sm text-muted-foreground">Quản lý sub-designer.</p>
         </div>
       </div>
 
@@ -214,7 +200,9 @@ export default function DesignerTeamPage() {
               <TableRow>
                 <TableCell colSpan={7} className="text-center py-8 text-sm text-muted-foreground">
                   {items.length === 0 ? (
-                    <>Chưa có sub-designer — bấm <strong>+ Thêm sub-designer</strong> ở góc trên.</>
+                    <>
+                      Chưa có sub-designer — bấm <strong>+ Thêm sub-designer</strong> ở góc trên.
+                    </>
                   ) : (
                     <>Không có designer nào ở trạng thái này.</>
                   )}
@@ -224,61 +212,48 @@ export default function DesignerTeamPage() {
             {displayed.map((it) => {
               const activeTasks = it.activeTaskCount ?? 0;
               return (
-              <TableRow key={it._id} className={it.status !== Status.Active ? 'opacity-60' : undefined}>
-                <TableCell className="font-medium">{it.fullName}</TableCell>
-                <TableCell className="text-muted-foreground">{it.email}</TableCell>
-                <TableCell className="text-center">
-                  {activeTasks > 0 ? (
-                    <Badge variant="default" className="bg-indigo-500 hover:bg-indigo-500">
-                      {activeTasks}
-                    </Badge>
-                  ) : (
-                    <span className="text-xs text-muted-foreground">0</span>
-                  )}
-                </TableCell>
-                <TableCell className="text-center text-xs text-muted-foreground">
-                  {it.completedTaskCount}
-                </TableCell>
-                <TableCell className="text-xs text-muted-foreground">
-                  {it.hireDate ? new Date(it.hireDate).toLocaleDateString('vi-VN') : '—'}
-                </TableCell>
-                <TableCell>
-                  <div className="flex items-center gap-2">
-                    <Switch
-                      checked={it.status === Status.Active}
-                      onCheckedChange={() => handleToggle(it)}
-                    />
-                    <span className="text-xs text-muted-foreground">
-                      {it.status === Status.Active ? 'Bật' : 'Tắt'}
-                    </span>
-                  </div>
-                </TableCell>
-                <TableCell className="text-right">
-                  <Button
-                    variant="ghost"
-                    size="sm"
-                    onClick={() => setResetTarget(it)}
-                    title="Reset mật khẩu"
-                  >
-                    <KeyRound size={14} />
-                  </Button>
-                  <Button variant="ghost" size="sm" onClick={() => openEdit(it)} title="Sửa">
-                    <Pencil size={14} />
-                  </Button>
-                  <Button
-                    variant="ghost"
-                    size="sm"
-                    onClick={() => setConfirmDelete(it)}
-                    title="Xoá"
-                    disabled={activeTasks > 0}
-                  >
-                    <Trash2
-                      size={14}
-                      className={activeTasks > 0 ? 'text-muted-foreground' : 'text-destructive'}
-                    />
-                  </Button>
-                </TableCell>
-              </TableRow>
+                <TableRow key={it._id} className={it.status !== Status.Active ? 'opacity-60' : undefined}>
+                  <TableCell className="font-medium">{it.fullName}</TableCell>
+                  <TableCell className="text-muted-foreground">{it.email}</TableCell>
+                  <TableCell className="text-center">
+                    {activeTasks > 0 ? (
+                      <Badge variant="default" className="bg-indigo-500 hover:bg-indigo-500">
+                        {activeTasks}
+                      </Badge>
+                    ) : (
+                      <span className="text-xs text-muted-foreground">0</span>
+                    )}
+                  </TableCell>
+                  <TableCell className="text-center text-xs text-muted-foreground">{it.completedTaskCount}</TableCell>
+                  <TableCell className="text-xs text-muted-foreground">
+                    {it.hireDate ? new Date(it.hireDate).toLocaleDateString('vi-VN') : '—'}
+                  </TableCell>
+                  <TableCell>
+                    <div className="flex items-center gap-2">
+                      <Switch checked={it.status === Status.Active} onCheckedChange={() => handleToggle(it)} />
+                      <span className="text-xs text-muted-foreground">
+                        {it.status === Status.Active ? 'Bật' : 'Tắt'}
+                      </span>
+                    </div>
+                  </TableCell>
+                  <TableCell className="text-right">
+                    <Button variant="ghost" size="sm" onClick={() => setResetTarget(it)} title="Reset mật khẩu">
+                      <KeyRound size={14} />
+                    </Button>
+                    <Button variant="ghost" size="sm" onClick={() => openEdit(it)} title="Sửa">
+                      <Pencil size={14} />
+                    </Button>
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      onClick={() => setConfirmDelete(it)}
+                      title="Xoá"
+                      disabled={activeTasks > 0}
+                    >
+                      <Trash2 size={14} className={activeTasks > 0 ? 'text-muted-foreground' : 'text-destructive'} />
+                    </Button>
+                  </TableCell>
+                </TableRow>
               );
             })}
           </TableBody>
@@ -319,8 +294,8 @@ export default function DesignerTeamPage() {
             <DialogTitle>Reset mật khẩu</DialogTitle>
           </DialogHeader>
           <p className="text-sm text-muted-foreground">
-            Reset mật khẩu cho <span className="font-medium text-foreground">{resetTarget?.fullName}</span>.
-            User sẽ phải đổi mật khẩu khi đăng nhập lần kế.
+            Reset mật khẩu cho <span className="font-medium text-foreground">{resetTarget?.fullName}</span>. User sẽ
+            phải đổi mật khẩu khi đăng nhập lần kế.
           </p>
           <div className="space-y-2">
             <Label>Mật khẩu mới</Label>
@@ -353,15 +328,7 @@ export default function DesignerTeamPage() {
   );
 }
 
-function StatCard({
-  label,
-  value,
-  accent,
-}: {
-  label: string;
-  value: number;
-  accent: string;
-}) {
+function StatCard({ label, value, accent }: { label: string; value: number; accent: string }) {
   return (
     <div className="rounded-lg border border-border bg-card p-4">
       <p className="text-xs text-muted-foreground">{label}</p>

@@ -11,7 +11,7 @@ export class BullMQProcessor extends WorkerHost {
     super();
   }
 
-  // eslint-disable-next-line @typescript-eslint/require-await, @typescript-eslint/no-explicit-any
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   async process(job: Job<any, any, string>): Promise<any> {
     console.log('==========================================');
     console.log(job.name, new Date().toLocaleTimeString());

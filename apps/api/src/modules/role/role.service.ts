@@ -1,6 +1,6 @@
 import { BadRequestException, ForbiddenException, Injectable, NotFoundException, OnModuleInit } from '@nestjs/common';
 import type { CreateRoleDto, GetRolesDto, GetRolesResDto, UpdateRoleDto, UpdateRolePermissionsDto } from 'shared';
-import { ALL_PERMISSION_CODES, DEFAULT_ROLE_PERMISSIONS, RoleType, Status, SYSTEM_ROLES } from 'shared';
+import { ALL_PERMISSION_CODES, DEFAULT_ROLE_PERMISSIONS, Status, SYSTEM_ROLES } from 'shared';
 
 import type { RoleDocument } from './role.entity';
 import { RoleRepository } from './role.repository';
@@ -48,8 +48,7 @@ export class RoleService implements OnModuleInit {
         const currentCodes = (existing.permissionCodes || []).slice().sort();
         const targetCodes = defaults.slice().sort();
         const codesDiffer =
-          currentCodes.length !== targetCodes.length ||
-          currentCodes.some((c, i) => c !== targetCodes[i]);
+          currentCodes.length !== targetCodes.length || currentCodes.some((c, i) => c !== targetCodes[i]);
         if (codesDiffer) patch.permissionCodes = defaults;
 
         if (Object.keys(patch).length > 0) {
@@ -64,7 +63,7 @@ export class RoleService implements OnModuleInit {
       } catch (err) {
         // Don't crash app on seed race / duplicate key — the role exists, that's good enough.
         const isDup = (err as { code?: number })?.code === 11000;
-        // eslint-disable-next-line no-console
+
         console.warn(`[role-seed] ${isDup ? 'duplicate' : 'error'} on ${roleName}:`, (err as Error).message);
       }
     }
@@ -134,7 +133,7 @@ export class RoleService implements OnModuleInit {
   public async resetPermissions(roleId: string): Promise<RoleDocument> {
     const role = await this.roleRepository.findOneById(roleId);
     if (!role) throw new NotFoundException('Role not found');
-    const defaults = DEFAULT_ROLE_PERMISSIONS[role.name as RoleType];
+    const defaults = DEFAULT_ROLE_PERMISSIONS[role.name];
     if (!defaults) throw new BadRequestException('No default preset for this role');
     const updated = await this.roleRepository.findOneAndUpdate({ _id: roleId }, { permissionCodes: defaults });
     if (!updated) throw new NotFoundException('Role not found');

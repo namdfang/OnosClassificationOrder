@@ -1,54 +1,55 @@
-import React, {
-  useCallback,
-  useEffect,
-  useLayoutEffect,
-  useMemo,
-  useRef,
-  useState,
-} from 'react';
-import { Ban, CalendarClock, ChevronDown, ChevronRight, FilterX, History, MousePointerClick, PauseCircle, X } from 'lucide-react';
+import React, { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import { useSearchParams } from 'react-router-dom';
-import { useVirtualizer } from '@tanstack/react-virtual';
+import {
+  Ban,
+  CalendarClock,
+  ChevronDown,
+  ChevronRight,
+  FilterX,
+  History,
+  MousePointerClick,
+  PauseCircle,
+  X,
+} from 'lucide-react';
 import type { WorkshopAvailableFilters } from 'shared';
+import { useVirtualizer } from '@tanstack/react-virtual';
 
-import { Badge } from '@/components/ui/badge';
-import { Button } from '@/components/ui/button';
+import { useWorkshopConfigStore } from '@/store/workshopConfigStore';
+
+import { RepositoryRemote } from '@/services';
+
+import { ImagePreviewDialog } from '@/components/common/ImagePreviewDialog';
 import { PaginationBar } from '@/components/common/PaginationBar';
 import { Spinner } from '@/components/common/Spinner';
-import { ImagePreviewDialog } from '@/components/common/ImagePreviewDialog';
-import { OrderFilterBar, type OrderFilterFacet } from '@/components/orders/OrderFilterBar';
-import {
-  Table,
-  TableBody,
-  TableCell,
-  TableHead,
-  TableHeader,
-  TableRow,
-} from '@/components/ui/table';
-import { TooltipProvider } from '@/components/ui/tooltip';
 import { BulkEditToolbar } from '@/components/orders/BulkEditToolbar';
-import { OrderDetailDialog } from '@/components/orders/OrderDetailDialog';
-import { OrderLogTimelineDialog } from '@/components/orders/OrderLogTimelineDialog';
-import { DesignerBacklogDialog } from '@/components/orders/DesignerBacklogDialog';
-import { OrderRowActionsMenu } from '@/components/orders/OrderRowActionsMenu';
 import { CancelledBadge } from '@/components/orders/CancelledBadge';
+import { DesignerBacklogDialog } from '@/components/orders/DesignerBacklogDialog';
 import { HeldBadge } from '@/components/orders/HeldBadge';
-import { isCancelled, isHeld } from '@/utils/orderActions';
-import { DesignerSummaryPanel } from './DesignerSummaryPanel';
+import { OrderDetailDialog } from '@/components/orders/OrderDetailDialog';
+import { OrderFilterBar, type OrderFilterFacet } from '@/components/orders/OrderFilterBar';
+import { OrderLogTimelineDialog } from '@/components/orders/OrderLogTimelineDialog';
+import { OrderRowActionsMenu } from '@/components/orders/OrderRowActionsMenu';
 import {
   WORKSHOP_COLS,
   type WorkshopColMeta,
   type WorkshopOrderRow,
   type WorkshopRenderCtx,
 } from '@/components/orders/workshopTableConfig';
-import { usePermission } from '@/hooks/usePermission';
-import { usePendingDesignsPoll } from '@/hooks/usePendingDesignsPoll';
-import { RepositoryRemote } from '@/services';
-import { useWorkshopConfigStore } from '@/store/workshopConfigStore';
+import { Badge } from '@/components/ui/badge';
+import { Button } from '@/components/ui/button';
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
+import { TooltipProvider } from '@/components/ui/tooltip';
+
 import { handleAxiosError } from '@/utils';
-import { useDebounce } from '@/hooks/useDebounce';
-import { NO_TOOL_ROW_CLASS, useIsNoTool } from '@/hooks/useIsNoTool';
 import { cn } from '@/utils/cn';
+import { isCancelled, isHeld } from '@/utils/orderActions';
+
+import { useDebounce } from '@/hooks/useDebounce';
+import { useIsNoTool } from '@/hooks/useIsNoTool';
+import { usePendingDesignsPoll } from '@/hooks/usePendingDesignsPoll';
+import { usePermission } from '@/hooks/usePermission';
+
+import { DesignerSummaryPanel } from './DesignerSummaryPanel';
 
 // Types and column config live in workshopTableConfig.tsx (shared with OrdersMiniTable).
 type OrderRow = WorkshopOrderRow;
@@ -64,15 +65,21 @@ const FILTER_CHIP_COLORS: Record<string, string> = {
   search: 'bg-slate-100 text-slate-700 border-slate-300 dark:bg-slate-800 dark:text-slate-200 dark:border-slate-600',
   date: 'bg-emerald-100 text-emerald-700 border-emerald-300 dark:bg-emerald-900/30 dark:text-emerald-300 dark:border-emerald-800',
   fabricType: 'bg-blue-100 text-blue-700 border-blue-300 dark:bg-blue-900/30 dark:text-blue-300 dark:border-blue-800',
-  machineNumber: 'bg-violet-100 text-violet-700 border-violet-300 dark:bg-violet-900/30 dark:text-violet-300 dark:border-violet-800',
+  machineNumber:
+    'bg-violet-100 text-violet-700 border-violet-300 dark:bg-violet-900/30 dark:text-violet-300 dark:border-violet-800',
   printStatus: 'bg-cyan-100 text-cyan-700 border-cyan-300 dark:bg-cyan-900/30 dark:text-cyan-300 dark:border-cyan-800',
-  toolResult: 'bg-amber-100 text-amber-700 border-amber-300 dark:bg-amber-900/30 dark:text-amber-300 dark:border-amber-800',
-  toolResultNote: 'bg-orange-100 text-orange-700 border-orange-300 dark:bg-orange-900/30 dark:text-orange-300 dark:border-orange-800',
+  toolResult:
+    'bg-amber-100 text-amber-700 border-amber-300 dark:bg-amber-900/30 dark:text-amber-300 dark:border-amber-800',
+  toolResultNote:
+    'bg-orange-100 text-orange-700 border-orange-300 dark:bg-orange-900/30 dark:text-orange-300 dark:border-orange-800',
   errorFile: 'bg-rose-100 text-rose-700 border-rose-300 dark:bg-rose-900/30 dark:text-rose-300 dark:border-rose-800',
-  assignee: 'bg-indigo-100 text-indigo-700 border-indigo-300 dark:bg-indigo-900/30 dark:text-indigo-300 dark:border-indigo-800',
-  designerStatus: 'bg-teal-100 text-teal-700 border-teal-300 dark:bg-teal-900/30 dark:text-teal-300 dark:border-teal-800',
+  assignee:
+    'bg-indigo-100 text-indigo-700 border-indigo-300 dark:bg-indigo-900/30 dark:text-indigo-300 dark:border-indigo-800',
+  designerStatus:
+    'bg-teal-100 text-teal-700 border-teal-300 dark:bg-teal-900/30 dark:text-teal-300 dark:border-teal-800',
   productionError: 'bg-red-100 text-red-700 border-red-300 dark:bg-red-900/30 dark:text-red-300 dark:border-red-800',
-  userSku: 'bg-fuchsia-100 text-fuchsia-700 border-fuchsia-300 dark:bg-fuchsia-900/30 dark:text-fuchsia-300 dark:border-fuchsia-800',
+  userSku:
+    'bg-fuchsia-100 text-fuchsia-700 border-fuchsia-300 dark:bg-fuchsia-900/30 dark:text-fuchsia-300 dark:border-fuchsia-800',
 };
 const FILTER_CHIP_DEFAULT =
   'bg-zinc-100 text-zinc-700 border-zinc-300 dark:bg-zinc-800 dark:text-zinc-200 dark:border-zinc-600';
@@ -89,8 +96,7 @@ function todayISO(): string {
 }
 
 // Combo = (size + loại vải + mockup). Dùng để đếm ×N + highlight combo trùng.
-const comboKeyOf = (r: OrderRow) =>
-  `${r.size || ''}|${r.fabricType || ''}|${r.mockupOriginalUrl || r.mockupUrl || ''}`;
+const comboKeyOf = (r: OrderRow) => `${r.size || ''}|${r.fabricType || ''}|${r.mockupOriginalUrl || r.mockupUrl || ''}`;
 
 // Virtualization cần cột width CỐ ĐỊNH (table-fixed) để không giật khi cuộn.
 // Lấy số px từ class `min-w-[Npx]` của mỗi cột làm width; fallback 140.
@@ -111,7 +117,7 @@ const getScrollParent = (node: HTMLElement | null): HTMLElement => {
     if (oy === 'auto' || oy === 'scroll' || oy === 'overlay') return el;
     el = el.parentElement;
   }
-  return document.scrollingElement as HTMLElement || document.documentElement;
+  return (document.scrollingElement as HTMLElement) || document.documentElement;
 };
 
 interface ProductRowProps {
@@ -198,11 +204,7 @@ const ProductRow = React.memo(function ProductRow({
       {cols.map((c, i) => (
         <TableCell
           key={c.key}
-          className={cn(
-            'py-2',
-            i === 0 &&
-              cn('sticky left-8 z-10 shadow-[1px_0_0_0_var(--border)]', rowBgClass),
-          )}
+          className={cn('py-2', i === 0 && cn('sticky left-8 z-10 shadow-[1px_0_0_0_var(--border)]', rowBgClass))}
         >
           <div className="flex items-center gap-1.5">
             {c.key === 'mockupTypeSize' && comboN > 1 && (
@@ -276,7 +278,12 @@ export function OrderTableWorkshop() {
    * change event không carry modifier keys.
    */
   const shiftKeyRef = useRef(false);
-  const [preview, setPreview] = useState<{ url: string; originalUrl?: string; title: string; sourceUrl?: string } | null>(null);
+  const [preview, setPreview] = useState<{
+    url: string;
+    originalUrl?: string;
+    title: string;
+    sourceUrl?: string;
+  } | null>(null);
   const [historyTarget, setHistoryTarget] = useState<{ id: string; productionId: string } | null>(null);
   const [detailTarget, setDetailTarget] = useState<{ id: string; productionId: string } | null>(null);
   const [collapsedTypes, setCollapsedTypes] = useState<Set<string>>(new Set());
@@ -291,45 +298,21 @@ export function OrderTableWorkshop() {
   }, []);
 
   // Filters by workshop code — single value mỗi facet.
-  const [filterPrintStatus, setFilterPrintStatus] = useState<string>(
-    () => searchParams.get('wprint') || '',
-  );
-  const [filterToolResultNote, setFilterToolResultNote] = useState<string>(
-    () => searchParams.get('wnote') || '',
-  );
-  const [filterAssignee, setFilterAssignee] = useState<string>(
-    () => searchParams.get('wassign') || '',
-  );
-  const [filterProductionError, setFilterProductionError] = useState<string>(
-    () => searchParams.get('werror') || '',
-  );
-  const [filterFabricType, setFilterFabricType] = useState<string>(
-    () => searchParams.get('wfabric') || '',
-  );
-  const [filterMachineNumber, setFilterMachineNumber] = useState<string>(
-    () => searchParams.get('wmnum') || '',
-  );
-  const [filterToolResult, setFilterToolResult] = useState<string>(
-    () => searchParams.get('wtool') || '',
-  );
-  const [filterErrorFile, setFilterErrorFile] = useState<string>(
-    () => searchParams.get('werrfile') || '',
-  );
-  const [filterDesignerStatus, setFilterDesignerStatus] = useState<string>(
-    () => searchParams.get('wdstatus') || '',
-  );
-  const [filterUserSku, setFilterUserSku] = useState<string>(
-    () => searchParams.get('wusersku') || '',
-  );
+  const [filterPrintStatus, setFilterPrintStatus] = useState<string>(() => searchParams.get('wprint') || '');
+  const [filterToolResultNote, setFilterToolResultNote] = useState<string>(() => searchParams.get('wnote') || '');
+  const [filterAssignee, setFilterAssignee] = useState<string>(() => searchParams.get('wassign') || '');
+  const [filterProductionError, setFilterProductionError] = useState<string>(() => searchParams.get('werror') || '');
+  const [filterFabricType, setFilterFabricType] = useState<string>(() => searchParams.get('wfabric') || '');
+  const [filterMachineNumber, setFilterMachineNumber] = useState<string>(() => searchParams.get('wmnum') || '');
+  const [filterToolResult, setFilterToolResult] = useState<string>(() => searchParams.get('wtool') || '');
+  const [filterErrorFile, setFilterErrorFile] = useState<string>(() => searchParams.get('werrfile') || '');
+  const [filterDesignerStatus, setFilterDesignerStatus] = useState<string>(() => searchParams.get('wdstatus') || '');
+  const [filterUserSku, setFilterUserSku] = useState<string>(() => searchParams.get('wusersku') || '');
   // Toggle "Đang giữ" — chỉ hiện đơn đang bị giữ (heldAt set).
-  const [filterHeld, setFilterHeld] = useState<boolean>(
-    () => searchParams.get('wheld') === 'true',
-  );
+  const [filterHeld, setFilterHeld] = useState<boolean>(() => searchParams.get('wheld') === 'true');
   // Toggle "Đã hủy" — chỉ hiện đơn đã hủy (cancelledAt set). Mặc định tắt: đơn
   // hủy vẫn hiện tô xám trong list nhưng KHÔNG tính vào facet count.
-  const [filterCancelled, setFilterCancelled] = useState<boolean>(
-    () => searchParams.get('wcancel') === 'true',
-  );
+  const [filterCancelled, setFilterCancelled] = useState<boolean>(() => searchParams.get('wcancel') === 'true');
 
   // Sync state → URL (replace). Strip default/empty values.
   useEffect(() => {
@@ -520,10 +503,7 @@ export function OrderTableWorkshop() {
     shiftKeyRef.current = shiftKey;
   }, []);
 
-  const onHistory = useCallback(
-    (id: string, productionId: string) => setHistoryTarget({ id, productionId }),
-    [],
-  );
+  const onHistory = useCallback((id: string, productionId: string) => setHistoryTarget({ id, productionId }), []);
 
   const toggleAll = () => {
     setSelected((prev) => {
@@ -686,8 +666,7 @@ export function OrderTableWorkshop() {
       if (!body || !sc) return;
       // Offset của <tbody> trong nội dung cuộn của scroll container (không đổi
       // khi cuộn vì trừ đi bù cộng scrollTop) — chỉ đo lại khi layout đổi.
-      const margin =
-        body.getBoundingClientRect().top - sc.getBoundingClientRect().top + sc.scrollTop;
+      const margin = body.getBoundingClientRect().top - sc.getBoundingClientRect().top + sc.scrollTop;
       setScrollMargin(Math.max(0, margin));
     };
     measure();
@@ -712,9 +691,7 @@ export function OrderTableWorkshop() {
     getItemKey: (i) => flatItems[i]?.key ?? i,
   });
   const virtualItems = rowVirtualizer.getVirtualItems();
-  const virtualPadTop = virtualItems.length
-    ? virtualItems[0].start - rowVirtualizer.options.scrollMargin
-    : 0;
+  const virtualPadTop = virtualItems.length ? virtualItems[0].start - rowVirtualizer.options.scrollMargin : 0;
   const virtualPadBottom = virtualItems.length
     ? rowVirtualizer.getTotalSize() - virtualItems[virtualItems.length - 1].end
     : 0;
@@ -777,10 +754,7 @@ export function OrderTableWorkshop() {
     });
   }, []);
 
-  const openDetail = useCallback(
-    (id: string, productionId: string) => setDetailTarget({ id, productionId }),
-    [],
-  );
+  const openDetail = useCallback((id: string, productionId: string) => setDetailTarget({ id, productionId }), []);
   const renderCtx: RenderCtx = useMemo(
     () => ({ canEditField, patchRow, openPreview, openDetail }),
     [canEditField, patchRow, openPreview, openDetail],
@@ -806,7 +780,6 @@ export function OrderTableWorkshop() {
   useEffect(() => {
     setSelected(new Set());
     setLastClickedId(null);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [
     debouncedSearch,
     bulkIds,
@@ -828,16 +801,85 @@ export function OrderTableWorkshop() {
 
   // Định nghĩa facet 1 lần — dùng cho cả OrderFilterBar lẫn chip "đang lọc".
   const facets: OrderFilterFacet[] = [
-    { key: 'fabricType', label: 'Loại vải', value: filterFabricType, onChange: setFilterFabricType, options: workshopFilters?.fabricType || [], perm: 'order.field.fabricType.view' },
-    { key: 'machineNumber', label: 'Máy', value: filterMachineNumber, onChange: setFilterMachineNumber, options: workshopFilters?.machineNumber || [], perm: 'order.field.machineNumber.view' },
-    { key: 'printStatus', label: 'Trạng thái in', value: filterPrintStatus, onChange: setFilterPrintStatus, options: workshopFilters?.printStatus || [], perm: 'order.field.printStatus.view' },
-    { key: 'toolResult', label: 'Kết quả Tool', value: filterToolResult, onChange: setFilterToolResult, options: workshopFilters?.toolResult || [], perm: 'order.field.toolResult.view' },
-    { key: 'toolResultNote', label: 'Note kq Tool', value: filterToolResultNote, onChange: setFilterToolResultNote, options: workshopFilters?.toolResultNote || [], perm: 'order.field.toolResultNote.view' },
-    { key: 'errorFile', label: 'File sửa lỗi', value: filterErrorFile, onChange: setFilterErrorFile, options: workshopFilters?.errorFile || [], perm: 'order.field.errorFile.view' },
-    { key: 'userSku', label: 'Khách hàng', value: filterUserSku, onChange: setFilterUserSku, options: workshopFilters?.userSku || [] },
-    { key: 'assignee', label: 'Người thực hiện', value: filterAssignee, onChange: setFilterAssignee, options: assigneeOptions, perm: 'order.field.assignee.view' },
-    { key: 'designerStatus', label: 'TT Designer', value: filterDesignerStatus, onChange: setFilterDesignerStatus, options: designerStatusOptions, hidden: !canSeeDesignerSummary },
-    { key: 'productionError', label: 'Lỗi xưởng', value: filterProductionError, onChange: setFilterProductionError, options: workshopFilters?.productionError || [], perm: 'order.field.productionError.view' },
+    {
+      key: 'fabricType',
+      label: 'Loại vải',
+      value: filterFabricType,
+      onChange: setFilterFabricType,
+      options: workshopFilters?.fabricType || [],
+      perm: 'order.field.fabricType.view',
+    },
+    {
+      key: 'machineNumber',
+      label: 'Máy',
+      value: filterMachineNumber,
+      onChange: setFilterMachineNumber,
+      options: workshopFilters?.machineNumber || [],
+      perm: 'order.field.machineNumber.view',
+    },
+    {
+      key: 'printStatus',
+      label: 'Trạng thái in',
+      value: filterPrintStatus,
+      onChange: setFilterPrintStatus,
+      options: workshopFilters?.printStatus || [],
+      perm: 'order.field.printStatus.view',
+    },
+    {
+      key: 'toolResult',
+      label: 'Kết quả Tool',
+      value: filterToolResult,
+      onChange: setFilterToolResult,
+      options: workshopFilters?.toolResult || [],
+      perm: 'order.field.toolResult.view',
+    },
+    {
+      key: 'toolResultNote',
+      label: 'Note kq Tool',
+      value: filterToolResultNote,
+      onChange: setFilterToolResultNote,
+      options: workshopFilters?.toolResultNote || [],
+      perm: 'order.field.toolResultNote.view',
+    },
+    {
+      key: 'errorFile',
+      label: 'File sửa lỗi',
+      value: filterErrorFile,
+      onChange: setFilterErrorFile,
+      options: workshopFilters?.errorFile || [],
+      perm: 'order.field.errorFile.view',
+    },
+    {
+      key: 'userSku',
+      label: 'Khách hàng',
+      value: filterUserSku,
+      onChange: setFilterUserSku,
+      options: workshopFilters?.userSku || [],
+    },
+    {
+      key: 'assignee',
+      label: 'Người thực hiện',
+      value: filterAssignee,
+      onChange: setFilterAssignee,
+      options: assigneeOptions,
+      perm: 'order.field.assignee.view',
+    },
+    {
+      key: 'designerStatus',
+      label: 'TT Designer',
+      value: filterDesignerStatus,
+      onChange: setFilterDesignerStatus,
+      options: designerStatusOptions,
+      hidden: !canSeeDesignerSummary,
+    },
+    {
+      key: 'productionError',
+      label: 'Lỗi xưởng',
+      value: filterProductionError,
+      onChange: setFilterProductionError,
+      options: workshopFilters?.productionError || [],
+      perm: 'order.field.productionError.view',
+    },
   ];
 
   const isDefaultDate = createdFrom === todayISO() && createdTo === todayISO();
@@ -858,7 +900,10 @@ export function OrderTableWorkshop() {
       label: f.label,
       display: opt?.label || f.value,
       color: FILTER_CHIP_COLORS[f.key] || FILTER_CHIP_DEFAULT,
-      onClear: () => { f.onChange(''); setPage(1); },
+      onClear: () => {
+        f.onChange('');
+        setPage(1);
+      },
     });
   }
   if (search.trim()) {
@@ -867,7 +912,10 @@ export function OrderTableWorkshop() {
       label: 'Tìm',
       display: search.trim(),
       color: FILTER_CHIP_COLORS.search,
-      onClear: () => { setSearch(''); setPage(1); },
+      onClear: () => {
+        setSearch('');
+        setPage(1);
+      },
     });
   }
   if (bulkIds.length) {
@@ -876,7 +924,10 @@ export function OrderTableWorkshop() {
       label: 'Nhiều mã',
       display: `${bulkIds.length} mã`,
       color: FILTER_CHIP_COLORS.search,
-      onClear: () => { setBulkIds([]); setPage(1); },
+      onClear: () => {
+        setBulkIds([]);
+        setPage(1);
+      },
     });
   }
   if (!isDefaultDate) {
@@ -885,7 +936,11 @@ export function OrderTableWorkshop() {
       label: 'Ngày',
       display: `${fmtChipDate(createdFrom) || '…'} → ${fmtChipDate(createdTo) || '…'}`,
       color: FILTER_CHIP_COLORS.date,
-      onClear: () => { setCreatedFrom(todayISO()); setCreatedTo(todayISO()); setPage(1); },
+      onClear: () => {
+        setCreatedFrom(todayISO());
+        setCreatedTo(todayISO());
+        setPage(1);
+      },
     });
   }
   if (filterHeld) {
@@ -894,7 +949,10 @@ export function OrderTableWorkshop() {
       label: 'Trạng thái',
       display: 'Đang giữ',
       color: FILTER_CHIP_COLORS.date,
-      onClear: () => { setFilterHeld(false); setPage(1); },
+      onClear: () => {
+        setFilterHeld(false);
+        setPage(1);
+      },
     });
   }
   if (filterCancelled) {
@@ -903,7 +961,10 @@ export function OrderTableWorkshop() {
       label: 'Trạng thái',
       display: 'Đã hủy',
       color: FILTER_CHIP_COLORS.date,
-      onClear: () => { setFilterCancelled(false); setPage(1); },
+      onClear: () => {
+        setFilterCancelled(false);
+        setPage(1);
+      },
     });
   }
 
@@ -994,20 +1055,12 @@ export function OrderTableWorkshop() {
         {canSeeDesignerSummary && (
           <div className="space-y-2">
             <div className="flex justify-end">
-              <Button
-                variant="outline"
-                size="sm"
-                className="h-8 text-xs"
-                onClick={() => setBacklogOpen(true)}
-              >
+              <Button variant="outline" size="sm" className="h-8 text-xs" onClick={() => setBacklogOpen(true)}>
                 <CalendarClock size={14} className="mr-1" />
                 Chi tiết tồn đọng
               </Button>
             </div>
-            <DesignerSummaryPanel
-              filterQs={summaryFilterQs}
-              onClickCell={handleSummaryCellClick}
-            />
+            <DesignerSummaryPanel filterQs={summaryFilterQs} onClickCell={handleSummaryCellClick} />
           </div>
         )}
 
@@ -1148,12 +1201,14 @@ export function OrderTableWorkshop() {
             <MousePointerClick size={13} className="mt-0.5 shrink-0 text-primary" />
             <div className="space-y-0.5">
               <p>
-                <span className="font-medium text-foreground">Mẹo chọn nhiều đơn:</span>{' '}
-                Tick checkbox cạnh tên sản phẩm để chọn toàn bộ đơn của sản phẩm đó.
+                <span className="font-medium text-foreground">Mẹo chọn nhiều đơn:</span> Tick checkbox cạnh tên sản phẩm
+                để chọn toàn bộ đơn của sản phẩm đó.
               </p>
               <p>
                 Tick 1 đơn, giữ{' '}
-                <kbd className="rounded border border-border bg-background px-1 py-0.5 font-mono text-[10px]">Shift</kbd>{' '}
+                <kbd className="rounded border border-border bg-background px-1 py-0.5 font-mono text-[10px]">
+                  Shift
+                </kbd>{' '}
                 rồi click checkbox khác để chọn nhanh tất cả đơn ở giữa (giống Excel / Google Sheets).
               </p>
             </div>
@@ -1226,11 +1281,7 @@ export function OrderTableWorkshop() {
                     const g = item.group;
                     const selCount = selectedCountByType.get(g.type) || 0;
                     const groupState: GroupSelectionState =
-                      selCount === 0
-                        ? 'none'
-                        : selCount === g.sortedOrders.length
-                          ? 'all'
-                          : 'some';
+                      selCount === 0 ? 'none' : selCount === g.sortedOrders.length ? 'all' : 'some';
                     return (
                       <TableRow
                         key={vi.key}
@@ -1369,4 +1420,3 @@ export function OrderTableWorkshop() {
     </TooltipProvider>
   );
 }
-

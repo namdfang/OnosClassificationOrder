@@ -1,15 +1,18 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import { Check, X } from 'lucide-react';
-import { toast } from 'sonner';
 import type { OrderWorkshopField, WorkshopConfigCategory } from 'shared';
+import { toast } from 'sonner';
 
+import { useWorkshopConfigStore } from '@/store/workshopConfigStore';
+
+import { RepositoryRemote } from '@/services';
+
+import { Spinner } from '@/components/common/Spinner';
 import { Button } from '@/components/ui/button';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
-import { Spinner } from '@/components/common/Spinner';
-import { RepositoryRemote } from '@/services';
-import { useWorkshopConfigStore } from '@/store/workshopConfigStore';
-import { cn } from '@/utils/cn';
+
 import { handleAxiosError } from '@/utils';
+import { cn } from '@/utils/cn';
 
 import { LucideIcon } from '@/pages/workshop-config/IconPicker';
 
@@ -35,15 +38,7 @@ interface Props {
  * `+N` và hover xem toàn bộ. Click → popover checkbox list, chọn xong bấm
  * "Lưu" (1 PATCH cho cả set).
  */
-export function MultiIconSelectCell({
-  orderId,
-  field,
-  category,
-  value,
-  canEdit,
-  maxVisible = 2,
-  onUpdated,
-}: Props) {
+export function MultiIconSelectCell({ orderId, field, category, value, canEdit, maxVisible = 2, onUpdated }: Props) {
   const items = useWorkshopConfigStore((s) => s.byCategory[category] || []);
   const resolve = useWorkshopConfigStore((s) => s.resolve);
 
@@ -104,9 +99,7 @@ export function MultiIconSelectCell({
         .map((s) => s.trim());
       const payload = sanitized.length > 0 ? sanitized : null;
       await RepositoryRemote.order.updateField(orderId, { field, value: payload });
-      toast.success(
-        payload ? `Đã lưu ${payload.length} mục` : 'Đã bỏ chọn',
-      );
+      toast.success(payload ? `Đã lưu ${payload.length} mục` : 'Đã bỏ chọn');
       onUpdated?.(payload);
       setOpen(false);
     } catch (err) {
@@ -160,9 +153,7 @@ export function MultiIconSelectCell({
       </PopoverTrigger>
       <PopoverContent className="w-72 p-2" align="start">
         <div className="flex items-center justify-between mb-1.5">
-          <p className="text-xs font-semibold text-foreground">
-            Chọn ({draft.length})
-          </p>
+          <p className="text-xs font-semibold text-foreground">Chọn ({draft.length})</p>
           {draft.length > 0 && (
             <button
               type="button"
@@ -189,9 +180,7 @@ export function MultiIconSelectCell({
                 <span
                   className={cn(
                     'inline-flex items-center justify-center w-4 h-4 rounded border',
-                    checked
-                      ? 'bg-primary border-primary text-primary-foreground'
-                      : 'border-input',
+                    checked ? 'bg-primary border-primary text-primary-foreground' : 'border-input',
                   )}
                 >
                   {checked && <Check size={11} />}
@@ -201,9 +190,7 @@ export function MultiIconSelectCell({
               </button>
             );
           })}
-          {items.length === 0 && (
-            <p className="text-xs text-muted-foreground text-center py-3">Chưa có lựa chọn</p>
-          )}
+          {items.length === 0 && <p className="text-xs text-muted-foreground text-center py-3">Chưa có lựa chọn</p>}
         </div>
         <div className="flex items-center justify-end gap-2 mt-2 pt-2 border-t border-border">
           <Button variant="outline" size="sm" onClick={() => setOpen(false)} disabled={saving}>

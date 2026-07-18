@@ -1,31 +1,20 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import { Eye, EyeOff, Pencil, Plus, RefreshCw, Trash2, Users as UsersIcon } from 'lucide-react';
-import { toast } from 'sonner';
 import type { Role } from 'shared';
 import { FULFILLMENT_STAGE_LABELS, FULFILLMENT_STAGES, Status } from 'shared';
+import { toast } from 'sonner';
 
+import { RepositoryRemote } from '@/services';
+
+import { Spinner } from '@/components/common/Spinner';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
-import {
-  Dialog,
-  DialogContent,
-  DialogFooter,
-  DialogHeader,
-  DialogTitle,
-} from '@/components/ui/dialog';
+import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Switch } from '@/components/ui/switch';
-import {
-  Table,
-  TableBody,
-  TableCell,
-  TableHead,
-  TableHeader,
-  TableRow,
-} from '@/components/ui/table';
-import { Spinner } from '@/components/common/Spinner';
-import { RepositoryRemote } from '@/services';
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
+
 import { handleAxiosError } from '@/utils';
 
 interface UserRow {
@@ -69,9 +58,10 @@ const EMPTY_FORM: FormState = {
 };
 
 // Auto-derive từ shared enum để khi thêm/đổi stage 1 chỗ — UI tự cập nhật.
-const FULFILLMENT_STAGE_OPTIONS: { value: string; label: string }[] = FULFILLMENT_STAGES.map(
-  (s) => ({ value: s, label: FULFILLMENT_STAGE_LABELS[s] }),
-);
+const FULFILLMENT_STAGE_OPTIONS: { value: string; label: string }[] = FULFILLMENT_STAGES.map((s) => ({
+  value: s,
+  label: FULFILLMENT_STAGE_LABELS[s],
+}));
 
 export default function UsersPage() {
   const [items, setItems] = useState<UserRow[]>([]);
@@ -84,10 +74,7 @@ export default function UsersPage() {
   const [showPassword, setShowPassword] = useState(false);
 
   const roleMap = useMemo(() => Object.fromEntries(roles.map((r) => [r._id, r])), [roles]);
-  const factoryMap = useMemo(
-    () => Object.fromEntries(factories.map((f) => [f._id, f])),
-    [factories],
-  );
+  const factoryMap = useMemo(() => Object.fromEntries(factories.map((f) => [f._id, f])), [factories]);
   /** True nếu role được chọn trong form là Fulfillment → bắt buộc nhập factoryId. */
   const isFulfillmentRole = useMemo(() => {
     const r = roleMap[form.roleId];
@@ -278,7 +265,11 @@ export default function UsersPage() {
                   <TableCell className="font-medium">{it.fullName}</TableCell>
                   <TableCell className="text-muted-foreground">{it.email}</TableCell>
                   <TableCell>
-                    {role ? <Badge variant="outline">{role.name}</Badge> : <span className="text-muted-foreground text-xs">—</span>}
+                    {role ? (
+                      <Badge variant="outline">{role.name}</Badge>
+                    ) : (
+                      <span className="text-muted-foreground text-xs">—</span>
+                    )}
                     {factory && role?.name === 'Fulfillment' && (
                       <Badge variant="secondary" className="ml-1 text-[10px]">
                         {factory.shortName || factory.name}
@@ -288,7 +279,9 @@ export default function UsersPage() {
                   <TableCell>
                     <div className="flex items-center gap-2">
                       <Switch checked={it.status === Status.Active} onCheckedChange={() => handleToggle(it)} />
-                      <span className="text-xs text-muted-foreground">{it.status === Status.Active ? 'Bật' : 'Tắt'}</span>
+                      <span className="text-xs text-muted-foreground">
+                        {it.status === Status.Active ? 'Bật' : 'Tắt'}
+                      </span>
                     </div>
                   </TableCell>
                   <TableCell className="text-right">
@@ -330,17 +323,13 @@ export default function UsersPage() {
               />
             </div>
             <div className="space-y-2">
-              <Label>
-                {form.mode === 'create' ? 'Mật khẩu' : 'Đặt lại mật khẩu (tuỳ chọn)'}
-              </Label>
+              <Label>{form.mode === 'create' ? 'Mật khẩu' : 'Đặt lại mật khẩu (tuỳ chọn)'}</Label>
               <div className="relative">
                 <Input
                   value={form.password}
                   onChange={(e) => setForm({ ...form, password: e.target.value })}
                   type={showPassword ? 'text' : 'password'}
-                  placeholder={
-                    form.mode === 'create' ? 'Tối thiểu 8 ký tự' : 'Bỏ trống nếu không đổi'
-                  }
+                  placeholder={form.mode === 'create' ? 'Tối thiểu 8 ký tự' : 'Bỏ trống nếu không đổi'}
                   className="pr-9"
                   autoComplete={form.mode === 'create' ? 'new-password' : 'off'}
                 />
@@ -355,9 +344,7 @@ export default function UsersPage() {
                 </button>
               </div>
               {form.mode === 'edit' && form.password && (
-                <p className="text-[11px] text-amber-600">
-                  Sẽ ghi đè mật khẩu hiện tại. Tối thiểu 8 ký tự.
-                </p>
+                <p className="text-[11px] text-amber-600">Sẽ ghi đè mật khẩu hiện tại. Tối thiểu 8 ký tự.</p>
               )}
             </div>
             <div className="space-y-2">
@@ -399,8 +386,7 @@ export default function UsersPage() {
                     ))}
                   </select>
                   <p className="text-[11px] text-muted-foreground">
-                    User Fulfillment chỉ xem được đơn ở xưởng này (hoặc đơn đã transfer từ
-                    xưởng này đi).
+                    User Fulfillment chỉ xem được đơn ở xưởng này (hoặc đơn đã transfer từ xưởng này đi).
                   </p>
                 </div>
                 <div className="space-y-2">
@@ -418,8 +404,7 @@ export default function UsersPage() {
                     ))}
                   </select>
                   <p className="text-[11px] text-muted-foreground">
-                    Mỗi (xưởng, stage) chỉ được 1 user. Đơn đến stage này tự nhảy vào
-                    "Task của tôi" của user.
+                    Mỗi (xưởng, stage) chỉ được 1 user. Đơn đến stage này tự nhảy vào "Task của tôi" của user.
                   </p>
                 </div>
               </>
@@ -443,8 +428,8 @@ export default function UsersPage() {
             <DialogTitle>Xóa user</DialogTitle>
           </DialogHeader>
           <p className="text-sm text-muted-foreground">
-            Xóa user <span className="font-medium text-foreground">{confirmDelete?.fullName}</span> ({confirmDelete?.email})?
-            Họ sẽ không đăng nhập được nữa.
+            Xóa user <span className="font-medium text-foreground">{confirmDelete?.fullName}</span> (
+            {confirmDelete?.email})? Họ sẽ không đăng nhập được nữa.
           </p>
           <DialogFooter>
             <Button variant="outline" onClick={() => setConfirmDelete(null)}>

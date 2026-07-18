@@ -1,8 +1,5 @@
 import { createZodDto } from '@anatine/zod-nestjs';
 import { extendApi } from '@anatine/zod-openapi';
-import { z } from 'zod';
-
-import { BaseEntityZod, PageQueryZod, PageResZod, ResZod } from '@shared/types';
 import {
   IDZod,
   MAX_PRODUCT_OPTION_LENGTH,
@@ -16,10 +13,13 @@ import {
   TITLE_MAX_LENGTH,
   TITLE_MIN_LENGTH,
 } from '@shared/constants';
-import { ResImageZod } from './upload.dto';
-import { CreateProductVariantZod, UpdateProductVariantZod } from './product-variant.dto';
-import { Status, Tier } from '../enums';
+import { BaseEntityZod, PageQueryZod, PageResZod, ResZod } from '@shared/types';
+import { z } from 'zod';
+
 import { BooleanZod, CategoryZod, getObjectValues, ID_LENGTH, UserZod } from '..';
+import { Status, Tier } from '../enums';
+import { CreateProductVariantZod, UpdateProductVariantZod } from './product-variant.dto';
+import { ResImageZod } from './upload.dto';
 
 const ArtworkRequirementsZod = z.object({
   dpi: z.number(),

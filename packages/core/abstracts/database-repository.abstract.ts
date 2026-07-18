@@ -1,35 +1,37 @@
+/* eslint-disable @typescript-eslint/no-empty-object-type */
 // https://github.com/andrechristikan/ack-nestjs-boilerplate/blob/main/src/common/database/abstracts/mongo/repositories/database.mongo.uuid.repository.abstract.ts
 
-import {
-  ClientSession,
-  Model,
-  Document,
-  PipelineStage,
-  PopulateOptions,
-  UpdateWithAggregationPipeline,
-  UpdateQuery,
-  FilterQuery,
-  IfAny,
-  MergeType,
-  Require_id,
-  UpdateWriteOpResult,
-} from 'mongoose';
 import { DATABASE_DELETED_AT_FIELD_NAME } from '@core/constants';
-import {
+import type {
+  IDatabaseCreateManyOptions,
   IDatabaseCreateOptions,
   IDatabaseExistOptions,
   IDatabaseFindAllOptions,
-  IDatabaseGetTotalOptions,
-  IDatabaseCreateManyOptions,
-  IDatabaseManyOptions,
   IDatabaseFindOneOptions,
+  IDatabaseGetTotalOptions,
+  IDatabaseManyOptions,
   IDatabaseRawFindAllOptions,
   IDatabaseRawGetTotalOptions,
-  IDatabaseRestoreManyOptions,
   IDatabaseRawOptions,
+  IDatabaseRestoreManyOptions,
   IDatabaseSoftDeleteManyOptions,
 } from '@core/interfaces/IDatabaseRepository';
-import { DatabaseEntityAbstract } from './entity.abstract';
+import type {
+  ClientSession,
+  Document,
+  FilterQuery,
+  IfAny,
+  MergeType,
+  Model,
+  PipelineStage,
+  PopulateOptions,
+  Require_id,
+  UpdateQuery,
+  UpdateWithAggregationPipeline,
+  UpdateWriteOpResult,
+} from 'mongoose';
+
+import type { DatabaseEntityAbstract } from './entity.abstract';
 
 export abstract class DatabaseRepositoryAbstract<Entity extends DatabaseEntityAbstract, EntityDocument> {
   protected _repository: Model<Entity>;
@@ -79,8 +81,7 @@ export abstract class DatabaseRepositoryAbstract<Entity extends DatabaseEntityAb
       findAll.session(options.session);
     }
 
-    if (options?.lean === false) {
-    } else {
+    if (options?.lean !== false) {
       findAll.lean();
     }
 
@@ -128,8 +129,7 @@ export abstract class DatabaseRepositoryAbstract<Entity extends DatabaseEntityAb
       findAll.session(options.session);
     }
 
-    if (options?.lean === false) {
-    } else {
+    if (options?.lean !== false) {
       findAll.lean();
     }
 
@@ -176,8 +176,7 @@ export abstract class DatabaseRepositoryAbstract<Entity extends DatabaseEntityAb
       findAll.session(options.session);
     }
 
-    if (options?.lean === false) {
-    } else {
+    if (options?.lean !== false) {
       findAll.lean();
     }
 
@@ -219,8 +218,7 @@ export abstract class DatabaseRepositoryAbstract<Entity extends DatabaseEntityAb
       findOne.sort(options.sort);
     }
 
-    if (options?.lean === false) {
-    } else {
+    if (options?.lean !== false) {
       findOne.lean();
     }
 
@@ -286,8 +284,7 @@ export abstract class DatabaseRepositoryAbstract<Entity extends DatabaseEntityAb
       findOne.sort(options.sort);
     }
 
-    if (options?.lean === false) {
-    } else {
+    if (options?.lean !== false) {
       findOne.lean();
     }
 

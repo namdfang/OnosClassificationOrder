@@ -1,17 +1,17 @@
 import { createZodDto } from '@anatine/zod-nestjs';
 import { extendApi } from '@anatine/zod-openapi';
-import { z } from 'zod';
-
 import {
   DesignerStatus,
   DesignerTransitionAction,
   FulfillmentStage,
   FulfillmentStageStatus,
   FulfillmentTransitionAction,
-  OrderPriority,
   ORDER_PRIORITIES,
+  OrderPriority,
 } from '@shared/enums';
 import { BaseEntityZod, PageQueryZod, PageResZod, ResZod } from '@shared/types';
+import { z } from 'zod';
+
 import { IDZod } from '..';
 
 export const DesignerStatusZod = z.nativeEnum(DesignerStatus);
@@ -436,9 +436,7 @@ export const GetProductionOrdersZod = PageQueryZod.extend({
    *   fixed                           — stage đã completedAt + đã rời stage, TỪNG bị đẩy về (reworkCount>0) = "Đã sửa".
    *   watching                        — user đã rework-back, đang chờ quay lại.
    */
-  fulfillmentStatus: z
-    .enum(['waiting', 'in-progress', 'rework', 'done', 'fixed', 'watching'])
-    .optional(),
+  fulfillmentStatus: z.enum(['waiting', 'in-progress', 'rework', 'done', 'fixed', 'watching']).optional(),
 
   // Date range on `orderAt` — thời gian khách lên đơn (yyyy-mm-dd). Tên giữ
   // là `createdFrom/createdTo` để URL/bookmark cũ không vỡ. Designer/Fulfillment
@@ -470,9 +468,7 @@ export type ProductionOrderGroup = z.infer<typeof ProductionOrderGroupZod>;
 export const GetGroupedProductionOrdersResZod = PageResZod.extend({
   data: ProductionOrderGroupZod.array(),
 });
-export class GetGroupedProductionOrdersResDto extends createZodDto(
-  extendApi(GetGroupedProductionOrdersResZod),
-) {}
+export class GetGroupedProductionOrdersResDto extends createZodDto(extendApi(GetGroupedProductionOrdersResZod)) {}
 
 // Đếm số đơn theo 5 trạng thái stage Fulfillment (bảng trang "In" admin-view).
 export const FulfillmentStatusCountsResZod = ResZod.extend({
@@ -486,9 +482,7 @@ export const FulfillmentStatusCountsResZod = ResZod.extend({
     watching: z.number(),
   }),
 });
-export class FulfillmentStatusCountsResDto extends createZodDto(
-  extendApi(FulfillmentStatusCountsResZod),
-) {}
+export class FulfillmentStatusCountsResDto extends createZodDto(extendApi(FulfillmentStatusCountsResZod)) {}
 
 //
 export const ImportProductionOrderRowZod = z.object({
@@ -540,9 +534,9 @@ export class ImportProductionOrdersResDto extends createZodDto(extendApi(ImportP
 export const ImportReworkOrderRowZod = z.object({
   productionId: z.string().min(1),
   toolResultNote: z.string().optional(), // sheet không dấu (vd "loi", "ok")
-  errorFile: z.string().optional(),       // sheet không dấu (vd "Vien co")
-  errorFileNote: z.string().optional(),   // free text; "hủy đơn" → cancel
-  assignee: z.string().optional(),        // fullName người thực hiện
+  errorFile: z.string().optional(), // sheet không dấu (vd "Vien co")
+  errorFileNote: z.string().optional(), // free text; "hủy đơn" → cancel
+  assignee: z.string().optional(), // fullName người thực hiện
 });
 export type ImportReworkOrderRow = z.infer<typeof ImportReworkOrderRowZod>;
 
@@ -553,9 +547,9 @@ export class ImportReworkOrdersDto extends createZodDto(extendApi(ImportReworkOr
 
 export const ImportReworkOrdersResZod = ResZod.extend({
   data: z.object({
-    updated: z.number(),         // số đơn cập nhật thành công
-    notFound: z.number(),        // productionId không tồn tại trong DB
-    cancelled: z.number(),       // số đơn bị mark cancel
+    updated: z.number(), // số đơn cập nhật thành công
+    notFound: z.number(), // productionId không tồn tại trong DB
+    cancelled: z.number(), // số đơn bị mark cancel
     assigneeMatched: z.number(), // số row gán assignee thành công
     skipped: z.array(z.object({ row: z.number(), reason: z.string() })),
   }),
@@ -762,9 +756,7 @@ export class BulkUpdateOrderFieldResDto extends createZodDto(extendApi(BulkUpdat
 export const BulkAssignDesignerPreviewZod = z.object({
   ids: IDZod.array().min(1),
 });
-export class BulkAssignDesignerPreviewDto extends createZodDto(
-  extendApi(BulkAssignDesignerPreviewZod),
-) {}
+export class BulkAssignDesignerPreviewDto extends createZodDto(extendApi(BulkAssignDesignerPreviewZod)) {}
 
 export const BulkAssignDesignerPreviewResZod = ResZod.extend({
   data: z.object({
@@ -801,9 +793,7 @@ export const BulkAssignDesignerPreviewResZod = ResZod.extend({
     eligibleWithToolCount: z.number(),
   }),
 });
-export class BulkAssignDesignerPreviewResDto extends createZodDto(
-  extendApi(BulkAssignDesignerPreviewResZod),
-) {}
+export class BulkAssignDesignerPreviewResDto extends createZodDto(extendApi(BulkAssignDesignerPreviewResZod)) {}
 
 export const BulkAssignDesignerZod = z.object({
   ids: IDZod.array().min(1),
@@ -858,9 +848,7 @@ export const SetProductionErrorZod = z.object({
    *  - 'designer' / 'tool-check': theo luồng source-driven (đã xử lý qua `source`).
    *  - 1 FulfillmentStage: đẩy về stage đó + làm lại toàn chuỗi tới vị trí xa nhất.
    */
-  target: z
-    .union([z.literal('designer'), z.literal('tool-check'), FulfillmentStageZod])
-    .optional(),
+  target: z.union([z.literal('designer'), z.literal('tool-check'), FulfillmentStageZod]).optional(),
 });
 export class SetProductionErrorDto extends createZodDto(extendApi(SetProductionErrorZod)) {}
 
@@ -873,9 +861,7 @@ export class SetProductionErrorResDto extends createZodDto(extendApi(SetProducti
 // info đơn + factory + machineType + fulfillmentStages hiện tại.
 //
 export const GetOrderByProductionIdResZod = ResZod.extend({ data: ProductionOrderZod });
-export class GetOrderByProductionIdResDto extends createZodDto(
-  extendApi(GetOrderByProductionIdResZod),
-) {}
+export class GetOrderByProductionIdResDto extends createZodDto(extendApi(GetOrderByProductionIdResZod)) {}
 
 //
 // Design review — public API cho tool ngoài duyệt thiết kế. Trả về 1 đơn ở
@@ -907,9 +893,7 @@ export const GetNextDesignReviewOrderResZod = z.object({
   /** Tổng số đơn còn cần xử lý (bao gồm cả đơn trong `data`) — không tính claim/lease. */
   remaining: z.number().int().nonnegative(),
 });
-export class GetNextDesignReviewOrderResDto extends createZodDto(
-  extendApi(GetNextDesignReviewOrderResZod),
-) {}
+export class GetNextDesignReviewOrderResDto extends createZodDto(extendApi(GetNextDesignReviewOrderResZod)) {}
 
 // Design review — lưu Kết quả Tool (workshop_config category=tool_result, vd
 // 'has-tool'/'no-tool'). `null` = xoá giá trị hiện có. KHÔNG có `toolResultNote`
@@ -923,9 +907,7 @@ export const SetDesignReviewResultZod = z.object({
 export class SetDesignReviewResultDto extends createZodDto(extendApi(SetDesignReviewResultZod)) {}
 
 export const SetDesignReviewResultResZod = ResZod.extend({ data: ProductionOrderZod });
-export class SetDesignReviewResultResDto extends createZodDto(
-  extendApi(SetDesignReviewResultResZod),
-) {}
+export class SetDesignReviewResultResDto extends createZodDto(extendApi(SetDesignReviewResultResZod)) {}
 
 //
 // Import summary — aggregates orders of a single day across all imports.
@@ -1235,12 +1217,8 @@ export const WorkshopAvailableFiltersResZod = ResZod.extend({
     cancelledCount: z.number().optional(),
   }),
 });
-export class WorkshopAvailableFiltersResDto extends createZodDto(
-  extendApi(WorkshopAvailableFiltersResZod),
-) {}
-export type WorkshopAvailableFilters = z.infer<
-  typeof WorkshopAvailableFiltersResZod
->['data'];
+export class WorkshopAvailableFiltersResDto extends createZodDto(extendApi(WorkshopAvailableFiltersResZod)) {}
+export type WorkshopAvailableFilters = z.infer<typeof WorkshopAvailableFiltersResZod>['data'];
 
 /**
  * Body của `POST /v1/orders/:id/designer-transition`. Server validate action
@@ -1355,9 +1333,7 @@ export const FulfillmentTransitionZod = z.object({
 export class FulfillmentTransitionDto extends createZodDto(extendApi(FulfillmentTransitionZod)) {}
 
 export const FulfillmentTransitionResZod = ResZod.extend({ data: ProductionOrderZod });
-export class FulfillmentTransitionResDto extends createZodDto(
-  extendApi(FulfillmentTransitionResZod),
-) {}
+export class FulfillmentTransitionResDto extends createZodDto(extendApi(FulfillmentTransitionResZod)) {}
 
 /**
  * GET `/v1/fulfillment/my-tasks?tab=waiting|in-progress|rework|watching`.
@@ -1410,9 +1386,7 @@ export const GetFulfillmentDailyOverviewZod = z.object({
   /** Override stage (Manager/Admin). Worker suy từ `user.fulfillmentStage`. */
   stage: FulfillmentStageZod.optional(),
 });
-export class GetFulfillmentDailyOverviewDto extends createZodDto(
-  extendApi(GetFulfillmentDailyOverviewZod),
-) {}
+export class GetFulfillmentDailyOverviewDto extends createZodDto(extendApi(GetFulfillmentDailyOverviewZod)) {}
 
 /**
  * Metric 1 stage fulfillment trong 1 ngày (phân loại theo
@@ -1481,9 +1455,7 @@ export const FulfillmentDailyOverviewResZod = ResZod.extend({
     rangeDays: z.number().int().nonnegative(),
   }),
 });
-export class FulfillmentDailyOverviewResDto extends createZodDto(
-  extendApi(FulfillmentDailyOverviewResZod),
-) {}
+export class FulfillmentDailyOverviewResDto extends createZodDto(extendApi(FulfillmentDailyOverviewResZod)) {}
 
 export const GetFulfillmentMyTasksResZod = PageResZod.extend({
   data: ProductionOrderZod.array(),
@@ -1499,9 +1471,7 @@ export const GetFulfillmentMyTasksResZod = PageResZod.extend({
     unassigned: z.number(),
   }),
 });
-export class GetFulfillmentMyTasksResDto extends createZodDto(
-  extendApi(GetFulfillmentMyTasksResZod),
-) {}
+export class GetFulfillmentMyTasksResDto extends createZodDto(extendApi(GetFulfillmentMyTasksResZod)) {}
 
 /**
  * Admin team queue (`GET /v1/fulfillment/team/queue?factoryId=`).
@@ -1536,9 +1506,7 @@ export const GetFulfillmentQueueResZod = ResZod.extend({
     columns: FulfillmentQueueColumnZod.array(),
   }),
 });
-export class GetFulfillmentQueueResDto extends createZodDto(
-  extendApi(GetFulfillmentQueueResZod),
-) {}
+export class GetFulfillmentQueueResDto extends createZodDto(extendApi(GetFulfillmentQueueResZod)) {}
 
 /** Stats — throughput per period (morning/noon/evening hoặc daily/weekly). */
 export const FulfillmentStageStatRowZod = z.object({
@@ -1569,9 +1537,7 @@ export const GetFulfillmentStatsResZod = ResZod.extend({
     completedCount: z.number(),
   }),
 });
-export class GetFulfillmentStatsResDto extends createZodDto(
-  extendApi(GetFulfillmentStatsResZod),
-) {}
+export class GetFulfillmentStatsResDto extends createZodDto(extendApi(GetFulfillmentStatsResZod)) {}
 
 // ─── Lifecycle Overview (dashboard Vòng đời đơn) ──────────────────
 // Phễu 8 chặng: Soát tool → Thiết kế → In → Ép → QC sau ép → May nhận →
@@ -1660,9 +1626,7 @@ export const LifecycleOverviewZod = z.object({
   /** Line chart: số đơn hoàn thành toàn flow mỗi ngày trong kỳ. */
   completionTimeline: LifecycleTimelineBucketZod.array(),
   /** Options cho dropdown lọc xưởng (chỉ xưởng có đơn). */
-  factories: z
-    .object({ factoryId: z.string(), factoryName: z.string() })
-    .array(),
+  factories: z.object({ factoryId: z.string(), factoryName: z.string() }).array(),
   filter: z.object({ factoryId: z.string().optional(), from: z.string().optional(), to: z.string().optional() }),
 });
 export type LifecycleOverview = z.infer<typeof LifecycleOverviewZod>;
@@ -1675,9 +1639,7 @@ export const GetLifecycleOverviewZod = z.object({
 export class GetLifecycleOverviewDto extends createZodDto(extendApi(GetLifecycleOverviewZod)) {}
 
 export const GetLifecycleOverviewResZod = ResZod.extend({ data: LifecycleOverviewZod });
-export class GetLifecycleOverviewResDto extends createZodDto(
-  extendApi(GetLifecycleOverviewResZod),
-) {}
+export class GetLifecycleOverviewResDto extends createZodDto(extendApi(GetLifecycleOverviewResZod)) {}
 
 // ─── Cancelled orders drill-down (danh sách đơn hủy cho Dashboard) ──
 // Bấm số "Đơn đã hủy" ở tab Stats / LifecycleStrip → mở modal list.
@@ -1744,9 +1706,7 @@ export const LifecycleTrackZod = z.object({
 export type LifecycleTrack = z.infer<typeof LifecycleTrackZod>;
 
 export const GetLifecycleTrackResZod = ResZod.extend({ data: LifecycleTrackZod });
-export class GetLifecycleTrackResDto extends createZodDto(
-  extendApi(GetLifecycleTrackResZod),
-) {}
+export class GetLifecycleTrackResDto extends createZodDto(extendApi(GetLifecycleTrackResZod)) {}
 
 // ─── Cutting File mapping (post-import flow) ──────────────────────
 // User dán list Drive link → BE fetch tên file (public Drive page) → parse
@@ -1833,9 +1793,7 @@ export const PreviewCuttingFilesResZod = ResZod.extend({
     }),
   }),
 });
-export class PreviewCuttingFilesResDto extends createZodDto(
-  extendApi(PreviewCuttingFilesResZod),
-) {}
+export class PreviewCuttingFilesResDto extends createZodDto(extendApi(PreviewCuttingFilesResZod)) {}
 
 export const ApplyCuttingFileItemZod = z.object({
   orderId: IDZod,

@@ -1,4 +1,4 @@
-import { ExcelImportStockOrder } from '..';
+import type { ExcelImportStockOrder } from '..';
 
 export const STOCK_ORDER_CODE_PREFIX = 'PS_';
 
@@ -302,7 +302,7 @@ for (const key in STOCK_ORDER_ITEM_WEIGHT_IMPORT_HEADERS) {
   REVERSED_STOCK_ORDER_ITEM_WEIGHT_IMPORT_HEADERS[value] = key;
 }
 
-export const BETA_STOCK_SHIP_FEE= 13; //1000g
+export const BETA_STOCK_SHIP_FEE = 13; //1000g
 export const UAT_STOCK_SHIP_FEE = 11; //1000g
 
 export const BETA_STOCK_FULFILLMENT_FEE = 1.5;

@@ -1,12 +1,11 @@
 import { createZodDto } from '@anatine/zod-nestjs';
 import { extendApi } from '@anatine/zod-openapi';
-import { z } from 'zod';
-import Big from 'big.js';
-
 import { BaseEntityZod, PageQueryZod, PageResZod, ResZod } from '@shared/types';
+import Big from 'big.js';
+import { z } from 'zod';
+
 import {
   BETA_SHIP_FEE,
-  CODE_LENGTH,
   CreateDropShipLineItemZod,
   DESCRIPTION_MAX_LENGTH,
   DROPSHIP_ORDER_TYPE,
@@ -15,7 +14,6 @@ import {
   ExternalIDZod,
   getObjectValues,
   GetStatisticsZod,
-  ID_LENGTH,
   IDZod,
   Marketplace,
   NAME_MIN_LENGTH,
@@ -25,7 +23,6 @@ import {
   optionalStringTransform,
   OptionalURLZod,
   OrderTrackingZod,
-  PrintArea,
   QUANTITY_MAX,
   SendToProviderZod,
   ShippingAddressZod,
@@ -535,7 +532,10 @@ export const ExcelImportOrderPriceZod = z
     let productPrice = 0;
     let shipFee = 0;
 
-    productPrice = new Big(data.baseCost).mul(new Big(data.isProd ? 1.05 : 1.03)).round(2, 3).toNumber();
+    productPrice = new Big(data.baseCost)
+      .mul(new Big(data.isProd ? 1.05 : 1.03))
+      .round(2, 3)
+      .toNumber();
     shipFee = new Big(data.weight)
       .div(1000)
       .mul(data.isProd ? BETA_SHIP_FEE : UAT_SHIP_FEE)

@@ -1,25 +1,14 @@
 import React, { useEffect, useMemo, useState } from 'react';
-import {
-  CalendarClock,
-  ChevronDown,
-  ChevronRight,
-  ChevronsDownUp,
-  ChevronsUpDown,
-  Search,
-  User,
-} from 'lucide-react';
+import { CalendarClock, ChevronDown, ChevronRight, ChevronsDownUp, ChevronsUpDown, Search, User } from 'lucide-react';
 import type { DesignerBacklogDay, DesignerBacklogRow } from 'shared';
 
-import {
-  Dialog,
-  DialogContent,
-  DialogHeader,
-  DialogTitle,
-} from '@/components/ui/dialog';
-import { Button } from '@/components/ui/button';
-import { Input } from '@/components/ui/input';
-import { Spinner } from '@/components/common/Spinner';
 import { RepositoryRemote } from '@/services';
+
+import { Spinner } from '@/components/common/Spinner';
+import { Button } from '@/components/ui/button';
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
+import { Input } from '@/components/ui/input';
+
 import { handleAxiosError } from '@/utils';
 import { cn } from '@/utils/cn';
 
@@ -44,19 +33,47 @@ const STATUS_META: Array<{
   label: string;
   cls: string;
 }> = [
-  { key: 'unassigned', code: 'unassigned', label: 'Chưa gán', cls: 'bg-zinc-100 text-zinc-600 dark:bg-zinc-800 dark:text-zinc-300' },
-  { key: 'assigned', code: 'assigned', label: 'Đã gán', cls: 'bg-zinc-200 text-zinc-700 dark:bg-zinc-700 dark:text-zinc-200' },
-  { key: 'inProgress', code: 'in-progress', label: 'Đang làm', cls: 'bg-indigo-100 text-indigo-700 dark:bg-indigo-900/40 dark:text-indigo-300' },
-  { key: 'rework', code: 'rework', label: 'Làm lại', cls: 'bg-amber-100 text-amber-700 dark:bg-amber-900/40 dark:text-amber-300' },
+  {
+    key: 'unassigned',
+    code: 'unassigned',
+    label: 'Chưa gán',
+    cls: 'bg-zinc-100 text-zinc-600 dark:bg-zinc-800 dark:text-zinc-300',
+  },
+  {
+    key: 'assigned',
+    code: 'assigned',
+    label: 'Đã gán',
+    cls: 'bg-zinc-200 text-zinc-700 dark:bg-zinc-700 dark:text-zinc-200',
+  },
+  {
+    key: 'inProgress',
+    code: 'in-progress',
+    label: 'Đang làm',
+    cls: 'bg-indigo-100 text-indigo-700 dark:bg-indigo-900/40 dark:text-indigo-300',
+  },
+  {
+    key: 'rework',
+    code: 'rework',
+    label: 'Làm lại',
+    cls: 'bg-amber-100 text-amber-700 dark:bg-amber-900/40 dark:text-amber-300',
+  },
 ];
 
 /** Màu + nhãn theo tuổi đơn (ngày). */
 function ageMeta(ageDays: number): { cls: string; label: string } {
-  if (ageDays < 0) return { cls: 'bg-zinc-100 text-zinc-500 dark:bg-zinc-800 dark:text-zinc-400', label: 'Không rõ ngày' };
-  if (ageDays === 0) return { cls: 'bg-emerald-100 text-emerald-700 dark:bg-emerald-900/40 dark:text-emerald-300', label: 'Hôm nay' };
-  if (ageDays <= 2) return { cls: 'bg-lime-100 text-lime-700 dark:bg-lime-900/40 dark:text-lime-300', label: `${ageDays} ngày` };
-  if (ageDays <= 7) return { cls: 'bg-amber-100 text-amber-700 dark:bg-amber-900/40 dark:text-amber-300', label: `${ageDays} ngày` };
-  if (ageDays <= 15) return { cls: 'bg-orange-100 text-orange-700 dark:bg-orange-900/40 dark:text-orange-300', label: `${ageDays} ngày` };
+  if (ageDays < 0)
+    return { cls: 'bg-zinc-100 text-zinc-500 dark:bg-zinc-800 dark:text-zinc-400', label: 'Không rõ ngày' };
+  if (ageDays === 0)
+    return { cls: 'bg-emerald-100 text-emerald-700 dark:bg-emerald-900/40 dark:text-emerald-300', label: 'Hôm nay' };
+  if (ageDays <= 2)
+    return { cls: 'bg-lime-100 text-lime-700 dark:bg-lime-900/40 dark:text-lime-300', label: `${ageDays} ngày` };
+  if (ageDays <= 7)
+    return { cls: 'bg-amber-100 text-amber-700 dark:bg-amber-900/40 dark:text-amber-300', label: `${ageDays} ngày` };
+  if (ageDays <= 15)
+    return {
+      cls: 'bg-orange-100 text-orange-700 dark:bg-orange-900/40 dark:text-orange-300',
+      label: `${ageDays} ngày`,
+    };
   return { cls: 'bg-red-100 text-red-700 dark:bg-red-900/40 dark:text-red-300', label: `${ageDays} ngày` };
 }
 
@@ -106,8 +123,7 @@ export function DesignerBacklogDialog({ open, onClose, onDrillDay }: Props) {
   }, [data, search]);
 
   const allExpanded = designers.length > 0 && designers.every((d) => expanded.has(d.userId));
-  const toggleAll = () =>
-    setExpanded(allExpanded ? new Set() : new Set(designers.map((d) => d.userId)));
+  const toggleAll = () => setExpanded(allExpanded ? new Set() : new Set(designers.map((d) => d.userId)));
 
   const renderDesigner = (d: DesignerBacklogRow) => {
     const isOpen = expanded.has(d.userId);
@@ -194,9 +210,7 @@ export function DesignerBacklogDialog({ open, onClose, onDrillDay }: Props) {
             <Spinner size={22} />
           </div>
         ) : !data || data.total === 0 ? (
-          <div className="py-12 text-center text-sm text-muted-foreground">
-            🎉 Không còn task tồn đọng.
-          </div>
+          <div className="py-12 text-center text-sm text-muted-foreground">🎉 Không còn task tồn đọng.</div>
         ) : (
           <>
             <div className="flex items-center justify-between gap-3 text-xs text-muted-foreground">
@@ -234,12 +248,8 @@ export function DesignerBacklogDialog({ open, onClose, onDrillDay }: Props) {
               ) : (
                 // 2 cột độc lập (round-robin) → chiều cao mỗi card không kéo lệch cột kia.
                 <div className="grid grid-cols-1 lg:grid-cols-2 gap-3 items-start">
-                  <div className="space-y-2">
-                    {designers.filter((_, i) => i % 2 === 0).map(renderDesigner)}
-                  </div>
-                  <div className="space-y-2">
-                    {designers.filter((_, i) => i % 2 === 1).map(renderDesigner)}
-                  </div>
+                  <div className="space-y-2">{designers.filter((_, i) => i % 2 === 0).map(renderDesigner)}</div>
+                  <div className="space-y-2">{designers.filter((_, i) => i % 2 === 1).map(renderDesigner)}</div>
                 </div>
               )}
             </div>

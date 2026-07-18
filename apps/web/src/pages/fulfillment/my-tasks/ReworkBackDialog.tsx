@@ -1,11 +1,6 @@
 import React, { useMemo, useState } from 'react';
-import type { ProductionOrder } from 'shared';
-import {
-  FULFILLMENT_STAGE_LABELS,
-  FULFILLMENT_STAGE_ORDER,
-  FULFILLMENT_STAGES,
-  FulfillmentStage,
-} from 'shared';
+import type { FulfillmentStage, ProductionOrder } from 'shared';
+import { FULFILLMENT_STAGE_LABELS, FULFILLMENT_STAGE_ORDER, FULFILLMENT_STAGES } from 'shared';
 
 import { Button } from '@/components/ui/button';
 import {
@@ -30,10 +25,7 @@ interface Props {
 
 export function ReworkBackDialog({ order, myStage, onClose, onSubmit }: Props) {
   const myIdx = FULFILLMENT_STAGE_ORDER[myStage];
-  const previousStages = useMemo(
-    () => FULFILLMENT_STAGES.filter((s) => FULFILLMENT_STAGE_ORDER[s] < myIdx),
-    [myIdx],
-  );
+  const previousStages = useMemo(() => FULFILLMENT_STAGES.filter((s) => FULFILLMENT_STAGE_ORDER[s] < myIdx), [myIdx]);
 
   const defaultTarget: Target = previousStages.length > 0 ? previousStages[previousStages.length - 1]! : 'designer';
   const [target, setTarget] = useState<Target>(defaultTarget);
@@ -57,29 +49,18 @@ export function ReworkBackDialog({ order, myStage, onClose, onSubmit }: Props) {
       <DialogContent>
         <DialogHeader>
           <DialogTitle>Báo lỗi đơn {order.productionId}</DialogTitle>
-          <DialogDescription>
-            Chọn nơi nhận xử lý (Designer hoặc 1 stage trước) + mô tả lỗi.
-          </DialogDescription>
+          <DialogDescription>Chọn nơi nhận xử lý (Designer hoặc 1 stage trước) + mô tả lỗi.</DialogDescription>
         </DialogHeader>
 
         <div className="space-y-3">
           <div>
             <Label className="text-xs">Đẩy về</Label>
             <div className="flex flex-wrap gap-2 mt-1">
-              <button
-                type="button"
-                onClick={() => setTarget('designer')}
-                className={chipClass(target === 'designer')}
-              >
+              <button type="button" onClick={() => setTarget('designer')} className={chipClass(target === 'designer')}>
                 Designer
               </button>
               {previousStages.map((s) => (
-                <button
-                  key={s}
-                  type="button"
-                  onClick={() => setTarget(s)}
-                  className={chipClass(target === s)}
-                >
+                <button key={s} type="button" onClick={() => setTarget(s)} className={chipClass(target === s)}>
                   {FULFILLMENT_STAGE_LABELS[s]}
                 </button>
               ))}
@@ -115,8 +96,7 @@ export function ReworkBackDialog({ order, myStage, onClose, onSubmit }: Props) {
 }
 
 function chipClass(active: boolean): string {
-  const base =
-    'inline-flex items-center px-3 py-1.5 text-xs font-medium rounded-md border transition-colors';
+  const base = 'inline-flex items-center px-3 py-1.5 text-xs font-medium rounded-md border transition-colors';
   return active
     ? `${base} bg-primary text-primary-foreground border-primary`
     : `${base} bg-background text-foreground border-border hover:bg-accent`;

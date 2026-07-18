@@ -1,4 +1,5 @@
 import { Injectable } from '@nestjs/common';
+
 import { RedisCacheService } from '../redis-cache/redis-cache.service';
 import { SystemConfigRepository } from './system-config.repository';
 
@@ -34,6 +35,7 @@ export class SystemConfigService {
     return value;
   }
 
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any -- config blob lưu tùy ý theo key
   async set(key: string, value: any, description?: string): Promise<void> {
     const cacheKey = `${this.CACHE_PREFIX}${key}`;
 

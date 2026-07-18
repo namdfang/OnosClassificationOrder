@@ -1,6 +1,7 @@
 import type { CreateUser, LoginDto, RegisterDto, ResetPasswordDto, UpdateUserDto } from 'shared';
-import { CONFIG } from '../constants';
+
 import { callApi } from '../apis';
+import { CONFIG } from '../constants';
 
 const login = (form: LoginDto) => {
   return callApi(`/${CONFIG.API_VERSION}/auth/login`, 'post', form);

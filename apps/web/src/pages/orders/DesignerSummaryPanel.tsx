@@ -2,8 +2,10 @@ import React, { useEffect, useMemo, useState } from 'react';
 import { ChevronDown, ChevronRight, Trophy, Users } from 'lucide-react';
 import type { DesignerBreakdownRow, DesignerStatusCounts } from 'shared';
 
-import { Spinner } from '@/components/common/Spinner';
 import { RepositoryRemote } from '@/services';
+
+import { Spinner } from '@/components/common/Spinner';
+
 import { handleAxiosError } from '@/utils';
 import { cn } from '@/utils/cn';
 
@@ -37,24 +39,17 @@ const STATUS_COLS: {
   key: keyof Omit<DesignerStatusCounts, 'total'>;
   label: string;
   cls: string;
-  filterValue:
-    | 'assigned'
-    | 'in-progress'
-    | 'done'
-    | 'rejected'
-    | 'rework'
-    | 'unassigned'
-    | '__unassigned_notool__';
+  filterValue: 'assigned' | 'in-progress' | 'done' | 'rejected' | 'rework' | 'unassigned' | '__unassigned_notool__';
 }[] = [
-    // "Chưa gán" panel = "Chưa gán không tool" (count `unassigned` từ BE đã = M);
-    // filterValue token để click (KPI strip + matrix) lọc đúng nhóm không-tool.
-    { key: 'unassigned', label: 'Chưa gán không tool', cls: 'text-zinc-500', filterValue: '__unassigned_notool__' },
-    { key: 'assigned', label: 'Cần làm', cls: 'text-zinc-700 dark:text-zinc-200', filterValue: 'assigned' },
-    { key: 'rework', label: 'Cần làm lại', cls: 'text-amber-600 dark:text-amber-400', filterValue: 'rework' },
-    { key: 'inProgress', label: 'Đang làm', cls: 'text-indigo-600 dark:text-indigo-400', filterValue: 'in-progress' },
-    { key: 'done', label: 'Đã xong', cls: 'text-emerald-600 dark:text-emerald-400', filterValue: 'done' },
-    { key: 'rejected', label: 'Không làm được', cls: 'text-rose-600 dark:text-rose-400', filterValue: 'rejected' },
-  ];
+  // "Chưa gán" panel = "Chưa gán không tool" (count `unassigned` từ BE đã = M);
+  // filterValue token để click (KPI strip + matrix) lọc đúng nhóm không-tool.
+  { key: 'unassigned', label: 'Chưa gán không tool', cls: 'text-zinc-500', filterValue: '__unassigned_notool__' },
+  { key: 'assigned', label: 'Cần làm', cls: 'text-zinc-700 dark:text-zinc-200', filterValue: 'assigned' },
+  { key: 'rework', label: 'Cần làm lại', cls: 'text-amber-600 dark:text-amber-400', filterValue: 'rework' },
+  { key: 'inProgress', label: 'Đang làm', cls: 'text-indigo-600 dark:text-indigo-400', filterValue: 'in-progress' },
+  { key: 'done', label: 'Đã xong', cls: 'text-emerald-600 dark:text-emerald-400', filterValue: 'done' },
+  { key: 'rejected', label: 'Không làm được', cls: 'text-rose-600 dark:text-rose-400', filterValue: 'rejected' },
+];
 
 // KPI strip = "Tổng chưa gán" (N+M, `unassignedAll`) đứng TRƯỚC "Chưa gán không
 // tool" (M), rồi các status khác. Matrix KHÔNG có card tổng (chỉ STATUS_COLS).
@@ -116,9 +111,7 @@ export function DesignerSummaryPanel({ filterQs, onClickCell }: Props) {
         <div className="flex items-center gap-2 text-xs font-semibold text-foreground">
           <Trophy size={13} className="text-amber-500" />
           Designer summary
-          <span className="text-muted-foreground font-normal">
-            ({showOverall ? 'tổng toàn bộ' : 'theo filter'})
-          </span>
+          <span className="text-muted-foreground font-normal">({showOverall ? 'tổng toàn bộ' : 'theo filter'})</span>
         </div>
         <div className="flex items-center gap-2">
           <button
@@ -153,9 +146,7 @@ export function DesignerSummaryPanel({ filterQs, onClickCell }: Props) {
               )}
               title={`Click để filter list theo ${c.label}`}
             >
-              <span className="text-[10px] uppercase tracking-wider text-muted-foreground">
-                {c.label}
-              </span>
+              <span className="text-[10px] uppercase tracking-wider text-muted-foreground">{c.label}</span>
               <span className={cn('text-lg font-bold leading-none mt-1', c.cls)}>{v}</span>
               {!showOverall && overallCounts && ov !== v && (
                 <span className="text-[10px] text-muted-foreground mt-0.5">/ {ov} tổng</span>
@@ -177,10 +168,7 @@ export function DesignerSummaryPanel({ filterQs, onClickCell }: Props) {
                   </span>
                 </th>
                 {STATUS_COLS.map((c) => (
-                  <th
-                    key={c.key}
-                    className={cn('text-center py-1.5 px-2 font-medium', c.cls)}
-                  >
+                  <th key={c.key} className={cn('text-center py-1.5 px-2 font-medium', c.cls)}>
                     {c.label}
                   </th>
                 ))}
@@ -210,9 +198,7 @@ export function DesignerSummaryPanel({ filterQs, onClickCell }: Props) {
                         title="Click filter theo người này"
                       >
                         <div>{row.fullName}</div>
-                        {row.email && (
-                          <div className="text-[10px] text-muted-foreground">- {row.email}</div>
-                        )}
+                        {row.email && <div className="text-[10px] text-muted-foreground">- {row.email}</div>}
                       </button>
                     </td>
                     {STATUS_COLS.map((c) => {
@@ -222,12 +208,7 @@ export function DesignerSummaryPanel({ filterQs, onClickCell }: Props) {
                           {v > 0 ? (
                             <button
                               type="button"
-                              onClick={() =>
-                                onClickCell?.(
-                                  isUnassigned ? '__none__' : row.userId,
-                                  c.filterValue,
-                                )
-                              }
+                              onClick={() => onClickCell?.(isUnassigned ? '__none__' : row.userId, c.filterValue)}
                               className={cn(
                                 'inline-block min-w-7 px-1.5 py-0.5 rounded text-[11px] font-medium hover:ring-1 hover:ring-primary',
                                 c.cls,

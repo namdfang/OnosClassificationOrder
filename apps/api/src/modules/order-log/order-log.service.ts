@@ -44,7 +44,6 @@ export class OrderLogService {
         userAgent: params.ctx?.userAgent,
       });
     } catch (err) {
-      // eslint-disable-next-line no-console
       console.warn('[order-log] write failed', err);
     }
   }
@@ -68,7 +67,6 @@ export class OrderLogService {
         })),
       );
     } catch (err) {
-      // eslint-disable-next-line no-console
       console.warn('[order-log] writeMany failed', err);
     }
   }

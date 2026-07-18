@@ -10,7 +10,7 @@ import type {
 } from 'shared';
 import { NotificationType } from 'shared';
 
-import { timeAgo, escapeRegExp } from '@/utils';
+import { escapeRegExp, timeAgo } from '@/utils';
 
 import type { UserDocument } from '../user/user.entity';
 import { UserRepository } from '../user/user.repository';

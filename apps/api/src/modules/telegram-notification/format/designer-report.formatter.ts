@@ -1,9 +1,6 @@
-import type {
-  DesignerReportData,
-  ReportPeriod,
-} from '@/modules/scheduled-reports/types';
-
 import { formatVnDateTime, formatVnHourMinute } from '@/modules/scheduled-reports/build-period';
+import type { DesignerReportData, ReportPeriod } from '@/modules/scheduled-reports/types';
+
 import { clamp, DIVIDER, escapeMd, N } from './_helpers';
 
 interface DesignerRow {
@@ -17,11 +14,7 @@ interface DesignerRow {
 
 function isIdle(r: DesignerRow): boolean {
   return (
-    r.totalInShift === 0 &&
-    r.doneInShift === 0 &&
-    r.assignedNow === 0 &&
-    r.inProgressNow === 0 &&
-    r.reworkNow === 0
+    r.totalInShift === 0 && r.doneInShift === 0 && r.assignedNow === 0 && r.inProgressNow === 0 && r.reworkNow === 0
   );
 }
 
@@ -47,9 +40,7 @@ export function formatDesignerReport(payload: {
   const lines: string[] = [];
 
   lines.push(`🎨 *Báo cáo Designer*`);
-  lines.push(
-    `_${escapeMd(period.slotLabel)} · ${formatVnHourMinute(period.from)} → ${formatVnHourMinute(period.to)}_`,
-  );
+  lines.push(`_${escapeMd(period.slotLabel)} · ${formatVnHourMinute(period.from)} → ${formatVnHourMinute(period.to)}_`);
   lines.push(`_Snapshot ${formatVnDateTime(generatedAt)}_`);
 
   if (data.rows.length === 0) {
@@ -68,9 +59,7 @@ export function formatDesignerReport(payload: {
   lines.push(DIVIDER);
   lines.push(`🎯 *Tổng (${data.rows.length} designer)*`);
   const t = data.totals;
-  lines.push(
-    `   Trong ca ${N(t.totalInShift)} · Xong ${N(t.doneInShift)} · Đang làm ${N(t.inProgressNow)}`,
-  );
+  lines.push(`   Trong ca ${N(t.totalInShift)} · Xong ${N(t.doneInShift)} · Đang làm ${N(t.inProgressNow)}`);
   const tail: string[] = [];
   if (t.assignedNow > 0) tail.push(`Gán ${N(t.assignedNow)}`);
   if (t.reworkNow > 0) tail.push(`⚠️ Lỗi ${N(t.reworkNow)}`);

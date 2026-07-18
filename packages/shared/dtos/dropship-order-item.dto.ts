@@ -1,9 +1,9 @@
 import { createZodDto } from '@anatine/zod-nestjs';
 import { extendApi } from '@anatine/zod-openapi';
+import { BaseEntityZod, PageResZod, ResZod } from '@shared/types';
 import { z } from 'zod';
 
-import { BaseEntityZod, PageResZod, ResZod } from '@shared/types';
-import { DESCRIPTION_MAX_LENGTH, DESCRIPTION_MIN_LENGTH, NAME_MIN_LENGTH, IDZod, QUANTITY_MAX } from '..';
+import { DESCRIPTION_MAX_LENGTH, DESCRIPTION_MIN_LENGTH, IDZod, NAME_MIN_LENGTH, QUANTITY_MAX } from '..';
 
 export const DropShipLineItemZod = BaseEntityZod.extend({
   orderId: IDZod,

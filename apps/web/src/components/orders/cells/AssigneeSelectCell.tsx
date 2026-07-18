@@ -1,13 +1,16 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import { User } from 'lucide-react';
-import { toast } from 'sonner';
 import { Status } from 'shared';
+import { toast } from 'sonner';
+
+import { useDesignerTeamStore } from '@/store/designerTeamStore';
+
+import { RepositoryRemote } from '@/services';
 
 import { Spinner } from '@/components/common/Spinner';
-import { RepositoryRemote } from '@/services';
-import { useDesignerTeamStore } from '@/store/designerTeamStore';
-import { cn } from '@/utils/cn';
+
 import { handleAxiosError } from '@/utils';
+import { cn } from '@/utils/cn';
 
 import { SelectPopover } from './SelectPopover';
 
@@ -55,9 +58,7 @@ export function AssigneeSelectCell({ orderId, value, canEdit, blockedReason, onU
     try {
       setSaving(true);
       await RepositoryRemote.order.updateField(orderId, { field: 'assignee', value: newId });
-      toast.success(
-        newId ? `Đã gán cho ${byId[newId]?.fullName || 'designer'}` : 'Đã bỏ chọn',
-      );
+      toast.success(newId ? `Đã gán cho ${byId[newId]?.fullName || 'designer'}` : 'Đã bỏ chọn');
       onUpdated?.(newId);
     } catch (err) {
       handleAxiosError(err);
@@ -76,9 +77,7 @@ export function AssigneeSelectCell({ orderId, value, canEdit, blockedReason, onU
       title={blockedReason || current?.fullName}
     >
       {saving ? <Spinner size={10} className="text-current" /> : <User size={12} />}
-      <span className="truncate max-w-[120px]">
-        {current?.fullName || (value ? `#${value.slice(-4)}` : '—')}
-      </span>
+      <span className="truncate max-w-[120px]">{current?.fullName || (value ? `#${value.slice(-4)}` : '—')}</span>
     </span>
   );
 

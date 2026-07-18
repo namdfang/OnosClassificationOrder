@@ -1,21 +1,17 @@
 import React, { useEffect, useState } from 'react';
-import { Trash2 } from 'lucide-react';
 import { PRODUCT_LEVEL_MAP, PRODUCT_LEVELS } from 'shared';
 
+import { RepositoryRemote } from '@/services';
+
+import { Spinner } from '@/components/common/Spinner';
 import { Button } from '@/components/ui/button';
+import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
-import {
-  Dialog,
-  DialogContent,
-  DialogFooter,
-  DialogHeader,
-  DialogTitle,
-} from '@/components/ui/dialog';
-import { Spinner } from '@/components/common/Spinner';
-import { RepositoryRemote } from '@/services';
+
 import { handleAxiosError } from '@/utils';
+
 import type { ProductConfigRow, RefItem } from './ProductConfigTab';
 
 interface Option {
@@ -207,11 +203,7 @@ export function ProductConfigEditDialog({
             {/* Phòng */}
             <div className="space-y-1.5">
               <Label>Phòng</Label>
-              <select
-                value={machineTypeId}
-                onChange={(e) => setMachineTypeId(e.target.value)}
-                className={selectCls}
-              >
+              <select value={machineTypeId} onChange={(e) => setMachineTypeId(e.target.value)} className={selectCls}>
                 {!machineTypeId && <option value="">— Chưa chọn —</option>}
                 {machineTypeOptions.map((m) => (
                   <option key={m._id} value={m._id}>

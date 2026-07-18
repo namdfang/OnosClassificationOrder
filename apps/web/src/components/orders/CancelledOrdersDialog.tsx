@@ -1,17 +1,14 @@
 import React, { useEffect, useState } from 'react';
-import { Ban } from 'lucide-react';
 import dayjs from 'dayjs';
+import { Ban } from 'lucide-react';
 import type { CancelledOrderRow } from 'shared';
 
-import {
-  Dialog,
-  DialogContent,
-  DialogHeader,
-  DialogTitle,
-} from '@/components/ui/dialog';
+import { RepositoryRemote } from '@/services';
+
 import { CopyButton } from '@/components/common/CopyButton';
 import { Spinner } from '@/components/common/Spinner';
-import { RepositoryRemote } from '@/services';
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
+
 import { handleAxiosError } from '@/utils';
 
 interface Props {
@@ -72,9 +69,7 @@ export function CancelledOrdersDialog({ open, onClose, from, to, factoryId }: Pr
             <Spinner size={20} />
           </div>
         ) : rows.length === 0 ? (
-          <p className="text-sm text-muted-foreground text-center py-12">
-            Không có đơn hủy trong khoảng đã chọn.
-          </p>
+          <p className="text-sm text-muted-foreground text-center py-12">Không có đơn hủy trong khoảng đã chọn.</p>
         ) : (
           <div className="max-h-[60vh] overflow-auto rounded-md border border-border">
             <table className="w-full text-[13px]">
@@ -110,9 +105,7 @@ export function CancelledOrdersDialog({ open, onClose, from, to, factoryId }: Pr
                     <td className="px-2 py-1.5 text-rose-600 dark:text-rose-400 max-w-[200px]">
                       <span className="line-clamp-2">{o.cancelReason || '—'}</span>
                     </td>
-                    <td className="px-2 py-1.5 text-muted-foreground whitespace-nowrap">
-                      {fmt(o.cancelledAt)}
-                    </td>
+                    <td className="px-2 py-1.5 text-muted-foreground whitespace-nowrap">{fmt(o.cancelledAt)}</td>
                   </tr>
                 ))}
               </tbody>

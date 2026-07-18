@@ -1,18 +1,19 @@
-import { z } from 'zod';
-import {
-  BaseEntityZod,
-  NameZod,
-  CodeZod,
-  DESCRIPTION_MIN_LENGTH,
-  DESCRIPTION_MAX_LENGTH,
-  Status,
-  PageResZod,
-  PageQueryZod,
-  ResZod,
-  getObjectValues,
-} from '..';
 import { createZodDto } from '@anatine/zod-nestjs';
 import { extendApi } from '@anatine/zod-openapi';
+import { z } from 'zod';
+
+import {
+  BaseEntityZod,
+  CodeZod,
+  DESCRIPTION_MAX_LENGTH,
+  DESCRIPTION_MIN_LENGTH,
+  getObjectValues,
+  NameZod,
+  PageQueryZod,
+  PageResZod,
+  ResZod,
+  Status,
+} from '..';
 
 export const DepartmentZod = BaseEntityZod.extend({
   name: NameZod,

@@ -1,26 +1,26 @@
 import React, { useMemo, useState } from 'react';
 import { CheckCircle2, Download, Flag, PauseCircle, PlayCircle, UserPlus, X } from 'lucide-react';
-import { toast } from 'sonner';
 import type { OrderWorkshopField, WorkshopConfigCategory } from 'shared';
 import { ORDER_PRIORITIES, ORDER_PRIORITY_LABELS, ORDER_WORKSHOP_FIELDS } from 'shared';
+import { toast } from 'sonner';
 
+import { useWorkshopConfigStore } from '@/store/workshopConfigStore';
+
+import { RepositoryRemote } from '@/services';
+
+import { Spinner } from '@/components/common/Spinner';
 import { Button } from '@/components/ui/button';
 import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Textarea } from '@/components/ui/textarea';
-import { Spinner } from '@/components/common/Spinner';
-import { RepositoryRemote } from '@/services';
-import { useWorkshopConfigStore } from '@/store/workshopConfigStore';
+
 import { handleAxiosError } from '@/utils';
-import { usePermission } from '@/hooks/usePermission';
 import { canUserHold } from '@/utils/orderActions';
 
-import { AssignDesignerDialog } from './AssignDesignerDialog';
+import { usePermission } from '@/hooks/usePermission';
+import { buildDetailOnlyWorkbook, downloadWorkbook, type ExportableOrder } from '@/pages/home/exportOrders';
 import { LucideIcon } from '@/pages/workshop-config/IconPicker';
-import {
-  buildDetailOnlyWorkbook,
-  downloadWorkbook,
-  type ExportableOrder,
-} from '@/pages/home/exportOrders';
+
+import { AssignDesignerDialog } from './AssignDesignerDialog';
 
 const FIELD_TO_CATEGORY: Record<OrderWorkshopField, WorkshopConfigCategory | null> = {
   printStatus: 'print_status' as WorkshopConfigCategory,
@@ -101,9 +101,7 @@ export function BulkEditToolbar({ selectedIds, onClear, onApplied }: Props) {
         return;
       }
       const wb = buildDetailOnlyWorkbook(data, { resolve: resolveWorkshop });
-      const stamp = new Date()
-        .toLocaleString('sv-SE', { hour12: false })
-        .replace(/[: ]/g, '-');
+      const stamp = new Date().toLocaleString('sv-SE', { hour12: false }).replace(/[: ]/g, '-');
       downloadWorkbook(`don-hang-chon-${stamp}.xlsx`, wb);
       toast.success(`Đã xuất ${data.length} đơn`);
     } catch (err) {
@@ -150,10 +148,7 @@ export function BulkEditToolbar({ selectedIds, onClear, onApplied }: Props) {
   };
 
   const editableFields = useMemo(
-    () =>
-      ORDER_WORKSHOP_FIELDS.filter(
-        (f) => canEditField(f) && !BULK_UPDATE_BLACKLIST.includes(f),
-      ),
+    () => ORDER_WORKSHOP_FIELDS.filter((f) => canEditField(f) && !BULK_UPDATE_BLACKLIST.includes(f)),
     [canEditField],
   );
 
@@ -236,11 +231,7 @@ export function BulkEditToolbar({ selectedIds, onClear, onApplied }: Props) {
             disabled={exporting}
             title="Xuất Excel các đơn đang chọn"
           >
-            {exporting ? (
-              <Spinner size={13} className="text-muted-foreground" />
-            ) : (
-              <Download size={13} />
-            )}
+            {exporting ? <Spinner size={13} className="text-muted-foreground" /> : <Download size={13} />}
             Xuất Excel
           </Button>
           <Button size="sm" variant="ghost" onClick={onClear}>

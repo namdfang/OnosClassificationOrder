@@ -1,38 +1,31 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import { CheckCircle2, History, Keyboard, MousePointerClick } from 'lucide-react';
-import { toast } from 'sonner';
 import type { WorkshopAvailableFilters } from 'shared';
+import { toast } from 'sonner';
 
-import { Button } from '@/components/ui/button';
+import { useWorkshopConfigStore } from '@/store/workshopConfigStore';
+
+import { RepositoryRemote } from '@/services';
+
+import { ImagePreviewDialog } from '@/components/common/ImagePreviewDialog';
 import { PaginationBar } from '@/components/common/PaginationBar';
 import { Spinner } from '@/components/common/Spinner';
-import { ImagePreviewDialog } from '@/components/common/ImagePreviewDialog';
-import { OrderFilterBar, type OrderFilterFacet } from '@/components/orders/OrderFilterBar';
-import {
-  Table,
-  TableBody,
-  TableCell,
-  TableHead,
-  TableHeader,
-  TableRow,
-} from '@/components/ui/table';
-import { TooltipProvider } from '@/components/ui/tooltip';
 import { BulkEditToolbar } from '@/components/orders/BulkEditToolbar';
 import { OrderDetailDialog } from '@/components/orders/OrderDetailDialog';
+import { OrderFilterBar, type OrderFilterFacet } from '@/components/orders/OrderFilterBar';
 import { OrderLogTimelineDialog } from '@/components/orders/OrderLogTimelineDialog';
-import {
-  PRINT_COLS,
-  type WorkshopOrderRow,
-  type WorkshopRenderCtx,
-} from '@/components/orders/workshopTableConfig';
-import { usePermission } from '@/hooks/usePermission';
-import { RepositoryRemote } from '@/services';
-import { useWorkshopConfigStore } from '@/store/workshopConfigStore';
+import { PRINT_COLS, type WorkshopOrderRow, type WorkshopRenderCtx } from '@/components/orders/workshopTableConfig';
+import { Button } from '@/components/ui/button';
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
+import { TooltipProvider } from '@/components/ui/tooltip';
+
 import { handleAxiosError } from '@/utils';
+import { cn } from '@/utils/cn';
+
 import { useDebounce } from '@/hooks/useDebounce';
 import { useIsNoTool } from '@/hooks/useIsNoTool';
-import { cn } from '@/utils/cn';
+import { usePermission } from '@/hooks/usePermission';
 
 type OrderRow = WorkshopOrderRow;
 const COLS = PRINT_COLS;
@@ -157,7 +150,12 @@ export function PrintOrderTable({
   }, [cursorIndex]);
   const activeRowRef = useRef<HTMLTableRowElement | null>(null);
 
-  const [preview, setPreview] = useState<{ url: string; originalUrl?: string; title: string; sourceUrl?: string } | null>(null);
+  const [preview, setPreview] = useState<{
+    url: string;
+    originalUrl?: string;
+    title: string;
+    sourceUrl?: string;
+  } | null>(null);
   const [historyTarget, setHistoryTarget] = useState<{ id: string; productionId: string } | null>(null);
   const [detailTarget, setDetailTarget] = useState<{ id: string; productionId: string } | null>(null);
 
@@ -330,11 +328,9 @@ export function PrintOrderTable({
     [items, isRowSelectable],
   );
   const orderedIds = selectableIds;
-  const allSelectableSelected =
-    selectableIds.length > 0 && selectableIds.every((id) => selected.has(id));
+  const allSelectableSelected = selectableIds.length > 0 && selectableIds.every((id) => selected.has(id));
 
-  const toggleAll = () =>
-    setSelected((prev) => (allSelectableSelected ? new Set() : new Set(selectableIds)));
+  const toggleAll = () => setSelected((prev) => (allSelectableSelected ? new Set() : new Set(selectableIds)));
 
   const handleCheckboxChange = (id: string) => {
     const isShift = shiftKeyRef.current;
@@ -393,10 +389,7 @@ export function PrintOrderTable({
       if (prev < 0) {
         next = e.key === 'ArrowDown' ? 0 : items.length - 1;
       } else {
-        next =
-          e.key === 'ArrowDown'
-            ? Math.min(prev + 1, items.length - 1)
-            : Math.max(prev - 1, 0);
+        next = e.key === 'ArrowDown' ? Math.min(prev + 1, items.length - 1) : Math.max(prev - 1, 0);
       }
       cursorRef.current = next;
       setCursorIndex(next);
@@ -405,7 +398,6 @@ export function PrintOrderTable({
     };
     window.addEventListener('keydown', handler);
     return () => window.removeEventListener('keydown', handler);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [keyboardMode, items]);
 
   // Scroll dòng đang focus vào tầm nhìn.
@@ -420,7 +412,6 @@ export function PrintOrderTable({
   useEffect(() => {
     setCopiedId(null);
     setCursorIndex(-1);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [
     debouncedSearch,
     createdFrom,
@@ -445,17 +436,98 @@ export function PrintOrderTable({
   }, [page, pageSize]);
 
   const facets: OrderFilterFacet[] = [
-    { key: 'type', label: 'Tên sản phẩm', value: fType, onChange: (v) => { setFType(v); setPage(1); }, options: workshopFilters?.type || [] },
-    { key: 'userSku', label: 'Khách hàng (SKU)', value: fUserSku, onChange: (v) => { setFUserSku(v); setPage(1); }, options: workshopFilters?.userSku || [] },
-    { key: 'fabricType', label: 'Loại vải', value: fFabricType, onChange: setFFabricType, options: workshopFilters?.fabricType || [], perm: 'order.field.fabricType.view' },
-    { key: 'machineNumber', label: 'Máy', value: fMachineNumber, onChange: setFMachineNumber, options: workshopFilters?.machineNumber || [], perm: 'order.field.machineNumber.view' },
-    { key: 'printStatus', label: 'Trạng thái in', value: fPrintStatus, onChange: setFPrintStatus, options: workshopFilters?.printStatus || [], perm: 'order.field.printStatus.view' },
-    { key: 'toolResult', label: 'Kết quả Tool', value: fToolResult, onChange: setFToolResult, options: workshopFilters?.toolResult || [], perm: 'order.field.toolResult.view' },
-    { key: 'toolResultNote', label: 'Note kq Tool', value: fToolResultNote, onChange: setFToolResultNote, options: workshopFilters?.toolResultNote || [], perm: 'order.field.toolResultNote.view' },
-    { key: 'errorFile', label: 'File sửa lỗi', value: fErrorFile, onChange: setFErrorFile, options: workshopFilters?.errorFile || [], perm: 'order.field.errorFile.view' },
-    { key: 'assignee', label: 'Người thực hiện', value: fAssignee, onChange: setFAssignee, options: workshopFilters?.assignee || [], perm: 'order.field.assignee.view' },
-    { key: 'designerStatus', label: 'TT Designer', value: fDesignerStatus, onChange: setFDesignerStatus, options: workshopFilters?.designerStatus || [], perm: 'order.field.designerStatus.view' },
-    { key: 'productionError', label: 'Lỗi xưởng', value: fProductionError, onChange: setFProductionError, options: workshopFilters?.productionError || [], perm: 'order.field.productionError.view' },
+    {
+      key: 'type',
+      label: 'Tên sản phẩm',
+      value: fType,
+      onChange: (v) => {
+        setFType(v);
+        setPage(1);
+      },
+      options: workshopFilters?.type || [],
+    },
+    {
+      key: 'userSku',
+      label: 'Khách hàng (SKU)',
+      value: fUserSku,
+      onChange: (v) => {
+        setFUserSku(v);
+        setPage(1);
+      },
+      options: workshopFilters?.userSku || [],
+    },
+    {
+      key: 'fabricType',
+      label: 'Loại vải',
+      value: fFabricType,
+      onChange: setFFabricType,
+      options: workshopFilters?.fabricType || [],
+      perm: 'order.field.fabricType.view',
+    },
+    {
+      key: 'machineNumber',
+      label: 'Máy',
+      value: fMachineNumber,
+      onChange: setFMachineNumber,
+      options: workshopFilters?.machineNumber || [],
+      perm: 'order.field.machineNumber.view',
+    },
+    {
+      key: 'printStatus',
+      label: 'Trạng thái in',
+      value: fPrintStatus,
+      onChange: setFPrintStatus,
+      options: workshopFilters?.printStatus || [],
+      perm: 'order.field.printStatus.view',
+    },
+    {
+      key: 'toolResult',
+      label: 'Kết quả Tool',
+      value: fToolResult,
+      onChange: setFToolResult,
+      options: workshopFilters?.toolResult || [],
+      perm: 'order.field.toolResult.view',
+    },
+    {
+      key: 'toolResultNote',
+      label: 'Note kq Tool',
+      value: fToolResultNote,
+      onChange: setFToolResultNote,
+      options: workshopFilters?.toolResultNote || [],
+      perm: 'order.field.toolResultNote.view',
+    },
+    {
+      key: 'errorFile',
+      label: 'File sửa lỗi',
+      value: fErrorFile,
+      onChange: setFErrorFile,
+      options: workshopFilters?.errorFile || [],
+      perm: 'order.field.errorFile.view',
+    },
+    {
+      key: 'assignee',
+      label: 'Người thực hiện',
+      value: fAssignee,
+      onChange: setFAssignee,
+      options: workshopFilters?.assignee || [],
+      perm: 'order.field.assignee.view',
+    },
+    {
+      key: 'designerStatus',
+      label: 'TT Designer',
+      value: fDesignerStatus,
+      onChange: setFDesignerStatus,
+      options: workshopFilters?.designerStatus || [],
+      perm: 'order.field.designerStatus.view',
+    },
+    {
+      key: 'productionError',
+      label: 'Lỗi xưởng',
+      value: fProductionError,
+      onChange: setFProductionError,
+      options: workshopFilters?.productionError || [],
+      perm: 'order.field.productionError.view',
+    },
   ];
 
   return (
@@ -469,7 +541,10 @@ export function PrintOrderTable({
               <button
                 key={tab.value || 'all'}
                 type="button"
-                onClick={() => { setStatusFilter(tab.value); setPage(1); }}
+                onClick={() => {
+                  setStatusFilter(tab.value);
+                  setPage(1);
+                }}
                 className={cn(
                   'inline-flex items-center gap-1.5 rounded-full border px-3 py-1.5 text-xs font-medium transition-colors',
                   active
@@ -520,7 +595,11 @@ export function PrintOrderTable({
           onSearchChange={setSearch}
           createdFrom={createdFrom}
           createdTo={createdTo}
-          onDateRangeChange={(f, t) => { setCreatedFrom(f); setCreatedTo(t); setPage(1); }}
+          onDateRangeChange={(f, t) => {
+            setCreatedFrom(f);
+            setCreatedTo(t);
+            setPage(1);
+          }}
           onReload={reload}
           loading={loading}
           facets={facets}
@@ -532,19 +611,20 @@ export function PrintOrderTable({
           pageSize={pageSize}
           total={total}
           loading={loading}
-          onChange={(p, ps) => { setPage(p); setPageSize(ps); }}
+          onChange={(p, ps) => {
+            setPage(p);
+            setPageSize(ps);
+          }}
         />
 
         {keyboardMode && items.length > 0 && (
           <div className="flex items-start gap-2 rounded-md border border-primary/30 bg-primary/5 px-3 py-2 text-[11px] text-foreground">
             <Keyboard size={13} className="mt-0.5 shrink-0 text-primary" />
             <p>
-              Nhấn{' '}
-              <kbd className="rounded border border-border bg-background px-1 py-0.5 font-mono text-[10px]">↑</kbd>{' '}
-              <kbd className="rounded border border-border bg-background px-1 py-0.5 font-mono text-[10px]">↓</kbd>{' '}
-              để copy Production ID từng dòng. Chỉ dòng đang trỏ hiện dấu{' '}
-              <CheckCircle2 size={11} className="inline text-emerald-500" /> — di chuyển
-              cursor thì dấu nhảy theo.
+              Nhấn <kbd className="rounded border border-border bg-background px-1 py-0.5 font-mono text-[10px]">↑</kbd>{' '}
+              <kbd className="rounded border border-border bg-background px-1 py-0.5 font-mono text-[10px]">↓</kbd> để
+              copy Production ID từng dòng. Chỉ dòng đang trỏ hiện dấu{' '}
+              <CheckCircle2 size={11} className="inline text-emerald-500" /> — di chuyển cursor thì dấu nhảy theo.
             </p>
           </div>
         )}
@@ -597,14 +677,20 @@ export function PrintOrderTable({
               <TableBody>
                 {loading && items.length === 0 && (
                   <TableRow>
-                    <TableCell colSpan={visibleCols.length + 2 + (extraRowAction ? 1 : 0)} className="text-center py-10">
+                    <TableCell
+                      colSpan={visibleCols.length + 2 + (extraRowAction ? 1 : 0)}
+                      className="text-center py-10"
+                    >
                       <Spinner size={20} className="text-muted-foreground" />
                     </TableCell>
                   </TableRow>
                 )}
                 {!loading && items.length === 0 && (
                   <TableRow>
-                    <TableCell colSpan={visibleCols.length + 2 + (extraRowAction ? 1 : 0)} className="text-center py-10 text-sm text-muted-foreground">
+                    <TableCell
+                      colSpan={visibleCols.length + 2 + (extraRowAction ? 1 : 0)}
+                      className="text-center py-10 text-sm text-muted-foreground"
+                    >
                       Không có đơn hàng nào phù hợp
                     </TableCell>
                   </TableRow>
@@ -636,7 +722,9 @@ export function PrintOrderTable({
                             type="checkbox"
                             checked={isSel}
                             disabled={!selectable}
-                            onMouseDown={(e) => { shiftKeyRef.current = e.shiftKey; }}
+                            onMouseDown={(e) => {
+                              shiftKeyRef.current = e.shiftKey;
+                            }}
                             onClick={(e) => e.stopPropagation()}
                             onChange={() => handleCheckboxChange(row._id)}
                             title={selectable ? 'Shift+click để chọn cả range' : 'Đơn không thao tác được ở stage In'}
@@ -653,7 +741,10 @@ export function PrintOrderTable({
                       {visibleCols.map((c, i) => (
                         <TableCell
                           key={c.key}
-                          className={cn('py-2', i === 0 && cn('sticky left-8 z-10 shadow-[1px_0_0_0_var(--border)]', rowBgClass))}
+                          className={cn(
+                            'py-2',
+                            i === 0 && cn('sticky left-8 z-10 shadow-[1px_0_0_0_var(--border)]', rowBgClass),
+                          )}
                         >
                           <div className="min-w-0">{c.render(row, renderCtx)}</div>
                         </TableCell>
@@ -686,7 +777,10 @@ export function PrintOrderTable({
             pageSize={pageSize}
             total={total}
             loading={loading}
-            onChange={(p, ps) => { setPage(p); setPageSize(ps); }}
+            onChange={(p, ps) => {
+              setPage(p);
+              setPageSize(ps);
+            }}
           />
         </div>
 
@@ -700,7 +794,10 @@ export function PrintOrderTable({
           <BulkEditToolbar
             selectedIds={Array.from(selected)}
             onClear={() => setSelected(new Set())}
-            onApplied={() => { setSelected(new Set()); reload(); }}
+            onApplied={() => {
+              setSelected(new Set());
+              reload();
+            }}
           />
         )}
 

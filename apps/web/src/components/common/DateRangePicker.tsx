@@ -4,8 +4,9 @@ import { Calendar, ChevronDown, X } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
-import { DATE_PRESETS, matchPreset, QUICK_PRESET_KEYS } from '@/utils/dateRangePresets';
+
 import { cn } from '@/utils/cn';
+import { DATE_PRESETS, matchPreset, QUICK_PRESET_KEYS } from '@/utils/dateRangePresets';
 
 interface DateRangePickerProps {
   from: string;
@@ -50,9 +51,7 @@ function CustomRangeBody({
 
   return (
     <div className="space-y-2">
-      <p className="text-[10px] uppercase tracking-wide text-muted-foreground font-medium">
-        {heading}
-      </p>
+      <p className="text-[10px] uppercase tracking-wide text-muted-foreground font-medium">{heading}</p>
       <div className="flex items-center gap-1.5">
         <label className="text-xs text-muted-foreground">Từ</label>
         <Input
@@ -172,18 +171,13 @@ export function DateRangePicker({
 
   // ─── Variant popover (mặc định — giữ nguyên hành vi cũ) ──────────
   const activeLabel = DATE_PRESETS.find((p) => p.key === activeKey)?.label;
-  const label =
-    activeLabel || (from && to ? `${fmt(from)} → ${fmt(to)}` : from || to || placeholder);
+  const label = activeLabel || (from && to ? `${fmt(from)} → ${fmt(to)}` : from || to || placeholder);
 
   return (
     <div className={cn('inline-flex items-center', className)}>
       <Popover open={open} onOpenChange={setOpen}>
         <PopoverTrigger asChild>
-          <Button
-            variant="outline"
-            size="sm"
-            className="h-9 gap-1.5 text-xs justify-start font-normal"
-          >
+          <Button variant="outline" size="sm" className="h-9 gap-1.5 text-xs justify-start font-normal">
             <Calendar size={13} className="text-muted-foreground" />
             <span className={cn(!hasValue && 'text-muted-foreground')}>{label}</span>
             <ChevronDown size={12} className="text-muted-foreground ml-1" />

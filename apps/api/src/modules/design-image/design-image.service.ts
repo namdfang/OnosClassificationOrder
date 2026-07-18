@@ -1,21 +1,9 @@
-import {
-  HeadObjectCommand,
-  PutObjectCommand,
-  S3Client,
-  DeleteObjectCommand,
-} from '@aws-sdk/client-s3';
+import { DeleteObjectCommand, HeadObjectCommand, PutObjectCommand, S3Client } from '@aws-sdk/client-s3';
 import { BadRequestException, Injectable, Logger } from '@nestjs/common';
 import sharp from 'sharp';
 
 import { ApiConfigService } from '@/shared/services';
-import {
-  buildDriveDownloadUrl,
-  buildR2Url,
-  extractDriveId,
-  hashForR2,
-  isOwnR2Url,
-  r2KeyFor,
-} from '@/utils/design-url';
+import { buildDriveDownloadUrl, buildR2Url, extractDriveId, hashForR2, isOwnR2Url, r2KeyFor } from '@/utils/design-url';
 
 import { DesignBufferCache } from './buffer-cache.service';
 import { R2DesignObjectRepository } from './r2-design-object.repository';
@@ -95,9 +83,7 @@ export class DesignImageService {
       const hash = sourceUrl.split('/').pop()?.replace('.webp', '') || hashForR2(sourceUrl);
       return {
         hash,
-        url: sourceUrl.includes('/preview/')
-          ? sourceUrl.replace('/preview/', '/thumb/')
-          : sourceUrl,
+        url: sourceUrl.includes('/preview/') ? sourceUrl.replace('/preview/', '/thumb/') : sourceUrl,
         cached: true,
         sizeBytes: 0,
       };
@@ -151,9 +137,7 @@ export class DesignImageService {
       const hash = sourceUrl.split('/').pop()?.replace('.webp', '') || hashForR2(sourceUrl);
       return {
         hash,
-        url: sourceUrl.includes('/thumb/')
-          ? sourceUrl.replace('/thumb/', '/preview/')
-          : sourceUrl,
+        url: sourceUrl.includes('/thumb/') ? sourceUrl.replace('/thumb/', '/preview/') : sourceUrl,
         cached: true,
         sizeBytes: 0,
       };
@@ -201,21 +185,15 @@ export class DesignImageService {
     }
     const ct = res.headers.get('content-type') || '';
     if (ct.includes('text/html')) {
-      throw new BadRequestException(
-        `Drive trả HTML (file > 100 MB hoặc cần auth): ${url}.`,
-      );
+      throw new BadRequestException(`Drive trả HTML (file > 100 MB hoặc cần auth): ${url}.`);
     }
     const cl = Number(res.headers.get('content-length') || 0);
     if (cl > 0 && cl > capMb * 1024 * 1024) {
-      throw new BadRequestException(
-        `File ${(cl / 1024 / 1024).toFixed(1)} MB > giới hạn ${capMb} MB`,
-      );
+      throw new BadRequestException(`File ${(cl / 1024 / 1024).toFixed(1)} MB > giới hạn ${capMb} MB`);
     }
     const ab = await res.arrayBuffer();
     if (ab.byteLength > capMb * 1024 * 1024) {
-      throw new BadRequestException(
-        `Body ${(ab.byteLength / 1024 / 1024).toFixed(1)} MB > giới hạn ${capMb} MB`,
-      );
+      throw new BadRequestException(`Body ${(ab.byteLength / 1024 / 1024).toFixed(1)} MB > giới hạn ${capMb} MB`);
     }
     return Buffer.from(ab);
   }

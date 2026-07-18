@@ -23,8 +23,8 @@ import {
   WorkshopConfigCategory,
 } from 'shared';
 
-import { OrderLogEntity } from '../order-log/order-log.entity';
 import { OrderEntity } from '../order/order.entity';
+import { OrderLogEntity } from '../order-log/order-log.entity';
 import { ProductConfigEntity } from '../product-config/product-config.entity';
 import { RoleRepository } from '../role/role.repository';
 import { UserEntity } from '../user/user.entity';
@@ -54,11 +54,7 @@ export class DesignerStatsService {
     private readonly roleRepository: RoleRepository,
   ) {}
 
-  async getPerformance(
-    from?: string,
-    to?: string,
-    userId?: string,
-  ): Promise<DesignerLeaderboardRow[]> {
+  async getPerformance(from?: string, to?: string, userId?: string): Promise<DesignerLeaderboardRow[]> {
     const range = this.resolveRange(from, to);
 
     // 1) Snapshot counts theo status (không filter date).
@@ -202,11 +198,11 @@ export class DesignerStatsService {
       };
       c.n++;
       // "Đã sửa" = done trong period MÀ từng bị báo lỗi (designerReworkCount>0).
-      if (((o.designerReworkCount as number) || 0) > 0) c.fixedN++;
-      const aAt = o.designerAssignedAt as Date | undefined;
-      const sAt = o.designerStartedAt as Date | undefined;
+      if ((o.designerReworkCount || 0) > 0) c.fixedN++;
+      const aAt = o.designerAssignedAt;
+      const sAt = o.designerStartedAt;
       const fsAt = (o as { designerFirstStartedAt?: Date }).designerFirstStartedAt;
-      const cAt = o.designerCompletedAt as Date | undefined;
+      const cAt = o.designerCompletedAt;
       // Response: ưu tiên firstStartedAt (immutable); fallback startedAt cho legacy.
       const respStart = fsAt || sAt;
       if (aAt && respStart) {
@@ -222,7 +218,7 @@ export class DesignerStatsService {
         c.workMs += cAt.getTime() - sAt.getTime();
         c.workN++;
       }
-      c.reworkSum += (o.designerReworkCount as number) || 0;
+      c.reworkSum += o.designerReworkCount || 0;
       completedAgg.set(uid, c);
     }
     for (const [uid, c] of completedAgg) {
@@ -278,19 +274,15 @@ export class DesignerStatsService {
       ensureRow(row._id).totalRejected = row.count;
     }
 
-    return [...rows.values()]
-      // Loại row của designer đã tắt (ensureRow ở các loop trên có thể tạo lại).
-      .filter((r) => allow(r.userId))
-      .sort(
-        (a, b) => b.completedInPeriod - a.completedInPeriod || b.assignedCount - a.assignedCount,
-      );
+    return (
+      [...rows.values()]
+        // Loại row của designer đã tắt (ensureRow ở các loop trên có thể tạo lại).
+        .filter((r) => allow(r.userId))
+        .sort((a, b) => b.completedInPeriod - a.completedInPeriod || b.assignedCount - a.assignedCount)
+    );
   }
 
-  async getTimeline(
-    userId: string,
-    from?: string,
-    to?: string,
-  ): Promise<DesignerTimelineBucket[]> {
+  async getTimeline(userId: string, from?: string, to?: string): Promise<DesignerTimelineBucket[]> {
     const range = this.resolveRange(from, to);
     const tz = 'Asia/Ho_Chi_Minh';
 
@@ -386,7 +378,7 @@ export class DesignerStatsService {
       cur.count += row.count;
       // Source ở byCode chỉ là indication — lấy source chính (designer/factory)
       // nếu có; nếu cùng code có cả 2 source thì giữ source phổ biến hơn.
-      if (src && (!cur.source || row.count > 0)) cur.source = src as 'designer' | 'factory';
+      if (src && (!cur.source || row.count > 0)) cur.source = src;
       byCodeMap.set(row._id.code, cur);
     }
 
@@ -494,12 +486,7 @@ export class DesignerStatsService {
             assignee: { $exists: true, $ne: null },
             inProductionAt: { $gte: start, $lte: end },
             designerStatus: {
-              $in: [
-                DesignerStatus.Assigned,
-                DesignerStatus.InProgress,
-                DesignerStatus.Rework,
-                DesignerStatus.Done,
-              ],
+              $in: [DesignerStatus.Assigned, DesignerStatus.InProgress, DesignerStatus.Rework, DesignerStatus.Done],
             },
             ...extraMatch,
           },
@@ -533,7 +520,11 @@ export class DesignerStatsService {
     const rowCells = new Map<string, ReturnType<typeof emptyCell>[]>();
     const rowTotals = new Map<string, ReturnType<typeof emptyCell>>();
     const ensureRow = (uid: string) => {
-      if (!rowCells.has(uid)) rowCells.set(uid, days.map(() => emptyCell()));
+      if (!rowCells.has(uid))
+        rowCells.set(
+          uid,
+          days.map(() => emptyCell()),
+        );
       if (!rowTotals.has(uid)) rowTotals.set(uid, emptyCell());
     };
     if (designerRole) for (const u of teamUsers) ensureRow(String(u._id));
@@ -551,7 +542,7 @@ export class DesignerStatsService {
       // Cells chỉ đổ khi ngày nằm trong day-list (preset ≤30; range cap 100).
       const col = dayIndex.get(r._id.day);
       if (col !== undefined) {
-        const c = rowCells.get(r._id.uid)![col]!;
+        const c = rowCells.get(r._id.uid)![col];
         c[key] += r.count;
         if (key !== 'done') c.unfinished += r.count;
       }
@@ -569,7 +560,7 @@ export class DesignerStatsService {
     const rows = [...rowTotals.entries()].map(([uid, totals]) => {
       const cells = rowCells.get(uid)!;
       cells.forEach((c, i) => {
-        for (const k of KEYS) columnTotals[i]![k] += c[k];
+        for (const k of KEYS) columnTotals[i][k] += c[k];
       });
       for (const k of KEYS) grandTotals[k] += totals[k];
       const info = nameMap.get(uid);
@@ -724,11 +715,7 @@ export class DesignerStatsService {
             ...baseMatch,
             assignee: { $exists: true, $ne: null },
             designerStatus: {
-              $in: [
-                DesignerStatus.Assigned,
-                DesignerStatus.InProgress,
-                DesignerStatus.Rework,
-              ],
+              $in: [DesignerStatus.Assigned, DesignerStatus.InProgress, DesignerStatus.Rework],
             },
           },
         },
@@ -788,9 +775,7 @@ export class DesignerStatsService {
 
     const missingIds = [...blMap.keys()].filter((id) => !nameMap.has(id));
     if (missingIds.length > 0) {
-      const extra = await this.userModel
-        .find({ _id: { $in: missingIds } }, { _id: 1, fullName: 1, email: 1 })
-        .lean();
+      const extra = await this.userModel.find({ _id: { $in: missingIds } }, { _id: 1, fullName: 1, email: 1 }).lean();
       for (const u of extra) nameMap.set(String(u._id), { fullName: u.fullName, email: u.email });
     }
 
@@ -880,9 +865,7 @@ export class DesignerStatsService {
         mockupOriginalUrl: o.mockupOriginalUrl as string | undefined,
         toolResultNote: o.toolResultNote as string | undefined,
         designerStatus: o.designerStatus as string | undefined,
-        inProductionAt: o.inProductionAt
-          ? new Date(o.inProductionAt as Date).toISOString()
-          : undefined,
+        inProductionAt: o.inProductionAt ? new Date(o.inProductionAt as Date).toISOString() : undefined,
         priority: o.priority as AssignBacklogOrder['priority'],
       });
       grouped.set(key, g);
@@ -947,12 +930,7 @@ export class DesignerStatsService {
       inProductionAt: { $gte: start, $lte: end },
       assignee: { $exists: true, $ne: null },
       designerStatus: {
-        $in: [
-          DesignerStatus.Assigned,
-          DesignerStatus.InProgress,
-          DesignerStatus.Rework,
-          DesignerStatus.Done,
-        ],
+        $in: [DesignerStatus.Assigned, DesignerStatus.InProgress, DesignerStatus.Rework, DesignerStatus.Done],
       },
     };
     if (type) match.type = type;
@@ -978,9 +956,7 @@ export class DesignerStatsService {
 
     // CHỈ designer ĐANG BẬT — thống kê sản phẩm loại người đã tắt.
     const teamUsers = designerRole
-      ? await this.userModel
-          .find({ roleId: designerRole._id, status: Status.Active }, { _id: 1, fullName: 1 })
-          .lean()
+      ? await this.userModel.find({ roleId: designerRole._id, status: Status.Active }, { _id: 1, fullName: 1 }).lean()
       : [];
     const activeIds = new Set(teamUsers.map((u) => String(u._id)));
     const nameMap = new Map<string, string>();
@@ -1137,10 +1113,7 @@ export class DesignerStatsService {
     const facetScope = {
       inProductionAt: inWindow,
       ...alive,
-      $or: [
-        { toolResultNote: { $in: [null, ''] } },
-        { productionErrorSource: 'tool-check' },
-      ],
+      $or: [{ toolResultNote: { $in: [null, ''] } }, { productionErrorSource: 'tool-check' }],
     };
     const facetAgg = (field: string) =>
       this.orderModel.aggregate<{ _id: string; count: number }>([
@@ -1187,39 +1160,27 @@ export class DesignerStatsService {
       machineFacetAgg,
       priorityFacetAggRows,
     ] = await Promise.all([
-        this.orderModel.countDocuments(checkedMatch),
-        this.orderModel
-          .find(reworkMatch, proj)
-          .sort({ priority: -1, inProductionAt: -1 })
-          .limit(LIST_CAP)
-          .lean(),
-        this.orderModel
-          .find(unreviewedMatch, proj)
-          .sort({ priority: -1, inProductionAt: -1 })
-          .limit(LIST_CAP)
-          .lean(),
-        // Candidate: đơn từng bị đánh Note kq Tool ≠ ok trong kỳ. Mã note (loại
-        // lỗi) nằm sẵn trong `toolCheckErrorNotes` — không cần join thêm.
-        this.orderModel
-          .find(errHistoryMatch, histProj)
-          .sort({ inProductionAt: -1 })
-          .limit(HISTORY_CAP)
-          .lean(),
-        // Per-day: chưa soát + In trả về (áp cùng 3 filter type/customer/machine).
-        this.orderModel.aggregate<{ _id: string; count: number }>([
-          { $match: unreviewedMatch },
-          { $group: { _id: dayExpr, count: { $sum: 1 } } },
-        ]),
-        this.orderModel.aggregate<{ _id: string; count: number }>([
-          { $match: reworkMatch },
-          { $group: { _id: dayExpr, count: { $sum: 1 } } },
-        ]),
-        // Facet options (phạm vi Support, KHÔNG áp 4 filter → ổn định).
-        facetAgg('type'),
-        facetAgg('userSku'),
-        facetAgg('machineNumber'),
-        priorityFacetAgg(),
-      ]);
+      this.orderModel.countDocuments(checkedMatch),
+      this.orderModel.find(reworkMatch, proj).sort({ priority: -1, inProductionAt: -1 }).limit(LIST_CAP).lean(),
+      this.orderModel.find(unreviewedMatch, proj).sort({ priority: -1, inProductionAt: -1 }).limit(LIST_CAP).lean(),
+      // Candidate: đơn từng bị đánh Note kq Tool ≠ ok trong kỳ. Mã note (loại
+      // lỗi) nằm sẵn trong `toolCheckErrorNotes` — không cần join thêm.
+      this.orderModel.find(errHistoryMatch, histProj).sort({ inProductionAt: -1 }).limit(HISTORY_CAP).lean(),
+      // Per-day: chưa soát + In trả về (áp cùng 3 filter type/customer/machine).
+      this.orderModel.aggregate<{ _id: string; count: number }>([
+        { $match: unreviewedMatch },
+        { $group: { _id: dayExpr, count: { $sum: 1 } } },
+      ]),
+      this.orderModel.aggregate<{ _id: string; count: number }>([
+        { $match: reworkMatch },
+        { $group: { _id: dayExpr, count: { $sum: 1 } } },
+      ]),
+      // Facet options (phạm vi Support, KHÔNG áp 4 filter → ổn định).
+      facetAgg('type'),
+      facetAgg('userSku'),
+      facetAgg('machineNumber'),
+      priorityFacetAgg(),
+    ]);
 
     const toOrder = (o: Record<string, unknown>): ToolCheckOrder => ({
       _id: String(o._id),
@@ -1237,9 +1198,7 @@ export class DesignerStatsService {
       productionErrorNote: o.productionErrorNote as string | undefined,
       productionErrorCount: o.productionErrorCount as number | undefined,
       machineNumber: o.machineNumber as string | undefined,
-      inProductionAt: o.inProductionAt
-        ? new Date(o.inProductionAt as Date).toISOString()
-        : undefined,
+      inProductionAt: o.inProductionAt ? new Date(o.inProductionAt as Date).toISOString() : undefined,
       priority: o.priority as ToolCheckOrder['priority'],
     });
 
@@ -1262,9 +1221,7 @@ export class DesignerStatsService {
     // Resolve mockup/level/fullName theo productConfigId của candidate.
     const cfgIds = [...new Set(candidates.map((o) => o.productConfigId).filter(Boolean))] as string[];
     const cfgs = cfgIds.length
-      ? await this.productConfigModel
-          .find({ _id: { $in: cfgIds } }, { fullName: 1, mockup: 1, level: 1 })
-          .lean()
+      ? await this.productConfigModel.find({ _id: { $in: cfgIds } }, { fullName: 1, mockup: 1, level: 1 }).lean()
       : [];
     const cfgMap = new Map<string, { fullName?: string; mockup?: string; level?: number }>();
     for (const c of cfgs as Array<Record<string, unknown>>) {
@@ -1280,9 +1237,7 @@ export class DesignerStatsService {
     for (const o of candidates) {
       const oid = String(o._id);
       const cfg = o.productConfigId ? cfgMap.get(String(o.productConfigId)) : undefined;
-      const notes = Array.isArray(o.toolCheckErrorNotes)
-        ? (o.toolCheckErrorNotes as string[]).filter(Boolean)
-        : [];
+      const notes = Array.isArray(o.toolCheckErrorNotes) ? (o.toolCheckErrorNotes as string[]).filter(Boolean) : [];
       const codes = notes.length ? [...new Set(notes)] : [''];
       const base = {
         orderId: oid,
@@ -1340,11 +1295,7 @@ export class DesignerStatsService {
    * khoảng tùy biến (cap 60 ngày); ngược lại → N ngày gần nhất. `days` sort
    * mới→cũ (đồng bộ với FE reverse).
    */
-  private resolveVnWindow(
-    rangeDays: number,
-    from?: string,
-    to?: string,
-  ): { start: Date; end: Date; days: string[] } {
+  private resolveVnWindow(rangeDays: number, from?: string, to?: string): { start: Date; end: Date; days: string[] } {
     const MS_DAY = 86_400_000;
     const CAP = 60;
     const vnStart = (d: string) => new Date(`${d}T00:00:00+07:00`);
@@ -1428,7 +1379,12 @@ export class DesignerStatsService {
       ]),
       // Đã báo lỗi trong kỳ (theo thời điểm báo = timeline.at).
       this.orderModel.aggregate<{ _id: { uid: string; name?: string }; count: number }>([
-        { $match: { fulfillmentTimeline: { $elemMatch: { action: 'rework-back' } }, ...(factoryId ? { factoryId } : {}) } },
+        {
+          $match: {
+            fulfillmentTimeline: { $elemMatch: { action: 'rework-back' } },
+            ...(factoryId ? { factoryId } : {}),
+          },
+        },
         { $unwind: '$fulfillmentTimeline' },
         {
           $match: {
@@ -1437,11 +1393,19 @@ export class DesignerStatsService {
             'fulfillmentTimeline.byUserId': { $exists: true, $ne: null },
           },
         },
-        { $group: { _id: { uid: '$fulfillmentTimeline.byUserId', name: '$fulfillmentTimeline.byUserName' }, count: { $sum: 1 } } },
+        {
+          $group: {
+            _id: { uid: '$fulfillmentTimeline.byUserId', name: '$fulfillmentTimeline.byUserName' },
+            count: { $sum: 1 },
+          },
+        },
       ]),
       // Map (factory, stage) → user phụ trách công đoạn đó.
       this.userModel
-        .find({ fulfillmentStage: { $exists: true, $ne: null } }, { _id: 1, fullName: 1, factoryId: 1, fulfillmentStage: 1 })
+        .find(
+          { fulfillmentStage: { $exists: true, $ne: null } },
+          { _id: 1, fullName: 1, factoryId: 1, fulfillmentStage: 1 },
+        )
         .lean(),
     ]);
 
@@ -1499,7 +1463,7 @@ export class DesignerStatsService {
         if (!r) continue;
         r.name = u.fullName || r.name;
         if (r.roleLabel === '—' || r.roleLabel === 'Designer') {
-          if (u.fulfillmentStage) r.roleLabel = FULFILLMENT_STAGE_LABELS[u.fulfillmentStage as FulfillmentStage] ?? r.roleLabel;
+          if (u.fulfillmentStage) r.roleLabel = FULFILLMENT_STAGE_LABELS[u.fulfillmentStage] ?? r.roleLabel;
           else if (isDesigner.has(String(u._id))) r.roleLabel = 'Designer';
         }
       }
@@ -1533,7 +1497,12 @@ export class DesignerStatsService {
     let match: Record<string, unknown>;
     if (userId.startsWith('stage:')) {
       const [, factory, stage] = userId.split(':');
-      match = { ...base, factoryId: factory || undefined, currentFulfillmentStage: stage, designerStatus: { $ne: 'rework' } };
+      match = {
+        ...base,
+        factoryId: factory || undefined,
+        currentFulfillmentStage: stage,
+        designerStatus: { $ne: 'rework' },
+      };
     } else {
       const user = await this.userModel.findById(userId, { fulfillmentStage: 1, factoryId: 1 }).lean();
       if (user?.fulfillmentStage) {
@@ -1564,11 +1533,7 @@ export class DesignerStatsService {
       inProductionAt: 1,
     };
     const [data, total] = await Promise.all([
-      this.orderModel
-        .find(match, proj)
-        .sort({ priority: -1, inProductionAt: -1 })
-        .limit(500)
-        .lean(),
+      this.orderModel.find(match, proj).sort({ priority: -1, inProductionAt: -1 }).limit(500).lean(),
       this.orderModel.countDocuments(match),
     ]);
     return { data: data.map((d) => ({ ...d, _id: String(d._id) })), total };
@@ -1660,16 +1625,20 @@ export class DesignerStatsService {
     const rowTotal = new Map<string, number>();
     for (const r of agg) {
       const code = r._id.code;
-      if (!rowCells.has(code)) rowCells.set(code, dayList.map(() => 0));
+      if (!rowCells.has(code))
+        rowCells.set(
+          code,
+          dayList.map(() => 0),
+        );
       rowTotal.set(code, (rowTotal.get(code) ?? 0) + r.count);
       const col = dayIndex.get(r._id.day);
-      if (col !== undefined) rowCells.get(code)![col]! += r.count;
+      if (col !== undefined) rowCells.get(code)![col] += r.count;
     }
 
     const columnTotals = dayList.map(() => 0);
     let grandTotal = 0;
     const rows = [...rowCells.entries()].map(([code, cells]) => {
-      cells.forEach((v, i) => (columnTotals[i]! += v));
+      cells.forEach((v, i) => (columnTotals[i] += v));
       const total = rowTotal.get(code) ?? 0;
       grandTotal += total;
       return { code, name: nameMap.get(code) || code, cells, total };

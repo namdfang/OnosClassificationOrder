@@ -1,9 +1,6 @@
-import type {
-  FactoryReportData,
-  ReportPeriod,
-} from '@/modules/scheduled-reports/types';
-
 import { formatVnDateTime } from '@/modules/scheduled-reports/build-period';
+import type { FactoryReportData, ReportPeriod } from '@/modules/scheduled-reports/types';
+
 import { clamp, DIVIDER, escapeMd, N } from './_helpers';
 
 interface FactoryRow {

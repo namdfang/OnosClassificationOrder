@@ -1,4 +1,5 @@
 import React from 'react';
+
 import { Pagination } from './Pagination';
 
 /**
@@ -29,12 +30,7 @@ interface PaginationBarProps {
   loading?: boolean;
 }
 
-export function PaginationBar({
-  position,
-  loading = false,
-  total,
-  ...rest
-}: PaginationBarProps) {
+export function PaginationBar({ position, loading = false, total, ...rest }: PaginationBarProps) {
   if (loading || total <= 0) return null;
 
   const inner = <Pagination {...rest} total={total} />;

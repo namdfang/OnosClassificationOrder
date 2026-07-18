@@ -1,15 +1,12 @@
 import { createZodDto } from '@anatine/zod-nestjs';
 import { extendApi } from '@anatine/zod-openapi';
-import { z } from 'zod';
-
 import { WorkshopConfigCategory } from '@shared/enums';
 import { BaseEntityZod, PageResZod, ResZod } from '@shared/types';
+import { z } from 'zod';
 
 const WorkshopConfigCategoryZod = z.nativeEnum(WorkshopConfigCategory);
 
-const HexColorZod = z
-  .string()
-  .regex(/^#([0-9a-fA-F]{6}|[0-9a-fA-F]{3})$/, 'color must be hex like #ff0000');
+const HexColorZod = z.string().regex(/^#([0-9a-fA-F]{6}|[0-9a-fA-F]{3})$/, 'color must be hex like #ff0000');
 
 /**
  * Production-error có thêm flag `errorSource` (chỉ áp dụng cho category

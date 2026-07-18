@@ -1,6 +1,7 @@
 import React from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { LogOut, Menu as MenuIcon, Moon, PanelLeft, PanelLeftClose, Sun, User } from 'lucide-react';
+
 import { Avatar, AvatarFallback } from '@/components/ui/avatar';
 import { Button } from '@/components/ui/button';
 import {
@@ -12,11 +13,11 @@ import {
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
 
-import { useAuthStore } from '../../store/authStore';
-import { RepositoryRemote } from '../../services';
-import { handleAxiosError } from '../../utils';
-import { useThemeStore } from '../../store/themeStore';
 import { PATHS } from '../../constants/paths';
+import { RepositoryRemote } from '../../services';
+import { useAuthStore } from '../../store/authStore';
+import { useThemeStore } from '../../store/themeStore';
+import { handleAxiosError } from '../../utils';
 
 interface HeaderProps {
   collapsed: boolean;

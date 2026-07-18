@@ -2,8 +2,9 @@ import React from 'react';
 import { Package } from 'lucide-react';
 
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { ProductConfigTab } from './ProductConfigTab';
+
 import { FactoryTab } from './FactoryTab';
+import { ProductConfigTab } from './ProductConfigTab';
 
 export default function Products() {
   return (

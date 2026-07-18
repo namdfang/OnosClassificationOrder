@@ -1,14 +1,5 @@
 import React, { useEffect, useMemo, useState } from 'react';
-import {
-  AlertTriangle,
-  Building2,
-  Factory,
-  Layers,
-  ListChecks,
-  MessageSquareWarning,
-  RotateCcw,
-} from 'lucide-react';
-import { toast } from 'sonner';
+import { AlertTriangle, Building2, Factory, Layers, ListChecks, MessageSquareWarning, RotateCcw } from 'lucide-react';
 import type { ProductionOrder, WorkshopConfig } from 'shared';
 import {
   FULFILLMENT_STAGE_LABELS,
@@ -17,22 +8,20 @@ import {
   FulfillmentStage,
   WorkshopConfigCategory,
 } from 'shared';
+import { toast } from 'sonner';
+
+import { useWorkshopConfigStore } from '@/store/workshopConfigStore';
+
+import { RepositoryRemote } from '@/services';
 
 import { Spinner } from '@/components/common/Spinner';
 import { Button } from '@/components/ui/button';
-import {
-  Dialog,
-  DialogContent,
-  DialogFooter,
-  DialogHeader,
-  DialogTitle,
-} from '@/components/ui/dialog';
+import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
-import { RepositoryRemote } from '@/services';
-import { useWorkshopConfigStore } from '@/store/workshopConfigStore';
-import { cn } from '@/utils/cn';
+
 import { handleAxiosError } from '@/utils';
+import { cn } from '@/utils/cn';
 import { isCancelled } from '@/utils/orderActions';
 
 const MAX_NOTE = 500;
@@ -58,10 +47,7 @@ export function OrderErrorScanDialog({ order, onClose, onSaved }: Props) {
     (s) => s.byCategory[WorkshopConfigCategory.ProductionError] || [],
   ) as WorkshopConfig[];
 
-  const sortedOptions = useMemo(
-    () => [...errorOptions].sort((a, b) => a.order - b.order),
-    [errorOptions],
-  );
+  const sortedOptions = useMemo(() => [...errorOptions].sort((a, b) => a.order - b.order), [errorOptions]);
 
   const currentStage = order.currentFulfillmentStage as FulfillmentStage | undefined;
   const isCompleted = !currentStage && !!order.fulfillmentCompletedAt;
@@ -100,12 +86,7 @@ export function OrderErrorScanDialog({ order, onClose, onSaved }: Props) {
   // Đơn đã hủy → chặn báo lỗi / đẩy về công đoạn trước (mirror guard BE).
   const orderCancelled = isCancelled(order);
 
-  const canSubmit =
-    !!code &&
-    !!source &&
-    (!noteRequired || !!note.trim()) &&
-    !orderCancelled &&
-    !saving;
+  const canSubmit = !!code && !!source && (!noteRequired || !!note.trim()) && !orderCancelled && !saving;
 
   const handleSubmit = async () => {
     if (!canSubmit) return;
@@ -152,8 +133,7 @@ export function OrderErrorScanDialog({ order, onClose, onSaved }: Props) {
     }
   };
 
-  const factoryLabel =
-    order.factory?.shortName || order.factory?.name || (order.factoryId ? '—' : 'Chưa map');
+  const factoryLabel = order.factory?.shortName || order.factory?.name || (order.factoryId ? '—' : 'Chưa map');
   const machineLabel = order.machineType?.shortName || order.machineType?.name || '';
   const stageLabel = currentStage ? FULFILLMENT_STAGE_LABELS[currentStage] : 'Chưa vào fulfillment';
 
@@ -165,13 +145,16 @@ export function OrderErrorScanDialog({ order, onClose, onSaved }: Props) {
 
   return (
     <Dialog open onOpenChange={(o) => !o && !saving && onClose()}>
-      <DialogContent className="max-w-xl" onKeyDown={(e) => {
-        // Cho phép Cmd/Ctrl+Enter submit nhanh khi đã đủ điều kiện
-        if ((e.metaKey || e.ctrlKey) && e.key === 'Enter' && canSubmit) {
-          e.preventDefault();
-          handleSubmit();
-        }
-      }}>
+      <DialogContent
+        className="max-w-xl"
+        onKeyDown={(e) => {
+          // Cho phép Cmd/Ctrl+Enter submit nhanh khi đã đủ điều kiện
+          if ((e.metaKey || e.ctrlKey) && e.key === 'Enter' && canSubmit) {
+            e.preventDefault();
+            handleSubmit();
+          }
+        }}
+      >
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2">
             <MessageSquareWarning size={18} className="text-rose-500" />
@@ -194,25 +177,19 @@ export function OrderErrorScanDialog({ order, onClose, onSaved }: Props) {
             <div className="min-w-0 flex-1">
               <div className="font-medium text-sm truncate">{order.type || 'Không rõ loại'}</div>
               <div className="text-muted-foreground truncate">
-                {[order.color, order.size, order.quantity ? `qty ${order.quantity}` : null]
-                  .filter(Boolean)
-                  .join(' · ')}
+                {[order.color, order.size, order.quantity ? `qty ${order.quantity}` : null].filter(Boolean).join(' · ')}
               </div>
             </div>
           </div>
           <div className="grid grid-cols-2 gap-2 pt-1">
             <InfoRow icon={<Factory size={12} />} label="Xưởng">
               {factoryLabel}
-              {machineLabel && (
-                <span className="text-muted-foreground"> · {machineLabel}</span>
-              )}
+              {machineLabel && <span className="text-muted-foreground"> · {machineLabel}</span>}
             </InfoRow>
             <InfoRow icon={<Layers size={12} />} label="Stage hiện tại">
               {stageLabel}
               {order.designerReworkCount && order.designerReworkCount > 0 ? (
-                <span className="ml-1 text-amber-600 dark:text-amber-400">
-                  · rework ×{order.designerReworkCount}
-                </span>
+                <span className="ml-1 text-amber-600 dark:text-amber-400">· rework ×{order.designerReworkCount}</span>
               ) : null}
             </InfoRow>
           </div>
@@ -233,10 +210,7 @@ export function OrderErrorScanDialog({ order, onClose, onSaved }: Props) {
             Mô tả dài → cắt 2 dòng + tooltip (title) xem đầy đủ. */}
         {(order.productionErrorNote || existingErrorName) && (
           <div className="rounded-md border border-rose-300 bg-rose-50 p-2.5 flex items-start gap-2 dark:border-rose-500/40 dark:bg-rose-500/10">
-            <MessageSquareWarning
-              size={15}
-              className="mt-0.5 shrink-0 text-rose-600 dark:text-rose-400"
-            />
+            <MessageSquareWarning size={15} className="mt-0.5 shrink-0 text-rose-600 dark:text-rose-400" />
             <div className="min-w-0 flex-1">
               <p className="text-[11px] font-semibold text-rose-700 dark:text-rose-300 flex items-center gap-1.5 flex-wrap">
                 Lỗi đã ghi trên đơn
@@ -343,17 +317,13 @@ export function OrderErrorScanDialog({ order, onClose, onSaved }: Props) {
 
           {/* Note */}
           <div className="space-y-2">
-            <Label className="text-xs">
-              Mô tả lỗi {noteRequired && <span className="text-destructive">*</span>}
-            </Label>
+            <Label className="text-xs">Mô tả lỗi {noteRequired && <span className="text-destructive">*</span>}</Label>
             <Textarea
               rows={2}
               value={note}
               onChange={(e) => setNote(e.target.value.slice(0, MAX_NOTE))}
               placeholder={
-                noteRequired
-                  ? 'Bắt buộc khi chọn "Lỗi khác" — mô tả cụ thể'
-                  : 'Mô tả ngắn gọn lỗi gặp phải (tùy chọn)'
+                noteRequired ? 'Bắt buộc khi chọn "Lỗi khác" — mô tả cụ thể' : 'Mô tả ngắn gọn lỗi gặp phải (tùy chọn)'
               }
             />
             <div className="text-right text-[10px] text-muted-foreground">
@@ -434,15 +404,7 @@ export function OrderErrorScanDialog({ order, onClose, onSaved }: Props) {
   );
 }
 
-function InfoRow({
-  icon,
-  label,
-  children,
-}: {
-  icon: React.ReactNode;
-  label: string;
-  children: React.ReactNode;
-}) {
+function InfoRow({ icon, label, children }: { icon: React.ReactNode; label: string; children: React.ReactNode }) {
   return (
     <div className="flex items-center gap-1.5">
       <span className="text-muted-foreground">{icon}</span>
@@ -470,7 +432,11 @@ function SourceButton({
         ? 'border-violet-500 bg-violet-50 text-violet-700 dark:bg-violet-500/10 dark:text-violet-300'
         : 'border-amber-500 bg-amber-50 text-amber-700 dark:bg-amber-500/10 dark:text-amber-300';
   const hoverCls =
-    color === 'sky' ? 'hover:border-sky-300' : color === 'violet' ? 'hover:border-violet-300' : 'hover:border-amber-300';
+    color === 'sky'
+      ? 'hover:border-sky-300'
+      : color === 'violet'
+        ? 'hover:border-violet-300'
+        : 'hover:border-amber-300';
   return (
     <button
       type="button"
@@ -486,15 +452,7 @@ function SourceButton({
   );
 }
 
-function ChipButton({
-  active,
-  onClick,
-  label,
-}: {
-  active: boolean;
-  onClick: () => void;
-  label: string;
-}) {
+function ChipButton({ active, onClick, label }: { active: boolean; onClick: () => void; label: string }) {
   return (
     <button
       type="button"

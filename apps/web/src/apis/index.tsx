@@ -1,8 +1,11 @@
 import axios, { HttpStatusCode } from 'axios';
 import { toast } from 'sonner';
-import { CONFIG } from '../constants';
-import { useAuthStore } from '@/store/authStore';
+
 import { PATHS } from '@/constants/paths';
+
+import { useAuthStore } from '@/store/authStore';
+
+import { CONFIG } from '../constants';
 
 const PUBLIC_ROUTE_KEYWORDS = ['catalog', 'product', 'products', 'categories', 'providers'];
 

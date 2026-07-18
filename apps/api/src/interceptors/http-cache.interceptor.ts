@@ -1,6 +1,5 @@
-/* eslint-disable @typescript-eslint/no-unnecessary-condition */
 /* eslint-disable @typescript-eslint/no-explicit-any */
-/* eslint-disable @typescript-eslint/no-unsafe-argument */
+
 import { CACHE_MANAGER, CacheInterceptor } from '@nestjs/cache-manager';
 import type { CallHandler, ExecutionContext } from '@nestjs/common';
 import { Inject, Injectable } from '@nestjs/common';
@@ -74,7 +73,6 @@ export class HttpCacheInterceptor extends CacheInterceptor {
 
   async setKey(key: string, value: string, ttl?: number): Promise<void> {
     try {
-      // eslint-disable-next-line unicorn/prefer-ternary
       if (typeof ttl === 'number' && Number.isInteger(ttl) && ttl > 0) {
         await this.redisClient.setEx(key, ttl, value);
       } else {

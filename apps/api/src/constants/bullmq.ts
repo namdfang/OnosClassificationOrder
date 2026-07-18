@@ -1,4 +1,3 @@
-/* eslint-disable no-redeclare */
 export const BullQueue = {
   RefreshTrackingStatus: 'RefreshTrackingStatus',
   ScanTransactionEmail: 'ScanTransactionEmail',

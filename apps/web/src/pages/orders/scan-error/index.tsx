@@ -1,29 +1,26 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import axios from 'axios';
-import {
-  CheckCircle2,
-  History,
-  Keyboard,
-  Loader2,
-  ScanLine,
-  Trash2,
-  XCircle,
-} from 'lucide-react';
 import { Navigate } from 'react-router-dom';
-import { toast } from 'sonner';
+import axios from 'axios';
+import { CheckCircle2, History, Keyboard, Loader2, ScanLine, Trash2, XCircle } from 'lucide-react';
 import type { FulfillmentStage, ProductionOrder } from 'shared';
+import { toast } from 'sonner';
+
+import { PATHS } from '@/constants/paths';
+
+import { useAuthStore } from '@/store/authStore';
+import { useWorkshopConfigStore } from '@/store/workshopConfigStore';
+
+import { RepositoryRemote } from '@/services';
 
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
-import { PATHS } from '@/constants/paths';
-import { usePermission } from '@/hooks/usePermission';
-import { RepositoryRemote } from '@/services';
-import { useAuthStore } from '@/store/authStore';
-import { useWorkshopConfigStore } from '@/store/workshopConfigStore';
+
 import { cn } from '@/utils/cn';
 
-import { OrderErrorScanDialog } from './OrderErrorScanDialog';
+import { usePermission } from '@/hooks/usePermission';
+
 import { FulfillmentScanActionDialog } from './FulfillmentScanActionDialog';
+import { OrderErrorScanDialog } from './OrderErrorScanDialog';
 
 const MAX_HISTORY = 10;
 const MODE_STORAGE_KEY = 'scan-error-mode';
@@ -62,10 +59,15 @@ interface HistoryEntry {
 
 export default function OrdersScanErrorPage() {
   const { has, isAdmin } = usePermission();
+
   if (!isAdmin && !has('page.scan_error')) {
     return <Navigate to={PATHS.ORDERS} replace />;
   }
 
+  return <ScanErrorPageContent />;
+}
+
+function ScanErrorPageContent() {
   // User Fulfillment → có fulfillmentStage → bật chế độ "Hoàn thành công đoạn".
   // User không có stage (admin/support…) → giữ luồng gán lỗi như cũ.
   const profile = useAuthStore((s) => s.profile);
@@ -267,9 +269,7 @@ export default function OrdersScanErrorPage() {
                 }
               }}
               placeholder={
-                mode === 'barcode'
-                  ? `Quét barcode (kỳ vọng "${BARCODE_PREFIX}…")…`
-                  : 'Nhập Production ID rồi Enter…'
+                mode === 'barcode' ? `Quét barcode (kỳ vọng "${BARCODE_PREFIX}…")…` : 'Nhập Production ID rồi Enter…'
               }
               className="pl-9 pr-3 h-11 text-sm font-mono"
               disabled={loading || !!order}
@@ -281,39 +281,33 @@ export default function OrdersScanErrorPage() {
               />
             )}
           </div>
-          <Button
-            onClick={() => handleLookup(value)}
-            disabled={!value.trim() || loading || !!order}
-          >
+          <Button onClick={() => handleLookup(value)} disabled={!value.trim() || loading || !!order}>
             Tra cứu
           </Button>
         </div>
 
         {/* Preview chuỗi đã normalize — chỉ hiện khi user gõ/quét và mã sau strip
             khác mã đang nhập (cho biết hệ thống sẽ search bằng cái gì). */}
-        {value.trim() && (() => {
-          const normalized = normalizeCode(value, mode);
-          const changed = normalized !== value.trim();
-          if (!changed && mode !== 'barcode') return null;
-          return (
-            <div className="flex items-center gap-2 text-[11px] text-muted-foreground">
-              <span>Sẽ tra cứu:</span>
-              <code className="px-1.5 py-0.5 rounded bg-muted font-mono text-foreground">
-                {normalized || '(rỗng)'}
-              </code>
-              {changed && (
-                <span className="text-emerald-600 dark:text-emerald-400">
-                  ✓ đã bỏ "{BARCODE_PREFIX}"
-                </span>
-              )}
-              {mode === 'barcode' && !changed && value.trim() && (
-                <span className="text-amber-600 dark:text-amber-400">
-                  ⚠ không thấy tiền tố "{BARCODE_PREFIX}" — đảm bảo bạn đang quét đúng loại barcode
-                </span>
-              )}
-            </div>
-          );
-        })()}
+        {value.trim() &&
+          (() => {
+            const normalized = normalizeCode(value, mode);
+            const changed = normalized !== value.trim();
+            if (!changed && mode !== 'barcode') return null;
+            return (
+              <div className="flex items-center gap-2 text-[11px] text-muted-foreground">
+                <span>Sẽ tra cứu:</span>
+                <code className="px-1.5 py-0.5 rounded bg-muted font-mono text-foreground">
+                  {normalized || '(rỗng)'}
+                </code>
+                {changed && <span className="text-emerald-600 dark:text-emerald-400">✓ đã bỏ "{BARCODE_PREFIX}"</span>}
+                {mode === 'barcode' && !changed && value.trim() && (
+                  <span className="text-amber-600 dark:text-amber-400">
+                    ⚠ không thấy tiền tố "{BARCODE_PREFIX}" — đảm bảo bạn đang quét đúng loại barcode
+                  </span>
+                )}
+              </div>
+            );
+          })()}
 
         <p className="text-[11px] text-muted-foreground">
           {mode === 'barcode'
@@ -408,15 +402,7 @@ function ModeButton({
   );
 }
 
-function Stat({
-  label,
-  value,
-  color,
-}: {
-  label: string;
-  value: number;
-  color: 'emerald' | 'amber' | 'rose';
-}) {
+function Stat({ label, value, color }: { label: string; value: number; color: 'emerald' | 'amber' | 'rose' }) {
   const cls = {
     emerald: 'text-emerald-600 dark:text-emerald-400',
     amber: 'text-amber-600 dark:text-amber-400',
@@ -452,9 +438,7 @@ function HistoryRow({ entry }: { entry: HistoryEntry }) {
           <span className="text-muted-foreground">·</span>
           <span className="text-muted-foreground">{statusText}</span>
         </div>
-        {entry.message && (
-          <div className="text-muted-foreground truncate mt-0.5">{entry.message}</div>
-        )}
+        {entry.message && <div className="text-muted-foreground truncate mt-0.5">{entry.message}</div>}
       </div>
       <span className="text-[10px] text-muted-foreground shrink-0">
         {entry.at.toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit', second: '2-digit' })}

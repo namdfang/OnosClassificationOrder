@@ -3,17 +3,15 @@ import { ArrowRight, History, RefreshCw } from 'lucide-react';
 import type { FulfillmentStage, ProductionOrderLog, ProductionOrderLogAction } from 'shared';
 import { FULFILLMENT_STAGE_LABELS, WorkshopConfigCategory } from 'shared';
 
+import { useWorkshopConfigStore } from '@/store/workshopConfigStore';
+
+import { RepositoryRemote } from '@/services';
+
+import { Spinner } from '@/components/common/Spinner';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
-import {
-  Dialog,
-  DialogContent,
-  DialogHeader,
-  DialogTitle,
-} from '@/components/ui/dialog';
-import { Spinner } from '@/components/common/Spinner';
-import { RepositoryRemote } from '@/services';
-import { useWorkshopConfigStore } from '@/store/workshopConfigStore';
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
+
 import { handleAxiosError } from '@/utils';
 import { cn } from '@/utils/cn';
 
@@ -24,7 +22,10 @@ interface Props {
   productionId?: string;
 }
 
-const ACTION_BADGE: Record<ProductionOrderLogAction, { label: string; variant: 'default' | 'secondary' | 'destructive' | 'success' | 'warning' | 'outline' }> = {
+const ACTION_BADGE: Record<
+  ProductionOrderLogAction,
+  { label: string; variant: 'default' | 'secondary' | 'destructive' | 'success' | 'warning' | 'outline' }
+> = {
   create: { label: 'Tạo', variant: 'success' },
   update: { label: 'Cập nhật', variant: 'default' },
   bulk_update: { label: 'Bulk', variant: 'default' },
@@ -146,10 +147,7 @@ function designFieldLabel(key: string): string {
 }
 
 /** Ghép before/after (object keyed theo field) thành list URL cũ→mới. */
-function designChangeEntries(
-  before: unknown,
-  after: unknown,
-): { key: string; before: string; after: string }[] {
+function designChangeEntries(before: unknown, after: unknown): { key: string; before: string; after: string }[] {
   const b = (before && typeof before === 'object' ? before : {}) as Record<string, unknown>;
   const a = (after && typeof after === 'object' ? after : {}) as Record<string, unknown>;
   const keys = Array.from(new Set([...Object.keys(b), ...Object.keys(a)]));
@@ -342,21 +340,15 @@ export function OrderLogTimelineDialog({ open, onOpenChange, orderId, production
               {logs.map((log) => {
                 const meta = ACTION_BADGE[log.action as ProductionOrderLogAction] || ACTION_BADGE.update;
                 const fieldLabel = log.field ? fieldLabelFor(log.field) : null;
-                const isFieldUpdate =
-                  !!log.field && (log.action === 'update' || log.action === 'bulk_update');
+                const isFieldUpdate = !!log.field && (log.action === 'update' || log.action === 'bulk_update');
                 return (
-                  <div
-                    key={log._id}
-                    className="rounded-lg border border-border bg-card px-3 py-2.5 space-y-1.5"
-                  >
+                  <div key={log._id} className="rounded-lg border border-border bg-card px-3 py-2.5 space-y-1.5">
                     {/* Header: action + field + thời gian */}
                     <div className="flex items-start justify-between gap-2">
                       <div className="flex items-center gap-2 flex-wrap min-w-0">
                         <Badge variant={meta.variant}>{meta.label}</Badge>
                         {fieldLabel && (
-                          <span className="text-sm font-semibold text-foreground truncate">
-                            {fieldLabel}
-                          </span>
+                          <span className="text-sm font-semibold text-foreground truncate">{fieldLabel}</span>
                         )}
                       </div>
                       <span className="text-[11px] text-muted-foreground whitespace-nowrap shrink-0">
@@ -378,15 +370,11 @@ export function OrderLogTimelineDialog({ open, onOpenChange, orderId, production
                       <div className="space-y-2">
                         {designChangeEntries(log.before, log.after).map(({ key, before, after }) => (
                           <div key={key} className="space-y-1">
-                            <span className="text-xs font-medium text-muted-foreground">
-                              {designFieldLabel(key)}
-                            </span>
+                            <span className="text-xs font-medium text-muted-foreground">{designFieldLabel(key)}</span>
                             <div className="text-[11px] font-mono break-all leading-relaxed">
                               <span className="text-destructive line-through">{before || '—'}</span>
                               <span className="mx-1 text-muted-foreground">→</span>
-                              <span className="text-emerald-600 dark:text-emerald-400">
-                                {after || '—'}
-                              </span>
+                              <span className="text-emerald-600 dark:text-emerald-400">{after || '—'}</span>
                             </div>
                           </div>
                         ))}

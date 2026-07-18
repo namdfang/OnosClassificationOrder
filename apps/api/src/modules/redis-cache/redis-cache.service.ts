@@ -27,7 +27,6 @@ export class RedisCacheService {
 
   async setKey(key: string, value: string, ttl?: number): Promise<void> {
     try {
-      // eslint-disable-next-line unicorn/prefer-ternary
       if (ttl) {
         await this.redisClient.setEx(key, ttl, value);
       } else {
@@ -84,7 +83,6 @@ export class RedisCacheService {
 
       const parsedItems: Record<string, unknown> = {};
 
-      // eslint-disable-next-line @typescript-eslint/no-shadow
       for (const [key, value] of Object.entries(items)) {
         try {
           parsedItems[key] = JSON.parse(value);
@@ -133,7 +131,6 @@ export class RedisCacheService {
     const keys = [];
 
     do {
-      // eslint-disable-next-line no-await-in-loop
       const result = await this.redisClient.scan(cursorNumber, { MATCH: `${prefix}*`, COUNT: 100 });
       cursorNumber = Number(result.cursor);
       keys.push(...result.keys);
@@ -154,7 +151,6 @@ export class RedisCacheService {
 
   async pushToList(key: string, values: string | string[], ttl?: number): Promise<void> {
     try {
-      // eslint-disable-next-line sonarjs/no-all-duplicated-branches
       await (Array.isArray(values) ? this.redisClient.rPush(key, values) : this.redisClient.rPush(key, values));
 
       if (ttl) {

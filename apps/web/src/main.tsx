@@ -1,17 +1,20 @@
+import 'dayjs/locale/vi';
+
 import React from 'react';
 import ReactDOM from 'react-dom/client';
 import dayjs from 'dayjs';
 import customParseFormat from 'dayjs/plugin/customParseFormat';
-import weekday from 'dayjs/plugin/weekday';
 import localeData from 'dayjs/plugin/localeData';
 import relativeTime from 'dayjs/plugin/relativeTime';
-import 'dayjs/locale/vi';
+import weekday from 'dayjs/plugin/weekday';
+
 import App from './App';
-import './theme/globals.css';
-import './assets/styles/index.css';
 import { Toaster } from './components/ui/sonner';
 import { useThemeStore } from './store/themeStore';
 import { registerImageCacheSW } from './utils/registerSW';
+
+import './theme/globals.css';
+import './assets/styles/index.css';
 
 dayjs.extend(customParseFormat);
 dayjs.extend(weekday);

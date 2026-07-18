@@ -52,6 +52,7 @@ export async function bootstrap(): Promise<NestFastifyApplication> {
   // Preserve raw body cho /api/v1/partner/* — cần để verify HMAC signature đúng byte-for-byte
   // Dùng preParsing hook để capture raw stream BEFORE Nest's JSON parser chạy
   const fastifyInstance = app.getHttpAdapter().getInstance();
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any -- Fastify preParsing hook generics quá phức tạp, chỉ đọc request.url
   fastifyInstance.addHook('preParsing', async (request: any, _reply: any, payload: any) => {
     if (!request.url?.startsWith('/api/v1/partner')) {
       return payload;
@@ -112,7 +113,6 @@ export async function bootstrap(): Promise<NestFastifyApplication> {
     public transform(value: unknown, metadata: ArgumentMetadata): unknown {
       const zodSchema = (metadata.metatype as ZodDtoStatic).zodSchema;
 
-      // eslint-disable-next-line @typescript-eslint/no-unnecessary-condition
       if (zodSchema) {
         const parseResult = zodSchema.safeParse(value);
 

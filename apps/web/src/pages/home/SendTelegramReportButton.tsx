@@ -1,13 +1,15 @@
 import React, { useState } from 'react';
-import { Send, Loader2, MessageCircle } from 'lucide-react';
+import { Loader2, MessageCircle, Send } from 'lucide-react';
 import { toast } from 'sonner';
+
+import { RepositoryRemote } from '@/services';
+import type { ReportSlot, ReportType } from '@/services/reports';
 
 import { Button } from '@/components/ui/button';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
-import { RepositoryRemote } from '@/services';
+
 import { handleAxiosError } from '@/utils';
 import { cn } from '@/utils/cn';
-import type { ReportSlot, ReportType } from '@/services/reports';
 
 const SLOT_OPTIONS: Array<{ value: ReportSlot | ''; label: string; hint: string }> = [
   { value: '', label: 'Tự động theo giờ', hint: 'BE chọn slot dựa trên giờ hiện tại' },
@@ -42,15 +44,11 @@ export function SendTelegramReportButton() {
       const resolvedSlot = data?.slot as string | undefined;
       if (ran.length > 0) {
         toast.success(
-          `Đã gửi ${ran.length} báo cáo (${ran.join(', ')})${
-            resolvedSlot ? ` · slot=${resolvedSlot}` : ''
-          }`,
+          `Đã gửi ${ran.length} báo cáo (${ran.join(', ')})${resolvedSlot ? ` · slot=${resolvedSlot}` : ''}`,
         );
       } else {
         toast.warning('Không có báo cáo nào được gửi', {
-          description: skipped.length
-            ? `Skipped: ${skipped.join(', ')}`
-            : 'Có thể SCHEDULED_REPORTS_ENABLED=false',
+          description: skipped.length ? `Skipped: ${skipped.join(', ')}` : 'Có thể SCHEDULED_REPORTS_ENABLED=false',
         });
       }
       setOpen(false);
@@ -76,9 +74,7 @@ export function SendTelegramReportButton() {
         </div>
 
         <div className="space-y-1.5">
-          <p className="text-[11px] font-semibold uppercase text-muted-foreground tracking-wider">
-            Chọn ca
-          </p>
+          <p className="text-[11px] font-semibold uppercase text-muted-foreground tracking-wider">Chọn ca</p>
           <div className="grid grid-cols-2 gap-1">
             {SLOT_OPTIONS.map((opt) => (
               <button
@@ -100,9 +96,7 @@ export function SendTelegramReportButton() {
         </div>
 
         <div className="space-y-1.5">
-          <p className="text-[11px] font-semibold uppercase text-muted-foreground tracking-wider">
-            Loại báo cáo
-          </p>
+          <p className="text-[11px] font-semibold uppercase text-muted-foreground tracking-wider">Loại báo cáo</p>
           <div className="space-y-1">
             {REPORT_OPTIONS.map((opt) => (
               <button
@@ -124,12 +118,7 @@ export function SendTelegramReportButton() {
         </div>
 
         <div className="flex items-center justify-end gap-2 pt-1">
-          <Button
-            variant="ghost"
-            size="sm"
-            onClick={() => setOpen(false)}
-            disabled={loading}
-          >
+          <Button variant="ghost" size="sm" onClick={() => setOpen(false)} disabled={loading}>
             Hủy
           </Button>
           <Button size="sm" onClick={handleSend} disabled={loading} className="gap-1.5">

@@ -1,9 +1,9 @@
 import { Module } from '@nestjs/common';
 import { MongooseModule } from '@nestjs/mongoose';
 
+import { OrderEntity, OrderSchema } from '../order/order.entity';
 import { OrderLogEntity, OrderLogSchema } from '../order-log/order-log.entity';
 import { OrderLogModule } from '../order-log/order-log.module';
-import { OrderEntity, OrderSchema } from '../order/order.entity';
 import { ProductConfigEntity, ProductConfigSchema } from '../product-config/product-config.entity';
 import { RoleEntity, RoleSchema } from '../role/role.entity';
 import { RoleRepository } from '../role/role.repository';
@@ -31,9 +31,7 @@ import { DesignerTeamService } from './designer-team.service';
     OrderLogModule,
     MongooseModule.forFeature([{ name: UserEntity.name, schema: UserSchema }]),
     MongooseModule.forFeature([{ name: OrderEntity.name, schema: OrderSchema }]),
-    MongooseModule.forFeature([
-      { name: WorkshopConfigEntity.name, schema: WorkshopConfigSchema },
-    ]),
+    MongooseModule.forFeature([{ name: WorkshopConfigEntity.name, schema: WorkshopConfigSchema }]),
     // RoleRepository không export từ RoleModule (chỉ export RoleService) nên
     // tự bind model + repo trong module này. Vì RoleSchema đã được Mongoose
     // đăng ký từ RoleModule (@Global), forFeature ở đây không xung đột.
@@ -41,24 +39,8 @@ import { DesignerTeamService } from './designer-team.service';
     MongooseModule.forFeature([{ name: OrderLogEntity.name, schema: OrderLogSchema }]),
     MongooseModule.forFeature([{ name: ProductConfigEntity.name, schema: ProductConfigSchema }]),
   ],
-  controllers: [
-    DesignerMigrationController,
-    DesignerTeamController,
-    DesignerTaskController,
-    DesignerStatsController,
-  ],
-  providers: [
-    DesignerMigrationService,
-    DesignerTeamService,
-    DesignerTaskService,
-    DesignerStatsService,
-    RoleRepository,
-  ],
-  exports: [
-    DesignerMigrationService,
-    DesignerTeamService,
-    DesignerTaskService,
-    DesignerStatsService,
-  ],
+  controllers: [DesignerMigrationController, DesignerTeamController, DesignerTaskController, DesignerStatsController],
+  providers: [DesignerMigrationService, DesignerTeamService, DesignerTaskService, DesignerStatsService, RoleRepository],
+  exports: [DesignerMigrationService, DesignerTeamService, DesignerTaskService, DesignerStatsService],
 })
 export class DesignerModule {}

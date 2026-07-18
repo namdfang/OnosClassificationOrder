@@ -1,6 +1,7 @@
 import { createZodDto } from '@anatine/zod-nestjs';
 import { extendApi } from '@anatine/zod-openapi';
 import { z } from 'zod';
+
 import { getObjectValues, MailStatus, MailType, PageQueryZod, PageResZod, VNDateZod } from '..';
 
 export const DataMailZod = z.object({
@@ -92,7 +93,7 @@ export const ScheduleMailZod = z.object({
   type: z.enum(getObjectValues(MailType)).optional(),
   scheduleTime: z.string(),
   scheduleDate: VNDateZod,
-  variables: SendMailZod
+  variables: SendMailZod,
 });
 export class ScheduleMailDto extends createZodDto(extendApi(ScheduleMailZod)) {}
 

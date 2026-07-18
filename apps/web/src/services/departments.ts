@@ -1,4 +1,5 @@
 import type { CreateDepartmentDto, UpdateDepartmentDto } from 'shared';
+
 import { callApi } from '../apis';
 import { CONFIG } from '../constants';
 

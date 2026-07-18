@@ -1,4 +1,3 @@
-/* eslint-disable prettier/prettier */
 import { BadRequestException, ForbiddenException, Injectable, NotFoundException } from '@nestjs/common';
 import { convertEndDate, convertStartDate, generateHash, UserNotFoundException, validateHash } from 'core';
 import type { FilterQuery } from 'mongoose';
@@ -16,7 +15,7 @@ import type {
 import { ChangePasswordZod, CODE_LENGTH, RoleType, Status, UserLogType } from 'shared';
 
 import { ApiConfigService } from '@/shared/services';
-import { genCode, parseUrls, escapeRegExp } from '@/utils';
+import { escapeRegExp, genCode, parseUrls } from '@/utils';
 
 import { CustomRoleRepository } from '../custom-role/custom-role.repository';
 import { DepartmentRepository } from '../departments/department.repository';
@@ -267,14 +266,10 @@ export class UserService {
     // được enforce ở DB (partial unique index) — convert E11000 → 400.
     if (role.name === RoleType.Fulfillment) {
       if (!createUserDto.factoryId) {
-        throw new BadRequestException(
-          'User Fulfillment phải gán xưởng (factoryId) — chọn xưởng trong form.',
-        );
+        throw new BadRequestException('User Fulfillment phải gán xưởng (factoryId) — chọn xưởng trong form.');
       }
       if (!createUserDto.fulfillmentStage) {
-        throw new BadRequestException(
-          'User Fulfillment phải gán stage (In/Ép/QC/May/Đóng gói) — chọn trong form.',
-        );
+        throw new BadRequestException('User Fulfillment phải gán stage (In/Ép/QC/May/Đóng gói) — chọn trong form.');
       }
     }
 
@@ -544,14 +539,10 @@ export class UserService {
     const finalStage = dto.fulfillmentStage !== undefined ? dto.fulfillmentStage : target.fulfillmentStage;
     if (finalRoleName === RoleType.Fulfillment) {
       if (!finalFactoryId) {
-        throw new BadRequestException(
-          'User Fulfillment phải gán xưởng (factoryId) — chọn xưởng trong form.',
-        );
+        throw new BadRequestException('User Fulfillment phải gán xưởng (factoryId) — chọn xưởng trong form.');
       }
       if (!finalStage) {
-        throw new BadRequestException(
-          'User Fulfillment phải gán stage (In/Ép/QC/May/Đóng gói) — chọn trong form.',
-        );
+        throw new BadRequestException('User Fulfillment phải gán stage (In/Ép/QC/May/Đóng gói) — chọn trong form.');
       }
     }
 

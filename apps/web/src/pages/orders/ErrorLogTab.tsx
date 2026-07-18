@@ -1,55 +1,47 @@
 import React, { useEffect, useMemo, useState } from 'react';
-import { AlertTriangle, CheckCircle2, History } from 'lucide-react';
 import { useSearchParams } from 'react-router-dom';
-import { toast } from 'sonner';
+import { AlertTriangle, CheckCircle2, History } from 'lucide-react';
+import type { FulfillmentStage, FulfillmentTransitionDto, ProductionOrder } from 'shared';
 import {
   DesignerTransitionAction,
-  FulfillmentStage,
   FULFILLMENT_STAGE_LABELS,
   FulfillmentStageStatus,
   FulfillmentTransitionAction,
   RoleType,
   WorkshopConfigCategory,
 } from 'shared';
-import type { FulfillmentTransitionDto, ProductionOrder } from 'shared';
+import { toast } from 'sonner';
 
-import { Badge } from '@/components/ui/badge';
-import { Button } from '@/components/ui/button';
-import { PaginationBar } from '@/components/common/PaginationBar';
-import { Spinner } from '@/components/common/Spinner';
-import { ImagePreviewDialog } from '@/components/common/ImagePreviewDialog';
-import { OrderFilterBar, type OrderFilterFacet } from '@/components/orders/OrderFilterBar';
-import {
-  Table,
-  TableBody,
-  TableCell,
-  TableHead,
-  TableHeader,
-  TableRow,
-} from '@/components/ui/table';
-import { TooltipProvider } from '@/components/ui/tooltip';
-import { OrderLogTimelineDialog } from '@/components/orders/OrderLogTimelineDialog';
-import { OrderDetailDialog } from '@/components/orders/OrderDetailDialog';
-import { OrderRowActionsMenu } from '@/components/orders/OrderRowActionsMenu';
-import { HeldBadge } from '@/components/orders/HeldBadge';
-import { CancelledBadge } from '@/components/orders/CancelledBadge';
-import { ReworkBackDialog } from '@/pages/fulfillment/my-tasks/ReworkBackDialog';
-import { isCancelled, isHeld } from '@/utils/orderActions';
-import {
-  WORKSHOP_COLS,
-  type WorkshopOrderRow,
-  type WorkshopRenderCtx,
-} from '@/components/orders/workshopTableConfig';
-import { usePermission } from '@/hooks/usePermission';
-import { usePendingDesignsPoll } from '@/hooks/usePendingDesignsPoll';
-import { RepositoryRemote } from '@/services';
 import { useAuthStore } from '@/store/authStore';
 import { useDesignerTeamStore } from '@/store/designerTeamStore';
 import { useWorkshopConfigStore } from '@/store/workshopConfigStore';
+
+import { RepositoryRemote } from '@/services';
+
+import { ImagePreviewDialog } from '@/components/common/ImagePreviewDialog';
+import { PaginationBar } from '@/components/common/PaginationBar';
+import { Spinner } from '@/components/common/Spinner';
+import { CancelledBadge } from '@/components/orders/CancelledBadge';
+import { HeldBadge } from '@/components/orders/HeldBadge';
+import { OrderDetailDialog } from '@/components/orders/OrderDetailDialog';
+import { OrderFilterBar, type OrderFilterFacet } from '@/components/orders/OrderFilterBar';
+import { OrderLogTimelineDialog } from '@/components/orders/OrderLogTimelineDialog';
+import { OrderRowActionsMenu } from '@/components/orders/OrderRowActionsMenu';
+import { WORKSHOP_COLS, type WorkshopOrderRow, type WorkshopRenderCtx } from '@/components/orders/workshopTableConfig';
+import { Badge } from '@/components/ui/badge';
+import { Button } from '@/components/ui/button';
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
+import { TooltipProvider } from '@/components/ui/tooltip';
+
 import { handleAxiosError } from '@/utils';
-import { useDebounce } from '@/hooks/useDebounce';
 import { cn } from '@/utils/cn';
+import { isCancelled, isHeld } from '@/utils/orderActions';
+
+import { useDebounce } from '@/hooks/useDebounce';
 import { NO_TOOL_ROW_CLASS, useIsNoTool } from '@/hooks/useIsNoTool';
+import { usePendingDesignsPoll } from '@/hooks/usePendingDesignsPoll';
+import { usePermission } from '@/hooks/usePermission';
+import { ReworkBackDialog } from '@/pages/fulfillment/my-tasks/ReworkBackDialog';
 
 type TimelineEntry = {
   stage?: string;
@@ -68,10 +60,7 @@ type TabKey = 'todo' | 'done';
 
 const DEFAULT_PAGE_SIZE = 30;
 
-const URGENCY_META: Record<
-  UrgencyKey,
-  { label: string; cls: string; chipCls: string; ringCls: string }
-> = {
+const URGENCY_META: Record<UrgencyKey, { label: string; cls: string; chipCls: string; ringCls: string }> = {
   new: {
     label: 'Mới',
     cls: 'bg-sky-100 text-sky-700 dark:bg-sky-900/40 dark:text-sky-300',
@@ -184,9 +173,7 @@ export function ErrorLogTab() {
 
   const loadConfig = useWorkshopConfigStore((s) => s.load);
   const configLoaded = useWorkshopConfigStore((s) => s.loaded);
-  const productionErrorConfigs = useWorkshopConfigStore(
-    (s) => s.byCategory[WorkshopConfigCategory.ProductionError],
-  );
+  const productionErrorConfigs = useWorkshopConfigStore((s) => s.byCategory[WorkshopConfigCategory.ProductionError]);
   const fabricConfigs = useWorkshopConfigStore((s) => s.byCategory[WorkshopConfigCategory.FabricType]);
   const toolResultConfigs = useWorkshopConfigStore((s) => s.byCategory[WorkshopConfigCategory.ToolResult]);
   const loadDesignerTeam = useDesignerTeamStore((s) => s.fetch);
@@ -199,9 +186,7 @@ export function ErrorLogTab() {
   const [byUrgency, setByUrgency] = useState({ new: 0, attention: 0, urgent: 0, critical: 0 });
   const [loading, setLoading] = useState(false);
 
-  const [tab, setTab] = useState<TabKey>(() =>
-    searchParams.get('etab') === 'done' ? 'done' : 'todo',
-  );
+  const [tab, setTab] = useState<TabKey>(() => (searchParams.get('etab') === 'done' ? 'done' : 'todo'));
   const [page, setPage] = useState(() => {
     const p = Number(searchParams.get('epage'));
     return Number.isFinite(p) && p > 0 ? p : 1;
@@ -295,9 +280,7 @@ export function ErrorLogTab() {
       const res = await RepositoryRemote.order.getErrorLog('?' + params.toString());
       setItems((res.data?.data || []) as ErrorLogRow[]);
       setTotal(Number(res.data?.total || 0));
-      setByUrgency(
-        (res.data?.byUrgency as typeof byUrgency) || { new: 0, attention: 0, urgent: 0, critical: 0 },
-      );
+      setByUrgency((res.data?.byUrgency as typeof byUrgency) || { new: 0, attention: 0, urgent: 0, critical: 0 });
     } catch (err) {
       handleAxiosError(err);
     } finally {
@@ -332,8 +315,7 @@ export function ErrorLogTab() {
   const openPreview = (url: string, title: string, originalUrl?: string, sourceUrl?: string) =>
     setPreview({ url, originalUrl, title, sourceUrl });
 
-  const openDetail = (orderId: string, productionId: string) =>
-    setDetailTarget({ id: orderId, productionId });
+  const openDetail = (orderId: string, productionId: string) => setDetailTarget({ id: orderId, productionId });
 
   const renderCtx: WorkshopRenderCtx = { canEditField, patchRow, openPreview, openDetail };
   const isNoTool = useIsNoTool();
@@ -413,8 +395,7 @@ export function ErrorLogTab() {
     }
   };
 
-  const isAdminRole =
-    roleName === RoleType.SuperAdmin || roleName === RoleType.Admin || roleName === RoleType.Manager;
+  const isAdminRole = roleName === RoleType.SuperAdmin || roleName === RoleType.Admin || roleName === RoleType.Manager;
   const canBulk = tab === 'todo' && isAdminRole;
 
   const toggleOne = (id: string) =>
@@ -455,7 +436,11 @@ export function ErrorLogTab() {
       if (status !== FulfillmentStageStatus.InProgress && status !== FulfillmentStageStatus.Done) {
         return (
           <>
-            <Button size="sm" className="whitespace-nowrap" onClick={() => void doFulfillment(row._id, FulfillmentTransitionAction.Start)}>
+            <Button
+              size="sm"
+              className="whitespace-nowrap"
+              onClick={() => void doFulfillment(row._id, FulfillmentTransitionAction.Start)}
+            >
               Bắt đầu
             </Button>
             {status && (
@@ -469,7 +454,11 @@ export function ErrorLogTab() {
       if (status === FulfillmentStageStatus.InProgress) {
         return (
           <>
-            <Button size="sm" className="whitespace-nowrap" onClick={() => void doFulfillment(row._id, FulfillmentTransitionAction.Complete)}>
+            <Button
+              size="sm"
+              className="whitespace-nowrap"
+              onClick={() => void doFulfillment(row._id, FulfillmentTransitionAction.Complete)}
+            >
               Hoàn thành
             </Button>
             <Button size="sm" variant="destructive" className="whitespace-nowrap" onClick={() => setReworkOrder(row)}>
@@ -489,14 +478,22 @@ export function ErrorLogTab() {
       const ds = row.designerStatus;
       if (ds === 'assigned' || ds === 'rework') {
         return (
-          <Button size="sm" className="whitespace-nowrap" onClick={() => void doDesigner(row._id, DesignerTransitionAction.Start)}>
+          <Button
+            size="sm"
+            className="whitespace-nowrap"
+            onClick={() => void doDesigner(row._id, DesignerTransitionAction.Start)}
+          >
             Bắt đầu
           </Button>
         );
       }
       if (ds === 'in-progress') {
         return (
-          <Button size="sm" className="whitespace-nowrap" onClick={() => void doDesigner(row._id, DesignerTransitionAction.Complete)}>
+          <Button
+            size="sm"
+            className="whitespace-nowrap"
+            onClick={() => void doDesigner(row._id, DesignerTransitionAction.Complete)}
+          >
             Hoàn thành
           </Button>
         );
@@ -583,7 +580,8 @@ export function ErrorLogTab() {
             <div className="flex-1">
               <h2 className="font-semibold text-foreground">Nhật ký bù lỗi</h2>
               <p className="text-xs text-muted-foreground">
-                Lỗi các đơn đã vào fulfillment (in → ép → … → đóng gói). Đơn không thuộc công đoạn của bạn hiển thị mờ (chỉ xem).
+                Lỗi các đơn đã vào fulfillment (in → ép → … → đóng gói). Đơn không thuộc công đoạn của bạn hiển thị mờ
+                (chỉ xem).
               </p>
             </div>
           </div>
@@ -655,13 +653,63 @@ export function ErrorLogTab() {
           }}
           onReload={() => fetchData()}
           loading={loading}
-          facets={[
-            { key: 'assignee', label: 'Người thực hiện', value: filterAssignee, onChange: (v) => { setFilterAssignee(v); setPage(1); }, options: assigneeOptions, perm: 'order.field.assignee.view' },
-            { key: 'fabricType', label: 'Loại vải', value: filterFabric, onChange: (v) => { setFilterFabric(v); setPage(1); }, options: fabricOptions, perm: 'order.field.fabricType.view' },
-            { key: 'toolResult', label: 'Kết quả Tool', value: filterTool, onChange: (v) => { setFilterTool(v); setPage(1); }, options: toolOptions, perm: 'order.field.toolResult.view' },
-            { key: 'productionError', label: 'Mã lỗi', value: filterErrorCode, onChange: (v) => { setFilterErrorCode(v); setPage(1); }, options: errorCodeOptions },
-            { key: 'productionErrorSource', label: 'Nguồn lỗi', value: filterSource, onChange: (v) => { setFilterSource(v); setPage(1); }, options: sourceOptions },
-          ] satisfies OrderFilterFacet[]}
+          facets={
+            [
+              {
+                key: 'assignee',
+                label: 'Người thực hiện',
+                value: filterAssignee,
+                onChange: (v) => {
+                  setFilterAssignee(v);
+                  setPage(1);
+                },
+                options: assigneeOptions,
+                perm: 'order.field.assignee.view',
+              },
+              {
+                key: 'fabricType',
+                label: 'Loại vải',
+                value: filterFabric,
+                onChange: (v) => {
+                  setFilterFabric(v);
+                  setPage(1);
+                },
+                options: fabricOptions,
+                perm: 'order.field.fabricType.view',
+              },
+              {
+                key: 'toolResult',
+                label: 'Kết quả Tool',
+                value: filterTool,
+                onChange: (v) => {
+                  setFilterTool(v);
+                  setPage(1);
+                },
+                options: toolOptions,
+                perm: 'order.field.toolResult.view',
+              },
+              {
+                key: 'productionError',
+                label: 'Mã lỗi',
+                value: filterErrorCode,
+                onChange: (v) => {
+                  setFilterErrorCode(v);
+                  setPage(1);
+                },
+                options: errorCodeOptions,
+              },
+              {
+                key: 'productionErrorSource',
+                label: 'Nguồn lỗi',
+                value: filterSource,
+                onChange: (v) => {
+                  setFilterSource(v);
+                  setPage(1);
+                },
+                options: sourceOptions,
+              },
+            ] satisfies OrderFilterFacet[]
+          }
         />
 
         <PaginationBar
@@ -711,14 +759,20 @@ export function ErrorLogTab() {
               <TableBody>
                 {loading && items.length === 0 && (
                   <TableRow>
-                    <TableCell colSpan={visibleCols.length + FIXED_COLS + (canBulk ? 1 : 0)} className="text-center py-10">
+                    <TableCell
+                      colSpan={visibleCols.length + FIXED_COLS + (canBulk ? 1 : 0)}
+                      className="text-center py-10"
+                    >
                       <Spinner size={20} className="text-muted-foreground" />
                     </TableCell>
                   </TableRow>
                 )}
                 {!loading && items.length === 0 && (
                   <TableRow>
-                    <TableCell colSpan={visibleCols.length + FIXED_COLS + (canBulk ? 1 : 0)} className="text-center py-10 text-sm text-muted-foreground">
+                    <TableCell
+                      colSpan={visibleCols.length + FIXED_COLS + (canBulk ? 1 : 0)}
+                      className="text-center py-10 text-sm text-muted-foreground"
+                    >
                       {tab === 'todo' ? 'Không có đơn lỗi nào cần xử lý 🎉' : 'Chưa có đơn lỗi đã xử lý trong 14 ngày.'}
                     </TableCell>
                   </TableRow>
@@ -744,11 +798,7 @@ export function ErrorLogTab() {
                     >
                       {canBulk && (
                         <TableCell className="py-2">
-                          <input
-                            type="checkbox"
-                            checked={selected.has(row._id)}
-                            onChange={() => toggleOne(row._id)}
-                          />
+                          <input type="checkbox" checked={selected.has(row._id)} onChange={() => toggleOne(row._id)} />
                         </TableCell>
                       )}
                       <TableCell className="py-2">
@@ -773,7 +823,11 @@ export function ErrorLogTab() {
                         <TableCell key={c.key} className="py-2">
                           {c.key === 'productionId' && (held || cancelled) ? (
                             <div className="flex items-center gap-1.5">
-                              {cancelled ? <CancelledBadge reason={row.cancelReason} /> : <HeldBadge reason={row.holdReason} />}
+                              {cancelled ? (
+                                <CancelledBadge reason={row.cancelReason} />
+                              ) : (
+                                <HeldBadge reason={row.holdReason} />
+                              )}
                               <div className="min-w-0 flex-1">{c.render(row, rowCtx)}</div>
                             </div>
                           ) : (
@@ -789,7 +843,9 @@ export function ErrorLogTab() {
                       <TableCell className="py-2">
                         {rep ? (
                           <div className="flex flex-col leading-tight">
-                            <span className="text-[11px] font-medium text-rose-600 dark:text-rose-400">{rep.label}</span>
+                            <span className="text-[11px] font-medium text-rose-600 dark:text-rose-400">
+                              {rep.label}
+                            </span>
                             {rep.who && <span className="text-[10px] text-muted-foreground truncate">{rep.who}</span>}
                           </div>
                         ) : (

@@ -1,20 +1,9 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import axios from 'axios';
 import {
-  DndContext,
-  DragEndEvent,
-  DragOverlay,
-  DragStartEvent,
-  PointerSensor,
-  useDroppable,
-  useSensor,
-  useSensors,
-} from '@dnd-kit/core';
-import {
   CheckCircle2,
   ChevronDown,
   ChevronRight,
-  ChevronUp,
   Clock,
   Copy,
   History,
@@ -25,48 +14,43 @@ import {
   RefreshCw,
   RotateCw,
   ScanLine,
-  Search,
   Trash2,
   X,
   XCircle,
 } from 'lucide-react';
+import type { FulfillmentTransitionDto, ProductionOrder } from 'shared';
+import { FULFILLMENT_STAGE_LABELS, FulfillmentStage, FulfillmentTransitionAction } from 'shared';
 import { toast } from 'sonner';
-import type { FulfillmentTaskTab, FulfillmentTransitionDto, ProductionOrder } from 'shared';
-import {
-  FULFILLMENT_STAGE_LABELS,
-  FulfillmentStage,
-  FulfillmentStageStatus,
-  FulfillmentTransitionAction,
-} from 'shared';
+import type { DragEndEvent, DragStartEvent } from '@dnd-kit/core';
+import { DndContext, DragOverlay, PointerSensor, useDroppable, useSensor, useSensors } from '@dnd-kit/core';
 
-import { Button } from '@/components/ui/button';
-import {
-  Dialog,
-  DialogContent,
-  DialogHeader,
-  DialogTitle,
-} from '@/components/ui/dialog';
-import { Input } from '@/components/ui/input';
-import { TooltipProvider } from '@/components/ui/tooltip';
+import { useAuthStore } from '@/store/authStore';
+
+import { RepositoryRemote } from '@/services';
+
 import { DateRangePicker } from '@/components/common/DateRangePicker';
 import { ImagePreviewDialog } from '@/components/common/ImagePreviewDialog';
+import { PipelineDailyOverview } from '@/components/common/PipelineDailyOverview';
 import { SelectFilter } from '@/components/common/SelectFilter';
 import { Spinner } from '@/components/common/Spinner';
 import { AssignDesignerDialog } from '@/components/orders/AssignDesignerDialog';
 import { OrderDetailDialog } from '@/components/orders/OrderDetailDialog';
-import { useDebounce } from '@/hooks/useDebounce';
-import { RepositoryRemote } from '@/services';
-import { useAuthStore } from '@/store/authStore';
+import { Button } from '@/components/ui/button';
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
+import { Input } from '@/components/ui/input';
+import { TooltipProvider } from '@/components/ui/tooltip';
+
 import { handleAxiosError } from '@/utils';
 import { cn } from '@/utils/cn';
 
-import { PipelineDailyOverview } from '@/components/common/PipelineDailyOverview';
+import { useDebounce } from '@/hooks/useDebounce';
+
+import { FulfillmentScanActionDialog } from '../../orders/scan-error/FulfillmentScanActionDialog';
+import { OrderErrorScanDialog } from '../../orders/scan-error/OrderErrorScanDialog';
 import { FulfillmentTaskCard } from './FulfillmentTaskCard';
+import PrintWorkshopView from './PrintWorkshopView';
 import { ReworkBackDialog } from './ReworkBackDialog';
 import { StageErrorPanel } from './StageErrorPanel';
-import PrintWorkshopView from './PrintWorkshopView';
-import { OrderErrorScanDialog } from '../../orders/scan-error/OrderErrorScanDialog';
-import { FulfillmentScanActionDialog } from '../../orders/scan-error/FulfillmentScanActionDialog';
 
 type ScannedOrder = ProductionOrder & {
   factory?: { name?: string; shortName?: string };
@@ -134,14 +118,7 @@ const EMPTY_COLS: Columns = {
   unassigned: [],
 };
 
-const WORKER_COL_ORDER: ColKey[] = [
-  'waiting',
-  'in-progress',
-  'rework',
-  'done',
-  'fixed',
-  'watching',
-];
+const WORKER_COL_ORDER: ColKey[] = ['waiting', 'in-progress', 'rework', 'done', 'fixed', 'watching'];
 const ADMIN_COL_ORDER: ColKey[] = ['unassigned', ...WORKER_COL_ORDER];
 
 type BulkAction = 'start' | 'complete';
@@ -267,9 +244,7 @@ function FulfillmentKanbanView() {
   // Admin/Manager/SupportManager (= override roles ở BE) → thấy thêm column
   // "Chưa gán Designer" + được phép gọi tab=unassigned.
   const roleName = profile?.role?.name as string | undefined;
-  const isOverrideRole = ['SuperAdmin', 'Admin', 'Manager', 'SupportManager'].includes(
-    roleName ?? '',
-  );
+  const isOverrideRole = ['SuperAdmin', 'Admin', 'Manager', 'SupportManager'].includes(roleName ?? '');
   const colOrder = isOverrideRole ? ADMIN_COL_ORDER : WORKER_COL_ORDER;
 
   const [columns, setColumns] = useState<Columns>(EMPTY_COLS);
@@ -280,9 +255,7 @@ function FulfillmentKanbanView() {
   const [loading, setLoading] = useState(false);
   const [reworkOrder, setReworkOrder] = useState<ProductionOrder | null>(null);
   const [activeOrder, setActiveOrder] = useState<ProductionOrder | null>(null);
-  const [preview, setPreview] = useState<{ url: string; title: string; original?: string } | null>(
-    null,
-  );
+  const [preview, setPreview] = useState<{ url: string; title: string; original?: string } | null>(null);
 
   // ─── Filter state ──────────────────────────────────────────────
   const [search, setSearch] = useState('');
@@ -474,8 +447,7 @@ function FulfillmentKanbanView() {
       arr.filter((o) => {
         if (dayFilter && vnDay(o.inProductionAt as string | undefined) !== dayFilter) return false;
         if (q) {
-          const hit =
-            o.productionId?.toLowerCase().includes(q) || o.orderId?.toLowerCase().includes(q);
+          const hit = o.productionId?.toLowerCase().includes(q) || o.orderId?.toLowerCase().includes(q);
           if (!hit) return false;
         }
         if (filters.type && o.type !== filters.type) return false;
@@ -500,8 +472,7 @@ function FulfillmentKanbanView() {
     const q = stripBarcodePrefix(debouncedSearch).toLowerCase();
     return watching.filter((o) => {
       if (q) {
-        const hit =
-          o.productionId?.toLowerCase().includes(q) || o.orderId?.toLowerCase().includes(q);
+        const hit = o.productionId?.toLowerCase().includes(q) || o.orderId?.toLowerCase().includes(q);
         if (!hit) return false;
       }
       if (filters.type && o.type !== filters.type) return false;
@@ -531,16 +502,9 @@ function FulfillmentKanbanView() {
     ): { value: string; label: string; count: number }[] => {
       const filtered = all.filter((o) => {
         if (key !== 'type' && filters.type && o.type !== filters.type) return false;
-        if (key !== 'fabricType' && filters.fabricType && o.fabricType !== filters.fabricType)
-          return false;
-        if (
-          key !== 'machineNumber' &&
-          filters.machineNumber &&
-          o.machineNumber !== filters.machineNumber
-        )
-          return false;
-        if (key !== 'toolResult' && filters.toolResult && o.toolResult !== filters.toolResult)
-          return false;
+        if (key !== 'fabricType' && filters.fabricType && o.fabricType !== filters.fabricType) return false;
+        if (key !== 'machineNumber' && filters.machineNumber && o.machineNumber !== filters.machineNumber) return false;
+        if (key !== 'toolResult' && filters.toolResult && o.toolResult !== filters.toolResult) return false;
         if (key !== 'userSku' && filters.userSku && o.userSku !== filters.userSku) return false;
         return true;
       });
@@ -589,8 +553,7 @@ function FulfillmentKanbanView() {
   const callBulk = async (action: BulkAction) => {
     if (!myStage || selected.size === 0) return;
     const ids = Array.from(selected);
-    const txAction =
-      action === 'start' ? FulfillmentTransitionAction.Start : FulfillmentTransitionAction.Complete;
+    const txAction = action === 'start' ? FulfillmentTransitionAction.Start : FulfillmentTransitionAction.Complete;
     try {
       const results = await Promise.allSettled(
         ids.map((id) =>
@@ -614,9 +577,7 @@ function FulfillmentKanbanView() {
   // ─── DnD ──────────────────────────────────────────────────────
   const handleDragStart = (e: DragStartEvent) => {
     const id = e.active.id as string;
-    const card =
-      filteredColumns.waiting.find((o) => o._id === id) ||
-      filteredColumns.rework.find((o) => o._id === id);
+    const card = filteredColumns.waiting.find((o) => o._id === id) || filteredColumns.rework.find((o) => o._id === id);
     if (card) setActiveOrder(card);
   };
 
@@ -634,8 +595,7 @@ function FulfillmentKanbanView() {
       return;
     }
 
-    const order =
-      columns[fromCol].find((o) => o._id === orderId) || ({ _id: orderId } as ProductionOrder);
+    const order = columns[fromCol].find((o) => o._id === orderId) || ({ _id: orderId } as ProductionOrder);
     setColumns((prev) => ({
       ...prev,
       [fromCol]: prev[fromCol].filter((o) => o._id !== orderId),
@@ -671,12 +631,7 @@ function FulfillmentKanbanView() {
     });
   };
 
-  const handleCardCheckbox = (
-    colKey: ColKey,
-    id: string,
-    checked: boolean,
-    withShift: boolean,
-  ) => {
+  const handleCardCheckbox = (colKey: ColKey, id: string, checked: boolean, withShift: boolean) => {
     if (
       withShift &&
       lastClickedRef.current &&
@@ -753,8 +708,7 @@ function FulfillmentKanbanView() {
     unassigned: filteredColumns.unassigned.length,
   };
 
-  const onPreview = (url: string, title: string, original?: string) =>
-    setPreview({ url, title, original });
+  const onPreview = (url: string, title: string, original?: string) => setPreview({ url, title, original });
 
   return (
     <TooltipProvider delayDuration={200}>
@@ -766,12 +720,8 @@ function FulfillmentKanbanView() {
               <ListChecks size={20} className="text-indigo-600" />
             </div>
             <div>
-              <h1 className="text-xl font-bold text-foreground">
-                Task của tôi — {FULFILLMENT_STAGE_LABELS[myStage]}
-              </h1>
-              <p className="text-xs text-muted-foreground">
-                Xưởng: {profile?.factoryId ?? '—'}
-              </p>
+              <h1 className="text-xl font-bold text-foreground">Task của tôi — {FULFILLMENT_STAGE_LABELS[myStage]}</h1>
+              <p className="text-xs text-muted-foreground">Xưởng: {profile?.factoryId ?? '—'}</p>
             </div>
           </div>
 
@@ -781,29 +731,35 @@ function FulfillmentKanbanView() {
         </div>
 
         {/* KPI */}
-        <div className={cn(
-          'grid gap-2',
-          colOrder.length === 7
-            ? 'grid-cols-2 md:grid-cols-4 xl:grid-cols-7'
-            : 'grid-cols-2 md:grid-cols-3 xl:grid-cols-6',
-        )}>
+        <div
+          className={cn(
+            'grid gap-2',
+            colOrder.length === 7
+              ? 'grid-cols-2 md:grid-cols-4 xl:grid-cols-7'
+              : 'grid-cols-2 md:grid-cols-3 xl:grid-cols-6',
+          )}
+        >
           {colOrder.map((k) => (
             <KPI key={k} label={COL_META[k].label} value={counts[k]} accent={COL_META[k].kpiAccent} />
           ))}
         </div>
 
         {/* Ô thống kê lỗi công đoạn — click xổ bảng lỗi theo ngày (inProductionAt). */}
-        <StageErrorPanel stage={myStage} from={dateFrom || undefined} to={dateTo || undefined} reloadToken={overviewToken} />
+        <StageErrorPanel
+          stage={myStage}
+          from={dateFrom || undefined}
+          to={dateTo || undefined}
+          reloadToken={overviewToken}
+        />
 
         {/* Hint */}
         <div className="flex items-start gap-2 rounded-md border border-border bg-muted/30 p-2.5 text-[11px] text-muted-foreground">
           <MousePointerClick size={13} className="text-primary shrink-0 mt-0.5" />
           <div>
-            <strong className="text-foreground">Mẹo chọn nhiều đơn:</strong> Tick checkbox cạnh tên
-            sản phẩm để chọn toàn bộ đơn của sản phẩm đó. Hoặc tick 1 đơn, giữ{' '}
-            <kbd className="px-1 bg-background border rounded">Shift</kbd> rồi click checkbox khác
-            (trong cùng cột) để chọn nhanh tất cả đơn ở giữa. Kéo card "Đang chờ"/"Làm lại" sang
-            "Đang làm" cũng được.
+            <strong className="text-foreground">Mẹo chọn nhiều đơn:</strong> Tick checkbox cạnh tên sản phẩm để chọn
+            toàn bộ đơn của sản phẩm đó. Hoặc tick 1 đơn, giữ{' '}
+            <kbd className="px-1 bg-background border rounded">Shift</kbd> rồi click checkbox khác (trong cùng cột) để
+            chọn nhanh tất cả đơn ở giữa. Kéo card "Đang chờ"/"Làm lại" sang "Đang làm" cũng được.
           </div>
         </div>
 
@@ -843,9 +799,15 @@ function FulfillmentKanbanView() {
                     {searchCopied ? <CheckCircle2 size={13} /> : <Copy size={12} />}
                   </button>
                   {lookupLoading ? (
-                    <Loader2 size={15} className="absolute right-2.5 top-1/2 -translate-y-1/2 text-muted-foreground animate-spin" />
+                    <Loader2
+                      size={15}
+                      className="absolute right-2.5 top-1/2 -translate-y-1/2 text-muted-foreground animate-spin"
+                    />
                   ) : (
-                    <ScanLine size={15} className="absolute right-2.5 top-1/2 -translate-y-1/2 text-muted-foreground/60" />
+                    <ScanLine
+                      size={15}
+                      className="absolute right-2.5 top-1/2 -translate-y-1/2 text-muted-foreground/60"
+                    />
                   )}
                   <Input
                     ref={searchInputRef}
@@ -885,7 +847,8 @@ function FulfillmentKanbanView() {
                 </p>
               ) : (
                 <p className="mt-1 text-[10px] text-muted-foreground">
-                  Quét mã hoặc Enter → mở đơn để <strong>Hoàn thành</strong> / <strong>Báo lỗi</strong>. Gõ để lọc kanban.
+                  Quét mã hoặc Enter → mở đơn để <strong>Hoàn thành</strong> / <strong>Báo lỗi</strong>. Gõ để lọc
+                  kanban.
                 </p>
               )}
             </div>
@@ -950,12 +913,14 @@ function FulfillmentKanbanView() {
 
         {/* Kanban — 6 cột worker / 7 cột admin */}
         <DndContext sensors={sensors} onDragStart={handleDragStart} onDragEnd={handleDragEnd}>
-          <div className={cn(
-            'grid gap-3',
-            colOrder.length === 7
-              ? 'grid-cols-1 md:grid-cols-2 xl:grid-cols-7'
-              : 'grid-cols-1 md:grid-cols-2 xl:grid-cols-6',
-          )}>
+          <div
+            className={cn(
+              'grid gap-3',
+              colOrder.length === 7
+                ? 'grid-cols-1 md:grid-cols-2 xl:grid-cols-7'
+                : 'grid-cols-1 md:grid-cols-2 xl:grid-cols-6',
+            )}
+          >
             {colOrder.map((key) => (
               <Column
                 key={key}
@@ -972,9 +937,7 @@ function FulfillmentKanbanView() {
                 onComplete={(o) => void callTransition(o, FulfillmentTransitionAction.Complete)}
                 onReportError={(o) => setReworkOrder(o)}
                 onPreview={onPreview}
-                onCheckCard={(id, checked, withShift) =>
-                  handleCardCheckbox(key, id, checked, withShift)
-                }
+                onCheckCard={(id, checked, withShift) => handleCardCheckbox(key, id, checked, withShift)}
                 onCheckGroup={toggleGroup}
               />
             ))}
@@ -1036,9 +999,7 @@ function FulfillmentKanbanView() {
                 Đã chọn <span className="font-semibold">{selected.size}</span>
               </span>
               {selectedColumns.size > 1 ? (
-                <span className="text-xs text-muted-foreground italic">
-                  (Đơn ở nhiều cột — chỉ bulk cùng 1 cột)
-                </span>
+                <span className="text-xs text-muted-foreground italic">(Đơn ở nhiều cột — chỉ bulk cùng 1 cột)</span>
               ) : (
                 <>
                   {bulkActions.includes('start') && (
@@ -1107,11 +1068,7 @@ function FulfillmentKanbanView() {
             clone luồng trang "Quét mã". Reload kanban sau mỗi thao tác. */}
         {scannedOrder &&
           (scanErrorMode ? (
-            <OrderErrorScanDialog
-              order={scannedOrder}
-              onClose={closeScanDialog}
-              onSaved={() => void load()}
-            />
+            <OrderErrorScanDialog order={scannedOrder} onClose={closeScanDialog} onSaved={() => void load()} />
           ) : (
             <FulfillmentScanActionDialog
               order={scannedOrder}
@@ -1161,9 +1118,7 @@ function FulfillmentKanbanView() {
                           )}
                         </span>
                         <span className="min-w-0 flex-1">
-                          <span className="block font-mono text-sm font-medium truncate">
-                            {h.code}
-                          </span>
+                          <span className="block font-mono text-sm font-medium truncate">{h.code}</span>
                           <span className="block text-[11px] text-muted-foreground">
                             {h.status === 'found' ? 'Tìm thấy' : 'Không tìm thấy'}
                           </span>
@@ -1305,9 +1260,7 @@ function Column({
       </div>
 
       <div className="flex-1 space-y-3 overflow-y-auto max-h-[calc(100vh-380px)]">
-        {cards.length === 0 && (
-          <div className="text-[11px] text-muted-foreground italic text-center py-6">Trống</div>
-        )}
+        {cards.length === 0 && <div className="text-[11px] text-muted-foreground italic text-center py-6">Trống</div>}
         {groups.map(([type, rows]) => {
           const selCount = rows.filter((r) => selected.has(r._id)).length;
           const allChecked = rows.length > 0 && selCount === rows.length;
@@ -1353,9 +1306,7 @@ function Column({
                     {selCount}/{rows.length}
                   </span>
                 )}
-                {!showCheckbox && (
-                  <span className="text-muted-foreground font-normal">{rows.length}</span>
-                )}
+                {!showCheckbox && <span className="text-muted-foreground font-normal">{rows.length}</span>}
               </div>
 
               {!isCollapsed && (
@@ -1364,10 +1315,7 @@ function Column({
                     const checked = selected.has(o._id);
                     const isDragging = activeDragId === o._id;
                     return (
-                      <div
-                        key={o._id}
-                        className={cn('relative group', isDragging && 'opacity-30')}
-                      >
+                      <div key={o._id} className={cn('relative group', isDragging && 'opacity-30')}>
                         {showCheckbox && (
                           <div className="absolute top-1.5 left-1.5 z-10">
                             <input
@@ -1375,14 +1323,15 @@ function Column({
                               checked={checked}
                               onClick={(e) => {
                                 const me = e.nativeEvent as MouseEvent;
-                                (e.currentTarget as HTMLInputElement & {
-                                  __shift?: boolean;
-                                }).__shift = me.shiftKey;
+                                (
+                                  e.currentTarget as HTMLInputElement & {
+                                    __shift?: boolean;
+                                  }
+                                ).__shift = me.shiftKey;
                               }}
                               onChange={(e) => {
                                 const ws =
-                                  ((e.currentTarget as HTMLInputElement & { __shift?: boolean })
-                                    .__shift) || false;
+                                  (e.currentTarget as HTMLInputElement & { __shift?: boolean }).__shift || false;
                                 onCheckCard(o._id, e.currentTarget.checked, ws);
                               }}
                               onPointerDown={(e) => e.stopPropagation()}
@@ -1406,9 +1355,7 @@ function Column({
                             onCopyProductionId={() => onCopyProductionId(o)}
                             onClickProductionId={() => onClickProductionId(o)}
                             onAssignDesigner={
-                              colKey === 'unassigned' && onAssignDesigner
-                                ? () => onAssignDesigner(o)
-                                : undefined
+                              colKey === 'unassigned' && onAssignDesigner ? () => onAssignDesigner(o) : undefined
                             }
                             onPreview={onPreview}
                             onStart={() => onStart(o)}

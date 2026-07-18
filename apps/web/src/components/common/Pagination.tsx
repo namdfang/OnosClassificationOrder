@@ -1,6 +1,8 @@
 import React from 'react';
 import { ChevronLeft, ChevronRight, ChevronsLeft, ChevronsRight } from 'lucide-react';
+
 import { Button } from '@/components/ui/button';
+
 import { cn } from '@/utils/cn';
 
 interface PaginationProps {
@@ -29,7 +31,7 @@ export function Pagination({
   const pages: number[] = [];
   const windowSize = 5;
   let start = Math.max(1, safePage - 2);
-  let end = Math.min(totalPages, start + windowSize - 1);
+  const end = Math.min(totalPages, start + windowSize - 1);
   start = Math.max(1, end - windowSize + 1);
   for (let i = start; i <= end; i++) pages.push(i);
 

@@ -1,50 +1,37 @@
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
-import { ArrowRight, Download, Factory, History, Layers, MapPin, Plus, Send } from 'lucide-react';
 import { useSearchParams } from 'react-router-dom';
-import { toast } from 'sonner';
+import { ArrowRight, Download, Factory, History, Layers, MapPin, Plus, Send } from 'lucide-react';
 import type { FactoryOverview, FactoryOverviewCell } from 'shared';
 import { WorkshopConfigCategory } from 'shared';
+import { toast } from 'sonner';
 
-import { Badge } from '@/components/ui/badge';
-import { Button } from '@/components/ui/button';
-import { Input } from '@/components/ui/input';
-import { Label } from '@/components/ui/label';
-import { Spinner } from '@/components/common/Spinner';
-import { PaginationBar } from '@/components/common/PaginationBar';
-import { OrderFilterBar, type OrderFilterFacet } from '@/components/orders/OrderFilterBar';
-import {
-  Dialog,
-  DialogContent,
-  DialogFooter,
-  DialogHeader,
-  DialogTitle,
-} from '@/components/ui/dialog';
-import {
-  Table,
-  TableBody,
-  TableCell,
-  TableHead,
-  TableHeader,
-  TableRow,
-} from '@/components/ui/table';
-import { TooltipProvider } from '@/components/ui/tooltip';
+import { useWorkshopConfigStore } from '@/store/workshopConfigStore';
+
+import { RepositoryRemote } from '@/services';
+
 import { ImagePreviewDialog } from '@/components/common/ImagePreviewDialog';
+import { PaginationBar } from '@/components/common/PaginationBar';
+import { Spinner } from '@/components/common/Spinner';
+import { CancelledBadge } from '@/components/orders/CancelledBadge';
+import { OrderFilterBar, type OrderFilterFacet } from '@/components/orders/OrderFilterBar';
 import { OrderLogTimelineDialog } from '@/components/orders/OrderLogTimelineDialog';
 import { OrderRowActionsMenu } from '@/components/orders/OrderRowActionsMenu';
-import { isCancelled } from '@/utils/orderActions';
-import { CancelledBadge } from '@/components/orders/CancelledBadge';
-import {
-  WORKSHOP_COLS,
-  type WorkshopOrderRow,
-  type WorkshopRenderCtx,
-} from '@/components/orders/workshopTableConfig';
-import { RepositoryRemote } from '@/services';
+import { WORKSHOP_COLS, type WorkshopOrderRow, type WorkshopRenderCtx } from '@/components/orders/workshopTableConfig';
+import { Badge } from '@/components/ui/badge';
+import { Button } from '@/components/ui/button';
+import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
+import { Input } from '@/components/ui/input';
+import { Label } from '@/components/ui/label';
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
+import { TooltipProvider } from '@/components/ui/tooltip';
+
 import { handleAxiosError } from '@/utils';
-import { usePermission } from '@/hooks/usePermission';
-import { useDebounce } from '@/hooks/useDebounce';
-import { useWorkshopConfigStore } from '@/store/workshopConfigStore';
 import { cn } from '@/utils/cn';
+import { isCancelled } from '@/utils/orderActions';
+
+import { useDebounce } from '@/hooks/useDebounce';
 import { NO_TOOL_ROW_CLASS, useIsNoTool } from '@/hooks/useIsNoTool';
+import { usePermission } from '@/hooks/usePermission';
 
 import { buildWorkbook, downloadWorkbook, type ExportableOrder } from './exportOrders';
 
@@ -57,13 +44,13 @@ type ViewMode = 'by-factory' | 'total';
 type FilterMode =
   | { kind: 'all' }
   | { kind: 'at'; factoryId: string }
-  | { kind: 'in'; factoryId: string }   // transferred-in to factoryId
-  | { kind: 'out'; factoryId: string }  // transferred-out from factoryId
+  | { kind: 'in'; factoryId: string } // transferred-in to factoryId
+  | { kind: 'out'; factoryId: string } // transferred-out from factoryId
   | { kind: 'print'; factoryId: string; stage: PrintStage }
   | { kind: 'print-all'; stage: PrintStage } // print stage across ALL factories (Tổng view)
-  | { kind: 'error'; factoryId: string }     // đơn lỗi xưởng tại factoryId
-  | { kind: 'error-all' }                    // đơn lỗi xưởng across ALL factories (Tổng view)
-  | { kind: 'unmapped' };                    // đơn chưa map xưởng nào
+  | { kind: 'error'; factoryId: string } // đơn lỗi xưởng tại factoryId
+  | { kind: 'error-all' } // đơn lỗi xưởng across ALL factories (Tổng view)
+  | { kind: 'unmapped' }; // đơn chưa map xưởng nào
 
 interface SelectFilters {
   type: string;
@@ -272,9 +259,7 @@ export default function OrderFactoryTab() {
   const fetchOverview = useCallback(async () => {
     try {
       setOverviewLoading(true);
-      const res = await RepositoryRemote.order.getFactoryOverview(
-        overviewQuery ? '?' + overviewQuery : '',
-      );
+      const res = await RepositoryRemote.order.getFactoryOverview(overviewQuery ? '?' + overviewQuery : '');
       setOverview((res.data?.data || null) as FactoryOverview | null);
     } catch (err) {
       handleAxiosError(err);
@@ -361,10 +346,7 @@ export default function OrderFactoryTab() {
     fetchRows();
   }, [fetchRows]);
 
-  const visibleCols = useMemo(
-    () => WORKSHOP_COLS.filter((c) => !c.perm || canViewField(c.key)),
-    [canViewField],
-  );
+  const visibleCols = useMemo(() => WORKSHOP_COLS.filter((c) => !c.perm || canViewField(c.key)), [canViewField]);
 
   /** Aggregate "Tổng" view metrics — sum print pipeline + tool counts across
    *  factory cards; distinct counts (sản phẩm/vải/phòng/máy) lấy thẳng từ
@@ -396,8 +378,7 @@ export default function OrderFactoryTab() {
   const patchRow = (id: string, p: Partial<WorkshopOrderRow>) =>
     setRows((prev) => prev.map((r) => (r._id === id ? { ...r, ...p } : r)));
 
-  const openPreview = (url: string, title: string, originalUrl?: string) =>
-    setPreview({ url, originalUrl, title });
+  const openPreview = (url: string, title: string, originalUrl?: string) => setPreview({ url, originalUrl, title });
 
   const ctx: WorkshopRenderCtx = { canEditField, patchRow, openPreview };
   const isNoTool = useIsNoTool();
@@ -432,9 +413,7 @@ export default function OrderFactoryTab() {
    *  chọn đơn đã map. */
   const selectedAllUnmapped = useMemo(() => {
     if (selected.size === 0) return false;
-    return rows
-      .filter((r) => selected.has(r._id))
-      .every((r) => !r.factoryId);
+    return rows.filter((r) => selected.has(r._id)).every((r) => !r.factoryId);
   }, [rows, selected]);
 
   // Export ALL rows matching the CURRENT filter — bypasses pagination, sends
@@ -478,9 +457,7 @@ export default function OrderFactoryTab() {
       // the same date range + factory scope, so the Summary sheet matches what
       // the user sees on screen.
       const wb = buildWorkbook(data, overview, { resolve: resolveWorkshop });
-      const stamp = new Date()
-        .toLocaleString('sv-SE', { hour12: false })
-        .replace(/[: ]/g, '-');
+      const stamp = new Date().toLocaleString('sv-SE', { hour12: false }).replace(/[: ]/g, '-');
       downloadWorkbook(`don-hang-${stamp}.xlsx`, wb);
       toast.success(`Đã xuất ${data.length} đơn + summary`);
     } catch (err) {
@@ -548,17 +525,12 @@ export default function OrderFactoryTab() {
                 disabled={exportLoading || rowsLoading}
                 title="Xuất tất cả đơn theo filter hiện tại (bỏ qua phân trang)"
               >
-                {exportLoading ? (
-                  <Spinner size={13} className="text-muted-foreground" />
-                ) : (
-                  <Download size={13} />
-                )}
+                {exportLoading ? <Spinner size={13} className="text-muted-foreground" /> : <Download size={13} />}
                 Xuất Excel
               </Button>
               {overview && (
                 <span className="ml-auto text-xs text-muted-foreground">
-                  <span className="font-semibold text-foreground tabular-nums">{overview.totals.total}</span>{' '}
-                  đơn ·{' '}
+                  <span className="font-semibold text-foreground tabular-nums">{overview.totals.total}</span> đơn ·{' '}
                   <span className="font-semibold text-amber-700 dark:text-amber-400 tabular-nums">
                     {overview.totals.transferred}
                   </span>{' '}
@@ -567,17 +539,60 @@ export default function OrderFactoryTab() {
               )}
             </>
           }
-          facets={[
-            { key: 'type', label: 'Sản phẩm', value: selectFilters.type, onChange: (v) => setSelectFilters((s) => ({ ...s, type: v })), options: overview?.availableFilters.products || [] },
-            { key: 'fabricType', label: 'Loại vải', value: selectFilters.fabric, onChange: (v) => setSelectFilters((s) => ({ ...s, fabric: v })), options: overview?.availableFilters.fabrics || [] },
-            { key: 'machineTypeId', label: 'Phòng', value: selectFilters.machine, onChange: (v) => setSelectFilters((s) => ({ ...s, machine: v })), options: overview?.availableFilters.machineTypes || [] },
-            { key: 'machineNumber', label: 'Máy', value: selectFilters.machineNumber, onChange: (v) => setSelectFilters((s) => ({ ...s, machineNumber: v })), options: overview?.availableFilters.machines || [] },
-            { key: 'toolResult', label: 'Kết quả Tool', value: selectFilters.tool, onChange: (v) => setSelectFilters((s) => ({ ...s, tool: v })), options: overview?.availableFilters.toolResults || [] },
-            { key: 'toolResultNote', label: 'Note Tool', value: selectFilters.toolNote, onChange: (v) => setSelectFilters((s) => ({ ...s, toolNote: v })), options: overview?.availableFilters.toolResultNotes || [] },
-            { key: 'userSku', label: 'Khách hàng', value: selectFilters.user, onChange: (v) => setSelectFilters((s) => ({ ...s, user: v })), options: overview?.availableFilters.users || [] },
-          ] satisfies OrderFilterFacet[]}
+          facets={
+            [
+              {
+                key: 'type',
+                label: 'Sản phẩm',
+                value: selectFilters.type,
+                onChange: (v) => setSelectFilters((s) => ({ ...s, type: v })),
+                options: overview?.availableFilters.products || [],
+              },
+              {
+                key: 'fabricType',
+                label: 'Loại vải',
+                value: selectFilters.fabric,
+                onChange: (v) => setSelectFilters((s) => ({ ...s, fabric: v })),
+                options: overview?.availableFilters.fabrics || [],
+              },
+              {
+                key: 'machineTypeId',
+                label: 'Phòng',
+                value: selectFilters.machine,
+                onChange: (v) => setSelectFilters((s) => ({ ...s, machine: v })),
+                options: overview?.availableFilters.machineTypes || [],
+              },
+              {
+                key: 'machineNumber',
+                label: 'Máy',
+                value: selectFilters.machineNumber,
+                onChange: (v) => setSelectFilters((s) => ({ ...s, machineNumber: v })),
+                options: overview?.availableFilters.machines || [],
+              },
+              {
+                key: 'toolResult',
+                label: 'Kết quả Tool',
+                value: selectFilters.tool,
+                onChange: (v) => setSelectFilters((s) => ({ ...s, tool: v })),
+                options: overview?.availableFilters.toolResults || [],
+              },
+              {
+                key: 'toolResultNote',
+                label: 'Note Tool',
+                value: selectFilters.toolNote,
+                onChange: (v) => setSelectFilters((s) => ({ ...s, toolNote: v })),
+                options: overview?.availableFilters.toolResultNotes || [],
+              },
+              {
+                key: 'userSku',
+                label: 'Khách hàng',
+                value: selectFilters.user,
+                onChange: (v) => setSelectFilters((s) => ({ ...s, user: v })),
+                options: overview?.availableFilters.users || [],
+              },
+            ] satisfies OrderFilterFacet[]
+          }
         />
-
 
         {/* Cards section — "Theo xưởng" = 3 factory cards; "Tổng" = 1 aggregate
             card với cùng layout print pipeline (Chưa in / Lỗi / Đã in xong)
@@ -592,12 +607,7 @@ export default function OrderFactoryTab() {
         ) : (
           <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
             {(overview?.factories || []).map((f) => (
-              <FactoryCard
-                key={f.factoryId}
-                cell={f}
-                filterMode={filterMode}
-                onFilter={setFilterMode}
-              />
+              <FactoryCard key={f.factoryId} cell={f} filterMode={filterMode} onFilter={setFilterMode} />
             ))}
             {!overview && overviewLoading && (
               <>
@@ -620,8 +630,7 @@ export default function OrderFactoryTab() {
             </div>
             <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
               {overview.flows.map((f) => {
-                const active =
-                  filterMode.kind === 'in' && filterMode.factoryId === f.toFactoryId;
+                const active = filterMode.kind === 'in' && filterMode.factoryId === f.toFactoryId;
                 return (
                   <button
                     key={`${f.fromFactoryId}-${f.toFactoryId}`}
@@ -643,9 +652,7 @@ export default function OrderFactoryTab() {
                     </Badge>
                     <div className="ml-auto text-right">
                       <p className="text-sm font-bold tabular-nums">{f.count} đơn</p>
-                      <p className="text-[10px] text-muted-foreground tabular-nums">
-                        {f.totalQuantity} sản phẩm
-                      </p>
+                      <p className="text-[10px] text-muted-foreground tabular-nums">{f.totalQuantity} sản phẩm</p>
                     </div>
                   </button>
                 );
@@ -658,10 +665,7 @@ export default function OrderFactoryTab() {
         <div className="rounded-lg border border-border bg-card p-3 space-y-2">
           <div className="flex items-center gap-2 flex-wrap">
             <span className="text-xs text-muted-foreground">Lọc:</span>
-            <FilterChip
-              active={filterMode.kind === 'all'}
-              onClick={() => setFilterMode({ kind: 'all' })}
-            >
+            <FilterChip active={filterMode.kind === 'all'} onClick={() => setFilterMode({ kind: 'all' })}>
               Tất cả
             </FilterChip>
             {viewMode === 'by-factory' &&
@@ -691,9 +695,7 @@ export default function OrderFactoryTab() {
             {overview && overview.totals.unmapped > 0 && (
               <FilterChip
                 active={filterMode.kind === 'unmapped'}
-                onClick={() =>
-                  setFilterMode(filterMode.kind === 'unmapped' ? { kind: 'all' } : { kind: 'unmapped' })
-                }
+                onClick={() => setFilterMode(filterMode.kind === 'unmapped' ? { kind: 'all' } : { kind: 'unmapped' })}
               >
                 <span className="inline-flex items-center gap-1">
                   <span className="w-1.5 h-1.5 rounded-full bg-amber-500" />
@@ -703,12 +705,20 @@ export default function OrderFactoryTab() {
             )}
             {filterMode.kind === 'print' && (
               <FilterChip active onClick={() => setFilterMode({ kind: 'all' })}>
-                {filterMode.stage === 'printed' ? 'Đã in xong' : filterMode.stage === 'printing' ? 'Đang in' : 'Chưa in'}
+                {filterMode.stage === 'printed'
+                  ? 'Đã in xong'
+                  : filterMode.stage === 'printing'
+                    ? 'Đang in'
+                    : 'Chưa in'}
               </FilterChip>
             )}
             {filterMode.kind === 'print-all' && (
               <FilterChip active onClick={() => setFilterMode({ kind: 'all' })}>
-                {filterMode.stage === 'printed' ? 'Đã in xong (Tổng)' : filterMode.stage === 'printing' ? 'Đang in (Tổng)' : 'Chưa in (Tổng)'}
+                {filterMode.stage === 'printed'
+                  ? 'Đã in xong (Tổng)'
+                  : filterMode.stage === 'printing'
+                    ? 'Đang in (Tổng)'
+                    : 'Chưa in (Tổng)'}
               </FilterChip>
             )}
             {filterMode.kind === 'error' && (
@@ -729,18 +739,26 @@ export default function OrderFactoryTab() {
               selectFilters.machineNumber ||
               selectFilters.toolNote ||
               selectFilters.user) && (
-                <Button
-                  variant="ghost"
-                  size="sm"
-                  className="text-xs h-7 ml-auto"
-                  onClick={() => {
-                    setFilterMode({ kind: 'all' });
-                    setSelectFilters({ type: '', fabric: '', tool: '', machine: '', machineNumber: '', toolNote: '', user: '' });
-                  }}
-                >
-                  Xóa lọc
-                </Button>
-              )}
+              <Button
+                variant="ghost"
+                size="sm"
+                className="text-xs h-7 ml-auto"
+                onClick={() => {
+                  setFilterMode({ kind: 'all' });
+                  setSelectFilters({
+                    type: '',
+                    fabric: '',
+                    tool: '',
+                    machine: '',
+                    machineNumber: '',
+                    toolNote: '',
+                    user: '',
+                  });
+                }}
+              >
+                Xóa lọc
+              </Button>
+            )}
           </div>
         </div>
 
@@ -759,10 +777,7 @@ export default function OrderFactoryTab() {
                 <MapPin size={13} /> Gán xưởng
               </Button>
             ) : (
-              <Button
-                size="sm"
-                onClick={() => setTransferDialog({ ids: Array.from(selected) })}
-              >
+              <Button size="sm" onClick={() => setTransferDialog({ ids: Array.from(selected) })}>
                 <Send size={13} /> Chuyển xưởng
               </Button>
             )}
@@ -805,13 +820,16 @@ export default function OrderFactoryTab() {
           <div className="border-b border-border px-3 py-2 flex items-center justify-between">
             <h3 className="text-sm font-semibold flex items-center gap-2">
               Danh sách đơn ({total})
-              {rowsLoading && rows.length > 0 && (
-                <Spinner size={11} className="text-muted-foreground" />
-              )}
+              {rowsLoading && rows.length > 0 && <Spinner size={11} className="text-muted-foreground" />}
             </h3>
           </div>
 
-          <div className={cn('overflow-x-auto transition-opacity duration-300', rowsLoading && rows.length > 0 && 'opacity-60')}>
+          <div
+            className={cn(
+              'overflow-x-auto transition-opacity duration-300',
+              rowsLoading && rows.length > 0 && 'opacity-60',
+            )}
+          >
             <Table>
               <TableHeader>
                 <TableRow>
@@ -853,9 +871,7 @@ export default function OrderFactoryTab() {
                 )}
                 {rows.map((row) => {
                   const isTransferred =
-                    !!row.originalFactoryId &&
-                    !!row.factoryId &&
-                    row.originalFactoryId !== row.factoryId;
+                    !!row.originalFactoryId && !!row.factoryId && row.originalFactoryId !== row.factoryId;
                   const originalMeta = overview?.factories.find((f) => f.factoryId === row.originalFactoryId);
                   return (
                     <TableRow
@@ -868,11 +884,7 @@ export default function OrderFactoryTab() {
                     >
                       {canTransfer && (
                         <TableCell>
-                          <input
-                            type="checkbox"
-                            checked={selected.has(row._id)}
-                            onChange={() => toggleRow(row._id)}
-                          />
+                          <input type="checkbox" checked={selected.has(row._id)} onChange={() => toggleRow(row._id)} />
                         </TableCell>
                       )}
                       <TableCell>
@@ -924,9 +936,7 @@ export default function OrderFactoryTab() {
                             variant="ghost"
                             size="icon"
                             title="Lịch sử"
-                            onClick={() =>
-                              setHistoryTarget({ id: row._id, productionId: row.productionId })
-                            }
+                            onClick={() => setHistoryTarget({ id: row._id, productionId: row.productionId })}
                           >
                             <History size={13} className="text-muted-foreground" />
                           </Button>
@@ -1007,14 +1017,10 @@ function FactoryCard({
   const isIn = filterMode.kind === 'in' && filterMode.factoryId === cell.factoryId;
   const isOut = filterMode.kind === 'out' && filterMode.factoryId === cell.factoryId;
   const isError = filterMode.kind === 'error' && filterMode.factoryId === cell.factoryId;
-  const activeStage =
-    filterMode.kind === 'print' && filterMode.factoryId === cell.factoryId
-      ? filterMode.stage
-      : null;
+  const activeStage = filterMode.kind === 'print' && filterMode.factoryId === cell.factoryId ? filterMode.stage : null;
   const togglePrint = (stage: PrintStage) =>
     onFilter(activeStage === stage ? { kind: 'all' } : { kind: 'print', factoryId: cell.factoryId, stage });
-  const toggleError = () =>
-    onFilter(isError ? { kind: 'all' } : { kind: 'error', factoryId: cell.factoryId });
+  const toggleError = () => onFilter(isError ? { kind: 'all' } : { kind: 'error', factoryId: cell.factoryId });
   return (
     <div
       className={cn(
@@ -1027,12 +1033,8 @@ function FactoryCard({
           <Factory size={18} className="text-sky-600 dark:text-sky-400" />
         </div>
         <div className="min-w-0">
-          <p className="font-semibold text-foreground truncate">
-            {cell.factoryName}
-          </p>
-          <p className="text-[10px] text-muted-foreground tabular-nums">
-            mã: {cell.factoryShortName || '—'}
-          </p>
+          <p className="font-semibold text-foreground truncate">{cell.factoryName}</p>
+          <p className="text-[10px] text-muted-foreground tabular-nums">mã: {cell.factoryShortName || '—'}</p>
         </div>
       </div>
       <button
@@ -1040,9 +1042,7 @@ function FactoryCard({
         onClick={() => onFilter(isAt ? { kind: 'all' } : { kind: 'at', factoryId: cell.factoryId })}
         className="w-full text-left mb-2 group"
       >
-        <p className="text-2xl font-bold tabular-nums group-hover:text-primary transition-colors">
-          {cell.total}
-        </p>
+        <p className="text-2xl font-bold tabular-nums group-hover:text-primary transition-colors">{cell.total}</p>
         <p className="text-[11px] text-muted-foreground">đang sản xuất tại đây</p>
       </button>
       {/* Per-factory mini stats */}
@@ -1064,9 +1064,7 @@ function FactoryCard({
           <p className="text-muted-foreground">loại máy</p>
         </div>
         <div className="text-center">
-          <p className="font-bold tabular-nums text-sm text-emerald-700 dark:text-emerald-400">
-            {cell.withToolCount}
-          </p>
+          <p className="font-bold tabular-nums text-sm text-emerald-700 dark:text-emerald-400">{cell.withToolCount}</p>
           <p className="text-muted-foreground">có tool</p>
         </div>
       </div>
@@ -1080,13 +1078,7 @@ function FactoryCard({
           onClick={() => togglePrint('not-printed')}
           tone="slate"
         />
-        <PrintStageBtn
-          label="Lỗi"
-          count={cell.errorCount}
-          active={isError}
-          onClick={toggleError}
-          tone="rose"
-        />
+        <PrintStageBtn label="Lỗi" count={cell.errorCount} active={isError} onClick={toggleError} tone="rose" />
         <PrintStageBtn
           label="Đã in xong"
           count={cell.printedCount}
@@ -1101,19 +1093,27 @@ function FactoryCard({
         <p className="text-[10px] text-muted-foreground mb-1">Design</p>
         <div className="grid grid-cols-4 gap-1 text-[10px]">
           <div className="text-center">
-            <p className="font-bold tabular-nums text-sm text-indigo-700 dark:text-indigo-400">{cell.designAssignedCount}</p>
+            <p className="font-bold tabular-nums text-sm text-indigo-700 dark:text-indigo-400">
+              {cell.designAssignedCount}
+            </p>
             <p className="text-muted-foreground">được gán</p>
           </div>
           <div className="text-center">
-            <p className="font-bold tabular-nums text-sm text-zinc-600 dark:text-zinc-300">{cell.designUnassignedCount}</p>
+            <p className="font-bold tabular-nums text-sm text-zinc-600 dark:text-zinc-300">
+              {cell.designUnassignedCount}
+            </p>
             <p className="text-muted-foreground">chưa gán</p>
           </div>
           <div className="text-center">
-            <p className="font-bold tabular-nums text-sm text-emerald-700 dark:text-emerald-400">{cell.designDoneCount}</p>
+            <p className="font-bold tabular-nums text-sm text-emerald-700 dark:text-emerald-400">
+              {cell.designDoneCount}
+            </p>
             <p className="text-muted-foreground">đã xong</p>
           </div>
           <div className="text-center">
-            <p className="font-bold tabular-nums text-sm text-amber-700 dark:text-amber-400">{cell.designNotDoneCount}</p>
+            <p className="font-bold tabular-nums text-sm text-amber-700 dark:text-amber-400">
+              {cell.designNotDoneCount}
+            </p>
             <p className="text-muted-foreground">chưa xong</p>
           </div>
         </div>
@@ -1128,9 +1128,7 @@ function FactoryCard({
           )}
         >
           <p className="text-[10px] text-muted-foreground">Nhận từ xưởng khác</p>
-          <p className="text-sm font-bold tabular-nums text-amber-700 dark:text-amber-400">
-            {cell.transferredIn}
-          </p>
+          <p className="text-sm font-bold tabular-nums text-amber-700 dark:text-amber-400">{cell.transferredIn}</p>
         </button>
         <button
           type="button"
@@ -1141,9 +1139,7 @@ function FactoryCard({
           )}
         >
           <p className="text-[10px] text-muted-foreground">Đã chuyển đi</p>
-          <p className="text-sm font-bold tabular-nums text-slate-700 dark:text-slate-300">
-            {cell.transferredOut}
-          </p>
+          <p className="text-sm font-bold tabular-nums text-slate-700 dark:text-slate-300">{cell.transferredOut}</p>
         </button>
       </div>
     </div>
@@ -1185,8 +1181,7 @@ function TotalCard({
   const activeStage = filterMode.kind === 'print-all' ? filterMode.stage : null;
   const togglePrint = (stage: PrintStage) =>
     onFilter(activeStage === stage ? { kind: 'all' } : { kind: 'print-all', stage });
-  const toggleError = () =>
-    onFilter(isErrorAll ? { kind: 'all' } : { kind: 'error-all' });
+  const toggleError = () => onFilter(isErrorAll ? { kind: 'all' } : { kind: 'error-all' });
 
   return (
     <div
@@ -1207,14 +1202,8 @@ function TotalCard({
         </div>
       </div>
 
-      <button
-        type="button"
-        onClick={() => onFilter({ kind: 'all' })}
-        className="w-full text-left mb-3 group"
-      >
-        <p className="text-3xl font-bold tabular-nums group-hover:text-primary transition-colors">
-          {agg.total}
-        </p>
+      <button type="button" onClick={() => onFilter({ kind: 'all' })} className="w-full text-left mb-3 group">
+        <p className="text-3xl font-bold tabular-nums group-hover:text-primary transition-colors">{agg.total}</p>
         <p className="text-[11px] text-muted-foreground">đơn trong khoảng ngày</p>
       </button>
 
@@ -1237,9 +1226,7 @@ function TotalCard({
           <p className="text-muted-foreground">loại máy</p>
         </div>
         <div className="text-center">
-          <p className="font-bold tabular-nums text-sm text-emerald-700 dark:text-emerald-400">
-            {agg.withToolCount}
-          </p>
+          <p className="font-bold tabular-nums text-sm text-emerald-700 dark:text-emerald-400">{agg.withToolCount}</p>
           <p className="text-muted-foreground">có tool</p>
         </div>
       </div>
@@ -1253,13 +1240,7 @@ function TotalCard({
           onClick={() => togglePrint('not-printed')}
           tone="slate"
         />
-        <PrintStageBtn
-          label="Lỗi"
-          count={agg.errorCount}
-          active={isErrorAll}
-          onClick={toggleError}
-          tone="rose"
-        />
+        <PrintStageBtn label="Lỗi" count={agg.errorCount} active={isErrorAll} onClick={toggleError} tone="rose" />
         <PrintStageBtn
           label="Đã in xong"
           count={agg.printedCount}
@@ -1274,19 +1255,27 @@ function TotalCard({
         <p className="text-[10px] text-muted-foreground mb-1">Design</p>
         <div className="grid grid-cols-4 gap-1 text-[10px]">
           <div className="text-center">
-            <p className="font-bold tabular-nums text-sm text-indigo-700 dark:text-indigo-400">{agg.designAssignedCount}</p>
+            <p className="font-bold tabular-nums text-sm text-indigo-700 dark:text-indigo-400">
+              {agg.designAssignedCount}
+            </p>
             <p className="text-muted-foreground">được gán</p>
           </div>
           <div className="text-center">
-            <p className="font-bold tabular-nums text-sm text-zinc-600 dark:text-zinc-300">{agg.designUnassignedCount}</p>
+            <p className="font-bold tabular-nums text-sm text-zinc-600 dark:text-zinc-300">
+              {agg.designUnassignedCount}
+            </p>
             <p className="text-muted-foreground">chưa gán</p>
           </div>
           <div className="text-center">
-            <p className="font-bold tabular-nums text-sm text-emerald-700 dark:text-emerald-400">{agg.designDoneCount}</p>
+            <p className="font-bold tabular-nums text-sm text-emerald-700 dark:text-emerald-400">
+              {agg.designDoneCount}
+            </p>
             <p className="text-muted-foreground">đã xong</p>
           </div>
           <div className="text-center">
-            <p className="font-bold tabular-nums text-sm text-amber-700 dark:text-amber-400">{agg.designNotDoneCount}</p>
+            <p className="font-bold tabular-nums text-sm text-amber-700 dark:text-amber-400">
+              {agg.designNotDoneCount}
+            </p>
             <p className="text-muted-foreground">chưa xong</p>
           </div>
         </div>
@@ -1300,15 +1289,11 @@ function TotalCard({
         </div>
         <div className="rounded-md border border-border px-2 py-1.5">
           <p className="text-[10px] text-muted-foreground">Đã chuyển</p>
-          <p className="text-sm font-bold tabular-nums text-amber-700 dark:text-amber-400">
-            {agg.transferred}
-          </p>
+          <p className="text-sm font-bold tabular-nums text-amber-700 dark:text-amber-400">{agg.transferred}</p>
         </div>
         <div className="rounded-md border border-border px-2 py-1.5">
           <p className="text-[10px] text-muted-foreground">Chưa map xưởng</p>
-          <p className="text-sm font-bold tabular-nums text-slate-700 dark:text-slate-300">
-            {agg.unmapped}
-          </p>
+          <p className="text-sm font-bold tabular-nums text-slate-700 dark:text-slate-300">{agg.unmapped}</p>
         </div>
       </div>
     </div>
@@ -1329,9 +1314,15 @@ function PrintStageBtn({
   tone: 'slate' | 'sky' | 'emerald' | 'rose';
 }) {
   const toneClasses = {
-    slate: { active: 'border-slate-400 bg-slate-50/60 dark:bg-slate-500/10', count: 'text-slate-700 dark:text-slate-300' },
+    slate: {
+      active: 'border-slate-400 bg-slate-50/60 dark:bg-slate-500/10',
+      count: 'text-slate-700 dark:text-slate-300',
+    },
     sky: { active: 'border-sky-400 bg-sky-50/60 dark:bg-sky-500/10', count: 'text-sky-700 dark:text-sky-300' },
-    emerald: { active: 'border-emerald-400 bg-emerald-50/60 dark:bg-emerald-500/10', count: 'text-emerald-700 dark:text-emerald-400' },
+    emerald: {
+      active: 'border-emerald-400 bg-emerald-50/60 dark:bg-emerald-500/10',
+      count: 'text-emerald-700 dark:text-emerald-400',
+    },
     rose: { active: 'border-rose-400 bg-rose-50/60 dark:bg-rose-500/10', count: 'text-rose-700 dark:text-rose-400' },
   }[tone];
   return (
@@ -1407,15 +1398,9 @@ function AssignFactoryDialog({
   const [saving, setSaving] = useState(false);
   const [machineTypes, setMachineTypes] = useState<Array<{ _id: string; name: string; shortName?: string }>>([]);
 
-  const fabricOptions = useWorkshopConfigStore(
-    (s) => s.byCategory[WorkshopConfigCategory.FabricType] || [],
-  );
-  const machineOptions = useWorkshopConfigStore(
-    (s) => s.byCategory[WorkshopConfigCategory.Machine] || [],
-  );
-  const toolOptions = useWorkshopConfigStore(
-    (s) => s.byCategory[WorkshopConfigCategory.ToolResult] || [],
-  );
+  const fabricOptions = useWorkshopConfigStore((s) => s.byCategory[WorkshopConfigCategory.FabricType] || []);
+  const machineOptions = useWorkshopConfigStore((s) => s.byCategory[WorkshopConfigCategory.Machine] || []);
+  const toolOptions = useWorkshopConfigStore((s) => s.byCategory[WorkshopConfigCategory.ToolResult] || []);
 
   // Reset form mỗi lần dialog mở (kể cả khi đổi single → bulk).
   useEffect(() => {
@@ -1475,12 +1460,11 @@ function AssignFactoryDialog({
     if (!single) return [] as Array<{ position: string; url: string }>;
     const orig = single.designsOriginal || {};
     const thumb = single.designs || {};
-    const positions = Array.from(
-      new Set([...Object.keys(orig), ...Object.keys(thumb)]),
-    );
+    const positions = Array.from(new Set([...Object.keys(orig), ...Object.keys(thumb)]));
     return positions
       .map((pos) => {
-        const url = (orig as Record<string, string | undefined>)[pos] || (thumb as Record<string, string | undefined>)[pos];
+        const url =
+          (orig as Record<string, string | undefined>)[pos] || (thumb as Record<string, string | undefined>)[pos];
         return url ? { position: pos, url } : null;
       })
       .filter((x): x is { position: string; url: string } => !!x);
@@ -1491,9 +1475,7 @@ function AssignFactoryDialog({
       <DialogContent className="max-w-lg">
         <DialogHeader>
           <DialogTitle>
-            {single
-              ? `Gán xưởng cho đơn ${single.productionId}`
-              : `Gán xưởng cho ${ids.length} đơn đã chọn`}
+            {single ? `Gán xưởng cho đơn ${single.productionId}` : `Gán xưởng cho ${ids.length} đơn đã chọn`}
           </DialogTitle>
         </DialogHeader>
 
@@ -1594,8 +1576,8 @@ function AssignFactoryDialog({
           </div>
 
           <p className="text-[10px] text-muted-foreground leading-relaxed">
-            Chỉ <strong>Xưởng</strong> là bắt buộc. 4 trường còn lại có thể bỏ trống để gán sau qua bảng đơn hàng.
-            Đơn đã có xưởng từ trước sẽ bị bỏ qua (dùng "Chuyển xưởng" thay thế).
+            Chỉ <strong>Xưởng</strong> là bắt buộc. 4 trường còn lại có thể bỏ trống để gán sau qua bảng đơn hàng. Đơn
+            đã có xưởng từ trước sẽ bị bỏ qua (dùng "Chuyển xưởng" thay thế).
           </p>
         </div>
 
@@ -1737,4 +1719,3 @@ function TransferDialog({
     </Dialog>
   );
 }
-

@@ -1,24 +1,15 @@
-import {
-  BadRequestException,
-  ConflictException,
-  Injectable,
-  NotFoundException,
-} from '@nestjs/common';
+import { BadRequestException, ConflictException, Injectable, NotFoundException } from '@nestjs/common';
 import { InjectModel } from '@nestjs/mongoose';
 import { generateHash } from 'core';
 import type { Model } from 'mongoose';
-import type {
-  CreateDesignerTeamMemberDto,
-  DesignerTeamMember,
-  UpdateDesignerTeamMemberDto,
-} from 'shared';
+import type { CreateDesignerTeamMemberDto, DesignerTeamMember, UpdateDesignerTeamMemberDto } from 'shared';
 import { CODE_LENGTH, DESIGNER_ACTIVE_STATUSES, RoleType, Status } from 'shared';
 
 import { genCode } from '@/utils';
 
 import { OrderEntity } from '../order/order.entity';
 import { RoleRepository } from '../role/role.repository';
-import { UserEntity, UserDocument } from '../user/user.entity';
+import { UserDocument, UserEntity } from '../user/user.entity';
 
 /**
  * Quản lý team designer (leader CRUD sub-designer). Identity model: `user._id`
@@ -72,9 +63,7 @@ export class DesignerTeamService {
   async create(dto: CreateDesignerTeamMemberDto): Promise<DesignerTeamMember> {
     const designerRole = await this.roleRepository.findOne({ name: RoleType.Designer });
     if (!designerRole) {
-      throw new BadRequestException(
-        'Role Designer chưa tồn tại — restart API để RoleService seed trước.',
-      );
+      throw new BadRequestException('Role Designer chưa tồn tại — restart API để RoleService seed trước.');
     }
 
     await this.assertEmailFree(dto.email, null);
@@ -149,10 +138,7 @@ export class DesignerTeamService {
       );
     }
 
-    await this.userModel.updateOne(
-      { _id: userId },
-      { $set: { deletedAt: new Date(), status: Status.Inactive } },
-    );
+    await this.userModel.updateOne({ _id: userId }, { $set: { deletedAt: new Date(), status: Status.Inactive } });
   }
 
   async resetPassword(userId: string, newPassword: string): Promise<void> {
@@ -181,10 +167,7 @@ export class DesignerTeamService {
     return this.countTasksByUser(userIds, 'done');
   }
 
-  private async countTasksByUser(
-    userIds: string[],
-    designerStatusFilter: unknown,
-  ): Promise<Map<string, number>> {
+  private async countTasksByUser(userIds: string[], designerStatusFilter: unknown): Promise<Map<string, number>> {
     if (userIds.length === 0) return new Map();
     const agg = await this.orderModel.aggregate<{ _id: string; count: number }>([
       { $match: { assignee: { $in: userIds }, designerStatus: designerStatusFilter } },

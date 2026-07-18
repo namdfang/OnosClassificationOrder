@@ -1,10 +1,5 @@
+import type { FactoryOverview, WorkshopConfig, WorkshopConfigCategory } from 'shared';
 import * as XLSX from 'xlsx';
-import type {
-  FactoryOverview,
-  FactoryOverviewCell,
-  WorkshopConfig,
-  WorkshopConfigCategory,
-} from 'shared';
 
 /**
  * Shape we accept for export. Only fields used by `buildExportRow` matter —
@@ -289,21 +284,32 @@ export function buildWorkbook(
         const s = f.breakdowns.sizes[i];
         const t = f.breakdowns.toolResults[i];
         rows.push([
-          p?.label || '', p?.count ?? '',
+          p?.label || '',
+          p?.count ?? '',
           '',
-          x?.label || '', x?.count ?? '',
+          x?.label || '',
+          x?.count ?? '',
           '',
-          s?.label || '', s?.count ?? '',
+          s?.label || '',
+          s?.count ?? '',
           '',
-          t?.label || '', t?.count ?? '',
+          t?.label || '',
+          t?.count ?? '',
         ]);
       }
       const ws = XLSX.utils.aoa_to_sheet(rows);
       ws['!cols'] = [
-        { wch: 32 }, { wch: 8 }, { wch: 2 },
-        { wch: 18 }, { wch: 8 }, { wch: 2 },
-        { wch: 10 }, { wch: 8 }, { wch: 2 },
-        { wch: 16 }, { wch: 8 },
+        { wch: 32 },
+        { wch: 8 },
+        { wch: 2 },
+        { wch: 18 },
+        { wch: 8 },
+        { wch: 2 },
+        { wch: 10 },
+        { wch: 8 },
+        { wch: 2 },
+        { wch: 16 },
+        { wch: 8 },
       ];
       XLSX.utils.book_append_sheet(wb, ws, sanitizeSheetName(f.factoryShortName || f.factoryName));
     }
@@ -343,10 +349,7 @@ const DETAIL_COL_WIDTHS = [
  * dùng đã tick chọn (BulkEditToolbar). Không có sheet tổng quan/breakdown/xưởng
  * vì selection không đi kèm `FactoryOverview`.
  */
-export function buildDetailOnlyWorkbook(
-  orders: ExportableOrder[],
-  ctx: ExportContext,
-): XLSX.WorkBook {
+export function buildDetailOnlyWorkbook(orders: ExportableOrder[], ctx: ExportContext): XLSX.WorkBook {
   const wb = XLSX.utils.book_new();
   const detailRows: (string | number)[][] = [DETAIL_HEADERS as unknown as string[]];
   for (const o of orders) detailRows.push(buildDetailRow(o, ctx));

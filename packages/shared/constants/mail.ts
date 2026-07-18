@@ -20,7 +20,7 @@ export const MAIL_IMPORT_HEADERS = {
 };
 
 export const REVERSE_MAIL_IMPORT_HEADERS = {};
-// eslint-disable-next-line guard-for-in, no-restricted-syntax
+
 for (const key in MAIL_IMPORT_HEADERS) {
   // @ts-expect-error types
   const value = MAIL_IMPORT_HEADERS[key];

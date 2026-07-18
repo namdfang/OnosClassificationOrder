@@ -1,8 +1,9 @@
 import React from 'react';
-import { Scissors } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
+import { Scissors } from 'lucide-react';
 
 import { PATHS } from '@/constants/paths';
+
 import { usePermission } from '@/hooks/usePermission';
 
 import { ImportCuttingFilesTab } from '../ImportCuttingFilesTab';

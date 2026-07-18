@@ -4,12 +4,12 @@ import Bottleneck from 'bottleneck';
 import type { IFile, UploadedFileDto } from 'core';
 import { AwsS3Service, BackblazeService } from 'core';
 import crypto from 'crypto';
-import { URL } from 'url';
 import dns from 'dns';
 import net from 'net';
 import type { ResImageDto } from 'shared';
 import { ImageType, myNanoid, Status } from 'shared';
 import sharp from 'sharp';
+import { URL } from 'url';
 
 import type { UserDocument } from '@/modules/user/user.entity';
 import { ApiConfigService } from '@/shared/services';

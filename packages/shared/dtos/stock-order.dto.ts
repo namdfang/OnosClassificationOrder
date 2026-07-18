@@ -1,23 +1,20 @@
 import { createZodDto } from '@anatine/zod-nestjs';
 import { extendApi } from '@anatine/zod-openapi';
-import { z } from 'zod';
-import Big from 'big.js';
-
 import { BaseEntityZod, PageQueryZod, PageResZod, ResZod } from '@shared/types';
+import Big from 'big.js';
+import { z } from 'zod';
+
 import {
   BETA_STOCK_SHIP_FEE,
-  CODE_LENGTH,
   CreateStockLineItemZod,
   DESCRIPTION_MAX_LENGTH,
-  STOCK_ORDER_TYPE,
-  StockOrderStatus,
   EXTERNAL_ID_MAX_LENGTH,
   ExternalIDZod,
   getObjectValues,
   GetStatisticsZod,
-  ID_LENGTH,
   IDZod,
   Marketplace,
+  NAME_MAX_LENGTH,
   NAME_MIN_LENGTH,
   NameZod,
   NOTE_MAX_LENGTH,
@@ -25,9 +22,10 @@ import {
   optionalStringTransform,
   OptionalURLZod,
   OrderTrackingZod,
-  PrintArea,
   QUANTITY_MAX,
   SendToProviderZod,
+  STOCK_ORDER_TYPE,
+  StockOrderStatus,
   TextZod,
   TrackingNumberZod,
   TrackingStatus,
@@ -35,7 +33,6 @@ import {
   UAT_SHIP_FEE,
   UpdateLineItemsZod,
   URLZod,
-  NAME_MAX_LENGTH,
 } from '..';
 // import { CreateLineItemZod } from './StockOrder-item.dto';
 
@@ -232,9 +229,7 @@ export const CalculateStockOrdersPaymentResZod = ResZod.extend({
     orders: z.array(CalculateStockOrderPaymentResultZod),
   }),
 });
-export class CalculateStockOrdersPaymentResDto extends createZodDto(
-  extendApi(CalculateStockOrdersPaymentResZod),
-) {}
+export class CalculateStockOrdersPaymentResDto extends createZodDto(extendApi(CalculateStockOrdersPaymentResZod)) {}
 
 //
 export const PayStockOrdersZod = z.object({
@@ -374,15 +369,7 @@ export const ExcelImportStockOrderZod = z
           path: ['name', 'phone', 'addressLine1', 'city', 'zip', 'region', 'country'],
         });
       }
-    } else if (
-      data.name ||
-      data.phone ||
-      data.addressLine1 ||
-      data.city ||
-      data.zip ||
-      data.region ||
-      data.country
-    ) {
+    } else if (data.name || data.phone || data.addressLine1 || data.city || data.zip || data.region || data.country) {
       const valid = ShippingAddressStockZod.safeParse({
         name: data.name,
         phone: data.phone,
@@ -530,16 +517,16 @@ export const ExcelImportStockOrderPriceZod = z
       productPrice,
       shipFee,
     };
-  })
-  // .superRefine((data, ctx) => {
-  //   if (!data.dimension && !data.weight) {
-  //     ctx.addIssue({
-  //       code: z.ZodIssueCode.custom,
-  //       message: 'Dimension or weight is required',
-  //       path: ['dimension', 'weight'],
-  //     });
-  //   }
-  // });
+  });
+// .superRefine((data, ctx) => {
+//   if (!data.dimension && !data.weight) {
+//     ctx.addIssue({
+//       code: z.ZodIssueCode.custom,
+//       message: 'Dimension or weight is required',
+//       path: ['dimension', 'weight'],
+//     });
+//   }
+// });
 
 export type ExcelImportStockOrderPrice = z.infer<typeof ExcelImportStockOrderPriceZod>;
 export class ExcelImportStockOrderPriceDto extends createZodDto(extendApi(ExcelImportStockOrderPriceZod)) {}

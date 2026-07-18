@@ -1,12 +1,15 @@
 import React, { useState } from 'react';
-import { toast } from 'sonner';
 import type { WorkshopConfigCategory } from 'shared';
+import { toast } from 'sonner';
+
+import { useWorkshopConfigStore } from '@/store/workshopConfigStore';
+
+import { RepositoryRemote } from '@/services';
 
 import { Spinner } from '@/components/common/Spinner';
-import { RepositoryRemote } from '@/services';
-import { useWorkshopConfigStore } from '@/store/workshopConfigStore';
-import { cn } from '@/utils/cn';
+
 import { handleAxiosError } from '@/utils';
+import { cn } from '@/utils/cn';
 
 import { ProductionErrorOtherDialog } from './ProductionErrorOtherDialog';
 import { SelectPopover } from './SelectPopover';
@@ -21,11 +24,7 @@ interface Props {
   errorNoteValue?: string;
   canEdit: boolean;
   /** Callback patch row sau khi chọn — caller cần update cả 3 field nếu là 'other'. */
-  onUpdated?: (
-    code: string | null,
-    source?: 'designer' | 'factory' | 'tool-check',
-    note?: string,
-  ) => void;
+  onUpdated?: (code: string | null, source?: 'designer' | 'factory' | 'tool-check', note?: string) => void;
 }
 
 const OTHER_CODE = 'other';

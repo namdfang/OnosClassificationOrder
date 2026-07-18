@@ -1,8 +1,7 @@
-import { AuthUser } from 'core';
+import { ZodValidationPipe } from '@anatine/zod-nestjs';
 import { Body, Controller, Get, HttpCode, HttpStatus, Inject, Post, Query, UsePipes } from '@nestjs/common';
 import { ApiOkResponse, ApiOperation, ApiTags } from '@nestjs/swagger';
-import { ZodValidationPipe } from '@anatine/zod-nestjs';
-import { Logger } from 'winston';
+import { AuthUser } from 'core';
 import {
   CreateCustomerDto,
   CreateCustomerResDto,
@@ -11,8 +10,10 @@ import {
   RoleType,
   SyncCustomersResDto,
 } from 'shared';
+import { Logger } from 'winston';
 
 import { Auth } from '@/decorators';
+
 import { UserDocument } from '../user/user.entity';
 import { CustomerService } from './customer.service';
 

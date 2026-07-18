@@ -2,12 +2,15 @@ import React, { useState } from 'react';
 import { Eye, EyeOff, KeyRound, User } from 'lucide-react';
 import { toast } from 'sonner';
 
+import { useAuthStore } from '@/store/authStore';
+
+import { RepositoryRemote } from '@/services';
+
+import { Spinner } from '@/components/common/Spinner';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
-import { Spinner } from '@/components/common/Spinner';
-import { RepositoryRemote } from '@/services';
-import { useAuthStore } from '@/store/authStore';
+
 import { handleAxiosError } from '@/utils';
 
 type PwField = 'oldPassword' | 'newPassword' | 'newConfirmPassword';
@@ -104,9 +107,7 @@ export default function Account() {
       <div className="bg-white dark:bg-slate-800 rounded-2xl p-6 border border-slate-100 dark:border-slate-700/60">
         <div className="flex items-center gap-2 mb-4">
           <KeyRound size={18} className="text-indigo-600" />
-          <h2 className="text-base font-semibold text-slate-800 dark:text-slate-100">
-            Đổi mật khẩu
-          </h2>
+          <h2 className="text-base font-semibold text-slate-800 dark:text-slate-100">Đổi mật khẩu</h2>
         </div>
 
         <div className="space-y-3 max-w-md">
@@ -171,15 +172,7 @@ interface PasswordInputProps {
   autoComplete?: string;
 }
 
-function PasswordInput({
-  label,
-  value,
-  onChange,
-  show,
-  onToggle,
-  placeholder,
-  autoComplete,
-}: PasswordInputProps) {
+function PasswordInput({ label, value, onChange, show, onToggle, placeholder, autoComplete }: PasswordInputProps) {
   return (
     <div className="space-y-1.5">
       <Label>{label}</Label>

@@ -1,15 +1,18 @@
 import React, { useMemo, useState } from 'react';
-import { Upload, FileText, FileCheck2, FilePlus2, CloudDownload } from 'lucide-react';
+import { CloudDownload, FileCheck2, FilePlus2, FileText, Upload } from 'lucide-react';
 import { toast } from 'sonner';
 import * as XLSX from 'xlsx';
 
+import { RepositoryRemote } from '@/services';
+
+import { Spinner } from '@/components/common/Spinner';
+import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Textarea } from '@/components/ui/textarea';
-import { Badge } from '@/components/ui/badge';
-import { Spinner } from '@/components/common/Spinner';
-import { RepositoryRemote } from '@/services';
+
 import { handleAxiosError } from '@/utils';
 import { cn } from '@/utils/cn';
+
 import { parseOrderRows, parseReworkOrderRows } from './parseOrders';
 
 type ImportMode = 'new' | 'rework';
@@ -67,7 +70,7 @@ export function ImportOrderTab({ onImported }: ImportOrderTabProps) {
       }
     } catch (err) {
       toast.error('Không đọc được file. Kiểm tra format .xlsx / .csv / .tsv / .txt.');
-      // eslint-disable-next-line no-console
+
       console.error(err);
     }
   };
@@ -85,7 +88,9 @@ export function ImportOrderTab({ onImported }: ImportOrderTabProps) {
         const result = resp.data.data as NewImportResult;
         setLastNewResult(result);
         setLastReworkResult(null);
-        toast.success(`Imported ${result.imported}, updated ${result.updated}, mapped ${result.mapped}/${result.mapped + result.unmapped}`);
+        toast.success(
+          `Imported ${result.imported}, updated ${result.updated}, mapped ${result.mapped}/${result.mapped + result.unmapped}`,
+        );
         onImported();
         setText('');
       } catch (error) {

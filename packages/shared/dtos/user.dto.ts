@@ -1,8 +1,5 @@
 import { createZodDto } from '@anatine/zod-nestjs';
 import { extendApi } from '@anatine/zod-openapi';
-import { z } from 'zod';
-
-import { BaseEntityZod, PageQueryZod, PageResZod, ResZod } from '@shared/types';
 import {
   ADDRESS_MAX_LENGTH,
   ADDRESS_MIN_LENGTH,
@@ -17,6 +14,9 @@ import {
   // PHONE_MIN_LENGTH,
 } from '@shared/constants';
 import { FulfillmentStage, Gender, Status } from '@shared/enums';
+import { BaseEntityZod, PageQueryZod, PageResZod, ResZod } from '@shared/types';
+import { z } from 'zod';
+
 import { getObjectValues } from '..';
 
 const TelegramConfigZod = z.object({

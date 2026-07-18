@@ -1,7 +1,8 @@
-import { z } from 'zod';
-import { BaseEntityZod, NameZod, NotificationType, IDZod, PageQueryZod, PageResZod, ResZod } from '..';
 import { createZodDto } from '@anatine/zod-nestjs';
 import { extendApi } from '@anatine/zod-openapi';
+import { z } from 'zod';
+
+import { BaseEntityZod, IDZod, NameZod, NotificationType, PageQueryZod, PageResZod, ResZod } from '..';
 
 export const NotificationZod = BaseEntityZod.extend({
   title: NameZod,

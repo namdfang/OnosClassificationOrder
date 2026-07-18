@@ -1,9 +1,10 @@
 import React from 'react';
 import { Settings as SettingsIcon } from 'lucide-react';
 
-import { usePermission } from '@/hooks/usePermission';
-import DesignerAssignmentConfig from '@/components/settings/DesignerAssignmentConfig';
 import CustomerAssignmentConfig from '@/components/settings/CustomerAssignmentConfig';
+import DesignerAssignmentConfig from '@/components/settings/DesignerAssignmentConfig';
+
+import { usePermission } from '@/hooks/usePermission';
 
 export default function Settings() {
   const { has } = usePermission();
@@ -32,9 +33,7 @@ export default function Settings() {
         </div>
       ) : (
         <div className="bg-white dark:bg-slate-800 rounded-2xl p-8 border border-slate-100 dark:border-slate-700/60 text-center">
-          <p className="text-slate-500 dark:text-slate-400">
-            Bạn không có quyền truy cập cấu hình hệ thống.
-          </p>
+          <p className="text-slate-500 dark:text-slate-400">Bạn không có quyền truy cập cấu hình hệ thống.</p>
         </div>
       )}
     </div>

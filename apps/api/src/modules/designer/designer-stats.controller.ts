@@ -2,33 +2,33 @@ import { ZodValidationPipe } from '@anatine/zod-nestjs';
 import { Controller, Get, HttpCode, HttpStatus, Inject, Param, Query, UsePipes } from '@nestjs/common';
 import { ApiOkResponse, ApiOperation, ApiTags } from '@nestjs/swagger';
 import { AuthUser } from 'core';
+import type { FulfillmentStage } from 'shared';
 import {
-  GetDesignerPerformanceDto,
-  GetDesignerPerformanceResDto,
-  GetDesignerTimelineDto,
-  GetDesignerTimelineResDto,
   GetAssignBacklogDto,
   GetAssignBacklogResDto,
   GetBreakdownFiltersResDto,
   GetDailyOverviewDto,
   GetDailyOverviewResDto,
-  GetProductBreakdownDto,
-  GetProductBreakdownResDto,
+  GetDesignerPerformanceDto,
+  GetDesignerPerformanceResDto,
+  GetDesignerTimelineDto,
+  GetDesignerTimelineResDto,
   GetErrorStatsDto,
   GetErrorStatsResDto,
   GetPersonErrorOrdersDto,
   GetPersonErrorOverviewDto,
+  GetProductBreakdownDto,
+  GetProductBreakdownResDto,
   GetStageErrorDailyDto,
   GetTeamDailyBreakdownDto,
   GetTeamDailyBreakdownResDto,
   GetToolCheckOverviewDto,
   PersonErrorOrdersResDto,
   PersonErrorOverviewResDto,
+  RoleType,
   StageErrorDailyResDto,
   ToolCheckOverviewResDto,
-  RoleType,
 } from 'shared';
-import type { FulfillmentStage } from 'shared';
 import { Logger } from 'winston';
 
 import { Auth } from '@/decorators';
@@ -122,8 +122,7 @@ export class DesignerStatsController {
   @Get('designer/team-daily-breakdown')
   @Auth(LEADER_ROLES)
   @ApiOperation({
-    summary:
-      'Ma trận Designer × Ngày (inProductionAt, 7/14/30) — MỌI designer theo trạng thái, focus đơn chưa xong.',
+    summary: 'Ma trận Designer × Ngày (inProductionAt, 7/14/30) — MỌI designer theo trạng thái, focus đơn chưa xong.',
   })
   @HttpCode(HttpStatus.OK)
   @ApiOkResponse({ type: GetTeamDailyBreakdownResDto })
@@ -156,9 +155,7 @@ export class DesignerStatsController {
   })
   @HttpCode(HttpStatus.OK)
   @ApiOkResponse({ type: GetBreakdownFiltersResDto })
-  async getBreakdownFilters(
-    @AuthUser() user: UserDocument,
-  ): Promise<GetBreakdownFiltersResDto> {
+  async getBreakdownFilters(@AuthUser() user: UserDocument): Promise<GetBreakdownFiltersResDto> {
     this.logger.info({
       message: JSON.stringify({ method: 'GET', url: '/designer/breakdown-filters', userId: user._id }),
     });
@@ -291,10 +288,7 @@ export class DesignerStatsController {
   })
   @HttpCode(HttpStatus.OK)
   @ApiOkResponse({ type: GetErrorStatsResDto })
-  async getErrorStats(
-    @Query() query: GetErrorStatsDto,
-    @AuthUser() user: UserDocument,
-  ): Promise<GetErrorStatsResDto> {
+  async getErrorStats(@Query() query: GetErrorStatsDto, @AuthUser() user: UserDocument): Promise<GetErrorStatsResDto> {
     this.logger.info({
       message: JSON.stringify({ method: 'GET', url: '/orders/error-stats', userId: user._id }),
     });
@@ -316,12 +310,7 @@ export class DesignerStatsController {
     this.logger.info({
       message: JSON.stringify({ method: 'GET', url: '/designer/person-error-overview', userId: user._id }),
     });
-    const data = await this.statsService.getPersonErrorOverview(
-      query.from,
-      query.to,
-      query.days,
-      query.factoryId,
-    );
+    const data = await this.statsService.getPersonErrorOverview(query.from, query.to, query.days, query.factoryId);
     return { success: true, data };
   }
 
@@ -359,12 +348,9 @@ export class DesignerStatsController {
       message: JSON.stringify({ method: 'GET', url: '/fulfillment/stage-error-daily', userId: user._id }),
     });
     // Worker Fulfillment: khóa theo stage + xưởng của chính họ. Admin/Manager: theo query.
-    const isOverride = [
-      RoleType.SuperAdmin,
-      RoleType.Admin,
-      RoleType.Manager,
-      RoleType.SupportManager,
-    ].includes(user.role?.name as RoleType);
+    const isOverride = [RoleType.SuperAdmin, RoleType.Admin, RoleType.Manager, RoleType.SupportManager].includes(
+      user.role?.name as RoleType,
+    );
     const stage = (isOverride ? query.stage : user.fulfillmentStage) ?? query.stage;
     const factoryId = isOverride ? query.factoryId : user.factoryId;
     const data = await this.statsService.getStageErrorDaily(

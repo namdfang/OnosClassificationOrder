@@ -10,14 +10,11 @@ import { ApiConfigService } from '@/shared/services';
 import { MailService } from './mail.service';
 import { MailHistoryRepository } from './mail-history.repository';
 
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
 export function ProdRabbitSubscribe(options: any) {
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   return function (target: any, propertyKey: string, descriptor: PropertyDescriptor) {
     console.log('process.env.pm_id', process.env.pm_id);
 
     if (process.env.pm_id === '0' || !process.env.pm_id) {
-      // eslint-disable-next-line @typescript-eslint/no-unsafe-argument
       return RabbitSubscribe(options)(target, propertyKey, descriptor);
     }
 
@@ -43,7 +40,7 @@ export class MailConsumer implements OnModuleInit, OnModuleDestroy {
     });
   }
 
-  async onModuleInit() {
+  onModuleInit() {
     // Delay setupDLQ to give AmqpConnection time to establish channel
     setTimeout(() => {
       // void this.setupDLQ();

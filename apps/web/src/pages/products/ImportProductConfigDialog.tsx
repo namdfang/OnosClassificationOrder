@@ -2,6 +2,9 @@ import React, { useState } from 'react';
 import { Upload } from 'lucide-react';
 import { toast } from 'sonner';
 
+import { RepositoryRemote } from '@/services';
+
+import { Spinner } from '@/components/common/Spinner';
 import { Button } from '@/components/ui/button';
 import {
   Dialog,
@@ -12,8 +15,7 @@ import {
   DialogTitle,
 } from '@/components/ui/dialog';
 import { Textarea } from '@/components/ui/textarea';
-import { Spinner } from '@/components/common/Spinner';
-import { RepositoryRemote } from '@/services';
+
 import { handleAxiosError } from '@/utils';
 
 const EXAMPLE = `Tên đầy đủ sản phẩm có tool Rập	Tên viết tắt	Máy	Xưởng	Loại vải	Kết quả Tool	Phòng
@@ -49,15 +51,7 @@ function parseRows(raw: string): ParsedRow[] {
   for (let i = startIdx; i < lines.length; i++) {
     const cols = lines[i].split('\t').map((c) => c.trim());
     if (cols.length < 7) continue;
-    const [
-      fullName,
-      shortName,
-      machineNumber,
-      factoryLabel,
-      fabricLabel,
-      toolResultLabel,
-      departmentLabel,
-    ] = cols;
+    const [fullName, shortName, machineNumber, factoryLabel, fabricLabel, toolResultLabel, departmentLabel] = cols;
     if (!fullName || !shortName || !factoryLabel || !departmentLabel) continue;
     rows.push({
       fullName,
@@ -95,7 +89,6 @@ export function ImportProductConfigDialog({ open, onOpenChange, onSuccess }: Imp
       const { imported, updated, skipped } = resp.data.data;
       toast.success(`Imported ${imported}, updated ${updated}, ${skipped.length} cảnh báo`);
       if (skipped.length > 0) {
-        // eslint-disable-next-line no-console
         console.warn('Import warnings:', skipped);
       }
       setText('');
@@ -114,11 +107,10 @@ export function ImportProductConfigDialog({ open, onOpenChange, onSuccess }: Imp
         <DialogHeader>
           <DialogTitle>Import Product Config</DialogTitle>
           <DialogDescription>
-            Paste dữ liệu từ Excel (tab-separated). 7 cột theo thứ tự: <b>Tên đầy đủ</b> —{' '}
-            <b>Tên viết tắt</b> — <b>Máy</b> (số máy, vd 94/27, để trống = không có tool) —{' '}
-            <b>Xưởng</b> (vd "MÊ LINH") — <b>Loại vải</b> (POLY 2 DA, MÈ 64, LỤA 4B, LỤA VÂN GỖ…) —{' '}
-            <b>Kết quả Tool</b> (để trống = có tool; "không tool" = không có tool) — <b>Phòng</b>{' '}
-            (loại máy in, vd "IN và CẮT LASER"). Hệ thống match label theo tên (case-insensitive).
+            Paste dữ liệu từ Excel (tab-separated). 7 cột theo thứ tự: <b>Tên đầy đủ</b> — <b>Tên viết tắt</b> —{' '}
+            <b>Máy</b> (số máy, vd 94/27, để trống = không có tool) — <b>Xưởng</b> (vd "MÊ LINH") — <b>Loại vải</b>{' '}
+            (POLY 2 DA, MÈ 64, LỤA 4B, LỤA VÂN GỖ…) — <b>Kết quả Tool</b> (để trống = có tool; "không tool" = không có
+            tool) — <b>Phòng</b> (loại máy in, vd "IN và CẮT LASER"). Hệ thống match label theo tên (case-insensitive).
           </DialogDescription>
         </DialogHeader>
 
@@ -130,9 +122,7 @@ export function ImportProductConfigDialog({ open, onOpenChange, onSuccess }: Imp
             rows={12}
             className="font-mono text-xs"
           />
-          <p className="text-xs text-muted-foreground">
-            {parseRows(text).length} dòng hợp lệ sẽ được import.
-          </p>
+          <p className="text-xs text-muted-foreground">{parseRows(text).length} dòng hợp lệ sẽ được import.</p>
         </div>
 
         <DialogFooter>

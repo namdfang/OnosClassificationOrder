@@ -1,7 +1,8 @@
 // https://github.com/andrechristikan/ack-nestjs-boilerplate/blob/main/src/common/database/interfaces/database.interface.ts
 
-import { PopulateOptions } from 'mongoose';
-import { IPaginationOptions } from './IPagination';
+import type { PopulateOptions } from 'mongoose';
+
+import type { IPaginationOptions } from './IPagination';
 
 // find one
 export interface IDatabaseFindOneOptions<T = any> extends Pick<IPaginationOptions, 'sort'> {

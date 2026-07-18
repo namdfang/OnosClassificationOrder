@@ -1,23 +1,27 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { ChevronDown, ChevronRight, Clock, Grab, ImageOff, UserPlus } from 'lucide-react';
-import { toast } from 'sonner';
-import { PRODUCT_LEVEL_MAP, WorkshopConfigCategory } from 'shared';
 import type { AssignBacklogGroup, AssignBacklogOrder } from 'shared';
+import { PRODUCT_LEVEL_MAP, WorkshopConfigCategory } from 'shared';
+import { toast } from 'sonner';
 
-import { Badge } from '@/components/ui/badge';
-import { Button } from '@/components/ui/button';
+import { useWorkshopConfigStore } from '@/store/workshopConfigStore';
+
+import { RepositoryRemote } from '@/services';
+
 import { CopyButton } from '@/components/common/CopyButton';
 import { ImagePreviewDialog } from '@/components/common/ImagePreviewDialog';
-import { ImageThumbCell } from '@/components/orders/cells/ImageThumbCell';
 import { AssignDesignerDialog } from '@/components/orders/AssignDesignerDialog';
+import { ImageThumbCell } from '@/components/orders/cells/ImageThumbCell';
 import { PriorityBadge } from '@/components/orders/cells/PrioritySelectCell';
-import { RepositoryRemote } from '@/services';
-import { useNow } from '@/hooks/useNow';
-import { usePermission } from '@/hooks/usePermission';
-import { useWorkshopConfigStore } from '@/store/workshopConfigStore';
+import { Badge } from '@/components/ui/badge';
+import { Button } from '@/components/ui/button';
+
 import { handleAxiosError } from '@/utils';
 import { cn } from '@/utils/cn';
 import { formatCountdown, getStageDeadline } from '@/utils/priorityEstimate';
+
+import { useNow } from '@/hooks/useNow';
+import { usePermission } from '@/hooks/usePermission';
 
 // Role được TỰ NHẬN task về mình (self-claim) vs. role được gán cho người khác.
 const CLAIM_SELF_ROLES = ['Designer', 'DesignerLeader'];
@@ -116,8 +120,7 @@ export function DesignerAssignBacklog({ days = 7, from, to, type, customer, relo
       return next;
     });
 
-  const noteName = (code?: string) =>
-    code ? resolve(WorkshopConfigCategory.ToolResultNote, code)?.name || code : '';
+  const noteName = (code?: string) => (code ? resolve(WorkshopConfigCategory.ToolResultNote, code)?.name || code : '');
 
   const selectedCount = selected.size;
   const selectedIds = useMemo(() => [...selected], [selected]);
@@ -199,9 +202,7 @@ export function DesignerAssignBacklog({ days = 7, from, to, type, customer, relo
       </div>
 
       {!loading && groups.length === 0 ? (
-        <p className="text-xs text-muted-foreground text-center py-10">
-          Không có đơn cần gán trong khoảng đã chọn.
-        </p>
+        <p className="text-xs text-muted-foreground text-center py-10">Không có đơn cần gán trong khoảng đã chọn.</p>
       ) : (
         <div className="divide-y divide-border/60">
           {groups.map((g) => {
@@ -221,11 +222,7 @@ export function DesignerAssignBacklog({ days = 7, from, to, type, customer, relo
                     }}
                     onChange={() => toggleGroup(g)}
                   />
-                  <button
-                    type="button"
-                    onClick={() => toggleExpand(g.key)}
-                    className="text-muted-foreground shrink-0"
-                  >
+                  <button type="button" onClick={() => toggleExpand(g.key)} className="text-muted-foreground shrink-0">
                     {isOpen ? <ChevronDown size={16} /> : <ChevronRight size={16} />}
                   </button>
                   {/* Mockup */}
@@ -258,15 +255,9 @@ export function DesignerAssignBacklog({ days = 7, from, to, type, customer, relo
                       Lv {g.level}
                     </Badge>
                   )}
-                  <button
-                    type="button"
-                    onClick={() => toggleExpand(g.key)}
-                    className="flex-1 min-w-0 text-left"
-                  >
+                  <button type="button" onClick={() => toggleExpand(g.key)} className="flex-1 min-w-0 text-left">
                     <div className="text-sm font-medium truncate">{g.fullName}</div>
-                    {g.shortName && (
-                      <div className="text-[10px] text-muted-foreground">{g.shortName}</div>
-                    )}
+                    {g.shortName && <div className="text-[10px] text-muted-foreground">{g.shortName}</div>}
                   </button>
                   <Badge variant="secondary" className="shrink-0">
                     {g.count} đơn
@@ -315,7 +306,9 @@ export function DesignerAssignBacklog({ days = 7, from, to, type, customer, relo
                                       <span
                                         className={cn(
                                           'text-[10px] inline-flex items-center gap-1 whitespace-nowrap',
-                                          countdown.overdue ? 'text-rose-600 dark:text-rose-400' : 'text-muted-foreground',
+                                          countdown.overdue
+                                            ? 'text-rose-600 dark:text-rose-400'
+                                            : 'text-muted-foreground',
                                         )}
                                       >
                                         <Clock size={10} /> {countdown.text}

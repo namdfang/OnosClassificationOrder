@@ -1,12 +1,13 @@
 import React, { Suspense } from 'react';
 import { BrowserRouter, Navigate, Outlet, Route, Routes, useLocation } from 'react-router-dom';
+
 import Loading from './components/loading';
 import { PATHS } from './constants/paths';
 import { routerConfig } from './constants/routerConfig';
 import MainLayout from './layouts/mainLayout/MainLayout';
+import NotFound from './pages/errors/NotFound';
 import ForgotPassword from './pages/login/ForgotPassword';
 import Login from './pages/login/index';
-import NotFound from './pages/errors/NotFound';
 import Register from './pages/register';
 import { useAuthStore } from './store/authStore';
 

@@ -5,6 +5,7 @@ import type {
   ResetDesignerPasswordDto,
   UpdateDesignerTeamMemberDto,
 } from 'shared';
+
 import { callApi } from '../apis';
 import { CONFIG } from '../constants';
 
@@ -36,11 +37,7 @@ const migrateLeader = () => {
 // ─── Phase 3 transition + Phase 4 my-tasks/my-stats ────────────────────
 
 const transition = (orderId: string, data: DesignerTransitionDto) => {
-  return callApi(
-    `/${CONFIG.API_VERSION}/orders/${orderId}/designer-transition`,
-    'post',
-    data,
-  );
+  return callApi(`/${CONFIG.API_VERSION}/orders/${orderId}/designer-transition`, 'post', data);
 };
 
 const myTasks = (
@@ -128,10 +125,7 @@ const timeline = (userId: string, params: { from?: string; to?: string } = {}) =
   if (params.from) qs.set('from', params.from);
   if (params.to) qs.set('to', params.to);
   const suffix = qs.toString() ? `?${qs.toString()}` : '';
-  return callApi(
-    `/${CONFIG.API_VERSION}/designer/timeline/${userId}${suffix}`,
-    'get',
-  );
+  return callApi(`/${CONFIG.API_VERSION}/designer/timeline/${userId}${suffix}`, 'get');
 };
 
 const teamDailyBreakdown = (
@@ -216,9 +210,7 @@ const errorStats = (params: { from?: string; to?: string } = {}) => {
   return callApi(`/${CONFIG.API_VERSION}/orders/error-stats${suffix}`, 'get');
 };
 
-const personErrorOverview = (
-  params: { from?: string; to?: string; days?: number; factoryId?: string } = {},
-) => {
+const personErrorOverview = (params: { from?: string; to?: string; days?: number; factoryId?: string } = {}) => {
   const qs = new URLSearchParams();
   if (params.from) qs.set('from', params.from);
   if (params.to) qs.set('to', params.to);
@@ -228,12 +220,7 @@ const personErrorOverview = (
   return callApi(`/${CONFIG.API_VERSION}/designer/person-error-overview${suffix}`, 'get');
 };
 
-const personErrorOrders = (params: {
-  userId: string;
-  from?: string;
-  to?: string;
-  days?: number;
-}) => {
+const personErrorOrders = (params: { userId: string; from?: string; to?: string; days?: number }) => {
   const qs = new URLSearchParams();
   qs.set('userId', params.userId);
   if (params.from) qs.set('from', params.from);

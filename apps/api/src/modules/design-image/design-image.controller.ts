@@ -6,11 +6,7 @@ import { RoleType } from 'shared';
 
 import { Auth } from '@/decorators';
 
-import {
-  DESIGN_PREVIEW_QUEUE,
-  DESIGN_THUMB_QUEUE,
-  DesignImageJobData,
-} from './design-image.processor';
+import { DESIGN_PREVIEW_QUEUE, DESIGN_THUMB_QUEUE, DesignImageJobData } from './design-image.processor';
 import { DesignImageService } from './design-image.service';
 import { R2DesignObjectRepository } from './r2-design-object.repository';
 
@@ -95,6 +91,7 @@ export class DesignImageController {
   ])
   @ApiOperation({ summary: 'Ensure design preview exists on R2 (block if needed)' })
   @HttpCode(HttpStatus.OK)
+  // eslint-disable-next-line @typescript-eslint/require-await -- [R2-disabled] tạm trả thẳng sourceUrl, restore sẽ await processPreview
   async ensurePreview(
     @Body() body: { sourceUrl?: string },
   ): Promise<{ success: true; data: { url: string; cached: boolean } }> {

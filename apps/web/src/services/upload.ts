@@ -1,4 +1,5 @@
 import type { UploadFileDto, UploadImageDto } from 'shared';
+
 import { callApi } from '../apis';
 
 const uploadImage = (query: string, body: UploadImageDto) => {

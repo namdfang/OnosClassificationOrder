@@ -1,4 +1,4 @@
-import { Injectable, ExecutionContext } from '@nestjs/common';
+import { ExecutionContext, Injectable } from '@nestjs/common';
 import { ThrottlerGuard, ThrottlerRequest } from '@nestjs/throttler';
 
 /**
@@ -24,14 +24,13 @@ export class FastifyThrottlerGuard extends ThrottlerGuard {
     const tracker = await getTracker(req, res);
     const key = generateKey(context, tracker, throttler.name ?? 'default');
 
-    const { totalHits, timeToExpire, isBlocked, timeToBlockExpire } =
-      await this.storageService.increment(
-        key,
-        ttl,
-        limit,
-        blockDuration,
-        throttler.name ?? 'default',
-      );
+    const { totalHits, timeToExpire, isBlocked, timeToBlockExpire } = await this.storageService.increment(
+      key,
+      ttl,
+      limit,
+      blockDuration,
+      throttler.name ?? 'default',
+    );
 
     if (isBlocked) {
       // Set header safely for Fastify

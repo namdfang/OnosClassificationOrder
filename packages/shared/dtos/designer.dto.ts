@@ -1,16 +1,9 @@
 import { createZodDto } from '@anatine/zod-nestjs';
 import { extendApi } from '@anatine/zod-openapi';
-import { z } from 'zod';
-
 import { IDZod, PASSWORD_MAX_LENGTH, PASSWORD_MIN_LENGTH } from '@shared/constants';
-import {
-  DesignerStatus,
-  DesignerTransitionAction,
-  FulfillmentStage,
-  OrderPriority,
-  Status,
-} from '@shared/enums';
+import { DesignerStatus, DesignerTransitionAction, FulfillmentStage, OrderPriority, Status } from '@shared/enums';
 import { PageResZod, ResZod } from '@shared/types';
+import { z } from 'zod';
 
 /**
  * Designer Task Workflow — DTOs.
@@ -52,14 +45,10 @@ export const CreateDesignerTeamMemberZod = z.object({
   hireDate: z.coerce.date().optional(),
   telegramChatId: z.string().max(60).optional(),
 });
-export class CreateDesignerTeamMemberDto extends createZodDto(
-  extendApi(CreateDesignerTeamMemberZod),
-) {}
+export class CreateDesignerTeamMemberDto extends createZodDto(extendApi(CreateDesignerTeamMemberZod)) {}
 
 export const CreateDesignerTeamMemberResZod = ResZod.extend({ data: DesignerTeamMemberZod });
-export class CreateDesignerTeamMemberResDto extends createZodDto(
-  extendApi(CreateDesignerTeamMemberResZod),
-) {}
+export class CreateDesignerTeamMemberResDto extends createZodDto(extendApi(CreateDesignerTeamMemberResZod)) {}
 
 export const UpdateDesignerTeamMemberZod = z.object({
   fullName: z.string().min(1).max(120).optional(),
@@ -68,14 +57,10 @@ export const UpdateDesignerTeamMemberZod = z.object({
   telegramChatId: z.string().max(60).nullable().optional(),
   status: z.nativeEnum(Status).optional(),
 });
-export class UpdateDesignerTeamMemberDto extends createZodDto(
-  extendApi(UpdateDesignerTeamMemberZod),
-) {}
+export class UpdateDesignerTeamMemberDto extends createZodDto(extendApi(UpdateDesignerTeamMemberZod)) {}
 
 export const UpdateDesignerTeamMemberResZod = ResZod.extend({ data: DesignerTeamMemberZod });
-export class UpdateDesignerTeamMemberResDto extends createZodDto(
-  extendApi(UpdateDesignerTeamMemberResZod),
-) {}
+export class UpdateDesignerTeamMemberResDto extends createZodDto(extendApi(UpdateDesignerTeamMemberResZod)) {}
 
 export const ResetDesignerPasswordZod = z.object({
   password: z.string().min(PASSWORD_MIN_LENGTH).max(PASSWORD_MAX_LENGTH),
@@ -310,9 +295,7 @@ export const GetBreakdownFiltersResZod = ResZod.extend({
     customers: BreakdownFilterOptionZod.array(),
   }),
 });
-export class GetBreakdownFiltersResDto extends createZodDto(
-  extendApi(GetBreakdownFiltersResZod),
-) {}
+export class GetBreakdownFiltersResDto extends createZodDto(extendApi(GetBreakdownFiltersResZod)) {}
 
 export const GetTeamDailyBreakdownResZod = ResZod.extend({
   data: z.object({
@@ -326,9 +309,7 @@ export const GetTeamDailyBreakdownResZod = ResZod.extend({
     rangeDays: z.number().int().positive(),
   }),
 });
-export class GetTeamDailyBreakdownResDto extends createZodDto(
-  extendApi(GetTeamDailyBreakdownResZod),
-) {}
+export class GetTeamDailyBreakdownResDto extends createZodDto(extendApi(GetTeamDailyBreakdownResZod)) {}
 
 // ─── Daily overview (bảng 4 hàng: tổng đơn / chưa soát / lỗi / tồn) ──────
 
@@ -506,9 +487,7 @@ export const DesignerBulkTransitionZod = z.object({
   /** BẮT BUỘC khi action='reject' — designer nhận thay cho TẤT CẢ đơn đã chọn. */
   targetUserId: IDZod.optional(),
 });
-export class DesignerBulkTransitionDto extends createZodDto(
-  extendApi(DesignerBulkTransitionZod),
-) {}
+export class DesignerBulkTransitionDto extends createZodDto(extendApi(DesignerBulkTransitionZod)) {}
 
 export const DesignerBulkTransitionResZod = ResZod.extend({
   data: z.object({
@@ -523,9 +502,7 @@ export const DesignerBulkTransitionResZod = ResZod.extend({
       .array(),
   }),
 });
-export class DesignerBulkTransitionResDto extends createZodDto(
-  extendApi(DesignerBulkTransitionResZod),
-) {}
+export class DesignerBulkTransitionResDto extends createZodDto(extendApi(DesignerBulkTransitionResZod)) {}
 
 // ─── My-task filter options (faceted) ───────────────────────────────
 
@@ -546,9 +523,7 @@ export const GetMyTaskFiltersResZod = ResZod.extend({
     errorFile: FilterOptionZod.array(),
   }),
 });
-export class GetMyTaskFiltersResDto extends createZodDto(
-  extendApi(GetMyTaskFiltersResZod),
-) {}
+export class GetMyTaskFiltersResDto extends createZodDto(extendApi(GetMyTaskFiltersResZod)) {}
 
 // ─── Designer breakdown (Admin / Leader on /orders page) ────────────
 
@@ -587,9 +562,7 @@ export const DesignerBreakdownResZod = ResZod.extend({
     perDesigner: DesignerBreakdownRowZod.array(),
   }),
 });
-export class DesignerBreakdownResDto extends createZodDto(
-  extendApi(DesignerBreakdownResZod),
-) {}
+export class DesignerBreakdownResDto extends createZodDto(extendApi(DesignerBreakdownResZod)) {}
 
 // ─── Backlog tồn đọng theo Designer × Ngày (inProductionAt) ──────────
 // Đơn CHƯA done gom theo người ôm × ngày vào sản xuất. "Không làm được"
@@ -637,9 +610,7 @@ export const DesignerBacklogResZod = ResZod.extend({
     designers: DesignerBacklogRowZod.array(),
   }),
 });
-export class DesignerBacklogResDto extends createZodDto(
-  extendApi(DesignerBacklogResZod),
-) {}
+export class DesignerBacklogResDto extends createZodDto(extendApi(DesignerBacklogResZod)) {}
 
 // ─── Stats dashboard (Phase 5) ──────────────────────────────────────
 
@@ -674,16 +645,12 @@ export const GetDesignerPerformanceZod = z.object({
   /** Optional — chỉ lấy 1 user. */
   userId: z.string().optional(),
 });
-export class GetDesignerPerformanceDto extends createZodDto(
-  extendApi(GetDesignerPerformanceZod),
-) {}
+export class GetDesignerPerformanceDto extends createZodDto(extendApi(GetDesignerPerformanceZod)) {}
 
 export const GetDesignerPerformanceResZod = ResZod.extend({
   data: DesignerLeaderboardRowZod.array(),
 });
-export class GetDesignerPerformanceResDto extends createZodDto(
-  extendApi(GetDesignerPerformanceResZod),
-) {}
+export class GetDesignerPerformanceResDto extends createZodDto(extendApi(GetDesignerPerformanceResZod)) {}
 
 export const DesignerTimelineBucketZod = z.object({
   date: z.string(),
@@ -703,9 +670,7 @@ export class GetDesignerTimelineDto extends createZodDto(extendApi(GetDesignerTi
 export const GetDesignerTimelineResZod = ResZod.extend({
   data: DesignerTimelineBucketZod.array(),
 });
-export class GetDesignerTimelineResDto extends createZodDto(
-  extendApi(GetDesignerTimelineResZod),
-) {}
+export class GetDesignerTimelineResDto extends createZodDto(extendApi(GetDesignerTimelineResZod)) {}
 
 // ─── Production error stats (giữ — không liên quan assignee) ──────────
 

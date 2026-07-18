@@ -1,4 +1,5 @@
 import { lazy } from 'react';
+
 import { PATHS } from './paths';
 
 const Home = lazy(() => import('../pages/home'));

@@ -1,6 +1,7 @@
 import React from 'react';
-import { DATE_PRESETS, matchPreset } from '@/utils/dateRangePresets';
+
 import { cn } from '@/utils/cn';
+import { DATE_PRESETS, matchPreset } from '@/utils/dateRangePresets';
 
 interface DateRangePresetsProps {
   from: string;
@@ -20,13 +21,7 @@ interface DateRangePresetsProps {
  * - Dùng kèm 2 `<Input type="date">` để user có thể chọn nhanh **HOẶC** tinh
  *   chỉnh thủ công.
  */
-export function DateRangePresets({
-  from,
-  to,
-  onChange,
-  variant = 'chip',
-  className,
-}: DateRangePresetsProps) {
+export function DateRangePresets({ from, to, onChange, variant = 'chip', className }: DateRangePresetsProps) {
   const active = matchPreset(from, to);
 
   const baseBtn =

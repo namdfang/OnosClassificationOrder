@@ -3,16 +3,31 @@ import React, { useState } from 'react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
+
 import { cn } from '@/utils/cn';
 
 const PRESETS = [
-  '#9CA3AF', '#6B7280', '#374151',
-  '#EF4444', '#F97316', '#F59E0B',
-  '#EAB308', '#84CC16', '#22C55E',
-  '#10B981', '#14B8A6', '#06B6D4',
-  '#0EA5E9', '#3B82F6', '#6366F1',
-  '#8B5CF6', '#A855F7', '#D946EF',
-  '#EC4899', '#F43F5E', '#0F172A',
+  '#9CA3AF',
+  '#6B7280',
+  '#374151',
+  '#EF4444',
+  '#F97316',
+  '#F59E0B',
+  '#EAB308',
+  '#84CC16',
+  '#22C55E',
+  '#10B981',
+  '#14B8A6',
+  '#06B6D4',
+  '#0EA5E9',
+  '#3B82F6',
+  '#6366F1',
+  '#8B5CF6',
+  '#A855F7',
+  '#D946EF',
+  '#EC4899',
+  '#F43F5E',
+  '#0F172A',
 ];
 
 interface Props {
@@ -46,7 +61,9 @@ export function ColorPicker({ value, onChange }: Props) {
               }}
               className={cn(
                 'h-7 w-7 rounded border transition-transform hover:scale-110',
-                value?.toLowerCase() === c.toLowerCase() ? 'border-foreground ring-2 ring-offset-1 ring-foreground/40' : 'border-border',
+                value?.toLowerCase() === c.toLowerCase()
+                  ? 'border-foreground ring-2 ring-offset-1 ring-foreground/40'
+                  : 'border-border',
               )}
               style={{ backgroundColor: c }}
             />

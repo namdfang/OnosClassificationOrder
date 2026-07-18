@@ -1,4 +1,5 @@
 import { z } from 'zod';
+
 import { BaseEntityZod } from '..';
 
 export const ContentZod = BaseEntityZod.extend({

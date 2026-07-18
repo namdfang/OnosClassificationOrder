@@ -6,28 +6,16 @@
   "types": "./index.ts",
   "license": "MIT",
   "scripts": {
-    "lint": "eslint --ext .ts,.tsx . --cache",
-    "lint:vercel": "eslint --ext .ts,.tsx,.astro . --cache && mkdir dist && touch ./dist/index.html",
-    "lint:fix": "eslint --ext .js,.jsx,.ts,.tsx,.astro . --fix --cache",
+    "lint": "eslint . --cache",
+    "lint:fix": "eslint . --fix --cache",
     "build-types": "pnpm tsc --noEmit -p tsconfig.build.json"
   },
   "devDependencies": {
     "@commitlint/cli": "^17.7.1",
     "@commitlint/config-conventional": "^18.4.2",
-    "astro-eslint-parser": "^0.16.0",
+    "@printsel/eslint-config": "workspace:*",
     "cspell": "^8.0.0",
-    "eslint": "^8.49.0",
-    "eslint-config-airbnb-base": "^15.0.0",
-    "eslint-config-airbnb-typescript": "^17.0.1",
-    "eslint-config-custom": "0.0.0",
-    "eslint-plugin-import": "^2.29.0",
-    "eslint-plugin-jsx-a11y": "^6.8.0",
-    "eslint-plugin-prettier": "^5.0.1",
-    "eslint-plugin-react": "^7.33.2",
-    "eslint-plugin-react-hooks": "^4.6.0",
-    "eslint-plugin-simple-import-sort": "^10.0.0",
-    "eslint-plugin-tailwindcss": "^3.13.0",
-    "eslint-plugin-unused-imports": "^3.0.0",
+    "eslint": "^9.30.0",
     "husky": "^8.0.3",
     "lint-staged": "^14.0.0",
     "prettier": "^3.0.3",
@@ -53,5 +41,8 @@
     "xlsx": "https://cdn.sheetjs.com/xlsx-0.19.3/xlsx-0.19.3.tgz",
     "zod": "^3.22.4",
     "zustand": "^4.4.1"
+  },
+  "engines": {
+    "node": "20.20.2"
   }
 }

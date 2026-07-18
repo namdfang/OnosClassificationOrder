@@ -20,7 +20,6 @@ const configService = new ApiConfigService(new ConfigService());
         registerAs(
           'amqp',
           (): RabbitMQConfig => ({
-            // eslint-disable-next-line max-len
             uri: configService.rabbitmq.uri,
             exchanges: [
               {

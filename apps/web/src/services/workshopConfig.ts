@@ -1,8 +1,5 @@
-import type {
-  CreateWorkshopConfigDto,
-  ReorderWorkshopConfigDto,
-  UpdateWorkshopConfigDto,
-} from 'shared';
+import type { CreateWorkshopConfigDto, ReorderWorkshopConfigDto, UpdateWorkshopConfigDto } from 'shared';
+
 import { callApi } from '../apis';
 import { CONFIG } from '../constants';
 

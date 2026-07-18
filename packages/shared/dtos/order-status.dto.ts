@@ -1,9 +1,8 @@
 import { createZodDto } from '@anatine/zod-nestjs';
 import { extendApi } from '@anatine/zod-openapi';
-import { z } from 'zod';
-
 import { IDZod } from '@shared/constants';
 import { ResZod } from '@shared/types';
+import { z } from 'zod';
 
 //
 // Status overview query — superset of order list filters.

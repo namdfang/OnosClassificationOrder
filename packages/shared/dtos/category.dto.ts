@@ -1,9 +1,9 @@
 import { createZodDto } from '@anatine/zod-nestjs';
 import { extendApi } from '@anatine/zod-openapi';
+import { CodeZod, IDZod, NameZod } from '@shared/constants';
+import { BaseEntityZod, PageQueryZod, PageResZod, ResZod } from '@shared/types';
 import { z } from 'zod';
 
-import { BaseEntityZod, PageQueryZod, PageResZod, ResZod } from '@shared/types';
-import { CodeZod, IDZod, NameZod } from '@shared/constants';
 import { ResImageZod } from './upload.dto';
 
 export const CategoryZod = BaseEntityZod.extend({

@@ -1,12 +1,12 @@
-import { DeleteObjectsCommand, ListObjectsCommand, ObjectCannedACL, PutObjectCommand, S3 } from '@aws-sdk/client-s3';
+import { DeleteObjectsCommand, ListObjectsCommand, PutObjectCommand, S3 } from '@aws-sdk/client-s3';
 import { getSignedUrl } from '@aws-sdk/s3-request-presigner';
 import type { UploadedFileDto } from '@core/dtos';
+import type { IFile } from '@core/interfaces';
+import { getUTCDate } from '@core/utils';
 import { Injectable } from '@nestjs/common';
 import { NodeHttpHandler } from '@smithy/node-http-handler';
 import * as https from 'https';
-import type { IFile } from '@core/interfaces';
-import { ResDto } from 'shared';
-import { getUTCDate } from '@core/utils';
+import type { ResDto } from 'shared';
 
 type S3Config = {
   endpoint: string;

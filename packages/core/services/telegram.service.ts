@@ -1,4 +1,3 @@
-/* eslint-disable no-console */
 import { Injectable } from '@nestjs/common';
 import axios from 'axios';
 

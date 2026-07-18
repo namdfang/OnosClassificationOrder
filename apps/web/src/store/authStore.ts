@@ -1,6 +1,6 @@
+import type { User } from 'shared';
 import { create } from 'zustand';
 import { persist } from 'zustand/middleware';
-import type { User } from 'shared';
 
 interface AuthStore {
   token: string | null;

@@ -20,7 +20,6 @@ export function registerImageCacheSW(): void {
         console.info('[sw] image cache registered, scope:', reg.scope);
       })
       .catch((err) => {
-        // eslint-disable-next-line no-console
         console.warn('[sw] registration failed:', err);
       });
   });

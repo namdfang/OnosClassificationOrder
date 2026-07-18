@@ -1,7 +1,10 @@
 import React, { useEffect, useMemo, useState } from 'react';
-import { toast } from 'sonner';
 import type { DesignFields } from 'shared';
+import { toast } from 'sonner';
 
+import { RepositoryRemote } from '@/services';
+
+import type { WorkshopOrderRow } from '@/components/orders/workshopTableConfig';
 import { Button } from '@/components/ui/button';
 import {
   Dialog,
@@ -12,9 +15,8 @@ import {
   DialogTitle,
 } from '@/components/ui/dialog';
 import { Input } from '@/components/ui/input';
-import { RepositoryRemote } from '@/services';
+
 import { handleAxiosError } from '@/utils';
-import type { WorkshopOrderRow } from '@/components/orders/workshopTableConfig';
 
 interface Props {
   order: WorkshopOrderRow | null;
@@ -42,10 +44,7 @@ export function EditOrderDesignDialog({ order, open, onOpenChange, onDone }: Pro
     const designKeys = Object.entries(order.designs || {})
       .filter(([, v]) => !!v)
       .map(([k]) => k);
-    return [
-      { key: MOCKUP_KEY, label: 'Mockup' },
-      ...designKeys.map((k) => ({ key: k, label: k })),
-    ];
+    return [{ key: MOCKUP_KEY, label: 'Mockup' }, ...designKeys.map((k) => ({ key: k, label: k }))];
   }, [order]);
 
   useEffect(() => {

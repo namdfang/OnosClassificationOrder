@@ -1,4 +1,4 @@
-import { OrderDirection } from '@core/constants';
+import type { OrderDirection } from '@core/constants';
 
 export type IPaginationOrder = Record<string, OrderDirection>;
 

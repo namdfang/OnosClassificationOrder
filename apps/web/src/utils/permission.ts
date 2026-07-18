@@ -1,7 +1,7 @@
 import { RoleType } from 'shared';
+
 import { useAuthStore } from '@/store/authStore';
 
-// eslint-disable-next-line consistent-return
 export const validatePermission = (roles: string[]) => {
   if (roles.length === 0) return true;
   const profile = useAuthStore.getState().profile;

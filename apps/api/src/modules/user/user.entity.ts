@@ -260,7 +260,6 @@ export type UserDocument = HydratedDocument<UserEntity> & {
 };
 
 UserSchema.pre('save', function (next: CallbackWithoutResultAndOptionalError) {
-  // eslint-disable-next-line no-invalid-this
   this.email = this.email.toLowerCase();
   next();
 });

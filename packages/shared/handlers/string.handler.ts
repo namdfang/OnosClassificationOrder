@@ -1,5 +1,3 @@
-/* eslint-disable unicorn/better-regex */
-
 // https://gist.github.com/jarvisluong/f01e108e963092336f04c4b7dd6f7e45
 // This function converts the string to lowercase, then perform the conversion
 function toLowerCaseNonAccentVietnamese(str: string) {

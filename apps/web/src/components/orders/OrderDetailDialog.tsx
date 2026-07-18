@@ -1,26 +1,15 @@
 import React, { useEffect, useState } from 'react';
-import {
-  ExternalLink,
-  FileText,
-  Image as ImageIcon,
-  Info,
-  Link2,
-  Loader2,
-  ScissorsLineDashed,
-} from 'lucide-react';
+import { ExternalLink, FileText, Image as ImageIcon, Info, Link2, Loader2, ScissorsLineDashed } from 'lucide-react';
 import type { ProductionOrder } from 'shared';
 
-import {
-  Dialog,
-  DialogContent,
-  DialogHeader,
-  DialogTitle,
-} from '@/components/ui/dialog';
-import { Badge } from '@/components/ui/badge';
-import { Button } from '@/components/ui/button';
+import { RepositoryRemote } from '@/services';
+
 import { CopyButton } from '@/components/common/CopyButton';
 import { ImagePreviewDialog } from '@/components/common/ImagePreviewDialog';
-import { RepositoryRemote } from '@/services';
+import { Badge } from '@/components/ui/badge';
+import { Button } from '@/components/ui/button';
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
+
 import { handleAxiosError } from '@/utils';
 
 interface Props {
@@ -52,9 +41,7 @@ export function OrderDetailDialog({ open, onOpenChange, orderId, productionId }:
   // Preview state cho mockup thumbnail — reuse ImagePreviewDialog (zoom + open
   // original tab). Design files KHÔNG có preview vì chỉ lưu URL Drive (không
   // có ảnh resize/optimize) — user mở Drive thẳng để xem.
-  const [preview, setPreview] = useState<{ url: string; original?: string; title: string } | null>(
-    null,
-  );
+  const [preview, setPreview] = useState<{ url: string; original?: string; title: string } | null>(null);
 
   useEffect(() => {
     if (!open || (!orderId && !productionId)) {
@@ -89,139 +76,123 @@ export function OrderDetailDialog({ open, onOpenChange, orderId, productionId }:
 
   return (
     <>
-    <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-w-4xl">
-        <DialogHeader>
-          <DialogTitle className="flex items-center gap-2">
-            <Info size={16} className="text-primary" />
-            Chi tiết đơn{order?.productionId ? ` — ${order.productionId}` : ''}
-          </DialogTitle>
-        </DialogHeader>
+      <Dialog open={open} onOpenChange={onOpenChange}>
+        <DialogContent className="max-w-4xl">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <Info size={16} className="text-primary" />
+              Chi tiết đơn{order?.productionId ? ` — ${order.productionId}` : ''}
+            </DialogTitle>
+          </DialogHeader>
 
-        {loading ? (
-          <div className="py-12 flex items-center justify-center text-sm text-muted-foreground">
-            <Loader2 size={16} className="animate-spin mr-2" /> Đang tải…
-          </div>
-        ) : !order ? (
-          <div className="py-8 text-sm text-muted-foreground text-center">Không tìm thấy đơn.</div>
-        ) : (
-          <div className="space-y-4 max-h-[80vh] overflow-y-auto pr-1">
-            {/* Section: Info chung */}
-            <Grid>
-              <InfoRow label="Production ID" value={order.productionId} mono copyable />
-              <InfoRow label="Order ID" value={order.orderId || '—'} mono copyable={!!order.orderId} />
-              <InfoRow label="Type" value={order.type || '—'} />
-              <InfoRow
-                label="Size / Color"
-                value={`${order.size || '—'}${order.color ? ' / ' + order.color : ''}`}
-              />
-              <InfoRow label="Số lượng" value={String(order.quantity ?? 1)} />
-              <InfoRow
-                label="Xưởng"
-                value={order.factory?.shortName || order.factory?.name || '—'}
-              />
-              <InfoRow
-                label="Máy"
-                value={order.machineType?.shortName || order.machineType?.name || '—'}
-              />
-              <InfoRow
-                label="Product"
-                value={order.productConfig?.shortName || order.productConfig?.fullName || '—'}
-              />
-            </Grid>
+          {loading ? (
+            <div className="py-12 flex items-center justify-center text-sm text-muted-foreground">
+              <Loader2 size={16} className="animate-spin mr-2" /> Đang tải…
+            </div>
+          ) : !order ? (
+            <div className="py-8 text-sm text-muted-foreground text-center">Không tìm thấy đơn.</div>
+          ) : (
+            <div className="space-y-4 max-h-[80vh] overflow-y-auto pr-1">
+              {/* Section: Info chung */}
+              <Grid>
+                <InfoRow label="Production ID" value={order.productionId} mono copyable />
+                <InfoRow label="Order ID" value={order.orderId || '—'} mono copyable={!!order.orderId} />
+                <InfoRow label="Type" value={order.type || '—'} />
+                <InfoRow label="Size / Color" value={`${order.size || '—'}${order.color ? ' / ' + order.color : ''}`} />
+                <InfoRow label="Số lượng" value={String(order.quantity ?? 1)} />
+                <InfoRow label="Xưởng" value={order.factory?.shortName || order.factory?.name || '—'} />
+                <InfoRow label="Máy" value={order.machineType?.shortName || order.machineType?.name || '—'} />
+                <InfoRow
+                  label="Product"
+                  value={order.productConfig?.shortName || order.productConfig?.fullName || '—'}
+                />
+              </Grid>
 
-            {/* Section: Workshop / status */}
-            <Grid>
-              <InfoRow label="Print Status" value={order.printStatus || '—'} />
-              <InfoRow label="Tool Result" value={order.toolResult || '—'} />
-              <InfoRow label="Note Tool" value={order.toolResultNote || '—'} />
-              <InfoRow
-                label="Sẵn sàng fulfill"
-                value={order.readyForFulfill ? 'Yes' : 'No'}
-                badgeTone={order.readyForFulfill ? 'success' : undefined}
-              />
-              <InfoRow
-                label="Designer status"
-                value={order.designerStatus || '—'}
-              />
-              <InfoRow
-                label="Stage hiện tại"
-                value={order.currentFulfillmentStage || '—'}
-              />
-            </Grid>
+              {/* Section: Workshop / status */}
+              <Grid>
+                <InfoRow label="Print Status" value={order.printStatus || '—'} />
+                <InfoRow label="Tool Result" value={order.toolResult || '—'} />
+                <InfoRow label="Note Tool" value={order.toolResultNote || '—'} />
+                <InfoRow
+                  label="Sẵn sàng fulfill"
+                  value={order.readyForFulfill ? 'Yes' : 'No'}
+                  badgeTone={order.readyForFulfill ? 'success' : undefined}
+                />
+                <InfoRow label="Designer status" value={order.designerStatus || '—'} />
+                <InfoRow label="Stage hiện tại" value={order.currentFulfillmentStage || '—'} />
+              </Grid>
 
-            {/* Section: Mockup + Design links — chỉ link, KHÔNG hiển thị ảnh.
+              {/* Section: Mockup + Design links — chỉ link, KHÔNG hiển thị ảnh.
                 User click để mở tab mới hoặc copy URL (workflow xưởng cần URL
                 gốc Drive để in/upload chỗ khác, không cần preview ngay tại đây). */}
-            <DesignLinksSection
-              productionId={order.productionId}
-              mockupUrl={order.mockupUrl}
-              mockupOriginalUrl={order.mockupOriginalUrl}
-              designs={order.designs as Record<string, string | undefined> | undefined}
-              designsOriginal={order.designsOriginal as Record<string, string | undefined> | undefined}
-              onPreviewMockup={(url, original, title) => setPreview({ url, original, title })}
-            />
+              <DesignLinksSection
+                productionId={order.productionId}
+                mockupUrl={order.mockupUrl}
+                mockupOriginalUrl={order.mockupOriginalUrl}
+                designs={order.designs as Record<string, string | undefined> | undefined}
+                designsOriginal={order.designsOriginal as Record<string, string | undefined> | undefined}
+                onPreviewMockup={(url, original, title) => setPreview({ url, original, title })}
+              />
 
-            {/* Section: Cutting file preview */}
-            <div className="rounded-lg border border-border bg-card">
-              <div className="px-4 py-2.5 border-b border-border flex items-center justify-between gap-2">
-                <h4 className="text-sm font-semibold text-foreground inline-flex items-center gap-2">
-                  <ScissorsLineDashed size={14} /> File cutting
-                </h4>
-                {order.cuttingFileUrl && (
-                  <a
-                    href={order.cuttingFileUrl}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="inline-flex items-center gap-1 text-xs text-primary hover:underline"
-                  >
-                    Mở Drive <ExternalLink size={11} />
-                  </a>
-                )}
-              </div>
-              {order.cuttingFileUrl ? (
-                <div className="p-3 space-y-2">
-                  <div className="flex items-center gap-2 text-xs text-muted-foreground">
-                    <FileText size={13} />
-                    <span className="font-mono truncate">{order.cuttingFileName || order.cuttingFileUrl}</span>
-                    <CopyButton value={order.cuttingFileUrl} label="link" iconSize={11} />
-                  </div>
-                  {cuttingFileId ? (
-                    <div className="aspect-[4/5] w-full bg-muted/30 rounded border border-border overflow-hidden">
-                      <iframe
-                        src={`https://drive.google.com/file/d/${cuttingFileId}/preview`}
-                        className="w-full h-full"
-                        title={order.cuttingFileName || 'Cutting file preview'}
-                        allow="autoplay"
-                      />
-                    </div>
-                  ) : (
-                    <Button asChild variant="secondary">
-                      <a href={order.cuttingFileUrl} target="_blank" rel="noopener noreferrer">
-                        Mở file để xem
-                      </a>
-                    </Button>
+              {/* Section: Cutting file preview */}
+              <div className="rounded-lg border border-border bg-card">
+                <div className="px-4 py-2.5 border-b border-border flex items-center justify-between gap-2">
+                  <h4 className="text-sm font-semibold text-foreground inline-flex items-center gap-2">
+                    <ScissorsLineDashed size={14} /> File cutting
+                  </h4>
+                  {order.cuttingFileUrl && (
+                    <a
+                      href={order.cuttingFileUrl}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="inline-flex items-center gap-1 text-xs text-primary hover:underline"
+                    >
+                      Mở Drive <ExternalLink size={11} />
+                    </a>
                   )}
                 </div>
-              ) : (
-                <div className="p-6 text-center text-xs text-muted-foreground">
-                  Chưa có file cutting. Vào tab <strong>Import File Cutting</strong> ở trang Orders
-                  để map.
-                </div>
-              )}
+                {order.cuttingFileUrl ? (
+                  <div className="p-3 space-y-2">
+                    <div className="flex items-center gap-2 text-xs text-muted-foreground">
+                      <FileText size={13} />
+                      <span className="font-mono truncate">{order.cuttingFileName || order.cuttingFileUrl}</span>
+                      <CopyButton value={order.cuttingFileUrl} label="link" iconSize={11} />
+                    </div>
+                    {cuttingFileId ? (
+                      <div className="aspect-[4/5] w-full bg-muted/30 rounded border border-border overflow-hidden">
+                        <iframe
+                          src={`https://drive.google.com/file/d/${cuttingFileId}/preview`}
+                          className="w-full h-full"
+                          title={order.cuttingFileName || 'Cutting file preview'}
+                          allow="autoplay"
+                        />
+                      </div>
+                    ) : (
+                      <Button asChild variant="secondary">
+                        <a href={order.cuttingFileUrl} target="_blank" rel="noopener noreferrer">
+                          Mở file để xem
+                        </a>
+                      </Button>
+                    )}
+                  </div>
+                ) : (
+                  <div className="p-6 text-center text-xs text-muted-foreground">
+                    Chưa có file cutting. Vào tab <strong>Import File Cutting</strong> ở trang Orders để map.
+                  </div>
+                )}
+              </div>
             </div>
-          </div>
-        )}
-      </DialogContent>
-    </Dialog>
+          )}
+        </DialogContent>
+      </Dialog>
 
-    <ImagePreviewDialog
-      open={!!preview}
-      onOpenChange={(o) => !o && setPreview(null)}
-      url={preview?.url}
-      originalUrl={preview?.original}
-      title={preview?.title}
-    />
+      <ImagePreviewDialog
+        open={!!preview}
+        onOpenChange={(o) => !o && setPreview(null)}
+        url={preview?.url}
+        originalUrl={preview?.original}
+        title={preview?.title}
+      />
     </>
   );
 }
@@ -243,9 +214,9 @@ function DesignLinksSection({
 }) {
   // Gộp position từ cả 2 source — ưu tiên `designsOriginal` (URL Drive gốc)
   // vì xưởng cần file gốc để in/upload, không phải URL preview optimized.
-  const positions = Array.from(
-    new Set([...Object.keys(designs ?? {}), ...Object.keys(designsOriginal ?? {})]),
-  ).filter((k) => (designsOriginal?.[k] || designs?.[k]));
+  const positions = Array.from(new Set([...Object.keys(designs ?? {}), ...Object.keys(designsOriginal ?? {})])).filter(
+    (k) => designsOriginal?.[k] || designs?.[k],
+  );
 
   // Mockup: thumb dùng URL R2/optimized (`mockupUrl`), preview/copy ưu tiên
   // `mockupOriginalUrl` (Drive gốc — xưởng cần URL gốc để paste chỗ khác).
@@ -264,14 +235,10 @@ function DesignLinksSection({
             </span>
           )}
         </h4>
-        <span className="text-[10px] text-muted-foreground italic">
-          Click để mở Drive · Copy để paste chỗ khác
-        </span>
+        <span className="text-[10px] text-muted-foreground italic">Click để mở Drive · Copy để paste chỗ khác</span>
       </div>
       {!hasAny ? (
-        <div className="p-6 text-center text-xs text-muted-foreground">
-          Đơn này chưa có link mockup / design.
-        </div>
+        <div className="p-6 text-center text-xs text-muted-foreground">Đơn này chưa có link mockup / design.</div>
       ) : (
         <div className="divide-y divide-border/40">
           {mockupLink && (
@@ -381,12 +348,8 @@ function LinkRow({
 }) {
   return (
     <li className="flex items-center gap-2 px-3 py-2 text-xs hover:bg-muted/30">
-      <span className="shrink-0 inline-flex items-center justify-center w-5 h-5 text-muted-foreground">
-        {icon}
-      </span>
-      <span className="shrink-0 font-semibold text-foreground min-w-[80px] uppercase tracking-wide">
-        {label}
-      </span>
+      <span className="shrink-0 inline-flex items-center justify-center w-5 h-5 text-muted-foreground">{icon}</span>
+      <span className="shrink-0 font-semibold text-foreground min-w-[80px] uppercase tracking-wide">{label}</span>
       <a
         href={url}
         target="_blank"
@@ -431,9 +394,7 @@ function InfoRow({
 }) {
   return (
     <div className="rounded border border-border/60 bg-muted/20 p-2.5">
-      <div className="text-[10px] uppercase tracking-wider text-muted-foreground font-semibold">
-        {label}
-      </div>
+      <div className="text-[10px] uppercase tracking-wider text-muted-foreground font-semibold">{label}</div>
       <div className="text-sm text-foreground mt-1 inline-flex items-center gap-1.5 min-h-[20px]">
         {badgeTone ? (
           <Badge variant={badgeTone}>{value}</Badge>
