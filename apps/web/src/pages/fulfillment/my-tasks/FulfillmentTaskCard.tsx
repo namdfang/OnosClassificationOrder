@@ -11,7 +11,7 @@ import {
   RotateCcw,
   XOctagon,
 } from 'lucide-react';
-import type { FulfillmentStage, FulfillmentStageState, ProductionOrder } from 'shared';
+import type { FulfillmentStage, FulfillmentStageState, ProductionOrderRow } from 'shared';
 import { FULFILLMENT_STAGE_LABELS, FulfillmentStageStatus } from 'shared';
 import { useDraggable } from '@dnd-kit/core';
 
@@ -42,7 +42,7 @@ import { useNow } from '@/hooks/useNow';
 type ColKey = 'waiting' | 'in-progress' | 'rework' | 'done' | 'fixed' | 'watching' | 'unassigned';
 
 export interface FulfillmentTaskCardProps {
-  order: ProductionOrder;
+  order: ProductionOrderRow;
   myStage: FulfillmentStage;
   colKey: ColKey;
   /** `true` = card này được copy productionId gần nhất → hiện CheckCircle2 xanh

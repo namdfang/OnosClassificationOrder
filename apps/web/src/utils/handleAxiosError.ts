@@ -3,7 +3,7 @@ import { toast } from 'sonner';
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 export const handleAxiosError = (error: any) => {
-  if (axios.isAxiosError(error) && !error?.__silent) {
+  if (axios.isAxiosError(error) && !(error as AxiosError & { __silent?: boolean }).__silent) {
     if (error?.response?.status === HttpStatusCode.Forbidden) {
       toast.error('Forbidden');
     } else {

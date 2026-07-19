@@ -542,7 +542,16 @@ export function ListOrderTab({ refreshKey }: ListOrderTabProps) {
   /** Click cell trong panel → set filter list. */
   const handleSummaryCellClick = (
     userId: string | null,
-    status: 'assigned' | 'in-progress' | 'done' | 'rejected' | 'rework' | 'unassigned' | null,
+    status:
+      | 'assigned'
+      | 'in-progress'
+      | 'done'
+      | 'rejected'
+      | 'rework'
+      | 'unassigned'
+      | '__unassigned_notool__'
+      | '__unassigned_tool__'
+      | null,
   ) => {
     if (userId !== null) setFilterAssignee(userId);
     if (status !== null) setFilterDesignerStatus(status);

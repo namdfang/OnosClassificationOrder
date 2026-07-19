@@ -213,10 +213,13 @@ export function FactoryTab() {
     }
 
     try {
-      const repo = type === 'factory' ? RepositoryRemote.factory : RepositoryRemote.machineType;
       if (mode === 'create') {
         if (type === 'factory') {
-          await repo.createFactory({ name: data.name, shortName: data.shortName, isActive: data.isActive });
+          await RepositoryRemote.factory.createFactory({
+            name: data.name,
+            shortName: data.shortName,
+            isActive: data.isActive,
+          });
         } else {
           await RepositoryRemote.machineType.createMachineType({
             name: data.name,

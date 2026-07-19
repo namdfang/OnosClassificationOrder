@@ -40,7 +40,12 @@ function Register() {
   const onSubmit = async (values: RegisterFormValues) => {
     setLoading(true);
     try {
-      await RepositoryRemote.auth.register({ ...values, recaptchaToken: '', refCode });
+      await RepositoryRemote.auth.register({
+        ...values,
+        passwordConfirm: values.password,
+        recaptchaToken: '',
+        refCode,
+      });
       navigate(PATHS.LOGIN);
       toast.success('Account created successfully');
     } catch (error) {

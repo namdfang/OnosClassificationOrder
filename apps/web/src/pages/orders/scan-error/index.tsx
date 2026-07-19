@@ -2,7 +2,7 @@ import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { Navigate } from 'react-router-dom';
 import axios from 'axios';
 import { CheckCircle2, History, Keyboard, Loader2, ScanLine, Trash2, XCircle } from 'lucide-react';
-import type { FulfillmentStage, ProductionOrder } from 'shared';
+import type { FulfillmentStage, ProductionOrderRow } from 'shared';
 import { toast } from 'sonner';
 
 import { PATHS } from '@/constants/paths';
@@ -44,7 +44,7 @@ function normalizeCode(raw: string, mode: ScanMode): string {
   return trimmed;
 }
 
-type ScannedOrder = ProductionOrder & {
+type ScannedOrder = ProductionOrderRow & {
   factory?: { name?: string; shortName?: string };
   machineType?: { name?: string; shortName?: string };
 };

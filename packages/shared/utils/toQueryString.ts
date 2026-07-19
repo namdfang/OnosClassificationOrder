@@ -19,7 +19,7 @@ export function toQueryString(params: Record<string, string | string[] | number 
         // string đầu ra — không làm.
         if (value === '' || (params.key as unknown) === (zodUndefined as unknown)) return false;
 
-        return `${key}=${encodeURIComponent(value)}`;
+        return `${key}=${encodeURIComponent(String(value))}`;
       })
       .filter(Boolean)
       .join('&');

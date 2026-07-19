@@ -1,3 +1,4 @@
+import React from 'react';
 import { toast, Toaster as Sonner } from 'sonner';
 
 import { useThemeStore } from '@/store/themeStore';

@@ -318,6 +318,9 @@ export const ProductionOrderZod = BaseEntityZod.extend({
 });
 export type ProductionOrder = z.infer<typeof ProductionOrderZod>;
 
+/** Row đã lưu DB — `_id` luôn có (BaseEntityZod để `_id` optional cho payload tạo mới). */
+export type ProductionOrderRow = ProductionOrder & { _id: string };
+
 // Whitelist of fields that can be updated inline via PATCH /:id/field.
 // Keep in sync with `FIELD_EDIT_PERMS` and `FIELD_CONFIG_CATEGORY` in BE service.
 export const ORDER_WORKSHOP_FIELDS = [
@@ -1719,8 +1722,8 @@ export class GetLifecycleTrackResDto extends createZodDto(extendApi(GetLifecycle
 // Ví dụ: `BH-96341-30608-M-BR-KL.pdf`, `ML-12345-67890-...`.
 const CUTTING_FILE_PRODUCTION_ID_REGEX = /^([A-Z]{2}-\d{5}-\d{5})/i;
 export function parseProductionIdFromCuttingFilename(filename: string): string | null {
-  const m = filename.match(CUTTING_FILE_PRODUCTION_ID_REGEX);
-  return m ? m[1].toUpperCase() : null;
+  const id = filename.match(CUTTING_FILE_PRODUCTION_ID_REGEX)?.[1];
+  return id ? id.toUpperCase() : null;
 }
 
 export const CuttingFileMatchedZod = z.object({

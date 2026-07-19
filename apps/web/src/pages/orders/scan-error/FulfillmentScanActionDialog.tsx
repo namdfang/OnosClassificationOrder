@@ -15,7 +15,7 @@ import {
   ShieldAlert,
   Wrench,
 } from 'lucide-react';
-import type { FulfillmentStage, ProductionOrder } from 'shared';
+import type { FulfillmentStage, ProductionOrderRow } from 'shared';
 import { FULFILLMENT_STAGE_LABELS, FulfillmentStageStatus, FulfillmentTransitionAction } from 'shared';
 import { toast } from 'sonner';
 
@@ -28,7 +28,7 @@ import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from '
 import { handleAxiosError } from '@/utils';
 import { cn } from '@/utils/cn';
 
-type ScannedOrder = ProductionOrder & {
+type ScannedOrder = ProductionOrderRow & {
   factory?: { name?: string; shortName?: string };
   machineType?: { name?: string; shortName?: string };
 };

@@ -326,6 +326,8 @@ GET /v1/orders/import-from-onospod/cron
 
 ## 5. Schema `OrderEntity`
 
+> Shared: `ProductionOrder` (= `z.infer<ProductionOrderZod>`, `_id` optional theo `BaseEntityZod`) + helper type `ProductionOrderRow = ProductionOrder & { _id: string }` cho row đã lưu DB — FE dùng cho list/kanban/scan dialog để khỏi phải guard `_id` từng chỗ.
+
 ```ts
 {
   productionId: string;        // unique index

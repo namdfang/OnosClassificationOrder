@@ -18,7 +18,7 @@ import {
   X,
   XCircle,
 } from 'lucide-react';
-import type { FulfillmentTransitionDto, ProductionOrder } from 'shared';
+import type { FulfillmentTransitionDto, ProductionOrderRow } from 'shared';
 import { FULFILLMENT_STAGE_LABELS, FulfillmentStage, FulfillmentTransitionAction } from 'shared';
 import { toast } from 'sonner';
 import type { DragEndEvent, DragStartEvent } from '@dnd-kit/core';
@@ -52,7 +52,7 @@ import PrintWorkshopView from './PrintWorkshopView';
 import { ReworkBackDialog } from './ReworkBackDialog';
 import { StageErrorPanel } from './StageErrorPanel';
 
-type ScannedOrder = ProductionOrder & {
+type ScannedOrder = ProductionOrderRow & {
   factory?: { name?: string; shortName?: string };
   machineType?: { name?: string; shortName?: string };
 };
@@ -106,7 +106,7 @@ function stripBarcodePrefix(raw: string): string {
 // Designer — admin gán qua AssignDesignerDialog).
 type ColKey = 'waiting' | 'in-progress' | 'rework' | 'done' | 'fixed' | 'watching' | 'unassigned';
 
-type Columns = Record<ColKey, ProductionOrder[]>;
+type Columns = Record<ColKey, ProductionOrderRow[]>;
 
 const EMPTY_COLS: Columns = {
   waiting: [],
@@ -250,11 +250,11 @@ function FulfillmentKanbanView() {
   const [columns, setColumns] = useState<Columns>(EMPTY_COLS);
   // Đơn user đã rework-back, đang chờ quay lại — render ở drawer dưới kanban
   // (giống pattern Designer's "File không làm được").
-  const [watching, setWatching] = useState<ProductionOrder[]>([]);
+  const [watching, setWatching] = useState<ProductionOrderRow[]>([]);
   const [showWatching, setShowWatching] = useState(false);
   const [loading, setLoading] = useState(false);
-  const [reworkOrder, setReworkOrder] = useState<ProductionOrder | null>(null);
-  const [activeOrder, setActiveOrder] = useState<ProductionOrder | null>(null);
+  const [reworkOrder, setReworkOrder] = useState<ProductionOrderRow | null>(null);
+  const [activeOrder, setActiveOrder] = useState<ProductionOrderRow | null>(null);
   const [preview, setPreview] = useState<{ url: string; title: string; original?: string } | null>(null);
 
   // ─── Filter state ──────────────────────────────────────────────
@@ -335,7 +335,7 @@ function FulfillmentKanbanView() {
   // Assign-designer dialog cho cột `unassigned` (admin-only). Reuse component
   // bulk-assign existing — single-id list. Reload sau khi gán xong.
   const [assignDesignerOrderId, setAssignDesignerOrderId] = useState<string | null>(null);
-  const handleCopyProductionId = async (order: ProductionOrder) => {
+  const handleCopyProductionId = async (order: ProductionOrderRow) => {
     try {
       await navigator.clipboard.writeText(order.productionId);
       setCopiedOrderId(order._id);
@@ -443,7 +443,7 @@ function FulfillmentKanbanView() {
   const filteredColumns = useMemo<Columns>(() => {
     // Date filter giờ chạy BE (xem `load()`) — không filter date ở FE nữa.
     const q = stripBarcodePrefix(debouncedSearch).toLowerCase();
-    const apply = (arr: ProductionOrder[]) =>
+    const apply = (arr: ProductionOrderRow[]) =>
       arr.filter((o) => {
         if (dayFilter && vnDay(o.inProductionAt as string | undefined) !== dayFilter) return false;
         if (q) {
@@ -488,7 +488,7 @@ function FulfillmentKanbanView() {
   // Giống pattern faceted search ở Designer — count phản ánh kết quả khi áp
   // các filter khác (exclude own facet). Tính client-side vì queue nhỏ.
   const filterOptions = useMemo(() => {
-    const all: ProductionOrder[] = [
+    const all: ProductionOrderRow[] = [
       ...columns.waiting,
       ...columns['in-progress'],
       ...columns.rework,
@@ -498,7 +498,7 @@ function FulfillmentKanbanView() {
     ];
     const facetFor = (
       key: keyof Filters,
-      getter: (o: ProductionOrder) => string | undefined,
+      getter: (o: ProductionOrderRow) => string | undefined,
     ): { value: string; label: string; count: number }[] => {
       const filtered = all.filter((o) => {
         if (key !== 'type' && filters.type && o.type !== filters.type) return false;
@@ -529,7 +529,7 @@ function FulfillmentKanbanView() {
 
   // ─── Transition + bulk ────────────────────────────────────────
   const callTransition = async (
-    order: ProductionOrder,
+    order: ProductionOrderRow,
     action: FulfillmentTransitionAction,
     body?: Pick<FulfillmentTransitionDto, 'target' | 'reason'>,
   ) => {
@@ -595,7 +595,7 @@ function FulfillmentKanbanView() {
       return;
     }
 
-    const order = columns[fromCol].find((o) => o._id === orderId) || ({ _id: orderId } as ProductionOrder);
+    const order = columns[fromCol].find((o) => o._id === orderId) || ({ _id: orderId } as ProductionOrderRow);
     setColumns((prev) => ({
       ...prev,
       [fromCol]: prev[fromCol].filter((o) => o._id !== orderId),
@@ -659,7 +659,7 @@ function FulfillmentKanbanView() {
     lastClickedRef.current = { colKey, id };
   };
 
-  const toggleGroup = (rows: ProductionOrder[], checked: boolean) => {
+  const toggleGroup = (rows: ProductionOrderRow[], checked: boolean) => {
     setSelected((prev) => {
       const next = new Set(prev);
       for (const r of rows) {
@@ -1173,8 +1173,8 @@ function KPI({ label, value, accent }: { label: string; value: number; accent: s
   );
 }
 
-function groupByType(cards: ProductionOrder[]): [string, ProductionOrder[]][] {
-  const map = new Map<string, ProductionOrder[]>();
+function groupByType(cards: ProductionOrderRow[]): [string, ProductionOrderRow[]][] {
+  const map = new Map<string, ProductionOrderRow[]>();
   for (const r of cards) {
     const k = r.type || '— Chưa có type —';
     const arr = map.get(k) || [];
@@ -1192,21 +1192,21 @@ function groupByType(cards: ProductionOrder[]): [string, ProductionOrder[]][] {
 
 interface ColumnProps {
   colKey: ColKey;
-  cards: ProductionOrder[];
+  cards: ProductionOrderRow[];
   myStage: FulfillmentStage;
   activeDragId?: string;
   selected: Set<string>;
   copiedOrderId: string | null;
-  onCopyProductionId: (o: ProductionOrder) => void;
-  onClickProductionId: (o: ProductionOrder) => void;
+  onCopyProductionId: (o: ProductionOrderRow) => void;
+  onClickProductionId: (o: ProductionOrderRow) => void;
   /** Chỉ truyền nếu admin (cột `unassigned`). Card unassigned bind button "Gán Designer". */
-  onAssignDesigner?: (o: ProductionOrder) => void;
-  onStart: (o: ProductionOrder) => void;
-  onComplete: (o: ProductionOrder) => void;
-  onReportError: (o: ProductionOrder) => void;
+  onAssignDesigner?: (o: ProductionOrderRow) => void;
+  onStart: (o: ProductionOrderRow) => void;
+  onComplete: (o: ProductionOrderRow) => void;
+  onReportError: (o: ProductionOrderRow) => void;
   onPreview: (url: string, title: string, original?: string) => void;
   onCheckCard: (id: string, checked: boolean, withShift: boolean) => void;
-  onCheckGroup: (rows: ProductionOrder[], checked: boolean) => void;
+  onCheckGroup: (rows: ProductionOrderRow[], checked: boolean) => void;
 }
 
 function Column({

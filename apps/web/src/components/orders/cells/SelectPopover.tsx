@@ -9,7 +9,7 @@ import { cn } from '@/utils/cn';
  *  đều fit. `code` là giá trị truyền vào onSelect (workshop_config code hoặc
  *  user._id tuỳ caller). */
 export type SelectOption = {
-  _id: string;
+  _id?: string;
   code: string;
   name: string;
   color?: string;
@@ -72,7 +72,7 @@ export function SelectPopover({ options, value, onSelect, triggerClassName, chil
             const isSelected = value === it.code;
             return (
               <button
-                key={it._id}
+                key={it._id ?? it.code}
                 type="button"
                 onClick={() => handleSelect(it.code)}
                 className={cn(

@@ -31,6 +31,9 @@ export default tseslint.config(
     rules: {
       ...react.configs.flat.recommended.rules,
       ...react.configs.flat['jsx-runtime'].rules,
+      // tsconfig web đang dùng JSX classic ("jsx": "react") → React phải có trong scope;
+      // bật lại để unused-imports không auto-xóa `import React`
+      'react/jsx-uses-react': 'error',
 
       'react-hooks/rules-of-hooks': 'error',
       'react-hooks/exhaustive-deps': 'warn',

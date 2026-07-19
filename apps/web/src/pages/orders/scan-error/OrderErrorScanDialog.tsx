@@ -1,6 +1,6 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import { AlertTriangle, Building2, Factory, Layers, ListChecks, MessageSquareWarning, RotateCcw } from 'lucide-react';
-import type { ProductionOrder, WorkshopConfig } from 'shared';
+import type { ProductionOrderRow, WorkshopConfig } from 'shared';
 import {
   FULFILLMENT_STAGE_LABELS,
   FULFILLMENT_STAGE_ORDER,
@@ -30,7 +30,7 @@ const OTHER_CODE = 'other';
 type ReworkTarget = 'none' | 'designer' | 'tool-check' | FulfillmentStage;
 type ErrorSource = 'designer' | 'factory' | 'tool-check';
 
-type ScannedOrder = ProductionOrder & {
+type ScannedOrder = ProductionOrderRow & {
   factory?: { name?: string; shortName?: string };
   machineType?: { name?: string; shortName?: string };
 };
