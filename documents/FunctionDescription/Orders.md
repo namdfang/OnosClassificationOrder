@@ -649,6 +649,38 @@ Render tab tương ứng. User chỉ có 1 trong các quyền → 1 tab; có nhi
 
 `WORKSHOP_COLS` được reuse bởi cả Tab `OrderTableWorkshop` (apps/web/src/pages/orders) **và** Dashboard Tab C `OrderFactoryTab`. Dashboard Tab C thêm 1 cột "Xưởng (đang / gốc)" ở đầu để hiển thị badge transfer.
 
+#### 10.2a Compact grouped columns (`OrderTableWorkshop` + Dashboard `OrdersMiniTable`/`OrderFactoryTab` — giảm scroll ngang)
+
+`WORKSHOP_COLS` gốc có ~20 cột riêng lẻ → các bảng đơn (`/orders/workshop`, Dashboard tab Trạng thái + tab Xưởng) scroll ngang rất sâu. Logic gom nhóm sống trong **`workshopTableConfig.tsx`** (dùng chung, KHÔNG duplicate ở từng trang):
+- `BASE_GROUP_DEFS` + `SUPPORT_GROUP_ORDER` + `HEADLINE_KEYS` + `FIELD_LABELS` — định nghĩa group + field label.
+- `buildColGroups(visibleCols, roleName)` — build group đã resolve (lọc quyền + đổi thứ tự theo role) từ `visibleCols`.
+- `GroupCellContent` — component render nội dung 1 group cell (field xếp CHIỀU DỌC, tự thêm label field không có cột riêng), nhận `renderedByKey` (Map key→ReactNode đã render sẵn) + `extra` optional (chèn node cạnh 1 member, vd Badge combo cạnh `mockupTypeSize`).
+
+3 nơi dùng: `OrderTableWorkshop.tsx` (`/orders/workshop`, có thêm sticky + virtualization), `OrdersMiniTable.tsx` (Dashboard tab Trạng thái — Tab B), `OrderFactoryTab.tsx` (Dashboard tab Xưởng — Tab C, giữ nguyên cột "Xưởng (đang / gốc)" riêng TRƯỚC các group). `ErrorLogTab`/`PrintOrderTable` (không thuộc Dashboard) vẫn dùng layout cột phẳng như cũ.
+
+8 group hiển thị — mỗi group là 1 cột bảng nhưng bên trong xếp field CHIỀU DỌC (nhiều dòng) thay vì mỗi field 1 cột ngang:
+
+| Group | Title header | Member field keys (thứ tự hiển thị trong cell) |
+|---|---|---|
+| `identity` (sticky đầu bảng) | Mã đơn / Ưu tiên | `productionId`, `priority`, `userSku`, `typeFullName` |
+| `product` | Sản phẩm | `mockupTypeSize` |
+| `toolCheck` | Kết quả Tool | `toolResult`, `toolResultNote` |
+| `factory` | Xưởng · Vải · Máy | `factoryMachine`, `fabricType`, `machineNumber` |
+| `print` | Trạng thái in | `printStatus`, `printStatusNote` |
+| `errorFile` | File sửa lỗi | `errorFile`, `errorFileNote` |
+| `productionError` | Lỗi xưởng | `productionError`, `productionErrorSource`, `productionErrorNote` |
+| `assignee` | Người thực hiện | `assignee`, `assigneeNote`, `designerStatus` |
+
+Thứ tự group MẶC ĐỊNH (mọi role trừ Support) đặt `toolCheck` ngay sau `product`, TRƯỚC `factory` (soát kết quả Tool là bước đầu tiên cần thấy). Role Support: `SUPPORT_GROUP_ORDER` gom thêm `errorFile` lên cạnh `toolCheck`, cả 2 đứng TRƯỚC `factory` + `print` (mirror behavior cũ theo field lẻ). Member field nào bị ẩn quyền thì loại khỏi group; group rỗng hết member thì ẩn cả cột.
+
+- **Label cho field không còn cột riêng**: field không thuộc `HEADLINE_KEYS` (`productionId`, `mockupTypeSize`, `factoryMachine` — đã tự mô tả qua tên/ảnh/badge) được thêm 1 label ngắn phía trước value, lấy từ `FIELD_LABELS` (vd `fabricType` → "Vải", `machineNumber` → "Máy", `productionErrorNote` → "Mô tả").
+- **Width cột** tính theo GROUP (`ColGroupDef.width`, cố định px) thay vì cộng dồn width từng field lẻ — tổng width bảng giảm từ ~3100px (20 cột) xuống ~1500-1700px (8 group + checkbox + action).
+- **Sticky đầu bảng**: group `identity` (chứa `productionId`) luôn là group index 0 → giữ class sticky `left-8` cũ; badge "Đã hủy"/"Đang giữ" (`CancelledBadge`/`HeldBadge`) gắn ở đầu cell group này (trước đây gắn ở cột đầu tiên nói chung).
+- **Header hàng tiêu đề loại sản phẩm** (`kind: 'header'` trong `flatItems`) — `position: sticky` trên 1 `<TableCell colSpan={nhiều}>` KHÔNG ghim khi cuộn ngang (browser bug thực tế, đã xác nhận qua test tay). Fix: tách 2 cell — 1 cell sticky `left-8` KHÔNG `colSpan` (ghim đúng) chứa chevron/tên/badge với `overflow-visible` + `shrink-0` mọi item (bỏ `line-clamp-1`) để nội dung TRÀN ra ngoài biên cell thay vì bị cắt, đè lên cell filler colSpan rỗng bên cạnh nhờ z-index của element sticky — filler luôn trống (không có data thật) nên phần tràn không bao giờ che thông tin khác, kể cả khi đã cuộn ngang.
+- **Nền cell sticky PHẢI là màu ĐẶC (không alpha `/NN`)** — sticky cell (checkbox, group `identity`, action, checkbox+tên nhóm ở hàng tiêu đề loại sản phẩm) dùng chính `rowBgClass`/`bg-muted` làm nền để CHE nội dung cuộn phía sau nó. Trước đây dùng màu có alpha (`bg-primary/10`, `dark:bg-primary/20`, `bg-muted/40`…) → khi cuộn ngang, chữ của cột phía sau xuyên qua lớp nền trong suốt, đè lên cột đang ghim (rõ nhất ở group `identity` khi row đang được TICK CHỌN). Đã đổi `rowBgClass` (`ProductRow`) sang màu đặc: `bg-indigo-50`/`dark:bg-indigo-950` (selected), `bg-amber-50`/`dark:bg-amber-950` (heaviest combo), `bg-sky-100`/`dark:bg-sky-950` (no-tool); sticky cell của hàng tiêu đề loại sản phẩm đổi `bg-muted/40` → `bg-muted` (đặc).
+- **Badge combo "×N"** vẫn gắn cạnh giá trị `mockupTypeSize` bên trong group `product`.
+- **Virtualizer**: `estimateSize` row thường tăng từ 68px → 130px vì field giờ xếp dọc nhiều dòng trong 1 group (group `identity` có tới 4 dòng); `measureElement` vẫn tự đo lại chính xác sau render.
+
 > **Trang Fulfillment "In"** dùng bảng **phẳng riêng** `PrintOrderTable` (KHÔNG group sản phẩm), KHÔNG reuse `OrderTableWorkshop`. Lấy data từ `GET /v1/orders` (`sort=grouped`). Xem `FulfillmentWorkflow.md §4.5`.
 
 `WorkshopOrderRow` có thêm field optional `currentFulfillmentStage` + `fulfillmentStages` để consumer (PrintOrderTable) quyết định hiển thị action theo trạng thái stage.

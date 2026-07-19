@@ -16,7 +16,13 @@ import { CancelledBadge } from '@/components/orders/CancelledBadge';
 import { OrderFilterBar, type OrderFilterFacet } from '@/components/orders/OrderFilterBar';
 import { OrderLogTimelineDialog } from '@/components/orders/OrderLogTimelineDialog';
 import { OrderRowActionsMenu } from '@/components/orders/OrderRowActionsMenu';
-import { WORKSHOP_COLS, type WorkshopOrderRow, type WorkshopRenderCtx } from '@/components/orders/workshopTableConfig';
+import {
+  buildColGroups,
+  GroupCellContent,
+  WORKSHOP_COLS,
+  type WorkshopOrderRow,
+  type WorkshopRenderCtx,
+} from '@/components/orders/workshopTableConfig';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
@@ -101,7 +107,7 @@ function parseFilterModeFromURL(sp: URLSearchParams): FilterMode {
 }
 
 export default function OrderFactoryTab() {
-  const { canViewField, canEditField, has, isAdmin } = usePermission();
+  const { canViewField, canEditField, has, isAdmin, roleName } = usePermission();
   const canTransfer = isAdmin || has('order.transfer');
   const [searchParams, setSearchParams] = useSearchParams();
 
@@ -347,6 +353,9 @@ export default function OrderFactoryTab() {
   }, [fetchRows]);
 
   const visibleCols = useMemo(() => WORKSHOP_COLS.filter((c) => !c.perm || canViewField(c.key)), [canViewField]);
+  // Gom cột theo chủ đề nghiệp vụ (giống OrderTableWorkshop) để giảm scroll
+  // ngang — xem `buildColGroups`/`GroupCellContent` trong workshopTableConfig.tsx.
+  const colGroups = useMemo(() => buildColGroups(visibleCols, roleName), [visibleCols, roleName]);
 
   /** Aggregate "Tổng" view metrics — sum print pipeline + tool counts across
    *  factory cards; distinct counts (sản phẩm/vải/phòng/máy) lấy thẳng từ
@@ -843,9 +852,9 @@ export default function OrderFactoryTab() {
                     </TableHead>
                   )}
                   <TableHead className="min-w-[150px]">Xưởng (đang / gốc)</TableHead>
-                  {visibleCols.map((c) => (
-                    <TableHead key={c.key} className={cn('whitespace-nowrap text-xs', c.width)}>
-                      {c.label}
+                  {colGroups.map((g) => (
+                    <TableHead key={g.key} className="whitespace-nowrap text-xs" style={{ minWidth: g.width }}>
+                      {g.title}
                     </TableHead>
                   ))}
                   <TableHead className="w-20 sticky right-0 z-20 bg-card"></TableHead>
@@ -854,7 +863,7 @@ export default function OrderFactoryTab() {
               <TableBody>
                 {rowsLoading && rows.length === 0 && (
                   <TableRow>
-                    <TableCell colSpan={visibleCols.length + 3} className="text-center py-8">
+                    <TableCell colSpan={colGroups.length + 3} className="text-center py-8">
                       <Spinner size={18} className="text-muted-foreground" />
                     </TableCell>
                   </TableRow>
@@ -862,7 +871,7 @@ export default function OrderFactoryTab() {
                 {!rowsLoading && rows.length === 0 && (
                   <TableRow>
                     <TableCell
-                      colSpan={visibleCols.length + 3}
+                      colSpan={colGroups.length + 3}
                       className="text-center py-8 text-sm text-muted-foreground"
                     >
                       Không có đơn nào phù hợp
@@ -873,6 +882,7 @@ export default function OrderFactoryTab() {
                   const isTransferred =
                     !!row.originalFactoryId && !!row.factoryId && row.originalFactoryId !== row.factoryId;
                   const originalMeta = overview?.factories.find((f) => f.factoryId === row.originalFactoryId);
+                  const renderedByKey = new Map(visibleCols.map((c) => [c.key, c.render(row, ctx)]));
                   return (
                     <TableRow
                       key={row._id}
@@ -917,16 +927,14 @@ export default function OrderFactoryTab() {
                           )}
                         </div>
                       </TableCell>
-                      {visibleCols.map((c) => (
-                        <TableCell key={c.key} className="py-2">
-                          {c.key === 'productionId' && isCancelled(row) ? (
-                            <div className="flex items-center gap-1.5">
+                      {colGroups.map((g, gi) => (
+                        <TableCell key={g.key} className="py-2 align-top">
+                          {gi === 0 && isCancelled(row) && (
+                            <div className="mb-1">
                               <CancelledBadge reason={row.cancelReason} />
-                              <div className="min-w-0 flex-1">{c.render(row, ctx)}</div>
                             </div>
-                          ) : (
-                            c.render(row, ctx)
                           )}
+                          <GroupCellContent group={g} renderedByKey={renderedByKey} />
                         </TableCell>
                       ))}
                       {/* Thao tác — pin cố định BÊN PHẢI */}

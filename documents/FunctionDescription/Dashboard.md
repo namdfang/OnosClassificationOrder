@@ -45,7 +45,7 @@ Thống kê + drill-down theo workshop fields:
 - 4–6 **KPI card** đổi theo role (xem mục 5)
 - **Filter chip bar** + date range
 - **Grid breakdown card** đếm đơn theo từng workshop category (printStatus, toolResultNote, assignee, ...) + factory + machineType
-- **Mini order list** (20 row/page) lọc theo filter hiện tại, có inline edit theo permission
+- **Mini order list** (20 row/page) lọc theo filter hiện tại, có inline edit theo permission — **compact grouped columns** (8 group thay vì ~20 cột lẻ, field xếp chiều dọc trong 1 cell), xem `Orders.md §10.2a`
 
 Data từ `GET /v1/orders/status-overview` + `GET /v1/orders` (list).
 
@@ -54,7 +54,7 @@ Dashboard chuyển xưởng + xuất Excel + filter chiều sâu:
 - **3 Factory cards** (ML / TN / US) — mỗi card: tổng đơn đang sản xuất tại đó, pure, nhận từ xưởng khác, đã chuyển đi, **5 mini stats** (sản phẩm / loại vải / **phòng** = distinct machineTypeId / **loại máy** = distinct workshop_config.machine code / có tool), **khối Design 4 số** (được gán / chưa gán / đã xong / chưa xong — theo `designerStatus`, mỗi cặp cộng lại = total)
 - **Flow visualization** — danh sách luồng `(Từ xưởng → Đến xưởng, count, totalQuantity)`
 - **Filter chip bar** factory `Tất cả / Đang ở ML / Đang ở TN / Đang ở US / Chưa xác định xưởng (count)` + **7 select filter** (Sản phẩm / Loại vải / **Phòng** = machineTypeId / **Máy** = workshop_config.machine code / Kết quả Tool / **Note Tool** = `toolResultNote` / **Khách hàng** = `userSku`) auto-scope theo factory chip đã chọn. Chip "Chưa xác định xưởng" → list endpoint nhận `unmapped=true` → `{$or: [factoryId null, $exists false]}`. Overview trả về `totals.unmapped` đếm riêng (`countDocuments` ngoài pipeline `matchMapped`). 7 select filter dùng **faceted-search pattern**: BE nhận đủ facet, mỗi dropdown aggregate bằng `scopeMatch + (facetFilters trừ field hiện tại)` qua helper `buildFacetMatch(excludeKey)` — count phản ánh đúng cross-filter. Options trả trong `availableFilters` (thêm `toolResultNotes` + `users` — userSku giới hạn top 300 theo số đơn). Các facet **scope luôn thẻ xưởng** (flow/stats/breakdown/unmapped đều dùng `cardMatch = matchMapped + facetFilters`) → vd. lọc theo khách hàng thì mỗi thẻ xưởng chỉ đếm đơn của khách đó; đồng thời lọc **bảng đơn chi tiết** (`getOrders`) + thu hẹp count các dropdown khác (cross-facet `buildFacetMatch`). Riêng chip factory/printStage/hasError/unmapped chỉ áp cho bảng chi tiết + `availableFilters`, KHÔNG đổi thẻ xưởng (ma trận flow toàn cục). URL prefix `f` (`ftoolnote`, `fuser`).
-- **Bảng đơn 20 cột** (reuse `WORKSHOP_COLS`) — cell inline edit theo permission
+- **Bảng đơn** — cột "Xưởng (đang / gốc)" riêng + **compact grouped columns** (8 group từ `WORKSHOP_COLS`, xem `Orders.md §10.2a`) — cell inline edit theo permission
 - **Bulk transfer** — checkbox row → toolbar `Send` mở Transfer dialog (chọn xưởng đích + lý do, tối đa 200 ký tự)
 - **Xuất Excel** — bypass phân trang, gom toàn bộ đơn theo filter hiện tại + overview thành workbook .xlsx multi-sheet
 - Date filters mặc định **= hôm nay** (`createdFrom = createdTo = todayISO()`) mỗi lần mount. Tên giữ là `createdFrom/createdTo` nhưng filter theo `orderAt` (ngày khách lên đơn) — xem `Orders.md §7.0`.
@@ -375,12 +375,7 @@ Default range: 7 ngày gần nhất (khớp với BE visibility cho Designer/Ful
 
 ### 8.6 OrdersMiniTable (dưới breakdown)
 
-Mini list với 10–11 cột cố định:
-- Production ID · User SKU · Size · Mockup (thumb) · Type · Nhà máy · Phòng
-- Trạng thái in (nếu có `printStatus.view`)
-- Note Tool (nếu có `toolResultNote.view`)
-- Người TH (nếu có `assignee.view`)
-- Cột action (History dialog)
+Bảng dùng **compact grouped columns** — 8 group build từ `WORKSHOP_COLS` (lọc theo `canViewField` per field) qua `buildColGroups()` (`workshopTableConfig.tsx`, dùng chung với `OrderTableWorkshop`/`OrderFactoryTab` — xem `Orders.md §10.2a`), mỗi group render qua `<GroupCellContent>` (field xếp chiều dọc trong 1 cell, field không có cột riêng có label ngắn phía trước) + 1 cột action cuối (sticky right, History dialog). Field bị ẩn quyền tự loại khỏi group; group rỗng hết member tự ẩn cả cột.
 
 Inline edit dùng `ColorBadgeSelectCell` / `IconSelectCell` từ Phase 4 — vẫn theo `canEditField` permission.
 
@@ -497,7 +492,7 @@ Cả 3 đều:
 | Flow visualization | Button rows | `[fromShortName] → [toShortName]` + `count + totalQuantity`. Click → filter `{kind:'in', factoryId=to}`. |
 | Filter chip bar | `FilterChip` (`Tất cả` + 1 chip/factory) + 4 `SelectFilter` | Selects auto-reset khi đổi factory chip để tránh combo zero-result. |
 | Bulk toolbar | Toolbar sticky khi `selected.size > 0` | Chỉ render khi `canTransfer = isAdmin \|\| has('order.transfer')`. Nút primary swap theo `selectedAllUnmapped`: tất cả unmapped → **"Gán xưởng"** (mở `AssignFactoryDialog`); ngược lại → **"Chuyển xưởng"**. Hint text giải thích quy tắc. |
-| Table | `Table` với 1 cột "Xưởng (đang / gốc)" + `WORKSHOP_COLS` filtered theo `canViewField` + cột History | Row có `originalFactoryId !== factoryId` hiện badge `warning` + `← Gốc: shortName`. Row chưa map: nếu `canTransfer` → render button `+ Gán xưởng` (mở dialog single mode), ngược lại → badge "Chưa map". |
+| Table | `Table` với 1 cột "Xưởng (đang / gốc)" + **compact grouped columns** (8 group từ `WORKSHOP_COLS` filtered theo `canViewField`, qua `buildColGroups()`/`<GroupCellContent>` — `Orders.md §10.2a`) + cột History | Row có `originalFactoryId !== factoryId` hiện badge `warning` + `← Gốc: shortName`. Row chưa map: nếu `canTransfer` → render button `+ Gán xưởng` (mở dialog single mode), ngược lại → badge "Chưa map". |
 | `TransferDialog` | `Dialog` | Select target + Input lý do (max 200). Gọi `bulkTransferOrders({ids, targetFactoryId, reason})`. |
 | `AssignFactoryDialog` | `Dialog` | Initial-assign cho đơn UNMAPPED. Single mode: hiển thị `productionId / type / size / qty + link design (target="_blank" → originalUrl)`; Bulk mode: tiêu đề "Gán xưởng cho N đơn đã chọn". Form: 1 select required (Xưởng) + 4 select optional (Loại vải / Phòng / Máy / Tool). Source options: factory ← `overview.factories`, fabric/machine/tool ← `useWorkshopConfigStore` (full catalog), Phòng ← lazy fetch `machineType.getMachineTypes()` lần đầu open. Gọi `bulkAssignOrders()`. |
 

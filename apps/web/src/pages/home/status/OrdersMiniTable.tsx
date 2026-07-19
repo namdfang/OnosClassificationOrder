@@ -10,7 +10,13 @@ import { CancelledBadge } from '@/components/orders/CancelledBadge';
 import { HeldBadge } from '@/components/orders/HeldBadge';
 import { OrderLogTimelineDialog } from '@/components/orders/OrderLogTimelineDialog';
 import { OrderRowActionsMenu } from '@/components/orders/OrderRowActionsMenu';
-import { WORKSHOP_COLS, type WorkshopOrderRow, type WorkshopRenderCtx } from '@/components/orders/workshopTableConfig';
+import {
+  buildColGroups,
+  GroupCellContent,
+  WORKSHOP_COLS,
+  type WorkshopOrderRow,
+  type WorkshopRenderCtx,
+} from '@/components/orders/workshopTableConfig';
 import { Button } from '@/components/ui/button';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { TooltipProvider } from '@/components/ui/tooltip';
@@ -30,7 +36,7 @@ interface Props {
 }
 
 export function OrdersMiniTable({ queryString }: Props) {
-  const { canViewField, canEditField } = usePermission();
+  const { canViewField, canEditField, roleName } = usePermission();
   const [rows, setRows] = useState<WorkshopOrderRow[]>([]);
   const [total, setTotal] = useState(0);
   const [loading, setLoading] = useState(false);
@@ -71,6 +77,9 @@ export function OrdersMiniTable({ queryString }: Props) {
   const openPreview = (url: string, title: string, originalUrl?: string) => setPreview({ url, originalUrl, title });
 
   const visibleCols = useMemo(() => WORKSHOP_COLS.filter((c) => !c.perm || canViewField(c.key)), [canViewField]);
+  // Gom cột theo chủ đề nghiệp vụ (giống OrderTableWorkshop) để giảm scroll
+  // ngang — xem `buildColGroups`/`GroupCellContent` trong workshopTableConfig.tsx.
+  const colGroups = useMemo(() => buildColGroups(visibleCols, roleName), [visibleCols, roleName]);
 
   const ctx: WorkshopRenderCtx = { canEditField, patchRow, openPreview };
   const isNoTool = useIsNoTool();
@@ -142,9 +151,9 @@ export function OrdersMiniTable({ queryString }: Props) {
             <Table>
               <TableHeader>
                 <TableRow>
-                  {visibleCols.map((c) => (
-                    <TableHead key={c.key} className={cn('whitespace-nowrap text-xs', c.width)}>
-                      {c.label}
+                  {colGroups.map((g) => (
+                    <TableHead key={g.key} className="whitespace-nowrap text-xs" style={{ minWidth: g.width }}>
+                      {g.title}
                     </TableHead>
                   ))}
                   <TableHead className="w-20 sticky right-0 z-20 bg-card"></TableHead>
@@ -153,7 +162,7 @@ export function OrdersMiniTable({ queryString }: Props) {
               <TableBody>
                 {loading && rows.length === 0 && (
                   <TableRow>
-                    <TableCell colSpan={visibleCols.length + 1} className="text-center py-8">
+                    <TableCell colSpan={colGroups.length + 1} className="text-center py-8">
                       <Spinner size={18} className="text-muted-foreground" />
                     </TableCell>
                   </TableRow>
@@ -161,53 +170,52 @@ export function OrdersMiniTable({ queryString }: Props) {
                 {!loading && rows.length === 0 && (
                   <TableRow>
                     <TableCell
-                      colSpan={visibleCols.length + 1}
+                      colSpan={colGroups.length + 1}
                       className="text-center py-8 text-sm text-muted-foreground"
                     >
                       Không có đơn nào phù hợp filter
                     </TableCell>
                   </TableRow>
                 )}
-                {sortedRows.map((row) => (
-                  <TableRow
-                    key={row._id}
-                    className={cn(
-                      isNoTool(row.toolResult) && NO_TOOL_ROW_CLASS,
-                      (isCancelled(row) || isHeld(row)) && 'opacity-60',
-                    )}
-                  >
-                    {visibleCols.map((c) => (
-                      <TableCell key={c.key} className="py-2">
-                        {c.key === 'productionId' && (isCancelled(row) || isHeld(row)) ? (
-                          <div className="flex items-center gap-1.5">
-                            {isCancelled(row) ? (
-                              <CancelledBadge reason={row.cancelReason} />
-                            ) : (
-                              <HeldBadge reason={row.holdReason} />
-                            )}
-                            <div className="min-w-0 flex-1">{c.render(row, ctx)}</div>
-                          </div>
-                        ) : (
-                          c.render(row, ctx)
-                        )}
+                {sortedRows.map((row) => {
+                  const renderedByKey = new Map(visibleCols.map((c) => [c.key, c.render(row, ctx)]));
+                  const dim = isCancelled(row) || isHeld(row);
+                  return (
+                    <TableRow
+                      key={row._id}
+                      className={cn(isNoTool(row.toolResult) && NO_TOOL_ROW_CLASS, dim && 'opacity-60')}
+                    >
+                      {colGroups.map((g, gi) => (
+                        <TableCell key={g.key} className="py-2 align-top">
+                          {gi === 0 && dim && (
+                            <div className="mb-1">
+                              {isCancelled(row) ? (
+                                <CancelledBadge reason={row.cancelReason} />
+                              ) : (
+                                <HeldBadge reason={row.holdReason} />
+                              )}
+                            </div>
+                          )}
+                          <GroupCellContent group={g} renderedByKey={renderedByKey} />
+                        </TableCell>
+                      ))}
+                      {/* Thao tác — pin cố định BÊN PHẢI */}
+                      <TableCell className="py-2 sticky right-0 z-10 bg-card shadow-[-1px_0_0_0_var(--border)]">
+                        <div className="flex items-center justify-end gap-0.5">
+                          <Button
+                            variant="ghost"
+                            size="icon"
+                            title="Lịch sử"
+                            onClick={() => setHistory({ id: row._id, productionId: row.productionId })}
+                          >
+                            <History size={13} className="text-muted-foreground" />
+                          </Button>
+                          <OrderRowActionsMenu order={row} onChanged={() => fetchData()} />
+                        </div>
                       </TableCell>
-                    ))}
-                    {/* Thao tác — pin cố định BÊN PHẢI */}
-                    <TableCell className="py-2 sticky right-0 z-10 bg-card shadow-[-1px_0_0_0_var(--border)]">
-                      <div className="flex items-center justify-end gap-0.5">
-                        <Button
-                          variant="ghost"
-                          size="icon"
-                          title="Lịch sử"
-                          onClick={() => setHistory({ id: row._id, productionId: row.productionId })}
-                        >
-                          <History size={13} className="text-muted-foreground" />
-                        </Button>
-                        <OrderRowActionsMenu order={row} onChanged={() => fetchData()} />
-                      </div>
-                    </TableCell>
-                  </TableRow>
-                ))}
+                    </TableRow>
+                  );
+                })}
               </TableBody>
             </Table>
           </div>

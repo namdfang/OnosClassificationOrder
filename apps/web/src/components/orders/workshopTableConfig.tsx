@@ -636,6 +636,141 @@ export const WORKSHOP_COLS: WorkshopColMeta[] = [
   },
 ];
 
+// ─── Compact grouped columns (dùng chung: OrderTableWorkshop, OrdersMiniTable,
+// OrderFactoryTab) ───────────────────────────────────────────────────────────
+// `WORKSHOP_COLS` gốc có ~20 cột riêng lẻ → bảng đơn scroll ngang rất sâu. Gom
+// các field liên quan theo chủ đề nghiệp vụ thành ít group hơn — mỗi group là
+// 1 cột bảng nhưng bên trong xếp field CHIỀU DỌC (nhiều dòng) thay vì mỗi
+// field 1 cột ngang. Field không có cột riêng nữa → thêm label ngắn phía
+// trước (xem FIELD_LABELS). Field "headline" của group (đã tự mô tả qua icon/
+// ảnh/badge tên) thì bỏ qua label — xem HEADLINE_KEYS.
+export type ColGroupKey =
+  | 'identity'
+  | 'product'
+  | 'factory'
+  | 'print'
+  | 'toolCheck'
+  | 'errorFile'
+  | 'productionError'
+  | 'assignee';
+
+export interface ColGroupDef {
+  key: ColGroupKey;
+  title: string;
+  width: number;
+  memberKeys: string[];
+}
+
+/** Group đã resolve members (member key nào bị ẩn theo quyền thì loại sẵn). */
+export type ResolvedColGroup = ColGroupDef & { members: WorkshopColMeta[] };
+
+export const BASE_GROUP_DEFS: ColGroupDef[] = [
+  {
+    key: 'identity',
+    title: 'Mã đơn / Ưu tiên',
+    width: 230,
+    memberKeys: ['productionId', 'priority', 'userSku', 'typeFullName'],
+  },
+  { key: 'product', title: 'Sản phẩm', width: 300, memberKeys: ['mockupTypeSize'] },
+  { key: 'toolCheck', title: 'Kết quả Tool', width: 170, memberKeys: ['toolResult', 'toolResultNote'] },
+  { key: 'factory', title: 'Xưởng · Vải · Máy', width: 190, memberKeys: ['factoryMachine', 'fabricType', 'machineNumber'] },
+  { key: 'print', title: 'Trạng thái in', width: 150, memberKeys: ['printStatus', 'printStatusNote'] },
+  { key: 'errorFile', title: 'File sửa lỗi', width: 180, memberKeys: ['errorFile', 'errorFileNote'] },
+  {
+    key: 'productionError',
+    title: 'Lỗi xưởng',
+    width: 210,
+    memberKeys: ['productionError', 'productionErrorSource', 'productionErrorNote'],
+  },
+  { key: 'assignee', title: 'Người thực hiện', width: 190, memberKeys: ['assignee', 'assigneeNote', 'designerStatus'] },
+];
+
+// Support role: soát tool → in, nên muốn thấy "Kết quả Tool" + "File sửa lỗi"
+// TRƯỚC "Trạng thái in" (mirror thứ tự nghiệp vụ cũ theo field lẻ).
+export const SUPPORT_GROUP_ORDER: ColGroupKey[] = [
+  'identity',
+  'product',
+  'toolCheck',
+  'errorFile',
+  'factory',
+  'print',
+  'productionError',
+  'assignee',
+];
+
+// Field đã tự mô tả qua icon/ảnh/badge tên riêng → không cần thêm label.
+export const HEADLINE_KEYS = new Set(['productionId', 'mockupTypeSize', 'factoryMachine']);
+
+// Label ngắn cho field KHÔNG còn cột riêng — hiển thị trước value trong group.
+export const FIELD_LABELS: Record<string, string> = {
+  priority: 'Ưu tiên',
+  userSku: 'SKU',
+  typeFullName: 'Loại SP',
+  fabricType: 'Vải',
+  machineNumber: 'Máy',
+  printStatus: 'Trạng thái',
+  printStatusNote: 'Note',
+  toolResult: 'Kết quả',
+  toolResultNote: 'Note',
+  errorFile: 'File lỗi',
+  errorFileNote: 'Ghi chú',
+  productionError: 'Lỗi xưởng',
+  productionErrorSource: 'Loại lỗi',
+  productionErrorNote: 'Mô tả',
+  assignee: 'Người TH',
+  assigneeNote: 'Note',
+  designerStatus: 'TT Designer',
+};
+
+/**
+ * Build group đã resolve từ danh sách cột ĐÃ LỌC QUYỀN (`visibleCols` — member
+ * key nào không có trong đây bị loại khỏi group; group rỗng hết member thì bỏ
+ * hẳn). `roleName === 'Support'` đổi thứ tự group theo `SUPPORT_GROUP_ORDER`.
+ */
+export function buildColGroups(visibleCols: WorkshopColMeta[], roleName?: string | null): ResolvedColGroup[] {
+  const defs =
+    roleName === 'Support' ? SUPPORT_GROUP_ORDER.map((k) => BASE_GROUP_DEFS.find((g) => g.key === k)!) : BASE_GROUP_DEFS;
+  const byKey = new Map(visibleCols.map((c) => [c.key, c]));
+  return defs
+    .map((g) => ({ ...g, members: g.memberKeys.map((k) => byKey.get(k)).filter((c): c is WorkshopColMeta => !!c) }))
+    .filter((g) => g.members.length > 0);
+}
+
+/**
+ * Nội dung 1 group cell — field xếp CHIỀU DỌC, mỗi field không thuộc
+ * `HEADLINE_KEYS` có label ngắn phía trước. `renderedByKey` = map key→ReactNode
+ * đã render sẵn (caller tự gọi `c.render(row, ctx)` theo field cần, thường
+ * memo theo [row, ctx] để tránh re-render lãng phí). `extra` cho phép chèn
+ * thêm node cạnh 1 member cụ thể (vd Badge "×N" cạnh `mockupTypeSize`).
+ */
+export function GroupCellContent({
+  group,
+  renderedByKey,
+  extra,
+}: {
+  group: ResolvedColGroup;
+  renderedByKey: Map<string, React.ReactNode>;
+  extra?: (memberKey: string) => React.ReactNode;
+}) {
+  return (
+    <div className="flex flex-col gap-1">
+      {group.members.map((c) => (
+        <div key={c.key} className="flex items-center gap-1.5 min-w-0">
+          {!HEADLINE_KEYS.has(c.key) && (
+            <span className="w-[46px] shrink-0 text-[9px] font-medium uppercase tracking-wide text-muted-foreground/70">
+              {FIELD_LABELS[c.key] || c.label}
+            </span>
+          )}
+          <div className="min-w-0 flex-1 flex items-center gap-1">
+            {renderedByKey.get(c.key)}
+            {extra?.(c.key)}
+          </div>
+        </div>
+      ))}
+    </div>
+  );
+}
+
 // ─── Cột riêng cho tài khoản In (PrintOrderTable) ───────────────────────────
 // Khác WORKSHOP_COLS 2 điểm:
 //  1. "Loại vải" gộp vào cột Mockup/Type/Size/Color — giá trị nằm DƯỚI Size.
