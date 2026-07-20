@@ -1277,7 +1277,24 @@ export class OrderService implements OnModuleInit {
     if (dto.type) filter.type = { $in: dto.type.split(',').filter(Boolean) };
     if (dto.userSku) filter.userSku = { $in: dto.userSku.split(',').filter(Boolean) };
     if (dto.fabricType) filter.fabricType = { $in: dto.fabricType.split(',').filter(Boolean) };
-    if (dto.toolResult) filter.toolResult = { $in: dto.toolResult.split(',').filter(Boolean) };
+    if (dto.toolResult) {
+      // Token đặc biệt __none__ ↔ "Chưa xác định" (chưa soát toolResult) — mirror
+      // logic toolResultNote/assignee ở trên.
+      const codes = dto.toolResult.split(',').filter(Boolean);
+      const hasNone = codes.includes('__none__');
+      const real = codes.filter((c) => c !== '__none__');
+      if (hasNone && real.length === 0) {
+        filter.toolResult = { $in: [null, ''] };
+      } else if (hasNone) {
+        filter.$or = [
+          ...(Array.isArray(filter.$or) ? (filter.$or as unknown[]) : []),
+          { toolResult: { $in: [null, ''] } },
+          { toolResult: { $in: real } },
+        ];
+      } else {
+        filter.toolResult = { $in: real };
+      }
+    }
     if (dto.machineNumber) {
       filter.machineNumber = { $in: dto.machineNumber.split(',').filter(Boolean) };
     }
@@ -3712,6 +3729,24 @@ export class OrderService implements OnModuleInit {
       return this.orderModel.countDocuments(noneMatch);
     })();
 
+    // Count "Chưa xác định" cho toolResult: đơn chưa soát tool (field missing /
+    // null / empty string) — mirror toolResultNoteNoneCount ở trên.
+    const toolResultNoneCount = await (async () => {
+      const sanitizedDto = { ...dto, toolResult: undefined } as GetProductionOrdersDto;
+      const baseFilter = this.buildOrderListFilter(sanitizedDto, roleName, assigneeCode);
+      const noneClauses = [{ toolResult: { $exists: false } }, { toolResult: null }, { toolResult: '' }];
+      let noneMatch: Record<string, unknown>;
+      if (Array.isArray(baseFilter.$or)) {
+        const { $or: existingOr, ...rest } = baseFilter as Record<string, unknown> & {
+          $or: unknown[];
+        };
+        noneMatch = { ...rest, ...excludeCancelled, $and: [{ $or: existingOr }, { $or: noneClauses }] };
+      } else {
+        noneMatch = { ...baseFilter, ...excludeCancelled, $or: noneClauses };
+      }
+      return this.orderModel.countDocuments(noneMatch);
+    })();
+
     const nameMap = async (category: WorkshopConfigCategory) =>
       new Map<string, string>((await this.workshopConfigRepository.findAll({ category })).map((d) => [d.code, d.name]));
     const [
@@ -3858,7 +3893,14 @@ export class OrderService implements OnModuleInit {
         productionError: productionErrorRows.map(toOption(productionErrorMap)),
         fabricType: fabricTypeRows.map(toOption(fabricTypeMap)),
         machineNumber: machineNumberRows.map(toOption(machineNumberMap)),
-        toolResult: toolResultRows.map(toOption(toolResultMap)),
+        toolResult: [
+          // Prepend "Chưa xác định" option — mirror toolResultNote. Skip nếu
+          // count=0 để facet không lủng lẳng option rỗng.
+          ...(toolResultNoneCount > 0
+            ? [{ value: '__none__', label: 'Chưa xác định', count: toolResultNoneCount }]
+            : []),
+          ...toolResultRows.map(toOption(toolResultMap)),
+        ],
         errorFile: errorFileRows.map(toOption(errorFileMap)),
         // Option `unassigned` đơn được THAY bằng 2 option tách tool (N+M = KPI
         // "Chưa gán"). Nếu cả 2 = 0 (mọi đơn chưa gán đều 'ok') → không hiện.
@@ -4920,8 +4962,12 @@ export class OrderService implements OnModuleInit {
    * được set qua `POST /design-review/result`). Count riêng — chạy song song
    * với `findOneAndUpdate` (`Promise.all`), không ảnh hưởng tính atomic của
    * claim.
+   *
+   * `dto.from`/`dto.to` (YYYY-MM-DD, optional) lọc theo `inProductionAt` (VN
+   * tz) — cùng semantics `createdFrom`/`createdTo` ở danh sách đơn (Orders.md
+   * §7.0b). Không truyền → không giới hạn ngày (hành vi cũ).
    */
-  async getNextDesignReviewOrder(): Promise<{
+  async getNextDesignReviewOrder(dto?: { from?: string; to?: string }): Promise<{
     success: true;
     data: DesignReviewOrder | null;
     remaining: number;
@@ -4929,13 +4975,19 @@ export class OrderService implements OnModuleInit {
     const now = new Date();
     const leaseExpiresBefore = new Date(now.getTime() - DESIGN_REVIEW_CLAIM_LEASE_MS);
 
-    const baseFilter = {
+    const baseFilter: Record<string, unknown> = {
       deletedAt: { $exists: false },
       cancelledAt: { $exists: false },
       heldAt: { $exists: false },
       toolResult: { $in: [null, ''] },
       designerStatus: DesignerStatus.Unassigned,
     };
+    if (dto?.from || dto?.to) {
+      const range: Record<string, Date> = {};
+      if (dto.from) range.$gte = vnDayStart(dto.from);
+      if (dto.to) range.$lte = vnDayEnd(dto.to);
+      baseFilter.inProductionAt = range;
+    }
 
     const [doc, remaining] = await Promise.all([
       this.orderModel

@@ -35,6 +35,7 @@ import {
   GetLifecycleOverviewDto,
   GetLifecycleOverviewResDto,
   GetLifecycleTrackResDto,
+  GetNextDesignReviewOrderDto,
   GetNextDesignReviewOrderResDto,
   GetOrderByProductionIdResDto,
   GetOrderDashboardDto,
@@ -792,20 +793,30 @@ export class OrderController {
   // Public — không cần JWT, để tool ngoài duyệt thiết kế gọi trực tiếp. Trả về
   // 1 đơn ở bước đầu tiên (chưa soát tool + chưa gán designer) mỗi lần gọi,
   // ưu tiên cao trước. Không định danh caller — log ip/userAgent làm audit
-  // trace duy nhất (giống import-from-onospod/cron). Xem Orders.md §18.
+  // trace duy nhất (giống import-from-onospod/cron). Optional `from`/`to`
+  // (YYYY-MM-DD) lọc theo `inProductionAt` — cùng semantics `createdFrom`/
+  // `createdTo` ở danh sách đơn. Xem Orders.md §18.
   @Get('design-review/next')
   @Auth([], [], { public: true })
   @ApiOperation({ summary: '[Public] Lấy 1 đơn ở bước đầu tiên cho tool duyệt thiết kế' })
   @HttpCode(HttpStatus.OK)
   @ApiOkResponse({ type: GetNextDesignReviewOrderResDto })
   async getNextDesignReviewOrder(
+    @Query() dto: GetNextDesignReviewOrderDto,
     @ClientIp() ip: string,
     @UserAgent() userAgent: string,
   ): Promise<GetNextDesignReviewOrderResDto> {
     this.logger.info({
-      message: JSON.stringify({ method: 'GET', url: '/orders/design-review/next', ip, userAgent }),
+      message: JSON.stringify({
+        method: 'GET',
+        url: '/orders/design-review/next',
+        ip,
+        userAgent,
+        from: dto.from,
+        to: dto.to,
+      }),
     });
-    return this.orderService.getNextDesignReviewOrder() as Promise<GetNextDesignReviewOrderResDto>;
+    return this.orderService.getNextDesignReviewOrder(dto) as Promise<GetNextDesignReviewOrderResDto>;
   }
 
   // Public — không cần JWT, để tool ngoài duyệt thiết kế lưu Kết quả Tool

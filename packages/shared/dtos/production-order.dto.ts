@@ -877,6 +877,15 @@ export const DesignReviewAttributesZod = z.object({
 });
 export type DesignReviewAttributes = z.infer<typeof DesignReviewAttributesZod>;
 
+// Filter optional theo khoảng ngày `inProductionAt` (VN tz) — cùng semantics
+// với `createdFrom`/`createdTo` ở danh sách đơn (Orders.md §7.0b), chỉ khác
+// tên field (`from`/`to`) vì đây là public API riêng cho tool ngoài.
+export const GetNextDesignReviewOrderZod = z.object({
+  from: z.string().optional(),
+  to: z.string().optional(),
+});
+export class GetNextDesignReviewOrderDto extends createZodDto(extendApi(GetNextDesignReviewOrderZod)) {}
+
 export const DesignReviewOrderZod = z.object({
   /** Mã đơn nội bộ — khóa duy nhất, luôn có, dùng để gọi lại các API khác (vd cập nhật toolResultNote). */
   productionId: z.string(),
