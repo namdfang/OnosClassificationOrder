@@ -6,6 +6,7 @@ import { RepositoryRemote } from '@/services';
 
 import { ImagePreviewDialog } from '@/components/common/ImagePreviewDialog';
 import { Spinner } from '@/components/common/Spinner';
+import { AssignFactoryDialog } from '@/components/orders/AssignFactoryDialog';
 import { OrderLogTimelineDialog } from '@/components/orders/OrderLogTimelineDialog';
 import {
   buildColGroups,
@@ -18,11 +19,8 @@ import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 
 import { handleAxiosError } from '@/utils';
-import { cn } from '@/utils/cn';
 
 import { usePermission } from '@/hooks/usePermission';
-
-import { AssignFactoryDialog, type AssignFactoryOption } from './OrderFactoryTab';
 
 /** Cap số đơn fetch cho 1 lần drill — đủ cho mọi con số theo ngày thực tế. */
 const FETCH_LIMIT = 500;
@@ -66,25 +64,13 @@ export function DesignerDrillPanel({ target, onClose }: Props) {
   const [expanded, setExpanded] = useState<Set<string>>(new Set());
   const [preview, setPreview] = useState<{ url?: string; originalUrl?: string; title?: string } | null>(null);
   const [historyTarget, setHistoryTarget] = useState<{ id: string; productionId: string } | null>(null);
-  // Gán xưởng cho đơn CHƯA map (nhóm "Chưa map") — tái dùng AssignFactoryDialog.
+  // Gán xưởng cho đơn CHƯA map (nhóm "Chưa map") — tái dùng AssignFactoryDialog
+  // (tự fetch danh sách xưởng, xem `components/orders/AssignFactoryDialog.tsx`).
   const [assignDialog, setAssignDialog] = useState<{ ids: string[]; single?: WorkshopOrderRow } | null>(null);
-  const [factories, setFactories] = useState<AssignFactoryOption[]>([]);
   // Bump sau khi gán xưởng xong → refetch panel.
   const [reloadKey, setReloadKey] = useState(0);
   const seqRef = useRef(0);
   const rootRef = useRef<HTMLDivElement>(null);
-
-  // Lazy load danh sách xưởng lần đầu mở dialog gán.
-  useEffect(() => {
-    if (!assignDialog || factories.length > 0) return;
-    RepositoryRemote.factory
-      .getFactories()
-      .then((res) => {
-        const data = (res.data?.data || []) as Array<{ _id: string; name: string; shortName?: string }>;
-        setFactories(data.map((f) => ({ factoryId: f._id, factoryName: f.name, factoryShortName: f.shortName })));
-      })
-      .catch((err) => handleAxiosError(err));
-  }, [assignDialog, factories.length]);
 
   useEffect(() => {
     if (!target) return;
@@ -303,7 +289,6 @@ export function DesignerDrillPanel({ target, onClose }: Props) {
         onOpenChange={(o) => !o && setAssignDialog(null)}
         ids={assignDialog?.ids || []}
         single={assignDialog?.single}
-        factories={factories}
         onSuccess={() => {
           setAssignDialog(null);
           setReloadKey((k) => k + 1);
