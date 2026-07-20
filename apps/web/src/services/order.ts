@@ -26,6 +26,10 @@ const getOrders = (query: string = '') => {
   return callApi(`/${CONFIG.API_VERSION}/orders${query}`, 'get');
 };
 
+const getOrdersByIds = (query: string = '') => {
+  return callApi(`/${CONFIG.API_VERSION}/orders/by-ids${query}`, 'get');
+};
+
 const importOrders = (data: ImportProductionOrdersDto) => {
   return callApi(`/${CONFIG.API_VERSION}/orders/import`, 'post', data);
 };
@@ -192,6 +196,7 @@ const updateOrderDesign = (id: string, data: UpdateOrderDesignDto) => {
 
 export const order = {
   getOrders,
+  getOrdersByIds,
   importOrders,
   importRework,
   importFromOnosPod,

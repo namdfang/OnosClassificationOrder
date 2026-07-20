@@ -191,6 +191,19 @@ export class OrderController {
     );
   }
 
+  @Get('by-ids')
+  @Auth(ORDER_VIEW_ROLES)
+  @ApiOperation({ summary: 'Lookup đơn theo danh sách _id (không scoping role) — drill-down dashboard' })
+  @HttpCode(HttpStatus.OK)
+  @ApiOkResponse({ type: GetProductionOrdersResDto })
+  async getOrdersByIds(@Query() dto: GetProductionOrdersDto): Promise<GetProductionOrdersResDto> {
+    const ids = (dto.ids || '')
+      .split(',')
+      .map((s) => s.trim())
+      .filter(Boolean);
+    return this.orderService.getOrdersByIds(ids, dto.page, dto.limit);
+  }
+
   @Get('workshop-filters')
   @Auth(ORDER_VIEW_ROLES)
   @ApiOperation({
