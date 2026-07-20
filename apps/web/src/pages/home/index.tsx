@@ -49,6 +49,20 @@ export default function Home() {
     }
   }, [searchParams]); // eslint-disable-line react-hooks/exhaustive-deps
 
+  // `/dashboard` trần → gắn `?tab=<activeTab>` để submenu sidebar highlight đúng.
+  useEffect(() => {
+    if (!searchParams.get('tab')) {
+      setSearchParams(
+        (prev) => {
+          const sp = new URLSearchParams(prev);
+          sp.set('tab', activeTab);
+          return sp;
+        },
+        { replace: true },
+      );
+    }
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
+
   const handleTabChange = (val: string) => {
     setActiveTab(val as TabKey);
     setSearchParams(
