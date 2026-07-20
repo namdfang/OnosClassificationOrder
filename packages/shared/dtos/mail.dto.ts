@@ -1,6 +1,7 @@
 import { createZodDto } from '@anatine/zod-nestjs';
 import { extendApi } from '@anatine/zod-openapi';
 import { z } from 'zod';
+
 import { getObjectValues, MailStatus, MailType, PageQueryZod, PageResZod, VNDateZod } from '..';
 
 export const DataMailZod = z.object({
@@ -42,7 +43,9 @@ export const MailHistoryZod = z.object({
   topic: z.nativeEnum(MailType),
   status: z.nativeEnum(MailStatus),
   subject: z.string().optional(),
-  scheduledTime: z.string().optional(),
+  // Date — khớp MailHistoryEntity (Mongo lưu Date thật, mail.service `.toDate()`);
+  // trước khai `z.string()` sai thực tế làm assertSameType 2 chiều fail.
+  scheduledTime: z.date().optional(),
 });
 export type MailHistory = z.infer<typeof MailHistoryZod>;
 
@@ -90,7 +93,7 @@ export const ScheduleMailZod = z.object({
   type: z.enum(getObjectValues(MailType)).optional(),
   scheduleTime: z.string(),
   scheduleDate: VNDateZod,
-  variables: SendMailZod
+  variables: SendMailZod,
 });
 export class ScheduleMailDto extends createZodDto(extendApi(ScheduleMailZod)) {}
 

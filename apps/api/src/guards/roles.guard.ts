@@ -43,7 +43,10 @@ export class RolesGuard implements CanActivate {
 
     const accessToken = request.headers.authorization?.replace('Bearer ', '') as string;
 
-    const userInfo = this.jwtService.decode(accessToken);
+    // Cast type-only: JWT do chính hệ thống phát hành luôn là object payload
+    // có sessionId. Token hỏng → decode trả null → throw tại đây (giữ nguyên
+    // hành vi cũ, AuthGuard phía trước đã chặn token invalid từ sớm).
+    const userInfo = this.jwtService.decode(accessToken) as { sessionId?: string };
 
     const cachedKey = `token:${userInfo.sessionId}:${user._id}`;
     const cachedToken = await this.redisCacheService.getHash(cachedKey, 'accessToken');

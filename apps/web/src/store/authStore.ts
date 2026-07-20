@@ -1,18 +1,26 @@
+import type { User } from 'shared';
 import { create } from 'zustand';
 import { persist } from 'zustand/middleware';
-import type { User } from 'shared';
+
+/**
+ * Profile trả về từ BE getMe: User + virtual `role` đã populate
+ * (name có thể là custom role nên để string thay vì RoleType).
+ */
+export type UserProfile = User & {
+  role?: { name: string; permissionCodes?: string[]; isSystem?: boolean };
+};
 
 interface AuthStore {
   token: string | null;
   tokenExpiredAt: number;
-  profile: User | null;
+  profile: UserProfile | null;
   loading: boolean;
   setToken: (data: string) => void;
   getToken: (isPublic?: boolean) => string | null;
   isAuthenticated: () => boolean;
   setTokenExpiredAt: (data: number) => void;
   clearToken: () => void;
-  setProfile: (data: User) => void;
+  setProfile: (data: UserProfile) => void;
   setLoading: (data: boolean) => void;
 }
 

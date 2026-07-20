@@ -1,22 +1,17 @@
 import React, { useEffect, useState } from 'react';
 import { RefreshCw, RotateCcw, ShieldCheck, X } from 'lucide-react';
-import { toast } from 'sonner';
 import type { Role } from 'shared';
+import { toast } from 'sonner';
 
+import { RepositoryRemote } from '@/services';
+
+import { Spinner } from '@/components/common/Spinner';
+import { PermissionMatrix } from '@/components/roles/PermissionMatrix';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Sheet, SheetContent, SheetHeader, SheetTitle } from '@/components/ui/sheet';
-import {
-  Table,
-  TableBody,
-  TableCell,
-  TableHead,
-  TableHeader,
-  TableRow,
-} from '@/components/ui/table';
-import { Spinner } from '@/components/common/Spinner';
-import { PermissionMatrix } from '@/components/roles/PermissionMatrix';
-import { RepositoryRemote } from '@/services';
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
+
 import { handleAxiosError } from '@/utils';
 
 export default function RolesPage() {
@@ -89,7 +84,9 @@ export default function RolesPage() {
         </div>
         <div>
           <h1 className="text-2xl font-bold text-foreground">Phân quyền</h1>
-          <p className="text-sm text-muted-foreground">Chọn role bên dưới để cấu hình quyền truy cập trang, hành động và field</p>
+          <p className="text-sm text-muted-foreground">
+            Chọn role bên dưới để cấu hình quyền truy cập trang, hành động và field
+          </p>
         </div>
       </div>
 
@@ -151,16 +148,12 @@ export default function RolesPage() {
           <SheetHeader>
             <SheetTitle className="flex items-center justify-between">
               <span>{editing?.name}</span>
-              <span className="text-xs font-normal text-muted-foreground">
-                {draftCodes.length} đang chọn
-              </span>
+              <span className="text-xs font-normal text-muted-foreground">{draftCodes.length} đang chọn</span>
             </SheetTitle>
           </SheetHeader>
 
           <div className="mt-4 space-y-2 text-sm">
-            {editing?.description && (
-              <p className="text-muted-foreground">{editing.description}</p>
-            )}
+            {editing?.description && <p className="text-muted-foreground">{editing.description}</p>}
             {editing?.isSystem && (
               <p className="text-xs text-muted-foreground">
                 Role hệ thống — không xóa được. Có thể chỉnh permissions hoặc reset về preset.

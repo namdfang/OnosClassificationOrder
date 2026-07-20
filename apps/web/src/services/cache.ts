@@ -1,5 +1,5 @@
-import { CONFIG } from '../constants';
 import { callApi } from '../apis';
+import { CONFIG } from '../constants';
 
 const clearAll = () => {
   return callApi(`/${CONFIG.API_VERSION}/cache/clear`, 'get');

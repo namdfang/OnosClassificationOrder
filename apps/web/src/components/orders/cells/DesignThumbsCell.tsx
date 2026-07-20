@@ -1,8 +1,9 @@
 import React from 'react';
 import { Image as ImageIcon } from 'lucide-react';
 
-import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { ImageThumbCell } from '@/components/orders/cells/ImageThumbCell';
+import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
+
 import { cn } from '@/utils/cn';
 
 const DESIGN_KEY_ORDER = [

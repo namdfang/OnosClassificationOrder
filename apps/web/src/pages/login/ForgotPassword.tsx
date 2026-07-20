@@ -1,7 +1,9 @@
 import React from 'react';
 import { Link } from 'react-router-dom';
 import { ArrowLeft, KeyRound } from 'lucide-react';
+
 import { Button } from '@/components/ui/button';
+
 import { PATHS } from '../../constants/paths';
 
 export default function ForgotPassword() {

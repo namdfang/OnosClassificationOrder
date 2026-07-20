@@ -1,10 +1,10 @@
 import { createZodDto } from '@anatine/zod-nestjs';
 import { extendApi } from '@anatine/zod-openapi';
-import { z } from 'zod';
-
-import { BaseEntityZod, PageQueryZod, PageResZod, ResZod } from '@shared/types';
 import { IDZod, NameZod, PriceZod } from '@shared/constants';
 import { Status } from '@shared/enums';
+import { BaseEntityZod, PageQueryZod, PageResZod, ResZod } from '@shared/types';
+import { z } from 'zod';
+
 import { getObjectValues } from '..';
 
 // ─── Price Group ───

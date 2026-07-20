@@ -1,5 +1,4 @@
 import React from 'react';
-import type { FactoryFilterOption } from 'shared';
 
 import { cn } from '@/utils/cn';
 
@@ -7,7 +6,7 @@ interface Props {
   label: string;
   value: string;
   onChange: (v: string) => void;
-  options: FactoryFilterOption[];
+  options: Array<{ value: string; label: string; count?: number }>;
 }
 
 /**
@@ -22,9 +21,7 @@ export function SelectFilter({ label, value, onChange, options }: Props) {
   const opts = options ?? [];
   return (
     <div>
-      <label className="text-[10px] text-muted-foreground uppercase tracking-wide font-medium">
-        {label}
-      </label>
+      <label className="text-[10px] text-muted-foreground uppercase tracking-wide font-medium">{label}</label>
       <select
         value={value}
         onChange={(e) => onChange(e.target.value)}
@@ -33,10 +30,10 @@ export function SelectFilter({ label, value, onChange, options }: Props) {
           value ? 'border-primary' : 'border-input',
         )}
       >
-        <option value="">— Tất cả ({opts.reduce((s, o) => s + o.count, 0)}) —</option>
+        <option value="">— Tất cả ({opts.reduce((s, o) => s + (o.count ?? 0), 0)}) —</option>
         {opts.map((o) => (
           <option key={o.value} value={o.value}>
-            {o.label} ({o.count})
+            {o.label} ({o.count ?? 0})
           </option>
         ))}
       </select>

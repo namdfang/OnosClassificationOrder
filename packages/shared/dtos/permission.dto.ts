@@ -1,11 +1,11 @@
-import { z } from 'zod';
-
-import { BaseEntityZod } from '@shared/types';
-import { DESCRIPTION_MAX_LENGTH, DESCRIPTION_MIN_LENGTH, NameZod, PermissionAction } from '@shared/constants';
-import { Status } from '@shared/enums';
 import { createZodDto } from '@anatine/zod-nestjs';
 import { extendApi } from '@anatine/zod-openapi';
+import { DESCRIPTION_MAX_LENGTH, DESCRIPTION_MIN_LENGTH, NameZod, PermissionAction } from '@shared/constants';
+import { Status } from '@shared/enums';
+import { BaseEntityZod } from '@shared/types';
 import { PageQueryZod, PageResZod, ResZod } from '@shared/types';
+import { z } from 'zod';
+
 import { getObjectValues } from '..';
 
 export const PermissionZod = BaseEntityZod.extend({

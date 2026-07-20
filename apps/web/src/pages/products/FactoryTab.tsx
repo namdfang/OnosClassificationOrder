@@ -1,33 +1,24 @@
 import React, { useEffect, useState } from 'react';
 import { Pencil, Plus, RotateCw, Trash2 } from 'lucide-react';
-import { toast } from 'sonner';
-import { WorkshopConfigCategory } from 'shared';
 import type { CreateWorkshopConfigDto, WorkshopConfig } from 'shared';
+import { WorkshopConfigCategory } from 'shared';
+import { toast } from 'sonner';
 
+import { useWorkshopConfigStore } from '@/store/workshopConfigStore';
+
+import { RepositoryRemote } from '@/services';
+
+import { Spinner } from '@/components/common/Spinner';
+import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
+import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Switch } from '@/components/ui/switch';
-import { Badge } from '@/components/ui/badge';
-import {
-  Dialog,
-  DialogContent,
-  DialogFooter,
-  DialogHeader,
-  DialogTitle,
-} from '@/components/ui/dialog';
-import {
-  Table,
-  TableBody,
-  TableCell,
-  TableHead,
-  TableHeader,
-  TableRow,
-} from '@/components/ui/table';
-import { Spinner } from '@/components/common/Spinner';
-import { RepositoryRemote } from '@/services';
-import { useWorkshopConfigStore } from '@/store/workshopConfigStore';
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
+
 import { handleAxiosError } from '@/utils';
+
 import { IconPicker, LucideIcon } from '@/pages/workshop-config/IconPicker';
 
 const slugify = (s: string) =>
@@ -84,9 +75,7 @@ export function FactoryTab() {
   const [machineTypes, setMachineTypes] = useState<ListItem[]>([]);
   const [loading, setLoading] = useState(false);
   const [form, setForm] = useState<FormState>(DEFAULT_FORM);
-  const fabricItems = useWorkshopConfigStore(
-    (s) => s.byCategory[WorkshopConfigCategory.FabricType] || [],
-  );
+  const fabricItems = useWorkshopConfigStore((s) => s.byCategory[WorkshopConfigCategory.FabricType] || []);
   const fabricLoaded = useWorkshopConfigStore((s) => s.loaded);
   const fabricLoading = useWorkshopConfigStore((s) => s.loading);
   const loadFabrics = useWorkshopConfigStore((s) => s.load);
@@ -176,9 +165,7 @@ export function FactoryTab() {
     )
       return;
     try {
-      const res = await RepositoryRemote.workshopConfig.resetCategory(
-        WorkshopConfigCategory.FabricType,
-      );
+      const res = await RepositoryRemote.workshopConfig.resetCategory(WorkshopConfigCategory.FabricType);
       const { removed, inserted } = res.data.data;
       toast.success(`Đã reset: xóa ${removed}, tạo lại ${inserted} loại vải`);
       await loadFabrics(true);
@@ -226,10 +213,13 @@ export function FactoryTab() {
     }
 
     try {
-      const repo = type === 'factory' ? RepositoryRemote.factory : RepositoryRemote.machineType;
       if (mode === 'create') {
         if (type === 'factory') {
-          await repo.createFactory({ name: data.name, shortName: data.shortName, isActive: data.isActive });
+          await RepositoryRemote.factory.createFactory({
+            name: data.name,
+            shortName: data.shortName,
+            isActive: data.isActive,
+          });
         } else {
           await RepositoryRemote.machineType.createMachineType({
             name: data.name,
@@ -261,12 +251,7 @@ export function FactoryTab() {
     }
   };
 
-  const renderTable = (
-    items: ListItem[],
-    type: 'factory' | 'machineType',
-    title: string,
-    description: string,
-  ) => (
+  const renderTable = (items: ListItem[], type: 'factory' | 'machineType', title: string, description: string) => (
     <div className="rounded-lg border border-border bg-card">
       <div className="flex items-center justify-between p-4 border-b border-border">
         <div>
@@ -310,11 +295,7 @@ export function FactoryTab() {
                   <Badge variant="outline">{it.shortName}</Badge>
                 </TableCell>
                 <TableCell>
-                  {it.isActive ? (
-                    <Badge variant="success">Hoạt động</Badge>
-                  ) : (
-                    <Badge variant="secondary">Tắt</Badge>
-                  )}
+                  {it.isActive ? <Badge variant="success">Hoạt động</Badge> : <Badge variant="secondary">Tắt</Badge>}
                 </TableCell>
                 <TableCell>
                   <Button variant="ghost" size="sm" onClick={() => openEdit(type, it)}>
@@ -393,11 +374,7 @@ export function FactoryTab() {
                   <TableCell className="font-medium">{it.name}</TableCell>
                   <TableCell className="font-mono text-xs text-muted-foreground">{it.code}</TableCell>
                   <TableCell>
-                    {it.isActive ? (
-                      <Badge variant="success">Bật</Badge>
-                    ) : (
-                      <Badge variant="secondary">Tắt</Badge>
-                    )}
+                    {it.isActive ? <Badge variant="success">Bật</Badge> : <Badge variant="secondary">Tắt</Badge>}
                   </TableCell>
                   <TableCell className="text-right">
                     <Button variant="ghost" size="sm" onClick={() => openFabricEdit(it)}>
@@ -413,10 +390,7 @@ export function FactoryTab() {
         </Table>
       </div>
 
-      <Dialog
-        open={fabricForm.open}
-        onOpenChange={(open) => !open && setFabricForm(FABRIC_FORM_DEFAULT)}
-      >
+      <Dialog open={fabricForm.open} onOpenChange={(open) => !open && setFabricForm(FABRIC_FORM_DEFAULT)}>
         <DialogContent>
           <DialogHeader>
             <DialogTitle>{fabricForm.mode === 'create' ? 'Thêm loại vải' : 'Sửa loại vải'}</DialogTitle>
@@ -443,10 +417,7 @@ export function FactoryTab() {
             </div>
             <div className="space-y-2">
               <Label>Icon</Label>
-              <IconPicker
-                value={fabricForm.icon}
-                onChange={(i) => setFabricForm({ ...fabricForm, icon: i })}
-              />
+              <IconPicker value={fabricForm.icon} onChange={(i) => setFabricForm({ ...fabricForm, icon: i })} />
             </div>
             <div className="flex items-center justify-between rounded-md border border-border p-3">
               <Label>Hoạt động</Label>
@@ -468,18 +439,14 @@ export function FactoryTab() {
         </DialogContent>
       </Dialog>
 
-      <Dialog
-        open={!!fabricConfirmDelete}
-        onOpenChange={(open) => !open && setFabricConfirmDelete(null)}
-      >
+      <Dialog open={!!fabricConfirmDelete} onOpenChange={(open) => !open && setFabricConfirmDelete(null)}>
         <DialogContent>
           <DialogHeader>
             <DialogTitle>Xóa loại vải</DialogTitle>
           </DialogHeader>
           <p className="text-sm text-muted-foreground">
-            Xóa{' '}
-            <span className="font-medium text-foreground">{fabricConfirmDelete?.name}</span>?
-            Product đang dùng vẫn giữ giá trị cũ nhưng sẽ không chọn được nữa.
+            Xóa <span className="font-medium text-foreground">{fabricConfirmDelete?.name}</span>? Product đang dùng vẫn
+            giữ giá trị cũ nhưng sẽ không chọn được nữa.
           </p>
           <DialogFooter>
             <Button variant="outline" onClick={() => setFabricConfirmDelete(null)}>

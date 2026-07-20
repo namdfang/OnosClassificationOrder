@@ -2,6 +2,9 @@ import React, { useState } from 'react';
 import { Ban, MoreHorizontal, PauseCircle, Pencil, PlayCircle } from 'lucide-react';
 import { toast } from 'sonner';
 
+import { RepositoryRemote } from '@/services';
+
+import type { WorkshopOrderRow } from '@/components/orders/workshopTableConfig';
 import { Button } from '@/components/ui/button';
 import {
   DropdownMenu,
@@ -9,14 +12,15 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
-import { usePermission } from '@/hooks/usePermission';
-import { RepositoryRemote } from '@/services';
+
 import { handleAxiosError } from '@/utils';
 import { canCancelOrder, canUserHold, isCancelled, isHeld } from '@/utils/orderActions';
-import type { WorkshopOrderRow } from '@/components/orders/workshopTableConfig';
+
+import { usePermission } from '@/hooks/usePermission';
+
 import { CancelOrderDialog } from './CancelOrderDialog';
-import { HoldOrderDialog } from './HoldOrderDialog';
 import { EditOrderDesignDialog } from './EditOrderDesignDialog';
+import { HoldOrderDialog } from './HoldOrderDialog';
 
 interface Props {
   order: WorkshopOrderRow;
@@ -112,24 +116,9 @@ export function OrderRowActionsMenu({ order, onChanged }: Props) {
         </DropdownMenuContent>
       </DropdownMenu>
 
-      <CancelOrderDialog
-        order={order}
-        open={cancelOpen}
-        onOpenChange={setCancelOpen}
-        onDone={onChanged}
-      />
-      <HoldOrderDialog
-        order={order}
-        open={holdOpen}
-        onOpenChange={setHoldOpen}
-        onDone={onChanged}
-      />
-      <EditOrderDesignDialog
-        order={order}
-        open={designOpen}
-        onOpenChange={setDesignOpen}
-        onDone={onChanged}
-      />
+      <CancelOrderDialog order={order} open={cancelOpen} onOpenChange={setCancelOpen} onDone={onChanged} />
+      <HoldOrderDialog order={order} open={holdOpen} onOpenChange={setHoldOpen} onDone={onChanged} />
+      <EditOrderDesignDialog order={order} open={designOpen} onOpenChange={setDesignOpen} onDone={onChanged} />
     </>
   );
 }

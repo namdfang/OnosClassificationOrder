@@ -8,14 +8,12 @@ if (process.env.NODE_ENV) {
 } else {
   console.log('NODE_ENV must be defined');
 
-  // eslint-disable-next-line unicorn/no-process-exit
   process.exit(1);
 }
 
 if (!process.env.DB_URI) {
   console.log('DB_URI must be defined');
 
-  // eslint-disable-next-line unicorn/no-process-exit
   process.exit(1);
 }
 

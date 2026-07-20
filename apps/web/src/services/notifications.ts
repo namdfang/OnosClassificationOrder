@@ -1,4 +1,5 @@
 import type { CreateNotificationDto, UpdateNotificationDto } from 'shared';
+
 import { callApi } from '../apis';
 import { CONFIG } from '../constants';
 

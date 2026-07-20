@@ -1,8 +1,9 @@
 import React, { useEffect, useState } from 'react';
-import { BarChart3, ClipboardList, Factory, FileSearch, Palette, TriangleAlert, Workflow } from 'lucide-react';
 import { useSearchParams } from 'react-router-dom';
+import { BarChart3, ClipboardList, Factory, FileSearch, Palette, TriangleAlert, Workflow } from 'lucide-react';
 
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
+
 import { usePermission } from '@/hooks/usePermission';
 
 import DesignerStatsTab from './DesignerStatsTab';
@@ -12,8 +13,8 @@ import OrderFactoryTab from './OrderFactoryTab';
 import OrderStatsTab from './OrderStatsTab';
 import OrderStatusTab from './OrderStatusTab';
 import PersonErrorTab from './PersonErrorTab';
-import ToolCheckTab from './ToolCheckTab';
 import { SendTelegramReportButton } from './SendTelegramReportButton';
+import ToolCheckTab from './ToolCheckTab';
 
 const TABS = ['factory', 'stats', 'status', 'lifecycle', 'tool-check', 'person-error', 'designer'] as const;
 type TabKey = (typeof TABS)[number];
@@ -50,30 +51,63 @@ export default function Home() {
 
   const handleTabChange = (val: string) => {
     setActiveTab(val as TabKey);
-    setSearchParams((prev) => {
-      const sp = new URLSearchParams(prev);
-      sp.set('tab', val);
-      // Mỗi tab có namespace riêng (xem hook / component tương ứng):
-      //   stats:   sfrom, sto, stype, suser
-      //   status:  printStatus*, toolResult*, errorFile, assignee*, factoryId,
-      //            machineTypeId, readyForFulfill, createdFrom, createdTo, search
-      //   factory: ffrom, fto, ffactory, fmode, fstage, ftype, ffabric, ftool,
-      //            fmachine, fpage, fsize
-      // Đổi tab → strip param của 2 tab kia để URL không lẫn.
-      if (val !== 'stats') {
-        ['sfrom', 'sto', 'stype', 'suser'].forEach((k) => sp.delete(k));
-      }
-      if (val !== 'status') {
-        ['printStatus', 'printStatusNote', 'toolResult', 'toolResultNote', 'errorFile', 'assignee', 'assigneeNote', 'factoryId', 'machineTypeId', 'readyForFulfill', 'createdFrom', 'createdTo', 'search'].forEach((k) => sp.delete(k));
-      }
-      if (val !== 'factory') {
-        ['ffrom', 'fto', 'fview', 'ffactory', 'fmode', 'fstage', 'ftype', 'ffabric', 'ftool', 'fmachine', 'fmnum', 'ftoolnote', 'fuser', 'fpage', 'fsize'].forEach((k) => sp.delete(k));
-      }
-      if (val !== 'lifecycle') {
-        ['lfrom', 'lto', 'lfactory'].forEach((k) => sp.delete(k));
-      }
-      return sp;
-    }, { replace: true });
+    setSearchParams(
+      (prev) => {
+        const sp = new URLSearchParams(prev);
+        sp.set('tab', val);
+        // Mỗi tab có namespace riêng (xem hook / component tương ứng):
+        //   stats:   sfrom, sto, stype, suser
+        //   status:  printStatus*, toolResult*, errorFile, assignee*, factoryId,
+        //            machineTypeId, readyForFulfill, createdFrom, createdTo, search
+        //   factory: ffrom, fto, ffactory, fmode, fstage, ftype, ffabric, ftool,
+        //            fmachine, fpage, fsize
+        // Đổi tab → strip param của 2 tab kia để URL không lẫn.
+        if (val !== 'stats') {
+          ['sfrom', 'sto', 'stype', 'suser'].forEach((k) => sp.delete(k));
+        }
+        if (val !== 'status') {
+          [
+            'printStatus',
+            'printStatusNote',
+            'toolResult',
+            'toolResultNote',
+            'errorFile',
+            'assignee',
+            'assigneeNote',
+            'factoryId',
+            'machineTypeId',
+            'readyForFulfill',
+            'createdFrom',
+            'createdTo',
+            'search',
+          ].forEach((k) => sp.delete(k));
+        }
+        if (val !== 'factory') {
+          [
+            'ffrom',
+            'fto',
+            'fview',
+            'ffactory',
+            'fmode',
+            'fstage',
+            'ftype',
+            'ffabric',
+            'ftool',
+            'fmachine',
+            'fmnum',
+            'ftoolnote',
+            'fuser',
+            'fpage',
+            'fsize',
+          ].forEach((k) => sp.delete(k));
+        }
+        if (val !== 'lifecycle') {
+          ['lfrom', 'lto', 'lfactory'].forEach((k) => sp.delete(k));
+        }
+        return sp;
+      },
+      { replace: true },
+    );
   };
 
   return (

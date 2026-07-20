@@ -1,20 +1,16 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import { AlertTriangle, CheckCircle2, ChevronRight, UserPlus } from 'lucide-react';
-import { toast } from 'sonner';
 import type { DesignerTeamMember } from 'shared';
 import { Status } from 'shared';
+import { toast } from 'sonner';
 
-import { Button } from '@/components/ui/button';
-import {
-  Dialog,
-  DialogContent,
-  DialogFooter,
-  DialogHeader,
-  DialogTitle,
-} from '@/components/ui/dialog';
-import { Label } from '@/components/ui/label';
-import { Spinner } from '@/components/common/Spinner';
 import { RepositoryRemote } from '@/services';
+
+import { Spinner } from '@/components/common/Spinner';
+import { Button } from '@/components/ui/button';
+import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
+import { Label } from '@/components/ui/label';
+
 import { handleAxiosError } from '@/utils';
 
 interface Props {
@@ -77,9 +73,7 @@ export function AssignDesignerDialog({ open, selectedIds, onClose, onApplied }: 
   // Đơn đã gán cho ai khác designer được chọn — cần confirm reassignOthers.
   const conflictCount = useMemo(() => {
     if (!preview || !selectedUserId) return 0;
-    return preview.alreadyAssigned
-      .filter((a) => a.userId !== selectedUserId)
-      .reduce((s, a) => s + a.count, 0);
+    return preview.alreadyAssigned.filter((a) => a.userId !== selectedUserId).reduce((s, a) => s + a.count, 0);
   }, [preview, selectedUserId]);
 
   const handleSubmit = async (force: boolean, skipUnreviewed = false) => {
@@ -109,9 +103,7 @@ export function AssignDesignerDialog({ open, selectedIds, onClose, onApplied }: 
         });
         // Show first few skipped reasons in a separate toast.
         const sample = data.skipped.slice(0, 5);
-        const sampleText = sample
-          .map((s) => `• ${s.productionId}: ${s.reason}`)
-          .join('\n');
+        const sampleText = sample.map((s) => `• ${s.productionId}: ${s.reason}`).join('\n');
         const more = data.skipped.length > 5 ? `\n…và ${data.skipped.length - 5} đơn khác` : '';
         toast.message('Đơn bị skip', { description: sampleText + more, duration: 10000 });
       }
@@ -143,8 +135,16 @@ export function AssignDesignerDialog({ open, selectedIds, onClose, onApplied }: 
               <div className="grid grid-cols-3 gap-2 text-xs">
                 <StatBox label="Chưa gán" value={preview.byStatus.unassigned} cls="text-zinc-600 dark:text-zinc-300" />
                 <StatBox label="Đã gán" value={preview.byStatus.assigned} cls="text-zinc-600 dark:text-zinc-300" />
-                <StatBox label="Không làm được" value={preview.byStatus.rejected} cls="text-rose-600 dark:text-rose-400" />
-                <StatBox label="Đang làm" value={preview.byStatus.inProgress} cls="text-indigo-600 dark:text-indigo-400" />
+                <StatBox
+                  label="Không làm được"
+                  value={preview.byStatus.rejected}
+                  cls="text-rose-600 dark:text-rose-400"
+                />
+                <StatBox
+                  label="Đang làm"
+                  value={preview.byStatus.inProgress}
+                  cls="text-indigo-600 dark:text-indigo-400"
+                />
                 <StatBox label="Đã xong" value={preview.byStatus.done} cls="text-emerald-600 dark:text-emerald-400" />
                 <StatBox label="Cần làm lại" value={preview.byStatus.rework} cls="text-amber-600 dark:text-amber-400" />
               </div>
@@ -152,8 +152,7 @@ export function AssignDesignerDialog({ open, selectedIds, onClose, onApplied }: 
                 <div className="mt-2 flex items-start gap-2 text-[11px] text-amber-700 dark:text-amber-300 bg-amber-50 dark:bg-amber-900/20 rounded p-2">
                   <AlertTriangle size={12} className="shrink-0 mt-px" />
                   <span>
-                    <strong>{preview.blockedCount}</strong> đơn đang in-progress/done — sẽ bị skip khi
-                    gán.
+                    <strong>{preview.blockedCount}</strong> đơn đang in-progress/done — sẽ bị skip khi gán.
                   </span>
                 </div>
               )}
@@ -161,9 +160,8 @@ export function AssignDesignerDialog({ open, selectedIds, onClose, onApplied }: 
                 <div className="mt-2 flex items-start gap-2 text-[11px] text-amber-700 dark:text-amber-300 bg-amber-50 dark:bg-amber-900/20 rounded p-2">
                   <AlertTriangle size={12} className="shrink-0 mt-px" />
                   <span>
-                    <strong>{preview.reworkHeldCount}</strong> đơn <strong>cần làm lại đang có người
-                    ôm</strong> — không gán cho người khác được, sẽ bị bỏ qua. Chỉ gán được đơn cần làm
-                    lại chưa có ai ôm.
+                    <strong>{preview.reworkHeldCount}</strong> đơn <strong>cần làm lại đang có người ôm</strong> — không
+                    gán cho người khác được, sẽ bị bỏ qua. Chỉ gán được đơn cần làm lại chưa có ai ôm.
                   </span>
                 </div>
               )}
@@ -171,8 +169,8 @@ export function AssignDesignerDialog({ open, selectedIds, onClose, onApplied }: 
                 <div className="mt-2 flex items-start gap-2 text-[11px] text-rose-700 dark:text-rose-300 bg-rose-50 dark:bg-rose-900/20 rounded p-2">
                   <AlertTriangle size={12} className="shrink-0 mt-px" />
                   <span>
-                    <strong>{preview.okCount}</strong> đơn đã <strong>OK</strong> (Note kq Tool 1) — không
-                    gán được, sẽ bị bỏ qua. Chỉ gán {preview.eligibleCount} đơn còn lại.
+                    <strong>{preview.okCount}</strong> đơn đã <strong>OK</strong> (Note kq Tool 1) — không gán được, sẽ
+                    bị bỏ qua. Chỉ gán {preview.eligibleCount} đơn còn lại.
                   </span>
                 </div>
               )}
@@ -180,16 +178,14 @@ export function AssignDesignerDialog({ open, selectedIds, onClose, onApplied }: 
                 <div className="mt-2 flex items-start gap-2 text-[11px] text-amber-700 dark:text-amber-300 bg-amber-50 dark:bg-amber-900/20 rounded p-2">
                   <AlertTriangle size={12} className="shrink-0 mt-px" />
                   <span>
-                    <strong>{preview.noToolCount}</strong> đơn <strong>chưa soát</strong> (Note kq Tool 1
-                    còn trống). Bạn có chắc muốn gán? Chọn <strong>Gán tất cả</strong> hoặc{' '}
-                    <strong>Chỉ gán đơn đã soát</strong> bên dưới.
+                    <strong>{preview.noToolCount}</strong> đơn <strong>chưa soát</strong> (Note kq Tool 1 còn trống).
+                    Bạn có chắc muốn gán? Chọn <strong>Gán tất cả</strong> hoặc <strong>Chỉ gán đơn đã soát</strong> bên
+                    dưới.
                   </span>
                 </div>
               )}
               {preview.eligibleCount === 0 && (
-                <div className="mt-2 text-[11px] text-rose-600 dark:text-rose-400">
-                  Không có đơn nào hợp lệ để gán.
-                </div>
+                <div className="mt-2 text-[11px] text-rose-600 dark:text-rose-400">Không có đơn nào hợp lệ để gán.</div>
               )}
             </div>
 
@@ -238,12 +234,10 @@ export function AssignDesignerDialog({ open, selectedIds, onClose, onApplied }: 
                 <div className="flex items-start gap-2">
                   <AlertTriangle size={13} className="shrink-0 mt-0.5" />
                   <div>
-                    <p className="font-medium">
-                      {conflictCount} đơn đã được gán cho designer khác.
-                    </p>
+                    <p className="font-medium">{conflictCount} đơn đã được gán cho designer khác.</p>
                     <p className="text-amber-700 dark:text-amber-300 mt-0.5">
-                      Tiếp tục gán sẽ <strong>ghi đè</strong> sang designer mới. Đơn đang
-                      in-progress/done/rework vẫn bị skip.
+                      Tiếp tục gán sẽ <strong>ghi đè</strong> sang designer mới. Đơn đang in-progress/done/rework vẫn bị
+                      skip.
                     </p>
                   </div>
                 </div>
@@ -261,9 +255,7 @@ export function AssignDesignerDialog({ open, selectedIds, onClose, onApplied }: 
             <>
               <Button
                 onClick={() => handleSubmit(conflictCount > 0, true)}
-                disabled={
-                  !selectedUserId || submitting || (preview?.eligibleWithToolCount || 0) === 0
-                }
+                disabled={!selectedUserId || submitting || (preview?.eligibleWithToolCount || 0) === 0}
                 variant="outline"
               >
                 {submitting && <Spinner size={13} className="mr-1.5" />}

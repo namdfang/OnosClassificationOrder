@@ -1,4 +1,4 @@
-import { ExcelImportStockOrder } from '..';
+import type { ExcelImportStockOrder } from '..';
 
 export const STOCK_ORDER_CODE_PREFIX = 'PS_';
 
@@ -33,7 +33,9 @@ export type StockOrderType = (typeof StockOrderType)[keyof typeof StockOrderType
 
 // Download front, back artworks, label files
 
-export const STOCK_ORDER_IMPORT_HEADERS: Record<keyof ExcelImportStockOrder, string> = {
+// `| 'weight'`: cột Weight vẫn nằm trong sheet import nhưng key `weight` đã
+// rời khỏi ExcelImportStockOrder — data giữ nguyên, chỉ nới type cho khớp.
+export const STOCK_ORDER_IMPORT_HEADERS: Partial<Record<keyof ExcelImportStockOrder | 'weight', string>> = {
   seller: 'Seller',
   orderId: 'Order ID',
   name: 'shipping name',
@@ -300,7 +302,7 @@ for (const key in STOCK_ORDER_ITEM_WEIGHT_IMPORT_HEADERS) {
   REVERSED_STOCK_ORDER_ITEM_WEIGHT_IMPORT_HEADERS[value] = key;
 }
 
-export const BETA_STOCK_SHIP_FEE= 13; //1000g
+export const BETA_STOCK_SHIP_FEE = 13; //1000g
 export const UAT_STOCK_SHIP_FEE = 11; //1000g
 
 export const BETA_STOCK_FULFILLMENT_FEE = 1.5;

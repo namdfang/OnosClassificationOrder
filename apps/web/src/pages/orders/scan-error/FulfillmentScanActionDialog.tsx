@@ -15,29 +15,20 @@ import {
   ShieldAlert,
   Wrench,
 } from 'lucide-react';
+import type { FulfillmentStage, ProductionOrderRow } from 'shared';
+import { FULFILLMENT_STAGE_LABELS, FulfillmentStageStatus, FulfillmentTransitionAction } from 'shared';
 import { toast } from 'sonner';
-import type { ProductionOrder } from 'shared';
-import {
-  FULFILLMENT_STAGE_LABELS,
-  FulfillmentStage,
-  FulfillmentStageStatus,
-  FulfillmentTransitionAction,
-} from 'shared';
+
+import { RepositoryRemote } from '@/services';
 
 import { Spinner } from '@/components/common/Spinner';
 import { Button } from '@/components/ui/button';
-import {
-  Dialog,
-  DialogContent,
-  DialogFooter,
-  DialogHeader,
-  DialogTitle,
-} from '@/components/ui/dialog';
-import { RepositoryRemote } from '@/services';
-import { cn } from '@/utils/cn';
-import { handleAxiosError } from '@/utils';
+import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 
-type ScannedOrder = ProductionOrder & {
+import { handleAxiosError } from '@/utils';
+import { cn } from '@/utils/cn';
+
+type ScannedOrder = ProductionOrderRow & {
   factory?: { name?: string; shortName?: string };
   machineType?: { name?: string; shortName?: string };
 };
@@ -55,10 +46,7 @@ interface Props {
   onReportError: () => void;
 }
 
-const STATUS_META: Record<
-  string,
-  { label: string; icon: React.ElementType; cls: string }
-> = {
+const STATUS_META: Record<string, { label: string; icon: React.ElementType; cls: string }> = {
   [FulfillmentStageStatus.Waiting]: {
     label: 'Đang chờ',
     icon: Clock,
@@ -123,9 +111,7 @@ export function FulfillmentScanActionDialog({
   onReportError,
 }: Props) {
   const currentStage = order.currentFulfillmentStage as FulfillmentStage | undefined;
-  const stageStatus = (order.fulfillmentStages?.[myStage]?.status ?? undefined) as
-    | FulfillmentStageStatus
-    | undefined;
+  const stageStatus = (order.fulfillmentStages?.[myStage]?.status ?? undefined) as FulfillmentStageStatus | undefined;
 
   const sameFactory = String(order.factoryId ?? '') === String(myFactoryId ?? '');
   const sameStage = currentStage === myStage;
@@ -140,8 +126,7 @@ export function FulfillmentScanActionDialog({
   const blockReason = useMemo(() => {
     if (isMyTask) return null;
     if (!sameFactory) return 'Đơn thuộc xưởng khác — bạn không thao tác được.';
-    if (stageStatus === FulfillmentStageStatus.Done)
-      return 'Bạn đã hoàn thành công đoạn này cho đơn rồi.';
+    if (stageStatus === FulfillmentStageStatus.Done) return 'Bạn đã hoàn thành công đoạn này cho đơn rồi.';
     if (!currentStage) return 'Đơn chưa vào quy trình fulfillment.';
     if (!sameStage)
       return `Đơn đang ở công đoạn "${FULFILLMENT_STAGE_LABELS[currentStage]}", không phải công đoạn của bạn.`;
@@ -159,10 +144,7 @@ export function FulfillmentScanActionDialog({
     setSaving(true);
     try {
       // Đang chờ/làm lại → start trước, rồi complete (1 lần quét = xong).
-      if (
-        stageStatus === FulfillmentStageStatus.Waiting ||
-        stageStatus === FulfillmentStageStatus.Rework
-      ) {
+      if (stageStatus === FulfillmentStageStatus.Waiting || stageStatus === FulfillmentStageStatus.Rework) {
         await RepositoryRemote.fulfillment.transition(order._id, {
           stage: myStage,
           action: FulfillmentTransitionAction.Start,
@@ -192,8 +174,7 @@ export function FulfillmentScanActionDialog({
   };
 
   const statusMeta = stageStatus ? STATUS_META[stageStatus] : undefined;
-  const factoryLabel =
-    order.factory?.shortName || order.factory?.name || (order.factoryId ? '—' : 'Chưa map');
+  const factoryLabel = order.factory?.shortName || order.factory?.name || (order.factoryId ? '—' : 'Chưa map');
   const machineLabel = order.machineType?.shortName || order.machineType?.name || '';
 
   const mockupUrl = order.mockupOriginalUrl || order.mockupUrl;
@@ -225,10 +206,7 @@ export function FulfillmentScanActionDialog({
 
   return (
     <Dialog open onOpenChange={(o) => !o && !saving && onClose()}>
-      <DialogContent
-        className="max-w-5xl max-h-[98vh] overflow-y-auto"
-        onKeyDown={handleKeyDown}
-      >
+      <DialogContent className="max-w-5xl max-h-[98vh] overflow-y-auto" onKeyDown={handleKeyDown}>
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2 text-lg">
             <Layers size={20} className="text-primary" />
@@ -285,38 +263,26 @@ export function FulfillmentScanActionDialog({
                   </span>
                 )}
               </div>
-              <div className="font-mono text-base font-semibold text-primary">
-                {order.productionId}
-              </div>
-              {order.userSku && (
-                <div className="text-sm text-muted-foreground truncate">📧 {order.userSku}</div>
-              )}
+              <div className="font-mono text-base font-semibold text-primary">{order.productionId}</div>
+              {order.userSku && <div className="text-sm text-muted-foreground truncate">📧 {order.userSku}</div>}
             </div>
 
             {/* Size / Màu / SL — badge lớn */}
             <div className="grid grid-cols-3 gap-2">
               <BigField icon={<Ruler size={15} />} label="Size" value={order.size || '—'} />
               <BigField icon={<Palette size={15} />} label="Màu" value={order.color || '—'} />
-              <BigField
-                icon={<Package size={15} />}
-                label="Số lượng"
-                value={String(order.quantity ?? 1)}
-              />
+              <BigField icon={<Package size={15} />} label="Số lượng" value={String(order.quantity ?? 1)} />
             </div>
 
             {/* Xưởng / Công đoạn / Tool */}
             <div className="space-y-2 rounded-lg border border-border bg-muted/30 p-3 text-sm">
               <DetailRow icon={<Factory size={15} />} label="Xưởng">
                 <span className="font-medium">{factoryLabel}</span>
-                {machineLabel && (
-                  <span className="text-muted-foreground"> · {machineLabel}</span>
-                )}
+                {machineLabel && <span className="text-muted-foreground"> · {machineLabel}</span>}
               </DetailRow>
               <DetailRow icon={<Layers size={15} />} label="Công đoạn hiện tại">
                 <span className="font-medium">
-                  {currentStage
-                    ? FULFILLMENT_STAGE_LABELS[currentStage]
-                    : 'Chưa vào fulfillment'}
+                  {currentStage ? FULFILLMENT_STAGE_LABELS[currentStage] : 'Chưa vào fulfillment'}
                 </span>
               </DetailRow>
               <DetailRow icon={<Wrench size={15} />} label="Kết quả soát tool">
@@ -357,11 +323,12 @@ export function FulfillmentScanActionDialog({
             <CheckCircle2 size={14} className="mt-0.5 shrink-0" />
             <span>
               {stageStatus === FulfillmentStageStatus.InProgress ? (
-                <>Đơn đang ở trạng thái <strong>Đang làm</strong> — nhấn Enter để Hoàn thành.</>
+                <>
+                  Đơn đang ở trạng thái <strong>Đang làm</strong> — nhấn Enter để Hoàn thành.
+                </>
               ) : (
                 <>
-                  Đơn đang ở trạng thái{' '}
-                  <strong>{statusMeta?.label ?? '—'}</strong> — nhấn Enter sẽ tự Bắt đầu rồi Hoàn
+                  Đơn đang ở trạng thái <strong>{statusMeta?.label ?? '—'}</strong> — nhấn Enter sẽ tự Bắt đầu rồi Hoàn
                   thành luôn.
                 </>
               )}
@@ -371,8 +338,8 @@ export function FulfillmentScanActionDialog({
           <div className="rounded-md border border-rose-300/50 bg-rose-50/50 dark:bg-rose-500/5 p-3 text-xs text-rose-700 dark:text-rose-300 flex items-start gap-1.5">
             <ShieldAlert size={14} className="mt-0.5 shrink-0" />
             <span>
-              <strong>Không phải task của bạn.</strong> {blockReason} Nhấn Enter để quét đơn tiếp
-              theo, hoặc bấm <strong>Báo lỗi đơn này</strong> để đẩy về công đoạn trước.
+              <strong>Không phải task của bạn.</strong> {blockReason} Nhấn Enter để quét đơn tiếp theo, hoặc bấm{' '}
+              <strong>Báo lỗi đơn này</strong> để đẩy về công đoạn trước.
             </span>
           </div>
         )}
@@ -385,11 +352,7 @@ export function FulfillmentScanActionDialog({
                 Báo lỗi
               </Button>
               <Button onClick={() => void doComplete()} disabled={saving} autoFocus size="lg">
-                {saving ? (
-                  <Spinner size={15} className="mr-2" />
-                ) : (
-                  <CheckCircle2 size={16} className="mr-1.5" />
-                )}
+                {saving ? <Spinner size={15} className="mr-2" /> : <CheckCircle2 size={16} className="mr-1.5" />}
                 Hoàn thành (Enter)
               </Button>
             </>
@@ -411,15 +374,7 @@ export function FulfillmentScanActionDialog({
 }
 
 /** Ô số liệu lớn (size / màu / số lượng). */
-function BigField({
-  icon,
-  label,
-  value,
-}: {
-  icon: React.ReactNode;
-  label: string;
-  value: string;
-}) {
+function BigField({ icon, label, value }: { icon: React.ReactNode; label: string; value: string }) {
   return (
     <div className="rounded-lg border border-border bg-card p-2.5 text-center">
       <div className="flex items-center justify-center gap-1 text-[10px] uppercase tracking-wide text-muted-foreground">
@@ -433,15 +388,7 @@ function BigField({
   );
 }
 
-function DetailRow({
-  icon,
-  label,
-  children,
-}: {
-  icon: React.ReactNode;
-  label: string;
-  children: React.ReactNode;
-}) {
+function DetailRow({ icon, label, children }: { icon: React.ReactNode; label: string; children: React.ReactNode }) {
   return (
     <div className="flex items-center gap-2">
       <span className="text-muted-foreground shrink-0">{icon}</span>

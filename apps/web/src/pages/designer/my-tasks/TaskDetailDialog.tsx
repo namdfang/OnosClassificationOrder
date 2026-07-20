@@ -1,21 +1,29 @@
 import React, { useEffect, useState } from 'react';
-import { Calendar, CheckCircle2, Clock, ExternalLink, FileWarning, Package, RotateCcw, ShieldAlert, XCircle } from 'lucide-react';
+import {
+  Calendar,
+  CheckCircle2,
+  Clock,
+  ExternalLink,
+  FileWarning,
+  Package,
+  RotateCcw,
+  ShieldAlert,
+  XCircle,
+} from 'lucide-react';
 import { DesignerStatus, WorkshopConfigCategory } from 'shared';
 
-import { Badge } from '@/components/ui/badge';
-import { Button } from '@/components/ui/button';
-import {
-  Dialog,
-  DialogContent,
-  DialogHeader,
-  DialogTitle,
-} from '@/components/ui/dialog';
+import { useWorkshopConfigStore } from '@/store/workshopConfigStore';
+
+import { RepositoryRemote } from '@/services';
+
 import { CopyButton } from '@/components/common/CopyButton';
 import { Spinner } from '@/components/common/Spinner';
-import { driveThumbUrl, driveViewUrl } from '@/utils/driveThumb';
-import { RepositoryRemote } from '@/services';
-import { useWorkshopConfigStore } from '@/store/workshopConfigStore';
+import { Badge } from '@/components/ui/badge';
+import { Button } from '@/components/ui/button';
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
+
 import { handleAxiosError } from '@/utils';
+import { driveThumbUrl, driveViewUrl } from '@/utils/driveThumb';
 
 interface Props {
   orderId: string | null;
@@ -102,18 +110,14 @@ export function TaskDetailDialog({ orderId, onClose }: Props) {
   }, [orderId]);
 
   // Resolve mã "File sửa lỗi" (errorFile[], category error_file_type) → name.
-  const errorFileItems = useWorkshopConfigStore(
-    (s) => s.byCategory[WorkshopConfigCategory.ErrorFileType] || [],
-  );
+  const errorFileItems = useWorkshopConfigStore((s) => s.byCategory[WorkshopConfigCategory.ErrorFileType] || []);
   const errorFileLabels = (detail?.errorFile || [])
     .filter(Boolean)
     .map((code) => errorFileItems.find((i) => i.code === code)?.name || code);
 
   const designs = detail?.designsOriginal || detail?.designs || {};
   const designKeys = Object.keys(designs).filter((k) => designs[k]);
-  const status = detail?.designerStatus
-    ? STATUS_META[detail.designerStatus]
-    : STATUS_META[DesignerStatus.Unassigned];
+  const status = detail?.designerStatus ? STATUS_META[detail.designerStatus] : STATUS_META[DesignerStatus.Unassigned];
 
   return (
     <>
@@ -177,9 +181,7 @@ export function TaskDetailDialog({ orderId, onClose }: Props) {
                   [Nút "Tải về" tạm ẩn vì ảnh khác-origin bị CORS chặn auto-download.] */}
               {designKeys.length > 0 && (
                 <div>
-                  <p className="text-xs font-semibold text-foreground mb-1.5">
-                    File design ({designKeys.length})
-                  </p>
+                  <p className="text-xs font-semibold text-foreground mb-1.5">File design ({designKeys.length})</p>
                   <p className="text-[11px] text-muted-foreground mb-1.5">
                     Chuột phải vào link → "Lưu liên kết thành…" để tải ảnh về máy.
                   </p>
@@ -226,10 +228,18 @@ export function TaskDetailDialog({ orderId, onClose }: Props) {
                 </p>
                 <div className="space-y-1 text-xs">
                   {detail.orderAt && (
-                    <Timeline icon={<Clock size={11} className="text-indigo-500" />} label="Khách lên đơn" value={fmt(detail.orderAt)} />
+                    <Timeline
+                      icon={<Clock size={11} className="text-indigo-500" />}
+                      label="Khách lên đơn"
+                      value={fmt(detail.orderAt)}
+                    />
                   )}
                   {detail.inProductionAt && (
-                    <Timeline icon={<Clock size={11} className="text-sky-500" />} label="Vào sản xuất" value={fmt(detail.inProductionAt)} />
+                    <Timeline
+                      icon={<Clock size={11} className="text-sky-500" />}
+                      label="Vào sản xuất"
+                      value={fmt(detail.inProductionAt)}
+                    />
                   )}
                   <Timeline icon={<Clock size={11} />} label="Được gán" value={fmt(detail.designerAssignedAt)} />
                   <Timeline icon={<Clock size={11} />} label="Bắt đầu" value={fmt(detail.designerStartedAt)} />
@@ -261,9 +271,7 @@ export function TaskDetailDialog({ orderId, onClose }: Props) {
                     <ShieldAlert size={12} /> Xưởng báo lỗi: {detail.productionError}
                   </p>
                   {detail.productionErrorNote && (
-                    <p className="text-[11px] text-amber-700 dark:text-amber-300 mt-1">
-                      {detail.productionErrorNote}
-                    </p>
+                    <p className="text-[11px] text-amber-700 dark:text-amber-300 mt-1">{detail.productionErrorNote}</p>
                   )}
                 </div>
               )}
@@ -297,16 +305,16 @@ export function TaskDetailDialog({ orderId, onClose }: Props) {
               {detail.designerRejectedReason && (
                 <div className="rounded-md border border-rose-300 bg-rose-50 dark:bg-rose-900/20 p-2.5">
                   <p className="text-xs font-medium text-rose-800 dark:text-rose-200">Lý do không làm được</p>
-                  <p className="text-[11px] text-rose-700 dark:text-rose-300 mt-1">
-                    {detail.designerRejectedReason}
-                  </p>
+                  <p className="text-[11px] text-rose-700 dark:text-rose-300 mt-1">{detail.designerRejectedReason}</p>
                 </div>
               )}
             </div>
           )}
 
           <div className="flex justify-end pt-2">
-            <Button variant="outline" onClick={onClose}>Đóng</Button>
+            <Button variant="outline" onClick={onClose}>
+              Đóng
+            </Button>
           </div>
         </DialogContent>
       </Dialog>

@@ -5,19 +5,44 @@ import { Search } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
+
 import { cn } from '@/utils/cn';
 
 const SUGGESTED = [
-  'User', 'Wrench', 'Ban', 'AlertCircle', 'CheckCircle', 'XCircle',
-  'Hash', 'Minus', 'Plus', 'Shirt', 'Scissors', 'CircleDot', 'Clock',
-  'Stamp', 'Rows', 'AlignVerticalJustifyCenter', 'ArrowLeftRight',
-  'PersonStanding', 'MessageCircleQuestion', 'Box', 'Flag', 'Tag',
-  'Star', 'Heart', 'ThumbsUp', 'Eye', 'Settings',
+  'User',
+  'Wrench',
+  'Ban',
+  'AlertCircle',
+  'CheckCircle',
+  'XCircle',
+  'Hash',
+  'Minus',
+  'Plus',
+  'Shirt',
+  'Scissors',
+  'CircleDot',
+  'Clock',
+  'Stamp',
+  'Rows',
+  'AlignVerticalJustifyCenter',
+  'ArrowLeftRight',
+  'PersonStanding',
+  'MessageCircleQuestion',
+  'Box',
+  'Flag',
+  'Tag',
+  'Star',
+  'Heart',
+  'ThumbsUp',
+  'Eye',
+  'Settings',
 ];
 
 export function LucideIcon({ name, size = 16, className }: { name?: string; size?: number; className?: string }) {
   if (!name) return null;
-  const Icon = (LucideIcons as unknown as Record<string, React.ComponentType<{ size?: number; className?: string }>>)[name];
+  const Icon = (LucideIcons as unknown as Record<string, React.ComponentType<{ size?: number; className?: string }>>)[
+    name
+  ];
   if (!Icon) return <span className={cn('text-muted-foreground text-xs', className)}>{name}</span>;
   return <Icon size={size} className={className} />;
 }
@@ -67,9 +92,7 @@ export function IconPicker({ value, onChange }: Props) {
               }}
               className={cn(
                 'flex items-center justify-center h-9 w-9 rounded border transition-colors',
-                value === name
-                  ? 'border-primary bg-primary/10 text-primary'
-                  : 'border-border hover:bg-accent',
+                value === name ? 'border-primary bg-primary/10 text-primary' : 'border-border hover:bg-accent',
               )}
             >
               <LucideIcon name={name} size={16} />

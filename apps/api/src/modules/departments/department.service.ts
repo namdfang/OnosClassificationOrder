@@ -2,7 +2,7 @@ import { BadRequestException, Injectable } from '@nestjs/common';
 import type { CreateDepartmentDto, GetDepartmentsDto, GetDepartmentsResDto, UpdateDepartmentDto } from 'shared';
 import { RoleType } from 'shared';
 
-import { genCode , escapeRegExp } from '@/utils';
+import { escapeRegExp, genCode } from '@/utils';
 
 import type { UserDocument } from '../user/user.entity';
 import type { DepartmentDocument, DepartmentEntity } from './department.entity';
@@ -55,7 +55,7 @@ export class DepartmentService {
 
     while (existedDepartment) {
       newDepartmentCode = genCode(8);
-      // eslint-disable-next-line no-await-in-loop
+
       existedDepartment = await this.departmentRepository.findOne({
         code: newDepartmentCode,
       });

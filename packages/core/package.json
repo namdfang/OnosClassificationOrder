@@ -16,8 +16,8 @@
     "prebuild": "rimraf dist",
     "build": "pnpm tsup index.ts --format cjs",
     "dev": "pnpm run build --watch",
-    "lint": "eslint . --ext .ts --cache",
-    "lint:fix": "eslint --fix . --ext .ts --cache",
+    "lint": "eslint . --cache",
+    "lint:fix": "eslint . --fix --cache",
     "build-types": "pnpm tsc --noEmit -p tsconfig.build.json"
   },
   "dependencies": {
@@ -50,14 +50,18 @@
     "zod": "^3.22.4"
   },
   "devDependencies": {
+    "@printsel/eslint-config": "workspace:*",
     "@types/bcryptjs": "^2.4.6",
     "@types/lodash": "^4.14.200",
     "@types/node": "^20.8.2",
     "@types/uuid": "^9.0.1",
-    "eslint-config-custom": "0.0.0",
+    "eslint": "^9.30.0",
     "rimraf": "^5.0.1",
     "tsconfig": "7.0.0",
     "tsup": "^7.2.0",
     "typescript": "^5.0.2"
+  },
+  "engines": {
+    "node": "20.20.2"
   }
 }

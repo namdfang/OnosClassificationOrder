@@ -1,6 +1,6 @@
 import React, { useMemo } from 'react';
-import { PERMISSION_CATALOG } from 'shared';
 import type { PermissionGroup, PermissionItem } from 'shared';
+import { PERMISSION_CATALOG } from 'shared';
 
 import { cn } from '@/utils/cn';
 
@@ -45,7 +45,12 @@ export function PermissionMatrix({ value, onChange, disabled }: Props) {
     const byField = new Map<string, { field: string; label: string; viewCode?: string; editCode?: string }>();
     for (const it of items) {
       if (!it.field) continue;
-      const row = byField.get(it.field) || { field: it.field, label: it.label, viewCode: undefined, editCode: undefined };
+      const row = byField.get(it.field) || {
+        field: it.field,
+        label: it.label,
+        viewCode: undefined,
+        editCode: undefined,
+      };
       if (it.mode === 'view') row.viewCode = it.code;
       if (it.mode === 'edit') row.editCode = it.code;
       byField.set(it.field, row);
@@ -145,7 +150,8 @@ export function PermissionMatrix({ value, onChange, disabled }: Props) {
           </table>
         </div>
         <p className="text-[11px] text-muted-foreground">
-          Edit kéo theo View được tự động — nếu không có view permission thì user không thấy cột, tức là edit cũng không dùng được.
+          Edit kéo theo View được tự động — nếu không có view permission thì user không thấy cột, tức là edit cũng không
+          dùng được.
         </p>
       </div>
     </div>

@@ -1,15 +1,15 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { ChevronDown, ChevronRight, LayoutList } from 'lucide-react';
+import type { DailyOverviewBacklogDesigner, DailyOverviewRow } from 'shared';
 import { WorkshopConfigCategory } from 'shared';
-import type {
-  DailyOverviewBacklogDesigner,
-  DailyOverviewRow,
-} from 'shared';
+
+import { useWorkshopConfigStore } from '@/store/workshopConfigStore';
+
+import { RepositoryRemote } from '@/services';
 
 import { Hint } from '@/components/common/Hint';
 import { TooltipProvider } from '@/components/ui/tooltip';
-import { RepositoryRemote } from '@/services';
-import { useWorkshopConfigStore } from '@/store/workshopConfigStore';
+
 import { handleAxiosError } from '@/utils';
 import { cn } from '@/utils/cn';
 
@@ -97,8 +97,7 @@ export function DesignerDailyOverview({ days: range = 7, from, to, reloadToken, 
   const { days, rows, backlogByDesigner, unassignedBacklog, columnTotals } = data;
   const nDays = days.length || range;
 
-  const noteName = (code: string) =>
-    resolve(WorkshopConfigCategory.ToolResultNote, code)?.name || code;
+  const noteName = (code: string) => resolve(WorkshopConfigCategory.ToolResultNote, code)?.name || code;
 
   const backlogGrand = useMemo(
     () => backlogByDesigner.reduce((s, d) => s + d.total, 0) + unassignedBacklog,
@@ -113,16 +112,12 @@ export function DesignerDailyOverview({ days: range = 7, from, to, reloadToken, 
           <div className="flex items-center gap-2">
             <LayoutList size={16} className="text-indigo-600" />
             <span className="text-sm font-semibold">Tổng quan {nDays} ngày</span>
-            <span className="hidden sm:inline text-[11px] text-muted-foreground">
-              — theo ngày vào sản xuất
-            </span>
+            <span className="hidden sm:inline text-[11px] text-muted-foreground">— theo ngày vào sản xuất</span>
           </div>
         </div>
 
         {!loading && days.length === 0 ? (
-          <p className="text-xs text-muted-foreground text-center py-10">
-            Không có đơn trong khoảng đã chọn.
-          </p>
+          <p className="text-xs text-muted-foreground text-center py-10">Không có đơn trong khoảng đã chọn.</p>
         ) : (
           <div className="overflow-x-auto">
             <table className="w-full text-[13px] tabular-nums border-separate border-spacing-0">
@@ -150,11 +145,7 @@ export function DesignerDailyOverview({ days: range = 7, from, to, reloadToken, 
               </thead>
               <tbody>
                 {/* 1. Tổng đơn */}
-                <MetricRow
-                  label="Tổng đơn"
-                  values={rows.map((r) => r.total)}
-                  total={columnTotals.total}
-                />
+                <MetricRow label="Tổng đơn" values={rows.map((r) => r.total)} total={columnTotals.total} />
                 {/* 1b. Tổng xong (Note Tool = ok) */}
                 <MetricRow
                   label="Tổng xong"
@@ -178,10 +169,7 @@ export function DesignerDailyOverview({ days: range = 7, from, to, reloadToken, 
                     <div className="text-[10px] text-muted-foreground font-normal">Note Tool ≠ ok</div>
                   </td>
                   {rows.map((r, i) => (
-                    <td
-                      key={days[i]}
-                      className="border-b border-l border-border/60 text-center px-1 py-1.5"
-                    >
+                    <td key={days[i]} className="border-b border-l border-border/60 text-center px-1 py-1.5">
                       {r.error === 0 ? (
                         <span className="text-muted-foreground/30">·</span>
                       ) : r.errorByNote.length > 0 ? (
@@ -250,15 +238,12 @@ export function DesignerDailyOverview({ days: range = 7, from, to, reloadToken, 
             <div className="mb-2 space-y-1">
               <div className="text-[11px] font-medium text-muted-foreground">
                 Tổng tồn {columnTotals.backlog} = Chưa soát{' '}
-                <span className="text-slate-600 dark:text-slate-300 font-semibold">
-                  {columnTotals.unreviewed}
-                </span>{' '}
-                + Lỗi{' '}
-                <span className="text-rose-600 font-semibold">{columnTotals.error}</span>
+                <span className="text-slate-600 dark:text-slate-300 font-semibold">{columnTotals.unreviewed}</span> +
+                Lỗi <span className="text-rose-600 font-semibold">{columnTotals.error}</span>
               </div>
               <div className="text-[10px] text-muted-foreground">
-                Bảng dưới: tồn theo trạng thái designer (đơn đã gán) — lăng kính khác, tổng{' '}
-                {backlogGrand}, có thể lệch với Tổng tồn (không tính đơn chưa soát/chưa gán theo Tool).
+                Bảng dưới: tồn theo trạng thái designer (đơn đã gán) — lăng kính khác, tổng {backlogGrand}, có thể lệch
+                với Tổng tồn (không tính đơn chưa soát/chưa gán theo Tool).
               </div>
             </div>
             {backlogByDesigner.length === 0 && unassignedBacklog === 0 ? (
@@ -280,9 +265,7 @@ export function DesignerDailyOverview({ days: range = 7, from, to, reloadToken, 
                       <tr key={d.userId} className="border-b border-border/50 hover:bg-muted/30">
                         <td className="px-3 py-1.5">
                           <div className="font-medium truncate max-w-[220px]">{d.fullName}</div>
-                          {d.email && (
-                            <div className="text-[10px] text-muted-foreground">{d.email}</div>
-                          )}
+                          {d.email && <div className="text-[10px] text-muted-foreground">{d.email}</div>}
                         </td>
                         <BLCell value={d.assigned} className="text-zinc-700 dark:text-zinc-200" />
                         <BLCell value={d.inProgress} className="text-indigo-600" />
@@ -294,10 +277,7 @@ export function DesignerDailyOverview({ days: range = 7, from, to, reloadToken, 
                       <tr className="border-b border-border/50 bg-slate-500/[0.06]">
                         <td className="px-3 py-1.5 font-medium text-slate-600 dark:text-slate-300">
                           Chưa gán
-                          <span className="text-[10px] text-muted-foreground font-normal">
-                            {' '}
-                            (chưa có designer)
-                          </span>
+                          <span className="text-[10px] text-muted-foreground font-normal"> (chưa có designer)</span>
                         </td>
                         <td className="text-center px-2 py-1.5 text-muted-foreground/40">·</td>
                         <td className="text-center px-2 py-1.5 text-muted-foreground/40">·</td>
@@ -343,14 +323,13 @@ function MetricRow({
         )}
       </td>
       {values.map((v, i) => (
-        <td
-          key={i}
-          className={cn('border-b border-l border-border/60 text-center px-1 py-1.5', className)}
-        >
+        <td key={i} className={cn('border-b border-l border-border/60 text-center px-1 py-1.5', className)}>
           {v === 0 ? <span className="text-muted-foreground/30">·</span> : <span className="font-semibold">{v}</span>}
         </td>
       ))}
-      <td className={cn('bg-muted/30 border-b border-l border-border text-center px-2 py-1.5 font-semibold', className)}>
+      <td
+        className={cn('bg-muted/30 border-b border-l border-border text-center px-2 py-1.5 font-semibold', className)}
+      >
         {total || <span className="text-muted-foreground/40">·</span>}
       </td>
     </tr>

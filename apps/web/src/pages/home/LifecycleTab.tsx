@@ -1,9 +1,9 @@
 import React, { useEffect, useMemo, useState } from 'react';
+import { useSearchParams } from 'react-router-dom';
 import {
   Activity,
   AlertTriangle,
   CheckCircle2,
-  BadgeCheck,
   ChevronDown,
   ChevronLeft,
   ChevronRight,
@@ -13,7 +13,6 @@ import {
   Flame,
   Hourglass,
   Inbox,
-  ListChecks,
   LogIn,
   LogOut,
   Package,
@@ -35,14 +34,17 @@ import {
   XAxis,
   YAxis,
 } from 'recharts';
-import { useSearchParams } from 'react-router-dom';
+
+import { RepositoryRemote } from '@/services';
 
 import { OrderFilterBar } from '@/components/orders/OrderFilterBar';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
-import { RepositoryRemote } from '@/services';
-import { usePermission } from '@/hooks/usePermission';
-import { cn } from '@/utils/cn';
+
 import { handleAxiosError } from '@/utils';
+import { cn } from '@/utils/cn';
+
+import { usePermission } from '@/hooks/usePermission';
+
 import { useAuthStore } from '../../store/authStore';
 
 interface LifecycleStageRow {
@@ -149,17 +151,13 @@ function KpiCard({ label, value, sub, icon, tone = 'default', loading }: KpiCard
         <span className="opacity-70 shrink-0">{icon}</span>
         <span className="text-[11px] font-medium truncate">{label}</span>
       </div>
-      <p className="text-2xl font-semibold tracking-tight tabular-nums text-foreground leading-none">
-        {value}
-      </p>
+      <p className="text-2xl font-semibold tracking-tight tabular-nums text-foreground leading-none">{value}</p>
       {sub && <p className="text-[11px] text-muted-foreground truncate mt-1">{sub}</p>}
     </div>
   );
 }
 
-type FunnelNode =
-  | { kind: 'stage'; row: LifecycleStageRow; step: number }
-  | { kind: 'done'; completed: number };
+type FunnelNode = { kind: 'stage'; row: LifecycleStageRow; step: number } | { kind: 'done'; completed: number };
 
 function chunk<T>(arr: T[], size: number): T[][] {
   const out: T[][] = [];
@@ -375,9 +373,7 @@ export default function LifecycleTab() {
   const { profile } = useAuthStore();
   const { roleName } = usePermission();
   // User gắn 1 xưởng (Fulfillment) → khóa vào xưởng đó. Role quản lý chọn mọi xưởng.
-  const isOverrideRole = ['SuperAdmin', 'Admin', 'Manager', 'SupportManager', 'Support'].includes(
-    roleName ?? '',
-  );
+  const isOverrideRole = ['SuperAdmin', 'Admin', 'Manager', 'SupportManager', 'Support'].includes(roleName ?? '');
   const lockedFactoryId = !isOverrideRole ? profile?.factoryId : undefined;
 
   const [searchParams, setSearchParams] = useSearchParams();
@@ -500,17 +496,17 @@ export default function LifecycleTab() {
           lockedFactoryId
             ? []
             : [
-              {
-                key: 'factory',
-                label: 'Xưởng',
-                value: selectedFactory,
-                onChange: setSelectedFactory,
-                options: [
-                  { value: '', label: 'Tất cả xưởng' },
-                  ...(data?.factories ?? []).map((f) => ({ value: f.factoryId, label: f.factoryName })),
-                ],
-              },
-            ]
+                {
+                  key: 'factory',
+                  label: 'Xưởng',
+                  value: selectedFactory,
+                  onChange: setSelectedFactory,
+                  options: [
+                    { value: '', label: 'Tất cả xưởng' },
+                    ...(data?.factories ?? []).map((f) => ({ value: f.factoryId, label: f.factoryName })),
+                  ],
+                },
+              ]
         }
         topActionsRight={
           lockedFactoryId ? (
@@ -551,8 +547,8 @@ export default function LifecycleTab() {
           value={
             totals?.bottleneckStage
               ? STAGE_META[totals.bottleneckStage]?.short ??
-              stages.find((s) => s.stage === totals.bottleneckStage)?.label ??
-              '—'
+                stages.find((s) => s.stage === totals.bottleneckStage)?.label ??
+                '—'
               : '—'
           }
           sub={
@@ -695,12 +691,20 @@ export default function LifecycleTab() {
                   const Icon = meta?.icon ?? Clock;
                   const isBottleneck = totals?.bottleneckStage === s.stage && s.backlog > 0;
                   const cell = (v: number, cls?: string) => (
-                    <td className={cn('text-right px-3 py-2.5 tabular-nums', v === 0 ? 'text-muted-foreground/40' : cls)}>
+                    <td
+                      className={cn('text-right px-3 py-2.5 tabular-nums', v === 0 ? 'text-muted-foreground/40' : cls)}
+                    >
                       {v === 0 ? '–' : formatNumber(v)}
                     </td>
                   );
                   return (
-                    <tr key={s.stage} className={cn('hover:bg-muted/30 transition-colors', isBottleneck && 'bg-amber-50/40 dark:bg-amber-500/5')}>
+                    <tr
+                      key={s.stage}
+                      className={cn(
+                        'hover:bg-muted/30 transition-colors',
+                        isBottleneck && 'bg-amber-50/40 dark:bg-amber-500/5',
+                      )}
+                    >
                       <td className="sticky left-0 bg-card px-4 py-2.5">
                         <div className="flex items-center gap-2">
                           <Icon size={15} className="text-primary shrink-0" />
@@ -840,9 +844,7 @@ function LineTooltip({ active, payload, label }: any) {
   return (
     <div className="bg-popover border border-border rounded-md shadow-md p-2.5 text-xs">
       <p className="font-semibold text-foreground">{label}</p>
-      <p className="text-muted-foreground tabular-nums">
-        {payload[0].value} đơn hoàn thành
-      </p>
+      <p className="text-muted-foreground tabular-nums">{payload[0].value} đơn hoàn thành</p>
     </div>
   );
 }

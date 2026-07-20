@@ -1,14 +1,16 @@
 import React from 'react';
 import { ListChecks, RefreshCw, Search } from 'lucide-react';
 
-import { Button } from '@/components/ui/button';
-import { Input } from '@/components/ui/input';
 import { DateRangePicker } from '@/components/common/DateRangePicker';
 import { Hint } from '@/components/common/Hint';
 import { SelectFilter } from '@/components/common/SelectFilter';
 import { BulkProductionIdDialog, parseProductionIds } from '@/components/orders/BulkProductionIdDialog';
-import { usePermission } from '@/hooks/usePermission';
+import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
+
 import { cn } from '@/utils/cn';
+
+import { usePermission } from '@/hooks/usePermission';
 
 /** 1 cột select trong grid facet — option list + permission gate. */
 export interface OrderFilterFacet {
@@ -102,27 +104,16 @@ export function OrderFilterBar({
   const searchTokenCount = search ? parseProductionIds(search).length : 0;
 
   const showSearch = search !== undefined && onSearchChange !== undefined;
-  const showDateRange =
-    createdFrom !== undefined && createdTo !== undefined && !!onDateRangeChange;
+  const showDateRange = createdFrom !== undefined && createdTo !== undefined && !!onDateRangeChange;
 
-  const visibleFacets = (facets || []).filter(
-    (f) => !f.hidden && (!f.perm || has(f.perm)),
-  );
+  const visibleFacets = (facets || []).filter((f) => !f.hidden && (!f.perm || has(f.perm)));
 
   return (
-    <div
-      className={cn(
-        'rounded-lg border border-border bg-card p-3 space-y-3',
-        className,
-      )}
-    >
+    <div className={cn('rounded-lg border border-border bg-card p-3 space-y-3', className)}>
       <div className="flex items-center gap-2 flex-wrap">
         {showSearch && (
           <div className="relative flex-1 min-w-[200px]">
-            <Search
-              size={13}
-              className="absolute left-2 top-1/2 -translate-y-1/2 text-muted-foreground"
-            />
+            <Search size={13} className="absolute left-2 top-1/2 -translate-y-1/2 text-muted-foreground" />
             <Input
               placeholder={searchPlaceholder}
               value={search}
@@ -164,12 +155,7 @@ export function OrderFilterBar({
       </div>
 
       {showDateRange && (
-        <DateRangePicker
-          variant="inline"
-          from={createdFrom}
-          to={createdTo}
-          onChange={onDateRangeChange}
-        />
+        <DateRangePicker variant="inline" from={createdFrom} to={createdTo} onChange={onDateRangeChange} />
       )}
 
       {middleRow}
@@ -177,13 +163,7 @@ export function OrderFilterBar({
       {visibleFacets.length > 0 && (
         <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-2">
           {visibleFacets.map((f) => (
-            <SelectFilter
-              key={f.key}
-              label={f.label}
-              value={f.value}
-              onChange={f.onChange}
-              options={f.options}
-            />
+            <SelectFilter key={f.key} label={f.label} value={f.value} onChange={f.onChange} options={f.options} />
           ))}
         </div>
       )}

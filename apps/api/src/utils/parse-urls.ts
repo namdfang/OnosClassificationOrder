@@ -13,13 +13,18 @@ type FileDocument = Document & {
 
 const configService = new ApiConfigService(new ConfigService());
 
-// eslint-disable-next-line sonarjs/cognitive-complexity
 export function parseUrls<T extends FileDocument>(fileDocument: T) {
   if (fileDocument.isGoogleDrive) {
     delete fileDocument.isGoogleDrive;
 
     if (fileDocument.url && fileDocument.url.includes('drive.google.com')) {
-      const imageId = UploadService.getGDriveFileId(fileDocument.url);
+      // BROKEN legacy path: `UploadService.getGDriveFileId` đã bị xóa khỏi
+      // service từ lâu — nhánh này chạy tới sẽ TypeError (hành vi sẵn có,
+      // cast type-only để qua type-check, KHÔNG đổi runtime). Ảnh Drive giờ
+      // đi qua pipeline R2 (`utils/design-url.ts:extractDriveId`).
+      const imageId = (UploadService as unknown as { getGDriveFileId(url: string): string }).getGDriveFileId(
+        fileDocument.url,
+      );
 
       fileDocument.url = `https://drive.google.com/uc?export=download&id=${imageId}`;
       fileDocument.previewUrl = `${configService.GDriveCDNUrl}/preview/${imageId}`;
@@ -44,7 +49,8 @@ export function parseUrls<T extends FileDocument>(fileDocument: T) {
   }
 
   const bucketName = process.env.AWS_S3_IMAGES_BUCKET_NAME || '';
-  const stripBucket = (path: string) => (bucketName && path.startsWith(bucketName + '/') ? path.slice(bucketName.length + 1) : path);
+  const stripBucket = (path: string) =>
+    bucketName && path.startsWith(bucketName + '/') ? path.slice(bucketName.length + 1) : path;
 
   if (fileDocument.url && !fileDocument.url.includes('http')) {
     fileDocument.url = `${process.env.CDN_URL}/${stripBucket(fileDocument.url)}`;

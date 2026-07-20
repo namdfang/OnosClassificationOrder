@@ -1,5 +1,5 @@
-import { create } from 'zustand';
 import type { DesignerTeamMember } from 'shared';
+import { create } from 'zustand';
 
 import { RepositoryRemote } from '@/services';
 

@@ -1,5 +1,7 @@
+import React from 'react';
+import { toast, Toaster as Sonner } from 'sonner';
+
 import { useThemeStore } from '@/store/themeStore';
-import { Toaster as Sonner, toast } from 'sonner';
 
 type ToasterProps = React.ComponentProps<typeof Sonner>;
 
@@ -24,4 +26,4 @@ const Toaster = ({ ...props }: ToasterProps) => {
   );
 };
 
-export { Toaster, toast };
+export { toast, Toaster };

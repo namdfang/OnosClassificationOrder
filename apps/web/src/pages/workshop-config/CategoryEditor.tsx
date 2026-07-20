@@ -1,36 +1,26 @@
 import React, { useEffect, useState } from 'react';
 import { GripVertical, Pencil, Plus, Trash2 } from 'lucide-react';
-import { toast } from 'sonner';
 import type {
   CreateWorkshopConfigDto,
   WorkshopConfig,
   WorkshopConfigCategory,
   WorkshopConfigDisplayMode,
 } from 'shared';
+import { toast } from 'sonner';
 
+import { useWorkshopConfigStore } from '@/store/workshopConfigStore';
+
+import { RepositoryRemote } from '@/services';
+
+import { Spinner } from '@/components/common/Spinner';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
-import {
-  Dialog,
-  DialogContent,
-  DialogFooter,
-  DialogHeader,
-  DialogTitle,
-} from '@/components/ui/dialog';
+import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Switch } from '@/components/ui/switch';
-import {
-  Table,
-  TableBody,
-  TableCell,
-  TableHead,
-  TableHeader,
-  TableRow,
-} from '@/components/ui/table';
-import { Spinner } from '@/components/common/Spinner';
-import { RepositoryRemote } from '@/services';
-import { useWorkshopConfigStore } from '@/store/workshopConfigStore';
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
+
 import { handleAxiosError } from '@/utils';
 
 import { ColorPicker } from './ColorPicker';
@@ -180,7 +170,8 @@ export function CategoryEditor({ category, mode }: Props) {
     <div className="rounded-lg border border-border bg-card">
       <div className="flex items-center justify-between p-4 border-b border-border">
         <p className="text-xs text-muted-foreground">
-          {items.length} mục — hiển thị dạng <span className="font-medium text-foreground">{mode === 'color' ? 'badge màu' : 'icon'}</span>
+          {items.length} mục — hiển thị dạng{' '}
+          <span className="font-medium text-foreground">{mode === 'color' ? 'badge màu' : 'icon'}</span>
         </p>
         <Button size="sm" onClick={openCreate}>
           <Plus size={14} /> Thêm
@@ -235,16 +226,14 @@ export function CategoryEditor({ category, mode }: Props) {
                 <TableCell className="font-medium">
                   {it.name}
                   {needsErrorSource && (
-                    <ErrorSourceBadge source={(it as { errorSource?: 'designer' | 'factory' | 'tool-check' }).errorSource} />
+                    <ErrorSourceBadge
+                      source={(it as { errorSource?: 'designer' | 'factory' | 'tool-check' }).errorSource}
+                    />
                   )}
                 </TableCell>
                 <TableCell className="font-mono text-xs text-muted-foreground">{it.code}</TableCell>
                 <TableCell>
-                  {it.isActive ? (
-                    <Badge variant="success">Bật</Badge>
-                  ) : (
-                    <Badge variant="secondary">Tắt</Badge>
-                  )}
+                  {it.isActive ? <Badge variant="success">Bật</Badge> : <Badge variant="secondary">Tắt</Badge>}
                 </TableCell>
                 <TableCell className="text-right">
                   <Button variant="ghost" size="sm" onClick={() => openEdit(it)}>
@@ -334,17 +323,14 @@ export function CategoryEditor({ category, mode }: Props) {
                   </button>
                 </div>
                 <p className="text-[11px] text-muted-foreground">
-                  Lỗi do designer → "Cần làm lại" cho designer. Do soát tool → đẩy về Support
-                  (vd thiếu file để in). Dashboard thống kê phân biệt các loại.
+                  Lỗi do designer → "Cần làm lại" cho designer. Do soát tool → đẩy về Support (vd thiếu file để in).
+                  Dashboard thống kê phân biệt các loại.
                 </p>
               </div>
             )}
             <div className="flex items-center justify-between rounded-md border border-border p-3">
               <Label>Hoạt động</Label>
-              <Switch
-                checked={form.isActive}
-                onCheckedChange={(v) => setForm({ ...form, isActive: v })}
-              />
+              <Switch checked={form.isActive} onCheckedChange={(v) => setForm({ ...form, isActive: v })} />
             </div>
           </div>
           <DialogFooter>
@@ -365,7 +351,8 @@ export function CategoryEditor({ category, mode }: Props) {
             <DialogTitle>Xóa mục</DialogTitle>
           </DialogHeader>
           <p className="text-sm text-muted-foreground">
-            Xóa <span className="font-medium text-foreground">{confirmDelete?.name}</span>? Mục đã được dùng trong đơn hàng vẫn giữ giá trị cũ nhưng sẽ không chọn được nữa.
+            Xóa <span className="font-medium text-foreground">{confirmDelete?.name}</span>? Mục đã được dùng trong đơn
+            hàng vẫn giữ giá trị cũ nhưng sẽ không chọn được nữa.
           </p>
           <DialogFooter>
             <Button variant="outline" onClick={() => setConfirmDelete(null)}>

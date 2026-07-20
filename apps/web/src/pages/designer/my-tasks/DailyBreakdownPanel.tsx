@@ -2,8 +2,10 @@ import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { AlertTriangle, CalendarDays, ChevronDown, ChevronRight, Filter } from 'lucide-react';
 import type { DesignerDailyBreakdownDay } from 'shared';
 
-import { Hint } from '@/components/common/Hint';
 import { RepositoryRemote } from '@/services';
+
+import { Hint } from '@/components/common/Hint';
+
 import { handleAxiosError } from '@/utils';
 import { cn } from '@/utils/cn';
 
@@ -67,13 +69,9 @@ export function DailyBreakdownPanel({ selectedDay, onPickDay, reloadToken }: Pro
         setLoading(true);
         const res = await RepositoryRemote.designer.myDailyBreakdown({ days: range });
         if (seq !== seqRef.current) return;
-        const data = res.data?.data as
-          | { days: DesignerDailyBreakdownDay[]; totals: Totals }
-          | undefined;
+        const data = res.data?.data as { days: DesignerDailyBreakdownDay[]; totals: Totals } | undefined;
         setDays(data?.days || []);
-        setTotals(
-          data?.totals || { assigned: 0, rework: 0, inProgress: 0, done: 0, unfinished: 0 },
-        );
+        setTotals(data?.totals || { assigned: 0, rework: 0, inProgress: 0, done: 0, unfinished: 0 });
       } catch (err) {
         if (seq === seqRef.current) handleAxiosError(err);
       } finally {
@@ -113,9 +111,7 @@ export function DailyBreakdownPanel({ selectedDay, onPickDay, reloadToken }: Pro
               onClick={() => setRange(r)}
               className={cn(
                 'px-2.5 py-1 text-[11px] font-medium transition-colors',
-                range === r
-                  ? 'bg-indigo-600 text-white'
-                  : 'bg-transparent text-muted-foreground hover:bg-muted',
+                range === r ? 'bg-indigo-600 text-white' : 'bg-transparent text-muted-foreground hover:bg-muted',
               )}
             >
               {r} ngày
@@ -242,9 +238,7 @@ export function DailyBreakdownPanel({ selectedDay, onPickDay, reloadToken }: Pro
                     <Cell value={totals.assigned} className="text-zinc-700 dark:text-zinc-200" strong />
                     <Cell value={totals.rework} className="text-amber-600" strong />
                     <Cell value={totals.inProgress} className="text-indigo-600" strong />
-                    <td className="px-2 py-1.5 text-center border-l border-border text-emerald-600">
-                      {totals.done}
-                    </td>
+                    <td className="px-2 py-1.5 text-center border-l border-border text-emerald-600">{totals.done}</td>
                   </tr>
                 </tfoot>
               )}
@@ -272,15 +266,7 @@ function Cell({ value, className, strong }: { value: number; className?: string;
   );
 }
 
-function SummaryChip({
-  label,
-  value,
-  className,
-}: {
-  label: string;
-  value: number;
-  className?: string;
-}) {
+function SummaryChip({ label, value, className }: { label: string; value: number; className?: string }) {
   return (
     <span className="text-muted-foreground">
       {label}: <span className={cn('font-semibold', className)}>{value}</span>

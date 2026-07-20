@@ -7,16 +7,43 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { CategoryEditor } from './CategoryEditor';
 
 const TABS: { key: WorkshopConfigCategory; label: string; description: string }[] = [
-  { key: WorkshopConfigCategory.PrintStatus, label: 'Trạng thái in', description: 'Danh sách trạng thái in (hiển thị badge màu)' },
-  { key: WorkshopConfigCategory.PrintStatusNote, label: 'Note trạng thái in', description: 'Ghi chú lần in (hiển thị icon)' },
+  {
+    key: WorkshopConfigCategory.PrintStatus,
+    label: 'Trạng thái in',
+    description: 'Danh sách trạng thái in (hiển thị badge màu)',
+  },
+  {
+    key: WorkshopConfigCategory.PrintStatusNote,
+    label: 'Note trạng thái in',
+    description: 'Ghi chú lần in (hiển thị icon)',
+  },
   { key: WorkshopConfigCategory.ToolResult, label: 'Kết quả Tool', description: 'Có/không có tool (hiển thị icon)' },
-  { key: WorkshopConfigCategory.ToolResultNote, label: 'Note kết quả Tool', description: 'OK / Lỗi / Không có file (hiển thị badge màu)' },
+  {
+    key: WorkshopConfigCategory.ToolResultNote,
+    label: 'Note kết quả Tool',
+    description: 'OK / Lỗi / Không có file (hiển thị badge màu)',
+  },
   { key: WorkshopConfigCategory.ErrorFileType, label: 'File sửa lỗi', description: 'Loại file lỗi (hiển thị icon)' },
-  { key: WorkshopConfigCategory.Assignee, label: 'Người thực hiện', description: 'Danh sách nhân sự (hiển thị icon)' },
-  { key: WorkshopConfigCategory.AssigneeNote, label: 'Note người thực hiện', description: 'Trạng thái xử lý (hiển thị icon)' },
-  { key: WorkshopConfigCategory.FabricType, label: 'Loại vải', description: 'Loại vải / blank dùng cho đơn (hiển thị icon)' },
-  { key: WorkshopConfigCategory.Machine, label: 'Loại máy', description: 'Các máy in trong xưởng — số máy (94, 27, 56…) (hiển thị badge màu)' },
-  { key: WorkshopConfigCategory.ProductionError, label: 'Lỗi sản xuất', description: 'Lý do xưởng báo lỗi đơn hàng (hiển thị badge màu)' },
+  {
+    key: WorkshopConfigCategory.AssigneeNote,
+    label: 'Note người thực hiện',
+    description: 'Trạng thái xử lý (hiển thị icon)',
+  },
+  {
+    key: WorkshopConfigCategory.FabricType,
+    label: 'Loại vải',
+    description: 'Loại vải / blank dùng cho đơn (hiển thị icon)',
+  },
+  {
+    key: WorkshopConfigCategory.Machine,
+    label: 'Loại máy',
+    description: 'Các máy in trong xưởng — số máy (94, 27, 56…) (hiển thị badge màu)',
+  },
+  {
+    key: WorkshopConfigCategory.ProductionError,
+    label: 'Lỗi sản xuất',
+    description: 'Lý do xưởng báo lỗi đơn hàng (hiển thị badge màu)',
+  },
 ];
 
 export default function WorkshopConfigPage() {
@@ -29,7 +56,8 @@ export default function WorkshopConfigPage() {
         <div>
           <h1 className="text-2xl font-bold text-foreground">Quản lý xưởng</h1>
           <p className="text-sm text-muted-foreground">
-            Cấu hình danh mục dùng cho cột nghiệp vụ của Order: trạng thái in, kết quả tool, file lỗi, người thực hiện...
+            Cấu hình danh mục dùng cho cột nghiệp vụ của Order: trạng thái in, kết quả tool, file lỗi, người thực
+            hiện...
           </p>
         </div>
       </div>

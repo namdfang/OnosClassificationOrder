@@ -1,16 +1,17 @@
-import { AuthUser } from 'core';
+import { ZodValidationPipe } from '@anatine/zod-nestjs';
 import { Body, Controller, Get, HttpCode, HttpStatus, Inject, Put, UsePipes } from '@nestjs/common';
 import { ApiOkResponse, ApiOperation, ApiTags } from '@nestjs/swagger';
-import { ZodValidationPipe } from '@anatine/zod-nestjs';
-import { Logger } from 'winston';
+import { AuthUser } from 'core';
 import {
   GetDesignerAssignmentConfigResDto,
   RoleType,
   SaveDesignerAssignmentConfigDto,
   SaveDesignerAssignmentConfigResDto,
 } from 'shared';
+import { Logger } from 'winston';
 
 import { Auth } from '@/decorators';
+
 import { UserDocument } from '../user/user.entity';
 import { DesignerAssignmentService } from './designer-assignment.service';
 

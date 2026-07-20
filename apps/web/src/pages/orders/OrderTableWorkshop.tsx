@@ -1,54 +1,57 @@
-import React, {
-  useCallback,
-  useEffect,
-  useLayoutEffect,
-  useMemo,
-  useRef,
-  useState,
-} from 'react';
-import { Ban, CalendarClock, ChevronDown, ChevronRight, FilterX, History, MousePointerClick, PauseCircle, X } from 'lucide-react';
+import React, { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import { useSearchParams } from 'react-router-dom';
-import { useVirtualizer } from '@tanstack/react-virtual';
+import {
+  Ban,
+  CalendarClock,
+  ChevronDown,
+  ChevronRight,
+  FilterX,
+  History,
+  MousePointerClick,
+  PauseCircle,
+  X,
+} from 'lucide-react';
 import type { WorkshopAvailableFilters } from 'shared';
+import { useVirtualizer } from '@tanstack/react-virtual';
 
-import { Badge } from '@/components/ui/badge';
-import { Button } from '@/components/ui/button';
+import { useWorkshopConfigStore } from '@/store/workshopConfigStore';
+
+import { RepositoryRemote } from '@/services';
+
+import { ImagePreviewDialog } from '@/components/common/ImagePreviewDialog';
 import { PaginationBar } from '@/components/common/PaginationBar';
 import { Spinner } from '@/components/common/Spinner';
-import { ImagePreviewDialog } from '@/components/common/ImagePreviewDialog';
-import { OrderFilterBar, type OrderFilterFacet } from '@/components/orders/OrderFilterBar';
-import {
-  Table,
-  TableBody,
-  TableCell,
-  TableHead,
-  TableHeader,
-  TableRow,
-} from '@/components/ui/table';
-import { TooltipProvider } from '@/components/ui/tooltip';
 import { BulkEditToolbar } from '@/components/orders/BulkEditToolbar';
-import { OrderDetailDialog } from '@/components/orders/OrderDetailDialog';
-import { OrderLogTimelineDialog } from '@/components/orders/OrderLogTimelineDialog';
-import { DesignerBacklogDialog } from '@/components/orders/DesignerBacklogDialog';
-import { OrderRowActionsMenu } from '@/components/orders/OrderRowActionsMenu';
 import { CancelledBadge } from '@/components/orders/CancelledBadge';
+import { DesignerBacklogDialog } from '@/components/orders/DesignerBacklogDialog';
 import { HeldBadge } from '@/components/orders/HeldBadge';
-import { isCancelled, isHeld } from '@/utils/orderActions';
-import { DesignerSummaryPanel } from './DesignerSummaryPanel';
+import { OrderDetailDialog } from '@/components/orders/OrderDetailDialog';
+import { OrderFilterBar, type OrderFilterFacet } from '@/components/orders/OrderFilterBar';
+import { OrderLogTimelineDialog } from '@/components/orders/OrderLogTimelineDialog';
+import { OrderRowActionsMenu } from '@/components/orders/OrderRowActionsMenu';
 import {
+  buildColGroups,
+  GroupCellContent,
+  type ResolvedColGroup,
   WORKSHOP_COLS,
-  type WorkshopColMeta,
   type WorkshopOrderRow,
   type WorkshopRenderCtx,
 } from '@/components/orders/workshopTableConfig';
-import { usePermission } from '@/hooks/usePermission';
-import { usePendingDesignsPoll } from '@/hooks/usePendingDesignsPoll';
-import { RepositoryRemote } from '@/services';
-import { useWorkshopConfigStore } from '@/store/workshopConfigStore';
+import { Badge } from '@/components/ui/badge';
+import { Button } from '@/components/ui/button';
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
+import { TooltipProvider } from '@/components/ui/tooltip';
+
 import { handleAxiosError } from '@/utils';
-import { useDebounce } from '@/hooks/useDebounce';
-import { NO_TOOL_ROW_CLASS, useIsNoTool } from '@/hooks/useIsNoTool';
 import { cn } from '@/utils/cn';
+import { isCancelled, isHeld } from '@/utils/orderActions';
+
+import { useDebounce } from '@/hooks/useDebounce';
+import { useIsNoTool } from '@/hooks/useIsNoTool';
+import { usePendingDesignsPoll } from '@/hooks/usePendingDesignsPoll';
+import { usePermission } from '@/hooks/usePermission';
+
+import { DesignerSummaryPanel } from './DesignerSummaryPanel';
 
 // Types and column config live in workshopTableConfig.tsx (shared with OrdersMiniTable).
 type OrderRow = WorkshopOrderRow;
@@ -64,15 +67,21 @@ const FILTER_CHIP_COLORS: Record<string, string> = {
   search: 'bg-slate-100 text-slate-700 border-slate-300 dark:bg-slate-800 dark:text-slate-200 dark:border-slate-600',
   date: 'bg-emerald-100 text-emerald-700 border-emerald-300 dark:bg-emerald-900/30 dark:text-emerald-300 dark:border-emerald-800',
   fabricType: 'bg-blue-100 text-blue-700 border-blue-300 dark:bg-blue-900/30 dark:text-blue-300 dark:border-blue-800',
-  machineNumber: 'bg-violet-100 text-violet-700 border-violet-300 dark:bg-violet-900/30 dark:text-violet-300 dark:border-violet-800',
+  machineNumber:
+    'bg-violet-100 text-violet-700 border-violet-300 dark:bg-violet-900/30 dark:text-violet-300 dark:border-violet-800',
   printStatus: 'bg-cyan-100 text-cyan-700 border-cyan-300 dark:bg-cyan-900/30 dark:text-cyan-300 dark:border-cyan-800',
-  toolResult: 'bg-amber-100 text-amber-700 border-amber-300 dark:bg-amber-900/30 dark:text-amber-300 dark:border-amber-800',
-  toolResultNote: 'bg-orange-100 text-orange-700 border-orange-300 dark:bg-orange-900/30 dark:text-orange-300 dark:border-orange-800',
+  toolResult:
+    'bg-amber-100 text-amber-700 border-amber-300 dark:bg-amber-900/30 dark:text-amber-300 dark:border-amber-800',
+  toolResultNote:
+    'bg-orange-100 text-orange-700 border-orange-300 dark:bg-orange-900/30 dark:text-orange-300 dark:border-orange-800',
   errorFile: 'bg-rose-100 text-rose-700 border-rose-300 dark:bg-rose-900/30 dark:text-rose-300 dark:border-rose-800',
-  assignee: 'bg-indigo-100 text-indigo-700 border-indigo-300 dark:bg-indigo-900/30 dark:text-indigo-300 dark:border-indigo-800',
-  designerStatus: 'bg-teal-100 text-teal-700 border-teal-300 dark:bg-teal-900/30 dark:text-teal-300 dark:border-teal-800',
+  assignee:
+    'bg-indigo-100 text-indigo-700 border-indigo-300 dark:bg-indigo-900/30 dark:text-indigo-300 dark:border-indigo-800',
+  designerStatus:
+    'bg-teal-100 text-teal-700 border-teal-300 dark:bg-teal-900/30 dark:text-teal-300 dark:border-teal-800',
   productionError: 'bg-red-100 text-red-700 border-red-300 dark:bg-red-900/30 dark:text-red-300 dark:border-red-800',
-  userSku: 'bg-fuchsia-100 text-fuchsia-700 border-fuchsia-300 dark:bg-fuchsia-900/30 dark:text-fuchsia-300 dark:border-fuchsia-800',
+  userSku:
+    'bg-fuchsia-100 text-fuchsia-700 border-fuchsia-300 dark:bg-fuchsia-900/30 dark:text-fuchsia-300 dark:border-fuchsia-800',
 };
 const FILTER_CHIP_DEFAULT =
   'bg-zinc-100 text-zinc-700 border-zinc-300 dark:bg-zinc-800 dark:text-zinc-200 dark:border-zinc-600';
@@ -89,17 +98,11 @@ function todayISO(): string {
 }
 
 // Combo = (size + loại vải + mockup). Dùng để đếm ×N + highlight combo trùng.
-const comboKeyOf = (r: OrderRow) =>
-  `${r.size || ''}|${r.fabricType || ''}|${r.mockupOriginalUrl || r.mockupUrl || ''}`;
+const comboKeyOf = (r: OrderRow) => `${r.size || ''}|${r.fabricType || ''}|${r.mockupOriginalUrl || r.mockupUrl || ''}`;
 
 // Virtualization cần cột width CỐ ĐỊNH (table-fixed) để không giật khi cuộn.
-// Lấy số px từ class `min-w-[Npx]` của mỗi cột làm width; fallback 140.
-const CHECKBOX_COL_W = 32; // khớp `w-8` + sticky left-8 của cột productionId
+const CHECKBOX_COL_W = 32; // khớp `w-8` + sticky left-8 của group đầu tiên
 const ACTIONS_COL_W = 64; // khớp `w-16` cột action cuối
-const parseColWidth = (c: WorkshopColMeta): number => {
-  const m = c.width?.match(/min-w-\[(\d+)px\]/);
-  return m ? Number(m[1]) : 140;
-};
 
 // Scroll thật của app nằm ở `<main className="overflow-auto">` (MainLayout),
 // KHÔNG phải window → virtualizer phải trỏ đúng scroll container này. Tìm
@@ -111,12 +114,12 @@ const getScrollParent = (node: HTMLElement | null): HTMLElement => {
     if (oy === 'auto' || oy === 'scroll' || oy === 'overlay') return el;
     el = el.parentElement;
   }
-  return document.scrollingElement as HTMLElement || document.documentElement;
+  return (document.scrollingElement as HTMLElement) || document.documentElement;
 };
 
 interface ProductRowProps {
   row: OrderRow;
-  cols: WorkshopColMeta[];
+  groups: ResolvedColGroup[];
   ctx: RenderCtx;
   comboN: number;
   isHeaviest: boolean;
@@ -139,7 +142,7 @@ interface ProductRowProps {
  */
 const ProductRow = React.memo(function ProductRow({
   row,
-  cols,
+  groups,
   ctx,
   comboN,
   isHeaviest,
@@ -155,24 +158,31 @@ const ProductRow = React.memo(function ProductRow({
   const cancelled = isCancelled(row);
   const held = isHeld(row);
   const dim = cancelled || held;
-  // Memo nội dung cell (c.render) theo [cols, row, ctx] — 3 prop này ổn định
-  // khi row không đổi. Nhờ vậy khi ProductRow re-render CHỈ vì đổi isSelected
-  // (→ đổi rowBgClass sticky), các cell component (IconSelectCell, Assignee…)
-  // KHÔNG render lại vì element ref được cache → React bail subtree.
+  // Flatten toàn bộ member cols của mọi group → render 1 lần, lookup lại theo
+  // key khi build từng group cell. Memo theo [groups, row, ctx, held] giống
+  // logic renderedCells cũ — chỉ đổi từ mảng theo index sang Map theo key vì
+  // giờ 1 group cell cần nhiều member render ghép lại.
   // Đơn đang GIỮ → override canEditField=false cho mọi cell (read-only). Menu
   // "..." (Mở giữ) nằm ở cột riêng nên vẫn thao tác được.
-  const renderedCells = useMemo(
-    () => cols.map((c) => c.render(row, held ? { ...ctx, canEditField: () => false } : ctx)),
-    [cols, row, ctx, held],
-  );
+  const renderedByKey = useMemo(() => {
+    const effectiveCtx = held ? { ...ctx, canEditField: () => false } : ctx;
+    const map = new Map<string, React.ReactNode>();
+    for (const g of groups) {
+      for (const c of g.members) map.set(c.key, c.render(row, effectiveCtx));
+    }
+    return map;
+  }, [groups, row, ctx, held]);
   // Trải thẳng bg classes (KHÔNG dùng bg-inherit vì sticky cell cần own bg để
   // mask cell scroll phía sau — `inherit` không reliable với TR background).
+  // BẮT BUỘC màu ĐẶC (không alpha `/NN`) — sticky cell (checkbox/identity/action)
+  // dùng chính class này làm nền che nội dung cuộn phía sau; màu có alpha sẽ để
+  // lộ chữ của cột khác đè lên khi cuộn ngang (cột "Mã đơn / Ưu tiên" bị xuyên thấu).
   const rowBgClass = isSelected
-    ? 'bg-primary/10 dark:bg-primary/20'
+    ? 'bg-indigo-50 dark:bg-indigo-950'
     : isHeaviest
-      ? 'bg-amber-50 dark:bg-amber-500/10'
+      ? 'bg-amber-50 dark:bg-amber-950'
       : noTool
-        ? 'bg-sky-100 dark:bg-sky-500/20'
+        ? 'bg-sky-100 dark:bg-sky-950'
         : 'bg-card';
   return (
     <TableRow
@@ -195,28 +205,32 @@ const ProductRow = React.memo(function ProductRow({
           title="Shift+click để chọn cả range tới checkbox trước đó"
         />
       </TableCell>
-      {cols.map((c, i) => (
+      {groups.map((g, gi) => (
         <TableCell
-          key={c.key}
+          key={g.key}
           className={cn(
-            'py-2',
-            i === 0 &&
-              cn('sticky left-8 z-10 shadow-[1px_0_0_0_var(--border)]', rowBgClass),
+            'py-2 align-top',
+            gi === 0 && cn('sticky left-8 z-10 shadow-[1px_0_0_0_var(--border)]', rowBgClass),
           )}
         >
-          <div className="flex items-center gap-1.5">
-            {c.key === 'mockupTypeSize' && comboN > 1 && (
-              <Badge
-                variant={isHeaviest ? 'warning' : 'secondary'}
-                className="font-mono text-[10px] px-1 py-0 shrink-0"
-                title={`Có ${comboN} đơn cùng (size + loại vải + mockup) trong sản phẩm này`}
-              >
-                ×{comboN}
-              </Badge>
-            )}
-            {i === 0 && cancelled && <CancelledBadge reason={row.cancelReason} />}
-            {i === 0 && held && !cancelled && <HeldBadge reason={row.holdReason} />}
-            <div className="min-w-0 flex-1">{renderedCells[i]}</div>
+          <div className="flex flex-col gap-1">
+            {gi === 0 && cancelled && <CancelledBadge reason={row.cancelReason} />}
+            {gi === 0 && held && !cancelled && <HeldBadge reason={row.holdReason} />}
+            <GroupCellContent
+              group={g}
+              renderedByKey={renderedByKey}
+              extra={(key) =>
+                key === 'mockupTypeSize' && comboN > 1 ? (
+                  <Badge
+                    variant={isHeaviest ? 'warning' : 'secondary'}
+                    className="font-mono text-[10px] px-1 py-0 shrink-0"
+                    title={`Có ${comboN} đơn cùng (size + loại vải + mockup) trong sản phẩm này`}
+                  >
+                    ×{comboN}
+                  </Badge>
+                ) : null
+              }
+            />
           </div>
         </TableCell>
       ))}
@@ -276,7 +290,12 @@ export function OrderTableWorkshop() {
    * change event không carry modifier keys.
    */
   const shiftKeyRef = useRef(false);
-  const [preview, setPreview] = useState<{ url: string; originalUrl?: string; title: string; sourceUrl?: string } | null>(null);
+  const [preview, setPreview] = useState<{
+    url: string;
+    originalUrl?: string;
+    title: string;
+    sourceUrl?: string;
+  } | null>(null);
   const [historyTarget, setHistoryTarget] = useState<{ id: string; productionId: string } | null>(null);
   const [detailTarget, setDetailTarget] = useState<{ id: string; productionId: string } | null>(null);
   const [collapsedTypes, setCollapsedTypes] = useState<Set<string>>(new Set());
@@ -291,45 +310,21 @@ export function OrderTableWorkshop() {
   }, []);
 
   // Filters by workshop code — single value mỗi facet.
-  const [filterPrintStatus, setFilterPrintStatus] = useState<string>(
-    () => searchParams.get('wprint') || '',
-  );
-  const [filterToolResultNote, setFilterToolResultNote] = useState<string>(
-    () => searchParams.get('wnote') || '',
-  );
-  const [filterAssignee, setFilterAssignee] = useState<string>(
-    () => searchParams.get('wassign') || '',
-  );
-  const [filterProductionError, setFilterProductionError] = useState<string>(
-    () => searchParams.get('werror') || '',
-  );
-  const [filterFabricType, setFilterFabricType] = useState<string>(
-    () => searchParams.get('wfabric') || '',
-  );
-  const [filterMachineNumber, setFilterMachineNumber] = useState<string>(
-    () => searchParams.get('wmnum') || '',
-  );
-  const [filterToolResult, setFilterToolResult] = useState<string>(
-    () => searchParams.get('wtool') || '',
-  );
-  const [filterErrorFile, setFilterErrorFile] = useState<string>(
-    () => searchParams.get('werrfile') || '',
-  );
-  const [filterDesignerStatus, setFilterDesignerStatus] = useState<string>(
-    () => searchParams.get('wdstatus') || '',
-  );
-  const [filterUserSku, setFilterUserSku] = useState<string>(
-    () => searchParams.get('wusersku') || '',
-  );
+  const [filterPrintStatus, setFilterPrintStatus] = useState<string>(() => searchParams.get('wprint') || '');
+  const [filterToolResultNote, setFilterToolResultNote] = useState<string>(() => searchParams.get('wnote') || '');
+  const [filterAssignee, setFilterAssignee] = useState<string>(() => searchParams.get('wassign') || '');
+  const [filterProductionError, setFilterProductionError] = useState<string>(() => searchParams.get('werror') || '');
+  const [filterFabricType, setFilterFabricType] = useState<string>(() => searchParams.get('wfabric') || '');
+  const [filterMachineNumber, setFilterMachineNumber] = useState<string>(() => searchParams.get('wmnum') || '');
+  const [filterToolResult, setFilterToolResult] = useState<string>(() => searchParams.get('wtool') || '');
+  const [filterErrorFile, setFilterErrorFile] = useState<string>(() => searchParams.get('werrfile') || '');
+  const [filterDesignerStatus, setFilterDesignerStatus] = useState<string>(() => searchParams.get('wdstatus') || '');
+  const [filterUserSku, setFilterUserSku] = useState<string>(() => searchParams.get('wusersku') || '');
   // Toggle "Đang giữ" — chỉ hiện đơn đang bị giữ (heldAt set).
-  const [filterHeld, setFilterHeld] = useState<boolean>(
-    () => searchParams.get('wheld') === 'true',
-  );
+  const [filterHeld, setFilterHeld] = useState<boolean>(() => searchParams.get('wheld') === 'true');
   // Toggle "Đã hủy" — chỉ hiện đơn đã hủy (cancelledAt set). Mặc định tắt: đơn
   // hủy vẫn hiện tô xám trong list nhưng KHÔNG tính vào facet count.
-  const [filterCancelled, setFilterCancelled] = useState<boolean>(
-    () => searchParams.get('wcancel') === 'true',
-  );
+  const [filterCancelled, setFilterCancelled] = useState<boolean>(() => searchParams.get('wcancel') === 'true');
 
   // Sync state → URL (replace). Strip default/empty values.
   useEffect(() => {
@@ -384,23 +379,9 @@ export function OrderTableWorkshop() {
     if (!configLoaded) loadConfig();
   }, [configLoaded, loadConfig]);
 
-  const visibleCols = useMemo(() => {
-    const filtered = COLS.filter((c) => !c.perm || canViewField(c.key));
-    // Support role muốn 4 cột tool-result/note/error-file/error-note đứng
-    // TRƯỚC `printStatus` (workflow: soát tool → in). Reorder client-side để
-    // không ảnh hưởng layout role khác. Idempotent: chỉ swap nếu thấy đủ.
-    if (roleName !== 'Support') return filtered;
-    const SUPPORT_BEFORE_PRINT = ['toolResult', 'toolResultNote', 'errorFile', 'errorFileNote'];
-    const printIdx = filtered.findIndex((c) => c.key === 'printStatus');
-    if (printIdx < 0) return filtered;
-    const supportCols = SUPPORT_BEFORE_PRINT.map((k) => filtered.find((c) => c.key === k)).filter(
-      (c): c is NonNullable<typeof c> => !!c,
-    );
-    if (supportCols.length === 0) return filtered;
-    const without = filtered.filter((c) => !SUPPORT_BEFORE_PRINT.includes(c.key));
-    const newPrintIdx = without.findIndex((c) => c.key === 'printStatus');
-    return [...without.slice(0, newPrintIdx), ...supportCols, ...without.slice(newPrintIdx)];
-  }, [canViewField, roleName]);
+  // Permission filter theo field — thứ tự KHÔNG còn ý nghĩa (group quyết định
+  // thứ tự hiển thị, xem `colGroups` bên dưới), chỉ dùng để tra cứu theo key.
+  const visibleCols = useMemo(() => COLS.filter((c) => !c.perm || canViewField(c.key)), [canViewField]);
 
   // Server returns groups of products (page = N products, not N rows). We keep
   // the flat `items` list for things like bulk select + checkbox state, but
@@ -520,10 +501,7 @@ export function OrderTableWorkshop() {
     shiftKeyRef.current = shiftKey;
   }, []);
 
-  const onHistory = useCallback(
-    (id: string, productionId: string) => setHistoryTarget({ id, productionId }),
-    [],
-  );
+  const onHistory = useCallback((id: string, productionId: string) => setHistoryTarget({ id, productionId }), []);
 
   const toggleAll = () => {
     setSelected((prev) => {
@@ -649,11 +627,18 @@ export function OrderTableWorkshop() {
     return out;
   }, [decoratedGroups, collapsedTypes]);
 
-  // Cột width cố định (table-fixed) + tổng width bảng cho horizontal scroll.
-  const colWidths = useMemo(() => visibleCols.map(parseColWidth), [visibleCols]);
+  // Group các field liên quan vào 1 cột hiển thị (xem `buildColGroups` trong
+  // workshopTableConfig.tsx — dùng chung với OrdersMiniTable/OrderFactoryTab) —
+  // chỉ giữ member nào còn trong visibleCols (đã lọc quyền), bỏ hẳn group nào
+  // rỗng (mọi member đều bị ẩn quyền).
+  const colGroups = useMemo(() => buildColGroups(visibleCols, roleName), [visibleCols, roleName]);
+
+  // Width cố định (table-fixed) tính theo GROUP (không phải field lẻ) + tổng
+  // width bảng cho horizontal scroll — đây là phần giảm scroll ngang chính:
+  // nhiều field xếp CHIỀU DỌC trong 1 group thay vì mỗi field 1 cột ngang.
   const totalTableWidth = useMemo(
-    () => CHECKBOX_COL_W + colWidths.reduce((s, w) => s + w, 0) + ACTIONS_COL_W,
-    [colWidths],
+    () => CHECKBOX_COL_W + colGroups.reduce((s, g) => s + g.width, 0) + ACTIONS_COL_W,
+    [colGroups],
   );
 
   // scrollMargin = offset (tính từ đỉnh document) của <tbody> — nơi row index 0
@@ -686,8 +671,7 @@ export function OrderTableWorkshop() {
       if (!body || !sc) return;
       // Offset của <tbody> trong nội dung cuộn của scroll container (không đổi
       // khi cuộn vì trừ đi bù cộng scrollTop) — chỉ đo lại khi layout đổi.
-      const margin =
-        body.getBoundingClientRect().top - sc.getBoundingClientRect().top + sc.scrollTop;
+      const margin = body.getBoundingClientRect().top - sc.getBoundingClientRect().top + sc.scrollTop;
       setScrollMargin(Math.max(0, margin));
     };
     measure();
@@ -703,22 +687,21 @@ export function OrderTableWorkshop() {
   const rowVirtualizer = useVirtualizer({
     count: flatItems.length,
     getScrollElement: () => scrollEl,
-    // Ước lượng SÁT chiều cao thật (row Production/Order thường 2-3 dòng ~68px)
-    // để tổng chiều cao không bị thiếu → không "cụt" hàng cuối khi cuộn tới đáy.
-    // measureElement vẫn tự đo lại chính xác sau khi render.
-    estimateSize: (i) => (flatItems[i]?.kind === 'header' ? 42 : 68),
+    // Ước lượng SÁT chiều cao thật. Row giờ xếp field CHIỀU DỌC trong từng
+    // group (group đầy nhất — "Mã đơn/Ưu tiên" — có tới 4 dòng) nên cao hơn
+    // trước (~68px/2-3 dòng) → estimate ~130px. measureElement vẫn tự đo lại
+    // chính xác sau khi render.
+    estimateSize: (i) => (flatItems[i]?.kind === 'header' ? 42 : 130),
     overscan: 12,
     scrollMargin,
     getItemKey: (i) => flatItems[i]?.key ?? i,
   });
   const virtualItems = rowVirtualizer.getVirtualItems();
-  const virtualPadTop = virtualItems.length
-    ? virtualItems[0].start - rowVirtualizer.options.scrollMargin
-    : 0;
+  const virtualPadTop = virtualItems.length ? virtualItems[0].start - rowVirtualizer.options.scrollMargin : 0;
   const virtualPadBottom = virtualItems.length
     ? rowVirtualizer.getTotalSize() - virtualItems[virtualItems.length - 1].end
     : 0;
-  const fullColSpan = visibleCols.length + 2;
+  const fullColSpan = colGroups.length + 2;
 
   /**
    * Excel-style range select. Native checkbox toggle chạy bình thường (visual
@@ -777,10 +760,7 @@ export function OrderTableWorkshop() {
     });
   }, []);
 
-  const openDetail = useCallback(
-    (id: string, productionId: string) => setDetailTarget({ id, productionId }),
-    [],
-  );
+  const openDetail = useCallback((id: string, productionId: string) => setDetailTarget({ id, productionId }), []);
   const renderCtx: RenderCtx = useMemo(
     () => ({ canEditField, patchRow, openPreview, openDetail }),
     [canEditField, patchRow, openPreview, openDetail],
@@ -806,7 +786,6 @@ export function OrderTableWorkshop() {
   useEffect(() => {
     setSelected(new Set());
     setLastClickedId(null);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [
     debouncedSearch,
     bulkIds,
@@ -828,16 +807,85 @@ export function OrderTableWorkshop() {
 
   // Định nghĩa facet 1 lần — dùng cho cả OrderFilterBar lẫn chip "đang lọc".
   const facets: OrderFilterFacet[] = [
-    { key: 'fabricType', label: 'Loại vải', value: filterFabricType, onChange: setFilterFabricType, options: workshopFilters?.fabricType || [], perm: 'order.field.fabricType.view' },
-    { key: 'machineNumber', label: 'Máy', value: filterMachineNumber, onChange: setFilterMachineNumber, options: workshopFilters?.machineNumber || [], perm: 'order.field.machineNumber.view' },
-    { key: 'printStatus', label: 'Trạng thái in', value: filterPrintStatus, onChange: setFilterPrintStatus, options: workshopFilters?.printStatus || [], perm: 'order.field.printStatus.view' },
-    { key: 'toolResult', label: 'Kết quả Tool', value: filterToolResult, onChange: setFilterToolResult, options: workshopFilters?.toolResult || [], perm: 'order.field.toolResult.view' },
-    { key: 'toolResultNote', label: 'Note kq Tool', value: filterToolResultNote, onChange: setFilterToolResultNote, options: workshopFilters?.toolResultNote || [], perm: 'order.field.toolResultNote.view' },
-    { key: 'errorFile', label: 'File sửa lỗi', value: filterErrorFile, onChange: setFilterErrorFile, options: workshopFilters?.errorFile || [], perm: 'order.field.errorFile.view' },
-    { key: 'userSku', label: 'Khách hàng', value: filterUserSku, onChange: setFilterUserSku, options: workshopFilters?.userSku || [] },
-    { key: 'assignee', label: 'Người thực hiện', value: filterAssignee, onChange: setFilterAssignee, options: assigneeOptions, perm: 'order.field.assignee.view' },
-    { key: 'designerStatus', label: 'TT Designer', value: filterDesignerStatus, onChange: setFilterDesignerStatus, options: designerStatusOptions, hidden: !canSeeDesignerSummary },
-    { key: 'productionError', label: 'Lỗi xưởng', value: filterProductionError, onChange: setFilterProductionError, options: workshopFilters?.productionError || [], perm: 'order.field.productionError.view' },
+    {
+      key: 'fabricType',
+      label: 'Loại vải',
+      value: filterFabricType,
+      onChange: setFilterFabricType,
+      options: workshopFilters?.fabricType || [],
+      perm: 'order.field.fabricType.view',
+    },
+    {
+      key: 'machineNumber',
+      label: 'Máy',
+      value: filterMachineNumber,
+      onChange: setFilterMachineNumber,
+      options: workshopFilters?.machineNumber || [],
+      perm: 'order.field.machineNumber.view',
+    },
+    {
+      key: 'printStatus',
+      label: 'Trạng thái in',
+      value: filterPrintStatus,
+      onChange: setFilterPrintStatus,
+      options: workshopFilters?.printStatus || [],
+      perm: 'order.field.printStatus.view',
+    },
+    {
+      key: 'toolResult',
+      label: 'Kết quả Tool',
+      value: filterToolResult,
+      onChange: setFilterToolResult,
+      options: workshopFilters?.toolResult || [],
+      perm: 'order.field.toolResult.view',
+    },
+    {
+      key: 'toolResultNote',
+      label: 'Note kq Tool',
+      value: filterToolResultNote,
+      onChange: setFilterToolResultNote,
+      options: workshopFilters?.toolResultNote || [],
+      perm: 'order.field.toolResultNote.view',
+    },
+    {
+      key: 'errorFile',
+      label: 'File sửa lỗi',
+      value: filterErrorFile,
+      onChange: setFilterErrorFile,
+      options: workshopFilters?.errorFile || [],
+      perm: 'order.field.errorFile.view',
+    },
+    {
+      key: 'userSku',
+      label: 'Khách hàng',
+      value: filterUserSku,
+      onChange: setFilterUserSku,
+      options: workshopFilters?.userSku || [],
+    },
+    {
+      key: 'assignee',
+      label: 'Người thực hiện',
+      value: filterAssignee,
+      onChange: setFilterAssignee,
+      options: assigneeOptions,
+      perm: 'order.field.assignee.view',
+    },
+    {
+      key: 'designerStatus',
+      label: 'TT Designer',
+      value: filterDesignerStatus,
+      onChange: setFilterDesignerStatus,
+      options: designerStatusOptions,
+      hidden: !canSeeDesignerSummary,
+    },
+    {
+      key: 'productionError',
+      label: 'Lỗi xưởng',
+      value: filterProductionError,
+      onChange: setFilterProductionError,
+      options: workshopFilters?.productionError || [],
+      perm: 'order.field.productionError.view',
+    },
   ];
 
   const isDefaultDate = createdFrom === todayISO() && createdTo === todayISO();
@@ -858,7 +906,10 @@ export function OrderTableWorkshop() {
       label: f.label,
       display: opt?.label || f.value,
       color: FILTER_CHIP_COLORS[f.key] || FILTER_CHIP_DEFAULT,
-      onClear: () => { f.onChange(''); setPage(1); },
+      onClear: () => {
+        f.onChange('');
+        setPage(1);
+      },
     });
   }
   if (search.trim()) {
@@ -867,7 +918,10 @@ export function OrderTableWorkshop() {
       label: 'Tìm',
       display: search.trim(),
       color: FILTER_CHIP_COLORS.search,
-      onClear: () => { setSearch(''); setPage(1); },
+      onClear: () => {
+        setSearch('');
+        setPage(1);
+      },
     });
   }
   if (bulkIds.length) {
@@ -876,7 +930,10 @@ export function OrderTableWorkshop() {
       label: 'Nhiều mã',
       display: `${bulkIds.length} mã`,
       color: FILTER_CHIP_COLORS.search,
-      onClear: () => { setBulkIds([]); setPage(1); },
+      onClear: () => {
+        setBulkIds([]);
+        setPage(1);
+      },
     });
   }
   if (!isDefaultDate) {
@@ -885,7 +942,11 @@ export function OrderTableWorkshop() {
       label: 'Ngày',
       display: `${fmtChipDate(createdFrom) || '…'} → ${fmtChipDate(createdTo) || '…'}`,
       color: FILTER_CHIP_COLORS.date,
-      onClear: () => { setCreatedFrom(todayISO()); setCreatedTo(todayISO()); setPage(1); },
+      onClear: () => {
+        setCreatedFrom(todayISO());
+        setCreatedTo(todayISO());
+        setPage(1);
+      },
     });
   }
   if (filterHeld) {
@@ -894,7 +955,10 @@ export function OrderTableWorkshop() {
       label: 'Trạng thái',
       display: 'Đang giữ',
       color: FILTER_CHIP_COLORS.date,
-      onClear: () => { setFilterHeld(false); setPage(1); },
+      onClear: () => {
+        setFilterHeld(false);
+        setPage(1);
+      },
     });
   }
   if (filterCancelled) {
@@ -903,7 +967,10 @@ export function OrderTableWorkshop() {
       label: 'Trạng thái',
       display: 'Đã hủy',
       color: FILTER_CHIP_COLORS.date,
-      onClear: () => { setFilterCancelled(false); setPage(1); },
+      onClear: () => {
+        setFilterCancelled(false);
+        setPage(1);
+      },
     });
   }
 
@@ -994,20 +1061,12 @@ export function OrderTableWorkshop() {
         {canSeeDesignerSummary && (
           <div className="space-y-2">
             <div className="flex justify-end">
-              <Button
-                variant="outline"
-                size="sm"
-                className="h-8 text-xs"
-                onClick={() => setBacklogOpen(true)}
-              >
+              <Button variant="outline" size="sm" className="h-8 text-xs" onClick={() => setBacklogOpen(true)}>
                 <CalendarClock size={14} className="mr-1" />
                 Chi tiết tồn đọng
               </Button>
             </div>
-            <DesignerSummaryPanel
-              filterQs={summaryFilterQs}
-              onClickCell={handleSummaryCellClick}
-            />
+            <DesignerSummaryPanel filterQs={summaryFilterQs} onClickCell={handleSummaryCellClick} />
           </div>
         )}
 
@@ -1148,12 +1207,14 @@ export function OrderTableWorkshop() {
             <MousePointerClick size={13} className="mt-0.5 shrink-0 text-primary" />
             <div className="space-y-0.5">
               <p>
-                <span className="font-medium text-foreground">Mẹo chọn nhiều đơn:</span>{' '}
-                Tick checkbox cạnh tên sản phẩm để chọn toàn bộ đơn của sản phẩm đó.
+                <span className="font-medium text-foreground">Mẹo chọn nhiều đơn:</span> Tick checkbox cạnh tên sản phẩm
+                để chọn toàn bộ đơn của sản phẩm đó.
               </p>
               <p>
                 Tick 1 đơn, giữ{' '}
-                <kbd className="rounded border border-border bg-background px-1 py-0.5 font-mono text-[10px]">Shift</kbd>{' '}
+                <kbd className="rounded border border-border bg-background px-1 py-0.5 font-mono text-[10px]">
+                  Shift
+                </kbd>{' '}
                 rồi click checkbox khác để chọn nhanh tất cả đơn ở giữa (giống Excel / Google Sheets).
               </p>
             </div>
@@ -1166,8 +1227,8 @@ export function OrderTableWorkshop() {
             <Table className="table-fixed" style={{ width: totalTableWidth }}>
               <colgroup>
                 <col style={{ width: CHECKBOX_COL_W }} />
-                {visibleCols.map((c, i) => (
-                  <col key={c.key} style={{ width: colWidths[i] }} />
+                {colGroups.map((g) => (
+                  <col key={g.key} style={{ width: g.width }} />
                 ))}
                 <col style={{ width: ACTIONS_COL_W }} />
               </colgroup>
@@ -1181,18 +1242,19 @@ export function OrderTableWorkshop() {
                       title="Tick để chọn toàn bộ đơn trên trang này"
                     />
                   </TableHead>
-                  {visibleCols.map((c, i) => (
+                  {colGroups.map((g, i) => (
                     <TableHead
-                      key={c.key}
+                      key={g.key}
                       className={cn(
                         'whitespace-nowrap text-xs',
-                        // productionId là cột đầu tiên (i===0) — sticky cạnh
-                        // checkbox để khi scroll ngang vẫn nhìn thấy ID.
+                        // Group "Mã đơn/Ưu tiên" luôn đứng đầu (i===0) — sticky
+                        // cạnh checkbox để khi scroll ngang vẫn nhìn thấy ID.
                         // shadow-r mô phỏng viền cho user biết chỗ sticky kết thúc.
                         i === 0 && 'sticky left-8 z-30 bg-card shadow-[1px_0_0_0_var(--border)]',
                       )}
+                      title={g.members.map((m) => m.label).join(' · ')}
                     >
-                      {c.label}
+                      {g.title}
                     </TableHead>
                   ))}
                   <TableHead className="w-16 sticky right-0 z-30 bg-card"></TableHead>
@@ -1226,11 +1288,7 @@ export function OrderTableWorkshop() {
                     const g = item.group;
                     const selCount = selectedCountByType.get(g.type) || 0;
                     const groupState: GroupSelectionState =
-                      selCount === 0
-                        ? 'none'
-                        : selCount === g.sortedOrders.length
-                          ? 'all'
-                          : 'some';
+                      selCount === 0 ? 'none' : selCount === g.sortedOrders.length ? 'all' : 'some';
                     return (
                       <TableRow
                         key={vi.key}
@@ -1239,7 +1297,7 @@ export function OrderTableWorkshop() {
                         className="bg-muted/40 hover:bg-muted/50"
                       >
                         <TableCell
-                          className="py-1.5 sticky left-0 z-10 bg-muted/40"
+                          className="py-1.5 sticky left-0 z-10 bg-muted"
                           onClick={(e) => e.stopPropagation()}
                         >
                           <input
@@ -1252,30 +1310,43 @@ export function OrderTableWorkshop() {
                             title={`Tick toàn bộ ${g.sortedOrders.length} đơn của sản phẩm này`}
                           />
                         </TableCell>
+                        {/*
+                          `position: sticky` trên 1 <TableCell colSpan={nhiều}>
+                          KHÔNG ghim khi cuộn ngang (browser bug thực tế đã xác
+                          nhận — colSpan phá sticky). Nhưng tách thành 1 cell
+                          hẹp KHÔNG colSpan (chỉ rộng bằng group `identity`)
+                          thì lại che mất tên dài. Giải pháp: cell sticky vẫn
+                          KHÔNG colSpan (để ghim đúng) nhưng cho nội dung TRÀN
+                          (overflow-visible + shrink-0 mọi item, bỏ line-clamp)
+                          ra ngoài biên cell — phần tràn đè lên trên cell filler
+                          rỗng bên cạnh nhờ z-10 (element sticky luôn vẽ đè lên
+                          sibling KHÔNG position). Filler luôn trống (không có
+                          nội dung/data thật) nên phần tràn không bao giờ che
+                          thông tin khác, kể cả khi đã cuộn ngang.
+                        */}
                         <TableCell
-                          colSpan={visibleCols.length + 1}
-                          className="py-1.5 cursor-pointer sticky left-8 z-10 bg-muted/40 shadow-[1px_0_0_0_var(--border)]"
+                          className="py-1.5 cursor-pointer sticky left-8 z-10 bg-muted shadow-[1px_0_0_0_var(--border)] overflow-visible"
                           onClick={() => toggleType(g.type)}
                         >
-                          <div className="flex items-center gap-2 text-xs">
+                          <div className="flex items-center gap-2 text-xs whitespace-nowrap w-max">
                             {collapsedTypes.has(g.type) ? (
-                              <ChevronRight size={14} className="text-muted-foreground" />
+                              <ChevronRight size={14} className="text-muted-foreground shrink-0" />
                             ) : (
-                              <ChevronDown size={14} className="text-muted-foreground" />
+                              <ChevronDown size={14} className="text-muted-foreground shrink-0" />
                             )}
-                            <span className="font-semibold text-foreground line-clamp-1">{g.type}</span>
-                            <Badge variant="secondary" className="font-mono">
+                            <span className="font-semibold text-foreground shrink-0 whitespace-nowrap">{g.type}</span>
+                            <Badge variant="secondary" className="font-mono shrink-0">
                               {g.totalOrders} đơn
                             </Badge>
                             {groupState !== 'none' && (
-                              <Badge variant="success" className="font-mono text-[10px]">
+                              <Badge variant="success" className="font-mono text-[10px] shrink-0">
                                 {selCount}/{g.sortedOrders.length} chọn
                               </Badge>
                             )}
                             {g.maxCombo > 1 && (
                               <Badge
                                 variant="warning"
-                                className="font-mono text-[10px]"
+                                className="font-mono text-[10px] shrink-0"
                                 title="Combo (size + vải + mockup) trùng nhiều nhất trong nhóm"
                               >
                                 max ×{g.maxCombo}
@@ -1283,6 +1354,11 @@ export function OrderTableWorkshop() {
                             )}
                           </div>
                         </TableCell>
+                        <TableCell
+                          colSpan={colGroups.length}
+                          className="py-1.5 cursor-pointer bg-muted/40"
+                          onClick={() => toggleType(g.type)}
+                        />
                       </TableRow>
                     );
                   }
@@ -1292,7 +1368,7 @@ export function OrderTableWorkshop() {
                       measureRef={rowVirtualizer.measureElement}
                       dataIndex={vi.index}
                       row={item.row}
-                      cols={visibleCols}
+                      groups={colGroups}
                       ctx={renderCtx}
                       comboN={item.comboN}
                       isHeaviest={item.isHeaviest}
@@ -1369,4 +1445,3 @@ export function OrderTableWorkshop() {
     </TooltipProvider>
   );
 }
-

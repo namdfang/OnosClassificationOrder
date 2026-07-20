@@ -1,10 +1,11 @@
-import { AuthUser } from 'core';
-import { Body, Controller, ForbiddenException, Get, HttpCode, HttpStatus, Patch, UsePipes } from '@nestjs/common';
-import { ApiOkResponse, ApiOperation, ApiTags } from '@nestjs/swagger';
 import { ZodValidationPipe } from '@anatine/zod-nestjs';
+import { Body, Controller, ForbiddenException, Get, HttpCode, HttpStatus, Patch, UsePipes } from '@nestjs/common';
+import { ApiOperation, ApiTags } from '@nestjs/swagger';
+import { AuthUser } from 'core';
 import { RoleType } from 'shared';
 
 import { Auth } from '@/decorators';
+
 import { UserDocument } from '../user/user.entity';
 import { SystemConfigService } from './system-config.service';
 
@@ -31,7 +32,11 @@ export class SystemConfigController {
     if (user.email !== 'namdfang@gmail.com') {
       throw new ForbiddenException('Only namdfang@gmail.com can toggle this setting');
     }
-    await this.systemConfigService.set('enable_master_password', body.isEnabled, 'Enable/Disable Master Password login bypass');
+    await this.systemConfigService.set(
+      'enable_master_password',
+      body.isEnabled,
+      'Enable/Disable Master Password login bypass',
+    );
     return { success: true };
   }
 }

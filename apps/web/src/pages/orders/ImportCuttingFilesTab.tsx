@@ -1,15 +1,5 @@
 import React, { useMemo, useState } from 'react';
-import {
-  AlertTriangle,
-  CheckCircle2,
-  FileText,
-  Link2,
-  Loader2,
-  Upload,
-  XCircle,
-} from 'lucide-react';
-import { toast } from 'sonner';
-import * as XLSX from 'xlsx';
+import { AlertTriangle, CheckCircle2, FileText, Link2, Loader2, Upload, XCircle } from 'lucide-react';
 import type {
   CuttingFileBreakdownRow,
   CuttingFileConflict,
@@ -17,12 +7,16 @@ import type {
   CuttingFileMatched,
   CuttingFileNotFound,
 } from 'shared';
+import { toast } from 'sonner';
+import * as XLSX from 'xlsx';
 
+import { RepositoryRemote } from '@/services';
+
+import { Spinner } from '@/components/common/Spinner';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Textarea } from '@/components/ui/textarea';
-import { Spinner } from '@/components/common/Spinner';
-import { RepositoryRemote } from '@/services';
+
 import { handleAxiosError } from '@/utils';
 
 interface ImportCuttingFilesTabProps {
@@ -85,16 +79,14 @@ export function ImportCuttingFilesTab({ onApplied }: ImportCuttingFilesTabProps)
           header: 1,
           blankrows: false,
         });
-        const colA = rows
-          .map((r) => (Array.isArray(r) && r[0] != null ? String(r[0]).trim() : ''))
-          .filter(Boolean);
+        const colA = rows.map((r) => (Array.isArray(r) && r[0] != null ? String(r[0]).trim() : '')).filter(Boolean);
         setText(colA.join('\n'));
       } else {
         setText(await file.text());
       }
     } catch (err) {
       toast.error('Không đọc được file. Kiểm tra format .xlsx / .csv / .txt.');
-      // eslint-disable-next-line no-console
+
       console.error(err);
     }
   };
@@ -173,9 +165,9 @@ export function ImportCuttingFilesTab({ onApplied }: ImportCuttingFilesTabProps)
             <h3 className="text-sm font-semibold text-foreground">Map file cutting (.pdf) cho đơn</h3>
             <p className="text-xs text-muted-foreground mt-0.5">
               Paste hoặc upload list link Google Drive — mỗi link 1 dòng. Tên file dạng{' '}
-              <code className="px-1 rounded bg-muted text-foreground">XX-XXXXX-XXXXX-*.pdf</code>{' '}
-              (2 chữ cái + 5 số + 5 số, ví dụ <code className="px-1 rounded bg-muted">BH-96341-30608-*.pdf</code>).
-              Hệ thống tự lấy tên file từ Drive (cần share "anyone with link") → parse productionId → match đơn.
+              <code className="px-1 rounded bg-muted text-foreground">XX-XXXXX-XXXXX-*.pdf</code> (2 chữ cái + 5 số + 5
+              số, ví dụ <code className="px-1 rounded bg-muted">BH-96341-30608-*.pdf</code>). Hệ thống tự lấy tên file
+              từ Drive (cần share "anyone with link") → parse productionId → match đơn.
             </p>
           </div>
           <label className="cursor-pointer">
@@ -219,11 +211,7 @@ export function ImportCuttingFilesTab({ onApplied }: ImportCuttingFilesTabProps)
             )}
           </p>
           <Button onClick={handlePreview} disabled={previewing || links.length === 0}>
-            {previewing ? (
-              <Spinner size={14} className="text-primary-foreground" />
-            ) : (
-              <Upload size={14} />
-            )}
+            {previewing ? <Spinner size={14} className="text-primary-foreground" /> : <Upload size={14} />}
             Kiểm tra ({links.length})
           </Button>
         </div>
@@ -232,30 +220,15 @@ export function ImportCuttingFilesTab({ onApplied }: ImportCuttingFilesTabProps)
       {preview && (
         <>
           <div className="grid grid-cols-2 md:grid-cols-5 gap-3">
-            <StatCard
-              label="Tổng link"
-              value={preview.summary.totalLinks}
-              icon={Link2}
-              tone="neutral"
-            />
-            <StatCard
-              label="Khớp đơn"
-              value={preview.summary.matched}
-              icon={CheckCircle2}
-              tone="success"
-            />
+            <StatCard label="Tổng link" value={preview.summary.totalLinks} icon={Link2} tone="neutral" />
+            <StatCard label="Khớp đơn" value={preview.summary.matched} icon={CheckCircle2} tone="success" />
             <StatCard
               label="Đã có file cũ"
               value={preview.summary.withExistingFile}
               icon={AlertTriangle}
               tone="warning"
             />
-            <StatCard
-              label="Không tìm thấy đơn"
-              value={preview.summary.notFound}
-              icon={XCircle}
-              tone="warning"
-            />
+            <StatCard label="Không tìm thấy đơn" value={preview.summary.notFound} icon={XCircle} tone="warning" />
             <StatCard
               label="Link lỗi"
               value={preview.summary.invalid + preview.summary.conflicts}
@@ -299,15 +272,9 @@ export function ImportCuttingFilesTab({ onApplied }: ImportCuttingFilesTabProps)
               <ul className="text-xs space-y-1">
                 {preview.invalid.map((iv, idx) => (
                   <li key={`${iv.link}-${idx}`}>
-                    <span className="text-rose-700 dark:text-rose-300">
-                      {INVALID_REASON_LABEL[iv.reason]}
-                    </span>
-                    {iv.fileName && (
-                      <span className="text-muted-foreground"> — {iv.fileName}</span>
-                    )}
-                    <div className="font-mono text-[10px] text-muted-foreground break-all">
-                      {iv.link}
-                    </div>
+                    <span className="text-rose-700 dark:text-rose-300">{INVALID_REASON_LABEL[iv.reason]}</span>
+                    {iv.fileName && <span className="text-muted-foreground"> — {iv.fileName}</span>}
+                    <div className="font-mono text-[10px] text-muted-foreground break-all">{iv.link}</div>
                   </li>
                 ))}
               </ul>
@@ -315,10 +282,7 @@ export function ImportCuttingFilesTab({ onApplied }: ImportCuttingFilesTabProps)
           )}
 
           {preview.notFound.length > 0 && (
-            <Section
-              title={`Không tìm thấy đơn (${preview.notFound.length})`}
-              tone="warning"
-            >
+            <Section title={`Không tìm thấy đơn (${preview.notFound.length})`} tone="warning">
               <ul className="text-xs space-y-1">
                 {preview.notFound.map((nf) => (
                   <li key={nf.link}>
@@ -331,11 +295,7 @@ export function ImportCuttingFilesTab({ onApplied }: ImportCuttingFilesTabProps)
           )}
 
           {preview.matched.length > 0 && (
-            <Section
-              title={`Sẵn sàng map (${preview.matched.length})`}
-              tone="success"
-              defaultOpen
-            >
+            <Section title={`Sẵn sàng map (${preview.matched.length})`} tone="success" defaultOpen>
               <div className="overflow-x-auto">
                 <table className="w-full text-xs">
                   <thead className="bg-muted/40 text-muted-foreground">
@@ -353,14 +313,10 @@ export function ImportCuttingFilesTab({ onApplied }: ImportCuttingFilesTabProps)
                         <td className="p-2 font-mono font-semibold">{m.productionId}</td>
                         <td className="p-2">{m.factoryName || '—'}</td>
                         <td className="p-2">{m.machineTypeName || '—'}</td>
-                        <td className="p-2 text-muted-foreground line-clamp-1 max-w-[280px]">
-                          {m.fileName}
-                        </td>
+                        <td className="p-2 text-muted-foreground line-clamp-1 max-w-[280px]">{m.fileName}</td>
                         <td className="p-2">
                           {m.existingCuttingFileUrl ? (
-                            <Badge variant="warning">
-                              {m.existingCuttingFileName || 'Có file cũ'}
-                            </Badge>
+                            <Badge variant="warning">{m.existingCuttingFileName || 'Có file cũ'}</Badge>
                           ) : (
                             <span className="text-muted-foreground">—</span>
                           )}

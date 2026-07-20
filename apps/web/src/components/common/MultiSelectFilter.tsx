@@ -3,6 +3,7 @@ import { Check, ChevronDown, Search, X } from 'lucide-react';
 
 import { Button } from '@/components/ui/button';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
+
 import { cn } from '@/utils/cn';
 
 export interface MultiSelectOption {
@@ -95,12 +96,7 @@ export function MultiSelectFilter({
           <ChevronDown size={12} className="text-muted-foreground shrink-0" />
         </Button>
       </PopoverTrigger>
-      <PopoverContent
-        align="start"
-        sideOffset={6}
-        className="p-0"
-        style={{ width }}
-      >
+      <PopoverContent align="start" sideOffset={6} className="p-0" style={{ width }}>
         <div className="flex items-center gap-1 border-b border-border px-2 py-1.5">
           <Search size={12} className="text-muted-foreground shrink-0" />
           <input
@@ -126,9 +122,7 @@ export function MultiSelectFilter({
         </div>
 
         <div className="max-h-[280px] overflow-y-auto py-1">
-          {filtered.length === 0 && (
-            <p className="text-center text-xs text-muted-foreground py-4">Không tìm thấy</p>
-          )}
+          {filtered.length === 0 && <p className="text-center text-xs text-muted-foreground py-4">Không tìm thấy</p>}
           {filtered.map((opt) => {
             const isOn = selected.has(opt.code);
             return (

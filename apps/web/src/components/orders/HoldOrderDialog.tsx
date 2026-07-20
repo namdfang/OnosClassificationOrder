@@ -1,6 +1,9 @@
 import React, { useState } from 'react';
 import { toast } from 'sonner';
 
+import { RepositoryRemote } from '@/services';
+
+import type { WorkshopOrderRow } from '@/components/orders/workshopTableConfig';
 import { Button } from '@/components/ui/button';
 import {
   Dialog,
@@ -11,9 +14,8 @@ import {
   DialogTitle,
 } from '@/components/ui/dialog';
 import { Textarea } from '@/components/ui/textarea';
-import { RepositoryRemote } from '@/services';
+
 import { handleAxiosError } from '@/utils';
-import type { WorkshopOrderRow } from '@/components/orders/workshopTableConfig';
 
 interface Props {
   order: WorkshopOrderRow | null;

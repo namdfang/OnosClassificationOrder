@@ -148,7 +148,9 @@ export class UserController {
       }),
     });
 
-    const userInfo = await this.jwtService.decode(accessToken);
+    // Cast type-only: token đã qua AuthGuard nên luôn là object payload có
+    // sessionId (mirror roles.guard.ts).
+    const userInfo = this.jwtService.decode(accessToken) as { sessionId?: string };
     const ipInfo = await extractIpLocation(ip);
 
     await this.actionRepository.create({

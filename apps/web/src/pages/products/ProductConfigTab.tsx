@@ -1,24 +1,21 @@
 import React, { useEffect, useRef, useState } from 'react';
-import { Eraser, ImageIcon, Pencil, Plus, RotateCw } from 'lucide-react';
-import { toast } from 'sonner';
+import { ImageIcon, Pencil, Plus, RotateCw } from 'lucide-react';
 import { PRODUCT_LEVEL_MAP, PRODUCT_LEVELS, WorkshopConfigCategory } from 'shared';
+import { toast } from 'sonner';
 
+import { useWorkshopConfigStore } from '@/store/workshopConfigStore';
+
+import { RepositoryRemote } from '@/services';
+
+import { PaginationBar } from '@/components/common/PaginationBar';
+import { Spinner } from '@/components/common/Spinner';
+import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
-import { Badge } from '@/components/ui/badge';
-import {
-  Table,
-  TableBody,
-  TableCell,
-  TableHead,
-  TableHeader,
-  TableRow,
-} from '@/components/ui/table';
-import { Spinner } from '@/components/common/Spinner';
-import { PaginationBar } from '@/components/common/PaginationBar';
-import { RepositoryRemote } from '@/services';
-import { useWorkshopConfigStore } from '@/store/workshopConfigStore';
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
+
 import { handleAxiosError } from '@/utils';
+
 import { ImportProductConfigDialog } from './ImportProductConfigDialog';
 import { ProductConfigEditDialog } from './ProductConfigEditDialog';
 
@@ -57,15 +54,9 @@ export function ProductConfigTab() {
   // Danh sách Xưởng / Phòng cho dropdown chỉnh sửa inline + dialog.
   const [factories, setFactories] = useState<RefItem[]>([]);
   const [machineTypes, setMachineTypes] = useState<RefItem[]>([]);
-  const fabricOptions = useWorkshopConfigStore(
-    (s) => s.byCategory[WorkshopConfigCategory.FabricType] || [],
-  );
-  const toolOptions = useWorkshopConfigStore(
-    (s) => s.byCategory[WorkshopConfigCategory.ToolResult] || [],
-  );
-  const machineOptions = useWorkshopConfigStore(
-    (s) => s.byCategory[WorkshopConfigCategory.Machine] || [],
-  );
+  const fabricOptions = useWorkshopConfigStore((s) => s.byCategory[WorkshopConfigCategory.FabricType] || []);
+  const toolOptions = useWorkshopConfigStore((s) => s.byCategory[WorkshopConfigCategory.ToolResult] || []);
+  const machineOptions = useWorkshopConfigStore((s) => s.byCategory[WorkshopConfigCategory.Machine] || []);
   const loadConfig = useWorkshopConfigStore((s) => s.load);
   const configLoaded = useWorkshopConfigStore((s) => s.loaded);
 
@@ -94,9 +85,7 @@ export function ProductConfigTab() {
     const f = factories.find((x) => x._id === factoryId);
     setItems((prev) =>
       prev.map((it) =>
-        it._id === id
-          ? { ...it, factoryId, factory: f ? { name: f.name, shortName: f.shortName } : it.factory }
-          : it,
+        it._id === id ? { ...it, factoryId, factory: f ? { name: f.name, shortName: f.shortName } : it.factory } : it,
       ),
     );
     try {
@@ -343,20 +332,22 @@ export function ProductConfigTab() {
                     <Badge variant="outline">{it.shortName}</Badge>
                   </TableCell>
                   <TableCell>
-                    {it.machineNumber ? (() => {
-                      const m = machineOptions.find((o) => o.code === it.machineNumber);
-                      if (m?.color) {
-                        return (
-                          <Badge
-                            className="font-normal border"
-                            style={{ backgroundColor: m.color, color: '#fff', borderColor: m.color }}
-                          >
-                            {m.name}
-                          </Badge>
-                        );
-                      }
-                      return <Badge variant="secondary">{m?.name ?? it.machineNumber}</Badge>;
-                    })() : (
+                    {it.machineNumber ? (
+                      (() => {
+                        const m = machineOptions.find((o) => o.code === it.machineNumber);
+                        if (m?.color) {
+                          return (
+                            <Badge
+                              className="font-normal border"
+                              style={{ backgroundColor: m.color, color: '#fff', borderColor: m.color }}
+                            >
+                              {m.name}
+                            </Badge>
+                          );
+                        }
+                        return <Badge variant="secondary">{m?.name ?? it.machineNumber}</Badge>;
+                      })()
+                    ) : (
                       <span className="text-muted-foreground text-xs">—</span>
                     )}
                   </TableCell>
@@ -447,12 +438,7 @@ export function ProductConfigTab() {
                     </div>
                   </TableCell>
                   <TableCell>
-                    <Button
-                      variant="ghost"
-                      size="icon"
-                      onClick={() => setEditItem(it)}
-                      title="Chỉnh sửa sản phẩm"
-                    >
+                    <Button variant="ghost" size="icon" onClick={() => setEditItem(it)} title="Chỉnh sửa sản phẩm">
                       <Pencil size={14} />
                     </Button>
                   </TableCell>

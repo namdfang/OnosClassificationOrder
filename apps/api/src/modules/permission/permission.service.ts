@@ -1,4 +1,3 @@
-/* eslint-disable unicorn/no-array-reduce */
 import { Injectable, NotFoundException } from '@nestjs/common';
 import type { CreatePermissionDto, UpdatePermissionDto } from 'shared';
 

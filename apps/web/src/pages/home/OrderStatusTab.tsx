@@ -1,4 +1,5 @@
 import React, { useEffect, useMemo, useState } from 'react';
+import type { LucideIcon } from 'lucide-react';
 import {
   AlertTriangle,
   CalendarDays,
@@ -10,19 +11,21 @@ import {
   Truck,
   Wrench,
 } from 'lucide-react';
-import type { LucideIcon } from 'lucide-react';
 import type { OrderStatusOverview } from 'shared';
 
-import { RepositoryRemote } from '@/services';
-import { handleAxiosError } from '@/utils';
-import { usePermission } from '@/hooks/usePermission';
 import { useWorkshopConfigStore } from '@/store/workshopConfigStore';
-import { cn } from '@/utils/cn';
+
+import { RepositoryRemote } from '@/services';
 
 import { OrderFilterBar } from '@/components/orders/OrderFilterBar';
 
-import { KpiCard } from './status/KpiCard';
+import { handleAxiosError } from '@/utils';
+import { cn } from '@/utils/cn';
+
+import { usePermission } from '@/hooks/usePermission';
+
 import { BreakdownCard } from './status/BreakdownCard';
+import { KpiCard } from './status/KpiCard';
 import { OrdersMiniTable } from './status/OrdersMiniTable';
 import { StatusActiveChips, StatusFilterTopActions } from './status/StatusFilterExtras';
 import { useStatusFilter } from './status/useStatusFilter';
@@ -98,19 +101,66 @@ export default function OrderStatusTab() {
 
     if (roleName === 'Designer') {
       return [
-        { key: 'designerQueue' as KpiKey, label: 'Cần check', value: t.pendingToolOk, hint: 'Đơn chưa Ok', accent: 'warning' as const, icon: ICONS.designerQueue },
-        { key: 'designerDone' as KpiKey, label: 'Ok hôm nay', value: t.today - t.pendingToolOk > 0 ? t.today - t.pendingToolOk : 0, hint: 'Đã đánh dấu Ok', accent: 'success' as const, icon: ICONS.designerDone },
-        { key: 'errors' as KpiKey, label: 'Đơn lỗi', value: t.errors, hint: 'Cần xử lý', accent: 'danger' as const, icon: ICONS.errors },
-        { key: 'total' as KpiKey, label: 'Tổng (range)', value: t.total, accent: 'default' as const, icon: ICONS.total },
+        {
+          key: 'designerQueue' as KpiKey,
+          label: 'Cần check',
+          value: t.pendingToolOk,
+          hint: 'Đơn chưa Ok',
+          accent: 'warning' as const,
+          icon: ICONS.designerQueue,
+        },
+        {
+          key: 'designerDone' as KpiKey,
+          label: 'Ok hôm nay',
+          value: t.today - t.pendingToolOk > 0 ? t.today - t.pendingToolOk : 0,
+          hint: 'Đã đánh dấu Ok',
+          accent: 'success' as const,
+          icon: ICONS.designerDone,
+        },
+        {
+          key: 'errors' as KpiKey,
+          label: 'Đơn lỗi',
+          value: t.errors,
+          hint: 'Cần xử lý',
+          accent: 'danger' as const,
+          icon: ICONS.errors,
+        },
+        {
+          key: 'total' as KpiKey,
+          label: 'Tổng (range)',
+          value: t.total,
+          accent: 'default' as const,
+          icon: ICONS.total,
+        },
       ];
     }
 
     if (roleName === 'Fulfillment') {
       return [
-        { key: 'fulfillReady' as KpiKey, label: 'Sẵn sàng in', value: t.readyForFulfill, hint: 'readyForFulfill=true', accent: 'primary' as const, icon: ICONS.fulfillReady },
-        { key: 'done' as KpiKey, label: 'Đã in xong', value: t.done, hint: 'In trên máy 1..94', accent: 'success' as const, icon: ICONS.done },
+        {
+          key: 'fulfillReady' as KpiKey,
+          label: 'Sẵn sàng in',
+          value: t.readyForFulfill,
+          hint: 'readyForFulfill=true',
+          accent: 'primary' as const,
+          icon: ICONS.fulfillReady,
+        },
+        {
+          key: 'done' as KpiKey,
+          label: 'Đã in xong',
+          value: t.done,
+          hint: 'In trên máy 1..94',
+          accent: 'success' as const,
+          icon: ICONS.done,
+        },
         { key: 'today' as KpiKey, label: 'Đơn hôm nay', value: t.today, accent: 'default' as const, icon: ICONS.today },
-        { key: 'total' as KpiKey, label: 'Tổng (range)', value: t.total, accent: 'default' as const, icon: ICONS.total },
+        {
+          key: 'total' as KpiKey,
+          label: 'Tổng (range)',
+          value: t.total,
+          accent: 'default' as const,
+          icon: ICONS.total,
+        },
       ];
     }
 
@@ -118,10 +168,29 @@ export default function OrderStatusTab() {
     return [
       { key: 'total' as KpiKey, label: 'Tổng đơn', value: t.total, accent: 'default' as const, icon: ICONS.total },
       // { key: 'today' as KpiKey, label: 'Hôm nay', value: t.today, accent: 'primary' as const, icon: ICONS.today },
-      { key: 'pendingToolOk' as KpiKey, label: 'Chờ Ok Tool', value: t.pendingToolOk, hint: 'Designer chưa check', accent: 'warning' as const, icon: ICONS.pendingToolOk },
-      { key: 'ready' as KpiKey, label: 'Sẵn sàng in', value: t.readyForFulfill, accent: 'primary' as const, icon: ICONS.ready },
+      {
+        key: 'pendingToolOk' as KpiKey,
+        label: 'Chờ Ok Tool',
+        value: t.pendingToolOk,
+        hint: 'Designer chưa check',
+        accent: 'warning' as const,
+        icon: ICONS.pendingToolOk,
+      },
+      {
+        key: 'ready' as KpiKey,
+        label: 'Sẵn sàng in',
+        value: t.readyForFulfill,
+        accent: 'primary' as const,
+        icon: ICONS.ready,
+      },
       { key: 'done' as KpiKey, label: 'Đã in xong', value: t.done, accent: 'success' as const, icon: ICONS.done },
-      { key: 'errors' as KpiKey, label: 'Lỗi cần xử lý', value: t.errors, accent: 'danger' as const, icon: ICONS.errors },
+      {
+        key: 'errors' as KpiKey,
+        label: 'Lỗi cần xử lý',
+        value: t.errors,
+        accent: 'danger' as const,
+        icon: ICONS.errors,
+      },
     ];
   }, [overview, roleName]);
 
@@ -161,28 +230,28 @@ export default function OrderStatusTab() {
       >
         {kpis.length > 0
           ? kpis.map((k) => (
-            <KpiCard
-              key={k.key}
-              label={k.label}
-              value={k.value}
-              hint={k.hint}
-              accent={k.accent}
-              icon={k.icon}
-              loading={loading && !overview}
-            />
-          ))
+              <KpiCard
+                key={k.key}
+                label={k.label}
+                value={k.value}
+                hint={k.hint}
+                accent={k.accent}
+                icon={k.icon}
+                loading={loading && !overview}
+              />
+            ))
           : [0, 1, 2, 3, 4, 5].map((i) => (
-            // Placeholder skeletons while overview loads (or when fetch
-            // failed and overview is null) — prevents the page from
-            // appearing blank.
-            <KpiCard
-              key={`__skeleton-${i}`}
-              label={loading ? 'Đang tải...' : 'Chưa có dữ liệu'}
-              value={0}
-              accent="default"
-              loading={loading}
-            />
-          ))}
+              // Placeholder skeletons while overview loads (or when fetch
+              // failed and overview is null) — prevents the page from
+              // appearing blank.
+              <KpiCard
+                key={`__skeleton-${i}`}
+                label={loading ? 'Đang tải...' : 'Chưa có dữ liệu'}
+                value={0}
+                accent="default"
+                loading={loading}
+              />
+            ))}
       </div>
 
       {/* Per-machine mini cards for Fulfill */}

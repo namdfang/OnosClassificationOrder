@@ -1,4 +1,3 @@
-/* eslint-disable no-await-in-loop */
 import { InjectQueue } from '@nestjs/bullmq';
 import { Injectable } from '@nestjs/common';
 import { Queue } from 'bullmq';

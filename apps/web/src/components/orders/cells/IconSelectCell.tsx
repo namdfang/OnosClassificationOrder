@@ -1,14 +1,18 @@
 import React, { useState } from 'react';
-import { toast } from 'sonner';
 import type { OrderWorkshopField, WorkshopConfigCategory } from 'shared';
+import { toast } from 'sonner';
+
+import { useWorkshopConfigStore } from '@/store/workshopConfigStore';
+
+import { RepositoryRemote } from '@/services';
 
 import { Spinner } from '@/components/common/Spinner';
-import { RepositoryRemote } from '@/services';
-import { useWorkshopConfigStore } from '@/store/workshopConfigStore';
-import { cn } from '@/utils/cn';
+
 import { handleAxiosError } from '@/utils';
+import { cn } from '@/utils/cn';
 
 import { LucideIcon } from '@/pages/workshop-config/IconPicker';
+
 import { SelectPopover } from './SelectPopover';
 
 interface Props {

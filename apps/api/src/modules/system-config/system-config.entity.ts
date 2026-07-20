@@ -15,6 +15,7 @@ export class SystemConfigEntity extends DatabaseEntityAbstract {
     required: true,
     type: Object,
   })
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any -- config blob lưu tùy ý theo key
   value: any;
 
   @Prop()

@@ -16,10 +16,11 @@ import type {
 } from 'shared';
 import { MailStatus, MailType } from 'shared';
 
+import { escapeRegExp } from '@/utils';
+
 import { MailHistoryRepository } from './mail-history.repository';
 import type { MailTemplateDocument, MailTemplateEntity } from './mail-template.entity';
 import { MailTemplateRepository } from './mail-template.repository';
-import { escapeRegExp } from '@/utils';
 
 @Injectable()
 export class MailService {
@@ -234,8 +235,6 @@ export class MailService {
       body = variables.body;
     }
 
-    // eslint-disable-next-line @typescript-eslint/no-unsafe-argument
-
     const times = scheduleTime.split(':');
 
     await this.mailHistoryRepository.create({
@@ -244,7 +243,7 @@ export class MailService {
       status: MailStatus.Pending,
       body,
       subject: variables.subject,
-      // eslint-disable-next-line @typescript-eslint/no-unsafe-argument
+
       scheduledTime: dayjs(scheduleDate)
         .clone()
         .hour(Number(times[0]))

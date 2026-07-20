@@ -1,9 +1,9 @@
 import { createZodDto } from '@anatine/zod-nestjs';
 import { extendApi } from '@anatine/zod-openapi';
+import { Status, StoreType } from '@shared/enums';
+import { BaseEntityZod, PageQueryZod, PageResZod, ResZod } from '@shared/types';
 import { z } from 'zod';
 
-import { BaseEntityZod, PageQueryZod, PageResZod, ResZod } from '@shared/types';
-import { StoreType, Status } from '@shared/enums';
 import { CodeZod, DESCRIPTION_MAX_LENGTH, DESCRIPTION_MIN_LENGTH, getObjectValues, IDZod, NameZod } from '..';
 
 export const StoreZod = BaseEntityZod.extend({

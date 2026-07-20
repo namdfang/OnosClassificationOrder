@@ -1,41 +1,35 @@
 import React, { memo, useCallback, useEffect, useState } from 'react';
-import { History, Trash2, Image as ImageIcon, ListChecks, X } from 'lucide-react';
 import { useSearchParams } from 'react-router-dom';
+import { History, Image as ImageIcon, ListChecks, Trash2, X } from 'lucide-react';
 import { toast } from 'sonner';
 
-import { Button } from '@/components/ui/button';
-import { Input } from '@/components/ui/input';
-import { Badge } from '@/components/ui/badge';
-import {
-  Table,
-  TableBody,
-  TableCell,
-  TableHead,
-  TableHeader,
-  TableRow,
-} from '@/components/ui/table';
-import { Spinner } from '@/components/common/Spinner';
-import { PaginationBar } from '@/components/common/PaginationBar';
-import { ImagePreviewDialog } from '@/components/common/ImagePreviewDialog';
-import { DesignThumbsCell } from '@/components/orders/cells/DesignThumbsCell';
-import { OrderLogTimelineDialog } from '@/components/orders/OrderLogTimelineDialog';
-import { OrderRowActionsMenu } from '@/components/orders/OrderRowActionsMenu';
-import { PrioritySelectCell } from '@/components/orders/cells/PrioritySelectCell';
-import type { WorkshopOrderRow } from '@/components/orders/workshopTableConfig';
-import { isCancelled, isHeld } from '@/utils/orderActions';
-import { CancelledBadge } from '@/components/orders/CancelledBadge';
-import { HeldBadge } from '@/components/orders/HeldBadge';
+import { RepositoryRemote } from '@/services';
+
 import { CopyButton } from '@/components/common/CopyButton';
 import { Hint } from '@/components/common/Hint';
-import { BulkProductionIdDialog, parseProductionIds } from '@/components/orders/BulkProductionIdDialog';
-import { TooltipProvider } from '@/components/ui/tooltip';
+import { ImagePreviewDialog } from '@/components/common/ImagePreviewDialog';
+import { PaginationBar } from '@/components/common/PaginationBar';
 import { SelectFilter } from '@/components/common/SelectFilter';
-import { RepositoryRemote } from '@/services';
+import { Spinner } from '@/components/common/Spinner';
+import { BulkProductionIdDialog, parseProductionIds } from '@/components/orders/BulkProductionIdDialog';
+import { CancelledBadge } from '@/components/orders/CancelledBadge';
+import { PrioritySelectCell } from '@/components/orders/cells/PrioritySelectCell';
+import { HeldBadge } from '@/components/orders/HeldBadge';
+import { OrderLogTimelineDialog } from '@/components/orders/OrderLogTimelineDialog';
+import { OrderRowActionsMenu } from '@/components/orders/OrderRowActionsMenu';
+import type { WorkshopOrderRow } from '@/components/orders/workshopTableConfig';
+import { Badge } from '@/components/ui/badge';
+import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
+import { TooltipProvider } from '@/components/ui/tooltip';
+
 import { handleAxiosError } from '@/utils';
 import { formatDate } from '@/utils/date';
 import { smallThumb } from '@/utils/driveThumb';
+import { isCancelled, isHeld } from '@/utils/orderActions';
+
 import { usePermission } from '@/hooks/usePermission';
-import { usePendingDesignsPoll } from '@/hooks/usePendingDesignsPoll';
 
 import { DesignerSummaryPanel } from './DesignerSummaryPanel';
 
@@ -100,7 +94,6 @@ interface ListOrderTabProps {
 
 const DEFAULT_PAGE_SIZE = 20;
 
-
 interface OrderRowItemProps {
   it: OrderRow;
   onPreview: (url: string, title: string, originalUrl?: string) => void;
@@ -134,9 +127,7 @@ const OrderRowItem = memo(
             <div className="flex items-center gap-1">
               <CopyButton value={it.productionId} label="Production ID" />
               <Hint content="Production ID">
-                <span className="font-mono text-xs font-semibold text-foreground cursor-help">
-                  {it.productionId}
-                </span>
+                <span className="font-mono text-xs font-semibold text-foreground cursor-help">{it.productionId}</span>
               </Hint>
               {cancelled && <CancelledBadge reason={it.cancelReason} />}
               {held && !cancelled && <HeldBadge reason={it.holdReason} />}
@@ -368,16 +359,10 @@ export function ListOrderTab({ refreshKey }: ListOrderTabProps) {
     const v = searchParams.get('lmapped');
     return v === 'mapped' || v === 'unmapped' ? v : 'all';
   });
-  const [filterError, setFilterError] = useState<boolean>(
-    () => searchParams.get('lerror') === 'true',
-  );
+  const [filterError, setFilterError] = useState<boolean>(() => searchParams.get('lerror') === 'true');
   // Designer summary filters — Admin / Leader.
-  const [filterAssignee, setFilterAssignee] = useState<string>(
-    () => searchParams.get('lassign') || '',
-  );
-  const [filterDesignerStatus, setFilterDesignerStatus] = useState<string>(
-    () => searchParams.get('ldstatus') || '',
-  );
+  const [filterAssignee, setFilterAssignee] = useState<string>(() => searchParams.get('lassign') || '');
+  const [filterDesignerStatus, setFilterDesignerStatus] = useState<string>(() => searchParams.get('ldstatus') || '');
   const [filterOptions, setFilterOptions] = useState<{
     assignee: FilterOption[];
     designerStatus: FilterOption[];
@@ -393,7 +378,12 @@ export function ListOrderTab({ refreshKey }: ListOrderTabProps) {
     const s = Number(searchParams.get('lsize'));
     return Number.isFinite(s) && s > 0 ? s : DEFAULT_PAGE_SIZE;
   });
-  const [preview, setPreview] = useState<{ url: string; originalUrl?: string; title: string; sourceUrl?: string } | null>(null);
+  const [preview, setPreview] = useState<{
+    url: string;
+    originalUrl?: string;
+    title: string;
+    sourceUrl?: string;
+  } | null>(null);
   const [historyTarget, setHistoryTarget] = useState<{ id: string; productionId: string } | null>(null);
 
   // Sync state → URL. Strip default values để URL gọn.
@@ -465,16 +455,7 @@ export function ListOrderTab({ refreshKey }: ListOrderTabProps) {
     fetchData();
     fetchFilters();
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [
-    refreshKey,
-    filterMapped,
-    filterError,
-    filterAssignee,
-    filterDesignerStatus,
-    bulkIds,
-    page,
-    pageSize,
-  ]);
+  }, [refreshKey, filterMapped, filterError, filterAssignee, filterDesignerStatus, bulkIds, page, pageSize]);
 
   // Skip lần render đầu — nếu không sẽ ghi đè `lpage` đọc từ URL khi F5.
   const isFirstRender = React.useRef(true);
@@ -527,10 +508,7 @@ export function ListOrderTab({ refreshKey }: ListOrderTabProps) {
   // [R2-disabled] tạm tắt poll vì pipeline R2 không chạy.
   // usePendingDesignsPoll(items as Array<{ _id: string; designs?: Record<string, string | undefined>; designsStatus?: Partial<Record<string, 'pending' | 'ready' | 'failed'>> }>, patchRow);
 
-  const openHistory = useCallback(
-    (id: string, productionId: string) => setHistoryTarget({ id, productionId }),
-    [],
-  );
+  const openHistory = useCallback((id: string, productionId: string) => setHistoryTarget({ id, productionId }), []);
 
   const handleChanged = useCallback(
     () => fetchData(),
@@ -571,6 +549,8 @@ export function ListOrderTab({ refreshKey }: ListOrderTabProps) {
       | 'rejected'
       | 'rework'
       | 'unassigned'
+      | '__unassigned_notool__'
+      | '__unassigned_tool__'
       | null,
   ) => {
     if (userId !== null) setFilterAssignee(userId);
@@ -582,10 +562,7 @@ export function ListOrderTab({ refreshKey }: ListOrderTabProps) {
     <TooltipProvider delayDuration={300}>
       <div className="space-y-4">
         {canSeeDesignerSummary && (
-          <DesignerSummaryPanel
-            filterQs={summaryFilterQs}
-            onClickCell={handleSummaryCellClick}
-          />
+          <DesignerSummaryPanel filterQs={summaryFilterQs} onClickCell={handleSummaryCellClick} />
         )}
 
         <div className="flex items-center justify-between gap-3 flex-wrap">
@@ -624,11 +601,7 @@ export function ListOrderTab({ refreshKey }: ListOrderTabProps) {
             {bulkIds.length > 0 && (
               <Badge variant="secondary" className="gap-1 cursor-default">
                 Đang lọc {bulkIds.length} mã
-                <button
-                  type="button"
-                  onClick={() => setBulkIds([])}
-                  className="ml-0.5 hover:text-foreground"
-                >
+                <button type="button" onClick={() => setBulkIds([])} className="ml-0.5 hover:text-foreground">
                   <X size={12} />
                 </button>
               </Badge>

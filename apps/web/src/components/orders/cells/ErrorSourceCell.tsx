@@ -1,10 +1,12 @@
 import React, { useState } from 'react';
 import { toast } from 'sonner';
 
-import { Spinner } from '@/components/common/Spinner';
 import { RepositoryRemote } from '@/services';
-import { cn } from '@/utils/cn';
+
+import { Spinner } from '@/components/common/Spinner';
+
 import { handleAxiosError } from '@/utils';
+import { cn } from '@/utils/cn';
 
 import { SelectPopover } from './SelectPopover';
 
@@ -53,13 +55,14 @@ export function ErrorSourceCell({ orderId, value, canEdit, onUpdated }: Props) {
     }
   };
 
-  const display = value === 'designer'
-    ? { label: 'Do designer', cls: 'bg-violet-100 text-violet-700 dark:bg-violet-500/20 dark:text-violet-300' }
-    : value === 'factory'
-      ? { label: 'Do xưởng', cls: 'bg-sky-100 text-sky-700 dark:bg-sky-500/20 dark:text-sky-300' }
-      : value === 'tool-check'
-        ? { label: 'Do soát tool', cls: 'bg-amber-100 text-amber-700 dark:bg-amber-500/20 dark:text-amber-300' }
-        : null;
+  const display =
+    value === 'designer'
+      ? { label: 'Do designer', cls: 'bg-violet-100 text-violet-700 dark:bg-violet-500/20 dark:text-violet-300' }
+      : value === 'factory'
+        ? { label: 'Do xưởng', cls: 'bg-sky-100 text-sky-700 dark:bg-sky-500/20 dark:text-sky-300' }
+        : value === 'tool-check'
+          ? { label: 'Do soát tool', cls: 'bg-amber-100 text-amber-700 dark:bg-amber-500/20 dark:text-amber-300' }
+          : null;
 
   const trigger = (
     <span
@@ -81,10 +84,7 @@ export function ErrorSourceCell({ orderId, value, canEdit, onUpdated }: Props) {
       disabled={!canEdit || saving}
       renderOption={(it) => (
         <span className="inline-flex items-center gap-2">
-          <span
-            className="inline-block w-2.5 h-2.5 rounded"
-            style={{ backgroundColor: it.color }}
-          />
+          <span className="inline-block w-2.5 h-2.5 rounded" style={{ backgroundColor: it.color }} />
           {it.name}
         </span>
       )}

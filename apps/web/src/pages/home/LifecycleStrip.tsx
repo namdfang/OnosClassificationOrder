@@ -2,7 +2,6 @@ import React, { useEffect, useMemo, useState } from 'react';
 import {
   Activity,
   AlertTriangle,
-  BadgeCheck,
   Ban,
   CheckCircle2,
   ChevronRight,
@@ -27,13 +26,15 @@ import {
 } from 'lucide-react';
 import type { LifecycleOverview, LifecycleTrack } from 'shared';
 
-import { DateRangePicker } from '@/components/common/DateRangePicker';
-import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 import { RepositoryRemote } from '@/services';
-import { cn } from '@/utils/cn';
-import { handleAxiosError } from '@/utils';
+
+import { DateRangePicker } from '@/components/common/DateRangePicker';
 import { BulkProductionIdDialog } from '@/components/orders/BulkProductionIdDialog';
 import { CancelledOrdersDialog } from '@/components/orders/CancelledOrdersDialog';
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
+
+import { handleAxiosError } from '@/utils';
+import { cn } from '@/utils/cn';
 
 /** Nhãn ngắn cho từng chặng — hiện trên đầu mỗi box. */
 const STAGE_SHORT: Record<string, string> = {
@@ -73,11 +74,36 @@ function daysAgoISO(days: number): string {
 const fmt = (n: number) => (n === 0 ? '–' : n.toLocaleString('en-US'));
 
 const TRACK_STYLE: Record<string, { chip: string; icon: React.ElementType; color: string; text: string }> = {
-  done: { chip: 'border-emerald-300/60 bg-emerald-50/60 dark:bg-emerald-500/10', icon: CheckCircle2, color: 'text-emerald-600 dark:text-emerald-400', text: 'Đã hoàn thành chặng' },
-  current: { chip: 'border-indigo-400 bg-indigo-50/70 dark:bg-indigo-500/10 ring-1 ring-indigo-300', icon: PlayCircle, color: 'text-indigo-600 dark:text-indigo-400', text: 'Đang ở chặng này' },
-  error: { chip: 'border-rose-400 bg-rose-50/70 dark:bg-rose-500/10 ring-1 ring-rose-300', icon: AlertTriangle, color: 'text-rose-600 dark:text-rose-400', text: 'Đang lỗi (chờ soát tool lại)' },
-  rework: { chip: 'border-amber-400 bg-amber-50/70 dark:bg-amber-500/10 ring-1 ring-amber-300', icon: RotateCw, color: 'text-amber-600 dark:text-amber-400', text: 'Đang chờ làm lại' },
-  pending: { chip: 'border-border bg-muted/30', icon: Circle, color: 'text-muted-foreground/40', text: 'Chưa tới chặng này' },
+  done: {
+    chip: 'border-emerald-300/60 bg-emerald-50/60 dark:bg-emerald-500/10',
+    icon: CheckCircle2,
+    color: 'text-emerald-600 dark:text-emerald-400',
+    text: 'Đã hoàn thành chặng',
+  },
+  current: {
+    chip: 'border-indigo-400 bg-indigo-50/70 dark:bg-indigo-500/10 ring-1 ring-indigo-300',
+    icon: PlayCircle,
+    color: 'text-indigo-600 dark:text-indigo-400',
+    text: 'Đang ở chặng này',
+  },
+  error: {
+    chip: 'border-rose-400 bg-rose-50/70 dark:bg-rose-500/10 ring-1 ring-rose-300',
+    icon: AlertTriangle,
+    color: 'text-rose-600 dark:text-rose-400',
+    text: 'Đang lỗi (chờ soát tool lại)',
+  },
+  rework: {
+    chip: 'border-amber-400 bg-amber-50/70 dark:bg-amber-500/10 ring-1 ring-amber-300',
+    icon: RotateCw,
+    color: 'text-amber-600 dark:text-amber-400',
+    text: 'Đang chờ làm lại',
+  },
+  pending: {
+    chip: 'border-border bg-muted/30',
+    icon: Circle,
+    color: 'text-muted-foreground/40',
+    text: 'Chưa tới chặng này',
+  },
 };
 
 /** 1 dòng chi tiết trong tooltip. */
@@ -231,7 +257,15 @@ export default function LifecycleStrip() {
           <ListChecks size={13} /> Nhiều mã
         </button>
         {!isTrack && (
-          <DateRangePicker from={from} to={to} placeholder="Khoảng ngày" onChange={(f, t) => { setFrom(f); setTo(t); }} />
+          <DateRangePicker
+            from={from}
+            to={to}
+            placeholder="Khoảng ngày"
+            onChange={(f, t) => {
+              setFrom(f);
+              setTo(t);
+            }}
+          />
         )}
         {!isTrack && (
           <button
@@ -245,7 +279,10 @@ export default function LifecycleStrip() {
                 : 'border-border bg-background text-muted-foreground hover:text-foreground hover:bg-accent',
             )}
           >
-            <Ban size={13} /> Hủy: <span className="font-semibold tabular-nums">{(totals?.cancelledInRange ?? 0).toLocaleString('en-US')}</span>
+            <Ban size={13} /> Hủy:{' '}
+            <span className="font-semibold tabular-nums">
+              {(totals?.cancelledInRange ?? 0).toLocaleString('en-US')}
+            </span>
           </button>
         )}
         {isTrack && track && !trackError && (
@@ -291,7 +328,11 @@ export default function LifecycleStrip() {
                   <div className="space-y-0.5">
                     <Row label="Tổng đơn (trong kỳ)" value={totals?.totalOrders ?? 0} />
                     <Row label="Đang chạy" value={totals?.totalActive ?? 0} />
-                    <Row label="Hoàn thành (kỳ)" value={totals?.completedInRange ?? 0} cls="text-emerald-600 dark:text-emerald-400" />
+                    <Row
+                      label="Hoàn thành (kỳ)"
+                      value={totals?.completedInRange ?? 0}
+                      cls="text-emerald-600 dark:text-emerald-400"
+                    />
                   </div>
                 )}
               </TooltipContent>
@@ -299,8 +340,8 @@ export default function LifecycleStrip() {
 
             <ChevronRight size={14} className="shrink-0 self-center text-muted-foreground/40" />
 
-            {isTrack
-              ? trackStages.map((n, i) => {
+            {isTrack ? (
+              trackStages.map((n, i) => {
                 const st = TRACK_STYLE[n.status] ?? TRACK_STYLE.pending;
                 const StageIcon = STAGE_ICON[n.key] ?? Circle;
                 const StatusIcon = st.icon;
@@ -308,7 +349,12 @@ export default function LifecycleStrip() {
                   <React.Fragment key={n.key}>
                     <Tooltip>
                       <TooltipTrigger asChild>
-                        <div className={cn('flex-1 min-w-0 rounded-lg border px-2 py-2.5 flex flex-col items-center justify-center gap-1.5 cursor-help', st.chip)}>
+                        <div
+                          className={cn(
+                            'flex-1 min-w-0 rounded-lg border px-2 py-2.5 flex flex-col items-center justify-center gap-1.5 cursor-help',
+                            st.chip,
+                          )}
+                        >
                           <span className="flex items-center gap-1 text-[10px] uppercase tracking-wide text-muted-foreground truncate max-w-full leading-none">
                             <StageIcon size={12} className="shrink-0" /> {n.label}
                           </span>
@@ -320,77 +366,139 @@ export default function LifecycleStrip() {
                         <div className="text-muted-foreground">{st.text}</div>
                       </TooltipContent>
                     </Tooltip>
-                    {i < trackStages.length - 1 && <ChevronRight size={15} className="shrink-0 self-center text-muted-foreground/40" />}
+                    {i < trackStages.length - 1 && (
+                      <ChevronRight size={15} className="shrink-0 self-center text-muted-foreground/40" />
+                    )}
                   </React.Fragment>
                 );
               })
-              : (
-                <>
-                  {aggStages.map((n) => {
-                    const isBottleneck = !!bottleneck && n.key === bottleneck && n.waiting > 0;
-                    const StageIcon = STAGE_ICON[n.key] ?? Circle;
-                    return (
-                      <React.Fragment key={n.key}>
-                        <Tooltip>
-                          <TooltipTrigger asChild>
-                            <div
-                              className={cn(
-                                'flex-1 min-w-0 rounded-lg border px-2 py-2 flex flex-col items-center gap-1 cursor-help h-[120px] w-[200px]',
-                                isBottleneck
-                                  ? 'border-amber-400 bg-amber-50/60 dark:bg-amber-500/10 ring-1 ring-amber-300'
-                                  : 'border-border bg-background',
-                              )}
-                            >
-                              {/* Tên chặng + icon */}
-                              <span className="flex items-center gap-1 text-[10px] uppercase tracking-wide text-muted-foreground truncate max-w-full leading-none">
-                                <StageIcon size={12} className={cn('shrink-0', isBottleneck ? 'text-amber-600' : 'text-primary')} /> {n.label}
-                              </span>
-                              {/* Tổng */}
-                              <span className="text-xl font-bold tabular-nums leading-none text-foreground">{fmt(n.total)}</span>
-                              {/* 4 trạng thái 2×2 dưới tổng: chờ (TL) · làm (TR) · lại (BL) · xong (BR) */}
-                              <div className="grid grid-cols-2 gap-x-3 gap-y-1 w-full h-full px-1 leading-none">
-                                <span className={cn('flex items-center gap-1 justify-start text-[11px] font-semibold tabular-nums', n.waiting === 0 ? 'text-muted-foreground/40' : 'text-slate-600 dark:text-slate-300')}>{fmt(n.waiting)}</span>
-                                <span className={cn('flex items-center gap-1 justify-end text-[11px] font-semibold tabular-nums', n.inProgress === 0 ? 'text-muted-foreground/40' : 'text-indigo-600 dark:text-indigo-300')}>{fmt(n.inProgress)}</span>
-                                <span className={cn('flex items-center gap-1 justify-start text-[11px] font-semibold tabular-nums', n.rework === 0 ? 'text-muted-foreground/40' : 'text-amber-600 dark:text-amber-300')}>{fmt(n.rework)}</span>
-                                <span className={cn('flex items-center gap-1 justify-end text-[11px] font-semibold tabular-nums', n.done === 0 ? 'text-muted-foreground/40' : 'text-emerald-600 dark:text-emerald-400')}>{fmt(n.done)}</span>
-                              </div>
-                            </div>
-                          </TooltipTrigger>
-                          <TooltipContent className="min-w-[180px]">
-                            <div className="font-semibold mb-1">
+            ) : (
+              <>
+                {aggStages.map((n) => {
+                  const isBottleneck = !!bottleneck && n.key === bottleneck && n.waiting > 0;
+                  const StageIcon = STAGE_ICON[n.key] ?? Circle;
+                  return (
+                    <React.Fragment key={n.key}>
+                      <Tooltip>
+                        <TooltipTrigger asChild>
+                          <div
+                            className={cn(
+                              'flex-1 min-w-0 rounded-lg border px-2 py-2 flex flex-col items-center gap-1 cursor-help h-[120px] w-[200px]',
+                              isBottleneck
+                                ? 'border-amber-400 bg-amber-50/60 dark:bg-amber-500/10 ring-1 ring-amber-300'
+                                : 'border-border bg-background',
+                            )}
+                          >
+                            {/* Tên chặng + icon */}
+                            <span className="flex items-center gap-1 text-[10px] uppercase tracking-wide text-muted-foreground truncate max-w-full leading-none">
+                              <StageIcon
+                                size={12}
+                                className={cn('shrink-0', isBottleneck ? 'text-amber-600' : 'text-primary')}
+                              />{' '}
                               {n.label}
-                              {isBottleneck && <span className="ml-1.5 text-[10px] uppercase text-amber-600">tắc</span>}
+                            </span>
+                            {/* Tổng */}
+                            <span className="text-xl font-bold tabular-nums leading-none text-foreground">
+                              {fmt(n.total)}
+                            </span>
+                            {/* 4 trạng thái 2×2 dưới tổng: chờ (TL) · làm (TR) · lại (BL) · xong (BR) */}
+                            <div className="grid grid-cols-2 gap-x-3 gap-y-1 w-full h-full px-1 leading-none">
+                              <span
+                                className={cn(
+                                  'flex items-center gap-1 justify-start text-[11px] font-semibold tabular-nums',
+                                  n.waiting === 0 ? 'text-muted-foreground/40' : 'text-slate-600 dark:text-slate-300',
+                                )}
+                              >
+                                {fmt(n.waiting)}
+                              </span>
+                              <span
+                                className={cn(
+                                  'flex items-center gap-1 justify-end text-[11px] font-semibold tabular-nums',
+                                  n.inProgress === 0
+                                    ? 'text-muted-foreground/40'
+                                    : 'text-indigo-600 dark:text-indigo-300',
+                                )}
+                              >
+                                {fmt(n.inProgress)}
+                              </span>
+                              <span
+                                className={cn(
+                                  'flex items-center gap-1 justify-start text-[11px] font-semibold tabular-nums',
+                                  n.rework === 0 ? 'text-muted-foreground/40' : 'text-amber-600 dark:text-amber-300',
+                                )}
+                              >
+                                {fmt(n.rework)}
+                              </span>
+                              <span
+                                className={cn(
+                                  'flex items-center gap-1 justify-end text-[11px] font-semibold tabular-nums',
+                                  n.done === 0 ? 'text-muted-foreground/40' : 'text-emerald-600 dark:text-emerald-400',
+                                )}
+                              >
+                                {fmt(n.done)}
+                              </span>
                             </div>
-                            <Row label="Tổng đơn (đang ở chặng)" value={n.total} cls="text-foreground" />
-                            <Row icon={<Clock size={11} />} label="Đang chờ" value={n.waiting} cls="text-slate-600 dark:text-slate-300" />
-                            <Row icon={<Activity size={11} />} label="Đang làm" value={n.inProgress} cls="text-indigo-600 dark:text-indigo-300" />
-                            <Row icon={<RotateCw size={11} />} label="Cần làm lại" value={n.rework} cls="text-amber-600 dark:text-amber-300" />
-                            <Row icon={<CheckCircle2 size={11} />} label="Đã xong (đã qua)" value={n.done} cls="text-emerald-600 dark:text-emerald-400" />
-                          </TooltipContent>
-                        </Tooltip>
-                        <ChevronRight size={15} className="shrink-0 self-center text-muted-foreground/40" />
-                      </React.Fragment>
-                    );
-                  })}
-                  {/* Box Hoàn thành — sau Đóng hàng */}
-                  <Tooltip>
-                    <TooltipTrigger asChild>
-                      <div className="flex-1 min-w-0 rounded-lg border border-emerald-300/60 bg-emerald-50/60 dark:bg-emerald-500/10 px-2 py-2.5 flex flex-col items-center justify-center gap-1.5 cursor-help">
-                        <span className="flex items-center gap-1 text-[10px] uppercase tracking-wide text-muted-foreground truncate max-w-full leading-none">
-                          <PackageCheck size={12} className="shrink-0 text-emerald-600" /> Hoàn thành
-                        </span>
-                        <span className="text-2xl font-bold tabular-nums leading-none text-emerald-700 dark:text-emerald-300">
-                          {fmt(totals?.completedInRange ?? 0)}
-                        </span>
-                      </div>
-                    </TooltipTrigger>
-                    <TooltipContent className="min-w-[170px]">
-                      <div className="font-semibold mb-1">Hoàn thành</div>
-                      <Row label="Đóng hàng xong (kỳ)" value={totals?.completedInRange ?? 0} cls="text-emerald-600 dark:text-emerald-400" />
-                    </TooltipContent>
-                  </Tooltip>
-                </>
-              )}
+                          </div>
+                        </TooltipTrigger>
+                        <TooltipContent className="min-w-[180px]">
+                          <div className="font-semibold mb-1">
+                            {n.label}
+                            {isBottleneck && <span className="ml-1.5 text-[10px] uppercase text-amber-600">tắc</span>}
+                          </div>
+                          <Row label="Tổng đơn (đang ở chặng)" value={n.total} cls="text-foreground" />
+                          <Row
+                            icon={<Clock size={11} />}
+                            label="Đang chờ"
+                            value={n.waiting}
+                            cls="text-slate-600 dark:text-slate-300"
+                          />
+                          <Row
+                            icon={<Activity size={11} />}
+                            label="Đang làm"
+                            value={n.inProgress}
+                            cls="text-indigo-600 dark:text-indigo-300"
+                          />
+                          <Row
+                            icon={<RotateCw size={11} />}
+                            label="Cần làm lại"
+                            value={n.rework}
+                            cls="text-amber-600 dark:text-amber-300"
+                          />
+                          <Row
+                            icon={<CheckCircle2 size={11} />}
+                            label="Đã xong (đã qua)"
+                            value={n.done}
+                            cls="text-emerald-600 dark:text-emerald-400"
+                          />
+                        </TooltipContent>
+                      </Tooltip>
+                      <ChevronRight size={15} className="shrink-0 self-center text-muted-foreground/40" />
+                    </React.Fragment>
+                  );
+                })}
+                {/* Box Hoàn thành — sau Đóng hàng */}
+                <Tooltip>
+                  <TooltipTrigger asChild>
+                    <div className="flex-1 min-w-0 rounded-lg border border-emerald-300/60 bg-emerald-50/60 dark:bg-emerald-500/10 px-2 py-2.5 flex flex-col items-center justify-center gap-1.5 cursor-help">
+                      <span className="flex items-center gap-1 text-[10px] uppercase tracking-wide text-muted-foreground truncate max-w-full leading-none">
+                        <PackageCheck size={12} className="shrink-0 text-emerald-600" /> Hoàn thành
+                      </span>
+                      <span className="text-2xl font-bold tabular-nums leading-none text-emerald-700 dark:text-emerald-300">
+                        {fmt(totals?.completedInRange ?? 0)}
+                      </span>
+                    </div>
+                  </TooltipTrigger>
+                  <TooltipContent className="min-w-[170px]">
+                    <div className="font-semibold mb-1">Hoàn thành</div>
+                    <Row
+                      label="Đóng hàng xong (kỳ)"
+                      value={totals?.completedInRange ?? 0}
+                      cls="text-emerald-600 dark:text-emerald-400"
+                    />
+                  </TooltipContent>
+                </Tooltip>
+              </>
+            )}
           </div>
         </TooltipProvider>
       )}
@@ -405,12 +513,7 @@ export default function LifecycleStrip() {
         }}
       />
 
-      <CancelledOrdersDialog
-        open={cancelledOpen}
-        onClose={() => setCancelledOpen(false)}
-        from={from}
-        to={to}
-      />
+      <CancelledOrdersDialog open={cancelledOpen} onClose={() => setCancelledOpen(false)} from={from} to={to} />
     </div>
   );
 }

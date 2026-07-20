@@ -1,7 +1,6 @@
 import { Body, Controller, Delete, Get, HttpCode, HttpStatus, Inject, Param, Patch, Post, Query } from '@nestjs/common';
 import { ApiOkResponse, ApiOperation, ApiTags } from '@nestjs/swagger';
 import { AuthUser } from 'core';
-import { Logger } from 'winston';
 import {
   ApplyCuttingFilesDto,
   ApplyCuttingFilesResDto,
@@ -11,33 +10,33 @@ import {
   BulkAssignDesignerResDto,
   BulkAssignOrderDto,
   BulkAssignOrderResDto,
+  BulkHoldOrderDto,
+  BulkHoldOrderResDto,
+  BulkResolveErrorDto,
+  BulkResolveErrorResDto,
   BulkTransferOrderDto,
   BulkUpdateOrderFieldDto,
   BulkUpdateOrderFieldResDto,
+  CancelOrderDto,
+  CancelOrderResDto,
   ClaimDesignerTasksDto,
-  DesignerBreakdownResDto,
   DesignerBacklogResDto,
+  DesignerBreakdownResDto,
+  FulfillmentStatusCountsResDto,
+  GetCancelledOrdersDto,
+  GetCancelledOrdersResDto,
   GetErrorLogDto,
   GetErrorLogResDto,
-  BulkResolveErrorDto,
-  BulkResolveErrorResDto,
-  GetOrderByProductionIdResDto,
-  GetNextDesignReviewOrderResDto,
-  SetDesignReviewResultDto,
-  SetDesignReviewResultResDto,
-  SetProductionErrorDto,
-  SetProductionErrorResDto,
   GetFactoryOverviewDto,
   GetFactoryOverviewResDto,
+  GetGroupedProductionOrdersResDto,
+  GetImportSummaryDto,
+  GetImportSummaryResDto,
   GetLifecycleOverviewDto,
   GetLifecycleOverviewResDto,
   GetLifecycleTrackResDto,
-  GetCancelledOrdersDto,
-  GetCancelledOrdersResDto,
-  GetGroupedProductionOrdersResDto,
-  FulfillmentStatusCountsResDto,
-  GetImportSummaryDto,
-  GetImportSummaryResDto,
+  GetNextDesignReviewOrderResDto,
+  GetOrderByProductionIdResDto,
   GetOrderDashboardDto,
   GetOrderDashboardResDto,
   GetOrderLogsDto,
@@ -46,6 +45,8 @@ import {
   GetOrderStatusOverviewResDto,
   GetProductionOrdersDto,
   GetProductionOrdersResDto,
+  HoldOrderDto,
+  HoldOrderResDto,
   ImportFromOnosPodDto,
   ImportFromOnosPodResDto,
   ImportProductionOrdersDto,
@@ -53,15 +54,13 @@ import {
   ImportReworkOrdersDto,
   ImportReworkOrdersResDto,
   PreviewCuttingFilesDto,
-  CancelOrderDto,
-  CancelOrderResDto,
-  HoldOrderDto,
-  HoldOrderResDto,
-  BulkHoldOrderDto,
-  BulkHoldOrderResDto,
   PreviewCuttingFilesResDto,
   ResDto,
   RoleType,
+  SetDesignReviewResultDto,
+  SetDesignReviewResultResDto,
+  SetProductionErrorDto,
+  SetProductionErrorResDto,
   TransferOrderDto,
   TransferOrderResDto,
   UpdateOrderDesignDto,
@@ -70,6 +69,7 @@ import {
   UpdateOrderFieldResDto,
   WorkshopAvailableFiltersResDto,
 } from 'shared';
+import { Logger } from 'winston';
 
 import { Auth, ClientIp, UserAgent } from '@/decorators';
 
@@ -132,7 +132,13 @@ export class OrderController {
     @Query() dto: GetProductionOrdersDto,
     @AuthUser() user: UserDocument,
   ): Promise<GetProductionOrdersResDto> {
-    return this.orderService.getOrders(dto, user?.role?.name, user?._id ? String(user._id) : undefined, user?.factoryId, user?.fulfillmentStage);
+    return this.orderService.getOrders(
+      dto,
+      user?.role?.name,
+      user?._id ? String(user._id) : undefined,
+      user?.factoryId,
+      user?.fulfillmentStage,
+    );
   }
 
   @Get('dashboard')
@@ -156,7 +162,13 @@ export class OrderController {
     @Query() dto: GetOrderStatusOverviewDto,
     @AuthUser() user: UserDocument,
   ): Promise<GetOrderStatusOverviewResDto> {
-    return this.orderService.getStatusOverview(dto, user?.role?.name, user?._id ? String(user._id) : undefined, user?.factoryId, user?.fulfillmentStage);
+    return this.orderService.getStatusOverview(
+      dto,
+      user?.role?.name,
+      user?._id ? String(user._id) : undefined,
+      user?.factoryId,
+      user?.fulfillmentStage,
+    );
   }
 
   @Get('grouped')
@@ -170,7 +182,13 @@ export class OrderController {
     @Query() dto: GetProductionOrdersDto,
     @AuthUser() user: UserDocument,
   ): Promise<GetGroupedProductionOrdersResDto> {
-    return this.orderService.getOrdersGroupedByType(dto, user?.role?.name, user?._id ? String(user._id) : undefined, user?.factoryId, user?.fulfillmentStage);
+    return this.orderService.getOrdersGroupedByType(
+      dto,
+      user?.role?.name,
+      user?._id ? String(user._id) : undefined,
+      user?.factoryId,
+      user?.fulfillmentStage,
+    );
   }
 
   @Get('workshop-filters')
@@ -184,7 +202,13 @@ export class OrderController {
     @Query() dto: GetProductionOrdersDto,
     @AuthUser() user: UserDocument,
   ): Promise<WorkshopAvailableFiltersResDto> {
-    return this.orderService.getWorkshopAvailableFilters(dto, user?.role?.name, user?._id ? String(user._id) : undefined, user?.factoryId, user?.fulfillmentStage);
+    return this.orderService.getWorkshopAvailableFilters(
+      dto,
+      user?.role?.name,
+      user?._id ? String(user._id) : undefined,
+      user?.factoryId,
+      user?.fulfillmentStage,
+    );
   }
 
   @Get('fulfillment-status-counts')
@@ -196,7 +220,13 @@ export class OrderController {
     @Query() dto: GetProductionOrdersDto,
     @AuthUser() user: UserDocument,
   ): Promise<FulfillmentStatusCountsResDto> {
-    return this.orderService.getFulfillmentStatusCounts(dto, user?.role?.name, user?._id ? String(user._id) : undefined, user?.factoryId, user?.fulfillmentStage);
+    return this.orderService.getFulfillmentStatusCounts(
+      dto,
+      user?.role?.name,
+      user?._id ? String(user._id) : undefined,
+      user?.factoryId,
+      user?.fulfillmentStage,
+    );
   }
 
   @Get('import-summary')
@@ -226,9 +256,10 @@ export class OrderController {
     summary: 'Poll subset of orders for designsStatus updates (R2 pipeline)',
   })
   @HttpCode(HttpStatus.OK)
-  async checkPendingDesigns(
-    @Body() body: { ids?: string[] },
-  ): Promise<{ success: true; data: Array<{ _id: string; designs?: Record<string, string>; designsStatus?: Record<string, string> }> }> {
+  async checkPendingDesigns(@Body() body: { ids?: string[] }): Promise<{
+    success: true;
+    data: Array<{ _id: string; designs?: Record<string, string>; designsStatus?: Record<string, string> }>;
+  }> {
     const result = await this.orderService.checkPendingDesigns(body?.ids || []);
     return { success: true, data: result };
   }
@@ -237,11 +268,13 @@ export class OrderController {
   @Auth(ORDER_VIEW_ROLES)
   @ApiOperation({ summary: 'Return ALL orders matching filter (no pagination) for spreadsheet export' })
   @HttpCode(HttpStatus.OK)
-  async exportOrders(
-    @Query() dto: GetProductionOrdersDto,
-    @AuthUser() user: UserDocument,
-  ) {
-    return this.orderService.exportOrders(dto, user?.role?.name, user?._id ? String(user._id) : undefined, user?.factoryId);
+  async exportOrders(@Query() dto: GetProductionOrdersDto, @AuthUser() user: UserDocument) {
+    return this.orderService.exportOrders(
+      dto,
+      user?.role?.name,
+      user?._id ? String(user._id) : undefined,
+      user?.factoryId,
+    );
   }
 
   @Get('factory-overview')
@@ -258,7 +291,9 @@ export class OrderController {
 
   @Get('lifecycle-overview')
   @Auth(ORDER_VIEW_ROLES)
-  @ApiOperation({ summary: 'Vòng đời đơn — phễu 10 chặng (soát tool → thiết kế → 8 stage fulfillment). Fulfillment khóa theo xưởng.' })
+  @ApiOperation({
+    summary: 'Vòng đời đơn — phễu 10 chặng (soát tool → thiết kế → 8 stage fulfillment). Fulfillment khóa theo xưởng.',
+  })
   @HttpCode(HttpStatus.OK)
   @ApiOkResponse({ type: GetLifecycleOverviewResDto })
   async getLifecycleOverview(
@@ -270,7 +305,9 @@ export class OrderController {
 
   @Get('cancelled-list')
   @Auth(ORDER_VIEW_ROLES)
-  @ApiOperation({ summary: 'Danh sách đơn HỦY (drill-down thống kê Dashboard). Scope xưởng + khoảng inProductionAt như dashboard.' })
+  @ApiOperation({
+    summary: 'Danh sách đơn HỦY (drill-down thống kê Dashboard). Scope xưởng + khoảng inProductionAt như dashboard.',
+  })
   @HttpCode(HttpStatus.OK)
   @ApiOkResponse({ type: GetCancelledOrdersResDto })
   async getCancelledOrders(
@@ -454,7 +491,9 @@ export class OrderController {
 
   @Post('import-from-onospod')
   @Auth(ORDER_WRITE_ROLES)
-  @ApiOperation({ summary: 'Fetch production export từ OnosPod QC rồi import đơn (thay thao tác export/paste thủ công)' })
+  @ApiOperation({
+    summary: 'Fetch production export từ OnosPod QC rồi import đơn (thay thao tác export/paste thủ công)',
+  })
   @HttpCode(HttpStatus.OK)
   @ApiOkResponse({ type: ImportFromOnosPodResDto })
   async importFromOnosPod(
@@ -539,8 +578,7 @@ export class OrderController {
   @Get('designer-breakdown')
   @Auth([RoleType.SuperAdmin, RoleType.Admin, RoleType.Manager, RoleType.DesignerLeader])
   @ApiOperation({
-    summary:
-      'Designer KPI + matrix per-user theo filter hiện tại + overall baseline. Cho Admin/Leader.',
+    summary: 'Designer KPI + matrix per-user theo filter hiện tại + overall baseline. Cho Admin/Leader.',
   })
   @HttpCode(HttpStatus.OK)
   @ApiOkResponse({ type: DesignerBreakdownResDto })
@@ -554,8 +592,7 @@ export class OrderController {
   @Get('designer-backlog')
   @Auth([RoleType.SuperAdmin, RoleType.Admin, RoleType.Manager, RoleType.DesignerLeader])
   @ApiOperation({
-    summary:
-      'Backlog tồn đọng (đơn chưa done) theo Designer × Ngày vào sản xuất — mọi ngày. Cho Admin/Leader.',
+    summary: 'Backlog tồn đọng (đơn chưa done) theo Designer × Ngày vào sản xuất — mọi ngày. Cho Admin/Leader.',
   })
   @HttpCode(HttpStatus.OK)
   @ApiOkResponse({ type: DesignerBacklogResDto })
@@ -566,15 +603,11 @@ export class OrderController {
   @Get('error-log')
   @Auth(ORDER_VIEW_ROLES)
   @ApiOperation({
-    summary:
-      'Nhật ký bù lỗi — đơn đang lỗi xưởng, sort theo thời gian lỗi cũ nhất; áp dụng visibility theo role.',
+    summary: 'Nhật ký bù lỗi — đơn đang lỗi xưởng, sort theo thời gian lỗi cũ nhất; áp dụng visibility theo role.',
   })
   @HttpCode(HttpStatus.OK)
   @ApiOkResponse({ type: GetErrorLogResDto })
-  async getErrorLog(
-    @Query() dto: GetErrorLogDto,
-    @AuthUser() user: UserDocument,
-  ): Promise<GetErrorLogResDto> {
+  async getErrorLog(@Query() dto: GetErrorLogDto, @AuthUser() user: UserDocument): Promise<GetErrorLogResDto> {
     return this.orderService.getErrorLog(
       dto,
       user?.role?.name,
@@ -612,7 +645,12 @@ export class OrderController {
     @UserAgent() userAgent: string,
   ): Promise<BulkResolveErrorResDto> {
     this.logger.info({
-      message: JSON.stringify({ method: 'POST', url: '/orders/bulk-resolve-error', count: dto.ids?.length, userId: user?._id }),
+      message: JSON.stringify({
+        method: 'POST',
+        url: '/orders/bulk-resolve-error',
+        count: dto.ids?.length,
+        userId: user?._id,
+      }),
     });
     return {
       success: true,
@@ -621,31 +659,18 @@ export class OrderController {
   }
 
   @Post('bulk-assign-designer-preview')
-  @Auth([
-    RoleType.SuperAdmin,
-    RoleType.Admin,
-    RoleType.Manager,
-    RoleType.DesignerLeader,
-  ])
+  @Auth([RoleType.SuperAdmin, RoleType.Admin, RoleType.Manager, RoleType.DesignerLeader])
   @ApiOperation({
-    summary:
-      'Pre-flight preview cho bulk assign designer — count theo status hiện tại + ai đang ôm task.',
+    summary: 'Pre-flight preview cho bulk assign designer — count theo status hiện tại + ai đang ôm task.',
   })
   @HttpCode(HttpStatus.OK)
   @ApiOkResponse({ type: BulkAssignDesignerPreviewResDto })
-  async bulkAssignDesignerPreview(
-    @Body() dto: BulkAssignDesignerPreviewDto,
-  ): Promise<BulkAssignDesignerPreviewResDto> {
+  async bulkAssignDesignerPreview(@Body() dto: BulkAssignDesignerPreviewDto): Promise<BulkAssignDesignerPreviewResDto> {
     return this.orderService.bulkAssignDesignerPreview(dto);
   }
 
   @Post('bulk-assign-designer')
-  @Auth([
-    RoleType.SuperAdmin,
-    RoleType.Admin,
-    RoleType.Manager,
-    RoleType.DesignerLeader,
-  ])
+  @Auth([RoleType.SuperAdmin, RoleType.Admin, RoleType.Manager, RoleType.DesignerLeader])
   @ApiOperation({
     summary:
       'Bulk assign 1 designer cho N đơn. Skip đơn đang in-progress/done/rework + trả skipped list. Set reassignOthers=true để override đơn đã gán cho người khác.',
@@ -667,13 +692,7 @@ export class OrderController {
   }
 
   @Post('claim-designer-tasks')
-  @Auth([
-    RoleType.SuperAdmin,
-    RoleType.Admin,
-    RoleType.Manager,
-    RoleType.DesignerLeader,
-    RoleType.Designer,
-  ])
+  @Auth([RoleType.SuperAdmin, RoleType.Admin, RoleType.Manager, RoleType.DesignerLeader, RoleType.Designer])
   @ApiOperation({
     summary:
       'Designer TỰ NHẬN (self-claim) N đơn từ pool cần gán về chính mình. Chỉ nhận đơn chưa ai ôm (unassigned/rejected/rework-chưa-ôm). Ghi log ai nhận + lúc nào.',
@@ -692,8 +711,7 @@ export class OrderController {
   @Post(':id/set-production-error')
   @Auth(ORDER_FIELD_EDIT_ROLES)
   @ApiOperation({
-    summary:
-      'Atomic set productionError + source + note. Code="other" bắt buộc source + note (BE validate).',
+    summary: 'Atomic set productionError + source + note. Code="other" bắt buộc source + note (BE validate).',
   })
   @HttpCode(HttpStatus.OK)
   @ApiOkResponse({ type: SetProductionErrorResDto })
@@ -821,7 +839,9 @@ export class OrderController {
     @Param('id') id: string,
     @AuthUser() user: UserDocument,
   ): Promise<{ success: true; data: unknown }> {
-    return this.orderService.getOrderById(id, user?.role?.name, user?._id ? String(user._id) : undefined, user?.factoryId);
+    // KHÔNG truyền factoryId — getOrderById chỉ scope theo Designer (assignee),
+    // không khóa xưởng (tham số thừa trước đây bị JS bỏ qua, giữ nguyên hành vi).
+    return this.orderService.getOrderById(id, user?.role?.name, user?._id ? String(user._id) : undefined);
   }
 
   @Delete(':id')

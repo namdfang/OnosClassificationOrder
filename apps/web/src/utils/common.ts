@@ -94,7 +94,7 @@ export const toTitleCase = (str: string) => {
     .join(' '); // Ghép các từ lại với nhau bằng khoảng trắng
 };
 
-export const downloadUrl = async (url: string, fileName) => {
+export const downloadUrl = async (url: string, fileName: string) => {
   const response = await axios.get(url, { responseType: 'blob' });
   const blobUrl = window.URL.createObjectURL(response.data);
   const a = document.createElement('a');

@@ -1,16 +1,19 @@
 import React from 'react';
-import { useDraggable } from '@dnd-kit/core';
-import { Clock, Factory, History, ImageIcon, RotateCcw, MessageSquareWarning } from 'lucide-react';
+import { Clock, Factory, ImageIcon, MessageSquareWarning } from 'lucide-react';
 import type { DesignerTaskCard as Card } from 'shared';
 import { DesignerStatus, WorkshopConfigCategory } from 'shared';
+import { useDraggable } from '@dnd-kit/core';
+
+import { useWorkshopConfigStore } from '@/store/workshopConfigStore';
 
 import { CopyButton } from '@/components/common/CopyButton';
 import { Hint } from '@/components/common/Hint';
 import { PriorityBadge } from '@/components/orders/cells/PrioritySelectCell';
-import { useNow } from '@/hooks/useNow';
-import { useWorkshopConfigStore } from '@/store/workshopConfigStore';
+
 import { cn } from '@/utils/cn';
 import { formatCountdown, getStageDeadline } from '@/utils/priorityEstimate';
+
+import { useNow } from '@/hooks/useNow';
 
 interface Props {
   card: Card;
@@ -94,8 +97,8 @@ export function TaskCard({ card, onPreview, onClickProductionId }: Props) {
 
   const style = transform
     ? {
-      transform: `translate3d(${transform.x}px, ${transform.y}px, 0)`,
-    }
+        transform: `translate3d(${transform.x}px, ${transform.y}px, 0)`,
+      }
     : undefined;
 
   const ts = timeStamp(card);
@@ -118,21 +121,13 @@ export function TaskCard({ card, onPreview, onClickProductionId }: Props) {
   // Resolve `toolResultNote` (code) → label + màu từ workshop_config, đồng bộ
   // với ColorBadgeSelectCell ở bảng đơn. Subscribe list để re-render khi store
   // load xong (resolve fn ref ổn định nên phải subscribe list mới re-render).
-  const toolNoteItems = useWorkshopConfigStore(
-    (s) => s.byCategory[WorkshopConfigCategory.ToolResultNote] || [],
-  );
-  const toolNoteCfg = card.toolResultNote
-    ? toolNoteItems.find((i) => i.code === card.toolResultNote)
-    : undefined;
+  const toolNoteItems = useWorkshopConfigStore((s) => s.byCategory[WorkshopConfigCategory.ToolResultNote] || []);
+  const toolNoteCfg = card.toolResultNote ? toolNoteItems.find((i) => i.code === card.toolResultNote) : undefined;
 
   // Resolve mã "File sửa lỗi" (errorFile[], category error_file_type) → name.
-  const errorFileItems = useWorkshopConfigStore(
-    (s) => s.byCategory[WorkshopConfigCategory.ErrorFileType] || [],
-  );
+  const errorFileItems = useWorkshopConfigStore((s) => s.byCategory[WorkshopConfigCategory.ErrorFileType] || []);
   const errorFiles = (card.errorFile || []).filter(Boolean);
-  const errorFileLabels = errorFiles.map(
-    (code) => errorFileItems.find((i) => i.code === code)?.name || code,
-  );
+  const errorFileLabels = errorFiles.map((code) => errorFileItems.find((i) => i.code === code)?.name || code);
 
   return (
     <div
@@ -140,8 +135,9 @@ export function TaskCard({ card, onPreview, onClickProductionId }: Props) {
       style={style}
       {...attributes}
       {...listeners}
-      className={`group relative rounded-md border bg-card p-2.5 shadow-sm hover:shadow-md transition-shadow cursor-grab active:cursor-grabbing ${isDragging ? 'opacity-50 ring-2 ring-primary/40' : 'border-border'
-        }`}
+      className={`group relative rounded-md border bg-card p-2.5 shadow-sm hover:shadow-md transition-shadow cursor-grab active:cursor-grabbing ${
+        isDragging ? 'opacity-50 ring-2 ring-primary/40' : 'border-border'
+      }`}
     >
       <div className="flex gap-2.5">
         {thumb ? (
@@ -155,7 +151,13 @@ export function TaskCard({ card, onPreview, onClickProductionId }: Props) {
             className="shrink-0 w-14 h-14 rounded border border-border overflow-hidden bg-checker"
             title="Click để xem to"
           >
-            <img src={thumb} alt="" className="w-full h-full object-contain" loading="lazy" referrerPolicy="no-referrer" />
+            <img
+              src={thumb}
+              alt=""
+              className="w-full h-full object-contain"
+              loading="lazy"
+              referrerPolicy="no-referrer"
+            />
           </button>
         ) : (
           <div className="shrink-0 w-14 h-14 rounded border border-dashed border-border bg-muted/40 flex items-center justify-center text-muted-foreground">

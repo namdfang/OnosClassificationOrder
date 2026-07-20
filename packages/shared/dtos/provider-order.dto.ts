@@ -1,17 +1,18 @@
-import { z } from 'zod';
-import {
-  BaseEntityZod,
-  Status,
-  PageResZod,
-  PageQueryZod,
-  ResZod,
-  getObjectValues,
-  ProviderOrderStatus,
-  NameZod,
-  IDZod,
-} from '..';
 import { createZodDto } from '@anatine/zod-nestjs';
 import { extendApi } from '@anatine/zod-openapi';
+import { z } from 'zod';
+
+import {
+  BaseEntityZod,
+  getObjectValues,
+  IDZod,
+  NameZod,
+  PageQueryZod,
+  PageResZod,
+  ProviderOrderStatus,
+  ResZod,
+  Status,
+} from '..';
 
 export const ProviderOrderZod = BaseEntityZod.extend({
   orderId: IDZod,

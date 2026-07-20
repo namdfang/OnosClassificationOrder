@@ -1,20 +1,21 @@
-import { z } from 'zod';
-import {
-  BaseEntityZod,
-  NameZod,
-  PageResZod,
-  PageQueryZod,
-  ResZod,
-  getObjectValues,
-  TrackingStatus,
-  EXTERNAL_ID_MAX_LENGTH,
-  NAME_MIN_LENGTH,
-  IDZod,
-  NOTE_MIN_LENGTH,
-  NOTE_MAX_LENGTH,
-} from '..';
 import { createZodDto } from '@anatine/zod-nestjs';
 import { extendApi } from '@anatine/zod-openapi';
+import { z } from 'zod';
+
+import {
+  BaseEntityZod,
+  EXTERNAL_ID_MAX_LENGTH,
+  getObjectValues,
+  IDZod,
+  NAME_MIN_LENGTH,
+  NameZod,
+  NOTE_MAX_LENGTH,
+  NOTE_MIN_LENGTH,
+  PageQueryZod,
+  PageResZod,
+  ResZod,
+  TrackingStatus,
+} from '..';
 
 const TrackingLogZod = z.object({
   status: z.nativeEnum(TrackingStatus),
@@ -91,14 +92,16 @@ export const CreateTrackingZod = z.object({
   shippingLabelUrl: z.string().optional(),
   departmentId: IDZod.optional(),
   orderId: TrackingZod.shape.orderId,
-  startDate: z.coerce.date({ message: 'Start Date must be a valid date' }),
+  startDate: z.coerce.date(),
   status: TrackingZod.shape.status.optional(),
   detail: TrackingZod.shape.detail.optional(),
   lastFetchedAt: z.coerce.date().optional(),
   providerId: z.string(),
-  weight: z.string({ message: 'Weight must be a string' }).optional(),
-  price: z.coerce.number({ message: 'Price must be a number' }).min(0, 'Price must be a positive number').optional(),
-  department: z.string({ message: 'Department must be a string' }),
+  // NOTE: param `message` (zod ≥3.23) bị zod 3.22.4 IGNORE hoàn toàn — đã gỡ
+  // để qua type-check, hành vi không đổi. Nâng zod rồi thì thêm lại nếu muốn.
+  weight: z.string().optional(),
+  price: z.coerce.number().min(0, 'Price must be a positive number').optional(),
+  department: z.string(),
 });
 export class CreateTrackingDto extends createZodDto(extendApi(CreateTrackingZod)) {}
 export type CreateTrackingValues = z.infer<typeof CreateTrackingZod>;
@@ -109,7 +112,7 @@ export const CreateTrackingResZod = ResZod.extend({
 export class CreateTrackingResDto extends createZodDto(extendApi(CreateTrackingResZod)) {}
 
 export const UpdateTrackingNoteZod = z.object({
-  note: z.string({ message: 'Note cannot be empty' }).trim(),
+  note: z.string().trim(),
 });
 export class UpdateTrackingNoteDto extends createZodDto(extendApi(UpdateTrackingNoteZod)) {}
 //
@@ -176,8 +179,10 @@ export const UpdateTrackingZod = z.object({
   detail: TrackingZod.shape.detail.optional(),
   providerId: z.string(),
   lastFetchedAt: z.coerce.date().optional(),
-  weight: z.string({ message: 'Weight must be a string' }).optional(),
-  price: z.coerce.number({ message: 'Price must be a number' }).min(0, 'Price must be a positive number').optional(),
+  // NOTE: param `message` (zod ≥3.23) bị zod 3.22.4 IGNORE hoàn toàn — đã gỡ
+  // để qua type-check, hành vi không đổi. Nâng zod rồi thì thêm lại nếu muốn.
+  weight: z.string().optional(),
+  price: z.coerce.number().min(0, 'Price must be a positive number').optional(),
 });
 export class UpdateTrackingDto extends createZodDto(extendApi(UpdateTrackingZod)) {}
 

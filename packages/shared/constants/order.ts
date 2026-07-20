@@ -1,4 +1,5 @@
-import { ExcelImportOrder } from '@shared/dtos';
+import type { ExcelImportOrder } from '@shared/dtos';
+
 import { getObjectValues } from '..';
 
 export const ORDER_CODE_PREFIX = 'PE_';
@@ -477,7 +478,8 @@ export const TIME_RANGES: Record<string, { min?: number; max?: number; label: st
   RANGE_1_PLUS: { min: 1, label: '1+ days' },
 } as const;
 
-export const STATUS_TIME_RANGES: Record<OrderStatus, typeof TIME_RANGES> = {
+// Partial: chỉ define cho 6 status có tracking time-range — data giữ nguyên.
+export const STATUS_TIME_RANGES: Partial<Record<OrderStatus, typeof TIME_RANGES>> = {
   [OrderStatus.InProduction]: {
     RANGE_3_7: { min: 3, max: 7, label: '3-7 days' },
     RANGE_7_15: { min: 7, max: 15, label: '7-15 days' },
@@ -534,7 +536,8 @@ export const STATUS_TIME_RANGES: Record<OrderStatus, typeof TIME_RANGES> = {
   },
 } as const;
 
-export const NEXT_ORDER_STATUS: Record<OrderStatus, OrderStatus[]> = {
+// Partial: chỉ define transition cho các status trong flow chính — data giữ nguyên.
+export const NEXT_ORDER_STATUS: Partial<Record<OrderStatus, OrderStatus[]>> = {
   [OrderStatus.Pending]: [OrderStatus.Processing],
   [OrderStatus.Processing]: [OrderStatus.InProduction],
   [OrderStatus.InProduction]: [OrderStatus.ShipOut],

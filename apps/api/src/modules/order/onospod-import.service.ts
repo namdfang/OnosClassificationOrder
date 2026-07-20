@@ -1,6 +1,6 @@
 import { BadRequestException, Injectable } from '@nestjs/common';
 import axios from 'axios';
-import type { ImportFromOnosPodDto, ImportFromOnosPodResDto } from 'shared';
+import type { DesignFields, ImportFromOnosPodDto, ImportFromOnosPodResDto } from 'shared';
 
 import { ApiConfigService } from '@/shared/services';
 
@@ -14,61 +14,328 @@ const TZ_OFFSET_MINUTES = 7 * 60;
 const MRP_STATUS = 'To Do';
 
 const PAGE_SIZE = 500;
-const MAX_PAGES = 200; // an toàn — 200 * 500 = 100k rows, dư sức cho 1 ngày/1 manufacture
+// an toàn — 200 * 500 = 100k rows, dư sức cho 1 ngày TOÀN BỘ account (không
+// truyền `manufacture_id` → 1 lượt phân trang gộp mọi manufacture, xem
+// `fetchAllPages()`/`importFromOnosPod()`).
+const MAX_PAGES = 200;
 
-const MANUFACTURES_QUERY = `query Manufactures($search: String, $page: Int, $page_size: Int) {
-  manufactures(search: $search, page: $page, page_size: $page_size) {
+// Đồng bộ với query thật của FE admin OnosPod (qc.onospod.com) thay vì tự
+// chọn field tay như trước — tránh lệch schema về sau. Bỏ field
+// `productionStatusSummary` (sibling, không liên quan phân trang, không dùng)
+// + mọi `__typename` (thuần metadata Apollo, không cần cho parse tay bằng
+// axios). Bỏ `production_src` trong fragment `LineItemPrint` — field này LUÔN
+// null trên thực tế, `mapItemToRow()` vẫn đọc `.src` như cũ. THÊM `quantity`
+// + `price` vào fragment `MrpProduct` (FE OnosPod không query 2 field này
+// nhưng `mapItemToRow()` cần cho `quantity`/`baseCost` — verify bằng test
+// gọi thật 2026-07-18: thiếu thì cả 2 về undefined).
+const PAGINATE_QUERY = `query PaginateMrpProduct(
+  $manufacture_id: String
+  $page_size: Int
+  $page: Int
+  $status: String
+  $barcode: String
+  $increment_id: String
+  $start: String
+  $end: String
+  $is_embroidery: Boolean
+  $pattern_status: String
+  $product_type_ids: [String!]
+  $account_id: [String!]
+) {
+  paginateMrpProduct(
+    manufacture_id: $manufacture_id
+    page: $page
+    perpage: $page_size
+    mrp_status: $status
+    barcode: $barcode
+    increment_id: $increment_id
+    is_embroidery: $is_embroidery
+    start: $start
+    end: $end
+    pattern_status: $pattern_status
+    product_type_ids: $product_type_ids
+    account_id: $account_id
+  ) {
+    items {
+      ...MrpProduct
+    }
+    paginate {
+      ...Paginate
+    }
+  }
+}
+
+fragment MrpProduct on MrpProduct {
+  _id
+  order_id
+  increment_id
+  increment_order_id
+  batch_id
+  barcode
+  barcode_src
+  print_method
+  qr_to_barcode_count
+  src
+  quantity
+  price
+  product_type {
+    _id
+    name
+    image
+    sku
+  }
+  mrp_log {
+    mrp_status
+    user_id
+    note
+    created_at
+    user {
+      _id
+      identity_label
+      email
+    }
+  }
+  print {
+    front
+    back
+    sleeve
+    hood
+    meta_data {
+      key
+      value
+    }
+    print_areas {
+      key
+      name
+      is_part
+      is_embroidery
+    }
+    print_areas_customs {
+      key
+      name
+      file {
+        _id
+        src
+        image_sizes {
+          name
+          width
+          height
+          url
+        }
+      }
+      is_part
+      is_required
+      is_embroidery
+      barcode
+      barcode_src
+      stitch_count
+      colors {
+        code
+        name
+        hex
+      }
+    }
+    design_front {
+      ... on LineItemPrint {
+        _id
+        src
+        image_sizes {
+          name
+          width
+          height
+          url
+        }
+      }
+    }
+    design_back {
+      ... on LineItemPrint {
+        _id
+        src
+        image_sizes {
+          name
+          width
+          height
+          url
+        }
+      }
+    }
+    design_sleeve {
+      ... on LineItemPrint {
+        _id
+        src
+        image_sizes {
+          name
+          width
+          height
+          url
+        }
+      }
+    }
+    design_hood {
+      ... on LineItemPrint {
+        _id
+        src
+        image_sizes {
+          name
+          width
+          height
+          url
+        }
+      }
+    }
+    design_sleeve_left {
+      ... on LineItemPrint {
+        _id
+        src
+        image_sizes {
+          name
+          width
+          height
+          url
+        }
+      }
+    }
+    design_sleeve_right {
+      ... on LineItemPrint {
+        _id
+        src
+        image_sizes {
+          name
+          width
+          height
+          url
+        }
+      }
+    }
+    design_chest_left {
+      ... on LineItemPrint {
+        _id
+        src
+        image_sizes {
+          name
+          width
+          height
+          url
+        }
+      }
+    }
+    design_chest_right {
+      ... on LineItemPrint {
+        _id
+        src
+        image_sizes {
+          name
+          width
+          height
+          url
+        }
+      }
+    }
+    design_placket {
+      ... on LineItemPrint {
+        _id
+        src
+        image_sizes {
+          name
+          width
+          height
+          url
+        }
+      }
+    }
+    design_left {
+      ... on LineItemPrint {
+        _id
+        src
+        image_sizes {
+          name
+          width
+          height
+          url
+        }
+      }
+    }
+    design_right {
+      ... on LineItemPrint {
+        _id
+        src
+        image_sizes {
+          name
+          width
+          height
+          url
+        }
+      }
+    }
+    design_left_cuff {
+      ...LineItemPrint
+    }
+    design_right_cuff {
+      ...LineItemPrint
+    }
+  }
+  manufacture {
     _id
     name
     sku
     country
   }
-}`;
-
-const PAGINATE_QUERY = `query PaginateMrpProduct($manufacture_id: String, $page_size: Int, $page: Int, $status: String, $start: String, $end: String) {
-  paginateMrpProduct(manufacture_id: $manufacture_id, page: $page, perpage: $page_size, mrp_status: $status, start: $start, end: $end) {
-    items {
-      order_id
-      increment_id
-      increment_order_id
-      print_method
-      src
-      quantity
-      price
-      product_type { name }
-      mrp_status
-      mrp_created_at
-      auth { identity_label email }
-      print {
-        meta_data { key value }
-        design_front { ... on LineItemPrint { src } }
-        design_back { ... on LineItemPrint { src } }
-        design_sleeve { ... on LineItemPrint { src } }
-        design_hood { ... on LineItemPrint { src } }
-        design_sleeve_left { ... on LineItemPrint { src } }
-        design_sleeve_right { ... on LineItemPrint { src } }
-        design_chest_left { ... on LineItemPrint { src } }
-        design_chest_right { ... on LineItemPrint { src } }
-        design_placket { ... on LineItemPrint { src } }
-        design_left { ... on LineItemPrint { src } }
-        design_right { ... on LineItemPrint { src } }
-        design_left_cuff { ... on LineItemPrint { src } }
-        design_right_cuff { ... on LineItemPrint { src } }
-      }
-    }
-    paginate { total_items current_page total_pages }
+  auth {
+    _id
+    identity_label
+    email
   }
+  is_embroidery
+  mrp_status
+  mrp_created_at
+  mrp_press_completed_at
+  mrp_cut_completed_at
+  mrp_print_completed_at
+  mrp_embroidery_completed_at
+  mrp_sew_completed_at
+  mrp_packing_completed_at
+  press_completed
+  cut_completed
+  print_completed
+  embroidery_completed
+  sew_completed
+  package_completed
+  mrp_design_ready_at
+  mrp_photo_required
+  mrp_actual_photos
+}
+
+fragment LineItemPrint on LineItemPrint {
+  _id
+  src
+  size
+  width
+  height
+  image_sizes {
+    name
+    url
+    width
+    height
+  }
+  task_id
+}
+
+fragment Paginate on Paginate {
+  total_items
+  current_page
+  total_pages
 }`;
 
-type Manufacture = {
-  _id: string;
-  name: string;
-  sku: string;
-  country?: string;
+type MrpPrintAreaCustom = {
+  key?: string | null;
+  name?: string | null;
+  file?: { src?: string | null } | null;
+  is_embroidery?: boolean | null;
 };
 
 type MrpPrint = {
   meta_data?: { key?: string; value?: string | null }[] | null;
+  print_areas_customs?: MrpPrintAreaCustom[] | null;
 } & Record<string, unknown>;
 
 type MrpProductItem = {
@@ -84,7 +351,55 @@ type MrpProductItem = {
   mrp_created_at?: string;
   auth?: { identity_label?: string; email?: string } | null;
   print?: MrpPrint | null;
+  manufacture?: { _id?: string; name?: string; sku?: string } | null;
 };
+
+/**
+ * 18 vị trí design hợp lệ của `DesignFields` (shared) — dùng validate key
+ * quét động từ response, tránh nhặt nhầm key `design_*` lạ ngoài schema đơn.
+ */
+const DESIGN_FIELD_KEYS = new Set<keyof DesignFields>([
+  'front',
+  'back',
+  'sleeve',
+  'hood',
+  'folder',
+  'placket',
+  'chestLeft',
+  'chestRight',
+  'left',
+  'right',
+  'sleeveLeft',
+  'sleeveRight',
+  'leftUpperSleeve',
+  'rightUpperSleeve',
+  'leftCuff',
+  'rightCuff',
+  'frontEmbroidery',
+  'backEmbroidery',
+]);
+
+/**
+ * Quét ĐỘNG mọi key `design_*` trong `item.print` — response chỉ chứa key ở
+ * vị trí đơn CÓ design (không có design → vắng key/null), nên không hardcode
+ * danh sách vị trí như trước. Convert `design_chest_left` → `chestLeft`
+ * (snake→camel) rồi đối chiếu `DESIGN_FIELD_KEYS`; key không thuộc
+ * `DesignFields` bị bỏ qua. Nhờ đó query thêm vị trí mới (vd `design_folder`)
+ * là tự map, không phải sửa code.
+ */
+function extractDesigns(print: MrpPrint | null | undefined): Partial<DesignFields> {
+  const designs: Partial<DesignFields> = {};
+  for (const [key, value] of Object.entries(print || {})) {
+    if (!key.startsWith('design_')) continue;
+    const src = (value as { src?: string | null } | null | undefined)?.src;
+    if (!src) continue;
+    const camel = key
+      .slice('design_'.length)
+      .replace(/_([a-z])/g, (_, c: string) => c.toUpperCase()) as keyof DesignFields;
+    if (DESIGN_FIELD_KEYS.has(camel)) designs[camel] = src;
+  }
+  return designs;
+}
 
 // Field mapping xác nhận qua test tay đối chiếu 1 dòng CSV export thật
 // (xem documents/FunctionDescription/Orders.md §3.6). size/color đọc từ
@@ -92,11 +407,25 @@ type MrpProductItem = {
 // export xlsx). weight/width/height/length/shipCost/externalId KHÔNG tìm
 // được field nguồn nào trên GraphQL schema (đã probe kỹ), để trống (đều
 // optional trong DTO).
+//
+// So với CSV (parseOrders.ts, 18 vị trí design): designs quét động qua
+// `extractDesigns()` — vị trí nào response có key `design_*` là map được.
+// Riêng `frontEmbroidery`/`backEmbroidery` nếu quét động chưa có thì fallback
+// từ `print.print_areas_customs` (entry `is_embroidery=true` + `file.src`,
+// match front/back qua key/name) — nguồn mới có từ khi đồng bộ
+// PAGINATE_QUERY với query thật của FE OnosPod.
 function mapItemToRow(item: MrpProductItem) {
-  const design = (key: string) => (item.print?.[key] as { src?: string } | null | undefined)?.src || undefined;
   const meta = new Map<string, string>();
   for (const m of item.print?.meta_data || []) {
     if (m?.key && m.value) meta.set(m.key.toLowerCase(), m.value);
+  }
+
+  const designs = extractDesigns(item.print);
+  if (!designs.frontEmbroidery) {
+    designs.frontEmbroidery = pickEmbroiderySrc(item.print?.print_areas_customs, 'front');
+  }
+  if (!designs.backEmbroidery) {
+    designs.backEmbroidery = pickEmbroiderySrc(item.print?.print_areas_customs, 'back');
   }
 
   return {
@@ -110,26 +439,27 @@ function mapItemToRow(item: MrpProductItem) {
     printMethod: item.print_method || undefined,
     quantity: typeof item.quantity === 'number' ? item.quantity : undefined,
     baseCost: parsePriceNumber(item.price),
-    designs: {
-      front: design('design_front'),
-      back: design('design_back'),
-      sleeve: design('design_sleeve'),
-      hood: design('design_hood'),
-      sleeveLeft: design('design_sleeve_left'),
-      sleeveRight: design('design_sleeve_right'),
-      chestLeft: design('design_chest_left'),
-      chestRight: design('design_chest_right'),
-      placket: design('design_placket'),
-      left: design('design_left'),
-      right: design('design_right'),
-      leftCuff: design('design_left_cuff'),
-      rightCuff: design('design_right_cuff'),
-    },
+    designs,
     status: item.mrp_status || undefined,
     orderId: item.increment_order_id || undefined,
     orderAt: item.order_id ? formatVnDateTime(objectIdTimestamp(item.order_id)) : undefined,
     inProductionAt: item.mrp_created_at ? formatVnDateTime(new Date(item.mrp_created_at)) : undefined,
   };
+}
+
+// Vùng in custom thêu (embroidery): match "front"/"back" trên key hoặc name
+// (lowercase, defensive — key thực tế có thể là "front_embroidery"/"Front
+// Embroidery"...). Không match → undefined, vô hại.
+function pickEmbroiderySrc(
+  areas: MrpPrintAreaCustom[] | null | undefined,
+  side: 'front' | 'back',
+): string | undefined {
+  for (const area of areas || []) {
+    if (!area.is_embroidery || !area.file?.src) continue;
+    const label = `${area.key || ''} ${area.name || ''}`.toLowerCase();
+    if (label.includes(side)) return area.file.src;
+  }
+  return undefined;
 }
 
 function parsePriceNumber(price: string | null | undefined): number | undefined {
@@ -160,7 +490,10 @@ function formatVnDateTime(date: Date): string {
  *
  * Query trực tiếp `paginateMrpProduct` (GraphQL) thay vì cơ chế export/tải
  * file bất đồng bộ ban đầu (đã bỏ — không tìm được cách biết khi nào file
- * export sẵn sàng). Trả JSON có sẵn, không cần chờ/poll gì cả.
+ * export sẵn sàng). Trả JSON có sẵn, không cần chờ/poll gì cả. KHÔNG truyền
+ * `manufacture_id` → 1 lượt phân trang gộp mọi manufacture (đã verify: tổng
+ * khớp 100% với gọi riêng từng manufacture) — không cần gọi `manufactures` +
+ * loop như trước.
  *
  * Lịch chạy do EXTERNAL crontab quản lý (không dùng @nestjs/schedule nội bộ)
  * — gọi `GET /v1/orders/import-from-onospod/cron` (public, không cần auth,
@@ -183,39 +516,15 @@ export class OnospodImportService {
     }
 
     const { start, end } = this.resolvePeriod(dto);
-    const manufactures = await this.fetchManufactures(config);
-    if (manufactures.length === 0) {
-      throw new BadRequestException('OnosPod không trả về manufacture nào (query `manufactures` rỗng).');
-    }
 
-    const allItems: MrpProductItem[] = [];
-    const byManufacture: { id: string; name: string; sku: string; fetched: number; error?: string }[] = [];
-
-    // Tuần tự (không Promise.all) để tránh dồn dập request cùng lúc tới
-    // OnosPod — 1 manufacture lỗi không chặn các manufacture còn lại.
-    for (const m of manufactures) {
-      try {
-        const items = await this.fetchAllPages(config, m._id, start, end);
-        allItems.push(...items);
-        byManufacture.push({ id: m._id, name: m.name, sku: m.sku, fetched: items.length });
-      } catch (err) {
-        const message = err instanceof Error ? err.message : 'Unknown error';
-        byManufacture.push({ id: m._id, name: m.name, sku: m.sku, fetched: 0, error: message });
-      }
-    }
+    // KHÔNG truyền `manufacture_id` → OnosPod trả đơn từ TẤT CẢ manufacture
+    // trong 1 lượt phân trang duy nhất (verify bằng test gọi thật 2026-07-18:
+    // tổng `total_items` khớp 100% với cộng dồn từng manufacture riêng lẻ) —
+    // bỏ hẳn bước gọi `manufactures` + loop tuần tự từng manufacture như
+    // trước, mỗi item đã tự mang sẵn field `manufacture{_id,name,sku}`.
+    const allItems = await this.fetchAllPages(config, start, end);
 
     if (allItems.length === 0) {
-      // Phân biệt "hỏng thật" với "hết đơn": nếu MỌI manufacture đều lỗi
-      // (token hết hạn, OnosPod down...) thì phải báo đúng nguyên nhân —
-      // không được nuốt lỗi rồi báo "không có đơn".
-      const failed = byManufacture.filter((m) => m.error);
-      if (failed.length === manufactures.length) {
-        throw new BadRequestException(
-          `OnosPod: tất cả ${failed.length} manufacture đều lỗi — ` +
-            failed.map((m) => `${m.sku}: ${m.error}`).join('; '),
-        );
-      }
-
       // Không có đơn "To Do" mới trong khoảng này — trạng thái BÌNH THƯỜNG
       // (sáng vắng, ngày lễ), đặc biệt với đường cron tự động. Trả success
       // với số 0 thay vì 400 để cron monitoring không báo động giả.
@@ -230,10 +539,16 @@ export class OnospodImportService {
           totalFetched: 0,
           duplicatesInBatch: 0,
           period: { start: start.toISOString(), end: end.toISOString() },
-          byManufacture,
+          byManufacture: [],
         },
       };
     }
+
+    // byManufacture giờ suy ra từ field `manufacture` có sẵn trên MỖI item
+    // (không cần gọi/loop riêng nữa) — chỉ để hiển thị số lượng theo xưởng
+    // trên toast FE, KHÔNG ảnh hưởng mapping xưởng nội bộ (vẫn qua
+    // ProductConfig như CSV, xem `OrderService.importOrders()`).
+    const byManufacture = this.groupByManufacture(allItems);
 
     const { rows, duplicatesInBatch } = this.dedupeByProductionId(allItems.map(mapItemToRow).filter((r) => r.productionId));
 
@@ -249,6 +564,25 @@ export class OnospodImportService {
         byManufacture,
       },
     };
+  }
+
+  private groupByManufacture(
+    items: MrpProductItem[],
+  ): { id: string; name: string; sku: string; fetched: number }[] {
+    const map = new Map<string, { id: string; name: string; sku: string; fetched: number }>();
+    for (const item of items) {
+      const manu = item.manufacture;
+      const key = manu?._id || 'unknown';
+      const entry = map.get(key) ?? {
+        id: manu?._id || 'unknown',
+        name: manu?.name || 'Không xác định',
+        sku: manu?.sku || '—',
+        fetched: 0,
+      };
+      entry.fetched += 1;
+      map.set(key, entry);
+    }
+    return Array.from(map.values());
   }
 
   /**
@@ -268,33 +602,6 @@ export class OnospodImportService {
       byId.set(row.productionId, row);
     }
     return { rows: Array.from(byId.values()), duplicatesInBatch: rows.length - byId.size };
-  }
-
-  private async fetchManufactures(config: { apiUrl: string; bearerToken: string }): Promise<Manufacture[]> {
-    let res;
-    try {
-      res = await axios.post(
-        config.apiUrl,
-        { operationName: 'Manufactures', variables: {}, query: MANUFACTURES_QUERY },
-        {
-          headers: {
-            Authorization: `Bearer ${config.bearerToken}`,
-            'Content-Type': 'application/json',
-          },
-          timeout: 30_000,
-        },
-      );
-    } catch (err) {
-      const message = axios.isAxiosError(err) ? err.message : 'Unknown error';
-      throw new BadRequestException(`Gọi OnosPod (manufactures) thất bại: ${message}`);
-    }
-
-    const gqlErrors = res.data?.errors;
-    if (Array.isArray(gqlErrors) && gqlErrors.length > 0) {
-      throw new BadRequestException(`OnosPod trả lỗi (manufactures): ${gqlErrors.map((e: { message?: string }) => e.message).join('; ')}`);
-    }
-
-    return res.data?.data?.manufactures || [];
   }
 
   /**
@@ -321,12 +628,10 @@ export class OnospodImportService {
     const vn = new Date(now.getTime() + TZ_OFFSET_MINUTES * 60_000);
     const boundary = new Date(vn);
 
-    if (vn.getUTCHours() < 12) {
+    if (vn.getUTCHours() < 8) {
       boundary.setUTCDate(boundary.getUTCDate() - 1);
-      boundary.setUTCHours(12, 0, 0, 0);
-    } else {
-      boundary.setUTCHours(0, 0, 0, 0);
     }
+    boundary.setUTCHours(0, 0, 0, 0);
 
     const start = new Date(boundary.getTime() - TZ_OFFSET_MINUTES * 60_000);
 
@@ -335,7 +640,6 @@ export class OnospodImportService {
 
   private async fetchAllPages(
     config: { apiUrl: string; bearerToken: string },
-    manufactureId: string,
     start: Date,
     end: Date,
   ): Promise<MrpProductItem[]> {
@@ -344,7 +648,7 @@ export class OnospodImportService {
     let totalPages = 1;
 
     do {
-      const pageItems = await this.fetchPage(config, manufactureId, start, end, page, (tp) => {
+      const pageItems = await this.fetchPage(config, start, end, page, (tp) => {
         totalPages = tp;
       });
       items.push(...pageItems);
@@ -354,9 +658,10 @@ export class OnospodImportService {
     return items;
   }
 
+  // Không truyền `manufacture_id` → OnosPod trả đơn từ TẤT CẢ manufacture
+  // (xem comment ở `importFromOnosPod()`).
   private async fetchPage(
     config: { apiUrl: string; bearerToken: string },
-    manufactureId: string,
     start: Date,
     end: Date,
     page: number,
@@ -369,7 +674,6 @@ export class OnospodImportService {
         {
           operationName: 'PaginateMrpProduct',
           variables: {
-            manufacture_id: manufactureId,
             page_size: PAGE_SIZE,
             page,
             status: MRP_STATUS,
@@ -388,7 +692,7 @@ export class OnospodImportService {
       );
     } catch (err) {
       const message = axios.isAxiosError(err) ? err.message : 'Unknown error';
-      throw new BadRequestException(`Gọi OnosPod (manufacture=${manufactureId}, page ${page}) thất bại: ${message}`);
+      throw new BadRequestException(`Gọi OnosPod (page ${page}) thất bại: ${message}`);
     }
 
     const gqlErrors = res.data?.errors;
@@ -398,7 +702,7 @@ export class OnospodImportService {
 
     const result = res.data?.data?.paginateMrpProduct;
     if (!result) {
-      throw new BadRequestException(`OnosPod không trả dữ liệu (manufacture=${manufactureId}, page ${page}).`);
+      throw new BadRequestException(`OnosPod không trả dữ liệu (page ${page}).`);
     }
 
     setTotalPages(result.paginate?.total_pages || 1);

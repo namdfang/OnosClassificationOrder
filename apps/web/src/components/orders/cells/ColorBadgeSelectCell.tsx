@@ -1,12 +1,15 @@
 import React, { useState } from 'react';
-import { toast } from 'sonner';
 import type { OrderWorkshopField, WorkshopConfigCategory } from 'shared';
+import { toast } from 'sonner';
+
+import { useWorkshopConfigStore } from '@/store/workshopConfigStore';
+
+import { RepositoryRemote } from '@/services';
 
 import { Spinner } from '@/components/common/Spinner';
-import { RepositoryRemote } from '@/services';
-import { useWorkshopConfigStore } from '@/store/workshopConfigStore';
-import { cn } from '@/utils/cn';
+
 import { handleAxiosError } from '@/utils';
+import { cn } from '@/utils/cn';
 
 import { SelectPopover } from './SelectPopover';
 
@@ -34,7 +37,9 @@ export function ColorBadgeSelectCell({ orderId, field, category, value, canEdit,
     try {
       setSaving(true);
       await RepositoryRemote.order.updateField(orderId, { field, value: newCode });
-      toast.success(current?.name && newCode ? `Đã đổi → ${resolve(category, newCode)?.name || newCode}` : 'Đã cập nhật');
+      toast.success(
+        current?.name && newCode ? `Đã đổi → ${resolve(category, newCode)?.name || newCode}` : 'Đã cập nhật',
+      );
       onUpdated?.(newCode);
     } catch (err) {
       handleAxiosError(err);

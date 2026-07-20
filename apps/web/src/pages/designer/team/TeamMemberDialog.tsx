@@ -1,20 +1,16 @@
 import React, { useEffect, useState } from 'react';
 import { Copy, KeyRound, RefreshCw } from 'lucide-react';
-import { toast } from 'sonner';
 import type { DesignerTeamMember } from 'shared';
+import { toast } from 'sonner';
 
+import { RepositoryRemote } from '@/services';
+
+import { Spinner } from '@/components/common/Spinner';
 import { Button } from '@/components/ui/button';
-import {
-  Dialog,
-  DialogContent,
-  DialogFooter,
-  DialogHeader,
-  DialogTitle,
-} from '@/components/ui/dialog';
+import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
-import { Spinner } from '@/components/common/Spinner';
-import { RepositoryRemote } from '@/services';
+
 import { handleAxiosError } from '@/utils';
 
 export type DialogMode = 'create' | 'edit';
@@ -115,19 +111,13 @@ export function TeamMemberDialog({ open, mode, member, onClose, onSaved }: Props
     <Dialog open={open} onOpenChange={(o) => !o && onClose()}>
       <DialogContent className="max-w-md">
         <DialogHeader>
-          <DialogTitle>
-            {mode === 'create' ? 'Thêm sub-designer' : 'Sửa thông tin'}
-          </DialogTitle>
+          <DialogTitle>{mode === 'create' ? 'Thêm sub-designer' : 'Sửa thông tin'}</DialogTitle>
         </DialogHeader>
 
         <div className="space-y-3">
           <div className="space-y-2">
             <Label>Tên hiển thị *</Label>
-            <Input
-              value={fullName}
-              onChange={(e) => setFullName(e.target.value)}
-              placeholder="VD: Nguyễn Văn Huy"
-            />
+            <Input value={fullName} onChange={(e) => setFullName(e.target.value)} placeholder="VD: Nguyễn Văn Huy" />
           </div>
 
           <div className="space-y-2">
@@ -150,7 +140,13 @@ export function TeamMemberDialog({ open, mode, member, onClose, onSaved }: Props
                   type="text"
                   className="font-mono"
                 />
-                <Button type="button" variant="outline" size="sm" onClick={() => setPassword(randomPassword())} title="Random">
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  onClick={() => setPassword(randomPassword())}
+                  title="Random"
+                >
                   <RefreshCw size={14} />
                 </Button>
                 <Button type="button" variant="outline" size="sm" onClick={copyPassword} title="Copy">

@@ -53,7 +53,7 @@ export const PERMISSION_CATALOG: PermissionItem[] = [
   { code: 'order.delete',              label: 'Xóa đơn hàng',              group: 'order' },
   { code: 'order.transfer',            label: 'Chuyển xưởng',              group: 'order' },
   { code: 'order.view_admin_table',    label: 'Thấy bảng Admin (cũ)',      group: 'order' },
-  { code: 'order.view_workshop_table', label: 'Thấy bảng Workshop (mới)',  group: 'order' },
+  { code: 'order.view_workshop_table', label: 'Thấy Danh sách đơn (mới)',  group: 'order' },
 
   // ─── Order field-level permissions ──────────────────────────────
   { code: 'order.field.printStatus.view',     label: 'Trạng thái in',         group: 'order_field', field: 'printStatus',     mode: 'view' },

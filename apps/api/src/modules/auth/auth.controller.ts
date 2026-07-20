@@ -1,18 +1,7 @@
 import { AmqpConnection } from '@golevelup/nestjs-rabbitmq';
-import {
-  Body,
-  Controller,
-  Get,
-  Headers,
-  HttpCode,
-  HttpException,
-  HttpStatus,
-  Inject,
-  Param,
-  Post,
-} from '@nestjs/common';
-import { Throttle } from '@nestjs/throttler';
+import { Body, Controller, Get, Headers, HttpCode, HttpStatus, Inject, Param, Post } from '@nestjs/common';
 import { ApiOkResponse, ApiOperation, ApiTags } from '@nestjs/swagger';
+import { Throttle } from '@nestjs/throttler';
 import { AuthUser } from 'core';
 import {
   CreateUserDto,
@@ -21,7 +10,6 @@ import {
   LoginDto,
   LoginResDto,
   myNanoid,
-  RegisterDto,
   ResDto,
   RoleType,
 } from 'shared';

@@ -1,11 +1,13 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
-import { Bar, BarChart, ResponsiveContainer, Tooltip as RTooltip, XAxis, YAxis } from 'recharts';
 import { BarChart3, CalendarRange, ImageOff, Users } from 'lucide-react';
-import { PRODUCT_LEVEL_MAP } from 'shared';
+import { Bar, BarChart, ResponsiveContainer, Tooltip as RTooltip, XAxis, YAxis } from 'recharts';
 import type { ProductBreakdownDesigner, TeamDailyCell, TeamDailyRow } from 'shared';
+import { PRODUCT_LEVEL_MAP } from 'shared';
+
+import { RepositoryRemote } from '@/services';
 
 import { DateRangePicker } from '@/components/common/DateRangePicker';
-import { RepositoryRemote } from '@/services';
+
 import { handleAxiosError } from '@/utils';
 import { cn } from '@/utils/cn';
 

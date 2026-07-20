@@ -1,4 +1,4 @@
-import { undefined } from 'zod';
+import { undefined as zodUndefined } from 'zod';
 
 export function toQueryString(params: Record<string, string | string[] | number | boolean>) {
   const queryString =
@@ -6,16 +6,20 @@ export function toQueryString(params: Record<string, string | string[] | number 
     Object.keys(params)
       .filter(Boolean)
       .map((key) => {
-        if (Array.isArray(params[key])) {
-          console.log('params[key]', params[key]);
-          return params[key].map((value) => `${key}=${encodeURIComponent(value)}`).join('&');
-        } else {
-          // @ts-expect-error key
-          if (params[key] === '' || params.key === undefined) return false;
-
-          // @ts-expect-error key
-          return `${key}=${encodeURIComponent(params[key])}`;
+        const value = params[key];
+        if (Array.isArray(value)) {
+          console.log('params[key]', value);
+          return value.map((v) => `${key}=${encodeURIComponent(v)}`).join('&');
         }
+        // LEGACY QUIRK giữ nguyên hành vi: bản gốc `import { undefined } from
+        // 'zod'` rồi so `params.key === undefined` — vế phải là FUNCTION
+        // z.undefined (không phải undefined thật), vế trái là key literal
+        // "key" (không phải biến `key`) → vế này LUÔN false, thực tế chỉ
+        // filter chuỗi rỗng. Sửa thành so sánh "đúng ý đồ" sẽ làm đổi query
+        // string đầu ra — không làm.
+        if (value === '' || (params.key as unknown) === (zodUndefined as unknown)) return false;
+
+        return `${key}=${encodeURIComponent(String(value))}`;
       })
       .filter(Boolean)
       .join('&');

@@ -2,13 +2,14 @@ import React, { useState } from 'react';
 import { Check } from 'lucide-react';
 
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
+
 import { cn } from '@/utils/cn';
 
 /** Shape tối thiểu cell cần — workshop_config items hoặc designer team items
  *  đều fit. `code` là giá trị truyền vào onSelect (workshop_config code hoặc
  *  user._id tuỳ caller). */
 export type SelectOption = {
-  _id: string;
+  _id?: string;
   code: string;
   name: string;
   color?: string;
@@ -31,15 +32,7 @@ interface Props {
  * Shared popover used by ColorBadgeSelectCell + IconSelectCell. Has a "clear"
  * row at the top so workers can unset a value.
  */
-export function SelectPopover({
-  options,
-  value,
-  onSelect,
-  triggerClassName,
-  children,
-  disabled,
-  renderOption,
-}: Props) {
+export function SelectPopover({ options, value, onSelect, triggerClassName, children, disabled, renderOption }: Props) {
   const [open, setOpen] = useState(false);
 
   const handleSelect = (code: string | null) => {
@@ -79,7 +72,7 @@ export function SelectPopover({
             const isSelected = value === it.code;
             return (
               <button
-                key={it._id}
+                key={it._id ?? it.code}
                 type="button"
                 onClick={() => handleSelect(it.code)}
                 className={cn(
@@ -92,9 +85,7 @@ export function SelectPopover({
               </button>
             );
           })}
-          {options.length === 0 && (
-            <p className="text-xs text-muted-foreground text-center py-3">Chưa có lựa chọn</p>
-          )}
+          {options.length === 0 && <p className="text-xs text-muted-foreground text-center py-3">Chưa có lựa chọn</p>}
         </div>
       </PopoverContent>
     </Popover>

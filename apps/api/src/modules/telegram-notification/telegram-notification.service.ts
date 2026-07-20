@@ -97,13 +97,11 @@ export class TelegramNotificationService {
 
 function withMentions(text: string, mentions?: TelegramMention[]): string {
   if (!mentions || mentions.length === 0) return text;
-  const cc = mentions
-    .map((m) => `[${escapeMd(m.displayName)}](tg://user?id=${m.telegramUserId})`)
-    .join(' ');
+  const cc = mentions.map((m) => `[${escapeMd(m.displayName)}](tg://user?id=${m.telegramUserId})`).join(' ');
 
   return `${text}\n\ncc: ${cc}`;
 }
 
 function escapeMd(s: string): string {
-  return s.replace(/([_*`\[\]])/g, '\\$1');
+  return s.replace(/([_*`[\]])/g, '\\$1');
 }

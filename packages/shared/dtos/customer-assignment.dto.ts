@@ -1,8 +1,8 @@
 import { createZodDto } from '@anatine/zod-nestjs';
 import { extendApi } from '@anatine/zod-openapi';
+import { ResZod } from '@shared/types';
 import { z } from 'zod';
 
-import { ResZod } from '@shared/types';
 import { IDZod } from '..';
 
 /**
@@ -31,20 +31,14 @@ export const CustomerAssignmentConfigZod = z.object({
 });
 export type CustomerAssignmentConfig = z.infer<typeof CustomerAssignmentConfigZod>;
 
-export class SaveCustomerAssignmentConfigDto extends createZodDto(
-  extendApi(CustomerAssignmentConfigZod),
-) {}
+export class SaveCustomerAssignmentConfigDto extends createZodDto(extendApi(CustomerAssignmentConfigZod)) {}
 
 export const GetCustomerAssignmentConfigResZod = ResZod.extend({
   data: CustomerAssignmentConfigZod,
 });
-export class GetCustomerAssignmentConfigResDto extends createZodDto(
-  extendApi(GetCustomerAssignmentConfigResZod),
-) {}
+export class GetCustomerAssignmentConfigResDto extends createZodDto(extendApi(GetCustomerAssignmentConfigResZod)) {}
 
 export const SaveCustomerAssignmentConfigResZod = ResZod.extend({
   data: CustomerAssignmentConfigZod,
 });
-export class SaveCustomerAssignmentConfigResDto extends createZodDto(
-  extendApi(SaveCustomerAssignmentConfigResZod),
-) {}
+export class SaveCustomerAssignmentConfigResDto extends createZodDto(extendApi(SaveCustomerAssignmentConfigResZod)) {}

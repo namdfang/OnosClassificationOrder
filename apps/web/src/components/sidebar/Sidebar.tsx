@@ -1,17 +1,20 @@
+import React, { useEffect, useMemo, useState } from 'react';
+import { Link, useLocation, useNavigate } from 'react-router-dom';
 import {
   AlertTriangle,
   Bell,
   Building2,
   ChevronDown,
   ChevronRight,
-  FileDown,
   Factory,
+  FileDown,
   LayoutGrid,
   List,
   LogOut,
   Package,
   Palette,
   ScanLine,
+  Scissors,
   Settings,
   ShieldCheck,
   ShieldHalf,
@@ -19,15 +22,17 @@ import {
   User,
   Users,
 } from 'lucide-react';
-import logoUrl from '@/assets/images/logo.png';
-import React, { useEffect, useMemo, useState } from 'react';
-import { Link, useLocation, useNavigate } from 'react-router-dom';
+
 import { Sheet, SheetContent } from '@/components/ui/sheet';
+
 import { cn } from '@/utils/cn';
+
+import logoUrl from '@/assets/images/logo.png';
+
 import { PATHS } from '../../constants/paths';
-import { useAuthStore } from '../../store/authStore';
 import { useIsMobile } from '../../hooks/useMediaQuery';
 import { RepositoryRemote } from '../../services';
+import { useAuthStore } from '../../store/authStore';
 import { handleAxiosError } from '../../utils';
 
 interface NavChild {
@@ -60,23 +65,80 @@ const NAV_GROUPS: NavGroup[] = [
     title: 'Workspace',
     items: [
       { key: PATHS.HOME, label: 'Dashboard', to: PATHS.HOME, icon: <LayoutGrid size={17} />, perm: 'page.dashboard' },
-      { key: PATHS.PRODUCTS, label: 'Sản phẩm', to: PATHS.PRODUCTS, icon: <Package size={17} />, perm: 'page.products' },
+      {
+        key: PATHS.PRODUCTS,
+        label: 'Sản phẩm',
+        to: PATHS.PRODUCTS,
+        icon: <Package size={17} />,
+        perm: 'page.products',
+      },
       {
         key: PATHS.ORDERS,
         label: 'Orders',
         icon: <ShoppingCart size={17} />,
         perm: 'page.orders',
         children: [
-          { key: 'orders-list', label: 'List Order', to: `${PATHS.ORDERS}?tab=list`, icon: <List size={14} /> },
-          { key: 'orders-error-log', label: 'Nhật ký bù lỗi', to: `${PATHS.ORDERS}?tab=error-log`, icon: <AlertTriangle size={14} />, hideForRoles: ['Support'] },
-          { key: 'orders-scan-error', label: 'Quét mã', to: PATHS.ORDERS_SCAN_ERROR, icon: <ScanLine size={14} />, perm: 'page.scan_error' },
-          { key: 'orders-import', label: 'Import Order', to: `${PATHS.ORDERS}?tab=import`, icon: <FileDown size={14} />, perm: 'order.import' },
+          // "List Order" (tab cũ) đang tạm tắt (xem pages/orders/ListOrderTab.tsx)
+          // — thay bằng "Danh sách đơn", đúng trang default thật hiện tại.
+          { key: 'orders-workshop', label: 'Danh sách đơn', to: PATHS.ORDERS_WORKSHOP, icon: <List size={14} /> },
+          {
+            key: 'orders-error-log',
+            label: 'Nhật ký bù lỗi',
+            to: PATHS.ORDERS_ERROR_LOG,
+            icon: <AlertTriangle size={14} />,
+            hideForRoles: ['Support'],
+          },
+          {
+            key: 'orders-scan-error',
+            label: 'Quét mã',
+            to: PATHS.ORDERS_SCAN_ERROR,
+            icon: <ScanLine size={14} />,
+            perm: 'page.scan_error',
+          },
+          {
+            key: 'orders-import',
+            label: 'Import Order',
+            to: PATHS.ORDERS_IMPORT,
+            icon: <FileDown size={14} />,
+            perm: 'order.import',
+          },
+          {
+            key: 'orders-cutting-files',
+            label: 'Import File Cutting',
+            to: PATHS.ORDERS_CUTTING_FILES,
+            icon: <Scissors size={14} />,
+            perm: 'order.import',
+          },
         ],
       },
-      { key: PATHS.WORKSHOP_CONFIG, label: 'Quản lý xưởng', to: PATHS.WORKSHOP_CONFIG, icon: <Factory size={17} />, perm: 'workshop.manage' },
-      { key: PATHS.MY_TASKS, label: 'Task của tôi', to: PATHS.MY_TASKS, icon: <List size={17} />, perm: 'page.my_tasks' },
-      { key: PATHS.DESIGNER_TEAM, label: 'Team Designer', to: PATHS.DESIGNER_TEAM, icon: <Palette size={17} />, perm: 'page.designer_team' },
-      { key: PATHS.FULFILLMENT_MY_TASKS, label: 'Task Fulfillment', to: PATHS.FULFILLMENT_MY_TASKS, icon: <List size={17} />, perm: 'page.fulfillment_my_tasks' },
+      {
+        key: PATHS.WORKSHOP_CONFIG,
+        label: 'Quản lý xưởng',
+        to: PATHS.WORKSHOP_CONFIG,
+        icon: <Factory size={17} />,
+        perm: 'workshop.manage',
+      },
+      {
+        key: PATHS.MY_TASKS,
+        label: 'Task của tôi',
+        to: PATHS.MY_TASKS,
+        icon: <List size={17} />,
+        perm: 'page.my_tasks',
+      },
+      {
+        key: PATHS.DESIGNER_TEAM,
+        label: 'Team Designer',
+        to: PATHS.DESIGNER_TEAM,
+        icon: <Palette size={17} />,
+        perm: 'page.designer_team',
+      },
+      {
+        key: PATHS.FULFILLMENT_MY_TASKS,
+        label: 'Task Fulfillment',
+        to: PATHS.FULFILLMENT_MY_TASKS,
+        icon: <List size={17} />,
+        perm: 'page.fulfillment_my_tasks',
+      },
       { key: PATHS.NOTIFICATIONS, label: 'Notifications', to: PATHS.NOTIFICATIONS, icon: <Bell size={17} /> },
       { key: PATHS.ACCOUNT, label: 'My account', to: PATHS.ACCOUNT, icon: <User size={17} /> },
     ],
@@ -86,8 +148,20 @@ const NAV_GROUPS: NavGroup[] = [
     items: [
       { key: PATHS.USERS, label: 'Users', to: PATHS.USERS, icon: <Users size={17} />, perm: 'user.manage' },
       { key: PATHS.ROLES, label: 'Roles', to: PATHS.ROLES, icon: <ShieldCheck size={17} />, perm: 'role.manage' },
-      { key: PATHS.CUSTOM_ROLES, label: 'Custom Roles', to: PATHS.CUSTOM_ROLES, icon: <ShieldHalf size={17} />, perm: 'role.manage' },
-      { key: PATHS.DEPARTMENTS, label: 'Departments', to: PATHS.DEPARTMENTS, icon: <Building2 size={17} />, perm: 'user.manage' },
+      {
+        key: PATHS.CUSTOM_ROLES,
+        label: 'Custom Roles',
+        to: PATHS.CUSTOM_ROLES,
+        icon: <ShieldHalf size={17} />,
+        perm: 'role.manage',
+      },
+      {
+        key: PATHS.DEPARTMENTS,
+        label: 'Departments',
+        to: PATHS.DEPARTMENTS,
+        icon: <Building2 size={17} />,
+        perm: 'user.manage',
+      },
       { key: PATHS.SETTINGS, label: 'Settings', to: PATHS.SETTINGS, icon: <Settings size={17} />, perm: 'role.manage' },
     ],
   },
@@ -115,9 +189,7 @@ function filterMenuByPermissions(
       items: g.items
         .filter((it) => allow(it.perm))
         .map((it) =>
-          it.children
-            ? { ...it, children: it.children.filter((c) => allow(c.perm) && visibleForRole(c)) }
-            : it,
+          it.children ? { ...it, children: it.children.filter((c) => allow(c.perm) && visibleForRole(c)) } : it,
         )
         .filter((it) => !it.children || it.children.length > 0),
     }))
@@ -144,15 +216,7 @@ function isLinkActive(linkPath: string, currentPath: string, currentSearch: stri
   return true;
 }
 
-function SidebarLeaf({
-  item,
-  collapsed,
-  level = 0,
-}: {
-  item: NavChild;
-  collapsed: boolean;
-  level?: number;
-}) {
+function SidebarLeaf({ item, collapsed, level = 0 }: { item: NavChild; collapsed: boolean; level?: number }) {
   const location = useLocation();
   const active = isLinkActive(item.to, location.pathname, location.search);
   return (
@@ -274,10 +338,7 @@ function Sidebar({ collapsed, mobileOpen, onMobileClose }: SidebarProps) {
   const renderContent = () => (
     <div className="flex flex-col h-full bg-background">
       <div
-        className={cn(
-          'flex items-center gap-2.5 h-16 px-4 border-b border-border',
-          !showLabels && 'justify-center',
-        )}
+        className={cn('flex items-center gap-2.5 h-16 px-4 border-b border-border', !showLabels && 'justify-center')}
       >
         {showLabels ? (
           <img src={logoUrl} alt="Logo" className="h-7 w-auto object-contain" />

@@ -1,5 +1,7 @@
 import React, { useEffect, useMemo, useState } from 'react';
+import { useSearchParams } from 'react-router-dom';
 import {
+  Ban,
   ChevronDown,
   ChevronRight,
   ChevronsDown,
@@ -8,7 +10,6 @@ import {
   DollarSign,
   Download,
   Factory,
-  Ban,
   Medal,
   Package,
   PauseCircle,
@@ -18,17 +19,20 @@ import {
 } from 'lucide-react';
 import { Cell, Pie, PieChart, ResponsiveContainer, Sector, Tooltip as RechartsTooltip } from 'recharts';
 
-import { Input } from '@/components/ui/input';
-import { Badge } from '@/components/ui/badge';
-import { cn } from '@/utils/cn';
-import { useSearchParams } from 'react-router-dom';
-import { OrderFilterBar } from '@/components/orders/OrderFilterBar';
-import { CancelledOrdersDialog } from '@/components/orders/CancelledOrdersDialog';
-import { useDebounce } from '@/hooks/useDebounce';
 import { RepositoryRemote } from '@/services';
+
+import { CancelledOrdersDialog } from '@/components/orders/CancelledOrdersDialog';
+import { OrderFilterBar } from '@/components/orders/OrderFilterBar';
+import { Badge } from '@/components/ui/badge';
+import { Input } from '@/components/ui/input';
+
 import { handleAxiosError } from '@/utils';
-import { useAuthStore } from '../../store/authStore';
+import { cn } from '@/utils/cn';
+
+import { useDebounce } from '@/hooks/useDebounce';
 import { usePermission } from '@/hooks/usePermission';
+
+import { useAuthStore } from '../../store/authStore';
 import { buildSizeMatrixWorkbook, downloadWorkbook } from './exportOrders';
 
 interface MockupSummary {
@@ -135,10 +139,8 @@ function todayISO(): string {
  * `_NO_PRICE` bỏ 5 cột giá (min/max/sản xuất/vận chuyển/tổng) — Designer +
  * Fulfillment chỉ thấy tên/quantity/mockup.
  */
-const GRID_COLS_CLASS =
-  'grid grid-cols-[32px_minmax(180px,1fr)_80px_90px_90px_110px_110px_100px_130px]';
-const GRID_COLS_CLASS_NO_PRICE =
-  'grid grid-cols-[32px_minmax(180px,1fr)_80px_130px]';
+const GRID_COLS_CLASS = 'grid grid-cols-[32px_minmax(180px,1fr)_80px_90px_90px_110px_110px_100px_130px]';
+const GRID_COLS_CLASS_NO_PRICE = 'grid grid-cols-[32px_minmax(180px,1fr)_80px_130px]';
 
 function daysAgoISO(days: number): string {
   const d = new Date();
@@ -208,9 +210,7 @@ function MetricCard({ label, value, sub, icon, loading }: MetricCardProps) {
         <span className="opacity-60 shrink-0">{icon}</span>
         <span className="text-[11px] font-medium truncate">{label}</span>
       </div>
-      <p className="text-lg font-semibold tracking-tight tabular-nums text-foreground leading-tight">
-        {value}
-      </p>
+      <p className="text-lg font-semibold tracking-tight tabular-nums text-foreground leading-tight">{value}</p>
       {sub && <p className="text-[10px] text-muted-foreground truncate mt-0.5">{sub}</p>}
     </div>
   );
@@ -227,9 +227,7 @@ export default function OrderStatsTab() {
   const hideFactoryDist = roleName === 'Designer';
   // User gắn với 1 xưởng (vd Fulfillment) → khóa bảng size vào xưởng của họ,
   // không xem được số liệu xưởng khác. Admin/Manager/Support được chọn mọi xưởng.
-  const isOverrideRole = ['SuperAdmin', 'Admin', 'Manager', 'SupportManager'].includes(
-    roleName ?? '',
-  );
+  const isOverrideRole = ['SuperAdmin', 'Admin', 'Manager', 'SupportManager'].includes(roleName ?? '');
   const lockedFactoryId = !isOverrideRole ? profile?.factoryId : undefined;
   // URL params (prefix `s` = stats). F5 / share link giữ nguyên date + search.
   // Default = today + empty search → strip khỏi URL để URL gọn.
@@ -273,8 +271,7 @@ export default function OrderStatsTab() {
       if (endDate) params.set('endDate', endDate);
       const typeTerm = debouncedType.trim();
       if (typeTerm) params.set('searchType', typeTerm);
-      const effectiveSearchUser =
-        override?.searchUser !== undefined ? override.searchUser : debouncedUser;
+      const effectiveSearchUser = override?.searchUser !== undefined ? override.searchUser : debouncedUser;
       if (effectiveSearchUser.trim()) params.set('searchUser', effectiveSearchUser.trim());
       const resp = await RepositoryRemote.order.getDashboard(`?${params.toString()}`);
       setData(resp.data.data);
@@ -335,9 +332,7 @@ export default function OrderStatsTab() {
       {/* Title row — minimal */}
       <div className="flex items-baseline justify-between gap-4">
         <div>
-          <h1 className="text-3xl font-semibold tracking-tight text-foreground">
-            Bảng điều khiển
-          </h1>
+          <h1 className="text-3xl font-semibold tracking-tight text-foreground">Bảng điều khiển</h1>
           <p className="text-sm text-muted-foreground mt-1">
             Theo dõi sản xuất {dateRangeLabel.toLowerCase()}
             {profile?.fullName ? ` · xin chào, ${profile.fullName.split(' ')[0]}` : ''}
@@ -370,10 +365,7 @@ export default function OrderStatsTab() {
         loading={loading}
         topActionsRight={
           <div className="relative min-w-[220px]">
-            <UserIcon
-              size={13}
-              className="absolute left-2 top-1/2 -translate-y-1/2 text-muted-foreground"
-            />
+            <UserIcon size={13} className="absolute left-2 top-1/2 -translate-y-1/2 text-muted-foreground" />
             <Input
               placeholder="Lọc theo SKU hoặc email khách…"
               value={searchUser}
@@ -501,9 +493,7 @@ export default function OrderStatsTab() {
             isRefetching && 'opacity-60',
           )}
         >
-          {!hideFactoryDist && (
-            <FactoryDistribution byFactory={data?.byFactory || []} loading={loading} />
-          )}
+          {!hideFactoryDist && <FactoryDistribution byFactory={data?.byFactory || []} loading={loading} />}
           {!hidePrice && (
             <TopUsersCard
               byUser={data?.byUser || []}
@@ -560,8 +550,7 @@ export default function OrderStatsTab() {
             )}
             {data && (
               <span className="text-xs text-muted-foreground">
-                <span className="tabular-nums font-semibold text-foreground">{data.byType.length}</span>{' '}
-                loại sản phẩm
+                <span className="tabular-nums font-semibold text-foreground">{data.byType.length}</span> loại sản phẩm
               </span>
             )}
           </div>
@@ -569,95 +558,109 @@ export default function OrderStatsTab() {
 
         {/* Scroll container — sticky header + sticky summary inside */}
         <div className="max-h-[600px] overflow-y-auto border-t border-border">
-        {/* Column headers */}
-        <div className={(hidePrice ? GRID_COLS_CLASS_NO_PRICE : GRID_COLS_CLASS) + ' gap-2 px-3 py-2 bg-muted/40 backdrop-blur text-[10px] tracking-wide font-medium text-muted-foreground items-center sticky top-0 z-20'}>
-          <div></div>
-          <div>Sản phẩm</div>
-          <div className="text-right">Số lượng</div>
-          {!hidePrice && (
-            <>
-              <div className="text-right">Min</div>
-              <div className="text-right">Max</div>
-              <div className="text-right">Sản xuất</div>
-              <div className="text-right">Vận chuyển</div>
-              <div className="text-right">Tổng</div>
-            </>
-          )}
-          <div className="text-center">Mockup</div>
-        </div>
-
-        {/* Body */}
-        {loading && !data && (
-          <div className="divide-y divide-border">
-            {[0, 1, 2, 3].map((i) => (
-              <div key={i} className="px-3 py-3 flex items-center gap-3">
-                <div className="w-3 h-3 rounded bg-muted animate-pulse" />
-                <div className="flex-1 h-4 rounded bg-muted/60 animate-pulse" style={{ maxWidth: `${60 - i * 8}%` }} />
-                <div className="w-12 h-4 rounded bg-muted/60 animate-pulse" />
-                <div className="w-16 h-4 rounded bg-muted/60 animate-pulse" />
-                <div className="w-20 h-4 rounded bg-muted/60 animate-pulse" />
-              </div>
-            ))}
+          {/* Column headers */}
+          <div
+            className={
+              (hidePrice ? GRID_COLS_CLASS_NO_PRICE : GRID_COLS_CLASS) +
+              ' gap-2 px-3 py-2 bg-muted/40 backdrop-blur text-[10px] tracking-wide font-medium text-muted-foreground items-center sticky top-0 z-20'
+            }
+          >
+            <div></div>
+            <div>Sản phẩm</div>
+            <div className="text-right">Số lượng</div>
+            {!hidePrice && (
+              <>
+                <div className="text-right">Min</div>
+                <div className="text-right">Max</div>
+                <div className="text-right">Sản xuất</div>
+                <div className="text-right">Vận chuyển</div>
+                <div className="text-right">Tổng</div>
+              </>
+            )}
+            <div className="text-center">Mockup</div>
           </div>
-        )}
 
-        {!loading && (!data || data.byType.length === 0) && (
-          <div className="text-center py-16 text-muted-foreground text-sm">
-            <Package size={32} className="mx-auto mb-3 opacity-30" strokeWidth={1.5} />
-            Chưa có đơn nào trong khoảng thời gian này.
-          </div>
-        )}
-
-        {!loading &&
-          data?.byType.map((row) => {
-            const isExpanded = expanded.has(row.type);
-            return (
-              <div key={row.type} className="border-b border-border last:border-b-0">
-                {/* Summary row — sticky to viewport top while THIS group is in view */}
-                <div
-                  onClick={() => toggleExpand(row.type)}
-                  className={cn(
-                    hidePrice ? GRID_COLS_CLASS_NO_PRICE : GRID_COLS_CLASS,
-                    'gap-2 px-3 py-2.5 items-center cursor-pointer transition-colors text-sm group',
-                    isExpanded
-                      ? 'sticky top-[30px] z-10 bg-card shadow-sm border-b border-border'
-                      : 'hover:bg-muted/30',
-                  )}
-                >
-                  <div className="text-muted-foreground">
-                    {isExpanded ? <ChevronDown size={14} /> : <ChevronRight size={14} />}
-                  </div>
-                  <div className="font-medium min-w-0 text-foreground group-hover:text-foreground">
-                    <span className="line-clamp-2 leading-snug">{row.type}</span>
-                  </div>
-                  <div className="text-right font-semibold tabular-nums">{formatNumber(row.quantity)}</div>
-                  {!hidePrice && (
-                    <>
-                      <div className="text-right tabular-nums text-muted-foreground">{formatCurrency(row.minCost)}</div>
-                      <div className="text-right tabular-nums text-muted-foreground">{formatCurrency(row.maxCost)}</div>
-                      <div className="text-right tabular-nums">{formatCurrency(row.productionCost)}</div>
-                      <div className="text-right tabular-nums text-muted-foreground">{formatCurrency(row.shippingCost)}</div>
-                      <div className="text-right font-semibold tabular-nums">{formatCurrency(row.totalCost)}</div>
-                    </>
-                  )}
-                  <div className="text-center text-xs">
-                    <span className="font-semibold tabular-nums">{row.uniqueMockupCount}</span>
-                    {row.duplicateMockupCount > 0 && (
-                      <span className="ml-1.5 text-amber-700 dark:text-amber-400">
-                        · {row.duplicateMockupCount} trùng
-                      </span>
-                    )}
-                  </div>
+          {/* Body */}
+          {loading && !data && (
+            <div className="divide-y divide-border">
+              {[0, 1, 2, 3].map((i) => (
+                <div key={i} className="px-3 py-3 flex items-center gap-3">
+                  <div className="w-3 h-3 rounded bg-muted animate-pulse" />
+                  <div
+                    className="flex-1 h-4 rounded bg-muted/60 animate-pulse"
+                    style={{ maxWidth: `${60 - i * 8}%` }}
+                  />
+                  <div className="w-12 h-4 rounded bg-muted/60 animate-pulse" />
+                  <div className="w-16 h-4 rounded bg-muted/60 animate-pulse" />
+                  <div className="w-20 h-4 rounded bg-muted/60 animate-pulse" />
                 </div>
+              ))}
+            </div>
+          )}
 
-                {isExpanded && (
-                  <div className="bg-muted/30">
-                    <ExpandedDetails row={row} />
+          {!loading && (!data || data.byType.length === 0) && (
+            <div className="text-center py-16 text-muted-foreground text-sm">
+              <Package size={32} className="mx-auto mb-3 opacity-30" strokeWidth={1.5} />
+              Chưa có đơn nào trong khoảng thời gian này.
+            </div>
+          )}
+
+          {!loading &&
+            data?.byType.map((row) => {
+              const isExpanded = expanded.has(row.type);
+              return (
+                <div key={row.type} className="border-b border-border last:border-b-0">
+                  {/* Summary row — sticky to viewport top while THIS group is in view */}
+                  <div
+                    onClick={() => toggleExpand(row.type)}
+                    className={cn(
+                      hidePrice ? GRID_COLS_CLASS_NO_PRICE : GRID_COLS_CLASS,
+                      'gap-2 px-3 py-2.5 items-center cursor-pointer transition-colors text-sm group',
+                      isExpanded
+                        ? 'sticky top-[30px] z-10 bg-card shadow-sm border-b border-border'
+                        : 'hover:bg-muted/30',
+                    )}
+                  >
+                    <div className="text-muted-foreground">
+                      {isExpanded ? <ChevronDown size={14} /> : <ChevronRight size={14} />}
+                    </div>
+                    <div className="font-medium min-w-0 text-foreground group-hover:text-foreground">
+                      <span className="line-clamp-2 leading-snug">{row.type}</span>
+                    </div>
+                    <div className="text-right font-semibold tabular-nums">{formatNumber(row.quantity)}</div>
+                    {!hidePrice && (
+                      <>
+                        <div className="text-right tabular-nums text-muted-foreground">
+                          {formatCurrency(row.minCost)}
+                        </div>
+                        <div className="text-right tabular-nums text-muted-foreground">
+                          {formatCurrency(row.maxCost)}
+                        </div>
+                        <div className="text-right tabular-nums">{formatCurrency(row.productionCost)}</div>
+                        <div className="text-right tabular-nums text-muted-foreground">
+                          {formatCurrency(row.shippingCost)}
+                        </div>
+                        <div className="text-right font-semibold tabular-nums">{formatCurrency(row.totalCost)}</div>
+                      </>
+                    )}
+                    <div className="text-center text-xs">
+                      <span className="font-semibold tabular-nums">{row.uniqueMockupCount}</span>
+                      {row.duplicateMockupCount > 0 && (
+                        <span className="ml-1.5 text-amber-700 dark:text-amber-400">
+                          · {row.duplicateMockupCount} trùng
+                        </span>
+                      )}
+                    </div>
                   </div>
-                )}
-              </div>
-            );
-          })}
+
+                  {isExpanded && (
+                    <div className="bg-muted/30">
+                      <ExpandedDetails row={row} />
+                    </div>
+                  )}
+                </div>
+              );
+            })}
         </div>
       </div>
 
@@ -748,7 +751,10 @@ function hashColor(str: string): { bg: string; text: string } {
 }
 
 function getInitials(s: string): string {
-  const parts = s.trim().split(/[\s@._-]+/).filter(Boolean);
+  const parts = s
+    .trim()
+    .split(/[\s@._-]+/)
+    .filter(Boolean);
   if (parts.length === 0) return '?';
   if (parts.length === 1) return parts[0].slice(0, 2).toUpperCase();
   return (parts[0][0] + parts[parts.length - 1][0]).toUpperCase();
@@ -764,9 +770,7 @@ function RankBadge({ rank }: { rank: number }) {
   if (rank === 3) {
     return <Medal size={20} className="fill-orange-300 text-orange-700" strokeWidth={1.5} />;
   }
-  return (
-    <span className="text-sm font-medium text-muted-foreground/60 tabular-nums">{rank}</span>
-  );
+  return <span className="text-sm font-medium text-muted-foreground/60 tabular-nums">{rank}</span>;
 }
 
 interface TopUsersCardProps {
@@ -796,9 +800,7 @@ function TopUsersCard({ byUser, loading, activeUserKey, onSelectCustomer, hidePr
           </div>
           <div>
             <h2 className="text-base font-semibold text-foreground">Khách hàng top đơn</h2>
-            <p className="text-xs text-muted-foreground mt-0.5">
-              {byUser.length} khách đặt hàng trong kỳ
-            </p>
+            <p className="text-xs text-muted-foreground mt-0.5">{byUser.length} khách đặt hàng trong kỳ</p>
           </div>
         </div>
         <div className="flex items-center bg-muted/40 rounded-md p-0.5">
@@ -851,9 +853,7 @@ function TopUsersCard({ byUser, loading, activeUserKey, onSelectCustomer, hidePr
               const rank = i + 1;
               const displayName = u.userSku || u.userEmail || '?';
               const avatarColors = hashColor(displayName);
-              const isActive =
-                !!activeUserKey &&
-                (activeUserKey === u.userEmail || activeUserKey === u.userSku);
+              const isActive = !!activeUserKey && (activeUserKey === u.userEmail || activeUserKey === u.userSku);
               return (
                 <button
                   key={`${u.userEmail || u.userSku || rank}`}
@@ -888,13 +888,9 @@ function TopUsersCard({ byUser, loading, activeUserKey, onSelectCustomer, hidePr
 
                   {/* Name + email + progress bar */}
                   <div className="flex-1 min-w-0">
-                    <p className="font-medium text-foreground truncate text-sm leading-tight">
-                      {displayName}
-                    </p>
+                    <p className="font-medium text-foreground truncate text-sm leading-tight">{displayName}</p>
                     {u.userEmail && u.userEmail !== displayName && (
-                      <p className="text-[11px] text-muted-foreground truncate leading-tight mt-0.5">
-                        {u.userEmail}
-                      </p>
+                      <p className="text-[11px] text-muted-foreground truncate leading-tight mt-0.5">{u.userEmail}</p>
                     )}
                     <div className="mt-1.5 h-1.5 bg-muted/60 rounded-full overflow-hidden max-w-[200px]">
                       <div
@@ -910,13 +906,9 @@ function TopUsersCard({ byUser, loading, activeUserKey, onSelectCustomer, hidePr
                       {u.orderCount} đơn
                     </p>
                     {hidePrice ? (
-                      <p className="text-[10px] text-muted-foreground tabular-nums">
-                        {u.totalQuantity} sản phẩm
-                      </p>
+                      <p className="text-[10px] text-muted-foreground tabular-nums">{u.totalQuantity} sản phẩm</p>
                     ) : (
-                      <p className="text-[10px] text-muted-foreground tabular-nums">
-                        {formatCurrency(u.totalCost)}
-                      </p>
+                      <p className="text-[10px] text-muted-foreground tabular-nums">{formatCurrency(u.totalCost)}</p>
                     )}
                   </div>
                 </button>
@@ -929,13 +921,7 @@ function TopUsersCard({ byUser, loading, activeUserKey, onSelectCustomer, hidePr
   );
 }
 
-function FactoryDistribution({
-  byFactory,
-  loading,
-}: {
-  byFactory: FactoryBreakdown[];
-  loading: boolean;
-}) {
+function FactoryDistribution({ byFactory, loading }: { byFactory: FactoryBreakdown[]; loading: boolean }) {
   const [hoveredIdx, setHoveredIdx] = useState<number | null>(null);
 
   // Default to first factory if nothing hovered
@@ -967,15 +953,12 @@ function FactoryDistribution({
             </div>
             <div>
               <h2 className="text-base font-semibold text-foreground">Phân bổ theo xưởng</h2>
-              <p className="text-xs text-muted-foreground mt-0.5">
-                Di chuột vào xưởng để xem loại in chi tiết
-              </p>
+              <p className="text-xs text-muted-foreground mt-0.5">Di chuột vào xưởng để xem loại in chi tiết</p>
             </div>
           </div>
           {byFactory.length > 0 && (
             <span className="text-xs text-muted-foreground">
-              <span className="tabular-nums font-semibold text-foreground">{byFactory.length}</span>{' '}
-              xưởng
+              <span className="tabular-nums font-semibold text-foreground">{byFactory.length}</span> xưởng
             </span>
           )}
         </div>
@@ -1006,9 +989,7 @@ function FactoryDistribution({
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4 px-5 pb-5">
           {/* Left: Factory pie */}
           <div className="flex flex-col items-center">
-            <h3 className="text-xs font-medium text-muted-foreground mb-2">
-              Xưởng sản xuất
-            </h3>
+            <h3 className="text-xs font-medium text-muted-foreground mb-2">Xưởng sản xuất</h3>
             <div className="w-full h-[220px] [&_.recharts-sector]:outline-none [&_.recharts-sector:focus]:outline-none [&_.recharts-pie]:outline-none [&_path:focus]:outline-none [&_path]:outline-none">
               <ResponsiveContainer width="100%" height="100%">
                 <PieChart>
@@ -1149,9 +1130,7 @@ function ExpandedDetails({ row }: { row: TypeSummary }) {
 
   // List container: when fullView=true → no max-height (show all inline);
   // when false → compact with scroll.
-  const listClass = fullView
-    ? 'space-y-2'
-    : 'space-y-2 max-h-[280px] overflow-y-auto pr-2';
+  const listClass = fullView ? 'space-y-2' : 'space-y-2 max-h-[280px] overflow-y-auto pr-2';
 
   // Sizes panel is small (typically 3-8 items) → always shown in full.
   // The toggle affects only the heavy Mockup panels.
@@ -1194,10 +1173,7 @@ function ExpandedDetails({ row }: { row: TypeSummary }) {
                       </span>
                     </div>
                     <div className="h-1 bg-muted/50 rounded-full overflow-hidden">
-                      <div
-                        className="h-full bg-foreground/70 rounded-full"
-                        style={{ width: `${pct}%` }}
-                      />
+                      <div className="h-full bg-foreground/70 rounded-full" style={{ width: `${pct}%` }} />
                     </div>
                   </div>
                 );
@@ -1285,9 +1261,7 @@ function ExpandedDetails({ row }: { row: TypeSummary }) {
                     }}
                   />
                   <div className="flex-1 min-w-0">
-                    <p className="text-[11px] text-muted-foreground truncate font-mono">
-                      {m.url.split('/').pop()}
-                    </p>
+                    <p className="text-[11px] text-muted-foreground truncate font-mono">{m.url.split('/').pop()}</p>
                     <Badge variant="warning" className="mt-0.5">
                       ×{m.count} dùng
                     </Badge>
@@ -1363,9 +1337,7 @@ function SizeMatrixTable({
     const rows = [...typeMap.entries()]
       .map(([type, v]) => ({ type, counts: v.counts, total: v.total }))
       .sort((a, b) => b.total - a.total);
-    const columns = [...colSet].sort(
-      (a, b) => sizeOrderRank(a) - sizeOrderRank(b) || a.localeCompare(b),
-    );
+    const columns = [...colSet].sort((a, b) => sizeOrderRank(a) - sizeOrderRank(b) || a.localeCompare(b));
     const colTotals: Record<string, number> = {};
     let grandTotal = 0;
     for (const c of columns) {
@@ -1378,9 +1350,7 @@ function SizeMatrixTable({
   }, [sizeMatrix, effectiveFactory]);
 
   const isEmpty = rows.length === 0;
-  const lockedFactoryName = lockedFactoryId
-    ? factories.find((f) => f.id === lockedFactoryId)?.name
-    : undefined;
+  const lockedFactoryName = lockedFactoryId ? factories.find((f) => f.id === lockedFactoryId)?.name : undefined;
 
   const handleExport = () => {
     const factoryLabel = effectiveFactory
@@ -1445,11 +1415,8 @@ function SizeMatrixTable({
           )}
           {!loading && !isEmpty && (
             <span className="text-xs text-muted-foreground">
-              Tổng:{' '}
-              <span className="tabular-nums font-semibold text-foreground">
-                {formatNumber(grandTotal)}
-              </span>{' '}
-              sản phẩm
+              Tổng: <span className="tabular-nums font-semibold text-foreground">{formatNumber(grandTotal)}</span> sản
+              phẩm
             </span>
           )}
           <button

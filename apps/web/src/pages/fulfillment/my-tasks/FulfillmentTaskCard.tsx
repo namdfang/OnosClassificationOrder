@@ -1,5 +1,4 @@
 import React from 'react';
-import { useDraggable } from '@dnd-kit/core';
 import dayjs from 'dayjs';
 import {
   CheckCircle2,
@@ -12,13 +11,16 @@ import {
   RotateCcw,
   XOctagon,
 } from 'lucide-react';
-import type { FulfillmentStageState, ProductionOrder } from 'shared';
-import { FULFILLMENT_STAGE_LABELS, FulfillmentStage, FulfillmentStageStatus } from 'shared';
+import type { FulfillmentStage, FulfillmentStageState, ProductionOrderRow } from 'shared';
+import { FULFILLMENT_STAGE_LABELS, FulfillmentStageStatus } from 'shared';
+import { useDraggable } from '@dnd-kit/core';
 
 import { Hint } from '@/components/common/Hint';
 import { PriorityBadge } from '@/components/orders/cells/PrioritySelectCell';
-import { useNow } from '@/hooks/useNow';
+
 import { formatCountdown, getStageDeadline } from '@/utils/priorityEstimate';
+
+import { useNow } from '@/hooks/useNow';
 
 /**
  * Card đơn fulfillment — design ngang hàng `pages/designer/my-tasks/TaskCard.tsx`
@@ -40,7 +42,7 @@ import { formatCountdown, getStageDeadline } from '@/utils/priorityEstimate';
 type ColKey = 'waiting' | 'in-progress' | 'rework' | 'done' | 'fixed' | 'watching' | 'unassigned';
 
 export interface FulfillmentTaskCardProps {
-  order: ProductionOrder;
+  order: ProductionOrderRow;
   myStage: FulfillmentStage;
   colKey: ColKey;
   /** `true` = card này được copy productionId gần nhất → hiện CheckCircle2 xanh
@@ -131,8 +133,7 @@ export function FulfillmentTaskCard({
           order.priority,
           myStage,
           // Fallback `inProductionAt` cho đơn cũ thiếu mốc waiting/started (đơn chưa chạy bước nào).
-          (status === FulfillmentStageStatus.InProgress ? state?.startedAt : state?.waitingAt) ||
-            order.inProductionAt,
+          (status === FulfillmentStageStatus.InProgress ? state?.startedAt : state?.waitingAt) || order.inProductionAt,
         )
       : undefined;
   const now = useNow(30_000);
@@ -146,8 +147,9 @@ export function FulfillmentTaskCard({
       style={style}
       {...attributes}
       {...listeners}
-      className={`group rounded-md border bg-card p-2.5 shadow-sm hover:shadow-md transition-shadow ${canDrag ? 'cursor-grab active:cursor-grabbing' : ''
-        } ${isDragging ? 'opacity-50 ring-2 ring-primary/40' : 'border-border'}`}
+      className={`group rounded-md border bg-card p-2.5 shadow-sm hover:shadow-md transition-shadow ${
+        canDrag ? 'cursor-grab active:cursor-grabbing' : ''
+      } ${isDragging ? 'opacity-50 ring-2 ring-primary/40' : 'border-border'}`}
     >
       <div className="flex gap-2.5">
         {thumb ? (
@@ -210,9 +212,7 @@ export function FulfillmentTaskCard({
                 {order.productionId}
               </button>
             ) : (
-              <div className="font-mono text-xs font-semibold text-foreground truncate">
-                {order.productionId}
-              </div>
+              <div className="font-mono text-xs font-semibold text-foreground truncate">{order.productionId}</div>
             )}
             <PriorityBadge priority={order.priority} />
           </div>
@@ -245,10 +245,7 @@ export function FulfillmentTaskCard({
               </Hint>
             )}
             {deadline && countdown && (
-              <Hint
-                content={`Hạn dự kiến bước ${FULFILLMENT_STAGE_LABELS[myStage]} · ${fmtTime(deadline)}`}
-                forceRich
-              >
+              <Hint content={`Hạn dự kiến bước ${FULFILLMENT_STAGE_LABELS[myStage]} · ${fmtTime(deadline)}`} forceRich>
                 <span
                   className={`inline-flex items-center gap-1 ${countdown.overdue ? 'text-rose-600 dark:text-rose-400 font-medium' : ''}`}
                 >
@@ -317,35 +314,25 @@ export function FulfillmentTaskCard({
       {/* Action buttons inline — opacity-hover cho gọn, mở rộng full khi cần thao tác */}
       {colKey === 'unassigned' && onAssignDesigner ? (
         <div className="flex items-center gap-1.5 pt-2 mt-1 border-t border-border/40">
-          <CardAction
-            color="indigo"
-            icon={PlayCircle}
-            label="Gán Designer"
-            onClick={onAssignDesigner}
-          />
+          <CardAction color="indigo" icon={PlayCircle} label="Gán Designer" onClick={onAssignDesigner} />
         </div>
       ) : (
-        colKey !== 'watching' && (status === FulfillmentStageStatus.Waiting ||
+        colKey !== 'watching' &&
+        (status === FulfillmentStageStatus.Waiting ||
           status === FulfillmentStageStatus.Rework ||
           status === FulfillmentStageStatus.InProgress) && (
-            <div className="flex items-center gap-1.5 pt-2 mt-1 border-t border-border/40">
-              {(status === FulfillmentStageStatus.Waiting || status === FulfillmentStageStatus.Rework) &&
-                onStart && (
-                  <CardAction
-                    color="indigo"
-                    icon={PlayCircle}
-                    label="Bắt đầu"
-                    onClick={onStart}
-                  />
-                )}
-              {status === FulfillmentStageStatus.InProgress && onComplete && (
-                <CardAction color="emerald" icon={CheckCircle2} label="Hoàn thành" onClick={onComplete} />
-              )}
-              {status === FulfillmentStageStatus.InProgress && onReportError && (
-                <CardAction color="rose" icon={XOctagon} label="Báo lỗi" onClick={onReportError} />
-              )}
-            </div>
-          )
+          <div className="flex items-center gap-1.5 pt-2 mt-1 border-t border-border/40">
+            {(status === FulfillmentStageStatus.Waiting || status === FulfillmentStageStatus.Rework) && onStart && (
+              <CardAction color="indigo" icon={PlayCircle} label="Bắt đầu" onClick={onStart} />
+            )}
+            {status === FulfillmentStageStatus.InProgress && onComplete && (
+              <CardAction color="emerald" icon={CheckCircle2} label="Hoàn thành" onClick={onComplete} />
+            )}
+            {status === FulfillmentStageStatus.InProgress && onReportError && (
+              <CardAction color="rose" icon={XOctagon} label="Báo lỗi" onClick={onReportError} />
+            )}
+          </div>
+        )
       )}
     </div>
   );

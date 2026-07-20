@@ -35,7 +35,6 @@ export class WorkshopConfigService implements OnModuleInit {
         console.log(`[workshop-seed] dropped legacy 'assignee' category: ${r.deletedCount} rows`);
       }
     } catch (err) {
-      // eslint-disable-next-line no-console
       console.warn('[workshop-seed] assignee cleanup failed:', (err as Error).message);
     }
 
@@ -43,10 +42,7 @@ export class WorkshopConfigService implements OnModuleInit {
       try {
         // withDeleted so soft-deleted rows don't trick us into inserting a
         // duplicate (the unique index ignores deletedAt).
-        const existing = await this.repo.findOne(
-          { category: item.category, code: item.code },
-          { withDeleted: true },
-        );
+        const existing = await this.repo.findOne({ category: item.category, code: item.code }, { withDeleted: true });
         if (!existing) {
           await this.repo.create({ ...item, isActive: true });
         } else {
@@ -63,7 +59,7 @@ export class WorkshopConfigService implements OnModuleInit {
         }
       } catch (err) {
         // Don't crash on dup-key races — the row exists, that's enough.
-        // eslint-disable-next-line no-console
+
         console.warn(`[workshop-seed] ${item.category}/${item.code}: ${(err as Error).message}`);
       }
     }
@@ -105,7 +101,7 @@ export class WorkshopConfigService implements OnModuleInit {
       { category: dto.category },
       { sort: { order: -1 }, paging: { limit: 1, skip: 0 } },
     );
-    const nextOrder = dto.order ?? ((lastOrder[0]?.order ?? -1) + 1);
+    const nextOrder = dto.order ?? (lastOrder[0]?.order ?? -1) + 1;
 
     return this.repo.create({
       ...dto,
@@ -150,9 +146,7 @@ export class WorkshopConfigService implements OnModuleInit {
    * admin wants the dropdown to match the seed list exactly (e.g. after a
    * cleanup), so manually-added or auto-created entries get wiped.
    */
-  async resetCategory(
-    category: WorkshopConfigCategory,
-  ): Promise<{ removed: number; inserted: number }> {
+  async resetCategory(category: WorkshopConfigCategory): Promise<{ removed: number; inserted: number }> {
     const removed = await this.model.deleteMany({ category });
     const seed = WORKSHOP_CONFIG_SEED.filter((s) => s.category === category);
     let inserted = 0;
@@ -161,7 +155,6 @@ export class WorkshopConfigService implements OnModuleInit {
         await this.repo.create({ ...item, isActive: true });
         inserted++;
       } catch (err) {
-        // eslint-disable-next-line no-console
         console.warn(`[workshop-reset] ${item.category}/${item.code}: ${(err as Error).message}`);
       }
     }
@@ -197,10 +190,7 @@ export class WorkshopConfigService implements OnModuleInit {
     return { scanned: all.length, removed: toDelete.length, groups: seen.size };
   }
 
-  private assertModeMatches(
-    category: WorkshopConfigCategory,
-    payload: { color?: string; icon?: string },
-  ) {
+  private assertModeMatches(category: WorkshopConfigCategory, payload: { color?: string; icon?: string }) {
     const mode = WORKSHOP_CONFIG_MODE[category];
     if (mode === 'color' && payload.icon && !payload.color) {
       throw new BadRequestException(`Category ${category} uses color, do not set icon only`);

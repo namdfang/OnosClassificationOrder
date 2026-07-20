@@ -1,25 +1,25 @@
-import { RefinementCtx, z } from 'zod';
+import dayjs from 'dayjs';
 import timezone from 'dayjs/plugin/timezone';
 import utc from 'dayjs/plugin/utc';
+import type { RefinementCtx } from 'zod';
+import { z } from 'zod';
+
+import { TIMEZONE } from '..';
 import {
   CODE_LENGTH,
   EXTERNAL_ID_MAX_LENGTH,
   ID_LENGTH,
   NAME_MAX_LENGTH,
   NAME_MIN_LENGTH,
-  NORMAL_TEXT_MAX_LENGTH,
   PRICE_MAX,
   PRICE_MIN,
 } from './common-length';
-import dayjs from 'dayjs';
-import { TIMEZONE } from '..';
 
 dayjs.extend(utc);
 dayjs.extend(timezone);
 
 dayjs.extend(utc);
 dayjs.extend(timezone);
-
 
 const checkDecimalPlaces = (val: number, maxDecimalPlaces = 2) => {
   const parts = val.toString().split('.');
@@ -142,7 +142,7 @@ export const TrackingNumberZod = z.coerce
   )
   .refine((value) => !value?.includes('__'), "Order ID can't contain '__'");
 
-  export const VNDateZod = z
+export const VNDateZod = z
   .string()
   .refine(
     (value) => {

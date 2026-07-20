@@ -1,5 +1,4 @@
 /** @type {import('tailwindcss').Config} */
-/* eslint-disable import/no-extraneous-dependencies, global-require */
 
 const plugin = require('tailwindcss/plugin');
 

@@ -5,12 +5,7 @@ import { MongooseModule } from '@nestjs/mongoose';
 import { OrderEntity, OrderSchema } from '../order/order.entity';
 import { DesignBufferCache } from './buffer-cache.service';
 import { DesignImageController } from './design-image.controller';
-import {
-  DESIGN_PREVIEW_QUEUE,
-  DESIGN_THUMB_QUEUE,
-  DesignPreviewProcessor,
-  DesignThumbProcessor,
-} from './design-image.processor';
+import { DESIGN_PREVIEW_QUEUE, DESIGN_THUMB_QUEUE } from './design-image.processor';
 import { DesignImageService } from './design-image.service';
 import { R2DesignObjectEntity, R2DesignObjectSchema } from './r2-design-object.entity';
 import { R2DesignObjectRepository } from './r2-design-object.repository';

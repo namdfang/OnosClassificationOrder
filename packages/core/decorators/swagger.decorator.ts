@@ -1,5 +1,5 @@
-/* eslint-disable @typescript-eslint/ban-types,@typescript-eslint/no-unsafe-argument */
 import { FileInterceptor, FilesInterceptor } from '@core/interceptors';
+import type { IApiFile } from '@core/interfaces';
 import type { Type } from '@nestjs/common';
 import { applyDecorators, UseInterceptors } from '@nestjs/common';
 import { PARAMTYPES_METADATA, ROUTE_ARGS_METADATA } from '@nestjs/common/constants';
@@ -8,9 +8,8 @@ import { ApiBody, ApiConsumes, ApiExtraModels, getSchemaPath } from '@nestjs/swa
 import type { ReferenceObject, SchemaObject } from '@nestjs/swagger/dist/interfaces/open-api-spec.interface';
 import { reverseObjectKeys } from '@nestjs/swagger/dist/utils/reverse-object-keys.util';
 import _ from 'lodash';
-import type { IApiFile } from '@core/interfaces';
 
-function explore(instance: Object, propertyKey: string | symbol) {
+function explore(instance: object, propertyKey: string | symbol) {
   const types: Array<Type<unknown>> = Reflect.getMetadata(PARAMTYPES_METADATA, instance, propertyKey);
   const routeArgsMetadata = Reflect.getMetadata(ROUTE_ARGS_METADATA, instance.constructor, propertyKey) || {};
 
@@ -23,7 +22,6 @@ function explore(instance: Object, propertyKey: string | symbol) {
   for (const [key, value] of Object.entries(parametersWithType)) {
     const keyPair = key.split(':');
 
-    // eslint-disable-next-line  @typescript-eslint/no-unsafe-enum-comparison
     if (Number(keyPair[0]) === RouteParamtypes.BODY) {
       return value.type;
     }

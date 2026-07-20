@@ -1,16 +1,18 @@
 import React from 'react';
-import { Link, useNavigate, useSearchParams } from 'react-router-dom';
-import { zodResolver } from '@hookform/resolvers/zod';
 import { useForm } from 'react-hook-form';
-import { z } from 'zod';
+import { Link, useNavigate, useSearchParams } from 'react-router-dom';
 import { Lock, Mail, User } from 'lucide-react';
 import { toast } from 'sonner';
+import { z } from 'zod';
+import { zodResolver } from '@hookform/resolvers/zod';
 
-import { Button } from '@/components/ui/button';
-import { Input } from '@/components/ui/input';
-import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from '@/components/ui/form';
 import { Spinner } from '@/components/common/Spinner';
+import { Button } from '@/components/ui/button';
+import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from '@/components/ui/form';
+import { Input } from '@/components/ui/input';
+
 import logoUrl from '@/assets/images/logo.png';
+
 import { PATHS } from '../../constants/paths';
 import { RepositoryRemote } from '../../services';
 import { useAuthStore } from '../../store/authStore';
@@ -38,7 +40,12 @@ function Register() {
   const onSubmit = async (values: RegisterFormValues) => {
     setLoading(true);
     try {
-      await RepositoryRemote.auth.register({ ...values, recaptchaToken: '', refCode });
+      await RepositoryRemote.auth.register({
+        ...values,
+        passwordConfirm: values.password,
+        recaptchaToken: '',
+        refCode,
+      });
       navigate(PATHS.LOGIN);
       toast.success('Account created successfully');
     } catch (error) {

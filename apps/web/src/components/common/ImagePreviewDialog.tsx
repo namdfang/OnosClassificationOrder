@@ -1,10 +1,12 @@
 import React, { useEffect, useState } from 'react';
 import { ExternalLink, Image as ImageIcon } from 'lucide-react';
 
-import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { RepositoryRemote } from '@/services';
-import { Spinner } from './Spinner';
+
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
+
 import { CopyButton } from './CopyButton';
+import { Spinner } from './Spinner';
 
 interface ImagePreviewDialogProps {
   open: boolean;

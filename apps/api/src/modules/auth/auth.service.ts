@@ -1,4 +1,4 @@
-import { forwardRef, Inject, Injectable } from '@nestjs/common';
+import { Inject, Injectable } from '@nestjs/common';
 import { JwtService } from '@nestjs/jwt';
 import { TokenType, UserNotFoundException, validateHash } from 'core';
 import { type LoginDto, type RoleType, Status } from 'shared';

@@ -1,9 +1,10 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import { ListChecks, Loader2, Search } from 'lucide-react';
 
-import { Button } from '@/components/ui/button';
-import { Textarea } from '@/components/ui/textarea';
+import { RepositoryRemote } from '@/services';
+
 import { Badge } from '@/components/ui/badge';
+import { Button } from '@/components/ui/button';
 import {
   Dialog,
   DialogContent,
@@ -12,7 +13,8 @@ import {
   DialogHeader,
   DialogTitle,
 } from '@/components/ui/dialog';
-import { RepositoryRemote } from '@/services';
+import { Textarea } from '@/components/ui/textarea';
+
 import { handleAxiosError } from '@/utils';
 
 /** Nhãn ngắn cho từng chặng fulfillment — hiện ở cột "Chặng" chế độ lookup. */
@@ -247,7 +249,13 @@ export function BulkProductionIdDialog({
             Đóng
           </Button>
           <Button onClick={onPrimary} disabled={!ids.length || loading}>
-            {loading ? <Loader2 size={15} className="animate-spin" /> : mode === 'filter' ? <ListChecks size={15} /> : <Search size={15} />}
+            {loading ? (
+              <Loader2 size={15} className="animate-spin" />
+            ) : mode === 'filter' ? (
+              <ListChecks size={15} />
+            ) : (
+              <Search size={15} />
+            )}
             {primaryLabel}
             {ids.length > 0 && ` (${ids.length})`}
           </Button>

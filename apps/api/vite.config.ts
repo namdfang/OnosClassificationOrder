@@ -1,4 +1,3 @@
-/* eslint-disable quote-props */
 import dotenv from 'dotenv';
 import path from 'path';
 import { defineConfig } from 'vite';

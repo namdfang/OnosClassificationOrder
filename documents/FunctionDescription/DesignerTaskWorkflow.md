@@ -342,7 +342,7 @@ Components con:
 Xem `Dashboard.md` mục tab D.
 
 ### 4.4 `DesignerSummaryPanel` (trên /orders)
-Trên cùng tab List Order + Bảng Workshop khi user có quyền `page.designer_stats`/`designer.task.assign`:
+Trên cùng tab List Order + Danh sách đơn khi user có quyền `page.designer_stats`/`designer.task.assign`:
 - 7 KPI button-card scoped theo filter list (gồm "Tổng chưa gán" + "Chưa gán không tool"). Toggle xem "tổng" (overall, ignore filter)
 - Bảng matrix per-designer collapsible — click cell → set filter list (`handleSummaryCellClick`)
 - Auto refetch khi filter list đổi (cùng query string)

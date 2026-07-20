@@ -1,5 +1,5 @@
-import type { LifecycleStageKey } from 'shared';
-import { ORDER_PRIORITY_STAGE_ESTIMATE_HOURS, OrderPriority } from 'shared';
+import type { LifecycleStageKey, OrderPriority } from 'shared';
+import { ORDER_PRIORITY_STAGE_ESTIMATE_HOURS } from 'shared';
 
 /**
  * Hạn dự kiến của 1 bước = thời điểm đơn VÀO bước đó (`enteredAt` — waitingAt/
@@ -44,7 +44,7 @@ export type ActiveStageRow = {
 };
 
 /**
- * Suy bước hiện tại đơn đang nằm (cho cột "Ưu tiên" ở Bảng Workshop — kanban
+ * Suy bước hiện tại đơn đang nằm (cho cột "Ưu tiên" ở Danh sách đơn — kanban
  * card đã biết sẵn stage của chính mình nên không cần helper này).
  *
  * `unassigned`/thiếu `designerStatus` = đơn CHƯA chạy bước nào — vẫn tính là

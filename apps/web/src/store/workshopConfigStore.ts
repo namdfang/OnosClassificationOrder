@@ -1,6 +1,6 @@
-import { create } from 'zustand';
 import type { WorkshopConfig, WorkshopConfigCategory } from 'shared';
 import { WORKSHOP_CONFIG_CATEGORIES } from 'shared';
+import { create } from 'zustand';
 
 import { RepositoryRemote } from '@/services';
 
@@ -53,10 +53,7 @@ export const useWorkshopConfigStore = create<WorkshopConfigStore>((set, get) => 
     const cat = item.category as WorkshopConfigCategory;
     const list: WorkshopConfig[] = byCategory[cat] || [];
     const idx = list.findIndex((i: WorkshopConfig) => i._id === item._id);
-    byCategory[cat] =
-      idx === -1
-        ? [...list, item]
-        : list.map((i: WorkshopConfig, k: number) => (k === idx ? item : i));
+    byCategory[cat] = idx === -1 ? [...list, item] : list.map((i: WorkshopConfig, k: number) => (k === idx ? item : i));
     byCategory[cat].sort((a: WorkshopConfig, b: WorkshopConfig) => a.order - b.order);
     set({ byCategory });
   },

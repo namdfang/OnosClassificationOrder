@@ -1,22 +1,22 @@
 import { auth } from './auth';
-import { roles } from './roles';
-import { customRoles } from './custom-roles';
-import { upload } from './upload';
-import { users } from './users';
 import { cache } from './cache';
-import { departments } from './departments';
-import { notifications } from './notifications';
-import { factory } from './factory';
-import { machineType } from './machineType';
-import { productConfig } from './productConfig';
-import { order } from './order';
-import { workshopConfig } from './workshopConfig';
-import { designer } from './designer';
-import { designerAssignment } from './designerAssignment';
+import { customRoles } from './custom-roles';
 import { customer } from './customer';
 import { customerAssignment } from './customerAssignment';
+import { departments } from './departments';
+import { designer } from './designer';
+import { designerAssignment } from './designerAssignment';
+import { factory } from './factory';
 import { fulfillment } from './fulfillment';
+import { machineType } from './machineType';
+import { notifications } from './notifications';
+import { order } from './order';
+import { productConfig } from './productConfig';
 import { reports } from './reports';
+import { roles } from './roles';
+import { upload } from './upload';
+import { users } from './users';
+import { workshopConfig } from './workshopConfig';
 
 export const RepositoryRemote = {
   auth,

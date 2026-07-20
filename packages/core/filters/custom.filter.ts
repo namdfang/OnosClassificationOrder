@@ -2,7 +2,7 @@ import type { ArgumentsHost } from '@nestjs/common';
 import { Catch, HttpException, HttpStatus } from '@nestjs/common';
 import { BaseExceptionFilter } from '@nestjs/core';
 import type { FastifyReply, FastifyRequest } from 'fastify';
-import { I18nContext, I18nService } from 'nestjs-i18n';
+import type { I18nService } from 'nestjs-i18n';
 
 @Catch(HttpException)
 export class CustomExceptionFilter extends BaseExceptionFilter {
@@ -39,7 +39,7 @@ export class CustomExceptionFilter extends BaseExceptionFilter {
       console.error(stackTrace);
     }
 
-    let translation: string = message;
+    const translation: string = message;
     // try {
     //   translation = await this.i18n.t(message, {
     //     lang: I18nContext.current()?.lang,

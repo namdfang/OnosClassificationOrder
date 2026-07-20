@@ -1,13 +1,10 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { CalendarRange, X } from 'lucide-react';
-import type {
-  FulfillmentDailyColumnTotals,
-  FulfillmentDailyRow,
-  FulfillmentStage,
-} from 'shared';
+import type { FulfillmentDailyColumnTotals, FulfillmentDailyRow, FulfillmentStage } from 'shared';
 import { FULFILLMENT_STAGE_LABELS, FULFILLMENT_STAGES } from 'shared';
 
 import { RepositoryRemote } from '@/services';
+
 import { handleAxiosError } from '@/utils';
 
 const WEEKDAYS = ['CN', 'T2', 'T3', 'T4', 'T5', 'T6', 'T7'];
@@ -107,16 +104,7 @@ interface Props {
  * 6 stage (đã xong/còn lại). Lane/stage của user bung 4 hàng con; hàng "Lỗi" tô
  * đỏ. Mỗi ô có tooltip. Ô 2 số chia đều 2 bên (slash giữa); hàng bung hiện `0`.
  */
-export function PipelineDailyOverview({
-  stage,
-  lane,
-  from,
-  to,
-  reloadToken,
-  dayFilter,
-  onPickDay,
-  caption,
-}: Props) {
+export function PipelineDailyOverview({ stage, lane, from, to, reloadToken, dayFilter, onPickDay, caption }: Props) {
   const [data, setData] = useState<Data>(EMPTY);
   const [loading, setLoading] = useState(false);
   const seqRef = useRef(0);
@@ -374,10 +362,7 @@ export function PipelineDailyOverview({
           label,
           tone: 'dim',
           showZero: true,
-          dual: (m) => [
-            m.stages[st]?.done ?? 0,
-            Math.max(0, (m.stages[st]?.arrived ?? 0) - (m.stages[st]?.done ?? 0)),
-          ],
+          dual: (m) => [m.stages[st]?.done ?? 0, Math.max(0, (m.stages[st]?.arrived ?? 0) - (m.stages[st]?.done ?? 0))],
           dualCls: [EMERALD, INDIGO],
           tip: (m, d) => {
             const s = m.stages[st];
@@ -450,7 +435,8 @@ export function PipelineDailyOverview({
         <span className="hidden md:inline text-[11px] text-muted-foreground">
           {caption ?? (
             <>
-              — theo ngày vào SX · ô 2 số = <b className="text-emerald-600">đã xong</b>/<b className="text-indigo-600">còn lại</b> · di chuột vào ô để xem chi tiết · bấm 1 ngày để lọc bên dưới
+              — theo ngày vào SX · ô 2 số = <b className="text-emerald-600">đã xong</b>/
+              <b className="text-indigo-600">còn lại</b> · di chuột vào ô để xem chi tiết · bấm 1 ngày để lọc bên dưới
             </>
           )}
         </span>
@@ -483,8 +469,9 @@ export function PipelineDailyOverview({
                     <th
                       key={d.day}
                       onClick={() => onPickDay?.(d.day)}
-                      className={`font-medium px-1.5 py-1.5 border-b border-l border-border text-center min-w-[62px] transition-colors ${onPickDay ? 'cursor-pointer' : ''
-                        } ${active ? 'bg-indigo-100 dark:bg-indigo-500/25' : 'bg-card hover:bg-muted/60'}`}
+                      className={`font-medium px-1.5 py-1.5 border-b border-l border-border text-center min-w-[62px] transition-colors ${
+                        onPickDay ? 'cursor-pointer' : ''
+                      } ${active ? 'bg-indigo-100 dark:bg-indigo-500/25' : 'bg-card hover:bg-muted/60'}`}
                     >
                       <div className="text-[11px] text-muted-foreground leading-tight">{wd}</div>
                       <div className="leading-tight font-semibold">{dm}</div>
@@ -500,8 +487,9 @@ export function PipelineDailyOverview({
               {rows.map((row) => (
                 <tr key={row.key} className={rowBgCls(row.tone)}>
                   <td
-                    className={`sticky left-0 z-10 ${labelBgCls(row.tone)} px-3 py-1.5 border-b border-border/60 ${row.indent ? 'pl-6' : ''
-                      } ${labelCls(row)}`}
+                    className={`sticky left-0 z-10 ${labelBgCls(row.tone)} px-3 py-1.5 border-b border-border/60 ${
+                      row.indent ? 'pl-6' : ''
+                    } ${labelCls(row)}`}
                   >
                     {row.indent && <span className="text-muted-foreground/50 mr-1">·</span>}
                     {row.label}
@@ -515,8 +503,9 @@ export function PipelineDailyOverview({
                         onMouseEnter={(e) => showTip(row.tip(d, fmtHead(d.day).dm), e)}
                         onMouseMove={(e) => showTip(row.tip(d, fmtHead(d.day).dm), e)}
                         onMouseLeave={hideTip}
-                        className={`border-b border-l border-border/60 px-1 py-1.5 transition-colors ${onPickDay ? 'cursor-pointer' : ''
-                          } ${active ? 'bg-indigo-100/70 dark:bg-indigo-500/20' : 'hover:bg-muted/50'}`}
+                        className={`border-b border-l border-border/60 px-1 py-1.5 transition-colors ${
+                          onPickDay ? 'cursor-pointer' : ''
+                        } ${active ? 'bg-indigo-100/70 dark:bg-indigo-500/20' : 'hover:bg-muted/50'}`}
                       >
                         {renderCell(row, d)}
                       </td>

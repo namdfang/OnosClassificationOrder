@@ -16,23 +16,18 @@ import {
   RoleType,
   WorkshopConfigCategory,
 } from 'shared';
-
-import { OrderLogService } from '../order-log/order-log.service';
-import type { AuditContext } from '../order-log/order-log.service';
-import { OrderEntity, OrderDocument } from '../order/order.entity';
-import { RoleRepository } from '../role/role.repository';
-import { UserEntity, UserDocument } from '../user/user.entity';
-import { WorkshopConfigEntity } from '../workshop-config/workshop-config.entity';
 import { Status } from 'shared';
+
+import { OrderDocument, OrderEntity } from '../order/order.entity';
+import type { AuditContext } from '../order-log/order-log.service';
+import { OrderLogService } from '../order-log/order-log.service';
+import { RoleRepository } from '../role/role.repository';
+import { UserDocument, UserEntity } from '../user/user.entity';
+import { WorkshopConfigEntity } from '../workshop-config/workshop-config.entity';
 
 const READY_FOR_FULFILL_CODE = 'ok';
 
-const OVERRIDE_ROLES: RoleType[] = [
-  RoleType.SuperAdmin,
-  RoleType.Admin,
-  RoleType.Manager,
-  RoleType.DesignerLeader,
-];
+const OVERRIDE_ROLES: RoleType[] = [RoleType.SuperAdmin, RoleType.Admin, RoleType.Manager, RoleType.DesignerLeader];
 
 /**
  * State machine cho task của Designer. Mọi transition đi qua method `transition`.
@@ -73,9 +68,7 @@ export class DesignerTaskService {
       .findOne({ _id: targetUserId, roleId: designerRole?._id }, { _id: 1, status: 1 })
       .lean();
     if (!u) {
-      throw new BadRequestException(
-        'Designer nhận thay không hợp lệ (không tìm thấy hoặc không phải sub-designer).',
-      );
+      throw new BadRequestException('Designer nhận thay không hợp lệ (không tìm thấy hoặc không phải sub-designer).');
     }
     if ((u as unknown as { status?: string }).status !== Status.Active) {
       throw new BadRequestException('Designer nhận thay đã bị tắt — chọn người khác.');
@@ -90,7 +83,7 @@ export class DesignerTaskService {
     ctx: AuditContext,
     targetUserId?: string,
   ): Promise<OrderDocument> {
-    const roleName = user.role?.name as RoleType | undefined;
+    const roleName = user.role?.name;
     const isOverride = roleName ? OVERRIDE_ROLES.includes(roleName) : false;
 
     const order = await this.orderModel.findById(orderId).lean();
@@ -116,7 +109,7 @@ export class DesignerTaskService {
       await this.assertHandoffTargetValid(targetUserId || '', fromUserId);
     }
 
-    const currentStatus = (order.designerStatus as DesignerStatus) || DesignerStatus.Unassigned;
+    const currentStatus = order.designerStatus || DesignerStatus.Unassigned;
     const plan = this.resolveTransition(currentStatus, action, reason, {
       isFirstStart: !order.designerFirstStartedAt,
       designerStartedAt: order.designerStartedAt,
@@ -138,9 +131,7 @@ export class DesignerTaskService {
     );
 
     if (!updated) {
-      throw new ConflictException(
-        'Trạng thái task vừa thay đổi bởi người khác — refresh và thử lại.',
-      );
+      throw new ConflictException('Trạng thái task vừa thay đổi bởi người khác — refresh và thử lại.');
     }
 
     void this.orderLogService.write({
@@ -206,10 +197,7 @@ export class DesignerTaskService {
     action: DesignerTransitionAction,
     plan: { nextStatus: DesignerStatus; patch: Record<string, unknown> },
   ): void {
-    if (
-      action !== DesignerTransitionAction.Complete ||
-      plan.nextStatus !== DesignerStatus.Done
-    ) {
+    if (action !== DesignerTransitionAction.Complete || plan.nextStatus !== DesignerStatus.Done) {
       return;
     }
     const set = (plan.patch.$set ?? {}) as Record<string, unknown>;
@@ -279,9 +267,7 @@ export class DesignerTaskService {
 
       case DesignerTransitionAction.Restart: {
         if (current !== DesignerStatus.Rework) {
-          throw new BadRequestException(
-            `Action 'restart' chỉ hợp lệ từ trạng thái 'rework' (current=${current}).`,
-          );
+          throw new BadRequestException(`Action 'restart' chỉ hợp lệ từ trạng thái 'rework' (current=${current}).`);
         }
         // Per-cycle: reset designerStartedAt để complete sau tính đúng delta.
         return {
@@ -433,58 +419,54 @@ export class DesignerTaskService {
     const toolCheckMarker = { productionErrorSource: 'tool-check', toolResultNote: 'error' };
     const notMarker = { $nor: [toolCheckMarker] };
 
-    const [assignedRaw, inProgressRaw, reworkRaw, doneRaw, fixedRaw, watchingRaw, rejectedRaw] =
-      await Promise.all([
-        this.orderModel
-          .find({ ...baseFilter, designerStatus: DesignerStatus.Assigned })
-          .sort({ priority: -1, designerAssignedAt: -1, inProductionAt: -1 })
-          .lean(),
-        this.orderModel
-          .find({ ...baseFilter, designerStatus: DesignerStatus.InProgress })
-          .sort({ priority: -1, designerStartedAt: -1, inProductionAt: -1 })
-          .lean(),
-        // "Cần làm lại" — loại đơn đang giữ ở Soát tool (chờ Support) → watching.
-        this.orderModel
-          .find({ ...baseFilter, ...notMarker, designerStatus: DesignerStatus.Rework })
-          .sort({ priority: -1, designerReworkAt: -1, inProductionAt: -1 })
-          .lean(),
-        // "Đã xong" = done KHÔNG dính lỗi (designerReworkCount = 0/thiếu), đơn
-        // KHÔNG bị đẩy về Soát tool.
-        this.orderModel
-          .find({
-            ...baseFilter,
-            ...notMarker,
-            designerStatus: DesignerStatus.Done,
-            designerReworkCount: { $in: [0, null] },
-          })
-          .sort({ priority: -1, designerCompletedAt: -1 })
-          .lean(),
-        // "Đã sửa" = done SAU KHI sửa lỗi (designerReworkCount > 0).
-        this.orderModel
-          .find({
-            ...baseFilter,
-            ...notMarker,
-            designerStatus: DesignerStatus.Done,
-            designerReworkCount: { $gt: 0 },
-          })
-          .sort({ priority: -1, designerCompletedAt: -1 })
-          .lean(),
-        // "Đang chờ quay lại" — đơn CỦA MÌNH (assignee scope ở baseFilter) đang
-        // giữ ở Soát tool phía trên; task đã xong/đang chờ làm lại. Sau khi Support
-        // soát xong → chuyển sang "Cần làm lại".
-        this.orderModel
-          .find({
-            ...baseFilter,
-            ...toolCheckMarker,
-            designerStatus: { $in: [DesignerStatus.Done, DesignerStatus.Rework] },
-          })
-          .sort({ priority: -1, inProductionAt: -1 })
-          .lean(),
-        this.orderModel
-          .find(rejectedFilter)
-          .sort({ priority: -1, updatedAt: -1, inProductionAt: -1 })
-          .lean(),
-      ]);
+    const [assignedRaw, inProgressRaw, reworkRaw, doneRaw, fixedRaw, watchingRaw, rejectedRaw] = await Promise.all([
+      this.orderModel
+        .find({ ...baseFilter, designerStatus: DesignerStatus.Assigned })
+        .sort({ priority: -1, designerAssignedAt: -1, inProductionAt: -1 })
+        .lean(),
+      this.orderModel
+        .find({ ...baseFilter, designerStatus: DesignerStatus.InProgress })
+        .sort({ priority: -1, designerStartedAt: -1, inProductionAt: -1 })
+        .lean(),
+      // "Cần làm lại" — loại đơn đang giữ ở Soát tool (chờ Support) → watching.
+      this.orderModel
+        .find({ ...baseFilter, ...notMarker, designerStatus: DesignerStatus.Rework })
+        .sort({ priority: -1, designerReworkAt: -1, inProductionAt: -1 })
+        .lean(),
+      // "Đã xong" = done KHÔNG dính lỗi (designerReworkCount = 0/thiếu), đơn
+      // KHÔNG bị đẩy về Soát tool.
+      this.orderModel
+        .find({
+          ...baseFilter,
+          ...notMarker,
+          designerStatus: DesignerStatus.Done,
+          designerReworkCount: { $in: [0, null] },
+        })
+        .sort({ priority: -1, designerCompletedAt: -1 })
+        .lean(),
+      // "Đã sửa" = done SAU KHI sửa lỗi (designerReworkCount > 0).
+      this.orderModel
+        .find({
+          ...baseFilter,
+          ...notMarker,
+          designerStatus: DesignerStatus.Done,
+          designerReworkCount: { $gt: 0 },
+        })
+        .sort({ priority: -1, designerCompletedAt: -1 })
+        .lean(),
+      // "Đang chờ quay lại" — đơn CỦA MÌNH (assignee scope ở baseFilter) đang
+      // giữ ở Soát tool phía trên; task đã xong/đang chờ làm lại. Sau khi Support
+      // soát xong → chuyển sang "Cần làm lại".
+      this.orderModel
+        .find({
+          ...baseFilter,
+          ...toolCheckMarker,
+          designerStatus: { $in: [DesignerStatus.Done, DesignerStatus.Rework] },
+        })
+        .sort({ priority: -1, inProductionAt: -1 })
+        .lean(),
+      this.orderModel.find(rejectedFilter).sort({ priority: -1, updatedAt: -1, inProductionAt: -1 }).lean(),
+    ]);
 
     return {
       columns: {
@@ -572,16 +554,16 @@ export class DesignerTaskService {
         ]),
         // Resolve code→name ở BACKEND (như getWorkshopAvailableFilters) — không
         // phụ thuộc FE workshop_config store cho category error_file_type.
-        this.workshopConfigModel
-          .find({ category: WorkshopConfigCategory.ErrorFileType }, { code: 1, name: 1 })
-          .lean(),
+        this.workshopConfigModel.find({ category: WorkshopConfigCategory.ErrorFileType }, { code: 1, name: 1 }).lean(),
       ]);
       const nameMap = new Map<string, string>(cfgs.map((c) => [c.code, c.name]));
       return agg.map((r) => ({ value: r._id, label: nameMap.get(r._id) || r._id, count: r.count }));
     };
 
-    const [typeOpts, fabricOpts, machineOpts, toolOpts, toolNoteOpts, userOpts, errorFileOpts] =
-      await Promise.all([...KEYS.map((k) => aggregate(k, k)), errorFileFacet()]);
+    const [typeOpts, fabricOpts, machineOpts, toolOpts, toolNoteOpts, userOpts, errorFileOpts] = await Promise.all([
+      ...KEYS.map((k) => aggregate(k, k)),
+      errorFileFacet(),
+    ]);
 
     return {
       type: typeOpts,
@@ -611,11 +593,9 @@ export class DesignerTaskService {
     modified: number;
     skipped: { orderId: string; productionId: string; reason: string }[];
   }> {
-    const roleName = user.role?.name as RoleType | undefined;
+    const roleName = user.role?.name;
     const userId = String(user._id);
-    const isOverride =
-      !!roleName &&
-      [RoleType.SuperAdmin, RoleType.Admin, RoleType.Manager].includes(roleName);
+    const isOverride = !!roleName && [RoleType.SuperAdmin, RoleType.Admin, RoleType.Manager].includes(roleName);
 
     // Bàn giao "không làm được" hàng loạt → 1 designer nhận cho tất cả. Validate
     // target 1 lần trước vòng lặp.
@@ -650,7 +630,7 @@ export class DesignerTaskService {
         continue;
       }
 
-      const current = (o.designerStatus as DesignerStatus) || DesignerStatus.Unassigned;
+      const current = o.designerStatus || DesignerStatus.Unassigned;
       const fromUserId = o.assignee || userId;
       // Bàn giao cho chính người đang ôm = no-op → skip.
       if (action === DesignerTransitionAction.Reject && targetUserId === fromUserId) {
@@ -671,11 +651,9 @@ export class DesignerTaskService {
           action,
           plan,
         );
-        const updated = await this.orderModel.findOneAndUpdate(
-          { _id: orderId, designerStatus: current },
-          plan.patch,
-          { new: true },
-        );
+        const updated = await this.orderModel.findOneAndUpdate({ _id: orderId, designerStatus: current }, plan.patch, {
+          new: true,
+        });
         if (!updated) {
           skipped.push({ orderId, productionId, reason: 'Trạng thái đã đổi (race) — refresh và thử lại.' });
           continue;
@@ -701,7 +679,14 @@ export class DesignerTaskService {
         }
         if (action === DesignerTransitionAction.Reject && targetUserId) {
           void this.orderLogService.writeMany([
-            { orderId, action: 'update', field: 'assignee', before: fromUserId, after: targetUserId, ctx: { ...ctx, user } },
+            {
+              orderId,
+              action: 'update',
+              field: 'assignee',
+              before: fromUserId,
+              after: targetUserId,
+              ctx: { ...ctx, user },
+            },
             {
               orderId,
               action: 'update',
@@ -737,19 +722,13 @@ export class DesignerTaskService {
     // làm/…" của designer, kể cả khi bị hủy giữa chừng.
     const filter: Record<string, unknown> = { assignee: userId, cancelledAt: null };
     if (query.type) filter.type = { $in: query.type.split(',').filter(Boolean) };
-    if (query.fabricType)
-      filter.fabricType = { $in: query.fabricType.split(',').filter(Boolean) };
-    if (query.machineNumber)
-      filter.machineNumber = { $in: query.machineNumber.split(',').filter(Boolean) };
-    if (query.toolResult)
-      filter.toolResult = { $in: query.toolResult.split(',').filter(Boolean) };
-    if (query.toolResultNote)
-      filter.toolResultNote = { $in: query.toolResultNote.split(',').filter(Boolean) };
-    if (query.userSku)
-      filter.userSku = { $in: query.userSku.split(',').filter(Boolean) };
+    if (query.fabricType) filter.fabricType = { $in: query.fabricType.split(',').filter(Boolean) };
+    if (query.machineNumber) filter.machineNumber = { $in: query.machineNumber.split(',').filter(Boolean) };
+    if (query.toolResult) filter.toolResult = { $in: query.toolResult.split(',').filter(Boolean) };
+    if (query.toolResultNote) filter.toolResultNote = { $in: query.toolResultNote.split(',').filter(Boolean) };
+    if (query.userSku) filter.userSku = { $in: query.userSku.split(',').filter(Boolean) };
     // `errorFile` là field MẢNG trên order → `$in` khớp nếu mảng chứa bất kỳ mã nào.
-    if (query.errorFile)
-      filter.errorFile = { $in: query.errorFile.split(',').filter(Boolean) };
+    if (query.errorFile) filter.errorFile = { $in: query.errorFile.split(',').filter(Boolean) };
     if (query.search) {
       filter.$or = [
         { productionId: { $regex: query.search, $options: 'i' } },
@@ -809,8 +788,7 @@ export class DesignerTaskService {
     for (const o of completedAgg) {
       // Response: ưu tiên firstStartedAt (immutable từ lần đầu). Fallback
       // designerStartedAt cho legacy data.
-      const respStart =
-        (o as { designerFirstStartedAt?: Date }).designerFirstStartedAt || o.designerStartedAt;
+      const respStart = (o as { designerFirstStartedAt?: Date }).designerFirstStartedAt || o.designerStartedAt;
       if (o.designerAssignedAt && respStart) {
         responseSumMs += respStart.getTime() - o.designerAssignedAt.getTime();
         responseN++;
@@ -838,8 +816,8 @@ export class DesignerTaskService {
       rejectedCount: rejectedByMe,
       completedInPeriod,
       fixedInPeriod,
-      avgResponseMin: responseN > 0 ? Math.round((responseSumMs / responseN) / 60000) : 0,
-      avgWorkMin: workN > 0 ? Math.round((workSumMs / workN) / 60000) : 0,
+      avgResponseMin: responseN > 0 ? Math.round(responseSumMs / responseN / 60000) : 0,
+      avgWorkMin: workN > 0 ? Math.round(workSumMs / workN / 60000) : 0,
       errorRate: completedInPeriod > 0 ? Math.round((reworkSum / completedInPeriod) * 100) / 100 : 0,
     };
   }
@@ -888,12 +866,7 @@ export class DesignerTaskService {
           cancelledAt: null,
           inProductionAt: { $gte: start, $lte: end },
           designerStatus: {
-            $in: [
-              DesignerStatus.Assigned,
-              DesignerStatus.InProgress,
-              DesignerStatus.Rework,
-              DesignerStatus.Done,
-            ],
+            $in: [DesignerStatus.Assigned, DesignerStatus.InProgress, DesignerStatus.Rework, DesignerStatus.Done],
           },
         },
       },
@@ -1011,5 +984,4 @@ export class DesignerTaskService {
     if (period === '30d') start.setDate(start.getDate() - 29);
     return { start, end };
   }
-
 }

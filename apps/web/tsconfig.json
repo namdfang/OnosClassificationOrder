@@ -22,9 +22,17 @@
     "outDir": "./dist",
     "paths": {
       "@/*": ["./src/*"],
-      "shared": ["../../packages/shared/index.ts"]
+      "shared": ["../../packages/shared/index.ts"],
+      "@shared/*": ["../../packages/shared/*"]
     }
   },
-  "include": ["src/**/*.ts", "src/**/*.tsx", "index.d.ts", "images.d.ts", "../api/src/utils/handle-axios-error.ts", "../api/src/utils/file.ts"],
+  "include": [
+    "src/**/*.ts",
+    "src/**/*.tsx",
+    "index.d.ts",
+    "images.d.ts",
+    "../api/src/utils/handle-axios-error.ts",
+    "../api/src/utils/file.ts"
+  ],
   "exclude": ["node_modules", "src/metadata.ts", "dist"]
 }

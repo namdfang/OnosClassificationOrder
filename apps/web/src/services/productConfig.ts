@@ -1,4 +1,5 @@
 import type { CreateProductConfigDto, ImportProductConfigDto, UpdateProductConfigDto } from 'shared';
+
 import { callApi } from '../apis';
 import { CONFIG } from '../constants';
 

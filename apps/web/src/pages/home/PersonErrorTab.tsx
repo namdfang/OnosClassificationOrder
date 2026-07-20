@@ -2,20 +2,15 @@ import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import { AlertTriangle, ChevronDown, ChevronRight, RefreshCw, Send, Wrench } from 'lucide-react';
 import type { PersonErrorRow } from 'shared';
 
-import { Button } from '@/components/ui/button';
-import {
-  Table,
-  TableBody,
-  TableCell,
-  TableHead,
-  TableHeader,
-  TableRow,
-} from '@/components/ui/table';
-import { Spinner } from '@/components/common/Spinner';
-import { DateRangePicker } from '@/components/common/DateRangePicker';
-import { DATE_PRESETS } from '@/utils/dateRangePresets';
 import { RepositoryRemote } from '@/services';
+
+import { DateRangePicker } from '@/components/common/DateRangePicker';
+import { Spinner } from '@/components/common/Spinner';
+import { Button } from '@/components/ui/button';
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
+
 import { handleAxiosError } from '@/utils';
+import { DATE_PRESETS } from '@/utils/dateRangePresets';
 
 interface PersonErrorOrderRow {
   _id: string;
@@ -155,10 +150,7 @@ export default function PersonErrorTab() {
               const isOpen = expanded === r.userId;
               return (
                 <React.Fragment key={r.userId}>
-                  <TableRow
-                    className="cursor-pointer hover:bg-accent/40"
-                    onClick={() => void toggleRow(r.userId)}
-                  >
+                  <TableRow className="cursor-pointer hover:bg-accent/40" onClick={() => void toggleRow(r.userId)}>
                     <TableCell className="text-muted-foreground">
                       {isOpen ? <ChevronDown size={15} /> : <ChevronRight size={15} />}
                     </TableCell>
@@ -175,9 +167,7 @@ export default function PersonErrorTab() {
                     </TableCell>
                     <TableCell className="text-right">
                       {r.reportedCount > 0 ? (
-                        <span className="font-semibold text-amber-600 dark:text-amber-400">
-                          {r.reportedCount}
-                        </span>
+                        <span className="font-semibold text-amber-600 dark:text-amber-400">{r.reportedCount}</span>
                       ) : (
                         <span className="text-muted-foreground">0</span>
                       )}
@@ -213,9 +203,7 @@ function DrillPanel({ loading, rows }: { loading: boolean; rows: PersonErrorOrde
   }
   return (
     <div className="p-3 space-y-1.5">
-      <div className="text-xs font-medium text-muted-foreground px-1">
-        Đơn lỗi đang cần fix ({rows.length})
-      </div>
+      <div className="text-xs font-medium text-muted-foreground px-1">Đơn lỗi đang cần fix ({rows.length})</div>
       <div className="grid gap-1.5 sm:grid-cols-2 lg:grid-cols-3">
         {rows.map((o) => (
           <div key={o._id} className="rounded-md border bg-card p-2 flex gap-2 text-xs">

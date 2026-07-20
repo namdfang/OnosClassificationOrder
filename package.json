@@ -34,12 +34,13 @@
     "reset": "pnpm clean-dist && pnpm --filter ./apps/api i"
   },
   "engines": {
-    "node": ">=18.0.0 <24"
+    "node": "20.20.2"
   },
   "packageManager": "pnpm@8.6.10",
   "pnpm": {
     "overrides": {
-      "passport": "0.6.0"
+      "passport": "0.6.0",
+      "@types/node": "20.17.17"
     }
   },
   "dependencies": {
@@ -52,7 +53,7 @@
     "@swc/core": "^1.3.99",
     "concurrently": "^8.2.1",
     "cspell": "^8.0.0",
-    "eslint": "^8.52.0",
+    "eslint": "^9.30.0",
     "husky": "^8.0.3",
     "lint-staged": "~15.1.0",
     "prettier": "^3.0.3",

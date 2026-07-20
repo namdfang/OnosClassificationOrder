@@ -1,13 +1,15 @@
 import React, { useEffect, useRef, useState } from 'react';
-import { toast } from 'sonner';
 import type { OrderWorkshopField } from 'shared';
+import { toast } from 'sonner';
+
+import { RepositoryRemote } from '@/services';
 
 import { Hint } from '@/components/common/Hint';
 import { Spinner } from '@/components/common/Spinner';
 import { Input } from '@/components/ui/input';
-import { RepositoryRemote } from '@/services';
-import { cn } from '@/utils/cn';
+
 import { handleAxiosError } from '@/utils';
+import { cn } from '@/utils/cn';
 
 interface Props {
   orderId: string;
@@ -82,9 +84,7 @@ export function TextEditCell({ orderId, field, value, canEdit, onUpdated, toolti
           placeholder="—"
           className="h-7 text-xs px-2"
         />
-        {saving && (
-          <Spinner size={10} className="absolute right-2 top-1/2 -translate-y-1/2 text-muted-foreground" />
-        )}
+        {saving && <Spinner size={10} className="absolute right-2 top-1/2 -translate-y-1/2 text-muted-foreground" />}
       </div>
     </Hint>
   );

@@ -2,8 +2,10 @@ import React, { useCallback, useEffect, useState } from 'react';
 import { ChevronDown, ChevronRight, TriangleAlert } from 'lucide-react';
 import type { FulfillmentStage } from 'shared';
 
-import { Spinner } from '@/components/common/Spinner';
 import { RepositoryRemote } from '@/services';
+
+import { Spinner } from '@/components/common/Spinner';
+
 import { handleAxiosError } from '@/utils';
 import { cn } from '@/utils/cn';
 
@@ -108,7 +110,10 @@ export function StageErrorPanel({
                 <tbody>
                   {data.rows.map((r) => (
                     <tr key={r.code} className="border-t border-rose-100 dark:border-rose-900/30">
-                      <td className="p-1.5 font-medium sticky left-0 bg-rose-50/40 dark:bg-rose-950/10 max-w-[160px] truncate" title={r.name}>
+                      <td
+                        className="p-1.5 font-medium sticky left-0 bg-rose-50/40 dark:bg-rose-950/10 max-w-[160px] truncate"
+                        title={r.name}
+                      >
                         {r.name}
                       </td>
                       {r.cells.map((v, i) => (

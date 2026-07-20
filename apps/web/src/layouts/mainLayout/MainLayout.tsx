@@ -1,9 +1,13 @@
-import { AnimatePresence, motion } from 'framer-motion';
 import React, { useEffect, useState } from 'react';
 import { useLocation, useOutlet } from 'react-router-dom';
-import { useIsMobile } from '@/hooks/useMediaQuery';
-import { RepositoryRemote } from '@/services';
+import { AnimatePresence, motion } from 'framer-motion';
+
 import { useAuthStore } from '@/store/authStore';
+
+import { RepositoryRemote } from '@/services';
+
+import { useIsMobile } from '@/hooks/useMediaQuery';
+
 import Header from '../../components/header';
 import Sidebar from '../../components/sidebar/Sidebar';
 

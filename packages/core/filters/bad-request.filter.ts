@@ -1,9 +1,10 @@
 import type { ArgumentsHost, ExceptionFilter } from '@nestjs/common';
 import { Catch, HttpStatus, UnprocessableEntityException } from '@nestjs/common';
-import { Reflector } from '@nestjs/core';
+import type { Reflector } from '@nestjs/core';
 import type { FastifyReply, FastifyRequest } from 'fastify';
-import { I18nContext, I18nService } from 'nestjs-i18n';
-import { ZodError } from 'zod';
+import type { I18nService } from 'nestjs-i18n';
+import { I18nContext } from 'nestjs-i18n';
+import type { ZodError } from 'zod';
 
 @Catch(UnprocessableEntityException)
 export class UnprocessableEntityFilter implements ExceptionFilter<UnprocessableEntityException> {
@@ -45,7 +46,7 @@ export class UnprocessableEntityFilter implements ExceptionFilter<UnprocessableE
     if (exceptionResponse.errors && exceptionResponse.errors.length > 0) {
       const validationError = exceptionResponse.errors[0];
 
-      // @ts-ignore
+      // @ts-expect-error zod error path type
       const target = validationError.path.join('.');
       const zodMessage = validationError.message;
 

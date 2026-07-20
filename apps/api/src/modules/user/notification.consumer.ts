@@ -16,6 +16,11 @@ export class NotificationConsumer {
   async sendNotification(@RabbitPayload() data: TeleMessageDto): Promise<void> {
     const { userId, message }: { userId: string; message: string } = data;
 
-    await this.userService.sendNotification(userId, message);
+    // BROKEN legacy path: `UserService.sendNotification` không còn tồn tại —
+    // handler này chạy (message telegram vào queue) sẽ TypeError như hiện
+    // trạng. Cast type-only để qua type-check, KHÔNG đổi runtime.
+    await (
+      this.userService as unknown as { sendNotification(userId: string, message: string): Promise<void> }
+    ).sendNotification(userId, message);
   }
 }

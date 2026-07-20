@@ -1,4 +1,7 @@
 import { createZodDto } from '@anatine/zod-nestjs';
+import { extendApi } from '@anatine/zod-openapi';
+import { z } from 'zod';
+
 import {
   BaseEntityZod,
   ExportStatus,
@@ -11,8 +14,6 @@ import {
   TrackingNumberZod,
   TrackingStatus,
 } from '..';
-import { extendApi } from '@anatine/zod-openapi';
-import { z } from 'zod';
 
 export const ExportZod = BaseEntityZod.extend({
   url: z.string().optional(),
@@ -76,7 +77,6 @@ export const ExportStockOrdersZod = z.object({
   trackingStatus: z.enum(getObjectValues(TrackingStatus)).optional(),
 });
 export class ExportStockOrdersDto extends createZodDto(extendApi(ExportStockOrdersZod)) {}
-
 
 export const ExportPaymentsZod = z.object({
   from: z.coerce.date(),

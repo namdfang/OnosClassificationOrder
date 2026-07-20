@@ -1,18 +1,14 @@
 import React, { useEffect, useState } from 'react';
 import { toast } from 'sonner';
 
+import { RepositoryRemote } from '@/services';
+
+import { Spinner } from '@/components/common/Spinner';
 import { Button } from '@/components/ui/button';
-import {
-  Dialog,
-  DialogContent,
-  DialogFooter,
-  DialogHeader,
-  DialogTitle,
-} from '@/components/ui/dialog';
+import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
-import { Spinner } from '@/components/common/Spinner';
-import { RepositoryRemote } from '@/services';
+
 import { handleAxiosError } from '@/utils';
 
 interface Props {
@@ -32,16 +28,8 @@ const MAX_NOTE = 500;
  * Dialog yêu cầu user pick lỗi do designer/xưởng + nhập note khi chọn code
  * "Lỗi khác" (other). BE validate cùng rule, dialog này chỉ là UX layer.
  */
-export function ProductionErrorOtherDialog({
-  open,
-  orderId,
-  defaultSource,
-  defaultNote,
-  onClose,
-  onSaved,
-}: Props) {
-  const normSource = (s?: 'designer' | 'factory' | 'tool-check') =>
-    s === 'tool-check' ? undefined : s;
+export function ProductionErrorOtherDialog({ open, orderId, defaultSource, defaultNote, onClose, onSaved }: Props) {
+  const normSource = (s?: 'designer' | 'factory' | 'tool-check') => (s === 'tool-check' ? undefined : s);
   const [source, setSource] = useState<'designer' | 'factory' | undefined>(normSource(defaultSource));
   const [note, setNote] = useState(defaultNote || '');
   const [saving, setSaving] = useState(false);
@@ -87,8 +75,8 @@ export function ProductionErrorOtherDialog({
           <DialogTitle>Lỗi khác — bắt buộc phân loại</DialogTitle>
         </DialogHeader>
         <p className="text-xs text-muted-foreground">
-          "Lỗi khác" cần phân loại nguồn lỗi (designer/xưởng) + mô tả cụ thể để dashboard thống kê
-          chính xác và team biết chi tiết.
+          "Lỗi khác" cần phân loại nguồn lỗi (designer/xưởng) + mô tả cụ thể để dashboard thống kê chính xác và team
+          biết chi tiết.
         </p>
 
         <div className="space-y-4">

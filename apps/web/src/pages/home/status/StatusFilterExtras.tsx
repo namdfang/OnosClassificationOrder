@@ -2,11 +2,14 @@ import React from 'react';
 import { X } from 'lucide-react';
 import { WorkshopConfigCategory } from 'shared';
 
-import { Button } from '@/components/ui/button';
 import { useWorkshopConfigStore } from '@/store/workshopConfigStore';
+
+import { Button } from '@/components/ui/button';
+
 import { cn } from '@/utils/cn';
 
 import { LucideIcon } from '@/pages/workshop-config/IconPicker';
+
 import type { StatusFilter, StatusFilterCategory } from './useStatusFilter';
 
 const CATEGORY_LABEL: Record<StatusFilterCategory, string> = {
@@ -41,12 +44,7 @@ interface StatusFilterTopActionsProps {
 
 /** "Lỗi cần xử lý" toggle + "Xóa toàn bộ filter" — chèn vào `topActionsRight`
  *  của `<OrderFilterBar>` trong OrderStatusTab. */
-export function StatusFilterTopActions({
-  hasError,
-  isActive,
-  onHasError,
-  onClearAll,
-}: StatusFilterTopActionsProps) {
+export function StatusFilterTopActions({ hasError, isActive, onHasError, onClearAll }: StatusFilterTopActionsProps) {
   return (
     <>
       <button
@@ -62,12 +60,7 @@ export function StatusFilterTopActions({
         Lỗi cần xử lý
       </button>
       {isActive && (
-        <Button
-          variant="ghost"
-          size="sm"
-          onClick={onClearAll}
-          className="text-xs h-7 ml-auto"
-        >
+        <Button variant="ghost" size="sm" onClick={onClearAll} className="text-xs h-7 ml-auto">
           <X size={12} /> Xóa toàn bộ filter
         </Button>
       )}
@@ -115,12 +108,7 @@ export function StatusActiveChips({ filter, onToggle }: StatusActiveChipsProps) 
           onClick={() => onToggle(c.cat, c.code)}
           className="inline-flex items-center gap-1.5 rounded-full border border-border bg-background pl-2 pr-1.5 py-0.5 text-[11px] hover:border-destructive/40"
         >
-          {c.color && (
-            <span
-              className="inline-block w-2 h-2 rounded"
-              style={{ backgroundColor: c.color }}
-            />
-          )}
+          {c.color && <span className="inline-block w-2 h-2 rounded" style={{ backgroundColor: c.color }} />}
           {c.icon && !c.color && <LucideIcon name={c.icon} size={11} />}
           <span>{c.label}</span>
           <X size={11} className="text-muted-foreground" />

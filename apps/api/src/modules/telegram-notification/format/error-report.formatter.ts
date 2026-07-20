@@ -1,16 +1,9 @@
-import type {
-  ErrorReportData,
-  ReportPeriod,
-} from '@/modules/scheduled-reports/types';
-
 import { formatVnDateTime } from '@/modules/scheduled-reports/build-period';
+import type { ErrorReportData, ReportPeriod } from '@/modules/scheduled-reports/types';
+
 import { clamp, DIVIDER, escapeMd, N } from './_helpers';
 
-export function formatErrorReport(payload: {
-  period: ReportPeriod;
-  data: ErrorReportData;
-  generatedAt: Date;
-}): string {
+export function formatErrorReport(payload: { period: ReportPeriod; data: ErrorReportData; generatedAt: Date }): string {
   const { period, data, generatedAt } = payload;
   const lines: string[] = [];
 

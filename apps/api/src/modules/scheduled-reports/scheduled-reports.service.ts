@@ -65,7 +65,7 @@ export class ScheduledReportsService {
         const data = await this.designerAgg.aggregate(period);
         await this.telegram.notifyDesignerReport({ period, data, generatedAt: new Date() });
       });
-      ok ? ran.push('designer') : skipped.push('designer');
+      (ok ? ran : skipped).push('designer');
     }
 
     if (reports.includes('factory')) {
@@ -73,7 +73,7 @@ export class ScheduledReportsService {
         const data = await this.factoryAgg.aggregate(period);
         await this.telegram.notifyFactoryReport({ period, data, generatedAt: new Date() });
       });
-      ok ? ran.push('factory') : skipped.push('factory');
+      (ok ? ran : skipped).push('factory');
     }
 
     if (reports.includes('error')) {
@@ -81,7 +81,7 @@ export class ScheduledReportsService {
         const data = await this.errorAgg.aggregate(period);
         await this.telegram.notifyErrorReport({ period, data, generatedAt: new Date() });
       });
-      ok ? ran.push('error') : skipped.push('error');
+      (ok ? ran : skipped).push('error');
     }
 
     return { ran, skipped };

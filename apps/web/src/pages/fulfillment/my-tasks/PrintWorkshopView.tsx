@@ -1,9 +1,16 @@
 import React, { useState } from 'react';
 import { CheckCircle2, PlayCircle, X } from 'lucide-react';
-import { toast } from 'sonner';
 import type { FulfillmentTransitionDto, ProductionOrder } from 'shared';
 import { FulfillmentStage, FulfillmentStageStatus, FulfillmentTransitionAction } from 'shared';
+import { toast } from 'sonner';
 
+import { useAuthStore } from '@/store/authStore';
+
+import { RepositoryRemote } from '@/services';
+
+import { PipelineDailyOverview } from '@/components/common/PipelineDailyOverview';
+import { OrderRowActionsMenu } from '@/components/orders/OrderRowActionsMenu';
+import type { WorkshopOrderRow } from '@/components/orders/workshopTableConfig';
 import { Button } from '@/components/ui/button';
 import {
   Dialog,
@@ -14,20 +21,15 @@ import {
   DialogTitle,
 } from '@/components/ui/dialog';
 import { TooltipProvider } from '@/components/ui/tooltip';
-import type { WorkshopOrderRow } from '@/components/orders/workshopTableConfig';
-import { OrderRowActionsMenu } from '@/components/orders/OrderRowActionsMenu';
-import { RepositoryRemote } from '@/services';
-import { useAuthStore } from '@/store/authStore';
+
 import { handleAxiosError } from '@/utils';
 
-import { PipelineDailyOverview } from '@/components/common/PipelineDailyOverview';
 import { PrintOrderTable } from './PrintOrderTable';
 import { ReworkBackDialog } from './ReworkBackDialog';
 
 type BulkAction = 'start' | 'complete';
 
-const printStatusOf = (row: WorkshopOrderRow): string | undefined =>
-  row.fulfillmentStages?.print?.status;
+const printStatusOf = (row: WorkshopOrderRow): string | undefined => row.fulfillmentStages?.print?.status;
 
 /**
  * Trang "Task của tôi" cho user In (Fulfillment stage=print). Bảng phẳng
@@ -59,9 +61,7 @@ export default function PrintWorkshopView() {
   // done qua path không hook (chưa có `currentFulfillmentStage`/`fulfillmentStages`)
   // vẫn hiện nút → BE self-heal khởi tạo stage khi bấm Bắt đầu.
   const canPrint = (row: WorkshopOrderRow) =>
-    row.toolResultNote === 'ok' &&
-    !!myFactoryId &&
-    String(row.factoryId ?? '') === String(myFactoryId);
+    row.toolResultNote === 'ok' && !!myFactoryId && String(row.factoryId ?? '') === String(myFactoryId);
 
   // Tick được: `canPrint` + chưa in xong (print.status !== done). Gồm cả đơn
   // chưa init stage (status undefined) → Bắt đầu được.
@@ -89,8 +89,7 @@ export default function PrintWorkshopView() {
 
   // Bulk: loop transition song song, gộp kết quả → 1 toast.
   const runBulk = async (rows: WorkshopOrderRow[], action: BulkAction, clear: () => void) => {
-    const txAction =
-      action === 'start' ? FulfillmentTransitionAction.Start : FulfillmentTransitionAction.Complete;
+    const txAction = action === 'start' ? FulfillmentTransitionAction.Start : FulfillmentTransitionAction.Complete;
     const verb = action === 'start' ? 'bắt đầu' : 'hoàn thành';
     const results = await Promise.allSettled(
       rows.map((r) =>
@@ -110,12 +109,7 @@ export default function PrintWorkshopView() {
 
   // Click 1 nút bulk: nếu chọn lẫn trạng thái (có đơn ở trạng thái khác) →
   // popup xác nhận; ngược lại chạy thẳng.
-  const onBulkClick = (
-    action: BulkAction,
-    eligible: WorkshopOrderRow[],
-    others: number,
-    clear: () => void,
-  ) => {
+  const onBulkClick = (action: BulkAction, eligible: WorkshopOrderRow[], others: number, clear: () => void) => {
     if (others > 0) setConfirm({ action, rows: eligible, skipped: others, clear });
     else void runBulk(eligible, action, clear);
   };
@@ -138,12 +132,7 @@ export default function PrintWorkshopView() {
             Bắt đầu
           </Button>
           {status && (
-            <Button
-              size="sm"
-              variant="destructive"
-              className="whitespace-nowrap"
-              onClick={() => setReworkOrder(row)}
-            >
+            <Button size="sm" variant="destructive" className="whitespace-nowrap" onClick={() => setReworkOrder(row)}>
               Báo lỗi
             </Button>
           )}
@@ -159,12 +148,7 @@ export default function PrintWorkshopView() {
           >
             Hoàn thành
           </Button>
-          <Button
-            size="sm"
-            variant="destructive"
-            className="whitespace-nowrap"
-            onClick={() => setReworkOrder(row)}
-          >
+          <Button size="sm" variant="destructive" className="whitespace-nowrap" onClick={() => setReworkOrder(row)}>
             Báo lỗi
           </Button>
         </>
@@ -183,9 +167,7 @@ export default function PrintWorkshopView() {
       const s = printStatusOf(r);
       return s === FulfillmentStageStatus.Waiting || s === FulfillmentStageStatus.Rework;
     });
-    const completable = selectedRows.filter(
-      (r) => printStatusOf(r) === FulfillmentStageStatus.InProgress,
-    );
+    const completable = selectedRows.filter((r) => printStatusOf(r) === FulfillmentStageStatus.InProgress);
     return (
       <div className="sticky bottom-3 z-30 flex justify-center px-4 pointer-events-none">
         <div className="pointer-events-auto flex items-center gap-2 rounded-full border border-border bg-card shadow-lg px-4 py-2 flex-wrap">
@@ -194,18 +176,12 @@ export default function PrintWorkshopView() {
             Đã chọn <span className="font-semibold">{selectedRows.length}</span>
           </span>
           {startable.length > 0 && (
-            <Button
-              size="sm"
-              onClick={() => onBulkClick('start', startable, completable.length, clear)}
-            >
+            <Button size="sm" onClick={() => onBulkClick('start', startable, completable.length, clear)}>
               <PlayCircle size={14} /> Bắt đầu ({startable.length})
             </Button>
           )}
           {completable.length > 0 && (
-            <Button
-              size="sm"
-              onClick={() => onBulkClick('complete', completable, startable.length, clear)}
-            >
+            <Button size="sm" onClick={() => onBulkClick('complete', completable, startable.length, clear)}>
               <CheckCircle2 size={14} /> Hoàn thành ({completable.length})
             </Button>
           )}
@@ -257,11 +233,9 @@ export default function PrintWorkshopView() {
           <DialogHeader>
             <DialogTitle>Xác nhận chuyển trạng thái</DialogTitle>
             <DialogDescription>
-              Các đơn đang chọn có trạng thái khác nhau. Chỉ{' '}
-              <strong>{confirm?.rows.length}</strong> đơn hợp lệ sẽ được{' '}
+              Các đơn đang chọn có trạng thái khác nhau. Chỉ <strong>{confirm?.rows.length}</strong> đơn hợp lệ sẽ được{' '}
               <strong>{confirm?.action === 'start' ? 'Bắt đầu' : 'Hoàn thành'}</strong>
-              {confirm && confirm.skipped > 0 ? ` (${confirm.skipped} đơn trạng thái khác bị bỏ qua)` : ''}.
-              Tiếp tục?
+              {confirm && confirm.skipped > 0 ? ` (${confirm.skipped} đơn trạng thái khác bị bỏ qua)` : ''}. Tiếp tục?
             </DialogDescription>
           </DialogHeader>
           <DialogFooter>

@@ -1,13 +1,8 @@
 import { createZodDto } from '@anatine/zod-nestjs';
 import { extendApi } from '@anatine/zod-openapi';
-import { z } from 'zod';
-
-import { BaseEntityZod, PageQueryZod, PageResZod, ResZod } from '@shared/types';
 import {
-  CODE_LENGTH,
   CodeZod,
   NAME_MAX_LENGTH,
-  NAME_MIN_LENGTH,
   NameZod,
   NOTE_MAX_LENGTH,
   NOTE_MIN_LENGTH,
@@ -16,9 +11,12 @@ import {
   TITLE_MAX_LENGTH,
   TITLE_MIN_LENGTH,
 } from '@shared/constants';
+import { IDZod, PriceZod } from '@shared/constants';
+import { BaseEntityZod, PageQueryZod, PageResZod, ResZod } from '@shared/types';
+import { z } from 'zod';
+
 import { getObjectValues, Status } from '..';
 import { ProductAttributeZod } from './product.dto';
-import { IDZod, PriceZod } from '@shared/constants';
 
 const ProductVariantZod = BaseEntityZod.extend({
   productId: IDZod,
@@ -115,7 +113,6 @@ export const GetProductVariantsByCodesResZod = ResZod.extend({
 });
 export class GetProductVariantsByCodesResDto extends createZodDto(extendApi(GetProductVariantsByCodesResZod)) {}
 
-
 export const ProductVariantLogZod = BaseEntityZod.extend({
   productVariantId: IDZod,
   after: z.string(),
@@ -132,7 +129,5 @@ export const ProductVariantLogResZod = ResZod.extend({
 });
 export class ProductVariantLogsResDto extends createZodDto(extendApi(ProductVariantLogResZod)) {}
 
-
 export const ProductVariantLogTypeZod = z.enum(['Update', 'Refund', 'Charge']);
 export type ProductVariantLogType = z.infer<typeof ProductVariantLogTypeZod>;
-

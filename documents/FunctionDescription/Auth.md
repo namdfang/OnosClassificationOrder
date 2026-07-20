@@ -111,14 +111,21 @@ Tự apply:
 
 ### 5.1 `authStore.ts` (Zustand + persist)
 ```ts
+/** Profile từ BE getMe: User + virtual `role` populate (name có thể là custom role → string). */
+type UserProfile = User & { role?: { name: string; permissionCodes?: string[]; isSystem?: boolean } };
+
 interface AuthStore {
-  user?: User;
-  accessToken?: string;
-  refreshToken?: string;
-  permissions: PermissionType[];
-  setAuth(payload): void;
-  logout(): void;
-  hasPermission(p: PermissionType): boolean;
+  token: string | null;
+  tokenExpiredAt: number;
+  profile: UserProfile | null;
+  loading: boolean;
+  setToken(data: string): void;
+  getToken(isPublic?: boolean): string | null;
+  isAuthenticated(): boolean;
+  setTokenExpiredAt(data: number): void;
+  clearToken(): void; // xóa token + profile, redirect /login
+  setProfile(data: UserProfile): void;
+  setLoading(data: boolean): void;
 }
 ```
 
@@ -159,7 +166,7 @@ Hệ thống dùng **catalog tĩnh** trong `packages/shared/constants/permission
 |-------|----------|----------|
 | `page` | `page.dashboard`, `page.orders`, `page.workshop_config`, `page.users`, `page.roles` | Quyết định sidebar item có hiện hay không. |
 | `order` | `order.import`, `order.delete`, `order.view_admin_table`, `order.view_workshop_table` | Hành động cấp module. |
-| `order_field` | `order.field.printStatus.{view\|edit}` (× 8 field) | Field-level — bảng workshop ẩn/khóa cột. |
+| `order_field` | `order.field.printStatus.{view\|edit}` (× 8 field) | Field-level — Danh sách đơn ẩn/khóa cột. |
 | `workshop` | `workshop.manage` | CRUD Workshop Config. |
 | `admin` | `user.manage`, `role.manage` | Quản trị user/role. |
 | `audit` | `order.log.view` | Xem timeline thay đổi đơn hàng. |

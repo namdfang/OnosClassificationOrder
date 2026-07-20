@@ -1,34 +1,32 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import { History } from 'lucide-react';
 
-import { Button } from '@/components/ui/button';
-import { Spinner } from '@/components/common/Spinner';
-import { PaginationBar } from '@/components/common/PaginationBar';
-import {
-  Table,
-  TableBody,
-  TableCell,
-  TableHead,
-  TableHeader,
-  TableRow,
-} from '@/components/ui/table';
-import { TooltipProvider } from '@/components/ui/tooltip';
+import { RepositoryRemote } from '@/services';
+
 import { ImagePreviewDialog } from '@/components/common/ImagePreviewDialog';
-import { OrderLogTimelineDialog } from '@/components/orders/OrderLogTimelineDialog';
-import { OrderRowActionsMenu } from '@/components/orders/OrderRowActionsMenu';
-import { isCancelled, isHeld } from '@/utils/orderActions';
+import { PaginationBar } from '@/components/common/PaginationBar';
+import { Spinner } from '@/components/common/Spinner';
 import { CancelledBadge } from '@/components/orders/CancelledBadge';
 import { HeldBadge } from '@/components/orders/HeldBadge';
+import { OrderLogTimelineDialog } from '@/components/orders/OrderLogTimelineDialog';
+import { OrderRowActionsMenu } from '@/components/orders/OrderRowActionsMenu';
 import {
+  buildColGroups,
+  GroupCellContent,
   WORKSHOP_COLS,
   type WorkshopOrderRow,
   type WorkshopRenderCtx,
 } from '@/components/orders/workshopTableConfig';
-import { RepositoryRemote } from '@/services';
+import { Button } from '@/components/ui/button';
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
+import { TooltipProvider } from '@/components/ui/tooltip';
+
 import { handleAxiosError } from '@/utils';
-import { usePermission } from '@/hooks/usePermission';
 import { cn } from '@/utils/cn';
+import { isCancelled, isHeld } from '@/utils/orderActions';
+
 import { NO_TOOL_ROW_CLASS, useIsNoTool } from '@/hooks/useIsNoTool';
+import { usePermission } from '@/hooks/usePermission';
 
 const DEFAULT_PAGE_SIZE = 20;
 
@@ -38,7 +36,7 @@ interface Props {
 }
 
 export function OrdersMiniTable({ queryString }: Props) {
-  const { canViewField, canEditField } = usePermission();
+  const { canViewField, canEditField, roleName } = usePermission();
   const [rows, setRows] = useState<WorkshopOrderRow[]>([]);
   const [total, setTotal] = useState(0);
   const [loading, setLoading] = useState(false);
@@ -76,13 +74,12 @@ export function OrdersMiniTable({ queryString }: Props) {
   const patchRow = (id: string, p: Partial<WorkshopOrderRow>) =>
     setRows((prev) => prev.map((r) => (r._id === id ? { ...r, ...p } : r)));
 
-  const openPreview = (url: string, title: string, originalUrl?: string) =>
-    setPreview({ url, originalUrl, title });
+  const openPreview = (url: string, title: string, originalUrl?: string) => setPreview({ url, originalUrl, title });
 
-  const visibleCols = useMemo(
-    () => WORKSHOP_COLS.filter((c) => !c.perm || canViewField(c.key)),
-    [canViewField],
-  );
+  const visibleCols = useMemo(() => WORKSHOP_COLS.filter((c) => !c.perm || canViewField(c.key)), [canViewField]);
+  // Gom cột theo chủ đề nghiệp vụ (giống OrderTableWorkshop) để giảm scroll
+  // ngang — xem `buildColGroups`/`GroupCellContent` trong workshopTableConfig.tsx.
+  const colGroups = useMemo(() => buildColGroups(visibleCols, roleName), [visibleCols, roleName]);
 
   const ctx: WorkshopRenderCtx = { canEditField, patchRow, openPreview };
   const isNoTool = useIsNoTool();
@@ -133,104 +130,97 @@ export function OrdersMiniTable({ queryString }: Props) {
   return (
     <TooltipProvider delayDuration={200}>
       <div className="space-y-3">
-      <PaginationBar position="top" {...paginationProps} />
-      <div className="rounded-lg border border-border bg-card overflow-hidden relative">
-        {/* Indeterminate progress strip at top while loading */}
-        <div
-          className={cn(
-            'absolute top-0 left-0 right-0 h-0.5 overflow-hidden bg-primary/10 pointer-events-none transition-opacity duration-200 z-10',
-            loading ? 'opacity-100' : 'opacity-0',
-          )}
-        >
-          <div className="h-full w-1/4 bg-primary animate-indeterminate-bar" />
-        </div>
+        <PaginationBar position="top" {...paginationProps} />
+        <div className="rounded-lg border border-border bg-card overflow-hidden relative">
+          {/* Indeterminate progress strip at top while loading */}
+          <div
+            className={cn(
+              'absolute top-0 left-0 right-0 h-0.5 overflow-hidden bg-primary/10 pointer-events-none transition-opacity duration-200 z-10',
+              loading ? 'opacity-100' : 'opacity-0',
+            )}
+          >
+            <div className="h-full w-1/4 bg-primary animate-indeterminate-bar" />
+          </div>
 
-        <div className="border-b border-border px-3 py-2 flex items-center justify-between">
-          <h3 className="text-sm font-semibold flex items-center gap-2">
-            Danh sách đơn ({total})
-            {isRefetching && <Spinner size={11} className="text-muted-foreground" />}
-          </h3>
-        </div>
-        <div
-          className={cn(
-            'overflow-x-auto transition-opacity duration-300',
-            isRefetching && 'opacity-60',
-          )}
-        >
-          <Table>
-            <TableHeader>
-              <TableRow>
-                {visibleCols.map((c) => (
-                  <TableHead key={c.key} className={cn('whitespace-nowrap text-xs', c.width)}>
-                    {c.label}
-                  </TableHead>
-                ))}
-                <TableHead className="w-20 sticky right-0 z-20 bg-card"></TableHead>
-              </TableRow>
-            </TableHeader>
-            <TableBody>
-              {loading && rows.length === 0 && (
+          <div className="border-b border-border px-3 py-2 flex items-center justify-between">
+            <h3 className="text-sm font-semibold flex items-center gap-2">
+              Danh sách đơn ({total}){isRefetching && <Spinner size={11} className="text-muted-foreground" />}
+            </h3>
+          </div>
+          <div className={cn('overflow-x-auto transition-opacity duration-300', isRefetching && 'opacity-60')}>
+            <Table>
+              <TableHeader>
                 <TableRow>
-                  <TableCell colSpan={visibleCols.length + 1} className="text-center py-8">
-                    <Spinner size={18} className="text-muted-foreground" />
-                  </TableCell>
-                </TableRow>
-              )}
-              {!loading && rows.length === 0 && (
-                <TableRow>
-                  <TableCell
-                    colSpan={visibleCols.length + 1}
-                    className="text-center py-8 text-sm text-muted-foreground"
-                  >
-                    Không có đơn nào phù hợp filter
-                  </TableCell>
-                </TableRow>
-              )}
-              {sortedRows.map((row) => (
-                <TableRow
-                  key={row._id}
-                  className={cn(
-                    isNoTool(row.toolResult) && NO_TOOL_ROW_CLASS,
-                    (isCancelled(row) || isHeld(row)) && 'opacity-60',
-                  )}
-                >
-                  {visibleCols.map((c) => (
-                    <TableCell key={c.key} className="py-2">
-                      {c.key === 'productionId' && (isCancelled(row) || isHeld(row)) ? (
-                        <div className="flex items-center gap-1.5">
-                          {isCancelled(row) ? (
-                            <CancelledBadge reason={row.cancelReason} />
-                          ) : (
-                            <HeldBadge reason={row.holdReason} />
-                          )}
-                          <div className="min-w-0 flex-1">{c.render(row, ctx)}</div>
-                        </div>
-                      ) : (
-                        c.render(row, ctx)
-                      )}
-                    </TableCell>
+                  {colGroups.map((g) => (
+                    <TableHead key={g.key} className="whitespace-nowrap text-xs" style={{ minWidth: g.width }}>
+                      {g.title}
+                    </TableHead>
                   ))}
-                  {/* Thao tác — pin cố định BÊN PHẢI */}
-                  <TableCell className="py-2 sticky right-0 z-10 bg-card shadow-[-1px_0_0_0_var(--border)]">
-                    <div className="flex items-center justify-end gap-0.5">
-                      <Button
-                        variant="ghost"
-                        size="icon"
-                        title="Lịch sử"
-                        onClick={() => setHistory({ id: row._id, productionId: row.productionId })}
-                      >
-                        <History size={13} className="text-muted-foreground" />
-                      </Button>
-                      <OrderRowActionsMenu order={row} onChanged={() => fetchData()} />
-                    </div>
-                  </TableCell>
+                  <TableHead className="w-20 sticky right-0 z-20 bg-card"></TableHead>
                 </TableRow>
-              ))}
-            </TableBody>
-          </Table>
+              </TableHeader>
+              <TableBody>
+                {loading && rows.length === 0 && (
+                  <TableRow>
+                    <TableCell colSpan={colGroups.length + 1} className="text-center py-8">
+                      <Spinner size={18} className="text-muted-foreground" />
+                    </TableCell>
+                  </TableRow>
+                )}
+                {!loading && rows.length === 0 && (
+                  <TableRow>
+                    <TableCell
+                      colSpan={colGroups.length + 1}
+                      className="text-center py-8 text-sm text-muted-foreground"
+                    >
+                      Không có đơn nào phù hợp filter
+                    </TableCell>
+                  </TableRow>
+                )}
+                {sortedRows.map((row) => {
+                  const renderedByKey = new Map(visibleCols.map((c) => [c.key, c.render(row, ctx)]));
+                  const dim = isCancelled(row) || isHeld(row);
+                  return (
+                    <TableRow
+                      key={row._id}
+                      className={cn(isNoTool(row.toolResult) && NO_TOOL_ROW_CLASS, dim && 'opacity-60')}
+                    >
+                      {colGroups.map((g, gi) => (
+                        <TableCell key={g.key} className="py-2 align-top">
+                          {gi === 0 && dim && (
+                            <div className="mb-1">
+                              {isCancelled(row) ? (
+                                <CancelledBadge reason={row.cancelReason} />
+                              ) : (
+                                <HeldBadge reason={row.holdReason} />
+                              )}
+                            </div>
+                          )}
+                          <GroupCellContent group={g} renderedByKey={renderedByKey} />
+                        </TableCell>
+                      ))}
+                      {/* Thao tác — pin cố định BÊN PHẢI */}
+                      <TableCell className="py-2 sticky right-0 z-10 bg-card shadow-[-1px_0_0_0_var(--border)]">
+                        <div className="flex items-center justify-end gap-0.5">
+                          <Button
+                            variant="ghost"
+                            size="icon"
+                            title="Lịch sử"
+                            onClick={() => setHistory({ id: row._id, productionId: row.productionId })}
+                          >
+                            <History size={13} className="text-muted-foreground" />
+                          </Button>
+                          <OrderRowActionsMenu order={row} onChanged={() => fetchData()} />
+                        </div>
+                      </TableCell>
+                    </TableRow>
+                  );
+                })}
+              </TableBody>
+            </Table>
+          </div>
+          <PaginationBar position="bottom" {...paginationProps} />
         </div>
-        <PaginationBar position="bottom" {...paginationProps} />
-      </div>
 
         <ImagePreviewDialog
           open={!!preview}

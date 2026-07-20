@@ -3,7 +3,10 @@
   "compilerOptions": {
     "paths": {
       "@/*": ["./src/*"],
-      // "@core/*": ["../../packages/core/*"],
+      // `@core/*` cần cho type-check (`pnpm build-types`): các file trong
+      // packages/core tự import `@core/...` — thiếu alias là TS2307. Build
+      // prod dùng swc (nest build -b swc), không đọc paths ở đây.
+      "@core/*": ["../../packages/core/*"],
       "@shared/*": ["../../packages/shared/*"]
       // "core": ["../../packages/core/"],
       // "shared": ["../../packages/shared/"]

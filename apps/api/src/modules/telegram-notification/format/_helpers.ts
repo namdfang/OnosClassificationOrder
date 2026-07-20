@@ -11,7 +11,7 @@ export const MAX_TELEGRAM_MESSAGE_LENGTH = 4096;
 
 /** Escape ký tự đặc biệt Markdown trong tên/email/factory… */
 export function escapeMd(input: string): string {
-  return input.replace(/([_*`\[\]])/g, '\\$1');
+  return input.replace(/([_*`[\]])/g, '\\$1');
 }
 
 /** `N(0)` → `'0'`. `N(5)` → `'*5*'` (bold). */

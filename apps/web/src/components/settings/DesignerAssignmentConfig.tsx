@@ -1,12 +1,14 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import { Factory as FactoryIcon, Plus, Save, Trash2, Users } from 'lucide-react';
-import { toast } from 'sonner';
 import type { DesignerAssignmentConfig as Config } from 'shared';
+import { toast } from 'sonner';
 
+import { RepositoryRemote } from '@/services';
+
+import { Spinner } from '@/components/common/Spinner';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
-import { Spinner } from '@/components/common/Spinner';
-import { RepositoryRemote } from '@/services';
+
 import { handleAxiosError } from '@/utils';
 
 interface FactoryLite {
@@ -58,14 +60,8 @@ export default function DesignerAssignmentConfig() {
     })();
   }, []);
 
-  const designerById = useMemo(
-    () => new Map(designers.map((d) => [d._id, d])),
-    [designers],
-  );
-  const factoryById = useMemo(
-    () => new Map(factories.map((f) => [f._id, f])),
-    [factories],
-  );
+  const designerById = useMemo(() => new Map(designers.map((d) => [d._id, d])), [designers]);
+  const factoryById = useMemo(() => new Map(factories.map((f) => [f._id, f])), [factories]);
 
   // designerId → tên xưởng đang giữ (để chặn 1 designer ở nhiều xưởng).
   const designerFactory = useMemo(() => {
@@ -95,9 +91,7 @@ export default function DesignerAssignmentConfig() {
   const setWeight = (factoryId: string, designerId: string, weight: number) => {
     setAlloc((prev) => ({
       ...prev,
-      [factoryId]: (prev[factoryId] || []).map((e) =>
-        e.designerId === designerId ? { ...e, weight } : e,
-      ),
+      [factoryId]: (prev[factoryId] || []).map((e) => (e.designerId === designerId ? { ...e, weight } : e)),
     }));
   };
 
@@ -140,12 +134,10 @@ export default function DesignerAssignmentConfig() {
             <Users size={18} className="text-indigo-600 dark:text-indigo-400" />
           </div>
           <div>
-            <h2 className="text-base font-semibold text-slate-800 dark:text-slate-100">
-              Gán designer theo xưởng
-            </h2>
+            <h2 className="text-base font-semibold text-slate-800 dark:text-slate-100">Gán designer theo xưởng</h2>
             <p className="text-xs text-slate-500 dark:text-slate-400">
-              Sau khi soát tool xong (kết quả != OK), đơn tự động chia cho designer theo tỉ lệ.
-              Mỗi designer chỉ thuộc 1 xưởng.
+              Sau khi soát tool xong (kết quả != OK), đơn tự động chia cho designer theo tỉ lệ. Mỗi designer chỉ thuộc 1
+              xưởng.
             </p>
           </div>
         </div>
@@ -155,9 +147,7 @@ export default function DesignerAssignmentConfig() {
         </Button>
       </div>
 
-      {factories.length === 0 && (
-        <p className="text-sm text-slate-500 dark:text-slate-400">Chưa có xưởng nào.</p>
-      )}
+      {factories.length === 0 && <p className="text-sm text-slate-500 dark:text-slate-400">Chưa có xưởng nào.</p>}
 
       <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-3">
         {factories.map((f) => {
@@ -181,9 +171,7 @@ export default function DesignerAssignmentConfig() {
                 )}
               </div>
 
-              {entries.length === 0 && (
-                <p className="text-xs text-slate-400">Chưa gán designer nào.</p>
-              )}
+              {entries.length === 0 && <p className="text-xs text-slate-400">Chưa gán designer nào.</p>}
 
               <div className="space-y-1.5">
                 {entries.map((e) => {
@@ -228,7 +216,9 @@ export default function DesignerAssignmentConfig() {
                     .map((d) => {
                       const usedIn = designerFactory.get(d._id);
                       const elsewhere = usedIn && usedIn !== f._id;
-                      const facName = elsewhere ? factoryById.get(usedIn!)?.shortName || factoryById.get(usedIn!)?.name : '';
+                      const facName = elsewhere
+                        ? factoryById.get(usedIn!)?.shortName || factoryById.get(usedIn!)?.name
+                        : '';
                       return (
                         <option key={d._id} value={d._id} disabled={!!elsewhere}>
                           {d.fullName}
