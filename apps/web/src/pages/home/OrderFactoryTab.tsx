@@ -1,8 +1,7 @@
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import { useSearchParams } from 'react-router-dom';
-import { ArrowRight, Download, Factory, History, Layers, MapPin, Plus, Send } from 'lucide-react';
+import { ArrowRight, Download, Factory, History, Layers, Send } from 'lucide-react';
 import type { FactoryOverview, FactoryOverviewCell } from 'shared';
-import { WorkshopConfigCategory } from 'shared';
 import { toast } from 'sonner';
 
 import { useWorkshopConfigStore } from '@/store/workshopConfigStore';
@@ -55,8 +54,7 @@ type FilterMode =
   | { kind: 'print'; factoryId: string; stage: PrintStage }
   | { kind: 'print-all'; stage: PrintStage } // print stage across ALL factories (Tổng view)
   | { kind: 'error'; factoryId: string } // đơn lỗi xưởng tại factoryId
-  | { kind: 'error-all' } // đơn lỗi xưởng across ALL factories (Tổng view)
-  | { kind: 'unmapped' }; // đơn chưa map xưởng nào
+  | { kind: 'error-all' }; // đơn lỗi xưởng across ALL factories (Tổng view)
 
 interface SelectFilters {
   type: string;
@@ -90,7 +88,6 @@ const DEFAULT_PAGE_SIZE = 20;
 function parseFilterModeFromURL(sp: URLSearchParams): FilterMode {
   const mode = sp.get('fmode');
   const stage = sp.get('fstage') as PrintStage | null;
-  if (mode === 'unmapped') return { kind: 'unmapped' };
   if (mode === 'error-all') return { kind: 'error-all' };
   if (mode === 'print-all' && (stage === 'printed' || stage === 'printing' || stage === 'not-printed')) {
     return { kind: 'print-all', stage };
@@ -183,9 +180,7 @@ export default function OrderFactoryTab() {
         sp.delete('ffactory');
         sp.delete('fmode');
         sp.delete('fstage');
-        if (filterMode.kind === 'unmapped') {
-          sp.set('fmode', 'unmapped');
-        } else if (filterMode.kind === 'print-all') {
+        if (filterMode.kind === 'print-all') {
           sp.set('fmode', 'print-all');
           sp.set('fstage', filterMode.stage);
         } else if (filterMode.kind === 'error-all') {
@@ -220,9 +215,6 @@ export default function OrderFactoryTab() {
   const [preview, setPreview] = useState<{ url: string; originalUrl?: string; title: string } | null>(null);
   const [historyTarget, setHistoryTarget] = useState<{ id: string; productionId: string } | null>(null);
   const [transferDialog, setTransferDialog] = useState<{ ids: string[] } | null>(null);
-  /** Mở dialog "Gán xưởng" — single khi click button trong cell row, bulk khi
-   *  click button trong bulk toolbar (mọi đơn được chọn đều unmapped). */
-  const [assignDialog, setAssignDialog] = useState<{ ids: string[]; single?: WorkshopOrderRow } | null>(null);
 
   // Overview query — includes the factory scope so dropdown options below
   // shrink to match the selected factory chip. Print-stage filter cũng dùng
@@ -248,9 +240,6 @@ export default function OrderFactoryTab() {
     }
     if (filterMode.kind === 'error-all') {
       sp.set('hasError', 'true');
-    }
-    if (filterMode.kind === 'unmapped') {
-      sp.set('unmapped', 'true');
     }
     if (selectFilters.type) sp.set('type', selectFilters.type);
     if (selectFilters.fabric) sp.set('fabricType', selectFilters.fabric);
@@ -294,7 +283,6 @@ export default function OrderFactoryTab() {
       sp.set('hasError', 'true');
     }
     if (filterMode.kind === 'error-all') sp.set('hasError', 'true');
-    if (filterMode.kind === 'unmapped') sp.set('unmapped', 'true');
     if (selectFilters.type) sp.set('type', selectFilters.type);
     if (selectFilters.fabric) sp.set('fabricType', selectFilters.fabric);
     if (selectFilters.tool) sp.set('toolResult', selectFilters.tool);
@@ -367,7 +355,6 @@ export default function OrderFactoryTab() {
       total: overview?.totals.total ?? 0,
       pure: overview?.totals.pure ?? 0,
       transferred: overview?.totals.transferred ?? 0,
-      unmapped: overview?.totals.unmapped ?? 0,
       productCount: overview?.availableFilters.products.length ?? 0,
       fabricCount: overview?.availableFilters.fabrics.length ?? 0,
       machineCount: overview?.availableFilters.machineTypes.length ?? 0,
@@ -410,21 +397,6 @@ export default function OrderFactoryTab() {
     fetchRows();
   };
 
-  const onAfterAssign = () => {
-    setSelected(new Set());
-    setAssignDialog(null);
-    fetchOverview();
-    fetchRows();
-  };
-
-  /** Bulk "Gán xưởng" chỉ enable khi MỌI đơn được chọn đều chưa map. Nếu mix
-   *  (có đơn đã có xưởng) thì ẩn đi để buộc user dùng "Chuyển xưởng" hoặc bỏ
-   *  chọn đơn đã map. */
-  const selectedAllUnmapped = useMemo(() => {
-    if (selected.size === 0) return false;
-    return rows.filter((r) => selected.has(r._id)).every((r) => !r.factoryId);
-  }, [rows, selected]);
-
   // Export ALL rows matching the CURRENT filter — bypasses pagination, sends
   // the same query params as `fetchRows` minus page/limit. Names (fabric,
   // tool result, assignee…) get resolved on the client through the workshop
@@ -446,7 +418,6 @@ export default function OrderFactoryTab() {
       sp.set('hasError', 'true');
     }
     if (filterMode.kind === 'error-all') sp.set('hasError', 'true');
-    if (filterMode.kind === 'unmapped') sp.set('unmapped', 'true');
     if (selectFilters.type) sp.set('type', selectFilters.type);
     if (selectFilters.fabric) sp.set('fabricType', selectFilters.fabric);
     if (selectFilters.tool) sp.set('toolResult', selectFilters.tool);
@@ -701,17 +672,6 @@ export default function OrderFactoryTab() {
                   </FilterChip>
                 );
               })}
-            {overview && overview.totals.unmapped > 0 && (
-              <FilterChip
-                active={filterMode.kind === 'unmapped'}
-                onClick={() => setFilterMode(filterMode.kind === 'unmapped' ? { kind: 'all' } : { kind: 'unmapped' })}
-              >
-                <span className="inline-flex items-center gap-1">
-                  <span className="w-1.5 h-1.5 rounded-full bg-amber-500" />
-                  Chưa xác định xưởng ({overview.totals.unmapped})
-                </span>
-              </FilterChip>
-            )}
             {filterMode.kind === 'print' && (
               <FilterChip active onClick={() => setFilterMode({ kind: 'all' })}>
                 {filterMode.stage === 'printed'
@@ -777,29 +737,12 @@ export default function OrderFactoryTab() {
             <span className="text-sm font-medium">
               Đã chọn <span className="tabular-nums font-bold">{selected.size}</span> đơn
             </span>
-            {selectedAllUnmapped ? (
-              <Button
-                size="sm"
-                onClick={() => setAssignDialog({ ids: Array.from(selected) })}
-                className="bg-amber-600 hover:bg-amber-700 text-white"
-              >
-                <MapPin size={13} /> Gán xưởng
-              </Button>
-            ) : (
-              <Button size="sm" onClick={() => setTransferDialog({ ids: Array.from(selected) })}>
-                <Send size={13} /> Chuyển xưởng
-              </Button>
-            )}
+            <Button size="sm" onClick={() => setTransferDialog({ ids: Array.from(selected) })}>
+              <Send size={13} /> Chuyển xưởng
+            </Button>
             <Button variant="ghost" size="sm" onClick={() => setSelected(new Set())}>
               Bỏ chọn
             </Button>
-            {selected.size > 0 && (
-              <span className="text-[11px] text-muted-foreground ml-auto">
-                {selectedAllUnmapped
-                  ? 'Tất cả đơn được chọn đều chưa map — dùng "Gán xưởng" để gán xưởng + cấu hình ban đầu.'
-                  : 'Đơn đã có xưởng — dùng "Chuyển xưởng" để đổi sang xưởng khác.'}
-              </span>
-            )}
           </div>
         )}
 
@@ -899,24 +842,9 @@ export default function OrderFactoryTab() {
                       )}
                       <TableCell>
                         <div className="flex flex-col gap-1 text-[11px]">
-                          {row.factory?.name ? (
-                            <Badge variant={isTransferred ? 'warning' : 'success'} className="w-fit">
-                              {row.factory.shortName || '?'} · {row.factory.name}
-                            </Badge>
-                          ) : canTransfer ? (
-                            <Button
-                              variant="outline"
-                              size="sm"
-                              className="h-6 text-[11px] px-2 w-fit border-amber-300 bg-amber-50/40 hover:bg-amber-100/60 dark:border-amber-500/40 dark:bg-amber-500/10 dark:hover:bg-amber-500/15 text-amber-700 dark:text-amber-300"
-                              onClick={() => setAssignDialog({ ids: [row._id], single: row })}
-                            >
-                              <Plus size={11} /> Gán xưởng
-                            </Button>
-                          ) : (
-                            <Badge variant="outline" className="w-fit">
-                              Chưa map
-                            </Badge>
-                          )}
+                          <Badge variant={isTransferred ? 'warning' : 'success'} className="w-fit">
+                            {row.factory?.shortName || '?'} · {row.factory?.name || '?'}
+                          </Badge>
                           {isTransferred && (
                             <span className="text-muted-foreground flex items-center gap-1">
                               <span>← Gốc:</span>
@@ -997,15 +925,6 @@ export default function OrderFactoryTab() {
           ids={transferDialog?.ids || []}
           factories={overview?.factories || []}
           onSuccess={onAfterTransfer}
-        />
-
-        <AssignFactoryDialog
-          open={!!assignDialog}
-          onOpenChange={(o) => !o && setAssignDialog(null)}
-          ids={assignDialog?.ids || []}
-          single={assignDialog?.single}
-          factories={overview?.factories || []}
-          onSuccess={onAfterAssign}
         />
       </div>
     </TooltipProvider>
@@ -1166,7 +1085,6 @@ function TotalCard({
     total: number;
     pure: number;
     transferred: number;
-    unmapped: number;
     productCount: number;
     fabricCount: number;
     machineCount: number;
@@ -1289,8 +1207,8 @@ function TotalCard({
         </div>
       </div>
 
-      {/* Bonus row: pure / transferred / unmapped — read-only mini stats */}
-      <div className="grid grid-cols-3 gap-2 text-xs">
+      {/* Bonus row: pure / transferred — read-only mini stats */}
+      <div className="grid grid-cols-2 gap-2 text-xs">
         <div className="rounded-md border border-border px-2 py-1.5">
           <p className="text-[10px] text-muted-foreground">Đơn thuần</p>
           <p className="text-sm font-bold tabular-nums text-foreground">{agg.pure}</p>
@@ -1298,10 +1216,6 @@ function TotalCard({
         <div className="rounded-md border border-border px-2 py-1.5">
           <p className="text-[10px] text-muted-foreground">Đã chuyển</p>
           <p className="text-sm font-bold tabular-nums text-amber-700 dark:text-amber-400">{agg.transferred}</p>
-        </div>
-        <div className="rounded-md border border-border px-2 py-1.5">
-          <p className="text-[10px] text-muted-foreground">Chưa map xưởng</p>
-          <p className="text-sm font-bold tabular-nums text-slate-700 dark:text-slate-300">{agg.unmapped}</p>
         </div>
       </div>
     </div>
@@ -1370,267 +1284,6 @@ function FilterChip({
     >
       {children}
     </button>
-  );
-}
-
-/**
- * Dialog gán xưởng cho đơn UNMAPPED (single hoặc bulk).
- *  - Single: hiển thị info đơn (productionId / type / size + qty / link design).
- *  - Bulk:   hiển thị count "Gán cho N đơn".
- *  - Form:   factory (required) + 4 optional select (loại vải / phòng / máy / tool).
- *  - Source options:
- *      • factory     ← prop `factories` (parent overview).
- *      • fabric/machine/toolResult ← `useWorkshopConfigStore` (full catalog).
- *      • machineType ← fetch on dialog open (machineType.getMachineTypes).
- */
-function AssignFactoryDialog({
-  open,
-  onOpenChange,
-  ids,
-  single,
-  factories,
-  onSuccess,
-}: {
-  open: boolean;
-  onOpenChange: (o: boolean) => void;
-  ids: string[];
-  single?: WorkshopOrderRow;
-  factories: FactoryOverviewCell[];
-  onSuccess: () => void;
-}) {
-  const [factoryId, setFactoryId] = useState('');
-  const [fabricType, setFabricType] = useState('');
-  const [machineTypeId, setMachineTypeId] = useState('');
-  const [machineNumber, setMachineNumber] = useState('');
-  const [toolResult, setToolResult] = useState('');
-  const [saving, setSaving] = useState(false);
-  const [machineTypes, setMachineTypes] = useState<Array<{ _id: string; name: string; shortName?: string }>>([]);
-
-  const fabricOptions = useWorkshopConfigStore((s) => s.byCategory[WorkshopConfigCategory.FabricType] || []);
-  const machineOptions = useWorkshopConfigStore((s) => s.byCategory[WorkshopConfigCategory.Machine] || []);
-  const toolOptions = useWorkshopConfigStore((s) => s.byCategory[WorkshopConfigCategory.ToolResult] || []);
-
-  // Reset form mỗi lần dialog mở (kể cả khi đổi single → bulk).
-  useEffect(() => {
-    if (!open) return;
-    setFactoryId('');
-    setFabricType('');
-    setMachineTypeId('');
-    setMachineNumber('');
-    setToolResult('');
-  }, [open, ids.join(',')]);
-
-  // Lazy load machineTypes lần đầu mở dialog — endpoint riêng, không có trong
-  // workshopConfigStore.
-  useEffect(() => {
-    if (!open || machineTypes.length > 0) return;
-    RepositoryRemote.machineType
-      .getMachineTypes()
-      .then((res) => {
-        const data = (res.data?.data || []) as Array<{ _id: string; name: string; shortName?: string }>;
-        setMachineTypes(data);
-      })
-      .catch((err) => handleAxiosError(err));
-  }, [open, machineTypes.length]);
-
-  const submit = async () => {
-    if (!factoryId) {
-      toast.error('Chọn xưởng');
-      return;
-    }
-    try {
-      setSaving(true);
-      const res = await RepositoryRemote.order.bulkAssignOrders({
-        ids,
-        factoryId,
-        fabricType: fabricType || undefined,
-        machineTypeId: machineTypeId || undefined,
-        machineNumber: machineNumber || undefined,
-        toolResult: toolResult || undefined,
-      });
-      const data = res.data?.data || { matched: 0, modified: 0 };
-      if (data.modified === 0) {
-        toast.warning('Không có đơn nào được cập nhật (có thể đã được gán từ trước).');
-      } else {
-        toast.success(`Đã gán ${data.modified}/${data.matched} đơn`);
-      }
-      onSuccess();
-    } catch (err) {
-      handleAxiosError(err);
-    } finally {
-      setSaving(false);
-    }
-  };
-
-  // Design links — collect all positions có URL, ưu tiên originalUrl (mở
-  // trong tab mới = bypass thumbnail).
-  const designLinks = useMemo(() => {
-    if (!single) return [] as Array<{ position: string; url: string }>;
-    const orig = single.designsOriginal || {};
-    const thumb = single.designs || {};
-    const positions = Array.from(new Set([...Object.keys(orig), ...Object.keys(thumb)]));
-    return positions
-      .map((pos) => {
-        const url =
-          (orig as Record<string, string | undefined>)[pos] || (thumb as Record<string, string | undefined>)[pos];
-        return url ? { position: pos, url } : null;
-      })
-      .filter((x): x is { position: string; url: string } => !!x);
-  }, [single]);
-
-  return (
-    <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-w-lg">
-        <DialogHeader>
-          <DialogTitle>
-            {single ? `Gán xưởng cho đơn ${single.productionId}` : `Gán xưởng cho ${ids.length} đơn đã chọn`}
-          </DialogTitle>
-        </DialogHeader>
-
-        <div className="space-y-3">
-          {single && (
-            <div className="rounded-md border border-border bg-muted/30 p-2.5 text-xs space-y-1">
-              <div className="flex flex-wrap items-center gap-x-3 gap-y-1">
-                <span>
-                  <span className="text-muted-foreground">ID:</span>{' '}
-                  <span className="font-mono font-semibold">{single.productionId}</span>
-                </span>
-                {single.type && (
-                  <span>
-                    <span className="text-muted-foreground">Sản phẩm:</span>{' '}
-                    <span className="font-semibold">{single.type}</span>
-                  </span>
-                )}
-                {single.size && (
-                  <span>
-                    <span className="text-muted-foreground">Size:</span>{' '}
-                    <span className="font-semibold">{single.size}</span>
-                  </span>
-                )}
-                {(single as unknown as { quantity?: number }).quantity != null && (
-                  <span>
-                    <span className="text-muted-foreground">SL:</span>{' '}
-                    <span className="font-semibold tabular-nums">
-                      {(single as unknown as { quantity?: number }).quantity}
-                    </span>
-                  </span>
-                )}
-              </div>
-              {designLinks.length > 0 && (
-                <div className="pt-1">
-                  <span className="text-muted-foreground">Design:</span>{' '}
-                  {designLinks.map((d, i) => (
-                    <a
-                      key={i}
-                      href={d.url}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      className="text-primary hover:underline mr-2"
-                    >
-                      {d.position}
-                    </a>
-                  ))}
-                </div>
-              )}
-            </div>
-          )}
-
-          <div>
-            <Label className="text-xs">
-              Xưởng <span className="text-rose-600">*</span>
-            </Label>
-            <select
-              value={factoryId}
-              onChange={(e) => setFactoryId(e.target.value)}
-              className="mt-1 w-full rounded-md border border-input bg-background px-2 py-2 text-sm focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
-            >
-              <option value="">— Chọn xưởng —</option>
-              {factories.map((f) => (
-                <option key={f.factoryId} value={f.factoryId}>
-                  {f.factoryShortName ? `${f.factoryShortName} · ${f.factoryName}` : f.factoryName}
-                </option>
-              ))}
-            </select>
-          </div>
-
-          <div className="grid grid-cols-2 gap-3">
-            <AssignSelectField
-              label="Loại vải"
-              value={fabricType}
-              onChange={setFabricType}
-              options={fabricOptions.map((o) => ({ value: o.code, label: o.name || o.code }))}
-            />
-            <AssignSelectField
-              label="Phòng"
-              value={machineTypeId}
-              onChange={setMachineTypeId}
-              options={machineTypes.map((m) => ({
-                value: m._id,
-                label: m.shortName ? `${m.shortName} · ${m.name}` : m.name,
-              }))}
-            />
-            <AssignSelectField
-              label="Máy"
-              value={machineNumber}
-              onChange={setMachineNumber}
-              options={machineOptions.map((o) => ({ value: o.code, label: o.name || o.code }))}
-            />
-            <AssignSelectField
-              label="Tool"
-              value={toolResult}
-              onChange={setToolResult}
-              options={toolOptions.map((o) => ({ value: o.code, label: o.name || o.code }))}
-            />
-          </div>
-
-          <p className="text-[10px] text-muted-foreground leading-relaxed">
-            Chỉ <strong>Xưởng</strong> là bắt buộc. 4 trường còn lại có thể bỏ trống để gán sau qua bảng đơn hàng. Đơn
-            đã có xưởng từ trước sẽ bị bỏ qua (dùng "Chuyển xưởng" thay thế).
-          </p>
-        </div>
-
-        <DialogFooter>
-          <Button variant="outline" onClick={() => onOpenChange(false)} disabled={saving}>
-            Hủy
-          </Button>
-          <Button onClick={submit} disabled={saving || !factoryId}>
-            {saving ? <Spinner size={13} /> : <MapPin size={13} />}
-            Gán xưởng
-          </Button>
-        </DialogFooter>
-      </DialogContent>
-    </Dialog>
-  );
-}
-
-/** Compact select cho 4 optional field trong AssignFactoryDialog. */
-function AssignSelectField({
-  label,
-  value,
-  onChange,
-  options,
-}: {
-  label: string;
-  value: string;
-  onChange: (v: string) => void;
-  options: Array<{ value: string; label: string }>;
-}) {
-  return (
-    <div>
-      <Label className="text-xs text-muted-foreground">{label} (tùy chọn)</Label>
-      <select
-        value={value}
-        onChange={(e) => onChange(e.target.value)}
-        className="mt-1 w-full rounded-md border border-input bg-background px-2 py-1.5 text-xs focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
-      >
-        <option value="">— Không gán —</option>
-        {options.map((o) => (
-          <option key={o.value} value={o.value}>
-            {o.label}
-          </option>
-        ))}
-      </select>
-    </div>
   );
 }
 

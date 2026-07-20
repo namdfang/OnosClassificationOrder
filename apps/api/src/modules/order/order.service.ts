@@ -1110,6 +1110,14 @@ export class OrderService implements OnModuleInit {
       filter.inProductionAt = buildRange();
     }
 
+    // Đơn chưa map xưởng (factoryId null/missing) bị loại khỏi MỌI view mặc
+    // định — chỉ xem qua trang "Không xác định xưởng" (dto.unmapped=true).
+    // Designer/Fulfillment branch ở trên đã tự loại trừ null qua equality/$or
+    // factoryId cụ thể nên không cần áp lại ở đây (tránh set field 2 lần).
+    if (dto?.unmapped !== true && filter.factoryId === undefined && !filter.$or) {
+      filter.factoryId = { $exists: true, $ne: null };
+    }
+
     return filter;
   }
 
@@ -1762,6 +1770,10 @@ export class OrderService implements OnModuleInit {
           $or: [{ factoryId: fulfillmentFactoryId }, { originalFactoryId: fulfillmentFactoryId }],
         });
       }
+    } else {
+      // Đơn chưa map xưởng bị loại khỏi mọi số liệu Dashboard — chỉ xem qua
+      // trang "Không xác định xưởng". Fulfillment ở trên đã tự loại trừ sẵn.
+      match.factoryId = { $exists: true, $ne: null };
     }
     if (dto.startDate || dto.endDate) {
       const range: Record<string, Date> = {};
@@ -2643,6 +2655,10 @@ export class OrderService implements OnModuleInit {
       }
     } else if (dto.factoryId) {
       match.$or = [{ factoryId: dto.factoryId }, { originalFactoryId: dto.factoryId }];
+    } else {
+      // Đơn chưa map xưởng bị loại khỏi Dashboard vòng đời — chỉ xem qua trang
+      // "Không xác định xưởng".
+      match.factoryId = { $exists: true, $ne: null };
     }
 
     // Đếm RIÊNG đơn hủy trong cùng window inProductionAt + xưởng (funnel đã loại
@@ -2958,6 +2974,10 @@ export class OrderService implements OnModuleInit {
       match.factoryId = '__no_factory__';
     } else if (scopedFactoryId) {
       match.$or = [{ factoryId: scopedFactoryId }, { originalFactoryId: scopedFactoryId }];
+    } else {
+      // Đơn chưa map xưởng bị loại khỏi drill-down "Đơn đã hủy" — chỉ xem qua
+      // trang "Không xác định xưởng".
+      match.factoryId = { $exists: true, $ne: null };
     }
 
     type Lean = {
@@ -3055,8 +3075,8 @@ export class OrderService implements OnModuleInit {
     // Loại đơn hủy khỏi mọi số liệu xưởng (matchMapped kế thừa qua spread).
     match.cancelledAt = { $exists: false };
     // `matchMapped` đếm/aggregate đơn đã map xưởng — Cards/flow/stats đều
-    // cần `factoryId` để classify. `match` (chưa gắn) dùng cho `unmapped`
-    // count và optional dropdown khi user chọn chip "Chưa xác định".
+    // cần `factoryId` để classify. Đơn chưa map xưởng không còn hiện ở tab
+    // này — xem qua trang "Không xác định xưởng" riêng.
     // QUAN TRỌNG: nếu `match` đã scope cứng `factoryId` (user In = xưởng mình)
     // thì GIỮ NGUYÊN, KHÔNG ghi đè bằng `{ $exists }` (sẽ lộ mọi xưởng).
     const matchMapped: Record<string, unknown> = { ...match };
@@ -3083,14 +3103,6 @@ export class OrderService implements OnModuleInit {
     }
     // Match cho thẻ xưởng = mapped + các facet đang chọn.
     const cardMatch: Record<string, unknown> = { ...matchMapped, ...facetFilters };
-
-    // Đơn chưa map xưởng trong cùng date range — đếm độc lập, dùng cho chip
-    // "Chưa xác định xưởng" trên FE (cũng tôn trọng facet filter).
-    const unmappedCount = await this.orderModel.countDocuments({
-      ...match,
-      ...facetFilters,
-      $or: [{ factoryId: { $exists: false } }, { factoryId: null }],
-    });
 
     type FlowRow = { _id: { from: string; to: string }; count: number; totalQuantity: number };
     const flowRows = await this.orderModel.aggregate<FlowRow>([
@@ -3563,7 +3575,7 @@ export class OrderService implements OnModuleInit {
       data: {
         factories: Array.from(cellMap.values()).sort((a, b) => b.total - a.total),
         flows,
-        totals: { total: grandTotal, transferred, pure, unmapped: unmappedCount },
+        totals: { total: grandTotal, transferred, pure },
         availableFilters: {
           products: typeRows.map((r) => ({ value: r._id, label: r._id, count: r.count })),
           fabrics: fabricRows.map((r) => ({
@@ -6621,6 +6633,9 @@ export class OrderService implements OnModuleInit {
     filter.currentFulfillmentStage = { $exists: true, $ne: null };
     // Bỏ hẳn lỗi nguồn soát-tool khỏi tab này.
     filter.productionErrorSource = { $ne: 'tool-check' };
+    // Đơn chưa map xưởng bị loại khỏi Nhật ký bù lỗi — chỉ xem qua trang
+    // "Không xác định xưởng".
+    filter.factoryId = { $exists: true, $ne: null };
 
     // Tab theo góc nhìn chặng của viewer (Cần xử lý / Đã xong) + khóa xưởng cho
     // Fulfillment. Designer lọc theo assignee (task của mình); các role khác FE

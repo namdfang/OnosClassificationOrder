@@ -47,6 +47,7 @@ export const PERMISSION_CATALOG: PermissionItem[] = [
   { code: 'page.fulfillment_stats',    label: 'Stats fulfillment',                 group: 'page' },
   { code: 'page.scan_error',           label: 'Quét mã (workshop scan)',           group: 'page' },
   { code: 'page.tool_check',           label: 'Soát tool (support dashboard)',     group: 'page' },
+  { code: 'page.unmapped_factory',     label: 'Đơn chưa xác định xưởng (menu tạm)', group: 'page' },
 
   // ─── Order actions ──────────────────────────────────────────────
   { code: 'order.import',              label: 'Import đơn hàng',           group: 'order' },
@@ -122,7 +123,8 @@ export const DEFAULT_ROLE_PERMISSIONS: Partial<Record<RoleType, string[]>> = {
 
   [RoleType.Support]: [
     'page.dashboard', 'page.orders', 'page.products', 'page.tool_check',
-    'order.import', 'order.view_workshop_table',
+    'page.unmapped_factory',
+    'order.import', 'order.transfer', 'order.view_workshop_table',
     'order.field.printStatus.view',
     'order.field.printStatusNote.view',
     // 5 field edit Support được phép (workflow soát tool + lỗi + đổi máy).

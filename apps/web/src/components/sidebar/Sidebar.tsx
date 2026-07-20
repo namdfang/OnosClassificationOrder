@@ -15,6 +15,7 @@ import {
   LayoutGrid,
   List,
   LogOut,
+  MapPin,
   Package,
   Palette,
   ScanLine,
@@ -126,6 +127,13 @@ const NAV_GROUPS: NavGroup[] = [
             to: PATHS.ORDERS_SCAN_ERROR,
             icon: <ScanLine size={14} />,
             perm: 'page.scan_error',
+          },
+          {
+            key: 'orders-unmapped',
+            label: 'Không xác định xưởng',
+            to: PATHS.ORDERS_UNMAPPED,
+            icon: <MapPin size={14} />,
+            perm: 'page.unmapped_factory',
           },
           {
             key: 'orders-import',
