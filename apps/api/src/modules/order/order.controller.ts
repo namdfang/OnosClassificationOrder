@@ -205,6 +205,20 @@ export class OrderController {
     return this.orderService.getOrdersByIds(ids, dto.page, dto.limit);
   }
 
+  @Get('overview-list')
+  @Auth(ORDER_VIEW_ROLES)
+  @ApiOperation({
+    summary:
+      'List đơn cho drill-down dashboard — KHÔNG áp visibility filter theo role (mọi role thấy CÙNG tập đơn khớp con số; cột hiển thị vẫn lọc theo quyền ở FE). Khác GET /orders (scoping assignee/factory theo role).',
+  })
+  @HttpCode(HttpStatus.OK)
+  @ApiOkResponse({ type: GetProductionOrdersResDto })
+  async getOverviewList(@Query() dto: GetProductionOrdersDto): Promise<GetProductionOrdersResDto> {
+    // roleName = undefined → buildVisibilityFilter bỏ qua scoping Designer/Fulfillment,
+    // chỉ giữ filter tường minh (date range + toolResultNote + assignee/designerStatus…).
+    return this.orderService.getOrders(dto);
+  }
+
   @Get('workshop-filters')
   @Auth(ORDER_VIEW_ROLES)
   @ApiOperation({

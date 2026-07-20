@@ -33,6 +33,14 @@ import { TeamDailyMatrix } from './TeamDailyMatrix';
 
 type Period = 'today' | '7d' | '30d' | 'custom';
 
+/**
+ * Tạm TẮT 3 khối thống kê cũ (Leaderboard + Timeline per-designer + Lỗi xưởng
+ * phân loại) + period switcher của chúng — KHÔNG gọi 3 API
+ * `designer/performance` / `designer/timeline/:id` / `orders/error-stats`.
+ * Bật lại: đổi flag về `true`.
+ */
+const SHOW_LEGACY_STATS = false;
+
 const SOURCE_COLORS = {
   designer: '#7C3AED', // violet
   factory: '#0EA5E9', // sky
@@ -93,6 +101,11 @@ export default function DesignerStatsTab() {
   const range = useMemo(() => rangeFromPeriod(period, customFrom, customTo), [period, customFrom, customTo]);
 
   const fetchAll = async () => {
+    // Legacy stats tắt → chỉ bump token cho các bảng còn lại refetch.
+    if (!SHOW_LEGACY_STATS) {
+      setMatrixToken((t) => t + 1);
+      return;
+    }
     try {
       setLoading(true);
       const [perfRes, errRes] = await Promise.all([
@@ -115,7 +128,7 @@ export default function DesignerStatsTab() {
   };
 
   const fetchTimeline = async (code: string) => {
-    if (!code) return;
+    if (!SHOW_LEGACY_STATS || !code) return;
     try {
       const res = await RepositoryRemote.designer.timeline(code, range);
       setTimeline((res.data?.data || []) as DesignerTimelineBucket[]);
@@ -217,7 +230,18 @@ export default function DesignerStatsTab() {
         customer={filterCustomer || undefined}
       />
 
-      {/* Period switcher */}
+      {/* Nút làm mới các bảng bên trên (period switcher tạm ẩn cùng 3 khối legacy). */}
+      {!SHOW_LEGACY_STATS && (
+        <div className="flex items-center justify-end">
+          <Button variant="ghost" size="sm" onClick={fetchAll} disabled={loading}>
+            <RefreshCw size={13} className={loading ? 'animate-spin' : ''} />
+            Làm mới
+          </Button>
+        </div>
+      )}
+
+      {/* Period switcher — chỉ phục vụ Leaderboard/Timeline/Error pie (đang tắt). */}
+      {SHOW_LEGACY_STATS && (
       <div className="flex items-center justify-between flex-wrap gap-3">
         <div className="inline-flex rounded-md border border-border overflow-hidden text-xs">
           {(['today', '7d', '30d', 'custom'] as Period[]).map((p) => (
@@ -265,8 +289,10 @@ export default function DesignerStatsTab() {
           <RefreshCw size={13} className={loading ? 'animate-spin' : ''} />
         </Button>
       </div>
+      )}
 
-      {/* Leaderboard */}
+      {/* Leaderboard — tạm tắt (SHOW_LEGACY_STATS). */}
+      {SHOW_LEGACY_STATS && (
       <div className="rounded-lg border border-border bg-card">
         <div className="flex items-center justify-between p-3 border-b border-border">
           <div className="flex items-center gap-2">
@@ -383,7 +409,10 @@ export default function DesignerStatsTab() {
           </TableBody>
         </Table>
       </div>
+      )}
 
+      {/* Timeline per-designer + Lỗi xưởng phân loại — tạm tắt (SHOW_LEGACY_STATS). */}
+      {SHOW_LEGACY_STATS && (
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-5">
         {/* Timeline */}
         <div className="lg:col-span-2 rounded-lg border border-border bg-card p-4">
@@ -472,6 +501,7 @@ export default function DesignerStatsTab() {
           )}
         </div>
       </div>
+      )}
     </div>
   );
 }
