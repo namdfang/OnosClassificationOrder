@@ -4960,8 +4960,12 @@ export class OrderService implements OnModuleInit {
    * được set qua `POST /design-review/result`). Count riêng — chạy song song
    * với `findOneAndUpdate` (`Promise.all`), không ảnh hưởng tính atomic của
    * claim.
+   *
+   * `dto.from`/`dto.to` (YYYY-MM-DD, optional) lọc theo `inProductionAt` (VN
+   * tz) — cùng semantics `createdFrom`/`createdTo` ở danh sách đơn (Orders.md
+   * §7.0b). Không truyền → không giới hạn ngày (hành vi cũ).
    */
-  async getNextDesignReviewOrder(): Promise<{
+  async getNextDesignReviewOrder(dto?: { from?: string; to?: string }): Promise<{
     success: true;
     data: DesignReviewOrder | null;
     remaining: number;
@@ -4969,13 +4973,19 @@ export class OrderService implements OnModuleInit {
     const now = new Date();
     const leaseExpiresBefore = new Date(now.getTime() - DESIGN_REVIEW_CLAIM_LEASE_MS);
 
-    const baseFilter = {
+    const baseFilter: Record<string, unknown> = {
       deletedAt: { $exists: false },
       cancelledAt: { $exists: false },
       heldAt: { $exists: false },
       toolResult: { $in: [null, ''] },
       designerStatus: DesignerStatus.Unassigned,
     };
+    if (dto?.from || dto?.to) {
+      const range: Record<string, Date> = {};
+      if (dto.from) range.$gte = vnDayStart(dto.from);
+      if (dto.to) range.$lte = vnDayEnd(dto.to);
+      baseFilter.inProductionAt = range;
+    }
 
     const [doc, remaining] = await Promise.all([
       this.orderModel
