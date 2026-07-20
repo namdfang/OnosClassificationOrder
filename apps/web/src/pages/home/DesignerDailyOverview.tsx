@@ -8,8 +8,9 @@ import { useWorkshopConfigStore } from '@/store/workshopConfigStore';
 import { RepositoryRemote } from '@/services';
 
 import { Hint } from '@/components/common/Hint';
-import { OrderListDialog } from '@/components/orders/OrderListDialog';
 import { TooltipProvider } from '@/components/ui/tooltip';
+
+import { DesignerDrillPanel, type DrillTarget } from './DesignerDrillPanel';
 
 import { handleAxiosError } from '@/utils';
 import { cn } from '@/utils/cn';
@@ -22,7 +23,15 @@ interface Data {
   rows: DailyOverviewRow[];
   backlogByDesigner: DailyOverviewBacklogDesigner[];
   unassignedBacklog: number;
-  columnTotals: { total: number; ok: number; unreviewed: number; error: number; backlog: number };
+  columnTotals: {
+    total: number;
+    ok: number;
+    unreviewed: number;
+    error: number;
+    errorTotal: number;
+    errorUnassigned: number;
+    backlog: number;
+  };
 }
 
 const EMPTY: Data = {
@@ -30,7 +39,7 @@ const EMPTY: Data = {
   rows: [],
   backlogByDesigner: [],
   unassignedBacklog: 0,
-  columnTotals: { total: 0, ok: 0, unreviewed: 0, error: 0, backlog: 0 },
+  columnTotals: { total: 0, ok: 0, unreviewed: 0, error: 0, errorTotal: 0, errorUnassigned: 0, backlog: 0 },
 };
 
 interface Props {
@@ -105,8 +114,9 @@ export function DesignerDailyOverview({ days: range = 7, from, to, reloadToken, 
     [backlogByDesigner, unassignedBacklog],
   );
 
-  // Drill-down: bấm 1 con số → mở modal danh sách đơn khớp filter.
-  const [drill, setDrill] = useState<{ title: React.ReactNode; query: string } | null>(null);
+  // Drill-down: bấm 1 con số → panel danh sách đơn INLINE ngay dưới bảng
+  // (gom nhóm theo sản phẩm, giống bảng "Cần gán designer") — không dùng dialog.
+  const [drill, setDrill] = useState<DrillTarget | null>(null);
 
   // Union mọi note lỗi trong khoảng (cho cột "Tổng" của dòng lỗi / tồn).
   const allErrorCodes = useMemo(
@@ -246,52 +256,33 @@ export function DesignerDailyOverview({ days: range = 7, from, to, reloadToken, 
                   onCell={(i) => openMetric('unreviewed', days[i], days[i], [], fmtHead(days[i]).dm)}
                   onTotal={() => openMetric('unreviewed', rangeFromTo.from ?? '', rangeFromTo.to ?? '', [])}
                 />
-                {/* 3. Tổng lỗi */}
+                {/* 3. Tổng lỗi — "còn lại/tổng phát sinh" trong ngày. */}
                 <tr className="group">
                   <td className="sticky left-0 z-10 bg-card group-hover:bg-muted/40 px-3 py-1.5 border-b border-border/60 font-medium text-rose-600">
                     Tổng lỗi
-                    <div className="text-[10px] text-muted-foreground font-normal">Note Tool ≠ ok</div>
+                    <div className="text-[10px] text-muted-foreground font-normal">còn lại / tổng phát sinh</div>
                   </td>
                   {rows.map((r, i) => {
                     const codes = r.errorByNote.map((n) => n.code);
                     const open = () => openMetric('error', days[i], days[i], codes, fmtHead(days[i]).dm);
                     return (
                       <td key={days[i]} className="border-b border-l border-border/60 text-center px-1 py-1.5">
-                        {r.error === 0 ? (
-                          <span className="text-muted-foreground/30">·</span>
-                        ) : r.errorByNote.length > 0 ? (
-                          <Hint
-                            forceRich
-                            content={
-                              <div className="text-left">
-                                {r.errorByNote.map((n) => (
-                                  <div key={n.code} className="flex justify-between gap-3">
-                                    <span>{noteName(n.code)}</span>
-                                    <span className="tabular-nums font-semibold">{n.count}</span>
-                                  </div>
-                                ))}
-                              </div>
-                            }
-                          >
-                            <button
-                              type="button"
-                              onClick={open}
-                              className="font-semibold text-rose-600 rounded px-1 -mx-1 hover:bg-rose-500/10 cursor-pointer"
-                            >
-                              {r.error}
-                            </button>
-                          </Hint>
-                        ) : (
-                          <NumCell value={r.error} onClick={open} className="text-rose-600" />
-                        )}
+                        <ErrorFractionCell
+                          error={r.error}
+                          errorTotal={r.errorTotal}
+                          errorUnassigned={r.errorUnassigned}
+                          breakdown={r.errorByNote.map((n) => ({ label: noteName(n.code), count: n.count }))}
+                          onClick={open}
+                        />
                       </td>
                     );
                   })}
                   <td className="bg-muted/30 border-b border-l border-border text-center px-2 py-1.5">
-                    <NumCell
-                      value={columnTotals.error}
+                    <ErrorFractionCell
+                      error={columnTotals.error}
+                      errorTotal={columnTotals.errorTotal}
+                      errorUnassigned={columnTotals.errorUnassigned}
                       onClick={() => openMetric('error', rangeFromTo.from ?? '', rangeFromTo.to ?? '', allErrorCodes)}
-                      className="font-semibold text-rose-600"
                     />
                   </td>
                 </tr>
@@ -438,13 +429,74 @@ export function DesignerDailyOverview({ days: range = 7, from, to, reloadToken, 
         )}
       </div>
 
-      <OrderListDialog
-        open={!!drill}
-        onClose={() => setDrill(null)}
-        title={drill?.title}
-        query={drill?.query ?? null}
-      />
+      {/* Panel drill-down inline — sibling của card (TooltipProvider không render
+          DOM) nên nằm GIỮA bảng tổng quan và bảng "Cần gán designer" (space-y). */}
+      <DesignerDrillPanel target={drill} onClose={() => setDrill(null)} />
     </TooltipProvider>
+  );
+}
+
+/**
+ * Ô hàng "Tổng lỗi" — `còn lại/tổng phát sinh` (vd. 3/8). Tooltip: breakdown
+ * theo mã note + số chưa gán designer + số đã sửa xong. Bấm (khi còn lỗi) →
+ * drill-down danh sách đơn ĐANG lỗi.
+ */
+function ErrorFractionCell({
+  error,
+  errorTotal,
+  errorUnassigned,
+  breakdown,
+  onClick,
+}: {
+  error: number;
+  errorTotal: number;
+  errorUnassigned: number;
+  breakdown?: { label: string; count: number }[];
+  onClick: () => void;
+}) {
+  if (error === 0 && errorTotal === 0) return <span className="text-muted-foreground/30">·</span>;
+  const text = (
+    <>
+      {error}
+      <span className="font-normal text-muted-foreground">/{errorTotal}</span>
+    </>
+  );
+  const inner =
+    error > 0 ? (
+      <button
+        type="button"
+        onClick={onClick}
+        className="font-semibold text-rose-600 rounded px-1 -mx-1 hover:bg-rose-500/10 cursor-pointer tabular-nums"
+      >
+        {text}
+      </button>
+    ) : (
+      <span className="font-semibold text-emerald-600 dark:text-emerald-400 tabular-nums">{text}</span>
+    );
+  return (
+    <Hint
+      forceRich
+      content={
+        <div className="text-left space-y-0.5">
+          {breakdown?.map((n) => (
+            <div key={n.label} className="flex justify-between gap-3">
+              <span>{n.label}</span>
+              <span className="tabular-nums font-semibold">{n.count}</span>
+            </div>
+          ))}
+          <div className={cn('flex justify-between gap-3', breakdown?.length && 'border-t border-border/50 pt-0.5')}>
+            <span>Chưa gán designer</span>
+            <span className="tabular-nums font-semibold">{errorUnassigned}</span>
+          </div>
+          <div className="flex justify-between gap-3">
+            <span>Đã sửa xong</span>
+            <span className="tabular-nums font-semibold">{Math.max(0, errorTotal - error)}</span>
+          </div>
+        </div>
+      }
+    >
+      {inner}
+    </Hint>
   );
 }
 

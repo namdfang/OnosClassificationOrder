@@ -338,8 +338,12 @@ export const DailyOverviewRowZod = z.object({
   ok: z.number().int().nonnegative(),
   /** toolResultNote null/'' (chưa soát tool). */
   unreviewed: z.number().int().nonnegative(),
-  /** toolResultNote set & != '' & != 'ok' (lỗi thật). */
+  /** toolResultNote set & != '' & != 'ok' (lỗi thật — CÒN LẠI hiện tại). */
   error: z.number().int().nonnegative(),
+  /** Đơn TỪNG lỗi trong ngày (kể cả đã sửa xong): note lỗi hiện tại ∨ productionErrorCount>0 ∨ designerReworkCount>0. */
+  errorTotal: z.number().int().nonnegative(),
+  /** Đơn ĐANG lỗi & chưa gán designer (assignee rỗng). */
+  errorUnassigned: z.number().int().nonnegative(),
   /** Breakdown theo từng mã note ≠ ok, sort count desc. */
   errorByNote: DailyOverviewErrorNoteZod.array(),
   /** toolResultNote != 'ok' = unreviewed + error (chưa soát + lỗi). */
@@ -366,6 +370,8 @@ export const DailyOverviewColumnTotalsZod = z.object({
   ok: z.number().int().nonnegative(),
   unreviewed: z.number().int().nonnegative(),
   error: z.number().int().nonnegative(),
+  errorTotal: z.number().int().nonnegative(),
+  errorUnassigned: z.number().int().nonnegative(),
   backlog: z.number().int().nonnegative(),
 });
 

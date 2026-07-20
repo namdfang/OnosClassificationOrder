@@ -294,7 +294,7 @@ GET /v1/orders/import-from-onospod/cron
 ### 4.2 Endpoints
 | Method | Path | Mô tả |
 |--------|------|-------|
-| GET | `/v1/orders` | List (filter + paginate, visibility filter theo role) — cache 60s key có gắn `role` |
+| GET | `/v1/orders` | List (filter + paginate, visibility filter theo role) — cache 60s key có gắn `role`. Populate `factory`/`machineType`/`productConfig (fullName, shortName, mockup, level)` — mockup/level phục vụ panel drill-down Dashboard Designer gom nhóm theo sản phẩm (`Dashboard.md §0b`). |
 | GET | `/v1/orders/grouped` | Phân trang theo **product type** thay vì row (Phase 4 — workshop cần combo toàn vẹn) |
 | GET | `/v1/orders/overview-list` | Giống `GET /orders` (cùng filter: date/toolResultNote/assignee/designerStatus…) NHƯNG **KHÔNG áp visibility filter theo role** → gọi `getOrders(dto)` với `roleName=undefined`. Dùng cho **drill-down bấm con số** ở Dashboard: mọi role (Designer/Support/Fulfillment…) thấy **CÙNG tập đơn** khớp con số như admin; cột hiển thị vẫn lọc theo quyền qua `canViewField` ở FE. Xem `Dashboard.md §0b`. |
 | GET | `/v1/orders/by-ids?ids=<CSV _id>&page&limit` | Lookup đơn theo danh sách `_id`, full workshop fields (populate factory/machineType/productConfig), **KHÔNG áp visibility filter theo role** (`getOrdersByIds`). Dùng cho **lazy-load bảng đơn đầy đủ inline** khi mở rộng 1 nhóm ở "Cần gán designer" Dashboard (nhóm gồm đơn CHƯA gán → `getOrders` sẽ ẩn hết với role Designer do scoping `assignee=self`). Cũng dùng được cho `OrderListDialog` (prop `ids?: string[]`). Xem `Dashboard.md §0c`. |
@@ -660,20 +660,21 @@ Render tab tương ứng. User chỉ có 1 trong các quyền → 1 tab; có nhi
 
 3 nơi dùng: `OrderTableWorkshop.tsx` (`/orders/workshop`, có thêm sticky + virtualization), `OrdersMiniTable.tsx` (Dashboard tab Trạng thái — Tab B), `OrderFactoryTab.tsx` (Dashboard tab Xưởng — Tab C, giữ nguyên cột "Xưởng (đang / gốc)" riêng TRƯỚC các group). `ErrorLogTab`/`PrintOrderTable` (không thuộc Dashboard) vẫn dùng layout cột phẳng như cũ.
 
-8 group hiển thị — mỗi group là 1 cột bảng nhưng bên trong xếp field CHIỀU DỌC (nhiều dòng) thay vì mỗi field 1 cột ngang:
+7 group hiển thị — mỗi group là 1 cột bảng nhưng bên trong xếp field CHIỀU DỌC (nhiều dòng) thay vì mỗi field 1 cột ngang:
 
 | Group | Title header | Member field keys (thứ tự hiển thị trong cell) |
 |---|---|---|
 | `identity` (sticky đầu bảng) | Mã đơn / Ưu tiên | `productionId`, `priority`, `userSku`, `typeFullName` |
 | `product` | Sản phẩm | `mockupTypeSize` |
-| `toolCheck` | Kết quả Tool | `toolResult`, `toolResultNote` |
+| `toolCheck` | Kết quả Tool / File lỗi | `toolResult`, `toolResultNote`, `errorFile`, `errorFileNote` |
 | `factory` | Xưởng · Vải · Máy | `factoryMachine`, `fabricType`, `machineNumber` |
 | `print` | Trạng thái in | `printStatus`, `printStatusNote` |
-| `errorFile` | File sửa lỗi | `errorFile`, `errorFileNote` |
 | `productionError` | Lỗi xưởng | `productionError`, `productionErrorSource`, `productionErrorNote` |
 | `assignee` | Người thực hiện | `assignee`, `assigneeNote`, `designerStatus` |
 
-Thứ tự group MẶC ĐỊNH (mọi role trừ Support) đặt `toolCheck` ngay sau `product`, TRƯỚC `factory` (soát kết quả Tool là bước đầu tiên cần thấy). Role Support: `SUPPORT_GROUP_ORDER` gom thêm `errorFile` lên cạnh `toolCheck`, cả 2 đứng TRƯỚC `factory` + `print` (mirror behavior cũ theo field lẻ). Member field nào bị ẩn quyền thì loại khỏi group; group rỗng hết member thì ẩn cả cột.
+> Group `toolCheck` GỘP "Kết quả Tool" + "File sửa lỗi" cũ (trước là 2 group `toolCheck`/`errorFile` riêng) thành 1 cột duy nhất, 4 field xếp dọc: `toolResult` → `toolResultNote` → `errorFile` → `errorFileNote`. Áp dụng cho MỌI bảng dùng `buildColGroups` (workshop, `OrdersMiniTable`, `OrderFactoryTab`…).
+
+Thứ tự group MẶC ĐỊNH (mọi role trừ Support) đặt `toolCheck` (gồm cả file lỗi) ngay sau `product`, TRƯỚC `factory` (soát kết quả Tool + file sửa lỗi là bước đầu tiên cần thấy). Role Support dùng `SUPPORT_GROUP_ORDER` cùng thứ tự này. Member field nào bị ẩn quyền thì loại khỏi group; group rỗng hết member thì ẩn cả cột.
 
 - **Label cho field không còn cột riêng**: field không thuộc `HEADLINE_KEYS` (`productionId`, `mockupTypeSize`, `factoryMachine` — đã tự mô tả qua tên/ảnh/badge) được thêm 1 label ngắn phía trước value, lấy từ `FIELD_LABELS` (vd `fabricType` → "Vải", `machineNumber` → "Máy", `productionErrorNote` → "Mô tả").
 - **Width cột** tính theo GROUP (`ColGroupDef.width`, cố định px) thay vì cộng dồn width từng field lẻ — tổng width bảng giảm từ ~3100px (20 cột) xuống ~1500-1700px (8 group + checkbox + action).

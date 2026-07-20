@@ -1,5 +1,5 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
-import { BarChart3, CalendarRange, ImageOff, Users } from 'lucide-react';
+import { BarChart3, CalendarRange, ImageOff, Users, X } from 'lucide-react';
 import { Bar, BarChart, ResponsiveContainer, Tooltip as RTooltip, XAxis, YAxis } from 'recharts';
 import type { ProductBreakdownDesigner, TeamDailyCell, TeamDailyRow } from 'shared';
 import { PRODUCT_LEVEL_MAP } from 'shared';
@@ -7,6 +7,7 @@ import { PRODUCT_LEVEL_MAP } from 'shared';
 import { RepositoryRemote } from '@/services';
 
 import { DateRangePicker } from '@/components/common/DateRangePicker';
+import { Spinner } from '@/components/common/Spinner';
 
 import { handleAxiosError } from '@/utils';
 import { cn } from '@/utils/cn';
@@ -151,6 +152,55 @@ export function StatusBarCharts({ type, customer, filterDays, filterFrom, filter
   const chartData = mode === 'designer' ? designerData : dayData;
   const isEmpty = !loading && chartData.length === 0;
 
+  // ── Panel "thống kê 7 ngày" khi bấm cột 1 designer (mode designer) ──────
+  // Data RIÊNG, LUÔN 7 ngày gần nhất (không theo date-range của biểu đồ):
+  // team-daily-breakdown (per-day 4 trạng thái) + product-breakdown (sản phẩm).
+  const [selDesigner, setSelDesigner] = useState<{ userId: string; name: string } | null>(null);
+  const [weekData, setWeekData] = useState<Data | null>(null);
+  const [weekProducts, setWeekProducts] = useState<Record<string, ProductBreakdownDesigner> | null>(null);
+  const [weekLoading, setWeekLoading] = useState(false);
+  const weekSeqRef = useRef(0);
+  const panelRef = useRef<HTMLDivElement>(null);
+
+  // Đổi bộ lọc chung → cache 7 ngày cũ không còn đúng.
+  useEffect(() => {
+    setWeekData(null);
+    setWeekProducts(null);
+  }, [type, customer]);
+
+  useEffect(() => {
+    if (!selDesigner || (weekData && weekProducts)) return;
+    const seq = ++weekSeqRef.current;
+    (async () => {
+      try {
+        setWeekLoading(true);
+        const common = { days: 7 as const, ...(type ? { type } : {}), ...(customer ? { customer } : {}) };
+        const [teamRes, prodRes] = await Promise.all([
+          RepositoryRemote.designer.teamDailyBreakdown(common),
+          RepositoryRemote.designer.productBreakdown(common),
+        ]);
+        if (seq !== weekSeqRef.current) return;
+        setWeekData((teamRes.data?.data as Data) || EMPTY);
+        const list = (prodRes.data?.data?.designers || []) as ProductBreakdownDesigner[];
+        setWeekProducts(Object.fromEntries(list.map((d) => [d.userId, d])));
+      } catch (err) {
+        if (seq === weekSeqRef.current) handleAxiosError(err);
+      } finally {
+        if (seq === weekSeqRef.current) setWeekLoading(false);
+      }
+    })();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [selDesigner, weekData, weekProducts]);
+
+  useEffect(() => {
+    if (selDesigner) panelRef.current?.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+  }, [selDesigner]);
+
+  const handleBarClick = (payload?: { userId?: string; name?: string }) => {
+    if (mode !== 'designer' || !payload?.userId) return;
+    setSelDesigner({ userId: payload.userId, name: payload.name || '' });
+  };
+
   return (
     <div className="rounded-lg border border-border bg-card">
       {/* Header: toggle + controls */}
@@ -226,7 +276,7 @@ export function StatusBarCharts({ type, customer, filterDays, filterFrom, filter
         ))}
         <span className="ml-auto text-[10px]">
           {mode === 'designer'
-            ? 'Mỗi cột = 1 designer, chuẩn hóa 100% theo trạng thái (xong hết → 100% xanh).'
+            ? 'Mỗi cột = 1 designer, chuẩn hóa 100% theo trạng thái. Bấm cột → thống kê 7 ngày bên dưới.'
             : 'Mỗi cột = 1 ngày, chiều cao = số đơn. Hover xem chi tiết.'}
         </span>
       </div>
@@ -236,12 +286,18 @@ export function StatusBarCharts({ type, customer, filterDays, filterFrom, filter
         {isEmpty ? (
           <p className="text-xs text-muted-foreground text-center py-16">Không có dữ liệu trong khoảng đã chọn.</p>
         ) : (
-          <div style={{ width: '100%', height: 320 }}>
+          <div style={{ width: '100%', height: 320 }} className={mode === 'designer' ? 'cursor-pointer' : undefined}>
             <ResponsiveContainer>
               <BarChart
                 data={chartData}
                 stackOffset={mode === 'designer' ? 'expand' : 'none'}
                 margin={{ top: 8, right: 8, left: mode === 'designer' ? 0 : -12, bottom: mode === 'designer' ? 40 : 4 }}
+                onClick={(state) =>
+                  handleBarClick(
+                    (state as { activePayload?: { payload?: { userId?: string; name?: string } }[] })
+                      ?.activePayload?.[0]?.payload,
+                  )
+                }
               >
                 <XAxis
                   dataKey="name"
@@ -268,6 +324,168 @@ export function StatusBarCharts({ type, customer, filterDays, filterFrom, filter
             </ResponsiveContainer>
           </div>
         )}
+      </div>
+
+      {/* Panel thống kê 7 ngày của designer vừa bấm (chỉ mode "Theo designer"). */}
+      {mode === 'designer' && selDesigner && (
+        <div ref={panelRef} className="border-t border-indigo-300 dark:border-indigo-800">
+          <div className="flex items-center gap-2 px-3 py-2 border-b border-border bg-muted/20">
+            <Users size={14} className="text-indigo-600 shrink-0" />
+            <span className="text-sm font-semibold">{selDesigner.name}</span>
+            <span className="text-[11px] text-muted-foreground">— thống kê 7 ngày gần nhất (theo ngày vào SX)</span>
+            {weekLoading && <Spinner size={12} className="text-muted-foreground" />}
+            <button
+              type="button"
+              onClick={() => setSelDesigner(null)}
+              className="ml-auto inline-flex items-center gap-1 text-[11px] text-muted-foreground hover:text-foreground"
+            >
+              <X size={13} /> Đóng
+            </button>
+          </div>
+          {weekLoading && !weekData ? (
+            <div className="py-8 text-center">
+              <Spinner size={16} className="text-muted-foreground" />
+            </div>
+          ) : (
+            <WeekStatsPanel
+              userId={selDesigner.userId}
+              data={weekData || EMPTY}
+              products={weekProducts?.[selDesigner.userId]}
+            />
+          )}
+        </div>
+      )}
+    </div>
+  );
+}
+
+/**
+ * Nội dung panel 7 ngày: 4 chip tổng trạng thái + bảng 4 trạng thái × 7 ngày +
+ * bảng sản phẩm designer làm trong 7 ngày (mockup + level + count).
+ */
+function WeekStatsPanel({
+  userId,
+  data,
+  products,
+}: {
+  userId: string;
+  data: Data;
+  products?: ProductBreakdownDesigner;
+}) {
+  // BE trả ngày mới→cũ → đảo để hiển thị quá khứ→hiện tại (đồng bộ index cells).
+  const row = data.rows.find((r) => r.userId === userId);
+  const days = useMemo(() => [...data.days].reverse(), [data.days]);
+  const cells = useMemo(() => (row ? [...row.cells].reverse() : []), [row]);
+  const totals = row?.totals;
+
+  return (
+    <div className="p-3 space-y-3">
+      {/* 4 chip tổng — cùng bộ màu/label với legend biểu đồ. */}
+      <div className="flex flex-wrap gap-2">
+        {STATUS.map((s) => {
+          const v = totals ? totals[s.key as keyof TeamDailyCell] : 0;
+          return (
+            <span
+              key={s.key}
+              className="inline-flex items-center gap-1.5 rounded-md border border-border px-2 py-1 text-[11px]"
+            >
+              <span className="w-2 h-2 rounded-sm" style={{ backgroundColor: s.color }} />
+              {s.label}
+              <span className="tabular-nums font-semibold">{v}</span>
+            </span>
+          );
+        })}
+      </div>
+
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-3">
+        {/* Bảng 4 trạng thái × 7 ngày */}
+        <div className="rounded-md border border-border overflow-x-auto">
+          <table className="w-full text-[12px] tabular-nums">
+            <thead>
+              <tr className="text-[11px] text-muted-foreground border-b border-border">
+                <th className="text-left font-medium px-2.5 py-1.5 min-w-[90px]">Trạng thái</th>
+                {days.map((d) => (
+                  <th key={d} className="text-center font-medium px-1.5 py-1.5 border-l border-border/60">
+                    {dm(d)}
+                  </th>
+                ))}
+                <th className="text-center font-semibold px-2 py-1.5 border-l border-border bg-muted/30">Tổng</th>
+              </tr>
+            </thead>
+            <tbody>
+              {STATUS.map((s) => (
+                <tr key={s.key} className="border-b border-border/50 last:border-0 hover:bg-muted/30">
+                  <td className="px-2.5 py-1.5">
+                    <span className="inline-flex items-center gap-1.5 font-medium">
+                      <span className="w-2 h-2 rounded-sm shrink-0" style={{ backgroundColor: s.color }} />
+                      {s.label}
+                    </span>
+                  </td>
+                  {days.map((d, i) => {
+                    const v = cells[i]?.[s.key as keyof TeamDailyCell] ?? 0;
+                    return (
+                      <td key={d} className="text-center px-1.5 py-1.5 border-l border-border/40">
+                        {v === 0 ? <span className="text-muted-foreground/30">·</span> : v}
+                      </td>
+                    );
+                  })}
+                  <td className="text-center px-2 py-1.5 border-l border-border bg-muted/30 font-semibold">
+                    {totals ? totals[s.key as keyof TeamDailyCell] : 0}
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+          {!row && (
+            <p className="text-[11px] text-muted-foreground text-center py-3">
+              Không có đơn nào trong 7 ngày gần nhất.
+            </p>
+          )}
+        </div>
+
+        {/* Sản phẩm designer làm trong 7 ngày */}
+        <div className="rounded-md border border-border">
+          <div className="px-2.5 py-1.5 text-[11px] text-muted-foreground border-b border-border">
+            Sản phẩm trong 7 ngày
+            {products && (
+              <span>
+                {' '}
+                — {products.products.length} sản phẩm · {products.total} đơn
+              </span>
+            )}
+          </div>
+          {!products || products.products.length === 0 ? (
+            <p className="text-[11px] text-muted-foreground text-center py-4">Không có sản phẩm nào.</p>
+          ) : (
+            <div className="max-h-56 overflow-y-auto divide-y divide-border/50">
+              {products.products.map((p) => (
+                <div key={p.type} className="flex items-center gap-2 px-2.5 py-1.5 text-[12px]">
+                  {p.mockup ? (
+                    <img
+                      src={p.mockup}
+                      alt=""
+                      className="w-8 h-8 rounded object-cover border border-border bg-muted shrink-0"
+                    />
+                  ) : (
+                    <span className="w-8 h-8 rounded border border-dashed border-border flex items-center justify-center text-muted-foreground shrink-0">
+                      <ImageOff size={12} />
+                    </span>
+                  )}
+                  {p.level != null && (
+                    <span
+                      className="text-[9px] px-1 py-0.5 rounded text-white shrink-0"
+                      style={{ backgroundColor: PRODUCT_LEVEL_MAP[p.level]?.color }}
+                    >
+                      Lv{p.level}
+                    </span>
+                  )}
+                  <span className="flex-1 min-w-0 truncate">{p.fullName || p.type}</span>
+                  <span className="tabular-nums font-semibold shrink-0">{p.count}</span>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
       </div>
     </div>
   );

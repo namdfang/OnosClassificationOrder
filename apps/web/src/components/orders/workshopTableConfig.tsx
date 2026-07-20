@@ -43,7 +43,8 @@ export type WorkshopOrderRow = {
   originalFactoryId?: string;
   factoryId?: string;
   isMapped?: boolean;
-  productConfig?: { fullName?: string };
+  productConfigId?: string;
+  productConfig?: { fullName?: string; shortName?: string; mockup?: string; level?: number };
 
   priority?: number;
   printStatus?: string;
@@ -650,7 +651,6 @@ export type ColGroupKey =
   | 'factory'
   | 'print'
   | 'toolCheck'
-  | 'errorFile'
   | 'productionError'
   | 'assignee';
 
@@ -672,10 +672,14 @@ export const BASE_GROUP_DEFS: ColGroupDef[] = [
     memberKeys: ['productionId', 'priority', 'userSku', 'typeFullName'],
   },
   { key: 'product', title: 'Sản phẩm', width: 300, memberKeys: ['mockupTypeSize'] },
-  { key: 'toolCheck', title: 'Kết quả Tool', width: 170, memberKeys: ['toolResult', 'toolResultNote'] },
+  {
+    key: 'toolCheck',
+    title: 'Kết quả Tool / File lỗi',
+    width: 270,
+    memberKeys: ['toolResult', 'toolResultNote', 'errorFile', 'errorFileNote'],
+  },
   { key: 'factory', title: 'Xưởng · Vải · Máy', width: 190, memberKeys: ['factoryMachine', 'fabricType', 'machineNumber'] },
   { key: 'print', title: 'Trạng thái in', width: 150, memberKeys: ['printStatus', 'printStatusNote'] },
-  { key: 'errorFile', title: 'File sửa lỗi', width: 180, memberKeys: ['errorFile', 'errorFileNote'] },
   {
     key: 'productionError',
     title: 'Lỗi xưởng',
@@ -691,7 +695,6 @@ export const SUPPORT_GROUP_ORDER: ColGroupKey[] = [
   'identity',
   'product',
   'toolCheck',
-  'errorFile',
   'factory',
   'print',
   'productionError',

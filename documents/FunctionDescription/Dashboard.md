@@ -8,7 +8,7 @@
 > **Tab A — Thống kê đơn & sản phẩm:** `apps/web/src/pages/home/OrderStatsTab.tsx`. Filter top bar dùng chung `<OrderFilterBar>` — xem `Orders.md §10.3`. 2 search field (`searchType` main + `searchUser` qua `topActionsRight`); auto-fetch debounce 300ms.
 > **Tab B — Tình trạng:** `apps/web/src/pages/home/OrderStatusTab.tsx` + `status/{KpiCard,BreakdownCard,StatusFilterExtras,OrdersMiniTable,useStatusFilter}.tsx`. Filter top bar dùng chung `<OrderFilterBar>` (apps/web/src/components/orders/OrderFilterBar.tsx) — xem `Orders.md §10.3`.
 > **Tab C — Đơn theo xưởng:** `apps/web/src/pages/home/OrderFactoryTab.tsx` + `apps/web/src/pages/home/exportOrders.ts` (XLSX builder)
-> **Tab D — Designer:** `apps/web/src/pages/home/DesignerStatsTab.tsx` (+ `DesignerDailyOverview.tsx`, `DesignerAssignBacklog.tsx`, `TeamDailyMatrix.tsx`, `StatusBarCharts.tsx`) — Admin/Manager/Leader **+ Designer (sub)** (perm `page.designer_stats`)
+> **Tab D — Designer:** `apps/web/src/pages/home/DesignerStatsTab.tsx` (+ `DesignerDailyOverview.tsx`, `DesignerDrillPanel.tsx`, `DesignerAssignBacklog.tsx`, `TeamDailyMatrix.tsx`, `StatusBarCharts.tsx`) — Admin/Manager/Leader **+ Designer (sub)** (perm `page.designer_stats`)
 > **File BE:** `apps/api/src/modules/order/order.service.ts` → `getDashboard()`, `getStatusOverview()`, `getFactoryOverview()`, `exportOrders()`, `transferOrder()`, `bulkTransferOrders()` + `apps/api/src/modules/designer/designer-stats.service.ts` → `getPerformance()`, `getTimeline()`, `getErrorStats()`, `getTeamDailyBreakdown()`
 > **Route:** `/dashboard?tab=stats|status|factory|designer`
 > **API:**
@@ -17,7 +17,7 @@
 >  - `GET /v1/orders/factory-overview` (Tab C)
 >  - `GET /v1/orders/export` (Tab C — full-list export, không phân trang)
 >  - `PATCH /v1/orders/:id/transfer` + `PATCH /v1/orders/bulk-transfer` (Tab C — chuyển xưởng)
->  - `GET /v1/designer/performance` + `/timeline/:userId` + `GET /v1/orders/error-stats` (Tab D)
+>  - `GET /v1/designer/performance` + `/timeline/:userId` + `GET /v1/orders/error-stats` (Tab D — **tạm KHÔNG gọi**, legacy stats tắt qua `SHOW_LEGACY_STATS=false`)
 
 ---
 
@@ -65,7 +65,7 @@ Data từ `GET /v1/orders/factory-overview` + `GET /v1/orders?sort=grouped&...` 
 
 **Chỉ hiển thị khi user có perm `page.designer_stats`** (DesignerLeader / Admin / Manager **+ Designer sub** — sub-designer cũng xem được thống kê toàn team). BE: 5 endpoint tab (`designer-stats.controller.ts`, const `LEADER_ROLES`) đã bao gồm `RoleType.Designer`. Xem `DesignerTaskWorkflow.md` để hiểu workflow tổng.
 
-Layout (thứ tự render trên tab: **Bộ lọc chung → Tổng quan N ngày → Cần gán designer → Biểu đồ cột cơ cấu → Ma trận toàn team → Period switcher → Leaderboard → Timeline → Error pie**). Đánh số dưới đây theo nhóm chức năng, không theo thứ tự dọc:
+Layout (thứ tự render trên tab: **Bộ lọc chung → Tổng quan N ngày → panel drill-down inline (khi bấm số) → Cần gán designer → Biểu đồ cột cơ cấu → Ma trận toàn team → nút "Làm mới"**). **Period switcher + Leaderboard + Timeline + Error pie TẠM TẮT** — flag `SHOW_LEGACY_STATS = false` trong `DesignerStatsTab.tsx` (code giữ nguyên để bật lại), KHÔNG gọi 3 API `designer/performance` / `designer/timeline/:userId` / `orders/error-stats`. Đánh số dưới đây theo nhóm chức năng, không theo thứ tự dọc:
 
 **0. Bộ lọc chung sản phẩm + khách hàng + switcher ngày** (card `Filter` render **ĐẦU TIÊN trên cùng tab**):
 - 2 dropdown `<SelectFilter>` (native select có count + typeahead): **Sản phẩm** (`order.type`) + **Khách hàng** (`order.userSku`). State `filterType`/`filterCustomer`, truyền **props `type`/`customer`** xuống StatusBarCharts + TeamDailyMatrix + DesignerDailyOverview + DesignerAssignBacklog.
@@ -78,7 +78,7 @@ Layout (thứ tự render trên tab: **Bộ lọc chung → Tổng quan N ngày 
 - **Gom theo sản phẩm** (`productConfigId` → mockup/level/fullName; đơn chưa map → nhóm **"Chưa map"**). Mỗi nhóm header: checkbox chọn-cả-nhóm (tristate) + thu/mở + **ảnh mockup** (click → `ImagePreviewDialog`) + **badge level** + tên + count.
 - **Mở nhóm** → bảng đơn **ĐẦY ĐỦ inline** (giống bảng workshop / drill-down §0b): checkbox chọn + **nhóm cột nghiệp vụ** `buildColGroups`/`GroupCellContent`/`WORKSHOP_COLS` (Mã đơn·Ưu tiên · Sản phẩm · Kết quả Tool · Xưởng·Vải·Máy · Trạng thái in · File lỗi · Lỗi xưởng · Người TH…). **Lazy-load per-nhóm** qua `GET /v1/orders/by-ids?ids=<CSV _id>` (`order.service.getOrdersByIds` — populate factory/machineType/productConfig, **KHÔNG scoping role** vì đơn CHƯA gán, nếu dùng `getOrders` role Designer sẽ bị lọc `assignee=self` → ẩn hết); cache theo `g.key` trong state `fullRows`, xóa khi refetch pool. Inline edit field qua `patchRow` (đổi state cục bộ), ảnh qua `openPreview`.
 - **Chip đếm ngược hạn design** (`getStageDeadline(priority,'designer',inProductionAt)` + `formatCountdown`, đơn ở đây CHƯA chạy bước designer nên mốc = `inProductionAt`, xem `Orders.md §17.4`) gắn cạnh badge **Ưu tiên** trong group `identity` qua prop `extra` của `GroupCellContent`.
-- **Chọn đơn lẻ / cả nhóm** → nút **"Gán design (N)"** mở `AssignDesignerDialog` (tái dùng preview + `bulk-assign-designer`). Gán xong → refetch bảng này + `onAssigned()` bump `matrixToken` → **Tổng quan refetch cập nhật số Tổng tồn/Chưa gán**.
+- **Chọn đơn lẻ / cả nhóm** → nút **"Gán design (N)"** mở `AssignDesignerDialog` (tái dùng preview + `bulk-assign-designer`). 2 nút **"Gán design"** / **"Nhận về mình"** **LUÔN hiển thị** (theo role), **mờ/`disabled` khi chưa chọn đơn nào** — không còn ẩn cả cụm khi selection rỗng; "Bỏ chọn" chỉ hiện khi có chọn. Gán xong → refetch bảng này + `onAssigned()` bump `matrixToken` → **Tổng quan refetch cập nhật số Tổng tồn/Chưa gán**.
 - Data từ `GET /v1/designer/assign-backlog?days=7|14|30` (+ `type`/`customer`). v1 trả full compact rows (thu/mở chỉ là UI).
 
 **0b. Bảng "Tổng quan N ngày"** (`DesignerDailyOverview.tsx` — render **NGAY DƯỚI bộ lọc, TRÊN bảng cần gán**; nhận `days` từ switcher §0 (bỏ switcher nội bộ); cột = ngày `inProductionAt` VN, cũ→mới trái→phải; BE trả mới→cũ, FE `reverse()` days+rows):
@@ -86,17 +86,17 @@ Layout (thứ tự render trên tab: **Bộ lọc chung → Tổng quan N ngày 
   - **Tổng đơn** — tất cả đơn vào SX ngày đó (mọi trạng thái). `total`.
   - **Tổng xong** — `toolResultNote === 'ok'` (đã soát xong, không lỗi). `ok`. Màu emerald.
   - **Chưa soát** — `toolResultNote` rỗng/null. `unreviewed`.
-  - **Tổng lỗi** — `toolResultNote` set & ≠ `''` & ≠ `ok` (lỗi thật); mỗi ô có **tooltip Radix** breakdown theo từng mã note (resolve code→name qua `workshopConfigStore` category `tool_result_note`). `error`.
+  - **Tổng lỗi** — hiển thị dạng **`còn lại/tổng phát sinh`** (vd `3/8`): `error` = `toolResultNote` set & ≠ `''` & ≠ `ok` (lỗi CÒN LẠI hiện tại) / `errorTotal` = đơn TỪNG lỗi trong ngày kể cả đã sửa xong (note lỗi hiện tại ∨ `productionErrorCount>0` ∨ `designerReworkCount>0` — best-effort, đơn lỗi từ file soát đã sửa có thể không đếm được 100%). Mỗi ô có **tooltip Radix**: breakdown theo từng mã note (resolve code→name qua `workshopConfigStore` category `tool_result_note`) + dòng **Chưa gán designer** (`errorUnassigned` = đơn đang lỗi & `assignee` rỗng) + dòng **Đã sửa xong** (`errorTotal − error`). `error=0` & `errorTotal>0` → hiện `0/N` xanh emerald, không bấm được.
   - **Tổng tồn** — `toolResultNote ≠ 'ok'` = **Chưa soát + Tổng lỗi** (`backlog = unreviewed + error`). **Click hàng → xổ bảng con**: header hiện `Tổng tồn = Chưa soát {unreviewed} + Lỗi {error}` + bảng `backlogByDesigner` (designer × Cần làm/Đang làm/Làm lại, theo `designerStatus`; **"Không làm được"/rejected KHÔNG tính là tồn** — nằm ở backlog "Cần gán") + dòng **"Chưa gán"** (`unassignedBacklog` = `designerStatus=unassigned`); ẩn designer tồn = 0.
 - **Bất biến sạch:** `Tổng đơn = Tổng xong + Tổng tồn`, và `Tổng tồn = Chưa soát + Tổng lỗi`. (Đổi từ định nghĩa cũ `backlog = designerStatus ≠ done` → thuần theo Tool để 2 bất biến này đúng.)
-- **Drill-down (bấm con số → modal đơn):** MỌI con số > 0 đều click được → mở `<OrderListDialog>` (`apps/web/src/components/orders/OrderListDialog.tsx`) — modal full màn hình, bảng đơn layout **giống `OrderFactoryTab`** (cột Xưởng + nhóm cột nghiệp vụ `buildColGroups`/`GroupCellContent`, preview ảnh + lịch sử, phân trang 20/trang). **Fetch qua `GET /v1/orders/overview-list` — KHÔNG scoping theo role** nên **mọi role thấy cùng tập đơn khớp con số như admin** (con số overview là team-wide/unscoped; nếu dùng `GET /orders` thì role Designer bị ép `assignee=self`, Fulfillment bị scope xưởng → ra rỗng). Cột hiển thị vẫn **lọc theo quyền** qua `canViewField`. Query build client-side (param `createdFrom`/`createdTo` = lọc `inProductionAt`; `sort=grouped`; + `type`/`customer` từ bộ lọc chung), map metric → `toolResultNote`:
+- **Drill-down (bấm con số → panel INLINE, KHÔNG còn dialog):** MỌI con số > 0 (5 hàng chỉ số + cả bảng con "Tồn theo designer") đều click được → đổ vào **`<DesignerDrillPanel>`** (`apps/web/src/pages/home/DesignerDrillPanel.tsx`) — panel hiện **NGAY DƯỚI card Tổng quan, TRÊN bảng "Cần gán designer"** (sibling qua `space-y` của tab; auto `scrollIntoView`), có tiêu đề + nút Đóng; bấm con số khác → panel thay nội dung. Bảng đơn **gom nhóm theo SẢN PHẨM giống `DesignerAssignBacklog`** (header nhóm: mockup click preview + badge level + tên + count; **mặc định THU GỌN mọi nhóm** — bấm nhóm mới mở → bảng cột workshop `buildColGroups`/`GroupCellContent`, inline edit theo quyền + nút Lịch sử `OrderLogTimelineDialog`; nhóm build client-side theo `productConfigId`, đơn chưa map → nhóm "Chưa map"). **Đơn CHƯA map** → nút **"Gán xưởng"** (amber, chỉ `isAdmin || order.transfer`) cạnh ô Xưởng (qua `extra` của `GroupCellContent`) → mở `AssignFactoryDialog` (**export từ `OrderFactoryTab.tsx`**, prop `factories: AssignFactoryOption[]` — panel map từ `GET /v1/factories` lazy-load; `OrderFactoryTab` vẫn truyền `overview.factories`); gán xong → panel refetch (giữ nguyên nhóm đang mở, chỉ thu gọn khi đổi con số). **Fetch qua `GET /v1/orders/overview-list` — KHÔNG scoping theo role** nên **mọi role thấy cùng tập đơn khớp con số như admin** (con số overview là team-wide/unscoped; nếu dùng `GET /orders` thì role Designer bị ép `assignee=self`, Fulfillment bị scope xưởng → ra rỗng); fetch 1 lần `limit=500` (total > 500 → chú thích "hiển thị N đơn đầu"). `getOrders` populate thêm `productConfig (fullName/shortName/mockup/level)` để panel có ảnh/level nhóm. Cột hiển thị vẫn **lọc theo quyền** qua `canViewField`. Query build client-side (param `createdFrom`/`createdTo` = lọc `inProductionAt`; `sort=grouped`; + `type`/`customer` từ bộ lọc chung), map metric → `toolResultNote`:
   - Ô ngày → `createdFrom=createdTo=day`; ô cột **Tổng** → `days[0]..days[last]` (cả kỳ).
   - **Tổng đơn** = không lọc note · **Tổng xong** = `toolResultNote=ok` · **Chưa soát** = `toolResultNote=__none__` · **Tổng lỗi** = `toolResultNote=<union mã note lỗi>` (1 ngày lấy `row.errorByNote`, cột Tổng lấy `allErrorCodes` gộp mọi ngày) · **Tổng tồn** = `toolResultNote=__none__,<mã lỗi>` (chưa soát + lỗi). Số trên hàng "Tổng tồn" `stopPropagation` để không toggle bảng con.
   - Bảng con "Tồn theo designer": ô Cần làm/Đang làm/Làm lại/Tổng click được → `getOrders?assignee=<userId>&designerStatus=assigned|in-progress|rework[,...]` (cùng range `inProductionAt` cả kỳ). Dòng "Chưa gán" **không** click (lăng kính `designerStatus=unassigned` lệch filter `getOrders`).
-- Data từ `GET /v1/designer/daily-overview?days=7|14|30` (+ `type`/`customer` từ bộ lọc chung). Nhận `reloadToken` (= `matrixToken`). Seq-guard chống race.
+- Data từ `GET /v1/designer/daily-overview?days=7|14|30` (+ `type`/`customer` từ bộ lọc chung). Row + `columnTotals` có thêm **`errorTotal`** + **`errorUnassigned`** (DTO `DailyOverviewRowZod`/`DailyOverviewColumnTotalsZod`, agg trong `DesignerStatsService.getDailyOverview`). Nhận `reloadToken` (= `matrixToken`). Seq-guard chống race.
 - **Lưu ý QA:** bảng con "Tồn theo designer" là **lăng kính `designerStatus`** (chỉ đơn ĐÃ gán ở assigned/in-progress/rework + dòng Chưa gán; **rejected/"Không làm được" KHÔNG tính**) → tổng của nó (`backlogGrand`) **có thể lệch** với "Tổng tồn" (theo Tool, gồm cả đơn chưa soát chưa ai xử lý). Đã ghi chú rõ trong header bảng con. Số "Chưa soát" hiển thị luôn để đối chiếu.
 
-**1. Leaderboard table** (`<Table>` shadcn) — sort theo `completedInPeriod` desc, auto-include sub-designer chưa có task (row count 0):
+**1. Leaderboard table** — **TẠM TẮT** (`SHOW_LEGACY_STATS=false`, không gọi `GET /v1/designer/performance`; code giữ nguyên) — (`<Table>` shadcn) sort theo `completedInPeriod` desc, auto-include sub-designer chưa có task (row count 0):
 
 | Cột | Mô tả |
 |-----|-------|
@@ -126,20 +126,21 @@ Click row → set `selectedUserId` → reload timeline chart.
   - **Lưu ý:** breakdown dùng bộ lọc chung, có thể KHÁC date-range riêng của cột (bars). Nếu 1 designer có quá nhiều sản phẩm tooltip sẽ cao.
   - **Theo designer:** mỗi **cột = 1 designer** (chỉ người có đơn), **stack 100%** (`stackOffset="expand"`, YAxis %) → xong hết = 100% xanh. Có **date-range RIÊNG** (`DateRangePicker`, mặc định 30 ngày) → gọi `team-daily-breakdown?from=&to=`, lấy `rows[].totals`.
   - **Theo ngày:** mỗi **cột = 1 ngày** (cũ→mới trái→phải), **stack số lượng** (`stackOffset="none"`) → thấy khối lượng/ngày. Switcher **7/14/30** + dropdown **lọc theo người** (Tất cả = `columnTotals`; 1 người = `rows[].cells`). Gọi `team-daily-breakdown?days=`.
+- **Bấm cột 1 designer (mode "Theo designer") → panel "thống kê 7 ngày"** hiện dưới biểu đồ (`WeekStatsPanel` cùng file; click bắt qua `BarChart onClick` → `activePayload.userId`; auto `scrollIntoView`; nút Đóng): header tên designer + **4 chip tổng trạng thái** + **bảng 4 trạng thái × 7 ngày** (cột = ngày cũ→mới + Tổng) + **bảng sản phẩm designer làm trong 7 ngày** (mockup + badge level + tên + count, max-height scroll). Data RIÊNG **LUÔN 7 ngày gần nhất** (`team-daily-breakdown?days=7` + `product-breakdown?days=7`, kèm `type`/`customer` bộ lọc chung) — KHÔNG theo date-range của biểu đồ (mặc định 30 ngày); cache 1 lần, reset khi đổi bộ lọc chung.
 - Cả 2 chế độ tái dùng **cùng endpoint** `GET /v1/designer/team-daily-breakdown` (đã bổ sung nhận `from`/`to` + `type`/`customer`; range tùy chỉnh cap 100 cột nhưng `totals` tính TRỰC TIẾP từ agg nên luôn đúng dù cap). Nhận props `type`/`customer` từ bộ lọc chung (§0) → refetch khi đổi. Fetch độc lập, seq-guard chống race.
 
-**3. Timeline per-designer** (Recharts `LineChart`, 4 series: assigned / started / completed / rework):
+**3. Timeline per-designer** — **TẠM TẮT** (`SHOW_LEGACY_STATS=false`, không gọi `GET /v1/designer/timeline/:userId`) — (Recharts `LineChart`, 4 series: assigned / started / completed / rework):
 - Dropdown chọn designer (default = top leaderboard)
 - Bucket per-day timezone Asia/Ho_Chi_Minh, fill mọi ngày trong period kể cả 0
 - 4 line colors: zinc / indigo / emerald / amber
 - Data từ `GET /v1/designer/timeline/:userId`
 
-**4. Error source pie + breakdown** (Recharts `PieChart`):
+**4. Error source pie + breakdown** — **TẠM TẮT** (`SHOW_LEGACY_STATS=false`, không gọi `GET /v1/orders/error-stats`) — (Recharts `PieChart`):
 - 3 slice: designer (violet) / factory (sky) / unknown (slate) — split theo `order.productionErrorSource`
 - List dưới: từng productionError code với count + dot color theo source
 - Data từ `GET /v1/orders/error-stats`
 
-**Period switcher** `today | 7d | 30d | custom` — ảnh hưởng Leaderboard + Timeline + Error pie. Custom có **`<DateRangePresets>`** (Hôm nay/Tuần này/Tháng này… từ `utils/dateRangePresets.ts`) + 2 date input. **Bảng Tổng quan + Cần gán + Ma trận KHÔNG dùng period này** — dùng switcher 7/14/30 ở Bộ lọc chung (hoặc riêng của ma trận).
+**Period switcher** `today | 7d | 30d | custom` — **TẠM ẨN cùng 3 khối legacy** (chỉ phục vụ Leaderboard + Timeline + Error pie; thay bằng nút **"Làm mới"** bump `matrixToken`). Custom có **`<DateRangePresets>`** (Hôm nay/Tuần này/Tháng này… từ `utils/dateRangePresets.ts`) + 2 date input. **Bảng Tổng quan + Cần gán + Ma trận KHÔNG dùng period này** — dùng switcher 7/14/30 ở Bộ lọc chung (hoặc riêng của ma trận).
 
 ---
 

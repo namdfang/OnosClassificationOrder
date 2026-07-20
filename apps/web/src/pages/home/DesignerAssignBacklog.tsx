@@ -212,17 +212,20 @@ export function DesignerAssignBacklog({ days = 7, from, to, type, customer, relo
             — {total} đơn (chưa gán / không làm được / làm lại chưa ôm, đã soát ≠ ok)
           </span>
         </div>
-        {selectedCount > 0 && (
+        {(canClaimSelf || canAssignOthers) && (
           <div className="flex items-center gap-2">
-            <button
-              type="button"
-              onClick={() => setSelected(new Set())}
-              className="text-[11px] text-muted-foreground hover:text-foreground"
-            >
-              Bỏ chọn ({selectedCount})
-            </button>
+            {selectedCount > 0 && (
+              <button
+                type="button"
+                onClick={() => setSelected(new Set())}
+                className="text-[11px] text-muted-foreground hover:text-foreground"
+              >
+                Bỏ chọn ({selectedCount})
+              </button>
+            )}
+            {/* Nút luôn hiển thị — mờ (disabled) khi chưa chọn đơn nào. */}
             {canClaimSelf && (
-              <Button size="sm" onClick={handleClaimSelf} disabled={claiming}>
+              <Button size="sm" onClick={handleClaimSelf} disabled={claiming || selectedCount === 0}>
                 <Grab size={13} />
                 Nhận về mình ({selectedCount})
               </Button>
@@ -232,7 +235,7 @@ export function DesignerAssignBacklog({ days = 7, from, to, type, customer, relo
                 size="sm"
                 variant={canClaimSelf ? 'outline' : 'default'}
                 onClick={() => setAssignOpen(true)}
-                disabled={claiming}
+                disabled={claiming || selectedCount === 0}
               >
                 <UserPlus size={13} />
                 Gán design ({selectedCount})
