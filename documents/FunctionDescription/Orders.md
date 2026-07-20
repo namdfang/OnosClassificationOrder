@@ -9,7 +9,7 @@
 > **File BE:** `apps/api/src/modules/order/`
 > **Route:** `/orders`
 > **API:**
->  - `GET /v1/orders` · `GET /v1/orders/:id` · `GET /v1/orders/grouped` · `GET /v1/orders/by-ids` · `GET /v1/orders/workshop-filters` · `GET /v1/orders/fulfillment-status-counts` · `GET /v1/orders/import-summary` · `GET /v1/orders/error-log`
+>  - `GET /v1/orders` · `GET /v1/orders/:id` · `GET /v1/orders/grouped` · `GET /v1/orders/overview-list` · `GET /v1/orders/by-ids` · `GET /v1/orders/workshop-filters` · `GET /v1/orders/fulfillment-status-counts` · `GET /v1/orders/import-summary` · `GET /v1/orders/error-log`
 >  - `GET /v1/orders/export` (full-list, không phân trang — xem `Dashboard.md §10.3`)
 >  - `GET /v1/orders/factory-overview` (xem `Dashboard.md §10.2`)
 >  - `GET /v1/orders/designer-breakdown` (KPI panel Designer — xem `DesignerTaskWorkflow.md §2.5`)
@@ -296,6 +296,7 @@ GET /v1/orders/import-from-onospod/cron
 |--------|------|-------|
 | GET | `/v1/orders` | List (filter + paginate, visibility filter theo role) — cache 60s key có gắn `role` |
 | GET | `/v1/orders/grouped` | Phân trang theo **product type** thay vì row (Phase 4 — workshop cần combo toàn vẹn) |
+| GET | `/v1/orders/overview-list` | Giống `GET /orders` (cùng filter: date/toolResultNote/assignee/designerStatus…) NHƯNG **KHÔNG áp visibility filter theo role** → gọi `getOrders(dto)` với `roleName=undefined`. Dùng cho **drill-down bấm con số** ở Dashboard: mọi role (Designer/Support/Fulfillment…) thấy **CÙNG tập đơn** khớp con số như admin; cột hiển thị vẫn lọc theo quyền qua `canViewField` ở FE. Xem `Dashboard.md §0b`. |
 | GET | `/v1/orders/by-ids?ids=<CSV _id>&page&limit` | Lookup đơn theo danh sách `_id`, full workshop fields (populate factory/machineType/productConfig), **KHÔNG áp visibility filter theo role** (`getOrdersByIds`). Dùng cho **lazy-load bảng đơn đầy đủ inline** khi mở rộng 1 nhóm ở "Cần gán designer" Dashboard (nhóm gồm đơn CHƯA gán → `getOrders` sẽ ẩn hết với role Designer do scoping `assignee=self`). Cũng dùng được cho `OrderListDialog` (prop `ids?: string[]`). Xem `Dashboard.md §0c`. |
 | GET | `/v1/orders/dashboard` | Aggregation (xem `Dashboard.md` Tab A) — cache 60s |
 | GET | `/v1/orders/status-overview` | Aggregation (xem `Dashboard.md` Tab B) |
