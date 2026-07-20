@@ -174,11 +174,15 @@ export const LoginZod = z.object({
   email: UserZod.shape.email,
   password: UserZod.shape.password,
   recaptchaToken: z.string(),
+  /** Ghi nhớ đăng nhập — token TTL dài hơn + FE persist qua localStorage thay vì sessionStorage. */
+  rememberMe: z.boolean().optional(),
 });
 export class LoginDto extends createZodDto(extendApi(LoginZod)) {}
 export const LoginResZod = z.object({
   userId: IDZod,
   accessToken: z.string(),
+  /** TTL thật của accessToken (giây) — FE dùng để tính tokenExpiredAt, không hardcode. */
+  expiresIn: z.number(),
   user: UserZod,
   // refreshToken: z.string(),
 });
