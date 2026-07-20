@@ -1477,6 +1477,8 @@ export class OrderService implements OnModuleInit {
     const populate = [
       { path: 'factory', select: ['name', 'shortName'] },
       { path: 'machineType', select: ['name', 'shortName'] },
+      // mockup/level cho panel drill-down Dashboard Designer gom nhóm theo sản phẩm.
+      { path: 'productConfig', select: ['fullName', 'shortName', 'mockup', 'level'] },
     ];
 
     let data: unknown[];

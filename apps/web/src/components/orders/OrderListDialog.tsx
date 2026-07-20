@@ -80,7 +80,9 @@ export function OrderListDialog({ open, onClose, title, query, ids }: Props) {
       const res =
         idsKey != null
           ? await RepositoryRemote.order.getOrdersByIds('?' + sp.toString())
-          : await RepositoryRemote.order.getOrders('?' + sp.toString());
+          : // Drill-down số ở dashboard → list KHÔNG scoping role (mọi role thấy
+            // cùng tập đơn khớp con số; cột vẫn lọc theo quyền qua canViewField).
+            await RepositoryRemote.order.getOverviewList('?' + sp.toString());
       setRows((res.data?.data || []) as WorkshopOrderRow[]);
       setTotal(res.data?.total || 0);
     } catch (err) {

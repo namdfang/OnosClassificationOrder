@@ -1383,7 +1383,15 @@ function FilterChip({
  *      • fabric/machine/toolResult ← `useWorkshopConfigStore` (full catalog).
  *      • machineType ← fetch on dialog open (machineType.getMachineTypes).
  */
-function AssignFactoryDialog({
+/** Shape tối thiểu cho dropdown xưởng — `FactoryOverviewCell` thỏa structurally;
+ *  consumer khác (vd. `DesignerDrillPanel`) map từ `GET /factories`. */
+export interface AssignFactoryOption {
+  factoryId: string;
+  factoryName: string;
+  factoryShortName?: string;
+}
+
+export function AssignFactoryDialog({
   open,
   onOpenChange,
   ids,
@@ -1395,7 +1403,7 @@ function AssignFactoryDialog({
   onOpenChange: (o: boolean) => void;
   ids: string[];
   single?: WorkshopOrderRow;
-  factories: FactoryOverviewCell[];
+  factories: AssignFactoryOption[];
   onSuccess: () => void;
 }) {
   const [factoryId, setFactoryId] = useState('');

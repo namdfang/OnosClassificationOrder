@@ -30,6 +30,11 @@ const getOrdersByIds = (query: string = '') => {
   return callApi(`/${CONFIG.API_VERSION}/orders/by-ids${query}`, 'get');
 };
 
+// Drill-down dashboard — KHÔNG scoping theo role (mọi role thấy cùng tập đơn).
+const getOverviewList = (query: string = '') => {
+  return callApi(`/${CONFIG.API_VERSION}/orders/overview-list${query}`, 'get');
+};
+
 const importOrders = (data: ImportProductionOrdersDto) => {
   return callApi(`/${CONFIG.API_VERSION}/orders/import`, 'post', data);
 };
@@ -197,6 +202,7 @@ const updateOrderDesign = (id: string, data: UpdateOrderDesignDto) => {
 export const order = {
   getOrders,
   getOrdersByIds,
+  getOverviewList,
   importOrders,
   importRework,
   importFromOnosPod,
