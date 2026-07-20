@@ -2,12 +2,16 @@ import React, { useEffect, useMemo, useState } from 'react';
 import { Link, useLocation, useNavigate } from 'react-router-dom';
 import {
   AlertTriangle,
+  BarChart3,
   Bell,
+  Briefcase,
   Building2,
   ChevronDown,
   ChevronRight,
+  ClipboardList,
   Factory,
   FileDown,
+  FileSearch,
   LayoutGrid,
   List,
   LogOut,
@@ -21,6 +25,7 @@ import {
   ShoppingCart,
   User,
   Users,
+  Workflow,
 } from 'lucide-react';
 
 import { Sheet, SheetContent } from '@/components/ui/sheet';
@@ -42,6 +47,8 @@ interface NavChild {
   icon: React.ReactNode;
   /** Permission code from PERMISSION_CATALOG. Empty = always visible. */
   perm?: string;
+  /** Hiện khi user có BẤT KỲ perm nào trong danh sách (điều kiện OR, thay cho `perm`). */
+  anyPerm?: string[];
   /** Role names to hide this entry from (bổ sung cho check `perm`). */
   hideForRoles?: string[];
 }
@@ -62,19 +69,44 @@ interface NavGroup {
 
 const NAV_GROUPS: NavGroup[] = [
   {
-    title: 'Workspace',
+    title: '',
     items: [
-      { key: PATHS.HOME, label: 'Dashboard', to: PATHS.HOME, icon: <LayoutGrid size={17} />, perm: 'page.dashboard' },
       {
-        key: PATHS.PRODUCTS,
-        label: 'Sản phẩm',
-        to: PATHS.PRODUCTS,
-        icon: <Package size={17} />,
-        perm: 'page.products',
+        key: PATHS.HOME,
+        label: 'Dashboard',
+        icon: <LayoutGrid size={17} />,
+        perm: 'page.dashboard',
+        children: [
+          { key: 'dash-factory', label: 'Đơn hàng theo xưởng', to: `${PATHS.HOME}?tab=factory`, icon: <Factory size={14} /> },
+          { key: 'dash-stats', label: 'Thống kê đơn & sản phẩm', to: `${PATHS.HOME}?tab=stats`, icon: <BarChart3 size={14} /> },
+          { key: 'dash-status', label: 'Tình trạng đơn hàng', to: `${PATHS.HOME}?tab=status`, icon: <ClipboardList size={14} /> },
+          { key: 'dash-lifecycle', label: 'Vòng đời đơn', to: `${PATHS.HOME}?tab=lifecycle`, icon: <Workflow size={14} /> },
+          {
+            key: 'dash-tool-check',
+            label: 'Soát tool',
+            to: `${PATHS.HOME}?tab=tool-check`,
+            icon: <FileSearch size={14} />,
+            perm: 'page.tool_check',
+          },
+          {
+            key: 'dash-person-error',
+            label: 'Lỗi theo người',
+            to: `${PATHS.HOME}?tab=person-error`,
+            icon: <AlertTriangle size={14} />,
+            anyPerm: ['page.designer_stats', 'page.tool_check'],
+          },
+          {
+            key: 'dash-designer',
+            label: 'Designer',
+            to: `${PATHS.HOME}?tab=designer`,
+            icon: <Palette size={14} />,
+            perm: 'page.designer_stats',
+          },
+        ],
       },
       {
         key: PATHS.ORDERS,
-        label: 'Orders',
+        label: 'Quản lý đơn',
         icon: <ShoppingCart size={17} />,
         perm: 'page.orders',
         children: [
@@ -112,57 +144,88 @@ const NAV_GROUPS: NavGroup[] = [
         ],
       },
       {
-        key: PATHS.WORKSHOP_CONFIG,
-        label: 'Quản lý xưởng',
-        to: PATHS.WORKSHOP_CONFIG,
-        icon: <Factory size={17} />,
-        perm: 'workshop.manage',
+        key: 'work',
+        label: 'Công việc',
+        icon: <Briefcase size={17} />,
+        children: [
+          {
+            key: PATHS.MY_TASKS,
+            label: 'Task của tôi',
+            to: PATHS.MY_TASKS,
+            icon: <List size={14} />,
+            perm: 'page.my_tasks',
+          },
+          {
+            key: PATHS.FULFILLMENT_MY_TASKS,
+            label: 'Task Fulfillment',
+            to: PATHS.FULFILLMENT_MY_TASKS,
+            icon: <Factory size={14} />,
+            perm: 'page.fulfillment_my_tasks',
+          },
+        ],
       },
-      {
-        key: PATHS.MY_TASKS,
-        label: 'Task của tôi',
-        to: PATHS.MY_TASKS,
-        icon: <List size={17} />,
-        perm: 'page.my_tasks',
-      },
-      {
-        key: PATHS.DESIGNER_TEAM,
-        label: 'Team Designer',
-        to: PATHS.DESIGNER_TEAM,
-        icon: <Palette size={17} />,
-        perm: 'page.designer_team',
-      },
-      {
-        key: PATHS.FULFILLMENT_MY_TASKS,
-        label: 'Task Fulfillment',
-        to: PATHS.FULFILLMENT_MY_TASKS,
-        icon: <List size={17} />,
-        perm: 'page.fulfillment_my_tasks',
-      },
-      { key: PATHS.NOTIFICATIONS, label: 'Notifications', to: PATHS.NOTIFICATIONS, icon: <Bell size={17} /> },
-      { key: PATHS.ACCOUNT, label: 'My account', to: PATHS.ACCOUNT, icon: <User size={17} /> },
     ],
   },
   {
-    title: 'Administration',
+    title: 'Danh mục',
     items: [
-      { key: PATHS.USERS, label: 'Users', to: PATHS.USERS, icon: <Users size={17} />, perm: 'user.manage' },
-      { key: PATHS.ROLES, label: 'Roles', to: PATHS.ROLES, icon: <ShieldCheck size={17} />, perm: 'role.manage' },
       {
-        key: PATHS.CUSTOM_ROLES,
-        label: 'Custom Roles',
-        to: PATHS.CUSTOM_ROLES,
-        icon: <ShieldHalf size={17} />,
-        perm: 'role.manage',
+        key: PATHS.PRODUCTS,
+        label: 'Sản phẩm',
+        to: PATHS.PRODUCTS,
+        icon: <Package size={17} />,
+        perm: 'page.products',
       },
       {
-        key: PATHS.DEPARTMENTS,
-        label: 'Departments',
-        to: PATHS.DEPARTMENTS,
+        key: PATHS.WORKSHOP_CONFIG,
+        label: 'Quản lý xưởng',
+        to: PATHS.WORKSHOP_CONFIG,
         icon: <Building2 size={17} />,
-        perm: 'user.manage',
+        perm: 'workshop.manage',
       },
-      { key: PATHS.SETTINGS, label: 'Settings', to: PATHS.SETTINGS, icon: <Settings size={17} />, perm: 'role.manage' },
+    ],
+  },
+  {
+    title: 'Cá nhân',
+    items: [
+      { key: PATHS.NOTIFICATIONS, label: 'Thông báo', to: PATHS.NOTIFICATIONS, icon: <Bell size={17} /> },
+      { key: PATHS.ACCOUNT, label: 'Tài khoản', to: PATHS.ACCOUNT, icon: <User size={17} /> },
+    ],
+  },
+  {
+    title: 'Quản trị',
+    items: [
+      {
+        key: 'admin-people',
+        label: 'Nhân sự & phân quyền',
+        icon: <Users size={17} />,
+        children: [
+          {
+            key: PATHS.DESIGNER_TEAM,
+            label: 'Team Designer',
+            to: PATHS.DESIGNER_TEAM,
+            icon: <Palette size={14} />,
+            perm: 'page.designer_team',
+          },
+          { key: PATHS.USERS, label: 'Người dùng', to: PATHS.USERS, icon: <User size={14} />, perm: 'user.manage' },
+          {
+            key: PATHS.DEPARTMENTS,
+            label: 'Phòng ban',
+            to: PATHS.DEPARTMENTS,
+            icon: <Building2 size={14} />,
+            perm: 'user.manage',
+          },
+          { key: PATHS.ROLES, label: 'Vai trò', to: PATHS.ROLES, icon: <ShieldCheck size={14} />, perm: 'role.manage' },
+          {
+            key: PATHS.CUSTOM_ROLES,
+            label: 'Vai trò tùy chỉnh',
+            to: PATHS.CUSTOM_ROLES,
+            icon: <ShieldHalf size={14} />,
+            perm: 'role.manage',
+          },
+        ],
+      },
+      { key: PATHS.SETTINGS, label: 'Cài đặt', to: PATHS.SETTINGS, icon: <Settings size={17} />, perm: 'role.manage' },
     ],
   },
 ];
@@ -181,7 +244,11 @@ function filterMenuByPermissions(
   isAdmin: boolean,
   roleName?: string,
 ): NavGroup[] {
-  const allow = (perm?: string) => !perm || isAdmin || codes.has(perm);
+  const allow = (perm?: string, anyPerm?: string[]) => {
+    if (isAdmin) return true;
+    if (anyPerm?.length) return anyPerm.some((p) => codes.has(p));
+    return !perm || codes.has(perm);
+  };
   const visibleForRole = (c: NavChild) => !(roleName && c.hideForRoles?.includes(roleName));
   return groups
     .map((g) => ({
@@ -189,7 +256,9 @@ function filterMenuByPermissions(
       items: g.items
         .filter((it) => allow(it.perm))
         .map((it) =>
-          it.children ? { ...it, children: it.children.filter((c) => allow(c.perm) && visibleForRole(c)) } : it,
+          it.children
+            ? { ...it, children: it.children.filter((c) => allow(c.perm, c.anyPerm) && visibleForRole(c)) }
+            : it,
         )
         .filter((it) => !it.children || it.children.length > 0),
     }))
@@ -348,9 +417,9 @@ function Sidebar({ collapsed, mobileOpen, onMobileClose }: SidebarProps) {
       </div>
 
       <div className="flex-1 overflow-y-auto overflow-x-hidden px-3 py-4 space-y-5">
-        {navGroups.map((group) => (
-          <div key={group.title}>
-            {showLabels && (
+        {navGroups.map((group, idx) => (
+          <div key={group.title || `group-${idx}`}>
+            {showLabels && group.title && (
               <p className="px-2 mb-2 text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">
                 {group.title}
               </p>

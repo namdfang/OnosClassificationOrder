@@ -1,20 +1,26 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { ChevronDown, ChevronRight, Clock, Grab, ImageOff, UserPlus } from 'lucide-react';
-import type { AssignBacklogGroup, AssignBacklogOrder } from 'shared';
-import { PRODUCT_LEVEL_MAP, WorkshopConfigCategory } from 'shared';
+import type { AssignBacklogGroup } from 'shared';
+import { PRODUCT_LEVEL_MAP } from 'shared';
 import { toast } from 'sonner';
 
 import { useWorkshopConfigStore } from '@/store/workshopConfigStore';
 
 import { RepositoryRemote } from '@/services';
 
-import { CopyButton } from '@/components/common/CopyButton';
 import { ImagePreviewDialog } from '@/components/common/ImagePreviewDialog';
+import { Spinner } from '@/components/common/Spinner';
 import { AssignDesignerDialog } from '@/components/orders/AssignDesignerDialog';
-import { ImageThumbCell } from '@/components/orders/cells/ImageThumbCell';
-import { PriorityBadge } from '@/components/orders/cells/PrioritySelectCell';
+import {
+  buildColGroups,
+  GroupCellContent,
+  WORKSHOP_COLS,
+  type WorkshopOrderRow,
+  type WorkshopRenderCtx,
+} from '@/components/orders/workshopTableConfig';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
+import { TooltipProvider } from '@/components/ui/tooltip';
 
 import { handleAxiosError } from '@/utils';
 import { cn } from '@/utils/cn';
@@ -39,12 +45,6 @@ interface Props {
   onAssigned?: () => void;
 }
 
-const STATUS_META: Record<string, { label: string; cls: string }> = {
-  unassigned: { label: 'Chưa gán', cls: 'text-slate-600 border-slate-300' },
-  rejected: { label: 'Không làm được', cls: 'text-rose-600 border-rose-300' },
-  rework: { label: 'Làm lại', cls: 'text-amber-600 border-amber-300' },
-};
-
 export function DesignerAssignBacklog({ days = 7, from, to, type, customer, reloadToken, onAssigned }: Props) {
   const [groups, setGroups] = useState<AssignBacklogGroup[]>([]);
   const [total, setTotal] = useState(0);
@@ -54,19 +54,26 @@ export function DesignerAssignBacklog({ days = 7, from, to, type, customer, relo
   const [assignOpen, setAssignOpen] = useState(false);
   const [claiming, setClaiming] = useState(false);
   const [preview, setPreview] = useState<{ url?: string; originalUrl?: string; title?: string } | null>(null);
+  // Full workshop rows theo nhóm — lazy fetch khi mở rộng nhóm (qua /orders/by-ids).
+  const [fullRows, setFullRows] = useState<Record<string, WorkshopOrderRow[]>>({});
+  const [rowsLoading, setRowsLoading] = useState<Set<string>>(new Set());
   const seqRef = useRef(0);
   const now = useNow(30_000);
 
-  const { roleName } = usePermission();
+  const { roleName, canViewField, canEditField } = usePermission();
   const canClaimSelf = !!roleName && CLAIM_SELF_ROLES.includes(roleName);
   const canAssignOthers = !!roleName && ASSIGN_OTHERS_ROLES.includes(roleName);
 
-  const resolve = useWorkshopConfigStore((s) => s.resolve);
   const loadConfig = useWorkshopConfigStore((s) => s.load);
   const configLoaded = useWorkshopConfigStore((s) => s.loaded);
   useEffect(() => {
     if (!configLoaded) loadConfig();
   }, [configLoaded, loadConfig]);
+
+  // Cột workshop (đã lọc quyền) — dựng bảng đơn đầy đủ giống bảng tổng quan.
+  const visibleCols = useMemo(() => WORKSHOP_COLS.filter((c) => !c.perm || canViewField(c.key)), [canViewField]);
+  const colGroups = useMemo(() => buildColGroups(visibleCols, roleName), [visibleCols, roleName]);
+  const openPreview = (url: string, title: string, originalUrl?: string) => setPreview({ url, title, originalUrl });
 
   const fetchData = () => {
     const seq = ++seqRef.current;
@@ -83,6 +90,8 @@ export function DesignerAssignBacklog({ days = 7, from, to, type, customer, relo
         const data = res.data?.data as { groups: AssignBacklogGroup[]; total: number };
         setGroups(data?.groups || []);
         setTotal(data?.total || 0);
+        // Pool đổi → xóa cache full rows để nhóm đang mở tự nạp lại.
+        setFullRows({});
       } catch (err) {
         if (seq === seqRef.current) handleAxiosError(err);
       } finally {
@@ -104,6 +113,39 @@ export function DesignerAssignBacklog({ days = 7, from, to, type, customer, relo
       return next;
     });
 
+  // Lazy-load full workshop rows cho nhóm vừa mở (chưa có cache & chưa đang tải).
+  useEffect(() => {
+    const toLoad = [...expanded].filter((k) => !(k in fullRows) && !rowsLoading.has(k));
+    if (toLoad.length === 0) return;
+    for (const key of toLoad) {
+      const g = groups.find((x) => x.key === key);
+      if (!g || g.orderIds.length === 0) {
+        setFullRows((p) => ({ ...p, [key]: [] }));
+        continue;
+      }
+      setRowsLoading((p) => new Set(p).add(key));
+      (async () => {
+        try {
+          const sp = new URLSearchParams();
+          sp.set('ids', g.orderIds.join(','));
+          sp.set('page', '1');
+          sp.set('limit', String(Math.min(g.orderIds.length, 500)));
+          const res = await RepositoryRemote.order.getOrdersByIds('?' + sp.toString());
+          setFullRows((p) => ({ ...p, [key]: (res.data?.data || []) as WorkshopOrderRow[] }));
+        } catch (err) {
+          handleAxiosError(err);
+        } finally {
+          setRowsLoading((p) => {
+            const n = new Set(p);
+            n.delete(key);
+            return n;
+          });
+        }
+      })();
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [expanded, groups]);
+
   const toggleOrder = (id: string) =>
     setSelected((prev) => {
       const next = new Set(prev);
@@ -119,8 +161,6 @@ export function DesignerAssignBacklog({ days = 7, from, to, type, customer, relo
       else g.orderIds.forEach((id) => next.add(id));
       return next;
     });
-
-  const noteName = (code?: string) => (code ? resolve(WorkshopConfigCategory.ToolResultNote, code)?.name || code : '');
 
   const selectedCount = selected.size;
   const selectedIds = useMemo(() => [...selected], [selected]);
@@ -161,6 +201,7 @@ export function DesignerAssignBacklog({ days = 7, from, to, type, customer, relo
   };
 
   return (
+    <TooltipProvider delayDuration={200}>
     <div className="rounded-lg border border-border bg-card">
       {/* Header */}
       <div className="flex items-center justify-between gap-3 p-3 border-b border-border flex-wrap">
@@ -264,90 +305,90 @@ export function DesignerAssignBacklog({ days = 7, from, to, type, customer, relo
                   </Badge>
                 </div>
 
-                {/* Orders */}
+                {/* Orders — bảng đơn ĐẦY ĐỦ (giống bảng tổng quan): cột workshop
+                    gộp nhóm + checkbox chọn để gán. Lazy-load qua /orders/by-ids. */}
                 {isOpen && (
                   <div className="overflow-x-auto bg-muted/10">
-                    <table className="w-full text-[13px]">
-                      <tbody>
-                        {g.orders.map((o: AssignBacklogOrder) => (
-                          <tr key={o._id} className="border-t border-border/40 hover:bg-muted/30">
-                            <td className="w-8 px-3 py-1.5">
-                              <input
-                                type="checkbox"
-                                className="size-4 cursor-pointer"
-                                checked={selected.has(o._id)}
-                                onChange={() => toggleOrder(o._id)}
-                              />
-                            </td>
-                            <td className="w-12 px-1 py-1.5">
-                              <ImageThumbCell
-                                url={o.mockupUrl}
-                                originalUrl={o.mockupOriginalUrl}
-                                title={`Mockup: ${o.productionId}`}
-                                onOpen={(url, title, originalUrl) => setPreview({ url, title, originalUrl })}
-                              />
-                            </td>
-                            <td className="px-2 py-1.5">
-                              <div className="flex items-center gap-1">
-                                <span className="font-medium">{o.productionId}</span>
-                                <CopyButton value={o.productionId} label="Production ID" iconSize={11} />
-                              </div>
-                            </td>
-                            <td className="px-2 py-1.5">
-                              {(() => {
-                                // Backlog = đơn chưa chạy bước "designer" — mốc vào bước
-                                // dùng thẳng `inProductionAt` (chưa có designerAssignedAt).
-                                const deadline = getStageDeadline(o.priority, 'designer', o.inProductionAt);
-                                const countdown = deadline ? formatCountdown(deadline, now) : undefined;
-                                return (
-                                  <div className="flex flex-col gap-1 items-start">
-                                    <PriorityBadge priority={o.priority} />
-                                    {deadline && countdown && (
-                                      <span
-                                        className={cn(
-                                          'text-[10px] inline-flex items-center gap-1 whitespace-nowrap',
-                                          countdown.overdue
-                                            ? 'text-rose-600 dark:text-rose-400'
-                                            : 'text-muted-foreground',
-                                        )}
-                                      >
-                                        <Clock size={10} /> {countdown.text}
-                                      </span>
-                                    )}
-                                  </div>
-                                );
-                              })()}
-                            </td>
-                            <td className="px-2 py-1.5 text-muted-foreground whitespace-nowrap">
-                              {o.size || '—'}
-                              {o.color ? ` / ${o.color}` : ''}
-                            </td>
-                            <td className="px-2 py-1.5">
-                              {o.toolResultNote ? (
-                                <Badge variant="outline" className="text-rose-600 border-rose-300 font-normal">
-                                  {noteName(o.toolResultNote)}
-                                </Badge>
-                              ) : (
-                                <span className="text-muted-foreground/40">·</span>
-                              )}
-                            </td>
-                            <td className="px-2 py-1.5">
-                              {(() => {
-                                const m = STATUS_META[o.designerStatus || ''] || {
-                                  label: o.designerStatus || '—',
-                                  cls: 'text-muted-foreground',
-                                };
-                                return (
-                                  <Badge variant="outline" className={cn('font-normal', m.cls)}>
-                                    {m.label}
-                                  </Badge>
-                                );
-                              })()}
-                            </td>
+                    {rowsLoading.has(g.key) && !fullRows[g.key] ? (
+                      <div className="py-6 text-center">
+                        <Spinner size={16} className="text-muted-foreground" />
+                      </div>
+                    ) : (
+                      <table className="w-full text-[13px]">
+                        <thead>
+                          <tr className="text-[11px] text-muted-foreground border-b border-border/50">
+                            <th className="w-8 px-3 py-1.5"></th>
+                            {colGroups.map((grp) => (
+                              <th
+                                key={grp.key}
+                                className="text-left font-medium px-2 py-1.5 whitespace-nowrap"
+                                style={{ minWidth: grp.width }}
+                              >
+                                {grp.title}
+                              </th>
+                            ))}
                           </tr>
-                        ))}
-                      </tbody>
-                    </table>
+                        </thead>
+                        <tbody>
+                          {(fullRows[g.key] || []).map((row) => {
+                            const ctx: WorkshopRenderCtx = {
+                              canEditField,
+                              patchRow: (id, patch) =>
+                                setFullRows((prev) => ({
+                                  ...prev,
+                                  [g.key]: (prev[g.key] || []).map((r) => (r._id === id ? { ...r, ...patch } : r)),
+                                })),
+                              openPreview,
+                            };
+                            const renderedByKey = new Map(visibleCols.map((c) => [c.key, c.render(row, ctx)]));
+                            // Chip đếm ngược hạn design (đơn chưa chạy bước designer →
+                            // mốc `inProductionAt`) — gắn cạnh badge Ưu tiên trong group.
+                            const deadline = getStageDeadline(row.priority, 'designer', row.inProductionAt);
+                            const countdown = deadline ? formatCountdown(deadline, now) : undefined;
+                            return (
+                              <tr
+                                key={row._id}
+                                className={cn(
+                                  'border-t border-border/40 hover:bg-muted/30 align-top',
+                                  selected.has(row._id) && 'bg-primary/5',
+                                )}
+                              >
+                                <td className="w-8 px-3 py-2">
+                                  <input
+                                    type="checkbox"
+                                    className="size-4 cursor-pointer"
+                                    checked={selected.has(row._id)}
+                                    onChange={() => toggleOrder(row._id)}
+                                  />
+                                </td>
+                                {colGroups.map((grp) => (
+                                  <td key={grp.key} className="px-2 py-2 align-top">
+                                    <GroupCellContent
+                                      group={grp}
+                                      renderedByKey={renderedByKey}
+                                      extra={(memberKey) =>
+                                        memberKey === 'priority' && deadline && countdown ? (
+                                          <span
+                                            className={cn(
+                                              'text-[10px] inline-flex items-center gap-1 whitespace-nowrap',
+                                              countdown.overdue
+                                                ? 'text-rose-600 dark:text-rose-400'
+                                                : 'text-muted-foreground',
+                                            )}
+                                          >
+                                            <Clock size={10} /> {countdown.text}
+                                          </span>
+                                        ) : null
+                                      }
+                                    />
+                                  </td>
+                                ))}
+                              </tr>
+                            );
+                          })}
+                        </tbody>
+                      </table>
+                    )}
                   </div>
                 )}
               </div>
@@ -376,5 +417,6 @@ export function DesignerAssignBacklog({ days = 7, from, to, type, customer, relo
         title={preview?.title}
       />
     </div>
+    </TooltipProvider>
   );
 }

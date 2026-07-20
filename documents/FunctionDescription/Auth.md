@@ -252,11 +252,16 @@ class RoleEntity {
 - Save → `PATCH /v1/roles/:id/permissions`.
 
 ### 8.3 Sidebar dynamic
-- `NAV_GROUPS` mỗi item có field `perm?: string` từ `page.*`.
-- Hàm `filterMenuByPermissions(groups, codes, isAdmin)` lọc theo `profile.role.permissionCodes`.
+- `NAV_GROUPS` chia **4 nhóm**: 1 nhóm **không header** (`title: ''`) ở trên cùng gồm 3 menu bung `Dashboard` · `Quản lý đơn` · `Công việc`; rồi 3 nhóm có header `Danh mục` · `Quản trị` · `Cá nhân`. Header rỗng không render (`showLabels && group.title`), key nhóm fallback `group-${idx}`. Mỗi `NavItem` có `perm?: string` từ `page.*`; item có `children` → menu bung/gộp (SidebarParent), item lẻ → leaf.
+- Menu `Công việc` (parent, không perm) gộp `Task của tôi` (`page.my_tasks`) + `Task Fulfillment` (`page.fulfillment_my_tasks`). `Team Designer` (`page.designer_team`) nằm trong menu `Nhân sự & phân quyền` (nhóm Quản trị).
+- `NavChild` field gating: `perm?: string` (1 quyền), `anyPerm?: string[]` (OR — hiện khi có BẤT KỲ quyền nào), `hideForRoles?: string[]` (ẩn theo tên role, bổ sung cho perm).
+- Hàm `filterMenuByPermissions(groups, codes, isAdmin, roleName?)` lọc theo `profile.role.permissionCodes`. `allow(perm, anyPerm)`: Admin bypass → `anyPerm` (OR) → `perm` (đơn). Parent giữ lại nếu còn ≥1 child; nhóm rỗng bị bỏ.
 - Admin / SuperAdmin bypass (full menu) — tránh khóa cứng nếu seed lỗi.
 - `getUserById` projection thêm `role.permissionCodes` + `role.isSystem` để FE nhận đủ data từ `/v1/auth/me`.
-- Item `Orders` có 3 child: `List Order` (`?tab=list`), `Nhật ký bù lỗi` (`?tab=error-log`), `Import Order` (`?tab=import`). Active state detect qua `isLinkActive(linkPath, currentPath, currentSearch)` — so sánh path + query subset, nên link có `?tab=` vẫn highlight đúng.
+- **Menu `Dashboard`** (nhóm Tổng quan) là parent bung ra 7 child = 7 tab, mỗi child link `/dashboard?tab=<key>` (`factory/stats/status/lifecycle/tool-check/person-error/designer`). Tab ngang ở page vẫn giữ; bấm submenu chỉ deep-link tới đúng tab. Gating child: `tool-check`→`page.tool_check`, `person-error`→`anyPerm:[page.designer_stats, page.tool_check]`, `designer`→`page.designer_stats`; 4 tab còn lại luôn hiện (theo `page.dashboard` của parent). `home/index.tsx` tự gắn `?tab=<activeTab>` khi vào `/dashboard` trần để submenu highlight đúng.
+- **Menu `Quản lý đơn`** (nhóm Đơn hàng) 5 child: `Danh sách đơn` (`/orders/workshop`), `Nhật ký bù lỗi` (`/orders/error-log`, `hideForRoles:['Support']`), `Quét mã` (`page.scan_error`), `Import Order` + `Import File Cutting` (`order.import`).
+- **Menu `Nhân sự & phân quyền`** (nhóm Quản trị) gộp `Team Designer` (`page.designer_team`) + `Người dùng`/`Phòng ban` (`user.manage`) + `Vai trò`/`Vai trò tùy chỉnh` (`role.manage`); `Cài đặt` để riêng (`role.manage`).
+- Active state detect qua `isLinkActive(linkPath, currentPath, currentSearch)` — so sánh path + query subset, nên link có `?tab=` vẫn highlight đúng.
 
 > ⚠️ Cache Redis `user:${id}` và `user:info:${id}` giữ payload cũ. Sau khi deploy Phase 5, admin gọi `POST /v1/users/:id/clear-user-cache` hoặc đợi TTL để FE thấy permission mới.
 

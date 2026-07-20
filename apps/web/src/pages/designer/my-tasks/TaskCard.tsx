@@ -169,6 +169,14 @@ export function TaskCard({ card, onPreview, onClickProductionId }: Props) {
           {/* productionId + nút copy, kèm note kết quả Tool ở góc trên phải */}
           <div className="flex items-center gap-1.5">
             <div className="flex items-center gap-1 min-w-0 flex-1">
+              <span className="shrink-0" onPointerDown={(e) => e.stopPropagation()}>
+                <CopyButton
+                  value={card.productionId ?? ''}
+                  label={`mã ${card.productionId}`}
+                  iconSize={16}
+                  className="p-1 text-foreground [&_svg]:stroke-[2.5]"
+                />
+              </span>
               {onClickProductionId ? (
                 <button
                   type="button"
@@ -184,9 +192,6 @@ export function TaskCard({ card, onPreview, onClickProductionId }: Props) {
               ) : (
                 <div className="font-mono text-xs font-semibold text-foreground truncate">{card.productionId}</div>
               )}
-              <span className="shrink-0" onPointerDown={(e) => e.stopPropagation()}>
-                <CopyButton value={card.productionId ?? ''} label={`mã ${card.productionId}`} iconSize={12} />
-              </span>
             </div>
             <PriorityBadge priority={card.priority} />
             {card.toolResultNote && (
@@ -208,7 +213,7 @@ export function TaskCard({ card, onPreview, onClickProductionId }: Props) {
             )}
           </div>
           {card.type && (
-            <Hint content={`Type: ${card.type}`} forceRich>
+            <Hint content={`Type: ${card.type}`} side="bottom" forceRich>
               <div className="text-[11px] text-foreground line-clamp-1">{card.type}</div>
             </Hint>
           )}

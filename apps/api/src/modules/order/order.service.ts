@@ -1536,6 +1536,30 @@ export class OrderService implements OnModuleInit {
   }
 
   /**
+   * Lookup đơn theo danh sách `_id` — trả full workshop fields (populate factory/
+   * machineType/productConfig) để FE render bảng đơn đầy đủ giống `getOrders`,
+   * NHƯNG **không áp visibility scoping theo role**. Dùng cho drill-down "Xem chi
+   * tiết" ở dashboard: hiển thị đúng tập đơn đã biết id (vd. nhóm "Cần gán" gồm
+   * đơn CHƯA gán → scoping theo assignee của getOrders sẽ ẩn hết với role Designer).
+   * Sort giống bảng gộp (type → size → fabric); phân trang qua skip/limit.
+   */
+  async getOrdersByIds(ids: string[], page = 1, limit = 20): Promise<GetProductionOrdersResDto> {
+    const clean = ids.map((s) => s.trim()).filter(Boolean);
+    if (clean.length === 0) return { success: true as const, data: [] as never, total: 0 };
+    const filter = { _id: { $in: clean }, cancelledAt: { $exists: false } };
+    const res = await this.orderRepository.findAllAndCount(filter, {
+      paging: { skip: limit * (page - 1), limit },
+      sort: { priority: -1, type: 1, size: 1, fabricType: 1, inProductionAt: -1 },
+      populate: [
+        { path: 'factory', select: ['name', 'shortName'] },
+        { path: 'machineType', select: ['name', 'shortName'] },
+        { path: 'productConfig', select: ['fullName', 'shortName'] },
+      ],
+    });
+    return { success: true as const, data: res.data as never, total: res.total };
+  }
+
+  /**
    * Export EVERY order matching the current filter (no pagination). Used by
    * the "Đơn hàng theo xưởng" tab to dump the visible scope to a spreadsheet.
    * Populates factory / machineType / productConfig so FE can render names

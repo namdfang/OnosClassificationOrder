@@ -122,6 +122,9 @@ export default function ToolCheckTab() {
   // Modal "Xem theo từng khách hàng" (full-screen) + tập khách đang mở rộng.
   const [customerView, setCustomerView] = useState(false);
   const [expandedCust, setExpandedCust] = useState<Set<string>>(new Set());
+  // Dialog chi tiết đơn lỗi của 1 khách (mở từ nút "Xem chi tiết") + lọc sản phẩm.
+  const [custDetail, setCustDetail] = useState<{ key: string; userSku?: string; userEmail?: string } | null>(null);
+  const [custDetailProduct, setCustDetailProduct] = useState('');
   const toggleCust = (k: string) =>
     setExpandedCust((prev) => {
       const n = new Set(prev);
@@ -531,6 +534,99 @@ export default function ToolCheckTab() {
       }))
       .sort((a, b) => b.count - a.count);
   }, [data?.errorHistory]);
+
+  // Chi tiết đơn lỗi của 1 khách: dedup theo orderId, gộp loại lỗi; lọc theo sản
+  // phẩm. Sort: sản phẩm giống nhau cạnh nhau (nhóm nhiều→ít) → theo loại lỗi
+  // (nhiều→ít) → theo file lỗi.
+  const custDetailData = useMemo(() => {
+    if (!custDetail) return null;
+    type ODItem = {
+      orderId: string;
+      productionId?: string;
+      typeKey: string;
+      product: string;
+      mockup?: string;
+      level?: number;
+      mockupUrl?: string;
+      mockupOriginalUrl?: string;
+      size?: string;
+      color?: string;
+      errorFile?: string[];
+      note?: string;
+      codes: Map<string, string | undefined>;
+    };
+    const rows = (data?.errorHistory ?? []).filter((r) => custKey(r) === custDetail.key);
+    const orderMap = new Map<string, ODItem>();
+    const productOrders = new Map<string, { label: string; orders: Set<string> }>();
+    for (const r of rows) {
+      const pk = r.type ?? '';
+      const label = r.fullName || r.type || '(Chưa rõ)';
+      let po = productOrders.get(pk);
+      if (!po) productOrders.set(pk, (po = { label, orders: new Set() }));
+      po.orders.add(r.orderId);
+      let it = orderMap.get(r.orderId);
+      if (!it) {
+        it = {
+          orderId: r.orderId,
+          productionId: r.productionId,
+          typeKey: pk,
+          product: label,
+          mockup: r.mockup,
+          level: r.level ?? undefined,
+          mockupUrl: r.mockupUrl,
+          mockupOriginalUrl: r.mockupOriginalUrl,
+          size: r.size,
+          color: r.color,
+          errorFile: r.errorFile,
+          note: r.note,
+          codes: new Map(),
+        };
+        orderMap.set(r.orderId, it);
+      }
+      it.codes.set(r.code || '', r.codeLabel);
+    }
+    const allOrders = [...orderMap.values()];
+    const productOptions = [...productOrders.entries()]
+      .map(([value, g]) => ({ value, label: g.label, count: g.orders.size }))
+      .sort((a, b) => b.count - a.count);
+
+    const orders = custDetailProduct ? allOrders.filter((o) => o.typeKey === custDetailProduct) : allOrders;
+
+    // Đếm để sort (trên tập đã lọc).
+    const codeKeyOf = (o: ODItem) => [...o.codes.keys()].sort().join('|');
+    const efKeyOf = (o: ODItem) => (o.errorFile && o.errorFile.length ? [...o.errorFile].sort().join('|') : '');
+    const prodCount = new Map<string, number>();
+    const codeCountByProd = new Map<string, Map<string, number>>();
+    for (const o of orders) {
+      prodCount.set(o.typeKey, (prodCount.get(o.typeKey) ?? 0) + 1);
+      const m = codeCountByProd.get(o.typeKey) ?? new Map<string, number>();
+      const ck = codeKeyOf(o);
+      m.set(ck, (m.get(ck) ?? 0) + 1);
+      codeCountByProd.set(o.typeKey, m);
+    }
+    orders.sort((a, b) => {
+      const pc = (prodCount.get(b.typeKey) ?? 0) - (prodCount.get(a.typeKey) ?? 0);
+      if (pc) return pc;
+      const pn = a.product.localeCompare(b.product);
+      if (pn) return pn;
+      const ak = codeKeyOf(a);
+      const bk = codeKeyOf(b);
+      const cc = (codeCountByProd.get(b.typeKey)?.get(bk) ?? 0) - (codeCountByProd.get(a.typeKey)?.get(ak) ?? 0);
+      if (cc) return cc;
+      const ck = ak.localeCompare(bk);
+      if (ck) return ck;
+      return efKeyOf(a).localeCompare(efKeyOf(b));
+    });
+
+    return {
+      userSku: custDetail.userSku,
+      userEmail: custDetail.userEmail,
+      totalOrders: allOrders.length,
+      totalProducts: productOrders.size,
+      productOptions,
+      orders,
+    };
+  }, [custDetail, custDetailProduct, data?.errorHistory]);
 
   const allCustExpanded = perCustomer.length > 0 && perCustomer.every((c) => expandedCust.has(c.key));
 
@@ -1109,6 +1205,16 @@ export default function ToolCheckTab() {
                           </span>
                           <button
                             type="button"
+                            onClick={() => {
+                              setCustDetailProduct('');
+                              setCustDetail({ key: c.key, userSku: c.userSku, userEmail: c.userEmail });
+                            }}
+                            className="inline-flex items-center gap-1 text-[11px] rounded-md border border-indigo-300 text-indigo-700 dark:text-indigo-300 dark:border-indigo-500/40 px-2 py-1 hover:bg-indigo-50 dark:hover:bg-indigo-500/10 transition-colors"
+                          >
+                            <FileSearch size={13} /> Xem chi tiết
+                          </button>
+                          <button
+                            type="button"
                             onClick={() => toggleCust(c.key)}
                             className="inline-flex items-center gap-1 text-[11px] rounded-md border border-border px-2 py-1 hover:bg-muted transition-colors"
                           >
@@ -1188,6 +1294,139 @@ export default function ToolCheckTab() {
                     </div>
                   );
                 })
+              )}
+            </div>
+          </DialogContent>
+        </Dialog>
+
+        {/* Dialog chi tiết đơn lỗi của 1 khách hàng */}
+        <Dialog open={custDetail !== null} onOpenChange={(v) => !v && setCustDetail(null)}>
+          <DialogContent className="max-w-none w-[92vw] md:w-[72vw] h-screen p-0 gap-0 flex flex-col sm:rounded-none">
+            <div className="flex items-center gap-2 px-5 py-3 border-b border-border shrink-0 flex-wrap">
+              <Users size={16} className="text-indigo-600" />
+              <DialogTitle className="text-base">{custDetailData?.userSku || '(Chưa rõ)'}</DialogTitle>
+              {custDetailData?.userEmail && (
+                <span className="text-[12px] text-muted-foreground">{custDetailData.userEmail}</span>
+              )}
+              <span className="inline-flex items-baseline gap-1 rounded-md bg-rose-100 text-rose-700 border border-rose-300 dark:bg-rose-500/20 dark:text-rose-300 dark:border-rose-500/40 px-2.5 py-1">
+                <span className="text-lg font-extrabold tabular-nums leading-none">{custDetailData?.totalOrders ?? 0}</span>
+                <span className="text-[11px] font-medium">đơn lỗi</span>
+              </span>
+              <span className="inline-flex items-baseline gap-1 rounded-md bg-indigo-100 text-indigo-700 border border-indigo-300 dark:bg-indigo-500/20 dark:text-indigo-300 dark:border-indigo-500/40 px-2.5 py-1">
+                <span className="text-lg font-extrabold tabular-nums leading-none">{custDetailData?.totalProducts ?? 0}</span>
+                <span className="text-[11px] font-medium">sản phẩm lỗi</span>
+              </span>
+              <div className="ml-auto mr-8 w-56">
+                <SelectFilter
+                  label="Lọc sản phẩm"
+                  value={custDetailProduct}
+                  onChange={setCustDetailProduct}
+                  options={(custDetailData?.productOptions ?? []).map((p) => ({ value: p.value, label: p.label, count: p.count }))}
+                />
+              </div>
+            </div>
+            <div className="flex-1 overflow-auto p-4">
+              {!custDetailData || custDetailData.orders.length === 0 ? (
+                <p className="text-sm text-muted-foreground text-center py-16">Không có đơn khớp bộ lọc.</p>
+              ) : (
+                <table className="w-full text-[13px]">
+                  <thead>
+                    <tr className="border-b border-border/60 text-left text-[11px] uppercase text-muted-foreground whitespace-nowrap">
+                      <th className="w-12 px-1 py-1.5">Ảnh</th>
+                      <th className="px-2 py-1.5">Mã đơn</th>
+                      <th className="px-2 py-1.5">Sản phẩm</th>
+                      <th className="px-2 py-1.5">Size/Màu</th>
+                      <th className="px-2 py-1.5">Loại lỗi</th>
+                      <th className="px-2 py-1.5">File lỗi</th>
+                      <th className="px-2 py-1.5">Note lỗi</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {custDetailData.orders.map((it) => (
+                      <tr key={it.orderId} className="border-t border-border/40 hover:bg-muted/30 align-top">
+                        <td className="w-12 px-1 py-1.5">
+                          <ImageThumbCell
+                            url={it.mockupUrl}
+                            originalUrl={it.mockupOriginalUrl}
+                            title={`Mockup: ${it.productionId || ''}`}
+                            onOpen={(url, title, originalUrl) => setPreview({ url, title, originalUrl })}
+                          />
+                        </td>
+                        <td className="px-2 py-1.5">
+                          <div className="flex items-center gap-1">
+                            <span className="font-medium whitespace-nowrap">{it.productionId || '—'}</span>
+                            {it.productionId && (
+                              <CopyButton value={it.productionId} label="Production ID" iconSize={11} />
+                            )}
+                          </div>
+                        </td>
+                        <td className="px-2 py-1.5">
+                          <div className="flex items-center gap-2">
+                            {it.mockup ? (
+                              <img src={it.mockup} alt="" className="w-6 h-6 rounded object-cover border border-border shrink-0" />
+                            ) : (
+                              <div className="w-6 h-6 rounded border border-dashed border-border shrink-0" />
+                            )}
+                            {it.level != null && (
+                              <Badge
+                                className="font-normal border shrink-0 text-[10px]"
+                                style={{
+                                  backgroundColor: PRODUCT_LEVEL_MAP[it.level]?.color,
+                                  color: '#fff',
+                                  borderColor: PRODUCT_LEVEL_MAP[it.level]?.color,
+                                }}
+                              >
+                                Lv {it.level}
+                              </Badge>
+                            )}
+                            <span className="min-w-0 truncate" title={it.product}>{it.product}</span>
+                          </div>
+                        </td>
+                        <td className="px-2 py-1.5 text-muted-foreground whitespace-nowrap">
+                          {it.size || '—'}
+                          {it.color ? ` / ${it.color}` : ''}
+                        </td>
+                        <td className="px-2 py-1.5">
+                          <div className="flex flex-wrap gap-1">
+                            {[...it.codes.entries()].map(([code, label]) => (
+                              <Badge
+                                key={code || '(unknown)'}
+                                variant="outline"
+                                className="font-normal text-amber-700 border-amber-300 dark:text-amber-300 truncate"
+                              >
+                                {label || code || '(Chưa rõ)'}
+                              </Badge>
+                            ))}
+                          </div>
+                        </td>
+                        <td className="px-2 py-1.5">
+                          {it.errorFile && it.errorFile.length > 0 ? (
+                            <div className="flex flex-wrap gap-1">
+                              {it.errorFile.map((code) => {
+                                const cfg = resolveConfig(WorkshopConfigCategory.ErrorFileType, code);
+                                return (
+                                  <Badge
+                                    key={code}
+                                    variant="outline"
+                                    className="font-normal text-[11px] truncate"
+                                    style={cfg?.color ? { color: cfg.color, borderColor: cfg.color } : undefined}
+                                  >
+                                    {cfg?.name || code}
+                                  </Badge>
+                                );
+                              })}
+                            </div>
+                          ) : (
+                            <span className="text-muted-foreground/50">—</span>
+                          )}
+                        </td>
+                        <td className="px-2 py-1.5 text-muted-foreground whitespace-pre-wrap max-w-[320px]">
+                          {it.note || <span className="text-muted-foreground/50">—</span>}
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
               )}
             </div>
           </DialogContent>
