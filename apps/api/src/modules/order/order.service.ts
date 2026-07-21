@@ -2687,6 +2687,11 @@ export class OrderService implements OnModuleInit {
     };
 
     const emptyTool = { $in: [{ $ifNull: ['$toolResultNote', ''] }, ['', null]] };
+    // Marker đơn bị đẩy về Support soát lại — CÙNG định nghĩa với "cần làm lại"
+    // ở tab Soát tool (getToolCheckOverview.reworkMatch).
+    const toolReworkMarker = {
+      $and: [{ $eq: ['$productionErrorSource', 'tool-check'] }, { $eq: ['$toolResultNote', 'error'] }],
+    };
     const completedRange: Record<string, unknown> = { $exists: true, $ne: null };
     if (from) completedRange.$gte = from;
     if (to) completedRange.$lte = to;
@@ -2701,7 +2706,9 @@ export class OrderService implements OnModuleInit {
                 _id: null,
                 backlog: { $sum: { $cond: [emptyTool, 1, 0] } },
                 error: { $sum: { $cond: [{ $eq: ['$toolResultNote', 'error'] }, 1, 0] } },
-                passed: { $sum: { $cond: [emptyTool, 0, 1] } },
+                rework: { $sum: { $cond: [toolReworkMarker, 1, 0] } },
+                // Đã qua = đã soát và KHÔNG đang bị đẩy về soát lại (marker).
+                passed: { $sum: { $cond: [{ $or: [emptyTool, toolReworkMarker] }, 0, 1] } },
                 doneInRange: { $sum: { $cond: [inRange('$toolCheckedAt'), 1, 0] } },
                 workSum: {
                   $sum: {
@@ -2857,7 +2864,7 @@ export class OrderService implements OnModuleInit {
         backlog: toolRow.backlog || 0,
         waitingToStart: 0,
         inProgress: 0,
-        rework: 0,
+        rework: toolRow.rework || 0,
         error: toolRow.error || 0,
         doneInRange: toolRow.doneInRange || 0,
         passedTotal: toolRow.passed || 0,
