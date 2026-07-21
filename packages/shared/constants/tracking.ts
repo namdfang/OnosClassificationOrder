@@ -1,4 +1,4 @@
-import type { ExcelImportTracking } from '..';
+import type { ExcelImportTracking } from '../dtos/tracking.dto';
 export const TrackingType = {
   Manual: 'Manual',
   Import: 'Import',

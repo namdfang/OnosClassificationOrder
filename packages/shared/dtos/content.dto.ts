@@ -1,6 +1,6 @@
 import { z } from 'zod';
 
-import { BaseEntityZod } from '..';
+import { BaseEntityZod } from '../types/BaseEntity';
 
 export const ContentZod = BaseEntityZod.extend({
   describe: z.string(),

@@ -17,7 +17,7 @@
   "scripts": {
     "postinstall": "pnpm run build",
     "prebuild": "rimraf dist",
-    "build": "pnpm tsup index.ts --format cjs,esm",
+    "build": "pnpm tsup index.ts --format cjs,esm --clean",
     "dev": "pnpm run build --watch",
     "lint": "eslint . --cache",
     "lint:fix": "eslint . --fix --cache",

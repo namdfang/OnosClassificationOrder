@@ -12,7 +12,7 @@ import {
 import { BaseEntityZod, PageQueryZod, PageResZod, ResZod } from '@shared/types';
 import { z } from 'zod';
 
-import { IDZod } from '..';
+import { IDZod } from '../constants/common-zod';
 
 export const DesignerStatusZod = z.nativeEnum(DesignerStatus);
 export const DesignerTransitionActionZod = z.nativeEnum(DesignerTransitionAction);

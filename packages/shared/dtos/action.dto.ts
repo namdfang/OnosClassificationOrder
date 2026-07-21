@@ -2,7 +2,11 @@ import { createZodDto } from '@anatine/zod-nestjs';
 import { extendApi } from '@anatine/zod-openapi';
 import { z } from 'zod';
 
-import { ActionType, BaseEntityZod, getObjectValues, PageQueryZod, PageResZod } from '..';
+import { ActionType } from '../enums/commons';
+import { BaseEntityZod } from '../types/BaseEntity';
+import { PageQueryZod } from '../types/PageQuery';
+import { PageResZod } from '../types/PageRes';
+import { getObjectValues } from '../utils/getObjectValues';
 
 export const ActionZod = BaseEntityZod.extend({
   ip: z.string(),

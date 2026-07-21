@@ -3,7 +3,7 @@ import { extendApi } from '@anatine/zod-openapi';
 import { ResZod } from '@shared/types';
 import { z } from 'zod';
 
-import { IDZod } from '..';
+import { IDZod } from '../constants/common-zod';
 
 /**
  * Cấu hình **ưu tiên gán xưởng theo khách hàng** (cao hơn product config).

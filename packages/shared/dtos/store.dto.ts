@@ -4,7 +4,9 @@ import { Status, StoreType } from '@shared/enums';
 import { BaseEntityZod, PageQueryZod, PageResZod, ResZod } from '@shared/types';
 import { z } from 'zod';
 
-import { CodeZod, DESCRIPTION_MAX_LENGTH, DESCRIPTION_MIN_LENGTH, getObjectValues, IDZod, NameZod } from '..';
+import { DESCRIPTION_MAX_LENGTH, DESCRIPTION_MIN_LENGTH } from '../constants/common-length';
+import { CodeZod, IDZod, NameZod } from '../constants/common-zod';
+import { getObjectValues } from '../utils/getObjectValues';
 
 export const StoreZod = BaseEntityZod.extend({
   name: NameZod,

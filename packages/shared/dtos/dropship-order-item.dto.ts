@@ -3,7 +3,8 @@ import { extendApi } from '@anatine/zod-openapi';
 import { BaseEntityZod, PageResZod, ResZod } from '@shared/types';
 import { z } from 'zod';
 
-import { DESCRIPTION_MAX_LENGTH, DESCRIPTION_MIN_LENGTH, IDZod, NAME_MIN_LENGTH, QUANTITY_MAX } from '..';
+import { DESCRIPTION_MAX_LENGTH, DESCRIPTION_MIN_LENGTH, NAME_MIN_LENGTH, QUANTITY_MAX } from '../constants/common-length';
+import { IDZod } from '../constants/common-zod';
 
 export const DropShipLineItemZod = BaseEntityZod.extend({
   orderId: IDZod,

@@ -4,7 +4,9 @@ import { RoleType, Status } from '@shared/enums';
 import { BaseEntityZod, PageQueryZod, PageResZod, ResZod } from '@shared/types';
 import { z } from 'zod';
 
-import { DESCRIPTION_MAX_LENGTH, DESCRIPTION_MIN_LENGTH, getObjectValues, IDZod } from '..';
+import { DESCRIPTION_MAX_LENGTH, DESCRIPTION_MIN_LENGTH } from '../constants/common-length';
+import { IDZod } from '../constants/common-zod';
+import { getObjectValues } from '../utils/getObjectValues';
 
 export const RoleZod = BaseEntityZod.extend({
   name: z.nativeEnum(RoleType),

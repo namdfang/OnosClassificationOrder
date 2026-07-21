@@ -2,19 +2,13 @@ import { createZodDto } from '@anatine/zod-nestjs';
 import { extendApi } from '@anatine/zod-openapi';
 import { z } from 'zod';
 
-import {
-  CodeZod,
-  IDZod,
-  IssueSolution,
-  IssueStatus,
-  IssueType,
-  OrderZod,
-  PageQueryZod,
-  PageResZod,
-  PRIORITY_MAX,
-  PRIORITY_MIN,
-  ResZod,
-} from '..';
+import { PRIORITY_MAX, PRIORITY_MIN } from '../constants/common-length';
+import { CodeZod, IDZod } from '../constants/common-zod';
+import { IssueSolution, IssueStatus, IssueType } from '../constants/issue';
+import { OrderZod } from './order.dto';
+import { PageQueryZod } from '../types/PageQuery';
+import { PageResZod } from '../types/PageRes';
+import { ResZod } from '../types/Res';
 
 export const IssueZod = z.object({
   code: CodeZod,
