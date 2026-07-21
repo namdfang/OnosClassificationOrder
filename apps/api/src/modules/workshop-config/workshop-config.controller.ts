@@ -1,16 +1,23 @@
 import { Body, Controller, Delete, Get, HttpCode, HttpStatus, Param, Patch, Post, Query } from '@nestjs/common';
 import { ApiOkResponse, ApiOperation, ApiTags } from '@nestjs/swagger';
+import { AuthUser } from 'core';
 import {
+  CreateStageErrorDto,
+  CreateStageErrorResDto,
   CreateWorkshopConfigDto,
   CreateWorkshopConfigResDto,
   DeleteWorkshopConfigResDto,
   GetAllWorkshopConfigsResDto,
+  GetStageErrorsDto,
+  GetStageErrorsResDto,
   GetWorkshopConfigsDto,
   GetWorkshopConfigsResDto,
   ReorderWorkshopConfigDto,
   ReorderWorkshopConfigResDto,
   ResDto,
   RoleType,
+  UpdateStageErrorDto,
+  UpdateStageErrorResDto,
   UpdateWorkshopConfigDto,
   UpdateWorkshopConfigResDto,
   WorkshopConfigCategory,
@@ -18,6 +25,7 @@ import {
 
 import { Auth } from '@/decorators';
 
+import { UserDocument } from '../user/user.entity';
 import { WorkshopConfigService } from './workshop-config.service';
 
 @Controller('workshop-config')
@@ -51,6 +59,50 @@ export class WorkshopConfigController {
   @ApiOkResponse({ type: GetAllWorkshopConfigsResDto })
   async getAll(): Promise<GetAllWorkshopConfigsResDto> {
     const data = await this.service.getAll();
+    return { success: true, data };
+  }
+
+  // ─── Stage Error Catalog (danh mục lỗi theo công đoạn — QR) ────────────────
+
+  @Get('stage-errors')
+  @Auth()
+  @ApiOperation({ summary: 'List stage errors of one fulfillment stage (incl. inactive)' })
+  @HttpCode(HttpStatus.OK)
+  @ApiOkResponse({ type: GetStageErrorsResDto })
+  async listStageErrors(@Query() dto: GetStageErrorsDto): Promise<GetStageErrorsResDto> {
+    return { success: true, data: await this.service.listStageErrors(dto.stage) };
+  }
+
+  @Post('stage-errors')
+  @Auth([RoleType.SuperAdmin, RoleType.Admin, RoleType.Manager, RoleType.Fulfillment])
+  @ApiOperation({ summary: 'Create stage error (Fulfillment: own stage only, code auto-generated)' })
+  @HttpCode(HttpStatus.OK)
+  @ApiOkResponse({ type: CreateStageErrorResDto })
+  async createStageError(
+    @Body() dto: CreateStageErrorDto,
+    @AuthUser() user: UserDocument,
+  ): Promise<CreateStageErrorResDto> {
+    const data = await this.service.createStageError(dto, {
+      roleName: user.role?.name as RoleType,
+      fulfillmentStage: user.fulfillmentStage,
+    });
+    return { success: true, data };
+  }
+
+  @Patch('stage-errors/:id')
+  @Auth([RoleType.SuperAdmin, RoleType.Admin, RoleType.Manager, RoleType.Fulfillment])
+  @ApiOperation({ summary: 'Update stage error (name / reworkTarget / isActive)' })
+  @HttpCode(HttpStatus.OK)
+  @ApiOkResponse({ type: UpdateStageErrorResDto })
+  async updateStageError(
+    @Param('id') id: string,
+    @Body() dto: UpdateStageErrorDto,
+    @AuthUser() user: UserDocument,
+  ): Promise<UpdateStageErrorResDto> {
+    const data = await this.service.updateStageError(id, dto, {
+      roleName: user.role?.name as RoleType,
+      fulfillmentStage: user.fulfillmentStage,
+    });
     return { success: true, data };
   }
 

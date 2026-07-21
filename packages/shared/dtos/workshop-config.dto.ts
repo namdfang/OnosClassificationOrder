@@ -1,10 +1,11 @@
 import { createZodDto } from '@anatine/zod-nestjs';
 import { extendApi } from '@anatine/zod-openapi';
-import { WorkshopConfigCategory } from '@shared/enums';
+import { FulfillmentStage, WorkshopConfigCategory } from '@shared/enums';
 import { BaseEntityZod, PageResZod, ResZod } from '@shared/types';
 import { z } from 'zod';
 
 const WorkshopConfigCategoryZod = z.nativeEnum(WorkshopConfigCategory);
+const FulfillmentStageZod = z.nativeEnum(FulfillmentStage);
 
 const HexColorZod = z.string().regex(/^#([0-9a-fA-F]{6}|[0-9a-fA-F]{3})$/, 'color must be hex like #ff0000');
 
@@ -16,6 +17,15 @@ const HexColorZod = z.string().regex(/^#([0-9a-fA-F]{6}|[0-9a-fA-F]{3})$/, 'colo
 export const ErrorSourceZod = z.enum(['designer', 'factory', 'tool-check']);
 export type ErrorSource = z.infer<typeof ErrorSourceZod>;
 
+/**
+ * Đích đẩy về khi quét QR lỗi (Stage Error Catalog — xem StageErrorCatalog.md):
+ * `tool-check` → Support soát lại; `designer` → designer rework; FulfillmentStage
+ * → rework-back stage đó + làm lại chuỗi. errorSource được BE tự suy từ đây
+ * (tool-check→tool-check, designer→designer, stage→factory).
+ */
+export const StageErrorReworkTargetZod = z.union([z.enum(['tool-check', 'designer']), FulfillmentStageZod]);
+export type StageErrorReworkTarget = z.infer<typeof StageErrorReworkTargetZod>;
+
 export const WorkshopConfigZod = BaseEntityZod.extend({
   category: WorkshopConfigCategoryZod,
   code: z.string().min(1).max(60),
@@ -26,6 +36,10 @@ export const WorkshopConfigZod = BaseEntityZod.extend({
   isActive: z.boolean().default(true),
   /** Chỉ dùng khi category=production_error. */
   errorSource: ErrorSourceZod.optional(),
+  /** Chỉ dùng khi category=production_error: công đoạn SỞ HỮU lỗi (Stage Error Catalog). Rỗng = lỗi chung. */
+  stage: FulfillmentStageZod.optional(),
+  /** Chỉ dùng khi category=production_error + có `stage`: đích đẩy về khi quét QR lỗi. */
+  reworkTarget: StageErrorReworkTargetZod.optional(),
 });
 export type WorkshopConfig = z.infer<typeof WorkshopConfigZod>;
 
@@ -95,3 +109,37 @@ export class ReorderWorkshopConfigResDto extends createZodDto(extendApi(ReorderW
 // DELETE
 export const DeleteWorkshopConfigResZod = ResZod;
 export class DeleteWorkshopConfigResDto extends createZodDto(extendApi(DeleteWorkshopConfigResZod)) {}
+
+// ─── Stage Error Catalog (danh mục lỗi theo công đoạn — quét QR) ─────────────
+// Row vẫn nằm trong workshop_config category=production_error (để reuse validate
+// + resolve tên lỗi toàn hệ thống), nhưng CRUD qua endpoint riêng cho công nhân
+// Fulfillment tự quản lỗi CỦA CÔNG ĐOẠN MÌNH. Xem StageErrorCatalog.md.
+
+// LIST (1 công đoạn — bao gồm cả isActive=false để toggle ẩn/hiện)
+export const GetStageErrorsZod = z.object({ stage: FulfillmentStageZod });
+export class GetStageErrorsDto extends createZodDto(extendApi(GetStageErrorsZod)) {}
+
+export const GetStageErrorsResZod = ResZod.extend({ data: WorkshopConfigZod.array() });
+export class GetStageErrorsResDto extends createZodDto(extendApi(GetStageErrorsResZod)) {}
+
+// CREATE — code do BE tự sinh (`se-<stage>-<n>`); Fulfillment bị ép stage = của mình.
+export const CreateStageErrorZod = z.object({
+  name: WorkshopConfigZod.shape.name,
+  reworkTarget: StageErrorReworkTargetZod,
+  /** Admin/Manager truyền stage tùy ý; Fulfillment BE tự lấy từ profile (bỏ qua field này). */
+  stage: FulfillmentStageZod.optional(),
+});
+export class CreateStageErrorDto extends createZodDto(extendApi(CreateStageErrorZod)) {}
+
+export const CreateStageErrorResZod = ResZod.extend({ data: WorkshopConfigZod });
+export class CreateStageErrorResDto extends createZodDto(extendApi(CreateStageErrorResZod)) {}
+
+// UPDATE — lỗi đã thêm KHÔNG cho sửa tên/đích (tránh đổi nghĩa QR đã in/đã gán
+// vào đơn); CHỈ cho ẩn/hiện (ẩn thay vì xóa để giữ thống kê cũ).
+export const UpdateStageErrorZod = z.object({
+  isActive: z.boolean(),
+});
+export class UpdateStageErrorDto extends createZodDto(extendApi(UpdateStageErrorZod)) {}
+
+export const UpdateStageErrorResZod = ResZod.extend({ data: WorkshopConfigZod });
+export class UpdateStageErrorResDto extends createZodDto(extendApi(UpdateStageErrorResZod)) {}

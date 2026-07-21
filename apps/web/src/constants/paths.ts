@@ -13,6 +13,7 @@ export const PATHS = {
   ORDERS_IMPORT: '/orders/import',
   ORDERS_CUTTING_FILES: '/orders/cutting-files',
   ORDERS_SCAN_ERROR: '/orders/scan-error',
+  ORDERS_STAGE_ERRORS: '/orders/stage-errors',
   ORDERS_UNMAPPED: '/orders/unmapped',
   WORKSHOP_CONFIG: '/workshop-config',
 
