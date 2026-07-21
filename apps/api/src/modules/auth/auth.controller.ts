@@ -68,6 +68,7 @@ export class AuthController {
       userId: user._id.toString(),
       role: user.role!.name,
       sessionId,
+      rememberMe: loginDto.rememberMe,
     });
 
     // const refreshToken = await this.authService.createRefreshToken({
@@ -95,6 +96,7 @@ export class AuthController {
     return {
       userId: user._id.toString(),
       accessToken: token.accessToken,
+      expiresIn: token.expiresIn,
       user,
       // refreshToken: refreshToken
     };

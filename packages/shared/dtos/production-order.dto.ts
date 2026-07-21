@@ -1128,8 +1128,6 @@ export const FactoryOverviewZod = z.object({
     total: z.number(),
     transferred: z.number(),
     pure: z.number(),
-    /** Đơn nằm trong date range nhưng chưa map xưởng (factoryId null). */
-    unmapped: z.number(),
   }),
   /** Distinct values within the date range — used to populate filter selects. */
   availableFilters: z.object({

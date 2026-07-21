@@ -352,6 +352,8 @@ export class DesignerStatsService {
         $match: {
           productionError: { $exists: true, $nin: [null, ''] },
           updatedAt: { $gte: range.start, $lte: range.end },
+          // Đơn chưa map xưởng bị loại — chỉ xem qua trang "Không xác định xưởng".
+          factoryId: { $exists: true, $ne: null },
         },
       },
       {
@@ -668,8 +670,14 @@ export class DesignerStatsService {
     const extraMatch: Record<string, unknown> = {};
     if (type) extraMatch.type = type;
     if (customer) extraMatch.userSku = customer;
-    // `cancelledAt: null` — loại đơn hủy khỏi mọi số liệu tổng quan.
-    const baseMatch = { inProductionAt: { $gte: start, $lte: end }, cancelledAt: null, ...extraMatch };
+    // `cancelledAt: null` — loại đơn hủy khỏi mọi số liệu tổng quan. Đơn chưa
+    // map xưởng cũng bị loại — chỉ xem qua trang "Không xác định xưởng".
+    const baseMatch = {
+      inProductionAt: { $gte: start, $lte: end },
+      cancelledAt: null,
+      factoryId: { $exists: true, $ne: null },
+      ...extraMatch,
+    };
 
     const dayExpr = { $dateToString: { format: '%Y-%m-%d', date: '$inProductionAt', timezone: '+07:00' } };
     const noteExpr = { $ifNull: ['$toolResultNote', ''] };
@@ -880,6 +888,9 @@ export class DesignerStatsService {
       cancelledAt: null, // loại đơn hủy khỏi pool "Cần gán" + self-claim
       // Đã soát & khác ok (KHÔNG gồm chưa soát null/'').
       toolResultNote: { $nin: [null, '', 'ok'] },
+      // Đơn chưa map xưởng bị loại khỏi backlog "Cần gán" — chỉ xem qua trang
+      // "Không xác định xưởng".
+      factoryId: { $exists: true, $ne: null },
       $or: [
         { designerStatus: DesignerStatus.Unassigned },
         { designerStatus: DesignerStatus.Rejected },
@@ -1124,7 +1135,9 @@ export class DesignerStatsService {
       $dateToString: { format: '%Y-%m-%d', date: '$inProductionAt', timezone: '+07:00' },
     };
     // `null` khớp cả giá trị null lẫn field vắng mặt → loại đơn đã xoá/hủy.
-    const alive = { deletedAt: null, cancelledAt: null };
+    // Đơn chưa map xưởng cũng bị loại khỏi Soát tool — chỉ xem qua trang
+    // "Không xác định xưởng".
+    const alive = { deletedAt: null, cancelledAt: null, factoryId: { $exists: true, $ne: null } };
 
     const checkedMatch = withFilters({ toolCheckedAt: inWindow, ...alive });
     const reworkMatch = withFilters({
@@ -1424,7 +1437,9 @@ export class DesignerStatsService {
       productionError: { $exists: true, $nin: [null, ''] },
       toolResultNote: 'error',
       cancelledAt: null, // match cả thiếu field lẫn null
-      ...(factoryId ? { factoryId } : {}),
+      // Đơn chưa map xưởng bị loại khỏi "Lỗi theo người" — chỉ xem qua trang
+      // "Không xác định xưởng".
+      ...(factoryId ? { factoryId } : { factoryId: { $exists: true, $ne: null } }),
     };
 
     const [fulfillAgg, designerAgg, reportedAgg, stageUsers] = await Promise.all([
@@ -1443,7 +1458,7 @@ export class DesignerStatsService {
         {
           $match: {
             fulfillmentTimeline: { $elemMatch: { action: 'rework-back' } },
-            ...(factoryId ? { factoryId } : {}),
+            ...(factoryId ? { factoryId } : { factoryId: { $exists: true, $ne: null } }),
           },
         },
         { $unwind: '$fulfillmentTimeline' },
@@ -1661,7 +1676,7 @@ export class DesignerStatsService {
           productionError: { $exists: true, $nin: [null, ''] },
           toolResultNote: 'error',
           cancelledAt: null,
-          ...(factoryId ? { factoryId } : {}),
+          ...(factoryId ? { factoryId } : { factoryId: { $exists: true, $ne: null } }),
         },
       },
       {

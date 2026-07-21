@@ -30,10 +30,18 @@ export class AuthService {
     // private recaptchaService: RecaptchaService,
   ) {}
 
-  async createAccessToken(data: { role: RoleType; userId: string; sessionId: string }): Promise<TokenPayloadDto> {
+  async createAccessToken(data: {
+    role: RoleType;
+    userId: string;
+    sessionId: string;
+    rememberMe?: boolean;
+  }): Promise<TokenPayloadDto> {
     const cachedKey = `token:${data.sessionId}:${data.userId}`;
+    const expiresIn = data.rememberMe
+      ? this.configService.authConfig.jwtRememberExpirationTime
+      : this.configService.authConfig.jwtExpirationTime;
     const token = {
-      expiresIn: this.configService.authConfig.jwtExpirationTime,
+      expiresIn,
       accessToken: await this.jwtService.signAsync(
         {
           sessionId: data.sessionId,
@@ -43,16 +51,12 @@ export class AuthService {
         },
         {
           privateKey: this.configService.authConfig.privateKey,
+          expiresIn,
         },
       ),
     };
     // eslint-disable-next-line @typescript-eslint/no-floating-promises
-    this.redisCacheService.setHash(
-      cachedKey,
-      'accessToken',
-      token.accessToken,
-      this.configService.authConfig.jwtExpirationTime,
-    );
+    this.redisCacheService.setHash(cachedKey, 'accessToken', token.accessToken, expiresIn);
 
     return token;
   }

@@ -21,6 +21,7 @@ import { handleAxiosError } from '../../utils';
 const loginSchema = z.object({
   email: z.string().min(1, 'Email is required').email('Invalid email'),
   password: z.string().min(1, 'Password is required'),
+  rememberMe: z.boolean().default(false),
 });
 
 type LoginFormValues = z.infer<typeof loginSchema>;
@@ -33,7 +34,7 @@ function Login() {
 
   const form = useForm<LoginFormValues>({
     resolver: zodResolver(loginSchema),
-    defaultValues: { email: '', password: '' },
+    defaultValues: { email: '', password: '', rememberMe: false },
   });
 
   const onSubmit = async (values: LoginFormValues) => {
@@ -41,10 +42,11 @@ function Login() {
       setLoading(true);
       const resp = await RepositoryRemote.auth.login({ ...values, recaptchaToken: '' });
       const loginInfo = resp?.data;
-      const expirationTime = new Date(new Date().getTime() + 24 * 60 * 60 * 1000).getTime();
 
       if (loginInfo) {
-        setToken(loginInfo.accessToken);
+        // TTL thật từ BE (dài hơn nếu rememberMe) — không hardcode 24h nữa.
+        const expirationTime = Date.now() + (loginInfo.expiresIn ?? 24 * 60 * 60) * 1000;
+        setToken(loginInfo.accessToken, values.rememberMe);
         setTokenExpiredAt(expirationTime);
         setProfile(loginInfo.user);
 
@@ -136,6 +138,24 @@ function Login() {
                       </div>
                     </FormControl>
                     <FormMessage />
+                  </FormItem>
+                )}
+              />
+
+              <FormField
+                control={form.control}
+                name="rememberMe"
+                render={({ field }) => (
+                  <FormItem>
+                    <label className="flex items-center gap-2 text-sm text-muted-foreground cursor-pointer w-fit">
+                      <input
+                        type="checkbox"
+                        checked={field.value}
+                        onChange={(e) => field.onChange(e.target.checked)}
+                        className="h-4 w-4 rounded border-input accent-primary"
+                      />
+                      Ghi nhớ đăng nhập
+                    </label>
                   </FormItem>
                 )}
               />

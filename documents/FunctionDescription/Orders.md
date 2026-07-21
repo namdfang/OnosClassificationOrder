@@ -1297,3 +1297,29 @@ Response mẫu (`SetDesignReviewResultResDto` — `data` = `ProductionOrderZod` 
 
 ### 18.7 Performance
 1 `findOneAndUpdate` (GET `/next`) với index sẵn có trên `toolResultNote`/`designerStatus`/`priority`/`cancelledAt`/`heldAt`/`designReviewClaimedAt` (đều đã đánh index ở `order.entity.ts`) — không cần index tổng hợp riêng vì volume đơn ở bước đầu tiên thường nhỏ. POST `/result` tái dùng `updateField()` nên chi phí giống hệt sửa tay 1 cell (1-2 lần gọi tuần tự tùy số field truyền).
+
+## 19. "Không xác định xưởng" — tách đơn chưa map xưởng khỏi hệ thống (menu tạm)
+
+> **Mục tiêu:** Đơn không có `factoryId` (không khớp Product Config lúc import, và không có Customer Override cứu — xem `importOrders()`) trước đây bị trộn lẫn vào mọi view. Nay bị **loại trừ mặc định** khỏi toàn bộ Danh sách đơn / Dashboard / task Designer / Fulfillment override view / Nhật ký bù lỗi / Soát tool / Lỗi theo người — chỉ xem được qua 1 menu tạm riêng.
+
+### 19.1 Cơ chế lọc (backend)
+- Không có entity field mới — vẫn dùng `factoryId` missing/null như trước, qua filter param sẵn có `unmapped: z.coerce.boolean()` trong `GetProductionOrdersZod` (`production-order.dto.ts`).
+- `order.service.ts` → `buildVisibilityFilter()` (dùng chung bởi `getOrders`/`getOrdersGroupedByType`, `getStatusOverview`, `getDesignerBreakdown`, `getDesignerBacklog`): thêm `factoryId: { $exists: true, $ne: null }` mặc định, **trừ khi** `dto.unmapped === true` (trang mới opt-in xem CHỈ đơn unmapped qua chính flag này).
+- Áp cùng pattern (`factoryId: { $exists: true, $ne: null }` vào base match) cho các hàm không dùng chung `buildVisibilityFilter`: `getDashboard`, `getLifecycleOverview`, `getCancelledOrders`, `getErrorLog` (`order.service.ts`); `getMyTasks`/`buildMyTaskBase` nhánh override-role (`fulfillment-task.service.ts`); `getToolCheckOverview`, `getPersonErrorOverview`, `getStageErrorDaily`, `getAssignBacklog`, `getDailyOverview`, `getErrorStats` (`designer-stats.service.ts`).
+- **Không đụng** `designer-task.service.ts` (`getMyTasks`/`buildMyTaskFilter`) — chỉ lọc theo `assignee` (đơn ĐÃ gán); đơn unmapped không có `factoryId` nên auto-assign (`designer-assignment.service.ts`) không bao giờ set `assignee` cho nó.
+- `getFactoryOverview` (tab Dashboard "Đơn hàng theo xưởng"): bỏ hẳn `unmappedCount`/`totals.unmapped` (không còn tiêu thụ ở FE) — `matchMapped`/`cardMatch` giữ nguyên logic cũ (đã đúng từ trước).
+
+### 19.2 Endpoint tái dùng (không có route mới)
+| Method | Path | Mô tả |
+|--------|------|-------|
+| GET | `/v1/orders?unmapped=true` | `getOrders` — trả đúng tập đơn chưa map xưởng, tái dùng nguyên vẹn. |
+| PATCH | `/v1/orders/bulk-assign` | `bulkAssignOrders` (`BulkAssignOrderDto`) — gán xưởng + fabric/machine/tool mặc định ban đầu cho đơn đã chọn. |
+
+### 19.3 Frontend
+- Trang: `apps/web/src/pages/orders/unmapped/index.tsx` (route `PATHS.ORDERS_UNMAPPED = '/orders/unmapped'`). Guard quyền y hệt `scan-error`: `!isAdmin && !has('page.unmapped_factory')` → `<Navigate to={PATHS.ORDERS} />`.
+- Tái dùng nguyên bộ component bảng workshop: `WORKSHOP_COLS`/`buildColGroups`/`GroupCellContent` (`workshopTableConfig.tsx`), `OrderFilterBar`, `OrderRowActionsMenu`, `PaginationBar`, `ImagePreviewDialog`, `OrderLogTimelineDialog` — không viết bảng mới.
+- Dialog "Gán xưởng" được **extract** từ `OrderFactoryTab.tsx` (trước đây gắn với chip "Chưa xác định xưởng" đã bỏ) sang `apps/web/src/components/orders/AssignFactoryDialog.tsx` — tự fetch danh sách xưởng qua `RepositoryRemote.factory.getFactories()` (không còn phụ thuộc `getFactoryOverview`). Nút "Gán xưởng" (đơn lẻ + bulk) gate bởi `isAdmin || has('order.transfer')`.
+- Sidebar: child "Không xác định xưởng" trong group "Quản lý đơn" (`Sidebar.tsx`, icon `MapPin`), gate `perm: 'page.unmapped_factory'`.
+
+### 19.4 Permissions
+- `page.unmapped_factory` (mới, group `page`) — Admin/SuperAdmin/Manager có sẵn qua `ALL_PERMISSION_CODES`; Support được cấp thêm trong `DEFAULT_ROLE_PERMISSIONS` (kèm `order.transfer` để nút "Gán xưởng" hiện ra — trước đó Support không có quyền này).

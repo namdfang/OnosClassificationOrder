@@ -133,6 +133,9 @@ export class ApiConfigService {
       privateKey: this.getString('JWT_PRIVATE_KEY'),
       publicKey: this.getString('JWT_PUBLIC_KEY'),
       jwtExpirationTime: this.getNumber('JWT_EXPIRATION_TIME'),
+      // TTL khi user check "Ghi nhớ đăng nhập" — optional env, mặc định 30 ngày
+      // nếu không set (không dùng helper `get()` vì nó throw khi thiếu key).
+      jwtRememberExpirationTime: Number(this.configService.get('JWT_REMEMBER_EXPIRATION_TIME')) || 30 * 24 * 60 * 60,
     };
   }
 

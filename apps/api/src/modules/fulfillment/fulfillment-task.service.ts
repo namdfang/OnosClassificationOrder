@@ -531,6 +531,10 @@ export class FulfillmentTaskService {
     const f: FilterQuery<OrderEntity> = { cancelledAt: null };
     if (factoryId) {
       f.$or = [{ factoryId }, { originalFactoryId: factoryId }];
+    } else {
+      // Override role (admin/manager) xem không khoá xưởng — vẫn loại đơn
+      // chưa map xưởng, chỉ xem qua trang "Không xác định xưởng".
+      f.factoryId = { $exists: true, $ne: null };
     }
     // Date logic: nếu user truyền cả 2 đều undefined → default 7 ngày. Nếu
     // truyền (kể cả empty string) → coi là explicit override / clear.
