@@ -1,15 +1,23 @@
-import React, { useEffect, useMemo, useState } from 'react';
-import { AlertTriangle, Building2, Factory, Layers, ListChecks, MessageSquareWarning, RotateCcw } from 'lucide-react';
-import type { ProductionOrderRow, WorkshopConfig } from 'shared';
+import React, { useMemo, useRef, useState } from 'react';
+import { Link } from 'react-router-dom';
 import {
-  FULFILLMENT_STAGE_LABELS,
-  FULFILLMENT_STAGE_ORDER,
-  FULFILLMENT_STAGES,
-  FulfillmentStage,
-  WorkshopConfigCategory,
-} from 'shared';
+  AlertTriangle,
+  CheckCircle2,
+  Factory,
+  Layers,
+  MessageSquareWarning,
+  Pencil,
+  Plus,
+  QrCode,
+  RotateCcw,
+} from 'lucide-react';
+import type { FulfillmentStage as FulfillmentStageT, ProductionOrderRow, WorkshopConfig } from 'shared';
+import { FULFILLMENT_STAGE_LABELS, FulfillmentStage, WorkshopConfigCategory } from 'shared';
 import { toast } from 'sonner';
 
+import { PATHS } from '@/constants/paths';
+
+import { useAuthStore } from '@/store/authStore';
 import { useWorkshopConfigStore } from '@/store/workshopConfigStore';
 
 import { RepositoryRemote } from '@/services';
@@ -23,12 +31,11 @@ import { Textarea } from '@/components/ui/textarea';
 import { handleAxiosError } from '@/utils';
 import { cn } from '@/utils/cn';
 import { isCancelled } from '@/utils/orderActions';
+import { beepError, beepScan, beepSuccess, parseScanCode, resolveErrorScan } from '@/utils/scanCodes';
+
+import { GuideStep, GuideZone } from './ScanGuide';
 
 const MAX_NOTE = 500;
-const OTHER_CODE = 'other';
-
-type ReworkTarget = 'none' | 'designer' | 'tool-check' | FulfillmentStage;
-type ErrorSource = 'designer' | 'factory' | 'tool-check';
 
 type ScannedOrder = ProductionOrderRow & {
   factory?: { name?: string; shortName?: string };
@@ -40,97 +47,217 @@ interface Props {
   onClose: () => void;
   /** Gọi sau khi gán lỗi (và rework-back nếu có) thành công. Page sẽ append vào lịch sử + re-focus input. */
   onSaved: (summary: { errorName: string; targetLabel: string }) => void;
+  /** Quét barcode ĐƠN khác (`N-…`) khi dialog đang mở → page tra cứu đơn mới. */
+  onScanOrder?: (code: string) => void;
+  /** Mã lỗi đã quét lần 1 (handoff từ dialog công đoạn) → pre-select, chờ quét lần 2 xác nhận. */
+  initialCode?: string;
 }
 
-export function OrderErrorScanDialog({ order, onClose, onSaved }: Props) {
+const SOURCE_LABELS: Record<string, string> = {
+  'tool-check': 'Do soát tool',
+  designer: 'Do designer',
+  factory: 'Do xưởng',
+};
+
+/**
+ * Modal gán lỗi qua màn quét. Danh sách mã lỗi CHỈ lấy từ danh mục lỗi của
+ * CÔNG ĐOẠN người báo (Stage Error Catalog — `stage` của user, fallback công
+ * đoạn hiện tại của đơn cho user không có stage). Chọn lỗi → nguồn + đích đẩy
+ * về TỰ THEO CONFIG (không chỉnh tay). Chưa có lỗi nào → link sang trang
+ * `/orders/stage-errors` để thêm. Xem StageErrorCatalog.md.
+ */
+export function OrderErrorScanDialog({ order, onClose, onSaved, onScanOrder, initialCode }: Props) {
   const errorOptions = useWorkshopConfigStore(
     (s) => s.byCategory[WorkshopConfigCategory.ProductionError] || [],
   ) as WorkshopConfig[];
 
-  const sortedOptions = useMemo(() => [...errorOptions].sort((a, b) => a.order - b.order), [errorOptions]);
+  const profile = useAuthStore((s) => s.profile);
+  const myStage = profile?.fulfillmentStage as FulfillmentStageT | undefined;
 
-  const currentStage = order.currentFulfillmentStage as FulfillmentStage | undefined;
+  const currentStage = order.currentFulfillmentStage as FulfillmentStageT | undefined;
   const isCompleted = !currentStage && !!order.fulfillmentCompletedAt;
-  // Vị trí xa nhất đơn từng tới → cho phép đẩy về mọi stage TRƯỚC vị trí đó. Đơn
-  // đã hoàn thành fulfillment (currentStage=null nhưng có fulfillmentCompletedAt)
-  // → furthest=Pack → đẩy về In..May xuất (reopen + làm lại toàn chuỗi).
+  // Vị trí xa nhất đơn từng tới → validate đích đẩy về theo config lỗi.
   const furthest = currentStage ?? (isCompleted ? FulfillmentStage.Pack : undefined);
-  // Đơn đã vào fulfillment HOẶC đã hoàn thành → cho phép rework-back designer/stage.
-  const canReworkBack = !!currentStage || isCompleted;
-  const previousStages = useMemo(() => {
-    if (!furthest) return [] as FulfillmentStage[];
-    const idx = FULFILLMENT_STAGE_ORDER[furthest];
-    return FULFILLMENT_STAGES.filter((s) => FULFILLMENT_STAGE_ORDER[s] < idx);
-  }, [furthest]);
 
-  const [code, setCode] = useState<string>('');
-  // Mặc định nguồn lỗi + đẩy về = "Soát tool" (theo ToolCheckWorkflow).
-  const [source, setSource] = useState<ErrorSource | undefined>('tool-check');
+  // Công đoạn ngữ cảnh = stage của user (công nhân); user không có stage
+  // (admin/support) → công đoạn hiện tại của đơn.
+  const contextStage = myStage ?? currentStage;
+  const stageErrors = useMemo(
+    () => errorOptions.filter((o) => o.stage === contextStage).sort((a, b) => a.order - b.order),
+    [errorOptions, contextStage],
+  );
+
+  const [code, setCode] = useState<string>(initialCode ?? '');
   const [note, setNote] = useState<string>('');
-  const [reworkTarget, setReworkTarget] = useState<ReworkTarget>('tool-check');
   const [saving, setSaving] = useState(false);
 
-  // Pre-fill từ workshop_config khi pick code (mirror BE auto-fill logic).
-  // Không reset khi bỏ chọn code → giữ nguồn mặc định "tool-check".
-  useEffect(() => {
-    if (!code) return;
-    const cfg = sortedOptions.find((o) => o.code === code);
-    if (cfg?.errorSource === 'designer' || cfg?.errorSource === 'factory' || cfg?.errorSource === 'tool-check') {
-      setSource(cfg.errorSource);
-    }
-  }, [code, sortedOptions]);
+  const selectedCfg = useMemo(() => stageErrors.find((o) => o.code === code), [stageErrors, code]);
+  // Nguồn + đích đẩy về suy từ config — hiển thị read-only, không cho chọn tay.
+  const resolution = useMemo(
+    () => (selectedCfg ? resolveErrorScan(selectedCfg, furthest) : undefined),
+    [selectedCfg, furthest],
+  );
 
-  const isOther = code === OTHER_CODE;
-  const noteRequired = isOther; // 'other' bắt buộc note (theo rule BE)
-  const sourceRequired = isOther || !source; // 'other' bắt buộc, hoặc khi config không có errorSource
   // Đơn đã hủy → chặn báo lỗi / đẩy về công đoạn trước (mirror guard BE).
   const orderCancelled = isCancelled(order);
 
-  const canSubmit = !!code && !!source && (!noteRequired || !!note.trim()) && !orderCancelled && !saving;
+  const canSubmit = !!selectedCfg && !!resolution?.ok && !orderCancelled && !saving;
 
-  const handleSubmit = async () => {
-    if (!canSubmit) return;
+  const submitError = async (cfg: WorkshopConfig) => {
+    const resolved = resolveErrorScan(cfg, furthest);
+    if (!resolved.ok) {
+      beepError();
+      toast.error(resolved.reason);
+      return;
+    }
     setSaving(true);
     try {
-      // Gộp TẤT CẢ vào 1 lần setProductionError (BE atomic). Nhờ đi qua
-      // setProductionError (không phải fulfillment-transition) nên báo được lỗi cả
-      // đơn ĐÃ đi qua công đoạn mình / đã hoàn thành — không dính stage guard.
-      //  - tool-check / designer: nguồn lỗi drive rework-back (source-based).
-      //  - FulfillmentStage: BE đẩy về stage + làm lại toàn chuỗi (target-based).
-      let effectiveSource: ErrorSource | undefined = source;
-      let apiTarget: 'designer' | 'tool-check' | FulfillmentStage | undefined;
-      let targetLabel = 'Chỉ mark lỗi';
-      if (reworkTarget === 'tool-check') {
-        effectiveSource = 'tool-check';
-        apiTarget = 'tool-check';
-        targetLabel = 'Đẩy về Soát tool';
-      } else if (reworkTarget === 'designer') {
-        effectiveSource = 'designer';
-        apiTarget = 'designer';
-        targetLabel = 'Đẩy về Designer';
-      } else if (reworkTarget !== 'none') {
-        // Đẩy về 1 công đoạn fulfillment trước → nguồn lỗi = xưởng.
-        effectiveSource = 'factory';
-        apiTarget = reworkTarget;
-        targetLabel = `Đẩy về ${FULFILLMENT_STAGE_LABELS[reworkTarget as FulfillmentStage]}`;
-      }
-
+      // 1 lần setProductionError (BE atomic): gán lỗi + đẩy về theo config.
       await RepositoryRemote.order.setProductionError(order._id, {
-        code,
-        source: effectiveSource,
+        code: cfg.code,
+        source: resolved.source,
         note: note.trim() || undefined,
-        target: apiTarget,
+        target: resolved.apiTarget,
       });
-
-      const errorName = sortedOptions.find((o) => o.code === code)?.name || code;
-      toast.success(`Đã gán lỗi "${errorName}" · ${targetLabel}`);
-      onSaved({ errorName, targetLabel });
+      beepSuccess();
+      toast.success(`Đã gán lỗi "${cfg.name}" · ${resolved.targetLabel}`);
+      onSaved({ errorName: cfg.name, targetLabel: resolved.targetLabel });
       onClose();
     } catch (err) {
+      beepError();
       handleAxiosError(err);
     } finally {
       setSaving(false);
     }
+  };
+
+  const handleSubmit = () => {
+    if (!canSubmit || !selectedCfg) return;
+    void submitError(selectedCfg);
+  };
+
+  /**
+   * Quét QR lỗi (`E-<code>`) khi dialog mở — luồng XÁC NHẬN 2 LẦN:
+   *  - Mã phải thuộc danh mục CÔNG ĐOẠN ngữ cảnh (bảng QR của trạm) — sai → từ chối.
+   *  - Lần 1 (mã khác mã đang chọn) → chỉ CHỌN lỗi, dừng 1 nhịp cho nhập mô tả.
+   *  - Lần 2 CÙNG MÃ (hoặc Enter tay) → mới ghi nhận + đẩy về. Quét mã khác → đổi lựa chọn.
+   */
+  const handleErrorScan = (codeScanned: string) => {
+    if (saving) return;
+    if (orderCancelled) {
+      beepError();
+      toast.error('Đơn đã hủy — không thể báo lỗi.');
+      return;
+    }
+    const cfg = stageErrors.find((o) => o.code.toLowerCase() === codeScanned);
+    if (!cfg) {
+      beepError();
+      toast.error(
+        contextStage
+          ? `Mã lỗi không thuộc công đoạn "${FULFILLMENT_STAGE_LABELS[contextStage]}" — kiểm tra bảng QR của trạm.`
+          : 'Chưa xác định được công đoạn — không nhận mã lỗi qua quét.',
+      );
+      return;
+    }
+    if (code === cfg.code) {
+      void submitError(cfg);
+      return;
+    }
+    setCode(cfg.code);
+    beepScan();
+    toast(`Đã chọn lỗi "${cfg.name}" — quét lại CÙNG MÃ hoặc nhấn Enter để ghi nhận.`);
+  };
+
+  /** Route 1 mã đã quét về đúng hành động. Trả false nếu mã không hợp lệ. */
+  const dispatchScan = (raw: string): boolean => {
+    const action = parseScanCode(raw);
+    if (action.kind === 'error') {
+      handleErrorScan(action.code);
+      return true;
+    }
+    if (action.kind === 'order') {
+      if (onScanOrder) onScanOrder(action.code);
+      else {
+        beepError();
+        toast.error('Đóng dialog rồi quét đơn ở ô tra cứu.');
+      }
+      return true;
+    }
+    if (action.kind === 'ok') {
+      beepError();
+      toast.error('Mã OK chỉ dùng cho công nhân công đoạn — ở đây hãy quét QR lỗi.');
+      return true;
+    }
+    return false;
+  };
+
+  // Buffer bắt keystroke máy quét khi dialog mở. Textarea note có burst-detector
+  // riêng: máy quét "gõ" mã vào note khi đang focus → nhận diện chuỗi ≥4 ký tự
+  // toàn gap <100ms kết thúc Enter → cắt khỏi note + xử lý như mã quét.
+  const scanBufRef = useRef('');
+  const lastKeyAtRef = useRef(0);
+  const taBufRef = useRef('');
+  const taLastAtRef = useRef(0);
+  const taAllFastRef = useRef(true);
+
+  const handleScanKeyDown = (e: React.KeyboardEvent): boolean => {
+    const el = e.target as HTMLElement;
+    const now = Date.now();
+
+    if (el.tagName === 'TEXTAREA') {
+      const gap = now - taLastAtRef.current;
+      if (e.key.length === 1 && !e.ctrlKey && !e.metaKey && !e.altKey) {
+        if (gap > 300) {
+          taBufRef.current = '';
+          taAllFastRef.current = true;
+        } else if (taBufRef.current.length > 0) {
+          taAllFastRef.current = taAllFastRef.current && gap < 100;
+        }
+        taBufRef.current += e.key;
+        taLastAtRef.current = now;
+        return false; // vẫn cho ký tự vào note — chỉ cắt khi xác định là mã quét
+      }
+      if (e.key === 'Enter' && !e.metaKey && !e.ctrlKey) {
+        const burst = taBufRef.current;
+        taBufRef.current = '';
+        taLastAtRef.current = now;
+        if (burst.length >= 4 && taAllFastRef.current && gap < 100 && parseScanCode(burst).kind !== 'unknown') {
+          e.preventDefault();
+          setNote((prev) => (prev.endsWith(burst) ? prev.slice(0, prev.length - burst.length) : prev));
+          dispatchScan(burst.trim());
+          return true;
+        }
+        return false; // Enter thường trong textarea = xuống dòng
+      }
+      return false;
+    }
+    if (el.tagName === 'INPUT') return false;
+
+    if (now - lastKeyAtRef.current > 600) scanBufRef.current = '';
+    lastKeyAtRef.current = now;
+    if (e.key.length === 1 && !e.ctrlKey && !e.metaKey && !e.altKey) {
+      scanBufRef.current += e.key;
+      e.preventDefault();
+      return true;
+    }
+    if (e.key !== 'Enter' || e.metaKey || e.ctrlKey) return false;
+    const raw = scanBufRef.current.trim();
+    scanBufRef.current = '';
+    if (!raw) {
+      // Enter TAY (buffer rỗng, không đứng trên button) → ghi nhận lỗi đang chọn.
+      if (el.tagName !== 'BUTTON' && canSubmit) {
+        e.preventDefault();
+        handleSubmit();
+        return true;
+      }
+      return false;
+    }
+    e.preventDefault();
+    if (!dispatchScan(raw)) {
+      beepError();
+      toast.error(`Mã không hợp lệ: "${raw}"`);
+    }
+    return true;
   };
 
   const factoryLabel = order.factory?.shortName || order.factory?.name || (order.factoryId ? '—' : 'Chưa map');
@@ -140,14 +267,17 @@ export function OrderErrorScanDialog({ order, onClose, onSaved }: Props) {
   // Lỗi đã ghi sẵn trên đơn (từ lần quét/gán trước) — hiển thị nổi bật để người
   // quét biết đơn này đang lỗi gì mà xử lý.
   const existingErrorName = order.productionError
-    ? sortedOptions.find((o) => o.code === order.productionError)?.name || order.productionError
+    ? errorOptions.find((o) => o.code === order.productionError)?.name || order.productionError
     : '';
 
   return (
     <Dialog open onOpenChange={(o) => !o && !saving && onClose()}>
+      {/* Modal gần full màn hình — mockup chiếm 1 nửa trái, form chữ to bên phải. */}
       <DialogContent
-        className="max-w-xl"
+        className="max-w-[96vw] w-[96vw] h-[94vh] max-h-[94vh] flex flex-col overflow-hidden gap-4"
         onKeyDown={(e) => {
+          // Máy quét (N-/E-/OK) xử lý trước — nếu đã nuốt event thì thôi.
+          if (handleScanKeyDown(e)) return;
           // Cho phép Cmd/Ctrl+Enter submit nhanh khi đã đủ điều kiện
           if ((e.metaKey || e.ctrlKey) && e.key === 'Enter' && canSubmit) {
             e.preventDefault();
@@ -156,63 +286,114 @@ export function OrderErrorScanDialog({ order, onClose, onSaved }: Props) {
         }}
       >
         <DialogHeader>
-          <DialogTitle className="flex items-center gap-2">
-            <MessageSquareWarning size={18} className="text-rose-500" />
+          <DialogTitle className="flex items-center gap-2.5 text-2xl">
+            <MessageSquareWarning size={24} className="text-rose-500" />
             Gán lỗi · {order.productionId}
           </DialogTitle>
         </DialogHeader>
 
-        {/* Order summary card */}
-        <div className="rounded-md border bg-muted/30 p-3 space-y-2 text-xs">
-          <div className="flex items-center gap-2">
+        <div className="flex-1 min-h-0 grid gap-6 md:grid-cols-2">
+          {/* Trái: mockup chiếm 1 nửa, cao hết modal + thông tin đơn chữ to */}
+          <div className="min-w-0 min-h-0 flex flex-col gap-3">
             {order.mockupUrl ? (
-              <img
-                src={order.mockupUrl}
-                alt={order.productionId}
-                className="w-12 h-12 rounded object-cover border bg-checker shrink-0"
-              />
+              <a
+                href={order.mockupOriginalUrl || order.mockupUrl}
+                target="_blank"
+                rel="noreferrer"
+                title="Click để mở ảnh gốc"
+                className="block flex-1 min-h-0 rounded-xl border border-border overflow-hidden bg-checker"
+              >
+                <img
+                  src={order.mockupUrl}
+                  alt={order.productionId}
+                  className="w-full h-full object-contain"
+                  referrerPolicy="no-referrer"
+                />
+              </a>
             ) : (
-              <div className="w-12 h-12 rounded border bg-muted shrink-0" />
+              <div className="flex-1 min-h-0 rounded-xl border border-dashed border-border bg-muted/40 flex items-center justify-center text-lg text-muted-foreground">
+                Không có mockup
+              </div>
             )}
-            <div className="min-w-0 flex-1">
-              <div className="font-medium text-sm truncate">{order.type || 'Không rõ loại'}</div>
-              <div className="text-muted-foreground truncate">
+            <div className="shrink-0 rounded-md border bg-muted/30 p-4 space-y-1.5">
+              <div className="font-semibold text-2xl truncate">{order.type || 'Không rõ loại'}</div>
+              <div className="text-muted-foreground text-lg truncate">
                 {[order.color, order.size, order.quantity ? `qty ${order.quantity}` : null].filter(Boolean).join(' · ')}
+              </div>
+              <div className="grid grid-cols-1 xl:grid-cols-2 gap-1.5 pt-1 text-lg">
+                <InfoRow icon={<Factory size={18} />} label="Xưởng">
+                  {factoryLabel}
+                  {machineLabel && <span className="text-muted-foreground"> · {machineLabel}</span>}
+                </InfoRow>
+                <InfoRow icon={<Layers size={18} />} label="Stage hiện tại">
+                  {stageLabel}
+                  {order.designerReworkCount && order.designerReworkCount > 0 ? (
+                    <span className="ml-1 text-amber-600 dark:text-amber-400">
+                      · rework ×{order.designerReworkCount}
+                    </span>
+                  ) : null}
+                </InfoRow>
               </div>
             </div>
           </div>
-          <div className="grid grid-cols-2 gap-2 pt-1">
-            <InfoRow icon={<Factory size={12} />} label="Xưởng">
-              {factoryLabel}
-              {machineLabel && <span className="text-muted-foreground"> · {machineLabel}</span>}
-            </InfoRow>
-            <InfoRow icon={<Layers size={12} />} label="Stage hiện tại">
-              {stageLabel}
-              {order.designerReworkCount && order.designerReworkCount > 0 ? (
-                <span className="ml-1 text-amber-600 dark:text-amber-400">· rework ×{order.designerReworkCount}</span>
-              ) : null}
-            </InfoRow>
-          </div>
-        </div>
+
+          {/* Phải: hướng dẫn + banner + form gán lỗi — cuộn dọc khi tràn */}
+          <div className="min-w-0 min-h-0 overflow-y-auto space-y-4 pr-1">
+            {/* Hướng dẫn 3 bước CHỮ TO — bọc vùng viền đậm + link thêm lỗi */}
+            <GuideZone
+              label="Cách báo lỗi — quét 2 lần"
+              tone="rose"
+              action={
+                <Link
+                  to={PATHS.ORDERS_STAGE_ERRORS}
+                  className="inline-flex items-center gap-1 text-base font-semibold text-rose-600 dark:text-rose-400 underline underline-offset-2 hover:text-rose-700 dark:hover:text-rose-300"
+                >
+                  <Plus size={16} /> Thêm lỗi ở đây
+                </Link>
+              }
+            >
+              <div className="grid gap-2.5 sm:grid-cols-3">
+                <GuideStep
+                  step={1}
+                  tone="rose"
+                  icon={<QrCode size={20} />}
+                  title="Quét QR lỗi"
+                  desc="Hoặc bấm chọn mã bên dưới — nguồn & nơi đẩy về tự theo cấu hình."
+                />
+                <GuideStep
+                  step={2}
+                  tone="slate"
+                  icon={<Pencil size={20} />}
+                  title="Gõ mô tả (nếu cần)"
+                  desc="Chọn nhầm? Quét mã KHÁC để đổi lựa chọn."
+                />
+                <GuideStep
+                  step={3}
+                  tone="emerald"
+                  icon={<CheckCircle2 size={20} />}
+                  title="Quét lại CÙNG MÃ / Enter"
+                  desc="Lúc này lỗi mới được ghi nhận + đơn tự đẩy về."
+                />
+              </div>
+            </GuideZone>
 
         {/* Đơn đã hủy → chặn mọi thao tác báo lỗi / đẩy về công đoạn trước. */}
         {orderCancelled && (
-          <div className="rounded-md border border-rose-400 bg-rose-100 p-2.5 flex items-start gap-2 dark:border-rose-500/50 dark:bg-rose-500/15">
-            <AlertTriangle size={15} className="mt-0.5 shrink-0 text-rose-600 dark:text-rose-400" />
-            <div className="min-w-0 flex-1 text-xs text-rose-800 dark:text-rose-200">
+          <div className="rounded-md border border-rose-400 bg-rose-100 p-3.5 flex items-start gap-2.5 dark:border-rose-500/50 dark:bg-rose-500/15">
+            <AlertTriangle size={20} className="mt-0.5 shrink-0 text-rose-600 dark:text-rose-400" />
+            <div className="min-w-0 flex-1 text-base text-rose-800 dark:text-rose-200">
               <p className="font-semibold">Đơn đã hủy — không thể báo lỗi</p>
               <p className="mt-0.5">Đơn hủy đã ra khỏi mọi công đoạn, không đẩy về công đoạn trước được.</p>
             </div>
           </div>
         )}
 
-        {/* Lỗi + mô tả đã ghi trên đơn — nổi bật (đỏ) để người quét thấy ngay.
-            Mô tả dài → cắt 2 dòng + tooltip (title) xem đầy đủ. */}
+        {/* Lỗi + mô tả đã ghi trên đơn — nổi bật (đỏ) để người quét thấy ngay. */}
         {(order.productionErrorNote || existingErrorName) && (
-          <div className="rounded-md border border-rose-300 bg-rose-50 p-2.5 flex items-start gap-2 dark:border-rose-500/40 dark:bg-rose-500/10">
-            <MessageSquareWarning size={15} className="mt-0.5 shrink-0 text-rose-600 dark:text-rose-400" />
+          <div className="rounded-md border border-rose-300 bg-rose-50 p-3.5 flex items-start gap-2.5 dark:border-rose-500/40 dark:bg-rose-500/10">
+            <MessageSquareWarning size={20} className="mt-0.5 shrink-0 text-rose-600 dark:text-rose-400" />
             <div className="min-w-0 flex-1">
-              <p className="text-[11px] font-semibold text-rose-700 dark:text-rose-300 flex items-center gap-1.5 flex-wrap">
+              <p className="text-sm font-semibold text-rose-700 dark:text-rose-300 flex items-center gap-1.5 flex-wrap">
                 Lỗi đã ghi trên đơn
                 {existingErrorName && (
                   <span className="px-1.5 py-0.5 rounded bg-rose-200/70 font-normal dark:bg-rose-500/20">
@@ -221,11 +402,7 @@ export function OrderErrorScanDialog({ order, onClose, onSaved }: Props) {
                 )}
                 {order.productionErrorSource && (
                   <span className="px-1.5 py-0.5 rounded bg-rose-200/70 font-normal dark:bg-rose-500/20">
-                    {order.productionErrorSource === 'designer'
-                      ? 'Do designer'
-                      : order.productionErrorSource === 'tool-check'
-                        ? 'Do soát tool'
-                        : 'Do xưởng'}
+                    {SOURCE_LABELS[order.productionErrorSource] ?? order.productionErrorSource}
                   </span>
                 )}
                 {order.productionErrorCount && order.productionErrorCount > 1 ? (
@@ -236,7 +413,7 @@ export function OrderErrorScanDialog({ order, onClose, onSaved }: Props) {
               </p>
               {order.productionErrorNote && (
                 <p
-                  className="mt-0.5 text-xs text-rose-900 dark:text-rose-100 line-clamp-2 break-words cursor-help"
+                  className="mt-1 text-base text-rose-900 dark:text-rose-100 line-clamp-2 break-words cursor-help"
                   title={order.productionErrorNote}
                 >
                   {order.productionErrorNote}
@@ -248,154 +425,109 @@ export function OrderErrorScanDialog({ order, onClose, onSaved }: Props) {
 
         {/* Form */}
         <div className="space-y-4">
-          {/* Mã lỗi */}
-          <div className="space-y-2">
-            <Label className="text-xs">
-              Mã lỗi <span className="text-destructive">*</span>
+          {/* Mã lỗi — CHỈ list của công đoạn ngữ cảnh (Stage Error Catalog) */}
+          <div className="space-y-2.5">
+            <Label className="text-lg">
+              Mã lỗi{' '}
+              {contextStage && (
+                <span className="text-muted-foreground font-normal">
+                  — công đoạn "{FULFILLMENT_STAGE_LABELS[contextStage]}"
+                </span>
+              )}{' '}
+              <span className="text-destructive">*</span>
             </Label>
-            <div className="flex flex-wrap gap-1.5">
-              {sortedOptions.map((opt) => {
-                const active = code === opt.code;
-                return (
-                  <button
-                    key={opt.code}
-                    type="button"
-                    onClick={() => setCode(opt.code)}
-                    className={cn(
-                      'inline-flex items-center gap-1 px-2.5 py-1 rounded-md border text-xs transition-colors',
-                      active
-                        ? 'bg-rose-500 border-rose-500 text-white'
-                        : 'bg-background border-border hover:border-rose-300',
-                    )}
+            {stageErrors.length === 0 ? (
+              <div className="rounded-md border border-dashed border-amber-300/60 bg-amber-50/40 dark:bg-amber-500/5 p-3.5 text-base text-amber-700 dark:text-amber-300 space-y-2">
+                <p className="flex items-start gap-2">
+                  <QrCode size={18} className="mt-0.5 shrink-0" />
+                  <span>
+                    {contextStage
+                      ? `Công đoạn "${FULFILLMENT_STAGE_LABELS[contextStage]}" chưa có lỗi nào trong danh mục.`
+                      : 'Đơn chưa vào fulfillment và bạn không có công đoạn — chưa xác định được danh mục lỗi.'}
+                  </span>
+                </p>
+                {contextStage && (
+                  <Link
+                    to={PATHS.ORDERS_STAGE_ERRORS}
+                    className="inline-flex items-center gap-1.5 font-medium underline underline-offset-2 hover:text-amber-800 dark:hover:text-amber-200"
                   >
-                    {opt.name}
-                    {opt.code === OTHER_CODE && (
-                      <AlertTriangle size={11} className={active ? 'text-white' : 'text-rose-500'} />
-                    )}
-                  </button>
-                );
-              })}
-            </div>
+                    <Plus size={16} /> Thêm lỗi cho công đoạn này
+                  </Link>
+                )}
+              </div>
+            ) : (
+              <div className="flex flex-wrap gap-2">
+                {stageErrors.map((opt) => {
+                  const active = code === opt.code;
+                  return (
+                    <button
+                      key={opt.code}
+                      type="button"
+                      onClick={() => setCode(opt.code)}
+                      className={cn(
+                        'inline-flex items-center gap-1.5 px-5 py-2.5 rounded-md border text-lg font-medium transition-colors',
+                        active
+                          ? 'bg-rose-500 border-rose-500 text-white'
+                          : 'bg-background border-border hover:border-rose-300',
+                      )}
+                    >
+                      {opt.name}
+                    </button>
+                  );
+                })}
+              </div>
+            )}
           </div>
 
-          {/* Nguồn lỗi */}
-          <div className="space-y-2">
-            <Label className="text-xs">
-              Nguồn lỗi <span className="text-destructive">*</span>
-            </Label>
-            <div className="flex gap-2">
-              <SourceButton
-                active={source === 'tool-check'}
-                color="amber"
-                onClick={() => setSource('tool-check')}
-                label="Do soát tool"
-              />
-              <SourceButton
-                active={source === 'factory'}
-                color="sky"
-                onClick={() => setSource('factory')}
-                label="Do xưởng"
-              />
-              <SourceButton
-                active={source === 'designer'}
-                color="violet"
-                onClick={() => setSource('designer')}
-                label="Do designer"
-              />
+          {/* Nguồn + đích đẩy về — TỰ THEO CONFIG, read-only (không chọn tay) */}
+          {selectedCfg && resolution && (
+            <div
+              className={cn(
+                'rounded-md border p-4 text-lg flex items-start gap-2.5',
+                resolution.ok
+                  ? 'border-amber-300/60 bg-amber-50/50 dark:border-amber-500/30 dark:bg-amber-500/5 text-amber-700 dark:text-amber-300'
+                  : 'border-rose-400 bg-rose-50 dark:border-rose-500/50 dark:bg-rose-500/10 text-rose-700 dark:text-rose-300',
+              )}
+            >
+              <RotateCcw size={22} className="mt-1 shrink-0" />
+              {resolution.ok ? (
+                <span>
+                  <strong>{SOURCE_LABELS[resolution.source]}</strong> · <strong>{resolution.targetLabel}</strong>
+                  <span className="block mt-0.5 font-normal opacity-80">
+                    Tự động theo cấu hình danh mục lỗi. Quét lại <strong>CÙNG MÃ</strong> (hoặc nhấn Enter) để ghi
+                    nhận — quét mã khác để đổi lựa chọn, gõ mô tả bên dưới nếu cần.
+                  </span>
+                </span>
+              ) : (
+                <span>{resolution.reason}</span>
+              )}
             </div>
-            {source === 'designer' && (
-              <p className="text-[11px] text-amber-600 dark:text-amber-400">
-                Lỗi designer → task tự về "Cần làm lại" cho designer đã làm đơn này.
-              </p>
-            )}
-            {source === 'tool-check' && (
-              <p className="text-[11px] text-amber-600 dark:text-amber-400">
-                Lỗi soát tool → đơn tự đẩy về Support (tab "Soát tool").
-              </p>
-            )}
-          </div>
+          )}
 
           {/* Note */}
           <div className="space-y-2">
-            <Label className="text-xs">Mô tả lỗi {noteRequired && <span className="text-destructive">*</span>}</Label>
+            <Label className="text-lg">Mô tả lỗi</Label>
             <Textarea
-              rows={2}
+              rows={3}
               value={note}
               onChange={(e) => setNote(e.target.value.slice(0, MAX_NOTE))}
-              placeholder={
-                noteRequired ? 'Bắt buộc khi chọn "Lỗi khác" — mô tả cụ thể' : 'Mô tả ngắn gọn lỗi gặp phải (tùy chọn)'
-              }
+              placeholder="Mô tả ngắn gọn lỗi gặp phải (tùy chọn)"
+              className="text-lg"
             />
-            <div className="text-right text-[10px] text-muted-foreground">
+            <div className="text-right text-xs text-muted-foreground">
               {note.length}/{MAX_NOTE}
             </div>
           </div>
-
-          {/* Đẩy về công đoạn — "Soát tool" luôn khả dụng; Designer + stage trước
-              chỉ khi đơn đã vào fulfillment. */}
-          <div className="space-y-2 pt-1 border-t">
-            <Label className="text-xs flex items-center gap-1.5">
-              <RotateCcw size={12} />
-              Đẩy về công đoạn <span className="text-muted-foreground font-normal">(mặc định Soát tool)</span>
-            </Label>
-            <div className="flex flex-wrap gap-1.5">
-              <ChipButton
-                active={reworkTarget === 'tool-check'}
-                onClick={() => {
-                  setReworkTarget('tool-check');
-                  setSource('tool-check');
-                }}
-                label="Soát tool"
-              />
-              {canReworkBack && (
-                <ChipButton
-                  active={reworkTarget === 'designer'}
-                  onClick={() => setReworkTarget('designer')}
-                  label="Designer"
-                />
-              )}
-              {canReworkBack &&
-                previousStages.map((s) => (
-                  <ChipButton
-                    key={s}
-                    active={reworkTarget === s}
-                    onClick={() => setReworkTarget(s)}
-                    label={FULFILLMENT_STAGE_LABELS[s]}
-                  />
-                ))}
-            </div>
-            {reworkTarget === 'tool-check' ? (
-              <p className="text-[11px] text-amber-600 dark:text-amber-400">
-                Đơn sẽ được đẩy về Support (tab "Soát tool")
-              </p>
-            ) : (
-              reworkTarget !== 'none' && (
-                <p className="text-[11px] text-muted-foreground">
-                  Mô tả lỗi sẽ được dùng làm lý do rework. Nếu trống, mặc định "Gán lỗi qua màn hình quét".
-                </p>
-              )
-            )}
-            {isCompleted && reworkTarget !== 'tool-check' && reworkTarget !== 'none' && (
-              <div className="rounded-md border border-dashed border-sky-300/50 bg-sky-50/40 dark:bg-sky-500/5 p-2 text-[11px] text-sky-700 dark:text-sky-300 flex items-start gap-1.5">
-                <RotateCcw size={12} className="mt-0.5 shrink-0" />
-                <span>Đơn đã hoàn thành fulfillment — đẩy về sẽ mở lại đơn & làm lại từ công đoạn đã chọn.</span>
-              </div>
-            )}
-            {!canReworkBack && reworkTarget !== 'tool-check' && (
-              <div className="rounded-md border border-dashed border-amber-300/50 bg-amber-50/40 dark:bg-amber-500/5 p-2 text-[11px] text-amber-700 dark:text-amber-300 flex items-start gap-1.5">
-                <ListChecks size={12} className="mt-0.5 shrink-0" />
-                <span>Đơn chưa vào fulfillment — chỉ có thể đẩy về Soát tool hoặc mark lỗi.</span>
-              </div>
-            )}
+        </div>
           </div>
         </div>
 
-        <DialogFooter className="gap-2">
-          <Button variant="outline" onClick={onClose} disabled={saving}>
+        <DialogFooter className="gap-3 shrink-0">
+          <Button variant="outline" onClick={onClose} disabled={saving} className="h-14 px-7 text-lg">
             Huỷ
           </Button>
-          <Button onClick={handleSubmit} disabled={!canSubmit}>
-            {saving && <Spinner size={14} className="mr-2" />}
+          <Button onClick={handleSubmit} disabled={!canSubmit} className="h-14 px-8 text-lg">
+            {saving && <Spinner size={20} className="mr-2" />}
             Gán lỗi & Quét tiếp
           </Button>
         </DialogFooter>
@@ -411,60 +543,5 @@ function InfoRow({ icon, label, children }: { icon: React.ReactNode; label: stri
       <span className="text-muted-foreground">{label}:</span>
       <span className="font-medium truncate">{children}</span>
     </div>
-  );
-}
-
-function SourceButton({
-  active,
-  color,
-  onClick,
-  label,
-}: {
-  active: boolean;
-  color: 'sky' | 'violet' | 'amber';
-  onClick: () => void;
-  label: string;
-}) {
-  const activeCls =
-    color === 'sky'
-      ? 'border-sky-500 bg-sky-50 text-sky-700 dark:bg-sky-500/10 dark:text-sky-300'
-      : color === 'violet'
-        ? 'border-violet-500 bg-violet-50 text-violet-700 dark:bg-violet-500/10 dark:text-violet-300'
-        : 'border-amber-500 bg-amber-50 text-amber-700 dark:bg-amber-500/10 dark:text-amber-300';
-  const hoverCls =
-    color === 'sky'
-      ? 'hover:border-sky-300'
-      : color === 'violet'
-        ? 'hover:border-violet-300'
-        : 'hover:border-amber-300';
-  return (
-    <button
-      type="button"
-      onClick={onClick}
-      className={cn(
-        'flex-1 px-3 py-2 rounded-md border text-xs font-medium transition-colors',
-        active ? activeCls : `border-border bg-background text-muted-foreground ${hoverCls}`,
-      )}
-    >
-      <Building2 size={12} className="inline -mt-0.5 mr-1" />
-      {label}
-    </button>
-  );
-}
-
-function ChipButton({ active, onClick, label }: { active: boolean; onClick: () => void; label: string }) {
-  return (
-    <button
-      type="button"
-      onClick={onClick}
-      className={cn(
-        'inline-flex items-center px-3 py-1.5 text-xs font-medium rounded-md border transition-colors',
-        active
-          ? 'bg-primary text-primary-foreground border-primary'
-          : 'bg-background text-foreground border-border hover:bg-accent',
-      )}
-    >
-      {label}
-    </button>
   );
 }

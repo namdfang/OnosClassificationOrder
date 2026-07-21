@@ -18,6 +18,7 @@ import {
   MapPin,
   Package,
   Palette,
+  QrCode,
   ScanLine,
   Scissors,
   Settings,
@@ -127,6 +128,13 @@ const NAV_GROUPS: NavGroup[] = [
             to: PATHS.ORDERS_SCAN_ERROR,
             icon: <ScanLine size={14} />,
             perm: 'page.scan_error',
+          },
+          {
+            key: 'orders-stage-errors',
+            label: 'Danh mục lỗi công đoạn',
+            to: PATHS.ORDERS_STAGE_ERRORS,
+            icon: <QrCode size={14} />,
+            perm: 'page.stage_errors',
           },
           {
             key: 'orders-unmapped',

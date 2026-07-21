@@ -16,6 +16,7 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 
 import { cn } from '@/utils/cn';
+import { beepError, beepScan, parseScanCode } from '@/utils/scanCodes';
 
 import { usePermission } from '@/hooks/usePermission';
 
@@ -81,6 +82,9 @@ function ScanErrorPageContent() {
   // Khi user Fulfillment bấm "Báo lỗi" trong dialog công đoạn → chuyển sang
   // dialog gán lỗi cho cùng đơn đó.
   const [errorMode, setErrorMode] = useState(false);
+  // Mã lỗi quét LẦN 1 từ dialog công đoạn → pre-select trong dialog gán lỗi,
+  // chờ quét lần 2 cùng mã (hoặc Enter) để xác nhận.
+  const [preselectedCode, setPreselectedCode] = useState<string | null>(null);
   const [history, setHistory] = useState<HistoryEntry[]>([]);
   const [mode, setMode] = useState<ScanMode>(() => {
     if (typeof window === 'undefined') return 'barcode';
@@ -119,11 +123,20 @@ function ScanErrorPageContent() {
       const code = normalizeCode(raw, mode);
       if (!code) return;
       if (loading) return;
+      // Quét nhầm mã hành động (OK / E-…) khi CHƯA có đơn đang chờ → nhắc quét đơn trước.
+      const action = parseScanCode(code);
+      if (action.kind === 'ok' || action.kind === 'error') {
+        beepError();
+        toast.error('Hãy quét mã ĐƠN trước, rồi mới quét mã OK / mã lỗi.');
+        setValue('');
+        return;
+      }
       setLoading(true);
       try {
         const res = await RepositoryRemote.order.getByProductionId(code);
         const data = res.data?.data as ScannedOrder | undefined;
         if (!data?._id) {
+          beepError();
           toast.error('Không tìm thấy đơn với mã này');
           pushHistory({
             id: `${Date.now()}`,
@@ -134,6 +147,7 @@ function ScanErrorPageContent() {
           setValue('');
           return;
         }
+        beepScan();
         setOrder(data);
         setValue('');
       } catch (err) {
@@ -141,6 +155,7 @@ function ScanErrorPageContent() {
         const msg = axios.isAxiosError(err)
           ? (err.response?.data as { message?: string })?.message || err.message
           : (err as Error).message;
+        beepError();
         if (status === 404) {
           toast.error(msg || 'Không tìm thấy đơn với mã này');
         } else {
@@ -192,7 +207,27 @@ function ScanErrorPageContent() {
   const onClose = useCallback(() => {
     setOrder(null);
     setErrorMode(false);
+    setPreselectedCode(null);
     // re-focus input handled by useEffect khi order = null
+  }, []);
+
+  // Quét barcode ĐƠN khác khi dialog đang mở → đóng dialog + tra cứu đơn mới luôn.
+  const onScanOrder = useCallback(
+    (code: string) => {
+      setOrder(null);
+      setErrorMode(false);
+      setPreselectedCode(null);
+      void handleLookup(code);
+    },
+    [handleLookup],
+  );
+
+  // Quét QR lỗi lần 1 (đã validate thuộc công đoạn user ở dialog công đoạn) →
+  // chuyển sang dialog gán lỗi với mã chọn sẵn.
+  const onScanError = useCallback((code: string) => {
+    beepScan();
+    setPreselectedCode(code);
+    setErrorMode(true);
   }, []);
 
   const stats = useMemo(() => {
@@ -215,8 +250,8 @@ function ScanErrorPageContent() {
           <h1 className="text-xl font-semibold">{myStage ? 'Quét hoàn thành / báo lỗi' : 'Quét mã'}</h1>
           <p className="text-sm text-muted-foreground">
             {myStage
-              ? 'Cắm máy quét USB → quét barcode. Nếu đơn ở công đoạn của bạn → Enter để Hoàn thành, hoặc bấm Báo lỗi.'
-              : 'Cắm máy quét USB → click vào ô input → quét barcode để mở dialog gán lỗi.'}
+              ? 'Quét barcode ĐƠN → quét tiếp mã OK để hoàn thành, hoặc quét QR lỗi để báo lỗi + tự đẩy về. Không cần chạm máy tính.'
+              : 'Cắm máy quét USB → quét barcode ĐƠN để mở dialog gán lỗi (quét tiếp QR lỗi để gán nhanh).'}
           </p>
         </div>
       </div>
@@ -363,9 +398,17 @@ function ScanErrorPageContent() {
             onClose={onClose}
             onCompleted={onCompleted}
             onReportError={() => setErrorMode(true)}
+            onScanError={onScanError}
+            onScanOrder={onScanOrder}
           />
         ) : (
-          <OrderErrorScanDialog order={order} onClose={onClose} onSaved={onSaved} />
+          <OrderErrorScanDialog
+            order={order}
+            onClose={onClose}
+            onSaved={onSaved}
+            onScanOrder={onScanOrder}
+            initialCode={preselectedCode ?? undefined}
+          />
         ))}
     </div>
   );
