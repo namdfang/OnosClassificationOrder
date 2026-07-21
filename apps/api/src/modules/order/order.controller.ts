@@ -62,6 +62,7 @@ import {
   SetDesignReviewResultResDto,
   SetProductionErrorDto,
   SetProductionErrorResDto,
+  ToolCheckDoneResDto,
   TransferOrderDto,
   TransferOrderResDto,
   UpdateOrderDesignDto,
@@ -467,6 +468,26 @@ export class OrderController {
     @UserAgent() userAgent: string,
   ): Promise<HoldOrderResDto> {
     return this.orderService.unholdOrder(id, user?.role?.name as RoleType, { user, ip, userAgent });
+  }
+
+  @Post(':id/tool-check-done')
+  @Auth([RoleType.SuperAdmin, RoleType.Admin, RoleType.Manager, RoleType.SupportManager, RoleType.Support])
+  @ApiOperation({
+    summary:
+      'Soát xong đơn In trả về (tool-check hold) — cần thiết kế: về designer cũ (rework) hoặc auto-gán / backlog "Cần gán"',
+  })
+  @HttpCode(HttpStatus.OK)
+  @ApiOkResponse({ type: ToolCheckDoneResDto })
+  async markToolCheckDone(
+    @Param('id') id: string,
+    @AuthUser() user: UserDocument,
+    @ClientIp() ip: string,
+    @UserAgent() userAgent: string,
+  ): Promise<ToolCheckDoneResDto> {
+    this.logger.info({
+      message: JSON.stringify({ method: 'POST', url: `/orders/${id}/tool-check-done`, userId: user._id }),
+    });
+    return this.orderService.markToolCheckDone(id, { user, ip, userAgent });
   }
 
   @Patch(':id/design')

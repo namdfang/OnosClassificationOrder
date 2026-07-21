@@ -1950,3 +1950,21 @@ export const ToolCheckOverviewResZod = ResZod.extend({
   }),
 });
 export class ToolCheckOverviewResDto extends createZodDto(extendApi(ToolCheckOverviewResZod)) {}
+
+// ─── Action "Đã soát xong" (tab Soát tool, list "Cần làm lại") ──────
+// Support xác nhận đã soát xong 1 đơn hold (source=tool-check + note=error) và
+// đơn CẦN THIẾT KẾ (khác nhánh đổi Note kq Tool → 'ok' = file ổn, về In):
+//   - Đơn có designer từng làm → designerStatus='rework' (về kanban "Cần làm lại").
+//   - Chưa có designer → auto-gán theo cấu hình xưởng (luồng import); không có
+//     cấu hình → nằm backlog "Cần gán" (designer tự nhận / leader phân).
+export const ToolCheckDoneOutcomeZod = z.enum(['designer-rework', 'auto-assigned', 'backlog']);
+export type ToolCheckDoneOutcome = z.infer<typeof ToolCheckDoneOutcomeZod>;
+
+export const ToolCheckDoneResZod = ResZod.extend({
+  data: z.object({
+    outcome: ToolCheckDoneOutcomeZod,
+    /** Tên designer nhận đơn (outcome='designer-rework' | 'auto-assigned'). */
+    assigneeName: z.string().optional(),
+  }),
+});
+export class ToolCheckDoneResDto extends createZodDto(extendApi(ToolCheckDoneResZod)) {}
