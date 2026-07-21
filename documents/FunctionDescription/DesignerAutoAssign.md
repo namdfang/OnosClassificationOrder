@@ -27,7 +27,11 @@ designer của xưởng đó theo tỉ lệ đã cấu hình, **không cần gá
    - `updateField('toolResultNote', code)` sửa tay ô "Note kq Tool" (bulk
      `bulkUpdateField` field `toolResultNote` **delegate** qua `updateField` nên
      cũng phủ).
-3. Hook gọi `OrderService.autoAssignAfterImport(orderIds, ctx)` (fire-and-forget).
+   - `markToolCheckDone` (nút "Đã soát xong" list "Cần làm lại" tab Soát tool —
+     đơn hold In trả về, chưa có designer; note giữ nguyên `'error'`; **await**
+     để trả outcome thật cho FE toast — xem `ToolCheckWorkflow.md §2.2b`).
+3. Hook gọi `OrderService.autoAssignAfterImport(orderIds, ctx)` (fire-and-forget,
+   riêng `markToolCheckDone` await).
 4. Engine xác minh lại điều kiện trên DB → chia đơn theo trọng số → `updateMany`
    set `assignee` + `designerStatus='assigned'` → ghi `orderLog` (field `assignee`).
 

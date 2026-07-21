@@ -81,6 +81,7 @@ import type {
   SetProductionErrorResDto,
   SizeMatrixRow,
   SizeSummary,
+  ToolCheckDoneResDto,
   TransferOrderDto,
   TransferOrderResDto,
   TypeSummary,
@@ -4222,6 +4223,94 @@ export class OrderService implements OnModuleInit {
       success: true,
       data: { matched: result.matchedCount, modified: result.modifiedCount },
     };
+  }
+
+  /**
+   * Action "Đã soát xong" (tab Soát tool, list "Cần làm lại") — Support xác nhận
+   * đã soát xong 1 đơn In trả về (marker `productionErrorSource='tool-check'` +
+   * `toolResultNote='error'`) và đơn CẦN THIẾT KẾ. Khác đường đổi Note kq Tool
+   * → 'ok' (= file ổn → chạy lại từ In):
+   *   - Đơn có designer từng làm xong → `designerStatus='rework'` → kanban
+   *     designer "Cần làm lại".
+   *   - Đơn đang có designer ôm (assigned/in-progress/rework) → không đụng
+   *     designer state, chỉ gỡ marker (đơn vẫn thuộc designer đó).
+   *   - Chưa có designer → `autoAssignAfterImport` (chia theo cấu hình xưởng,
+   *     luồng import); không có cấu hình / không map xưởng → giữ nguyên
+   *     note='error' + unassigned → nằm backlog "Cần gán" (designer tự nhận
+   *     hoặc leader phân).
+   * GIỮ `toolResultNote='error'` (điều kiện lọt backlog/auto-assign) — chỉ gỡ
+   * marker `productionErrorSource` để đơn rời list "Cần làm lại" + tab watching
+   * của In (positional watching theo designerStatus tiếp quản).
+   */
+  async markToolCheckDone(id: string, ctx?: AuditContext): Promise<ToolCheckDoneResDto> {
+    const before = await this.orderModel.findById(id).lean();
+    if (!before) throw new NotFoundException('Order not found');
+    const b = before as unknown as {
+      heldAt?: Date | null;
+      cancelledAt?: Date | null;
+      productionErrorSource?: string;
+      toolResultNote?: string;
+      assignee?: string;
+      designerStatus?: DesignerStatus;
+      designerCompletedAt?: Date;
+    };
+    this.assertNotHeld(b);
+    if (b.cancelledAt) throw new BadRequestException('Đơn đã hủy — không thao tác được.');
+    if (!(b.productionErrorSource === 'tool-check' && b.toolResultNote === 'error')) {
+      throw new BadRequestException('Đơn không ở trạng thái "In trả về" (chờ soát lại).');
+    }
+
+    const set: Record<string, unknown> = {
+      productionErrorSource: null,
+      // Re-flow từ In sau khi designer xong (Entry A) — đồng bộ nhánh 'ok' hold.
+      currentFulfillmentStage: FulfillmentStage.Print,
+      readyForFulfill: false,
+    };
+    const hasAssignee = !!b.assignee;
+    const needRework = hasAssignee && (b.designerStatus === DesignerStatus.Done || !!b.designerCompletedAt);
+    if (needRework) {
+      set.designerStatus = DesignerStatus.Rework;
+      set.designerReworkAt = new Date();
+    }
+    await this.orderModel.updateOne({ _id: id }, { $set: set });
+    void this.orderLogService.write({
+      orderId: id,
+      action: 'update',
+      field: 'productionErrorSource',
+      before: 'tool-check',
+      after: null,
+      ctx,
+    });
+    if (needRework) {
+      void this.orderLogService.write({
+        orderId: id,
+        action: 'update',
+        field: 'designerStatus',
+        before: b.designerStatus ?? null,
+        after: DesignerStatus.Rework,
+        ctx,
+      });
+    }
+    void this.invalidateListCache();
+
+    const resolveName = async (userId?: string): Promise<string | undefined> => {
+      if (!userId) return undefined;
+      const u = await this.userModel.findById(userId, { fullName: 1 }).lean();
+      return (u as unknown as { fullName?: string } | null)?.fullName;
+    };
+
+    if (hasAssignee) {
+      return { success: true, data: { outcome: 'designer-rework', assigneeName: await resolveName(b.assignee) } };
+    }
+
+    // Chưa có designer → auto-gán như luồng import (await để trả kết quả thật).
+    await this.autoAssignAfterImport([id], ctx);
+    const after = await this.orderModel.findById(id, { assignee: 1 }).lean();
+    const newAssignee = (after as unknown as { assignee?: string } | null)?.assignee;
+    if (newAssignee) {
+      return { success: true, data: { outcome: 'auto-assigned', assigneeName: await resolveName(newAssignee) } };
+    }
+    return { success: true, data: { outcome: 'backlog' } };
   }
 
   /**
