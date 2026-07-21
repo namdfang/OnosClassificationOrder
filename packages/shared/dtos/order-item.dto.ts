@@ -3,17 +3,11 @@ import { extendApi } from '@anatine/zod-openapi';
 import { BaseEntityZod, PageQueryZod, PageResZod, ResZod } from '@shared/types';
 import { z } from 'zod';
 
-import {
-  DESCRIPTION_MAX_LENGTH,
-  DESCRIPTION_MIN_LENGTH,
-  getObjectValues,
-  IDZod,
-  LineItemStatus,
-  NAME_MIN_LENGTH,
-  NameZod,
-  PrintArea,
-  QUANTITY_MAX,
-} from '..';
+import { DESCRIPTION_MAX_LENGTH, DESCRIPTION_MIN_LENGTH, NAME_MIN_LENGTH, QUANTITY_MAX } from '../constants/common-length';
+import { IDZod, NameZod } from '../constants/common-zod';
+import { LineItemStatus } from '../constants/order';
+import { PrintArea } from '../enums/product';
+import { getObjectValues } from '../utils/getObjectValues';
 
 export const LineItemZod = BaseEntityZod.extend({
   orderId: IDZod,

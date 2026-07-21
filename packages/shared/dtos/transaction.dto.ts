@@ -3,21 +3,9 @@ import { extendApi } from '@anatine/zod-openapi';
 import { BaseEntityZod, PageQueryZod, PageResZod, ResZod } from '@shared/types';
 import { z } from 'zod';
 
-import {
-  CodeZod,
-  DEFAULT_CURRENCY,
-  EMAIL_MAX_LENGTH,
-  IDZod,
-  MAX_TOPUP_AMOUNT,
-  MIN_TOPUP_AMOUNT,
-  NAME_MAX_LENGTH,
-  NOTE_MAX_LENGTH,
-  refineDecimalPlaces,
-  TopupType,
-  TransactionMethod,
-  TransactionStatus,
-  TransactionType,
-} from '..';
+import { EMAIL_MAX_LENGTH, MAX_TOPUP_AMOUNT, MIN_TOPUP_AMOUNT, NAME_MAX_LENGTH, NOTE_MAX_LENGTH } from '../constants/common-length';
+import { CodeZod, IDZod, refineDecimalPlaces } from '../constants/common-zod';
+import { DEFAULT_CURRENCY, TopupType, TransactionMethod, TransactionStatus, TransactionType } from '../constants/transaction';
 
 export const TransactionZod = BaseEntityZod.extend({
   code: CodeZod.toUpperCase(),

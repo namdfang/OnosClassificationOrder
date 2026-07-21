@@ -2,7 +2,13 @@ import { createZodDto } from '@anatine/zod-nestjs';
 import { extendApi } from '@anatine/zod-openapi';
 import { z } from 'zod';
 
-import { BaseEntityZod, IDZod, PageQueryZod, PageResZod, ResZod, Status, WebhookTopic } from '..';
+import { IDZod } from '../constants/common-zod';
+import { Status } from '../enums/commons';
+import { WebhookTopic } from '../enums/webhook';
+import { BaseEntityZod } from '../types/BaseEntity';
+import { PageQueryZod } from '../types/PageQuery';
+import { PageResZod } from '../types/PageRes';
+import { ResZod } from '../types/Res';
 
 export const WebhookZod = BaseEntityZod.extend({
   name: z.string(),

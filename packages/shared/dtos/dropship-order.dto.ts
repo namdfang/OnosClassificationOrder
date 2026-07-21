@@ -4,36 +4,15 @@ import { BaseEntityZod, PageQueryZod, PageResZod, ResZod } from '@shared/types';
 import Big from 'big.js';
 import { z } from 'zod';
 
-import {
-  BETA_SHIP_FEE,
-  CreateDropShipLineItemZod,
-  DESCRIPTION_MAX_LENGTH,
-  DROPSHIP_ORDER_TYPE,
-  DropshipOrderStatus,
-  EXTERNAL_ID_MAX_LENGTH,
-  ExternalIDZod,
-  getObjectValues,
-  GetStatisticsZod,
-  IDZod,
-  Marketplace,
-  NAME_MIN_LENGTH,
-  NameZod,
-  NOTE_MAX_LENGTH,
-  NOTE_MIN_LENGTH,
-  optionalStringTransform,
-  OptionalURLZod,
-  OrderTrackingZod,
-  QUANTITY_MAX,
-  SendToProviderZod,
-  ShippingAddressZod,
-  TextZod,
-  TrackingNumberZod,
-  TrackingStatus,
-  TransactionZod,
-  UAT_SHIP_FEE,
-  UpdateLineItemsZod,
-  URLZod,
-} from '..';
+import { DESCRIPTION_MAX_LENGTH, EXTERNAL_ID_MAX_LENGTH, NAME_MIN_LENGTH, NOTE_MAX_LENGTH, NOTE_MIN_LENGTH, QUANTITY_MAX } from '../constants/common-length';
+import { ExternalIDZod, IDZod, NameZod, optionalStringTransform, OptionalURLZod, TextZod, TrackingNumberZod, URLZod } from '../constants/common-zod';
+import { BETA_SHIP_FEE, DROPSHIP_ORDER_TYPE, DropshipOrderStatus, UAT_SHIP_FEE } from '../constants/dropship-order';
+import { Marketplace } from '../constants/marketplace';
+import { CreateDropShipLineItemZod } from './dropship-order-item.dto';
+import { GetStatisticsZod, OrderTrackingZod, SendToProviderZod, ShippingAddressZod, UpdateLineItemsZod } from './order.dto';
+import { TransactionZod } from './transaction.dto';
+import { TrackingStatus } from '../enums/tracking';
+import { getObjectValues } from '../utils/getObjectValues';
 // import { CreateLineItemZod } from './DropShipOrder-item.dto';
 
 export const DropShipOrderTrackingZod = z.object({
