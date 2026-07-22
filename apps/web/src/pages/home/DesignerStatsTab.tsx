@@ -30,6 +30,7 @@ import { DesignerAssignBacklog } from './DesignerAssignBacklog';
 import { DesignerDailyOverview } from './DesignerDailyOverview';
 import { StatusBarCharts } from './StatusBarCharts';
 import { TeamDailyMatrix } from './TeamDailyMatrix';
+import { TopDesigners } from './TopDesigners';
 
 type Period = 'today' | '7d' | '30d' | 'custom';
 
@@ -156,40 +157,52 @@ export default function DesignerStatsTab() {
 
   return (
     <div className="space-y-5">
-      {/* Filter dùng chung: lọc biểu đồ cột + ma trận theo sản phẩm / khách hàng. */}
-      <div className="rounded-lg border border-border bg-card p-3">
-        <div className="flex items-center gap-2 mb-2">
-          <Filter size={15} className="text-indigo-600" />
-          <span className="text-sm font-semibold">Bộ lọc chung</span>
-          <span className="hidden md:inline text-[11px] text-muted-foreground">— áp cho các bảng bên dưới</span>
-          {(filterType || filterCustomer) && (
-            <button
-              type="button"
-              onClick={() => {
-                setFilterType('');
-                setFilterCustomer('');
+      {/* Filter dùng chung (trái) + Top designer theo cùng filter (phải). */}
+      <div className="flex flex-col lg:flex-row gap-4 items-stretch">
+        <div className="flex-1 min-w-0 rounded-lg border border-border bg-card p-3">
+          <div className="flex items-center gap-2 mb-2">
+            <Filter size={15} className="text-indigo-600" />
+            <span className="text-sm font-semibold">Bộ lọc chung</span>
+            <span className="hidden md:inline text-[11px] text-muted-foreground">— áp cho các bảng bên dưới</span>
+            {(filterType || filterCustomer) && (
+              <button
+                type="button"
+                onClick={() => {
+                  setFilterType('');
+                  setFilterCustomer('');
+                }}
+                className="inline-flex items-center gap-1 text-[11px] text-muted-foreground hover:text-foreground"
+              >
+                <X size={12} /> Xóa lọc
+              </button>
+            )}
+          </div>
+          {/* Thanh ngày — preset inline full-width */}
+          <div className="mb-2">
+            <DateRangePicker
+              variant="inline"
+              from={dateFrom}
+              to={dateTo}
+              onChange={(f, t) => {
+                setDateFrom(f);
+                setDateTo(t);
               }}
-              className="inline-flex items-center gap-1 text-[11px] text-muted-foreground hover:text-foreground"
-            >
-              <X size={12} /> Xóa lọc
-            </button>
-          )}
+            />
+          </div>
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+            <SelectFilter label="Sản phẩm" value={filterType} onChange={setFilterType} options={products} />
+            <SelectFilter label="Khách hàng" value={filterCustomer} onChange={setFilterCustomer} options={customers} />
+          </div>
         </div>
-        {/* Thanh ngày — preset inline full-width */}
-        <div className="mb-2">
-          <DateRangePicker
-            variant="inline"
-            from={dateFrom}
-            to={dateTo}
-            onChange={(f, t) => {
-              setDateFrom(f);
-              setDateTo(t);
-            }}
+
+        <div className="w-full lg:w-80 xl:w-96 shrink-0">
+          <TopDesigners
+            from={dateFrom || undefined}
+            to={dateTo || undefined}
+            type={filterType || undefined}
+            customer={filterCustomer || undefined}
+            reloadToken={matrixToken}
           />
-        </div>
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-2">
-          <SelectFilter label="Sản phẩm" value={filterType} onChange={setFilterType} options={products} />
-          <SelectFilter label="Khách hàng" value={filterCustomer} onChange={setFilterCustomer} options={customers} />
         </div>
       </div>
 

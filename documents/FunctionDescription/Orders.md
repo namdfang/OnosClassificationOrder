@@ -485,6 +485,8 @@ Ngoài các filter cơ bản (`createdFrom/To`, `factoryId`, `machineTypeId`, `p
 | `assignee` | CSV user._id | Lọc theo designer được gán. Token: `__none__` = chưa gán (null/''/missing) · `__any__` = ĐÃ gán bất kỳ ai (`$exists + $nin [null,'']` — drill hàng "Đã gán designer" bảng Tổng quan N ngày). |
 | `needDesigner` | boolean | `true` → pool cần/qua designer: `toolCheckErrorNotes` non-empty ∨ `designerStatus ∈ [assigned, in-progress, rework, done]` ($or push vào $and). Kết hợp `assignee=__none__` → drill hàng "Chưa gán designer" bảng Tổng quan N ngày. |
 | `designBacklog` | boolean | `true` → union "Tổng tồn" lăng kính designer: chưa soát (note rỗng) ∨ đã gán & chưa xong (assignee + `designerStatus ∈ [assigned,in-progress,rework]`) ∨ đang lỗi & chưa gán (pool cần designer). Drill hàng Tổng tồn bảng Tổng quan N ngày. |
+| `rejectedBy` | string | userId → đơn có sự kiện bàn giao "Không làm được" ĐI từ user (`designerRejections.fromUserId`). Drill hàng "Không làm được" panel thống kê 7 ngày (StatusBarCharts). Số ở ma trận/panel đếm LẦN — danh sách đơn distinct nên có thể ít hơn. |
+| `receivedBy` | string | userId → đơn có sự kiện NHẬN bàn giao (`designerRejections.toUserId`). Drill hàng "Nhận thêm" panel thống kê 7 ngày. |
 | `sort` | `'grouped'` | Sort `(type, size, fabricType, inProductionAt desc)` thay vì `inProductionAt` mặc định — để combo trùng nhau gom liền nhau (Workshop dùng để in batch chung). |
 
 ---

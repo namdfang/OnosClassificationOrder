@@ -425,6 +425,15 @@ export const GetProductionOrdersZod = PageQueryZod.extend({
    */
   needDesigner: z.coerce.boolean().optional(),
   /**
+   * userId → đơn có sự kiện bàn giao "Không làm được" ĐI từ user này
+   * (`designerRejections.fromUserId`). Drill hàng "Không làm được" panel
+   * thống kê 7 ngày (StatusBarCharts). Số đếm ma trận là số LẦN — 1 đơn bàn
+   * giao nhiều lần vẫn chỉ 1 dòng trong danh sách.
+   */
+  rejectedBy: z.string().optional(),
+  /** userId → đơn có sự kiện NHẬN bàn giao (`designerRejections.toUserId`). */
+  receivedBy: z.string().optional(),
+  /**
    * Truthy → đơn "tồn" theo lăng kính designer (hàng Tổng tồn Tổng quan N ngày):
    * chưa soát (note rỗng) ∨ đã gán & chưa xong (status assigned/in-progress/
    * rework) ∨ đang lỗi & chưa gán (pool cần designer). Union — mirror aggregation.

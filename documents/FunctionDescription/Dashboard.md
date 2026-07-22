@@ -4,20 +4,18 @@
 > **Tab "Soát tool" (`tool-check`)** — Support/Admin: đơn In trả về "do soát tool" + backlog chưa soát + **dải tổng quan theo ngày (6 hàng: Tổng đơn/Chưa soát/Đã soát/Soát lỗi/Soát OK/Cần làm lại; click ngày → lọc list, click CON SỐ → drill `DesignerDrillPanel` có filter Designer/Khách)** + **3 filter Sản phẩm/Khách/Máy** + thống kê lỗi theo sản phẩm/khách. **Doc riêng:** [`ToolCheckWorkflow.md`](ToolCheckWorkflow.md) (API `GET /v1/designer/tool-check-overview`, perm `page.tool_check`, gate `isAdmin || has('page.tool_check')`).
 > **Tab "Vòng đời đơn" (`lifecycle`)** — phễu 9 chặng soát tool→thiết kế→7 stage fulfillment. **MỌI tài khoản** (Fulfillment khóa xưởng). **Doc riêng:** [`OrderLifecycle.md`](OrderLifecycle.md) (API `GET /v1/orders/lifecycle-overview`).
 > **Strip "Vòng đời đơn"** (`LifecycleStrip.tsx`) — 1 dòng gọn trên đầu Dashboard, TRÊN mọi tab, cho mọi tài khoản: mặc định mini-phễu backlog theo ngày; nhập `productionId` → hành trình 1 đơn (API `GET /v1/orders/lifecycle-track/:code`). Xem `OrderLifecycle.md`.
-> **Tab A — Thống kê:** `apps/web/src/pages/home/OrderStatsTab.tsx`
-> **Tab A — Thống kê đơn & sản phẩm:** `apps/web/src/pages/home/OrderStatsTab.tsx`. Filter top bar dùng chung `<OrderFilterBar>` — xem `Orders.md §10.3`. 2 search field (`searchType` main + `searchUser` qua `topActionsRight`); auto-fetch debounce 300ms.
+> **Tab A — Thống kê:** `apps/web/src/pages/home/OrderStatsTab.tsx` > **Tab A — Thống kê đơn & sản phẩm:** `apps/web/src/pages/home/OrderStatsTab.tsx`. Filter top bar dùng chung `<OrderFilterBar>` — xem `Orders.md §10.3`. 2 search field (`searchType` main + `searchUser` qua `topActionsRight`); auto-fetch debounce 300ms.
 > **Tab B — Tình trạng:** `apps/web/src/pages/home/OrderStatusTab.tsx` + `status/{KpiCard,BreakdownCard,StatusFilterExtras,OrdersMiniTable,useStatusFilter}.tsx`. Filter top bar dùng chung `<OrderFilterBar>` (apps/web/src/components/orders/OrderFilterBar.tsx) — xem `Orders.md §10.3`.
 > **Tab C — Đơn theo xưởng:** `apps/web/src/pages/home/OrderFactoryTab.tsx` + `apps/web/src/pages/home/exportOrders.ts` (XLSX builder)
-> **Tab D — Designer:** `apps/web/src/pages/home/DesignerStatsTab.tsx` (+ `DesignerDailyOverview.tsx`, `DesignerDrillPanel.tsx`, `DesignerAssignBacklog.tsx`, `TeamDailyMatrix.tsx`, `StatusBarCharts.tsx`) — Admin/Manager/Leader **+ Designer (sub)** (perm `page.designer_stats`)
-> **File BE:** `apps/api/src/modules/order/order.service.ts` → `getDashboard()`, `getStatusOverview()`, `getFactoryOverview()`, `exportOrders()`, `transferOrder()`, `bulkTransferOrders()` + `apps/api/src/modules/designer/designer-stats.service.ts` → `getPerformance()`, `getTimeline()`, `getErrorStats()`, `getTeamDailyBreakdown()`
-> **Route:** `/dashboard?tab=stats|status|factory|designer`
-> **API:**
->  - `GET /v1/orders/dashboard` (Tab A)
->  - `GET /v1/orders/status-overview` (Tab B)
->  - `GET /v1/orders/factory-overview` (Tab C)
->  - `GET /v1/orders/export` (Tab C — full-list export, không phân trang)
->  - `PATCH /v1/orders/:id/transfer` + `PATCH /v1/orders/bulk-transfer` (Tab C — chuyển xưởng)
->  - `GET /v1/designer/performance` + `/timeline/:userId` + `GET /v1/orders/error-stats` (Tab D — **tạm KHÔNG gọi**, legacy stats tắt qua `SHOW_LEGACY_STATS=false`)
+> **Tab D — Designer:** `apps/web/src/pages/home/DesignerStatsTab.tsx` (+ `DesignerDailyOverview.tsx`, `DesignerDrillPanel.tsx`, `DesignerAssignBacklog.tsx`, `TeamDailyMatrix.tsx`, `StatusBarCharts.tsx`, `TopDesigners.tsx`) — Admin/Manager/Leader **+ Designer (sub)** (perm `page.designer_stats`)
+> **File BE:** `apps/api/src/modules/order/order.service.ts` → `getDashboard()`, `getStatusOverview()`, `getFactoryOverview()`, `exportOrders()`, `transferOrder()`, `bulkTransferOrders()` + `apps/api/src/modules/designer/designer-stats.service.ts` → `getPerformance()`, `getTimeline()`, `getErrorStats()`, `getTeamDailyBreakdown()` > **Route:** `/dashboard?tab=stats|status|factory|designer` > **API:**
+>
+> - `GET /v1/orders/dashboard` (Tab A)
+> - `GET /v1/orders/status-overview` (Tab B)
+> - `GET /v1/orders/factory-overview` (Tab C)
+> - `GET /v1/orders/export` (Tab C — full-list export, không phân trang)
+> - `PATCH /v1/orders/:id/transfer` + `PATCH /v1/orders/bulk-transfer` (Tab C — chuyển xưởng)
+> - `GET /v1/designer/performance` + `/timeline/:userId` + `GET /v1/orders/error-stats` (Tab D — **tạm KHÔNG gọi**, legacy stats tắt qua `SHOW_LEGACY_STATS=false`)
 
 ---
 
@@ -26,7 +24,9 @@
 Dashboard chia 4 tab độc lập (Tab D chỉ Leader/Admin/Manager):
 
 ### Tab A — "Thống kê đơn & sản phẩm" (cũ)
+
 Tổng quan đơn theo kỳ thời gian:
+
 - 4 metric card (đơn hàng / số lượng / chi phí SX / phí ship)
 - Biểu đồ tròn phân bổ **xưởng → loại máy** (hover drill-down)
 - Bảng **pivot sản phẩm × size** (`SizeMatrixTable`) — đặt **ngay trên** bảng "Chi tiết theo loại sản phẩm". Mỗi dòng 1 type, mỗi cột 1 size (XS→S→M→L→XL→2XL…, biến thể XXL/XXXL normalize về 2XL/3XL qua `normalizeSize`), ô = số lượng (0 → `–` mờ), cột cuối + dòng cuối = Tổng. Header trái + cột Tổng sticky, scroll ngang khi nhiều size.
@@ -41,7 +41,9 @@ Tổng quan đơn theo kỳ thời gian:
 Data từ `GET /v1/orders/dashboard`.
 
 ### Tab B — "Tình trạng đơn hàng" (Phase 6)
+
 Thống kê + drill-down theo workshop fields:
+
 - 4–6 **KPI card** đổi theo role (xem mục 5)
 - **Filter chip bar** + date range
 - **Grid breakdown card** đếm đơn theo từng workshop category (printStatus, toolResultNote, assignee, ...) + factory + machineType
@@ -50,7 +52,9 @@ Thống kê + drill-down theo workshop fields:
 Data từ `GET /v1/orders/status-overview` + `GET /v1/orders` (list).
 
 ### Tab C — "Đơn hàng theo xưởng" (Phase 7)
+
 Dashboard chuyển xưởng + xuất Excel + filter chiều sâu:
+
 - **3 Factory cards** (ML / TN / US) — mỗi card: tổng đơn đang sản xuất tại đó, pure, nhận từ xưởng khác, đã chuyển đi, **5 mini stats** (sản phẩm / loại vải / **phòng** = distinct machineTypeId / **loại máy** = distinct workshop_config.machine code / có tool), **khối Design 4 số** (được gán / chưa gán / đã xong / chưa xong — theo `designerStatus`, mỗi cặp cộng lại = total)
 - **Flow visualization** — danh sách luồng `(Từ xưởng → Đến xưởng, count, totalQuantity)`
 - **Filter chip bar** factory `Tất cả / Đang ở ML / Đang ở TN / Đang ở US` + **7 select filter** (Sản phẩm / Loại vải / **Phòng** = machineTypeId / **Máy** = workshop_config.machine code / Kết quả Tool / **Note Tool** = `toolResultNote` / **Khách hàng** = `userSku`) auto-scope theo factory chip đã chọn. 7 select filter dùng **faceted-search pattern**: BE nhận đủ facet, mỗi dropdown aggregate bằng `scopeMatch + (facetFilters trừ field hiện tại)` qua helper `buildFacetMatch(excludeKey)` — count phản ánh đúng cross-filter. Options trả trong `availableFilters` (thêm `toolResultNotes` + `users` — userSku giới hạn top 300 theo số đơn). Các facet **scope luôn thẻ xưởng** (flow/stats/breakdown đều dùng `cardMatch = matchMapped + facetFilters`) → vd. lọc theo khách hàng thì mỗi thẻ xưởng chỉ đếm đơn của khách đó; đồng thời lọc **bảng đơn chi tiết** (`getOrders`) + thu hẹp count các dropdown khác (cross-facet `buildFacetMatch`). Riêng chip factory/printStage/hasError chỉ áp cho bảng chi tiết + `availableFilters`, KHÔNG đổi thẻ xưởng (ma trận flow toàn cục). URL prefix `f` (`ftoolnote`, `fuser`).
@@ -69,12 +73,22 @@ Data từ `GET /v1/orders/factory-overview` + `GET /v1/orders?sort=grouped&...` 
 Layout (thứ tự render trên tab: **Bộ lọc chung → Tổng quan N ngày → panel drill-down inline (khi bấm số) → Cần gán designer → Biểu đồ cột cơ cấu → Ma trận toàn team → nút "Làm mới"**). **Period switcher + Leaderboard + Timeline + Error pie TẠM TẮT** — flag `SHOW_LEGACY_STATS = false` trong `DesignerStatsTab.tsx` (code giữ nguyên để bật lại), KHÔNG gọi 3 API `designer/performance` / `designer/timeline/:userId` / `orders/error-stats`. Đánh số dưới đây theo nhóm chức năng, không theo thứ tự dọc:
 
 **0. Bộ lọc chung sản phẩm + khách hàng + switcher ngày** (card `Filter` render **ĐẦU TIÊN trên cùng tab**):
+
 - 2 dropdown `<SelectFilter>` (native select có count + typeahead): **Sản phẩm** (`order.type`) + **Khách hàng** (`order.userSku`). State `filterType`/`filterCustomer`, truyền **props `type`/`customer`** xuống StatusBarCharts + TeamDailyMatrix + DesignerDailyOverview + DesignerAssignBacklog.
 - **Thanh ngày `<DateRangePicker variant="inline">`** (preset ngang full-width: Hôm nay · Hôm qua · 7/14/30 ngày · Tháng này · Tháng trước · Tùy chỉnh) — state `dateFrom`/`dateTo`, **mặc định 7 ngày gần nhất** (`last-7d`). Điều khiển **CẢ** `DesignerDailyOverview` VÀ `DesignerAssignBacklog` VÀ biểu đồ cột. Đã **bỏ nhóm nút 7/14/30 riêng** (model `rangeDays` cũ) — nay luôn gửi `from`/`to`; prop `days` truyền hằng `7` (BE bỏ qua khi có from/to). Xem `DateRangePicker-InlineRedesign.md`.
 - Option list load 1 lần lúc mount từ `GET /v1/designer/breakdown-filters`. Nút **"Xóa lọc"** hiện khi có filter active.
 - **Ảnh hưởng section 0b (tổng quan) + 0c (cần gán) + 2 (ma trận) + 2b (biểu đồ cột)** — KHÔNG ảnh hưởng Leaderboard/Timeline/Error pie (period switcher riêng).
+- **Card "Top Designer"** (`TopDesigners.tsx`) nằm **bên phải card Bộ lọc chung**
+  (flex row, cột phải `lg:w-80 xl:w-96`; mobile xuống dưới): top **3** designer
+  theo tổng **Đã xong** trong scope filter chung (gọi riêng
+  `GET /v1/designer/team-daily-breakdown` với from/to + type/customer, đọc
+  `rows[].totals.done`, loại bucket `__inactive__`, chỉ lấy done > 0). Mỗi hàng:
+  huy chương 🥇🥈🥉 + avatar chữ cái đầu (chưa có ảnh thật — API không trả avatar)
+  - tên + progress bar tím (tỉ lệ so với hạng 1) + "N thiết kế". Refetch theo
+    `matrixToken` (nút Làm mới).
 
 **0c. Bảng "Cần gán designer"** (`DesignerAssignBacklog.tsx` — render **NGAY DƯỚI bảng tổng quan**; gom theo sản phẩm):
+
 - **Pool:** `toolResultNote ∉ [null,'','ok']` (đã soát & ≠ ok) **VÀ** (`unassigned` / `rejected` / `rework chưa ôm` = rework + assignee rỗng).
 - **Gom theo sản phẩm** (`productConfigId` → mockup/level/fullName; đơn chưa map → nhóm **"Chưa map"**). Mỗi nhóm header: checkbox chọn-cả-nhóm (tristate) + thu/mở + **ảnh mockup** (click → `ImagePreviewDialog`) + **badge level** + tên + count.
 - **Mở nhóm** → bảng đơn **ĐẦY ĐỦ inline** (giống bảng workshop / drill-down §0b): checkbox chọn + **nhóm cột nghiệp vụ** `buildColGroups`/`GroupCellContent`/`WORKSHOP_COLS` (Mã đơn·Ưu tiên · Sản phẩm · Kết quả Tool · Xưởng·Vải·Máy · Trạng thái in · File lỗi · Lỗi xưởng · Người TH…). **Lazy-load per-nhóm** qua `GET /v1/orders/by-ids?ids=<CSV _id>` (`order.service.getOrdersByIds` — populate factory/machineType/productConfig, **KHÔNG scoping role** vì đơn CHƯA gán, nếu dùng `getOrders` role Designer sẽ bị lọc `assignee=self` → ẩn hết); cache theo `g.key` trong state `fullRows`, xóa khi refetch pool. Inline edit field qua `patchRow` (đổi state cục bộ), ảnh qua `openPreview`.
@@ -83,6 +97,7 @@ Layout (thứ tự render trên tab: **Bộ lọc chung → Tổng quan N ngày 
 - Data từ `GET /v1/designer/assign-backlog?days=7|14|30` (+ `type`/`customer`). v1 trả full compact rows (thu/mở chỉ là UI).
 
 **0b. Bảng "Tổng quan N ngày"** (`DesignerDailyOverview.tsx` — render **NGAY DƯỚI bộ lọc, TRÊN bảng cần gán**; nhận `days` từ switcher §0 (bỏ switcher nội bộ); cột = ngày `inProductionAt` VN, cũ→mới trái→phải; BE trả mới→cũ, FE `reverse()` days+rows):
+
 - **10 hàng chỉ số** (cột cuối = Tổng) — **các hàng ok/chưa-soát/lỗi/tồn phân loại HOÀN TOÀN theo `toolResultNote`, KHÔNG theo `designerStatus`**:
   - **Tổng đơn** — tất cả đơn vào SX ngày đó (mọi trạng thái). `total`.
   - **Tổng xong** — `toolResultNote === 'ok'` (đã soát xong, không lỗi). `ok`. Màu emerald.
@@ -105,20 +120,21 @@ Layout (thứ tự render trên tab: **Bộ lọc chung → Tổng quan N ngày 
 
 **1. Leaderboard table** — **TẠM TẮT** (`SHOW_LEGACY_STATS=false`, không gọi `GET /v1/designer/performance`; code giữ nguyên) — (`<Table>` shadcn) sort theo `completedInPeriod` desc, auto-include sub-designer chưa có task (row count 0):
 
-| Cột | Mô tả |
-|-----|-------|
-| # | Rank |
-| Designer | fullName + email |
+| Cột                                       | Mô tả                                                                                                                                                                                                                  |
+| ----------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| #                                         | Rank                                                                                                                                                                                                                   |
+| Designer                                  | fullName + email                                                                                                                                                                                                       |
 | Cần làm / Đang làm / Đã xong / **Đã sửa** | Snapshot count theo `designerStatus`; **Đã xong** = `completedInPeriod − fixedInPeriod` (hoàn thành không lỗi trong period); **Đã sửa** (`fixedInPeriod`, teal) = hoàn thành sau khi sửa lỗi (`designerReworkCount>0`) |
-| Trả (hiện) / L.lại (hiện) | Snapshot — task đang ở status rejected/rework |
-| **Tổng trả / Tổng l.lại** | **Cumulative** — đếm số LẦN transition tới rejected/rework trong period từ OrderLog (kể cả task đã chuyển trạng thái sau đó) |
-| Avg phản hồi | Trung bình `designerFirstStartedAt − designerAssignedAt` (phút). Fallback `designerStartedAt` cho legacy. |
-| Avg làm | Trung bình `designerWorkMs` (cumulative cycle-by-cycle). Fallback `designerCompletedAt − designerStartedAt` cho legacy. |
-| Tỉ lệ lỗi | `designerReworkCount` trung bình / completed → badge color (xanh / vàng / đỏ) |
+| Trả (hiện) / L.lại (hiện)                 | Snapshot — task đang ở status rejected/rework                                                                                                                                                                          |
+| **Tổng trả / Tổng l.lại**                 | **Cumulative** — đếm số LẦN transition tới rejected/rework trong period từ OrderLog (kể cả task đã chuyển trạng thái sau đó)                                                                                           |
+| Avg phản hồi                              | Trung bình `designerFirstStartedAt − designerAssignedAt` (phút). Fallback `designerStartedAt` cho legacy.                                                                                                              |
+| Avg làm                                   | Trung bình `designerWorkMs` (cumulative cycle-by-cycle). Fallback `designerCompletedAt − designerStartedAt` cho legacy.                                                                                                |
+| Tỉ lệ lỗi                                 | `designerReworkCount` trung bình / completed → badge color (xanh / vàng / đỏ)                                                                                                                                          |
 
 Click row → set `selectedUserId` → reload timeline chart.
 
 **2. Ma trận toàn team × ngày** (`TeamDailyMatrix.tsx` — component riêng, **render ĐẦU TIÊN trên cùng tab**, trên cả period switcher & Leaderboard):
+
 - **Mục đích:** thấy **MỌI designer theo thời gian + trạng thái** cùng lúc (Leaderboard chỉ có tổng, Timeline chỉ 1 designer). **Snapshot lens theo `inProductionAt`** (giống panel `/my-tasks` §`DesignerTaskWorkflow.md 4.2b` nhưng scope toàn team).
 - **Switcher `7/14/30 ngày` RIÊNG** (state `range` nội bộ, độc lập period switcher của tab) — tránh custom range sinh quá nhiều cột. Seq-guard chống race.
 - **Bảng ma trận full-width** (`table w-full` → cột ngày **giãn hết chiều rộng** khi ít ngày; nhiều ngày → cuộn ngang): cột trái **sticky = Designer** (tên + "chưa xong N · xong M"), header **sticky = các ngày** theo chiều **cũ→mới (quá khứ→hiện tại), trái→phải** (BE trả mới→cũ, FE `reverse()` cả `days`+`cells`+`columnTotals`). Mỗi ô = **5 số mini `Cần làm·Làm lại·Đang làm·Đã xong·Không làm được`** (assigned·rework·inProgress·done·**rejected**, màu zinc/amber/indigo/emerald/rose) + badge **`+N` (received, sky)** khi có nhận bàn giao thêm — **BẤT BIẾN: Tổng đã nhận = 5 số cộng lại** (`rejected`/`received` = số LẦN bàn giao đếm từ event `designerRejections` unwind theo fromUserId/toUserId, cùng scope + day theo `inProductionAt`; `received` ĐÃ nằm trong 5 số của người nhận nên KHÔNG cộng riêng — tooltip ghi rõ). Nền heatmap amber theo tổng chưa xong của ô (done/rejected/received KHÔNG ảnh hưởng nền); ô rỗng = `·`. Row label thêm "đã nhận T" (+ k.làm được/nhận khi >0); grand strip thêm `Không làm được` + `Nhận thêm` + `Tổng đã nhận`; title attr mỗi ô hiện đầy đủ công thức. **Mỗi con số có tooltip riêng** — dùng **Radix `Hint forceRich`** (bọc `TooltipProvider` ở root component; **KHÔNG** dùng native `title` vì không hiện ổn định) nội dung `"Cần làm/Cần làm lại/Đang làm/Đã xong: N"`. Footer sticky `Tổng/ngày` cũng hiện **4 số breakdown**. Grand summary strip trên đầu.
@@ -128,22 +144,25 @@ Click row → set `selectedUserId` → reload timeline chart.
 - **Lưu ý window:** đếm `inProductionAt ∈ [today−(N−1)..today]` → đơn tồn ngoài N ngày ẩn; dùng 14/30 để mở rộng. `done` gộp theo `inProductionAt` (KHÁC "completed in period" của Leaderboard dùng `designerCompletedAt`).
 
 **2b. Biểu đồ cột cơ cấu trạng thái** (`StatusBarCharts.tsx` — 1 card có **toggle**, render **ĐẦU TIÊN trên cùng tab**, trên cả ma trận; Recharts `BarChart` stacked):
+
 - **Toggle "Theo designer / Theo ngày"** — 1 khu vực biểu đồ, 2 chế độ, chung bộ màu 4 trạng thái (Cần làm zinc `#71717A` · Cần làm lại amber `#F59E0B` · Đang làm indigo `#6366F1` · Đã xong emerald `#10B981`) + legend + custom tooltip (hover hiện **số lượng + %** từng trạng thái + Tổng).
 - **Breakdown sản phẩm mode "Theo designer":** dữ liệu = sản phẩm designer được gán (mọi đơn assigned/in-progress/rework/done) **theo bộ lọc chung tab** (days/from/to + type/customer), mỗi sản phẩm = **ảnh mockup + badge level** (ProductConfig) + **số đơn**. Data từ `GET /v1/designer/product-breakdown` (props `filterDays`/`filterFrom`/`filterTo`; map `userId → {products,total}`; `designerData` có `userId`).
   - **Hover tooltip (recharts):** rê vào cột → tooltip hiện count/% + **TẤT CẢ sản phẩm** (không giới hạn chiều cao / không scroll — vì tooltip recharts bám con trỏ, rê vào để cuộn sẽ mất). `ChartTooltip` nhận prop `breakdown` (map `userId→{products,total}`), tra cứu qua `payload[0].payload.userId` (đã thêm `userId` vào `designerData`).
   - **Lưu ý:** breakdown dùng bộ lọc chung, có thể KHÁC date-range riêng của cột (bars). Nếu 1 designer có quá nhiều sản phẩm tooltip sẽ cao.
   - **Theo designer:** mỗi **cột = 1 designer** (chỉ người có đơn), **stack 100%** (`stackOffset="expand"`, YAxis %) → xong hết = 100% xanh. Có **date-range RIÊNG** (`DateRangePicker`, mặc định 30 ngày) → gọi `team-daily-breakdown?from=&to=`, lấy `rows[].totals`.
   - **Theo ngày:** mỗi **cột = 1 ngày** (cũ→mới trái→phải), **stack số lượng** (`stackOffset="none"`) → thấy khối lượng/ngày. Switcher **7/14/30** + dropdown **lọc theo người** (Tất cả = `columnTotals`; 1 người = `rows[].cells`). Gọi `team-daily-breakdown?days=`.
-- **Bấm cột 1 designer (mode "Theo designer") → panel "thống kê 7 ngày"** hiện dưới biểu đồ (`WeekStatsPanel` cùng file; click bắt qua `BarChart onClick` → `activePayload.userId`; auto `scrollIntoView`; nút Đóng): header tên designer + **4 chip tổng trạng thái** + **bảng 4 trạng thái × 7 ngày** (cột = ngày cũ→mới + Tổng) + **bảng sản phẩm designer làm trong 7 ngày** (mockup + badge level + tên + count, max-height scroll). Data RIÊNG **LUÔN 7 ngày gần nhất** (`team-daily-breakdown?days=7` + `product-breakdown?days=7`, kèm `type`/`customer` bộ lọc chung) — KHÔNG theo date-range của biểu đồ (mặc định 30 ngày); cache 1 lần, reset khi đổi bộ lọc chung.
+- **Bấm cột 1 designer (mode "Theo designer") → panel "thống kê 7 ngày"** hiện dưới biểu đồ (`WeekStatsPanel` cùng file; click bắt qua `BarChart onClick` → `activePayload.userId`; auto `scrollIntoView`; nút Đóng): header tên designer + **6 chip tổng** (4 trạng thái + **Không làm được** rose + **Nhận thêm** sky — `PANEL_ROWS = STATUS + EVENT_ROWS`) + **bảng 6 hàng × 7 ngày** (cột = ngày cũ→mới + Tổng) + **bảng sản phẩm designer làm trong 7 ngày** (mockup + badge level + tên + count, max-height scroll). 2 hàng sự kiện đọc `cells[].rejected/received` (số LẦN bàn giao — khớp ma trận). **MỌI con số > 0 (ô ngày + cột Tổng + chip) bấm được** → `DesignerDrillPanel` inline dưới panel (target `{title, query}` → `GET /orders/overview-list`): hàng trạng thái query `assignee=<userId>&designerStatus=<db-value>` (map `STATUS_DB` vì key `inProgress` ≠ `'in-progress'`), hàng sự kiện query `rejectedBy=<userId>` / `receivedBy=<userId>`; đều kèm `createdFrom/createdTo` (1 ngày hoặc cả cửa sổ 7 ngày) + `type`/`userSku` bộ lọc chung + `sort=grouped`. Title drill hàng sự kiện ghi "(N lần — 1 đơn bàn giao nhiều lần chỉ 1 dòng)" + footnote dưới bảng giải thích lần vs đơn. Drill reset khi đổi designer/bộ lọc chung. Data RIÊNG **LUÔN 7 ngày gần nhất** (`team-daily-breakdown?days=7` + `product-breakdown?days=7`, kèm `type`/`customer` bộ lọc chung) — KHÔNG theo date-range của biểu đồ (mặc định 30 ngày); cache 1 lần, reset khi đổi bộ lọc chung.
 - Cả 2 chế độ tái dùng **cùng endpoint** `GET /v1/designer/team-daily-breakdown` (đã bổ sung nhận `from`/`to` + `type`/`customer`; range tùy chỉnh cap 100 cột nhưng `totals` tính TRỰC TIẾP từ agg nên luôn đúng dù cap). Nhận props `type`/`customer` từ bộ lọc chung (§0) → refetch khi đổi. Fetch độc lập, seq-guard chống race.
 
 **3. Timeline per-designer** — **TẠM TẮT** (`SHOW_LEGACY_STATS=false`, không gọi `GET /v1/designer/timeline/:userId`) — (Recharts `LineChart`, 4 series: assigned / started / completed / rework):
+
 - Dropdown chọn designer (default = top leaderboard)
 - Bucket per-day timezone Asia/Ho_Chi_Minh, fill mọi ngày trong period kể cả 0
 - 4 line colors: zinc / indigo / emerald / amber
 - Data từ `GET /v1/designer/timeline/:userId`
 
 **4. Error source pie + breakdown** — **TẠM TẮT** (`SHOW_LEGACY_STATS=false`, không gọi `GET /v1/orders/error-stats`) — (Recharts `PieChart`):
+
 - 3 slice: designer (violet) / factory (sky) / unknown (slate) — split theo `order.productionErrorSource`
 - List dưới: từng productionError code với count + dot color theo source
 - Data từ `GET /v1/orders/error-stats`
@@ -155,6 +174,7 @@ Click row → set `selectedUserId` → reload timeline chart.
 ## 2. Luồng hoạt động
 
 ### 2.1 Khởi tạo
+
 ```
 User vào /dashboard
   → fetchDashboard({ startDate, endDate, searchType, searchUser })
@@ -164,6 +184,7 @@ User vào /dashboard
 ```
 
 ### 2.2 Đổi filter
+
 ```
 User chọn date range / nhập search type / nhập search user / chọn Top N
   → debounce 300ms (search) hoặc immediate (date / topN)
@@ -172,6 +193,7 @@ User chọn date range / nhập search type / nhập search user / chọn Top N
 ```
 
 ### 2.3 Hover pie chart (drill-down xưởng)
+
 ```
 User di chuột vào 1 slice xưởng
   → activeShape lift slice + halo background
@@ -184,14 +206,16 @@ User di chuột vào 1 slice xưởng
 ## 3. API: `GET /v1/orders/dashboard`
 
 ### 3.1 Query params
-| Param | Type | Mặc định | Mô tả |
-|-------|------|----------|-------|
-| `startDate` | ISO date string | đầu tháng hiện tại | Bao gồm |
-| `endDate` | ISO date string | hôm nay | Bao gồm cuối ngày |
-| `searchType` | string | — | Substring tên product type (case-insensitive) |
-| `searchUser` | string | — | Substring `userSku` hoặc `userEmail` |
+
+| Param        | Type            | Mặc định           | Mô tả                                         |
+| ------------ | --------------- | ------------------ | --------------------------------------------- |
+| `startDate`  | ISO date string | đầu tháng hiện tại | Bao gồm                                       |
+| `endDate`    | ISO date string | hôm nay            | Bao gồm cuối ngày                             |
+| `searchType` | string          | —                  | Substring tên product type (case-insensitive) |
+| `searchUser` | string          | —                  | Substring `userSku` hoặc `userEmail`          |
 
 ### 3.2 Response shape
+
 ```ts
 {
   totals: {
@@ -218,28 +242,31 @@ User di chuột vào 1 slice xưởng
 ## 4. UI Components
 
 ### 4.1 Filter bar (top)
-| Field | Component | Mô tả |
-|-------|-----------|-------|
-| Khoảng thời gian | shadcn `DateRangePicker` | Preset: hôm nay / 7 ngày / 30 ngày / tháng này |
-| Tìm theo sản phẩm | shadcn `Input` | Substring match cho `type` |
-| Tìm khách hàng | shadcn `Input` | Match `userSku` hoặc `userEmail` |
-| Top N | shadcn `Select` | 3 / 5 / 10 / All |
+
+| Field             | Component                | Mô tả                                          |
+| ----------------- | ------------------------ | ---------------------------------------------- |
+| Khoảng thời gian  | shadcn `DateRangePicker` | Preset: hôm nay / 7 ngày / 30 ngày / tháng này |
+| Tìm theo sản phẩm | shadcn `Input`           | Substring match cho `type`                     |
+| Tìm khách hàng    | shadcn `Input`           | Match `userSku` hoặc `userEmail`               |
+| Top N             | shadcn `Select`          | 3 / 5 / 10 / All                               |
 
 ### 4.2 Metric cards (4 ô uniform nhỏ)
+
 - Card style: `rounded-lg`, `border-border`, `px-3 py-2.5`, h=68px
 - Icon size 14 + nhãn 11px + giá trị 18px `tabular-nums`
 - Skeleton khi loading
 
-| Card | Source | Format |
-|------|--------|--------|
-| Đơn hàng | `totals.totalOrders` | `12,345` |
-| Sản phẩm | `totals.totalQuantity` | `12,345 cái` |
-| Chi phí SX | `totals.totalProductionCost` | `$12,345.67` |
-| Phí vận chuyển | `totals.totalShippingCost` | `$12,345.67` |
+| Card           | Source                       | Format       |
+| -------------- | ---------------------------- | ------------ |
+| Đơn hàng       | `totals.totalOrders`         | `12,345`     |
+| Sản phẩm       | `totals.totalQuantity`       | `12,345 cái` |
+| Chi phí SX     | `totals.totalProductionCost` | `$12,345.67` |
+| Phí vận chuyển | `totals.totalShippingCost`   | `$12,345.67` |
 
 **Card "Đơn đã hủy"** (`Ban`, đỏ khi >0) hàng riêng dưới lưới KPI = `totals.cancelledOrders` — bấm mở `CancelledOrdersDialog` (`GET /orders/cancelled-list?from&to&factoryId`) xem danh sách đơn hủy. Đơn hủy đã bị **loại khỏi toàn bộ số liệu** dashboard/công đoạn (chỉ còn hiện ở bảng đơn chính với badge). Xem `documents/Plans/CancelledOrders-ExcludeFromStages.md`.
 
 ### 4.3 FactoryDistribution (pie chart)
+
 - Header: icon **Factory** (sky-100 box) + tiêu đề "Phân bổ theo xưởng"
 - Recharts `PieChart` + `Pie` với `activeShape` lift + halo
 - Click-disable focus outline (CSS override trong `globals.css`)
@@ -247,6 +274,7 @@ User di chuột vào 1 slice xưởng
 - Side panel: di chuột vào slice → hiển thị `byMachineType[]` với % và quantity
 
 ### 4.4 Group by Production Type table
+
 - Layout: **CSS Grid div** (không phải `<table>`) để `position: sticky` scope đúng
 - Sticky header row + sticky summary row khi expand
 - `content-visibility: auto` cho rows ngoài viewport (perf)
@@ -257,6 +285,7 @@ User di chuột vào 1 slice xưởng
 - Mỗi mockup click → mở `ImagePreviewDialog` (display URL + original URL)
 
 ### 4.5 TopUsersCard
+
 - Header: icon **Crown** (violet-100 box) + tiêu đề "Khách hàng top đơn"
 - Mỗi row:
   - `RankBadge` (Medal vàng/bạc/đồng cho 1/2/3, số plain cho 4+)
@@ -271,6 +300,7 @@ User di chuột vào 1 slice xưởng
 ## 5. Backend aggregation logic
 
 ### 5.1 Pipeline `getDashboard()`
+
 ```
 $match { deletedAt: null, orderAt between [startDate, endDate], type ~ searchType, $or [userSku ~ searchUser, userEmail ~ searchUser] }
 $facet {
@@ -282,10 +312,12 @@ $facet {
 ```
 
 ### 5.2 Helper functions
+
 - **`sizeRank(size)`**: map S/M/L/XL/2XL/3XL/4XL/5XL → số để sort
 - **`processDesigns(designs)`**: transform Drive URL → Teehub CDN URL + giữ lại original
 
 ### 5.3 Cache
+
 - Key: `dashboard:${md5(query)}` → TTL 60s
 - Invalidate: khi `createOrder`, `importOrders`, `deleteOrder`, `updateOrder`
 
@@ -293,14 +325,14 @@ $facet {
 
 ## 6. Performance notes
 
-| Tối ưu | Vị trí | Mục đích |
-|--------|--------|----------|
-| `React.memo` | `MetricCard`, `RankBadge`, `TopUserRow` | Tránh re-render khi parent thay đổi |
-| `useMemo` | `chartData`, `topUsers`, `mergedFactory` | Tính toán nặng chỉ chạy khi deps đổi |
-| `useCallback` | `onPieHover`, `setActiveIndex` | Stable ref cho child memo |
-| `content-visibility: auto` | Bảng byType khi expand | Browser skip render off-screen rows |
-| Native `title` attribute | Tooltip mockup | Nhẹ hơn Radix Tooltip x100 lần |
-| Redis cache 60s | API dashboard | Tránh aggregate lặp lại |
+| Tối ưu                     | Vị trí                                   | Mục đích                             |
+| -------------------------- | ---------------------------------------- | ------------------------------------ |
+| `React.memo`               | `MetricCard`, `RankBadge`, `TopUserRow`  | Tránh re-render khi parent thay đổi  |
+| `useMemo`                  | `chartData`, `topUsers`, `mergedFactory` | Tính toán nặng chỉ chạy khi deps đổi |
+| `useCallback`              | `onPieHover`, `setActiveIndex`           | Stable ref cho child memo            |
+| `content-visibility: auto` | Bảng byType khi expand                   | Browser skip render off-screen rows  |
+| Native `title` attribute   | Tooltip mockup                           | Nhẹ hơn Radix Tooltip x100 lần       |
+| Redis cache 60s            | API dashboard                            | Tránh aggregate lặp lại              |
 
 ---
 
@@ -311,10 +343,11 @@ Page mở cho mọi role có `page.dashboard` (Admin, Manager, Support, Designer
 Tab C — **chuyển xưởng** (`/:id/transfer`, `/bulk-transfer`) gắn `@Auth(ORDER_WRITE_ROLES)` (SuperAdmin / Admin / Manager / Support). FE check thêm bằng `isAdmin || has('order.transfer')` để ẩn checkbox + nút bulk transfer khỏi Designer/Fulfillment.
 
 **Scope theo xưởng cho Fulfillment (mọi tab Dashboard):** tài khoản role `Fulfillment` **chỉ thấy đơn xưởng mình** trên cả 3 tab data (`getDashboard` Stats, `getStatusOverview` tab B, `getFactoryOverview` tab C) — controller truyền `user?.factoryId` + `user?.fulfillmentStage`:
+
 - **Stage In (print)**: thấy **mọi trạng thái** (bỏ `readyForFulfill`, gồm đơn lỗi/chưa ready) nhưng scope `factoryId = user.factoryId` (equality, không gồm `originalFactoryId`).
 - **Stage khác** (Ép/QC/May/Đóng): `readyForFulfill=true` + (`factoryId` hoặc `originalFactoryId` = xưởng mình).
 
-Phân biệt qua helper `OrderService.isPrintAdminView(roleName, fulfillmentStage)`. `getDashboard` gộp factory-scope $or + searchUser $or vào `$and` để không ghi đè. Admin/Manager không bị scope (thấy mọi xưởng). Xem `FulfillmentWorkflow.md §4.5`.
+Phân biệt qua helper `OrderService.isPrintAdminView(roleName, fulfillmentStage)`. `getDashboard` gộp factory-scope $or + searchUser $or vào `$and`để không ghi đè. Admin/Manager không bị scope (thấy mọi xưởng). Xem`FulfillmentWorkflow.md §4.5`.
 
 ---
 
@@ -323,6 +356,7 @@ Phân biệt qua helper `OrderService.isPrintAdminView(roleName, fulfillmentStag
 ### 8.1 Endpoint `GET /v1/orders/status-overview`
 
 Query params (extends list filter):
+
 - `printStatus`, `printStatusNote`, `toolResult`, `toolResultNote`, `errorFile`, `assignee`, `assigneeNote` — CSV codes (multi-select OR trong cùng category, AND giữa các category)
 - `factoryId`, `machineTypeId`
 - `readyForFulfill` (bool)
@@ -330,6 +364,7 @@ Query params (extends list filter):
 - `search`
 
 Response:
+
 ```ts
 {
   totals: {
@@ -347,6 +382,7 @@ Response:
 ```
 
 ### 8.2 Aggregation (`getStatusOverview()`)
+
 1. Build base match (visibility filter theo role + query filters).
 2. `$facet` 16 nhánh chạy SONG SONG: 6 KPI count + 9 breakdown group + 1 ready breakdown — 1 round-trip DB.
 3. Hậu xử lý FE-friendly:
@@ -356,15 +392,16 @@ Response:
 
 ### 8.3 Per-role KPI cards (FE)
 
-| Role | KPI |
-|------|-----|
-| Admin / Manager / Support | Tổng đơn · Hôm nay · Chờ Ok Tool · Sẵn sàng in · Đã in xong · Lỗi cần xử lý |
-| Designer | Cần check · Ok hôm nay · Đơn lỗi · Tổng (range) |
-| Fulfillment | Sẵn sàng in · Đã in xong · Đơn hôm nay · Tổng (range) **+ mini KPI từng máy**. Cell `toolResultNote` (Note kq Tool 1) hiển thị inline-edit để Fulfillment cập nhật tình trạng đơn sau khi in. |
+| Role                      | KPI                                                                                                                                                                                           |
+| ------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Admin / Manager / Support | Tổng đơn · Hôm nay · Chờ Ok Tool · Sẵn sàng in · Đã in xong · Lỗi cần xử lý                                                                                                                   |
+| Designer                  | Cần check · Ok hôm nay · Đơn lỗi · Tổng (range)                                                                                                                                               |
+| Fulfillment               | Sẵn sàng in · Đã in xong · Đơn hôm nay · Tổng (range) **+ mini KPI từng máy**. Cell `toolResultNote` (Note kq Tool 1) hiển thị inline-edit để Fulfillment cập nhật tình trạng đơn sau khi in. |
 
 ### 8.4 Breakdown card visibility
 
 Mỗi card render conditional theo `usePermission().canViewField(field)`:
+
 - Designer: ẩn `printStatus`, `printStatusNote` (vì không phải việc của Designer)
 - Fulfillment: ẩn `toolResult*`, `errorFile*`, `assignee*`
 - Support: thấy tất cả (view-only)
@@ -401,13 +438,13 @@ Optimistic update qua callback `onUpdated(newValue)` → patch row local state. 
 
 ## 9. Performance Tab B
 
-| Tối ưu | Vị trí |
-|--------|--------|
-| 1 round-trip cho overview | `$facet` 16-branch aggregation |
-| Parallel overview + list | 2 fetch chạy song song khi filter đổi |
-| Workshop name resolve | 1 bulk fetch all configs vào Map; lookup O(1) |
-| URL state thay vì component state | Refresh / back-forward không mất filter |
-| Optimistic update cell | Không re-fetch toàn list khi sửa 1 field |
+| Tối ưu                            | Vị trí                                        |
+| --------------------------------- | --------------------------------------------- |
+| 1 round-trip cho overview         | `$facet` 16-branch aggregation                |
+| Parallel overview + list          | 2 fetch chạy song song khi filter đổi         |
+| Workshop name resolve             | 1 bulk fetch all configs vào Map; lookup O(1) |
+| URL state thay vì component state | Refresh / back-forward không mất filter       |
+| Optimistic update cell            | Không re-fetch toàn list khi sửa 1 field      |
 
 ---
 
@@ -416,10 +453,12 @@ Optimistic update qua callback `onUpdated(newValue)` → patch row local state. 
 ### 10.1 Khái niệm chuyển xưởng
 
 Mỗi order có 2 field factory:
+
 - `factoryId` — xưởng **hiện tại** đang sản xuất (mutable qua transfer).
 - `originalFactoryId` — xưởng **gốc** tại lúc import (immutable, backfill bằng `factoryId` cho legacy rows ở `OrderService.onModuleInit()`).
 
 Phân loại đơn:
+
 - **Pure** — `factoryId === originalFactoryId` (chưa chuyển).
 - **Transferred** — `factoryId !== originalFactoryId`.
   - Với từng xưởng X: `transferredIn` = đơn `factoryId=X, originalFactoryId≠X`; `transferredOut` = `originalFactoryId=X, factoryId≠X`.
@@ -429,6 +468,7 @@ Phân loại đơn:
 Query: `createdFrom`, `createdTo`, `factoryId?` (chỉ scope `availableFilters` — cards + flow giữ global).
 
 Response `FactoryOverview` (shared DTO `production-order.dto.ts`):
+
 ```ts
 {
   totals: { total, transferred, pure },
@@ -462,6 +502,7 @@ FactoryOverviewCell = {
 ```
 
 Aggregation chính (`OrderService.getFactoryOverview`):
+
 1. `$match` theo `orderAt` range (đổi từ `createdAt` tháng 2026-06 — xem `Orders.md §7.0`) + `factoryId, originalFactoryId` đều tồn tại + (`readyForFulfill=true` nếu role là Fulfillment).
 2. `$group` theo `(originalFactoryId, factoryId)` → bảng flow.
 3. Bulk fetch tên factory từ collection `factories`.
@@ -482,37 +523,40 @@ Sheet "Chi tiết đơn" resolve code → tên hiển thị qua workshop config 
 
 ### 10.4 Endpoint chuyển xưởng
 
-| Method | Path | Body | Mô tả |
-|--------|------|------|-------|
-| PATCH | `/v1/orders/:id/transfer` | `{ targetFactoryId, reason? }` | Đổi `factoryId` cho 1 order; nếu trùng target trả `modified: 0`. |
-| PATCH | `/v1/orders/bulk-transfer` | `{ ids[], targetFactoryId, reason? }` | Pre-filter ID đã ở target (skip no-op), `updateMany` phần còn lại. |
-| PATCH | `/v1/orders/bulk-assign` | `{ ids[], factoryId, fabricType?, machineTypeId?, machineNumber?, toolResult?, reason? }` | Initial-assign cho đơn **UNMAPPED**. Pre-filter `factoryId` null/missing, `updateMany` set `factoryId + originalFactoryId + 4 optional fields`, log `bulk_update` với before/after từng field thay đổi. Đơn đã có factory bị skip (đếm `matched` nhưng không `modified`). |
+| Method | Path                       | Body                                                                                      | Mô tả                                                                                                                                                                                                                                                                     |
+| ------ | -------------------------- | ----------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| PATCH  | `/v1/orders/:id/transfer`  | `{ targetFactoryId, reason? }`                                                            | Đổi `factoryId` cho 1 order; nếu trùng target trả `modified: 0`.                                                                                                                                                                                                          |
+| PATCH  | `/v1/orders/bulk-transfer` | `{ ids[], targetFactoryId, reason? }`                                                     | Pre-filter ID đã ở target (skip no-op), `updateMany` phần còn lại.                                                                                                                                                                                                        |
+| PATCH  | `/v1/orders/bulk-assign`   | `{ ids[], factoryId, fabricType?, machineTypeId?, machineNumber?, toolResult?, reason? }` | Initial-assign cho đơn **UNMAPPED**. Pre-filter `factoryId` null/missing, `updateMany` set `factoryId + originalFactoryId + 4 optional fields`, log `bulk_update` với before/after từng field thay đổi. Đơn đã có factory bị skip (đếm `matched` nhưng không `modified`). |
 
 Cả 3 đều:
+
 - Ghi `OrderLog` (xem `OrderLog.md`) với `before/after` field thay đổi (`transfer` action cho 2 endpoint đầu, `bulk_update` cho `bulk-assign`).
 - Gọi `invalidateListCache()` để clear cache `orders:list:*`.
 
 `bulk-assign` thêm validate:
+
 - `factoryId` tồn tại qua `FactoryRepository.findOne`.
 - `machineTypeId` (nếu set) qua `MachineTypeRepository.findOne`.
 - `fabricType`, `machineNumber`, `toolResult` (nếu set) qua `assertValueAllowed()` ⇒ workshop_config category tương ứng (`fabric`, `machine`, `tool_result`).
 
 ### 10.5 UI components Tab C
 
-| Section | Component | Mô tả |
-|---------|-----------|-------|
-| Date range bar | `Input type=date` x2 + `RefreshCw` + `Download` | Default = today. Nút `Tải lại` re-fetch overview + rows. |
-| Factory cards | `FactoryCard` (3 cards horizontal) | Click số chính → set `filterMode={kind:'at', factoryId}`. Click ô "Nhận từ xưởng khác" / "Đã chuyển đi" → `{kind:'in'\|'out', factoryId}`. 3 button "Chưa in / Đang in / Đã in xong" → `{kind:'print', factoryId, stage}` để drill-down list theo trạng thái in. |
-| Flow visualization | Button rows | `[fromShortName] → [toShortName]` + `count + totalQuantity`. Click → filter `{kind:'in', factoryId=to}`. |
-| Filter chip bar | `FilterChip` (`Tất cả` + 1 chip/factory) + 4 `SelectFilter` | Selects auto-reset khi đổi factory chip để tránh combo zero-result. |
-| Bulk toolbar | Toolbar sticky khi `selected.size > 0` | Chỉ render khi `canTransfer = isAdmin \|\| has('order.transfer')`. Nút **"Chuyển xưởng"** (mở `TransferDialog`) — bảng này chỉ còn đơn ĐÃ map (đơn unmapped bị loại khỏi tab từ `order.service.ts`, xem `Orders.md §19`) nên không còn nhánh "Gán xưởng" ở đây nữa. |
-| Table | `Table` với 1 cột "Xưởng (đang / gốc)" + **compact grouped columns** (8 group từ `WORKSHOP_COLS` filtered theo `canViewField`, qua `buildColGroups()`/`<GroupCellContent>` — `Orders.md §10.2a`) + cột History | Row có `originalFactoryId !== factoryId` hiện badge `warning` + `← Gốc: shortName`. Mọi row luôn có xưởng (không còn nhánh "Gán xưởng"/"Chưa map" inline). |
-| `TransferDialog` | `Dialog` | Select target + Input lý do (max 200). Gọi `bulkTransferOrders({ids, targetFactoryId, reason})`. |
-| `AssignFactoryDialog` | `Dialog` | Initial-assign cho đơn UNMAPPED. Single mode: hiển thị `productionId / type / size / qty + link design (target="_blank" → originalUrl)`; Bulk mode: tiêu đề "Gán xưởng cho N đơn đã chọn". Form: 1 select required (Xưởng) + 4 select optional (Loại vải / Phòng / Máy / Tool). Source options: factory ← `overview.factories`, fabric/machine/tool ← `useWorkshopConfigStore` (full catalog), Phòng ← lazy fetch `machineType.getMachineTypes()` lần đầu open. Gọi `bulkAssignOrders()`. |
+| Section               | Component                                                                                                                                                                                                      | Mô tả                                                                                                                                                                                                                                                                                                                                                                                                                                                                                     |
+| --------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Date range bar        | `Input type=date` x2 + `RefreshCw` + `Download`                                                                                                                                                                | Default = today. Nút `Tải lại` re-fetch overview + rows.                                                                                                                                                                                                                                                                                                                                                                                                                                  |
+| Factory cards         | `FactoryCard` (3 cards horizontal)                                                                                                                                                                             | Click số chính → set `filterMode={kind:'at', factoryId}`. Click ô "Nhận từ xưởng khác" / "Đã chuyển đi" → `{kind:'in'\|'out', factoryId}`. 3 button "Chưa in / Đang in / Đã in xong" → `{kind:'print', factoryId, stage}` để drill-down list theo trạng thái in.                                                                                                                                                                                                                          |
+| Flow visualization    | Button rows                                                                                                                                                                                                    | `[fromShortName] → [toShortName]` + `count + totalQuantity`. Click → filter `{kind:'in', factoryId=to}`.                                                                                                                                                                                                                                                                                                                                                                                  |
+| Filter chip bar       | `FilterChip` (`Tất cả` + 1 chip/factory) + 4 `SelectFilter`                                                                                                                                                    | Selects auto-reset khi đổi factory chip để tránh combo zero-result.                                                                                                                                                                                                                                                                                                                                                                                                                       |
+| Bulk toolbar          | Toolbar sticky khi `selected.size > 0`                                                                                                                                                                         | Chỉ render khi `canTransfer = isAdmin \|\| has('order.transfer')`. Nút **"Chuyển xưởng"** (mở `TransferDialog`) — bảng này chỉ còn đơn ĐÃ map (đơn unmapped bị loại khỏi tab từ `order.service.ts`, xem `Orders.md §19`) nên không còn nhánh "Gán xưởng" ở đây nữa.                                                                                                                                                                                                                       |
+| Table                 | `Table` với 1 cột "Xưởng (đang / gốc)" + **compact grouped columns** (8 group từ `WORKSHOP_COLS` filtered theo `canViewField`, qua `buildColGroups()`/`<GroupCellContent>` — `Orders.md §10.2a`) + cột History | Row có `originalFactoryId !== factoryId` hiện badge `warning` + `← Gốc: shortName`. Mọi row luôn có xưởng (không còn nhánh "Gán xưởng"/"Chưa map" inline).                                                                                                                                                                                                                                                                                                                                |
+| `TransferDialog`      | `Dialog`                                                                                                                                                                                                       | Select target + Input lý do (max 200). Gọi `bulkTransferOrders({ids, targetFactoryId, reason})`.                                                                                                                                                                                                                                                                                                                                                                                          |
+| `AssignFactoryDialog` | `Dialog`                                                                                                                                                                                                       | Initial-assign cho đơn UNMAPPED. Single mode: hiển thị `productionId / type / size / qty + link design (target="_blank" → originalUrl)`; Bulk mode: tiêu đề "Gán xưởng cho N đơn đã chọn". Form: 1 select required (Xưởng) + 4 select optional (Loại vải / Phòng / Máy / Tool). Source options: factory ← `overview.factories`, fabric/machine/tool ← `useWorkshopConfigStore` (full catalog), Phòng ← lazy fetch `machineType.getMachineTypes()` lần đầu open. Gọi `bulkAssignOrders()`. |
 
 ### 10.6 Filter mode → query params
 
 `FilterMode` (FE-only union):
+
 - `{kind:'all'}` → không gửi `factoryId`/`transferStatus`.
 - `{kind:'at', factoryId}` → `?factoryId=…` (đơn đang ở X).
 - `{kind:'in', factoryId}` → `?transferStatus=transferred-in:<fid>`.
@@ -529,12 +573,12 @@ Hàm chính: `buildWorkbook(orders, overview, { resolve })` → `XLSX.WorkBook`.
 
 Cấu trúc workbook:
 
-| Sheet | Mô tả | Cấu trúc |
-|-------|-------|----------|
-| **Tổng quan** | Snapshot scope hiện tại | TỔNG QUAN (total/pure/transferred) → bảng `(Xưởng, Mã, Tổng, Pure, Nhận vào, Chuyển đi, Sản phẩm, Loại vải, Loại máy, Có tool)` → bảng `LUỒNG CHUYỂN XƯỞNG (Từ, Đến, Số đơn, Tổng sản phẩm)`. |
-| **Breakdown** | Long-form pivotable | 4 cột `(Xưởng, Loại, Giá trị, Số đơn)` × mỗi factory × `{Sản phẩm, Loại vải, Size, Kết quả Tool}`. |
-| **Chi tiết đơn** | Detail dump 21 cột | Production ID · User SKU · Size · Trạng thái in · Note Trạng thái in · Kết quả Tool · Note kq Tool 1 · File sửa lỗi · Ghi chú file lỗi · Color · Người thực hiện · Note người thực hiện · Type · Mockup · Design Front · Order ID · In Production At · Type.1 · Nhà máy · Phòng · Loại vải. |
-| **[shortName]** × N | 1 sheet / factory (`sanitizeSheetName` cắt 31 ký tự + thay `:\/?*[]` → `_`) | Header xưởng + dòng `(Tổng, Pure, Nhận vào, Chuyển đi)` + bảng 4 cột song song `Sản phẩm / Loại vải / Size / Kết quả Tool`. |
+| Sheet               | Mô tả                                                                       | Cấu trúc                                                                                                                                                                                                                                                                                    |
+| ------------------- | --------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **Tổng quan**       | Snapshot scope hiện tại                                                     | TỔNG QUAN (total/pure/transferred) → bảng `(Xưởng, Mã, Tổng, Pure, Nhận vào, Chuyển đi, Sản phẩm, Loại vải, Loại máy, Có tool)` → bảng `LUỒNG CHUYỂN XƯỞNG (Từ, Đến, Số đơn, Tổng sản phẩm)`.                                                                                               |
+| **Breakdown**       | Long-form pivotable                                                         | 4 cột `(Xưởng, Loại, Giá trị, Số đơn)` × mỗi factory × `{Sản phẩm, Loại vải, Size, Kết quả Tool}`.                                                                                                                                                                                          |
+| **Chi tiết đơn**    | Detail dump 21 cột                                                          | Production ID · User SKU · Size · Trạng thái in · Note Trạng thái in · Kết quả Tool · Note kq Tool 1 · File sửa lỗi · Ghi chú file lỗi · Color · Người thực hiện · Note người thực hiện · Type · Mockup · Design Front · Order ID · In Production At · Type.1 · Nhà máy · Phòng · Loại vải. |
+| **[shortName]** × N | 1 sheet / factory (`sanitizeSheetName` cắt 31 ký tự + thay `:\/?*[]` → `_`) | Header xưởng + dòng `(Tổng, Pure, Nhận vào, Chuyển đi)` + bảng 4 cột song song `Sản phẩm / Loại vải / Size / Kết quả Tool`.                                                                                                                                                                 |
 
 Tên file: `don-hang-YYYY-MM-DD-HH-MM-SS.xlsx` (timestamp lấy bằng `toLocaleString('sv-SE')` → ISO-like local time).
 
@@ -542,29 +586,30 @@ Trước khi gọi: nếu `data.length === 0` toast warning, không build workbo
 
 ### 10.8 Performance Tab C
 
-| Tối ưu | Vị trí |
-|--------|--------|
-| Tránh re-fetch overview khi đổi page/pageSize | `overviewQuery` chỉ phụ thuộc `(createdFrom, createdTo, filterMode)` |
-| Reset `selectFilters` khi đổi factory chip | `useEffect([filterMode])` — tránh combo zero-result phải debug |
-| Workshop config store load 1 lần | `useEffect` check `loaded` trước khi gọi `load()` |
-| Bulk transfer pre-filter | Skip ID đã ở target → không ghi log no-op |
-| Indeterminate progress bar khi `rowsLoading` | Giữ UI mượt thay vì block toàn bảng |
-| Sort `grouped` trên list | BE sort `(type, size, fabricType)` để đơn cùng combo gom liền nhau |
-| Export bypass phân trang nhưng giữ visibility filter | BE chia query → tránh client tải 10k rows × 20 page |
+| Tối ưu                                               | Vị trí                                                               |
+| ---------------------------------------------------- | -------------------------------------------------------------------- |
+| Tránh re-fetch overview khi đổi page/pageSize        | `overviewQuery` chỉ phụ thuộc `(createdFrom, createdTo, filterMode)` |
+| Reset `selectFilters` khi đổi factory chip           | `useEffect([filterMode])` — tránh combo zero-result phải debug       |
+| Workshop config store load 1 lần                     | `useEffect` check `loaded` trước khi gọi `load()`                    |
+| Bulk transfer pre-filter                             | Skip ID đã ở target → không ghi log no-op                            |
+| Indeterminate progress bar khi `rowsLoading`         | Giữ UI mượt thay vì block toàn bảng                                  |
+| Sort `grouped` trên list                             | BE sort `(type, size, fabricType)` để đơn cùng combo gom liền nhau   |
+| Export bypass phân trang nhưng giữ visibility filter | BE chia query → tránh client tải 10k rows × 20 page                  |
 
 ### 10.9 Print stage drill-down (Phase 7.1)
 
 3 button trong mỗi `FactoryCard` — disjoint, cộng lại = `total`:
 
-| Button | Định nghĩa BE | Tone (FE) |
-|--------|----------------|-----------|
-| **Chưa in** | `printStatus` null/empty/missing | slate |
-| **Đang in** | `printStatus` tồn tại, KHÔNG ∈ `PRINTED_MACHINE_CODES` | sky |
-| **Đã in xong** | `printStatus` ∈ `PRINTED_MACHINE_CODES` = `['machine-1', 'machine-2', 'machine-3', 'machine-4', 'machine-94']` | emerald |
+| Button         | Định nghĩa BE                                                                                                  | Tone (FE) |
+| -------------- | -------------------------------------------------------------------------------------------------------------- | --------- |
+| **Chưa in**    | `printStatus` null/empty/missing                                                                               | slate     |
+| **Đang in**    | `printStatus` tồn tại, KHÔNG ∈ `PRINTED_MACHINE_CODES`                                                         | sky       |
+| **Đã in xong** | `printStatus` ∈ `PRINTED_MACHINE_CODES` = `['machine-1', 'machine-2', 'machine-3', 'machine-4', 'machine-94']` | emerald   |
 
 Constant `PRINTED_MACHINE_CODES` ở module-level `order.service.ts` — dùng chung giữa `getStatusOverview()`, `getFactoryOverview()` (statRows aggregation), và `buildOrderListFilter()` (filter `printStage` query) để 3 chỗ luôn nhất quán.
 
 Click button → `FilterMode = { kind: 'print', factoryId, stage }`:
+
 - Bảng đơn lọc theo xưởng đó + stage.
 - Chip "Đang ở Xưởng X" cũng active (vì scope vẫn ở xưởng).
 - 4 select filter `availableFilters` (sản phẩm/vải/máy/tool) thu hẹp về options thực sự có trong (xưởng × stage) — `GetFactoryOverviewDto.printStage` thread xuống `filterMatch`.
@@ -576,6 +621,7 @@ Click chip "Đang ở X" lúc đang ở print mode → switch về `kind:'at'` (
 Xưởng (role Fulfillment) báo lỗi đơn hàng sau khi nhận file: chọn mã lý do (workshop_config `category=production_error`) + nhập mô tả tự do.
 
 **Schema** (`OrderEntity`):
+
 ```ts
 productionError?: string;       // code (wrong-size / wrong-color / print-misalign / fabric-damage / machine-jam / other...)
 productionErrorNote?: string;   // free text mô tả chi tiết
@@ -585,49 +631,55 @@ productionErrorNote?: string;   // free text mô tả chi tiết
 
 **Mã lý do default** (seed `workshop-config.seed.ts`, color badge):
 
-| Code | Tên hiển thị | Màu |
-|------|--------------|-----|
-| `wrong-size` | Sai size | `#EF4444` |
-| `wrong-color` | Sai màu | `#F97316` |
-| `wrong-fabric` | Sai loại vải | `#F59E0B` |
-| `print-misalign` | In lệch | `#DC2626` |
-| `print-blur` | In mờ/nhòe | `#B91C1C` |
-| `fabric-damage` | Vải lỗi/rách | `#A855F7` |
-| `wrong-design` | Sai design | `#7C3AED` |
+| Code             | Tên hiển thị      | Màu       |
+| ---------------- | ----------------- | --------- |
+| `wrong-size`     | Sai size          | `#EF4444` |
+| `wrong-color`    | Sai màu           | `#F97316` |
+| `wrong-fabric`   | Sai loại vải      | `#F59E0B` |
+| `print-misalign` | In lệch           | `#DC2626` |
+| `print-blur`     | In mờ/nhòe        | `#B91C1C` |
+| `fabric-damage`  | Vải lỗi/rách      | `#A855F7` |
+| `wrong-design`   | Sai design        | `#7C3AED` |
 | `missing-design` | Thiếu file design | `#9333EA` |
-| `machine-jam` | Máy lỗi/kẹt | `#0EA5E9` |
-| `other` | Lỗi khác | `#64748B` |
+| `machine-jam`    | Máy lỗi/kẹt       | `#0EA5E9` |
+| `other`          | Lỗi khác          | `#64748B` |
 
 **Permission codes** (catalog):
+
 - `order.field.productionError.view / .edit` — Fulfillment + admin.
 - `order.field.productionErrorNote.view / .edit` — Fulfillment + admin.
 
 **Filter trên list endpoint** (`GetProductionOrdersDto`):
+
 - `productionError=wrong-size,print-misalign` — CSV codes.
 - `hasError=true` — tất cả đơn có productionError. (`hasError=false` không support — không lọc tức là "tất cả".)
 
 **Factory tab — nút "Lỗi xưởng" thay vị trí "Đang in":**
 
-| Ô (mỗi card) | Filter mode | Query |
-|--------------|-------------|-------|
-| Chưa in | `{kind:'print', stage:'not-printed'}` | `factoryId + printStage` |
-| **Lỗi xưởng** (mới) | `{kind:'error', factoryId}` | `factoryId + hasError=true` |
-| Đã in xong | `{kind:'print', stage:'printed'}` | `factoryId + printStage` |
+| Ô (mỗi card)        | Filter mode                           | Query                       |
+| ------------------- | ------------------------------------- | --------------------------- |
+| Chưa in             | `{kind:'print', stage:'not-printed'}` | `factoryId + printStage`    |
+| **Lỗi xưởng** (mới) | `{kind:'error', factoryId}`           | `factoryId + hasError=true` |
+| Đã in xong          | `{kind:'print', stage:'printed'}`     | `factoryId + printStage`    |
 
 Card hiện `cell.errorCount` ở giữa (tone `rose`); active khi `filterMode.kind === 'error' && factoryId match`. Chip "Đang ở Xưởng X" cũng active đồng thời (giữ context xưởng).
 
 URL params: `fmode=error&ffactory=<id>` (cùng namespace `f*` với các filter khác của Tab C).
 
 **Status tab (Tab B):**
+
 - Toggle nhanh "Lỗi cần xử lý" (button rose) trong `<FilterChipBar>` — đặt `hasError=true` URL param.
 - Breakdown card "Lỗi xưởng" hiện 10 lý do hàng đầu (mode color). Click code → toggle `productionError` CSV filter.
 - KPI "Lỗi cần xử lý" giờ đếm cả `productionError` (cộng dồn với `toolResultNote='error'` và `errorFile != null`).
 
 **Cách aggregation đếm `errorCount`** (`getFactoryOverview` statRows):
+
 ```js
-errorCount: { $sum: { $cond: [
-  { $ne: [{ $ifNull: ['$productionError', ''] }, ''] }, 1, 0
-]}}
+errorCount: {
+  $sum: {
+    $cond: [{ $ne: [{ $ifNull: ['$productionError', ''] }, ''] }, 1, 0];
+  }
+}
 ```
 
 ---
@@ -638,13 +690,14 @@ errorCount: { $sum: { $cond: [
 
 Mỗi tab có **prefix riêng** để các param không clash khi user switch tab. Parent `home/index.tsx` `handleTabChange` strip param của 2 tab kia mỗi lần đổi tab.
 
-| Tab | Prefix | Params |
-|-----|--------|--------|
-| Stats (`OrderStatsTab`) | `s` | `sfrom`, `sto`, `stype`, `suser` |
-| Status (`useStatusFilter`) | _không prefix_ | `createdFrom`, `createdTo`, `printStatus`, `printStatusNote`, `toolResult`, `toolResultNote`, `errorFile`, `assignee`, `assigneeNote`, `factoryId`, `machineTypeId`, `readyForFulfill`, `search` |
-| Factory (`OrderFactoryTab`) | `f` | `ffrom`, `fto`, `fview`, `ffactory`, `fmode`, `fstage`, `ftype`, `ffabric`, `ftool`, `fmachine`, `fmnum`, `fpage`, `fsize` |
+| Tab                         | Prefix         | Params                                                                                                                                                                                           |
+| --------------------------- | -------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| Stats (`OrderStatsTab`)     | `s`            | `sfrom`, `sto`, `stype`, `suser`                                                                                                                                                                 |
+| Status (`useStatusFilter`)  | _không prefix_ | `createdFrom`, `createdTo`, `printStatus`, `printStatusNote`, `toolResult`, `toolResultNote`, `errorFile`, `assignee`, `assigneeNote`, `factoryId`, `machineTypeId`, `readyForFulfill`, `search` |
+| Factory (`OrderFactoryTab`) | `f`            | `ffrom`, `fto`, `fview`, `ffactory`, `fmode`, `fstage`, `ftype`, `ffabric`, `ftool`, `fmachine`, `fmnum`, `fpage`, `fsize`                                                                       |
 
 **`fview` (sub-view) — admin only:**
+
 - `fview` absent / khác → `by-factory` (default — 3 factory card breakdown).
 - `fview=total` → "Tổng" sub-view: hiển thị 1 `TotalCard` gộp tất cả xưởng (productCount/fabricCount/machineCount lấy từ `availableFilters.*.length` để đếm DISTINCT chuẩn; print/error counts là sum across cells; transferred/pure lấy từ `overview.totals`). Click stage button → set `FilterMode.kind = 'print-all'|'error-all'` → fetchRows bỏ `factoryId`, chỉ pass `printStage` hoặc `hasError` → BE filter cross-factory.
 - Non-admin nếu nhận URL với `fview=total` thì init state fallback `by-factory` (guard `v === 'total' && isAdmin`).
@@ -677,12 +730,12 @@ useEffect(() => {
 
 ### 11.3 Phân loại param: strip default vs always-write
 
-| Loại | Quy tắc | Lý do |
-|------|---------|-------|
-| **Date** (`*from`, `*to`, `createdFrom/To`) | **Luôn ghi vào URL** (kể cả today) | URL phải hiển thị explicit ngày đang xem để share link / copy URL không gây nhầm |
-| **Filter chips/selects** (workshop codes, factory, stage, ...) | Strip khi rỗng/default | URL gọn khi không filter |
-| **Pagination** (`*page`, `*size`) | Strip khi `page=1`/`size=20` | Default state không cần param |
-| **Search** | Strip khi rỗng | Default state không cần param |
+| Loại                                                           | Quy tắc                            | Lý do                                                                            |
+| -------------------------------------------------------------- | ---------------------------------- | -------------------------------------------------------------------------------- |
+| **Date** (`*from`, `*to`, `createdFrom/To`)                    | **Luôn ghi vào URL** (kể cả today) | URL phải hiển thị explicit ngày đang xem để share link / copy URL không gây nhầm |
+| **Filter chips/selects** (workshop codes, factory, stage, ...) | Strip khi rỗng/default             | URL gọn khi không filter                                                         |
+| **Pagination** (`*page`, `*size`)                              | Strip khi `page=1`/`size=20`       | Default state không cần param                                                    |
+| **Search**                                                     | Strip khi rỗng                     | Default state không cần param                                                    |
 
 ### 11.4 Default = today cho mọi date filter
 

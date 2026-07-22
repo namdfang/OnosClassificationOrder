@@ -1414,6 +1414,14 @@ export class OrderService implements OnModuleInit {
       // nguyên kể cả đơn đã sửa về 'ok'. '1' = từng lỗi, '0' = chưa từng.
       filter['toolCheckErrorNotes.0'] = { $exists: dto.toolCheckedError === '1' };
     }
+    if (dto.rejectedBy) {
+      // Sự kiện bàn giao "Không làm được" đi từ user (đếm LẦN ở ma trận/panel;
+      // danh sách đơn distinct nên có thể ít hơn con số).
+      filter['designerRejections.fromUserId'] = dto.rejectedBy;
+    }
+    if (dto.receivedBy) {
+      filter['designerRejections.toUserId'] = dto.receivedBy;
+    }
     if (dto.needDesigner === true) {
       // Pool cần/qua designer — mirror hàng "Chưa gán designer" Tổng quan N ngày.
       filter.$and = [
