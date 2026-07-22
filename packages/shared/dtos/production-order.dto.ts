@@ -921,6 +921,8 @@ export const DesignReviewOrderZod = z.object({
   productCode: z.string().nullable(),
   attributes: DesignReviewAttributesZod,
   designs: DesignFieldsZod,
+  /** Ảnh mockup sản phẩm — tham chiếu trực quan khi soát design (KHÔNG phải file design gốc). */
+  mockupUrl: z.string().optional(),
 });
 export type DesignReviewOrder = z.infer<typeof DesignReviewOrderZod>;
 
@@ -932,6 +934,18 @@ export const GetNextDesignReviewOrderResZod = z.object({
   remaining: z.number().int().nonnegative(),
 });
 export class GetNextDesignReviewOrderResDto extends createZodDto(extendApi(GetNextDesignReviewOrderResZod)) {}
+
+// Lookup TRỰC TIẾP 1 đơn theo `productionId` — bổ sung cho `/design-review/next`
+// (lấy đơn TIẾP THEO trong hàng đợi). Dùng khi tool ngoài cần soát lại/tra cứu
+// đúng 1 đơn cụ thể thay vì lấy theo thứ tự hàng đợi. KHÔNG áp filter hàng đợi
+// (`toolResult` rỗng / `designerStatus` unassigned) — trả về đơn ở BẤT KỲ
+// trạng thái nào, kể cả đã soát/đã gán, miễn khớp `productionId`.
+export const GetDesignReviewOrderByIdResZod = z.object({
+  success: z.literal(true),
+  /** null nếu không tìm thấy đơn khớp `productionId`. */
+  data: DesignReviewOrderZod.nullable(),
+});
+export class GetDesignReviewOrderByIdResDto extends createZodDto(extendApi(GetDesignReviewOrderByIdResZod)) {}
 
 // Design review — lưu Kết quả Tool (workshop_config category=tool_result, vd
 // 'has-tool'/'no-tool'). `null` = xoá giá trị hiện có. KHÔNG có `toolResultNote`

@@ -5273,7 +5273,7 @@ export class OrderService implements OnModuleInit {
           { $set: { designReviewClaimedAt: now } },
           {
             sort: { priority: -1, inProductionAt: 1, createdAt: 1 },
-            projection: { productionId: 1, orderId: 1, type: 1, color: 1, size: 1, designs: 1 },
+            projection: { productionId: 1, orderId: 1, type: 1, color: 1, size: 1, designs: 1, mockupUrl: 1 },
             new: true,
           },
         )
@@ -5290,6 +5290,7 @@ export class OrderService implements OnModuleInit {
       color?: string;
       size?: string;
       designs?: DesignFields;
+      mockupUrl?: string;
     };
 
     return {
@@ -5300,8 +5301,57 @@ export class OrderService implements OnModuleInit {
         productCode: mapProductTypeToCode(d.type),
         attributes: { size: d.size, color: d.color },
         designs: d.designs ?? {},
+        mockupUrl: d.mockupUrl,
       },
       remaining,
+    };
+  }
+
+  /**
+   * Lookup TRỰC TIẾP 1 đơn theo `productionId` cho tool soát design ngoài —
+   * bổ sung cho `getNextDesignReviewOrder()` (lấy đơn TIẾP THEO theo hàng đợi).
+   * KHÔNG áp filter hàng đợi (toolResult rỗng / designerStatus unassigned) —
+   * trả về đơn ở BẤT KỲ trạng thái nào miễn khớp `productionId` (kể cả đã
+   * soát/đã gán), phục vụ tra cứu/soát lại 1 đơn cụ thể. KHÔNG claim lease
+   * (không set `designReviewClaimedAt`) vì đây là lookup, không phải lấy việc.
+   */
+  async getDesignReviewOrderByProductionId(productionId: string): Promise<{
+    success: true;
+    data: DesignReviewOrder | null;
+  }> {
+    const trimmed = (productionId ?? '').trim();
+    if (!trimmed) return { success: true, data: null };
+
+    const escaped = trimmed.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+    const doc = await this.orderModel
+      .findOne(
+        { productionId: { $regex: `^${escaped}$`, $options: 'i' } },
+        { productionId: 1, orderId: 1, type: 1, color: 1, size: 1, designs: 1, mockupUrl: 1 },
+      )
+      .lean();
+
+    if (!doc) return { success: true, data: null };
+
+    const d = doc as unknown as {
+      productionId: string;
+      orderId?: string;
+      type?: string;
+      color?: string;
+      size?: string;
+      designs?: DesignFields;
+      mockupUrl?: string;
+    };
+
+    return {
+      success: true,
+      data: {
+        productionId: d.productionId,
+        orderId: d.orderId,
+        productCode: mapProductTypeToCode(d.type),
+        attributes: { size: d.size, color: d.color },
+        designs: d.designs ?? {},
+        mockupUrl: d.mockupUrl,
+      },
     };
   }
 

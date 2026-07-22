@@ -25,6 +25,7 @@ import {
   FulfillmentStatusCountsResDto,
   GetCancelledOrdersDto,
   GetCancelledOrdersResDto,
+  GetDesignReviewOrderByIdResDto,
   GetErrorLogDto,
   GetErrorLogResDto,
   GetFactoryOverviewDto,
@@ -859,6 +860,33 @@ export class OrderController {
       }),
     });
     return this.orderService.getNextDesignReviewOrder(dto) as Promise<GetNextDesignReviewOrderResDto>;
+  }
+
+  // Public — bổ sung cho `design-review/next` (lấy đơn TIẾP THEO theo hàng
+  // đợi). Endpoint này lấy TRỰC TIẾP 1 đơn theo `productionId` để tool soát
+  // lại/tra cứu — KHÔNG áp filter hàng đợi, KHÔNG claim lease. Xem Orders.md §18.
+  @Get('design-review/by-production-id/:productionId')
+  @Auth([], [], { public: true })
+  @ApiOperation({ summary: '[Public] Lấy thông tin 1 đơn (kèm mockup) theo productionId để tool soát design' })
+  @HttpCode(HttpStatus.OK)
+  @ApiOkResponse({ type: GetDesignReviewOrderByIdResDto })
+  async getDesignReviewOrderByProductionId(
+    @Param('productionId') productionId: string,
+    @ClientIp() ip: string,
+    @UserAgent() userAgent: string,
+  ): Promise<GetDesignReviewOrderByIdResDto> {
+    this.logger.info({
+      message: JSON.stringify({
+        method: 'GET',
+        url: '/orders/design-review/by-production-id',
+        productionId,
+        ip,
+        userAgent,
+      }),
+    });
+    return this.orderService.getDesignReviewOrderByProductionId(
+      productionId,
+    ) as Promise<GetDesignReviewOrderByIdResDto>;
   }
 
   // Public — không cần JWT, để tool ngoài duyệt thiết kế lưu Kết quả Tool
