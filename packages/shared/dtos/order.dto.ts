@@ -3,46 +3,15 @@ import { extendApi } from '@anatine/zod-openapi';
 import { BaseEntityZod, PageQueryZod, PageResZod, ResZod } from '@shared/types';
 import { z } from 'zod';
 
-import {
-  BooleanZod,
-  BulkImportUpdateOrderType,
-  CODE_LENGTH,
-  CodeZod,
-  DESCRIPTION_MAX_LENGTH,
-  DownloadStatus,
-  EXTERNAL_ID_MAX_LENGTH,
-  ExternalIDZod,
-  getObjectValues,
-  ID_LENGTH,
-  IDZod,
-  LabelService,
-  Marketplace,
-  NAME_MAX_LENGTH,
-  NAME_MIN_LENGTH,
-  NameZod,
-  NOTE_MAX_LENGTH,
-  NOTE_MIN_LENGTH,
-  optionalStringTransform,
-  OptionalURLZod,
-  OrderStatisticChartGroupBy,
-  OrderStatisticChartType,
-  OrderStatus,
-  OrderType,
-  PrintArea,
-  PRIORITY_MAX,
-  PRIORITY_MIN,
-  ProductionLine,
-  ProviderCode,
-  QUANTITY_MAX,
-  ShippingMethod,
-  ShippingStatus,
-  ShippingType,
-  ThirdShippingService,
-  TrackingNumberZod,
-  TrackingStatus,
-  TransactionZod,
-  URLZod,
-} from '..';
+import { CODE_LENGTH, DESCRIPTION_MAX_LENGTH, EXTERNAL_ID_MAX_LENGTH, ID_LENGTH, NAME_MAX_LENGTH, NAME_MIN_LENGTH, NOTE_MAX_LENGTH, NOTE_MIN_LENGTH, PRIORITY_MAX, PRIORITY_MIN, QUANTITY_MAX } from '../constants/common-length';
+import { BooleanZod, CodeZod, ExternalIDZod, IDZod, NameZod, optionalStringTransform, OptionalURLZod, TrackingNumberZod, URLZod } from '../constants/common-zod';
+import { Marketplace } from '../constants/marketplace';
+import { BulkImportUpdateOrderType, DownloadStatus, LabelService, OrderStatisticChartGroupBy, OrderStatisticChartType, OrderStatus, OrderType, ProductionLine, ShippingMethod, ShippingStatus, ShippingType, ThirdShippingService } from '../constants/order';
+import { TransactionZod } from './transaction.dto';
+import { PrintArea } from '../enums/product';
+import { ProviderCode } from '../enums/provider-code';
+import { TrackingStatus } from '../enums/tracking';
+import { getObjectValues } from '../utils/getObjectValues';
 import { CreateLineItemZod } from './order-item.dto';
 
 export const ShippingAddressZod = z.object({

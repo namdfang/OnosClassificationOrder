@@ -105,10 +105,10 @@ LifecycleStageRow = {
   backlog: number;      // đang chứa (snapshot). tool-check = chưa soát
   waitingToStart: number; // chờ nhận task (đã tới, chưa bấm Bắt đầu). designer='assigned'; fulfillment='waiting'; tool=0
   inProgress: number;   // đang làm (snapshot). tool-check = 0
-  rework: number;       // rework (snapshot)
+  rework: number;       // rework (snapshot). tool-check = đơn bị đẩy về Support soát lại (marker `productionErrorSource='tool-check' AND toolResultNote='error'` — CÙNG định nghĩa "cần làm lại" tab Soát tool)
   error: number;        // lỗi (snapshot)
   doneInRange: number;  // hoàn thành chặng trong kỳ (throughput)
-  passedTotal: number;  // đã từng qua chặng (cumulative). tool-check = đã soát
+  passedTotal: number;  // đã từng qua chặng (cumulative). tool-check = đã soát VÀ không đang bị đẩy về soát lại
   avgWorkMs: number;    // thời gian hoàn thành TB của đơn done trong kỳ (ms)
 }
 ```
@@ -160,6 +160,9 @@ trên collection `orders`:
   `{ $or: [factoryId, originalFactoryId] }`; role khác → theo `dto.factoryId`.
 - Facet `tool` / `designer`: `$group _id:null` với `$cond` đếm backlog/inProgress/
   rework/error/passed + `doneInRange`/`workSum`/`workCnt` (lọc qua helper `inRange`).
+  Riêng `tool`: `rework` đếm theo marker `toolReworkMarker`
+  (`productionErrorSource='tool-check' AND toolResultNote='error'` — khớp
+  `getToolCheckOverview().reworkMatch`); `passed` loại các đơn đang mang marker này.
 - Facet `fulfillmentSnapshot`: group theo `currentFulfillmentStage`; status hiện tại
   trích bằng `$let`+`$filter` trên `$objectToArray(fulfillmentStages)` (tránh field
   path có dấu gạch `qc-post-press`).

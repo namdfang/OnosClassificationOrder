@@ -4,36 +4,16 @@ import { BaseEntityZod, PageQueryZod, PageResZod, ResZod } from '@shared/types';
 import Big from 'big.js';
 import { z } from 'zod';
 
-import {
-  BETA_STOCK_SHIP_FEE,
-  CreateStockLineItemZod,
-  DESCRIPTION_MAX_LENGTH,
-  EXTERNAL_ID_MAX_LENGTH,
-  ExternalIDZod,
-  getObjectValues,
-  GetStatisticsZod,
-  IDZod,
-  Marketplace,
-  NAME_MAX_LENGTH,
-  NAME_MIN_LENGTH,
-  NameZod,
-  NOTE_MAX_LENGTH,
-  NOTE_MIN_LENGTH,
-  optionalStringTransform,
-  OptionalURLZod,
-  OrderTrackingZod,
-  QUANTITY_MAX,
-  SendToProviderZod,
-  STOCK_ORDER_TYPE,
-  StockOrderStatus,
-  TextZod,
-  TrackingNumberZod,
-  TrackingStatus,
-  TransactionZod,
-  UAT_SHIP_FEE,
-  UpdateLineItemsZod,
-  URLZod,
-} from '..';
+import { DESCRIPTION_MAX_LENGTH, EXTERNAL_ID_MAX_LENGTH, NAME_MAX_LENGTH, NAME_MIN_LENGTH, NOTE_MAX_LENGTH, NOTE_MIN_LENGTH, QUANTITY_MAX } from '../constants/common-length';
+import { ExternalIDZod, IDZod, NameZod, optionalStringTransform, OptionalURLZod, TextZod, TrackingNumberZod, URLZod } from '../constants/common-zod';
+import { UAT_SHIP_FEE } from '../constants/dropship-order';
+import { Marketplace } from '../constants/marketplace';
+import { BETA_STOCK_SHIP_FEE, STOCK_ORDER_TYPE, StockOrderStatus } from '../constants/stock-order';
+import { GetStatisticsZod, OrderTrackingZod, SendToProviderZod, UpdateLineItemsZod } from './order.dto';
+import { CreateStockLineItemZod } from './stock-order-item.dto';
+import { TransactionZod } from './transaction.dto';
+import { TrackingStatus } from '../enums/tracking';
+import { getObjectValues } from '../utils/getObjectValues';
 // import { CreateLineItemZod } from './StockOrder-item.dto';
 
 export const ShippingAddressStockZod = z.object({

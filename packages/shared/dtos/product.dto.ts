@@ -16,7 +16,11 @@ import {
 import { BaseEntityZod, PageQueryZod, PageResZod, ResZod } from '@shared/types';
 import { z } from 'zod';
 
-import { BooleanZod, CategoryZod, getObjectValues, ID_LENGTH, UserZod } from '..';
+import { ID_LENGTH } from '../constants/common-length';
+import { BooleanZod } from '../constants/common-zod';
+import { CategoryZod } from './category.dto';
+import { UserZod } from './user.dto';
+import { getObjectValues } from '../utils/getObjectValues';
 import { Status, Tier } from '../enums';
 import { CreateProductVariantZod, UpdateProductVariantZod } from './product-variant.dto';
 import { ResImageZod } from './upload.dto';

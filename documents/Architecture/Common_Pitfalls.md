@@ -214,19 +214,20 @@ Khác biệt local/server **không phải lúc nào cũng do timezone.** Phiên 
 - API crash lúc **khởi động** (require-time), stack trace trỏ vào `zod/lib/helpers/util.js` / `zod/lib/locales/en.js` (red herring — zod chỉ là "giọt nước tràn ly"): `RangeError: Maximum call stack size exceeded`.
 - Load được khi `node --stack-size=2000` (>default ~984) → **hữu hạn nhưng quá sâu**, KHÔNG phải đệ quy vô hạn (schema tự tham chiếu).
 
-### Root cause
-- Leaf files trong `packages/shared` (`dtos/*.dto.ts`, `constants/*.ts`, `utils/*.ts`...) import primitives (`IDZod`, `Status`, `BaseEntityZod`...) từ **`'..'` = entry `index.ts`**. Mà `index.ts` `export * from './dtos'` → **cycle: index → dtos → leaf → index**.
-- tsup/esbuild xử lý cycle-qua-ENTRY-point bằng cách **DUP toàn bộ graph** (mỗi symbol có suffix tăng dần: `ProductionOrderZod`, `...Zod2`, ... `...Zod74` — **74 bản copy**). Bundle `dist/index.cjs` phồng ~21MB. Eval 74 lớp lồng nhau lúc require → tràn stack.
-- **Tích lũy âm thầm:** mỗi file mới thêm `from '..'` tăng bội số. Vượt ngưỡng stack lúc nào không biết → **chỉ lộ khi rebuild `shared`** (dist gitignore, mỗi máy build riêng → máy chưa rebuild vẫn chạy dist cũ nhỏ hơn).
+### Root cause (2 tầng)
+- Leaf files trong `packages/shared` (`dtos/*.dto.ts`, `constants/*.ts`, `utils/*.ts`...) import primitives (`IDZod`, `Status`, `BaseEntityZod`...) từ **`'..'` = thư mục gói** → Node/esbuild resolve qua `package.json` (`module: dist/index.js`) → **tsup NUỐT NGUYÊN `dist/index.js` CŨ vào bundle mới** (marker `// dist/index.js` trong `dist/index.cjs`).
+- **Snowball mỗi lần build:** build N chứa dist của build N-1 bên trong → mỗi symbol có suffix tăng dần (`ALL_PERMISSION_CODES`, `...2`, ... `...24` = 24 lớp) — vì `prebuild: rimraf dist` **KHÔNG chạy** (pnpm mặc định bỏ qua pre/post scripts). Bundle phồng dần (8–21MB tuỳ số lớp). Eval N lớp lồng nhau lúc require → tràn stack.
+- Nếu dist SẠCH lúc build, `'..'` fallback về `index.ts` → **cycle-qua-entry thật** → esbuild sắp thứ tự eval sai → `TypeError: Cannot read properties of undefined (reading 'extend')` (`BaseEntityZod` chưa init). Tức là kiểu import `'..'` sai ở CẢ 2 nhánh — chỉ "chạy được" nhờ ăn dist cũ.
+- **Tích lũy âm thầm:** vượt ngưỡng stack lúc nào không biết → **chỉ lộ khi rebuild/deploy** (dist gitignore, mỗi máy build riêng; máy Node mới stack lớn hơn vẫn chạy được trong khi server Node cũ crash).
 
-### Fix (đã áp 2026-07)
-- Tách **`packages/shared/internal.ts`** = aggregation barrel (6 dòng `export * from './constants'|'./enums'|...|'./dtos'`). `index.ts` chỉ còn `export * from './internal'` (thin entry).
-- Đổi **mọi** leaf import `from '..'` → **`from '../internal'`** (38 files). Leaf giờ import module **NON-entry** → esbuild dedupe cycle về **1 copy**. Bundle: 21MB → **498KB**, `ProductionOrderZod` 74→**1**, load ở default stack OK (1355 exports).
+### Fix (đã áp 2026-07, branch fix/factory-by-customer)
+- Đổi **mọi** leaf import `from '..'` → **import trực tiếp module nguồn** (`from '../constants/common-zod'`, `from './common-length'`, `from '../utils/getObjectValues'`...) — codemod 40 files. Không còn cycle-qua-entry, không còn resolve vào dist. Bundle: **8.13MB → 526KB**, `ALL_PERMISSION_CODES` 24→**1**, load OK cả với `--stack-size=200` (1448 exports, không mất export nào).
+- `packages/shared/package.json` build script thêm **`--clean`**: `tsup index.ts --format cjs,esm --clean` — tsup tự xoá dist trước mỗi build (không phụ thuộc `prebuild` vốn bị pnpm bỏ qua) → hết đường snowball tái phát.
 
 ### Rule chung
-- **TUYỆT ĐỐI KHÔNG** `import ... from '..'` (entry) bên trong `packages/shared`. Dùng **`from '../internal'`** (hoặc import file/sub-barrel cụ thể). Import entry từ trong package = tạo cycle-qua-entry → esbuild dup graph.
+- **TUYỆT ĐỐI KHÔNG** `import ... from '..'` (entry/thư mục gói) bên trong `packages/shared`. Import **file module cụ thể** (hoặc sub-barrel `@shared/enums`/`@shared/types` — alias tsconfig trỏ source, an toàn).
 - Sau khi thêm file/DTO vào `shared`: `grep -rn "from '\.\.'" packages/shared --include=*.ts | grep -v dist` phải **= 0**.
-- Sanity sau `pnpm --filter shared build`: `grep -c "^var ProductionOrderZod" packages/shared/dist/index.cjs` phải **= 1** (>1 = cycle tái phát) + `node -e "require('./packages/shared/dist/index.cjs')"` không tràn stack.
+- Sanity sau `pnpm --filter shared build`: `grep -c "^// dist/index" packages/shared/dist/index.cjs` phải **= 0** và `grep -c "var ALL_PERMISSION_CODES" ...` phải **= 1** (>1 = tái phát) + `node --stack-size=200 -e "require('./packages/shared/dist/index.cjs')"` không tràn stack; size dist/index.cjs ~500KB (thấy MB là có chuyện).
 
 ---
 

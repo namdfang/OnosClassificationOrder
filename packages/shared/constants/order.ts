@@ -1,6 +1,6 @@
 import type { ExcelImportOrder } from '@shared/dtos';
 
-import { getObjectValues } from '..';
+import { getObjectValues } from '../utils/getObjectValues';
 
 export const ORDER_CODE_PREFIX = 'PE_';
 

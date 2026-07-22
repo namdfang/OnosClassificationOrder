@@ -3,7 +3,7 @@ import { extendApi } from '@anatine/zod-openapi';
 import { BaseEntityZod, PageQueryZod, PageResZod, ResZod } from '@shared/types';
 import { z } from 'zod';
 
-import { IDZod } from '..';
+import { IDZod } from '../constants/common-zod';
 
 export const ProductConfigZod = BaseEntityZod.extend({
   fullName: z.string().min(1).max(300),

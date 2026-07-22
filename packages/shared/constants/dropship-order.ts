@@ -1,4 +1,4 @@
-import type { ExcelImportDropShipOrder } from '..';
+import type { ExcelImportDropShipOrder } from '../dtos/dropship-order.dto';
 
 export const DROPSHIP_ORDER_CODE_PREFIX = 'PS_';
 

@@ -1,6 +1,6 @@
 import { customAlphabet } from 'nanoid';
 
-import { ID_LENGTH } from '..';
+import { ID_LENGTH } from '../constants/common-length';
 
 const alphabet = '0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZ';
 

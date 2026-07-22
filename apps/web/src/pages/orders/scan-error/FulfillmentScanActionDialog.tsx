@@ -1,4 +1,5 @@
 import React, { useMemo, useRef, useState } from 'react';
+import { Link } from 'react-router-dom';
 import {
   CheckCircle2,
   Clock,
@@ -10,14 +11,27 @@ import {
   Package,
   Palette,
   PlayCircle,
+  Plus,
+  QrCode,
   RotateCw,
   Ruler,
+  ScanLine,
   ShieldAlert,
   Wrench,
 } from 'lucide-react';
-import type { FulfillmentStage, ProductionOrderRow } from 'shared';
-import { FULFILLMENT_STAGE_LABELS, FulfillmentStageStatus, FulfillmentTransitionAction } from 'shared';
+import type { ProductionOrderRow, WorkshopConfig } from 'shared';
+import {
+  FULFILLMENT_STAGE_LABELS,
+  FulfillmentStage,
+  FulfillmentStageStatus,
+  FulfillmentTransitionAction,
+  WorkshopConfigCategory,
+} from 'shared';
 import { toast } from 'sonner';
+
+import { PATHS } from '@/constants/paths';
+
+import { useWorkshopConfigStore } from '@/store/workshopConfigStore';
 
 import { RepositoryRemote } from '@/services';
 
@@ -27,6 +41,21 @@ import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from '
 
 import { handleAxiosError } from '@/utils';
 import { cn } from '@/utils/cn';
+import { beepError, beepSuccess, parseScanCode } from '@/utils/scanCodes';
+
+import { GuideStep, GuideZone } from './ScanGuide';
+
+/** Link sang trang danh mục lỗi công đoạn — đặt ở góc vùng "Báo lỗi". */
+function AddErrorLink() {
+  return (
+    <Link
+      to={PATHS.ORDERS_STAGE_ERRORS}
+      className="inline-flex items-center gap-1 text-base font-semibold text-rose-600 dark:text-rose-400 underline underline-offset-2 hover:text-rose-700 dark:hover:text-rose-300"
+    >
+      <Plus size={16} /> Thêm lỗi ở đây
+    </Link>
+  );
+}
 
 type ScannedOrder = ProductionOrderRow & {
   factory?: { name?: string; shortName?: string };
@@ -44,6 +73,13 @@ interface Props {
   onCompleted: (summary: { stageLabel: string }) => void;
   /** User bấm "Báo lỗi" → page chuyển sang dialog gán lỗi. */
   onReportError: () => void;
+  /**
+   * Quét QR lỗi (`E-<code>`) hợp lệ (thuộc công đoạn của user) → page chuyển
+   * sang modal gán lỗi với mã đã chọn sẵn, chờ quét lần 2 xác nhận.
+   */
+  onScanError?: (code: string) => void;
+  /** Quét barcode ĐƠN khác (`N-…`) khi dialog đang mở → page tra cứu đơn mới. */
+  onScanOrder?: (code: string) => void;
 }
 
 const STATUS_META: Record<string, { label: string; icon: React.ElementType; cls: string }> = {
@@ -109,6 +145,8 @@ export function FulfillmentScanActionDialog({
   onClose,
   onCompleted,
   onReportError,
+  onScanError,
+  onScanOrder,
 }: Props) {
   const currentStage = order.currentFulfillmentStage as FulfillmentStage | undefined;
   const stageStatus = (order.fulfillmentStages?.[myStage]?.status ?? undefined) as FulfillmentStageStatus | undefined;
@@ -138,6 +176,13 @@ export function FulfillmentScanActionDialog({
 
   const myStageLabel = FULFILLMENT_STAGE_LABELS[myStage];
 
+  // Danh mục lỗi CỦA CÔNG ĐOẠN user (Stage Error Catalog) — validate QR `E-<code>`
+  // trước khi handoff sang modal gán lỗi (luồng xác nhận 2 lần quét).
+  const errorConfigs = useWorkshopConfigStore(
+    (s) => s.byCategory[WorkshopConfigCategory.ProductionError] || [],
+  ) as WorkshopConfig[];
+  const myStageErrors = useMemo(() => errorConfigs.filter((o) => o.stage === myStage), [errorConfigs, myStage]);
+
   const doComplete = async () => {
     if (!isMyTask || savingRef.current) return;
     savingRef.current = true;
@@ -154,10 +199,12 @@ export function FulfillmentScanActionDialog({
         stage: myStage,
         action: FulfillmentTransitionAction.Complete,
       });
+      beepSuccess();
       toast.success(`Đã hoàn thành "${myStageLabel}" · ${order.productionId}`);
       onCompleted({ stageLabel: myStageLabel });
       onClose();
     } catch (err) {
+      beepError();
       handleAxiosError(err);
     } finally {
       savingRef.current = false;
@@ -165,12 +212,75 @@ export function FulfillmentScanActionDialog({
     }
   };
 
+  /**
+   * Quét QR lỗi lần 1 → KHÔNG ghi nhận ngay. Validate mã thuộc danh mục công
+   * đoạn của user → handoff sang modal gán lỗi (mã đã chọn sẵn); ở đó quét lần
+   * 2 CÙNG MÃ (hoặc Enter) mới ghi nhận + đẩy về — chọn nhầm còn đổi được.
+   */
+  const doErrorScan = (codeScanned: string) => {
+    if (savingRef.current) return;
+    const cfg = myStageErrors.find((o) => o.code.toLowerCase() === codeScanned);
+    if (!cfg) {
+      beepError();
+      toast.error(`Mã lỗi không thuộc công đoạn "${myStageLabel}" — kiểm tra bảng QR của trạm.`);
+      return;
+    }
+    if (onScanError) onScanError(cfg.code);
+    else {
+      beepError();
+      toast.error('Báo lỗi qua quét chỉ dùng ở trang Quét mã.');
+    }
+  };
+
+  // Buffer bắt keystroke của máy quét khi dialog mở (máy quét gõ nhanh + kết
+  // thúc Enter). Enter tay (buffer rỗng) giữ hành vi cũ: Hoàn thành / Đóng.
+  const scanBufRef = useRef('');
+  const lastKeyAtRef = useRef(0);
+
   const handleKeyDown = (e: React.KeyboardEvent) => {
+    const el = e.target as HTMLElement;
+    if (el.tagName === 'INPUT' || el.tagName === 'TEXTAREA') return;
+    const now = Date.now();
+    if (now - lastKeyAtRef.current > 600) scanBufRef.current = '';
+    lastKeyAtRef.current = now;
+    if (e.key.length === 1 && !e.ctrlKey && !e.metaKey && !e.altKey) {
+      scanBufRef.current += e.key;
+      e.preventDefault(); // tránh space/ký tự kích hoạt button đang focus
+      return;
+    }
     if (e.key !== 'Enter') return;
     e.preventDefault();
     if (saving) return;
-    if (isMyTask) void doComplete();
-    else onClose(); // không phải task → Enter để quét tiếp
+    const raw = scanBufRef.current.trim();
+    scanBufRef.current = '';
+    if (!raw) {
+      if (isMyTask) void doComplete();
+      else onClose(); // không phải task → Enter để quét tiếp
+      return;
+    }
+    const action = parseScanCode(raw);
+    if (action.kind === 'ok') {
+      if (isMyTask) void doComplete();
+      else {
+        beepError();
+        toast.error(blockReason ?? 'Không phải task của bạn — không hoàn thành được.');
+      }
+      return;
+    }
+    if (action.kind === 'error') {
+      doErrorScan(action.code);
+      return;
+    }
+    if (action.kind === 'order') {
+      if (onScanOrder) onScanOrder(action.code);
+      else {
+        beepError();
+        toast.error('Đóng dialog rồi quét đơn ở ô tra cứu.');
+      }
+      return;
+    }
+    beepError();
+    toast.error(`Mã không hợp lệ: "${raw}"`);
   };
 
   const statusMeta = stageStatus ? STATUS_META[stageStatus] : undefined;
@@ -206,108 +316,118 @@ export function FulfillmentScanActionDialog({
 
   return (
     <Dialog open onOpenChange={(o) => !o && !saving && onClose()}>
-      <DialogContent className="max-w-5xl max-h-[98vh] overflow-y-auto" onKeyDown={handleKeyDown}>
+      {/* Modal gần full màn hình — công nhân đứng xa vẫn đọc được: mockup chiếm
+          1 nửa trái cao hết modal, cột phải chữ to (text-lg trở lên). */}
+      <DialogContent
+        className="max-w-[96vw] w-[96vw] h-[94vh] max-h-[94vh] flex flex-col overflow-hidden gap-4"
+        onKeyDown={handleKeyDown}
+      >
         <DialogHeader>
-          <DialogTitle className="flex items-center gap-2 text-lg">
-            <Layers size={20} className="text-primary" />
+          <DialogTitle className="flex items-center gap-2.5 text-2xl">
+            <Layers size={26} className="text-primary" />
             Công đoạn của tôi · {myStageLabel}
           </DialogTitle>
         </DialogHeader>
 
-        <div className="grid gap-5 md:grid-cols-[minmax(0,1.7fr)_minmax(0,1fr)]">
-          {/* Mockup lớn — click mở ảnh gốc tab mới */}
-          <div className="min-w-0">
+        <div className="flex-1 min-h-0 grid gap-6 md:grid-cols-2">
+          {/* Mockup — chiếm 1 nửa, cao hết modal + nút mở ảnh gốc to */}
+          <div className="min-w-0 min-h-0 flex flex-col gap-3">
             {mockupUrl ? (
-              <a
-                href={mockupUrl}
-                target="_blank"
-                rel="noreferrer"
-                title="Click để mở ảnh gốc"
-                className="group relative block w-full aspect-square rounded-xl border border-border overflow-hidden bg-checker"
-              >
-                <img
-                  src={order.mockupUrl || mockupUrl}
-                  alt={order.productionId}
-                  className="w-full h-full object-contain"
-                  referrerPolicy="no-referrer"
-                />
-                <span className="absolute bottom-2 right-2 inline-flex items-center gap-1 rounded-md bg-black/60 px-2 py-1 text-[11px] text-white opacity-0 group-hover:opacity-100 transition-opacity">
-                  <ExternalLink size={12} /> Mở ảnh gốc
-                </span>
-              </a>
+              <>
+                <a
+                  href={mockupUrl}
+                  target="_blank"
+                  rel="noreferrer"
+                  title="Click để mở ảnh gốc"
+                  className="group relative block flex-1 min-h-0 rounded-xl border border-border overflow-hidden bg-checker"
+                >
+                  <img
+                    src={order.mockupUrl || mockupUrl}
+                    alt={order.productionId}
+                    className="w-full h-full object-contain"
+                    referrerPolicy="no-referrer"
+                  />
+                </a>
+                <Button asChild variant="outline" className="h-14 text-lg shrink-0">
+                  <a href={mockupUrl} target="_blank" rel="noreferrer">
+                    <ExternalLink size={22} className="mr-2" />
+                    Mở ảnh gốc
+                  </a>
+                </Button>
+              </>
             ) : (
-              <div className="w-full aspect-square rounded-xl border border-dashed border-border bg-muted/40 flex flex-col items-center justify-center gap-2 text-muted-foreground">
-                <ImageIcon size={40} />
-                <span className="text-xs">Không có mockup</span>
+              <div className="flex-1 min-h-0 rounded-xl border border-dashed border-border bg-muted/40 flex flex-col items-center justify-center gap-3 text-muted-foreground">
+                <ImageIcon size={64} />
+                <span className="text-lg">Không có mockup</span>
               </div>
             )}
           </div>
 
-          {/* Thông tin — chữ lớn */}
-          <div className="min-w-0 space-y-4">
+          {/* Thông tin — chữ lớn, cuộn dọc khi tràn */}
+          <div className="min-w-0 min-h-0 overflow-y-auto space-y-5 pr-1">
             {/* Tên sản phẩm + productionId + trạng thái */}
-            <div className="space-y-1">
-              <div className="flex items-start justify-between gap-2">
-                <h2 className="text-xl font-bold leading-tight text-foreground">
+            <div className="space-y-1.5">
+              <div className="flex items-start justify-between gap-3">
+                <h2 className="text-3xl font-bold leading-tight text-foreground">
                   {order.type || 'Không rõ loại sản phẩm'}
                 </h2>
                 {statusMeta && (
                   <span
                     className={cn(
-                      'inline-flex items-center gap-1 rounded-full px-3 py-1 text-xs font-semibold shrink-0',
+                      'inline-flex items-center gap-1.5 rounded-full px-4 py-1.5 text-base font-semibold shrink-0',
                       statusMeta.cls,
                     )}
                   >
-                    <statusMeta.icon size={13} />
+                    <statusMeta.icon size={18} />
                     {statusMeta.label}
                   </span>
                 )}
               </div>
-              <div className="font-mono text-base font-semibold text-primary">{order.productionId}</div>
-              {order.userSku && <div className="text-sm text-muted-foreground truncate">📧 {order.userSku}</div>}
+              <div className="font-mono text-2xl font-semibold text-primary">{order.productionId}</div>
+              {order.userSku && <div className="text-lg text-muted-foreground truncate">📧 {order.userSku}</div>}
             </div>
 
             {/* Size / Màu / SL — badge lớn */}
-            <div className="grid grid-cols-3 gap-2">
-              <BigField icon={<Ruler size={15} />} label="Size" value={order.size || '—'} />
-              <BigField icon={<Palette size={15} />} label="Màu" value={order.color || '—'} />
-              <BigField icon={<Package size={15} />} label="Số lượng" value={String(order.quantity ?? 1)} />
+            <div className="grid grid-cols-3 gap-3">
+              <BigField icon={<Ruler size={18} />} label="Size" value={order.size || '—'} />
+              <BigField icon={<Palette size={18} />} label="Màu" value={order.color || '—'} />
+              <BigField icon={<Package size={18} />} label="Số lượng" value={String(order.quantity ?? 1)} />
             </div>
 
             {/* Xưởng / Công đoạn / Tool */}
-            <div className="space-y-2 rounded-lg border border-border bg-muted/30 p-3 text-sm">
-              <DetailRow icon={<Factory size={15} />} label="Xưởng">
+            <div className="space-y-3 rounded-lg border border-border bg-muted/30 p-4 text-lg">
+              <DetailRow icon={<Factory size={20} />} label="Xưởng">
                 <span className="font-medium">{factoryLabel}</span>
                 {machineLabel && <span className="text-muted-foreground"> · {machineLabel}</span>}
               </DetailRow>
-              <DetailRow icon={<Layers size={15} />} label="Công đoạn hiện tại">
+              <DetailRow icon={<Layers size={20} />} label="Công đoạn hiện tại">
                 <span className="font-medium">
                   {currentStage ? FULFILLMENT_STAGE_LABELS[currentStage] : 'Chưa vào fulfillment'}
                 </span>
               </DetailRow>
-              <DetailRow icon={<Wrench size={15} />} label="Kết quả soát tool">
+              <DetailRow icon={<Wrench size={20} />} label="Kết quả soát tool">
                 <span className={cn('font-semibold', toolMeta.cls)}>{toolMeta.label}</span>
               </DetailRow>
             </div>
 
             {/* Link design */}
-            <div className="space-y-1.5">
-              <div className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
+            <div className="space-y-2">
+              <div className="text-sm font-medium uppercase tracking-wide text-muted-foreground">
                 Link design ({designLinks.length})
               </div>
               {designLinks.length === 0 ? (
-                <p className="text-sm text-muted-foreground italic">Chưa có link design.</p>
+                <p className="text-base text-muted-foreground italic">Chưa có link design.</p>
               ) : (
-                <div className="flex flex-wrap gap-1.5">
+                <div className="flex flex-wrap gap-2">
                   {designLinks.map((l) => (
                     <a
                       key={l.key}
                       href={l.url}
                       target="_blank"
                       rel="noreferrer"
-                      className="inline-flex items-center gap-1 rounded-md border border-border bg-card px-2.5 py-1.5 text-xs font-medium text-foreground hover:border-primary hover:text-primary transition-colors"
+                      className="inline-flex items-center gap-1.5 rounded-md border border-border bg-card px-4 py-2.5 text-base font-medium text-foreground hover:border-primary hover:text-primary transition-colors"
                     >
-                      <ExternalLink size={12} />
+                      <ExternalLink size={16} />
                       {l.label}
                     </a>
                   ))}
@@ -317,52 +437,111 @@ export function FulfillmentScanActionDialog({
           </div>
         </div>
 
-        {/* Banner trạng thái thao tác */}
+        {/* Banner trạng thái + hướng dẫn quét 3 bước CHỮ TO — công nhân đứng xa đọc được */}
         {isMyTask ? (
-          <div className="rounded-md border border-emerald-300/50 bg-emerald-50/50 dark:bg-emerald-500/5 p-3 text-xs text-emerald-700 dark:text-emerald-300 flex items-start gap-1.5">
-            <CheckCircle2 size={14} className="mt-0.5 shrink-0" />
-            <span>
+          <div className="shrink-0 space-y-3">
+            <div className="rounded-md border border-emerald-300/50 bg-emerald-50/50 dark:bg-emerald-500/5 p-3 text-lg font-semibold text-emerald-700 dark:text-emerald-300 flex items-center gap-2.5">
+              <CheckCircle2 size={22} className="shrink-0" />
               {stageStatus === FulfillmentStageStatus.InProgress ? (
-                <>
-                  Đơn đang ở trạng thái <strong>Đang làm</strong> — nhấn Enter để Hoàn thành.
-                </>
+                <span>
+                  Đơn đang <strong>Đang làm</strong> — đúng công đoạn của bạn, thao tác bằng máy quét theo 3 bước:
+                </span>
               ) : (
-                <>
-                  Đơn đang ở trạng thái <strong>{statusMeta?.label ?? '—'}</strong> — nhấn Enter sẽ tự Bắt đầu rồi Hoàn
-                  thành luôn.
-                </>
+                <span>
+                  Đơn đang <strong>{statusMeta?.label ?? '—'}</strong> — đúng công đoạn của bạn, thao tác bằng máy quét
+                  theo 3 bước:
+                </span>
               )}
-            </span>
+            </div>
+            {/* Chia 2 VÙNG: Hoàn thành (trái) · Báo lỗi 2 bước + link thêm lỗi (phải) */}
+            <div className="grid gap-3 lg:grid-cols-[1fr_2fr]">
+              <GuideZone label="✔ Hoàn thành" tone="emerald">
+                <GuideStep
+                  step={1}
+                  tone="emerald"
+                  icon={<CheckCircle2 size={20} />}
+                  title='Làm XONG → quét mã "OK"'
+                  desc="Đơn hoàn thành công đoạn này và tự chuyển sang công đoạn sau. (Hoặc nhấn Enter)"
+                />
+              </GuideZone>
+              <GuideZone label="⚠ Báo lỗi — quét 2 lần" tone="rose" action={<AddErrorLink />}>
+                <div className="grid gap-2.5 md:grid-cols-2">
+                  <GuideStep
+                    step={1}
+                    tone="rose"
+                    icon={<QrCode size={20} />}
+                    title="Quét QR lỗi trên bảng"
+                    desc="Lỗi được CHỌN (chưa ghi nhận) — gõ mô tả hoặc quét mã khác để đổi."
+                  />
+                  <GuideStep
+                    step={2}
+                    tone="amber"
+                    icon={<RotateCw size={20} />}
+                    title="Quét lại CÙNG MÃ để xác nhận"
+                    desc="Lúc này lỗi mới được ghi nhận + đơn tự đẩy về theo cấu hình."
+                  />
+                </div>
+              </GuideZone>
+            </div>
           </div>
         ) : (
-          <div className="rounded-md border border-rose-300/50 bg-rose-50/50 dark:bg-rose-500/5 p-3 text-xs text-rose-700 dark:text-rose-300 flex items-start gap-1.5">
-            <ShieldAlert size={14} className="mt-0.5 shrink-0" />
-            <span>
-              <strong>Không phải task của bạn.</strong> {blockReason} Nhấn Enter để quét đơn tiếp theo, hoặc bấm{' '}
-              <strong>Báo lỗi đơn này</strong> để đẩy về công đoạn trước.
-            </span>
+          <div className="shrink-0 space-y-3">
+            <div className="rounded-md border border-rose-300/50 bg-rose-50/50 dark:bg-rose-500/5 p-3 text-lg font-semibold text-rose-700 dark:text-rose-300 flex items-center gap-2.5">
+              <ShieldAlert size={22} className="shrink-0" />
+              <span>Không phải task của bạn. {blockReason}</span>
+            </div>
+            {/* Chia 2 VÙNG: Báo lỗi đơn xa 2 bước + link thêm lỗi (trái) · Quét tiếp (phải) */}
+            <div className="grid gap-3 lg:grid-cols-[2fr_1fr]">
+              <GuideZone label="⚠ Báo lỗi đơn này — quét 2 lần" tone="rose" action={<AddErrorLink />}>
+                <div className="grid gap-2.5 md:grid-cols-2">
+                  <GuideStep
+                    step={1}
+                    tone="rose"
+                    icon={<QrCode size={20} />}
+                    title="Quét QR lỗi trên bảng"
+                    desc="Lỗi được CHỌN (chưa ghi nhận) — mở màn gán lỗi để xem lại."
+                  />
+                  <GuideStep
+                    step={2}
+                    tone="amber"
+                    icon={<RotateCw size={20} />}
+                    title="Quét lại CÙNG MÃ để xác nhận"
+                    desc="Ghi nhận lỗi + đơn tự đẩy về công đoạn theo cấu hình."
+                  />
+                </div>
+              </GuideZone>
+              <GuideZone label="Quét tiếp" tone="slate">
+                <GuideStep
+                  step={1}
+                  tone="slate"
+                  icon={<ScanLine size={20} />}
+                  title="Quét đơn khác / nhấn Enter"
+                  desc="Chuyển sang tra cứu đơn mới, hoặc Enter để đóng và quét tiếp."
+                />
+              </GuideZone>
+            </div>
           </div>
         )}
 
-        <DialogFooter className="gap-2">
+        <DialogFooter className="gap-3 shrink-0">
           {isMyTask ? (
             <>
-              <Button variant="outline" onClick={onReportError} disabled={saving}>
-                <MessageSquareWarning size={15} className="mr-1.5 text-rose-500" />
+              <Button variant="outline" onClick={onReportError} disabled={saving} className="h-14 px-6 text-lg">
+                <MessageSquareWarning size={20} className="mr-2 text-rose-500" />
                 Báo lỗi
               </Button>
-              <Button onClick={() => void doComplete()} disabled={saving} autoFocus size="lg">
-                {saving ? <Spinner size={15} className="mr-2" /> : <CheckCircle2 size={16} className="mr-1.5" />}
+              <Button onClick={() => void doComplete()} disabled={saving} autoFocus className="h-14 px-8 text-lg">
+                {saving ? <Spinner size={20} className="mr-2" /> : <CheckCircle2 size={22} className="mr-2" />}
                 Hoàn thành (Enter)
               </Button>
             </>
           ) : (
             <>
-              <Button variant="outline" onClick={onReportError} disabled={saving}>
-                <MessageSquareWarning size={15} className="mr-1.5 text-rose-500" />
+              <Button variant="outline" onClick={onReportError} disabled={saving} className="h-14 px-6 text-lg">
+                <MessageSquareWarning size={20} className="mr-2 text-rose-500" />
                 Báo lỗi đơn này
               </Button>
-              <Button onClick={onClose} autoFocus size="lg">
+              <Button onClick={onClose} autoFocus className="h-14 px-8 text-lg">
                 Đóng & quét tiếp (Enter)
               </Button>
             </>
@@ -376,12 +555,12 @@ export function FulfillmentScanActionDialog({
 /** Ô số liệu lớn (size / màu / số lượng). */
 function BigField({ icon, label, value }: { icon: React.ReactNode; label: string; value: string }) {
   return (
-    <div className="rounded-lg border border-border bg-card p-2.5 text-center">
-      <div className="flex items-center justify-center gap-1 text-[10px] uppercase tracking-wide text-muted-foreground">
+    <div className="rounded-lg border border-border bg-card p-4 text-center">
+      <div className="flex items-center justify-center gap-1.5 text-sm uppercase tracking-wide text-muted-foreground">
         {icon}
         {label}
       </div>
-      <div className="mt-0.5 text-lg font-bold text-foreground truncate" title={value}>
+      <div className="mt-1 text-3xl font-bold text-foreground truncate" title={value}>
         {value}
       </div>
     </div>
@@ -390,7 +569,7 @@ function BigField({ icon, label, value }: { icon: React.ReactNode; label: string
 
 function DetailRow({ icon, label, children }: { icon: React.ReactNode; label: string; children: React.ReactNode }) {
   return (
-    <div className="flex items-center gap-2">
+    <div className="flex items-center gap-2.5">
       <span className="text-muted-foreground shrink-0">{icon}</span>
       <span className="text-muted-foreground shrink-0">{label}:</span>
       <span className="min-w-0 truncate">{children}</span>

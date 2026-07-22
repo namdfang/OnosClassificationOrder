@@ -289,7 +289,7 @@ GET /v1/orders/import-from-onospod/cron
 | `order.repository.ts` | Extends DatabaseRepositoryAbstract |
 | `order.service.ts` | `getOrders`, `getDashboard`, `getStatusOverview`, `getFactoryOverview`, `getOrdersGroupedByType`, `getImportSummary`, `exportOrders`, `importOrders`, `updateField`, `bulkUpdateField`, `transferOrder`, `bulkTransferOrders`, `backfillOrderFabric`, `deleteOrder` |
 | `onospod-import.service.ts` | `OnospodImportService.importFromOnosPod()` — query GraphQL `paginateMrpProduct` từ `qc.onospod.com`, map JSON → rows rồi gọi lại `OrderService.importOrders()`. Xem §3.6. |
-| `order.controller.ts` | 18 endpoints (xem §4.2) |
+| `order.controller.ts` | Endpoints (xem §4.2) |
 
 ### 4.2 Endpoints
 | Method | Path | Mô tả |
@@ -318,6 +318,7 @@ GET /v1/orders/import-from-onospod/cron
 | PATCH | `/v1/orders/bulk-field` | Bulk apply 1 field cho nhiều order. Phase 2. |
 | PATCH | `/v1/orders/:id/transfer` | Chuyển 1 đơn sang xưởng khác. Phase 7. `ORDER_WRITE_ROLES`. |
 | PATCH | `/v1/orders/bulk-transfer` | Chuyển nhiều đơn sang xưởng khác. Phase 7. Pre-filter ID đã ở target. |
+| POST | `/v1/orders/:id/tool-check-done` | Nút "Đã soát xong" (tab Soát tool, list "Cần làm lại") — đơn hold cần thiết kế → designer cũ (rework) / auto-gán / backlog "Cần gán". `@Auth([SuperAdmin,Admin,Manager,SupportManager,Support])`. Xem `ToolCheckWorkflow.md §2.2b`. |
 | DELETE | `/v1/orders/:id` | Soft delete (Admin only) |
 
 ### 4.3 Cache

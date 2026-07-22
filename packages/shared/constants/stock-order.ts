@@ -1,4 +1,4 @@
-import type { ExcelImportStockOrder } from '..';
+import type { ExcelImportStockOrder } from '../dtos/stock-order.dto';
 
 export const STOCK_ORDER_CODE_PREFIX = 'PS_';
 

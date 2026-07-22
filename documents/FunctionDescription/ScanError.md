@@ -1,5 +1,7 @@
 # Scan barcode → Gán lỗi nhanh — Function Description
 
+> **UPDATE 2026-07-21 — Quét 2 bước (hands-free):** quét đơn `N-…` xong có thể quét tiếp mã **`OK`** (tự start+complete) hoặc **QR lỗi `E-<code>`** (tự gán lỗi + đẩy về đích cấu hình sẵn) NGAY KHI DIALOG ĐANG MỞ — công nhân không cần chạm máy tính. Kèm beep WebAudio (thành công/thất bại) + parse tiền tố ở input chính. Danh mục lỗi theo công đoạn + gen/in QR: xem [`StageErrorCatalog.md`](StageErrorCatalog.md). Helper dùng chung: `apps/web/src/utils/scanCodes.ts` (`parseScanCode` / `resolveErrorScan` / beep*).
+
 > **File FE:** `apps/web/src/pages/orders/scan-error/index.tsx` (page) + `OrderErrorScanDialog.tsx` (modal gán lỗi) + `FulfillmentScanActionDialog.tsx` (modal hoàn thành/báo lỗi cho công nhân Fulfillment)
 > **File BE:** `apps/api/src/modules/order/order.controller.ts` + `order.service.ts → getByProductionId()`
 > **Route FE:** `/ffm/orders/scan-error`
@@ -16,7 +18,7 @@ Khi user có `profile.fulfillmentStage` (công nhân Fulfillment), page chuyển
 - **Không phải task** (khác stage / khác xưởng / chưa vào fulfillment / đã done ở stage này): vẫn hiển thị chi tiết + banner đỏ nêu lý do, **chặn mọi thao tác** (không Hoàn thành, không Báo lỗi). Enter = đóng để quét tiếp.
 - Guard double-submit bằng `savingRef`. Sau khi xong → `onClose` reset `order` + `errorMode` → input tự re-focus để quét đơn kế tiếp; append lịch sử "Hoàn thành <stage>".
 - User KHÔNG có stage (admin/support…) → giữ nguyên luồng gán lỗi (`OrderErrorScanDialog`) như mục dưới.
-- **Layout dialog (to/rộng, `max-w-4xl`)**: 2 cột `md:grid-cols-[1.15fr_1fr]` — **cột trái mockup lớn** (`aspect-square`, click mở ảnh gốc tab mới), **cột phải thông tin chữ lớn**: tên sản phẩm (`text-xl`) + productionId (mono, primary) + SKU; hàng 3 ô lớn Size / Màu / Số lượng (`BigField`); box Xưởng (+ máy) / Công đoạn hiện tại / **Kết quả soát tool** (màu theo `toolResultNote`: rỗng=Chưa soát xám, `ok`=OK xanh, khác=lỗi đỏ); và **Link design** — chip từ `order.designs` (map `DESIGN_LABELS` vị trí→nhãn VN) + file `cuttingFileUrl`, mỗi chip mở tab mới. Banner trạng thái + footer (Báo lỗi / **Hoàn thành (Enter)** hoặc Đóng & quét tiếp) giữ nguyên chức năng Enter.
+- **Layout dialog (GẦN FULL MÀN HÌNH — update 2026-07-21, cho công nhân đứng xa đọc được)**: `w-[96vw] h-[94vh]` flex-col, grid 2 cột `md:grid-cols-2` — **cột trái mockup chiếm 1 NỬA + cao hết modal** (`flex-1 object-contain`, click mở ảnh gốc) + **nút "Mở ảnh gốc" to riêng** (`h-14 text-lg`) dưới ảnh; **cột phải chữ lớn** (cuộn dọc khi tràn): tên sản phẩm `text-3xl` + productionId mono `text-2xl` + SKU `text-lg`; 3 ô Size/Màu/SL (`BigField` value `text-3xl`); box Xưởng / Công đoạn / **Kết quả soát tool** `text-lg` (màu theo `toolResultNote`); **Link design** chip `text-base px-4 py-2.5`. Banner trạng thái `text-base`; footer button `h-14 text-lg` (Báo lỗi / **Hoàn thành (Enter)** hoặc Đóng & quét tiếp). `OrderErrorScanDialog` cũng GẦN FULL MÀN HÌNH (`w-[96vw] h-[94vh]`, grid 2 cột): trái = mockup chiếm 1 nửa cao hết modal (click mở ảnh gốc) + box tên sản phẩm `text-2xl`/meta `text-lg`; phải = banner + form cuộn dọc — chip lỗi `text-lg px-5 py-2.5`, label `text-lg`, box nguồn/đích `text-lg`, textarea `text-lg` 3 rows, footer `h-14 text-lg`.
 
 Reuse 100% endpoint cũ (`by-production-id` + `fulfillment-transition` start/complete/rework-back) — không thêm BE. Liên quan: [`FulfillmentWorkflow.md`](FulfillmentWorkflow.md).
 
@@ -157,6 +159,8 @@ Page tự `<Navigate to={PATHS.ORDERS}>` nếu user thiếu perm (defense-in-dep
   - Empty state: "Chưa có quét nào. Quét hoặc gõ Production ID để bắt đầu."
 
 ### 4.2 Modal `OrderErrorScanDialog`
+
+> **UPDATE 2026-07-21 (Stage Error Catalog):** form đã đổi — **Mã lỗi CHỈ hiển thị danh mục lỗi của công đoạn ngữ cảnh** (`user.fulfillmentStage`, fallback `order.currentFulfillmentStage`; filter store production_error theo `o.stage`). Chưa có lỗi nào → box amber + **Link sang `/orders/stage-errors`** để thêm. Chọn lỗi → **nguồn + đích đẩy về TỰ SUY từ config** (`resolveErrorScan`) hiển thị read-only — ĐÃ BỎ radio "Nguồn lỗi" + chip "Đẩy về công đoạn" (không chọn tay). Đích không hợp lệ với vị trí đơn → box đỏ + disable submit. Lỗi `other` không còn trong luồng này (note giờ luôn optional). Mô tả bên dưới là bản CŨ, giữ để tham khảo phần không đổi (summary card, banner hủy/lỗi đã ghi, footer, Cmd/Ctrl+Enter).
 
 - **Header**: `MessageSquareWarning` rose icon + "Gán lỗi · {productionId}".
 - **Order summary card** (rounded muted background):
@@ -323,6 +327,9 @@ curl -X GET http://localhost:3001/v1/orders/by-production-id/PROD-1234 \
 ---
 
 ## 12. Lịch sử thay đổi
+
+- **2026-07-21** — Quét 2 bước: dialog bắt keystroke máy quét (buffer + reset 600ms) → `OK` = hoàn thành, `E-<code>` = báo lỗi theo config (`resolveErrorScan`), `N-…` = thay đơn đang chờ. Beep WebAudio 3 loại. Xem `StageErrorCatalog.md`.
+- **2026-07-21 (update)** — **Xác nhận 2 lần quét lỗi**: quét `E-` lần 1 chỉ CHỌN lỗi (validate thuộc danh mục công đoạn người quét; `FulfillmentScanActionDialog.onScanError` → handoff `OrderErrorScanDialog` `initialCode`); quét lần 2 CÙNG MÃ hoặc Enter tay mới ghi nhận + đẩy về; quét mã khác = đổi lựa chọn; burst-detector cắt mã máy quét gõ nhầm vào textarea note. Bỏ prop `onErrorSaved`.
 
 - **2026-06-27** — Initial implementation. Page + modal + BE endpoint + permission. Reuse `setProductionError` + `fulfillment-transition` (rework-back). Pattern A (autoFocus + onPressEnter + auto-refocus).
 - **2026-06-27 (update)** — Thêm **mode toggle** Barcode/Nhập tay (segmented control) + persist trong `localStorage`. Mode barcode: auto-strip tiền tố `N-` qua helper `normalizeCode()`. Live preview chip "Sẽ tra cứu: …" + warning amber khi mode=barcode nhưng thiếu tiền tố. Placeholder + hint + icon đổi theo mode.

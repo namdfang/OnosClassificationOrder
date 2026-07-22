@@ -3,6 +3,7 @@ import {
   AlertTriangle,
   ChevronDown,
   ChevronUp,
+  ClipboardCheck,
   Clock,
   FileSearch,
   PackageSearch,
@@ -10,6 +11,7 @@ import {
   Users,
   X,
 } from 'lucide-react';
+import { toast } from 'sonner';
 import type { OrderPriority, ToolCheckDayRow, ToolCheckErrorRow, ToolCheckFacet, ToolCheckOrder } from 'shared';
 import { ORDER_PRIORITY_LABELS, PRODUCT_LEVEL_MAP, WorkshopConfigCategory } from 'shared';
 
@@ -136,6 +138,8 @@ export default function ToolCheckTab() {
   const [data, setData] = useState<Overview | null>(null);
   const [loading, setLoading] = useState(false);
   const [listTab, setListTab] = useState<ListTab>('rework');
+  // Đơn đang gọi action "Đã soát xong" (disable nút, tránh double-click).
+  const [doneBusy, setDoneBusy] = useState<string | null>(null);
   const [preview, setPreview] = useState<{ url?: string; originalUrl?: string; title?: string } | null>(null);
   const seqRef = useRef(0);
   const now = useNow(30_000);
@@ -185,6 +189,29 @@ export default function ToolCheckTab() {
         : prev,
     );
 
+  // Action "Đã soát xong" (list "Cần làm lại") — đơn CẦN THIẾT KẾ: BE gỡ marker
+  // hold rồi đẩy về designer cũ (rework) / auto-gán theo cấu hình xưởng /
+  // backlog "Cần gán". Khác đường đổi Note kq Tool → 'ok' (= file ổn, về In).
+  const markDone = async (o: ToolCheckOrder) => {
+    try {
+      setDoneBusy(o._id);
+      const res = await RepositoryRemote.order.markToolCheckDone(o._id);
+      const d = (res.data?.data || {}) as { outcome?: string; assigneeName?: string };
+      if (d.outcome === 'designer-rework') {
+        toast.success(`${o.productionId}: đã đẩy về designer${d.assigneeName ? ` ${d.assigneeName}` : ''} (cần làm lại).`);
+      } else if (d.outcome === 'auto-assigned') {
+        toast.success(`${o.productionId}: đã tự gán cho designer${d.assigneeName ? ` ${d.assigneeName}` : ''}.`);
+      } else {
+        toast.info(`${o.productionId}: xưởng chưa có cấu hình gán — đơn vào backlog "Cần gán" (designer tự nhận hoặc phân tay).`);
+      }
+      fetchData();
+    } catch (err) {
+      handleAxiosError(err);
+    } finally {
+      setDoneBusy(null);
+    }
+  };
+
   // Full kỳ (cho KPI). Danh sách hiển thị lọc thêm theo ngày đang chọn.
   const reworkAll = data?.reworkList || [];
   const unreviewedAll = data?.unreviewedList || [];
@@ -221,6 +248,15 @@ export default function ToolCheckTab() {
             <span className="font-medium whitespace-nowrap">{o.productionId}</span>
             <CopyButton value={o.productionId} label="Production ID" iconSize={11} />
           </div>
+        </td>
+        {/* Ngày vào SX (VN) — biết đơn thuộc ngày nào ngay trong list. */}
+        <td className="px-2 py-1.5 text-muted-foreground whitespace-nowrap" title={vnDay(o.inProductionAt) || undefined}>
+          {o.inProductionAt
+            ? (() => {
+                const h = fmtDayHead(vnDay(o.inProductionAt));
+                return `${h.wd} ${h.dm}`;
+              })()
+            : '—'}
         </td>
         <td className="px-2 py-1.5">
           {(() => {
@@ -315,6 +351,21 @@ export default function ToolCheckTab() {
             }}
           />
         </td>
+        {/* Action "Đã soát xong" — chỉ list "Cần làm lại" (đơn hold In trả về). */}
+        {listTab === 'rework' && (
+          <td className="px-2 py-1.5">
+            <Button
+              variant="outline"
+              size="sm"
+              className="h-7 gap-1 text-[11px] whitespace-nowrap border-emerald-300 text-emerald-700 hover:bg-emerald-50 dark:text-emerald-300 dark:border-emerald-500/40 dark:hover:bg-emerald-500/10"
+              disabled={!canEditNote || doneBusy === o._id}
+              onClick={() => markDone(o)}
+            >
+              <ClipboardCheck size={13} />
+              Đã soát xong
+            </Button>
+          </td>
+        )}
       </tr>
     );
   };
@@ -807,7 +858,7 @@ export default function ToolCheckTab() {
             </div>
             <span className="text-[11px] text-muted-foreground">
               {listTab === 'rework'
-                ? '⚠ Ưu tiên — In trả về do thiếu file. Đổi Note kq Tool → "ok" để đẩy lại In.'
+                ? '⚠ Ưu tiên — In trả về do thiếu file. Note kq Tool → "ok" = file ổn, chạy lại từ In · "Đã soát xong" = cần thiết kế, đẩy về designer / tự gán.'
                 : 'Backlog đơn chưa có Note kq Tool.'}
             </span>
           </div>
@@ -827,6 +878,7 @@ export default function ToolCheckTab() {
                   <tr className="border-b border-border/60 text-left text-[11px] uppercase text-muted-foreground whitespace-nowrap">
                     <th className="w-12 px-1 py-2" />
                     <th className="px-2 py-2">Mã đơn</th>
+                    <th className="px-2 py-2">Ngày SX</th>
                     <th className="px-2 py-2">Ưu tiên</th>
                     <th className="px-2 py-2">Khách</th>
                     <th className="px-2 py-2">Sản phẩm</th>
@@ -835,6 +887,7 @@ export default function ToolCheckTab() {
                     <th className="px-2 py-2">File sửa lỗi</th>
                     <th className="px-2 py-2">Ghi chú file lỗi</th>
                     <th className="px-2 py-2">Lỗi xưởng</th>
+                    {listTab === 'rework' && <th className="px-2 py-2" />}
                   </tr>
                 </thead>
                 <tbody>{activeList.map(renderRow)}</tbody>

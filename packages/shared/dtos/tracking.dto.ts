@@ -2,20 +2,14 @@ import { createZodDto } from '@anatine/zod-nestjs';
 import { extendApi } from '@anatine/zod-openapi';
 import { z } from 'zod';
 
-import {
-  BaseEntityZod,
-  EXTERNAL_ID_MAX_LENGTH,
-  getObjectValues,
-  IDZod,
-  NAME_MIN_LENGTH,
-  NameZod,
-  NOTE_MAX_LENGTH,
-  NOTE_MIN_LENGTH,
-  PageQueryZod,
-  PageResZod,
-  ResZod,
-  TrackingStatus,
-} from '..';
+import { EXTERNAL_ID_MAX_LENGTH, NAME_MIN_LENGTH, NOTE_MAX_LENGTH, NOTE_MIN_LENGTH } from '../constants/common-length';
+import { IDZod, NameZod } from '../constants/common-zod';
+import { TrackingStatus } from '../enums/tracking';
+import { BaseEntityZod } from '../types/BaseEntity';
+import { PageQueryZod } from '../types/PageQuery';
+import { PageResZod } from '../types/PageRes';
+import { ResZod } from '../types/Res';
+import { getObjectValues } from '../utils/getObjectValues';
 
 const TrackingLogZod = z.object({
   status: z.nativeEnum(TrackingStatus),

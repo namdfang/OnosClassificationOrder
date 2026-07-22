@@ -2,7 +2,11 @@ import { createZodDto } from '@anatine/zod-nestjs';
 import { extendApi } from '@anatine/zod-openapi';
 import { z } from 'zod';
 
-import { getObjectValues, MailStatus, MailType, PageQueryZod, PageResZod, VNDateZod } from '..';
+import { VNDateZod } from '../constants/common-zod';
+import { MailStatus, MailType } from '../constants/mail';
+import { PageQueryZod } from '../types/PageQuery';
+import { PageResZod } from '../types/PageRes';
+import { getObjectValues } from '../utils/getObjectValues';
 
 export const DataMailZod = z.object({
   template: z.string(),

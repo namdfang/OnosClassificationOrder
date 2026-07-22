@@ -15,7 +15,8 @@ import { IDZod, PriceZod } from '@shared/constants';
 import { BaseEntityZod, PageQueryZod, PageResZod, ResZod } from '@shared/types';
 import { z } from 'zod';
 
-import { getObjectValues, Status } from '..';
+import { Status } from '../enums/commons';
+import { getObjectValues } from '../utils/getObjectValues';
 import { ProductAttributeZod } from './product.dto';
 
 const ProductVariantZod = BaseEntityZod.extend({

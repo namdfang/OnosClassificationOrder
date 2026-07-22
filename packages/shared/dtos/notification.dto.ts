@@ -2,7 +2,12 @@ import { createZodDto } from '@anatine/zod-nestjs';
 import { extendApi } from '@anatine/zod-openapi';
 import { z } from 'zod';
 
-import { BaseEntityZod, IDZod, NameZod, NotificationType, PageQueryZod, PageResZod, ResZod } from '..';
+import { IDZod, NameZod } from '../constants/common-zod';
+import { NotificationType } from '../enums/notifications';
+import { BaseEntityZod } from '../types/BaseEntity';
+import { PageQueryZod } from '../types/PageQuery';
+import { PageResZod } from '../types/PageRes';
+import { ResZod } from '../types/Res';
 
 export const NotificationZod = BaseEntityZod.extend({
   title: NameZod,

@@ -313,9 +313,13 @@ function FunnelNodeCard({ node, isBottleneck }: { node: FunnelNode; isBottleneck
         <Metric
           icon={<RotateCw size={9} />}
           label="Rework"
-          value={isTool ? '–' : dash(s.rework)}
+          value={dash(s.rework)}
           valueClass="text-amber-700 dark:text-amber-300"
-          desc={isTool ? 'Chặng soát tool không có rework.' : `Số đơn bị đẩy lại "${s.label}" để làm lại.`}
+          desc={
+            isTool
+              ? 'Số đơn bị đẩy về Support soát lại (In báo "Thiếu file để in"…).'
+              : `Số đơn bị đẩy lại "${s.label}" để làm lại.`
+          }
         />
         <Metric
           icon={<AlertTriangle size={9} />}

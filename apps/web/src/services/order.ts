@@ -195,6 +195,11 @@ const bulkHold = (data: BulkHoldOrderDto) => {
   return callApi(`/${CONFIG.API_VERSION}/orders/bulk-hold`, 'patch', data);
 };
 
+/** Soát xong đơn In trả về (tab Soát tool) — đẩy về designer / auto-gán / backlog "Cần gán". */
+const markToolCheckDone = (id: string) => {
+  return callApi(`/${CONFIG.API_VERSION}/orders/${id}/tool-check-done`, 'post', {});
+};
+
 const updateOrderDesign = (id: string, data: UpdateOrderDesignDto) => {
   return callApi(`/${CONFIG.API_VERSION}/orders/${id}/design`, 'patch', data);
 };
@@ -243,5 +248,6 @@ export const order = {
   holdOrder,
   unholdOrder,
   bulkHold,
+  markToolCheckDone,
   updateOrderDesign,
 };

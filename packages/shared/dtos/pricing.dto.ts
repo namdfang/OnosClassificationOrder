@@ -5,7 +5,7 @@ import { Status } from '@shared/enums';
 import { BaseEntityZod, PageQueryZod, PageResZod, ResZod } from '@shared/types';
 import { z } from 'zod';
 
-import { getObjectValues } from '..';
+import { getObjectValues } from '../utils/getObjectValues';
 
 // ─── Price Group ───
 
