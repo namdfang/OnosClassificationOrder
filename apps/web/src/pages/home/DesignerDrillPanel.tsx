@@ -2,6 +2,8 @@ import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { ChevronDown, ChevronRight, History, ImageOff, ListChecks, Plus, X } from 'lucide-react';
 import { PRODUCT_LEVEL_MAP } from 'shared';
 
+import { useDesignerTeamStore } from '@/store/designerTeamStore';
+
 import { RepositoryRemote } from '@/services';
 
 import { ImagePreviewDialog } from '@/components/common/ImagePreviewDialog';
@@ -19,6 +21,7 @@ import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 
 import { handleAxiosError } from '@/utils';
+import { cn } from '@/utils/cn';
 
 import { usePermission } from '@/hooks/usePermission';
 
@@ -69,8 +72,19 @@ export function DesignerDrillPanel({ target, onClose }: Props) {
   const [assignDialog, setAssignDialog] = useState<{ ids: string[]; single?: WorkshopOrderRow } | null>(null);
   // Bump sau khi gán xưởng xong → refetch panel.
   const [reloadKey, setReloadKey] = useState(0);
+  // Filter nội bộ panel: theo designer ('__none__' = chưa gán) + theo khách (userSku).
+  const [filterAssignee, setFilterAssignee] = useState<string | null>(null);
+  const [filterCustomer, setFilterCustomer] = useState<string | null>(null);
   const seqRef = useRef(0);
   const rootRef = useRef<HTMLDivElement>(null);
+
+  // Resolve tên designer cho thanh filter thống kê.
+  const teamById = useDesignerTeamStore((s) => s.byId);
+  const teamLoaded = useDesignerTeamStore((s) => s.loaded);
+  const fetchTeam = useDesignerTeamStore((s) => s.fetch);
+  useEffect(() => {
+    if (target && !teamLoaded) fetchTeam();
+  }, [target, teamLoaded, fetchTeam]);
 
   useEffect(() => {
     if (!target) return;
@@ -98,16 +112,47 @@ export function DesignerDrillPanel({ target, onClose }: Props) {
   useEffect(() => {
     if (!target) return;
     setExpanded(new Set());
+    setFilterAssignee(null);
+    setFilterCustomer(null);
     rootRef.current?.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
   }, [target]);
 
   const visibleCols = useMemo(() => WORKSHOP_COLS.filter((c) => !c.perm || canViewField(c.key)), [canViewField]);
   const colGroups = useMemo(() => buildColGroups(visibleCols, roleName), [visibleCols, roleName]);
 
+  // ── Filter nội bộ theo designer / khách hàng (thống kê + cross-facet:
+  // count mỗi chiều tính trên rows đã lọc bởi chiều còn lại). ──
+  const assigneeKey = (r: WorkshopOrderRow) => r.assignee || '__none__';
+  const matchAssignee = (r: WorkshopOrderRow) => !filterAssignee || assigneeKey(r) === filterAssignee;
+  const matchCustomer = (r: WorkshopOrderRow) => !filterCustomer || (r.userSku || '—') === filterCustomer;
+
+  const assigneeFacet = useMemo(() => {
+    const m = new Map<string, number>();
+    for (const r of rows) if (matchCustomer(r)) m.set(assigneeKey(r), (m.get(assigneeKey(r)) || 0) + 1);
+    return [...m.entries()].sort((a, b) => b[1] - a[1]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [rows, filterCustomer]);
+
+  const customerFacet = useMemo(() => {
+    const m = new Map<string, number>();
+    for (const r of rows) if (matchAssignee(r)) m.set(r.userSku || '—', (m.get(r.userSku || '—') || 0) + 1);
+    return [...m.entries()].sort((a, b) => b[1] - a[1]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [rows, filterAssignee]);
+
+  const filteredRows = useMemo(
+    () => rows.filter((r) => matchAssignee(r) && matchCustomer(r)),
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [rows, filterAssignee, filterCustomer],
+  );
+
+  const assigneeName = (id: string) =>
+    id === '__none__' ? 'Chưa gán' : teamById[id]?.fullName || `#${id.slice(-4)}`;
+
   // Gom nhóm theo sản phẩm (productConfigId) — đơn chưa map → nhóm "Chưa map".
   const groups = useMemo<ProductGroup[]>(() => {
     const map = new Map<string, ProductGroup>();
-    for (const r of rows) {
+    for (const r of filteredRows) {
       const key = r.productConfigId ? String(r.productConfigId) : 'unmapped';
       let g = map.get(key);
       if (!g) {
@@ -124,7 +169,7 @@ export function DesignerDrillPanel({ target, onClose }: Props) {
       g.rows.push(r);
     }
     return [...map.values()].sort((a, b) => b.rows.length - a.rows.length || a.fullName.localeCompare(b.fullName));
-  }, [rows]);
+  }, [filteredRows]);
 
   if (!target) return null;
 
@@ -150,6 +195,7 @@ export function DesignerDrillPanel({ target, onClose }: Props) {
         <span className="text-[11px] text-muted-foreground">
           — {total} đơn
           {total > rows.length && !loading && ` (hiển thị ${rows.length} đơn đầu)`}
+          {(filterAssignee || filterCustomer) && ` · đang lọc: ${filteredRows.length} đơn`}
         </span>
         {loading && <Spinner size={13} className="text-muted-foreground" />}
         <button
@@ -161,11 +207,30 @@ export function DesignerDrillPanel({ target, onClose }: Props) {
         </button>
       </div>
 
+      {/* Thanh thống kê + filter theo Designer / Khách hàng (client-side,
+          cross-facet: count mỗi chiều tính trên rows đã lọc bởi chiều kia). */}
+      {rows.length > 0 && (
+        <div className="px-3 py-2 border-b border-border bg-muted/10 space-y-1.5">
+          <FacetBar
+            label="Designer"
+            options={assigneeFacet.map(([id, n]) => ({ key: id, label: assigneeName(id), count: n }))}
+            active={filterAssignee}
+            onToggle={(k) => setFilterAssignee((cur) => (cur === k ? null : k))}
+          />
+          <FacetBar
+            label="Khách"
+            options={customerFacet.map(([sku, n]) => ({ key: sku, label: sku, count: n }))}
+            active={filterCustomer}
+            onToggle={(k) => setFilterCustomer((cur) => (cur === k ? null : k))}
+          />
+        </div>
+      )}
+
       {loading && rows.length === 0 ? (
         <div className="py-10 text-center">
           <Spinner size={18} className="text-muted-foreground" />
         </div>
-      ) : rows.length === 0 ? (
+      ) : filteredRows.length === 0 ? (
         <p className="text-xs text-muted-foreground text-center py-10">Không có đơn nào phù hợp.</p>
       ) : (
         <div className="divide-y divide-border/60">
@@ -307,6 +372,46 @@ export function DesignerDrillPanel({ target, onClose }: Props) {
         orderId={historyTarget?.id}
         productionId={historyTarget?.productionId}
       />
+    </div>
+  );
+}
+
+/**
+ * Thanh chip thống kê + filter 1 chiều (Designer / Khách) trong panel drill.
+ * Chip = giá trị + count; bấm để lọc, bấm lại để bỏ; "Tất cả" = tổng.
+ */
+function FacetBar({
+  label,
+  options,
+  active,
+  onToggle,
+}: {
+  label: string;
+  options: { key: string; label: string; count: number }[];
+  active: string | null;
+  onToggle: (key: string) => void;
+}) {
+  const totalCount = options.reduce((s, o) => s + o.count, 0);
+  const chip = (isActive: boolean) =>
+    cn(
+      'rounded-full border px-2 py-0.5 text-[11px] leading-4 cursor-pointer transition-colors whitespace-nowrap',
+      isActive
+        ? 'bg-indigo-600 border-indigo-600 text-white'
+        : 'border-border text-muted-foreground hover:bg-muted hover:text-foreground',
+    );
+  return (
+    <div className="flex items-start gap-2">
+      <span className="text-[11px] font-medium text-muted-foreground shrink-0 pt-0.5 w-16">{label}</span>
+      <div className="flex flex-wrap gap-1 max-h-[4.5rem] overflow-y-auto">
+        <button type="button" onClick={() => active && onToggle(active)} className={chip(active === null)}>
+          Tất cả · {totalCount}
+        </button>
+        {options.map((o) => (
+          <button key={o.key} type="button" onClick={() => onToggle(o.key)} className={chip(active === o.key)}>
+            {o.label} · {o.count}
+          </button>
+        ))}
+      </div>
     </div>
   );
 }

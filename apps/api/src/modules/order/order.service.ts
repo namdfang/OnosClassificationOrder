@@ -95,6 +95,7 @@ import type {
 import type { GetOrderLogsDto, LifecycleTrack, LifecycleTrackStage, LifecycleTrackStatus } from 'shared';
 import {
   customerMatchKey,
+  DESIGNER_ACTIVE_STATUSES,
   DESIGNER_ASSIGNMENT_CONFIG_KEY,
   DESIGNER_REASSIGNABLE_STATUSES,
   DesignerStatus,
@@ -1298,10 +1299,17 @@ export class OrderService implements OnModuleInit {
     if (dto.toolResultNote) {
       // Token đặc biệt __none__ ↔ "Chưa soát" (chưa có note kq tool nào set).
       // Bao gồm field missing, null, hoặc empty string. Mirror logic assignee.
+      // __any__ = đã soát (note bất kỳ) · __error__ = đã soát & ≠ 'ok' — drill
+      // hàng "Đã soát"/"Soát lỗi" dải Tổng quan theo ngày tab Soát tool
+      // ($nin [null] tự loại cả field missing).
       const codes = dto.toolResultNote.split(',').filter(Boolean);
       const hasNone = codes.includes('__none__');
       const real = codes.filter((c) => c !== '__none__');
-      if (hasNone && real.length === 0) {
+      if (codes.includes('__any__')) {
+        filter.toolResultNote = { $nin: [null, ''] };
+      } else if (codes.includes('__error__')) {
+        filter.toolResultNote = { $nin: [null, '', 'ok'] };
+      } else if (hasNone && real.length === 0) {
         filter.toolResultNote = { $in: [null, ''] };
       } else if (hasNone) {
         filter.$or = [
@@ -1339,6 +1347,7 @@ export class OrderService implements OnModuleInit {
     if (dto.machineNumber) {
       filter.machineNumber = { $in: dto.machineNumber.split(',').filter(Boolean) };
     }
+    if (dto.priority) filter.priority = Number(dto.priority);
     if (dto.designerStatus) {
       const codes = dto.designerStatus.split(',').filter(Boolean);
       // Token tách "Chưa gán" theo tool (dropdown TT Designer + click KPI panel):
@@ -1388,11 +1397,15 @@ export class OrderService implements OnModuleInit {
       }
     }
     if (dto.assignee) {
-      // Override block phía dưới — nếu user chọn __none__ token, lọc đơn chưa gán.
+      // Token __none__ = đơn chưa gán; __any__ = đơn ĐÃ gán (bất kỳ ai — drill
+      // hàng "Đã gán designer" Tổng quan N ngày, mirror match ma trận team).
       const codes = dto.assignee.split(',').filter(Boolean);
       const hasNone = codes.includes('__none__');
-      const real = codes.filter((c) => c !== '__none__');
-      if (hasNone && real.length === 0) {
+      const hasAny = codes.includes('__any__');
+      const real = codes.filter((c) => c !== '__none__' && c !== '__any__');
+      if (hasAny) {
+        filter.assignee = { $exists: true, $nin: [null, ''] };
+      } else if (hasNone && real.length === 0) {
         filter.assignee = { $in: [null, ''] };
       } else if (hasNone) {
         filter.$or = [
@@ -1423,6 +1436,95 @@ export class OrderService implements OnModuleInit {
       // hasError=false không được hỗ trợ: dùng "không lọc" để xem đơn không
       // lỗi (tránh đụng `$or` với filter search/printStage).
       filter.productionError = { $exists: true, $nin: [null, ''] };
+    }
+    if (dto.errorSource) {
+      filter.productionErrorSource = { $in: dto.errorSource.split(',').filter(Boolean) };
+    }
+    if (dto.toolCheckedError) {
+      // Lịch sử soát ra lỗi BỀN VỮNG: `toolCheckErrorNotes` ghi khi người soát
+      // đánh note ≠ 'ok' (updateField/bulk/importRework/markToolCheckDone), giữ
+      // nguyên kể cả đơn đã sửa về 'ok'. '1' = từng lỗi, '0' = chưa từng.
+      filter['toolCheckErrorNotes.0'] = { $exists: dto.toolCheckedError === '1' };
+    }
+    if (dto.rejectedBy) {
+      // Sự kiện bàn giao "Không làm được" đi từ user (đếm LẦN ở ma trận/panel;
+      // danh sách đơn distinct nên có thể ít hơn con số).
+      filter['designerRejections.fromUserId'] = dto.rejectedBy;
+    }
+    if (dto.receivedBy) {
+      filter['designerRejections.toUserId'] = dto.receivedBy;
+    }
+    if (dto.needDesigner === true) {
+      // Pool cần/qua designer — mirror hàng "Chưa gán designer" Tổng quan N ngày.
+      filter.$and = [
+        ...(Array.isArray(filter.$and) ? (filter.$and as unknown[]) : []),
+        {
+          $or: [
+            { 'toolCheckErrorNotes.0': { $exists: true } },
+            {
+              designerStatus: {
+                $in: [DesignerStatus.Assigned, DesignerStatus.InProgress, DesignerStatus.Rework, DesignerStatus.Done],
+              },
+            },
+          ],
+        },
+      ];
+    }
+    if (dto.designBacklog === true) {
+      // Hàng "Tổng tồn" Tổng quan N ngày — union 3 nhóm (mirror aggregation
+      // getDailyOverview.backlog): chưa soát ∨ đã gán chưa xong ∨ đang lỗi chưa gán.
+      filter.$and = [
+        ...(Array.isArray(filter.$and) ? (filter.$and as unknown[]) : []),
+        {
+          $or: [
+            { toolResultNote: { $in: [null, ''] } },
+            {
+              assignee: { $exists: true, $nin: [null, ''] },
+              designerStatus: { $in: [DesignerStatus.Assigned, DesignerStatus.InProgress, DesignerStatus.Rework] },
+            },
+            {
+              $and: [
+                {
+                  $or: [
+                    { 'toolCheckErrorNotes.0': { $exists: true } },
+                    {
+                      designerStatus: {
+                        $in: [
+                          DesignerStatus.Assigned,
+                          DesignerStatus.InProgress,
+                          DesignerStatus.Rework,
+                          DesignerStatus.Done,
+                        ],
+                      },
+                    },
+                  ],
+                },
+                { assignee: { $in: [null, ''] } },
+                { toolResultNote: { $nin: [null, '', 'ok'] } },
+              ],
+            },
+          ],
+        },
+      ];
+    }
+    if (dto.toolErrorNote) {
+      const codes = dto.toolErrorNote.split(',').filter(Boolean);
+      if (codes.length) {
+        // Mã lỗi soát tool MỚI NHẤT của đơn (phần tử cuối `toolCheckErrorNotes`)
+        // — khớp breakdown `toolErrorByNote` của Tổng quan N ngày. $expr đặt trong
+        // $and để không đè $expr của transferStatus.
+        filter.$and = [
+          ...(Array.isArray(filter.$and) ? (filter.$and as unknown[]) : []),
+          {
+            $expr: {
+              $in: [
+                { $ifNull: [{ $arrayElemAt: [{ $ifNull: ['$toolCheckErrorNotes', []] }, -1] }, ''] },
+                codes,
+              ],
+            },
+          },
+        ];
+      }
     }
 
     // Transfer filters — let the factory tab slice orders by direction.
@@ -2741,9 +2843,25 @@ export class OrderService implements OnModuleInit {
     const toolReworkMarker = {
       $and: [{ $eq: ['$productionErrorSource', 'tool-check'] }, { $eq: ['$toolResultNote', 'error'] }],
     };
-    const completedRange: Record<string, unknown> = { $exists: true, $ne: null };
-    if (from) completedRange.$gte = from;
-    if (to) completedRange.$lte = to;
+    // "Đang cần designer nhưng CHƯA gán" — mirror `unassignedNeedCond` của
+    // getDailyOverview (bảng "Chưa gán designer"): thuộc pool cần/qua designer
+    // (từng soát ra lỗi ∨ đã vào flow) & chưa gán & ĐANG lỗi (note ≠ ''/'ok').
+    // Tự loại đơn "In trả về chờ Soát tool" (note='error' do máy set, không có
+    // marker toolCheckErrorNotes → không thuộc pool).
+    const noteExpr = { $ifNull: ['$toolResultNote', ''] };
+    const curErrorCond = { $and: [{ $ne: [noteExpr, ''] }, { $ne: [noteExpr, 'ok'] }] };
+    const toolErrHasCond = { $gt: [{ $size: { $ifNull: ['$toolCheckErrorNotes', []] } }, 0] };
+    const designerStatusExpr = { $ifNull: ['$designerStatus', DesignerStatus.Unassigned] };
+    const s4Cond = {
+      $in: [
+        designerStatusExpr,
+        [DesignerStatus.Assigned, DesignerStatus.InProgress, DesignerStatus.Rework, DesignerStatus.Done],
+      ],
+    };
+    const assignedCond = { $and: [{ $ne: [{ $ifNull: ['$assignee', ''] }, ''] }, s4Cond] };
+    const unassignedNeedCond = {
+      $and: [{ $or: [toolErrHasCond, s4Cond] }, { $not: [assignedCond] }, curErrorCond],
+    };
 
     const [agg] = await this.orderModel.aggregate([
       { $match: match },
@@ -2776,9 +2894,16 @@ export class OrderService implements OnModuleInit {
             {
               $group: {
                 _id: null,
+                // "Đang chờ" = đơn lỗi ĐÃ gán chờ làm (status=assigned) + đơn
+                // đang cần designer CHƯA gán (unassignedNeedCond) — KHÔNG đếm
+                // mọi đơn unassigned (default của đơn thường không cần design).
                 backlog: {
                   $sum: {
-                    $cond: [{ $in: ['$designerStatus', [DesignerStatus.Unassigned, DesignerStatus.Assigned]] }, 1, 0],
+                    $cond: [
+                      { $or: [{ $eq: [designerStatusExpr, DesignerStatus.Assigned] }, unassignedNeedCond] },
+                      1,
+                      0,
+                    ],
                   },
                 },
                 assigned: {
@@ -2844,8 +2969,11 @@ export class OrderService implements OnModuleInit {
           ],
           totalAll: [{ $count: 'n' }],
           totalActive: [{ $match: { fulfillmentCompletedAt: { $in: [null, undefined] } } }, { $count: 'n' }],
+          // "Hoàn thành" = đơn TRONG COHORT (inProductionAt ∈ kỳ) đã đóng hàng
+          // xong — KHÔNG lọc thêm theo ngày hoàn thành (thuần trục inProductionAt
+          // → bất biến totalOrders = totalActive + completedInRange).
           totalCycle: [
-            { $match: { fulfillmentCompletedAt: completedRange } },
+            { $match: { fulfillmentCompletedAt: { $exists: true, $ne: null } } },
             {
               $group: {
                 _id: null,
@@ -2864,7 +2992,9 @@ export class OrderService implements OnModuleInit {
             },
           ],
           completionTimeline: [
-            { $match: { fulfillmentCompletedAt: completedRange } },
+            // Cohort-based: ngày hoàn thành của đơn trong kỳ có thể rơi ngoài
+            // window inProductionAt — chart hiện đúng ngày đó.
+            { $match: { fulfillmentCompletedAt: { $exists: true, $ne: null } } },
             {
               $group: {
                 _id: {
@@ -4458,7 +4588,12 @@ export class OrderService implements OnModuleInit {
       set.designerStatus = DesignerStatus.Rework;
       set.designerReworkAt = new Date();
     }
-    await this.orderModel.updateOne({ _id: id }, { $set: set });
+    // "Đã soát xong" = xác nhận đơn có lỗi thật sau soát lại → ghi lịch sử soát
+    // lỗi bền vững (mã 'error' — In trả về) cho thống kê "Soát lỗi" Tổng quan.
+    await this.orderModel.updateOne(
+      { _id: id },
+      { $set: set, $addToSet: { toolCheckErrorNotes: 'error' } },
+    );
     void this.orderLogService.write({
       orderId: id,
       action: 'update',
@@ -5011,22 +5146,34 @@ export class OrderService implements OnModuleInit {
 
   /**
    * Chia N phần cho các designer theo trọng số `weights` (tự do, không cần
-   * cộng 100). `baseᵢ = floor(N × wᵢ/Σw)`; **số dư dồn hết cho designer đầu**
-   * (theo yêu cầu "phần dư về designer đầu"). Σw = 0 → chia đều.
+   * cộng 100), CÂN BẰNG theo tải thực tế `loads` (số đơn chưa xong mỗi
+   * designer đang giữ). Từng đơn gán cho người có tải quy đổi
+   * `(load + đã chia trong lô + 1) / weight` thấp nhất → soát lẻ từng đơn
+   * (N=1) vẫn ra đúng tỉ lệ về lâu dài, và tự bù trừ khi 1 người đang bị dồn
+   * đơn từ nguồn khác (gán tay). Σw = 0 → coi mọi trọng số = 1 (chia đều theo
+   * tải); trọng số 0/âm khi có người khác > 0 → người đó không nhận đơn.
    */
-  private allocateByWeight(n: number, weights: number[]): number[] {
+  private allocateByLoad(n: number, weights: number[], loads: number[]): number[] {
     const k = weights.length;
-    if (k === 0 || n <= 0) return new Array(k).fill(0);
+    const alloc: number[] = new Array(k).fill(0);
+    if (k === 0 || n <= 0) return alloc;
     let effective = weights.map((w) => (Number.isFinite(w) && w > 0 ? w : 0));
-    let sum = effective.reduce((a, b) => a + b, 0);
-    if (sum <= 0) {
-      effective = new Array(k).fill(1);
-      sum = k;
+    if (effective.reduce((a, b) => a + b, 0) <= 0) effective = new Array(k).fill(1);
+    for (let u = 0; u < n; u++) {
+      let pick = -1;
+      let best = Infinity;
+      for (let i = 0; i < k; i++) {
+        if (effective[i] <= 0) continue;
+        const score = ((loads[i] > 0 ? loads[i] : 0) + alloc[i] + 1) / effective[i];
+        if (score < best) {
+          best = score;
+          pick = i;
+        }
+      }
+      if (pick < 0) break;
+      alloc[pick] += 1;
     }
-    const base = effective.map((w) => Math.floor((n * w) / sum));
-    const assigned = base.reduce((a, b) => a + b, 0);
-    base[0] += n - assigned; // phần dư về designer đầu danh sách
-    return base;
+    return alloc;
   }
 
   /**
@@ -5039,7 +5186,8 @@ export class OrderService implements OnModuleInit {
    *   - có `factoryId` (đã map xưởng) & xưởng đó CÓ cấu hình designer
    *   - chưa ai ôm (`designerStatus='unassigned'`, `assignee` rỗng)
    *   - không hủy / giữ / xóa
-   * Phân bổ theo lô (floor + dư về đầu) cho các designer Active của xưởng.
+   * Phân bổ cân bằng tải thực tế theo trọng số (`allocateByLoad`) cho các
+   * designer Active của xưởng — đơn về người có (đơn chưa xong)/weight thấp nhất.
    */
   private async autoAssignAfterImport(orderIds: string[], ctx?: AuditContext): Promise<void> {
     try {
@@ -5088,6 +5236,21 @@ export class OrderService implements OnModuleInit {
         .lean();
       const validIds = new Set(activeUsers.map((u) => String(u._id)));
 
+      // Tải thực tế: số đơn CHƯA XONG mỗi designer đang giữ (kể cả gán tay,
+      // mọi xưởng) — để cân bằng khi chia, đặc biệt khi soát lẻ từng đơn (N=1).
+      const loadRows = await this.orderModel.aggregate<{ _id: string; count: number }>([
+        {
+          $match: {
+            assignee: { $in: Array.from(validIds) },
+            designerStatus: { $in: DESIGNER_ACTIVE_STATUSES },
+            cancelledAt: null,
+            deletedAt: { $exists: false },
+          },
+        },
+        { $group: { _id: '$assignee', count: { $sum: 1 } } },
+      ]);
+      const loadByDesigner = new Map(loadRows.map((r) => [String(r._id), r.count]));
+
       const groups = new Map<string, string[]>();
       for (const o of eligible) {
         const fid = String((o as unknown as { factoryId?: string }).factoryId);
@@ -5108,9 +5271,10 @@ export class OrderService implements OnModuleInit {
       for (const [fid, orderList] of groups) {
         const designers = (byFactory.get(fid) || []).filter((d) => validIds.has(d.designerId));
         if (!designers.length) continue;
-        const alloc = this.allocateByWeight(
+        const alloc = this.allocateByLoad(
           orderList.length,
           designers.map((d) => d.weight),
+          designers.map((d) => loadByDesigner.get(d.designerId) || 0),
         );
         let cursor = 0;
         for (let i = 0; i < designers.length; i++) {
@@ -5966,7 +6130,18 @@ export class OrderService implements OnModuleInit {
         continue;
       }
 
-      await this.orderModel.updateOne({ _id: order._id }, { $set });
+      const reworkUpdate: Record<string, unknown> = { $set };
+      // Import kq soát đánh note lỗi (≠ ok) → ghi lịch sử soát lỗi bền vững —
+      // mirror nhánh field='toolResultNote' của `updateField` (trước đây path
+      // import bị bỏ sót → thống kê "Soát lỗi" thiếu đơn soát qua file).
+      if (
+        typeof $set.toolResultNote === 'string' &&
+        $set.toolResultNote.trim() &&
+        $set.toolResultNote !== READY_FOR_FULFILL_CODE
+      ) {
+        reworkUpdate.$addToSet = { toolCheckErrorNotes: $set.toolResultNote };
+      }
+      await this.orderModel.updateOne({ _id: order._id }, reworkUpdate);
       updated += 1;
 
       // Ứng viên auto-gán: soát tool xong (note có giá trị & != 'ok'), KHÔNG gán

@@ -38,6 +38,17 @@ import { WorkshopConfigEntity } from '../workshop-config/workshop-config.entity'
  *
  * Identity: assignee = user._id. Resolve fullName từ users collection.
  */
+/** Cell ma trận team — 4 trạng thái + sự kiện bàn giao (Không làm được / Nhận thêm). */
+type TeamDailyCellShape = {
+  assigned: number;
+  rework: number;
+  inProgress: number;
+  done: number;
+  rejected: number;
+  received: number;
+  unfinished: number;
+};
+
 @Injectable()
 export class DesignerStatsService {
   private readonly logger = new Logger(DesignerStatsService.name);
@@ -405,6 +416,11 @@ export class DesignerStatsService {
    * (7/14/30) cho MỌI sub-designer. Snapshot lens — mỗi ô là số đơn VÀO SẢN
    * XUẤT ngày đó ĐANG ở từng trạng thái. Focus 3 trạng thái chưa xong
    * (assigned/rework/inProgress) + done kèm. Tự include designer chưa có đơn.
+   *
+   * Scope ĐỒNG BỘ với bảng Tổng quan N ngày (`getDailyOverview`): loại đơn hủy
+   * + đơn chưa map xưởng; đơn của designer ĐÃ TẮT gộp vào dòng "Khác (đã tắt)"
+   * thay vì bỏ — để bất biến `Tổng/ngày = assignedToolError + assignedWasOk`
+   * (hàng "Đã gán designer" bên Tổng quan) đúng từng ngày.
    */
   async getTeamDailyBreakdown(
     rangeDays: number,
@@ -418,11 +434,11 @@ export class DesignerStatsService {
       userId: string;
       fullName: string;
       email?: string;
-      cells: { assigned: number; rework: number; inProgress: number; done: number; unfinished: number }[];
-      totals: { assigned: number; rework: number; inProgress: number; done: number; unfinished: number };
+      cells: TeamDailyCellShape[];
+      totals: TeamDailyCellShape;
     }[];
-    columnTotals: { assigned: number; rework: number; inProgress: number; done: number; unfinished: number }[];
-    grandTotals: { assigned: number; rework: number; inProgress: number; done: number; unfinished: number };
+    columnTotals: TeamDailyCellShape[];
+    grandTotals: TeamDailyCellShape;
     rangeDays: number;
   }> {
     const MS_DAY = 86_400_000;
@@ -471,25 +487,55 @@ export class DesignerStatsService {
       [DesignerStatus.InProgress]: 'inProgress',
       [DesignerStatus.Done]: 'done',
     };
-    const emptyCell = () => ({ assigned: 0, rework: 0, inProgress: 0, done: 0, unfinished: 0 });
+    const emptyCell = () => ({
+      assigned: 0,
+      rework: 0,
+      inProgress: 0,
+      done: 0,
+      rejected: 0,
+      received: 0,
+      unfinished: 0,
+    });
 
     // Filter sản phẩm / khách hàng (áp dụng chung cho ma trận + 2 biểu đồ cột).
     const extraMatch: Record<string, unknown> = {};
     if (type) extraMatch.type = type;
     if (customer) extraMatch.userSku = customer;
 
-    const [agg, designerRole] = await Promise.all([
+    // Match sự kiện bàn giao "Không làm được" — cùng scope đơn với ma trận
+    // (KHÔNG ràng designerStatus/assignee hiện tại — đơn có thể đã đi tiếp).
+    const rejectionScope = {
+      'designerRejections.0': { $exists: true },
+      inProductionAt: { $gte: start, $lte: end },
+      cancelledAt: null,
+      factoryId: { $exists: true, $ne: null },
+      ...extraMatch,
+    };
+    const rejectionDayExpr = {
+      $dateToString: { format: '%Y-%m-%d', date: '$inProductionAt', timezone: '+07:00' },
+    };
+    const buildRejectionAgg = (uidField: '$designerRejections.fromUserId' | '$designerRejections.toUserId') =>
+      this.orderModel.aggregate<{ _id: { uid: string; day: string }; count: number }>([
+        { $match: rejectionScope },
+        { $unwind: '$designerRejections' },
+        { $group: { _id: { uid: uidField, day: rejectionDayExpr }, count: { $sum: 1 } } },
+      ]);
+
+    const [agg, rejAgg, recvAgg, designerRole] = await Promise.all([
       this.orderModel.aggregate<{
         _id: { uid: string; day: string; status: DesignerStatus };
         count: number;
       }>([
         {
           $match: {
-            assignee: { $exists: true, $ne: null },
+            assignee: { $exists: true, $nin: [null, ''] },
             inProductionAt: { $gte: start, $lte: end },
             designerStatus: {
               $in: [DesignerStatus.Assigned, DesignerStatus.InProgress, DesignerStatus.Rework, DesignerStatus.Done],
             },
+            // Đồng bộ scope với Tổng quan: loại đơn hủy + đơn chưa map xưởng.
+            cancelledAt: null,
+            factoryId: { $exists: true, $ne: null },
             ...extraMatch,
           },
         },
@@ -504,6 +550,10 @@ export class DesignerStatsService {
           },
         },
       ]),
+      // Số LẦN "Không làm được" (bàn giao đi) theo (designer, ngày vào SX).
+      buildRejectionAgg('$designerRejections.fromUserId'),
+      // Số LẦN nhận bàn giao thêm theo (designer, ngày vào SX).
+      buildRejectionAgg('$designerRejections.toUserId'),
       this.roleRepository.findOne({ name: RoleType.Designer }),
     ]);
 
@@ -518,7 +568,7 @@ export class DesignerStatsService {
     const nameMap = new Map<string, { fullName: string; email?: string }>();
     for (const u of teamUsers) nameMap.set(String(u._id), { fullName: u.fullName, email: u.email });
 
-    const KEYS = ['assigned', 'rework', 'inProgress', 'done', 'unfinished'] as const;
+    const KEYS = ['assigned', 'rework', 'inProgress', 'done', 'rejected', 'received', 'unfinished'] as const;
     const rowCells = new Map<string, ReturnType<typeof emptyCell>[]>();
     const rowTotals = new Map<string, ReturnType<typeof emptyCell>>();
     const ensureRow = (uid: string) => {
@@ -531,24 +581,43 @@ export class DesignerStatsService {
     };
     if (designerRole) for (const u of teamUsers) ensureRow(String(u._id));
 
+    // Đơn gán cho designer ĐÃ TẮT / assignee ngoài team → gộp 1 dòng "Khác" để
+    // Tổng/ngày vẫn đếm đủ mọi đơn đã gán (khớp hàng "Đã gán designer" Tổng quan).
+    const INACTIVE_UID = '__inactive__';
     for (const r of agg) {
       const key = statusKey[r._id.status];
       if (!key) continue;
-      // Bỏ qua đơn của designer đã tắt (chỉ thống kê người active).
-      if (!activeIds.has(r._id.uid)) continue;
-      ensureRow(r._id.uid);
+      const uid = activeIds.has(r._id.uid) ? r._id.uid : INACTIVE_UID;
+      ensureRow(uid);
       // Totals cộng TRỰC TIẾP từ agg → đúng cho mọi khoảng (kể cả day-list bị cap).
-      const tt = rowTotals.get(r._id.uid)!;
+      const tt = rowTotals.get(uid)!;
       tt[key] += r.count;
       if (key !== 'done') tt.unfinished += r.count;
       // Cells chỉ đổ khi ngày nằm trong day-list (preset ≤30; range cap 100).
       const col = dayIndex.get(r._id.day);
       if (col !== undefined) {
-        const c = rowCells.get(r._id.uid)![col];
+        const c = rowCells.get(uid)![col];
         c[key] += r.count;
         if (key !== 'done') c.unfinished += r.count;
       }
     }
+    // Đổ sự kiện bàn giao vào cells/totals — cùng bucket "Khác" cho user đã tắt.
+    const bumpEvents = (
+      list: { _id: { uid: string; day: string }; count: number }[],
+      key: 'rejected' | 'received',
+    ) => {
+      for (const r of list) {
+        if (!r._id.uid) continue;
+        const uid = activeIds.has(r._id.uid) ? r._id.uid : INACTIVE_UID;
+        ensureRow(uid);
+        rowTotals.get(uid)![key] += r.count;
+        const col = dayIndex.get(r._id.day);
+        if (col !== undefined) rowCells.get(uid)![col][key] += r.count;
+      }
+    };
+    bumpEvents(rejAgg, 'rejected');
+    bumpEvents(recvAgg, 'received');
+    nameMap.set(INACTIVE_UID, { fullName: 'Khác (designer đã tắt)' });
 
     // Resolve tên cho assignee ngoài team (nếu có).
     const missingIds = [...rowTotals.keys()].filter((id) => !nameMap.has(id));
@@ -615,11 +684,27 @@ export class DesignerStatsService {
   }
 
   /**
-   * Bảng tổng quan N ngày (7/14/30) cho tab Designer — 4 hàng:
-   *   1. total     — tất cả đơn inProductionAt ngày đó (mọi trạng thái)
-   *   2. unreviewed— toolResultNote null/'' (chưa soát)
-   *   3. error     — toolResultNote set & != 'ok' (+ breakdown theo mã note)
-   *   4. backlog   — toolResultNote != 'ok' (chưa soát + lỗi, theo Tool)
+   * Bảng tổng quan N ngày (7/14/30) cho tab Designer — các hàng:
+   *   1. total       — tất cả đơn inProductionAt ngày đó (mọi trạng thái)
+   *   2. unreviewed  — toolResultNote null/'' (chưa soát)
+   *   3. toolError   — "Soát lỗi": đơn TỪNG bị người soát đánh note lỗi ≠ 'ok'
+   *                    (`toolCheckErrorNotes` non-empty — LỊCH SỬ, giữ kể cả đã
+   *                    sửa về 'ok'; không dính note='error' do In báo). Kèm
+   *                    toolErrorByNote (mã mới nhất) + toolErrorFixed +
+   *                    toolErrorUnassigned + assignedToolError cho tooltip.
+   *   4. wasOkPushed — "OK/chưa soát → đẩy về": chưa từng lỗi soát tool nhưng
+   *                    đã vào flow designer (designerStatus ∈ 4, gồm rework
+   *                    chưa ai ôm) — lịch sử.
+   *   5. unassignedNeed (+Tool) / unassignedResolved / assignedToolError+
+   *                    assignedWasOk — pool cần designer tách: chưa gán & ĐANG
+   *                    lỗi / chưa gán & đã về ok / đã gán. BẤT BIẾN: toolError
+   *                    + wasOkPushed = assignedTotal + unassignedNeed +
+   *                    unassignedResolved; assignedTotal = Tổng/ngày của
+   *                    getTeamDailyBreakdown.
+   *   6. error       — đơn ĐANG lỗi còn lại (note set & != 'ok') + breakdown mã note
+   *   7. backlog     — Tổng tồn (lăng kính designer): UNION chưa-soát ∨ đã-gán-
+   *                    chưa-xong ∨ đang-lỗi-chưa-gán ≈ unreviewed +
+   *                    (assignedTotal − designDone) + unassignedNeed
    * Kèm backlogByDesigner (per-designer × [assigned,inProgress,rework] — "Không
    * làm được"/rejected KHÔNG tính là tồn) + unassignedBacklog
    * cho bảng con khi expand hàng Tồn.
@@ -638,8 +723,18 @@ export class DesignerStatsService {
       ok: number;
       unreviewed: number;
       error: number;
-      errorTotal: number;
       errorUnassigned: number;
+      toolError: number;
+      toolErrorFixed: number;
+      toolErrorUnassigned: number;
+      toolErrorByNote: { code: string; count: number }[];
+      assignedToolError: number;
+      assignedWasOk: number;
+      wasOkPushed: number;
+      unassignedNeed: number;
+      unassignedNeedTool: number;
+      unassignedResolved: number;
+      designDone: number;
       errorByNote: { code: string; count: number }[];
       backlog: number;
       unassigned: number;
@@ -659,8 +754,17 @@ export class DesignerStatsService {
       ok: number;
       unreviewed: number;
       error: number;
-      errorTotal: number;
       errorUnassigned: number;
+      toolError: number;
+      toolErrorFixed: number;
+      toolErrorUnassigned: number;
+      assignedToolError: number;
+      assignedWasOk: number;
+      wasOkPushed: number;
+      unassignedNeed: number;
+      unassignedNeedTool: number;
+      unassignedResolved: number;
+      designDone: number;
       backlog: number;
     };
     rangeDays: number;
@@ -682,8 +786,33 @@ export class DesignerStatsService {
     const dayExpr = { $dateToString: { format: '%Y-%m-%d', date: '$inProductionAt', timezone: '+07:00' } };
     const noteExpr = { $ifNull: ['$toolResultNote', ''] };
     const statusExpr = { $ifNull: ['$designerStatus', DesignerStatus.Unassigned] };
+    // Đơn ĐANG lỗi (note set & ≠ ok) / từng bị soát ra lỗi / assignee rỗng.
+    const curErrorCond = { $and: [{ $ne: [noteExpr, ''] }, { $ne: [noteExpr, 'ok'] }] };
+    const toolErrHasCond = { $gt: [{ $size: { $ifNull: ['$toolCheckErrorNotes', []] } }, 0] };
+    const assigneeExpr = { $ifNull: ['$assignee', ''] };
+    // designerStatus thuộc 4 trạng thái làm việc (đã vào flow designer).
+    const s4Cond = {
+      $in: [
+        statusExpr,
+        [DesignerStatus.Assigned, DesignerStatus.InProgress, DesignerStatus.Rework, DesignerStatus.Done],
+      ],
+    };
+    // "Đã gán designer" — MIRROR match của getTeamDailyBreakdown (assignee set +
+    // designerStatus ∈ 4 trạng thái) để assignedToolError + assignedWasOk =
+    // Tổng/ngày bảng "Tất cả designer theo ngày" chính xác từng ngày.
+    const assignedCond = { $and: [{ $ne: [assigneeExpr, ''] }, s4Cond] };
+    // Pool cần/qua designer + 2 lát cắt dùng chung cho unassignedNeed & backlog.
+    const poolCond = { $or: [toolErrHasCond, s4Cond] };
+    const unassignedNeedCond = { $and: [poolCond, { $not: [assignedCond] }, curErrorCond] };
+    // Đã gán & CHƯA xong (assigned/in-progress/rework) = assignedTotal − designDone.
+    const pendingAssignedCond = {
+      $and: [
+        { $ne: [assigneeExpr, ''] },
+        { $in: [statusExpr, [DesignerStatus.Assigned, DesignerStatus.InProgress, DesignerStatus.Rework]] },
+      ],
+    };
 
-    const [rowsAgg, noteAgg, backlogAgg, designerRole] = await Promise.all([
+    const [rowsAgg, noteAgg, toolNoteAgg, backlogAgg, designerRole] = await Promise.all([
       // (a) per-day counts
       this.orderModel.aggregate<{
         _id: string;
@@ -691,8 +820,17 @@ export class DesignerStatsService {
         ok: number;
         unreviewed: number;
         error: number;
-        errorTotal: number;
         errorUnassigned: number;
+        toolError: number;
+        toolErrorFixed: number;
+        toolErrorUnassigned: number;
+        assignedToolError: number;
+        assignedWasOk: number;
+        wasOkPushed: number;
+        unassignedNeed: number;
+        unassignedNeedTool: number;
+        unassignedResolved: number;
+        designDone: number;
         backlog: number;
         unassigned: number;
       }>([
@@ -705,49 +843,82 @@ export class DesignerStatsService {
             ok: { $sum: { $cond: [{ $eq: [noteExpr, 'ok'] }, 1, 0] } },
             // Chưa soát (note rỗng).
             unreviewed: { $sum: { $cond: [{ $eq: [noteExpr, ''] }, 1, 0] } },
-            // Lỗi thật (đã soát & note ≠ 'ok') — CÒN LẠI hiện tại.
-            error: {
+            // Đơn ĐANG lỗi còn lại (đã soát & note ≠ 'ok') — chưa xử lý xong.
+            error: { $sum: { $cond: [curErrorCond, 1, 0] } },
+            // "Soát lỗi": đơn TỪNG bị người soát tool đánh note lỗi (≠ ok) —
+            // nguồn BỀN VỮNG `toolCheckErrorNotes` (giữ kể cả đơn đã sửa về
+            // 'ok'; KHÔNG dính note='error' do In báo → tự loại đơn treo chưa
+            // soát lại). Số lịch sử, không teo theo thời điểm hiện tại.
+            toolError: { $sum: { $cond: [toolErrHasCond, 1, 0] } },
+            // Trong toolError: đã sửa xong (note hiện tại = 'ok').
+            toolErrorFixed: {
+              $sum: { $cond: [{ $and: [toolErrHasCond, { $eq: [noteExpr, 'ok'] }] }, 1, 0] },
+            },
+            // Trong toolError: còn đang lỗi & chưa gán designer.
+            toolErrorUnassigned: {
               $sum: {
-                $cond: [{ $and: [{ $ne: [noteExpr, ''] }, { $ne: [noteExpr, 'ok'] }] }, 1, 0],
+                $cond: [{ $and: [toolErrHasCond, curErrorCond, { $eq: [assigneeExpr, ''] }] }, 1, 0],
               },
             },
-            // Đơn TỪNG lỗi trong ngày (kể cả đã sửa xong, note đã về 'ok') — hiển
-            // thị "còn lại/tổng". Đơn lỗi từ file soát đã sửa không để lại dấu vết
-            // riêng nên đếm best-effort qua counter lỗi tích lũy.
-            errorTotal: {
+            // Design ĐÃ XONG (assignee + status done) — khớp cột "Đã xong" ma trận.
+            designDone: {
               $sum: {
                 $cond: [
-                  {
-                    $or: [
-                      { $and: [{ $ne: [noteExpr, ''] }, { $ne: [noteExpr, 'ok'] }] },
-                      { $gt: [{ $ifNull: ['$productionErrorCount', 0] }, 0] },
-                      { $gt: [{ $ifNull: ['$designerReworkCount', 0] }, 0] },
-                    ],
-                  },
+                  { $and: [{ $ne: [assigneeExpr, ''] }, { $eq: [statusExpr, DesignerStatus.Done] }] },
                   1,
                   0,
                 ],
               },
             },
-            // Đơn ĐANG lỗi & chưa gán designer (assignee rỗng).
+            // "Đã gán designer" tách 2 nguồn — tổng 2 số = Tổng/ngày ma trận team.
+            assignedToolError: {
+              $sum: { $cond: [{ $and: [assignedCond, toolErrHasCond] }, 1, 0] },
+            },
+            assignedWasOk: {
+              $sum: { $cond: [{ $and: [assignedCond, { $not: [toolErrHasCond] }] }, 1, 0] },
+            },
+            // "OK/chưa soát → đẩy về": chưa từng lỗi soát tool nhưng đã vào flow
+            // designer (gồm rework chưa ai ôm) — lịch sử, không teo khi fix xong.
+            wasOkPushed: {
+              $sum: { $cond: [{ $and: [{ $not: [toolErrHasCond] }, s4Cond] }, 1, 0] },
+            },
+            // "Chưa gán designer" = pool cần designer & chưa gán & ĐANG lỗi
+            // (note set ≠ ok). Phần đã về ok tách riêng `unassignedResolved` —
+            // bất biến: toolError + wasOkPushed = assignedTotal + unassignedNeed
+            // + unassignedResolved.
+            unassignedNeed: { $sum: { $cond: [unassignedNeedCond, 1, 0] } },
+            // Trong unassignedNeed: phần từng lỗi soát tool (FE lấy phần bù ra
+            // nhóm "OK/chưa soát đẩy về").
+            unassignedNeedTool: {
+              $sum: {
+                $cond: [{ $and: [toolErrHasCond, { $not: [assignedCond] }, curErrorCond] }, 1, 0],
+              },
+            },
+            // Pool & chưa gán nhưng note đã về ok/rỗng — xử lý không cần designer.
+            unassignedResolved: {
+              $sum: {
+                $cond: [{ $and: [poolCond, { $not: [assignedCond] }, { $not: [curErrorCond] }] }, 1, 0],
+              },
+            },
+            // Đơn ĐANG lỗi & chưa gán designer (assignee rỗng) — nhóm "Chưa phân".
             errorUnassigned: {
               $sum: {
+                $cond: [{ $and: [curErrorCond, { $eq: [assigneeExpr, ''] }] }, 1, 0],
+              },
+            },
+            // Tổng tồn (lăng kính designer) = UNION: chưa soát ∨ đã gán chưa
+            // xong ∨ đang lỗi chưa gán — đơn thuộc 2 nhóm chỉ đếm 1 lần.
+            // = Chưa soát + (Đã gán − Đã xong) + Chưa gán khi các nhóm không
+            // trùng (đơn CHƯA SOÁT nhưng ĐÃ GÁN sẽ làm tổng số học lớn hơn union).
+            backlog: {
+              $sum: {
                 $cond: [
-                  {
-                    $and: [
-                      { $ne: [noteExpr, ''] },
-                      { $ne: [noteExpr, 'ok'] },
-                      { $eq: [{ $ifNull: ['$assignee', ''] }, ''] },
-                    ],
-                  },
+                  { $or: [{ $eq: [noteExpr, ''] }, pendingAssignedCond, unassignedNeedCond] },
                   1,
                   0,
                 ],
               },
             },
-            // Tổng tồn = chưa 'ok' = chưa soát + lỗi (theo Tool, KHÔNG theo
-            // designerStatus). Đảm bảo total = ok + backlog.
-            backlog: { $sum: { $cond: [{ $ne: [noteExpr, 'ok'] }, 1, 0] } },
             // Đơn designerStatus=unassigned (cho bảng xổ "Chưa gán").
             unassigned: {
               $sum: { $cond: [{ $eq: [statusExpr, DesignerStatus.Unassigned] }, 1, 0] },
@@ -759,6 +930,20 @@ export class DesignerStatsService {
       this.orderModel.aggregate<{ _id: { day: string; note: string }; count: number }>([
         { $match: { ...baseMatch, toolResultNote: { $nin: [null, '', 'ok'] } } },
         { $group: { _id: { day: dayExpr, note: '$toolResultNote' }, count: { $sum: 1 } } },
+        { $sort: { count: -1 } },
+      ]),
+      // (b2) toolErrorByNote per day — breakdown mã lỗi soát tool theo MÃ MỚI
+      // NHẤT của đơn (phần tử cuối `toolCheckErrorNotes` — $addToSet append đuôi
+      // khi gặp mã mới). Mỗi đơn đúng 1 dòng → tổng breakdown = toolError, khớp
+      // con số ngoài ô + drill `toolErrorNote`.
+      this.orderModel.aggregate<{ _id: { day: string; note: string }; count: number }>([
+        { $match: { ...baseMatch, 'toolCheckErrorNotes.0': { $exists: true } } },
+        {
+          $group: {
+            _id: { day: dayExpr, note: { $arrayElemAt: ['$toolCheckErrorNotes', -1] } },
+            count: { $sum: 1 },
+          },
+        },
         { $sort: { count: -1 } },
       ]),
       // (c) backlog per designer (active statuses có assignee).
@@ -778,47 +963,82 @@ export class DesignerStatsService {
       this.roleRepository.findOne({ name: RoleType.Designer }),
     ]);
 
-    // errorByNote gom theo ngày
+    // errorByNote / toolErrorByNote gom theo ngày
     const noteByDay = new Map<string, { code: string; count: number }[]>();
     for (const r of noteAgg) {
       const list = noteByDay.get(r._id.day) || [];
       list.push({ code: r._id.note, count: r.count });
       noteByDay.set(r._id.day, list);
     }
+    const toolNoteByDay = new Map<string, { code: string; count: number }[]>();
+    for (const r of toolNoteAgg) {
+      const list = toolNoteByDay.get(r._id.day) || [];
+      list.push({ code: r._id.note, count: r.count });
+      toolNoteByDay.set(r._id.day, list);
+    }
 
     const rowMap = new Map(rowsAgg.map((r) => [r._id, r]));
-    const columnTotals = { total: 0, ok: 0, unreviewed: 0, error: 0, errorTotal: 0, errorUnassigned: 0, backlog: 0 };
+    const columnTotals = {
+      total: 0,
+      ok: 0,
+      unreviewed: 0,
+      error: 0,
+      errorUnassigned: 0,
+      toolError: 0,
+      toolErrorFixed: 0,
+      toolErrorUnassigned: 0,
+      assignedToolError: 0,
+      assignedWasOk: 0,
+      wasOkPushed: 0,
+      unassignedNeed: 0,
+      unassignedNeedTool: 0,
+      unassignedResolved: 0,
+      designDone: 0,
+      backlog: 0,
+    };
     let unassignedBacklog = 0;
     const rows = days.map((day) => {
       const r = rowMap.get(day);
-      const total = r?.total ?? 0;
-      const ok = r?.ok ?? 0;
-      const unreviewed = r?.unreviewed ?? 0;
-      const error = r?.error ?? 0;
-      const errorTotal = r?.errorTotal ?? 0;
-      const errorUnassigned = r?.errorUnassigned ?? 0;
-      const backlog = r?.backlog ?? 0;
-      const unassigned = r?.unassigned ?? 0;
-      columnTotals.total += total;
-      columnTotals.ok += ok;
-      columnTotals.unreviewed += unreviewed;
-      columnTotals.error += error;
-      columnTotals.errorTotal += errorTotal;
-      columnTotals.errorUnassigned += errorUnassigned;
-      columnTotals.backlog += backlog;
-      unassignedBacklog += unassigned;
-      return {
+      const row = {
         day,
-        total,
-        ok,
-        unreviewed,
-        error,
-        errorTotal,
-        errorUnassigned,
+        total: r?.total ?? 0,
+        ok: r?.ok ?? 0,
+        unreviewed: r?.unreviewed ?? 0,
+        error: r?.error ?? 0,
+        errorUnassigned: r?.errorUnassigned ?? 0,
+        toolError: r?.toolError ?? 0,
+        toolErrorFixed: r?.toolErrorFixed ?? 0,
+        toolErrorUnassigned: r?.toolErrorUnassigned ?? 0,
+        toolErrorByNote: toolNoteByDay.get(day) || [],
+        assignedToolError: r?.assignedToolError ?? 0,
+        assignedWasOk: r?.assignedWasOk ?? 0,
+        wasOkPushed: r?.wasOkPushed ?? 0,
+        unassignedNeed: r?.unassignedNeed ?? 0,
+        unassignedNeedTool: r?.unassignedNeedTool ?? 0,
+        unassignedResolved: r?.unassignedResolved ?? 0,
+        designDone: r?.designDone ?? 0,
         errorByNote: noteByDay.get(day) || [],
-        backlog,
-        unassigned,
+        backlog: r?.backlog ?? 0,
+        unassigned: r?.unassigned ?? 0,
       };
+      columnTotals.total += row.total;
+      columnTotals.ok += row.ok;
+      columnTotals.unreviewed += row.unreviewed;
+      columnTotals.error += row.error;
+      columnTotals.errorUnassigned += row.errorUnassigned;
+      columnTotals.toolError += row.toolError;
+      columnTotals.toolErrorFixed += row.toolErrorFixed;
+      columnTotals.toolErrorUnassigned += row.toolErrorUnassigned;
+      columnTotals.assignedToolError += row.assignedToolError;
+      columnTotals.assignedWasOk += row.assignedWasOk;
+      columnTotals.wasOkPushed += row.wasOkPushed;
+      columnTotals.unassignedNeed += row.unassignedNeed;
+      columnTotals.unassignedNeedTool += row.unassignedNeedTool;
+      columnTotals.unassignedResolved += row.unassignedResolved;
+      columnTotals.designDone += row.designDone;
+      columnTotals.backlog += row.backlog;
+      unassignedBacklog += row.unassigned;
+      return row;
     });
 
     // Resolve tên designer cho bảng con — CHỈ designer ĐANG BẬT (thống kê active).
@@ -1113,7 +1333,14 @@ export class DesignerStatsService {
     unreviewedList: ToolCheckOrder[];
     errorHistory: ToolCheckErrorRow[];
     days: ToolCheckDayRow[];
-    columnTotals: { unreviewed: number; rework: number };
+    columnTotals: {
+      total: number;
+      unreviewed: number;
+      reviewed: number;
+      reviewedError: number;
+      reviewedOk: number;
+      rework: number;
+    };
     facets: {
       type: ToolCheckFacet[];
       customer: ToolCheckFacet[];
@@ -1134,6 +1361,10 @@ export class DesignerStatsService {
     const dayExpr = {
       $dateToString: { format: '%Y-%m-%d', date: '$inProductionAt', timezone: '+07:00' },
     };
+    const noteExpr = { $ifNull: ['$toolResultNote', ''] };
+    // Marker lịch sử "từng soát ra lỗi" (bền vững — xem ToolCheckWorkflow.md).
+    const toolErrHasCond = { $gt: [{ $size: { $ifNull: ['$toolCheckErrorNotes', []] } }, 0] };
+    const toolErrNoneCond = { $eq: [{ $size: { $ifNull: ['$toolCheckErrorNotes', []] } }, 0] };
     // `null` khớp cả giá trị null lẫn field vắng mặt → loại đơn đã xoá/hủy.
     // Đơn chưa map xưởng cũng bị loại khỏi Soát tool — chỉ xem qua trang
     // "Không xác định xưởng".
@@ -1227,8 +1458,7 @@ export class DesignerStatsService {
       reworkRaw,
       unreviewedRaw,
       candidatesRaw,
-      unreviewedByDay,
-      reworkByDay,
+      dailyByDay,
       typeFacetAgg,
       customerFacetAgg,
       machineFacetAgg,
@@ -1240,14 +1470,40 @@ export class DesignerStatsService {
       // Candidate: đơn từng bị đánh Note kq Tool ≠ ok trong kỳ. Mã note (loại
       // lỗi) nằm sẵn trong `toolCheckErrorNotes` — không cần join thêm.
       this.orderModel.find(errHistoryMatch, histProj).sort({ inProductionAt: -1 }).limit(HISTORY_CAP).lean(),
-      // Per-day: chưa soát + In trả về (áp cùng 3 filter type/customer/machine).
-      this.orderModel.aggregate<{ _id: string; count: number }>([
-        { $match: unreviewedMatch },
-        { $group: { _id: dayExpr, count: { $sum: 1 } } },
-      ]),
-      this.orderModel.aggregate<{ _id: string; count: number }>([
-        { $match: reworkMatch },
-        { $group: { _id: dayExpr, count: { $sum: 1 } } },
+      // Per-day (áp cùng filter tab): tổng đơn + chưa soát / soát lỗi / soát ok
+      // / In trả về trong 1 pass — đã soát suy ra sau (total−unreviewed).
+      // Soát lỗi/OK là KẾT QUẢ SOÁT (lịch sử): lỗi = `toolCheckErrorNotes`
+      // non-empty (không teo khi đơn sửa xong); ok = đã soát & CHƯA TỪNG lỗi
+      // (gồm cả đơn soát ok bị In trả về treo note='error').
+      this.orderModel.aggregate<{
+        _id: string;
+        total: number;
+        unreviewed: number;
+        reviewedError: number;
+        reviewedOk: number;
+        rework: number;
+      }>([
+        { $match: withFilters({ inProductionAt: inWindow, ...alive }) },
+        {
+          $group: {
+            _id: dayExpr,
+            total: { $sum: 1 },
+            unreviewed: { $sum: { $cond: [{ $eq: [noteExpr, ''] }, 1, 0] } },
+            reviewedError: { $sum: { $cond: [toolErrHasCond, 1, 0] } },
+            reviewedOk: {
+              $sum: { $cond: [{ $and: [{ $ne: [noteExpr, ''] }, toolErrNoneCond] }, 1, 0] },
+            },
+            rework: {
+              $sum: {
+                $cond: [
+                  { $and: [{ $eq: ['$productionErrorSource', 'tool-check'] }, { $eq: [noteExpr, 'error'] }] },
+                  1,
+                  0,
+                ],
+              },
+            },
+          },
+        },
       ]),
       // Facet options (phạm vi Support, KHÔNG áp 4 filter → ổn định).
       facetAgg('type'),
@@ -1335,15 +1591,23 @@ export class DesignerStatsService {
     }
 
     // Dải theo ngày: căn theo `days` (mới→cũ) từ resolveVnWindow.
-    const unreviewedDayMap = new Map(unreviewedByDay.map((r) => [r._id, r.count]));
-    const reworkDayMap = new Map(reworkByDay.map((r) => [r._id, r.count]));
-    const columnTotals = { unreviewed: 0, rework: 0 };
+    const dailyDayMap = new Map(dailyByDay.map((r) => [r._id, r]));
+    const columnTotals = { total: 0, unreviewed: 0, reviewed: 0, reviewedError: 0, reviewedOk: 0, rework: 0 };
     const dayRows: ToolCheckDayRow[] = days.map((day) => {
-      const unreviewed = unreviewedDayMap.get(day) ?? 0;
-      const rework = reworkDayMap.get(day) ?? 0;
+      const r = dailyDayMap.get(day);
+      const total = r?.total ?? 0;
+      const unreviewed = r?.unreviewed ?? 0;
+      const reviewed = Math.max(0, total - unreviewed);
+      const reviewedOk = r?.reviewedOk ?? 0;
+      const reviewedError = r?.reviewedError ?? 0;
+      const rework = r?.rework ?? 0;
+      columnTotals.total += total;
       columnTotals.unreviewed += unreviewed;
+      columnTotals.reviewed += reviewed;
+      columnTotals.reviewedError += reviewedError;
+      columnTotals.reviewedOk += reviewedOk;
       columnTotals.rework += rework;
-      return { day, unreviewed, rework };
+      return { day, total, unreviewed, reviewed, reviewedError, reviewedOk, rework };
     });
 
     return {

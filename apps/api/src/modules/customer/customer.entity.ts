@@ -16,6 +16,9 @@ export class CustomerEntity extends DatabaseEntityAbstract {
   @Prop({ default: 'sync' })
   source: string;
 
+  // Tier VIP 0..5; null = khách lẻ (chưa xếp hạng).
+  @Prop({ type: Number, default: null })
+  tier: number | null;
   // Rỗng '' = record tạo qua sync/thêm tay, CHƯA đăng ký → chưa đăng nhập được
   // cho tới khi khách tự đăng ký (claim) qua Customer Portal.
   @Prop({ default: '' })

@@ -117,6 +117,7 @@ errorFile, errorFileNote, assignee). Các cột khác BỎ QUA (không đè dữ
       2. Loop từng row → lookup order theo productionId:
          - Nếu không tồn tại → notFound++ + skipped[].
          - Match `Note_kq_Tool` (vd "loi") → workshop_config.name normalize → code → set `toolResultNote`.
+           Code ≠ 'ok' → kèm `$addToSet toolCheckErrorNotes` (lịch sử soát lỗi bền vững — xem `ToolCheckWorkflow.md`).
          - Match `File_sua_loi` (vd "Vien co") → tương tự.
          - `Ghi_chu_file_loi` → set `errorFileNote` (raw). Nếu chứa "huy don" (normalize) → set
            `cancelledAt = new Date()` + `cancelReason = note` (counter `cancelled++`).
@@ -480,6 +481,16 @@ Ngoài các filter cơ bản (`createdFrom/To`, `factoryId`, `machineTypeId`, `p
 | `printStage` | enum | `printed` · `printing` · `not-printed`. Mutually exclusive — Dashboard Tab C drill-down 3 button trên `FactoryCard`. Định nghĩa "đã in xong" = `printStatus ∈ PRINTED_MACHINE_CODES` (`['machine-1','machine-2','machine-3','machine-4','machine-94']`). |
 | `productionError` | CSV codes | (Phase 8) Lọc theo lý do lỗi xưởng (`wrong-size`, `print-misalign`, ...). |
 | `hasError` | boolean | (Phase 8) `true` → đơn có `productionError` set. `false` không hỗ trợ (dùng cách không truyền filter). |
+| `errorSource` | CSV | Lọc theo `productionErrorSource` (`designer`/`factory`/`tool-check`) — filter generic theo nguồn lỗi hiện tại. Kết hợp `toolResultNote=error` → drill hàng "Cần làm lại" (In trả về) dải ngày tab Soát tool. |
+| `toolResultNote` | CSV codes | Lọc note kq Tool. Token: `__none__` = chưa soát (null/''/missing) · `__any__` = ĐÃ soát, note bất kỳ (`$nin [null,'']`) · `__error__` = đã soát & ≠ 'ok' (`$nin [null,'','ok']`) — 2 token sau cho drill hàng "Đã soát"/"Soát lỗi" dải "Tổng quan theo ngày" tab Soát tool (`ToolCheckTab.tsx`). |
+| `priority` | `'1'`\|`'2'`\|`'3'` | Lọc theo mức ưu tiên (`filter.priority = Number(...)`) — drill tab Soát tool mang theo filter "Ưu tiên" của tab. |
+| `toolCheckedError` | `'1'` \| `'0'` | `'1'` → đơn TỪNG bị soát tool đánh note lỗi: `'toolCheckErrorNotes.0': {$exists:true}`; `'0'` → chưa từng (`$exists:false`) — lịch sử bền vững, xem `ToolCheckWorkflow.md`. Drill hàng "Soát lỗi" + 2 nhóm "Đẩy lại · từng lỗi/từng ok" bảng Tổng quan N ngày. |
+| `toolErrorNote` | CSV codes | Lọc theo **mã lỗi soát tool MỚI NHẤT** của đơn (`$expr $in` trên `$arrayElemAt(toolCheckErrorNotes, -1)` — push vào `$and` để không đè `$expr` của `transferStatus`). Drill dòng mã lỗi trong tooltip hàng "Soát lỗi". |
+| `assignee` | CSV user._id | Lọc theo designer được gán. Token: `__none__` = chưa gán (null/''/missing) · `__any__` = ĐÃ gán bất kỳ ai (`$exists + $nin [null,'']` — drill hàng "Đã gán designer" bảng Tổng quan N ngày). |
+| `needDesigner` | boolean | `true` → pool cần/qua designer: `toolCheckErrorNotes` non-empty ∨ `designerStatus ∈ [assigned, in-progress, rework, done]` ($or push vào $and). Kết hợp `assignee=__none__` → drill hàng "Chưa gán designer" bảng Tổng quan N ngày. |
+| `designBacklog` | boolean | `true` → union "Tổng tồn" lăng kính designer: chưa soát (note rỗng) ∨ đã gán & chưa xong (assignee + `designerStatus ∈ [assigned,in-progress,rework]`) ∨ đang lỗi & chưa gán (pool cần designer). Drill hàng Tổng tồn bảng Tổng quan N ngày. |
+| `rejectedBy` | string | userId → đơn có sự kiện bàn giao "Không làm được" ĐI từ user (`designerRejections.fromUserId`). Drill hàng "Không làm được" panel thống kê 7 ngày (StatusBarCharts). Số ở ma trận/panel đếm LẦN — danh sách đơn distinct nên có thể ít hơn. |
+| `receivedBy` | string | userId → đơn có sự kiện NHẬN bàn giao (`designerRejections.toUserId`). Drill hàng "Nhận thêm" panel thống kê 7 ngày. |
 | `sort` | `'grouped'` | Sort `(type, size, fabricType, inProductionAt desc)` thay vì `inProductionAt` mặc định — để combo trùng nhau gom liền nhau (Workshop dùng để in batch chung). |
 
 ---

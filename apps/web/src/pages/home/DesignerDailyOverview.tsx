@@ -28,8 +28,17 @@ interface Data {
     ok: number;
     unreviewed: number;
     error: number;
-    errorTotal: number;
     errorUnassigned: number;
+    toolError: number;
+    toolErrorFixed: number;
+    toolErrorUnassigned: number;
+    assignedToolError: number;
+    assignedWasOk: number;
+    wasOkPushed: number;
+    unassignedNeed: number;
+    unassignedNeedTool: number;
+    unassignedResolved: number;
+    designDone: number;
     backlog: number;
   };
 }
@@ -39,7 +48,24 @@ const EMPTY: Data = {
   rows: [],
   backlogByDesigner: [],
   unassignedBacklog: 0,
-  columnTotals: { total: 0, ok: 0, unreviewed: 0, error: 0, errorTotal: 0, errorUnassigned: 0, backlog: 0 },
+  columnTotals: {
+    total: 0,
+    ok: 0,
+    unreviewed: 0,
+    error: 0,
+    errorUnassigned: 0,
+    toolError: 0,
+    toolErrorFixed: 0,
+    toolErrorUnassigned: 0,
+    assignedToolError: 0,
+    assignedWasOk: 0,
+    wasOkPushed: 0,
+    unassignedNeed: 0,
+    unassignedNeedTool: 0,
+    unassignedResolved: 0,
+    designDone: 0,
+    backlog: 0,
+  },
 };
 
 interface Props {
@@ -124,6 +150,14 @@ export function DesignerDailyOverview({ days: range = 7, from, to, reloadToken, 
     [rows],
   );
 
+  // Cộng dồn breakdown cả kỳ cho tooltip ô cột "Tổng" (lỗi hiện tại / lỗi soát).
+  const sumByCode = (lists: { code: string; count: number }[][]) => {
+    const m = new Map<string, number>();
+    for (const list of lists) for (const n of list) m.set(n.code, (m.get(n.code) || 0) + n.count);
+    return [...m.entries()].map(([code, count]) => ({ code, count })).sort((a, b) => b.count - a.count);
+  };
+  const allToolErrorBreakdown = useMemo(() => sumByCode(rows.map((r) => r.toolErrorByNote)), [rows]);
+
   const rangeFromTo = useMemo(
     () => (days.length ? { from: days[0], to: days[days.length - 1] } : { from, to }),
     [days, from, to],
@@ -141,12 +175,12 @@ export function DesignerDailyOverview({ days: range = 7, from, to, reloadToken, 
     return sp;
   };
 
-  type Metric = 'total' | 'ok' | 'unreviewed' | 'error' | 'backlog';
+  type Metric = 'total' | 'ok' | 'unreviewed' | 'toolError' | 'backlog';
   const METRIC_LABEL: Record<Metric, string> = {
     total: 'Tổng đơn',
     ok: 'Tổng xong',
     unreviewed: 'Chưa soát',
-    error: 'Tổng lỗi',
+    toolError: 'Soát lỗi',
     backlog: 'Tổng tồn',
   };
 
@@ -156,8 +190,8 @@ export function DesignerDailyOverview({ days: range = 7, from, to, reloadToken, 
     const sp = baseParams(fromDay, toDay);
     if (metric === 'ok') sp.set('toolResultNote', 'ok');
     else if (metric === 'unreviewed') sp.set('toolResultNote', '__none__');
-    else if (metric === 'error') sp.set('toolResultNote', errorCodes.join(','));
-    else if (metric === 'backlog') sp.set('toolResultNote', ['__none__', ...errorCodes].join(','));
+    else if (metric === 'toolError') sp.set('toolCheckedError', '1');
+    else if (metric === 'backlog') sp.set('designBacklog', '1');
     setDrill({
       title: (
         <>
@@ -165,6 +199,148 @@ export function DesignerDailyOverview({ days: range = 7, from, to, reloadToken, 
           {dayLabel ? ` · ${dayLabel}` : ' · cả kỳ'}
         </>
       ),
+      query: sp.toString(),
+    });
+  };
+
+  /** Drill từng dòng tooltip hàng "Soát lỗi": 1 mã lỗi (theo mã MỚI NHẤT của
+   *  đơn — khớp breakdown BE) / Chưa gán designer / Đã sửa xong. */
+  const openToolErrorLine = (
+    line: { type: 'note'; code: string } | { type: 'unassigned' } | { type: 'fixed' },
+    fromDay: string,
+    toDay: string,
+    errorCodes: string[],
+    dayLabel?: string,
+  ) => {
+    const sp = baseParams(fromDay, toDay);
+    let label: string;
+    if (line.type === 'note') {
+      sp.set('toolErrorNote', line.code);
+      label = noteName(line.code);
+    } else if (line.type === 'unassigned') {
+      sp.set('toolCheckedError', '1');
+      sp.set('assignee', '__none__');
+      sp.set('toolResultNote', errorCodes.join(','));
+      label = 'Chưa gán designer';
+    } else {
+      sp.set('toolCheckedError', '1');
+      sp.set('toolResultNote', 'ok');
+      label = 'Đã sửa xong';
+    }
+    setDrill({
+      title: (
+        <>
+          Soát lỗi · {label}
+          {dayLabel ? ` · ${dayLabel}` : ' · cả kỳ'}
+        </>
+      ),
+      query: sp.toString(),
+    });
+  };
+
+  /** Drill hàng "OK/chưa soát → đẩy về" — chưa từng lỗi soát tool nhưng đã vào
+   *  flow designer (designerStatus ∈ 4). */
+  const openWasOk = (
+    kind: 'all' | 'assigned' | 'unassigned',
+    fromDay?: string,
+    toDay?: string,
+    dayLabel?: string,
+  ) => {
+    const sp = baseParams(fromDay, toDay);
+    sp.set('toolCheckedError', '0');
+    sp.set('designerStatus', 'assigned,in-progress,rework,done');
+    if (kind === 'assigned') sp.set('assignee', '__any__');
+    else if (kind === 'unassigned') sp.set('assignee', '__none__');
+    setDrill({
+      title: (
+        <>
+          OK/chưa soát → đẩy về
+          {kind === 'assigned' ? ' · đã gán' : kind === 'unassigned' ? ' · chưa gán' : ''}
+          {dayLabel ? ` · ${dayLabel}` : ' · cả kỳ'}
+        </>
+      ),
+      query: sp.toString(),
+    });
+  };
+
+  /** Drill hàng "Tổng lỗi" — toàn bộ pool cần designer (soát lỗi + đẩy về). */
+  const openErrorPool = (fromDay?: string, toDay?: string, dayLabel?: string) => {
+    const sp = baseParams(fromDay, toDay);
+    sp.set('needDesigner', '1');
+    setDrill({
+      title: <>Tổng lỗi (soát lỗi + đẩy về){dayLabel ? ` · ${dayLabel}` : ' · cả kỳ'}</>,
+      query: sp.toString(),
+    });
+  };
+
+  /** Drill hàng "Chưa gán designer" — pool cần designer, chưa gán & ĐANG lỗi
+   *  (note ∈ errorCodes ≠ 'ok'); `resolved` = phần đã về 'ok' không cần designer. */
+  const openUnassignedNeed = (
+    kind: 'all' | 'tool' | 'wasOk' | 'resolved',
+    fromDay: string | undefined,
+    toDay: string | undefined,
+    errorCodes: string[],
+    dayLabel?: string,
+  ) => {
+    const sp = baseParams(fromDay, toDay);
+    sp.set('assignee', '__none__');
+    if (kind === 'resolved') {
+      sp.set('needDesigner', '1');
+      sp.set('toolResultNote', 'ok');
+    } else {
+      sp.set('toolResultNote', errorCodes.join(','));
+      if (kind === 'tool') sp.set('toolCheckedError', '1');
+      else if (kind === 'wasOk') {
+        sp.set('toolCheckedError', '0');
+        sp.set('designerStatus', 'assigned,in-progress,rework,done');
+      } else sp.set('needDesigner', '1');
+    }
+    setDrill({
+      title: (
+        <>
+          Chưa gán designer
+          {kind === 'tool'
+            ? ' · từ soát lỗi'
+            : kind === 'wasOk'
+              ? ' · ok/chưa soát đẩy về'
+              : kind === 'resolved'
+                ? ' · đã xử lý không cần designer'
+                : ''}
+          {dayLabel ? ` · ${dayLabel}` : ' · cả kỳ'}
+        </>
+      ),
+      query: sp.toString(),
+    });
+  };
+
+  /** Drill hàng "Đã gán designer" — mirror match ma trận team (assignee bất kỳ
+   *  + designerStatus ∈ 4 trạng thái), tách nguồn qua toolCheckedError. */
+  const DS4 = 'assigned,in-progress,rework,done';
+  const openAssigned = (kind: 'all' | 'tool' | 'wasOk', fromDay?: string, toDay?: string, dayLabel?: string) => {
+    const sp = baseParams(fromDay, toDay);
+    sp.set('assignee', '__any__');
+    sp.set('designerStatus', DS4);
+    if (kind === 'tool') sp.set('toolCheckedError', '1');
+    else if (kind === 'wasOk') sp.set('toolCheckedError', '0');
+    setDrill({
+      title: (
+        <>
+          Đã gán designer
+          {kind === 'tool' ? ' · từ soát lỗi' : kind === 'wasOk' ? ' · ok/chưa soát đẩy về' : ''}
+          {dayLabel ? ` · ${dayLabel}` : ' · cả kỳ'}
+        </>
+      ),
+      query: sp.toString(),
+    });
+  };
+
+  /** Drill hàng "Design đã xong" — assignee bất kỳ + designerStatus='done'. */
+  const openDesignDone = (fromDay?: string, toDay?: string, dayLabel?: string) => {
+    const sp = baseParams(fromDay, toDay);
+    sp.set('assignee', '__any__');
+    sp.set('designerStatus', 'done');
+    setDrill({
+      title: <>Design đã xong{dayLabel ? ` · ${dayLabel}` : ' · cả kỳ'}</>,
       query: sp.toString(),
     });
   };
@@ -256,33 +432,327 @@ export function DesignerDailyOverview({ days: range = 7, from, to, reloadToken, 
                   onCell={(i) => openMetric('unreviewed', days[i], days[i], [], fmtHead(days[i]).dm)}
                   onTotal={() => openMetric('unreviewed', rangeFromTo.from ?? '', rangeFromTo.to ?? '', [])}
                 />
-                {/* 3. Tổng lỗi — "còn lại/tổng phát sinh" trong ngày. */}
+                {/* 2b. Soát lỗi — lịch sử toolCheckErrorNotes, tooltip breakdown theo mã. */}
                 <tr className="group">
-                  <td className="sticky left-0 z-10 bg-card group-hover:bg-muted/40 px-3 py-1.5 border-b border-border/60 font-medium text-rose-600">
-                    Tổng lỗi
-                    <div className="text-[10px] text-muted-foreground font-normal">còn lại / tổng phát sinh</div>
+                  <td className="sticky left-0 z-10 bg-card group-hover:bg-muted/40 px-3 py-1.5 border-b border-border/60 font-medium text-orange-600 dark:text-orange-400">
+                    <Hint content="Tổng đơn TỪNG bị soát tool phát hiện lỗi (người soát đánh Note ≠ 'ok') — số lịch sử, KHÔNG giảm khi đơn đã sửa xong; không tính đơn In trả về chưa soát lại">
+                      <span className="cursor-help">Soát lỗi</span>
+                    </Hint>
                   </td>
                   {rows.map((r, i) => {
+                    const day = days[i];
+                    const dm = fmtHead(day).dm;
                     const codes = r.errorByNote.map((n) => n.code);
-                    const open = () => openMetric('error', days[i], days[i], codes, fmtHead(days[i]).dm);
                     return (
-                      <td key={days[i]} className="border-b border-l border-border/60 text-center px-1 py-1.5">
-                        <ErrorFractionCell
-                          error={r.error}
-                          errorTotal={r.errorTotal}
-                          errorUnassigned={r.errorUnassigned}
-                          breakdown={r.errorByNote.map((n) => ({ label: noteName(n.code), count: n.count }))}
-                          onClick={open}
+                      <td key={day} className="border-b border-l border-border/60 text-center px-1 py-1.5">
+                        <BreakdownNumCell
+                          value={r.toolError}
+                          className="text-orange-600 dark:text-orange-400 hover:bg-orange-500/10"
+                          breakdown={r.toolErrorByNote.map((n) => ({
+                            label: noteName(n.code),
+                            count: n.count,
+                            onClick: () => openToolErrorLine({ type: 'note', code: n.code }, day, day, codes, dm),
+                          }))}
+                          extra={[
+                            {
+                              label: 'Đã gán designer',
+                              count: r.assignedToolError,
+                              onClick: () => openAssigned('tool', day, day, dm),
+                            },
+                            {
+                              label: 'Chưa gán designer',
+                              count: r.toolErrorUnassigned,
+                              onClick: () => openToolErrorLine({ type: 'unassigned' }, day, day, codes, dm),
+                            },
+                            {
+                              label: 'Đã sửa xong',
+                              count: r.toolErrorFixed,
+                              onClick: () => openToolErrorLine({ type: 'fixed' }, day, day, codes, dm),
+                            },
+                          ]}
+                          onClick={() => openMetric('toolError', day, day, [], dm)}
                         />
                       </td>
                     );
                   })}
                   <td className="bg-muted/30 border-b border-l border-border text-center px-2 py-1.5">
-                    <ErrorFractionCell
-                      error={columnTotals.error}
-                      errorTotal={columnTotals.errorTotal}
-                      errorUnassigned={columnTotals.errorUnassigned}
-                      onClick={() => openMetric('error', rangeFromTo.from ?? '', rangeFromTo.to ?? '', allErrorCodes)}
+                    <BreakdownNumCell
+                      value={columnTotals.toolError}
+                      className="text-orange-600 dark:text-orange-400 hover:bg-orange-500/10"
+                      breakdown={allToolErrorBreakdown.map((n) => ({
+                        label: noteName(n.code),
+                        count: n.count,
+                        onClick: () =>
+                          openToolErrorLine(
+                            { type: 'note', code: n.code },
+                            rangeFromTo.from ?? '',
+                            rangeFromTo.to ?? '',
+                            allErrorCodes,
+                          ),
+                      }))}
+                      extra={[
+                        {
+                          label: 'Đã gán designer',
+                          count: columnTotals.assignedToolError,
+                          onClick: () => openAssigned('tool', rangeFromTo.from, rangeFromTo.to),
+                        },
+                        {
+                          label: 'Chưa gán designer',
+                          count: columnTotals.toolErrorUnassigned,
+                          onClick: () =>
+                            openToolErrorLine(
+                              { type: 'unassigned' },
+                              rangeFromTo.from ?? '',
+                              rangeFromTo.to ?? '',
+                              allErrorCodes,
+                            ),
+                        },
+                        {
+                          label: 'Đã sửa xong',
+                          count: columnTotals.toolErrorFixed,
+                          onClick: () =>
+                            openToolErrorLine({ type: 'fixed' }, rangeFromTo.from ?? '', rangeFromTo.to ?? '', []),
+                        },
+                      ]}
+                      onClick={() => openMetric('toolError', rangeFromTo.from ?? '', rangeFromTo.to ?? '', [])}
+                    />
+                  </td>
+                </tr>
+                {/* 2c. OK/chưa soát → đẩy về — chưa từng lỗi soát tool nhưng đã
+                    vào flow designer (lịch sử). Soát lỗi + hàng này = Chưa gán +
+                    Đã gán. */}
+                <tr className="group">
+                  <td className="sticky left-0 z-10 bg-card group-hover:bg-muted/40 px-3 py-1.5 border-b border-border/60 font-medium text-purple-600 dark:text-purple-400">
+                    <Hint content="Đơn CHƯA TỪNG lỗi soát tool (ok/chưa soát) nhưng bị công đoạn đẩy về designer — số lịch sử, không giảm khi đã fix xong (gồm cả đơn đẩy về chưa ai nhận)">
+                      <span className="cursor-help">OK/chưa soát → đẩy về</span>
+                    </Hint>
+                  </td>
+                  {rows.map((r, i) => {
+                    const day = days[i];
+                    const dm = fmtHead(day).dm;
+                    return (
+                      <td key={day} className="border-b border-l border-border/60 text-center px-1 py-1.5">
+                        <BreakdownNumCell
+                          value={r.wasOkPushed}
+                          className="text-purple-600 dark:text-purple-400 hover:bg-purple-500/10"
+                          extra={[
+                            {
+                              label: 'Đã gán designer',
+                              count: r.assignedWasOk,
+                              onClick: () => openWasOk('assigned', day, day, dm),
+                            },
+                            {
+                              label: 'Chưa gán designer',
+                              count: Math.max(0, r.wasOkPushed - r.assignedWasOk),
+                              onClick: () => openWasOk('unassigned', day, day, dm),
+                            },
+                          ]}
+                          onClick={() => openWasOk('all', day, day, dm)}
+                        />
+                      </td>
+                    );
+                  })}
+                  <td className="bg-muted/30 border-b border-l border-border text-center px-2 py-1.5">
+                    <BreakdownNumCell
+                      value={columnTotals.wasOkPushed}
+                      className="text-purple-600 dark:text-purple-400 hover:bg-purple-500/10"
+                      extra={[
+                        {
+                          label: 'Đã gán designer',
+                          count: columnTotals.assignedWasOk,
+                          onClick: () => openWasOk('assigned', rangeFromTo.from, rangeFromTo.to),
+                        },
+                        {
+                          label: 'Chưa gán designer',
+                          count: Math.max(0, columnTotals.wasOkPushed - columnTotals.assignedWasOk),
+                          onClick: () => openWasOk('unassigned', rangeFromTo.from, rangeFromTo.to),
+                        },
+                      ]}
+                      onClick={() => openWasOk('all', rangeFromTo.from, rangeFromTo.to)}
+                    />
+                  </td>
+                </tr>
+                {/* 2d. Chưa gán designer — pool cần/qua designer trừ đã gán.
+                    Bất biến: Soát lỗi + OK/chưa soát đẩy về = hàng này + Đã gán. */}
+                <tr className="group">
+                  <td className="sticky left-0 z-10 bg-card group-hover:bg-muted/40 px-3 py-1.5 border-b border-border/60 font-medium text-teal-600 dark:text-teal-400">
+                    <Hint content="Đơn ĐANG lỗi (Note kq Tool có giá trị ≠ 'ok') cần designer nhưng CHƯA gán ai. Đối soát: Soát lỗi + OK/chưa soát đẩy về = Đã gán + Chưa gán + đã-xử-lý-không-cần-designer (dòng cuối tooltip).">
+                      <span className="cursor-help">Chưa gán designer</span>
+                    </Hint>
+                  </td>
+                  {rows.map((r, i) => {
+                    const day = days[i];
+                    const dm = fmtHead(day).dm;
+                    const codes = r.errorByNote.map((n) => n.code);
+                    return (
+                      <td key={day} className="border-b border-l border-border/60 text-center px-1 py-1.5">
+                        <BreakdownNumCell
+                          value={r.unassignedNeed}
+                          className="text-teal-600 dark:text-teal-400 hover:bg-teal-500/10"
+                          extra={[
+                            {
+                              label: 'Từ soát lỗi',
+                              count: r.unassignedNeedTool,
+                              onClick: () => openUnassignedNeed('tool', day, day, codes, dm),
+                            },
+                            {
+                              label: 'OK/chưa soát → đẩy về',
+                              count: Math.max(0, r.unassignedNeed - r.unassignedNeedTool),
+                              onClick: () => openUnassignedNeed('wasOk', day, day, codes, dm),
+                            },
+                            {
+                              label: 'Đã xử lý không cần designer',
+                              count: r.unassignedResolved,
+                              onClick: () => openUnassignedNeed('resolved', day, day, codes, dm),
+                            },
+                          ]}
+                          onClick={() => openUnassignedNeed('all', day, day, codes, dm)}
+                        />
+                      </td>
+                    );
+                  })}
+                  <td className="bg-muted/30 border-b border-l border-border text-center px-2 py-1.5">
+                    <BreakdownNumCell
+                      value={columnTotals.unassignedNeed}
+                      className="text-teal-600 dark:text-teal-400 hover:bg-teal-500/10"
+                      extra={[
+                        {
+                          label: 'Từ soát lỗi',
+                          count: columnTotals.unassignedNeedTool,
+                          onClick: () => openUnassignedNeed('tool', rangeFromTo.from, rangeFromTo.to, allErrorCodes),
+                        },
+                        {
+                          label: 'OK/chưa soát → đẩy về',
+                          count: Math.max(0, columnTotals.unassignedNeed - columnTotals.unassignedNeedTool),
+                          onClick: () => openUnassignedNeed('wasOk', rangeFromTo.from, rangeFromTo.to, allErrorCodes),
+                        },
+                        {
+                          label: 'Đã xử lý không cần designer',
+                          count: columnTotals.unassignedResolved,
+                          onClick: () =>
+                            openUnassignedNeed('resolved', rangeFromTo.from, rangeFromTo.to, allErrorCodes),
+                        },
+                      ]}
+                      onClick={() => openUnassignedNeed('all', rangeFromTo.from, rangeFromTo.to, allErrorCodes)}
+                    />
+                  </td>
+                </tr>
+                {/* 2e. Đã gán designer — KHỚP "Tổng / ngày" bảng "Tất cả designer
+                    theo ngày" (= soát lỗi đã gán + ok/chưa soát đẩy về đã gán). */}
+                <tr className="group">
+                  <td className="sticky left-0 z-10 bg-card group-hover:bg-muted/40 px-3 py-1.5 border-b border-border/60 font-medium text-indigo-600 dark:text-indigo-400">
+                    <Hint content="Tổng đơn ĐÃ GIAO cho designer (mọi trạng thái) — khớp hàng 'Tổng / ngày' của bảng 'Tất cả designer theo ngày'. Gồm 2 nguồn: đơn soát tool ra lỗi + đơn ok/chưa soát bị công đoạn đẩy về.">
+                      <span className="cursor-help">Đã gán designer</span>
+                    </Hint>
+                    <div className="text-[10px] text-muted-foreground font-normal">= Tổng/ngày bảng designer</div>
+                  </td>
+                  {rows.map((r, i) => {
+                    const day = days[i];
+                    const dm = fmtHead(day).dm;
+                    return (
+                      <td key={day} className="border-b border-l border-border/60 text-center px-1 py-1.5">
+                        <BreakdownNumCell
+                          value={r.assignedToolError + r.assignedWasOk}
+                          className="text-indigo-600 dark:text-indigo-400 hover:bg-indigo-500/10"
+                          breakdown={[
+                            {
+                              label: 'Từ soát lỗi',
+                              count: r.assignedToolError,
+                              onClick: () => openAssigned('tool', day, day, dm),
+                            },
+                            {
+                              label: 'OK/chưa soát → đẩy về',
+                              count: r.assignedWasOk,
+                              onClick: () => openAssigned('wasOk', day, day, dm),
+                            },
+                          ]}
+                          onClick={() => openAssigned('all', day, day, dm)}
+                        />
+                      </td>
+                    );
+                  })}
+                  <td className="bg-muted/30 border-b border-l border-border text-center px-2 py-1.5">
+                    <BreakdownNumCell
+                      value={columnTotals.assignedToolError + columnTotals.assignedWasOk}
+                      className="text-indigo-600 dark:text-indigo-400 hover:bg-indigo-500/10"
+                      breakdown={[
+                        {
+                          label: 'Từ soát lỗi',
+                          count: columnTotals.assignedToolError,
+                          onClick: () => openAssigned('tool', rangeFromTo.from, rangeFromTo.to),
+                        },
+                        {
+                          label: 'OK/chưa soát → đẩy về',
+                          count: columnTotals.assignedWasOk,
+                          onClick: () => openAssigned('wasOk', rangeFromTo.from, rangeFromTo.to),
+                        },
+                      ]}
+                      onClick={() => openAssigned('all', rangeFromTo.from, rangeFromTo.to)}
+                    />
+                  </td>
+                </tr>
+                {/* 2f. Design đã xong — assignee + designerStatus='done' (⊂ Đã gán,
+                    khớp cột "Đã xong" ma trận team). */}
+                <MetricRow
+                  label="Design đã xong"
+                  hint="Đơn designer ĐÃ hoàn thành (designerStatus = done) — khớp cột 'Đã xong' của bảng 'Tất cả designer theo ngày'. Là tập con của hàng Đã gán designer."
+                  values={rows.map((r) => r.designDone)}
+                  total={columnTotals.designDone}
+                  className="text-emerald-600 dark:text-emerald-400"
+                  onCell={(i) => openDesignDone(days[i], days[i], fmtHead(days[i]).dm)}
+                  onTotal={() => openDesignDone(rangeFromTo.from, rangeFromTo.to)}
+                />
+                {/* 3. Tổng lỗi = Soát lỗi + OK/chưa soát → đẩy về (2 nửa không giao
+                    nhau của pool cần designer — lịch sử). */}
+                <tr className="group">
+                  <td className="sticky left-0 z-10 bg-card group-hover:bg-muted/40 px-3 py-1.5 border-b border-border/60 font-medium text-rose-600">
+                    <Hint content="= Soát lỗi + OK/chưa soát → đẩy về (2 nguồn không trùng nhau) — tổng đơn từng có lỗi cần designer, tính lịch sử. Đối soát: = Đã gán + Chưa gán + đã-xử-lý-không-cần-designer.">
+                      <span className="cursor-help">Tổng lỗi</span>
+                    </Hint>
+                    <div className="text-[10px] text-muted-foreground font-normal">soát lỗi + đẩy về</div>
+                  </td>
+                  {rows.map((r, i) => {
+                    const day = days[i];
+                    const dm = fmtHead(day).dm;
+                    return (
+                      <td key={day} className="border-b border-l border-border/60 text-center px-1 py-1.5">
+                        <BreakdownNumCell
+                          value={r.toolError + r.wasOkPushed}
+                          className="text-rose-600 hover:bg-rose-500/10"
+                          extra={[
+                            {
+                              label: 'Soát lỗi',
+                              count: r.toolError,
+                              onClick: () => openMetric('toolError', day, day, [], dm),
+                            },
+                            {
+                              label: 'OK/chưa soát → đẩy về',
+                              count: r.wasOkPushed,
+                              onClick: () => openWasOk('all', day, day, dm),
+                            },
+                          ]}
+                          onClick={() => openErrorPool(day, day, dm)}
+                        />
+                      </td>
+                    );
+                  })}
+                  <td className="bg-muted/30 border-b border-l border-border text-center px-2 py-1.5">
+                    <BreakdownNumCell
+                      value={columnTotals.toolError + columnTotals.wasOkPushed}
+                      className="text-rose-600 hover:bg-rose-500/10"
+                      extra={[
+                        {
+                          label: 'Soát lỗi',
+                          count: columnTotals.toolError,
+                          onClick: () => openMetric('toolError', rangeFromTo.from ?? '', rangeFromTo.to ?? '', []),
+                        },
+                        {
+                          label: 'OK/chưa soát → đẩy về',
+                          count: columnTotals.wasOkPushed,
+                          onClick: () => openWasOk('all', rangeFromTo.from, rangeFromTo.to),
+                        },
+                      ]}
+                      onClick={() => openErrorPool(rangeFromTo.from, rangeFromTo.to)}
                     />
                   </td>
                 </tr>
@@ -294,7 +764,7 @@ export function DesignerDailyOverview({ days: range = 7, from, to, reloadToken, 
                       Tổng tồn
                     </span>
                     <div className="text-[10px] text-muted-foreground font-normal pl-[18px]">
-                      chưa 'ok' = chưa soát + lỗi · bấm để xem theo designer
+                      chưa soát + đã gán chưa xong + chưa gán · bấm để xem theo designer
                     </div>
                   </td>
                   {rows.map((r, i) => {
@@ -353,7 +823,12 @@ export function DesignerDailyOverview({ days: range = 7, from, to, reloadToken, 
               <div className="text-[11px] font-medium text-muted-foreground">
                 Tổng tồn {columnTotals.backlog} = Chưa soát{' '}
                 <span className="text-slate-600 dark:text-slate-300 font-semibold">{columnTotals.unreviewed}</span> +
-                Lỗi <span className="text-rose-600 font-semibold">{columnTotals.error}</span>
+                Đã gán chưa xong{' '}
+                <span className="text-indigo-600 font-semibold">
+                  {columnTotals.assignedToolError + columnTotals.assignedWasOk - columnTotals.designDone}
+                </span>{' '}
+                + Chưa gán <span className="text-teal-600 font-semibold">{columnTotals.unassignedNeed}</span>
+                <span className="font-normal"> (đơn chưa soát nhưng đã gán chỉ đếm 1 lần)</span>
               </div>
               <div className="text-[10px] text-muted-foreground">
                 Bảng dưới: tồn theo trạng thái designer (đơn đã gán) — lăng kính khác, tổng {backlogGrand}, có thể lệch
@@ -436,66 +911,87 @@ export function DesignerDailyOverview({ days: range = 7, from, to, reloadToken, 
   );
 }
 
+interface BreakdownLine {
+  label: string;
+  count: number;
+  /** Có onClick + count>0 → dòng tooltip bấm được, mở drill danh sách đơn. */
+  onClick?: () => void;
+}
+
 /**
- * Ô hàng "Tổng lỗi" — `còn lại/tổng phát sinh` (vd. 3/8). Tooltip: breakdown
- * theo mã note + số chưa gán designer + số đã sửa xong. Bấm (khi còn lỗi) →
- * drill-down danh sách đơn ĐANG lỗi.
+ * Con số + tooltip breakdown (hàng "Soát lỗi" / "Tổng lỗi"): `breakdown` = số
+ * lượng theo từng mã lỗi (mỗi đơn 1 dòng — tổng breakdown = con số ngoài ô),
+ * `extra` = các dòng tổng kết (Chưa gán designer, Đã sửa xong…). Bấm con số
+ * HOẶC từng dòng tooltip → drill-down; stopPropagation để không toggle xổ nhóm
+ * của hàng cha.
  */
-function ErrorFractionCell({
-  error,
-  errorTotal,
-  errorUnassigned,
+function BreakdownNumCell({
+  value,
+  className,
   breakdown,
+  extra,
   onClick,
 }: {
-  error: number;
-  errorTotal: number;
-  errorUnassigned: number;
-  breakdown?: { label: string; count: number }[];
+  value: number;
+  className?: string;
+  breakdown?: BreakdownLine[];
+  extra?: BreakdownLine[];
   onClick: () => void;
 }) {
-  if (error === 0 && errorTotal === 0) return <span className="text-muted-foreground/30">·</span>;
-  const text = (
-    <>
-      {error}
-      <span className="font-normal text-muted-foreground">/{errorTotal}</span>
-    </>
-  );
-  const inner =
-    error > 0 ? (
-      <button
-        type="button"
-        onClick={onClick}
-        className="font-semibold text-rose-600 rounded px-1 -mx-1 hover:bg-rose-500/10 cursor-pointer tabular-nums"
-      >
-        {text}
-      </button>
-    ) : (
-      <span className="font-semibold text-emerald-600 dark:text-emerald-400 tabular-nums">{text}</span>
+  if (value === 0) return <span className="text-muted-foreground/30">·</span>;
+  const renderLine = (l: BreakdownLine, extraCls?: string) => {
+    const inner = (
+      <>
+        <span>{l.label}</span>
+        <span className="tabular-nums font-semibold">{l.count}</span>
+      </>
     );
+    if (!l.onClick || l.count === 0) {
+      return (
+        <div key={l.label} className={cn('flex justify-between gap-3 px-1', extraCls)}>
+          {inner}
+        </div>
+      );
+    }
+    return (
+      <button
+        key={l.label}
+        type="button"
+        onClick={(e) => {
+          e.stopPropagation();
+          l.onClick?.();
+        }}
+        className={cn(
+          'flex justify-between gap-3 w-full rounded px-1 hover:bg-primary/15 cursor-pointer text-left',
+          extraCls,
+        )}
+      >
+        {inner}
+      </button>
+    );
+  };
   return (
     <Hint
       forceRich
       content={
-        <div className="text-left space-y-0.5">
-          {breakdown?.map((n) => (
-            <div key={n.label} className="flex justify-between gap-3">
-              <span>{n.label}</span>
-              <span className="tabular-nums font-semibold">{n.count}</span>
-            </div>
-          ))}
-          <div className={cn('flex justify-between gap-3', breakdown?.length && 'border-t border-border/50 pt-0.5')}>
-            <span>Chưa gán designer</span>
-            <span className="tabular-nums font-semibold">{errorUnassigned}</span>
-          </div>
-          <div className="flex justify-between gap-3">
-            <span>Đã sửa xong</span>
-            <span className="tabular-nums font-semibold">{Math.max(0, errorTotal - error)}</span>
-          </div>
+        <div className="text-left space-y-0.5 -mx-1">
+          {breakdown?.map((n) => renderLine(n))}
+          {extra?.map((l, i) =>
+            renderLine(l, i === 0 && breakdown?.length ? 'border-t border-border/50 pt-0.5' : undefined),
+          )}
         </div>
       }
     >
-      {inner}
+      <button
+        type="button"
+        onClick={(e) => {
+          e.stopPropagation();
+          onClick();
+        }}
+        className={cn('font-semibold rounded px-1 -mx-1 cursor-pointer tabular-nums', className)}
+      >
+        {value}
+      </button>
     </Hint>
   );
 }

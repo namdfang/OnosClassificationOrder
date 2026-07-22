@@ -12,6 +12,9 @@ import { Spinner } from '@/components/common/Spinner';
 import { handleAxiosError } from '@/utils';
 import { cn } from '@/utils/cn';
 
+import type { DrillTarget } from './DesignerDrillPanel';
+import { DesignerDrillPanel } from './DesignerDrillPanel';
+
 type Mode = 'designer' | 'day';
 type RangeDays = 7 | 14 | 30;
 const RANGES: RangeDays[] = [7, 14, 30];
@@ -25,6 +28,22 @@ const STATUS = [
 ] as const;
 const LABEL: Record<string, string> = Object.fromEntries(STATUS.map((s) => [s.key, s.label]));
 
+// 2 hàng sự kiện bàn giao (chỉ panel 7 ngày, KHÔNG vào biểu đồ cột): đếm số LẦN
+// (khớp ma trận Tất cả designer theo ngày) — 1 đơn bàn giao nhiều lần đếm nhiều.
+const EVENT_ROWS = [
+  { key: 'rejected', label: 'Không làm được', color: '#F43F5E' },
+  { key: 'received', label: 'Nhận thêm', color: '#0EA5E9' },
+] as const;
+const PANEL_ROWS = [...STATUS, ...EVENT_ROWS] as const;
+
+// key hàng → giá trị designerStatus trong DB (inProgress khác 'in-progress').
+const STATUS_DB: Record<string, string> = {
+  assigned: 'assigned',
+  rework: 'rework',
+  inProgress: 'in-progress',
+  done: 'done',
+};
+
 interface Data {
   days: string[];
   rows: TeamDailyRow[];
@@ -35,7 +54,7 @@ const EMPTY: Data = {
   days: [],
   rows: [],
   columnTotals: [],
-  grandTotals: { assigned: 0, rework: 0, inProgress: 0, done: 0, unfinished: 0 },
+  grandTotals: { assigned: 0, rework: 0, inProgress: 0, done: 0, rejected: 0, received: 0, unfinished: 0 },
 };
 
 function todayISO(): string {
@@ -156,6 +175,8 @@ export function StatusBarCharts({ type, customer, filterDays, filterFrom, filter
   // Data RIÊNG, LUÔN 7 ngày gần nhất (không theo date-range của biểu đồ):
   // team-daily-breakdown (per-day 4 trạng thái) + product-breakdown (sản phẩm).
   const [selDesigner, setSelDesigner] = useState<{ userId: string; name: string } | null>(null);
+  // Drill danh sách đơn khi bấm 1 con số trong panel 7 ngày.
+  const [drill, setDrill] = useState<DrillTarget | null>(null);
   const [weekData, setWeekData] = useState<Data | null>(null);
   const [weekProducts, setWeekProducts] = useState<Record<string, ProductBreakdownDesigner> | null>(null);
   const [weekLoading, setWeekLoading] = useState(false);
@@ -167,6 +188,11 @@ export function StatusBarCharts({ type, customer, filterDays, filterFrom, filter
     setWeekData(null);
     setWeekProducts(null);
   }, [type, customer]);
+
+  // Đổi designer / đóng panel → bỏ drill cũ (query gắn với designer trước).
+  useEffect(() => {
+    setDrill(null);
+  }, [selDesigner, type, customer]);
 
   useEffect(() => {
     if (!selDesigner || (weekData && weekProducts)) return;
@@ -349,9 +375,18 @@ export function StatusBarCharts({ type, customer, filterDays, filterFrom, filter
           ) : (
             <WeekStatsPanel
               userId={selDesigner.userId}
+              name={selDesigner.name}
               data={weekData || EMPTY}
               products={weekProducts?.[selDesigner.userId]}
+              type={type}
+              customer={customer}
+              onPick={setDrill}
             />
+          )}
+          {drill && (
+            <div className="border-t border-border p-3">
+              <DesignerDrillPanel target={drill} onClose={() => setDrill(null)} />
+            </div>
           )}
         </div>
       )}
@@ -360,17 +395,28 @@ export function StatusBarCharts({ type, customer, filterDays, filterFrom, filter
 }
 
 /**
- * Nội dung panel 7 ngày: 4 chip tổng trạng thái + bảng 4 trạng thái × 7 ngày +
- * bảng sản phẩm designer làm trong 7 ngày (mockup + level + count).
+ * Nội dung panel 7 ngày: 6 chip tổng (4 trạng thái + Không làm được + Nhận thêm)
+ * + bảng 6 hàng × 7 ngày + bảng sản phẩm designer làm trong 7 ngày.
+ * MỌI con số > 0 bấm được → drill danh sách đơn (`onPick` → DesignerDrillPanel).
+ * 2 hàng sự kiện đếm số LẦN bàn giao (khớp ma trận) — danh sách đơn distinct
+ * nên có thể ít hơn con số.
  */
 function WeekStatsPanel({
   userId,
+  name,
   data,
   products,
+  type,
+  customer,
+  onPick,
 }: {
   userId: string;
+  name: string;
   data: Data;
   products?: ProductBreakdownDesigner;
+  type?: string;
+  customer?: string;
+  onPick: (target: DrillTarget) => void;
 }) {
   // BE trả ngày mới→cũ → đảo để hiển thị quá khứ→hiện tại (đồng bộ index cells).
   const row = data.rows.find((r) => r.userId === userId);
@@ -378,27 +424,82 @@ function WeekStatsPanel({
   const cells = useMemo(() => (row ? [...row.cells].reverse() : []), [row]);
   const totals = row?.totals;
 
+  // Query overview-list cho 1 ô: hàng trạng thái → assignee+designerStatus;
+  // hàng sự kiện → rejectedBy/receivedBy. Ngày lọc theo inProductionAt.
+  const buildQuery = (key: string, fromDay?: string, toDay?: string): string => {
+    const sp = new URLSearchParams();
+    if (fromDay) sp.set('createdFrom', fromDay);
+    if (toDay) sp.set('createdTo', toDay);
+    if (type) sp.set('type', type);
+    if (customer) sp.set('userSku', customer);
+    sp.set('sort', 'grouped');
+    if (key === 'rejected') sp.set('rejectedBy', userId);
+    else if (key === 'received') sp.set('receivedBy', userId);
+    else {
+      sp.set('assignee', userId);
+      sp.set('designerStatus', STATUS_DB[key] || key);
+    }
+    return sp.toString();
+  };
+
+  const isEvent = (key: string) => key === 'rejected' || key === 'received';
+  const pick = (key: string, label: string, v: number, fromDay?: string, toDay?: string, dayLabel?: string) => {
+    onPick({
+      title: (
+        <>
+          {label} · {dayLabel || '7 ngày'} — {name}
+          {isEvent(key) && (
+            <span className="text-muted-foreground font-normal"> ({v} lần — 1 đơn bàn giao nhiều lần chỉ 1 dòng)</span>
+          )}
+        </>
+      ),
+      query: buildQuery(key, fromDay, toDay),
+    });
+  };
+
+  const windowFrom = days[0];
+  const windowTo = days[days.length - 1];
+
+  const numBtn = (key: string, label: string, v: number, fromDay?: string, toDay?: string, dayLabel?: string) =>
+    v === 0 ? (
+      <span className="text-muted-foreground/30">·</span>
+    ) : (
+      <button
+        type="button"
+        onClick={() => pick(key, label, v, fromDay, toDay, dayLabel)}
+        className="tabular-nums underline-offset-2 hover:underline hover:text-indigo-600 dark:hover:text-indigo-400"
+        title="Xem danh sách đơn"
+      >
+        {v}
+      </button>
+    );
+
   return (
     <div className="p-3 space-y-3">
-      {/* 4 chip tổng — cùng bộ màu/label với legend biểu đồ. */}
+      {/* 6 chip tổng — bấm = drill cả 7 ngày. */}
       <div className="flex flex-wrap gap-2">
-        {STATUS.map((s) => {
+        {PANEL_ROWS.map((s) => {
           const v = totals ? totals[s.key as keyof TeamDailyCell] : 0;
           return (
-            <span
+            <button
               key={s.key}
-              className="inline-flex items-center gap-1.5 rounded-md border border-border px-2 py-1 text-[11px]"
+              type="button"
+              onClick={() => v > 0 && pick(s.key, s.label, v, windowFrom, windowTo)}
+              className={cn(
+                'inline-flex items-center gap-1.5 rounded-md border border-border px-2 py-1 text-[11px]',
+                v > 0 && 'hover:border-indigo-400 hover:bg-indigo-50/50 dark:hover:bg-indigo-500/10',
+              )}
             >
               <span className="w-2 h-2 rounded-sm" style={{ backgroundColor: s.color }} />
               {s.label}
               <span className="tabular-nums font-semibold">{v}</span>
-            </span>
+            </button>
           );
         })}
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-3">
-        {/* Bảng 4 trạng thái × 7 ngày */}
+        {/* Bảng 6 hàng × 7 ngày — mọi số bấm được. */}
         <div className="rounded-md border border-border overflow-x-auto">
           <table className="w-full text-[12px] tabular-nums">
             <thead>
@@ -413,7 +514,7 @@ function WeekStatsPanel({
               </tr>
             </thead>
             <tbody>
-              {STATUS.map((s) => (
+              {PANEL_ROWS.map((s) => (
                 <tr key={s.key} className="border-b border-border/50 last:border-0 hover:bg-muted/30">
                   <td className="px-2.5 py-1.5">
                     <span className="inline-flex items-center gap-1.5 font-medium">
@@ -425,17 +526,23 @@ function WeekStatsPanel({
                     const v = cells[i]?.[s.key as keyof TeamDailyCell] ?? 0;
                     return (
                       <td key={d} className="text-center px-1.5 py-1.5 border-l border-border/40">
-                        {v === 0 ? <span className="text-muted-foreground/30">·</span> : v}
+                        {numBtn(s.key, s.label, v, d, d, dm(d))}
                       </td>
                     );
                   })}
                   <td className="text-center px-2 py-1.5 border-l border-border bg-muted/30 font-semibold">
-                    {totals ? totals[s.key as keyof TeamDailyCell] : 0}
+                    {(totals?.[s.key as keyof TeamDailyCell] ?? 0) > 0
+                      ? numBtn(s.key, s.label, totals?.[s.key as keyof TeamDailyCell] ?? 0, windowFrom, windowTo)
+                      : 0}
                   </td>
                 </tr>
               ))}
             </tbody>
           </table>
+          <p className="px-2.5 py-1.5 text-[10px] text-muted-foreground border-t border-border/50">
+            Không làm được / Nhận thêm = số LẦN bàn giao (khớp ma trận) — bấm vào hiện danh sách đơn, 1 đơn bàn giao
+            nhiều lần chỉ 1 dòng.
+          </p>
           {!row && (
             <p className="text-[11px] text-muted-foreground text-center py-3">
               Không có đơn nào trong 7 ngày gần nhất.

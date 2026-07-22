@@ -158,6 +158,16 @@ export function PipelineDailyOverview({ stage, lane, from, to, reloadToken, dayF
         tip: (_m, d) => `${d} · Soát tool — công đoạn của bạn`,
       });
       list.push({
+        key: 'tool-unreviewed',
+        label: 'Chưa soát',
+        indent: true,
+        tone: 'highlight',
+        showZero: true,
+        single: (m) => m.toolUnreviewed,
+        singleCls: AMBER,
+        tip: (m, d) => `${d} · Soát tool / Chưa soát: ${m.toolUnreviewed} — chưa kiểm tool`,
+      });
+      list.push({
         key: 'tool-reviewed',
         label: 'Đã soát',
         indent: true,
@@ -166,16 +176,6 @@ export function PipelineDailyOverview({ stage, lane, from, to, reloadToken, dayF
         single: (m) => m.toolReviewed,
         singleCls: 'text-foreground',
         tip: (m, d) => `${d} · Soát tool / Đã soát: ${m.toolReviewed} — đơn đã có kết quả tool`,
-      });
-      list.push({
-        key: 'tool-ok',
-        label: 'OK',
-        indent: true,
-        tone: 'highlight',
-        showZero: true,
-        single: (m) => m.toolOk,
-        singleCls: EMERALD,
-        tip: (m, d) => `${d} · Soát tool / OK: ${m.toolOk} — đã soát & kết quả 'ok' (sẵn sàng in)`,
       });
       list.push({
         key: 'tool-error',
@@ -189,14 +189,14 @@ export function PipelineDailyOverview({ stage, lane, from, to, reloadToken, dayF
           `${d} · Soát tool / Lỗi: ${Math.max(0, m.toolReviewed - m.toolOk)} — đã soát nhưng kết quả ≠ 'ok'`,
       });
       list.push({
-        key: 'tool-unreviewed',
-        label: 'Chưa soát',
+        key: 'tool-ok',
+        label: 'OK',
         indent: true,
         tone: 'highlight',
         showZero: true,
-        single: (m) => m.toolUnreviewed,
-        singleCls: AMBER,
-        tip: (m, d) => `${d} · Soát tool / Chưa soát: ${m.toolUnreviewed} — chưa kiểm tool`,
+        single: (m) => m.toolOk,
+        singleCls: EMERALD,
+        tip: (m, d) => `${d} · Soát tool / OK: ${m.toolOk} — đã soát & kết quả 'ok' (sẵn sàng in)`,
       });
     } else {
       list.push({

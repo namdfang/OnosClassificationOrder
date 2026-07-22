@@ -329,7 +329,7 @@ export default function LifecycleStrip() {
                     <Row label="Tổng đơn (trong kỳ)" value={totals?.totalOrders ?? 0} />
                     <Row label="Đang chạy" value={totals?.totalActive ?? 0} />
                     <Row
-                      label="Hoàn thành (kỳ)"
+                      label="Đã hoàn thành"
                       value={totals?.completedInRange ?? 0}
                       cls="text-emerald-600 dark:text-emerald-400"
                     />
@@ -491,7 +491,7 @@ export default function LifecycleStrip() {
                   <TooltipContent className="min-w-[170px]">
                     <div className="font-semibold mb-1">Hoàn thành</div>
                     <Row
-                      label="Đóng hàng xong (kỳ)"
+                      label="Đơn trong kỳ đã đóng hàng xong"
                       value={totals?.completedInRange ?? 0}
                       cls="text-emerald-600 dark:text-emerald-400"
                     />

@@ -44,6 +44,8 @@ import { formatCountdown, getStageDeadline } from '@/utils/priorityEstimate';
 import { useNow } from '@/hooks/useNow';
 import { usePermission } from '@/hooks/usePermission';
 
+import { DesignerDrillPanel, type DrillTarget } from './DesignerDrillPanel';
+
 interface Overview {
   checkedCount: number;
   errorCount: number;
@@ -51,7 +53,14 @@ interface Overview {
   unreviewedList: ToolCheckOrder[];
   errorHistory: ToolCheckErrorRow[];
   days: ToolCheckDayRow[];
-  columnTotals: { unreviewed: number; rework: number };
+  columnTotals: {
+    total: number;
+    unreviewed: number;
+    reviewed: number;
+    reviewedError: number;
+    reviewedOk: number;
+    rework: number;
+  };
   facets: {
     type: ToolCheckFacet[];
     customer: ToolCheckFacet[];
@@ -112,6 +121,9 @@ export default function ToolCheckTab() {
   // Ngày đang lọc (YYYY-MM-DD VN) — click 1 cột trong dải ngày; chỉ lọc DANH
   // SÁCH client-side, KPI/dải/thống kê giữ nguyên cả kỳ.
   const [dayFilter, setDayFilter] = useState('');
+  // Drill-down: bấm 1 CON SỐ trong dải "Tổng quan theo ngày" → panel danh sách
+  // đơn inline (có filter Designer/Khách) — mirror DesignerDailyOverview.
+  const [drill, setDrill] = useState<DrillTarget | null>(null);
   // Cross-filter nội bộ 3 ô thống kê lỗi (client-side, không refetch):
   // selCust = key `userSku|||userEmail`, selType = mã sản phẩm (`type`).
   const [selCust, setSelCust] = useState('');
@@ -168,11 +180,13 @@ export default function ToolCheckTab() {
   };
 
   useEffect(() => {
-    // Đổi kỳ/filter → bỏ ngày đang chọn + cross-filter thống kê.
+    // Đổi kỳ/filter → bỏ ngày đang chọn + cross-filter thống kê + đóng drill
+    // (query drill chụp filter cũ, giữ mở sẽ lệch với dải mới).
     setDayFilter('');
     setSelCust('');
     setSelType('');
     setSelCode('');
+    setDrill(null);
     fetchData();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [dateFrom, dateTo, filterType, filterCustomer, filterMachine, filterPriority]);
@@ -182,10 +196,10 @@ export default function ToolCheckTab() {
     setData((prev) =>
       prev
         ? {
-            ...prev,
-            reworkList: prev.reworkList.map((o) => (o._id === id ? { ...o, ...partial } : o)),
-            unreviewedList: prev.unreviewedList.map((o) => (o._id === id ? { ...o, ...partial } : o)),
-          }
+          ...prev,
+          reworkList: prev.reworkList.map((o) => (o._id === id ? { ...o, ...partial } : o)),
+          unreviewedList: prev.unreviewedList.map((o) => (o._id === id ? { ...o, ...partial } : o)),
+        }
         : prev,
     );
 
@@ -253,9 +267,9 @@ export default function ToolCheckTab() {
         <td className="px-2 py-1.5 text-muted-foreground whitespace-nowrap" title={vnDay(o.inProductionAt) || undefined}>
           {o.inProductionAt
             ? (() => {
-                const h = fmtDayHead(vnDay(o.inProductionAt));
-                return `${h.wd} ${h.dm}`;
-              })()
+              const h = fmtDayHead(vnDay(o.inProductionAt));
+              return `${h.wd} ${h.dm}`;
+            })()
             : '—'}
         </td>
         <td className="px-2 py-1.5">
@@ -391,6 +405,52 @@ export default function ToolCheckTab() {
   );
 
   const days = useMemo(() => [...(data?.days || [])].reverse(), [data]);
+
+  // ── Drill dải "Tổng quan theo ngày" — query cho GET /orders/overview-list
+  // (mirror openMetric của DesignerDailyOverview; createdFrom/To lọc theo
+  // inProductionAt VN, cùng trục với cột ngày). Mang theo 4 filter tab.
+  type StripMetric = 'total' | 'unreviewed' | 'reviewed' | 'reviewedError' | 'reviewedOk' | 'rework';
+  const STRIP_METRIC_LABEL: Record<StripMetric, string> = {
+    total: 'Tổng đơn',
+    unreviewed: 'Chưa soát',
+    reviewed: 'Đã soát',
+    reviewedError: 'Soát lỗi',
+    reviewedOk: 'Soát OK',
+    rework: 'Cần làm lại',
+  };
+  const openStripDrill = (metric: StripMetric, fromDay?: string, toDay?: string, dayLabel?: string) => {
+    const sp = new URLSearchParams();
+    if (fromDay) sp.set('createdFrom', fromDay);
+    if (toDay) sp.set('createdTo', toDay);
+    if (filterType) sp.set('type', filterType);
+    if (filterCustomer) sp.set('userSku', filterCustomer);
+    if (filterMachine) sp.set('machineNumber', filterMachine);
+    if (filterPriority) sp.set('priority', filterPriority);
+    sp.set('sort', 'grouped');
+    if (metric === 'unreviewed') sp.set('toolResultNote', '__none__');
+    else if (metric === 'reviewed') sp.set('toolResultNote', '__any__');
+    else if (metric === 'reviewedError') {
+      // Lịch sử "từng soát ra lỗi" (không teo khi đơn sửa xong) — khớp aggregation.
+      sp.set('toolCheckedError', '1');
+    } else if (metric === 'reviewedOk') {
+      // Đã soát & chưa từng lỗi = soát ok ngay.
+      sp.set('toolCheckedError', '0');
+      sp.set('toolResultNote', '__any__');
+    } else if (metric === 'rework') {
+      // "Cần làm lại" = In trả về do soát tool (source=tool-check + note='error').
+      sp.set('errorSource', 'tool-check');
+      sp.set('toolResultNote', 'error');
+    }
+    setDrill({
+      title: (
+        <>
+          Soát tool · {STRIP_METRIC_LABEL[metric]}
+          {dayLabel ? ` · ${dayLabel}` : ' · cả kỳ'}
+        </>
+      ),
+      query: sp.toString(),
+    });
+  };
 
   // 3 ô thống kê lỗi Soát tool (lịch sử, kể cả đơn đã sửa). Đếm ĐƠN riêng biệt
   // (dedup theo orderId). Cross-filter: chọn Khách → lọc Sản phẩm + Loại lỗi;
@@ -732,25 +792,15 @@ export default function ToolCheckTab() {
           </div>
         </div>
 
-        {/* Tổng quan theo ngày FULL luồng (toàn nhà máy) — highlight lane Soát tool.
-          Ăn cùng filter ngày; click 1 ngày → lọc danh sách bên dưới (dùng chung
-          dayFilter với dải focus phía dưới). */}
-        <PipelineDailyOverview
-          lane="tool"
-          from={dateFrom}
-          to={dateTo}
-          dayFilter={dayFilter || undefined}
-          onPickDay={toggleDay}
-          caption="— TOÀN nhà máy · lane Soát tool được tô đậm · di chuột xem chi tiết · bấm 1 ngày để lọc danh sách"
-        />
-
-        {/* Dải tổng quan theo ngày — Chưa soát + In trả về. Click 1 ngày → lọc
-          danh sách bên dưới (client-side); click lại/✕ để bỏ. */}
+        {/* Dải tổng quan theo ngày (ăn theo filter tab) — Tổng đơn / Chưa soát /
+          Đã soát / Soát lỗi / Soát OK / Cần làm lại. Click NỀN Ô hoặc header 1
+          ngày → lọc danh sách bên dưới (client-side); click CON SỐ → panel
+          drill danh sách đơn (filter Designer/Khách). */}
         <div className="rounded-lg border border-border bg-card">
           <div className="flex items-center gap-2 px-3 py-2 border-b border-border">
             <span className="text-sm font-semibold">Tổng quan theo ngày</span>
             <span className="hidden sm:inline text-[11px] text-muted-foreground">
-              — bấm 1 ngày để lọc danh sách bên dưới
+              — bấm 1 ngày để lọc danh sách bên dưới · bấm CON SỐ để xem danh sách đơn
             </span>
             {dayFilter && (
               <button
@@ -780,9 +830,8 @@ export default function ToolCheckTab() {
                         <th
                           key={d.day}
                           onClick={() => toggleDay(d.day)}
-                          className={`font-medium px-1.5 py-1.5 border-b border-l border-border text-center min-w-[58px] cursor-pointer transition-colors ${
-                            active ? 'bg-indigo-100 dark:bg-indigo-500/25' : 'bg-card hover:bg-muted/60'
-                          }`}
+                          className={`font-medium px-1.5 py-1.5 border-b border-l border-border text-center min-w-[58px] cursor-pointer transition-colors ${active ? 'bg-indigo-100 dark:bg-indigo-500/25' : 'bg-card hover:bg-muted/60'
+                            }`}
                         >
                           <div className="text-[11px] text-muted-foreground leading-tight">{wd}</div>
                           <div className="leading-tight font-semibold">{dm}</div>
@@ -795,29 +844,50 @@ export default function ToolCheckTab() {
                   </tr>
                 </thead>
                 <tbody>
-                  <DayMetricRow
-                    label="Chưa soát"
-                    cls="text-slate-600 dark:text-slate-300"
-                    days={days}
-                    dayFilter={dayFilter}
-                    pick={(d) => d.unreviewed}
-                    total={data?.columnTotals.unreviewed ?? 0}
-                    onPick={toggleDay}
-                  />
-                  <DayMetricRow
-                    label="In trả về"
-                    cls="text-amber-600"
-                    days={days}
-                    dayFilter={dayFilter}
-                    pick={(d) => d.rework}
-                    total={data?.columnTotals.rework ?? 0}
-                    onPick={toggleDay}
-                  />
+                  {(
+                    [
+                      { metric: 'total', label: 'Tổng đơn', cls: 'text-foreground', pick: (d: ToolCheckDayRow) => d.total },
+                      { metric: 'unreviewed', label: 'Chưa soát', cls: 'text-amber-600', pick: (d: ToolCheckDayRow) => d.unreviewed },
+                      { metric: 'reviewed', label: 'Đã soát', cls: 'text-slate-600 dark:text-slate-300', pick: (d: ToolCheckDayRow) => d.reviewed },
+                      { metric: 'reviewedError', label: 'Soát lỗi', cls: 'text-red-600 dark:text-red-400', pick: (d: ToolCheckDayRow) => d.reviewedError },
+                      { metric: 'reviewedOk', label: 'Soát OK', cls: 'text-emerald-600 dark:text-emerald-400', pick: (d: ToolCheckDayRow) => d.reviewedOk },
+                      { metric: 'rework', label: 'Cần làm lại', cls: 'text-orange-600 dark:text-orange-400', pick: (d: ToolCheckDayRow) => d.rework },
+                    ] as const
+                  ).map((row) => (
+                    <DayMetricRow
+                      key={row.metric}
+                      label={row.label}
+                      cls={row.cls}
+                      days={days}
+                      dayFilter={dayFilter}
+                      pick={row.pick}
+                      total={data?.columnTotals[row.metric] ?? 0}
+                      onPick={toggleDay}
+                      onDrill={(day) => openStripDrill(row.metric, day, day, fmtDayHead(day).dm)}
+                      onDrillTotal={() => openStripDrill(row.metric, dateFrom, dateTo)}
+                    />
+                  ))}
                 </tbody>
               </table>
             </div>
           )}
         </div>
+
+        {/* Tổng quan theo ngày FULL luồng (toàn nhà máy) — highlight lane Soát tool.
+          Ăn cùng filter ngày; click 1 ngày → lọc danh sách bên dưới (dùng chung
+          dayFilter với dải focus phía dưới). */}
+        <PipelineDailyOverview
+          lane="tool"
+          from={dateFrom}
+          to={dateTo}
+          dayFilter={dayFilter || undefined}
+          onPickDay={toggleDay}
+          caption="— TOÀN nhà máy · lane Soát tool được tô đậm · di chuột xem chi tiết · bấm 1 ngày để lọc danh sách"
+        />
+
+        {/* Panel drill-down inline — bấm con số trên dải → danh sách đơn gom
+          nhóm sản phẩm + filter Designer/Khách (dùng chung DesignerDailyOverview). */}
+        <DesignerDrillPanel target={drill} onClose={() => setDrill(null)} />
 
         {/* KPI */}
         <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
@@ -836,22 +906,20 @@ export default function ToolCheckTab() {
               <button
                 type="button"
                 onClick={() => setListTab('rework')}
-                className={`px-3 py-1.5 font-medium ${
-                  listTab === 'rework'
+                className={`px-3 py-1.5 font-medium ${listTab === 'rework'
                     ? 'bg-amber-500 text-white'
                     : 'bg-background text-muted-foreground hover:bg-muted'
-                }`}
+                  }`}
               >
                 Cần làm lại ({reworkList.length})
               </button>
               <button
                 type="button"
                 onClick={() => setListTab('unreviewed')}
-                className={`px-3 py-1.5 font-medium ${
-                  listTab === 'unreviewed'
+                className={`px-3 py-1.5 font-medium ${listTab === 'unreviewed'
                     ? 'bg-slate-600 text-white'
                     : 'bg-background text-muted-foreground hover:bg-muted'
-                }`}
+                  }`}
               >
                 Chưa soát ({unreviewedList.length})
               </button>
@@ -964,9 +1032,8 @@ export default function ToolCheckTab() {
                         key={c.key}
                         type="button"
                         onClick={() => setSelCust((cur) => (cur === c.key ? '' : c.key))}
-                        className={`w-full flex items-center gap-2 text-[13px] rounded px-2 py-1 text-left transition-colors ${
-                          active ? 'bg-indigo-100 dark:bg-indigo-500/20' : 'hover:bg-muted/60'
-                        }`}
+                        className={`w-full flex items-center gap-2 text-[13px] rounded px-2 py-1 text-left transition-colors ${active ? 'bg-indigo-100 dark:bg-indigo-500/20' : 'hover:bg-muted/60'
+                          }`}
                       >
                         <div className="flex-1 min-w-0">
                           <div className="truncate font-medium" title={c.userSku || '(Chưa rõ)'}>
@@ -1012,9 +1079,8 @@ export default function ToolCheckTab() {
                         key={p.key}
                         type="button"
                         onClick={() => setSelType((cur) => (cur === p.key ? '' : p.key))}
-                        className={`w-full flex items-center gap-2 text-[13px] rounded px-2 py-1 text-left transition-colors ${
-                          active ? 'bg-indigo-100 dark:bg-indigo-500/20' : 'hover:bg-muted/60'
-                        }`}
+                        className={`w-full flex items-center gap-2 text-[13px] rounded px-2 py-1 text-left transition-colors ${active ? 'bg-indigo-100 dark:bg-indigo-500/20' : 'hover:bg-muted/60'
+                          }`}
                       >
                         {p.mockup ? (
                           <img
@@ -1066,9 +1132,8 @@ export default function ToolCheckTab() {
                         key={e.code || '(unknown)'}
                         type="button"
                         onClick={() => setSelCode((cur) => (cur === (e.code || '') ? '' : e.code || ''))}
-                        className={`w-full flex items-center gap-2 text-[13px] rounded px-2 py-1 text-left transition-colors ${
-                          active ? 'bg-amber-100 dark:bg-amber-500/20' : 'hover:bg-muted/60'
-                        }`}
+                        className={`w-full flex items-center gap-2 text-[13px] rounded px-2 py-1 text-left transition-colors ${active ? 'bg-amber-100 dark:bg-amber-500/20' : 'hover:bg-muted/60'
+                          }`}
                       >
                         <Badge
                           variant="outline"
@@ -1497,6 +1562,8 @@ function DayMetricRow({
   pick,
   total,
   onPick,
+  onDrill,
+  onDrillTotal,
 }: {
   label: string;
   cls: string;
@@ -1505,6 +1572,10 @@ function DayMetricRow({
   pick: (d: ToolCheckDayRow) => number;
   total: number;
   onPick: (day: string) => void;
+  /** Bấm CON SỐ 1 ngày → mở panel danh sách đơn (nền ô vẫn toggle lọc ngày). */
+  onDrill?: (day: string) => void;
+  /** Bấm con số cột "Tổng" → drill cả kỳ. */
+  onDrillTotal?: () => void;
 }) {
   return (
     <tr className="group">
@@ -1516,12 +1587,22 @@ function DayMetricRow({
           <td
             key={d.day}
             onClick={() => onPick(d.day)}
-            className={`border-b border-l border-border/60 text-center px-1 py-1.5 cursor-pointer transition-colors ${
-              active ? 'bg-indigo-100 dark:bg-indigo-500/25' : 'hover:bg-muted/50'
-            }`}
+            className={`border-b border-l border-border/60 text-center px-1 py-1.5 cursor-pointer transition-colors ${active ? 'bg-indigo-100 dark:bg-indigo-500/25' : 'hover:bg-muted/50'
+              }`}
           >
             {v === 0 ? (
               <span className="text-muted-foreground/30">·</span>
+            ) : onDrill ? (
+              <button
+                type="button"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  onDrill(d.day);
+                }}
+                className={`font-semibold rounded px-1 -mx-1 hover:bg-primary/15 cursor-pointer tabular-nums ${cls}`}
+              >
+                {v}
+              </button>
             ) : (
               <span className={`font-semibold ${cls}`}>{v}</span>
             )}
@@ -1529,7 +1610,19 @@ function DayMetricRow({
         );
       })}
       <td className={`bg-muted/30 border-b border-l border-border text-center px-2 py-1.5 font-semibold ${cls}`}>
-        {total || <span className="text-muted-foreground/40">·</span>}
+        {total === 0 ? (
+          <span className="text-muted-foreground/40">·</span>
+        ) : onDrillTotal ? (
+          <button
+            type="button"
+            onClick={onDrillTotal}
+            className={`font-semibold rounded px-1 -mx-1 hover:bg-primary/15 cursor-pointer tabular-nums ${cls}`}
+          >
+            {total}
+          </button>
+        ) : (
+          total
+        )}
       </td>
     </tr>
   );

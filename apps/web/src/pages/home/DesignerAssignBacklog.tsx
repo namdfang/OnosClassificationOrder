@@ -202,224 +202,224 @@ export function DesignerAssignBacklog({ days = 7, from, to, type, customer, relo
 
   return (
     <TooltipProvider delayDuration={200}>
-    <div className="rounded-lg border border-border bg-card">
-      {/* Header */}
-      <div className="flex items-center justify-between gap-3 p-3 border-b border-border flex-wrap">
-        <div className="flex items-center gap-2">
-          <UserPlus size={16} className="text-indigo-600" />
-          <span className="text-sm font-semibold">Cần gán designer</span>
-          <span className="text-[11px] text-muted-foreground">
-            — {total} đơn (chưa gán / không làm được / làm lại chưa ôm, đã soát ≠ ok)
-          </span>
-        </div>
-        {(canClaimSelf || canAssignOthers) && (
+      <div className="rounded-lg border border-border bg-card">
+        {/* Header */}
+        <div className="flex items-center justify-between gap-3 p-3 border-b border-border flex-wrap">
           <div className="flex items-center gap-2">
-            {selectedCount > 0 && (
-              <button
-                type="button"
-                onClick={() => setSelected(new Set())}
-                className="text-[11px] text-muted-foreground hover:text-foreground"
-              >
-                Bỏ chọn ({selectedCount})
-              </button>
-            )}
-            {/* Nút luôn hiển thị — mờ (disabled) khi chưa chọn đơn nào. */}
-            {canClaimSelf && (
-              <Button size="sm" onClick={handleClaimSelf} disabled={claiming || selectedCount === 0}>
-                <Grab size={13} />
-                Nhận về mình ({selectedCount})
-              </Button>
-            )}
-            {canAssignOthers && (
-              <Button
-                size="sm"
-                variant={canClaimSelf ? 'outline' : 'default'}
-                onClick={() => setAssignOpen(true)}
-                disabled={claiming || selectedCount === 0}
-              >
-                <UserPlus size={13} />
-                Gán design ({selectedCount})
-              </Button>
-            )}
+            <UserPlus size={16} className="text-indigo-600" />
+            <span className="text-md font-semibold text-red-500">Cần gán designer</span>
+            <span className="text-[11px] text-muted-foreground">
+              — {total} đơn (chưa gán / không làm được / làm lại chưa ôm, đã soát ≠ ok)
+            </span>
           </div>
-        )}
-      </div>
+          {(canClaimSelf || canAssignOthers) && (
+            <div className="flex items-center gap-2">
+              {selectedCount > 0 && (
+                <button
+                  type="button"
+                  onClick={() => setSelected(new Set())}
+                  className="text-[11px] text-muted-foreground hover:text-foreground"
+                >
+                  Bỏ chọn ({selectedCount})
+                </button>
+              )}
+              {/* Nút luôn hiển thị — mờ (disabled) khi chưa chọn đơn nào. */}
+              {canClaimSelf && (
+                <Button size="sm" onClick={handleClaimSelf} disabled={claiming || selectedCount === 0}>
+                  <Grab size={13} />
+                  Nhận về mình ({selectedCount})
+                </Button>
+              )}
+              {canAssignOthers && (
+                <Button
+                  size="sm"
+                  variant={canClaimSelf ? 'outline' : 'default'}
+                  onClick={() => setAssignOpen(true)}
+                  disabled={claiming || selectedCount === 0}
+                >
+                  <UserPlus size={13} />
+                  Gán design ({selectedCount})
+                </Button>
+              )}
+            </div>
+          )}
+        </div>
 
-      {!loading && groups.length === 0 ? (
-        <p className="text-xs text-muted-foreground text-center py-10">Không có đơn cần gán trong khoảng đã chọn.</p>
-      ) : (
-        <div className="divide-y divide-border/60">
-          {groups.map((g) => {
-            const isOpen = expanded.has(g.key);
-            const selInGroup = g.orderIds.filter((id) => selected.has(id)).length;
-            const allSel = selInGroup > 0 && selInGroup === g.orderIds.length;
-            return (
-              <div key={g.key}>
-                {/* Group header */}
-                <div className="flex items-center gap-2 px-3 py-2 hover:bg-muted/30">
-                  <input
-                    type="checkbox"
-                    className="size-4 shrink-0 cursor-pointer"
-                    checked={allSel}
-                    ref={(el) => {
-                      if (el) el.indeterminate = selInGroup > 0 && !allSel;
-                    }}
-                    onChange={() => toggleGroup(g)}
-                  />
-                  <button type="button" onClick={() => toggleExpand(g.key)} className="text-muted-foreground shrink-0">
-                    {isOpen ? <ChevronDown size={16} /> : <ChevronRight size={16} />}
-                  </button>
-                  {/* Mockup */}
-                  {g.mockup ? (
-                    <button
-                      type="button"
-                      onClick={() => setPreview({ url: g.mockup, title: g.fullName })}
-                      className="shrink-0"
-                    >
-                      <img
-                        src={g.mockup}
-                        alt="mockup"
-                        className="w-9 h-9 rounded object-cover border border-border bg-muted"
-                      />
-                    </button>
-                  ) : (
-                    <div className="w-9 h-9 rounded border border-dashed border-border flex items-center justify-center text-muted-foreground shrink-0">
-                      <ImageOff size={14} />
-                    </div>
-                  )}
-                  {g.level != null && (
-                    <Badge
-                      className="font-normal border shrink-0"
-                      style={{
-                        backgroundColor: PRODUCT_LEVEL_MAP[g.level]?.color,
-                        color: '#fff',
-                        borderColor: PRODUCT_LEVEL_MAP[g.level]?.color,
+        {!loading && groups.length === 0 ? (
+          <p className="text-xs text-muted-foreground text-center py-10">Không có đơn cần gán trong khoảng đã chọn.</p>
+        ) : (
+          <div className="divide-y divide-border/60">
+            {groups.map((g) => {
+              const isOpen = expanded.has(g.key);
+              const selInGroup = g.orderIds.filter((id) => selected.has(id)).length;
+              const allSel = selInGroup > 0 && selInGroup === g.orderIds.length;
+              return (
+                <div key={g.key}>
+                  {/* Group header */}
+                  <div className="flex items-center gap-2 px-3 py-2 hover:bg-muted/30">
+                    <input
+                      type="checkbox"
+                      className="size-4 shrink-0 cursor-pointer"
+                      checked={allSel}
+                      ref={(el) => {
+                        if (el) el.indeterminate = selInGroup > 0 && !allSel;
                       }}
-                    >
-                      Lv {g.level}
-                    </Badge>
-                  )}
-                  <button type="button" onClick={() => toggleExpand(g.key)} className="flex-1 min-w-0 text-left">
-                    <div className="text-sm font-medium truncate">{g.fullName}</div>
-                    {g.shortName && <div className="text-[10px] text-muted-foreground">{g.shortName}</div>}
-                  </button>
-                  <Badge variant="secondary" className="shrink-0">
-                    {g.count} đơn
-                  </Badge>
-                </div>
-
-                {/* Orders — bảng đơn ĐẦY ĐỦ (giống bảng tổng quan): cột workshop
-                    gộp nhóm + checkbox chọn để gán. Lazy-load qua /orders/by-ids. */}
-                {isOpen && (
-                  <div className="overflow-x-auto bg-muted/10">
-                    {rowsLoading.has(g.key) && !fullRows[g.key] ? (
-                      <div className="py-6 text-center">
-                        <Spinner size={16} className="text-muted-foreground" />
-                      </div>
+                      onChange={() => toggleGroup(g)}
+                    />
+                    <button type="button" onClick={() => toggleExpand(g.key)} className="text-muted-foreground shrink-0">
+                      {isOpen ? <ChevronDown size={16} /> : <ChevronRight size={16} />}
+                    </button>
+                    {/* Mockup */}
+                    {g.mockup ? (
+                      <button
+                        type="button"
+                        onClick={() => setPreview({ url: g.mockup, title: g.fullName })}
+                        className="shrink-0"
+                      >
+                        <img
+                          src={g.mockup}
+                          alt="mockup"
+                          className="w-9 h-9 rounded object-cover border border-border bg-muted"
+                        />
+                      </button>
                     ) : (
-                      <table className="w-full text-[13px]">
-                        <thead>
-                          <tr className="text-[11px] text-muted-foreground border-b border-border/50">
-                            <th className="w-8 px-3 py-1.5"></th>
-                            {colGroups.map((grp) => (
-                              <th
-                                key={grp.key}
-                                className="text-left font-medium px-2 py-1.5 whitespace-nowrap"
-                                style={{ minWidth: grp.width }}
-                              >
-                                {grp.title}
-                              </th>
-                            ))}
-                          </tr>
-                        </thead>
-                        <tbody>
-                          {(fullRows[g.key] || []).map((row) => {
-                            const ctx: WorkshopRenderCtx = {
-                              canEditField,
-                              patchRow: (id, patch) =>
-                                setFullRows((prev) => ({
-                                  ...prev,
-                                  [g.key]: (prev[g.key] || []).map((r) => (r._id === id ? { ...r, ...patch } : r)),
-                                })),
-                              openPreview,
-                            };
-                            const renderedByKey = new Map(visibleCols.map((c) => [c.key, c.render(row, ctx)]));
-                            // Chip đếm ngược hạn design (đơn chưa chạy bước designer →
-                            // mốc `inProductionAt`) — gắn cạnh badge Ưu tiên trong group.
-                            const deadline = getStageDeadline(row.priority, 'designer', row.inProductionAt);
-                            const countdown = deadline ? formatCountdown(deadline, now) : undefined;
-                            return (
-                              <tr
-                                key={row._id}
-                                className={cn(
-                                  'border-t border-border/40 hover:bg-muted/30 align-top',
-                                  selected.has(row._id) && 'bg-primary/5',
-                                )}
-                              >
-                                <td className="w-8 px-3 py-2">
-                                  <input
-                                    type="checkbox"
-                                    className="size-4 cursor-pointer"
-                                    checked={selected.has(row._id)}
-                                    onChange={() => toggleOrder(row._id)}
-                                  />
-                                </td>
-                                {colGroups.map((grp) => (
-                                  <td key={grp.key} className="px-2 py-2 align-top">
-                                    <GroupCellContent
-                                      group={grp}
-                                      renderedByKey={renderedByKey}
-                                      extra={(memberKey) =>
-                                        memberKey === 'priority' && deadline && countdown ? (
-                                          <span
-                                            className={cn(
-                                              'text-[10px] inline-flex items-center gap-1 whitespace-nowrap',
-                                              countdown.overdue
-                                                ? 'text-rose-600 dark:text-rose-400'
-                                                : 'text-muted-foreground',
-                                            )}
-                                          >
-                                            <Clock size={10} /> {countdown.text}
-                                          </span>
-                                        ) : null
-                                      }
+                      <div className="w-9 h-9 rounded border border-dashed border-border flex items-center justify-center text-muted-foreground shrink-0">
+                        <ImageOff size={14} />
+                      </div>
+                    )}
+                    {g.level != null && (
+                      <Badge
+                        className="font-normal border shrink-0"
+                        style={{
+                          backgroundColor: PRODUCT_LEVEL_MAP[g.level]?.color,
+                          color: '#fff',
+                          borderColor: PRODUCT_LEVEL_MAP[g.level]?.color,
+                        }}
+                      >
+                        Lv {g.level}
+                      </Badge>
+                    )}
+                    <button type="button" onClick={() => toggleExpand(g.key)} className="flex-1 min-w-0 text-left">
+                      <div className="text-sm font-medium truncate">{g.fullName}</div>
+                      {g.shortName && <div className="text-[10px] text-muted-foreground">{g.shortName}</div>}
+                    </button>
+                    <Badge variant="secondary" className="shrink-0">
+                      {g.count} đơn
+                    </Badge>
+                  </div>
+
+                  {/* Orders — bảng đơn ĐẦY ĐỦ (giống bảng tổng quan): cột workshop
+                    gộp nhóm + checkbox chọn để gán. Lazy-load qua /orders/by-ids. */}
+                  {isOpen && (
+                    <div className="overflow-x-auto bg-muted/10">
+                      {rowsLoading.has(g.key) && !fullRows[g.key] ? (
+                        <div className="py-6 text-center">
+                          <Spinner size={16} className="text-muted-foreground" />
+                        </div>
+                      ) : (
+                        <table className="w-full text-[13px]">
+                          <thead>
+                            <tr className="text-[11px] text-muted-foreground border-b border-border/50">
+                              <th className="w-8 px-3 py-1.5"></th>
+                              {colGroups.map((grp) => (
+                                <th
+                                  key={grp.key}
+                                  className="text-left font-medium px-2 py-1.5 whitespace-nowrap"
+                                  style={{ minWidth: grp.width }}
+                                >
+                                  {grp.title}
+                                </th>
+                              ))}
+                            </tr>
+                          </thead>
+                          <tbody>
+                            {(fullRows[g.key] || []).map((row) => {
+                              const ctx: WorkshopRenderCtx = {
+                                canEditField,
+                                patchRow: (id, patch) =>
+                                  setFullRows((prev) => ({
+                                    ...prev,
+                                    [g.key]: (prev[g.key] || []).map((r) => (r._id === id ? { ...r, ...patch } : r)),
+                                  })),
+                                openPreview,
+                              };
+                              const renderedByKey = new Map(visibleCols.map((c) => [c.key, c.render(row, ctx)]));
+                              // Chip đếm ngược hạn design (đơn chưa chạy bước designer →
+                              // mốc `inProductionAt`) — gắn cạnh badge Ưu tiên trong group.
+                              const deadline = getStageDeadline(row.priority, 'designer', row.inProductionAt);
+                              const countdown = deadline ? formatCountdown(deadline, now) : undefined;
+                              return (
+                                <tr
+                                  key={row._id}
+                                  className={cn(
+                                    'border-t border-border/40 hover:bg-muted/30 align-top',
+                                    selected.has(row._id) && 'bg-primary/5',
+                                  )}
+                                >
+                                  <td className="w-8 px-3 py-2">
+                                    <input
+                                      type="checkbox"
+                                      className="size-4 cursor-pointer"
+                                      checked={selected.has(row._id)}
+                                      onChange={() => toggleOrder(row._id)}
                                     />
                                   </td>
-                                ))}
-                              </tr>
-                            );
-                          })}
-                        </tbody>
-                      </table>
-                    )}
-                  </div>
-                )}
-              </div>
-            );
-          })}
-        </div>
-      )}
+                                  {colGroups.map((grp) => (
+                                    <td key={grp.key} className="px-2 py-2 align-top">
+                                      <GroupCellContent
+                                        group={grp}
+                                        renderedByKey={renderedByKey}
+                                        extra={(memberKey) =>
+                                          memberKey === 'priority' && deadline && countdown ? (
+                                            <span
+                                              className={cn(
+                                                'text-[10px] inline-flex items-center gap-1 whitespace-nowrap',
+                                                countdown.overdue
+                                                  ? 'text-rose-600 dark:text-rose-400'
+                                                  : 'text-muted-foreground',
+                                              )}
+                                            >
+                                              <Clock size={10} /> {countdown.text}
+                                            </span>
+                                          ) : null
+                                        }
+                                      />
+                                    </td>
+                                  ))}
+                                </tr>
+                              );
+                            })}
+                          </tbody>
+                        </table>
+                      )}
+                    </div>
+                  )}
+                </div>
+              );
+            })}
+          </div>
+        )}
 
-      <AssignDesignerDialog
-        open={assignOpen}
-        selectedIds={selectedIds}
-        onClose={() => setAssignOpen(false)}
-        onApplied={() => {
-          setAssignOpen(false);
-          setSelected(new Set());
-          fetchData();
-          onAssigned?.();
-        }}
-      />
+        <AssignDesignerDialog
+          open={assignOpen}
+          selectedIds={selectedIds}
+          onClose={() => setAssignOpen(false)}
+          onApplied={() => {
+            setAssignOpen(false);
+            setSelected(new Set());
+            fetchData();
+            onAssigned?.();
+          }}
+        />
 
-      <ImagePreviewDialog
-        open={preview !== null}
-        onOpenChange={(v) => !v && setPreview(null)}
-        url={preview?.url}
-        originalUrl={preview?.originalUrl}
-        title={preview?.title}
-      />
-    </div>
+        <ImagePreviewDialog
+          open={preview !== null}
+          onOpenChange={(v) => !v && setPreview(null)}
+          url={preview?.url}
+          originalUrl={preview?.originalUrl}
+          title={preview?.title}
+        />
+      </div>
     </TooltipProvider>
   );
 }

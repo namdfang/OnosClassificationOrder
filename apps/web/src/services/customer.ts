@@ -14,4 +14,12 @@ const sync = () => {
   return callApi(`/${CONFIG.API_VERSION}/customers/sync`, 'post');
 };
 
-export const customer = { list, create, sync };
+const updateTier = (id: string, tier: number | null) => {
+  return callApi(`/${CONFIG.API_VERSION}/customers/${id}/tier`, 'patch', { tier });
+};
+
+const importTiers = (rows: { userSku: string; tier: number }[]) => {
+  return callApi(`/${CONFIG.API_VERSION}/customers/import-tiers`, 'post', { rows });
+};
+
+export const customer = { list, create, sync, updateTier, importTiers };
