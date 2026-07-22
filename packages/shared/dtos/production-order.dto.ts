@@ -102,6 +102,26 @@ export const DesignFieldsZod = z.object({
 });
 export type DesignFields = z.infer<typeof DesignFieldsZod>;
 
+/**
+ * Địa chỉ ship — mirror field `shipping` trả về từ OnosPod (order API).
+ * Dùng để "lấy ngược" địa chỉ khi đơn đang GIỮ chờ khách cập nhật, xem
+ * `OrderService.getHeldOrdersForRecovery` + `OnospodOrderLookupService`.
+ */
+export const ProductionOrderShippingAddressZod = z.object({
+  firstName: z.string().optional(),
+  lastName: z.string().optional(),
+  company: z.string().optional(),
+  address1: z.string().optional(),
+  address2: z.string().optional(),
+  city: z.string().optional(),
+  state: z.string().optional(),
+  postcode: z.string().optional(),
+  country: z.string().optional(),
+  email: z.string().optional(),
+  phone: z.string().optional(),
+});
+export type ProductionOrderShippingAddress = z.infer<typeof ProductionOrderShippingAddressZod>;
+
 /** Trạng thái pipeline R2 cho từng vị trí design (Phase 6 Design-R2-Pipeline). */
 export const DesignStatusZod = z.enum(['pending', 'ready', 'failed']);
 export type DesignStatus = z.infer<typeof DesignStatusZod>;
@@ -179,6 +199,12 @@ export const ProductionOrderZod = BaseEntityZod.extend({
    */
   heldAt: z.date().optional(),
   holdReason: z.string().optional(),
+  /**
+   * Snapshot địa chỉ ship lấy từ OnosPod — chỉ dùng cho cron "lấy ngược địa
+   * chỉ" (đơn giữ lý do `HOLD_REASON_WAITING_ADDRESS`). Lần đầu = snapshot mốc
+   * so sánh (KHÔNG tự mở giữ), lần sau khác snapshot → mở giữ + cập nhật.
+   */
+  shippingAddress: ProductionOrderShippingAddressZod.optional(),
   orderId: z.string().optional(),
   externalId: z.string().optional(),
   referent: z.string().optional(),
@@ -2010,6 +2036,26 @@ export const GetCustomerOrderTrackResZod = ResZod.extend({
   }),
 });
 export class GetCustomerOrderTrackResDto extends createZodDto(extendApi(GetCustomerOrderTrackResZod)) {}
+
+// ─── Recover held orders from OnosPod (design/địa chỉ chờ khách cập nhật) ──
+// Public cron endpoint — xem `Orders.md §9c` + `OnospodOrderLookupService`.
+export const RecoverHeldOrdersSkipZod = z.object({
+  productionId: z.string(),
+  reason: z.string(),
+});
+
+export const RecoverHeldOrdersResZod = ResZod.extend({
+  data: z.object({
+    checkedDesign: z.number().int().nonnegative(),
+    checkedAddress: z.number().int().nonnegative(),
+    designUpdated: z.number().int().nonnegative(),
+    addressPrimed: z.number().int().nonnegative(),
+    addressUpdated: z.number().int().nonnegative(),
+    unheld: z.number().int().nonnegative(),
+    skipped: RecoverHeldOrdersSkipZod.array(),
+  }),
+});
+export class RecoverHeldOrdersResDto extends createZodDto(extendApi(RecoverHeldOrdersResZod)) {}
 
 // ─── Action "Đã soát xong" (tab Soát tool, list "Cần làm lại") ──────
 // Support xác nhận đã soát xong 1 đơn hold (source=tool-check + note=error) và

@@ -77,6 +77,8 @@ import type {
   OrderWorkshopField,
   PreviewCuttingFilesDto,
   PreviewCuttingFilesResDto,
+  ProductionOrderShippingAddress,
+  RecoverHeldOrdersResDto,
   SetProductionErrorDto,
   SetProductionErrorResDto,
   SizeMatrixRow,
@@ -102,6 +104,8 @@ import {
   FulfillmentStage,
   FulfillmentStageStatus,
   FulfillmentTransitionAction,
+  HOLD_REASON_WAITING_ADDRESS,
+  HOLD_REASON_WAITING_DESIGN,
   LIFECYCLE_STAGE_KEYS,
   parseProductionIdFromCuttingFilename,
   RoleType,
@@ -127,6 +131,7 @@ import { UserEntity } from '../user/user.entity';
 import { WorkshopConfigRepository } from '../workshop-config/workshop-config.repository';
 import { mapProductTypeToCode } from './design-review-product-code';
 import { DriveFileNameService } from './drive-file-name.service';
+import { OnospodOrderLookupService } from './onospod-order-lookup.service';
 import { OrderDocument, OrderEntity } from './order.entity';
 import { OrderRepository } from './order.repository';
 
@@ -268,6 +273,21 @@ const PRINTED_MACHINE_CODES = ['machine-1', 'machine-2', 'machine-3', 'machine-4
 const ORDER_LIST_CACHE_PREFIX = 'orders:list:';
 const ORDER_LIST_CACHE_TTL_SECONDS = 60;
 
+// So sánh snapshot địa chỉ ship lúc `recoverHeldOrders()` — xem method đó.
+const ADDRESS_FIELDS: Array<keyof ProductionOrderShippingAddress> = [
+  'firstName',
+  'lastName',
+  'company',
+  'address1',
+  'address2',
+  'city',
+  'state',
+  'postcode',
+  'country',
+  'email',
+  'phone',
+];
+
 /**
  * Parse `yyyy-mm-dd` (hoặc full ISO) thành UTC Date tương ứng với VN local
  * midnight / end-of-day. JS `new Date("2026-06-22")` parse là UTC midnight =
@@ -361,6 +381,7 @@ export class OrderService implements OnModuleInit {
     private readonly driveFileNameService: DriveFileNameService,
     private readonly systemConfigService: SystemConfigService,
     private readonly customerAssignmentService: CustomerAssignmentService,
+    private readonly onospodOrderLookupService: OnospodOrderLookupService,
   ) {}
 
   /** Validate giá trị assignee là userId hợp lệ (user role=Designer, ĐANG BẬT). */
@@ -4234,6 +4255,148 @@ export class OrderService implements OnModuleInit {
     return {
       success: true,
       data: { matched: result.matchedCount, modified: result.modifiedCount },
+    };
+  }
+
+  /**
+   * Cron công khai — quét đơn đang GIỮ lý do "chờ khách cập nhật" (design hoặc
+   * địa chỉ), gọi OnosPod kiểm tra khách đã cập nhật chưa, nếu có → cập nhật +
+   * tự MỞ GIỮ. Xem `Orders.md §9c` + `OnospodOrderLookupService`.
+   *
+   * - Design: so sánh trực tiếp từ lần đầu — `designs`/`designsOriginal` hiện
+   *   có đã là baseline hợp lệ (populate từ lúc import).
+   * - Địa chỉ: `shippingAddress` là field MỚI chưa có baseline → lần check đầu
+   *   chỉ SNAPSHOT (không tự mở giữ); từ lần thứ 2 mới thực sự so sánh + mở
+   *   giữ khi khác snapshot đã lưu.
+   */
+  async recoverHeldOrders(ctx?: AuditContext): Promise<RecoverHeldOrdersResDto> {
+    const skipped: Array<{ productionId: string; reason: string }> = [];
+    let checkedDesign = 0;
+    let checkedAddress = 0;
+    let designUpdated = 0;
+    let addressPrimed = 0;
+    let addressUpdated = 0;
+    let unheld = 0;
+
+    const [designOrders, addressOrders] = await Promise.all([
+      this.orderModel
+        .find({ heldAt: { $exists: true }, cancelledAt: { $exists: false }, holdReason: HOLD_REASON_WAITING_DESIGN })
+        .lean(),
+      this.orderModel
+        .find({ heldAt: { $exists: true }, cancelledAt: { $exists: false }, holdReason: HOLD_REASON_WAITING_ADDRESS })
+        .lean(),
+    ]);
+
+    for (const order of designOrders) {
+      checkedDesign++;
+      const productionId = order.productionId;
+      const orderNumber = order.orderId;
+      if (!orderNumber) {
+        skipped.push({ productionId, reason: 'Thiếu orderId (mã đơn OnosPod) — không tra được' });
+        continue;
+      }
+
+      const lookup = await this.onospodOrderLookupService.lookupByProductionId(orderNumber, productionId);
+      if (!lookup) {
+        skipped.push({ productionId, reason: 'OnosPod chưa cấu hình hoặc gọi API thất bại' });
+        continue;
+      }
+      if (lookup.ambiguous) {
+        skipped.push({ productionId, reason: 'Nhiều line_item cùng khớp productionId — cần review tay' });
+        continue;
+      }
+      if (!lookup.matched || !lookup.design || Object.keys(lookup.design).length === 0) {
+        skipped.push({ productionId, reason: 'Không tìm thấy design tương ứng trên OnosPod' });
+        continue;
+      }
+
+      const baseline = order.designsOriginal ?? order.designs ?? {};
+      const changed: Partial<DesignFields> = {};
+      for (const [key, value] of Object.entries(lookup.design) as Array<[keyof DesignFields, string]>) {
+        if ((baseline as Record<string, string | undefined>)[key] !== value) changed[key] = value;
+      }
+      if (Object.keys(changed).length === 0) {
+        skipped.push({ productionId, reason: 'Design chưa thay đổi — vẫn đang chờ khách' });
+        continue;
+      }
+
+      const set: Record<string, unknown> = {};
+      for (const [key, value] of Object.entries(changed)) {
+        set[`designs.${key}`] = value;
+        set[`designsOriginal.${key}`] = value;
+      }
+      await this.orderModel.findByIdAndUpdate(order._id, { $set: set, $unset: { heldAt: 1, holdReason: 1 } });
+      void this.orderLogService.write({
+        orderId: String(order._id),
+        action: 'unhold',
+        field: 'heldAt',
+        before: HOLD_REASON_WAITING_DESIGN,
+        after: null,
+        ctx,
+      });
+      designUpdated++;
+      unheld++;
+    }
+
+    for (const order of addressOrders) {
+      checkedAddress++;
+      const productionId = order.productionId;
+      const orderNumber = order.orderId;
+      if (!orderNumber) {
+        skipped.push({ productionId, reason: 'Thiếu orderId (mã đơn OnosPod) — không tra được' });
+        continue;
+      }
+
+      const lookup = await this.onospodOrderLookupService.lookupByProductionId(orderNumber, productionId);
+      if (!lookup) {
+        skipped.push({ productionId, reason: 'OnosPod chưa cấu hình hoặc gọi API thất bại' });
+        continue;
+      }
+      if (lookup.ambiguous) {
+        skipped.push({ productionId, reason: 'Nhiều line_item cùng khớp productionId — cần review tay' });
+        continue;
+      }
+      if (!lookup.matched || !lookup.shipping) {
+        skipped.push({ productionId, reason: 'Không tìm thấy địa chỉ ship tương ứng trên OnosPod' });
+        continue;
+      }
+
+      const stored = order.shippingAddress;
+      if (!stored) {
+        // Lần đầu — chưa có baseline để so sánh, chỉ snapshot, KHÔNG tự mở giữ.
+        await this.orderModel.findByIdAndUpdate(order._id, { $set: { shippingAddress: lookup.shipping } });
+        addressPrimed++;
+        skipped.push({ productionId, reason: 'Lần đầu kiểm tra — đã lưu snapshot địa chỉ, chờ lần sau so sánh' });
+        continue;
+      }
+
+      const isSame = ADDRESS_FIELDS.every((f) => (stored[f] || '') === (lookup.shipping![f] || ''));
+      if (isSame) {
+        skipped.push({ productionId, reason: 'Địa chỉ chưa thay đổi — vẫn đang chờ khách' });
+        continue;
+      }
+
+      await this.orderModel.findByIdAndUpdate(order._id, {
+        $set: { shippingAddress: lookup.shipping },
+        $unset: { heldAt: 1, holdReason: 1 },
+      });
+      void this.orderLogService.write({
+        orderId: String(order._id),
+        action: 'unhold',
+        field: 'heldAt',
+        before: HOLD_REASON_WAITING_ADDRESS,
+        after: null,
+        ctx,
+      });
+      addressUpdated++;
+      unheld++;
+    }
+
+    if (designUpdated > 0 || addressUpdated > 0) void this.invalidateListCache();
+
+    return {
+      success: true,
+      data: { checkedDesign, checkedAddress, designUpdated, addressPrimed, addressUpdated, unheld, skipped },
     };
   }
 

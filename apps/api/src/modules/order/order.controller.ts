@@ -56,6 +56,7 @@ import {
   ImportReworkOrdersResDto,
   PreviewCuttingFilesDto,
   PreviewCuttingFilesResDto,
+  RecoverHeldOrdersResDto,
   ResDto,
   RoleType,
   SetDesignReviewResultDto,
@@ -574,6 +575,26 @@ export class OrderController {
       message: JSON.stringify({ method: 'GET', url: '/orders/import-from-onospod/cron', ip, userAgent }),
     });
     return this.onospodImportService.importFromOnosPod({}, { ip, userAgent });
+  }
+
+  // Public — cron riêng, tách khỏi import-from-onospod/cron ở trên. Quét đơn
+  // đang GIỮ lý do "chờ khách cập nhật" (design/địa chỉ), tự lấy ngược từ
+  // OnosPod + mở giữ nếu khách đã cập nhật. Xem Orders.md §9c.
+  @Get('recover-held-from-onospod/cron')
+  @Auth([], [], { public: true })
+  @ApiOperation({
+    summary: '[Public] Cron: lấy ngược design/địa chỉ ship từ OnosPod cho đơn đang giữ chờ khách cập nhật',
+  })
+  @HttpCode(HttpStatus.OK)
+  @ApiOkResponse({ type: RecoverHeldOrdersResDto })
+  async recoverHeldFromOnospodCron(
+    @ClientIp() ip: string,
+    @UserAgent() userAgent: string,
+  ): Promise<RecoverHeldOrdersResDto> {
+    this.logger.info({
+      message: JSON.stringify({ method: 'GET', url: '/orders/recover-held-from-onospod/cron', ip, userAgent }),
+    });
+    return this.orderService.recoverHeldOrders({ ip, userAgent });
   }
 
   // ─── Cutting File Mapping (post-import) ──────────────────────────

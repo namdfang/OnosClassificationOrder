@@ -600,11 +600,88 @@ Permission code chi tiết — xem `packages/shared/constants/permission-catalog
 ### 9b.5 Frontend
 - Util `apps/web/src/utils/orderActions.ts`: `isHeld(o)`, `canUserHold(roleName)` (mirror `ORDER_WRITE_ROLES`).
 - `HeldBadge.tsx` (hổ phách "Đang giữ" + reason) — mirror `CancelledBadge`.
-- `HoldOrderDialog.tsx` (giữ 1 đơn, lý do KHÔNG bắt buộc).
+- `HoldOrderDialog.tsx` (giữ 1 đơn, lý do KHÔNG bắt buộc). Export `HOLD_REASON_PRESETS` — 5 lý do phổ biến dạng chip (Đợi khách sửa design / địa chỉ / thông tin đơn, Chờ khách xác nhận, Thiếu vật tư): click chip = điền nhanh vào textarea (click lại = bỏ chọn), vẫn sửa tay/tự gõ lý do khác được — KHÔNG phải danh mục cấu hình được (khác `workshop_config`), chỉ là preset tĩnh FE.
 - Tô xám + badge + **cell read-only** (override `ctx.canEditField=()=>false`) ở: `OrderTableWorkshop`, `ErrorLogTab`, `OrdersMiniTable`; tô xám + badge ở `ListOrderTab`.
 - `OrderRowActionsMenu.tsx`: item **"Giữ đơn"** (mở dialog) / **"Mở giữ"** (gọi trực tiếp) cho role `canUserHold`; menu hiện khi `isAdmin || canUserHold`.
-- `BulkEditToolbar.tsx`: nút **"Giữ đơn"** (dialog lý do bulk) + **"Mở giữ"** (bulk trực tiếp) → `RepositoryRemote.order.bulkHold({ ids, hold, reason })`.
+- `BulkEditToolbar.tsx`: nút **"Giữ đơn"** (dialog lý do bulk, tái dùng CHUNG `HOLD_REASON_PRESETS` từ `HoldOrderDialog.tsx`) + **"Mở giữ"** (bulk trực tiếp) → `RepositoryRemote.order.bulkHold({ ids, hold, reason })`.
 - Service `services/order.ts`: `holdOrder` · `unholdOrder` · `bulkHold`.
+
+## 9c. Tự động lấy ngược design/địa chỉ ship từ OnosPod (đơn giữ chờ khách)
+
+> **Mục tiêu:** Đơn giữ vì "chờ khách sửa design" hoặc "chờ khách sửa địa chỉ" —
+> cron public quét định kỳ, hỏi OnosPod xem khách đã cập nhật chưa, nếu có →
+> tự cập nhật + **MỞ GIỮ**, không cần nhân viên check tay.
+
+### 9c.1 Điều kiện kích hoạt
+Chỉ áp dụng khi `order.holdReason` **khớp CHÍNH XÁC** (không phải substring) 1
+trong 2 hằng số `shared/constants/hold-reason.ts`:
+- `HOLD_REASON_WAITING_DESIGN = 'Đợi khách sửa design'` → check design.
+- `HOLD_REASON_WAITING_ADDRESS = 'Đợi khách sửa địa chỉ'` → check địa chỉ ship.
+
+`HoldOrderDialog.tsx`/`BulkEditToolbar.tsx` import 2 hằng số này làm 2 preset
+chip ĐẦU trong `HOLD_REASON_PRESETS` — đổi text preset ở FE mà không đổi hằng
+số dùng chung sẽ làm cron ngừng nhận diện đơn (3 preset còn lại là free-text
+thường, không kích hoạt tự động).
+
+### 9c.2 Nguồn dữ liệu OnosPod — `OnospodOrderLookupService`
+Gọi `api.onospod.com/graphql` (query `orders`, **khác** host với
+`OnospodImportService` đang dùng cho import hàng ngày — đó là `qc.onospod.com`
+`paginateMrpProduct`). Config `ApiConfigService.onospodApiConfig` (env
+`ONOSPOD_API_URL`/`ONOSPOD_API_BEARER_TOKEN`/`ONOSPOD_API_SUPER_TOKEN`) —
+thiếu config → getter trả `null`, cron tự skip toàn bộ (không throw).
+
+⚠️ **Gateway OnosPod BẮT BUỘC header `Origin: https://app.onospod.com`** (verify
+bằng test gọi thật 2026-07-23) — thiếu header này → **403 Forbidden** dù token
+vẫn hợp lệ (dễ nhầm là token/password sai, KHÔNG PHẢI — đã từng chẩn đoán nhầm
+1 lần). `lookupByProductionId()` set cứng `Origin`/`Referer` = `app.onospod.com`
+trong request headers — nếu OnosPod đổi domain frontend, phải sửa hằng số
+`ONOSPOD_ORIGIN` ở đầu file. Mọi lỗi gọi API (network/403/GraphQL error) đều
+được log qua Winston (`action: 'onospodOrderLookup'`) kèm `status`/`error` —
+xem log thay vì đoán khi cron báo skip "gọi API thất bại".
+
+**Khớp line_item ↔ `productionId` nội bộ** (điểm quan trọng nhất, đã verify
+bằng test gọi thật 2026-07-22): 1 order OnosPod (search theo `order.orderId`,
+mã dạng `NF-xxxxx-xxxxx`) có nhiều `line_items[]` (mỗi size/màu 1 item), MỖI
+`line_item` lại có mảng `productions[]` (các lượt sản xuất/rework). **`productionId`
+nội bộ CHÍNH LÀ `line_items[].productions[].increment_id`** — KHÔNG phải
+`line_items[].product_id` (field này có định dạng hoàn toàn khác, ví dụ
+`NF-33230-29523-00`, không khớp `productionId` kiểu `EH-49336-76798`). Tìm
+đúng 1 `line_item` chứa `productions[].increment_id === productionId` →
+`design` lấy từ `line_item.print.design_{front,back,sleeve,hood,placket,left,
+right,chest_left,chest_right,sleeve_left,sleeve_right,upper_sleeve_left,
+upper_sleeve_right,left_cuff,right_cuff}.src` — **field `design_*`** (asset
+design KHÁCH ĐÃ UP, đã qua xử lý, hosted trên `cdn.onospod.com`), **KHÔNG phải**
+field trần `line_item.print.front/back/...` (chỉ là link Drive gốc lúc khách
+paste, có thể chưa xử lý/hết quyền xem — đã sửa lại sau khi test thực tế phát
+hiện field `.src` mới đúng là design cuối cùng). Không có `design_folder`
+tương ứng field `folder` → vị trí này KHÔNG map/KHÔNG check. **>1 line_item
+cùng khớp** (dữ liệu bất thường) → coi là `ambiguous`, **KHÔNG áp dụng**, bỏ
+qua + log lý do (an toàn hơn đoán đại 1 cái). `shipping` lấy ở level ORDER
+(không phải per-item): `order.shipping.{first_name,last_name,company,
+address_1,address_2,city,state,postcode,country,email,phone}`.
+
+### 9c.3 Logic so sánh + mở giữ — `OrderService.recoverHeldOrders()`
+- **Design**: so sánh TRỰC TIẾP từ lần check đầu tiên — baseline =
+  `order.designsOriginal ?? order.designs` (đã có sẵn từ lúc import, hợp lệ để
+  so sánh ngay). Khác baseline (ở BẤT KỲ vị trí in nào OnosPod trả về giá trị)
+  → `$set designs.<k>` + `designsOriginal.<k>` cho các vị trí đổi + `$unset
+  heldAt/holdReason` (mở giữ) + log `unhold`.
+- **Địa chỉ**: `order.shippingAddress` là field MỚI, chưa từng có baseline →
+  **lần check đầu chỉ SNAPSHOT** (`$set shippingAddress`), **KHÔNG tự mở giữ**
+  (chưa biết có đổi hay không). Từ lần thứ 2 trở đi mới so sánh snapshot đã
+  lưu với dữ liệu OnosPod hiện tại (so từng field, rỗng coi như `''`) — khác
+  → cập nhật snapshot + mở giữ + log `unhold`; giống → giữ nguyên (vẫn chờ).
+- Đơn thiếu `orderId` (chưa từng có mã đơn OnosPod) → skip, lý do rõ ràng
+  trong response `skipped[]` (không đoán, không throw).
+
+### 9c.4 API
+| Method | Path | Auth | Mô tả |
+|---|---|---|---|
+| GET | `/v1/orders/recover-held-from-onospod/cron` | public (`@Auth([],[],{public:true})`) | Cron — quét TOÀN BỘ đơn giữ khớp 1 trong 2 lý do trên, trả `{ checkedDesign, checkedAddress, designUpdated, addressPrimed, addressUpdated, unheld, skipped[] }`. Log ip/userAgent làm audit trace (giống `import-from-onospod/cron`). |
+
+Không có body/param — cron gọi trực tiếp qua `curl`, không cần token (giống
+mẫu `import-from-onospod/cron` đã có). Đặt lịch chạy ở crontab ngoài, độc lập
+với cron import.
 
 ---
 
