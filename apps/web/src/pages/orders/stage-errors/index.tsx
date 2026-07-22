@@ -164,10 +164,10 @@ function StageErrorsContent() {
   };
 
   /**
-   * Vẽ 1 nhãn A8 (QR + tên + đích đẩy về) lên canvas rồi trả PNG dataURL —
+   * Vẽ 1 nhãn A8 (QR + tiêu đề + phụ đề + mã) lên canvas rồi trả PNG dataURL —
    * nhét nguyên ảnh vào trang PDF để né vấn đề font tiếng Việt của jsPDF.
    */
-  const drawLabel = (row: WorkshopConfig): string => {
+  const drawA8Label = (qrCanvasId: string, title: string, subtitle: string, code: string): string => {
     const W = A8_MM.w * PX_PER_MM;
     const H = A8_MM.h * PX_PER_MM;
     const c = document.createElement('canvas');
@@ -180,7 +180,7 @@ function StageErrorsContent() {
     ctx.lineWidth = 4;
     ctx.strokeRect(10, 10, W - 20, H - 20);
 
-    const qrEl = document.getElementById(`qr-canvas-${row._id}`) as HTMLCanvasElement | null;
+    const qrEl = document.getElementById(qrCanvasId) as HTMLCanvasElement | null;
     const qrSize = 660;
     const qy = 90;
     if (qrEl) ctx.drawImage(qrEl, (W - qrSize) / 2, qy, qrSize, qrSize);
@@ -188,7 +188,7 @@ function StageErrorsContent() {
     ctx.fillStyle = '#000000';
     ctx.textAlign = 'center';
     ctx.font = 'bold 72px sans-serif';
-    const lines = wrapCanvasText(ctx, row.name, W - 140).slice(0, 3);
+    const lines = wrapCanvasText(ctx, title, W - 140).slice(0, 3);
     let ty = qy + qrSize + 120;
     for (const line of lines) {
       ctx.fillText(line, W / 2, ty);
@@ -196,12 +196,24 @@ function StageErrorsContent() {
     }
     ctx.font = '52px sans-serif';
     ctx.fillStyle = '#333333';
-    ctx.fillText(`Đẩy về: ${targetLabel(row.reworkTarget as StageErrorReworkTarget)}`, W / 2, ty + 14);
+    ctx.fillText(subtitle, W / 2, ty + 14);
     ctx.font = '44px monospace';
     ctx.fillStyle = '#555555';
-    ctx.fillText(errorQrPayload(row), W / 2, ty + 84);
+    ctx.fillText(code, W / 2, ty + 84);
     return c.toDataURL('image/png');
   };
+
+  const drawLabel = (row: WorkshopConfig): string =>
+    drawA8Label(
+      `qr-canvas-${row._id}`,
+      row.name,
+      `Đẩy về: ${targetLabel(row.reworkTarget as StageErrorReworkTarget)}`,
+      errorQrPayload(row),
+    );
+
+  // Nhãn "✔ HOÀN THÀNH" (SCAN_OK_CODE) — luôn là trang đầu PDF, giống card đầu sheet in.
+  const drawOkLabel = (): string =>
+    drawA8Label('qr-canvas-ok', '✔ HOÀN THÀNH', 'Chuyển đơn sang công đoạn sau', SCAN_OK_CODE);
 
   const handleExportPdf = async () => {
     if (selectedRows.length === 0 || exporting) return;
@@ -209,12 +221,13 @@ function StageErrorsContent() {
     try {
       const { jsPDF } = await import('jspdf');
       const doc = new jsPDF({ orientation: 'portrait', unit: 'mm', format: [A8_MM.w, A8_MM.h] });
-      selectedRows.forEach((row, i) => {
-        if (i > 0) doc.addPage([A8_MM.w, A8_MM.h], 'portrait');
+      doc.addImage(drawOkLabel(), 'PNG', 0, 0, A8_MM.w, A8_MM.h);
+      selectedRows.forEach((row) => {
+        doc.addPage([A8_MM.w, A8_MM.h], 'portrait');
         doc.addImage(drawLabel(row), 'PNG', 0, 0, A8_MM.w, A8_MM.h);
       });
       doc.save(`qr-loi-${stage}.pdf`);
-      toast.success(`Đã xuất PDF ${selectedRows.length} lỗi — mỗi lỗi 1 trang A8.`);
+      toast.success(`Đã xuất PDF: 1 nhãn OK + ${selectedRows.length} lỗi — mỗi nhãn 1 trang A8.`);
     } catch (err) {
       toast.error(`Xuất PDF thất bại: ${(err as Error).message}`);
     } finally {
@@ -374,6 +387,7 @@ function StageErrorsContent() {
 
       {/* Canvas QR ẩn (512px) — nguồn ảnh nét cho nhãn A8 khi xuất PDF. */}
       <div className="hidden">
+        <QRCodeCanvas id="qr-canvas-ok" value={SCAN_OK_CODE} size={512} />
         {rows.map((row) => (
           <QRCodeCanvas key={row._id} id={`qr-canvas-${row._id}`} value={errorQrPayload(row)} size={512} />
         ))}

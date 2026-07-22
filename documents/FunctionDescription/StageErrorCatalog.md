@@ -25,7 +25,7 @@ Mỗi công đoạn có **danh mục lỗi riêng** do chính công nhân công 
 - **Đã thêm là KHÔNG SỬA được** (tên/đích cố định — QR đã in + đơn đã gán sẽ đổi nghĩa nếu sửa): chỉ cho **ẩn/hiện** (`isActive`). Muốn "sửa" → ẩn lỗi cũ + thêm lỗi mới. **KHÔNG xóa cứng** — lỗi đã từng gán vào đơn phải giữ để thống kê cũ resolve được tên.
 - **Chọn lỗi (checkbox từng row + chọn tất cả)** rồi thao tác bằng 2 nút (disabled khi chưa chọn):
   - **"In (n)"**: `window.print()` sheet A4 gồm mã `OK` chung + QR các lỗi ĐÃ CHỌN (visibility-trick `@media print` + container off-screen `#stage-qr-sheet`).
-  - **"Xuất PDF (n)"**: mỗi lỗi đã chọn = **1 trang A8 (52×74mm)** — nhãn vẽ trên canvas (viền + QR 660px từ `QRCodeCanvas` ẩn 512px + tên bold wrap ≤3 dòng + "Đẩy về: X" + code mono) rồi `addImage` nguyên trang vào `jsPDF` (né vấn đề font tiếng Việt của jsPDF; lib import lazy). File `qr-loi-<stage>.pdf`.
+  - **"Xuất PDF (n)"**: **trang ĐẦU luôn là nhãn "✔ HOÀN THÀNH"** (`SCAN_OK_CODE`, canvas ẩn `#qr-canvas-ok`, `drawOkLabel()` — mirror card OK đứng đầu sheet in), sau đó mỗi lỗi đã chọn = **1 trang A8 (52×74mm)** — nhãn vẽ trên canvas qua helper chung `drawA8Label(qrCanvasId, title, subtitle, code)` (viền + QR 660px từ `QRCodeCanvas` ẩn 512px + tiêu đề bold wrap ≤3 dòng + phụ đề + code mono) rồi `addImage` nguyên trang vào `jsPDF` (né vấn đề font tiếng Việt của jsPDF; lib import lazy). File `qr-loi-<stage>.pdf`.
 
 ### 2.2 Quét 2 bước (`/orders/scan-error`)
 
