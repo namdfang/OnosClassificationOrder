@@ -1263,7 +1263,7 @@ export function OrderTableWorkshop() {
         {/* Table */}
         <div className="rounded-lg border border-border bg-card overflow-hidden">
           <div className="overflow-x-auto">
-            <Table className="table-fixed" style={{ width: totalTableWidth }}>
+            <Table className="table-fixed" style={{ width: totalTableWidth, minWidth: '100%' }}>
               <colgroup>
                 <col style={{ width: CHECKBOX_COL_W }} />
                 {colGroups.map((g) => (
