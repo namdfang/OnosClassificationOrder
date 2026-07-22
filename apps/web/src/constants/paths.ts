@@ -12,6 +12,7 @@ export const PATHS = {
     ORDERS_IMPORT: '/ffm/orders/import',
     ORDERS_CUTTING_FILES: '/ffm/orders/cutting-files',
     ORDERS_SCAN_ERROR: '/ffm/orders/scan-error',
+    ORDERS_STAGE_ERRORS: '/ffm/orders/stage-errors',
     ORDERS_UNMAPPED: '/ffm/orders/unmapped',
     WORKSHOP_CONFIG: '/ffm/workshop-config',
 
