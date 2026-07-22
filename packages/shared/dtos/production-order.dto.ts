@@ -909,6 +909,13 @@ export type DesignReviewAttributes = z.infer<typeof DesignReviewAttributesZod>;
 export const GetNextDesignReviewOrderZod = z.object({
   from: z.string().optional(),
   to: z.string().optional(),
+  /**
+   * Ép lấy ĐÚNG 1 đơn theo `productionId`, BỎ QUA mọi filter hàng đợi
+   * (`toolResult` rỗng / `designerStatus` unassigned...) — trả về đơn ở BẤT
+   * KỲ trạng thái nào miễn khớp mã, KHÔNG claim lease. Dùng khi tool ngoài
+   * cần soát lại/ép xử lý đúng 1 đơn cụ thể thay vì lấy theo hàng đợi.
+   */
+  pid: z.string().optional(),
 });
 export class GetNextDesignReviewOrderDto extends createZodDto(extendApi(GetNextDesignReviewOrderZod)) {}
 

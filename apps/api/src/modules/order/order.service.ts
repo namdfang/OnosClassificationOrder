@@ -288,6 +288,17 @@ const ADDRESS_FIELDS: Array<keyof ProductionOrderShippingAddress> = [
   'phone',
 ];
 
+/** Field cần cho `getNextDesignReviewOrder`/`getDesignReviewOrderByProductionId` — xem `OrderService.toDesignReviewOrder`. */
+type DesignReviewSourceDoc = {
+  productionId: string;
+  orderId?: string;
+  type?: string;
+  color?: string;
+  size?: string;
+  designs?: DesignFields;
+  mockupUrl?: string;
+};
+
 /**
  * Parse `yyyy-mm-dd` (hoặc full ISO) thành UTC Date tương ứng với VN local
  * midnight / end-of-day. JS `new Date("2026-06-22")` parse là UTC midnight =
@@ -5238,14 +5249,33 @@ export class OrderService implements OnModuleInit {
    * tz) — cùng semantics `createdFrom`/`createdTo` ở danh sách đơn (Orders.md
    * §7.0b). Không truyền → không giới hạn ngày (hành vi cũ).
    */
-  async getNextDesignReviewOrder(dto?: { from?: string; to?: string }): Promise<{
+  /** Map raw order doc (field cần cho design review) → `DesignReviewOrder`. Dùng chung bởi `getNextDesignReviewOrder`/`getDesignReviewOrderByProductionId`. */
+  private toDesignReviewOrder(doc: DesignReviewSourceDoc): DesignReviewOrder {
+    return {
+      productionId: doc.productionId,
+      orderId: doc.orderId,
+      productCode: mapProductTypeToCode(doc.type),
+      attributes: { size: doc.size, color: doc.color },
+      designs: doc.designs ?? {},
+      mockupUrl: doc.mockupUrl,
+    };
+  }
+
+  private static readonly DESIGN_REVIEW_PROJECTION = {
+    productionId: 1,
+    orderId: 1,
+    type: 1,
+    color: 1,
+    size: 1,
+    designs: 1,
+    mockupUrl: 1,
+  } as const;
+
+  async getNextDesignReviewOrder(dto?: { from?: string; to?: string; pid?: string }): Promise<{
     success: true;
     data: DesignReviewOrder | null;
     remaining: number;
   }> {
-    const now = new Date();
-    const leaseExpiresBefore = new Date(now.getTime() - DESIGN_REVIEW_CLAIM_LEASE_MS);
-
     const baseFilter: Record<string, unknown> = {
       deletedAt: { $exists: false },
       cancelledAt: { $exists: false },
@@ -5260,6 +5290,21 @@ export class OrderService implements OnModuleInit {
       baseFilter.inProductionAt = range;
     }
 
+    // `pid` — ép lấy ĐÚNG 1 đơn theo productionId, BỎ QUA filter hàng đợi ở
+    // trên (toolResult/designerStatus...), KHÔNG claim lease. Vẫn trả kèm
+    // `remaining` của hàng đợi bình thường để tool không mất context.
+    const pid = dto?.pid?.trim();
+    if (pid) {
+      const [byId, remaining] = await Promise.all([
+        this.getDesignReviewOrderByProductionId(pid),
+        this.orderModel.countDocuments(baseFilter),
+      ]);
+      return { success: true, data: byId.data, remaining };
+    }
+
+    const now = new Date();
+    const leaseExpiresBefore = new Date(now.getTime() - DESIGN_REVIEW_CLAIM_LEASE_MS);
+
     const [doc, remaining] = await Promise.all([
       this.orderModel
         .findOneAndUpdate(
@@ -5273,7 +5318,7 @@ export class OrderService implements OnModuleInit {
           { $set: { designReviewClaimedAt: now } },
           {
             sort: { priority: -1, inProductionAt: 1, createdAt: 1 },
-            projection: { productionId: 1, orderId: 1, type: 1, color: 1, size: 1, designs: 1, mockupUrl: 1 },
+            projection: OrderService.DESIGN_REVIEW_PROJECTION,
             new: true,
           },
         )
@@ -5283,26 +5328,9 @@ export class OrderService implements OnModuleInit {
 
     if (!doc) return { success: true, data: null, remaining };
 
-    const d = doc as unknown as {
-      productionId: string;
-      orderId?: string;
-      type?: string;
-      color?: string;
-      size?: string;
-      designs?: DesignFields;
-      mockupUrl?: string;
-    };
-
     return {
       success: true,
-      data: {
-        productionId: d.productionId,
-        orderId: d.orderId,
-        productCode: mapProductTypeToCode(d.type),
-        attributes: { size: d.size, color: d.color },
-        designs: d.designs ?? {},
-        mockupUrl: d.mockupUrl,
-      },
+      data: this.toDesignReviewOrder(doc as unknown as DesignReviewSourceDoc),
       remaining,
     };
   }
@@ -5324,34 +5352,14 @@ export class OrderService implements OnModuleInit {
 
     const escaped = trimmed.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
     const doc = await this.orderModel
-      .findOne(
-        { productionId: { $regex: `^${escaped}$`, $options: 'i' } },
-        { productionId: 1, orderId: 1, type: 1, color: 1, size: 1, designs: 1, mockupUrl: 1 },
-      )
+      .findOne({ productionId: { $regex: `^${escaped}$`, $options: 'i' } }, OrderService.DESIGN_REVIEW_PROJECTION)
       .lean();
 
     if (!doc) return { success: true, data: null };
 
-    const d = doc as unknown as {
-      productionId: string;
-      orderId?: string;
-      type?: string;
-      color?: string;
-      size?: string;
-      designs?: DesignFields;
-      mockupUrl?: string;
-    };
-
     return {
       success: true,
-      data: {
-        productionId: d.productionId,
-        orderId: d.orderId,
-        productCode: mapProductTypeToCode(d.type),
-        attributes: { size: d.size, color: d.color },
-        designs: d.designs ?? {},
-        mockupUrl: d.mockupUrl,
-      },
+      data: this.toDesignReviewOrder(doc as unknown as DesignReviewSourceDoc),
     };
   }
 

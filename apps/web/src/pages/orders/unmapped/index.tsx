@@ -32,6 +32,7 @@ import { cn } from '@/utils/cn';
 import { useDebounce } from '@/hooks/useDebounce';
 import { NO_TOOL_ROW_CLASS, useIsNoTool } from '@/hooks/useIsNoTool';
 import { usePermission } from '@/hooks/usePermission';
+import { useSidebarResetSignal } from '@/hooks/useSidebarResetSignal';
 
 const DEFAULT_PAGE_SIZE = 20;
 
@@ -75,6 +76,14 @@ function UnmappedFactoryOrdersContent() {
   const [preview, setPreview] = useState<{ url: string; originalUrl?: string; title: string } | null>(null);
   const [historyTarget, setHistoryTarget] = useState<{ id: string; productionId: string } | null>(null);
   const [assignDialog, setAssignDialog] = useState<{ ids: string[]; single?: WorkshopOrderRow } | null>(null);
+
+  // Click lại menu "Không xác định xưởng" ở sidebar khi đang đứng đúng trang
+  // này → xóa hết filter (xem `useSidebarResetSignal`).
+  useSidebarResetSignal(PATHS.ORDERS_UNMAPPED, () => {
+    setSearch('');
+    setSelected(new Set());
+    setPage(1);
+  });
 
   const fetchRows = useCallback(async () => {
     const sp = new URLSearchParams();

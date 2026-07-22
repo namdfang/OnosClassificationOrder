@@ -840,6 +840,7 @@ Filter gửi qua query string `?printStatus=code&fabricType=code&designerStatus=
 | Param | Default (strip URL khi == default) | Mapping |
 |-------|------------------------------------|---------|
 | `wsearch` | `''` | search |
+| `pid` | `''` | tìm CHÍNH XÁC 1 đơn theo `productionId` (khác `wsearch`) — xem chi tiết dưới |
 | `wfrom` / `wto` | **today** (always-write, kể cả today) | `createdFrom` / `createdTo` |
 | `wprint` | `[]` | CSV `printStatus` codes |
 | `wnote` | `[]` | CSV `toolResultNote` codes |
@@ -849,6 +850,14 @@ Filter gửi qua query string `?printStatus=code&fabricType=code&designerStatus=
 | `wsize` | `20` | dòng/trang |
 
 Workshop tab dùng date always-write vào URL (kể cả today) để URL hiển thị explicit ngày đang xem — tránh user share link mà không biết filter ngày nào. Các param khác strip khi rỗng/default.
+
+**`?pid=<productionId>`** — filter RIÊNG, **state thật, persist vào URL** (không tự xóa) để F5/share link giữ nguyên, tách biệt hoàn toàn khỏi `wsearch`/`search` (match "contains" trên 5 field, `buildSearchOr`). Dùng cho link từ nơi khác (thông báo/tool ngoài) cần mở đúng 1 đơn theo `productionId` **chính xác**:
+- Gửi xuống BE qua param **`productionIds`** (đã có sẵn — dùng chung với filter "Nhiều mã" ở `BulkEditToolbar`, exact case-insensitive match, xem `order.service.ts` dòng ~1267) thay vì `search` — tránh match nhầm field khác (`userSku`/`userEmail`/`orderId`/`type`) như `search` thường làm. `pid` set → ưu tiên hơn "Nhiều mã" (2 filter dùng chung 1 param BE, không kết hợp được).
+- Có `pid` lúc mount (chưa có `wfrom`/`wto` khác) → **bỏ hẳn default `wfrom`/`wto` = today**, set `''` (tìm all-time) — nếu không, đơn không thuộc "hôm nay" sẽ bị lọc mất dù đúng mã.
+- **Group product mặc định "Mở hết"** thay vì collapse như thường lệ (`fetchData()` check state `pid` hiện tại, KHÔNG chỉ lúc mount) — thấy ngay đơn cần tìm, không phải tự bấm mở group.
+- Chip "Mã đơn" trong thanh filter đang lọc — click X hoặc `clearAllFilters()` để bỏ.
+
+Ví dụ: `/ffm/orders/workshop?pid=GO-63713-02355`.
 
 ### 10.4 Bulk edit (`BulkEditToolbar`)
 
@@ -1404,3 +1413,29 @@ Response mẫu (`SetDesignReviewResultResDto` — `data` = `ProductionOrderZod` 
 
 ### 19.4 Permissions
 - `page.unmapped_factory` (mới, group `page`) — Admin/SuperAdmin/Manager có sẵn qua `ALL_PERMISSION_CODES`; Support được cấp thêm trong `DEFAULT_ROLE_PERMISSIONS` (kèm `order.transfer` để nút "Gán xưởng" hiện ra — trước đó Support không có quyền này).
+
+## 20. Click lại menu sidebar đang active → xóa filter (cross-cutting UX)
+
+> **Vấn đề:** React Router coi click `<Link>` trỏ tới URL hiện tại là no-op — không điều hướng, không remount, không re-render. Trước đây click lại đúng menu đang đứng (vd đang lọc dở "Danh sách đơn" rồi bấm lại "Danh sách đơn") không có tác dụng gì.
+
+**Cơ chế chung** (`apps/web/src/store/sidebarResetStore.ts` + `apps/web/src/hooks/useSidebarResetSignal.ts`):
+- `sidebarResetStore` (Zustand, không persist): `{ path, nonce, requestReset(path) }` — `requestReset` set `path` + tăng `nonce`.
+- `Sidebar.tsx` → `SidebarLeaf`: `<Link onClick={() => { if (active) requestReset(item.to); }}>` — CHỈ bắn tín hiệu khi item đang **active** (dùng lại `isLinkActive()` sẵn có), không đụng hành vi Link click bình thường khi chưa active.
+- Trang cần phản ứng gọi `useSidebarResetSignal(path, onReset)` — `path` PHẢI khớp CHÍNH XÁC chuỗi `to` khai báo trong `NAV_GROUPS` (kể cả query string, vd `${PATHS.HOME}?tab=factory`). Hook chỉ chạy `onReset` khi `resetPath === path` VÀ `nonce` vừa tăng — không fire lúc mount.
+- **Không tự động remount qua `key`** — mỗi trang tự định nghĩa "xóa filter" nghĩa là gì (set lại state về default), không có universal "reset toàn bộ component state".
+
+**Đã wire** (path khớp `NAV_GROUPS`, hàm reset gọi qua `useSidebarResetSignal`):
+| Sidebar item | Trang | Hàm reset |
+|---|---|---|
+| Danh sách đơn | `OrderTableWorkshop.tsx` | `clearAllFilters()` (đã có sẵn, dùng lại nguyên) |
+| Nhật ký bù lỗi | `ErrorLogTab.tsx` | `clearAllFilters()` (mới thêm — reset `tab`/`search`/`createdFrom`/`createdTo`/5 filter dropdown/`selected`/`page`) |
+| Không xác định xưởng | `pages/orders/unmapped/index.tsx` | inline — reset `search`/`selected`/`page` |
+| Task Fulfillment | `pages/fulfillment/my-tasks/index.tsx` (`FulfillmentKanbanView`) | inline — reset `search`/`filters`/`dateFrom`/`dateTo`/`selected` (`dayFilter` tự clear qua effect có sẵn khi đổi ngày) |
+| Task của tôi | `pages/designer/my-tasks/index.tsx` | inline — reset `search`/`filters`/`dateFrom`/`dateTo`/`selected` |
+
+**CHƯA wire** (biết rõ, chưa làm — không phải bỏ sót):
+- **Dashboard** (7 tab `?tab=...`) — mỗi tab filter riêng nằm trong component con (`OrderStatsTab`, `OrderStatusTab`, `OrderFactoryTab`, `LifecycleTab`, `ToolCheckTab`, `PersonErrorTab`, `DesignerStatsTab`) — cần khảo sát + sửa riêng từng tab, chưa làm trong lượt này.
+- **`PrintWorkshopView.tsx`** (Fulfillment stage=Print, dùng `PrintOrderTable.tsx` filter riêng, KHÁC `FulfillmentKanbanView`) — chưa sửa.
+- Các trang admin/CRUD/upload (Products, Workshop Config, Users, Import Order, Cutting Files...) — không phải dạng "danh sách filter" cùng pattern, không áp dụng.
+
+Muốn thêm trang mới: import `useSidebarResetSignal` từ `@/hooks/useSidebarResetSignal`, gọi `useSidebarResetSignal(PATHS.XXX, resetFn)` với `resetFn` set lại mọi filter state về giá trị mặc định của trang đó.

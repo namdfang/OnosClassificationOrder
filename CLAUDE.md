@@ -334,6 +334,7 @@ export class UserRepository extends DatabaseRepositoryAbstract<UserEntity, UserD
 | Doc | Khi nào đọc |
 |---|---|
 | [`documents/Architecture/Common_Pitfalls.md`](documents/Architecture/Common_Pitfalls.md) | **Trước khi** add field mới vào `UserEntity`, refactor enum trong production, viết const patch object với `new Date()`, hoặc sửa `packages/shared/`. Tổng hợp 5 bug pattern cross-cutting đã từng xảy ra với root cause + rule chung. |
+| [`documents/FunctionDescription/Orders.md`](documents/FunctionDescription/Orders.md) §20 | **Trước khi** thêm 1 trang danh sách/filter mới có entry sidebar, hoặc sửa `Sidebar.tsx`/`sidebarResetStore.ts`/`useSidebarResetSignal.ts`. Cơ chế "click lại menu sidebar đang active → tự xóa filter trang đó" (React Router không remount khi click Link trùng URL hiện tại) + bảng các trang đã wire. |
 
 ### Doc file structure (template cho file mới)
 

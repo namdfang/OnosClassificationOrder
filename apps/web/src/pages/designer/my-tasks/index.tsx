@@ -20,6 +20,8 @@ import { toast } from 'sonner';
 import type { DragEndEvent, DragStartEvent } from '@dnd-kit/core';
 import { DndContext, DragOverlay, PointerSensor, useDroppable, useSensor, useSensors } from '@dnd-kit/core';
 
+import { PATHS } from '@/constants/paths';
+
 import { useWorkshopConfigStore } from '@/store/workshopConfigStore';
 
 import { RepositoryRemote } from '@/services';
@@ -35,6 +37,7 @@ import { TooltipProvider } from '@/components/ui/tooltip';
 import { handleAxiosError } from '@/utils';
 
 import { useDebounce } from '@/hooks/useDebounce';
+import { useSidebarResetSignal } from '@/hooks/useSidebarResetSignal';
 
 import { DailyBreakdownPanel } from './DailyBreakdownPanel';
 import { RejectModal } from './RejectModal';
@@ -204,6 +207,16 @@ export default function MyTasksPage() {
   // Selection state — global Set chứa tất cả id đã chọn. Bulk action chỉ
   // valid khi tất cả id đã chọn nằm trong CÙNG 1 cột status.
   const [selected, setSelected] = useState<Set<string>>(new Set());
+
+  // Click lại menu "Task của tôi" ở sidebar khi đang đứng đúng trang này →
+  // xóa hết filter (xem `useSidebarResetSignal`).
+  useSidebarResetSignal(PATHS.MY_TASKS, () => {
+    setSearch('');
+    setFilters({ ...EMPTY_FILTERS });
+    setDateFrom(daysAgoISO(6));
+    setDateTo(todayISO());
+    setSelected(new Set());
+  });
 
   const [rejectTarget, setRejectTarget] = useState<DesignerTaskCard | null>(null);
   const [bulkReject, setBulkReject] = useState(false);

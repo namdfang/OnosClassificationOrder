@@ -12,6 +12,8 @@ import {
 } from 'shared';
 import { toast } from 'sonner';
 
+import { PATHS } from '@/constants/paths';
+
 import { useAuthStore } from '@/store/authStore';
 import { useDesignerTeamStore } from '@/store/designerTeamStore';
 import { useWorkshopConfigStore } from '@/store/workshopConfigStore';
@@ -41,6 +43,7 @@ import { useDebounce } from '@/hooks/useDebounce';
 import { NO_TOOL_ROW_CLASS, useIsNoTool } from '@/hooks/useIsNoTool';
 import { usePendingDesignsPoll } from '@/hooks/usePendingDesignsPoll';
 import { usePermission } from '@/hooks/usePermission';
+import { useSidebarResetSignal } from '@/hooks/useSidebarResetSignal';
 import { ReworkBackDialog } from '@/pages/fulfillment/my-tasks/ReworkBackDialog';
 
 type TimelineEntry = {
@@ -218,6 +221,25 @@ export function ErrorLogTab() {
   const [reworkOrder, setReworkOrder] = useState<ErrorLogRow | null>(null);
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const [bulkResolving, setBulkResolving] = useState(false);
+
+  const clearAllFilters = () => {
+    setTab('todo');
+    setSearch('');
+    setCreatedFrom('');
+    setCreatedTo('');
+    setFilterAssignee('');
+    setFilterFabric('');
+    setFilterTool('');
+    setFilterErrorCode('');
+    setFilterSource('');
+    setFilterUrgency('');
+    setSelected(new Set());
+    setPage(1);
+  };
+
+  // Click lại menu "Nhật ký bù lỗi" ở sidebar khi đang đứng đúng trang này →
+  // xóa hết filter (xem `useSidebarResetSignal`).
+  useSidebarResetSignal(PATHS.ORDERS_ERROR_LOG, clearAllFilters);
 
   useEffect(() => {
     if (!configLoaded) loadConfig();

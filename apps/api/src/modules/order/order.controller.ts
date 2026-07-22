@@ -857,6 +857,7 @@ export class OrderController {
         userAgent,
         from: dto.from,
         to: dto.to,
+        pid: dto.pid,
       }),
     });
     return this.orderService.getNextDesignReviewOrder(dto) as Promise<GetNextDesignReviewOrderResDto>;
