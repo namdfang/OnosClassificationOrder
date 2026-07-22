@@ -27,7 +27,7 @@ export class ProductConfigEntity extends DatabaseEntityAbstract {
   @Prop({ trim: true })
   fabricType?: string;
 
-  /** workshop_config code (category=tool_result). Default tool status — copied to order.toolResult at import. */
+  /** workshop_config code (category=tool_result). Default tool status — display/config only, KHÔNG còn copy vào order.toolResult lúc import (đơn mới luôn để trống để tool tự động soát). */
   @Prop({ trim: true })
   toolResult?: string;
 

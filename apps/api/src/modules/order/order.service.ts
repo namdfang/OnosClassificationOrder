@@ -5418,7 +5418,6 @@ export class OrderService implements OnModuleInit {
         let factoryId: string | undefined;
         let machineTypeId: string | undefined;
         let fabricType: string | undefined;
-        let toolResult: string | undefined;
         let machineNumber: string | undefined;
 
         if (row.type?.trim()) {
@@ -5431,8 +5430,9 @@ export class OrderService implements OnModuleInit {
             factoryId = pc.factoryId;
             machineTypeId = pc.machineTypeId;
             fabricType = pc.fabricType || undefined;
-            // Để tạm, tool ổn sẽ xóa không lưu toolResult vào đơn nữa (xem comment ở khối map product config phía trên).
-            toolResult = pc.toolResult || undefined;
+            // KHÔNG copy `toolResult` từ product config nữa — để trống lúc
+            // import (API onospod lẫn CSV) để tool tự động soát có thể chạy
+            // và tự set kết quả, thay vì bị default che mất đơn chưa soát.
             machineNumber = pc.machineNumber || undefined;
             mapped++;
           } else {
@@ -5490,15 +5490,13 @@ export class OrderService implements OnModuleInit {
           factoryId,
           machineTypeId,
         };
-        // Insert-only fields: fabric + toolResult + machineNumber are *defaults*
-        // derived from product config. If the workshop already overrode them on
-        // a previous run, re-import shouldn't blow those edits away.
-        // `originalFactoryId` is pinned for the same reason.
-        // Để tạm, tool ổn sẽ xóa không lưu toolResult vào đơn nữa (xem comment
-        // ở khối map product config phía trên).
+        // Insert-only fields: fabric + machineNumber are *defaults* derived from
+        // product config. If the workshop already overrode them on a previous
+        // run, re-import shouldn't blow those edits away. `originalFactoryId`
+        // is pinned for the same reason. `toolResult` KHÔNG nằm trong danh sách
+        // này nữa — luôn để trống lúc tạo đơn mới, chờ tool tự động soát set.
         const insertOnly: Record<string, unknown> = { originalFactoryId: factoryId };
         if (fabricType) insertOnly.fabricType = fabricType;
-        if (toolResult) insertOnly.toolResult = toolResult;
         if (machineNumber) insertOnly.machineNumber = machineNumber;
 
         // Atomic upsert by productionId — includes soft-deleted records.

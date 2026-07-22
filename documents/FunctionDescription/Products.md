@@ -48,7 +48,7 @@ UI chia 2 tab:
   factoryId: ObjectId;     // ref FactoryEntity (xưởng — vd Mê Linh / Thái Nguyên / US)
   machineTypeId: ObjectId; // ref MachineTypeEntity (phòng — loại máy in: ICL / IEN / HT)
   fabricType?: string;     // workshop_config code (category=fabric_type) — default fabric copy vào order
-  toolResult?: string;     // workshop_config code (category=tool_result) — default tool status copy vào order
+  toolResult?: string;     // workshop_config code (category=tool_result) — default tool status. KHÔNG còn copy vào order lúc import nữa (xem §2.2 dưới) — chỉ còn ý nghĩa hiển thị/cấu hình.
   mockup?: string;         // URL ảnh mockup — hiển thị cột đầu bảng config (thumbnail + edit inline)
   level?: number;          // Cấp độ 1..10 (PRODUCT_LEVELS ở shared) — badge màu gradient
   guide?: string;          // Hướng dẫn/ghi chú sản phẩm (free-text textarea)
@@ -57,7 +57,9 @@ UI chia 2 tab:
 
 > **Lưu ý:** `ProductConfigEntity` bị ràng buộc `assertSameType<ProductConfig, ProductConfigEntity>()` (2 chiều) — thêm field mới **BẮT BUỘC** sửa đồng bộ cả `packages/shared/dtos/product-config.dto.ts` (`ProductConfigZod` + Create/Update) lẫn entity, nếu không sẽ fail compile. `service.updateProductConfig` spread `...dto` nên field mới tự pass-through, không cần sửa service. 10 level cố định + màu định nghĩa ở `packages/shared/constants/product-level.ts` (`PRODUCT_LEVELS`, `PRODUCT_LEVEL_MAP`).
 
-Cột `fabricType` + `toolResult` cho phép admin set sẵn loại vải / kết quả tool mặc định. Khi import order khớp `type` → product, BE auto-copy 2 cột này vào order (chỉ insert, không ghi đè), để Workshop view group được. UI bảng config có dropdown chọn fabric / tool inline.
+Cột `fabricType` cho phép admin set sẵn loại vải mặc định — khi import order khớp `type` → product, BE auto-copy vào order (chỉ insert, không ghi đè) để Workshop view group được.
+
+Cột `toolResult` **KHÔNG còn được auto-copy vào order lúc import nữa** (API OnosPod lẫn CSV) — đơn mới luôn tạo với `toolResult` rỗng để tool tự động soát (`GET /v1/orders/design-review/next`) nhận diện đúng đơn chưa soát, xem `Orders.md §3.3`. Cột này ở Products chỉ còn ý nghĩa cấu hình/hiển thị, KHÔNG ảnh hưởng đơn mới. UI bảng config vẫn giữ dropdown chọn fabric / tool inline (không đổi UI Products).
 
 ### 2.3 Import flow (`ImportProductConfigDialog.tsx`)
 ```

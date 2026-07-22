@@ -144,14 +144,16 @@ for (row of rows):
   else:
     imported++
 
-  // Mapping qua product config (auto-derive xưởng + máy + vải + tool)
+  // Mapping qua product config (auto-derive xưởng + máy + vải)
   config = productConfig.findByType(row.type)
   if config:
     set productConfigId, factoryId, machineTypeId, isMapped=true
     // insertOnly — chỉ gắn khi tạo mới, không overwrite giá trị workshop đã chỉnh
     insertOnly.originalFactoryId = factoryId
     if config.fabricType: insertOnly.fabricType = config.fabricType
-    if config.toolResult: insertOnly.toolResult = config.toolResult
+    // KHÔNG set insertOnly.toolResult nữa — đơn mới LUÔN để trống `toolResult`
+    // (kể cả product config có default) để tool tự động soát nhận diện đúng
+    // đơn "chưa soát" và tự chạy, thay vì bị default che mất.
     mapped++
   else:
     isMapped=false
@@ -165,7 +167,9 @@ for (row of rows):
   //     configure (env R2_* trống) → designs.{k} = raw URL để không transform
 ```
 
-`fabricType` và `toolResult` được **derived từ product config** tại lúc import — workshop không phải gõ tay. Nếu product config thay đổi sau khi import (admin chỉnh fabric default), gọi `POST /v1/orders/backfill-fabric` để re-derive cho các đơn còn thiếu (chỉ điền chỗ trống, **không overwrite** giá trị admin đã chỉnh).
+`fabricType` được **derived từ product config** tại lúc import — workshop không phải gõ tay. Nếu product config thay đổi sau khi import (admin chỉnh fabric default), gọi `POST /v1/orders/backfill-fabric` để re-derive cho các đơn còn thiếu (chỉ điền chỗ trống, **không overwrite** giá trị admin đã chỉnh).
+
+`toolResult` **KHÔNG còn được default từ product config lúc import** (API OnosPod lẫn CSV) — đơn mới luôn tạo với `toolResult` rỗng, để hàng đợi "Public API cho tool ngoài soát" (`GET /v1/orders/design-review/next`, xem `§18` bên dưới) nhận diện đúng đơn chưa soát và tự chạy tool, thay vì bị default từ config che mất. `ProductConfigEntity.toolResult` (field cấu hình "Kết quả Tool mặc định") vẫn còn trong schema nhưng KHÔNG còn nơi nào đọc để copy vào đơn nữa.
 
 ### 3.4 Trùng productionId
 - **Update**, **không** tạo duplicate
