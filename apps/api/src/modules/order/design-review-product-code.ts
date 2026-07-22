@@ -30,7 +30,7 @@ const PRODUCT_TYPE_CODE_MAP: Record<string, string> = {
     "all-over print embroidered logo men's polo shirt": "PLTRU",
     "aop men's polo shirt with woven placket label": "PLMAC",
     "all-over print curved hem t-shirt": "TXMEXICO",
-    "all-over print baseball jersey - no piping": "BR-KL",
+    "all-over print baseball jersey - no piping": "BBJERNP",
     "all-over print vietnam football jersey": "FBVN",
     "all-over print satin long-sleeve pajama set": "PJMV",
     "all-over print satin short-sleeve pajama set with long pants": "LPANTSSHIRTV",
