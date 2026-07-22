@@ -1,7 +1,7 @@
 # Auto-gán Designer theo xưởng — Function Description
 
 > **File FE:** `apps/web/src/pages/settings/index.tsx` + `apps/web/src/components/settings/DesignerAssignmentConfig.tsx` + `apps/web/src/services/designerAssignment.ts`
-> **File BE:** `apps/api/src/modules/designer-assignment/` (service + controller + module) + `apps/api/src/modules/order/order.service.ts` → `autoAssignAfterImport()` + `allocateByWeight()` + hook `importRework`/`updateField`
+> **File BE:** `apps/api/src/modules/designer-assignment/` (service + controller + module) + `apps/api/src/modules/order/order.service.ts` → `autoAssignAfterImport()` + `allocateByLoad()` + hook `importRework`/`updateField`
 > **Route:** `/settings` (gate quyền `role.manage`)
 > **API:** `GET/PUT /v1/designer-assignment/config`
 
@@ -32,7 +32,8 @@ designer của xưởng đó theo tỉ lệ đã cấu hình, **không cần gá
      để trả outcome thật cho FE toast — xem `ToolCheckWorkflow.md §2.2b`).
 3. Hook gọi `OrderService.autoAssignAfterImport(orderIds, ctx)` (fire-and-forget,
    riêng `markToolCheckDone` await).
-4. Engine xác minh lại điều kiện trên DB → chia đơn theo trọng số → `updateMany`
+4. Engine xác minh lại điều kiện trên DB → đếm **tải thực tế** (số đơn chưa xong
+   mỗi designer đang giữ) → chia đơn **cân bằng tải theo trọng số** → `updateMany`
    set `assignee` + `designerStatus='assigned'` → ghi `orderLog` (field `assignee`).
 
 > `importOrders` (import đơn chính) **không** gắn hook: đơn mới có `toolResultNote`
@@ -86,19 +87,29 @@ Constant `DESIGNER_ASSIGNMENT_CONFIG_KEY = 'designer_assignment_config'`.
   & `toolResultNote ∉ [null,'','ok']` & `cancelledAt=null` & `heldAt=null` &
   `deletedAt` không tồn tại.
 - Lọc designer **Active + role Designer** (query `userModel`).
-- Nhóm ứng viên theo `factoryId` → `allocateByWeight(N, weights)` → cắt orderId →
-  mỗi designer 1 `updateMany({_id∈slice, designerStatus:'unassigned'}, {$set:...})`
-  (guard `unassigned` chống race).
+- **Đếm tải thực tế**: 1 aggregate đếm số đơn CHƯA XONG mỗi designer đang giữ
+  (`assignee ∈ validIds`, `designerStatus ∈ DESIGNER_ACTIVE_STATUSES`
+  [assigned/in-progress/rework], `cancelledAt=null`, không xóa) — tính cả đơn
+  gán tay, mọi xưởng.
+- Nhóm ứng viên theo `factoryId` → `allocateByLoad(N, weights, loads)` → cắt
+  orderId → mỗi designer 1 `updateMany({_id∈slice, designerStatus:'unassigned'},
+  {$set:...})` (guard `unassigned` chống race).
 - `orderLogService.writeMany` (field `assignee`, after=designerId) + `invalidateListCache`.
 
-### 5.3 `OrderService.allocateByWeight(n, weights)`
-`baseᵢ = floor(n × wᵢ / Σw)`; **số dư dồn hết cho designer đầu danh sách**. Σw = 0
-→ chia đều. Trọng số < 0 hoặc không hợp lệ → coi như 0.
+### 5.3 `OrderService.allocateByLoad(n, weights, loads)`
+Cân bằng tải theo trọng số (weighted least-loaded): từng đơn gán cho designer có
+tải quy đổi `(load + đã chia trong lô + 1) / weight` **thấp nhất** (tie → người
+đứng trước). Nhờ đọc tải từ DB nên **soát lẻ từng đơn (N=1) vẫn ra đúng tỉ lệ về
+lâu dài** và tự bù trừ khi 1 designer đang bị dồn đơn từ nguồn khác (gán tay) —
+khắc phục bug cũ của `allocateByWeight` (floor + dư dồn designer đầu → N=1 luôn
+về người đứng đầu danh sách). Σw = 0 → coi mọi trọng số = 1 (chia đều theo tải);
+trọng số 0/âm khi có người khác > 0 → người đó không nhận đơn.
 
 ## 6. Performance notes
 - Cấu hình cache Redis 1h → đọc gần như free ở hook.
-- Engine: 1 `find` (ứng viên) + 1 `find` (designer Active) + K `updateMany` (K =
-  số designer có phần > 0). Chạy fire-and-forget, không chặn response import/edit.
+- Engine: 1 `find` (ứng viên) + 1 `find` (designer Active) + 1 `aggregate` (tải
+  thực tế, group theo `assignee`) + K `updateMany` (K = số designer có phần > 0).
+  Chạy fire-and-forget, không chặn response import/edit.
 - Guard `designerStatus:'unassigned'` trong `updateMany` → không đè đơn đã có người.
 
 ## 7. Permissions

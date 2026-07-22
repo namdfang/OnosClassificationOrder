@@ -93,6 +93,7 @@ import type {
 import type { GetOrderLogsDto, LifecycleTrack, LifecycleTrackStage, LifecycleTrackStatus } from 'shared';
 import {
   customerMatchKey,
+  DESIGNER_ACTIVE_STATUSES,
   DESIGNER_ASSIGNMENT_CONFIG_KEY,
   DESIGNER_REASSIGNABLE_STATUSES,
   DesignerStatus,
@@ -4963,22 +4964,34 @@ export class OrderService implements OnModuleInit {
 
   /**
    * Chia N phần cho các designer theo trọng số `weights` (tự do, không cần
-   * cộng 100). `baseᵢ = floor(N × wᵢ/Σw)`; **số dư dồn hết cho designer đầu**
-   * (theo yêu cầu "phần dư về designer đầu"). Σw = 0 → chia đều.
+   * cộng 100), CÂN BẰNG theo tải thực tế `loads` (số đơn chưa xong mỗi
+   * designer đang giữ). Từng đơn gán cho người có tải quy đổi
+   * `(load + đã chia trong lô + 1) / weight` thấp nhất → soát lẻ từng đơn
+   * (N=1) vẫn ra đúng tỉ lệ về lâu dài, và tự bù trừ khi 1 người đang bị dồn
+   * đơn từ nguồn khác (gán tay). Σw = 0 → coi mọi trọng số = 1 (chia đều theo
+   * tải); trọng số 0/âm khi có người khác > 0 → người đó không nhận đơn.
    */
-  private allocateByWeight(n: number, weights: number[]): number[] {
+  private allocateByLoad(n: number, weights: number[], loads: number[]): number[] {
     const k = weights.length;
-    if (k === 0 || n <= 0) return new Array(k).fill(0);
+    const alloc: number[] = new Array(k).fill(0);
+    if (k === 0 || n <= 0) return alloc;
     let effective = weights.map((w) => (Number.isFinite(w) && w > 0 ? w : 0));
-    let sum = effective.reduce((a, b) => a + b, 0);
-    if (sum <= 0) {
-      effective = new Array(k).fill(1);
-      sum = k;
+    if (effective.reduce((a, b) => a + b, 0) <= 0) effective = new Array(k).fill(1);
+    for (let u = 0; u < n; u++) {
+      let pick = -1;
+      let best = Infinity;
+      for (let i = 0; i < k; i++) {
+        if (effective[i] <= 0) continue;
+        const score = ((loads[i] > 0 ? loads[i] : 0) + alloc[i] + 1) / effective[i];
+        if (score < best) {
+          best = score;
+          pick = i;
+        }
+      }
+      if (pick < 0) break;
+      alloc[pick] += 1;
     }
-    const base = effective.map((w) => Math.floor((n * w) / sum));
-    const assigned = base.reduce((a, b) => a + b, 0);
-    base[0] += n - assigned; // phần dư về designer đầu danh sách
-    return base;
+    return alloc;
   }
 
   /**
@@ -4991,7 +5004,8 @@ export class OrderService implements OnModuleInit {
    *   - có `factoryId` (đã map xưởng) & xưởng đó CÓ cấu hình designer
    *   - chưa ai ôm (`designerStatus='unassigned'`, `assignee` rỗng)
    *   - không hủy / giữ / xóa
-   * Phân bổ theo lô (floor + dư về đầu) cho các designer Active của xưởng.
+   * Phân bổ cân bằng tải thực tế theo trọng số (`allocateByLoad`) cho các
+   * designer Active của xưởng — đơn về người có (đơn chưa xong)/weight thấp nhất.
    */
   private async autoAssignAfterImport(orderIds: string[], ctx?: AuditContext): Promise<void> {
     try {
@@ -5040,6 +5054,21 @@ export class OrderService implements OnModuleInit {
         .lean();
       const validIds = new Set(activeUsers.map((u) => String(u._id)));
 
+      // Tải thực tế: số đơn CHƯA XONG mỗi designer đang giữ (kể cả gán tay,
+      // mọi xưởng) — để cân bằng khi chia, đặc biệt khi soát lẻ từng đơn (N=1).
+      const loadRows = await this.orderModel.aggregate<{ _id: string; count: number }>([
+        {
+          $match: {
+            assignee: { $in: Array.from(validIds) },
+            designerStatus: { $in: DESIGNER_ACTIVE_STATUSES },
+            cancelledAt: null,
+            deletedAt: { $exists: false },
+          },
+        },
+        { $group: { _id: '$assignee', count: { $sum: 1 } } },
+      ]);
+      const loadByDesigner = new Map(loadRows.map((r) => [String(r._id), r.count]));
+
       const groups = new Map<string, string[]>();
       for (const o of eligible) {
         const fid = String((o as unknown as { factoryId?: string }).factoryId);
@@ -5060,9 +5089,10 @@ export class OrderService implements OnModuleInit {
       for (const [fid, orderList] of groups) {
         const designers = (byFactory.get(fid) || []).filter((d) => validIds.has(d.designerId));
         if (!designers.length) continue;
-        const alloc = this.allocateByWeight(
+        const alloc = this.allocateByLoad(
           orderList.length,
           designers.map((d) => d.weight),
+          designers.map((d) => loadByDesigner.get(d.designerId) || 0),
         );
         let cursor = 0;
         for (let i = 0; i < designers.length; i++) {
