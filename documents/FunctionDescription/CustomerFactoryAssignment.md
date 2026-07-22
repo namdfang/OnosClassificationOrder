@@ -2,7 +2,7 @@
 
 > **File FE:** `apps/web/src/pages/settings/index.tsx` + `apps/web/src/components/settings/CustomerAssignmentConfig.tsx` + `apps/web/src/services/customer.ts` + `apps/web/src/services/customerAssignment.ts`
 > **File BE:** `apps/api/src/modules/customer/` (entity + repository + service + controller + module) + `apps/api/src/modules/customer-assignment/` (service + controller + module) + `apps/api/src/modules/order/order.service.ts` → hook trong `importOrders`
-> **Route:** `/settings` (gate quyền `role.manage`)
+> **Route:** `/adm/settings` (gate quyền `role.manage`)
 > **API:** `GET/POST /v1/customers`, `POST /v1/customers/sync`, `GET/PUT /v1/customer-assignment/config`
 
 ## 1. Overview
@@ -45,8 +45,12 @@ Chưa có bảng khách hàng sẵn → có nút **Sync** quét `orders` gom dis
 | GET | `/v1/customer-assignment/config` | `@Auth([Admin])` | Lấy cấu hình |
 | PUT | `/v1/customer-assignment/config` | `@Auth([Admin])` | Lưu (validate 1-khách-1-xưởng) |
 
-Collection `customers` (mới): `{ userSku, userEmail, source: 'sync'|'manual' }`,
-**unique index `{ userSku: 1, userEmail: 1 }`**.
+Collection `customers`: `{ userSku, userEmail, source: 'sync'|'manual'|'register', password, fullName, phone, status }`,
+**unique index `{ userSku: 1, userEmail: 1 }`**. Từ khi có Customer Portal
+(xem [`CustomerPortal.md`](CustomerPortal.md)), bảng này dùng CHUNG cho cả
+mục đích dedup gán xưởng VÀ tài khoản đăng nhập khách hàng — record tạo qua
+sync/thêm tay có `password=''` (chưa đăng ký), `userSku` không còn bắt buộc
+(khách tự đăng ký có thể chưa có lịch sử đơn hàng).
 
 Config lưu blob JSON trong `system_configs` (key `customer_assignment_config`,
 Redis-cache 1h). Shared DTO `packages/shared/dtos/customer.dto.ts` +

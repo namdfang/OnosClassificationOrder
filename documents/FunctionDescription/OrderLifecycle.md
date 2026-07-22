@@ -2,7 +2,7 @@
 
 > **File FE:** `apps/web/src/pages/home/LifecycleTab.tsx` (tab chi tiết trong `apps/web/src/pages/home/index.tsx`) + `apps/web/src/pages/home/LifecycleStrip.tsx` (strip gọn trên đầu Dashboard)
 > **File BE:** `apps/api/src/modules/order/order.service.ts` → `getLifecycleOverview()` + `getLifecycleTrack()`; `order.controller.ts` → `GET /v1/orders/lifecycle-overview` + `GET /v1/orders/lifecycle-track/:code`
-> **Route:** `/` (Dashboard) → strip luôn hiện trên đầu + tab `?tab=lifecycle`
+> **Route:** `/ffm/dashboard` → strip luôn hiện trên đầu + tab `?tab=lifecycle`
 > **API:** `GET /v1/orders/lifecycle-overview`, `GET /v1/orders/lifecycle-track/:code`
 
 ## 1. Overview

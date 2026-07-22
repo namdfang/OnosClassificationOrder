@@ -2,7 +2,7 @@
 
 > **File FE:** `apps/web/src/pages/products/index.tsx`
 > **File BE:** `apps/api/src/modules/product-config/`, `factory/`, `machine-type/`
-> **Route:** `/products`
+> **Route:** `/adm/products`
 > **API:** `/v1/product-configs`, `/v1/factories`, `/v1/machine-types`
 
 ---

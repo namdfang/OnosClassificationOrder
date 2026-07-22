@@ -3,6 +3,7 @@ import { JwtModule } from '@nestjs/jwt';
 import { MongooseModule } from '@nestjs/mongoose';
 import { PassportModule } from '@nestjs/passport';
 
+import { CustomerModule } from '@/modules/customer/customer.module';
 import { SystemConfigModule } from '@/modules/system-config/system-config.module';
 import { UserModule } from '@/modules/user/user.module';
 import { ApiConfigService } from '@/shared/services';
@@ -19,6 +20,7 @@ import { PublicStrategy } from './public.strategy';
 @Module({
   imports: [
     forwardRef(() => UserModule),
+    CustomerModule,
     SystemConfigModule,
     PassportModule.register({ defaultStrategy: 'jwt' }),
     JwtModule.registerAsync({

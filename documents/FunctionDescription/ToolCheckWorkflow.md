@@ -1,7 +1,7 @@
 # Soát tool — Lỗi "do Soát tool" + Dashboard Support — Function Description
 
 > **File FE:** `apps/web/src/pages/home/ToolCheckTab.tsx` (tab thứ 5 trong `apps/web/src/pages/home/index.tsx`, bên trái tab Designer), `apps/web/src/components/common/PipelineDailyOverview.tsx` (bảng "Tổng quan theo ngày" `lane='tool'`, xem `FulfillmentWorkflow.md §4.6`), `apps/web/src/services/designer.ts` → `toolCheckOverview`, `apps/web/src/pages/workshop-config/CategoryEditor.tsx` (nút chọn nguồn + badge), cells `ProductionErrorSelectCell`/`ErrorSourceCell`/`ColorBadgeSelectCell`/`SelectPopover` > **File BE:** `apps/api/src/modules/order/order.service.ts` (hook rework-back tool-check + hook `$addToSet toolCheckErrorNotes` trong `updateField('toolResultNote')` + backfill `onModuleInit`), `apps/api/src/modules/order/order.entity.ts` (field `toolCheckErrorNotes: string[]`), `apps/api/src/modules/order-log/order-log.repository.ts` → `aggregateToolCheckErrorNotes()`, `apps/api/src/modules/designer/designer-stats.service.ts` → `getToolCheckOverview()`, `designer-stats.controller.ts` → `GET /v1/designer/tool-check-overview`, `apps/api/src/modules/fulfillment/fulfillment-task.service.ts` (tab watching), `apps/api/src/modules/workshop-config/workshop-config.seed.ts` (seed "Thiếu file để in")
-> **Route:** `/` (Dashboard) → tab `?tab=tool-check` > **API:** `GET /v1/designer/tool-check-overview`
+> **Route:** `/ffm/dashboard` → tab `?tab=tool-check` > **API:** `GET /v1/designer/tool-check-overview`
 
 ## 1. Overview
 

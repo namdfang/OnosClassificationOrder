@@ -114,10 +114,18 @@ Mục đích:
 ```
 Extract token → Verify RS256 signature → Decode payload
     → Check type === ACCESS_TOKEN
-    → UserService.getUserById(userId)
-    → Check user.status !== Inactive
-    → Return user (attached to request)
+    → role === RoleType.Customer?
+        YES → CustomerService.getById(userId) (collection `customers`, KHÔNG phải `users`)
+              → gắn role ảo { name: RoleType.Customer } (CustomerEntity không có roleId)
+        NO  → UserService.getUserById(userId)
+    → Check status !== Inactive
+    → Return user/customer (attached to request) — RolesGuard/PermissionsGuard tái dùng
+      nguyên vẹn cho cả 2 vì object trả về đều có `_id` + `role.name`.
 ```
+
+Token của Customer Portal dùng CHUNG cơ chế JWT/Redis session này (cùng
+`AuthService.createAccessToken`), chỉ khác nguồn load user — xem
+[`FunctionDescription/CustomerPortal.md`](../FunctionDescription/CustomerPortal.md).
 
 ### 2.6 Logout Flow
 

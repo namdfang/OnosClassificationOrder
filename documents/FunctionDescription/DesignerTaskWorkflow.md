@@ -21,9 +21,9 @@
 >  - `designer-stats.{controller,service}.ts` — Leader dashboard
 >
 > **Route FE:**
->  - `/designer/team` (Leader/Admin)
->  - `/my-tasks` (Designer sub)
->  - `/dashboard?tab=designer` (Leader/Admin tab)
+>  - `/ffm/designer/team` (Leader/Admin)
+>  - `/ffm/my-tasks` (Designer sub)
+>  - `/ffm/dashboard?tab=designer` (Leader/Admin tab)
 >
 > **API chính:**
 >  - `POST /v1/designer/migrate-leader` (one-shot)

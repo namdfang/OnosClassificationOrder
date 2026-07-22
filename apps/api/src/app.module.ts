@@ -28,6 +28,7 @@ import { ActionModule } from './modules/actions/action.module';
 import { AmqpModule } from './modules/amqp/amqp.module';
 import { CustomerModule } from './modules/customer/customer.module';
 import { CustomerAssignmentModule } from './modules/customer-assignment/customer-assignment.module';
+import { CustomerPortalModule } from './modules/customer-portal/customer-portal.module';
 import { DepartmentModule } from './modules/departments/department.module';
 import { DesignerModule } from './modules/designer/designer.module';
 import { DesignerAssignmentModule } from './modules/designer-assignment/designer-assignment.module';
@@ -71,6 +72,7 @@ import { SharedModule } from './shared/shared.module';
     DesignerAssignmentModule,
     CustomerModule,
     CustomerAssignmentModule,
+    CustomerPortalModule,
     FulfillmentModule,
     TelegramNotificationModule,
     ScheduledReportsModule,

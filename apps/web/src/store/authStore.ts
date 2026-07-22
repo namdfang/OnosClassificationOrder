@@ -2,6 +2,8 @@ import type { User } from 'shared';
 import { create } from 'zustand';
 import { createJSONStorage, persist, type StateStorage } from 'zustand/middleware';
 
+import { PATHS } from '@/constants/paths';
+
 /**
  * Profile trả về từ BE getMe: User + virtual `role` đã populate
  * (name có thể là custom role nên để string thay vì RoleType).
@@ -86,7 +88,7 @@ export const useAuthStore = create<AuthStore>()(
         localStorage.removeItem('auth-store');
         sessionStorage.removeItem('auth-store');
 
-        window.location.href = '/login';
+        window.location.href = PATHS.LOGIN;
       },
       setProfile: (data) => set({ profile: data }),
       setLoading: (data) => set({ loading: data }),

@@ -1950,3 +1950,63 @@ export const ToolCheckOverviewResZod = ResZod.extend({
   }),
 });
 export class ToolCheckOverviewResDto extends createZodDto(extendApi(ToolCheckOverviewResZod)) {}
+
+// ─── Customer Portal — đặt đơn / xem đơn của chính khách hàng ─────
+// Đặt đơn CHỈ gồm thông tin cơ bản (KHÔNG có factory/machine/toolResult/
+// designer/fulfillment...) — các field sản xuất được default giống hệt
+// luồng import nội bộ (`OrderService.importOrders`), xem `CustomerOrderService`.
+export const PlaceCustomerOrderZod = z.object({
+  type: z.string().min(1),
+  color: z.string().max(200).optional(),
+  size: z.string().max(200).optional(),
+  mockupUrl: z.string().max(2000).optional(),
+  printMethod: z.string().max(200).optional(),
+  weight: z.number().nonnegative().optional(),
+  width: z.number().nonnegative().optional(),
+  height: z.number().nonnegative().optional(),
+  length: z.number().nonnegative().optional(),
+  quantity: z.number().int().positive().default(1),
+  designs: DesignFieldsZod.optional(),
+  referent: z.string().max(500).optional(),
+});
+export class PlaceCustomerOrderDto extends createZodDto(extendApi(PlaceCustomerOrderZod)) {}
+
+/** Thông tin đơn hàng thu gọn — CHỈ field cơ bản, ẩn toàn bộ field sản xuất nội bộ. */
+export const CustomerOrderSummaryZod = z.object({
+  _id: IDZod,
+  productionId: z.string(),
+  type: z.string().optional(),
+  color: z.string().optional(),
+  size: z.string().optional(),
+  quantity: z.number().optional(),
+  mockupUrl: z.string().optional(),
+  status: z.string().optional(),
+  orderAt: z.coerce.date().optional(),
+  cancelledAt: z.coerce.date().optional(),
+  cancelReason: z.string().optional(),
+  createdAt: z.coerce.date().optional(),
+});
+export type CustomerOrderSummary = z.infer<typeof CustomerOrderSummaryZod>;
+
+export const PlaceCustomerOrderResZod = ResZod.extend({ data: CustomerOrderSummaryZod });
+export class PlaceCustomerOrderResDto extends createZodDto(extendApi(PlaceCustomerOrderResZod)) {}
+
+export const GetCustomerOrdersZod = z.object({
+  page: z.coerce.number().int().positive().default(1),
+  limit: z.coerce.number().int().positive().max(100).default(20),
+});
+export class GetCustomerOrdersDto extends createZodDto(extendApi(GetCustomerOrdersZod)) {}
+
+export const GetCustomerOrdersResZod = ResZod.extend({
+  data: CustomerOrderSummaryZod.array(),
+  total: z.number().optional(),
+});
+export class GetCustomerOrdersResDto extends createZodDto(extendApi(GetCustomerOrdersResZod)) {}
+
+export const GetCustomerOrderTrackResZod = ResZod.extend({
+  data: z.object({
+    order: CustomerOrderSummaryZod,
+    track: LifecycleTrackZod,
+  }),
+});
+export class GetCustomerOrderTrackResDto extends createZodDto(extendApi(GetCustomerOrderTrackResZod)) {}

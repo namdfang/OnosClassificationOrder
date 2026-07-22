@@ -10,7 +10,7 @@
 > **Tab C — Đơn theo xưởng:** `apps/web/src/pages/home/OrderFactoryTab.tsx` + `apps/web/src/pages/home/exportOrders.ts` (XLSX builder)
 > **Tab D — Designer:** `apps/web/src/pages/home/DesignerStatsTab.tsx` (+ `DesignerDailyOverview.tsx`, `DesignerDrillPanel.tsx`, `DesignerAssignBacklog.tsx`, `TeamDailyMatrix.tsx`, `StatusBarCharts.tsx`) — Admin/Manager/Leader **+ Designer (sub)** (perm `page.designer_stats`)
 > **File BE:** `apps/api/src/modules/order/order.service.ts` → `getDashboard()`, `getStatusOverview()`, `getFactoryOverview()`, `exportOrders()`, `transferOrder()`, `bulkTransferOrders()` + `apps/api/src/modules/designer/designer-stats.service.ts` → `getPerformance()`, `getTimeline()`, `getErrorStats()`, `getTeamDailyBreakdown()`
-> **Route:** `/dashboard?tab=stats|status|factory|designer`
+> **Route:** `/ffm/dashboard?tab=stats|status|factory|designer`
 > **API:**
 >  - `GET /v1/orders/dashboard` (Tab A)
 >  - `GET /v1/orders/status-overview` (Tab B)

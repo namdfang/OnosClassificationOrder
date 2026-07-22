@@ -2,7 +2,7 @@
 
 > **File FE:** `apps/web/src/pages/settings/index.tsx` + `apps/web/src/components/settings/DesignerAssignmentConfig.tsx` + `apps/web/src/services/designerAssignment.ts`
 > **File BE:** `apps/api/src/modules/designer-assignment/` (service + controller + module) + `apps/api/src/modules/order/order.service.ts` → `autoAssignAfterImport()` + `allocateByWeight()` + hook `importRework`/`updateField`
-> **Route:** `/settings` (gate quyền `role.manage`)
+> **Route:** `/adm/settings` (gate quyền `role.manage`)
 > **API:** `GET/PUT /v1/designer-assignment/config`
 
 ## 1. Overview

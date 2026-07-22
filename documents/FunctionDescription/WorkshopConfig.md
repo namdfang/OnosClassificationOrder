@@ -4,7 +4,7 @@
 > **Store FE:** `apps/web/src/store/workshopConfigStore.ts`
 > **File BE:** `apps/api/src/modules/workshop-config/`
 > **Shared:** `packages/shared/dtos/workshop-config.dto.ts`, `packages/shared/enums/workshop-config-category.ts`
-> **Route:** `/workshop-config`
+> **Route:** `/ffm/workshop-config`
 > **API:** `/v1/workshop-config/*`
 
 ---

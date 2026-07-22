@@ -2,8 +2,11 @@
 
 > **File FE:** `apps/web/src/pages/login/index.tsx`, `apps/web/src/store/authStore.ts`
 > **File BE:** `apps/api/src/modules/auth/`, `user/`, `role/`, `custom-role/`, `permission/`, `departments/`
-> **Route:** `/login`
+> **Route:** `/adm/login`
 > **API:** `/v1/auth/*`
+>
+> Đây là auth cho **nhân viên** (staff). Khách hàng dùng hệ thống riêng —
+> `RoleType.Customer` + JWT branch trong `JwtStrategy` — xem [`CustomerPortal.md`](CustomerPortal.md).
 
 ---
 

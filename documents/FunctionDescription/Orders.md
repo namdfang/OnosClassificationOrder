@@ -7,7 +7,7 @@
 > **Workshop columns (shared with Dashboard Tab C):** `apps/web/src/components/orders/workshopTableConfig.tsx` (`WORKSHOP_COLS` + `WorkshopOrderRow` + `WorkshopRenderCtx`)
 > **Designer KPI panel (Admin/Leader):** `apps/web/src/pages/orders/DesignerSummaryPanel.tsx`
 > **File BE:** `apps/api/src/modules/order/`
-> **Route:** `/orders`
+> **Route:** `/ffm/orders`
 > **API:**
 >  - `GET /v1/orders` · `GET /v1/orders/:id` · `GET /v1/orders/grouped` · `GET /v1/orders/overview-list` · `GET /v1/orders/by-ids` · `GET /v1/orders/workshop-filters` · `GET /v1/orders/fulfillment-status-counts` · `GET /v1/orders/import-summary` · `GET /v1/orders/error-log`
 >  - `GET /v1/orders/export` (full-list, không phân trang — xem `Dashboard.md §10.3`)
@@ -653,12 +653,12 @@ Render tab tương ứng. User chỉ có 1 trong các quyền → 1 tab; có nhi
 
 #### 10.2a Compact grouped columns (`OrderTableWorkshop` + Dashboard `OrdersMiniTable`/`OrderFactoryTab` — giảm scroll ngang)
 
-`WORKSHOP_COLS` gốc có ~20 cột riêng lẻ → các bảng đơn (`/orders/workshop`, Dashboard tab Trạng thái + tab Xưởng) scroll ngang rất sâu. Logic gom nhóm sống trong **`workshopTableConfig.tsx`** (dùng chung, KHÔNG duplicate ở từng trang):
+`WORKSHOP_COLS` gốc có ~20 cột riêng lẻ → các bảng đơn (`/ffm/orders/workshop`, Dashboard tab Trạng thái + tab Xưởng) scroll ngang rất sâu. Logic gom nhóm sống trong **`workshopTableConfig.tsx`** (dùng chung, KHÔNG duplicate ở từng trang):
 - `BASE_GROUP_DEFS` + `SUPPORT_GROUP_ORDER` + `HEADLINE_KEYS` + `FIELD_LABELS` — định nghĩa group + field label.
 - `buildColGroups(visibleCols, roleName)` — build group đã resolve (lọc quyền + đổi thứ tự theo role) từ `visibleCols`.
 - `GroupCellContent` — component render nội dung 1 group cell (field xếp CHIỀU DỌC, tự thêm label field không có cột riêng), nhận `renderedByKey` (Map key→ReactNode đã render sẵn) + `extra` optional (chèn node cạnh 1 member, vd Badge combo cạnh `mockupTypeSize`).
 
-3 nơi dùng: `OrderTableWorkshop.tsx` (`/orders/workshop`, có thêm sticky + virtualization), `OrdersMiniTable.tsx` (Dashboard tab Trạng thái — Tab B), `OrderFactoryTab.tsx` (Dashboard tab Xưởng — Tab C, giữ nguyên cột "Xưởng (đang / gốc)" riêng TRƯỚC các group). `ErrorLogTab`/`PrintOrderTable` (không thuộc Dashboard) vẫn dùng layout cột phẳng như cũ.
+3 nơi dùng: `OrderTableWorkshop.tsx` (`/ffm/orders/workshop`, có thêm sticky + virtualization), `OrdersMiniTable.tsx` (Dashboard tab Trạng thái — Tab B), `OrderFactoryTab.tsx` (Dashboard tab Xưởng — Tab C, giữ nguyên cột "Xưởng (đang / gốc)" riêng TRƯỚC các group). `ErrorLogTab`/`PrintOrderTable` (không thuộc Dashboard) vẫn dùng layout cột phẳng như cũ.
 
 7 group hiển thị — mỗi group là 1 cột bảng nhưng bên trong xếp field CHIỀU DỌC (nhiều dòng) thay vì mỗi field 1 cột ngang:
 

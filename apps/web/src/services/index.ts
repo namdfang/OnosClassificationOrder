@@ -3,6 +3,7 @@ import { cache } from './cache';
 import { customRoles } from './custom-roles';
 import { customer } from './customer';
 import { customerAssignment } from './customerAssignment';
+import { customerAuth, customerOrder } from './customerPortal';
 import { departments } from './departments';
 import { designer } from './designer';
 import { designerAssignment } from './designerAssignment';
@@ -36,6 +37,8 @@ export const RepositoryRemote = {
   designerAssignment,
   customer,
   customerAssignment,
+  customerAuth,
+  customerOrder,
   fulfillment,
   reports,
 };
