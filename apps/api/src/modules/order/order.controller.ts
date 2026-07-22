@@ -25,6 +25,7 @@ import {
   FulfillmentStatusCountsResDto,
   GetCancelledOrdersDto,
   GetCancelledOrdersResDto,
+  GetDesignReviewOrderByIdResDto,
   GetErrorLogDto,
   GetErrorLogResDto,
   GetFactoryOverviewDto,
@@ -56,6 +57,7 @@ import {
   ImportReworkOrdersResDto,
   PreviewCuttingFilesDto,
   PreviewCuttingFilesResDto,
+  RecoverHeldOrdersResDto,
   ResDto,
   RoleType,
   SetDesignReviewResultDto,
@@ -576,6 +578,26 @@ export class OrderController {
     return this.onospodImportService.importFromOnosPod({}, { ip, userAgent });
   }
 
+  // Public — cron riêng, tách khỏi import-from-onospod/cron ở trên. Quét đơn
+  // đang GIỮ lý do "chờ khách cập nhật" (design/địa chỉ), tự lấy ngược từ
+  // OnosPod + mở giữ nếu khách đã cập nhật. Xem Orders.md §9c.
+  @Get('recover-held-from-onospod/cron')
+  @Auth([], [], { public: true })
+  @ApiOperation({
+    summary: '[Public] Cron: lấy ngược design/địa chỉ ship từ OnosPod cho đơn đang giữ chờ khách cập nhật',
+  })
+  @HttpCode(HttpStatus.OK)
+  @ApiOkResponse({ type: RecoverHeldOrdersResDto })
+  async recoverHeldFromOnospodCron(
+    @ClientIp() ip: string,
+    @UserAgent() userAgent: string,
+  ): Promise<RecoverHeldOrdersResDto> {
+    this.logger.info({
+      message: JSON.stringify({ method: 'GET', url: '/orders/recover-held-from-onospod/cron', ip, userAgent }),
+    });
+    return this.orderService.recoverHeldOrders({ ip, userAgent });
+  }
+
   // ─── Cutting File Mapping (post-import) ──────────────────────────
   // Permission: Support + Admin + Manager (theo confirm với user — gọn hơn
   // ORDER_WRITE_ROLES vì designer/fulfill không cần map file cutting).
@@ -835,9 +857,37 @@ export class OrderController {
         userAgent,
         from: dto.from,
         to: dto.to,
+        pid: dto.pid,
       }),
     });
     return this.orderService.getNextDesignReviewOrder(dto) as Promise<GetNextDesignReviewOrderResDto>;
+  }
+
+  // Public — bổ sung cho `design-review/next` (lấy đơn TIẾP THEO theo hàng
+  // đợi). Endpoint này lấy TRỰC TIẾP 1 đơn theo `productionId` để tool soát
+  // lại/tra cứu — KHÔNG áp filter hàng đợi, KHÔNG claim lease. Xem Orders.md §18.
+  @Get('design-review/by-production-id/:productionId')
+  @Auth([], [], { public: true })
+  @ApiOperation({ summary: '[Public] Lấy thông tin 1 đơn (kèm mockup) theo productionId để tool soát design' })
+  @HttpCode(HttpStatus.OK)
+  @ApiOkResponse({ type: GetDesignReviewOrderByIdResDto })
+  async getDesignReviewOrderByProductionId(
+    @Param('productionId') productionId: string,
+    @ClientIp() ip: string,
+    @UserAgent() userAgent: string,
+  ): Promise<GetDesignReviewOrderByIdResDto> {
+    this.logger.info({
+      message: JSON.stringify({
+        method: 'GET',
+        url: '/orders/design-review/by-production-id',
+        productionId,
+        ip,
+        userAgent,
+      }),
+    });
+    return this.orderService.getDesignReviewOrderByProductionId(
+      productionId,
+    ) as Promise<GetDesignReviewOrderByIdResDto>;
   }
 
   // Public — không cần JWT, để tool ngoài duyệt thiết kế lưu Kết quả Tool

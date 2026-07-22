@@ -14,6 +14,8 @@ import {
 import type { WorkshopAvailableFilters } from 'shared';
 import { useVirtualizer } from '@tanstack/react-virtual';
 
+import { PATHS } from '@/constants/paths';
+
 import { useWorkshopConfigStore } from '@/store/workshopConfigStore';
 
 import { RepositoryRemote } from '@/services';
@@ -50,6 +52,7 @@ import { useDebounce } from '@/hooks/useDebounce';
 import { useIsNoTool } from '@/hooks/useIsNoTool';
 import { usePendingDesignsPoll } from '@/hooks/usePendingDesignsPoll';
 import { usePermission } from '@/hooks/usePermission';
+import { useSidebarResetSignal } from '@/hooks/useSidebarResetSignal';
 
 import { DesignerSummaryPanel } from './DesignerSummaryPanel';
 
@@ -272,10 +275,20 @@ export function OrderTableWorkshop() {
     const s = Number(searchParams.get('wsize'));
     return Number.isFinite(s) && s > 0 ? s : DEFAULT_PAGE_SIZE;
   });
-  // Default = today (workshop dùng "đơn hôm nay" làm view chính). User vẫn
-  // có thể chọn range khác hoặc clear hẳn qua DateRangePicker.
-  const [createdFrom, setCreatedFrom] = useState(() => searchParams.get('wfrom') || todayISO());
-  const [createdTo, setCreatedTo] = useState(() => searchParams.get('wto') || todayISO());
+  // `?pid=<productionId>` — filter RIÊNG, tìm CHÍNH XÁC 1 đơn theo productionId
+  // (khác `search`/`wsearch` — match "contains" trên 5 field). Gửi xuống BE qua
+  // param `productionIds` (exact, case-insensitive — có sẵn, dùng chung với
+  // "Nhiều mã") thay vì `search`. Persist thật vào URL (không tự xóa) — F5/share
+  // link giữ nguyên. Set 1 lần lúc mount, sau đó là state bình thường như mọi
+  // filter khác (đổi qua chip "Mã đơn" hoặc `clearAllFilters`).
+  const [pid, setPid] = useState(() => searchParams.get('pid')?.trim() || '');
+
+  // Default = today (workshop dùng "đơn hôm nay" làm view chính), TRỪ khi có
+  // `pid` lúc mount (tìm chính xác 1 đơn, không giới hạn ngày — đơn có thể
+  // KHÔNG thuộc "hôm nay"). User vẫn có thể chọn range khác hoặc clear hẳn
+  // qua DateRangePicker.
+  const [createdFrom, setCreatedFrom] = useState(() => searchParams.get('wfrom') || (pid ? '' : todayISO()));
+  const [createdTo, setCreatedTo] = useState(() => searchParams.get('wto') || (pid ? '' : todayISO()));
   const [search, setSearch] = useState(() => searchParams.get('wsearch') || '');
   const debouncedSearch = useDebounce(search, 300);
   // Lọc bulk theo danh sách productionId (modal "Nhiều mã"). Transient — không
@@ -331,6 +344,7 @@ export function OrderTableWorkshop() {
     setSearchParams(
       (prev) => {
         const sp = new URLSearchParams(prev);
+        pid.trim() ? sp.set('pid', pid.trim()) : sp.delete('pid');
         search ? sp.set('wsearch', search) : sp.delete('wsearch');
         createdFrom ? sp.set('wfrom', createdFrom) : sp.delete('wfrom');
         createdTo ? sp.set('wto', createdTo) : sp.delete('wto');
@@ -353,6 +367,7 @@ export function OrderTableWorkshop() {
       { replace: true },
     );
   }, [
+    pid,
     search,
     createdFrom,
     createdTo,
@@ -394,7 +409,12 @@ export function OrderTableWorkshop() {
   const buildFilterParams = (): URLSearchParams => {
     const params = new URLSearchParams();
     if (debouncedSearch.trim()) params.set('search', debouncedSearch.trim());
-    if (bulkIds.length) params.set('productionIds', bulkIds.join(','));
+    // `pid` (tìm chính xác 1 đơn) ưu tiên hơn "Nhiều mã" nếu cả 2 cùng set —
+    // 2 filter dùng chung 1 param BE (`productionIds`, exact match) nên không
+    // kết hợp được cả 2 cùng lúc.
+    const pidTrimmed = pid.trim();
+    if (pidTrimmed) params.set('productionIds', pidTrimmed);
+    else if (bulkIds.length) params.set('productionIds', bulkIds.join(','));
     if (filterPrintStatus) params.set('printStatus', filterPrintStatus);
     if (filterToolResultNote) params.set('toolResultNote', filterToolResultNote);
     if (filterAssignee) params.set('assignee', filterAssignee);
@@ -430,8 +450,9 @@ export function OrderTableWorkshop() {
       // total = number of product types (server pagination unit).
       setTotal(res.data?.total || 0);
       // Default: every product section is collapsed. User clicks chevron or
-      // "Mở hết" to expand.
-      setCollapsedTypes(new Set(grouped.map((g) => g.type || '(không có tên)')));
+      // "Mở hết" to expand. TRỪ khi mở từ link `?pid=` — mở hết sẵn để thấy
+      // ngay đơn cần tìm, không phải tự bấm mở group.
+      setCollapsedTypes(pid.trim() ? new Set() : new Set(grouped.map((g) => g.type || '(không có tên)')));
     } catch (err) {
       handleAxiosError(err);
     }
@@ -455,6 +476,7 @@ export function OrderTableWorkshop() {
     page,
     pageSize,
     debouncedSearch,
+    pid,
     bulkIds,
     filterPrintStatus,
     filterToolResultNote,
@@ -924,6 +946,18 @@ export function OrderTableWorkshop() {
       },
     });
   }
+  if (pid.trim()) {
+    activeFilters.push({
+      key: 'pid',
+      label: 'Mã đơn',
+      display: pid.trim(),
+      color: FILTER_CHIP_COLORS.search,
+      onClear: () => {
+        setPid('');
+        setPage(1);
+      },
+    });
+  }
   if (bulkIds.length) {
     activeFilters.push({
       key: 'bulkIds',
@@ -976,6 +1010,7 @@ export function OrderTableWorkshop() {
 
   const clearAllFilters = () => {
     setSearch('');
+    setPid('');
     setBulkIds([]);
     setFilterHeld(false);
     setCreatedFrom(todayISO());
@@ -992,6 +1027,10 @@ export function OrderTableWorkshop() {
     setFilterUserSku('');
     setPage(1);
   };
+
+  // Click lại menu "Danh sách đơn" ở sidebar khi đang đứng đúng trang này →
+  // xóa hết filter (xem `useSidebarResetSignal`).
+  useSidebarResetSignal(PATHS.ORDERS_WORKSHOP, clearAllFilters);
 
   /**
    * Click cell trong summary panel → set filter list. userId='__none__' tương
@@ -1224,7 +1263,7 @@ export function OrderTableWorkshop() {
         {/* Table */}
         <div className="rounded-lg border border-border bg-card overflow-hidden">
           <div className="overflow-x-auto">
-            <Table className="table-fixed" style={{ width: totalTableWidth }}>
+            <Table className="table-fixed" style={{ width: totalTableWidth, minWidth: '100%' }}>
               <colgroup>
                 <col style={{ width: CHECKBOX_COL_W }} />
                 {colGroups.map((g) => (
@@ -1296,10 +1335,7 @@ export function OrderTableWorkshop() {
                         ref={rowVirtualizer.measureElement}
                         className="bg-muted/40 hover:bg-muted/50"
                       >
-                        <TableCell
-                          className="py-1.5 sticky left-0 z-10 bg-muted"
-                          onClick={(e) => e.stopPropagation()}
-                        >
+                        <TableCell className="py-1.5 sticky left-0 z-10 bg-muted" onClick={(e) => e.stopPropagation()}>
                           <input
                             type="checkbox"
                             checked={groupState === 'all'}

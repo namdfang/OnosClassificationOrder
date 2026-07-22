@@ -4,7 +4,7 @@
 
 > **File FE:** `apps/web/src/pages/orders/scan-error/index.tsx` (page) + `OrderErrorScanDialog.tsx` (modal gán lỗi) + `FulfillmentScanActionDialog.tsx` (modal hoàn thành/báo lỗi cho công nhân Fulfillment)
 > **File BE:** `apps/api/src/modules/order/order.controller.ts` + `order.service.ts → getByProductionId()`
-> **Route FE:** `/orders/scan-error`
+> **Route FE:** `/ffm/orders/scan-error`
 > **API:** `GET /v1/orders/by-production-id/:code`, `POST /v1/orders/:id/fulfillment-transition`
 
 ---

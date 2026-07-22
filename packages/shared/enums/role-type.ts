@@ -24,4 +24,8 @@ export enum RoleType {
   Fulfillment = 'Fulfillment',
 
   Referrer = 'Referrer',
+
+  // Tài khoản khách hàng (Customer Portal) — không phải nhân viên, không dùng
+  // hệ thống permissionCodes nội bộ. Xem `customer-portal` module.
+  Customer = 'Customer',
 }

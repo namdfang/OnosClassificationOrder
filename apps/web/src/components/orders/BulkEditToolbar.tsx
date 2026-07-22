@@ -13,7 +13,7 @@ import { Button } from '@/components/ui/button';
 import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Textarea } from '@/components/ui/textarea';
 
-import { handleAxiosError } from '@/utils';
+import { cn, handleAxiosError } from '@/utils';
 import { canUserHold } from '@/utils/orderActions';
 
 import { usePermission } from '@/hooks/usePermission';
@@ -21,6 +21,7 @@ import { buildDetailOnlyWorkbook, downloadWorkbook, type ExportableOrder } from 
 import { LucideIcon } from '@/pages/workshop-config/IconPicker';
 
 import { AssignDesignerDialog } from './AssignDesignerDialog';
+import { HOLD_REASON_PRESETS } from './HoldOrderDialog';
 
 const FIELD_TO_CATEGORY: Record<OrderWorkshopField, WorkshopConfigCategory | null> = {
   printStatus: 'print_status' as WorkshopConfigCategory,
@@ -290,6 +291,26 @@ export function BulkEditToolbar({ selectedIds, onClear, onApplied }: Props) {
           </DialogHeader>
           <div className="space-y-1.5">
             <label className="text-xs font-medium text-foreground">Lý do giữ (không bắt buộc)</label>
+            <div className="flex flex-wrap gap-1.5">
+              {HOLD_REASON_PRESETS.map((preset) => {
+                const active = holdReason === preset;
+                return (
+                  <button
+                    key={preset}
+                    type="button"
+                    onClick={() => setHoldReason(active ? '' : preset)}
+                    className={cn(
+                      'px-2.5 py-1 rounded-full border text-xs transition-colors',
+                      active
+                        ? 'bg-primary border-primary text-primary-foreground'
+                        : 'bg-background border-border text-muted-foreground hover:border-primary/50 hover:text-foreground',
+                    )}
+                  >
+                    {preset}
+                  </button>
+                );
+              })}
+            </div>
             <Textarea
               value={holdReason}
               onChange={(e) => setHoldReason(e.target.value.slice(0, 200))}

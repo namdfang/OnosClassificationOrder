@@ -1,9 +1,18 @@
-import { BadRequestException, Injectable, NotFoundException } from '@nestjs/common';
+import {
+  BadRequestException,
+  ConflictException,
+  Injectable,
+  UnauthorizedException,
+  NotFoundException,
+} from '@nestjs/common';
 import { InjectModel } from '@nestjs/mongoose';
+import { generateHash, validateHash } from 'core';
 import { Model } from 'mongoose';
 import type {
   CreateCustomerDto,
   Customer,
+  CustomerLoginDto,
+  CustomerRegisterDto,
   GetCustomersDto,
   GetCustomersResDto,
   ImportCustomerTiersDto,
@@ -11,12 +20,21 @@ import type {
   SyncCustomersResDto,
   UpdateCustomerTierDto,
 } from 'shared';
+import { Status } from 'shared';
 
 import { OrderEntity } from '../order/order.entity';
+import type { CustomerDocument } from './customer.entity';
 import { CustomerEntity } from './customer.entity';
 
 function escapeRegex(s: string): string {
   return s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+}
+
+/** Không bao giờ trả `password` (hash) ra ngoài API — kể cả cho chính khách hàng đó. */
+export function toSafeCustomer(doc: CustomerDocument): Customer {
+  const obj = doc.toObject() as Record<string, unknown>;
+  delete obj.password;
+  return obj as unknown as Customer;
 }
 
 @Injectable()
@@ -32,11 +50,7 @@ export class CustomerService {
       const rx = { $regex: escapeRegex(dto.search.trim()), $options: 'i' };
       filter.$or = [{ userSku: rx }, { userEmail: rx }];
     }
-    const data = await this.customerModel
-      .find(filter)
-      .sort({ userSku: 1 })
-      .lean()
-      .exec();
+    const data = await this.customerModel.find(filter).select('-password').sort({ userSku: 1 }).lean().exec();
     return { success: true, data: data as unknown as Customer[], total: data.length };
   }
 
@@ -46,8 +60,10 @@ export class CustomerService {
     if (!userSku) throw new BadRequestException('User SKU không được để trống');
     const existing = await this.customerModel.findOne({ userSku, userEmail });
     if (existing) throw new BadRequestException('Khách hàng (SKU + email) đã tồn tại');
-    const created = await this.customerModel.create({ userSku, userEmail, source: 'manual' });
-    return created.toObject() as unknown as Customer;
+    // password='' — record chưa từng đăng ký qua Customer Portal, chưa đăng
+    // nhập được cho tới khi khách tự đăng ký (claim) theo (userSku, userEmail).
+    const created = await this.customerModel.create({ userSku, userEmail, source: 'manual', password: '' });
+    return toSafeCustomer(created);
   }
 
   /**
@@ -78,6 +94,9 @@ export class CustomerService {
                 userSku: p._id.userSku,
                 userEmail: p._id.userEmail || '',
                 source: 'sync',
+                // Record mới tạo qua sync KHÔNG có mật khẩu — chỉ là "chỗ giữ
+                // sẵn" cho khách, chưa đăng nhập được cho tới khi tự đăng ký.
+                password: '',
               },
             },
             upsert: true,
@@ -96,9 +115,7 @@ export class CustomerService {
   }
 
   async updateTier(id: string, dto: UpdateCustomerTierDto): Promise<Customer> {
-    const updated = await this.customerModel
-      .findByIdAndUpdate(id, { $set: { tier: dto.tier } }, { new: true })
-      .lean();
+    const updated = await this.customerModel.findByIdAndUpdate(id, { $set: { tier: dto.tier } }, { new: true }).lean();
     if (!updated) throw new NotFoundException('Không tìm thấy khách hàng');
     return updated as unknown as Customer;
   }
@@ -151,5 +168,66 @@ export class CustomerService {
       updatedCustomers = res.modifiedCount ?? 0;
     }
     return { success: true, data: { matchedSkus, updatedCustomers, skippedSkus } };
+  }
+  /**
+   * Đăng ký Customer Portal. Nếu đã có record (sync/thêm tay) khớp đúng
+   * (userSku, userEmail) và CHƯA đăng ký (`password=''`) → "nhận" (claim) lại
+   * record đó thay vì tạo trùng. Nếu record đã có password → tài khoản đã tồn
+   * tại, từ chối đăng ký lại.
+   */
+  async register(dto: CustomerRegisterDto): Promise<Customer> {
+    const userEmail = dto.userEmail.trim().toLowerCase();
+    const userSku = (dto.userSku || '').trim();
+    const passwordHash = generateHash(dto.password);
+
+    const existing = await this.customerModel.findOne({ userSku, userEmail });
+    if (existing) {
+      if (existing.password) {
+        throw new ConflictException('Email này đã được đăng ký');
+      }
+      const claimed = await this.customerModel.findOneAndUpdate(
+        { _id: existing._id },
+        {
+          password: passwordHash,
+          fullName: dto.fullName?.trim() || existing.fullName,
+          phone: dto.phone?.trim() || existing.phone,
+          status: Status.Active,
+        },
+        { new: true },
+      );
+      return toSafeCustomer(claimed!);
+    }
+
+    const created = await this.customerModel.create({
+      userSku,
+      userEmail,
+      source: 'register',
+      password: passwordHash,
+      fullName: dto.fullName?.trim() || '',
+      phone: dto.phone?.trim() || '',
+      status: Status.Active,
+    });
+    return toSafeCustomer(created);
+  }
+
+  /** Xác thực đăng nhập Customer Portal — khớp email (case-insensitive) + password đã set. */
+  async validateLogin(dto: CustomerLoginDto): Promise<CustomerDocument> {
+    const userEmail = dto.userEmail.trim().toLowerCase();
+    const candidates = await this.customerModel.find({ userEmail, password: { $ne: '' } });
+
+    for (const candidate of candidates) {
+      if (await validateHash(dto.password, candidate.password)) {
+        if (candidate.status === Status.Inactive) {
+          throw new UnauthorizedException('Tài khoản đã bị khoá, vui lòng liên hệ hỗ trợ');
+        }
+        return candidate;
+      }
+    }
+
+    throw new UnauthorizedException('Email hoặc mật khẩu không chính xác');
+  }
+
+  async getById(id: string): Promise<CustomerDocument | null> {
+    return this.customerModel.findById(id);
   }
 }

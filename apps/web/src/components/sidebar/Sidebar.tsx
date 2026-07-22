@@ -40,6 +40,7 @@ import { PATHS } from '../../constants/paths';
 import { useIsMobile } from '../../hooks/useMediaQuery';
 import { RepositoryRemote } from '../../services';
 import { useAuthStore } from '../../store/authStore';
+import { useSidebarResetStore } from '../../store/sidebarResetStore';
 import { handleAxiosError } from '../../utils';
 
 interface NavChild {
@@ -79,10 +80,30 @@ const NAV_GROUPS: NavGroup[] = [
         icon: <LayoutGrid size={17} />,
         perm: 'page.dashboard',
         children: [
-          { key: 'dash-factory', label: 'Đơn hàng theo xưởng', to: `${PATHS.HOME}?tab=factory`, icon: <Factory size={14} /> },
-          { key: 'dash-stats', label: 'Thống kê đơn & sản phẩm', to: `${PATHS.HOME}?tab=stats`, icon: <BarChart3 size={14} /> },
-          { key: 'dash-status', label: 'Tình trạng đơn hàng', to: `${PATHS.HOME}?tab=status`, icon: <ClipboardList size={14} /> },
-          { key: 'dash-lifecycle', label: 'Vòng đời đơn', to: `${PATHS.HOME}?tab=lifecycle`, icon: <Workflow size={14} /> },
+          {
+            key: 'dash-factory',
+            label: 'Đơn hàng theo xưởng',
+            to: `${PATHS.HOME}?tab=factory`,
+            icon: <Factory size={14} />,
+          },
+          {
+            key: 'dash-stats',
+            label: 'Thống kê đơn & sản phẩm',
+            to: `${PATHS.HOME}?tab=stats`,
+            icon: <BarChart3 size={14} />,
+          },
+          {
+            key: 'dash-status',
+            label: 'Tình trạng đơn hàng',
+            to: `${PATHS.HOME}?tab=status`,
+            icon: <ClipboardList size={14} />,
+          },
+          {
+            key: 'dash-lifecycle',
+            label: 'Vòng đời đơn',
+            to: `${PATHS.HOME}?tab=lifecycle`,
+            icon: <Workflow size={14} />,
+          },
           {
             key: 'dash-tool-check',
             label: 'Soát tool',
@@ -304,9 +325,15 @@ function isLinkActive(linkPath: string, currentPath: string, currentSearch: stri
 function SidebarLeaf({ item, collapsed, level = 0 }: { item: NavChild; collapsed: boolean; level?: number }) {
   const location = useLocation();
   const active = isLinkActive(item.to, location.pathname, location.search);
+  const requestReset = useSidebarResetStore((s) => s.requestReset);
   return (
     <Link
       to={item.to}
+      // Click lại menu ĐANG active → Router coi là no-op (không điều hướng),
+      // nên phát tín hiệu riêng để trang tự xóa filter (xem `useSidebarResetSignal`).
+      onClick={() => {
+        if (active) requestReset(item.to);
+      }}
       title={collapsed ? item.label : undefined}
       className={cn(
         'flex items-center gap-2.5 px-3 py-2 rounded-md text-sm transition-colors',

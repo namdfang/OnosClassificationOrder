@@ -1,8 +1,6 @@
 # Auto-gán Designer theo xưởng — Function Description
 
-> **File FE:** `apps/web/src/pages/settings/index.tsx` + `apps/web/src/components/settings/DesignerAssignmentConfig.tsx` + `apps/web/src/services/designerAssignment.ts`
-> **File BE:** `apps/api/src/modules/designer-assignment/` (service + controller + module) + `apps/api/src/modules/order/order.service.ts` → `autoAssignAfterImport()` + `allocateByLoad()` + hook `importRework`/`updateField`
-> **Route:** `/settings` (gate quyền `role.manage`)
+> **File FE:** `apps/web/src/pages/settings/index.tsx` + `apps/web/src/components/settings/DesignerAssignmentConfig.tsx` + `apps/web/src/services/designerAssignment.ts` > **File BE:** `apps/api/src/modules/designer-assignment/` (service + controller + module) + `apps/api/src/modules/order/order.service.ts` → `autoAssignAfterImport()` + `allocateByWeight()` + hook `importRework`/`updateField` > **Route:** `/adm/settings` (gate quyền `role.manage`)
 > **API:** `GET/PUT /v1/designer-assignment/config`
 
 ## 1. Overview
@@ -41,10 +39,10 @@ designer của xưởng đó theo tỉ lệ đã cấu hình, **không cần gá
 
 ## 3. API / Schema
 
-| Method | Path | Auth | Mô tả |
-|---|---|---|---|
-| GET | `/v1/designer-assignment/config` | `@Auth([Admin])` | Lấy cấu hình |
-| PUT | `/v1/designer-assignment/config` | `@Auth([Admin])` | Lưu (validate 1-designer-1-xưởng) |
+| Method | Path                             | Auth             | Mô tả                             |
+| ------ | -------------------------------- | ---------------- | --------------------------------- |
+| GET    | `/v1/designer-assignment/config` | `@Auth([Admin])` | Lấy cấu hình                      |
+| PUT    | `/v1/designer-assignment/config` | `@Auth([Admin])` | Lưu (validate 1-designer-1-xưởng) |
 
 Lưu blob JSON trong collection `system_configs` (key `designer_assignment_config`,
 Redis-cache 1h qua `SystemConfigService`). Shared DTO
@@ -65,10 +63,11 @@ Constant `DESIGNER_ASSIGNMENT_CONFIG_KEY = 'designer_assignment_config'`.
 ## 4. UI Components
 
 `DesignerAssignmentConfig.tsx`:
+
 - Mount: load `factory.getFactories()` + `designer.listTeam('1')` (Status.Active) +
   `designerAssignment.getConfig()`.
 - Mỗi xưởng 1 card: danh sách designer (tên + ô trọng số + **% quy đổi** + nút xóa)
-  + dropdown "Thêm designer".
+  - dropdown "Thêm designer".
 - **Chặn 1-designer-nhiều-xưởng:** designer đã ở xưởng khác hiển thị `disabled` +
   ghi chú "(đã ở {xưởng})" trong dropdown.
 - Nút **Lưu** → `saveConfig` (chỉ gửi xưởng có ≥ 1 designer).
@@ -76,11 +75,13 @@ Constant `DESIGNER_ASSIGNMENT_CONFIG_KEY = 'designer_assignment_config'`.
 ## 5. Backend logic
 
 ### 5.1 `DesignerAssignmentService.saveConfig(dto)`
+
 - Validate: 1 `designerId` không xuất hiện ở ≥ 2 xưởng (và không lặp trong cùng
   xưởng) → `BadRequestException`. Không kiểm tra tổng % .
 - `SystemConfigService.set(KEY, { ...dto, updatedAt })`.
 
 ### 5.2 `OrderService.autoAssignAfterImport(orderIds, ctx)`
+
 - Đọc config; nếu rỗng → return. Map `factoryId → designers[]`.
 - **Xác minh ứng viên trên DB** (authoritative, không tin state truyền vào):
   `designerStatus='unassigned'` & `assignee ∈ [null,'']` & `factoryId ∈ configured`
@@ -93,10 +94,11 @@ Constant `DESIGNER_ASSIGNMENT_CONFIG_KEY = 'designer_assignment_config'`.
   gán tay, mọi xưởng.
 - Nhóm ứng viên theo `factoryId` → `allocateByLoad(N, weights, loads)` → cắt
   orderId → mỗi designer 1 `updateMany({_id∈slice, designerStatus:'unassigned'},
-  {$set:...})` (guard `unassigned` chống race).
+{$set:...})` (guard `unassigned` chống race).
 - `orderLogService.writeMany` (field `assignee`, after=designerId) + `invalidateListCache`.
 
 ### 5.3 `OrderService.allocateByLoad(n, weights, loads)`
+
 Cân bằng tải theo trọng số (weighted least-loaded): từng đơn gán cho designer có
 tải quy đổi `(load + đã chia trong lô + 1) / weight` **thấp nhất** (tie → người
 đứng trước). Nhờ đọc tải từ DB nên **soát lẻ từng đơn (N=1) vẫn ra đúng tỉ lệ về
@@ -106,6 +108,7 @@ về người đứng đầu danh sách). Σw = 0 → coi mọi trọng số = 1
 trọng số 0/âm khi có người khác > 0 → người đó không nhận đơn.
 
 ## 6. Performance notes
+
 - Cấu hình cache Redis 1h → đọc gần như free ở hook.
 - Engine: 1 `find` (ứng viên) + 1 `find` (designer Active) + 1 `aggregate` (tải
   thực tế, group theo `assignee`) + K `updateMany` (K = số designer có phần > 0).
@@ -113,6 +116,7 @@ trọng số 0/âm khi có người khác > 0 → người đó không nhận đ
 - Guard `designerStatus:'unassigned'` trong `updateMany` → không đè đơn đã có người.
 
 ## 7. Permissions
+
 - Cấu hình: `@Auth([Admin])` (FE gate `role.manage`).
 - Auto-gán chạy server-side theo actor của import/edit (ghi log `orderLog` field
   `assignee`).

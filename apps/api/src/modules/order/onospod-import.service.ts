@@ -686,13 +686,20 @@ export class OnospodImportService {
           headers: {
             Authorization: `Bearer ${config.bearerToken}`,
             'Content-Type': 'application/json',
+            // Gateway OnosPod (qc.onospod.com lẫn api.onospod.com) chặn 403 nếu
+            // THIẾU header `origin` — verify bằng test gọi thật 2026-07-23, xem
+            // comment `ONOSPOD_ORIGIN` ở `onospod-order-lookup.service.ts`.
+            // KHÔNG liên quan token/password dù message dễ gây nhầm.
+            Origin: 'https://qc.onospod.com',
+            Referer: 'https://qc.onospod.com/',
           },
           timeout: 30_000,
         },
       );
     } catch (err) {
+      const status = axios.isAxiosError(err) ? err.response?.status : undefined;
       const message = axios.isAxiosError(err) ? err.message : 'Unknown error';
-      throw new BadRequestException(`Gọi OnosPod (page ${page}) thất bại: ${message}`);
+      throw new BadRequestException(`Gọi OnosPod (page ${page}) thất bại: ${message}${status ? ` (HTTP ${status})` : ''}`);
     }
 
     const gqlErrors = res.data?.errors;

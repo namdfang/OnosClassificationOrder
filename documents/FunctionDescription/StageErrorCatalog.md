@@ -2,7 +2,7 @@
 
 > **File FE:** `apps/web/src/pages/orders/stage-errors/index.tsx` (trang danh mục + in QR) + `apps/web/src/utils/scanCodes.ts` (parse mã / beep / resolve đích) + `apps/web/src/pages/orders/scan-error/{index,FulfillmentScanActionDialog,OrderErrorScanDialog}.tsx` (luồng quét 2 bước)
 > **File BE:** `apps/api/src/modules/workshop-config/` (entity + service + controller — endpoints `stage-errors`)
-> **Route:** `/orders/stage-errors`
+> **Route:** `/ffm/orders/stage-errors`
 > **API:** `GET|POST /v1/workshop-config/stage-errors`, `PATCH /v1/workshop-config/stage-errors/:id`
 
 ## 1. Overview
@@ -18,7 +18,7 @@ Mỗi công đoạn có **danh mục lỗi riêng** do chính công nhân công 
 
 ## 2. Luồng hoạt động
 
-### 2.1 Quản lý danh mục (`/orders/stage-errors`, perm `page.stage_errors`)
+### 2.1 Quản lý danh mục (`/ffm/orders/stage-errors`, perm `page.stage_errors`)
 
 - Công nhân Fulfillment: **khóa vào công đoạn của mình** (`profile.fulfillmentStage`); Admin/Manager: chọn 1 trong 6 stage.
 - Thêm lỗi: nhập tên + chọn đích đẩy về (chip: Soát tool / Designer / các stage trước). Code BE **tự sinh** `se-<stage>-<n>`.
@@ -27,7 +27,7 @@ Mỗi công đoạn có **danh mục lỗi riêng** do chính công nhân công 
   - **"In (n)"**: `window.print()` sheet A4 gồm mã `OK` chung + QR các lỗi ĐÃ CHỌN (visibility-trick `@media print` + container off-screen `#stage-qr-sheet`).
   - **"Xuất PDF (n)"**: **trang ĐẦU luôn là nhãn "✔ HOÀN THÀNH"** (`SCAN_OK_CODE`, canvas ẩn `#qr-canvas-ok`, `drawOkLabel()` — mirror card OK đứng đầu sheet in), sau đó mỗi lỗi đã chọn = **1 trang A8 (52×74mm)** — nhãn vẽ trên canvas qua helper chung `drawA8Label(qrCanvasId, title, subtitle, code)` (viền + QR 660px từ `QRCodeCanvas` ẩn 512px + tiêu đề bold wrap ≤3 dòng + phụ đề + code mono) rồi `addImage` nguyên trang vào `jsPDF` (né vấn đề font tiếng Việt của jsPDF; lib import lazy). File `qr-loi-<stage>.pdf`.
 
-### 2.2 Quét 2 bước (`/orders/scan-error`)
+### 2.2 Quét 2 bước (`/ffm/orders/scan-error`)
 
 - Input chính parse thêm tiền tố qua `parseScanCode()`: quét `OK`/`E-…` khi **chưa** có đơn → beep lỗi + toast "Hãy quét mã ĐƠN trước".
 - Đơn tìm thấy → beep 1 tiếng (`beepScan`) + mở dialog như cũ. **Dialog mở vẫn bắt được máy quét**: buffer keystroke ở `onKeyDown` của DialogContent (bỏ qua khi focus trong input/textarea; ký tự in được `preventDefault` để không kích hoạt button; buffer reset nếu ngắt > 600ms — phân biệt máy quét gõ nhanh với người gõ tay).
@@ -35,7 +35,7 @@ Mỗi công đoạn có **danh mục lỗi riêng** do chính công nhân công 
   - Trong `FulfillmentScanActionDialog` (công nhân có stage): quét `OK` (hoặc Enter tay) → hoàn thành như cũ (`start`+`complete`). Quét `E-<code>` lần 1 → **validate mã thuộc danh mục CÔNG ĐOẠN CỦA USER** (`myStageErrors`, sai → beep + "không thuộc công đoạn X") → **KHÔNG submit**, gọi `onScanError(code)` → page chuyển sang `OrderErrorScanDialog` với `initialCode` chọn sẵn. Quét `N-…` → thay đơn.
   - Trong `OrderErrorScanDialog`: lỗi đang chọn (`code`) + quét `E-` → **cùng mã → ghi nhận** (`submitError`); **khác mã (hợp lệ trong danh mục công đoạn ngữ cảnh) → đổi lựa chọn** + beep 1 tiếng + toast nhắc; mã ngoài danh mục → từ chối. **Enter tay** (buffer rỗng, không đứng trên button) → ghi nhận lỗi đang chọn. Giữa 2 lần quét user có "1 nhịp" gõ mô tả lỗi vào textarea.
   - **Burst-detector textarea note**: máy quét gõ mã vào note khi con trỏ đang trong ô mô tả → chuỗi ≥4 ký tự toàn gap <100ms kết thúc Enter + parse ra tiền tố hợp lệ → tự cắt khỏi note + xử lý như mã quét (Enter gõ tay thường = xuống dòng bình thường).
-- `OrderErrorScanDialog` (admin/support hoặc chế độ Báo lỗi): **form chỉ hiển thị danh mục lỗi của công đoạn ngữ cảnh** (stage của user, fallback stage hiện tại của đơn); chưa có lỗi → link sang `/orders/stage-errors`. Chọn lỗi → nguồn + đích đẩy về **tự suy từ config, read-only** (box amber kèm hướng dẫn xác nhận; đích không hợp lệ → box đỏ + disable submit). `OK` bị từ chối (chỉ dành cho công nhân stage); Cmd/Ctrl+Enter submit tay giữ nguyên.
+- `OrderErrorScanDialog` (admin/support hoặc chế độ Báo lỗi): **form chỉ hiển thị danh mục lỗi của công đoạn ngữ cảnh** (stage của user, fallback stage hiện tại của đơn); chưa có lỗi → link sang `/ffm/orders/stage-errors`. Chọn lỗi → nguồn + đích đẩy về **tự suy từ config, read-only** (box amber kèm hướng dẫn xác nhận; đích không hợp lệ → box đỏ + disable submit). `OK` bị từ chối (chỉ dành cho công nhân stage); Cmd/Ctrl+Enter submit tay giữ nguyên.
 - Mọi kết quả có **beep WebAudio** (không cần file asset): `beepScan` 1 tone = bắt đơn, `beepSuccess` 2 tone lên = xong, `beepError` buzz trầm = thất bại/mã sai.
 
 ### 2.3 Resolve đích đẩy về (`resolveErrorScan` — `utils/scanCodes.ts`)
@@ -73,7 +73,7 @@ Format mã quét (`utils/scanCodes.ts`): đơn `N-…` (có sẵn) · hoàn thà
 ## 4. UI Components
 
 - **`pages/orders/stage-errors/index.tsx`**: header + nút In bảng QR; chọn stage (khóa với công nhân); form thêm (Input tên + `TargetChip`); list row = QR 64px + tên + code mono + badge "Đẩy về X" + sửa inline / ẩn-hiện; sheet in `#stage-qr-sheet` (QR 140px, OK card viền đậm).
-- **`pages/orders/scan-error/ScanGuide.tsx`**: `GuideStep` (số bước + icon + title `text-lg` + desc `text-base`, 4 tone màu) + `GuideZone` (khung VÙNG viền đậm 2px + tiêu đề UPPERCASE + slot `action` góc phải) — hướng dẫn quét CHỮ TO **chia vùng** trong CẢ 2 modal: `FulfillmentScanActionDialog` task-của-mình = vùng "✔ Hoàn thành" (quét OK) + vùng "⚠ Báo lỗi — quét 2 lần" (2 bước + **link "Thêm lỗi ở đây"** → `/orders/stage-errors`); đơn-xa = vùng "Báo lỗi đơn này" (+link) + vùng "Quét tiếp". `OrderErrorScanDialog` = 1 vùng "Cách báo lỗi — quét 2 lần" (3 bước + link thêm lỗi) đầu cột phải.
+- **`pages/orders/scan-error/ScanGuide.tsx`**: `GuideStep` (số bước + icon + title `text-lg` + desc `text-base`, 4 tone màu) + `GuideZone` (khung VÙNG viền đậm 2px + tiêu đề UPPERCASE + slot `action` góc phải) — hướng dẫn quét CHỮ TO **chia vùng** trong CẢ 2 modal: `FulfillmentScanActionDialog` task-của-mình = vùng "✔ Hoàn thành" (quét OK) + vùng "⚠ Báo lỗi — quét 2 lần" (2 bước + **link "Thêm lỗi ở đây"** → `/ffm/orders/stage-errors`); đơn-xa = vùng "Báo lỗi đơn này" (+link) + vùng "Quét tiếp". `OrderErrorScanDialog` = 1 vùng "Cách báo lỗi — quét 2 lần" (3 bước + link thêm lỗi) đầu cột phải.
 - **Sidebar**: entry "Danh mục lỗi công đoạn" (icon `QrCode`) trong group Quản lý đơn, perm `page.stage_errors`.
 - Sau mỗi mutation: refetch list + `useWorkshopConfigStore.load(true)` để luồng quét resolve được mã mới ngay.
 
@@ -119,6 +119,6 @@ Luồng quét KHÔNG thêm endpoint order nào — tái dùng `POST /orders/:id/
 
 ## 9. Lịch sử thay đổi
 
-- **2026-07-21** — Initial: entity + DTOs (`stage`/`reworkTarget`), 3 endpoint stage-errors, trang `/orders/stage-errors` + in QR, luồng quét 2 bước (OK / E- / N- trong dialog), beep WebAudio, perm `page.stage_errors` (preset Fulfillment).
+- **2026-07-21** — Initial: entity + DTOs (`stage`/`reworkTarget`), 3 endpoint stage-errors, trang `/ffm/orders/stage-errors` + in QR, luồng quét 2 bước (OK / E- / N- trong dialog), beep WebAudio, perm `page.stage_errors` (preset Fulfillment).
 - **2026-07-21 (update)** — `OrderErrorScanDialog` viết lại: mã lỗi chỉ theo danh mục công đoạn ngữ cảnh + link thêm lỗi khi rỗng; nguồn/đích read-only theo config (bỏ chọn tay); bỏ lỗi `other` khỏi luồng quét; note luôn optional.
 - **2026-07-21 (update 2)** — Luồng **xác nhận 2 lần quét**: quét lỗi lần 1 = chọn (validate thuộc công đoạn người quét, handoff `onScanError` → `initialCode`), lần 2 cùng mã / Enter = ghi nhận, mã khác = đổi lựa chọn; dừng 1 nhịp nhập mô tả giữa 2 lần; burst-detector cho textarea note; `FulfillmentScanActionDialog` bỏ submit lỗi trực tiếp (bỏ prop `onErrorSaved`, thêm `onScanError`).

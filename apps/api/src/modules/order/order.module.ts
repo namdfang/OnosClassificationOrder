@@ -16,6 +16,7 @@ import { UserEntity, UserSchema } from '../user/user.entity';
 import { WorkshopConfigModule } from '../workshop-config/workshop-config.module';
 import { DriveFileNameService } from './drive-file-name.service';
 import { OnospodImportService } from './onospod-import.service';
+import { OnospodOrderLookupService } from './onospod-order-lookup.service';
 import { OrderController } from './order.controller';
 import { OrderEntity, OrderSchema } from './order.entity';
 import { OrderRepository } from './order.repository';
@@ -40,7 +41,14 @@ import { OrderService } from './order.service';
     CustomerAssignmentModule,
   ],
   controllers: [OrderController],
-  providers: [OrderService, OrderRepository, RoleRepository, DriveFileNameService, OnospodImportService],
+  providers: [
+    OrderService,
+    OrderRepository,
+    RoleRepository,
+    DriveFileNameService,
+    OnospodImportService,
+    OnospodOrderLookupService,
+  ],
   exports: [OrderService],
 })
 export class OrderModule {}

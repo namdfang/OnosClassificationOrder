@@ -7,7 +7,7 @@
 > **Workshop columns (shared with Dashboard Tab C):** `apps/web/src/components/orders/workshopTableConfig.tsx` (`WORKSHOP_COLS` + `WorkshopOrderRow` + `WorkshopRenderCtx`)
 > **Designer KPI panel (Admin/Leader):** `apps/web/src/pages/orders/DesignerSummaryPanel.tsx`
 > **File BE:** `apps/api/src/modules/order/`
-> **Route:** `/orders`
+> **Route:** `/ffm/orders`
 > **API:**
 >  - `GET /v1/orders` · `GET /v1/orders/:id` · `GET /v1/orders/grouped` · `GET /v1/orders/overview-list` · `GET /v1/orders/by-ids` · `GET /v1/orders/workshop-filters` · `GET /v1/orders/fulfillment-status-counts` · `GET /v1/orders/import-summary` · `GET /v1/orders/error-log`
 >  - `GET /v1/orders/export` (full-list, không phân trang — xem `Dashboard.md §10.3`)
@@ -145,14 +145,16 @@ for (row of rows):
   else:
     imported++
 
-  // Mapping qua product config (auto-derive xưởng + máy + vải + tool)
+  // Mapping qua product config (auto-derive xưởng + máy + vải)
   config = productConfig.findByType(row.type)
   if config:
     set productConfigId, factoryId, machineTypeId, isMapped=true
     // insertOnly — chỉ gắn khi tạo mới, không overwrite giá trị workshop đã chỉnh
     insertOnly.originalFactoryId = factoryId
     if config.fabricType: insertOnly.fabricType = config.fabricType
-    if config.toolResult: insertOnly.toolResult = config.toolResult
+    // KHÔNG set insertOnly.toolResult nữa — đơn mới LUÔN để trống `toolResult`
+    // (kể cả product config có default) để tool tự động soát nhận diện đúng
+    // đơn "chưa soát" và tự chạy, thay vì bị default che mất.
     mapped++
   else:
     isMapped=false
@@ -166,7 +168,9 @@ for (row of rows):
   //     configure (env R2_* trống) → designs.{k} = raw URL để không transform
 ```
 
-`fabricType` và `toolResult` được **derived từ product config** tại lúc import — workshop không phải gõ tay. Nếu product config thay đổi sau khi import (admin chỉnh fabric default), gọi `POST /v1/orders/backfill-fabric` để re-derive cho các đơn còn thiếu (chỉ điền chỗ trống, **không overwrite** giá trị admin đã chỉnh).
+`fabricType` được **derived từ product config** tại lúc import — workshop không phải gõ tay. Nếu product config thay đổi sau khi import (admin chỉnh fabric default), gọi `POST /v1/orders/backfill-fabric` để re-derive cho các đơn còn thiếu (chỉ điền chỗ trống, **không overwrite** giá trị admin đã chỉnh).
+
+`toolResult` **KHÔNG còn được default từ product config lúc import** (API OnosPod lẫn CSV) — đơn mới luôn tạo với `toolResult` rỗng, để hàng đợi "Public API cho tool ngoài soát" (`GET /v1/orders/design-review/next`, xem `§18` bên dưới) nhận diện đúng đơn chưa soát và tự chạy tool, thay vì bị default từ config che mất. `ProductConfigEntity.toolResult` (field cấu hình "Kết quả Tool mặc định") vẫn còn trong schema nhưng KHÔNG còn nơi nào đọc để copy vào đơn nữa.
 
 ### 3.4 Trùng productionId
 - **Update**, **không** tạo duplicate
@@ -607,11 +611,88 @@ Permission code chi tiết — xem `packages/shared/constants/permission-catalog
 ### 9b.5 Frontend
 - Util `apps/web/src/utils/orderActions.ts`: `isHeld(o)`, `canUserHold(roleName)` (mirror `ORDER_WRITE_ROLES`).
 - `HeldBadge.tsx` (hổ phách "Đang giữ" + reason) — mirror `CancelledBadge`.
-- `HoldOrderDialog.tsx` (giữ 1 đơn, lý do KHÔNG bắt buộc).
+- `HoldOrderDialog.tsx` (giữ 1 đơn, lý do KHÔNG bắt buộc). Export `HOLD_REASON_PRESETS` — 5 lý do phổ biến dạng chip (Đợi khách sửa design / địa chỉ / thông tin đơn, Chờ khách xác nhận, Thiếu vật tư): click chip = điền nhanh vào textarea (click lại = bỏ chọn), vẫn sửa tay/tự gõ lý do khác được — KHÔNG phải danh mục cấu hình được (khác `workshop_config`), chỉ là preset tĩnh FE.
 - Tô xám + badge + **cell read-only** (override `ctx.canEditField=()=>false`) ở: `OrderTableWorkshop`, `ErrorLogTab`, `OrdersMiniTable`; tô xám + badge ở `ListOrderTab`.
 - `OrderRowActionsMenu.tsx`: item **"Giữ đơn"** (mở dialog) / **"Mở giữ"** (gọi trực tiếp) cho role `canUserHold`; menu hiện khi `isAdmin || canUserHold`.
-- `BulkEditToolbar.tsx`: nút **"Giữ đơn"** (dialog lý do bulk) + **"Mở giữ"** (bulk trực tiếp) → `RepositoryRemote.order.bulkHold({ ids, hold, reason })`.
+- `BulkEditToolbar.tsx`: nút **"Giữ đơn"** (dialog lý do bulk, tái dùng CHUNG `HOLD_REASON_PRESETS` từ `HoldOrderDialog.tsx`) + **"Mở giữ"** (bulk trực tiếp) → `RepositoryRemote.order.bulkHold({ ids, hold, reason })`.
 - Service `services/order.ts`: `holdOrder` · `unholdOrder` · `bulkHold`.
+
+## 9c. Tự động lấy ngược design/địa chỉ ship từ OnosPod (đơn giữ chờ khách)
+
+> **Mục tiêu:** Đơn giữ vì "chờ khách sửa design" hoặc "chờ khách sửa địa chỉ" —
+> cron public quét định kỳ, hỏi OnosPod xem khách đã cập nhật chưa, nếu có →
+> tự cập nhật + **MỞ GIỮ**, không cần nhân viên check tay.
+
+### 9c.1 Điều kiện kích hoạt
+Chỉ áp dụng khi `order.holdReason` **khớp CHÍNH XÁC** (không phải substring) 1
+trong 2 hằng số `shared/constants/hold-reason.ts`:
+- `HOLD_REASON_WAITING_DESIGN = 'Đợi khách sửa design'` → check design.
+- `HOLD_REASON_WAITING_ADDRESS = 'Đợi khách sửa địa chỉ'` → check địa chỉ ship.
+
+`HoldOrderDialog.tsx`/`BulkEditToolbar.tsx` import 2 hằng số này làm 2 preset
+chip ĐẦU trong `HOLD_REASON_PRESETS` — đổi text preset ở FE mà không đổi hằng
+số dùng chung sẽ làm cron ngừng nhận diện đơn (3 preset còn lại là free-text
+thường, không kích hoạt tự động).
+
+### 9c.2 Nguồn dữ liệu OnosPod — `OnospodOrderLookupService`
+Gọi `api.onospod.com/graphql` (query `orders`, **khác** host với
+`OnospodImportService` đang dùng cho import hàng ngày — đó là `qc.onospod.com`
+`paginateMrpProduct`). Config `ApiConfigService.onospodApiConfig` (env
+`ONOSPOD_API_URL`/`ONOSPOD_API_BEARER_TOKEN`/`ONOSPOD_API_SUPER_TOKEN`) —
+thiếu config → getter trả `null`, cron tự skip toàn bộ (không throw).
+
+⚠️ **Gateway OnosPod BẮT BUỘC header `Origin: https://app.onospod.com`** (verify
+bằng test gọi thật 2026-07-23) — thiếu header này → **403 Forbidden** dù token
+vẫn hợp lệ (dễ nhầm là token/password sai, KHÔNG PHẢI — đã từng chẩn đoán nhầm
+1 lần). `lookupByProductionId()` set cứng `Origin`/`Referer` = `app.onospod.com`
+trong request headers — nếu OnosPod đổi domain frontend, phải sửa hằng số
+`ONOSPOD_ORIGIN` ở đầu file. Mọi lỗi gọi API (network/403/GraphQL error) đều
+được log qua Winston (`action: 'onospodOrderLookup'`) kèm `status`/`error` —
+xem log thay vì đoán khi cron báo skip "gọi API thất bại".
+
+**Khớp line_item ↔ `productionId` nội bộ** (điểm quan trọng nhất, đã verify
+bằng test gọi thật 2026-07-22): 1 order OnosPod (search theo `order.orderId`,
+mã dạng `NF-xxxxx-xxxxx`) có nhiều `line_items[]` (mỗi size/màu 1 item), MỖI
+`line_item` lại có mảng `productions[]` (các lượt sản xuất/rework). **`productionId`
+nội bộ CHÍNH LÀ `line_items[].productions[].increment_id`** — KHÔNG phải
+`line_items[].product_id` (field này có định dạng hoàn toàn khác, ví dụ
+`NF-33230-29523-00`, không khớp `productionId` kiểu `EH-49336-76798`). Tìm
+đúng 1 `line_item` chứa `productions[].increment_id === productionId` →
+`design` lấy từ `line_item.print.design_{front,back,sleeve,hood,placket,left,
+right,chest_left,chest_right,sleeve_left,sleeve_right,upper_sleeve_left,
+upper_sleeve_right,left_cuff,right_cuff}.src` — **field `design_*`** (asset
+design KHÁCH ĐÃ UP, đã qua xử lý, hosted trên `cdn.onospod.com`), **KHÔNG phải**
+field trần `line_item.print.front/back/...` (chỉ là link Drive gốc lúc khách
+paste, có thể chưa xử lý/hết quyền xem — đã sửa lại sau khi test thực tế phát
+hiện field `.src` mới đúng là design cuối cùng). Không có `design_folder`
+tương ứng field `folder` → vị trí này KHÔNG map/KHÔNG check. **>1 line_item
+cùng khớp** (dữ liệu bất thường) → coi là `ambiguous`, **KHÔNG áp dụng**, bỏ
+qua + log lý do (an toàn hơn đoán đại 1 cái). `shipping` lấy ở level ORDER
+(không phải per-item): `order.shipping.{first_name,last_name,company,
+address_1,address_2,city,state,postcode,country,email,phone}`.
+
+### 9c.3 Logic so sánh + mở giữ — `OrderService.recoverHeldOrders()`
+- **Design**: so sánh TRỰC TIẾP từ lần check đầu tiên — baseline =
+  `order.designsOriginal ?? order.designs` (đã có sẵn từ lúc import, hợp lệ để
+  so sánh ngay). Khác baseline (ở BẤT KỲ vị trí in nào OnosPod trả về giá trị)
+  → `$set designs.<k>` + `designsOriginal.<k>` cho các vị trí đổi + `$unset
+  heldAt/holdReason` (mở giữ) + log `unhold`.
+- **Địa chỉ**: `order.shippingAddress` là field MỚI, chưa từng có baseline →
+  **lần check đầu chỉ SNAPSHOT** (`$set shippingAddress`), **KHÔNG tự mở giữ**
+  (chưa biết có đổi hay không). Từ lần thứ 2 trở đi mới so sánh snapshot đã
+  lưu với dữ liệu OnosPod hiện tại (so từng field, rỗng coi như `''`) — khác
+  → cập nhật snapshot + mở giữ + log `unhold`; giống → giữ nguyên (vẫn chờ).
+- Đơn thiếu `orderId` (chưa từng có mã đơn OnosPod) → skip, lý do rõ ràng
+  trong response `skipped[]` (không đoán, không throw).
+
+### 9c.4 API
+| Method | Path | Auth | Mô tả |
+|---|---|---|---|
+| GET | `/v1/orders/recover-held-from-onospod/cron` | public (`@Auth([],[],{public:true})`) | Cron — quét TOÀN BỘ đơn giữ khớp 1 trong 2 lý do trên, trả `{ checkedDesign, checkedAddress, designUpdated, addressPrimed, addressUpdated, unheld, skipped[] }`. Log ip/userAgent làm audit trace (giống `import-from-onospod/cron`). |
+
+Không có body/param — cron gọi trực tiếp qua `curl`, không cần token (giống
+mẫu `import-from-onospod/cron` đã có). Đặt lịch chạy ở crontab ngoài, độc lập
+với cron import.
 
 ---
 
@@ -665,12 +746,12 @@ Render tab tương ứng. User chỉ có 1 trong các quyền → 1 tab; có nhi
 
 #### 10.2a Compact grouped columns (`OrderTableWorkshop` + Dashboard `OrdersMiniTable`/`OrderFactoryTab` — giảm scroll ngang)
 
-`WORKSHOP_COLS` gốc có ~20 cột riêng lẻ → các bảng đơn (`/orders/workshop`, Dashboard tab Trạng thái + tab Xưởng) scroll ngang rất sâu. Logic gom nhóm sống trong **`workshopTableConfig.tsx`** (dùng chung, KHÔNG duplicate ở từng trang):
+`WORKSHOP_COLS` gốc có ~20 cột riêng lẻ → các bảng đơn (`/ffm/orders/workshop`, Dashboard tab Trạng thái + tab Xưởng) scroll ngang rất sâu. Logic gom nhóm sống trong **`workshopTableConfig.tsx`** (dùng chung, KHÔNG duplicate ở từng trang):
 - `BASE_GROUP_DEFS` + `SUPPORT_GROUP_ORDER` + `HEADLINE_KEYS` + `FIELD_LABELS` — định nghĩa group + field label.
 - `buildColGroups(visibleCols, roleName)` — build group đã resolve (lọc quyền + đổi thứ tự theo role) từ `visibleCols`.
 - `GroupCellContent` — component render nội dung 1 group cell (field xếp CHIỀU DỌC, tự thêm label field không có cột riêng), nhận `renderedByKey` (Map key→ReactNode đã render sẵn) + `extra` optional (chèn node cạnh 1 member, vd Badge combo cạnh `mockupTypeSize`).
 
-3 nơi dùng: `OrderTableWorkshop.tsx` (`/orders/workshop`, có thêm sticky + virtualization), `OrdersMiniTable.tsx` (Dashboard tab Trạng thái — Tab B), `OrderFactoryTab.tsx` (Dashboard tab Xưởng — Tab C, giữ nguyên cột "Xưởng (đang / gốc)" riêng TRƯỚC các group). `ErrorLogTab`/`PrintOrderTable` (không thuộc Dashboard) vẫn dùng layout cột phẳng như cũ.
+3 nơi dùng: `OrderTableWorkshop.tsx` (`/ffm/orders/workshop`, có thêm sticky + virtualization), `OrdersMiniTable.tsx` (Dashboard tab Trạng thái — Tab B), `OrderFactoryTab.tsx` (Dashboard tab Xưởng — Tab C, giữ nguyên cột "Xưởng (đang / gốc)" riêng TRƯỚC các group). `ErrorLogTab`/`PrintOrderTable` (không thuộc Dashboard) vẫn dùng layout cột phẳng như cũ.
 
 7 group hiển thị — mỗi group là 1 cột bảng nhưng bên trong xếp field CHIỀU DỌC (nhiều dòng) thay vì mỗi field 1 cột ngang:
 
@@ -770,6 +851,7 @@ Filter gửi qua query string `?printStatus=code&fabricType=code&designerStatus=
 | Param | Default (strip URL khi == default) | Mapping |
 |-------|------------------------------------|---------|
 | `wsearch` | `''` | search |
+| `pid` | `''` | tìm CHÍNH XÁC 1 đơn theo `productionId` (khác `wsearch`) — xem chi tiết dưới |
 | `wfrom` / `wto` | **today** (always-write, kể cả today) | `createdFrom` / `createdTo` |
 | `wprint` | `[]` | CSV `printStatus` codes |
 | `wnote` | `[]` | CSV `toolResultNote` codes |
@@ -779,6 +861,14 @@ Filter gửi qua query string `?printStatus=code&fabricType=code&designerStatus=
 | `wsize` | `20` | dòng/trang |
 
 Workshop tab dùng date always-write vào URL (kể cả today) để URL hiển thị explicit ngày đang xem — tránh user share link mà không biết filter ngày nào. Các param khác strip khi rỗng/default.
+
+**`?pid=<productionId>`** — filter RIÊNG, **state thật, persist vào URL** (không tự xóa) để F5/share link giữ nguyên, tách biệt hoàn toàn khỏi `wsearch`/`search` (match "contains" trên 5 field, `buildSearchOr`). Dùng cho link từ nơi khác (thông báo/tool ngoài) cần mở đúng 1 đơn theo `productionId` **chính xác**:
+- Gửi xuống BE qua param **`productionIds`** (đã có sẵn — dùng chung với filter "Nhiều mã" ở `BulkEditToolbar`, exact case-insensitive match, xem `order.service.ts` dòng ~1267) thay vì `search` — tránh match nhầm field khác (`userSku`/`userEmail`/`orderId`/`type`) như `search` thường làm. `pid` set → ưu tiên hơn "Nhiều mã" (2 filter dùng chung 1 param BE, không kết hợp được).
+- Có `pid` lúc mount (chưa có `wfrom`/`wto` khác) → **bỏ hẳn default `wfrom`/`wto` = today**, set `''` (tìm all-time) — nếu không, đơn không thuộc "hôm nay" sẽ bị lọc mất dù đúng mã.
+- **Group product mặc định "Mở hết"** thay vì collapse như thường lệ (`fetchData()` check state `pid` hiện tại, KHÔNG chỉ lúc mount) — thấy ngay đơn cần tìm, không phải tự bấm mở group.
+- Chip "Mã đơn" trong thanh filter đang lọc — click X hoặc `clearAllFilters()` để bỏ.
+
+Ví dụ: `/ffm/orders/workshop?pid=GO-63713-02355`.
 
 ### 10.4 Bulk edit (`BulkEditToolbar`)
 
@@ -1334,3 +1424,29 @@ Response mẫu (`SetDesignReviewResultResDto` — `data` = `ProductionOrderZod` 
 
 ### 19.4 Permissions
 - `page.unmapped_factory` (mới, group `page`) — Admin/SuperAdmin/Manager có sẵn qua `ALL_PERMISSION_CODES`; Support được cấp thêm trong `DEFAULT_ROLE_PERMISSIONS` (kèm `order.transfer` để nút "Gán xưởng" hiện ra — trước đó Support không có quyền này).
+
+## 20. Click lại menu sidebar đang active → xóa filter (cross-cutting UX)
+
+> **Vấn đề:** React Router coi click `<Link>` trỏ tới URL hiện tại là no-op — không điều hướng, không remount, không re-render. Trước đây click lại đúng menu đang đứng (vd đang lọc dở "Danh sách đơn" rồi bấm lại "Danh sách đơn") không có tác dụng gì.
+
+**Cơ chế chung** (`apps/web/src/store/sidebarResetStore.ts` + `apps/web/src/hooks/useSidebarResetSignal.ts`):
+- `sidebarResetStore` (Zustand, không persist): `{ path, nonce, requestReset(path) }` — `requestReset` set `path` + tăng `nonce`.
+- `Sidebar.tsx` → `SidebarLeaf`: `<Link onClick={() => { if (active) requestReset(item.to); }}>` — CHỈ bắn tín hiệu khi item đang **active** (dùng lại `isLinkActive()` sẵn có), không đụng hành vi Link click bình thường khi chưa active.
+- Trang cần phản ứng gọi `useSidebarResetSignal(path, onReset)` — `path` PHẢI khớp CHÍNH XÁC chuỗi `to` khai báo trong `NAV_GROUPS` (kể cả query string, vd `${PATHS.HOME}?tab=factory`). Hook chỉ chạy `onReset` khi `resetPath === path` VÀ `nonce` vừa tăng — không fire lúc mount.
+- **Không tự động remount qua `key`** — mỗi trang tự định nghĩa "xóa filter" nghĩa là gì (set lại state về default), không có universal "reset toàn bộ component state".
+
+**Đã wire** (path khớp `NAV_GROUPS`, hàm reset gọi qua `useSidebarResetSignal`):
+| Sidebar item | Trang | Hàm reset |
+|---|---|---|
+| Danh sách đơn | `OrderTableWorkshop.tsx` | `clearAllFilters()` (đã có sẵn, dùng lại nguyên) |
+| Nhật ký bù lỗi | `ErrorLogTab.tsx` | `clearAllFilters()` (mới thêm — reset `tab`/`search`/`createdFrom`/`createdTo`/5 filter dropdown/`selected`/`page`) |
+| Không xác định xưởng | `pages/orders/unmapped/index.tsx` | inline — reset `search`/`selected`/`page` |
+| Task Fulfillment | `pages/fulfillment/my-tasks/index.tsx` (`FulfillmentKanbanView`) | inline — reset `search`/`filters`/`dateFrom`/`dateTo`/`selected` (`dayFilter` tự clear qua effect có sẵn khi đổi ngày) |
+| Task của tôi | `pages/designer/my-tasks/index.tsx` | inline — reset `search`/`filters`/`dateFrom`/`dateTo`/`selected` |
+
+**CHƯA wire** (biết rõ, chưa làm — không phải bỏ sót):
+- **Dashboard** (7 tab `?tab=...`) — mỗi tab filter riêng nằm trong component con (`OrderStatsTab`, `OrderStatusTab`, `OrderFactoryTab`, `LifecycleTab`, `ToolCheckTab`, `PersonErrorTab`, `DesignerStatsTab`) — cần khảo sát + sửa riêng từng tab, chưa làm trong lượt này.
+- **`PrintWorkshopView.tsx`** (Fulfillment stage=Print, dùng `PrintOrderTable.tsx` filter riêng, KHÁC `FulfillmentKanbanView`) — chưa sửa.
+- Các trang admin/CRUD/upload (Products, Workshop Config, Users, Import Order, Cutting Files...) — không phải dạng "danh sách filter" cùng pattern, không áp dụng.
+
+Muốn thêm trang mới: import `useSidebarResetSignal` từ `@/hooks/useSidebarResetSignal`, gọi `useSidebarResetSignal(PATHS.XXX, resetFn)` với `resetFn` set lại mọi filter state về giá trị mặc định của trang đó.

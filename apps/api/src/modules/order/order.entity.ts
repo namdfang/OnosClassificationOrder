@@ -1,7 +1,7 @@
 import { Prop, raw, SchemaFactory } from '@nestjs/mongoose';
 import { DatabaseEntity, DatabaseEntityAbstract } from 'core';
 import type { HydratedDocument } from 'mongoose';
-import type { DesignFields, FulfillmentStages, FulfillmentTimelineEntry } from 'shared';
+import type { DesignFields, FulfillmentStages, FulfillmentTimelineEntry, ProductionOrderShippingAddress } from 'shared';
 import {
   DESIGNER_STATUSES,
   DesignerStatus,
@@ -182,6 +182,31 @@ export class OrderEntity extends DatabaseEntityAbstract {
 
   @Prop()
   holdReason?: string;
+
+  /**
+   * Snapshot địa chỉ ship lấy từ OnosPod — CHỈ dùng cho cron "lấy ngược địa chỉ"
+   * khi đơn giữ lý do `HOLD_REASON_WAITING_ADDRESS` (xem
+   * `OrderService.getHeldOrdersForRecovery` + `OnospodOrderLookupService`).
+   * Lần check đầu = snapshot mốc so sánh (KHÔNG tự mở giữ); lần sau khác
+   * snapshot → mở giữ + cập nhật.
+   */
+  @Prop({
+    _id: false,
+    type: raw({
+      firstName: String,
+      lastName: String,
+      company: String,
+      address1: String,
+      address2: String,
+      city: String,
+      state: String,
+      postcode: String,
+      country: String,
+      email: String,
+      phone: String,
+    }),
+  })
+  shippingAddress?: ProductionOrderShippingAddress;
 
   @Prop({ index: true })
   orderId?: string;

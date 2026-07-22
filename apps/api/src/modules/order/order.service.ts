@@ -77,6 +77,8 @@ import type {
   OrderWorkshopField,
   PreviewCuttingFilesDto,
   PreviewCuttingFilesResDto,
+  ProductionOrderShippingAddress,
+  RecoverHeldOrdersResDto,
   SetProductionErrorDto,
   SetProductionErrorResDto,
   SizeMatrixRow,
@@ -103,6 +105,8 @@ import {
   FulfillmentStage,
   FulfillmentStageStatus,
   FulfillmentTransitionAction,
+  HOLD_REASON_WAITING_ADDRESS,
+  HOLD_REASON_WAITING_DESIGN,
   LIFECYCLE_STAGE_KEYS,
   parseProductionIdFromCuttingFilename,
   RoleType,
@@ -128,6 +132,7 @@ import { UserEntity } from '../user/user.entity';
 import { WorkshopConfigRepository } from '../workshop-config/workshop-config.repository';
 import { mapProductTypeToCode } from './design-review-product-code';
 import { DriveFileNameService } from './drive-file-name.service';
+import { OnospodOrderLookupService } from './onospod-order-lookup.service';
 import { OrderDocument, OrderEntity } from './order.entity';
 import { OrderRepository } from './order.repository';
 
@@ -269,6 +274,32 @@ const PRINTED_MACHINE_CODES = ['machine-1', 'machine-2', 'machine-3', 'machine-4
 const ORDER_LIST_CACHE_PREFIX = 'orders:list:';
 const ORDER_LIST_CACHE_TTL_SECONDS = 60;
 
+// So sánh snapshot địa chỉ ship lúc `recoverHeldOrders()` — xem method đó.
+const ADDRESS_FIELDS: Array<keyof ProductionOrderShippingAddress> = [
+  'firstName',
+  'lastName',
+  'company',
+  'address1',
+  'address2',
+  'city',
+  'state',
+  'postcode',
+  'country',
+  'email',
+  'phone',
+];
+
+/** Field cần cho `getNextDesignReviewOrder`/`getDesignReviewOrderByProductionId` — xem `OrderService.toDesignReviewOrder`. */
+type DesignReviewSourceDoc = {
+  productionId: string;
+  orderId?: string;
+  type?: string;
+  color?: string;
+  size?: string;
+  designs?: DesignFields;
+  mockupUrl?: string;
+};
+
 /**
  * Parse `yyyy-mm-dd` (hoặc full ISO) thành UTC Date tương ứng với VN local
  * midnight / end-of-day. JS `new Date("2026-06-22")` parse là UTC midnight =
@@ -362,6 +393,7 @@ export class OrderService implements OnModuleInit {
     private readonly driveFileNameService: DriveFileNameService,
     private readonly systemConfigService: SystemConfigService,
     private readonly customerAssignmentService: CustomerAssignmentService,
+    private readonly onospodOrderLookupService: OnospodOrderLookupService,
   ) {}
 
   /** Validate giá trị assignee là userId hợp lệ (user role=Designer, ĐANG BẬT). */
@@ -4368,6 +4400,148 @@ export class OrderService implements OnModuleInit {
   }
 
   /**
+   * Cron công khai — quét đơn đang GIỮ lý do "chờ khách cập nhật" (design hoặc
+   * địa chỉ), gọi OnosPod kiểm tra khách đã cập nhật chưa, nếu có → cập nhật +
+   * tự MỞ GIỮ. Xem `Orders.md §9c` + `OnospodOrderLookupService`.
+   *
+   * - Design: so sánh trực tiếp từ lần đầu — `designs`/`designsOriginal` hiện
+   *   có đã là baseline hợp lệ (populate từ lúc import).
+   * - Địa chỉ: `shippingAddress` là field MỚI chưa có baseline → lần check đầu
+   *   chỉ SNAPSHOT (không tự mở giữ); từ lần thứ 2 mới thực sự so sánh + mở
+   *   giữ khi khác snapshot đã lưu.
+   */
+  async recoverHeldOrders(ctx?: AuditContext): Promise<RecoverHeldOrdersResDto> {
+    const skipped: Array<{ productionId: string; reason: string }> = [];
+    let checkedDesign = 0;
+    let checkedAddress = 0;
+    let designUpdated = 0;
+    let addressPrimed = 0;
+    let addressUpdated = 0;
+    let unheld = 0;
+
+    const [designOrders, addressOrders] = await Promise.all([
+      this.orderModel
+        .find({ heldAt: { $exists: true }, cancelledAt: { $exists: false }, holdReason: HOLD_REASON_WAITING_DESIGN })
+        .lean(),
+      this.orderModel
+        .find({ heldAt: { $exists: true }, cancelledAt: { $exists: false }, holdReason: HOLD_REASON_WAITING_ADDRESS })
+        .lean(),
+    ]);
+
+    for (const order of designOrders) {
+      checkedDesign++;
+      const productionId = order.productionId;
+      const orderNumber = order.orderId;
+      if (!orderNumber) {
+        skipped.push({ productionId, reason: 'Thiếu orderId (mã đơn OnosPod) — không tra được' });
+        continue;
+      }
+
+      const lookup = await this.onospodOrderLookupService.lookupByProductionId(orderNumber, productionId);
+      if (!lookup) {
+        skipped.push({ productionId, reason: 'OnosPod chưa cấu hình hoặc gọi API thất bại' });
+        continue;
+      }
+      if (lookup.ambiguous) {
+        skipped.push({ productionId, reason: 'Nhiều line_item cùng khớp productionId — cần review tay' });
+        continue;
+      }
+      if (!lookup.matched || !lookup.design || Object.keys(lookup.design).length === 0) {
+        skipped.push({ productionId, reason: 'Không tìm thấy design tương ứng trên OnosPod' });
+        continue;
+      }
+
+      const baseline = order.designsOriginal ?? order.designs ?? {};
+      const changed: Partial<DesignFields> = {};
+      for (const [key, value] of Object.entries(lookup.design) as Array<[keyof DesignFields, string]>) {
+        if ((baseline as Record<string, string | undefined>)[key] !== value) changed[key] = value;
+      }
+      if (Object.keys(changed).length === 0) {
+        skipped.push({ productionId, reason: 'Design chưa thay đổi — vẫn đang chờ khách' });
+        continue;
+      }
+
+      const set: Record<string, unknown> = {};
+      for (const [key, value] of Object.entries(changed)) {
+        set[`designs.${key}`] = value;
+        set[`designsOriginal.${key}`] = value;
+      }
+      await this.orderModel.findByIdAndUpdate(order._id, { $set: set, $unset: { heldAt: 1, holdReason: 1 } });
+      void this.orderLogService.write({
+        orderId: String(order._id),
+        action: 'unhold',
+        field: 'heldAt',
+        before: HOLD_REASON_WAITING_DESIGN,
+        after: null,
+        ctx,
+      });
+      designUpdated++;
+      unheld++;
+    }
+
+    for (const order of addressOrders) {
+      checkedAddress++;
+      const productionId = order.productionId;
+      const orderNumber = order.orderId;
+      if (!orderNumber) {
+        skipped.push({ productionId, reason: 'Thiếu orderId (mã đơn OnosPod) — không tra được' });
+        continue;
+      }
+
+      const lookup = await this.onospodOrderLookupService.lookupByProductionId(orderNumber, productionId);
+      if (!lookup) {
+        skipped.push({ productionId, reason: 'OnosPod chưa cấu hình hoặc gọi API thất bại' });
+        continue;
+      }
+      if (lookup.ambiguous) {
+        skipped.push({ productionId, reason: 'Nhiều line_item cùng khớp productionId — cần review tay' });
+        continue;
+      }
+      if (!lookup.matched || !lookup.shipping) {
+        skipped.push({ productionId, reason: 'Không tìm thấy địa chỉ ship tương ứng trên OnosPod' });
+        continue;
+      }
+
+      const stored = order.shippingAddress;
+      if (!stored) {
+        // Lần đầu — chưa có baseline để so sánh, chỉ snapshot, KHÔNG tự mở giữ.
+        await this.orderModel.findByIdAndUpdate(order._id, { $set: { shippingAddress: lookup.shipping } });
+        addressPrimed++;
+        skipped.push({ productionId, reason: 'Lần đầu kiểm tra — đã lưu snapshot địa chỉ, chờ lần sau so sánh' });
+        continue;
+      }
+
+      const isSame = ADDRESS_FIELDS.every((f) => (stored[f] || '') === (lookup.shipping![f] || ''));
+      if (isSame) {
+        skipped.push({ productionId, reason: 'Địa chỉ chưa thay đổi — vẫn đang chờ khách' });
+        continue;
+      }
+
+      await this.orderModel.findByIdAndUpdate(order._id, {
+        $set: { shippingAddress: lookup.shipping },
+        $unset: { heldAt: 1, holdReason: 1 },
+      });
+      void this.orderLogService.write({
+        orderId: String(order._id),
+        action: 'unhold',
+        field: 'heldAt',
+        before: HOLD_REASON_WAITING_ADDRESS,
+        after: null,
+        ctx,
+      });
+      addressUpdated++;
+      unheld++;
+    }
+
+    if (designUpdated > 0 || addressUpdated > 0) void this.invalidateListCache();
+
+    return {
+      success: true,
+      data: { checkedDesign, checkedAddress, designUpdated, addressPrimed, addressUpdated, unheld, skipped },
+    };
+  }
+
+  /**
    * Action "Đã soát xong" (tab Soát tool, list "Cần làm lại") — Support xác nhận
    * đã soát xong 1 đơn In trả về (marker `productionErrorSource='tool-check'` +
    * `toolResultNote='error'`) và đơn CẦN THIẾT KẾ. Khác đường đổi Note kq Tool
@@ -5239,14 +5413,33 @@ export class OrderService implements OnModuleInit {
    * tz) — cùng semantics `createdFrom`/`createdTo` ở danh sách đơn (Orders.md
    * §7.0b). Không truyền → không giới hạn ngày (hành vi cũ).
    */
-  async getNextDesignReviewOrder(dto?: { from?: string; to?: string }): Promise<{
+  /** Map raw order doc (field cần cho design review) → `DesignReviewOrder`. Dùng chung bởi `getNextDesignReviewOrder`/`getDesignReviewOrderByProductionId`. */
+  private toDesignReviewOrder(doc: DesignReviewSourceDoc): DesignReviewOrder {
+    return {
+      productionId: doc.productionId,
+      orderId: doc.orderId,
+      productCode: mapProductTypeToCode(doc.type),
+      attributes: { size: doc.size, color: doc.color },
+      designs: doc.designs ?? {},
+      mockupUrl: doc.mockupUrl,
+    };
+  }
+
+  private static readonly DESIGN_REVIEW_PROJECTION = {
+    productionId: 1,
+    orderId: 1,
+    type: 1,
+    color: 1,
+    size: 1,
+    designs: 1,
+    mockupUrl: 1,
+  } as const;
+
+  async getNextDesignReviewOrder(dto?: { from?: string; to?: string; pid?: string }): Promise<{
     success: true;
     data: DesignReviewOrder | null;
     remaining: number;
   }> {
-    const now = new Date();
-    const leaseExpiresBefore = new Date(now.getTime() - DESIGN_REVIEW_CLAIM_LEASE_MS);
-
     const baseFilter: Record<string, unknown> = {
       deletedAt: { $exists: false },
       cancelledAt: { $exists: false },
@@ -5261,6 +5454,21 @@ export class OrderService implements OnModuleInit {
       baseFilter.inProductionAt = range;
     }
 
+    // `pid` — ép lấy ĐÚNG 1 đơn theo productionId, BỎ QUA filter hàng đợi ở
+    // trên (toolResult/designerStatus...), KHÔNG claim lease. Vẫn trả kèm
+    // `remaining` của hàng đợi bình thường để tool không mất context.
+    const pid = dto?.pid?.trim();
+    if (pid) {
+      const [byId, remaining] = await Promise.all([
+        this.getDesignReviewOrderByProductionId(pid),
+        this.orderModel.countDocuments(baseFilter),
+      ]);
+      return { success: true, data: byId.data, remaining };
+    }
+
+    const now = new Date();
+    const leaseExpiresBefore = new Date(now.getTime() - DESIGN_REVIEW_CLAIM_LEASE_MS);
+
     const [doc, remaining] = await Promise.all([
       this.orderModel
         .findOneAndUpdate(
@@ -5274,7 +5482,7 @@ export class OrderService implements OnModuleInit {
           { $set: { designReviewClaimedAt: now } },
           {
             sort: { priority: -1, inProductionAt: 1, createdAt: 1 },
-            projection: { productionId: 1, orderId: 1, type: 1, color: 1, size: 1, designs: 1 },
+            projection: OrderService.DESIGN_REVIEW_PROJECTION,
             new: true,
           },
         )
@@ -5284,25 +5492,38 @@ export class OrderService implements OnModuleInit {
 
     if (!doc) return { success: true, data: null, remaining };
 
-    const d = doc as unknown as {
-      productionId: string;
-      orderId?: string;
-      type?: string;
-      color?: string;
-      size?: string;
-      designs?: DesignFields;
+    return {
+      success: true,
+      data: this.toDesignReviewOrder(doc as unknown as DesignReviewSourceDoc),
+      remaining,
     };
+  }
+
+  /**
+   * Lookup TRỰC TIẾP 1 đơn theo `productionId` cho tool soát design ngoài —
+   * bổ sung cho `getNextDesignReviewOrder()` (lấy đơn TIẾP THEO theo hàng đợi).
+   * KHÔNG áp filter hàng đợi (toolResult rỗng / designerStatus unassigned) —
+   * trả về đơn ở BẤT KỲ trạng thái nào miễn khớp `productionId` (kể cả đã
+   * soát/đã gán), phục vụ tra cứu/soát lại 1 đơn cụ thể. KHÔNG claim lease
+   * (không set `designReviewClaimedAt`) vì đây là lookup, không phải lấy việc.
+   */
+  async getDesignReviewOrderByProductionId(productionId: string): Promise<{
+    success: true;
+    data: DesignReviewOrder | null;
+  }> {
+    const trimmed = (productionId ?? '').trim();
+    if (!trimmed) return { success: true, data: null };
+
+    const escaped = trimmed.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+    const doc = await this.orderModel
+      .findOne({ productionId: { $regex: `^${escaped}$`, $options: 'i' } }, OrderService.DESIGN_REVIEW_PROJECTION)
+      .lean();
+
+    if (!doc) return { success: true, data: null };
 
     return {
       success: true,
-      data: {
-        productionId: d.productionId,
-        orderId: d.orderId,
-        productCode: mapProductTypeToCode(d.type),
-        attributes: { size: d.size, color: d.color },
-        designs: d.designs ?? {},
-      },
-      remaining,
+      data: this.toDesignReviewOrder(doc as unknown as DesignReviewSourceDoc),
     };
   }
 
@@ -5582,7 +5803,6 @@ export class OrderService implements OnModuleInit {
         let factoryId: string | undefined;
         let machineTypeId: string | undefined;
         let fabricType: string | undefined;
-        let toolResult: string | undefined;
         let machineNumber: string | undefined;
 
         if (row.type?.trim()) {
@@ -5595,8 +5815,9 @@ export class OrderService implements OnModuleInit {
             factoryId = pc.factoryId;
             machineTypeId = pc.machineTypeId;
             fabricType = pc.fabricType || undefined;
-            // Để tạm, tool ổn sẽ xóa không lưu toolResult vào đơn nữa (xem comment ở khối map product config phía trên).
-            toolResult = pc.toolResult || undefined;
+            // KHÔNG copy `toolResult` từ product config nữa — để trống lúc
+            // import (API onospod lẫn CSV) để tool tự động soát có thể chạy
+            // và tự set kết quả, thay vì bị default che mất đơn chưa soát.
             machineNumber = pc.machineNumber || undefined;
             mapped++;
           } else {
@@ -5654,15 +5875,13 @@ export class OrderService implements OnModuleInit {
           factoryId,
           machineTypeId,
         };
-        // Insert-only fields: fabric + toolResult + machineNumber are *defaults*
-        // derived from product config. If the workshop already overrode them on
-        // a previous run, re-import shouldn't blow those edits away.
-        // `originalFactoryId` is pinned for the same reason.
-        // Để tạm, tool ổn sẽ xóa không lưu toolResult vào đơn nữa (xem comment
-        // ở khối map product config phía trên).
+        // Insert-only fields: fabric + machineNumber are *defaults* derived from
+        // product config. If the workshop already overrode them on a previous
+        // run, re-import shouldn't blow those edits away. `originalFactoryId`
+        // is pinned for the same reason. `toolResult` KHÔNG nằm trong danh sách
+        // này nữa — luôn để trống lúc tạo đơn mới, chờ tool tự động soát set.
         const insertOnly: Record<string, unknown> = { originalFactoryId: factoryId };
         if (fabricType) insertOnly.fabricType = fabricType;
-        if (toolResult) insertOnly.toolResult = toolResult;
         if (machineNumber) insertOnly.machineNumber = machineNumber;
 
         // Atomic upsert by productionId — includes soft-deleted records.

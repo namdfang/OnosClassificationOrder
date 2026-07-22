@@ -24,6 +24,8 @@ import { toast } from 'sonner';
 import type { DragEndEvent, DragStartEvent } from '@dnd-kit/core';
 import { DndContext, DragOverlay, PointerSensor, useDroppable, useSensor, useSensors } from '@dnd-kit/core';
 
+import { PATHS } from '@/constants/paths';
+
 import { useAuthStore } from '@/store/authStore';
 
 import { RepositoryRemote } from '@/services';
@@ -44,6 +46,7 @@ import { handleAxiosError } from '@/utils';
 import { cn } from '@/utils/cn';
 
 import { useDebounce } from '@/hooks/useDebounce';
+import { useSidebarResetSignal } from '@/hooks/useSidebarResetSignal';
 
 import { FulfillmentScanActionDialog } from '../../orders/scan-error/FulfillmentScanActionDialog';
 import { OrderErrorScanDialog } from '../../orders/scan-error/OrderErrorScanDialog';
@@ -347,6 +350,17 @@ function FulfillmentKanbanView() {
   // ─── Selection state ───────────────────────────────────────────
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const lastClickedRef = useRef<{ colKey: ColKey; id: string } | null>(null);
+
+  // Click lại menu "Task Fulfillment" ở sidebar khi đang đứng đúng trang này
+  // → xóa hết filter (xem `useSidebarResetSignal`). `dayFilter` tự clear qua
+  // effect riêng khi `dateFrom`/`dateTo` đổi, không cần set tay ở đây.
+  useSidebarResetSignal(PATHS.FULFILLMENT_MY_TASKS, () => {
+    setSearch('');
+    setFilters(EMPTY_FILTERS);
+    setDateFrom(init7d.from);
+    setDateTo(init7d.to);
+    setSelected(new Set());
+  });
 
   const sensors = useSensors(useSensor(PointerSensor, { activationConstraint: { distance: 6 } }));
 

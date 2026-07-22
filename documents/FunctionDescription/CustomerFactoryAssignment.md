@@ -1,8 +1,6 @@
 # Ưu tiên gán xưởng theo khách hàng — Function Description
 
-> **File FE:** `apps/web/src/pages/settings/index.tsx` + `apps/web/src/components/settings/CustomerAssignmentConfig.tsx` + `apps/web/src/components/settings/CustomerFactoryKanban.tsx` + `apps/web/src/components/settings/CustomerListDialog.tsx` + `apps/web/src/services/customer.ts` + `apps/web/src/services/customerAssignment.ts`
-> **File BE:** `apps/api/src/modules/customer/` (entity + repository + service + controller + module) + `apps/api/src/modules/customer-assignment/` (service + controller + module) + `apps/api/src/modules/order/order.service.ts` → hook trong `importOrders`
-> **Route:** `/settings` (gate quyền `role.manage`)
+> **File FE:** `apps/web/src/pages/settings/index.tsx` + `apps/web/src/components/settings/CustomerAssignmentConfig.tsx` + `apps/web/src/components/settings/CustomerFactoryKanban.tsx` + `apps/web/src/components/settings/CustomerListDialog.tsx` + `apps/web/src/services/customer.ts` + `apps/web/src/services/customerAssignment.ts` > **File BE:** `apps/api/src/modules/customer/` (entity + repository + service + controller + module) + `apps/api/src/modules/customer-assignment/` (service + controller + module) + `apps/api/src/modules/order/order.service.ts` → hook trong `importOrders` > **Route:** `/adm/settings` (gate quyền `role.manage`)
 > **API:** `GET/POST /v1/customers`, `POST /v1/customers/sync`, `PATCH /v1/customers/:id/tier`, `POST /v1/customers/import-tiers`, `GET/PUT /v1/customer-assignment/config`
 
 ## 1. Overview
@@ -45,20 +43,30 @@ khách) và **Import tier** hàng loạt từ file `TÊN TÀI KHOẢN | VIP n`.
 
 ## 3. API / Schema
 
-| Method | Path | Auth | Mô tả |
-|---|---|---|---|
-| GET | `/v1/customers` | `@Auth([Admin])` | Danh sách khách (query `search` optional) |
-| POST | `/v1/customers` | `@Auth([Admin])` | Thêm khách thủ công (userSku + userEmail) |
-| POST | `/v1/customers/sync` | `@Auth([Admin])` | Sync từ orders → `{ scanned, created, existing, total }` |
-| PATCH | `/v1/customers/:id/tier` | `@Auth([Admin])` | Sửa tier 1 khách (`{ tier: 0..5 \| null }`, null = khách lẻ) |
-| POST | `/v1/customers/import-tiers` | `@Auth([Admin])` | Import tier hàng loạt (`{ rows: [{userSku, tier}] }`, max 2000) → `{ matchedSkus, updatedCustomers, skippedSkus }` |
-| GET | `/v1/customer-assignment/config` | `@Auth([Admin])` | Lấy cấu hình |
-| PUT | `/v1/customer-assignment/config` | `@Auth([Admin])` | Lưu (validate 1-khách-1-xưởng) |
+| Method | Path                             | Auth             | Mô tả                                                                                                              |
+| ------ | -------------------------------- | ---------------- | ------------------------------------------------------------------------------------------------------------------ |
+| GET    | `/v1/customers`                  | `@Auth([Admin])` | Danh sách khách (query `search` optional)                                                                          |
+| POST   | `/v1/customers`                  | `@Auth([Admin])` | Thêm khách thủ công (userSku + userEmail)                                                                          |
+| POST   | `/v1/customers/sync`             | `@Auth([Admin])` | Sync từ orders → `{ scanned, created, existing, total }`                                                           |
+| PATCH  | `/v1/customers/:id/tier`         | `@Auth([Admin])` | Sửa tier 1 khách (`{ tier: 0..5 \| null }`, null = khách lẻ)                                                       |
+| POST   | `/v1/customers/import-tiers`     | `@Auth([Admin])` | Import tier hàng loạt (`{ rows: [{userSku, tier}] }`, max 2000) → `{ matchedSkus, updatedCustomers, skippedSkus }` |
+| GET    | `/v1/customer-assignment/config` | `@Auth([Admin])` | Lấy cấu hình                                                                                                       |
+| PUT    | `/v1/customer-assignment/config` | `@Auth([Admin])` | Lưu (validate 1-khách-1-xưởng)                                                                                     |
 
+<<<<<<< HEAD
 Collection `customers`: `{ userSku, userEmail, source: 'sync'|'manual', tier: number|null }`,
 **unique index `{ userSku: 1, userEmail: 1 }`**. Zod: `CustomerTierZod`
 (int 0..5, coerce) + constants `CUSTOMER_TIERS` / `CUSTOMER_TIER_MIN/MAX` +
 `UpdateCustomerTier*` / `ImportCustomerTiers*` DTOs.
+=======
+Collection `customers`: `{ userSku, userEmail, source: 'sync'|'manual'|'register', password, fullName, phone, status }`,
+**unique index `{ userSku: 1, userEmail: 1 }`**. Từ khi có Customer Portal
+(xem [`CustomerPortal.md`](CustomerPortal.md)), bảng này dùng CHUNG cho cả
+mục đích dedup gán xưởng VÀ tài khoản đăng nhập khách hàng — record tạo qua
+sync/thêm tay có `password=''` (chưa đăng ký), `userSku` không còn bắt buộc
+(khách tự đăng ký có thể chưa có lịch sử đơn hàng).
+
+> > > > > > > 3125d6f74725042165660b3067f3f9556b62817e
 
 Config lưu blob JSON trong `system_configs` (key `customer_assignment_config`,
 Redis-cache 1h). Shared DTO `packages/shared/dtos/customer.dto.ts` +
@@ -78,6 +86,7 @@ Constant `CUSTOMER_ASSIGNMENT_CONFIG_KEY = 'customer_assignment_config'`.
 ## 4. UI Components
 
 `CustomerAssignmentConfig.tsx`:
+
 - Mount: `factory.getFactories()` + `customer.list()` + `customerAssignment.getConfig()`.
 - Header + nút **Lưu** (kèm chip cam "● Chưa lưu" khi dirty). Thanh công cụ:
   `ui/switch` bật/tắt + nút **Sync khách hàng** + **Thêm khách** (`ui/dialog`
@@ -92,6 +101,7 @@ Constant `CUSTOMER_ASSIGNMENT_CONFIG_KEY = 'customer_assignment_config'`.
   cập nhật baseline.
 
 `CustomerFactoryKanban.tsx` (thay grid MultiSelectFilter cũ):
+
 - Cột đầu **"Chưa gán"** (`UNASSIGNED_COL='__unassigned__'`, khách không nằm trong
   alloc nào) + 1 cột / xưởng. Grid `xl:grid-cols-4`, mỗi cột cao cố định
   `h-[70vh]` scroll riêng, hiện toàn bộ khách. Section này đặt TRÊN
@@ -109,6 +119,7 @@ Constant `CUSTOMER_ASSIGNMENT_CONFIG_KEY = 'customer_assignment_config'`.
   state, phải bấm **Lưu** mới ghi config.
 
 `CustomerListDialog.tsx` (mở từ nút **Danh sách khách** trên toolbar):
+
 - Bảng khách: search (SKU/email, client-side) + hàng chip filter theo tier
   (Tất cả / Khách lẻ / VIP 0..5, kèm số lượng) + cột Tier là `TierBadge` màu
   (VIP 0 cyan, 1 emerald, 2 sky, 3 violet, 4 fuchsia, 5 amber/vàng; khách lẻ
@@ -123,6 +134,7 @@ Constant `CUSTOMER_ASSIGNMENT_CONFIG_KEY = 'customer_assignment_config'`.
 ## 5. Backend logic
 
 ### 5.1 `CustomerService`
+
 - `list(dto)`: filter `search` regex trên userSku/userEmail, sort userSku.
 - `create(dto)`: normalize (email lowercase+trim); chặn trùng cặp → `BadRequest`;
   `source='manual'`.
@@ -136,23 +148,27 @@ Constant `CUSTOMER_ASSIGNMENT_CONFIG_KEY = 'customer_assignment_config'`.
   **không tự tạo khách mới**.
 
 ### 5.2 `CustomerAssignmentService`
+
 - `getConfig()` / `saveConfig(dto)` — validate 1 `customerId` không ở ≥ 2 xưởng
   (và không lặp trong cùng xưởng) → `BadRequest`. Lưu `system_configs`.
 - `getImportOverride()`: nếu `!enabled` → `{ enabled:false, map:empty }`. Ngược lại
   fetch customers theo `customerIds`, dựng `Map<customerMatchKey, factoryId>`.
 
 ### 5.3 Hook trong `OrderService.importOrders`
+
 - Trước vòng lặp: `const customerOverride = await customerAssignmentService.getImportOverride()`.
 - Trong loop, sau đoạn map product config: nếu `enabled` & khớp
   `customerMatchKey(row.userSku, row.userEmail)` → `factoryId = forced`. Đoạn tính
   `factoryCount` / `data.factoryId` / `originalFactoryId` dùng `factoryId` đã ép.
 
 ## 6. Performance notes
+
 - Config cache Redis 1h → đọc gần free ở hook import.
 - Import: `getImportOverride` = 1 `getConfig` (cache) + 1 `find` customers (chỉ khi
   bật). Map dựng 1 lần, match O(1) mỗi dòng.
 - Sync: 1 aggregate distinct + 1 bulkWrite upsert (nút bấm thủ công).
 
 ## 7. Permissions
+
 - Cấu hình + customers CRUD: `@Auth([Admin])` (FE gate `role.manage`).
 - Ép xưởng chạy server-side trong `importOrders` theo actor import.

@@ -1,7 +1,7 @@
 # All Orders — Function Description
 
 > **File:** `apps/web/src/pages/orders/allOrders/index.tsx`
-> **Route:** `/orders/list`
+> **Route:** `/ffm/orders/list`
 
 ---
 

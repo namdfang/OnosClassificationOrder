@@ -102,6 +102,26 @@ export const DesignFieldsZod = z.object({
 });
 export type DesignFields = z.infer<typeof DesignFieldsZod>;
 
+/**
+ * Địa chỉ ship — mirror field `shipping` trả về từ OnosPod (order API).
+ * Dùng để "lấy ngược" địa chỉ khi đơn đang GIỮ chờ khách cập nhật, xem
+ * `OrderService.getHeldOrdersForRecovery` + `OnospodOrderLookupService`.
+ */
+export const ProductionOrderShippingAddressZod = z.object({
+  firstName: z.string().optional(),
+  lastName: z.string().optional(),
+  company: z.string().optional(),
+  address1: z.string().optional(),
+  address2: z.string().optional(),
+  city: z.string().optional(),
+  state: z.string().optional(),
+  postcode: z.string().optional(),
+  country: z.string().optional(),
+  email: z.string().optional(),
+  phone: z.string().optional(),
+});
+export type ProductionOrderShippingAddress = z.infer<typeof ProductionOrderShippingAddressZod>;
+
 /** Trạng thái pipeline R2 cho từng vị trí design (Phase 6 Design-R2-Pipeline). */
 export const DesignStatusZod = z.enum(['pending', 'ready', 'failed']);
 export type DesignStatus = z.infer<typeof DesignStatusZod>;
@@ -179,6 +199,12 @@ export const ProductionOrderZod = BaseEntityZod.extend({
    */
   heldAt: z.date().optional(),
   holdReason: z.string().optional(),
+  /**
+   * Snapshot địa chỉ ship lấy từ OnosPod — chỉ dùng cho cron "lấy ngược địa
+   * chỉ" (đơn giữ lý do `HOLD_REASON_WAITING_ADDRESS`). Lần đầu = snapshot mốc
+   * so sánh (KHÔNG tự mở giữ), lần sau khác snapshot → mở giữ + cập nhật.
+   */
+  shippingAddress: ProductionOrderShippingAddressZod.optional(),
   orderId: z.string().optional(),
   externalId: z.string().optional(),
   referent: z.string().optional(),
@@ -931,6 +957,13 @@ export type DesignReviewAttributes = z.infer<typeof DesignReviewAttributesZod>;
 export const GetNextDesignReviewOrderZod = z.object({
   from: z.string().optional(),
   to: z.string().optional(),
+  /**
+   * Ép lấy ĐÚNG 1 đơn theo `productionId`, BỎ QUA mọi filter hàng đợi
+   * (`toolResult` rỗng / `designerStatus` unassigned...) — trả về đơn ở BẤT
+   * KỲ trạng thái nào miễn khớp mã, KHÔNG claim lease. Dùng khi tool ngoài
+   * cần soát lại/ép xử lý đúng 1 đơn cụ thể thay vì lấy theo hàng đợi.
+   */
+  pid: z.string().optional(),
 });
 export class GetNextDesignReviewOrderDto extends createZodDto(extendApi(GetNextDesignReviewOrderZod)) {}
 
@@ -943,6 +976,8 @@ export const DesignReviewOrderZod = z.object({
   productCode: z.string().nullable(),
   attributes: DesignReviewAttributesZod,
   designs: DesignFieldsZod,
+  /** Ảnh mockup sản phẩm — tham chiếu trực quan khi soát design (KHÔNG phải file design gốc). */
+  mockupUrl: z.string().optional(),
 });
 export type DesignReviewOrder = z.infer<typeof DesignReviewOrderZod>;
 
@@ -954,6 +989,18 @@ export const GetNextDesignReviewOrderResZod = z.object({
   remaining: z.number().int().nonnegative(),
 });
 export class GetNextDesignReviewOrderResDto extends createZodDto(extendApi(GetNextDesignReviewOrderResZod)) {}
+
+// Lookup TRỰC TIẾP 1 đơn theo `productionId` — bổ sung cho `/design-review/next`
+// (lấy đơn TIẾP THEO trong hàng đợi). Dùng khi tool ngoài cần soát lại/tra cứu
+// đúng 1 đơn cụ thể thay vì lấy theo thứ tự hàng đợi. KHÔNG áp filter hàng đợi
+// (`toolResult` rỗng / `designerStatus` unassigned) — trả về đơn ở BẤT KỲ
+// trạng thái nào, kể cả đã soát/đã gán, miễn khớp `productionId`.
+export const GetDesignReviewOrderByIdResZod = z.object({
+  success: z.literal(true),
+  /** null nếu không tìm thấy đơn khớp `productionId`. */
+  data: DesignReviewOrderZod.nullable(),
+});
+export class GetDesignReviewOrderByIdResDto extends createZodDto(extendApi(GetDesignReviewOrderByIdResZod)) {}
 
 // Design review — lưu Kết quả Tool (workshop_config category=tool_result, vd
 // 'has-tool'/'no-tool'). `null` = xoá giá trị hiện có. KHÔNG có `toolResultNote`
@@ -2016,6 +2063,86 @@ export const ToolCheckOverviewResZod = ResZod.extend({
   }),
 });
 export class ToolCheckOverviewResDto extends createZodDto(extendApi(ToolCheckOverviewResZod)) {}
+
+// ─── Customer Portal — đặt đơn / xem đơn của chính khách hàng ─────
+// Đặt đơn CHỈ gồm thông tin cơ bản (KHÔNG có factory/machine/toolResult/
+// designer/fulfillment...) — các field sản xuất được default giống hệt
+// luồng import nội bộ (`OrderService.importOrders`), xem `CustomerOrderService`.
+export const PlaceCustomerOrderZod = z.object({
+  type: z.string().min(1),
+  color: z.string().max(200).optional(),
+  size: z.string().max(200).optional(),
+  mockupUrl: z.string().max(2000).optional(),
+  printMethod: z.string().max(200).optional(),
+  weight: z.number().nonnegative().optional(),
+  width: z.number().nonnegative().optional(),
+  height: z.number().nonnegative().optional(),
+  length: z.number().nonnegative().optional(),
+  quantity: z.number().int().positive().default(1),
+  designs: DesignFieldsZod.optional(),
+  referent: z.string().max(500).optional(),
+});
+export class PlaceCustomerOrderDto extends createZodDto(extendApi(PlaceCustomerOrderZod)) {}
+
+/** Thông tin đơn hàng thu gọn — CHỈ field cơ bản, ẩn toàn bộ field sản xuất nội bộ. */
+export const CustomerOrderSummaryZod = z.object({
+  _id: IDZod,
+  productionId: z.string(),
+  type: z.string().optional(),
+  color: z.string().optional(),
+  size: z.string().optional(),
+  quantity: z.number().optional(),
+  mockupUrl: z.string().optional(),
+  status: z.string().optional(),
+  orderAt: z.coerce.date().optional(),
+  cancelledAt: z.coerce.date().optional(),
+  cancelReason: z.string().optional(),
+  createdAt: z.coerce.date().optional(),
+});
+export type CustomerOrderSummary = z.infer<typeof CustomerOrderSummaryZod>;
+
+export const PlaceCustomerOrderResZod = ResZod.extend({ data: CustomerOrderSummaryZod });
+export class PlaceCustomerOrderResDto extends createZodDto(extendApi(PlaceCustomerOrderResZod)) {}
+
+export const GetCustomerOrdersZod = z.object({
+  page: z.coerce.number().int().positive().default(1),
+  limit: z.coerce.number().int().positive().max(100).default(20),
+});
+export class GetCustomerOrdersDto extends createZodDto(extendApi(GetCustomerOrdersZod)) {}
+
+export const GetCustomerOrdersResZod = ResZod.extend({
+  data: CustomerOrderSummaryZod.array(),
+  total: z.number().optional(),
+});
+export class GetCustomerOrdersResDto extends createZodDto(extendApi(GetCustomerOrdersResZod)) {}
+
+export const GetCustomerOrderTrackResZod = ResZod.extend({
+  data: z.object({
+    order: CustomerOrderSummaryZod,
+    track: LifecycleTrackZod,
+  }),
+});
+export class GetCustomerOrderTrackResDto extends createZodDto(extendApi(GetCustomerOrderTrackResZod)) {}
+
+// ─── Recover held orders from OnosPod (design/địa chỉ chờ khách cập nhật) ──
+// Public cron endpoint — xem `Orders.md §9c` + `OnospodOrderLookupService`.
+export const RecoverHeldOrdersSkipZod = z.object({
+  productionId: z.string(),
+  reason: z.string(),
+});
+
+export const RecoverHeldOrdersResZod = ResZod.extend({
+  data: z.object({
+    checkedDesign: z.number().int().nonnegative(),
+    checkedAddress: z.number().int().nonnegative(),
+    designUpdated: z.number().int().nonnegative(),
+    addressPrimed: z.number().int().nonnegative(),
+    addressUpdated: z.number().int().nonnegative(),
+    unheld: z.number().int().nonnegative(),
+    skipped: RecoverHeldOrdersSkipZod.array(),
+  }),
+});
+export class RecoverHeldOrdersResDto extends createZodDto(extendApi(RecoverHeldOrdersResZod)) {}
 
 // ─── Action "Đã soát xong" (tab Soát tool, list "Cần làm lại") ──────
 // Support xác nhận đã soát xong 1 đơn hold (source=tool-check + note=error) và

@@ -21,9 +21,9 @@
 >  - `designer-stats.{controller,service}.ts` — Leader dashboard
 >
 > **Route FE:**
->  - `/designer/team` (Leader/Admin)
->  - `/my-tasks` (Designer sub)
->  - `/dashboard?tab=designer` (Leader/Admin tab)
+>  - `/ffm/designer/team` (Leader/Admin)
+>  - `/ffm/my-tasks` (Designer sub)
+>  - `/ffm/dashboard?tab=designer` (Leader/Admin tab)
 >
 > **API chính:**
 >  - `POST /v1/designer/migrate-leader` (one-shot)
@@ -309,6 +309,8 @@ Xem 2.3 chi tiết.
 **Bộ lọc ngày:** chỉ dùng `<DateRangePicker>` (đã bỏ 3 preset nút Hôm nay/7 ngày/30 ngày). State `dateFrom`/`dateTo` **mặc định 7 ngày gần nhất**, **lưu vào URL params `from`/`to`** (F5 giữ lựa chọn — `useSearchParams`, đọc khi mount + sync khi đổi). Gửi `from`/`to` vào `myTasks` + `myTaskFilters` + `myStats({period:'custom', from, to})`.
 
 **Filter bar lưu URL params:** ngoài `from`/`to`, toàn bộ filter bar (`type`/`fabricType`/`machineNumber`/`toolResult`/`toolResultNote`/`userSku`/`errorFile` + `search`) cũng **đọc từ URL khi mount + sync vào URL khi đổi** (cùng 1 `useEffect` sync, `search` sync theo `debouncedSearch`) → F5 giữ nguyên cả bộ lọc. `fetchTasks`/`fetchFilters` gửi `...filters` xuống cả 2 endpoint nên các cột bên dưới + count facet đều lọc theo. **Hai endpoint dùng chung `buildMyTaskFilter` + cùng range `inProductionAt`** ⇒ kết quả `/my-tasks` và `/my-task-filters` luôn đồng bộ.
+
+**Click lại menu "Task của tôi" ở sidebar** khi đang đứng đúng trang này → tự xóa `search`/`filters`/`dateFrom`/`dateTo`/`selected` về mặc định (`useSidebarResetSignal`, xem cơ chế chung + bảng trang đã wire ở `Orders.md §20`).
 
 **Chống race khi đổi ngày/filter liên tiếp (seq guard):** `fetchTasks`/`fetchFilters` mỗi lần gọi tăng `tasksSeqRef`/`filtersSeqRef`; khi response về chỉ `setState` nếu `seq` còn là mới nhất, ngược lại bỏ qua. Tránh response cũ về muộn (mạng không đảm bảo thứ tự) ghi đè data mới → trước đây gây "đổi lại ngày thì cột hiển thị loạn". Latency local ~0 nên hiếm lộ; server latency cao lộ rõ.
 

@@ -204,6 +204,21 @@ export class ApiConfigService {
     return { apiUrl, bearerToken };
   }
 
+  /**
+   * OnosPod order API (api.onospod.com/graphql) — dùng để "lấy ngược"
+   * design/địa chỉ ship cho đơn đang GIỮ chờ khách cập nhật (xem
+   * `OnospodOrderLookupService`). Token lấy từ phiên đăng nhập admin OnosPod —
+   * PHẢI rotate định kỳ, TUYỆT ĐỐI không hardcode giá trị thật vào code/commit.
+   * Optional integration — thiếu config → getter trả null, feature tự disable.
+   */
+  get onospodApiConfig(): null | { apiUrl: string; bearerToken: string; superToken: string } {
+    const apiUrl = this.configService.get<string>('ONOSPOD_API_URL') || '';
+    const bearerToken = this.configService.get<string>('ONOSPOD_API_BEARER_TOKEN') || '';
+    const superToken = this.configService.get<string>('ONOSPOD_API_SUPER_TOKEN') || '';
+    if (!apiUrl || !bearerToken || !superToken) return null;
+    return { apiUrl, bearerToken, superToken };
+  }
+
   get cdn() {
     return {
       url: this.getString('CDN_URL'),

@@ -250,6 +250,7 @@ Default preset:
   - **Nút "Lịch sử tra cứu"** (`History` icon, cạnh ô search, có badge số lượng): mở modal `Dialog` liệt kê `searchHistory` (persist `localStorage` key `fulfillment-search-history`, cap `MAX_SEARCH_HISTORY=20`). Mỗi lượt Enter/quét đẩy 1 entry `{ code, status: 'found'|'not-found', at }`. Click 1 dòng → tra cứu lại (`setSearch` + `handleScanLookup`). Có nút "Xoá lịch sử".
   - Facet options derive client-side bằng pattern faceted (loại trừ chính facet đang tính) → count phản ánh đúng các filter khác.
   - Apply filter client-side trước khi group → DnD/checkbox/kanban đều thấy data đã filter.
+  - **Click lại menu "Task Fulfillment" ở sidebar khi đang đứng đúng trang này** (`FulfillmentKanbanView` — CHƯA áp dụng cho `PrintWorkshopView`) → tự xóa `search`/`filters`/`dateFrom`/`dateTo`/`selected` (`useSidebarResetSignal`, xem cơ chế chung + bảng trang đã wire ở `Orders.md §20`).
 - **Selection + bulk** (clone Designer):
   - Checkbox tại group header (toàn bộ rows trong group) — indeterminate state khi partial.
   - Checkbox tại từng card (top-left absolute). Shift+click trong cùng cột để select range.

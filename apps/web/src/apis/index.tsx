@@ -4,10 +4,15 @@ import { toast } from 'sonner';
 import { PATHS } from '@/constants/paths';
 
 import { useAuthStore } from '@/store/authStore';
+import { useCustomerAuthStore } from '@/store/customerAuthStore';
 
 import { CONFIG } from '../constants';
 
 const PUBLIC_ROUTE_KEYWORDS = ['catalog', 'product', 'products', 'categories', 'providers'];
+
+// Endpoint `/customer/...` thuộc Customer Portal — dùng token RIÊNG
+// (customerAuthStore), tách biệt hoàn toàn khỏi token nhân viên (authStore).
+const isCustomerRoute = (url: string) => url.includes('/customer/');
 
 const apiAxios = axios.create({
   baseURL: CONFIG.API_URL,
@@ -17,6 +22,13 @@ const apiAxios = axios.create({
 apiAxios.interceptors.request.use(
   (config) => {
     const url = config.url || '';
+
+    if (isCustomerRoute(url)) {
+      const token = useCustomerAuthStore.getState().getToken();
+      if (token) config.headers.Authorization = `Bearer ${token}`;
+      return config;
+    }
+
     const isPublicRoute = PUBLIC_ROUTE_KEYWORDS.some((kw) => url.includes(kw));
     const token = useAuthStore.getState().getToken(isPublicRoute);
 
@@ -32,6 +44,15 @@ apiAxios.interceptors.request.use(
 apiAxios.interceptors.response.use(
   (response) => response,
   (error) => {
+    const requestUrl = (error?.config?.url as string | undefined) || '';
+
+    if (isCustomerRoute(requestUrl)) {
+      if (error?.response?.status === HttpStatusCode.Unauthorized && !requestUrl.includes('/customer/auth/login')) {
+        useCustomerAuthStore.getState().clearToken();
+      }
+      return Promise.reject(error);
+    }
+
     if (error?.response?.status === HttpStatusCode.Unauthorized) {
       useAuthStore.getState().clearToken();
     }

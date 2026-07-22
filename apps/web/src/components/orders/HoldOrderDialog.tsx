@@ -1,4 +1,5 @@
 import React, { useState } from 'react';
+import { HOLD_REASON_WAITING_ADDRESS, HOLD_REASON_WAITING_DESIGN } from 'shared';
 import { toast } from 'sonner';
 
 import { RepositoryRemote } from '@/services';
@@ -15,7 +16,7 @@ import {
 } from '@/components/ui/dialog';
 import { Textarea } from '@/components/ui/textarea';
 
-import { handleAxiosError } from '@/utils';
+import { cn, handleAxiosError } from '@/utils';
 
 interface Props {
   order: WorkshopOrderRow | null;
@@ -26,6 +27,21 @@ interface Props {
 }
 
 const MAX = 200;
+
+/**
+ * Lý do giữ đơn phổ biến — click để điền nhanh, vẫn sửa tay được sau khi chọn.
+ * Dùng chung với bulk hold ở `BulkEditToolbar.tsx`. 2 preset đầu dùng CHÍNH XÁC
+ * text từ `shared` (`HOLD_REASON_WAITING_DESIGN`/`_ADDRESS`) — cron tự động
+ * lấy ngược design/địa chỉ từ OnosPod match theo đúng text này, đổi ở FE mà
+ * không đổi hằng số dùng chung sẽ làm cron không nhận diện được đơn nữa.
+ */
+export const HOLD_REASON_PRESETS = [
+  HOLD_REASON_WAITING_DESIGN,
+  HOLD_REASON_WAITING_ADDRESS,
+  'Đợi khách sửa thông tin đơn',
+  'Chờ khách xác nhận',
+  'Thiếu vật tư',
+];
 
 /**
  * Dialog GIỮ 1 đơn — lý do KHÔNG bắt buộc (khác CancelOrderDialog). Sau khi giữ,
@@ -70,6 +86,26 @@ export function HoldOrderDialog({ order, open, onOpenChange, onDone }: Props) {
 
         <div className="space-y-1.5">
           <label className="text-xs font-medium text-foreground">Lý do giữ (không bắt buộc)</label>
+          <div className="flex flex-wrap gap-1.5">
+            {HOLD_REASON_PRESETS.map((preset) => {
+              const active = reason === preset;
+              return (
+                <button
+                  key={preset}
+                  type="button"
+                  onClick={() => setReason(active ? '' : preset)}
+                  className={cn(
+                    'px-2.5 py-1 rounded-full border text-xs transition-colors',
+                    active
+                      ? 'bg-primary border-primary text-primary-foreground'
+                      : 'bg-background border-border text-muted-foreground hover:border-primary/50 hover:text-foreground',
+                  )}
+                >
+                  {preset}
+                </button>
+              );
+            })}
+          </div>
           <Textarea
             value={reason}
             onChange={(e) => setReason(e.target.value.slice(0, MAX))}
