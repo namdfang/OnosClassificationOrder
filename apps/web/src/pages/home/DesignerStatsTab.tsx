@@ -193,16 +193,6 @@ export default function DesignerStatsTab() {
         </div>
       </div>
 
-      {/* Bảng tổng quan N ngày (tổng đơn / chưa soát / lỗi / tồn) — TRÊN CÙNG. */}
-      <DesignerDailyOverview
-        days={7}
-        from={dateFrom || undefined}
-        to={dateTo || undefined}
-        reloadToken={matrixToken}
-        type={filterType || undefined}
-        customer={filterCustomer || undefined}
-      />
-
       {/* Bảng "Cần gán designer" gom theo sản phẩm — dưới bảng tổng quan. */}
       <DesignerAssignBacklog
         days={7}
@@ -214,13 +204,14 @@ export default function DesignerStatsTab() {
         onAssigned={() => setMatrixToken((t) => t + 1)}
       />
 
-      {/* Biểu đồ cột: toggle "Theo designer (100%)" / "Theo ngày (số lượng)". */}
-      <StatusBarCharts
+      {/* Bảng tổng quan N ngày (tổng đơn / chưa soát / lỗi / tồn) — TRÊN CÙNG. */}
+      <DesignerDailyOverview
+        days={7}
+        from={dateFrom || undefined}
+        to={dateTo || undefined}
+        reloadToken={matrixToken}
         type={filterType || undefined}
         customer={filterCustomer || undefined}
-        filterDays={7}
-        filterFrom={dateFrom || undefined}
-        filterTo={dateTo || undefined}
       />
 
       {/* Ma trận toàn team × ngày (7/14/30 riêng) — snapshot đơn chưa xong. */}
@@ -228,6 +219,15 @@ export default function DesignerStatsTab() {
         reloadToken={matrixToken}
         type={filterType || undefined}
         customer={filterCustomer || undefined}
+      />
+
+      {/* Biểu đồ cột: toggle "Theo designer (100%)" / "Theo ngày (số lượng)". */}
+      <StatusBarCharts
+        type={filterType || undefined}
+        customer={filterCustomer || undefined}
+        filterDays={7}
+        filterFrom={dateFrom || undefined}
+        filterTo={dateTo || undefined}
       />
 
       {/* Nút làm mới các bảng bên trên (period switcher tạm ẩn cùng 3 khối legacy). */}
@@ -242,265 +242,264 @@ export default function DesignerStatsTab() {
 
       {/* Period switcher — chỉ phục vụ Leaderboard/Timeline/Error pie (đang tắt). */}
       {SHOW_LEGACY_STATS && (
-      <div className="flex items-center justify-between flex-wrap gap-3">
-        <div className="inline-flex rounded-md border border-border overflow-hidden text-xs">
-          {(['today', '7d', '30d', 'custom'] as Period[]).map((p) => (
-            <button
-              key={p}
-              type="button"
-              onClick={() => setPeriod(p)}
-              className={`px-3 py-1.5 ${
-                period === p
+        <div className="flex items-center justify-between flex-wrap gap-3">
+          <div className="inline-flex rounded-md border border-border overflow-hidden text-xs">
+            {(['today', '7d', '30d', 'custom'] as Period[]).map((p) => (
+              <button
+                key={p}
+                type="button"
+                onClick={() => setPeriod(p)}
+                className={`px-3 py-1.5 ${period === p
                   ? 'bg-primary text-primary-foreground'
                   : 'bg-background text-muted-foreground hover:bg-muted'
-              }`}
-            >
-              {p === 'today' ? 'Hôm nay' : p === '7d' ? '7 ngày' : p === '30d' ? '30 ngày' : 'Tùy chỉnh'}
-            </button>
-          ))}
-        </div>
-        {period === 'custom' && (
-          <div className="flex items-center gap-2 text-xs flex-wrap">
-            <DateRangePresets
-              from={customFrom}
-              to={customTo}
-              variant="compact"
-              onChange={(f, t) => {
-                setCustomFrom(f);
-                setCustomTo(t);
-              }}
-            />
-            <input
-              type="date"
-              value={customFrom}
-              onChange={(e) => setCustomFrom(e.target.value)}
-              className="rounded-md border border-input bg-background px-2 py-1"
-            />
-            <span className="text-muted-foreground">→</span>
-            <input
-              type="date"
-              value={customTo}
-              onChange={(e) => setCustomTo(e.target.value)}
-              className="rounded-md border border-input bg-background px-2 py-1"
-            />
+                  }`}
+              >
+                {p === 'today' ? 'Hôm nay' : p === '7d' ? '7 ngày' : p === '30d' ? '30 ngày' : 'Tùy chỉnh'}
+              </button>
+            ))}
           </div>
-        )}
-        <Button variant="ghost" size="sm" onClick={fetchAll} disabled={loading}>
-          <RefreshCw size={13} className={loading ? 'animate-spin' : ''} />
-        </Button>
-      </div>
+          {period === 'custom' && (
+            <div className="flex items-center gap-2 text-xs flex-wrap">
+              <DateRangePresets
+                from={customFrom}
+                to={customTo}
+                variant="compact"
+                onChange={(f, t) => {
+                  setCustomFrom(f);
+                  setCustomTo(t);
+                }}
+              />
+              <input
+                type="date"
+                value={customFrom}
+                onChange={(e) => setCustomFrom(e.target.value)}
+                className="rounded-md border border-input bg-background px-2 py-1"
+              />
+              <span className="text-muted-foreground">→</span>
+              <input
+                type="date"
+                value={customTo}
+                onChange={(e) => setCustomTo(e.target.value)}
+                className="rounded-md border border-input bg-background px-2 py-1"
+              />
+            </div>
+          )}
+          <Button variant="ghost" size="sm" onClick={fetchAll} disabled={loading}>
+            <RefreshCw size={13} className={loading ? 'animate-spin' : ''} />
+          </Button>
+        </div>
       )}
 
       {/* Leaderboard — tạm tắt (SHOW_LEGACY_STATS). */}
       {SHOW_LEGACY_STATS && (
-      <div className="rounded-lg border border-border bg-card">
-        <div className="flex items-center justify-between p-3 border-b border-border">
-          <div className="flex items-center gap-2">
-            <Trophy size={16} className="text-amber-500" />
-            <span className="text-sm font-semibold">Leaderboard</span>
-            <span className="text-xs text-muted-foreground">— sort theo Đã xong trong period</span>
+        <div className="rounded-lg border border-border bg-card">
+          <div className="flex items-center justify-between p-3 border-b border-border">
+            <div className="flex items-center gap-2">
+              <Trophy size={16} className="text-amber-500" />
+              <span className="text-sm font-semibold">Leaderboard</span>
+              <span className="text-xs text-muted-foreground">— sort theo Đã xong trong period</span>
+            </div>
           </div>
-        </div>
-        <Table>
-          <TableHeader>
-            <TableRow>
-              <TableHead className="w-10 text-center">#</TableHead>
-              <TableHead>Designer</TableHead>
-              <TableHead className="w-30 text-center" title="Đang chờ làm — snapshot hiện tại">
-                Cần làm
-              </TableHead>
-              <TableHead className="w-30 text-center" title="Đang xử lý — snapshot hiện tại">
-                Đang làm
-              </TableHead>
-              <TableHead
-                className="w-30 text-center"
-                title="Hoàn thành KHÔNG dính lỗi trong period (đã trừ đơn Đã sửa)"
-              >
-                Đã xong
-              </TableHead>
-              <TableHead
-                className="w-30 text-center"
-                title="Hoàn thành SAU KHI sửa lỗi trong period (designerReworkCount>0)"
-              >
-                Đã sửa
-              </TableHead>
-              <TableHead className="w-30 text-center" title="Đang ở trạng thái không làm được — snapshot">
-                KLĐ (hiện)
-              </TableHead>
-              <TableHead className="w-30 text-center" title="Đang ở trạng thái rework — snapshot">
-                L.lại (hiện)
-              </TableHead>
-              <TableHead
-                className="w-30 text-center"
-                title="Tổng số lần đã báo không làm được trong period (kể cả đã giao lại sau đó)"
-              >
-                Tổng KLĐ
-              </TableHead>
-              <TableHead
-                className="w-30 text-center"
-                title="Tổng số lần đã chuyển sang rework trong period (kể cả đã restart xong)"
-              >
-                Tổng l.lại
-              </TableHead>
-              <TableHead className="w-30 text-center">Avg phản hồi</TableHead>
-              <TableHead className="w-30 text-center">Avg làm</TableHead>
-              <TableHead className="w-30 text-center">Tỉ lệ lỗi</TableHead>
-            </TableRow>
-          </TableHeader>
-          <TableBody>
-            {loading && leaderboard.length === 0 && (
+          <Table>
+            <TableHeader>
               <TableRow>
-                <TableCell colSpan={13} className="text-center py-8">
-                  <Spinner size={20} className="text-muted-foreground" />
-                </TableCell>
-              </TableRow>
-            )}
-            {!loading && leaderboard.length === 0 && (
-              <TableRow>
-                <TableCell colSpan={13} className="text-center py-8 text-sm text-muted-foreground">
-                  Chưa có designer nào hoạt động trong period này.
-                </TableCell>
-              </TableRow>
-            )}
-            {leaderboard.map((row, idx) => {
-              const isSelected = row.userId === selectedUserId;
-              return (
-                <TableRow
-                  key={row.userId}
-                  className={`cursor-pointer ${isSelected ? 'bg-muted/50' : ''}`}
-                  onClick={() => setSelectedCode(row.userId)}
+                <TableHead className="w-10 text-center">#</TableHead>
+                <TableHead>Designer</TableHead>
+                <TableHead className="w-30 text-center" title="Đang chờ làm — snapshot hiện tại">
+                  Cần làm
+                </TableHead>
+                <TableHead className="w-30 text-center" title="Đang xử lý — snapshot hiện tại">
+                  Đang làm
+                </TableHead>
+                <TableHead
+                  className="w-30 text-center"
+                  title="Hoàn thành KHÔNG dính lỗi trong period (đã trừ đơn Đã sửa)"
                 >
-                  <TableCell className="text-center text-xs font-bold text-muted-foreground">{idx + 1}</TableCell>
-                  <TableCell>
-                    <div className="font-medium text-sm">{row.fullName}</div>
-                    {row.email && <div className="text-[10px] text-muted-foreground">{row.email}</div>}
-                  </TableCell>
-                  <TableCell className="text-center">{row.assignedCount}</TableCell>
-                  <TableCell className="text-center text-indigo-600 dark:text-indigo-400">
-                    {row.inProgressCount}
-                  </TableCell>
-                  <TableCell className="text-center font-semibold text-emerald-600 dark:text-emerald-400">
-                    {Math.max(0, row.completedInPeriod - row.fixedInPeriod)}
-                  </TableCell>
-                  <TableCell className="text-center font-semibold text-teal-600 dark:text-teal-400">
-                    {row.fixedInPeriod}
-                  </TableCell>
-                  <TableCell className="text-center text-rose-600 dark:text-rose-400">{row.rejectedCount}</TableCell>
-                  <TableCell className="text-center text-amber-600 dark:text-amber-400">{row.reworkCount}</TableCell>
-                  <TableCell className="text-center text-rose-700 dark:text-rose-300 font-semibold">
-                    {row.totalRejected}
-                  </TableCell>
-                  <TableCell className="text-center text-amber-700 dark:text-amber-300 font-semibold">
-                    {row.totalRework}
-                  </TableCell>
-                  <TableCell className="text-center text-xs">{row.avgResponseMin}&apos;</TableCell>
-                  <TableCell className="text-center text-xs">{row.avgWorkMin}&apos;</TableCell>
-                  <TableCell className="text-center">
-                    <Badge
-                      variant={row.errorRate === 0 ? 'outline' : row.errorRate < 0.2 ? 'secondary' : 'destructive'}
-                      className="text-[10px]"
-                    >
-                      {Math.round(row.errorRate * 100)}%
-                    </Badge>
+                  Đã xong
+                </TableHead>
+                <TableHead
+                  className="w-30 text-center"
+                  title="Hoàn thành SAU KHI sửa lỗi trong period (designerReworkCount>0)"
+                >
+                  Đã sửa
+                </TableHead>
+                <TableHead className="w-30 text-center" title="Đang ở trạng thái không làm được — snapshot">
+                  KLĐ (hiện)
+                </TableHead>
+                <TableHead className="w-30 text-center" title="Đang ở trạng thái rework — snapshot">
+                  L.lại (hiện)
+                </TableHead>
+                <TableHead
+                  className="w-30 text-center"
+                  title="Tổng số lần đã báo không làm được trong period (kể cả đã giao lại sau đó)"
+                >
+                  Tổng KLĐ
+                </TableHead>
+                <TableHead
+                  className="w-30 text-center"
+                  title="Tổng số lần đã chuyển sang rework trong period (kể cả đã restart xong)"
+                >
+                  Tổng l.lại
+                </TableHead>
+                <TableHead className="w-30 text-center">Avg phản hồi</TableHead>
+                <TableHead className="w-30 text-center">Avg làm</TableHead>
+                <TableHead className="w-30 text-center">Tỉ lệ lỗi</TableHead>
+              </TableRow>
+            </TableHeader>
+            <TableBody>
+              {loading && leaderboard.length === 0 && (
+                <TableRow>
+                  <TableCell colSpan={13} className="text-center py-8">
+                    <Spinner size={20} className="text-muted-foreground" />
                   </TableCell>
                 </TableRow>
-              );
-            })}
-          </TableBody>
-        </Table>
-      </div>
+              )}
+              {!loading && leaderboard.length === 0 && (
+                <TableRow>
+                  <TableCell colSpan={13} className="text-center py-8 text-sm text-muted-foreground">
+                    Chưa có designer nào hoạt động trong period này.
+                  </TableCell>
+                </TableRow>
+              )}
+              {leaderboard.map((row, idx) => {
+                const isSelected = row.userId === selectedUserId;
+                return (
+                  <TableRow
+                    key={row.userId}
+                    className={`cursor-pointer ${isSelected ? 'bg-muted/50' : ''}`}
+                    onClick={() => setSelectedCode(row.userId)}
+                  >
+                    <TableCell className="text-center text-xs font-bold text-muted-foreground">{idx + 1}</TableCell>
+                    <TableCell>
+                      <div className="font-medium text-sm">{row.fullName}</div>
+                      {row.email && <div className="text-[10px] text-muted-foreground">{row.email}</div>}
+                    </TableCell>
+                    <TableCell className="text-center">{row.assignedCount}</TableCell>
+                    <TableCell className="text-center text-indigo-600 dark:text-indigo-400">
+                      {row.inProgressCount}
+                    </TableCell>
+                    <TableCell className="text-center font-semibold text-emerald-600 dark:text-emerald-400">
+                      {Math.max(0, row.completedInPeriod - row.fixedInPeriod)}
+                    </TableCell>
+                    <TableCell className="text-center font-semibold text-teal-600 dark:text-teal-400">
+                      {row.fixedInPeriod}
+                    </TableCell>
+                    <TableCell className="text-center text-rose-600 dark:text-rose-400">{row.rejectedCount}</TableCell>
+                    <TableCell className="text-center text-amber-600 dark:text-amber-400">{row.reworkCount}</TableCell>
+                    <TableCell className="text-center text-rose-700 dark:text-rose-300 font-semibold">
+                      {row.totalRejected}
+                    </TableCell>
+                    <TableCell className="text-center text-amber-700 dark:text-amber-300 font-semibold">
+                      {row.totalRework}
+                    </TableCell>
+                    <TableCell className="text-center text-xs">{row.avgResponseMin}&apos;</TableCell>
+                    <TableCell className="text-center text-xs">{row.avgWorkMin}&apos;</TableCell>
+                    <TableCell className="text-center">
+                      <Badge
+                        variant={row.errorRate === 0 ? 'outline' : row.errorRate < 0.2 ? 'secondary' : 'destructive'}
+                        className="text-[10px]"
+                      >
+                        {Math.round(row.errorRate * 100)}%
+                      </Badge>
+                    </TableCell>
+                  </TableRow>
+                );
+              })}
+            </TableBody>
+          </Table>
+        </div>
       )}
 
       {/* Timeline per-designer + Lỗi xưởng phân loại — tạm tắt (SHOW_LEGACY_STATS). */}
       {SHOW_LEGACY_STATS && (
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-5">
-        {/* Timeline */}
-        <div className="lg:col-span-2 rounded-lg border border-border bg-card p-4">
-          <div className="flex items-center justify-between mb-3">
-            <div>
-              <h3 className="text-sm font-semibold">Timeline per-designer</h3>
-              <p className="text-[11px] text-muted-foreground">4 series: gán / nhận / xong / làm lại — theo ngày.</p>
+        <div className="grid grid-cols-1 lg:grid-cols-3 gap-5">
+          {/* Timeline */}
+          <div className="lg:col-span-2 rounded-lg border border-border bg-card p-4">
+            <div className="flex items-center justify-between mb-3">
+              <div>
+                <h3 className="text-sm font-semibold">Timeline per-designer</h3>
+                <p className="text-[11px] text-muted-foreground">4 series: gán / nhận / xong / làm lại — theo ngày.</p>
+              </div>
+              <select
+                value={selectedUserId}
+                onChange={(e) => setSelectedCode(e.target.value)}
+                className="h-8 rounded-md border border-input bg-background px-2 text-xs"
+              >
+                {leaderboard.map((r) => (
+                  <option key={r.userId} value={r.userId}>
+                    {r.fullName}
+                  </option>
+                ))}
+              </select>
             </div>
-            <select
-              value={selectedUserId}
-              onChange={(e) => setSelectedCode(e.target.value)}
-              className="h-8 rounded-md border border-input bg-background px-2 text-xs"
-            >
-              {leaderboard.map((r) => (
-                <option key={r.userId} value={r.userId}>
-                  {r.fullName}
-                </option>
-              ))}
-            </select>
+            {timeline.length === 0 ? (
+              <p className="text-xs text-muted-foreground text-center py-12">
+                Chọn 1 designer ở leaderboard để xem timeline.
+              </p>
+            ) : (
+              <div style={{ width: '100%', height: 280 }}>
+                <ResponsiveContainer>
+                  <LineChart data={timeline} margin={{ top: 5, right: 10, left: -10, bottom: 0 }}>
+                    <XAxis dataKey="date" tickFormatter={(d) => d.slice(5)} tick={{ fontSize: 10 }} />
+                    <YAxis tick={{ fontSize: 10 }} allowDecimals={false} />
+                    <RechartsTooltip contentStyle={{ fontSize: 11, padding: 6 }} labelStyle={{ fontSize: 10 }} />
+                    <Line type="monotone" dataKey="assigned" stroke="#71717A" strokeWidth={2} dot={false} name="Gán" />
+                    <Line type="monotone" dataKey="started" stroke="#6366F1" strokeWidth={2} dot={false} name="Nhận" />
+                    <Line type="monotone" dataKey="completed" stroke="#10B981" strokeWidth={2} dot={false} name="Xong" />
+                    <Line type="monotone" dataKey="rework" stroke="#F59E0B" strokeWidth={2} dot={false} name="Làm lại" />
+                  </LineChart>
+                </ResponsiveContainer>
+              </div>
+            )}
           </div>
-          {timeline.length === 0 ? (
-            <p className="text-xs text-muted-foreground text-center py-12">
-              Chọn 1 designer ở leaderboard để xem timeline.
-            </p>
-          ) : (
-            <div style={{ width: '100%', height: 280 }}>
-              <ResponsiveContainer>
-                <LineChart data={timeline} margin={{ top: 5, right: 10, left: -10, bottom: 0 }}>
-                  <XAxis dataKey="date" tickFormatter={(d) => d.slice(5)} tick={{ fontSize: 10 }} />
-                  <YAxis tick={{ fontSize: 10 }} allowDecimals={false} />
-                  <RechartsTooltip contentStyle={{ fontSize: 11, padding: 6 }} labelStyle={{ fontSize: 10 }} />
-                  <Line type="monotone" dataKey="assigned" stroke="#71717A" strokeWidth={2} dot={false} name="Gán" />
-                  <Line type="monotone" dataKey="started" stroke="#6366F1" strokeWidth={2} dot={false} name="Nhận" />
-                  <Line type="monotone" dataKey="completed" stroke="#10B981" strokeWidth={2} dot={false} name="Xong" />
-                  <Line type="monotone" dataKey="rework" stroke="#F59E0B" strokeWidth={2} dot={false} name="Làm lại" />
-                </LineChart>
-              </ResponsiveContainer>
-            </div>
-          )}
-        </div>
 
-        {/* Error stats pie */}
-        <div className="rounded-lg border border-border bg-card p-4">
-          <h3 className="text-sm font-semibold">Lỗi xưởng — phân loại</h3>
-          <p className="text-[11px] text-muted-foreground mb-2">
-            Designer vs xưởng. {errorStats?.total || 0} đơn lỗi tổng.
-          </p>
-          {pieData.length === 0 ? (
-            <p className="text-xs text-muted-foreground text-center py-8">Không có lỗi nào trong period này.</p>
-          ) : (
-            <div style={{ width: '100%', height: 200 }}>
-              <ResponsiveContainer>
-                <PieChart>
-                  <Pie data={pieData} dataKey="value" nameKey="name" outerRadius={70} label={{ fontSize: 10 }}>
-                    {pieData.map((d) => (
-                      <Cell key={d.key} fill={SOURCE_COLORS[d.key as keyof typeof SOURCE_COLORS]} />
-                    ))}
-                  </Pie>
-                  <RechartsTooltip contentStyle={{ fontSize: 11, padding: 6 }} />
-                </PieChart>
-              </ResponsiveContainer>
-            </div>
-          )}
-          {errorStats && errorStats.byCode.length > 0 && (
-            <div className="mt-3 space-y-1 max-h-40 overflow-y-auto">
-              {errorStats.byCode.map((row) => (
-                <div key={row.code} className="flex items-center justify-between text-[11px] gap-2">
-                  <div className="flex items-center gap-1.5 min-w-0">
-                    <span
-                      className="inline-block w-1.5 h-1.5 rounded-full shrink-0"
-                      style={{
-                        backgroundColor:
-                          row.errorSource === 'designer'
-                            ? SOURCE_COLORS.designer
-                            : row.errorSource === 'factory'
-                              ? SOURCE_COLORS.factory
-                              : SOURCE_COLORS.unknown,
-                      }}
-                    />
-                    <span className="truncate">{row.label || row.code}</span>
+          {/* Error stats pie */}
+          <div className="rounded-lg border border-border bg-card p-4">
+            <h3 className="text-sm font-semibold">Lỗi xưởng — phân loại</h3>
+            <p className="text-[11px] text-muted-foreground mb-2">
+              Designer vs xưởng. {errorStats?.total || 0} đơn lỗi tổng.
+            </p>
+            {pieData.length === 0 ? (
+              <p className="text-xs text-muted-foreground text-center py-8">Không có lỗi nào trong period này.</p>
+            ) : (
+              <div style={{ width: '100%', height: 200 }}>
+                <ResponsiveContainer>
+                  <PieChart>
+                    <Pie data={pieData} dataKey="value" nameKey="name" outerRadius={70} label={{ fontSize: 10 }}>
+                      {pieData.map((d) => (
+                        <Cell key={d.key} fill={SOURCE_COLORS[d.key as keyof typeof SOURCE_COLORS]} />
+                      ))}
+                    </Pie>
+                    <RechartsTooltip contentStyle={{ fontSize: 11, padding: 6 }} />
+                  </PieChart>
+                </ResponsiveContainer>
+              </div>
+            )}
+            {errorStats && errorStats.byCode.length > 0 && (
+              <div className="mt-3 space-y-1 max-h-40 overflow-y-auto">
+                {errorStats.byCode.map((row) => (
+                  <div key={row.code} className="flex items-center justify-between text-[11px] gap-2">
+                    <div className="flex items-center gap-1.5 min-w-0">
+                      <span
+                        className="inline-block w-1.5 h-1.5 rounded-full shrink-0"
+                        style={{
+                          backgroundColor:
+                            row.errorSource === 'designer'
+                              ? SOURCE_COLORS.designer
+                              : row.errorSource === 'factory'
+                                ? SOURCE_COLORS.factory
+                                : SOURCE_COLORS.unknown,
+                        }}
+                      />
+                      <span className="truncate">{row.label || row.code}</span>
+                    </div>
+                    <span className="text-muted-foreground tabular-nums">{row.count}</span>
                   </div>
-                  <span className="text-muted-foreground tabular-nums">{row.count}</span>
-                </div>
-              ))}
-            </div>
-          )}
+                ))}
+              </div>
+            )}
+          </div>
         </div>
-      </div>
       )}
     </div>
   );

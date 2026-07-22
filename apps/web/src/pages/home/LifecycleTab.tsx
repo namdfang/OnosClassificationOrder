@@ -532,9 +532,9 @@ export default function LifecycleTab() {
           loading={loading && !data}
         />
         <KpiCard
-          label="Hoàn thành trong kỳ"
+          label="Hoàn thành"
           value={totals ? formatNumber(totals.completedInRange) : '—'}
-          sub={`${startDate} → ${endDate}`}
+          sub={`Đơn vào SX ${startDate} → ${endDate} đã đóng hàng xong`}
           icon={<PackageCheck size={13} />}
           tone="emerald"
           loading={loading && !data}

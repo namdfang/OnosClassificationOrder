@@ -35,7 +35,7 @@ const EMPTY: Data = {
   days: [],
   rows: [],
   columnTotals: [],
-  grandTotals: { assigned: 0, rework: 0, inProgress: 0, done: 0, unfinished: 0 },
+  grandTotals: { assigned: 0, rework: 0, inProgress: 0, done: 0, rejected: 0, received: 0, unfinished: 0 },
 };
 
 function todayISO(): string {

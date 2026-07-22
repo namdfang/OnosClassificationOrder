@@ -364,7 +364,13 @@ export const GetProductionOrdersZod = PageQueryZod.extend({
 
   // Workshop filters — comma-separated list of workshop_config codes
   printStatus: z.string().optional(),
+  /**
+   * CSV mã note kq Tool. Token: `__none__` = chưa soát (note rỗng) · `__any__`
+   * = đã soát (note bất kỳ) · `__error__` = đã soát & ≠ 'ok' (đang lỗi). 2 token
+   * sau dùng cho drill dải "Tổng quan theo ngày" tab Soát tool.
+   */
   toolResultNote: z.string().optional(),
+  /** CSV user._id. Token: `__none__` = chưa gán · `__any__` = đã gán (bất kỳ ai). */
   assignee: z.string().optional(),
   errorFile: z.string().optional(),
   /** Exact match (CSV) — used by the factory tab product filter. */
@@ -379,6 +385,8 @@ export const GetProductionOrdersZod = PageQueryZod.extend({
   productionError: z.string().optional(),
   /** Comma-separated workshop_config codes for machine (numéro máy). */
   machineNumber: z.string().optional(),
+  /** Lọc theo mức ưu tiên (`order.priority`) — '1'|'2'|'3'. Drill tab Soát tool. */
+  priority: z.enum(['1', '2', '3']).optional(),
   /**
    * Designer state filter — CSV của DesignerStatus value. Hỗ trợ token đặc
    * biệt `__none__` để lọc đơn chưa có designerStatus (data legacy).
@@ -391,6 +399,37 @@ export const GetProductionOrdersZod = PageQueryZod.extend({
    * Falsy → chỉ lấy đơn không có lỗi. Bỏ qua khi không có giá trị.
    */
   hasError: z.coerce.boolean().optional(),
+
+  /**
+   * CSV `productionErrorSource` ('designer'|'factory'|'tool-check') — lọc theo
+   * nguồn lỗi hiện tại. Drill hàng "Lỗi công đoạn" bảng Tổng quan N ngày.
+   */
+  errorSource: z.string().optional(),
+  /**
+   * Lịch sử soát lỗi tool (`toolCheckErrorNotes` — bền vững, xem
+   * ToolCheckWorkflow.md). '1' → đơn TỪNG bị soát ra lỗi (array non-empty);
+   * '0' → chưa từng (array rỗng/missing). Drill hàng "Soát lỗi" + nhóm
+   * "Đẩy lại · từng lỗi/từng ok" bảng Tổng quan N ngày.
+   */
+  toolCheckedError: z.enum(['1', '0']).optional(),
+  /**
+   * CSV mã lỗi soát tool — lọc theo MÃ MỚI NHẤT của đơn (phần tử cuối
+   * `toolCheckErrorNotes`, khớp breakdown `toolErrorByNote`). Drill dòng mã lỗi
+   * trong tooltip hàng "Soát lỗi" bảng Tổng quan N ngày.
+   */
+  toolErrorNote: z.string().optional(),
+  /**
+   * Truthy → đơn thuộc pool cần/qua designer: `toolCheckErrorNotes` non-empty
+   * HOẶC `designerStatus ∈ [assigned, in-progress, rework, done]`. Kết hợp
+   * `assignee=__none__` cho drill hàng "Chưa gán designer" Tổng quan N ngày.
+   */
+  needDesigner: z.coerce.boolean().optional(),
+  /**
+   * Truthy → đơn "tồn" theo lăng kính designer (hàng Tổng tồn Tổng quan N ngày):
+   * chưa soát (note rỗng) ∨ đã gán & chưa xong (status assigned/in-progress/
+   * rework) ∨ đang lỗi & chưa gán (pool cần designer). Union — mirror aggregation.
+   */
+  designBacklog: z.coerce.boolean().optional(),
 
   /**
    * Truthy → chỉ lấy đơn đang GIỮ (heldAt set). Falsy → chỉ lấy đơn KHÔNG giữ.
@@ -1623,7 +1662,8 @@ export const LifecycleOverviewZod = z.object({
     totalOrders: z.number(),
     /** Đơn còn trong pipeline (chưa pack done, chưa hủy). */
     totalActive: z.number(),
-    /** Đơn pack.done trong kỳ. */
+    /** Đơn TRONG COHORT (inProductionAt ∈ kỳ) đã đóng hàng xong — không lọc
+     * thêm theo ngày hoàn thành. Bất biến: totalOrders = totalActive + số này. */
     completedInRange: z.number(),
     /** Cycle time TB toàn flow (ms): designerFirstStartedAt/createdAt → fulfillmentCompletedAt. */
     avgTotalCycleMs: z.number(),
@@ -1871,11 +1911,24 @@ export const ToolCheckOrderZod = z.object({
 });
 export type ToolCheckOrder = z.infer<typeof ToolCheckOrderZod>;
 
-/** 1 ngày trong dải "tổng quan theo ngày" của tab Soát tool. */
+/**
+ * 1 ngày trong dải "tổng quan theo ngày" của tab Soát tool. Bất biến:
+ * `total = unreviewed + reviewed`; `reviewed ≈ reviewedError + reviewedOk`
+ * (soát lỗi/ok là KẾT QUẢ SOÁT lịch sử — lệch chỉ khi đơn từng lỗi bị xóa
+ * trắng note, hiếm).
+ */
 export const ToolCheckDayRowZod = z.object({
   day: z.string(),
+  /** Tổng đơn vào SX ngày đó (sau filter tab). */
+  total: z.number().int().nonnegative(),
   /** Đơn chưa soát (toolResultNote rỗng) vào SX ngày đó. */
   unreviewed: z.number().int().nonnegative(),
+  /** Đơn đã soát (toolResultNote có nội dung). */
+  reviewed: z.number().int().nonnegative(),
+  /** TỪNG bị soát ra lỗi (`toolCheckErrorNotes` non-empty) — LỊCH SỬ, không giảm khi đơn đã sửa xong. */
+  reviewedError: z.number().int().nonnegative(),
+  /** Đã soát & CHƯA TỪNG lỗi = soát ok ngay (gồm cả đơn ok bị In trả về treo note='error'). */
+  reviewedOk: z.number().int().nonnegative(),
   /** Đơn In trả về (source=tool-check + note=error) vào SX ngày đó. */
   rework: z.number().int().nonnegative(),
 });
@@ -1934,9 +1987,13 @@ export const ToolCheckOverviewResZod = ResZod.extend({
     errorHistory: ToolCheckErrorRowZod.array(),
     /** Dải theo ngày (mới→cũ; FE reverse để cũ→mới). */
     days: ToolCheckDayRowZod.array(),
-    /** Tổng cột cho dải ngày. */
+    /** Tổng cột cho dải ngày (cùng shape metric với `ToolCheckDayRowZod`). */
     columnTotals: z.object({
+      total: z.number().int().nonnegative(),
       unreviewed: z.number().int().nonnegative(),
+      reviewed: z.number().int().nonnegative(),
+      reviewedError: z.number().int().nonnegative(),
+      reviewedOk: z.number().int().nonnegative(),
       rework: z.number().int().nonnegative(),
     }),
     /** Options cho 3 dropdown filter (phạm vi Support trong kỳ, không cross-narrow). */

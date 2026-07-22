@@ -248,6 +248,10 @@ export const TeamDailyCellZod = z.object({
   rework: z.number().int().nonnegative(),
   inProgress: z.number().int().nonnegative(),
   done: z.number().int().nonnegative(),
+  /** Số LẦN "Không làm được" (bàn giao đi) — event `designerRejections.fromUserId`. */
+  rejected: z.number().int().nonnegative(),
+  /** Số LẦN nhận bàn giao từ người khác — event `designerRejections.toUserId`. ĐÃ nằm trong 4 trạng thái/rejected của người nhận, KHÔNG cộng vào tổng đã nhận. */
+  received: z.number().int().nonnegative(),
   /** = assigned + rework + inProgress. */
   unfinished: z.number().int().nonnegative(),
 });
@@ -338,12 +342,32 @@ export const DailyOverviewRowZod = z.object({
   ok: z.number().int().nonnegative(),
   /** toolResultNote null/'' (chưa soát tool). */
   unreviewed: z.number().int().nonnegative(),
-  /** toolResultNote set & != '' & != 'ok' (lỗi thật — CÒN LẠI hiện tại). */
+  /** Tổng đơn ĐANG lỗi (toolResultNote set & != '' & != 'ok') — còn lại chưa xử lý xong. */
   error: z.number().int().nonnegative(),
-  /** Đơn TỪNG lỗi trong ngày (kể cả đã sửa xong): note lỗi hiện tại ∨ productionErrorCount>0 ∨ designerReworkCount>0. */
-  errorTotal: z.number().int().nonnegative(),
   /** Đơn ĐANG lỗi & chưa gán designer (assignee rỗng). */
   errorUnassigned: z.number().int().nonnegative(),
+  /** "Soát lỗi": đơn TỪNG bị người soát đánh note lỗi ≠ 'ok' (toolCheckErrorNotes non-empty — LỊCH SỬ, giữ kể cả đã sửa về 'ok'). */
+  toolError: z.number().int().nonnegative(),
+  /** Trong toolError: đơn ĐÃ sửa xong (toolResultNote hiện tại = 'ok'). */
+  toolErrorFixed: z.number().int().nonnegative(),
+  /** Trong toolError: đơn còn đang lỗi & chưa gán designer. */
+  toolErrorUnassigned: z.number().int().nonnegative(),
+  /** Breakdown theo MÃ LỖI MỚI NHẤT của đơn (phần tử cuối toolCheckErrorNotes) — mỗi đơn đúng 1 dòng, tổng = toolError. */
+  toolErrorByNote: DailyOverviewErrorNoteZod.array(),
+  /** Đã gán designer (assignee set + designerStatus ∈ 4 trạng thái) & TỪNG lỗi soát tool. */
+  assignedToolError: z.number().int().nonnegative(),
+  /** Đã gán designer & CHƯA từng lỗi soát tool (ok/chưa soát bị đẩy về). assignedToolError + assignedWasOk = Tổng/ngày ma trận team. */
+  assignedWasOk: z.number().int().nonnegative(),
+  /** Đơn CHƯA từng lỗi soát tool nhưng đã vào flow designer (designerStatus ∈ 4) — "OK/chưa soát → đẩy về", tính lịch sử (gồm rework chưa ai ôm). */
+  wasOkPushed: z.number().int().nonnegative(),
+  /** "Chưa gán designer": pool cần designer (toolCheckErrorNotes non-empty ∨ designerStatus ∈ 4) & CHƯA gán & ĐANG lỗi (note set ≠ 'ok'). */
+  unassignedNeed: z.number().int().nonnegative(),
+  /** Trong unassignedNeed: phần TỪNG lỗi soát tool (phần còn lại = ok/chưa soát bị đẩy về). */
+  unassignedNeedTool: z.number().int().nonnegative(),
+  /** Pool & chưa gán nhưng note ĐÃ về 'ok'/rỗng — đã xử lý không cần designer. Bất biến: toolError + wasOkPushed = assignedTotal + unassignedNeed + unassignedResolved. */
+  unassignedResolved: z.number().int().nonnegative(),
+  /** Design ĐÃ XONG: assignee set + designerStatus='done' (⊂ Đã gán — khớp cột "Đã xong" ma trận team). */
+  designDone: z.number().int().nonnegative(),
   /** Breakdown theo từng mã note ≠ ok, sort count desc. */
   errorByNote: DailyOverviewErrorNoteZod.array(),
   /** toolResultNote != 'ok' = unreviewed + error (chưa soát + lỗi). */
@@ -370,8 +394,17 @@ export const DailyOverviewColumnTotalsZod = z.object({
   ok: z.number().int().nonnegative(),
   unreviewed: z.number().int().nonnegative(),
   error: z.number().int().nonnegative(),
-  errorTotal: z.number().int().nonnegative(),
   errorUnassigned: z.number().int().nonnegative(),
+  toolError: z.number().int().nonnegative(),
+  toolErrorFixed: z.number().int().nonnegative(),
+  toolErrorUnassigned: z.number().int().nonnegative(),
+  assignedToolError: z.number().int().nonnegative(),
+  assignedWasOk: z.number().int().nonnegative(),
+  wasOkPushed: z.number().int().nonnegative(),
+  unassignedNeed: z.number().int().nonnegative(),
+  unassignedNeedTool: z.number().int().nonnegative(),
+  unassignedResolved: z.number().int().nonnegative(),
+  designDone: z.number().int().nonnegative(),
   backlog: z.number().int().nonnegative(),
 });
 

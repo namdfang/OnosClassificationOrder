@@ -89,7 +89,7 @@ Response `LifecycleOverview`:
   totals: {
     totalOrders: number;                // tổng đơn trong tập đã lọc (facet totalAll)
     totalActive: number;                // đơn chưa pack done, chưa hủy
-    completedInRange: number;           // pack.done trong kỳ
+    completedInRange: number;           // đơn TRONG COHORT (inProductionAt ∈ kỳ) đã pack done — KHÔNG lọc thêm theo ngày hoàn thành (bất biến: totalOrders = totalActive + completedInRange)
     avgTotalCycleMs: number;            // designerFirstStartedAt/createdAt → fulfillmentCompletedAt
     bottleneckStage: string | null;     // chặng có backlog lớn nhất
     cancelledInRange: number;           // đơn HỦY trong cùng window inProductionAt + xưởng (funnel đã loại; đếm riêng)
@@ -102,7 +102,7 @@ Response `LifecycleOverview`:
 LifecycleStageRow = {
   stage: string;        // 'tool-check' | 'designer' | 8 FulfillmentStage
   label: string;        // nhãn VN (BE authoritative)
-  backlog: number;      // đang chứa (snapshot). tool-check = chưa soát
+  backlog: number;      // đang chứa (snapshot). tool-check = chưa soát. designer = đơn lỗi ĐÃ gán chờ làm (status='assigned') + đơn ĐANG cần designer chưa gán (mirror `unassignedNeedCond` getDailyOverview — KHÔNG đếm mọi đơn unassigned vì đó là default của đơn thường)
   waitingToStart: number; // chờ nhận task (đã tới, chưa bấm Bắt đầu). designer='assigned'; fulfillment='waiting'; tool=0
   inProgress: number;   // đang làm (snapshot). tool-check = 0
   rework: number;       // rework (snapshot). tool-check = đơn bị đẩy về Support soát lại (marker `productionErrorSource='tool-check' AND toolResultNote='error'` — CÙNG định nghĩa "cần làm lại" tab Soát tool)
@@ -168,7 +168,13 @@ trên collection `orders`:
   path có dấu gạch `qc-post-press`).
 - Facet `fulfillmentByStage`: `$objectToArray` → `$unwind` → group theo `stages.k`
   → passed/doneInRange/avgWork per stage.
+- Facet `designer.backlog`: `status='assigned'` ∨ `unassignedNeedCond` (pool cần
+  designer & đang lỗi & chưa gán — mirror bảng "Chưa gán designer", tự loại đơn
+  "In trả về chờ Soát tool").
 - Facet `totalActive` / `totalCycle` / `completionTimeline` / `factories`.
+  `totalCycle` + `completionTimeline` match `fulfillmentCompletedAt` **tồn tại**
+  (cohort-based, không lọc theo ngày hoàn thành — thuần trục `inProductionAt`;
+  timeline có thể có ngày nằm ngoài window).
 
 `avgWorkMs = workSum / workCnt` (làm tròn). `bottleneckStage` = chặng backlog max.
 

@@ -25,7 +25,7 @@ const EMPTY: Data = {
   days: [],
   rows: [],
   columnTotals: [],
-  grandTotals: { assigned: 0, rework: 0, inProgress: 0, done: 0, unfinished: 0 },
+  grandTotals: { assigned: 0, rework: 0, inProgress: 0, done: 0, rejected: 0, received: 0, unfinished: 0 },
 };
 
 interface Props {
@@ -108,6 +108,8 @@ export function TeamDailyMatrix({ reloadToken, type, customer }: Props) {
               <Legend className="text-amber-600" label="Làm lại" />
               <Legend className="text-indigo-600" label="Đang làm" />
               <Legend className="text-emerald-600" label="Đã xong" />
+              <Legend className="text-rose-600" label="Không làm được" />
+              <Legend className="text-sky-600" label="+Nhận thêm" />
             </div>
             {/* Range switcher */}
             <div className="flex items-center rounded-md border border-border overflow-hidden">
@@ -145,8 +147,21 @@ export function TeamDailyMatrix({ reloadToken, type, customer }: Props) {
           <span className="text-muted-foreground">
             Đang làm <span className="font-semibold text-indigo-600">{grandTotals.inProgress}</span>
           </span>
+          <span className="text-muted-foreground">
+            Không làm được <span className="font-semibold text-rose-600">{grandTotals.rejected}</span>
+          </span>
+          <span className="text-muted-foreground">
+            Nhận thêm <span className="font-semibold text-sky-600">+{grandTotals.received}</span>
+          </span>
           <span className="ml-auto text-muted-foreground">
-            Đã xong <span className="font-semibold text-emerald-600">{grandTotals.done}</span>
+            Đã xong <span className="font-semibold text-emerald-600">{grandTotals.done}</span> · Tổng đã nhận{' '}
+            <span className="font-semibold text-foreground">
+              {grandTotals.assigned +
+                grandTotals.rework +
+                grandTotals.inProgress +
+                grandTotals.done +
+                grandTotals.rejected}
+            </span>
           </span>
         </div>
 
@@ -183,20 +198,40 @@ export function TeamDailyMatrix({ reloadToken, type, customer }: Props) {
                         {row.fullName}
                       </div>
                       <div className="text-[10px] text-muted-foreground">
-                        chưa xong{' '}
+                        đã nhận{' '}
+                        <span className="font-semibold text-foreground">
+                          {row.totals.assigned +
+                            row.totals.rework +
+                            row.totals.inProgress +
+                            row.totals.done +
+                            row.totals.rejected}
+                        </span>{' '}
+                        · chưa xong{' '}
                         <span className={row.totals.unfinished > 0 ? 'text-amber-600 font-semibold' : ''}>
                           {row.totals.unfinished}
                         </span>{' '}
                         · xong <span className="text-emerald-600">{row.totals.done}</span>
+                        {row.totals.rejected > 0 && (
+                          <>
+                            {' '}
+                            · k.làm được <span className="text-rose-600">{row.totals.rejected}</span>
+                          </>
+                        )}
+                        {row.totals.received > 0 && (
+                          <>
+                            {' '}
+                            · nhận <span className="text-sky-600">+{row.totals.received}</span>
+                          </>
+                        )}
                       </div>
                     </td>
                     {row.cells.map((c, i) => (
                       <td
                         key={days[i]}
-                        title={`${days[i]} — Cần làm ${c.assigned} · Làm lại ${c.rework} · Đang làm ${c.inProgress} · Đã xong ${c.done}`}
+                        title={`${days[i]} — Đã nhận ${c.assigned + c.rework + c.inProgress + c.done + c.rejected} = Cần làm ${c.assigned} + Làm lại ${c.rework} + Đang làm ${c.inProgress} + Đã xong ${c.done} + Không làm được ${c.rejected} (nhận bàn giao thêm +${c.received})`}
                         className={cn('border-b border-l border-border/60 text-center px-1 py-1.5', tint(c.unfinished))}
                       >
-                        {c.assigned + c.rework + c.inProgress + c.done === 0 ? (
+                        {c.assigned + c.rework + c.inProgress + c.done + c.rejected + c.received === 0 ? (
                           <span className="text-muted-foreground/30">·</span>
                         ) : (
                           <MiniCell cell={c} />
@@ -213,7 +248,7 @@ export function TeamDailyMatrix({ reloadToken, type, customer }: Props) {
                   </td>
                   {columnTotals.map((c, i) => (
                     <td key={days[i]} className="border-t-2 border-l border-border text-center px-1 py-1.5">
-                      {c.assigned + c.rework + c.inProgress + c.done === 0 ? (
+                      {c.assigned + c.rework + c.inProgress + c.done + c.rejected + c.received === 0 ? (
                         <span className="text-muted-foreground/40">·</span>
                       ) : (
                         <MiniCell cell={c} />
@@ -229,7 +264,9 @@ export function TeamDailyMatrix({ reloadToken, type, customer }: Props) {
         <p className="px-3 py-2 text-[11px] text-muted-foreground border-t border-border">
           Mỗi ô: <span className="text-zinc-600 dark:text-zinc-300">Cần làm</span>·
           <span className="text-amber-600">Làm lại</span>·<span className="text-indigo-600">Đang làm</span>·
-          <span className="text-emerald-600">Đã xong</span> (đơn vào sản xuất ngày đó, đang ở trạng thái tương ứng). Nền
+          <span className="text-emerald-600">Đã xong</span>·<span className="text-rose-600">Không làm được</span>{' '}
+          (đơn vào sản xuất ngày đó) — <b>Tổng đã nhận = 5 số cộng lại</b>;{' '}
+          <span className="text-sky-600">+N</span> = số lần nhận bàn giao thêm (đã nằm trong 5 số, không cộng riêng). Nền
           càng đậm = càng nhiều đơn chưa xong. Đơn vào SX ngoài {range} ngày sẽ ẩn — chọn 14/30 để mở rộng.
         </p>
       </div>
@@ -238,6 +275,7 @@ export function TeamDailyMatrix({ reloadToken, type, customer }: Props) {
 }
 
 function MiniCell({ cell }: { cell: TeamDailyCell }) {
+  const receivedTotal = cell.assigned + cell.rework + cell.inProgress + cell.done + cell.rejected;
   return (
     <span className="inline-flex items-center justify-center gap-1 leading-none text-[13px]">
       <Num value={cell.assigned} label="Cần làm" className="text-zinc-700 dark:text-zinc-200" />
@@ -247,6 +285,17 @@ function MiniCell({ cell }: { cell: TeamDailyCell }) {
       <Num value={cell.inProgress} label="Đang làm" className="text-indigo-600" />
       <Sep />
       <Num value={cell.done} label="Đã xong" className="text-emerald-600" />
+      <Sep />
+      {/* <Num
+        value={cell.rejected}
+        label={`Không làm được (bàn giao đi) — Đã nhận = 5 số cộng lại = ${receivedTotal}`}
+        className="text-rose-600"
+      />
+      {cell.received > 0 && (
+        <Hint content={`Nhận bàn giao thêm: ${cell.received} (đã tính trong các số kia — không cộng riêng)`} forceRich>
+          <span className="cursor-help font-semibold text-sky-600">+{cell.received}</span>
+        </Hint>
+      )} */}
     </span>
   );
 }

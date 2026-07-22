@@ -251,8 +251,10 @@ export class OrderEntity extends DatabaseEntityAbstract {
   /**
    * BỀN VỮNG: tập mã `toolResultNote` ≠ ok (≠ rỗng) mà người soát tool ĐÃ từng
    * đánh trên đơn (dedup, $addToSet). KHÔNG bị xoá khi đơn sửa về 'ok' → dùng
-   * thống kê lịch sử "lỗi do người soát tool tạo ra" (ToolCheckTab §2.3). Set ở
-   * updateField('toolResultNote') + backfill từ OrderLog trong onModuleInit.
+   * thống kê lịch sử "lỗi do người soát tool tạo ra" (ToolCheckTab §2.3) + hàng
+   * "Soát lỗi" Tổng quan N ngày (Dashboard Designer). Set ở updateField
+   * ('toolResultNote') + importRework + markToolCheckDone ('error') + backfill
+   * từ OrderLog trong onModuleInit.
    */
   @Prop({ type: [String], default: undefined, index: true })
   toolCheckErrorNotes?: string[];
