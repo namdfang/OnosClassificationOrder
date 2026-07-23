@@ -114,6 +114,14 @@ export function TaskDetailDialog({ orderId, onClose }: Props) {
   const errorFileLabels = (detail?.errorFile || [])
     .filter(Boolean)
     .map((code) => errorFileItems.find((i) => i.code === code)?.name || code);
+  // Resolve mã lỗi xưởng (productionError, category production_error) → tên
+  // (mã dạng `se-qc-post-press-3` người dùng không hiểu được).
+  const productionErrorItems = useWorkshopConfigStore(
+    (s) => s.byCategory[WorkshopConfigCategory.ProductionError] || [],
+  );
+  const productionErrorLabel = detail?.productionError
+    ? productionErrorItems.find((i) => i.code === detail.productionError)?.name || detail.productionError
+    : '';
 
   const designs = detail?.designsOriginal || detail?.designs || {};
   const designKeys = Object.keys(designs).filter((k) => designs[k]);
@@ -268,7 +276,7 @@ export function TaskDetailDialog({ orderId, onClose }: Props) {
               {detail.productionError && (
                 <div className="rounded-md border border-amber-300 bg-amber-50 dark:bg-amber-900/20 p-2.5">
                   <p className="text-xs font-medium text-amber-800 dark:text-amber-200 flex items-center gap-1">
-                    <ShieldAlert size={12} /> Xưởng báo lỗi: {detail.productionError}
+                    <ShieldAlert size={12} /> Xưởng báo lỗi: {productionErrorLabel}
                   </p>
                   {detail.productionErrorNote && (
                     <p className="text-[11px] text-amber-700 dark:text-amber-300 mt-1">{detail.productionErrorNote}</p>
