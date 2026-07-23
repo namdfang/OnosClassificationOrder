@@ -30,3 +30,9 @@ const trackOrder = (productionId: string) => {
 };
 
 export const customerOrder = { placeOrder, listOrders, trackOrder };
+
+const getCatalog = (query: string = '') => {
+  return callApi(`/${CONFIG.API_VERSION}/customer/catalog${query}`, 'get');
+};
+
+export const customerCatalog = { getCatalog };

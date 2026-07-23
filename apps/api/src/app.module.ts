@@ -39,7 +39,9 @@ import { MailModule } from './modules/mail/mail.module';
 import { NotificationModule } from './modules/notifications/notification.module';
 import { OrderModule } from './modules/order/order.module';
 import { OrderLogModule } from './modules/order-log/order-log.module';
+import { ProductCategoryModule } from './modules/product-category/product-category.module';
 import { ProductConfigModule } from './modules/product-config/product-config.module';
+import { PromotionModule } from './modules/promotion/promotion.module';
 import { BullMQModule } from './modules/queue/bullmq.module';
 import { RedisCacheModule } from './modules/redis-cache/redis-cache.module';
 import { RedisCacheService } from './modules/redis-cache/redis-cache.service';
@@ -64,7 +66,9 @@ import { SharedModule } from './shared/shared.module';
     DepartmentModule,
     FactoryModule,
     MachineTypeModule,
+    ProductCategoryModule,
     ProductConfigModule,
+    PromotionModule,
     WorkshopConfigModule,
     OrderModule,
     OrderLogModule,

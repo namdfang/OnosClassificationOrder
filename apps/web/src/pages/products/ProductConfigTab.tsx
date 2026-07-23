@@ -1,5 +1,6 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { ImageIcon, Pencil, Plus, RotateCw } from 'lucide-react';
+import type { ProductItemSpecific, ProductVariation } from 'shared';
 import { PRODUCT_LEVEL_MAP, PRODUCT_LEVELS, WorkshopConfigCategory } from 'shared';
 import { toast } from 'sonner';
 
@@ -33,6 +34,19 @@ export interface ProductConfigRow {
   machineTypeId?: string;
   factory?: { name: string; shortName: string };
   machineType?: { name: string; shortName: string };
+  // Thông tin chi tiết sản phẩm (catalog cho khách hàng)
+  productCategoryId?: string;
+  productCategory?: { name: string; shortName: string };
+  printMethod?: string;
+  printArea?: string;
+  sizeChartUrl?: string;
+  description?: string;
+  itemSpecifics?: ProductItemSpecific[];
+  weight?: number;
+  width?: number;
+  height?: number;
+  length?: number;
+  variations?: ProductVariation[];
 }
 
 /** Item danh sách Xưởng / Phòng cho dropdown (chỉ cần id + nhãn). */
@@ -57,6 +71,8 @@ export function ProductConfigTab() {
   const fabricOptions = useWorkshopConfigStore((s) => s.byCategory[WorkshopConfigCategory.FabricType] || []);
   const toolOptions = useWorkshopConfigStore((s) => s.byCategory[WorkshopConfigCategory.ToolResult] || []);
   const machineOptions = useWorkshopConfigStore((s) => s.byCategory[WorkshopConfigCategory.Machine] || []);
+  const printMethodOptions = useWorkshopConfigStore((s) => s.byCategory[WorkshopConfigCategory.PrintMethod] || []);
+  const [productCategoryOptions, setProductCategoryOptions] = useState<RefItem[]>([]);
   const loadConfig = useWorkshopConfigStore((s) => s.load);
   const configLoaded = useWorkshopConfigStore((s) => s.loaded);
 
@@ -64,16 +80,18 @@ export function ProductConfigTab() {
     if (!configLoaded) loadConfig();
   }, [configLoaded, loadConfig]);
 
-  // Load danh sách Xưởng + Phòng 1 lần (cho dropdown chỉnh sửa inline + dialog).
+  // Load danh sách Xưởng + Phòng + Danh mục sản phẩm 1 lần (cho dropdown chỉnh sửa inline + dialog).
   useEffect(() => {
     (async () => {
       try {
-        const [fRes, mRes] = await Promise.all([
+        const [fRes, mRes, cRes] = await Promise.all([
           RepositoryRemote.factory.getFactories('?page=1&limit=200'),
           RepositoryRemote.machineType.getMachineTypes('?page=1&limit=200'),
+          RepositoryRemote.productCategory.getProductCategories('?page=1&limit=200'),
         ]);
         setFactories((fRes.data?.data || []) as RefItem[]);
         setMachineTypes((mRes.data?.data || []) as RefItem[]);
+        setProductCategoryOptions((cRes.data?.data || []) as RefItem[]);
       } catch (error) {
         handleAxiosError(error);
       }
@@ -282,20 +300,21 @@ export function ProductConfigTab() {
               <TableHead className="min-w-[160px]">Loại vải</TableHead>
               <TableHead className="min-w-[140px]">Kết quả Tool</TableHead>
               <TableHead className="w-[150px]">Level</TableHead>
+              <TableHead className="min-w-[140px]">Danh mục / Biến thể</TableHead>
               <TableHead className="w-12"></TableHead>
             </TableRow>
           </TableHeader>
           <TableBody>
             {loading && (
               <TableRow>
-                <TableCell colSpan={10} className="text-center py-8">
+                <TableCell colSpan={11} className="text-center py-8">
                   <Spinner size={20} className="text-muted-foreground" />
                 </TableCell>
               </TableRow>
             )}
             {!loading && items.length === 0 && (
               <TableRow>
-                <TableCell colSpan={10} className="text-center py-8 text-muted-foreground">
+                <TableCell colSpan={11} className="text-center py-8 text-muted-foreground">
                   Chưa có product config nào. Click "Import từ Excel" để bắt đầu.
                 </TableCell>
               </TableRow>
@@ -438,6 +457,18 @@ export function ProductConfigTab() {
                     </div>
                   </TableCell>
                   <TableCell>
+                    <div className="flex flex-col gap-1 text-xs">
+                      {it.productCategory ? (
+                        <Badge variant="secondary" className="w-fit font-normal">
+                          {it.productCategory.name}
+                        </Badge>
+                      ) : (
+                        <span className="text-muted-foreground">—</span>
+                      )}
+                      <span className="text-muted-foreground">{it.variations?.length || 0} biến thể</span>
+                    </div>
+                  </TableCell>
+                  <TableCell>
                     <Button variant="ghost" size="icon" onClick={() => setEditItem(it)} title="Chỉnh sửa sản phẩm">
                       <Pencil size={14} />
                     </Button>
@@ -476,6 +507,8 @@ export function ProductConfigTab() {
         toolOptions={toolOptions}
         factoryOptions={factories}
         machineTypeOptions={machineTypes}
+        productCategoryOptions={productCategoryOptions}
+        printMethodOptions={printMethodOptions}
         onSaved={applyEdit}
         onDelete={handleDelete}
       />

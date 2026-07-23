@@ -25,6 +25,7 @@ import {
   ShieldCheck,
   ShieldHalf,
   ShoppingCart,
+  Tag,
   User,
   Users,
   Workflow,
@@ -212,6 +213,13 @@ const NAV_GROUPS: NavGroup[] = [
         to: PATHS.PRODUCTS,
         icon: <Package size={17} />,
         perm: 'page.products',
+      },
+      {
+        key: PATHS.PROMOTIONS,
+        label: 'Chương trình giảm giá',
+        to: PATHS.PROMOTIONS,
+        icon: <Tag size={17} />,
+        perm: 'page.promotions',
       },
       {
         key: PATHS.WORKSHOP_CONFIG,

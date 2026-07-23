@@ -4,6 +4,7 @@ import { Package } from 'lucide-react';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 
 import { FactoryTab } from './FactoryTab';
+import { ProductCategoryTab } from './ProductCategoryTab';
 import { ProductConfigTab } from './ProductConfigTab';
 
 export default function Products() {
@@ -15,17 +16,21 @@ export default function Products() {
         </div>
         <div>
           <h1 className="text-2xl font-bold text-foreground">Sản phẩm</h1>
-          <p className="text-sm text-muted-foreground">Quản lý product config, xưởng và loại máy</p>
+          <p className="text-sm text-muted-foreground">Quản lý product config, danh mục sản phẩm, xưởng và loại máy</p>
         </div>
       </div>
 
       <Tabs defaultValue="config" className="w-full">
         <TabsList>
           <TabsTrigger value="config">Config</TabsTrigger>
+          <TabsTrigger value="category">Danh mục</TabsTrigger>
           <TabsTrigger value="factory">Xưởng</TabsTrigger>
         </TabsList>
         <TabsContent value="config">
           <ProductConfigTab />
+        </TabsContent>
+        <TabsContent value="category">
+          <ProductCategoryTab />
         </TabsContent>
         <TabsContent value="factory">
           <FactoryTab />

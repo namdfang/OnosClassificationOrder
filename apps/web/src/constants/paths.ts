@@ -30,6 +30,7 @@ export const PATHS = {
     SETTINGS: '/adm/settings',
     ACCOUNT: '/adm/account',
     PRODUCTS: '/adm/products',
+    PROMOTIONS: '/adm/promotions',
     USERS: '/adm/users',
     DEPARTMENTS: '/adm/departments',
     ROLES: '/adm/roles',
@@ -46,6 +47,7 @@ export const PATHS = {
     CUSTOMER_ORDERS: '/customer/orders',
     CUSTOMER_ORDER_NEW: '/customer/orders/new',
     CUSTOMER_ORDER_DETAIL: '/customer/orders/:productionId',
+    CUSTOMER_CATALOG: '/customer/catalog',
 
     ERROR_403: '/forbidden',
     ERROR_404: '/error/404',
