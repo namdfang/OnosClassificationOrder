@@ -978,6 +978,8 @@ export const DesignReviewOrderZod = z.object({
   designs: DesignFieldsZod,
   /** Ảnh mockup sản phẩm — tham chiếu trực quan khi soát design (KHÔNG phải file design gốc). */
   mockupUrl: z.string().optional(),
+  /** Ngày đơn chuyển sang sản xuất (đơn vào production) — null nếu đơn chưa có mốc này. */
+  inProductionAt: z.coerce.date().nullable().optional(),
 });
 export type DesignReviewOrder = z.infer<typeof DesignReviewOrderZod>;
 
@@ -1010,6 +1012,13 @@ export class GetDesignReviewOrderByIdResDto extends createZodDto(extendApi(GetDe
 export const SetDesignReviewResultZod = z.object({
   productionId: z.string().min(1),
   toolResult: z.string().nullable(),
+  /**
+   * Optional — "Note kq Tool 1". Không truyền → giữ nguyên (hành vi cũ,
+   * KHÔNG đụng field này). Truyền (kể cả `null` để xoá) → ghi đè + chạy CÙNG
+   * side-effect hook với xưởng đánh tay ở Danh sách đơn (vd 'ok' → auto
+   * rework-back/vào fulfillment).
+   */
+  toolResultNote: z.string().nullable().optional(),
 });
 export class SetDesignReviewResultDto extends createZodDto(extendApi(SetDesignReviewResultZod)) {}
 

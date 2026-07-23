@@ -17,6 +17,18 @@ export class RateLimiterGuard implements CanActivate {
     // eslint-disable-next-line @typescript-eslint/no-unnecessary-type-assertion
     const response = context.switchToHttp().getResponse() as FastifyReply;
 
+    // Route public (`@Auth([], [], { public: true })`) → `PublicStrategy` set
+    // `request.user = { [Symbol.for('isPublic')]: true }`, KHÔNG có token/_id
+    // thật. Không skip ở đây thì mọi caller ẩn danh (design-review tool, cron
+    // job...) dùng CHUNG 1 bucket khoá literal "undefined" (session lẫn user)
+    // — dễ bị 429 dồn dập do lẫn traffic của nhau, dù mỗi caller riêng chưa
+    // vượt hạn mức thật. Route public vốn cố tình "không định danh caller"
+    // (xem comment ở `order.controller.ts` design-review) nên bỏ qua rate
+    // limit theo session/user là đúng chủ đích thiết kế.
+    if ((request.user as Record<PropertyKey, unknown>)?.[Symbol.for('isPublic')]) {
+      return true;
+    }
+
     const token: string = request.headers.authorization?.split(' ')[1];
     const userId: string = request.user._id as string;
 

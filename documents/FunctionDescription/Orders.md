@@ -1300,15 +1300,16 @@ Hiển thị (chip đồng hồ, đỏ nếu quá hạn):
 
 ## 18. Design Review — public API cho tool ngoài duyệt thiết kế
 
-> **File BE:** `apps/api/src/modules/order/order.controller.ts` → `GET /v1/orders/design-review/next` + `POST /v1/orders/design-review/result`, `apps/api/src/modules/order/order.service.ts` → `getNextDesignReviewOrder()` + `setDesignReviewResult()`, `apps/api/src/modules/order/design-review-product-code.ts` (`mapProductTypeToCode()` — bảng mapping cố định `type` → mã sản phẩm)
-> **Shared:** `packages/shared/dtos/production-order.dto.ts` (`GetNextDesignReviewOrderZod`/`GetNextDesignReviewOrderDto` + `DesignReviewOrderZod`/`DesignReviewAttributesZod`/`GetNextDesignReviewOrderResDto` + `SetDesignReviewResultZod`/`SetDesignReviewResultResDto`)
+> **File BE:** `apps/api/src/modules/order/order.controller.ts` → `GET /v1/orders/design-review/next` + `GET /v1/orders/design-review/by-production-id/:productionId` + `POST /v1/orders/design-review/result`, `apps/api/src/modules/order/order.service.ts` → `getNextDesignReviewOrder()` + `getDesignReviewOrderByProductionId()` + `setDesignReviewResult()`, `apps/api/src/modules/order/design-review-product-code.ts` (`mapProductTypeToCode()` — bảng mapping cố định `type` → mã sản phẩm)
+> **Shared:** `packages/shared/dtos/production-order.dto.ts` (`GetNextDesignReviewOrderZod`/`GetNextDesignReviewOrderDto` + `DesignReviewOrderZod`/`DesignReviewAttributesZod`/`GetNextDesignReviewOrderResDto` + `GetDesignReviewOrderByIdResDto` + `SetDesignReviewResultZod`/`SetDesignReviewResultResDto`)
 > **Route:** không có FE — chỉ API cho hệ thống ngoài gọi.
-> **API:** `GET /v1/orders/design-review/next`, `POST /v1/orders/design-review/result`
+> **API:** `GET /v1/orders/design-review/next`, `GET /v1/orders/design-review/by-production-id/:productionId`, `POST /v1/orders/design-review/result`
 
 ### 18.1 Overview
-2 endpoint **hoàn toàn public** (`@Auth([], [], { public: true })` — không JWT, không API key, theo quyết định người dùng khi tạo tính năng), cho **nhiều client song song** (bot duyệt thiết kế) dùng theo cặp, xoay quanh field **`toolResult`** ("Kết quả Tool", KHÁC `toolResultNote` "Note kq Tool 1" — field đó giờ CHỈ nhân viên sửa tay, ngoài luồng automation này):
-1. `GET /design-review/next` — lấy **1 đơn mỗi lần gọi**, luôn là đơn đang ở **bước đầu tiên của tiến trình**: chưa có Kết quả Tool (`toolResult` rỗng) **và** chưa gán designer (`designerStatus='unassigned'`). Query optional `from`/`to` (`YYYY-MM-DD`) lọc thêm theo khoảng ngày `inProductionAt` (VN tz) — cùng semantics `createdFrom`/`createdTo` ở danh sách đơn (§7.0b), chỉ đổi tên field cho gọn vì đây là API public riêng. Không truyền `from`/`to` → không giới hạn ngày (hành vi mặc định, không breaking client cũ).
-2. `POST /design-review/result` — sau khi client xử lý xong, gọi lại để lưu **Kết quả Tool** (`toolResult`) — tương đương thao tác tay ở cột "Kết quả Tool" (Danh sách đơn, `/orders?tab=list`). Đơn tự rời khỏi hàng đợi `next` ngay khi `toolResult` được set (không rỗng nữa).
+3 endpoint **hoàn toàn public** (`@Auth([], [], { public: true })` — không JWT, không API key, theo quyết định người dùng khi tạo tính năng), cho **nhiều client song song** (bot duyệt thiết kế) dùng theo cặp, xoay quanh field **`toolResult`** ("Kết quả Tool", KHÁC `toolResultNote` "Note kq Tool 1" — field đó giờ CHỈ nhân viên sửa tay, ngoài luồng automation này):
+1. `GET /design-review/next` — lấy **1 đơn mỗi lần gọi**, luôn là đơn đang ở **bước đầu tiên của tiến trình**: chưa có Kết quả Tool (`toolResult` rỗng) **và** chưa gán designer (`designerStatus='unassigned'`). Query optional `from`/`to` (`YYYY-MM-DD`) lọc thêm theo khoảng ngày `inProductionAt` (VN tz) — cùng semantics `createdFrom`/`createdTo` ở danh sách đơn (§7.0b), chỉ đổi tên field cho gọn vì đây là API public riêng. Không truyền `from`/`to` → không giới hạn ngày (hành vi mặc định, không breaking client cũ). Query optional `pid` — ép lấy ĐÚNG 1 đơn theo `productionId`, bỏ qua mọi filter hàng đợi, không claim lease (uỷ quyền lại cho `getDesignReviewOrderByProductionId`).
+2. `GET /design-review/by-production-id/:productionId` — lookup TRỰC TIẾP 1 đơn theo `productionId` để tool soát lại/tra cứu, KHÔNG áp filter hàng đợi (trả về đơn ở BẤT KỲ trạng thái nào, kể cả đã soát/đã gán) và KHÔNG claim lease. Cùng response shape `DesignReviewOrder` với `/next` (§18.4).
+3. `POST /design-review/result` — sau khi client xử lý xong, gọi lại để lưu **Kết quả Tool** (`toolResult`) — tương đương thao tác tay ở cột "Kết quả Tool" (Danh sách đơn, `/orders?tab=list`). Đơn tự rời khỏi hàng đợi `next` ngay khi `toolResult` được set (không rỗng nữa). Optional `toolResultNote` ("Note kq Tool 1") — nếu truyền, ghi luôn field này và chạy CÙNG side-effect hook với sửa tay (xem §18.6).
 
 `toolResult` **vẫn được map từ `ProductConfig.toolResult` lúc import** (CSV hoặc API OnosPod — cùng chung pipeline `importOrders()`, khớp theo `type` ↔ `ProductConfig.fullName`), giống mọi field insert-only khác — chỉ set **lần đầu tạo đơn** (`$setOnInsert`, KHÔNG bị ghi đè khi re-import). **Để tạm** như vậy (comment `// Để tạm, tool ổn sẽ xóa không lưu toolResult vào đơn nữa` ở `importOrders()`) — dự định khi tool duyệt thiết kế ổn định sẽ bỏ mapping này để MỌI đơn mới đều tự vào hàng đợi `/next` ngay từ đầu. Trong lúc chờ: đơn nào product config đã có sẵn `toolResult` sẽ KHÔNG vào hàng đợi `/next` (vì điều kiện §18.3 là `toolResult` rỗng) — chỉ đơn chưa map/product config chưa set `toolResult` mới vào hàng đợi.
 
@@ -1344,6 +1345,8 @@ Sort: `priority desc` → `inProductionAt asc` → `createdAt asc` (đơn ưu ti
     productCode: string | null;    // map từ `type` qua bảng cố định trong design-review-product-code.ts, null nếu type không khớp bảng
     attributes: { size?: string; color?: string };
     designs: DesignFields;        // chỉ các key có URL (front/back/sleeve/...), raw Drive URL (R2 pipeline đang tắt — xem ImageOptimization.md)
+    mockupUrl?: string;            // ảnh mockup sản phẩm — tham chiếu trực quan khi soát design
+    inProductionAt: string | null; // ngày đơn chuyển sang sản xuất (ISO date) — null nếu đơn chưa có mốc này
   } | null;   // null khi không còn đơn nào ở bước đầu tiên
   remaining: number;   // tổng số đơn còn cần xử lý (đúng điều kiện §18.3, KHÔNG xét claim/lease) — bao gồm cả đơn trong `data`, đếm bằng countDocuments() song song (Promise.all) với findOneAndUpdate
 }
@@ -1360,10 +1363,9 @@ Body request (`SetDesignReviewResultDto`, `packages/shared/dtos/production-order
 |---|---|---|---|
 | `productionId` | `string` | Có | Mã đơn — khóa duy nhất, luôn có, exact match case-insensitive (giống `by-production-id/:code`). KHÁC `orderId` (mã đơn marketplace gốc, KHÔNG unique vì 1 đơn có thể nhiều line item) — cố tình dùng `productionId` để tránh nhầm đơn khi update. |
 | `toolResult` | `string \| null` | Có | Code `workshop_config` category `tool_result`. `null` = xoá giá trị hiện có. |
+| `toolResultNote` | `string \| null` | Không | "Note kq Tool 1" — code `workshop_config` category **`tool_result_note`** (`WorkshopConfigCategory.ToolResultNote`, KHÁC `production_error`). **Không truyền field này** (bỏ hẳn key khỏi JSON) → giữ nguyên hành vi cũ, KHÔNG đụng field. **Truyền** (kể cả `null` để xoá) → ghi đè + chạy CÙNG side-effect hook với xưởng đánh tay ở Danh sách đơn/tab "Soát tool" (xem `ToolCheckWorkflow.md`) — vd `'ok'` → tự vào fulfillment hoặc rework-back designer tùy trạng thái đơn. |
 
-`productionId` không khớp đơn nào → 404. `toolResult` không khớp code `workshop_config` category `tool_result` đang active → 400.
-
-**KHÔNG có `toolResultNote`** ("Note kq Tool 1") trong request/response của endpoint này — field đó chỉ nhân viên sửa tay qua Danh sách đơn/tab "Soát tool" (Dashboard), ngoài phạm vi automation.
+`productionId` không khớp đơn nào → 404. `toolResult` không khớp code `workshop_config` category `tool_result` đang active → 400. `toolResultNote` (nếu có truyền) không khớp code active → 400.
 
 **Giá trị mẫu hiện có** (seed `workshop-config.seed.ts` — admin có thể thêm code mới qua trang Workshop Config, đây không phải enum cứng):
 
@@ -1371,8 +1373,12 @@ Body request (`SetDesignReviewResultDto`, `packages/shared/dtos/production-order
 |---|---|---|
 | `toolResult` | `has-tool` | Có Tool |
 | `toolResult` | `no-tool` | Không có Tool |
+| `toolResultNote` | `no-tool` | Không có tool |
+| `toolResultNote` | `error` | Lỗi |
+| `toolResultNote` | `ok` | Ok — **duy nhất giá trị kích hoạt `readyForFulfill`/entry fulfillment** (mọi code khác đều coi là "chưa đạt") |
+| `toolResultNote` | `no-pdf` | Không có file PDF |
 
-Request mẫu:
+Request mẫu (chỉ `toolResult`, hành vi cũ — KHÔNG đụng `toolResultNote`):
 ```json
 POST /v1/orders/design-review/result
 {
@@ -1381,20 +1387,30 @@ POST /v1/orders/design-review/result
 }
 ```
 
-Response mẫu (`SetDesignReviewResultResDto` — `data` = `ProductionOrderZod` đầy đủ của đơn SAU khi cập nhật, rút gọn các field liên quan):
+Request mẫu (kèm `toolResultNote` — ghi đè cả 2 field + chạy side-effect hook):
+```json
+POST /v1/orders/design-review/result
+{
+  "productionId": "RR-03884-24456",
+  "toolResult": "has-tool",
+  "toolResultNote": "ok"
+}
+```
+
+Response mẫu (`SetDesignReviewResultResDto` — `data` = `ProductionOrderZod` đầy đủ của đơn SAU khi cập nhật (SAU cùng nếu có cả 2 field), rút gọn các field liên quan):
 ```json
 {
   "success": true,
   "data": {
     "productionId": "RR-03884-24456",
     "toolResult": "has-tool",
-    "toolResultNote": null,
+    "toolResultNote": "ok",
     "designerStatus": "unassigned"
   }
 }
 ```
 
-**Cơ chế:** `setDesignReviewResult()` resolve `productionId` → `_id` (exact match case-insensitive, giống `getByProductionId`), rồi gọi lại **nguyên vẹn** `updateField()` (field `toolResult` — cùng hàm dùng cho sửa tay ở Danh sách đơn) với role giả `SuperAdmin` để bypass permission gate (roleName chỉ được đọc ở đúng chỗ đó bên trong `updateField`, không ảnh hưởng business logic khác). Khác `toolResultNote`, field `toolResult` **KHÔNG có side-effect hook nào** trong `updateField` (không đụng `readyForFulfill`, không auto-assign designer, không rework-back) — chỉ là 1 field workshop_config đơn thuần. `assertNotHeld` vẫn chạy (đơn đang giữ → 409).
+**Cơ chế:** `setDesignReviewResult()` resolve `productionId` → `_id` (exact match case-insensitive, giống `getByProductionId`), rồi gọi **nguyên vẹn** `updateField()` — 1 lần cho `toolResult` (KHÔNG có side-effect hook nào, không đụng `readyForFulfill`, không auto-assign designer, không rework-back — chỉ là 1 field workshop_config đơn thuần), và nếu request có truyền `toolResultNote` (kiểm tra `!== undefined`, phân biệt với "không truyền") thì gọi THÊM 1 lần `updateField()` nữa cho field đó — CÙNG nhánh side-effect hook với sửa tay ở Danh sách đơn (`dto.field === 'toolResultNote'` trong `updateField()`: set `readyForFulfill`, auto rework-back về tool-check/designer, hoặc entry vào fulfillment tùy trạng thái đơn trước đó). Cả 2 lần gọi đều dùng role giả `SuperAdmin` để bypass permission gate (roleName chỉ được đọc ở đúng chỗ đó bên trong `updateField`, không ảnh hưởng business logic khác) và đều chạy `assertNotHeld` (đơn đang giữ → 409 — nếu lần gọi `toolResult` thành công nhưng đơn bị giữ sau đó trước lần gọi `toolResultNote`, request sẽ dừng giữa chừng với `toolResult` đã lưu nhưng `toolResultNote` chưa).
 
 ### 18.7 Performance
 1 `findOneAndUpdate` (GET `/next`) với index sẵn có trên `toolResultNote`/`designerStatus`/`priority`/`cancelledAt`/`heldAt`/`designReviewClaimedAt` (đều đã đánh index ở `order.entity.ts`) — không cần index tổng hợp riêng vì volume đơn ở bước đầu tiên thường nhỏ. POST `/result` tái dùng `updateField()` nên chi phí giống hệt sửa tay 1 cell (1-2 lần gọi tuần tự tùy số field truyền).

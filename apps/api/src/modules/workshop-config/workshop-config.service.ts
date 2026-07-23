@@ -49,6 +49,24 @@ export class WorkshopConfigService implements OnModuleInit {
       console.warn('[workshop-seed] assignee cleanup failed:', (err as Error).message);
     }
 
+    // One-shot cleanup: bỏ category 'product_category' khỏi DB. Đây là rác
+    // sót lại từ 1 lần thử nghiệm sớm (seed apparel/mug/home-decor/accessory)
+    // — tính năng Product Category giờ có module riêng (`apps/api/src/modules/
+    // product-category/`, xem Products.md §3.5), KHÔNG dùng workshop_config
+    // nữa nên category này KHÔNG còn trong enum `WorkshopConfigCategory`.
+    // Row lạ (category không có trong enum) làm `getAll()` throw
+    // `Cannot read properties of undefined (reading 'push')` → sập TOÀN BỘ
+    // workshop-config store ở FE cho mọi user. `deleteMany` idempotent.
+    try {
+      const r = await this.model.deleteMany({ category: 'product_category' as WorkshopConfigCategory });
+      if (r.deletedCount && r.deletedCount > 0) {
+        // eslint-disable-next-line no-console
+        console.log(`[workshop-seed] dropped legacy 'product_category' category: ${r.deletedCount} rows`);
+      }
+    } catch (err) {
+      console.warn('[workshop-seed] product_category cleanup failed:', (err as Error).message);
+    }
+
     for (const item of WORKSHOP_CONFIG_SEED) {
       try {
         // withDeleted so soft-deleted rows don't trick us into inserting a
@@ -86,6 +104,15 @@ export class WorkshopConfigService implements OnModuleInit {
       {} as Record<WorkshopConfigCategory, WorkshopConfig[]>,
     );
     for (const item of data as unknown as WorkshopConfig[]) {
+      // Bỏ qua item có category không (còn) nằm trong enum hiện tại (vd rác
+      // sót lại từ 1 category đã bị xoá khỏi `WorkshopConfigCategory`) — 1
+      // dòng dữ liệu rác KHÔNG được phép làm crash cả endpoint (mọi user mất
+      // hết workshop-config store). Xem precedent 'assignee'/'product_category'
+      // ở `onModuleInit()`.
+      if (!grouped[item.category]) {
+        console.warn(`[workshop-config] getAll(): unknown category "${item.category}" (id=${item._id}) — skipped`);
+        continue;
+      }
       grouped[item.category].push(item);
     }
     return grouped;
