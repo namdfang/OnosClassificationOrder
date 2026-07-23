@@ -119,7 +119,11 @@ export class DesignerTaskService {
 
     // Hook fulfillment khi designer.complete → vào/quay lại pipeline. Dùng CHUNG
     // với bulkTransition (xem applyCompleteFulfillmentHook).
-    this.applyCompleteFulfillmentHook(order.currentFulfillmentStage, action, plan);
+    this.applyCompleteFulfillmentHook(
+      order as { currentFulfillmentStage?: string | null; fulfillmentCompletedAt?: Date | null },
+      action,
+      plan,
+    );
 
     // findOneAndUpdate với filter expected state → race-safe; nếu trong lúc
     // request đang xử lý mà user khác kéo card sang trạng thái khác thì update
@@ -193,13 +197,18 @@ export class DesignerTaskService {
    * nhưng stage vẫn `done` → vô hình ở mọi tab In; hoặc chưa bao giờ vào In).
    */
   private applyCompleteFulfillmentHook(
-    currentFulfillmentStage: string | null | undefined,
+    order: { currentFulfillmentStage?: string | null; fulfillmentCompletedAt?: Date | null },
     action: DesignerTransitionAction,
     plan: { nextStatus: DesignerStatus; patch: Record<string, unknown> },
   ): void {
     if (action !== DesignerTransitionAction.Complete || plan.nextStatus !== DesignerStatus.Done) {
       return;
     }
+    const currentFulfillmentStage = order.currentFulfillmentStage;
+    // Đơn ĐÃ HOÀN THÀNH fulfillment (pack done → stage=null + fulfillmentCompletedAt)
+    // cũng có stage rỗng — designer complete muộn KHÔNG được kéo đơn xong về
+    // print/waiting (xưởng sẽ làm lại oan cả chuỗi).
+    if (!currentFulfillmentStage && order.fulfillmentCompletedAt) return;
     const set = (plan.patch.$set ?? {}) as Record<string, unknown>;
     if (!currentFulfillmentStage) {
       set.currentFulfillmentStage = FulfillmentStage.Print;
@@ -614,6 +623,7 @@ export class DesignerTaskService {
           designerStartedAt: 1,
           designerFirstStartedAt: 1,
           currentFulfillmentStage: 1,
+          fulfillmentCompletedAt: 1,
         },
       )
       .lean();
@@ -647,7 +657,7 @@ export class DesignerTaskService {
         // Cùng hook fulfillment như transition đơn lẻ — nếu thiếu, complete hàng
         // loạt để đơn kẹt (currentStage set nhưng stage vẫn 'done').
         this.applyCompleteFulfillmentHook(
-          (o as { currentFulfillmentStage?: string | null }).currentFulfillmentStage,
+          o as { currentFulfillmentStage?: string | null; fulfillmentCompletedAt?: Date | null },
           action,
           plan,
         );

@@ -451,6 +451,10 @@ function buildFulfillmentEntrySet(): Record<string, unknown> {
 
 ```ts
 if (action === Complete && nextStatus === Done && !order.currentFulfillmentStage) {
+  // GUARD: đơn ĐÃ HOÀN THÀNH fulfillment cũng có stage=null (pack complete set
+  // currentFulfillmentStage=null + fulfillmentCompletedAt) → designer complete
+  // muộn KHÔNG init lại print (nếu không xưởng làm lại oan cả chuỗi).
+  if (order.fulfillmentCompletedAt) return;
   // Lần đầu vào fulfillment.
   set.currentFulfillmentStage = 'print';
   set['fulfillmentStages.print'] = { status: 'waiting', reworkCount: 0, workMs: 0 };
@@ -484,21 +488,12 @@ if (dto.field === 'toolResultNote') {
   patch.readyForFulfill = normalized === READY_FOR_FULFILL_CODE;
   if (normalized === READY_FOR_FULFILL_CODE) {
     patch.productionFirstErrorAt = null;
-    if (!before.currentFulfillmentStage) Object.assign(patch, buildFulfillmentEntrySet());
+    if (!before.currentFulfillmentStage && !before.fulfillmentCompletedAt) Object.assign(patch, buildFulfillmentEntrySet());
   }
 }
 ```
 
-**B2. `OrderService.bulkUpdateField()`** — sau update chính, chạy thêm `updateMany` cho subset chưa vào fulfillment:
-
-```ts
-if (dto.field === 'toolResultNote' && normalized === READY_FOR_FULFILL_CODE) {
-  await this.orderModel.updateMany(
-    { _id: { $in: dto.ids }, deletedAt: { $exists: false }, currentFulfillmentStage: { $in: [null, undefined] } },
-    { $set: buildFulfillmentEntrySet() },
-  );
-}
-```
+**B2. `OrderService.bulkUpdateField()`** — field `toolResultNote` thuộc `SIDE_EFFECT_FIELDS` → **delegate loop `updateField()`** per-đơn (không còn `updateMany` riêng), nên guard B1 phủ luôn bulk.
 
 **B3. `OrderService.importRework()`** — per-row check trong import xlsx:
 
@@ -506,11 +501,11 @@ if (dto.field === 'toolResultNote' && normalized === READY_FOR_FULFILL_CODE) {
 if (code === READY_FOR_FULFILL_CODE) {
   $set.readyForFulfill = true;
   $set.productionFirstErrorAt = null;
-  if (!order.currentFulfillmentStage) Object.assign($set, buildFulfillmentEntrySet());
+  if (!order.currentFulfillmentStage && !order.fulfillmentCompletedAt) Object.assign($set, buildFulfillmentEntrySet());
 }
 ```
 
-**Guard `!currentFulfillmentStage`** đảm bảo không ghi đè state đang chạy — nếu đơn đã ở Press/QC/... mà admin sửa cell ok bằng tay, chỉ flip `readyForFulfill`.
+**Guard `!currentFulfillmentStage && !fulfillmentCompletedAt`** đảm bảo không ghi đè state đang chạy VÀ không kéo ngược đơn đã hoàn thành — vì pack complete CỐ Ý set `currentFulfillmentStage=null` + `fulfillmentCompletedAt`, nên `stage=null` một mình KHÔNG có nghĩa "chưa từng vào fulfillment". **Bug 2026-07-23:** backfill orphan-thuận trong `OrderService.onModuleInit()` (init Print cho đơn `readyForFulfill=true` + `stage=null`) thiếu điều kiện loại `fulfillmentCompletedAt`/`heldAt` → MỖI LẦN API restart kéo TOÀN BỘ đơn đã đóng hàng xong về print/waiting (139 đơn/lần, 1949 đơn bị xưởng Thái Nguyên làm lại oan trong 7 ngày). Đã thêm exclusion vào backfill + guard `fulfillmentCompletedAt` ở Entry A/B1/B3 + self-heal In (`fulfillment-task.service.ts` transition).
 
 ### 5.4b Hook báo lỗi designer qua cell → rework-back (watching → cần làm lại)
 
