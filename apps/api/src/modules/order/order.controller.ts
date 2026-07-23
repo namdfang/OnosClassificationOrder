@@ -896,7 +896,7 @@ export class OrderController {
   // Xem Orders.md §18.
   @Post('design-review/result')
   @Auth([], [], { public: true })
-  @ApiOperation({ summary: '[Public] Lưu Kết quả Tool (toolResult) từ tool duyệt thiết kế' })
+  @ApiOperation({ summary: '[Public] Lưu Kết quả Tool (toolResult) + optional Note kq Tool 1 (toolResultNote)' })
   @HttpCode(HttpStatus.OK)
   @ApiOkResponse({ type: SetDesignReviewResultResDto })
   async setDesignReviewResult(
@@ -910,13 +910,14 @@ export class OrderController {
         url: '/orders/design-review/result',
         productionId: dto.productionId,
         toolResult: dto.toolResult,
+        toolResultNote: dto.toolResultNote,
         ip,
         userAgent,
       }),
     });
     return this.orderService.setDesignReviewResult(
       dto.productionId,
-      { toolResult: dto.toolResult },
+      { toolResult: dto.toolResult, toolResultNote: dto.toolResultNote },
       { ip, userAgent },
     ) as Promise<SetDesignReviewResultResDto>;
   }
