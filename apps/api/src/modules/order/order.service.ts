@@ -567,10 +567,16 @@ export class OrderService implements OnModuleInit {
     // → FactoryOverview đếm, my-tasks worker không đếm → worker miss đơn.
     // Aggregation pipeline để $ifNull dùng $$NOW khi inProductionAt null.
     // Idempotent — chỉ áp khi stage chưa init.
+    // QUAN TRỌNG: pack complete CỐ Ý set currentFulfillmentStage=null +
+    // fulfillmentCompletedAt (fulfillment-task.service transition) — nên phải
+    // loại đơn đã hoàn thành + đơn đang giữ, nếu không mỗi lần restart sẽ kéo
+    // ngược TOÀN BỘ đơn đã đóng hàng xong về print/waiting → xưởng làm lại oan.
     const orphanForwardRes = await this.orderModel.updateMany(
       {
         readyForFulfill: true,
         currentFulfillmentStage: { $in: [null, undefined] },
+        fulfillmentCompletedAt: { $in: [null, undefined] },
+        heldAt: { $in: [null, undefined] },
         cancelledAt: { $exists: false },
         deletedAt: { $exists: false },
       },
@@ -4736,6 +4742,7 @@ export class OrderService implements OnModuleInit {
         patch.productionFirstErrorAt = null;
         const b = before as unknown as {
           currentFulfillmentStage?: string | null;
+          fulfillmentCompletedAt?: Date | null;
           productionErrorSource?: string;
           toolResultNote?: string;
           assignee?: string;
@@ -4764,8 +4771,10 @@ export class OrderService implements OnModuleInit {
         } else {
           // Entry point fulfillment thứ 2 — manual set 'ok' (admin/leader bypass
           // designer state machine). Chỉ áp khi đơn chưa từng vào fulfillment để
-          // tránh ghi đè state đang chạy.
-          if (!b.currentFulfillmentStage) Object.assign(patch, buildFulfillmentEntrySet());
+          // tránh ghi đè state đang chạy. Đơn ĐÃ HOÀN THÀNH (pack done →
+          // currentFulfillmentStage=null + fulfillmentCompletedAt) cũng có stage
+          // null — không được re-init, tránh kéo đơn xong về print/waiting.
+          if (!b.currentFulfillmentStage && !b.fulfillmentCompletedAt) Object.assign(patch, buildFulfillmentEntrySet());
         }
       } else {
         // Toggle KHỎI 'ok' (vd về 'no-pdf', 'error', null) → đơn không còn
@@ -6078,7 +6087,9 @@ export class OrderService implements OnModuleInit {
           if (code === READY_FOR_FULFILL_CODE) {
             $set.readyForFulfill = true;
             $set.productionFirstErrorAt = null;
-            if (!order.currentFulfillmentStage) {
+            // Loại đơn đã hoàn thành (stage=null NHƯNG fulfillmentCompletedAt có)
+            // — re-init sẽ kéo đơn xong về print/waiting.
+            if (!order.currentFulfillmentStage && !order.fulfillmentCompletedAt) {
               Object.assign($set, buildFulfillmentEntrySet());
             }
           }
