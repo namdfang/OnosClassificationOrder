@@ -129,7 +129,10 @@ export class FulfillmentTaskService {
       body.action === FulfillmentTransitionAction.Start &&
       order.toolResultNote === 'ok' &&
       order.currentFulfillmentStage !== FulfillmentStage.Print &&
-      (order.fulfillmentStages?.print?.status ?? null) !== FulfillmentStageStatus.Done
+      (order.fulfillmentStages?.print?.status ?? null) !== FulfillmentStageStatus.Done &&
+      // Đơn đã đóng hàng xong (stage=null + fulfillmentCompletedAt) → KHÔNG hồi
+      // sinh về print — tránh xưởng làm lại oan đơn đã hoàn thành.
+      !(order as unknown as { fulfillmentCompletedAt?: Date | null }).fulfillmentCompletedAt
     ) {
       const cur = (order.fulfillmentStages?.print ?? {}) as FulfillmentStageState;
       const set: Record<string, unknown> = {

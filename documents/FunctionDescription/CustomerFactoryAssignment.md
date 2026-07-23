@@ -53,20 +53,15 @@ khách) và **Import tier** hàng loạt từ file `TÊN TÀI KHOẢN | VIP n`.
 | GET    | `/v1/customer-assignment/config` | `@Auth([Admin])` | Lấy cấu hình                                                                                                       |
 | PUT    | `/v1/customer-assignment/config` | `@Auth([Admin])` | Lưu (validate 1-khách-1-xưởng)                                                                                     |
 
-<<<<<<< HEAD
-Collection `customers`: `{ userSku, userEmail, source: 'sync'|'manual', tier: number|null }`,
+Collection `customers`: `{ userSku, userEmail, source: 'sync'|'manual'|'register', tier: number|null, password, fullName, phone, status }`,
 **unique index `{ userSku: 1, userEmail: 1 }`**. Zod: `CustomerTierZod`
 (int 0..5, coerce) + constants `CUSTOMER_TIERS` / `CUSTOMER_TIER_MIN/MAX` +
-`UpdateCustomerTier*` / `ImportCustomerTiers*` DTOs.
-=======
-Collection `customers`: `{ userSku, userEmail, source: 'sync'|'manual'|'register', password, fullName, phone, status }`,
-**unique index `{ userSku: 1, userEmail: 1 }`**. Từ khi có Customer Portal
-(xem [`CustomerPortal.md`](CustomerPortal.md)), bảng này dùng CHUNG cho cả
-mục đích dedup gán xưởng VÀ tài khoản đăng nhập khách hàng — record tạo qua
-sync/thêm tay có `password=''` (chưa đăng ký), `userSku` không còn bắt buộc
-(khách tự đăng ký có thể chưa có lịch sử đơn hàng).
-
-> > > > > > > 3125d6f74725042165660b3067f3f9556b62817e
+`UpdateCustomerTier*` / `ImportCustomerTiers*` DTOs + Portal auth DTOs
+(`CustomerRegister*` / `CustomerLogin*` / `GetCustomerMe*`). Từ khi có Customer
+Portal (xem [`CustomerPortal.md`](CustomerPortal.md)), bảng này dùng CHUNG cho cả
+mục đích dedup gán xưởng + tier VIP VÀ tài khoản đăng nhập khách hàng — record
+tạo qua sync/thêm tay có `password=''` (chưa đăng ký), `userSku` không còn bắt
+buộc (khách tự đăng ký có thể chưa có lịch sử đơn hàng).
 
 Config lưu blob JSON trong `system_configs` (key `customer_assignment_config`,
 Redis-cache 1h). Shared DTO `packages/shared/dtos/customer.dto.ts` +
