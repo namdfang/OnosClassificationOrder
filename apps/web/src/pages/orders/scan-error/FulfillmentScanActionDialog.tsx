@@ -272,6 +272,16 @@ export function FulfillmentScanActionDialog({
       return;
     }
     if (action.kind === 'order') {
+      // Quét LẠI đúng mã đơn đang mở = xác nhận hoàn thành (như quét OK) —
+      // công nhân không cần mã OK riêng, quét cùng 1 barcode 2 lần là xong.
+      if (action.code.toLowerCase() === (order.productionId || '').toLowerCase()) {
+        if (isMyTask) void doComplete();
+        else {
+          beepError();
+          toast.error(blockReason ?? 'Không phải task của bạn — không hoàn thành được.');
+        }
+        return;
+      }
       if (onScanOrder) onScanOrder(action.code);
       else {
         beepError();
@@ -460,8 +470,8 @@ export function FulfillmentScanActionDialog({
                   step={1}
                   tone="emerald"
                   icon={<CheckCircle2 size={20} />}
-                  title='Làm XONG → quét mã "OK"'
-                  desc="Đơn hoàn thành công đoạn này và tự chuyển sang công đoạn sau. (Hoặc nhấn Enter)"
+                  title='Làm XONG → quét LẠI mã đơn (hoặc mã "OK")'
+                  desc="Quét lại chính barcode của đơn này lần nữa — đơn hoàn thành công đoạn và tự chuyển sang công đoạn sau. Quét mã OK hoặc nhấn Enter cũng được."
                 />
               </GuideZone>
               <GuideZone label="⚠ Báo lỗi — quét 2 lần" tone="rose" action={<AddErrorLink />}>
