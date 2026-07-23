@@ -100,4 +100,10 @@ export const WORKSHOP_CONFIG_SEED: WorkshopConfigSeed[] = [
   { category: WorkshopConfigCategory.Machine, code: 'machine-94', name: '94', color: '#3B82F6', order: 0 },
   { category: WorkshopConfigCategory.Machine, code: 'machine-27', name: '27', color: '#10B981', order: 1 },
   { category: WorkshopConfigCategory.Machine, code: 'machine-56', name: '56', color: '#F59E0B', order: 2 },
+
+  // print_method (icon) — phương pháp in cho catalog khách hàng
+  { category: WorkshopConfigCategory.PrintMethod, code: 'dtg', name: 'DTG', icon: 'Printer', order: 0 },
+  { category: WorkshopConfigCategory.PrintMethod, code: 'dtf', name: 'DTF', icon: 'Printer', order: 1 },
+  { category: WorkshopConfigCategory.PrintMethod, code: 'sublimation', name: 'Sublimation (ép nhiệt)', icon: 'Printer', order: 2 },
+  { category: WorkshopConfigCategory.PrintMethod, code: 'embroidery', name: 'Thêu', icon: 'Scissors', order: 3 },
 ];

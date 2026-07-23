@@ -3,7 +3,7 @@ import { cache } from './cache';
 import { customRoles } from './custom-roles';
 import { customer } from './customer';
 import { customerAssignment } from './customerAssignment';
-import { customerAuth, customerOrder } from './customerPortal';
+import { customerAuth, customerCatalog, customerOrder } from './customerPortal';
 import { departments } from './departments';
 import { designer } from './designer';
 import { designerAssignment } from './designerAssignment';
@@ -12,7 +12,9 @@ import { fulfillment } from './fulfillment';
 import { machineType } from './machineType';
 import { notifications } from './notifications';
 import { order } from './order';
+import { productCategory } from './productCategory';
 import { productConfig } from './productConfig';
+import { promotion } from './promotion';
 import { reports } from './reports';
 import { roles } from './roles';
 import { upload } from './upload';
@@ -30,6 +32,7 @@ export const RepositoryRemote = {
   customRoles,
   factory,
   machineType,
+  productCategory,
   productConfig,
   order,
   workshopConfig,
@@ -39,6 +42,8 @@ export const RepositoryRemote = {
   customerAssignment,
   customerAuth,
   customerOrder,
+  customerCatalog,
   fulfillment,
   reports,
+  promotion,
 };

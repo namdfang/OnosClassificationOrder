@@ -1,23 +1,26 @@
 # Products — Function Description
 
 > **File FE:** `apps/web/src/pages/products/index.tsx`
-> **File BE:** `apps/api/src/modules/product-config/`, `factory/`, `machine-type/`
+> **File BE:** `apps/api/src/modules/product-config/`, `factory/`, `machine-type/`, `product-category/`
 > **Route:** `/adm/products`
-> **API:** `/v1/product-configs`, `/v1/factories`, `/v1/machine-types`
+> **API:** `/v1/product-configs`, `/v1/factories`, `/v1/machine-types`, `/v1/product-categories`
+> **Liên quan:** Chương trình giảm giá theo tier khách hàng — [`Promotion.md`](Promotion.md). Catalog cho Customer Portal (giá tham khảo đã áp discount) — [`CustomerPortal.md`](CustomerPortal.md) §7.
 
 ---
 
 ## 1. Overview
 
-Module **Products** quản lý 3 entity liên quan đến cấu hình sản xuất:
+Module **Products** quản lý 4 entity liên quan đến cấu hình sản xuất + catalog:
 
-- **Product Config** — map `fullName` (tên đầy đủ sản phẩm) → `factory` + `machineType` (phòng / loại máy in) + `machineNumber` (số máy) + default `fabricType` + default `toolResult`
+- **Product Config** — map `fullName` (tên đầy đủ sản phẩm) → `factory` + `machineType` (phòng / loại máy in) + `machineNumber` (số máy) + default `fabricType` + default `toolResult` + chi tiết catalog (§2.4/§2.5)
 - **Factory** — danh sách xưởng sản xuất (mặc định ML/TN/US)
 - **Machine Type** — danh sách "Phòng" / loại máy in (ICL / IEN / HT…)
+- **Product Category** (§4) — danh mục sản phẩm, module riêng (KHÔNG dùng workshop_config), ProductConfig tham chiếu qua `productCategoryId`
 
-UI chia 2 tab:
+UI chia 3 tab:
 - **Config tab** — CRUD product config + import từ Google Sheets + xóa toàn bộ
-- **Xưởng tab** — CRUD factory & machine type (2 bảng chia đôi màn hình)
+- **Danh mục tab** (`ProductCategoryTab.tsx`) — CRUD product category (§4), tab riêng cho dễ tìm
+- **Xưởng tab** — CRUD factory / machine type (2 bảng xếp dọc, xem §3)
 
 ---
 
@@ -33,7 +36,7 @@ UI chia 2 tab:
 | **Xưởng / Phòng** (editable) | Cột **Xưởng** (`factoryId`) + **Phòng** (`machineTypeId`) sửa inline bằng `<select>` (giá trị = id, nhãn `shortName · name`) **và** trong Edit dialog. Update lạc quan (`factoryId`+`factory` / `machineTypeId`+`machineType`), lỗi thì refetch rollback. **Chỉ ảnh hưởng import đơn về sau** — đơn đã import giữ nguyên `factoryId`/`originalFactoryId` (insertOnly + transfer), KHÔNG backfill. BE `updateProductConfig` **validate** `factoryId` (`factoryService.getFactory`) + `machineTypeId` (`machineTypeService.getMachineType`) → 404 nếu id không tồn tại. |
 | **Mockup** | Cột **đầu tiên** — string URL ảnh; hiển thị thumbnail 56×56 (click mở tab mới) + ô `Input` sửa inline, lưu on-blur khi đổi |
 | **Level** | Select 1 trong **10 level cố định** (`PRODUCT_LEVELS` ở shared) — badge màu gradient dễ→khó (xanh lá `#22C55E` → đỏ đậm `#7F1D1D`). Lưu ngay khi chọn |
-| **Edit dialog** (`ProductConfigEditDialog.tsx`) | Nút ✏️ (`Pencil`) mỗi dòng mở modal chỉnh **mockup + level + fabricType + toolResult + Xưởng + Phòng + guide** cùng lúc, bấm **Lưu** → 1 PATCH; có nút **Xóa sản phẩm** (destructive) ở footer. **Đây là nơi duy nhất sửa `guide`** (cột Hướng dẫn hiện **tạm ẩn** khỏi bảng). Nhận thêm props `factoryOptions` / `machineTypeOptions` từ tab. |
+| **Edit dialog** (`ProductConfigEditDialog.tsx`) | Nút ✏️ (`Pencil`) mỗi dòng mở modal **3 tab**: **Sản xuất** (mockup + level + fabricType + toolResult + Xưởng + Phòng + guide — như cũ), **Chi tiết sản phẩm** (§2.4), **Biến thể** (§2.5); bấm **Lưu** → 1 PATCH gộp cả 3 tab. Nhận thêm props `factoryOptions` / `machineTypeOptions` / `productCategoryOptions` (id-based, từ `/v1/product-categories`) / `printMethodOptions` (workshop_config) từ tab. |
 | **Hướng dẫn** (`guide`) | Free-text ghi chú/hướng dẫn sản phẩm — **cột trong bảng tạm ẩn**; chỉ sửa qua Edit dialog (textarea). |
 | Delete (1 dòng) | Nút xóa ở bảng **tạm ẩn**, thay bằng nút Edit; xóa (soft delete `deletedAt`) chuyển vào **footer Edit dialog** |
 | **Xóa tất cả** | Confirm → DELETE `/v1/product-configs/all` (hard-delete `deleteMany({})`) — dùng khi reset từ đầu |
@@ -52,10 +55,36 @@ UI chia 2 tab:
   mockup?: string;         // URL ảnh mockup — hiển thị cột đầu bảng config (thumbnail + edit inline)
   level?: number;          // Cấp độ 1..10 (PRODUCT_LEVELS ở shared) — badge màu gradient
   guide?: string;          // Hướng dẫn/ghi chú sản phẩm (free-text textarea)
+
+  // Chi tiết sản phẩm (catalog cho khách hàng) — xem §2.4/§2.5
+  productCategoryId?: ObjectId;  // ref ProductCategoryEntity (module riêng — §4), virtual populate `productCategory`
+  printMethod?: string;          // workshop_config code (category=print_method)
+  printArea?: string;            // Vị trí in (free-text)
+  sizeChartUrl?: string;         // Ảnh/URL bảng size
+  description?: string;          // Mô tả — hiển thị Customer Portal
+  itemSpecifics?: { label: string; value: string }[]; // Thông số kỹ thuật tự do
+  weight?: number; width?: number; height?: number; length?: number; // Đóng gói mặc định
+  variations?: {
+    sku: string;          // Unique TOÀN HỆ THỐNG (index unique+sparse trên `variations.sku`)
+    color?: string; size?: string;
+    cost?: number;         // Giá vốn — KHÔNG bao giờ trả ra Customer Portal
+    nonShipCost?: number;  // Giá vốn không gồm ship — KHÔNG bao giờ trả ra Customer Portal
+    retailPrice?: number;  // Giá bán niêm yết — hiển thị Customer Portal
+    weight?: number; width?: number; height?: number; length?: number; // Override đóng gói
+    status: string;        // Status.Active/Inactive
+  }[];
 }
 ```
 
 > **Lưu ý:** `ProductConfigEntity` bị ràng buộc `assertSameType<ProductConfig, ProductConfigEntity>()` (2 chiều) — thêm field mới **BẮT BUỘC** sửa đồng bộ cả `packages/shared/dtos/product-config.dto.ts` (`ProductConfigZod` + Create/Update) lẫn entity, nếu không sẽ fail compile. `service.updateProductConfig` spread `...dto` nên field mới tự pass-through, không cần sửa service. 10 level cố định + màu định nghĩa ở `packages/shared/constants/product-level.ts` (`PRODUCT_LEVELS`, `PRODUCT_LEVEL_MAP`).
+
+### 2.4 Chi tiết sản phẩm (catalog cho khách hàng)
+
+Tab **"Chi tiết sản phẩm"** trong Edit dialog — `productCategoryId` chọn từ module **Product Category riêng** (§4, xem tab riêng ở Products), `printMethod` chọn từ category `print_method` trong `workshop_config` (quản lý ở trang `/workshop-config`, xem `WorkshopConfig.md`), `printArea`/`description` free-text, `sizeChartUrl` là URL ảnh, `itemSpecifics` là danh sách key-value tự do (thêm/xoá dòng), 4 field đóng gói mặc định (weight/width/height/length).
+
+### 2.5 Biến thể (`variations`)
+
+Tab **"Biến thể"** — mỗi sản phẩm có danh sách biến thể (màu/size), mỗi biến thể có SKU riêng **unique toàn hệ thống** (Mongo unique+sparse index trên `variations.sku`; trùng SKU với sản phẩm khác → 400 "SKU biến thể đã tồn tại ở sản phẩm khác", xử lý ở `product-config.service.ts` qua `isDuplicateVariationSkuError()`). `cost`/`nonShipCost` là giá vốn nội bộ — **tuyệt đối không trả ra Customer Portal** (xem `CustomerCatalogVariationZod` chỉ có `retailPrice`/`discountedPrice`). `retailPrice` là giá bán niêm yết dùng làm gốc tính discount ở module Promotion (`Promotion.md`). `status` Active/Inactive để tạm ẩn biến thể khỏi catalog khách hàng mà không cần xoá.
 
 Cột `fabricType` cho phép admin set sẵn loại vải mặc định — khi import order khớp `type` → product, BE auto-copy vào order (chỉ insert, không ghi đè) để Workshop view group được.
 
@@ -86,7 +115,7 @@ Tên đầy đủ | Tên viết tắt | Máy | Xưởng | Loại vải | Kết q
 ## 3. Tab `Xưởng` (`apps/web/src/pages/products/FactoryTab.tsx`)
 
 ### 3.1 Layout
-3 bảng xếp dọc (`space-y-6`):
+3 bảng xếp dọc (`space-y-6`) — Xưởng / Loại máy dùng CHUNG 1 form generic (`FormState.type: 'factory' | 'machineType'`, `renderTable()` tái dùng cho cả 2), Loại vải render riêng (icon picker):
 - **Xưởng** (Factory) — CRUD shortName/name/isActive
 - **Loại máy** (MachineType / Phòng) — CRUD shortName/name/isActive
 - **Loại vải** (Fabric — workshop_config category=fabric_type) — CRUD code/name/icon/isActive, dùng `IconPicker` và slugify tự động. Sync `workshopConfigStore`. Đây là **cùng dataset** với tab Loại vải ở trang Workshop Config, đặt ở đây để admin tiện thao tác sau khi import. Có nút **"Reset từ seed"** → `POST /v1/workshop-config/reset/fabric_type` hard-delete toàn bộ category rồi re-insert 22 fabric từ `WORKSHOP_CONFIG_SEED` (POLY 2 DA, MÈ 64, LỤA 4B, LỤA VÂN GỖ, THUN LẠNH, NỈ BÔNG, MÈ CARO, LỤA NGỌC TRAI, LƯỚI, THÔ MỘC, LỤA, CANVAS, THUN BỘT, PHI BÓNG, 60% COTTON 40% POLY, LÔNG- CHĂN, ÁO: LỤA 4B- QUẦN: MÈ CARO, VẢI MÈ MỚI, MIX VẢI + LƯỚI, MÈ CA SẤU, THÊU, GIẢ LEN).
@@ -112,30 +141,57 @@ Khi BE khởi động, `FactoryService.onModuleInit()` + `MachineTypeService.onM
 
 ---
 
-## 4. Backend Modules
+## 4. Tab `Danh mục` (`apps/web/src/pages/products/ProductCategoryTab.tsx`)
 
-### 4.1 `product-config/`
+Tab riêng cấp ngang hàng Config/Xưởng (KHÔNG lồng trong tab Xưởng — dễ tìm hơn). CRUD 1 bảng đơn giản, cùng pattern Factory/MachineType nhưng KHÔNG dùng chung generic form (component độc lập, tự quản state).
+
+Backend module riêng `apps/api/src/modules/product-category/` **KHÔNG dùng workshop_config** — cùng pattern hệt Factory/MachineType (entity + repository + service + controller + module, xem `factory.entity.ts` làm template). Lý do tách riêng: danh mục sản phẩm là khái niệm catalog/bán hàng (không phải cấu hình vận hành xưởng), cần tham chiếu ổn định qua `_id` từ cả `ProductConfig` (§2.4) lẫn `Promotion` (`scope='category'`, xem `Promotion.md`).
+
+```ts
+// ProductCategoryEntity
+{
+  name: string;       // Required, trim
+  shortName: string;  // Required, uppercase, unique — index
+  isActive: boolean;  // Default true
+}
+```
+
+| Method | Path | Quyền | Mô tả |
+|--------|------|-------|-------|
+| GET | `/v1/product-categories` | Admin/Manager | List + phân trang + filter `isActive`/`search` |
+| POST | `/v1/product-categories` | Admin/Manager | Tạo — trùng `shortName` → 400 |
+| PATCH | `/v1/product-categories/:id` | Admin/Manager | Update |
+
+`ProductCategoryService.onModuleInit()` seed 4 mặc định nếu **shortName chưa tồn tại**: APPAREL (Áo/Quần), MUG (Ly/Cốc), HOME-DECOR (Trang trí nhà), ACCESSORY (Phụ kiện).
+
+`ProductConfigService.createProductConfig()`/`updateProductConfig()` validate `productCategoryId` tồn tại (404 nếu không, qua `ProductCategoryService.getProductCategory()`) khi client gửi giá trị — tương tự validate `factoryId`/`machineTypeId`.
+
+---
+
+## 5. Backend Modules
+
+### 5.1 `product-config/`
 | File | Mô tả |
 |------|-------|
-| `product-config.entity.ts` | Schema + virtual `factory`, `machineType` |
+| `product-config.entity.ts` | Schema + virtual `factory`, `machineType`, `productCategory` |
 | `product-config.repository.ts` | Extends `DatabaseRepositoryAbstract` |
 | `product-config.service.ts` | Logic CRUD + `bulkUpsert()` |
 | `product-config.controller.ts` | 6 endpoints: list / create / update / delete / import / lookup-by-type |
 
-### 4.2 `factory/` & `machine-type/`
-- Cùng pattern: entity + repo + service + controller
+### 5.2 `factory/`, `machine-type/` & `product-category/`
+- Cùng pattern: entity + repo + service + controller (xem §4 cho `product-category/`)
 - Service có method `findByShortName()` để Product Config resolve trong import flow
 - `findByShortName()` được cache (Redis TTL 5 phút) vì lookup nhiều khi import
 
-### 4.3 Cache
+### 5.3 Cache
 - Key: `factories:all`, `machineTypes:all`, `productConfigs:type:{shortName}`
 - Invalidate khi create/update/delete
 
 ---
 
-## 5. API endpoints
+## 6. API endpoints
 
-### 5.1 Product Config
+### 6.1 Product Config
 | Method | Path | Body / Query | Mô tả |
 |--------|------|--------------|-------|
 | GET | `/v1/product-configs` | `?page&limit&search&factoryId&machineTypeId` | List + filter |
@@ -145,7 +201,7 @@ Khi BE khởi động, `FactoryService.onModuleInit()` + `MachineTypeService.onM
 | DELETE | `/v1/product-configs/all` | — | Hard delete toàn bộ (SuperAdmin/Admin) — trả về `{ removed }` |
 | POST | `/v1/product-configs/import` | `{ rows: [] }` | Bulk upsert by fullName |
 
-### 5.2 Factory & MachineType
+### 6.2 Factory & MachineType
 | Method | Path | Mô tả |
 |--------|------|-------|
 | GET | `/v1/factories` | List all (cache) |
@@ -157,9 +213,16 @@ Khi BE khởi động, `FactoryService.onModuleInit()` + `MachineTypeService.onM
 | PATCH | `/v1/machine-types/:id` | Update |
 | DELETE | `/v1/machine-types/:id` | Soft delete |
 
+### 6.3 ProductCategory (§4)
+| Method | Path | Mô tả |
+|--------|------|-------|
+| GET | `/v1/product-categories` | List + phân trang |
+| POST | `/v1/product-categories` | Create |
+| PATCH | `/v1/product-categories/:id` | Update |
+
 ---
 
-## 6. Quan hệ với Order module
+## 7. Quan hệ với Order module
 
 Khi `importOrders()` chạy, mỗi order sẽ:
 1. Lookup `ProductConfig` theo `type` (shortName)
@@ -172,7 +235,7 @@ Tỉ lệ map tốt là tiền đề cho:
 
 ---
 
-## 7. Permissions
+## 8. Permissions
 
 | Role | Truy cập |
 |------|----------|

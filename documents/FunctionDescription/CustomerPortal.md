@@ -1,9 +1,9 @@
 # Customer Portal — Function Description
 
-> **File FE:** `apps/web/src/pages/customer/{login,register}/index.tsx`, `apps/web/src/pages/customer/orders/{index,new,track}.tsx`, `apps/web/src/layouts/customerLayout/CustomerLayout.tsx`, `apps/web/src/store/customerAuthStore.ts`, `apps/web/src/services/customerPortal.ts`
-> **File BE:** `apps/api/src/modules/customer-portal/` (`customer-auth.controller.ts`, `customer-order.controller.ts`, `customer-order.service.ts`, `customer-portal.module.ts`), `apps/api/src/modules/customer/` (`customer.entity.ts`, `customer.service.ts` → `register()`/`validateLogin()`/`getById()`/`toSafeCustomer()`), `apps/api/src/modules/auth/jwt.strategy.ts` (branch theo `RoleType.Customer`)
-> **Route:** `/customer/login`, `/customer/register`, `/customer/orders`, `/customer/orders/new`, `/customer/orders/:productionId`
-> **API:** `POST /v1/customer/auth/register`, `POST /v1/customer/auth/login`, `GET /v1/customer/auth/me`, `POST /v1/customer/orders`, `GET /v1/customer/orders`, `GET /v1/customer/orders/:productionId`
+> **File FE:** `apps/web/src/pages/customer/{login,register}/index.tsx`, `apps/web/src/pages/customer/orders/{index,new,track}.tsx`, `apps/web/src/pages/customer/catalog/index.tsx`, `apps/web/src/layouts/customerLayout/CustomerLayout.tsx`, `apps/web/src/store/customerAuthStore.ts`, `apps/web/src/services/customerPortal.ts`
+> **File BE:** `apps/api/src/modules/customer-portal/` (`customer-auth.controller.ts`, `customer-order.controller.ts`, `customer-order.service.ts`, `customer-catalog.controller.ts`, `customer-catalog.service.ts`, `customer-portal.module.ts`), `apps/api/src/modules/customer/` (`customer.entity.ts`, `customer.service.ts` → `register()`/`validateLogin()`/`getById()`/`toSafeCustomer()`), `apps/api/src/modules/auth/jwt.strategy.ts` (branch theo `RoleType.Customer`)
+> **Route:** `/customer/login`, `/customer/register`, `/customer/orders`, `/customer/orders/new`, `/customer/orders/:productionId`, `/customer/catalog`
+> **API:** `POST /v1/customer/auth/register`, `POST /v1/customer/auth/login`, `GET /v1/customer/auth/me`, `POST /v1/customer/orders`, `GET /v1/customer/orders`, `GET /v1/customer/orders/:productionId`, `GET /v1/customer/catalog`
 
 ---
 
@@ -93,6 +93,7 @@ khi đã xác nhận đơn thuộc về khách hàng đang đăng nhập.
 | POST | `/v1/customer/orders` | `@Auth([Customer])` | Đặt đơn mới (thông tin cơ bản) |
 | GET | `/v1/customer/orders` | `@Auth([Customer])` | Danh sách đơn của khách (phân trang) |
 | GET | `/v1/customer/orders/:productionId` | `@Auth([Customer])` | Tiến trình 1 đơn (scope theo khách) |
+| GET | `/v1/customer/catalog` | `@Auth([Customer])` | Danh sách sản phẩm + giá tham khảo (đã áp discount theo tier) — xem §7 |
 
 Schema `customers` (mở rộng — xem [`CustomerFactoryAssignment.md §3`](CustomerFactoryAssignment.md)):
 ```ts
@@ -136,7 +137,33 @@ Chưa có ghi nhận benchmark riêng — tái dùng nguyên vẹn pipeline `imp
 (đã tối ưu cho import hàng loạt) cho trường hợp 1-đơn/lần nên chi phí không
 đáng kể so với luồng import nội bộ hiện có.
 
-## 7. Permissions
+## 7. Catalog (`/customer/catalog`) — giá tham khảo theo tier
+
+**Chỉ tham khảo** — chưa đổi form đặt đơn (`/customer/orders/new` giữ nguyên
+hành vi cũ, không tính tổng tiền). Trang này giúp khách xem thông tin sản
+phẩm (mockup, mô tả, biến thể, giá) trước khi tự điền vào form đặt đơn (nút
+copy tên sản phẩm qua `CopyButton`).
+
+`CustomerCatalogService.getCatalog()` (`apps/api/src/modules/customer-portal/customer-catalog.service.ts`):
+1. Query `ProductConfigEntity` với `variations` không rỗng (chỉ sản phẩm đã
+   được enrich đầy đủ mới hiện trong catalog — xem [`Products.md §2.5`](Products.md)),
+   filter thêm `search`/`productCategoryId` nếu có. `productCategory` trả về
+   trong response là TÊN đã resolve từ `productCategoryId` (populate virtual
+   qua `ProductCategory` module — [`Products.md §4`](Products.md)), KHÔNG
+   phải id.
+2. Lấy toàn bộ promotion đang active + trong khoảng ngày hiệu lực qua
+   `PromotionService.getActiveInDateRange()` ([`Promotion.md`](Promotion.md)).
+3. Với mỗi biến thể, dùng `promotionMatches()` + `applyPromotionDiscount()`
+   (tái dùng từ `promotion.service.ts`) để tìm promotion cho giá **thấp
+   nhất** theo tier của khách (`customer.tier`, VIP 0..5 hoặc `null` = khách
+   lẻ), `quantity` mặc định = 1 (trang browse không có input số lượng).
+
+**Bảo mật dữ liệu:** response CHỈ trả `retailPrice`/`discountedPrice`/
+`appliedPromotionName` — **tuyệt đối KHÔNG** trả `cost`/`nonShipCost` (giá vốn
+nội bộ) ra Customer Portal. Xem `CustomerCatalogVariationZod` trong
+`packages/shared/dtos/product-config.dto.ts`.
+
+## 8. Permissions
 
 Không dùng `permission-catalog` nội bộ — gate hoàn toàn bằng
 `@Auth([RoleType.Customer])` (role-only, không permission code). Nhân viên

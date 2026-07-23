@@ -44,6 +44,11 @@ const TABS: { key: WorkshopConfigCategory; label: string; description: string }[
     label: 'Lỗi sản xuất',
     description: 'Lý do xưởng báo lỗi đơn hàng (hiển thị badge màu)',
   },
+  {
+    key: WorkshopConfigCategory.PrintMethod,
+    label: 'Phương pháp in',
+    description: 'Phương pháp in cho catalog khách hàng (hiển thị icon)',
+  },
 ];
 
 export default function WorkshopConfigPage() {

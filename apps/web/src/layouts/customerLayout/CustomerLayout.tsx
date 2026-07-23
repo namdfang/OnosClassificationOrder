@@ -1,6 +1,6 @@
 import React, { useEffect } from 'react';
 import { Link, Outlet, useNavigate } from 'react-router-dom';
-import { LogOut, PackagePlus } from 'lucide-react';
+import { LayoutGrid, LogOut, PackagePlus } from 'lucide-react';
 
 import { Button } from '@/components/ui/button';
 
@@ -36,6 +36,10 @@ function CustomerLayout() {
           </Link>
 
           <div className="flex items-center gap-3">
+            <Button size="sm" variant="ghost" onClick={() => navigate(PATHS.CUSTOMER_CATALOG)}>
+              <LayoutGrid size={14} className="mr-1.5" />
+              Danh mục sản phẩm
+            </Button>
             <Button size="sm" variant="secondary" onClick={() => navigate(PATHS.CUSTOMER_ORDER_NEW)}>
               <PackagePlus size={14} className="mr-1.5" />
               Đặt đơn mới

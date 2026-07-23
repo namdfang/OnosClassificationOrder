@@ -13,6 +13,7 @@ import { WorkshopConfigCategory } from 'shared';
 
 import { FactoryService } from '../factory/factory.service';
 import { MachineTypeService } from '../machine-type/machine-type.service';
+import { ProductCategoryService } from '../product-category/product-category.service';
 import { WorkshopConfigRepository } from '../workshop-config/workshop-config.repository';
 import { ProductConfigEntity } from './product-config.entity';
 import { ProductConfigRepository } from './product-config.repository';
@@ -20,6 +21,15 @@ import { ProductConfigRepository } from './product-config.repository';
 /** workshop_config codes (category=tool_result) emitted by import defaults. */
 const TOOL_RESULT_HAS = 'has-tool';
 const TOOL_RESULT_NONE = 'no-tool';
+
+/** MongoDB duplicate-key error E11000 từ unique index `variations.sku`. */
+function isDuplicateVariationSkuError(err: unknown): boolean {
+  if (!err || typeof err !== 'object') return false;
+  const e = err as { code?: number; keyPattern?: Record<string, unknown>; message?: string };
+  if (e.code !== 11000) return false;
+  if (e.keyPattern?.['variations.sku'] !== undefined) return true;
+  return typeof e.message === 'string' && e.message.includes('variations.sku');
+}
 
 const slugify = (input: string): string =>
   input
@@ -36,6 +46,7 @@ export class ProductConfigService {
     private readonly productConfigRepository: ProductConfigRepository,
     private readonly factoryService: FactoryService,
     private readonly machineTypeService: MachineTypeService,
+    private readonly productCategoryService: ProductCategoryService,
     private readonly workshopConfigRepository: WorkshopConfigRepository,
     @InjectModel(ProductConfigEntity.name)
     private readonly productConfigModel: Model<ProductConfigEntity>,
@@ -158,6 +169,7 @@ export class ProductConfigService {
       populate: [
         { path: 'factory', select: ['name', 'shortName'] },
         { path: 'machineType', select: ['name', 'shortName'] },
+        { path: 'productCategory', select: ['name', 'shortName'] },
       ],
     });
 
@@ -167,21 +179,37 @@ export class ProductConfigService {
   async createProductConfig(dto: CreateProductConfigDto) {
     const factory = await this.factoryService.getFactory(dto.factoryId);
     if (!factory) throw new BadRequestException('Invalid factoryId');
+    if (dto.productCategoryId) await this.productCategoryService.getProductCategory(dto.productCategoryId);
 
-    return this.productConfigRepository.create({ ...dto, shortName: dto.shortName.toUpperCase() });
+    try {
+      return await this.productConfigRepository.create({ ...dto, shortName: dto.shortName.toUpperCase() });
+    } catch (err) {
+      if (isDuplicateVariationSkuError(err)) {
+        throw new BadRequestException('SKU biến thể đã tồn tại ở sản phẩm khác');
+      }
+      throw err;
+    }
   }
 
   async updateProductConfig(id: string, dto: UpdateProductConfigDto) {
-    // Validate ref khi client đổi Xưởng / Phòng (throw 404 nếu id không tồn tại).
+    // Validate ref khi client đổi Xưởng / Phòng / Danh mục (throw 404 nếu id không tồn tại).
     if (dto.factoryId) await this.factoryService.getFactory(dto.factoryId);
     if (dto.machineTypeId) await this.machineTypeService.getMachineType(dto.machineTypeId);
+    if (dto.productCategoryId) await this.productCategoryService.getProductCategory(dto.productCategoryId);
 
-    const p = await this.productConfigRepository.findOneAndUpdate(
-      { _id: id },
-      { ...dto, ...(dto.shortName ? { shortName: dto.shortName.toUpperCase() } : {}) },
-    );
-    if (!p) throw new NotFoundException('ProductConfig not found');
-    return p;
+    try {
+      const p = await this.productConfigRepository.findOneAndUpdate(
+        { _id: id },
+        { ...dto, ...(dto.shortName ? { shortName: dto.shortName.toUpperCase() } : {}) },
+      );
+      if (!p) throw new NotFoundException('ProductConfig not found');
+      return p;
+    } catch (err) {
+      if (isDuplicateVariationSkuError(err)) {
+        throw new BadRequestException('SKU biến thể đã tồn tại ở sản phẩm khác');
+      }
+      throw err;
+    }
   }
 
   async deleteProductConfig(id: string) {

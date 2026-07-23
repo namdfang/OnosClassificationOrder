@@ -49,6 +49,7 @@ export const PERMISSION_CATALOG: PermissionItem[] = [
   { code: 'page.stage_errors',         label: 'Danh mục lỗi công đoạn (QR)',       group: 'page' },
   { code: 'page.tool_check',           label: 'Soát tool (support dashboard)',     group: 'page' },
   { code: 'page.unmapped_factory',     label: 'Đơn chưa xác định xưởng (menu tạm)', group: 'page' },
+  { code: 'page.promotions',           label: 'Quản lý chương trình giảm giá',      group: 'page' },
 
   // ─── Order actions ──────────────────────────────────────────────
   { code: 'order.import',              label: 'Import đơn hàng',           group: 'order' },
