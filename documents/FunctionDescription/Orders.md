@@ -1300,16 +1300,17 @@ Hiển thị (chip đồng hồ, đỏ nếu quá hạn):
 
 ## 18. Design Review — public API cho tool ngoài duyệt thiết kế
 
-> **File BE:** `apps/api/src/modules/order/order.controller.ts` → `GET /v1/orders/design-review/next` + `GET /v1/orders/design-review/by-production-id/:productionId` + `POST /v1/orders/design-review/result`, `apps/api/src/modules/order/order.service.ts` → `getNextDesignReviewOrder()` + `getDesignReviewOrderByProductionId()` + `setDesignReviewResult()`, `apps/api/src/modules/order/design-review-product-code.ts` (`mapProductTypeToCode()` — bảng mapping cố định `type` → mã sản phẩm)
-> **Shared:** `packages/shared/dtos/production-order.dto.ts` (`GetNextDesignReviewOrderZod`/`GetNextDesignReviewOrderDto` + `DesignReviewOrderZod`/`DesignReviewAttributesZod`/`GetNextDesignReviewOrderResDto` + `GetDesignReviewOrderByIdResDto` + `SetDesignReviewResultZod`/`SetDesignReviewResultResDto`)
+> **File BE:** `apps/api/src/modules/order/order.controller.ts` → `GET /v1/orders/design-review/next` + `GET /v1/orders/design-review/by-production-id/:productionId` + `GET /v1/orders/design-review/error-file-options` + `POST /v1/orders/design-review/result`, `apps/api/src/modules/order/order.service.ts` → `getNextDesignReviewOrder()` + `getDesignReviewOrderByProductionId()` + `getDesignReviewErrorFileOptions()` + `setDesignReviewResult()`, `apps/api/src/modules/order/design-review-product-code.ts` (`mapProductTypeToCode()` — bảng mapping cố định `type` → mã sản phẩm)
+> **Shared:** `packages/shared/dtos/production-order.dto.ts` (`GetNextDesignReviewOrderZod`/`GetNextDesignReviewOrderDto` + `DesignReviewOrderZod`/`DesignReviewAttributesZod`/`GetNextDesignReviewOrderResDto` + `GetDesignReviewOrderByIdResDto` + `DesignReviewErrorFileOptionZod`/`GetDesignReviewErrorFileOptionsResDto` + `SetDesignReviewResultZod`/`SetDesignReviewResultResDto`)
 > **Route:** không có FE — chỉ API cho hệ thống ngoài gọi.
-> **API:** `GET /v1/orders/design-review/next`, `GET /v1/orders/design-review/by-production-id/:productionId`, `POST /v1/orders/design-review/result`
+> **API:** `GET /v1/orders/design-review/next`, `GET /v1/orders/design-review/by-production-id/:productionId`, `GET /v1/orders/design-review/error-file-options`, `POST /v1/orders/design-review/result`
 
 ### 18.1 Overview
-3 endpoint **hoàn toàn public** (`@Auth([], [], { public: true })` — không JWT, không API key, theo quyết định người dùng khi tạo tính năng), cho **nhiều client song song** (bot duyệt thiết kế) dùng theo cặp, xoay quanh field **`toolResult`** ("Kết quả Tool", KHÁC `toolResultNote` "Note kq Tool 1" — field đó giờ CHỈ nhân viên sửa tay, ngoài luồng automation này):
+4 endpoint **hoàn toàn public** (`@Auth([], [], { public: true })` — không JWT, không API key, theo quyết định người dùng khi tạo tính năng), cho **nhiều client song song** (bot duyệt thiết kế) dùng theo cặp, xoay quanh field **`toolResult`** ("Kết quả Tool", KHÁC `toolResultNote` "Note kq Tool 1" — field đó giờ CHỈ nhân viên sửa tay, ngoài luồng automation này):
 1. `GET /design-review/next` — lấy **1 đơn mỗi lần gọi**, luôn là đơn đang ở **bước đầu tiên của tiến trình**: chưa có Kết quả Tool (`toolResult` rỗng) **và** chưa gán designer (`designerStatus='unassigned'`). Query optional `from`/`to` (`YYYY-MM-DD`) lọc thêm theo khoảng ngày `inProductionAt` (VN tz) — cùng semantics `createdFrom`/`createdTo` ở danh sách đơn (§7.0b), chỉ đổi tên field cho gọn vì đây là API public riêng. Không truyền `from`/`to` → không giới hạn ngày (hành vi mặc định, không breaking client cũ). Query optional `pid` — ép lấy ĐÚNG 1 đơn theo `productionId`, bỏ qua mọi filter hàng đợi, không claim lease (uỷ quyền lại cho `getDesignReviewOrderByProductionId`).
 2. `GET /design-review/by-production-id/:productionId` — lookup TRỰC TIẾP 1 đơn theo `productionId` để tool soát lại/tra cứu, KHÔNG áp filter hàng đợi (trả về đơn ở BẤT KỲ trạng thái nào, kể cả đã soát/đã gán) và KHÔNG claim lease. Cùng response shape `DesignReviewOrder` với `/next` (§18.4).
-3. `POST /design-review/result` — sau khi client xử lý xong, gọi lại để lưu **Kết quả Tool** (`toolResult`) — tương đương thao tác tay ở cột "Kết quả Tool" (Danh sách đơn, `/orders?tab=list`). Đơn tự rời khỏi hàng đợi `next` ngay khi `toolResult` được set (không rỗng nữa). Optional `toolResultNote` ("Note kq Tool 1") — nếu truyền, ghi luôn field này và chạy CÙNG side-effect hook với sửa tay (xem §18.6).
+3. `GET /design-review/error-file-options` — trả về danh mục **"File lỗi"** (`workshop_config` category `error_file_type`, chỉ code active) để tool hiển thị lựa chọn khi Note kq Tool 1 = `'error'`, rồi truyền `code` lại qua field `errorFile` ở `/design-review/result` (xem §18.7).
+4. `POST /design-review/result` — sau khi client xử lý xong, gọi lại để lưu **Kết quả Tool** (`toolResult`) — tương đương thao tác tay ở cột "Kết quả Tool" (Danh sách đơn, `/orders?tab=list`). Đơn tự rời khỏi hàng đợi `next` ngay khi `toolResult` được set (không rỗng nữa). Optional `toolResultNote` ("Note kq Tool 1") — nếu truyền, ghi luôn field này và chạy CÙNG side-effect hook với sửa tay (xem §18.7). Optional `errorFile` ("File lỗi", chọn được nhiều lỗi cùng lúc) + `errorFileNote` ("Ghi chú", free text) — cùng cơ chế optional, dùng khi `toolResultNote='error'` (xem §18.7).
 
 `toolResult` **vẫn được map từ `ProductConfig.toolResult` lúc import** (CSV hoặc API OnosPod — cùng chung pipeline `importOrders()`, khớp theo `type` ↔ `ProductConfig.fullName`), giống mọi field insert-only khác — chỉ set **lần đầu tạo đơn** (`$setOnInsert`, KHÔNG bị ghi đè khi re-import). **Để tạm** như vậy (comment `// Để tạm, tool ổn sẽ xóa không lưu toolResult vào đơn nữa` ở `importOrders()`) — dự định khi tool duyệt thiết kế ổn định sẽ bỏ mapping này để MỌI đơn mới đều tự vào hàng đợi `/next` ngay từ đầu. Trong lúc chờ: đơn nào product config đã có sẵn `toolResult` sẽ KHÔNG vào hàng đợi `/next` (vì điều kiện §18.3 là `toolResult` rỗng) — chỉ đơn chưa map/product config chưa set `toolResult` mới vào hàng đợi.
 
@@ -1355,7 +1356,25 @@ Sort: `priority desc` → `inProductionAt asc` → `createdAt asc` (đơn ưu ti
 ### 18.5 Bảng mapping `type` → `productCode`
 Bảng cố định trong `design-review-product-code.ts` (`PRODUCT_TYPE_CODE_MAP`, so khớp case-insensitive theo `ProductConfig.fullName`/`OrderEntity.type`) — sửa/thêm mã trực tiếp trong file này, không cần đổi code gọi.
 
-### 18.6 `POST /design-review/result` — lưu Kết quả Tool
+### 18.6 `GET /design-review/error-file-options` — danh mục "File lỗi"
+
+Không tham số. Trả về TOÀN BỘ code active của `workshop_config` category `error_file_type` (`WorkshopConfigCategory.ErrorFileType` — cùng danh mục field `errorFile` ở Danh sách đơn/tab "Soát tool"), sort theo `order`. JSON **tự định nghĩa riêng** cho luồng public này (`DesignReviewErrorFileOptionZod` — chỉ `code`/`name`, KHÁC `WorkshopConfigZod` đầy đủ dùng nội bộ, không lộ `color`/`icon`/`errorSource`).
+
+Response mẫu (`GetDesignReviewErrorFileOptionsResDto`):
+```json
+GET /v1/orders/design-review/error-file-options
+{
+  "success": true,
+  "data": [
+    { "code": "vien-co", "name": "Viền cổ" },
+    { "code": "lech-mau", "name": "Lệch màu" }
+  ]
+}
+```
+
+`code` ở đây chính là giá trị tool truyền vào field `errorFile` (mảng) ở `POST /design-review/result` (§18.7).
+
+### 18.7 `POST /design-review/result` — lưu Kết quả Tool
 
 Body request (`SetDesignReviewResultDto`, `packages/shared/dtos/production-order.dto.ts`):
 
@@ -1364,8 +1383,10 @@ Body request (`SetDesignReviewResultDto`, `packages/shared/dtos/production-order
 | `productionId` | `string` | Có | Mã đơn — khóa duy nhất, luôn có, exact match case-insensitive (giống `by-production-id/:code`). KHÁC `orderId` (mã đơn marketplace gốc, KHÔNG unique vì 1 đơn có thể nhiều line item) — cố tình dùng `productionId` để tránh nhầm đơn khi update. |
 | `toolResult` | `string \| null` | Có | Code `workshop_config` category `tool_result`. `null` = xoá giá trị hiện có. |
 | `toolResultNote` | `string \| null` | Không | "Note kq Tool 1" — code `workshop_config` category **`tool_result_note`** (`WorkshopConfigCategory.ToolResultNote`, KHÁC `production_error`). **Không truyền field này** (bỏ hẳn key khỏi JSON) → giữ nguyên hành vi cũ, KHÔNG đụng field. **Truyền** (kể cả `null` để xoá) → ghi đè + chạy CÙNG side-effect hook với xưởng đánh tay ở Danh sách đơn/tab "Soát tool" (xem `ToolCheckWorkflow.md`) — vd `'ok'` → tự vào fulfillment hoặc rework-back designer tùy trạng thái đơn. |
+| `errorFile` | `string[] \| null` | Không | "File lỗi" — mảng code `workshop_config` category **`error_file_type`**, lấy từ `GET /design-review/error-file-options` (§18.6). **Chọn được nhiều lỗi cùng lúc** (mảng nhiều phần tử). Dùng khi `toolResultNote='error'` để ghi luôn nguyên nhân lỗi file — BE **không ép buộc** theo `toolResultNote` (tool tự quyết định có truyền hay không). **Không truyền field này** → giữ nguyên hành vi cũ, KHÔNG đụng field. **Truyền** (kể cả `null`/`[]` để xoá) → ghi đè. KHÔNG có side-effect hook (chỉ 1 field workshop_config đơn thuần, khác `toolResultNote`). |
+| `errorFileNote` | `string \| null` | Không | "Ghi chú" — free text, **KHÔNG** qua `workshop_config` (không validate code, nhận bất kỳ chuỗi nào) — cùng cột "Kết quả Tool / File lỗi" ở Danh sách đơn (bên cạnh `errorFile`). Cùng cơ chế optional như `errorFile`. **Không truyền field này** → giữ nguyên hành vi cũ, KHÔNG đụng field. **Truyền** (kể cả `null`/`''` để xoá) → ghi đè. KHÔNG có side-effect hook. **Lưu ý:** field này KHÁC với cơ chế detect "hủy đơn" trong `errorFileNote` ở luồng import CSV rework (`order.service.ts` — hàm import rework, nếu note chứa "hủy đơn" thì tự set `cancelledAt`/`cancelReason`) — luồng `setDesignReviewResult()` đi qua `updateField()` đơn thuần, **KHÔNG** chạy detect đó. |
 
-`productionId` không khớp đơn nào → 404. `toolResult` không khớp code `workshop_config` category `tool_result` đang active → 400. `toolResultNote` (nếu có truyền) không khớp code active → 400.
+`productionId` không khớp đơn nào → 404. `toolResult` không khớp code `workshop_config` category `tool_result` đang active → 400. `toolResultNote`/`errorFile` (nếu có truyền) không khớp code active → 400. `errorFileNote` không validate (free text, luôn 200 nếu qua được các field trước).
 
 **Giá trị mẫu hiện có** (seed `workshop-config.seed.ts` — admin có thể thêm code mới qua trang Workshop Config, đây không phải enum cứng):
 
@@ -1377,8 +1398,10 @@ Body request (`SetDesignReviewResultDto`, `packages/shared/dtos/production-order
 | `toolResultNote` | `error` | Lỗi |
 | `toolResultNote` | `ok` | Ok — **duy nhất giá trị kích hoạt `readyForFulfill`/entry fulfillment** (mọi code khác đều coi là "chưa đạt") |
 | `toolResultNote` | `no-pdf` | Không có file PDF |
+| `errorFile` | *(xem `GET /design-review/error-file-options`, §18.6)* | — |
+| `errorFileNote` | *(free text, không giới hạn giá trị)* | — |
 
-Request mẫu (chỉ `toolResult`, hành vi cũ — KHÔNG đụng `toolResultNote`):
+Request mẫu (chỉ `toolResult`, hành vi cũ — KHÔNG đụng `toolResultNote`/`errorFile`/`errorFileNote`):
 ```json
 POST /v1/orders/design-review/result
 {
@@ -1397,23 +1420,37 @@ POST /v1/orders/design-review/result
 }
 ```
 
-Response mẫu (`SetDesignReviewResultResDto` — `data` = `ProductionOrderZod` đầy đủ của đơn SAU khi cập nhật (SAU cùng nếu có cả 2 field), rút gọn các field liên quan):
+Request mẫu (Note kq Tool 1 = lỗi, kèm `errorFile` **nhiều lỗi** + `errorFileNote` — ghi đè cả 4 field):
+```json
+POST /v1/orders/design-review/result
+{
+  "productionId": "RR-03884-24456",
+  "toolResult": "has-tool",
+  "toolResultNote": "error",
+  "errorFile": ["vien-co", "lech-mau"],
+  "errorFileNote": "Tay áo bị lệch mẫu, cần kiểm tra lại"
+}
+```
+
+Response mẫu (`SetDesignReviewResultResDto` — `data` = `ProductionOrderZod` đầy đủ của đơn SAU khi cập nhật (SAU CÙNG lần gọi `updateField()` cuối, xem cơ chế bên dưới), rút gọn các field liên quan):
 ```json
 {
   "success": true,
   "data": {
     "productionId": "RR-03884-24456",
     "toolResult": "has-tool",
-    "toolResultNote": "ok",
+    "toolResultNote": "error",
+    "errorFile": ["vien-co", "lech-mau"],
+    "errorFileNote": "Tay áo bị lệch mẫu, cần kiểm tra lại",
     "designerStatus": "unassigned"
   }
 }
 ```
 
-**Cơ chế:** `setDesignReviewResult()` resolve `productionId` → `_id` (exact match case-insensitive, giống `getByProductionId`), rồi gọi **nguyên vẹn** `updateField()` — 1 lần cho `toolResult` (KHÔNG có side-effect hook nào, không đụng `readyForFulfill`, không auto-assign designer, không rework-back — chỉ là 1 field workshop_config đơn thuần), và nếu request có truyền `toolResultNote` (kiểm tra `!== undefined`, phân biệt với "không truyền") thì gọi THÊM 1 lần `updateField()` nữa cho field đó — CÙNG nhánh side-effect hook với sửa tay ở Danh sách đơn (`dto.field === 'toolResultNote'` trong `updateField()`: set `readyForFulfill`, auto rework-back về tool-check/designer, hoặc entry vào fulfillment tùy trạng thái đơn trước đó). Cả 2 lần gọi đều dùng role giả `SuperAdmin` để bypass permission gate (roleName chỉ được đọc ở đúng chỗ đó bên trong `updateField`, không ảnh hưởng business logic khác) và đều chạy `assertNotHeld` (đơn đang giữ → 409 — nếu lần gọi `toolResult` thành công nhưng đơn bị giữ sau đó trước lần gọi `toolResultNote`, request sẽ dừng giữa chừng với `toolResult` đã lưu nhưng `toolResultNote` chưa).
+**Cơ chế:** `setDesignReviewResult()` resolve `productionId` → `_id` (exact match case-insensitive, giống `getByProductionId`), rồi gọi **nguyên vẹn** `updateField()` — 1 lần cho `toolResult` (KHÔNG có side-effect hook nào, không đụng `readyForFulfill`, không auto-assign designer, không rework-back — chỉ là 1 field workshop_config đơn thuần), và nếu request có truyền `toolResultNote` (kiểm tra `!== undefined`, phân biệt với "không truyền") thì gọi THÊM 1 lần `updateField()` nữa cho field đó — CÙNG nhánh side-effect hook với sửa tay ở Danh sách đơn (`dto.field === 'toolResultNote'` trong `updateField()`: set `readyForFulfill`, auto rework-back về tool-check/designer, hoặc entry vào fulfillment tùy trạng thái đơn trước đó), rồi nếu request có truyền `errorFile` (cùng kiểm tra `!== undefined`) thì gọi THÊM 1 lần `updateField()` nữa cho field đó (KHÔNG side-effect hook), rồi nếu request có truyền `errorFileNote` (cùng kiểm tra `!== undefined`) thì gọi THÊM 1 lần `updateField()` cuối cho field đó (free text, KHÔNG side-effect hook, `assertValueAllowed` bỏ qua vì category=null). Response trả về kết quả của lần gọi `updateField()` CUỐI CÙNG đã chạy. Mọi lần gọi đều dùng role giả `SuperAdmin` để bypass permission gate (roleName chỉ được đọc ở đúng chỗ đó bên trong `updateField`, không ảnh hưởng business logic khác) và đều chạy `assertNotHeld` (đơn đang giữ → 409 — nếu 1 lần gọi trước đó đã thành công nhưng đơn bị giữ trước lần gọi kế tiếp, request sẽ dừng giữa chừng với các field trước đã lưu nhưng field sau chưa).
 
-### 18.7 Performance
-1 `findOneAndUpdate` (GET `/next`) với index sẵn có trên `toolResultNote`/`designerStatus`/`priority`/`cancelledAt`/`heldAt`/`designReviewClaimedAt` (đều đã đánh index ở `order.entity.ts`) — không cần index tổng hợp riêng vì volume đơn ở bước đầu tiên thường nhỏ. POST `/result` tái dùng `updateField()` nên chi phí giống hệt sửa tay 1 cell (1-2 lần gọi tuần tự tùy số field truyền).
+### 18.8 Performance
+1 `findOneAndUpdate` (GET `/next`) với index sẵn có trên `toolResultNote`/`designerStatus`/`priority`/`cancelledAt`/`heldAt`/`designReviewClaimedAt` (đều đã đánh index ở `order.entity.ts`) — không cần index tổng hợp riêng vì volume đơn ở bước đầu tiên thường nhỏ. GET `/error-file-options` là 1 query `find()` nhỏ trên `workshopConfigs` (đã có unique index `{category,code}`, volume category này rất nhỏ) — không cần cache riêng. POST `/result` tái dùng `updateField()` nên chi phí giống hệt sửa tay 1 cell (1-3 lần gọi tuần tự tùy số field truyền).
 
 ## 19. "Không xác định xưởng" — tách đơn chưa map xưởng khỏi hệ thống (menu tạm)
 

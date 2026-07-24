@@ -40,7 +40,8 @@
   "pnpm": {
     "overrides": {
       "passport": "0.6.0",
-      "@types/node": "20.17.17"
+      "@types/node": "20.17.17",
+      "reflect-metadata": "0.1.13"
     }
   },
   "dependencies": {

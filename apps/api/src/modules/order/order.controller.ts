@@ -25,6 +25,7 @@ import {
   FulfillmentStatusCountsResDto,
   GetCancelledOrdersDto,
   GetCancelledOrdersResDto,
+  GetDesignReviewErrorFileOptionsResDto,
   GetDesignReviewOrderByIdResDto,
   GetErrorLogDto,
   GetErrorLogResDto,
@@ -890,13 +891,42 @@ export class OrderController {
     ) as Promise<GetDesignReviewOrderByIdResDto>;
   }
 
+  // Public — bổ sung cho `design-review/next`/`by-production-id`. Trả về danh
+  // mục "File lỗi" (workshop_config category=error_file_type, chỉ code
+  // active) để tool ngoài hiển thị lựa chọn khi Note kq Tool 1 = 'error', rồi
+  // truyền `code` lại qua field `errorFile` ở `POST /design-review/result`.
+  // Xem Orders.md §18.
+  @Get('design-review/error-file-options')
+  @Auth([], [], { public: true })
+  @ApiOperation({ summary: '[Public] Danh mục "File lỗi" để truyền vào POST /design-review/result' })
+  @HttpCode(HttpStatus.OK)
+  @ApiOkResponse({ type: GetDesignReviewErrorFileOptionsResDto })
+  async getDesignReviewErrorFileOptions(
+    @ClientIp() ip: string,
+    @UserAgent() userAgent: string,
+  ): Promise<GetDesignReviewErrorFileOptionsResDto> {
+    this.logger.info({
+      message: JSON.stringify({
+        method: 'GET',
+        url: '/orders/design-review/error-file-options',
+        ip,
+        userAgent,
+      }),
+    });
+    return this.orderService.getDesignReviewErrorFileOptions();
+  }
+
   // Public — không cần JWT, để tool ngoài duyệt thiết kế lưu Kết quả Tool
   // (`toolResult`). KHÔNG đụng `toolResultNote` — field đó chỉ nhân viên sửa
-  // tay. Không định danh caller — log ip/userAgent làm audit trace duy nhất.
-  // Xem Orders.md §18.
+  // tay, TRỪ KHI tool tự truyền tường minh (cùng cơ chế cho `errorFile`/
+  // `errorFileNote`, dùng khi `toolResultNote='error'`). Không định danh
+  // caller — log ip/userAgent làm audit trace duy nhất. Xem Orders.md §18.
   @Post('design-review/result')
   @Auth([], [], { public: true })
-  @ApiOperation({ summary: '[Public] Lưu Kết quả Tool (toolResult) + optional Note kq Tool 1 (toolResultNote)' })
+  @ApiOperation({
+    summary:
+      '[Public] Lưu Kết quả Tool (toolResult) + optional Note kq Tool 1 (toolResultNote) + optional File lỗi (errorFile) + optional Ghi chú (errorFileNote)',
+  })
   @HttpCode(HttpStatus.OK)
   @ApiOkResponse({ type: SetDesignReviewResultResDto })
   async setDesignReviewResult(
@@ -911,13 +941,20 @@ export class OrderController {
         productionId: dto.productionId,
         toolResult: dto.toolResult,
         toolResultNote: dto.toolResultNote,
+        errorFile: dto.errorFile,
+        errorFileNote: dto.errorFileNote,
         ip,
         userAgent,
       }),
     });
     return this.orderService.setDesignReviewResult(
       dto.productionId,
-      { toolResult: dto.toolResult, toolResultNote: dto.toolResultNote },
+      {
+        toolResult: dto.toolResult,
+        toolResultNote: dto.toolResultNote,
+        errorFile: dto.errorFile,
+        errorFileNote: dto.errorFileNote,
+      },
       { ip, userAgent },
     ) as Promise<SetDesignReviewResultResDto>;
   }

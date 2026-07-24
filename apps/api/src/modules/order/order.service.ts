@@ -46,6 +46,7 @@ import type {
   FulfillmentTimelineEntry,
   GetCancelledOrdersDto,
   GetCancelledOrdersResDto,
+  GetDesignReviewErrorFileOptionsResDto,
   GetErrorLogDto,
   GetErrorLogResDto,
   GetFactoryOverviewDto,
@@ -5540,30 +5541,58 @@ export class OrderService implements OnModuleInit {
   }
 
   /**
+   * Public API cho tool ngoài lấy danh mục "File lỗi" (workshop_config
+   * category=error_file_type, chỉ code active, sort theo `order`) để hiển thị
+   * lựa chọn khi Note kq Tool 1 = 'error', rồi truyền `code` lại qua field
+   * `errorFile` ở `setDesignReviewResult()`. Chỉ trả `code`/`name` — JSON tự
+   * định nghĩa riêng cho luồng public này (KHÁC `WorkshopConfigZod` đầy đủ
+   * dùng nội bộ, tránh lộ `color`/`icon`/`errorSource`... không cần thiết).
+   */
+  async getDesignReviewErrorFileOptions(): Promise<GetDesignReviewErrorFileOptionsResDto> {
+    const rows = await this.workshopConfigRepository.findAll<{ code: string; name: string }>(
+      { category: WorkshopConfigCategory.ErrorFileType, isActive: true },
+      { sort: { order: 1 }, select: { code: 1, name: 1 } },
+    );
+    return { success: true, data: rows.map((r) => ({ code: r.code, name: r.name })) };
+  }
+
+  /**
    * Public API cho tool ngoài lưu Kết quả Tool (`toolResult`) sau khi xử lý
    * đơn lấy từ `getNextDesignReviewOrder()` — tương đương thao tác tay ở cột
    * "Kết quả Tool" (Danh sách đơn). Optional `toolResultNote` ("Note kq Tool
    * 1") — chỉ ghi khi tool truyền lên (KHÁC `undefined`, kể cả `null` để xoá);
-   * không truyền → giữ hành vi cũ, KHÔNG đụng field này.
+   * không truyền → giữ hành vi cũ, KHÔNG đụng field này. Optional `errorFile`
+   * ("File lỗi", code lấy từ `getDesignReviewErrorFileOptions()`) và
+   * `errorFileNote` ("Ghi chú", free text) — cùng cơ chế optional như
+   * `toolResultNote`, dùng khi `toolResultNote='error'` để ghi luôn nguyên
+   * nhân + ghi chú lỗi file (BE không ép buộc theo `toolResultNote`, tool tự
+   * quyết định truyền hay không).
    *
    * Tra theo `productionId` — khóa duy nhất, luôn có (khác `orderId` = mã đơn
    * marketplace gốc, KHÔNG unique vì 1 đơn có thể nhiều line item).
    *
-   * Tái dùng NGUYÊN VẸN `updateField()` — gọi TUẦN TỰ 2 lần khi có
-   * `toolResultNote`: `toolResult` trước (KHÔNG có side-effect hook), rồi
-   * `toolResultNote` sau (CÓ side-effect hook — auto rework-back/fulfillment
-   * entry set, xem nhánh `dto.field === 'toolResultNote'` trong
-   * `updateField()`) — cùng cơ chế 'ok' xưởng đánh tay ở Danh sách đơn.
-   * Permission gate (`assertCanEditField`) bypass bằng role giả
-   * `RoleType.SuperAdmin` (an toàn vì bên trong `updateField`, `roleName` CHỈ
-   * đọc ở đúng chỗ đó, không ảnh hưởng nhánh business logic nào khác).
-   * `assertValueAllowed` (value phải khớp code `workshop_config` category
-   * tương ứng đang active) và `assertNotHeld` vẫn chạy bình thường ở mỗi lần
-   * gọi.
+   * Tái dùng NGUYÊN VẸN `updateField()` — gọi TUẦN TỰ tối đa 4 lần:
+   * `toolResult` trước (KHÔNG có side-effect hook), rồi `toolResultNote` nếu
+   * có (CÓ side-effect hook — auto rework-back/fulfillment entry set, xem
+   * nhánh `dto.field === 'toolResultNote'` trong `updateField()`) — cùng cơ
+   * chế 'ok' xưởng đánh tay ở Danh sách đơn, rồi `errorFile` nếu có, rồi
+   * `errorFileNote` nếu có (2 field cuối KHÔNG có side-effect hook, chỉ field
+   * đơn thuần). Trả về kết quả của lần gọi CUỐI CÙNG. Permission gate
+   * (`assertCanEditField`) bypass bằng role giả `RoleType.SuperAdmin` (an
+   * toàn vì bên trong `updateField`, `roleName` CHỈ đọc ở đúng chỗ đó, không
+   * ảnh hưởng nhánh business logic nào khác). `assertValueAllowed` (value
+   * phải khớp code `workshop_config` category tương ứng đang active —
+   * `errorFileNote` free text nên bỏ qua bước này) và `assertNotHeld` vẫn
+   * chạy bình thường ở mỗi lần gọi.
    */
   async setDesignReviewResult(
     productionId: string,
-    input: { toolResult: string | null; toolResultNote?: string | null },
+    input: {
+      toolResult: string | null;
+      toolResultNote?: string | null;
+      errorFile?: string[] | null;
+      errorFileNote?: string | null;
+    },
     ctx?: AuditContext,
   ): Promise<UpdateOrderFieldResDto> {
     const trimmed = (productionId ?? '').trim();
@@ -5576,20 +5605,41 @@ export class OrderService implements OnModuleInit {
     if (!order) throw new NotFoundException('Không tìm thấy đơn với mã này.');
     const id = String((order as { _id: string })._id);
 
-    const result = await this.updateField(
+    let result = await this.updateField(
       id,
       { field: 'toolResult', value: input.toolResult },
       RoleType.SuperAdmin,
       ctx,
     );
-    if (input.toolResultNote === undefined) return result;
 
-    return this.updateField(
-      id,
-      { field: 'toolResultNote', value: input.toolResultNote },
-      RoleType.SuperAdmin,
-      ctx,
-    );
+    if (input.toolResultNote !== undefined) {
+      result = await this.updateField(
+        id,
+        { field: 'toolResultNote', value: input.toolResultNote },
+        RoleType.SuperAdmin,
+        ctx,
+      );
+    }
+
+    if (input.errorFile !== undefined) {
+      result = await this.updateField(
+        id,
+        { field: 'errorFile', value: input.errorFile },
+        RoleType.SuperAdmin,
+        ctx,
+      );
+    }
+
+    if (input.errorFileNote !== undefined) {
+      result = await this.updateField(
+        id,
+        { field: 'errorFileNote', value: input.errorFileNote },
+        RoleType.SuperAdmin,
+        ctx,
+      );
+    }
+
+    return result;
   }
 
   /**

@@ -1004,6 +1004,25 @@ export const GetDesignReviewOrderByIdResZod = z.object({
 });
 export class GetDesignReviewOrderByIdResDto extends createZodDto(extendApi(GetDesignReviewOrderByIdResZod)) {}
 
+// Design review — danh mục "File lỗi" (workshop_config category=error_file_type,
+// chỉ code active) để tool ngoài hiển thị lựa chọn khi Note kq Tool 1 = 'error',
+// rồi truyền lại `code` qua field `errorFile` ở `/design-review/result`. JSON
+// tự định nghĩa riêng cho luồng public này (chỉ `code`/`name`, KHÁC
+// `WorkshopConfigZod` đầy đủ dùng nội bộ).
+export const DesignReviewErrorFileOptionZod = z.object({
+  code: z.string(),
+  name: z.string(),
+});
+export type DesignReviewErrorFileOption = z.infer<typeof DesignReviewErrorFileOptionZod>;
+
+export const GetDesignReviewErrorFileOptionsResZod = z.object({
+  success: z.literal(true),
+  data: DesignReviewErrorFileOptionZod.array(),
+});
+export class GetDesignReviewErrorFileOptionsResDto extends createZodDto(
+  extendApi(GetDesignReviewErrorFileOptionsResZod),
+) {}
+
 // Design review — lưu Kết quả Tool (workshop_config category=tool_result, vd
 // 'has-tool'/'no-tool'). `null` = xoá giá trị hiện có. KHÔNG có `toolResultNote`
 // ("Note kq Tool 1") — field đó chỉ nhân viên sửa tay, ngoài luồng automation.
@@ -1019,6 +1038,24 @@ export const SetDesignReviewResultZod = z.object({
    * rework-back/vào fulfillment).
    */
   toolResultNote: z.string().nullable().optional(),
+  /**
+   * Optional — mã "File lỗi" (workshop_config category=error_file_type), lấy
+   * từ `GET /design-review/error-file-options`. Dùng khi `toolResultNote`
+   * (request này hoặc giá trị đã lưu trước đó) = 'error' để ghi luôn nguyên
+   * nhân lỗi file — tool tự quyết định có truyền hay không, BE không ép buộc
+   * theo `toolResultNote`. Không truyền field này (bỏ hẳn key khỏi JSON) →
+   * giữ nguyên hành vi cũ, KHÔNG đụng field. Truyền (kể cả `null`/`[]` để
+   * xoá) → ghi đè.
+   */
+  errorFile: z.string().array().nullable().optional(),
+  /**
+   * Optional — "Ghi chú" (`errorFileNote`, free text, KHÔNG qua workshop_config
+   * — cùng cột "Kết quả Tool / File lỗi" ở Danh sách đơn). Cùng cơ chế optional
+   * như `errorFile`. Không truyền field này → giữ nguyên hành vi cũ, KHÔNG
+   * đụng field. Truyền (kể cả `null`/`''` để xoá) → ghi đè. KHÔNG có
+   * side-effect hook.
+   */
+  errorFileNote: z.string().nullable().optional(),
 });
 export class SetDesignReviewResultDto extends createZodDto(extendApi(SetDesignReviewResultZod)) {}
 
