@@ -1,6 +1,9 @@
 import { BadRequestException, Injectable, NotFoundException } from '@nestjs/common';
 import { InjectModel } from '@nestjs/mongoose';
+import type { IFile } from 'core';
+import fs from 'fs';
 import { Model } from 'mongoose';
+import path from 'path';
 import type {
   CreateProductConfigDto,
   GetProductConfigsDto,
@@ -9,7 +12,7 @@ import type {
   ImportProductConfigResDto,
   UpdateProductConfigDto,
 } from 'shared';
-import { WorkshopConfigCategory } from 'shared';
+import { myNanoid, ProductConfigStatus, WorkshopConfigCategory } from 'shared';
 
 import { FactoryService } from '../factory/factory.service';
 import { MachineTypeService } from '../machine-type/machine-type.service';
@@ -29,6 +32,15 @@ function isDuplicateVariationSkuError(err: unknown): boolean {
   if (e.code !== 11000) return false;
   if (e.keyPattern?.['variations.sku'] !== undefined) return true;
   return typeof e.message === 'string' && e.message.includes('variations.sku');
+}
+
+/** MongoDB duplicate-key error E11000 từ unique index `sku` (SKU sản phẩm, khác SKU biến thể). */
+function isDuplicateProductSkuError(err: unknown): boolean {
+  if (!err || typeof err !== 'object') return false;
+  const e = err as { code?: number; keyPattern?: Record<string, unknown>; message?: string };
+  if (e.code !== 11000) return false;
+  if (e.keyPattern?.sku !== undefined) return true;
+  return typeof e.message === 'string' && /\bindex: sku/.test(e.message);
 }
 
 const slugify = (input: string): string =>
@@ -152,16 +164,19 @@ export class ProductConfigService {
   }
 
   async getProductConfigs(dto: GetProductConfigsDto): Promise<GetProductConfigsResDto> {
-    const { page, limit, sort, order, search, factoryId, machineTypeId } = dto;
+    const { page, limit, sort, order, search, factoryId, machineTypeId, status } = dto;
     const filter: Record<string, unknown> = {};
     if (search) {
       filter.$or = [
         { fullName: { $regex: search, $options: 'i' } },
         { shortName: { $regex: search, $options: 'i' } },
+        { sku: { $regex: search, $options: 'i' } },
       ];
     }
     if (factoryId) filter.factoryId = factoryId;
     if (machineTypeId) filter.machineTypeId = machineTypeId;
+    // Không truyền status ⇒ mặc định loại Hidden (vẫn thấy Active + Inactive + doc cũ chưa có field này).
+    filter.status = status ? status : { $ne: ProductConfigStatus.Hidden };
 
     const { data, total } = await this.productConfigRepository.findAllAndCount(filter, {
       paging: { skip: limit * (page - 1), limit },
@@ -176,16 +191,95 @@ export class ProductConfigService {
     return { success: true, data, total };
   }
 
+  async getProductConfig(id: string) {
+    const p = await this.productConfigRepository.findOne(
+      { _id: id },
+      {
+        populate: [
+          { path: 'factory', select: ['name', 'shortName'] },
+          { path: 'machineType', select: ['name', 'shortName'] },
+          { path: 'productCategory', select: ['name', 'shortName'] },
+        ],
+      },
+    );
+    if (!p) throw new NotFoundException('ProductConfig not found');
+    return p;
+  }
+
+  private static readonly UPLOAD_ALLOWED_MIMETYPES = ['image/jpeg', 'image/png', 'image/webp'];
+  private static readonly UPLOAD_MAX_BYTES = 8 * 1024 * 1024;
+
+  private static readonly UPLOAD_FOLDERS = ['mockup', 'size-chart'] as const;
+  private static readonly UPLOAD_FILENAME_PATTERN = /^[A-Za-z0-9_-]+\.(jpe?g|png|webp)$/i;
+
+  /**
+   * Upload mockup/bảng size — lưu LOCAL DISK (`src/assets/uploads/products/{type}`),
+   * KHÔNG qua S3/Backblaze (khác `UploadService` ở module `upload/`) để tránh phụ
+   * thuộc credentials cloud chưa cấu hình. Trả URL tuyệt đối dựng từ `origin`
+   * (protocol+host của request), TRỎ SANG endpoint `serveProductImage()` bên dưới
+   * — KHÔNG dùng `ServeStaticModule` sẵn có, vì loader Fastify của
+   * `@nestjs/serve-static` (`FastifyLoader.register()`) đăng ký `@fastify/static`
+   * với `wildcard: false` ⇒ chỉ auto-serve các file ĐÃ TỒN TẠI lúc server boot
+   * (quét thư mục 1 lần khi khởi động), file tạo ra lúc runtime (upload) sẽ
+   * KHÔNG có route và rơi vào SPA fallback (`index.html` rỗng — 200 OK nhưng
+   * Content-Length 0) — đây là nguyên nhân ảnh upload xong không hiển thị được.
+   */
+  async uploadProductImage(type: 'mockup' | 'size-chart', file: IFile, origin: string): Promise<string> {
+    if (!file) throw new BadRequestException('Thiếu file');
+    if (!ProductConfigService.UPLOAD_ALLOWED_MIMETYPES.includes(file.mimetype)) {
+      throw new BadRequestException('Chỉ chấp nhận ảnh JPG/PNG/WEBP');
+    }
+    if (file.size > ProductConfigService.UPLOAD_MAX_BYTES) {
+      throw new BadRequestException('Ảnh vượt quá 8MB');
+    }
+
+    const folder = type === 'mockup' ? 'mockup' : 'size-chart';
+    const ext = file.mimetype.split('/')[1];
+    const filename = `${myNanoid()}.${ext}`;
+    const dir = path.resolve('./src/assets/uploads/products', folder);
+    await fs.promises.mkdir(dir, { recursive: true });
+    await fs.promises.writeFile(path.join(dir, filename), file.buffer);
+
+    return `${origin}/api/v1/product-configs/uploaded-image/${folder}/${filename}`;
+  }
+
+  /**
+   * Resolve + validate `folder`/`filename` cho `serveProductImage()` — chặn
+   * path traversal (chỉ whitelist 2 folder cố định + regex filename khớp đúng
+   * format `myNanoid().ext` mà `uploadProductImage()` tự sinh).
+   */
+  resolveProductImagePath(folder: string, filename: string): { filePath: string; mimetype: string } {
+    if (
+      !(ProductConfigService.UPLOAD_FOLDERS as readonly string[]).includes(folder) ||
+      !ProductConfigService.UPLOAD_FILENAME_PATTERN.test(filename)
+    ) {
+      throw new NotFoundException('Image not found');
+    }
+    const filePath = path.resolve('./src/assets/uploads/products', folder, filename);
+    if (!fs.existsSync(filePath)) throw new NotFoundException('Image not found');
+
+    const ext = path.extname(filename).slice(1).toLowerCase();
+    const mimetype = ext === 'jpg' ? 'image/jpeg' : `image/${ext}`;
+    return { filePath, mimetype };
+  }
+
   async createProductConfig(dto: CreateProductConfigDto) {
     const factory = await this.factoryService.getFactory(dto.factoryId);
     if (!factory) throw new BadRequestException('Invalid factoryId');
     if (dto.productCategoryId) await this.productCategoryService.getProductCategory(dto.productCategoryId);
 
     try {
-      return await this.productConfigRepository.create({ ...dto, shortName: dto.shortName.toUpperCase() });
+      return await this.productConfigRepository.create({
+        ...dto,
+        shortName: dto.shortName.toUpperCase(),
+        ...(dto.sku ? { sku: dto.sku.trim().toUpperCase() } : {}),
+      });
     } catch (err) {
       if (isDuplicateVariationSkuError(err)) {
         throw new BadRequestException('SKU biến thể đã tồn tại ở sản phẩm khác');
+      }
+      if (isDuplicateProductSkuError(err)) {
+        throw new BadRequestException('SKU sản phẩm đã tồn tại ở sản phẩm khác');
       }
       throw err;
     }
@@ -200,13 +294,20 @@ export class ProductConfigService {
     try {
       const p = await this.productConfigRepository.findOneAndUpdate(
         { _id: id },
-        { ...dto, ...(dto.shortName ? { shortName: dto.shortName.toUpperCase() } : {}) },
+        {
+          ...dto,
+          ...(dto.shortName ? { shortName: dto.shortName.toUpperCase() } : {}),
+          ...(dto.sku ? { sku: dto.sku.trim().toUpperCase() } : {}),
+        },
       );
       if (!p) throw new NotFoundException('ProductConfig not found');
       return p;
     } catch (err) {
       if (isDuplicateVariationSkuError(err)) {
         throw new BadRequestException('SKU biến thể đã tồn tại ở sản phẩm khác');
+      }
+      if (isDuplicateProductSkuError(err)) {
+        throw new BadRequestException('SKU sản phẩm đã tồn tại ở sản phẩm khác');
       }
       throw err;
     }

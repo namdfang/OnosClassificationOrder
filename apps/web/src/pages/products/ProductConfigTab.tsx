@@ -1,8 +1,11 @@
-import React, { useEffect, useRef, useState } from 'react';
+import React, { useEffect, useState } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { ImageIcon, Pencil, Plus, RotateCw } from 'lucide-react';
-import type { ProductItemSpecific, ProductVariation } from 'shared';
-import { PRODUCT_LEVEL_MAP, PRODUCT_LEVELS, WorkshopConfigCategory } from 'shared';
+import type { ProductItemSpecific, ProductPrintArea, ProductVariation } from 'shared';
+import { PRODUCT_LEVEL_MAP, PRODUCT_LEVELS, ProductConfigStatus, WorkshopConfigCategory } from 'shared';
 import { toast } from 'sonner';
+
+import { PATHS } from '@/constants/paths';
 
 import { useWorkshopConfigStore } from '@/store/workshopConfigStore';
 
@@ -18,12 +21,13 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@
 import { handleAxiosError } from '@/utils';
 
 import { ImportProductConfigDialog } from './ImportProductConfigDialog';
-import { ProductConfigEditDialog } from './ProductConfigEditDialog';
 
 export interface ProductConfigRow {
   _id: string;
   fullName: string;
   shortName: string;
+  sku?: string;
+  status?: ProductConfigStatus;
   machineNumber?: string;
   fabricType?: string;
   toolResult?: string;
@@ -38,7 +42,7 @@ export interface ProductConfigRow {
   productCategoryId?: string;
   productCategory?: { name: string; shortName: string };
   printMethod?: string;
-  printArea?: string;
+  printArea?: ProductPrintArea;
   sizeChartUrl?: string;
   description?: string;
   itemSpecifics?: ProductItemSpecific[];
@@ -54,25 +58,33 @@ export interface RefItem {
   _id: string;
   name: string;
   shortName: string;
+  /** Chỉ Product Category dùng (danh mục đa cấp độ) — Xưởng/Phòng bỏ trống. */
+  parentId?: string;
 }
 
+export const STATUS_META: Record<ProductConfigStatus, { label: string; className: string }> = {
+  [ProductConfigStatus.Active]: { label: 'Hiển thị', className: 'bg-emerald-500 text-white border-emerald-500' },
+  [ProductConfigStatus.Inactive]: { label: 'Ẩn khách hàng', className: 'bg-amber-500 text-white border-amber-500' },
+  [ProductConfigStatus.Hidden]: { label: 'Đã ẩn', className: 'bg-slate-500 text-white border-slate-500' },
+};
+
 export function ProductConfigTab() {
+  const navigate = useNavigate();
   const [items, setItems] = useState<ProductConfigRow[]>([]);
   const [loading, setLoading] = useState(false);
   const [search, setSearch] = useState('');
+  // Rỗng = mặc định BE (loại Hidden, vẫn thấy Active + Inactive).
+  const [statusFilter, setStatusFilter] = useState<'' | ProductConfigStatus>('');
   const [page, setPage] = useState(1);
   const [pageSize, setPageSize] = useState(20);
   const [total, setTotal] = useState(0);
   const [importOpen, setImportOpen] = useState(false);
-  const [editItem, setEditItem] = useState<ProductConfigRow | null>(null);
-  // Danh sách Xưởng / Phòng cho dropdown chỉnh sửa inline + dialog.
+  // Danh sách Xưởng / Phòng cho dropdown chỉnh sửa inline + trang chi tiết.
   const [factories, setFactories] = useState<RefItem[]>([]);
   const [machineTypes, setMachineTypes] = useState<RefItem[]>([]);
   const fabricOptions = useWorkshopConfigStore((s) => s.byCategory[WorkshopConfigCategory.FabricType] || []);
   const toolOptions = useWorkshopConfigStore((s) => s.byCategory[WorkshopConfigCategory.ToolResult] || []);
   const machineOptions = useWorkshopConfigStore((s) => s.byCategory[WorkshopConfigCategory.Machine] || []);
-  const printMethodOptions = useWorkshopConfigStore((s) => s.byCategory[WorkshopConfigCategory.PrintMethod] || []);
-  const [productCategoryOptions, setProductCategoryOptions] = useState<RefItem[]>([]);
   const loadConfig = useWorkshopConfigStore((s) => s.load);
   const configLoaded = useWorkshopConfigStore((s) => s.loaded);
 
@@ -80,18 +92,16 @@ export function ProductConfigTab() {
     if (!configLoaded) loadConfig();
   }, [configLoaded, loadConfig]);
 
-  // Load danh sách Xưởng + Phòng + Danh mục sản phẩm 1 lần (cho dropdown chỉnh sửa inline + dialog).
+  // Load danh sách Xưởng + Phòng 1 lần (cho dropdown chỉnh sửa inline trong bảng).
   useEffect(() => {
     (async () => {
       try {
-        const [fRes, mRes, cRes] = await Promise.all([
+        const [fRes, mRes] = await Promise.all([
           RepositoryRemote.factory.getFactories('?page=1&limit=200'),
           RepositoryRemote.machineType.getMachineTypes('?page=1&limit=200'),
-          RepositoryRemote.productCategory.getProductCategories('?page=1&limit=200'),
         ]);
         setFactories((fRes.data?.data || []) as RefItem[]);
         setMachineTypes((mRes.data?.data || []) as RefItem[]);
-        setProductCategoryOptions((cRes.data?.data || []) as RefItem[]);
       } catch (error) {
         handleAxiosError(error);
       }
@@ -158,8 +168,17 @@ export function ProductConfigTab() {
     }
   };
 
-  // Giá trị đã lưu (id → {mockup, guide}) để onBlur chỉ PATCH khi thực sự đổi.
-  const savedText = useRef<Record<string, { mockup?: string; guide?: string }>>({});
+  const handleStatusChange = async (id: string, value: ProductConfigStatus) => {
+    setItems((prev) => prev.map((it) => (it._id === id ? { ...it, status: value } : it)));
+    try {
+      await RepositoryRemote.productConfig.updateProductConfig(id, { status: value });
+      // Nếu đang lọc theo 1 trạng thái cụ thể, đổi sang trạng thái khác thì dòng này biến mất khỏi filter hiện tại.
+      if (statusFilter && statusFilter !== value) fetchData();
+    } catch (error) {
+      handleAxiosError(error);
+      fetchData();
+    }
+  };
 
   const patchField = async (id: string, patch: Partial<ProductConfigRow>) => {
     setItems((prev) => prev.map((it) => (it._id === id ? { ...it, ...patch } : it)));
@@ -175,37 +194,15 @@ export function ProductConfigTab() {
     patchField(id, { level: value ? Number(value) : undefined });
   };
 
-  // Sau khi lưu từ dialog Edit: merge lạc quan + đồng bộ ref gate text.
-  const applyEdit = (id: string, patch: Partial<ProductConfigRow>) => {
-    setItems((prev) => prev.map((it) => (it._id === id ? { ...it, ...patch } : it)));
-    savedText.current[id] = {
-      mockup: patch.mockup ?? savedText.current[id]?.mockup ?? '',
-      guide: patch.guide ?? savedText.current[id]?.guide ?? '',
-    };
-  };
-
-  // Text field (mockup/guide): gõ chỉ cập nhật local; blur mới lưu nếu đổi.
-  const handleTextInput = (id: string, field: 'mockup' | 'guide', value: string) => {
-    setItems((prev) => prev.map((it) => (it._id === id ? { ...it, [field]: value } : it)));
-  };
-  const handleTextBlur = (id: string, field: 'mockup' | 'guide', value: string) => {
-    const next = value.trim();
-    if ((savedText.current[id]?.[field] || '') === next) return;
-    savedText.current[id] = { ...savedText.current[id], [field]: next };
-    patchField(id, { [field]: next });
-  };
-
   const fetchData = async () => {
     try {
       setLoading(true);
       const params = new URLSearchParams({ page: String(page), limit: String(pageSize) });
       if (search) params.set('search', search);
+      if (statusFilter) params.set('status', statusFilter);
       const resp = await RepositoryRemote.productConfig.getProductConfigs(`?${params.toString()}`);
       const rows: ProductConfigRow[] = resp.data.data || [];
       setTotal(resp.data.total || 0);
-      savedText.current = Object.fromEntries(
-        rows.map((r) => [r._id, { mockup: r.mockup || '', guide: r.guide || '' }]),
-      );
       setItems(rows);
     } catch (error) {
       handleAxiosError(error);
@@ -217,23 +214,12 @@ export function ProductConfigTab() {
   useEffect(() => {
     fetchData();
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [page, pageSize]);
+  }, [page, pageSize, statusFilter]);
 
   // Search → luôn về trang 1 (setPage(1) tự trigger refetch; nếu đang ở 1 thì gọi tay).
   const handleSearch = () => {
     if (page !== 1) setPage(1);
     else fetchData();
-  };
-
-  const handleDelete = async (id: string) => {
-    if (!confirm('Xoá product config này?')) return;
-    try {
-      await RepositoryRemote.productConfig.deleteProductConfig(id);
-      toast.success('Đã xoá');
-      fetchData();
-    } catch (error) {
-      handleAxiosError(error);
-    }
   };
 
   const handleClearAll = async () => {
@@ -252,13 +238,29 @@ export function ProductConfigTab() {
   return (
     <div className="space-y-4">
       <div className="flex items-center justify-between gap-3">
-        <Input
-          placeholder="Tìm theo tên hoặc viết tắt…"
-          value={search}
-          onChange={(e) => setSearch(e.target.value)}
-          onKeyDown={(e) => e.key === 'Enter' && handleSearch()}
-          className="max-w-sm"
-        />
+        <div className="flex items-center gap-2">
+          <Input
+            placeholder="Tìm theo tên, viết tắt, SKU…"
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+            onKeyDown={(e) => e.key === 'Enter' && handleSearch()}
+            className="max-w-sm"
+          />
+          <select
+            value={statusFilter}
+            onChange={(e) => {
+              setStatusFilter(e.target.value as '' | ProductConfigStatus);
+              setPage(1);
+            }}
+            className="rounded-md border border-input bg-background px-2 py-2 text-sm focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
+            title="Lọc theo trạng thái — mặc định ẩn các sản phẩm Đã ẩn"
+          >
+            <option value="">Tất cả (trừ Đã ẩn)</option>
+            <option value={ProductConfigStatus.Active}>{STATUS_META[ProductConfigStatus.Active].label}</option>
+            <option value={ProductConfigStatus.Inactive}>{STATUS_META[ProductConfigStatus.Inactive].label}</option>
+            <option value={ProductConfigStatus.Hidden}>{STATUS_META[ProductConfigStatus.Hidden].label}</option>
+          </select>
+        </div>
         <div className="flex items-center gap-2">
           <Button
             variant="outline"
@@ -301,20 +303,21 @@ export function ProductConfigTab() {
               <TableHead className="min-w-[140px]">Kết quả Tool</TableHead>
               <TableHead className="w-[150px]">Level</TableHead>
               <TableHead className="min-w-[140px]">Danh mục / Biến thể</TableHead>
+              <TableHead className="min-w-[140px]">Trạng thái</TableHead>
               <TableHead className="w-12"></TableHead>
             </TableRow>
           </TableHeader>
           <TableBody>
             {loading && (
               <TableRow>
-                <TableCell colSpan={11} className="text-center py-8">
+                <TableCell colSpan={12} className="text-center py-8">
                   <Spinner size={20} className="text-muted-foreground" />
                 </TableCell>
               </TableRow>
             )}
             {!loading && items.length === 0 && (
               <TableRow>
-                <TableCell colSpan={11} className="text-center py-8 text-muted-foreground">
+                <TableCell colSpan={12} className="text-center py-8 text-muted-foreground">
                   Chưa có product config nào. Click "Import từ Excel" để bắt đầu.
                 </TableCell>
               </TableRow>
@@ -323,28 +326,19 @@ export function ProductConfigTab() {
               items.map((it) => (
                 <TableRow key={it._id}>
                   <TableCell>
-                    <div className="flex flex-col gap-1">
-                      {it.mockup ? (
-                        <a href={it.mockup} target="_blank" rel="noreferrer" title="Mở ảnh mockup">
-                          <img
-                            src={it.mockup}
-                            alt="mockup"
-                            className="w-14 h-14 rounded object-cover border border-border bg-muted"
-                          />
-                        </a>
-                      ) : (
-                        <div className="w-14 h-14 rounded border border-dashed border-border flex items-center justify-center text-muted-foreground">
-                          <ImageIcon size={16} />
-                        </div>
-                      )}
-                      <Input
-                        value={it.mockup || ''}
-                        onChange={(e) => handleTextInput(it._id, 'mockup', e.target.value)}
-                        onBlur={(e) => handleTextBlur(it._id, 'mockup', e.target.value)}
-                        placeholder="URL mockup"
-                        className="h-7 w-[118px] text-xs"
-                      />
-                    </div>
+                    {it.mockup ? (
+                      <a href={it.mockup} target="_blank" rel="noreferrer" title="Mở ảnh mockup">
+                        <img
+                          src={it.mockup}
+                          alt="mockup"
+                          className="w-14 h-14 rounded object-cover border border-border bg-muted"
+                        />
+                      </a>
+                    ) : (
+                      <div className="w-14 h-14 rounded border border-dashed border-border flex items-center justify-center text-muted-foreground">
+                        <ImageIcon size={16} />
+                      </div>
+                    )}
                   </TableCell>
                   <TableCell className="font-medium">{it.fullName}</TableCell>
                   <TableCell>
@@ -469,7 +463,28 @@ export function ProductConfigTab() {
                     </div>
                   </TableCell>
                   <TableCell>
-                    <Button variant="ghost" size="icon" onClick={() => setEditItem(it)} title="Chỉnh sửa sản phẩm">
+                    <div className="flex flex-col gap-1">
+                      <Badge className={`font-normal border w-fit ${STATUS_META[it.status || ProductConfigStatus.Active].className}`}>
+                        {STATUS_META[it.status || ProductConfigStatus.Active].label}
+                      </Badge>
+                      <select
+                        value={it.status || ProductConfigStatus.Active}
+                        onChange={(e) => handleStatusChange(it._id, e.target.value as ProductConfigStatus)}
+                        className="w-full rounded-md border border-input bg-background px-2 py-1 text-xs focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
+                      >
+                        <option value={ProductConfigStatus.Active}>{STATUS_META[ProductConfigStatus.Active].label}</option>
+                        <option value={ProductConfigStatus.Inactive}>{STATUS_META[ProductConfigStatus.Inactive].label}</option>
+                        <option value={ProductConfigStatus.Hidden}>{STATUS_META[ProductConfigStatus.Hidden].label}</option>
+                      </select>
+                    </div>
+                  </TableCell>
+                  <TableCell>
+                    <Button
+                      variant="ghost"
+                      size="icon"
+                      onClick={() => navigate(PATHS.PRODUCT_DETAIL.replace(':id', it._id))}
+                      title="Chỉnh sửa sản phẩm"
+                    >
                       <Pencil size={14} />
                     </Button>
                   </TableCell>
@@ -497,20 +512,6 @@ export function ProductConfigTab() {
           fetchData();
           loadConfig(true);
         }}
-      />
-
-      <ProductConfigEditDialog
-        open={editItem !== null}
-        onOpenChange={(v) => !v && setEditItem(null)}
-        item={editItem}
-        fabricOptions={fabricOptions}
-        toolOptions={toolOptions}
-        factoryOptions={factories}
-        machineTypeOptions={machineTypes}
-        productCategoryOptions={productCategoryOptions}
-        printMethodOptions={printMethodOptions}
-        onSaved={applyEdit}
-        onDelete={handleDelete}
       />
     </div>
   );

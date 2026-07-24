@@ -1,9 +1,10 @@
-import type { UploadFileDto, UploadImageDto } from 'shared';
+import type { UploadFileDto } from 'shared';
 
 import { callApi } from '../apis';
 
-const uploadImage = (query: string, body: UploadImageDto) => {
-  return callApi(`/v1/upload/image${query}`, 'post', body, 'upload');
+/** `formData` phải có field `type` (ImageType) + `file` (File) — multipart/form-data. */
+const uploadImage = (formData: FormData) => {
+  return callApi('/v1/upload/image', 'post', formData, 'upload');
 };
 
 const uploadFile = (body: UploadFileDto) => {

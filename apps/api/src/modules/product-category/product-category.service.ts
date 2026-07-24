@@ -46,6 +46,7 @@ export class ProductCategoryService implements OnModuleInit {
   async createProductCategory(dto: CreateProductCategoryDto) {
     const existing = await this.productCategoryRepository.findOne({ shortName: dto.shortName.toUpperCase() });
     if (existing) throw new BadRequestException('ProductCategory shortName already exists');
+    if (dto.parentId) await this.getProductCategory(dto.parentId);
     return this.productCategoryRepository.create({
       ...dto,
       shortName: dto.shortName.toUpperCase(),
@@ -54,11 +55,33 @@ export class ProductCategoryService implements OnModuleInit {
   }
 
   async updateProductCategory(id: string, dto: UpdateProductCategoryDto) {
+    if (dto.parentId) {
+      if (dto.parentId === id) throw new BadRequestException('Danh mục không thể là cha của chính nó');
+      await this.getProductCategory(dto.parentId);
+      await this.assertNoCycle(id, dto.parentId);
+    }
     const category = await this.productCategoryRepository.findOneAndUpdate(
       { _id: id },
       { ...dto, ...(dto.shortName ? { shortName: dto.shortName.toUpperCase() } : {}) },
     );
     if (!category) throw new NotFoundException('ProductCategory not found');
     return category;
+  }
+
+  /**
+   * Chặn set `parentId` tạo vòng lặp (VD: A → B → A) — đi ngược chuỗi cha của
+   * `newParentId`, nếu gặp lại `id` (chính node đang sửa) thì `newParentId`
+   * thực ra là hậu duệ của `id` ⇒ 400. Giới hạn 100 bước đề phòng dữ liệu lỗi
+   * sẵn có tạo vòng lặp vô hạn.
+   */
+  private async assertNoCycle(id: string, newParentId: string): Promise<void> {
+    let currentId: string | undefined = newParentId;
+    for (let i = 0; i < 100 && currentId; i++) {
+      if (currentId === id) {
+        throw new BadRequestException('Không thể chọn danh mục con của chính nó làm danh mục cha');
+      }
+      const current: { parentId?: string } | null = await this.productCategoryRepository.findOneById(currentId);
+      currentId = current?.parentId;
+    }
   }
 }

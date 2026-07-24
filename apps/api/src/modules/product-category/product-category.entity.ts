@@ -13,6 +13,10 @@ export class ProductCategoryEntity extends DatabaseEntityAbstract {
 
   @Prop({ required: true, default: true })
   isActive: boolean;
+
+  /** ref ProductCategoryEntity (self) — undefined = danh mục gốc (root). Cho phép cây đa cấp độ không giới hạn độ sâu. */
+  @Prop({ ref: 'ProductCategoryEntity', index: true })
+  parentId?: string;
 }
 
 assertSameType<ProductCategory, ProductCategoryEntity>();
