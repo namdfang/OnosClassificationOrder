@@ -1,4 +1,4 @@
-import { BadRequestException, Injectable, NotFoundException } from '@nestjs/common';
+import { BadRequestException, Injectable, NotFoundException, OnModuleInit } from '@nestjs/common';
 import { InjectModel } from '@nestjs/mongoose';
 import { Model } from 'mongoose';
 import type {
@@ -7,10 +7,13 @@ import type {
   GetProductConfigsResDto,
   ImportProductConfigDto,
   ImportProductConfigResDto,
+  ProductPrintArea,
+  ProductVariation,
   UpdateProductConfigDto,
 } from 'shared';
 import { WorkshopConfigCategory } from 'shared';
 
+import { CollectionService } from '../collection/collection.service';
 import { FactoryService } from '../factory/factory.service';
 import { MachineTypeService } from '../machine-type/machine-type.service';
 import { ProductCategoryService } from '../product-category/product-category.service';
@@ -41,16 +44,111 @@ const slugify = (input: string): string =>
     .replace(/(^-|-$)/g, '');
 
 @Injectable()
-export class ProductConfigService {
+export class ProductConfigService implements OnModuleInit {
   constructor(
     private readonly productConfigRepository: ProductConfigRepository,
     private readonly factoryService: FactoryService,
     private readonly machineTypeService: MachineTypeService,
     private readonly productCategoryService: ProductCategoryService,
+    private readonly collectionService: CollectionService,
     private readonly workshopConfigRepository: WorkshopConfigRepository,
     @InjectModel(ProductConfigEntity.name)
     private readonly productConfigModel: Model<ProductConfigEntity>,
   ) {}
+
+  /**
+   * Migration one-shot (idempotent): variations legacy lưu `color`/`size` rời →
+   * chuẩn hóa sang model options tự định nghĩa (`optionNames` ['Color','Size'] +
+   * `variations[].options` [color, size]). Chỉ đụng doc còn variation thiếu
+   * `options`; giữ nguyên `color`/`size` cũ (deprecated, không đọc nữa).
+   */
+  async onModuleInit() {
+    const res = await this.productConfigModel.updateMany(
+      { variations: { $elemMatch: { options: { $exists: false } } } },
+      [
+        {
+          $set: {
+            optionNames: { $ifNull: ['$optionNames', ['Color', 'Size']] },
+            variations: {
+              $map: {
+                input: '$variations',
+                as: 'v',
+                in: {
+                  $mergeObjects: [
+                    '$$v',
+                    { options: { $ifNull: ['$$v.options', [{ $ifNull: ['$$v.color', 'As Design'] }, { $ifNull: ['$$v.size', 'One Size'] }]] } },
+                  ],
+                },
+              },
+            },
+          },
+        },
+      ],
+    );
+    if (res.modifiedCount) {
+      console.log(`[product-config-backfill] variations.options migrated on ${res.modifiedCount} products`);
+    }
+  }
+
+  /** Validate collectionIds tồn tại (throw 404 nếu id sai). */
+  private async assertCollectionsValid(collectionIds?: string[]) {
+    if (!collectionIds?.length) return;
+    for (const id of collectionIds) await this.collectionService.getCollection(id);
+  }
+
+  /**
+   * Validate cấu trúc options/variants/printAreas:
+   * - optionNames không trùng (case-insensitive).
+   * - variant.options đúng độ dài optionNames, tổ hợp không trùng, SKU không trùng trong doc.
+   * - printAreas không trùng key.
+   */
+  private assertProductStructureValid(dto: {
+    optionNames?: string[];
+    variations?: ProductVariation[];
+    printAreas?: ProductPrintArea[];
+  }) {
+    const { optionNames, variations, printAreas } = dto;
+
+    if (optionNames) {
+      const seen = new Set<string>();
+      for (const n of optionNames) {
+        const k = n.trim().toLowerCase();
+        if (seen.has(k)) throw new BadRequestException(`Tên nhóm option trùng nhau: "${n}"`);
+        seen.add(k);
+      }
+    }
+
+    if (variations?.length) {
+      const skuSeen = new Set<string>();
+      const comboSeen = new Set<string>();
+      for (const v of variations) {
+        const sku = v.sku.toUpperCase();
+        if (skuSeen.has(sku)) throw new BadRequestException(`SKU biến thể trùng trong sản phẩm: ${sku}`);
+        skuSeen.add(sku);
+
+        if (optionNames?.length) {
+          if (!v.options || v.options.length !== optionNames.length) {
+            throw new BadRequestException(
+              `Biến thể ${sku}: options phải có đúng ${optionNames.length} giá trị theo thứ tự ${optionNames.join(' / ')}`,
+            );
+          }
+          const combo = v.options.map((o) => o.trim().toLowerCase()).join('|');
+          if (comboSeen.has(combo)) {
+            throw new BadRequestException(`Tổ hợp option trùng nhau: ${v.options.join(' / ')}`);
+          }
+          comboSeen.add(combo);
+        }
+      }
+    }
+
+    if (printAreas?.length) {
+      const keySeen = new Set<string>();
+      for (const a of printAreas) {
+        if (keySeen.has(a.key)) throw new BadRequestException(`Vị trí in trùng key: ${a.key}`);
+        keySeen.add(a.key);
+      }
+    }
+  }
 
   /**
    * Resolve a human-readable Vietnamese label (e.g. "Cotton Jersey",
@@ -176,10 +274,18 @@ export class ProductConfigService {
     return { success: true, data, total };
   }
 
+  async getProductConfigById(id: string) {
+    const p = await this.productConfigRepository.findOneById(id);
+    if (!p) throw new NotFoundException('ProductConfig not found');
+    return p;
+  }
+
   async createProductConfig(dto: CreateProductConfigDto) {
     const factory = await this.factoryService.getFactory(dto.factoryId);
     if (!factory) throw new BadRequestException('Invalid factoryId');
     if (dto.productCategoryId) await this.productCategoryService.getProductCategory(dto.productCategoryId);
+    await this.assertCollectionsValid(dto.collectionIds);
+    this.assertProductStructureValid(dto);
 
     try {
       return await this.productConfigRepository.create({ ...dto, shortName: dto.shortName.toUpperCase() });
@@ -196,6 +302,21 @@ export class ProductConfigService {
     if (dto.factoryId) await this.factoryService.getFactory(dto.factoryId);
     if (dto.machineTypeId) await this.machineTypeService.getMachineType(dto.machineTypeId);
     if (dto.productCategoryId) await this.productCategoryService.getProductCategory(dto.productCategoryId);
+    await this.assertCollectionsValid(dto.collectionIds);
+
+    // Partial update: nếu chỉ gửi variations mà không gửi optionNames → validate
+    // theo optionNames đang lưu trong DB.
+    let effectiveOptionNames = dto.optionNames;
+    if (effectiveOptionNames === undefined && dto.variations) {
+      const existing = await this.productConfigRepository.findOneById(id);
+      if (!existing) throw new NotFoundException('ProductConfig not found');
+      effectiveOptionNames = existing.optionNames;
+    }
+    this.assertProductStructureValid({
+      optionNames: effectiveOptionNames,
+      variations: dto.variations,
+      printAreas: dto.printAreas,
+    });
 
     try {
       const p = await this.productConfigRepository.findOneAndUpdate(

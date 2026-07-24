@@ -30,6 +30,7 @@ export const PATHS = {
     SETTINGS: '/adm/settings',
     ACCOUNT: '/adm/account',
     PRODUCTS: '/adm/products',
+    PRODUCT_EDIT: '/adm/products/:id/edit',
     PROMOTIONS: '/adm/promotions',
     USERS: '/adm/users',
     DEPARTMENTS: '/adm/departments',

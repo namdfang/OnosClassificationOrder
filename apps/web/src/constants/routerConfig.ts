@@ -6,6 +6,7 @@ const Home = lazy(() => import('../pages/home'));
 const Settings = lazy(() => import('../pages/settings'));
 const Account = lazy(() => import('../pages/account'));
 const Products = lazy(() => import('../pages/products'));
+const ProductEdit = lazy(() => import('../pages/products/edit'));
 const Promotions = lazy(() => import('../pages/promotions'));
 const Orders = lazy(() => import('../pages/orders'));
 const OrdersWorkshop = lazy(() => import('../pages/orders/workshop'));
@@ -35,6 +36,7 @@ export const routerConfig: RouterConfig[] = [
   { path: PATHS.SETTINGS, component: Settings },
   { path: PATHS.ACCOUNT, component: Account },
   { path: PATHS.PRODUCTS, component: Products },
+  { path: PATHS.PRODUCT_EDIT, component: ProductEdit },
   { path: PATHS.PROMOTIONS, component: Promotions },
   { path: PATHS.ORDERS, component: Orders },
   { path: PATHS.ORDERS_WORKSHOP, component: OrdersWorkshop },

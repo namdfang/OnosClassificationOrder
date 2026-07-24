@@ -2,6 +2,7 @@ export * from './action.dto';
 export * from './api-key.dto';
 export * from './artwork.dto';
 export * from './category.dto';
+export * from './collection.dto';
 export * from './common.dto';
 export * from './content.dto';
 export * from './cronjob.dto';

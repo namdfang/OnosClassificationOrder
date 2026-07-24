@@ -1,8 +1,11 @@
 import React, { useEffect, useRef, useState } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { ImageIcon, Pencil, Plus, RotateCw } from 'lucide-react';
-import type { ProductItemSpecific, ProductVariation } from 'shared';
+import type { ProductItemSpecific, ProductPrintArea, ProductVariation } from 'shared';
 import { PRODUCT_LEVEL_MAP, PRODUCT_LEVELS, WorkshopConfigCategory } from 'shared';
 import { toast } from 'sonner';
+
+import { PATHS } from '@/constants/paths';
 
 import { useWorkshopConfigStore } from '@/store/workshopConfigStore';
 
@@ -18,16 +21,18 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@
 import { handleAxiosError } from '@/utils';
 
 import { ImportProductConfigDialog } from './ImportProductConfigDialog';
-import { ProductConfigEditDialog } from './ProductConfigEditDialog';
 
 export interface ProductConfigRow {
   _id: string;
   fullName: string;
   shortName: string;
+  slug?: string;
+  sku?: string;
   machineNumber?: string;
   fabricType?: string;
   toolResult?: string;
   mockup?: string;
+  images?: string[];
   level?: number;
   guide?: string;
   factoryId?: string;
@@ -37,16 +42,26 @@ export interface ProductConfigRow {
   // Thông tin chi tiết sản phẩm (catalog cho khách hàng)
   productCategoryId?: string;
   productCategory?: { name: string; shortName: string };
+  collectionIds?: string[];
   printMethod?: string;
   printArea?: string;
   sizeChartUrl?: string;
   description?: string;
+  shortDescription?: string;
+  templateDescription?: string;
+  maxProductionTime?: number;
+  maxShippingTime?: number;
+  hideForSeller?: boolean;
+  enableDesignCheck?: boolean;
+  enableAffiliate?: boolean;
   itemSpecifics?: ProductItemSpecific[];
   weight?: number;
   width?: number;
   height?: number;
   length?: number;
+  optionNames?: string[];
   variations?: ProductVariation[];
+  printAreas?: ProductPrintArea[];
 }
 
 /** Item danh sách Xưởng / Phòng cho dropdown (chỉ cần id + nhãn). */
@@ -57,6 +72,7 @@ export interface RefItem {
 }
 
 export function ProductConfigTab() {
+  const navigate = useNavigate();
   const [items, setItems] = useState<ProductConfigRow[]>([]);
   const [loading, setLoading] = useState(false);
   const [search, setSearch] = useState('');
@@ -64,15 +80,12 @@ export function ProductConfigTab() {
   const [pageSize, setPageSize] = useState(20);
   const [total, setTotal] = useState(0);
   const [importOpen, setImportOpen] = useState(false);
-  const [editItem, setEditItem] = useState<ProductConfigRow | null>(null);
-  // Danh sách Xưởng / Phòng cho dropdown chỉnh sửa inline + dialog.
+  // Danh sách Xưởng / Phòng cho dropdown chỉnh sửa inline.
   const [factories, setFactories] = useState<RefItem[]>([]);
   const [machineTypes, setMachineTypes] = useState<RefItem[]>([]);
   const fabricOptions = useWorkshopConfigStore((s) => s.byCategory[WorkshopConfigCategory.FabricType] || []);
   const toolOptions = useWorkshopConfigStore((s) => s.byCategory[WorkshopConfigCategory.ToolResult] || []);
   const machineOptions = useWorkshopConfigStore((s) => s.byCategory[WorkshopConfigCategory.Machine] || []);
-  const printMethodOptions = useWorkshopConfigStore((s) => s.byCategory[WorkshopConfigCategory.PrintMethod] || []);
-  const [productCategoryOptions, setProductCategoryOptions] = useState<RefItem[]>([]);
   const loadConfig = useWorkshopConfigStore((s) => s.load);
   const configLoaded = useWorkshopConfigStore((s) => s.loaded);
 
@@ -80,18 +93,16 @@ export function ProductConfigTab() {
     if (!configLoaded) loadConfig();
   }, [configLoaded, loadConfig]);
 
-  // Load danh sách Xưởng + Phòng + Danh mục sản phẩm 1 lần (cho dropdown chỉnh sửa inline + dialog).
+  // Load danh sách Xưởng + Phòng 1 lần (cho dropdown chỉnh sửa inline).
   useEffect(() => {
     (async () => {
       try {
-        const [fRes, mRes, cRes] = await Promise.all([
+        const [fRes, mRes] = await Promise.all([
           RepositoryRemote.factory.getFactories('?page=1&limit=200'),
           RepositoryRemote.machineType.getMachineTypes('?page=1&limit=200'),
-          RepositoryRemote.productCategory.getProductCategories('?page=1&limit=200'),
         ]);
         setFactories((fRes.data?.data || []) as RefItem[]);
         setMachineTypes((mRes.data?.data || []) as RefItem[]);
-        setProductCategoryOptions((cRes.data?.data || []) as RefItem[]);
       } catch (error) {
         handleAxiosError(error);
       }
@@ -175,15 +186,6 @@ export function ProductConfigTab() {
     patchField(id, { level: value ? Number(value) : undefined });
   };
 
-  // Sau khi lưu từ dialog Edit: merge lạc quan + đồng bộ ref gate text.
-  const applyEdit = (id: string, patch: Partial<ProductConfigRow>) => {
-    setItems((prev) => prev.map((it) => (it._id === id ? { ...it, ...patch } : it)));
-    savedText.current[id] = {
-      mockup: patch.mockup ?? savedText.current[id]?.mockup ?? '',
-      guide: patch.guide ?? savedText.current[id]?.guide ?? '',
-    };
-  };
-
   // Text field (mockup/guide): gõ chỉ cập nhật local; blur mới lưu nếu đổi.
   const handleTextInput = (id: string, field: 'mockup' | 'guide', value: string) => {
     setItems((prev) => prev.map((it) => (it._id === id ? { ...it, [field]: value } : it)));
@@ -223,17 +225,6 @@ export function ProductConfigTab() {
   const handleSearch = () => {
     if (page !== 1) setPage(1);
     else fetchData();
-  };
-
-  const handleDelete = async (id: string) => {
-    if (!confirm('Xoá product config này?')) return;
-    try {
-      await RepositoryRemote.productConfig.deleteProductConfig(id);
-      toast.success('Đã xoá');
-      fetchData();
-    } catch (error) {
-      handleAxiosError(error);
-    }
   };
 
   const handleClearAll = async () => {
@@ -469,7 +460,12 @@ export function ProductConfigTab() {
                     </div>
                   </TableCell>
                   <TableCell>
-                    <Button variant="ghost" size="icon" onClick={() => setEditItem(it)} title="Chỉnh sửa sản phẩm">
+                    <Button
+                      variant="ghost"
+                      size="icon"
+                      onClick={() => navigate(PATHS.PRODUCT_EDIT.replace(':id', it._id))}
+                      title="Chỉnh sửa sản phẩm"
+                    >
                       <Pencil size={14} />
                     </Button>
                   </TableCell>
@@ -497,20 +493,6 @@ export function ProductConfigTab() {
           fetchData();
           loadConfig(true);
         }}
-      />
-
-      <ProductConfigEditDialog
-        open={editItem !== null}
-        onOpenChange={(v) => !v && setEditItem(null)}
-        item={editItem}
-        fabricOptions={fabricOptions}
-        toolOptions={toolOptions}
-        factoryOptions={factories}
-        machineTypeOptions={machineTypes}
-        productCategoryOptions={productCategoryOptions}
-        printMethodOptions={printMethodOptions}
-        onSaved={applyEdit}
-        onDelete={handleDelete}
       />
     </div>
   );

@@ -1,6 +1,7 @@
 import { Module } from '@nestjs/common';
 import { MongooseModule } from '@nestjs/mongoose';
 
+import { CollectionModule } from '../collection/collection.module';
 import { FactoryModule } from '../factory/factory.module';
 import { MachineTypeModule } from '../machine-type/machine-type.module';
 import { ProductCategoryModule } from '../product-category/product-category.module';
@@ -13,6 +14,7 @@ import { ProductConfigService } from './product-config.service';
 @Module({
   imports: [
     MongooseModule.forFeature([{ name: ProductConfigEntity.name, schema: ProductConfigSchema }]),
+    CollectionModule,
     FactoryModule,
     MachineTypeModule,
     ProductCategoryModule,

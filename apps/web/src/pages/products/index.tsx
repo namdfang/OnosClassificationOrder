@@ -3,6 +3,7 @@ import { Package } from 'lucide-react';
 
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 
+import { CollectionTab } from './CollectionTab';
 import { FactoryTab } from './FactoryTab';
 import { ProductCategoryTab } from './ProductCategoryTab';
 import { ProductConfigTab } from './ProductConfigTab';
@@ -24,6 +25,7 @@ export default function Products() {
         <TabsList>
           <TabsTrigger value="config">Config</TabsTrigger>
           <TabsTrigger value="category">Danh mục</TabsTrigger>
+          <TabsTrigger value="collection">Collection</TabsTrigger>
           <TabsTrigger value="factory">Xưởng</TabsTrigger>
         </TabsList>
         <TabsContent value="config">
@@ -31,6 +33,9 @@ export default function Products() {
         </TabsContent>
         <TabsContent value="category">
           <ProductCategoryTab />
+        </TabsContent>
+        <TabsContent value="collection">
+          <CollectionTab />
         </TabsContent>
         <TabsContent value="factory">
           <FactoryTab />

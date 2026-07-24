@@ -1,7 +1,7 @@
 import { Prop, raw, SchemaFactory } from '@nestjs/mongoose';
 import { assertSameType, DatabaseEntity, DatabaseEntityAbstract } from 'core';
 import type { HydratedDocument } from 'mongoose';
-import type { ProductConfig, ProductItemSpecific, ProductVariation } from 'shared';
+import type { ProductConfig, ProductItemSpecific, ProductPrintArea, ProductVariation } from 'shared';
 import { Status } from 'shared';
 
 import type { FactoryDocument } from '../factory/factory.entity';
@@ -15,6 +15,14 @@ export class ProductConfigEntity extends DatabaseEntityAbstract {
 
   @Prop({ required: true, trim: true, uppercase: true, index: true })
   shortName: string;
+
+  /** Slug SEO/URL (hệ cũ: slug). */
+  @Prop({ trim: true })
+  slug?: string;
+
+  /** SKU sản phẩm (hệ cũ: sku) — prefix sinh SKU biến thể, fallback shortName. */
+  @Prop({ trim: true, uppercase: true })
+  sku?: string;
 
   @Prop({ trim: true })
   machineNumber?: string;
@@ -33,9 +41,13 @@ export class ProductConfigEntity extends DatabaseEntityAbstract {
   @Prop({ trim: true })
   toolResult?: string;
 
-  /** Ảnh/URL mockup sản phẩm — hiển thị cột đầu bảng config. */
+  /** Ảnh/URL mockup CHÍNH của sản phẩm — hiển thị cột đầu bảng config. */
   @Prop({ trim: true })
   mockup?: string;
+
+  /** Gallery ảnh PHỤ (không gồm `mockup`) — upload hoặc dán link. */
+  @Prop({ type: [String], default: undefined })
+  images?: string[];
 
   /** Cấp độ sản phẩm 1..10 (PRODUCT_LEVELS) — badge màu. */
   @Prop({ type: Number, min: 1, max: 10 })
@@ -51,6 +63,10 @@ export class ProductConfigEntity extends DatabaseEntityAbstract {
   @Prop({ ref: 'ProductCategoryEntity', index: true })
   productCategoryId?: string;
 
+  /** ref CollectionEntity (nhiều-nhiều) — bộ sưu tập khách duyệt khi lên đơn. */
+  @Prop({ type: [String], ref: 'CollectionEntity', index: true, default: undefined })
+  collectionIds?: string[];
+
   /** workshop_config code (category=print_method). */
   @Prop({ trim: true })
   printMethod?: string;
@@ -63,9 +79,37 @@ export class ProductConfigEntity extends DatabaseEntityAbstract {
   @Prop({ trim: true })
   sizeChartUrl?: string;
 
-  /** Mô tả sản phẩm — hiển thị cho khách hàng ở Customer Portal. */
+  /** Mô tả sản phẩm ("Item description") — HTML, hiển thị cho khách hàng ở Customer Portal. */
   @Prop({ trim: true })
   description?: string;
+
+  /** Mô tả ngắn ("Short description") — HTML. */
+  @Prop({ trim: true })
+  shortDescription?: string;
+
+  /** "Template description" — HTML hướng dẫn file in/template. */
+  @Prop({ trim: true })
+  templateDescription?: string;
+
+  /** Thời gian sản xuất tối đa (ngày). */
+  @Prop({ type: Number, min: 0 })
+  maxProductionTime?: number;
+
+  /** Thời gian ship tối đa (ngày). */
+  @Prop({ type: Number, min: 0 })
+  maxShippingTime?: number;
+
+  /** Ẩn sản phẩm khỏi catalog khách ("Hide product for seller"). */
+  @Prop({ type: Boolean })
+  hideForSeller?: boolean;
+
+  /** Bật soát design ("Enable design check"). */
+  @Prop({ type: Boolean })
+  enableDesignCheck?: boolean;
+
+  /** Bật hoa hồng affiliate ("Enable affiliate commission"). */
+  @Prop({ type: Boolean })
+  enableAffiliate?: boolean;
 
   /** Thông số kỹ thuật dạng key-value tự do (chất liệu, kiểu dáng...). */
   @Prop({
@@ -88,16 +132,28 @@ export class ProductConfigEntity extends DatabaseEntityAbstract {
   @Prop({ type: Number, min: 0 })
   length?: number;
 
-  /** Danh sách biến thể (màu/size) — SKU riêng từng biến thể, unique toàn hệ thống. */
+  /**
+   * Tên các nhóm option user tự định nghĩa (VD ['Color','Size']) —
+   * `variations[].options` align theo index với mảng này.
+   */
+  @Prop({ type: [String], default: undefined })
+  optionNames?: string[];
+
+  /** Danh sách biến thể (tổ hợp option) — SKU riêng từng biến thể, unique toàn hệ thống. */
   @Prop({
     type: [
       raw({
         sku: { type: String, required: true, trim: true, uppercase: true },
+        options: { type: [String], default: undefined },
         color: { type: String, trim: true },
         size: { type: String, trim: true },
         cost: { type: Number, min: 0 },
         nonShipCost: { type: Number, min: 0 },
+        wholesalePrice: { type: Number, min: 0 },
         retailPrice: { type: Number, min: 0 },
+        tiktokPrice: { type: Number, min: 0 },
+        expUsShipCost: { type: Number, min: 0 },
+        tiktokShipCost: { type: Number, min: 0 },
         weight: { type: Number, min: 0 },
         width: { type: Number, min: 0 },
         height: { type: Number, min: 0 },
@@ -109,6 +165,27 @@ export class ProductConfigEntity extends DatabaseEntityAbstract {
     _id: false,
   })
   variations?: ProductVariation[];
+
+  /**
+   * Vị trí in structured — `key` khớp 18 khóa DesignFields (`front`, `back`...),
+   * là cột `design_<key>` khách điền khi lên đơn CSV/API.
+   */
+  @Prop({
+    type: [
+      raw({
+        key: { type: String, required: true, trim: true },
+        name: { type: String, required: true, trim: true },
+        templateUrl: { type: String, trim: true },
+        widthPx: { type: Number, min: 0 },
+        heightPx: { type: Number, min: 0 },
+        isRequired: { type: Boolean, default: false },
+        isEmbroidery: { type: Boolean, default: false },
+      }),
+    ],
+    default: undefined,
+    _id: false,
+  })
+  printAreas?: ProductPrintArea[];
 }
 
 assertSameType<ProductConfig, ProductConfigEntity>();

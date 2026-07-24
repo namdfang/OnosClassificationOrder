@@ -7,6 +7,10 @@ const getProductConfigs = (query: string = '') => {
   return callApi(`/${CONFIG.API_VERSION}/product-configs${query}`, 'get');
 };
 
+const getProductConfig = (id: string) => {
+  return callApi(`/${CONFIG.API_VERSION}/product-configs/${id}`, 'get');
+};
+
 const createProductConfig = (data: CreateProductConfigDto) => {
   return callApi(`/${CONFIG.API_VERSION}/product-configs`, 'post', data);
 };
@@ -29,6 +33,7 @@ const clearAllProductConfigs = () => {
 
 export const productConfig = {
   getProductConfigs,
+  getProductConfig,
   createProductConfig,
   updateProductConfig,
   deleteProductConfig,

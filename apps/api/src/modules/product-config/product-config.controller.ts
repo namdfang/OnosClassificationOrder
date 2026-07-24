@@ -3,6 +3,7 @@ import { ApiOkResponse, ApiOperation, ApiTags } from '@nestjs/swagger';
 import {
   CreateProductConfigDto,
   CreateProductConfigResDto,
+  GetProductConfigResDto,
   GetProductConfigsDto,
   GetProductConfigsResDto,
   ImportProductConfigDto,
@@ -29,6 +30,15 @@ export class ProductConfigController {
   @ApiOkResponse({ type: GetProductConfigsResDto })
   async getProductConfigs(@Query() dto: GetProductConfigsDto): Promise<GetProductConfigsResDto> {
     return this.productConfigService.getProductConfigs(dto);
+  }
+
+  @Get(':id')
+  @Auth([RoleType.Admin, RoleType.Manager])
+  @ApiOperation({ summary: 'Get 1 product config by id (trang sửa sản phẩm)' })
+  @HttpCode(HttpStatus.OK)
+  @ApiOkResponse({ type: GetProductConfigResDto })
+  async getProductConfig(@Param('id') id: string): Promise<GetProductConfigResDto> {
+    return { success: true, data: await this.productConfigService.getProductConfigById(id) };
   }
 
   @Post()

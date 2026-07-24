@@ -21,16 +21,17 @@ export class CustomerCatalogService {
   ) {}
 
   async getCatalog(customer: CustomerDocument, dto: GetCustomerCatalogDto): Promise<GetCustomerCatalogResDto> {
-    const { page, limit, search, productCategoryId } = dto;
+    const { page, limit, search, productCategoryId, collectionId } = dto;
     const filter: Record<string, unknown> = { variations: { $exists: true, $ne: [] } };
     if (search) filter.fullName = { $regex: search, $options: 'i' };
     if (productCategoryId) filter.productCategoryId = productCategoryId;
+    if (collectionId) filter.collectionIds = collectionId;
 
     const [rows, total, activePromotions] = await Promise.all([
       this.productConfigModel
         .find(filter)
         .select(
-          'fullName shortName productCategoryId printMethod printArea mockup sizeChartUrl description itemSpecifics variations',
+          'fullName shortName productCategoryId printMethod printArea mockup sizeChartUrl description itemSpecifics optionNames variations',
         )
         .populate<{ productCategory?: { name: string } }>({ path: 'productCategory', select: 'name' })
         .sort({ fullName: 1 })
@@ -62,6 +63,7 @@ export class CustomerCatalogService {
           const best = matched[0];
           return {
             sku: v.sku,
+            options: v.options,
             color: v.color,
             size: v.size,
             retailPrice: v.retailPrice,
@@ -81,6 +83,7 @@ export class CustomerCatalogService {
         sizeChartUrl: row.sizeChartUrl,
         description: row.description,
         itemSpecifics: row.itemSpecifics,
+        optionNames: row.optionNames,
         variations,
       };
     });
