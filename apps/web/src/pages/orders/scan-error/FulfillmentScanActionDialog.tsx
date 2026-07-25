@@ -1,6 +1,7 @@
 import React, { useMemo, useRef, useState } from 'react';
 import { Link } from 'react-router-dom';
 import {
+  Barcode,
   CheckCircle2,
   Clock,
   ExternalLink,
@@ -12,17 +13,15 @@ import {
   Palette,
   PlayCircle,
   Plus,
-  QrCode,
   RotateCw,
   Ruler,
   ScanLine,
   ShieldAlert,
   Wrench,
 } from 'lucide-react';
-import type { ProductionOrderRow, WorkshopConfig } from 'shared';
+import type {   FulfillmentStage,ProductionOrderRow, WorkshopConfig } from 'shared';
 import {
   FULFILLMENT_STAGE_LABELS,
-  FulfillmentStage,
   FulfillmentStageStatus,
   FulfillmentTransitionAction,
   WorkshopConfigCategory,
@@ -74,7 +73,7 @@ interface Props {
   /** User bấm "Báo lỗi" → page chuyển sang dialog gán lỗi. */
   onReportError: () => void;
   /**
-   * Quét QR lỗi (`E-<code>`) hợp lệ (thuộc công đoạn của user) → page chuyển
+   * Quét mã lỗi (`E-<code>`) hợp lệ (thuộc công đoạn của user) → page chuyển
    * sang modal gán lỗi với mã đã chọn sẵn, chờ quét lần 2 xác nhận.
    */
   onScanError?: (code: string) => void;
@@ -176,7 +175,7 @@ export function FulfillmentScanActionDialog({
 
   const myStageLabel = FULFILLMENT_STAGE_LABELS[myStage];
 
-  // Danh mục lỗi CỦA CÔNG ĐOẠN user (Stage Error Catalog) — validate QR `E-<code>`
+  // Danh mục lỗi CỦA CÔNG ĐOẠN user (Stage Error Catalog) — validate mã `E-<code>`
   // trước khi handoff sang modal gán lỗi (luồng xác nhận 2 lần quét).
   const errorConfigs = useWorkshopConfigStore(
     (s) => s.byCategory[WorkshopConfigCategory.ProductionError] || [],
@@ -213,7 +212,7 @@ export function FulfillmentScanActionDialog({
   };
 
   /**
-   * Quét QR lỗi lần 1 → KHÔNG ghi nhận ngay. Validate mã thuộc danh mục công
+   * Quét mã lỗi lần 1 → KHÔNG ghi nhận ngay. Validate mã thuộc danh mục công
    * đoạn của user → handoff sang modal gán lỗi (mã đã chọn sẵn); ở đó quét lần
    * 2 CÙNG MÃ (hoặc Enter) mới ghi nhận + đẩy về — chọn nhầm còn đổi được.
    */
@@ -222,7 +221,7 @@ export function FulfillmentScanActionDialog({
     const cfg = myStageErrors.find((o) => o.code.toLowerCase() === codeScanned);
     if (!cfg) {
       beepError();
-      toast.error(`Mã lỗi không thuộc công đoạn "${myStageLabel}" — kiểm tra bảng QR của trạm.`);
+      toast.error(`Mã lỗi không thuộc công đoạn "${myStageLabel}" — kiểm tra bảng mã lỗi của trạm.`);
       return;
     }
     if (onScanError) onScanError(cfg.code);
@@ -479,8 +478,8 @@ export function FulfillmentScanActionDialog({
                   <GuideStep
                     step={1}
                     tone="rose"
-                    icon={<QrCode size={20} />}
-                    title="Quét QR lỗi trên bảng"
+                    icon={<Barcode size={20} />}
+                    title="Quét mã lỗi trên bảng"
                     desc="Lỗi được CHỌN (chưa ghi nhận) — gõ mô tả hoặc quét mã khác để đổi."
                   />
                   <GuideStep
@@ -507,8 +506,8 @@ export function FulfillmentScanActionDialog({
                   <GuideStep
                     step={1}
                     tone="rose"
-                    icon={<QrCode size={20} />}
-                    title="Quét QR lỗi trên bảng"
+                    icon={<Barcode size={20} />}
+                    title="Quét mã lỗi trên bảng"
                     desc="Lỗi được CHỌN (chưa ghi nhận) — mở màn gán lỗi để xem lại."
                   />
                   <GuideStep

@@ -1,6 +1,6 @@
 # Scan barcode → Gán lỗi nhanh — Function Description
 
-> **UPDATE 2026-07-21 — Quét 2 bước (hands-free):** quét đơn `N-…` xong có thể quét tiếp mã **`OK`** (tự start+complete) hoặc **QR lỗi `E-<code>`** (tự gán lỗi + đẩy về đích cấu hình sẵn) NGAY KHI DIALOG ĐANG MỞ — công nhân không cần chạm máy tính. Kèm beep WebAudio (thành công/thất bại) + parse tiền tố ở input chính. Danh mục lỗi theo công đoạn + gen/in QR: xem [`StageErrorCatalog.md`](StageErrorCatalog.md). Helper dùng chung: `apps/web/src/utils/scanCodes.ts` (`parseScanCode` / `resolveErrorScan` / beep*).
+> **UPDATE 2026-07-21 — Quét 2 bước (hands-free):** quét đơn `N-…` xong có thể quét tiếp mã **`OK`** (tự start+complete) hoặc **barcode lỗi `E-<code>`** (tự gán lỗi + đẩy về đích cấu hình sẵn — từ 2026-07-25 in dạng barcode Code128 thay QR vì nhiều máy quét không đọc được QR, payload không đổi) NGAY KHI DIALOG ĐANG MỞ — công nhân không cần chạm máy tính. Kèm beep WebAudio (thành công/thất bại) + parse tiền tố ở input chính. Danh mục lỗi theo công đoạn + gen/in barcode: xem [`StageErrorCatalog.md`](StageErrorCatalog.md). Helper dùng chung: `apps/web/src/utils/scanCodes.ts` (`parseScanCode` / `resolveErrorScan` / beep*).
 
 > **File FE:** `apps/web/src/pages/orders/scan-error/index.tsx` (page) + `OrderErrorScanDialog.tsx` (modal gán lỗi) + `FulfillmentScanActionDialog.tsx` (modal hoàn thành/báo lỗi cho công nhân Fulfillment)
 > **File BE:** `apps/api/src/modules/order/order.controller.ts` + `order.service.ts → getByProductionId()`

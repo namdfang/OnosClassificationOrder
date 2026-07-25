@@ -2,13 +2,13 @@ import React, { useMemo, useRef, useState } from 'react';
 import { Link } from 'react-router-dom';
 import {
   AlertTriangle,
+  Barcode,
   CheckCircle2,
   Factory,
   Layers,
   MessageSquareWarning,
   Pencil,
   Plus,
-  QrCode,
   RotateCcw,
 } from 'lucide-react';
 import type { FulfillmentStage as FulfillmentStageT, ProductionOrderRow, WorkshopConfig } from 'shared';
@@ -137,8 +137,8 @@ export function OrderErrorScanDialog({ order, onClose, onSaved, onScanOrder, ini
   };
 
   /**
-   * Quét QR lỗi (`E-<code>`) khi dialog mở — luồng XÁC NHẬN 2 LẦN:
-   *  - Mã phải thuộc danh mục CÔNG ĐOẠN ngữ cảnh (bảng QR của trạm) — sai → từ chối.
+   * Quét mã lỗi (`E-<code>`) khi dialog mở — luồng XÁC NHẬN 2 LẦN:
+   *  - Mã phải thuộc danh mục CÔNG ĐOẠN ngữ cảnh (bảng mã lỗi của trạm) — sai → từ chối.
    *  - Lần 1 (mã khác mã đang chọn) → chỉ CHỌN lỗi, dừng 1 nhịp cho nhập mô tả.
    *  - Lần 2 CÙNG MÃ (hoặc Enter tay) → mới ghi nhận + đẩy về. Quét mã khác → đổi lựa chọn.
    */
@@ -154,7 +154,7 @@ export function OrderErrorScanDialog({ order, onClose, onSaved, onScanOrder, ini
       beepError();
       toast.error(
         contextStage
-          ? `Mã lỗi không thuộc công đoạn "${FULFILLMENT_STAGE_LABELS[contextStage]}" — kiểm tra bảng QR của trạm.`
+          ? `Mã lỗi không thuộc công đoạn "${FULFILLMENT_STAGE_LABELS[contextStage]}" — kiểm tra bảng mã lỗi của trạm.`
           : 'Chưa xác định được công đoạn — không nhận mã lỗi qua quét.',
       );
       return;
@@ -185,7 +185,7 @@ export function OrderErrorScanDialog({ order, onClose, onSaved, onScanOrder, ini
     }
     if (action.kind === 'ok') {
       beepError();
-      toast.error('Mã OK chỉ dùng cho công nhân công đoạn — ở đây hãy quét QR lỗi.');
+      toast.error('Mã OK chỉ dùng cho công nhân công đoạn — ở đây hãy quét mã lỗi.');
       return true;
     }
     return false;
@@ -356,8 +356,8 @@ export function OrderErrorScanDialog({ order, onClose, onSaved, onScanOrder, ini
                 <GuideStep
                   step={1}
                   tone="rose"
-                  icon={<QrCode size={20} />}
-                  title="Quét QR lỗi"
+                  icon={<Barcode size={20} />}
+                  title="Quét mã lỗi"
                   desc="Hoặc bấm chọn mã bên dưới — nguồn & nơi đẩy về tự theo cấu hình."
                 />
                 <GuideStep
@@ -439,7 +439,7 @@ export function OrderErrorScanDialog({ order, onClose, onSaved, onScanOrder, ini
             {stageErrors.length === 0 ? (
               <div className="rounded-md border border-dashed border-amber-300/60 bg-amber-50/40 dark:bg-amber-500/5 p-3.5 text-base text-amber-700 dark:text-amber-300 space-y-2">
                 <p className="flex items-start gap-2">
-                  <QrCode size={18} className="mt-0.5 shrink-0" />
+                  <Barcode size={18} className="mt-0.5 shrink-0" />
                   <span>
                     {contextStage
                       ? `Công đoạn "${FULFILLMENT_STAGE_LABELS[contextStage]}" chưa có lỗi nào trong danh mục.`

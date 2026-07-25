@@ -5,7 +5,7 @@ import { FULFILLMENT_STAGE_LABELS, FULFILLMENT_STAGE_ORDER, FULFILLMENT_STAGES }
  * Format mã quét trong luồng "quét 2 bước" (xem StageErrorCatalog.md + ScanError.md):
  *   - Đơn hàng:  `N-<productionId>` (barcode in trên đơn — có sẵn)
  *   - Hoàn thành: `OK` (1 mã chung — hệ thống biết công đoạn qua profile)
- *   - Lỗi:       `E-<code>` (QR gen từ danh mục lỗi công đoạn, code dạng `se-<stage>-<n>`)
+ *   - Lỗi:       `E-<code>` (barcode Code128 in từ danh mục lỗi công đoạn, code dạng `se-<stage>-<n>`)
  * Máy quét HID gõ payload + Enter vào element đang focus → parse theo tiền tố.
  */
 export const SCAN_ORDER_PREFIX = 'N-';
@@ -32,8 +32,8 @@ export function parseScanCode(raw: string): ScanAction {
   return { kind: 'unknown', raw: trimmed };
 }
 
-/** Payload in vào QR cho 1 lỗi trong danh mục. */
-export function errorQrPayload(cfg: Pick<WorkshopConfig, 'code'>): string {
+/** Payload in vào barcode (Code128) cho 1 lỗi trong danh mục. */
+export function errorScanPayload(cfg: Pick<WorkshopConfig, 'code'>): string {
   return `${SCAN_ERROR_PREFIX}${cfg.code}`;
 }
 
