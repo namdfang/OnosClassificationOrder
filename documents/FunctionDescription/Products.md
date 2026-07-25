@@ -90,6 +90,15 @@ Cột `fabricType` cho phép admin set sẵn loại vải mặc định — khi 
 
 Cột `toolResult` **KHÔNG còn được auto-copy vào order lúc import nữa** (API OnosPod lẫn CSV) — đơn mới luôn tạo với `toolResult` rỗng để tool tự động soát (`GET /v1/orders/design-review/next`) nhận diện đúng đơn chưa soát, xem `Orders.md §3.3`. Cột này ở Products chỉ còn ý nghĩa cấu hình/hiển thị, KHÔNG ảnh hưởng đơn mới. UI bảng config vẫn giữ dropdown chọn fabric / tool inline (không đổi UI Products).
 
+### 2.6 Kanban gán xưởng theo sản phẩm (trang `/adm/settings`)
+
+`apps/web/src/components/settings/ProductFactoryKanban.tsx` — section trong trang Settings (`apps/web/src/pages/settings/index.tsx`, gate `role.manage` chung với các config khác), thay cho việc chọn `<select>` Xưởng từng dòng ở bảng Config khi cần chuyển hàng loạt.
+
+- **Layout:** kanban **chỉ gồm các cột xưởng** (1 cột / factory, KHÔNG có cột "Chưa gán") — UI mirror `CustomerFactoryKanban.tsx` (dnd-kit, cột 70vh cuộn trong, highlight cột khi kéo qua). Card = mockup thumbnail 36×36 (fallback icon ảnh) + `fullName` + `shortName`; vị trí xưởng hiện tại = cột đang đứng. Sort A→Z theo `fullName` trong cột.
+- **Search:** 1 ô tìm client-side theo `fullName`/`shortName`, lọc mọi cột (header cột hiển thị `visible/total`).
+- **Lưu:** kéo thả sang cột khác → **PATCH `/v1/product-configs/:id` `{ factoryId }` lưu NGAY** (update lạc quan + toast, lỗi thì refetch rollback) — KHÔNG có nút Lưu/dirty guard như CustomerFactoryKanban. Cùng ràng buộc §2.1: chỉ ảnh hưởng đơn import về sau.
+- **Data:** load 1 lần `GET /v1/factories` + `GET /v1/product-configs?page=1&limit=2000`; nếu `total > 2000` hoặc có sản phẩm chưa gán xưởng (không hiển thị được trong kanban) → hiện text cảnh báo amber.
+
 ### 2.3 Import flow (`ImportProductConfigDialog.tsx`)
 ```
 User paste TSV vào textarea
