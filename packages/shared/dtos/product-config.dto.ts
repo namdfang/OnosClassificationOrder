@@ -1,7 +1,7 @@
 import { createZodDto } from '@anatine/zod-nestjs';
 import { extendApi } from '@anatine/zod-openapi';
-import { PriceZod } from '@shared/constants';
-import { Status } from '@shared/enums';
+import { PriceZod, ProductPrintAreaKeyZod } from '@shared/constants';
+import { ProductConfigStatus, Status } from '@shared/enums';
 import { BaseEntityZod, PageQueryZod, PageResZod, ResZod } from '@shared/types';
 import { z } from 'zod';
 
@@ -16,15 +16,30 @@ export const ProductItemSpecificZod = z.object({
 export type ProductItemSpecific = z.infer<typeof ProductItemSpecificZod>;
 
 /**
- * Biến thể sản phẩm (màu/size cụ thể) — SKU riêng, giá vốn (cost/nonShipCost)
- * dùng nội bộ, `retailPrice` là giá niêm yết hiển thị cho khách (chưa áp
- * discount). `weight/width/height/length` override đóng gói mặc định của sản
- * phẩm khi biến thể này có kích thước/khối lượng khác.
+ * Danh sách vị trí in của 1 sản phẩm — mỗi phần tử là 1 key CỐ ĐỊNH trong
+ * `PRODUCT_PRINT_AREAS` (`packages/shared/constants/product-print-area.ts`,
+ * map 1-1 với `DesignFields`/order.designs). KHÔNG cho tự gõ key/label —
+ * admin chỉ CHỌN trong danh mục cố định để tránh sai chính tả / trỏ tới field
+ * design không tồn tại. Nhãn hiển thị resolve từ constant, không lưu trùng
+ * lặp theo từng sản phẩm.
+ */
+export const ProductPrintAreaZod = ProductPrintAreaKeyZod.array()
+  .max(30)
+  .refine((keys) => new Set(keys).size === keys.length, { message: 'Vị trí in bị trùng lặp' });
+export type ProductPrintArea = z.infer<typeof ProductPrintAreaZod>;
+
+/**
+ * Biến thể sản phẩm (VD: màu/size cụ thể, nhưng KHÔNG định nghĩa cứng field
+ * nào — admin tự đặt tên thuộc tính qua `attributes` key-value) — SKU riêng,
+ * giá vốn (cost/nonShipCost) dùng nội bộ, `retailPrice` là giá niêm yết hiển
+ * thị cho khách (chưa áp discount). `weight/width/height/length` override
+ * đóng gói mặc định của sản phẩm khi biến thể này có kích thước/khối lượng
+ * khác.
  */
 export const ProductVariationZod = z.object({
   sku: z.string().min(1).max(100).trim().toUpperCase(),
-  color: z.string().max(100).optional(),
-  size: z.string().max(100).optional(),
+  /** Thuộc tính biến thể tự do dạng key-value (VD: "Màu" → "Đỏ", "Size" → "M"). */
+  attributes: ProductItemSpecificZod.array().max(20).optional(),
   /** Giá vốn sản xuất. */
   cost: PriceZod.optional(),
   /** Giá vốn KHÔNG gồm phí ship. */
@@ -42,6 +57,10 @@ export type ProductVariation = z.infer<typeof ProductVariationZod>;
 export const ProductConfigZod = BaseEntityZod.extend({
   fullName: z.string().min(1).max(300),
   shortName: z.string().min(1).max(60),
+  /** Mã SKU riêng của sản phẩm (KHÔNG phải SKU biến thể) — unique toàn hệ thống nếu có. */
+  sku: z.string().max(100).optional(),
+  /** Active = hiện catalog khách hàng, Inactive = ẩn catalog nhưng vẫn hiện quản trị, Hidden = ẩn cả 2 (KHÔNG xóa). */
+  status: z.enum(getObjectValues(ProductConfigStatus)).default(ProductConfigStatus.Active),
   /** Machine number/identifier (e.g. "94", "27"). Empty → product has no tool. */
   machineNumber: z.string().max(60).optional(),
   machineTypeId: IDZod,
@@ -62,8 +81,8 @@ export const ProductConfigZod = BaseEntityZod.extend({
   productCategoryId: IDZod.optional(),
   /** workshop_config code (category=print_method). */
   printMethod: z.string().max(60).optional(),
-  /** Vị trí in (free-text, VD: "Mặt trước 30x40cm, mặt sau 20x25cm"). */
-  printArea: z.string().max(2000).optional(),
+  /** Danh sách vị trí in — mảng key CỐ ĐỊNH (xem `PRODUCT_PRINT_AREAS`), KHÔNG còn free-text. */
+  printArea: ProductPrintAreaZod.optional(),
   /** Ảnh/URL bảng size. */
   sizeChartUrl: z.string().max(1000).optional(),
   /** Mô tả sản phẩm — hiển thị cho khách hàng ở Customer Portal. */
@@ -84,6 +103,8 @@ export type ProductConfig = z.infer<typeof ProductConfigZod>;
 export const GetProductConfigsZod = PageQueryZod.extend({
   factoryId: IDZod.optional(),
   machineTypeId: IDZod.optional(),
+  /** Không truyền ⇒ mặc định loại `Hidden` khỏi danh sách (vẫn thấy Active + Inactive). Truyền cụ thể để xem đúng 1 trạng thái (VD: `hidden` để xem sản phẩm đã ẩn). */
+  status: z.enum(getObjectValues(ProductConfigStatus)).optional(),
 });
 export class GetProductConfigsDto extends createZodDto(extendApi(GetProductConfigsZod)) {}
 
@@ -91,9 +112,15 @@ export const GetProductConfigsResZod = PageResZod.extend({ data: ProductConfigZo
 export class GetProductConfigsResDto extends createZodDto(extendApi(GetProductConfigsResZod)) {}
 
 //
+export const GetProductConfigResZod = ResZod.extend({ data: ProductConfigZod });
+export class GetProductConfigResDto extends createZodDto(extendApi(GetProductConfigResZod)) {}
+
+//
 export const CreateProductConfigZod = z.object({
   fullName: ProductConfigZod.shape.fullName,
   shortName: ProductConfigZod.shape.shortName,
+  sku: ProductConfigZod.shape.sku,
+  status: ProductConfigZod.shape.status,
   machineNumber: ProductConfigZod.shape.machineNumber,
   machineTypeId: ProductConfigZod.shape.machineTypeId,
   factoryId: ProductConfigZod.shape.factoryId,
@@ -123,6 +150,8 @@ export class CreateProductConfigResDto extends createZodDto(extendApi(CreateProd
 export const UpdateProductConfigZod = z.object({
   fullName: ProductConfigZod.shape.fullName.optional(),
   shortName: ProductConfigZod.shape.shortName.optional(),
+  sku: ProductConfigZod.shape.sku,
+  status: ProductConfigZod.shape.status.optional(),
   machineNumber: ProductConfigZod.shape.machineNumber,
   machineTypeId: ProductConfigZod.shape.machineTypeId.optional(),
   factoryId: ProductConfigZod.shape.factoryId.optional(),
@@ -179,19 +208,42 @@ export const ImportProductConfigResZod = ResZod.extend({
 });
 export class ImportProductConfigResDto extends createZodDto(extendApi(ImportProductConfigResZod)) {}
 
+//
+/**
+ * Upload ảnh mockup/bảng size — lưu **local disk** trên server API (KHÔNG qua
+ * S3/Backblaze, khác hẳn `/v1/upload/image`). Lý do tách riêng: pipeline S3
+ * hiện có (`apps/api/src/modules/upload/`) cần `AWS_S3_*`/`BACKBLAZE_*`
+ * credentials — môi trường dev/1 số môi trường chưa cấu hình gây 500. Ảnh
+ * sản phẩm dùng nội bộ nên chấp nhận lưu đĩa server, phục vụ qua
+ * `ServeStaticModule` sẵn có (`rootPath: ./src/assets`).
+ */
+export const UploadProductImageZod = z.object({
+  type: z.enum(['mockup', 'size-chart']),
+});
+export class UploadProductImageDto extends createZodDto(extendApi(UploadProductImageZod)) {}
+
+export const UploadProductImageResZod = ResZod.extend({ data: z.object({ url: z.string() }) });
+export class UploadProductImageResDto extends createZodDto(extendApi(UploadProductImageResZod)) {}
+
 // ─── Customer Portal — Catalog (chỉ field an toàn cho khách hàng) ───
 // KHÔNG bao giờ trả `cost` / `nonShipCost` (giá vốn nội bộ) ra Customer Portal.
 
 export const CustomerCatalogVariationZod = z.object({
   sku: ProductVariationZod.shape.sku,
-  color: ProductVariationZod.shape.color,
-  size: ProductVariationZod.shape.size,
+  attributes: ProductVariationZod.shape.attributes,
   retailPrice: ProductVariationZod.shape.retailPrice,
   /** Giá sau khi áp chương trình giảm giá tốt nhất theo tier của khách (nếu có). */
   discountedPrice: PriceZod.optional(),
   appliedPromotionName: z.string().optional(),
 });
 export type CustomerCatalogVariation = z.infer<typeof CustomerCatalogVariationZod>;
+
+/** Vị trí in đã resolve nhãn hiển thị — trả cho API khách hàng thay vì bare key. */
+export const CustomerCatalogPrintAreaZod = z.object({
+  key: ProductPrintAreaKeyZod,
+  label: z.string(),
+});
+export type CustomerCatalogPrintArea = z.infer<typeof CustomerCatalogPrintAreaZod>;
 
 export const CustomerCatalogItemZod = z.object({
   _id: IDZod,
@@ -200,7 +252,7 @@ export const CustomerCatalogItemZod = z.object({
   /** Tên danh mục đã resolve từ `productCategoryId` (ProductCategory module) — KHÔNG phải id. */
   productCategory: z.string().optional(),
   printMethod: z.string().optional(),
-  printArea: z.string().optional(),
+  printArea: CustomerCatalogPrintAreaZod.array().optional(),
   mockup: z.string().optional(),
   sizeChartUrl: z.string().optional(),
   description: z.string().optional(),

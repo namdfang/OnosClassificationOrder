@@ -60,6 +60,14 @@ const IMAGE_CONFIG: ImageConfig = {
     preview: { quality: 90, width: 500 },
     thumbnail: { quality: 80, width: 200 },
   },
+  [ImageType.SizeChart]: {
+    folder: 'u-images/size-chart',
+    allowedExtensions: /(jpg|jpeg|png|webp)$/i,
+    minDimensions: [200, 200],
+    maxDimensions: [10_000, 10_000],
+    preview: { quality: 90, width: 800 },
+    thumbnail: { quality: 80, width: 200 },
+  },
   [ImageType.Artwork]: {
     folder: 'u-images/artwork',
     allowedExtensions: /(jpg|jpeg|png)$/i,
@@ -281,6 +289,7 @@ export class UploadService {
   private validateImageFormat(allowedExtensions: RegExp, type: ImageType, format?: string): void {
     const uploadErrorMessage: Partial<Record<ImageType, string>> = {
       [ImageType.Mockup]: 'Invalid mockup file',
+      [ImageType.SizeChart]: 'Invalid size chart file',
       [ImageType.Artwork]: 'Artwork only support png file',
       [ImageType.ProductImage]: 'Invalid product image file',
       [ImageType.TopupImage]: 'Invalid topup image file',

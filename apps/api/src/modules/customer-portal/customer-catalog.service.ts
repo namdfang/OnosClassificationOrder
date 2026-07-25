@@ -1,7 +1,14 @@
 import { Injectable } from '@nestjs/common';
 import { InjectModel } from '@nestjs/mongoose';
 import { Model } from 'mongoose';
-import type { CustomerCatalogItem, CustomerCatalogVariation, GetCustomerCatalogDto, GetCustomerCatalogResDto } from 'shared';
+import type {
+  CustomerCatalogItem,
+  CustomerCatalogPrintArea,
+  CustomerCatalogVariation,
+  GetCustomerCatalogDto,
+  GetCustomerCatalogResDto,
+} from 'shared';
+import { PRODUCT_PRINT_AREA_LABEL_MAP, ProductConfigStatus } from 'shared';
 
 import type { CustomerDocument } from '@/modules/customer/customer.entity';
 import { ProductConfigEntity } from '@/modules/product-config/product-config.entity';
@@ -22,7 +29,12 @@ export class CustomerCatalogService {
 
   async getCatalog(customer: CustomerDocument, dto: GetCustomerCatalogDto): Promise<GetCustomerCatalogResDto> {
     const { page, limit, search, productCategoryId } = dto;
-    const filter: Record<string, unknown> = { variations: { $exists: true, $ne: [] } };
+    // Chỉ Active mới hiện catalog khách hàng — Inactive/Hidden bị loại. `null` để
+    // tương thích ngược data cũ chưa có field `status` (mặc định coi như Active).
+    const filter: Record<string, unknown> = {
+      variations: { $exists: true, $ne: [] },
+      status: { $in: [ProductConfigStatus.Active, null] },
+    };
     if (search) filter.fullName = { $regex: search, $options: 'i' };
     if (productCategoryId) filter.productCategoryId = productCategoryId;
 
@@ -62,13 +74,17 @@ export class CustomerCatalogService {
           const best = matched[0];
           return {
             sku: v.sku,
-            color: v.color,
-            size: v.size,
+            attributes: v.attributes,
             retailPrice: v.retailPrice,
             discountedPrice: best?.price,
             appliedPromotionName: best?.promotion.name,
           };
         });
+
+      const printArea: CustomerCatalogPrintArea[] = (row.printArea || []).map((key) => ({
+        key,
+        label: PRODUCT_PRINT_AREA_LABEL_MAP[key],
+      }));
 
       return {
         _id: String(row._id),
@@ -76,7 +92,7 @@ export class CustomerCatalogService {
         shortName: row.shortName,
         productCategory: row.productCategory?.name,
         printMethod: row.printMethod,
-        printArea: row.printArea,
+        printArea,
         mockup: row.mockup,
         sizeChartUrl: row.sizeChartUrl,
         description: row.description,

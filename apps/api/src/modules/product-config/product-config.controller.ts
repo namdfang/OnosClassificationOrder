@@ -1,8 +1,27 @@
-import { Body, Controller, Delete, Get, HttpCode, HttpStatus, Param, Patch, Post, Query } from '@nestjs/common';
+import {
+  Body,
+  Controller,
+  Delete,
+  Get,
+  Header,
+  HttpCode,
+  HttpStatus,
+  Param,
+  Patch,
+  Post,
+  Query,
+  Req,
+  StreamableFile,
+  UploadedFile,
+} from '@nestjs/common';
 import { ApiOkResponse, ApiOperation, ApiTags } from '@nestjs/swagger';
+import { ApiFile, IFile } from 'core';
+import type { FastifyRequest } from 'fastify';
+import { createReadStream } from 'fs';
 import {
   CreateProductConfigDto,
   CreateProductConfigResDto,
+  GetProductConfigResDto,
   GetProductConfigsDto,
   GetProductConfigsResDto,
   ImportProductConfigDto,
@@ -11,6 +30,8 @@ import {
   RoleType,
   UpdateProductConfigDto,
   UpdateProductConfigResDto,
+  UploadProductImageDto,
+  UploadProductImageResDto,
 } from 'shared';
 
 import { Auth } from '@/decorators';
@@ -29,6 +50,28 @@ export class ProductConfigController {
   @ApiOkResponse({ type: GetProductConfigsResDto })
   async getProductConfigs(@Query() dto: GetProductConfigsDto): Promise<GetProductConfigsResDto> {
     return this.productConfigService.getProductConfigs(dto);
+  }
+
+  @Get(':id')
+  @Auth([RoleType.Admin, RoleType.Manager])
+  @ApiOperation({ summary: 'Get 1 product config by id' })
+  @HttpCode(HttpStatus.OK)
+  @ApiOkResponse({ type: GetProductConfigResDto })
+  async getProductConfig(@Param('id') id: string): Promise<GetProductConfigResDto> {
+    return { success: true, data: await this.productConfigService.getProductConfig(id) };
+  }
+
+  @Get('uploaded-image/:folder/:filename')
+  @Auth([], [], { public: true })
+  @ApiOperation({ summary: 'Serve mockup/size-chart image uploaded to local disk (public, dùng cho <img src>)' })
+  // Web app (vd :5173) và API (vd :3007) khác origin — helmet mặc định set
+  // Cross-Origin-Resource-Policy: same-origin nên trình duyệt CHẶN hiển thị ảnh
+  // qua <img> dù URL mở trực tiếp vẫn OK (CORP chỉ chặn embed cross-origin,
+  // không chặn navigation). Override riêng route này thành cross-origin.
+  @Header('Cross-Origin-Resource-Policy', 'cross-origin')
+  serveProductImage(@Param('folder') folder: string, @Param('filename') filename: string): StreamableFile {
+    const { filePath, mimetype } = this.productConfigService.resolveProductImagePath(folder, filename);
+    return new StreamableFile(createReadStream(filePath), { type: mimetype });
   }
 
   @Post()
@@ -69,6 +112,22 @@ export class ProductConfigController {
   @ApiOkResponse({ type: ImportProductConfigResDto })
   async importProductConfigs(@Body() dto: ImportProductConfigDto): Promise<ImportProductConfigResDto> {
     return this.productConfigService.importProductConfigs(dto);
+  }
+
+  @Post('upload-image')
+  @Auth([RoleType.Admin, RoleType.Manager])
+  @ApiOperation({ summary: 'Upload mockup/size-chart image (lưu local disk, KHÔNG qua S3/Backblaze)' })
+  @HttpCode(HttpStatus.OK)
+  @ApiOkResponse({ type: UploadProductImageResDto })
+  @ApiFile({ name: 'file' })
+  async uploadProductImage(
+    @Body() dto: UploadProductImageDto,
+    @UploadedFile() file: IFile,
+    @Req() req: FastifyRequest,
+  ): Promise<UploadProductImageResDto> {
+    const origin = `${req.protocol}://${req.headers.host}`;
+    const url = await this.productConfigService.uploadProductImage(dto.type, file, origin);
+    return { success: true, data: { url } };
   }
 
   @Delete('all')

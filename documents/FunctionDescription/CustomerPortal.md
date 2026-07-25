@@ -146,11 +146,13 @@ copy tên sản phẩm qua `CopyButton`).
 
 `CustomerCatalogService.getCatalog()` (`apps/api/src/modules/customer-portal/customer-catalog.service.ts`):
 1. Query `ProductConfigEntity` với `variations` không rỗng (chỉ sản phẩm đã
-   được enrich đầy đủ mới hiện trong catalog — xem [`Products.md §2.5`](Products.md)),
-   filter thêm `search`/`productCategoryId` nếu có. `productCategory` trả về
-   trong response là TÊN đã resolve từ `productCategoryId` (populate virtual
-   qua `ProductCategory` module — [`Products.md §4`](Products.md)), KHÔNG
-   phải id.
+   được enrich đầy đủ mới hiện trong catalog — xem [`Products.md §2.5`](Products.md))
+   **VÀ `status=active`** (Inactive/Hidden bị loại khỏi catalog khách hàng —
+   xem [`Products.md §2.2`](Products.md); data cũ chưa có field `status` vẫn
+   coi như active qua `$in: [Active, null]`), filter thêm `search`/`productCategoryId`
+   nếu có. `productCategory` trả về trong response là TÊN đã resolve từ
+   `productCategoryId` (populate virtual qua `ProductCategory` module —
+   [`Products.md §4`](Products.md)), KHÔNG phải id.
 2. Lấy toàn bộ promotion đang active + trong khoảng ngày hiệu lực qua
    `PromotionService.getActiveInDateRange()` ([`Promotion.md`](Promotion.md)).
 3. Với mỗi biến thể, dùng `promotionMatches()` + `applyPromotionDiscount()`

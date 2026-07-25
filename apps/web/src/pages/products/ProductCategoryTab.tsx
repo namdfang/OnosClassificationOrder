@@ -14,24 +14,26 @@ import { Switch } from '@/components/ui/switch';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 
 import { handleAxiosError } from '@/utils';
+import { sortCategoryTree } from '@/utils/categoryTree';
 
 interface ProductCategoryRow {
   _id: string;
   name: string;
   shortName: string;
   isActive: boolean;
+  parentId?: string;
 }
 
 interface FormState {
   open: boolean;
   mode: 'create' | 'edit';
-  data: { _id?: string; name: string; shortName: string; isActive: boolean };
+  data: { _id?: string; name: string; shortName: string; isActive: boolean; parentId: string };
 }
 
 const DEFAULT_FORM: FormState = {
   open: false,
   mode: 'create',
-  data: { name: '', shortName: '', isActive: true },
+  data: { name: '', shortName: '', isActive: true, parentId: '' },
 };
 
 export function ProductCategoryTab() {
@@ -56,13 +58,20 @@ export function ProductCategoryTab() {
     fetchData();
   }, []);
 
-  const openCreate = () => setForm({ open: true, mode: 'create', data: { name: '', shortName: '', isActive: true } });
+  const openCreate = () =>
+    setForm({ open: true, mode: 'create', data: { name: '', shortName: '', isActive: true, parentId: '' } });
 
   const openEdit = (item: ProductCategoryRow) =>
     setForm({
       open: true,
       mode: 'edit',
-      data: { _id: item._id, name: item.name, shortName: item.shortName, isActive: item.isActive },
+      data: {
+        _id: item._id,
+        name: item.name,
+        shortName: item.shortName,
+        isActive: item.isActive,
+        parentId: item.parentId || '',
+      },
     });
 
   const handleSubmit = async () => {
@@ -72,7 +81,12 @@ export function ProductCategoryTab() {
       return;
     }
 
-    const payload = { name: data.name, shortName: data.shortName, isActive: data.isActive };
+    const payload = {
+      name: data.name,
+      shortName: data.shortName,
+      isActive: data.isActive,
+      parentId: data.parentId || undefined,
+    };
     try {
       setSaving(true);
       if (mode === 'create') {
@@ -131,9 +145,14 @@ export function ProductCategoryTab() {
               </TableRow>
             )}
             {!loading &&
-              items.map((it) => (
+              sortCategoryTree(items).map((it) => (
                 <TableRow key={it._id}>
-                  <TableCell className="font-medium">{it.name}</TableCell>
+                  <TableCell className="font-medium">
+                    <span style={{ paddingLeft: it.depth * 20 }} className="inline-flex items-center gap-1.5">
+                      {it.depth > 0 && <span className="text-muted-foreground">└</span>}
+                      {it.name}
+                    </span>
+                  </TableCell>
                   <TableCell>
                     <Badge variant="outline">{it.shortName}</Badge>
                   </TableCell>
@@ -173,6 +192,23 @@ export function ProductCategoryTab() {
                 placeholder="VD: APPAREL"
                 maxLength={20}
               />
+            </div>
+            <div className="space-y-2">
+              <Label>Danh mục cha (để trống = danh mục gốc)</Label>
+              <select
+                value={form.data.parentId}
+                onChange={(e) => setForm({ ...form, data: { ...form.data, parentId: e.target.value } })}
+                className="w-full rounded-md border border-input bg-background px-2 py-2 text-sm focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
+              >
+                <option value="">— Không có (danh mục gốc) —</option>
+                {sortCategoryTree(items)
+                  .filter((it) => it._id !== form.data._id)
+                  .map((it) => (
+                    <option key={it._id} value={it._id}>
+                      {'—'.repeat(it.depth)} {it.name}
+                    </option>
+                  ))}
+              </select>
             </div>
             <div className="flex items-center justify-between rounded-md border border-border p-3">
               <Label>Hoạt động</Label>

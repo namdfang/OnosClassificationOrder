@@ -128,3 +128,6 @@ tmp
 dist-prod/
 
 *.xlsx
+
+# Ảnh mockup/bảng size upload local disk (product-config.service.ts uploadProductImage)
+src/assets/uploads/

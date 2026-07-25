@@ -1,8 +1,8 @@
 import { Prop, raw, SchemaFactory } from '@nestjs/mongoose';
 import { assertSameType, DatabaseEntity, DatabaseEntityAbstract } from 'core';
 import type { HydratedDocument } from 'mongoose';
-import type { ProductConfig, ProductItemSpecific, ProductVariation } from 'shared';
-import { Status } from 'shared';
+import type { ProductConfig, ProductItemSpecific, ProductPrintArea, ProductVariation } from 'shared';
+import { getObjectValues, PRODUCT_PRINT_AREA_KEYS, ProductConfigStatus, Status } from 'shared';
 
 import type { FactoryDocument } from '../factory/factory.entity';
 import type { MachineTypeDocument } from '../machine-type/machine-type.entity';
@@ -15,6 +15,14 @@ export class ProductConfigEntity extends DatabaseEntityAbstract {
 
   @Prop({ required: true, trim: true, uppercase: true, index: true })
   shortName: string;
+
+  /** Mã SKU riêng của sản phẩm (KHÔNG phải SKU biến thể trong `variations[]`). */
+  @Prop({ trim: true, uppercase: true })
+  sku?: string;
+
+  /** Active = hiện catalog khách hàng, Inactive = ẩn catalog nhưng vẫn hiện quản trị, Hidden = ẩn cả 2 (KHÔNG xóa DB). */
+  @Prop({ type: String, default: ProductConfigStatus.Active, enum: getObjectValues(ProductConfigStatus), index: true })
+  status: ProductConfigStatus;
 
   @Prop({ trim: true })
   machineNumber?: string;
@@ -55,9 +63,9 @@ export class ProductConfigEntity extends DatabaseEntityAbstract {
   @Prop({ trim: true })
   printMethod?: string;
 
-  /** Vị trí in (free-text). */
-  @Prop({ trim: true })
-  printArea?: string;
+  /** Danh sách vị trí in — mảng key CỐ ĐỊNH (xem `PRODUCT_PRINT_AREA_KEYS`), map 1-1 sang `order.designs`, KHÔNG còn free-text. */
+  @Prop({ type: [String], enum: PRODUCT_PRINT_AREA_KEYS, default: undefined })
+  printArea?: ProductPrintArea;
 
   /** Ảnh/URL bảng size. */
   @Prop({ trim: true })
@@ -88,13 +96,15 @@ export class ProductConfigEntity extends DatabaseEntityAbstract {
   @Prop({ type: Number, min: 0 })
   length?: number;
 
-  /** Danh sách biến thể (màu/size) — SKU riêng từng biến thể, unique toàn hệ thống. */
+  /** Danh sách biến thể (VD: màu/size, tự đặt tên) — SKU riêng từng biến thể, unique toàn hệ thống. */
   @Prop({
     type: [
       raw({
         sku: { type: String, required: true, trim: true, uppercase: true },
-        color: { type: String, trim: true },
-        size: { type: String, trim: true },
+        attributes: {
+          type: [raw({ label: { type: String, required: true, trim: true }, value: { type: String, required: true, trim: true } })],
+          default: undefined,
+        },
         cost: { type: Number, min: 0 },
         nonShipCost: { type: Number, min: 0 },
         retailPrice: { type: Number, min: 0 },
@@ -118,6 +128,9 @@ export const ProductConfigSchema = SchemaFactory.createForClass(ProductConfigEnt
 
 // SKU biến thể unique toàn hệ thống (sparse — sản phẩm chưa có variations không bị chặn).
 ProductConfigSchema.index({ 'variations.sku': 1 }, { unique: true, sparse: true });
+
+// SKU sản phẩm (khác SKU biến thể) unique toàn hệ thống (sparse — sản phẩm chưa có sku không bị chặn).
+ProductConfigSchema.index({ sku: 1 }, { unique: true, sparse: true });
 
 ProductConfigSchema.virtual('machineType', {
   ref: 'MachineTypeEntity',

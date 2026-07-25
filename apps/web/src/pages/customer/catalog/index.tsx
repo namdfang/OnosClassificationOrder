@@ -108,7 +108,7 @@ function CustomerCatalog() {
                   {item.variations.slice(0, 4).map((v) => (
                     <div key={v.sku} className="flex items-center justify-between text-xs">
                       <span className="text-muted-foreground truncate">
-                        {[v.color, v.size].filter(Boolean).join(' / ') || v.sku}
+                        {(v.attributes || []).map((a) => a.value).join(' / ') || v.sku}
                       </span>
                       <span className="font-medium">
                         {v.discountedPrice != null && v.discountedPrice !== v.retailPrice ? (
