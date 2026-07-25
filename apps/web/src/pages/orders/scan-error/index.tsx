@@ -222,7 +222,7 @@ function ScanErrorPageContent() {
     [handleLookup],
   );
 
-  // Quét QR lỗi lần 1 (đã validate thuộc công đoạn user ở dialog công đoạn) →
+  // Quét mã lỗi lần 1 (đã validate thuộc công đoạn user ở dialog công đoạn) →
   // chuyển sang dialog gán lỗi với mã chọn sẵn.
   const onScanError = useCallback((code: string) => {
     beepScan();

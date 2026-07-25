@@ -1,7 +1,7 @@
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
+import ReactBarcode from 'react-barcode';
 import { Navigate } from 'react-router-dom';
-import { Eye, EyeOff, FileDown, Plus, Printer, QrCode, RotateCcw } from 'lucide-react';
-import { QRCodeCanvas, QRCodeSVG } from 'qrcode.react';
+import { Barcode as BarcodeIcon, Eye, EyeOff, FileDown, Plus, Printer, RotateCcw } from 'lucide-react';
 import type { FulfillmentStage as FulfillmentStageT, StageErrorReworkTarget, WorkshopConfig } from 'shared';
 import { FULFILLMENT_STAGE_LABELS, FULFILLMENT_STAGE_ORDER, FULFILLMENT_STAGES, FulfillmentStage } from 'shared';
 import { toast } from 'sonner';
@@ -19,7 +19,7 @@ import { Input } from '@/components/ui/input';
 
 import { handleAxiosError } from '@/utils';
 import { cn } from '@/utils/cn';
-import { errorQrPayload, SCAN_OK_CODE } from '@/utils/scanCodes';
+import { errorScanPayload, SCAN_OK_CODE } from '@/utils/scanCodes';
 
 import { usePermission } from '@/hooks/usePermission';
 
@@ -37,7 +37,7 @@ function targetOptionsFor(stage: FulfillmentStageT): StageErrorReworkTarget[] {
 
 // Kích thước trang nhãn A8 (52×74mm) — mỗi lỗi 1 trang trong PDF xuất ra.
 const A8_MM = { w: 52, h: 74 };
-const PX_PER_MM = 20; // vẽ label ở ~508dpi cho QR nét
+const PX_PER_MM = 20; // vẽ label ở ~508dpi cho barcode nét
 
 function wrapCanvasText(ctx: CanvasRenderingContext2D, text: string, maxWidth: number): string[] {
   const words = text.split(/\s+/).filter(Boolean);
@@ -121,7 +121,7 @@ function StageErrorsContent() {
         reworkTarget: target,
         stage: myStage ? undefined : stage,
       });
-      toast.success('Đã thêm lỗi — QR sẵn sàng để in.');
+      toast.success('Đã thêm lỗi — barcode sẵn sàng để in.');
       setName('');
       setTarget(null);
       afterMutate();
@@ -164,10 +164,11 @@ function StageErrorsContent() {
   };
 
   /**
-   * Vẽ 1 nhãn A8 (QR + tiêu đề + phụ đề + mã) lên canvas rồi trả PNG dataURL —
+   * Vẽ 1 nhãn A8 (barcode Code128 + tiêu đề + phụ đề + mã) lên canvas rồi trả PNG dataURL —
    * nhét nguyên ảnh vào trang PDF để né vấn đề font tiếng Việt của jsPDF.
+   * Barcode nguồn lấy từ canvas ẩn (react-barcode renderer="canvas") qua id wrapper.
    */
-  const drawA8Label = (qrCanvasId: string, title: string, subtitle: string, code: string): string => {
+  const drawA8Label = (barWrapId: string, title: string, subtitle: string, code: string): string => {
     const W = A8_MM.w * PX_PER_MM;
     const H = A8_MM.h * PX_PER_MM;
     const c = document.createElement('canvas');
@@ -180,16 +181,18 @@ function StageErrorsContent() {
     ctx.lineWidth = 4;
     ctx.strokeRect(10, 10, W - 20, H - 20);
 
-    const qrEl = document.getElementById(qrCanvasId) as HTMLCanvasElement | null;
-    const qrSize = 660;
-    const qy = 90;
-    if (qrEl) ctx.drawImage(qrEl, (W - qrSize) / 2, qy, qrSize, qrSize);
+    // Kéo giãn barcode full khổ ngang nhãn — giãn dọc/ngang đều không ảnh hưởng quét 1D.
+    const barEl = document.getElementById(barWrapId)?.querySelector('canvas');
+    const barW = W - 160;
+    const barH = 480;
+    const by = 150;
+    if (barEl) ctx.drawImage(barEl, (W - barW) / 2, by, barW, barH);
 
     ctx.fillStyle = '#000000';
     ctx.textAlign = 'center';
     ctx.font = 'bold 72px sans-serif';
     const lines = wrapCanvasText(ctx, title, W - 140).slice(0, 3);
-    let ty = qy + qrSize + 120;
+    let ty = by + barH + 130;
     for (const line of lines) {
       ctx.fillText(line, W / 2, ty);
       ty += 86;
@@ -205,15 +208,15 @@ function StageErrorsContent() {
 
   const drawLabel = (row: WorkshopConfig): string =>
     drawA8Label(
-      `qr-canvas-${row._id}`,
+      `bar-canvas-${row._id}`,
       row.name,
       `Đẩy về: ${targetLabel(row.reworkTarget as StageErrorReworkTarget)}`,
-      errorQrPayload(row),
+      errorScanPayload(row),
     );
 
   // Nhãn "✔ HOÀN THÀNH" (SCAN_OK_CODE) — luôn là trang đầu PDF, giống card đầu sheet in.
   const drawOkLabel = (): string =>
-    drawA8Label('qr-canvas-ok', '✔ HOÀN THÀNH', 'Chuyển đơn sang công đoạn sau', SCAN_OK_CODE);
+    drawA8Label('bar-canvas-ok', '✔ HOÀN THÀNH', 'Chuyển đơn sang công đoạn sau', SCAN_OK_CODE);
 
   const handleExportPdf = async () => {
     if (selectedRows.length === 0 || exporting) return;
@@ -226,7 +229,7 @@ function StageErrorsContent() {
         doc.addPage([A8_MM.w, A8_MM.h], 'portrait');
         doc.addImage(drawLabel(row), 'PNG', 0, 0, A8_MM.w, A8_MM.h);
       });
-      doc.save(`qr-loi-${stage}.pdf`);
+      doc.save(`barcode-loi-${stage}.pdf`);
       toast.success(`Đã xuất PDF: 1 nhãn OK + ${selectedRows.length} lỗi — mỗi nhãn 1 trang A8.`);
     } catch (err) {
       toast.error(`Xuất PDF thất bại: ${(err as Error).message}`);
@@ -241,13 +244,13 @@ function StageErrorsContent() {
       <div className="flex items-center justify-between gap-3 flex-wrap">
         <div className="flex items-center gap-3">
           <div className="w-10 h-10 rounded-lg bg-indigo-100 dark:bg-indigo-500/10 flex items-center justify-center text-indigo-600 dark:text-indigo-300">
-            <QrCode size={20} />
+            <BarcodeIcon size={20} />
           </div>
           <div>
             <h1 className="text-xl font-semibold">Danh mục lỗi công đoạn</h1>
             <p className="text-sm text-muted-foreground">
-              Mỗi công đoạn tự định nghĩa lỗi + đích đẩy về. Thêm xong in QR dán tại trạm — quét đơn rồi quét QR lỗi là
-              tự báo lỗi + đẩy về.
+              Mỗi công đoạn tự định nghĩa lỗi + đích đẩy về. Thêm xong in barcode dán tại trạm — quét đơn rồi quét mã
+              lỗi là tự báo lỗi + đẩy về.
             </p>
           </div>
         </div>
@@ -316,7 +319,7 @@ function StageErrorsContent() {
         <div className="flex justify-end">
           <Button onClick={handleCreate} disabled={!name.trim() || !target || saving}>
             {saving && <Spinner size={14} className="mr-2" />}
-            Thêm & tạo QR
+            Thêm & tạo Barcode
           </Button>
         </div>
       </div>
@@ -357,19 +360,19 @@ function StageErrorsContent() {
                   onChange={() => toggleSelect(row._id)}
                 />
                 <div className="shrink-0 rounded-md border bg-white p-1.5">
-                  <QRCodeSVG value={errorQrPayload(row)} size={64} />
+                  <ReactBarcode value={errorScanPayload(row)} format="CODE128" width={1} height={40} displayValue={false} margin={4} />
                 </div>
                 <div className="min-w-0 flex-1">
                   <div className="font-medium text-sm">{row.name}</div>
                   <div className="mt-0.5 flex items-center gap-2 text-xs text-muted-foreground flex-wrap">
-                    <code className="px-1 py-0.5 rounded bg-muted font-mono">{errorQrPayload(row)}</code>
+                    <code className="px-1 py-0.5 rounded bg-muted font-mono">{errorScanPayload(row)}</code>
                     <span className="inline-flex items-center gap-1 rounded bg-amber-100 dark:bg-amber-500/15 text-amber-700 dark:text-amber-300 px-1.5 py-0.5">
                       <RotateCcw size={10} /> Đẩy về {targetLabel(row.reworkTarget as StageErrorReworkTarget)}
                     </span>
                     {!row.isActive && <span className="text-rose-500">Đang ẩn</span>}
                   </div>
                 </div>
-                {/* Đã thêm là KHÔNG sửa được (QR đã in/đơn đã gán sẽ đổi nghĩa) — chỉ ẩn/hiện. */}
+                {/* Đã thêm là KHÔNG sửa được (barcode đã in/đơn đã gán sẽ đổi nghĩa) — chỉ ẩn/hiện. */}
                 <Button
                   size="sm"
                   variant="ghost"
@@ -385,32 +388,46 @@ function StageErrorsContent() {
         )}
       </div>
 
-      {/* Canvas QR ẩn (512px) — nguồn ảnh nét cho nhãn A8 khi xuất PDF. */}
+      {/* Canvas barcode ẩn (module 4px, cao 400px) — nguồn ảnh nét cho nhãn A8 khi xuất PDF.
+          react-barcode không nhận prop id → bọc div id rồi querySelector('canvas'). */}
       <div className="hidden">
-        <QRCodeCanvas id="qr-canvas-ok" value={SCAN_OK_CODE} size={512} />
+        <div id="bar-canvas-ok">
+          <ReactBarcode renderer="canvas" value={SCAN_OK_CODE} format="CODE128" width={4} height={400} displayValue={false} margin={0} />
+        </div>
         {rows.map((row) => (
-          <QRCodeCanvas key={row._id} id={`qr-canvas-${row._id}`} value={errorQrPayload(row)} size={512} />
+          <div key={row._id} id={`bar-canvas-${row._id}`}>
+            <ReactBarcode
+              renderer="canvas"
+              value={errorScanPayload(row)}
+              format="CODE128"
+              width={4}
+              height={400}
+              displayValue={false}
+              margin={0}
+            />
+          </div>
         ))}
       </div>
 
-      {/* Sheet in QR — chỉ hiện khi print (visibility trick + off-screen trên màn hình) */}
+      {/* Sheet in barcode — chỉ hiện khi print (visibility trick + off-screen trên màn hình) */}
       <style>{`@media print {
         body * { visibility: hidden !important; }
-        #stage-qr-sheet, #stage-qr-sheet * { visibility: visible !important; }
-        #stage-qr-sheet { position: absolute !important; left: 0 !important; top: 0 !important; width: 100% !important; }
+        #stage-barcode-sheet, #stage-barcode-sheet * { visibility: visible !important; }
+        #stage-barcode-sheet { position: absolute !important; left: 0 !important; top: 0 !important; width: 100% !important; }
       }`}</style>
-      <div id="stage-qr-sheet" className="fixed top-0 -left-[200vw] w-[190mm] bg-white text-black">
+      <div id="stage-barcode-sheet" className="fixed top-0 -left-[200vw] w-[190mm] bg-white text-black">
         <div className="p-6">
           <h2 className="text-lg font-bold mb-1">
-            Bảng QR công đoạn: {FULFILLMENT_STAGE_LABELS[stage]}
+            Bảng mã lỗi công đoạn: {FULFILLMENT_STAGE_LABELS[stage]}
           </h2>
           <p className="text-xs mb-4">
             Quét barcode ĐƠN trước → quét 1 mã dưới đây. "{SCAN_OK_CODE}" = hoàn thành công đoạn; mã lỗi = báo lỗi + tự
             đẩy về công đoạn ghi trên nhãn.
           </p>
-          <div className="grid grid-cols-3 gap-4">
+          {/* 2 cột (không phải 3 như QR cũ) — barcode 1D cần bề ngang rộng để module đủ lớn cho máy quét. */}
+          <div className="grid grid-cols-2 gap-4">
             <div className="border-2 border-black rounded-lg p-3 flex flex-col items-center gap-2 break-inside-avoid">
-              <QRCodeSVG value={SCAN_OK_CODE} size={140} />
+              <ReactBarcode value={SCAN_OK_CODE} format="CODE128" width={2} height={70} displayValue={false} margin={0} />
               <div className="text-base font-bold text-center">✔ HOÀN THÀNH</div>
               <div className="text-[10px] text-center">Chuyển đơn sang công đoạn sau</div>
             </div>
@@ -419,11 +436,11 @@ function StageErrorsContent() {
                 key={row._id}
                 className="border border-black rounded-lg p-3 flex flex-col items-center gap-2 break-inside-avoid"
               >
-                <QRCodeSVG value={errorQrPayload(row)} size={140} />
+                <ReactBarcode value={errorScanPayload(row)} format="CODE128" width={1.4} height={70} displayValue={false} margin={0} />
                 <div className="text-sm font-bold text-center leading-tight">{row.name}</div>
                 <div className="text-[10px] text-center">
                   Đẩy về: {targetLabel(row.reworkTarget as StageErrorReworkTarget)} ·{' '}
-                  <span className="font-mono">{errorQrPayload(row)}</span>
+                  <span className="font-mono">{errorScanPayload(row)}</span>
                 </div>
               </div>
             ))}

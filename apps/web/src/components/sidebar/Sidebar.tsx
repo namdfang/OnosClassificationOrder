@@ -3,6 +3,7 @@ import { Link, useLocation, useNavigate } from 'react-router-dom';
 import {
   AlertTriangle,
   BarChart3,
+  Barcode,
   Bell,
   Briefcase,
   Building2,
@@ -18,7 +19,6 @@ import {
   MapPin,
   Package,
   Palette,
-  QrCode,
   ScanLine,
   Scissors,
   Settings,
@@ -155,7 +155,7 @@ const NAV_GROUPS: NavGroup[] = [
             key: 'orders-stage-errors',
             label: 'Danh mục lỗi công đoạn',
             to: PATHS.ORDERS_STAGE_ERRORS,
-            icon: <QrCode size={14} />,
+            icon: <Barcode size={14} />,
             perm: 'page.stage_errors',
           },
           {
