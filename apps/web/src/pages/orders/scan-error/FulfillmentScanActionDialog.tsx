@@ -3,6 +3,7 @@ import { Trans, useTranslation } from 'react-i18next';
 import { Link } from 'react-router-dom';
 import type { TFunction } from 'i18next';
 import {
+  Barcode,
   CheckCircle2,
   Clock,
   ExternalLink,
@@ -14,7 +15,6 @@ import {
   Palette,
   PlayCircle,
   Plus,
-  QrCode,
   RotateCw,
   Ruler,
   ScanLine,
@@ -76,7 +76,7 @@ interface Props {
   /** User bấm "Báo lỗi" → page chuyển sang dialog gán lỗi. */
   onReportError: () => void;
   /**
-   * Quét QR lỗi (`E-<code>`) hợp lệ (thuộc công đoạn của user) → page chuyển
+   * Quét mã lỗi (`E-<code>`) hợp lệ (thuộc công đoạn của user) → page chuyển
    * sang modal gán lỗi với mã đã chọn sẵn, chờ quét lần 2 xác nhận.
    */
   onScanError?: (code: string) => void;
@@ -182,7 +182,7 @@ export function FulfillmentScanActionDialog({
 
   const myStageLabel = getStageLabel(t, myStage);
 
-  // Danh mục lỗi CỦA CÔNG ĐOẠN user (Stage Error Catalog) — validate QR `E-<code>`
+  // Danh mục lỗi CỦA CÔNG ĐOẠN user (Stage Error Catalog) — validate mã `E-<code>`
   // trước khi handoff sang modal gán lỗi (luồng xác nhận 2 lần quét).
   const errorConfigs = useWorkshopConfigStore(
     (s) => s.byCategory[WorkshopConfigCategory.ProductionError] || [],
@@ -219,7 +219,7 @@ export function FulfillmentScanActionDialog({
   };
 
   /**
-   * Quét QR lỗi lần 1 → KHÔNG ghi nhận ngay. Validate mã thuộc danh mục công
+   * Quét mã lỗi lần 1 → KHÔNG ghi nhận ngay. Validate mã thuộc danh mục công
    * đoạn của user → handoff sang modal gán lỗi (mã đã chọn sẵn); ở đó quét lần
    * 2 CÙNG MÃ (hoặc Enter) mới ghi nhận + đẩy về — chọn nhầm còn đổi được.
    */
@@ -497,7 +497,7 @@ export function FulfillmentScanActionDialog({
                   <GuideStep
                     step={1}
                     tone="rose"
-                    icon={<QrCode size={20} />}
+                    icon={<Barcode size={20} />}
                     title={t('fulfillmentDialog.errorStep1Title')}
                     desc={t('fulfillmentDialog.errorStep1Desc')}
                   />
@@ -525,7 +525,7 @@ export function FulfillmentScanActionDialog({
                   <GuideStep
                     step={1}
                     tone="rose"
-                    icon={<QrCode size={20} />}
+                    icon={<Barcode size={20} />}
                     title={t('fulfillmentDialog.errorStep1Title')}
                     desc={t('fulfillmentDialog.farErrorStep1Desc')}
                   />

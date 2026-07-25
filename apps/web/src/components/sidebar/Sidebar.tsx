@@ -5,6 +5,7 @@ import type { TFunction } from 'i18next';
 import {
   AlertTriangle,
   BarChart3,
+  Barcode,
   Bell,
   Briefcase,
   Building2,
@@ -20,7 +21,6 @@ import {
   MapPin,
   Package,
   Palette,
-  QrCode,
   ScanLine,
   Scissors,
   Settings,
@@ -163,7 +163,7 @@ function buildNavGroups(t: TFunction<'layout'>): NavGroup[] {
               key: 'orders-stage-errors',
               label: t('sidebar.orders.stageErrors'),
               to: PATHS.ORDERS_STAGE_ERRORS,
-              icon: <QrCode size={14} />,
+              icon: <Barcode size={14} />,
               perm: 'page.stage_errors',
             },
             {

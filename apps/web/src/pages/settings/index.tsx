@@ -4,6 +4,7 @@ import { Settings as SettingsIcon } from 'lucide-react';
 
 import CustomerAssignmentConfig from '@/components/settings/CustomerAssignmentConfig';
 import DesignerAssignmentConfig from '@/components/settings/DesignerAssignmentConfig';
+import ProductFactoryKanban from '@/components/settings/ProductFactoryKanban';
 
 import { usePermission } from '@/hooks/usePermission';
 
@@ -31,6 +32,9 @@ export default function Settings() {
           </div>
           <div className="bg-white dark:bg-slate-800 rounded-2xl p-6 border border-slate-100 dark:border-slate-700/60">
             <DesignerAssignmentConfig />
+          </div>
+          <div className="bg-white dark:bg-slate-800 rounded-2xl p-6 border border-slate-100 dark:border-slate-700/60">
+            <ProductFactoryKanban />
           </div>
         </div>
       ) : (

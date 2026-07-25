@@ -1,6 +1,6 @@
-# Stage Error Catalog — Danh mục lỗi theo công đoạn + Quét 2 bước (QR)
+# Stage Error Catalog — Danh mục lỗi theo công đoạn + Quét 2 bước (Barcode)
 
-> **File FE:** `apps/web/src/pages/orders/stage-errors/index.tsx` (trang danh mục + in QR) + `apps/web/src/utils/scanCodes.ts` (parse mã / beep / resolve đích) + `apps/web/src/pages/orders/scan-error/{index,FulfillmentScanActionDialog,OrderErrorScanDialog}.tsx` (luồng quét 2 bước)
+> **File FE:** `apps/web/src/pages/orders/stage-errors/index.tsx` (trang danh mục + in barcode) + `apps/web/src/utils/scanCodes.ts` (parse mã / beep / resolve đích) + `apps/web/src/pages/orders/scan-error/{index,FulfillmentScanActionDialog,OrderErrorScanDialog}.tsx` (luồng quét 2 bước)
 > **File BE:** `apps/api/src/modules/workshop-config/` (entity + service + controller — endpoints `stage-errors`)
 > **Route:** `/ffm/orders/stage-errors`
 > **API:** `GET|POST /v1/workshop-config/stage-errors`, `PATCH /v1/workshop-config/stage-errors/:id`
@@ -10,11 +10,11 @@
 Mục tiêu: công nhân fulfillment thao tác **100% bằng máy quét, không chạm máy tính**:
 
 1. Quét barcode **đơn** (`N-<productionId>`) → hệ thống hiện đơn đang chờ hành động.
-2. Quét tiếp **mã hành động** (in sẵn trên bảng QR dán tại trạm):
+2. Quét tiếp **mã hành động** (in sẵn trên bảng barcode dán tại trạm):
    - Mã **`OK`** → tự `start` + `complete` công đoạn của mình → đơn sang công đoạn sau.
    - Mã **lỗi `E-<code>`** → tự `setProductionError` với mã lỗi + **đích đẩy về cấu hình sẵn** — không chọn gì thêm.
 
-Mỗi công đoạn có **danh mục lỗi riêng** do chính công nhân công đoạn đó tự thêm. Mỗi lỗi khai báo **đích đẩy về** (= nguồn lỗi): Soát tool / Designer / 1 stage đứng TRƯỚC công đoạn sở hữu. Thêm lỗi xong → QR sinh ngay (client-side, lib `qrcode.react`) → nút "In bảng QR" ra sheet A4.
+Mỗi công đoạn có **danh mục lỗi riêng** do chính công nhân công đoạn đó tự thêm. Mỗi lỗi khai báo **đích đẩy về** (= nguồn lỗi): Soát tool / Designer / 1 stage đứng TRƯỚC công đoạn sở hữu. Thêm lỗi xong → **barcode Code128** sinh ngay (client-side, lib `react-barcode` — đã đổi từ QR sang barcode 1D vì nhiều máy quét ở xưởng không đọc được QR; **payload `E-<code>` giữ nguyên** nên luồng quét + BE không đổi gì) → nút "In" ra sheet A4.
 
 ## 2. Luồng hoạt động
 
@@ -22,10 +22,10 @@ Mỗi công đoạn có **danh mục lỗi riêng** do chính công nhân công 
 
 - Công nhân Fulfillment: **khóa vào công đoạn của mình** (`profile.fulfillmentStage`); Admin/Manager: chọn 1 trong 6 stage.
 - Thêm lỗi: nhập tên + chọn đích đẩy về (chip: Soát tool / Designer / các stage trước). Code BE **tự sinh** `se-<stage>-<n>`.
-- **Đã thêm là KHÔNG SỬA được** (tên/đích cố định — QR đã in + đơn đã gán sẽ đổi nghĩa nếu sửa): chỉ cho **ẩn/hiện** (`isActive`). Muốn "sửa" → ẩn lỗi cũ + thêm lỗi mới. **KHÔNG xóa cứng** — lỗi đã từng gán vào đơn phải giữ để thống kê cũ resolve được tên.
+- **Đã thêm là KHÔNG SỬA được** (tên/đích cố định — barcode đã in + đơn đã gán sẽ đổi nghĩa nếu sửa): chỉ cho **ẩn/hiện** (`isActive`). Muốn "sửa" → ẩn lỗi cũ + thêm lỗi mới. **KHÔNG xóa cứng** — lỗi đã từng gán vào đơn phải giữ để thống kê cũ resolve được tên.
 - **Chọn lỗi (checkbox từng row + chọn tất cả)** rồi thao tác bằng 2 nút (disabled khi chưa chọn):
-  - **"In (n)"**: `window.print()` sheet A4 gồm mã `OK` chung + QR các lỗi ĐÃ CHỌN (visibility-trick `@media print` + container off-screen `#stage-qr-sheet`).
-  - **"Xuất PDF (n)"**: **trang ĐẦU luôn là nhãn "✔ HOÀN THÀNH"** (`SCAN_OK_CODE`, canvas ẩn `#qr-canvas-ok`, `drawOkLabel()` — mirror card OK đứng đầu sheet in), sau đó mỗi lỗi đã chọn = **1 trang A8 (52×74mm)** — nhãn vẽ trên canvas qua helper chung `drawA8Label(qrCanvasId, title, subtitle, code)` (viền + QR 660px từ `QRCodeCanvas` ẩn 512px + tiêu đề bold wrap ≤3 dòng + phụ đề + code mono) rồi `addImage` nguyên trang vào `jsPDF` (né vấn đề font tiếng Việt của jsPDF; lib import lazy). File `qr-loi-<stage>.pdf`.
+  - **"In (n)"**: `window.print()` sheet A4 gồm mã `OK` chung + barcode các lỗi ĐÃ CHỌN, grid **2 cột** (barcode 1D cần bề ngang rộng — không phải 3 cột như QR cũ; visibility-trick `@media print` + container off-screen `#stage-barcode-sheet`).
+  - **"Xuất PDF (n)"**: **trang ĐẦU luôn là nhãn "✔ HOÀN THÀNH"** (`SCAN_OK_CODE`, canvas ẩn trong wrapper `#bar-canvas-ok`, `drawOkLabel()` — mirror card OK đứng đầu sheet in), sau đó mỗi lỗi đã chọn = **1 trang A8 (52×74mm)** — nhãn vẽ trên canvas qua helper chung `drawA8Label(barWrapId, title, subtitle, code)` (viền + barcode kéo giãn 880×480px lấy từ canvas ẩn `react-barcode renderer="canvas"` bọc trong `div#bar-canvas-<id>` vì lib không nhận prop `id` + tiêu đề bold wrap ≤3 dòng + phụ đề + code mono) rồi `addImage` nguyên trang vào `jsPDF` (né vấn đề font tiếng Việt của jsPDF; lib import lazy). File `barcode-loi-<stage>.pdf`.
 
 ### 2.2 Quét 2 bước (`/ffm/orders/scan-error`)
 
@@ -72,9 +72,9 @@ Format mã quét (`utils/scanCodes.ts`): đơn `N-…` (có sẵn) · hoàn thà
 
 ## 4. UI Components
 
-- **`pages/orders/stage-errors/index.tsx`**: header + nút In bảng QR; chọn stage (khóa với công nhân); form thêm (Input tên + `TargetChip`); list row = QR 64px + tên + code mono + badge "Đẩy về X" + sửa inline / ẩn-hiện; sheet in `#stage-qr-sheet` (QR 140px, OK card viền đậm).
+- **`pages/orders/stage-errors/index.tsx`**: header + nút In bảng barcode; chọn stage (khóa với công nhân); form thêm (Input tên + `TargetChip` + nút "Thêm & tạo Barcode"); list row = barcode cao 40px + tên + code mono + badge "Đẩy về X" + ẩn-hiện; sheet in `#stage-barcode-sheet` (barcode cao 70px, grid 2 cột, OK card viền đậm).
 - **`pages/orders/scan-error/ScanGuide.tsx`**: `GuideStep` (số bước + icon + title `text-lg` + desc `text-base`, 4 tone màu) + `GuideZone` (khung VÙNG viền đậm 2px + tiêu đề UPPERCASE + slot `action` góc phải) — hướng dẫn quét CHỮ TO **chia vùng** trong CẢ 2 modal: `FulfillmentScanActionDialog` task-của-mình = vùng "✔ Hoàn thành" (quét OK) + vùng "⚠ Báo lỗi — quét 2 lần" (2 bước + **link "Thêm lỗi ở đây"** → `/ffm/orders/stage-errors`); đơn-xa = vùng "Báo lỗi đơn này" (+link) + vùng "Quét tiếp". `OrderErrorScanDialog` = 1 vùng "Cách báo lỗi — quét 2 lần" (3 bước + link thêm lỗi) đầu cột phải.
-- **Sidebar**: entry "Danh mục lỗi công đoạn" (icon `QrCode`) trong group Quản lý đơn, perm `page.stage_errors`.
+- **Sidebar**: entry "Danh mục lỗi công đoạn" (icon `Barcode`) trong group Quản lý đơn, perm `page.stage_errors`.
 - Sau mỗi mutation: refetch list + `useWorkshopConfigStore.load(true)` để luồng quét resolve được mã mới ngay.
 
 ## 5. Backend logic
@@ -89,7 +89,7 @@ Luồng quét KHÔNG thêm endpoint order nào — tái dùng `POST /orders/:id/
 
 ## 6. Performance notes
 
-- QR render client-side (SVG, `qrcode.react`) — 0 request; danh mục ~vài chục row/stage, 1 query indexed `{category, stage}`.
+- Barcode render client-side (SVG Code128, `react-barcode`/JsBarcode) — 0 request; danh mục ~vài chục row/stage, 1 query indexed `{category, stage}`.
 - Quét lỗi = đúng 1 request `setProductionError` (trước đây: mở dialog + 3-4 click + submit).
 
 ## 7. Permissions
@@ -105,7 +105,7 @@ Luồng quét KHÔNG thêm endpoint order nào — tái dùng `POST /orders/:id/
 | Case | Hành vi |
 |---|---|
 | Quét `OK`/`E-` khi chưa quét đơn | Beep lỗi + toast "Hãy quét mã ĐƠN trước". |
-| Quét `E-` mã không tồn tại / đã ẩn / KHÔNG thuộc công đoạn của người quét | Beep lỗi + toast "không thuộc công đoạn X — kiểm tra bảng QR của trạm". Store chỉ chứa lỗi active. |
+| Quét `E-` mã không tồn tại / đã ẩn / KHÔNG thuộc công đoạn của người quét | Beep lỗi + toast "không thuộc công đoạn X — kiểm tra bảng mã lỗi của trạm". Store chỉ chứa lỗi active. |
 | Quét `E-` lần 1 rồi quét mã khác | Đổi lựa chọn sang lỗi mới (reset nhịp xác nhận) — chọn nhầm sửa được. |
 | Quét `E-` lần 2 CÙNG mã / Enter tay | Ghi nhận lỗi + đẩy về (chỉ lúc này mới gọi API). |
 | Máy quét gõ mã vào textarea note đang focus | Burst-detector cắt chuỗi khỏi note + xử lý như mã quét. |
@@ -122,3 +122,4 @@ Luồng quét KHÔNG thêm endpoint order nào — tái dùng `POST /orders/:id/
 - **2026-07-21** — Initial: entity + DTOs (`stage`/`reworkTarget`), 3 endpoint stage-errors, trang `/ffm/orders/stage-errors` + in QR, luồng quét 2 bước (OK / E- / N- trong dialog), beep WebAudio, perm `page.stage_errors` (preset Fulfillment).
 - **2026-07-21 (update)** — `OrderErrorScanDialog` viết lại: mã lỗi chỉ theo danh mục công đoạn ngữ cảnh + link thêm lỗi khi rỗng; nguồn/đích read-only theo config (bỏ chọn tay); bỏ lỗi `other` khỏi luồng quét; note luôn optional.
 - **2026-07-21 (update 2)** — Luồng **xác nhận 2 lần quét**: quét lỗi lần 1 = chọn (validate thuộc công đoạn người quét, handoff `onScanError` → `initialCode`), lần 2 cùng mã / Enter = ghi nhận, mã khác = đổi lựa chọn; dừng 1 nhịp nhập mô tả giữa 2 lần; burst-detector cho textarea note; `FulfillmentScanActionDialog` bỏ submit lỗi trực tiếp (bỏ prop `onErrorSaved`, thêm `onScanError`).
+- **2026-07-25** — **QR → Barcode Code128** (nhiều máy quét ở xưởng chỉ đọc 1D): render bằng `react-barcode` (đã có sẵn dep, thay `qrcode.react` — dep cũ vẫn còn trong package.json nhưng không còn chỗ dùng); payload `E-<code>`/`OK` **không đổi** nên `parseScanCode`, luồng quét 2 bước và BE giữ nguyên 100%. Sheet in đổi grid 3→2 cột, id `#stage-qr-sheet`→`#stage-barcode-sheet`; PDF `qr-loi-*`→`barcode-loi-*`, nhãn A8 vẽ barcode kéo giãn thay QR vuông; rename `errorQrPayload`→`errorScanPayload` (`utils/scanCodes.ts`); icon `QrCode`→`Barcode` (Sidebar + 2 dialog quét + header trang danh mục); text UI "QR lỗi"→"mã lỗi".
