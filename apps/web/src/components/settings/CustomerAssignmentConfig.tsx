@@ -1,4 +1,5 @@
 import React, { useEffect, useMemo, useState } from 'react';
+import { useTranslation } from 'react-i18next';
 import { List, RefreshCw, Save, UserPlus, Users } from 'lucide-react';
 import type { Customer, CustomerAssignmentConfig as Config } from 'shared';
 import { toast } from 'sonner';
@@ -34,6 +35,7 @@ function snapshot(enabled: boolean, alloc: AllocState): string {
 }
 
 export default function CustomerAssignmentConfig() {
+  const { t } = useTranslation(['customerFactoryAssignment', 'common']);
   const [factories, setFactories] = useState<FactoryLite[]>([]);
   const [customers, setCustomers] = useState<Customer[]>([]);
   const [alloc, setAlloc] = useState<AllocState>({});
@@ -107,7 +109,7 @@ export default function CustomerAssignmentConfig() {
       if (!anchor) return;
       const href = anchor.getAttribute('href') || '';
       if (!href || href.startsWith('#')) return;
-      const ok = window.confirm('Bạn có thay đổi gán khách/xưởng CHƯA LƯU. Rời trang sẽ mất thay đổi — vẫn thoát?');
+      const ok = window.confirm(t('leaveConfirm'));
       if (!ok) {
         e.preventDefault();
         e.stopPropagation();
@@ -119,7 +121,7 @@ export default function CustomerAssignmentConfig() {
       window.removeEventListener('beforeunload', onBeforeUnload);
       document.removeEventListener('click', onClickCapture, true);
     };
-  }, [dirty]);
+  }, [dirty, t]);
 
   const handleSync = async () => {
     try {
@@ -127,7 +129,7 @@ export default function CustomerAssignmentConfig() {
       const res = await RepositoryRemote.customer.sync();
       const d = res.data?.data as { created: number; total: number };
       await loadCustomers();
-      toast.success(`Sync xong: +${d?.created ?? 0} khách mới (tổng ${d?.total ?? 0})`);
+      toast.success(t('toasts.syncSuccess', { created: d?.created ?? 0, total: d?.total ?? 0 }));
     } catch (err) {
       handleAxiosError(err);
     } finally {
@@ -137,14 +139,14 @@ export default function CustomerAssignmentConfig() {
 
   const handleAdd = async () => {
     if (!newSku.trim()) {
-      toast.error('User SKU không được để trống');
+      toast.error(t('toasts.skuRequired'));
       return;
     }
     try {
       setAdding(true);
       await RepositoryRemote.customer.create({ userSku: newSku.trim(), userEmail: newEmail.trim() });
       await loadCustomers();
-      toast.success('Đã thêm khách hàng');
+      toast.success(t('toasts.addSuccess'));
       setAddOpen(false);
       setNewSku('');
       setNewEmail('');
@@ -166,7 +168,7 @@ export default function CustomerAssignmentConfig() {
       setSaving(true);
       await RepositoryRemote.customerAssignment.saveConfig(payload);
       setBaseline(snapshot(enabled, alloc));
-      toast.success('Đã lưu cấu hình gán xưởng theo khách');
+      toast.success(t('toasts.saveSuccess'));
     } catch (err) {
       handleAxiosError(err);
     } finally {
@@ -190,25 +192,19 @@ export default function CustomerAssignmentConfig() {
             <Users size={18} className="text-emerald-600 dark:text-emerald-400" />
           </div>
           <div>
-            <h2 className="text-base font-semibold text-slate-800 dark:text-slate-100">
-              Ưu tiên gán xưởng theo khách hàng
-            </h2>
-            <p className="text-xs text-slate-500 dark:text-slate-400">
-              Khi bật, đơn của khách đã gán sẽ ép về xưởng tương ứng lúc import (ưu tiên hơn cấu hình sản phẩm). Khách
-              chưa gán vẫn theo cấu hình sản phẩm. Mỗi khách chỉ thuộc 1 xưởng — kéo thả khách giữa các cột rồi bấm
-              Lưu.
-            </p>
+            <h2 className="text-base font-semibold text-slate-800 dark:text-slate-100">{t('title')}</h2>
+            <p className="text-xs text-slate-500 dark:text-slate-400">{t('subtitle')}</p>
           </div>
         </div>
         <div className="flex items-center gap-2">
           {dirty && (
             <span className="text-[11px] font-medium text-amber-600 dark:text-amber-400 whitespace-nowrap">
-              ● Chưa lưu
+              ● {t('unsavedBadge')}
             </span>
           )}
           <Button size="sm" onClick={handleSave} disabled={saving}>
             {saving ? <Spinner size={13} className="mr-1.5" /> : <Save size={14} />}
-            Lưu
+            {t('actions.save', { ns: 'common' })}
           </Button>
         </div>
       </div>
@@ -217,24 +213,24 @@ export default function CustomerAssignmentConfig() {
         <div className="flex items-center gap-2">
           <Switch checked={enabled} onCheckedChange={setEnabled} />
           <span className="text-sm font-medium text-slate-700 dark:text-slate-200">
-            {enabled ? 'Đang bật' : 'Đang tắt'}
+            {enabled ? t('enabledOn') : t('enabledOff')}
           </span>
         </div>
         <div className="flex-1" />
         <Button size="sm" variant="outline" onClick={handleSync} disabled={syncing}>
           {syncing ? <Spinner size={13} className="mr-1.5" /> : <RefreshCw size={14} />}
-          Sync khách hàng
+          {t('syncCustomers')}
         </Button>
         <Button size="sm" variant="outline" onClick={() => setAddOpen(true)}>
-          <UserPlus size={14} /> Thêm khách
+          <UserPlus size={14} /> {t('addCustomer')}
         </Button>
         <Button size="sm" variant="outline" onClick={() => setListOpen(true)}>
-          <List size={14} /> Danh sách khách
+          <List size={14} /> {t('customerList')}
         </Button>
-        <span className="text-xs text-slate-400">{customers.length} khách</span>
+        <span className="text-xs text-slate-400">{t('customerCount', { count: customers.length })}</span>
       </div>
 
-      {factories.length === 0 && <p className="text-sm text-slate-500 dark:text-slate-400">Chưa có xưởng nào.</p>}
+      {factories.length === 0 && <p className="text-sm text-slate-500 dark:text-slate-400">{t('noFactories')}</p>}
 
       {factories.length > 0 && (
         <CustomerFactoryKanban factories={factories} customers={customers} alloc={alloc} onMove={moveCustomer} />
@@ -245,29 +241,31 @@ export default function CustomerAssignmentConfig() {
       <Dialog open={addOpen} onOpenChange={setAddOpen}>
         <DialogContent>
           <DialogHeader>
-            <DialogTitle>Thêm khách hàng</DialogTitle>
+            <DialogTitle>{t('addDialog.title')}</DialogTitle>
           </DialogHeader>
           <div className="space-y-3 pt-1">
             <div className="space-y-1">
-              <label className="text-xs font-medium text-slate-600 dark:text-slate-300">User SKU *</label>
-              <Input value={newSku} onChange={(e) => setNewSku(e.target.value)} placeholder="VD: HB-16459" />
+              <label className="text-xs font-medium text-slate-600 dark:text-slate-300">{t('addDialog.skuLabel')}</label>
+              <Input value={newSku} onChange={(e) => setNewSku(e.target.value)} placeholder={t('addDialog.skuPlaceholder')} />
             </div>
             <div className="space-y-1">
-              <label className="text-xs font-medium text-slate-600 dark:text-slate-300">User email</label>
+              <label className="text-xs font-medium text-slate-600 dark:text-slate-300">
+                {t('addDialog.emailLabel')}
+              </label>
               <Input
                 value={newEmail}
                 onChange={(e) => setNewEmail(e.target.value)}
-                placeholder="VD: customer@example.com"
+                placeholder={t('addDialog.emailPlaceholder')}
               />
             </div>
           </div>
           <DialogFooter>
             <Button variant="outline" onClick={() => setAddOpen(false)} disabled={adding}>
-              Hủy
+              {t('actions.cancel', { ns: 'common' })}
             </Button>
             <Button onClick={handleAdd} disabled={adding}>
               {adding ? <Spinner size={13} className="mr-1.5" /> : null}
-              Thêm
+              {t('addDialog.submit')}
             </Button>
           </DialogFooter>
         </DialogContent>

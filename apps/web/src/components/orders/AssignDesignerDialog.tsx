@@ -1,4 +1,5 @@
 import React, { useEffect, useMemo, useState } from 'react';
+import { Trans, useTranslation } from 'react-i18next';
 import { AlertTriangle, CheckCircle2, ChevronRight, UserPlus } from 'lucide-react';
 import type { DesignerTeamMember } from 'shared';
 import { Status } from 'shared';
@@ -40,6 +41,7 @@ type Preview = {
 };
 
 export function AssignDesignerDialog({ open, selectedIds, onClose, onApplied }: Props) {
+  const { t } = useTranslation('orders');
   const [preview, setPreview] = useState<Preview | null>(null);
   const [loading, setLoading] = useState(false);
   const [designers, setDesigners] = useState<DesignerTeamMember[]>([]);
@@ -78,7 +80,7 @@ export function AssignDesignerDialog({ open, selectedIds, onClose, onApplied }: 
 
   const handleSubmit = async (force: boolean, skipUnreviewed = false) => {
     if (!selectedUserId) {
-      toast.error('Chọn designer trước.');
+      toast.error(t('dialogs.assignDesigner.chooseDesignerFirst'));
       return;
     }
     try {
@@ -94,18 +96,19 @@ export function AssignDesignerDialog({ open, selectedIds, onClose, onApplied }: 
         modified: number;
         skipped: { orderId: string; productionId: string; reason: string }[];
       };
-      const msg = `Đã gán ${data.modified}/${data.matched} đơn`;
+      const msg = t('dialogs.assignDesigner.assignedMsg', { modified: data.modified, matched: data.matched });
       if (data.skipped.length === 0) {
         toast.success(msg);
       } else {
-        toast.warning(`${msg}. ${data.skipped.length} đơn bị skip — xem chi tiết.`, {
+        toast.warning(t('dialogs.assignDesigner.skipWarning', { msg, count: data.skipped.length }), {
           duration: 6000,
         });
         // Show first few skipped reasons in a separate toast.
         const sample = data.skipped.slice(0, 5);
         const sampleText = sample.map((s) => `• ${s.productionId}: ${s.reason}`).join('\n');
-        const more = data.skipped.length > 5 ? `\n…và ${data.skipped.length - 5} đơn khác` : '';
-        toast.message('Đơn bị skip', { description: sampleText + more, duration: 10000 });
+        const more =
+          data.skipped.length > 5 ? t('dialogs.assignDesigner.andMore', { count: data.skipped.length - 5 }) : '';
+        toast.message(t('dialogs.assignDesigner.skippedTitle'), { description: sampleText + more, duration: 10000 });
       }
       onApplied();
       onClose();
@@ -120,7 +123,7 @@ export function AssignDesignerDialog({ open, selectedIds, onClose, onApplied }: 
     <Dialog open={open} onOpenChange={(o) => !o && !submitting && onClose()}>
       <DialogContent className="max-w-lg">
         <DialogHeader>
-          <DialogTitle>Gán designer cho {selectedIds.length} đơn</DialogTitle>
+          <DialogTitle>{t('dialogs.assignDesigner.title', { count: selectedIds.length })}</DialogTitle>
         </DialogHeader>
 
         {loading ? (
@@ -131,28 +134,49 @@ export function AssignDesignerDialog({ open, selectedIds, onClose, onApplied }: 
           <div className="space-y-4">
             {/* Status breakdown */}
             <div>
-              <p className="text-xs text-muted-foreground mb-2">Trạng thái hiện tại:</p>
+              <p className="text-xs text-muted-foreground mb-2">{t('dialogs.assignDesigner.currentStatus')}</p>
               <div className="grid grid-cols-3 gap-2 text-xs">
-                <StatBox label="Chưa gán" value={preview.byStatus.unassigned} cls="text-zinc-600 dark:text-zinc-300" />
-                <StatBox label="Đã gán" value={preview.byStatus.assigned} cls="text-zinc-600 dark:text-zinc-300" />
                 <StatBox
-                  label="Không làm được"
+                  label={t('dialogs.assignDesigner.statusUnassigned')}
+                  value={preview.byStatus.unassigned}
+                  cls="text-zinc-600 dark:text-zinc-300"
+                />
+                <StatBox
+                  label={t('dialogs.assignDesigner.statusAssigned')}
+                  value={preview.byStatus.assigned}
+                  cls="text-zinc-600 dark:text-zinc-300"
+                />
+                <StatBox
+                  label={t('dialogs.assignDesigner.statusRejected')}
                   value={preview.byStatus.rejected}
                   cls="text-rose-600 dark:text-rose-400"
                 />
                 <StatBox
-                  label="Đang làm"
+                  label={t('dialogs.assignDesigner.statusInProgress')}
                   value={preview.byStatus.inProgress}
                   cls="text-indigo-600 dark:text-indigo-400"
                 />
-                <StatBox label="Đã xong" value={preview.byStatus.done} cls="text-emerald-600 dark:text-emerald-400" />
-                <StatBox label="Cần làm lại" value={preview.byStatus.rework} cls="text-amber-600 dark:text-amber-400" />
+                <StatBox
+                  label={t('dialogs.assignDesigner.statusDone')}
+                  value={preview.byStatus.done}
+                  cls="text-emerald-600 dark:text-emerald-400"
+                />
+                <StatBox
+                  label={t('dialogs.assignDesigner.statusRework')}
+                  value={preview.byStatus.rework}
+                  cls="text-amber-600 dark:text-amber-400"
+                />
               </div>
               {preview.blockedCount > 0 && (
                 <div className="mt-2 flex items-start gap-2 text-[11px] text-amber-700 dark:text-amber-300 bg-amber-50 dark:bg-amber-900/20 rounded p-2">
                   <AlertTriangle size={12} className="shrink-0 mt-px" />
                   <span>
-                    <strong>{preview.blockedCount}</strong> đơn đang in-progress/done — sẽ bị skip khi gán.
+                    <Trans
+                      i18nKey="dialogs.assignDesigner.blockedMsg"
+                      ns="orders"
+                      values={{ count: preview.blockedCount }}
+                      components={{ strong: <strong /> }}
+                    />
                   </span>
                 </div>
               )}
@@ -160,8 +184,12 @@ export function AssignDesignerDialog({ open, selectedIds, onClose, onApplied }: 
                 <div className="mt-2 flex items-start gap-2 text-[11px] text-amber-700 dark:text-amber-300 bg-amber-50 dark:bg-amber-900/20 rounded p-2">
                   <AlertTriangle size={12} className="shrink-0 mt-px" />
                   <span>
-                    <strong>{preview.reworkHeldCount}</strong> đơn <strong>cần làm lại đang có người ôm</strong> — không
-                    gán cho người khác được, sẽ bị bỏ qua. Chỉ gán được đơn cần làm lại chưa có ai ôm.
+                    <Trans
+                      i18nKey="dialogs.assignDesigner.reworkHeldMsg"
+                      ns="orders"
+                      values={{ count: preview.reworkHeldCount }}
+                      components={{ strong: <strong /> }}
+                    />
                   </span>
                 </div>
               )}
@@ -169,8 +197,12 @@ export function AssignDesignerDialog({ open, selectedIds, onClose, onApplied }: 
                 <div className="mt-2 flex items-start gap-2 text-[11px] text-rose-700 dark:text-rose-300 bg-rose-50 dark:bg-rose-900/20 rounded p-2">
                   <AlertTriangle size={12} className="shrink-0 mt-px" />
                   <span>
-                    <strong>{preview.okCount}</strong> đơn đã <strong>OK</strong> (Note kq Tool 1) — không gán được, sẽ
-                    bị bỏ qua. Chỉ gán {preview.eligibleCount} đơn còn lại.
+                    <Trans
+                      i18nKey="dialogs.assignDesigner.okCountMsg"
+                      ns="orders"
+                      values={{ count: preview.okCount, eligible: preview.eligibleCount }}
+                      components={{ strong: <strong /> }}
+                    />
                   </span>
                 </div>
               )}
@@ -178,25 +210,32 @@ export function AssignDesignerDialog({ open, selectedIds, onClose, onApplied }: 
                 <div className="mt-2 flex items-start gap-2 text-[11px] text-amber-700 dark:text-amber-300 bg-amber-50 dark:bg-amber-900/20 rounded p-2">
                   <AlertTriangle size={12} className="shrink-0 mt-px" />
                   <span>
-                    <strong>{preview.noToolCount}</strong> đơn <strong>chưa soát</strong> (Note kq Tool 1 còn trống).
-                    Bạn có chắc muốn gán? Chọn <strong>Gán tất cả</strong> hoặc <strong>Chỉ gán đơn đã soát</strong> bên
-                    dưới.
+                    <Trans
+                      i18nKey="dialogs.assignDesigner.noToolMsg"
+                      ns="orders"
+                      values={{ count: preview.noToolCount }}
+                      components={{ strong: <strong /> }}
+                    />
                   </span>
                 </div>
               )}
               {preview.eligibleCount === 0 && (
-                <div className="mt-2 text-[11px] text-rose-600 dark:text-rose-400">Không có đơn nào hợp lệ để gán.</div>
+                <div className="mt-2 text-[11px] text-rose-600 dark:text-rose-400">
+                  {t('dialogs.assignDesigner.noEligible')}
+                </div>
               )}
             </div>
 
             {/* Already assigned breakdown */}
             {preview.alreadyAssigned.length > 0 && (
               <div>
-                <p className="text-xs text-muted-foreground mb-1">Đang ôm task:</p>
+                <p className="text-xs text-muted-foreground mb-1">{t('dialogs.assignDesigner.holdingTasks')}</p>
                 <ul className="text-xs space-y-0.5 max-h-32 overflow-y-auto">
                   {preview.alreadyAssigned.map((a) => (
                     <li key={a.userId} className="flex items-center justify-between border-b border-border/40 py-1">
-                      <span>{a.fullName || `(deleted user ${a.userId.slice(-4)})`}</span>
+                      <span>
+                        {a.fullName || t('dialogs.assignDesigner.deletedUser', { id: a.userId.slice(-4) })}
+                      </span>
                       <span className="font-semibold">{a.count}</span>
                     </li>
                   ))}
@@ -206,23 +245,21 @@ export function AssignDesignerDialog({ open, selectedIds, onClose, onApplied }: 
 
             {/* Designer selector */}
             <div className="space-y-2">
-              <Label>Gán cho designer *</Label>
+              <Label>{t('dialogs.assignDesigner.selectLabel')}</Label>
               {loadingDesigners ? (
                 <Spinner size={14} />
               ) : designers.length === 0 ? (
-                <p className="text-xs text-rose-600 dark:text-rose-400">
-                  Chưa có sub-designer nào — vào /designer/team tạo trước.
-                </p>
+                <p className="text-xs text-rose-600 dark:text-rose-400">{t('dialogs.assignDesigner.noDesigners')}</p>
               ) : (
                 <select
                   value={selectedUserId}
                   onChange={(e) => setSelectedUserId(e.target.value)}
                   className="w-full h-9 rounded-md border border-input bg-background px-3 text-sm"
                 >
-                  <option value="">— Chọn —</option>
+                  <option value="">{t('dialogs.assignDesigner.selectPlaceholder')}</option>
                   {designers.map((d) => (
                     <option key={d._id} value={d._id}>
-                      {d.fullName} · đang ôm {d.activeTaskCount}
+                      {t('dialogs.assignDesigner.designerOption', { fullName: d.fullName, count: d.activeTaskCount })}
                     </option>
                   ))}
                 </select>
@@ -234,10 +271,13 @@ export function AssignDesignerDialog({ open, selectedIds, onClose, onApplied }: 
                 <div className="flex items-start gap-2">
                   <AlertTriangle size={13} className="shrink-0 mt-0.5" />
                   <div>
-                    <p className="font-medium">{conflictCount} đơn đã được gán cho designer khác.</p>
+                    <p className="font-medium">{t('dialogs.assignDesigner.conflictTitle', { count: conflictCount })}</p>
                     <p className="text-amber-700 dark:text-amber-300 mt-0.5">
-                      Tiếp tục gán sẽ <strong>ghi đè</strong> sang designer mới. Đơn đang in-progress/done/rework vẫn bị
-                      skip.
+                      <Trans
+                        i18nKey="dialogs.assignDesigner.conflictDesc"
+                        ns="orders"
+                        components={{ strong: <strong /> }}
+                      />
                     </p>
                   </div>
                 </div>
@@ -248,7 +288,7 @@ export function AssignDesignerDialog({ open, selectedIds, onClose, onApplied }: 
 
         <DialogFooter>
           <Button variant="outline" onClick={onClose} disabled={submitting}>
-            Huỷ
+            {t('common:actions.cancel')}
           </Button>
           {(preview?.noToolCount || 0) > 0 ? (
             // Có đơn chưa soát → 2 lựa chọn. `force` = conflictCount>0 (ghi đè).
@@ -259,7 +299,7 @@ export function AssignDesignerDialog({ open, selectedIds, onClose, onApplied }: 
                 variant="outline"
               >
                 {submitting && <Spinner size={13} className="mr-1.5" />}
-                Chỉ gán đơn đã soát ({preview?.eligibleWithToolCount || 0})
+                {t('dialogs.assignDesigner.onlyReviewed', { count: preview?.eligibleWithToolCount || 0 })}
               </Button>
               <Button
                 onClick={() => handleSubmit(conflictCount > 0, false)}
@@ -268,7 +308,7 @@ export function AssignDesignerDialog({ open, selectedIds, onClose, onApplied }: 
               >
                 {submitting && <Spinner size={13} className="mr-1.5" />}
                 <CheckCircle2 size={13} className="mr-1" />
-                Gán tất cả ({preview?.eligibleCount || 0})
+                {t('dialogs.assignDesigner.assignAll', { count: preview?.eligibleCount || 0 })}
               </Button>
             </>
           ) : conflictCount > 0 ? (
@@ -279,7 +319,7 @@ export function AssignDesignerDialog({ open, selectedIds, onClose, onApplied }: 
             >
               {submitting && <Spinner size={13} className="mr-1.5" />}
               <ChevronRight size={13} />
-              Ghi đè & Gán
+              {t('dialogs.assignDesigner.overwriteAssign')}
             </Button>
           ) : (
             <Button
@@ -288,7 +328,7 @@ export function AssignDesignerDialog({ open, selectedIds, onClose, onApplied }: 
             >
               {submitting && <Spinner size={13} className="mr-1.5" />}
               <CheckCircle2 size={13} className="mr-1" />
-              Gán
+              {t('dialogs.assignDesigner.assign')}
             </Button>
           )}
         </DialogFooter>

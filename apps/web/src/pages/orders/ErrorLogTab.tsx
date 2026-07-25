@@ -1,10 +1,11 @@
 import React, { useEffect, useMemo, useState } from 'react';
+import { useTranslation } from 'react-i18next';
 import { useSearchParams } from 'react-router-dom';
+import type { TFunction } from 'i18next';
 import { AlertTriangle, CheckCircle2, History } from 'lucide-react';
 import type { FulfillmentStage, FulfillmentTransitionDto, ProductionOrder } from 'shared';
 import {
   DesignerTransitionAction,
-  FULFILLMENT_STAGE_LABELS,
   FulfillmentStageStatus,
   FulfillmentTransitionAction,
   RoleType,
@@ -29,7 +30,12 @@ import { OrderDetailDialog } from '@/components/orders/OrderDetailDialog';
 import { OrderFilterBar, type OrderFilterFacet } from '@/components/orders/OrderFilterBar';
 import { OrderLogTimelineDialog } from '@/components/orders/OrderLogTimelineDialog';
 import { OrderRowActionsMenu } from '@/components/orders/OrderRowActionsMenu';
-import { WORKSHOP_COLS, type WorkshopOrderRow, type WorkshopRenderCtx } from '@/components/orders/workshopTableConfig';
+import {
+  colLabel,
+  WORKSHOP_COLS,
+  type WorkshopOrderRow,
+  type WorkshopRenderCtx,
+} from '@/components/orders/workshopTableConfig';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
@@ -37,6 +43,7 @@ import { TooltipProvider } from '@/components/ui/tooltip';
 
 import { handleAxiosError } from '@/utils';
 import { cn } from '@/utils/cn';
+import { getStageLabel } from '@/utils/fulfillmentStageLabel';
 import { isCancelled, isHeld } from '@/utils/orderActions';
 
 import { useDebounce } from '@/hooks/useDebounce';
@@ -63,32 +70,34 @@ type TabKey = 'todo' | 'done';
 
 const DEFAULT_PAGE_SIZE = 30;
 
-const URGENCY_META: Record<UrgencyKey, { label: string; cls: string; chipCls: string; ringCls: string }> = {
-  new: {
-    label: 'Mới',
-    cls: 'bg-sky-100 text-sky-700 dark:bg-sky-900/40 dark:text-sky-300',
-    chipCls: 'bg-sky-50 border-sky-300 text-sky-700',
-    ringCls: 'ring-sky-200',
-  },
-  attention: {
-    label: 'Cần làm',
-    cls: 'bg-amber-100 text-amber-700 dark:bg-amber-900/40 dark:text-amber-300',
-    chipCls: 'bg-amber-50 border-amber-300 text-amber-700',
-    ringCls: 'ring-amber-200',
-  },
-  urgent: {
-    label: 'Gấp',
-    cls: 'bg-orange-100 text-orange-700 dark:bg-orange-900/40 dark:text-orange-300',
-    chipCls: 'bg-orange-50 border-orange-300 text-orange-700',
-    ringCls: 'ring-orange-200',
-  },
-  critical: {
-    label: 'Khẩn cấp',
-    cls: 'bg-rose-100 text-rose-700 dark:bg-rose-900/40 dark:text-rose-300 animate-pulse',
-    chipCls: 'bg-rose-50 border-rose-300 text-rose-700',
-    ringCls: 'ring-rose-200',
-  },
-};
+function buildUrgencyMeta(t: TFunction<'orderLog'>): Record<UrgencyKey, { label: string; cls: string; chipCls: string; ringCls: string }> {
+  return {
+    new: {
+      label: t('urgency.new'),
+      cls: 'bg-sky-100 text-sky-700 dark:bg-sky-900/40 dark:text-sky-300',
+      chipCls: 'bg-sky-50 border-sky-300 text-sky-700',
+      ringCls: 'ring-sky-200',
+    },
+    attention: {
+      label: t('urgency.attention'),
+      cls: 'bg-amber-100 text-amber-700 dark:bg-amber-900/40 dark:text-amber-300',
+      chipCls: 'bg-amber-50 border-amber-300 text-amber-700',
+      ringCls: 'ring-amber-200',
+    },
+    urgent: {
+      label: t('urgency.urgent'),
+      cls: 'bg-orange-100 text-orange-700 dark:bg-orange-900/40 dark:text-orange-300',
+      chipCls: 'bg-orange-50 border-orange-300 text-orange-700',
+      ringCls: 'ring-orange-200',
+    },
+    critical: {
+      label: t('urgency.critical'),
+      cls: 'bg-rose-100 text-rose-700 dark:bg-rose-900/40 dark:text-rose-300 animate-pulse',
+      chipCls: 'bg-rose-50 border-rose-300 text-rose-700',
+      ringCls: 'ring-rose-200',
+    },
+  };
+}
 
 const HOUR_MS = 60 * 60 * 1000;
 const DAY_MS = 24 * HOUR_MS;
@@ -122,36 +131,36 @@ function formatDayOnly(d?: string): string {
   return `${pad(date.getDate())}/${pad(date.getMonth() + 1)}`;
 }
 
-function stageLabel(key?: string): string {
+function stageLabel(key: string | undefined, t: TFunction<'orderLog'>): string {
   if (!key) return '—';
-  const fl = (FULFILLMENT_STAGE_LABELS as Record<string, string>)[key];
-  if (fl) return fl;
-  if (key === 'designer') return 'Thiết kế';
-  if (key === 'tool-check') return 'Soát tool';
+  if (key === 'designer') return t('stage.designer');
+  if (key === 'tool-check') return t('stage.toolCheck');
+  const fl = getStageLabel(t, key);
+  if (fl !== key) return fl;
   return key;
 }
 
 // Chặng đơn ĐANG đứng (positional) — suy như getLifecycleTrack.
-function currentStageInfo(row: ErrorLogRow): { key: string; label: string } {
+function currentStageInfo(row: ErrorLogRow, t: TFunction<'orderLog'>): { key: string; label: string } {
   if (row.productionErrorSource === 'tool-check' && row.toolResultNote === 'error') {
-    return { key: 'tool-check', label: 'Soát tool' };
+    return { key: 'tool-check', label: t('stage.toolCheck') };
   }
-  if (row.designerStatus === 'rework') return { key: 'designer', label: 'Thiết kế' };
+  if (row.designerStatus === 'rework') return { key: 'designer', label: t('stage.designer') };
   if (row.currentFulfillmentStage) {
-    return { key: row.currentFulfillmentStage, label: stageLabel(row.currentFulfillmentStage) };
+    return { key: row.currentFulfillmentStage, label: stageLabel(row.currentFulfillmentStage, t) };
   }
   if (row.designerStatus === 'assigned' || row.designerStatus === 'in-progress') {
-    return { key: 'designer', label: 'Thiết kế' };
+    return { key: 'designer', label: t('stage.designer') };
   }
   return { key: '', label: '—' };
 }
 
 // Chặng NÊU lỗi (reporter) + người báo — từ timeline rework-back gần nhất.
-function reporterInfo(row: ErrorLogRow): { label: string; who: string } | null {
+function reporterInfo(row: ErrorLogRow, t: TFunction<'orderLog'>): { label: string; who: string } | null {
   const tl = row.fulfillmentTimeline || [];
   for (let i = tl.length - 1; i >= 0; i--) {
     if (tl[i].action === 'rework-back') {
-      return { label: stageLabel(tl[i].stage), who: tl[i].byUserName || '' };
+      return { label: stageLabel(tl[i].stage, t), who: tl[i].byUserName || '' };
     }
   }
   return null;
@@ -168,6 +177,9 @@ function errorNote(row: ErrorLogRow): string {
 }
 
 export function ErrorLogTab() {
+  const { t } = useTranslation('orderLog');
+  const { t: tOrders } = useTranslation('orders');
+  const URGENCY_META = useMemo(() => buildUrgencyMeta(t), [t]);
   const { canEditField, canViewField, roleName } = usePermission();
   const profile = useAuthStore((s) => s.profile);
   const myStage = profile?.fulfillmentStage as FulfillmentStage | undefined;
@@ -339,7 +351,7 @@ export function ErrorLogTab() {
 
   const openDetail = (orderId: string, productionId: string) => setDetailTarget({ id: orderId, productionId });
 
-  const renderCtx: WorkshopRenderCtx = { canEditField, patchRow, openPreview, openDetail };
+  const renderCtx: WorkshopRenderCtx = { canEditField, patchRow, openPreview, openDetail, t: tOrders };
   const isNoTool = useIsNoTool();
 
   const designerNameById = useMemo(
@@ -348,7 +360,7 @@ export function ErrorLogTab() {
   );
 
   const fixerName = (row: ErrorLogRow): string => {
-    const cur = currentStageInfo(row);
+    const cur = currentStageInfo(row, t);
     if (cur.key === 'designer') return row.assignee ? designerNameById.get(String(row.assignee)) || '—' : '—';
     if (cur.key === 'tool-check') return 'Support';
     if (cur.key) {
@@ -375,7 +387,7 @@ export function ErrorLogTab() {
         action,
         ...body,
       } as FulfillmentTransitionDto);
-      toast.success('Đã cập nhật');
+      toast.success(t('actions.updated'));
     } catch (err) {
       handleAxiosError(err);
     } finally {
@@ -386,7 +398,7 @@ export function ErrorLogTab() {
   const doDesigner = async (orderId: string, action: DesignerTransitionAction) => {
     try {
       await RepositoryRemote.designer.transition(orderId, { action });
-      toast.success('Đã cập nhật');
+      toast.success(t('actions.updated'));
     } catch (err) {
       handleAxiosError(err);
     } finally {
@@ -397,7 +409,7 @@ export function ErrorLogTab() {
   const doSupportOk = async (orderId: string) => {
     try {
       await RepositoryRemote.order.updateField(orderId, { field: 'toolResultNote', value: 'ok' });
-      toast.success('Đã đánh dấu soát OK');
+      toast.success(t('actions.markedToolCheckOk'));
     } catch (err) {
       handleAxiosError(err);
     } finally {
@@ -409,7 +421,7 @@ export function ErrorLogTab() {
   const doResolveError = async (orderId: string) => {
     try {
       await RepositoryRemote.order.resolveError(orderId);
-      toast.success('Đã đánh dấu hoàn thành lỗi');
+      toast.success(t('actions.markedErrorResolved'));
     } catch (err) {
       handleAxiosError(err);
     } finally {
@@ -435,7 +447,7 @@ export function ErrorLogTab() {
     try {
       setBulkResolving(true);
       const res = await RepositoryRemote.order.bulkResolveError(Array.from(selected));
-      toast.success(`Đã đánh dấu hoàn thành ${res.data?.data?.modified ?? selected.size} đơn`);
+      toast.success(t('actions.markedCompletedCount', { count: res.data?.data?.modified ?? selected.size }));
     } catch (err) {
       handleAxiosError(err);
     } finally {
@@ -463,11 +475,11 @@ export function ErrorLogTab() {
               className="whitespace-nowrap"
               onClick={() => void doFulfillment(row._id, FulfillmentTransitionAction.Start)}
             >
-              Bắt đầu
+              {t('actions.start')}
             </Button>
             {status && (
               <Button size="sm" variant="destructive" className="whitespace-nowrap" onClick={() => setReworkOrder(row)}>
-                Báo lỗi
+                {t('actions.reportError')}
               </Button>
             )}
           </>
@@ -481,10 +493,10 @@ export function ErrorLogTab() {
               className="whitespace-nowrap"
               onClick={() => void doFulfillment(row._id, FulfillmentTransitionAction.Complete)}
             >
-              Hoàn thành
+              {t('actions.complete')}
             </Button>
             <Button size="sm" variant="destructive" className="whitespace-nowrap" onClick={() => setReworkOrder(row)}>
-              Báo lỗi
+              {t('actions.reportError')}
             </Button>
           </>
         );
@@ -505,7 +517,7 @@ export function ErrorLogTab() {
             className="whitespace-nowrap"
             onClick={() => void doDesigner(row._id, DesignerTransitionAction.Start)}
           >
-            Bắt đầu
+            {t('actions.start')}
           </Button>
         );
       }
@@ -516,7 +528,7 @@ export function ErrorLogTab() {
             className="whitespace-nowrap"
             onClick={() => void doDesigner(row._id, DesignerTransitionAction.Complete)}
           >
-            Hoàn thành
+            {t('actions.complete')}
           </Button>
         );
       }
@@ -526,7 +538,7 @@ export function ErrorLogTab() {
     if (roleName === RoleType.Support && row.productionErrorSource === 'tool-check' && row.toolResultNote === 'error') {
       return (
         <Button size="sm" className="whitespace-nowrap" onClick={() => void doSupportOk(row._id)}>
-          Đã soát (OK)
+          {t('actions.toolCheckOk')}
         </Button>
       );
     }
@@ -539,7 +551,7 @@ export function ErrorLogTab() {
     ) {
       return (
         <Button size="sm" variant="outline" className="whitespace-nowrap" onClick={() => void doResolveError(row._id)}>
-          <CheckCircle2 size={13} /> Đánh dấu xong
+          <CheckCircle2 size={13} /> {t('actions.markDone')}
         </Button>
       );
     }
@@ -563,8 +575,8 @@ export function ErrorLogTab() {
       label: String(m.fullName || m.email || m._id),
       count: 0,
     }));
-    return [{ value: '__none__', label: 'Chưa gán', count: 0 }, ...base];
-  }, [designerMembers]);
+    return [{ value: '__none__', label: tOrders('listTab.unassigned'), count: 0 }, ...base];
+  }, [designerMembers, tOrders]);
 
   const fabricOptions = useMemo<Array<{ value: string; label: string; count: number }>>(
     () => (fabricConfigs || []).map((c) => ({ value: String(c.code), label: String(c.name), count: 0 })),
@@ -579,8 +591,8 @@ export function ErrorLogTab() {
     [productionErrorConfigs],
   );
   const sourceOptions = [
-    { value: 'designer', label: 'Lỗi do Designer', count: 0 },
-    { value: 'factory', label: 'Lỗi do Xưởng', count: 0 },
+    { value: 'designer', label: t('filters.sourceDesigner'), count: 0 },
+    { value: 'factory', label: t('filters.sourceFactory'), count: 0 },
   ];
 
   const toggleUrgency = (key: UrgencyKey) => {
@@ -600,29 +612,28 @@ export function ErrorLogTab() {
               <AlertTriangle size={18} className="text-rose-600" />
             </div>
             <div className="flex-1">
-              <h2 className="font-semibold text-foreground">Nhật ký bù lỗi</h2>
-              <p className="text-xs text-muted-foreground">
-                Lỗi các đơn đã vào fulfillment (in → ép → … → đóng gói). Đơn không thuộc công đoạn của bạn hiển thị mờ
-                (chỉ xem).
-              </p>
+              <h2 className="font-semibold text-foreground">{t('page.title')}</h2>
+              <p className="text-xs text-muted-foreground">{t('page.description')}</p>
             </div>
           </div>
 
           {/* Sub-tab Cần xử lý / Đã xong */}
           <div className="inline-flex rounded-lg border border-border bg-muted/30 p-0.5">
-            {(['todo', 'done'] as TabKey[]).map((t) => (
+            {(['todo', 'done'] as TabKey[]).map((tabKey) => (
               <button
-                key={t}
+                key={tabKey}
                 onClick={() => {
-                  setTab(t);
+                  setTab(tabKey);
                   setPage(1);
                 }}
                 className={cn(
                   'px-3 py-1.5 text-xs font-medium rounded-md transition-colors',
-                  tab === t ? 'bg-background text-foreground shadow-sm' : 'text-muted-foreground hover:text-foreground',
+                  tab === tabKey
+                    ? 'bg-background text-foreground shadow-sm'
+                    : 'text-muted-foreground hover:text-foreground',
                 )}
               >
-                {t === 'todo' ? 'Cần xử lý' : 'Đã xong (14 ngày)'}
+                {tabKey === 'todo' ? t('page.tabTodo') : t('page.tabDone')}
               </button>
             ))}
           </div>
@@ -655,10 +666,10 @@ export function ErrorLogTab() {
                   }}
                   className="text-[11px] text-muted-foreground underline hover:text-foreground"
                 >
-                  Xóa filter mức độ
+                  {t('page.clearUrgencyFilter')}
                 </button>
               )}
-              <span className="text-[11px] text-muted-foreground ml-1">Tổng {totalErrors} đơn cần xử lý.</span>
+              <span className="text-[11px] text-muted-foreground ml-1">{t('page.totalToProcess', { count: totalErrors })}</span>
             </div>
           )}
         </div>
@@ -668,9 +679,9 @@ export function ErrorLogTab() {
           onSearchChange={setSearch}
           createdFrom={createdFrom}
           createdTo={createdTo}
-          onDateRangeChange={(f, t) => {
+          onDateRangeChange={(f, to) => {
             setCreatedFrom(f);
-            setCreatedTo(t);
+            setCreatedTo(to);
             setPage(1);
           }}
           onReload={() => fetchData()}
@@ -679,7 +690,7 @@ export function ErrorLogTab() {
             [
               {
                 key: 'assignee',
-                label: 'Người thực hiện',
+                label: tOrders('workshopCols.col.assignee'),
                 value: filterAssignee,
                 onChange: (v) => {
                   setFilterAssignee(v);
@@ -690,7 +701,7 @@ export function ErrorLogTab() {
               },
               {
                 key: 'fabricType',
-                label: 'Loại vải',
+                label: tOrders('tableWorkshop.facets.fabricType'),
                 value: filterFabric,
                 onChange: (v) => {
                   setFilterFabric(v);
@@ -701,7 +712,7 @@ export function ErrorLogTab() {
               },
               {
                 key: 'toolResult',
-                label: 'Kết quả Tool',
+                label: tOrders('tableWorkshop.facets.toolResult'),
                 value: filterTool,
                 onChange: (v) => {
                   setFilterTool(v);
@@ -712,7 +723,7 @@ export function ErrorLogTab() {
               },
               {
                 key: 'productionError',
-                label: 'Mã lỗi',
+                label: t('filters.errorCode'),
                 value: filterErrorCode,
                 onChange: (v) => {
                   setFilterErrorCode(v);
@@ -722,7 +733,7 @@ export function ErrorLogTab() {
               },
               {
                 key: 'productionErrorSource',
-                label: 'Nguồn lỗi',
+                label: t('filters.errorSource'),
                 value: filterSource,
                 onChange: (v) => {
                   setFilterSource(v);
@@ -758,23 +769,23 @@ export function ErrorLogTab() {
                         type="checkbox"
                         checked={allSelected}
                         onChange={toggleAll}
-                        title="Chọn tất cả trong trang"
+                        title={t('table.selectAllOnPage')}
                       />
                     </TableHead>
                   )}
-                  <TableHead className="whitespace-nowrap text-xs w-[120px]">Mức độ</TableHead>
-                  <TableHead className="whitespace-nowrap text-xs w-[120px]">Tuổi đơn</TableHead>
-                  <TableHead className="whitespace-nowrap text-xs w-[70px]">Xưởng</TableHead>
+                  <TableHead className="whitespace-nowrap text-xs w-[120px]">{t('table.urgency')}</TableHead>
+                  <TableHead className="whitespace-nowrap text-xs w-[120px]">{t('table.orderAge')}</TableHead>
+                  <TableHead className="whitespace-nowrap text-xs w-[70px]">{t('table.factory')}</TableHead>
                   {visibleCols.map((c) => (
                     <TableHead key={c.key} className={cn('whitespace-nowrap text-xs', c.width)}>
-                      {c.label}
+                      {colLabel(tOrders, c.key, c.label)}
                     </TableHead>
                   ))}
-                  <TableHead className="whitespace-nowrap text-xs w-[110px]">Chặng hiện tại</TableHead>
-                  <TableHead className="whitespace-nowrap text-xs w-[140px]">Nêu lỗi</TableHead>
-                  <TableHead className="whitespace-nowrap text-xs w-[200px]">Ghi chú lỗi</TableHead>
-                  <TableHead className="whitespace-nowrap text-xs w-[110px]">Người sửa</TableHead>
-                  <TableHead className="whitespace-nowrap text-xs w-[70px]">Số lần</TableHead>
+                  <TableHead className="whitespace-nowrap text-xs w-[110px]">{t('table.currentStage')}</TableHead>
+                  <TableHead className="whitespace-nowrap text-xs w-[140px]">{t('table.reporter')}</TableHead>
+                  <TableHead className="whitespace-nowrap text-xs w-[200px]">{t('table.errorNote')}</TableHead>
+                  <TableHead className="whitespace-nowrap text-xs w-[110px]">{t('table.fixer')}</TableHead>
+                  <TableHead className="whitespace-nowrap text-xs w-[70px]">{t('table.errorCount')}</TableHead>
                   <TableHead className="whitespace-nowrap text-xs w-[160px] sticky right-0 z-20 bg-card"></TableHead>
                 </TableRow>
               </TableHeader>
@@ -795,7 +806,7 @@ export function ErrorLogTab() {
                       colSpan={visibleCols.length + FIXED_COLS + (canBulk ? 1 : 0)}
                       className="text-center py-10 text-sm text-muted-foreground"
                     >
-                      {tab === 'todo' ? 'Không có đơn lỗi nào cần xử lý 🎉' : 'Chưa có đơn lỗi đã xử lý trong 14 ngày.'}
+                      {tab === 'todo' ? t('table.emptyTodo') : t('table.emptyDone')}
                     </TableCell>
                   </TableRow>
                 )}
@@ -807,8 +818,8 @@ export function ErrorLogTab() {
                   const actionNode = renderActionButtons(row);
                   const greyed = held || cancelled || actionNode === null;
                   const rowCtx = greyed ? { ...renderCtx, canEditField: () => false } : renderCtx;
-                  const cur = currentStageInfo(row);
-                  const rep = reporterInfo(row);
+                  const cur = currentStageInfo(row, t);
+                  const rep = reporterInfo(row, t);
                   return (
                     <TableRow
                       key={row._id}
@@ -832,7 +843,7 @@ export function ErrorLogTab() {
                             {formatDuration(row.inProductionAt)}
                           </span>
                           <span className="text-[10px] text-muted-foreground">
-                            vào SX {formatDayOnly(row.inProductionAt)}
+                            {t('table.enteredProductionAt', { date: formatDayOnly(row.inProductionAt) })}
                           </span>
                         </div>
                       </TableCell>
@@ -903,7 +914,7 @@ export function ErrorLogTab() {
                           <Button
                             variant="ghost"
                             size="icon"
-                            title="Lịch sử"
+                            title={t('table.history')}
                             onClick={() => setHistoryTarget({ id: row._id, productionId: row.productionId })}
                           >
                             <History size={13} className="text-muted-foreground" />
@@ -936,14 +947,14 @@ export function ErrorLogTab() {
           <div className="sticky bottom-3 z-30 flex justify-center px-4 pointer-events-none">
             <div className="pointer-events-auto flex items-center gap-3 rounded-full border border-border bg-card shadow-lg px-4 py-2">
               <span className="text-sm">
-                Đã chọn <span className="font-semibold">{selected.size}</span>
+                {t('table.selectedLabel')} <span className="font-semibold">{selected.size}</span>
               </span>
               <Button size="sm" onClick={() => void doBulkResolve()} disabled={bulkResolving}>
                 {bulkResolving ? <Spinner size={13} className="mr-1.5" /> : <CheckCircle2 size={14} />}
-                Đánh dấu xong ({selected.size})
+                {t('table.markDoneCount', { count: selected.size })}
               </Button>
               <Button size="sm" variant="ghost" onClick={() => setSelected(new Set())}>
-                Bỏ chọn
+                {t('table.deselect')}
               </Button>
             </div>
           </div>

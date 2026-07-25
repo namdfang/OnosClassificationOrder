@@ -1,4 +1,6 @@
 import React from 'react';
+import { useTranslation } from 'react-i18next';
+import type { TFunction } from 'i18next';
 import { X } from 'lucide-react';
 import { WorkshopConfigCategory } from 'shared';
 
@@ -12,16 +14,18 @@ import { LucideIcon } from '@/pages/workshop-config/IconPicker';
 
 import type { StatusFilter, StatusFilterCategory } from './useStatusFilter';
 
-const CATEGORY_LABEL: Record<StatusFilterCategory, string> = {
-  printStatus: 'Trạng thái in',
-  printStatusNote: 'Note in',
-  toolResult: 'Tool',
-  toolResultNote: 'Note Tool',
-  errorFile: 'File lỗi',
-  productionError: 'Lỗi xưởng',
-  assignee: 'Người TH',
-  assigneeNote: 'Note người TH',
-};
+function buildCategoryLabel(t: TFunction<'dashboard'>): Record<StatusFilterCategory, string> {
+  return {
+    printStatus: t('statusFilter.category.printStatus'),
+    printStatusNote: t('statusFilter.category.printStatusNote'),
+    toolResult: t('statusFilter.category.toolResult'),
+    toolResultNote: t('statusFilter.category.toolResultNote'),
+    errorFile: t('statusFilter.category.errorFile'),
+    productionError: t('statusFilter.category.productionError'),
+    assignee: t('statusFilter.category.assignee'),
+    assigneeNote: t('statusFilter.category.assigneeNote'),
+  };
+}
 
 /** Map sang WorkshopConfigCategory để resolve label/color/icon cho chip.
  *  Chú ý: `assignee` lưu userId → workshop_config không có nên fallback raw. */
@@ -45,6 +49,7 @@ interface StatusFilterTopActionsProps {
 /** "Lỗi cần xử lý" toggle + "Xóa toàn bộ filter" — chèn vào `topActionsRight`
  *  của `<OrderFilterBar>` trong OrderStatusTab. */
 export function StatusFilterTopActions({ hasError, isActive, onHasError, onClearAll }: StatusFilterTopActionsProps) {
+  const { t } = useTranslation('dashboard');
   return (
     <>
       <button
@@ -57,11 +62,11 @@ export function StatusFilterTopActions({ hasError, isActive, onHasError, onClear
             : 'border-border bg-background text-muted-foreground hover:text-foreground',
         )}
       >
-        Lỗi cần xử lý
+        {t('statusFilter.needsHandling')}
       </button>
       {isActive && (
         <Button variant="ghost" size="sm" onClick={onClearAll} className="text-xs h-7 ml-auto">
-          <X size={12} /> Xóa toàn bộ filter
+          <X size={12} /> {t('statusFilter.clearAll')}
         </Button>
       )}
     </>
@@ -76,7 +81,9 @@ interface StatusActiveChipsProps {
 /** Pill chip cho từng filter đang active (1 chip per code). Chèn vào
  *  `middleRow` của `<OrderFilterBar>`. */
 export function StatusActiveChips({ filter, onToggle }: StatusActiveChipsProps) {
+  const { t } = useTranslation('dashboard');
   const resolve = useWorkshopConfigStore((s) => s.resolve);
+  const categoryLabel = buildCategoryLabel(t);
 
   const chips: Array<{
     cat: StatusFilterCategory;
@@ -85,14 +92,14 @@ export function StatusActiveChips({ filter, onToggle }: StatusActiveChipsProps) 
     color?: string;
     icon?: string;
   }> = [];
-  for (const cat of Object.keys(CATEGORY_LABEL) as StatusFilterCategory[]) {
+  for (const cat of Object.keys(categoryLabel) as StatusFilterCategory[]) {
     for (const code of filter[cat]) {
       const wsCat = CATEGORY_TO_WS[cat];
       const meta = wsCat ? resolve(wsCat, code) : undefined;
       chips.push({
         cat,
         code,
-        label: `${CATEGORY_LABEL[cat]}: ${meta?.name || code}`,
+        label: `${categoryLabel[cat]}: ${meta?.name || code}`,
         color: meta?.color,
         icon: meta?.icon,
       });

@@ -1,4 +1,5 @@
 import React, { useEffect, useState } from 'react';
+import { useTranslation } from 'react-i18next';
 import { Plus } from 'lucide-react';
 import { toast } from 'sonner';
 
@@ -37,6 +38,7 @@ const DEFAULT_FORM: FormState = {
 };
 
 export function ProductCategoryTab() {
+  const { t } = useTranslation(['products', 'common']);
   const [items, setItems] = useState<ProductCategoryRow[]>([]);
   const [loading, setLoading] = useState(false);
   const [form, setForm] = useState<FormState>(DEFAULT_FORM);
@@ -77,7 +79,7 @@ export function ProductCategoryTab() {
   const handleSubmit = async () => {
     const { mode, data } = form;
     if (!data.name.trim() || !data.shortName.trim()) {
-      toast.error('Tên và viết tắt là bắt buộc');
+      toast.error(t('categoryTab.form.nameRequired'));
       return;
     }
 
@@ -91,10 +93,10 @@ export function ProductCategoryTab() {
       setSaving(true);
       if (mode === 'create') {
         await RepositoryRemote.productCategory.createProductCategory(payload);
-        toast.success('Đã tạo danh mục');
+        toast.success(t('categoryTab.form.createSuccess'));
       } else if (data._id) {
         await RepositoryRemote.productCategory.updateProductCategory(data._id, payload);
-        toast.success('Đã cập nhật');
+        toast.success(t('categoryTab.form.updateSuccess'));
       }
       setForm(DEFAULT_FORM);
       fetchData();
@@ -110,22 +112,20 @@ export function ProductCategoryTab() {
       <div className="rounded-lg border border-border bg-card">
         <div className="flex items-center justify-between p-4 border-b border-border">
           <div>
-            <h3 className="text-sm font-semibold text-foreground">Danh mục sản phẩm</h3>
-            <p className="text-xs text-muted-foreground mt-0.5">
-              Dùng để phân loại sản phẩm ở catalog khách hàng + phạm vi chương trình giảm giá.
-            </p>
+            <h3 className="text-sm font-semibold text-foreground">{t('categoryTab.title')}</h3>
+            <p className="text-xs text-muted-foreground mt-0.5">{t('categoryTab.description')}</p>
           </div>
           <Button size="sm" onClick={openCreate}>
             <Plus size={14} />
-            Thêm
+            {t('common:actions.add')}
           </Button>
         </div>
         <Table>
           <TableHeader>
             <TableRow>
-              <TableHead>Tên</TableHead>
-              <TableHead>Viết tắt</TableHead>
-              <TableHead>Trạng thái</TableHead>
+              <TableHead>{t('categoryTab.table.name')}</TableHead>
+              <TableHead>{t('categoryTab.table.shortName')}</TableHead>
+              <TableHead>{t('categoryTab.table.status')}</TableHead>
               <TableHead className="w-20"></TableHead>
             </TableRow>
           </TableHeader>
@@ -140,7 +140,7 @@ export function ProductCategoryTab() {
             {!loading && items.length === 0 && (
               <TableRow>
                 <TableCell colSpan={4} className="text-center py-8 text-muted-foreground text-sm">
-                  Chưa có danh mục nào.
+                  {t('categoryTab.table.empty')}
                 </TableCell>
               </TableRow>
             )}
@@ -157,11 +157,15 @@ export function ProductCategoryTab() {
                     <Badge variant="outline">{it.shortName}</Badge>
                   </TableCell>
                   <TableCell>
-                    {it.isActive ? <Badge variant="success">Hoạt động</Badge> : <Badge variant="secondary">Tắt</Badge>}
+                    {it.isActive ? (
+                      <Badge variant="success">{t('categoryTab.table.active')}</Badge>
+                    ) : (
+                      <Badge variant="secondary">{t('categoryTab.table.inactive')}</Badge>
+                    )}
                   </TableCell>
                   <TableCell>
                     <Button variant="ghost" size="sm" onClick={() => openEdit(it)}>
-                      Sửa
+                      {t('common:actions.edit')}
                     </Button>
                   </TableCell>
                 </TableRow>
@@ -173,34 +177,36 @@ export function ProductCategoryTab() {
       <Dialog open={form.open} onOpenChange={(open) => !open && setForm(DEFAULT_FORM)}>
         <DialogContent>
           <DialogHeader>
-            <DialogTitle>{form.mode === 'create' ? 'Thêm danh mục sản phẩm' : 'Sửa danh mục sản phẩm'}</DialogTitle>
+            <DialogTitle>
+              {form.mode === 'create' ? t('categoryTab.dialog.createTitle') : t('categoryTab.dialog.editTitle')}
+            </DialogTitle>
           </DialogHeader>
           <div className="space-y-3">
             <div className="space-y-2">
-              <Label>Tên</Label>
+              <Label>{t('categoryTab.form.name')}</Label>
               <Input
                 value={form.data.name}
                 onChange={(e) => setForm({ ...form, data: { ...form.data, name: e.target.value } })}
-                placeholder="VD: Áo/Quần"
+                placeholder={t('categoryTab.form.namePlaceholder')}
               />
             </div>
             <div className="space-y-2">
-              <Label>Tên viết tắt</Label>
+              <Label>{t('categoryTab.form.shortName')}</Label>
               <Input
                 value={form.data.shortName}
                 onChange={(e) => setForm({ ...form, data: { ...form.data, shortName: e.target.value.toUpperCase() } })}
-                placeholder="VD: APPAREL"
+                placeholder={t('categoryTab.form.shortNamePlaceholder')}
                 maxLength={20}
               />
             </div>
             <div className="space-y-2">
-              <Label>Danh mục cha (để trống = danh mục gốc)</Label>
+              <Label>{t('categoryTab.form.parent')}</Label>
               <select
                 value={form.data.parentId}
                 onChange={(e) => setForm({ ...form, data: { ...form.data, parentId: e.target.value } })}
                 className="w-full rounded-md border border-input bg-background px-2 py-2 text-sm focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
               >
-                <option value="">— Không có (danh mục gốc) —</option>
+                <option value="">{t('categoryTab.form.noParent')}</option>
                 {sortCategoryTree(items)
                   .filter((it) => it._id !== form.data._id)
                   .map((it) => (
@@ -211,7 +217,7 @@ export function ProductCategoryTab() {
               </select>
             </div>
             <div className="flex items-center justify-between rounded-md border border-border p-3">
-              <Label>Hoạt động</Label>
+              <Label>{t('categoryTab.form.active')}</Label>
               <Switch
                 checked={form.data.isActive}
                 onCheckedChange={(v) => setForm({ ...form, data: { ...form.data, isActive: v } })}
@@ -220,11 +226,11 @@ export function ProductCategoryTab() {
           </div>
           <DialogFooter>
             <Button variant="outline" onClick={() => setForm(DEFAULT_FORM)} disabled={saving}>
-              Hủy
+              {t('common:actions.cancel')}
             </Button>
             <Button onClick={handleSubmit} disabled={saving}>
               {saving && <Spinner size={14} className="mr-2" />}
-              Lưu
+              {t('common:actions.save')}
             </Button>
           </DialogFooter>
         </DialogContent>

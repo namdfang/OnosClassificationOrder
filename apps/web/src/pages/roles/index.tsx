@@ -1,4 +1,5 @@
 import React, { useEffect, useState } from 'react';
+import { useTranslation } from 'react-i18next';
 import { RefreshCw, RotateCcw, ShieldCheck, X } from 'lucide-react';
 import type { Role } from 'shared';
 import { toast } from 'sonner';
@@ -15,6 +16,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@
 import { handleAxiosError } from '@/utils';
 
 export default function RolesPage() {
+  const { t } = useTranslation(['auth', 'common']);
   const [roles, setRoles] = useState<Role[]>([]);
   const [loading, setLoading] = useState(false);
   const [editing, setEditing] = useState<Role | null>(null);
@@ -52,7 +54,7 @@ export default function RolesPage() {
     try {
       setSaving(true);
       await RepositoryRemote.roles.updatePermissions(editing._id!, { codes: draftCodes });
-      toast.success('Đã lưu permissions');
+      toast.success(t('roles.toasts.saveSuccess'));
       await fetchAll();
       close();
     } catch (err) {
@@ -64,10 +66,10 @@ export default function RolesPage() {
 
   const handleReset = async () => {
     if (!editing) return;
-    if (!confirm('Reset permissions của role này về preset mặc định?')) return;
+    if (!confirm(t('roles.resetConfirm'))) return;
     try {
       const res = await RepositoryRemote.roles.resetPermissions(editing._id!);
-      toast.success('Đã reset về mặc định');
+      toast.success(t('roles.toasts.resetSuccess'));
       const fresh = res.data?.data as Role;
       setDraftCodes(fresh?.permissionCodes || []);
       await fetchAll();
@@ -83,29 +85,27 @@ export default function RolesPage() {
           <ShieldCheck size={20} className="text-indigo-600" />
         </div>
         <div>
-          <h1 className="text-2xl font-bold text-foreground">Phân quyền</h1>
-          <p className="text-sm text-muted-foreground">
-            Chọn role bên dưới để cấu hình quyền truy cập trang, hành động và field
-          </p>
+          <h1 className="text-2xl font-bold text-foreground">{t('roles.title')}</h1>
+          <p className="text-sm text-muted-foreground">{t('roles.subtitle')}</p>
         </div>
       </div>
 
       <div className="rounded-lg border border-border bg-card">
         <div className="flex items-center justify-between p-4 border-b border-border">
-          <p className="text-xs text-muted-foreground">{roles.length} role</p>
+          <p className="text-xs text-muted-foreground">{t('roles.roleCount', { count: roles.length })}</p>
           <Button variant="ghost" size="sm" onClick={fetchAll} disabled={loading}>
             <RefreshCw size={13} className={loading ? 'animate-spin' : ''} />
-            Tải lại
+            {t('roles.reload')}
           </Button>
         </div>
 
         <Table>
           <TableHeader>
             <TableRow>
-              <TableHead>Role</TableHead>
-              <TableHead>Mô tả</TableHead>
-              <TableHead className="w-24 text-center">Permissions</TableHead>
-              <TableHead className="w-20">System</TableHead>
+              <TableHead>{t('roles.table.role')}</TableHead>
+              <TableHead>{t('roles.table.description')}</TableHead>
+              <TableHead className="w-24 text-center">{t('roles.table.permissions')}</TableHead>
+              <TableHead className="w-20">{t('roles.table.system')}</TableHead>
               <TableHead className="w-20 text-right"></TableHead>
             </TableRow>
           </TableHeader>
@@ -120,7 +120,7 @@ export default function RolesPage() {
             {!loading && roles.length === 0 && (
               <TableRow>
                 <TableCell colSpan={5} className="text-center py-8 text-sm text-muted-foreground">
-                  Chưa có role
+                  {t('roles.noRoles')}
                 </TableCell>
               </TableRow>
             )}
@@ -131,10 +131,10 @@ export default function RolesPage() {
                 <TableCell className="text-center">
                   <Badge variant="outline">{r.permissionCodes?.length || 0}</Badge>
                 </TableCell>
-                <TableCell>{r.isSystem && <Badge variant="secondary">System</Badge>}</TableCell>
+                <TableCell>{r.isSystem && <Badge variant="secondary">{t('roles.table.system')}</Badge>}</TableCell>
                 <TableCell className="text-right" onClick={(e) => e.stopPropagation()}>
                   <Button variant="ghost" size="sm" onClick={() => openEditor(r)}>
-                    Sửa
+                    {t('actions.edit', { ns: 'common' })}
                   </Button>
                 </TableCell>
               </TableRow>
@@ -148,17 +148,15 @@ export default function RolesPage() {
           <SheetHeader>
             <SheetTitle className="flex items-center justify-between">
               <span>{editing?.name}</span>
-              <span className="text-xs font-normal text-muted-foreground">{draftCodes.length} đang chọn</span>
+              <span className="text-xs font-normal text-muted-foreground">
+                {t('roles.selectedCount', { count: draftCodes.length })}
+              </span>
             </SheetTitle>
           </SheetHeader>
 
           <div className="mt-4 space-y-2 text-sm">
             {editing?.description && <p className="text-muted-foreground">{editing.description}</p>}
-            {editing?.isSystem && (
-              <p className="text-xs text-muted-foreground">
-                Role hệ thống — không xóa được. Có thể chỉnh permissions hoặc reset về preset.
-              </p>
-            )}
+            {editing?.isSystem && <p className="text-xs text-muted-foreground">{t('roles.systemRoleNote')}</p>}
           </div>
 
           <div className="mt-6">
@@ -168,15 +166,15 @@ export default function RolesPage() {
           <div className="sticky bottom-0 -mx-6 px-6 py-3 bg-background border-t border-border mt-6 flex items-center justify-between gap-2">
             <Button variant="outline" size="sm" onClick={handleReset} disabled={!editing?.isSystem}>
               <RotateCcw size={13} />
-              Reset preset
+              {t('roles.resetPreset')}
             </Button>
             <div className="flex items-center gap-2">
               <Button variant="ghost" size="sm" onClick={close}>
-                <X size={14} /> Hủy
+                <X size={14} /> {t('actions.cancel', { ns: 'common' })}
               </Button>
               <Button size="sm" onClick={handleSave} disabled={saving}>
                 {saving && <Spinner size={13} className="mr-1.5" />}
-                Lưu
+                {t('actions.save', { ns: 'common' })}
               </Button>
             </div>
           </div>

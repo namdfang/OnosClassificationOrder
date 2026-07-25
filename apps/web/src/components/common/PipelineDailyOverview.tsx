@@ -1,11 +1,14 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
+import { useTranslation } from 'react-i18next';
+import type { TFunction } from 'i18next';
 import { CalendarRange, X } from 'lucide-react';
 import type { FulfillmentDailyColumnTotals, FulfillmentDailyRow, FulfillmentStage } from 'shared';
-import { FULFILLMENT_STAGE_LABELS, FULFILLMENT_STAGES } from 'shared';
+import { FULFILLMENT_STAGES } from 'shared';
 
 import { RepositoryRemote } from '@/services';
 
 import { handleAxiosError } from '@/utils';
+import { getStageLabel } from '@/utils/fulfillmentStageLabel';
 
 const WEEKDAYS = ['CN', 'T2', 'T3', 'T4', 'T5', 'T6', 'T7'];
 
@@ -97,6 +100,251 @@ interface Props {
   caption?: React.ReactNode;
 }
 
+function buildRows(t: TFunction<'dashboard'>, stage: FulfillmentStage | undefined, lane: OverviewLane | undefined): RowDesc[] {
+  const list: RowDesc[] = [
+    {
+      key: 'total',
+      label: t('pipelineOverview.labels.total'),
+      tone: 'neutral',
+      single: (m) => m.total,
+      singleCls: 'text-foreground',
+      tip: (m, d) => t('pipelineOverview.tips.total', { day: d, count: m.total }),
+    },
+  ];
+
+  // ─── Lane "Soát tool" ───────────────────────────────────────────────
+  if (lane === 'tool') {
+    list.push({
+      key: 'tool-h',
+      label: t('pipelineOverview.labels.toolCheck'),
+      header: true,
+      tone: 'highlight',
+      tip: (_m, d) => t('pipelineOverview.tips.yourStage', { day: d, label: t('pipelineOverview.labels.toolCheck') }),
+    });
+    list.push({
+      key: 'tool-unreviewed',
+      label: t('pipelineOverview.labels.unreviewed'),
+      indent: true,
+      tone: 'highlight',
+      showZero: true,
+      single: (m) => m.toolUnreviewed,
+      singleCls: AMBER,
+      tip: (m, d) => t('pipelineOverview.tips.toolUnreviewed', { day: d, count: m.toolUnreviewed }),
+    });
+    list.push({
+      key: 'tool-reviewed',
+      label: t('pipelineOverview.labels.reviewed'),
+      indent: true,
+      tone: 'highlight',
+      showZero: true,
+      single: (m) => m.toolReviewed,
+      singleCls: 'text-foreground',
+      tip: (m, d) => t('pipelineOverview.tips.toolReviewed', { day: d, count: m.toolReviewed }),
+    });
+    list.push({
+      key: 'tool-error',
+      label: t('pipelineOverview.labels.error'),
+      indent: true,
+      tone: 'danger',
+      showZero: true,
+      single: (m) => Math.max(0, m.toolReviewed - m.toolOk),
+      singleCls: RED,
+      tip: (m, d) =>
+        t('pipelineOverview.tips.toolError', { day: d, count: Math.max(0, m.toolReviewed - m.toolOk) }),
+    });
+    list.push({
+      key: 'tool-ok',
+      label: t('pipelineOverview.labels.ok'),
+      indent: true,
+      tone: 'highlight',
+      showZero: true,
+      single: (m) => m.toolOk,
+      singleCls: EMERALD,
+      tip: (m, d) => t('pipelineOverview.tips.toolOk', { day: d, count: m.toolOk }),
+    });
+  } else {
+    list.push({
+      key: 'tool',
+      label: t('pipelineOverview.labels.toolCheck'),
+      tone: 'neutral',
+      dual: (m) => [m.toolReviewed, m.toolUnreviewed],
+      dualCls: [EMERALD, AMBER],
+      tip: (m, d) => t('pipelineOverview.tips.toolDual', { day: d, done: m.toolReviewed, left: m.toolUnreviewed }),
+    });
+  }
+
+  // ─── Lane "Designer" ────────────────────────────────────────────────
+  if (lane === 'designer') {
+    list.push({
+      key: 'designer-h',
+      label: t('pipelineOverview.labels.designer'),
+      header: true,
+      tone: 'highlight',
+      tip: (_m, d) => t('pipelineOverview.tips.yourStage', { day: d, label: t('pipelineOverview.labels.designer') }),
+    });
+    list.push({
+      key: 'designer-received',
+      label: t('pipelineOverview.labels.received'),
+      indent: true,
+      tone: 'highlight',
+      showZero: true,
+      single: (m) => m.designerReceived,
+      singleCls: 'text-foreground',
+      tip: (m, d) => t('pipelineOverview.tips.designerReceived', { day: d, count: m.designerReceived }),
+    });
+    list.push({
+      key: 'designer-done',
+      label: t('pipelineOverview.labels.done'),
+      indent: true,
+      tone: 'highlight',
+      showZero: true,
+      single: (m) => Math.max(0, m.designerDone - m.designerFixed),
+      singleCls: EMERALD,
+      tip: (m, d) =>
+        t('pipelineOverview.tips.designerDone', {
+          day: d,
+          count: Math.max(0, m.designerDone - m.designerFixed),
+          fixed: m.designerFixed,
+        }),
+    });
+    list.push({
+      key: 'designer-fixed',
+      label: t('pipelineOverview.labels.fixed'),
+      indent: true,
+      tone: 'highlight',
+      showZero: true,
+      single: (m) => m.designerFixed,
+      singleCls: TEAL,
+      tip: (m, d) => t('pipelineOverview.tips.designerFixed', { day: d, count: m.designerFixed }),
+    });
+    list.push({
+      key: 'designer-remaining',
+      label: t('pipelineOverview.labels.remaining'),
+      indent: true,
+      tone: 'highlight',
+      showZero: true,
+      single: (m) => Math.max(0, m.designerReceived - m.designerDone - m.designerRework),
+      singleCls: INDIGO,
+      tip: (m, d) =>
+        t('pipelineOverview.tips.designerRemaining', {
+          day: d,
+          count: Math.max(0, m.designerReceived - m.designerDone - m.designerRework),
+        }),
+    });
+    list.push({
+      key: 'designer-rework',
+      label: t('pipelineOverview.labels.rework'),
+      indent: true,
+      tone: 'danger',
+      showZero: true,
+      single: (m) => m.designerRework,
+      singleCls: RED,
+      tip: (m, d) => t('pipelineOverview.tips.designerRework', { day: d, count: m.designerRework }),
+    });
+  } else {
+    list.push({
+      key: 'designer',
+      label: t('pipelineOverview.labels.designer'),
+      tone: 'neutral',
+      dual: (m) => [m.designerDone, Math.max(0, m.designerReceived - m.designerDone)],
+      dualCls: [EMERALD, INDIGO],
+      tip: (m, d) =>
+        t('pipelineOverview.tips.designerDual', {
+          day: d,
+          done: m.designerDone,
+          left: Math.max(0, m.designerReceived - m.designerDone),
+          received: m.designerReceived,
+        }),
+    });
+  }
+
+  // ─── 6 stage fulfillment ────────────────────────────────────────────
+  for (const st of FULFILLMENT_STAGES) {
+    const label = getStageLabel(t, st);
+    if (st === stage) {
+      list.push({
+        key: `${st}-h`,
+        label,
+        header: true,
+        tone: 'highlight',
+        tip: (_m, d) => t('pipelineOverview.tips.yourStage', { day: d, label }),
+      });
+      list.push({
+        key: `${st}-arrived`,
+        label: t('pipelineOverview.labels.arrived'),
+        indent: true,
+        tone: 'highlight',
+        showZero: true,
+        single: (m) => m.stages[st]?.arrived ?? 0,
+        singleCls: 'text-foreground',
+        tip: (m, d) => t('pipelineOverview.tips.stageArrived', { day: d, label, count: m.stages[st]?.arrived ?? 0 }),
+      });
+      list.push({
+        key: `${st}-done`,
+        label: t('pipelineOverview.labels.done'),
+        indent: true,
+        tone: 'highlight',
+        showZero: true,
+        single: (m) => Math.max(0, (m.stages[st]?.done ?? 0) - (m.stages[st]?.fixed ?? 0)),
+        singleCls: EMERALD,
+        tip: (m, d) =>
+          t('pipelineOverview.tips.stageDone', {
+            day: d,
+            label,
+            count: Math.max(0, (m.stages[st]?.done ?? 0) - (m.stages[st]?.fixed ?? 0)),
+            fixed: m.stages[st]?.fixed ?? 0,
+          }),
+      });
+      list.push({
+        key: `${st}-fixed`,
+        label: t('pipelineOverview.labels.fixed'),
+        indent: true,
+        tone: 'highlight',
+        showZero: true,
+        single: (m) => m.stages[st]?.fixed ?? 0,
+        singleCls: TEAL,
+        tip: (m, d) => t('pipelineOverview.tips.stageFixed', { day: d, label, count: m.stages[st]?.fixed ?? 0 }),
+      });
+      list.push({
+        key: `${st}-remaining`,
+        label: t('pipelineOverview.labels.remaining'),
+        indent: true,
+        tone: 'highlight',
+        showZero: true,
+        single: (m) => m.stages[st]?.remaining ?? 0,
+        singleCls: INDIGO,
+        tip: (m, d) =>
+          t('pipelineOverview.tips.stageRemaining', { day: d, label, count: m.stages[st]?.remaining ?? 0 }),
+      });
+      list.push({
+        key: `${st}-rework`,
+        label: t('pipelineOverview.labels.rework'),
+        indent: true,
+        tone: 'danger',
+        showZero: true,
+        single: (m) => m.stages[st]?.rework ?? 0,
+        singleCls: RED,
+        tip: (m, d) => t('pipelineOverview.tips.stageRework', { day: d, label, count: m.stages[st]?.rework ?? 0 }),
+      });
+    } else {
+      list.push({
+        key: st,
+        label,
+        tone: 'dim',
+        showZero: true,
+        dual: (m) => [m.stages[st]?.done ?? 0, Math.max(0, (m.stages[st]?.arrived ?? 0) - (m.stages[st]?.done ?? 0))],
+        dualCls: [EMERALD, INDIGO],
+        tip: (m, d) => {
+          const s = m.stages[st];
+          const left = Math.max(0, (s?.arrived ?? 0) - (s?.done ?? 0));
+          return t('pipelineOverview.tips.stageDual', { day: d, label, done: s?.done ?? 0, left, arrived: s?.arrived ?? 0 });
+        },
+      });
+    }
+  }
+  return list;
+}
+
 /**
  * Bảng tổng quan theo ngày FULL luồng (Task Fulfillment / Designer / Soát tool),
  * gom theo `inProductionAt` (VN) — funnel TOÀN CỤC (không scope assignee). Mỗi
@@ -105,6 +353,7 @@ interface Props {
  * đỏ. Mỗi ô có tooltip. Ô 2 số chia đều 2 bên (slash giữa); hàng bung hiện `0`.
  */
 export function PipelineDailyOverview({ stage, lane, from, to, reloadToken, dayFilter, onPickDay, caption }: Props) {
+  const { t } = useTranslation('dashboard');
   const [data, setData] = useState<Data>(EMPTY);
   const [loading, setLoading] = useState(false);
   const seqRef = useRef(0);
@@ -136,247 +385,7 @@ export function PipelineDailyOverview({ stage, lane, from, to, reloadToken, dayF
 
   const { days, columnTotals } = data;
 
-  const rows = useMemo<RowDesc[]>(() => {
-    const list: RowDesc[] = [
-      {
-        key: 'total',
-        label: 'Tổng đơn',
-        tone: 'neutral',
-        single: (m) => m.total,
-        singleCls: 'text-foreground',
-        tip: (m, d) => `${d} · Tổng đơn vào sản xuất: ${m.total}`,
-      },
-    ];
-
-    // ─── Lane "Soát tool" ───────────────────────────────────────────────
-    if (lane === 'tool') {
-      list.push({
-        key: 'tool-h',
-        label: 'Soát tool',
-        header: true,
-        tone: 'highlight',
-        tip: (_m, d) => `${d} · Soát tool — công đoạn của bạn`,
-      });
-      list.push({
-        key: 'tool-unreviewed',
-        label: 'Chưa soát',
-        indent: true,
-        tone: 'highlight',
-        showZero: true,
-        single: (m) => m.toolUnreviewed,
-        singleCls: AMBER,
-        tip: (m, d) => `${d} · Soát tool / Chưa soát: ${m.toolUnreviewed} — chưa kiểm tool`,
-      });
-      list.push({
-        key: 'tool-reviewed',
-        label: 'Đã soát',
-        indent: true,
-        tone: 'highlight',
-        showZero: true,
-        single: (m) => m.toolReviewed,
-        singleCls: 'text-foreground',
-        tip: (m, d) => `${d} · Soát tool / Đã soát: ${m.toolReviewed} — đơn đã có kết quả tool`,
-      });
-      list.push({
-        key: 'tool-error',
-        label: 'Lỗi',
-        indent: true,
-        tone: 'danger',
-        showZero: true,
-        single: (m) => Math.max(0, m.toolReviewed - m.toolOk),
-        singleCls: RED,
-        tip: (m, d) =>
-          `${d} · Soát tool / Lỗi: ${Math.max(0, m.toolReviewed - m.toolOk)} — đã soát nhưng kết quả ≠ 'ok'`,
-      });
-      list.push({
-        key: 'tool-ok',
-        label: 'OK',
-        indent: true,
-        tone: 'highlight',
-        showZero: true,
-        single: (m) => m.toolOk,
-        singleCls: EMERALD,
-        tip: (m, d) => `${d} · Soát tool / OK: ${m.toolOk} — đã soát & kết quả 'ok' (sẵn sàng in)`,
-      });
-    } else {
-      list.push({
-        key: 'tool',
-        label: 'Soát tool',
-        tone: 'neutral',
-        dual: (m) => [m.toolReviewed, m.toolUnreviewed],
-        dualCls: [EMERALD, AMBER],
-        tip: (m, d) =>
-          `${d} · Soát tool — Đã soát ${m.toolReviewed} / Chưa soát ${m.toolUnreviewed}. ` +
-          `(đã soát = đơn đã có kết quả tool; chưa soát = chưa kiểm)`,
-      });
-    }
-
-    // ─── Lane "Designer" ────────────────────────────────────────────────
-    if (lane === 'designer') {
-      list.push({
-        key: 'designer-h',
-        label: 'Designer',
-        header: true,
-        tone: 'highlight',
-        tip: (_m, d) => `${d} · Designer — công đoạn của bạn`,
-      });
-      list.push({
-        key: 'designer-received',
-        label: 'Nhận',
-        indent: true,
-        tone: 'highlight',
-        showZero: true,
-        single: (m) => m.designerReceived,
-        singleCls: 'text-foreground',
-        tip: (m, d) => `${d} · Designer / Nhận: ${m.designerReceived} — đơn đã được giao cho designer`,
-      });
-      list.push({
-        key: 'designer-done',
-        label: 'Đã xong',
-        indent: true,
-        tone: 'highlight',
-        showZero: true,
-        single: (m) => Math.max(0, m.designerDone - m.designerFixed),
-        singleCls: EMERALD,
-        tip: (m, d) =>
-          `${d} · Designer / Đã xong: ${Math.max(0, m.designerDone - m.designerFixed)} — ` +
-          `hoàn thành KHÔNG dính lỗi (đã trừ ${m.designerFixed} đơn đã sửa)`,
-      });
-      list.push({
-        key: 'designer-fixed',
-        label: 'Đã sửa',
-        indent: true,
-        tone: 'highlight',
-        showZero: true,
-        single: (m) => m.designerFixed,
-        singleCls: TEAL,
-        tip: (m, d) =>
-          `${d} · Designer / Đã sửa: ${m.designerFixed} — hoàn thành SAU KHI sửa lỗi (designerReworkCount>0)`,
-      });
-      list.push({
-        key: 'designer-remaining',
-        label: 'Còn lại',
-        indent: true,
-        tone: 'highlight',
-        showZero: true,
-        single: (m) => Math.max(0, m.designerReceived - m.designerDone - m.designerRework),
-        singleCls: INDIGO,
-        tip: (m, d) =>
-          `${d} · Designer / Còn lại: ${Math.max(0, m.designerReceived - m.designerDone - m.designerRework)} — ` +
-          `đã giao chưa xong (cần làm + đang làm, không tính lỗi cần sửa)`,
-      });
-      list.push({
-        key: 'designer-rework',
-        label: 'Lỗi cần sửa',
-        indent: true,
-        tone: 'danger',
-        showZero: true,
-        single: (m) => m.designerRework,
-        singleCls: RED,
-        tip: (m, d) =>
-          `${d} · Designer / Lỗi cần sửa: ${m.designerRework} — xưởng báo lỗi designer, cần làm lại (rework)`,
-      });
-    } else {
-      list.push({
-        key: 'designer',
-        label: 'Designer',
-        tone: 'neutral',
-        dual: (m) => [m.designerDone, Math.max(0, m.designerReceived - m.designerDone)],
-        dualCls: [EMERALD, INDIGO],
-        tip: (m, d) =>
-          `${d} · Designer — Đã làm ${m.designerDone} / Còn lại ${Math.max(0, m.designerReceived - m.designerDone)} ` +
-          `(tổng nhận ${m.designerReceived}). Còn lại = đã giao nhưng chưa xong.`,
-      });
-    }
-
-    // ─── 6 stage fulfillment ────────────────────────────────────────────
-    for (const st of FULFILLMENT_STAGES) {
-      const label = FULFILLMENT_STAGE_LABELS[st];
-      if (st === stage) {
-        list.push({
-          key: `${st}-h`,
-          label,
-          header: true,
-          tone: 'highlight',
-          tip: (_m, d) => `${d} · ${label} — công đoạn của bạn`,
-        });
-        list.push({
-          key: `${st}-arrived`,
-          label: 'Đến',
-          indent: true,
-          tone: 'highlight',
-          showZero: true,
-          single: (m) => m.stages[st]?.arrived ?? 0,
-          singleCls: 'text-foreground',
-          tip: (m, d) =>
-            `${d} · ${label} / Đến: ${m.stages[st]?.arrived ?? 0} — tổng đơn cohort đã tới công đoạn này (= Đã làm + Còn lại + Lỗi)`,
-        });
-        list.push({
-          key: `${st}-done`,
-          label: 'Đã làm',
-          indent: true,
-          tone: 'highlight',
-          showZero: true,
-          single: (m) => Math.max(0, (m.stages[st]?.done ?? 0) - (m.stages[st]?.fixed ?? 0)),
-          singleCls: EMERALD,
-          tip: (m, d) =>
-            `${d} · ${label} / Đã làm: ${Math.max(0, (m.stages[st]?.done ?? 0) - (m.stages[st]?.fixed ?? 0))} — ` +
-            `hoàn thành KHÔNG dính lỗi (đã trừ ${m.stages[st]?.fixed ?? 0} đơn đã sửa)`,
-        });
-        list.push({
-          key: `${st}-fixed`,
-          label: 'Đã sửa',
-          indent: true,
-          tone: 'highlight',
-          showZero: true,
-          single: (m) => m.stages[st]?.fixed ?? 0,
-          singleCls: TEAL,
-          tip: (m, d) =>
-            `${d} · ${label} / Đã sửa: ${m.stages[st]?.fixed ?? 0} — hoàn thành SAU KHI công đoạn từng bị đẩy về (reworkCount>0)`,
-        });
-        list.push({
-          key: `${st}-remaining`,
-          label: 'Còn lại',
-          indent: true,
-          tone: 'highlight',
-          showZero: true,
-          single: (m) => m.stages[st]?.remaining ?? 0,
-          singleCls: INDIGO,
-          tip: (m, d) =>
-            `${d} · ${label} / Còn lại: ${m.stages[st]?.remaining ?? 0} — đang chờ + đang làm (waiting + in-progress)`,
-        });
-        list.push({
-          key: `${st}-rework`,
-          label: 'Lỗi cần sửa',
-          indent: true,
-          tone: 'danger',
-          showZero: true,
-          single: (m) => m.stages[st]?.rework ?? 0,
-          singleCls: RED,
-          tip: (m, d) =>
-            `${d} · ${label} / Lỗi cần sửa: ${m.stages[st]?.rework ?? 0} — bị công đoạn sau đẩy về, cần làm lại (rework)`,
-        });
-      } else {
-        list.push({
-          key: st,
-          label,
-          tone: 'dim',
-          showZero: true,
-          dual: (m) => [m.stages[st]?.done ?? 0, Math.max(0, (m.stages[st]?.arrived ?? 0) - (m.stages[st]?.done ?? 0))],
-          dualCls: [EMERALD, INDIGO],
-          tip: (m, d) => {
-            const s = m.stages[st];
-            const left = Math.max(0, (s?.arrived ?? 0) - (s?.done ?? 0));
-            return (
-              `${d} · ${label} — Đã xong ${s?.done ?? 0} / Còn lại ${left} ` +
-              `(tổng nhận ${s?.arrived ?? 0}, cộng dồn).`
-            );
-          },
-        });
-      }
-    }
-    return list;
-  }, [stage, lane]);
+  const rows = useMemo<RowDesc[]>(() => buildRows(t, stage, lane), [t, stage, lane]);
 
   const renderCell = (row: RowDesc, m: Metrics) => {
     if (row.header) return null;
@@ -431,12 +440,14 @@ export function PipelineDailyOverview({ stage, lane, from, to, reloadToken, dayF
     <div className="rounded-md border border-border bg-card">
       <div className="flex items-center gap-2 px-3 py-2 border-b border-border">
         <CalendarRange size={15} className="text-indigo-600" />
-        <span className="text-sm font-semibold">Tổng quan theo ngày</span>
+        <span className="text-sm font-semibold">{t('pipelineOverview.title')}</span>
         <span className="hidden md:inline text-[11px] text-muted-foreground">
           {caption ?? (
             <>
-              — theo ngày vào SX · ô 2 số = <b className="text-emerald-600">đã xong</b>/
-              <b className="text-indigo-600">còn lại</b> · di chuột vào ô để xem chi tiết · bấm 1 ngày để lọc bên dưới
+              — {t('pipelineOverview.captionPrefix')} · {t('pipelineOverview.captionCellFormat')} ={' '}
+              <b className="text-emerald-600">{t('pipelineOverview.labels.done')}</b>/
+              <b className="text-indigo-600">{t('pipelineOverview.labels.remaining')}</b> ·{' '}
+              {t('pipelineOverview.captionSuffix')}
             </>
           )}
         </span>
@@ -446,21 +457,21 @@ export function PipelineDailyOverview({ stage, lane, from, to, reloadToken, dayF
             onClick={() => onPickDay(dayFilter)}
             className="ml-auto inline-flex items-center gap-1 text-[11px] rounded-full bg-indigo-100 dark:bg-indigo-500/20 text-indigo-700 dark:text-indigo-300 px-2 py-0.5"
           >
-            Đang lọc {fmtHead(dayFilter).dm}
+            {t('pipelineOverview.filtering', { date: fmtHead(dayFilter).dm })}
             <X size={11} />
           </button>
         )}
       </div>
 
       {!loading && days.length === 0 ? (
-        <p className="text-xs text-muted-foreground text-center py-6">Không có đơn trong khoảng đã chọn.</p>
+        <p className="text-xs text-muted-foreground text-center py-6">{t('pipelineOverview.noOrdersInRange')}</p>
       ) : (
         <div className="overflow-x-auto">
           <table className="w-full text-[13px] tabular-nums border-separate border-spacing-0">
             <thead>
               <tr>
                 <th className="sticky left-0 z-20 bg-card text-left font-medium px-3 py-2 border-b border-border min-w-[120px]">
-                  Chỉ số
+                  {t('pipelineOverview.metricColumn')}
                 </th>
                 {days.map((d) => {
                   const { wd, dm } = fmtHead(d.day);
@@ -479,7 +490,7 @@ export function PipelineDailyOverview({ stage, lane, from, to, reloadToken, dayF
                   );
                 })}
                 <th className="bg-muted/30 font-semibold px-2 py-1.5 border-b border-l border-border text-center min-w-[62px]">
-                  Tổng
+                  {t('pipelineOverview.totalColumn')}
                 </th>
               </tr>
             </thead>
@@ -513,8 +524,8 @@ export function PipelineDailyOverview({ stage, lane, from, to, reloadToken, dayF
                   })}
                   <td
                     className="bg-muted/30 border-b border-l border-border px-2 py-1.5"
-                    onMouseEnter={(e) => showTip(row.tip(columnTotals, 'Tổng cả kỳ'), e)}
-                    onMouseMove={(e) => showTip(row.tip(columnTotals, 'Tổng cả kỳ'), e)}
+                    onMouseEnter={(e) => showTip(row.tip(columnTotals, t('pipelineOverview.totalPeriod')), e)}
+                    onMouseMove={(e) => showTip(row.tip(columnTotals, t('pipelineOverview.totalPeriod')), e)}
                     onMouseLeave={hideTip}
                   >
                     {renderCell(row, columnTotals)}

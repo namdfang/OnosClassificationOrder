@@ -1,4 +1,5 @@
 import React from 'react';
+import { useTranslation } from 'react-i18next';
 import { ListChecks, RefreshCw, Search } from 'lucide-react';
 
 import { DateRangePicker } from '@/components/common/DateRangePicker';
@@ -62,9 +63,6 @@ export interface OrderFilterBarProps {
   className?: string;
 }
 
-const DEFAULT_SEARCH_PLACEHOLDER =
-  'Tìm Production ID / SKU / Order ID / Type… (dán nhiều mã cách nhau bằng phẩy/khoảng trắng)';
-
 /**
  * Filter bar chuẩn cho mọi bảng order. Reusable across:
  *  - `OrderTableWorkshop` (reference)
@@ -84,7 +82,7 @@ const DEFAULT_SEARCH_PLACEHOLDER =
 export function OrderFilterBar({
   search,
   onSearchChange,
-  searchPlaceholder = DEFAULT_SEARCH_PLACEHOLDER,
+  searchPlaceholder,
   onBulkApply,
   bulkIds,
   createdFrom,
@@ -97,8 +95,10 @@ export function OrderFilterBar({
   middleRow,
   className,
 }: OrderFilterBarProps) {
+  const { t } = useTranslation('orders');
   const { has } = usePermission();
   const [bulkOpen, setBulkOpen] = React.useState(false);
+  const finalSearchPlaceholder = searchPlaceholder ?? t('filterBar.defaultSearchPlaceholder');
 
   // Đếm số mã parse được từ ô search (hiện badge "N mã" khi tìm nhiều mã).
   const searchTokenCount = search ? parseProductionIds(search).length : 0;
@@ -115,7 +115,7 @@ export function OrderFilterBar({
           <div className="relative flex-1 min-w-[200px]">
             <Search size={13} className="absolute left-2 top-1/2 -translate-y-1/2 text-muted-foreground" />
             <Input
-              placeholder={searchPlaceholder}
+              placeholder={finalSearchPlaceholder}
               value={search}
               onChange={(e) => onSearchChange(e.target.value)}
               onPaste={(e) => {
@@ -134,22 +134,22 @@ export function OrderFilterBar({
             />
             {searchTokenCount > 1 && (
               <span className="absolute right-2 top-1/2 -translate-y-1/2 text-[11px] font-medium text-primary pointer-events-none">
-                {searchTokenCount} mã
+                {t('filterBar.tokenCount', { count: searchTokenCount })}
               </span>
             )}
           </div>
         )}
         {showSearch && onBulkApply && (
-          <Hint content="Dán danh sách mã (mỗi Production ID một dòng) để lọc bảng">
+          <Hint content={t('filterBar.bulkHint')}>
             <Button variant="outline" size="sm" onClick={() => setBulkOpen(true)}>
               <ListChecks size={14} />
-              Nhiều mã
+              {t('filterBar.bulkBtn')}
             </Button>
           </Hint>
         )}
         <Button variant="outline" size="sm" onClick={onReload} disabled={loading}>
           <RefreshCw size={13} className={loading ? 'animate-spin' : ''} />
-          Tải lại
+          {t('filterBar.reloadBtn')}
         </Button>
         {topActionsRight}
       </div>

@@ -1,0 +1,70 @@
+{
+  "page": {
+    "title": "Chương trình giảm giá",
+    "subtitle": "Quản lý discount theo tier khách hàng (VIP 0..5) — áp dụng cho giá tham khảo ở Customer Portal.",
+    "stats": {
+      "total": "Tổng chương trình",
+      "active": "Đang hoạt động",
+      "expiringSoon": "Sắp hết hạn (7 ngày)"
+    },
+    "searchPlaceholder": "Tìm theo tên hoặc mã coupon…",
+    "createButton": "Tạo chương trình",
+    "allTiers": "Mọi tier",
+    "deleteConfirm": "Xoá chương trình giảm giá này?",
+    "deleteSuccess": "Đã xoá",
+    "table": {
+      "name": "Tên",
+      "code": "Mã",
+      "discount": "Giảm giá",
+      "scope": "Phạm vi",
+      "tier": "Tier",
+      "validity": "Hiệu lực",
+      "status": "Trạng thái",
+      "empty": "Chưa có chương trình giảm giá nào.",
+      "active": "Hoạt động",
+      "inactive": "Tạm tắt"
+    }
+  },
+  "scope": {
+    "all": "Toàn bộ",
+    "category": "Theo danh mục",
+    "product": "Sản phẩm cụ thể"
+  },
+  "editDialog": {
+    "createTitle": "Tạo chương trình giảm giá",
+    "editTitle": "Sửa chương trình giảm giá",
+    "name": "Tên chương trình",
+    "namePlaceholder": "VD: Giảm giá khách VIP",
+    "code": "Mã coupon (tuỳ chọn)",
+    "codePlaceholder": "VD: VIP10",
+    "description": "Mô tả",
+    "discountTypeLabel": "Loại giảm giá",
+    "discountType": {
+      "percentage": "% giảm giá",
+      "fixed": "Giảm số tiền cố định"
+    },
+    "discountValue": "Giá trị",
+    "scopeLabel": "Phạm vi áp dụng",
+    "scope": {
+      "all": "Toàn bộ sản phẩm",
+      "category": "Theo danh mục",
+      "product": "Sản phẩm cụ thể"
+    },
+    "productCategory": "Danh mục sản phẩm",
+    "notSelected": "— Chưa chọn —",
+    "applicableProducts": "Sản phẩm áp dụng ({{count}} đã chọn)",
+    "noProducts": "Chưa có sản phẩm nào.",
+    "applicableTiers": "Tier khách hàng áp dụng (bỏ trống = mọi tier, kể cả khách lẻ)",
+    "minQuantity": "SL tối thiểu",
+    "startDate": "Bắt đầu",
+    "endDate": "Kết thúc",
+    "active": "Đang hoạt động",
+    "inactive": "Tạm tắt",
+    "nameRequired": "Nhập tên chương trình",
+    "discountValueRequired": "Nhập giá trị giảm giá",
+    "categoryRequired": "Chọn danh mục áp dụng",
+    "productRequired": "Chọn ít nhất 1 sản phẩm áp dụng",
+    "updateSuccess": "Đã cập nhật chương trình giảm giá",
+    "createSuccess": "Đã tạo chương trình giảm giá"
+  }
+}

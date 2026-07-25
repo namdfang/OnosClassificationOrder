@@ -1,6 +1,8 @@
-import React, { useState } from 'react';
+import React, { useMemo, useState } from 'react';
 import { useForm } from 'react-hook-form';
+import { useTranslation } from 'react-i18next';
 import { useNavigate } from 'react-router-dom';
+import type { TFunction } from 'i18next';
 import { toast } from 'sonner';
 import { z } from 'zod';
 import { zodResolver } from '@hookform/resolvers/zod';
@@ -15,22 +17,26 @@ import { PATHS } from '../../../constants/paths';
 import { RepositoryRemote } from '../../../services';
 import { handleAxiosError } from '../../../utils';
 
-const placeOrderSchema = z.object({
-  type: z.string().min(1, 'Loại sản phẩm là bắt buộc'),
-  color: z.string().optional(),
-  size: z.string().optional(),
-  quantity: z.coerce.number().int().positive().default(1),
-  mockupUrl: z.string().optional(),
-  printMethod: z.string().optional(),
-  referent: z.string().optional(),
-});
+function buildPlaceOrderSchema(t: TFunction<'customerPortal'>) {
+  return z.object({
+    type: z.string().min(1, t('orderNew.validation.typeRequired')),
+    color: z.string().optional(),
+    size: z.string().optional(),
+    quantity: z.coerce.number().int().positive().default(1),
+    mockupUrl: z.string().optional(),
+    printMethod: z.string().optional(),
+    referent: z.string().optional(),
+  });
+}
 
-type PlaceOrderFormValues = z.infer<typeof placeOrderSchema>;
+type PlaceOrderFormValues = z.infer<ReturnType<typeof buildPlaceOrderSchema>>;
 
 function CustomerOrderNew() {
   const navigate = useNavigate();
+  const { t } = useTranslation('customerPortal');
   const [loading, setLoading] = useState(false);
 
+  const placeOrderSchema = useMemo(() => buildPlaceOrderSchema(t), [t]);
   const form = useForm<PlaceOrderFormValues>({
     resolver: zodResolver(placeOrderSchema),
     defaultValues: { type: '', color: '', size: '', quantity: 1, mockupUrl: '', printMethod: '', referent: '' },
@@ -40,7 +46,7 @@ function CustomerOrderNew() {
     try {
       setLoading(true);
       const res = await RepositoryRemote.customerOrder.placeOrder(values);
-      toast.success(`Đặt đơn thành công — mã đơn ${res?.data?.data?.productionId}`);
+      toast.success(t('orderNew.success', { code: res?.data?.data?.productionId }));
       navigate(PATHS.CUSTOMER_ORDERS);
     } catch (error) {
       handleAxiosError(error);
@@ -51,7 +57,7 @@ function CustomerOrderNew() {
 
   return (
     <div className="max-w-lg">
-      <h1 className="text-lg font-semibold mb-5">Đặt đơn mới</h1>
+      <h1 className="text-lg font-semibold mb-5">{t('orderNew.title')}</h1>
 
       <div className="bg-card border border-border rounded-xl p-6">
         <Form {...form}>
@@ -61,9 +67,9 @@ function CustomerOrderNew() {
               name="type"
               render={({ field }) => (
                 <FormItem>
-                  <FormLabel>Loại sản phẩm</FormLabel>
+                  <FormLabel>{t('orderNew.type')}</FormLabel>
                   <FormControl>
-                    <Input placeholder="Vd: Áo thun, Cốc sứ..." className="h-10" {...field} />
+                    <Input placeholder={t('orderNew.typePlaceholder')} className="h-10" {...field} />
                   </FormControl>
                   <FormMessage />
                 </FormItem>
@@ -76,9 +82,9 @@ function CustomerOrderNew() {
                 name="color"
                 render={({ field }) => (
                   <FormItem>
-                    <FormLabel>Màu</FormLabel>
+                    <FormLabel>{t('orderNew.color')}</FormLabel>
                     <FormControl>
-                      <Input placeholder="Đen" className="h-10" {...field} />
+                      <Input placeholder={t('orderNew.colorPlaceholder')} className="h-10" {...field} />
                     </FormControl>
                     <FormMessage />
                   </FormItem>
@@ -89,9 +95,9 @@ function CustomerOrderNew() {
                 name="size"
                 render={({ field }) => (
                   <FormItem>
-                    <FormLabel>Size</FormLabel>
+                    <FormLabel>{t('orderNew.size')}</FormLabel>
                     <FormControl>
-                      <Input placeholder="M" className="h-10" {...field} />
+                      <Input placeholder={t('orderNew.sizePlaceholder')} className="h-10" {...field} />
                     </FormControl>
                     <FormMessage />
                   </FormItem>
@@ -104,7 +110,7 @@ function CustomerOrderNew() {
               name="quantity"
               render={({ field }) => (
                 <FormItem>
-                  <FormLabel>Số lượng</FormLabel>
+                  <FormLabel>{t('orderNew.quantity')}</FormLabel>
                   <FormControl>
                     <Input type="number" min={1} className="h-10" {...field} />
                   </FormControl>
@@ -118,9 +124,9 @@ function CustomerOrderNew() {
               name="mockupUrl"
               render={({ field }) => (
                 <FormItem>
-                  <FormLabel>Link ảnh mockup/thiết kế (không bắt buộc)</FormLabel>
+                  <FormLabel>{t('orderNew.mockupUrl')}</FormLabel>
                   <FormControl>
-                    <Input placeholder="https://..." className="h-10" {...field} />
+                    <Input placeholder={t('orderNew.mockupUrlPlaceholder')} className="h-10" {...field} />
                   </FormControl>
                   <FormMessage />
                 </FormItem>
@@ -132,9 +138,9 @@ function CustomerOrderNew() {
               name="printMethod"
               render={({ field }) => (
                 <FormItem>
-                  <FormLabel>Phương pháp in (không bắt buộc)</FormLabel>
+                  <FormLabel>{t('orderNew.printMethod')}</FormLabel>
                   <FormControl>
-                    <Input placeholder="DTG, DTF..." className="h-10" {...field} />
+                    <Input placeholder={t('orderNew.printMethodPlaceholder')} className="h-10" {...field} />
                   </FormControl>
                   <FormMessage />
                 </FormItem>
@@ -146,9 +152,9 @@ function CustomerOrderNew() {
               name="referent"
               render={({ field }) => (
                 <FormItem>
-                  <FormLabel>Ghi chú (không bắt buộc)</FormLabel>
+                  <FormLabel>{t('orderNew.note')}</FormLabel>
                   <FormControl>
-                    <Textarea placeholder="Ghi chú thêm cho đơn hàng..." {...field} />
+                    <Textarea placeholder={t('orderNew.notePlaceholder')} {...field} />
                   </FormControl>
                   <FormMessage />
                 </FormItem>
@@ -157,7 +163,7 @@ function CustomerOrderNew() {
 
             <Button type="submit" disabled={loading} className="w-full h-10">
               {loading && <Spinner size={14} className="text-primary-foreground" />}
-              Đặt đơn
+              {t('orderNew.submit')}
             </Button>
           </form>
         </Form>

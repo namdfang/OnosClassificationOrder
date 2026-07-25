@@ -1,9 +1,11 @@
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
+import { useTranslation } from 'react-i18next';
 import { Navigate } from 'react-router-dom';
+import type { TFunction } from 'i18next';
 import { Eye, EyeOff, FileDown, Plus, Printer, QrCode, RotateCcw } from 'lucide-react';
 import { QRCodeCanvas, QRCodeSVG } from 'qrcode.react';
 import type { FulfillmentStage as FulfillmentStageT, StageErrorReworkTarget, WorkshopConfig } from 'shared';
-import { FULFILLMENT_STAGE_LABELS, FULFILLMENT_STAGE_ORDER, FULFILLMENT_STAGES, FulfillmentStage } from 'shared';
+import { FULFILLMENT_STAGE_ORDER, FULFILLMENT_STAGES, FulfillmentStage } from 'shared';
 import { toast } from 'sonner';
 
 import { PATHS } from '@/constants/paths';
@@ -19,15 +21,16 @@ import { Input } from '@/components/ui/input';
 
 import { handleAxiosError } from '@/utils';
 import { cn } from '@/utils/cn';
+import { getStageLabel } from '@/utils/fulfillmentStageLabel';
 import { errorQrPayload, SCAN_OK_CODE } from '@/utils/scanCodes';
 
 import { usePermission } from '@/hooks/usePermission';
 
-function targetLabel(target?: StageErrorReworkTarget): string {
-  if (!target) return '—';
-  if (target === 'tool-check') return 'Soát tool';
-  if (target === 'designer') return 'Designer';
-  return FULFILLMENT_STAGE_LABELS[target];
+function targetLabel(target: StageErrorReworkTarget | undefined, t: TFunction<'stageErrorCatalog'>): string {
+  if (!target) return t('targetNone');
+  if (target === 'tool-check') return t('targetToolCheck');
+  if (target === 'designer') return t('targetDesigner');
+  return getStageLabel(t, target);
 }
 
 function targetOptionsFor(stage: FulfillmentStageT): StageErrorReworkTarget[] {
@@ -67,6 +70,7 @@ export default function OrdersStageErrorsPage() {
 }
 
 function StageErrorsContent() {
+  const { t } = useTranslation('stageErrorCatalog');
   // Công nhân Fulfillment → khóa vào công đoạn của mình; Admin/Manager → chọn tab.
   const profile = useAuthStore((s) => s.profile);
   const myStage = profile?.fulfillmentStage as FulfillmentStageT | undefined;
@@ -121,7 +125,7 @@ function StageErrorsContent() {
         reworkTarget: target,
         stage: myStage ? undefined : stage,
       });
-      toast.success('Đã thêm lỗi — QR sẵn sàng để in.');
+      toast.success(t('createSuccess'));
       setName('');
       setTarget(null);
       afterMutate();
@@ -137,7 +141,7 @@ function StageErrorsContent() {
     setSaving(true);
     try {
       await RepositoryRemote.workshopConfig.updateStageError(row._id, { isActive: !row.isActive });
-      toast.success(row.isActive ? 'Đã ẩn lỗi (không xóa để giữ thống kê cũ).' : 'Đã hiện lại lỗi.');
+      toast.success(row.isActive ? t('hideSuccess') : t('showSuccess'));
       afterMutate();
     } catch (err) {
       handleAxiosError(err);
@@ -207,13 +211,12 @@ function StageErrorsContent() {
     drawA8Label(
       `qr-canvas-${row._id}`,
       row.name,
-      `Đẩy về: ${targetLabel(row.reworkTarget as StageErrorReworkTarget)}`,
+      t('labelPushTo', { target: targetLabel(row.reworkTarget as StageErrorReworkTarget, t) }),
       errorQrPayload(row),
     );
 
   // Nhãn "✔ HOÀN THÀNH" (SCAN_OK_CODE) — luôn là trang đầu PDF, giống card đầu sheet in.
-  const drawOkLabel = (): string =>
-    drawA8Label('qr-canvas-ok', '✔ HOÀN THÀNH', 'Chuyển đơn sang công đoạn sau', SCAN_OK_CODE);
+  const drawOkLabel = (): string => drawA8Label('qr-canvas-ok', t('okLabelTitle'), t('okLabelSubtitle'), SCAN_OK_CODE);
 
   const handleExportPdf = async () => {
     if (selectedRows.length === 0 || exporting) return;
@@ -227,9 +230,9 @@ function StageErrorsContent() {
         doc.addImage(drawLabel(row), 'PNG', 0, 0, A8_MM.w, A8_MM.h);
       });
       doc.save(`qr-loi-${stage}.pdf`);
-      toast.success(`Đã xuất PDF: 1 nhãn OK + ${selectedRows.length} lỗi — mỗi nhãn 1 trang A8.`);
+      toast.success(t('exportSuccess', { count: selectedRows.length }));
     } catch (err) {
-      toast.error(`Xuất PDF thất bại: ${(err as Error).message}`);
+      toast.error(t('exportFailed', { message: (err as Error).message }));
     } finally {
       setExporting(false);
     }
@@ -244,31 +247,28 @@ function StageErrorsContent() {
             <QrCode size={20} />
           </div>
           <div>
-            <h1 className="text-xl font-semibold">Danh mục lỗi công đoạn</h1>
-            <p className="text-sm text-muted-foreground">
-              Mỗi công đoạn tự định nghĩa lỗi + đích đẩy về. Thêm xong in QR dán tại trạm — quét đơn rồi quét QR lỗi là
-              tự báo lỗi + đẩy về.
-            </p>
+            <h1 className="text-xl font-semibold">{t('title')}</h1>
+            <p className="text-sm text-muted-foreground">{t('description')}</p>
           </div>
         </div>
         <div className="flex items-center gap-2">
           <Button variant="outline" onClick={() => window.print()} disabled={selectedRows.length === 0}>
             <Printer size={15} className="mr-1.5" />
-            In ({selectedRows.length})
+            {t('printBtn', { count: selectedRows.length })}
           </Button>
           <Button variant="outline" onClick={handleExportPdf} disabled={selectedRows.length === 0 || exporting}>
             {exporting ? <Spinner size={14} className="mr-1.5" /> : <FileDown size={15} className="mr-1.5" />}
-            Xuất PDF ({selectedRows.length})
+            {t('exportPdfBtn', { count: selectedRows.length })}
           </Button>
         </div>
       </div>
 
       {/* Chọn công đoạn */}
       <div className="flex items-center gap-2 flex-wrap">
-        <span className="text-xs text-muted-foreground">Công đoạn:</span>
+        <span className="text-xs text-muted-foreground">{t('stageLabel')}</span>
         {myStage ? (
           <span className="inline-flex items-center rounded-md bg-primary/10 text-primary px-3 py-1.5 text-sm font-semibold">
-            {FULFILLMENT_STAGE_LABELS[myStage]}
+            {getStageLabel(t, myStage)}
           </span>
         ) : (
           FULFILLMENT_STAGES.map((s) => (
@@ -283,7 +283,7 @@ function StageErrorsContent() {
                   : 'bg-background text-foreground border-border hover:bg-accent',
               )}
             >
-              {FULFILLMENT_STAGE_LABELS[s]}
+              {getStageLabel(t, s)}
             </button>
           ))
         )}
@@ -293,30 +293,30 @@ function StageErrorsContent() {
       <div className="rounded-lg border bg-card p-4 space-y-3">
         <div className="text-sm font-medium flex items-center gap-1.5">
           <Plus size={15} className="text-primary" />
-          Thêm lỗi cho công đoạn "{FULFILLMENT_STAGE_LABELS[stage]}"
+          {t('addForStage', { stage: getStageLabel(t, stage) })}
         </div>
         <Input
           value={name}
           onChange={(e) => setName(e.target.value.slice(0, 120))}
-          placeholder="Tên lỗi — vd: Lệch màu khi ép, Đường may hỏng…"
+          placeholder={t('namePlaceholder')}
           onKeyDown={(e) => {
             if (e.key === 'Enter') handleCreate();
           }}
         />
         <div className="space-y-1.5">
           <div className="text-xs text-muted-foreground flex items-center gap-1">
-            <RotateCcw size={12} /> Đẩy về công đoạn (= nguồn lỗi):
+            <RotateCcw size={12} /> {t('pushToLabel')}
           </div>
           <div className="flex flex-wrap gap-1.5">
-            {targets.map((t) => (
-              <TargetChip key={t} active={target === t} label={targetLabel(t)} onClick={() => setTarget(t)} />
+            {targets.map((tg) => (
+              <TargetChip key={tg} active={target === tg} label={targetLabel(tg, t)} onClick={() => setTarget(tg)} />
             ))}
           </div>
         </div>
         <div className="flex justify-end">
           <Button onClick={handleCreate} disabled={!name.trim() || !target || saving}>
             {saving && <Spinner size={14} className="mr-2" />}
-            Thêm & tạo QR
+            {t('createBtn')}
           </Button>
         </div>
       </div>
@@ -333,19 +333,17 @@ function StageErrorsContent() {
               disabled={rows.length === 0}
             />
             <span>
-              Lỗi của "{FULFILLMENT_STAGE_LABELS[stage]}"{' '}
+              {t('listTitle', { stage: getStageLabel(t, stage) })}{' '}
               <span className="text-muted-foreground font-normal">
                 ({rows.length}
-                {selected.size > 0 && ` · chọn ${selected.size}`})
+                {selected.size > 0 && t('selectedSuffix', { count: selected.size })})
               </span>
             </span>
           </label>
           {loading && <Spinner size={14} />}
         </div>
         {rows.length === 0 && !loading ? (
-          <div className="p-6 text-center text-sm text-muted-foreground">
-            Chưa có lỗi nào. Thêm lỗi đầu tiên ở form bên trên.
-          </div>
+          <div className="p-6 text-center text-sm text-muted-foreground">{t('empty')}</div>
         ) : (
           <ul className="divide-y">
             {rows.map((row) => (
@@ -364,9 +362,10 @@ function StageErrorsContent() {
                   <div className="mt-0.5 flex items-center gap-2 text-xs text-muted-foreground flex-wrap">
                     <code className="px-1 py-0.5 rounded bg-muted font-mono">{errorQrPayload(row)}</code>
                     <span className="inline-flex items-center gap-1 rounded bg-amber-100 dark:bg-amber-500/15 text-amber-700 dark:text-amber-300 px-1.5 py-0.5">
-                      <RotateCcw size={10} /> Đẩy về {targetLabel(row.reworkTarget as StageErrorReworkTarget)}
+                      <RotateCcw size={10} />{' '}
+                      {t('pushToBadge', { target: targetLabel(row.reworkTarget as StageErrorReworkTarget, t) })}
                     </span>
-                    {!row.isActive && <span className="text-rose-500">Đang ẩn</span>}
+                    {!row.isActive && <span className="text-rose-500">{t('hiddenBadge')}</span>}
                   </div>
                 </div>
                 {/* Đã thêm là KHÔNG sửa được (QR đã in/đơn đã gán sẽ đổi nghĩa) — chỉ ẩn/hiện. */}
@@ -375,7 +374,7 @@ function StageErrorsContent() {
                   variant="ghost"
                   className="shrink-0"
                   onClick={() => handleToggleActive(row)}
-                  title={row.isActive ? 'Ẩn lỗi (giữ thống kê cũ)' : 'Hiện lại lỗi'}
+                  title={row.isActive ? t('hideTooltip') : t('showTooltip')}
                 >
                   {row.isActive ? <EyeOff size={13} /> : <Eye size={13} />}
                 </Button>
@@ -401,18 +400,13 @@ function StageErrorsContent() {
       }`}</style>
       <div id="stage-qr-sheet" className="fixed top-0 -left-[200vw] w-[190mm] bg-white text-black">
         <div className="p-6">
-          <h2 className="text-lg font-bold mb-1">
-            Bảng QR công đoạn: {FULFILLMENT_STAGE_LABELS[stage]}
-          </h2>
-          <p className="text-xs mb-4">
-            Quét barcode ĐƠN trước → quét 1 mã dưới đây. "{SCAN_OK_CODE}" = hoàn thành công đoạn; mã lỗi = báo lỗi + tự
-            đẩy về công đoạn ghi trên nhãn.
-          </p>
+          <h2 className="text-lg font-bold mb-1">{t('printSheetTitle', { stage: getStageLabel(t, stage) })}</h2>
+          <p className="text-xs mb-4">{t('printSheetDesc', { ok: SCAN_OK_CODE })}</p>
           <div className="grid grid-cols-3 gap-4">
             <div className="border-2 border-black rounded-lg p-3 flex flex-col items-center gap-2 break-inside-avoid">
               <QRCodeSVG value={SCAN_OK_CODE} size={140} />
-              <div className="text-base font-bold text-center">✔ HOÀN THÀNH</div>
-              <div className="text-[10px] text-center">Chuyển đơn sang công đoạn sau</div>
+              <div className="text-base font-bold text-center">{t('okLabelTitle')}</div>
+              <div className="text-[10px] text-center">{t('okLabelSubtitle')}</div>
             </div>
             {selectedRows.map((row) => (
               <div
@@ -422,7 +416,7 @@ function StageErrorsContent() {
                 <QRCodeSVG value={errorQrPayload(row)} size={140} />
                 <div className="text-sm font-bold text-center leading-tight">{row.name}</div>
                 <div className="text-[10px] text-center">
-                  Đẩy về: {targetLabel(row.reworkTarget as StageErrorReworkTarget)} ·{' '}
+                  {t('printCardPushTo', { target: targetLabel(row.reworkTarget as StageErrorReworkTarget, t) })}{' '}
                   <span className="font-mono">{errorQrPayload(row)}</span>
                 </div>
               </div>

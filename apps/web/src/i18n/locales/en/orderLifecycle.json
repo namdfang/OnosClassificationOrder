@@ -1,0 +1,144 @@
+{
+  "strip": {
+    "title": "Order lifecycle",
+    "searchPlaceholder": "Look up productionId…",
+    "bulkLookup": "Multiple codes",
+    "bulkLookupTitle": "Look up multiple Production IDs",
+    "dateRangePlaceholder": "Date range",
+    "cancelledTitle": "View cancelled orders in this period",
+    "cancelled": "Cancelled",
+    "trackNotFound": "No order found with this code.",
+    "completedAll": "Fully completed",
+    "currentlyAt": "Currently at \"{{stage}}\"",
+    "totalOrders": "Total orders",
+    "totalOrdersTooltip": "All orders",
+    "completedFull": "Order has completed the entire process.",
+    "inProgressFull": "Order is still in process.",
+    "totalOrdersInRange": "Total orders (in range)",
+    "active": "Active",
+    "completed": "Completed",
+    "bottleneckTag": "bottleneck",
+    "totalOrdersAtStage": "Total orders (at this stage)",
+    "waiting": "Waiting",
+    "inProgress": "In progress",
+    "needRework": "Needs rework",
+    "doneOver": "Done (passed)",
+    "completedTitle": "Completed",
+    "completedDesc": "Orders shipped in this period",
+    "stages": {
+      "toolCheck": "Tool check",
+      "designer": "Design",
+      "print": "Print",
+      "press": "Press",
+      "qcPostPress": "QC after press",
+      "sewIn": "Sew in",
+      "sewOut": "Sew out",
+      "pack": "Pack",
+      "done": "Completed"
+    },
+    "trackStatus": {
+      "done": "Stage completed",
+      "current": "Currently at this stage",
+      "error": "Has an error (waiting for tool re-check)",
+      "rework": "Waiting for rework",
+      "pending": "Not reached this stage yet"
+    }
+  },
+  "lifecycleTab": {
+    "title": "Order lifecycle",
+    "subtitle": "Filter by production entry date → see which stage those orders are currently at",
+    "factoryFacetLabel": "Factory",
+    "allFactories": "All factories",
+    "myFactory": "My factory",
+    "stages": {
+      "toolCheck": "Tool check",
+      "designer": "Design",
+      "print": "Print",
+      "press": "Press",
+      "qcPostPress": "QC after press",
+      "sewIn": "Sew in",
+      "sewOut": "Sew out",
+      "pack": "Pack"
+    },
+    "duration": {
+      "minutes": "{{count}} min",
+      "daysHours": "{{days}}d {{hours}}h",
+      "days": "{{count}}d"
+    },
+    "kpi": {
+      "inProgress": { "label": "Orders in process", "sub": "Not shipped yet" },
+      "completed": { "label": "Completed", "sub": "Orders entering production {{from}} → {{to}} that shipped" },
+      "cycleTime": { "label": "Average cycle time", "sub": "Design → shipped" },
+      "bottleneck": {
+        "label": "Bottleneck stage",
+        "subWaiting": "{{count}} orders waiting",
+        "subNone": "No backlog"
+      }
+    },
+    "funnel": {
+      "title": "Stage funnel",
+      "done": "Completed",
+      "doneSub": "completed in period",
+      "doneTooltip": "Number of orders that shipped (finished the entire process) in the selected time range.",
+      "bottleneckTag": "bottleneck",
+      "waitingLabel": "waiting",
+      "waitingTooltipTool": "Orders NOT yet tool-checked (Tool result note column still empty).",
+      "waitingTooltipStage": "Orders waiting at \"{{label}}\" — reached this stage but worker hasn't started."
+    },
+    "metrics": {
+      "waitingToStart": "Waiting to start",
+      "waitingToStartDescTool": "The tool check stage has no \"receive task\" step.",
+      "waitingToStartDescDesigner": "Orders assigned to a sub-designer but not yet claimed with \"Take task\".",
+      "waitingToStartDescStage": "Orders that reached \"{{label}}\" but the worker hasn't clicked \"Start\".",
+      "inProgress": "In progress",
+      "inProgressDescTool": "The tool check stage has no \"in progress\" state.",
+      "inProgressDescStage": "Orders currently being worked at \"{{label}}\".",
+      "rework": "Rework",
+      "reworkDescTool": "Orders sent back to Support for re-check (Print reported \"Missing file to print\"…).",
+      "reworkDescStage": "Orders sent back to \"{{label}}\" for rework.",
+      "error": "Error",
+      "errorDescTool": "Orders flagged as an error during tool check (Tool result note = \"error\").",
+      "errorDescStage": "Orders currently flagged with a production error at \"{{label}}\".",
+      "doneInRange": "Done (period)",
+      "doneInRangeDesc": "Orders that completed \"{{label}}\" in the selected time range.",
+      "avgTime": "Avg time",
+      "avgTimeDescTool": "Average time from entering production to finishing the tool check (in period).",
+      "avgTimeDescStage": "Average time to work an order at \"{{label}}\" (orders completed in period).",
+      "passedTotalTool": "Checked (total)",
+      "passedTotalStage": "Passed (total)",
+      "passedTotalDescTool": "Total orders that have been tool-checked (Tool result note has a value).",
+      "passedTotalDescStage": "Total orders that have ever passed through \"{{label}}\" (cumulative)."
+    },
+    "detailTable": {
+      "title": "Detail by stage",
+      "subtitle": "Current snapshot (backlog / in progress / rework / error) · period throughput (done / avg time)",
+      "columns": {
+        "stage": "Stage",
+        "backlog": "Backlog",
+        "waitingToStart": "Waiting to start",
+        "inProgress": "In progress",
+        "rework": "Rework",
+        "error": "Error",
+        "doneInRange": "Done (period)",
+        "passedTotal": "Passed",
+        "avgTime": "Avg time"
+      }
+    },
+    "charts": {
+      "backlogTitle": "Backlog by stage",
+      "backlogSubtitle": "Orders waiting · in progress · rework · error at each stage",
+      "noData": "No data yet.",
+      "legend": {
+        "backlog": "Backlog",
+        "inProgress": "In progress",
+        "rework": "Rework",
+        "error": "Error"
+      },
+      "completedTitle": "Orders completed per day",
+      "completedSubtitle": "Number of orders shipped per day in the period",
+      "noCompleted": "No orders completed in this period yet.",
+      "tooltipTotal": "Total",
+      "tooltipCompletedSuffix": "{{count}} orders completed"
+    }
+  }
+}

@@ -1,4 +1,5 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { useTranslation } from 'react-i18next';
 import { Navigate } from 'react-router-dom';
 import axios from 'axios';
 import { CheckCircle2, History, Keyboard, Loader2, ScanLine, Trash2, XCircle } from 'lucide-react';
@@ -69,6 +70,7 @@ export default function OrdersScanErrorPage() {
 }
 
 function ScanErrorPageContent() {
+  const { t } = useTranslation('scanError');
   // User Fulfillment → có fulfillmentStage → bật chế độ "Hoàn thành công đoạn".
   // User không có stage (admin/support…) → giữ luồng gán lỗi như cũ.
   const profile = useAuthStore((s) => s.profile);
@@ -127,7 +129,7 @@ function ScanErrorPageContent() {
       const action = parseScanCode(code);
       if (action.kind === 'ok' || action.kind === 'error') {
         beepError();
-        toast.error('Hãy quét mã ĐƠN trước, rồi mới quét mã OK / mã lỗi.');
+        toast.error(t('page.scanOrderFirst'));
         setValue('');
         return;
       }
@@ -137,7 +139,7 @@ function ScanErrorPageContent() {
         const data = res.data?.data as ScannedOrder | undefined;
         if (!data?._id) {
           beepError();
-          toast.error('Không tìm thấy đơn với mã này');
+          toast.error(t('page.notFound'));
           pushHistory({
             id: `${Date.now()}`,
             productionId: code,
@@ -157,9 +159,9 @@ function ScanErrorPageContent() {
           : (err as Error).message;
         beepError();
         if (status === 404) {
-          toast.error(msg || 'Không tìm thấy đơn với mã này');
+          toast.error(msg || t('page.notFound'));
         } else {
-          toast.error(msg || 'Lỗi khi tra cứu đơn');
+          toast.error(msg || t('page.lookupError'));
         }
         pushHistory({
           id: `${Date.now()}`,
@@ -173,7 +175,7 @@ function ScanErrorPageContent() {
         setLoading(false);
       }
     },
-    [loading, mode, pushHistory],
+    [loading, mode, pushHistory, t],
   );
 
   const onSaved = useCallback(
@@ -198,10 +200,10 @@ function ScanErrorPageContent() {
         productionId: order.productionId,
         at: new Date(),
         status: 'success',
-        message: `Hoàn thành ${summary.stageLabel}`,
+        message: t('page.completedMsg', { stage: summary.stageLabel }),
       });
     },
-    [order, pushHistory],
+    [order, pushHistory, t],
   );
 
   const onClose = useCallback(() => {
@@ -247,12 +249,8 @@ function ScanErrorPageContent() {
           <ScanLine size={20} />
         </div>
         <div>
-          <h1 className="text-xl font-semibold">{myStage ? 'Quét hoàn thành / báo lỗi' : 'Quét mã'}</h1>
-          <p className="text-sm text-muted-foreground">
-            {myStage
-              ? 'Quét barcode ĐƠN → quét tiếp mã OK để hoàn thành, hoặc quét QR lỗi để báo lỗi + tự đẩy về. Không cần chạm máy tính.'
-              : 'Cắm máy quét USB → quét barcode ĐƠN để mở dialog gán lỗi (quét tiếp QR lỗi để gán nhanh).'}
-          </p>
+          <h1 className="text-xl font-semibold">{myStage ? t('page.titleStage') : t('page.titleGeneric')}</h1>
+          <p className="text-sm text-muted-foreground">{myStage ? t('page.descStage') : t('page.descGeneric')}</p>
         </div>
       </div>
 
@@ -260,21 +258,21 @@ function ScanErrorPageContent() {
       <div className="rounded-lg border bg-card p-4 space-y-3">
         {/* Mode toggle */}
         <div className="flex items-center gap-2">
-          <span className="text-xs text-muted-foreground">Chế độ:</span>
+          <span className="text-xs text-muted-foreground">{t('page.modeLabel')}</span>
           <div className="inline-flex rounded-md border bg-muted/50 p-0.5">
             <ModeButton
               active={mode === 'barcode'}
               onClick={() => setMode('barcode')}
               icon={<ScanLine size={13} />}
-              label="Barcode"
-              hint={`Tự bỏ tiền tố "${BARCODE_PREFIX}"`}
+              label={t('page.modeBarcode')}
+              hint={t('page.modeBarcodeHint', { prefix: BARCODE_PREFIX })}
             />
             <ModeButton
               active={mode === 'normal'}
               onClick={() => setMode('normal')}
               icon={<Keyboard size={13} />}
-              label="Nhập tay"
-              hint="Gõ Production ID trực tiếp"
+              label={t('page.modeManual')}
+              hint={t('page.modeManualHint')}
             />
           </div>
         </div>
@@ -304,7 +302,7 @@ function ScanErrorPageContent() {
                 }
               }}
               placeholder={
-                mode === 'barcode' ? `Quét barcode (kỳ vọng "${BARCODE_PREFIX}…")…` : 'Nhập Production ID rồi Enter…'
+                mode === 'barcode' ? t('page.placeholderBarcode', { prefix: BARCODE_PREFIX }) : t('page.placeholderManual')
               }
               className="pl-9 pr-3 h-11 text-sm font-mono"
               disabled={loading || !!order}
@@ -317,7 +315,7 @@ function ScanErrorPageContent() {
             )}
           </div>
           <Button onClick={() => handleLookup(value)} disabled={!value.trim() || loading || !!order}>
-            Tra cứu
+            {t('page.lookupBtn')}
           </Button>
         </div>
 
@@ -330,14 +328,18 @@ function ScanErrorPageContent() {
             if (!changed && mode !== 'barcode') return null;
             return (
               <div className="flex items-center gap-2 text-[11px] text-muted-foreground">
-                <span>Sẽ tra cứu:</span>
+                <span>{t('page.willLookup')}</span>
                 <code className="px-1.5 py-0.5 rounded bg-muted font-mono text-foreground">
-                  {normalized || '(rỗng)'}
+                  {normalized || t('page.empty')}
                 </code>
-                {changed && <span className="text-emerald-600 dark:text-emerald-400">✓ đã bỏ "{BARCODE_PREFIX}"</span>}
+                {changed && (
+                  <span className="text-emerald-600 dark:text-emerald-400">
+                    {t('page.prefixStripped', { prefix: BARCODE_PREFIX })}
+                  </span>
+                )}
                 {mode === 'barcode' && !changed && value.trim() && (
                   <span className="text-amber-600 dark:text-amber-400">
-                    ⚠ không thấy tiền tố "{BARCODE_PREFIX}" — đảm bảo bạn đang quét đúng loại barcode
+                    {t('page.prefixMissingWarning', { prefix: BARCODE_PREFIX })}
                   </span>
                 )}
               </div>
@@ -345,9 +347,7 @@ function ScanErrorPageContent() {
           })()}
 
         <p className="text-[11px] text-muted-foreground">
-          {mode === 'barcode'
-            ? `Tip: máy quét USB hoạt động như bàn phím — chỉ cần ô input có focus, mã "${BARCODE_PREFIX}…" sẽ tự nhảy vào kèm Enter. Hệ thống tự bỏ tiền tố trước khi tra cứu.`
-            : 'Tip: nhập đầy đủ Production ID (không có tiền tố) rồi nhấn Enter để tra cứu.'}
+          {mode === 'barcode' ? t('page.tipBarcode', { prefix: BARCODE_PREFIX }) : t('page.tipManual')}
         </p>
       </div>
 
@@ -356,30 +356,28 @@ function ScanErrorPageContent() {
         <div className="flex items-center justify-between p-3 border-b">
           <div className="flex items-center gap-2 text-sm font-medium">
             <History size={14} />
-            Lịch sử quét gần nhất
+            {t('page.historyTitle')}
             <span className="text-muted-foreground font-normal">
               ({history.length}/{MAX_HISTORY})
             </span>
           </div>
           <div className="flex items-center gap-3 text-xs">
-            <Stat label="Thành công" value={stats.success} color="emerald" />
-            <Stat label="Không tìm thấy" value={stats.notFound} color="amber" />
-            <Stat label="Lỗi" value={stats.error} color="rose" />
+            <Stat label={t('page.statSuccess')} value={stats.success} color="emerald" />
+            <Stat label={t('page.statNotFound')} value={stats.notFound} color="amber" />
+            <Stat label={t('page.statError')} value={stats.error} color="rose" />
             {history.length > 0 && (
               <button
                 type="button"
                 onClick={() => setHistory([])}
                 className="inline-flex items-center gap-1 text-muted-foreground hover:text-foreground"
               >
-                <Trash2 size={12} /> Xoá
+                <Trash2 size={12} /> {t('page.clearBtn')}
               </button>
             )}
           </div>
         </div>
         {history.length === 0 ? (
-          <div className="p-6 text-center text-sm text-muted-foreground">
-            Chưa có quét nào. Quét hoặc gõ Production ID để bắt đầu.
-          </div>
+          <div className="p-6 text-center text-sm text-muted-foreground">{t('page.emptyHistory')}</div>
         ) : (
           <ul className="divide-y">
             {history.map((h) => (
@@ -460,6 +458,7 @@ function Stat({ label, value, color }: { label: string; value: number; color: 'e
 }
 
 function HistoryRow({ entry }: { entry: HistoryEntry }) {
+  const { t, i18n } = useTranslation('scanError');
   const icon = {
     success: <CheckCircle2 size={14} className="text-emerald-500" />,
     'not-found': <XCircle size={14} className="text-amber-500" />,
@@ -467,9 +466,9 @@ function HistoryRow({ entry }: { entry: HistoryEntry }) {
   }[entry.status];
 
   const statusText = {
-    success: 'Đã gán lỗi',
-    'not-found': 'Không tìm thấy',
-    error: 'Lỗi',
+    success: t('page.historyStatusSuccess'),
+    'not-found': t('page.historyStatusNotFound'),
+    error: t('page.historyStatusError'),
   }[entry.status];
 
   return (
@@ -484,7 +483,11 @@ function HistoryRow({ entry }: { entry: HistoryEntry }) {
         {entry.message && <div className="text-muted-foreground truncate mt-0.5">{entry.message}</div>}
       </div>
       <span className="text-[10px] text-muted-foreground shrink-0">
-        {entry.at.toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit', second: '2-digit' })}
+        {entry.at.toLocaleTimeString(i18n.language === 'en' ? 'en-US' : 'vi-VN', {
+          hour: '2-digit',
+          minute: '2-digit',
+          second: '2-digit',
+        })}
       </span>
     </li>
   );

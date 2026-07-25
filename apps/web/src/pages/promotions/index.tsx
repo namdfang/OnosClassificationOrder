@@ -1,4 +1,5 @@
 import React, { useEffect, useState } from 'react';
+import { useTranslation } from 'react-i18next';
 import { Pencil, Plus, Tag, Trash2 } from 'lucide-react';
 import type { Promotion } from 'shared';
 import { Status } from 'shared';
@@ -36,17 +37,19 @@ interface Stats {
   byTier: Record<string, number>;
 }
 
-const SCOPE_LABEL: Record<string, string> = {
-  all: 'Toàn bộ',
-  category: 'Theo danh mục',
-  product: 'Sản phẩm cụ thể',
-};
+const buildScopeLabel = (t: (key: string) => string): Record<string, string> => ({
+  all: t('scope.all'),
+  category: t('scope.category'),
+  product: t('scope.product'),
+});
 
 function formatDiscount(p: Promotion): string {
   return p.discountType === 'percentage' ? `${p.discountValue}%` : `${p.discountValue.toLocaleString('vi-VN')}đ`;
 }
 
 export default function PromotionsPage() {
+  const { t } = useTranslation(['promotion', 'common']);
+  const SCOPE_LABEL = buildScopeLabel(t);
   const [items, setItems] = useState<Promotion[]>([]);
   const [loading, setLoading] = useState(false);
   const [search, setSearch] = useState('');
@@ -110,10 +113,10 @@ export default function PromotionsPage() {
   };
 
   const handleDelete = async (id: string) => {
-    if (!confirm('Xoá chương trình giảm giá này?')) return;
+    if (!confirm(t('page.deleteConfirm'))) return;
     try {
       await RepositoryRemote.promotion.deletePromotion(id);
-      toast.success('Đã xoá');
+      toast.success(t('page.deleteSuccess'));
       fetchData();
       fetchStats();
     } catch (error) {
@@ -137,25 +140,23 @@ export default function PromotionsPage() {
           <Tag size={20} className="text-rose-600" />
         </div>
         <div>
-          <h1 className="text-2xl font-bold text-foreground">Chương trình giảm giá</h1>
-          <p className="text-sm text-muted-foreground">
-            Quản lý discount theo tier khách hàng (VIP 0..5) — áp dụng cho giá tham khảo ở Customer Portal.
-          </p>
+          <h1 className="text-2xl font-bold text-foreground">{t('page.title')}</h1>
+          <p className="text-sm text-muted-foreground">{t('page.subtitle')}</p>
         </div>
       </div>
 
       {stats && (
         <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
           <div className="rounded-lg border border-border bg-card p-3">
-            <p className="text-xs text-muted-foreground">Tổng chương trình</p>
+            <p className="text-xs text-muted-foreground">{t('page.stats.total')}</p>
             <p className="text-xl font-semibold">{stats.total}</p>
           </div>
           <div className="rounded-lg border border-border bg-card p-3">
-            <p className="text-xs text-muted-foreground">Đang hoạt động</p>
+            <p className="text-xs text-muted-foreground">{t('page.stats.active')}</p>
             <p className="text-xl font-semibold text-emerald-600">{stats.active}</p>
           </div>
           <div className="rounded-lg border border-border bg-card p-3">
-            <p className="text-xs text-muted-foreground">Sắp hết hạn (7 ngày)</p>
+            <p className="text-xs text-muted-foreground">{t('page.stats.expiringSoon')}</p>
             <p className="text-xl font-semibold text-amber-600">{stats.expiringSoon}</p>
           </div>
         </div>
@@ -163,7 +164,7 @@ export default function PromotionsPage() {
 
       <div className="flex items-center justify-between gap-3">
         <Input
-          placeholder="Tìm theo tên hoặc mã coupon…"
+          placeholder={t('page.searchPlaceholder')}
           value={search}
           onChange={(e) => setSearch(e.target.value)}
           onKeyDown={(e) => e.key === 'Enter' && handleSearch()}
@@ -171,7 +172,7 @@ export default function PromotionsPage() {
         />
         <Button onClick={openCreate}>
           <Plus size={14} />
-          Tạo chương trình
+          {t('page.createButton')}
         </Button>
       </div>
 
@@ -179,13 +180,13 @@ export default function PromotionsPage() {
         <Table>
           <TableHeader>
             <TableRow>
-              <TableHead>Tên</TableHead>
-              <TableHead>Mã</TableHead>
-              <TableHead>Giảm giá</TableHead>
-              <TableHead>Phạm vi</TableHead>
-              <TableHead>Tier</TableHead>
-              <TableHead>Hiệu lực</TableHead>
-              <TableHead>Trạng thái</TableHead>
+              <TableHead>{t('page.table.name')}</TableHead>
+              <TableHead>{t('page.table.code')}</TableHead>
+              <TableHead>{t('page.table.discount')}</TableHead>
+              <TableHead>{t('page.table.scope')}</TableHead>
+              <TableHead>{t('page.table.tier')}</TableHead>
+              <TableHead>{t('page.table.validity')}</TableHead>
+              <TableHead>{t('page.table.status')}</TableHead>
               <TableHead className="w-20"></TableHead>
             </TableRow>
           </TableHeader>
@@ -200,7 +201,7 @@ export default function PromotionsPage() {
             {!loading && items.length === 0 && (
               <TableRow>
                 <TableCell colSpan={8} className="text-center py-8 text-muted-foreground">
-                  Chưa có chương trình giảm giá nào.
+                  {t('page.table.empty')}
                 </TableCell>
               </TableRow>
             )}
@@ -215,7 +216,7 @@ export default function PromotionsPage() {
                   <TableCell className="font-medium text-rose-600">{formatDiscount(p)}</TableCell>
                   <TableCell className="text-sm">{SCOPE_LABEL[p.scope]}</TableCell>
                   <TableCell className="text-sm">
-                    {p.applicableTiers?.length ? p.applicableTiers.map((t) => `VIP ${t}`).join(', ') : 'Mọi tier'}
+                    {p.applicableTiers?.length ? p.applicableTiers.map((tier) => `VIP ${tier}`).join(', ') : t('page.allTiers')}
                   </TableCell>
                   <TableCell className="text-xs text-muted-foreground">
                     {p.startDate ? new Date(p.startDate).toLocaleDateString('vi-VN') : '—'}
@@ -224,15 +225,20 @@ export default function PromotionsPage() {
                   </TableCell>
                   <TableCell>
                     <Badge variant={p.status === Status.Active ? 'secondary' : 'outline'}>
-                      {p.status === Status.Active ? 'Hoạt động' : 'Tạm tắt'}
+                      {p.status === Status.Active ? t('page.table.active') : t('page.table.inactive')}
                     </Badge>
                   </TableCell>
                   <TableCell>
                     <div className="flex items-center gap-1">
-                      <Button variant="ghost" size="icon" onClick={() => openEdit(p)} title="Sửa">
+                      <Button variant="ghost" size="icon" onClick={() => openEdit(p)} title={t('common:actions.edit')}>
                         <Pencil size={14} />
                       </Button>
-                      <Button variant="ghost" size="icon" onClick={() => handleDelete(String(p._id))} title="Xoá">
+                      <Button
+                        variant="ghost"
+                        size="icon"
+                        onClick={() => handleDelete(String(p._id))}
+                        title={t('common:actions.delete')}
+                      >
                         <Trash2 size={14} className="text-destructive" />
                       </Button>
                     </div>

@@ -1,5 +1,7 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { useTranslation } from 'react-i18next';
 import axios from 'axios';
+import type { TFunction } from 'i18next';
 import {
   CheckCircle2,
   ChevronDown,
@@ -19,7 +21,7 @@ import {
   XCircle,
 } from 'lucide-react';
 import type { FulfillmentTransitionDto, ProductionOrderRow } from 'shared';
-import { FULFILLMENT_STAGE_LABELS, FulfillmentStage, FulfillmentTransitionAction } from 'shared';
+import { FulfillmentStage, FulfillmentTransitionAction } from 'shared';
 import { toast } from 'sonner';
 import type { DragEndEvent, DragStartEvent } from '@dnd-kit/core';
 import { DndContext, DragOverlay, PointerSensor, useDroppable, useSensor, useSensors } from '@dnd-kit/core';
@@ -44,6 +46,7 @@ import { TooltipProvider } from '@/components/ui/tooltip';
 
 import { handleAxiosError } from '@/utils';
 import { cn } from '@/utils/cn';
+import { getStageLabel } from '@/utils/fulfillmentStageLabel';
 
 import { useDebounce } from '@/hooks/useDebounce';
 import { useSidebarResetSignal } from '@/hooks/useSidebarResetSignal';
@@ -126,7 +129,7 @@ const ADMIN_COL_ORDER: ColKey[] = ['unassigned', ...WORKER_COL_ORDER];
 
 type BulkAction = 'start' | 'complete';
 
-const COL_META: Record<
+type ColMeta = Record<
   ColKey,
   {
     label: string;
@@ -135,57 +138,61 @@ const COL_META: Record<
     kpiAccent: string;
     bulk: BulkAction[];
   }
-> = {
-  waiting: {
-    label: 'Đang chờ',
-    icon: Clock,
-    accent: 'border-zinc-300 dark:border-zinc-700',
-    kpiAccent: 'text-zinc-700 dark:text-zinc-200',
-    bulk: ['start'],
-  },
-  'in-progress': {
-    label: 'Đang làm',
-    icon: PlayCircle,
-    accent: 'border-indigo-300 dark:border-indigo-700',
-    kpiAccent: 'text-indigo-600',
-    bulk: ['complete'],
-  },
-  rework: {
-    label: 'Làm lại',
-    icon: RotateCw,
-    accent: 'border-amber-300 dark:border-amber-700',
-    kpiAccent: 'text-amber-600',
-    bulk: ['start'],
-  },
-  done: {
-    label: 'Đã xong',
-    icon: CheckCircle2,
-    accent: 'border-emerald-300 dark:border-emerald-700',
-    kpiAccent: 'text-emerald-600',
-    bulk: [],
-  },
-  fixed: {
-    label: 'Đã sửa',
-    icon: CheckCircle2,
-    accent: 'border-teal-300 dark:border-teal-700',
-    kpiAccent: 'text-teal-600',
-    bulk: [],
-  },
-  watching: {
-    label: 'Đang chờ quay lại',
-    icon: RotateCw,
-    accent: 'border-sky-300 dark:border-sky-700',
-    kpiAccent: 'text-sky-600',
-    bulk: [],
-  },
-  unassigned: {
-    label: 'Chưa gán Designer',
-    icon: ListChecks,
-    accent: 'border-rose-300 dark:border-rose-700',
-    kpiAccent: 'text-rose-600',
-    bulk: [],
-  },
-};
+>;
+
+function buildColMeta(t: TFunction): ColMeta {
+  return {
+    waiting: {
+      label: t('stageStatus.waiting'),
+      icon: Clock,
+      accent: 'border-zinc-300 dark:border-zinc-700',
+      kpiAccent: 'text-zinc-700 dark:text-zinc-200',
+      bulk: ['start'],
+    },
+    'in-progress': {
+      label: t('stageStatus.inProgress'),
+      icon: PlayCircle,
+      accent: 'border-indigo-300 dark:border-indigo-700',
+      kpiAccent: 'text-indigo-600',
+      bulk: ['complete'],
+    },
+    rework: {
+      label: t('stageStatus.rework'),
+      icon: RotateCw,
+      accent: 'border-amber-300 dark:border-amber-700',
+      kpiAccent: 'text-amber-600',
+      bulk: ['start'],
+    },
+    done: {
+      label: t('stageStatus.done'),
+      icon: CheckCircle2,
+      accent: 'border-emerald-300 dark:border-emerald-700',
+      kpiAccent: 'text-emerald-600',
+      bulk: [],
+    },
+    fixed: {
+      label: t('stageStatus.fixed'),
+      icon: CheckCircle2,
+      accent: 'border-teal-300 dark:border-teal-700',
+      kpiAccent: 'text-teal-600',
+      bulk: [],
+    },
+    watching: {
+      label: t('stageStatus.watching'),
+      icon: RotateCw,
+      accent: 'border-sky-300 dark:border-sky-700',
+      kpiAccent: 'text-sky-600',
+      bulk: [],
+    },
+    unassigned: {
+      label: t('stageStatus.unassigned'),
+      icon: ListChecks,
+      accent: 'border-rose-300 dark:border-rose-700',
+      kpiAccent: 'text-rose-600',
+      bulk: [],
+    },
+  };
+}
 
 type Filters = {
   type: string;
@@ -242,6 +249,8 @@ export default function FulfillmentMyTasksPage() {
 }
 
 function FulfillmentKanbanView() {
+  const { t } = useTranslation(['fulfillmentWorkflow', 'common']);
+  const colMeta = useMemo(() => buildColMeta(t), [t]);
   const profile = useAuthStore((s) => s.profile);
   const myStage = profile?.fulfillmentStage as FulfillmentStage | undefined;
   // Admin/Manager/SupportManager (= override roles ở BE) → thấy thêm column
@@ -343,7 +352,7 @@ function FulfillmentKanbanView() {
       await navigator.clipboard.writeText(order.productionId);
       setCopiedOrderId(order._id);
     } catch {
-      toast.error('Không copy được — trình duyệt chặn clipboard');
+      toast.error(t('toast.copyError'));
     }
   };
 
@@ -423,7 +432,7 @@ function FulfillmentKanbanView() {
         const res = await RepositoryRemote.order.getByProductionId(code);
         const data = res.data?.data as ScannedOrder | undefined;
         if (!data?._id) {
-          toast.error('Không tìm thấy đơn với mã này');
+          toast.error(t('toast.notFound'));
           pushSearchHistory(code, 'not-found');
           return;
         }
@@ -433,7 +442,7 @@ function FulfillmentKanbanView() {
       } catch (err) {
         const status = axios.isAxiosError(err) ? err.response?.status : undefined;
         if (status === 404) {
-          toast.error('Không tìm thấy đơn với mã này');
+          toast.error(t('toast.notFound'));
           pushSearchHistory(code, 'not-found');
         } else {
           handleAxiosError(err);
@@ -442,7 +451,7 @@ function FulfillmentKanbanView() {
         setLookupLoading(false);
       }
     },
-    [lookupLoading, pushSearchHistory],
+    [lookupLoading, pushSearchHistory, t],
   );
 
   const closeScanDialog = useCallback(() => {
@@ -554,7 +563,7 @@ function FulfillmentKanbanView() {
         action,
         ...body,
       } as FulfillmentTransitionDto);
-      toast.success(actionToastLabel(action));
+      toast.success(actionToastLabel(t, action));
       void load();
     } catch (err) {
       handleAxiosError(err);
@@ -579,8 +588,9 @@ function FulfillmentKanbanView() {
       );
       const ok = results.filter((r) => r.status === 'fulfilled').length;
       const fail = results.length - ok;
-      if (fail === 0) toast.success(`Đã ${actionLabelInfinitive(action)} ${ok} đơn`);
-      else toast.warning(`Đã ${actionLabelInfinitive(action)} ${ok}/${results.length} đơn (${fail} lỗi)`);
+      const verb = actionLabelInfinitive(t, action);
+      if (fail === 0) toast.success(t('toast.bulkDone', { verb, count: ok }));
+      else toast.warning(t('toast.bulkPartial', { verb, ok, total: results.length, fail }));
       void load();
     } catch (err) {
       handleAxiosError(err);
@@ -604,7 +614,13 @@ function FulfillmentKanbanView() {
 
     if (toCol !== 'in-progress' || (fromCol !== 'waiting' && fromCol !== 'rework')) {
       toast.warning(
-        'Chỉ kéo được "Đang chờ" / "Làm lại" sang "Đang làm". Đơn hoàn thành dùng nút "Hoàn thành"; báo lỗi dùng nút "Báo lỗi".',
+        t('kanban.dragWarning', {
+          waiting: t('stageStatus.waiting'),
+          rework: t('stageStatus.rework'),
+          inProgress: t('stageStatus.inProgress'),
+          complete: t('actions.complete'),
+          reportError: t('actions.reportError'),
+        }),
       );
       return;
     }
@@ -629,12 +645,13 @@ function FulfillmentKanbanView() {
       watching: [],
       unassigned: [],
     };
+    const noTypeLabel = t('kanban.column.noType');
     for (const k of colOrder) {
-      const groups = groupByType(filteredColumns[k]);
+      const groups = groupByType(filteredColumns[k], noTypeLabel);
       for (const [, rows] of groups) for (const r of rows) out[k].push(r._id);
     }
     return out;
-  }, [filteredColumns, colOrder]);
+  }, [filteredColumns, colOrder, t]);
 
   const toggleId = (id: string, checked: boolean) => {
     setSelected((prev) => {
@@ -701,13 +718,14 @@ function FulfillmentKanbanView() {
   const bulkActions = useMemo<BulkAction[]>(() => {
     if (selectedColumns.size !== 1) return [];
     const [only] = [...selectedColumns];
-    return COL_META[only].bulk;
-  }, [selectedColumns]);
+    return colMeta[only].bulk;
+  }, [selectedColumns, colMeta]);
 
   if (!myStage) {
     return (
       <div className="p-8 text-center text-sm text-muted-foreground">
-        Tài khoản chưa được gán <strong>Stage Fulfillment</strong>. Liên hệ Admin để gán.
+        {t('kanban.noStage')} <strong>{t('kanban.noStageStrong')}</strong>
+        {t('kanban.noStageSuffix')}
       </div>
     );
   }
@@ -734,8 +752,12 @@ function FulfillmentKanbanView() {
               <ListChecks size={20} className="text-indigo-600" />
             </div>
             <div>
-              <h1 className="text-xl font-bold text-foreground">Task của tôi — {FULFILLMENT_STAGE_LABELS[myStage]}</h1>
-              <p className="text-xs text-muted-foreground">Xưởng: {profile?.factoryId ?? '—'}</p>
+              <h1 className="text-xl font-bold text-foreground">
+                {t('kanban.header.title', { stage: getStageLabel(t, myStage) })}
+              </h1>
+              <p className="text-xs text-muted-foreground">
+                {t('kanban.header.factory', { factory: profile?.factoryId ?? '—' })}
+              </p>
             </div>
           </div>
 
@@ -754,7 +776,7 @@ function FulfillmentKanbanView() {
           )}
         >
           {colOrder.map((k) => (
-            <KPI key={k} label={COL_META[k].label} value={counts[k]} accent={COL_META[k].kpiAccent} />
+            <KPI key={k} label={colMeta[k].label} value={counts[k]} accent={colMeta[k].kpiAccent} />
           ))}
         </div>
 
@@ -770,10 +792,8 @@ function FulfillmentKanbanView() {
         <div className="flex items-start gap-2 rounded-md border border-border bg-muted/30 p-2.5 text-[11px] text-muted-foreground">
           <MousePointerClick size={13} className="text-primary shrink-0 mt-0.5" />
           <div>
-            <strong className="text-foreground">Mẹo chọn nhiều đơn:</strong> Tick checkbox cạnh tên sản phẩm để chọn
-            toàn bộ đơn của sản phẩm đó. Hoặc tick 1 đơn, giữ{' '}
-            <kbd className="px-1 bg-background border rounded">Shift</kbd> rồi click checkbox khác (trong cùng cột) để
-            chọn nhanh tất cả đơn ở giữa. Kéo card "Đang chờ"/"Làm lại" sang "Đang làm" cũng được.
+            <strong className="text-foreground">{t('kanban.hint.tip')}</strong> {t('kanban.hint.body1')}{' '}
+            <kbd className="px-1 bg-background border rounded">Shift</kbd> {t('kanban.hint.body2')}
           </div>
         </div>
 
@@ -783,14 +803,14 @@ function FulfillmentKanbanView() {
           <div className="flex flex-wrap items-center gap-2">
             <div className="flex-1 min-w-[220px]">
               <label className="text-[10px] text-muted-foreground uppercase tracking-wide font-medium">
-                Tìm / Quét mã
+                {t('kanban.search.label')}
               </label>
               <div className="mt-1 flex items-center gap-1.5">
                 <div className="relative flex-1">
                   <button
                     type="button"
                     disabled={!stripBarcodePrefix(search)}
-                    title={searchCopied ? 'Đã copy' : 'Copy mã đang tìm'}
+                    title={searchCopied ? t('common:actions.copied') : t('kanban.search.copyTitle')}
                     onClick={async () => {
                       const v = stripBarcodePrefix(search);
                       if (!v) return;
@@ -798,7 +818,7 @@ function FulfillmentKanbanView() {
                         await navigator.clipboard.writeText(v);
                         setSearchCopied(true);
                       } catch {
-                        toast.error('Không copy được — trình duyệt chặn clipboard');
+                        toast.error(t('toast.copyError'));
                       }
                     }}
                     className={cn(
@@ -833,7 +853,7 @@ function FulfillmentKanbanView() {
                         void handleScanLookup(search);
                       }
                     }}
-                    placeholder="Gõ tay hoặc quét mã (N-…) rồi Enter để mở đơn"
+                    placeholder={t('kanban.search.placeholder')}
                     className="h-11 pl-9 pr-9 text-sm font-mono"
                     disabled={!!scannedOrder}
                   />
@@ -843,7 +863,7 @@ function FulfillmentKanbanView() {
                   type="button"
                   variant="outline"
                   onClick={() => setHistoryOpen(true)}
-                  title="Lịch sử tra cứu"
+                  title={t('kanban.search.historyTitle')}
                   className="relative h-11 w-11 shrink-0 p-0"
                 >
                   <History size={17} />
@@ -857,12 +877,14 @@ function FulfillmentKanbanView() {
               {/* Feedback khi máy quét xuất tiền tố "N-" — cho biết mã thực sẽ tìm. */}
               {stripBarcodePrefix(search) !== search.trim() && !!search.trim() ? (
                 <p className="mt-1 text-[10px] text-emerald-600 dark:text-emerald-400">
-                  ✓ đã bỏ "{BARCODE_PREFIX}" → tìm: <code className="font-mono">{stripBarcodePrefix(search)}</code>
+                  {t('kanban.search.strippedPrefix', { prefix: BARCODE_PREFIX })}{' '}
+                  <code className="font-mono">{stripBarcodePrefix(search)}</code>
                 </p>
               ) : (
                 <p className="mt-1 text-[10px] text-muted-foreground">
-                  Quét mã hoặc Enter → mở đơn để <strong>Hoàn thành</strong> / <strong>Báo lỗi</strong>. Gõ để lọc
-                  kanban.
+                  {t('kanban.search.hintPre')} <strong>{t('actions.complete')}</strong> /{' '}
+                  <strong>{t('actions.reportError')}</strong>
+                  {t('kanban.search.hintSuffix')}
                 </p>
               )}
             </div>
@@ -873,41 +895,41 @@ function FulfillmentKanbanView() {
             variant="inline"
             from={dateFrom}
             to={dateTo}
-            onChange={(f, t) => {
+            onChange={(f, to) => {
               setDateFrom(f);
-              setDateTo(t);
+              setDateTo(to);
             }}
-            placeholder="Tất cả"
+            placeholder={t('kanban.dateAllPlaceholder')}
           />
 
           {/* Row 2: 5 facet filters */}
           <div className="grid grid-cols-2 md:grid-cols-3 xl:grid-cols-5 gap-2">
             <SelectFilter
-              label="Sản phẩm"
+              label={t('kanban.filters.type')}
               value={filters.type}
               onChange={(v) => setFilters({ ...filters, type: v })}
               options={filterOptions.type}
             />
             <SelectFilter
-              label="Loại vải"
+              label={t('kanban.filters.fabricType')}
               value={filters.fabricType}
               onChange={(v) => setFilters({ ...filters, fabricType: v })}
               options={filterOptions.fabricType}
             />
             <SelectFilter
-              label="Máy"
+              label={t('kanban.filters.machineNumber')}
               value={filters.machineNumber}
               onChange={(v) => setFilters({ ...filters, machineNumber: v })}
               options={filterOptions.machineNumber}
             />
             <SelectFilter
-              label="Kết quả Tool"
+              label={t('kanban.filters.toolResult')}
               value={filters.toolResult}
               onChange={(v) => setFilters({ ...filters, toolResult: v })}
               options={filterOptions.toolResult}
             />
             <SelectFilter
-              label="Khách hàng (SKU)"
+              label={t('kanban.filters.userSku')}
               value={filters.userSku}
               onChange={(v) => setFilters({ ...filters, userSku: v })}
               options={filterOptions.userSku}
@@ -939,6 +961,7 @@ function FulfillmentKanbanView() {
               <Column
                 key={key}
                 colKey={key}
+                meta={colMeta[key]}
                 cards={filteredColumns[key]}
                 myStage={myStage}
                 activeDragId={activeOrder?._id}
@@ -1010,20 +1033,20 @@ function FulfillmentKanbanView() {
             <div className="pointer-events-auto flex items-center gap-2 rounded-full border border-border bg-card shadow-lg px-4 py-2 flex-wrap">
               <CheckCircle2 size={14} className="text-primary" />
               <span className="text-sm">
-                Đã chọn <span className="font-semibold">{selected.size}</span>
+                {t('kanban.selection.selected')} <span className="font-semibold">{selected.size}</span>
               </span>
               {selectedColumns.size > 1 ? (
-                <span className="text-xs text-muted-foreground italic">(Đơn ở nhiều cột — chỉ bulk cùng 1 cột)</span>
+                <span className="text-xs text-muted-foreground italic">{t('kanban.selection.multiColumn')}</span>
               ) : (
                 <>
                   {bulkActions.includes('start') && (
                     <Button size="sm" onClick={() => callBulk('start')}>
-                      <PlayCircle size={14} /> Bắt đầu
+                      <PlayCircle size={14} /> {t('actions.start')}
                     </Button>
                   )}
                   {bulkActions.includes('complete') && (
                     <Button size="sm" onClick={() => callBulk('complete')}>
-                      <CheckCircle2 size={14} /> Hoàn thành
+                      <CheckCircle2 size={14} /> {t('actions.complete')}
                     </Button>
                   )}
                 </>
@@ -1100,16 +1123,14 @@ function FulfillmentKanbanView() {
             <DialogHeader>
               <DialogTitle className="flex items-center gap-2">
                 <History size={18} className="text-primary" />
-                Lịch sử tra cứu
+                {t('kanban.history.title')}
                 <span className="text-xs font-normal text-muted-foreground">
                   ({searchHistory.length}/{MAX_SEARCH_HISTORY})
                 </span>
               </DialogTitle>
             </DialogHeader>
             {searchHistory.length === 0 ? (
-              <div className="py-8 text-center text-sm text-muted-foreground">
-                Chưa có lượt tra cứu nào. Quét hoặc gõ mã rồi Enter để bắt đầu.
-              </div>
+              <div className="py-8 text-center text-sm text-muted-foreground">{t('kanban.history.empty')}</div>
             ) : (
               <>
                 <ul className="divide-y max-h-[60vh] overflow-y-auto -mx-2">
@@ -1134,7 +1155,7 @@ function FulfillmentKanbanView() {
                         <span className="min-w-0 flex-1">
                           <span className="block font-mono text-sm font-medium truncate">{h.code}</span>
                           <span className="block text-[11px] text-muted-foreground">
-                            {h.status === 'found' ? 'Tìm thấy' : 'Không tìm thấy'}
+                            {h.status === 'found' ? t('kanban.history.found') : t('kanban.history.notFound')}
                           </span>
                         </span>
                         <span className="shrink-0 text-[10px] text-muted-foreground">
@@ -1151,7 +1172,7 @@ function FulfillmentKanbanView() {
                 </ul>
                 <div className="flex justify-end pt-1">
                   <Button variant="ghost" size="sm" onClick={() => setSearchHistory([])}>
-                    <Trash2 size={13} className="mr-1.5" /> Xoá lịch sử
+                    <Trash2 size={13} className="mr-1.5" /> {t('kanban.history.clear')}
                   </Button>
                 </div>
               </>
@@ -1163,19 +1184,19 @@ function FulfillmentKanbanView() {
   );
 }
 
-function actionToastLabel(action: FulfillmentTransitionAction): string {
+function actionToastLabel(t: TFunction, action: FulfillmentTransitionAction): string {
   switch (action) {
     case FulfillmentTransitionAction.Start:
-      return 'Đã bắt đầu';
+      return t('toast.started');
     case FulfillmentTransitionAction.Complete:
-      return 'Đã hoàn thành';
+      return t('toast.completed');
     case FulfillmentTransitionAction.ReworkBack:
-      return 'Đã đẩy về xử lý';
+      return t('toast.reworkedBack');
   }
 }
 
-function actionLabelInfinitive(action: BulkAction): string {
-  return action === 'start' ? 'bắt đầu' : 'hoàn thành';
+function actionLabelInfinitive(t: TFunction, action: BulkAction): string {
+  return action === 'start' ? t('verbs.start') : t('verbs.complete');
 }
 
 function KPI({ label, value, accent }: { label: string; value: number; accent: string }) {
@@ -1187,10 +1208,10 @@ function KPI({ label, value, accent }: { label: string; value: number; accent: s
   );
 }
 
-function groupByType(cards: ProductionOrderRow[]): [string, ProductionOrderRow[]][] {
+function groupByType(cards: ProductionOrderRow[], noTypeLabel: string): [string, ProductionOrderRow[]][] {
   const map = new Map<string, ProductionOrderRow[]>();
   for (const r of cards) {
-    const k = r.type || '— Chưa có type —';
+    const k = r.type || noTypeLabel;
     const arr = map.get(k) || [];
     arr.push(r);
     map.set(k, arr);
@@ -1206,6 +1227,7 @@ function groupByType(cards: ProductionOrderRow[]): [string, ProductionOrderRow[]
 
 interface ColumnProps {
   colKey: ColKey;
+  meta: ColMeta[ColKey];
   cards: ProductionOrderRow[];
   myStage: FulfillmentStage;
   activeDragId?: string;
@@ -1225,6 +1247,7 @@ interface ColumnProps {
 
 function Column({
   colKey,
+  meta,
   cards,
   myStage,
   activeDragId,
@@ -1240,10 +1263,11 @@ function Column({
   onCheckCard,
   onCheckGroup,
 }: ColumnProps) {
-  const meta = COL_META[colKey];
+  const { t } = useTranslation('fulfillmentWorkflow');
   const Icon = meta.icon;
   const { setNodeRef, isOver } = useDroppable({ id: colKey });
-  const groups = useMemo(() => groupByType(cards), [cards]);
+  const noTypeLabel = t('kanban.column.noType');
+  const groups = useMemo(() => groupByType(cards, noTypeLabel), [cards, noTypeLabel]);
 
   const [collapsed, setCollapsed] = useState<Set<string>>(new Set());
   const toggleCollapse = (type: string) =>
@@ -1274,7 +1298,9 @@ function Column({
       </div>
 
       <div className="flex-1 space-y-3 overflow-y-auto max-h-[calc(100vh-380px)]">
-        {cards.length === 0 && <div className="text-[11px] text-muted-foreground italic text-center py-6">Trống</div>}
+        {cards.length === 0 && (
+          <div className="text-[11px] text-muted-foreground italic text-center py-6">{t('kanban.column.empty')}</div>
+        )}
         {groups.map(([type, rows]) => {
           const selCount = rows.filter((r) => selected.has(r._id)).length;
           const allChecked = rows.length > 0 && selCount === rows.length;
@@ -1293,7 +1319,7 @@ function Column({
                   }
                 }}
                 className="flex items-center gap-2 px-1.5 py-1 rounded bg-card/60 text-[11px] font-medium text-foreground cursor-pointer hover:bg-card select-none"
-                title={isCollapsed ? 'Click để mở' : 'Click để thu gọn'}
+                title={isCollapsed ? t('kanban.column.expandTitle') : t('kanban.column.collapseTitle')}
               >
                 {showCheckbox && (
                   <input

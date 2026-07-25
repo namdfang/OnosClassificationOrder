@@ -1,0 +1,144 @@
+{
+  "strip": {
+    "title": "Vòng đời đơn",
+    "searchPlaceholder": "Tra cứu productionId…",
+    "bulkLookup": "Nhiều mã",
+    "bulkLookupTitle": "Tra cứu nhiều Production ID",
+    "dateRangePlaceholder": "Khoảng ngày",
+    "cancelledTitle": "Xem danh sách đơn đã hủy trong kỳ",
+    "cancelled": "Hủy",
+    "trackNotFound": "Không tìm thấy đơn với mã này.",
+    "completedAll": "Đã hoàn thành toàn bộ",
+    "currentlyAt": "Đang ở \"{{stage}}\"",
+    "totalOrders": "Tổng đơn",
+    "totalOrdersTooltip": "Tổng đơn tất cả",
+    "completedFull": "Đơn đã hoàn thành toàn bộ quy trình.",
+    "inProgressFull": "Đơn đang trong quy trình.",
+    "totalOrdersInRange": "Tổng đơn (trong kỳ)",
+    "active": "Đang chạy",
+    "completed": "Đã hoàn thành",
+    "bottleneckTag": "tắc",
+    "totalOrdersAtStage": "Tổng đơn (đang ở chặng)",
+    "waiting": "Đang chờ",
+    "inProgress": "Đang làm",
+    "needRework": "Cần làm lại",
+    "doneOver": "Đã xong (đã qua)",
+    "completedTitle": "Hoàn thành",
+    "completedDesc": "Đơn trong kỳ đã đóng hàng xong",
+    "stages": {
+      "toolCheck": "Soát tool",
+      "designer": "Thiết kế",
+      "print": "In",
+      "press": "Ép",
+      "qcPostPress": "QC ép",
+      "sewIn": "May vào",
+      "sewOut": "May ra",
+      "pack": "Đóng",
+      "done": "Hoàn thành"
+    },
+    "trackStatus": {
+      "done": "Đã hoàn thành chặng",
+      "current": "Đang ở chặng này",
+      "error": "Đang lỗi (chờ soát tool lại)",
+      "rework": "Đang chờ làm lại",
+      "pending": "Chưa tới chặng này"
+    }
+  },
+  "lifecycleTab": {
+    "title": "Vòng đời đơn hàng",
+    "subtitle": "Lọc theo ngày vào sản xuất → xem đơn của (các) ngày đó hiện đang tồn ở công đoạn nào",
+    "factoryFacetLabel": "Xưởng",
+    "allFactories": "Tất cả xưởng",
+    "myFactory": "Xưởng của tôi",
+    "stages": {
+      "toolCheck": "Soát tool",
+      "designer": "Thiết kế",
+      "print": "In",
+      "press": "Ép",
+      "qcPostPress": "QC ép",
+      "sewIn": "May vào",
+      "sewOut": "May ra",
+      "pack": "Đóng hàng"
+    },
+    "duration": {
+      "minutes": "{{count}} phút",
+      "daysHours": "{{days}} ngày {{hours}}h",
+      "days": "{{count}} ngày"
+    },
+    "kpi": {
+      "inProgress": { "label": "Đơn đang trong quy trình", "sub": "Chưa đóng hàng xong" },
+      "completed": { "label": "Hoàn thành", "sub": "Đơn vào SX {{from}} → {{to}} đã đóng hàng xong" },
+      "cycleTime": { "label": "Cycle time trung bình", "sub": "Thiết kế → đóng hàng" },
+      "bottleneck": {
+        "label": "Công đoạn tắc nghẽn",
+        "subWaiting": "{{count}} đơn đang chờ",
+        "subNone": "Không có tồn đọng"
+      }
+    },
+    "funnel": {
+      "title": "Phễu công đoạn",
+      "done": "Hoàn thành",
+      "doneSub": "hoàn thành trong kỳ",
+      "doneTooltip": "Số đơn đã đóng hàng xong (kết thúc toàn bộ quy trình) trong khoảng thời gian đã chọn.",
+      "bottleneckTag": "tắc",
+      "waitingLabel": "đang chờ",
+      "waitingTooltipTool": "Số đơn CHƯA soát tool (cột Note kq tool còn trống).",
+      "waitingTooltipStage": "Số đơn đang chờ tại \"{{label}}\" — đã tới công đoạn nhưng worker chưa bắt đầu."
+    },
+    "metrics": {
+      "waitingToStart": "Chờ nhận",
+      "waitingToStartDescTool": "Chặng soát tool không có bước nhận task.",
+      "waitingToStartDescDesigner": "Số đơn đã giao cho sub-designer nhưng chưa bấm \"Nhận làm\".",
+      "waitingToStartDescStage": "Số đơn đã tới \"{{label}}\" nhưng worker chưa bấm \"Bắt đầu\".",
+      "inProgress": "Đang làm",
+      "inProgressDescTool": "Chặng soát tool không có trạng thái \"đang làm\".",
+      "inProgressDescStage": "Số đơn đang được làm tại \"{{label}}\".",
+      "rework": "Rework",
+      "reworkDescTool": "Số đơn bị đẩy về Support soát lại (In báo \"Thiếu file để in\"…).",
+      "reworkDescStage": "Số đơn bị đẩy lại \"{{label}}\" để làm lại.",
+      "error": "Lỗi",
+      "errorDescTool": "Số đơn bị soát ra lỗi (Note kq tool = \"error\").",
+      "errorDescStage": "Số đơn đang bị đánh lỗi sản xuất tại \"{{label}}\".",
+      "doneInRange": "HT (kỳ)",
+      "doneInRangeDesc": "Số đơn đã hoàn thành \"{{label}}\" trong khoảng thời gian đã chọn.",
+      "avgTime": "Time TB",
+      "avgTimeDescTool": "Thời gian trung bình từ lúc đơn vào sản xuất đến lúc soát xong (trong kỳ).",
+      "avgTimeDescStage": "Thời gian làm trung bình một đơn tại \"{{label}}\" (đơn hoàn thành trong kỳ).",
+      "passedTotalTool": "Đã soát (tổng)",
+      "passedTotalStage": "Đã qua (tổng)",
+      "passedTotalDescTool": "Tổng số đơn đã được soát tool (Note kq tool có giá trị).",
+      "passedTotalDescStage": "Tổng số đơn đã từng đi qua \"{{label}}\" (tích lũy)."
+    },
+    "detailTable": {
+      "title": "Chi tiết theo công đoạn",
+      "subtitle": "Snapshot hiện tại (đang chứa / đang làm / rework / lỗi) · throughput theo kỳ (hoàn thành / thời gian TB)",
+      "columns": {
+        "stage": "Công đoạn",
+        "backlog": "Đang chứa",
+        "waitingToStart": "Chờ nhận",
+        "inProgress": "Đang làm",
+        "rework": "Rework",
+        "error": "Lỗi",
+        "doneInRange": "Hoàn thành (kỳ)",
+        "passedTotal": "Đã qua",
+        "avgTime": "Time TB"
+      }
+    },
+    "charts": {
+      "backlogTitle": "Tồn đọng theo công đoạn",
+      "backlogSubtitle": "Số đơn đang chờ · đang làm · rework · lỗi tại mỗi chặng",
+      "noData": "Chưa có dữ liệu.",
+      "legend": {
+        "backlog": "Đang chứa",
+        "inProgress": "Đang làm",
+        "rework": "Rework",
+        "error": "Lỗi"
+      },
+      "completedTitle": "Đơn hoàn thành mỗi ngày",
+      "completedSubtitle": "Số đơn đóng hàng xong theo ngày trong kỳ",
+      "noCompleted": "Chưa có đơn nào hoàn thành trong kỳ.",
+      "tooltipTotal": "Tổng",
+      "tooltipCompletedSuffix": "{{count}} đơn hoàn thành"
+    }
+  }
+}

@@ -29,7 +29,7 @@
 ### Styling
 
 - **Tailwind** cho layout, spacing, colors, responsive.
-- **Ant Design theme tokens** cho component styling (borderRadius, colors...).
+- **Radix UI + shadcn-style components** (`src/components/ui/`) cho component primitives — KHÔNG dùng Ant Design (không phải dependency của project).
 - **globals.css** cho CSS overrides mà Design Token không hỗ trợ.
 - KHÔNG dùng styled-components.
 - KHÔNG dùng inline styles trừ khi bắt buộc (e.g., dynamic values).
@@ -83,10 +83,10 @@ import { handleAxiosError } from '@/utils';
 
 - Page transitions: Framer Motion `motion.div` trong MainLayout.
 - CSS transitions: chỉ dùng `transition-*` Tailwind classes cho hover/focus.
-- **KHÔNG** thêm CSS `animation` hoặc `@keyframes` cho Ant Design overlay components (Modal, Popover, Dropdown, Tooltip, Drawer) — chúng đã có animation riêng, thêm vào sẽ gây nhấp nháy.
+- **KHÔNG** thêm CSS `animation` hoặc `@keyframes` cho Radix overlay components (Dialog, Popover, DropdownMenu, Tooltip, Sheet) — chúng đã có animation riêng, thêm vào sẽ gây nhấp nháy.
 
 ### Form Handling
 
-- Dùng Ant Design `Form` với `Form.Item`.
-- Define `FieldType` interface cho type-safe form values.
-- Validation: Ant Design built-in rules + custom validators.
+- Dùng `react-hook-form` + `@hookform/resolvers/zod` với `Form`/`FormField`/`FormItem` (`src/components/ui/form.tsx`, wrapper quanh Radix).
+- Define Zod schema cho type-safe form values (`z.infer<typeof schema>`).
+- Validation: Zod schema rules + custom validators (`src/utils/validate.ts`).

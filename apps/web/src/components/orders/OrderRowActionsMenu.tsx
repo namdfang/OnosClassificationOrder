@@ -1,4 +1,5 @@
 import React, { useState } from 'react';
+import { useTranslation } from 'react-i18next';
 import { Ban, MoreHorizontal, PauseCircle, Pencil, PlayCircle } from 'lucide-react';
 import { toast } from 'sonner';
 
@@ -34,6 +35,7 @@ interface Props {
  * disable design/hủy. Đơn đang giữ → chỉ còn "Mở giữ" (mọi action khác khóa).
  */
 export function OrderRowActionsMenu({ order, onChanged }: Props) {
+  const { t } = useTranslation('orders');
   const { isAdmin, roleName } = usePermission();
   const [cancelOpen, setCancelOpen] = useState(false);
   const [designOpen, setDesignOpen] = useState(false);
@@ -45,14 +47,14 @@ export function OrderRowActionsMenu({ order, onChanged }: Props) {
 
   const cancelled = isCancelled(order);
   const held = isHeld(order);
-  const cancelCheck = canCancelOrder(order);
+  const cancelCheck = canCancelOrder(order, t);
   const cancelDisabled = cancelled || held || !cancelCheck.ok;
 
   const doUnhold = async () => {
     try {
       setUnholding(true);
       const res = await RepositoryRemote.order.unholdOrder(order._id);
-      toast.success('Đã mở giữ đơn');
+      toast.success(t('rowActionsMenu.unheld'));
       onChanged((res.data?.data as WorkshopOrderRow) ?? order);
     } catch (err) {
       handleAxiosError(err);
@@ -69,7 +71,7 @@ export function OrderRowActionsMenu({ order, onChanged }: Props) {
             variant="ghost"
             size="icon"
             className="h-7 w-7"
-            aria-label="Thao tác đơn"
+            aria-label={t('rowActionsMenu.ariaLabel')}
             onClick={(e) => e.stopPropagation()}
           >
             <MoreHorizontal size={16} />
@@ -78,7 +80,7 @@ export function OrderRowActionsMenu({ order, onChanged }: Props) {
         <DropdownMenuContent align="end" onClick={(e) => e.stopPropagation()}>
           {isAdmin && (
             <DropdownMenuItem disabled={cancelled || held} onSelect={() => setDesignOpen(true)}>
-              <Pencil size={14} className="mr-2" /> Đổi design
+              <Pencil size={14} className="mr-2" /> {t('rowActionsMenu.changeDesign')}
             </DropdownMenuItem>
           )}
           {canHold &&
@@ -91,26 +93,32 @@ export function OrderRowActionsMenu({ order, onChanged }: Props) {
                   void doUnhold();
                 }}
               >
-                <PlayCircle size={14} className="mr-2" /> Mở giữ
+                <PlayCircle size={14} className="mr-2" /> {t('rowActionsMenu.unhold')}
               </DropdownMenuItem>
             ) : (
               <DropdownMenuItem
                 disabled={cancelled}
                 className="text-amber-600 focus:text-amber-600"
-                title={cancelled ? 'Đơn đã hủy' : undefined}
+                title={cancelled ? t('rowActionsMenu.alreadyCancelled') : undefined}
                 onSelect={() => setHoldOpen(true)}
               >
-                <PauseCircle size={14} className="mr-2" /> Giữ đơn
+                <PauseCircle size={14} className="mr-2" /> {t('rowActionsMenu.hold')}
               </DropdownMenuItem>
             ))}
           {isAdmin && (
             <DropdownMenuItem
               disabled={cancelDisabled}
               className="text-rose-600 focus:text-rose-600"
-              title={cancelled ? 'Đơn đã hủy' : held ? 'Đơn đang giữ — mở lại trước' : cancelCheck.reason}
+              title={
+                cancelled
+                  ? t('rowActionsMenu.alreadyCancelled')
+                  : held
+                    ? t('rowActionsMenu.heldReopenFirst')
+                    : cancelCheck.reason
+              }
               onSelect={() => setCancelOpen(true)}
             >
-              <Ban size={14} className="mr-2" /> Hủy đơn
+              <Ban size={14} className="mr-2" /> {t('rowActionsMenu.cancelOrder')}
             </DropdownMenuItem>
           )}
         </DropdownMenuContent>

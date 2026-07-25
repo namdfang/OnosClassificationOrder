@@ -1,4 +1,5 @@
 import React from 'react';
+import { useTranslation } from 'react-i18next';
 
 import { cn } from '@/utils/cn';
 
@@ -16,6 +17,7 @@ interface Props {
  * count phản ánh đúng các filter khác đang active.
  */
 export function SelectFilter({ label, value, onChange, options }: Props) {
+  const { t } = useTranslation('common');
   // Guard: options có thể undefined khi response BE chưa có facet đó (vd. trong
   // lúc deploy backend mới chưa lên) → tránh crash `.reduce`/`.map` of undefined.
   const opts = options ?? [];
@@ -30,7 +32,9 @@ export function SelectFilter({ label, value, onChange, options }: Props) {
           value ? 'border-primary' : 'border-input',
         )}
       >
-        <option value="">— Tất cả ({opts.reduce((s, o) => s + (o.count ?? 0), 0)}) —</option>
+        <option value="">
+          {t('selectFilter.all', { count: opts.reduce((s, o) => s + (o.count ?? 0), 0) })}
+        </option>
         {opts.map((o) => (
           <option key={o.value} value={o.value}>
             {o.label} ({o.count ?? 0})

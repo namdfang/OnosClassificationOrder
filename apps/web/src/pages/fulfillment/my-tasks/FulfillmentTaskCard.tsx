@@ -1,5 +1,7 @@
 import React from 'react';
+import { useTranslation } from 'react-i18next';
 import dayjs from 'dayjs';
+import type { TFunction } from 'i18next';
 import {
   CheckCircle2,
   ChevronRight,
@@ -12,12 +14,13 @@ import {
   XOctagon,
 } from 'lucide-react';
 import type { FulfillmentStage, FulfillmentStageState, ProductionOrderRow } from 'shared';
-import { FULFILLMENT_STAGE_LABELS, FulfillmentStageStatus } from 'shared';
+import { FulfillmentStageStatus } from 'shared';
 import { useDraggable } from '@dnd-kit/core';
 
 import { Hint } from '@/components/common/Hint';
 import { PriorityBadge } from '@/components/orders/cells/PrioritySelectCell';
 
+import { getStageLabel } from '@/utils/fulfillmentStageLabel';
 import { formatCountdown, getStageDeadline } from '@/utils/priorityEstimate';
 
 import { useNow } from '@/hooks/useNow';
@@ -70,28 +73,29 @@ function fmtTime(d?: Date | string): string {
 }
 
 /** Nhãn nguồn lỗi cho badge — đồng bộ với các cell/scan dialog. */
-function srcLabel(source?: string): string {
-  if (source === 'designer') return 'Do designer';
-  if (source === 'tool-check') return 'Do soát tool';
-  if (source === 'factory') return 'Do xưởng';
-  return 'Lỗi';
+function srcLabel(t: TFunction, source?: string): string {
+  if (source === 'designer') return t('errorSource.designer');
+  if (source === 'tool-check') return t('errorSource.toolCheck');
+  if (source === 'factory') return t('errorSource.factory');
+  return t('errorSource.generic');
 }
 
 /** Mốc thời gian đại diện cho card theo status — đồng bộ pattern với
  *  `pages/designer/my-tasks/TaskCard.timeStamp()`. */
 function timeStamp(
+  t: TFunction,
   state: FulfillmentStageState | null,
   status: FulfillmentStageStatus,
 ): { label: string; value?: Date | string } {
   switch (status) {
     case FulfillmentStageStatus.Waiting:
-      return { label: 'Nhận', value: state?.waitingAt };
+      return { label: t('taskCard.timeLabels.waiting'), value: state?.waitingAt };
     case FulfillmentStageStatus.InProgress:
-      return { label: 'Bắt đầu', value: state?.startedAt };
+      return { label: t('taskCard.timeLabels.inProgress'), value: state?.startedAt };
     case FulfillmentStageStatus.Rework:
-      return { label: 'Quay lại', value: state?.reworkAt };
+      return { label: t('taskCard.timeLabels.rework'), value: state?.reworkAt };
     case FulfillmentStageStatus.Done:
-      return { label: 'Xong', value: state?.completedAt };
+      return { label: t('taskCard.timeLabels.done'), value: state?.completedAt };
     default:
       return { label: '', value: undefined };
   }
@@ -110,6 +114,7 @@ export function FulfillmentTaskCard({
   onComplete,
   onReportError,
 }: FulfillmentTaskCardProps) {
+  const { t } = useTranslation(['fulfillmentWorkflow', 'common']);
   const state = (order.fulfillmentStages?.[myStage] ?? null) as FulfillmentStageState | null;
   const status = state?.status ?? FulfillmentStageStatus.Waiting;
   const currentStage = order.currentFulfillmentStage as FulfillmentStage | undefined;
@@ -126,7 +131,7 @@ export function FulfillmentTaskCard({
     ? { transform: `translate3d(${transform.x}px, ${transform.y}px, 0)` }
     : undefined;
 
-  const ts = timeStamp(state, status);
+  const ts = timeStamp(t, state, status);
   const deadline =
     status === FulfillmentStageStatus.Waiting || status === FulfillmentStageStatus.InProgress
       ? getStageDeadline(
@@ -137,7 +142,7 @@ export function FulfillmentTaskCard({
         )
       : undefined;
   const now = useNow(30_000);
-  const countdown = deadline ? formatCountdown(deadline, now) : undefined;
+  const countdown = deadline ? formatCountdown(deadline, now, t) : undefined;
   const url = order.mockupOriginalUrl || order.mockupUrl;
   const thumb = smallThumb(order.mockupUrl);
 
@@ -161,7 +166,7 @@ export function FulfillmentTaskCard({
             }}
             onPointerDown={(e) => e.stopPropagation()}
             className="shrink-0 w-14 h-14 rounded border border-border overflow-hidden bg-checker"
-            title="Click để xem to"
+            title={t('taskCard.previewTitle')}
           >
             <img
               src={thumb}
@@ -181,7 +186,7 @@ export function FulfillmentTaskCard({
           <div className="flex items-center gap-1 min-w-0">
             {/* Copy button bên trái productionId — tick xanh persist cho đến khi
                 user copy productionId card khác hoặc F5 (state ở parent). */}
-            <Hint content={isCopied ? 'Đã copy' : 'Copy productionId'} forceRich>
+            <Hint content={isCopied ? t('common:actions.copied') : t('taskCard.copyTitle')} forceRich>
               <button
                 type="button"
                 onClick={(e) => {
@@ -194,7 +199,7 @@ export function FulfillmentTaskCard({
                     ? 'shrink-0 inline-flex items-center justify-center w-4 h-4 text-emerald-600 dark:text-emerald-400'
                     : 'shrink-0 inline-flex items-center justify-center w-4 h-4 text-muted-foreground hover:text-foreground'
                 }
-                aria-label="Copy productionId"
+                aria-label={t('taskCard.copyTitle')}
               >
                 {isCopied ? <CheckCircle2 size={16} /> : <Copy size={15} />}
               </button>
@@ -218,17 +223,18 @@ export function FulfillmentTaskCard({
           </div>
 
           {order.type && (
-            <Hint content={`Type: ${order.type}`} forceRich>
+            <Hint content={t('taskCard.typeTooltip', { type: order.type })} forceRich>
               <div className="text-[11px] text-foreground line-clamp-1">{order.type}</div>
             </Hint>
           )}
           <div className="text-[10px] text-muted-foreground line-clamp-1">
             {order.size || '—'}
             {order.color && <> · {order.color}</>}
-            {' · '}qty {order.quantity}
+            {' · '}
+            {t('taskCard.qty', { quantity: order.quantity })}
           </div>
           {order.userSku && (
-            <Hint content={`Khách hàng (SKU): ${order.userSku}`} forceRich>
+            <Hint content={t('taskCard.customerTooltip', { sku: order.userSku })} forceRich>
               <div className="text-[10px] text-muted-foreground line-clamp-1 inline-flex items-center gap-1">
                 <span aria-hidden>📧</span>
                 <span className="truncate">{order.userSku}</span>
@@ -238,14 +244,24 @@ export function FulfillmentTaskCard({
 
           <div className="flex items-center gap-2 text-[10px] text-muted-foreground flex-wrap">
             {ts.value && (
-              <Hint content={`${ts.label} lúc ${fmtTime(ts.value)} (${dayjs(ts.value).fromNow()})`} forceRich>
+              <Hint
+                content={t('taskCard.timeHint', {
+                  label: ts.label,
+                  time: fmtTime(ts.value),
+                  relative: dayjs(ts.value).fromNow(),
+                })}
+                forceRich
+              >
                 <span className="inline-flex items-center gap-1">
                   <Clock size={10} /> {ts.label}: {fmtTime(ts.value)}
                 </span>
               </Hint>
             )}
             {deadline && countdown && (
-              <Hint content={`Hạn dự kiến bước ${FULFILLMENT_STAGE_LABELS[myStage]} · ${fmtTime(deadline)}`} forceRich>
+              <Hint
+                content={t('taskCard.deadlineHint', { stage: getStageLabel(t, myStage), time: fmtTime(deadline) })}
+                forceRich
+              >
                 <span
                   className={`inline-flex items-center gap-1 ${countdown.overdue ? 'text-rose-600 dark:text-rose-400 font-medium' : ''}`}
                 >
@@ -254,7 +270,7 @@ export function FulfillmentTaskCard({
               </Hint>
             )}
             {state?.reworkCount && state.reworkCount > 0 ? (
-              <Hint content={`Đơn này đã rework ${state.reworkCount} lần`} forceRich>
+              <Hint content={t('taskCard.reworkHint', { count: state.reworkCount })} forceRich>
                 <span className="inline-flex items-center gap-1 text-amber-600 dark:text-amber-400">
                   <RotateCcw size={10} /> ×{state.reworkCount}
                 </span>
@@ -265,12 +281,12 @@ export function FulfillmentTaskCard({
           {colKey === 'watching' && (
             <div className="text-[10px] text-sky-700 dark:text-sky-300 inline-flex items-center gap-1">
               <ChevronRight size={11} />
-              Đang ở:{' '}
+              {t('taskCard.watchingPrefix')}{' '}
               <strong>
                 {order.designerStatus === 'rework'
-                  ? 'Designer (rework)'
+                  ? t('taskCard.watchingDesignerRework')
                   : currentStage
-                    ? FULFILLMENT_STAGE_LABELS[currentStage]
+                    ? getStageLabel(t, currentStage)
                     : '—'}
               </strong>
             </div>
@@ -284,15 +300,15 @@ export function FulfillmentTaskCard({
               <div className="inline-flex items-center gap-1 font-medium flex-wrap">
                 <MessageSquareWarning size={11} className="shrink-0" />
                 <span className="px-1 rounded bg-rose-200/60 dark:bg-rose-500/20">
-                  {srcLabel(order.productionErrorSource)}
+                  {srcLabel(t, order.productionErrorSource)}
                 </span>
                 {currentStage && colKey !== 'watching' && (
                   <span className="text-rose-600/80 dark:text-rose-300/80">
-                    · đang ở {FULFILLMENT_STAGE_LABELS[currentStage]}
+                    {t('taskCard.errorStageSuffix', { stage: getStageLabel(t, currentStage) })}
                   </span>
                 )}
                 {order.designerStatus === 'rework' && colKey !== 'watching' && (
-                  <span className="text-rose-600/80 dark:text-rose-300/80">· đang ở Designer</span>
+                  <span className="text-rose-600/80 dark:text-rose-300/80">{t('taskCard.errorDesignerSuffix')}</span>
                 )}
                 {order.productionErrorCount && order.productionErrorCount > 1 ? (
                   <span className="font-mono">×{order.productionErrorCount}</span>
@@ -314,7 +330,7 @@ export function FulfillmentTaskCard({
       {/* Action buttons inline — opacity-hover cho gọn, mở rộng full khi cần thao tác */}
       {colKey === 'unassigned' && onAssignDesigner ? (
         <div className="flex items-center gap-1.5 pt-2 mt-1 border-t border-border/40">
-          <CardAction color="indigo" icon={PlayCircle} label="Gán Designer" onClick={onAssignDesigner} />
+          <CardAction color="indigo" icon={PlayCircle} label={t('actions.assignDesigner')} onClick={onAssignDesigner} />
         </div>
       ) : (
         colKey !== 'watching' &&
@@ -323,13 +339,13 @@ export function FulfillmentTaskCard({
           status === FulfillmentStageStatus.InProgress) && (
           <div className="flex items-center gap-1.5 pt-2 mt-1 border-t border-border/40">
             {(status === FulfillmentStageStatus.Waiting || status === FulfillmentStageStatus.Rework) && onStart && (
-              <CardAction color="indigo" icon={PlayCircle} label="Bắt đầu" onClick={onStart} />
+              <CardAction color="indigo" icon={PlayCircle} label={t('actions.start')} onClick={onStart} />
             )}
             {status === FulfillmentStageStatus.InProgress && onComplete && (
-              <CardAction color="emerald" icon={CheckCircle2} label="Hoàn thành" onClick={onComplete} />
+              <CardAction color="emerald" icon={CheckCircle2} label={t('actions.complete')} onClick={onComplete} />
             )}
             {status === FulfillmentStageStatus.InProgress && onReportError && (
-              <CardAction color="rose" icon={XOctagon} label="Báo lỗi" onClick={onReportError} />
+              <CardAction color="rose" icon={XOctagon} label={t('actions.reportError')} onClick={onReportError} />
             )}
           </div>
         )

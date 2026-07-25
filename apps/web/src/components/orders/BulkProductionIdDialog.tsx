@@ -1,4 +1,6 @@
 import React, { useEffect, useMemo, useState } from 'react';
+import { Trans, useTranslation } from 'react-i18next';
+import type { TFunction } from 'i18next';
 import { ListChecks, Loader2, Search } from 'lucide-react';
 
 import { RepositoryRemote } from '@/services';
@@ -18,14 +20,16 @@ import { Textarea } from '@/components/ui/textarea';
 import { handleAxiosError } from '@/utils';
 
 /** Nhãn ngắn cho từng chặng fulfillment — hiện ở cột "Chặng" chế độ lookup. */
-const STAGE_SHORT: Record<string, string> = {
-  print: 'In',
-  press: 'Ép',
-  'qc-post-press': 'QC ép',
-  'sew-in': 'May vào',
-  'sew-out': 'May ra',
-  pack: 'Đóng',
-};
+function buildStageShort(t: TFunction<'orders'>): Record<string, string> {
+  return {
+    print: t('dialogs.bulkProductionId.stageShort.print'),
+    press: t('dialogs.bulkProductionId.stageShort.press'),
+    'qc-post-press': t('dialogs.bulkProductionId.stageShort.qcPostPress'),
+    'sew-in': t('dialogs.bulkProductionId.stageShort.sewIn'),
+    'sew-out': t('dialogs.bulkProductionId.stageShort.sewOut'),
+    pack: t('dialogs.bulkProductionId.stageShort.pack'),
+  };
+}
 
 /**
  * Tách textarea → mảng productionId: cắt theo xuống dòng / phẩy / khoảng trắng,
@@ -83,6 +87,8 @@ export function BulkProductionIdDialog({
   onPick,
   initialIds,
 }: BulkProductionIdDialogProps) {
+  const { t } = useTranslation('orders');
+  const STAGE_SHORT = useMemo(() => buildStageShort(t), [t]);
   const [text, setText] = useState('');
   const [loading, setLoading] = useState(false);
   const [rows, setRows] = useState<LookupRow[] | null>(null);
@@ -140,12 +146,12 @@ export function BulkProductionIdDialog({
   };
 
   const stageLabel = (r: LookupRow): string => {
-    if (r.fulfillmentCompletedAt) return 'Hoàn thành';
+    if (r.fulfillmentCompletedAt) return t('dialogs.bulkProductionId.completed');
     if (r.currentFulfillmentStage) return STAGE_SHORT[r.currentFulfillmentStage] ?? r.currentFulfillmentStage;
     return '—';
   };
 
-  const primaryLabel = mode === 'filter' ? 'Lọc bảng' : 'Tìm';
+  const primaryLabel = mode === 'filter' ? t('dialogs.bulkProductionId.filterBtn') : t('dialogs.bulkProductionId.findBtn');
   const onPrimary = mode === 'filter' ? applyFilter : runLookup;
 
   return (
@@ -154,11 +160,9 @@ export function BulkProductionIdDialog({
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2">
             <ListChecks size={18} className="text-primary" />
-            Tìm nhiều Production ID
+            {t('dialogs.bulkProductionId.title')}
           </DialogTitle>
-          <DialogDescription>
-            Dán danh sách mã, mỗi Production ID một dòng (hoặc cách nhau bằng dấu phẩy / khoảng trắng).
-          </DialogDescription>
+          <DialogDescription>{t('dialogs.bulkProductionId.description')}</DialogDescription>
         </DialogHeader>
 
         <div className="space-y-2">
@@ -177,9 +181,14 @@ export function BulkProductionIdDialog({
           />
           <div className="flex items-center justify-between text-xs text-muted-foreground">
             <span>
-              Đã nhập <span className="font-semibold text-foreground">{ids.length}</span> mã
+              <Trans
+                i18nKey="dialogs.bulkProductionId.enteredCount"
+                ns="orders"
+                values={{ count: ids.length }}
+                components={{ strong: <span className="font-semibold text-foreground" /> }}
+              />
             </span>
-            <span className="opacity-70">Ctrl/⌘ + Enter để tìm</span>
+            <span className="opacity-70">{t('dialogs.bulkProductionId.ctrlEnterHint')}</span>
           </div>
         </div>
 
@@ -188,17 +197,17 @@ export function BulkProductionIdDialog({
             <table className="w-full text-sm">
               <thead className="sticky top-0 bg-muted/60 backdrop-blur">
                 <tr className="text-left text-xs text-muted-foreground">
-                  <th className="px-3 py-2 font-medium">Production ID</th>
-                  <th className="px-3 py-2 font-medium">Sản phẩm</th>
-                  <th className="px-3 py-2 font-medium">Chặng</th>
-                  <th className="px-3 py-2 font-medium">Trạng thái</th>
+                  <th className="px-3 py-2 font-medium">{t('dialogs.bulkProductionId.colProductionId')}</th>
+                  <th className="px-3 py-2 font-medium">{t('dialogs.bulkProductionId.colProduct')}</th>
+                  <th className="px-3 py-2 font-medium">{t('dialogs.bulkProductionId.colStage')}</th>
+                  <th className="px-3 py-2 font-medium">{t('dialogs.bulkProductionId.colStatus')}</th>
                 </tr>
               </thead>
               <tbody>
                 {rows.length === 0 && (
                   <tr>
                     <td colSpan={4} className="px-3 py-6 text-center text-muted-foreground">
-                      Không tìm thấy đơn nào khớp.
+                      {t('dialogs.bulkProductionId.noMatch')}
                     </td>
                   </tr>
                 )}
@@ -240,13 +249,14 @@ export function BulkProductionIdDialog({
 
         {mode === 'lookup' && rows && missingIds.length > 0 && (
           <div className="text-xs text-amber-600 dark:text-amber-400">
-            Không tìm thấy {missingIds.length} mã: <span className="font-mono">{missingIds.join(', ')}</span>
+            {t('dialogs.bulkProductionId.missingIds', { count: missingIds.length })}{' '}
+            <span className="font-mono">{missingIds.join(', ')}</span>
           </div>
         )}
 
         <DialogFooter>
           <Button variant="ghost" onClick={close}>
-            Đóng
+            {t('common:actions.close')}
           </Button>
           <Button onClick={onPrimary} disabled={!ids.length || loading}>
             {loading ? (

@@ -1,4 +1,5 @@
 import React, { useMemo, useState } from 'react';
+import { useTranslation } from 'react-i18next';
 import { Check, ChevronDown, Search, X } from 'lucide-react';
 
 import { Button } from '@/components/ui/button';
@@ -46,6 +47,7 @@ export function MultiSelectFilter({
   width = 240,
   className,
 }: MultiSelectFilterProps) {
+  const { t } = useTranslation('common');
   const [open, setOpen] = useState(false);
   const [query, setQuery] = useState('');
 
@@ -103,7 +105,7 @@ export function MultiSelectFilter({
             type="text"
             value={query}
             onChange={(e) => setQuery(e.target.value)}
-            placeholder="Tìm…"
+            placeholder={t('multiSelect.searchPlaceholder')}
             className="flex-1 bg-transparent outline-none text-xs h-7"
           />
           {selected.size > 0 && (
@@ -114,7 +116,7 @@ export function MultiSelectFilter({
                 setQuery('');
               }}
               className="text-[10px] text-muted-foreground hover:text-foreground px-1"
-              title="Xóa tất cả"
+              title={t('multiSelect.clearAll')}
             >
               <X size={11} />
             </button>
@@ -122,7 +124,9 @@ export function MultiSelectFilter({
         </div>
 
         <div className="max-h-[280px] overflow-y-auto py-1">
-          {filtered.length === 0 && <p className="text-center text-xs text-muted-foreground py-4">Không tìm thấy</p>}
+          {filtered.length === 0 && (
+            <p className="text-center text-xs text-muted-foreground py-4">{t('multiSelect.noMatch')}</p>
+          )}
           {filtered.map((opt) => {
             const isOn = selected.has(opt.code);
             return (
@@ -162,7 +166,7 @@ export function MultiSelectFilter({
               onClick={() => onChange(options.map((o) => o.code))}
               className="text-[10px] text-muted-foreground hover:text-foreground"
             >
-              Chọn tất cả
+              {t('multiSelect.selectAll')}
             </button>
             <span className="text-[10px] text-muted-foreground">
               {selected.size}/{options.length}

@@ -1,4 +1,5 @@
 import React, { useCallback, useEffect, useState } from 'react';
+import { useTranslation } from 'react-i18next';
 import { ChevronDown, ChevronRight, TriangleAlert } from 'lucide-react';
 import type { FulfillmentStage } from 'shared';
 
@@ -44,6 +45,7 @@ export function StageErrorPanel({
   to?: string;
   reloadToken?: number;
 }) {
+  const { t } = useTranslation('fulfillmentWorkflow');
   const [open, setOpen] = useState(false);
   const [loading, setLoading] = useState(false);
   const [data, setData] = useState<StageErrorData | null>(null);
@@ -73,7 +75,7 @@ export function StageErrorPanel({
       >
         <span className="inline-flex items-center gap-1.5">
           <TriangleAlert size={14} />
-          Thống kê lỗi công đoạn theo ngày
+          {t('stageErrorPanel.title')}
           {data && data.grandTotal > 0 && (
             <span className="px-1.5 py-0.5 rounded-full bg-rose-200/70 dark:bg-rose-500/20 font-semibold">
               {data.grandTotal}
@@ -87,24 +89,24 @@ export function StageErrorPanel({
         <div className="p-2.5 pt-0">
           {loading ? (
             <div className="flex items-center gap-2 py-4 text-xs text-muted-foreground">
-              <Spinner size={14} /> Đang tải…
+              <Spinner size={14} /> {t('stageErrorPanel.loading')}
             </div>
           ) : !data || data.rows.length === 0 ? (
-            <div className="py-4 text-xs text-muted-foreground">Không có lỗi trong kỳ.</div>
+            <div className="py-4 text-xs text-muted-foreground">{t('stageErrorPanel.empty')}</div>
           ) : (
             <div className="overflow-x-auto">
               <table className="w-full text-xs border-collapse">
                 <thead>
                   <tr className="text-muted-foreground">
                     <th className="text-left font-medium p-1.5 sticky left-0 bg-rose-50/40 dark:bg-rose-950/10">
-                      Mã lỗi
+                      {t('stageErrorPanel.colErrorCode')}
                     </th>
                     {data.days.map((d) => (
                       <th key={d} className="p-1.5 text-center font-medium whitespace-nowrap">
                         {shortDay(d)}
                       </th>
                     ))}
-                    <th className="p-1.5 text-center font-semibold">Tổng</th>
+                    <th className="p-1.5 text-center font-semibold">{t('stageErrorPanel.colTotal')}</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -131,7 +133,9 @@ export function StageErrorPanel({
                     </tr>
                   ))}
                   <tr className="border-t-2 border-rose-200 dark:border-rose-900/50 font-semibold">
-                    <td className="p-1.5 sticky left-0 bg-rose-50/40 dark:bg-rose-950/10">Tổng</td>
+                    <td className="p-1.5 sticky left-0 bg-rose-50/40 dark:bg-rose-950/10">
+                      {t('stageErrorPanel.colTotal')}
+                    </td>
                     {data.columnTotals.map((v, i) => (
                       <td key={i} className="p-1.5 text-center tabular-nums">
                         {v || '·'}

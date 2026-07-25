@@ -1,0 +1,56 @@
+{
+  "sidebar": {
+    "groups": {
+      "catalog": "Danh mục",
+      "personal": "Cá nhân",
+      "admin": "Quản trị"
+    },
+    "dashboard": {
+      "title": "Dashboard",
+      "factory": "Đơn hàng theo xưởng",
+      "stats": "Thống kê đơn & sản phẩm",
+      "status": "Tình trạng đơn hàng",
+      "lifecycle": "Vòng đời đơn",
+      "toolCheck": "Soát tool",
+      "personError": "Lỗi theo người",
+      "designer": "Designer"
+    },
+    "orders": {
+      "title": "Quản lý đơn",
+      "list": "Danh sách đơn",
+      "errorLog": "Nhật ký bù lỗi",
+      "scanError": "Quét mã",
+      "stageErrors": "Danh mục lỗi công đoạn",
+      "unmapped": "Không xác định xưởng",
+      "import": "Import Order",
+      "cuttingFiles": "Import File Cutting"
+    },
+    "work": {
+      "title": "Công việc",
+      "myTasks": "Task của tôi",
+      "fulfillmentTasks": "Task Fulfillment"
+    },
+    "products": "Sản phẩm",
+    "promotions": "Chương trình giảm giá",
+    "workshopConfig": "Quản lý xưởng",
+    "notifications": "Thông báo",
+    "account": "Tài khoản",
+    "peoplePermissions": "Nhân sự & phân quyền",
+    "designerTeam": "Team Designer",
+    "users": "Người dùng",
+    "departments": "Phòng ban",
+    "roles": "Vai trò",
+    "customRoles": "Vai trò tùy chỉnh",
+    "settings": "Cài đặt",
+    "signOut": "Đăng xuất",
+    "member": "Thành viên"
+  },
+  "header": {
+    "toggleSidebar": "Đóng/mở sidebar",
+    "lightMode": "Chế độ sáng",
+    "darkMode": "Chế độ tối",
+    "myAccount": "Tài khoản của tôi",
+    "signOut": "Đăng xuất",
+    "member": "Thành viên"
+  }
+}

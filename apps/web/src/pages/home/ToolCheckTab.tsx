@@ -1,4 +1,5 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
+import { useTranslation } from 'react-i18next';
 import {
   AlertTriangle,
   ChevronDown,
@@ -11,9 +12,9 @@ import {
   Users,
   X,
 } from 'lucide-react';
-import { toast } from 'sonner';
 import type { OrderPriority, ToolCheckDayRow, ToolCheckErrorRow, ToolCheckFacet, ToolCheckOrder } from 'shared';
 import { ORDER_PRIORITY_LABELS, PRODUCT_LEVEL_MAP, WorkshopConfigCategory } from 'shared';
+import { toast } from 'sonner';
 
 import { useWorkshopConfigStore } from '@/store/workshopConfigStore';
 
@@ -101,6 +102,7 @@ const toPriorityOpts = (f: ToolCheckFacet[] = []) =>
 const custKey = (r: { userSku?: string; userEmail?: string }) => `${r.userSku ?? ''}|||${r.userEmail ?? ''}`;
 
 export default function ToolCheckTab() {
+  const { t } = useTranslation('toolCheckWorkflow');
   const { canEditField } = usePermission();
   const loadConfig = useWorkshopConfigStore((s) => s.load);
   const configLoaded = useWorkshopConfigStore((s) => s.loaded);
@@ -212,11 +214,15 @@ export default function ToolCheckTab() {
       const res = await RepositoryRemote.order.markToolCheckDone(o._id);
       const d = (res.data?.data || {}) as { outcome?: string; assigneeName?: string };
       if (d.outcome === 'designer-rework') {
-        toast.success(`${o.productionId}: đã đẩy về designer${d.assigneeName ? ` ${d.assigneeName}` : ''} (cần làm lại).`);
+        toast.success(
+          t('list.markDoneToastRework', { id: o.productionId, name: d.assigneeName ? ` ${d.assigneeName}` : '' }),
+        );
       } else if (d.outcome === 'auto-assigned') {
-        toast.success(`${o.productionId}: đã tự gán cho designer${d.assigneeName ? ` ${d.assigneeName}` : ''}.`);
+        toast.success(
+          t('list.markDoneToastAuto', { id: o.productionId, name: d.assigneeName ? ` ${d.assigneeName}` : '' }),
+        );
       } else {
-        toast.info(`${o.productionId}: xưởng chưa có cấu hình gán — đơn vào backlog "Cần gán" (designer tự nhận hoặc phân tay).`);
+        toast.info(t('list.markDoneToastNone', { id: o.productionId }));
       }
       fetchData();
     } catch (err) {
@@ -253,7 +259,7 @@ export default function ToolCheckTab() {
           <ImageThumbCell
             url={o.mockupUrl}
             originalUrl={o.mockupOriginalUrl}
-            title={`Mockup: ${o.productionId}`}
+            title={t('list.mockupTitle', { id: o.productionId })}
             onOpen={(url, title, originalUrl) => setPreview({ url, title, originalUrl })}
           />
         </td>
@@ -278,7 +284,7 @@ export default function ToolCheckTab() {
             // — mốc vào bước dùng thẳng `inProductionAt` (không có mốc riêng
             // "quay lại Support"/"vào hàng chờ soát" trong dữ liệu).
             const deadline = getStageDeadline(o.priority, 'tool-check', o.inProductionAt);
-            const countdown = deadline ? formatCountdown(deadline, now) : undefined;
+            const countdown = deadline ? formatCountdown(deadline, now, t) : undefined;
             return (
               <div className="flex flex-col gap-1 items-start">
                 <PriorityBadge priority={o.priority} />
@@ -321,7 +327,7 @@ export default function ToolCheckTab() {
             {showCount && (
               <span
                 className="text-[10px] font-bold px-1.5 py-0.5 rounded bg-rose-100 text-rose-700 dark:bg-rose-500/20 dark:text-rose-300"
-                title={`Xưởng đã báo lỗi ${o.productionErrorCount} lần trên đơn này`}
+                title={t('list.errorReportedTimes', { count: o.productionErrorCount })}
               >
                 ×{o.productionErrorCount}
               </span>
@@ -348,7 +354,7 @@ export default function ToolCheckTab() {
             value={o.errorFileNote}
             canEdit={canEditErrNote}
             onUpdated={(v) => patchRow(o._id, { errorFileNote: v ?? undefined })}
-            tooltipLabel="Ghi chú file lỗi"
+            tooltipLabel={t('list.columns.errorFileNote')}
           />
         </td>
         {/* Lỗi xưởng */}
@@ -376,7 +382,7 @@ export default function ToolCheckTab() {
               onClick={() => markDone(o)}
             >
               <ClipboardCheck size={13} />
-              Đã soát xong
+              {t('list.markDoneButton')}
             </Button>
           </td>
         )}
@@ -386,22 +392,27 @@ export default function ToolCheckTab() {
 
   const kpis = useMemo(
     () => [
-      { key: 'checked', label: 'Đã soát trong kỳ', value: data?.checkedCount ?? 0, cls: 'text-foreground' },
+      { key: 'checked', label: t('kpi.checked'), value: data?.checkedCount ?? 0, cls: 'text-foreground' },
       {
         key: 'rework',
-        label: 'In trả về (cần làm lại)',
+        label: t('kpi.rework'),
         value: reworkAll.length,
         cls: 'text-amber-600 dark:text-amber-400',
       },
-      { key: 'unreviewed', label: 'Chưa soát', value: unreviewedAll.length, cls: 'text-slate-600 dark:text-slate-400' },
+      {
+        key: 'unreviewed',
+        label: t('kpi.unreviewed'),
+        value: unreviewedAll.length,
+        cls: 'text-slate-600 dark:text-slate-400',
+      },
       {
         key: 'error',
-        label: 'Lỗi soát tool (đang chờ)',
+        label: t('kpi.error'),
         value: data?.errorCount ?? 0,
         cls: 'text-rose-600 dark:text-rose-400',
       },
     ],
-    [data, reworkAll.length, unreviewedAll.length],
+    [data, reworkAll.length, unreviewedAll.length, t],
   );
 
   const days = useMemo(() => [...(data?.days || [])].reverse(), [data]);
@@ -411,12 +422,12 @@ export default function ToolCheckTab() {
   // inProductionAt VN, cùng trục với cột ngày). Mang theo 4 filter tab.
   type StripMetric = 'total' | 'unreviewed' | 'reviewed' | 'reviewedError' | 'reviewedOk' | 'rework';
   const STRIP_METRIC_LABEL: Record<StripMetric, string> = {
-    total: 'Tổng đơn',
-    unreviewed: 'Chưa soát',
-    reviewed: 'Đã soát',
-    reviewedError: 'Soát lỗi',
-    reviewedOk: 'Soát OK',
-    rework: 'Cần làm lại',
+    total: t('dailyStrip.metrics.total'),
+    unreviewed: t('dailyStrip.metrics.unreviewed'),
+    reviewed: t('dailyStrip.metrics.reviewed'),
+    reviewedError: t('dailyStrip.metrics.reviewedError'),
+    reviewedOk: t('dailyStrip.metrics.reviewedOk'),
+    rework: t('dailyStrip.metrics.rework'),
   };
   const openStripDrill = (metric: StripMetric, fromDay?: string, toDay?: string, dayLabel?: string) => {
     const sp = new URLSearchParams();
@@ -444,8 +455,8 @@ export default function ToolCheckTab() {
     setDrill({
       title: (
         <>
-          Soát tool · {STRIP_METRIC_LABEL[metric]}
-          {dayLabel ? ` · ${dayLabel}` : ' · cả kỳ'}
+          {t('header.title')} · {STRIP_METRIC_LABEL[metric]}
+          {dayLabel ? ` · ${dayLabel}` : ` · ${t('dailyStrip.dayLabelAll')}`}
         </>
       ),
       query: sp.toString(),
@@ -543,7 +554,7 @@ export default function ToolCheckTab() {
       items.push({
         orderId: r.orderId,
         productionId: r.productionId,
-        product: r.fullName || r.type || '(Chưa rõ)',
+        product: r.fullName || r.type || t('errorStats.unknown'),
         note: r.note,
         errorFile: r.errorFile,
         mockup: r.mockup,
@@ -579,8 +590,8 @@ export default function ToolCheckTab() {
       return ak.localeCompare(bk);
     });
 
-    return { label: label || '(Chưa rõ)', items };
-  }, [data?.errorHistory, selCode, selCust, selType]);
+    return { label: label || t('errorStats.unknown'), items };
+  }, [data?.errorHistory, selCode, selCust, selType, t]);
 
   // Chế độ "xem theo từng khách hàng": mỗi khách → sản phẩm lỗi + loại lỗi
   // (đếm đơn riêng biệt), sort nhiều→ít. KHÔNG áp cross-filter (hiện mọi khách).
@@ -614,7 +625,7 @@ export default function ToolCheckTab() {
       let p = g.products.get(pk);
       if (!p) {
         p = {
-          product: r.fullName || r.type || '(Chưa rõ)',
+          product: r.fullName || r.type || t('errorStats.unknown'),
           mockup: r.mockup,
           level: r.level ?? undefined,
           orders: new Set(),
@@ -644,7 +655,7 @@ export default function ToolCheckTab() {
           .sort((a, b) => b.count - a.count),
       }))
       .sort((a, b) => b.count - a.count);
-  }, [data?.errorHistory]);
+  }, [data?.errorHistory, t]);
 
   // Chi tiết đơn lỗi của 1 khách: dedup theo orderId, gộp loại lỗi; lọc theo sản
   // phẩm. Sort: sản phẩm giống nhau cạnh nhau (nhóm nhiều→ít) → theo loại lỗi
@@ -671,7 +682,7 @@ export default function ToolCheckTab() {
     const productOrders = new Map<string, { label: string; orders: Set<string> }>();
     for (const r of rows) {
       const pk = r.type ?? '';
-      const label = r.fullName || r.type || '(Chưa rõ)';
+      const label = r.fullName || r.type || t('errorStats.unknown');
       let po = productOrders.get(pk);
       if (!po) productOrders.set(pk, (po = { label, orders: new Set() }));
       po.orders.add(r.orderId);
@@ -737,7 +748,7 @@ export default function ToolCheckTab() {
       productOptions,
       orders,
     };
-  }, [custDetail, custDetailProduct, data?.errorHistory]);
+  }, [custDetail, custDetailProduct, data?.errorHistory, t]);
 
   const allCustExpanded = perCustomer.length > 0 && perCustomer.every((c) => expandedCust.has(c.key));
 
@@ -747,10 +758,8 @@ export default function ToolCheckTab() {
         {/* Filter bar (thời gian) */}
         <div className="rounded-lg border border-border bg-card p-3 flex items-center gap-2 flex-wrap">
           <FileSearch size={16} className="text-indigo-600" />
-          <span className="text-sm font-semibold">Soát tool</span>
-          <span className="hidden md:inline text-[11px] text-muted-foreground">
-            — đơn cần làm lại + backlog chưa soát cho Support
-          </span>
+          <span className="text-sm font-semibold">{t('header.title')}</span>
+          <span className="hidden md:inline text-[11px] text-muted-foreground">— {t('header.subtitle')}</span>
           <Button variant="ghost" size="sm" className="ml-auto" onClick={fetchData} disabled={loading}>
             <RefreshCw size={13} className={loading ? 'animate-spin' : ''} />
           </Button>
@@ -758,33 +767,33 @@ export default function ToolCheckTab() {
             variant="inline"
             from={dateFrom}
             to={dateTo}
-            onChange={(f, t) => {
+            onChange={(f, t2) => {
               setDateFrom(f);
-              setDateTo(t);
+              setDateTo(t2);
             }}
           />
           {/* Hàng filter: Sản phẩm / Khách / Máy / Ưu tiên — options từ facet BE (cả kỳ). */}
           <div className="w-full grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-2">
             <SelectFilter
-              label="Sản phẩm"
+              label={t('filters.product')}
               value={filterType}
               onChange={setFilterType}
               options={toOpts(data?.facets.type)}
             />
             <SelectFilter
-              label="Khách hàng"
+              label={t('filters.customer')}
               value={filterCustomer}
               onChange={setFilterCustomer}
               options={toOpts(data?.facets.customer)}
             />
             <SelectFilter
-              label="Máy"
+              label={t('filters.machine')}
               value={filterMachine}
               onChange={setFilterMachine}
               options={toOpts(data?.facets.machineNumber)}
             />
             <SelectFilter
-              label="Ưu tiên"
+              label={t('filters.priority')}
               value={filterPriority}
               onChange={setFilterPriority}
               options={toPriorityOpts(data?.facets.priority)}
@@ -798,30 +807,28 @@ export default function ToolCheckTab() {
           drill danh sách đơn (filter Designer/Khách). */}
         <div className="rounded-lg border border-border bg-card">
           <div className="flex items-center gap-2 px-3 py-2 border-b border-border">
-            <span className="text-sm font-semibold">Tổng quan theo ngày</span>
-            <span className="hidden sm:inline text-[11px] text-muted-foreground">
-              — bấm 1 ngày để lọc danh sách bên dưới · bấm CON SỐ để xem danh sách đơn
-            </span>
+            <span className="text-sm font-semibold">{t('dailyStrip.title')}</span>
+            <span className="hidden sm:inline text-[11px] text-muted-foreground">— {t('dailyStrip.subtitle')}</span>
             {dayFilter && (
               <button
                 type="button"
                 onClick={() => setDayFilter('')}
                 className="ml-auto inline-flex items-center gap-1 text-[11px] rounded-full bg-indigo-100 dark:bg-indigo-500/20 text-indigo-700 dark:text-indigo-300 px-2 py-0.5"
               >
-                Đang lọc {fmtDayHead(dayFilter).dm}
+                {t('dailyStrip.filtering', { date: fmtDayHead(dayFilter).dm })}
                 <X size={11} />
               </button>
             )}
           </div>
           {days.length === 0 ? (
-            <p className="text-xs text-muted-foreground text-center py-6">Không có dữ liệu.</p>
+            <p className="text-xs text-muted-foreground text-center py-6">{t('dailyStrip.noData')}</p>
           ) : (
             <div className="overflow-x-auto">
               <table className="w-full text-[13px] tabular-nums border-separate border-spacing-0">
                 <thead>
                   <tr>
                     <th className="sticky left-0 z-20 bg-card text-left font-medium px-3 py-2 border-b border-border min-w-[110px]">
-                      Chỉ số
+                      {t('dailyStrip.metricColumn')}
                     </th>
                     {days.map((d) => {
                       const { wd, dm } = fmtDayHead(d.day);
@@ -839,19 +846,19 @@ export default function ToolCheckTab() {
                       );
                     })}
                     <th className="bg-muted/30 font-semibold px-2 py-1.5 border-b border-l border-border text-center min-w-[58px]">
-                      Tổng
+                      {t('dailyStrip.totalColumn')}
                     </th>
                   </tr>
                 </thead>
                 <tbody>
                   {(
                     [
-                      { metric: 'total', label: 'Tổng đơn', cls: 'text-foreground', pick: (d: ToolCheckDayRow) => d.total },
-                      { metric: 'unreviewed', label: 'Chưa soát', cls: 'text-amber-600', pick: (d: ToolCheckDayRow) => d.unreviewed },
-                      { metric: 'reviewed', label: 'Đã soát', cls: 'text-slate-600 dark:text-slate-300', pick: (d: ToolCheckDayRow) => d.reviewed },
-                      { metric: 'reviewedError', label: 'Soát lỗi', cls: 'text-red-600 dark:text-red-400', pick: (d: ToolCheckDayRow) => d.reviewedError },
-                      { metric: 'reviewedOk', label: 'Soát OK', cls: 'text-emerald-600 dark:text-emerald-400', pick: (d: ToolCheckDayRow) => d.reviewedOk },
-                      { metric: 'rework', label: 'Cần làm lại', cls: 'text-orange-600 dark:text-orange-400', pick: (d: ToolCheckDayRow) => d.rework },
+                      { metric: 'total', label: t('dailyStrip.metrics.total'), cls: 'text-foreground', pick: (d: ToolCheckDayRow) => d.total },
+                      { metric: 'unreviewed', label: t('dailyStrip.metrics.unreviewed'), cls: 'text-amber-600', pick: (d: ToolCheckDayRow) => d.unreviewed },
+                      { metric: 'reviewed', label: t('dailyStrip.metrics.reviewed'), cls: 'text-slate-600 dark:text-slate-300', pick: (d: ToolCheckDayRow) => d.reviewed },
+                      { metric: 'reviewedError', label: t('dailyStrip.metrics.reviewedError'), cls: 'text-red-600 dark:text-red-400', pick: (d: ToolCheckDayRow) => d.reviewedError },
+                      { metric: 'reviewedOk', label: t('dailyStrip.metrics.reviewedOk'), cls: 'text-emerald-600 dark:text-emerald-400', pick: (d: ToolCheckDayRow) => d.reviewedOk },
+                      { metric: 'rework', label: t('dailyStrip.metrics.rework'), cls: 'text-orange-600 dark:text-orange-400', pick: (d: ToolCheckDayRow) => d.rework },
                     ] as const
                   ).map((row) => (
                     <DayMetricRow
@@ -882,7 +889,7 @@ export default function ToolCheckTab() {
           to={dateTo}
           dayFilter={dayFilter || undefined}
           onPickDay={toggleDay}
-          caption="— TOÀN nhà máy · lane Soát tool được tô đậm · di chuột xem chi tiết · bấm 1 ngày để lọc danh sách"
+          caption={t('pipelineCaption')}
         />
 
         {/* Panel drill-down inline — bấm con số trên dải → danh sách đơn gom
@@ -911,7 +918,7 @@ export default function ToolCheckTab() {
                     : 'bg-background text-muted-foreground hover:bg-muted'
                   }`}
               >
-                Cần làm lại ({reworkList.length})
+                {t('list.reworkTab', { count: reworkList.length })}
               </button>
               <button
                 type="button"
@@ -921,13 +928,11 @@ export default function ToolCheckTab() {
                     : 'bg-background text-muted-foreground hover:bg-muted'
                   }`}
               >
-                Chưa soát ({unreviewedList.length})
+                {t('list.unreviewedTab', { count: unreviewedList.length })}
               </button>
             </div>
             <span className="text-[11px] text-muted-foreground">
-              {listTab === 'rework'
-                ? '⚠ Ưu tiên — In trả về do thiếu file. Note kq Tool → "ok" = file ổn, chạy lại từ In · "Đã soát xong" = cần thiết kế, đẩy về designer / tự gán.'
-                : 'Backlog đơn chưa có Note kq Tool.'}
+              {listTab === 'rework' ? t('list.reworkHint') : t('list.unreviewedHint')}
             </span>
           </div>
 
@@ -937,7 +942,7 @@ export default function ToolCheckTab() {
             </div>
           ) : activeList.length === 0 ? (
             <p className="text-xs text-muted-foreground text-center py-10">
-              {listTab === 'rework' ? 'Không có đơn In trả về.' : 'Không có đơn chưa soát.'}
+              {listTab === 'rework' ? t('list.noReworkOrders') : t('list.noUnreviewedOrders')}
             </p>
           ) : (
             <div className="overflow-x-auto">
@@ -945,16 +950,16 @@ export default function ToolCheckTab() {
                 <thead>
                   <tr className="border-b border-border/60 text-left text-[11px] uppercase text-muted-foreground whitespace-nowrap">
                     <th className="w-12 px-1 py-2" />
-                    <th className="px-2 py-2">Mã đơn</th>
-                    <th className="px-2 py-2">Ngày SX</th>
-                    <th className="px-2 py-2">Ưu tiên</th>
-                    <th className="px-2 py-2">Khách</th>
-                    <th className="px-2 py-2">Sản phẩm</th>
-                    <th className="px-2 py-2">Size/Màu</th>
-                    <th className="px-2 py-2">Note kq Tool 1</th>
-                    <th className="px-2 py-2">File sửa lỗi</th>
-                    <th className="px-2 py-2">Ghi chú file lỗi</th>
-                    <th className="px-2 py-2">Lỗi xưởng</th>
+                    <th className="px-2 py-2">{t('list.columns.orderCode')}</th>
+                    <th className="px-2 py-2">{t('list.columns.productionDate')}</th>
+                    <th className="px-2 py-2">{t('list.columns.priority')}</th>
+                    <th className="px-2 py-2">{t('list.columns.customer')}</th>
+                    <th className="px-2 py-2">{t('list.columns.product')}</th>
+                    <th className="px-2 py-2">{t('list.columns.sizeColor')}</th>
+                    <th className="px-2 py-2">{t('list.columns.toolNote')}</th>
+                    <th className="px-2 py-2">{t('list.columns.errorFile')}</th>
+                    <th className="px-2 py-2">{t('list.columns.errorFileNote')}</th>
+                    <th className="px-2 py-2">{t('list.columns.factoryError')}</th>
                     {listTab === 'rework' && <th className="px-2 py-2" />}
                   </tr>
                 </thead>
@@ -969,10 +974,8 @@ export default function ToolCheckTab() {
         <div className="rounded-lg border border-border bg-card">
           <div className="flex items-center gap-2 px-4 py-2.5 border-b border-border flex-wrap">
             <AlertTriangle size={15} className="text-amber-500" />
-            <span className="text-sm font-semibold">Thống kê lỗi Soát tool</span>
-            <span className="hidden md:inline text-[11px] text-muted-foreground">
-              — đơn từng bị người soát tool đánh Note kq Tool ≠ ok (kể cả đã sửa về ok), theo ngày vào SX · đếm số đơn
-            </span>
+            <span className="text-sm font-semibold">{t('errorStats.title')}</span>
+            <span className="hidden md:inline text-[11px] text-muted-foreground">— {t('errorStats.subtitle')}</span>
             <div className="ml-auto flex items-center gap-2">
               {(selCust || selType) && (
                 <button
@@ -983,7 +986,7 @@ export default function ToolCheckTab() {
                   }}
                   className="inline-flex items-center gap-1 text-[11px] rounded-full bg-indigo-100 dark:bg-indigo-500/20 text-indigo-700 dark:text-indigo-300 px-2 py-0.5"
                 >
-                  Bỏ lọc chéo
+                  {t('errorStats.clearCrossFilter')}
                   <X size={11} />
                 </button>
               )}
@@ -993,7 +996,7 @@ export default function ToolCheckTab() {
                 className="inline-flex items-center gap-1 text-[11px] rounded-md border border-border px-2 py-1 hover:bg-muted transition-colors"
               >
                 <Users size={13} />
-                Xem theo khách hàng
+                {t('errorStats.viewByCustomer')}
               </button>
               <button
                 type="button"
@@ -1001,7 +1004,7 @@ export default function ToolCheckTab() {
                 className="inline-flex items-center gap-1 text-[11px] rounded-md border border-border px-2 py-1 hover:bg-muted transition-colors"
               >
                 {statsExpanded ? <ChevronUp size={13} /> : <ChevronDown size={13} />}
-                {statsExpanded ? 'Ẩn bớt' : 'Mở rộng'}
+                {statsExpanded ? t('errorStats.collapse') : t('errorStats.expand')}
               </button>
             </div>
           </div>
@@ -1010,19 +1013,19 @@ export default function ToolCheckTab() {
             <div>
               <div className="flex items-center gap-2 mb-3">
                 <Users size={16} className="text-indigo-600" />
-                <h3 className="text-sm font-semibold">Theo khách hàng</h3>
+                <h3 className="text-sm font-semibold">{t('errorStats.byCustomer')}</h3>
                 {selCust && (
                   <button
                     type="button"
                     onClick={() => setSelCust('')}
                     className="ml-auto inline-flex items-center gap-1 text-[10px] rounded bg-muted px-1.5 py-0.5 text-muted-foreground"
                   >
-                    <X size={10} /> bỏ chọn
+                    <X size={10} /> {t('errorStats.deselect')}
                   </button>
                 )}
               </div>
               {stats.byCustomer.length === 0 ? (
-                <p className="text-xs text-muted-foreground text-center py-6">Chưa có dữ liệu.</p>
+                <p className="text-xs text-muted-foreground text-center py-6">{t('errorStats.noData')}</p>
               ) : (
                 <div className={cn('space-y-0.5', statsExpanded ? '' : 'max-h-72 overflow-y-auto')}>
                   {stats.byCustomer.map((c) => {
@@ -1036,8 +1039,8 @@ export default function ToolCheckTab() {
                           }`}
                       >
                         <div className="flex-1 min-w-0">
-                          <div className="truncate font-medium" title={c.userSku || '(Chưa rõ)'}>
-                            {c.userSku || '(Chưa rõ)'}
+                          <div className="truncate font-medium" title={c.userSku || t('errorStats.unknown')}>
+                            {c.userSku || t('errorStats.unknown')}
                           </div>
                           {c.userEmail && (
                             <div className="truncate text-[11px] text-muted-foreground" title={c.userEmail}>
@@ -1057,19 +1060,19 @@ export default function ToolCheckTab() {
             <div className="lg:border-l lg:border-border lg:pl-4">
               <div className="flex items-center gap-2 mb-3">
                 <PackageSearch size={16} className="text-indigo-600" />
-                <h3 className="text-sm font-semibold">Theo sản phẩm</h3>
+                <h3 className="text-sm font-semibold">{t('errorStats.byProduct')}</h3>
                 {selType && (
                   <button
                     type="button"
                     onClick={() => setSelType('')}
                     className="ml-auto inline-flex items-center gap-1 text-[10px] rounded bg-muted px-1.5 py-0.5 text-muted-foreground"
                   >
-                    <X size={10} /> bỏ chọn
+                    <X size={10} /> {t('errorStats.deselect')}
                   </button>
                 )}
               </div>
               {stats.byProduct.length === 0 ? (
-                <p className="text-xs text-muted-foreground text-center py-6">Chưa có dữ liệu.</p>
+                <p className="text-xs text-muted-foreground text-center py-6">{t('errorStats.noData')}</p>
               ) : (
                 <div className={cn('space-y-0.5', statsExpanded ? '' : 'max-h-72 overflow-y-auto')}>
                   {stats.byProduct.map((p) => {
@@ -1100,11 +1103,11 @@ export default function ToolCheckTab() {
                               borderColor: PRODUCT_LEVEL_MAP[p.level]?.color,
                             }}
                           >
-                            Lv {p.level}
+                            {t('level', { level: p.level })}
                           </Badge>
                         )}
-                        <span className="flex-1 min-w-0 truncate" title={p.fullName || p.type || '(Chưa rõ)'}>
-                          {p.fullName || p.type || '(Chưa rõ)'}
+                        <span className="flex-1 min-w-0 truncate" title={p.fullName || p.type || t('errorStats.unknown')}>
+                          {p.fullName || p.type || t('errorStats.unknown')}
                         </span>
                         <span className="text-muted-foreground tabular-nums shrink-0">{p.count}</span>
                       </button>
@@ -1118,11 +1121,13 @@ export default function ToolCheckTab() {
             <div className="lg:border-l lg:border-border lg:pl-4">
               <div className="flex items-center gap-2 mb-3">
                 <AlertTriangle size={16} className="text-amber-500" />
-                <h3 className="text-sm font-semibold">Theo loại lỗi</h3>
-                <span className="hidden xl:inline text-[10px] text-muted-foreground">— bấm để xem chi tiết</span>
+                <h3 className="text-sm font-semibold">{t('errorStats.byError')}</h3>
+                <span className="hidden xl:inline text-[10px] text-muted-foreground">
+                  — {t('errorStats.byErrorHint')}
+                </span>
               </div>
               {stats.byError.length === 0 ? (
-                <p className="text-xs text-muted-foreground text-center py-6">Chưa có dữ liệu.</p>
+                <p className="text-xs text-muted-foreground text-center py-6">{t('errorStats.noData')}</p>
               ) : (
                 <div className={cn('space-y-0.5', statsExpanded ? '' : 'max-h-72 overflow-y-auto')}>
                   {stats.byError.map((e) => {
@@ -1139,7 +1144,7 @@ export default function ToolCheckTab() {
                           variant="outline"
                           className="font-normal text-amber-700 border-amber-300 dark:text-amber-300 truncate"
                         >
-                          {e.label || e.code || '(Chưa rõ)'}
+                          {e.label || e.code || t('errorStats.unknown')}
                         </Badge>
                         <span className="ml-auto text-muted-foreground tabular-nums shrink-0">{e.count}</span>
                       </button>
@@ -1154,11 +1159,13 @@ export default function ToolCheckTab() {
           {selCode && (
             <div className="border-t border-border px-4 py-3">
               <div className="flex items-center gap-2 mb-2 flex-wrap">
-                <span className="text-[13px] font-semibold">Chi tiết loại lỗi:</span>
+                <span className="text-[13px] font-semibold">{t('errorStats.detail.title')}</span>
                 <Badge variant="outline" className="font-normal text-amber-700 border-amber-300 dark:text-amber-300">
                   {codeDetail.label}
                 </Badge>
-                <span className="text-[11px] text-muted-foreground">{codeDetail.items.length} đơn</span>
+                <span className="text-[11px] text-muted-foreground">
+                  {t('errorStats.detail.orderCount', { count: codeDetail.items.length })}
+                </span>
                 <div className="ml-auto flex items-center gap-2">
                   <button
                     type="button"
@@ -1166,30 +1173,32 @@ export default function ToolCheckTab() {
                     className="inline-flex items-center gap-1 text-[11px] rounded-md border border-border px-2 py-1 hover:bg-muted transition-colors"
                   >
                     {detailExpanded ? <ChevronUp size={13} /> : <ChevronDown size={13} />}
-                    {detailExpanded ? 'Ẩn bớt' : 'Mở rộng'}
+                    {detailExpanded ? t('errorStats.collapse') : t('errorStats.expand')}
                   </button>
                   <button
                     type="button"
                     onClick={() => setSelCode('')}
                     className="inline-flex items-center gap-1 text-[11px] rounded bg-muted px-2 py-0.5 text-muted-foreground"
                   >
-                    <X size={11} /> đóng
+                    <X size={11} /> {t('errorStats.detail.close')}
                   </button>
                 </div>
               </div>
               {codeDetail.items.length === 0 ? (
-                <p className="text-xs text-muted-foreground text-center py-4">Không có đơn khớp bộ lọc.</p>
+                <p className="text-xs text-muted-foreground text-center py-4">
+                  {t('errorStats.detail.noMatching')}
+                </p>
               ) : (
                 <div className={cn('overflow-x-auto', detailExpanded ? '' : 'max-h-80 overflow-y-auto')}>
                   <table className="w-full text-[13px]">
                     <thead>
                       <tr className="border-b border-border/60 text-left text-[11px] uppercase text-muted-foreground whitespace-nowrap">
-                        <th className="w-12 px-1 py-1.5">Ảnh</th>
-                        <th className="px-2 py-1.5">Mã đơn</th>
-                        <th className="px-2 py-1.5">Sản phẩm</th>
-                        <th className="px-2 py-1.5">Size/Màu</th>
-                        <th className="px-2 py-1.5">File lỗi</th>
-                        <th className="px-2 py-1.5">Note lỗi</th>
+                        <th className="w-12 px-1 py-1.5">{t('errorStats.detail.columns.image')}</th>
+                        <th className="px-2 py-1.5">{t('errorStats.detail.columns.orderCode')}</th>
+                        <th className="px-2 py-1.5">{t('errorStats.detail.columns.product')}</th>
+                        <th className="px-2 py-1.5">{t('errorStats.detail.columns.sizeColor')}</th>
+                        <th className="px-2 py-1.5">{t('errorStats.detail.columns.errorFile')}</th>
+                        <th className="px-2 py-1.5">{t('errorStats.detail.columns.errorNote')}</th>
                       </tr>
                     </thead>
                     <tbody>
@@ -1199,7 +1208,7 @@ export default function ToolCheckTab() {
                             <ImageThumbCell
                               url={it.mockupUrl}
                               originalUrl={it.mockupOriginalUrl}
-                              title={`Mockup: ${it.productionId || ''}`}
+                              title={t('list.mockupTitle', { id: it.productionId || '' })}
                               onOpen={(url, title, originalUrl) => setPreview({ url, title, originalUrl })}
                             />
                           </td>
@@ -1231,7 +1240,7 @@ export default function ToolCheckTab() {
                                     borderColor: PRODUCT_LEVEL_MAP[it.level]?.color,
                                   }}
                                 >
-                                  Lv {it.level}
+                                  {t('level', { level: it.level })}
                                 </Badge>
                               )}
                               <span className="min-w-0 truncate" title={it.product}>
@@ -1290,9 +1299,9 @@ export default function ToolCheckTab() {
           <DialogContent className="max-w-none w-[92vw] md:w-[60vw] h-screen p-0 gap-0 flex flex-col sm:rounded-none">
             <div className="flex items-center gap-2 px-5 py-3 border-b border-border shrink-0">
               <Users size={16} className="text-indigo-600" />
-              <DialogTitle className="text-base">Lỗi Soát tool theo từng khách hàng</DialogTitle>
+              <DialogTitle className="text-base">{t('customerModal.title')}</DialogTitle>
               <span className="hidden sm:inline text-[12px] text-muted-foreground">
-                {perCustomer.length} khách · theo ngày vào SX trong kỳ · đếm số đơn (kể cả đã sửa)
+                {t('customerModal.subtitle', { count: perCustomer.length })}
               </span>
               {perCustomer.length > 0 && (
                 <button
@@ -1301,25 +1310,25 @@ export default function ToolCheckTab() {
                   className="ml-auto mr-8 inline-flex items-center gap-1 text-[11px] rounded-md border border-border px-2 py-1 hover:bg-muted transition-colors"
                 >
                   {allCustExpanded ? <ChevronUp size={13} /> : <ChevronDown size={13} />}
-                  {allCustExpanded ? 'Ẩn tất cả' : 'Mở rộng tất cả'}
+                  {allCustExpanded ? t('customerModal.collapseAll') : t('customerModal.expandAll')}
                 </button>
               )}
             </div>
             <div className="flex-1 overflow-y-auto p-4 space-y-3">
               {perCustomer.length === 0 ? (
-                <p className="text-sm text-muted-foreground text-center py-16">Chưa có dữ liệu.</p>
+                <p className="text-sm text-muted-foreground text-center py-16">{t('errorStats.noData')}</p>
               ) : (
                 perCustomer.map((c) => {
                   const exp = expandedCust.has(c.key);
                   return (
                     <div key={c.key} className="rounded-lg border border-border bg-card p-3 pr-5">
                       <div className="flex items-center gap-2 mb-2 flex-wrap">
-                        <span className="font-bold text-[17px]">{c.userSku || '(Chưa rõ)'}</span>
+                        <span className="font-bold text-[17px]">{c.userSku || t('errorStats.unknown')}</span>
                         {c.userEmail && <span className="text-[12px] text-muted-foreground">{c.userEmail}</span>}
                         <div className="ml-auto flex items-center gap-3">
                           <span className="inline-flex items-baseline gap-1 rounded-md bg-rose-100 text-rose-700 border border-rose-300 dark:bg-rose-500/20 dark:text-rose-300 dark:border-rose-500/40 px-2.5 py-1">
                             <span className="text-lg font-extrabold tabular-nums leading-none">{c.count}</span>
-                            <span className="text-[11px] font-medium">đơn lỗi</span>
+                            <span className="text-[11px] font-medium">{t('customerModal.errorOrders')}</span>
                           </span>
                           <button
                             type="button"
@@ -1329,7 +1338,7 @@ export default function ToolCheckTab() {
                             }}
                             className="inline-flex items-center gap-1 text-[11px] rounded-md border border-indigo-300 text-indigo-700 dark:text-indigo-300 dark:border-indigo-500/40 px-2 py-1 hover:bg-indigo-50 dark:hover:bg-indigo-500/10 transition-colors"
                           >
-                            <FileSearch size={13} /> Xem chi tiết
+                            <FileSearch size={13} /> {t('customerModal.viewDetail')}
                           </button>
                           <button
                             type="button"
@@ -1337,7 +1346,7 @@ export default function ToolCheckTab() {
                             className="inline-flex items-center gap-1 text-[11px] rounded-md border border-border px-2 py-1 hover:bg-muted transition-colors"
                           >
                             {exp ? <ChevronUp size={13} /> : <ChevronDown size={13} />}
-                            {exp ? 'Ẩn bớt' : 'Mở rộng'}
+                            {exp ? t('errorStats.collapse') : t('errorStats.expand')}
                           </button>
                         </div>
                       </div>
@@ -1345,7 +1354,7 @@ export default function ToolCheckTab() {
                         {/* Sản phẩm lỗi */}
                         <div>
                           <div className="text-[11px] uppercase tracking-wide text-muted-foreground mb-1 flex items-center gap-1">
-                            <PackageSearch size={12} /> Sản phẩm lỗi
+                            <PackageSearch size={12} /> {t('customerModal.errorProducts')}
                             <span className="text-[14px] font-extrabold tabular-nums text-indigo-600 dark:text-indigo-400 normal-case">
                               {c.products.length}
                             </span>
@@ -1371,7 +1380,7 @@ export default function ToolCheckTab() {
                                       borderColor: PRODUCT_LEVEL_MAP[p.level]?.color,
                                     }}
                                   >
-                                    Lv {p.level}
+                                    {t('level', { level: p.level })}
                                   </Badge>
                                 )}
                                 <span className="flex-1 min-w-0 truncate" title={p.product}>
@@ -1387,7 +1396,7 @@ export default function ToolCheckTab() {
                         {/* Loại lỗi */}
                         <div>
                           <div className="text-[11px] uppercase tracking-wide text-muted-foreground mb-1 flex items-center gap-1">
-                            <AlertTriangle size={12} className="text-amber-500" /> Loại lỗi
+                            <AlertTriangle size={12} className="text-amber-500" /> {t('customerModal.errorTypes')}
                             <span className="text-[14px] font-extrabold tabular-nums text-amber-600 dark:text-amber-400 normal-case">
                               {c.codes.length}
                             </span>
@@ -1399,7 +1408,7 @@ export default function ToolCheckTab() {
                                   variant="outline"
                                   className="font-normal text-amber-700 border-amber-300 dark:text-amber-300 truncate"
                                 >
-                                  {e.label || e.code || '(Chưa rõ)'}
+                                  {e.label || e.code || t('errorStats.unknown')}
                                 </Badge>
                                 <span className="ml-auto shrink-0 tabular-nums text-[15px] font-extrabold text-amber-600 dark:text-amber-400">
                                   {e.count}
@@ -1422,21 +1431,21 @@ export default function ToolCheckTab() {
           <DialogContent className="max-w-none w-[92vw] md:w-[72vw] h-screen p-0 gap-0 flex flex-col sm:rounded-none">
             <div className="flex items-center gap-2 px-5 py-3 border-b border-border shrink-0 flex-wrap">
               <Users size={16} className="text-indigo-600" />
-              <DialogTitle className="text-base">{custDetailData?.userSku || '(Chưa rõ)'}</DialogTitle>
+              <DialogTitle className="text-base">{custDetailData?.userSku || t('errorStats.unknown')}</DialogTitle>
               {custDetailData?.userEmail && (
                 <span className="text-[12px] text-muted-foreground">{custDetailData.userEmail}</span>
               )}
               <span className="inline-flex items-baseline gap-1 rounded-md bg-rose-100 text-rose-700 border border-rose-300 dark:bg-rose-500/20 dark:text-rose-300 dark:border-rose-500/40 px-2.5 py-1">
                 <span className="text-lg font-extrabold tabular-nums leading-none">{custDetailData?.totalOrders ?? 0}</span>
-                <span className="text-[11px] font-medium">đơn lỗi</span>
+                <span className="text-[11px] font-medium">{t('customerModal.errorOrders')}</span>
               </span>
               <span className="inline-flex items-baseline gap-1 rounded-md bg-indigo-100 text-indigo-700 border border-indigo-300 dark:bg-indigo-500/20 dark:text-indigo-300 dark:border-indigo-500/40 px-2.5 py-1">
                 <span className="text-lg font-extrabold tabular-nums leading-none">{custDetailData?.totalProducts ?? 0}</span>
-                <span className="text-[11px] font-medium">sản phẩm lỗi</span>
+                <span className="text-[11px] font-medium">{t('custDetailModal.errorProducts')}</span>
               </span>
               <div className="ml-auto mr-8 w-56">
                 <SelectFilter
-                  label="Lọc sản phẩm"
+                  label={t('custDetailModal.filterProduct')}
                   value={custDetailProduct}
                   onChange={setCustDetailProduct}
                   options={(custDetailData?.productOptions ?? []).map((p) => ({ value: p.value, label: p.label, count: p.count }))}
@@ -1445,18 +1454,20 @@ export default function ToolCheckTab() {
             </div>
             <div className="flex-1 overflow-auto p-4">
               {!custDetailData || custDetailData.orders.length === 0 ? (
-                <p className="text-sm text-muted-foreground text-center py-16">Không có đơn khớp bộ lọc.</p>
+                <p className="text-sm text-muted-foreground text-center py-16">
+                  {t('errorStats.detail.noMatching')}
+                </p>
               ) : (
                 <table className="w-full text-[13px]">
                   <thead>
                     <tr className="border-b border-border/60 text-left text-[11px] uppercase text-muted-foreground whitespace-nowrap">
-                      <th className="w-12 px-1 py-1.5">Ảnh</th>
-                      <th className="px-2 py-1.5">Mã đơn</th>
-                      <th className="px-2 py-1.5">Sản phẩm</th>
-                      <th className="px-2 py-1.5">Size/Màu</th>
-                      <th className="px-2 py-1.5">Loại lỗi</th>
-                      <th className="px-2 py-1.5">File lỗi</th>
-                      <th className="px-2 py-1.5">Note lỗi</th>
+                      <th className="w-12 px-1 py-1.5">{t('errorStats.detail.columns.image')}</th>
+                      <th className="px-2 py-1.5">{t('errorStats.detail.columns.orderCode')}</th>
+                      <th className="px-2 py-1.5">{t('errorStats.detail.columns.product')}</th>
+                      <th className="px-2 py-1.5">{t('errorStats.detail.columns.sizeColor')}</th>
+                      <th className="px-2 py-1.5">{t('errorStats.detail.columns.errorType')}</th>
+                      <th className="px-2 py-1.5">{t('errorStats.detail.columns.errorFile')}</th>
+                      <th className="px-2 py-1.5">{t('errorStats.detail.columns.errorNote')}</th>
                     </tr>
                   </thead>
                   <tbody>
@@ -1466,7 +1477,7 @@ export default function ToolCheckTab() {
                           <ImageThumbCell
                             url={it.mockupUrl}
                             originalUrl={it.mockupOriginalUrl}
-                            title={`Mockup: ${it.productionId || ''}`}
+                            title={t('list.mockupTitle', { id: it.productionId || '' })}
                             onOpen={(url, title, originalUrl) => setPreview({ url, title, originalUrl })}
                           />
                         </td>
@@ -1494,7 +1505,7 @@ export default function ToolCheckTab() {
                                   borderColor: PRODUCT_LEVEL_MAP[it.level]?.color,
                                 }}
                               >
-                                Lv {it.level}
+                                {t('level', { level: it.level })}
                               </Badge>
                             )}
                             <span className="min-w-0 truncate" title={it.product}>{it.product}</span>
@@ -1512,7 +1523,7 @@ export default function ToolCheckTab() {
                                 variant="outline"
                                 className="font-normal text-amber-700 border-amber-300 dark:text-amber-300 truncate"
                               >
-                                {label || code || '(Chưa rõ)'}
+                                {label || code || t('errorStats.unknown')}
                               </Badge>
                             ))}
                           </div>

@@ -1,4 +1,5 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
+import { useTranslation } from 'react-i18next';
 import { ChevronDown, ChevronRight, LayoutList } from 'lucide-react';
 import type { DailyOverviewBacklogDesigner, DailyOverviewRow } from 'shared';
 import { WorkshopConfigCategory } from 'shared';
@@ -91,6 +92,7 @@ function fmtHead(day: string): { wd: string; dm: string } {
 }
 
 export function DesignerDailyOverview({ days: range = 7, from, to, reloadToken, type, customer }: Props) {
+  const { t } = useTranslation('dashboard');
   const [data, setData] = useState<Data>(EMPTY);
   const [loading, setLoading] = useState(false);
   const [expanded, setExpanded] = useState(false);
@@ -177,12 +179,13 @@ export function DesignerDailyOverview({ days: range = 7, from, to, reloadToken, 
 
   type Metric = 'total' | 'ok' | 'unreviewed' | 'toolError' | 'backlog';
   const METRIC_LABEL: Record<Metric, string> = {
-    total: 'Tổng đơn',
-    ok: 'Tổng xong',
-    unreviewed: 'Chưa soát',
-    toolError: 'Soát lỗi',
-    backlog: 'Tổng tồn',
+    total: t('dailyOverview.metrics.total'),
+    ok: t('dailyOverview.metrics.ok'),
+    unreviewed: t('dailyOverview.metrics.unreviewed'),
+    toolError: t('dailyOverview.metrics.toolError'),
+    backlog: t('dailyOverview.metrics.backlog'),
   };
+  const dayOrAll = (dayLabel?: string) => (dayLabel ? ` · ${dayLabel}` : ` · ${t('dailyOverview.dayLabelAll')}`);
 
   /** Mở modal cho 1 ô metric. `errorCodes` = danh sách note lỗi của phạm vi đó
    *  (1 ngày → row.errorByNote; cột Tổng → allErrorCodes). */
@@ -196,7 +199,7 @@ export function DesignerDailyOverview({ days: range = 7, from, to, reloadToken, 
       title: (
         <>
           {METRIC_LABEL[metric]}
-          {dayLabel ? ` · ${dayLabel}` : ' · cả kỳ'}
+          {dayOrAll(dayLabel)}
         </>
       ),
       query: sp.toString(),
@@ -221,17 +224,17 @@ export function DesignerDailyOverview({ days: range = 7, from, to, reloadToken, 
       sp.set('toolCheckedError', '1');
       sp.set('assignee', '__none__');
       sp.set('toolResultNote', errorCodes.join(','));
-      label = 'Chưa gán designer';
+      label = t('dailyOverview.breakdown.unassignedDesigner');
     } else {
       sp.set('toolCheckedError', '1');
       sp.set('toolResultNote', 'ok');
-      label = 'Đã sửa xong';
+      label = t('dailyOverview.breakdown.fixed');
     }
     setDrill({
       title: (
         <>
-          Soát lỗi · {label}
-          {dayLabel ? ` · ${dayLabel}` : ' · cả kỳ'}
+          {t('dailyOverview.metrics.toolError')} · {label}
+          {dayOrAll(dayLabel)}
         </>
       ),
       query: sp.toString(),
@@ -254,9 +257,13 @@ export function DesignerDailyOverview({ days: range = 7, from, to, reloadToken, 
     setDrill({
       title: (
         <>
-          OK/chưa soát → đẩy về
-          {kind === 'assigned' ? ' · đã gán' : kind === 'unassigned' ? ' · chưa gán' : ''}
-          {dayLabel ? ` · ${dayLabel}` : ' · cả kỳ'}
+          {t('dailyOverview.metrics.wasOkPushed')}
+          {kind === 'assigned'
+            ? ` · ${t('dailyOverview.assignedSuffix')}`
+            : kind === 'unassigned'
+              ? ` · ${t('dailyOverview.unassignedSuffix')}`
+              : ''}
+          {dayOrAll(dayLabel)}
         </>
       ),
       query: sp.toString(),
@@ -268,7 +275,12 @@ export function DesignerDailyOverview({ days: range = 7, from, to, reloadToken, 
     const sp = baseParams(fromDay, toDay);
     sp.set('needDesigner', '1');
     setDrill({
-      title: <>Tổng lỗi (soát lỗi + đẩy về){dayLabel ? ` · ${dayLabel}` : ' · cả kỳ'}</>,
+      title: (
+        <>
+          {t('dailyOverview.metrics.totalErrorFull')}
+          {dayOrAll(dayLabel)}
+        </>
+      ),
       query: sp.toString(),
     });
   };
@@ -298,15 +310,15 @@ export function DesignerDailyOverview({ days: range = 7, from, to, reloadToken, 
     setDrill({
       title: (
         <>
-          Chưa gán designer
+          {t('dailyOverview.metrics.unassignedNeed')}
           {kind === 'tool'
-            ? ' · từ soát lỗi'
+            ? ` · ${t('dailyOverview.breakdown.fromToolCheck')}`
             : kind === 'wasOk'
-              ? ' · ok/chưa soát đẩy về'
+              ? ` · ${t('dailyOverview.breakdown.wasOkPushedShort')}`
               : kind === 'resolved'
-                ? ' · đã xử lý không cần designer'
+                ? ` · ${t('dailyOverview.breakdown.resolvedNoDesigner')}`
                 : ''}
-          {dayLabel ? ` · ${dayLabel}` : ' · cả kỳ'}
+          {dayOrAll(dayLabel)}
         </>
       ),
       query: sp.toString(),
@@ -325,9 +337,13 @@ export function DesignerDailyOverview({ days: range = 7, from, to, reloadToken, 
     setDrill({
       title: (
         <>
-          Đã gán designer
-          {kind === 'tool' ? ' · từ soát lỗi' : kind === 'wasOk' ? ' · ok/chưa soát đẩy về' : ''}
-          {dayLabel ? ` · ${dayLabel}` : ' · cả kỳ'}
+          {t('dailyOverview.metrics.assigned')}
+          {kind === 'tool'
+            ? ` · ${t('dailyOverview.breakdown.fromToolCheck')}`
+            : kind === 'wasOk'
+              ? ` · ${t('dailyOverview.breakdown.wasOkPushedShort')}`
+              : ''}
+          {dayOrAll(dayLabel)}
         </>
       ),
       query: sp.toString(),
@@ -340,7 +356,12 @@ export function DesignerDailyOverview({ days: range = 7, from, to, reloadToken, 
     sp.set('assignee', '__any__');
     sp.set('designerStatus', 'done');
     setDrill({
-      title: <>Design đã xong{dayLabel ? ` · ${dayLabel}` : ' · cả kỳ'}</>,
+      title: (
+        <>
+          {t('dailyOverview.metrics.designDone')}
+          {dayOrAll(dayLabel)}
+        </>
+      ),
       query: sp.toString(),
     });
   };
@@ -371,20 +392,22 @@ export function DesignerDailyOverview({ days: range = 7, from, to, reloadToken, 
         <div className="flex items-center justify-between gap-3 p-3 border-b border-border flex-wrap">
           <div className="flex items-center gap-2">
             <LayoutList size={16} className="text-indigo-600" />
-            <span className="text-sm font-semibold">Tổng quan {nDays} ngày</span>
-            <span className="hidden sm:inline text-[11px] text-muted-foreground">— theo ngày vào sản xuất</span>
+            <span className="text-sm font-semibold">{t('dailyOverview.title', { count: nDays })}</span>
+            <span className="hidden sm:inline text-[11px] text-muted-foreground">
+              — {t('dailyOverview.subtitle')}
+            </span>
           </div>
         </div>
 
         {!loading && days.length === 0 ? (
-          <p className="text-xs text-muted-foreground text-center py-10">Không có đơn trong khoảng đã chọn.</p>
+          <p className="text-xs text-muted-foreground text-center py-10">{t('dailyOverview.noOrdersInRange')}</p>
         ) : (
           <div className="overflow-x-auto">
             <table className="w-full text-[13px] tabular-nums border-separate border-spacing-0">
               <thead>
                 <tr>
                   <th className="sticky left-0 z-20 bg-card text-left font-medium px-3 py-2 border-b border-border min-w-[150px]">
-                    Chỉ số
+                    {t('dailyOverview.metricColumn')}
                   </th>
                   {days.map((d) => {
                     const { wd, dm } = fmtHead(d);
@@ -399,14 +422,14 @@ export function DesignerDailyOverview({ days: range = 7, from, to, reloadToken, 
                     );
                   })}
                   <th className="bg-muted/30 font-semibold px-2 py-1.5 border-b border-l border-border text-center min-w-[64px]">
-                    Tổng
+                    {t('dailyOverview.totalColumn')}
                   </th>
                 </tr>
               </thead>
               <tbody>
                 {/* 1. Tổng đơn */}
                 <MetricRow
-                  label="Tổng đơn"
+                  label={t('dailyOverview.metrics.total')}
                   values={rows.map((r) => r.total)}
                   total={columnTotals.total}
                   onCell={(i) => openMetric('total', days[i], days[i], [], fmtHead(days[i]).dm)}
@@ -414,8 +437,8 @@ export function DesignerDailyOverview({ days: range = 7, from, to, reloadToken, 
                 />
                 {/* 1b. Tổng xong (Note Tool = ok) */}
                 <MetricRow
-                  label="Tổng xong"
-                  hint="Đơn có Note kết quả Tool = 'ok' (đã soát xong, không lỗi)"
+                  label={t('dailyOverview.metrics.ok')}
+                  hint={t('dailyOverview.metrics.okHint')}
                   values={rows.map((r) => r.ok)}
                   total={columnTotals.ok}
                   className="text-emerald-600 dark:text-emerald-400"
@@ -424,8 +447,8 @@ export function DesignerDailyOverview({ days: range = 7, from, to, reloadToken, 
                 />
                 {/* 2. Chưa soát */}
                 <MetricRow
-                  label="Chưa soát"
-                  hint="Đơn có Note kết quả Tool còn trống (chưa soát)"
+                  label={t('dailyOverview.metrics.unreviewed')}
+                  hint={t('dailyOverview.metrics.unreviewedHint')}
                   values={rows.map((r) => r.unreviewed)}
                   total={columnTotals.unreviewed}
                   className="text-slate-600 dark:text-slate-300"
@@ -435,8 +458,8 @@ export function DesignerDailyOverview({ days: range = 7, from, to, reloadToken, 
                 {/* 2b. Soát lỗi — lịch sử toolCheckErrorNotes, tooltip breakdown theo mã. */}
                 <tr className="group">
                   <td className="sticky left-0 z-10 bg-card group-hover:bg-muted/40 px-3 py-1.5 border-b border-border/60 font-medium text-orange-600 dark:text-orange-400">
-                    <Hint content="Tổng đơn TỪNG bị soát tool phát hiện lỗi (người soát đánh Note ≠ 'ok') — số lịch sử, KHÔNG giảm khi đơn đã sửa xong; không tính đơn In trả về chưa soát lại">
-                      <span className="cursor-help">Soát lỗi</span>
+                    <Hint content={t('dailyOverview.metrics.toolErrorHint')}>
+                      <span className="cursor-help">{t('dailyOverview.metrics.toolError')}</span>
                     </Hint>
                   </td>
                   {rows.map((r, i) => {
@@ -455,17 +478,17 @@ export function DesignerDailyOverview({ days: range = 7, from, to, reloadToken, 
                           }))}
                           extra={[
                             {
-                              label: 'Đã gán designer',
+                              label: t('dailyOverview.breakdown.assignedDesigner'),
                               count: r.assignedToolError,
                               onClick: () => openAssigned('tool', day, day, dm),
                             },
                             {
-                              label: 'Chưa gán designer',
+                              label: t('dailyOverview.breakdown.unassignedDesigner'),
                               count: r.toolErrorUnassigned,
                               onClick: () => openToolErrorLine({ type: 'unassigned' }, day, day, codes, dm),
                             },
                             {
-                              label: 'Đã sửa xong',
+                              label: t('dailyOverview.breakdown.fixed'),
                               count: r.toolErrorFixed,
                               onClick: () => openToolErrorLine({ type: 'fixed' }, day, day, codes, dm),
                             },
@@ -492,12 +515,12 @@ export function DesignerDailyOverview({ days: range = 7, from, to, reloadToken, 
                       }))}
                       extra={[
                         {
-                          label: 'Đã gán designer',
+                          label: t('dailyOverview.breakdown.assignedDesigner'),
                           count: columnTotals.assignedToolError,
                           onClick: () => openAssigned('tool', rangeFromTo.from, rangeFromTo.to),
                         },
                         {
-                          label: 'Chưa gán designer',
+                          label: t('dailyOverview.breakdown.unassignedDesigner'),
                           count: columnTotals.toolErrorUnassigned,
                           onClick: () =>
                             openToolErrorLine(
@@ -508,7 +531,7 @@ export function DesignerDailyOverview({ days: range = 7, from, to, reloadToken, 
                             ),
                         },
                         {
-                          label: 'Đã sửa xong',
+                          label: t('dailyOverview.breakdown.fixed'),
                           count: columnTotals.toolErrorFixed,
                           onClick: () =>
                             openToolErrorLine({ type: 'fixed' }, rangeFromTo.from ?? '', rangeFromTo.to ?? '', []),
@@ -523,8 +546,8 @@ export function DesignerDailyOverview({ days: range = 7, from, to, reloadToken, 
                     Đã gán. */}
                 <tr className="group">
                   <td className="sticky left-0 z-10 bg-card group-hover:bg-muted/40 px-3 py-1.5 border-b border-border/60 font-medium text-purple-600 dark:text-purple-400">
-                    <Hint content="Đơn CHƯA TỪNG lỗi soát tool (ok/chưa soát) nhưng bị công đoạn đẩy về designer — số lịch sử, không giảm khi đã fix xong (gồm cả đơn đẩy về chưa ai nhận)">
-                      <span className="cursor-help">OK/chưa soát → đẩy về</span>
+                    <Hint content={t('dailyOverview.metrics.wasOkPushedHint')}>
+                      <span className="cursor-help">{t('dailyOverview.metrics.wasOkPushed')}</span>
                     </Hint>
                   </td>
                   {rows.map((r, i) => {
@@ -537,12 +560,12 @@ export function DesignerDailyOverview({ days: range = 7, from, to, reloadToken, 
                           className="text-purple-600 dark:text-purple-400 hover:bg-purple-500/10"
                           extra={[
                             {
-                              label: 'Đã gán designer',
+                              label: t('dailyOverview.breakdown.assignedDesigner'),
                               count: r.assignedWasOk,
                               onClick: () => openWasOk('assigned', day, day, dm),
                             },
                             {
-                              label: 'Chưa gán designer',
+                              label: t('dailyOverview.breakdown.unassignedDesigner'),
                               count: Math.max(0, r.wasOkPushed - r.assignedWasOk),
                               onClick: () => openWasOk('unassigned', day, day, dm),
                             },
@@ -558,12 +581,12 @@ export function DesignerDailyOverview({ days: range = 7, from, to, reloadToken, 
                       className="text-purple-600 dark:text-purple-400 hover:bg-purple-500/10"
                       extra={[
                         {
-                          label: 'Đã gán designer',
+                          label: t('dailyOverview.breakdown.assignedDesigner'),
                           count: columnTotals.assignedWasOk,
                           onClick: () => openWasOk('assigned', rangeFromTo.from, rangeFromTo.to),
                         },
                         {
-                          label: 'Chưa gán designer',
+                          label: t('dailyOverview.breakdown.unassignedDesigner'),
                           count: Math.max(0, columnTotals.wasOkPushed - columnTotals.assignedWasOk),
                           onClick: () => openWasOk('unassigned', rangeFromTo.from, rangeFromTo.to),
                         },
@@ -576,8 +599,8 @@ export function DesignerDailyOverview({ days: range = 7, from, to, reloadToken, 
                     Bất biến: Soát lỗi + OK/chưa soát đẩy về = hàng này + Đã gán. */}
                 <tr className="group">
                   <td className="sticky left-0 z-10 bg-card group-hover:bg-muted/40 px-3 py-1.5 border-b border-border/60 font-medium text-teal-600 dark:text-teal-400">
-                    <Hint content="Đơn ĐANG lỗi (Note kq Tool có giá trị ≠ 'ok') cần designer nhưng CHƯA gán ai. Đối soát: Soát lỗi + OK/chưa soát đẩy về = Đã gán + Chưa gán + đã-xử-lý-không-cần-designer (dòng cuối tooltip).">
-                      <span className="cursor-help">Chưa gán designer</span>
+                    <Hint content={t('dailyOverview.metrics.unassignedNeedHint')}>
+                      <span className="cursor-help">{t('dailyOverview.metrics.unassignedNeed')}</span>
                     </Hint>
                   </td>
                   {rows.map((r, i) => {
@@ -591,17 +614,17 @@ export function DesignerDailyOverview({ days: range = 7, from, to, reloadToken, 
                           className="text-teal-600 dark:text-teal-400 hover:bg-teal-500/10"
                           extra={[
                             {
-                              label: 'Từ soát lỗi',
+                              label: t('dailyOverview.breakdown.fromToolCheck'),
                               count: r.unassignedNeedTool,
                               onClick: () => openUnassignedNeed('tool', day, day, codes, dm),
                             },
                             {
-                              label: 'OK/chưa soát → đẩy về',
+                              label: t('dailyOverview.metrics.wasOkPushed'),
                               count: Math.max(0, r.unassignedNeed - r.unassignedNeedTool),
                               onClick: () => openUnassignedNeed('wasOk', day, day, codes, dm),
                             },
                             {
-                              label: 'Đã xử lý không cần designer',
+                              label: t('dailyOverview.breakdown.resolvedNoDesigner'),
                               count: r.unassignedResolved,
                               onClick: () => openUnassignedNeed('resolved', day, day, codes, dm),
                             },
@@ -617,17 +640,17 @@ export function DesignerDailyOverview({ days: range = 7, from, to, reloadToken, 
                       className="text-teal-600 dark:text-teal-400 hover:bg-teal-500/10"
                       extra={[
                         {
-                          label: 'Từ soát lỗi',
+                          label: t('dailyOverview.breakdown.fromToolCheck'),
                           count: columnTotals.unassignedNeedTool,
                           onClick: () => openUnassignedNeed('tool', rangeFromTo.from, rangeFromTo.to, allErrorCodes),
                         },
                         {
-                          label: 'OK/chưa soát → đẩy về',
+                          label: t('dailyOverview.metrics.wasOkPushed'),
                           count: Math.max(0, columnTotals.unassignedNeed - columnTotals.unassignedNeedTool),
                           onClick: () => openUnassignedNeed('wasOk', rangeFromTo.from, rangeFromTo.to, allErrorCodes),
                         },
                         {
-                          label: 'Đã xử lý không cần designer',
+                          label: t('dailyOverview.breakdown.resolvedNoDesigner'),
                           count: columnTotals.unassignedResolved,
                           onClick: () =>
                             openUnassignedNeed('resolved', rangeFromTo.from, rangeFromTo.to, allErrorCodes),
@@ -641,10 +664,12 @@ export function DesignerDailyOverview({ days: range = 7, from, to, reloadToken, 
                     theo ngày" (= soát lỗi đã gán + ok/chưa soát đẩy về đã gán). */}
                 <tr className="group">
                   <td className="sticky left-0 z-10 bg-card group-hover:bg-muted/40 px-3 py-1.5 border-b border-border/60 font-medium text-indigo-600 dark:text-indigo-400">
-                    <Hint content="Tổng đơn ĐÃ GIAO cho designer (mọi trạng thái) — khớp hàng 'Tổng / ngày' của bảng 'Tất cả designer theo ngày'. Gồm 2 nguồn: đơn soát tool ra lỗi + đơn ok/chưa soát bị công đoạn đẩy về.">
-                      <span className="cursor-help">Đã gán designer</span>
+                    <Hint content={t('dailyOverview.metrics.assignedHint')}>
+                      <span className="cursor-help">{t('dailyOverview.metrics.assigned')}</span>
                     </Hint>
-                    <div className="text-[10px] text-muted-foreground font-normal">= Tổng/ngày bảng designer</div>
+                    <div className="text-[10px] text-muted-foreground font-normal">
+                      {t('dailyOverview.metrics.assignedSubtitle')}
+                    </div>
                   </td>
                   {rows.map((r, i) => {
                     const day = days[i];
@@ -656,12 +681,12 @@ export function DesignerDailyOverview({ days: range = 7, from, to, reloadToken, 
                           className="text-indigo-600 dark:text-indigo-400 hover:bg-indigo-500/10"
                           breakdown={[
                             {
-                              label: 'Từ soát lỗi',
+                              label: t('dailyOverview.breakdown.fromToolCheck'),
                               count: r.assignedToolError,
                               onClick: () => openAssigned('tool', day, day, dm),
                             },
                             {
-                              label: 'OK/chưa soát → đẩy về',
+                              label: t('dailyOverview.metrics.wasOkPushed'),
                               count: r.assignedWasOk,
                               onClick: () => openAssigned('wasOk', day, day, dm),
                             },
@@ -677,12 +702,12 @@ export function DesignerDailyOverview({ days: range = 7, from, to, reloadToken, 
                       className="text-indigo-600 dark:text-indigo-400 hover:bg-indigo-500/10"
                       breakdown={[
                         {
-                          label: 'Từ soát lỗi',
+                          label: t('dailyOverview.breakdown.fromToolCheck'),
                           count: columnTotals.assignedToolError,
                           onClick: () => openAssigned('tool', rangeFromTo.from, rangeFromTo.to),
                         },
                         {
-                          label: 'OK/chưa soát → đẩy về',
+                          label: t('dailyOverview.metrics.wasOkPushed'),
                           count: columnTotals.assignedWasOk,
                           onClick: () => openAssigned('wasOk', rangeFromTo.from, rangeFromTo.to),
                         },
@@ -694,8 +719,8 @@ export function DesignerDailyOverview({ days: range = 7, from, to, reloadToken, 
                 {/* 2f. Design đã xong — assignee + designerStatus='done' (⊂ Đã gán,
                     khớp cột "Đã xong" ma trận team). */}
                 <MetricRow
-                  label="Design đã xong"
-                  hint="Đơn designer ĐÃ hoàn thành (designerStatus = done) — khớp cột 'Đã xong' của bảng 'Tất cả designer theo ngày'. Là tập con của hàng Đã gán designer."
+                  label={t('dailyOverview.metrics.designDone')}
+                  hint={t('dailyOverview.metrics.designDoneHint')}
                   values={rows.map((r) => r.designDone)}
                   total={columnTotals.designDone}
                   className="text-emerald-600 dark:text-emerald-400"
@@ -706,10 +731,12 @@ export function DesignerDailyOverview({ days: range = 7, from, to, reloadToken, 
                     nhau của pool cần designer — lịch sử). */}
                 <tr className="group">
                   <td className="sticky left-0 z-10 bg-card group-hover:bg-muted/40 px-3 py-1.5 border-b border-border/60 font-medium text-rose-600">
-                    <Hint content="= Soát lỗi + OK/chưa soát → đẩy về (2 nguồn không trùng nhau) — tổng đơn từng có lỗi cần designer, tính lịch sử. Đối soát: = Đã gán + Chưa gán + đã-xử-lý-không-cần-designer.">
-                      <span className="cursor-help">Tổng lỗi</span>
+                    <Hint content={t('dailyOverview.metrics.totalErrorHint')}>
+                      <span className="cursor-help">{t('dailyOverview.metrics.totalError')}</span>
                     </Hint>
-                    <div className="text-[10px] text-muted-foreground font-normal">soát lỗi + đẩy về</div>
+                    <div className="text-[10px] text-muted-foreground font-normal">
+                      {t('dailyOverview.metrics.totalErrorSubtitle')}
+                    </div>
                   </td>
                   {rows.map((r, i) => {
                     const day = days[i];
@@ -721,12 +748,12 @@ export function DesignerDailyOverview({ days: range = 7, from, to, reloadToken, 
                           className="text-rose-600 hover:bg-rose-500/10"
                           extra={[
                             {
-                              label: 'Soát lỗi',
+                              label: t('dailyOverview.metrics.toolError'),
                               count: r.toolError,
                               onClick: () => openMetric('toolError', day, day, [], dm),
                             },
                             {
-                              label: 'OK/chưa soát → đẩy về',
+                              label: t('dailyOverview.metrics.wasOkPushed'),
                               count: r.wasOkPushed,
                               onClick: () => openWasOk('all', day, day, dm),
                             },
@@ -742,12 +769,12 @@ export function DesignerDailyOverview({ days: range = 7, from, to, reloadToken, 
                       className="text-rose-600 hover:bg-rose-500/10"
                       extra={[
                         {
-                          label: 'Soát lỗi',
+                          label: t('dailyOverview.metrics.toolError'),
                           count: columnTotals.toolError,
                           onClick: () => openMetric('toolError', rangeFromTo.from ?? '', rangeFromTo.to ?? '', []),
                         },
                         {
-                          label: 'OK/chưa soát → đẩy về',
+                          label: t('dailyOverview.metrics.wasOkPushed'),
                           count: columnTotals.wasOkPushed,
                           onClick: () => openWasOk('all', rangeFromTo.from, rangeFromTo.to),
                         },
@@ -761,10 +788,10 @@ export function DesignerDailyOverview({ days: range = 7, from, to, reloadToken, 
                   <td className="sticky left-0 z-10 bg-card group-hover:bg-muted/40 px-3 py-1.5 border-b border-border/60 font-medium text-amber-600">
                     <span className="inline-flex items-center gap-1">
                       {expanded ? <ChevronDown size={14} /> : <ChevronRight size={14} />}
-                      Tổng tồn
+                      {t('dailyOverview.metrics.backlog')}
                     </span>
                     <div className="text-[10px] text-muted-foreground font-normal pl-[18px]">
-                      chưa soát + đã gán chưa xong + chưa gán · bấm để xem theo designer
+                      {t('dailyOverview.metrics.backlogSubtitle')}
                     </div>
                   </td>
                   {rows.map((r, i) => {
@@ -821,32 +848,33 @@ export function DesignerDailyOverview({ days: range = 7, from, to, reloadToken, 
           <div className="border-t border-border bg-muted/10 p-3">
             <div className="mb-2 space-y-1">
               <div className="text-[11px] font-medium text-muted-foreground">
-                Tổng tồn {columnTotals.backlog} = Chưa soát{' '}
-                <span className="text-slate-600 dark:text-slate-300 font-semibold">{columnTotals.unreviewed}</span> +
-                Đã gán chưa xong{' '}
+                {t('dailyOverview.backlogSection.summaryPrefix', { total: columnTotals.backlog })}{' '}
+                {t('dailyOverview.metrics.unreviewed')}{' '}
+                <span className="text-slate-600 dark:text-slate-300 font-semibold">{columnTotals.unreviewed}</span> +{' '}
+                {t('dailyOverview.backlogSection.assignedPending')}{' '}
                 <span className="text-indigo-600 font-semibold">
                   {columnTotals.assignedToolError + columnTotals.assignedWasOk - columnTotals.designDone}
                 </span>{' '}
-                + Chưa gán <span className="text-teal-600 font-semibold">{columnTotals.unassignedNeed}</span>
-                <span className="font-normal"> (đơn chưa soát nhưng đã gán chỉ đếm 1 lần)</span>
+                + {t('dailyOverview.metrics.unassignedNeed')}{' '}
+                <span className="text-teal-600 font-semibold">{columnTotals.unassignedNeed}</span>
+                <span className="font-normal"> {t('dailyOverview.backlogSection.note')}</span>
               </div>
               <div className="text-[10px] text-muted-foreground">
-                Bảng dưới: tồn theo trạng thái designer (đơn đã gán) — lăng kính khác, tổng {backlogGrand}, có thể lệch
-                với Tổng tồn (không tính đơn chưa soát/chưa gán theo Tool).
+                {t('dailyOverview.backlogSection.hint2', { total: backlogGrand })}
               </div>
             </div>
             {backlogByDesigner.length === 0 && unassignedBacklog === 0 ? (
-              <p className="text-xs text-muted-foreground py-2">Không có đơn tồn.</p>
+              <p className="text-xs text-muted-foreground py-2">{t('dailyOverview.backlogSection.noBacklog')}</p>
             ) : (
               <div className="overflow-x-auto rounded-md border border-border">
                 <table className="w-full text-[13px] tabular-nums">
                   <thead>
                     <tr className="text-[11px] text-muted-foreground border-b border-border">
-                      <th className="text-left font-medium px-3 py-1.5">Designer</th>
-                      <BLHead label="Cần làm" className="text-zinc-600 dark:text-zinc-300" />
-                      <BLHead label="Đang làm" className="text-indigo-600" />
-                      <BLHead label="Làm lại" className="text-amber-600" />
-                      <th className="text-center font-semibold px-2 py-1.5">Tổng</th>
+                      <th className="text-left font-medium px-3 py-1.5">{t('dailyOverview.backlogSection.designer')}</th>
+                      <BLHead label={t('teamDailyMatrix.labels.assigned')} className="text-zinc-600 dark:text-zinc-300" />
+                      <BLHead label={t('teamDailyMatrix.labels.inProgress')} className="text-indigo-600" />
+                      <BLHead label={t('teamDailyMatrix.labels.rework')} className="text-amber-600" />
+                      <th className="text-center font-semibold px-2 py-1.5">{t('dailyOverview.totalColumn')}</th>
                     </tr>
                   </thead>
                   <tbody>
@@ -859,24 +887,31 @@ export function DesignerDailyOverview({ days: range = 7, from, to, reloadToken, 
                         <BLCell
                           value={d.assigned}
                           className="text-zinc-700 dark:text-zinc-200"
-                          onClick={() => openDesigner(d.userId, d.fullName, ['assigned'], 'Cần làm')}
+                          onClick={() => openDesigner(d.userId, d.fullName, ['assigned'], t('teamDailyMatrix.labels.assigned'))}
                         />
                         <BLCell
                           value={d.inProgress}
                           className="text-indigo-600"
-                          onClick={() => openDesigner(d.userId, d.fullName, ['in-progress'], 'Đang làm')}
+                          onClick={() =>
+                            openDesigner(d.userId, d.fullName, ['in-progress'], t('teamDailyMatrix.labels.inProgress'))
+                          }
                         />
                         <BLCell
                           value={d.rework}
                           className="text-amber-600"
-                          onClick={() => openDesigner(d.userId, d.fullName, ['rework'], 'Làm lại')}
+                          onClick={() => openDesigner(d.userId, d.fullName, ['rework'], t('teamDailyMatrix.labels.rework'))}
                         />
                         <td className="text-center px-2 py-1.5">
                           <NumCell
                             value={d.total}
                             className="font-semibold"
                             onClick={() =>
-                              openDesigner(d.userId, d.fullName, ['assigned', 'in-progress', 'rework'], 'Tổng tồn')
+                              openDesigner(
+                                d.userId,
+                                d.fullName,
+                                ['assigned', 'in-progress', 'rework'],
+                                t('dailyOverview.metrics.backlog'),
+                              )
                             }
                           />
                         </td>
@@ -885,8 +920,11 @@ export function DesignerDailyOverview({ days: range = 7, from, to, reloadToken, 
                     {unassignedBacklog > 0 && (
                       <tr className="border-b border-border/50 bg-slate-500/[0.06]">
                         <td className="px-3 py-1.5 font-medium text-slate-600 dark:text-slate-300">
-                          Chưa gán
-                          <span className="text-[10px] text-muted-foreground font-normal"> (chưa có designer)</span>
+                          {t('dailyOverview.backlogSection.unassignedRow')}
+                          <span className="text-[10px] text-muted-foreground font-normal">
+                            {' '}
+                            {t('dailyOverview.backlogSection.unassignedRowHint')}
+                          </span>
                         </td>
                         <td className="text-center px-2 py-1.5 text-muted-foreground/40">·</td>
                         <td className="text-center px-2 py-1.5 text-muted-foreground/40">·</td>

@@ -1,0 +1,134 @@
+{
+  "actionBadge": {
+    "create": "Create",
+    "update": "Update",
+    "bulkUpdate": "Bulk",
+    "import": "Import",
+    "delete": "Delete",
+    "transfer": "Transfer factory",
+    "cancel": "Cancel order",
+    "updateDesign": "Change design",
+    "hold": "Hold order",
+    "unhold": "Release"
+  },
+  "importSubaction": {
+    "create": "Created",
+    "update": "Updated"
+  },
+  "fieldLabel": {
+    "printStatus": "Print status",
+    "printStatusNote": "Print status note",
+    "toolResult": "Tool result",
+    "toolResultNote": "Tool result note",
+    "errorFile": "Error file",
+    "errorFileNote": "Error file note",
+    "assignee": "Assignee",
+    "assigneeNote": "Assignee note",
+    "designerStatus": "Designer status",
+    "fabricType": "Fabric type",
+    "machineNumber": "Machine",
+    "productionError": "Factory error",
+    "productionErrorNote": "Factory error description",
+    "productionErrorSource": "Error source",
+    "cancelledAt": "Cancel order",
+    "heldAt": "Hold order",
+    "designs": "Design",
+    "designsOriginal": "Original design",
+    "mockupUrl": "Mockup",
+    "factoryId": "Factory",
+    "machineTypeId": "Machine type",
+    "type": "Product type",
+    "color": "Color",
+    "size": "Size",
+    "quantity": "Quantity",
+    "status": "Order status (OnosPod)",
+    "fulfillmentStage": "{{stage}} stage",
+    "currentFulfillmentStage": "Current stage"
+  },
+  "designerStatusLabels": {
+    "unassigned": "Unassigned",
+    "assigned": "Assigned",
+    "inProgress": "In progress",
+    "done": "Done",
+    "rejected": "Rejected",
+    "rework": "Needs rework"
+  },
+  "fulfillmentStatusLabels": {
+    "waiting": "Waiting",
+    "inProgress": "In progress",
+    "done": "Done",
+    "rework": "Needs rework"
+  },
+  "sourceLabel": {
+    "designer": "Designer's fault",
+    "factory": "Factory's fault"
+  },
+  "importPayload": {
+    "mapped": "Product mapped",
+    "unmapped": "Product not mapped"
+  },
+  "timeline": {
+    "titleWithId": "Change history — {{productionId}}",
+    "title": "Change history",
+    "recordCount": "{{count}} entries",
+    "reload": "Reload",
+    "empty": "No change history yet.",
+    "reasonLabel": "Reason:",
+    "systemUser": "system"
+  },
+  "urgency": {
+    "new": "New",
+    "attention": "Needs attention",
+    "urgent": "Urgent",
+    "critical": "Critical"
+  },
+  "stage": {
+    "designer": "Design",
+    "toolCheck": "Tool check"
+  },
+  "actions": {
+    "updated": "Updated",
+    "markedToolCheckOk": "Marked tool check as OK",
+    "markedErrorResolved": "Marked error as resolved",
+    "markedCompletedCount": "Marked {{count}} orders as done",
+    "start": "Start",
+    "reportError": "Report error",
+    "complete": "Complete",
+    "toolCheckOk": "Checked (OK)",
+    "markDone": "Mark done"
+  },
+  "filters": {
+    "sourceDesigner": "Designer error",
+    "sourceFactory": "Factory error",
+    "errorCode": "Error code",
+    "errorSource": "Error source"
+  },
+  "page": {
+    "title": "Error log",
+    "description": "Errors on orders already in fulfillment (print → press → … → packing). Orders outside your stage show dimmed (view only).",
+    "tabTodo": "To process",
+    "tabDone": "Done (14 days)",
+    "clearUrgencyFilter": "Clear urgency filter",
+    "totalToProcess": "{{count}} orders need processing in total.",
+    "noPermission": "You don't have permission to view this page.",
+    "pageSubtitle": "Manage production orders"
+  },
+  "table": {
+    "selectAllOnPage": "Select all on this page",
+    "urgency": "Urgency",
+    "orderAge": "Order age",
+    "factory": "Factory",
+    "currentStage": "Current stage",
+    "reporter": "Reported at",
+    "errorNote": "Error note",
+    "fixer": "Fixer",
+    "errorCount": "Count",
+    "emptyTodo": "No error orders need processing 🎉",
+    "emptyDone": "No processed error orders in the last 14 days.",
+    "enteredProductionAt": "entered production {{date}}",
+    "history": "History",
+    "selectedLabel": "Selected",
+    "markDoneCount": "Mark done ({{count}})",
+    "deselect": "Deselect"
+  }
+}

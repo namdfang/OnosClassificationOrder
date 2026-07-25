@@ -1,6 +1,18 @@
 import type { FactoryOverview, WorkshopConfig, WorkshopConfigCategory } from 'shared';
 import * as XLSX from 'xlsx';
 
+import i18n from '@/i18n';
+
+/**
+ * Export functions are triggered imperatively (button click), not rendered by
+ * React, so there's no `useTranslation()` hook context here. Reading straight
+ * from the i18n singleton at call time still reacts correctly to the current
+ * language (unlike a module-scope constant, which would freeze at import).
+ */
+function t(key: string, options?: Record<string, unknown>): string {
+  return i18n.t(key, { ns: 'dashboard', ...options });
+}
+
 /**
  * Shape we accept for export. Only fields used by `buildExportRow` matter —
  * unused ones are ignored so the typing stays permissive.
@@ -39,29 +51,31 @@ export interface ExportContext {
 }
 
 /** Detail-sheet headers — matches the order requested by ops. */
-const DETAIL_HEADERS = [
-  'Production ID',
-  'User SKU',
-  'Size',
-  'Trạng thái in',
-  'Note Trạng thái in',
-  'Kết quả Tool',
-  'Note kq Tool 1',
-  'File sửa lỗi',
-  'Ghi chú file lỗi',
-  'Color',
-  'Người thực hiện',
-  'Note người thực hiện',
-  'Type',
-  'Mockup',
-  'Design Front',
-  'Order ID',
-  'In Production At',
-  'Type.1',
-  'Nhà máy',
-  'Phòng',
-  'Loại vải',
-] as const;
+function buildDetailHeaders(): string[] {
+  return [
+    t('export.headers.productionId'),
+    t('export.headers.userSku'),
+    t('export.headers.size'),
+    t('export.headers.printStatus'),
+    t('export.headers.printStatusNote'),
+    t('export.headers.toolResult'),
+    t('export.headers.toolResultNote'),
+    t('export.headers.errorFile'),
+    t('export.headers.errorFileNote'),
+    t('export.headers.color'),
+    t('export.headers.assignee'),
+    t('export.headers.assigneeNote'),
+    t('export.headers.type'),
+    t('export.headers.mockup'),
+    t('export.headers.designFront'),
+    t('export.headers.orderId'),
+    t('export.headers.inProductionAt'),
+    t('export.headers.productConfig'),
+    t('export.headers.factory'),
+    t('export.headers.machineType'),
+    t('export.headers.fabricType'),
+  ];
+}
 
 function formatDate(iso?: string): string {
   if (!iso) return '';
@@ -143,7 +157,7 @@ function buildDetailRow(o: ExportableOrder, ctx: ExportContext): (string | numbe
 /** Truncate Excel sheet name (max 31 chars + no `:\/?*[]`). */
 function sanitizeSheetName(s: string): string {
   const cleaned = s.replace(/[:\\/?*[\]]/g, '_').trim();
-  return cleaned.slice(0, 31) || 'Sheet';
+  return cleaned.slice(0, 31) || t('export.sheets.fallback');
 }
 
 /**
@@ -164,24 +178,24 @@ export function buildWorkbook(
 
   // ─── Sheet 1: Tổng quan ─────────────────────────────────────────────
   const overviewRows: (string | number)[][] = [];
-  overviewRows.push(['TỔNG QUAN']);
+  overviewRows.push([t('export.overview.heading')]);
   overviewRows.push([]);
   if (overview) {
-    overviewRows.push(['Tổng đơn (cả 3 xưởng)', overview.totals.total]);
-    overviewRows.push(['Đơn không chuyển xưởng', overview.totals.pure]);
-    overviewRows.push(['Đơn đã chuyển xưởng', overview.totals.transferred]);
+    overviewRows.push([t('export.overview.totalAllFactories'), overview.totals.total]);
+    overviewRows.push([t('export.overview.pureOrders'), overview.totals.pure]);
+    overviewRows.push([t('export.overview.transferredOrders'), overview.totals.transferred]);
     overviewRows.push([]);
     overviewRows.push([
-      'Xưởng',
-      'Mã',
-      'Tổng đơn',
-      'Pure',
-      'Nhận chuyển vào',
-      'Chuyển đi',
-      'Sản phẩm',
-      'Loại vải',
-      'Loại máy',
-      'Có tool',
+      t('export.overview.tableHeaders.factory'),
+      t('export.overview.tableHeaders.code'),
+      t('export.overview.tableHeaders.total'),
+      t('export.overview.tableHeaders.pure'),
+      t('export.overview.tableHeaders.transferredIn'),
+      t('export.overview.tableHeaders.transferredOut'),
+      t('export.overview.tableHeaders.product'),
+      t('export.overview.tableHeaders.fabric'),
+      t('export.overview.tableHeaders.machine'),
+      t('export.overview.tableHeaders.hasTool'),
     ]);
     for (const f of overview.factories) {
       overviewRows.push([
@@ -199,8 +213,13 @@ export function buildWorkbook(
     }
     if (overview.flows.length > 0) {
       overviewRows.push([]);
-      overviewRows.push(['LUỒNG CHUYỂN XƯỞNG']);
-      overviewRows.push(['Từ xưởng', 'Đến xưởng', 'Số đơn', 'Tổng sản phẩm']);
+      overviewRows.push([t('export.overview.flowHeading')]);
+      overviewRows.push([
+        t('export.overview.flowHeaders.from'),
+        t('export.overview.flowHeaders.to'),
+        t('export.overview.flowHeaders.count'),
+        t('export.overview.flowHeaders.totalQty'),
+      ]);
       for (const fl of overview.flows) {
         overviewRows.push([
           `${fl.fromShortName || fl.fromName}`,
@@ -211,7 +230,7 @@ export function buildWorkbook(
       }
     }
   } else {
-    overviewRows.push(['Không có dữ liệu overview']);
+    overviewRows.push([t('export.overview.noData')]);
   }
   const wsOverview = XLSX.utils.aoa_to_sheet(overviewRows);
   wsOverview['!cols'] = [
@@ -226,52 +245,73 @@ export function buildWorkbook(
     { wch: 12 },
     { wch: 10 },
   ];
-  XLSX.utils.book_append_sheet(wb, wsOverview, 'Tổng quan');
+  XLSX.utils.book_append_sheet(wb, wsOverview, t('export.sheets.overview'));
 
   // ─── Sheet 2: Breakdown (long form) ─────────────────────────────────
   const bdRows: (string | number)[][] = [];
-  bdRows.push(['Xưởng', 'Loại', 'Giá trị', 'Số đơn']);
+  bdRows.push([
+    t('export.breakdown.headers.factory'),
+    t('export.breakdown.headers.category'),
+    t('export.breakdown.headers.value'),
+    t('export.breakdown.headers.count'),
+  ]);
   if (overview) {
     for (const f of overview.factories) {
       const factoryLabel = f.factoryShortName || f.factoryName;
-      for (const p of f.breakdowns.products) bdRows.push([factoryLabel, 'Sản phẩm', p.label, p.count]);
-      for (const x of f.breakdowns.fabrics) bdRows.push([factoryLabel, 'Loại vải', x.label, x.count]);
-      for (const s of f.breakdowns.sizes) bdRows.push([factoryLabel, 'Size', s.label, s.count]);
-      for (const t of f.breakdowns.toolResults) bdRows.push([factoryLabel, 'Kết quả Tool', t.label, t.count]);
+      for (const p of f.breakdowns.products)
+        bdRows.push([factoryLabel, t('export.breakdown.categories.product'), p.label, p.count]);
+      for (const x of f.breakdowns.fabrics)
+        bdRows.push([factoryLabel, t('export.breakdown.categories.fabric'), x.label, x.count]);
+      for (const s of f.breakdowns.sizes)
+        bdRows.push([factoryLabel, t('export.breakdown.categories.size'), s.label, s.count]);
+      for (const tr of f.breakdowns.toolResults)
+        bdRows.push([factoryLabel, t('export.breakdown.categories.toolResult'), tr.label, tr.count]);
     }
   }
   const wsBreakdown = XLSX.utils.aoa_to_sheet(bdRows);
   wsBreakdown['!cols'] = [{ wch: 16 }, { wch: 16 }, { wch: 50 }, { wch: 10 }];
-  XLSX.utils.book_append_sheet(wb, wsBreakdown, 'Breakdown');
+  XLSX.utils.book_append_sheet(wb, wsBreakdown, t('export.sheets.breakdown'));
 
   // ─── Sheet 3: Chi tiết đơn ──────────────────────────────────────────
-  const detailRows: (string | number)[][] = [DETAIL_HEADERS as unknown as string[]];
+  const detailRows: (string | number)[][] = [buildDetailHeaders()];
   for (const o of orders) detailRows.push(buildDetailRow(o, ctx));
   const wsDetail = XLSX.utils.aoa_to_sheet(detailRows);
   // Auto-size — fixed widths tuned for the 21 columns.
   wsDetail['!cols'] = DETAIL_COL_WIDTHS;
-  XLSX.utils.book_append_sheet(wb, wsDetail, 'Chi tiết đơn');
+  XLSX.utils.book_append_sheet(wb, wsDetail, t('export.sheets.detail'));
 
   // ─── Sheet 4..N: 1 sheet per factory (just that factory's breakdowns) ─
   if (overview) {
     for (const f of overview.factories) {
       const rows: (string | number)[][] = [];
-      rows.push([`Xưởng: ${f.factoryName} (${f.factoryShortName || ''})`]);
+      rows.push([t('export.factorySheet.title', { name: f.factoryName, shortName: f.factoryShortName || '' })]);
       rows.push([
-        'Tổng đơn',
+        t('export.factorySheet.summary.total'),
         f.total,
         '',
-        'Pure',
+        t('export.factorySheet.summary.pure'),
         f.pure,
         '',
-        'Nhận vào',
+        t('export.factorySheet.summary.transferredIn'),
         f.transferredIn,
         '',
-        'Chuyển đi',
+        t('export.factorySheet.summary.transferredOut'),
         f.transferredOut,
       ]);
       rows.push([]);
-      rows.push(['Sản phẩm', 'Số đơn', '', 'Loại vải', 'Số đơn', '', 'Size', 'Số đơn', '', 'Kết quả Tool', 'Số đơn']);
+      rows.push([
+        t('export.breakdown.categories.product'),
+        t('export.breakdown.headers.count'),
+        '',
+        t('export.breakdown.categories.fabric'),
+        t('export.breakdown.headers.count'),
+        '',
+        t('export.breakdown.categories.size'),
+        t('export.breakdown.headers.count'),
+        '',
+        t('export.breakdown.categories.toolResult'),
+        t('export.breakdown.headers.count'),
+      ]);
       const maxLen = Math.max(
         f.breakdowns.products.length,
         f.breakdowns.fabrics.length,
@@ -282,7 +322,7 @@ export function buildWorkbook(
         const p = f.breakdowns.products[i];
         const x = f.breakdowns.fabrics[i];
         const s = f.breakdowns.sizes[i];
-        const t = f.breakdowns.toolResults[i];
+        const tr = f.breakdowns.toolResults[i];
         rows.push([
           p?.label || '',
           p?.count ?? '',
@@ -293,8 +333,8 @@ export function buildWorkbook(
           s?.label || '',
           s?.count ?? '',
           '',
-          t?.label || '',
-          t?.count ?? '',
+          tr?.label || '',
+          tr?.count ?? '',
         ]);
       }
       const ws = XLSX.utils.aoa_to_sheet(rows);
@@ -351,11 +391,11 @@ const DETAIL_COL_WIDTHS = [
  */
 export function buildDetailOnlyWorkbook(orders: ExportableOrder[], ctx: ExportContext): XLSX.WorkBook {
   const wb = XLSX.utils.book_new();
-  const detailRows: (string | number)[][] = [DETAIL_HEADERS as unknown as string[]];
+  const detailRows: (string | number)[][] = [buildDetailHeaders()];
   for (const o of orders) detailRows.push(buildDetailRow(o, ctx));
   const ws = XLSX.utils.aoa_to_sheet(detailRows);
   ws['!cols'] = DETAIL_COL_WIDTHS;
-  XLSX.utils.book_append_sheet(wb, ws, 'Chi tiết đơn');
+  XLSX.utils.book_append_sheet(wb, ws, t('export.sheets.detail'));
   return wb;
 }
 
@@ -389,16 +429,16 @@ export function buildSizeMatrixWorkbook(params: {
   const aoa: (string | number)[][] = [];
   aoa.push([title]);
   aoa.push([]);
-  aoa.push(['Sản phẩm', ...columns, 'Tổng']);
+  aoa.push([t('export.sizeMatrix.product'), ...columns, t('export.sizeMatrix.total')]);
   for (const r of rows) {
     aoa.push([r.type, ...columns.map((c) => r.counts[c] || ''), r.total]);
   }
-  aoa.push(['Tổng', ...columns.map((c) => colTotals[c] || ''), grandTotal]);
+  aoa.push([t('export.sizeMatrix.total'), ...columns.map((c) => colTotals[c] || ''), grandTotal]);
 
   const ws = XLSX.utils.aoa_to_sheet(aoa);
   ws['!cols'] = [{ wch: 44 }, ...columns.map(() => ({ wch: 6 })), { wch: 9 }];
   // Merge tiêu đề trải hết các cột.
   ws['!merges'] = [{ s: { r: 0, c: 0 }, e: { r: 0, c: columns.length + 1 } }];
-  XLSX.utils.book_append_sheet(wb, ws, 'Size theo SP');
+  XLSX.utils.book_append_sheet(wb, ws, t('export.sheets.sizeByProduct'));
   return wb;
 }

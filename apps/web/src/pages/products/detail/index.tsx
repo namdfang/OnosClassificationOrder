@@ -1,5 +1,7 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
+import { Trans, useTranslation } from 'react-i18next';
 import { useNavigate, useParams } from 'react-router-dom';
+import type { TFunction } from 'i18next';
 import { ArrowLeft, ImageIcon, Plus, Sparkles, Trash2, Upload } from 'lucide-react';
 import type { ProductItemSpecific, ProductPrintArea, ProductVariation } from 'shared';
 import { PRODUCT_LEVELS, PRODUCT_PRINT_AREAS, ProductConfigStatus, Status, WorkshopConfigCategory } from 'shared';
@@ -28,7 +30,7 @@ import { sortCategoryTree } from '@/utils/categoryTree';
 import { cn } from '@/utils/cn';
 
 import type { ProductConfigRow, RefItem } from '../ProductConfigTab';
-import { STATUS_META } from '../ProductConfigTab';
+import { buildStatusMeta } from '../ProductConfigTab';
 
 const selectCls =
   'w-full rounded-md border border-input bg-background px-2 py-2 text-sm focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring';
@@ -52,6 +54,7 @@ function ImageUploadField({
   onFileSelected: (file: File) => void;
   aspectClassName: string;
 }) {
+  const { t } = useTranslation('products');
   const inputRef = useRef<HTMLInputElement>(null);
   const [previewUrl, setPreviewUrl] = useState<string | null>(null);
 
@@ -87,7 +90,7 @@ function ImageUploadField({
           'relative w-full rounded-md border border-border bg-muted overflow-hidden group',
           aspectClassName,
         )}
-        title="Chọn ảnh — chỉ upload khi bấm Lưu thay đổi"
+        title={t('detail.imageUpload.title')}
       >
         {displayValue ? (
           <img src={displayValue} alt="preview" className="w-full h-full object-cover" />
@@ -98,11 +101,11 @@ function ImageUploadField({
         )}
         <div className="absolute inset-0 flex items-center justify-center bg-black/0 transition-colors group-hover:bg-black/40">
           <span className="flex items-center gap-1 text-xs font-medium text-white opacity-0 group-hover:opacity-100">
-            <Upload size={14} /> {pendingFile ? 'Đổi ảnh khác' : 'Chọn ảnh'}
+            <Upload size={14} /> {pendingFile ? t('detail.imageUpload.change') : t('detail.imageUpload.choose')}
           </span>
         </div>
       </button>
-      {pendingFile && <p className="text-[11px] text-amber-600">Ảnh mới — sẽ upload khi bấm Lưu</p>}
+      {pendingFile && <p className="text-[11px] text-amber-600">{t('detail.imageUpload.pendingHint')}</p>}
     </div>
   );
 }
@@ -129,13 +132,16 @@ const computeVariationSku = (productSku: string, attributes: ProductItemSpecific
 };
 
 /** Gợi ý tên + ví dụ giá trị theo thứ tự thuộc tính thường gặp — dùng chung cho popover từng biến thể lẫn "Tạo nhanh biến thể"; dòng thứ 4 trở đi dùng nhãn chung. */
-const ATTRIBUTE_PLACEHOLDERS: { label: string; value: string }[] = [
-  { label: 'Size', value: 'VD: M' },
-  { label: 'Mẫu/Màu', value: 'VD: Đỏ' },
-  { label: 'Loại', value: 'VD: Cotton' },
+const buildAttributePlaceholders = (t: TFunction<'products'>): { label: string; value: string }[] => [
+  { label: t('detail.attributes.sizeLabel'), value: t('detail.attributes.sizeExample') },
+  { label: t('detail.attributes.colorLabel'), value: t('detail.attributes.colorExample') },
+  { label: t('detail.attributes.typeLabel'), value: t('detail.attributes.typeExample') },
 ];
-const getAttributePlaceholder = (idx: number) =>
-  ATTRIBUTE_PLACEHOLDERS[idx] || { label: 'Tên biến thể', value: 'Giá trị' };
+const getAttributePlaceholder = (t: TFunction<'products'>, idx: number) =>
+  buildAttributePlaceholders(t)[idx] || {
+    label: t('detail.attributes.genericLabel'),
+    value: t('detail.attributes.genericValue'),
+  };
 
 /** Popover chỉnh thuộc tính 1 biến thể dạng key-value tự do (KHÔNG định nghĩa cứng màu/size). */
 function VariationAttributesEditor({
@@ -145,6 +151,7 @@ function VariationAttributesEditor({
   attributes: ProductItemSpecific[];
   onChange: (next: ProductItemSpecific[]) => void;
 }) {
+  const { t } = useTranslation(['products', 'common']);
   const [open, setOpen] = useState(false);
   const update = (idx: number, patch: Partial<ProductItemSpecific>) =>
     onChange(attributes.map((a, i) => (i === idx ? { ...a, ...patch } : a)));
@@ -163,19 +170,19 @@ function VariationAttributesEditor({
           type="button"
           className="w-full h-8 text-left text-xs rounded-md border border-input bg-background px-2 hover:bg-muted truncate"
         >
-          {summary || <span className="text-muted-foreground">+ Thêm thuộc tính</span>}
+          {summary || <span className="text-muted-foreground">{t('detail.attributes.addAttribute')}</span>}
         </button>
       </PopoverTrigger>
       <PopoverContent className="w-72 space-y-2" align="start">
         <div className="flex items-center justify-between">
-          <p className="text-xs font-medium text-foreground">Thuộc tính biến thể</p>
+          <p className="text-xs font-medium text-foreground">{t('detail.attributes.variantAttributes')}</p>
           <Button variant="outline" size="sm" onClick={add}>
-            <Plus size={12} /> Thêm
+            <Plus size={12} /> {t('common:actions.add')}
           </Button>
         </div>
         <div className="space-y-1.5 max-h-56 overflow-y-auto">
           {attributes.map((a, idx) => {
-            const ph = getAttributePlaceholder(idx);
+            const ph = getAttributePlaceholder(t, idx);
             return (
             <div key={idx} className="flex items-center gap-1.5">
               <Input
@@ -197,7 +204,7 @@ function VariationAttributesEditor({
             );
           })}
           {attributes.length === 0 && (
-            <p className="text-xs text-muted-foreground text-center py-2">Chưa có thuộc tính nào.</p>
+            <p className="text-xs text-muted-foreground text-center py-2">{t('detail.attributes.empty')}</p>
           )}
         </div>
       </PopoverContent>
@@ -211,15 +218,20 @@ interface BulkDimension {
   values: string;
 }
 
-/** Ví dụ danh sách giá trị (số nhiều) theo cùng thứ tự với `ATTRIBUTE_PLACEHOLDERS` — dùng cho "Tạo nhanh biến thể". */
-const BULK_DIM_VALUES_EXAMPLES = ['VD: S, M, L', 'VD: Đỏ, Xanh, Vàng', 'VD: Cotton, Poly'];
-const getBulkDimPlaceholder = (idx: number) => ({
-  label: getAttributePlaceholder(idx).label,
-  values: BULK_DIM_VALUES_EXAMPLES[idx] || 'VD: Giá trị 1, Giá trị 2',
+/** Ví dụ danh sách giá trị (số nhiều) theo cùng thứ tự với `buildAttributePlaceholders` — dùng cho "Tạo nhanh biến thể". */
+const buildBulkDimValuesExamples = (t: TFunction<'products'>): string[] => [
+  t('detail.bulkGenerate.sizeValuesExample'),
+  t('detail.bulkGenerate.colorValuesExample'),
+  t('detail.bulkGenerate.typeValuesExample'),
+];
+const getBulkDimPlaceholder = (t: TFunction<'products'>, idx: number) => ({
+  label: getAttributePlaceholder(t, idx).label,
+  values: buildBulkDimValuesExamples(t)[idx] || t('detail.bulkGenerate.genericValuesExample'),
 });
 
 /** Popover "Tạo nhanh biến thể" — cartesian product giữa các thuộc tính (VD: Màu × Size) thành nhiều dòng biến thể 1 lần. */
 function BulkGenerateVariantsPopover({ onGenerate }: { onGenerate: (rows: ProductVariation[]) => void }) {
+  const { t } = useTranslation('products');
   const [open, setOpen] = useState(false);
   const [dims, setDims] = useState<BulkDimension[]>([{ label: '', values: '' }]);
 
@@ -256,18 +268,15 @@ function BulkGenerateVariantsPopover({ onGenerate }: { onGenerate: (rows: Produc
     <Popover open={open} onOpenChange={setOpen}>
       <PopoverTrigger asChild>
         <Button variant="outline" size="sm">
-          <Sparkles size={14} /> Tạo nhanh biến thể
+          <Sparkles size={14} /> {t('detail.bulkGenerate.trigger')}
         </Button>
       </PopoverTrigger>
       <PopoverContent className="w-96 space-y-2" align="end">
-        <p className="text-xs font-medium text-foreground">Tạo nhanh biến thể (tổ hợp thuộc tính)</p>
-        <p className="text-xs text-muted-foreground">
-          Mỗi thuộc tính nhập 1 tên + danh sách giá trị cách nhau dấu phẩy. Hệ thống sẽ tạo tất cả tổ hợp (VD: 3 màu ×
-          3 size = 9 biến thể) rồi thêm vào cuối danh sách hiện có.
-        </p>
+        <p className="text-xs font-medium text-foreground">{t('detail.bulkGenerate.title')}</p>
+        <p className="text-xs text-muted-foreground">{t('detail.bulkGenerate.description')}</p>
         <div className="space-y-1.5 max-h-56 overflow-y-auto">
           {dims.map((d, idx) => {
-            const ph = getBulkDimPlaceholder(idx);
+            const ph = getBulkDimPlaceholder(t, idx);
             return (
               <div key={idx} className="flex items-center gap-1.5">
                 <Input
@@ -291,10 +300,10 @@ function BulkGenerateVariantsPopover({ onGenerate }: { onGenerate: (rows: Produc
         </div>
         <div className="flex items-center justify-between pt-1">
           <Button variant="outline" size="sm" onClick={() => setDims((prev) => [...prev, { label: '', values: '' }])}>
-            <Plus size={12} /> Thêm thuộc tính
+            <Plus size={12} /> {t('detail.bulkGenerate.addAttribute')}
           </Button>
           <Button size="sm" onClick={handleGenerate} disabled={previewCount === 0}>
-            Tạo {previewCount > 0 ? `${previewCount} biến thể` : ''}
+            {previewCount > 0 ? t('detail.bulkGenerate.generateCount', { count: previewCount }) : t('detail.bulkGenerate.generate')}
           </Button>
         </div>
       </PopoverContent>
@@ -329,8 +338,10 @@ interface FormSnapshot {
 }
 
 export default function ProductDetailPage() {
+  const { t } = useTranslation(['products', 'common']);
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
+  const STATUS_META = useMemo(() => buildStatusMeta(t), [t]);
 
   const [item, setItem] = useState<ProductConfigRow | null>(null);
   const [loading, setLoading] = useState(true);
@@ -542,7 +553,7 @@ export default function ProductDetailPage() {
       if (!anchor) return;
       const href = anchor.getAttribute('href') || '';
       if (!href || href.startsWith('#')) return;
-      const ok = window.confirm('Bạn có thay đổi CHƯA LƯU. Rời trang sẽ mất thay đổi — vẫn thoát?');
+      const ok = window.confirm(t('detail.unsavedConfirm'));
       if (!ok) {
         e.preventDefault();
         e.stopPropagation();
@@ -554,10 +565,10 @@ export default function ProductDetailPage() {
       window.removeEventListener('beforeunload', onBeforeUnload);
       document.removeEventListener('click', onClickCapture, true);
     };
-  }, [dirty]);
+  }, [dirty, t]);
 
   const handleBack = () => {
-    if (dirty && !window.confirm('Bạn có thay đổi CHƯA LƯU. Rời trang sẽ mất thay đổi — vẫn thoát?')) return;
+    if (dirty && !window.confirm(t('detail.unsavedConfirm'))) return;
     navigate(PATHS.PRODUCTS);
   };
 
@@ -585,7 +596,7 @@ export default function ProductDetailPage() {
 
   const applyBulkPrice = () => {
     if (!bulkCost && !bulkNonShipCost && !bulkRetailPrice) return;
-    if (!window.confirm(`Áp dụng giá vừa nhập cho toàn bộ ${variations.length} biến thể — ghi đè giá hiện tại?`)) return;
+    if (!window.confirm(t('detail.applyBulkPriceConfirm', { count: variations.length }))) return;
     setVariations((prev) =>
       prev.map((v) => ({
         ...v,
@@ -606,7 +617,7 @@ export default function ProductDetailPage() {
 
   const handleSave = async () => {
     if (!shortName.trim()) {
-      toast.error('Tên viết tắt không được để trống');
+      toast.error(t('detail.shortNameRequired'));
       return;
     }
 
@@ -663,7 +674,7 @@ export default function ProductDetailPage() {
       applyItem({ ...item, ...patch });
       setMockupFile(null);
       setSizeChartFile(null);
-      toast.success('Đã lưu sản phẩm');
+      toast.success(t('detail.saveSuccess'));
     } catch (error) {
       handleAxiosError(error);
     } finally {
@@ -676,14 +687,14 @@ export default function ProductDetailPage() {
       {/* Header — sticky để luôn thấy nút Lưu kể cả khi cuộn dài. */}
       <div className="sticky top-0 z-10 -mx-4 md:-mx-6 -mt-4 md:-mt-6 px-4 md:px-6 py-3 bg-background/95 backdrop-blur border-b border-border flex items-center justify-between gap-3">
         <div className="flex items-center gap-3 min-w-0">
-          <Button variant="ghost" size="icon" onClick={handleBack} title="Quay lại danh sách" className="shrink-0">
+          <Button variant="ghost" size="icon" onClick={handleBack} title={t('detail.backToList')} className="shrink-0">
             <ArrowLeft size={18} />
           </Button>
           <div className="min-w-0">
             <h1 className="text-lg font-bold text-foreground truncate">{item.fullName}</h1>
             <div className="flex flex-wrap items-center gap-2 mt-1">
               <div className="flex items-center gap-1">
-                <Label className="text-xs text-muted-foreground shrink-0">Viết tắt</Label>
+                <Label className="text-xs text-muted-foreground shrink-0">{t('detail.header.shortName')}</Label>
                 <Input
                   value={shortName}
                   onChange={(e) => setShortName(e.target.value)}
@@ -712,14 +723,16 @@ export default function ProductDetailPage() {
                 <option value={ProductConfigStatus.Hidden}>{STATUS_META[ProductConfigStatus.Hidden].label}</option>
               </select>
               {dirty && (
-                <Badge className="bg-amber-500 text-white font-normal border-amber-500 shrink-0">Chưa lưu</Badge>
+                <Badge className="bg-amber-500 text-white font-normal border-amber-500 shrink-0">
+                  {t('detail.header.unsaved')}
+                </Badge>
               )}
             </div>
           </div>
         </div>
         <Button onClick={handleSave} disabled={saving || !dirty} className="shrink-0">
           {saving && <Spinner size={14} />}
-          Lưu thay đổi
+          {t('detail.header.saveChanges')}
         </Button>
       </div>
 
@@ -727,7 +740,7 @@ export default function ProductDetailPage() {
         {/* Sidebar — thông tin sản xuất, cố định bên trái, luôn thấy khi cuộn tab bên phải. */}
         <div className="rounded-lg border border-border bg-card p-4 space-y-4 lg:sticky lg:top-[76px]">
           <div className="space-y-1.5">
-            <Label className="text-xs text-muted-foreground">Mockup</Label>
+            <Label className="text-xs text-muted-foreground">{t('detail.sidebar.mockup')}</Label>
             <ImageUploadField
               value={mockup}
               pendingFile={mockupFile}
@@ -739,7 +752,7 @@ export default function ProductDetailPage() {
           <Separator />
 
           <div className="space-y-1.5">
-            <Label className="text-xs text-muted-foreground">Level</Label>
+            <Label className="text-xs text-muted-foreground">{t('detail.sidebar.level')}</Label>
             <div className="flex flex-wrap gap-1">
               {PRODUCT_LEVELS.map((lv) => {
                 const active = level === String(lv.value);
@@ -765,19 +778,19 @@ export default function ProductDetailPage() {
           <Separator />
 
           <div className="space-y-1.5">
-            <Label className="text-xs text-muted-foreground">Mã máy in</Label>
+            <Label className="text-xs text-muted-foreground">{t('detail.sidebar.machineNumber')}</Label>
             <Input
               value={machineNumber}
               onChange={(e) => setMachineNumber(e.target.value)}
-              placeholder="VD: 94, 27… (để trống = không có tool)"
+              placeholder={t('detail.sidebar.machineNumberPlaceholder')}
             />
           </div>
 
           <div className="grid grid-cols-2 gap-2">
             <div className="space-y-1.5">
-              <Label className="text-xs text-muted-foreground">Xưởng</Label>
+              <Label className="text-xs text-muted-foreground">{t('detail.sidebar.factory')}</Label>
               <select value={factoryId} onChange={(e) => setFactoryId(e.target.value)} className={selectCls}>
-                {!factoryId && <option value="">— Chưa chọn —</option>}
+                {!factoryId && <option value="">{t('detail.notSelected')}</option>}
                 {factories.map((f) => (
                   <option key={f._id} value={f._id}>
                     {f.shortName}
@@ -786,9 +799,9 @@ export default function ProductDetailPage() {
               </select>
             </div>
             <div className="space-y-1.5">
-              <Label className="text-xs text-muted-foreground">Phòng</Label>
+              <Label className="text-xs text-muted-foreground">{t('detail.sidebar.department')}</Label>
               <select value={machineTypeId} onChange={(e) => setMachineTypeId(e.target.value)} className={selectCls}>
-                {!machineTypeId && <option value="">— Chưa chọn —</option>}
+                {!machineTypeId && <option value="">{t('detail.notSelected')}</option>}
                 {machineTypes.map((m) => (
                   <option key={m._id} value={m._id}>
                     {m.shortName}
@@ -800,9 +813,9 @@ export default function ProductDetailPage() {
 
           <div className="grid grid-cols-2 gap-2">
             <div className="space-y-1.5">
-              <Label className="text-xs text-muted-foreground">Loại vải</Label>
+              <Label className="text-xs text-muted-foreground">{t('detail.sidebar.fabricType')}</Label>
               <select value={fabricType} onChange={(e) => setFabricType(e.target.value)} className={selectCls}>
-                <option value="">— Chưa chọn —</option>
+                <option value="">{t('detail.notSelected')}</option>
                 {fabricOptions.map((opt) => (
                   <option key={opt.code} value={opt.code}>
                     {opt.name}
@@ -811,9 +824,9 @@ export default function ProductDetailPage() {
               </select>
             </div>
             <div className="space-y-1.5">
-              <Label className="text-xs text-muted-foreground">Kết quả Tool</Label>
+              <Label className="text-xs text-muted-foreground">{t('detail.sidebar.toolResult')}</Label>
               <select value={toolResult} onChange={(e) => setToolResult(e.target.value)} className={selectCls}>
-                <option value="">— Chưa chọn —</option>
+                <option value="">{t('detail.notSelected')}</option>
                 {toolOptions.map((opt) => (
                   <option key={opt.code} value={opt.code}>
                     {opt.name}
@@ -826,11 +839,11 @@ export default function ProductDetailPage() {
           <Separator />
 
           <div className="space-y-1.5">
-            <Label className="text-xs text-muted-foreground">Ghi chú / hướng dẫn</Label>
+            <Label className="text-xs text-muted-foreground">{t('detail.sidebar.guide')}</Label>
             <Textarea
               value={guide}
               onChange={(e) => setGuide(e.target.value)}
-              placeholder="Hướng dẫn / ghi chú sản phẩm…"
+              placeholder={t('detail.sidebar.guidePlaceholder')}
               rows={3}
               className="text-sm"
             />
@@ -841,22 +854,22 @@ export default function ProductDetailPage() {
         <div className="rounded-lg border border-border bg-card p-4 md:p-5">
           <Tabs defaultValue="detail">
             <TabsList>
-              <TabsTrigger value="detail">Chi tiết sản phẩm</TabsTrigger>
-              <TabsTrigger value="variations">Biến thể ({variations.length})</TabsTrigger>
+              <TabsTrigger value="detail">{t('detail.tabs.detail')}</TabsTrigger>
+              <TabsTrigger value="variations">{t('detail.tabs.variations', { count: variations.length })}</TabsTrigger>
             </TabsList>
 
             <TabsContent value="detail" className="space-y-5 pt-1">
               <section className="space-y-3">
-                <h3 className="text-sm font-semibold text-foreground">Phân loại</h3>
+                <h3 className="text-sm font-semibold text-foreground">{t('detail.classification.title')}</h3>
                 <div className="grid grid-cols-2 gap-3">
                   <div className="space-y-1.5">
-                    <Label className="text-xs text-muted-foreground">Danh mục sản phẩm</Label>
+                    <Label className="text-xs text-muted-foreground">{t('detail.classification.productCategory')}</Label>
                     <select
                       value={productCategoryId}
                       onChange={(e) => setProductCategoryId(e.target.value)}
                       className={selectCls}
                     >
-                      <option value="">— Chưa chọn —</option>
+                      <option value="">{t('detail.notSelected')}</option>
                       {sortCategoryTree(productCategoryOptions).map((opt) => (
                         <option key={opt._id} value={opt._id}>
                           {'—'.repeat(opt.depth)} {opt.shortName} · {opt.name}
@@ -865,9 +878,9 @@ export default function ProductDetailPage() {
                     </select>
                   </div>
                   <div className="space-y-1.5">
-                    <Label className="text-xs text-muted-foreground">Phương pháp in</Label>
+                    <Label className="text-xs text-muted-foreground">{t('detail.classification.printMethod')}</Label>
                     <select value={printMethod} onChange={(e) => setPrintMethod(e.target.value)} className={selectCls}>
-                      <option value="">— Chưa chọn —</option>
+                      <option value="">{t('detail.notSelected')}</option>
                       {printMethodOptions.map((opt) => (
                         <option key={opt.code} value={opt.code}>
                           {opt.name}
@@ -881,12 +894,15 @@ export default function ProductDetailPage() {
               <Separator />
 
               <section className="space-y-3">
-                <h3 className="text-sm font-semibold text-foreground">Hiển thị cho khách hàng</h3>
+                <h3 className="text-sm font-semibold text-foreground">{t('detail.customerDisplay.title')}</h3>
                 <div className="space-y-1.5">
-                  <Label className="text-xs text-muted-foreground">Vị trí in</Label>
+                  <Label className="text-xs text-muted-foreground">{t('detail.customerDisplay.printArea')}</Label>
                   <p className="text-xs text-muted-foreground">
-                    Chọn các vị trí sản phẩm này hỗ trợ in — danh mục cố định, map 1-1 sang{' '}
-                    <span className="font-mono">order.designs</span> để API khách hàng xác định đúng vị trí thiết kế.
+                    <Trans
+                      t={t}
+                      i18nKey="detail.customerDisplay.printAreaHint"
+                      components={{ code: <span className="font-mono">order.designs</span> }}
+                    />
                   </p>
                   <div className="grid grid-cols-2 sm:grid-cols-3 gap-x-3 gap-y-2 rounded-md border border-border p-3">
                     {PRODUCT_PRINT_AREAS.map((pa) => (
@@ -897,13 +913,13 @@ export default function ProductDetailPage() {
                           onChange={(e) => togglePrintArea(pa.key, e.target.checked)}
                           className="rounded border-input"
                         />
-                        {pa.label}
+                        {t(`printAreas.${pa.key}`, { defaultValue: pa.label })}
                       </label>
                     ))}
                   </div>
                 </div>
                 <div className="space-y-1.5">
-                  <Label className="text-xs text-muted-foreground">Bảng size</Label>
+                  <Label className="text-xs text-muted-foreground">{t('detail.customerDisplay.sizeChart')}</Label>
                   <div className="max-w-[220px]">
                     <ImageUploadField
                       value={sizeChartUrl}
@@ -914,11 +930,11 @@ export default function ProductDetailPage() {
                   </div>
                 </div>
                 <div className="space-y-1.5">
-                  <Label className="text-xs text-muted-foreground">Mô tả sản phẩm</Label>
+                  <Label className="text-xs text-muted-foreground">{t('detail.customerDisplay.description')}</Label>
                   <Textarea
                     value={description}
                     onChange={(e) => setDescription(e.target.value)}
-                    placeholder="Mô tả sản phẩm…"
+                    placeholder={t('detail.customerDisplay.descriptionPlaceholder')}
                     rows={3}
                   />
                 </div>
@@ -927,22 +943,22 @@ export default function ProductDetailPage() {
               <Separator />
 
               <section className="space-y-3">
-                <h3 className="text-sm font-semibold text-foreground">Đóng gói mặc định</h3>
+                <h3 className="text-sm font-semibold text-foreground">{t('detail.packaging.title')}</h3>
                 <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
                   <div className="space-y-1.5">
-                    <Label className="text-xs text-muted-foreground">Khối lượng (g)</Label>
+                    <Label className="text-xs text-muted-foreground">{t('detail.packaging.weight')}</Label>
                     <Input type="number" min={0} value={weight} onChange={(e) => setWeight(e.target.value)} />
                   </div>
                   <div className="space-y-1.5">
-                    <Label className="text-xs text-muted-foreground">Rộng (cm)</Label>
+                    <Label className="text-xs text-muted-foreground">{t('detail.packaging.width')}</Label>
                     <Input type="number" min={0} value={width} onChange={(e) => setWidth(e.target.value)} />
                   </div>
                   <div className="space-y-1.5">
-                    <Label className="text-xs text-muted-foreground">Cao (cm)</Label>
+                    <Label className="text-xs text-muted-foreground">{t('detail.packaging.height')}</Label>
                     <Input type="number" min={0} value={height} onChange={(e) => setHeight(e.target.value)} />
                   </div>
                   <div className="space-y-1.5">
-                    <Label className="text-xs text-muted-foreground">Dài (cm)</Label>
+                    <Label className="text-xs text-muted-foreground">{t('detail.packaging.length')}</Label>
                     <Input type="number" min={0} value={length} onChange={(e) => setLength(e.target.value)} />
                   </div>
                 </div>
@@ -952,13 +968,13 @@ export default function ProductDetailPage() {
 
               <section className="space-y-3">
                 <div className="flex items-center justify-between">
-                  <h3 className="text-sm font-semibold text-foreground">Thông số kỹ thuật</h3>
+                  <h3 className="text-sm font-semibold text-foreground">{t('detail.itemSpecifics.title')}</h3>
                   <Button
                     variant="outline"
                     size="sm"
                     onClick={() => setItemSpecifics((prev) => [...prev, { label: '', value: '' }])}
                   >
-                    <Plus size={14} /> Thêm dòng
+                    <Plus size={14} /> {t('detail.itemSpecifics.addRow')}
                   </Button>
                 </div>
                 <div className="space-y-2">
@@ -967,13 +983,13 @@ export default function ProductDetailPage() {
                       <Input
                         value={s.label}
                         onChange={(e) => updateSpecific(idx, { label: e.target.value })}
-                        placeholder="VD: Chất liệu"
+                        placeholder={t('detail.itemSpecifics.labelPlaceholder')}
                         className="flex-1"
                       />
                       <Input
                         value={s.value}
                         onChange={(e) => updateSpecific(idx, { value: e.target.value })}
-                        placeholder="VD: Cotton 100%"
+                        placeholder={t('detail.itemSpecifics.valuePlaceholder')}
                         className="flex-1"
                       />
                       <Button variant="ghost" size="icon" onClick={() => removeSpecific(idx)}>
@@ -982,7 +998,7 @@ export default function ProductDetailPage() {
                     </div>
                   ))}
                   {itemSpecifics.length === 0 && (
-                    <p className="text-xs text-muted-foreground">Chưa có thông số nào.</p>
+                    <p className="text-xs text-muted-foreground">{t('detail.itemSpecifics.empty')}</p>
                   )}
                 </div>
               </section>
@@ -991,31 +1007,30 @@ export default function ProductDetailPage() {
             <TabsContent value="variations" className="space-y-3 pt-1">
               <div className="flex items-center justify-between gap-3">
                 <p className="text-xs text-muted-foreground">
-                  SKU biến thể tự sinh theo <span className="font-mono">{'{SKU sản phẩm}-{thuộc tính}'}</span>, duy
-                  nhất trên toàn hệ thống.
-                  {!sku.trim() && (
-                    <span className="text-amber-600"> Sản phẩm chưa có SKU — nên đặt SKU sản phẩm ở header để tránh trùng.</span>
-                  )}
+                  {t('detail.variations.skuHintPrefix')}{' '}
+                  <span className="font-mono">{t('detail.variations.skuFormat')}</span>
+                  {t('detail.variations.skuHintSuffix')}
+                  {!sku.trim() && <span className="text-amber-600"> {t('detail.variations.noSkuWarning')}</span>}
                 </p>
                 <div className="flex items-center gap-2 shrink-0">
                   <BulkGenerateVariantsPopover
                     onGenerate={(rows) => setVariations((prev) => [...prev, ...rows])}
                   />
                   <Button variant="outline" size="sm" onClick={() => setVariations((prev) => [...prev, emptyVariation()])}>
-                    <Plus size={14} /> Thêm biến thể
+                    <Plus size={14} /> {t('detail.variations.addVariation')}
                   </Button>
                 </div>
               </div>
 
               {variations.length > 0 && (
                 <div className="flex items-center gap-2 rounded-md border border-dashed border-border p-2.5">
-                  <span className="text-xs text-muted-foreground shrink-0">Nhập nhanh giá cho tất cả:</span>
+                  <span className="text-xs text-muted-foreground shrink-0">{t('detail.variations.bulkPriceLabel')}</span>
                   <Input
                     type="number"
                     min={0}
                     value={bulkCost}
                     onChange={(e) => setBulkCost(e.target.value)}
-                    placeholder="Giá vốn"
+                    placeholder={t('detail.variations.cost')}
                     className="h-8 text-xs"
                   />
                   <Input
@@ -1023,7 +1038,7 @@ export default function ProductDetailPage() {
                     min={0}
                     value={bulkNonShipCost}
                     onChange={(e) => setBulkNonShipCost(e.target.value)}
-                    placeholder="Vốn (ko ship)"
+                    placeholder={t('detail.variations.nonShipCost')}
                     className="h-8 text-xs"
                   />
                   <Input
@@ -1031,11 +1046,11 @@ export default function ProductDetailPage() {
                     min={0}
                     value={bulkRetailPrice}
                     onChange={(e) => setBulkRetailPrice(e.target.value)}
-                    placeholder="Giá bán"
+                    placeholder={t('detail.variations.retailPrice')}
                     className="h-8 text-xs"
                   />
                   <Button variant="outline" size="sm" className="shrink-0" onClick={applyBulkPrice}>
-                    Áp dụng cho {variations.length} biến thể
+                    {t('detail.variations.applyToCount', { count: variations.length })}
                   </Button>
                 </div>
               )}
@@ -1045,11 +1060,11 @@ export default function ProductDetailPage() {
                   <TableHeader>
                     <TableRow>
                       <TableHead className="min-w-[130px]">SKU</TableHead>
-                      <TableHead className="min-w-[180px]">Thuộc tính</TableHead>
-                      <TableHead className="min-w-[100px]">Giá vốn</TableHead>
-                      <TableHead className="min-w-[110px]">Vốn (ko ship)</TableHead>
-                      <TableHead className="min-w-[100px]">Giá bán</TableHead>
-                      <TableHead className="min-w-[110px]">Trạng thái</TableHead>
+                      <TableHead className="min-w-[180px]">{t('detail.variations.attributes')}</TableHead>
+                      <TableHead className="min-w-[100px]">{t('detail.variations.cost')}</TableHead>
+                      <TableHead className="min-w-[110px]">{t('detail.variations.nonShipCost')}</TableHead>
+                      <TableHead className="min-w-[100px]">{t('detail.variations.retailPrice')}</TableHead>
+                      <TableHead className="min-w-[110px]">{t('detail.variations.status')}</TableHead>
                       <TableHead className="w-10"></TableHead>
                     </TableRow>
                   </TableHeader>
@@ -1057,7 +1072,7 @@ export default function ProductDetailPage() {
                     {variations.length === 0 && (
                       <TableRow>
                         <TableCell colSpan={7} className="text-center py-6 text-muted-foreground">
-                          Chưa có biến thể nào.
+                          {t('detail.variations.empty')}
                         </TableCell>
                       </TableRow>
                     )}
@@ -1066,10 +1081,10 @@ export default function ProductDetailPage() {
                         <TableCell>
                           <div
                             className="h-8 flex items-center px-2 rounded-md border border-dashed border-border bg-muted/40 font-mono text-xs text-muted-foreground truncate"
-                            title="SKU tự sinh theo SKU sản phẩm + thuộc tính biến thể — không sửa trực tiếp được ở đây (chỉnh trong database nếu cần khác quy ước)"
+                            title={t('detail.variations.skuGeneratedTitle')}
                           >
                             {v.sku.trim() || computeVariationSku(sku, v.attributes || []) || (
-                              <span className="italic">thiếu SKU sản phẩm / thuộc tính</span>
+                              <span className="italic">{t('detail.variations.skuMissing')}</span>
                             )}
                           </div>
                         </TableCell>
@@ -1119,7 +1134,7 @@ export default function ProductDetailPage() {
                               }
                             />
                             <Badge variant={v.status === Status.Active ? 'secondary' : 'outline'} className="font-normal">
-                              {v.status === Status.Active ? 'Đang bán' : 'Ngừng'}
+                              {v.status === Status.Active ? t('detail.variations.selling') : t('detail.variations.stopped')}
                             </Badge>
                           </div>
                         </TableCell>

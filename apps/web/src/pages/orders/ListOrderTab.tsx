@@ -1,4 +1,5 @@
 import React, { memo, useCallback, useEffect, useState } from 'react';
+import { useTranslation } from 'react-i18next';
 import { useSearchParams } from 'react-router-dom';
 import { History, Image as ImageIcon, ListChecks, Trash2, X } from 'lucide-react';
 import { toast } from 'sonner';
@@ -114,6 +115,7 @@ const OrderRowItem = memo(
     canEditPriority,
     onPriorityUpdated,
   }: OrderRowItemProps) {
+    const { t } = useTranslation('orders');
     const variantBits = [it.color, it.size, it.printMethod].filter(Boolean);
     const mockupThumbSrc = smallThumb(it.mockupUrl, 200);
     const cancelled = isCancelled(it);
@@ -135,7 +137,7 @@ const OrderRowItem = memo(
             {it.orderId && (
               <div className="flex items-center gap-1">
                 <CopyButton value={it.orderId} label="Order ID" iconSize={10} />
-                <Hint content="Order ID — mã đơn hàng">
+                <Hint content={t('listTab.orderIdHint')}>
                   <span className="font-mono text-[11px] text-muted-foreground cursor-help">#{it.orderId}</span>
                 </Hint>
               </div>
@@ -151,7 +153,7 @@ const OrderRowItem = memo(
               </div>
             )}
             {it.orderAt && (
-              <Hint content={`Khách lên đơn: ${formatDate(it.orderAt, 'HH:mm DD/MM/YYYY')}`}>
+              <Hint content={t('listTab.orderedAtHint', { time: formatDate(it.orderAt, 'HH:mm DD/MM/YYYY') })}>
                 <span className="text-[10px] text-muted-foreground inline-flex items-center gap-1 cursor-help">
                   <span className="opacity-60">🛒</span>
                   {formatDate(it.orderAt, 'HH:mm DD/MM/YYYY')}
@@ -164,7 +166,7 @@ const OrderRowItem = memo(
         {/* Mockup */}
         <TableCell>
           {it.mockupUrl ? (
-            <Hint content="Click để xem ảnh đầy đủ">
+            <Hint content={t('listTab.clickToViewFullImage')}>
               <button
                 type="button"
                 onClick={() => onPreview(it.mockupUrl!, `Mockup — ${it.productionId}`, it.mockupOriginalUrl)}
@@ -206,8 +208,8 @@ const OrderRowItem = memo(
         <TableCell className="max-w-[300px]">
           <div className="flex flex-col gap-0.5">
             <div className="flex items-center gap-1 min-w-0">
-              {it.type && <CopyButton value={it.type} label="tên sản phẩm" />}
-              <Hint content={it.type || 'Chưa có tên sản phẩm'}>
+              {it.type && <CopyButton value={it.type} label={t('listTab.productName')} />}
+              <Hint content={it.type || t('listTab.noProductName')}>
                 <span className="text-sm font-semibold text-foreground truncate cursor-help min-w-0">
                   {it.type || '—'}
                 </span>
@@ -219,20 +221,20 @@ const OrderRowItem = memo(
               </Hint>
             )}
             <span className="text-[11px] text-muted-foreground flex items-center gap-1 flex-wrap">
-              <Hint content="Số lượng">
+              <Hint content={t('listTab.quantity')}>
                 <span className="cursor-help">
                   Qty: <span className="font-medium text-foreground">{it.quantity ?? 1}</span>
                 </span>
               </Hint>
               {typeof it.baseCost === 'number' && (
-                <Hint content="Base cost — giá gốc sản phẩm">
+                <Hint content={t('listTab.baseCostHint')}>
                   <span className="cursor-help">
                     · Base: <span className="font-medium text-foreground">${it.baseCost}</span>
                   </span>
                 </Hint>
               )}
               {typeof it.shipCost === 'number' && (
-                <Hint content="Ship cost — phí vận chuyển">
+                <Hint content={t('listTab.shipCostHint')}>
                   <span className="cursor-help">
                     · Ship: <span className="font-medium text-foreground">${it.shipCost}</span>
                   </span>
@@ -248,7 +250,7 @@ const OrderRowItem = memo(
             {it.userSku ? (
               <div className="flex items-center gap-1">
                 <CopyButton value={it.userSku} label="SKU" iconSize={10} />
-                <Hint content="User SKU — mã khách hàng">
+                <Hint content={t('listTab.userSkuHint')}>
                   <span className="text-xs font-medium cursor-help">{it.userSku}</span>
                 </Hint>
               </div>
@@ -272,21 +274,21 @@ const OrderRowItem = memo(
         <TableCell>
           {it.isMapped ? (
             <div className="flex flex-col gap-1">
-              <Hint content={`Xưởng: ${it.factory?.name} (mã: ${it.factory?.shortName})`}>
+              <Hint content={t('listTab.factoryHint', { name: it.factory?.name, code: it.factory?.shortName })}>
                 <Badge variant="success" className="w-fit cursor-help">
                   {it.factory?.shortName || '?'} · {it.factory?.name || '?'}
                 </Badge>
               </Hint>
-              <Hint content={`Loại máy: ${it.machineType?.name} (mã: ${it.machineType?.shortName})`}>
+              <Hint content={t('listTab.machineTypeHint', { name: it.machineType?.name, code: it.machineType?.shortName })}>
                 <Badge variant="secondary" className="w-fit cursor-help">
                   {it.machineType?.shortName || '?'} · {it.machineType?.name || '?'}
                 </Badge>
               </Hint>
             </div>
           ) : (
-            <Hint content="Type của order không match với product config nào — chưa xác định được xưởng/máy">
+            <Hint content={t('workshopCols.misc.noMappingHint')}>
               <Badge variant="warning" className="cursor-help">
-                Chưa mapping
+                {t('workshopCols.misc.noMapping')}
               </Badge>
             </Hint>
           )}
@@ -295,7 +297,7 @@ const OrderRowItem = memo(
         {/* Status */}
         <TableCell>
           {it.status ? (
-            <Hint content={`Trạng thái production: ${it.status}`}>
+            <Hint content={t('listTab.statusHint', { status: it.status })}>
               <Badge variant="outline" className="cursor-help">
                 {it.status}
               </Badge>
@@ -318,12 +320,12 @@ const OrderRowItem = memo(
         {/* Thao tác — pin cố định BÊN PHẢI */}
         <TableCell className="sticky right-0 z-10 bg-card shadow-[-1px_0_0_0_var(--border)]">
           <div className="flex items-center gap-0.5">
-            <Hint content="Lịch sử thay đổi">
+            <Hint content={t('listTab.history')}>
               <Button variant="ghost" size="icon" onClick={() => onHistory(it._id, it.productionId)}>
                 <History size={14} className="text-muted-foreground" />
               </Button>
             </Hint>
-            <Hint content="Xoá order này">
+            <Hint content={t('listTab.deleteOrder')}>
               <Button variant="ghost" size="icon" onClick={() => onDelete(it._id)}>
                 <Trash2 size={14} className="text-destructive" />
               </Button>
@@ -343,6 +345,7 @@ const OrderRowItem = memo(
 );
 
 export function ListOrderTab({ refreshKey }: ListOrderTabProps) {
+  const { t } = useTranslation('orders');
   // URL params (prefix `l` = list). F5 giữ nguyên filter — default values
   // bị strip khỏi URL để URL gọn khi chưa filter gì.
   const [searchParams, setSearchParams] = useSearchParams();
@@ -481,10 +484,10 @@ export function ListOrderTab({ refreshKey }: ListOrderTabProps) {
 
   const handleDelete = useCallback(
     async (id: string) => {
-      if (!confirm('Xoá order này?')) return;
+      if (!confirm(t('listTab.confirmDelete'))) return;
       try {
         await RepositoryRemote.order.deleteOrder(id);
-        toast.success('Đã xoá');
+        toast.success(t('listTab.deleted'));
         fetchData();
       } catch (error) {
         handleAxiosError(error);
@@ -531,7 +534,7 @@ export function ListOrderTab({ refreshKey }: ListOrderTabProps) {
   const assigneeOptions = canSeeDesignerSummary
     ? filterOptions.assignee.find((o) => o.value === '__none__')
       ? filterOptions.assignee
-      : [{ value: '__none__', label: 'Chưa gán', count: 0 }, ...filterOptions.assignee]
+      : [{ value: '__none__', label: t('listTab.unassigned'), count: 0 }, ...filterOptions.assignee]
     : [];
 
   const summaryFilterQs = buildFilterParams().toString();
@@ -569,7 +572,7 @@ export function ListOrderTab({ refreshKey }: ListOrderTabProps) {
           <div className="flex items-center gap-2">
             <div className="relative">
               <Input
-                placeholder="Tìm Production ID, Order ID, SKU, email… (dán nhiều mã cách nhau bằng phẩy/khoảng trắng)"
+                placeholder={t('listTab.searchPlaceholder')}
                 value={search}
                 onChange={(e) => setSearch(e.target.value)}
                 onKeyDown={(e) => e.key === 'Enter' && handleSearch()}
@@ -589,18 +592,18 @@ export function ListOrderTab({ refreshKey }: ListOrderTabProps) {
               />
               {searchTokenCount > 1 && (
                 <span className="absolute right-2 top-1/2 -translate-y-1/2 text-[11px] font-medium text-primary pointer-events-none">
-                  {searchTokenCount} mã
+                  {t('listTab.tokenCount', { count: searchTokenCount })}
                 </span>
               )}
             </div>
-            <Hint content="Tìm nhiều Production ID cùng lúc">
+            <Hint content={t('listTab.searchMultipleProductionIds')}>
               <Button variant="outline" size="icon" onClick={() => setBulkOpen(true)}>
                 <ListChecks size={16} />
               </Button>
             </Hint>
             {bulkIds.length > 0 && (
               <Badge variant="secondary" className="gap-1 cursor-default">
-                Đang lọc {bulkIds.length} mã
+                {t('listTab.filteringCount', { count: bulkIds.length })}
                 <button type="button" onClick={() => setBulkIds([])} className="ml-0.5 hover:text-foreground">
                   <X size={12} />
                 </button>
@@ -613,29 +616,29 @@ export function ListOrderTab({ refreshKey }: ListOrderTabProps) {
               size="sm"
               onClick={() => setFilterMapped('all')}
             >
-              Tất cả
+              {t('listTab.filterAll')}
             </Button>
             <Button
               variant={filterMapped === 'mapped' ? 'default' : 'outline'}
               size="sm"
               onClick={() => setFilterMapped('mapped')}
             >
-              Đã mapping
+              {t('listTab.filterMapped')}
             </Button>
             <Button
               variant={filterMapped === 'unmapped' ? 'default' : 'outline'}
               size="sm"
               onClick={() => setFilterMapped('unmapped')}
             >
-              Chưa mapping
+              {t('workshopCols.misc.noMapping')}
             </Button>
             <Button
               variant={filterError ? 'destructive' : 'outline'}
               size="sm"
               onClick={() => setFilterError((v) => !v)}
-              title="Chỉ hiện đơn xưởng đã báo lỗi"
+              title={t('listTab.factoryErrorOnlyTitle')}
             >
-              Lỗi xưởng
+              {t('listTab.factoryError')}
             </Button>
           </div>
         </div>
@@ -664,7 +667,7 @@ export function ListOrderTab({ refreshKey }: ListOrderTabProps) {
                     setFilterDesignerStatus('');
                   }}
                 >
-                  Xoá filter designer
+                  {t('listTab.clearDesignerFilter')}
                 </Button>
               </div>
             )}
@@ -682,9 +685,9 @@ export function ListOrderTab({ refreshKey }: ListOrderTabProps) {
                 {/* [R2-disabled] <TableHead className="min-w-[110px]">Design</TableHead> */}
                 <TableHead className="min-w-[260px]">Product</TableHead>
                 <TableHead>SKU / Email</TableHead>
-                <TableHead>Xưởng / Máy</TableHead>
+                <TableHead>{t('listTab.factoryMachine')}</TableHead>
                 <TableHead>Status</TableHead>
-                <TableHead>Ưu tiên</TableHead>
+                <TableHead>{t('workshopCols.col.priority')}</TableHead>
                 <TableHead className="w-24 sticky right-0 z-20 bg-card"></TableHead>
               </TableRow>
             </TableHeader>
@@ -699,7 +702,7 @@ export function ListOrderTab({ refreshKey }: ListOrderTabProps) {
               {!loading && items.length === 0 && (
                 <TableRow>
                   <TableCell colSpan={8} className="text-center py-10 text-muted-foreground text-sm">
-                    Chưa có order nào. Sang tab "Import Order" để thêm.
+                    {t('listTab.emptyState')}
                   </TableCell>
                 </TableRow>
               )}

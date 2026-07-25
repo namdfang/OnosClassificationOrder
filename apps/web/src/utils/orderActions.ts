@@ -1,3 +1,5 @@
+import type { TFunction } from 'i18next';
+
 /**
  * Đơn tối thiểu cần để quyết định quyền hủy. Khớp `WorkshopOrderRow` (+ mọi row
  * order khác) — chỉ đọc các field liên quan.
@@ -39,7 +41,7 @@ export const canUserHold = (roleName?: string): boolean =>
  * Admin được hủy đơn ở **BẤT KỲ trạng thái nào** (đã in/ép/may/rework…) — chỉ
  * chặn đơn ĐÃ hủy sẵn (không hủy 2 lần). Action đã Admin-only ở BE.
  */
-export function canCancelOrder(o: CancellableOrder): { ok: boolean; reason?: string } {
-  if (o.cancelledAt) return { ok: false, reason: 'Đơn đã hủy.' };
+export function canCancelOrder(o: CancellableOrder, t?: TFunction<'orders'>): { ok: boolean; reason?: string } {
+  if (o.cancelledAt) return { ok: false, reason: t ? t('orderActions.alreadyCancelled') : 'Đơn đã hủy.' };
   return { ok: true };
 }

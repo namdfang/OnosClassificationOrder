@@ -1,4 +1,5 @@
 import React, { useEffect, useMemo, useState } from 'react';
+import { useTranslation } from 'react-i18next';
 import type { LucideIcon } from 'lucide-react';
 import {
   AlertTriangle,
@@ -54,6 +55,7 @@ const ICONS: Record<KpiKey, LucideIcon> = {
 };
 
 export default function OrderStatusTab() {
+  const { t } = useTranslation('dashboard');
   const { roleName, isAdmin, has, canViewField } = usePermission();
   const { filter, queryString, isActive, toggle, setScalar, setHasError, clearAll } = useStatusFilter();
   const [search, setSearchLocal] = useState<string>(filter.search || '');
@@ -96,39 +98,39 @@ export default function OrderStatusTab() {
 
   // ─── KPI cards per role ───────────────────────────────────────
   const kpis = useMemo(() => {
-    const t = overview?.totals;
-    if (!t) return [];
+    const totals = overview?.totals;
+    if (!totals) return [];
 
     if (roleName === 'Designer') {
       return [
         {
           key: 'designerQueue' as KpiKey,
-          label: 'Cần check',
-          value: t.pendingToolOk,
-          hint: 'Đơn chưa Ok',
+          label: t('statusTab.kpi.needCheck'),
+          value: totals.pendingToolOk,
+          hint: t('statusTab.kpi.notOkYet'),
           accent: 'warning' as const,
           icon: ICONS.designerQueue,
         },
         {
           key: 'designerDone' as KpiKey,
-          label: 'Ok hôm nay',
-          value: t.today - t.pendingToolOk > 0 ? t.today - t.pendingToolOk : 0,
-          hint: 'Đã đánh dấu Ok',
+          label: t('statusTab.kpi.okToday'),
+          value: totals.today - totals.pendingToolOk > 0 ? totals.today - totals.pendingToolOk : 0,
+          hint: t('statusTab.kpi.markedOk'),
           accent: 'success' as const,
           icon: ICONS.designerDone,
         },
         {
           key: 'errors' as KpiKey,
-          label: 'Đơn lỗi',
-          value: t.errors,
-          hint: 'Cần xử lý',
+          label: t('statusTab.kpi.errorOrders'),
+          value: totals.errors,
+          hint: t('statusTab.kpi.needsHandling'),
           accent: 'danger' as const,
           icon: ICONS.errors,
         },
         {
           key: 'total' as KpiKey,
-          label: 'Tổng (range)',
-          value: t.total,
+          label: t('statusTab.kpi.totalRange'),
+          value: totals.total,
           accent: 'default' as const,
           icon: ICONS.total,
         },
@@ -139,25 +141,31 @@ export default function OrderStatusTab() {
       return [
         {
           key: 'fulfillReady' as KpiKey,
-          label: 'Sẵn sàng in',
-          value: t.readyForFulfill,
+          label: t('statusTab.kpi.readyToPrint'),
+          value: totals.readyForFulfill,
           hint: 'readyForFulfill=true',
           accent: 'primary' as const,
           icon: ICONS.fulfillReady,
         },
         {
           key: 'done' as KpiKey,
-          label: 'Đã in xong',
-          value: t.done,
-          hint: 'In trên máy 1..94',
+          label: t('statusTab.kpi.printed'),
+          value: totals.done,
+          hint: t('statusTab.kpi.printedOnMachines'),
           accent: 'success' as const,
           icon: ICONS.done,
         },
-        { key: 'today' as KpiKey, label: 'Đơn hôm nay', value: t.today, accent: 'default' as const, icon: ICONS.today },
+        {
+          key: 'today' as KpiKey,
+          label: t('statusTab.kpi.ordersToday'),
+          value: totals.today,
+          accent: 'default' as const,
+          icon: ICONS.today,
+        },
         {
           key: 'total' as KpiKey,
-          label: 'Tổng (range)',
-          value: t.total,
+          label: t('statusTab.kpi.totalRange'),
+          value: totals.total,
           accent: 'default' as const,
           icon: ICONS.total,
         },
@@ -166,33 +174,45 @@ export default function OrderStatusTab() {
 
     // Admin / Manager / Support
     return [
-      { key: 'total' as KpiKey, label: 'Tổng đơn', value: t.total, accent: 'default' as const, icon: ICONS.total },
+      {
+        key: 'total' as KpiKey,
+        label: t('statusTab.kpi.totalOrders'),
+        value: totals.total,
+        accent: 'default' as const,
+        icon: ICONS.total,
+      },
       // { key: 'today' as KpiKey, label: 'Hôm nay', value: t.today, accent: 'primary' as const, icon: ICONS.today },
       {
         key: 'pendingToolOk' as KpiKey,
-        label: 'Chờ Ok Tool',
-        value: t.pendingToolOk,
-        hint: 'Designer chưa check',
+        label: t('statusTab.kpi.waitingToolOk'),
+        value: totals.pendingToolOk,
+        hint: t('statusTab.kpi.designerNotChecked'),
         accent: 'warning' as const,
         icon: ICONS.pendingToolOk,
       },
       {
         key: 'ready' as KpiKey,
-        label: 'Sẵn sàng in',
-        value: t.readyForFulfill,
+        label: t('statusTab.kpi.readyToPrint'),
+        value: totals.readyForFulfill,
         accent: 'primary' as const,
         icon: ICONS.ready,
       },
-      { key: 'done' as KpiKey, label: 'Đã in xong', value: t.done, accent: 'success' as const, icon: ICONS.done },
+      {
+        key: 'done' as KpiKey,
+        label: t('statusTab.kpi.printed'),
+        value: totals.done,
+        accent: 'success' as const,
+        icon: ICONS.done,
+      },
       {
         key: 'errors' as KpiKey,
-        label: 'Lỗi cần xử lý',
-        value: t.errors,
+        label: t('statusTab.kpi.errorsNeedHandling'),
+        value: totals.errors,
         accent: 'danger' as const,
         icon: ICONS.errors,
       },
     ];
-  }, [overview, roleName]);
+  }, [overview, roleName, t]);
 
   // ─── Per-machine mini KPI for Fulfillment ─────────────────────
   const showMachineKpis = roleName === 'Fulfillment' && (overview?.totals.byMachine?.length || 0) > 0;
@@ -246,7 +266,7 @@ export default function OrderStatusTab() {
               // appearing blank.
               <KpiCard
                 key={`__skeleton-${i}`}
-                label={loading ? 'Đang tải...' : 'Chưa có dữ liệu'}
+                label={loading ? t('statusTab.loading') : t('statusTab.noData')}
                 value={0}
                 accent="default"
                 loading={loading}
@@ -278,9 +298,9 @@ export default function OrderStatusTab() {
         onSearchChange={setSearchLocal}
         createdFrom={filter.createdFrom}
         createdTo={filter.createdTo}
-        onDateRangeChange={(f, t) => {
+        onDateRangeChange={(f, t2) => {
           setScalar('createdFrom', f || undefined);
-          setScalar('createdTo', t || undefined);
+          setScalar('createdTo', t2 || undefined);
         }}
         onReload={fetchOverview}
         loading={loading}
@@ -308,7 +328,7 @@ export default function OrderStatusTab() {
         >
           {showPrintStatus && overview.breakdown.printStatus.length > 0 && (
             <BreakdownCard
-              title="Trạng thái in"
+              title={t('statusFilter.category.printStatus')}
               items={overview.breakdown.printStatus}
               selectedCodes={filter.printStatus}
               onToggle={(c) => toggle('printStatus', c)}
@@ -317,7 +337,7 @@ export default function OrderStatusTab() {
           )}
           {showPrintNote && overview.breakdown.printStatusNote.length > 0 && (
             <BreakdownCard
-              title="Note Trạng thái in"
+              title={t('statusFilter.category.printStatusNote')}
               items={overview.breakdown.printStatusNote}
               selectedCodes={filter.printStatusNote}
               onToggle={(c) => toggle('printStatusNote', c)}
@@ -326,7 +346,7 @@ export default function OrderStatusTab() {
           )}
           {showToolResult && overview.breakdown.toolResult.length > 0 && (
             <BreakdownCard
-              title="Kết quả Tool"
+              title={t('statusFilter.category.toolResult')}
               items={overview.breakdown.toolResult}
               selectedCodes={filter.toolResult}
               onToggle={(c) => toggle('toolResult', c)}
@@ -335,7 +355,7 @@ export default function OrderStatusTab() {
           )}
           {showToolNote && overview.breakdown.toolResultNote.length > 0 && (
             <BreakdownCard
-              title="Note kết quả Tool"
+              title={t('statusFilter.category.toolResultNote')}
               items={overview.breakdown.toolResultNote}
               selectedCodes={filter.toolResultNote}
               onToggle={(c) => toggle('toolResultNote', c)}
@@ -344,7 +364,7 @@ export default function OrderStatusTab() {
           )}
           {showErrorFile && overview.breakdown.errorFile.length > 0 && (
             <BreakdownCard
-              title="File sửa lỗi"
+              title={t('statusFilter.category.errorFile')}
               items={overview.breakdown.errorFile}
               selectedCodes={filter.errorFile}
               onToggle={(c) => toggle('errorFile', c)}
@@ -353,7 +373,7 @@ export default function OrderStatusTab() {
           )}
           {showProductionError && overview.breakdown.productionError.length > 0 && (
             <BreakdownCard
-              title="Lỗi xưởng"
+              title={t('statusFilter.category.productionError')}
               items={overview.breakdown.productionError}
               selectedCodes={filter.productionError}
               onToggle={(c) => toggle('productionError', c)}
@@ -362,7 +382,7 @@ export default function OrderStatusTab() {
           )}
           {showAssignee && overview.breakdown.assignee.length > 0 && (
             <BreakdownCard
-              title="Người thực hiện"
+              title={t('statusFilter.category.assignee')}
               items={overview.breakdown.assignee}
               selectedCodes={filter.assignee}
               onToggle={(c) => toggle('assignee', c)}
@@ -371,7 +391,7 @@ export default function OrderStatusTab() {
           )}
           {showAssigneeNote && overview.breakdown.assigneeNote.length > 0 && (
             <BreakdownCard
-              title="Note người thực hiện"
+              title={t('statusFilter.category.assigneeNote')}
               items={overview.breakdown.assigneeNote}
               selectedCodes={filter.assigneeNote}
               onToggle={(c) => toggle('assigneeNote', c)}
@@ -382,7 +402,7 @@ export default function OrderStatusTab() {
           {/* Factory / MachineType — admin-level breakdowns */}
           {(isAdmin || has('order.view_admin_table')) && overview.breakdown.factory.length > 0 && (
             <BreakdownCard
-              title="Nhà máy"
+              title={t('statusTab.factory')}
               items={overview.breakdown.factory.map((f) => ({
                 code: f.factoryId,
                 name: f.name,
@@ -395,7 +415,7 @@ export default function OrderStatusTab() {
           )}
           {(isAdmin || has('order.view_admin_table')) && overview.breakdown.machineType.length > 0 && (
             <BreakdownCard
-              title="Loại máy"
+              title={t('statusTab.machineType')}
               items={overview.breakdown.machineType.map((m) => ({
                 code: m.machineTypeId,
                 name: m.name,

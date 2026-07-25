@@ -1,4 +1,6 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
+import { useTranslation } from 'react-i18next';
+import type { TFunction } from 'i18next';
 import { BarChart3, CalendarRange, ImageOff, Users, X } from 'lucide-react';
 import { Bar, BarChart, ResponsiveContainer, Tooltip as RTooltip, XAxis, YAxis } from 'recharts';
 import type { ProductBreakdownDesigner, TeamDailyCell, TeamDailyRow } from 'shared';
@@ -20,21 +22,23 @@ type RangeDays = 7 | 14 | 30;
 const RANGES: RangeDays[] = [7, 14, 30];
 
 // Bộ màu + nhãn 4 trạng thái — đồng bộ với ma trận (zinc/amber/indigo/emerald).
-const STATUS = [
-  { key: 'assigned', label: 'Cần làm', color: '#71717A' },
-  { key: 'rework', label: 'Cần làm lại', color: '#F59E0B' },
-  { key: 'inProgress', label: 'Đang làm', color: '#6366F1' },
-  { key: 'done', label: 'Đã xong', color: '#10B981' },
-] as const;
-const LABEL: Record<string, string> = Object.fromEntries(STATUS.map((s) => [s.key, s.label]));
+function buildStatus(t: TFunction<'dashboard'>) {
+  return [
+    { key: 'assigned', label: t('teamDailyMatrix.labels.assigned'), color: '#71717A' },
+    { key: 'rework', label: t('teamDailyMatrix.labels.needRework'), color: '#F59E0B' },
+    { key: 'inProgress', label: t('teamDailyMatrix.labels.inProgress'), color: '#6366F1' },
+    { key: 'done', label: t('teamDailyMatrix.labels.done'), color: '#10B981' },
+  ] as const;
+}
 
 // 2 hàng sự kiện bàn giao (chỉ panel 7 ngày, KHÔNG vào biểu đồ cột): đếm số LẦN
 // (khớp ma trận Tất cả designer theo ngày) — 1 đơn bàn giao nhiều lần đếm nhiều.
-const EVENT_ROWS = [
-  { key: 'rejected', label: 'Không làm được', color: '#F43F5E' },
-  { key: 'received', label: 'Nhận thêm', color: '#0EA5E9' },
-] as const;
-const PANEL_ROWS = [...STATUS, ...EVENT_ROWS] as const;
+function buildEventRows(t: TFunction<'dashboard'>) {
+  return [
+    { key: 'rejected', label: t('teamDailyMatrix.labels.rejected'), color: '#F43F5E' },
+    { key: 'received', label: t('statusBarCharts.receivedExtra'), color: '#0EA5E9' },
+  ] as const;
+}
 
 // key hàng → giá trị designerStatus trong DB (inProgress khác 'in-progress').
 const STATUS_DB: Record<string, string> = {
@@ -83,6 +87,8 @@ interface Props {
 }
 
 export function StatusBarCharts({ type, customer, filterDays, filterFrom, filterTo }: Props) {
+  const { t } = useTranslation('dashboard');
+  const STATUS = useMemo(() => buildStatus(t), [t]);
   const [mode, setMode] = useState<Mode>('designer');
   // Chế độ "theo designer": date-range riêng (mặc định 30 ngày).
   const [dFrom, setDFrom] = useState(daysAgoISO(29));
@@ -233,14 +239,14 @@ export function StatusBarCharts({ type, customer, filterDays, filterFrom, filter
       <div className="flex items-center justify-between gap-3 p-3 border-b border-border flex-wrap">
         <div className="flex items-center gap-2">
           <BarChart3 size={16} className="text-indigo-600" />
-          <span className="text-sm font-semibold">Cơ cấu trạng thái</span>
+          <span className="text-sm font-semibold">{t('statusBarCharts.title')}</span>
           {/* Toggle mode */}
           <div className="ml-1 flex items-center rounded-md border border-border overflow-hidden text-[11px]">
             <ToggleBtn active={mode === 'designer'} onClick={() => setMode('designer')} icon={<Users size={12} />}>
-              Theo designer
+              {t('statusBarCharts.byDesigner')}
             </ToggleBtn>
             <ToggleBtn active={mode === 'day'} onClick={() => setMode('day')} icon={<CalendarRange size={12} />}>
-              Theo ngày
+              {t('statusBarCharts.byDay')}
             </ToggleBtn>
           </div>
         </div>
@@ -253,9 +259,9 @@ export function StatusBarCharts({ type, customer, filterDays, filterFrom, filter
               from={dFrom}
               to={dTo}
               clearable={false}
-              onChange={(f, t) => {
+              onChange={(f, t2) => {
                 setDFrom(f);
-                setDTo(t);
+                setDTo(t2);
               }}
             />
           ) : (
@@ -271,7 +277,7 @@ export function StatusBarCharts({ type, customer, filterDays, filterFrom, filter
                       range === r ? 'bg-indigo-600 text-white' : 'text-muted-foreground hover:bg-muted',
                     )}
                   >
-                    {r} ngày
+                    {t('teamDailyMatrix.days', { count: r })}
                   </button>
                 ))}
               </div>
@@ -280,7 +286,7 @@ export function StatusBarCharts({ type, customer, filterDays, filterFrom, filter
                 onChange={(e) => setPersonId(e.target.value)}
                 className="h-8 rounded-md border border-input bg-background px-2 text-xs"
               >
-                <option value="">Tất cả</option>
+                <option value="">{t('drillPanel.all')}</option>
                 {data.rows.map((r) => (
                   <option key={r.userId} value={r.userId}>
                     {r.fullName}
@@ -301,16 +307,14 @@ export function StatusBarCharts({ type, customer, filterDays, filterFrom, filter
           </span>
         ))}
         <span className="ml-auto text-[10px]">
-          {mode === 'designer'
-            ? 'Mỗi cột = 1 designer, chuẩn hóa 100% theo trạng thái. Bấm cột → thống kê 7 ngày bên dưới.'
-            : 'Mỗi cột = 1 ngày, chiều cao = số đơn. Hover xem chi tiết.'}
+          {mode === 'designer' ? t('statusBarCharts.hintDesigner') : t('statusBarCharts.hintDay')}
         </span>
       </div>
 
       {/* Chart */}
       <div className="p-3">
         {isEmpty ? (
-          <p className="text-xs text-muted-foreground text-center py-16">Không có dữ liệu trong khoảng đã chọn.</p>
+          <p className="text-xs text-muted-foreground text-center py-16">{t('statusBarCharts.noDataInRange')}</p>
         ) : (
           <div style={{ width: '100%', height: 320 }} className={mode === 'designer' ? 'cursor-pointer' : undefined}>
             <ResponsiveContainer>
@@ -358,14 +362,14 @@ export function StatusBarCharts({ type, customer, filterDays, filterFrom, filter
           <div className="flex items-center gap-2 px-3 py-2 border-b border-border bg-muted/20">
             <Users size={14} className="text-indigo-600 shrink-0" />
             <span className="text-sm font-semibold">{selDesigner.name}</span>
-            <span className="text-[11px] text-muted-foreground">— thống kê 7 ngày gần nhất (theo ngày vào SX)</span>
+            <span className="text-[11px] text-muted-foreground">— {t('statusBarCharts.last7DaysStats')}</span>
             {weekLoading && <Spinner size={12} className="text-muted-foreground" />}
             <button
               type="button"
               onClick={() => setSelDesigner(null)}
               className="ml-auto inline-flex items-center gap-1 text-[11px] text-muted-foreground hover:text-foreground"
             >
-              <X size={13} /> Đóng
+              <X size={13} /> {t('drillPanel.close')}
             </button>
           </div>
           {weekLoading && !weekData ? (
@@ -418,6 +422,8 @@ function WeekStatsPanel({
   customer?: string;
   onPick: (target: DrillTarget) => void;
 }) {
+  const { t } = useTranslation('dashboard');
+  const PANEL_ROWS = useMemo(() => [...buildStatus(t), ...buildEventRows(t)], [t]);
   // BE trả ngày mới→cũ → đảo để hiển thị quá khứ→hiện tại (đồng bộ index cells).
   const row = data.rows.find((r) => r.userId === userId);
   const days = useMemo(() => [...data.days].reverse(), [data.days]);
@@ -447,9 +453,12 @@ function WeekStatsPanel({
     onPick({
       title: (
         <>
-          {label} · {dayLabel || '7 ngày'} — {name}
+          {label} · {dayLabel || t('statusBarCharts.days7')} — {name}
           {isEvent(key) && (
-            <span className="text-muted-foreground font-normal"> ({v} lần — 1 đơn bàn giao nhiều lần chỉ 1 dòng)</span>
+            <span className="text-muted-foreground font-normal">
+              {' '}
+              {t('statusBarCharts.handoffCount', { count: v })}
+            </span>
           )}
         </>
       ),
@@ -468,7 +477,7 @@ function WeekStatsPanel({
         type="button"
         onClick={() => pick(key, label, v, fromDay, toDay, dayLabel)}
         className="tabular-nums underline-offset-2 hover:underline hover:text-indigo-600 dark:hover:text-indigo-400"
-        title="Xem danh sách đơn"
+        title={t('statusBarCharts.viewOrderList')}
       >
         {v}
       </button>
@@ -504,13 +513,15 @@ function WeekStatsPanel({
           <table className="w-full text-[12px] tabular-nums">
             <thead>
               <tr className="text-[11px] text-muted-foreground border-b border-border">
-                <th className="text-left font-medium px-2.5 py-1.5 min-w-[90px]">Trạng thái</th>
+                <th className="text-left font-medium px-2.5 py-1.5 min-w-[90px]">{t('statusBarCharts.status')}</th>
                 {days.map((d) => (
                   <th key={d} className="text-center font-medium px-1.5 py-1.5 border-l border-border/60">
                     {dm(d)}
                   </th>
                 ))}
-                <th className="text-center font-semibold px-2 py-1.5 border-l border-border bg-muted/30">Tổng</th>
+                <th className="text-center font-semibold px-2 py-1.5 border-l border-border bg-muted/30">
+                  {t('statusBarCharts.total')}
+                </th>
               </tr>
             </thead>
             <tbody>
@@ -540,12 +551,11 @@ function WeekStatsPanel({
             </tbody>
           </table>
           <p className="px-2.5 py-1.5 text-[10px] text-muted-foreground border-t border-border/50">
-            Không làm được / Nhận thêm = số LẦN bàn giao (khớp ma trận) — bấm vào hiện danh sách đơn, 1 đơn bàn giao
-            nhiều lần chỉ 1 dòng.
+            {t('statusBarCharts.handoffNote')}
           </p>
           {!row && (
             <p className="text-[11px] text-muted-foreground text-center py-3">
-              Không có đơn nào trong 7 ngày gần nhất.
+              {t('statusBarCharts.noOrdersLast7Days')}
             </p>
           )}
         </div>
@@ -553,16 +563,16 @@ function WeekStatsPanel({
         {/* Sản phẩm designer làm trong 7 ngày */}
         <div className="rounded-md border border-border">
           <div className="px-2.5 py-1.5 text-[11px] text-muted-foreground border-b border-border">
-            Sản phẩm trong 7 ngày
+            {t('statusBarCharts.productsIn7Days')}
             {products && (
               <span>
                 {' '}
-                — {products.products.length} sản phẩm · {products.total} đơn
+                — {t('statusBarCharts.productsCount', { count: products.products.length, total: products.total })}
               </span>
             )}
           </div>
           {!products || products.products.length === 0 ? (
-            <p className="text-[11px] text-muted-foreground text-center py-4">Không có sản phẩm nào.</p>
+            <p className="text-[11px] text-muted-foreground text-center py-4">{t('statusBarCharts.noProducts')}</p>
           ) : (
             <div className="max-h-56 overflow-y-auto divide-y divide-border/50">
               {products.products.map((p) => (
@@ -642,6 +652,11 @@ function ChartTooltip({
   /** userId → breakdown sản phẩm (chỉ mode designer). */
   breakdown?: Record<string, ProductBreakdownDesigner>;
 }) {
+  const { t } = useTranslation('dashboard');
+  const LABEL: Record<string, string> = useMemo(
+    () => Object.fromEntries(buildStatus(t).map((s) => [s.key, s.label])),
+    [t],
+  );
   if (!active || !payload?.length) return null;
   const total = payload.reduce((s, p) => s + (p.value || 0), 0);
   const userId = payload[0]?.payload?.userId;
@@ -662,7 +677,7 @@ function ChartTooltip({
         </div>
       ))}
       <div className="mt-1 border-t border-border pt-1 flex items-center justify-between font-semibold">
-        <span>Tổng</span>
+        <span>{t('statusBarCharts.total')}</span>
         <span className="tabular-nums">{total}</span>
       </div>
 
@@ -670,7 +685,7 @@ function ChartTooltip({
       {bd && bd.products.length > 0 && (
         <div className="mt-2 border-t border-border pt-1.5">
           <div className="text-[10px] text-muted-foreground mb-1">
-            {bd.products.length} sản phẩm · {bd.total} đơn (theo bộ lọc chung)
+            {t('statusBarCharts.productsCountFiltered', { count: bd.products.length, total: bd.total })}
           </div>
           <div className="space-y-1">
             {bd.products.map((p) => (

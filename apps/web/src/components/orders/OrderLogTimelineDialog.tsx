@@ -1,7 +1,9 @@
 import React, { useEffect, useMemo, useState } from 'react';
+import { useTranslation } from 'react-i18next';
+import type { TFunction } from 'i18next';
 import { ArrowRight, History, RefreshCw } from 'lucide-react';
 import type { FulfillmentStage, ProductionOrderLog, ProductionOrderLogAction } from 'shared';
-import { FULFILLMENT_STAGE_LABELS, WorkshopConfigCategory } from 'shared';
+import { WorkshopConfigCategory } from 'shared';
 
 import { useWorkshopConfigStore } from '@/store/workshopConfigStore';
 
@@ -14,6 +16,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/u
 
 import { handleAxiosError } from '@/utils';
 import { cn } from '@/utils/cn';
+import { getStageLabel } from '@/utils/fulfillmentStageLabel';
 
 interface Props {
   open: boolean;
@@ -22,58 +25,66 @@ interface Props {
   productionId?: string;
 }
 
-const ACTION_BADGE: Record<
+function buildActionBadge(
+  t: TFunction<'orderLog'>,
+): Record<
   ProductionOrderLogAction,
   { label: string; variant: 'default' | 'secondary' | 'destructive' | 'success' | 'warning' | 'outline' }
-> = {
-  create: { label: 'Tạo', variant: 'success' },
-  update: { label: 'Cập nhật', variant: 'default' },
-  bulk_update: { label: 'Bulk', variant: 'default' },
-  import: { label: 'Import', variant: 'outline' },
-  delete: { label: 'Xóa', variant: 'destructive' },
-  transfer: { label: 'Chuyển xưởng', variant: 'warning' },
-  cancel: { label: 'Hủy đơn', variant: 'destructive' },
-  update_design: { label: 'Đổi design', variant: 'default' },
-  hold: { label: 'Giữ đơn', variant: 'warning' },
-  unhold: { label: 'Mở giữ', variant: 'success' },
-};
+> {
+  return {
+    create: { label: t('actionBadge.create'), variant: 'success' },
+    update: { label: t('actionBadge.update'), variant: 'default' },
+    bulk_update: { label: t('actionBadge.bulkUpdate'), variant: 'default' },
+    import: { label: t('actionBadge.import'), variant: 'outline' },
+    delete: { label: t('actionBadge.delete'), variant: 'destructive' },
+    transfer: { label: t('actionBadge.transfer'), variant: 'warning' },
+    cancel: { label: t('actionBadge.cancel'), variant: 'destructive' },
+    update_design: { label: t('actionBadge.updateDesign'), variant: 'default' },
+    hold: { label: t('actionBadge.hold'), variant: 'warning' },
+    unhold: { label: t('actionBadge.unhold'), variant: 'success' },
+  };
+}
 
 // Import log ghi `after` = object tóm tắt (productionId/type/isMapped/_subAction).
 // `_subAction` = đơn được tạo mới hay cập nhật trong lần import.
-const IMPORT_SUBACTION: Record<string, { label: string; variant: 'default' | 'success' }> = {
-  create: { label: 'Tạo mới', variant: 'success' },
-  update: { label: 'Cập nhật', variant: 'default' },
-};
+function buildImportSubaction(t: TFunction<'orderLog'>): Record<string, { label: string; variant: 'default' | 'success' }> {
+  return {
+    create: { label: t('importSubaction.create'), variant: 'success' },
+    update: { label: t('importSubaction.update'), variant: 'default' },
+  };
+}
 
-const FIELD_LABEL: Record<string, string> = {
-  printStatus: 'Trạng thái in',
-  printStatusNote: 'Note trạng thái in',
-  toolResult: 'Kết quả Tool',
-  toolResultNote: 'Note kết quả Tool',
-  errorFile: 'File sửa lỗi',
-  errorFileNote: 'Ghi chú file lỗi',
-  assignee: 'Người thực hiện',
-  assigneeNote: 'Note người thực hiện',
-  designerStatus: 'TT Designer',
-  fabricType: 'Loại vải',
-  machineNumber: 'Máy',
-  productionError: 'Lỗi xưởng',
-  productionErrorNote: 'Mô tả lỗi xưởng',
-  productionErrorSource: 'Nguồn lỗi',
-  cancelledAt: 'Hủy đơn',
-  heldAt: 'Giữ đơn',
-  designs: 'Design',
-  designsOriginal: 'Design gốc',
-  mockupUrl: 'Mockup',
-  // Field bị re-import (importOrders) ghi đè — xem OrderLog.md §4.
-  factoryId: 'Xưởng',
-  machineTypeId: 'Loại máy',
-  type: 'Loại sản phẩm',
-  color: 'Màu',
-  size: 'Size',
-  quantity: 'Số lượng',
-  status: 'Trạng thái đơn (OnosPod)',
-};
+function buildFieldLabel(t: TFunction<'orderLog'>): Record<string, string> {
+  return {
+    printStatus: t('fieldLabel.printStatus'),
+    printStatusNote: t('fieldLabel.printStatusNote'),
+    toolResult: t('fieldLabel.toolResult'),
+    toolResultNote: t('fieldLabel.toolResultNote'),
+    errorFile: t('fieldLabel.errorFile'),
+    errorFileNote: t('fieldLabel.errorFileNote'),
+    assignee: t('fieldLabel.assignee'),
+    assigneeNote: t('fieldLabel.assigneeNote'),
+    designerStatus: t('fieldLabel.designerStatus'),
+    fabricType: t('fieldLabel.fabricType'),
+    machineNumber: t('fieldLabel.machineNumber'),
+    productionError: t('fieldLabel.productionError'),
+    productionErrorNote: t('fieldLabel.productionErrorNote'),
+    productionErrorSource: t('fieldLabel.productionErrorSource'),
+    cancelledAt: t('fieldLabel.cancelledAt'),
+    heldAt: t('fieldLabel.heldAt'),
+    designs: t('fieldLabel.designs'),
+    designsOriginal: t('fieldLabel.designsOriginal'),
+    mockupUrl: t('fieldLabel.mockupUrl'),
+    // Field bị re-import (importOrders) ghi đè — xem OrderLog.md §4.
+    factoryId: t('fieldLabel.factoryId'),
+    machineTypeId: t('fieldLabel.machineTypeId'),
+    type: t('fieldLabel.type'),
+    color: t('fieldLabel.color'),
+    size: t('fieldLabel.size'),
+    quantity: t('fieldLabel.quantity'),
+    status: t('fieldLabel.status'),
+  };
+}
 
 // Field nào resolve code→name (+ color) qua workshop_config store.
 const FIELD_CATEGORY: Record<string, WorkshopConfigCategory> = {
@@ -89,14 +100,16 @@ const FIELD_CATEGORY: Record<string, WorkshopConfigCategory> = {
 };
 
 // designerStatus là enum → nhãn + màu tiếng Việt (không phải workshop_config).
-const DESIGNER_STATUS_LABELS: Record<string, string> = {
-  unassigned: 'Chưa gán',
-  assigned: 'Đã gán',
-  'in-progress': 'Đang làm',
-  done: 'Đã xong',
-  rejected: 'Không làm được',
-  rework: 'Cần làm lại',
-};
+function buildDesignerStatusLabels(t: TFunction<'orderLog'>): Record<string, string> {
+  return {
+    unassigned: t('designerStatusLabels.unassigned'),
+    assigned: t('designerStatusLabels.assigned'),
+    'in-progress': t('designerStatusLabels.inProgress'),
+    done: t('designerStatusLabels.done'),
+    rejected: t('designerStatusLabels.rejected'),
+    rework: t('designerStatusLabels.rework'),
+  };
+}
 const DESIGNER_STATUS_COLOR: Record<string, string> = {
   unassigned: '#a1a1aa',
   assigned: '#71717a',
@@ -108,12 +121,14 @@ const DESIGNER_STATUS_COLOR: Record<string, string> = {
 const SOURCE_COLOR: Record<string, string> = { designer: '#8b5cf6', factory: '#0ea5e9' };
 
 // Trạng thái công đoạn fulfillment (waiting/in-progress/done/rework) → nhãn + màu.
-const FULFILLMENT_STATUS_LABELS: Record<string, string> = {
-  waiting: 'Chờ làm',
-  'in-progress': 'Đang làm',
-  done: 'Đã xong',
-  rework: 'Cần làm lại',
-};
+function buildFulfillmentStatusLabels(t: TFunction<'orderLog'>): Record<string, string> {
+  return {
+    waiting: t('fulfillmentStatusLabels.waiting'),
+    'in-progress': t('fulfillmentStatusLabels.inProgress'),
+    done: t('fulfillmentStatusLabels.done'),
+    rework: t('fulfillmentStatusLabels.rework'),
+  };
+}
 const FULFILLMENT_STATUS_COLOR: Record<string, string> = {
   waiting: '#a1a1aa',
   'in-progress': '#6366f1',
@@ -123,15 +138,15 @@ const FULFILLMENT_STATUS_COLOR: Record<string, string> = {
 // Field key dạng `fulfillmentStages.<stage>.status` (log của Task Fulfillment).
 const FULFILLMENT_STAGE_STATUS_RE = /^fulfillmentStages\.(.+)\.status$/;
 
-/** Nhãn tiếng Việt cho field key (gồm key động của fulfillment stage). */
-function fieldLabelFor(field: string): string {
+/** Nhãn cho field key (gồm key động của fulfillment stage). */
+function fieldLabelFor(field: string, t: TFunction<'orderLog'>): string {
   const m = field.match(FULFILLMENT_STAGE_STATUS_RE);
   if (m) {
     const stage = m[1] as FulfillmentStage;
-    return `Công đoạn ${FULFILLMENT_STAGE_LABELS[stage] || m[1]}`;
+    return t('fieldLabel.fulfillmentStage', { stage: getStageLabel(t, stage) });
   }
-  if (field === 'currentFulfillmentStage') return 'Công đoạn hiện tại';
-  return FIELD_LABEL[field] || field;
+  if (field === 'currentFulfillmentStage') return t('fieldLabel.currentFulfillmentStage');
+  return buildFieldLabel(t)[field] || field;
 }
 
 /** Style tint từ hex `#rrggbb` — chữ = color, nền = color 12% (8-digit hex). */
@@ -141,8 +156,8 @@ function tintStyle(color?: string): React.CSSProperties | undefined {
 }
 
 /** Nhãn đẹp cho key snapshot của update_design (`mockupUrl`, `designs.front`, …). */
-function designFieldLabel(key: string): string {
-  if (key === 'mockupUrl') return 'Mockup';
+function designFieldLabel(key: string, t: TFunction<'orderLog'>): string {
+  if (key === 'mockupUrl') return t('fieldLabel.mockupUrl');
   return key.replace(/^designs\./, '');
 }
 
@@ -195,6 +210,7 @@ function DiffRow({ before, after }: { before: Display; after: Display }) {
 }
 
 export function OrderLogTimelineDialog({ open, onOpenChange, orderId, productionId }: Props) {
+  const { t } = useTranslation('orderLog');
   const [logs, setLogs] = useState<ProductionOrderLog[]>([]);
   const [loading, setLoading] = useState(false);
 
@@ -203,6 +219,11 @@ export function OrderLogTimelineDialog({ open, onOpenChange, orderId, production
   const loadConfig = useWorkshopConfigStore((s) => s.load);
   const configLoaded = useWorkshopConfigStore((s) => s.loaded);
   const resolve = useWorkshopConfigStore((s) => s.resolve);
+
+  const actionBadge = useMemo(() => buildActionBadge(t), [t]);
+  const importSubaction = useMemo(() => buildImportSubaction(t), [t]);
+  const designerStatusLabels = useMemo(() => buildDesignerStatusLabels(t), [t]);
+  const fulfillmentStatusLabels = useMemo(() => buildFulfillmentStatusLabels(t), [t]);
 
   const fetchLogs = async () => {
     if (!orderId) return;
@@ -238,17 +259,18 @@ export function OrderLogTimelineDialog({ open, onOpenChange, orderId, production
     const raw = String(value);
     if (!field) return { text: raw };
     if (field === 'designerStatus') {
-      return { text: DESIGNER_STATUS_LABELS[raw] || raw, color: DESIGNER_STATUS_COLOR[raw] };
+      return { text: designerStatusLabels[raw] || raw, color: DESIGNER_STATUS_COLOR[raw] };
     }
     if (field === 'productionErrorSource') {
-      const text = raw === 'designer' ? 'Do designer' : raw === 'factory' ? 'Do xưởng' : raw;
+      const text =
+        raw === 'designer' ? t('sourceLabel.designer') : raw === 'factory' ? t('sourceLabel.factory') : raw;
       return { text, color: SOURCE_COLOR[raw] };
     }
     if (field === 'currentFulfillmentStage') {
-      return { text: FULFILLMENT_STAGE_LABELS[raw as FulfillmentStage] || raw };
+      return { text: getStageLabel(t, raw as FulfillmentStage) };
     }
     if (FULFILLMENT_STAGE_STATUS_RE.test(field)) {
-      return { text: FULFILLMENT_STATUS_LABELS[raw] || raw, color: FULFILLMENT_STATUS_COLOR[raw] };
+      return { text: fulfillmentStatusLabels[raw] || raw, color: FULFILLMENT_STATUS_COLOR[raw] };
     }
     const cat = FIELD_CATEGORY[field];
     if (cat) {
@@ -265,7 +287,7 @@ export function OrderLogTimelineDialog({ open, onOpenChange, orderId, production
       return <div className="text-xs text-muted-foreground">{String(after)}</div>;
     }
     const o = after as Record<string, unknown>;
-    const sub = typeof o._subAction === 'string' ? IMPORT_SUBACTION[o._subAction] : undefined;
+    const sub = typeof o._subAction === 'string' ? importSubaction[o._subAction] : undefined;
     const pid = o.productionId != null ? String(o.productionId) : undefined;
     const type = o.type != null ? String(o.type) : undefined;
     const isMapped = typeof o.isMapped === 'boolean' ? (o.isMapped as boolean) : undefined;
@@ -288,13 +310,13 @@ export function OrderLogTimelineDialog({ open, onOpenChange, orderId, production
                   : 'bg-amber-50 text-amber-700 dark:bg-amber-500/10 dark:text-amber-300',
               )}
             >
-              {isMapped ? 'Đã map sản phẩm' : 'Chưa map sản phẩm'}
+              {isMapped ? t('importPayload.mapped') : t('importPayload.unmapped')}
             </span>
           )}
         </div>
         {rest.map(([k, v]) => (
           <div key={k} className="text-muted-foreground">
-            {fieldLabelFor(k)}: <span className="text-foreground">{resolveDisplay(k, v).text}</span>
+            {fieldLabelFor(k, t)}: <span className="text-foreground">{resolveDisplay(k, v).text}</span>
           </div>
         ))}
       </div>
@@ -302,9 +324,9 @@ export function OrderLogTimelineDialog({ open, onOpenChange, orderId, production
   };
 
   const headerLabel = useMemo(() => {
-    if (productionId) return `Lịch sử thay đổi — ${productionId}`;
-    return 'Lịch sử thay đổi';
-  }, [productionId]);
+    if (productionId) return t('timeline.titleWithId', { productionId });
+    return t('timeline.title');
+  }, [productionId, t]);
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
@@ -317,10 +339,10 @@ export function OrderLogTimelineDialog({ open, onOpenChange, orderId, production
         </DialogHeader>
 
         <div className="flex items-center justify-between text-xs text-muted-foreground">
-          <span>{logs.length} bản ghi</span>
+          <span>{t('timeline.recordCount', { count: logs.length })}</span>
           <Button variant="ghost" size="sm" onClick={fetchLogs} disabled={loading}>
             <RefreshCw size={13} className={loading ? 'animate-spin' : ''} />
-            Tải lại
+            {t('timeline.reload')}
           </Button>
         </div>
 
@@ -332,14 +354,14 @@ export function OrderLogTimelineDialog({ open, onOpenChange, orderId, production
           )}
 
           {!loading && logs.length === 0 && (
-            <p className="text-sm text-muted-foreground text-center py-10">Chưa có lịch sử thay đổi.</p>
+            <p className="text-sm text-muted-foreground text-center py-10">{t('timeline.empty')}</p>
           )}
 
           {logs.length > 0 && (
             <div className="space-y-2">
               {logs.map((log) => {
-                const meta = ACTION_BADGE[log.action as ProductionOrderLogAction] || ACTION_BADGE.update;
-                const fieldLabel = log.field ? fieldLabelFor(log.field) : null;
+                const meta = actionBadge[log.action as ProductionOrderLogAction] || actionBadge.update;
+                const fieldLabel = log.field ? fieldLabelFor(log.field, t) : null;
                 const isFieldUpdate = !!log.field && (log.action === 'update' || log.action === 'bulk_update');
                 return (
                   <div key={log._id} className="rounded-lg border border-border bg-card px-3 py-2.5 space-y-1.5">
@@ -370,7 +392,7 @@ export function OrderLogTimelineDialog({ open, onOpenChange, orderId, production
                       <div className="space-y-2">
                         {designChangeEntries(log.before, log.after).map(({ key, before, after }) => (
                           <div key={key} className="space-y-1">
-                            <span className="text-xs font-medium text-muted-foreground">{designFieldLabel(key)}</span>
+                            <span className="text-xs font-medium text-muted-foreground">{designFieldLabel(key, t)}</span>
                             <div className="text-[11px] font-mono break-all leading-relaxed">
                               <span className="text-destructive line-through">{before || '—'}</span>
                               <span className="mx-1 text-muted-foreground">→</span>
@@ -384,7 +406,7 @@ export function OrderLogTimelineDialog({ open, onOpenChange, orderId, production
                     {/* Hủy đơn: after = lý do. */}
                     {log.action === 'cancel' && (
                       <div className="text-[13px] rounded bg-rose-50 dark:bg-rose-500/10 px-2 py-1">
-                        <span className="text-muted-foreground">Lý do: </span>
+                        <span className="text-muted-foreground">{t('timeline.reasonLabel')} </span>
                         <span className="text-foreground">{resolveDisplay(undefined, log.after).text}</span>
                       </div>
                     )}
@@ -394,7 +416,7 @@ export function OrderLogTimelineDialog({ open, onOpenChange, orderId, production
                     {/* Meta: người thực hiện · role · ip */}
                     <div className="text-[11px] text-muted-foreground flex items-center gap-1 flex-wrap">
                       <span className="font-medium text-foreground/70">
-                        {log.userName || log.userEmail || 'system'}
+                        {log.userName || log.userEmail || t('timeline.systemUser')}
                       </span>
                       {log.roleCode && <span>· {log.roleCode}</span>}
                       {log.ip && <span>· {log.ip}</span>}

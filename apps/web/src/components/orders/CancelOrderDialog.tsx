@@ -1,4 +1,5 @@
 import React, { useState } from 'react';
+import { useTranslation } from 'react-i18next';
 import { toast } from 'sonner';
 
 import { RepositoryRemote } from '@/services';
@@ -28,6 +29,7 @@ interface Props {
 const MAX = 200;
 
 export function CancelOrderDialog({ order, open, onOpenChange, onDone }: Props) {
+  const { t } = useTranslation('orders');
   const [reason, setReason] = useState('');
   const [loading, setLoading] = useState(false);
 
@@ -36,7 +38,7 @@ export function CancelOrderDialog({ order, open, onOpenChange, onDone }: Props) 
     try {
       setLoading(true);
       const res = await RepositoryRemote.order.cancelOrder(order._id, { reason: reason.trim() });
-      toast.success('Đã hủy đơn');
+      toast.success(t('dialogs.cancelOrder.success'));
       setReason('');
       onOpenChange(false);
       onDone((res.data?.data as WorkshopOrderRow) ?? order);
@@ -51,7 +53,7 @@ export function CancelOrderDialog({ order, open, onOpenChange, onDone }: Props) 
     <Dialog open={open} onOpenChange={(o) => (o ? onOpenChange(o) : (setReason(''), onOpenChange(false)))}>
       <DialogContent className="sm:max-w-md">
         <DialogHeader>
-          <DialogTitle>Hủy đơn</DialogTitle>
+          <DialogTitle>{t('dialogs.cancelOrder.title')}</DialogTitle>
           <DialogDescription>
             {order ? (
               <span className="text-xs">
@@ -66,12 +68,12 @@ export function CancelOrderDialog({ order, open, onOpenChange, onDone }: Props) 
 
         <div className="space-y-1.5">
           <label className="text-xs font-medium text-foreground">
-            Lý do hủy <span className="text-rose-600">*</span>
+            {t('dialogs.cancelOrder.reasonLabel')} <span className="text-rose-600">*</span>
           </label>
           <Textarea
             value={reason}
             onChange={(e) => setReason(e.target.value.slice(0, MAX))}
-            placeholder="Nhập lý do hủy đơn…"
+            placeholder={t('dialogs.cancelOrder.reasonPlaceholder')}
             rows={3}
             autoFocus
           />
@@ -82,10 +84,10 @@ export function CancelOrderDialog({ order, open, onOpenChange, onDone }: Props) 
 
         <DialogFooter>
           <Button variant="ghost" onClick={() => onOpenChange(false)} disabled={loading}>
-            Đóng
+            {t('common:actions.close')}
           </Button>
           <Button variant="destructive" onClick={submit} disabled={loading || !reason.trim()}>
-            {loading ? 'Đang hủy…' : 'Hủy đơn'}
+            {loading ? t('dialogs.cancelOrder.cancelling') : t('dialogs.cancelOrder.submitBtn')}
           </Button>
         </DialogFooter>
       </DialogContent>

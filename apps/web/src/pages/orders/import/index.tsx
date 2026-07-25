@@ -1,4 +1,5 @@
 import React from 'react';
+import { useTranslation } from 'react-i18next';
 import { useNavigate } from 'react-router-dom';
 import { FileDown } from 'lucide-react';
 
@@ -9,6 +10,7 @@ import { usePermission } from '@/hooks/usePermission';
 import { ImportOrderTab } from '../ImportOrderTab';
 
 export default function OrdersImportPage() {
+  const { t } = useTranslation('orders');
   const { has, canViewWorkshopTable } = usePermission();
   const navigate = useNavigate();
   const canImport = has('order.import');
@@ -16,7 +18,7 @@ export default function OrdersImportPage() {
   if (!canImport) {
     return (
       <div className="flex items-center justify-center py-20 text-sm text-muted-foreground">
-        Bạn không có quyền xem trang này.
+        {t('importPage.noPermission')}
       </div>
     );
   }
@@ -28,8 +30,8 @@ export default function OrdersImportPage() {
           <FileDown size={20} className="text-emerald-600" />
         </div>
         <div>
-          <h1 className="text-2xl font-bold text-foreground">Import Order</h1>
-          <p className="text-sm text-muted-foreground">Quản lý production orders</p>
+          <h1 className="text-2xl font-bold text-foreground">{t('importPage.title')}</h1>
+          <p className="text-sm text-muted-foreground">{t('importPage.subtitle')}</p>
         </div>
       </div>
 

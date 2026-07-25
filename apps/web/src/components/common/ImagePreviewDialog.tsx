@@ -1,4 +1,5 @@
 import React, { useEffect, useState } from 'react';
+import { useTranslation } from 'react-i18next';
 import { ExternalLink, Image as ImageIcon } from 'lucide-react';
 
 import { RepositoryRemote } from '@/services';
@@ -30,6 +31,7 @@ export function ImagePreviewDialog({
   title,
   ensurePreviewSource,
 }: ImagePreviewDialogProps) {
+  const { t } = useTranslation('common');
   const [resolvedUrl, setResolvedUrl] = useState<string | undefined>(url);
   const [resolving, setResolving] = useState(false);
   const [imgLoaded, setImgLoaded] = useState(false);
@@ -83,13 +85,13 @@ export function ImagePreviewDialog({
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="max-w-3xl">
         <DialogHeader>
-          <DialogTitle>{title || 'Preview'}</DialogTitle>
+          <DialogTitle>{title || t('imagePreview.title')}</DialogTitle>
         </DialogHeader>
         <div className="flex items-center justify-center bg-checker rounded-md min-h-[400px] relative">
           {resolving && (
             <div className="absolute inset-0 flex flex-col items-center justify-center gap-2 bg-background/40 backdrop-blur-sm rounded-md">
               <Spinner size={28} />
-              <p className="text-xs text-muted-foreground">Đang chuẩn bị preview…</p>
+              <p className="text-xs text-muted-foreground">{t('imagePreview.preparing')}</p>
             </div>
           )}
           {!resolving && displayUrl && !imgError && (
@@ -116,15 +118,15 @@ export function ImagePreviewDialog({
           )}
           {!resolving && imgError && (
             <div className="text-center py-12 text-muted-foreground text-sm px-6">
-              Không tải được ảnh — có thể link đã hết hạn hoặc bị chặn CORS.
+              {t('imagePreview.loadError')}
               <br />
-              Thử mở link Original ở dưới.
+              {t('imagePreview.tryOriginal')}
             </div>
           )}
           {!resolving && !displayUrl && (
             <div className="text-center text-muted-foreground py-12">
               <ImageIcon size={32} className="mx-auto opacity-50" />
-              <p className="mt-2 text-sm">Không có ảnh</p>
+              <p className="mt-2 text-sm">{t('imagePreview.noImage')}</p>
             </div>
           )}
         </div>
@@ -133,10 +135,10 @@ export function ImagePreviewDialog({
           {displayUrl && (
             <div className="flex items-start gap-2">
               <span className="text-[11px] font-semibold text-muted-foreground uppercase tracking-wider shrink-0 mt-0.5">
-                Display:
+                {t('imagePreview.displayLabel')}
               </span>
               <div className="flex items-center gap-1 flex-1 min-w-0">
-                <CopyButton value={displayUrl} label="display URL" iconSize={11} />
+                <CopyButton value={displayUrl} label={t('imagePreview.displayUrlLabel')} iconSize={11} />
                 <a
                   href={displayUrl}
                   target="_blank"
@@ -154,10 +156,10 @@ export function ImagePreviewDialog({
           {showOriginal && (
             <div className="flex items-start gap-2">
               <span className="text-[11px] font-semibold text-foreground uppercase tracking-wider shrink-0 mt-0.5">
-                Original:
+                {t('imagePreview.originalLabel')}
               </span>
               <div className="flex items-center gap-1 flex-1 min-w-0">
-                <CopyButton value={originalUrl!} label="original URL" iconSize={11} />
+                <CopyButton value={originalUrl!} label={t('imagePreview.originalUrlLabel')} iconSize={11} />
                 <a
                   href={originalUrl}
                   target="_blank"

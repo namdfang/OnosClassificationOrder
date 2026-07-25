@@ -1,4 +1,6 @@
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
+import { useTranslation } from 'react-i18next';
+import type { TFunction } from 'i18next';
 import { AlertTriangle, ChevronDown, ChevronRight, RefreshCw, Send, Wrench } from 'lucide-react';
 import type { PersonErrorRow } from 'shared';
 
@@ -28,10 +30,10 @@ interface PersonErrorOrderRow {
   inProductionAt?: string;
 }
 
-function srcLabel(s?: string): string {
-  if (s === 'designer') return 'Do designer';
-  if (s === 'tool-check') return 'Do soát tool';
-  if (s === 'factory') return 'Do xưởng';
+function srcLabel(t: TFunction<'dashboard'>, s?: string): string {
+  if (s === 'designer') return t('personError.source.designer');
+  if (s === 'tool-check') return t('personError.source.toolCheck');
+  if (s === 'factory') return t('personError.source.factory');
   return '—';
 }
 
@@ -42,6 +44,7 @@ function srcLabel(s?: string): string {
  * Click 1 dòng → xổ list đơn lỗi đang cần người đó sửa (drill-down theo inProductionAt).
  */
 export default function PersonErrorTab() {
+  const { t } = useTranslation('dashboard');
   const last7 = DATE_PRESETS.find((p) => p.key === 'last-7d')!.range();
   const [dateFrom, setDateFrom] = useState(() => last7.from);
   const [dateTo, setDateTo] = useState(() => last7.to);
@@ -115,14 +118,14 @@ export default function PersonErrorTab() {
         />
         <Button variant="outline" size="sm" onClick={() => void fetchOverview()} disabled={loading}>
           {loading ? <Spinner size={14} className="mr-1.5" /> : <RefreshCw size={14} className="mr-1.5" />}
-          Tải lại
+          {t('personError.reload')}
         </Button>
         <div className="ml-auto flex items-center gap-4 text-sm">
           <span className="inline-flex items-center gap-1.5 text-rose-600 dark:text-rose-400">
-            <Wrench size={15} /> Đang cần fix: <strong>{totals.needFix}</strong>
+            <Wrench size={15} /> {t('personError.needFix')}: <strong>{totals.needFix}</strong>
           </span>
           <span className="inline-flex items-center gap-1.5 text-amber-600 dark:text-amber-400">
-            <Send size={15} /> Đã báo: <strong>{totals.reported}</strong>
+            <Send size={15} /> {t('personError.reported')}: <strong>{totals.reported}</strong>
           </span>
         </div>
       </div>
@@ -132,17 +135,17 @@ export default function PersonErrorTab() {
           <TableHeader>
             <TableRow>
               <TableHead className="w-8" />
-              <TableHead>Người</TableHead>
-              <TableHead>Vai trò / Công đoạn</TableHead>
-              <TableHead className="text-right">Đang cần fix</TableHead>
-              <TableHead className="text-right">Đã báo lỗi</TableHead>
+              <TableHead>{t('personError.columns.person')}</TableHead>
+              <TableHead>{t('personError.columns.roleStage')}</TableHead>
+              <TableHead className="text-right">{t('personError.columns.needFix')}</TableHead>
+              <TableHead className="text-right">{t('personError.columns.reported')}</TableHead>
             </TableRow>
           </TableHeader>
           <TableBody>
             {rows.length === 0 && !loading && (
               <TableRow>
                 <TableCell colSpan={5} className="text-center text-sm text-muted-foreground py-8">
-                  Không có lỗi trong kỳ.
+                  {t('personError.noErrors')}
                 </TableCell>
               </TableRow>
             )}
@@ -191,19 +194,22 @@ export default function PersonErrorTab() {
 }
 
 function DrillPanel({ loading, rows }: { loading: boolean; rows: PersonErrorOrderRow[] }) {
+  const { t } = useTranslation('dashboard');
   if (loading) {
     return (
       <div className="p-4 text-sm text-muted-foreground flex items-center gap-2">
-        <Spinner size={14} /> Đang tải đơn cần fix…
+        <Spinner size={14} /> {t('personError.loadingNeedFix')}
       </div>
     );
   }
   if (rows.length === 0) {
-    return <div className="p-4 text-sm text-muted-foreground">Không còn đơn nào cần fix.</div>;
+    return <div className="p-4 text-sm text-muted-foreground">{t('personError.noneNeedFix')}</div>;
   }
   return (
     <div className="p-3 space-y-1.5">
-      <div className="text-xs font-medium text-muted-foreground px-1">Đơn lỗi đang cần fix ({rows.length})</div>
+      <div className="text-xs font-medium text-muted-foreground px-1">
+        {t('personError.errorsNeedFix', { count: rows.length })}
+      </div>
       <div className="grid gap-1.5 sm:grid-cols-2 lg:grid-cols-3">
         {rows.map((o) => (
           <div key={o._id} className="rounded-md border bg-card p-2 flex gap-2 text-xs">
@@ -223,7 +229,7 @@ function DrillPanel({ loading, rows }: { loading: boolean; rows: PersonErrorOrde
                 {[o.type, o.size, o.color].filter(Boolean).join(' · ')}
               </div>
               <div className="text-rose-600 dark:text-rose-400 truncate" title={o.productionErrorNote}>
-                {srcLabel(o.productionErrorSource)}
+                {srcLabel(t, o.productionErrorSource)}
                 {o.productionErrorNote ? ` · ${o.productionErrorNote}` : ''}
               </div>
             </div>

@@ -1,4 +1,5 @@
 import React, { useEffect, useState } from 'react';
+import { useTranslation } from 'react-i18next';
 import { Palette } from 'lucide-react';
 import type { TeamDailyRow } from 'shared';
 
@@ -39,6 +40,7 @@ interface TopDesignersProps {
  * cùng scope filter chung (from/to + sản phẩm + khách hàng) của tab Designer.
  */
 export function TopDesigners({ from, to, type, customer, reloadToken }: TopDesignersProps) {
+  const { t } = useTranslation('dashboard');
   const [rows, setRows] = useState<{ userId: string; fullName: string; done: number }[]>([]);
   const [loading, setLoading] = useState(false);
 
@@ -68,7 +70,7 @@ export function TopDesigners({ from, to, type, customer, reloadToken }: TopDesig
     <div className="rounded-lg border border-border bg-card p-4">
       <div className="flex items-center gap-2 mb-3">
         <Palette size={16} className="text-violet-500" />
-        <span className="text-sm font-bold">Top Designer</span>
+        <span className="text-sm font-bold">{t('topDesigners.title')}</span>
       </div>
 
       {loading && rows.length === 0 && (
@@ -77,7 +79,7 @@ export function TopDesigners({ from, to, type, customer, reloadToken }: TopDesig
         </div>
       )}
       {!loading && rows.length === 0 && (
-        <p className="py-6 text-center text-xs text-muted-foreground">Chưa có thiết kế nào xong trong khoảng này.</p>
+        <p className="py-6 text-center text-xs text-muted-foreground">{t('topDesigners.empty')}</p>
       )}
 
       <div className="space-y-3">
@@ -102,7 +104,7 @@ export function TopDesigners({ from, to, type, customer, reloadToken }: TopDesig
               </div>
             </div>
             <span className="shrink-0 text-sm font-bold text-violet-600 dark:text-violet-400 tabular-nums whitespace-nowrap">
-              {r.done} thiết kế
+              {t('topDesigners.count', { count: r.done })}
             </span>
           </div>
         ))}

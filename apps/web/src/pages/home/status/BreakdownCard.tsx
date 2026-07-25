@@ -1,4 +1,5 @@
 import React, { useMemo, useState } from 'react';
+import { useTranslation } from 'react-i18next';
 import { Check, ChevronDown } from 'lucide-react';
 
 import { Badge } from '@/components/ui/badge';
@@ -27,6 +28,7 @@ interface Props {
 }
 
 export function BreakdownCard({ title, items, selectedCodes, onToggle, mode, initialVisible = 8 }: Props) {
+  const { t } = useTranslation('dashboard');
   const [expanded, setExpanded] = useState(false);
   const totalCount = useMemo(() => items.reduce((s, it) => s + it.count, 0), [items]);
   const max = useMemo(() => Math.max(1, ...items.map((i) => i.count)), [items]);
@@ -42,7 +44,9 @@ export function BreakdownCard({ title, items, selectedCodes, onToggle, mode, ini
         </Badge>
       </div>
       <div className="divide-y divide-border">
-        {visible.length === 0 && <p className="px-3 py-4 text-xs text-muted-foreground text-center">Không có data</p>}
+        {visible.length === 0 && (
+          <p className="px-3 py-4 text-xs text-muted-foreground text-center">{t('breakdownCard.noData')}</p>
+        )}
         {visible.map((it) => {
           const isSelected = !!it.code && selectedCodes.includes(it.code);
           const pct = (it.count / max) * 100;
@@ -78,7 +82,9 @@ export function BreakdownCard({ title, items, selectedCodes, onToggle, mode, ini
         <div className="border-t border-border px-2 py-1">
           <Button variant="ghost" size="sm" className="w-full h-7 text-[11px]" onClick={() => setExpanded((v) => !v)}>
             <ChevronDown size={12} className={cn('transition-transform', expanded && 'rotate-180')} />
-            {expanded ? 'Thu gọn' : `Xem thêm ${items.length - initialVisible}`}
+            {expanded
+              ? t('breakdownCard.collapse')
+              : t('breakdownCard.showMore', { count: items.length - initialVisible })}
           </Button>
         </div>
       )}

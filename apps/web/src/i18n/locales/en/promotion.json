@@ -1,0 +1,70 @@
+{
+  "page": {
+    "title": "Promotions",
+    "subtitle": "Manage discounts by customer tier (VIP 0..5) — applied to reference prices in the Customer Portal.",
+    "stats": {
+      "total": "Total promotions",
+      "active": "Active",
+      "expiringSoon": "Expiring soon (7 days)"
+    },
+    "searchPlaceholder": "Search by name or coupon code…",
+    "createButton": "Create promotion",
+    "allTiers": "All tiers",
+    "deleteConfirm": "Delete this promotion?",
+    "deleteSuccess": "Deleted",
+    "table": {
+      "name": "Name",
+      "code": "Code",
+      "discount": "Discount",
+      "scope": "Scope",
+      "tier": "Tier",
+      "validity": "Validity",
+      "status": "Status",
+      "empty": "No promotions yet.",
+      "active": "Active",
+      "inactive": "Paused"
+    }
+  },
+  "scope": {
+    "all": "All",
+    "category": "By category",
+    "product": "Specific products"
+  },
+  "editDialog": {
+    "createTitle": "Create promotion",
+    "editTitle": "Edit promotion",
+    "name": "Promotion name",
+    "namePlaceholder": "E.g. VIP customer discount",
+    "code": "Coupon code (optional)",
+    "codePlaceholder": "E.g. VIP10",
+    "description": "Description",
+    "discountTypeLabel": "Discount type",
+    "discountType": {
+      "percentage": "% discount",
+      "fixed": "Fixed amount discount"
+    },
+    "discountValue": "Value",
+    "scopeLabel": "Scope",
+    "scope": {
+      "all": "All products",
+      "category": "By category",
+      "product": "Specific products"
+    },
+    "productCategory": "Product category",
+    "notSelected": "— Not selected —",
+    "applicableProducts": "Applicable products ({{count}} selected)",
+    "noProducts": "No products yet.",
+    "applicableTiers": "Applicable customer tiers (leave blank = all tiers, including walk-in customers)",
+    "minQuantity": "Min. quantity",
+    "startDate": "Start date",
+    "endDate": "End date",
+    "active": "Active",
+    "inactive": "Paused",
+    "nameRequired": "Enter a promotion name",
+    "discountValueRequired": "Enter a discount value",
+    "categoryRequired": "Select an applicable category",
+    "productRequired": "Select at least 1 applicable product",
+    "updateSuccess": "Promotion updated",
+    "createSuccess": "Promotion created"
+  }
+}

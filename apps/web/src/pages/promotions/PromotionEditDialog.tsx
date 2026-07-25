@@ -1,4 +1,6 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
+import { useTranslation } from 'react-i18next';
+import type { TFunction } from 'i18next';
 import type { CreatePromotionDto, Promotion, PromotionDiscountType, PromotionScope } from 'shared';
 import { CUSTOMER_TIERS, PROMOTION_DISCOUNT_TYPES, PROMOTION_SCOPES, Status } from 'shared';
 import { toast } from 'sonner';
@@ -21,16 +23,16 @@ import type { ProductCategoryOption, ProductConfigOption } from './index';
 const selectCls =
   'w-full rounded-md border border-input bg-background px-2 py-2 text-sm focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring';
 
-const DISCOUNT_TYPE_LABEL: Record<PromotionDiscountType, string> = {
-  percentage: '% giảm giá',
-  fixed: 'Giảm số tiền cố định',
-};
+const buildDiscountTypeLabel = (t: TFunction<['promotion', 'common']>): Record<PromotionDiscountType, string> => ({
+  percentage: t('editDialog.discountType.percentage'),
+  fixed: t('editDialog.discountType.fixed'),
+});
 
-const SCOPE_LABEL: Record<PromotionScope, string> = {
-  all: 'Toàn bộ sản phẩm',
-  category: 'Theo danh mục',
-  product: 'Sản phẩm cụ thể',
-};
+const buildScopeLabel = (t: TFunction<['promotion', 'common']>): Record<PromotionScope, string> => ({
+  all: t('editDialog.scope.all'),
+  category: t('editDialog.scope.category'),
+  product: t('editDialog.scope.product'),
+});
 
 interface Props {
   open: boolean;
@@ -42,6 +44,9 @@ interface Props {
 }
 
 export function PromotionEditDialog({ open, onOpenChange, item, productOptions, categoryOptions, onSaved }: Props) {
+  const { t } = useTranslation(['promotion', 'common']);
+  const DISCOUNT_TYPE_LABEL = useMemo(() => buildDiscountTypeLabel(t), [t]);
+  const SCOPE_LABEL = useMemo(() => buildScopeLabel(t), [t]);
   const [name, setName] = useState('');
   const [code, setCode] = useState('');
   const [description, setDescription] = useState('');
@@ -84,19 +89,19 @@ export function PromotionEditDialog({ open, onOpenChange, item, productOptions, 
 
   const handleSave = async () => {
     if (!name.trim()) {
-      toast.error('Nhập tên chương trình');
+      toast.error(t('editDialog.nameRequired'));
       return;
     }
     if (!discountValue) {
-      toast.error('Nhập giá trị giảm giá');
+      toast.error(t('editDialog.discountValueRequired'));
       return;
     }
     if (scope === 'category' && !scopeCategoryId) {
-      toast.error('Chọn danh mục áp dụng');
+      toast.error(t('editDialog.categoryRequired'));
       return;
     }
     if (scope === 'product' && scopeProductConfigIds.length === 0) {
-      toast.error('Chọn ít nhất 1 sản phẩm áp dụng');
+      toast.error(t('editDialog.productRequired'));
       return;
     }
 
@@ -120,10 +125,10 @@ export function PromotionEditDialog({ open, onOpenChange, item, productOptions, 
       setSaving(true);
       if (item) {
         await RepositoryRemote.promotion.updatePromotion(String(item._id), payload);
-        toast.success('Đã cập nhật chương trình giảm giá');
+        toast.success(t('editDialog.updateSuccess'));
       } else {
         await RepositoryRemote.promotion.createPromotion(payload);
-        toast.success('Đã tạo chương trình giảm giá');
+        toast.success(t('editDialog.createSuccess'));
       }
       onSaved();
       onOpenChange(false);
@@ -138,39 +143,41 @@ export function PromotionEditDialog({ open, onOpenChange, item, productOptions, 
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="sm:max-w-lg max-h-[85vh] overflow-y-auto">
         <DialogHeader>
-          <DialogTitle>{item ? 'Sửa chương trình giảm giá' : 'Tạo chương trình giảm giá'}</DialogTitle>
+          <DialogTitle>{item ? t('editDialog.editTitle') : t('editDialog.createTitle')}</DialogTitle>
         </DialogHeader>
 
         <div className="space-y-4">
           <div className="grid grid-cols-2 gap-3">
             <div className="space-y-1.5">
-              <Label>Tên chương trình</Label>
-              <Input value={name} onChange={(e) => setName(e.target.value)} placeholder="VD: Giảm giá khách VIP" />
+              <Label>{t('editDialog.name')}</Label>
+              <Input value={name} onChange={(e) => setName(e.target.value)} placeholder={t('editDialog.namePlaceholder')} />
             </div>
             <div className="space-y-1.5">
-              <Label>Mã coupon (tuỳ chọn)</Label>
-              <Input value={code} onChange={(e) => setCode(e.target.value.toUpperCase())} placeholder="VD: VIP10" />
+              <Label>{t('editDialog.code')}</Label>
+              <Input value={code} onChange={(e) => setCode(e.target.value.toUpperCase())} placeholder={t('editDialog.codePlaceholder')} />
             </div>
           </div>
 
           <div className="space-y-1.5">
-            <Label>Mô tả</Label>
+            <Label>{t('editDialog.description')}</Label>
             <Textarea value={description} onChange={(e) => setDescription(e.target.value)} rows={2} />
           </div>
 
           <div className="grid grid-cols-2 gap-3">
             <div className="space-y-1.5">
-              <Label>Loại giảm giá</Label>
+              <Label>{t('editDialog.discountTypeLabel')}</Label>
               <select value={discountType} onChange={(e) => setDiscountType(e.target.value as PromotionDiscountType)} className={selectCls}>
-                {PROMOTION_DISCOUNT_TYPES.map((t) => (
-                  <option key={t} value={t}>
-                    {DISCOUNT_TYPE_LABEL[t]}
+                {PROMOTION_DISCOUNT_TYPES.map((dt) => (
+                  <option key={dt} value={dt}>
+                    {DISCOUNT_TYPE_LABEL[dt]}
                   </option>
                 ))}
               </select>
             </div>
             <div className="space-y-1.5">
-              <Label>Giá trị {discountType === 'percentage' ? '(%)' : '(VNĐ)'}</Label>
+              <Label>
+                {t('editDialog.discountValue')} {discountType === 'percentage' ? '(%)' : '(VNĐ)'}
+              </Label>
               <Input
                 type="number"
                 min={0}
@@ -182,7 +189,7 @@ export function PromotionEditDialog({ open, onOpenChange, item, productOptions, 
           </div>
 
           <div className="space-y-1.5">
-            <Label>Phạm vi áp dụng</Label>
+            <Label>{t('editDialog.scopeLabel')}</Label>
             <select value={scope} onChange={(e) => setScope(e.target.value as PromotionScope)} className={selectCls}>
               {PROMOTION_SCOPES.map((s) => (
                 <option key={s} value={s}>
@@ -194,9 +201,9 @@ export function PromotionEditDialog({ open, onOpenChange, item, productOptions, 
 
           {scope === 'category' && (
             <div className="space-y-1.5">
-              <Label>Danh mục sản phẩm</Label>
+              <Label>{t('editDialog.productCategory')}</Label>
               <select value={scopeCategoryId} onChange={(e) => setScopeCategoryId(e.target.value)} className={selectCls}>
-                <option value="">— Chưa chọn —</option>
+                <option value="">{t('editDialog.notSelected')}</option>
                 {categoryOptions.map((opt) => (
                   <option key={opt._id} value={opt._id}>
                     {opt.shortName} · {opt.name}
@@ -208,7 +215,7 @@ export function PromotionEditDialog({ open, onOpenChange, item, productOptions, 
 
           {scope === 'product' && (
             <div className="space-y-1.5">
-              <Label>Sản phẩm áp dụng ({scopeProductConfigIds.length} đã chọn)</Label>
+              <Label>{t('editDialog.applicableProducts', { count: scopeProductConfigIds.length })}</Label>
               <div className="max-h-40 overflow-y-auto rounded-md border border-border p-2 space-y-1">
                 {productOptions.map((p) => (
                   <label key={p._id} className="flex items-center gap-2 text-sm cursor-pointer">
@@ -220,27 +227,27 @@ export function PromotionEditDialog({ open, onOpenChange, item, productOptions, 
                     {p.fullName} <span className="text-muted-foreground text-xs">({p.shortName})</span>
                   </label>
                 ))}
-                {productOptions.length === 0 && <p className="text-xs text-muted-foreground">Chưa có sản phẩm nào.</p>}
+                {productOptions.length === 0 && <p className="text-xs text-muted-foreground">{t('editDialog.noProducts')}</p>}
               </div>
             </div>
           )}
 
           <div className="space-y-1.5">
-            <Label>Tier khách hàng áp dụng (bỏ trống = mọi tier, kể cả khách lẻ)</Label>
+            <Label>{t('editDialog.applicableTiers')}</Label>
             <div className="flex flex-wrap gap-2">
-              {CUSTOMER_TIERS.map((t) => (
+              {CUSTOMER_TIERS.map((tier) => (
                 <button
-                  key={t}
+                  key={tier}
                   type="button"
-                  onClick={() => toggleTier(t)}
+                  onClick={() => toggleTier(tier)}
                   className={cn(
                     'px-2.5 py-1 rounded-full text-xs font-medium border transition-colors',
-                    applicableTiers.includes(t)
+                    applicableTiers.includes(tier)
                       ? 'border-indigo-500 bg-indigo-50 text-indigo-700 dark:bg-indigo-500/15 dark:text-indigo-300'
                       : 'border-slate-200 dark:border-slate-700 text-slate-500 dark:text-slate-400',
                   )}
                 >
-                  VIP {t}
+                  VIP {tier}
                 </button>
               ))}
             </div>
@@ -248,32 +255,32 @@ export function PromotionEditDialog({ open, onOpenChange, item, productOptions, 
 
           <div className="grid grid-cols-3 gap-3">
             <div className="space-y-1.5">
-              <Label>SL tối thiểu</Label>
+              <Label>{t('editDialog.minQuantity')}</Label>
               <Input type="number" min={1} value={minQuantity} onChange={(e) => setMinQuantity(e.target.value)} />
             </div>
             <div className="space-y-1.5">
-              <Label>Bắt đầu</Label>
+              <Label>{t('editDialog.startDate')}</Label>
               <Input type="date" value={startDate} onChange={(e) => setStartDate(e.target.value)} />
             </div>
             <div className="space-y-1.5">
-              <Label>Kết thúc</Label>
+              <Label>{t('editDialog.endDate')}</Label>
               <Input type="date" value={endDate} onChange={(e) => setEndDate(e.target.value)} />
             </div>
           </div>
 
           <div className="flex items-center gap-2">
             <Switch checked={active} onCheckedChange={setActive} />
-            <Label className="!mb-0">{active ? 'Đang hoạt động' : 'Tạm tắt'}</Label>
+            <Label className="!mb-0">{active ? t('editDialog.active') : t('editDialog.inactive')}</Label>
           </div>
         </div>
 
         <DialogFooter>
           <Button variant="outline" onClick={() => onOpenChange(false)} disabled={saving}>
-            Hủy
+            {t('common:actions.cancel')}
           </Button>
           <Button onClick={handleSave} disabled={saving}>
             {saving && <Spinner size={14} />}
-            Lưu
+            {t('common:actions.save')}
           </Button>
         </DialogFooter>
       </DialogContent>

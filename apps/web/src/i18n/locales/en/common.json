@@ -1,0 +1,114 @@
+{
+  "actions": {
+    "save": "Save",
+    "cancel": "Cancel",
+    "delete": "Delete",
+    "edit": "Edit",
+    "add": "Add",
+    "create": "Create",
+    "search": "Search",
+    "confirm": "Confirm",
+    "close": "Close",
+    "back": "Back",
+    "next": "Next",
+    "submit": "Submit",
+    "reset": "Reset",
+    "export": "Export",
+    "import": "Import",
+    "download": "Download",
+    "upload": "Upload",
+    "refresh": "Refresh",
+    "view": "View",
+    "viewDetail": "View detail",
+    "copy": "Copy",
+    "copied": "Copied",
+    "filter": "Filter",
+    "clearFilter": "Clear filter",
+    "apply": "Apply",
+    "select": "Select",
+    "selectAll": "Select all",
+    "clearSelection": "Clear selection",
+    "actions": "Actions",
+    "yes": "Yes",
+    "no": "No"
+  },
+  "status": {
+    "loading": "Loading...",
+    "saving": "Saving...",
+    "processing": "Processing...",
+    "success": "Success",
+    "failed": "Failed",
+    "error": "Something went wrong",
+    "noData": "No data",
+    "notFound": "Not found"
+  },
+  "confirm": {
+    "deleteTitle": "Confirm delete",
+    "deleteMessage": "Are you sure you want to delete this item?",
+    "unsavedTitle": "Unsaved changes",
+    "unsavedMessage": "Are you sure you want to leave without saving your changes?"
+  },
+  "table": {
+    "page": "Page",
+    "of": "of",
+    "rowsPerPage": "Rows per page",
+    "total": "Total",
+    "totalRecords": "{{count}} records total"
+  },
+  "language": {
+    "vi": "Tiếng Việt",
+    "en": "English",
+    "switch": "Switch language"
+  },
+  "errors": {
+    "notFoundTitle": "Page not found",
+    "notFoundMessage": "The page you visited does not exist or has been moved.",
+    "backToDashboard": "Back to dashboard"
+  },
+  "datePresets": {
+    "today": "Today",
+    "yesterday": "Yesterday",
+    "last-7d": "7 days",
+    "last-14d": "14 days",
+    "last-30d": "30 days",
+    "this-week": "This week",
+    "last-week": "Last week",
+    "this-month": "This month",
+    "last-month": "Last month",
+    "this-year": "This year",
+    "last-year": "Last year"
+  },
+  "dateRange": {
+    "placeholder": "Select date",
+    "from": "From",
+    "to": "to",
+    "custom": "Custom",
+    "customHeading": "Select a custom range",
+    "customHeadingOr": "Or select a custom range"
+  },
+  "pagination": {
+    "noResults": "No results",
+    "showing": "Showing {{from}}–{{to}} / {{total}}",
+    "perPage": "{{size}}/page"
+  },
+  "multiSelect": {
+    "searchPlaceholder": "Search…",
+    "clearAll": "Clear all",
+    "noMatch": "No match found",
+    "selectAll": "Select all"
+  },
+  "selectFilter": {
+    "all": "— All ({{count}}) —"
+  },
+  "imagePreview": {
+    "title": "Image preview",
+    "preparing": "Preparing preview…",
+    "loadError": "Could not load image — the link may have expired or is blocked by CORS.",
+    "tryOriginal": "Try opening the Original link below.",
+    "noImage": "No image",
+    "displayLabel": "Display:",
+    "originalLabel": "Original:",
+    "displayUrlLabel": "display URL",
+    "originalUrlLabel": "original URL"
+  }
+}

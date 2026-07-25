@@ -1,4 +1,5 @@
 import React, { useState } from 'react';
+import { useTranslation } from 'react-i18next';
 import type { OrderWorkshopField, WorkshopConfigCategory } from 'shared';
 import { toast } from 'sonner';
 
@@ -25,6 +26,7 @@ interface Props {
 }
 
 export function IconSelectCell({ orderId, field, category, value, canEdit, onUpdated }: Props) {
+  const { t } = useTranslation('orders');
   const items = useWorkshopConfigStore((s) => s.byCategory[category] || []);
   const resolve = useWorkshopConfigStore((s) => s.resolve);
   const current = resolve(category, value || undefined);
@@ -35,7 +37,9 @@ export function IconSelectCell({ orderId, field, category, value, canEdit, onUpd
     try {
       setSaving(true);
       await RepositoryRemote.order.updateField(orderId, { field, value: newCode });
-      toast.success(newCode ? `Đã đổi → ${resolve(category, newCode)?.name || newCode}` : 'Đã bỏ chọn');
+      toast.success(
+        newCode ? t('cells.changedTo', { name: resolve(category, newCode)?.name || newCode }) : t('cells.cleared'),
+      );
       onUpdated?.(newCode);
     } catch (err) {
       handleAxiosError(err);

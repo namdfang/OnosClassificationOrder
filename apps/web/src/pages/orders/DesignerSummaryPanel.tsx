@@ -1,4 +1,6 @@
 import React, { useEffect, useMemo, useState } from 'react';
+import { useTranslation } from 'react-i18next';
+import type { TFunction } from 'i18next';
 import { ChevronDown, ChevronRight, Trophy, Users } from 'lucide-react';
 import type { DesignerBreakdownRow, DesignerStatusCounts } from 'shared';
 
@@ -35,31 +37,55 @@ type Breakdown = {
   perDesigner: DesignerBreakdownRow[];
 };
 
-const STATUS_COLS: {
+type StatusCol = {
   key: keyof Omit<DesignerStatusCounts, 'total'>;
   label: string;
   cls: string;
   filterValue: 'assigned' | 'in-progress' | 'done' | 'rejected' | 'rework' | 'unassigned' | '__unassigned_notool__';
-}[] = [
+};
+
+function buildStatusCols(t: TFunction<'orders'>): StatusCol[] {
   // "Chưa gán" panel = "Chưa gán không tool" (count `unassigned` từ BE đã = M);
   // filterValue token để click (KPI strip + matrix) lọc đúng nhóm không-tool.
-  { key: 'unassigned', label: 'Chưa gán không tool', cls: 'text-zinc-500', filterValue: '__unassigned_notool__' },
-  { key: 'assigned', label: 'Cần làm', cls: 'text-zinc-700 dark:text-zinc-200', filterValue: 'assigned' },
-  { key: 'rework', label: 'Cần làm lại', cls: 'text-amber-600 dark:text-amber-400', filterValue: 'rework' },
-  { key: 'inProgress', label: 'Đang làm', cls: 'text-indigo-600 dark:text-indigo-400', filterValue: 'in-progress' },
-  { key: 'done', label: 'Đã xong', cls: 'text-emerald-600 dark:text-emerald-400', filterValue: 'done' },
-  { key: 'rejected', label: 'Không làm được', cls: 'text-rose-600 dark:text-rose-400', filterValue: 'rejected' },
-];
+  return [
+    {
+      key: 'unassigned',
+      label: t('designerSummary.status.unassignedNoTool'),
+      cls: 'text-zinc-500',
+      filterValue: '__unassigned_notool__',
+    },
+    { key: 'assigned', label: t('designerSummary.status.assigned'), cls: 'text-zinc-700 dark:text-zinc-200', filterValue: 'assigned' },
+    { key: 'rework', label: t('designerSummary.status.rework'), cls: 'text-amber-600 dark:text-amber-400', filterValue: 'rework' },
+    {
+      key: 'inProgress',
+      label: t('designerSummary.status.inProgress'),
+      cls: 'text-indigo-600 dark:text-indigo-400',
+      filterValue: 'in-progress',
+    },
+    { key: 'done', label: t('designerSummary.status.done'), cls: 'text-emerald-600 dark:text-emerald-400', filterValue: 'done' },
+    { key: 'rejected', label: t('designerSummary.status.rejected'), cls: 'text-rose-600 dark:text-rose-400', filterValue: 'rejected' },
+  ];
+}
 
 // KPI strip = "Tổng chưa gán" (N+M, `unassignedAll`) đứng TRƯỚC "Chưa gán không
 // tool" (M), rồi các status khác. Matrix KHÔNG có card tổng (chỉ STATUS_COLS).
 // Click "Tổng chưa gán" → filterValue 'unassigned' = list chưa gán & note≠'ok' (N+M).
-const KPI_COLS: typeof STATUS_COLS = [
-  { key: 'unassignedAll', label: 'Tổng chưa gán', cls: 'text-zinc-600 dark:text-zinc-300', filterValue: 'unassigned' },
-  ...STATUS_COLS,
-];
+function buildKpiCols(t: TFunction<'orders'>): StatusCol[] {
+  return [
+    {
+      key: 'unassignedAll',
+      label: t('designerSummary.status.unassignedAll'),
+      cls: 'text-zinc-600 dark:text-zinc-300',
+      filterValue: 'unassigned',
+    },
+    ...buildStatusCols(t),
+  ];
+}
 
 export function DesignerSummaryPanel({ filterQs, onClickCell }: Props) {
+  const { t } = useTranslation('orders');
+  const STATUS_COLS = useMemo(() => buildStatusCols(t), [t]);
+  const KPI_COLS = useMemo(() => buildKpiCols(t), [t]);
   const [data, setData] = useState<Breakdown | null>(null);
   const [loading, setLoading] = useState(false);
   const [showTable, setShowTable] = useState(true);
@@ -110,8 +136,10 @@ export function DesignerSummaryPanel({ filterQs, onClickCell }: Props) {
       <div className="flex items-center justify-between border-b border-border px-3 py-2 flex-wrap gap-2">
         <div className="flex items-center gap-2 text-xs font-semibold text-foreground">
           <Trophy size={13} className="text-amber-500" />
-          Designer summary
-          <span className="text-muted-foreground font-normal">({showOverall ? 'tổng toàn bộ' : 'theo filter'})</span>
+          {t('designerSummary.title')}
+          <span className="text-muted-foreground font-normal">
+            ({showOverall ? t('designerSummary.scopeOverall') : t('designerSummary.scopeFiltered')})
+          </span>
         </div>
         <div className="flex items-center gap-2">
           <button
@@ -119,7 +147,9 @@ export function DesignerSummaryPanel({ filterQs, onClickCell }: Props) {
             onClick={() => setShowOverall((s) => !s)}
             className="text-[11px] text-muted-foreground hover:text-foreground"
           >
-            Xem {showOverall ? 'theo filter' : 'tổng'}
+            {t('designerSummary.viewToggle', {
+              target: showOverall ? t('designerSummary.scopeFiltered') : t('designerSummary.scopeOverallShort'),
+            })}
           </button>
           <button
             type="button"
@@ -127,7 +157,7 @@ export function DesignerSummaryPanel({ filterQs, onClickCell }: Props) {
             className="text-[11px] text-muted-foreground hover:text-foreground inline-flex items-center gap-1"
           >
             {showTable ? <ChevronDown size={11} /> : <ChevronRight size={11} />}
-            Bảng theo người
+            {t('designerSummary.tableByPerson')}
           </button>
         </div>
       </div>
@@ -144,12 +174,14 @@ export function DesignerSummaryPanel({ filterQs, onClickCell }: Props) {
               className={cn(
                 'flex flex-col rounded-md border border-border bg-background p-2 text-left hover:border-primary hover:bg-primary/5 transition-colors',
               )}
-              title={`Click để filter list theo ${c.label}`}
+              title={t('designerSummary.clickToFilter', { label: c.label })}
             >
               <span className="text-[10px] uppercase tracking-wider text-muted-foreground">{c.label}</span>
               <span className={cn('text-lg font-bold leading-none mt-1', c.cls)}>{v}</span>
               {!showOverall && overallCounts && ov !== v && (
-                <span className="text-[10px] text-muted-foreground mt-0.5">/ {ov} tổng</span>
+                <span className="text-[10px] text-muted-foreground mt-0.5">
+                  / {ov} {t('designerSummary.total')}
+                </span>
               )}
             </button>
           );
@@ -164,7 +196,7 @@ export function DesignerSummaryPanel({ filterQs, onClickCell }: Props) {
               <tr>
                 <th className="text-left py-1.5 px-3 font-medium">
                   <span className="inline-flex items-center gap-1 text-muted-foreground">
-                    <Users size={11} /> Designer ({sortedRows.length})
+                    <Users size={11} /> {t('designerSummary.designerCount', { count: sortedRows.length })}
                   </span>
                 </th>
                 {STATUS_COLS.map((c) => (
@@ -172,14 +204,14 @@ export function DesignerSummaryPanel({ filterQs, onClickCell }: Props) {
                     {c.label}
                   </th>
                 ))}
-                <th className="text-center py-1.5 px-2 font-semibold">Tổng</th>
+                <th className="text-center py-1.5 px-2 font-semibold">{t('designerSummary.total')}</th>
               </tr>
             </thead>
             <tbody>
               {sortedRows.length === 0 && (
                 <tr>
                   <td colSpan={STATUS_COLS.length + 2} className="text-center py-4 text-muted-foreground">
-                    Không có designer.
+                    {t('designerSummary.noDesigners')}
                   </td>
                 </tr>
               )}
@@ -195,7 +227,7 @@ export function DesignerSummaryPanel({ filterQs, onClickCell }: Props) {
                           'font-medium text-foreground hover:text-primary text-left flex gap-2',
                           isUnassigned && 'italic text-muted-foreground',
                         )}
-                        title="Click filter theo người này"
+                        title={t('designerSummary.clickFilterByPerson')}
                       >
                         <div>{row.fullName}</div>
                         {row.email && <div className="text-[10px] text-muted-foreground">- {row.email}</div>}
@@ -214,7 +246,7 @@ export function DesignerSummaryPanel({ filterQs, onClickCell }: Props) {
                                 c.cls,
                                 'bg-muted/40',
                               )}
-                              title={`Filter: ${row.fullName} · ${c.label}`}
+                              title={t('designerSummary.filterTitle', { name: row.fullName, label: c.label })}
                             >
                               {v}
                             </button>

@@ -1,4 +1,6 @@
 import React, { useEffect, useMemo, useState } from 'react';
+import { useTranslation } from 'react-i18next';
+import type { TFunction } from 'i18next';
 import { KeyRound, Palette, Pencil, Plus, RefreshCw, Trash2 } from 'lucide-react';
 import type { DesignerTeamMember } from 'shared';
 import { Status } from 'shared';
@@ -29,13 +31,17 @@ const EMPTY_DIALOG: DialogState = { open: false, mode: 'create', member: null };
 
 type StatusFilter = 'active' | 'inactive' | 'all';
 
-const STATUS_FILTERS: { key: StatusFilter; label: string }[] = [
-  { key: 'active', label: 'Đang bật' },
-  { key: 'inactive', label: 'Đã tắt' },
-  { key: 'all', label: 'Tất cả' },
-];
+function buildStatusFilters(t: TFunction<'designerTaskWorkflow'>): { key: StatusFilter; label: string }[] {
+  return [
+    { key: 'active', label: t('team.statusFilters.active') },
+    { key: 'inactive', label: t('team.statusFilters.inactive') },
+    { key: 'all', label: t('team.statusFilters.all') },
+  ];
+}
 
 export default function DesignerTeamPage() {
+  const { t } = useTranslation(['designerTaskWorkflow', 'common']);
+  const statusFilters = useMemo(() => buildStatusFilters(t), [t]);
   const [items, setItems] = useState<DesignerTeamMember[]>([]);
   const [loading, setLoading] = useState(false);
   // Mặc định chỉ hiện designer đang bật. Chọn "Đã tắt" để xem + thống kê người
@@ -88,7 +94,7 @@ export default function DesignerTeamPage() {
       await RepositoryRemote.designer.updateMember(m._id, {
         status: m.status === Status.Active ? Status.Inactive : Status.Active,
       });
-      toast.success('Đã đổi trạng thái');
+      toast.success(t('team.toggled'));
       fetchAll();
     } catch (err) {
       handleAxiosError(err);
@@ -99,7 +105,7 @@ export default function DesignerTeamPage() {
     if (!confirmDelete) return;
     try {
       await RepositoryRemote.designer.removeMember(confirmDelete._id);
-      toast.success('Đã xoá');
+      toast.success(t('team.deleted'));
       setConfirmDelete(null);
       fetchAll();
     } catch (err) {
@@ -110,13 +116,13 @@ export default function DesignerTeamPage() {
   const handleResetPassword = async () => {
     if (!resetTarget) return;
     if (resetPwd.length < 8) {
-      toast.error('Mật khẩu phải ít nhất 8 ký tự');
+      toast.error(t('team.passwordTooShort'));
       return;
     }
     try {
       setResetting(true);
       await RepositoryRemote.designer.resetPassword(resetTarget._id, { password: resetPwd });
-      toast.success(`Đã reset mật khẩu cho ${resetTarget.fullName} — gửi cho họ trước khi đóng`);
+      toast.success(t('team.resetDone', { name: resetTarget.fullName }));
       setResetTarget(null);
       setResetPwd('');
     } catch (err) {
@@ -133,23 +139,23 @@ export default function DesignerTeamPage() {
           <Palette size={20} className="text-violet-600" />
         </div>
         <div>
-          <h1 className="text-2xl font-bold text-foreground">Team Designer</h1>
-          <p className="text-sm text-muted-foreground">Quản lý sub-designer.</p>
+          <h1 className="text-2xl font-bold text-foreground">{t('team.title')}</h1>
+          <p className="text-sm text-muted-foreground">{t('team.subtitle')}</p>
         </div>
       </div>
 
       <div className="grid grid-cols-3 gap-3">
-        <StatCard label="Đang làm" value={totals.active} accent="text-emerald-600" />
-        <StatCard label="Tạm tắt" value={totals.inactive} accent="text-zinc-500" />
-        <StatCard label="Task active toàn team" value={totals.totalActiveTasks} accent="text-indigo-600" />
+        <StatCard label={t('team.stats.active')} value={totals.active} accent="text-emerald-600" />
+        <StatCard label={t('team.stats.inactive')} value={totals.inactive} accent="text-zinc-500" />
+        <StatCard label={t('team.stats.totalActiveTasks')} value={totals.totalActiveTasks} accent="text-indigo-600" />
       </div>
 
       <div className="rounded-lg border border-border bg-card">
         <div className="flex items-center justify-between p-4 border-b border-border gap-2 flex-wrap">
           <div className="flex items-center gap-3">
-            <p className="text-xs text-muted-foreground">{displayed.length} thành viên</p>
+            <p className="text-xs text-muted-foreground">{t('team.memberCount', { count: displayed.length })}</p>
             <div className="flex items-center gap-1 rounded-md border border-border p-0.5">
-              {STATUS_FILTERS.map((f) => (
+              {statusFilters.map((f) => (
                 <button
                   key={f.key}
                   type="button"
@@ -168,10 +174,10 @@ export default function DesignerTeamPage() {
           <div className="flex items-center gap-2">
             <Button variant="ghost" size="sm" onClick={fetchAll} disabled={loading}>
               <RefreshCw size={13} className={loading ? 'animate-spin' : ''} />
-              Tải lại
+              {t('team.reload')}
             </Button>
             <Button size="sm" onClick={openCreate}>
-              <Plus size={14} /> Thêm sub-designer
+              <Plus size={14} /> {t('team.addMember')}
             </Button>
           </div>
         </div>
@@ -179,12 +185,12 @@ export default function DesignerTeamPage() {
         <Table>
           <TableHeader>
             <TableRow>
-              <TableHead>Họ tên</TableHead>
-              <TableHead>Email</TableHead>
-              <TableHead className="w-24 text-center">Đang làm</TableHead>
-              <TableHead className="w-24 text-center">Đã xong</TableHead>
-              <TableHead className="w-32">Vào làm</TableHead>
-              <TableHead className="w-28">Trạng thái</TableHead>
+              <TableHead>{t('team.table.fullName')}</TableHead>
+              <TableHead>{t('team.table.email')}</TableHead>
+              <TableHead className="w-24 text-center">{t('team.table.active')}</TableHead>
+              <TableHead className="w-24 text-center">{t('team.table.done')}</TableHead>
+              <TableHead className="w-32">{t('team.table.hireDate')}</TableHead>
+              <TableHead className="w-28">{t('team.table.status')}</TableHead>
               <TableHead className="w-40 text-right"></TableHead>
             </TableRow>
           </TableHeader>
@@ -201,10 +207,11 @@ export default function DesignerTeamPage() {
                 <TableCell colSpan={7} className="text-center py-8 text-sm text-muted-foreground">
                   {items.length === 0 ? (
                     <>
-                      Chưa có sub-designer — bấm <strong>+ Thêm sub-designer</strong> ở góc trên.
+                      {t('team.emptyNoMembersPrefix')} <strong>{t('team.emptyNoMembersAction')}</strong>{' '}
+                      {t('team.emptyNoMembersSuffix')}
                     </>
                   ) : (
-                    <>Không có designer nào ở trạng thái này.</>
+                    <>{t('team.emptyFiltered')}</>
                   )}
                 </TableCell>
               </TableRow>
@@ -232,22 +239,27 @@ export default function DesignerTeamPage() {
                     <div className="flex items-center gap-2">
                       <Switch checked={it.status === Status.Active} onCheckedChange={() => handleToggle(it)} />
                       <span className="text-xs text-muted-foreground">
-                        {it.status === Status.Active ? 'Bật' : 'Tắt'}
+                        {it.status === Status.Active ? t('team.statusOn') : t('team.statusOff')}
                       </span>
                     </div>
                   </TableCell>
                   <TableCell className="text-right">
-                    <Button variant="ghost" size="sm" onClick={() => setResetTarget(it)} title="Reset mật khẩu">
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      onClick={() => setResetTarget(it)}
+                      title={t('team.resetPasswordTitle')}
+                    >
                       <KeyRound size={14} />
                     </Button>
-                    <Button variant="ghost" size="sm" onClick={() => openEdit(it)} title="Sửa">
+                    <Button variant="ghost" size="sm" onClick={() => openEdit(it)} title={t('common:actions.edit')}>
                       <Pencil size={14} />
                     </Button>
                     <Button
                       variant="ghost"
                       size="sm"
                       onClick={() => setConfirmDelete(it)}
-                      title="Xoá"
+                      title={t('common:actions.delete')}
                       disabled={activeTasks > 0}
                     >
                       <Trash2 size={14} className={activeTasks > 0 ? 'text-muted-foreground' : 'text-destructive'} />
@@ -271,18 +283,18 @@ export default function DesignerTeamPage() {
       <Dialog open={!!confirmDelete} onOpenChange={(o) => !o && setConfirmDelete(null)}>
         <DialogContent>
           <DialogHeader>
-            <DialogTitle>Xoá sub-designer</DialogTitle>
+            <DialogTitle>{t('team.deleteDialog.title')}</DialogTitle>
           </DialogHeader>
           <p className="text-sm text-muted-foreground">
-            Xoá <span className="font-medium text-foreground">{confirmDelete?.fullName}</span> ({confirmDelete?.email})?
-            User sẽ không đăng nhập được. Các đơn đã hoàn thành của user vẫn giữ liên kết để stats không mất.
+            {t('team.deleteDialog.prefix')} <span className="font-medium text-foreground">{confirmDelete?.fullName}</span>{' '}
+            ({confirmDelete?.email}){t('team.deleteDialog.suffix')}
           </p>
           <DialogFooter>
             <Button variant="outline" onClick={() => setConfirmDelete(null)}>
-              Huỷ
+              {t('common:actions.cancel')}
             </Button>
             <Button variant="destructive" onClick={handleDelete}>
-              Xoá
+              {t('common:actions.delete')}
             </Button>
           </DialogFooter>
         </DialogContent>
@@ -291,20 +303,20 @@ export default function DesignerTeamPage() {
       <Dialog open={!!resetTarget} onOpenChange={(o) => !o && (setResetTarget(null), setResetPwd(''))}>
         <DialogContent>
           <DialogHeader>
-            <DialogTitle>Reset mật khẩu</DialogTitle>
+            <DialogTitle>{t('team.resetDialog.title')}</DialogTitle>
           </DialogHeader>
           <p className="text-sm text-muted-foreground">
-            Reset mật khẩu cho <span className="font-medium text-foreground">{resetTarget?.fullName}</span>. User sẽ
-            phải đổi mật khẩu khi đăng nhập lần kế.
+            {t('team.resetDialog.prefix')} <span className="font-medium text-foreground">{resetTarget?.fullName}</span>
+            {t('team.resetDialog.suffix')}
           </p>
           <div className="space-y-2">
-            <Label>Mật khẩu mới</Label>
+            <Label>{t('team.resetDialog.newPasswordLabel')}</Label>
             <Input
               type="text"
               className="font-mono"
               value={resetPwd}
               onChange={(e) => setResetPwd(e.target.value)}
-              placeholder="Ít nhất 8 ký tự"
+              placeholder={t('team.resetDialog.newPasswordPlaceholder')}
             />
           </div>
           <DialogFooter>
@@ -315,11 +327,11 @@ export default function DesignerTeamPage() {
                 setResetPwd('');
               }}
             >
-              Huỷ
+              {t('common:actions.cancel')}
             </Button>
             <Button onClick={handleResetPassword} disabled={resetting}>
               {resetting && <Spinner size={14} className="mr-2" />}
-              Reset
+              {t('team.resetDialog.confirm')}
             </Button>
           </DialogFooter>
         </DialogContent>

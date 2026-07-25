@@ -1,4 +1,5 @@
 import React, { useEffect, useState } from 'react';
+import { useTranslation } from 'react-i18next';
 import { ImageIcon, PackageSearch } from 'lucide-react';
 import type { CustomerCatalogItem } from 'shared';
 
@@ -18,6 +19,7 @@ function formatPrice(value?: number): string {
 }
 
 function CustomerCatalog() {
+  const { t } = useTranslation('customerPortal');
   const [items, setItems] = useState<CustomerCatalogItem[]>([]);
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState('');
@@ -54,11 +56,11 @@ function CustomerCatalog() {
     <div>
       <div className="flex items-center justify-between mb-5 gap-3">
         <div>
-          <h1 className="text-lg font-semibold">Danh mục sản phẩm</h1>
-          <p className="text-xs text-muted-foreground">Giá tham khảo — sao chép tên sản phẩm để điền vào form đặt đơn.</p>
+          <h1 className="text-lg font-semibold">{t('catalog.title')}</h1>
+          <p className="text-xs text-muted-foreground">{t('catalog.subtitle')}</p>
         </div>
         <Input
-          placeholder="Tìm sản phẩm…"
+          placeholder={t('catalog.searchPlaceholder')}
           value={search}
           onChange={(e) => setSearch(e.target.value)}
           onKeyDown={(e) => e.key === 'Enter' && handleSearch()}
@@ -73,7 +75,7 @@ function CustomerCatalog() {
       ) : items.length === 0 ? (
         <div className="flex flex-col items-center justify-center py-16 text-muted-foreground">
           <PackageSearch size={32} className="mb-3" />
-          <p className="text-sm">Chưa có sản phẩm nào trong danh mục.</p>
+          <p className="text-sm">{t('catalog.empty')}</p>
         </div>
       ) : (
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
@@ -94,7 +96,7 @@ function CustomerCatalog() {
               <div className="flex-1 min-w-0 space-y-1.5">
                 <div className="flex items-center gap-1.5">
                   <p className="font-medium text-sm truncate">{item.fullName}</p>
-                  <CopyButton value={item.fullName} label="tên sản phẩm" />
+                  <CopyButton value={item.fullName} label={t('catalog.copyProductName')} />
                 </div>
 
                 <div className="flex flex-wrap gap-1.5">
@@ -123,7 +125,9 @@ function CustomerCatalog() {
                     </div>
                   ))}
                   {item.variations.length > 4 && (
-                    <p className="text-xs text-muted-foreground">+ {item.variations.length - 4} biến thể khác</p>
+                    <p className="text-xs text-muted-foreground">
+                      {t('catalog.moreVariations', { count: item.variations.length - 4 })}
+                    </p>
                   )}
                 </div>
               </div>

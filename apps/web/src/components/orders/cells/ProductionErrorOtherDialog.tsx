@@ -1,4 +1,5 @@
 import React, { useEffect, useState } from 'react';
+import { useTranslation } from 'react-i18next';
 import { toast } from 'sonner';
 
 import { RepositoryRemote } from '@/services';
@@ -29,6 +30,7 @@ const MAX_NOTE = 500;
  * "Lỗi khác" (other). BE validate cùng rule, dialog này chỉ là UX layer.
  */
 export function ProductionErrorOtherDialog({ open, orderId, defaultSource, defaultNote, onClose, onSaved }: Props) {
+  const { t } = useTranslation('orders');
   const normSource = (s?: 'designer' | 'factory' | 'tool-check') => (s === 'tool-check' ? undefined : s);
   const [source, setSource] = useState<'designer' | 'factory' | undefined>(normSource(defaultSource));
   const [note, setNote] = useState(defaultNote || '');
@@ -44,11 +46,11 @@ export function ProductionErrorOtherDialog({ open, orderId, defaultSource, defau
   const handleSubmit = async () => {
     if (!orderId) return;
     if (!source) {
-      toast.error('Phải chọn lỗi do designer hay do xưởng');
+      toast.error(t('cells.errorOtherDialog.sourceRequired'));
       return;
     }
     if (!note.trim()) {
-      toast.error('Phải nhập mô tả lỗi');
+      toast.error(t('cells.errorOtherDialog.noteRequired'));
       return;
     }
     try {
@@ -58,7 +60,7 @@ export function ProductionErrorOtherDialog({ open, orderId, defaultSource, defau
         source,
         note: note.trim(),
       });
-      toast.success('Đã ghi nhận lỗi');
+      toast.success(t('cells.errorOtherDialog.recorded'));
       onSaved(source, note.trim());
       onClose();
     } catch (err) {
@@ -72,16 +74,13 @@ export function ProductionErrorOtherDialog({ open, orderId, defaultSource, defau
     <Dialog open={open} onOpenChange={(o) => !o && !saving && onClose()}>
       <DialogContent className="max-w-md">
         <DialogHeader>
-          <DialogTitle>Lỗi khác — bắt buộc phân loại</DialogTitle>
+          <DialogTitle>{t('cells.errorOtherDialog.title')}</DialogTitle>
         </DialogHeader>
-        <p className="text-xs text-muted-foreground">
-          "Lỗi khác" cần phân loại nguồn lỗi (designer/xưởng) + mô tả cụ thể để dashboard thống kê chính xác và team
-          biết chi tiết.
-        </p>
+        <p className="text-xs text-muted-foreground">{t('cells.errorOtherDialog.description')}</p>
 
         <div className="space-y-4">
           <div className="space-y-2">
-            <Label>Lỗi do *</Label>
+            <Label>{t('cells.errorOtherDialog.sourceLabel')}</Label>
             <div className="flex gap-2">
               <button
                 type="button"
@@ -92,7 +91,7 @@ export function ProductionErrorOtherDialog({ open, orderId, defaultSource, defau
                     : 'border-border bg-background text-muted-foreground hover:border-violet-300'
                 }`}
               >
-                Do designer
+                {t('cells.errorSource.designer')}
               </button>
               <button
                 type="button"
@@ -103,23 +102,23 @@ export function ProductionErrorOtherDialog({ open, orderId, defaultSource, defau
                     : 'border-border bg-background text-muted-foreground hover:border-sky-300'
                 }`}
               >
-                Do xưởng
+                {t('cells.errorSource.factory')}
               </button>
             </div>
             {source === 'designer' && (
               <p className="text-[11px] text-amber-600 dark:text-amber-400">
-                Lỗi designer → task sẽ tự chuyển về "Cần làm lại" cho designer đã làm đơn này.
+                {t('cells.errorOtherDialog.designerHint')}
               </p>
             )}
           </div>
 
           <div className="space-y-2">
-            <Label>Mô tả lỗi *</Label>
+            <Label>{t('cells.errorOtherDialog.noteLabel')}</Label>
             <Textarea
               rows={4}
               value={note}
               onChange={(e) => setNote(e.target.value.slice(0, MAX_NOTE))}
-              placeholder="Mô tả cụ thể lỗi là gì, ở đâu, do nguyên nhân nào…"
+              placeholder={t('cells.errorOtherDialog.notePlaceholder')}
             />
             <div className="text-right text-[10px] text-muted-foreground">
               {note.length}/{MAX_NOTE}
@@ -129,11 +128,11 @@ export function ProductionErrorOtherDialog({ open, orderId, defaultSource, defau
 
         <DialogFooter>
           <Button variant="outline" onClick={onClose} disabled={saving}>
-            Huỷ
+            {t('cells.multiIcon.cancel')}
           </Button>
           <Button onClick={handleSubmit} disabled={saving || !source || !note.trim()}>
             {saving && <Spinner size={14} className="mr-2" />}
-            Lưu
+            {t('cells.multiIcon.save')}
           </Button>
         </DialogFooter>
       </DialogContent>

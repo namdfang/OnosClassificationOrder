@@ -1,0 +1,101 @@
+{
+  "layout": {
+    "brand": "Customer Portal",
+    "catalog": "Danh mục sản phẩm",
+    "newOrder": "Đặt đơn mới",
+    "logout": "Đăng xuất"
+  },
+  "login": {
+    "title": "Đăng nhập Customer Portal",
+    "subtitle": "Theo dõi và quản lý đơn hàng của bạn",
+    "email": "Email",
+    "emailPlaceholder": "you@example.com",
+    "password": "Mật khẩu",
+    "passwordPlaceholder": "••••••••",
+    "showPassword": "Hiện mật khẩu",
+    "hidePassword": "Ẩn mật khẩu",
+    "rememberMe": "Ghi nhớ đăng nhập",
+    "submit": "Đăng nhập",
+    "success": "Đăng nhập thành công",
+    "noAccount": "Chưa có tài khoản?",
+    "registerNow": "Đăng ký ngay",
+    "validation": {
+      "emailRequired": "Email là bắt buộc",
+      "emailInvalid": "Email không hợp lệ",
+      "passwordRequired": "Mật khẩu là bắt buộc"
+    }
+  },
+  "register": {
+    "title": "Đăng ký Customer Portal",
+    "subtitle": "Tạo tài khoản để đặt đơn và theo dõi tiến trình",
+    "email": "Email",
+    "emailPlaceholder": "you@example.com",
+    "password": "Mật khẩu",
+    "passwordPlaceholder": "Tối thiểu 6 ký tự",
+    "fullName": "Họ tên (không bắt buộc)",
+    "fullNamePlaceholder": "Nguyễn Văn A",
+    "phone": "Số điện thoại (không bắt buộc)",
+    "phonePlaceholder": "09xx xxx xxx",
+    "submit": "Đăng ký",
+    "success": "Đăng ký thành công, vui lòng đăng nhập",
+    "haveAccount": "Đã có tài khoản?",
+    "signIn": "Đăng nhập",
+    "validation": {
+      "emailRequired": "Email là bắt buộc",
+      "emailInvalid": "Email không hợp lệ",
+      "passwordMin": "Mật khẩu tối thiểu 6 ký tự"
+    }
+  },
+  "orders": {
+    "title": "Đơn hàng của bạn",
+    "empty": "Bạn chưa có đơn hàng nào.",
+    "placeFirst": "Đặt đơn đầu tiên",
+    "columns": {
+      "code": "Mã đơn",
+      "product": "Sản phẩm",
+      "colorSize": "Màu / Size",
+      "quantity": "SL",
+      "status": "Trạng thái",
+      "orderDate": "Ngày đặt"
+    },
+    "statusCancelled": "Đã hủy",
+    "statusProcessing": "Đang xử lý"
+  },
+  "orderNew": {
+    "title": "Đặt đơn mới",
+    "type": "Loại sản phẩm",
+    "typePlaceholder": "Vd: Áo thun, Cốc sứ...",
+    "color": "Màu",
+    "colorPlaceholder": "Đen",
+    "size": "Size",
+    "sizePlaceholder": "M",
+    "quantity": "Số lượng",
+    "mockupUrl": "Link ảnh mockup/thiết kế (không bắt buộc)",
+    "mockupUrlPlaceholder": "https://...",
+    "printMethod": "Phương pháp in (không bắt buộc)",
+    "printMethodPlaceholder": "DTG, DTF...",
+    "note": "Ghi chú (không bắt buộc)",
+    "notePlaceholder": "Ghi chú thêm cho đơn hàng...",
+    "submit": "Đặt đơn",
+    "success": "Đặt đơn thành công — mã đơn {{code}}",
+    "validation": {
+      "typeRequired": "Loại sản phẩm là bắt buộc"
+    }
+  },
+  "track": {
+    "notFound": "Không tìm thấy đơn hàng này.",
+    "cancelled": "Đã hủy",
+    "completed": "Hoàn thành",
+    "processing": "Đang xử lý",
+    "progressTitle": "Tiến trình đơn hàng",
+    "quantityShort": "SL"
+  },
+  "catalog": {
+    "title": "Danh mục sản phẩm",
+    "subtitle": "Giá tham khảo — sao chép tên sản phẩm để điền vào form đặt đơn.",
+    "searchPlaceholder": "Tìm sản phẩm…",
+    "empty": "Chưa có sản phẩm nào trong danh mục.",
+    "copyProductName": "tên sản phẩm",
+    "moreVariations": "+ {{count}} biến thể khác"
+  }
+}

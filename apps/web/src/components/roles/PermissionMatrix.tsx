@@ -1,17 +1,9 @@
 import React, { useMemo } from 'react';
+import { useTranslation } from 'react-i18next';
 import type { PermissionGroup, PermissionItem } from 'shared';
 import { PERMISSION_CATALOG } from 'shared';
 
 import { cn } from '@/utils/cn';
-
-const GROUP_LABEL: Record<PermissionGroup, string> = {
-  page: 'Truy cập trang',
-  order: 'Hành động Order',
-  order_field: 'Field-level Order',
-  workshop: 'Workshop',
-  admin: 'Quản trị',
-  audit: 'Audit',
-};
 
 interface Props {
   /** Codes the role currently has. */
@@ -21,6 +13,7 @@ interface Props {
 }
 
 export function PermissionMatrix({ value, onChange, disabled }: Props) {
+  const { t } = useTranslation('auth');
   const selected = useMemo(() => new Set(value), [value]);
 
   const toggle = (code: string) => {
@@ -66,7 +59,7 @@ export function PermissionMatrix({ value, onChange, disabled }: Props) {
         return (
           <div key={group} className="space-y-2">
             <h4 className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
-              {GROUP_LABEL[group]}
+              {t(`permissionGroups.${group}`)}
             </h4>
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-1.5 rounded-md border border-border p-3">
               {items.map((it) => {
@@ -87,7 +80,7 @@ export function PermissionMatrix({ value, onChange, disabled }: Props) {
                       disabled={disabled}
                       className="h-3.5 w-3.5"
                     />
-                    <span className="flex-1">{it.label}</span>
+                    <span className="flex-1">{t(`permissions.${it.code}`, { defaultValue: it.label })}</span>
                     <span className="text-[10px] font-mono text-muted-foreground/60">{it.code}</span>
                   </label>
                 );
@@ -100,15 +93,15 @@ export function PermissionMatrix({ value, onChange, disabled }: Props) {
       {/* Field-level matrix */}
       <div className="space-y-2">
         <h4 className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
-          {GROUP_LABEL.order_field}
+          {t('permissionGroups.order_field')}
         </h4>
         <div className="rounded-md border border-border overflow-hidden">
           <table className="w-full text-sm">
             <thead className="bg-muted/40">
               <tr>
-                <th className="text-left px-3 py-2 font-medium">Field</th>
-                <th className="px-3 py-2 font-medium w-20 text-center">View</th>
-                <th className="px-3 py-2 font-medium w-20 text-center">Edit</th>
+                <th className="text-left px-3 py-2 font-medium">{t('permissionMatrix.field')}</th>
+                <th className="px-3 py-2 font-medium w-20 text-center">{t('permissionMatrix.view')}</th>
+                <th className="px-3 py-2 font-medium w-20 text-center">{t('permissionMatrix.edit')}</th>
               </tr>
             </thead>
             <tbody>
@@ -118,7 +111,11 @@ export function PermissionMatrix({ value, onChange, disabled }: Props) {
                 return (
                   <tr key={row.field} className="border-t border-border">
                     <td className="px-3 py-2">
-                      <div className="font-medium">{row.label}</div>
+                      <div className="font-medium">
+                        {t(row.viewCode ? `permissions.${row.viewCode}` : `permissions.${row.editCode}`, {
+                          defaultValue: row.label,
+                        })}
+                      </div>
                       <div className="text-[10px] font-mono text-muted-foreground/60">{row.field}</div>
                     </td>
                     <td className="px-3 py-2 text-center">
@@ -149,10 +146,7 @@ export function PermissionMatrix({ value, onChange, disabled }: Props) {
             </tbody>
           </table>
         </div>
-        <p className="text-[11px] text-muted-foreground">
-          Edit kéo theo View được tự động — nếu không có view permission thì user không thấy cột, tức là edit cũng không
-          dùng được.
-        </p>
+        <p className="text-[11px] text-muted-foreground">{t('permissionMatrix.editImpliesView')}</p>
       </div>
     </div>
   );

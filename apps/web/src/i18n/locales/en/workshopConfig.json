@@ -1,0 +1,109 @@
+{
+  "page": {
+    "title": "Workshop management",
+    "subtitle": "Configure the categories used for Order business columns: print status, tool result, error files, assignee...",
+    "tabs": {
+      "printStatus": {
+        "label": "Print status",
+        "description": "List of print statuses (shown as a color badge)"
+      },
+      "printStatusNote": {
+        "label": "Print status note",
+        "description": "Print run note (shown as an icon)"
+      },
+      "toolResult": {
+        "label": "Tool result",
+        "description": "Has/doesn't have tool (shown as an icon)"
+      },
+      "toolResultNote": {
+        "label": "Tool result note",
+        "description": "OK / Error / No file (shown as a color badge)"
+      },
+      "errorFileType": {
+        "label": "Error fix file",
+        "description": "Error file type (shown as an icon)"
+      },
+      "assigneeNote": {
+        "label": "Assignee note",
+        "description": "Processing status (shown as an icon)"
+      },
+      "fabricType": {
+        "label": "Fabric type",
+        "description": "Fabric / blank type used for orders (shown as an icon)"
+      },
+      "machine": {
+        "label": "Machine type",
+        "description": "Printing machines in the factory — machine number (94, 27, 56…) (shown as a color badge)"
+      },
+      "productionError": {
+        "label": "Production error",
+        "description": "Reasons the factory reports an order error (shown as a color badge)"
+      },
+      "printMethod": {
+        "label": "Print method",
+        "description": "Print method for the customer catalog (shown as an icon)"
+      }
+    }
+  },
+  "categoryEditor": {
+    "itemCount": "{{count}} items — displayed as",
+    "displayMode": {
+      "color": "color badge",
+      "icon": "icon"
+    },
+    "table": {
+      "display": "Display",
+      "name": "Name",
+      "code": "Code",
+      "status": "Status",
+      "empty": "No items yet",
+      "on": "On",
+      "off": "Off"
+    },
+    "dialog": {
+      "createTitle": "Add item",
+      "editTitle": "Edit item"
+    },
+    "form": {
+      "displayName": "Display name",
+      "displayNamePlaceholder": "E.g. Printed (machine 1)",
+      "code": "Code",
+      "codeHint": "(slug, used for storage)",
+      "codePlaceholder": "e.g. machine-1",
+      "color": "Color",
+      "icon": "Icon",
+      "active": "Active",
+      "nameCodeRequired": "Please enter a name and code",
+      "colorRequired": "Please choose a color",
+      "iconRequired": "Please choose an icon",
+      "errorSourceRequired": "You must select whether the error is from the designer or the factory",
+      "addSuccess": "Added",
+      "updateSuccess": "Updated successfully"
+    },
+    "errorSource": {
+      "label": "Error type *",
+      "designer": "By designer",
+      "factory": "By factory",
+      "toolCheck": "By tool check",
+      "hint": "Designer errors → \"Needs rework\" for the designer. Tool-check errors → routed to Support (e.g. missing print file). The dashboard distinguishes between the different types."
+    },
+    "errorSourceBadge": {
+      "unassigned": "? UNASSIGNED",
+      "designer": "DES",
+      "toolCheck": "TOOL CHECK",
+      "factory": "FACTORY"
+    },
+    "deleteSuccess": "Deleted",
+    "deleteDialog": {
+      "title": "Delete item",
+      "message": "Delete {{name}}? Orders that already used it keep their existing value, but it will no longer be selectable."
+    }
+  },
+  "colorPicker": {
+    "choose": "Choose color"
+  },
+  "iconPicker": {
+    "choose": "Choose icon",
+    "searchPlaceholder": "Search icon..."
+  }
+}

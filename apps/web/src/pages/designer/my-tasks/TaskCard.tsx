@@ -1,4 +1,6 @@
 import React from 'react';
+import { useTranslation } from 'react-i18next';
+import type { TFunction } from 'i18next';
 import { Clock, Factory, ImageIcon, MessageSquareWarning } from 'lucide-react';
 import type { DesignerTaskCard as Card } from 'shared';
 import { DesignerStatus, WorkshopConfigCategory } from 'shared';
@@ -28,18 +30,18 @@ function smallThumb(url?: string): string | undefined {
   return url;
 }
 
-function timeStamp(card: Card): { label: string; value: Date | undefined } {
+function timeStamp(card: Card, t: TFunction<'designerTaskWorkflow'>): { label: string; value: Date | undefined } {
   switch (card.designerStatus) {
     case DesignerStatus.Assigned:
-      return { label: 'Gán', value: card.designerAssignedAt };
+      return { label: t('taskCard.timeline.assigned'), value: card.designerAssignedAt };
     case DesignerStatus.InProgress:
-      return { label: 'Bắt đầu', value: card.designerStartedAt };
+      return { label: t('taskCard.timeline.started'), value: card.designerStartedAt };
     case DesignerStatus.Done:
-      return { label: 'Xong', value: card.designerCompletedAt };
+      return { label: t('taskCard.timeline.done'), value: card.designerCompletedAt };
     case DesignerStatus.Rework:
-      return { label: 'Lỗi xưởng', value: card.designerReworkAt };
+      return { label: t('taskCard.timeline.rework'), value: card.designerReworkAt };
     case DesignerStatus.Rejected:
-      return { label: 'Không làm được', value: card.designerRejectedAt };
+      return { label: t('taskCard.timeline.rejected'), value: card.designerRejectedAt };
     default:
       return { label: '', value: undefined };
   }
@@ -72,24 +74,25 @@ function fmtFull(d?: Date): string {
 }
 
 /** Giải thích mốc thời gian theo trạng thái — dùng cho tooltip. */
-function statusTimeHint(status: DesignerStatus): string {
+function statusTimeHint(status: DesignerStatus, t: TFunction<'designerTaskWorkflow'>): string {
   switch (status) {
     case DesignerStatus.Assigned:
-      return 'Thời điểm bạn được giao task này';
+      return t('taskCard.timeHint.assigned');
     case DesignerStatus.InProgress:
-      return 'Thời điểm bắt đầu làm';
+      return t('taskCard.timeHint.inProgress');
     case DesignerStatus.Done:
-      return 'Thời điểm hoàn thành';
+      return t('taskCard.timeHint.done');
     case DesignerStatus.Rework:
-      return 'Thời điểm xưởng báo lỗi (cần làm lại)';
+      return t('taskCard.timeHint.rework');
     case DesignerStatus.Rejected:
-      return 'Thời điểm báo không làm được';
+      return t('taskCard.timeHint.rejected');
     default:
       return '';
   }
 }
 
 export function TaskCard({ card, onPreview, onClickProductionId }: Props) {
+  const { t } = useTranslation('designerTaskWorkflow');
   const { attributes, listeners, setNodeRef, transform, isDragging } = useDraggable({
     id: card._id,
     data: { status: card.designerStatus },
@@ -101,7 +104,7 @@ export function TaskCard({ card, onPreview, onClickProductionId }: Props) {
       }
     : undefined;
 
-  const ts = timeStamp(card);
+  const ts = timeStamp(card, t);
   const url = card.mockupOriginalUrl || card.mockupUrl;
   const thumb = smallThumb(card.mockupUrl);
 
@@ -116,7 +119,7 @@ export function TaskCard({ card, onPreview, onClickProductionId }: Props) {
         )
       : undefined;
   const now = useNow(30_000);
-  const countdown = deadline ? formatCountdown(deadline, now) : undefined;
+  const countdown = deadline ? formatCountdown(deadline, now, t) : undefined;
 
   // Resolve `toolResultNote` (code) → label + màu từ workshop_config, đồng bộ
   // với ColorBadgeSelectCell ở bảng đơn. Subscribe list để re-render khi store
@@ -145,11 +148,16 @@ export function TaskCard({ card, onPreview, onClickProductionId }: Props) {
             type="button"
             onClick={(e) => {
               e.stopPropagation();
-              if (url) onPreview?.(card.mockupUrl || url, `Mockup ${card.productionId}`, card.mockupOriginalUrl);
+              if (url)
+                onPreview?.(
+                  card.mockupUrl || url,
+                  t('taskCard.mockupTitle', { productionId: card.productionId }),
+                  card.mockupOriginalUrl,
+                );
             }}
             onPointerDown={(e) => e.stopPropagation()}
             className="shrink-0 w-14 h-14 rounded border border-border overflow-hidden bg-checker"
-            title="Click để xem to"
+            title={t('taskCard.viewLarge')}
           >
             <img
               src={thumb}
@@ -172,7 +180,7 @@ export function TaskCard({ card, onPreview, onClickProductionId }: Props) {
               <span className="shrink-0" onPointerDown={(e) => e.stopPropagation()}>
                 <CopyButton
                   value={card.productionId ?? ''}
-                  label={`mã ${card.productionId}`}
+                  label={t('taskCard.copyLabel', { productionId: card.productionId })}
                   iconSize={16}
                   className="p-1 text-foreground [&_svg]:stroke-[2.5]"
                 />
@@ -195,7 +203,10 @@ export function TaskCard({ card, onPreview, onClickProductionId }: Props) {
             </div>
             <PriorityBadge priority={card.priority} />
             {card.toolResultNote && (
-              <Hint content={`Note kết quả Tool: ${toolNoteCfg?.name || card.toolResultNote}`} forceRich>
+              <Hint
+                content={t('taskCard.toolNoteHint', { name: toolNoteCfg?.name || card.toolResultNote })}
+                forceRich
+              >
                 <span
                   className={cn(
                     'shrink-0 max-w-[45%] truncate rounded border px-1.5 py-0.5 text-[9px] font-medium',
@@ -213,7 +224,7 @@ export function TaskCard({ card, onPreview, onClickProductionId }: Props) {
             )}
           </div>
           {card.type && (
-            <Hint content={`Type: ${card.type}`} side="bottom" forceRich>
+            <Hint content={t('taskCard.typeHint', { type: card.type })} side="bottom" forceRich>
               <div className="text-[11px] text-foreground line-clamp-1">{card.type}</div>
             </Hint>
           )}
@@ -227,21 +238,21 @@ export function TaskCard({ card, onPreview, onClickProductionId }: Props) {
       {/* Hàng thời gian dàn ngang full-width (tận dụng khoảng trống dưới mockup) */}
       <div className="mt-1.5 flex items-center gap-x-3 gap-y-0.5 text-[10px] text-muted-foreground flex-wrap">
         {card.inProductionAt && (
-          <Hint content={`Ngày đơn vào sản xuất · ${fmtFull(card.inProductionAt)}`} forceRich>
+          <Hint content={t('taskCard.productionHint', { time: fmtFull(card.inProductionAt) })} forceRich>
             <span className="inline-flex items-center gap-1">
-              <Factory size={10} className="text-sky-500" /> SX: {fmtTime(card.inProductionAt)}
+              <Factory size={10} className="text-sky-500" /> {t('taskCard.productionLabel')}: {fmtTime(card.inProductionAt)}
             </span>
           </Hint>
         )}
         {ts.value && (
-          <Hint content={`${statusTimeHint(card.designerStatus)} · ${fmtFull(ts.value)}`} forceRich>
+          <Hint content={`${statusTimeHint(card.designerStatus, t)} · ${fmtFull(ts.value)}`} forceRich>
             <span className="inline-flex items-center gap-1">
               <Clock size={10} /> {ts.label} {fmtTime(ts.value)}
             </span>
           </Hint>
         )}
         {deadline && countdown && (
-          <Hint content={`Hạn dự kiến bước Thiết kế · ${fmtFull(deadline)}`} forceRich>
+          <Hint content={t('taskCard.deadlineHint', { time: fmtFull(deadline) })} forceRich>
             <span
               className={cn(
                 'inline-flex items-center gap-1',
@@ -276,7 +287,7 @@ export function TaskCard({ card, onPreview, onClickProductionId }: Props) {
       )}
       {card.designerStatus === DesignerStatus.Rejected && card.designerRejectedReason && (
         <div className="mt-1 text-[10px] text-rose-700 dark:text-rose-300 line-clamp-2">
-          <span className="font-medium">Lý do không làm được:</span> {card.designerRejectedReason}
+          <span className="font-medium">{t('taskCard.rejectedReasonLabel')}</span> {card.designerRejectedReason}
         </div>
       )}
 

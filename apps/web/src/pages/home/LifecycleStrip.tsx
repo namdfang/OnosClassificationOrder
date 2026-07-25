@@ -1,4 +1,6 @@
 import React, { useEffect, useMemo, useState } from 'react';
+import { useTranslation } from 'react-i18next';
+import type { TFunction } from 'i18next';
 import {
   Activity,
   AlertTriangle,
@@ -37,16 +39,18 @@ import { handleAxiosError } from '@/utils';
 import { cn } from '@/utils/cn';
 
 /** Nhãn ngắn cho từng chặng — hiện trên đầu mỗi box. */
-const STAGE_SHORT: Record<string, string> = {
-  'tool-check': 'Soát tool',
-  designer: 'Thiết kế',
-  print: 'In',
-  press: 'Ép',
-  'qc-post-press': 'QC ép',
-  'sew-in': 'May vào',
-  'sew-out': 'May ra',
-  pack: 'Đóng',
-};
+function buildStageShort(t: TFunction<'orderLifecycle'>): Record<string, string> {
+  return {
+    'tool-check': t('strip.stages.toolCheck'),
+    designer: t('strip.stages.designer'),
+    print: t('strip.stages.print'),
+    press: t('strip.stages.press'),
+    'qc-post-press': t('strip.stages.qcPostPress'),
+    'sew-in': t('strip.stages.sewIn'),
+    'sew-out': t('strip.stages.sewOut'),
+    pack: t('strip.stages.pack'),
+  };
+}
 
 /** Icon riêng cho từng chặng — hiện trong box cho dễ phân biệt. */
 const STAGE_ICON: Record<string, React.ElementType> = {
@@ -73,38 +77,42 @@ function daysAgoISO(days: number): string {
 
 const fmt = (n: number) => (n === 0 ? '–' : n.toLocaleString('en-US'));
 
-const TRACK_STYLE: Record<string, { chip: string; icon: React.ElementType; color: string; text: string }> = {
-  done: {
-    chip: 'border-emerald-300/60 bg-emerald-50/60 dark:bg-emerald-500/10',
-    icon: CheckCircle2,
-    color: 'text-emerald-600 dark:text-emerald-400',
-    text: 'Đã hoàn thành chặng',
-  },
-  current: {
-    chip: 'border-indigo-400 bg-indigo-50/70 dark:bg-indigo-500/10 ring-1 ring-indigo-300',
-    icon: PlayCircle,
-    color: 'text-indigo-600 dark:text-indigo-400',
-    text: 'Đang ở chặng này',
-  },
-  error: {
-    chip: 'border-rose-400 bg-rose-50/70 dark:bg-rose-500/10 ring-1 ring-rose-300',
-    icon: AlertTriangle,
-    color: 'text-rose-600 dark:text-rose-400',
-    text: 'Đang lỗi (chờ soát tool lại)',
-  },
-  rework: {
-    chip: 'border-amber-400 bg-amber-50/70 dark:bg-amber-500/10 ring-1 ring-amber-300',
-    icon: RotateCw,
-    color: 'text-amber-600 dark:text-amber-400',
-    text: 'Đang chờ làm lại',
-  },
-  pending: {
-    chip: 'border-border bg-muted/30',
-    icon: Circle,
-    color: 'text-muted-foreground/40',
-    text: 'Chưa tới chặng này',
-  },
-};
+function buildTrackStyle(
+  t: TFunction<'orderLifecycle'>,
+): Record<string, { chip: string; icon: React.ElementType; color: string; text: string }> {
+  return {
+    done: {
+      chip: 'border-emerald-300/60 bg-emerald-50/60 dark:bg-emerald-500/10',
+      icon: CheckCircle2,
+      color: 'text-emerald-600 dark:text-emerald-400',
+      text: t('strip.trackStatus.done'),
+    },
+    current: {
+      chip: 'border-indigo-400 bg-indigo-50/70 dark:bg-indigo-500/10 ring-1 ring-indigo-300',
+      icon: PlayCircle,
+      color: 'text-indigo-600 dark:text-indigo-400',
+      text: t('strip.trackStatus.current'),
+    },
+    error: {
+      chip: 'border-rose-400 bg-rose-50/70 dark:bg-rose-500/10 ring-1 ring-rose-300',
+      icon: AlertTriangle,
+      color: 'text-rose-600 dark:text-rose-400',
+      text: t('strip.trackStatus.error'),
+    },
+    rework: {
+      chip: 'border-amber-400 bg-amber-50/70 dark:bg-amber-500/10 ring-1 ring-amber-300',
+      icon: RotateCw,
+      color: 'text-amber-600 dark:text-amber-400',
+      text: t('strip.trackStatus.rework'),
+    },
+    pending: {
+      chip: 'border-border bg-muted/30',
+      icon: Circle,
+      color: 'text-muted-foreground/40',
+      text: t('strip.trackStatus.pending'),
+    },
+  };
+}
 
 /** 1 dòng chi tiết trong tooltip. */
 function Row({ icon, label, value, cls }: { icon?: React.ReactNode; label: string; value: number; cls?: string }) {
@@ -129,6 +137,9 @@ function Row({ icon, label, value, cls }: { icon?: React.ReactNode; label: strin
  * Fulfillment tự khóa theo xưởng ở BE. Xem `OrderLifecycle.md`.
  */
 export default function LifecycleStrip() {
+  const { t } = useTranslation('orderLifecycle');
+  const STAGE_SHORT = useMemo(() => buildStageShort(t), [t]);
+  const TRACK_STYLE = useMemo(() => buildTrackStyle(t), [t]);
   const [from, setFrom] = useState<string>(() => daysAgoISO(6));
   const [to, setTo] = useState<string>(() => todayISO());
   const [pid, setPid] = useState('');
@@ -187,7 +198,7 @@ export default function LifecycleStrip() {
       } catch {
         if (!cancelled) {
           setTrack(null);
-          setTrackError('Không tìm thấy đơn với mã này.');
+          setTrackError(t('strip.trackNotFound'));
         }
       } finally {
         if (!cancelled) setLoading(false);
@@ -196,7 +207,7 @@ export default function LifecycleStrip() {
     return () => {
       cancelled = true;
     };
-  }, [debouncedPid]);
+  }, [debouncedPid, t]);
 
   const bottleneck = agg?.totals.bottleneckStage;
   const totals = agg?.totals;
@@ -212,15 +223,15 @@ export default function LifecycleStrip() {
         rework: s.rework,
         done: s.passedTotal,
       })),
-    [agg],
+    [agg, STAGE_SHORT],
   );
 
   const trackStages = useMemo(() => {
     if (!track) return [];
     const list = track.stages.map((s) => ({ key: s.key, label: STAGE_SHORT[s.key] ?? s.label, status: s.status }));
-    list.push({ key: 'done', label: 'Hoàn thành', status: track.completed ? 'done' : 'pending' });
+    list.push({ key: 'done', label: t('strip.stages.done'), status: track.completed ? 'done' : 'pending' });
     return list;
-  }, [track]);
+  }, [track, STAGE_SHORT, t]);
 
   return (
     <div className="rounded-xl border border-border bg-card px-3 py-2.5 space-y-2.5">
@@ -228,14 +239,14 @@ export default function LifecycleStrip() {
       <div className="flex items-center gap-2 flex-wrap">
         <div className="flex items-center gap-1.5 text-sm font-semibold text-foreground">
           <Workflow size={15} className="text-indigo-600" />
-          Vòng đời đơn
+          {t('strip.title')}
         </div>
         <div className="relative w-[200px]">
           <Search size={13} className="absolute left-2 top-1/2 -translate-y-1/2 text-muted-foreground" />
           <input
             value={pid}
             onChange={(e) => setPid(e.target.value)}
-            placeholder="Tra cứu productionId…"
+            placeholder={t('strip.searchPlaceholder')}
             className="w-full h-7 pl-7 pr-6 rounded-md border border-border bg-background text-xs outline-none focus:ring-1 focus:ring-indigo-300"
           />
           {pid && (
@@ -251,19 +262,19 @@ export default function LifecycleStrip() {
         <button
           type="button"
           onClick={() => setBulkOpen(true)}
-          title="Tra cứu nhiều Production ID"
+          title={t('strip.bulkLookupTitle')}
           className="h-7 px-2 inline-flex items-center gap-1 rounded-md border border-border bg-background text-xs text-muted-foreground hover:text-foreground hover:bg-accent"
         >
-          <ListChecks size={13} /> Nhiều mã
+          <ListChecks size={13} /> {t('strip.bulkLookup')}
         </button>
         {!isTrack && (
           <DateRangePicker
             from={from}
             to={to}
-            placeholder="Khoảng ngày"
-            onChange={(f, t) => {
+            placeholder={t('strip.dateRangePlaceholder')}
+            onChange={(f, t2) => {
               setFrom(f);
-              setTo(t);
+              setTo(t2);
             }}
           />
         )}
@@ -271,7 +282,7 @@ export default function LifecycleStrip() {
           <button
             type="button"
             onClick={() => setCancelledOpen(true)}
-            title="Xem danh sách đơn đã hủy trong kỳ"
+            title={t('strip.cancelledTitle')}
             className={cn(
               'h-7 px-2 inline-flex items-center gap-1 rounded-md border text-xs transition-colors',
               (totals?.cancelledInRange ?? 0) > 0
@@ -279,7 +290,7 @@ export default function LifecycleStrip() {
                 : 'border-border bg-background text-muted-foreground hover:text-foreground hover:bg-accent',
             )}
           >
-            <Ban size={13} /> Hủy:{' '}
+            <Ban size={13} /> {t('strip.cancelled')}:{' '}
             <span className="font-semibold tabular-nums">
               {(totals?.cancelledInRange ?? 0).toLocaleString('en-US')}
             </span>
@@ -293,8 +304,10 @@ export default function LifecycleStrip() {
             <span>
               ·{' '}
               {track.completed
-                ? 'Đã hoàn thành toàn bộ'
-                : `Đang ở "${STAGE_SHORT[track.currentStageKey ?? ''] ?? track.currentStageKey ?? '—'}"`}
+                ? t('strip.completedAll')
+                : t('strip.currentlyAt', {
+                    stage: STAGE_SHORT[track.currentStageKey ?? ''] ?? track.currentStageKey ?? '—',
+                  })}
             </span>
           </span>
         )}
@@ -311,7 +324,7 @@ export default function LifecycleStrip() {
               <TooltipTrigger asChild>
                 <div className="w-[104px] shrink-0 rounded-lg border border-indigo-300/60 bg-indigo-50/50 dark:bg-indigo-500/10 px-2.5 py-2.5 flex flex-col items-center justify-center gap-1.5 cursor-help">
                   <span className="text-[10px] uppercase tracking-wide text-muted-foreground flex items-center gap-1 leading-none">
-                    <Layers size={12} className="text-indigo-600" /> Tổng đơn
+                    <Layers size={12} className="text-indigo-600" /> {t('strip.totalOrders')}
                   </span>
                   <span className="text-2xl font-bold tabular-nums leading-none text-indigo-700 dark:text-indigo-300">
                     {isTrack ? (track?.completed ? '✓' : '●') : fmt(totals?.totalOrders ?? 0)}
@@ -319,17 +332,17 @@ export default function LifecycleStrip() {
                 </div>
               </TooltipTrigger>
               <TooltipContent className="min-w-[170px]">
-                <div className="font-semibold mb-1">Tổng đơn tất cả</div>
+                <div className="font-semibold mb-1">{t('strip.totalOrdersTooltip')}</div>
                 {isTrack ? (
                   <div className="text-muted-foreground">
-                    {track?.completed ? 'Đơn đã hoàn thành toàn bộ quy trình.' : 'Đơn đang trong quy trình.'}
+                    {track?.completed ? t('strip.completedFull') : t('strip.inProgressFull')}
                   </div>
                 ) : (
                   <div className="space-y-0.5">
-                    <Row label="Tổng đơn (trong kỳ)" value={totals?.totalOrders ?? 0} />
-                    <Row label="Đang chạy" value={totals?.totalActive ?? 0} />
+                    <Row label={t('strip.totalOrdersInRange')} value={totals?.totalOrders ?? 0} />
+                    <Row label={t('strip.active')} value={totals?.totalActive ?? 0} />
                     <Row
-                      label="Đã hoàn thành"
+                      label={t('strip.completed')}
                       value={totals?.completedInRange ?? 0}
                       cls="text-emerald-600 dark:text-emerald-400"
                     />
@@ -443,30 +456,34 @@ export default function LifecycleStrip() {
                         <TooltipContent className="min-w-[180px]">
                           <div className="font-semibold mb-1">
                             {n.label}
-                            {isBottleneck && <span className="ml-1.5 text-[10px] uppercase text-amber-600">tắc</span>}
+                            {isBottleneck && (
+                              <span className="ml-1.5 text-[10px] uppercase text-amber-600">
+                                {t('strip.bottleneckTag')}
+                              </span>
+                            )}
                           </div>
-                          <Row label="Tổng đơn (đang ở chặng)" value={n.total} cls="text-foreground" />
+                          <Row label={t('strip.totalOrdersAtStage')} value={n.total} cls="text-foreground" />
                           <Row
                             icon={<Clock size={11} />}
-                            label="Đang chờ"
+                            label={t('strip.waiting')}
                             value={n.waiting}
                             cls="text-slate-600 dark:text-slate-300"
                           />
                           <Row
                             icon={<Activity size={11} />}
-                            label="Đang làm"
+                            label={t('strip.inProgress')}
                             value={n.inProgress}
                             cls="text-indigo-600 dark:text-indigo-300"
                           />
                           <Row
                             icon={<RotateCw size={11} />}
-                            label="Cần làm lại"
+                            label={t('strip.needRework')}
                             value={n.rework}
                             cls="text-amber-600 dark:text-amber-300"
                           />
                           <Row
                             icon={<CheckCircle2 size={11} />}
-                            label="Đã xong (đã qua)"
+                            label={t('strip.doneOver')}
                             value={n.done}
                             cls="text-emerald-600 dark:text-emerald-400"
                           />
@@ -481,7 +498,7 @@ export default function LifecycleStrip() {
                   <TooltipTrigger asChild>
                     <div className="flex-1 min-w-0 rounded-lg border border-emerald-300/60 bg-emerald-50/60 dark:bg-emerald-500/10 px-2 py-2.5 flex flex-col items-center justify-center gap-1.5 cursor-help">
                       <span className="flex items-center gap-1 text-[10px] uppercase tracking-wide text-muted-foreground truncate max-w-full leading-none">
-                        <PackageCheck size={12} className="shrink-0 text-emerald-600" /> Hoàn thành
+                        <PackageCheck size={12} className="shrink-0 text-emerald-600" /> {t('strip.stages.done')}
                       </span>
                       <span className="text-2xl font-bold tabular-nums leading-none text-emerald-700 dark:text-emerald-300">
                         {fmt(totals?.completedInRange ?? 0)}
@@ -489,9 +506,9 @@ export default function LifecycleStrip() {
                     </div>
                   </TooltipTrigger>
                   <TooltipContent className="min-w-[170px]">
-                    <div className="font-semibold mb-1">Hoàn thành</div>
+                    <div className="font-semibold mb-1">{t('strip.completedTitle')}</div>
                     <Row
-                      label="Đơn trong kỳ đã đóng hàng xong"
+                      label={t('strip.completedDesc')}
                       value={totals?.completedInRange ?? 0}
                       cls="text-emerald-600 dark:text-emerald-400"
                     />

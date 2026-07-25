@@ -1,4 +1,5 @@
 import React from 'react';
+import { useTranslation } from 'react-i18next';
 import { useNavigate } from 'react-router-dom';
 import { Scissors } from 'lucide-react';
 
@@ -9,6 +10,7 @@ import { usePermission } from '@/hooks/usePermission';
 import { ImportCuttingFilesTab } from '../ImportCuttingFilesTab';
 
 export default function OrdersCuttingFilesPage() {
+  const { t } = useTranslation('orders');
   const { has, canViewWorkshopTable } = usePermission();
   const navigate = useNavigate();
   const canImport = has('order.import');
@@ -16,7 +18,7 @@ export default function OrdersCuttingFilesPage() {
   if (!canImport) {
     return (
       <div className="flex items-center justify-center py-20 text-sm text-muted-foreground">
-        Bạn không có quyền xem trang này.
+        {t('cuttingFilesPage.noPermission')}
       </div>
     );
   }
@@ -28,8 +30,8 @@ export default function OrdersCuttingFilesPage() {
           <Scissors size={20} className="text-emerald-600" />
         </div>
         <div>
-          <h1 className="text-2xl font-bold text-foreground">Import File Cutting</h1>
-          <p className="text-sm text-muted-foreground">Quản lý production orders</p>
+          <h1 className="text-2xl font-bold text-foreground">{t('cuttingFilesPage.title')}</h1>
+          <p className="text-sm text-muted-foreground">{t('cuttingFilesPage.subtitle')}</p>
         </div>
       </div>
 

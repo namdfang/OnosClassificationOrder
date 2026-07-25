@@ -1,4 +1,5 @@
 import React from 'react';
+import { useTranslation } from 'react-i18next';
 import { AlertTriangle } from 'lucide-react';
 import { RoleType } from 'shared';
 
@@ -7,6 +8,7 @@ import { usePermission } from '@/hooks/usePermission';
 import { ErrorLogTab } from '../ErrorLogTab';
 
 export default function OrdersErrorLogPage() {
+  const { t } = useTranslation('orderLog');
   const { roleName } = usePermission();
   // Support tạm ẩn tab "Nhật ký bù lỗi" — lỗi soát-tool không còn hiển thị ở đây.
   const visible = roleName !== RoleType.Support;
@@ -14,7 +16,7 @@ export default function OrdersErrorLogPage() {
   if (!visible) {
     return (
       <div className="flex items-center justify-center py-20 text-sm text-muted-foreground">
-        Bạn không có quyền xem trang này.
+        {t('page.noPermission')}
       </div>
     );
   }
@@ -26,8 +28,8 @@ export default function OrdersErrorLogPage() {
           <AlertTriangle size={20} className="text-emerald-600" />
         </div>
         <div>
-          <h1 className="text-2xl font-bold text-foreground">Nhật ký bù lỗi</h1>
-          <p className="text-sm text-muted-foreground">Quản lý production orders</p>
+          <h1 className="text-2xl font-bold text-foreground">{t('page.title')}</h1>
+          <p className="text-sm text-muted-foreground">{t('page.pageSubtitle')}</p>
         </div>
       </div>
 

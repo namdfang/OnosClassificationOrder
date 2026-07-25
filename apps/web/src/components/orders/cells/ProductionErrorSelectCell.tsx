@@ -1,4 +1,5 @@
 import React, { useState } from 'react';
+import { useTranslation } from 'react-i18next';
 import type { WorkshopConfigCategory } from 'shared';
 import { toast } from 'sonner';
 
@@ -43,6 +44,7 @@ export function ProductionErrorSelectCell({
   canEdit,
   onUpdated,
 }: Props) {
+  const { t } = useTranslation('orders');
   const items = useWorkshopConfigStore((s) => s.byCategory[category] || []);
   const resolve = useWorkshopConfigStore((s) => s.resolve);
   const current = resolve(category, value || undefined);
@@ -66,7 +68,7 @@ export function ProductionErrorSelectCell({
         field: 'productionError',
         value: newCode,
       });
-      toast.success(newCode ? `Đã đổi → ${cfg?.name || newCode}` : 'Đã bỏ chọn');
+      toast.success(newCode ? t('cells.changedTo', { name: cfg?.name || newCode }) : t('cells.cleared'));
       onUpdated?.(newCode, cfg?.errorSource);
     } catch (err) {
       handleAxiosError(err);
@@ -85,7 +87,7 @@ export function ProductionErrorSelectCell({
 
   const trigger = (
     <span
-      title={current?.name || 'Chưa chọn'}
+      title={current?.name || t('cells.notSelected')}
       className={cn(
         'inline-flex items-center gap-1 px-2 py-0.5 rounded text-xs font-medium border whitespace-nowrap',
         !current && 'bg-muted text-muted-foreground border-dashed border-border',
@@ -110,22 +112,22 @@ export function ProductionErrorSelectCell({
             <span className="flex-1">{it.name}</span>
             {it.errorSource === 'designer' && (
               <span className="text-[9px] font-semibold px-1.5 py-0.5 rounded bg-violet-100 text-violet-700 dark:bg-violet-500/20 dark:text-violet-300">
-                DES
+                {t('cells.errorSource.tagDesigner')}
               </span>
             )}
             {it.errorSource === 'factory' && (
               <span className="text-[9px] font-semibold px-1.5 py-0.5 rounded bg-sky-100 text-sky-700 dark:bg-sky-500/20 dark:text-sky-300">
-                XƯỞNG
+                {t('cells.errorSource.tagFactory')}
               </span>
             )}
             {it.errorSource === 'tool-check' && (
               <span className="text-[9px] font-semibold px-1.5 py-0.5 rounded bg-amber-100 text-amber-700 dark:bg-amber-500/20 dark:text-amber-300">
-                SOÁT TOOL
+                {t('cells.errorSource.tagToolCheck')}
               </span>
             )}
             {it.code === OTHER_CODE && (
               <span className="text-[9px] font-semibold px-1.5 py-0.5 rounded bg-rose-100 text-rose-700 dark:bg-rose-500/20 dark:text-rose-300">
-                CẦN CHI TIẾT
+                {t('cells.productionError.needsDetail')}
               </span>
             )}
           </span>

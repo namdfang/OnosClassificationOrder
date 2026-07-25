@@ -1,4 +1,5 @@
 import React, { useEffect, useMemo, useState } from 'react';
+import { useTranslation } from 'react-i18next';
 import type { DesignFields } from 'shared';
 import { toast } from 'sonner';
 
@@ -35,6 +36,7 @@ function currentUrl(order: WorkshopOrderRow, key: string): string {
 }
 
 export function EditOrderDesignDialog({ order, open, onOpenChange, onDone }: Props) {
+  const { t } = useTranslation('orders');
   const [values, setValues] = useState<Record<string, string>>({});
   const [loading, setLoading] = useState(false);
 
@@ -44,8 +46,11 @@ export function EditOrderDesignDialog({ order, open, onOpenChange, onDone }: Pro
     const designKeys = Object.entries(order.designs || {})
       .filter(([, v]) => !!v)
       .map(([k]) => k);
-    return [{ key: MOCKUP_KEY, label: 'Mockup' }, ...designKeys.map((k) => ({ key: k, label: k }))];
-  }, [order]);
+    return [
+      { key: MOCKUP_KEY, label: t('dialogs.editDesign.mockupLabel') },
+      ...designKeys.map((k) => ({ key: k, label: k })),
+    ];
+  }, [order, t]);
 
   useEffect(() => {
     if (order && open) {
@@ -67,7 +72,7 @@ export function EditOrderDesignDialog({ order, open, onOpenChange, onDone }: Pro
       else (designs as Record<string, string>)[f.key] = next;
     }
     if (mockupUrl === undefined && Object.keys(designs).length === 0) {
-      toast.info('Không có thay đổi nào');
+      toast.info(t('dialogs.editDesign.noChanges'));
       return;
     }
     try {
@@ -76,7 +81,7 @@ export function EditOrderDesignDialog({ order, open, onOpenChange, onDone }: Pro
         ...(mockupUrl !== undefined ? { mockupUrl } : {}),
         ...(Object.keys(designs).length ? { designs } : {}),
       });
-      toast.success('Đã cập nhật design');
+      toast.success(t('dialogs.editDesign.success'));
       onOpenChange(false);
       onDone((res.data?.data as WorkshopOrderRow) ?? order);
     } catch (err) {
@@ -90,12 +95,12 @@ export function EditOrderDesignDialog({ order, open, onOpenChange, onDone }: Pro
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="sm:max-w-lg">
         <DialogHeader>
-          <DialogTitle>Đổi design</DialogTitle>
+          <DialogTitle>{t('dialogs.editDesign.title')}</DialogTitle>
           <DialogDescription>
             {order ? (
               <span className="text-xs">
                 <span className="font-mono font-semibold text-foreground">{order.productionId}</span>
-                {order.type ? ` · ${order.type}` : ''} — dán URL mới. URL cũ được lưu trong Lịch sử đơn.
+                {order.type ? ` · ${order.type}` : ''} — {t('dialogs.editDesign.description')}
               </span>
             ) : null}
           </DialogDescription>
@@ -108,22 +113,22 @@ export function EditOrderDesignDialog({ order, open, onOpenChange, onDone }: Pro
               <Input
                 value={values[f.key] ?? ''}
                 onChange={(e) => setValues((p) => ({ ...p, [f.key]: e.target.value }))}
-                placeholder="https://…"
+                placeholder={t('dialogs.editDesign.urlPlaceholder')}
                 className="text-xs"
               />
             </div>
           ))}
           {fields.length <= 1 && (
-            <p className="text-[11px] text-muted-foreground italic">Đơn chưa có vị trí design nào ngoài mockup.</p>
+            <p className="text-[11px] text-muted-foreground italic">{t('dialogs.editDesign.noExtraFields')}</p>
           )}
         </div>
 
         <DialogFooter>
           <Button variant="ghost" onClick={() => onOpenChange(false)} disabled={loading}>
-            Đóng
+            {t('common:actions.close')}
           </Button>
           <Button onClick={submit} disabled={loading}>
-            {loading ? 'Đang lưu…' : 'Lưu'}
+            {loading ? t('dialogs.editDesign.saving') : t('common:actions.save')}
           </Button>
         </DialogFooter>
       </DialogContent>

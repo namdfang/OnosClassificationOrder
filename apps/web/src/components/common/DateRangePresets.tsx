@@ -1,4 +1,5 @@
 import React from 'react';
+import { useTranslation } from 'react-i18next';
 
 import { cn } from '@/utils/cn';
 import { DATE_PRESETS, matchPreset } from '@/utils/dateRangePresets';
@@ -22,6 +23,7 @@ interface DateRangePresetsProps {
  *   chỉnh thủ công.
  */
 export function DateRangePresets({ from, to, onChange, variant = 'chip', className }: DateRangePresetsProps) {
+  const { t } = useTranslation('common');
   const active = matchPreset(from, to);
 
   const baseBtn =
@@ -52,7 +54,7 @@ export function DateRangePresets({ from, to, onChange, variant = 'chip', classNa
                   : 'border-border bg-background text-muted-foreground hover:text-foreground',
             )}
           >
-            {p.label}
+            {t(`datePresets.${p.key}`, { defaultValue: p.label })}
           </button>
         );
       })}

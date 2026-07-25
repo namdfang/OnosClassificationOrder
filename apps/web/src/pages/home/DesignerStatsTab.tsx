@@ -1,4 +1,5 @@
 import React, { useEffect, useMemo, useState } from 'react';
+import { useTranslation } from 'react-i18next';
 import { Filter, RefreshCw, Trophy, X } from 'lucide-react';
 import {
   Cell,
@@ -62,6 +63,7 @@ function rangeFromPeriod(period: Period, customFrom?: string, customTo?: string)
 }
 
 export default function DesignerStatsTab() {
+  const { t } = useTranslation('dashboard');
   const [period, setPeriod] = useState<Period>('30d');
   const [customFrom, setCustomFrom] = useState('');
   const [customTo, setCustomTo] = useState('');
@@ -149,11 +151,11 @@ export default function DesignerStatsTab() {
   const pieData = useMemo(() => {
     if (!errorStats) return [];
     return [
-      { name: 'Lỗi designer', value: errorStats.bySource.designer, key: 'designer' },
-      { name: 'Lỗi xưởng', value: errorStats.bySource.factory, key: 'factory' },
-      { name: 'Không xác định', value: errorStats.bySource.unknown, key: 'unknown' },
+      { name: t('designerStats.errorSource.designer'), value: errorStats.bySource.designer, key: 'designer' },
+      { name: t('designerStats.errorSource.factory'), value: errorStats.bySource.factory, key: 'factory' },
+      { name: t('designerStats.errorSource.unknown'), value: errorStats.bySource.unknown, key: 'unknown' },
     ].filter((d) => d.value > 0);
-  }, [errorStats]);
+  }, [errorStats, t]);
 
   return (
     <div className="space-y-5">
@@ -162,8 +164,10 @@ export default function DesignerStatsTab() {
         <div className="flex-1 min-w-0 rounded-lg border border-border bg-card p-3">
           <div className="flex items-center gap-2 mb-2">
             <Filter size={15} className="text-indigo-600" />
-            <span className="text-sm font-semibold">Bộ lọc chung</span>
-            <span className="hidden md:inline text-[11px] text-muted-foreground">— áp cho các bảng bên dưới</span>
+            <span className="text-sm font-semibold">{t('designerStats.commonFilter')}</span>
+            <span className="hidden md:inline text-[11px] text-muted-foreground">
+              — {t('designerStats.appliesToTablesBelow')}
+            </span>
             {(filterType || filterCustomer) && (
               <button
                 type="button"
@@ -173,7 +177,7 @@ export default function DesignerStatsTab() {
                 }}
                 className="inline-flex items-center gap-1 text-[11px] text-muted-foreground hover:text-foreground"
               >
-                <X size={12} /> Xóa lọc
+                <X size={12} /> {t('designerStats.clearFilter')}
               </button>
             )}
           </div>
@@ -183,15 +187,20 @@ export default function DesignerStatsTab() {
               variant="inline"
               from={dateFrom}
               to={dateTo}
-              onChange={(f, t) => {
+              onChange={(f, t2) => {
                 setDateFrom(f);
-                setDateTo(t);
+                setDateTo(t2);
               }}
             />
           </div>
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
-            <SelectFilter label="Sản phẩm" value={filterType} onChange={setFilterType} options={products} />
-            <SelectFilter label="Khách hàng" value={filterCustomer} onChange={setFilterCustomer} options={customers} />
+            <SelectFilter label={t('designerStats.product')} value={filterType} onChange={setFilterType} options={products} />
+            <SelectFilter
+              label={t('designerStats.customer')}
+              value={filterCustomer}
+              onChange={setFilterCustomer}
+              options={customers}
+            />
           </div>
         </div>
 
@@ -248,7 +257,7 @@ export default function DesignerStatsTab() {
         <div className="flex items-center justify-end">
           <Button variant="ghost" size="sm" onClick={fetchAll} disabled={loading}>
             <RefreshCw size={13} className={loading ? 'animate-spin' : ''} />
-            Làm mới
+            {t('designerStats.refresh')}
           </Button>
         </div>
       )}
@@ -267,7 +276,13 @@ export default function DesignerStatsTab() {
                   : 'bg-background text-muted-foreground hover:bg-muted'
                   }`}
               >
-                {p === 'today' ? 'Hôm nay' : p === '7d' ? '7 ngày' : p === '30d' ? '30 ngày' : 'Tùy chỉnh'}
+                {p === 'today'
+                  ? t('designerStats.periodOptions.today')
+                  : p === '7d'
+                    ? t('designerStats.periodOptions.days7')
+                    : p === '30d'
+                      ? t('designerStats.periodOptions.days30')
+                      : t('designerStats.periodOptions.custom')}
               </button>
             ))}
           </div>
@@ -277,9 +292,9 @@ export default function DesignerStatsTab() {
                 from={customFrom}
                 to={customTo}
                 variant="compact"
-                onChange={(f, t) => {
+                onChange={(f, t2) => {
                   setCustomFrom(f);
-                  setCustomTo(t);
+                  setCustomTo(t2);
                 }}
               />
               <input
@@ -309,54 +324,42 @@ export default function DesignerStatsTab() {
           <div className="flex items-center justify-between p-3 border-b border-border">
             <div className="flex items-center gap-2">
               <Trophy size={16} className="text-amber-500" />
-              <span className="text-sm font-semibold">Leaderboard</span>
-              <span className="text-xs text-muted-foreground">— sort theo Đã xong trong period</span>
+              <span className="text-sm font-semibold">{t('designerStats.leaderboard.title')}</span>
+              <span className="text-xs text-muted-foreground">— {t('designerStats.leaderboard.sortedByDone')}</span>
             </div>
           </div>
           <Table>
             <TableHeader>
               <TableRow>
                 <TableHead className="w-10 text-center">#</TableHead>
-                <TableHead>Designer</TableHead>
-                <TableHead className="w-30 text-center" title="Đang chờ làm — snapshot hiện tại">
-                  Cần làm
+                <TableHead>{t('designerStats.leaderboard.designer')}</TableHead>
+                <TableHead className="w-30 text-center" title={t('designerStats.leaderboard.tooltips.assigned')}>
+                  {t('designerStats.leaderboard.columns.assigned')}
                 </TableHead>
-                <TableHead className="w-30 text-center" title="Đang xử lý — snapshot hiện tại">
-                  Đang làm
+                <TableHead className="w-30 text-center" title={t('designerStats.leaderboard.tooltips.inProgress')}>
+                  {t('designerStats.leaderboard.columns.inProgress')}
                 </TableHead>
-                <TableHead
-                  className="w-30 text-center"
-                  title="Hoàn thành KHÔNG dính lỗi trong period (đã trừ đơn Đã sửa)"
-                >
-                  Đã xong
+                <TableHead className="w-30 text-center" title={t('designerStats.leaderboard.tooltips.done')}>
+                  {t('designerStats.leaderboard.columns.done')}
                 </TableHead>
-                <TableHead
-                  className="w-30 text-center"
-                  title="Hoàn thành SAU KHI sửa lỗi trong period (designerReworkCount>0)"
-                >
-                  Đã sửa
+                <TableHead className="w-30 text-center" title={t('designerStats.leaderboard.tooltips.fixed')}>
+                  {t('designerStats.leaderboard.columns.fixed')}
                 </TableHead>
-                <TableHead className="w-30 text-center" title="Đang ở trạng thái không làm được — snapshot">
-                  KLĐ (hiện)
+                <TableHead className="w-30 text-center" title={t('designerStats.leaderboard.tooltips.rejectedNow')}>
+                  {t('designerStats.leaderboard.columns.rejectedNow')}
                 </TableHead>
-                <TableHead className="w-30 text-center" title="Đang ở trạng thái rework — snapshot">
-                  L.lại (hiện)
+                <TableHead className="w-30 text-center" title={t('designerStats.leaderboard.tooltips.reworkNow')}>
+                  {t('designerStats.leaderboard.columns.reworkNow')}
                 </TableHead>
-                <TableHead
-                  className="w-30 text-center"
-                  title="Tổng số lần đã báo không làm được trong period (kể cả đã giao lại sau đó)"
-                >
-                  Tổng KLĐ
+                <TableHead className="w-30 text-center" title={t('designerStats.leaderboard.tooltips.totalRejected')}>
+                  {t('designerStats.leaderboard.columns.totalRejected')}
                 </TableHead>
-                <TableHead
-                  className="w-30 text-center"
-                  title="Tổng số lần đã chuyển sang rework trong period (kể cả đã restart xong)"
-                >
-                  Tổng l.lại
+                <TableHead className="w-30 text-center" title={t('designerStats.leaderboard.tooltips.totalRework')}>
+                  {t('designerStats.leaderboard.columns.totalRework')}
                 </TableHead>
-                <TableHead className="w-30 text-center">Avg phản hồi</TableHead>
-                <TableHead className="w-30 text-center">Avg làm</TableHead>
-                <TableHead className="w-30 text-center">Tỉ lệ lỗi</TableHead>
+                <TableHead className="w-30 text-center">{t('designerStats.leaderboard.columns.avgResponse')}</TableHead>
+                <TableHead className="w-30 text-center">{t('designerStats.leaderboard.columns.avgWork')}</TableHead>
+                <TableHead className="w-30 text-center">{t('designerStats.leaderboard.columns.errorRate')}</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
@@ -370,7 +373,7 @@ export default function DesignerStatsTab() {
               {!loading && leaderboard.length === 0 && (
                 <TableRow>
                   <TableCell colSpan={13} className="text-center py-8 text-sm text-muted-foreground">
-                    Chưa có designer nào hoạt động trong period này.
+                    {t('designerStats.leaderboard.noActivity')}
                   </TableCell>
                 </TableRow>
               )}
@@ -430,8 +433,8 @@ export default function DesignerStatsTab() {
           <div className="lg:col-span-2 rounded-lg border border-border bg-card p-4">
             <div className="flex items-center justify-between mb-3">
               <div>
-                <h3 className="text-sm font-semibold">Timeline per-designer</h3>
-                <p className="text-[11px] text-muted-foreground">4 series: gán / nhận / xong / làm lại — theo ngày.</p>
+                <h3 className="text-sm font-semibold">{t('designerStats.timeline.title')}</h3>
+                <p className="text-[11px] text-muted-foreground">{t('designerStats.timeline.subtitle')}</p>
               </div>
               <select
                 value={selectedUserId}
@@ -447,7 +450,7 @@ export default function DesignerStatsTab() {
             </div>
             {timeline.length === 0 ? (
               <p className="text-xs text-muted-foreground text-center py-12">
-                Chọn 1 designer ở leaderboard để xem timeline.
+                {t('designerStats.timeline.selectDesigner')}
               </p>
             ) : (
               <div style={{ width: '100%', height: 280 }}>
@@ -456,10 +459,38 @@ export default function DesignerStatsTab() {
                     <XAxis dataKey="date" tickFormatter={(d) => d.slice(5)} tick={{ fontSize: 10 }} />
                     <YAxis tick={{ fontSize: 10 }} allowDecimals={false} />
                     <RechartsTooltip contentStyle={{ fontSize: 11, padding: 6 }} labelStyle={{ fontSize: 10 }} />
-                    <Line type="monotone" dataKey="assigned" stroke="#71717A" strokeWidth={2} dot={false} name="Gán" />
-                    <Line type="monotone" dataKey="started" stroke="#6366F1" strokeWidth={2} dot={false} name="Nhận" />
-                    <Line type="monotone" dataKey="completed" stroke="#10B981" strokeWidth={2} dot={false} name="Xong" />
-                    <Line type="monotone" dataKey="rework" stroke="#F59E0B" strokeWidth={2} dot={false} name="Làm lại" />
+                    <Line
+                      type="monotone"
+                      dataKey="assigned"
+                      stroke="#71717A"
+                      strokeWidth={2}
+                      dot={false}
+                      name={t('designerStats.timeline.series.assigned')}
+                    />
+                    <Line
+                      type="monotone"
+                      dataKey="started"
+                      stroke="#6366F1"
+                      strokeWidth={2}
+                      dot={false}
+                      name={t('designerStats.timeline.series.started')}
+                    />
+                    <Line
+                      type="monotone"
+                      dataKey="completed"
+                      stroke="#10B981"
+                      strokeWidth={2}
+                      dot={false}
+                      name={t('designerStats.timeline.series.completed')}
+                    />
+                    <Line
+                      type="monotone"
+                      dataKey="rework"
+                      stroke="#F59E0B"
+                      strokeWidth={2}
+                      dot={false}
+                      name={t('designerStats.timeline.series.rework')}
+                    />
                   </LineChart>
                 </ResponsiveContainer>
               </div>
@@ -468,12 +499,12 @@ export default function DesignerStatsTab() {
 
           {/* Error stats pie */}
           <div className="rounded-lg border border-border bg-card p-4">
-            <h3 className="text-sm font-semibold">Lỗi xưởng — phân loại</h3>
+            <h3 className="text-sm font-semibold">{t('designerStats.errorPie.title')}</h3>
             <p className="text-[11px] text-muted-foreground mb-2">
-              Designer vs xưởng. {errorStats?.total || 0} đơn lỗi tổng.
+              {t('designerStats.errorPie.subtitle', { count: errorStats?.total || 0 })}
             </p>
             {pieData.length === 0 ? (
-              <p className="text-xs text-muted-foreground text-center py-8">Không có lỗi nào trong period này.</p>
+              <p className="text-xs text-muted-foreground text-center py-8">{t('designerStats.errorPie.noErrors')}</p>
             ) : (
               <div style={{ width: '100%', height: 200 }}>
                 <ResponsiveContainer>

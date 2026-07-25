@@ -1,4 +1,5 @@
 import React, { useEffect, useMemo, useState } from 'react';
+import { useTranslation } from 'react-i18next';
 import { History } from 'lucide-react';
 
 import { RepositoryRemote } from '@/services';
@@ -36,6 +37,8 @@ interface Props {
 }
 
 export function OrdersMiniTable({ queryString }: Props) {
+  const { t } = useTranslation('dashboard');
+  const { t: tOrders } = useTranslation('orders');
   const { canViewField, canEditField, roleName } = usePermission();
   const [rows, setRows] = useState<WorkshopOrderRow[]>([]);
   const [total, setTotal] = useState(0);
@@ -81,7 +84,7 @@ export function OrdersMiniTable({ queryString }: Props) {
   // ngang — xem `buildColGroups`/`GroupCellContent` trong workshopTableConfig.tsx.
   const colGroups = useMemo(() => buildColGroups(visibleCols, roleName), [visibleCols, roleName]);
 
-  const ctx: WorkshopRenderCtx = { canEditField, patchRow, openPreview };
+  const ctx: WorkshopRenderCtx = { canEditField, patchRow, openPreview, t: tOrders };
   const isNoTool = useIsNoTool();
 
   // Re-sort rows on the current page: same product clustered (preserved from
@@ -96,12 +99,12 @@ export function OrdersMiniTable({ queryString }: Props) {
     const buckets = new Map<string, WorkshopOrderRow[]>();
     const typeOrder: string[] = [];
     for (const r of rows) {
-      const t = r.type || '(không có tên)';
-      if (!buckets.has(t)) {
-        buckets.set(t, []);
-        typeOrder.push(t);
+      const typeKey = r.type || t('statusFilter.noName');
+      if (!buckets.has(typeKey)) {
+        buckets.set(typeKey, []);
+        typeOrder.push(typeKey);
       }
-      buckets.get(t)!.push(r);
+      buckets.get(typeKey)!.push(r);
     }
     for (const [, list] of buckets) {
       list.sort((a, b) => {
@@ -111,8 +114,8 @@ export function OrdersMiniTable({ queryString }: Props) {
         return comboKey(a).localeCompare(comboKey(b));
       });
     }
-    return typeOrder.flatMap((t) => buckets.get(t)!);
-  }, [rows]);
+    return typeOrder.flatMap((typeName) => buckets.get(typeName)!);
+  }, [rows, t]);
 
   const isRefetching = loading && rows.length > 0;
 
@@ -144,7 +147,8 @@ export function OrdersMiniTable({ queryString }: Props) {
 
           <div className="border-b border-border px-3 py-2 flex items-center justify-between">
             <h3 className="text-sm font-semibold flex items-center gap-2">
-              Danh sách đơn ({total}){isRefetching && <Spinner size={11} className="text-muted-foreground" />}
+              {t('statusFilter.orderList', { count: total })}
+              {isRefetching && <Spinner size={11} className="text-muted-foreground" />}
             </h3>
           </div>
           <div className={cn('overflow-x-auto transition-opacity duration-300', isRefetching && 'opacity-60')}>
@@ -173,7 +177,7 @@ export function OrdersMiniTable({ queryString }: Props) {
                       colSpan={colGroups.length + 1}
                       className="text-center py-8 text-sm text-muted-foreground"
                     >
-                      Không có đơn nào phù hợp filter
+                      {t('statusFilter.noMatchingOrders')}
                     </TableCell>
                   </TableRow>
                 )}
@@ -205,7 +209,7 @@ export function OrdersMiniTable({ queryString }: Props) {
                           <Button
                             variant="ghost"
                             size="icon"
-                            title="Lịch sử"
+                            title={t('statusFilter.history')}
                             onClick={() => setHistory({ id: row._id, productionId: row.productionId })}
                           >
                             <History size={13} className="text-muted-foreground" />

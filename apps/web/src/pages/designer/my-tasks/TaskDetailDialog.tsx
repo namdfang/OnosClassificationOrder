@@ -1,4 +1,6 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
+import { useTranslation } from 'react-i18next';
+import type { TFunction } from 'i18next';
 import {
   Calendar,
   CheckCircle2,
@@ -66,14 +68,16 @@ type OrderDetail = {
   inProductionAt?: string;
 };
 
-const STATUS_META: Record<DesignerStatus, { label: string; cls: string }> = {
-  [DesignerStatus.Unassigned]: { label: 'Chưa gán', cls: 'bg-zinc-200 text-zinc-700' },
-  [DesignerStatus.Assigned]: { label: 'Cần làm', cls: 'bg-zinc-300 text-zinc-800' },
-  [DesignerStatus.InProgress]: { label: 'Đang làm', cls: 'bg-indigo-200 text-indigo-800' },
-  [DesignerStatus.Done]: { label: 'Đã xong', cls: 'bg-emerald-200 text-emerald-800' },
-  [DesignerStatus.Rejected]: { label: 'Không làm được', cls: 'bg-rose-200 text-rose-800' },
-  [DesignerStatus.Rework]: { label: 'Cần làm lại', cls: 'bg-amber-200 text-amber-800' },
-};
+function buildStatusMeta(t: TFunction<'designerTaskWorkflow'>): Record<DesignerStatus, { label: string; cls: string }> {
+  return {
+    [DesignerStatus.Unassigned]: { label: t('taskDetail.status.unassigned'), cls: 'bg-zinc-200 text-zinc-700' },
+    [DesignerStatus.Assigned]: { label: t('taskDetail.status.assigned'), cls: 'bg-zinc-300 text-zinc-800' },
+    [DesignerStatus.InProgress]: { label: t('taskDetail.status.inProgress'), cls: 'bg-indigo-200 text-indigo-800' },
+    [DesignerStatus.Done]: { label: t('taskDetail.status.done'), cls: 'bg-emerald-200 text-emerald-800' },
+    [DesignerStatus.Rejected]: { label: t('taskDetail.status.rejected'), cls: 'bg-rose-200 text-rose-800' },
+    [DesignerStatus.Rework]: { label: t('taskDetail.status.rework'), cls: 'bg-amber-200 text-amber-800' },
+  };
+}
 
 function fmt(d?: string): string {
   if (!d) return '—';
@@ -81,6 +85,8 @@ function fmt(d?: string): string {
 }
 
 export function TaskDetailDialog({ orderId, onClose }: Props) {
+  const { t } = useTranslation(['designerTaskWorkflow', 'common']);
+  const statusMeta = useMemo(() => buildStatusMeta(t), [t]);
   const [detail, setDetail] = useState<OrderDetail | null>(null);
   const [loading, setLoading] = useState(false);
 
@@ -125,7 +131,7 @@ export function TaskDetailDialog({ orderId, onClose }: Props) {
 
   const designs = detail?.designsOriginal || detail?.designs || {};
   const designKeys = Object.keys(designs).filter((k) => designs[k]);
-  const status = detail?.designerStatus ? STATUS_META[detail.designerStatus] : STATUS_META[DesignerStatus.Unassigned];
+  const status = detail?.designerStatus ? statusMeta[detail.designerStatus] : statusMeta[DesignerStatus.Unassigned];
 
   return (
     <>
@@ -151,25 +157,25 @@ export function TaskDetailDialog({ orderId, onClose }: Props) {
             <div className="space-y-5">
               {/* Basic info */}
               <div className="grid grid-cols-3 gap-3 text-xs">
-                <Field label="Type" value={detail.type} />
-                <Field label="Size / Color" value={`${detail.size || '—'} / ${detail.color || '—'}`} />
-                <Field label="Order ID" value={detail.orderId} mono copyable />
-                <Field label="Loại vải" value={detail.fabricType} />
-                <Field label="Máy" value={detail.machineNumber} />
-                <Field label="Tool" value={detail.toolResult} />
-                <Field label="Note Tool" value={detail.toolResultNote} />
-                <Field label="Xưởng" value={detail.factory?.name} />
-                <Field label="Phòng" value={detail.machineType?.name} />
+                <Field label={t('taskDetail.fields.type')} value={detail.type} />
+                <Field label={t('taskDetail.fields.sizeColor')} value={`${detail.size || '—'} / ${detail.color || '—'}`} />
+                <Field label={t('taskDetail.fields.orderId')} value={detail.orderId} mono copyable />
+                <Field label={t('taskDetail.fields.fabricType')} value={detail.fabricType} />
+                <Field label={t('taskDetail.fields.machine')} value={detail.machineNumber} />
+                <Field label={t('taskDetail.fields.tool')} value={detail.toolResult} />
+                <Field label={t('taskDetail.fields.toolNote')} value={detail.toolResultNote} />
+                <Field label={t('taskDetail.fields.factory')} value={detail.factory?.name} />
+                <Field label={t('taskDetail.fields.room')} value={detail.machineType?.name} />
               </div>
 
               {/* Mockup */}
               {detail.mockupUrl && (
                 <div>
-                  <p className="text-xs font-semibold text-foreground mb-1.5">Mockup</p>
+                  <p className="text-xs font-semibold text-foreground mb-1.5">{t('taskDetail.mockup')}</p>
                   <button
                     type="button"
                     onClick={() => openInNewTab(detail.mockupOriginalUrl || detail.mockupUrl)}
-                    title="Mở ảnh gốc ở tab mới"
+                    title={t('taskDetail.openOriginal')}
                     className="block w-32 h-32 rounded border border-border overflow-hidden hover:ring-2 hover:ring-primary/40 bg-checker"
                   >
                     <img
@@ -189,10 +195,10 @@ export function TaskDetailDialog({ orderId, onClose }: Props) {
                   [Nút "Tải về" tạm ẩn vì ảnh khác-origin bị CORS chặn auto-download.] */}
               {designKeys.length > 0 && (
                 <div>
-                  <p className="text-xs font-semibold text-foreground mb-1.5">File design ({designKeys.length})</p>
-                  <p className="text-[11px] text-muted-foreground mb-1.5">
-                    Chuột phải vào link → "Lưu liên kết thành…" để tải ảnh về máy.
+                  <p className="text-xs font-semibold text-foreground mb-1.5">
+                    {t('taskDetail.designsHeading', { count: designKeys.length })}
                   </p>
+                  <p className="text-[11px] text-muted-foreground mb-1.5">{t('taskDetail.designsHint')}</p>
                   <div className="space-y-1">
                     {designKeys.map((k) => {
                       const original = (detail.designsOriginal || {})[k];
@@ -209,14 +215,14 @@ export function TaskDetailDialog({ orderId, onClose }: Props) {
                                 href={raw}
                                 target="_blank"
                                 rel="noopener noreferrer"
-                                title="Left-click: mở tab mới · Chuột phải: Lưu liên kết để tải về"
+                                title={t('taskDetail.designLinkTitle')}
                                 className="inline-flex items-center gap-1 min-w-0 text-primary hover:underline"
                               >
                                 <ExternalLink size={12} className="shrink-0" />
                                 <span className="truncate">{raw}</span>
                               </a>
                               <span className="ml-auto shrink-0">
-                                <CopyButton value={raw} label="Link design" iconSize={11} />
+                                <CopyButton value={raw} label={t('taskDetail.designLinkLabel')} iconSize={11} />
                               </span>
                             </>
                           ) : (
@@ -232,41 +238,49 @@ export function TaskDetailDialog({ orderId, onClose }: Props) {
               {/* Designer timeline */}
               <div>
                 <p className="text-xs font-semibold text-foreground mb-1.5 flex items-center gap-1">
-                  <Calendar size={12} /> Timeline designer
+                  <Calendar size={12} /> {t('taskDetail.timelineTitle')}
                 </p>
                 <div className="space-y-1 text-xs">
                   {detail.orderAt && (
                     <Timeline
                       icon={<Clock size={11} className="text-indigo-500" />}
-                      label="Khách lên đơn"
+                      label={t('taskDetail.timeline.ordered')}
                       value={fmt(detail.orderAt)}
                     />
                   )}
                   {detail.inProductionAt && (
                     <Timeline
                       icon={<Clock size={11} className="text-sky-500" />}
-                      label="Vào sản xuất"
+                      label={t('taskDetail.timeline.inProduction')}
                       value={fmt(detail.inProductionAt)}
                     />
                   )}
-                  <Timeline icon={<Clock size={11} />} label="Được gán" value={fmt(detail.designerAssignedAt)} />
-                  <Timeline icon={<Clock size={11} />} label="Bắt đầu" value={fmt(detail.designerStartedAt)} />
+                  <Timeline
+                    icon={<Clock size={11} />}
+                    label={t('taskDetail.timeline.assigned')}
+                    value={fmt(detail.designerAssignedAt)}
+                  />
+                  <Timeline
+                    icon={<Clock size={11} />}
+                    label={t('taskDetail.timeline.started')}
+                    value={fmt(detail.designerStartedAt)}
+                  />
                   <Timeline
                     icon={<CheckCircle2 size={11} className="text-emerald-600" />}
-                    label="Hoàn thành"
+                    label={t('taskDetail.timeline.completed')}
                     value={fmt(detail.designerCompletedAt)}
                   />
                   {detail.designerReworkAt && (
                     <Timeline
                       icon={<RotateCcw size={11} className="text-amber-600" />}
-                      label={`Cần làm lại ${detail.designerReworkCount ? `×${detail.designerReworkCount}` : ''}`}
+                      label={`${t('taskDetail.timeline.rework')} ${detail.designerReworkCount ? `×${detail.designerReworkCount}` : ''}`}
                       value={fmt(detail.designerReworkAt)}
                     />
                   )}
                   {detail.designerRejectedAt && (
                     <Timeline
                       icon={<XCircle size={11} className="text-rose-600" />}
-                      label="Không làm được"
+                      label={t('taskDetail.timeline.rejected')}
                       value={fmt(detail.designerRejectedAt)}
                     />
                   )}
@@ -276,7 +290,7 @@ export function TaskDetailDialog({ orderId, onClose }: Props) {
               {detail.productionError && (
                 <div className="rounded-md border border-amber-300 bg-amber-50 dark:bg-amber-900/20 p-2.5">
                   <p className="text-xs font-medium text-amber-800 dark:text-amber-200 flex items-center gap-1">
-                    <ShieldAlert size={12} /> Xưởng báo lỗi: {productionErrorLabel}
+                    <ShieldAlert size={12} /> {t('taskDetail.productionErrorLabel', { label: productionErrorLabel })}
                   </p>
                   {detail.productionErrorNote && (
                     <p className="text-[11px] text-amber-700 dark:text-amber-300 mt-1">{detail.productionErrorNote}</p>
@@ -287,7 +301,7 @@ export function TaskDetailDialog({ orderId, onClose }: Props) {
               {(errorFileLabels.length > 0 || detail.errorFileNote) && (
                 <div className="rounded-md border border-violet-300 dark:border-violet-700 bg-violet-50 dark:bg-violet-900/20 p-2.5">
                   <p className="text-xs font-medium text-violet-800 dark:text-violet-200 flex items-center gap-1">
-                    <FileWarning size={12} /> File sửa lỗi
+                    <FileWarning size={12} /> {t('taskDetail.errorFileTitle')}
                   </p>
                   {errorFileLabels.length > 0 && (
                     <div className="mt-1.5 flex flex-wrap gap-1">
@@ -303,7 +317,7 @@ export function TaskDetailDialog({ orderId, onClose }: Props) {
                   )}
                   {detail.errorFileNote && (
                     <p className="text-[11px] text-violet-700 dark:text-violet-300 mt-1.5">
-                      <span className="font-medium">Ghi chú: </span>
+                      <span className="font-medium">{t('taskDetail.errorFileNoteLabel')} </span>
                       {detail.errorFileNote}
                     </p>
                   )}
@@ -312,7 +326,9 @@ export function TaskDetailDialog({ orderId, onClose }: Props) {
 
               {detail.designerRejectedReason && (
                 <div className="rounded-md border border-rose-300 bg-rose-50 dark:bg-rose-900/20 p-2.5">
-                  <p className="text-xs font-medium text-rose-800 dark:text-rose-200">Lý do không làm được</p>
+                  <p className="text-xs font-medium text-rose-800 dark:text-rose-200">
+                    {t('taskDetail.rejectedReasonTitle')}
+                  </p>
                   <p className="text-[11px] text-rose-700 dark:text-rose-300 mt-1">{detail.designerRejectedReason}</p>
                 </div>
               )}
@@ -321,7 +337,7 @@ export function TaskDetailDialog({ orderId, onClose }: Props) {
 
           <div className="flex justify-end pt-2">
             <Button variant="outline" onClick={onClose}>
-              Đóng
+              {t('common:actions.close')}
             </Button>
           </div>
         </DialogContent>

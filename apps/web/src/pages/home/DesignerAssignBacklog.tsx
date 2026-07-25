@@ -1,4 +1,5 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
+import { useTranslation } from 'react-i18next';
 import { ChevronDown, ChevronRight, Clock, Grab, ImageOff, UserPlus } from 'lucide-react';
 import type { AssignBacklogGroup } from 'shared';
 import { PRODUCT_LEVEL_MAP } from 'shared';
@@ -46,6 +47,8 @@ interface Props {
 }
 
 export function DesignerAssignBacklog({ days = 7, from, to, type, customer, reloadToken, onAssigned }: Props) {
+  const { t } = useTranslation('dashboard');
+  const { t: tOrders } = useTranslation('orders');
   const [groups, setGroups] = useState<AssignBacklogGroup[]>([]);
   const [total, setTotal] = useState(0);
   const [loading, setLoading] = useState(false);
@@ -177,12 +180,14 @@ export function DesignerAssignBacklog({ days = 7, from, to, type, customer, relo
         modified: number;
         skipped: { orderId: string; productionId: string; reason: string }[];
       };
-      const msg = `Đã nhận ${data.modified}/${data.matched} đơn về mình`;
+      const msg = t('assignBacklog.claimedSelf', { modified: data.modified, matched: data.matched });
       if (data.skipped.length === 0) {
         toast.success(msg);
       } else {
-        toast.warning(`${msg}. ${data.skipped.length} đơn bị bỏ qua.`, { duration: 6000 });
-        toast.message('Đơn bị bỏ qua', {
+        toast.warning(t('assignBacklog.claimedSelfWithSkipped', { msg, count: data.skipped.length }), {
+          duration: 6000,
+        });
+        toast.message(t('assignBacklog.skippedOrders'), {
           description: data.skipped
             .slice(0, 5)
             .map((s) => `• ${s.productionId}: ${s.reason}`)
@@ -207,9 +212,9 @@ export function DesignerAssignBacklog({ days = 7, from, to, type, customer, relo
         <div className="flex items-center justify-between gap-3 p-3 border-b border-border flex-wrap">
           <div className="flex items-center gap-2">
             <UserPlus size={16} className="text-indigo-600" />
-            <span className="text-md font-semibold text-red-500">Cần gán designer</span>
+            <span className="text-md font-semibold text-red-500">{t('assignBacklog.title')}</span>
             <span className="text-[11px] text-muted-foreground">
-              — {total} đơn (chưa gán / không làm được / làm lại chưa ôm, đã soát ≠ ok)
+              — {t('assignBacklog.subtitle', { count: total })}
             </span>
           </div>
           {(canClaimSelf || canAssignOthers) && (
@@ -220,14 +225,14 @@ export function DesignerAssignBacklog({ days = 7, from, to, type, customer, relo
                   onClick={() => setSelected(new Set())}
                   className="text-[11px] text-muted-foreground hover:text-foreground"
                 >
-                  Bỏ chọn ({selectedCount})
+                  {t('assignBacklog.deselect', { count: selectedCount })}
                 </button>
               )}
               {/* Nút luôn hiển thị — mờ (disabled) khi chưa chọn đơn nào. */}
               {canClaimSelf && (
                 <Button size="sm" onClick={handleClaimSelf} disabled={claiming || selectedCount === 0}>
                   <Grab size={13} />
-                  Nhận về mình ({selectedCount})
+                  {t('assignBacklog.claimSelf', { count: selectedCount })}
                 </Button>
               )}
               {canAssignOthers && (
@@ -238,7 +243,7 @@ export function DesignerAssignBacklog({ days = 7, from, to, type, customer, relo
                   disabled={claiming || selectedCount === 0}
                 >
                   <UserPlus size={13} />
-                  Gán design ({selectedCount})
+                  {t('assignBacklog.assignDesign', { count: selectedCount })}
                 </Button>
               )}
             </div>
@@ -246,7 +251,7 @@ export function DesignerAssignBacklog({ days = 7, from, to, type, customer, relo
         </div>
 
         {!loading && groups.length === 0 ? (
-          <p className="text-xs text-muted-foreground text-center py-10">Không có đơn cần gán trong khoảng đã chọn.</p>
+          <p className="text-xs text-muted-foreground text-center py-10">{t('assignBacklog.noOrders')}</p>
         ) : (
           <div className="divide-y divide-border/60">
             {groups.map((g) => {
@@ -296,7 +301,7 @@ export function DesignerAssignBacklog({ days = 7, from, to, type, customer, relo
                           borderColor: PRODUCT_LEVEL_MAP[g.level]?.color,
                         }}
                       >
-                        Lv {g.level}
+                        {t('assignBacklog.level', { level: g.level })}
                       </Badge>
                     )}
                     <button type="button" onClick={() => toggleExpand(g.key)} className="flex-1 min-w-0 text-left">
@@ -304,7 +309,7 @@ export function DesignerAssignBacklog({ days = 7, from, to, type, customer, relo
                       {g.shortName && <div className="text-[10px] text-muted-foreground">{g.shortName}</div>}
                     </button>
                     <Badge variant="secondary" className="shrink-0">
-                      {g.count} đơn
+                      {t('assignBacklog.orderCount', { count: g.count })}
                     </Badge>
                   </div>
 
@@ -342,12 +347,13 @@ export function DesignerAssignBacklog({ days = 7, from, to, type, customer, relo
                                     [g.key]: (prev[g.key] || []).map((r) => (r._id === id ? { ...r, ...patch } : r)),
                                   })),
                                 openPreview,
+                                t: tOrders,
                               };
                               const renderedByKey = new Map(visibleCols.map((c) => [c.key, c.render(row, ctx)]));
                               // Chip đếm ngược hạn design (đơn chưa chạy bước designer →
                               // mốc `inProductionAt`) — gắn cạnh badge Ưu tiên trong group.
                               const deadline = getStageDeadline(row.priority, 'designer', row.inProductionAt);
-                              const countdown = deadline ? formatCountdown(deadline, now) : undefined;
+                              const countdown = deadline ? formatCountdown(deadline, now, t) : undefined;
                               return (
                                 <tr
                                   key={row._id}

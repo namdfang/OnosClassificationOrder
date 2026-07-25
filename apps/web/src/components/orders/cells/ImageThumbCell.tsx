@@ -1,4 +1,5 @@
 import React from 'react';
+import { useTranslation } from 'react-i18next';
 import { AlertTriangle, ExternalLink, Image as ImageIcon, Loader2 } from 'lucide-react';
 
 interface Props {
@@ -18,13 +19,14 @@ function smallThumb(url?: string): string | undefined {
 }
 
 export function ImageThumbCell({ url, originalUrl, title, onOpen, size = 36, status }: Props) {
+  const { t } = useTranslation('orders');
   // Pending — pipeline R2 đang chạy. Show skeleton + spinner, disable click.
   if (status === 'pending') {
     return (
       <span
         className="inline-flex items-center justify-center rounded border border-dashed border-amber-300 bg-amber-50/40 text-amber-600 dark:bg-amber-500/5 cursor-not-allowed"
         style={{ width: size, height: size }}
-        title="Đang xử lý ảnh thumb trên R2…"
+        title={t('cells.imageThumb.pending')}
       >
         <Loader2 size={14} className="animate-spin" />
       </span>
@@ -39,7 +41,7 @@ export function ImageThumbCell({ url, originalUrl, title, onOpen, size = 36, sta
           href={originalUrl}
           target="_blank"
           rel="noreferrer"
-          title="Ảnh xử lý thất bại — click mở link gốc"
+          title={t('cells.imageThumb.failedWithLink')}
           className="inline-flex items-center justify-center rounded border border-rose-300 bg-rose-50/40 text-rose-600 hover:bg-rose-100 dark:bg-rose-500/5"
           style={{ width: size, height: size }}
         >
@@ -51,7 +53,7 @@ export function ImageThumbCell({ url, originalUrl, title, onOpen, size = 36, sta
       <span
         className="inline-flex items-center justify-center rounded border border-rose-300 bg-rose-50/40 text-rose-600 dark:bg-rose-500/5"
         style={{ width: size, height: size }}
-        title="Ảnh xử lý thất bại"
+        title={t('cells.imageThumb.failed')}
       >
         <AlertTriangle size={14} />
       </span>
@@ -71,7 +73,7 @@ export function ImageThumbCell({ url, originalUrl, title, onOpen, size = 36, sta
   return (
     <button
       type="button"
-      onClick={() => onOpen?.(url, title || 'Ảnh', originalUrl)}
+      onClick={() => onOpen?.(url, title || t('cells.imageThumb.defaultTitle'), originalUrl)}
       title={title}
       className="inline-block rounded border border-border overflow-hidden hover:ring-2 hover:ring-primary/40 relative group bg-checker bg-checker-sm"
       style={{ width: size, height: size }}

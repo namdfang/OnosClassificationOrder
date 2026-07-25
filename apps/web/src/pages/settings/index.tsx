@@ -1,4 +1,5 @@
 import React from 'react';
+import { useTranslation } from 'react-i18next';
 import { Settings as SettingsIcon } from 'lucide-react';
 
 import CustomerAssignmentConfig from '@/components/settings/CustomerAssignmentConfig';
@@ -7,6 +8,7 @@ import DesignerAssignmentConfig from '@/components/settings/DesignerAssignmentCo
 import { usePermission } from '@/hooks/usePermission';
 
 export default function Settings() {
+  const { t } = useTranslation('auth');
   const { has } = usePermission();
   const canManage = has('role.manage');
 
@@ -17,8 +19,8 @@ export default function Settings() {
           <SettingsIcon size={20} className="text-slate-600 dark:text-slate-300" />
         </div>
         <div>
-          <h1 className="text-2xl font-bold text-slate-800 dark:text-slate-100">Settings</h1>
-          <p className="text-sm text-slate-500 dark:text-slate-400">System configuration</p>
+          <h1 className="text-2xl font-bold text-slate-800 dark:text-slate-100">{t('settings.title')}</h1>
+          <p className="text-sm text-slate-500 dark:text-slate-400">{t('settings.subtitle')}</p>
         </div>
       </div>
 
@@ -33,7 +35,7 @@ export default function Settings() {
         </div>
       ) : (
         <div className="bg-white dark:bg-slate-800 rounded-2xl p-8 border border-slate-100 dark:border-slate-700/60 text-center">
-          <p className="text-slate-500 dark:text-slate-400">Bạn không có quyền truy cập cấu hình hệ thống.</p>
+          <p className="text-slate-500 dark:text-slate-400">{t('settings.noAccess')}</p>
         </div>
       )}
     </div>

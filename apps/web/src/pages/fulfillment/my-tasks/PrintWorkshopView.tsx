@@ -1,4 +1,5 @@
 import React, { useState } from 'react';
+import { useTranslation } from 'react-i18next';
 import { CheckCircle2, PlayCircle, X } from 'lucide-react';
 import type { FulfillmentTransitionDto, ProductionOrder } from 'shared';
 import { FulfillmentStage, FulfillmentStageStatus, FulfillmentTransitionAction } from 'shared';
@@ -38,6 +39,7 @@ const printStatusOf = (row: WorkshopOrderRow): string | undefined => row.fulfill
  * Xem documents/Plans/PrintStage-AdminTableView.md.
  */
 export default function PrintWorkshopView() {
+  const { t } = useTranslation(['fulfillmentWorkflow', 'common']);
   const profile = useAuthStore((s) => s.profile);
   const myFactoryId = profile?.factoryId;
   const [reloadToken, setReloadToken] = useState(0);
@@ -79,7 +81,7 @@ export default function PrintWorkshopView() {
         action,
         ...body,
       } as FulfillmentTransitionDto);
-      toast.success('Đã cập nhật');
+      toast.success(t('toast.updated'));
       refresh();
     } catch (err) {
       handleAxiosError(err);
@@ -90,7 +92,7 @@ export default function PrintWorkshopView() {
   // Bulk: loop transition song song, gộp kết quả → 1 toast.
   const runBulk = async (rows: WorkshopOrderRow[], action: BulkAction, clear: () => void) => {
     const txAction = action === 'start' ? FulfillmentTransitionAction.Start : FulfillmentTransitionAction.Complete;
-    const verb = action === 'start' ? 'bắt đầu' : 'hoàn thành';
+    const verb = action === 'start' ? t('verbs.start') : t('verbs.complete');
     const results = await Promise.allSettled(
       rows.map((r) =>
         RepositoryRemote.fulfillment.transition(r._id, {
@@ -101,8 +103,8 @@ export default function PrintWorkshopView() {
     );
     const ok = results.filter((r) => r.status === 'fulfilled').length;
     const fail = results.length - ok;
-    if (fail === 0) toast.success(`Đã ${verb} ${ok} đơn`);
-    else toast.warning(`Đã ${verb} ${ok}/${results.length} đơn (${fail} lỗi)`);
+    if (fail === 0) toast.success(t('toast.bulkDone', { verb, count: ok }));
+    else toast.warning(t('toast.bulkPartial', { verb, ok, total: results.length, fail }));
     clear();
     refresh();
   };
@@ -129,11 +131,11 @@ export default function PrintWorkshopView() {
             className="whitespace-nowrap"
             onClick={() => void doTransition(row._id, FulfillmentTransitionAction.Start)}
           >
-            Bắt đầu
+            {t('actions.start')}
           </Button>
           {status && (
             <Button size="sm" variant="destructive" className="whitespace-nowrap" onClick={() => setReworkOrder(row)}>
-              Báo lỗi
+              {t('actions.reportError')}
             </Button>
           )}
         </>
@@ -146,10 +148,10 @@ export default function PrintWorkshopView() {
             className="whitespace-nowrap"
             onClick={() => void doTransition(row._id, FulfillmentTransitionAction.Complete)}
           >
-            Hoàn thành
+            {t('actions.complete')}
           </Button>
           <Button size="sm" variant="destructive" className="whitespace-nowrap" onClick={() => setReworkOrder(row)}>
-            Báo lỗi
+            {t('actions.reportError')}
           </Button>
         </>
       );
@@ -173,16 +175,16 @@ export default function PrintWorkshopView() {
         <div className="pointer-events-auto flex items-center gap-2 rounded-full border border-border bg-card shadow-lg px-4 py-2 flex-wrap">
           <CheckCircle2 size={14} className="text-primary" />
           <span className="text-sm">
-            Đã chọn <span className="font-semibold">{selectedRows.length}</span>
+            {t('kanban.selection.selected')} <span className="font-semibold">{selectedRows.length}</span>
           </span>
           {startable.length > 0 && (
             <Button size="sm" onClick={() => onBulkClick('start', startable, completable.length, clear)}>
-              <PlayCircle size={14} /> Bắt đầu ({startable.length})
+              <PlayCircle size={14} /> {t('actions.start')} ({startable.length})
             </Button>
           )}
           {completable.length > 0 && (
             <Button size="sm" onClick={() => onBulkClick('complete', completable, startable.length, clear)}>
-              <CheckCircle2 size={14} /> Hoàn thành ({completable.length})
+              <CheckCircle2 size={14} /> {t('actions.complete')} ({completable.length})
             </Button>
           )}
           <Button size="sm" variant="ghost" onClick={clear}>
@@ -204,7 +206,7 @@ export default function PrintWorkshopView() {
         />
         <PrintOrderTable
           extraRowAction={renderRowAction}
-          extraActionLabel="Thao tác In"
+          extraActionLabel={t('printWorkshop.extraActionLabel')}
           reloadToken={reloadToken}
           isRowSelectable={isRowSelectable}
           renderBulkBar={renderBulkBar}
@@ -231,16 +233,20 @@ export default function PrintWorkshopView() {
       <Dialog open={!!confirm} onOpenChange={(o) => !o && setConfirm(null)}>
         <DialogContent>
           <DialogHeader>
-            <DialogTitle>Xác nhận chuyển trạng thái</DialogTitle>
+            <DialogTitle>{t('printWorkshop.confirmDialog.title')}</DialogTitle>
             <DialogDescription>
-              Các đơn đang chọn có trạng thái khác nhau. Chỉ <strong>{confirm?.rows.length}</strong> đơn hợp lệ sẽ được{' '}
-              <strong>{confirm?.action === 'start' ? 'Bắt đầu' : 'Hoàn thành'}</strong>
-              {confirm && confirm.skipped > 0 ? ` (${confirm.skipped} đơn trạng thái khác bị bỏ qua)` : ''}. Tiếp tục?
+              {t('printWorkshop.confirmDialog.bodyPrefix')} <strong>{confirm?.rows.length}</strong>{' '}
+              {t('printWorkshop.confirmDialog.bodyMid')}{' '}
+              <strong>{confirm?.action === 'start' ? t('actions.start') : t('actions.complete')}</strong>
+              {confirm && confirm.skipped > 0
+                ? ` ${t('printWorkshop.confirmDialog.skippedNote', { count: confirm.skipped })}`
+                : ''}
+              {t('printWorkshop.confirmDialog.continue')}
             </DialogDescription>
           </DialogHeader>
           <DialogFooter>
             <Button variant="ghost" onClick={() => setConfirm(null)}>
-              Huỷ
+              {t('common:actions.cancel')}
             </Button>
             <Button
               onClick={() => {
@@ -248,7 +254,7 @@ export default function PrintWorkshopView() {
                 setConfirm(null);
               }}
             >
-              Xác nhận
+              {t('common:actions.confirm')}
             </Button>
           </DialogFooter>
         </DialogContent>

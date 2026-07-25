@@ -1,4 +1,5 @@
 import React, { useEffect, useState } from 'react';
+import { Trans, useTranslation } from 'react-i18next';
 import { ExternalLink, FileText, Image as ImageIcon, Info, Link2, Loader2, ScissorsLineDashed } from 'lucide-react';
 import type { ProductionOrder } from 'shared';
 
@@ -36,6 +37,7 @@ function extractDriveFileId(url?: string): string | null {
 }
 
 export function OrderDetailDialog({ open, onOpenChange, orderId, productionId }: Props) {
+  const { t } = useTranslation('orders');
   const [loading, setLoading] = useState(false);
   const [order, setOrder] = useState<OrderWithRels | null>(null);
   // Preview state cho mockup thumbnail — reuse ImagePreviewDialog (zoom + open
@@ -81,45 +83,63 @@ export function OrderDetailDialog({ open, onOpenChange, orderId, productionId }:
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2">
               <Info size={16} className="text-primary" />
-              Chi tiết đơn{order?.productionId ? ` — ${order.productionId}` : ''}
+              {t('dialogs.orderDetail.title')}
+              {order?.productionId ? ` — ${order.productionId}` : ''}
             </DialogTitle>
           </DialogHeader>
 
           {loading ? (
             <div className="py-12 flex items-center justify-center text-sm text-muted-foreground">
-              <Loader2 size={16} className="animate-spin mr-2" /> Đang tải…
+              <Loader2 size={16} className="animate-spin mr-2" /> {t('common:status.loading')}
             </div>
           ) : !order ? (
-            <div className="py-8 text-sm text-muted-foreground text-center">Không tìm thấy đơn.</div>
+            <div className="py-8 text-sm text-muted-foreground text-center">{t('dialogs.orderDetail.notFound')}</div>
           ) : (
             <div className="space-y-4 max-h-[80vh] overflow-y-auto pr-1">
               {/* Section: Info chung */}
               <Grid>
-                <InfoRow label="Production ID" value={order.productionId} mono copyable />
-                <InfoRow label="Order ID" value={order.orderId || '—'} mono copyable={!!order.orderId} />
-                <InfoRow label="Type" value={order.type || '—'} />
-                <InfoRow label="Size / Color" value={`${order.size || '—'}${order.color ? ' / ' + order.color : ''}`} />
-                <InfoRow label="Số lượng" value={String(order.quantity ?? 1)} />
-                <InfoRow label="Xưởng" value={order.factory?.shortName || order.factory?.name || '—'} />
-                <InfoRow label="Máy" value={order.machineType?.shortName || order.machineType?.name || '—'} />
+                <InfoRow label={t('dialogs.orderDetail.labelProductionId')} value={order.productionId} mono copyable />
                 <InfoRow
-                  label="Product"
+                  label={t('dialogs.orderDetail.labelOrderId')}
+                  value={order.orderId || '—'}
+                  mono
+                  copyable={!!order.orderId}
+                />
+                <InfoRow label={t('dialogs.orderDetail.labelType')} value={order.type || '—'} />
+                <InfoRow
+                  label={t('dialogs.orderDetail.labelSizeColor')}
+                  value={`${order.size || '—'}${order.color ? ' / ' + order.color : ''}`}
+                />
+                <InfoRow label={t('dialogs.orderDetail.labelQuantity')} value={String(order.quantity ?? 1)} />
+                <InfoRow
+                  label={t('dialogs.orderDetail.labelFactory')}
+                  value={order.factory?.shortName || order.factory?.name || '—'}
+                />
+                <InfoRow
+                  label={t('dialogs.orderDetail.labelMachine')}
+                  value={order.machineType?.shortName || order.machineType?.name || '—'}
+                />
+                <InfoRow
+                  label={t('dialogs.orderDetail.labelProduct')}
                   value={order.productConfig?.shortName || order.productConfig?.fullName || '—'}
                 />
               </Grid>
 
               {/* Section: Workshop / status */}
               <Grid>
-                <InfoRow label="Print Status" value={order.printStatus || '—'} />
-                <InfoRow label="Tool Result" value={order.toolResult || '—'} />
-                <InfoRow label="Note Tool" value={order.toolResultNote || '—'} />
+                <InfoRow label={t('dialogs.orderDetail.labelPrintStatus')} value={order.printStatus || '—'} />
+                <InfoRow label={t('dialogs.orderDetail.labelToolResult')} value={order.toolResult || '—'} />
+                <InfoRow label={t('dialogs.orderDetail.labelNoteTool')} value={order.toolResultNote || '—'} />
                 <InfoRow
-                  label="Sẵn sàng fulfill"
-                  value={order.readyForFulfill ? 'Yes' : 'No'}
+                  label={t('dialogs.orderDetail.labelReadyFulfill')}
+                  value={order.readyForFulfill ? t('common:actions.yes') : t('common:actions.no')}
                   badgeTone={order.readyForFulfill ? 'success' : undefined}
                 />
-                <InfoRow label="Designer status" value={order.designerStatus || '—'} />
-                <InfoRow label="Stage hiện tại" value={order.currentFulfillmentStage || '—'} />
+                <InfoRow label={t('dialogs.orderDetail.labelDesignerStatus')} value={order.designerStatus || '—'} />
+                <InfoRow
+                  label={t('dialogs.orderDetail.labelCurrentStage')}
+                  value={order.currentFulfillmentStage || '—'}
+                />
               </Grid>
 
               {/* Section: Mockup + Design links — chỉ link, KHÔNG hiển thị ảnh.
@@ -138,7 +158,7 @@ export function OrderDetailDialog({ open, onOpenChange, orderId, productionId }:
               <div className="rounded-lg border border-border bg-card">
                 <div className="px-4 py-2.5 border-b border-border flex items-center justify-between gap-2">
                   <h4 className="text-sm font-semibold text-foreground inline-flex items-center gap-2">
-                    <ScissorsLineDashed size={14} /> File cutting
+                    <ScissorsLineDashed size={14} /> {t('dialogs.orderDetail.cuttingFileTitle')}
                   </h4>
                   {order.cuttingFileUrl && (
                     <a
@@ -147,7 +167,7 @@ export function OrderDetailDialog({ open, onOpenChange, orderId, productionId }:
                       rel="noopener noreferrer"
                       className="inline-flex items-center gap-1 text-xs text-primary hover:underline"
                     >
-                      Mở Drive <ExternalLink size={11} />
+                      {t('dialogs.orderDetail.openDrive')} <ExternalLink size={11} />
                     </a>
                   )}
                 </div>
@@ -170,14 +190,18 @@ export function OrderDetailDialog({ open, onOpenChange, orderId, productionId }:
                     ) : (
                       <Button asChild variant="secondary">
                         <a href={order.cuttingFileUrl} target="_blank" rel="noopener noreferrer">
-                          Mở file để xem
+                          {t('dialogs.orderDetail.openFile')}
                         </a>
                       </Button>
                     )}
                   </div>
                 ) : (
                   <div className="p-6 text-center text-xs text-muted-foreground">
-                    Chưa có file cutting. Vào tab <strong>Import File Cutting</strong> ở trang Orders để map.
+                    <Trans
+                      i18nKey="dialogs.orderDetail.noCuttingFile"
+                      ns="orders"
+                      components={{ strong: <strong /> }}
+                    />
                   </div>
                 )}
               </div>
@@ -212,6 +236,7 @@ function DesignLinksSection({
   designsOriginal?: Record<string, string | undefined>;
   onPreviewMockup: (url: string, original: string | undefined, title: string) => void;
 }) {
+  const { t } = useTranslation('orders');
   // Gộp position từ cả 2 source — ưu tiên `designsOriginal` (URL Drive gốc)
   // vì xưởng cần file gốc để in/upload, không phải URL preview optimized.
   const positions = Array.from(new Set([...Object.keys(designs ?? {}), ...Object.keys(designsOriginal ?? {})])).filter(
@@ -228,17 +253,17 @@ function DesignLinksSection({
     <div className="rounded-lg border border-border bg-card">
       <div className="px-4 py-2.5 border-b border-border flex items-center justify-between">
         <h4 className="text-sm font-semibold text-foreground inline-flex items-center gap-2">
-          <Link2 size={14} /> Link file
+          <Link2 size={14} /> {t('dialogs.orderDetail.linkFileTitle')}
           {hasAny && (
             <span className="text-xs text-muted-foreground font-normal">
               ({positions.length + (mockupLink ? 1 : 0)})
             </span>
           )}
         </h4>
-        <span className="text-[10px] text-muted-foreground italic">Click để mở Drive · Copy để paste chỗ khác</span>
+        <span className="text-[10px] text-muted-foreground italic">{t('dialogs.orderDetail.linkFileHint')}</span>
       </div>
       {!hasAny ? (
-        <div className="p-6 text-center text-xs text-muted-foreground">Đơn này chưa có link mockup / design.</div>
+        <div className="p-6 text-center text-xs text-muted-foreground">{t('dialogs.orderDetail.noLinks')}</div>
       ) : (
         <div className="divide-y divide-border/40">
           {mockupLink && (
@@ -284,6 +309,7 @@ function MockupRow({
   originalUrl?: string;
   onPreview: (url: string, original: string | undefined, title: string) => void;
 }) {
+  const { t } = useTranslation('orders');
   const title = `Mockup ${productionId}`;
   return (
     <div className="flex items-center gap-3 px-3 py-2 hover:bg-muted/30">
@@ -291,7 +317,7 @@ function MockupRow({
         type="button"
         onClick={() => onPreview(thumbUrl || fullUrl, originalUrl, title)}
         className="shrink-0 w-14 h-14 rounded border border-border overflow-hidden bg-checker hover:ring-2 hover:ring-primary/40"
-        title="Click để xem to"
+        title={t('dialogs.orderDetail.clickToEnlarge')}
       >
         {thumbUrl ? (
           <img
@@ -308,7 +334,7 @@ function MockupRow({
         )}
       </button>
       <span className="shrink-0 text-xs font-semibold text-foreground min-w-[80px] uppercase tracking-wide">
-        Mockup
+        {t('dialogs.orderDetail.mockupLabel')}
       </span>
       <a
         href={fullUrl}
@@ -326,7 +352,7 @@ function MockupRow({
           target="_blank"
           rel="noopener noreferrer"
           className="inline-flex items-center justify-center w-5 h-5 text-muted-foreground hover:text-primary"
-          title="Mở tab mới"
+          title={t('dialogs.orderDetail.openNewTab')}
         >
           <ExternalLink size={11} />
         </a>
@@ -346,6 +372,7 @@ function LinkRow({
   url: string;
   copyLabel: string;
 }) {
+  const { t } = useTranslation('orders');
   return (
     <li className="flex items-center gap-2 px-3 py-2 text-xs hover:bg-muted/30">
       <span className="shrink-0 inline-flex items-center justify-center w-5 h-5 text-muted-foreground">{icon}</span>
@@ -366,7 +393,7 @@ function LinkRow({
           target="_blank"
           rel="noopener noreferrer"
           className="inline-flex items-center justify-center w-5 h-5 text-muted-foreground hover:text-primary"
-          title="Mở tab mới"
+          title={t('dialogs.orderDetail.openNewTab')}
         >
           <ExternalLink size={11} />
         </a>

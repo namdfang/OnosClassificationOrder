@@ -1,0 +1,64 @@
+{
+  "title": "Prioritize factory assignment by customer",
+  "subtitle": "When enabled, orders from assigned customers are forced to their assigned factory at import time (takes priority over product config). Unassigned customers still follow product config. Each customer belongs to only 1 factory — drag customers between columns then click Save.",
+  "enabledOn": "Enabled",
+  "enabledOff": "Disabled",
+  "unsavedBadge": "Unsaved",
+  "syncCustomers": "Sync customers",
+  "addCustomer": "Add customer",
+  "customerList": "Customer list",
+  "customerCount": "{{count}} customers",
+  "noFactories": "No factories yet.",
+  "leaveConfirm": "You have UNSAVED changes to customer/factory assignment. Leaving will discard them — continue anyway?",
+  "addDialog": {
+    "title": "Add customer",
+    "skuLabel": "User SKU *",
+    "skuPlaceholder": "e.g. HB-16459",
+    "emailLabel": "User email",
+    "emailPlaceholder": "e.g. customer@example.com",
+    "submit": "Add"
+  },
+  "toasts": {
+    "skuRequired": "User SKU is required",
+    "syncSuccess": "Sync complete: +{{created}} new customers (total {{total}})",
+    "addSuccess": "Customer added",
+    "saveSuccess": "Customer-factory assignment config saved"
+  },
+  "kanban": {
+    "searchPlaceholder": "Search customers in all columns...",
+    "unassignedColumn": "Unassigned",
+    "emptyColumn": "Empty — drag customers here",
+    "noSearchMatch": "No customer matches the search"
+  },
+  "tier": {
+    "retail": "Retail",
+    "vip": "VIP {{tier}}"
+  },
+  "customerListDialog": {
+    "title": "Customer list ({{count}})",
+    "searchPlaceholder": "Search by SKU / email...",
+    "importTier": "Import tier",
+    "filterAll": "All",
+    "table": {
+      "account": "Account (SKU)",
+      "email": "Email",
+      "tier": "Tier"
+    },
+    "changeTierTitle": "Click to change tier",
+    "noMatch": "No customers match the filter.",
+    "tierChangeSuccess": "{{sku}}: {{tier}}",
+    "import": {
+      "title": "Import customer tiers",
+      "description": "Upload a .xlsx / .csv / .txt file or paste directly, one line each: ACCOUNT NAME  VIP 0..5. Matches by SKU (case-insensitive), applies to every email with that SKU; accounts not in the list are skipped.",
+      "pastePlaceholder": "Or paste here, e.g.:\nTIENHC\tVIP 0\nMERCHFOX\tVIP 2",
+      "validRows": "Read <b>{{count}}</b> valid rows",
+      "invalidRowsSuffix": ", <b>{{count}}</b> invalid rows (skipped)",
+      "noValidRows": "No valid rows found (format: ACCOUNT NAME + VIP 0..5)",
+      "fileReadError": "Could not read file",
+      "resultSuccess": "Assigned tier to <b>{{updated}}</b> customers ({{matched}} accounts matched).",
+      "resultSkipped": "Skipped {{count}} accounts not in the list:",
+      "submit": "Import",
+      "toastSuccess": "Assigned tier to {{updated}} customers ({{matched}} accounts matched)"
+    }
+  }
+}

@@ -1,5 +1,7 @@
 import React, { useEffect, useMemo, useState } from 'react';
+import { useTranslation } from 'react-i18next';
 import { Link, useLocation, useNavigate } from 'react-router-dom';
+import type { TFunction } from 'i18next';
 import {
   AlertTriangle,
   BarChart3,
@@ -71,209 +73,234 @@ interface NavGroup {
   items: NavItem[];
 }
 
-const NAV_GROUPS: NavGroup[] = [
-  {
-    title: '',
-    items: [
-      {
-        key: PATHS.HOME,
-        label: 'Dashboard',
-        icon: <LayoutGrid size={17} />,
-        perm: 'page.dashboard',
-        children: [
-          {
-            key: 'dash-factory',
-            label: 'Đơn hàng theo xưởng',
-            to: `${PATHS.HOME}?tab=factory`,
-            icon: <Factory size={14} />,
-          },
-          {
-            key: 'dash-stats',
-            label: 'Thống kê đơn & sản phẩm',
-            to: `${PATHS.HOME}?tab=stats`,
-            icon: <BarChart3 size={14} />,
-          },
-          {
-            key: 'dash-status',
-            label: 'Tình trạng đơn hàng',
-            to: `${PATHS.HOME}?tab=status`,
-            icon: <ClipboardList size={14} />,
-          },
-          {
-            key: 'dash-lifecycle',
-            label: 'Vòng đời đơn',
-            to: `${PATHS.HOME}?tab=lifecycle`,
-            icon: <Workflow size={14} />,
-          },
-          {
-            key: 'dash-tool-check',
-            label: 'Soát tool',
-            to: `${PATHS.HOME}?tab=tool-check`,
-            icon: <FileSearch size={14} />,
-            perm: 'page.tool_check',
-          },
-          {
-            key: 'dash-person-error',
-            label: 'Lỗi theo người',
-            to: `${PATHS.HOME}?tab=person-error`,
-            icon: <AlertTriangle size={14} />,
-            anyPerm: ['page.designer_stats', 'page.tool_check'],
-          },
-          {
-            key: 'dash-designer',
-            label: 'Designer',
-            to: `${PATHS.HOME}?tab=designer`,
-            icon: <Palette size={14} />,
-            perm: 'page.designer_stats',
-          },
-        ],
-      },
-      {
-        key: PATHS.ORDERS,
-        label: 'Quản lý đơn',
-        icon: <ShoppingCart size={17} />,
-        perm: 'page.orders',
-        children: [
-          // "List Order" (tab cũ) đang tạm tắt (xem pages/orders/ListOrderTab.tsx)
-          // — thay bằng "Danh sách đơn", đúng trang default thật hiện tại.
-          { key: 'orders-workshop', label: 'Danh sách đơn', to: PATHS.ORDERS_WORKSHOP, icon: <List size={14} /> },
-          {
-            key: 'orders-error-log',
-            label: 'Nhật ký bù lỗi',
-            to: PATHS.ORDERS_ERROR_LOG,
-            icon: <AlertTriangle size={14} />,
-            hideForRoles: ['Support'],
-          },
-          {
-            key: 'orders-scan-error',
-            label: 'Quét mã',
-            to: PATHS.ORDERS_SCAN_ERROR,
-            icon: <ScanLine size={14} />,
-            perm: 'page.scan_error',
-          },
-          {
-            key: 'orders-stage-errors',
-            label: 'Danh mục lỗi công đoạn',
-            to: PATHS.ORDERS_STAGE_ERRORS,
-            icon: <QrCode size={14} />,
-            perm: 'page.stage_errors',
-          },
-          {
-            key: 'orders-unmapped',
-            label: 'Không xác định xưởng',
-            to: PATHS.ORDERS_UNMAPPED,
-            icon: <MapPin size={14} />,
-            perm: 'page.unmapped_factory',
-          },
-          {
-            key: 'orders-import',
-            label: 'Import Order',
-            to: PATHS.ORDERS_IMPORT,
-            icon: <FileDown size={14} />,
-            perm: 'order.import',
-          },
-          {
-            key: 'orders-cutting-files',
-            label: 'Import File Cutting',
-            to: PATHS.ORDERS_CUTTING_FILES,
-            icon: <Scissors size={14} />,
-            perm: 'order.import',
-          },
-        ],
-      },
-      {
-        key: 'work',
-        label: 'Công việc',
-        icon: <Briefcase size={17} />,
-        children: [
-          {
-            key: PATHS.MY_TASKS,
-            label: 'Task của tôi',
-            to: PATHS.MY_TASKS,
-            icon: <List size={14} />,
-            perm: 'page.my_tasks',
-          },
-          {
-            key: PATHS.FULFILLMENT_MY_TASKS,
-            label: 'Task Fulfillment',
-            to: PATHS.FULFILLMENT_MY_TASKS,
-            icon: <Factory size={14} />,
-            perm: 'page.fulfillment_my_tasks',
-          },
-        ],
-      },
-    ],
-  },
-  {
-    title: 'Danh mục',
-    items: [
-      {
-        key: PATHS.PRODUCTS,
-        label: 'Sản phẩm',
-        to: PATHS.PRODUCTS,
-        icon: <Package size={17} />,
-        perm: 'page.products',
-      },
-      {
-        key: PATHS.PROMOTIONS,
-        label: 'Chương trình giảm giá',
-        to: PATHS.PROMOTIONS,
-        icon: <Tag size={17} />,
-        perm: 'page.promotions',
-      },
-      {
-        key: PATHS.WORKSHOP_CONFIG,
-        label: 'Quản lý xưởng',
-        to: PATHS.WORKSHOP_CONFIG,
-        icon: <Building2 size={17} />,
-        perm: 'workshop.manage',
-      },
-    ],
-  },
-  {
-    title: 'Cá nhân',
-    items: [
-      { key: PATHS.NOTIFICATIONS, label: 'Thông báo', to: PATHS.NOTIFICATIONS, icon: <Bell size={17} /> },
-      { key: PATHS.ACCOUNT, label: 'Tài khoản', to: PATHS.ACCOUNT, icon: <User size={17} /> },
-    ],
-  },
-  {
-    title: 'Quản trị',
-    items: [
-      {
-        key: 'admin-people',
-        label: 'Nhân sự & phân quyền',
-        icon: <Users size={17} />,
-        children: [
-          {
-            key: PATHS.DESIGNER_TEAM,
-            label: 'Team Designer',
-            to: PATHS.DESIGNER_TEAM,
-            icon: <Palette size={14} />,
-            perm: 'page.designer_team',
-          },
-          { key: PATHS.USERS, label: 'Người dùng', to: PATHS.USERS, icon: <User size={14} />, perm: 'user.manage' },
-          {
-            key: PATHS.DEPARTMENTS,
-            label: 'Phòng ban',
-            to: PATHS.DEPARTMENTS,
-            icon: <Building2 size={14} />,
-            perm: 'user.manage',
-          },
-          { key: PATHS.ROLES, label: 'Vai trò', to: PATHS.ROLES, icon: <ShieldCheck size={14} />, perm: 'role.manage' },
-          {
-            key: PATHS.CUSTOM_ROLES,
-            label: 'Vai trò tùy chỉnh',
-            to: PATHS.CUSTOM_ROLES,
-            icon: <ShieldHalf size={14} />,
-            perm: 'role.manage',
-          },
-        ],
-      },
-      { key: PATHS.SETTINGS, label: 'Cài đặt', to: PATHS.SETTINGS, icon: <Settings size={17} />, perm: 'role.manage' },
-    ],
-  },
-];
+function buildNavGroups(t: TFunction<'layout'>): NavGroup[] {
+  return [
+    {
+      title: '',
+      items: [
+        {
+          key: PATHS.HOME,
+          label: t('sidebar.dashboard.title'),
+          icon: <LayoutGrid size={17} />,
+          perm: 'page.dashboard',
+          children: [
+            {
+              key: 'dash-factory',
+              label: t('sidebar.dashboard.factory'),
+              to: `${PATHS.HOME}?tab=factory`,
+              icon: <Factory size={14} />,
+            },
+            {
+              key: 'dash-stats',
+              label: t('sidebar.dashboard.stats'),
+              to: `${PATHS.HOME}?tab=stats`,
+              icon: <BarChart3 size={14} />,
+            },
+            {
+              key: 'dash-status',
+              label: t('sidebar.dashboard.status'),
+              to: `${PATHS.HOME}?tab=status`,
+              icon: <ClipboardList size={14} />,
+            },
+            {
+              key: 'dash-lifecycle',
+              label: t('sidebar.dashboard.lifecycle'),
+              to: `${PATHS.HOME}?tab=lifecycle`,
+              icon: <Workflow size={14} />,
+            },
+            {
+              key: 'dash-tool-check',
+              label: t('sidebar.dashboard.toolCheck'),
+              to: `${PATHS.HOME}?tab=tool-check`,
+              icon: <FileSearch size={14} />,
+              perm: 'page.tool_check',
+            },
+            {
+              key: 'dash-person-error',
+              label: t('sidebar.dashboard.personError'),
+              to: `${PATHS.HOME}?tab=person-error`,
+              icon: <AlertTriangle size={14} />,
+              anyPerm: ['page.designer_stats', 'page.tool_check'],
+            },
+            {
+              key: 'dash-designer',
+              label: t('sidebar.dashboard.designer'),
+              to: `${PATHS.HOME}?tab=designer`,
+              icon: <Palette size={14} />,
+              perm: 'page.designer_stats',
+            },
+          ],
+        },
+        {
+          key: PATHS.ORDERS,
+          label: t('sidebar.orders.title'),
+          icon: <ShoppingCart size={17} />,
+          perm: 'page.orders',
+          children: [
+            // "List Order" (tab cũ) đang tạm tắt (xem pages/orders/ListOrderTab.tsx)
+            // — thay bằng "Danh sách đơn", đúng trang default thật hiện tại.
+            {
+              key: 'orders-workshop',
+              label: t('sidebar.orders.list'),
+              to: PATHS.ORDERS_WORKSHOP,
+              icon: <List size={14} />,
+            },
+            {
+              key: 'orders-error-log',
+              label: t('sidebar.orders.errorLog'),
+              to: PATHS.ORDERS_ERROR_LOG,
+              icon: <AlertTriangle size={14} />,
+              hideForRoles: ['Support'],
+            },
+            {
+              key: 'orders-scan-error',
+              label: t('sidebar.orders.scanError'),
+              to: PATHS.ORDERS_SCAN_ERROR,
+              icon: <ScanLine size={14} />,
+              perm: 'page.scan_error',
+            },
+            {
+              key: 'orders-stage-errors',
+              label: t('sidebar.orders.stageErrors'),
+              to: PATHS.ORDERS_STAGE_ERRORS,
+              icon: <QrCode size={14} />,
+              perm: 'page.stage_errors',
+            },
+            {
+              key: 'orders-unmapped',
+              label: t('sidebar.orders.unmapped'),
+              to: PATHS.ORDERS_UNMAPPED,
+              icon: <MapPin size={14} />,
+              perm: 'page.unmapped_factory',
+            },
+            {
+              key: 'orders-import',
+              label: t('sidebar.orders.import'),
+              to: PATHS.ORDERS_IMPORT,
+              icon: <FileDown size={14} />,
+              perm: 'order.import',
+            },
+            {
+              key: 'orders-cutting-files',
+              label: t('sidebar.orders.cuttingFiles'),
+              to: PATHS.ORDERS_CUTTING_FILES,
+              icon: <Scissors size={14} />,
+              perm: 'order.import',
+            },
+          ],
+        },
+        {
+          key: 'work',
+          label: t('sidebar.work.title'),
+          icon: <Briefcase size={17} />,
+          children: [
+            {
+              key: PATHS.MY_TASKS,
+              label: t('sidebar.work.myTasks'),
+              to: PATHS.MY_TASKS,
+              icon: <List size={14} />,
+              perm: 'page.my_tasks',
+            },
+            {
+              key: PATHS.FULFILLMENT_MY_TASKS,
+              label: t('sidebar.work.fulfillmentTasks'),
+              to: PATHS.FULFILLMENT_MY_TASKS,
+              icon: <Factory size={14} />,
+              perm: 'page.fulfillment_my_tasks',
+            },
+          ],
+        },
+      ],
+    },
+    {
+      title: t('sidebar.groups.catalog'),
+      items: [
+        {
+          key: PATHS.PRODUCTS,
+          label: t('sidebar.products'),
+          to: PATHS.PRODUCTS,
+          icon: <Package size={17} />,
+          perm: 'page.products',
+        },
+        {
+          key: PATHS.PROMOTIONS,
+          label: t('sidebar.promotions'),
+          to: PATHS.PROMOTIONS,
+          icon: <Tag size={17} />,
+          perm: 'page.promotions',
+        },
+        {
+          key: PATHS.WORKSHOP_CONFIG,
+          label: t('sidebar.workshopConfig'),
+          to: PATHS.WORKSHOP_CONFIG,
+          icon: <Building2 size={17} />,
+          perm: 'workshop.manage',
+        },
+      ],
+    },
+    {
+      title: t('sidebar.groups.personal'),
+      items: [
+        { key: PATHS.NOTIFICATIONS, label: t('sidebar.notifications'), to: PATHS.NOTIFICATIONS, icon: <Bell size={17} /> },
+        { key: PATHS.ACCOUNT, label: t('sidebar.account'), to: PATHS.ACCOUNT, icon: <User size={17} /> },
+      ],
+    },
+    {
+      title: t('sidebar.groups.admin'),
+      items: [
+        {
+          key: 'admin-people',
+          label: t('sidebar.peoplePermissions'),
+          icon: <Users size={17} />,
+          children: [
+            {
+              key: PATHS.DESIGNER_TEAM,
+              label: t('sidebar.designerTeam'),
+              to: PATHS.DESIGNER_TEAM,
+              icon: <Palette size={14} />,
+              perm: 'page.designer_team',
+            },
+            {
+              key: PATHS.USERS,
+              label: t('sidebar.users'),
+              to: PATHS.USERS,
+              icon: <User size={14} />,
+              perm: 'user.manage',
+            },
+            {
+              key: PATHS.DEPARTMENTS,
+              label: t('sidebar.departments'),
+              to: PATHS.DEPARTMENTS,
+              icon: <Building2 size={14} />,
+              perm: 'user.manage',
+            },
+            {
+              key: PATHS.ROLES,
+              label: t('sidebar.roles'),
+              to: PATHS.ROLES,
+              icon: <ShieldCheck size={14} />,
+              perm: 'role.manage',
+            },
+            {
+              key: PATHS.CUSTOM_ROLES,
+              label: t('sidebar.customRoles'),
+              to: PATHS.CUSTOM_ROLES,
+              icon: <ShieldHalf size={14} />,
+              perm: 'role.manage',
+            },
+          ],
+        },
+        {
+          key: PATHS.SETTINGS,
+          label: t('sidebar.settings'),
+          to: PATHS.SETTINGS,
+          icon: <Settings size={17} />,
+          perm: 'role.manage',
+        },
+      ],
+    },
+  ];
+}
 
 /**
  * Filter sidebar menu by user.role.permissionCodes. Items without `perm` are
@@ -429,6 +456,7 @@ function SidebarParent({ item, collapsed }: { item: NavItem; collapsed: boolean 
 
 function Sidebar({ collapsed, mobileOpen, onMobileClose }: SidebarProps) {
   const navigate = useNavigate();
+  const { t } = useTranslation('layout');
   const { profile } = useAuthStore();
   const isMobile = useIsMobile();
 
@@ -439,8 +467,8 @@ function Sidebar({ collapsed, mobileOpen, onMobileClose }: SidebarProps) {
     [profile?.role?.permissionCodes],
   );
   const navGroups = useMemo(
-    () => filterMenuByPermissions(NAV_GROUPS, permissionCodes, isAdmin, roleName),
-    [permissionCodes, isAdmin, roleName],
+    () => filterMenuByPermissions(buildNavGroups(t), permissionCodes, isAdmin, roleName),
+    [t, permissionCodes, isAdmin, roleName],
   );
 
   const handleLogout = async () => {
@@ -491,11 +519,11 @@ function Sidebar({ collapsed, mobileOpen, onMobileClose }: SidebarProps) {
           </div>
           <div className="flex-1 min-w-0">
             <p className="text-sm font-semibold text-foreground truncate">{profile?.fullName}</p>
-            <p className="text-[11px] text-muted-foreground truncate">{profile?.role?.name || 'Member'}</p>
+            <p className="text-[11px] text-muted-foreground truncate">{profile?.role?.name || t('sidebar.member')}</p>
           </div>
           <button
             onClick={handleLogout}
-            title="Sign out"
+            title={t('sidebar.signOut')}
             className="w-8 h-8 rounded-md flex items-center justify-center text-muted-foreground hover:text-destructive hover:bg-destructive/10 transition-colors bg-transparent border-none cursor-pointer"
           >
             <LogOut size={15} />

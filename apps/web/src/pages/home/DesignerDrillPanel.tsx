@@ -1,4 +1,5 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
+import { useTranslation } from 'react-i18next';
 import { ChevronDown, ChevronRight, History, ImageOff, ListChecks, Plus, X } from 'lucide-react';
 import { PRODUCT_LEVEL_MAP } from 'shared';
 
@@ -58,6 +59,8 @@ interface ProductGroup {
  * Fetch qua `overview-list` (không scoping role — khớp con số team-wide).
  */
 export function DesignerDrillPanel({ target, onClose }: Props) {
+  const { t } = useTranslation('dashboard');
+  const { t: tOrders } = useTranslation('orders');
   const { canViewField, canEditField, roleName, has, isAdmin } = usePermission();
   const canTransfer = isAdmin || has('order.transfer');
   const [rows, setRows] = useState<WorkshopOrderRow[]>([]);
@@ -147,7 +150,7 @@ export function DesignerDrillPanel({ target, onClose }: Props) {
   );
 
   const assigneeName = (id: string) =>
-    id === '__none__' ? 'Chưa gán' : teamById[id]?.fullName || `#${id.slice(-4)}`;
+    id === '__none__' ? t('drillPanel.unassigned') : teamById[id]?.fullName || `#${id.slice(-4)}`;
 
   // Gom nhóm theo sản phẩm (productConfigId) — đơn chưa map → nhóm "Chưa map".
   const groups = useMemo<ProductGroup[]>(() => {
@@ -158,7 +161,7 @@ export function DesignerDrillPanel({ target, onClose }: Props) {
       if (!g) {
         g = {
           key,
-          fullName: r.productConfig?.fullName || (key === 'unmapped' ? 'Chưa map' : r.type || 'Không rõ'),
+          fullName: r.productConfig?.fullName || (key === 'unmapped' ? t('drillPanel.unmapped') : r.type || t('drillPanel.unknown')),
           shortName: r.productConfig?.shortName,
           mockup: r.productConfig?.mockup,
           level: r.productConfig?.level,
@@ -169,7 +172,7 @@ export function DesignerDrillPanel({ target, onClose }: Props) {
       g.rows.push(r);
     }
     return [...map.values()].sort((a, b) => b.rows.length - a.rows.length || a.fullName.localeCompare(b.fullName));
-  }, [filteredRows]);
+  }, [filteredRows, t]);
 
   if (!target) return null;
 
@@ -184,6 +187,7 @@ export function DesignerDrillPanel({ target, onClose }: Props) {
     canEditField,
     patchRow: (id, patch) => setRows((prev) => prev.map((r) => (r._id === id ? { ...r, ...patch } : r))),
     openPreview: (url, title, originalUrl) => setPreview({ url, title, originalUrl }),
+    t: tOrders,
   };
 
   return (
@@ -193,9 +197,10 @@ export function DesignerDrillPanel({ target, onClose }: Props) {
         <ListChecks size={16} className="text-indigo-600 shrink-0" />
         <span className="text-sm font-semibold">{target.title}</span>
         <span className="text-[11px] text-muted-foreground">
-          — {total} đơn
-          {total > rows.length && !loading && ` (hiển thị ${rows.length} đơn đầu)`}
-          {(filterAssignee || filterCustomer) && ` · đang lọc: ${filteredRows.length} đơn`}
+          — {t('drillPanel.orderCount', { count: total })}
+          {total > rows.length && !loading && ` (${t('drillPanel.showingFirst', { count: rows.length })})`}
+          {(filterAssignee || filterCustomer) &&
+            ` · ${t('drillPanel.filtering', { count: filteredRows.length })}`}
         </span>
         {loading && <Spinner size={13} className="text-muted-foreground" />}
         <button
@@ -203,7 +208,7 @@ export function DesignerDrillPanel({ target, onClose }: Props) {
           onClick={onClose}
           className="ml-auto inline-flex items-center gap-1 text-[11px] text-muted-foreground hover:text-foreground"
         >
-          <X size={13} /> Đóng
+          <X size={13} /> {t('drillPanel.close')}
         </button>
       </div>
 
@@ -218,7 +223,7 @@ export function DesignerDrillPanel({ target, onClose }: Props) {
             onToggle={(k) => setFilterAssignee((cur) => (cur === k ? null : k))}
           />
           <FacetBar
-            label="Khách"
+            label={t('drillPanel.customer')}
             options={customerFacet.map(([sku, n]) => ({ key: sku, label: sku, count: n }))}
             active={filterCustomer}
             onToggle={(k) => setFilterCustomer((cur) => (cur === k ? null : k))}
@@ -231,7 +236,7 @@ export function DesignerDrillPanel({ target, onClose }: Props) {
           <Spinner size={18} className="text-muted-foreground" />
         </div>
       ) : filteredRows.length === 0 ? (
-        <p className="text-xs text-muted-foreground text-center py-10">Không có đơn nào phù hợp.</p>
+        <p className="text-xs text-muted-foreground text-center py-10">{t('drillPanel.noMatchingOrders')}</p>
       ) : (
         <div className="divide-y divide-border/60">
           {groups.map((g) => {
@@ -269,7 +274,7 @@ export function DesignerDrillPanel({ target, onClose }: Props) {
                         borderColor: PRODUCT_LEVEL_MAP[g.level]?.color,
                       }}
                     >
-                      Lv {g.level}
+                      {t('drillPanel.level', { level: g.level })}
                     </Badge>
                   )}
                   <button type="button" onClick={() => toggleGroup(g.key)} className="flex-1 min-w-0 text-left">
@@ -277,7 +282,7 @@ export function DesignerDrillPanel({ target, onClose }: Props) {
                     {g.shortName && <div className="text-[10px] text-muted-foreground">{g.shortName}</div>}
                   </button>
                   <Badge variant="secondary" className="shrink-0">
-                    {g.rows.length} đơn
+                    {t('drillPanel.orderCount', { count: g.rows.length })}
                   </Badge>
                 </div>
 
@@ -319,7 +324,7 @@ export function DesignerDrillPanel({ target, onClose }: Props) {
                                           className="h-6 text-[11px] px-2 w-fit border-amber-300 bg-amber-50/40 hover:bg-amber-100/60 dark:border-amber-500/40 dark:bg-amber-500/10 dark:hover:bg-amber-500/15 text-amber-700 dark:text-amber-300"
                                           onClick={() => setAssignDialog({ ids: [row._id], single: row })}
                                         >
-                                          <Plus size={11} /> Gán xưởng
+                                          <Plus size={11} /> {t('drillPanel.assignFactory')}
                                         </Button>
                                       ) : null
                                     }
@@ -330,7 +335,7 @@ export function DesignerDrillPanel({ target, onClose }: Props) {
                                 <Button
                                   variant="ghost"
                                   size="icon"
-                                  title="Lịch sử"
+                                  title={t('drillPanel.history')}
                                   onClick={() => setHistoryTarget({ id: row._id, productionId: row.productionId })}
                                 >
                                   <History size={13} className="text-muted-foreground" />
@@ -391,6 +396,7 @@ function FacetBar({
   active: string | null;
   onToggle: (key: string) => void;
 }) {
+  const { t } = useTranslation('dashboard');
   const totalCount = options.reduce((s, o) => s + o.count, 0);
   const chip = (isActive: boolean) =>
     cn(
@@ -404,7 +410,7 @@ function FacetBar({
       <span className="text-[11px] font-medium text-muted-foreground shrink-0 pt-0.5 w-16">{label}</span>
       <div className="flex flex-wrap gap-1 max-h-[4.5rem] overflow-y-auto">
         <button type="button" onClick={() => active && onToggle(active)} className={chip(active === null)}>
-          Tất cả · {totalCount}
+          {t('drillPanel.all')} · {totalCount}
         </button>
         {options.map((o) => (
           <button key={o.key} type="button" onClick={() => onToggle(o.key)} className={chip(active === o.key)}>

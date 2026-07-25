@@ -1,4 +1,5 @@
 import React, { useMemo, useState } from 'react';
+import { useTranslation } from 'react-i18next';
 import { CloudDownload, FileCheck2, FilePlus2, FileText, Upload } from 'lucide-react';
 import { toast } from 'sonner';
 import * as XLSX from 'xlsx';
@@ -38,6 +39,7 @@ interface ReworkImportResult {
 }
 
 export function ImportOrderTab({ onImported }: ImportOrderTabProps) {
+  const { t } = useTranslation('orders');
   const [mode, setMode] = useState<ImportMode>('new');
   const [text, setText] = useState('');
   const [loading, setLoading] = useState(false);
@@ -57,7 +59,7 @@ export function ImportOrderTab({ onImported }: ImportOrderTabProps) {
         const wb = XLSX.read(buf, { type: 'array', cellDates: true });
         const sheetName = wb.SheetNames[0];
         if (!sheetName) {
-          toast.error('File rỗng — không có sheet nào');
+          toast.error(t('importTab.emptyFile'));
           return;
         }
         const tsv = XLSX.utils.sheet_to_csv(wb.Sheets[sheetName], {
@@ -69,7 +71,7 @@ export function ImportOrderTab({ onImported }: ImportOrderTabProps) {
         setText(await file.text());
       }
     } catch (err) {
-      toast.error('Không đọc được file. Kiểm tra format .xlsx / .csv / .tsv / .txt.');
+      toast.error(t('importTab.fileReadError'));
 
       console.error(err);
     }
@@ -79,7 +81,7 @@ export function ImportOrderTab({ onImported }: ImportOrderTabProps) {
     if (mode === 'new') {
       const rows = parseOrderRows(text);
       if (rows.length === 0) {
-        toast.error('Không parse được dòng nào. Kiểm tra format (cột cách bằng Tab, có header "Production ID").');
+        toast.error(t('importTab.noRowsNew'));
         return;
       }
       try {
@@ -89,7 +91,12 @@ export function ImportOrderTab({ onImported }: ImportOrderTabProps) {
         setLastNewResult(result);
         setLastReworkResult(null);
         toast.success(
-          `Imported ${result.imported}, updated ${result.updated}, mapped ${result.mapped}/${result.mapped + result.unmapped}`,
+          t('importTab.importSuccess', {
+            imported: result.imported,
+            updated: result.updated,
+            mapped: result.mapped,
+            total: result.mapped + result.unmapped,
+          }),
         );
         onImported();
         setText('');
@@ -101,7 +108,7 @@ export function ImportOrderTab({ onImported }: ImportOrderTabProps) {
     } else {
       const rows = parseReworkOrderRows(text);
       if (rows.length === 0) {
-        toast.error('Không parse được dòng nào. Header sheet soát phải bắt đầu bằng "Production ID".');
+        toast.error(t('importTab.noRowsRework'));
         return;
       }
       try {
@@ -111,7 +118,12 @@ export function ImportOrderTab({ onImported }: ImportOrderTabProps) {
         setLastReworkResult(result);
         setLastNewResult(null);
         toast.success(
-          `Soát: updated ${result.updated}, not-found ${result.notFound}, cancel ${result.cancelled}, gán designer ${result.assigneeMatched}`,
+          t('importTab.reworkSuccess', {
+            updated: result.updated,
+            notFound: result.notFound,
+            cancelled: result.cancelled,
+            assigneeMatched: result.assigneeMatched,
+          }),
         );
         onImported();
         setText('');
@@ -134,16 +146,26 @@ export function ImportOrderTab({ onImported }: ImportOrderTabProps) {
       setLastNewResult(result);
       setLastReworkResult(null);
       const manufactureSummary = result.byManufacture
-        .map((m) => `${m.sku}${m.error ? ' (lỗi)' : ''}: ${m.fetched}`)
+        .map((m) => `${m.sku}${m.error ? t('importTab.errorSuffix') : ''}: ${m.fetched}`)
         .join(', ');
       toast.success(
-        `Đã lấy ${result.totalFetched} đơn từ ${result.byManufacture.length} xưởng OnosPod (${manufactureSummary}): ` +
-          `imported ${result.imported}, updated ${result.updated}, mapped ${result.mapped}/${result.mapped + result.unmapped}`,
+        t('importTab.onosPodSuccess', {
+          totalFetched: result.totalFetched,
+          count: result.byManufacture.length,
+          summary: manufactureSummary,
+          imported: result.imported,
+          updated: result.updated,
+          mapped: result.mapped,
+          total: result.mapped + result.unmapped,
+        }),
       );
       const failedManufactures = result.byManufacture.filter((m) => m.error);
       if (failedManufactures.length > 0) {
         toast.error(
-          `${failedManufactures.length} xưởng lỗi: ${failedManufactures.map((m) => `${m.sku} — ${m.error}`).join('; ')}`,
+          t('importTab.onosPodFailed', {
+            count: failedManufactures.length,
+            list: failedManufactures.map((m) => `${m.sku} — ${m.error}`).join('; '),
+          }),
         );
       }
       onImported();
@@ -159,11 +181,9 @@ export function ImportOrderTab({ onImported }: ImportOrderTabProps) {
       <div className="rounded-lg border border-border bg-card p-5 space-y-3">
         <div className="flex items-center justify-between gap-3 flex-wrap">
           <div>
-            <h3 className="text-sm font-semibold text-foreground">Paste data từ Google Sheets / Excel</h3>
+            <h3 className="text-sm font-semibold text-foreground">{t('importTab.pasteTitle')}</h3>
             <p className="text-xs text-muted-foreground mt-0.5">
-              {mode === 'new'
-                ? 'Sao chép cả khối (gồm header) từ sheet đơn mới rồi paste vào đây.'
-                : 'Sheet soát: cập nhật QC fields (kết quả tool, file lỗi, ghi chú, người thực hiện) cho đơn đã có.'}
+              {mode === 'new' ? t('importTab.pasteHintNew') : t('importTab.pasteHintRework')}
             </p>
           </div>
           <div className="flex items-center gap-2">
@@ -176,7 +196,7 @@ export function ImportOrderTab({ onImported }: ImportOrderTabProps) {
                 onClick={handleImportFromOnosPod}
               >
                 {onosPodLoading ? <Spinner size={14} /> : <CloudDownload size={14} />}
-                Lấy đơn từ OnosPod
+                {t('importTab.fetchOnosPod')}
               </Button>
             )}
             <label className="cursor-pointer">
@@ -191,7 +211,7 @@ export function ImportOrderTab({ onImported }: ImportOrderTabProps) {
               />
               <span className="inline-flex items-center gap-1.5 h-9 px-3 text-sm font-medium rounded-md border border-input bg-background shadow-sm hover:bg-accent">
                 <FileText size={14} />
-                Chọn file
+                {t('importTab.chooseFile')}
               </span>
             </label>
           </div>
@@ -212,7 +232,7 @@ export function ImportOrderTab({ onImported }: ImportOrderTabProps) {
                 : 'text-muted-foreground hover:text-foreground',
             )}
           >
-            <FilePlus2 size={13} /> Import đơn mới
+            <FilePlus2 size={13} /> {t('importTab.modeNew')}
           </button>
           <button
             type="button"
@@ -227,7 +247,7 @@ export function ImportOrderTab({ onImported }: ImportOrderTabProps) {
                 : 'text-muted-foreground hover:text-foreground',
             )}
           >
-            <FileCheck2 size={13} /> Import file soát
+            <FileCheck2 size={13} /> {t('importTab.modeRework')}
           </button>
         </div>
 
@@ -236,82 +256,86 @@ export function ImportOrderTab({ onImported }: ImportOrderTabProps) {
           onChange={(e) => setText(e.target.value)}
           rows={16}
           className="font-mono text-xs"
-          placeholder={
-            mode === 'new'
-              ? 'Production ID\tUser SKU\tUser email\tType\t...'
-              : 'Production ID\tUser SKU\tSize\tTrang_thai_in\t...\tNote_kq_Tool\tFile_sua_loi\tGhi_chu_file_loi\tNguoi_thuc_hien\t...'
-          }
+          placeholder={mode === 'new' ? t('importTab.placeholderNew') : t('importTab.placeholderRework')}
         />
 
         <div className="flex items-center justify-between">
           <p className="text-xs text-muted-foreground">
             {parsedCount > 0 ? (
               <>
-                <Badge variant="secondary">{parsedCount}</Badge> dòng hợp lệ sẵn sàng{' '}
-                {mode === 'new' ? 'import' : 'soát'}.
+                <Badge variant="secondary">{parsedCount}</Badge>{' '}
+                {mode === 'new' ? t('importTab.rowsReadyNew') : t('importTab.rowsReadyRework')}
               </>
             ) : (
-              'Chưa parse được dòng nào. Header phải bắt đầu bằng "Production ID".'
+              t('importTab.noRowsHint')
             )}
           </p>
           <Button onClick={handleImport} disabled={loading || parsedCount === 0}>
             {loading ? <Spinner size={14} className="text-primary-foreground" /> : <Upload size={14} />}
-            {mode === 'new' ? 'Import' : 'Soát'} {parsedCount > 0 ? `(${parsedCount})` : ''}
+            {mode === 'new' ? t('importTab.importBtn') : t('importTab.reworkBtn')} {parsedCount > 0 ? `(${parsedCount})` : ''}
           </Button>
         </div>
       </div>
 
       {lastNewResult && (
         <div className="rounded-lg border border-border bg-card p-5">
-          <h3 className="text-sm font-semibold text-foreground mb-3">Kết quả import lần trước</h3>
+          <h3 className="text-sm font-semibold text-foreground mb-3">{t('importTab.lastResultNewTitle')}</h3>
           <div className="grid grid-cols-4 gap-3">
-            <Stat label="Imported" value={lastNewResult.imported} accent="success" />
-            <Stat label="Updated" value={lastNewResult.updated} accent="secondary" />
-            <Stat label="Đã mapping" value={lastNewResult.mapped} accent="success" />
-            <Stat label="Chưa mapping" value={lastNewResult.unmapped} accent="warning" />
+            <Stat label={t('importTab.statImported')} value={lastNewResult.imported} accent="success" t={t} />
+            <Stat label={t('importTab.statUpdated')} value={lastNewResult.updated} accent="secondary" t={t} />
+            <Stat label={t('importTab.statMapped')} value={lastNewResult.mapped} accent="success" t={t} />
+            <Stat label={t('importTab.statUnmapped')} value={lastNewResult.unmapped} accent="warning" t={t} />
           </div>
-          <SkippedList items={lastNewResult.skipped} />
+          <SkippedList items={lastNewResult.skipped} t={t} />
         </div>
       )}
 
       {lastReworkResult && (
         <div className="rounded-lg border border-border bg-card p-5">
-          <h3 className="text-sm font-semibold text-foreground mb-3">Kết quả soát lần trước</h3>
+          <h3 className="text-sm font-semibold text-foreground mb-3">{t('importTab.lastResultReworkTitle')}</h3>
           <div className="grid grid-cols-4 gap-3">
-            <Stat label="Updated" value={lastReworkResult.updated} accent="success" />
-            <Stat label="Not found" value={lastReworkResult.notFound} accent="warning" />
-            <Stat label="Cancelled" value={lastReworkResult.cancelled} accent="warning" />
-            <Stat label="Gán designer" value={lastReworkResult.assigneeMatched} accent="secondary" />
+            <Stat label={t('importTab.statUpdated')} value={lastReworkResult.updated} accent="success" t={t} />
+            <Stat label={t('importTab.statNotFound')} value={lastReworkResult.notFound} accent="warning" t={t} />
+            <Stat label={t('importTab.statCancelled')} value={lastReworkResult.cancelled} accent="warning" t={t} />
+            <Stat label={t('importTab.statAssigned')} value={lastReworkResult.assigneeMatched} accent="secondary" t={t} />
           </div>
-          <SkippedList items={lastReworkResult.skipped} />
+          <SkippedList items={lastReworkResult.skipped} t={t} />
         </div>
       )}
     </div>
   );
 }
 
-function Stat({ label, value, accent }: { label: string; value: number; accent: 'success' | 'warning' | 'secondary' }) {
+function Stat({
+  label,
+  value,
+  accent,
+  t,
+}: {
+  label: string;
+  value: number;
+  accent: 'success' | 'warning' | 'secondary';
+  t: (key: string) => string;
+}) {
   return (
     <div className="rounded-md border border-border p-3">
       <p className="text-[10px] uppercase tracking-wider text-muted-foreground font-semibold">{label}</p>
       <p className="text-xl font-bold text-foreground mt-1">{value}</p>
       <Badge variant={accent} className="mt-1">
-        {accent === 'success' ? 'OK' : accent === 'warning' ? 'Check' : 'Info'}
+        {accent === 'success' ? t('importTab.statOk') : accent === 'warning' ? t('importTab.statCheck') : t('importTab.statInfo')}
       </Badge>
     </div>
   );
 }
 
-function SkippedList({ items }: { items: { row: number; reason: string }[] }) {
+function SkippedList({ items, t }: { items: { row: number; reason: string }[]; t: (key: string, opts?: Record<string, unknown>) => string }) {
   if (items.length === 0) return null;
   return (
     <div className="mt-4">
-      <p className="text-xs font-semibold text-foreground mb-2">Skipped rows ({items.length}):</p>
+      <p className="text-xs font-semibold text-foreground mb-2">{t('importTab.skippedRows', { count: items.length })}</p>
       <ul className="space-y-1 text-xs text-muted-foreground max-h-40 overflow-auto">
         {items.map((s) => (
-          <li key={s.row}>
-            Row {s.row}: {s.reason}
-          </li>
+          <li key={s.row}>{t('importTab.rowItem', { row: s.row, reason: s.reason })}</li>
         ))}
       </ul>
     </div>

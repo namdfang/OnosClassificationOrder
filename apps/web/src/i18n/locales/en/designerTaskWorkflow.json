@@ -1,0 +1,248 @@
+{
+  "myTasks": {
+    "columns": {
+      "assigned": "To do",
+      "rework": "To redo",
+      "watching": "Waiting to resume",
+      "inProgress": "In progress",
+      "done": "Done",
+      "fixed": "Fixed"
+    },
+    "noType": "— No type —",
+    "dragRuleWarning": "Cannot move \"{{from}}\" → \"{{to}}\". Drag rules: To do/To redo → In progress, In progress → Done.",
+    "statusUpdated": "Status updated",
+    "bulkUpdated": "Updated {{modified}}/{{matched}}",
+    "bulkSkippedWarning": "Updated {{modified}}/{{matched}}. {{count}} orders skipped",
+    "skippedOrdersTitle": "Skipped orders",
+    "rejectHandedOver": "Order handed over to another designer",
+    "greeting": "Hello",
+    "subtitle": "Drag and drop a card to change its status, or tick the checkbox to bulk update.",
+    "kpi": {
+      "assigned": "To do",
+      "rework": "To redo",
+      "watching": "Waiting to resume",
+      "inProgress": "In progress",
+      "done": "Done",
+      "fixed": "Fixed",
+      "rejected": "Rejected",
+      "responseWork": "Response / work"
+    },
+    "pipelineCaption": "— WHOLE factory (not just your orders) · Designer lane highlighted · hover for details · click a day to filter",
+    "hint": {
+      "title": "Tip for selecting multiple orders:",
+      "textBefore": "Tick the checkbox next to a product name to select all its orders. Or tick one order, hold",
+      "textAfter": "then click another checkbox (in the same column) to quickly select everything in between."
+    },
+    "filters": {
+      "search": "Search",
+      "searchPlaceholder": "productionId / orderId",
+      "type": "Product",
+      "fabricType": "Fabric type",
+      "machine": "Machine",
+      "toolResult": "Tool result",
+      "toolResultNote": "Tool result note",
+      "customer": "Customer",
+      "errorFile": "Error file"
+    },
+    "rejectedDrawer": {
+      "toggle": "Rejected files ({{count}})",
+      "empty": "No files have been marked as unworkable yet."
+    },
+    "bulkToolbar": {
+      "selected": "Selected",
+      "mixedColumns": "(Orders in multiple columns — bulk only works within one column)",
+      "start": "Start",
+      "restart": "Restart",
+      "complete": "Complete",
+      "reject": "Reject"
+    },
+    "rejectBulkTarget": "{{count}} selected orders",
+    "column": {
+      "expand": "Click to expand",
+      "collapse": "Click to collapse",
+      "empty": "Empty"
+    },
+    "rejectCardButton": "Reject"
+  },
+  "dailyBreakdown": {
+    "weekdays": ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"],
+    "ageToday": "Today",
+    "ageYesterday": "Yesterday",
+    "ageDaysAgo": "{{count}} days ago",
+    "title": "Daily breakdown",
+    "unfinishedBadge": "{{unfinished}} unfinished · {{days}} days",
+    "rangeDays": "{{count}} days",
+    "summary": {
+      "unfinished": "Unfinished:",
+      "assigned": "To do",
+      "rework": "To redo",
+      "inProgress": "In progress",
+      "done": "Done:"
+    },
+    "table": {
+      "day": "Day",
+      "assigned": "To do",
+      "rework": "To redo",
+      "inProgress": "In progress",
+      "done": "Done",
+      "loading": "Loading…",
+      "empty": "No orders in the last {{count}} days.",
+      "total": "Total"
+    },
+    "backlogHint": "Order pending since {{age}}, not finished yet",
+    "clickToFilter": "Click to filter the kanban by this day"
+  },
+  "rejectModal": {
+    "title": "Report an unworkable file",
+    "reportPrefix": "Report file",
+    "reportMiddle": "as unworkable and",
+    "reportHandoff": "hand it over to another designer",
+    "reportSuffix": "to take over. The order will move directly to the chosen person.",
+    "targetLabel": "Hand over to designer",
+    "targetPlaceholder": "— Select a replacement —",
+    "targetOption": "{{name}} ({{count}} orders in progress)",
+    "noCandidates": "No other designer is currently active to take over.",
+    "reasonLabel": "Reason (optional — max {{maxLen}} characters)",
+    "reasonPlaceholder": "e.g. No source file, unclear mockup...",
+    "confirmTitle": "You must select a designer to take over",
+    "confirmButton": "Reject"
+  },
+  "taskCard": {
+    "timeline": {
+      "assigned": "Assigned",
+      "started": "Started",
+      "done": "Done",
+      "rework": "Factory error",
+      "rejected": "Rejected"
+    },
+    "timeHint": {
+      "assigned": "Time you were assigned this task",
+      "inProgress": "Time work started",
+      "done": "Time completed",
+      "rework": "Time the factory reported an error (needs redo)",
+      "rejected": "Time reported as unworkable"
+    },
+    "viewLarge": "Click to view larger",
+    "mockupTitle": "Mockup {{productionId}}",
+    "copyLabel": "code {{productionId}}",
+    "toolNoteHint": "Tool result note: {{name}}",
+    "typeHint": "Type: {{type}}",
+    "productionHint": "Order entered production date · {{time}}",
+    "productionLabel": "Prod",
+    "deadlineHint": "Estimated deadline for Design stage · {{time}}",
+    "rejectedReasonLabel": "Reason unworkable:"
+  },
+  "taskDetail": {
+    "status": {
+      "unassigned": "Unassigned",
+      "assigned": "To do",
+      "inProgress": "In progress",
+      "done": "Done",
+      "rejected": "Rejected",
+      "rework": "To redo"
+    },
+    "fields": {
+      "type": "Type",
+      "sizeColor": "Size / Color",
+      "orderId": "Order ID",
+      "fabricType": "Fabric type",
+      "machine": "Machine",
+      "tool": "Tool",
+      "toolNote": "Tool note",
+      "factory": "Factory",
+      "room": "Department"
+    },
+    "mockup": "Mockup",
+    "openOriginal": "Open original image in new tab",
+    "designsHeading": "Design files ({{count}})",
+    "designsHint": "Right-click a link → \"Save link as…\" to download the image.",
+    "designLinkTitle": "Left-click: open in new tab · Right-click: Save link to download",
+    "designLinkLabel": "Design link",
+    "timelineTitle": "Designer timeline",
+    "timeline": {
+      "ordered": "Customer placed order",
+      "inProduction": "Entered production",
+      "assigned": "Assigned",
+      "started": "Started",
+      "completed": "Completed",
+      "rework": "To redo",
+      "rejected": "Rejected"
+    },
+    "productionErrorLabel": "Factory reported error: {{label}}",
+    "errorFileTitle": "Error file",
+    "errorFileNoteLabel": "Note:",
+    "rejectedReasonTitle": "Reason unworkable"
+  },
+  "team": {
+    "statusFilters": {
+      "active": "Active",
+      "inactive": "Inactive",
+      "all": "All"
+    },
+    "title": "Designer Team",
+    "subtitle": "Manage sub-designers.",
+    "stats": {
+      "active": "Active",
+      "inactive": "Inactive",
+      "totalActiveTasks": "Active tasks (whole team)"
+    },
+    "memberCount": "{{count}} members",
+    "reload": "Reload",
+    "addMember": "Add sub-designer",
+    "table": {
+      "fullName": "Full name",
+      "email": "Email",
+      "active": "Active",
+      "done": "Done",
+      "hireDate": "Hire date",
+      "status": "Status"
+    },
+    "emptyNoMembersPrefix": "No sub-designers yet — click",
+    "emptyNoMembersAction": "+ Add sub-designer",
+    "emptyNoMembersSuffix": "above.",
+    "emptyFiltered": "No designer in this status.",
+    "statusOn": "On",
+    "statusOff": "Off",
+    "resetPasswordTitle": "Reset password",
+    "toggled": "Status changed",
+    "deleted": "Deleted",
+    "passwordTooShort": "Password must be at least 8 characters",
+    "resetDone": "Password reset for {{name}} — send it to them before closing",
+    "deleteDialog": {
+      "title": "Delete sub-designer",
+      "prefix": "Delete",
+      "suffix": "? The user will not be able to log in. Completed orders keep their link so stats aren't lost."
+    },
+    "resetDialog": {
+      "title": "Reset password",
+      "prefix": "Reset password for",
+      "suffix": ". The user will need to change their password on next login.",
+      "newPasswordLabel": "New password",
+      "newPasswordPlaceholder": "At least 8 characters",
+      "confirm": "Reset"
+    }
+  },
+  "teamMemberDialog": {
+    "titleCreate": "Add sub-designer",
+    "titleEdit": "Edit info",
+    "fullNameLabel": "Display name *",
+    "fullNamePlaceholder": "e.g. John Smith",
+    "emailLabel": "Email *",
+    "emailPlaceholder": "huy@onospod.com",
+    "passwordLabel": "Password *",
+    "randomTitle": "Random",
+    "copyTitle": "Copy",
+    "passwordHint": "Copy the password and send it to the team separately — it cannot be viewed again after closing this dialog.",
+    "hireDateLabel": "Hire date",
+    "telegramLabel": "Telegram Chat ID",
+    "telegramPlaceholder": "optional",
+    "submitCreate": "Create",
+    "submitSave": "Save",
+    "passwordCopied": "Password copied",
+    "clipboardBlocked": "Browser blocked clipboard access — copy manually",
+    "missingFields": "Please enter both Name and Email",
+    "passwordTooShort": "Password must be at least 8 characters",
+    "created": "Created {{name}} — send the password to the team before closing this dialog",
+    "updated": "Updated"
+  }
+}

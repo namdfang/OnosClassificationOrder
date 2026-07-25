@@ -1,4 +1,5 @@
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
+import { useTranslation } from 'react-i18next';
 import { Navigate } from 'react-router-dom';
 import { History, MapPin } from 'lucide-react';
 
@@ -18,6 +19,7 @@ import { OrderRowActionsMenu } from '@/components/orders/OrderRowActionsMenu';
 import {
   buildColGroups,
   GroupCellContent,
+  groupTitle,
   WORKSHOP_COLS,
   type WorkshopOrderRow,
   type WorkshopRenderCtx,
@@ -54,6 +56,7 @@ export default function UnmappedFactoryOrdersPage() {
 }
 
 function UnmappedFactoryOrdersContent() {
+  const { t } = useTranslation('orders');
   const { canViewField, canEditField, has, isAdmin, roleName } = usePermission();
   const canAssign = isAdmin || has('order.transfer');
 
@@ -117,7 +120,7 @@ function UnmappedFactoryOrdersContent() {
   const patchRow = (id: string, p: Partial<WorkshopOrderRow>) =>
     setRows((prev) => prev.map((r) => (r._id === id ? { ...r, ...p } : r)));
   const openPreview = (url: string, title: string, originalUrl?: string) => setPreview({ url, originalUrl, title });
-  const ctx: WorkshopRenderCtx = { canEditField, patchRow, openPreview };
+  const ctx: WorkshopRenderCtx = { canEditField, patchRow, openPreview, t };
   const isNoTool = useIsNoTool();
   const emptyColSpan = colGroups.length + (canAssign ? 1 : 0) + 1;
 
@@ -147,7 +150,7 @@ function UnmappedFactoryOrdersContent() {
           loading={rowsLoading}
           topActionsRight={
             <span className="ml-auto text-xs text-muted-foreground">
-              <span className="font-semibold text-foreground tabular-nums">{total}</span> đơn chưa xác định xưởng
+              <span className="font-semibold text-foreground tabular-nums">{total}</span> {t('unmapped.unmappedCount')}
             </span>
           }
         />
@@ -155,17 +158,18 @@ function UnmappedFactoryOrdersContent() {
         {canAssign && selected.size > 0 && (
           <div className="rounded-lg border border-primary/30 bg-primary/5 p-3 flex items-center gap-3 flex-wrap">
             <span className="text-sm font-medium">
-              Đã chọn <span className="tabular-nums font-bold">{selected.size}</span> đơn
+              {t('unmapped.selectedLabel')} <span className="tabular-nums font-bold">{selected.size}</span>{' '}
+              {t('unmapped.ordersSuffix')}
             </span>
             <Button
               size="sm"
               onClick={() => setAssignDialog({ ids: Array.from(selected) })}
               className="bg-amber-600 hover:bg-amber-700 text-white"
             >
-              <MapPin size={13} /> Gán xưởng
+              <MapPin size={13} /> {t('unmapped.assignFactory')}
             </Button>
             <Button variant="ghost" size="sm" onClick={() => setSelected(new Set())}>
-              Bỏ chọn
+              {t('unmapped.deselect')}
             </Button>
           </div>
         )}
@@ -212,7 +216,7 @@ function UnmappedFactoryOrdersContent() {
                   )}
                   {colGroups.map((g) => (
                     <TableHead key={g.key} className="whitespace-nowrap text-xs" style={{ minWidth: g.width }}>
-                      {g.title}
+                      {groupTitle(t, g.key, g.title)}
                     </TableHead>
                   ))}
                   <TableHead className="w-20 sticky right-0 z-20 bg-card"></TableHead>
@@ -229,7 +233,7 @@ function UnmappedFactoryOrdersContent() {
                 {!rowsLoading && rows.length === 0 && (
                   <TableRow>
                     <TableCell colSpan={emptyColSpan} className="text-center py-8 text-sm text-muted-foreground">
-                      Không có đơn nào chưa xác định xưởng
+                      {t('unmapped.emptyState')}
                     </TableCell>
                   </TableRow>
                 )}
@@ -258,7 +262,7 @@ function UnmappedFactoryOrdersContent() {
                           <Button
                             variant="ghost"
                             size="icon"
-                            title="Lịch sử"
+                            title={t('tableWorkshop.history')}
                             onClick={() => setHistoryTarget({ id: row._id, productionId: row.productionId })}
                           >
                             <History size={13} className="text-muted-foreground" />
@@ -270,7 +274,7 @@ function UnmappedFactoryOrdersContent() {
                               className="h-6 text-[11px] px-2 border-amber-300 bg-amber-50/40 hover:bg-amber-100/60 dark:border-amber-500/40 dark:bg-amber-500/10 dark:hover:bg-amber-500/15 text-amber-700 dark:text-amber-300"
                               onClick={() => setAssignDialog({ ids: [row._id], single: row })}
                             >
-                              <MapPin size={11} /> Gán xưởng
+                              <MapPin size={11} /> {t('unmapped.assignFactory')}
                             </Button>
                           )}
                           <OrderRowActionsMenu

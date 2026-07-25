@@ -1,0 +1,278 @@
+{
+  "printAreas": {
+    "front": "Front",
+    "back": "Back",
+    "sleeve": "Sleeve",
+    "hood": "Hood",
+    "folder": "Placket fold",
+    "placket": "Placket",
+    "chestLeft": "Left chest",
+    "chestRight": "Right chest",
+    "left": "Left",
+    "right": "Right",
+    "sleeveLeft": "Left sleeve",
+    "sleeveRight": "Right sleeve",
+    "leftUpperSleeve": "Left upper sleeve",
+    "rightUpperSleeve": "Right upper sleeve",
+    "leftCuff": "Left cuff",
+    "rightCuff": "Right cuff",
+    "frontEmbroidery": "Front embroidery",
+    "backEmbroidery": "Back embroidery"
+  },
+  "page": {
+    "title": "Products",
+    "subtitle": "Manage product config, product categories, factories and machine types",
+    "tabs": {
+      "config": "Config",
+      "category": "Categories",
+      "factory": "Factories"
+    }
+  },
+  "configTab": {
+    "searchPlaceholder": "Search by name, short name, SKU…",
+    "statusFilter": {
+      "title": "Filter by status — hidden products are excluded by default",
+      "allExceptHidden": "All (except Hidden)"
+    },
+    "status": {
+      "active": "Visible",
+      "inactive": "Hidden from customers",
+      "hidden": "Hidden"
+    },
+    "backfill": {
+      "button": "Backfill fabric + tool + machine for orders",
+      "title": "After setting Fabric Type / Tool Result / Machine for the product, click to apply to already-imported orders (idempotent — won't overwrite existing values)",
+      "success": "Backfilled {{updated}}/{{scanned}} orders (fabric / tool / machine)"
+    },
+    "importButton": "Import from Excel",
+    "clearAll": {
+      "confirm": "Delete all Product Configs? This action cannot be undone.",
+      "success": "Deleted {{count}} product configs"
+    },
+    "table": {
+      "mockup": "Mockup",
+      "productName": "Product name",
+      "shortName": "Short name",
+      "machine": "Machine",
+      "department": "Department",
+      "factory": "Factory",
+      "fabricType": "Fabric type",
+      "toolResult": "Tool result",
+      "level": "Level",
+      "categoryVariations": "Category / Variations",
+      "status": "Status",
+      "empty": "No product configs yet. Click \"Import from Excel\" to get started.",
+      "variationsCount": "{{count}} variations",
+      "notSelected": "— Not selected —",
+      "editTitle": "Edit product",
+      "openMockup": "Open mockup image"
+    }
+  },
+  "categoryTab": {
+    "title": "Product categories",
+    "description": "Used to classify products in the customer catalog + promotion scope.",
+    "table": {
+      "name": "Name",
+      "shortName": "Short name",
+      "status": "Status",
+      "empty": "No categories yet.",
+      "active": "Active",
+      "inactive": "Inactive"
+    },
+    "dialog": {
+      "createTitle": "Add product category",
+      "editTitle": "Edit product category"
+    },
+    "form": {
+      "name": "Name",
+      "namePlaceholder": "E.g. Shirts/Pants",
+      "shortName": "Short name",
+      "shortNamePlaceholder": "E.g. APPAREL",
+      "parent": "Parent category (leave blank = root category)",
+      "noParent": "— None (root category) —",
+      "active": "Active",
+      "nameRequired": "Name and short name are required",
+      "createSuccess": "Category created",
+      "updateSuccess": "Updated successfully"
+    }
+  },
+  "factoryTab": {
+    "table": {
+      "name": "Name",
+      "shortName": "Short name",
+      "status": "Status",
+      "active": "Active",
+      "inactive": "Inactive"
+    },
+    "form": {
+      "nameShortNameRequired": "Name and short name are required",
+      "createSuccess": "Created successfully",
+      "updateSuccess": "Updated successfully",
+      "active": "Active"
+    },
+    "factory": {
+      "title": "Factories",
+      "description": "List of production factories"
+    },
+    "machineType": {
+      "title": "Machine types",
+      "description": "Types of printing machines in the factory"
+    },
+    "dialog": {
+      "factoryNoun": "factory",
+      "machineTypeNoun": "machine type",
+      "factoryNamePlaceholder": "Me Linh Factory",
+      "machineTypeNamePlaceholder": "Print and laser cut",
+      "factoryShortNamePlaceholder": "ML",
+      "machineTypeShortNamePlaceholder": "ICL"
+    },
+    "fabric": {
+      "title": "Fabric types",
+      "description": "List of fabric / blank types. Auto-generated when importing Product Config with a new label.",
+      "addSuccess": "Fabric type added",
+      "deleteSuccess": "Deleted successfully",
+      "form": {
+        "nameCodeRequired": "Please enter a name and code",
+        "displayName": "Display name",
+        "displayNamePlaceholder": "E.g. POLY 2 DA",
+        "code": "Code",
+        "codeHint": "(slug, used for storage)",
+        "codePlaceholder": "e.g. poly-2-da",
+        "icon": "Icon"
+      },
+      "reset": {
+        "button": "Reset from seed",
+        "title": "Delete all and recreate from seed (22 default fabric types)",
+        "confirm": "Reset all Fabric Types to the seed list? All current entries will be deleted and recreated from seed. This action cannot be undone.",
+        "success": "Reset complete: removed {{removed}}, recreated {{inserted}} fabric types"
+      },
+      "table": {
+        "icon": "Icon",
+        "code": "Code",
+        "empty": "No fabric types yet",
+        "on": "On"
+      },
+      "dialog": {
+        "createTitle": "Add fabric type",
+        "editTitle": "Edit fabric type"
+      },
+      "deleteDialog": {
+        "title": "Delete fabric type",
+        "message": "Delete {{name}}? Products using it will keep their existing value but it will no longer be selectable."
+      }
+    }
+  },
+  "importDialog": {
+    "title": "Import Product Config",
+    "description": "Paste data from Excel (tab-separated). 7 columns in order: <b>Full name</b> — <b>Short name</b> — <b>Machine</b> (machine number, e.g. 94/27, leave blank = no tool) — <b>Factory</b> (e.g. \"ME LINH\") — <b>Fabric type</b> (POLY 2 DA, ME 64, LUA 4B, LUA VAN GO…) — <b>Tool result</b> (leave blank = has tool; \"no tool\" = no tool) — <b>Department</b> (machine type, e.g. \"PRINT AND LASER CUT\"). The system matches labels by name (case-insensitive).",
+    "parseError": "No rows could be parsed. Check the format (7 columns, separated by Tab).",
+    "importSuccess": "Imported {{imported}}, updated {{updated}}, {{skippedCount}} warnings",
+    "validRows": "{{count}} valid rows will be imported."
+  },
+  "detail": {
+    "backToList": "Back to list",
+    "unsavedConfirm": "You have UNSAVED changes. Leaving this page will lose them — leave anyway?",
+    "shortNameRequired": "Short name cannot be empty",
+    "saveSuccess": "Product saved",
+    "applyBulkPriceConfirm": "Apply the entered prices to all {{count}} variations — overwrite existing prices?",
+    "notSelected": "— Not selected —",
+    "header": {
+      "shortName": "Short name",
+      "unsaved": "Unsaved",
+      "saveChanges": "Save changes"
+    },
+    "sidebar": {
+      "mockup": "Mockup",
+      "level": "Level",
+      "machineNumber": "Print machine code",
+      "machineNumberPlaceholder": "E.g. 94, 27… (leave blank = no tool)",
+      "factory": "Factory",
+      "department": "Department",
+      "fabricType": "Fabric type",
+      "toolResult": "Tool result",
+      "guide": "Notes / instructions",
+      "guidePlaceholder": "Product instructions / notes…"
+    },
+    "tabs": {
+      "detail": "Product detail",
+      "variations": "Variations ({{count}})"
+    },
+    "classification": {
+      "title": "Classification",
+      "productCategory": "Product category",
+      "printMethod": "Print method"
+    },
+    "customerDisplay": {
+      "title": "Customer display",
+      "printArea": "Print area",
+      "printAreaHint": "Select the print areas this product supports — a fixed catalog mapped 1-1 to <code>order.designs</code> so the customer API can determine the correct design position.",
+      "sizeChart": "Size chart",
+      "description": "Product description",
+      "descriptionPlaceholder": "Product description…"
+    },
+    "packaging": {
+      "title": "Default packaging",
+      "weight": "Weight (g)",
+      "width": "Width (cm)",
+      "height": "Height (cm)",
+      "length": "Length (cm)"
+    },
+    "itemSpecifics": {
+      "title": "Item specifics",
+      "addRow": "Add row",
+      "labelPlaceholder": "E.g. Material",
+      "valuePlaceholder": "E.g. 100% Cotton",
+      "empty": "No specifics yet."
+    },
+    "imageUpload": {
+      "title": "Choose image — only uploaded when you click Save changes",
+      "change": "Change image",
+      "choose": "Choose image",
+      "pendingHint": "New image — will be uploaded when you click Save"
+    },
+    "attributes": {
+      "sizeLabel": "Size",
+      "sizeExample": "E.g. M",
+      "colorLabel": "Style/Color",
+      "colorExample": "E.g. Red",
+      "typeLabel": "Type",
+      "typeExample": "E.g. Cotton",
+      "genericLabel": "Attribute name",
+      "genericValue": "Value",
+      "addAttribute": "+ Add attribute",
+      "variantAttributes": "Variant attributes",
+      "empty": "No attributes yet."
+    },
+    "bulkGenerate": {
+      "trigger": "Bulk generate variations",
+      "title": "Bulk generate variations (attribute combinations)",
+      "description": "Enter a name and a comma-separated list of values for each attribute. The system will generate all combinations (e.g. 3 colors × 3 sizes = 9 variations) and add them to the end of the current list.",
+      "addAttribute": "Add attribute",
+      "generate": "Generate",
+      "generateCount": "Generate {{count}} variations",
+      "sizeValuesExample": "E.g. S, M, L",
+      "colorValuesExample": "E.g. Red, Blue, Yellow",
+      "typeValuesExample": "E.g. Cotton, Poly",
+      "genericValuesExample": "E.g. Value 1, Value 2"
+    },
+    "variations": {
+      "skuHintPrefix": "Variation SKU is auto-generated as",
+      "skuFormat": "{Product SKU}-{attribute}",
+      "skuHintSuffix": ", unique across the whole system.",
+      "noSkuWarning": "This product doesn't have a SKU yet — set the product SKU in the header to avoid duplicates.",
+      "addVariation": "Add variation",
+      "bulkPriceLabel": "Quick-fill price for all:",
+      "cost": "Cost",
+      "nonShipCost": "Cost (no ship)",
+      "retailPrice": "Retail price",
+      "applyToCount": "Apply to {{count}} variations",
+      "attributes": "Attributes",
+      "status": "Status",
+      "empty": "No variations yet.",
+      "skuGeneratedTitle": "SKU auto-generated from product SKU + variation attributes — cannot be edited directly here (edit in the database if a different convention is needed)",
+      "skuMissing": "missing product SKU / attributes",
+      "selling": "Selling",
+      "stopped": "Stopped"
+    }
+  }
+}

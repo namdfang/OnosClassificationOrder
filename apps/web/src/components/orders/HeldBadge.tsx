@@ -1,4 +1,5 @@
 import React from 'react';
+import { useTranslation } from 'react-i18next';
 import { PauseCircle } from 'lucide-react';
 
 import { Badge } from '@/components/ui/badge';
@@ -9,14 +10,15 @@ import { Badge } from '@/components/ui/badge';
  * `CancelledBadge` ở chỗ đơn giữ REVERSIBLE — mở lại để tiếp tục.
  */
 export function HeldBadge({ reason, className }: { reason?: string | null; className?: string }) {
+  const { t } = useTranslation('orders');
   return (
     <span className={`inline-flex items-center gap-1 shrink-0 min-w-0 ${className ?? ''}`}>
       <Badge
         className="text-[10px] px-1 py-0 shrink-0 gap-0.5 border-amber-300 bg-amber-100 text-amber-700 dark:border-amber-800 dark:bg-amber-500/20 dark:text-amber-300"
-        title={reason || 'Đơn đang được giữ — mở lại để tiếp tục'}
+        title={reason || t('heldBadge.title')}
       >
         <PauseCircle size={10} />
-        Đang giữ
+        {t('heldBadge.label')}
       </Badge>
       {reason && (
         <span

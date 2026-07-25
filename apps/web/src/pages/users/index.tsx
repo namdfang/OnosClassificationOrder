@@ -1,7 +1,9 @@
 import React, { useEffect, useMemo, useState } from 'react';
+import { Trans, useTranslation } from 'react-i18next';
+import type { TFunction } from 'i18next';
 import { Eye, EyeOff, Pencil, Plus, RefreshCw, Trash2, Users as UsersIcon } from 'lucide-react';
 import type { Role } from 'shared';
-import { FULFILLMENT_STAGE_LABELS, FULFILLMENT_STAGES, Status } from 'shared';
+import { FULFILLMENT_STAGES, Status } from 'shared';
 import { toast } from 'sonner';
 
 import { RepositoryRemote } from '@/services';
@@ -16,6 +18,7 @@ import { Switch } from '@/components/ui/switch';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 
 import { handleAxiosError } from '@/utils';
+import { getStageLabel } from '@/utils/fulfillmentStageLabel';
 
 interface UserRow {
   _id: string;
@@ -58,12 +61,16 @@ const EMPTY_FORM: FormState = {
 };
 
 // Auto-derive từ shared enum để khi thêm/đổi stage 1 chỗ — UI tự cập nhật.
-const FULFILLMENT_STAGE_OPTIONS: { value: string; label: string }[] = FULFILLMENT_STAGES.map((s) => ({
-  value: s,
-  label: FULFILLMENT_STAGE_LABELS[s],
-}));
+function buildFulfillmentStageOptions(t: TFunction): { value: string; label: string }[] {
+  return FULFILLMENT_STAGES.map((s) => ({
+    value: s,
+    label: getStageLabel(t, s),
+  }));
+}
 
 export default function UsersPage() {
+  const { t } = useTranslation(['auth', 'common']);
+  const fulfillmentStageOptions = useMemo(() => buildFulfillmentStageOptions(t), [t]);
   const [items, setItems] = useState<UserRow[]>([]);
   const [roles, setRoles] = useState<Role[]>([]);
   const [factories, setFactories] = useState<FactoryRow[]>([]);
@@ -125,25 +132,25 @@ export default function UsersPage() {
 
   const handleSubmit = async () => {
     if (!form.fullName.trim() || !form.email.trim() || !form.roleId) {
-      toast.error('Vui lòng nhập đủ Tên, Email, Role');
+      toast.error(t('users.validation.requiredFields'));
       return;
     }
     if (form.mode === 'create' && form.password.length < 8) {
-      toast.error('Mật khẩu phải có ít nhất 8 ký tự');
+      toast.error(t('users.validation.passwordMin'));
       return;
     }
     // Edit mode: password optional. Nếu nhập → validate min 8 ký tự, sau khi
     // update user thành công sẽ gọi /reset-password riêng.
     if (form.mode === 'edit' && form.password && form.password.length < 8) {
-      toast.error('Mật khẩu mới phải có ít nhất 8 ký tự — hoặc bỏ trống để giữ nguyên');
+      toast.error(t('users.validation.passwordMinEdit'));
       return;
     }
     if (isFulfillmentRole && !form.factoryId) {
-      toast.error('Role Fulfillment phải chọn xưởng');
+      toast.error(t('users.validation.factoryRequired'));
       return;
     }
     if (isFulfillmentRole && !form.fulfillmentStage) {
-      toast.error('Role Fulfillment phải chọn stage (In/Ép/QC/May/Đóng gói)');
+      toast.error(t('users.validation.stageRequired'));
       return;
     }
     try {
@@ -158,7 +165,7 @@ export default function UsersPage() {
           factoryId: form.factoryId || undefined,
           fulfillmentStage: form.fulfillmentStage || undefined,
         } as any);
-        toast.success('Đã tạo user');
+        toast.success(t('users.toasts.created'));
       } else if (form.id) {
         await RepositoryRemote.users.adminUpdateUser(form.id, {
           fullName: form.fullName,
@@ -170,9 +177,9 @@ export default function UsersPage() {
         // Optional reset password — chỉ gọi khi user nhập password mới.
         if (form.password) {
           await RepositoryRemote.users.resetPassword({ password: form.password }, form.id);
-          toast.success('Đã cập nhật + đổi mật khẩu');
+          toast.success(t('users.toasts.updatedWithPassword'));
         } else {
-          toast.success('Đã cập nhật');
+          toast.success(t('users.toasts.updated'));
         }
       }
       setForm(EMPTY_FORM);
@@ -188,7 +195,7 @@ export default function UsersPage() {
     if (!confirmDelete) return;
     try {
       await RepositoryRemote.users.adminDeleteUser(confirmDelete._id!);
-      toast.success('Đã xóa');
+      toast.success(t('users.toasts.deleted'));
       setConfirmDelete(null);
       fetchAll();
     } catch (err) {
@@ -199,7 +206,7 @@ export default function UsersPage() {
   const handleToggle = async (it: UserRow) => {
     try {
       await RepositoryRemote.users.toggleActive(it._id!);
-      toast.success('Đã đổi trạng thái');
+      toast.success(t('users.toasts.statusToggled'));
       fetchAll();
     } catch (err) {
       handleAxiosError(err);
@@ -213,21 +220,21 @@ export default function UsersPage() {
           <UsersIcon size={20} className="text-indigo-600" />
         </div>
         <div>
-          <h1 className="text-2xl font-bold text-foreground">Người dùng</h1>
-          <p className="text-sm text-muted-foreground">Tạo, sửa, gán role và toggle trạng thái user</p>
+          <h1 className="text-2xl font-bold text-foreground">{t('users.title')}</h1>
+          <p className="text-sm text-muted-foreground">{t('users.subtitle')}</p>
         </div>
       </div>
 
       <div className="rounded-lg border border-border bg-card">
         <div className="flex items-center justify-between p-4 border-b border-border">
-          <p className="text-xs text-muted-foreground">{items.length} user</p>
+          <p className="text-xs text-muted-foreground">{t('users.userCount', { count: items.length })}</p>
           <div className="flex items-center gap-2">
             <Button variant="ghost" size="sm" onClick={fetchAll} disabled={loading}>
               <RefreshCw size={13} className={loading ? 'animate-spin' : ''} />
-              Tải lại
+              {t('users.reload')}
             </Button>
             <Button size="sm" onClick={openCreate}>
-              <Plus size={14} /> Thêm user
+              <Plus size={14} /> {t('users.addUser')}
             </Button>
           </div>
         </div>
@@ -235,10 +242,10 @@ export default function UsersPage() {
         <Table>
           <TableHeader>
             <TableRow>
-              <TableHead>Họ tên</TableHead>
-              <TableHead>Email</TableHead>
-              <TableHead>Role</TableHead>
-              <TableHead className="w-28">Trạng thái</TableHead>
+              <TableHead>{t('users.table.fullName')}</TableHead>
+              <TableHead>{t('users.table.email')}</TableHead>
+              <TableHead>{t('users.table.role')}</TableHead>
+              <TableHead className="w-28">{t('users.table.status')}</TableHead>
               <TableHead className="w-32 text-right"></TableHead>
             </TableRow>
           </TableHeader>
@@ -253,7 +260,7 @@ export default function UsersPage() {
             {!loading && items.length === 0 && (
               <TableRow>
                 <TableCell colSpan={5} className="text-center py-8 text-sm text-muted-foreground">
-                  Chưa có user
+                  {t('users.noUsers')}
                 </TableCell>
               </TableRow>
             )}
@@ -280,7 +287,7 @@ export default function UsersPage() {
                     <div className="flex items-center gap-2">
                       <Switch checked={it.status === Status.Active} onCheckedChange={() => handleToggle(it)} />
                       <span className="text-xs text-muted-foreground">
-                        {it.status === Status.Active ? 'Bật' : 'Tắt'}
+                        {it.status === Status.Active ? t('users.statusOn') : t('users.statusOff')}
                       </span>
                     </div>
                   </TableCell>
@@ -302,34 +309,36 @@ export default function UsersPage() {
       <Dialog open={form.open} onOpenChange={(open) => !open && setForm(EMPTY_FORM)}>
         <DialogContent>
           <DialogHeader>
-            <DialogTitle>{form.mode === 'create' ? 'Thêm user' : 'Sửa user'}</DialogTitle>
+            <DialogTitle>{form.mode === 'create' ? t('users.createTitle') : t('users.editTitle')}</DialogTitle>
           </DialogHeader>
           <div className="space-y-3">
             <div className="space-y-2">
-              <Label>Họ tên</Label>
+              <Label>{t('users.fullNameLabel')}</Label>
               <Input
                 value={form.fullName}
                 onChange={(e) => setForm({ ...form, fullName: e.target.value })}
-                placeholder="VD: Nguyễn Văn A"
+                placeholder={t('users.fullNamePlaceholder')}
               />
             </div>
             <div className="space-y-2">
-              <Label>Email</Label>
+              <Label>{t('users.emailLabel')}</Label>
               <Input
                 value={form.email}
                 onChange={(e) => setForm({ ...form, email: e.target.value })}
-                placeholder="user@onos.com"
+                placeholder={t('users.emailPlaceholder')}
                 type="email"
               />
             </div>
             <div className="space-y-2">
-              <Label>{form.mode === 'create' ? 'Mật khẩu' : 'Đặt lại mật khẩu (tuỳ chọn)'}</Label>
+              <Label>{form.mode === 'create' ? t('users.passwordLabel') : t('users.resetPasswordLabel')}</Label>
               <div className="relative">
                 <Input
                   value={form.password}
                   onChange={(e) => setForm({ ...form, password: e.target.value })}
                   type={showPassword ? 'text' : 'password'}
-                  placeholder={form.mode === 'create' ? 'Tối thiểu 8 ký tự' : 'Bỏ trống nếu không đổi'}
+                  placeholder={
+                    form.mode === 'create' ? t('users.passwordPlaceholderCreate') : t('users.passwordPlaceholderEdit')
+                  }
                   className="pr-9"
                   autoComplete={form.mode === 'create' ? 'new-password' : 'off'}
                 />
@@ -337,18 +346,18 @@ export default function UsersPage() {
                   type="button"
                   tabIndex={-1}
                   onClick={() => setShowPassword((s) => !s)}
-                  aria-label={showPassword ? 'Ẩn mật khẩu' : 'Hiện mật khẩu'}
+                  aria-label={showPassword ? t('users.hidePassword') : t('users.showPassword')}
                   className="absolute right-2 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground transition-colors"
                 >
                   {showPassword ? <EyeOff size={16} /> : <Eye size={16} />}
                 </button>
               </div>
               {form.mode === 'edit' && form.password && (
-                <p className="text-[11px] text-amber-600">Sẽ ghi đè mật khẩu hiện tại. Tối thiểu 8 ký tự.</p>
+                <p className="text-[11px] text-amber-600">{t('users.passwordOverwriteNote')}</p>
               )}
             </div>
             <div className="space-y-2">
-              <Label>Role</Label>
+              <Label>{t('users.roleLabel')}</Label>
               <select
                 value={form.roleId}
                 onChange={(e) =>
@@ -371,13 +380,13 @@ export default function UsersPage() {
             {isFulfillmentRole && (
               <>
                 <div className="space-y-2">
-                  <Label>Xưởng *</Label>
+                  <Label>{t('users.factoryLabel')}</Label>
                   <select
                     value={form.factoryId}
                     onChange={(e) => setForm({ ...form, factoryId: e.target.value })}
                     className="w-full h-9 rounded-md border border-input bg-background px-3 text-sm"
                   >
-                    <option value="">— Chọn xưởng —</option>
+                    <option value="">{t('users.selectFactory')}</option>
                     {factories.map((f) => (
                       <option key={f._id} value={f._id}>
                         {f.name}
@@ -385,38 +394,34 @@ export default function UsersPage() {
                       </option>
                     ))}
                   </select>
-                  <p className="text-[11px] text-muted-foreground">
-                    User Fulfillment chỉ xem được đơn ở xưởng này (hoặc đơn đã transfer từ xưởng này đi).
-                  </p>
+                  <p className="text-[11px] text-muted-foreground">{t('users.factoryNote')}</p>
                 </div>
                 <div className="space-y-2">
-                  <Label>Stage Fulfillment *</Label>
+                  <Label>{t('users.stageLabel')}</Label>
                   <select
                     value={form.fulfillmentStage}
                     onChange={(e) => setForm({ ...form, fulfillmentStage: e.target.value })}
                     className="w-full h-9 rounded-md border border-input bg-background px-3 text-sm"
                   >
-                    <option value="">— Chọn stage —</option>
-                    {FULFILLMENT_STAGE_OPTIONS.map((s) => (
+                    <option value="">{t('users.selectStage')}</option>
+                    {fulfillmentStageOptions.map((s) => (
                       <option key={s.value} value={s.value}>
                         {s.label}
                       </option>
                     ))}
                   </select>
-                  <p className="text-[11px] text-muted-foreground">
-                    Mỗi (xưởng, stage) chỉ được 1 user. Đơn đến stage này tự nhảy vào "Task của tôi" của user.
-                  </p>
+                  <p className="text-[11px] text-muted-foreground">{t('users.stageNote')}</p>
                 </div>
               </>
             )}
           </div>
           <DialogFooter>
             <Button variant="outline" onClick={() => setForm(EMPTY_FORM)}>
-              Hủy
+              {t('actions.cancel', { ns: 'common' })}
             </Button>
             <Button onClick={handleSubmit} disabled={saving}>
               {saving && <Spinner size={14} className="mr-2" />}
-              Lưu
+              {t('actions.save', { ns: 'common' })}
             </Button>
           </DialogFooter>
         </DialogContent>
@@ -425,18 +430,22 @@ export default function UsersPage() {
       <Dialog open={!!confirmDelete} onOpenChange={(open) => !open && setConfirmDelete(null)}>
         <DialogContent>
           <DialogHeader>
-            <DialogTitle>Xóa user</DialogTitle>
+            <DialogTitle>{t('users.deleteTitle')}</DialogTitle>
           </DialogHeader>
           <p className="text-sm text-muted-foreground">
-            Xóa user <span className="font-medium text-foreground">{confirmDelete?.fullName}</span> (
-            {confirmDelete?.email})? Họ sẽ không đăng nhập được nữa.
+            <Trans
+              i18nKey="users.deleteConfirm"
+              ns="auth"
+              values={{ name: confirmDelete?.fullName, email: confirmDelete?.email }}
+              components={{ b: <span className="font-medium text-foreground" /> }}
+            />
           </p>
           <DialogFooter>
             <Button variant="outline" onClick={() => setConfirmDelete(null)}>
-              Hủy
+              {t('actions.cancel', { ns: 'common' })}
             </Button>
             <Button variant="destructive" onClick={handleDelete}>
-              Xóa
+              {t('actions.delete', { ns: 'common' })}
             </Button>
           </DialogFooter>
         </DialogContent>

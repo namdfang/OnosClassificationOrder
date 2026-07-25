@@ -1,0 +1,13 @@
+{
+  "title": "Gán designer theo xưởng",
+  "subtitle": "Sau khi soát tool xong (kết quả khác OK), đơn tự động chia cho designer theo tỉ lệ. Mỗi designer chỉ thuộc 1 xưởng.",
+  "save": "Lưu",
+  "noFactories": "Chưa có xưởng nào.",
+  "noDesigners": "Chưa gán designer nào.",
+  "removeFromFactory": "Xóa khỏi xưởng",
+  "addDesignerPlaceholder": "— Thêm designer —",
+  "usedElsewhere": "(đã ở {{factory}})",
+  "toasts": {
+    "saveSuccess": "Đã lưu cấu hình gán designer"
+  }
+}

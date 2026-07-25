@@ -1,6 +1,8 @@
-import React from 'react';
+import React, { useMemo } from 'react';
 import { useForm } from 'react-hook-form';
+import { useTranslation } from 'react-i18next';
 import { Link, useNavigate, useSearchParams } from 'react-router-dom';
+import type { TFunction } from 'i18next';
 import { Lock, Mail, User } from 'lucide-react';
 import { toast } from 'sonner';
 import { z } from 'zod';
@@ -18,20 +20,24 @@ import { RepositoryRemote } from '../../services';
 import { useAuthStore } from '../../store/authStore';
 import { handleAxiosError } from '../../utils';
 
-const registerSchema = z.object({
-  fullName: z.string().min(1, 'Name is required'),
-  email: z.string().min(1, 'Email is required').email('Invalid email'),
-  password: z.string().min(6, 'Password must be at least 6 characters'),
-});
+function buildRegisterSchema(t: TFunction<'auth'>) {
+  return z.object({
+    fullName: z.string().min(1, t('register.validation.nameRequired')),
+    email: z.string().min(1, t('register.validation.emailRequired')).email(t('register.validation.emailInvalid')),
+    password: z.string().min(6, t('register.validation.passwordMin')),
+  });
+}
 
-type RegisterFormValues = z.infer<typeof registerSchema>;
+type RegisterFormValues = z.infer<ReturnType<typeof buildRegisterSchema>>;
 
 function Register() {
   const navigate = useNavigate();
+  const { t } = useTranslation('auth');
   const { loading, setLoading } = useAuthStore();
   const [searchParam] = useSearchParams();
   const refCode = searchParam.get('ref') || '';
 
+  const registerSchema = useMemo(() => buildRegisterSchema(t), [t]);
   const form = useForm<RegisterFormValues>({
     resolver: zodResolver(registerSchema),
     defaultValues: { fullName: '', email: '', password: '' },
@@ -47,7 +53,7 @@ function Register() {
         refCode,
       });
       navigate(PATHS.LOGIN);
-      toast.success('Account created successfully');
+      toast.success(t('register.success'));
     } catch (error) {
       handleAxiosError(error);
     }
@@ -59,8 +65,8 @@ function Register() {
       <div className="w-full max-w-[440px]">
         <div className="text-center mb-8">
           <img src={logoUrl} alt="Logo" className="h-10 w-auto object-contain mx-auto mb-5" />
-          <h1 className="text-2xl font-bold text-foreground tracking-tight">Create your account</h1>
-          <p className="text-sm text-muted-foreground mt-1.5">Sign up to get started</p>
+          <h1 className="text-2xl font-bold text-foreground tracking-tight">{t('register.title')}</h1>
+          <p className="text-sm text-muted-foreground mt-1.5">{t('register.subtitle')}</p>
         </div>
 
         <div className="bg-card rounded-2xl border border-border p-7 shadow-sm">
@@ -71,11 +77,11 @@ function Register() {
                 name="fullName"
                 render={({ field }) => (
                   <FormItem>
-                    <FormLabel>Full name</FormLabel>
+                    <FormLabel>{t('register.fullName')}</FormLabel>
                     <FormControl>
                       <div className="relative">
                         <User size={15} className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground" />
-                        <Input placeholder="Your name" className="pl-9 h-10" {...field} />
+                        <Input placeholder={t('register.fullNamePlaceholder')} className="pl-9 h-10" {...field} />
                       </div>
                     </FormControl>
                     <FormMessage />
@@ -88,11 +94,11 @@ function Register() {
                 name="email"
                 render={({ field }) => (
                   <FormItem>
-                    <FormLabel>Email</FormLabel>
+                    <FormLabel>{t('register.email')}</FormLabel>
                     <FormControl>
                       <div className="relative">
                         <Mail size={15} className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground" />
-                        <Input placeholder="you@example.com" className="pl-9 h-10" {...field} />
+                        <Input placeholder={t('register.emailPlaceholder')} className="pl-9 h-10" {...field} />
                       </div>
                     </FormControl>
                     <FormMessage />
@@ -105,7 +111,7 @@ function Register() {
                 name="password"
                 render={({ field }) => (
                   <FormItem>
-                    <FormLabel>Password</FormLabel>
+                    <FormLabel>{t('register.password')}</FormLabel>
                     <FormControl>
                       <div className="relative">
                         <Lock size={15} className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground" />
@@ -119,16 +125,16 @@ function Register() {
 
               <Button type="submit" disabled={loading} className="w-full h-10">
                 {loading && <Spinner size={14} className="text-primary-foreground" />}
-                Create account
+                {t('register.createAccount')}
               </Button>
             </form>
           </Form>
         </div>
 
         <p className="text-center text-sm text-muted-foreground mt-6">
-          Already have an account?{' '}
+          {t('register.alreadyHaveAccount')}{' '}
           <Link to={PATHS.LOGIN} className="text-foreground hover:underline font-medium">
-            Sign in
+            {t('register.signIn')}
           </Link>
         </p>
       </div>

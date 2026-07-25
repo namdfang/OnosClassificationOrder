@@ -1,4 +1,6 @@
 import React, { useState } from 'react';
+import { useTranslation } from 'react-i18next';
+import type { TFunction } from 'i18next';
 import { Loader2, MessageCircle, Send } from 'lucide-react';
 import { toast } from 'sonner';
 
@@ -11,21 +13,28 @@ import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover
 import { handleAxiosError } from '@/utils';
 import { cn } from '@/utils/cn';
 
-const SLOT_OPTIONS: Array<{ value: ReportSlot | ''; label: string; hint: string }> = [
-  { value: '', label: 'Tự động theo giờ', hint: 'BE chọn slot dựa trên giờ hiện tại' },
-  { value: 'morning', label: 'Ca sáng', hint: '07:30 — period 18:30 hôm trước → 07:30' },
-  { value: 'noon', label: 'Ca trưa', hint: '13:00 — period 07:30 → 13:00' },
-  { value: 'evening', label: 'Ca chiều', hint: '18:30 — period 13:00 → 18:30' },
-];
+function buildSlotOptions(t: TFunction<'dashboard'>): Array<{ value: ReportSlot | ''; label: string; hint: string }> {
+  return [
+    { value: '', label: t('telegramReport.slots.auto'), hint: t('telegramReport.slots.autoHint') },
+    { value: 'morning', label: t('telegramReport.slots.morning'), hint: t('telegramReport.slots.morningHint') },
+    { value: 'noon', label: t('telegramReport.slots.noon'), hint: t('telegramReport.slots.noonHint') },
+    { value: 'evening', label: t('telegramReport.slots.evening'), hint: t('telegramReport.slots.eveningHint') },
+  ];
+}
 
-const REPORT_OPTIONS: Array<{ value: ReportType; label: string; emoji: string }> = [
-  { value: 'all', label: 'Tất cả 3 báo cáo', emoji: '📨' },
-  { value: 'designer', label: 'Chỉ Designer', emoji: '🎨' },
-  { value: 'factory', label: 'Chỉ Xưởng', emoji: '🏭' },
-  { value: 'error', label: 'Chỉ Đơn lỗi', emoji: '⚠️' },
-];
+function buildReportOptions(t: TFunction<'dashboard'>): Array<{ value: ReportType; label: string; emoji: string }> {
+  return [
+    { value: 'all', label: t('telegramReport.types.all'), emoji: '📨' },
+    { value: 'designer', label: t('telegramReport.types.designer'), emoji: '🎨' },
+    { value: 'factory', label: t('telegramReport.types.factory'), emoji: '🏭' },
+    { value: 'error', label: t('telegramReport.types.error'), emoji: '⚠️' },
+  ];
+}
 
 export function SendTelegramReportButton() {
+  const { t } = useTranslation('dashboard');
+  const SLOT_OPTIONS = buildSlotOptions(t);
+  const REPORT_OPTIONS = buildReportOptions(t);
   const [open, setOpen] = useState(false);
   const [slot, setSlot] = useState<ReportSlot | ''>('');
   const [report, setReport] = useState<ReportType>('all');
@@ -44,11 +53,17 @@ export function SendTelegramReportButton() {
       const resolvedSlot = data?.slot as string | undefined;
       if (ran.length > 0) {
         toast.success(
-          `Đã gửi ${ran.length} báo cáo (${ran.join(', ')})${resolvedSlot ? ` · slot=${resolvedSlot}` : ''}`,
+          t('telegramReport.sentSuccess', {
+            count: ran.length,
+            names: ran.join(', '),
+            slot: resolvedSlot ? ` · slot=${resolvedSlot}` : '',
+          }),
         );
       } else {
-        toast.warning('Không có báo cáo nào được gửi', {
-          description: skipped.length ? `Skipped: ${skipped.join(', ')}` : 'Có thể SCHEDULED_REPORTS_ENABLED=false',
+        toast.warning(t('telegramReport.noneSent'), {
+          description: skipped.length
+            ? t('telegramReport.skipped', { names: skipped.join(', ') })
+            : t('telegramReport.disabledHint'),
         });
       }
       setOpen(false);
@@ -64,17 +79,19 @@ export function SendTelegramReportButton() {
       <PopoverTrigger asChild>
         <Button variant="outline" size="sm" className="gap-2" disabled={loading}>
           {loading ? <Loader2 size={14} className="animate-spin" /> : <Send size={14} />}
-          Gửi báo cáo Telegram
+          {t('telegramReport.button')}
         </Button>
       </PopoverTrigger>
       <PopoverContent align="end" className="w-[320px] p-3 space-y-3">
         <div className="flex items-center gap-2">
           <MessageCircle size={14} className="text-indigo-600" />
-          <p className="text-sm font-semibold text-foreground">Gửi báo cáo Telegram</p>
+          <p className="text-sm font-semibold text-foreground">{t('telegramReport.button')}</p>
         </div>
 
         <div className="space-y-1.5">
-          <p className="text-[11px] font-semibold uppercase text-muted-foreground tracking-wider">Chọn ca</p>
+          <p className="text-[11px] font-semibold uppercase text-muted-foreground tracking-wider">
+            {t('telegramReport.chooseSlot')}
+          </p>
           <div className="grid grid-cols-2 gap-1">
             {SLOT_OPTIONS.map((opt) => (
               <button
@@ -96,7 +113,9 @@ export function SendTelegramReportButton() {
         </div>
 
         <div className="space-y-1.5">
-          <p className="text-[11px] font-semibold uppercase text-muted-foreground tracking-wider">Loại báo cáo</p>
+          <p className="text-[11px] font-semibold uppercase text-muted-foreground tracking-wider">
+            {t('telegramReport.chooseType')}
+          </p>
           <div className="space-y-1">
             {REPORT_OPTIONS.map((opt) => (
               <button
@@ -119,11 +138,11 @@ export function SendTelegramReportButton() {
 
         <div className="flex items-center justify-end gap-2 pt-1">
           <Button variant="ghost" size="sm" onClick={() => setOpen(false)} disabled={loading}>
-            Hủy
+            {t('telegramReport.cancel')}
           </Button>
           <Button size="sm" onClick={handleSend} disabled={loading} className="gap-1.5">
             {loading ? <Loader2 size={13} className="animate-spin" /> : <Send size={13} />}
-            Gửi ngay
+            {t('telegramReport.sendNow')}
           </Button>
         </div>
       </PopoverContent>

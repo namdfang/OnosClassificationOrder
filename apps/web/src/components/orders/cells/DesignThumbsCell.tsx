@@ -1,4 +1,6 @@
 import React from 'react';
+import { useTranslation } from 'react-i18next';
+import type { TFunction } from 'i18next';
 import { Image as ImageIcon } from 'lucide-react';
 
 import { ImageThumbCell } from '@/components/orders/cells/ImageThumbCell';
@@ -27,26 +29,28 @@ const DESIGN_KEY_ORDER = [
   'backEmbroidery',
 ] as const;
 
-const DESIGN_LABELS: Record<string, string> = {
-  front: 'Mặt trước',
-  back: 'Mặt sau',
-  sleeve: 'Tay áo',
-  hood: 'Mũ',
-  folder: 'Folder',
-  placket: 'Nẹp áo',
-  chestLeft: 'Ngực trái',
-  chestRight: 'Ngực phải',
-  left: 'Trái',
-  right: 'Phải',
-  sleeveLeft: 'Tay trái',
-  sleeveRight: 'Tay phải',
-  leftUpperSleeve: 'Tay trên trái',
-  rightUpperSleeve: 'Tay trên phải',
-  leftCuff: 'Cổ tay trái',
-  rightCuff: 'Cổ tay phải',
-  frontEmbroidery: 'Thêu trước',
-  backEmbroidery: 'Thêu sau',
-};
+function buildDesignLabels(t: TFunction<'orders'>): Record<string, string> {
+  return {
+    front: t('cells.designThumbs.labels.front'),
+    back: t('cells.designThumbs.labels.back'),
+    sleeve: t('cells.designThumbs.labels.sleeve'),
+    hood: t('cells.designThumbs.labels.hood'),
+    folder: t('cells.designThumbs.labels.folder'),
+    placket: t('cells.designThumbs.labels.placket'),
+    chestLeft: t('cells.designThumbs.labels.chestLeft'),
+    chestRight: t('cells.designThumbs.labels.chestRight'),
+    left: t('cells.designThumbs.labels.left'),
+    right: t('cells.designThumbs.labels.right'),
+    sleeveLeft: t('cells.designThumbs.labels.sleeveLeft'),
+    sleeveRight: t('cells.designThumbs.labels.sleeveRight'),
+    leftUpperSleeve: t('cells.designThumbs.labels.leftUpperSleeve'),
+    rightUpperSleeve: t('cells.designThumbs.labels.rightUpperSleeve'),
+    leftCuff: t('cells.designThumbs.labels.leftCuff'),
+    rightCuff: t('cells.designThumbs.labels.rightCuff'),
+    frontEmbroidery: t('cells.designThumbs.labels.frontEmbroidery'),
+    backEmbroidery: t('cells.designThumbs.labels.backEmbroidery'),
+  };
+}
 
 interface Props {
   designs?: Record<string, string | undefined>;
@@ -107,6 +111,8 @@ export function DesignThumbsCell({
   maxInline = 2,
   size = 32,
 }: Props) {
+  const { t } = useTranslation('orders');
+  const designLabels = React.useMemo(() => buildDesignLabels(t), [t]);
   const entries = React.useMemo(
     () => extractEntries(designs, designsOriginal, designsStatus),
     [designs, designsOriginal, designsStatus],
@@ -117,7 +123,7 @@ export function DesignThumbsCell({
       <span
         className="inline-flex items-center justify-center rounded border border-border bg-muted text-muted-foreground"
         style={{ width: size, height: size }}
-        title="Chưa có design"
+        title={t('cells.designThumbs.noDesign')}
       >
         <ImageIcon size={14} />
       </span>
@@ -128,7 +134,7 @@ export function DesignThumbsCell({
   const overflow = entries.slice(maxInline);
 
   const renderThumb = (e: DesignEntry, sz: number) => {
-    const label = DESIGN_LABELS[e.key] || e.key;
+    const label = designLabels[e.key] || e.key;
     const title = productionId ? `${label} — ${productionId}` : label;
     return (
       <ImageThumbCell
@@ -160,21 +166,22 @@ export function DesignThumbsCell({
                 'cursor-pointer select-none',
               )}
               style={{ width: size, height: size }}
-              title={`+${overflow.length} design khác`}
+              title={t('cells.designThumbs.moreCount', { count: overflow.length })}
             >
               +{overflow.length}
             </button>
           </PopoverTrigger>
           <PopoverContent className="w-[280px] p-2" align="start">
             <p className="text-[11px] font-semibold text-foreground mb-2 px-1">
-              {productionId ? `Tất cả design — ${productionId}` : 'Tất cả design'} ({entries.length})
+              {productionId ? t('cells.designThumbs.allDesignsFor', { productionId }) : t('cells.designThumbs.allDesigns')}{' '}
+              ({entries.length})
             </p>
             <div className="grid grid-cols-4 gap-1.5">
               {entries.map((e) => (
                 <div key={e.key} className="flex flex-col items-center gap-0.5">
                   {renderThumb(e, 56)}
                   <span className="text-[9px] text-muted-foreground line-clamp-1 max-w-[56px]">
-                    {DESIGN_LABELS[e.key] || e.key}
+                    {designLabels[e.key] || e.key}
                   </span>
                 </div>
               ))}

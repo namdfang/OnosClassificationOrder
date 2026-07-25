@@ -1,0 +1,107 @@
+{
+  "header": {
+    "title": "Soát tool",
+    "subtitle": "đơn cần làm lại + backlog chưa soát cho Support"
+  },
+  "filters": {
+    "product": "Sản phẩm",
+    "customer": "Khách hàng",
+    "machine": "Máy",
+    "priority": "Ưu tiên"
+  },
+  "dailyStrip": {
+    "title": "Tổng quan theo ngày",
+    "subtitle": "bấm 1 ngày để lọc danh sách bên dưới · bấm CON SỐ để xem danh sách đơn",
+    "filtering": "Đang lọc {{date}}",
+    "noData": "Không có dữ liệu.",
+    "metricColumn": "Chỉ số",
+    "totalColumn": "Tổng",
+    "dayLabelAll": "cả kỳ",
+    "metrics": {
+      "total": "Tổng đơn",
+      "unreviewed": "Chưa soát",
+      "reviewed": "Đã soát",
+      "reviewedError": "Soát lỗi",
+      "reviewedOk": "Soát OK",
+      "rework": "Cần làm lại"
+    }
+  },
+  "pipelineCaption": "— TOÀN nhà máy · lane Soát tool được tô đậm · di chuột xem chi tiết · bấm 1 ngày để lọc danh sách",
+  "kpi": {
+    "checked": "Đã soát trong kỳ",
+    "rework": "In trả về (cần làm lại)",
+    "unreviewed": "Chưa soát",
+    "error": "Lỗi soát tool (đang chờ)"
+  },
+  "level": "Lv {{level}}",
+  "list": {
+    "reworkTab": "Cần làm lại ({{count}})",
+    "unreviewedTab": "Chưa soát ({{count}})",
+    "reworkHint": "⚠ Ưu tiên — In trả về do thiếu file. Note kq Tool → \"ok\" = file ổn, chạy lại từ In · \"Đã soát xong\" = cần thiết kế, đẩy về designer / tự gán.",
+    "unreviewedHint": "Backlog đơn chưa có Note kq Tool.",
+    "noReworkOrders": "Không có đơn In trả về.",
+    "noUnreviewedOrders": "Không có đơn chưa soát.",
+    "columns": {
+      "orderCode": "Mã đơn",
+      "productionDate": "Ngày SX",
+      "priority": "Ưu tiên",
+      "customer": "Khách",
+      "product": "Sản phẩm",
+      "sizeColor": "Size/Màu",
+      "toolNote": "Note kq Tool 1",
+      "errorFile": "File sửa lỗi",
+      "errorFileNote": "Ghi chú file lỗi",
+      "factoryError": "Lỗi xưởng"
+    },
+    "markDoneButton": "Đã soát xong",
+    "markDoneToastRework": "{{id}}: đã đẩy về designer{{name}} (cần làm lại).",
+    "markDoneToastAuto": "{{id}}: đã tự gán cho designer{{name}}.",
+    "markDoneToastNone": "{{id}}: xưởng chưa có cấu hình gán — đơn vào backlog \"Cần gán\" (designer tự nhận hoặc phân tay).",
+    "errorReportedTimes": "Xưởng đã báo lỗi {{count}} lần trên đơn này",
+    "mockupTitle": "Mockup: {{id}}"
+  },
+  "errorStats": {
+    "title": "Thống kê lỗi Soát tool",
+    "subtitle": "đơn từng bị người soát tool đánh Note kq Tool ≠ ok (kể cả đã sửa về ok), theo ngày vào SX · đếm số đơn",
+    "clearCrossFilter": "Bỏ lọc chéo",
+    "viewByCustomer": "Xem theo khách hàng",
+    "expand": "Mở rộng",
+    "collapse": "Ẩn bớt",
+    "byCustomer": "Theo khách hàng",
+    "byProduct": "Theo sản phẩm",
+    "byError": "Theo loại lỗi",
+    "byErrorHint": "bấm để xem chi tiết",
+    "deselect": "bỏ chọn",
+    "noData": "Chưa có dữ liệu.",
+    "unknown": "(Chưa rõ)",
+    "detail": {
+      "title": "Chi tiết loại lỗi:",
+      "orderCount": "{{count}} đơn",
+      "close": "đóng",
+      "noMatching": "Không có đơn khớp bộ lọc.",
+      "columns": {
+        "image": "Ảnh",
+        "orderCode": "Mã đơn",
+        "product": "Sản phẩm",
+        "sizeColor": "Size/Màu",
+        "errorFile": "File lỗi",
+        "errorNote": "Note lỗi",
+        "errorType": "Loại lỗi"
+      }
+    }
+  },
+  "customerModal": {
+    "title": "Lỗi Soát tool theo từng khách hàng",
+    "subtitle": "{{count}} khách · theo ngày vào SX trong kỳ · đếm số đơn (kể cả đã sửa)",
+    "collapseAll": "Ẩn tất cả",
+    "expandAll": "Mở rộng tất cả",
+    "errorOrders": "đơn lỗi",
+    "viewDetail": "Xem chi tiết",
+    "errorProducts": "Sản phẩm lỗi",
+    "errorTypes": "Loại lỗi"
+  },
+  "custDetailModal": {
+    "errorProducts": "sản phẩm lỗi",
+    "filterProduct": "Lọc sản phẩm"
+  }
+}

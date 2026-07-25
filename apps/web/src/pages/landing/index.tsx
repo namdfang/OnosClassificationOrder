@@ -1,5 +1,7 @@
 import React from 'react';
+import { useTranslation } from 'react-i18next';
 import { useNavigate } from 'react-router-dom';
+import type { TFunction } from 'i18next';
 import { ClipboardList, Factory, LineChart, ShieldCheck } from 'lucide-react';
 
 import { Button } from '@/components/ui/button';
@@ -8,31 +10,28 @@ import logoUrl from '@/assets/images/logo.png';
 
 import { PATHS } from '../../constants/paths';
 
-const FEATURES = [
-  {
-    icon: ClipboardList,
-    title: 'Quản lý đơn hàng',
-    description: 'Theo dõi toàn bộ đơn hàng từ import, phân loại đến xử lý lỗi trên một màn hình duy nhất.',
-  },
-  {
-    icon: Factory,
-    title: 'Điều phối sản xuất',
-    description: 'Gán xưởng, phân công thiết kế và theo dõi từng công đoạn fulfillment theo thời gian thực.',
-  },
-  {
-    icon: LineChart,
-    title: 'Báo cáo & thống kê',
-    description: 'Dashboard trực quan cho năng suất, tỉ lệ lỗi và tiến độ theo từng xưởng, từng người.',
-  },
-  {
-    icon: ShieldCheck,
-    title: 'Theo dõi tiến trình',
-    description: 'Khách hàng tự đặt đơn và tra cứu tiến trình xử lý mọi lúc, không cần liên hệ trực tiếp.',
-  },
-];
+function buildFeatures(t: TFunction<'landing'>) {
+  return [
+    { icon: ClipboardList, title: t('features.orders.title'), description: t('features.orders.description') },
+    { icon: Factory, title: t('features.production.title'), description: t('features.production.description') },
+    { icon: LineChart, title: t('features.reports.title'), description: t('features.reports.description') },
+    { icon: ShieldCheck, title: t('features.tracking.title'), description: t('features.tracking.description') },
+  ];
+}
+
+function buildSteps(t: TFunction<'landing'>) {
+  return [
+    { step: '1', title: t('howItWorks.step1.title'), description: t('howItWorks.step1.description') },
+    { step: '2', title: t('howItWorks.step2.title'), description: t('howItWorks.step2.description') },
+    { step: '3', title: t('howItWorks.step3.title'), description: t('howItWorks.step3.description') },
+  ];
+}
 
 function Landing() {
   const navigate = useNavigate();
+  const { t } = useTranslation('landing');
+  const FEATURES = buildFeatures(t);
+  const STEPS = buildSteps(t);
 
   return (
     <div className="min-h-screen bg-background flex flex-col">
@@ -45,18 +44,18 @@ function Landing() {
 
           <nav className="hidden md:flex items-center gap-6 text-sm text-muted-foreground">
             <a href="#features" className="hover:text-foreground transition-colors">
-              Tính năng
+              {t('nav.features')}
             </a>
             <a href="#how-it-works" className="hover:text-foreground transition-colors">
-              Quy trình
+              {t('nav.howItWorks')}
             </a>
           </nav>
 
           <div className="flex items-center gap-2">
             <Button variant="ghost" onClick={() => navigate(PATHS.CUSTOMER_LOGIN)}>
-              Khách hàng
+              {t('customer')}
             </Button>
-            <Button onClick={() => navigate(PATHS.LOGIN)}>Đăng nhập</Button>
+            <Button onClick={() => navigate(PATHS.LOGIN)}>{t('signIn')}</Button>
           </div>
         </div>
       </header>
@@ -64,15 +63,13 @@ function Landing() {
       <main className="flex-1">
         <section className="max-w-6xl mx-auto px-4 py-20 text-center">
           <h1 className="text-3xl md:text-5xl font-bold text-foreground tracking-tight max-w-2xl mx-auto">
-            Hệ thống quản lý sản xuất &amp; đơn hàng in ấn theo yêu cầu
+            {t('hero.title')}
           </h1>
-          <p className="text-muted-foreground mt-4 max-w-xl mx-auto">
-            Quản lý đơn hàng, điều phối xưởng sản xuất và theo dõi tiến trình trên một nền tảng duy nhất.
-          </p>
+          <p className="text-muted-foreground mt-4 max-w-xl mx-auto">{t('hero.subtitle')}</p>
 
           <div className="flex flex-col sm:flex-row items-center justify-center gap-3 mt-8">
             <Button size="lg" className="w-full sm:w-auto h-11 px-8" onClick={() => navigate(PATHS.LOGIN)}>
-              Đăng nhập hệ thống
+              {t('hero.signInSystem')}
             </Button>
             <Button
               size="lg"
@@ -80,7 +77,7 @@ function Landing() {
               className="w-full sm:w-auto h-11 px-8"
               onClick={() => navigate(PATHS.CUSTOMER_REGISTER)}
             >
-              Khách hàng — Đặt đơn ngay
+              {t('hero.customerOrderNow')}
             </Button>
           </div>
         </section>
@@ -100,13 +97,9 @@ function Landing() {
         </section>
 
         <section id="how-it-works" className="max-w-6xl mx-auto px-4 py-16">
-          <h2 className="text-xl font-bold text-foreground text-center">Quy trình đơn giản</h2>
+          <h2 className="text-xl font-bold text-foreground text-center">{t('howItWorks.title')}</h2>
           <div className="grid grid-cols-1 sm:grid-cols-3 gap-6 mt-10">
-            {[
-              { step: '1', title: 'Đặt đơn', description: 'Khách hàng tạo tài khoản và đặt đơn trực tuyến.' },
-              { step: '2', title: 'Sản xuất', description: 'Đơn được phân xưởng, thiết kế và sản xuất theo quy trình.' },
-              { step: '3', title: 'Theo dõi', description: 'Tra cứu tiến trình xử lý đơn hàng theo thời gian thực.' },
-            ].map(({ step, title, description }) => (
+            {STEPS.map(({ step, title, description }) => (
               <div key={step} className="text-center">
                 <div className="h-9 w-9 rounded-full bg-primary text-primary-foreground flex items-center justify-center font-semibold mx-auto">
                   {step}
@@ -122,7 +115,7 @@ function Landing() {
       <footer className="border-t border-border">
         <div className="max-w-6xl mx-auto px-4 h-16 flex items-center justify-between text-sm text-muted-foreground">
           <span>© {new Date().getFullYear()} Printsel</span>
-          <span>Hệ thống quản lý sản xuất &amp; đơn hàng in ấn theo yêu cầu</span>
+          <span>{t('footer.tagline')}</span>
         </div>
       </footer>
     </div>

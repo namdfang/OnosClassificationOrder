@@ -1,4 +1,5 @@
 import React, { useEffect, useState } from 'react';
+import { useTranslation } from 'react-i18next';
 import { GripVertical, Pencil, Plus, Trash2 } from 'lucide-react';
 import type {
   CreateWorkshopConfigDto,
@@ -54,6 +55,7 @@ interface Props {
 }
 
 export function CategoryEditor({ category, mode }: Props) {
+  const { t } = useTranslation(['workshopConfig', 'common']);
   const { byCategory, load, loaded, loading, upsertItem, removeItem } = useWorkshopConfigStore();
   const items = byCategory[category] || [];
 
@@ -104,19 +106,19 @@ export function CategoryEditor({ category, mode }: Props) {
 
   const handleSubmit = async () => {
     if (!form.name.trim() || !form.code.trim()) {
-      toast.error('Vui lòng nhập tên và mã');
+      toast.error(t('categoryEditor.form.nameCodeRequired'));
       return;
     }
     if (mode === 'color' && !form.color) {
-      toast.error('Hãy chọn màu');
+      toast.error(t('categoryEditor.form.colorRequired'));
       return;
     }
     if (mode === 'icon' && !form.icon) {
-      toast.error('Hãy chọn icon');
+      toast.error(t('categoryEditor.form.iconRequired'));
       return;
     }
     if (needsErrorSource && !form.errorSource) {
-      toast.error('Phải chọn lỗi do designer hay do xưởng');
+      toast.error(t('categoryEditor.form.errorSourceRequired'));
       return;
     }
     try {
@@ -133,7 +135,7 @@ export function CategoryEditor({ category, mode }: Props) {
         };
         const res = await RepositoryRemote.workshopConfig.create(payload);
         upsertItem(res.data.data);
-        toast.success('Đã thêm');
+        toast.success(t('categoryEditor.form.addSuccess'));
       } else if (form.id) {
         const res = await RepositoryRemote.workshopConfig.update(form.id, {
           code: form.code,
@@ -144,7 +146,7 @@ export function CategoryEditor({ category, mode }: Props) {
           errorSource: needsErrorSource ? form.errorSource : undefined,
         });
         upsertItem(res.data.data);
-        toast.success('Đã cập nhật');
+        toast.success(t('categoryEditor.form.updateSuccess'));
       }
       setForm({ ...form, open: false });
     } catch (error) {
@@ -159,7 +161,7 @@ export function CategoryEditor({ category, mode }: Props) {
     try {
       await RepositoryRemote.workshopConfig.remove(confirmDelete._id!);
       removeItem(confirmDelete._id!);
-      toast.success('Đã xóa');
+      toast.success(t('categoryEditor.deleteSuccess'));
       setConfirmDelete(null);
     } catch (error) {
       handleAxiosError(error);
@@ -170,21 +172,23 @@ export function CategoryEditor({ category, mode }: Props) {
     <div className="rounded-lg border border-border bg-card">
       <div className="flex items-center justify-between p-4 border-b border-border">
         <p className="text-xs text-muted-foreground">
-          {items.length} mục — hiển thị dạng{' '}
-          <span className="font-medium text-foreground">{mode === 'color' ? 'badge màu' : 'icon'}</span>
+          {t('categoryEditor.itemCount', { count: items.length })}{' '}
+          <span className="font-medium text-foreground">
+            {mode === 'color' ? t('categoryEditor.displayMode.color') : t('categoryEditor.displayMode.icon')}
+          </span>
         </p>
         <Button size="sm" onClick={openCreate}>
-          <Plus size={14} /> Thêm
+          <Plus size={14} /> {t('common:actions.add')}
         </Button>
       </div>
       <Table>
         <TableHeader>
           <TableRow>
             <TableHead className="w-10"></TableHead>
-            <TableHead className="w-20">Hiển thị</TableHead>
-            <TableHead>Tên</TableHead>
-            <TableHead>Mã</TableHead>
-            <TableHead className="w-24">Trạng thái</TableHead>
+            <TableHead className="w-20">{t('categoryEditor.table.display')}</TableHead>
+            <TableHead>{t('categoryEditor.table.name')}</TableHead>
+            <TableHead>{t('categoryEditor.table.code')}</TableHead>
+            <TableHead className="w-24">{t('categoryEditor.table.status')}</TableHead>
             <TableHead className="w-28 text-right"></TableHead>
           </TableRow>
         </TableHeader>
@@ -199,7 +203,7 @@ export function CategoryEditor({ category, mode }: Props) {
           {!loading && items.length === 0 && (
             <TableRow>
               <TableCell colSpan={6} className="text-center py-8 text-sm text-muted-foreground">
-                Chưa có mục nào
+                {t('categoryEditor.table.empty')}
               </TableCell>
             </TableRow>
           )}
@@ -233,7 +237,11 @@ export function CategoryEditor({ category, mode }: Props) {
                 </TableCell>
                 <TableCell className="font-mono text-xs text-muted-foreground">{it.code}</TableCell>
                 <TableCell>
-                  {it.isActive ? <Badge variant="success">Bật</Badge> : <Badge variant="secondary">Tắt</Badge>}
+                  {it.isActive ? (
+                    <Badge variant="success">{t('categoryEditor.table.on')}</Badge>
+                  ) : (
+                    <Badge variant="secondary">{t('categoryEditor.table.off')}</Badge>
+                  )}
                 </TableCell>
                 <TableCell className="text-right">
                   <Button variant="ghost" size="sm" onClick={() => openEdit(it)}>
@@ -251,42 +259,42 @@ export function CategoryEditor({ category, mode }: Props) {
       <Dialog open={form.open} onOpenChange={(open) => setForm({ ...form, open })}>
         <DialogContent>
           <DialogHeader>
-            <DialogTitle>{form.mode === 'create' ? 'Thêm mục' : 'Sửa mục'}</DialogTitle>
+            <DialogTitle>{form.mode === 'create' ? t('categoryEditor.dialog.createTitle') : t('categoryEditor.dialog.editTitle')}</DialogTitle>
           </DialogHeader>
           <div className="space-y-3">
             <div className="space-y-2">
-              <Label>Tên hiển thị</Label>
+              <Label>{t('categoryEditor.form.displayName')}</Label>
               <Input
                 value={form.name}
                 onChange={(e) => handleNameChange(e.target.value)}
-                placeholder="VD: Đã in (máy 1)"
+                placeholder={t('categoryEditor.form.displayNamePlaceholder')}
               />
             </div>
             <div className="space-y-2">
               <Label>
-                Mã <span className="text-muted-foreground">(slug, dùng để lưu trữ)</span>
+                {t('categoryEditor.form.code')} <span className="text-muted-foreground">{t('categoryEditor.form.codeHint')}</span>
               </Label>
               <Input
                 value={form.code}
                 onChange={(e) => setForm({ ...form, code: slugify(e.target.value) })}
-                placeholder="vd: machine-1"
+                placeholder={t('categoryEditor.form.codePlaceholder')}
                 className="font-mono"
               />
             </div>
             {mode === 'color' ? (
               <div className="space-y-2">
-                <Label>Màu</Label>
+                <Label>{t('categoryEditor.form.color')}</Label>
                 <ColorPicker value={form.color} onChange={(c) => setForm({ ...form, color: c })} />
               </div>
             ) : (
               <div className="space-y-2">
-                <Label>Icon</Label>
+                <Label>{t('categoryEditor.form.icon')}</Label>
                 <IconPicker value={form.icon} onChange={(i) => setForm({ ...form, icon: i })} />
               </div>
             )}
             {needsErrorSource && (
               <div className="space-y-2">
-                <Label>Loại lỗi *</Label>
+                <Label>{t('categoryEditor.errorSource.label')}</Label>
                 <div className="flex gap-2">
                   <button
                     type="button"
@@ -297,7 +305,7 @@ export function CategoryEditor({ category, mode }: Props) {
                         : 'border-border bg-background text-muted-foreground hover:border-violet-300'
                     }`}
                   >
-                    Do designer làm
+                    {t('categoryEditor.errorSource.designer')}
                   </button>
                   <button
                     type="button"
@@ -308,7 +316,7 @@ export function CategoryEditor({ category, mode }: Props) {
                         : 'border-border bg-background text-muted-foreground hover:border-sky-300'
                     }`}
                   >
-                    Do xưởng làm
+                    {t('categoryEditor.errorSource.factory')}
                   </button>
                   <button
                     type="button"
@@ -319,27 +327,24 @@ export function CategoryEditor({ category, mode }: Props) {
                         : 'border-border bg-background text-muted-foreground hover:border-amber-300'
                     }`}
                   >
-                    Do soát tool
+                    {t('categoryEditor.errorSource.toolCheck')}
                   </button>
                 </div>
-                <p className="text-[11px] text-muted-foreground">
-                  Lỗi do designer → "Cần làm lại" cho designer. Do soát tool → đẩy về Support (vd thiếu file để in).
-                  Dashboard thống kê phân biệt các loại.
-                </p>
+                <p className="text-[11px] text-muted-foreground">{t('categoryEditor.errorSource.hint')}</p>
               </div>
             )}
             <div className="flex items-center justify-between rounded-md border border-border p-3">
-              <Label>Hoạt động</Label>
+              <Label>{t('categoryEditor.form.active')}</Label>
               <Switch checked={form.isActive} onCheckedChange={(v) => setForm({ ...form, isActive: v })} />
             </div>
           </div>
           <DialogFooter>
             <Button variant="outline" onClick={() => setForm({ ...form, open: false })}>
-              Hủy
+              {t('common:actions.cancel')}
             </Button>
             <Button onClick={handleSubmit} disabled={saving}>
               {saving && <Spinner size={14} className="mr-2" />}
-              Lưu
+              {t('common:actions.save')}
             </Button>
           </DialogFooter>
         </DialogContent>
@@ -348,18 +353,17 @@ export function CategoryEditor({ category, mode }: Props) {
       <Dialog open={!!confirmDelete} onOpenChange={(open) => !open && setConfirmDelete(null)}>
         <DialogContent>
           <DialogHeader>
-            <DialogTitle>Xóa mục</DialogTitle>
+            <DialogTitle>{t('categoryEditor.deleteDialog.title')}</DialogTitle>
           </DialogHeader>
           <p className="text-sm text-muted-foreground">
-            Xóa <span className="font-medium text-foreground">{confirmDelete?.name}</span>? Mục đã được dùng trong đơn
-            hàng vẫn giữ giá trị cũ nhưng sẽ không chọn được nữa.
+            {t('categoryEditor.deleteDialog.message', { name: confirmDelete?.name })}
           </p>
           <DialogFooter>
             <Button variant="outline" onClick={() => setConfirmDelete(null)}>
-              Hủy
+              {t('common:actions.cancel')}
             </Button>
             <Button variant="destructive" onClick={handleDelete}>
-              Xóa
+              {t('common:actions.delete')}
             </Button>
           </DialogFooter>
         </DialogContent>
@@ -369,30 +373,31 @@ export function CategoryEditor({ category, mode }: Props) {
 }
 
 function ErrorSourceBadge({ source }: { source?: 'designer' | 'factory' | 'tool-check' }) {
+  const { t } = useTranslation('workshopConfig');
   if (!source) {
     return (
       <span className="ml-2 text-[9px] font-semibold px-1.5 py-0.5 rounded bg-rose-100 text-rose-700 dark:bg-rose-500/20">
-        ? CHƯA GÁN
+        {t('categoryEditor.errorSourceBadge.unassigned')}
       </span>
     );
   }
   if (source === 'designer') {
     return (
       <span className="ml-2 text-[9px] font-semibold px-1.5 py-0.5 rounded bg-violet-100 text-violet-700 dark:bg-violet-500/20 dark:text-violet-300">
-        DES
+        {t('categoryEditor.errorSourceBadge.designer')}
       </span>
     );
   }
   if (source === 'tool-check') {
     return (
       <span className="ml-2 text-[9px] font-semibold px-1.5 py-0.5 rounded bg-amber-100 text-amber-700 dark:bg-amber-500/20 dark:text-amber-300">
-        SOÁT TOOL
+        {t('categoryEditor.errorSourceBadge.toolCheck')}
       </span>
     );
   }
   return (
     <span className="ml-2 text-[9px] font-semibold px-1.5 py-0.5 rounded bg-sky-100 text-sky-700 dark:bg-sky-500/20 dark:text-sky-300">
-      XƯỞNG
+      {t('categoryEditor.errorSourceBadge.factory')}
     </span>
   );
 }

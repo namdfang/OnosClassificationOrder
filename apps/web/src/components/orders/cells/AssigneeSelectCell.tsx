@@ -1,4 +1,5 @@
 import React, { useEffect, useMemo, useState } from 'react';
+import { useTranslation } from 'react-i18next';
 import { User } from 'lucide-react';
 import { Status } from 'shared';
 import { toast } from 'sonner';
@@ -30,6 +31,7 @@ interface Props {
  * thấy trong store) thì hiển thị fallback ngắn.
  */
 export function AssigneeSelectCell({ orderId, value, canEdit, blockedReason, onUpdated }: Props) {
+  const { t } = useTranslation('orders');
   const members = useDesignerTeamStore((s) => s.members);
   const byId = useDesignerTeamStore((s) => s.byId);
   const loaded = useDesignerTeamStore((s) => s.loaded);
@@ -58,7 +60,9 @@ export function AssigneeSelectCell({ orderId, value, canEdit, blockedReason, onU
     try {
       setSaving(true);
       await RepositoryRemote.order.updateField(orderId, { field: 'assignee', value: newId });
-      toast.success(newId ? `Đã gán cho ${byId[newId]?.fullName || 'designer'}` : 'Đã bỏ chọn');
+      toast.success(
+        newId ? t('cells.assignee.assignedTo', { name: byId[newId]?.fullName || t('cells.assignee.fallback') }) : t('cells.cleared'),
+      );
       onUpdated?.(newId);
     } catch (err) {
       handleAxiosError(err);

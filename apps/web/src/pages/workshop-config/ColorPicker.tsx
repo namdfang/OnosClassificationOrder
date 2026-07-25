@@ -1,4 +1,5 @@
 import React, { useState } from 'react';
+import { useTranslation } from 'react-i18next';
 
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -36,6 +37,7 @@ interface Props {
 }
 
 export function ColorPicker({ value, onChange }: Props) {
+  const { t } = useTranslation('workshopConfig');
   const [open, setOpen] = useState(false);
   return (
     <Popover open={open} onOpenChange={setOpen}>
@@ -45,7 +47,7 @@ export function ColorPicker({ value, onChange }: Props) {
             className="inline-block w-4 h-4 rounded border border-border"
             style={{ backgroundColor: value || 'transparent' }}
           />
-          <span className="text-sm font-mono">{value || 'Chọn màu'}</span>
+          <span className="text-sm font-mono">{value || t('colorPicker.choose')}</span>
         </Button>
       </PopoverTrigger>
       <PopoverContent className="w-64 p-3" align="start">

@@ -1,4 +1,5 @@
 import React, { useEffect, useMemo, useState } from 'react';
+import { useTranslation } from 'react-i18next';
 import { Check, X } from 'lucide-react';
 import type { OrderWorkshopField, WorkshopConfigCategory } from 'shared';
 import { toast } from 'sonner';
@@ -39,6 +40,7 @@ interface Props {
  * "Lưu" (1 PATCH cho cả set).
  */
 export function MultiIconSelectCell({ orderId, field, category, value, canEdit, maxVisible = 2, onUpdated }: Props) {
+  const { t } = useTranslation('orders');
   const items = useWorkshopConfigStore((s) => s.byCategory[category] || []);
   const resolve = useWorkshopConfigStore((s) => s.resolve);
 
@@ -99,7 +101,7 @@ export function MultiIconSelectCell({ orderId, field, category, value, canEdit, 
         .map((s) => s.trim());
       const payload = sanitized.length > 0 ? sanitized : null;
       await RepositoryRemote.order.updateField(orderId, { field, value: payload });
-      toast.success(payload ? `Đã lưu ${payload.length} mục` : 'Đã bỏ chọn');
+      toast.success(payload ? t('cells.multiIcon.saved', { count: payload.length }) : t('cells.cleared'));
       onUpdated?.(payload);
       setOpen(false);
     } catch (err) {
@@ -115,7 +117,7 @@ export function MultiIconSelectCell({ orderId, field, category, value, canEdit, 
   const fullTooltip = selected.map((s) => s.item?.name || s.code).join(', ');
 
   const trigger = (
-    <span className="inline-flex items-center gap-1 max-w-full" title={fullTooltip || 'Chưa chọn'}>
+    <span className="inline-flex items-center gap-1 max-w-full" title={fullTooltip || t('cells.notSelected')}>
       {saving && <Spinner size={10} className="text-current" />}
       {selected.length === 0 ? (
         <span className="text-muted-foreground text-xs">—</span>
@@ -153,14 +155,14 @@ export function MultiIconSelectCell({ orderId, field, category, value, canEdit, 
       </PopoverTrigger>
       <PopoverContent className="w-72 p-2" align="start">
         <div className="flex items-center justify-between mb-1.5">
-          <p className="text-xs font-semibold text-foreground">Chọn ({draft.length})</p>
+          <p className="text-xs font-semibold text-foreground">{t('cells.multiIcon.selectedCount', { count: draft.length })}</p>
           {draft.length > 0 && (
             <button
               type="button"
               onClick={clearDraft}
               className="inline-flex items-center gap-1 text-[11px] text-muted-foreground hover:text-foreground"
             >
-              <X size={11} /> Bỏ hết
+              <X size={11} /> {t('cells.multiIcon.clearAll')}
             </button>
           )}
         </div>
@@ -190,15 +192,17 @@ export function MultiIconSelectCell({ orderId, field, category, value, canEdit, 
               </button>
             );
           })}
-          {items.length === 0 && <p className="text-xs text-muted-foreground text-center py-3">Chưa có lựa chọn</p>}
+          {items.length === 0 && (
+            <p className="text-xs text-muted-foreground text-center py-3">{t('cells.selectPopover.noOptions')}</p>
+          )}
         </div>
         <div className="flex items-center justify-end gap-2 mt-2 pt-2 border-t border-border">
           <Button variant="outline" size="sm" onClick={() => setOpen(false)} disabled={saving}>
-            Huỷ
+            {t('cells.multiIcon.cancel')}
           </Button>
           <Button size="sm" onClick={handleSave} disabled={!dirty || saving}>
             {saving && <Spinner size={11} />}
-            Lưu
+            {t('cells.multiIcon.save')}
           </Button>
         </div>
       </PopoverContent>

@@ -1,5 +1,7 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
+import { useTranslation } from 'react-i18next';
 import { useSearchParams } from 'react-router-dom';
+import type { TFunction } from 'i18next';
 import { CheckCircle2, History, Keyboard, MousePointerClick } from 'lucide-react';
 import type { WorkshopAvailableFilters } from 'shared';
 import { toast } from 'sonner';
@@ -51,15 +53,19 @@ const EMPTY_COUNTS: StatusCounts = {
 };
 
 /** value '' = tất cả (không lọc theo stage status). */
-const STATUS_TABS: Array<{ value: string; label: string; countKey: keyof StatusCounts; accent: string }> = [
-  { value: '', label: 'Tất cả', countKey: 'all', accent: 'text-foreground' },
-  { value: 'waiting', label: 'Đang chờ', countKey: 'waiting', accent: 'text-zinc-600 dark:text-zinc-300' },
-  { value: 'in-progress', label: 'Đang làm', countKey: 'inProgress', accent: 'text-indigo-600' },
-  { value: 'rework', label: 'Làm lại', countKey: 'rework', accent: 'text-amber-600' },
-  { value: 'done', label: 'Đã xong', countKey: 'done', accent: 'text-emerald-600' },
-  { value: 'fixed', label: 'Đã sửa', countKey: 'fixed', accent: 'text-teal-600' },
-  { value: 'watching', label: 'Đang chờ quay lại', countKey: 'watching', accent: 'text-sky-600' },
-];
+function buildStatusTabs(
+  t: TFunction,
+): Array<{ value: string; label: string; countKey: keyof StatusCounts; accent: string }> {
+  return [
+    { value: '', label: t('stageStatus.all'), countKey: 'all', accent: 'text-foreground' },
+    { value: 'waiting', label: t('stageStatus.waiting'), countKey: 'waiting', accent: 'text-zinc-600 dark:text-zinc-300' },
+    { value: 'in-progress', label: t('stageStatus.inProgress'), countKey: 'inProgress', accent: 'text-indigo-600' },
+    { value: 'rework', label: t('stageStatus.rework'), countKey: 'rework', accent: 'text-amber-600' },
+    { value: 'done', label: t('stageStatus.done'), countKey: 'done', accent: 'text-emerald-600' },
+    { value: 'fixed', label: t('stageStatus.fixed'), countKey: 'fixed', accent: 'text-teal-600' },
+    { value: 'watching', label: t('stageStatus.watching'), countKey: 'watching', accent: 'text-sky-600' },
+  ];
+}
 
 function todayISO(): string {
   const d = new Date();
@@ -107,6 +113,9 @@ export function PrintOrderTable({
   renderBulkBar,
   dayOverride,
 }: PrintOrderTableProps = {}) {
+  const { t } = useTranslation(['fulfillmentWorkflow', 'common']);
+  const { t: tOrders } = useTranslation('orders');
+  const statusTabs = useMemo(() => buildStatusTabs(t), [t]);
   const { canViewField, canEditField } = usePermission();
   const loadConfig = useWorkshopConfigStore((s) => s.load);
   const configLoaded = useWorkshopConfigStore((s) => s.loaded);
@@ -318,7 +327,7 @@ export function PrintOrderTable({
   const openPreview = (url: string, title: string, originalUrl?: string, sourceUrl?: string) =>
     setPreview({ url, originalUrl, title, sourceUrl });
   const openDetail = (id: string, productionId: string) => setDetailTarget({ id, productionId });
-  const renderCtx: WorkshopRenderCtx = { canEditField, patchRow, openPreview, openDetail };
+  const renderCtx: WorkshopRenderCtx = { canEditField, patchRow, openPreview, openDetail, t: tOrders };
 
   // ─── Selection (flat) — chỉ tick được đơn hợp lệ ──────────────
   const canSelect = (row: OrderRow) => (isRowSelectable ? isRowSelectable(row) : true);
@@ -370,7 +379,7 @@ export function PrintOrderTable({
       await navigator.clipboard.writeText(row.productionId);
       setCopiedId(row._id);
     } catch {
-      toast.error('Không copy được — trình duyệt chặn clipboard');
+      toast.error(t('toast.copyError'));
     }
   };
 
@@ -438,7 +447,7 @@ export function PrintOrderTable({
   const facets: OrderFilterFacet[] = [
     {
       key: 'type',
-      label: 'Tên sản phẩm',
+      label: t('printTable.facets.type'),
       value: fType,
       onChange: (v) => {
         setFType(v);
@@ -448,7 +457,7 @@ export function PrintOrderTable({
     },
     {
       key: 'userSku',
-      label: 'Khách hàng (SKU)',
+      label: t('printTable.facets.userSku'),
       value: fUserSku,
       onChange: (v) => {
         setFUserSku(v);
@@ -458,7 +467,7 @@ export function PrintOrderTable({
     },
     {
       key: 'fabricType',
-      label: 'Loại vải',
+      label: t('printTable.facets.fabricType'),
       value: fFabricType,
       onChange: setFFabricType,
       options: workshopFilters?.fabricType || [],
@@ -466,7 +475,7 @@ export function PrintOrderTable({
     },
     {
       key: 'machineNumber',
-      label: 'Máy',
+      label: t('printTable.facets.machineNumber'),
       value: fMachineNumber,
       onChange: setFMachineNumber,
       options: workshopFilters?.machineNumber || [],
@@ -474,7 +483,7 @@ export function PrintOrderTable({
     },
     {
       key: 'printStatus',
-      label: 'Trạng thái in',
+      label: t('printTable.facets.printStatus'),
       value: fPrintStatus,
       onChange: setFPrintStatus,
       options: workshopFilters?.printStatus || [],
@@ -482,7 +491,7 @@ export function PrintOrderTable({
     },
     {
       key: 'toolResult',
-      label: 'Kết quả Tool',
+      label: t('printTable.facets.toolResult'),
       value: fToolResult,
       onChange: setFToolResult,
       options: workshopFilters?.toolResult || [],
@@ -490,7 +499,7 @@ export function PrintOrderTable({
     },
     {
       key: 'toolResultNote',
-      label: 'Note kq Tool',
+      label: t('printTable.facets.toolResultNote'),
       value: fToolResultNote,
       onChange: setFToolResultNote,
       options: workshopFilters?.toolResultNote || [],
@@ -498,7 +507,7 @@ export function PrintOrderTable({
     },
     {
       key: 'errorFile',
-      label: 'File sửa lỗi',
+      label: t('printTable.facets.errorFile'),
       value: fErrorFile,
       onChange: setFErrorFile,
       options: workshopFilters?.errorFile || [],
@@ -506,7 +515,7 @@ export function PrintOrderTable({
     },
     {
       key: 'assignee',
-      label: 'Người thực hiện',
+      label: t('printTable.facets.assignee'),
       value: fAssignee,
       onChange: setFAssignee,
       options: workshopFilters?.assignee || [],
@@ -514,7 +523,7 @@ export function PrintOrderTable({
     },
     {
       key: 'designerStatus',
-      label: 'TT Designer',
+      label: t('printTable.facets.designerStatus'),
       value: fDesignerStatus,
       onChange: setFDesignerStatus,
       options: workshopFilters?.designerStatus || [],
@@ -522,7 +531,7 @@ export function PrintOrderTable({
     },
     {
       key: 'productionError',
-      label: 'Lỗi xưởng',
+      label: t('printTable.facets.productionError'),
       value: fProductionError,
       onChange: setFProductionError,
       options: workshopFilters?.productionError || [],
@@ -535,7 +544,7 @@ export function PrintOrderTable({
       <div className="space-y-4">
         {/* Chips trạng thái stage — hàng ngang + count */}
         <div className="flex flex-wrap items-center gap-2">
-          {STATUS_TABS.map((tab) => {
+          {statusTabs.map((tab) => {
             const active = statusFilter === tab.value;
             return (
               <button
@@ -569,7 +578,7 @@ export function PrintOrderTable({
           <button
             type="button"
             onClick={() => setKeyboardMode((v) => !v)}
-            title="Bật/tắt copy Production ID bằng phím mũi tên ↑ ↓"
+            title={t('printTable.keyboardMode.toggleTitle')}
             className={cn(
               'ml-auto inline-flex items-center gap-1.5 rounded-full border px-3 py-1.5 text-xs font-medium transition-colors',
               keyboardMode
@@ -578,14 +587,14 @@ export function PrintOrderTable({
             )}
           >
             <Keyboard size={14} />
-            Chế độ phím ↑↓
+            {t('printTable.keyboardMode.label')}
             <span
               className={cn(
                 'rounded-full px-1.5 py-0.5 text-[10px] font-bold uppercase tracking-wide',
                 keyboardMode ? 'bg-primary text-primary-foreground' : 'bg-muted text-muted-foreground',
               )}
             >
-              {keyboardMode ? 'On' : 'Off'}
+              {keyboardMode ? t('printTable.keyboardMode.on') : t('printTable.keyboardMode.off')}
             </span>
           </button>
         </div>
@@ -595,9 +604,9 @@ export function PrintOrderTable({
           onSearchChange={setSearch}
           createdFrom={createdFrom}
           createdTo={createdTo}
-          onDateRangeChange={(f, t) => {
+          onDateRangeChange={(f, to) => {
             setCreatedFrom(f);
-            setCreatedTo(t);
+            setCreatedTo(to);
             setPage(1);
           }}
           onReload={reload}
@@ -621,10 +630,11 @@ export function PrintOrderTable({
           <div className="flex items-start gap-2 rounded-md border border-primary/30 bg-primary/5 px-3 py-2 text-[11px] text-foreground">
             <Keyboard size={13} className="mt-0.5 shrink-0 text-primary" />
             <p>
-              Nhấn <kbd className="rounded border border-border bg-background px-1 py-0.5 font-mono text-[10px]">↑</kbd>{' '}
-              <kbd className="rounded border border-border bg-background px-1 py-0.5 font-mono text-[10px]">↓</kbd> để
-              copy Production ID từng dòng. Chỉ dòng đang trỏ hiện dấu{' '}
-              <CheckCircle2 size={11} className="inline text-emerald-500" /> — di chuyển cursor thì dấu nhảy theo.
+              {t('printTable.keyboardHint.pre')}{' '}
+              <kbd className="rounded border border-border bg-background px-1 py-0.5 font-mono text-[10px]">↑</kbd>{' '}
+              <kbd className="rounded border border-border bg-background px-1 py-0.5 font-mono text-[10px]">↓</kbd>{' '}
+              {t('printTable.keyboardHint.mid')}{' '}
+              <CheckCircle2 size={11} className="inline text-emerald-500" /> {t('printTable.keyboardHint.suffix')}
             </p>
           </div>
         )}
@@ -633,9 +643,9 @@ export function PrintOrderTable({
           <div className="flex items-start gap-2 rounded-md border border-dashed border-border bg-muted/30 px-3 py-2 text-[11px] text-muted-foreground">
             <MousePointerClick size={13} className="mt-0.5 shrink-0 text-primary" />
             <p>
-              Tick 1 đơn, giữ{' '}
+              {t('printTable.shiftHint.pre')}{' '}
               <kbd className="rounded border border-border bg-background px-1 py-0.5 font-mono text-[10px]">Shift</kbd>{' '}
-              rồi click checkbox khác để chọn nhanh tất cả đơn ở giữa.
+              {t('printTable.shiftHint.suffix')}
             </p>
           </div>
         )}
@@ -651,7 +661,7 @@ export function PrintOrderTable({
                       checked={allSelectableSelected}
                       disabled={selectableIds.length === 0}
                       onChange={toggleAll}
-                      title="Chọn toàn bộ đơn hợp lệ trên trang"
+                      title={t('printTable.selectAllTitle')}
                     />
                   </TableHead>
                   {visibleCols.map((c, i) => (
@@ -669,7 +679,7 @@ export function PrintOrderTable({
                   <TableHead className="w-12"></TableHead>
                   {extraRowAction && (
                     <TableHead className="sticky right-0 z-30 bg-card whitespace-nowrap text-xs shadow-[-1px_0_0_0_var(--border)]">
-                      {extraActionLabel ?? 'Thao tác'}
+                      {extraActionLabel ?? t('printTable.defaultActionLabel')}
                     </TableHead>
                   )}
                 </TableRow>
@@ -691,7 +701,7 @@ export function PrintOrderTable({
                       colSpan={visibleCols.length + 2 + (extraRowAction ? 1 : 0)}
                       className="text-center py-10 text-sm text-muted-foreground"
                     >
-                      Không có đơn hàng nào phù hợp
+                      {t('printTable.noResults')}
                     </TableCell>
                   </TableRow>
                 )}
@@ -727,13 +737,15 @@ export function PrintOrderTable({
                             }}
                             onClick={(e) => e.stopPropagation()}
                             onChange={() => handleCheckboxChange(row._id)}
-                            title={selectable ? 'Shift+click để chọn cả range' : 'Đơn không thao tác được ở stage In'}
+                            title={
+                              selectable ? t('printTable.rowSelectableTitle') : t('printTable.rowNotSelectableTitle')
+                            }
                           />
                           {isCopied && (
                             <CheckCircle2
                               size={15}
                               className="shrink-0 text-emerald-500"
-                              aria-label="Đã copy Production ID"
+                              aria-label={t('printTable.copiedAria')}
                             />
                           )}
                         </div>
@@ -753,7 +765,7 @@ export function PrintOrderTable({
                         <Button
                           variant="ghost"
                           size="icon"
-                          title="Lịch sử"
+                          title={t('printTable.historyTitle')}
                           onClick={() => setHistoryTarget({ id: row._id, productionId: row.productionId })}
                         >
                           <History size={13} className="text-muted-foreground" />

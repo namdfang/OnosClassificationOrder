@@ -1,0 +1,114 @@
+{
+  "actions": {
+    "save": "Lưu",
+    "cancel": "Hủy",
+    "delete": "Xóa",
+    "edit": "Sửa",
+    "add": "Thêm",
+    "create": "Tạo mới",
+    "search": "Tìm kiếm",
+    "confirm": "Xác nhận",
+    "close": "Đóng",
+    "back": "Quay lại",
+    "next": "Tiếp theo",
+    "submit": "Gửi",
+    "reset": "Đặt lại",
+    "export": "Xuất file",
+    "import": "Nhập file",
+    "download": "Tải xuống",
+    "upload": "Tải lên",
+    "refresh": "Làm mới",
+    "view": "Xem",
+    "viewDetail": "Xem chi tiết",
+    "copy": "Sao chép",
+    "copied": "Đã sao chép",
+    "filter": "Lọc",
+    "clearFilter": "Xóa lọc",
+    "apply": "Áp dụng",
+    "select": "Chọn",
+    "selectAll": "Chọn tất cả",
+    "clearSelection": "Bỏ chọn",
+    "actions": "Hành động",
+    "yes": "Có",
+    "no": "Không"
+  },
+  "status": {
+    "loading": "Đang tải...",
+    "saving": "Đang lưu...",
+    "processing": "Đang xử lý...",
+    "success": "Thành công",
+    "failed": "Thất bại",
+    "error": "Đã có lỗi xảy ra",
+    "noData": "Không có dữ liệu",
+    "notFound": "Không tìm thấy dữ liệu"
+  },
+  "confirm": {
+    "deleteTitle": "Xác nhận xóa",
+    "deleteMessage": "Bạn có chắc chắn muốn xóa mục này không?",
+    "unsavedTitle": "Thay đổi chưa được lưu",
+    "unsavedMessage": "Bạn có chắc muốn rời khỏi trang mà không lưu thay đổi?"
+  },
+  "table": {
+    "page": "Trang",
+    "of": "trên",
+    "rowsPerPage": "Số dòng/trang",
+    "total": "Tổng cộng",
+    "totalRecords": "Tổng {{count}} bản ghi"
+  },
+  "language": {
+    "vi": "Tiếng Việt",
+    "en": "English",
+    "switch": "Đổi ngôn ngữ"
+  },
+  "errors": {
+    "notFoundTitle": "Không tìm thấy trang",
+    "notFoundMessage": "Trang bạn truy cập không tồn tại hoặc đã bị chuyển.",
+    "backToDashboard": "Về Dashboard"
+  },
+  "datePresets": {
+    "today": "Hôm nay",
+    "yesterday": "Hôm qua",
+    "last-7d": "7 ngày",
+    "last-14d": "14 ngày",
+    "last-30d": "30 ngày",
+    "this-week": "Tuần này",
+    "last-week": "Tuần trước",
+    "this-month": "Tháng này",
+    "last-month": "Tháng trước",
+    "this-year": "Năm nay",
+    "last-year": "Năm trước"
+  },
+  "dateRange": {
+    "placeholder": "Chọn ngày",
+    "from": "Từ",
+    "to": "đến",
+    "custom": "Tùy chỉnh",
+    "customHeading": "Chọn khoảng tùy chỉnh",
+    "customHeadingOr": "Hoặc chọn khoảng tùy chỉnh"
+  },
+  "pagination": {
+    "noResults": "Không có kết quả",
+    "showing": "Hiển thị {{from}}–{{to}} / {{total}}",
+    "perPage": "{{size}}/trang"
+  },
+  "multiSelect": {
+    "searchPlaceholder": "Tìm…",
+    "clearAll": "Xóa tất cả",
+    "noMatch": "Không tìm thấy",
+    "selectAll": "Chọn tất cả"
+  },
+  "selectFilter": {
+    "all": "— Tất cả ({{count}}) —"
+  },
+  "imagePreview": {
+    "title": "Xem trước ảnh",
+    "preparing": "Đang chuẩn bị preview…",
+    "loadError": "Không tải được ảnh — có thể link đã hết hạn hoặc bị chặn CORS.",
+    "tryOriginal": "Thử mở link Original ở dưới.",
+    "noImage": "Không có ảnh",
+    "displayLabel": "Display:",
+    "originalLabel": "Original:",
+    "displayUrlLabel": "display URL",
+    "originalUrlLabel": "original URL"
+  }
+}

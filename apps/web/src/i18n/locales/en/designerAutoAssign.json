@@ -1,0 +1,13 @@
+{
+  "title": "Assign designers by factory",
+  "subtitle": "After tool check is done (result other than OK), orders are automatically distributed to designers by weight. Each designer belongs to only 1 factory.",
+  "save": "Save",
+  "noFactories": "No factories yet.",
+  "noDesigners": "No designers assigned yet.",
+  "removeFromFactory": "Remove from factory",
+  "addDesignerPlaceholder": "— Add designer —",
+  "usedElsewhere": "(already in {{factory}})",
+  "toasts": {
+    "saveSuccess": "Designer assignment config saved"
+  }
+}

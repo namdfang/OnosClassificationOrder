@@ -1,0 +1,41 @@
+{
+  "nav": {
+    "features": "Features",
+    "howItWorks": "How it works"
+  },
+  "customer": "Customer",
+  "signIn": "Sign in",
+  "hero": {
+    "title": "Production management & on-demand print order system",
+    "subtitle": "Manage orders, coordinate production workshops, and track progress on a single platform.",
+    "signInSystem": "Sign in to system",
+    "customerOrderNow": "Customer — Order now"
+  },
+  "features": {
+    "orders": {
+      "title": "Order management",
+      "description": "Track every order from import, classification to error handling on a single screen."
+    },
+    "production": {
+      "title": "Production coordination",
+      "description": "Assign factories, delegate designs, and track every fulfillment stage in real time."
+    },
+    "reports": {
+      "title": "Reports & analytics",
+      "description": "Visual dashboards for productivity, error rate, and progress by factory and by person."
+    },
+    "tracking": {
+      "title": "Progress tracking",
+      "description": "Customers place orders and track progress anytime, with no need for direct contact."
+    }
+  },
+  "howItWorks": {
+    "title": "Simple process",
+    "step1": { "title": "Place order", "description": "Customer creates an account and places an order online." },
+    "step2": { "title": "Production", "description": "The order is assigned to a factory, designed, and produced." },
+    "step3": { "title": "Track", "description": "Track order progress in real time." }
+  },
+  "footer": {
+    "tagline": "Production management & on-demand print order system"
+  }
+}

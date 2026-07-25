@@ -1,0 +1,248 @@
+{
+  "myTasks": {
+    "columns": {
+      "assigned": "Cần làm",
+      "rework": "Cần làm lại",
+      "watching": "Đang chờ quay lại",
+      "inProgress": "Đang làm",
+      "done": "Đã xong",
+      "fixed": "Đã sửa"
+    },
+    "noType": "— Chưa có type —",
+    "dragRuleWarning": "Không chuyển được \"{{from}}\" → \"{{to}}\". Drag rules: Cần làm/Cần làm lại → Đang làm, Đang làm → Đã xong.",
+    "statusUpdated": "Cập nhật trạng thái",
+    "bulkUpdated": "Cập nhật {{modified}}/{{matched}}",
+    "bulkSkippedWarning": "Cập nhật {{modified}}/{{matched}}. {{count}} đơn bị skip",
+    "skippedOrdersTitle": "Đơn bị skip",
+    "rejectHandedOver": "Đã bàn giao đơn cho designer khác",
+    "greeting": "Xin chào",
+    "subtitle": "Kéo thả card để chuyển trạng thái, hoặc tick checkbox để bulk update.",
+    "kpi": {
+      "assigned": "Cần làm",
+      "rework": "Cần làm lại",
+      "watching": "Đang chờ quay lại",
+      "inProgress": "Đang làm",
+      "done": "Đã xong",
+      "fixed": "Đã sửa",
+      "rejected": "Không làm được",
+      "responseWork": "Phản hồi / làm"
+    },
+    "pipelineCaption": "— TOÀN nhà máy (không chỉ đơn của bạn) · lane Designer được tô đậm · di chuột xem chi tiết · bấm 1 ngày để lọc",
+    "hint": {
+      "title": "Mẹo chọn nhiều đơn:",
+      "textBefore": "Tick checkbox cạnh tên sản phẩm để chọn toàn bộ đơn của sản phẩm đó. Hoặc tick 1 đơn, giữ",
+      "textAfter": "rồi click checkbox khác (trong cùng cột) để chọn nhanh tất cả đơn ở giữa."
+    },
+    "filters": {
+      "search": "Search",
+      "searchPlaceholder": "productionId / orderId",
+      "type": "Sản phẩm",
+      "fabricType": "Loại vải",
+      "machine": "Máy",
+      "toolResult": "Kết quả Tool",
+      "toolResultNote": "Note kq Tool",
+      "customer": "Khách hàng",
+      "errorFile": "File sửa lỗi"
+    },
+    "rejectedDrawer": {
+      "toggle": "File không làm được ({{count}})",
+      "empty": "Chưa có file nào báo không làm được."
+    },
+    "bulkToolbar": {
+      "selected": "Đã chọn",
+      "mixedColumns": "(Đơn ở nhiều cột — chỉ bulk cùng 1 cột)",
+      "start": "Nhận làm",
+      "restart": "Nhận làm lại",
+      "complete": "Hoàn thành",
+      "reject": "Không làm được"
+    },
+    "rejectBulkTarget": "{{count}} đơn được chọn",
+    "column": {
+      "expand": "Click để mở",
+      "collapse": "Click để thu gọn",
+      "empty": "Trống"
+    },
+    "rejectCardButton": "Không làm được"
+  },
+  "dailyBreakdown": {
+    "weekdays": ["CN", "T2", "T3", "T4", "T5", "T6", "T7"],
+    "ageToday": "Hôm nay",
+    "ageYesterday": "Hôm qua",
+    "ageDaysAgo": "{{count}} ngày trước",
+    "title": "Chi tiết theo ngày",
+    "unfinishedBadge": "{{unfinished}} chưa xong · {{days}} ngày",
+    "rangeDays": "{{count}} ngày",
+    "summary": {
+      "unfinished": "Chưa xong:",
+      "assigned": "Cần làm",
+      "rework": "Cần làm lại",
+      "inProgress": "Đang làm",
+      "done": "Đã xong:"
+    },
+    "table": {
+      "day": "Ngày",
+      "assigned": "Cần làm",
+      "rework": "Cần làm lại",
+      "inProgress": "Đang làm",
+      "done": "Đã xong",
+      "loading": "Đang tải…",
+      "empty": "Không có đơn trong {{count}} ngày gần nhất.",
+      "total": "Tổng"
+    },
+    "backlogHint": "Đơn tồn {{age}} chưa làm xong",
+    "clickToFilter": "Click để lọc kanban theo ngày này"
+  },
+  "rejectModal": {
+    "title": "Báo file không làm được",
+    "reportPrefix": "Báo file",
+    "reportMiddle": "không làm được và",
+    "reportHandoff": "bàn giao cho một designer khác",
+    "reportSuffix": "nhận thay. Đơn sẽ chuyển thẳng sang người được chọn.",
+    "targetLabel": "Chuyển cho designer",
+    "targetPlaceholder": "— Chọn người nhận thay —",
+    "targetOption": "{{name}} ({{count}} đơn đang làm)",
+    "noCandidates": "Không có designer nào khác đang bật để nhận thay.",
+    "reasonLabel": "Lý do (tùy chọn — max {{maxLen}} ký tự)",
+    "reasonPlaceholder": "VD: Không có file source, mockup không rõ ràng...",
+    "confirmTitle": "Bắt buộc chọn designer nhận thay",
+    "confirmButton": "Không làm được"
+  },
+  "taskCard": {
+    "timeline": {
+      "assigned": "Gán",
+      "started": "Bắt đầu",
+      "done": "Xong",
+      "rework": "Lỗi xưởng",
+      "rejected": "Không làm được"
+    },
+    "timeHint": {
+      "assigned": "Thời điểm bạn được giao task này",
+      "inProgress": "Thời điểm bắt đầu làm",
+      "done": "Thời điểm hoàn thành",
+      "rework": "Thời điểm xưởng báo lỗi (cần làm lại)",
+      "rejected": "Thời điểm báo không làm được"
+    },
+    "viewLarge": "Click để xem to",
+    "mockupTitle": "Mockup {{productionId}}",
+    "copyLabel": "mã {{productionId}}",
+    "toolNoteHint": "Note kết quả Tool: {{name}}",
+    "typeHint": "Type: {{type}}",
+    "productionHint": "Ngày đơn vào sản xuất · {{time}}",
+    "productionLabel": "SX",
+    "deadlineHint": "Hạn dự kiến bước Thiết kế · {{time}}",
+    "rejectedReasonLabel": "Lý do không làm được:"
+  },
+  "taskDetail": {
+    "status": {
+      "unassigned": "Chưa gán",
+      "assigned": "Cần làm",
+      "inProgress": "Đang làm",
+      "done": "Đã xong",
+      "rejected": "Không làm được",
+      "rework": "Cần làm lại"
+    },
+    "fields": {
+      "type": "Type",
+      "sizeColor": "Size / Color",
+      "orderId": "Order ID",
+      "fabricType": "Loại vải",
+      "machine": "Máy",
+      "tool": "Tool",
+      "toolNote": "Note Tool",
+      "factory": "Xưởng",
+      "room": "Phòng"
+    },
+    "mockup": "Mockup",
+    "openOriginal": "Mở ảnh gốc ở tab mới",
+    "designsHeading": "File design ({{count}})",
+    "designsHint": "Chuột phải vào link → \"Lưu liên kết thành…\" để tải ảnh về máy.",
+    "designLinkTitle": "Left-click: mở tab mới · Chuột phải: Lưu liên kết để tải về",
+    "designLinkLabel": "Link design",
+    "timelineTitle": "Timeline designer",
+    "timeline": {
+      "ordered": "Khách lên đơn",
+      "inProduction": "Vào sản xuất",
+      "assigned": "Được gán",
+      "started": "Bắt đầu",
+      "completed": "Hoàn thành",
+      "rework": "Cần làm lại",
+      "rejected": "Không làm được"
+    },
+    "productionErrorLabel": "Xưởng báo lỗi: {{label}}",
+    "errorFileTitle": "File sửa lỗi",
+    "errorFileNoteLabel": "Ghi chú:",
+    "rejectedReasonTitle": "Lý do không làm được"
+  },
+  "team": {
+    "statusFilters": {
+      "active": "Đang bật",
+      "inactive": "Đã tắt",
+      "all": "Tất cả"
+    },
+    "title": "Team Designer",
+    "subtitle": "Quản lý sub-designer.",
+    "stats": {
+      "active": "Đang làm",
+      "inactive": "Tạm tắt",
+      "totalActiveTasks": "Task active toàn team"
+    },
+    "memberCount": "{{count}} thành viên",
+    "reload": "Tải lại",
+    "addMember": "Thêm sub-designer",
+    "table": {
+      "fullName": "Họ tên",
+      "email": "Email",
+      "active": "Đang làm",
+      "done": "Đã xong",
+      "hireDate": "Vào làm",
+      "status": "Trạng thái"
+    },
+    "emptyNoMembersPrefix": "Chưa có sub-designer — bấm",
+    "emptyNoMembersAction": "+ Thêm sub-designer",
+    "emptyNoMembersSuffix": "ở góc trên.",
+    "emptyFiltered": "Không có designer nào ở trạng thái này.",
+    "statusOn": "Bật",
+    "statusOff": "Tắt",
+    "resetPasswordTitle": "Reset mật khẩu",
+    "toggled": "Đã đổi trạng thái",
+    "deleted": "Đã xoá",
+    "passwordTooShort": "Mật khẩu phải ít nhất 8 ký tự",
+    "resetDone": "Đã reset mật khẩu cho {{name}} — gửi cho họ trước khi đóng",
+    "deleteDialog": {
+      "title": "Xoá sub-designer",
+      "prefix": "Xoá",
+      "suffix": "? User sẽ không đăng nhập được. Các đơn đã hoàn thành của user vẫn giữ liên kết để stats không mất."
+    },
+    "resetDialog": {
+      "title": "Reset mật khẩu",
+      "prefix": "Reset mật khẩu cho",
+      "suffix": ". User sẽ phải đổi mật khẩu khi đăng nhập lần kế.",
+      "newPasswordLabel": "Mật khẩu mới",
+      "newPasswordPlaceholder": "Ít nhất 8 ký tự",
+      "confirm": "Reset"
+    }
+  },
+  "teamMemberDialog": {
+    "titleCreate": "Thêm sub-designer",
+    "titleEdit": "Sửa thông tin",
+    "fullNameLabel": "Tên hiển thị *",
+    "fullNamePlaceholder": "VD: Nguyễn Văn Huy",
+    "emailLabel": "Email *",
+    "emailPlaceholder": "huy@onospod.com",
+    "passwordLabel": "Mật khẩu *",
+    "randomTitle": "Random",
+    "copyTitle": "Copy",
+    "passwordHint": "Copy mật khẩu rồi gửi riêng cho team — sau khi đóng dialog không xem lại được.",
+    "hireDateLabel": "Ngày vào làm",
+    "telegramLabel": "Telegram Chat ID",
+    "telegramPlaceholder": "optional",
+    "submitCreate": "Tạo",
+    "submitSave": "Lưu",
+    "passwordCopied": "Đã copy password",
+    "clipboardBlocked": "Trình duyệt chặn clipboard — copy thủ công",
+    "missingFields": "Vui lòng nhập đủ Tên + Email",
+    "passwordTooShort": "Mật khẩu phải có ít nhất 8 ký tự",
+    "created": "Đã tạo {{name}} — gửi mật khẩu cho team trước khi đóng dialog",
+    "updated": "Đã cập nhật"
+  }
+}

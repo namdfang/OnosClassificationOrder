@@ -1,0 +1,56 @@
+{
+  "sidebar": {
+    "groups": {
+      "catalog": "Catalog",
+      "personal": "Personal",
+      "admin": "Admin"
+    },
+    "dashboard": {
+      "title": "Dashboard",
+      "factory": "Orders by factory",
+      "stats": "Order & product stats",
+      "status": "Order status",
+      "lifecycle": "Order lifecycle",
+      "toolCheck": "Tool check",
+      "personError": "Errors by person",
+      "designer": "Designer"
+    },
+    "orders": {
+      "title": "Order management",
+      "list": "Order list",
+      "errorLog": "Error correction log",
+      "scanError": "Scan code",
+      "stageErrors": "Stage error catalog",
+      "unmapped": "Unmapped factory",
+      "import": "Import order",
+      "cuttingFiles": "Import cutting files"
+    },
+    "work": {
+      "title": "Work",
+      "myTasks": "My tasks",
+      "fulfillmentTasks": "Fulfillment tasks"
+    },
+    "products": "Products",
+    "promotions": "Promotions",
+    "workshopConfig": "Workshop management",
+    "notifications": "Notifications",
+    "account": "Account",
+    "peoplePermissions": "People & permissions",
+    "designerTeam": "Designer team",
+    "users": "Users",
+    "departments": "Departments",
+    "roles": "Roles",
+    "customRoles": "Custom roles",
+    "settings": "Settings",
+    "signOut": "Sign out",
+    "member": "Member"
+  },
+  "header": {
+    "toggleSidebar": "Toggle sidebar",
+    "lightMode": "Light mode",
+    "darkMode": "Dark mode",
+    "myAccount": "My account",
+    "signOut": "Sign out",
+    "member": "Member"
+  }
+}

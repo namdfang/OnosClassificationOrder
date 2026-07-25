@@ -1,4 +1,5 @@
 import React, { useState } from 'react';
+import { useTranslation } from 'react-i18next';
 import type { OrderWorkshopField, WorkshopConfigCategory } from 'shared';
 import { toast } from 'sonner';
 
@@ -27,6 +28,7 @@ interface Props {
  * Toast success / error; rollback handled by re-fetch via `onUpdated` callback.
  */
 export function ColorBadgeSelectCell({ orderId, field, category, value, canEdit, onUpdated }: Props) {
+  const { t } = useTranslation('orders');
   const items = useWorkshopConfigStore((s) => s.byCategory[category] || []);
   const resolve = useWorkshopConfigStore((s) => s.resolve);
   const current = resolve(category, value || undefined);
@@ -38,7 +40,9 @@ export function ColorBadgeSelectCell({ orderId, field, category, value, canEdit,
       setSaving(true);
       await RepositoryRemote.order.updateField(orderId, { field, value: newCode });
       toast.success(
-        current?.name && newCode ? `Đã đổi → ${resolve(category, newCode)?.name || newCode}` : 'Đã cập nhật',
+        current?.name && newCode
+          ? t('cells.changedTo', { name: resolve(category, newCode)?.name || newCode })
+          : t('cells.updated'),
       );
       onUpdated?.(newCode);
     } catch (err) {
@@ -54,7 +58,7 @@ export function ColorBadgeSelectCell({ orderId, field, category, value, canEdit,
 
   const trigger = (
     <span
-      title={current?.name || 'Chưa chọn'}
+      title={current?.name || t('cells.notSelected')}
       className={cn(
         'inline-flex items-center gap-1 px-2 py-0.5 rounded text-xs font-medium border whitespace-nowrap',
         !current && 'bg-muted text-muted-foreground border-dashed border-border',
@@ -86,23 +90,24 @@ export function ColorBadgeSelectCell({ orderId, field, category, value, canEdit,
 }
 
 function ErrorSourceTag({ source }: { source: 'designer' | 'factory' | 'tool-check' }) {
+  const { t } = useTranslation('orders');
   if (source === 'designer') {
     return (
       <span className="text-[9px] font-semibold px-1.5 py-0.5 rounded bg-violet-100 text-violet-700 dark:bg-violet-500/20 dark:text-violet-300">
-        DES
+        {t('cells.errorSource.tagDesigner')}
       </span>
     );
   }
   if (source === 'tool-check') {
     return (
       <span className="text-[9px] font-semibold px-1.5 py-0.5 rounded bg-amber-100 text-amber-700 dark:bg-amber-500/20 dark:text-amber-300">
-        SOÁT TOOL
+        {t('cells.errorSource.tagToolCheck')}
       </span>
     );
   }
   return (
     <span className="text-[9px] font-semibold px-1.5 py-0.5 rounded bg-sky-100 text-sky-700 dark:bg-sky-500/20 dark:text-sky-300">
-      XƯỞNG
+      {t('cells.errorSource.tagFactory')}
     </span>
   );
 }

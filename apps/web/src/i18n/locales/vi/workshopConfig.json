@@ -1,0 +1,109 @@
+{
+  "page": {
+    "title": "Quản lý xưởng",
+    "subtitle": "Cấu hình danh mục dùng cho cột nghiệp vụ của Order: trạng thái in, kết quả tool, file lỗi, người thực hiện...",
+    "tabs": {
+      "printStatus": {
+        "label": "Trạng thái in",
+        "description": "Danh sách trạng thái in (hiển thị badge màu)"
+      },
+      "printStatusNote": {
+        "label": "Note trạng thái in",
+        "description": "Ghi chú lần in (hiển thị icon)"
+      },
+      "toolResult": {
+        "label": "Kết quả Tool",
+        "description": "Có/không có tool (hiển thị icon)"
+      },
+      "toolResultNote": {
+        "label": "Note kết quả Tool",
+        "description": "OK / Lỗi / Không có file (hiển thị badge màu)"
+      },
+      "errorFileType": {
+        "label": "File sửa lỗi",
+        "description": "Loại file lỗi (hiển thị icon)"
+      },
+      "assigneeNote": {
+        "label": "Note người thực hiện",
+        "description": "Trạng thái xử lý (hiển thị icon)"
+      },
+      "fabricType": {
+        "label": "Loại vải",
+        "description": "Loại vải / blank dùng cho đơn (hiển thị icon)"
+      },
+      "machine": {
+        "label": "Loại máy",
+        "description": "Các máy in trong xưởng — số máy (94, 27, 56…) (hiển thị badge màu)"
+      },
+      "productionError": {
+        "label": "Lỗi sản xuất",
+        "description": "Lý do xưởng báo lỗi đơn hàng (hiển thị badge màu)"
+      },
+      "printMethod": {
+        "label": "Phương pháp in",
+        "description": "Phương pháp in cho catalog khách hàng (hiển thị icon)"
+      }
+    }
+  },
+  "categoryEditor": {
+    "itemCount": "{{count}} mục — hiển thị dạng",
+    "displayMode": {
+      "color": "badge màu",
+      "icon": "icon"
+    },
+    "table": {
+      "display": "Hiển thị",
+      "name": "Tên",
+      "code": "Mã",
+      "status": "Trạng thái",
+      "empty": "Chưa có mục nào",
+      "on": "Bật",
+      "off": "Tắt"
+    },
+    "dialog": {
+      "createTitle": "Thêm mục",
+      "editTitle": "Sửa mục"
+    },
+    "form": {
+      "displayName": "Tên hiển thị",
+      "displayNamePlaceholder": "VD: Đã in (máy 1)",
+      "code": "Mã",
+      "codeHint": "(slug, dùng để lưu trữ)",
+      "codePlaceholder": "vd: machine-1",
+      "color": "Màu",
+      "icon": "Icon",
+      "active": "Hoạt động",
+      "nameCodeRequired": "Vui lòng nhập tên và mã",
+      "colorRequired": "Hãy chọn màu",
+      "iconRequired": "Hãy chọn icon",
+      "errorSourceRequired": "Phải chọn lỗi do designer hay do xưởng",
+      "addSuccess": "Đã thêm",
+      "updateSuccess": "Đã cập nhật"
+    },
+    "errorSource": {
+      "label": "Loại lỗi *",
+      "designer": "Do designer làm",
+      "factory": "Do xưởng làm",
+      "toolCheck": "Do soát tool",
+      "hint": "Lỗi do designer → \"Cần làm lại\" cho designer. Do soát tool → đẩy về Support (vd thiếu file để in). Dashboard thống kê phân biệt các loại."
+    },
+    "errorSourceBadge": {
+      "unassigned": "? CHƯA GÁN",
+      "designer": "DES",
+      "toolCheck": "SOÁT TOOL",
+      "factory": "XƯỞNG"
+    },
+    "deleteSuccess": "Đã xóa",
+    "deleteDialog": {
+      "title": "Xóa mục",
+      "message": "Xóa {{name}}? Mục đã được dùng trong đơn hàng vẫn giữ giá trị cũ nhưng sẽ không chọn được nữa."
+    }
+  },
+  "colorPicker": {
+    "choose": "Chọn màu"
+  },
+  "iconPicker": {
+    "choose": "Chọn icon",
+    "searchPlaceholder": "Tìm icon..."
+  }
+}

@@ -1,4 +1,5 @@
 import React, { useEffect, useMemo, useState } from 'react';
+import { useTranslation } from 'react-i18next';
 import { useSearchParams } from 'react-router-dom';
 import {
   Ban,
@@ -217,6 +218,7 @@ function MetricCard({ label, value, sub, icon, loading }: MetricCardProps) {
 }
 
 export default function OrderStatsTab() {
+  const { t } = useTranslation('dashboard');
   const { profile } = useAuthStore();
   // Hide cost/price stats for Designer + Fulfillment — họ chỉ cần số lượng đơn,
   // không cần thấy doanh thu. Admin/Manager/Support thấy đầy đủ.
@@ -306,12 +308,12 @@ export default function OrderStatsTab() {
     });
   };
 
-  const t = data?.totals;
+  const totals = data?.totals;
 
   const dateRangeLabel = useMemo(() => {
-    if (!startDate && !endDate) return 'Tất cả';
+    if (!startDate && !endDate) return t('statsTab.allTime');
     return `${startDate || '...'} → ${endDate || '...'}`;
-  }, [startDate, endDate]);
+  }, [startDate, endDate, t]);
 
   // Show dim overlay only on refetches (when we already have data) — not on
   // the initial load, since skeletons handle that.
@@ -332,10 +334,10 @@ export default function OrderStatsTab() {
       {/* Title row — minimal */}
       <div className="flex items-baseline justify-between gap-4">
         <div>
-          <h1 className="text-3xl font-semibold tracking-tight text-foreground">Bảng điều khiển</h1>
+          <h1 className="text-3xl font-semibold tracking-tight text-foreground">{t('statsTab.title')}</h1>
           <p className="text-sm text-muted-foreground mt-1">
-            Theo dõi sản xuất {dateRangeLabel.toLowerCase()}
-            {profile?.fullName ? ` · xin chào, ${profile.fullName.split(' ')[0]}` : ''}
+            {t('statsTab.trackingProduction', { range: dateRangeLabel.toLowerCase() })}
+            {profile?.fullName ? ` · ${t('statsTab.hello', { name: profile.fullName.split(' ')[0] })}` : ''}
           </p>
         </div>
         <div className="text-xs text-muted-foreground hidden sm:flex items-center gap-1.5">
@@ -343,7 +345,7 @@ export default function OrderStatsTab() {
             <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75" />
             <span className="relative inline-flex rounded-full h-2 w-2 bg-emerald-500" />
           </span>
-          Cập nhật tức thì
+          {t('statsTab.liveUpdate')}
         </div>
       </div>
 
@@ -354,12 +356,12 @@ export default function OrderStatsTab() {
       <OrderFilterBar
         search={searchType}
         onSearchChange={setSearchType}
-        searchPlaceholder="Lọc theo tên sản phẩm…"
+        searchPlaceholder={t('statsTab.filterByProductName')}
         createdFrom={startDate}
         createdTo={endDate}
-        onDateRangeChange={(f, t) => {
+        onDateRangeChange={(f, t2) => {
           setStartDate(f);
-          setEndDate(t);
+          setEndDate(t2);
         }}
         onReload={() => fetchDashboard()}
         loading={loading}
@@ -367,7 +369,7 @@ export default function OrderStatsTab() {
           <div className="relative min-w-[220px]">
             <UserIcon size={13} className="absolute left-2 top-1/2 -translate-y-1/2 text-muted-foreground" />
             <Input
-              placeholder="Lọc theo SKU hoặc email khách…"
+              placeholder={t('statsTab.filterBySkuEmail')}
               value={searchUser}
               onChange={(e) => setSearchUser(e.target.value)}
               className="pl-7 h-9 text-sm"
@@ -385,30 +387,34 @@ export default function OrderStatsTab() {
         )}
       >
         <MetricCard
-          label="Tổng đơn"
-          value={t ? formatNumber(t.totalOrders) : '—'}
-          sub={t ? `${formatNumber(t.totalQuantity)} sản phẩm` : undefined}
+          label={t('statsTab.totalOrders')}
+          value={totals ? formatNumber(totals.totalOrders) : '—'}
+          sub={totals ? t('statsTab.productsCount', { count: formatNumber(totals.totalQuantity) }) : undefined}
           icon={<Package size={12} />}
           loading={loading && !data}
         />
         {!hidePrice && (
           <>
             <MetricCard
-              label="Chi phí sản xuất"
-              value={t ? formatCurrency(t.totalProductionCost) : '—'}
+              label={t('statsTab.productionCost')}
+              value={totals ? formatCurrency(totals.totalProductionCost) : '—'}
               icon={<Package size={12} />}
               loading={loading && !data}
             />
             <MetricCard
-              label="Chi phí vận chuyển"
-              value={t ? formatCurrency(t.totalShippingCost) : '—'}
+              label={t('statsTab.shippingCost')}
+              value={totals ? formatCurrency(totals.totalShippingCost) : '—'}
               icon={<Truck size={12} />}
               loading={loading && !data}
             />
             <MetricCard
-              label="Tổng chi phí"
-              value={t ? formatCurrency(t.totalCost) : '—'}
-              sub={t && t.totalOrders > 0 ? `TB ${formatCurrency(t.totalCost / t.totalOrders)}/đơn` : undefined}
+              label={t('statsTab.totalCost')}
+              value={totals ? formatCurrency(totals.totalCost) : '—'}
+              sub={
+                totals && totals.totalOrders > 0
+                  ? t('statsTab.avgPerOrder', { value: formatCurrency(totals.totalCost / totals.totalOrders) })
+                  : undefined
+              }
               icon={<DollarSign size={12} />}
               loading={loading && !data}
             />
@@ -423,7 +429,7 @@ export default function OrderStatsTab() {
         onClick={() => setCancelledOpen(true)}
         className={cn(
           'w-full flex items-center gap-2.5 rounded-lg border px-3 py-2.5 text-left transition-colors',
-          t && t.cancelledOrders > 0
+          totals && totals.cancelledOrders > 0
             ? 'border-rose-300 dark:border-rose-800 bg-rose-50/60 dark:bg-rose-950/20 hover:bg-rose-100/70 dark:hover:bg-rose-950/40'
             : 'border-border bg-card hover:bg-muted/30',
           isRefetching && 'opacity-60',
@@ -432,22 +438,24 @@ export default function OrderStatsTab() {
         <span
           className={cn(
             'shrink-0',
-            t && t.cancelledOrders > 0 ? 'text-rose-600 dark:text-rose-400' : 'text-muted-foreground opacity-60',
+            totals && totals.cancelledOrders > 0
+              ? 'text-rose-600 dark:text-rose-400'
+              : 'text-muted-foreground opacity-60',
           )}
         >
           <Ban size={16} />
         </span>
-        <span className="text-[11px] font-medium text-muted-foreground">Đơn đã hủy</span>
+        <span className="text-[11px] font-medium text-muted-foreground">{t('statsTab.cancelledOrders')}</span>
         <span
           className={cn(
             'text-lg font-semibold tabular-nums leading-none',
-            t && t.cancelledOrders > 0 ? 'text-rose-600 dark:text-rose-400' : 'text-foreground',
+            totals && totals.cancelledOrders > 0 ? 'text-rose-600 dark:text-rose-400' : 'text-foreground',
           )}
         >
-          {t ? formatNumber(t.cancelledOrders) : '—'}
+          {totals ? formatNumber(totals.cancelledOrders) : '—'}
         </span>
         <span className="ml-auto text-[11px] text-muted-foreground">
-          {t && t.cancelledOrders > 0 ? 'Bấm xem danh sách →' : 'Không có đơn hủy'}
+          {totals && totals.cancelledOrders > 0 ? t('statsTab.viewList') : t('statsTab.noCancelledOrders')}
         </span>
       </button>
 
@@ -455,7 +463,7 @@ export default function OrderStatsTab() {
       <div
         className={cn(
           'w-full flex items-center gap-2.5 rounded-lg border px-3 py-2.5',
-          t && t.heldOrders > 0
+          totals && totals.heldOrders > 0
             ? 'border-amber-300 dark:border-amber-800 bg-amber-50/60 dark:bg-amber-950/20'
             : 'border-border bg-card',
           isRefetching && 'opacity-60',
@@ -464,22 +472,22 @@ export default function OrderStatsTab() {
         <span
           className={cn(
             'shrink-0',
-            t && t.heldOrders > 0 ? 'text-amber-600 dark:text-amber-400' : 'text-muted-foreground opacity-60',
+            totals && totals.heldOrders > 0 ? 'text-amber-600 dark:text-amber-400' : 'text-muted-foreground opacity-60',
           )}
         >
           <PauseCircle size={16} />
         </span>
-        <span className="text-[11px] font-medium text-muted-foreground">Đơn đang giữ</span>
+        <span className="text-[11px] font-medium text-muted-foreground">{t('statsTab.heldOrders')}</span>
         <span
           className={cn(
             'text-lg font-semibold tabular-nums leading-none',
-            t && t.heldOrders > 0 ? 'text-amber-600 dark:text-amber-400' : 'text-foreground',
+            totals && totals.heldOrders > 0 ? 'text-amber-600 dark:text-amber-400' : 'text-foreground',
           )}
         >
-          {t ? formatNumber(t.heldOrders) : '—'}
+          {totals ? formatNumber(totals.heldOrders) : '—'}
         </span>
         <span className="ml-auto text-[11px] text-muted-foreground">
-          {t && t.heldOrders > 0 ? 'Đơn tạm dừng — cần mở lại' : 'Không có đơn giữ'}
+          {totals && totals.heldOrders > 0 ? t('statsTab.heldNeedsReopen') : t('statsTab.noHeldOrders')}
         </span>
       </div>
 
@@ -525,16 +533,14 @@ export default function OrderStatsTab() {
       >
         <div className="px-5 py-4 flex items-end justify-between gap-3 flex-wrap">
           <div>
-            <h2 className="text-base font-semibold text-foreground">Chi tiết theo loại sản phẩm</h2>
-            <p className="text-xs text-muted-foreground mt-0.5">
-              Click vào dòng để xem chi tiết size, mockup, và mockup trùng lặp
-            </p>
+            <h2 className="text-base font-semibold text-foreground">{t('statsTab.productDetail.title')}</h2>
+            <p className="text-xs text-muted-foreground mt-0.5">{t('statsTab.productDetail.subtitle')}</p>
           </div>
           <div className="flex items-center gap-2">
             {searchUser.trim() && (
               <span className="inline-flex items-center gap-1.5 text-xs bg-violet-100 dark:bg-violet-500/15 text-violet-700 dark:text-violet-300 px-2 py-1 rounded-md">
                 <UserIcon size={12} />
-                <span className="font-medium">Khách: {searchUser.trim()}</span>
+                <span className="font-medium">{t('statsTab.customerLabel', { name: searchUser.trim() })}</span>
                 <button
                   type="button"
                   onClick={() => {
@@ -542,7 +548,7 @@ export default function OrderStatsTab() {
                     fetchDashboard({ searchUser: '' });
                   }}
                   className="ml-1 hover:text-violet-900 dark:hover:text-violet-100"
-                  title="Bỏ lọc khách"
+                  title={t('statsTab.clearCustomerFilter')}
                 >
                   ✕
                 </button>
@@ -550,7 +556,8 @@ export default function OrderStatsTab() {
             )}
             {data && (
               <span className="text-xs text-muted-foreground">
-                <span className="tabular-nums font-semibold text-foreground">{data.byType.length}</span> loại sản phẩm
+                <span className="tabular-nums font-semibold text-foreground">{data.byType.length}</span>{' '}
+                {t('statsTab.productTypesCount')}
               </span>
             )}
           </div>
@@ -566,18 +573,18 @@ export default function OrderStatsTab() {
             }
           >
             <div></div>
-            <div>Sản phẩm</div>
-            <div className="text-right">Số lượng</div>
+            <div>{t('designerStats.product')}</div>
+            <div className="text-right">{t('statsTab.quantity')}</div>
             {!hidePrice && (
               <>
-                <div className="text-right">Min</div>
-                <div className="text-right">Max</div>
-                <div className="text-right">Sản xuất</div>
-                <div className="text-right">Vận chuyển</div>
-                <div className="text-right">Tổng</div>
+                <div className="text-right">{t('statsTab.min')}</div>
+                <div className="text-right">{t('statsTab.max')}</div>
+                <div className="text-right">{t('statsTab.production')}</div>
+                <div className="text-right">{t('statsTab.shipping')}</div>
+                <div className="text-right">{t('statsTab.total')}</div>
               </>
             )}
-            <div className="text-center">Mockup</div>
+            <div className="text-center">{t('statsTab.mockup')}</div>
           </div>
 
           {/* Body */}
@@ -601,7 +608,7 @@ export default function OrderStatsTab() {
           {!loading && (!data || data.byType.length === 0) && (
             <div className="text-center py-16 text-muted-foreground text-sm">
               <Package size={32} className="mx-auto mb-3 opacity-30" strokeWidth={1.5} />
-              Chưa có đơn nào trong khoảng thời gian này.
+              {t('statsTab.noOrdersInRange')}
             </div>
           )}
 
@@ -647,7 +654,7 @@ export default function OrderStatsTab() {
                       <span className="font-semibold tabular-nums">{row.uniqueMockupCount}</span>
                       {row.duplicateMockupCount > 0 && (
                         <span className="ml-1.5 text-amber-700 dark:text-amber-400">
-                          · {row.duplicateMockupCount} trùng
+                          · {t('statsTab.duplicateCount', { count: row.duplicateMockupCount })}
                         </span>
                       )}
                     </div>
@@ -784,6 +791,7 @@ interface TopUsersCardProps {
 }
 
 function TopUsersCard({ byUser, loading, activeUserKey, onSelectCustomer, hidePrice }: TopUsersCardProps) {
+  const { t } = useTranslation('dashboard');
   const [limit, setLimit] = useState<TopLimit>(5);
 
   const sliced = limit === 'all' ? byUser : byUser.slice(0, limit);
@@ -799,8 +807,10 @@ function TopUsersCard({ byUser, loading, activeUserKey, onSelectCustomer, hidePr
             <Crown size={18} className="text-violet-600 dark:text-violet-400" strokeWidth={2} />
           </div>
           <div>
-            <h2 className="text-base font-semibold text-foreground">Khách hàng top đơn</h2>
-            <p className="text-xs text-muted-foreground mt-0.5">{byUser.length} khách đặt hàng trong kỳ</p>
+            <h2 className="text-base font-semibold text-foreground">{t('statsTab.topCustomers.title')}</h2>
+            <p className="text-xs text-muted-foreground mt-0.5">
+              {t('statsTab.topCustomers.subtitle', { count: byUser.length })}
+            </p>
           </div>
         </div>
         <div className="flex items-center bg-muted/40 rounded-md p-0.5">
@@ -816,7 +826,7 @@ function TopUsersCard({ byUser, loading, activeUserKey, onSelectCustomer, hidePr
                   : 'text-muted-foreground hover:text-foreground',
               )}
             >
-              {opt === 'all' ? 'Tất cả' : opt}
+              {opt === 'all' ? t('drillPanel.all') : opt}
             </button>
           ))}
         </div>
@@ -842,7 +852,7 @@ function TopUsersCard({ byUser, loading, activeUserKey, onSelectCustomer, hidePr
         {!loading && byUser.length === 0 && (
           <div className="text-center py-10 text-sm text-muted-foreground">
             <Trophy size={28} className="mx-auto mb-2 opacity-30" strokeWidth={1.5} />
-            Chưa có khách hàng nào trong kỳ.
+            {t('statsTab.topCustomers.noCustomers')}
           </div>
         )}
 
@@ -903,10 +913,12 @@ function TopUsersCard({ byUser, loading, activeUserKey, onSelectCustomer, hidePr
                   {/* Count on right */}
                   <div className="shrink-0 text-right">
                     <p className="text-sm font-semibold text-violet-600 dark:text-violet-400 tabular-nums">
-                      {u.orderCount} đơn
+                      {t('drillPanel.orderCount', { count: u.orderCount })}
                     </p>
                     {hidePrice ? (
-                      <p className="text-[10px] text-muted-foreground tabular-nums">{u.totalQuantity} sản phẩm</p>
+                      <p className="text-[10px] text-muted-foreground tabular-nums">
+                        {t('statsTab.productsCount', { count: u.totalQuantity })}
+                      </p>
                     ) : (
                       <p className="text-[10px] text-muted-foreground tabular-nums">{formatCurrency(u.totalCost)}</p>
                     )}
@@ -922,6 +934,7 @@ function TopUsersCard({ byUser, loading, activeUserKey, onSelectCustomer, hidePr
 }
 
 function FactoryDistribution({ byFactory, loading }: { byFactory: FactoryBreakdown[]; loading: boolean }) {
+  const { t } = useTranslation('dashboard');
   const [hoveredIdx, setHoveredIdx] = useState<number | null>(null);
 
   // Default to first factory if nothing hovered
@@ -952,13 +965,14 @@ function FactoryDistribution({ byFactory, loading }: { byFactory: FactoryBreakdo
               <Factory size={18} className="text-sky-600 dark:text-sky-400" strokeWidth={2} />
             </div>
             <div>
-              <h2 className="text-base font-semibold text-foreground">Phân bổ theo xưởng</h2>
-              <p className="text-xs text-muted-foreground mt-0.5">Di chuột vào xưởng để xem loại in chi tiết</p>
+              <h2 className="text-base font-semibold text-foreground">{t('statsTab.factoryDist.title')}</h2>
+              <p className="text-xs text-muted-foreground mt-0.5">{t('statsTab.factoryDist.subtitle')}</p>
             </div>
           </div>
           {byFactory.length > 0 && (
             <span className="text-xs text-muted-foreground">
-              <span className="tabular-nums font-semibold text-foreground">{byFactory.length}</span> xưởng
+              <span className="tabular-nums font-semibold text-foreground">{byFactory.length}</span>{' '}
+              {t('statsTab.factoryDist.factoryCount')}
             </span>
           )}
         </div>
@@ -981,7 +995,7 @@ function FactoryDistribution({ byFactory, loading }: { byFactory: FactoryBreakdo
       {!loading && byFactory.length === 0 && (
         <div className="text-center py-16 text-muted-foreground text-sm">
           <Factory size={32} className="mx-auto mb-3 opacity-30" strokeWidth={1.5} />
-          Chưa có dữ liệu xưởng. Hãy import đơn và mapping cấu hình sản phẩm.
+          {t('statsTab.factoryDist.noData')}
         </div>
       )}
 
@@ -989,7 +1003,7 @@ function FactoryDistribution({ byFactory, loading }: { byFactory: FactoryBreakdo
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4 px-5 pb-5">
           {/* Left: Factory pie */}
           <div className="flex flex-col items-center">
-            <h3 className="text-xs font-medium text-muted-foreground mb-2">Xưởng sản xuất</h3>
+            <h3 className="text-xs font-medium text-muted-foreground mb-2">{t('statsTab.factoryDist.factory')}</h3>
             <div className="w-full h-[220px] [&_.recharts-sector]:outline-none [&_.recharts-sector:focus]:outline-none [&_.recharts-pie]:outline-none [&_path:focus]:outline-none [&_path]:outline-none">
               <ResponsiveContainer width="100%" height="100%">
                 <PieChart>
@@ -1053,11 +1067,12 @@ function FactoryDistribution({ byFactory, loading }: { byFactory: FactoryBreakdo
           {/* Right: Machine type pie of active factory */}
           <div className="flex flex-col items-center">
             <h3 className="text-xs font-medium text-muted-foreground mb-2 text-center">
-              Loại in: <span className="text-foreground font-semibold">{activeFactory?.factoryName || '—'}</span>
+              {t('statsTab.factoryDist.printType')}:{' '}
+              <span className="text-foreground font-semibold">{activeFactory?.factoryName || '—'}</span>
             </h3>
             {machineChartData.length === 0 ? (
               <div className="h-[220px] flex items-center justify-center text-xs text-muted-foreground">
-                Không có loại in
+                {t('statsTab.factoryDist.noPrintType')}
               </div>
             ) : (
               <>
@@ -1113,19 +1128,21 @@ function FactoryDistribution({ byFactory, loading }: { byFactory: FactoryBreakdo
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 function PieTooltip({ active, payload }: any) {
+  const { t } = useTranslation('dashboard');
   if (!active || !payload?.length) return null;
   const p = payload[0].payload;
   return (
     <div className="bg-popover border border-border rounded-md shadow-md p-2 text-xs">
       <p className="font-semibold text-foreground">{p.fullName}</p>
       <p className="text-muted-foreground">
-        {p.value.toLocaleString()} items · {p.percentage}%
+        {t('statsTab.factoryDist.itemsCount', { count: p.value.toLocaleString() })} · {p.percentage}%
       </p>
     </div>
   );
 }
 
 function ExpandedDetails({ row }: { row: TypeSummary }) {
+  const { t } = useTranslation('dashboard');
   const [fullView, setFullView] = useState(false);
 
   // List container: when fullView=true → no max-height (show all inline);
@@ -1138,7 +1155,7 @@ function ExpandedDetails({ row }: { row: TypeSummary }) {
     <div className="border-t border-border">
       <div className="flex items-center justify-between px-5 pt-3 pb-1">
         <p className="text-[11px] text-muted-foreground">
-          {fullView ? 'Đã mở rộng tất cả' : 'Đang thu gọn — cuộn trong panel để xem thêm'}
+          {fullView ? t('statsTab.expandedDetails.allExpanded') : t('statsTab.expandedDetails.collapsedHint')}
         </p>
         <button
           type="button"
@@ -1146,7 +1163,7 @@ function ExpandedDetails({ row }: { row: TypeSummary }) {
           className="inline-flex items-center gap-1 text-xs text-muted-foreground hover:text-foreground transition-colors h-7 px-2"
         >
           {fullView ? <ChevronsUp size={12} /> : <ChevronsDown size={12} />}
-          {fullView ? 'Thu gọn' : 'Mở rộng hết'}
+          {fullView ? t('statsTab.expandedDetails.collapse') : t('statsTab.expandedDetails.expandAll')}
         </button>
       </div>
 
@@ -1154,11 +1171,11 @@ function ExpandedDetails({ row }: { row: TypeSummary }) {
         {/* Sizes */}
         <div>
           <h4 className="text-xs font-medium text-muted-foreground mb-3 flex items-center justify-between">
-            <span>Phân bổ size</span>
-            <span className="tabular-nums">{row.sizes.length} size</span>
+            <span>{t('statsTab.expandedDetails.sizeDistribution')}</span>
+            <span className="tabular-nums">{t('statsTab.expandedDetails.sizeCount', { count: row.sizes.length })}</span>
           </h4>
           {row.sizes.length === 0 ? (
-            <p className="text-xs text-muted-foreground">Chưa có dữ liệu size</p>
+            <p className="text-xs text-muted-foreground">{t('statsTab.expandedDetails.noSizeData')}</p>
           ) : (
             <div className="space-y-1.5">
               {row.sizes.map((s) => {
@@ -1169,7 +1186,8 @@ function ExpandedDetails({ row }: { row: TypeSummary }) {
                     <div className="flex items-center justify-between text-xs">
                       <span className="font-mono font-medium text-foreground w-10">{s.size}</span>
                       <span className="tabular-nums text-muted-foreground">
-                        <span className="font-semibold text-foreground">{s.count}</span> items
+                        <span className="font-semibold text-foreground">{s.count}</span>{' '}
+                        {t('statsTab.expandedDetails.items')}
                       </span>
                     </div>
                     <div className="h-1 bg-muted/50 rounded-full overflow-hidden">
@@ -1185,11 +1203,13 @@ function ExpandedDetails({ row }: { row: TypeSummary }) {
         {/* Mockups */}
         <div>
           <h4 className="text-xs font-medium text-muted-foreground mb-3 flex items-center justify-between">
-            <span>Mockup đã dùng</span>
-            <span className="tabular-nums">{row.mockups.length} mockup</span>
+            <span>{t('statsTab.expandedDetails.mockupsUsed')}</span>
+            <span className="tabular-nums">
+              {t('statsTab.expandedDetails.mockupCount', { count: row.mockups.length })}
+            </span>
           </h4>
           {row.mockups.length === 0 ? (
-            <p className="text-xs text-muted-foreground">Chưa có mockup</p>
+            <p className="text-xs text-muted-foreground">{t('statsTab.expandedDetails.noMockups')}</p>
           ) : (
             <div className={listClass}>
               {row.mockups.map((m) => (
@@ -1228,17 +1248,19 @@ function ExpandedDetails({ row }: { row: TypeSummary }) {
         {/* Duplicate mockups */}
         <div>
           <h4 className="text-xs font-medium text-muted-foreground mb-3 flex items-center justify-between">
-            <span>Mockup bị trùng</span>
+            <span>{t('statsTab.expandedDetails.duplicateMockups')}</span>
             {row.duplicateMockups.length > 0 ? (
               <span className="tabular-nums text-amber-700 dark:text-amber-400">
-                {row.duplicateMockups.length} trùng
+                {t('statsTab.duplicateCount', { count: row.duplicateMockups.length })}
               </span>
             ) : (
-              <span className="tabular-nums text-emerald-700 dark:text-emerald-400">Không có</span>
+              <span className="tabular-nums text-emerald-700 dark:text-emerald-400">
+                {t('statsTab.expandedDetails.none')}
+              </span>
             )}
           </h4>
           {row.duplicateMockups.length === 0 ? (
-            <p className="text-xs text-muted-foreground">Tốt — không có mockup trùng lặp</p>
+            <p className="text-xs text-muted-foreground">{t('statsTab.expandedDetails.noDuplicates')}</p>
           ) : (
             <div className={listClass}>
               {row.duplicateMockups.map((m) => (
@@ -1263,7 +1285,7 @@ function ExpandedDetails({ row }: { row: TypeSummary }) {
                   <div className="flex-1 min-w-0">
                     <p className="text-[11px] text-muted-foreground truncate font-mono">{m.url.split('/').pop()}</p>
                     <Badge variant="warning" className="mt-0.5">
-                      ×{m.count} dùng
+                      {t('statsTab.expandedDetails.usedCount', { count: m.count })}
                     </Badge>
                   </div>
                 </a>
@@ -1297,6 +1319,7 @@ function SizeMatrixTable({
   lockedFactoryId?: string;
   dateRangeLabel: string;
 }) {
+  const { t } = useTranslation('dashboard');
   // Danh sách xưởng (distinct) để build dropdown.
   const factories = useMemo(() => {
     const map = new Map<string, string>();
@@ -1354,9 +1377,9 @@ function SizeMatrixTable({
 
   const handleExport = () => {
     const factoryLabel = effectiveFactory
-      ? factories.find((f) => f.id === effectiveFactory)?.name || 'Xưởng'
-      : 'Tất cả xưởng';
-    const title = `LỆNH SẢN XUẤT — ${factoryLabel} — ${dateRangeLabel}`;
+      ? factories.find((f) => f.id === effectiveFactory)?.name || t('statsTab.sizeMatrix.factory')
+      : t('statsTab.sizeMatrix.allFactories');
+    const title = `${t('statsTab.sizeMatrix.exportTitle')} — ${factoryLabel} — ${dateRangeLabel}`;
     const wb = buildSizeMatrixWorkbook({ title, columns, rows, colTotals, grandTotal });
     const slug = factoryLabel
       .normalize('NFD')
@@ -1377,17 +1400,15 @@ function SizeMatrixTable({
     >
       <div className="px-5 py-4 flex items-end justify-between gap-3 flex-wrap">
         <div>
-          <h2 className="text-base font-semibold text-foreground">Số lượng theo size mỗi sản phẩm</h2>
-          <p className="text-xs text-muted-foreground mt-0.5">
-            Mỗi dòng một sản phẩm, mỗi cột một size — ô trống nghĩa là không có
-          </p>
+          <h2 className="text-base font-semibold text-foreground">{t('statsTab.sizeMatrix.title')}</h2>
+          <p className="text-xs text-muted-foreground mt-0.5">{t('statsTab.sizeMatrix.subtitle')}</p>
         </div>
         <div className="flex items-center gap-3 flex-wrap">
           {/* Factory filter — locked users thấy nhãn cố định, còn lại thấy dropdown */}
           {lockedFactoryId ? (
             <span className="inline-flex items-center gap-1.5 text-xs bg-sky-100 dark:bg-sky-500/15 text-sky-700 dark:text-sky-300 px-2.5 py-1.5 rounded-md">
               <Factory size={12} />
-              <span className="font-medium">{lockedFactoryName || 'Xưởng của tôi'}</span>
+              <span className="font-medium">{lockedFactoryName || t('statsTab.sizeMatrix.myFactory')}</span>
             </span>
           ) : (
             <div className="relative">
@@ -1400,7 +1421,7 @@ function SizeMatrixTable({
                 onChange={(e) => setSelectedFactory(e.target.value)}
                 className="h-8 pl-7 pr-7 text-xs rounded-md border border-border bg-background text-foreground appearance-none cursor-pointer hover:bg-muted/30 transition-colors min-w-[160px]"
               >
-                <option value="">Tất cả xưởng</option>
+                <option value="">{t('statsTab.sizeMatrix.allFactories')}</option>
                 {factories.map((f) => (
                   <option key={f.id} value={f.id}>
                     {f.name}
@@ -1415,15 +1436,16 @@ function SizeMatrixTable({
           )}
           {!loading && !isEmpty && (
             <span className="text-xs text-muted-foreground">
-              Tổng: <span className="tabular-nums font-semibold text-foreground">{formatNumber(grandTotal)}</span> sản
-              phẩm
+              {t('statsTab.sizeMatrix.total')}:{' '}
+              <span className="tabular-nums font-semibold text-foreground">{formatNumber(grandTotal)}</span>{' '}
+              {t('statsTab.sizeMatrix.products')}
             </span>
           )}
           <button
             type="button"
             onClick={handleExport}
             disabled={isEmpty}
-            title="Xuất bảng ra file Excel (.xlsx)"
+            title={t('statsTab.sizeMatrix.exportButtonTitle')}
             className={cn(
               'inline-flex items-center gap-1.5 h-8 px-3 text-xs rounded-md border transition-colors',
               isEmpty
@@ -1432,7 +1454,7 @@ function SizeMatrixTable({
             )}
           >
             <Download size={13} />
-            Xuất Excel
+            {t('factoryTab.exportExcel')}
           </button>
         </div>
       </div>
@@ -1448,15 +1470,15 @@ function SizeMatrixTable({
           <div className="text-center py-16 text-muted-foreground text-sm">
             <Package size={32} className="mx-auto mb-3 opacity-30" strokeWidth={1.5} />
             {sizeMatrix.length === 0
-              ? 'Chưa có đơn nào trong khoảng thời gian này.'
-              : 'Xưởng này chưa có dữ liệu trong kỳ.'}
+              ? t('statsTab.noOrdersInRange')
+              : t('statsTab.sizeMatrix.noFactoryData')}
           </div>
         ) : (
           <table className="w-full text-sm border-collapse">
             <thead>
               <tr className="bg-muted/40 backdrop-blur text-[11px] tracking-wide font-medium text-muted-foreground">
                 <th className="sticky left-0 top-0 z-20 bg-muted/40 text-left px-3 py-2 min-w-[220px] border-b border-border">
-                  Sản phẩm
+                  {t('designerStats.product')}
                 </th>
                 {columns.map((c) => (
                   <th
@@ -1467,7 +1489,7 @@ function SizeMatrixTable({
                   </th>
                 ))}
                 <th className="sticky right-0 top-0 z-20 bg-muted/40 text-right px-3 py-2 w-16 border-b border-border">
-                  Tổng
+                  {t('statsTab.total')}
                 </th>
               </tr>
             </thead>
@@ -1499,7 +1521,7 @@ function SizeMatrixTable({
             </tbody>
             <tfoot>
               <tr className="bg-muted/40 font-semibold text-foreground border-t-2 border-border">
-                <td className="sticky left-0 z-10 bg-muted/40 px-3 py-2">Tổng</td>
+                <td className="sticky left-0 z-10 bg-muted/40 px-3 py-2">{t('statsTab.total')}</td>
                 {columns.map((c) => (
                   <td key={c} className="text-right px-3 py-2 tabular-nums">
                     {formatNumber(colTotals[c])}

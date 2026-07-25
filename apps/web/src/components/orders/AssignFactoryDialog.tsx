@@ -1,4 +1,5 @@
 import React, { useEffect, useMemo, useState } from 'react';
+import { Trans, useTranslation } from 'react-i18next';
 import { MapPin } from 'lucide-react';
 import type { Factory } from 'shared';
 import { WorkshopConfigCategory } from 'shared';
@@ -29,15 +30,18 @@ function AssignSelectField({
   onChange: (v: string) => void;
   options: Array<{ value: string; label: string }>;
 }) {
+  const { t } = useTranslation('orders');
   return (
     <div>
-      <Label className="text-xs text-muted-foreground">{label} (tùy chọn)</Label>
+      <Label className="text-xs text-muted-foreground">
+        {label} {t('dialogs.assignFactory.optionalSuffix')}
+      </Label>
       <select
         value={value}
         onChange={(e) => onChange(e.target.value)}
         className="mt-1 w-full rounded-md border border-input bg-background px-2 py-1.5 text-xs focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
       >
-        <option value="">— Không gán —</option>
+        <option value="">{t('dialogs.assignFactory.noneOption')}</option>
         {options.map((o) => (
           <option key={o.value} value={o.value}>
             {o.label}
@@ -70,6 +74,7 @@ export function AssignFactoryDialog({
   single?: WorkshopOrderRow;
   onSuccess: () => void;
 }) {
+  const { t } = useTranslation('orders');
   const [factoryId, setFactoryId] = useState('');
   const [fabricType, setFabricType] = useState('');
   const [machineTypeId, setMachineTypeId] = useState('');
@@ -118,7 +123,7 @@ export function AssignFactoryDialog({
 
   const submit = async () => {
     if (!factoryId) {
-      toast.error('Chọn xưởng');
+      toast.error(t('dialogs.assignFactory.chooseFactory'));
       return;
     }
     try {
@@ -133,9 +138,9 @@ export function AssignFactoryDialog({
       });
       const data = res.data?.data || { matched: 0, modified: 0 };
       if (data.modified === 0) {
-        toast.warning('Không có đơn nào được cập nhật (có thể đã được gán từ trước).');
+        toast.warning(t('dialogs.assignFactory.noUpdate'));
       } else {
-        toast.success(`Đã gán ${data.modified}/${data.matched} đơn`);
+        toast.success(t('dialogs.assignFactory.assignedMsg', { modified: data.modified, matched: data.matched }));
       }
       onSuccess();
     } catch (err) {
@@ -166,7 +171,9 @@ export function AssignFactoryDialog({
       <DialogContent className="max-w-lg">
         <DialogHeader>
           <DialogTitle>
-            {single ? `Gán xưởng cho đơn ${single.productionId}` : `Gán xưởng cho ${ids.length} đơn đã chọn`}
+            {single
+              ? t('dialogs.assignFactory.titleSingle', { productionId: single.productionId })
+              : t('dialogs.assignFactory.titleBulk', { count: ids.length })}
           </DialogTitle>
         </DialogHeader>
 
@@ -175,24 +182,24 @@ export function AssignFactoryDialog({
             <div className="rounded-md border border-border bg-muted/30 p-2.5 text-xs space-y-1">
               <div className="flex flex-wrap items-center gap-x-3 gap-y-1">
                 <span>
-                  <span className="text-muted-foreground">ID:</span>{' '}
+                  <span className="text-muted-foreground">{t('dialogs.assignFactory.labelId')}</span>{' '}
                   <span className="font-mono font-semibold">{single.productionId}</span>
                 </span>
                 {single.type && (
                   <span>
-                    <span className="text-muted-foreground">Sản phẩm:</span>{' '}
+                    <span className="text-muted-foreground">{t('dialogs.assignFactory.labelProduct')}</span>{' '}
                     <span className="font-semibold">{single.type}</span>
                   </span>
                 )}
                 {single.size && (
                   <span>
-                    <span className="text-muted-foreground">Size:</span>{' '}
+                    <span className="text-muted-foreground">{t('dialogs.assignFactory.labelSize')}</span>{' '}
                     <span className="font-semibold">{single.size}</span>
                   </span>
                 )}
                 {(single as unknown as { quantity?: number }).quantity != null && (
                   <span>
-                    <span className="text-muted-foreground">SL:</span>{' '}
+                    <span className="text-muted-foreground">{t('dialogs.assignFactory.labelQty')}</span>{' '}
                     <span className="font-semibold tabular-nums">
                       {(single as unknown as { quantity?: number }).quantity}
                     </span>
@@ -201,7 +208,7 @@ export function AssignFactoryDialog({
               </div>
               {designLinks.length > 0 && (
                 <div className="pt-1">
-                  <span className="text-muted-foreground">Design:</span>{' '}
+                  <span className="text-muted-foreground">{t('dialogs.assignFactory.labelDesign')}</span>{' '}
                   {designLinks.map((d, i) => (
                     <a
                       key={i}
@@ -220,14 +227,14 @@ export function AssignFactoryDialog({
 
           <div>
             <Label className="text-xs">
-              Xưởng <span className="text-rose-600">*</span>
+              {t('dialogs.assignFactory.factoryLabel')} <span className="text-rose-600">*</span>
             </Label>
             <select
               value={factoryId}
               onChange={(e) => setFactoryId(e.target.value)}
               className="mt-1 w-full rounded-md border border-input bg-background px-2 py-2 text-sm focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
             >
-              <option value="">— Chọn xưởng —</option>
+              <option value="">{t('dialogs.assignFactory.chooseFactoryPlaceholder')}</option>
               {factories.map((f) => (
                 <option key={f._id} value={f._id}>
                   {f.shortName ? `${f.shortName} · ${f.name}` : f.name}
@@ -238,13 +245,13 @@ export function AssignFactoryDialog({
 
           <div className="grid grid-cols-2 gap-3">
             <AssignSelectField
-              label="Loại vải"
+              label={t('dialogs.assignFactory.fabricLabel')}
               value={fabricType}
               onChange={setFabricType}
               options={fabricOptions.map((o) => ({ value: o.code, label: o.name || o.code }))}
             />
             <AssignSelectField
-              label="Phòng"
+              label={t('dialogs.assignFactory.roomLabel')}
               value={machineTypeId}
               onChange={setMachineTypeId}
               options={machineTypes.map((m) => ({
@@ -253,13 +260,13 @@ export function AssignFactoryDialog({
               }))}
             />
             <AssignSelectField
-              label="Máy"
+              label={t('dialogs.assignFactory.machineLabel')}
               value={machineNumber}
               onChange={setMachineNumber}
               options={machineOptions.map((o) => ({ value: o.code, label: o.name || o.code }))}
             />
             <AssignSelectField
-              label="Tool"
+              label={t('dialogs.assignFactory.toolLabel')}
               value={toolResult}
               onChange={setToolResult}
               options={toolOptions.map((o) => ({ value: o.code, label: o.name || o.code }))}
@@ -267,18 +274,17 @@ export function AssignFactoryDialog({
           </div>
 
           <p className="text-[10px] text-muted-foreground leading-relaxed">
-            Chỉ <strong>Xưởng</strong> là bắt buộc. 4 trường còn lại có thể bỏ trống để gán sau qua bảng đơn hàng. Đơn
-            đã có xưởng từ trước sẽ bị bỏ qua (dùng "Chuyển xưởng" thay thế).
+            <Trans i18nKey="dialogs.assignFactory.footerNote" ns="orders" components={{ strong: <strong /> }} />
           </p>
         </div>
 
         <DialogFooter>
           <Button variant="outline" onClick={() => onOpenChange(false)} disabled={saving}>
-            Hủy
+            {t('common:actions.cancel')}
           </Button>
           <Button onClick={submit} disabled={saving || !factoryId}>
             {saving ? <Spinner size={13} /> : <MapPin size={13} />}
-            Gán xưởng
+            {t('dialogs.assignFactory.submitBtn')}
           </Button>
         </DialogFooter>
       </DialogContent>

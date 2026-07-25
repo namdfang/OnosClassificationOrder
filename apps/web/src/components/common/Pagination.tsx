@@ -1,4 +1,5 @@
 import React from 'react';
+import { useTranslation } from 'react-i18next';
 import { ChevronLeft, ChevronRight, ChevronsLeft, ChevronsRight } from 'lucide-react';
 
 import { Button } from '@/components/ui/button';
@@ -22,6 +23,7 @@ export function Pagination({
   onChange,
   className,
 }: PaginationProps) {
+  const { t } = useTranslation('common');
   const totalPages = Math.max(1, Math.ceil(total / pageSize));
   const safePage = Math.min(Math.max(1, page), totalPages);
   const from = total === 0 ? 0 : (safePage - 1) * pageSize + 1;
@@ -43,7 +45,7 @@ export function Pagination({
   return (
     <div className={cn('flex items-center justify-between gap-3 flex-wrap', className)}>
       <p className="text-xs text-muted-foreground">
-        {total === 0 ? 'Không có kết quả' : `Hiển thị ${from}–${to} / ${total}`}
+        {total === 0 ? t('pagination.noResults') : t('pagination.showing', { from, to, total })}
       </p>
 
       <div className="flex items-center gap-1.5">
@@ -54,7 +56,7 @@ export function Pagination({
         >
           {pageSizeOptions.map((s) => (
             <option key={s} value={s}>
-              {s}/trang
+              {t('pagination.perPage', { size: s })}
             </option>
           ))}
         </select>

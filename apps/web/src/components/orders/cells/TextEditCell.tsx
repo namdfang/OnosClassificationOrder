@@ -1,4 +1,5 @@
 import React, { useEffect, useRef, useState } from 'react';
+import { useTranslation } from 'react-i18next';
 import type { OrderWorkshopField } from 'shared';
 import { toast } from 'sonner';
 
@@ -26,6 +27,7 @@ interface Props {
  * Shows a small spinner inside the input while saving.
  */
 export function TextEditCell({ orderId, field, value, canEdit, onUpdated, tooltipLabel }: Props) {
+  const { t } = useTranslation('orders');
   const [draft, setDraft] = useState(value || '');
   const [saving, setSaving] = useState(false);
   const inputRef = useRef<HTMLInputElement>(null);
@@ -41,7 +43,7 @@ export function TextEditCell({ orderId, field, value, canEdit, onUpdated, toolti
     try {
       setSaving(true);
       await RepositoryRemote.order.updateField(orderId, { field, value: trimmed || null });
-      toast.success('Đã lưu');
+      toast.success(t('cells.textEdit.saved'));
       onUpdated?.(trimmed || null);
     } catch (err) {
       handleAxiosError(err);

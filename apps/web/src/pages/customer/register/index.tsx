@@ -1,6 +1,8 @@
-import React, { useState } from 'react';
+import React, { useMemo, useState } from 'react';
 import { useForm } from 'react-hook-form';
+import { useTranslation } from 'react-i18next';
 import { Link, useNavigate } from 'react-router-dom';
+import type { TFunction } from 'i18next';
 import { Lock, Mail, Phone, User } from 'lucide-react';
 import { toast } from 'sonner';
 import { z } from 'zod';
@@ -17,19 +19,23 @@ import { PATHS } from '../../../constants/paths';
 import { RepositoryRemote } from '../../../services';
 import { handleAxiosError } from '../../../utils';
 
-const registerSchema = z.object({
-  userEmail: z.string().min(1, 'Email là bắt buộc').email('Email không hợp lệ'),
-  password: z.string().min(6, 'Mật khẩu tối thiểu 6 ký tự'),
-  fullName: z.string().optional(),
-  phone: z.string().optional(),
-});
+function buildRegisterSchema(t: TFunction<'customerPortal'>) {
+  return z.object({
+    userEmail: z.string().min(1, t('register.validation.emailRequired')).email(t('register.validation.emailInvalid')),
+    password: z.string().min(6, t('register.validation.passwordMin')),
+    fullName: z.string().optional(),
+    phone: z.string().optional(),
+  });
+}
 
-type RegisterFormValues = z.infer<typeof registerSchema>;
+type RegisterFormValues = z.infer<ReturnType<typeof buildRegisterSchema>>;
 
 function CustomerRegister() {
   const navigate = useNavigate();
+  const { t } = useTranslation('customerPortal');
   const [loading, setLoading] = useState(false);
 
+  const registerSchema = useMemo(() => buildRegisterSchema(t), [t]);
   const form = useForm<RegisterFormValues>({
     resolver: zodResolver(registerSchema),
     defaultValues: { userEmail: '', password: '', fullName: '', phone: '' },
@@ -39,7 +45,7 @@ function CustomerRegister() {
     try {
       setLoading(true);
       await RepositoryRemote.customerAuth.register(values);
-      toast.success('Đăng ký thành công, vui lòng đăng nhập');
+      toast.success(t('register.success'));
       navigate(PATHS.CUSTOMER_LOGIN);
     } catch (error) {
       handleAxiosError(error);
@@ -53,8 +59,8 @@ function CustomerRegister() {
       <div className="w-full max-w-[440px]">
         <div className="text-center mb-8">
           <img src={logoUrl} alt="Logo" className="h-10 w-auto object-contain mx-auto mb-5" />
-          <h1 className="text-2xl font-bold text-foreground tracking-tight">Đăng ký Customer Portal</h1>
-          <p className="text-sm text-muted-foreground mt-1.5">Tạo tài khoản để đặt đơn và theo dõi tiến trình</p>
+          <h1 className="text-2xl font-bold text-foreground tracking-tight">{t('register.title')}</h1>
+          <p className="text-sm text-muted-foreground mt-1.5">{t('register.subtitle')}</p>
         </div>
 
         <div className="bg-card rounded-2xl border border-border p-7 shadow-sm">
@@ -65,11 +71,11 @@ function CustomerRegister() {
                 name="userEmail"
                 render={({ field }) => (
                   <FormItem>
-                    <FormLabel>Email</FormLabel>
+                    <FormLabel>{t('register.email')}</FormLabel>
                     <FormControl>
                       <div className="relative">
                         <Mail size={15} className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground" />
-                        <Input placeholder="you@example.com" className="pl-9 h-10" {...field} />
+                        <Input placeholder={t('register.emailPlaceholder')} className="pl-9 h-10" {...field} />
                       </div>
                     </FormControl>
                     <FormMessage />
@@ -82,11 +88,16 @@ function CustomerRegister() {
                 name="password"
                 render={({ field }) => (
                   <FormItem>
-                    <FormLabel>Mật khẩu</FormLabel>
+                    <FormLabel>{t('register.password')}</FormLabel>
                     <FormControl>
                       <div className="relative">
                         <Lock size={15} className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground" />
-                        <Input type="password" placeholder="Tối thiểu 6 ký tự" className="pl-9 h-10" {...field} />
+                        <Input
+                          type="password"
+                          placeholder={t('register.passwordPlaceholder')}
+                          className="pl-9 h-10"
+                          {...field}
+                        />
                       </div>
                     </FormControl>
                     <FormMessage />
@@ -99,11 +110,11 @@ function CustomerRegister() {
                 name="fullName"
                 render={({ field }) => (
                   <FormItem>
-                    <FormLabel>Họ tên (không bắt buộc)</FormLabel>
+                    <FormLabel>{t('register.fullName')}</FormLabel>
                     <FormControl>
                       <div className="relative">
                         <User size={15} className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground" />
-                        <Input placeholder="Nguyễn Văn A" className="pl-9 h-10" {...field} />
+                        <Input placeholder={t('register.fullNamePlaceholder')} className="pl-9 h-10" {...field} />
                       </div>
                     </FormControl>
                     <FormMessage />
@@ -116,11 +127,11 @@ function CustomerRegister() {
                 name="phone"
                 render={({ field }) => (
                   <FormItem>
-                    <FormLabel>Số điện thoại (không bắt buộc)</FormLabel>
+                    <FormLabel>{t('register.phone')}</FormLabel>
                     <FormControl>
                       <div className="relative">
                         <Phone size={15} className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground" />
-                        <Input placeholder="09xx xxx xxx" className="pl-9 h-10" {...field} />
+                        <Input placeholder={t('register.phonePlaceholder')} className="pl-9 h-10" {...field} />
                       </div>
                     </FormControl>
                     <FormMessage />
@@ -130,16 +141,16 @@ function CustomerRegister() {
 
               <Button type="submit" disabled={loading} className="w-full h-10">
                 {loading && <Spinner size={14} className="text-primary-foreground" />}
-                Đăng ký
+                {t('register.submit')}
               </Button>
             </form>
           </Form>
         </div>
 
         <p className="text-center text-sm text-muted-foreground mt-6">
-          Đã có tài khoản?{' '}
+          {t('register.haveAccount')}{' '}
           <Link to={PATHS.CUSTOMER_LOGIN} className="text-primary hover:underline">
-            Đăng nhập
+            {t('register.signIn')}
           </Link>
         </p>
       </div>

@@ -1,4 +1,5 @@
 import React, { useState } from 'react';
+import { useTranslation } from 'react-i18next';
 import { Check } from 'lucide-react';
 
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
@@ -33,6 +34,7 @@ interface Props {
  * row at the top so workers can unset a value.
  */
 export function SelectPopover({ options, value, onSelect, triggerClassName, children, disabled, renderOption }: Props) {
+  const { t } = useTranslation('orders');
   const [open, setOpen] = useState(false);
 
   const handleSelect = (code: string | null) => {
@@ -65,7 +67,7 @@ export function SelectPopover({ options, value, onSelect, triggerClassName, chil
           )}
         >
           {!value && <Check size={12} />}
-          <span className={!value ? '' : 'ml-[18px]'}>— Bỏ chọn —</span>
+          <span className={!value ? '' : 'ml-[18px]'}>{t('cells.selectPopover.clear')}</span>
         </button>
         <div className="max-h-72 overflow-y-auto">
           {options.map((it) => {
@@ -85,7 +87,9 @@ export function SelectPopover({ options, value, onSelect, triggerClassName, chil
               </button>
             );
           })}
-          {options.length === 0 && <p className="text-xs text-muted-foreground text-center py-3">Chưa có lựa chọn</p>}
+          {options.length === 0 && (
+            <p className="text-xs text-muted-foreground text-center py-3">{t('cells.selectPopover.noOptions')}</p>
+          )}
         </div>
       </PopoverContent>
     </Popover>

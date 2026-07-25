@@ -1,4 +1,5 @@
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
+import { useTranslation } from 'react-i18next';
 import { History, ListChecks } from 'lucide-react';
 
 import { RepositoryRemote } from '@/services';
@@ -11,6 +12,7 @@ import { OrderLogTimelineDialog } from '@/components/orders/OrderLogTimelineDial
 import {
   buildColGroups,
   GroupCellContent,
+  groupTitle,
   WORKSHOP_COLS,
   type WorkshopOrderRow,
   type WorkshopRenderCtx,
@@ -54,6 +56,7 @@ interface Props {
  * cục bộ) + xem lịch sử + preview ảnh, không bulk/chuyển xưởng.
  */
 export function OrderListDialog({ open, onClose, title, query, ids }: Props) {
+  const { t } = useTranslation('orders');
   const idsKey = ids && ids.length ? ids.join(',') : null;
   const { canViewField, canEditField, roleName } = usePermission();
   const [rows, setRows] = useState<WorkshopOrderRow[]>([]);
@@ -102,7 +105,7 @@ export function OrderListDialog({ open, onClose, title, query, ids }: Props) {
   const patchRow = (id: string, p: Partial<WorkshopOrderRow>) =>
     setRows((prev) => prev.map((r) => (r._id === id ? { ...r, ...p } : r)));
   const openPreview = (url: string, t: string, originalUrl?: string) => setPreview({ url, originalUrl, title: t });
-  const ctx: WorkshopRenderCtx = { canEditField, patchRow, openPreview };
+  const ctx: WorkshopRenderCtx = { canEditField, patchRow, openPreview, t };
   const isNoTool = useIsNoTool();
 
   return (
@@ -113,7 +116,7 @@ export function OrderListDialog({ open, onClose, title, query, ids }: Props) {
             <DialogTitle className="flex items-center gap-2 text-sm">
               <ListChecks size={16} className="text-indigo-600" />
               {title}
-              <span className="text-xs font-normal text-muted-foreground">— {total} đơn</span>
+              <span className="text-xs font-normal text-muted-foreground">— {t('listDialog.orderCount', { count: total })}</span>
               {loading && <Spinner size={12} className="text-muted-foreground" />}
             </DialogTitle>
           </DialogHeader>
@@ -132,10 +135,10 @@ export function OrderListDialog({ open, onClose, title, query, ids }: Props) {
                 <Table>
                   <TableHeader className="sticky top-0 z-20 bg-card">
                     <TableRow>
-                      <TableHead className="min-w-[150px]">Xưởng (đang / gốc)</TableHead>
+                      <TableHead className="min-w-[150px]">{t('listDialog.factoryHeader')}</TableHead>
                       {colGroups.map((g) => (
                         <TableHead key={g.key} className="whitespace-nowrap text-xs" style={{ minWidth: g.width }}>
-                          {g.title}
+                          {groupTitle(t, g.key, g.title)}
                         </TableHead>
                       ))}
                       <TableHead className="w-12 sticky right-0 z-20 bg-card"></TableHead>
@@ -155,7 +158,7 @@ export function OrderListDialog({ open, onClose, title, query, ids }: Props) {
                           colSpan={colGroups.length + 2}
                           className="text-center py-10 text-sm text-muted-foreground"
                         >
-                          Không có đơn nào phù hợp
+                          {t('listDialog.noMatchingOrders')}
                         </TableCell>
                       </TableRow>
                     )}
@@ -179,7 +182,7 @@ export function OrderListDialog({ open, onClose, title, query, ids }: Props) {
                                 </Badge>
                               ) : (
                                 <Badge variant="outline" className="w-fit">
-                                  Chưa map
+                                  {t('listDialog.notMapped')}
                                 </Badge>
                               )}
                             </div>
@@ -198,7 +201,7 @@ export function OrderListDialog({ open, onClose, title, query, ids }: Props) {
                             <Button
                               variant="ghost"
                               size="icon"
-                              title="Lịch sử"
+                              title={t('listDialog.history')}
                               onClick={() => setHistoryTarget({ id: row._id, productionId: row.productionId })}
                             >
                               <History size={13} className="text-muted-foreground" />

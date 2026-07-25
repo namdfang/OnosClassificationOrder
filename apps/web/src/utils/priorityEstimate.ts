@@ -1,3 +1,4 @@
+import type { TFunction } from 'i18next';
 import type { LifecycleStageKey, OrderPriority } from 'shared';
 import { ORDER_PRIORITY_STAGE_ESTIMATE_HOURS } from 'shared';
 
@@ -18,23 +19,47 @@ export function getStageDeadline(
   return new Date(new Date(enteredAt).getTime() + hours * 60 * 60 * 1000);
 }
 
-/** "2h30p" / "45p" / "1ng 3h" — dùng cho chip đếm ngược, không lộ số 0 thừa. */
-function formatDuration(ms: number): string {
+/**
+ * "2h30p" / "45p" / "1ng 3h" — dùng cho chip đếm ngược, không lộ số 0 thừa.
+ * `t` optional — không truyền vẫn fallback tiếng Việt hard code như cũ (giữ
+ * tương thích cho các trang chưa convert i18n). Luôn tra namespace `orders`
+ * qua `{ ns: 'orders' }` bất kể namespace mặc định của `t` truyền vào, vì
+ * caller có thể đến từ bất kỳ trang nào (dashboard/toolCheckWorkflow/...).
+ */
+function formatDuration(ms: number, t?: TFunction): string {
+  const dayUnit = t ? t('priorityEstimate.dayUnit', { ns: 'orders' }) : 'ng';
+  const hourUnit = t ? t('priorityEstimate.hourUnit', { ns: 'orders' }) : 'h';
+  const minuteUnit = t ? t('priorityEstimate.minuteUnit', { ns: 'orders' }) : 'p';
+  const lessThanMinute = t ? t('priorityEstimate.lessThanMinute', { ns: 'orders' }) : '<1p';
   const totalMinutes = Math.floor(ms / 60_000);
   const days = Math.floor(totalMinutes / 1440);
   const hours = Math.floor((totalMinutes % 1440) / 60);
   const minutes = totalMinutes % 60;
-  if (days > 0) return `${days}ng ${hours}h`;
-  if (hours > 0) return `${hours}h${String(minutes).padStart(2, '0')}p`;
-  if (minutes > 0) return `${minutes}p`;
-  return '<1p';
+  if (days > 0) return `${days}${dayUnit} ${hours}${hourUnit}`;
+  if (hours > 0) return `${hours}${hourUnit}${String(minutes).padStart(2, '0')}${minuteUnit}`;
+  if (minutes > 0) return `${minutes}${minuteUnit}`;
+  return lessThanMinute;
 }
 
-/** Đếm ngược tới hạn — "Còn 2h30p" hoặc "Quá hạn 45p" (đỏ) khi đã qua `deadline`. */
-export function formatCountdown(deadline: Date, now: Date = new Date()): { text: string; overdue: boolean } {
+/**
+ * Đếm ngược tới hạn — "Còn 2h30p" hoặc "Quá hạn 45p" (đỏ) khi đã qua `deadline`.
+ * `t` optional — xem ghi chú `formatDuration`.
+ */
+export function formatCountdown(
+  deadline: Date,
+  now: Date = new Date(),
+  t?: TFunction,
+): { text: string; overdue: boolean } {
   const diffMs = deadline.getTime() - now.getTime();
   const overdue = diffMs <= 0;
-  return { text: `${overdue ? 'Quá hạn' : 'Còn'} ${formatDuration(Math.abs(diffMs))}`, overdue };
+  const prefix = t
+    ? overdue
+      ? t('priorityEstimate.overdue', { ns: 'orders' })
+      : t('priorityEstimate.remaining', { ns: 'orders' })
+    : overdue
+      ? 'Quá hạn'
+      : 'Còn';
+  return { text: `${prefix} ${formatDuration(Math.abs(diffMs), t)}`, overdue };
 }
 
 /** Đơn tối thiểu cần để suy ra bước hiện tại đang active (workshop table). */

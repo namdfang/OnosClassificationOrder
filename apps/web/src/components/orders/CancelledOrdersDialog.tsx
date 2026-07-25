@@ -1,4 +1,5 @@
 import React, { useEffect, useState } from 'react';
+import { useTranslation } from 'react-i18next';
 import dayjs from 'dayjs';
 import { Ban } from 'lucide-react';
 import type { CancelledOrderRow } from 'shared';
@@ -22,6 +23,7 @@ interface Props {
 }
 
 export function CancelledOrdersDialog({ open, onClose, from, to, factoryId }: Props) {
+  const { t } = useTranslation('orders');
   const [rows, setRows] = useState<CancelledOrderRow[]>([]);
   const [total, setTotal] = useState(0);
   const [loading, setLoading] = useState(false);
@@ -55,10 +57,11 @@ export function CancelledOrdersDialog({ open, onClose, from, to, factoryId }: Pr
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2">
             <Ban size={16} className="text-rose-600" />
-            Đơn đã hủy
+            {t('dialogs.cancelledOrders.title')}
             {total > 0 && (
               <span className="text-xs font-normal text-muted-foreground">
-                — {total} đơn{rows.length < total ? ` (hiện ${rows.length} mới nhất)` : ''}
+                {t('dialogs.cancelledOrders.countSuffix', { total })}
+                {rows.length < total ? t('dialogs.cancelledOrders.showingLatest', { count: rows.length }) : ''}
               </span>
             )}
           </DialogTitle>
@@ -69,18 +72,20 @@ export function CancelledOrdersDialog({ open, onClose, from, to, factoryId }: Pr
             <Spinner size={20} />
           </div>
         ) : rows.length === 0 ? (
-          <p className="text-sm text-muted-foreground text-center py-12">Không có đơn hủy trong khoảng đã chọn.</p>
+          <p className="text-sm text-muted-foreground text-center py-12">{t('dialogs.cancelledOrders.empty')}</p>
         ) : (
           <div className="max-h-[60vh] overflow-auto rounded-md border border-border">
             <table className="w-full text-[13px]">
               <thead className="sticky top-0 bg-muted/60 backdrop-blur text-[11px] text-muted-foreground">
                 <tr>
-                  <th className="text-left px-3 py-2 font-medium">Production ID</th>
-                  <th className="text-left px-2 py-2 font-medium">Sản phẩm</th>
-                  <th className="text-left px-2 py-2 font-medium">Size / Màu</th>
-                  <th className="text-left px-2 py-2 font-medium">Công đoạn</th>
-                  <th className="text-left px-2 py-2 font-medium">Lý do hủy</th>
-                  <th className="text-left px-2 py-2 font-medium whitespace-nowrap">Ngày hủy</th>
+                  <th className="text-left px-3 py-2 font-medium">{t('dialogs.cancelledOrders.colProductionId')}</th>
+                  <th className="text-left px-2 py-2 font-medium">{t('dialogs.cancelledOrders.colProduct')}</th>
+                  <th className="text-left px-2 py-2 font-medium">{t('dialogs.cancelledOrders.colSizeColor')}</th>
+                  <th className="text-left px-2 py-2 font-medium">{t('dialogs.cancelledOrders.colStage')}</th>
+                  <th className="text-left px-2 py-2 font-medium">{t('dialogs.cancelledOrders.colReason')}</th>
+                  <th className="text-left px-2 py-2 font-medium whitespace-nowrap">
+                    {t('dialogs.cancelledOrders.colCancelledAt')}
+                  </th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-border/60">

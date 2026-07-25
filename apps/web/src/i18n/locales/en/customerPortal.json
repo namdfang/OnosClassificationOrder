@@ -1,0 +1,101 @@
+{
+  "layout": {
+    "brand": "Customer Portal",
+    "catalog": "Product catalog",
+    "newOrder": "Place new order",
+    "logout": "Sign out"
+  },
+  "login": {
+    "title": "Sign in to Customer Portal",
+    "subtitle": "Track and manage your orders",
+    "email": "Email",
+    "emailPlaceholder": "you@example.com",
+    "password": "Password",
+    "passwordPlaceholder": "••••••••",
+    "showPassword": "Show password",
+    "hidePassword": "Hide password",
+    "rememberMe": "Remember me",
+    "submit": "Sign in",
+    "success": "Signed in successfully",
+    "noAccount": "Don't have an account?",
+    "registerNow": "Register now",
+    "validation": {
+      "emailRequired": "Email is required",
+      "emailInvalid": "Invalid email",
+      "passwordRequired": "Password is required"
+    }
+  },
+  "register": {
+    "title": "Register for Customer Portal",
+    "subtitle": "Create an account to place orders and track progress",
+    "email": "Email",
+    "emailPlaceholder": "you@example.com",
+    "password": "Password",
+    "passwordPlaceholder": "At least 6 characters",
+    "fullName": "Full name (optional)",
+    "fullNamePlaceholder": "Your name",
+    "phone": "Phone number (optional)",
+    "phonePlaceholder": "09xx xxx xxx",
+    "submit": "Register",
+    "success": "Registered successfully, please sign in",
+    "haveAccount": "Already have an account?",
+    "signIn": "Sign in",
+    "validation": {
+      "emailRequired": "Email is required",
+      "emailInvalid": "Invalid email",
+      "passwordMin": "Password must be at least 6 characters"
+    }
+  },
+  "orders": {
+    "title": "Your orders",
+    "empty": "You don't have any orders yet.",
+    "placeFirst": "Place your first order",
+    "columns": {
+      "code": "Order code",
+      "product": "Product",
+      "colorSize": "Color / Size",
+      "quantity": "Qty",
+      "status": "Status",
+      "orderDate": "Order date"
+    },
+    "statusCancelled": "Cancelled",
+    "statusProcessing": "Processing"
+  },
+  "orderNew": {
+    "title": "Place new order",
+    "type": "Product type",
+    "typePlaceholder": "e.g. T-shirt, Mug...",
+    "color": "Color",
+    "colorPlaceholder": "Black",
+    "size": "Size",
+    "sizePlaceholder": "M",
+    "quantity": "Quantity",
+    "mockupUrl": "Mockup/design image link (optional)",
+    "mockupUrlPlaceholder": "https://...",
+    "printMethod": "Print method (optional)",
+    "printMethodPlaceholder": "DTG, DTF...",
+    "note": "Note (optional)",
+    "notePlaceholder": "Additional note for this order...",
+    "submit": "Place order",
+    "success": "Order placed successfully — order code {{code}}",
+    "validation": {
+      "typeRequired": "Product type is required"
+    }
+  },
+  "track": {
+    "notFound": "This order could not be found.",
+    "cancelled": "Cancelled",
+    "completed": "Completed",
+    "processing": "Processing",
+    "progressTitle": "Order progress",
+    "quantityShort": "Qty"
+  },
+  "catalog": {
+    "title": "Product catalog",
+    "subtitle": "Reference prices — copy the product name to fill in the order form.",
+    "searchPlaceholder": "Search products…",
+    "empty": "No products in the catalog yet.",
+    "copyProductName": "product name",
+    "moreVariations": "+ {{count}} more variations"
+  }
+}

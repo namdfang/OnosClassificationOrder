@@ -1,4 +1,5 @@
 import React, { useState } from 'react';
+import { Trans, useTranslation } from 'react-i18next';
 import { Upload } from 'lucide-react';
 import { toast } from 'sonner';
 
@@ -73,13 +74,14 @@ interface ImportProductConfigDialogProps {
 }
 
 export function ImportProductConfigDialog({ open, onOpenChange, onSuccess }: ImportProductConfigDialogProps) {
+  const { t } = useTranslation(['products', 'common']);
   const [text, setText] = useState('');
   const [loading, setLoading] = useState(false);
 
   const handleImport = async () => {
     const rows = parseRows(text);
     if (rows.length === 0) {
-      toast.error('Không parse được dòng nào. Kiểm tra format (đủ 7 cột, cách nhau bằng Tab).');
+      toast.error(t('importDialog.parseError'));
       return;
     }
 
@@ -87,7 +89,7 @@ export function ImportProductConfigDialog({ open, onOpenChange, onSuccess }: Imp
       setLoading(true);
       const resp = await RepositoryRemote.productConfig.importProductConfigs({ rows });
       const { imported, updated, skipped } = resp.data.data;
-      toast.success(`Imported ${imported}, updated ${updated}, ${skipped.length} cảnh báo`);
+      toast.success(t('importDialog.importSuccess', { imported, updated, skippedCount: skipped.length }));
       if (skipped.length > 0) {
         console.warn('Import warnings:', skipped);
       }
@@ -105,12 +107,9 @@ export function ImportProductConfigDialog({ open, onOpenChange, onSuccess }: Imp
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="max-w-3xl">
         <DialogHeader>
-          <DialogTitle>Import Product Config</DialogTitle>
+          <DialogTitle>{t('importDialog.title')}</DialogTitle>
           <DialogDescription>
-            Paste dữ liệu từ Excel (tab-separated). 7 cột theo thứ tự: <b>Tên đầy đủ</b> — <b>Tên viết tắt</b> —{' '}
-            <b>Máy</b> (số máy, vd 94/27, để trống = không có tool) — <b>Xưởng</b> (vd "MÊ LINH") — <b>Loại vải</b>{' '}
-            (POLY 2 DA, MÈ 64, LỤA 4B, LỤA VÂN GỖ…) — <b>Kết quả Tool</b> (để trống = có tool; "không tool" = không có
-            tool) — <b>Phòng</b> (loại máy in, vd "IN và CẮT LASER"). Hệ thống match label theo tên (case-insensitive).
+            <Trans t={t} i18nKey="importDialog.description" components={{ b: <b /> }} />
           </DialogDescription>
         </DialogHeader>
 
@@ -122,16 +121,16 @@ export function ImportProductConfigDialog({ open, onOpenChange, onSuccess }: Imp
             rows={12}
             className="font-mono text-xs"
           />
-          <p className="text-xs text-muted-foreground">{parseRows(text).length} dòng hợp lệ sẽ được import.</p>
+          <p className="text-xs text-muted-foreground">{t('importDialog.validRows', { count: parseRows(text).length })}</p>
         </div>
 
         <DialogFooter>
           <Button variant="outline" onClick={() => onOpenChange(false)} disabled={loading}>
-            Hủy
+            {t('common:actions.cancel')}
           </Button>
           <Button onClick={handleImport} disabled={loading || !text.trim()}>
             {loading ? <Spinner size={14} className="text-primary-foreground" /> : <Upload size={14} />}
-            Import
+            {t('common:actions.import')}
           </Button>
         </DialogFooter>
       </DialogContent>

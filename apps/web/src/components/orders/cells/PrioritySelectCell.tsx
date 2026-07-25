@@ -1,5 +1,7 @@
-import React, { useState } from 'react';
-import { ORDER_PRIORITIES, ORDER_PRIORITY_LABELS, OrderPriority } from 'shared';
+import React, { useMemo, useState } from 'react';
+import { useTranslation } from 'react-i18next';
+import type { TFunction } from 'i18next';
+import { ORDER_PRIORITIES, OrderPriority } from 'shared';
 import { toast } from 'sonner';
 
 import { RepositoryRemote } from '@/services';
@@ -11,35 +13,34 @@ import { cn } from '@/utils/cn';
 
 import { type SelectOption, SelectPopover } from './SelectPopover';
 
-export const PRIORITY_META: Record<OrderPriority, { label: string; cls: string; dot: string }> = {
-  [OrderPriority.Low]: {
-    label: ORDER_PRIORITY_LABELS[OrderPriority.Low],
-    cls: 'bg-blue-100 text-blue-700 dark:bg-blue-900/40 dark:text-blue-300',
-    dot: '#3b82f6',
-  },
-  [OrderPriority.Normal]: {
-    label: ORDER_PRIORITY_LABELS[OrderPriority.Normal],
-    cls: 'bg-amber-100 text-amber-700 dark:bg-amber-900/40 dark:text-amber-300',
-    dot: '#f59e0b',
-  },
-  [OrderPriority.High]: {
-    label: ORDER_PRIORITY_LABELS[OrderPriority.High],
-    cls: 'bg-rose-100 text-rose-700 dark:bg-rose-900/40 dark:text-rose-300',
-    dot: '#ef4444',
-  },
-};
-
-const PRIORITY_OPTIONS: SelectOption[] = ORDER_PRIORITIES.map((p) => ({
-  _id: String(p),
-  code: String(p),
-  name: PRIORITY_META[p].label,
-  color: PRIORITY_META[p].dot,
-}));
+export function buildPriorityMeta(
+  t: TFunction<'orders'>,
+): Record<OrderPriority, { label: string; cls: string; dot: string }> {
+  return {
+    [OrderPriority.Low]: {
+      label: t('priority.low'),
+      cls: 'bg-blue-100 text-blue-700 dark:bg-blue-900/40 dark:text-blue-300',
+      dot: '#3b82f6',
+    },
+    [OrderPriority.Normal]: {
+      label: t('priority.normal'),
+      cls: 'bg-amber-100 text-amber-700 dark:bg-amber-900/40 dark:text-amber-300',
+      dot: '#f59e0b',
+    },
+    [OrderPriority.High]: {
+      label: t('priority.high'),
+      cls: 'bg-rose-100 text-rose-700 dark:bg-rose-900/40 dark:text-rose-300',
+      dot: '#ef4444',
+    },
+  };
+}
 
 /** Badge đọc-only cho card Kanban — không có popover chỉnh sửa. */
 export function PriorityBadge({ priority }: { priority?: OrderPriority | number | null }) {
+  const { t } = useTranslation('orders');
+  const priorityMeta = useMemo(() => buildPriorityMeta(t), [t]);
   if (!priority) return null;
-  const meta = PRIORITY_META[priority as OrderPriority];
+  const meta = priorityMeta[priority as OrderPriority];
   if (!meta) return null;
   return (
     <span
@@ -66,8 +67,20 @@ interface Props {
  * PATCH qua `updateField` field `priority`.
  */
 export function PrioritySelectCell({ orderId, value, canEdit, onUpdated }: Props) {
+  const { t } = useTranslation('orders');
+  const priorityMeta = useMemo(() => buildPriorityMeta(t), [t]);
+  const priorityOptions: SelectOption[] = useMemo(
+    () =>
+      ORDER_PRIORITIES.map((p) => ({
+        _id: String(p),
+        code: String(p),
+        name: priorityMeta[p].label,
+        color: priorityMeta[p].dot,
+      })),
+    [priorityMeta],
+  );
   const [saving, setSaving] = useState(false);
-  const current = value ? PRIORITY_META[value as OrderPriority] : undefined;
+  const current = value ? priorityMeta[value as OrderPriority] : undefined;
 
   const handleSelect = async (newCode: string | null) => {
     const newValue = newCode ? Number(newCode) : null;
@@ -75,7 +88,11 @@ export function PrioritySelectCell({ orderId, value, canEdit, onUpdated }: Props
     try {
       setSaving(true);
       await RepositoryRemote.order.updateField(orderId, { field: 'priority', value: newCode });
-      toast.success(newValue ? `Đã đổi → ${PRIORITY_META[newValue as OrderPriority].label}` : 'Đã bỏ ưu tiên');
+      toast.success(
+        newValue
+          ? t('cells.changedTo', { name: priorityMeta[newValue as OrderPriority].label })
+          : t('cells.priority.cleared'),
+      );
       onUpdated?.(newValue);
     } catch (err) {
       handleAxiosError(err);
@@ -86,7 +103,7 @@ export function PrioritySelectCell({ orderId, value, canEdit, onUpdated }: Props
 
   const trigger = (
     <span
-      title={current?.label || 'Chưa chọn'}
+      title={current?.label || t('cells.notSelected')}
       className={cn(
         'inline-flex items-center gap-1 px-2 py-0.5 rounded text-[10px] font-medium border border-transparent whitespace-nowrap',
         current ? current.cls : 'bg-muted text-muted-foreground border-dashed border-border',
@@ -99,7 +116,7 @@ export function PrioritySelectCell({ orderId, value, canEdit, onUpdated }: Props
 
   return (
     <SelectPopover
-      options={PRIORITY_OPTIONS}
+      options={priorityOptions}
       value={value ? String(value) : undefined}
       onSelect={handleSelect}
       disabled={!canEdit || saving}

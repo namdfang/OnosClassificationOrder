@@ -1,4 +1,6 @@
 import React, { useMemo, useState } from 'react';
+import { Trans, useTranslation } from 'react-i18next';
+import type { TFunction } from 'i18next';
 import { CheckCircle2, Download, Flag, PauseCircle, PlayCircle, UserPlus, X } from 'lucide-react';
 import type { OrderWorkshopField, WorkshopConfigCategory } from 'shared';
 import { ORDER_PRIORITIES, ORDER_PRIORITY_LABELS, ORDER_WORKSHOP_FIELDS } from 'shared';
@@ -43,22 +45,24 @@ const FIELD_TO_CATEGORY: Record<OrderWorkshopField, WorkshopConfigCategory | nul
   priority: null,
 };
 
-const FIELD_LABEL: Record<OrderWorkshopField, string> = {
-  printStatus: 'Trạng thái in',
-  printStatusNote: 'Note trạng thái in',
-  toolResult: 'Kết quả Tool',
-  toolResultNote: 'Note kq Tool',
-  errorFile: 'File sửa lỗi',
-  errorFileNote: 'Ghi chú file lỗi',
-  assignee: 'Người thực hiện',
-  assigneeNote: 'Note người thực hiện',
-  fabricType: 'Loại vải',
-  machineNumber: 'Máy',
-  productionError: 'Lỗi xưởng',
-  productionErrorNote: 'Mô tả lỗi xưởng',
-  productionErrorSource: 'Loại lỗi (des/xưởng)',
-  priority: 'Ưu tiên',
-};
+function buildFieldLabel(t: TFunction<'orders'>): Record<OrderWorkshopField, string> {
+  return {
+    printStatus: t('bulkEdit.fieldLabels.printStatus'),
+    printStatusNote: t('bulkEdit.fieldLabels.printStatusNote'),
+    toolResult: t('bulkEdit.fieldLabels.toolResult'),
+    toolResultNote: t('bulkEdit.fieldLabels.toolResultNote'),
+    errorFile: t('bulkEdit.fieldLabels.errorFile'),
+    errorFileNote: t('bulkEdit.fieldLabels.errorFileNote'),
+    assignee: t('bulkEdit.fieldLabels.assignee'),
+    assigneeNote: t('bulkEdit.fieldLabels.assigneeNote'),
+    fabricType: t('bulkEdit.fieldLabels.fabricType'),
+    machineNumber: t('bulkEdit.fieldLabels.machineNumber'),
+    productionError: t('bulkEdit.fieldLabels.productionError'),
+    productionErrorNote: t('bulkEdit.fieldLabels.productionErrorNote'),
+    productionErrorSource: t('bulkEdit.fieldLabels.productionErrorSource'),
+    priority: t('bulkEdit.fieldLabels.priority'),
+  };
+}
 
 /** Bulk update dropdown SKIP assignee + priority — đã có nút/dialog riêng ("Gán design" / "Ưu tiên"). */
 const BULK_UPDATE_BLACKLIST: OrderWorkshopField[] = ['assignee', 'priority'];
@@ -70,6 +74,7 @@ interface Props {
 }
 
 export function BulkEditToolbar({ selectedIds, onClear, onApplied }: Props) {
+  const { t } = useTranslation('orders');
   const { canEditField, roleName } = usePermission();
   const byCategory = useWorkshopConfigStore((s) => s.byCategory);
   const resolveWorkshop = useWorkshopConfigStore((s) => s.resolve);
@@ -98,13 +103,13 @@ export function BulkEditToolbar({ selectedIds, onClear, onApplied }: Props) {
       const res = await RepositoryRemote.order.exportOrders('?ids=' + selectedIds.join(','));
       const data = (res.data?.data || []) as ExportableOrder[];
       if (data.length === 0) {
-        toast.warning('Không có đơn nào để xuất');
+        toast.warning(t('bulkEdit.noExport'));
         return;
       }
       const wb = buildDetailOnlyWorkbook(data, { resolve: resolveWorkshop });
       const stamp = new Date().toLocaleString('sv-SE', { hour12: false }).replace(/[: ]/g, '-');
       downloadWorkbook(`don-hang-chon-${stamp}.xlsx`, wb);
-      toast.success(`Đã xuất ${data.length} đơn`);
+      toast.success(t('bulkEdit.exportSuccess', { count: data.length }));
     } catch (err) {
       handleAxiosError(err);
     } finally {
@@ -117,7 +122,11 @@ export function BulkEditToolbar({ selectedIds, onClear, onApplied }: Props) {
       setHolding(true);
       const res = await RepositoryRemote.order.bulkHold({ ids: selectedIds, hold, reason });
       const { matched, modified } = res.data?.data || { matched: 0, modified: 0 };
-      toast.success(hold ? `Đã giữ ${modified}/${matched} đơn` : `Đã mở giữ ${modified}/${matched} đơn`);
+      toast.success(
+        hold
+          ? t('bulkEdit.holdSuccess', { modified, matched })
+          : t('bulkEdit.unholdSuccess', { modified, matched }),
+      );
       setHoldOpen(false);
       setHoldReason('');
       onApplied();
@@ -137,7 +146,7 @@ export function BulkEditToolbar({ selectedIds, onClear, onApplied }: Props) {
         value: priorityValue || null,
       });
       const { matched, modified } = res.data?.data || { matched: 0, modified: 0 };
-      toast.success(`Đã update ${modified}/${matched} đơn`);
+      toast.success(t('bulkEdit.updateSuccess', { modified, matched }));
       setPriorityOpen(false);
       setPriorityValue('');
       onApplied();
@@ -153,11 +162,12 @@ export function BulkEditToolbar({ selectedIds, onClear, onApplied }: Props) {
     [canEditField],
   );
 
+  const FIELD_LABEL = useMemo(() => buildFieldLabel(t), [t]);
   const category = field ? FIELD_TO_CATEGORY[field] : null;
   const options = category ? byCategory[category] : [];
 
   const handleConfirm = async () => {
-    if (!field) return toast.error('Chọn field');
+    if (!field) return toast.error(t('bulkEdit.chooseField'));
     const sendValue = category ? value : freeText;
     try {
       setSaving(true);
@@ -167,7 +177,7 @@ export function BulkEditToolbar({ selectedIds, onClear, onApplied }: Props) {
         value: sendValue || null,
       });
       const { matched, modified } = res.data?.data || { matched: 0, modified: 0 };
-      toast.success(`Đã update ${modified}/${matched} đơn`);
+      toast.success(t('bulkEdit.updateSuccess', { modified, matched }));
       setOpen(false);
       setField('');
       setValue('');
@@ -188,19 +198,24 @@ export function BulkEditToolbar({ selectedIds, onClear, onApplied }: Props) {
         <div className="pointer-events-auto flex items-center gap-3 rounded-full border border-border bg-card shadow-lg px-4 py-2">
           <CheckCircle2 size={16} className="text-primary" />
           <span className="text-sm">
-            Đã chọn <span className="font-semibold">{selectedIds.length}</span> đơn
+            <Trans
+              i18nKey="bulkEdit.selectedCount"
+              ns="orders"
+              values={{ count: selectedIds.length }}
+              components={{ strong: <span className="font-semibold" /> }}
+            />
           </span>
           <Button size="sm" onClick={() => setOpen(true)} disabled={editableFields.length === 0}>
-            Bulk update
+            {t('bulkEdit.bulkUpdateBtn')}
           </Button>
           {canEditField('assignee') && (
             <Button size="sm" variant="secondary" onClick={() => setAssignOpen(true)}>
-              <UserPlus size={14} /> Gán design
+              <UserPlus size={14} /> {t('bulkEdit.assignDesignBtn')}
             </Button>
           )}
           {canEditField('priority') && (
             <Button size="sm" variant="secondary" onClick={() => setPriorityOpen(true)}>
-              <Flag size={14} /> Ưu tiên
+              <Flag size={14} /> {t('bulkEdit.priorityBtn')}
             </Button>
           )}
           {canHold && (
@@ -212,7 +227,7 @@ export function BulkEditToolbar({ selectedIds, onClear, onApplied }: Props) {
                 onClick={() => setHoldOpen(true)}
                 disabled={holding}
               >
-                <PauseCircle size={14} /> Giữ đơn
+                <PauseCircle size={14} /> {t('bulkEdit.holdBtn')}
               </Button>
               <Button
                 size="sm"
@@ -221,7 +236,7 @@ export function BulkEditToolbar({ selectedIds, onClear, onApplied }: Props) {
                 onClick={() => submitHold(false)}
                 disabled={holding}
               >
-                <PlayCircle size={14} /> Mở giữ
+                <PlayCircle size={14} /> {t('bulkEdit.unholdBtn')}
               </Button>
             </>
           )}
@@ -230,13 +245,13 @@ export function BulkEditToolbar({ selectedIds, onClear, onApplied }: Props) {
             size="sm"
             onClick={handleExport}
             disabled={exporting}
-            title="Xuất Excel các đơn đang chọn"
+            title={t('bulkEdit.exportTitle')}
           >
             {exporting ? <Spinner size={13} className="text-muted-foreground" /> : <Download size={13} />}
-            Xuất Excel
+            {t('bulkEdit.exportBtn')}
           </Button>
           <Button size="sm" variant="ghost" onClick={onClear}>
-            <X size={14} /> Bỏ chọn
+            <X size={14} /> {t('common:actions.clearSelection')}
           </Button>
         </div>
       </div>
@@ -254,17 +269,17 @@ export function BulkEditToolbar({ selectedIds, onClear, onApplied }: Props) {
       >
         <DialogContent className="sm:max-w-md">
           <DialogHeader>
-            <DialogTitle>Đổi mức ưu tiên {selectedIds.length} đơn</DialogTitle>
+            <DialogTitle>{t('bulkEdit.priorityDialogTitle', { count: selectedIds.length })}</DialogTitle>
           </DialogHeader>
           <div className="space-y-1.5">
-            <label className="text-xs font-medium">Mức ưu tiên</label>
+            <label className="text-xs font-medium">{t('bulkEdit.priorityFieldLabel')}</label>
             <select
               value={priorityValue}
               onChange={(e) => setPriorityValue(e.target.value)}
               className="w-full h-9 rounded-md border border-input bg-background px-3 text-sm"
               autoFocus
             >
-              <option value="">— Bỏ ưu tiên —</option>
+              <option value="">{t('bulkEdit.noPriorityOption')}</option>
               {ORDER_PRIORITIES.map((p) => (
                 <option key={p} value={p}>
                   {ORDER_PRIORITY_LABELS[p]}
@@ -274,11 +289,11 @@ export function BulkEditToolbar({ selectedIds, onClear, onApplied }: Props) {
           </div>
           <DialogFooter>
             <Button variant="ghost" onClick={() => setPriorityOpen(false)} disabled={applyingPriority}>
-              Đóng
+              {t('common:actions.close')}
             </Button>
             <Button onClick={submitPriority} disabled={applyingPriority}>
               {applyingPriority && <Spinner size={13} className="mr-1.5" />}
-              Áp dụng
+              {t('common:actions.apply')}
             </Button>
           </DialogFooter>
         </DialogContent>
@@ -287,10 +302,10 @@ export function BulkEditToolbar({ selectedIds, onClear, onApplied }: Props) {
       <Dialog open={holdOpen} onOpenChange={(o) => (o ? setHoldOpen(true) : (setHoldReason(''), setHoldOpen(false)))}>
         <DialogContent className="sm:max-w-md">
           <DialogHeader>
-            <DialogTitle>Giữ {selectedIds.length} đơn</DialogTitle>
+            <DialogTitle>{t('bulkEdit.holdDialogTitle', { count: selectedIds.length })}</DialogTitle>
           </DialogHeader>
           <div className="space-y-1.5">
-            <label className="text-xs font-medium text-foreground">Lý do giữ (không bắt buộc)</label>
+            <label className="text-xs font-medium text-foreground">{t('bulkEdit.holdReasonLabel')}</label>
             <div className="flex flex-wrap gap-1.5">
               {HOLD_REASON_PRESETS.map((preset) => {
                 const active = holdReason === preset;
@@ -314,21 +329,19 @@ export function BulkEditToolbar({ selectedIds, onClear, onApplied }: Props) {
             <Textarea
               value={holdReason}
               onChange={(e) => setHoldReason(e.target.value.slice(0, 200))}
-              placeholder="VD: chờ khách xác nhận, thiếu vật tư…"
+              placeholder={t('bulkEdit.holdReasonPlaceholder')}
               rows={3}
               autoFocus
             />
-            <p className="text-[11px] text-amber-600 dark:text-amber-400">
-              Đơn giữ sẽ bị khóa mọi thao tác + tô xám cho tới khi mở lại. Đơn đã hủy sẽ bị bỏ qua.
-            </p>
+            <p className="text-[11px] text-amber-600 dark:text-amber-400">{t('bulkEdit.holdWarning')}</p>
           </div>
           <DialogFooter>
             <Button variant="ghost" onClick={() => setHoldOpen(false)} disabled={holding}>
-              Đóng
+              {t('common:actions.close')}
             </Button>
             <Button onClick={() => submitHold(true, holdReason.trim() || undefined)} disabled={holding}>
               {holding && <Spinner size={13} className="mr-1.5" />}
-              Giữ đơn
+              {t('bulkEdit.holdBtn')}
             </Button>
           </DialogFooter>
         </DialogContent>
@@ -337,12 +350,12 @@ export function BulkEditToolbar({ selectedIds, onClear, onApplied }: Props) {
       <Dialog open={open} onOpenChange={setOpen}>
         <DialogContent>
           <DialogHeader>
-            <DialogTitle>Cập nhật {selectedIds.length} đơn</DialogTitle>
+            <DialogTitle>{t('bulkEdit.updateDialogTitle', { count: selectedIds.length })}</DialogTitle>
           </DialogHeader>
 
           <div className="space-y-3">
             <div className="space-y-1.5">
-              <label className="text-xs font-medium">Field</label>
+              <label className="text-xs font-medium">{t('bulkEdit.fieldLabel')}</label>
               <select
                 value={field}
                 onChange={(e) => {
@@ -352,7 +365,7 @@ export function BulkEditToolbar({ selectedIds, onClear, onApplied }: Props) {
                 }}
                 className="w-full h-9 rounded-md border border-input bg-background px-3 text-sm"
               >
-                <option value="">— Chọn field —</option>
+                <option value="">{t('bulkEdit.chooseFieldPlaceholder')}</option>
                 {editableFields.map((f) => (
                   <option key={f} value={f}>
                     {FIELD_LABEL[f]}
@@ -363,13 +376,13 @@ export function BulkEditToolbar({ selectedIds, onClear, onApplied }: Props) {
 
             {field && category && (
               <div className="space-y-1.5">
-                <label className="text-xs font-medium">Giá trị mới</label>
+                <label className="text-xs font-medium">{t('bulkEdit.newValueLabel')}</label>
                 <select
                   value={value}
                   onChange={(e) => setValue(e.target.value)}
                   className="w-full h-9 rounded-md border border-input bg-background px-3 text-sm"
                 >
-                  <option value="">— Bỏ chọn —</option>
+                  <option value="">{t('bulkEdit.clearOption')}</option>
                   {options.map((it) => (
                     <option key={it._id} value={it.code}>
                       {it.name}
@@ -399,29 +412,27 @@ export function BulkEditToolbar({ selectedIds, onClear, onApplied }: Props) {
 
             {field && !category && (
               <div className="space-y-1.5">
-                <label className="text-xs font-medium">Text mới (để trống = xóa)</label>
+                <label className="text-xs font-medium">{t('bulkEdit.newTextLabel')}</label>
                 <input
                   type="text"
                   value={freeText}
                   onChange={(e) => setFreeText(e.target.value)}
                   className="w-full h-9 rounded-md border border-input bg-background px-3 text-sm"
-                  placeholder="Ghi chú..."
+                  placeholder={t('bulkEdit.notePlaceholder')}
                 />
               </div>
             )}
 
-            <p className="text-xs text-muted-foreground">
-              Hành động sẽ ghi log audit cho từng đơn (Phase 3). Không undo được.
-            </p>
+            <p className="text-xs text-muted-foreground">{t('bulkEdit.auditNote')}</p>
           </div>
 
           <DialogFooter>
             <Button variant="outline" onClick={() => setOpen(false)}>
-              Hủy
+              {t('common:actions.cancel')}
             </Button>
             <Button onClick={handleConfirm} disabled={!field || saving}>
               {saving && <Spinner size={13} className="mr-1.5" />}
-              Áp dụng
+              {t('common:actions.apply')}
             </Button>
           </DialogFooter>
         </DialogContent>

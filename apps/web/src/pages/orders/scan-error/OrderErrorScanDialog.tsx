@@ -1,4 +1,5 @@
 import React, { useMemo, useRef, useState } from 'react';
+import { Trans, useTranslation } from 'react-i18next';
 import { Link } from 'react-router-dom';
 import {
   AlertTriangle,
@@ -12,7 +13,7 @@ import {
   RotateCcw,
 } from 'lucide-react';
 import type { FulfillmentStage as FulfillmentStageT, ProductionOrderRow, WorkshopConfig } from 'shared';
-import { FULFILLMENT_STAGE_LABELS, FulfillmentStage, WorkshopConfigCategory } from 'shared';
+import { FulfillmentStage, WorkshopConfigCategory } from 'shared';
 import { toast } from 'sonner';
 
 import { PATHS } from '@/constants/paths';
@@ -30,6 +31,7 @@ import { Textarea } from '@/components/ui/textarea';
 
 import { handleAxiosError } from '@/utils';
 import { cn } from '@/utils/cn';
+import { getStageLabel } from '@/utils/fulfillmentStageLabel';
 import { isCancelled } from '@/utils/orderActions';
 import { beepError, beepScan, beepSuccess, parseScanCode, resolveErrorScan } from '@/utils/scanCodes';
 
@@ -53,12 +55,6 @@ interface Props {
   initialCode?: string;
 }
 
-const SOURCE_LABELS: Record<string, string> = {
-  'tool-check': 'Do soát tool',
-  designer: 'Do designer',
-  factory: 'Do xưởng',
-};
-
 /**
  * Modal gán lỗi qua màn quét. Danh sách mã lỗi CHỈ lấy từ danh mục lỗi của
  * CÔNG ĐOẠN người báo (Stage Error Catalog — `stage` của user, fallback công
@@ -67,6 +63,12 @@ const SOURCE_LABELS: Record<string, string> = {
  * `/orders/stage-errors` để thêm. Xem StageErrorCatalog.md.
  */
 export function OrderErrorScanDialog({ order, onClose, onSaved, onScanOrder, initialCode }: Props) {
+  const { t } = useTranslation('scanError');
+  const SOURCE_LABELS: Record<string, string> = {
+    'tool-check': t('orderErrorDialog.sourceLabels.toolCheck'),
+    designer: t('orderErrorDialog.sourceLabels.designer'),
+    factory: t('orderErrorDialog.sourceLabels.factory'),
+  };
   const errorOptions = useWorkshopConfigStore(
     (s) => s.byCategory[WorkshopConfigCategory.ProductionError] || [],
   ) as WorkshopConfig[];
@@ -94,8 +96,8 @@ export function OrderErrorScanDialog({ order, onClose, onSaved, onScanOrder, ini
   const selectedCfg = useMemo(() => stageErrors.find((o) => o.code === code), [stageErrors, code]);
   // Nguồn + đích đẩy về suy từ config — hiển thị read-only, không cho chọn tay.
   const resolution = useMemo(
-    () => (selectedCfg ? resolveErrorScan(selectedCfg, furthest) : undefined),
-    [selectedCfg, furthest],
+    () => (selectedCfg ? resolveErrorScan(selectedCfg, furthest, t) : undefined),
+    [selectedCfg, furthest, t],
   );
 
   // Đơn đã hủy → chặn báo lỗi / đẩy về công đoạn trước (mirror guard BE).
@@ -104,7 +106,7 @@ export function OrderErrorScanDialog({ order, onClose, onSaved, onScanOrder, ini
   const canSubmit = !!selectedCfg && !!resolution?.ok && !orderCancelled && !saving;
 
   const submitError = async (cfg: WorkshopConfig) => {
-    const resolved = resolveErrorScan(cfg, furthest);
+    const resolved = resolveErrorScan(cfg, furthest, t);
     if (!resolved.ok) {
       beepError();
       toast.error(resolved.reason);
@@ -120,7 +122,7 @@ export function OrderErrorScanDialog({ order, onClose, onSaved, onScanOrder, ini
         target: resolved.apiTarget,
       });
       beepSuccess();
-      toast.success(`Đã gán lỗi "${cfg.name}" · ${resolved.targetLabel}`);
+      toast.success(t('orderErrorDialog.assignedSuccess', { name: cfg.name, target: resolved.targetLabel }));
       onSaved({ errorName: cfg.name, targetLabel: resolved.targetLabel });
       onClose();
     } catch (err) {
@@ -146,7 +148,7 @@ export function OrderErrorScanDialog({ order, onClose, onSaved, onScanOrder, ini
     if (saving) return;
     if (orderCancelled) {
       beepError();
-      toast.error('Đơn đã hủy — không thể báo lỗi.');
+      toast.error(t('orderErrorDialog.orderCancelled'));
       return;
     }
     const cfg = stageErrors.find((o) => o.code.toLowerCase() === codeScanned);
@@ -154,8 +156,8 @@ export function OrderErrorScanDialog({ order, onClose, onSaved, onScanOrder, ini
       beepError();
       toast.error(
         contextStage
-          ? `Mã lỗi không thuộc công đoạn "${FULFILLMENT_STAGE_LABELS[contextStage]}" — kiểm tra bảng QR của trạm.`
-          : 'Chưa xác định được công đoạn — không nhận mã lỗi qua quét.',
+          ? t('orderErrorDialog.errorNotInStage', { stage: getStageLabel(t, contextStage) })
+          : t('orderErrorDialog.noStageContext'),
       );
       return;
     }
@@ -165,7 +167,7 @@ export function OrderErrorScanDialog({ order, onClose, onSaved, onScanOrder, ini
     }
     setCode(cfg.code);
     beepScan();
-    toast(`Đã chọn lỗi "${cfg.name}" — quét lại CÙNG MÃ hoặc nhấn Enter để ghi nhận.`);
+    toast(t('orderErrorDialog.selectedError', { name: cfg.name }));
   };
 
   /** Route 1 mã đã quét về đúng hành động. Trả false nếu mã không hợp lệ. */
@@ -179,13 +181,13 @@ export function OrderErrorScanDialog({ order, onClose, onSaved, onScanOrder, ini
       if (onScanOrder) onScanOrder(action.code);
       else {
         beepError();
-        toast.error('Đóng dialog rồi quét đơn ở ô tra cứu.');
+        toast.error(t('orderErrorDialog.closeDialogFirst'));
       }
       return true;
     }
     if (action.kind === 'ok') {
       beepError();
-      toast.error('Mã OK chỉ dùng cho công nhân công đoạn — ở đây hãy quét QR lỗi.');
+      toast.error(t('orderErrorDialog.okOnlyForWorker'));
       return true;
     }
     return false;
@@ -255,14 +257,15 @@ export function OrderErrorScanDialog({ order, onClose, onSaved, onScanOrder, ini
     e.preventDefault();
     if (!dispatchScan(raw)) {
       beepError();
-      toast.error(`Mã không hợp lệ: "${raw}"`);
+      toast.error(t('orderErrorDialog.invalidCode', { code: raw }));
     }
     return true;
   };
 
-  const factoryLabel = order.factory?.shortName || order.factory?.name || (order.factoryId ? '—' : 'Chưa map');
+  const factoryLabel =
+    order.factory?.shortName || order.factory?.name || (order.factoryId ? '—' : t('orderErrorDialog.notMapped'));
   const machineLabel = order.machineType?.shortName || order.machineType?.name || '';
-  const stageLabel = currentStage ? FULFILLMENT_STAGE_LABELS[currentStage] : 'Chưa vào fulfillment';
+  const stageLabel = currentStage ? getStageLabel(t, currentStage) : t('orderErrorDialog.notInFulfillment');
 
   // Lỗi đã ghi sẵn trên đơn (từ lần quét/gán trước) — hiển thị nổi bật để người
   // quét biết đơn này đang lỗi gì mà xử lý.
@@ -288,7 +291,7 @@ export function OrderErrorScanDialog({ order, onClose, onSaved, onScanOrder, ini
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2.5 text-2xl">
             <MessageSquareWarning size={24} className="text-rose-500" />
-            Gán lỗi · {order.productionId}
+            {t('orderErrorDialog.dialogTitle', { productionId: order.productionId })}
           </DialogTitle>
         </DialogHeader>
 
@@ -300,7 +303,7 @@ export function OrderErrorScanDialog({ order, onClose, onSaved, onScanOrder, ini
                 href={order.mockupOriginalUrl || order.mockupUrl}
                 target="_blank"
                 rel="noreferrer"
-                title="Click để mở ảnh gốc"
+                title={t('orderErrorDialog.clickToOpenOriginal')}
                 className="block flex-1 min-h-0 rounded-xl border border-border overflow-hidden bg-checker"
               >
                 <img
@@ -312,24 +315,24 @@ export function OrderErrorScanDialog({ order, onClose, onSaved, onScanOrder, ini
               </a>
             ) : (
               <div className="flex-1 min-h-0 rounded-xl border border-dashed border-border bg-muted/40 flex items-center justify-center text-lg text-muted-foreground">
-                Không có mockup
+                {t('orderErrorDialog.noMockup')}
               </div>
             )}
             <div className="shrink-0 rounded-md border bg-muted/30 p-4 space-y-1.5">
-              <div className="font-semibold text-2xl truncate">{order.type || 'Không rõ loại'}</div>
+              <div className="font-semibold text-2xl truncate">{order.type || t('orderErrorDialog.unknownType')}</div>
               <div className="text-muted-foreground text-lg truncate">
                 {[order.color, order.size, order.quantity ? `qty ${order.quantity}` : null].filter(Boolean).join(' · ')}
               </div>
               <div className="grid grid-cols-1 xl:grid-cols-2 gap-1.5 pt-1 text-lg">
-                <InfoRow icon={<Factory size={18} />} label="Xưởng">
+                <InfoRow icon={<Factory size={18} />} label={t('orderErrorDialog.labelFactory')}>
                   {factoryLabel}
                   {machineLabel && <span className="text-muted-foreground"> · {machineLabel}</span>}
                 </InfoRow>
-                <InfoRow icon={<Layers size={18} />} label="Stage hiện tại">
+                <InfoRow icon={<Layers size={18} />} label={t('orderErrorDialog.labelStage')}>
                   {stageLabel}
                   {order.designerReworkCount && order.designerReworkCount > 0 ? (
                     <span className="ml-1 text-amber-600 dark:text-amber-400">
-                      · rework ×{order.designerReworkCount}
+                      {t('orderErrorDialog.reworkCount', { count: order.designerReworkCount })}
                     </span>
                   ) : null}
                 </InfoRow>
@@ -341,14 +344,14 @@ export function OrderErrorScanDialog({ order, onClose, onSaved, onScanOrder, ini
           <div className="min-w-0 min-h-0 overflow-y-auto space-y-4 pr-1">
             {/* Hướng dẫn 3 bước CHỮ TO — bọc vùng viền đậm + link thêm lỗi */}
             <GuideZone
-              label="Cách báo lỗi — quét 2 lần"
+              label={t('orderErrorDialog.zoneHowToReport')}
               tone="rose"
               action={
                 <Link
                   to={PATHS.ORDERS_STAGE_ERRORS}
                   className="inline-flex items-center gap-1 text-base font-semibold text-rose-600 dark:text-rose-400 underline underline-offset-2 hover:text-rose-700 dark:hover:text-rose-300"
                 >
-                  <Plus size={16} /> Thêm lỗi ở đây
+                  <Plus size={16} /> {t('addErrorLink')}
                 </Link>
               }
             >
@@ -357,22 +360,22 @@ export function OrderErrorScanDialog({ order, onClose, onSaved, onScanOrder, ini
                   step={1}
                   tone="rose"
                   icon={<QrCode size={20} />}
-                  title="Quét QR lỗi"
-                  desc="Hoặc bấm chọn mã bên dưới — nguồn & nơi đẩy về tự theo cấu hình."
+                  title={t('orderErrorDialog.step1Title')}
+                  desc={t('orderErrorDialog.step1Desc')}
                 />
                 <GuideStep
                   step={2}
                   tone="slate"
                   icon={<Pencil size={20} />}
-                  title="Gõ mô tả (nếu cần)"
-                  desc="Chọn nhầm? Quét mã KHÁC để đổi lựa chọn."
+                  title={t('orderErrorDialog.step2Title')}
+                  desc={t('orderErrorDialog.step2Desc')}
                 />
                 <GuideStep
                   step={3}
                   tone="emerald"
                   icon={<CheckCircle2 size={20} />}
-                  title="Quét lại CÙNG MÃ / Enter"
-                  desc="Lúc này lỗi mới được ghi nhận + đơn tự đẩy về."
+                  title={t('orderErrorDialog.step3Title')}
+                  desc={t('orderErrorDialog.step3Desc')}
                 />
               </div>
             </GuideZone>
@@ -382,8 +385,8 @@ export function OrderErrorScanDialog({ order, onClose, onSaved, onScanOrder, ini
           <div className="rounded-md border border-rose-400 bg-rose-100 p-3.5 flex items-start gap-2.5 dark:border-rose-500/50 dark:bg-rose-500/15">
             <AlertTriangle size={20} className="mt-0.5 shrink-0 text-rose-600 dark:text-rose-400" />
             <div className="min-w-0 flex-1 text-base text-rose-800 dark:text-rose-200">
-              <p className="font-semibold">Đơn đã hủy — không thể báo lỗi</p>
-              <p className="mt-0.5">Đơn hủy đã ra khỏi mọi công đoạn, không đẩy về công đoạn trước được.</p>
+              <p className="font-semibold">{t('orderErrorDialog.cancelledTitle')}</p>
+              <p className="mt-0.5">{t('orderErrorDialog.cancelledDesc')}</p>
             </div>
           </div>
         )}
@@ -394,7 +397,7 @@ export function OrderErrorScanDialog({ order, onClose, onSaved, onScanOrder, ini
             <MessageSquareWarning size={20} className="mt-0.5 shrink-0 text-rose-600 dark:text-rose-400" />
             <div className="min-w-0 flex-1">
               <p className="text-sm font-semibold text-rose-700 dark:text-rose-300 flex items-center gap-1.5 flex-wrap">
-                Lỗi đã ghi trên đơn
+                {t('orderErrorDialog.existingErrorTitle')}
                 {existingErrorName && (
                   <span className="px-1.5 py-0.5 rounded bg-rose-200/70 font-normal dark:bg-rose-500/20">
                     {existingErrorName}
@@ -407,7 +410,7 @@ export function OrderErrorScanDialog({ order, onClose, onSaved, onScanOrder, ini
                 )}
                 {order.productionErrorCount && order.productionErrorCount > 1 ? (
                   <span className="px-1.5 py-0.5 rounded bg-rose-200/70 font-mono dark:bg-rose-500/20">
-                    ×{order.productionErrorCount}
+                    {t('orderErrorDialog.countSuffix', { count: order.productionErrorCount })}
                   </span>
                 ) : null}
               </p>
@@ -428,10 +431,10 @@ export function OrderErrorScanDialog({ order, onClose, onSaved, onScanOrder, ini
           {/* Mã lỗi — CHỈ list của công đoạn ngữ cảnh (Stage Error Catalog) */}
           <div className="space-y-2.5">
             <Label className="text-lg">
-              Mã lỗi{' '}
+              {t('orderErrorDialog.codeLabel')}{' '}
               {contextStage && (
                 <span className="text-muted-foreground font-normal">
-                  — công đoạn "{FULFILLMENT_STAGE_LABELS[contextStage]}"
+                  {t('orderErrorDialog.codeStageSuffix', { stage: getStageLabel(t, contextStage) })}
                 </span>
               )}{' '}
               <span className="text-destructive">*</span>
@@ -442,8 +445,8 @@ export function OrderErrorScanDialog({ order, onClose, onSaved, onScanOrder, ini
                   <QrCode size={18} className="mt-0.5 shrink-0" />
                   <span>
                     {contextStage
-                      ? `Công đoạn "${FULFILLMENT_STAGE_LABELS[contextStage]}" chưa có lỗi nào trong danh mục.`
-                      : 'Đơn chưa vào fulfillment và bạn không có công đoạn — chưa xác định được danh mục lỗi.'}
+                      ? t('orderErrorDialog.noErrorsInStage', { stage: getStageLabel(t, contextStage) })
+                      : t('orderErrorDialog.noStageNoErrors')}
                   </span>
                 </p>
                 {contextStage && (
@@ -451,7 +454,7 @@ export function OrderErrorScanDialog({ order, onClose, onSaved, onScanOrder, ini
                     to={PATHS.ORDERS_STAGE_ERRORS}
                     className="inline-flex items-center gap-1.5 font-medium underline underline-offset-2 hover:text-amber-800 dark:hover:text-amber-200"
                   >
-                    <Plus size={16} /> Thêm lỗi cho công đoạn này
+                    <Plus size={16} /> {t('orderErrorDialog.addErrorForStage')}
                   </Link>
                 )}
               </div>
@@ -494,8 +497,7 @@ export function OrderErrorScanDialog({ order, onClose, onSaved, onScanOrder, ini
                 <span>
                   <strong>{SOURCE_LABELS[resolution.source]}</strong> · <strong>{resolution.targetLabel}</strong>
                   <span className="block mt-0.5 font-normal opacity-80">
-                    Tự động theo cấu hình danh mục lỗi. Quét lại <strong>CÙNG MÃ</strong> (hoặc nhấn Enter) để ghi
-                    nhận — quét mã khác để đổi lựa chọn, gõ mô tả bên dưới nếu cần.
+                    <Trans i18nKey="orderErrorDialog.resolutionHint" ns="scanError" components={{ strong: <strong /> }} />
                   </span>
                 </span>
               ) : (
@@ -506,12 +508,12 @@ export function OrderErrorScanDialog({ order, onClose, onSaved, onScanOrder, ini
 
           {/* Note */}
           <div className="space-y-2">
-            <Label className="text-lg">Mô tả lỗi</Label>
+            <Label className="text-lg">{t('orderErrorDialog.noteLabel')}</Label>
             <Textarea
               rows={3}
               value={note}
               onChange={(e) => setNote(e.target.value.slice(0, MAX_NOTE))}
-              placeholder="Mô tả ngắn gọn lỗi gặp phải (tùy chọn)"
+              placeholder={t('orderErrorDialog.notePlaceholder')}
               className="text-lg"
             />
             <div className="text-right text-xs text-muted-foreground">
@@ -524,11 +526,11 @@ export function OrderErrorScanDialog({ order, onClose, onSaved, onScanOrder, ini
 
         <DialogFooter className="gap-3 shrink-0">
           <Button variant="outline" onClick={onClose} disabled={saving} className="h-14 px-7 text-lg">
-            Huỷ
+            {t('common:actions.cancel')}
           </Button>
           <Button onClick={handleSubmit} disabled={!canSubmit} className="h-14 px-8 text-lg">
             {saving && <Spinner size={20} className="mr-2" />}
-            Gán lỗi & Quét tiếp
+            {t('orderErrorDialog.assignAndContinueBtn')}
           </Button>
         </DialogFooter>
       </DialogContent>

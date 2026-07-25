@@ -1,4 +1,7 @@
 import React, { useMemo, useState } from 'react';
+import { useTranslation } from 'react-i18next';
+import { Factory as FactoryIcon, Inbox, Search } from 'lucide-react';
+import type { Customer } from 'shared';
 import type { DragEndEvent, DragStartEvent } from '@dnd-kit/core';
 import {
   DndContext,
@@ -9,8 +12,6 @@ import {
   useSensor,
   useSensors,
 } from '@dnd-kit/core';
-import { Factory as FactoryIcon, Inbox, Search } from 'lucide-react';
-import type { Customer } from 'shared';
 
 import { TierBadge } from '@/components/settings/CustomerListDialog';
 import { Input } from '@/components/ui/input';
@@ -69,6 +70,7 @@ function Column({
   customers: Customer[];
   visible: Customer[];
 }) {
+  const { t } = useTranslation('customerFactoryAssignment');
   const { setNodeRef, isOver } = useDroppable({ id });
   const isUnassigned = id === UNASSIGNED_COL;
   return (
@@ -104,7 +106,7 @@ function Column({
         ))}
         {visible.length === 0 && (
           <p className="py-4 text-center text-[11px] text-slate-400">
-            {customers.length === 0 ? 'Trống — kéo khách vào đây' : 'Không khách nào khớp tìm kiếm'}
+            {customers.length === 0 ? t('kanban.emptyColumn') : t('kanban.noSearchMatch')}
           </p>
         )}
       </div>
@@ -126,6 +128,7 @@ interface CustomerFactoryKanbanProps {
 }
 
 export default function CustomerFactoryKanban({ factories, customers, alloc, onMove }: CustomerFactoryKanbanProps) {
+  const { t } = useTranslation('customerFactoryAssignment');
   const [search, setSearch] = useState('');
   const [activeId, setActiveId] = useState('');
   const sensors = useSensors(useSensor(PointerSensor, { activationConstraint: { distance: 4 } }));
@@ -143,8 +146,8 @@ export default function CustomerFactoryKanban({ factories, customers, alloc, onM
       cols.push({ id: f._id, title: f.name, shortName: f.shortName, customers: sortCustomers(list) });
     }
     const unassigned = sortCustomers(customers.filter((c) => !assigned.has(String(c._id))));
-    return [{ id: UNASSIGNED_COL, title: 'Chưa gán', customers: unassigned }, ...cols];
-  }, [factories, customers, alloc, byId]);
+    return [{ id: UNASSIGNED_COL, title: t('kanban.unassignedColumn'), customers: unassigned }, ...cols];
+  }, [factories, customers, alloc, byId, t]);
 
   const q = search.trim().toLowerCase();
   const matches = (c: Customer) =>
@@ -171,7 +174,7 @@ export default function CustomerFactoryKanban({ factories, customers, alloc, onM
         <Input
           value={search}
           onChange={(e) => setSearch(e.target.value)}
-          placeholder="Tìm khách trong mọi cột..."
+          placeholder={t('kanban.searchPlaceholder')}
           className="h-8 pl-8 text-sm"
         />
       </div>

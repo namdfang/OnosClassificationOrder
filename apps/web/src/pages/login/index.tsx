@@ -1,6 +1,8 @@
-import React, { useState } from 'react';
+import React, { useMemo, useState } from 'react';
 import { useForm } from 'react-hook-form';
+import { useTranslation } from 'react-i18next';
 import { useNavigate } from 'react-router-dom';
+import type { TFunction } from 'i18next';
 import { Eye, EyeOff, Lock, Mail } from 'lucide-react';
 import { toast } from 'sonner';
 import { z } from 'zod';
@@ -18,20 +20,24 @@ import { RepositoryRemote } from '../../services';
 import { useAuthStore } from '../../store/authStore';
 import { handleAxiosError } from '../../utils';
 
-const loginSchema = z.object({
-  email: z.string().min(1, 'Email is required').email('Invalid email'),
-  password: z.string().min(1, 'Password is required'),
-  rememberMe: z.boolean().default(false),
-});
+function buildLoginSchema(t: TFunction<'auth'>) {
+  return z.object({
+    email: z.string().min(1, t('login.validation.emailRequired')).email(t('login.validation.emailInvalid')),
+    password: z.string().min(1, t('login.validation.passwordRequired')),
+    rememberMe: z.boolean().default(false),
+  });
+}
 
-type LoginFormValues = z.infer<typeof loginSchema>;
+type LoginFormValues = z.infer<ReturnType<typeof buildLoginSchema>>;
 
 function Login() {
   const navigate = useNavigate();
+  const { t } = useTranslation('auth');
   const [loading, setLoading] = useState(false);
   const [showPassword, setShowPassword] = useState(false);
   const { setProfile, setToken, setTokenExpiredAt } = useAuthStore();
 
+  const loginSchema = useMemo(() => buildLoginSchema(t), [t]);
   const form = useForm<LoginFormValues>({
     resolver: zodResolver(loginSchema),
     defaultValues: { email: '', password: '', rememberMe: false },
@@ -65,7 +71,7 @@ function Login() {
         // khác dùng dashboard chung.
         const roleName = (loginInfo.user as { role?: { name?: string } })?.role?.name;
         navigate(roleName === 'Designer' ? PATHS.MY_TASKS : PATHS.HOME);
-        toast.success('Welcome back');
+        toast.success(t('login.welcomeBack'));
       }
     } catch (error) {
       // Backend dùng chung 1 i18n key (error.userNotFound) cho mọi lý do đăng
@@ -73,7 +79,7 @@ function Login() {
       // thân thiện thay vì raw key cho người dùng dễ hiểu.
       const rawMessage = (error as { response?: { data?: { message?: string } } })?.response?.data?.message;
       if (rawMessage === 'error.userNotFound') {
-        toast.error('Email hoặc mật khẩu không chính xác.');
+        toast.error(t('login.invalidCredentials'));
       } else {
         handleAxiosError(error);
       }
@@ -87,8 +93,8 @@ function Login() {
       <div className="w-full max-w-[440px]">
         <div className="text-center mb-8">
           <img src={logoUrl} alt="Logo" className="h-10 w-auto object-contain mx-auto mb-5" />
-          <h1 className="text-2xl font-bold text-foreground tracking-tight">Sign in to your workspace</h1>
-          <p className="text-sm text-muted-foreground mt-1.5">Enter your credentials to continue</p>
+          <h1 className="text-2xl font-bold text-foreground tracking-tight">{t('login.title')}</h1>
+          <p className="text-sm text-muted-foreground mt-1.5">{t('login.subtitle')}</p>
         </div>
 
         <div className="bg-card rounded-2xl border border-border p-7 shadow-sm">
@@ -99,11 +105,11 @@ function Login() {
                 name="email"
                 render={({ field }) => (
                   <FormItem>
-                    <FormLabel>Email</FormLabel>
+                    <FormLabel>{t('login.email')}</FormLabel>
                     <FormControl>
                       <div className="relative">
                         <Mail size={15} className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground" />
-                        <Input placeholder="you@example.com" className="pl-9 h-10" {...field} />
+                        <Input placeholder={t('login.emailPlaceholder')} className="pl-9 h-10" {...field} />
                       </div>
                     </FormControl>
                     <FormMessage />
@@ -116,13 +122,13 @@ function Login() {
                 name="password"
                 render={({ field }) => (
                   <FormItem>
-                    <FormLabel>Password</FormLabel>
+                    <FormLabel>{t('login.password')}</FormLabel>
                     <FormControl>
                       <div className="relative">
                         <Lock size={15} className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground" />
                         <Input
                           type={showPassword ? 'text' : 'password'}
-                          placeholder="••••••••"
+                          placeholder={t('login.passwordPlaceholder')}
                           className="pl-9 pr-10 h-10"
                           {...field}
                         />
@@ -130,7 +136,7 @@ function Login() {
                           type="button"
                           tabIndex={-1}
                           onClick={() => setShowPassword((s) => !s)}
-                          aria-label={showPassword ? 'Ẩn mật khẩu' : 'Hiện mật khẩu'}
+                          aria-label={showPassword ? t('login.hidePassword') : t('login.showPassword')}
                           className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground transition-colors"
                         >
                           {showPassword ? <EyeOff size={16} /> : <Eye size={16} />}
@@ -154,7 +160,7 @@ function Login() {
                         onChange={(e) => field.onChange(e.target.checked)}
                         className="h-4 w-4 rounded border-input accent-primary"
                       />
-                      Ghi nhớ đăng nhập
+                      {t('login.rememberMe')}
                     </label>
                   </FormItem>
                 )}
@@ -162,13 +168,13 @@ function Login() {
 
               <Button type="submit" disabled={loading} className="w-full h-10">
                 {loading && <Spinner size={14} className="text-primary-foreground" />}
-                Continue
+                {t('login.continue')}
               </Button>
             </form>
           </Form>
         </div>
 
-        <p className="text-center text-xs text-muted-foreground mt-6">Protected workspace — authorized access only</p>
+        <p className="text-center text-xs text-muted-foreground mt-6">{t('login.footer')}</p>
       </div>
     </div>
   );

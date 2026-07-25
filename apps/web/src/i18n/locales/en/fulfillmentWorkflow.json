@@ -1,0 +1,179 @@
+{
+  "stageLabels": {
+    "print": "Print",
+    "press": "Press",
+    "qc-post-press": "QC after press",
+    "sew-in": "Sew-in",
+    "sew-out": "Sew-out",
+    "pack": "Pack"
+  },
+  "stageStatus": {
+    "all": "All",
+    "waiting": "Waiting",
+    "inProgress": "In progress",
+    "rework": "Rework",
+    "done": "Done",
+    "fixed": "Fixed",
+    "watching": "Waiting to return",
+    "unassigned": "Unassigned Designer"
+  },
+  "actions": {
+    "start": "Start",
+    "complete": "Complete",
+    "reportError": "Report error",
+    "pushBack": "Push back for processing",
+    "assignDesigner": "Assign designer"
+  },
+  "errorSource": {
+    "designer": "By designer",
+    "toolCheck": "By tool check",
+    "factory": "By factory",
+    "generic": "Error"
+  },
+  "toast": {
+    "copyError": "Could not copy — the browser blocked clipboard access",
+    "notFound": "No order found with this code",
+    "updated": "Updated",
+    "started": "Started",
+    "completed": "Completed",
+    "reworkedBack": "Pushed back for processing",
+    "bulkDone": "{{verb}} {{count}} orders",
+    "bulkPartial": "{{verb}} {{ok}}/{{total}} orders ({{fail}} failed)"
+  },
+  "verbs": {
+    "start": "started",
+    "complete": "completed"
+  },
+  "kanban": {
+    "header": {
+      "title": "My tasks — {{stage}}",
+      "factory": "Factory: {{factory}}"
+    },
+    "noStage": "Your account is not assigned a",
+    "noStageStrong": "Fulfillment Stage",
+    "noStageSuffix": ". Contact an Admin to get one assigned.",
+    "hint": {
+      "tip": "Tip for selecting multiple orders:",
+      "body1": "Tick the checkbox next to a product name to select all orders of that product. Or tick one order, hold",
+      "body2": "then click another checkbox (in the same column) to quickly select everything in between. Dragging a \"Waiting\"/\"Rework\" card to \"In progress\" also works."
+    },
+    "search": {
+      "label": "Search / Scan code",
+      "copyTitle": "Copy the searched code",
+      "placeholder": "Type or scan a code (N-…) then press Enter to open the order",
+      "historyTitle": "Lookup history",
+      "strippedPrefix": "✓ removed \"{{prefix}}\" → searching:",
+      "hintPre": "Scan or press Enter to open the order for",
+      "hintSuffix": ". Type to filter the kanban."
+    },
+    "dateAllPlaceholder": "All",
+    "filters": {
+      "type": "Product",
+      "fabricType": "Fabric type",
+      "machineNumber": "Machine",
+      "toolResult": "Tool result",
+      "userSku": "Customer (SKU)"
+    },
+    "selection": {
+      "selected": "Selected",
+      "multiColumn": "(Orders span multiple columns — bulk actions require a single column)"
+    },
+    "history": {
+      "title": "Lookup history",
+      "empty": "No lookups yet. Scan or type a code then press Enter to start.",
+      "found": "Found",
+      "notFound": "Not found",
+      "clear": "Clear history"
+    },
+    "column": {
+      "expandTitle": "Click to expand",
+      "collapseTitle": "Click to collapse",
+      "empty": "Empty",
+      "noType": "— No type —"
+    },
+    "dragWarning": "You can only drag \"{{waiting}}\" / \"{{rework}}\" to \"{{inProgress}}\". Use the \"{{complete}}\" button to complete an order, or \"{{reportError}}\" to report an error."
+  },
+  "printTable": {
+    "keyboardMode": {
+      "toggleTitle": "Toggle copying the Production ID with the ↑ ↓ arrow keys",
+      "label": "Arrow-key mode",
+      "on": "On",
+      "off": "Off"
+    },
+    "keyboardHint": {
+      "pre": "Press",
+      "mid": "to copy the Production ID row by row. Only the row currently pointed at shows the",
+      "suffix": "— moving the cursor moves the mark along."
+    },
+    "shiftHint": {
+      "pre": "Tick one order, hold",
+      "suffix": "then click another checkbox to quickly select everything in between."
+    },
+    "selectAllTitle": "Select all eligible orders on this page",
+    "rowSelectableTitle": "Shift+click to select a range",
+    "rowNotSelectableTitle": "This order cannot be actioned at the Print stage",
+    "historyTitle": "History",
+    "noResults": "No matching orders",
+    "defaultActionLabel": "Action",
+    "copiedAria": "Production ID copied",
+    "facets": {
+      "type": "Product name",
+      "userSku": "Customer (SKU)",
+      "fabricType": "Fabric type",
+      "machineNumber": "Machine",
+      "printStatus": "Print status",
+      "toolResult": "Tool result",
+      "toolResultNote": "Tool result note",
+      "errorFile": "Fix file",
+      "assignee": "Assignee",
+      "designerStatus": "Designer status",
+      "productionError": "Factory error"
+    }
+  },
+  "taskCard": {
+    "copyTitle": "Copy productionId",
+    "previewTitle": "Click to view larger",
+    "typeTooltip": "Type: {{type}}",
+    "qty": "qty {{quantity}}",
+    "customerTooltip": "Customer (SKU): {{sku}}",
+    "timeLabels": {
+      "waiting": "Received",
+      "inProgress": "Started",
+      "rework": "Returned",
+      "done": "Done"
+    },
+    "timeHint": "{{label}} at {{time}} ({{relative}})",
+    "deadlineHint": "Estimated deadline for {{stage}} · {{time}}",
+    "reworkHint": "This order has been reworked {{count}} time(s)",
+    "watchingPrefix": "Currently at:",
+    "watchingDesignerRework": "Designer (rework)",
+    "errorStageSuffix": "· currently at {{stage}}",
+    "errorDesignerSuffix": "· currently at Designer"
+  },
+  "reworkDialog": {
+    "title": "Report error for order {{code}}",
+    "description": "Choose where to send it for processing (Designer or a previous stage) and describe the error.",
+    "pushTo": "Push back to",
+    "designer": "Designer",
+    "reasonLabel": "Error reason",
+    "reasonPlaceholder": "Briefly describe the error encountered...",
+    "submit": "Push back for processing"
+  },
+  "stageErrorPanel": {
+    "title": "Stage error statistics by day",
+    "loading": "Loading…",
+    "empty": "No errors in this period.",
+    "colErrorCode": "Error code",
+    "colTotal": "Total"
+  },
+  "printWorkshop": {
+    "extraActionLabel": "Print action",
+    "confirmDialog": {
+      "title": "Confirm status change",
+      "bodyPrefix": "The selected orders have different statuses. Only",
+      "bodyMid": "eligible orders will be",
+      "skippedNote": "({{count}} orders with other statuses will be skipped)",
+      "continue": ". Continue?"
+    }
+  }
+}

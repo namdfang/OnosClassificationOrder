@@ -1,0 +1,107 @@
+{
+  "header": {
+    "title": "Tool check",
+    "subtitle": "orders needing rework + unreviewed backlog for Support"
+  },
+  "filters": {
+    "product": "Product",
+    "customer": "Customer",
+    "machine": "Machine",
+    "priority": "Priority"
+  },
+  "dailyStrip": {
+    "title": "Daily overview",
+    "subtitle": "click a day to filter the list below · click a NUMBER to view the order list",
+    "filtering": "Filtering {{date}}",
+    "noData": "No data.",
+    "metricColumn": "Metric",
+    "totalColumn": "Total",
+    "dayLabelAll": "full period",
+    "metrics": {
+      "total": "Total orders",
+      "unreviewed": "Unreviewed",
+      "reviewed": "Reviewed",
+      "reviewedError": "Review error",
+      "reviewedOk": "Review OK",
+      "rework": "Needs rework"
+    }
+  },
+  "pipelineCaption": "— WHOLE factory · Tool check lane highlighted · hover for details · click a day to filter the list",
+  "kpi": {
+    "checked": "Checked in period",
+    "rework": "Sent back by Print (needs rework)",
+    "unreviewed": "Unreviewed",
+    "error": "Tool check errors (waiting)"
+  },
+  "level": "Lv {{level}}",
+  "list": {
+    "reworkTab": "Needs rework ({{count}})",
+    "unreviewedTab": "Unreviewed ({{count}})",
+    "reworkHint": "⚠ Priority — sent back by Print due to a missing file. Tool result note → \"ok\" = file is fine, resume from Print · \"Checked\" = needs design, sent back to the designer / auto-assigned.",
+    "unreviewedHint": "Backlog of orders with no Tool result note yet.",
+    "noReworkOrders": "No orders sent back by Print.",
+    "noUnreviewedOrders": "No unreviewed orders.",
+    "columns": {
+      "orderCode": "Order code",
+      "productionDate": "Production date",
+      "priority": "Priority",
+      "customer": "Customer",
+      "product": "Product",
+      "sizeColor": "Size/Color",
+      "toolNote": "Tool result note",
+      "errorFile": "Error fix file",
+      "errorFileNote": "Error file note",
+      "factoryError": "Factory error"
+    },
+    "markDoneButton": "Checked",
+    "markDoneToastRework": "{{id}}: sent back to designer{{name}} (needs rework).",
+    "markDoneToastAuto": "{{id}}: auto-assigned to designer{{name}}.",
+    "markDoneToastNone": "{{id}}: the factory has no assignment config — the order went to the \"Needs assignment\" backlog (designer self-claim or manual assignment).",
+    "errorReportedTimes": "The factory reported this order {{count}} time(s)",
+    "mockupTitle": "Mockup: {{id}}"
+  },
+  "errorStats": {
+    "title": "Tool check error stats",
+    "subtitle": "orders ever flagged with a Tool result note ≠ ok by a reviewer (including fixed ones), by production entry date · counts orders",
+    "clearCrossFilter": "Clear cross-filter",
+    "viewByCustomer": "View by customer",
+    "expand": "Expand",
+    "collapse": "Collapse",
+    "byCustomer": "By customer",
+    "byProduct": "By product",
+    "byError": "By error type",
+    "byErrorHint": "click to see details",
+    "deselect": "deselect",
+    "noData": "No data yet.",
+    "unknown": "(Unknown)",
+    "detail": {
+      "title": "Error type detail:",
+      "orderCount": "{{count}} orders",
+      "close": "close",
+      "noMatching": "No orders match the filter.",
+      "columns": {
+        "image": "Image",
+        "orderCode": "Order code",
+        "product": "Product",
+        "sizeColor": "Size/Color",
+        "errorFile": "Error file",
+        "errorNote": "Error note",
+        "errorType": "Error type"
+      }
+    }
+  },
+  "customerModal": {
+    "title": "Tool check errors by customer",
+    "subtitle": "{{count}} customers · by production entry date in period · counts orders (including fixed)",
+    "collapseAll": "Collapse all",
+    "expandAll": "Expand all",
+    "errorOrders": "error orders",
+    "viewDetail": "View detail",
+    "errorProducts": "Error products",
+    "errorTypes": "Error types"
+  },
+  "custDetailModal": {
+    "errorProducts": "error products",
+    "filterProduct": "Filter product"
+  }
+}

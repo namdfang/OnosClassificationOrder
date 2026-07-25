@@ -10,6 +10,7 @@ import weekday from 'dayjs/plugin/weekday';
 
 import App from './App';
 import { Toaster } from './components/ui/sonner';
+import { getStoredLanguage } from './i18n';
 import { useThemeStore } from './store/themeStore';
 import { registerImageCacheSW } from './utils/registerSW';
 
@@ -20,7 +21,10 @@ dayjs.extend(customParseFormat);
 dayjs.extend(weekday);
 dayjs.extend(localeData);
 dayjs.extend(relativeTime);
-dayjs.locale('vi');
+
+const initialLanguage = getStoredLanguage();
+dayjs.locale(initialLanguage);
+document.documentElement.lang = initialLanguage;
 
 registerImageCacheSW();
 

@@ -1,4 +1,5 @@
 import React, { useState } from 'react';
+import { useTranslation } from 'react-i18next';
 import { Check, Copy } from 'lucide-react';
 
 import { cn } from '@/utils/cn';
@@ -16,6 +17,7 @@ interface CopyButtonProps {
  * inside table cells).
  */
 export function CopyButton({ value, className, iconSize = 12, label }: CopyButtonProps) {
+  const { t } = useTranslation('common');
   const [copied, setCopied] = useState(false);
 
   const handleCopy = async (e: React.MouseEvent) => {
@@ -30,7 +32,11 @@ export function CopyButton({ value, className, iconSize = 12, label }: CopyButto
     }
   };
 
-  const titleText = copied ? 'Đã copy!' : label ? `Copy ${label}` : 'Copy';
+  const titleText = copied
+    ? t('actions.copied')
+    : label
+      ? `${t('actions.copy')} ${label}`
+      : t('actions.copy');
 
   return (
     <button

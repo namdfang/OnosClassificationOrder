@@ -1,4 +1,6 @@
 import React from 'react';
+import { useTranslation } from 'react-i18next';
+import type { TFunction } from 'i18next';
 import { Clock } from 'lucide-react';
 import { DesignerStatus, WorkshopConfigCategory } from 'shared';
 
@@ -86,7 +88,43 @@ export type WorkshopOrderRow = {
   holdReason?: string;
 };
 
-const DESIGNER_STATUS_META: Record<DesignerStatus, { label: string; cls: string; tooltip: string }> = {
+function buildDesignerStatusMeta(t: TFunction<'orders'>): Record<DesignerStatus, { label: string; cls: string; tooltip: string }> {
+  return {
+    [DesignerStatus.Unassigned]: {
+      label: t('workshopCols.designerStatus.unassigned.label'),
+      cls: 'bg-zinc-100 text-zinc-600 dark:bg-zinc-800 dark:text-zinc-300',
+      tooltip: t('workshopCols.designerStatus.unassigned.tooltip'),
+    },
+    [DesignerStatus.Assigned]: {
+      label: t('workshopCols.designerStatus.assigned.label'),
+      cls: 'bg-zinc-200 text-zinc-700 dark:bg-zinc-700 dark:text-zinc-200',
+      tooltip: t('workshopCols.designerStatus.assigned.tooltip'),
+    },
+    [DesignerStatus.InProgress]: {
+      label: t('workshopCols.designerStatus.inProgress.label'),
+      cls: 'bg-indigo-100 text-indigo-700 dark:bg-indigo-900/40 dark:text-indigo-300',
+      tooltip: t('workshopCols.designerStatus.inProgress.tooltip'),
+    },
+    [DesignerStatus.Done]: {
+      label: t('workshopCols.designerStatus.done.label'),
+      cls: 'bg-emerald-100 text-emerald-700 dark:bg-emerald-900/40 dark:text-emerald-300',
+      tooltip: t('workshopCols.designerStatus.done.tooltip'),
+    },
+    [DesignerStatus.Rejected]: {
+      label: t('workshopCols.designerStatus.rejected.label'),
+      cls: 'bg-rose-100 text-rose-700 dark:bg-rose-900/40 dark:text-rose-300',
+      tooltip: t('workshopCols.designerStatus.rejected.tooltip'),
+    },
+    [DesignerStatus.Rework]: {
+      label: t('workshopCols.designerStatus.rework.label'),
+      cls: 'bg-amber-100 text-amber-700 dark:bg-amber-900/40 dark:text-amber-300',
+      tooltip: t('workshopCols.designerStatus.rework.tooltip'),
+    },
+  };
+}
+
+/** Fallback y hệt bản gốc — dùng khi `ctx.t` không có (consumer ngoài batch i18n này). */
+const DESIGNER_STATUS_META_FALLBACK: Record<DesignerStatus, { label: string; cls: string; tooltip: string }> = {
   [DesignerStatus.Unassigned]: {
     label: 'Chưa gán',
     cls: 'bg-zinc-100 text-zinc-600 dark:bg-zinc-800 dark:text-zinc-300',
@@ -119,6 +157,38 @@ const DESIGNER_STATUS_META: Record<DesignerStatus, { label: string; cls: string;
   },
 };
 
+/**
+ * Header cột / group được định nghĩa module-scope (`WORKSHOP_COLS`,
+ * `BASE_GROUP_DEFS`) vì được import trực tiếp (không qua factory function) bởi
+ * nhiều trang khác ngoài batch i18n này (OrderFactoryTab, DesignerDrillPanel,
+ * DesignerAssignBacklog, OrdersMiniTable…) — đổi shape sẽ vỡ build các trang đó.
+ * 2 helper dưới đây cho phép các trang ĐÃ convert i18n (trong batch này) dịch
+ * label/title mà không cần đổi shape `WORKSHOP_COLS`/`BASE_GROUP_DEFS`: dùng
+ * key `workshopCols.col.<key>` / `workshopCols.group.<key>` nếu có bản dịch,
+ * fallback về text tiếng Việt gốc (`fallback`) nếu chưa có key.
+ */
+export function colLabel(t: TFunction<'orders'>, key: string, fallback: string): string {
+  return t(`workshopCols.col.${key}`, { defaultValue: fallback });
+}
+export function groupTitle(t: TFunction<'orders'>, key: string, fallback: string): string {
+  return t(`workshopCols.group.${key}`, { defaultValue: fallback });
+}
+
+/**
+ * Dịch 1 chuỗi động BÊN TRONG `render()` của `WorkshopColMeta` (hint/badge/toast)
+ * qua `ctx.t` optional — xem ghi chú `WorkshopRenderCtx.t`. `render()` là hàm
+ * thường (không phải component) nên KHÔNG được gọi `useTranslation` trực tiếp;
+ * `ctx.t` do component cha (đã có hook context) truyền xuống.
+ */
+function tr(
+  ctx: WorkshopRenderCtx,
+  key: string,
+  fallback: string,
+  options?: Record<string, unknown>,
+): string {
+  return ctx.t ? ctx.t(key, { defaultValue: fallback, ...options }) : fallback;
+}
+
 export interface WorkshopRenderCtx {
   canEditField: (field: string) => boolean;
   patchRow: (id: string, patch: Partial<WorkshopOrderRow>) => void;
@@ -129,6 +199,13 @@ export interface WorkshopRenderCtx {
   openPreview: (url: string, title: string, originalUrl?: string, sourceUrl?: string) => void;
   /** Mở OrderDetailDialog cho đơn (hiện preview file cutting + info). */
   openDetail?: (orderId: string, productionId: string) => void;
+  /**
+   * i18n `t` (namespace `orders`) — optional để không phá vỡ các trang gọi
+   * `c.render(row, ctx)` chưa convert i18n (out-of-batch). Khi có, các chuỗi
+   * động bên trong render (hint/badge/toast) dịch theo ngôn ngữ hiện tại;
+   * không có thì fallback y hệt text tiếng Việt gốc.
+   */
+  t?: TFunction<'orders'>;
 }
 
 export type WorkshopColMeta = {
@@ -147,6 +224,7 @@ export type WorkshopColMeta = {
  * gọi lại mỗi hàng (số lần gọi hook sẽ đổi theo số dòng → vi phạm Rules of Hooks).
  */
 function PriorityCell({ row, ctx }: { row: WorkshopOrderRow; ctx: WorkshopRenderCtx }) {
+  const { t } = useTranslation('orders');
   const activeStage = getActiveStageKey(row);
   const stageState = activeStage
     ? (row.fulfillmentStages?.[activeStage] as { waitingAt?: string; startedAt?: string } | undefined)
@@ -159,7 +237,7 @@ function PriorityCell({ row, ctx }: { row: WorkshopOrderRow; ctx: WorkshopRender
       : stageState?.startedAt || stageState?.waitingAt;
   const deadline = activeStage ? getStageDeadline(row.priority, activeStage, enteredAt) : undefined;
   const now = useNow(30_000);
-  const countdown = deadline ? formatCountdown(deadline, now) : undefined;
+  const countdown = deadline ? formatCountdown(deadline, now, t) : undefined;
   return (
     <div className="flex flex-col gap-1 items-start">
       <PrioritySelectCell
@@ -188,22 +266,23 @@ export const WORKSHOP_COLS: WorkshopColMeta[] = [
     label: 'Nhà máy / Phòng',
     perm: null,
     width: 'min-w-[180px]',
-    render: (r) => {
+    render: (r, ctx) => {
       const hasMapping = !!(r.factory?.name || r.machineType?.name);
       if (!hasMapping) {
         return (
-          <Hint content="Type của order không match với product config nào — chưa xác định được xưởng/máy" forceRich>
+          <Hint content={tr(ctx, 'workshopCols.misc.noMappingHint', 'Type của order không match với product config nào — chưa xác định được xưởng/máy')} forceRich>
             <Badge variant="warning" className="cursor-help">
-              Chưa mapping
+              {tr(ctx, 'workshopCols.misc.noMapping', 'Chưa mapping')}
             </Badge>
           </Hint>
         );
       }
+      const codeLabel = tr(ctx, 'workshopCols.misc.codeLabel', 'mã');
       return (
         <div className="flex flex-col gap-1">
           {r.factory?.name && (
             <Hint
-              content={`Nhà máy: ${r.factory.name}${r.factory.shortName ? ' (mã: ' + r.factory.shortName + ')' : ''}`}
+              content={`${tr(ctx, 'workshopCols.misc.factoryLabel', 'Nhà máy')}: ${r.factory.name}${r.factory.shortName ? ` (${codeLabel}: ${r.factory.shortName})` : ''}`}
               forceRich
             >
               <Badge variant="success" className="w-fit cursor-help text-[10px] py-0 px-1.5">
@@ -213,7 +292,7 @@ export const WORKSHOP_COLS: WorkshopColMeta[] = [
           )}
           {r.machineType?.name && (
             <Hint
-              content={`Phòng: ${r.machineType.name}${r.machineType.shortName ? ' (mã: ' + r.machineType.shortName + ')' : ''}`}
+              content={`${tr(ctx, 'workshopCols.misc.roomLabel', 'Phòng')}: ${r.machineType.name}${r.machineType.shortName ? ` (${codeLabel}: ${r.machineType.shortName})` : ''}`}
               forceRich
             >
               <Badge variant="secondary" className="w-fit cursor-help text-[10px] py-0 px-1.5">
@@ -243,7 +322,14 @@ export const WORKSHOP_COLS: WorkshopColMeta[] = [
               iconSize={15}
               className="p-1 hover:ring-1 hover:ring-primary/40"
             />
-            <Hint content={ctx.openDetail ? 'Click để xem chi tiết' : `Production ID: ${r.productionId}`} forceRich>
+            <Hint
+              content={
+                ctx.openDetail
+                  ? tr(ctx, 'workshopCols.misc.clickForDetail', 'Click để xem chi tiết')
+                  : `Production ID: ${r.productionId}`
+              }
+              forceRich
+            >
               {ctx.openDetail ? (
                 <button
                   type="button"
@@ -262,7 +348,7 @@ export const WORKSHOP_COLS: WorkshopColMeta[] = [
               )}
             </Hint>
             {hasCuttingFile && (
-              <Hint content="Đã map file cutting" forceRich>
+              <Hint content={tr(ctx, 'workshopCols.misc.cuttingFileMapped', 'Đã map file cutting')} forceRich>
                 <span className="text-emerald-600 dark:text-emerald-400 text-[10px]" aria-label="cutting">
                   ✂
                 </span>
@@ -455,7 +541,12 @@ export const WORKSHOP_COLS: WorkshopColMeta[] = [
           {showCount && (
             <span
               className="text-[10px] font-bold px-1.5 py-0.5 rounded bg-rose-100 text-rose-700 dark:bg-rose-500/20 dark:text-rose-300"
-              title={`Xưởng đã báo lỗi ${r.productionErrorCount} lần trên đơn này`}
+              title={tr(
+                ctx,
+                'workshopCols.misc.factoryReportedErrors',
+                `Xưởng đã báo lỗi ${r.productionErrorCount} lần trên đơn này`,
+                { count: r.productionErrorCount },
+              )}
             >
               ×{r.productionErrorCount}
             </span>
@@ -493,7 +584,7 @@ export const WORKSHOP_COLS: WorkshopColMeta[] = [
         value={r.errorFileNote}
         canEdit={ctx.canEditField('errorFileNote')}
         onUpdated={(v) => ctx.patchRow(r._id, { errorFileNote: v ?? undefined })}
-        tooltipLabel="Ghi chú file lỗi"
+        tooltipLabel={tr(ctx, 'workshopCols.col.errorFileNote', 'Ghi chú file lỗi')}
       />
     ),
   },
@@ -551,7 +642,7 @@ export const WORKSHOP_COLS: WorkshopColMeta[] = [
         value={r.productionErrorNote}
         canEdit={ctx.canEditField('productionErrorNote')}
         onUpdated={(v) => ctx.patchRow(r._id, { productionErrorNote: v ?? undefined })}
-        tooltipLabel="Mô tả lỗi xưởng"
+        tooltipLabel={tr(ctx, 'workshopCols.col.productionErrorNote', 'Mô tả lỗi xưởng')}
       />
     ),
   },
@@ -565,7 +656,11 @@ export const WORKSHOP_COLS: WorkshopColMeta[] = [
         orderId={r._id}
         value={r.assignee}
         canEdit={ctx.canEditField('assignee')}
-        blockedReason={r.toolResultNote === 'ok' ? "Đơn đã 'ok' (Note kq Tool 1) — không cần gán designer" : undefined}
+        blockedReason={
+          r.toolResultNote === 'ok'
+            ? tr(ctx, 'workshopCols.misc.blockedAssignReason', "Đơn đã 'ok' (Note kq Tool 1) — không cần gán designer")
+            : undefined
+        }
         onUpdated={(v) => ctx.patchRow(r._id, { assignee: v ?? undefined })}
       />
     ),
@@ -575,9 +670,9 @@ export const WORKSHOP_COLS: WorkshopColMeta[] = [
     label: 'TT Designer',
     perm: 'order.field.designerStatus.view',
     width: 'min-w-[110px]',
-    render: (r) => {
+    render: (r, ctx) => {
       const status = (r.designerStatus as DesignerStatus) || DesignerStatus.Unassigned;
-      const meta = DESIGNER_STATUS_META[status];
+      const meta = (ctx.t ? buildDesignerStatusMeta(ctx.t) : DESIGNER_STATUS_META_FALLBACK)[status];
       const rework = r.designerReworkCount && r.designerReworkCount > 0 ? ` · ${r.designerReworkCount}×` : '';
       return (
         <Hint content={meta.tooltip} forceRich>
@@ -755,13 +850,14 @@ export function GroupCellContent({
   renderedByKey: Map<string, React.ReactNode>;
   extra?: (memberKey: string) => React.ReactNode;
 }) {
+  const { t } = useTranslation('orders');
   return (
     <div className="flex flex-col gap-1">
       {group.members.map((c) => (
         <div key={c.key} className="flex items-center gap-1.5 min-w-0">
           {!HEADLINE_KEYS.has(c.key) && (
             <span className="w-[46px] shrink-0 text-[9px] font-medium uppercase tracking-wide text-muted-foreground/70">
-              {FIELD_LABELS[c.key] || c.label}
+              {t(`workshopCols.short.${c.key}`, { defaultValue: FIELD_LABELS[c.key] || c.label })}
             </span>
           )}
           <div className="min-w-0 flex-1 flex items-center gap-1">

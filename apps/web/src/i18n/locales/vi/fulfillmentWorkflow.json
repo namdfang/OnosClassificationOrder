@@ -1,0 +1,179 @@
+{
+  "stageLabels": {
+    "print": "In",
+    "press": "Ép",
+    "qc-post-press": "QC sau ép",
+    "sew-in": "May nhận vào",
+    "sew-out": "May xuất ra",
+    "pack": "Đóng hàng"
+  },
+  "stageStatus": {
+    "all": "Tất cả",
+    "waiting": "Đang chờ",
+    "inProgress": "Đang làm",
+    "rework": "Làm lại",
+    "done": "Đã xong",
+    "fixed": "Đã sửa",
+    "watching": "Đang chờ quay lại",
+    "unassigned": "Chưa gán Designer"
+  },
+  "actions": {
+    "start": "Bắt đầu",
+    "complete": "Hoàn thành",
+    "reportError": "Báo lỗi",
+    "pushBack": "Đẩy về xử lý",
+    "assignDesigner": "Gán Designer"
+  },
+  "errorSource": {
+    "designer": "Do designer",
+    "toolCheck": "Do soát tool",
+    "factory": "Do xưởng",
+    "generic": "Lỗi"
+  },
+  "toast": {
+    "copyError": "Không copy được — trình duyệt chặn clipboard",
+    "notFound": "Không tìm thấy đơn với mã này",
+    "updated": "Đã cập nhật",
+    "started": "Đã bắt đầu",
+    "completed": "Đã hoàn thành",
+    "reworkedBack": "Đã đẩy về xử lý",
+    "bulkDone": "Đã {{verb}} {{count}} đơn",
+    "bulkPartial": "Đã {{verb}} {{ok}}/{{total}} đơn ({{fail}} lỗi)"
+  },
+  "verbs": {
+    "start": "bắt đầu",
+    "complete": "hoàn thành"
+  },
+  "kanban": {
+    "header": {
+      "title": "Task của tôi — {{stage}}",
+      "factory": "Xưởng: {{factory}}"
+    },
+    "noStage": "Tài khoản chưa được gán",
+    "noStageStrong": "Stage Fulfillment",
+    "noStageSuffix": ". Liên hệ Admin để gán.",
+    "hint": {
+      "tip": "Mẹo chọn nhiều đơn:",
+      "body1": "Tick checkbox cạnh tên sản phẩm để chọn toàn bộ đơn của sản phẩm đó. Hoặc tick 1 đơn, giữ",
+      "body2": "rồi click checkbox khác (trong cùng cột) để chọn nhanh tất cả đơn ở giữa. Kéo card \"Đang chờ\"/\"Làm lại\" sang \"Đang làm\" cũng được."
+    },
+    "search": {
+      "label": "Tìm / Quét mã",
+      "copyTitle": "Copy mã đang tìm",
+      "placeholder": "Gõ tay hoặc quét mã (N-…) rồi Enter để mở đơn",
+      "historyTitle": "Lịch sử tra cứu",
+      "strippedPrefix": "✓ đã bỏ \"{{prefix}}\" → tìm:",
+      "hintPre": "Quét mã hoặc Enter → mở đơn để",
+      "hintSuffix": ". Gõ để lọc kanban."
+    },
+    "dateAllPlaceholder": "Tất cả",
+    "filters": {
+      "type": "Sản phẩm",
+      "fabricType": "Loại vải",
+      "machineNumber": "Máy",
+      "toolResult": "Kết quả Tool",
+      "userSku": "Khách hàng (SKU)"
+    },
+    "selection": {
+      "selected": "Đã chọn",
+      "multiColumn": "(Đơn ở nhiều cột — chỉ bulk cùng 1 cột)"
+    },
+    "history": {
+      "title": "Lịch sử tra cứu",
+      "empty": "Chưa có lượt tra cứu nào. Quét hoặc gõ mã rồi Enter để bắt đầu.",
+      "found": "Tìm thấy",
+      "notFound": "Không tìm thấy",
+      "clear": "Xoá lịch sử"
+    },
+    "column": {
+      "expandTitle": "Click để mở",
+      "collapseTitle": "Click để thu gọn",
+      "empty": "Trống",
+      "noType": "— Chưa có type —"
+    },
+    "dragWarning": "Chỉ kéo được \"{{waiting}}\" / \"{{rework}}\" sang \"{{inProgress}}\". Đơn hoàn thành dùng nút \"{{complete}}\"; báo lỗi dùng nút \"{{reportError}}\"."
+  },
+  "printTable": {
+    "keyboardMode": {
+      "toggleTitle": "Bật/tắt copy Production ID bằng phím mũi tên ↑ ↓",
+      "label": "Chế độ phím ↑↓",
+      "on": "On",
+      "off": "Off"
+    },
+    "keyboardHint": {
+      "pre": "Nhấn",
+      "mid": "để copy Production ID từng dòng. Chỉ dòng đang trỏ hiện dấu",
+      "suffix": "— di chuyển cursor thì dấu nhảy theo."
+    },
+    "shiftHint": {
+      "pre": "Tick 1 đơn, giữ",
+      "suffix": "rồi click checkbox khác để chọn nhanh tất cả đơn ở giữa."
+    },
+    "selectAllTitle": "Chọn toàn bộ đơn hợp lệ trên trang",
+    "rowSelectableTitle": "Shift+click để chọn cả range",
+    "rowNotSelectableTitle": "Đơn không thao tác được ở stage In",
+    "historyTitle": "Lịch sử",
+    "noResults": "Không có đơn hàng nào phù hợp",
+    "defaultActionLabel": "Thao tác",
+    "copiedAria": "Đã copy Production ID",
+    "facets": {
+      "type": "Tên sản phẩm",
+      "userSku": "Khách hàng (SKU)",
+      "fabricType": "Loại vải",
+      "machineNumber": "Máy",
+      "printStatus": "Trạng thái in",
+      "toolResult": "Kết quả Tool",
+      "toolResultNote": "Note kq Tool",
+      "errorFile": "File sửa lỗi",
+      "assignee": "Người thực hiện",
+      "designerStatus": "TT Designer",
+      "productionError": "Lỗi xưởng"
+    }
+  },
+  "taskCard": {
+    "copyTitle": "Copy productionId",
+    "previewTitle": "Click để xem to",
+    "typeTooltip": "Type: {{type}}",
+    "qty": "qty {{quantity}}",
+    "customerTooltip": "Khách hàng (SKU): {{sku}}",
+    "timeLabels": {
+      "waiting": "Nhận",
+      "inProgress": "Bắt đầu",
+      "rework": "Quay lại",
+      "done": "Xong"
+    },
+    "timeHint": "{{label}} lúc {{time}} ({{relative}})",
+    "deadlineHint": "Hạn dự kiến bước {{stage}} · {{time}}",
+    "reworkHint": "Đơn này đã rework {{count}} lần",
+    "watchingPrefix": "Đang ở:",
+    "watchingDesignerRework": "Designer (rework)",
+    "errorStageSuffix": "· đang ở {{stage}}",
+    "errorDesignerSuffix": "· đang ở Designer"
+  },
+  "reworkDialog": {
+    "title": "Báo lỗi đơn {{code}}",
+    "description": "Chọn nơi nhận xử lý (Designer hoặc 1 stage trước) + mô tả lỗi.",
+    "pushTo": "Đẩy về",
+    "designer": "Designer",
+    "reasonLabel": "Lý do lỗi",
+    "reasonPlaceholder": "Mô tả ngắn gọn lỗi gặp phải...",
+    "submit": "Đẩy về xử lý"
+  },
+  "stageErrorPanel": {
+    "title": "Thống kê lỗi công đoạn theo ngày",
+    "loading": "Đang tải…",
+    "empty": "Không có lỗi trong kỳ.",
+    "colErrorCode": "Mã lỗi",
+    "colTotal": "Tổng"
+  },
+  "printWorkshop": {
+    "extraActionLabel": "Thao tác In",
+    "confirmDialog": {
+      "title": "Xác nhận chuyển trạng thái",
+      "bodyPrefix": "Các đơn đang chọn có trạng thái khác nhau. Chỉ",
+      "bodyMid": "đơn hợp lệ sẽ được",
+      "skippedNote": "({{count}} đơn trạng thái khác bị bỏ qua)",
+      "continue": ". Tiếp tục?"
+    }
+  }
+}

@@ -1,4 +1,5 @@
 import React, { useEffect, useState } from 'react';
+import { useTranslation } from 'react-i18next';
 import { useParams } from 'react-router-dom';
 import dayjs from 'dayjs';
 import { AlertCircle, Circle, CircleCheck, CircleDot } from 'lucide-react';
@@ -20,6 +21,7 @@ function stageIcon(status: string) {
 }
 
 function CustomerOrderTrack() {
+  const { t } = useTranslation('customerPortal');
   const { productionId } = useParams<{ productionId: string }>();
   const [data, setData] = useState<TrackData | null>(null);
   const [loading, setLoading] = useState(true);
@@ -46,7 +48,7 @@ function CustomerOrderTrack() {
   }
 
   if (notFound || !data) {
-    return <p className="text-sm text-muted-foreground py-16 text-center">Không tìm thấy đơn hàng này.</p>;
+    return <p className="text-sm text-muted-foreground py-16 text-center">{t('track.notFound')}</p>;
   }
 
   const { order, track } = data;
@@ -57,20 +59,24 @@ function CustomerOrderTrack() {
         <div>
           <h1 className="text-lg font-semibold">{order.productionId}</h1>
           <p className="text-sm text-muted-foreground mt-1">
-            {order.type || '-'} · {order.color || '-'} / {order.size || '-'} · SL {order.quantity ?? '-'}
+            {order.type || '-'} · {order.color || '-'} / {order.size || '-'} · {t('track.quantityShort')}{' '}
+            {order.quantity ?? '-'}
           </p>
         </div>
         {order.cancelledAt ? (
-          <Badge variant="destructive">Đã hủy{order.cancelReason ? `: ${order.cancelReason}` : ''}</Badge>
+          <Badge variant="destructive">
+            {t('track.cancelled')}
+            {order.cancelReason ? `: ${order.cancelReason}` : ''}
+          </Badge>
         ) : track.completed ? (
-          <Badge variant="success">Hoàn thành</Badge>
+          <Badge variant="success">{t('track.completed')}</Badge>
         ) : (
-          <Badge variant="secondary">Đang xử lý</Badge>
+          <Badge variant="secondary">{t('track.processing')}</Badge>
         )}
       </div>
 
       <div className="bg-card border border-border rounded-xl p-6">
-        <h2 className="text-sm font-semibold mb-4">Tiến trình đơn hàng</h2>
+        <h2 className="text-sm font-semibold mb-4">{t('track.progressTitle')}</h2>
         <ol className="space-y-4">
           {track.stages.map((stage) => (
             <li key={stage.key} className="flex items-start gap-3">

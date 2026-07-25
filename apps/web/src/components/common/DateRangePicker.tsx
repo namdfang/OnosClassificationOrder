@@ -1,4 +1,6 @@
 import React, { useState } from 'react';
+import { useTranslation } from 'react-i18next';
+import type { TFunction } from 'i18next';
 import { Calendar, ChevronDown, X } from 'lucide-react';
 
 import { Button } from '@/components/ui/button';
@@ -7,6 +9,10 @@ import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover
 
 import { cn } from '@/utils/cn';
 import { DATE_PRESETS, matchPreset, QUICK_PRESET_KEYS } from '@/utils/dateRangePresets';
+
+function presetLabel(t: TFunction<'common'>, key: string, fallback: string): string {
+  return t(`datePresets.${key}`, { defaultValue: fallback });
+}
 
 interface DateRangePickerProps {
   from: string;
@@ -45,6 +51,7 @@ function CustomRangeBody({
   heading: string;
   onClose: () => void;
 }) {
+  const { t } = useTranslation('common');
   const [draftFrom, setDraftFrom] = useState(from);
   const [draftTo, setDraftTo] = useState(to);
   const hasValue = !!(from || to);
@@ -53,14 +60,14 @@ function CustomRangeBody({
     <div className="space-y-2">
       <p className="text-[10px] uppercase tracking-wide text-muted-foreground font-medium">{heading}</p>
       <div className="flex items-center gap-1.5">
-        <label className="text-xs text-muted-foreground">Từ</label>
+        <label className="text-xs text-muted-foreground">{t('dateRange.from')}</label>
         <Input
           type="date"
           value={draftFrom}
           onChange={(e) => setDraftFrom(e.target.value)}
           className="h-8 text-xs flex-1"
         />
-        <label className="text-xs text-muted-foreground">đến</label>
+        <label className="text-xs text-muted-foreground">{t('dateRange.to')}</label>
         <Input
           type="date"
           value={draftTo}
@@ -79,7 +86,7 @@ function CustomRangeBody({
               onClose();
             }}
           >
-            <X size={11} /> Xóa
+            <X size={11} /> {t('actions.clearFilter')}
           </Button>
         )}
         <Button
@@ -91,7 +98,7 @@ function CustomRangeBody({
             onClose();
           }}
         >
-          Áp dụng
+          {t('actions.apply')}
         </Button>
       </div>
     </div>
@@ -112,13 +119,15 @@ export function DateRangePicker({
   to,
   onChange,
   clearable = true,
-  placeholder = 'Chọn ngày',
+  placeholder,
   variant = 'popover',
   className,
 }: DateRangePickerProps) {
+  const { t } = useTranslation('common');
   const [open, setOpen] = useState(false);
   const activeKey = matchPreset(from, to);
   const hasValue = !!(from || to);
+  const resolvedPlaceholder = placeholder ?? t('dateRange.placeholder');
 
   // ─── Variant inline ─────────────────────────────────────────────
   if (variant === 'inline') {
@@ -143,14 +152,14 @@ export function DateRangePicker({
             }}
             className={cn(pillBase, p.key === activeKey ? pillActive : pillIdle)}
           >
-            {p.label}
+            {presetLabel(t, p.key, p.label)}
           </button>
         ))}
         <Popover open={open} onOpenChange={setOpen}>
           <PopoverTrigger asChild>
             <button type="button" className={cn(pillBase, isCustom ? pillActive : pillIdle)}>
               <Calendar size={12} className={cn(!isCustom && 'text-muted-foreground')} />
-              {isCustom ? `${fmt(from)} → ${fmt(to)}` : 'Tùy chỉnh'}
+              {isCustom ? `${fmt(from)} → ${fmt(to)}` : t('dateRange.custom')}
               <ChevronDown size={11} className="text-muted-foreground" />
             </button>
           </PopoverTrigger>
@@ -160,7 +169,7 @@ export function DateRangePicker({
               to={to}
               onChange={onChange}
               clearable={clearable}
-              heading="Chọn khoảng tùy chỉnh"
+              heading={t('dateRange.customHeading')}
               onClose={() => setOpen(false)}
             />
           </PopoverContent>
@@ -170,8 +179,8 @@ export function DateRangePicker({
   }
 
   // ─── Variant popover (mặc định — giữ nguyên hành vi cũ) ──────────
-  const activeLabel = DATE_PRESETS.find((p) => p.key === activeKey)?.label;
-  const label = activeLabel || (from && to ? `${fmt(from)} → ${fmt(to)}` : from || to || placeholder);
+  const activeLabel = activeKey ? presetLabel(t, activeKey, DATE_PRESETS.find((p) => p.key === activeKey)?.label ?? '') : undefined;
+  const label = activeLabel || (from && to ? `${fmt(from)} → ${fmt(to)}` : from || to || resolvedPlaceholder);
 
   return (
     <div className={cn('inline-flex items-center', className)}>
@@ -203,7 +212,7 @@ export function DateRangePicker({
                       : 'border-border bg-background hover:bg-muted/40 text-foreground',
                   )}
                 >
-                  {p.label}
+                  {presetLabel(t, p.key, p.label)}
                 </button>
               );
             })}
@@ -215,7 +224,7 @@ export function DateRangePicker({
               to={to}
               onChange={onChange}
               clearable={clearable}
-              heading="Hoặc chọn khoảng tùy chỉnh"
+              heading={t('dateRange.customHeadingOr')}
               onClose={() => setOpen(false)}
             />
           </div>

@@ -1,4 +1,5 @@
 import React, { useEffect, useState } from 'react';
+import { useTranslation } from 'react-i18next';
 import { useSearchParams } from 'react-router-dom';
 import { BarChart3, ClipboardList, Factory, FileSearch, Palette, TriangleAlert, Workflow } from 'lucide-react';
 
@@ -20,6 +21,7 @@ const TABS = ['factory', 'stats', 'status', 'lifecycle', 'tool-check', 'person-e
 type TabKey = (typeof TABS)[number];
 
 export default function Home() {
+  const { t } = useTranslation('dashboard');
   const [searchParams, setSearchParams] = useSearchParams();
   const { has, isAdmin } = usePermission();
   const canSeeDesigner = has('page.designer_stats');
@@ -131,8 +133,8 @@ export default function Home() {
           <BarChart3 size={20} className="text-indigo-600" />
         </div>
         <div className="flex-1">
-          <h1 className="text-2xl font-bold text-foreground">Dashboard</h1>
-          <p className="text-sm text-muted-foreground">Tổng quan hoạt động xưởng</p>
+          <h1 className="text-2xl font-bold text-foreground">{t('page.title')}</h1>
+          <p className="text-sm text-muted-foreground">{t('page.subtitle')}</p>
         </div>
         {isAdmin && <SendTelegramReportButton />}
       </div>
@@ -143,32 +145,32 @@ export default function Home() {
       <Tabs value={activeTab} onValueChange={handleTabChange} className="w-full">
         <TabsList>
           <TabsTrigger value="factory" className="gap-1.5">
-            <Factory size={14} /> Đơn hàng theo xưởng
+            <Factory size={14} /> {t('tabs.factory')}
           </TabsTrigger>
           <TabsTrigger value="stats" className="gap-1.5">
-            <BarChart3 size={14} /> Thống kê đơn & sản phẩm
+            <BarChart3 size={14} /> {t('tabs.stats')}
           </TabsTrigger>
           <TabsTrigger value="status" className="gap-1.5">
-            <ClipboardList size={14} /> Tình trạng đơn hàng
+            <ClipboardList size={14} /> {t('tabs.status')}
           </TabsTrigger>
           {canSeeLifecycle && (
             <TabsTrigger value="lifecycle" className="gap-1.5">
-              <Workflow size={14} /> Vòng đời đơn
+              <Workflow size={14} /> {t('tabs.lifecycle')}
             </TabsTrigger>
           )}
           {canSeeToolCheck && (
             <TabsTrigger value="tool-check" className="gap-1.5">
-              <FileSearch size={14} /> Soát tool
+              <FileSearch size={14} /> {t('tabs.toolCheck')}
             </TabsTrigger>
           )}
           {canSeePersonError && (
             <TabsTrigger value="person-error" className="gap-1.5">
-              <TriangleAlert size={14} /> Lỗi theo người
+              <TriangleAlert size={14} /> {t('tabs.personError')}
             </TabsTrigger>
           )}
           {canSeeDesigner && (
             <TabsTrigger value="designer" className="gap-1.5">
-              <Palette size={14} /> Designer
+              <Palette size={14} /> {t('tabs.designer')}
             </TabsTrigger>
           )}
         </TabsList>

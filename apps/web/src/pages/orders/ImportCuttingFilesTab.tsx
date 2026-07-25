@@ -1,4 +1,6 @@
 import React, { useMemo, useState } from 'react';
+import { Trans, useTranslation } from 'react-i18next';
+import type { TFunction } from 'i18next';
 import { AlertTriangle, CheckCircle2, FileText, Link2, Loader2, Upload, XCircle } from 'lucide-react';
 import type {
   CuttingFileBreakdownRow,
@@ -40,14 +42,18 @@ interface PreviewState {
   };
 }
 
-const INVALID_REASON_LABEL: Record<CuttingFileInvalid['reason'], string> = {
-  'invalid-url': 'URL không hợp lệ (không phải Drive)',
-  'fetch-failed': 'Không tải được tên file (mạng / quyền)',
-  'parse-failed': 'Đọc page Drive được nhưng không trích được tên file',
-  'no-production-id': 'Tên file không khớp pattern XX-XXXXX-XXXXX (2 chữ cái + 5 số + 5 số)',
-};
+function buildInvalidReasonLabel(t: TFunction<'orders'>): Record<CuttingFileInvalid['reason'], string> {
+  return {
+    'invalid-url': t('cuttingFilesTab.invalidReasonLabel.invalidUrl'),
+    'fetch-failed': t('cuttingFilesTab.invalidReasonLabel.fetchFailed'),
+    'parse-failed': t('cuttingFilesTab.invalidReasonLabel.parseFailed'),
+    'no-production-id': t('cuttingFilesTab.invalidReasonLabel.noProductionId'),
+  };
+}
 
 export function ImportCuttingFilesTab({ onApplied }: ImportCuttingFilesTabProps) {
+  const { t } = useTranslation('orders');
+  const INVALID_REASON_LABEL = useMemo(() => buildInvalidReasonLabel(t), [t]);
   const [text, setText] = useState('');
   const [previewing, setPreviewing] = useState(false);
   const [applying, setApplying] = useState(false);
@@ -72,7 +78,7 @@ export function ImportCuttingFilesTab({ onApplied }: ImportCuttingFilesTabProps)
         const wb = XLSX.read(buf, { type: 'array' });
         const sheetName = wb.SheetNames[0];
         if (!sheetName) {
-          toast.error('File rỗng — không có sheet nào');
+          toast.error(t('cuttingFilesTab.emptyFile'));
           return;
         }
         const rows = XLSX.utils.sheet_to_json<unknown[]>(wb.Sheets[sheetName], {
@@ -85,7 +91,7 @@ export function ImportCuttingFilesTab({ onApplied }: ImportCuttingFilesTabProps)
         setText(await file.text());
       }
     } catch (err) {
-      toast.error('Không đọc được file. Kiểm tra format .xlsx / .csv / .txt.');
+      toast.error(t('cuttingFilesTab.fileReadError'));
 
       console.error(err);
     }
@@ -93,11 +99,11 @@ export function ImportCuttingFilesTab({ onApplied }: ImportCuttingFilesTabProps)
 
   const handlePreview = async () => {
     if (links.length === 0) {
-      toast.error('Paste ít nhất 1 link hoặc upload file');
+      toast.error(t('cuttingFilesTab.pasteAtLeastOne'));
       return;
     }
     if (links.length > 2000) {
-      toast.error('Tối đa 2000 link / batch — chia nhỏ file');
+      toast.error(t('cuttingFilesTab.maxLinks'));
       return;
     }
     try {
@@ -123,7 +129,7 @@ export function ImportCuttingFilesTab({ onApplied }: ImportCuttingFilesTabProps)
         cuttingFileName: m.fileName,
       }));
     if (mappings.length === 0) {
-      toast.error('Không có đơn nào để map (bật "Ghi đè" nếu muốn cập nhật đơn đã có file)');
+      toast.error(t('cuttingFilesTab.noOrdersToMap'));
       return;
     }
     try {
@@ -131,14 +137,11 @@ export function ImportCuttingFilesTab({ onApplied }: ImportCuttingFilesTabProps)
       const resp = await RepositoryRemote.order.applyCuttingFiles({ mappings, overwrite });
       const data = resp.data.data as { updated: number; skipped: number };
       if (data.updated === 0) {
-        toast.error(
-          `Không có đơn nào được cập nhật (skip ${data.skipped}). ` +
-            `Kiểm tra console BE — có thể đơn không tồn tại hoặc field bị Mongoose strip.`,
-        );
+        toast.error(t('cuttingFilesTab.updateZero', { skipped: data.skipped }));
       } else if (data.updated < mappings.length) {
-        toast.warning(`Đã map ${data.updated}/${mappings.length} đơn (skip ${data.skipped})`);
+        toast.warning(t('cuttingFilesTab.updatePartial', { updated: data.updated, total: mappings.length, skipped: data.skipped }));
       } else {
-        toast.success(`Đã map ${data.updated} đơn (skip ${data.skipped})`);
+        toast.success(t('cuttingFilesTab.updateSuccess', { updated: data.updated, skipped: data.skipped }));
       }
       setPreview(null);
       setText('');
@@ -162,12 +165,16 @@ export function ImportCuttingFilesTab({ onApplied }: ImportCuttingFilesTabProps)
       <div className="rounded-lg border border-border bg-card p-5 space-y-3">
         <div className="flex items-center justify-between gap-3 flex-wrap">
           <div>
-            <h3 className="text-sm font-semibold text-foreground">Map file cutting (.pdf) cho đơn</h3>
+            <h3 className="text-sm font-semibold text-foreground">{t('cuttingFilesTab.title')}</h3>
             <p className="text-xs text-muted-foreground mt-0.5">
-              Paste hoặc upload list link Google Drive — mỗi link 1 dòng. Tên file dạng{' '}
-              <code className="px-1 rounded bg-muted text-foreground">XX-XXXXX-XXXXX-*.pdf</code> (2 chữ cái + 5 số + 5
-              số, ví dụ <code className="px-1 rounded bg-muted">BH-96341-30608-*.pdf</code>). Hệ thống tự lấy tên file
-              từ Drive (cần share "anyone with link") → parse productionId → match đơn.
+              <Trans
+                i18nKey="cuttingFilesTab.description"
+                ns="orders"
+                components={{
+                  code1: <code className="px-1 rounded bg-muted text-foreground" />,
+                  code2: <code className="px-1 rounded bg-muted" />,
+                }}
+              />
             </p>
           </div>
           <label className="cursor-pointer">
@@ -183,7 +190,7 @@ export function ImportCuttingFilesTab({ onApplied }: ImportCuttingFilesTabProps)
             />
             <span className="inline-flex items-center gap-1.5 h-9 px-3 text-sm font-medium rounded-md border border-input bg-background shadow-sm hover:bg-accent">
               <FileText size={14} />
-              Chọn file (.xlsx cột A)
+              {t('cuttingFilesTab.chooseFile')}
             </span>
           </label>
         </div>
@@ -196,7 +203,7 @@ export function ImportCuttingFilesTab({ onApplied }: ImportCuttingFilesTabProps)
           }}
           rows={10}
           className="font-mono text-xs"
-          placeholder="https://drive.google.com/file/d/abc.../view&#10;https://drive.google.com/file/d/xyz.../view&#10;..."
+          placeholder={t('cuttingFilesTab.placeholder')}
         />
 
         <div className="flex items-center justify-between">
@@ -204,15 +211,15 @@ export function ImportCuttingFilesTab({ onApplied }: ImportCuttingFilesTabProps)
             <Link2 size={12} />
             {links.length > 0 ? (
               <>
-                <Badge variant="secondary">{links.length}</Badge> link sẵn sàng kiểm tra
+                <Badge variant="secondary">{links.length}</Badge> {t('cuttingFilesTab.linksReady')}
               </>
             ) : (
-              'Chưa có link nào'
+              t('cuttingFilesTab.noLinks')
             )}
           </p>
           <Button onClick={handlePreview} disabled={previewing || links.length === 0}>
             {previewing ? <Spinner size={14} className="text-primary-foreground" /> : <Upload size={14} />}
-            Kiểm tra ({links.length})
+            {t('cuttingFilesTab.checkBtn', { count: links.length })}
           </Button>
         </div>
       </div>
@@ -220,17 +227,17 @@ export function ImportCuttingFilesTab({ onApplied }: ImportCuttingFilesTabProps)
       {preview && (
         <>
           <div className="grid grid-cols-2 md:grid-cols-5 gap-3">
-            <StatCard label="Tổng link" value={preview.summary.totalLinks} icon={Link2} tone="neutral" />
-            <StatCard label="Khớp đơn" value={preview.summary.matched} icon={CheckCircle2} tone="success" />
+            <StatCard label={t('cuttingFilesTab.statTotalLinks')} value={preview.summary.totalLinks} icon={Link2} tone="neutral" />
+            <StatCard label={t('cuttingFilesTab.statMatched')} value={preview.summary.matched} icon={CheckCircle2} tone="success" />
             <StatCard
-              label="Đã có file cũ"
+              label={t('cuttingFilesTab.statExistingFile')}
               value={preview.summary.withExistingFile}
               icon={AlertTriangle}
               tone="warning"
             />
-            <StatCard label="Không tìm thấy đơn" value={preview.summary.notFound} icon={XCircle} tone="warning" />
+            <StatCard label={t('cuttingFilesTab.statNotFound')} value={preview.summary.notFound} icon={XCircle} tone="warning" />
             <StatCard
-              label="Link lỗi"
+              label={t('cuttingFilesTab.statInvalidLink')}
               value={preview.summary.invalid + preview.summary.conflicts}
               icon={XCircle}
               tone="danger"
@@ -239,21 +246,20 @@ export function ImportCuttingFilesTab({ onApplied }: ImportCuttingFilesTabProps)
 
           {(preview.summary.byFactory.length > 0 || preview.summary.byMachineType.length > 0) && (
             <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-              <BreakdownCard title="Phân bổ theo xưởng" rows={preview.summary.byFactory} />
-              <BreakdownCard title="Phân bổ theo máy" rows={preview.summary.byMachineType} />
+              <BreakdownCard title={t('cuttingFilesTab.breakdownFactory')} rows={preview.summary.byFactory} />
+              <BreakdownCard title={t('cuttingFilesTab.breakdownMachine')} rows={preview.summary.byMachineType} />
             </div>
           )}
 
           {preview.conflicts.length > 0 && (
-            <Section
-              title={`Conflict (${preview.conflicts.length}) — cùng productionId xuất hiện > 1 link, vui lòng xoá bớt`}
-              tone="danger"
-            >
+            <Section title={t('cuttingFilesTab.conflictTitle', { count: preview.conflicts.length })} tone="danger">
               <ul className="text-xs space-y-1.5">
                 {preview.conflicts.map((c) => (
                   <li key={c.productionId} className="space-y-1">
                     <span className="font-mono font-semibold text-foreground">{c.productionId}</span>{' '}
-                    <span className="text-muted-foreground">— {c.links.length} link:</span>
+                    <span className="text-muted-foreground">
+                      {t('cuttingFilesTab.linkCountSuffix', { count: c.links.length })}
+                    </span>
                     <ul className="ml-3 space-y-0.5">
                       {c.links.map((l) => (
                         <li key={l} className="font-mono text-[10px] text-muted-foreground break-all">
@@ -268,7 +274,7 @@ export function ImportCuttingFilesTab({ onApplied }: ImportCuttingFilesTabProps)
           )}
 
           {preview.invalid.length > 0 && (
-            <Section title={`Link lỗi (${preview.invalid.length})`} tone="warning">
+            <Section title={t('cuttingFilesTab.invalidTitle', { count: preview.invalid.length })} tone="warning">
               <ul className="text-xs space-y-1">
                 {preview.invalid.map((iv, idx) => (
                   <li key={`${iv.link}-${idx}`}>
@@ -282,7 +288,7 @@ export function ImportCuttingFilesTab({ onApplied }: ImportCuttingFilesTabProps)
           )}
 
           {preview.notFound.length > 0 && (
-            <Section title={`Không tìm thấy đơn (${preview.notFound.length})`} tone="warning">
+            <Section title={t('cuttingFilesTab.notFoundTitle', { count: preview.notFound.length })} tone="warning">
               <ul className="text-xs space-y-1">
                 {preview.notFound.map((nf) => (
                   <li key={nf.link}>
@@ -295,16 +301,16 @@ export function ImportCuttingFilesTab({ onApplied }: ImportCuttingFilesTabProps)
           )}
 
           {preview.matched.length > 0 && (
-            <Section title={`Sẵn sàng map (${preview.matched.length})`} tone="success" defaultOpen>
+            <Section title={t('cuttingFilesTab.readyTitle', { count: preview.matched.length })} tone="success" defaultOpen>
               <div className="overflow-x-auto">
                 <table className="w-full text-xs">
                   <thead className="bg-muted/40 text-muted-foreground">
                     <tr>
-                      <th className="text-left p-2">Production ID</th>
-                      <th className="text-left p-2">Xưởng</th>
-                      <th className="text-left p-2">Máy</th>
-                      <th className="text-left p-2">File mới</th>
-                      <th className="text-left p-2">File cũ</th>
+                      <th className="text-left p-2">{t('cuttingFilesTab.colProductionId')}</th>
+                      <th className="text-left p-2">{t('cuttingFilesTab.colFactory')}</th>
+                      <th className="text-left p-2">{t('cuttingFilesTab.colMachine')}</th>
+                      <th className="text-left p-2">{t('cuttingFilesTab.colNewFile')}</th>
+                      <th className="text-left p-2">{t('cuttingFilesTab.colOldFile')}</th>
                     </tr>
                   </thead>
                   <tbody>
@@ -316,7 +322,7 @@ export function ImportCuttingFilesTab({ onApplied }: ImportCuttingFilesTabProps)
                         <td className="p-2 text-muted-foreground line-clamp-1 max-w-[280px]">{m.fileName}</td>
                         <td className="p-2">
                           {m.existingCuttingFileUrl ? (
-                            <Badge variant="warning">{m.existingCuttingFileName || 'Có file cũ'}</Badge>
+                            <Badge variant="warning">{m.existingCuttingFileName || t('cuttingFilesTab.hasOldFile')}</Badge>
                           ) : (
                             <span className="text-muted-foreground">—</span>
                           )}
@@ -337,15 +343,20 @@ export function ImportCuttingFilesTab({ onApplied }: ImportCuttingFilesTabProps)
                 onChange={(e) => setOverwrite(e.target.checked)}
                 className="h-4 w-4 rounded border-input"
               />
-              Ghi đè file cũ ({preview.summary.withExistingFile} đơn đã có file)
+              {t('cuttingFilesTab.overwriteLabel', { count: preview.summary.withExistingFile })}
             </label>
             <div className="flex items-center gap-3">
               <span className="text-xs text-muted-foreground">
-                Sẽ map <strong className="text-foreground">{eligibleMatchCount}</strong> đơn
+                <Trans
+                  i18nKey="cuttingFilesTab.willMap"
+                  ns="orders"
+                  values={{ count: eligibleMatchCount }}
+                  components={{ strong: <strong className="text-foreground" /> }}
+                />
               </span>
               <Button onClick={handleApply} disabled={applying || eligibleMatchCount === 0}>
                 {applying ? <Loader2 size={14} className="animate-spin" /> : <CheckCircle2 size={14} />}
-                Mapping ({eligibleMatchCount})
+                {t('cuttingFilesTab.mappingBtn', { count: eligibleMatchCount })}
               </Button>
             </div>
           </div>
@@ -410,6 +421,7 @@ function Section({
   children: React.ReactNode;
   defaultOpen?: boolean;
 }) {
+  const { t } = useTranslation('orders');
   const [open, setOpen] = useState(defaultOpen);
   const toneCls = {
     success: 'border-emerald-300 dark:border-emerald-700/50',
@@ -424,7 +436,7 @@ function Section({
         className="w-full px-4 py-2.5 text-left text-sm font-semibold flex items-center justify-between"
       >
         <span className="text-foreground">{title}</span>
-        <span className="text-xs text-muted-foreground">{open ? 'Ẩn' : 'Mở'}</span>
+        <span className="text-xs text-muted-foreground">{open ? t('cuttingFilesTab.hide') : t('cuttingFilesTab.show')}</span>
       </button>
       {open && <div className="px-4 pb-3">{children}</div>}
     </div>

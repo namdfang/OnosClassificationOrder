@@ -1,4 +1,5 @@
 import React, { useEffect, useState } from 'react';
+import { useTranslation } from 'react-i18next';
 import { Copy, KeyRound, RefreshCw } from 'lucide-react';
 import type { DesignerTeamMember } from 'shared';
 import { toast } from 'sonner';
@@ -35,6 +36,7 @@ function randomPassword(): string {
 }
 
 export function TeamMemberDialog({ open, mode, member, onClose, onSaved }: Props) {
+  const { t } = useTranslation(['designerTaskWorkflow', 'common']);
   const [fullName, setFullName] = useState('');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
@@ -63,19 +65,19 @@ export function TeamMemberDialog({ open, mode, member, onClose, onSaved }: Props
     if (!password) return;
     try {
       await navigator.clipboard.writeText(password);
-      toast.success('Đã copy password');
+      toast.success(t('teamMemberDialog.passwordCopied'));
     } catch {
-      toast.error('Trình duyệt chặn clipboard — copy thủ công');
+      toast.error(t('teamMemberDialog.clipboardBlocked'));
     }
   };
 
   const handleSubmit = async () => {
     if (!fullName.trim() || !email.trim()) {
-      toast.error('Vui lòng nhập đủ Tên + Email');
+      toast.error(t('teamMemberDialog.missingFields'));
       return;
     }
     if (mode === 'create' && password.length < 8) {
-      toast.error('Mật khẩu phải có ít nhất 8 ký tự');
+      toast.error(t('teamMemberDialog.passwordTooShort'));
       return;
     }
     try {
@@ -88,7 +90,7 @@ export function TeamMemberDialog({ open, mode, member, onClose, onSaved }: Props
           hireDate: hireDate ? (new Date(hireDate) as unknown as Date) : undefined,
           telegramChatId: telegramChatId || undefined,
         });
-        toast.success(`Đã tạo ${fullName} — gửi mật khẩu cho team trước khi đóng dialog`);
+        toast.success(t('teamMemberDialog.created', { name: fullName }));
       } else if (member) {
         await RepositoryRemote.designer.updateMember(member._id, {
           fullName,
@@ -96,7 +98,7 @@ export function TeamMemberDialog({ open, mode, member, onClose, onSaved }: Props
           hireDate: hireDate ? (new Date(hireDate) as unknown as Date) : null,
           telegramChatId: telegramChatId || null,
         });
-        toast.success('Đã cập nhật');
+        toast.success(t('teamMemberDialog.updated'));
       }
       onSaved();
       onClose();
@@ -111,28 +113,32 @@ export function TeamMemberDialog({ open, mode, member, onClose, onSaved }: Props
     <Dialog open={open} onOpenChange={(o) => !o && onClose()}>
       <DialogContent className="max-w-md">
         <DialogHeader>
-          <DialogTitle>{mode === 'create' ? 'Thêm sub-designer' : 'Sửa thông tin'}</DialogTitle>
+          <DialogTitle>{mode === 'create' ? t('teamMemberDialog.titleCreate') : t('teamMemberDialog.titleEdit')}</DialogTitle>
         </DialogHeader>
 
         <div className="space-y-3">
           <div className="space-y-2">
-            <Label>Tên hiển thị *</Label>
-            <Input value={fullName} onChange={(e) => setFullName(e.target.value)} placeholder="VD: Nguyễn Văn Huy" />
+            <Label>{t('teamMemberDialog.fullNameLabel')}</Label>
+            <Input
+              value={fullName}
+              onChange={(e) => setFullName(e.target.value)}
+              placeholder={t('teamMemberDialog.fullNamePlaceholder')}
+            />
           </div>
 
           <div className="space-y-2">
-            <Label>Email *</Label>
+            <Label>{t('teamMemberDialog.emailLabel')}</Label>
             <Input
               value={email}
               onChange={(e) => setEmail(e.target.value)}
-              placeholder="huy@onospod.com"
+              placeholder={t('teamMemberDialog.emailPlaceholder')}
               type="email"
             />
           </div>
 
           {mode === 'create' && (
             <div className="space-y-2">
-              <Label>Mật khẩu *</Label>
+              <Label>{t('teamMemberDialog.passwordLabel')}</Label>
               <div className="flex gap-2">
                 <Input
                   value={password}
@@ -145,31 +151,37 @@ export function TeamMemberDialog({ open, mode, member, onClose, onSaved }: Props
                   variant="outline"
                   size="sm"
                   onClick={() => setPassword(randomPassword())}
-                  title="Random"
+                  title={t('teamMemberDialog.randomTitle')}
                 >
                   <RefreshCw size={14} />
                 </Button>
-                <Button type="button" variant="outline" size="sm" onClick={copyPassword} title="Copy">
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  onClick={copyPassword}
+                  title={t('teamMemberDialog.copyTitle')}
+                >
                   <Copy size={14} />
                 </Button>
               </div>
               <p className="text-[11px] text-muted-foreground flex items-center gap-1">
-                <KeyRound size={11} /> Copy mật khẩu rồi gửi riêng cho team — sau khi đóng dialog không xem lại được.
+                <KeyRound size={11} /> {t('teamMemberDialog.passwordHint')}
               </p>
             </div>
           )}
 
           <div className="grid grid-cols-2 gap-3">
             <div className="space-y-2">
-              <Label>Ngày vào làm</Label>
+              <Label>{t('teamMemberDialog.hireDateLabel')}</Label>
               <Input type="date" value={hireDate} onChange={(e) => setHireDate(e.target.value)} />
             </div>
             <div className="space-y-2">
-              <Label>Telegram Chat ID</Label>
+              <Label>{t('teamMemberDialog.telegramLabel')}</Label>
               <Input
                 value={telegramChatId}
                 onChange={(e) => setTelegramChatId(e.target.value)}
-                placeholder="optional"
+                placeholder={t('teamMemberDialog.telegramPlaceholder')}
               />
             </div>
           </div>
@@ -177,11 +189,11 @@ export function TeamMemberDialog({ open, mode, member, onClose, onSaved }: Props
 
         <DialogFooter>
           <Button variant="outline" onClick={onClose} disabled={saving}>
-            Hủy
+            {t('common:actions.cancel')}
           </Button>
           <Button onClick={handleSubmit} disabled={saving}>
             {saving && <Spinner size={14} className="mr-2" />}
-            {mode === 'create' ? 'Tạo' : 'Lưu'}
+            {mode === 'create' ? t('teamMemberDialog.submitCreate') : t('teamMemberDialog.submitSave')}
           </Button>
         </DialogFooter>
       </DialogContent>

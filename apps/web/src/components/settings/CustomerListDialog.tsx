@@ -1,4 +1,5 @@
 import React, { useMemo, useRef, useState } from 'react';
+import { Trans, useTranslation } from 'react-i18next';
 import { FileUp, Search } from 'lucide-react';
 import type { Customer } from 'shared';
 import { CUSTOMER_TIERS } from 'shared';
@@ -27,6 +28,7 @@ const TIER_STYLES: Record<number, string> = {
 const RETAIL_STYLE = 'bg-slate-100 text-slate-500 dark:bg-slate-700/60 dark:text-slate-400';
 
 export function TierBadge({ tier }: { tier: number | null | undefined }) {
+  const { t } = useTranslation('customerFactoryAssignment');
   const isVip = typeof tier === 'number' && tier >= 0 && tier <= 5;
   return (
     <span
@@ -35,7 +37,7 @@ export function TierBadge({ tier }: { tier: number | null | undefined }) {
         isVip ? TIER_STYLES[tier as number] : RETAIL_STYLE,
       )}
     >
-      {isVip ? `VIP ${tier}` : 'Khách lẻ'}
+      {isVip ? t('tier.vip', { tier }) : t('tier.retail')}
     </span>
   );
 }
@@ -89,6 +91,7 @@ interface CustomerListDialogProps {
 type TierFilter = 'all' | 'retail' | `${number}`;
 
 export default function CustomerListDialog({ open, onOpenChange, customers, onReload }: CustomerListDialogProps) {
+  const { t } = useTranslation(['customerFactoryAssignment', 'common']);
   const [search, setSearch] = useState('');
   const [tierFilter, setTierFilter] = useState<TierFilter>('all');
   const [savingId, setSavingId] = useState('');
@@ -106,7 +109,7 @@ export default function CustomerListDialog({ open, onOpenChange, customers, onRe
 
   const tierCounts = useMemo(() => {
     const m = new Map<TierFilter, number>([['all', customers.length], ['retail', 0]]);
-    for (const t of CUSTOMER_TIERS) m.set(`${t}`, 0);
+    for (const tier of CUSTOMER_TIERS) m.set(`${tier}`, 0);
     for (const c of customers) {
       const key: TierFilter = typeof c.tier === 'number' ? (`${c.tier}` as TierFilter) : 'retail';
       m.set(key, (m.get(key) || 0) + 1);
@@ -130,7 +133,12 @@ export default function CustomerListDialog({ open, onOpenChange, customers, onRe
       setSavingId(String(c._id));
       await RepositoryRemote.customer.updateTier(String(c._id), tier);
       await onReload();
-      toast.success(`${c.userSku}: ${tier === null ? 'Khách lẻ' : `VIP ${tier}`}`);
+      toast.success(
+        t('customerListDialog.tierChangeSuccess', {
+          sku: c.userSku,
+          tier: tier === null ? t('tier.retail') : t('tier.vip', { tier }),
+        }),
+      );
     } catch (err) {
       handleAxiosError(err);
     } finally {
@@ -141,7 +149,7 @@ export default function CustomerListDialog({ open, onOpenChange, customers, onRe
   const applyParsed = (next: { rows: ParsedRow[]; invalid: string[] }) => {
     setParsed(next);
     setImportResult(null);
-    if (!next.rows.length) toast.error('Không đọc được dòng hợp lệ nào (định dạng: TÊN TÀI KHOẢN + VIP 0..5)');
+    if (!next.rows.length) toast.error(t('customerListDialog.import.noValidRows'));
   };
 
   const handleFile = async (file: File) => {
@@ -157,7 +165,7 @@ export default function CustomerListDialog({ open, onOpenChange, customers, onRe
         applyParsed(parseTierText(await file.text()));
       }
     } catch {
-      toast.error('Không đọc được file');
+      toast.error(t('customerListDialog.import.fileReadError'));
     }
   };
 
@@ -169,7 +177,9 @@ export default function CustomerListDialog({ open, onOpenChange, customers, onRe
       const d = res.data?.data as { matchedSkus: number; updatedCustomers: number; skippedSkus: string[] };
       setImportResult(d);
       await onReload();
-      toast.success(`Đã gán tier cho ${d.updatedCustomers} khách (${d.matchedSkus} tài khoản khớp)`);
+      toast.success(
+        t('customerListDialog.import.toastSuccess', { updated: d.updatedCustomers, matched: d.matchedSkus }),
+      );
     } catch (err) {
       handleAxiosError(err);
     } finally {
@@ -206,7 +216,7 @@ export default function CustomerListDialog({ open, onOpenChange, customers, onRe
       <Dialog open={open} onOpenChange={onOpenChange}>
         <DialogContent className="max-w-3xl">
           <DialogHeader>
-            <DialogTitle>Danh sách khách hàng ({customers.length})</DialogTitle>
+            <DialogTitle>{t('customerListDialog.title', { count: customers.length })}</DialogTitle>
           </DialogHeader>
 
           <div className="space-y-3">
@@ -216,28 +226,28 @@ export default function CustomerListDialog({ open, onOpenChange, customers, onRe
                 <Input
                   value={search}
                   onChange={(e) => setSearch(e.target.value)}
-                  placeholder="Tìm theo SKU / email..."
+                  placeholder={t('customerListDialog.searchPlaceholder')}
                   className="h-8 pl-8 text-sm"
                 />
               </div>
               <Button size="sm" variant="outline" onClick={() => setImportOpen(true)}>
-                <FileUp size={14} /> Import tier
+                <FileUp size={14} /> {t('customerListDialog.importTier')}
               </Button>
             </div>
 
             <div className="flex flex-wrap items-center gap-1.5">
-              {filterChip('all', 'Tất cả')}
+              {filterChip('all', t('customerListDialog.filterAll'))}
               {filterChip('retail', <TierBadge tier={null} />)}
-              {CUSTOMER_TIERS.map((t) => filterChip(`${t}` as TierFilter, <TierBadge tier={t} />))}
+              {CUSTOMER_TIERS.map((tier) => filterChip(`${tier}` as TierFilter, <TierBadge tier={tier} />))}
             </div>
 
             <div className="max-h-[55vh] overflow-y-auto rounded-lg border border-slate-200 dark:border-slate-700/60">
               <table className="w-full text-sm">
                 <thead className="sticky top-0 bg-slate-50 dark:bg-slate-800 text-[11px] uppercase text-slate-500 dark:text-slate-400">
                   <tr>
-                    <th className="text-left px-3 py-2 font-medium">Tài khoản (SKU)</th>
-                    <th className="text-left px-3 py-2 font-medium">Email</th>
-                    <th className="text-left px-3 py-2 font-medium w-36">Tier</th>
+                    <th className="text-left px-3 py-2 font-medium">{t('customerListDialog.table.account')}</th>
+                    <th className="text-left px-3 py-2 font-medium">{t('customerListDialog.table.email')}</th>
+                    <th className="text-left px-3 py-2 font-medium w-36">{t('customerListDialog.table.tier')}</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-slate-100 dark:divide-slate-700/60">
@@ -251,7 +261,7 @@ export default function CustomerListDialog({ open, onOpenChange, customers, onRe
                         </td>
                         <td className="px-3 py-1.5">
                           <div className="inline-flex items-center gap-1.5">
-                            <span className="relative inline-flex" title="Bấm để đổi tier">
+                            <span className="relative inline-flex" title={t('customerListDialog.changeTierTitle')}>
                               <TierBadge tier={c.tier} />
                               <select
                                 value={typeof c.tier === 'number' ? `${c.tier}` : ''}
@@ -259,9 +269,11 @@ export default function CustomerListDialog({ open, onOpenChange, customers, onRe
                                 disabled={savingId === id}
                                 className="absolute inset-0 opacity-0 cursor-pointer"
                               >
-                                <option value="">Khách lẻ</option>
-                                {CUSTOMER_TIERS.map((t) => (
-                                  <option key={t} value={t}>{`VIP ${t}`}</option>
+                                <option value="">{t('tier.retail')}</option>
+                                {CUSTOMER_TIERS.map((tier) => (
+                                  <option key={tier} value={tier}>
+                                    {t('tier.vip', { tier })}
+                                  </option>
                                 ))}
                               </select>
                             </span>
@@ -274,7 +286,7 @@ export default function CustomerListDialog({ open, onOpenChange, customers, onRe
                   {filtered.length === 0 && (
                     <tr>
                       <td colSpan={3} className="px-3 py-6 text-center text-sm text-slate-400">
-                        Không có khách nào khớp bộ lọc.
+                        {t('customerListDialog.noMatch')}
                       </td>
                     </tr>
                   )}
@@ -294,14 +306,10 @@ export default function CustomerListDialog({ open, onOpenChange, customers, onRe
       >
         <DialogContent className="max-w-lg">
           <DialogHeader>
-            <DialogTitle>Import tier khách hàng</DialogTitle>
+            <DialogTitle>{t('customerListDialog.import.title')}</DialogTitle>
           </DialogHeader>
           <div className="space-y-3">
-            <p className="text-xs text-slate-500 dark:text-slate-400">
-              Upload file <span className="font-mono">.xlsx / .csv / .txt</span> hoặc dán trực tiếp, mỗi dòng:{' '}
-              <span className="font-mono">TÊN TÀI KHOẢN&nbsp;&nbsp;VIP 0..5</span>. Khớp theo SKU (không phân biệt
-              hoa/thường), gán cho mọi email trùng SKU; tài khoản chưa có trong danh sách sẽ bị bỏ qua.
-            </p>
+            <p className="text-xs text-slate-500 dark:text-slate-400">{t('customerListDialog.import.description')}</p>
             <input
               ref={fileRef}
               type="file"
@@ -322,7 +330,7 @@ export default function CustomerListDialog({ open, onOpenChange, customers, onRe
                   setImportResult(null);
                 }
               }}
-              placeholder={'Hoặc dán vào đây, VD:\nTIENHC\tVIP 0\nMERCHFOX\tVIP 2'}
+              placeholder={t('customerListDialog.import.pastePlaceholder')}
               rows={5}
               className="w-full rounded-md border border-slate-200 dark:border-slate-700 bg-transparent px-2.5 py-2 text-xs font-mono text-slate-700 dark:text-slate-200"
             />
@@ -330,11 +338,19 @@ export default function CustomerListDialog({ open, onOpenChange, customers, onRe
             {parsed && (
               <div className="rounded-lg bg-slate-50 dark:bg-slate-800/60 px-3 py-2 text-xs space-y-1">
                 <p className="text-slate-600 dark:text-slate-300">
-                  Đọc được <b>{parsed.rows.length}</b> dòng hợp lệ
+                  <Trans
+                    ns="customerFactoryAssignment"
+                    i18nKey="customerListDialog.import.validRows"
+                    values={{ count: parsed.rows.length }}
+                    components={{ b: <b /> }}
+                  />
                   {parsed.invalid.length > 0 && (
-                    <>
-                      , <b className="text-rose-500">{parsed.invalid.length}</b> dòng không hợp lệ (bỏ qua)
-                    </>
+                    <Trans
+                      ns="customerFactoryAssignment"
+                      i18nKey="customerListDialog.import.invalidRowsSuffix"
+                      values={{ count: parsed.invalid.length }}
+                      components={{ b: <b className="text-rose-500" /> }}
+                    />
                   )}
                   .
                 </p>
@@ -349,12 +365,16 @@ export default function CustomerListDialog({ open, onOpenChange, customers, onRe
             {importResult && (
               <div className="rounded-lg bg-emerald-50 dark:bg-emerald-500/10 px-3 py-2 text-xs space-y-1">
                 <p className="text-emerald-700 dark:text-emerald-400">
-                  Đã gán tier cho <b>{importResult.updatedCustomers}</b> khách ({importResult.matchedSkus} tài khoản
-                  khớp).
+                  <Trans
+                    ns="customerFactoryAssignment"
+                    i18nKey="customerListDialog.import.resultSuccess"
+                    values={{ updated: importResult.updatedCustomers, matched: importResult.matchedSkus }}
+                    components={{ b: <b /> }}
+                  />
                 </p>
                 {importResult.skippedSkus.length > 0 && (
                   <p className="text-amber-600 dark:text-amber-400">
-                    Bỏ qua {importResult.skippedSkus.length} tài khoản chưa có trong danh sách:{' '}
+                    {t('customerListDialog.import.resultSkipped', { count: importResult.skippedSkus.length })}{' '}
                     <span className="font-mono">{importResult.skippedSkus.join(', ')}</span>
                   </p>
                 )}
@@ -363,11 +383,11 @@ export default function CustomerListDialog({ open, onOpenChange, customers, onRe
           </div>
           <DialogFooter>
             <Button variant="outline" onClick={() => setImportOpen(false)} disabled={importing}>
-              Đóng
+              {t('actions.close', { ns: 'common' })}
             </Button>
             <Button onClick={handleImport} disabled={importing || !parsed?.rows.length}>
               {importing ? <Spinner size={13} className="mr-1.5" /> : <FileUp size={14} />}
-              Import {parsed?.rows.length ? `(${parsed.rows.length})` : ''}
+              {t('customerListDialog.import.submit')} {parsed?.rows.length ? `(${parsed.rows.length})` : ''}
             </Button>
           </DialogFooter>
         </DialogContent>

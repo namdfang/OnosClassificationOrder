@@ -1,4 +1,5 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
+import { useTranslation } from 'react-i18next';
 import { useNavigate } from 'react-router-dom';
 import { ImageIcon, Pencil, Plus, RotateCw } from 'lucide-react';
 import type { ProductItemSpecific, ProductPrintArea, ProductVariation } from 'shared';
@@ -21,6 +22,14 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@
 import { handleAxiosError } from '@/utils';
 
 import { ImportProductConfigDialog } from './ImportProductConfigDialog';
+
+export const buildStatusMeta = (
+  t: (key: string) => string,
+): Record<ProductConfigStatus, { label: string; className: string }> => ({
+  [ProductConfigStatus.Active]: { label: t('configTab.status.active'), className: 'bg-emerald-500 text-white border-emerald-500' },
+  [ProductConfigStatus.Inactive]: { label: t('configTab.status.inactive'), className: 'bg-amber-500 text-white border-amber-500' },
+  [ProductConfigStatus.Hidden]: { label: t('configTab.status.hidden'), className: 'bg-slate-500 text-white border-slate-500' },
+});
 
 export interface ProductConfigRow {
   _id: string;
@@ -62,14 +71,10 @@ export interface RefItem {
   parentId?: string;
 }
 
-export const STATUS_META: Record<ProductConfigStatus, { label: string; className: string }> = {
-  [ProductConfigStatus.Active]: { label: 'Hiển thị', className: 'bg-emerald-500 text-white border-emerald-500' },
-  [ProductConfigStatus.Inactive]: { label: 'Ẩn khách hàng', className: 'bg-amber-500 text-white border-amber-500' },
-  [ProductConfigStatus.Hidden]: { label: 'Đã ẩn', className: 'bg-slate-500 text-white border-slate-500' },
-};
-
 export function ProductConfigTab() {
+  const { t } = useTranslation('products');
   const navigate = useNavigate();
+  const STATUS_META = useMemo(() => buildStatusMeta(t), [t]);
   const [items, setItems] = useState<ProductConfigRow[]>([]);
   const [loading, setLoading] = useState(false);
   const [search, setSearch] = useState('');
@@ -223,11 +228,11 @@ export function ProductConfigTab() {
   };
 
   const handleClearAll = async () => {
-    if (!confirm('Xóa toàn bộ Product Config? Hành động này không thể hoàn tác.')) return;
+    if (!confirm(t('configTab.clearAll.confirm'))) return;
     try {
       const res = await RepositoryRemote.productConfig.clearAllProductConfigs();
       const removed = res.data.data?.removed ?? 0;
-      toast.success(`Đã xóa ${removed} product config`);
+      toast.success(t('configTab.clearAll.success', { count: removed }));
       if (page !== 1) setPage(1);
       else fetchData();
     } catch (error) {
@@ -240,7 +245,7 @@ export function ProductConfigTab() {
       <div className="flex items-center justify-between gap-3">
         <div className="flex items-center gap-2">
           <Input
-            placeholder="Tìm theo tên, viết tắt, SKU…"
+            placeholder={t('configTab.searchPlaceholder')}
             value={search}
             onChange={(e) => setSearch(e.target.value)}
             onKeyDown={(e) => e.key === 'Enter' && handleSearch()}
@@ -253,9 +258,9 @@ export function ProductConfigTab() {
               setPage(1);
             }}
             className="rounded-md border border-input bg-background px-2 py-2 text-sm focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
-            title="Lọc theo trạng thái — mặc định ẩn các sản phẩm Đã ẩn"
+            title={t('configTab.statusFilter.title')}
           >
-            <option value="">Tất cả (trừ Đã ẩn)</option>
+            <option value="">{t('configTab.statusFilter.allExceptHidden')}</option>
             <option value={ProductConfigStatus.Active}>{STATUS_META[ProductConfigStatus.Active].label}</option>
             <option value={ProductConfigStatus.Inactive}>{STATUS_META[ProductConfigStatus.Inactive].label}</option>
             <option value={ProductConfigStatus.Hidden}>{STATUS_META[ProductConfigStatus.Hidden].label}</option>
@@ -268,15 +273,15 @@ export function ProductConfigTab() {
               try {
                 const res = await RepositoryRemote.order.backfillFabric();
                 const { scanned, updated } = res.data.data;
-                toast.success(`Đã backfill ${updated}/${scanned} đơn (loại vải / tool / máy)`);
+                toast.success(t('configTab.backfill.success', { updated, scanned }));
               } catch (error) {
                 handleAxiosError(error);
               }
             }}
-            title="Sau khi set Loại vải / Kết quả Tool / Máy cho sản phẩm, click để áp dụng cho các đơn đã import (idempotent — không ghi đè giá trị đã có)"
+            title={t('configTab.backfill.title')}
           >
             <RotateCw size={14} />
-            Backfill vải + tool + máy cho đơn
+            {t('configTab.backfill.button')}
           </Button>
           {/* <Button variant="outline" onClick={handleClearAll} title="Xóa toàn bộ product config — dùng khi bắt đầu lại từ đầu">
             <Eraser size={14} />
@@ -284,7 +289,7 @@ export function ProductConfigTab() {
           </Button> */}
           <Button onClick={() => setImportOpen(true)}>
             <Plus size={14} />
-            Import từ Excel
+            {t('configTab.importButton')}
           </Button>
         </div>
       </div>
@@ -293,17 +298,17 @@ export function ProductConfigTab() {
         <Table>
           <TableHeader>
             <TableRow>
-              <TableHead className="w-[130px]">Mockup</TableHead>
-              <TableHead>Tên sản phẩm</TableHead>
-              <TableHead>Viết tắt</TableHead>
-              <TableHead className="w-20">Máy</TableHead>
-              <TableHead>Phòng</TableHead>
-              <TableHead>Xưởng</TableHead>
-              <TableHead className="min-w-[160px]">Loại vải</TableHead>
-              <TableHead className="min-w-[140px]">Kết quả Tool</TableHead>
-              <TableHead className="w-[150px]">Level</TableHead>
-              <TableHead className="min-w-[140px]">Danh mục / Biến thể</TableHead>
-              <TableHead className="min-w-[140px]">Trạng thái</TableHead>
+              <TableHead className="w-[130px]">{t('configTab.table.mockup')}</TableHead>
+              <TableHead>{t('configTab.table.productName')}</TableHead>
+              <TableHead>{t('configTab.table.shortName')}</TableHead>
+              <TableHead className="w-20">{t('configTab.table.machine')}</TableHead>
+              <TableHead>{t('configTab.table.department')}</TableHead>
+              <TableHead>{t('configTab.table.factory')}</TableHead>
+              <TableHead className="min-w-[160px]">{t('configTab.table.fabricType')}</TableHead>
+              <TableHead className="min-w-[140px]">{t('configTab.table.toolResult')}</TableHead>
+              <TableHead className="w-[150px]">{t('configTab.table.level')}</TableHead>
+              <TableHead className="min-w-[140px]">{t('configTab.table.categoryVariations')}</TableHead>
+              <TableHead className="min-w-[140px]">{t('configTab.table.status')}</TableHead>
               <TableHead className="w-12"></TableHead>
             </TableRow>
           </TableHeader>
@@ -318,7 +323,7 @@ export function ProductConfigTab() {
             {!loading && items.length === 0 && (
               <TableRow>
                 <TableCell colSpan={12} className="text-center py-8 text-muted-foreground">
-                  Chưa có product config nào. Click "Import từ Excel" để bắt đầu.
+                  {t('configTab.table.empty')}
                 </TableCell>
               </TableRow>
             )}
@@ -327,7 +332,7 @@ export function ProductConfigTab() {
                 <TableRow key={it._id}>
                   <TableCell>
                     {it.mockup ? (
-                      <a href={it.mockup} target="_blank" rel="noreferrer" title="Mở ảnh mockup">
+                      <a href={it.mockup} target="_blank" rel="noreferrer" title={t('configTab.table.openMockup')}>
                         <img
                           src={it.mockup}
                           alt="mockup"
@@ -370,7 +375,7 @@ export function ProductConfigTab() {
                       onChange={(e) => handleMachineTypeChange(it._id, e.target.value)}
                       className="w-full min-w-[130px] rounded-md border border-input bg-background px-2 py-1 text-xs focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
                     >
-                      {!it.machineTypeId && <option value="">— Chưa chọn —</option>}
+                      {!it.machineTypeId && <option value="">{t('configTab.table.notSelected')}</option>}
                       {machineTypes.map((m) => (
                         <option key={m._id} value={m._id}>
                           {m.shortName} · {m.name}
@@ -384,7 +389,7 @@ export function ProductConfigTab() {
                       onChange={(e) => handleFactoryChange(it._id, e.target.value)}
                       className="w-full min-w-[130px] rounded-md border border-input bg-background px-2 py-1 text-xs focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
                     >
-                      {!it.factoryId && <option value="">— Chưa chọn —</option>}
+                      {!it.factoryId && <option value="">{t('configTab.table.notSelected')}</option>}
                       {factories.map((f) => (
                         <option key={f._id} value={f._id}>
                           {f.shortName} · {f.name}
@@ -398,7 +403,7 @@ export function ProductConfigTab() {
                       onChange={(e) => handleFabricChange(it._id, e.target.value)}
                       className="w-full rounded-md border border-input bg-background px-2 py-1 text-xs focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
                     >
-                      <option value="">— Chưa chọn —</option>
+                      <option value="">{t('configTab.table.notSelected')}</option>
                       {fabricOptions.map((opt) => (
                         <option key={opt.code} value={opt.code}>
                           {opt.name}
@@ -412,7 +417,7 @@ export function ProductConfigTab() {
                       onChange={(e) => handleToolChange(it._id, e.target.value)}
                       className="w-full rounded-md border border-input bg-background px-2 py-1 text-xs focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
                     >
-                      <option value="">— Chưa chọn —</option>
+                      <option value="">{t('configTab.table.notSelected')}</option>
                       {toolOptions.map((opt) => (
                         <option key={opt.code} value={opt.code}>
                           {opt.name}
@@ -441,7 +446,7 @@ export function ProductConfigTab() {
                         onChange={(e) => handleLevelChange(it._id, e.target.value)}
                         className="w-full rounded-md border border-input bg-background px-2 py-1 text-xs focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
                       >
-                        <option value="">— Chưa chọn —</option>
+                        <option value="">{t('configTab.table.notSelected')}</option>
                         {PRODUCT_LEVELS.map((lv) => (
                           <option key={lv.value} value={lv.value}>
                             {lv.label}
@@ -459,7 +464,9 @@ export function ProductConfigTab() {
                       ) : (
                         <span className="text-muted-foreground">—</span>
                       )}
-                      <span className="text-muted-foreground">{it.variations?.length || 0} biến thể</span>
+                      <span className="text-muted-foreground">
+                        {t('configTab.table.variationsCount', { count: it.variations?.length || 0 })}
+                      </span>
                     </div>
                   </TableCell>
                   <TableCell>
@@ -483,7 +490,7 @@ export function ProductConfigTab() {
                       variant="ghost"
                       size="icon"
                       onClick={() => navigate(PATHS.PRODUCT_DETAIL.replace(':id', it._id))}
-                      title="Chỉnh sửa sản phẩm"
+                      title={t('configTab.table.editTitle')}
                     >
                       <Pencil size={14} />
                     </Button>

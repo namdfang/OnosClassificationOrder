@@ -1,0 +1,64 @@
+{
+  "title": "Ưu tiên gán xưởng theo khách hàng",
+  "subtitle": "Khi bật, đơn của khách đã gán sẽ ép về xưởng tương ứng lúc import (ưu tiên hơn cấu hình sản phẩm). Khách chưa gán vẫn theo cấu hình sản phẩm. Mỗi khách chỉ thuộc 1 xưởng — kéo thả khách giữa các cột rồi bấm Lưu.",
+  "enabledOn": "Đang bật",
+  "enabledOff": "Đang tắt",
+  "unsavedBadge": "Chưa lưu",
+  "syncCustomers": "Sync khách hàng",
+  "addCustomer": "Thêm khách",
+  "customerList": "Danh sách khách",
+  "customerCount": "{{count}} khách",
+  "noFactories": "Chưa có xưởng nào.",
+  "leaveConfirm": "Bạn có thay đổi gán khách/xưởng CHƯA LƯU. Rời trang sẽ mất thay đổi — vẫn thoát?",
+  "addDialog": {
+    "title": "Thêm khách hàng",
+    "skuLabel": "User SKU *",
+    "skuPlaceholder": "VD: HB-16459",
+    "emailLabel": "User email",
+    "emailPlaceholder": "VD: customer@example.com",
+    "submit": "Thêm"
+  },
+  "toasts": {
+    "skuRequired": "User SKU không được để trống",
+    "syncSuccess": "Sync xong: +{{created}} khách mới (tổng {{total}})",
+    "addSuccess": "Đã thêm khách hàng",
+    "saveSuccess": "Đã lưu cấu hình gán xưởng theo khách"
+  },
+  "kanban": {
+    "searchPlaceholder": "Tìm khách trong mọi cột...",
+    "unassignedColumn": "Chưa gán",
+    "emptyColumn": "Trống — kéo khách vào đây",
+    "noSearchMatch": "Không khách nào khớp tìm kiếm"
+  },
+  "tier": {
+    "retail": "Khách lẻ",
+    "vip": "VIP {{tier}}"
+  },
+  "customerListDialog": {
+    "title": "Danh sách khách hàng ({{count}})",
+    "searchPlaceholder": "Tìm theo SKU / email...",
+    "importTier": "Import tier",
+    "filterAll": "Tất cả",
+    "table": {
+      "account": "Tài khoản (SKU)",
+      "email": "Email",
+      "tier": "Tier"
+    },
+    "changeTierTitle": "Bấm để đổi tier",
+    "noMatch": "Không có khách nào khớp bộ lọc.",
+    "tierChangeSuccess": "{{sku}}: {{tier}}",
+    "import": {
+      "title": "Import tier khách hàng",
+      "description": "Upload file .xlsx / .csv / .txt hoặc dán trực tiếp, mỗi dòng: TÊN TÀI KHOẢN  VIP 0..5. Khớp theo SKU (không phân biệt hoa/thường), gán cho mọi email trùng SKU; tài khoản chưa có trong danh sách sẽ bị bỏ qua.",
+      "pastePlaceholder": "Hoặc dán vào đây, VD:\nTIENHC\tVIP 0\nMERCHFOX\tVIP 2",
+      "validRows": "Đọc được <b>{{count}}</b> dòng hợp lệ",
+      "invalidRowsSuffix": ", <b>{{count}}</b> dòng không hợp lệ (bỏ qua)",
+      "noValidRows": "Không đọc được dòng hợp lệ nào (định dạng: TÊN TÀI KHOẢN + VIP 0..5)",
+      "fileReadError": "Không đọc được file",
+      "resultSuccess": "Đã gán tier cho <b>{{updated}}</b> khách ({{matched}} tài khoản khớp).",
+      "resultSkipped": "Bỏ qua {{count}} tài khoản chưa có trong danh sách:",
+      "submit": "Import",
+      "toastSuccess": "Đã gán tier cho {{updated}} khách ({{matched}} tài khoản khớp)"
+    }
+  }
+}

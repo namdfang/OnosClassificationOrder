@@ -1,0 +1,278 @@
+{
+  "printAreas": {
+    "front": "Mặt trước",
+    "back": "Mặt sau",
+    "sleeve": "Tay áo",
+    "hood": "Mũ trùm",
+    "folder": "Nẹp gấp",
+    "placket": "Nẹp áo",
+    "chestLeft": "Ngực trái",
+    "chestRight": "Ngực phải",
+    "left": "Bên trái",
+    "right": "Bên phải",
+    "sleeveLeft": "Tay trái",
+    "sleeveRight": "Tay phải",
+    "leftUpperSleeve": "Bắp tay trái",
+    "rightUpperSleeve": "Bắp tay phải",
+    "leftCuff": "Cổ tay trái",
+    "rightCuff": "Cổ tay phải",
+    "frontEmbroidery": "Thêu mặt trước",
+    "backEmbroidery": "Thêu mặt sau"
+  },
+  "page": {
+    "title": "Sản phẩm",
+    "subtitle": "Quản lý product config, danh mục sản phẩm, xưởng và loại máy",
+    "tabs": {
+      "config": "Config",
+      "category": "Danh mục",
+      "factory": "Xưởng"
+    }
+  },
+  "configTab": {
+    "searchPlaceholder": "Tìm theo tên, viết tắt, SKU…",
+    "statusFilter": {
+      "title": "Lọc theo trạng thái — mặc định ẩn các sản phẩm Đã ẩn",
+      "allExceptHidden": "Tất cả (trừ Đã ẩn)"
+    },
+    "status": {
+      "active": "Hiển thị",
+      "inactive": "Ẩn khách hàng",
+      "hidden": "Đã ẩn"
+    },
+    "backfill": {
+      "button": "Backfill vải + tool + máy cho đơn",
+      "title": "Sau khi set Loại vải / Kết quả Tool / Máy cho sản phẩm, click để áp dụng cho các đơn đã import (idempotent — không ghi đè giá trị đã có)",
+      "success": "Đã backfill {{updated}}/{{scanned}} đơn (loại vải / tool / máy)"
+    },
+    "importButton": "Import từ Excel",
+    "clearAll": {
+      "confirm": "Xóa toàn bộ Product Config? Hành động này không thể hoàn tác.",
+      "success": "Đã xóa {{count}} product config"
+    },
+    "table": {
+      "mockup": "Mockup",
+      "productName": "Tên sản phẩm",
+      "shortName": "Viết tắt",
+      "machine": "Máy",
+      "department": "Phòng",
+      "factory": "Xưởng",
+      "fabricType": "Loại vải",
+      "toolResult": "Kết quả Tool",
+      "level": "Level",
+      "categoryVariations": "Danh mục / Biến thể",
+      "status": "Trạng thái",
+      "empty": "Chưa có product config nào. Click \"Import từ Excel\" để bắt đầu.",
+      "variationsCount": "{{count}} biến thể",
+      "notSelected": "— Chưa chọn —",
+      "editTitle": "Chỉnh sửa sản phẩm",
+      "openMockup": "Mở ảnh mockup"
+    }
+  },
+  "categoryTab": {
+    "title": "Danh mục sản phẩm",
+    "description": "Dùng để phân loại sản phẩm ở catalog khách hàng + phạm vi chương trình giảm giá.",
+    "table": {
+      "name": "Tên",
+      "shortName": "Viết tắt",
+      "status": "Trạng thái",
+      "empty": "Chưa có danh mục nào.",
+      "active": "Hoạt động",
+      "inactive": "Tắt"
+    },
+    "dialog": {
+      "createTitle": "Thêm danh mục sản phẩm",
+      "editTitle": "Sửa danh mục sản phẩm"
+    },
+    "form": {
+      "name": "Tên",
+      "namePlaceholder": "VD: Áo/Quần",
+      "shortName": "Tên viết tắt",
+      "shortNamePlaceholder": "VD: APPAREL",
+      "parent": "Danh mục cha (để trống = danh mục gốc)",
+      "noParent": "— Không có (danh mục gốc) —",
+      "active": "Hoạt động",
+      "nameRequired": "Tên và viết tắt là bắt buộc",
+      "createSuccess": "Đã tạo danh mục",
+      "updateSuccess": "Đã cập nhật"
+    }
+  },
+  "factoryTab": {
+    "table": {
+      "name": "Tên",
+      "shortName": "Viết tắt",
+      "status": "Trạng thái",
+      "active": "Hoạt động",
+      "inactive": "Tắt"
+    },
+    "form": {
+      "nameShortNameRequired": "Tên và viết tắt là bắt buộc",
+      "createSuccess": "Đã tạo",
+      "updateSuccess": "Đã cập nhật",
+      "active": "Hoạt động"
+    },
+    "factory": {
+      "title": "Xưởng",
+      "description": "Danh sách các xưởng sản xuất"
+    },
+    "machineType": {
+      "title": "Loại máy",
+      "description": "Các loại máy in trong xưởng"
+    },
+    "dialog": {
+      "factoryNoun": "xưởng",
+      "machineTypeNoun": "loại máy",
+      "factoryNamePlaceholder": "Xưởng Mê Linh",
+      "machineTypeNamePlaceholder": "In và cắt laser",
+      "factoryShortNamePlaceholder": "ML",
+      "machineTypeShortNamePlaceholder": "ICL"
+    },
+    "fabric": {
+      "title": "Loại vải",
+      "description": "Danh sách loại vải / blank. Tự sinh khi import Product Config có label mới.",
+      "addSuccess": "Đã thêm loại vải",
+      "deleteSuccess": "Đã xóa",
+      "form": {
+        "nameCodeRequired": "Vui lòng nhập tên và mã",
+        "displayName": "Tên hiển thị",
+        "displayNamePlaceholder": "VD: POLY 2 DA",
+        "code": "Mã",
+        "codeHint": "(slug, dùng để lưu trữ)",
+        "codePlaceholder": "vd: poly-2-da",
+        "icon": "Icon"
+      },
+      "reset": {
+        "button": "Reset từ seed",
+        "title": "Xóa toàn bộ rồi tạo lại từ seed (22 loại vải mặc định)",
+        "confirm": "Reset toàn bộ Loại vải về danh sách seed? Tất cả entry hiện tại sẽ bị xóa và tạo lại từ seed. Hành động này không thể hoàn tác.",
+        "success": "Đã reset: xóa {{removed}}, tạo lại {{inserted}} loại vải"
+      },
+      "table": {
+        "icon": "Icon",
+        "code": "Mã",
+        "empty": "Chưa có loại vải nào",
+        "on": "Bật"
+      },
+      "dialog": {
+        "createTitle": "Thêm loại vải",
+        "editTitle": "Sửa loại vải"
+      },
+      "deleteDialog": {
+        "title": "Xóa loại vải",
+        "message": "Xóa {{name}}? Product đang dùng vẫn giữ giá trị cũ nhưng sẽ không chọn được nữa."
+      }
+    }
+  },
+  "importDialog": {
+    "title": "Import Product Config",
+    "description": "Paste dữ liệu từ Excel (tab-separated). 7 cột theo thứ tự: <b>Tên đầy đủ</b> — <b>Tên viết tắt</b> — <b>Máy</b> (số máy, vd 94/27, để trống = không có tool) — <b>Xưởng</b> (vd \"MÊ LINH\") — <b>Loại vải</b> (POLY 2 DA, MÈ 64, LỤA 4B, LỤA VÂN GỖ…) — <b>Kết quả Tool</b> (để trống = có tool; \"không tool\" = không có tool) — <b>Phòng</b> (loại máy in, vd \"IN và CẮT LASER\"). Hệ thống match label theo tên (case-insensitive).",
+    "parseError": "Không parse được dòng nào. Kiểm tra format (đủ 7 cột, cách nhau bằng Tab).",
+    "importSuccess": "Imported {{imported}}, updated {{updated}}, {{skippedCount}} cảnh báo",
+    "validRows": "{{count}} dòng hợp lệ sẽ được import."
+  },
+  "detail": {
+    "backToList": "Quay lại danh sách",
+    "unsavedConfirm": "Bạn có thay đổi CHƯA LƯU. Rời trang sẽ mất thay đổi — vẫn thoát?",
+    "shortNameRequired": "Tên viết tắt không được để trống",
+    "saveSuccess": "Đã lưu sản phẩm",
+    "applyBulkPriceConfirm": "Áp dụng giá vừa nhập cho toàn bộ {{count}} biến thể — ghi đè giá hiện tại?",
+    "notSelected": "— Chưa chọn —",
+    "header": {
+      "shortName": "Viết tắt",
+      "unsaved": "Chưa lưu",
+      "saveChanges": "Lưu thay đổi"
+    },
+    "sidebar": {
+      "mockup": "Mockup",
+      "level": "Level",
+      "machineNumber": "Mã máy in",
+      "machineNumberPlaceholder": "VD: 94, 27… (để trống = không có tool)",
+      "factory": "Xưởng",
+      "department": "Phòng",
+      "fabricType": "Loại vải",
+      "toolResult": "Kết quả Tool",
+      "guide": "Ghi chú / hướng dẫn",
+      "guidePlaceholder": "Hướng dẫn / ghi chú sản phẩm…"
+    },
+    "tabs": {
+      "detail": "Chi tiết sản phẩm",
+      "variations": "Biến thể ({{count}})"
+    },
+    "classification": {
+      "title": "Phân loại",
+      "productCategory": "Danh mục sản phẩm",
+      "printMethod": "Phương pháp in"
+    },
+    "customerDisplay": {
+      "title": "Hiển thị cho khách hàng",
+      "printArea": "Vị trí in",
+      "printAreaHint": "Chọn các vị trí sản phẩm này hỗ trợ in — danh mục cố định, map 1-1 sang <code>order.designs</code> để API khách hàng xác định đúng vị trí thiết kế.",
+      "sizeChart": "Bảng size",
+      "description": "Mô tả sản phẩm",
+      "descriptionPlaceholder": "Mô tả sản phẩm…"
+    },
+    "packaging": {
+      "title": "Đóng gói mặc định",
+      "weight": "Khối lượng (g)",
+      "width": "Rộng (cm)",
+      "height": "Cao (cm)",
+      "length": "Dài (cm)"
+    },
+    "itemSpecifics": {
+      "title": "Thông số kỹ thuật",
+      "addRow": "Thêm dòng",
+      "labelPlaceholder": "VD: Chất liệu",
+      "valuePlaceholder": "VD: Cotton 100%",
+      "empty": "Chưa có thông số nào."
+    },
+    "imageUpload": {
+      "title": "Chọn ảnh — chỉ upload khi bấm Lưu thay đổi",
+      "change": "Đổi ảnh khác",
+      "choose": "Chọn ảnh",
+      "pendingHint": "Ảnh mới — sẽ upload khi bấm Lưu"
+    },
+    "attributes": {
+      "sizeLabel": "Size",
+      "sizeExample": "VD: M",
+      "colorLabel": "Mẫu/Màu",
+      "colorExample": "VD: Đỏ",
+      "typeLabel": "Loại",
+      "typeExample": "VD: Cotton",
+      "genericLabel": "Tên biến thể",
+      "genericValue": "Giá trị",
+      "addAttribute": "+ Thêm thuộc tính",
+      "variantAttributes": "Thuộc tính biến thể",
+      "empty": "Chưa có thuộc tính nào."
+    },
+    "bulkGenerate": {
+      "trigger": "Tạo nhanh biến thể",
+      "title": "Tạo nhanh biến thể (tổ hợp thuộc tính)",
+      "description": "Mỗi thuộc tính nhập 1 tên + danh sách giá trị cách nhau dấu phẩy. Hệ thống sẽ tạo tất cả tổ hợp (VD: 3 màu × 3 size = 9 biến thể) rồi thêm vào cuối danh sách hiện có.",
+      "addAttribute": "Thêm thuộc tính",
+      "generate": "Tạo",
+      "generateCount": "Tạo {{count}} biến thể",
+      "sizeValuesExample": "VD: S, M, L",
+      "colorValuesExample": "VD: Đỏ, Xanh, Vàng",
+      "typeValuesExample": "VD: Cotton, Poly",
+      "genericValuesExample": "VD: Giá trị 1, Giá trị 2"
+    },
+    "variations": {
+      "skuHintPrefix": "SKU biến thể tự sinh theo",
+      "skuFormat": "{SKU sản phẩm}-{thuộc tính}",
+      "skuHintSuffix": ", duy nhất trên toàn hệ thống.",
+      "noSkuWarning": "Sản phẩm chưa có SKU — nên đặt SKU sản phẩm ở header để tránh trùng.",
+      "addVariation": "Thêm biến thể",
+      "bulkPriceLabel": "Nhập nhanh giá cho tất cả:",
+      "cost": "Giá vốn",
+      "nonShipCost": "Vốn (ko ship)",
+      "retailPrice": "Giá bán",
+      "applyToCount": "Áp dụng cho {{count}} biến thể",
+      "attributes": "Thuộc tính",
+      "status": "Trạng thái",
+      "empty": "Chưa có biến thể nào.",
+      "skuGeneratedTitle": "SKU tự sinh theo SKU sản phẩm + thuộc tính biến thể — không sửa trực tiếp được ở đây (chỉnh trong database nếu cần khác quy ước)",
+      "skuMissing": "thiếu SKU sản phẩm / thuộc tính",
+      "selling": "Đang bán",
+      "stopped": "Ngừng"
+    }
+  }
+}

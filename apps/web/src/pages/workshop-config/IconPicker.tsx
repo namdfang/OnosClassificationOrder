@@ -1,4 +1,5 @@
 import React, { useMemo, useState } from 'react';
+import { useTranslation } from 'react-i18next';
 import * as LucideIcons from 'lucide-react';
 import { Search } from 'lucide-react';
 
@@ -53,6 +54,7 @@ interface Props {
 }
 
 export function IconPicker({ value, onChange }: Props) {
+  const { t } = useTranslation('workshopConfig');
   const [open, setOpen] = useState(false);
   const [search, setSearch] = useState('');
 
@@ -67,14 +69,14 @@ export function IconPicker({ value, onChange }: Props) {
       <PopoverTrigger asChild>
         <Button type="button" variant="outline" className="gap-2 justify-start w-full">
           <LucideIcon name={value} size={16} />
-          <span className="text-sm">{value || 'Chọn icon'}</span>
+          <span className="text-sm">{value || t('iconPicker.choose')}</span>
         </Button>
       </PopoverTrigger>
       <PopoverContent className="w-72 p-3" align="start">
         <div className="relative mb-3">
           <Search size={14} className="absolute left-2 top-1/2 -translate-y-1/2 text-muted-foreground" />
           <Input
-            placeholder="Tìm icon..."
+            placeholder={t('iconPicker.searchPlaceholder')}
             value={search}
             onChange={(e) => setSearch(e.target.value)}
             className="pl-7 h-8 text-sm"

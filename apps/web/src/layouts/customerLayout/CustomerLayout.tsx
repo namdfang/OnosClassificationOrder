@@ -1,6 +1,7 @@
 import React, { useEffect } from 'react';
+import { useTranslation } from 'react-i18next';
 import { Link, Outlet, useNavigate } from 'react-router-dom';
-import { LayoutGrid, LogOut, PackagePlus } from 'lucide-react';
+import { Languages, LayoutGrid, LogOut, PackagePlus } from 'lucide-react';
 
 import { Button } from '@/components/ui/button';
 
@@ -9,10 +10,13 @@ import logoUrl from '@/assets/images/logo.png';
 import { PATHS } from '../../constants/paths';
 import { RepositoryRemote } from '../../services';
 import { useCustomerAuthStore } from '../../store/customerAuthStore';
+import { useLanguageStore } from '../../store/languageStore';
 
 function CustomerLayout() {
   const navigate = useNavigate();
+  const { t } = useTranslation('customerPortal');
   const { profile, setProfile, clearToken } = useCustomerAuthStore();
+  const { language, toggleLanguage } = useLanguageStore();
 
   useEffect(() => {
     RepositoryRemote.customerAuth
@@ -32,25 +36,35 @@ function CustomerLayout() {
         <div className="max-w-4xl mx-auto px-4 h-14 flex items-center justify-between">
           <Link to={PATHS.CUSTOMER_ORDERS} className="flex items-center gap-2">
             <img src={logoUrl} alt="Logo" className="h-7 w-auto object-contain" />
-            <span className="font-semibold text-sm">Customer Portal</span>
+            <span className="font-semibold text-sm">{t('layout.brand')}</span>
           </Link>
 
           <div className="flex items-center gap-3">
             <Button size="sm" variant="ghost" onClick={() => navigate(PATHS.CUSTOMER_CATALOG)}>
               <LayoutGrid size={14} className="mr-1.5" />
-              Danh mục sản phẩm
+              {t('layout.catalog')}
             </Button>
             <Button size="sm" variant="secondary" onClick={() => navigate(PATHS.CUSTOMER_ORDER_NEW)}>
               <PackagePlus size={14} className="mr-1.5" />
-              Đặt đơn mới
+              {t('layout.newOrder')}
             </Button>
             {profile?.userEmail && (
               <span className="text-xs text-muted-foreground hidden sm:inline">{profile.userEmail}</span>
             )}
+            <Button
+              size="sm"
+              variant="ghost"
+              onClick={toggleLanguage}
+              title={t('language.switch', { ns: 'common' })}
+              className="gap-1 w-auto px-2"
+            >
+              <Languages size={16} />
+              <span className="text-xs font-medium uppercase">{language}</span>
+            </Button>
             <button
               type="button"
               onClick={clearToken}
-              aria-label="Đăng xuất"
+              aria-label={t('layout.logout')}
               className="text-muted-foreground hover:text-foreground transition-colors"
             >
               <LogOut size={16} />

@@ -1,4 +1,6 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
+import { useTranslation } from 'react-i18next';
+import type { TFunction } from 'i18next';
 import { AlertTriangle, CalendarDays, ChevronDown, ChevronRight, Filter } from 'lucide-react';
 import type { DesignerDailyBreakdownDay } from 'shared';
 
@@ -29,24 +31,24 @@ interface Props {
   reloadToken?: number;
 }
 
-const WEEKDAYS = ['CN', 'T2', 'T3', 'T4', 'T5', 'T6', 'T7'];
-
 /** 'YYYY-MM-DD' → { wd: 'T4', dm: '01/07' } (đọc theo giờ VN). */
-function fmtDay(day: string): { wd: string; dm: string } {
+function fmtDay(day: string, weekdays: string[]): { wd: string; dm: string } {
   const d = new Date(`${day}T12:00:00+07:00`);
   return {
-    wd: WEEKDAYS[d.getDay()] ?? '',
+    wd: weekdays[d.getDay()] ?? '',
     dm: `${String(d.getDate()).padStart(2, '0')}/${String(d.getMonth() + 1).padStart(2, '0')}`,
   };
 }
 
-function ageLabel(ageDays: number): string {
-  if (ageDays <= 0) return 'Hôm nay';
-  if (ageDays === 1) return 'Hôm qua';
-  return `${ageDays} ngày trước`;
+function ageLabel(ageDays: number, t: TFunction<'designerTaskWorkflow'>): string {
+  if (ageDays <= 0) return t('dailyBreakdown.ageToday');
+  if (ageDays === 1) return t('dailyBreakdown.ageYesterday');
+  return t('dailyBreakdown.ageDaysAgo', { count: ageDays });
 }
 
 export function DailyBreakdownPanel({ selectedDay, onPickDay, reloadToken }: Props) {
+  const { t } = useTranslation('designerTaskWorkflow');
+  const weekdays = t('dailyBreakdown.weekdays', { returnObjects: true }) as string[];
   const [open, setOpen] = useState(true);
   const [range, setRange] = useState<RangeDays>(7);
   const [days, setDays] = useState<DesignerDailyBreakdownDay[]>([]);
@@ -94,10 +96,10 @@ export function DailyBreakdownPanel({ selectedDay, onPickDay, reloadToken }: Pro
         >
           {open ? <ChevronDown size={14} /> : <ChevronRight size={14} />}
           <CalendarDays size={14} className="text-indigo-600" />
-          <span>Chi tiết theo ngày</span>
+          <span>{t('dailyBreakdown.title')}</span>
           {totals.unfinished > 0 && (
             <span className="ml-1 rounded-full bg-amber-100 dark:bg-amber-500/15 px-2 py-0.5 text-[10px] font-semibold text-amber-700 dark:text-amber-400">
-              {totals.unfinished} chưa xong · {daysWithBacklog} ngày
+              {t('dailyBreakdown.unfinishedBadge', { unfinished: totals.unfinished, days: daysWithBacklog })}
             </span>
           )}
         </button>
@@ -114,7 +116,7 @@ export function DailyBreakdownPanel({ selectedDay, onPickDay, reloadToken }: Pro
                 range === r ? 'bg-indigo-600 text-white' : 'bg-transparent text-muted-foreground hover:bg-muted',
               )}
             >
-              {r} ngày
+              {t('dailyBreakdown.rangeDays', { count: r })}
             </button>
           ))}
         </div>
@@ -125,16 +127,29 @@ export function DailyBreakdownPanel({ selectedDay, onPickDay, reloadToken }: Pro
           {/* Summary strip — focus vào đơn chưa xong */}
           <div className="flex flex-wrap items-center gap-x-4 gap-y-1 px-3 py-2 text-[11px] border-b border-border bg-muted/20">
             <span className="font-semibold text-foreground">
-              Chưa xong:{' '}
+              {t('dailyBreakdown.summary.unfinished')}{' '}
               <span className={totals.unfinished > 0 ? 'text-amber-600' : 'text-muted-foreground'}>
                 {totals.unfinished}
               </span>
             </span>
-            <SummaryChip label="Cần làm" value={totals.assigned} className="text-zinc-600 dark:text-zinc-300" />
-            <SummaryChip label="Cần làm lại" value={totals.rework} className="text-amber-600" />
-            <SummaryChip label="Đang làm" value={totals.inProgress} className="text-indigo-600" />
+            <SummaryChip
+              label={t('dailyBreakdown.summary.assigned')}
+              value={totals.assigned}
+              className="text-zinc-600 dark:text-zinc-300"
+            />
+            <SummaryChip
+              label={t('dailyBreakdown.summary.rework')}
+              value={totals.rework}
+              className="text-amber-600"
+            />
+            <SummaryChip
+              label={t('dailyBreakdown.summary.inProgress')}
+              value={totals.inProgress}
+              className="text-indigo-600"
+            />
             <span className="ml-auto text-muted-foreground">
-              Đã xong: <span className="font-semibold text-emerald-600">{totals.done}</span>
+              {t('dailyBreakdown.summary.done')}{' '}
+              <span className="font-semibold text-emerald-600">{totals.done}</span>
             </span>
           </div>
 
@@ -143,25 +158,25 @@ export function DailyBreakdownPanel({ selectedDay, onPickDay, reloadToken }: Pro
             <table className="w-full text-[11px] tabular-nums">
               <thead className="sticky top-0 bg-card z-10">
                 <tr className="text-muted-foreground border-b border-border">
-                  <th className="text-left font-medium px-3 py-1.5">Ngày</th>
-                  <Th>Cần làm</Th>
-                  <Th>Cần làm lại</Th>
-                  <Th>Đang làm</Th>
-                  <Th className="border-l border-border">Đã xong</Th>
+                  <th className="text-left font-medium px-3 py-1.5">{t('dailyBreakdown.table.day')}</th>
+                  <Th>{t('dailyBreakdown.table.assigned')}</Th>
+                  <Th>{t('dailyBreakdown.table.rework')}</Th>
+                  <Th>{t('dailyBreakdown.table.inProgress')}</Th>
+                  <Th className="border-l border-border">{t('dailyBreakdown.table.done')}</Th>
                 </tr>
               </thead>
               <tbody>
                 {loading && days.length === 0 && (
                   <tr>
                     <td colSpan={5} className="px-3 py-6 text-center text-muted-foreground italic">
-                      Đang tải…
+                      {t('dailyBreakdown.table.loading')}
                     </td>
                   </tr>
                 )}
                 {!loading && days.length === 0 && (
                   <tr>
                     <td colSpan={5} className="px-3 py-6 text-center text-muted-foreground italic">
-                      Không có đơn trong {range} ngày gần nhất.
+                      {t('dailyBreakdown.table.empty', { count: range })}
                     </td>
                   </tr>
                 )}
@@ -174,7 +189,7 @@ export function DailyBreakdownPanel({ selectedDay, onPickDay, reloadToken }: Pro
                       : d.ageDays >= 3
                         ? 'bg-amber-50/70 dark:bg-amber-500/[0.07]'
                         : 'bg-amber-50/40 dark:bg-amber-500/[0.04]';
-                  const { wd, dm } = fmtDay(d.day);
+                  const { wd, dm } = fmtDay(d.day, weekdays);
                   return (
                     <tr
                       key={d.day}
@@ -187,7 +202,7 @@ export function DailyBreakdownPanel({ selectedDay, onPickDay, reloadToken }: Pro
                           onPickDay(d.day);
                         }
                       }}
-                      title="Click để lọc kanban theo ngày này"
+                      title={t('dailyBreakdown.clickToFilter')}
                       className={cn(
                         'group border-b border-border/60 cursor-pointer transition-colors hover:bg-muted/60',
                         backlogTint,
@@ -197,7 +212,7 @@ export function DailyBreakdownPanel({ selectedDay, onPickDay, reloadToken }: Pro
                       <td className="px-3 py-1.5">
                         <div className="flex items-center gap-1.5">
                           {d.unfinished > 0 && d.ageDays >= 3 ? (
-                            <Hint content={`Đơn tồn ${ageLabel(d.ageDays).toLowerCase()} chưa làm xong`}>
+                            <Hint content={t('dailyBreakdown.backlogHint', { age: ageLabel(d.ageDays, t).toLowerCase() })}>
                               <AlertTriangle size={12} className="text-amber-500 shrink-0" />
                             </Hint>
                           ) : (
@@ -208,7 +223,7 @@ export function DailyBreakdownPanel({ selectedDay, onPickDay, reloadToken }: Pro
                               )}
                             />
                           )}
-                          <Hint content={ageLabel(d.ageDays)}>
+                          <Hint content={ageLabel(d.ageDays, t)}>
                             <span className="font-medium text-foreground">
                               {wd} <span className="text-muted-foreground">{dm}</span>
                             </span>
@@ -234,7 +249,7 @@ export function DailyBreakdownPanel({ selectedDay, onPickDay, reloadToken }: Pro
               {days.length > 0 && (
                 <tfoot className="sticky bottom-0 bg-card">
                   <tr className="border-t-2 border-border font-semibold">
-                    <td className="px-3 py-1.5 text-foreground">Tổng</td>
+                    <td className="px-3 py-1.5 text-foreground">{t('dailyBreakdown.table.total')}</td>
                     <Cell value={totals.assigned} className="text-zinc-700 dark:text-zinc-200" strong />
                     <Cell value={totals.rework} className="text-amber-600" strong />
                     <Cell value={totals.inProgress} className="text-indigo-600" strong />

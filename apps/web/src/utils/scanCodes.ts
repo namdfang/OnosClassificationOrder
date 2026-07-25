@@ -1,5 +1,8 @@
+import type { TFunction } from 'i18next';
 import type { FulfillmentStage, StageErrorReworkTarget, WorkshopConfig } from 'shared';
-import { FULFILLMENT_STAGE_LABELS, FULFILLMENT_STAGE_ORDER, FULFILLMENT_STAGES } from 'shared';
+import { FULFILLMENT_STAGE_ORDER, FULFILLMENT_STAGES } from 'shared';
+
+import { getStageLabel } from '@/utils/fulfillmentStageLabel';
 
 /**
  * Format mã quét trong luồng "quét 2 bước" (xem StageErrorCatalog.md + ScanError.md):
@@ -53,35 +56,40 @@ export type ErrorScanResolution =
  * ('factory' → chỉ mark lỗi). Target stage phải đứng TRƯỚC `furthest` (vị trí
  * xa nhất đơn từng tới; undefined = chưa vào fulfillment).
  */
-export function resolveErrorScan(cfg: WorkshopConfig, furthest: FulfillmentStage | undefined): ErrorScanResolution {
+export function resolveErrorScan(
+  cfg: WorkshopConfig,
+  furthest: FulfillmentStage | undefined,
+  t: TFunction<'scanError'>,
+): ErrorScanResolution {
   const target: StageErrorReworkTarget | undefined =
     (cfg.reworkTarget as StageErrorReworkTarget | undefined) ??
     (cfg.errorSource === 'tool-check' || cfg.errorSource === 'designer' ? cfg.errorSource : undefined);
 
   if (target === 'tool-check') {
-    return { ok: true, apiTarget: 'tool-check', source: 'tool-check', targetLabel: 'Đẩy về Soát tool' };
+    return { ok: true, apiTarget: 'tool-check', source: 'tool-check', targetLabel: t('resolve.toToolCheck') };
   }
   if (target === 'designer') {
-    if (!furthest) return { ok: false, reason: 'Đơn chưa vào fulfillment — lỗi này không đẩy về Designer được.' };
-    return { ok: true, apiTarget: 'designer', source: 'designer', targetLabel: 'Đẩy về Designer' };
+    if (!furthest) return { ok: false, reason: t('resolve.notInFulfillmentForDesigner') };
+    return { ok: true, apiTarget: 'designer', source: 'designer', targetLabel: t('resolve.toDesigner') };
   }
   if (target && FULFILLMENT_STAGES.includes(target)) {
     if (!furthest || FULFILLMENT_STAGE_ORDER[target] >= FULFILLMENT_STAGE_ORDER[furthest]) {
       return {
         ok: false,
-        reason: `Không đẩy về "${FULFILLMENT_STAGE_LABELS[target]}" được — đơn đang ở "${
-          furthest ? FULFILLMENT_STAGE_LABELS[furthest] : 'trước fulfillment'
-        }".`,
+        reason: t('resolve.cannotPushBack', {
+          target: getStageLabel(t, target),
+          current: furthest ? getStageLabel(t, furthest) : t('resolve.beforeFulfillment'),
+        }),
       };
     }
     return {
       ok: true,
       apiTarget: target,
       source: 'factory',
-      targetLabel: `Đẩy về ${FULFILLMENT_STAGE_LABELS[target]}`,
+      targetLabel: t('resolve.toStage', { stage: getStageLabel(t, target) }),
     };
   }
-  return { ok: true, source: 'factory', targetLabel: 'Chỉ mark lỗi' };
+  return { ok: true, source: 'factory', targetLabel: t('resolve.markOnly') };
 }
 
 // ─── Beep feedback (WebAudio — không cần file asset, công nhân không cần nhìn màn hình) ───

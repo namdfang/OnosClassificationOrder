@@ -1,0 +1,134 @@
+{
+  "actionBadge": {
+    "create": "Tạo",
+    "update": "Cập nhật",
+    "bulkUpdate": "Bulk",
+    "import": "Import",
+    "delete": "Xóa",
+    "transfer": "Chuyển xưởng",
+    "cancel": "Hủy đơn",
+    "updateDesign": "Đổi design",
+    "hold": "Giữ đơn",
+    "unhold": "Mở giữ"
+  },
+  "importSubaction": {
+    "create": "Tạo mới",
+    "update": "Cập nhật"
+  },
+  "fieldLabel": {
+    "printStatus": "Trạng thái in",
+    "printStatusNote": "Note trạng thái in",
+    "toolResult": "Kết quả Tool",
+    "toolResultNote": "Note kết quả Tool",
+    "errorFile": "File sửa lỗi",
+    "errorFileNote": "Ghi chú file lỗi",
+    "assignee": "Người thực hiện",
+    "assigneeNote": "Note người thực hiện",
+    "designerStatus": "TT Designer",
+    "fabricType": "Loại vải",
+    "machineNumber": "Máy",
+    "productionError": "Lỗi xưởng",
+    "productionErrorNote": "Mô tả lỗi xưởng",
+    "productionErrorSource": "Nguồn lỗi",
+    "cancelledAt": "Hủy đơn",
+    "heldAt": "Giữ đơn",
+    "designs": "Design",
+    "designsOriginal": "Design gốc",
+    "mockupUrl": "Mockup",
+    "factoryId": "Xưởng",
+    "machineTypeId": "Loại máy",
+    "type": "Loại sản phẩm",
+    "color": "Màu",
+    "size": "Size",
+    "quantity": "Số lượng",
+    "status": "Trạng thái đơn (OnosPod)",
+    "fulfillmentStage": "Công đoạn {{stage}}",
+    "currentFulfillmentStage": "Công đoạn hiện tại"
+  },
+  "designerStatusLabels": {
+    "unassigned": "Chưa gán",
+    "assigned": "Đã gán",
+    "inProgress": "Đang làm",
+    "done": "Đã xong",
+    "rejected": "Không làm được",
+    "rework": "Cần làm lại"
+  },
+  "fulfillmentStatusLabels": {
+    "waiting": "Chờ làm",
+    "inProgress": "Đang làm",
+    "done": "Đã xong",
+    "rework": "Cần làm lại"
+  },
+  "sourceLabel": {
+    "designer": "Do designer",
+    "factory": "Do xưởng"
+  },
+  "importPayload": {
+    "mapped": "Đã map sản phẩm",
+    "unmapped": "Chưa map sản phẩm"
+  },
+  "timeline": {
+    "titleWithId": "Lịch sử thay đổi — {{productionId}}",
+    "title": "Lịch sử thay đổi",
+    "recordCount": "{{count}} bản ghi",
+    "reload": "Tải lại",
+    "empty": "Chưa có lịch sử thay đổi.",
+    "reasonLabel": "Lý do:",
+    "systemUser": "system"
+  },
+  "urgency": {
+    "new": "Mới",
+    "attention": "Cần làm",
+    "urgent": "Gấp",
+    "critical": "Khẩn cấp"
+  },
+  "stage": {
+    "designer": "Thiết kế",
+    "toolCheck": "Soát tool"
+  },
+  "actions": {
+    "updated": "Đã cập nhật",
+    "markedToolCheckOk": "Đã đánh dấu soát OK",
+    "markedErrorResolved": "Đã đánh dấu hoàn thành lỗi",
+    "markedCompletedCount": "Đã đánh dấu hoàn thành {{count}} đơn",
+    "start": "Bắt đầu",
+    "reportError": "Báo lỗi",
+    "complete": "Hoàn thành",
+    "toolCheckOk": "Đã soát (OK)",
+    "markDone": "Đánh dấu xong"
+  },
+  "filters": {
+    "sourceDesigner": "Lỗi do Designer",
+    "sourceFactory": "Lỗi do Xưởng",
+    "errorCode": "Mã lỗi",
+    "errorSource": "Nguồn lỗi"
+  },
+  "page": {
+    "title": "Nhật ký bù lỗi",
+    "description": "Lỗi các đơn đã vào fulfillment (in → ép → … → đóng gói). Đơn không thuộc công đoạn của bạn hiển thị mờ (chỉ xem).",
+    "tabTodo": "Cần xử lý",
+    "tabDone": "Đã xong (14 ngày)",
+    "clearUrgencyFilter": "Xóa filter mức độ",
+    "totalToProcess": "Tổng {{count}} đơn cần xử lý.",
+    "noPermission": "Bạn không có quyền xem trang này.",
+    "pageSubtitle": "Quản lý production orders"
+  },
+  "table": {
+    "selectAllOnPage": "Chọn tất cả trong trang",
+    "urgency": "Mức độ",
+    "orderAge": "Tuổi đơn",
+    "factory": "Xưởng",
+    "currentStage": "Chặng hiện tại",
+    "reporter": "Nêu lỗi",
+    "errorNote": "Ghi chú lỗi",
+    "fixer": "Người sửa",
+    "errorCount": "Số lần",
+    "emptyTodo": "Không có đơn lỗi nào cần xử lý 🎉",
+    "emptyDone": "Chưa có đơn lỗi đã xử lý trong 14 ngày.",
+    "enteredProductionAt": "vào SX {{date}}",
+    "history": "Lịch sử",
+    "selectedLabel": "Đã chọn",
+    "markDoneCount": "Đánh dấu xong ({{count}})",
+    "deselect": "Bỏ chọn"
+  }
+}

@@ -1,5 +1,7 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
+import { useTranslation } from 'react-i18next';
 import { useSearchParams } from 'react-router-dom';
+import type { TFunction } from 'i18next';
 import {
   CheckCircle2,
   ChevronDown,
@@ -70,52 +72,53 @@ const EMPTY_COLS: Columns = {
 // THỨ TỰ CỘT: Cần làm → Cần làm lại → Đang chờ quay lại → Đang làm → Đã xong → Đã sửa
 const COL_ORDER: ColKey[] = ['assigned', 'rework', 'watching', 'inProgress', 'done', 'fixed'];
 
-const COL_META: Record<
-  ColKey,
-  { label: string; status: DesignerStatus; accent: string; bulk: DesignerTransitionAction[] }
-> = {
-  assigned: {
-    label: 'Cần làm',
-    status: DesignerStatus.Assigned,
-    accent: 'border-zinc-300 dark:border-zinc-700',
-    bulk: [DesignerTransitionAction.Start, DesignerTransitionAction.Reject],
-  },
-  rework: {
-    label: 'Cần làm lại',
-    status: DesignerStatus.Rework,
-    accent: 'border-amber-300 dark:border-amber-700',
-    bulk: [DesignerTransitionAction.Restart],
-  },
-  // "Đang chờ quay lại" = task đã xong/đang chờ làm lại của đơn đang bị giữ ở
-  // Soát tool phía trên. Read-only (không kéo/không bulk); Support soát xong →
-  // BE tự chuyển sang "Cần làm lại". status giữ Done cho hợp kiểu.
-  watching: {
-    label: 'Đang chờ quay lại',
-    status: DesignerStatus.Done,
-    accent: 'border-sky-300 dark:border-sky-700',
-    bulk: [],
-  },
-  inProgress: {
-    label: 'Đang làm',
-    status: DesignerStatus.InProgress,
-    accent: 'border-indigo-300 dark:border-indigo-700',
-    bulk: [DesignerTransitionAction.Complete, DesignerTransitionAction.Reject],
-  },
-  done: {
-    label: 'Đã xong',
-    status: DesignerStatus.Done,
-    accent: 'border-emerald-300 dark:border-emerald-700',
-    bulk: [],
-  },
-  // "Đã sửa" = done nhưng từng bị báo lỗi (designerReworkCount>0). Terminal, không
-  // phải drop target (guard trong planTransition). status giữ Done cho hợp kiểu.
-  fixed: {
-    label: 'Đã sửa',
-    status: DesignerStatus.Done,
-    accent: 'border-teal-300 dark:border-teal-700',
-    bulk: [],
-  },
-};
+type ColMeta = { label: string; status: DesignerStatus; accent: string; bulk: DesignerTransitionAction[] };
+
+function buildColMeta(t: TFunction<'designerTaskWorkflow'>): Record<ColKey, ColMeta> {
+  return {
+    assigned: {
+      label: t('myTasks.columns.assigned'),
+      status: DesignerStatus.Assigned,
+      accent: 'border-zinc-300 dark:border-zinc-700',
+      bulk: [DesignerTransitionAction.Start, DesignerTransitionAction.Reject],
+    },
+    rework: {
+      label: t('myTasks.columns.rework'),
+      status: DesignerStatus.Rework,
+      accent: 'border-amber-300 dark:border-amber-700',
+      bulk: [DesignerTransitionAction.Restart],
+    },
+    // "Đang chờ quay lại" = task đã xong/đang chờ làm lại của đơn đang bị giữ ở
+    // Soát tool phía trên. Read-only (không kéo/không bulk); Support soát xong →
+    // BE tự chuyển sang "Cần làm lại". status giữ Done cho hợp kiểu.
+    watching: {
+      label: t('myTasks.columns.watching'),
+      status: DesignerStatus.Done,
+      accent: 'border-sky-300 dark:border-sky-700',
+      bulk: [],
+    },
+    inProgress: {
+      label: t('myTasks.columns.inProgress'),
+      status: DesignerStatus.InProgress,
+      accent: 'border-indigo-300 dark:border-indigo-700',
+      bulk: [DesignerTransitionAction.Complete, DesignerTransitionAction.Reject],
+    },
+    done: {
+      label: t('myTasks.columns.done'),
+      status: DesignerStatus.Done,
+      accent: 'border-emerald-300 dark:border-emerald-700',
+      bulk: [],
+    },
+    // "Đã sửa" = done nhưng từng bị báo lỗi (designerReworkCount>0). Terminal, không
+    // phải drop target (guard trong planTransition). status giữ Done cho hợp kiểu.
+    fixed: {
+      label: t('myTasks.columns.fixed'),
+      status: DesignerStatus.Done,
+      accent: 'border-teal-300 dark:border-teal-700',
+      bulk: [],
+    },
+  };
+}
 
 const COL_BY_STATUS: Partial<Record<DesignerStatus, ColKey>> = {
   [DesignerStatus.Assigned]: 'assigned',
@@ -151,11 +154,12 @@ const EMPTY_FILTERS: Filters = {
 function planTransition(
   from: DesignerStatus,
   to: ColKey,
+  colMeta: Record<ColKey, ColMeta>,
 ): { action: DesignerTransitionAction; needsReason?: boolean } | null {
   // "Đã sửa" + "Đang chờ quay lại" là cột read-only (terminal / chờ hệ thống) —
   // không cho kéo thả vào.
   if (to === 'fixed' || to === 'watching') return null;
-  const target = COL_META[to].status;
+  const target = colMeta[to].status;
   if (target === from) return null;
   if (target === DesignerStatus.InProgress) {
     if (from === DesignerStatus.Assigned) return { action: DesignerTransitionAction.Start };
@@ -168,6 +172,8 @@ function planTransition(
 }
 
 export default function MyTasksPage() {
+  const { t } = useTranslation(['designerTaskWorkflow', 'common']);
+  const colMeta = useMemo(() => buildColMeta(t), [t]);
   const [columns, setColumns] = useState<Columns>(EMPTY_COLS);
   const [rejected, setRejected] = useState<DesignerTaskCard[]>([]);
   const [showRejected, setShowRejected] = useState(false);
@@ -377,7 +383,7 @@ export default function MyTasksPage() {
     fetchTasks();
     fetchFilters();
     fetchStats();
-    setBreakdownToken((t) => t + 1);
+    setBreakdownToken((prev) => prev + 1);
   };
 
   // Cho mỗi cột → ordered array của id (sau khi đã group by type, để
@@ -392,11 +398,11 @@ export default function MyTasksPage() {
       fixed: [],
     };
     for (const k of COL_ORDER) {
-      const groups = groupByType(columns[k]);
+      const groups = groupByType(columns[k], t('myTasks.noType'));
       for (const [, rows] of groups) for (const r of rows) out[k].push(r._id);
     }
     return out;
-  }, [columns]);
+  }, [columns, t]);
 
   // ─── Selection helpers ─────────────────────────────────────────
   const toggleId = (id: string, checked: boolean) => {
@@ -464,14 +470,14 @@ export default function MyTasksPage() {
   const bulkActions = useMemo<DesignerTransitionAction[]>(() => {
     if (selectedColumns.size !== 1) return []; // mixed cols → no bulk
     const [only] = [...selectedColumns];
-    return COL_META[only].bulk;
-  }, [selectedColumns]);
+    return colMeta[only].bulk;
+  }, [selectedColumns, colMeta]);
 
   // ─── Drag handling ─────────────────────────────────────────────
   const callTransition = async (orderId: string, dto: DesignerTransitionDto) => {
     try {
       await RepositoryRemote.designer.transition(orderId, dto);
-      toast.success('Cập nhật trạng thái');
+      toast.success(t('myTasks.statusUpdated'));
       refreshAll();
     } catch (err) {
       handleAxiosError(err);
@@ -494,15 +500,13 @@ export default function MyTasksPage() {
     const cardId = event.active.id as string;
     const fromStatus = (event.active.data.current as { status?: DesignerStatus } | undefined)?.status;
     const overId = event.over?.id as ColKey | undefined;
-    if (!overId || !fromStatus || !COL_META[overId]) return;
+    if (!overId || !fromStatus || !colMeta[overId]) return;
 
-    const plan = planTransition(fromStatus, overId);
+    const plan = planTransition(fromStatus, overId, colMeta);
     if (!plan) {
-      const targetStatus = COL_META[overId].status;
+      const targetStatus = colMeta[overId].status;
       if (targetStatus === fromStatus) return;
-      toast.warning(
-        `Không chuyển được "${fromStatus}" → "${targetStatus}". Drag rules: Cần làm/Cần làm lại → Đang làm, Đang làm → Đã xong.`,
-      );
+      toast.warning(t('myTasks.dragRuleWarning', { from: fromStatus, to: targetStatus }));
       return;
     }
     moveCardOptimistic(cardId, fromStatus, overId);
@@ -521,7 +525,7 @@ export default function MyTasksPage() {
       return {
         ...prev,
         [fromKey]: prev[fromKey].filter((c) => c._id !== id),
-        [destKey]: [{ ...card, designerStatus: COL_META[destKey].status }, ...prev[destKey]],
+        [destKey]: [{ ...card, designerStatus: colMeta[destKey].status }, ...prev[destKey]],
       };
     });
   };
@@ -537,12 +541,14 @@ export default function MyTasksPage() {
         modified: number;
         skipped: { orderId: string; productionId: string; reason: string }[];
       };
-      const msg = `Cập nhật ${data.modified}/${data.matched}`;
       if (data.skipped.length === 0) {
-        toast.success(msg);
+        toast.success(t('myTasks.bulkUpdated', { modified: data.modified, matched: data.matched }));
       } else {
-        toast.warning(`${msg}. ${data.skipped.length} đơn bị skip`, { duration: 5000 });
-        toast.message('Đơn bị skip', {
+        toast.warning(
+          t('myTasks.bulkSkippedWarning', { modified: data.modified, matched: data.matched, count: data.skipped.length }),
+          { duration: 5000 },
+        );
+        toast.message(t('myTasks.skippedOrdersTitle'), {
           description: data.skipped
             .slice(0, 5)
             .map((s) => `• ${s.productionId}: ${s.reason}`)
@@ -569,7 +575,7 @@ export default function MyTasksPage() {
         reason: reason || undefined,
         targetUserId,
       });
-      toast.success('Đã bàn giao đơn cho designer khác');
+      toast.success(t('myTasks.rejectHandedOver'));
       setRejectTarget(null);
       refreshAll();
     } catch (err) {
@@ -589,10 +595,11 @@ export default function MyTasksPage() {
               <ListChecks size={20} className="text-indigo-600" />
             </div>
             <div>
-              <h1 className="text-xl font-bold text-foreground">Xin chào{fullName ? `, ${fullName}` : ''}</h1>
-              <p className="text-xs text-muted-foreground">
-                Kéo thả card để chuyển trạng thái, hoặc tick checkbox để bulk update.
-              </p>
+              <h1 className="text-xl font-bold text-foreground">
+                {t('myTasks.greeting')}
+                {fullName ? `, ${fullName}` : ''}
+              </h1>
+              <p className="text-xs text-muted-foreground">{t('myTasks.subtitle')}</p>
             </div>
           </div>
 
@@ -609,28 +616,28 @@ export default function MyTasksPage() {
           from={dateFrom}
           to={dateTo}
           clearable={false}
-          onChange={(f, t) => {
+          onChange={(f, to) => {
             setDateFrom(f);
-            setDateTo(t);
+            setDateTo(to);
           }}
         />
 
         {/* KPI */}
         {stats && (
           <div className="grid grid-cols-2 md:grid-cols-8 gap-2">
-            <KPI label="Cần làm" value={stats.assignedCount} accent="text-zinc-700 dark:text-zinc-200" />
-            <KPI label="Cần làm lại" value={stats.reworkCount} accent="text-amber-600" />
-            <KPI label="Đang chờ quay lại" value={columns.watching.length} accent="text-sky-600" />
-            <KPI label="Đang làm" value={stats.inProgressCount} accent="text-indigo-600" />
+            <KPI label={t('myTasks.kpi.assigned')} value={stats.assignedCount} accent="text-zinc-700 dark:text-zinc-200" />
+            <KPI label={t('myTasks.kpi.rework')} value={stats.reworkCount} accent="text-amber-600" />
+            <KPI label={t('myTasks.kpi.watching')} value={columns.watching.length} accent="text-sky-600" />
+            <KPI label={t('myTasks.kpi.inProgress')} value={stats.inProgressCount} accent="text-indigo-600" />
             <KPI
-              label="Đã xong"
+              label={t('myTasks.kpi.done')}
               value={Math.max(0, stats.completedInPeriod - stats.fixedInPeriod)}
               accent="text-emerald-600"
             />
-            <KPI label="Đã sửa" value={stats.fixedInPeriod} accent="text-teal-600" />
-            <KPI label="Không làm được" value={stats.rejectedCount} accent="text-rose-600" />
+            <KPI label={t('myTasks.kpi.fixed')} value={stats.fixedInPeriod} accent="text-teal-600" />
+            <KPI label={t('myTasks.kpi.rejected')} value={stats.rejectedCount} accent="text-rose-600" />
             <KPI
-              label="Phản hồi / làm"
+              label={t('myTasks.kpi.responseWork')}
               value={`${stats.avgResponseMin}' / ${stats.avgWorkMin}'`}
               accent="text-muted-foreground"
             />
@@ -650,7 +657,7 @@ export default function MyTasksPage() {
             setDateFrom(day);
             setDateTo(day);
           }}
-          caption="— TOÀN nhà máy (không chỉ đơn của bạn) · lane Designer được tô đậm · di chuột xem chi tiết · bấm 1 ngày để lọc"
+          caption={t('myTasks.pipelineCaption')}
         />
 
         {/* Chi tiết theo ngày — panel focus đơn chưa xong (7/14/30 ngày).
@@ -668,59 +675,59 @@ export default function MyTasksPage() {
         <div className="flex items-start gap-2 rounded-md border border-border bg-muted/30 p-2.5 text-[11px] text-muted-foreground">
           <MousePointerClick size={13} className="text-primary shrink-0 mt-0.5" />
           <div>
-            <strong className="text-foreground">Mẹo chọn nhiều đơn:</strong> Tick checkbox cạnh tên sản phẩm để chọn
-            toàn bộ đơn của sản phẩm đó. Hoặc tick 1 đơn, giữ{' '}
-            <kbd className="px-1 bg-background border rounded">Shift</kbd> rồi click checkbox khác (trong cùng cột) để
-            chọn nhanh tất cả đơn ở giữa.
+            <strong className="text-foreground">{t('myTasks.hint.title')}</strong> {t('myTasks.hint.textBefore')}{' '}
+            <kbd className="px-1 bg-background border rounded">Shift</kbd> {t('myTasks.hint.textAfter')}
           </div>
         </div>
 
         {/* Filter bar */}
         <div className="grid grid-cols-2 md:grid-cols-3 xl:grid-cols-8 gap-2 rounded-md border border-border bg-card p-2.5">
           <div>
-            <label className="text-[10px] text-muted-foreground uppercase tracking-wide font-medium">Search</label>
+            <label className="text-[10px] text-muted-foreground uppercase tracking-wide font-medium">
+              {t('myTasks.filters.search')}
+            </label>
             <div className="relative mt-1">
               <Search size={12} className="absolute left-2 top-1/2 -translate-y-1/2 text-muted-foreground" />
               <Input
                 value={search}
                 onChange={(e) => setSearch(e.target.value)}
-                placeholder="productionId / orderId"
+                placeholder={t('myTasks.filters.searchPlaceholder')}
                 className="h-7 pl-7 text-xs"
               />
             </div>
           </div>
           <SelectFilter
-            label="Sản phẩm"
+            label={t('myTasks.filters.type')}
             value={filters.type}
             onChange={(v) => setFilters({ ...filters, type: v })}
             options={filterOptions.type}
           />
           <SelectFilter
-            label="Loại vải"
+            label={t('myTasks.filters.fabricType')}
             value={filters.fabricType}
             onChange={(v) => setFilters({ ...filters, fabricType: v })}
             options={labelOpts(WorkshopConfigCategory.FabricType, filterOptions.fabricType)}
           />
           <SelectFilter
-            label="Máy"
+            label={t('myTasks.filters.machine')}
             value={filters.machineNumber}
             onChange={(v) => setFilters({ ...filters, machineNumber: v })}
             options={labelOpts(WorkshopConfigCategory.Machine, filterOptions.machineNumber)}
           />
           <SelectFilter
-            label="Kết quả Tool"
+            label={t('myTasks.filters.toolResult')}
             value={filters.toolResult}
             onChange={(v) => setFilters({ ...filters, toolResult: v })}
             options={labelOpts(WorkshopConfigCategory.ToolResult, filterOptions.toolResult)}
           />
           <SelectFilter
-            label="Note kq Tool"
+            label={t('myTasks.filters.toolResultNote')}
             value={filters.toolResultNote}
             onChange={(v) => setFilters({ ...filters, toolResultNote: v })}
             options={labelOpts(WorkshopConfigCategory.ToolResultNote, filterOptions.toolResultNote)}
           />
           <SelectFilter
-            label="Khách hàng"
+            label={t('myTasks.filters.customer')}
             value={filters.userSku}
             onChange={(v) => setFilters({ ...filters, userSku: v })}
             options={filterOptions.userSku}
@@ -729,7 +736,7 @@ export default function MyTasksPage() {
               thẳng từ backend facet: `label` đã là name (resolve ở BE), không cần
               labelOpts/byCategory. Field mảng: BE lọc `$in` khớp đơn chứa mã đã chọn. */}
           <SelectFilter
-            label="File sửa lỗi"
+            label={t('myTasks.filters.errorFile')}
             value={filters.errorFile}
             onChange={(v) => setFilters({ ...filters, errorFile: v })}
             options={filterOptions.errorFile}
@@ -759,6 +766,7 @@ export default function MyTasksPage() {
                   <Column
                     key={key}
                     colKey={key}
+                    meta={colMeta[key]}
                     cards={columns[key]}
                     selected={selected}
                     activeDragId={activeCard?._id}
@@ -788,13 +796,13 @@ export default function MyTasksPage() {
             onClick={() => setShowRejected((s) => !s)}
             className="w-full flex items-center justify-between p-3 text-xs font-medium text-muted-foreground hover:text-foreground"
           >
-            <span>File không làm được ({rejected.length})</span>
+            <span>{t('myTasks.rejectedDrawer.toggle', { count: rejected.length })}</span>
             {showRejected ? <ChevronUp size={14} /> : <ChevronDown size={14} />}
           </button>
           {showRejected && (
             <div className="p-3 pt-0 grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-2">
               {rejected.length === 0 && (
-                <p className="text-xs text-muted-foreground col-span-full">Chưa có file nào báo không làm được.</p>
+                <p className="text-xs text-muted-foreground col-span-full">{t('myTasks.rejectedDrawer.empty')}</p>
               )}
               {rejected.map((c) => (
                 <TaskCard key={c._id} card={c} onPreview={onPreview} />
@@ -809,30 +817,30 @@ export default function MyTasksPage() {
             <div className="pointer-events-auto flex items-center gap-2 rounded-full border border-border bg-card shadow-lg px-4 py-2 flex-wrap">
               <CheckCircle2 size={14} className="text-primary" />
               <span className="text-sm">
-                Đã chọn <span className="font-semibold">{selected.size}</span>
+                {t('myTasks.bulkToolbar.selected')} <span className="font-semibold">{selected.size}</span>
               </span>
               {selectedColumns.size > 1 ? (
-                <span className="text-xs text-muted-foreground italic">(Đơn ở nhiều cột — chỉ bulk cùng 1 cột)</span>
+                <span className="text-xs text-muted-foreground italic">{t('myTasks.bulkToolbar.mixedColumns')}</span>
               ) : (
                 <>
                   {bulkActions.includes(DesignerTransitionAction.Start) && (
                     <Button size="sm" onClick={() => callBulk(DesignerTransitionAction.Start)}>
-                      <PlayCircle size={14} /> Nhận làm
+                      <PlayCircle size={14} /> {t('myTasks.bulkToolbar.start')}
                     </Button>
                   )}
                   {bulkActions.includes(DesignerTransitionAction.Restart) && (
                     <Button size="sm" onClick={() => callBulk(DesignerTransitionAction.Restart)}>
-                      <RotateCcw size={14} /> Nhận làm lại
+                      <RotateCcw size={14} /> {t('myTasks.bulkToolbar.restart')}
                     </Button>
                   )}
                   {bulkActions.includes(DesignerTransitionAction.Complete) && (
                     <Button size="sm" onClick={() => callBulk(DesignerTransitionAction.Complete)}>
-                      <CheckCircle2 size={14} /> Hoàn thành
+                      <CheckCircle2 size={14} /> {t('myTasks.bulkToolbar.complete')}
                     </Button>
                   )}
                   {bulkActions.includes(DesignerTransitionAction.Reject) && (
                     <Button size="sm" variant="destructive" onClick={() => setBulkReject(true)}>
-                      <XCircle size={14} /> Không làm được
+                      <XCircle size={14} /> {t('myTasks.bulkToolbar.reject')}
                     </Button>
                   )}
                 </>
@@ -846,7 +854,7 @@ export default function MyTasksPage() {
 
         <RejectModal
           open={!!rejectTarget || bulkReject}
-          productionId={bulkReject ? `${selected.size} đơn được chọn` : rejectTarget?.productionId}
+          productionId={bulkReject ? t('myTasks.rejectBulkTarget', { count: selected.size }) : rejectTarget?.productionId}
           onClose={() => {
             setRejectTarget(null);
             setBulkReject(false);
@@ -884,10 +892,10 @@ function sizeRank(size?: string): number {
   return i === -1 ? SIZE_ORDER.length : i; // size lạ → trước nhóm "không có size"
 }
 
-function groupByType(cards: DesignerTaskCard[]): [string, DesignerTaskCard[]][] {
+function groupByType(cards: DesignerTaskCard[], noTypeLabel: string): [string, DesignerTaskCard[]][] {
   const map = new Map<string, DesignerTaskCard[]>();
   for (const r of cards) {
-    const k = r.type || '— Chưa có type —';
+    const k = r.type || noTypeLabel;
     const arr = map.get(k) || [];
     arr.push(r);
     map.set(k, arr);
@@ -911,6 +919,7 @@ function KPI({ label, value, accent }: { label: string; value: number | string; 
 
 interface ColProps {
   colKey: ColKey;
+  meta: ColMeta;
   cards: DesignerTaskCard[];
   selected: Set<string>;
   activeDragId?: string;
@@ -923,6 +932,7 @@ interface ColProps {
 
 function Column({
   colKey,
+  meta,
   cards,
   selected,
   activeDragId,
@@ -932,9 +942,9 @@ function Column({
   onPreview,
   onRejectCard,
 }: ColProps) {
-  const meta = COL_META[colKey];
+  const { t } = useTranslation('designerTaskWorkflow');
   const { setNodeRef, isOver } = useDroppable({ id: colKey });
-  const groups = useMemo(() => groupByType(cards), [cards]);
+  const groups = useMemo(() => groupByType(cards, t('myTasks.noType')), [cards, t]);
 
   // Mặc định mở tất cả group; user click header để collapse/expand riêng từng cái.
   const [collapsed, setCollapsed] = useState<Set<string>>(new Set());
@@ -959,7 +969,9 @@ function Column({
       </div>
 
       <div className="flex-1 space-y-3 overflow-y-auto max-h-[calc(100vh-380px)]">
-        {cards.length === 0 && <div className="text-[11px] text-muted-foreground italic text-center py-6">Trống</div>}
+        {cards.length === 0 && (
+          <div className="text-[11px] text-muted-foreground italic text-center py-6">{t('myTasks.column.empty')}</div>
+        )}
         {groups.map(([type, rows]) => {
           const selCount = rows.filter((r) => selected.has(r._id)).length;
           const allChecked = rows.length > 0 && selCount === rows.length;
@@ -978,7 +990,7 @@ function Column({
                   }
                 }}
                 className="flex items-center gap-2 px-1.5 py-1 rounded bg-card/60 text-[11px] font-medium text-foreground cursor-pointer hover:bg-card select-none"
-                title={isCollapsed ? 'Click để mở' : 'Click để thu gọn'}
+                title={isCollapsed ? t('myTasks.column.expand') : t('myTasks.column.collapse')}
               >
                 <input
                   type="checkbox"
@@ -1050,9 +1062,9 @@ function Column({
                             }}
                             onPointerDown={(e) => e.stopPropagation()}
                             className="absolute top-1 right-1 text-[10px] text-rose-600 hover:text-rose-700 opacity-0 group-hover:opacity-100 transition-opacity bg-background/80 rounded px-1.5 py-0.5"
-                            title="Không làm được"
+                            title={t('myTasks.rejectCardButton')}
                           >
-                            Không làm được
+                            {t('myTasks.rejectCardButton')}
                           </button>
                         )}
                       </div>

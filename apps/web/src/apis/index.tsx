@@ -6,6 +6,8 @@ import { PATHS } from '@/constants/paths';
 import { useAuthStore } from '@/store/authStore';
 import { useCustomerAuthStore } from '@/store/customerAuthStore';
 
+import i18n from '@/i18n';
+
 import { CONFIG } from '../constants';
 
 const PUBLIC_ROUTE_KEYWORDS = ['catalog', 'product', 'products', 'categories', 'providers'];
@@ -69,7 +71,7 @@ apiAxios.interceptors.response.use(
     // để trang login tự hiện lỗi thay vì bị logout/redirect ngay trên chính nó.
     const isLoginRequest = (error?.config?.url as string | undefined)?.includes('/auth/login');
     if (!isLoginRequest && error?.response?.data?.message === 'error.userNotFound') {
-      toast.error('Tài khoản không tồn tại hoặc đã bị xoá. Vui lòng đăng nhập lại.');
+      toast.error(i18n.t('session.accountNotFound', { ns: 'auth' }));
       useAuthStore.getState().clearToken();
       error.__silent = true;
     }

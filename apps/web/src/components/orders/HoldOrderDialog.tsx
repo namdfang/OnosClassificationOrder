@@ -1,4 +1,5 @@
 import React, { useState } from 'react';
+import { useTranslation } from 'react-i18next';
 import { HOLD_REASON_WAITING_ADDRESS, HOLD_REASON_WAITING_DESIGN } from 'shared';
 import { toast } from 'sonner';
 
@@ -48,6 +49,7 @@ export const HOLD_REASON_PRESETS = [
  * đơn bị khóa mọi thao tác + tô xám cho tới khi mở lại.
  */
 export function HoldOrderDialog({ order, open, onOpenChange, onDone }: Props) {
+  const { t } = useTranslation('orders');
   const [reason, setReason] = useState('');
   const [loading, setLoading] = useState(false);
 
@@ -56,7 +58,7 @@ export function HoldOrderDialog({ order, open, onOpenChange, onDone }: Props) {
     try {
       setLoading(true);
       const res = await RepositoryRemote.order.holdOrder(order._id, { reason: reason.trim() || undefined });
-      toast.success('Đã giữ đơn');
+      toast.success(t('dialogs.holdOrder.success'));
       setReason('');
       onOpenChange(false);
       onDone((res.data?.data as WorkshopOrderRow) ?? order);
@@ -71,7 +73,7 @@ export function HoldOrderDialog({ order, open, onOpenChange, onDone }: Props) {
     <Dialog open={open} onOpenChange={(o) => (o ? onOpenChange(o) : (setReason(''), onOpenChange(false)))}>
       <DialogContent className="sm:max-w-md">
         <DialogHeader>
-          <DialogTitle>Giữ đơn</DialogTitle>
+          <DialogTitle>{t('dialogs.holdOrder.title')}</DialogTitle>
           <DialogDescription>
             {order ? (
               <span className="text-xs">
@@ -85,7 +87,7 @@ export function HoldOrderDialog({ order, open, onOpenChange, onDone }: Props) {
         </DialogHeader>
 
         <div className="space-y-1.5">
-          <label className="text-xs font-medium text-foreground">Lý do giữ (không bắt buộc)</label>
+          <label className="text-xs font-medium text-foreground">{t('dialogs.holdOrder.reasonLabel')}</label>
           <div className="flex flex-wrap gap-1.5">
             {HOLD_REASON_PRESETS.map((preset) => {
               const active = reason === preset;
@@ -109,24 +111,22 @@ export function HoldOrderDialog({ order, open, onOpenChange, onDone }: Props) {
           <Textarea
             value={reason}
             onChange={(e) => setReason(e.target.value.slice(0, MAX))}
-            placeholder="VD: chờ khách xác nhận, thiếu vật tư…"
+            placeholder={t('dialogs.holdOrder.reasonPlaceholder')}
             rows={3}
             autoFocus
           />
           <p className="text-[10px] text-muted-foreground text-right">
             {reason.length}/{MAX}
           </p>
-          <p className="text-[11px] text-amber-600 dark:text-amber-400">
-            Đơn giữ sẽ bị khóa mọi thao tác cho tới khi bạn mở lại.
-          </p>
+          <p className="text-[11px] text-amber-600 dark:text-amber-400">{t('dialogs.holdOrder.warning')}</p>
         </div>
 
         <DialogFooter>
           <Button variant="ghost" onClick={() => onOpenChange(false)} disabled={loading}>
-            Đóng
+            {t('common:actions.close')}
           </Button>
           <Button onClick={submit} disabled={loading}>
-            {loading ? 'Đang giữ…' : 'Giữ đơn'}
+            {loading ? t('dialogs.holdOrder.holding') : t('dialogs.holdOrder.submitBtn')}
           </Button>
         </DialogFooter>
       </DialogContent>

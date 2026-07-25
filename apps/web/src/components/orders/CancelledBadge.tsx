@@ -1,4 +1,5 @@
 import React from 'react';
+import { useTranslation } from 'react-i18next';
 
 import { Badge } from '@/components/ui/badge';
 
@@ -7,10 +8,11 @@ import { Badge } from '@/components/ui/badge';
  * full trong tooltip). Dùng chung cho mọi bảng order.
  */
 export function CancelledBadge({ reason, className }: { reason?: string | null; className?: string }) {
+  const { t } = useTranslation('orders');
   return (
     <span className={`inline-flex items-center gap-1 shrink-0 min-w-0 ${className ?? ''}`}>
-      <Badge variant="destructive" className="text-[10px] px-1 py-0 shrink-0" title={reason || 'Đơn đã hủy'}>
-        Đã hủy
+      <Badge variant="destructive" className="text-[10px] px-1 py-0 shrink-0" title={reason || t('cancelledBadge.title')}>
+        {t('cancelledBadge.label')}
       </Badge>
       {reason && (
         <span

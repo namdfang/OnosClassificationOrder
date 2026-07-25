@@ -1,0 +1,41 @@
+{
+  "nav": {
+    "features": "Tính năng",
+    "howItWorks": "Quy trình"
+  },
+  "customer": "Khách hàng",
+  "signIn": "Đăng nhập",
+  "hero": {
+    "title": "Hệ thống quản lý sản xuất & đơn hàng in ấn theo yêu cầu",
+    "subtitle": "Quản lý đơn hàng, điều phối xưởng sản xuất và theo dõi tiến trình trên một nền tảng duy nhất.",
+    "signInSystem": "Đăng nhập hệ thống",
+    "customerOrderNow": "Khách hàng — Đặt đơn ngay"
+  },
+  "features": {
+    "orders": {
+      "title": "Quản lý đơn hàng",
+      "description": "Theo dõi toàn bộ đơn hàng từ import, phân loại đến xử lý lỗi trên một màn hình duy nhất."
+    },
+    "production": {
+      "title": "Điều phối sản xuất",
+      "description": "Gán xưởng, phân công thiết kế và theo dõi từng công đoạn fulfillment theo thời gian thực."
+    },
+    "reports": {
+      "title": "Báo cáo & thống kê",
+      "description": "Dashboard trực quan cho năng suất, tỉ lệ lỗi và tiến độ theo từng xưởng, từng người."
+    },
+    "tracking": {
+      "title": "Theo dõi tiến trình",
+      "description": "Khách hàng tự đặt đơn và tra cứu tiến trình xử lý mọi lúc, không cần liên hệ trực tiếp."
+    }
+  },
+  "howItWorks": {
+    "title": "Quy trình đơn giản",
+    "step1": { "title": "Đặt đơn", "description": "Khách hàng tạo tài khoản và đặt đơn trực tuyến." },
+    "step2": { "title": "Sản xuất", "description": "Đơn được phân xưởng, thiết kế và sản xuất theo quy trình." },
+    "step3": { "title": "Theo dõi", "description": "Tra cứu tiến trình xử lý đơn hàng theo thời gian thực." }
+  },
+  "footer": {
+    "tagline": "Hệ thống quản lý sản xuất & đơn hàng in ấn theo yêu cầu"
+  }
+}

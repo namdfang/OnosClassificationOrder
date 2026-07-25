@@ -1,5 +1,7 @@
 import React, { useEffect, useMemo, useState } from 'react';
+import { useTranslation } from 'react-i18next';
 import { useSearchParams } from 'react-router-dom';
+import type { TFunction } from 'i18next';
 import {
   Activity,
   AlertTriangle,
@@ -74,16 +76,18 @@ interface LifecycleOverview {
 }
 
 /** Icon + nhãn ngắn cho mỗi chặng (dùng trong phễu + biểu đồ). */
-const STAGE_META: Record<string, { icon: React.ElementType; short: string }> = {
-  'tool-check': { icon: ClipboardCheck, short: 'Soát tool' },
-  designer: { icon: Palette, short: 'Thiết kế' },
-  print: { icon: Printer, short: 'In' },
-  press: { icon: Flame, short: 'Ép' },
-  'qc-post-press': { icon: ShieldCheck, short: 'QC ép' },
-  'sew-in': { icon: LogIn, short: 'May vào' },
-  'sew-out': { icon: LogOut, short: 'May ra' },
-  pack: { icon: Package, short: 'Đóng hàng' },
-};
+function buildStageMeta(t: TFunction<'orderLifecycle'>): Record<string, { icon: React.ElementType; short: string }> {
+  return {
+    'tool-check': { icon: ClipboardCheck, short: t('lifecycleTab.stages.toolCheck') },
+    designer: { icon: Palette, short: t('lifecycleTab.stages.designer') },
+    print: { icon: Printer, short: t('lifecycleTab.stages.print') },
+    press: { icon: Flame, short: t('lifecycleTab.stages.press') },
+    'qc-post-press': { icon: ShieldCheck, short: t('lifecycleTab.stages.qcPostPress') },
+    'sew-in': { icon: LogIn, short: t('lifecycleTab.stages.sewIn') },
+    'sew-out': { icon: LogOut, short: t('lifecycleTab.stages.sewOut') },
+    pack: { icon: Package, short: t('lifecycleTab.stages.pack') },
+  };
+}
 
 // Đường ray (rail) indigo liền mạch nối các công đoạn trong phễu.
 const RAIL_H = 'relative h-[3px] w-full rounded-full bg-indigo-400/70 dark:bg-indigo-500/50';
@@ -102,16 +106,16 @@ function formatNumber(n: number): string {
 }
 
 /** ms → chuỗi ngắn gọn (phút / giờ / ngày). 0 hoặc âm → "—". */
-function formatDuration(ms: number): string {
+function formatDuration(t: TFunction<'orderLifecycle'>, ms: number): string {
   if (!ms || ms <= 0) return '—';
   const totalMin = Math.round(ms / 60000);
-  if (totalMin < 60) return `${totalMin} phút`;
+  if (totalMin < 60) return t('lifecycleTab.duration.minutes', { count: totalMin });
   const h = Math.floor(totalMin / 60);
   const m = totalMin % 60;
   if (h < 24) return m > 0 ? `${h}h ${m}m` : `${h}h`;
   const d = Math.floor(h / 24);
   const hr = h % 24;
-  return hr > 0 ? `${d} ngày ${hr}h` : `${d} ngày`;
+  return hr > 0 ? t('lifecycleTab.duration.daysHours', { days: d, hours: hr }) : t('lifecycleTab.duration.days', { count: d });
 }
 
 function todayISO(): string {
@@ -215,7 +219,16 @@ function Metric({
 const dash = (n: number) => (n === 0 ? '–' : formatNumber(n));
 
 /** Node lớn trong phễu — đầy đủ chỉ số + tooltip mỗi trường. */
-function FunnelNodeCard({ node, isBottleneck }: { node: FunnelNode; isBottleneck: boolean }) {
+function FunnelNodeCard({
+  node,
+  isBottleneck,
+  stageMeta,
+}: {
+  node: FunnelNode;
+  isBottleneck: boolean;
+  stageMeta: Record<string, { icon: React.ElementType; short: string }>;
+}) {
+  const { t } = useTranslation('orderLifecycle');
   if (node.kind === 'done') {
     return (
       <div className="flex-1 min-w-0 rounded-lg border border-emerald-300/60 bg-emerald-50/60 dark:bg-emerald-500/10 p-3 flex flex-col">
@@ -224,7 +237,7 @@ function FunnelNodeCard({ node, isBottleneck }: { node: FunnelNode; isBottleneck
             ✓
           </span>
           <CheckCircle2 size={15} className="text-emerald-600 shrink-0" />
-          <span className="text-xs font-semibold text-foreground truncate">Hoàn thành</span>
+          <span className="text-xs font-semibold text-foreground truncate">{t('lifecycleTab.funnel.done')}</span>
         </div>
         <Tooltip>
           <TooltipTrigger asChild>
@@ -232,19 +245,17 @@ function FunnelNodeCard({ node, isBottleneck }: { node: FunnelNode; isBottleneck
               <div className="text-[28px] leading-none font-bold tabular-nums text-emerald-700 dark:text-emerald-300">
                 {formatNumber(node.completed)}
               </div>
-              <div className="text-[10px] text-muted-foreground mt-1">hoàn thành trong kỳ</div>
+              <div className="text-[10px] text-muted-foreground mt-1">{t('lifecycleTab.funnel.doneSub')}</div>
             </div>
           </TooltipTrigger>
-          <TooltipContent className="max-w-[230px]">
-            Số đơn đã đóng hàng xong (kết thúc toàn bộ quy trình) trong khoảng thời gian đã chọn.
-          </TooltipContent>
+          <TooltipContent className="max-w-[230px]">{t('lifecycleTab.funnel.doneTooltip')}</TooltipContent>
         </Tooltip>
       </div>
     );
   }
 
   const s = node.row;
-  const meta = STAGE_META[s.stage];
+  const meta = stageMeta[s.stage];
   const Icon = meta?.icon ?? Clock;
   const isTool = s.stage === 'tool-check';
 
@@ -266,7 +277,7 @@ function FunnelNodeCard({ node, isBottleneck }: { node: FunnelNode; isBottleneck
         <span className="text-xs font-semibold text-foreground truncate">{s.label}</span>
         {isBottleneck && (
           <span className="ml-auto text-[8px] uppercase tracking-wide font-bold text-amber-600 bg-amber-100 dark:bg-amber-500/15 px-1 py-0.5 rounded shrink-0">
-            tắc
+            {t('lifecycleTab.funnel.bottleneckTag')}
           </span>
         )}
       </div>
@@ -278,13 +289,13 @@ function FunnelNodeCard({ node, isBottleneck }: { node: FunnelNode; isBottleneck
             <div className="text-[26px] leading-none font-bold tabular-nums text-foreground">
               {formatNumber(s.backlog)}
             </div>
-            <div className="text-[10px] text-muted-foreground mt-0.5">đang chờ</div>
+            <div className="text-[10px] text-muted-foreground mt-0.5">{t('lifecycleTab.funnel.waitingLabel')}</div>
           </div>
         </TooltipTrigger>
         <TooltipContent className="max-w-[230px]">
           {isTool
-            ? 'Số đơn CHƯA soát tool (cột Note kq tool còn trống).'
-            : `Số đơn đang chờ tại "${s.label}" — đã tới công đoạn nhưng worker chưa bắt đầu.`}
+            ? t('lifecycleTab.funnel.waitingTooltipTool')
+            : t('lifecycleTab.funnel.waitingTooltipStage', { label: s.label })}
         </TooltipContent>
       </Tooltip>
 
@@ -292,61 +303,65 @@ function FunnelNodeCard({ node, isBottleneck }: { node: FunnelNode; isBottleneck
       <div className="grid grid-cols-2 gap-1.5">
         <Metric
           icon={<Inbox size={9} />}
-          label="Chờ nhận"
+          label={t('lifecycleTab.metrics.waitingToStart')}
           value={isTool ? '–' : dash(s.waitingToStart)}
           valueClass="text-sky-700 dark:text-sky-300"
           desc={
             isTool
-              ? 'Chặng soát tool không có bước nhận task.'
+              ? t('lifecycleTab.metrics.waitingToStartDescTool')
               : s.stage === 'designer'
-                ? 'Số đơn đã giao cho sub-designer nhưng chưa bấm "Nhận làm".'
-                : `Số đơn đã tới "${s.label}" nhưng worker chưa bấm "Bắt đầu".`
+                ? t('lifecycleTab.metrics.waitingToStartDescDesigner')
+                : t('lifecycleTab.metrics.waitingToStartDescStage', { label: s.label })
           }
         />
         <Metric
           icon={<Activity size={9} />}
-          label="Đang làm"
+          label={t('lifecycleTab.metrics.inProgress')}
           value={isTool ? '–' : dash(s.inProgress)}
           valueClass="text-indigo-700 dark:text-indigo-300"
-          desc={isTool ? 'Chặng soát tool không có trạng thái "đang làm".' : `Số đơn đang được làm tại "${s.label}".`}
+          desc={
+            isTool
+              ? t('lifecycleTab.metrics.inProgressDescTool')
+              : t('lifecycleTab.metrics.inProgressDescStage', { label: s.label })
+          }
         />
         <Metric
           icon={<RotateCw size={9} />}
-          label="Rework"
+          label={t('lifecycleTab.metrics.rework')}
           value={dash(s.rework)}
           valueClass="text-amber-700 dark:text-amber-300"
           desc={
             isTool
-              ? 'Số đơn bị đẩy về Support soát lại (In báo "Thiếu file để in"…).'
-              : `Số đơn bị đẩy lại "${s.label}" để làm lại.`
+              ? t('lifecycleTab.metrics.reworkDescTool')
+              : t('lifecycleTab.metrics.reworkDescStage', { label: s.label })
           }
         />
         <Metric
           icon={<AlertTriangle size={9} />}
-          label="Lỗi"
+          label={t('lifecycleTab.metrics.error')}
           value={dash(s.error)}
           valueClass="text-rose-700 dark:text-rose-300"
           desc={
             isTool
-              ? 'Số đơn bị soát ra lỗi (Note kq tool = "error").'
-              : `Số đơn đang bị đánh lỗi sản xuất tại "${s.label}".`
+              ? t('lifecycleTab.metrics.errorDescTool')
+              : t('lifecycleTab.metrics.errorDescStage', { label: s.label })
           }
         />
         <Metric
           icon={<PackageCheck size={9} />}
-          label="HT (kỳ)"
+          label={t('lifecycleTab.metrics.doneInRange')}
           value={dash(s.doneInRange)}
           valueClass="text-emerald-700 dark:text-emerald-300"
-          desc={`Số đơn đã hoàn thành "${s.label}" trong khoảng thời gian đã chọn.`}
+          desc={t('lifecycleTab.metrics.doneInRangeDesc', { label: s.label })}
         />
         <Metric
           icon={<Hourglass size={9} />}
-          label="Time TB"
-          value={formatDuration(s.avgWorkMs)}
+          label={t('lifecycleTab.metrics.avgTime')}
+          value={formatDuration(t, s.avgWorkMs)}
           desc={
             isTool
-              ? 'Thời gian trung bình từ lúc đơn vào sản xuất đến lúc soát xong (trong kỳ).'
-              : `Thời gian làm trung bình một đơn tại "${s.label}" (đơn hoàn thành trong kỳ).`
+              ? t('lifecycleTab.metrics.avgTimeDescTool')
+              : t('lifecycleTab.metrics.avgTimeDescStage', { label: s.label })
           }
         />
       </div>
@@ -355,12 +370,12 @@ function FunnelNodeCard({ node, isBottleneck }: { node: FunnelNode; isBottleneck
       <div className="mt-1.5">
         <Metric
           icon={<CheckCircle2 size={9} />}
-          label={isTool ? 'Đã soát (tổng)' : 'Đã qua (tổng)'}
+          label={isTool ? t('lifecycleTab.metrics.passedTotalTool') : t('lifecycleTab.metrics.passedTotalStage')}
           value={formatNumber(s.passedTotal)}
           desc={
             isTool
-              ? 'Tổng số đơn đã được soát tool (Note kq tool có giá trị).'
-              : `Tổng số đơn đã từng đi qua "${s.label}" (tích lũy).`
+              ? t('lifecycleTab.metrics.passedTotalDescTool')
+              : t('lifecycleTab.metrics.passedTotalDescStage', { label: s.label })
           }
         />
       </div>
@@ -374,6 +389,8 @@ function FunnelNodeCard({ node, isBottleneck }: { node: FunnelNode; isBottleneck
  * từ `GET /v1/orders/lifecycle-overview`. Xem `OrderLifecycle.md`.
  */
 export default function LifecycleTab() {
+  const { t } = useTranslation('orderLifecycle');
+  const stageMeta = useMemo(() => buildStageMeta(t), [t]);
   const { profile } = useAuthStore();
   const { roleName } = usePermission();
   // User gắn 1 xưởng (Fulfillment) → khóa vào xưởng đó. Role quản lý chọn mọi xưởng.
@@ -446,13 +463,13 @@ export default function LifecycleTab() {
   const barData = useMemo(
     () =>
       stages.map((s) => ({
-        name: STAGE_META[s.stage]?.short ?? s.label,
-        'Đang chứa': s.backlog,
-        'Đang làm': s.inProgress,
-        Rework: s.rework,
-        Lỗi: s.error,
+        name: stageMeta[s.stage]?.short ?? s.label,
+        backlog: s.backlog,
+        inProgress: s.inProgress,
+        rework: s.rework,
+        error: s.error,
       })),
-    [stages],
+    [stages, stageMeta],
   );
 
   const lineData = data?.completionTimeline ?? [];
@@ -480,19 +497,17 @@ export default function LifecycleTab() {
 
       <div className="flex items-baseline justify-between gap-4">
         <div>
-          <h1 className="text-3xl font-semibold tracking-tight text-foreground">Vòng đời đơn hàng</h1>
-          <p className="text-sm text-muted-foreground mt-1">
-            Lọc theo ngày vào sản xuất → xem đơn của (các) ngày đó hiện đang tồn ở công đoạn nào
-          </p>
+          <h1 className="text-3xl font-semibold tracking-tight text-foreground">{t('lifecycleTab.title')}</h1>
+          <p className="text-sm text-muted-foreground mt-1">{t('lifecycleTab.subtitle')}</p>
         </div>
       </div>
 
       <OrderFilterBar
         createdFrom={startDate}
         createdTo={endDate}
-        onDateRangeChange={(f, t) => {
+        onDateRangeChange={(f, t2) => {
           setStartDate(f);
-          setEndDate(t);
+          setEndDate(t2);
         }}
         onReload={fetchData}
         loading={loading}
@@ -502,11 +517,11 @@ export default function LifecycleTab() {
             : [
                 {
                   key: 'factory',
-                  label: 'Xưởng',
+                  label: t('lifecycleTab.factoryFacetLabel'),
                   value: selectedFactory,
                   onChange: setSelectedFactory,
                   options: [
-                    { value: '', label: 'Tất cả xưởng' },
+                    { value: '', label: t('lifecycleTab.allFactories') },
                     ...(data?.factories ?? []).map((f) => ({ value: f.factoryId, label: f.factoryName })),
                   ],
                 },
@@ -516,7 +531,7 @@ export default function LifecycleTab() {
           lockedFactoryId ? (
             <span className="inline-flex items-center gap-1.5 text-xs bg-sky-100 dark:bg-sky-500/15 text-sky-700 dark:text-sky-300 px-2.5 py-1.5 rounded-md">
               <Factory size={12} />
-              <span className="font-medium">{lockedFactoryName || 'Xưởng của tôi'}</span>
+              <span className="font-medium">{lockedFactoryName || t('lifecycleTab.myFactory')}</span>
             </span>
           ) : undefined
         }
@@ -525,40 +540,42 @@ export default function LifecycleTab() {
       {/* KPI row */}
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
         <KpiCard
-          label="Đơn đang trong quy trình"
+          label={t('lifecycleTab.kpi.inProgress.label')}
           value={totals ? formatNumber(totals.totalActive) : '—'}
-          sub="Chưa đóng hàng xong"
+          sub={t('lifecycleTab.kpi.inProgress.sub')}
           icon={<Activity size={13} />}
           loading={loading && !data}
         />
         <KpiCard
-          label="Hoàn thành"
+          label={t('lifecycleTab.kpi.completed.label')}
           value={totals ? formatNumber(totals.completedInRange) : '—'}
-          sub={`Đơn vào SX ${startDate} → ${endDate} đã đóng hàng xong`}
+          sub={t('lifecycleTab.kpi.completed.sub', { from: startDate, to: endDate })}
           icon={<PackageCheck size={13} />}
           tone="emerald"
           loading={loading && !data}
         />
         <KpiCard
-          label="Cycle time trung bình"
-          value={totals ? formatDuration(totals.avgTotalCycleMs) : '—'}
-          sub="Thiết kế → đóng hàng"
+          label={t('lifecycleTab.kpi.cycleTime.label')}
+          value={totals ? formatDuration(t, totals.avgTotalCycleMs) : '—'}
+          sub={t('lifecycleTab.kpi.cycleTime.sub')}
           icon={<Timer size={13} />}
           loading={loading && !data}
         />
         <KpiCard
-          label="Công đoạn tắc nghẽn"
+          label={t('lifecycleTab.kpi.bottleneck.label')}
           value={
             totals?.bottleneckStage
-              ? STAGE_META[totals.bottleneckStage]?.short ??
+              ? stageMeta[totals.bottleneckStage]?.short ??
                 stages.find((s) => s.stage === totals.bottleneckStage)?.label ??
                 '—'
               : '—'
           }
           sub={
             totals?.bottleneckStage
-              ? `${formatNumber(stages.find((s) => s.stage === totals.bottleneckStage)?.backlog ?? 0)} đơn đang chờ`
-              : 'Không có tồn đọng'
+              ? t('lifecycleTab.kpi.bottleneck.subWaiting', {
+                  count: formatNumber(stages.find((s) => s.stage === totals.bottleneckStage)?.backlog ?? 0),
+                })
+              : t('lifecycleTab.kpi.bottleneck.subNone')
           }
           icon={<AlertTriangle size={13} />}
           tone={totals?.bottleneckStage ? 'amber' : 'default'}
@@ -568,7 +585,7 @@ export default function LifecycleTab() {
 
       {/* Phễu các chặng — bố cục rắn bò (boustrophedon) để thấy hết không cuộn */}
       <div className="rounded-xl border border-border bg-card p-5">
-        <h2 className="text-base font-semibold text-foreground mb-1">Phễu công đoạn</h2>
+        <h2 className="text-base font-semibold text-foreground mb-1">{t('lifecycleTab.funnel.title')}</h2>
         {/* <p className="text-xs text-muted-foreground mb-4">
           Đơn vào sản xuất trong khoảng ngày đã lọc, hiện đang nằm ở công đoạn nào. Đi theo số thứ tự (rắn bò); di chuột vào số để xem chú thích.
         </p> */}
@@ -600,6 +617,7 @@ export default function LifecycleTab() {
                                 totals?.bottleneckStage === node.row.stage &&
                                 node.row.backlog > 0
                               }
+                              stageMeta={stageMeta}
                             />
                           ) : (
                             <div className="flex-1 min-w-0" />
@@ -660,10 +678,8 @@ export default function LifecycleTab() {
       {/* Bảng chi tiết */}
       <div className="rounded-xl border border-border overflow-hidden bg-card">
         <div className="px-5 py-4">
-          <h2 className="text-base font-semibold text-foreground">Chi tiết theo công đoạn</h2>
-          <p className="text-xs text-muted-foreground mt-0.5">
-            Snapshot hiện tại (đang chứa / đang làm / rework / lỗi) · throughput theo kỳ (hoàn thành / thời gian TB)
-          </p>
+          <h2 className="text-base font-semibold text-foreground">{t('lifecycleTab.detailTable.title')}</h2>
+          <p className="text-xs text-muted-foreground mt-0.5">{t('lifecycleTab.detailTable.subtitle')}</p>
         </div>
         <div className="overflow-x-auto border-t border-border">
           {loading && !data ? (
@@ -677,21 +693,37 @@ export default function LifecycleTab() {
               <thead>
                 <tr className="bg-muted/40 text-[11px] tracking-wide font-medium text-muted-foreground">
                   <th className="sticky left-0 bg-muted/40 text-left px-4 py-2.5 min-w-[180px] border-b border-border">
-                    Công đoạn
+                    {t('lifecycleTab.detailTable.columns.stage')}
                   </th>
-                  <th className="text-right px-3 py-2.5 border-b border-border">Đang chứa</th>
-                  <th className="text-right px-3 py-2.5 border-b border-border">Chờ nhận</th>
-                  <th className="text-right px-3 py-2.5 border-b border-border">Đang làm</th>
-                  <th className="text-right px-3 py-2.5 border-b border-border">Rework</th>
-                  <th className="text-right px-3 py-2.5 border-b border-border">Lỗi</th>
-                  <th className="text-right px-3 py-2.5 border-b border-border">Hoàn thành (kỳ)</th>
-                  <th className="text-right px-3 py-2.5 border-b border-border">Đã qua</th>
-                  <th className="text-right px-3 py-2.5 border-b border-border">Time TB</th>
+                  <th className="text-right px-3 py-2.5 border-b border-border">
+                    {t('lifecycleTab.detailTable.columns.backlog')}
+                  </th>
+                  <th className="text-right px-3 py-2.5 border-b border-border">
+                    {t('lifecycleTab.detailTable.columns.waitingToStart')}
+                  </th>
+                  <th className="text-right px-3 py-2.5 border-b border-border">
+                    {t('lifecycleTab.detailTable.columns.inProgress')}
+                  </th>
+                  <th className="text-right px-3 py-2.5 border-b border-border">
+                    {t('lifecycleTab.detailTable.columns.rework')}
+                  </th>
+                  <th className="text-right px-3 py-2.5 border-b border-border">
+                    {t('lifecycleTab.detailTable.columns.error')}
+                  </th>
+                  <th className="text-right px-3 py-2.5 border-b border-border">
+                    {t('lifecycleTab.detailTable.columns.doneInRange')}
+                  </th>
+                  <th className="text-right px-3 py-2.5 border-b border-border">
+                    {t('lifecycleTab.detailTable.columns.passedTotal')}
+                  </th>
+                  <th className="text-right px-3 py-2.5 border-b border-border">
+                    {t('lifecycleTab.detailTable.columns.avgTime')}
+                  </th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-border">
                 {stages.map((s) => {
-                  const meta = STAGE_META[s.stage];
+                  const meta = stageMeta[s.stage];
                   const Icon = meta?.icon ?? Clock;
                   const isBottleneck = totals?.bottleneckStage === s.stage && s.backlog > 0;
                   const cell = (v: number, cls?: string) => (
@@ -715,7 +747,7 @@ export default function LifecycleTab() {
                           <span className="font-medium text-foreground">{s.label}</span>
                           {isBottleneck && (
                             <span className="text-[9px] uppercase tracking-wide font-semibold text-amber-600 bg-amber-100 dark:bg-amber-500/15 px-1.5 py-0.5 rounded">
-                              tắc
+                              {t('lifecycleTab.funnel.bottleneckTag')}
                             </span>
                           )}
                         </div>
@@ -728,7 +760,7 @@ export default function LifecycleTab() {
                       {cell(s.doneInRange, 'text-emerald-700 dark:text-emerald-300')}
                       {cell(s.passedTotal, 'text-muted-foreground')}
                       <td className="text-right px-3 py-2.5 tabular-nums text-muted-foreground">
-                        {formatDuration(s.avgWorkMs)}
+                        {formatDuration(t, s.avgWorkMs)}
                       </td>
                     </tr>
                   );
@@ -742,13 +774,13 @@ export default function LifecycleTab() {
       {/* Biểu đồ */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
         <div className="rounded-xl border border-border bg-card p-5">
-          <h2 className="text-base font-semibold text-foreground mb-1">Tồn đọng theo công đoạn</h2>
-          <p className="text-xs text-muted-foreground mb-4">Số đơn đang chờ · đang làm · rework · lỗi tại mỗi chặng</p>
+          <h2 className="text-base font-semibold text-foreground mb-1">{t('lifecycleTab.charts.backlogTitle')}</h2>
+          <p className="text-xs text-muted-foreground mb-4">{t('lifecycleTab.charts.backlogSubtitle')}</p>
           {loading && !data ? (
             <div className="h-[300px] rounded bg-muted/40 animate-pulse" />
           ) : barData.length === 0 ? (
             <div className="h-[300px] flex items-center justify-center text-sm text-muted-foreground">
-              Chưa có dữ liệu.
+              {t('lifecycleTab.charts.noData')}
             </div>
           ) : (
             <div className="h-[300px]">
@@ -758,20 +790,42 @@ export default function LifecycleTab() {
                   <XAxis dataKey="name" tick={{ fontSize: 10 }} interval={0} angle={-30} textAnchor="end" height={56} />
                   <YAxis tick={{ fontSize: 11 }} allowDecimals={false} />
                   <RechartsTooltip content={<BarTooltip />} cursor={{ fill: 'hsl(var(--muted))', opacity: 0.4 }} />
-                  <Bar dataKey="Đang chứa" stackId="a" fill={SEGMENT_COLORS.backlog} radius={[0, 0, 0, 0]} />
-                  <Bar dataKey="Đang làm" stackId="a" fill={SEGMENT_COLORS.inProgress} />
-                  <Bar dataKey="Rework" stackId="a" fill={SEGMENT_COLORS.rework} />
-                  <Bar dataKey="Lỗi" stackId="a" fill={SEGMENT_COLORS.error} radius={[3, 3, 0, 0]} />
+                  <Bar
+                    dataKey="backlog"
+                    name={t('lifecycleTab.charts.legend.backlog')}
+                    stackId="a"
+                    fill={SEGMENT_COLORS.backlog}
+                    radius={[0, 0, 0, 0]}
+                  />
+                  <Bar
+                    dataKey="inProgress"
+                    name={t('lifecycleTab.charts.legend.inProgress')}
+                    stackId="a"
+                    fill={SEGMENT_COLORS.inProgress}
+                  />
+                  <Bar
+                    dataKey="rework"
+                    name={t('lifecycleTab.charts.legend.rework')}
+                    stackId="a"
+                    fill={SEGMENT_COLORS.rework}
+                  />
+                  <Bar
+                    dataKey="error"
+                    name={t('lifecycleTab.charts.legend.error')}
+                    stackId="a"
+                    fill={SEGMENT_COLORS.error}
+                    radius={[3, 3, 0, 0]}
+                  />
                 </BarChart>
               </ResponsiveContainer>
             </div>
           )}
           <div className="flex flex-wrap gap-3 mt-3 justify-center">
             {[
-              ['Đang chứa', SEGMENT_COLORS.backlog],
-              ['Đang làm', SEGMENT_COLORS.inProgress],
-              ['Rework', SEGMENT_COLORS.rework],
-              ['Lỗi', SEGMENT_COLORS.error],
+              [t('lifecycleTab.charts.legend.backlog'), SEGMENT_COLORS.backlog],
+              [t('lifecycleTab.charts.legend.inProgress'), SEGMENT_COLORS.inProgress],
+              [t('lifecycleTab.charts.legend.rework'), SEGMENT_COLORS.rework],
+              [t('lifecycleTab.charts.legend.error'), SEGMENT_COLORS.error],
             ].map(([label, color]) => (
               <span key={label} className="inline-flex items-center gap-1.5 text-[11px] text-muted-foreground">
                 <span className="w-2.5 h-2.5 rounded-sm" style={{ backgroundColor: color }} />
@@ -782,13 +836,13 @@ export default function LifecycleTab() {
         </div>
 
         <div className="rounded-xl border border-border bg-card p-5">
-          <h2 className="text-base font-semibold text-foreground mb-1">Đơn hoàn thành mỗi ngày</h2>
-          <p className="text-xs text-muted-foreground mb-4">Số đơn đóng hàng xong theo ngày trong kỳ</p>
+          <h2 className="text-base font-semibold text-foreground mb-1">{t('lifecycleTab.charts.completedTitle')}</h2>
+          <p className="text-xs text-muted-foreground mb-4">{t('lifecycleTab.charts.completedSubtitle')}</p>
           {loading && !data ? (
             <div className="h-[300px] rounded bg-muted/40 animate-pulse" />
           ) : lineData.length === 0 ? (
             <div className="h-[300px] flex items-center justify-center text-sm text-muted-foreground">
-              Chưa có đơn nào hoàn thành trong kỳ.
+              {t('lifecycleTab.charts.noCompleted')}
             </div>
           ) : (
             <div className="h-[300px]">
@@ -820,6 +874,7 @@ export default function LifecycleTab() {
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 function BarTooltip({ active, payload, label }: any) {
+  const { t } = useTranslation('orderLifecycle');
   if (!active || !payload?.length) return null;
   const total = payload.reduce((sum: number, p: { value?: number }) => sum + (p.value || 0), 0);
   return (
@@ -835,7 +890,7 @@ function BarTooltip({ active, payload, label }: any) {
         </p>
       ))}
       <p className="flex items-center justify-between gap-3 mt-1.5 pt-1.5 border-t border-border text-foreground font-medium">
-        <span>Tổng</span>
+        <span>{t('lifecycleTab.charts.tooltipTotal')}</span>
         <span className="tabular-nums">{total}</span>
       </p>
     </div>
@@ -844,11 +899,14 @@ function BarTooltip({ active, payload, label }: any) {
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 function LineTooltip({ active, payload, label }: any) {
+  const { t } = useTranslation('orderLifecycle');
   if (!active || !payload?.length) return null;
   return (
     <div className="bg-popover border border-border rounded-md shadow-md p-2.5 text-xs">
       <p className="font-semibold text-foreground">{label}</p>
-      <p className="text-muted-foreground tabular-nums">{payload[0].value} đơn hoàn thành</p>
+      <p className="text-muted-foreground tabular-nums">
+        {t('lifecycleTab.charts.tooltipCompletedSuffix', { count: payload[0].value })}
+      </p>
     </div>
   );
 }

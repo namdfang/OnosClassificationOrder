@@ -1,4 +1,5 @@
 import React, { useEffect, useMemo, useState } from 'react';
+import { useTranslation } from 'react-i18next';
 import { Factory as FactoryIcon, Plus, Save, Trash2, Users } from 'lucide-react';
 import type { DesignerAssignmentConfig as Config } from 'shared';
 import { toast } from 'sonner';
@@ -24,6 +25,7 @@ type AllocEntry = { designerId: string; weight: number };
 type AllocState = Record<string, AllocEntry[]>;
 
 export default function DesignerAssignmentConfig() {
+  const { t } = useTranslation(['designerAutoAssign', 'common']);
   const [factories, setFactories] = useState<FactoryLite[]>([]);
   const [designers, setDesigners] = useState<DesignerLite[]>([]);
   const [alloc, setAlloc] = useState<AllocState>({});
@@ -110,7 +112,7 @@ export default function DesignerAssignmentConfig() {
     try {
       setSaving(true);
       await RepositoryRemote.designerAssignment.saveConfig(payload);
-      toast.success('Đã lưu cấu hình gán designer');
+      toast.success(t('toasts.saveSuccess'));
     } catch (err) {
       handleAxiosError(err);
     } finally {
@@ -134,20 +136,17 @@ export default function DesignerAssignmentConfig() {
             <Users size={18} className="text-indigo-600 dark:text-indigo-400" />
           </div>
           <div>
-            <h2 className="text-base font-semibold text-slate-800 dark:text-slate-100">Gán designer theo xưởng</h2>
-            <p className="text-xs text-slate-500 dark:text-slate-400">
-              Sau khi soát tool xong (kết quả != OK), đơn tự động chia cho designer theo tỉ lệ. Mỗi designer chỉ thuộc 1
-              xưởng.
-            </p>
+            <h2 className="text-base font-semibold text-slate-800 dark:text-slate-100">{t('title')}</h2>
+            <p className="text-xs text-slate-500 dark:text-slate-400">{t('subtitle')}</p>
           </div>
         </div>
         <Button size="sm" onClick={handleSave} disabled={saving}>
           {saving ? <Spinner size={13} className="mr-1.5" /> : <Save size={14} />}
-          Lưu
+          {t('actions.save', { ns: 'common' })}
         </Button>
       </div>
 
-      {factories.length === 0 && <p className="text-sm text-slate-500 dark:text-slate-400">Chưa có xưởng nào.</p>}
+      {factories.length === 0 && <p className="text-sm text-slate-500 dark:text-slate-400">{t('noFactories')}</p>}
 
       <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-3">
         {factories.map((f) => {
@@ -171,7 +170,7 @@ export default function DesignerAssignmentConfig() {
                 )}
               </div>
 
-              {entries.length === 0 && <p className="text-xs text-slate-400">Chưa gán designer nào.</p>}
+              {entries.length === 0 && <p className="text-xs text-slate-400">{t('noDesigners')}</p>}
 
               <div className="space-y-1.5">
                 {entries.map((e) => {
@@ -194,7 +193,7 @@ export default function DesignerAssignmentConfig() {
                         type="button"
                         onClick={() => removeDesigner(f._id, e.designerId)}
                         className="text-slate-400 hover:text-rose-500 transition-colors"
-                        title="Xóa khỏi xưởng"
+                        title={t('removeFromFactory')}
                       >
                         <Trash2 size={14} />
                       </button>
@@ -210,7 +209,7 @@ export default function DesignerAssignmentConfig() {
                   onChange={(ev) => addDesigner(f._id, ev.target.value)}
                   className="flex-1 h-8 rounded-md border border-slate-200 dark:border-slate-700 bg-transparent px-2 text-sm text-slate-700 dark:text-slate-200"
                 >
-                  <option value="">— Thêm designer —</option>
+                  <option value="">{t('addDesignerPlaceholder')}</option>
                   {designers
                     .filter((d) => !inThis.has(d._id))
                     .map((d) => {
@@ -222,7 +221,7 @@ export default function DesignerAssignmentConfig() {
                       return (
                         <option key={d._id} value={d._id} disabled={!!elsewhere}>
                           {d.fullName}
-                          {elsewhere ? ` (đã ở ${facName})` : ''}
+                          {elsewhere ? ` ${t('usedElsewhere', { factory: facName })}` : ''}
                         </option>
                       );
                     })}

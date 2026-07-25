@@ -1,4 +1,5 @@
 import React, { useEffect, useState } from 'react';
+import { useTranslation } from 'react-i18next';
 import { Pencil, Plus, RotateCw, Trash2 } from 'lucide-react';
 import type { CreateWorkshopConfigDto, WorkshopConfig } from 'shared';
 import { WorkshopConfigCategory } from 'shared';
@@ -71,6 +72,7 @@ const DEFAULT_FORM: FormState = {
 };
 
 export function FactoryTab() {
+  const { t } = useTranslation(['products', 'common']);
   const [factories, setFactories] = useState<ListItem[]>([]);
   const [machineTypes, setMachineTypes] = useState<ListItem[]>([]);
   const [loading, setLoading] = useState(false);
@@ -111,7 +113,7 @@ export function FactoryTab() {
 
   const handleFabricSubmit = async () => {
     if (!fabricForm.name.trim() || !fabricForm.code.trim()) {
-      toast.error('Vui lòng nhập tên và mã');
+      toast.error(t('factoryTab.fabric.form.nameCodeRequired'));
       return;
     }
     try {
@@ -126,7 +128,7 @@ export function FactoryTab() {
         };
         const res = await RepositoryRemote.workshopConfig.create(payload);
         upsertFabric(res.data.data);
-        toast.success('Đã thêm loại vải');
+        toast.success(t('factoryTab.fabric.addSuccess'));
       } else if (fabricForm.id) {
         const res = await RepositoryRemote.workshopConfig.update(fabricForm.id, {
           code: fabricForm.code,
@@ -135,7 +137,7 @@ export function FactoryTab() {
           isActive: fabricForm.isActive,
         });
         upsertFabric(res.data.data);
-        toast.success('Đã cập nhật');
+        toast.success(t('common:status.success'));
       }
       setFabricForm(FABRIC_FORM_DEFAULT);
     } catch (error) {
@@ -150,7 +152,7 @@ export function FactoryTab() {
     try {
       await RepositoryRemote.workshopConfig.remove(fabricConfirmDelete._id!);
       removeFabric(fabricConfirmDelete._id!);
-      toast.success('Đã xóa');
+      toast.success(t('factoryTab.fabric.deleteSuccess'));
       setFabricConfirmDelete(null);
     } catch (error) {
       handleAxiosError(error);
@@ -158,16 +160,11 @@ export function FactoryTab() {
   };
 
   const handleFabricReset = async () => {
-    if (
-      !confirm(
-        'Reset toàn bộ Loại vải về danh sách seed? Tất cả entry hiện tại sẽ bị xóa và tạo lại từ seed. Hành động này không thể hoàn tác.',
-      )
-    )
-      return;
+    if (!confirm(t('factoryTab.fabric.reset.confirm'))) return;
     try {
       const res = await RepositoryRemote.workshopConfig.resetCategory(WorkshopConfigCategory.FabricType);
       const { removed, inserted } = res.data.data;
-      toast.success(`Đã reset: xóa ${removed}, tạo lại ${inserted} loại vải`);
+      toast.success(t('factoryTab.fabric.reset.success', { removed, inserted }));
       await loadFabrics(true);
     } catch (error) {
       handleAxiosError(error);
@@ -208,7 +205,7 @@ export function FactoryTab() {
   const handleSubmit = async () => {
     const { mode, type, data } = form;
     if (!data.name.trim() || !data.shortName.trim()) {
-      toast.error('Tên và viết tắt là bắt buộc');
+      toast.error(t('factoryTab.form.nameShortNameRequired'));
       return;
     }
 
@@ -227,7 +224,7 @@ export function FactoryTab() {
             isActive: data.isActive,
           });
         }
-        toast.success('Đã tạo');
+        toast.success(t('factoryTab.form.createSuccess'));
       } else if (data._id) {
         if (type === 'factory') {
           await RepositoryRemote.factory.updateFactory(data._id, {
@@ -242,7 +239,7 @@ export function FactoryTab() {
             isActive: data.isActive,
           });
         }
-        toast.success('Đã cập nhật');
+        toast.success(t('factoryTab.form.updateSuccess'));
       }
       setForm(DEFAULT_FORM);
       fetchAll();
@@ -260,15 +257,15 @@ export function FactoryTab() {
         </div>
         <Button size="sm" onClick={() => openCreate(type)}>
           <Plus size={14} />
-          Thêm
+          {t('common:actions.add')}
         </Button>
       </div>
       <Table>
         <TableHeader>
           <TableRow>
-            <TableHead>Tên</TableHead>
-            <TableHead>Viết tắt</TableHead>
-            <TableHead>Trạng thái</TableHead>
+            <TableHead>{t('factoryTab.table.name')}</TableHead>
+            <TableHead>{t('factoryTab.table.shortName')}</TableHead>
+            <TableHead>{t('factoryTab.table.status')}</TableHead>
             <TableHead className="w-20"></TableHead>
           </TableRow>
         </TableHeader>
@@ -283,7 +280,7 @@ export function FactoryTab() {
           {!loading && items.length === 0 && (
             <TableRow>
               <TableCell colSpan={4} className="text-center py-8 text-muted-foreground text-sm">
-                Chưa có dữ liệu
+                {t('common:status.noData')}
               </TableCell>
             </TableRow>
           )}
@@ -295,11 +292,15 @@ export function FactoryTab() {
                   <Badge variant="outline">{it.shortName}</Badge>
                 </TableCell>
                 <TableCell>
-                  {it.isActive ? <Badge variant="success">Hoạt động</Badge> : <Badge variant="secondary">Tắt</Badge>}
+                  {it.isActive ? (
+                    <Badge variant="success">{t('factoryTab.table.active')}</Badge>
+                  ) : (
+                    <Badge variant="secondary">{t('factoryTab.table.inactive')}</Badge>
+                  )}
                 </TableCell>
                 <TableCell>
                   <Button variant="ghost" size="sm" onClick={() => openEdit(type, it)}>
-                    Sửa
+                    {t('common:actions.edit')}
                   </Button>
                 </TableCell>
               </TableRow>
@@ -311,40 +312,38 @@ export function FactoryTab() {
 
   return (
     <div className="space-y-6">
-      {renderTable(factories, 'factory', 'Xưởng', 'Danh sách các xưởng sản xuất')}
-      {renderTable(machineTypes, 'machineType', 'Loại máy', 'Các loại máy in trong xưởng')}
+      {renderTable(factories, 'factory', t('factoryTab.factory.title'), t('factoryTab.factory.description'))}
+      {renderTable(machineTypes, 'machineType', t('factoryTab.machineType.title'), t('factoryTab.machineType.description'))}
 
       <div className="rounded-lg border border-border bg-card">
         <div className="flex items-center justify-between p-4 border-b border-border">
           <div>
-            <h3 className="text-sm font-semibold text-foreground">Loại vải</h3>
-            <p className="text-xs text-muted-foreground mt-0.5">
-              Danh sách loại vải / blank. Tự sinh khi import Product Config có label mới.
-            </p>
+            <h3 className="text-sm font-semibold text-foreground">{t('factoryTab.fabric.title')}</h3>
+            <p className="text-xs text-muted-foreground mt-0.5">{t('factoryTab.fabric.description')}</p>
           </div>
           <div className="flex items-center gap-2">
             <Button
               size="sm"
               variant="outline"
               onClick={handleFabricReset}
-              title="Xóa toàn bộ rồi tạo lại từ seed (22 loại vải mặc định)"
+              title={t('factoryTab.fabric.reset.title')}
             >
               <RotateCw size={14} />
-              Reset từ seed
+              {t('factoryTab.fabric.reset.button')}
             </Button>
             <Button size="sm" onClick={openFabricCreate}>
               <Plus size={14} />
-              Thêm
+              {t('common:actions.add')}
             </Button>
           </div>
         </div>
         <Table>
           <TableHeader>
             <TableRow>
-              <TableHead className="w-20">Icon</TableHead>
-              <TableHead>Tên</TableHead>
-              <TableHead>Mã</TableHead>
-              <TableHead className="w-24">Trạng thái</TableHead>
+              <TableHead className="w-20">{t('factoryTab.fabric.table.icon')}</TableHead>
+              <TableHead>{t('factoryTab.table.name')}</TableHead>
+              <TableHead>{t('factoryTab.fabric.table.code')}</TableHead>
+              <TableHead className="w-24">{t('factoryTab.table.status')}</TableHead>
               <TableHead className="w-28 text-right"></TableHead>
             </TableRow>
           </TableHeader>
@@ -359,7 +358,7 @@ export function FactoryTab() {
             {!fabricLoading && fabricItems.length === 0 && (
               <TableRow>
                 <TableCell colSpan={5} className="text-center py-8 text-muted-foreground text-sm">
-                  Chưa có loại vải nào
+                  {t('factoryTab.fabric.table.empty')}
                 </TableCell>
               </TableRow>
             )}
@@ -374,7 +373,11 @@ export function FactoryTab() {
                   <TableCell className="font-medium">{it.name}</TableCell>
                   <TableCell className="font-mono text-xs text-muted-foreground">{it.code}</TableCell>
                   <TableCell>
-                    {it.isActive ? <Badge variant="success">Bật</Badge> : <Badge variant="secondary">Tắt</Badge>}
+                    {it.isActive ? (
+                      <Badge variant="success">{t('factoryTab.fabric.table.on')}</Badge>
+                    ) : (
+                      <Badge variant="secondary">{t('factoryTab.table.inactive')}</Badge>
+                    )}
                   </TableCell>
                   <TableCell className="text-right">
                     <Button variant="ghost" size="sm" onClick={() => openFabricEdit(it)}>
@@ -393,34 +396,36 @@ export function FactoryTab() {
       <Dialog open={fabricForm.open} onOpenChange={(open) => !open && setFabricForm(FABRIC_FORM_DEFAULT)}>
         <DialogContent>
           <DialogHeader>
-            <DialogTitle>{fabricForm.mode === 'create' ? 'Thêm loại vải' : 'Sửa loại vải'}</DialogTitle>
+            <DialogTitle>
+              {fabricForm.mode === 'create' ? t('factoryTab.fabric.dialog.createTitle') : t('factoryTab.fabric.dialog.editTitle')}
+            </DialogTitle>
           </DialogHeader>
           <div className="space-y-3">
             <div className="space-y-2">
-              <Label>Tên hiển thị</Label>
+              <Label>{t('factoryTab.fabric.form.displayName')}</Label>
               <Input
                 value={fabricForm.name}
                 onChange={(e) => handleFabricNameChange(e.target.value)}
-                placeholder="VD: POLY 2 DA"
+                placeholder={t('factoryTab.fabric.form.displayNamePlaceholder')}
               />
             </div>
             <div className="space-y-2">
               <Label>
-                Mã <span className="text-muted-foreground">(slug, dùng để lưu trữ)</span>
+                {t('factoryTab.fabric.form.code')} <span className="text-muted-foreground">{t('factoryTab.fabric.form.codeHint')}</span>
               </Label>
               <Input
                 value={fabricForm.code}
                 onChange={(e) => setFabricForm({ ...fabricForm, code: slugify(e.target.value) })}
-                placeholder="vd: poly-2-da"
+                placeholder={t('factoryTab.fabric.form.codePlaceholder')}
                 className="font-mono"
               />
             </div>
             <div className="space-y-2">
-              <Label>Icon</Label>
+              <Label>{t('factoryTab.fabric.form.icon')}</Label>
               <IconPicker value={fabricForm.icon} onChange={(i) => setFabricForm({ ...fabricForm, icon: i })} />
             </div>
             <div className="flex items-center justify-between rounded-md border border-border p-3">
-              <Label>Hoạt động</Label>
+              <Label>{t('factoryTab.form.active')}</Label>
               <Switch
                 checked={fabricForm.isActive}
                 onCheckedChange={(v) => setFabricForm({ ...fabricForm, isActive: v })}
@@ -429,11 +434,11 @@ export function FactoryTab() {
           </div>
           <DialogFooter>
             <Button variant="outline" onClick={() => setFabricForm(FABRIC_FORM_DEFAULT)}>
-              Hủy
+              {t('common:actions.cancel')}
             </Button>
             <Button onClick={handleFabricSubmit} disabled={fabricSaving}>
               {fabricSaving && <Spinner size={14} className="mr-2" />}
-              Lưu
+              {t('common:actions.save')}
             </Button>
           </DialogFooter>
         </DialogContent>
@@ -442,18 +447,17 @@ export function FactoryTab() {
       <Dialog open={!!fabricConfirmDelete} onOpenChange={(open) => !open && setFabricConfirmDelete(null)}>
         <DialogContent>
           <DialogHeader>
-            <DialogTitle>Xóa loại vải</DialogTitle>
+            <DialogTitle>{t('factoryTab.fabric.deleteDialog.title')}</DialogTitle>
           </DialogHeader>
           <p className="text-sm text-muted-foreground">
-            Xóa <span className="font-medium text-foreground">{fabricConfirmDelete?.name}</span>? Product đang dùng vẫn
-            giữ giá trị cũ nhưng sẽ không chọn được nữa.
+            {t('factoryTab.fabric.deleteDialog.message', { name: fabricConfirmDelete?.name })}
           </p>
           <DialogFooter>
             <Button variant="outline" onClick={() => setFabricConfirmDelete(null)}>
-              Hủy
+              {t('common:actions.cancel')}
             </Button>
             <Button variant="destructive" onClick={handleFabricDelete}>
-              Xóa
+              {t('common:actions.delete')}
             </Button>
           </DialogFooter>
         </DialogContent>
@@ -463,29 +467,30 @@ export function FactoryTab() {
         <DialogContent>
           <DialogHeader>
             <DialogTitle>
-              {form.mode === 'create' ? 'Thêm' : 'Sửa'} {form.type === 'factory' ? 'xưởng' : 'loại máy'}
+              {form.mode === 'create' ? t('common:actions.add') : t('common:actions.edit')}{' '}
+              {form.type === 'factory' ? t('factoryTab.dialog.factoryNoun') : t('factoryTab.dialog.machineTypeNoun')}
             </DialogTitle>
           </DialogHeader>
           <div className="space-y-3">
             <div className="space-y-2">
-              <Label>Tên</Label>
+              <Label>{t('factoryTab.table.name')}</Label>
               <Input
                 value={form.data.name}
                 onChange={(e) => setForm({ ...form, data: { ...form.data, name: e.target.value } })}
-                placeholder={form.type === 'factory' ? 'Xưởng Mê Linh' : 'In và cắt laser'}
+                placeholder={form.type === 'factory' ? t('factoryTab.dialog.factoryNamePlaceholder') : t('factoryTab.dialog.machineTypeNamePlaceholder')}
               />
             </div>
             <div className="space-y-2">
-              <Label>Tên viết tắt</Label>
+              <Label>{t('factoryTab.table.shortName')}</Label>
               <Input
                 value={form.data.shortName}
                 onChange={(e) => setForm({ ...form, data: { ...form.data, shortName: e.target.value.toUpperCase() } })}
-                placeholder={form.type === 'factory' ? 'ML' : 'ICL'}
+                placeholder={form.type === 'factory' ? t('factoryTab.dialog.factoryShortNamePlaceholder') : t('factoryTab.dialog.machineTypeShortNamePlaceholder')}
                 maxLength={20}
               />
             </div>
             <div className="flex items-center justify-between rounded-md border border-border p-3">
-              <Label>Hoạt động</Label>
+              <Label>{t('factoryTab.form.active')}</Label>
               <Switch
                 checked={form.data.isActive}
                 onCheckedChange={(v) => setForm({ ...form, data: { ...form.data, isActive: v } })}
@@ -494,9 +499,9 @@ export function FactoryTab() {
           </div>
           <DialogFooter>
             <Button variant="outline" onClick={() => setForm(DEFAULT_FORM)}>
-              Hủy
+              {t('common:actions.cancel')}
             </Button>
-            <Button onClick={handleSubmit}>Lưu</Button>
+            <Button onClick={handleSubmit}>{t('common:actions.save')}</Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>
