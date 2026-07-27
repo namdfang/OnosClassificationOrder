@@ -313,6 +313,7 @@ function BulkGenerateVariantsPopover({ onGenerate }: { onGenerate: (rows: Produc
 
 /** Form fields quan tâm khi so sánh dirty — không gồm data chỉ để hiển thị (factory/machineType/productCategory object). */
 interface FormSnapshot {
+  fullName: string;
   shortName: string;
   sku: string;
   status: ProductConfigStatus;
@@ -340,6 +341,7 @@ interface FormSnapshot {
 export default function ProductDetailPage() {
   const { t } = useTranslation(['products', 'common']);
   const { id } = useParams<{ id: string }>();
+  const isNew = id === 'new';
   const navigate = useNavigate();
   const STATUS_META = useMemo(() => buildStatusMeta(t), [t]);
 
@@ -356,6 +358,7 @@ export default function ProductDetailPage() {
   const loadConfig = useWorkshopConfigStore((s) => s.load);
   const configLoaded = useWorkshopConfigStore((s) => s.loaded);
 
+  const [fullName, setFullName] = useState('');
   const [shortName, setShortName] = useState('');
   const [sku, setSku] = useState('');
   const [status, setStatus] = useState<ProductConfigStatus>(ProductConfigStatus.Active);
@@ -416,6 +419,7 @@ export default function ProductDetailPage() {
   const applyItem = (row: ProductConfigRow) => {
     setItem(row);
     const s: FormSnapshot = {
+      fullName: row.fullName || '',
       shortName: row.shortName || '',
       sku: row.sku || '',
       status: row.status || ProductConfigStatus.Active,
@@ -439,6 +443,7 @@ export default function ProductDetailPage() {
       length: row.length != null ? String(row.length) : '',
       variations: row.variations || [],
     };
+    setFullName(s.fullName);
     setShortName(s.shortName);
     setSku(s.sku);
     setStatus(s.status);
@@ -465,6 +470,11 @@ export default function ProductDetailPage() {
   };
 
   useEffect(() => {
+    if (isNew) {
+      applyItem({ _id: '', fullName: '', shortName: '', status: ProductConfigStatus.Active });
+      setLoading(false);
+      return;
+    }
     if (!id) return;
     (async () => {
       try {
@@ -485,6 +495,7 @@ export default function ProductDetailPage() {
     if (!item) return false;
     return (
       snapshot({
+        fullName,
         shortName,
         sku,
         status,
@@ -516,6 +527,7 @@ export default function ProductDetailPage() {
     baseline,
     mockupFile,
     sizeChartFile,
+    fullName,
     shortName,
     sku,
     status,
@@ -616,8 +628,20 @@ export default function ProductDetailPage() {
   };
 
   const handleSave = async () => {
+    if (isNew && !fullName.trim()) {
+      toast.error(t('detail.fullNameRequired'));
+      return;
+    }
     if (!shortName.trim()) {
       toast.error(t('detail.shortNameRequired'));
+      return;
+    }
+    if (isNew && !factoryId) {
+      toast.error(t('detail.factoryRequired'));
+      return;
+    }
+    if (isNew && !machineTypeId) {
+      toast.error(t('detail.machineTypeRequired'));
       return;
     }
 
@@ -634,6 +658,7 @@ export default function ProductDetailPage() {
     }
 
     const patch: Partial<ProductConfigRow> = {
+      fullName: fullName.trim(),
       shortName: shortName.trim(),
       sku: sku.trim() || undefined,
       status,
@@ -670,11 +695,19 @@ export default function ProductDetailPage() {
     const c = productCategoryOptions.find((x) => x._id === productCategoryId);
     patch.productCategory = c ? { name: c.name, shortName: c.shortName } : undefined;
     try {
-      await RepositoryRemote.productConfig.updateProductConfig(item._id, patch as never);
-      applyItem({ ...item, ...patch });
-      setMockupFile(null);
-      setSizeChartFile(null);
-      toast.success(t('detail.saveSuccess'));
+      if (isNew) {
+        const res = await RepositoryRemote.productConfig.createProductConfig(patch as never);
+        setMockupFile(null);
+        setSizeChartFile(null);
+        toast.success(t('detail.createSuccess'));
+        navigate(PATHS.PRODUCT_DETAIL.replace(':id', res.data.data._id), { replace: true });
+      } else {
+        await RepositoryRemote.productConfig.updateProductConfig(item._id, patch as never);
+        applyItem({ ...item, ...patch });
+        setMockupFile(null);
+        setSizeChartFile(null);
+        toast.success(t('detail.saveSuccess'));
+      }
     } catch (error) {
       handleAxiosError(error);
     } finally {
@@ -691,7 +724,16 @@ export default function ProductDetailPage() {
             <ArrowLeft size={18} />
           </Button>
           <div className="min-w-0">
-            <h1 className="text-lg font-bold text-foreground truncate">{item.fullName}</h1>
+            {isNew ? (
+              <Input
+                value={fullName}
+                onChange={(e) => setFullName(e.target.value)}
+                placeholder={t('detail.header.fullNamePlaceholder')}
+                className="h-8 text-lg font-bold"
+              />
+            ) : (
+              <h1 className="text-lg font-bold text-foreground truncate">{item.fullName}</h1>
+            )}
             <div className="flex flex-wrap items-center gap-2 mt-1">
               <div className="flex items-center gap-1">
                 <Label className="text-xs text-muted-foreground shrink-0">{t('detail.header.shortName')}</Label>
@@ -730,9 +772,9 @@ export default function ProductDetailPage() {
             </div>
           </div>
         </div>
-        <Button onClick={handleSave} disabled={saving || !dirty} className="shrink-0">
+        <Button onClick={handleSave} disabled={saving || (!isNew && !dirty)} className="shrink-0">
           {saving && <Spinner size={14} />}
-          {t('detail.header.saveChanges')}
+          {t(isNew ? 'detail.header.createProduct' : 'detail.header.saveChanges')}
         </Button>
       </div>
 
