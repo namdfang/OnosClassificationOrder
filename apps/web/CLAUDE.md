@@ -9,6 +9,19 @@
 - Default export cho page components, named export cho utilities.
 - File naming: **PascalCase** cho components (e.g., `FilterForm.tsx`, `StatCard.tsx`).
 
+### I18n (Đa ngôn ngữ) — BẮT BUỘC cho mọi UI mới
+
+> Chi tiết đầy đủ + kiến trúc: [`documents/FunctionDescription/I18n.md`](../../documents/FunctionDescription/I18n.md) — đọc trước khi thêm trang/component mới hoặc sửa text hiển thị.
+
+- **KHÔNG hardcode text hiển thị người dùng** dưới bất kỳ hình thức nào: JSX text, `toast.success/error`, `placeholder`, `title`/`aria-label`, tên nút, tiêu đề dialog, table column header, empty-state, tooltip... TẤT CẢ phải qua `react-i18next`: `const { t } = useTranslation('<namespace>')` rồi `t('key')`.
+- **Namespace theo feature**, khớp bảng "Feature → Doc mapping" ở [`CLAUDE.md`](../../CLAUDE.md) gốc (vd trang Orders dùng namespace `orders`, Fulfillment dùng `fulfillmentWorkflow`...). Dùng `common` cho string dùng chung (Lưu/Hủy/Xóa/Tìm kiếm, loading/error, pagination...) — đọc `src/i18n/locales/vi/common.json` trước khi tự thêm key trùng nghĩa.
+- Thêm key mới → viết vào **CẢ 2** file `src/i18n/locales/{vi,en}/<namespace>.json`, không để lệch cấu trúc key giữa 2 ngôn ngữ. Namespace mới → đăng ký thêm trong `src/i18n/index.ts`.
+- **Map/mảng label khai báo ở module scope** (ngoài function component — chỉ evaluate 1 lần lúc import, KHÔNG tự đổi khi user chuyển ngôn ngữ) → PHẢI chuyển thành function nhận `t` làm tham số, gọi trong component qua `useMemo(() => buildX(t), [t])` (mẫu: `buildNavGroups(t)` ở `components/sidebar/Sidebar.tsx`).
+- **Zod schema có message lỗi** khai module scope → factory function `buildXSchema(t)`, gọi qua `useMemo` trong component (mẫu: `buildLoginSchema(t)` ở `pages/login/index.tsx`).
+- Label lấy từ `packages/shared` (enum/constant dùng chung BE, vd permission-catalog, fulfillment-stage) → **KHÔNG sửa file shared**. Tạo dictionary riêng trong namespace FE + tra bằng `t(key, { defaultValue: originalLabel })` để tự fallback khi thiếu key (mẫu: `utils/fulfillmentStageLabel.ts`, `permissions.*`/`permissionGroups.*` trong `auth.json`).
+- Module KHÔNG phải React component (axios interceptor, export util gọi từ click handler...) → import `i18n` default export từ `@/i18n`, gọi `i18n.t(key, { ns: '<namespace>' })` thay vì dùng hook.
+- Ngôn ngữ mặc định: **Tiếng Việt**. Không đổi behavior mặc định khi thêm string mới.
+
 ### State Management
 
 - Zustand stores với `persist` middleware cho data cần giữ qua sessions.
@@ -53,8 +66,7 @@
 ```typescript
 // 1. React + third-party
 import React, { useEffect, useState } from 'react';
-import { Button, Table } from 'antd';
-import type { TablePaginationConfig } from 'antd';
+import { useTranslation } from 'react-i18next';
 import dayjs from 'dayjs';
 import { Search } from 'lucide-react';
 
