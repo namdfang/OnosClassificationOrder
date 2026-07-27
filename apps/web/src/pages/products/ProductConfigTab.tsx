@@ -287,6 +287,10 @@ export function ProductConfigTab() {
             <Eraser size={14} />
             Xóa tất cả
           </Button> */}
+          <Button variant="outline" onClick={() => navigate(PATHS.PRODUCT_DETAIL.replace(':id', 'new'))}>
+            <Plus size={14} />
+            {t('configTab.addButton')}
+          </Button>
           <Button onClick={() => setImportOpen(true)}>
             <Plus size={14} />
             {t('configTab.importButton')}

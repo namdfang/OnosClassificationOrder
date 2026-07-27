@@ -45,6 +45,7 @@
       "success": "Backfilled {{updated}}/{{scanned}} orders (fabric / tool / machine)"
     },
     "importButton": "Import from Excel",
+    "addButton": "Add product",
     "clearAll": {
       "confirm": "Delete all Product Configs? This action cannot be undone.",
       "success": "Deleted {{count}} product configs"
@@ -173,13 +174,20 @@
     "backToList": "Back to list",
     "unsavedConfirm": "You have UNSAVED changes. Leaving this page will lose them — leave anyway?",
     "shortNameRequired": "Short name cannot be empty",
+    "fullNameRequired": "Product full name cannot be empty",
+    "factoryRequired": "Please select a factory",
+    "machineTypeRequired": "Please select a department",
     "saveSuccess": "Product saved",
+    "createSuccess": "Product created",
     "applyBulkPriceConfirm": "Apply the entered prices to all {{count}} variations — overwrite existing prices?",
     "notSelected": "— Not selected —",
     "header": {
       "shortName": "Short name",
       "unsaved": "Unsaved",
-      "saveChanges": "Save changes"
+      "saveChanges": "Save changes",
+      "createProduct": "Create product",
+      "fullNamePlaceholder": "Enter product full name…",
+      "newProductTitle": "New product"
     },
     "sidebar": {
       "mockup": "Mockup",

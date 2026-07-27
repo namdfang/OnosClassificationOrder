@@ -45,6 +45,7 @@
       "success": "Đã backfill {{updated}}/{{scanned}} đơn (loại vải / tool / máy)"
     },
     "importButton": "Import từ Excel",
+    "addButton": "Thêm sản phẩm",
     "clearAll": {
       "confirm": "Xóa toàn bộ Product Config? Hành động này không thể hoàn tác.",
       "success": "Đã xóa {{count}} product config"
@@ -173,13 +174,20 @@
     "backToList": "Quay lại danh sách",
     "unsavedConfirm": "Bạn có thay đổi CHƯA LƯU. Rời trang sẽ mất thay đổi — vẫn thoát?",
     "shortNameRequired": "Tên viết tắt không được để trống",
+    "fullNameRequired": "Tên đầy đủ sản phẩm không được để trống",
+    "factoryRequired": "Vui lòng chọn xưởng",
+    "machineTypeRequired": "Vui lòng chọn phòng",
     "saveSuccess": "Đã lưu sản phẩm",
+    "createSuccess": "Đã tạo sản phẩm mới",
     "applyBulkPriceConfirm": "Áp dụng giá vừa nhập cho toàn bộ {{count}} biến thể — ghi đè giá hiện tại?",
     "notSelected": "— Chưa chọn —",
     "header": {
       "shortName": "Viết tắt",
       "unsaved": "Chưa lưu",
-      "saveChanges": "Lưu thay đổi"
+      "saveChanges": "Lưu thay đổi",
+      "createProduct": "Tạo sản phẩm",
+      "fullNamePlaceholder": "Nhập tên đầy đủ sản phẩm…",
+      "newProductTitle": "Sản phẩm mới"
     },
     "sidebar": {
       "mockup": "Mockup",
