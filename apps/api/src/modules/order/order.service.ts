@@ -116,6 +116,11 @@ import {
 } from 'shared';
 import { Logger } from 'winston';
 
+import {
+  getExcludedFactoryIdSync,
+  loadExcludedFactoryId,
+  productionFactoryClause,
+} from '../../utils/excluded-factory';
 import { CustomerAssignmentService } from '../customer-assignment/customer-assignment.service';
 import { DESIGN_PREVIEW_QUEUE, DESIGN_THUMB_QUEUE, DesignImageJobData } from '../design-image/design-image.processor';
 import { DesignImageService } from '../design-image/design-image.service';
@@ -424,6 +429,10 @@ export class OrderService implements OnModuleInit {
    * `factoryId` into the new column (treats them as "pure", never transferred).
    */
   async onModuleInit() {
+    // Load _id xưởng US (ngoài luồng sản xuất) TRƯỚC mọi backfill/traffic —
+    // các builder filter đọc sync từ cache này (xem utils/excluded-factory.ts).
+    await loadExcludedFactoryId(this.orderModel.db).catch(() => undefined);
+
     const result = await this.orderModel.updateMany(
       { originalFactoryId: { $exists: false }, factoryId: { $exists: true, $ne: null } },
       [{ $set: { originalFactoryId: '$factoryId' } }],
@@ -581,6 +590,9 @@ export class OrderService implements OnModuleInit {
         heldAt: { $in: [null, undefined] },
         cancelledAt: { $exists: false },
         deletedAt: { $exists: false },
+        // Đơn xưởng US (ngoài luồng sản xuất) KHÔNG được init stage — nếu không
+        // mỗi lần restart lại kéo toàn bộ đơn US ready=ok vào print/waiting.
+        factoryId: productionFactoryClause(this.orderModel.db),
       },
       [
         {
@@ -1152,12 +1164,14 @@ export class OrderService implements OnModuleInit {
       filter.inProductionAt = buildRange();
     }
 
-    // Đơn chưa map xưởng (factoryId null/missing) bị loại khỏi MỌI view mặc
-    // định — chỉ xem qua trang "Không xác định xưởng" (dto.unmapped=true).
+    // Đơn chưa map xưởng (factoryId null/missing) VÀ đơn xưởng US (ngoài luồng
+    // sản xuất) bị loại khỏi MỌI view mặc định — unmapped xem qua trang "Không
+    // xác định xưởng" (dto.unmapped=true), đơn US chỉ xem ở tab Đơn hàng theo
+    // xưởng hoặc khi lọc tường minh factoryId (Orders.md §21).
     // Designer/Fulfillment branch ở trên đã tự loại trừ null qua equality/$or
     // factoryId cụ thể nên không cần áp lại ở đây (tránh set field 2 lần).
     if (dto?.unmapped !== true && filter.factoryId === undefined && !filter.$or) {
-      filter.factoryId = { $exists: true, $ne: null };
+      filter.factoryId = productionFactoryClause(this.orderModel.db);
     }
 
     return filter;
@@ -1916,9 +1930,9 @@ export class OrderService implements OnModuleInit {
         });
       }
     } else {
-      // Đơn chưa map xưởng bị loại khỏi mọi số liệu Dashboard — chỉ xem qua
-      // trang "Không xác định xưởng". Fulfillment ở trên đã tự loại trừ sẵn.
-      match.factoryId = { $exists: true, $ne: null };
+      // Đơn chưa map xưởng + đơn xưởng US (ngoài luồng sản xuất) bị loại khỏi
+      // mọi số liệu Dashboard. Fulfillment ở trên đã tự loại trừ sẵn.
+      match.factoryId = productionFactoryClause(this.orderModel.db);
     }
     if (dto.startDate || dto.endDate) {
       const range: Record<string, Date> = {};
@@ -2759,6 +2773,93 @@ export class OrderService implements OnModuleInit {
   }
 
   /**
+   * Nút "Tự động gán xưởng" ở trang Không xác định xưởng (Orders.md §19): re-map
+   * TOÀN BỘ đơn unmapped theo Product Config HIỆN TẠI — dành cho đơn import lúc
+   * config chưa có, sau đó admin đã tạo/bổ sung config (vd kéo từ cột "Chưa xác
+   * định xưởng" ở kanban Settings). Mapping y hệt `importOrders`: khớp `type` ↔
+   * `fullName` (exact, case-insensitive) → set đủ bộ isMapped/productConfigId/
+   * factoryId/originalFactoryId/machineTypeId; riêng fabricType/machineNumber
+   * chỉ điền khi đơn đang trống (tôn trọng chỉnh tay của xưởng — cùng tinh thần
+   * insert-only của import).
+   */
+  async remapUnmappedOrders(
+    ctx?: AuditContext,
+  ): Promise<{ scanned: number; matchedTypes: number; assigned: number }> {
+    const unmappedFilter = {
+      $or: [{ factoryId: { $exists: false } }, { factoryId: null }],
+      deletedAt: { $exists: false },
+    };
+    const [scanned, rawTypes, configs] = await Promise.all([
+      this.orderModel.countDocuments(unmappedFilter),
+      this.orderModel.distinct('type', { ...unmappedFilter, type: { $nin: [null, ''] } }),
+      this.productConfigRepository.findAll({}),
+    ]);
+
+    const byName = new Map<string, (typeof configs)[number]>();
+    for (const pc of configs) byName.set(pc.fullName.trim().toLowerCase(), pc);
+
+    const matchedTypes = new Set<string>();
+    let assigned = 0;
+    for (const rawType of rawTypes as string[]) {
+      const key = String(rawType).trim().toLowerCase();
+      const pc = byName.get(key);
+      if (!pc?.factoryId) continue;
+
+      // Match equality theo đúng giá trị raw từ distinct (nhiều biến thể hoa
+      // thường của cùng 1 type được xử lý ở từng vòng lặp riêng).
+      const eligible = await this.orderModel
+        .find({ ...unmappedFilter, type: rawType })
+        .select({ _id: 1 })
+        .lean();
+      if (eligible.length === 0) continue;
+      matchedTypes.add(key);
+      const ids = eligible.map((o) => String(o._id));
+
+      const $set: Record<string, unknown> = {
+        isMapped: true,
+        productConfigId: String(pc._id),
+        factoryId: pc.factoryId,
+        originalFactoryId: pc.factoryId,
+      };
+      if (pc.machineTypeId) $set.machineTypeId = pc.machineTypeId;
+      await this.orderModel.updateMany({ _id: { $in: ids } }, { $set });
+      if (pc.fabricType) {
+        await this.orderModel.updateMany(
+          { _id: { $in: ids }, $or: [{ fabricType: { $exists: false } }, { fabricType: null }, { fabricType: '' }] },
+          { $set: { fabricType: pc.fabricType } },
+        );
+      }
+      if (pc.machineNumber) {
+        await this.orderModel.updateMany(
+          {
+            _id: { $in: ids },
+            $or: [{ machineNumber: { $exists: false } }, { machineNumber: null }, { machineNumber: '' }],
+          },
+          { $set: { machineNumber: pc.machineNumber } },
+        );
+      }
+
+      void this.orderLogService.writeMany(
+        ids.map((orderId) => ({
+          orderId,
+          action: 'bulk_update' as const,
+          before: { factoryId: null },
+          after: {
+            factoryId: pc.factoryId,
+            ...(pc.machineTypeId ? { machineTypeId: pc.machineTypeId } : {}),
+            reason: 'Tự động gán xưởng theo Product Config',
+          },
+          ctx,
+        })),
+      );
+      assigned += ids.length;
+    }
+
+    if (assigned > 0) void this.invalidateListCache();
+    return { scanned, matchedTypes: matchedTypes.size, assigned };
+  }
+
+  /**
    * Dashboard "Vòng đời đơn" — phễu 9 chặng (Soát tool → Thiết kế → 7 stage
    * Fulfillment). Mỗi chặng: snapshot (đang chứa / đang làm / rework / lỗi) +
    * throughput theo kỳ (hoàn thành + thời gian TB). Một aggregate $facet duy
@@ -2801,9 +2902,9 @@ export class OrderService implements OnModuleInit {
     } else if (dto.factoryId) {
       match.$or = [{ factoryId: dto.factoryId }, { originalFactoryId: dto.factoryId }];
     } else {
-      // Đơn chưa map xưởng bị loại khỏi Dashboard vòng đời — chỉ xem qua trang
-      // "Không xác định xưởng".
-      match.factoryId = { $exists: true, $ne: null };
+      // Đơn chưa map xưởng + đơn xưởng US (ngoài luồng sản xuất) bị loại khỏi
+      // Dashboard vòng đời.
+      match.factoryId = productionFactoryClause(this.orderModel.db);
     }
 
     // Đếm RIÊNG đơn hủy trong cùng window inProductionAt + xưởng (funnel đã loại
@@ -3155,9 +3256,9 @@ export class OrderService implements OnModuleInit {
     } else if (scopedFactoryId) {
       match.$or = [{ factoryId: scopedFactoryId }, { originalFactoryId: scopedFactoryId }];
     } else {
-      // Đơn chưa map xưởng bị loại khỏi drill-down "Đơn đã hủy" — chỉ xem qua
-      // trang "Không xác định xưởng".
-      match.factoryId = { $exists: true, $ne: null };
+      // Đơn chưa map xưởng + đơn xưởng US (ngoài luồng sản xuất) bị loại khỏi
+      // drill-down "Đơn đã hủy".
+      match.factoryId = productionFactoryClause(this.orderModel.db);
     }
 
     type Lean = {
@@ -4776,7 +4877,12 @@ export class OrderService implements OnModuleInit {
           // tránh ghi đè state đang chạy. Đơn ĐÃ HOÀN THÀNH (pack done →
           // currentFulfillmentStage=null + fulfillmentCompletedAt) cũng có stage
           // null — không được re-init, tránh kéo đơn xong về print/waiting.
-          if (!b.currentFulfillmentStage && !b.fulfillmentCompletedAt) Object.assign(patch, buildFulfillmentEntrySet());
+          // Đơn xưởng US (ngoài luồng sản xuất) không vào fulfillment.
+          const usFactoryId = getExcludedFactoryIdSync(this.orderModel.db);
+          const isExcludedFactory = !!usFactoryId && (b as { factoryId?: string }).factoryId === usFactoryId;
+          if (!b.currentFulfillmentStage && !b.fulfillmentCompletedAt && !isExcludedFactory) {
+            Object.assign(patch, buildFulfillmentEntrySet());
+          }
         }
       } else {
         // Toggle KHỎI 'ok' (vd về 'no-pdf', 'error', null) → đơn không còn
@@ -5226,6 +5332,10 @@ export class OrderService implements OnModuleInit {
           );
         }
       }
+      // Xưởng US (ngoài luồng sản xuất) không auto-gán designer, kể cả khi Admin
+      // lỡ cấu hình designer cho nó.
+      const excludedFactoryId = getExcludedFactoryIdSync(this.orderModel.db);
+      if (excludedFactoryId) byFactory.delete(excludedFactoryId);
       if (!byFactory.size) return;
 
       // Xác minh trạng thái thực trên DB (authoritative).
@@ -5474,12 +5584,16 @@ export class OrderService implements OnModuleInit {
     data: DesignReviewOrder | null;
     remaining: number;
   }> {
+    const excludedFactoryId = getExcludedFactoryIdSync(this.orderModel.db);
     const baseFilter: Record<string, unknown> = {
       deletedAt: { $exists: false },
       cancelledAt: { $exists: false },
       heldAt: { $exists: false },
       toolResult: { $in: [null, ''] },
       designerStatus: DesignerStatus.Unassigned,
+      // Đơn xưởng US (ngoài luồng sản xuất) KHÔNG vào hàng đợi soát tool —
+      // $ne vẫn cho đơn chưa map xưởng (factoryId null) vào queue như cũ.
+      ...(excludedFactoryId ? { factoryId: { $ne: excludedFactoryId } } : {}),
     };
     if (dto?.from || dto?.to) {
       const range: Record<string, Date> = {};
@@ -6180,8 +6294,11 @@ export class OrderService implements OnModuleInit {
             $set.readyForFulfill = true;
             $set.productionFirstErrorAt = null;
             // Loại đơn đã hoàn thành (stage=null NHƯNG fulfillmentCompletedAt có)
-            // — re-init sẽ kéo đơn xong về print/waiting.
-            if (!order.currentFulfillmentStage && !order.fulfillmentCompletedAt) {
+            // — re-init sẽ kéo đơn xong về print/waiting. Đơn xưởng US (ngoài
+            // luồng sản xuất) không vào fulfillment.
+            const usFactoryId = getExcludedFactoryIdSync(this.orderModel.db);
+            const isExcludedFactory = !!usFactoryId && order.factoryId === usFactoryId;
+            if (!order.currentFulfillmentStage && !order.fulfillmentCompletedAt && !isExcludedFactory) {
               Object.assign($set, buildFulfillmentEntrySet());
             }
           }
@@ -7232,9 +7349,9 @@ export class OrderService implements OnModuleInit {
     filter.currentFulfillmentStage = { $exists: true, $ne: null };
     // Bỏ hẳn lỗi nguồn soát-tool khỏi tab này.
     filter.productionErrorSource = { $ne: 'tool-check' };
-    // Đơn chưa map xưởng bị loại khỏi Nhật ký bù lỗi — chỉ xem qua trang
-    // "Không xác định xưởng".
-    filter.factoryId = { $exists: true, $ne: null };
+    // Đơn chưa map xưởng + đơn xưởng US (ngoài luồng sản xuất) bị loại khỏi
+    // Nhật ký bù lỗi.
+    filter.factoryId = productionFactoryClause(this.orderModel.db);
 
     // Tab theo góc nhìn chặng của viewer (Cần xử lý / Đã xong) + khóa xưởng cho
     // Fulfillment. Designer lọc theo assignee (task của mình); các role khác FE

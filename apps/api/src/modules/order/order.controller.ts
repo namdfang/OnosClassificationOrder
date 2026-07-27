@@ -59,6 +59,7 @@ import {
   PreviewCuttingFilesDto,
   PreviewCuttingFilesResDto,
   RecoverHeldOrdersResDto,
+  RemapUnmappedOrdersResDto,
   ResDto,
   RoleType,
   SetDesignReviewResultDto,
@@ -393,6 +394,21 @@ export class OrderController {
     @UserAgent() userAgent: string,
   ): Promise<BulkAssignOrderResDto> {
     return this.orderService.bulkAssignOrders(dto, { user, ip, userAgent });
+  }
+
+  @Post('remap-unmapped')
+  @Auth(ORDER_WRITE_ROLES)
+  @ApiOperation({
+    summary: 'Re-map toàn bộ đơn unmapped theo Product Config hiện tại (nút "Tự động gán xưởng")',
+  })
+  @HttpCode(HttpStatus.OK)
+  @ApiOkResponse({ type: RemapUnmappedOrdersResDto })
+  async remapUnmappedOrders(
+    @AuthUser() user: UserDocument,
+    @ClientIp() ip: string,
+    @UserAgent() userAgent: string,
+  ): Promise<RemapUnmappedOrdersResDto> {
+    return { success: true, data: await this.orderService.remapUnmappedOrders({ user, ip, userAgent }) };
   }
 
   @Patch(':id/transfer')

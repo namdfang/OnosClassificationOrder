@@ -10,12 +10,14 @@ import type {
   GetProductConfigsResDto,
   ImportProductConfigDto,
   ImportProductConfigResDto,
+  UnmatchedOrderType,
   UpdateProductConfigDto,
 } from 'shared';
 import { myNanoid, ProductConfigStatus, WorkshopConfigCategory } from 'shared';
 
 import { FactoryService } from '../factory/factory.service';
 import { MachineTypeService } from '../machine-type/machine-type.service';
+import { OrderEntity } from '../order/order.entity';
 import { ProductCategoryService } from '../product-category/product-category.service';
 import { WorkshopConfigRepository } from '../workshop-config/workshop-config.repository';
 import { ProductConfigEntity } from './product-config.entity';
@@ -62,7 +64,44 @@ export class ProductConfigService {
     private readonly workshopConfigRepository: WorkshopConfigRepository,
     @InjectModel(ProductConfigEntity.name)
     private readonly productConfigModel: Model<ProductConfigEntity>,
+    @InjectModel(OrderEntity.name)
+    private readonly orderModel: Model<OrderEntity>,
   ) {}
+
+  /**
+   * Quét đơn `days` ngày gần nhất (theo `inProductionAt`, fallback `createdAt`
+   * cho đơn thiếu ngày vào sản xuất; loại đơn hủy/xóa), gom theo `type`
+   * (case-insensitive) rồi trả về các loại CHƯA khớp `fullName` của bất kỳ
+   * Product Config nào — nguồn dữ liệu cho cột "Chưa xác định xưởng" ở kanban
+   * Settings (nút Sync). Sort số đơn giảm dần để loại "nóng" nhất lên đầu.
+   */
+  async getUnmatchedOrderTypes(days: number): Promise<UnmatchedOrderType[]> {
+    const since = new Date(Date.now() - days * 24 * 60 * 60 * 1000);
+    const groups = await this.orderModel.aggregate<{ _id: string; type: string; orderCount: number }>([
+      {
+        $match: {
+          deletedAt: { $exists: false },
+          cancelledAt: null,
+          type: { $nin: [null, ''] },
+          $or: [{ inProductionAt: { $gte: since } }, { inProductionAt: null, createdAt: { $gte: since } }],
+        },
+      },
+      {
+        $group: {
+          _id: { $toLower: { $trim: { input: '$type' } } },
+          type: { $first: '$type' },
+          orderCount: { $sum: 1 },
+        },
+      },
+      { $sort: { orderCount: -1 } },
+    ]);
+
+    const configs = await this.productConfigModel.find({}, { fullName: 1 }).lean();
+    const known = new Set(configs.map((c) => c.fullName.trim().toLowerCase()));
+    return groups
+      .filter((g) => g._id && !known.has(g._id))
+      .map((g) => ({ type: g.type, orderCount: g.orderCount }));
+  }
 
   /**
    * Resolve a human-readable Vietnamese label (e.g. "Cotton Jersey",

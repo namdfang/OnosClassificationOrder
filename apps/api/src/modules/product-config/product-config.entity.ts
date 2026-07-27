@@ -27,8 +27,9 @@ export class ProductConfigEntity extends DatabaseEntityAbstract {
   @Prop({ trim: true })
   machineNumber?: string;
 
-  @Prop({ required: true, ref: 'MachineTypeEntity', index: true })
-  machineTypeId: string;
+  /** Optional từ 2026-07 — sản phẩm tạo nhanh từ kanban Settings chưa có loại máy, bổ sung sau ở trang Products. */
+  @Prop({ ref: 'MachineTypeEntity', index: true })
+  machineTypeId?: string;
 
   @Prop({ required: true, ref: 'FactoryEntity', index: true })
   factoryId: string;

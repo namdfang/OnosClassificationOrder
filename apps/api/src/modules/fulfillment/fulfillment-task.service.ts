@@ -28,6 +28,7 @@ import {
   RoleType,
 } from 'shared';
 
+import { productionFactoryClause } from '../../utils/excluded-factory';
 import { OrderDocument, OrderEntity } from '../order/order.entity';
 import { OrderService } from '../order/order.service';
 import type { AuditContext } from '../order-log/order-log.service';
@@ -545,8 +546,8 @@ export class FulfillmentTaskService {
       f.$or = [{ factoryId }, { originalFactoryId: factoryId }];
     } else {
       // Override role (admin/manager) xem không khoá xưởng — vẫn loại đơn
-      // chưa map xưởng, chỉ xem qua trang "Không xác định xưởng".
-      f.factoryId = { $exists: true, $ne: null };
+      // chưa map xưởng + đơn xưởng US (ngoài luồng sản xuất).
+      f.factoryId = productionFactoryClause(this.orderModel.db);
     }
     // Date logic: nếu user truyền cả 2 đều undefined → default 7 ngày. Nếu
     // truyền (kể cả empty string) → coi là explicit override / clear.

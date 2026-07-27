@@ -634,7 +634,11 @@
     "ordersSuffix": "orders",
     "assignFactory": "Assign factory",
     "deselect": "Deselect",
-    "emptyState": "No orders with an undetermined factory"
+    "emptyState": "No orders with an undetermined factory",
+    "autoAssign": "Auto-assign factory",
+    "autoAssignDone": "Auto-assigned {{assigned}} orders across {{types}} product types matching the config",
+    "autoAssignNone": "No orders match a Product Config with a factory — check the kanban in Settings",
+    "productFacet": "Product"
   },
   "priority": {
     "low": "Priority",
