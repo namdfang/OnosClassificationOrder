@@ -5008,6 +5008,9 @@ export class OrderService implements OnModuleInit {
         after: DesignerStatus.Rework,
         ctx,
       });
+      // Lỗi designer trên đơn CHƯA ai ôm (soát 'ok' từ đầu → chưa từng có
+      // designer) → auto-gán theo cấu hình xưởng; engine tự lọc đơn đã có assignee.
+      void this.autoAssignAfterImport([id], ctx);
     }
 
     void this.invalidateListCache();
@@ -5188,19 +5191,25 @@ export class OrderService implements OnModuleInit {
   }
 
   /**
-   * Auto-gán đơn cho designer theo cấu hình xưởng (`designer_assignment_config`)
-   * SAU khi soát tool xong. Được gọi từ `importRework` + `updateField('toolResultNote')`
-   * (bulk toolResultNote delegate qua updateField nên cũng phủ). Fire-and-forget.
+   * Auto-gán đơn cho designer theo cấu hình xưởng (`designer_assignment_config`).
+   * Được gọi từ: `importRework` + `updateField('toolResultNote')` (bulk delegate
+   * qua updateField nên cũng phủ) + `markToolCheckDone` + các đường BÁO LỖI
+   * DESIGNER trên đơn chưa ai ôm (`setProductionError`, `updateField`
+   * productionError/productionErrorSource, rework-back từ kanban Fulfillment —
+   * public để `FulfillmentTaskService` gọi). Fire-and-forget.
    *
-   * Ứng viên (tự xác minh lại trên DB, không tin state truyền vào):
-   *   - `toolResultNote` CÓ giá trị & != 'ok' (đã soát, có lỗi cần designer)
-   *   - có `factoryId` (đã map xưởng) & xưởng đó CÓ cấu hình designer
-   *   - chưa ai ôm (`designerStatus='unassigned'`, `assignee` rỗng)
-   *   - không hủy / giữ / xóa
+   * Ứng viên (tự xác minh lại trên DB, không tin state truyền vào) — chung:
+   * có `factoryId` & xưởng CÓ cấu hình designer, `assignee` rỗng, không
+   * hủy/giữ/xóa. Theo trạng thái:
+   *   - `unassigned` + `toolResultNote` CÓ giá trị & != 'ok' (sau soát tool).
+   *   - `rework` chưa ai ôm — xưởng báo lỗi designer trên đơn CHƯA TỪNG có
+   *     designer (soát 'ok' đi thẳng fulfillment). Không điều kiện toolResultNote
+   *     (đường rework-back từ kanban không set 'error'). Gán xong GIỮ status
+   *     `rework` → task vào thẳng cột "Cần làm lại" của designer.
    * Phân bổ cân bằng tải thực tế theo trọng số (`allocateByLoad`) cho các
    * designer Active của xưởng — đơn về người có (đơn chưa xong)/weight thấp nhất.
    */
-  private async autoAssignAfterImport(orderIds: string[], ctx?: AuditContext): Promise<void> {
+  async autoAssignAfterImport(orderIds: string[], ctx?: AuditContext): Promise<void> {
     try {
       const ids = Array.from(new Set(orderIds.map((x) => String(x)).filter(Boolean)));
       if (!ids.length) return;
@@ -5224,13 +5233,18 @@ export class OrderService implements OnModuleInit {
         .find(
           {
             _id: { $in: ids },
-            designerStatus: DesignerStatus.Unassigned,
             assignee: { $in: [null, ''] },
             factoryId: { $in: Array.from(byFactory.keys()) },
-            toolResultNote: { $nin: [null, '', READY_FOR_FULFILL_CODE] },
             cancelledAt: null,
             heldAt: null,
             deletedAt: { $exists: false },
+            $or: [
+              {
+                designerStatus: DesignerStatus.Unassigned,
+                toolResultNote: { $nin: [null, '', READY_FOR_FULFILL_CODE] },
+              },
+              { designerStatus: DesignerStatus.Rework },
+            ],
           },
           { _id: 1, factoryId: 1 },
         )
@@ -5306,6 +5320,13 @@ export class OrderService implements OnModuleInit {
                 designerRejectedAt: null,
               },
             },
+          );
+          // Đơn rework chưa ai ôm → chỉ gán người, GIỮ designerStatus='rework'
+          // để task hiện đúng cột "Cần làm lại" (guard assignee rỗng chống race
+          // với gán tay / self-claim giữa lúc query eligible và update).
+          await this.orderModel.updateMany(
+            { _id: { $in: slice }, designerStatus: DesignerStatus.Rework, assignee: { $in: [null, ''] } },
+            { $set: { assignee: designerId, designerAssignedAt: now } },
           );
           for (const oid of slice) {
             logRows.push({ orderId: oid, action: 'update', field: 'assignee', before: null, after: designerId, ctx });
@@ -7169,6 +7190,10 @@ export class OrderService implements OnModuleInit {
         ctx,
       },
     ]);
+
+    // Lỗi designer trên đơn CHƯA ai ôm (soát 'ok' từ đầu → chưa từng có designer)
+    // → auto-gán theo cấu hình xưởng; engine tự lọc đơn đã có assignee.
+    if (autoReworkApplied) void this.autoAssignAfterImport([id], ctx);
 
     void this.invalidateListCache();
     return { success: true, data: updated };

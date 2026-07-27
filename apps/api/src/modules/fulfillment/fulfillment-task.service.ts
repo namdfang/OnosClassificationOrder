@@ -29,6 +29,7 @@ import {
 } from 'shared';
 
 import { OrderDocument, OrderEntity } from '../order/order.entity';
+import { OrderService } from '../order/order.service';
 import type { AuditContext } from '../order-log/order-log.service';
 import { OrderLogService } from '../order-log/order-log.service';
 import { UserDocument, UserEntity } from '../user/user.entity';
@@ -93,6 +94,7 @@ export class FulfillmentTaskService {
     @InjectModel(OrderEntity.name) private readonly orderModel: Model<OrderEntity>,
     @InjectModel(UserEntity.name) private readonly userModel: Model<UserEntity>,
     private readonly orderLogService: OrderLogService,
+    private readonly orderService: OrderService,
   ) {}
 
   // ─── Transition ─────────────────────────────────────────────────
@@ -213,6 +215,13 @@ export class FulfillmentTaskService {
       after: plan.nextStatus,
       ctx: { ...ctx, user },
     });
+
+    // Rework-back về designer trên đơn CHƯA ai ôm (soát 'ok' từ đầu → chưa từng
+    // có designer) → auto-gán theo cấu hình xưởng, khỏi chờ leader phân/self-claim.
+    // Engine tự lọc: đơn đã có assignee (rework về designer cũ) không bị đụng.
+    if (body.action === FulfillmentTransitionAction.ReworkBack && body.target === 'designer') {
+      void this.orderService.autoAssignAfterImport([orderId], { ...ctx, user });
+    }
 
     return updated;
   }

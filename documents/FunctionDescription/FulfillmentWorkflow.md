@@ -111,6 +111,8 @@ Worker KHÔNG bắt buộc dùng nút "Báo lỗi": chọn cell **"Lỗi xưởn
 
 Áp dụng ở `OrderService.updateField()` (field `productionError` / `productionErrorSource`) + `OrderService.setProductionError()` (scan + dialog "Lỗi khác") qua helper chung `buildDesignerReworkBackFromError()`. Kích hoạt khi `errorSource='designer'` + `canReworkBackToDesigner` + có user context; đơn chưa vào pipeline thì tự khởi tạo stage Print (xem callout "Vị trí stage" trên). **Áp cho mọi stage** (print trở đi), cả PrintOrderTable (chip watching/rework) lẫn kanban (tab watching/rework).
 
+> **Auto-gán designer sau báo lỗi (2026-07):** cả 3 đường đẩy về designer (rework-back §2.3, cell/scan §2.3b) đều hook `OrderService.autoAssignAfterImport([orderId], ctx)` sau khi ghi DB — đơn thành `rework` mà **chưa ai ôm** (soát 'ok' từ đầu nên chưa từng có designer) sẽ được auto-gán theo cấu hình xưởng (GIỮ status `rework` → vào thẳng cột "Cần làm lại"), khỏi nằm backlog "Cần gán". Đơn đã có assignee (rework về designer cũ) → engine tự lọc, không đụng. Riêng đường rework-back của kanban: `FulfillmentTaskService` inject `OrderService` (`fulfillment.module.ts` import `OrderModule`). Xem `DesignerAutoAssign.md`.
+
 #### 2.3c Báo lỗi "do Soát tool" (`errorSource='tool-check'`) — đẩy về Support
 
 Song song 2.3b nhưng target = **Support** (không phải designer): worker chọn "Lỗi xưởng" loại `tool-check` (vd "Thiếu file để in") → cùng helper `buildDesignerReworkBackFromError(..., target='tool-check')` + gate `canReworkBackToSupport()`. **KHÔNG** đụng `designerStatus`; marker hold = `productionErrorSource='tool-check' AND toolResultNote='error'`.
