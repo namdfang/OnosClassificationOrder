@@ -1,14 +1,21 @@
 # Auto-gán Designer theo xưởng — Function Description
 
-> **File FE:** `apps/web/src/pages/settings/index.tsx` + `apps/web/src/components/settings/DesignerAssignmentConfig.tsx` + `apps/web/src/services/designerAssignment.ts` > **File BE:** `apps/api/src/modules/designer-assignment/` (service + controller + module) + `apps/api/src/modules/order/order.service.ts` → `autoAssignAfterImport()` + `allocateByWeight()` + hook `importRework`/`updateField` > **Route:** `/adm/settings` (gate quyền `role.manage`)
+> **File FE:** `apps/web/src/pages/settings/index.tsx` + `apps/web/src/components/settings/DesignerAssignmentConfig.tsx` + `apps/web/src/services/designerAssignment.ts` > **File BE:** `apps/api/src/modules/designer-assignment/` (service + controller + module) + `apps/api/src/modules/order/order.service.ts` → `autoAssignAfterImport()` (public) + `allocateByLoad()` + hook `importRework`/`updateField`/`setProductionError`/`markToolCheckDone` + `apps/api/src/modules/fulfillment/fulfillment-task.service.ts` → hook `transition()` rework-back target=designer > **Route:** `/adm/settings` (gate quyền `role.manage`)
 > **API:** `GET/PUT /v1/designer-assignment/config`
 
 ## 1. Overview
+
+> **Loại xưởng US (2026-07):** engine `autoAssignAfterImport()` luôn bỏ xưởng ngoài luồng sản xuất (shortName `US`) khỏi map cấu hình (`byFactory.delete`), kể cả khi Admin lỡ cấu hình designer cho nó — xem `Orders.md §21`.
+
 
 Cho phép Admin cấu hình **mỗi xưởng có những designer nào + trọng số (%) nhận
 task**. Sau khi **soát tool xong** cho một đơn (`toolResultNote` **có giá trị &
 != 'ok'** — tức đã soát và có lỗi cần designer), hệ thống **tự động gán** đơn cho
 designer của xưởng đó theo tỉ lệ đã cấu hình, **không cần gán tay**.
+
+Ngoài luồng soát tool, **đơn bị báo lỗi nguồn designer khi CHƯA ai ôm** (đơn soát
+'ok' từ đầu đi thẳng fulfillment nên chưa từng có designer) cũng được auto-gán —
+khỏi nằm backlog "Cần gán" chờ leader phân / designer self-claim (xem §2 bước 2b).
 
 - **Bất biến:** 1 designer chỉ thuộc **1 xưởng** (validate BE lúc lưu + FE lúc chọn).
 - **% tự do:** nhập trọng số bất kỳ (>= 0), không cần cộng đủ 100; tỉ lệ thực =
@@ -28,11 +35,24 @@ designer của xưởng đó theo tỉ lệ đã cấu hình, **không cần gá
    - `markToolCheckDone` (nút "Đã soát xong" list "Cần làm lại" tab Soát tool —
      đơn hold In trả về, chưa có designer; note giữ nguyên `'error'`; **await**
      để trả outcome thật cho FE toast — xem `ToolCheckWorkflow.md §2.2b`).
+
+2b. **Báo lỗi nguồn designer trên đơn CHƯA ai ôm** (`designerStatus` thành
+   `'rework'` + `assignee` rỗng) qua 1 trong 3 đường — hook fire sau khi ghi DB:
+   - `setProductionError` (quét mã lỗi / cell lỗi) — khi `autoReworkApplied`.
+   - `updateField('productionError')` / `updateField('productionErrorSource'='designer')`
+     (bulk delegate qua `updateField` nên cũng phủ) — khi `autoReworkApplied`.
+   - `FulfillmentTaskService.transition()` action=rework-back target=designer
+     (kanban Fulfillment / `OrderErrorScanDialog`) — inject `OrderService`
+     (FulfillmentModule import OrderModule, không vòng lặp).
+   Đơn đã có assignee (rework về designer cũ) → engine tự lọc, không đụng.
+
 3. Hook gọi `OrderService.autoAssignAfterImport(orderIds, ctx)` (fire-and-forget,
    riêng `markToolCheckDone` await).
 4. Engine xác minh lại điều kiện trên DB → đếm **tải thực tế** (số đơn chưa xong
    mỗi designer đang giữ) → chia đơn **cân bằng tải theo trọng số** → `updateMany`
-   set `assignee` + `designerStatus='assigned'` → ghi `orderLog` (field `assignee`).
+   set `assignee` (+ `designerStatus='assigned'` cho ứng viên unassigned; ứng viên
+   `rework` **GIỮ nguyên status** → task vào thẳng cột "Cần làm lại") → ghi
+   `orderLog` (field `assignee`).
 
 > `importOrders` (import đơn chính) **không** gắn hook: đơn mới có `toolResultNote`
 > rỗng → không bao giờ thỏa luật "có giá trị & != 'ok'".
@@ -83,18 +103,23 @@ Constant `DESIGNER_ASSIGNMENT_CONFIG_KEY = 'designer_assignment_config'`.
 ### 5.2 `OrderService.autoAssignAfterImport(orderIds, ctx)`
 
 - Đọc config; nếu rỗng → return. Map `factoryId → designers[]`.
-- **Xác minh ứng viên trên DB** (authoritative, không tin state truyền vào):
-  `designerStatus='unassigned'` & `assignee ∈ [null,'']` & `factoryId ∈ configured`
-  & `toolResultNote ∉ [null,'','ok']` & `cancelledAt=null` & `heldAt=null` &
-  `deletedAt` không tồn tại.
+- **Xác minh ứng viên trên DB** (authoritative, không tin state truyền vào) —
+  điều kiện chung: `assignee ∈ [null,'']` & `factoryId ∈ configured` &
+  `cancelledAt=null` & `heldAt=null` & `deletedAt` không tồn tại, kèm `$or` 2 loại:
+  - `designerStatus='unassigned'` & `toolResultNote ∉ [null,'','ok']` (sau soát tool);
+  - `designerStatus='rework'` (báo lỗi designer trên đơn chưa ai ôm — KHÔNG cần
+    điều kiện toolResultNote vì đường rework-back từ kanban không set `'error'`).
 - Lọc designer **Active + role Designer** (query `userModel`).
 - **Đếm tải thực tế**: 1 aggregate đếm số đơn CHƯA XONG mỗi designer đang giữ
   (`assignee ∈ validIds`, `designerStatus ∈ DESIGNER_ACTIVE_STATUSES`
   [assigned/in-progress/rework], `cancelledAt=null`, không xóa) — tính cả đơn
   gán tay, mọi xưởng.
 - Nhóm ứng viên theo `factoryId` → `allocateByLoad(N, weights, loads)` → cắt
-  orderId → mỗi designer 1 `updateMany({_id∈slice, designerStatus:'unassigned'},
-{$set:...})` (guard `unassigned` chống race).
+  orderId → mỗi designer 2 `updateMany` theo loại (guard status chống race):
+  - `{_id∈slice, designerStatus:'unassigned'}` → set `assignee` +
+    `designerStatus:'assigned'` + clear rejected.
+  - `{_id∈slice, designerStatus:'rework', assignee∈[null,'']}` → CHỈ set
+    `assignee` + `designerAssignedAt` (**giữ `rework`** → cột "Cần làm lại").
 - `orderLogService.writeMany` (field `assignee`, after=designerId) + `invalidateListCache`.
 
 ### 5.3 `OrderService.allocateByLoad(n, weights, loads)`
@@ -113,7 +138,8 @@ trọng số 0/âm khi có người khác > 0 → người đó không nhận đ
 - Engine: 1 `find` (ứng viên) + 1 `find` (designer Active) + 1 `aggregate` (tải
   thực tế, group theo `assignee`) + K `updateMany` (K = số designer có phần > 0).
   Chạy fire-and-forget, không chặn response import/edit.
-- Guard `designerStatus:'unassigned'` trong `updateMany` → không đè đơn đã có người.
+- Guard status trong `updateMany` (`unassigned` / `rework`+assignee rỗng) → không
+  đè đơn đã có người hoặc vừa bị gán tay/self-claim giữa lúc query và update.
 
 ## 7. Permissions
 

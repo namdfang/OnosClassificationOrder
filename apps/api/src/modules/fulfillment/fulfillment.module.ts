@@ -2,6 +2,7 @@ import { Module } from '@nestjs/common';
 import { MongooseModule } from '@nestjs/mongoose';
 
 import { OrderEntity, OrderSchema } from '../order/order.entity';
+import { OrderModule } from '../order/order.module';
 import { OrderLogModule } from '../order-log/order-log.module';
 import { UserEntity, UserSchema } from '../user/user.entity';
 import { FulfillmentTaskController } from './fulfillment-task.controller';
@@ -17,6 +18,8 @@ import { FulfillmentTaskService } from './fulfillment-task.service';
 @Module({
   imports: [
     OrderLogModule,
+    // OrderService cho hook auto-gán designer khi rework-back target=designer.
+    OrderModule,
     MongooseModule.forFeature([{ name: OrderEntity.name, schema: OrderSchema }]),
     MongooseModule.forFeature([{ name: UserEntity.name, schema: UserSchema }]),
   ],

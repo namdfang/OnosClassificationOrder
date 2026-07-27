@@ -63,7 +63,8 @@ export const ProductConfigZod = BaseEntityZod.extend({
   status: z.enum(getObjectValues(ProductConfigStatus)).default(ProductConfigStatus.Active),
   /** Machine number/identifier (e.g. "94", "27"). Empty → product has no tool. */
   machineNumber: z.string().max(60).optional(),
-  machineTypeId: IDZod,
+  /** Optional từ 2026-07 — sản phẩm tạo nhanh từ kanban Settings (kéo từ cột "Chưa xác định xưởng") chưa có loại máy, bổ sung sau ở trang Products. */
+  machineTypeId: IDZod.optional(),
   factoryId: IDZod,
   /** workshop_config code (category=fabric_type). Default fabric used at import. */
   fabricType: z.string().max(60).optional(),
@@ -224,6 +225,24 @@ export class UploadProductImageDto extends createZodDto(extendApi(UploadProductI
 
 export const UploadProductImageResZod = ResZod.extend({ data: z.object({ url: z.string() }) });
 export class UploadProductImageResDto extends createZodDto(extendApi(UploadProductImageResZod)) {}
+
+// ─── Kanban Settings — sync sản phẩm chưa có config từ đơn gần đây ───
+
+/** Quét đơn `days` ngày gần nhất (mặc định 14) tìm `type` chưa có trong Product Config. */
+export const GetUnmatchedOrderTypesZod = z.object({
+  days: z.coerce.number().int().min(1).max(90).default(14),
+});
+export class GetUnmatchedOrderTypesDto extends createZodDto(extendApi(GetUnmatchedOrderTypesZod)) {}
+
+/** 1 loại sản phẩm xuất hiện trên đơn nhưng CHƯA có Product Config — kèm số đơn trong khoảng quét. */
+export const UnmatchedOrderTypeZod = z.object({
+  type: z.string(),
+  orderCount: z.number(),
+});
+export type UnmatchedOrderType = z.infer<typeof UnmatchedOrderTypeZod>;
+
+export const GetUnmatchedOrderTypesResZod = ResZod.extend({ data: UnmatchedOrderTypeZod.array() });
+export class GetUnmatchedOrderTypesResDto extends createZodDto(extendApi(GetUnmatchedOrderTypesResZod)) {}
 
 // ─── Customer Portal — Catalog (chỉ field an toàn cho khách hàng) ───
 // KHÔNG bao giờ trả `cost` / `nonShipCost` (giá vốn nội bộ) ra Customer Portal.

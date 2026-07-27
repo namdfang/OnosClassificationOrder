@@ -23,6 +23,7 @@ import {
   WorkshopConfigCategory,
 } from 'shared';
 
+import { productionFactoryClause } from '../../utils/excluded-factory';
 import { OrderEntity } from '../order/order.entity';
 import { OrderLogEntity } from '../order-log/order-log.entity';
 import { ProductConfigEntity } from '../product-config/product-config.entity';
@@ -364,7 +365,7 @@ export class DesignerStatsService {
           productionError: { $exists: true, $nin: [null, ''] },
           updatedAt: { $gte: range.start, $lte: range.end },
           // Đơn chưa map xưởng bị loại — chỉ xem qua trang "Không xác định xưởng".
-          factoryId: { $exists: true, $ne: null },
+          factoryId: productionFactoryClause(this.orderModel.db),
         },
       },
       {
@@ -508,7 +509,7 @@ export class DesignerStatsService {
       'designerRejections.0': { $exists: true },
       inProductionAt: { $gte: start, $lte: end },
       cancelledAt: null,
-      factoryId: { $exists: true, $ne: null },
+      factoryId: productionFactoryClause(this.orderModel.db),
       ...extraMatch,
     };
     const rejectionDayExpr = {
@@ -535,7 +536,7 @@ export class DesignerStatsService {
             },
             // Đồng bộ scope với Tổng quan: loại đơn hủy + đơn chưa map xưởng.
             cancelledAt: null,
-            factoryId: { $exists: true, $ne: null },
+            factoryId: productionFactoryClause(this.orderModel.db),
             ...extraMatch,
           },
         },
@@ -779,7 +780,7 @@ export class DesignerStatsService {
     const baseMatch = {
       inProductionAt: { $gte: start, $lte: end },
       cancelledAt: null,
-      factoryId: { $exists: true, $ne: null },
+      factoryId: productionFactoryClause(this.orderModel.db),
       ...extraMatch,
     };
 
@@ -1110,7 +1111,7 @@ export class DesignerStatsService {
       toolResultNote: { $nin: [null, '', 'ok'] },
       // Đơn chưa map xưởng bị loại khỏi backlog "Cần gán" — chỉ xem qua trang
       // "Không xác định xưởng".
-      factoryId: { $exists: true, $ne: null },
+      factoryId: productionFactoryClause(this.orderModel.db),
       $or: [
         { designerStatus: DesignerStatus.Unassigned },
         { designerStatus: DesignerStatus.Rejected },
@@ -1368,7 +1369,7 @@ export class DesignerStatsService {
     // `null` khớp cả giá trị null lẫn field vắng mặt → loại đơn đã xoá/hủy.
     // Đơn chưa map xưởng cũng bị loại khỏi Soát tool — chỉ xem qua trang
     // "Không xác định xưởng".
-    const alive = { deletedAt: null, cancelledAt: null, factoryId: { $exists: true, $ne: null } };
+    const alive = { deletedAt: null, cancelledAt: null, factoryId: productionFactoryClause(this.orderModel.db) };
 
     const checkedMatch = withFilters({ toolCheckedAt: inWindow, ...alive });
     const reworkMatch = withFilters({
@@ -1703,7 +1704,7 @@ export class DesignerStatsService {
       cancelledAt: null, // match cả thiếu field lẫn null
       // Đơn chưa map xưởng bị loại khỏi "Lỗi theo người" — chỉ xem qua trang
       // "Không xác định xưởng".
-      ...(factoryId ? { factoryId } : { factoryId: { $exists: true, $ne: null } }),
+      ...(factoryId ? { factoryId } : { factoryId: productionFactoryClause(this.orderModel.db) }),
     };
 
     const [fulfillAgg, designerAgg, reportedAgg, stageUsers] = await Promise.all([
@@ -1722,7 +1723,7 @@ export class DesignerStatsService {
         {
           $match: {
             fulfillmentTimeline: { $elemMatch: { action: 'rework-back' } },
-            ...(factoryId ? { factoryId } : { factoryId: { $exists: true, $ne: null } }),
+            ...(factoryId ? { factoryId } : { factoryId: productionFactoryClause(this.orderModel.db) }),
           },
         },
         { $unwind: '$fulfillmentTimeline' },
@@ -1940,7 +1941,7 @@ export class DesignerStatsService {
           productionError: { $exists: true, $nin: [null, ''] },
           toolResultNote: 'error',
           cancelledAt: null,
-          ...(factoryId ? { factoryId } : { factoryId: { $exists: true, $ne: null } }),
+          ...(factoryId ? { factoryId } : { factoryId: productionFactoryClause(this.orderModel.db) }),
         },
       },
       {

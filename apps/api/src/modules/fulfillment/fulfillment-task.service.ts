@@ -28,7 +28,9 @@ import {
   RoleType,
 } from 'shared';
 
+import { productionFactoryClause } from '../../utils/excluded-factory';
 import { OrderDocument, OrderEntity } from '../order/order.entity';
+import { OrderService } from '../order/order.service';
 import type { AuditContext } from '../order-log/order-log.service';
 import { OrderLogService } from '../order-log/order-log.service';
 import { UserDocument, UserEntity } from '../user/user.entity';
@@ -93,6 +95,7 @@ export class FulfillmentTaskService {
     @InjectModel(OrderEntity.name) private readonly orderModel: Model<OrderEntity>,
     @InjectModel(UserEntity.name) private readonly userModel: Model<UserEntity>,
     private readonly orderLogService: OrderLogService,
+    private readonly orderService: OrderService,
   ) {}
 
   // ─── Transition ─────────────────────────────────────────────────
@@ -213,6 +216,13 @@ export class FulfillmentTaskService {
       after: plan.nextStatus,
       ctx: { ...ctx, user },
     });
+
+    // Rework-back về designer trên đơn CHƯA ai ôm (soát 'ok' từ đầu → chưa từng
+    // có designer) → auto-gán theo cấu hình xưởng, khỏi chờ leader phân/self-claim.
+    // Engine tự lọc: đơn đã có assignee (rework về designer cũ) không bị đụng.
+    if (body.action === FulfillmentTransitionAction.ReworkBack && body.target === 'designer') {
+      void this.orderService.autoAssignAfterImport([orderId], { ...ctx, user });
+    }
 
     return updated;
   }
@@ -536,8 +546,8 @@ export class FulfillmentTaskService {
       f.$or = [{ factoryId }, { originalFactoryId: factoryId }];
     } else {
       // Override role (admin/manager) xem không khoá xưởng — vẫn loại đơn
-      // chưa map xưởng, chỉ xem qua trang "Không xác định xưởng".
-      f.factoryId = { $exists: true, $ne: null };
+      // chưa map xưởng + đơn xưởng US (ngoài luồng sản xuất).
+      f.factoryId = productionFactoryClause(this.orderModel.db);
     }
     // Date logic: nếu user truyền cả 2 đều undefined → default 7 ngày. Nếu
     // truyền (kể cả empty string) → coi là explicit override / clear.
