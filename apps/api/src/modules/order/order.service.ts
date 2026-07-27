@@ -5566,7 +5566,11 @@ export class OrderService implements OnModuleInit {
    * `errorFileNote` ("Ghi chú", free text) — cùng cơ chế optional như
    * `toolResultNote`, dùng khi `toolResultNote='error'` để ghi luôn nguyên
    * nhân + ghi chú lỗi file (BE không ép buộc theo `toolResultNote`, tool tự
-   * quyết định truyền hay không).
+   * quyết định truyền hay không). Optional `printFileUrl` — Drive URL của
+   * "File in" (design đã duyệt), free text, KHÔNG qua `updateField()`/
+   * `workshop_config` (không phải `OrderWorkshopField`, chỉ set thẳng qua
+   * `findOneAndUpdate` giống `cuttingFileUrl` ở `applyCuttingFiles()`) — cùng
+   * cơ chế optional (`!== undefined`), KHÔNG có side-effect hook.
    *
    * Tra theo `productionId` — khóa duy nhất, luôn có (khác `orderId` = mã đơn
    * marketplace gốc, KHÔNG unique vì 1 đơn có thể nhiều line item).
@@ -5577,13 +5581,14 @@ export class OrderService implements OnModuleInit {
    * nhánh `dto.field === 'toolResultNote'` trong `updateField()`) — cùng cơ
    * chế 'ok' xưởng đánh tay ở Danh sách đơn, rồi `errorFile` nếu có, rồi
    * `errorFileNote` nếu có (2 field cuối KHÔNG có side-effect hook, chỉ field
-   * đơn thuần). Trả về kết quả của lần gọi CUỐI CÙNG. Permission gate
-   * (`assertCanEditField`) bypass bằng role giả `RoleType.SuperAdmin` (an
-   * toàn vì bên trong `updateField`, `roleName` CHỈ đọc ở đúng chỗ đó, không
-   * ảnh hưởng nhánh business logic nào khác). `assertValueAllowed` (value
-   * phải khớp code `workshop_config` category tương ứng đang active —
-   * `errorFileNote` free text nên bỏ qua bước này) và `assertNotHeld` vẫn
-   * chạy bình thường ở mỗi lần gọi.
+   * đơn thuần), rồi `printFileUrl` nếu có (set thẳng, KHÔNG qua
+   * `assertCanEditField`/`assertValueAllowed`). Trả về kết quả của lần gọi/
+   * update CUỐI CÙNG. Permission gate (`assertCanEditField`) bypass bằng role
+   * giả `RoleType.SuperAdmin` (an toàn vì bên trong `updateField`, `roleName`
+   * CHỈ đọc ở đúng chỗ đó, không ảnh hưởng nhánh business logic nào khác).
+   * `assertValueAllowed` (value phải khớp code `workshop_config` category
+   * tương ứng đang active — `errorFileNote` free text nên bỏ qua bước này) và
+   * `assertNotHeld` vẫn chạy bình thường ở mỗi lần gọi `updateField()`.
    */
   async setDesignReviewResult(
     productionId: string,
@@ -5592,6 +5597,7 @@ export class OrderService implements OnModuleInit {
       toolResultNote?: string | null;
       errorFile?: string[] | null;
       errorFileNote?: string | null;
+      printFileUrl?: string | null;
     },
     ctx?: AuditContext,
   ): Promise<UpdateOrderFieldResDto> {
@@ -5637,6 +5643,19 @@ export class OrderService implements OnModuleInit {
         RoleType.SuperAdmin,
         ctx,
       );
+    }
+
+    // printFileUrl KHÔNG phải OrderWorkshopField — set thẳng qua findOneAndUpdate
+    // giống cuttingFileUrl ở applyCuttingFiles(), bỏ qua assertCanEditField/
+    // assertValueAllowed (free text, không phải workshop_config code).
+    if (input.printFileUrl !== undefined) {
+      const updated = await this.orderModel.findOneAndUpdate(
+        { _id: id },
+        { $set: { printFileUrl: input.printFileUrl || null } },
+        { new: true },
+      );
+      if (!updated) throw new NotFoundException('Order not found');
+      result = { success: true, data: updated };
     }
 
     return result;

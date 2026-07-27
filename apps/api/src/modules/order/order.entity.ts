@@ -56,6 +56,14 @@ export class OrderEntity extends DatabaseEntityAbstract {
   @Prop()
   cuttingFileName?: string;
 
+  /**
+   * Drive URL của file in (design đã duyệt, dùng ở stage "In" của fulfillment).
+   * Set qua `POST /orders/design-review/result` (public API tool ngoài soát
+   * design) — xem `OrderService.setDesignReviewResult`, Orders.md §18.7.
+   */
+  @Prop()
+  printFileUrl?: string;
+
   @Prop()
   printMethod?: string;
 
