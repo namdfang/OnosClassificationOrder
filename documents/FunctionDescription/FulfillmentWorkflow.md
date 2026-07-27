@@ -7,6 +7,9 @@
 
 ## 1. Overview
 
+> **Loại đơn xưởng US (2026-07):** đơn xưởng `US` không bao giờ được init stage In (guard ở cả 3 entry: designer complete, set `toolResultNote='ok'`, importRework + backfill onModuleInit) và bị loại khỏi view override-role của my-tasks — xem `Orders.md §21`.
+
+
 Sau khi Designer mark task `done` (`designerStatus === 'done'` + `readyForFulfill === true`), đơn được auto-route qua **6 stage tuần tự** trong phạm vi factory:
 
 ```

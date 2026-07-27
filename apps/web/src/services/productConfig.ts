@@ -36,6 +36,11 @@ const uploadProductImage = (formData: FormData) => {
   return callApi(`/${CONFIG.API_VERSION}/product-configs/upload-image`, 'post', formData, 'upload');
 };
 
+/** Loại sản phẩm xuất hiện trên đơn N ngày gần nhất nhưng CHƯA có Product Config (query `?days=14`). */
+const getUnmatchedOrderTypes = (query: string = '') => {
+  return callApi(`/${CONFIG.API_VERSION}/product-configs/unmatched-order-types${query}`, 'get');
+};
+
 export const productConfig = {
   getProductConfigs,
   getProductConfig,
@@ -45,4 +50,5 @@ export const productConfig = {
   importProductConfigs,
   clearAllProductConfigs,
   uploadProductImage,
+  getUnmatchedOrderTypes,
 };

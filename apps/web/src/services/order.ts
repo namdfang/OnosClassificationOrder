@@ -123,6 +123,11 @@ const bulkAssignOrders = (data: BulkAssignOrderDto) => {
   return callApi(`/${CONFIG.API_VERSION}/orders/bulk-assign`, 'patch', data);
 };
 
+/** Nút "Tự động gán xưởng" trang Không xác định xưởng — re-map toàn bộ đơn unmapped theo Product Config hiện tại. */
+const remapUnmappedOrders = () => {
+  return callApi(`/${CONFIG.API_VERSION}/orders/remap-unmapped`, 'post');
+};
+
 const backfillFabric = () => {
   return callApi(`/${CONFIG.API_VERSION}/orders/backfill-fabric`, 'post');
 };
@@ -230,6 +235,7 @@ export const order = {
   transferOrder,
   bulkTransferOrders,
   bulkAssignOrders,
+  remapUnmappedOrders,
   backfillFabric,
   exportOrders,
   getDesignerBreakdown,

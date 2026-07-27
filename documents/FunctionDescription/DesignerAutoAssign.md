@@ -5,6 +5,9 @@
 
 ## 1. Overview
 
+> **Loại xưởng US (2026-07):** engine `autoAssignAfterImport()` luôn bỏ xưởng ngoài luồng sản xuất (shortName `US`) khỏi map cấu hình (`byFactory.delete`), kể cả khi Admin lỡ cấu hình designer cho nó — xem `Orders.md §21`.
+
+
 Cho phép Admin cấu hình **mỗi xưởng có những designer nào + trọng số (%) nhận
 task**. Sau khi **soát tool xong** cho một đơn (`toolResultNote` **có giá trị &
 != 'ok'** — tức đã soát và có lỗi cần designer), hệ thống **tự động gán** đơn cho
