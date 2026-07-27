@@ -1203,6 +1203,18 @@ export const BulkAssignOrderResZod = ResZod.extend({
 });
 export class BulkAssignOrderResDto extends createZodDto(extendApi(BulkAssignOrderResZod)) {}
 
+/**
+ * Nút "Tự động gán xưởng" ở trang Không xác định xưởng (Orders.md §19): re-map
+ * TOÀN BỘ đơn unmapped theo Product Config hiện tại (khớp `type` ↔ `fullName`
+ * exact case-insensitive, gán đủ bộ như lúc import). `scanned` = tổng đơn
+ * unmapped lúc quét, `matchedTypes` = số loại sản phẩm khớp config có xưởng,
+ * `assigned` = số đơn đã gán.
+ */
+export const RemapUnmappedOrdersResZod = ResZod.extend({
+  data: z.object({ scanned: z.number(), matchedTypes: z.number(), assigned: z.number() }),
+});
+export class RemapUnmappedOrdersResDto extends createZodDto(extendApi(RemapUnmappedOrdersResZod)) {}
+
 //
 // Factory overview — used by the new "Đơn hàng theo xưởng" dashboard tab.
 //

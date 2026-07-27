@@ -1475,17 +1475,20 @@ Response mẫu (`SetDesignReviewResultResDto` — `data` = `ProductionOrderZod` 
 - **Không đụng** `designer-task.service.ts` (`getMyTasks`/`buildMyTaskFilter`) — chỉ lọc theo `assignee` (đơn ĐÃ gán); đơn unmapped không có `factoryId` nên auto-assign (`designer-assignment.service.ts`) không bao giờ set `assignee` cho nó.
 - `getFactoryOverview` (tab Dashboard "Đơn hàng theo xưởng"): bỏ hẳn `unmappedCount`/`totals.unmapped` (không còn tiêu thụ ở FE) — `matchMapped`/`cardMatch` giữ nguyên logic cũ (đã đúng từ trước).
 
-### 19.2 Endpoint tái dùng (không có route mới)
+### 19.2 Endpoint
 | Method | Path | Mô tả |
 |--------|------|-------|
 | GET | `/v1/orders?unmapped=true` | `getOrders` — trả đúng tập đơn chưa map xưởng, tái dùng nguyên vẹn. |
 | PATCH | `/v1/orders/bulk-assign` | `bulkAssignOrders` (`BulkAssignOrderDto`) — gán xưởng + fabric/machine/tool mặc định ban đầu cho đơn đã chọn. |
+| POST | `/v1/orders/remap-unmapped` | `remapUnmappedOrders()` — nút **"Tự động gán xưởng"**: re-map TOÀN BỘ đơn unmapped theo Product Config HIỆN TẠI (`@Auth(ORDER_WRITE_ROLES)`, không body). Khớp `type` ↔ `fullName` exact case-insensitive (iterate `distinct('type')` của tập unmapped, lookup map config load 1 lần) → set đủ bộ như import: `isMapped`/`productConfigId`/`factoryId`/`originalFactoryId`/`machineTypeId`; riêng `fabricType`/`machineNumber` chỉ điền khi đơn đang TRỐNG (tôn trọng chỉnh tay — cùng tinh thần insert-only của `importOrders`). Ghi `orderLog` action `bulk_update` (reason "Tự động gán xưởng theo Product Config") + invalidate cache. Res `RemapUnmappedOrdersResDto`: `{ scanned, matchedTypes, assigned }`. Dùng sau khi tạo config từ cột "Chưa xác định xưởng" ở kanban Settings (`Products.md §2.6`). |
 
 ### 19.3 Frontend
 - Trang: `apps/web/src/pages/orders/unmapped/index.tsx` (route `PATHS.ORDERS_UNMAPPED = '/orders/unmapped'`). Guard quyền y hệt `scan-error`: `!isAdmin && !has('page.unmapped_factory')` → `<Navigate to={PATHS.ORDERS} />`.
 - Tái dùng nguyên bộ component bảng workshop: `WORKSHOP_COLS`/`buildColGroups`/`GroupCellContent` (`workshopTableConfig.tsx`), `OrderFilterBar`, `OrderRowActionsMenu`, `PaginationBar`, `ImagePreviewDialog`, `OrderLogTimelineDialog` — không viết bảng mới.
 - Dialog "Gán xưởng" được **extract** từ `OrderFactoryTab.tsx` (trước đây gắn với chip "Chưa xác định xưởng" đã bỏ) sang `apps/web/src/components/orders/AssignFactoryDialog.tsx` — tự fetch danh sách xưởng qua `RepositoryRemote.factory.getFactories()` (không còn phụ thuộc `getFactoryOverview`). Nút "Gán xưởng" (đơn lẻ + bulk) gate bởi `isAdmin || has('order.transfer')`.
 - Sidebar: child "Không xác định xưởng" trong group "Quản lý đơn" (`Sidebar.tsx`, icon `MapPin`), gate `perm: 'page.unmapped_factory'`.
+- Nút **"Tự động gán xưởng"** (icon `Wand2`, màu emerald, đặt cạnh counter ở `topActionsRight` của `OrderFilterBar`, gate `isAdmin || has('order.transfer')` như nút Gán xưởng) → `POST /v1/orders/remap-unmapped` → toast i18n `unmapped.autoAssignDone` (`{{assigned}}`/`{{types}}`) hoặc `unmapped.autoAssignNone` khi không đơn nào khớp → refetch bảng.
+- **Facet "Sản phẩm"** (label i18n `unmapped.productFacet`) — dropdown `SelectFilter` qua prop `facets` của `OrderFilterBar`: thống kê từng `type` + số đơn trong tập unmapped (option "Tất cả (tổng)"), nguồn từ `GET /orders/workshop-filters?unmapped=true` (facet `type` sẵn có, scoped theo `search` hiện tại), chọn 1 sản phẩm → truyền param `type` sẵn có của `getOrders`. Facet refetch cùng lúc reload/gán xưởng/auto-gán; reset kèm tín hiệu sidebar (`fType`).
 
 ### 19.4 Permissions
 - `page.unmapped_factory` (mới, group `page`) — Admin/SuperAdmin/Manager có sẵn qua `ALL_PERMISSION_CODES`; Support được cấp thêm trong `DEFAULT_ROLE_PERMISSIONS` (kèm `order.transfer` để nút "Gán xưởng" hiện ra — trước đó Support không có quyền này).
@@ -1515,3 +1518,34 @@ Response mẫu (`SetDesignReviewResultResDto` — `data` = `ProductionOrderZod` 
 - Các trang admin/CRUD/upload (Products, Workshop Config, Users, Import Order, Cutting Files...) — không phải dạng "danh sách filter" cùng pattern, không áp dụng.
 
 Muốn thêm trang mới: import `useSidebarResetSignal` từ `@/hooks/useSidebarResetSignal`, gọi `useSidebarResetSignal(PATHS.XXX, resetFn)` với `resetFn` set lại mọi filter state về giá trị mặc định của trang đó.
+
+## 21. Xưởng ngoài luồng sản xuất — loại đơn xưởng US khỏi mọi thống kê & luồng
+
+> **Yêu cầu (2026-07):** đơn thuộc xưởng **US** không tham gia sản xuất tại chỗ → loại khỏi TOÀN BỘ thống kê + luồng, **chỉ hiển thị ở tab Dashboard "Đơn hàng theo xưởng"** (`getFactoryOverview` — KHÔNG áp exclusion) hoặc khi lọc tường minh `factoryId` = xưởng US.
+
+### 21.1 Cơ chế nhận diện
+
+`apps/api/src/utils/excluded-factory.ts`:
+- `EXCLUDED_PRODUCTION_FACTORY_SHORT_NAME = 'US'` (hardcode theo yêu cầu — đổi xưởng ngoài luồng thì sửa constant này).
+- `loadExcludedFactoryId(db)` — resolve `_id` xưởng từ collection `factories` theo shortName, await tại `OrderService.onModuleInit()` trước mọi backfill/traffic.
+- `getExcludedFactoryIdSync(db)` — đọc sync từ cache module-scope (TTL 5 phút, tự refresh nền) vì các builder filter là hàm sync; cache dùng CHUNG cho order / designer-stats / designer-task / fulfillment-task service.
+- `productionFactoryClause(db)` — clause chuẩn thay cho pattern unmapped cũ: `{ $exists: true, $nin: [null, <usId>] }` (fallback `{ $exists: true, $ne: null }` khi chưa có xưởng US).
+
+### 21.2 Điểm áp dụng (exclusion)
+
+| Nhóm | Vị trí |
+|------|--------|
+| Danh sách đơn + facets + mọi consumer `buildVisibilityFilter`/`buildOrderListFilter` (getOrders, grouped, workshop-filters, status-overview, designer-breakdown/backlog, export...) | `order.service.ts` → `buildVisibilityFilter()` default clause dùng `productionFactoryClause` |
+| Dashboard Stats (`getDashboard`), Vòng đời (`getLifecycleOverview`), Đơn hủy (`getCancelledOrders`), Nhật ký bù lỗi (`getErrorLog`) | default `match.factoryId` từng hàm |
+| Soát tool (`GET /orders/design-review/next` + `remaining`) | `getNextDesignReviewOrder()` baseFilter thêm `factoryId: { $ne: usId }` (đơn CHƯA map xưởng vẫn vào queue như cũ) |
+| Auto-gán designer | `autoAssignAfterImport()` → `byFactory.delete(usId)` — kể cả khi Admin lỡ cấu hình designer cho US |
+| Entry fulfillment (đơn không được đẩy vào stage In) | 3 chỗ: `updateField('toolResultNote'='ok')` + `importRework` (guard trước `buildFulfillmentEntrySet()`), `designer-task.service.ts` → `applyCompleteFulfillmentHook()` early-return (transition + bulkTransition, projection bulk thêm `factoryId`); + backfill `onModuleInit` orphan-forward thêm `factoryId: productionFactoryClause` |
+| Task Fulfillment view override-role | `fulfillment-task.service.ts` → `buildMyTaskBase()` nhánh không khóa xưởng |
+| Designer stats/backlog/tool-check/person-error/stage-error/daily-overview | `designer-stats.service.ts` — mọi chỗ `factoryId: { $exists: true, $ne: null }` → `productionFactoryClause` (9 điểm) |
+
+### 21.3 Những gì GIỮ NGUYÊN
+
+- `getFactoryOverview` (tab "Đơn hàng theo xưởng") — US vẫn hiện card/số liệu đầy đủ.
+- Lọc tường minh `factoryId` (drill từ tab xưởng, dropdown xưởng ở Danh sách đơn/Lifecycle) — `buildOrderListFilter` ghi đè `filter.factoryId = dto.factoryId` SAU default clause → chọn đúng xưởng US vẫn xem được đơn (escape hatch, cùng semantics trang unmapped).
+- Import đơn: đơn US vẫn import + map factory bình thường (chỉ không đi tiếp vào luồng).
+- Worker Fulfillment gắn xưởng US (nếu có): nhánh khóa-xưởng của `buildMyTaskBase` không áp exclusion — nhưng đơn US không bao giờ được init stage nên my-tasks rỗng.

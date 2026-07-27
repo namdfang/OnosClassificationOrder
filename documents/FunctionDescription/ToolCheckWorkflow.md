@@ -5,6 +5,9 @@
 
 ## 1. Overview
 
+> **Loại đơn xưởng US (2026-07):** đơn xưởng `US` KHÔNG vào hàng đợi soát tool (`GET /orders/design-review/next` lọc `factoryId $ne` xưởng US) và bị loại khỏi mọi thống kê tab Soát tool — xem `Orders.md §21`.
+
+
 Bổ sung **nguồn lỗi thứ 3** cho `productionError`: `errorSource = 'tool-check'` (nhãn **"Soát tool"**), song song `designer` / `factory`.
 
 Bối cảnh: đơn `toolResultNote='ok'` được đẩy thẳng sang In (xem `FulfillmentWorkflow.md §2.1 Entry B`). Nếu đơn ok nhưng **thiếu file để in**, trước đây In chỉ báo được "do designer" hoặc "do xưởng" → Support (người soát tool) không biết lỗi thuộc về mình. Nay In chọn lỗi loại **Soát tool** (mặc định mã "Thiếu file để in") → đơn đẩy **về Support** để soát lại, KHÔNG đụng designer/xưởng.

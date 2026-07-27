@@ -7,6 +7,9 @@
 
 ## 1. Overview
 
+> **Loại đơn xưởng US (2026-07):** đơn thuộc xưởng ngoài luồng sản xuất (shortName `US`) bị loại khỏi Lifecycle overview/strip + mọi thống kê dashboard (trừ tab "Đơn hàng theo xưởng") — xem `Orders.md §21` (`utils/excluded-factory.ts`).
+
+
 Dashboard thống kê **vòng đời đơn** theo 8 chặng tuần tự — cho biết tại mỗi
 công đoạn hiện đang **chứa** bao nhiêu đơn (chờ), **đang làm** bao nhiêu, **lỗi**,
 **rework**, **thời gian hoàn thành trung bình**, và **throughput** (số hoàn thành

@@ -1,7 +1,8 @@
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Navigate } from 'react-router-dom';
-import { History, MapPin } from 'lucide-react';
+import { History, MapPin, Wand2 } from 'lucide-react';
+import { toast } from 'sonner';
 
 import { PATHS } from '@/constants/paths';
 
@@ -69,6 +70,12 @@ function UnmappedFactoryOrdersContent() {
   const [search, setSearch] = useState('');
   const debouncedSearch = useDebounce(search, 300);
 
+  // Facet "Sản phẩm": thống kê type + số đơn trong tập unmapped (faceted
+  // aggregation `GET /orders/workshop-filters?unmapped=true`), chọn 1 type →
+  // lọc bảng qua param `type` sẵn có của `getOrders`.
+  const [fType, setFType] = useState('');
+  const [typeOptions, setTypeOptions] = useState<Array<{ value: string; label: string; count?: number }>>([]);
+
   const [rows, setRows] = useState<WorkshopOrderRow[]>([]);
   const [total, setTotal] = useState(0);
   const [rowsLoading, setRowsLoading] = useState(false);
@@ -84,6 +91,7 @@ function UnmappedFactoryOrdersContent() {
   // này → xóa hết filter (xem `useSidebarResetSignal`).
   useSidebarResetSignal(PATHS.ORDERS_UNMAPPED, () => {
     setSearch('');
+    setFType('');
     setSelected(new Set());
     setPage(1);
   });
@@ -94,6 +102,7 @@ function UnmappedFactoryOrdersContent() {
     sp.set('page', String(page));
     sp.set('limit', String(pageSize));
     if (debouncedSearch.trim()) sp.set('search', debouncedSearch.trim());
+    if (fType) sp.set('type', fType);
     try {
       setRowsLoading(true);
       const res = await RepositoryRemote.order.getOrders('?' + sp.toString());
@@ -104,7 +113,19 @@ function UnmappedFactoryOrdersContent() {
     } finally {
       setRowsLoading(false);
     }
-  }, [page, pageSize, debouncedSearch]);
+  }, [page, pageSize, debouncedSearch, fType]);
+
+  const fetchTypeFacet = useCallback(async () => {
+    const sp = new URLSearchParams();
+    sp.set('unmapped', 'true');
+    if (debouncedSearch.trim()) sp.set('search', debouncedSearch.trim());
+    try {
+      const res = await RepositoryRemote.order.getWorkshopFilters('?' + sp.toString());
+      setTypeOptions((res.data?.data?.type || []) as Array<{ value: string; label: string; count?: number }>);
+    } catch (err) {
+      handleAxiosError(err);
+    }
+  }, [debouncedSearch]);
 
   useEffect(() => {
     setPage(1);
@@ -113,6 +134,10 @@ function UnmappedFactoryOrdersContent() {
   useEffect(() => {
     fetchRows();
   }, [fetchRows]);
+
+  useEffect(() => {
+    fetchTypeFacet();
+  }, [fetchTypeFacet]);
 
   const visibleCols = useMemo(() => WORKSHOP_COLS.filter((c) => !c.perm || canViewField(c.key)), [canViewField]);
   const colGroups = useMemo(() => buildColGroups(visibleCols, roleName), [visibleCols, roleName]);
@@ -138,6 +163,31 @@ function UnmappedFactoryOrdersContent() {
     setSelected(new Set());
     setAssignDialog(null);
     fetchRows();
+    fetchTypeFacet();
+  };
+
+  const [autoAssigning, setAutoAssigning] = useState(false);
+  // Re-map TOÀN BỘ đơn unmapped theo Product Config hiện tại (khớp type ↔
+  // fullName, gán đủ bộ như lúc import) — dùng sau khi tạo config từ cột
+  // "Chưa xác định xưởng" ở kanban Settings.
+  const handleAutoAssign = async () => {
+    try {
+      setAutoAssigning(true);
+      const res = await RepositoryRemote.order.remapUnmappedOrders();
+      const data = res.data?.data as { scanned: number; matchedTypes: number; assigned: number } | undefined;
+      if (data?.assigned) {
+        toast.success(t('unmapped.autoAssignDone', { assigned: data.assigned, types: data.matchedTypes }));
+      } else {
+        toast.info(t('unmapped.autoAssignNone'));
+      }
+      setSelected(new Set());
+      fetchRows();
+      fetchTypeFacet();
+    } catch (err) {
+      handleAxiosError(err);
+    } finally {
+      setAutoAssigning(false);
+    }
   };
 
   return (
@@ -146,12 +196,41 @@ function UnmappedFactoryOrdersContent() {
         <OrderFilterBar
           search={search}
           onSearchChange={setSearch}
-          onReload={fetchRows}
+          onReload={() => {
+            fetchRows();
+            fetchTypeFacet();
+          }}
           loading={rowsLoading}
+          facets={[
+            {
+              key: 'type',
+              label: t('unmapped.productFacet'),
+              value: fType,
+              onChange: (v) => {
+                setFType(v);
+                setPage(1);
+              },
+              options: typeOptions,
+            },
+          ]}
           topActionsRight={
-            <span className="ml-auto text-xs text-muted-foreground">
-              <span className="font-semibold text-foreground tabular-nums">{total}</span> {t('unmapped.unmappedCount')}
-            </span>
+            <div className="ml-auto flex items-center gap-3">
+              {canAssign && (
+                <Button
+                  size="sm"
+                  variant="outline"
+                  className="h-7 text-xs border-emerald-300 bg-emerald-50/40 hover:bg-emerald-100/60 dark:border-emerald-500/40 dark:bg-emerald-500/10 dark:hover:bg-emerald-500/15 text-emerald-700 dark:text-emerald-300"
+                  onClick={handleAutoAssign}
+                  disabled={autoAssigning || rowsLoading}
+                >
+                  <Wand2 size={13} className={cn(autoAssigning && 'animate-pulse')} /> {t('unmapped.autoAssign')}
+                </Button>
+              )}
+              <span className="text-xs text-muted-foreground">
+                <span className="font-semibold text-foreground tabular-nums">{total}</span>{' '}
+                {t('unmapped.unmappedCount')}
+              </span>
+            </div>
           }
         />
 

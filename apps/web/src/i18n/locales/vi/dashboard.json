@@ -405,7 +405,7 @@
       "unreviewedHint": "Đơn có Note kết quả Tool còn trống (chưa soát)",
       "toolError": "Soát lỗi",
       "toolErrorHint": "Tổng đơn TỪNG bị soát tool phát hiện lỗi (người soát đánh Note ≠ 'ok') — số lịch sử, KHÔNG giảm khi đơn đã sửa xong; không tính đơn In trả về chưa soát lại",
-      "wasOkPushed": "OK/chưa soát → đẩy về",
+      "wasOkPushed": "Lỗi xưởng đẩy về",
       "wasOkPushedHint": "Đơn CHƯA TỪNG lỗi soát tool (ok/chưa soát) nhưng bị công đoạn đẩy về designer — số lịch sử, không giảm khi đã fix xong (gồm cả đơn đẩy về chưa ai nhận)",
       "unassignedNeed": "Chưa gán designer",
       "unassignedNeedHint": "Đơn ĐANG lỗi (Note kq Tool có giá trị ≠ 'ok') cần designer nhưng CHƯA gán ai. Đối soát: Soát lỗi + OK/chưa soát đẩy về = Đã gán + Chưa gán + đã-xử-lý-không-cần-designer (dòng cuối tooltip).",

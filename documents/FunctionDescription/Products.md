@@ -129,10 +129,14 @@ Cột `toolResult` **KHÔNG còn được auto-copy vào order lúc import nữa
 
 `apps/web/src/components/settings/ProductFactoryKanban.tsx` — section trong trang Settings (`apps/web/src/pages/settings/index.tsx`, gate `role.manage` chung với các config khác), thay cho việc chọn `<select>` Xưởng từng dòng ở bảng Config khi cần chuyển hàng loạt.
 
-- **Layout:** kanban **chỉ gồm các cột xưởng** (1 cột / factory, KHÔNG có cột "Chưa gán") — UI mirror `CustomerFactoryKanban.tsx` (dnd-kit, cột 70vh cuộn trong, highlight cột khi kéo qua). Card = mockup thumbnail 36×36 (fallback icon ảnh) + `fullName` + `shortName`; vị trí xưởng hiện tại = cột đang đứng. Sort A→Z theo `fullName` trong cột.
-- **Search:** 1 ô tìm client-side theo `fullName`/`shortName`, lọc mọi cột (header cột hiển thị `visible/total`).
-- **Lưu:** kéo thả sang cột khác → **PATCH `/v1/product-configs/:id` `{ factoryId }` lưu NGAY** (update lạc quan + toast, lỗi thì refetch rollback) — KHÔNG có nút Lưu/dirty guard như CustomerFactoryKanban. Cùng ràng buộc §2.1: chỉ ảnh hưởng đơn import về sau.
-- **Data:** load 1 lần `GET /v1/factories` + `GET /v1/product-configs?page=1&limit=2000`; nếu `total > 2000` hoặc có sản phẩm chưa gán xưởng (không hiển thị được trong kanban) → hiện text cảnh báo amber.
+- **Layout:** cột đầu **"Chưa xác định xưởng"** + 1 cột / factory — UI mirror `CustomerFactoryKanban.tsx` (dnd-kit, cột 70vh cuộn trong, highlight cột xưởng khi kéo qua; cột "Chưa xác định xưởng" KHÔNG droppable — chỉ là nguồn kéo đi). Card = mockup thumbnail 36×36 (fallback icon ảnh) + `fullName` + `shortName`; vị trí xưởng hiện tại = cột đang đứng. Sort A→Z theo `fullName` trong cột.
+- **Cột "Chưa xác định xưởng"** chứa 2 loại card:
+  - Config đã tồn tại nhưng `factoryId` rỗng / trỏ xưởng đã xóa — kéo sang xưởng = PATCH như thường.
+  - **Pending type (card vàng, viền đứt):** loại sản phẩm quét từ đơn nhưng CHƯA có config — chỉ xuất hiện sau khi bấm **nút "Sync sản phẩm chưa có xưởng (14 ngày)"** → `GET /v1/product-configs/unmatched-order-types?days=14` (`ProductConfigService.getUnmatchedOrderTypes()`: aggregate đơn 14 ngày gần nhất theo `inProductionAt` fallback `createdAt`, loại đơn hủy/xóa, group `type` case-insensitive, loại các type khớp `fullName` config, sort số đơn giảm dần). Card hiển thị `type` + badge **"N đơn / 14 ngày"** để biết khối lượng. State client-side, F5 mất — bấm Sync lại.
+- **Kéo pending type vào cột xưởng → TẠO NGAY Product Config tối thiểu** (`POST /v1/product-configs` với `fullName` = type, `shortName` tự sinh (uppercase bỏ dấu, `[^A-Z0-9]`→`-`), `factoryId` = cột thả) — `machineTypeId` đã nới thành **optional** trong entity + `ProductConfigZod` để cho phép việc này; toast nhắc bổ sung Loại máy ở trang Products. Lỗi tạo → trả card về cột chờ.
+- **Search:** 1 ô tìm client-side theo `fullName`/`shortName` (pending type theo `type`), lọc mọi cột (header cột hiển thị `visible/total`).
+- **Lưu:** kéo thả config sang cột khác → **PATCH `/v1/product-configs/:id` `{ factoryId }` lưu NGAY** (update lạc quan + toast, lỗi thì refetch rollback) — KHÔNG có nút Lưu/dirty guard như CustomerFactoryKanban. Cùng ràng buộc §2.1: chỉ ảnh hưởng đơn import về sau; **đơn tồn unmapped gán bằng nút "Tự động gán xưởng" ở trang Không xác định xưởng** (`POST /v1/orders/remap-unmapped` — xem `Orders.md §19`).
+- **Data:** load 1 lần `GET /v1/factories` + `GET /v1/product-configs?page=1&limit=2000`; nếu `total > 2000` → hiện text cảnh báo amber.
 
 ### 2.3 Import flow (`ImportProductConfigDialog.tsx`)
 ```

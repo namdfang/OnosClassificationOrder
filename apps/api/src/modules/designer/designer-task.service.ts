@@ -18,6 +18,7 @@ import {
 } from 'shared';
 import { Status } from 'shared';
 
+import { getExcludedFactoryIdSync } from '../../utils/excluded-factory';
 import { OrderDocument, OrderEntity } from '../order/order.entity';
 import type { AuditContext } from '../order-log/order-log.service';
 import { OrderLogService } from '../order-log/order-log.service';
@@ -120,7 +121,7 @@ export class DesignerTaskService {
     // Hook fulfillment khi designer.complete → vào/quay lại pipeline. Dùng CHUNG
     // với bulkTransition (xem applyCompleteFulfillmentHook).
     this.applyCompleteFulfillmentHook(
-      order as { currentFulfillmentStage?: string | null; fulfillmentCompletedAt?: Date | null },
+      order as { currentFulfillmentStage?: string | null; fulfillmentCompletedAt?: Date | null; factoryId?: string },
       action,
       plan,
     );
@@ -197,13 +198,17 @@ export class DesignerTaskService {
    * nhưng stage vẫn `done` → vô hình ở mọi tab In; hoặc chưa bao giờ vào In).
    */
   private applyCompleteFulfillmentHook(
-    order: { currentFulfillmentStage?: string | null; fulfillmentCompletedAt?: Date | null },
+    order: { currentFulfillmentStage?: string | null; fulfillmentCompletedAt?: Date | null; factoryId?: string | null },
     action: DesignerTransitionAction,
     plan: { nextStatus: DesignerStatus; patch: Record<string, unknown> },
   ): void {
     if (action !== DesignerTransitionAction.Complete || plan.nextStatus !== DesignerStatus.Done) {
       return;
     }
+    // Đơn xưởng US (ngoài luồng sản xuất) không vào fulfillment — designer
+    // complete chỉ đổi trạng thái thiết kế, không init stage In.
+    const excludedFactoryId = getExcludedFactoryIdSync(this.orderModel.db);
+    if (excludedFactoryId && order.factoryId === excludedFactoryId) return;
     const currentFulfillmentStage = order.currentFulfillmentStage;
     // Đơn ĐÃ HOÀN THÀNH fulfillment (pack done → stage=null + fulfillmentCompletedAt)
     // cũng có stage rỗng — designer complete muộn KHÔNG được kéo đơn xong về
@@ -624,6 +629,8 @@ export class DesignerTaskService {
           designerFirstStartedAt: 1,
           currentFulfillmentStage: 1,
           fulfillmentCompletedAt: 1,
+          // Cho guard xưởng US trong applyCompleteFulfillmentHook.
+          factoryId: 1,
         },
       )
       .lean();
@@ -657,7 +664,7 @@ export class DesignerTaskService {
         // Cùng hook fulfillment như transition đơn lẻ — nếu thiếu, complete hàng
         // loạt để đơn kẹt (currentStage set nhưng stage vẫn 'done').
         this.applyCompleteFulfillmentHook(
-          o as { currentFulfillmentStage?: string | null; fulfillmentCompletedAt?: Date | null },
+          o as { currentFulfillmentStage?: string | null; fulfillmentCompletedAt?: Date | null; factoryId?: string },
           action,
           plan,
         );

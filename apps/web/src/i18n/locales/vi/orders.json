@@ -634,7 +634,11 @@
     "ordersSuffix": "đơn",
     "assignFactory": "Gán xưởng",
     "deselect": "Bỏ chọn",
-    "emptyState": "Không có đơn nào chưa xác định xưởng"
+    "emptyState": "Không có đơn nào chưa xác định xưởng",
+    "autoAssign": "Tự động gán xưởng",
+    "autoAssignDone": "Đã tự động gán {{assigned}} đơn theo {{types}} loại sản phẩm khớp cấu hình",
+    "autoAssignNone": "Không có đơn nào khớp Product Config có xưởng — kiểm tra lại kanban ở Cài đặt",
+    "productFacet": "Sản phẩm"
   },
   "priority": {
     "low": "Ưu tiên",

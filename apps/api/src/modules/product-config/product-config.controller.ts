@@ -24,6 +24,8 @@ import {
   GetProductConfigResDto,
   GetProductConfigsDto,
   GetProductConfigsResDto,
+  GetUnmatchedOrderTypesDto,
+  GetUnmatchedOrderTypesResDto,
   ImportProductConfigDto,
   ImportProductConfigResDto,
   ResDto,
@@ -50,6 +52,16 @@ export class ProductConfigController {
   @ApiOkResponse({ type: GetProductConfigsResDto })
   async getProductConfigs(@Query() dto: GetProductConfigsDto): Promise<GetProductConfigsResDto> {
     return this.productConfigService.getProductConfigs(dto);
+  }
+
+  // Khai báo TRƯỚC `@Get(':id')` — route param 1 segment sẽ nuốt path này nếu đứng sau.
+  @Get('unmatched-order-types')
+  @Auth([RoleType.Admin, RoleType.Manager])
+  @ApiOperation({ summary: 'Loại sản phẩm xuất hiện trên đơn N ngày gần nhất nhưng CHƯA có Product Config' })
+  @HttpCode(HttpStatus.OK)
+  @ApiOkResponse({ type: GetUnmatchedOrderTypesResDto })
+  async getUnmatchedOrderTypes(@Query() dto: GetUnmatchedOrderTypesDto): Promise<GetUnmatchedOrderTypesResDto> {
+    return { success: true, data: await this.productConfigService.getUnmatchedOrderTypes(dto.days) };
   }
 
   @Get(':id')
