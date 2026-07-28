@@ -177,6 +177,11 @@ export const ProductionOrderZod = BaseEntityZod.extend({
   cuttingFileUrl: z.string().optional(),
   /** Tên file cache lúc map (FE hiện ở dialog detail mà không re-fetch Drive). */
   cuttingFileName: z.string().optional(),
+  /**
+   * Drive URL của file in (design đã duyệt) — set qua
+   * `POST /orders/design-review/result` (tool ngoài soát design, Orders.md §18.7).
+   */
+  printFileUrl: z.string().optional(),
   printMethod: z.string().optional(),
   weight: z.number().optional(),
   width: z.number().optional(),
@@ -1056,6 +1061,14 @@ export const SetDesignReviewResultZod = z.object({
    * side-effect hook.
    */
   errorFileNote: z.string().nullable().optional(),
+  /**
+   * Optional — Drive URL của "File in" (design đã duyệt, dùng ở stage "In" của
+   * fulfillment). Free text (KHÔNG qua workshop_config, không validate format).
+   * Cùng cơ chế optional như `errorFileNote`. Không truyền field này → giữ
+   * nguyên hành vi cũ, KHÔNG đụng field. Truyền (kể cả `null`/`''` để xoá) →
+   * ghi đè. KHÔNG có side-effect hook.
+   */
+  printFileUrl: z.string().nullable().optional(),
 });
 export class SetDesignReviewResultDto extends createZodDto(extendApi(SetDesignReviewResultZod)) {}
 

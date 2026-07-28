@@ -941,7 +941,7 @@ export class OrderController {
   @Auth([], [], { public: true })
   @ApiOperation({
     summary:
-      '[Public] Lưu Kết quả Tool (toolResult) + optional Note kq Tool 1 (toolResultNote) + optional File lỗi (errorFile) + optional Ghi chú (errorFileNote)',
+      '[Public] Lưu Kết quả Tool (toolResult) + optional Note kq Tool 1 (toolResultNote) + optional File lỗi (errorFile) + optional Ghi chú (errorFileNote) + optional Drive URL File in (printFileUrl)',
   })
   @HttpCode(HttpStatus.OK)
   @ApiOkResponse({ type: SetDesignReviewResultResDto })
@@ -959,6 +959,7 @@ export class OrderController {
         toolResultNote: dto.toolResultNote,
         errorFile: dto.errorFile,
         errorFileNote: dto.errorFileNote,
+        printFileUrl: dto.printFileUrl,
         ip,
         userAgent,
       }),
@@ -970,6 +971,7 @@ export class OrderController {
         toolResultNote: dto.toolResultNote,
         errorFile: dto.errorFile,
         errorFileNote: dto.errorFileNote,
+        printFileUrl: dto.printFileUrl,
       },
       { ip, userAgent },
     ) as Promise<SetDesignReviewResultResDto>;
