@@ -15,6 +15,7 @@ import type {
 } from 'shared';
 import { myNanoid, ProductConfigStatus, WorkshopConfigCategory } from 'shared';
 
+import { CollectionService } from '../collection/collection.service';
 import { FactoryService } from '../factory/factory.service';
 import { MachineTypeService } from '../machine-type/machine-type.service';
 import { OrderEntity } from '../order/order.entity';
@@ -61,6 +62,7 @@ export class ProductConfigService {
     private readonly factoryService: FactoryService,
     private readonly machineTypeService: MachineTypeService,
     private readonly productCategoryService: ProductCategoryService,
+    private readonly collectionService: CollectionService,
     private readonly workshopConfigRepository: WorkshopConfigRepository,
     @InjectModel(ProductConfigEntity.name)
     private readonly productConfigModel: Model<ProductConfigEntity>,
@@ -306,6 +308,7 @@ export class ProductConfigService {
     const factory = await this.factoryService.getFactory(dto.factoryId);
     if (!factory) throw new BadRequestException('Invalid factoryId');
     if (dto.productCategoryId) await this.productCategoryService.getProductCategory(dto.productCategoryId);
+    for (const collectionId of dto.collectionIds || []) await this.collectionService.getCollection(collectionId);
 
     try {
       return await this.productConfigRepository.create({
@@ -329,6 +332,7 @@ export class ProductConfigService {
     if (dto.factoryId) await this.factoryService.getFactory(dto.factoryId);
     if (dto.machineTypeId) await this.machineTypeService.getMachineType(dto.machineTypeId);
     if (dto.productCategoryId) await this.productCategoryService.getProductCategory(dto.productCategoryId);
+    for (const collectionId of dto.collectionIds || []) await this.collectionService.getCollection(collectionId);
 
     try {
       const p = await this.productConfigRepository.findOneAndUpdate(

@@ -1,6 +1,7 @@
 import { Module } from '@nestjs/common';
 import { MongooseModule } from '@nestjs/mongoose';
 
+import { CollectionModule } from '../collection/collection.module';
 import { FactoryModule } from '../factory/factory.module';
 import { MachineTypeModule } from '../machine-type/machine-type.module';
 import { OrderEntity, OrderSchema } from '../order/order.entity';
@@ -17,6 +18,7 @@ import { ProductConfigService } from './product-config.service';
     // Chỉ cần model đơn (KHÔNG import OrderModule — tránh vòng lặp DI) cho
     // `getUnmatchedOrderTypes()`: quét type trên đơn chưa có config.
     MongooseModule.forFeature([{ name: OrderEntity.name, schema: OrderSchema }]),
+    CollectionModule,
     FactoryModule,
     MachineTypeModule,
     ProductCategoryModule,

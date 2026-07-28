@@ -36,11 +36,15 @@ export interface ProductConfigRow {
   fullName: string;
   shortName: string;
   sku?: string;
+  slug?: string;
   status?: ProductConfigStatus;
   machineNumber?: string;
   fabricType?: string;
   toolResult?: string;
   mockup?: string;
+  /** Gallery ảnh bổ sung — `mockup` là ảnh chính (index 0). */
+  images?: string[];
+  collectionIds?: string[];
   level?: number;
   guide?: string;
   factoryId?: string;
@@ -54,6 +58,13 @@ export interface ProductConfigRow {
   printArea?: ProductPrintArea;
   sizeChartUrl?: string;
   description?: string;
+  shortDescription?: string;
+  templateDescription?: string;
+  maxProductionTime?: number;
+  maxShippingTime?: number;
+  hideForSeller?: boolean;
+  enableDesignCheck?: boolean;
+  enableAffiliate?: boolean;
   itemSpecifics?: ProductItemSpecific[];
   weight?: number;
   width?: number;

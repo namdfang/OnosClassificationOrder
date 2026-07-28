@@ -25,7 +25,8 @@
     "tabs": {
       "config": "Config",
       "category": "Categories",
-      "factory": "Factories"
+      "factory": "Factories",
+      "collection": "Collections"
     }
   },
   "configTab": {
@@ -281,6 +282,179 @@
       "skuMissing": "missing product SKU / attributes",
       "selling": "Selling",
       "stopped": "Stopped"
+    },
+    "sections": {
+      "production": {
+        "label": "Production",
+        "desc": "Images, factory & machine mapping, defaults applied to imported orders + internal guide."
+      },
+      "details": {
+        "label": "Product Details",
+        "desc": "Catalog information shown to customers on the portal."
+      },
+      "variants": {
+        "label": "Variants & Price",
+        "desc": "Define option groups, generate combinations, set prices — regenerating never wipes entered prices."
+      },
+      "printAreas": {
+        "label": "Print Areas",
+        "desc": "Keys map 1-1 to order.designs (design_<key> columns for CSV/API ordering)."
+      }
+    },
+    "counts": {
+      "variants": "{{count}} variants",
+      "printAreas": "{{count}} areas"
+    },
+    "production": {
+      "slug": "Slug"
+    },
+    "toggles": {
+      "hideForSeller": "Hide product for seller",
+      "designCheck": "Enable design check",
+      "affiliate": "Enable affiliate commission"
+    },
+    "shippingTime": {
+      "title": "Shipping time",
+      "maxProduction": "Max Production time (days)",
+      "maxShipping": "Max shipping time (days)"
+    },
+    "logistics": {
+      "title": "Logistics Information",
+      "weight": "Weight * (Gr)",
+      "width": "Package Width (Cm)",
+      "height": "Package Height (Cm)",
+      "length": "Package Length (Cm)",
+      "hint": "Default package — used when a variant has no override."
+    },
+    "descriptions": {
+      "short": "Short description",
+      "shortPlaceholder": "Bullet-point summary (material, sizes, MOQ…)",
+      "item": "Item description (shown to customers)",
+      "itemPlaceholder": "Full product description…",
+      "template": "Template description",
+      "templatePlaceholder": "Print file requirements, templates & mockup links, disclaimers…"
+    },
+    "collectionsField": {
+      "label": "Collections (multi-select)",
+      "empty": "No collections yet — create them in the Collections tab of the Products page."
+    },
+    "gallery": {
+      "label": "Product images",
+      "primary": "Primary",
+      "pending": "Pending upload",
+      "setPrimary": "Set as primary",
+      "remove": "Remove",
+      "empty": "No images yet — paste a URL or upload files below.",
+      "urlPlaceholder": "Paste image URL and press Enter",
+      "addUrl": "Add URL",
+      "upload": "Upload",
+      "hint": "First image is the PRIMARY mockup (shown in product list & customer catalog). Hover an image to set primary or remove. Max {{max}} images.",
+      "pendingHint": "{{count}} new images — uploaded when you click Save",
+      "duplicateUrl": "This image URL is already in the list",
+      "maxReached": "Maximum {{max}} images"
+    },
+    "groups": {
+      "title": "Option groups (max {{max}})",
+      "addGroup": "Add group",
+      "namePlaceholder": "Group name (e.g. Color, Size, Ship By Label)",
+      "noOptions": "No options yet.",
+      "optionPlaceholder": "Add option — press Enter or paste 'Red, Blue, Green'",
+      "removeGroup": "Remove group",
+      "duplicateSkipped": "Skipped {{count}} duplicate options",
+      "empty": "No option groups yet — e.g. add \"Color\" (Red, Blue) + \"Size\" (S, M, L), then generate variants.",
+      "generate": "Generate variants ({{count}})",
+      "batchEdit": "Batch edit",
+      "needGroup": "Add at least one option group first",
+      "needName": "Every option group needs a name",
+      "emptyGroup": "Group \"{{name}}\" has no options yet",
+      "duplicateName": "Duplicate group name: \"{{name}}\"",
+      "tooMany": "Too many combinations ({{count}}) — max {{max}} variants",
+      "generated": "Variants generated: {{created}} new, {{kept}} kept",
+      "generatedOrphans": "Variants generated: {{created}} new, {{kept}} kept, {{orphans}} orphaned (highlighted — remove if unused)",
+      "variantName": "Variant Name",
+      "option": "Option",
+      "optionValuePlaceholder": "Option",
+      "addOption": "Add option",
+      "done": "Done",
+      "addVariant": "Add Variant",
+      "variationList": "Variation List",
+      "duplicateOption": "Duplicate option: \"{{name}}\"",
+      "maxGroups": "Maximum {{max}} option groups"
+    },
+    "table": {
+      "empty": "No variants yet — add options in the groups on the left, then click \"Generate variants\".",
+      "optionFallback": "Option {{index}}",
+      "cost": "Cost",
+      "shipCosts": "EXP US/TIKTOK US",
+      "nonShip": "Non-Ship",
+      "wholesale": "Wholesale",
+      "expUsPrice": "EXP US $",
+      "ttUsPrice": "TT US $",
+      "package": "Package",
+      "active": "Active",
+      "orphanTitle": "Does not match the current option set — fix the options or remove this row",
+      "skuTitle": "SKU auto-generated from product SKU + attributes — not editable here (change in database if needed)",
+      "skuMissing": "missing product SKU / attributes",
+      "expShipTitle": "Express US shipping cost",
+      "ttShipTitle": "TikTok (SBTT) shipping cost"
+    },
+    "batchEdit": {
+      "title": "Batch edit variants",
+      "filterHint": "Filter by option — leave a group empty to match all of its values",
+      "matches": "Matches",
+      "valuesHint": "New values — EMPTY fields keep their current values",
+      "statusKeep": "Sale status — keep unchanged",
+      "noValues": "No values entered to apply",
+      "noMatch": "No variants match the filter",
+      "applied": "Applied to {{count}} variants",
+      "apply": "Apply ({{count}})",
+      "fields": {
+        "cost": "Cost",
+        "expUsShipCost": "EXP US ship",
+        "tiktokShipCost": "TIKTOK US ship",
+        "nonShipCost": "Non-Ship",
+        "wholesalePrice": "Wholesale",
+        "retailPrice": "EXP US $",
+        "tiktokPrice": "TT US $",
+        "weight": "Weight (g)",
+        "width": "Width (cm)",
+        "height": "Height (cm)",
+        "length": "Length (cm)"
+      },
+      "allOf": "All - {{name}}",
+      "someOf": "{{count}} - {{name}}",
+      "clear": "Clear"
+    }
+  },
+  "collectionTab": {
+    "title": "Product collections",
+    "description": "Group products into collections (one product can belong to many) — assigned on the product detail page.",
+    "table": {
+      "image": "Image",
+      "name": "Name",
+      "shortName": "Short name",
+      "sortOrder": "Order",
+      "status": "Status",
+      "empty": "No collections yet.",
+      "active": "Active",
+      "inactive": "Off"
+    },
+    "dialog": {
+      "createTitle": "Add collection",
+      "editTitle": "Edit collection"
+    },
+    "form": {
+      "name": "Name",
+      "namePlaceholder": "e.g. Summer 2026",
+      "shortName": "Short name",
+      "shortNamePlaceholder": "e.g. SUMMER26",
+      "image": "Image (URL)",
+      "description": "Description",
+      "sortOrder": "Sort order",
+      "active": "Active",
+      "nameRequired": "Name and short name are required",
+      "createSuccess": "Collection created",
+      "updateSuccess": "Updated"
     }
   }
 }
