@@ -296,6 +296,7 @@
     "selectedCount": "<strong>{{count}}</strong> orders selected",
     "bulkUpdateBtn": "Bulk update",
     "assignDesignBtn": "Assign design",
+    "unassignDesignBtn": "Unassign design",
     "priorityBtn": "Priority",
     "holdBtn": "Hold order",
     "unholdBtn": "Release",

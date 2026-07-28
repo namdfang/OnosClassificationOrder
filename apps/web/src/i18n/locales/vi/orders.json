@@ -296,6 +296,7 @@
     "selectedCount": "Đã chọn <strong>{{count}}</strong> đơn",
     "bulkUpdateBtn": "Bulk update",
     "assignDesignBtn": "Gán design",
+    "unassignDesignBtn": "Bỏ gán design",
     "priorityBtn": "Ưu tiên",
     "holdBtn": "Giữ đơn",
     "unholdBtn": "Mở giữ",

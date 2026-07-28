@@ -36,6 +36,13 @@ khỏi nằm backlog "Cần gán" chờ leader phân / designer self-claim (xem 
      đơn hold In trả về, chưa có designer; note giữ nguyên `'error'`; **await**
      để trả outcome thật cho FE toast — xem `ToolCheckWorkflow.md §2.2b`).
 
+   **NGOẠI LỆ:** `OrderService.setDesignReviewResult()` (public API
+   `POST /orders/design-review/result` cho tool ngoài duyệt thiết kế, xem
+   `Orders.md §18.7`) gọi `updateField('toolResultNote', ...)` với
+   `opts.skipAutoAssign: true` — tool ngoài soát xong **KHÔNG** tự gán
+   designer (khác sửa tay/import rework ở trên); đơn nằm ở backlog "Cần gán"
+   chờ Leader/Admin gán tay.
+
 2b. **Báo lỗi nguồn designer trên đơn CHƯA ai ôm** (`designerStatus` thành
    `'rework'` + `assignee` rỗng) qua 1 trong 3 đường — hook fire sau khi ghi DB:
    - `setProductionError` (quét mã lỗi / cell lỗi) — khi `autoReworkApplied`.
