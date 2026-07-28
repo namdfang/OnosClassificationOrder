@@ -1,7 +1,17 @@
-import React, { useEffect, useMemo, useState } from 'react';
-import { Factory as FactoryIcon, ImageIcon, Package, PackageSearch, RefreshCw, Search } from 'lucide-react';
-import type { CreateProductConfigDto } from 'shared';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
+import {
+  Download,
+  Factory as FactoryIcon,
+  ImageDown,
+  ImageIcon,
+  Package,
+  PackageSearch,
+  RefreshCw,
+  Search,
+} from 'lucide-react';
+import type { CrawlMockupResultItem, CrawlProductMockupsDto, CreateProductConfigDto } from 'shared';
 import { toast } from 'sonner';
+import * as XLSX from 'xlsx';
 import type { DragEndEvent, DragStartEvent } from '@dnd-kit/core';
 import {
   DndContext,
@@ -15,12 +25,14 @@ import {
 
 import { RepositoryRemote } from '@/services';
 
+import { ImagePreviewDialog } from '@/components/common/ImagePreviewDialog';
 import { Spinner } from '@/components/common/Spinner';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 
 import { handleAxiosError } from '@/utils';
 import { cn } from '@/utils/cn';
+import { toFullSizeImageUrl } from '@/utils/imageUrl';
 
 interface ProductLite {
   _id: string;
@@ -28,6 +40,7 @@ interface ProductLite {
   shortName: string;
   mockup?: string;
   factoryId?: string;
+  machineTypeId?: string;
 }
 
 interface FactoryLite {
@@ -63,7 +76,7 @@ const makeShortName = (fullName: string) =>
     .replace(/(^-+|-+$)/g, '')
     .slice(0, 60) || 'SP';
 
-function ProductCard({ p }: { p: ProductLite }) {
+function ProductCard({ p, onPreview }: { p: ProductLite; onPreview?: (p: ProductLite) => void }) {
   return (
     <div className="rounded-lg border border-slate-200 dark:border-slate-700/60 bg-white dark:bg-slate-800 px-2 py-1.5 shadow-sm">
       <div className="flex items-center gap-2">
@@ -71,8 +84,22 @@ function ProductCard({ p }: { p: ProductLite }) {
           <img
             src={p.mockup}
             alt=""
-            className="w-9 h-9 shrink-0 rounded object-cover border border-slate-200 dark:border-slate-700 bg-slate-100 dark:bg-slate-700/50"
+            className={cn(
+              'w-9 h-9 shrink-0 rounded object-cover border border-slate-200 dark:border-slate-700 bg-slate-100 dark:bg-slate-700/50',
+              onPreview && 'cursor-zoom-in hover:ring-2 hover:ring-indigo-300 dark:hover:ring-indigo-500/40',
+            )}
             draggable={false}
+            // stopPropagation ở pointerdown để dnd-kit (listeners ở wrapper cha)
+            // không bắt drag khi bấm vào ảnh — bấm ảnh = mở preview, không kéo thẻ.
+            onPointerDown={onPreview ? (e) => e.stopPropagation() : undefined}
+            onClick={
+              onPreview
+                ? (e) => {
+                    e.stopPropagation();
+                    onPreview(p);
+                  }
+                : undefined
+            }
           />
         ) : (
           <div className="w-9 h-9 shrink-0 rounded border border-dashed border-slate-300 dark:border-slate-600 flex items-center justify-center text-slate-400">
@@ -80,7 +107,9 @@ function ProductCard({ p }: { p: ProductLite }) {
           </div>
         )}
         <div className="flex-1 min-w-0">
-          <p className="truncate text-xs font-medium text-slate-700 dark:text-slate-200">{p.fullName}</p>
+          <p className="truncate text-xs font-medium text-slate-700 dark:text-slate-200" title={p.fullName}>
+            {p.fullName}
+          </p>
           <p className="truncate text-[10px] font-mono text-slate-400">{p.shortName}</p>
         </div>
       </div>
@@ -101,6 +130,99 @@ function PendingCard({ p }: { p: PendingType }) {
             {p.orderCount} đơn / {SYNC_DAYS} ngày — chưa có config
           </p>
         </div>
+      </div>
+    </div>
+  );
+}
+
+/** Nhãn + màu chip cho từng trạng thái kết quả crawl ảnh. */
+const CRAWL_STATUS_META: Record<
+  CrawlMockupResultItem['status'],
+  { label: string; className: string }
+> = {
+  created: { label: 'Gán mới', className: 'bg-emerald-100 text-emerald-700 dark:bg-emerald-500/15 dark:text-emerald-400' },
+  updated: { label: 'Ghi đè', className: 'bg-sky-100 text-sky-700 dark:bg-sky-500/15 dark:text-sky-400' },
+  'no-match': { label: 'Không trùng tên', className: 'bg-amber-100 text-amber-700 dark:bg-amber-500/15 dark:text-amber-400' },
+  'no-results': { label: 'Không có kết quả', className: 'bg-slate-200 text-slate-600 dark:bg-slate-700 dark:text-slate-300' },
+  error: { label: 'Lỗi', className: 'bg-red-100 text-red-700 dark:bg-red-500/15 dark:text-red-400' },
+};
+
+/** Bảng log chi tiết từng sản phẩm sau khi crawl ảnh — lấy được hay không, vì sao. */
+function CrawlLogPanel({ results, onClose }: { results: CrawlMockupResultItem[]; onClose: () => void }) {
+  const counts = results.reduce<Record<string, number>>((acc, r) => {
+    acc[r.status] = (acc[r.status] || 0) + 1;
+    return acc;
+  }, {});
+  return (
+    <div className="rounded-xl border border-slate-200 dark:border-slate-700/60 bg-white dark:bg-slate-800/60">
+      <div className="flex flex-wrap items-center gap-2 px-3 py-2 border-b border-slate-200/70 dark:border-slate-700/60">
+        <span className="text-xs font-medium text-slate-700 dark:text-slate-200">
+          Kết quả lấy ảnh ({results.length} sản phẩm)
+        </span>
+        {(Object.keys(CRAWL_STATUS_META) as Array<CrawlMockupResultItem['status']>)
+          .filter((s) => counts[s])
+          .map((s) => (
+            <span key={s} className={cn('rounded px-1.5 py-0.5 text-[10px] font-medium', CRAWL_STATUS_META[s].className)}>
+              {CRAWL_STATUS_META[s].label}: {counts[s]}
+            </span>
+          ))}
+        <button
+          type="button"
+          onClick={onClose}
+          className="ml-auto text-[11px] text-slate-400 hover:text-slate-600 dark:hover:text-slate-300"
+        >
+          Đóng
+        </button>
+      </div>
+      <div className="max-h-64 overflow-y-auto divide-y divide-slate-100 dark:divide-slate-700/40">
+        {results.map((r, i) => (
+          <div key={`${r.productConfigId}-${i}`} className="flex items-start gap-2 px-3 py-1.5">
+            <span
+              className={cn(
+                'mt-0.5 shrink-0 rounded px-1.5 py-0.5 text-[10px] font-medium',
+                CRAWL_STATUS_META[r.status].className,
+              )}
+            >
+              {CRAWL_STATUS_META[r.status].label}
+            </span>
+            <div className="min-w-0 flex-1">
+              <p className="truncate text-xs font-medium text-slate-700 dark:text-slate-200" title={r.fullName}>
+                {r.fullName || '(tên trống)'}
+              </p>
+              {(r.status === 'created' || r.status === 'updated') && (
+                <p className="truncate text-[11px] text-slate-400">
+                  {r.note ? `${r.note} — ` : ''}
+                  khớp "{r.matchedTitle}" ·{' '}
+                  <a
+                    href={toFullSizeImageUrl(r.imageUrl)}
+                    target="_blank"
+                    rel="noreferrer"
+                    className="text-indigo-500 hover:underline"
+                  >
+                    xem ảnh
+                  </a>
+                </p>
+              )}
+              {r.status === 'no-match' && (
+                <p className="truncate text-[11px] text-slate-400" title={(r.foundTitles || []).join(' · ')}>
+                  Site trả về: {(r.foundTitles || []).join(' · ')}
+                </p>
+              )}
+              {(r.status === 'no-results' || r.status === 'error') && r.note && (
+                <p className="truncate text-[11px] text-slate-400" title={r.note}>
+                  {r.note}
+                </p>
+              )}
+            </div>
+            {(r.status === 'created' || r.status === 'updated') && r.imageUrl && (
+              <img
+                src={r.imageUrl}
+                alt=""
+                className="w-8 h-8 shrink-0 rounded object-cover border border-slate-200 dark:border-slate-700"
+              />
+            )}
+          </div>
+        ))}
       </div>
     </div>
   );
@@ -173,6 +295,7 @@ function Column({
 
 export default function ProductFactoryKanban() {
   const [factories, setFactories] = useState<FactoryLite[]>([]);
+  const [machineTypes, setMachineTypes] = useState<FactoryLite[]>([]);
   const [products, setProducts] = useState<ProductLite[]>([]);
   const [total, setTotal] = useState(0);
   const [loading, setLoading] = useState(true);
@@ -181,17 +304,26 @@ export default function ProductFactoryKanban() {
   const [pending, setPending] = useState<PendingType[]>([]);
   const [synced, setSynced] = useState(false);
   const [syncing, setSyncing] = useState(false);
+  const [preview, setPreview] = useState<ProductLite | null>(null);
+  const [crawling, setCrawling] = useState(false);
+  const [crawlProgress, setCrawlProgress] = useState('');
+  /** Chi tiết từng sản phẩm đã crawl (tích lũy qua các lô) — hiển thị bảng log dưới toolbar. */
+  const [crawlResults, setCrawlResults] = useState<CrawlMockupResultItem[]>([]);
+  // Đóng trang / bấm Dừng giữa chừng → flag ref chặn vòng lặp gọi lô tiếp theo.
+  const crawlStopRef = useRef(false);
   const sensors = useSensors(useSensor(PointerSensor, { activationConstraint: { distance: 4 } }));
 
   const fetchData = async () => {
     try {
       setLoading(true);
-      const [facRes, prodRes] = await Promise.all([
+      const [facRes, prodRes, mtRes] = await Promise.all([
         RepositoryRemote.factory.getFactories(),
         RepositoryRemote.productConfig.getProductConfigs('?page=1&limit=2000'),
+        RepositoryRemote.machineType.getMachineTypes('?page=1&limit=200'),
       ]);
       setFactories((facRes.data?.data || []) as FactoryLite[]);
       setProducts((prodRes.data?.data || []) as ProductLite[]);
+      setMachineTypes((mtRes.data?.data || []) as FactoryLite[]);
       setTotal(prodRes.data?.total || 0);
     } catch (error) {
       handleAxiosError(error);
@@ -253,6 +385,81 @@ export default function ProductFactoryKanban() {
     } finally {
       setSyncing(false);
     }
+  };
+
+  /**
+   * Lấy ảnh mockup từ onospod.com cho sản phẩm CHƯA có ảnh — BE xử lý theo lô
+   * ~10 sản phẩm/request (tránh timeout), FE gọi lặp với `cursor` từ response
+   * trước đến khi `done`. Chỉ gán khi trùng tên chính xác; xong thì refetch để
+   * hiển thị mockup mới.
+   */
+  const handleCrawlMockups = async () => {
+    if (crawling) {
+      crawlStopRef.current = true;
+      setCrawlProgress('Đang dừng sau lô hiện tại...');
+      return;
+    }
+    crawlStopRef.current = false;
+    setCrawling(true);
+    setCrawlResults([]);
+    let processed = 0;
+    let updated = 0;
+    let cursor: string | undefined;
+    try {
+      setCrawlProgress('Đang quét lô đầu tiên...');
+      for (;;) {
+        const res = await RepositoryRemote.productConfig.crawlProductMockups({
+          limit: 10,
+          cursor,
+        } as CrawlProductMockupsDto);
+        const data = res.data?.data as {
+          processed: number;
+          updated: number;
+          remaining: number;
+          nextCursor?: string;
+          done: boolean;
+          results: CrawlMockupResultItem[];
+        };
+        processed += data.processed;
+        updated += data.updated;
+        cursor = data.nextCursor;
+        setCrawlResults((prev) => [...prev, ...(data.results || [])]);
+        setCrawlProgress(`Đã quét ${processed} sản phẩm, gán ảnh ${updated}, còn lại ${data.remaining}`);
+        if (data.done || crawlStopRef.current) break;
+      }
+      toast.success(`Lấy ảnh xong: quét ${processed} sản phẩm thiếu ảnh, gán được ${updated} ảnh từ Onospod`);
+      fetchData();
+    } catch (error) {
+      handleAxiosError(error);
+    } finally {
+      setCrawling(false);
+      setCrawlProgress('');
+    }
+  };
+
+  /** Export toàn bộ config ra Excel cùng dạng file "SKU THÁI NGUYÊN-MÊ LINH" (Tên SP / viết tắt / Nhà máy / Phòng). */
+  const handleExport = () => {
+    const factoryName = new Map(factories.map((f) => [f._id, f.name]));
+    const machineTypeName = new Map(machineTypes.map((m) => [m._id, m.name]));
+    const rows = [...products]
+      .sort(
+        (a, b) =>
+          (factoryName.get(a.factoryId || '') || '').localeCompare(factoryName.get(b.factoryId || '') || '') ||
+          a.fullName.localeCompare(b.fullName),
+      )
+      .map((p) => [
+        '',
+        p.fullName,
+        p.shortName,
+        factoryName.get(p.factoryId || '') || '',
+        '',
+        machineTypeName.get(p.machineTypeId || '') || '',
+      ]);
+    const ws = XLSX.utils.aoa_to_sheet([['', 'Tên SP', 'Tên viết tắt', 'Nhà máy', '', 'Phòng'], ...rows]);
+    ws['!cols'] = [{ wch: 4 }, { wch: 50 }, { wch: 28 }, { wch: 14 }, { wch: 4 }, { wch: 20 }];
+    const wb = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(wb, ws, 'Mã');
+    XLSX.writeFile(wb, 'SKU-product-config.xlsx', { bookType: 'xlsx' });
   };
 
   // Thả vào cột xưởng khác → update lạc quan + PATCH lưu ngay; lỗi thì refetch rollback.
@@ -363,12 +570,33 @@ export default function ProductFactoryKanban() {
               <RefreshCw size={13} className={cn(syncing && 'animate-spin')} />
               Sync sản phẩm chưa có xưởng ({SYNC_DAYS} ngày)
             </Button>
+            <Button
+              variant="outline"
+              size="sm"
+              className="h-8 text-xs"
+              onClick={handleCrawlMockups}
+              title="Tìm ảnh trên onospod.com theo tên cho các sản phẩm chưa có ảnh — chỉ gán khi trùng tên chính xác"
+            >
+              {crawling ? <Spinner size={13} /> : <ImageDown size={13} />}
+              {crawling ? 'Dừng lấy ảnh' : 'Lấy ảnh từ Onospod'}
+            </Button>
+            <Button variant="outline" size="sm" className="h-8 text-xs" onClick={handleExport}>
+              <Download size={13} />
+              Export Excel
+            </Button>
+            {crawlProgress && (
+              <span className="text-xs text-indigo-600 dark:text-indigo-400 tabular-nums">{crawlProgress}</span>
+            )}
             {total > products.length && (
               <span className="text-xs text-amber-600 dark:text-amber-400">
                 Chỉ tải {products.length}/{total} sản phẩm đầu tiên
               </span>
             )}
           </div>
+
+          {crawlResults.length > 0 && (
+            <CrawlLogPanel results={crawlResults} onClose={() => setCrawlResults([])} />
+          )}
 
           {factories.length === 0 && (
             <p className="text-sm text-slate-500 dark:text-slate-400">Chưa có xưởng nào.</p>
@@ -398,7 +626,7 @@ export default function ProductFactoryKanban() {
                   ))}
                   {visibleUnassigned.map((p) => (
                     <DraggableCard key={p._id} id={p._id}>
-                      <ProductCard p={p} />
+                      <ProductCard p={p} onPreview={setPreview} />
                     </DraggableCard>
                   ))}
                 </Column>
@@ -419,7 +647,7 @@ export default function ProductFactoryKanban() {
                     >
                       {visible.map((p) => (
                         <DraggableCard key={p._id} id={p._id}>
-                          <ProductCard p={p} />
+                          <ProductCard p={p} onPreview={setPreview} />
                         </DraggableCard>
                       ))}
                     </Column>
@@ -441,6 +669,14 @@ export default function ProductFactoryKanban() {
           )}
         </>
       )}
+
+      <ImagePreviewDialog
+        open={!!preview}
+        onOpenChange={(v) => !v && setPreview(null)}
+        // Mockup crawl từ onospod lưu thumbnail -100x100 — preview bỏ hậu tố để xem ảnh gốc.
+        url={toFullSizeImageUrl(preview?.mockup)}
+        title={preview?.fullName}
+      />
     </div>
   );
 }
