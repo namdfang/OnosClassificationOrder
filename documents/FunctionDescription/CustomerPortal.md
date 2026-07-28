@@ -1,9 +1,9 @@
 # Customer Portal — Function Description
 
-> **File FE:** `apps/web/src/pages/customer/{login,register}/index.tsx`, `apps/web/src/pages/customer/orders/{index,new,track}.tsx`, `apps/web/src/pages/customer/catalog/index.tsx`, `apps/web/src/layouts/customerLayout/CustomerLayout.tsx`, `apps/web/src/store/customerAuthStore.ts`, `apps/web/src/services/customerPortal.ts`
+> **File FE:** `apps/web/src/pages/customer/{login,register}/index.tsx`, `apps/web/src/pages/customer/orders/{index,new,track}.tsx`, `apps/web/src/pages/customer/catalog/{index,detail}.tsx`, `apps/web/src/layouts/customerLayout/CustomerLayout.tsx`, `apps/web/src/store/customerAuthStore.ts`, `apps/web/src/services/customerPortal.ts`
 > **File BE:** `apps/api/src/modules/customer-portal/` (`customer-auth.controller.ts`, `customer-order.controller.ts`, `customer-order.service.ts`, `customer-catalog.controller.ts`, `customer-catalog.service.ts`, `customer-portal.module.ts`), `apps/api/src/modules/customer/` (`customer.entity.ts`, `customer.service.ts` → `register()`/`validateLogin()`/`getById()`/`toSafeCustomer()`), `apps/api/src/modules/auth/jwt.strategy.ts` (branch theo `RoleType.Customer`)
-> **Route:** `/customer/login`, `/customer/register`, `/customer/orders`, `/customer/orders/new`, `/customer/orders/:productionId`, `/customer/catalog`
-> **API:** `POST /v1/customer/auth/register`, `POST /v1/customer/auth/login`, `GET /v1/customer/auth/me`, `POST /v1/customer/orders`, `GET /v1/customer/orders`, `GET /v1/customer/orders/:productionId`, `GET /v1/customer/catalog`
+> **Route:** `/customer/login`, `/customer/register`, `/customer/orders`, `/customer/orders/new`, `/customer/orders/:productionId`, `/customer/catalog`, `/customer/catalog/:id`
+> **API:** `POST /v1/customer/auth/register`, `POST /v1/customer/auth/login`, `GET /v1/customer/auth/me`, `POST /v1/customer/orders`, `GET /v1/customer/orders`, `GET /v1/customer/orders/:productionId`, `GET /v1/customer/catalog`, `GET /v1/customer/catalog/:id`
 
 ---
 
@@ -94,6 +94,7 @@ khi đã xác nhận đơn thuộc về khách hàng đang đăng nhập.
 | GET | `/v1/customer/orders` | `@Auth([Customer])` | Danh sách đơn của khách (phân trang) |
 | GET | `/v1/customer/orders/:productionId` | `@Auth([Customer])` | Tiến trình 1 đơn (scope theo khách) |
 | GET | `/v1/customer/catalog` | `@Auth([Customer])` | Danh sách sản phẩm + giá tham khảo (đã áp discount theo tier) — xem §7 |
+| GET | `/v1/customer/catalog/:id` | `@Auth([Customer])` | 1 sản phẩm — trang chi tiết `/customer/catalog/:id` trước khi đặt đơn — xem §7 |
 
 Schema `customers` (mở rộng — xem [`CustomerFactoryAssignment.md §3`](CustomerFactoryAssignment.md)):
 ```ts
@@ -117,7 +118,9 @@ Schema `customers` (mở rộng — xem [`CustomerFactoryAssignment.md §3`](Cus
   "Đặt đơn mới" + email khách + đăng xuất), KHÔNG dùng `Sidebar`/`MainLayout`
   của khu vực nhân viên.
 - `pages/customer/orders/index.tsx` — bảng danh sách đơn (shadcn `Table`).
-- `pages/customer/orders/new.tsx` — form đặt đơn.
+- `pages/customer/orders/new.tsx` — form đặt đơn. **2 chế độ** dựa vào `location.state` (điều hướng từ `CustomerCatalogDetail.handleNewOrder`, xem §7):
+  - **Từ catalog** (`state.fromCatalog === true`): ẩn các field tự gõ tay (`type`/`color`/`size`/`mockupUrl`/`printMethod` — LẤY SẴN từ `state`, không hiện lại trên form), hiện card tóm tắt sản phẩm đã chọn (mockup + tên + màu/size + SKU + giá, nút "Đổi sản phẩm khác" quay lại `/customer/catalog`) + chỉ còn nhập **thông tin cần thiết**: số lượng, 1 ô link thiết kế (Drive URL) cho MỖI vị trí in trong `state.printArea` (field `designs.<key>` — key khớp `ProductPrintAreaKey`/`DesignFieldsZod`), ghi chú.
+  - **Trực tiếp** (vào thẳng `/customer/orders/new`, không qua catalog): giữ nguyên form tự do cũ (`type`/`color`/`size`/`quantity`/`mockupUrl`/`printMethod`/ghi chú) — khách gõ tay tên sản phẩm không có trong catalog.
 - `pages/customer/orders/track.tsx` — stepper dọc hiển thị `LifecycleTrack.stages`.
 
 ## 5. Backend logic
@@ -137,33 +140,74 @@ Chưa có ghi nhận benchmark riêng — tái dùng nguyên vẹn pipeline `imp
 (đã tối ưu cho import hàng loạt) cho trường hợp 1-đơn/lần nên chi phí không
 đáng kể so với luồng import nội bộ hiện có.
 
-## 7. Catalog (`/customer/catalog`) — giá tham khảo theo tier
+## 7. Catalog (`/customer/catalog`, `/customer/catalog/:id`) — xem sản phẩm + đặt đơn theo biến thể
 
-**Chỉ tham khảo** — chưa đổi form đặt đơn (`/customer/orders/new` giữ nguyên
-hành vi cũ, không tính tổng tiền). Trang này giúp khách xem thông tin sản
-phẩm (mockup, mô tả, biến thể, giá) trước khi tự điền vào form đặt đơn (nút
-copy tên sản phẩm qua `CopyButton`).
+Khách xem danh sách sản phẩm (giá tham khảo theo tier) → bấm vào 1 sản phẩm →
+trang chi tiết (layout gallery trái/thông tin phải, giống trang sản phẩm
+catalog thương mại điện tử) → chọn biến thể (màu/size...) → bấm **"Đặt đơn
+mới"** → điều hướng sang `/customer/orders/new` với sản phẩm/biến thể đã chọn
+đóng gói sẵn qua `location.state` (xem §4) — khách chỉ cần nhập số lượng +
+link thiết kế theo từng vị trí in + ghi chú, KHÔNG phải tự gõ lại tên sản
+phẩm/màu/size. Đặt đơn trực tiếp (không qua catalog) vẫn dùng form tự do cũ.
 
-`CustomerCatalogService.getCatalog()` (`apps/api/src/modules/customer-portal/customer-catalog.service.ts`):
-1. Query `ProductConfigEntity` với `variations` không rỗng (chỉ sản phẩm đã
-   được enrich đầy đủ mới hiện trong catalog — xem [`Products.md §2.5`](Products.md))
-   **VÀ `status=active`** (Inactive/Hidden bị loại khỏi catalog khách hàng —
-   xem [`Products.md §2.2`](Products.md); data cũ chưa có field `status` vẫn
-   coi như active qua `$in: [Active, null]`), filter thêm `search`/`productCategoryId`
-   nếu có. `productCategory` trả về trong response là TÊN đã resolve từ
-   `productCategoryId` (populate virtual qua `ProductCategory` module —
-   [`Products.md §4`](Products.md)), KHÔNG phải id.
-2. Lấy toàn bộ promotion đang active + trong khoảng ngày hiệu lực qua
-   `PromotionService.getActiveInDateRange()` ([`Promotion.md`](Promotion.md)).
-3. Với mỗi biến thể, dùng `promotionMatches()` + `applyPromotionDiscount()`
-   (tái dùng từ `promotion.service.ts`) để tìm promotion cho giá **thấp
-   nhất** theo tier của khách (`customer.tier`, VIP 0..5 hoặc `null` = khách
-   lẻ), `quantity` mặc định = 1 (trang browse không có input số lượng).
+`CustomerCatalogService` (`apps/api/src/modules/customer-portal/customer-catalog.service.ts`)
+dùng chung 1 hàm `mapRow()` (map `ProductConfigEntity` → `CustomerCatalogItem`
++ áp discount theo tier) cho cả 2 API:
+
+1. `getCatalog()` — danh sách, phân trang.
+2. `getCatalogItem()` — 1 sản phẩm theo `_id`, dùng cho trang chi tiết
+   `/customer/catalog/:id`. 404 nếu không khớp filter hiển thị bên dưới.
+
+**Filter hiển thị (cả 2 API):** `ProductConfigEntity` với `variations` không
+rỗng (chỉ sản phẩm đã được enrich đầy đủ mới hiện trong catalog — xem
+[`Products.md §2.5`](Products.md)) **VÀ `status=active`** (Inactive/Hidden bị
+loại khỏi catalog khách hàng — xem [`Products.md §2.2`](Products.md); data cũ
+chưa có field `status` vẫn coi như active qua `$in: [Active, null]`).
+`getCatalog()` filter thêm `search`/`productCategoryId` nếu có. `productCategory`
+trả về trong response là TÊN đã resolve từ `productCategoryId` (populate
+virtual qua `ProductCategory` module — [`Products.md §4`](Products.md)), KHÔNG
+phải id.
+
+Với mỗi biến thể, dùng `promotionMatches()` + `applyPromotionDiscount()` (tái
+dùng từ `promotion.service.ts`) để tìm promotion đang active + trong khoảng
+ngày hiệu lực (`PromotionService.getActiveInDateRange()`,
+[`Promotion.md`](Promotion.md)) cho giá **thấp nhất** theo tier của khách
+(`customer.tier`, VIP 0..5 hoặc `null` = khách lẻ), `quantity` mặc định = 1.
 
 **Bảo mật dữ liệu:** response CHỈ trả `retailPrice`/`discountedPrice`/
 `appliedPromotionName` — **tuyệt đối KHÔNG** trả `cost`/`nonShipCost` (giá vốn
 nội bộ) ra Customer Portal. Xem `CustomerCatalogVariationZod` trong
 `packages/shared/dtos/product-config.dto.ts`.
+
+### 7.1 Trang chi tiết (`pages/customer/catalog/detail.tsx`)
+
+- Gallery trái: `mockup` làm ảnh chính, `sizeChartUrl` (nếu có) làm ảnh phụ —
+  strip thumbnail chỉ hiện khi có ≥2 ảnh (data hiện tại tối đa 2: mockup +
+  size chart, KHÔNG có field gallery nhiều ảnh trong `ProductConfigZod`).
+- Panel phải: breadcrumb (Home › Danh mục › tên sản phẩm), badge `printMethod`,
+  giá (ưu tiên `discountedPrice`, gạch ngang `retailPrice` nếu có giảm), SKU
+  của biến thể đang chọn, bộ chọn thuộc tính, vị trí in (`printArea[].label`),
+  mô tả, nút "Đặt đơn mới", nút tải bảng size (nếu có `sizeChartUrl`).
+- **Bộ chọn thuộc tính (màu/size...):** `attributes` của từng biến thể là
+  key-value tự do (`label`/`value`, xem `Products.md §2.5`) — FE **gom nhóm
+  theo `label`** (giữ thứ tự xuất hiện đầu tiên), mỗi label → danh sách
+  `value` duy nhất. Label chỉ có **đúng 1 giá trị** (VD "Colour: As Design")
+  → hiện badge tĩnh (không chọn được, đúng như ảnh mẫu "COLORS: AS DESIGN").
+  Label có **≥2 giá trị** → hiện dạng nút chọn (VD "SIZES: S/M/L/XL/...").
+  Chọn đủ tổ hợp → tìm biến thể khớp CHÍNH XÁC mọi `label`/`value` đã chọn
+  (`findMatchingVariation`) để lấy SKU/giá hiển thị.
+- **Nút "Đặt đơn mới"** (`handleNewOrder`) điều hướng sang
+  `PATHS.CUSTOMER_ORDER_NEW` kèm `location.state`:
+  `{ fromCatalog: true, productId, fullName, mockupUrl, printMethod, printArea, sku, color, size, attributes, price }`.
+  `color`/`size` được đoán từ `attributes` đã chọn qua `pickColorSize()` —
+  match `label` chứa "color"/"colour"/"màu" → `color`, chứa "size"/"cỡ" →
+  `size` (heuristic, vì `label` tự do không có key cố định "color"/"size").
+
+### 7.2 API `GET /v1/customer/catalog/:id`
+
+`GetCustomerCatalogItemResDto` (`packages/shared/dtos/product-config.dto.ts`)
+— `data: CustomerCatalogItemZod` (KHÔNG nullable, 404 nếu không tìm thấy/không
+active/không có biến thể — khác `getCatalog()` trả mảng có thể rỗng).
 
 ## 8. Permissions
 

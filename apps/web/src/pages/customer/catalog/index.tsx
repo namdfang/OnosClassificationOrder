@@ -1,7 +1,10 @@
 import React, { useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
+import { useNavigate } from 'react-router-dom';
 import { ImageIcon, PackageSearch } from 'lucide-react';
 import type { CustomerCatalogItem } from 'shared';
+
+import { PATHS } from '@/constants/paths';
 
 import { RepositoryRemote } from '@/services';
 
@@ -13,13 +16,14 @@ import { Input } from '@/components/ui/input';
 
 import { handleAxiosError } from '@/utils';
 
+const usdFormatter = new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD' });
 function formatPrice(value?: number): string {
-  if (value == null) return '—';
-  return value.toLocaleString('vi-VN') + 'đ';
+  return value == null ? '—' : usdFormatter.format(value);
 }
 
 function CustomerCatalog() {
   const { t } = useTranslation('customerPortal');
+  const navigate = useNavigate();
   const [items, setItems] = useState<CustomerCatalogItem[]>([]);
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState('');
@@ -80,7 +84,16 @@ function CustomerCatalog() {
       ) : (
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
           {items.map((item) => (
-            <div key={item._id} className="bg-card border border-border rounded-xl p-4 flex gap-3">
+            <div
+              key={item._id}
+              role="button"
+              tabIndex={0}
+              onClick={() => navigate(PATHS.CUSTOMER_CATALOG_DETAIL.replace(':id', item._id))}
+              onKeyDown={(e) => {
+                if (e.key === 'Enter' || e.key === ' ') navigate(PATHS.CUSTOMER_CATALOG_DETAIL.replace(':id', item._id));
+              }}
+              className="bg-card border border-border rounded-xl p-4 flex gap-3 cursor-pointer hover:border-primary/50 hover:shadow-sm transition-colors"
+            >
               {item.mockup ? (
                 <img
                   src={item.mockup}

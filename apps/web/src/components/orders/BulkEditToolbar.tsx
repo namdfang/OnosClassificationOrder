@@ -1,7 +1,7 @@
 import React, { useMemo, useState } from 'react';
 import { Trans, useTranslation } from 'react-i18next';
 import type { TFunction } from 'i18next';
-import { CheckCircle2, Download, Flag, PauseCircle, PlayCircle, UserPlus, X } from 'lucide-react';
+import { CheckCircle2, Download, Flag, PauseCircle, PlayCircle, UserMinus, UserPlus, X } from 'lucide-react';
 import type { OrderWorkshopField, WorkshopConfigCategory } from 'shared';
 import { ORDER_PRIORITIES, ORDER_PRIORITY_LABELS, ORDER_WORKSHOP_FIELDS } from 'shared';
 import { toast } from 'sonner';
@@ -93,6 +93,7 @@ export function BulkEditToolbar({ selectedIds, onClear, onApplied }: Props) {
   const [priorityOpen, setPriorityOpen] = useState(false);
   const [priorityValue, setPriorityValue] = useState('');
   const [applyingPriority, setApplyingPriority] = useState(false);
+  const [unassigning, setUnassigning] = useState(false);
 
   // Export ĐÚNG các đơn đang tick chọn — gọi /orders/export với `ids` (bỏ qua
   // phân trang, đúng cả khi chọn xuyên trang vì BE lọc theo `_id`). Chỉ 1 sheet
@@ -157,6 +158,23 @@ export function BulkEditToolbar({ selectedIds, onClear, onApplied }: Props) {
     }
   };
 
+  // Bỏ gán design hàng loạt — tái dùng `bulkUpdateField(field='assignee', value=null)`,
+  // CÙNG code path với ô "Người thực hiện" tự xoá lựa chọn ở từng dòng
+  // (AssigneeSelectCell) — BE tự reset designerStatus='unassigned' + clear mốc thời gian.
+  const submitUnassignDesign = async () => {
+    try {
+      setUnassigning(true);
+      const res = await RepositoryRemote.order.bulkUpdateField({ ids: selectedIds, field: 'assignee', value: null });
+      const { matched, modified } = res.data?.data || { matched: 0, modified: 0 };
+      toast.success(t('bulkEdit.updateSuccess', { modified, matched }));
+      onApplied();
+    } catch (err) {
+      handleAxiosError(err);
+    } finally {
+      setUnassigning(false);
+    }
+  };
+
   const editableFields = useMemo(
     () => ORDER_WORKSHOP_FIELDS.filter((f) => canEditField(f) && !BULK_UPDATE_BLACKLIST.includes(f)),
     [canEditField],
@@ -209,9 +227,15 @@ export function BulkEditToolbar({ selectedIds, onClear, onApplied }: Props) {
             {t('bulkEdit.bulkUpdateBtn')}
           </Button>
           {canEditField('assignee') && (
-            <Button size="sm" variant="secondary" onClick={() => setAssignOpen(true)}>
-              <UserPlus size={14} /> {t('bulkEdit.assignDesignBtn')}
-            </Button>
+            <>
+              <Button size="sm" variant="secondary" onClick={() => setAssignOpen(true)}>
+                <UserPlus size={14} /> {t('bulkEdit.assignDesignBtn')}
+              </Button>
+              <Button size="sm" variant="outline" onClick={submitUnassignDesign} disabled={unassigning}>
+                {unassigning ? <Spinner size={13} className="text-muted-foreground" /> : <UserMinus size={14} />}
+                {t('bulkEdit.unassignDesignBtn')}
+              </Button>
+            </>
           )}
           {canEditField('priority') && (
             <Button size="sm" variant="secondary" onClick={() => setPriorityOpen(true)}>

@@ -35,4 +35,8 @@ const getCatalog = (query: string = '') => {
   return callApi(`/${CONFIG.API_VERSION}/customer/catalog${query}`, 'get');
 };
 
-export const customerCatalog = { getCatalog };
+const getCatalogItem = (id: string) => {
+  return callApi(`/${CONFIG.API_VERSION}/customer/catalog/${encodeURIComponent(id)}`, 'get');
+};
+
+export const customerCatalog = { getCatalog, getCatalogItem };

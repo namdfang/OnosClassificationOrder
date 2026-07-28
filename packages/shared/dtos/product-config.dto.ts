@@ -387,3 +387,7 @@ export class GetCustomerCatalogDto extends createZodDto(extendApi(GetCustomerCat
 
 export const GetCustomerCatalogResZod = PageResZod.extend({ data: CustomerCatalogItemZod.array() });
 export class GetCustomerCatalogResDto extends createZodDto(extendApi(GetCustomerCatalogResZod)) {}
+
+/** 1 sản phẩm — dùng cho trang chi tiết `/customer/catalog/:id` (gallery + chọn biến thể + "Đặt đơn mới"). */
+export const GetCustomerCatalogItemResZod = ResZod.extend({ data: CustomerCatalogItemZod });
+export class GetCustomerCatalogItemResDto extends createZodDto(extendApi(GetCustomerCatalogItemResZod)) {}

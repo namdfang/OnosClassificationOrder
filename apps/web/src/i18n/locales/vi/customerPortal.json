@@ -78,8 +78,16 @@
     "notePlaceholder": "Ghi chú thêm cho đơn hàng...",
     "submit": "Đặt đơn",
     "success": "Đặt đơn thành công — mã đơn {{code}}",
+    "changeProduct": "Đổi sản phẩm khác",
+    "designUrl": "Link thiết kế — {{area}}",
+    "designUrlPlaceholder": "https://drive.google.com/...",
+    "useCatalogPicker": "Chọn từ danh mục sản phẩm",
+    "useManualEntry": "Không tìm thấy sản phẩm? Nhập tay",
+    "searchPlaceholder": "Tìm sản phẩm theo tên…",
+    "searchEmpty": "Không tìm thấy sản phẩm phù hợp.",
     "validation": {
-      "typeRequired": "Loại sản phẩm là bắt buộc"
+      "typeRequired": "Loại sản phẩm là bắt buộc",
+      "productRequired": "Vui lòng chọn 1 sản phẩm từ danh mục"
     }
   },
   "track": {
@@ -92,10 +100,19 @@
   },
   "catalog": {
     "title": "Danh mục sản phẩm",
-    "subtitle": "Giá tham khảo — sao chép tên sản phẩm để điền vào form đặt đơn.",
+    "subtitle": "Chọn sản phẩm rồi bấm \"Đặt đơn mới\" để bắt đầu.",
     "searchPlaceholder": "Tìm sản phẩm…",
     "empty": "Chưa có sản phẩm nào trong danh mục.",
     "copyProductName": "tên sản phẩm",
     "moreVariations": "+ {{count}} biến thể khác"
+  },
+  "catalogDetail": {
+    "notFound": "Không tìm thấy sản phẩm này.",
+    "backToCatalog": "Quay lại danh mục",
+    "breadcrumbCatalog": "Danh mục",
+    "sku": "SKU",
+    "printArea": "Vị trí in",
+    "newOrder": "Đặt đơn mới",
+    "downloadSizeChart": "Tải bảng size"
   }
 }

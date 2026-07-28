@@ -106,6 +106,9 @@ const PRODUCT_TYPE_CODE_MAP: Record<string, string> = {
     "all-over print mesh baseball jersey - no piping": "BBJERNPLUOI",
     "all-over print pocket unisex hawaiian shirt": "HT",
     "all-over print boxy mesh football jersey": "FBCROPTOPBOXY",
+    "all-over print raglan men's polo shirt": "VUDANJLPOLO",
+    "all-over print raglan soccer jersey ver 1": "VUDANJLSC",
+    "all-over print raglan soccer jersey ver 2": "VUDANJLSC2"
 };
 
 /** Case-insensitive, trim khoảng trắng thừa. Không khớp → null. */
