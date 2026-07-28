@@ -49,6 +49,7 @@ export const PATHS = {
     CUSTOMER_ORDER_NEW: '/customer/orders/new',
     CUSTOMER_ORDER_DETAIL: '/customer/orders/:productionId',
     CUSTOMER_CATALOG: '/customer/catalog',
+    CUSTOMER_CATALOG_DETAIL: '/customer/catalog/:id',
 
     ERROR_403: '/forbidden',
     ERROR_404: '/error/404',

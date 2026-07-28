@@ -78,8 +78,16 @@
     "notePlaceholder": "Additional note for this order...",
     "submit": "Place order",
     "success": "Order placed successfully — order code {{code}}",
+    "changeProduct": "Choose a different product",
+    "designUrl": "Design link — {{area}}",
+    "designUrlPlaceholder": "https://drive.google.com/...",
+    "useCatalogPicker": "Pick from the product catalog",
+    "useManualEntry": "Can't find your product? Enter manually",
+    "searchPlaceholder": "Search products by name…",
+    "searchEmpty": "No matching products found.",
     "validation": {
-      "typeRequired": "Product type is required"
+      "typeRequired": "Product type is required",
+      "productRequired": "Please select a product from the catalog"
     }
   },
   "track": {
@@ -92,10 +100,19 @@
   },
   "catalog": {
     "title": "Product catalog",
-    "subtitle": "Reference prices — copy the product name to fill in the order form.",
+    "subtitle": "Pick a product then click \"New order\" to get started.",
     "searchPlaceholder": "Search products…",
     "empty": "No products in the catalog yet.",
     "copyProductName": "product name",
     "moreVariations": "+ {{count}} more variations"
+  },
+  "catalogDetail": {
+    "notFound": "This product could not be found.",
+    "backToCatalog": "Back to catalog",
+    "breadcrumbCatalog": "Catalog",
+    "sku": "SKU",
+    "printArea": "Print area",
+    "newOrder": "New order",
+    "downloadSizeChart": "Download size chart"
   }
 }
