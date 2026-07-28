@@ -17,7 +17,15 @@ import { BulkEditToolbar } from '@/components/orders/BulkEditToolbar';
 import { OrderDetailDialog } from '@/components/orders/OrderDetailDialog';
 import { OrderFilterBar, type OrderFilterFacet } from '@/components/orders/OrderFilterBar';
 import { OrderLogTimelineDialog } from '@/components/orders/OrderLogTimelineDialog';
-import { PRINT_COLS, type WorkshopOrderRow, type WorkshopRenderCtx } from '@/components/orders/workshopTableConfig';
+import {
+  GroupCellContent,
+  PRINT_COLS,
+  PRINT_MERGE_GROUP_DEFS,
+  type ResolvedColGroup,
+  type WorkshopColMeta,
+  type WorkshopOrderRow,
+  type WorkshopRenderCtx,
+} from '@/components/orders/workshopTableConfig';
 import { Button } from '@/components/ui/button';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { TooltipProvider } from '@/components/ui/tooltip';
@@ -236,6 +244,29 @@ export function PrintOrderTable({
   }, [configLoaded, loadConfig]);
 
   const visibleCols = useMemo(() => COLS.filter((c) => !c.perm || canViewField(c.key)), [canViewField]);
+
+  // Gộp 2 cụm cột thành 1 cột/cụm (Máy·TT in·Note + Lỗi xưởng·Loại·Mô tả) —
+  // field trong ô xếp dọc, mỗi mục có label riêng qua GroupCellContent.
+  // Cột ngoài cụm giữ nguyên; group chiếm vị trí member đầu tiên còn quyền xem.
+  type DisplayUnit = { kind: 'col'; col: WorkshopColMeta } | { kind: 'group'; group: ResolvedColGroup };
+  const displayUnits = useMemo<DisplayUnit[]>(() => {
+    const consumed = new Set<string>();
+    const units: DisplayUnit[] = [];
+    for (const c of visibleCols) {
+      if (consumed.has(c.key)) continue;
+      const def = PRINT_MERGE_GROUP_DEFS.find((g) => g.memberKeys.includes(c.key));
+      if (def) {
+        const members = def.memberKeys
+          .map((k) => visibleCols.find((vc) => vc.key === k))
+          .filter((m): m is WorkshopColMeta => !!m);
+        members.forEach((m) => consumed.add(m.key));
+        units.push({ kind: 'group', group: { ...def, members } });
+      } else {
+        units.push({ kind: 'col', col: c });
+      }
+    }
+    return units;
+  }, [visibleCols]);
 
   // Build query params. `includeStatus`: kèm `fulfillmentStatus` (cho data +
   // facets để cả 2 narrow theo chip đang chọn). Counts KHÔNG kèm (đếm đủ 5).
@@ -664,16 +695,17 @@ export function PrintOrderTable({
                       title={t('printTable.selectAllTitle')}
                     />
                   </TableHead>
-                  {visibleCols.map((c, i) => (
+                  {displayUnits.map((u, i) => (
                     <TableHead
-                      key={c.key}
+                      key={u.kind === 'col' ? u.col.key : u.group.key}
                       className={cn(
                         'whitespace-nowrap text-xs',
-                        c.width,
+                        u.kind === 'col' && u.col.width,
                         i === 0 && 'sticky left-8 z-30 bg-card shadow-[1px_0_0_0_var(--border)]',
                       )}
+                      style={u.kind === 'group' ? { minWidth: u.group.width } : undefined}
                     >
-                      {c.label}
+                      {u.kind === 'col' ? u.col.label : u.group.title}
                     </TableHead>
                   ))}
                   <TableHead className="w-12"></TableHead>
@@ -688,7 +720,7 @@ export function PrintOrderTable({
                 {loading && items.length === 0 && (
                   <TableRow>
                     <TableCell
-                      colSpan={visibleCols.length + 2 + (extraRowAction ? 1 : 0)}
+                      colSpan={displayUnits.length + 2 + (extraRowAction ? 1 : 0)}
                       className="text-center py-10"
                     >
                       <Spinner size={20} className="text-muted-foreground" />
@@ -698,7 +730,7 @@ export function PrintOrderTable({
                 {!loading && items.length === 0 && (
                   <TableRow>
                     <TableCell
-                      colSpan={visibleCols.length + 2 + (extraRowAction ? 1 : 0)}
+                      colSpan={displayUnits.length + 2 + (extraRowAction ? 1 : 0)}
                       className="text-center py-10 text-sm text-muted-foreground"
                     >
                       {t('printTable.noResults')}
@@ -709,20 +741,28 @@ export function PrintOrderTable({
                   const isSel = selected.has(row._id);
                   const selectable = canSelect(row);
                   const noTool = isNoTool(row.toolResult);
+                  // Đơn ĐANG lỗi (đang hiện ở Nhật ký bù lỗi tab "Cần xử lý"):
+                  // báo lỗi không rút đơn khỏi bảng In — nền đỏ để người in biết
+                  // đơn cần làm lại. Ưu tiên đỏ hơn nền no-tool.
+                  const hasError = !!row.productionError && !row.errorResolvedAt;
                   const isCopied = copiedId === row._id;
                   const isCursor = keyboardMode && idx === cursorIndex;
                   const rowBgClass = isSel
                     ? 'bg-primary/10 dark:bg-primary/20'
-                    : noTool
-                      ? 'bg-sky-100 dark:bg-sky-500/20'
-                      : 'bg-card';
+                    : hasError
+                      ? 'bg-red-100 dark:bg-red-500/15'
+                      : noTool
+                        ? 'bg-sky-100 dark:bg-sky-500/20'
+                        : 'bg-card';
                   return (
                     <TableRow
                       key={row._id}
                       ref={isCursor ? activeRowRef : undefined}
                       className={cn(
                         rowBgClass,
-                        noTool && 'border-l-2 border-l-sky-400 dark:border-l-sky-400/60',
+                        hasError
+                          ? 'border-l-2 border-l-red-500 dark:border-l-red-400/70'
+                          : noTool && 'border-l-2 border-l-sky-400 dark:border-l-sky-400/60',
                         isCursor && 'ring-2 ring-inset ring-primary',
                       )}
                     >
@@ -750,15 +790,23 @@ export function PrintOrderTable({
                           )}
                         </div>
                       </TableCell>
-                      {visibleCols.map((c, i) => (
+                      {displayUnits.map((u, i) => (
                         <TableCell
-                          key={c.key}
+                          key={u.kind === 'col' ? u.col.key : u.group.key}
                           className={cn(
                             'py-2',
                             i === 0 && cn('sticky left-8 z-10 shadow-[1px_0_0_0_var(--border)]', rowBgClass),
                           )}
                         >
-                          <div className="min-w-0">{c.render(row, renderCtx)}</div>
+                          {u.kind === 'col' ? (
+                            <div className="min-w-0">{u.col.render(row, renderCtx)}</div>
+                          ) : (
+                            <GroupCellContent
+                              group={u.group}
+                              singleLineValues
+                              renderedByKey={new Map(u.group.members.map((m) => [m.key, m.render(row, renderCtx)]))}
+                            />
+                          )}
                         </TableCell>
                       ))}
                       <TableCell>

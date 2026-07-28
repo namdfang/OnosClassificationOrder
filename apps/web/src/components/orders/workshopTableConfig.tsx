@@ -64,6 +64,8 @@ export type WorkshopOrderRow = {
   productionErrorNote?: string;
   productionErrorSource?: 'designer' | 'factory' | 'tool-check';
   productionErrorCount?: number;
+  /** Set khi bấm "Hoàn thành lỗi" ở Nhật ký bù lỗi; báo lỗi mới sẽ clear. Đơn ĐANG lỗi = productionError set + field này rỗng. */
+  errorResolvedAt?: string | null;
 
   // Phase 3 Designer-Task-Workflow
   designerStatus?: DesignerStatus;
@@ -845,10 +847,13 @@ export function GroupCellContent({
   group,
   renderedByKey,
   extra,
+  singleLineValues,
 }: {
   group: ResolvedColGroup;
   renderedByKey: Map<string, React.ReactNode>;
   extra?: (memberKey: string) => React.ReactNode;
+  /** true → ép value text 1 dòng (đè `line-clamp-2` của TextEditCell) — bảng In cần mỗi mục cao đúng 1 dòng. */
+  singleLineValues?: boolean;
 }) {
   const { t } = useTranslation('orders');
   return (
@@ -856,11 +861,19 @@ export function GroupCellContent({
       {group.members.map((c) => (
         <div key={c.key} className="flex items-center gap-1.5 min-w-0">
           {!HEADLINE_KEYS.has(c.key) && (
-            <span className="w-[46px] shrink-0 text-[9px] font-medium uppercase tracking-wide text-muted-foreground/70">
+            // Bề rộng CỐ ĐỊNH đủ chứa nhãn dài nhất ("TT Designer") + nowrap:
+            // nhãn luôn 1 dòng VÀ mọi value bên phải bắt đầu cùng 1 mốc x
+            // → các mục trong ô gộp thẳng hàng dọc.
+            <span className="w-[68px] shrink-0 whitespace-nowrap text-[9px] font-medium uppercase tracking-wide text-muted-foreground/70">
               {t(`workshopCols.short.${c.key}`, { defaultValue: FIELD_LABELS[c.key] || c.label })}
             </span>
           )}
-          <div className="min-w-0 flex-1 flex items-center gap-1">
+          <div
+            className={cn(
+              'min-w-0 flex-1 flex items-center gap-1',
+              singleLineValues && '[&_.line-clamp-2]:line-clamp-1',
+            )}
+          >
             {renderedByKey.get(c.key)}
             {extra?.(c.key)}
           </div>
@@ -945,3 +958,25 @@ export const PRINT_COLS: WorkshopColMeta[] = (() => {
   }
   return result;
 })();
+
+/**
+ * Gộp cột hiển thị CHỈ cho bảng In (PrintOrderTable): mỗi group là 1 cột bảng,
+ * các field bên trong xếp CHIỀU DỌC kèm label ngắn từng mục (render qua
+ * `GroupCellContent` — nhãn lấy từ `workshopCols.short.*` / FIELD_LABELS).
+ * Cột khác của PRINT_COLS vẫn đứng riêng; group xuất hiện tại vị trí member
+ * đầu tiên còn hiển thị theo quyền.
+ */
+export const PRINT_MERGE_GROUP_DEFS: ColGroupDef[] = [
+  {
+    key: 'print',
+    title: 'Máy · Trạng thái in · Note',
+    width: 190,
+    memberKeys: ['machineNumber', 'printStatus', 'printStatusNote'],
+  },
+  {
+    key: 'productionError',
+    title: 'Lỗi xưởng · Loại · Mô tả',
+    width: 230,
+    memberKeys: ['productionError', 'productionErrorSource', 'productionErrorNote'],
+  },
+];
