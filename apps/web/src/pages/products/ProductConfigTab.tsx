@@ -1,7 +1,7 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useNavigate } from 'react-router-dom';
-import { ImageIcon, Pencil, Plus, RotateCw } from 'lucide-react';
+import { FileUp, ImageIcon, Pencil, Plus, RotateCw } from 'lucide-react';
 import type { ProductItemSpecific, ProductPrintArea, ProductVariation } from 'shared';
 import { PRODUCT_LEVEL_MAP, PRODUCT_LEVELS, ProductConfigStatus, WorkshopConfigCategory } from 'shared';
 import { toast } from 'sonner';
@@ -20,8 +20,10 @@ import { Input } from '@/components/ui/input';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 
 import { handleAxiosError } from '@/utils';
+import { toFullSizeImageUrl } from '@/utils/imageUrl';
 
 import { ImportProductConfigDialog } from './ImportProductConfigDialog';
+import { UploadConfigFileDialog } from './UploadConfigFileDialog';
 
 export const buildStatusMeta = (
   t: (key: string) => string,
@@ -95,6 +97,7 @@ export function ProductConfigTab() {
   const [pageSize, setPageSize] = useState(20);
   const [total, setTotal] = useState(0);
   const [importOpen, setImportOpen] = useState(false);
+  const [uploadOpen, setUploadOpen] = useState(false);
   // Danh sách Xưởng / Phòng cho dropdown chỉnh sửa inline + trang chi tiết.
   const [factories, setFactories] = useState<RefItem[]>([]);
   const [machineTypes, setMachineTypes] = useState<RefItem[]>([]);
@@ -306,6 +309,10 @@ export function ProductConfigTab() {
             <Plus size={14} />
             {t('configTab.importButton')}
           </Button>
+          <Button variant="outline" onClick={() => setUploadOpen(true)}>
+            <FileUp size={14} />
+            {t('configTab.uploadButton')}
+          </Button>
         </div>
       </div>
 
@@ -347,7 +354,13 @@ export function ProductConfigTab() {
                 <TableRow key={it._id}>
                   <TableCell>
                     {it.mockup ? (
-                      <a href={it.mockup} target="_blank" rel="noreferrer" title={t('configTab.table.openMockup')}>
+                      // Mockup crawl từ onospod lưu thumbnail -100x100 — mở tab thì bỏ hậu tố để xem ảnh gốc.
+                      <a
+                        href={toFullSizeImageUrl(it.mockup)}
+                        target="_blank"
+                        rel="noreferrer"
+                        title={t('configTab.table.openMockup')}
+                      >
                         <img
                           src={it.mockup}
                           alt="mockup"
@@ -530,6 +543,15 @@ export function ProductConfigTab() {
       <ImportProductConfigDialog
         open={importOpen}
         onOpenChange={setImportOpen}
+        onSuccess={() => {
+          fetchData();
+          loadConfig(true);
+        }}
+      />
+
+      <UploadConfigFileDialog
+        open={uploadOpen}
+        onOpenChange={setUploadOpen}
         onSuccess={() => {
           fetchData();
           loadConfig(true);

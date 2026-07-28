@@ -68,7 +68,8 @@
       "notSelected": "— Chưa chọn —",
       "editTitle": "Chỉnh sửa sản phẩm",
       "openMockup": "Mở ảnh mockup"
-    }
+    },
+    "uploadButton": "Tải config lên"
   },
   "categoryTab": {
     "title": "Danh mục sản phẩm",
@@ -456,5 +457,25 @@
       "createSuccess": "Đã tạo collection",
       "updateSuccess": "Đã cập nhật"
     }
+  },
+  "uploadConfigDialog": {
+    "title": "Tải file config lên",
+    "description": "Chọn file Excel (.xlsx) chứa danh sách sản phẩm (cột Tên SP / Tên viết tắt / Nhà máy / Phòng — giống file SKU THÁI NGUYÊN-MÊ LINH). Hệ thống so tên với config hiện có và chỉ hiển thị các sản phẩm CHƯA có config để bạn chọn thêm. Dòng thiếu Tên viết tắt vẫn được nhận — tự sinh từ tên sản phẩm (badge \"tự sinh\").",
+    "chooseFile": "Chọn file Excel",
+    "parseError": "Không đọc được dữ liệu từ file — kiểm tra file có dòng header \"Tên SP\", cột Nhà máy và cột Phòng.",
+    "parsed": "{{total}} dòng hợp lệ trong file — {{existing}} đã có config, {{fresh}} chưa có.",
+    "noNew": "Tất cả sản phẩm trong file đều đã có trong config.",
+    "selectAll": "Chọn / bỏ chọn tất cả",
+    "table": {
+      "name": "Tên sản phẩm",
+      "shortName": "Tên viết tắt",
+      "factory": "Xưởng",
+      "department": "Phòng"
+    },
+    "importButton": "Thêm {{count}} sản phẩm vào config",
+    "importSuccess": "Đã thêm {{imported}} sản phẩm vào config, {{skippedCount}} cảnh báo",
+    "invalidRows": "{{count}} dòng thiếu Xưởng/Phòng đã bị bỏ qua.",
+    "autoShortBadge": "tự sinh",
+    "autoShortTitle": "File thiếu Tên viết tắt — hệ thống tự lấy tên sản phẩm làm tên viết tắt, sửa lại sau ở trang Products nếu cần"
   }
 }

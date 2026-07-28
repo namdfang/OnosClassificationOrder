@@ -68,7 +68,8 @@
       "notSelected": "— Not selected —",
       "editTitle": "Edit product",
       "openMockup": "Open mockup image"
-    }
+    },
+    "uploadButton": "Upload config"
   },
   "categoryTab": {
     "title": "Product categories",
@@ -456,5 +457,25 @@
       "createSuccess": "Collection created",
       "updateSuccess": "Updated"
     }
+  },
+  "uploadConfigDialog": {
+    "title": "Upload config file",
+    "description": "Pick an Excel file (.xlsx) with the product list (columns Tên SP / short name / Nhà máy / Phòng — same layout as the SKU THÁI NGUYÊN-MÊ LINH file). Names are compared against existing configs and only products NOT yet configured are shown for selection. Rows without a short name are still accepted — one is generated from the product name (\"auto\" badge).",
+    "chooseFile": "Choose Excel file",
+    "parseError": "Could not read any data from the file — make sure it has a \"Tên SP\" header row plus Nhà máy and Phòng columns.",
+    "parsed": "{{total}} valid rows in file — {{existing}} already configured, {{fresh}} new.",
+    "noNew": "Every product in the file already exists in the config.",
+    "selectAll": "Select / deselect all",
+    "table": {
+      "name": "Product name",
+      "shortName": "Short name",
+      "factory": "Factory",
+      "department": "Department"
+    },
+    "importButton": "Add {{count}} products to config",
+    "importSuccess": "Added {{imported}} products to config, {{skippedCount}} warnings",
+    "invalidRows": "{{count}} rows missing Factory/Department were skipped.",
+    "autoShortBadge": "auto",
+    "autoShortTitle": "Short name missing in file — the product name is used as the short name; edit later on the Products page if needed"
   }
 }

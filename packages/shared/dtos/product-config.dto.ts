@@ -292,6 +292,58 @@ export type UnmatchedOrderType = z.infer<typeof UnmatchedOrderTypeZod>;
 export const GetUnmatchedOrderTypesResZod = ResZod.extend({ data: UnmatchedOrderTypeZod.array() });
 export class GetUnmatchedOrderTypesResDto extends createZodDto(extendApi(GetUnmatchedOrderTypesResZod)) {}
 
+// ─── Crawl ảnh mockup từ onospod.com cho sản phẩm chưa có ảnh ───
+
+/**
+ * Xử lý theo lô (FE gọi lặp): mỗi call quét tối đa `limit` sản phẩm thiếu
+ * mockup có `_id > cursor` (sort `_id` tăng dần). Cursor tiến đơn điệu nên
+ * sản phẩm đã thử-nhưng-không-khớp KHÔNG bị quét lại vòng sau — tránh loop
+ * vô hạn. FE truyền lại `nextCursor` từ response đến khi `done=true`.
+ */
+export const CrawlProductMockupsZod = z.object({
+  limit: z.coerce.number().int().min(1).max(50).default(10),
+  cursor: IDZod.optional(),
+});
+export class CrawlProductMockupsDto extends createZodDto(extendApi(CrawlProductMockupsZod)) {}
+
+/**
+ * Kết quả crawl CHI TIẾT từng sản phẩm trong lô:
+ * - `created`  — sản phẩm chưa có ảnh, đã tìm được và gán mới.
+ * - `updated`  — sản phẩm đã có ảnh, bị ghi đè (hiện crawl chỉ quét sản phẩm thiếu ảnh nên hiếm gặp).
+ * - `no-match` — search CÓ kết quả nhưng không cái nào trùng tên (xem `foundTitles` để biết site trả gì).
+ * - `no-results` — search không trả kết quả nào (sản phẩm không tồn tại trên onospod).
+ * - `error`    — request lỗi/timeout (xem `message`).
+ */
+export const CrawlMockupResultItemZod = z.object({
+  productConfigId: IDZod,
+  fullName: z.string(),
+  status: z.enum(['created', 'updated', 'no-match', 'no-results', 'error']),
+  imageUrl: z.string().optional(),
+  /** Tên sản phẩm trên onospod đã khớp (có thể khớp sau khi bỏ mã `[...]`/tiền tố — xem `note`). */
+  matchedTitle: z.string().optional(),
+  /** Tối đa 3 tên gần nhất site trả về khi `no-match` — để người dùng biết vì sao không khớp. */
+  foundTitles: z.string().array().optional(),
+  /** Ghi chú thêm (vd "khớp sau khi bỏ mã [PANT]") hoặc thông điệp lỗi. */
+  note: z.string().optional(),
+});
+export type CrawlMockupResultItem = z.infer<typeof CrawlMockupResultItemZod>;
+
+export const CrawlProductMockupsResZod = ResZod.extend({
+  data: z.object({
+    /** Số sản phẩm đã quét trong lô này. */
+    processed: z.number(),
+    /** Số sản phẩm tìm được ảnh trùng tên và đã gán mockup. */
+    updated: z.number(),
+    /** Số sản phẩm thiếu mockup còn lại SAU cursor (chưa quét). */
+    remaining: z.number(),
+    nextCursor: IDZod.optional(),
+    done: z.boolean(),
+    /** Chi tiết từng sản phẩm trong lô — lấy được hay không, vì sao. */
+    results: CrawlMockupResultItemZod.array(),
+  }),
+});
+export class CrawlProductMockupsResDto extends createZodDto(extendApi(CrawlProductMockupsResZod)) {}
+
 // ─── Customer Portal — Catalog (chỉ field an toàn cho khách hàng) ───
 // KHÔNG bao giờ trả `cost` / `nonShipCost` (giá vốn nội bộ) ra Customer Portal.
 
