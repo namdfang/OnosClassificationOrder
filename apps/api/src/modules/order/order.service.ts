@@ -10,7 +10,7 @@ import {
 } from '@nestjs/common';
 import { InjectModel } from '@nestjs/mongoose';
 import { Queue } from 'bullmq';
-import { FilterQuery, Model, PipelineStage } from 'mongoose';
+import { Model, PipelineStage } from 'mongoose';
 import type {
   ApplyCuttingFilesDto,
   ApplyCuttingFilesResDto,
@@ -43,8 +43,6 @@ import type {
   FactoryBucket,
   FactoryFlow,
   FactoryOverviewCell,
-  FixAssignDesignLogDto,
-  FixAssignDesignLogResDto,
   FulfillmentTimelineEntry,
   GetCancelledOrdersDto,
   GetCancelledOrdersResDto,
@@ -128,7 +126,6 @@ import { DESIGN_PREVIEW_QUEUE, DESIGN_THUMB_QUEUE, DesignImageJobData } from '..
 import { DesignImageService } from '../design-image/design-image.service';
 import { FactoryRepository } from '../factory/factory.repository';
 import { MachineTypeRepository } from '../machine-type/machine-type.repository';
-import type { OrderLogEntity } from '../order-log/order-log.entity';
 import { OrderLogRepository } from '../order-log/order-log.repository';
 import type { AuditContext } from '../order-log/order-log.service';
 import { OrderLogService } from '../order-log/order-log.service';
@@ -5808,60 +5805,6 @@ export class OrderService implements OnModuleInit {
     }
 
     return result;
-  }
-
-  /**
-   * Data-fix 1 lần (admin-only, KHÔNG public) — xóa log "gán design"
-   * (`OrderLogEntity` field=`assignee`, action `update`/`bulk_update`) bị ghi
-   * SAI trong ngày hôm nay, cho 1 sản phẩm (vd do bug auto-assign). KHÔNG đụng
-   * field `assignee` thật trên đơn — chỉ dọn audit log.
-   *
-   * 2 chế độ chọn đơn — CẢ 2 đều CHỈ chạy trên đơn có `inProductionAt` (ngày
-   * vào sản xuất, giờ VN, `vnTodayStart()`/`vnDayEnd(vnTodayString())`) rơi
-   * vào HÔM NAY — kể cả `productionId` (đơn vào sản xuất ngày khác → coi như
-   * không khớp, trả 404 — an toàn, tránh test/chạy nhầm lên đơn ngày khác):
-   *  - `productionId` (ưu tiên, dùng để TEST trên đúng 1 đơn) — exact match
-   *    case-insensitive, giống `getByProductionId`, bỏ qua lọc `type`.
-   *  - `type` — khớp `order.type` case-insensitive (giống ProductConfig.fullName
-   *    lúc import).
-   *
-   * Log bị xóa lọc theo `OrderLogEntity.createdAt` (thời điểm log bị ghi SAI)
-   * nằm trong HÔM NAY — KHÁC field dùng để chọn đơn (`inProductionAt`) — an
-   * toàn, không đụng log lịch sử của ngày khác.
-   */
-  async fixAssignDesignLog(dto: FixAssignDesignLogDto): Promise<FixAssignDesignLogResDto> {
-    let orderIds: string[];
-    const todayRange = { $gte: vnTodayStart(), $lte: vnDayEnd(vnTodayString()) };
-
-    if (dto.productionId?.trim()) {
-      const escaped = dto.productionId.trim().replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-      const order = await this.orderModel
-        .findOne({ productionId: { $regex: `^${escaped}$`, $options: 'i' }, inProductionAt: todayRange }, { _id: 1 })
-        .lean();
-      if (!order) throw new NotFoundException('Không tìm thấy đơn với mã này vào sản xuất trong hôm nay.');
-      orderIds = [String((order as { _id: string })._id)];
-    } else {
-      const escapedType = (dto.type ?? '').trim().replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-      const orders = await this.orderModel
-        .find({ type: { $regex: `^${escapedType}$`, $options: 'i' }, inProductionAt: todayRange }, { _id: 1 })
-        .lean();
-      orderIds = orders.map((o) => String((o as { _id: string })._id));
-    }
-
-    if (orderIds.length === 0) {
-      return { success: true, data: { matchedOrders: 0, deletedLogs: 0, orderIds: [] } };
-    }
-
-    const logFilter: FilterQuery<OrderLogEntity> = {
-      orderId: { $in: orderIds },
-      field: 'assignee',
-      action: { $in: ['update', 'bulk_update'] },
-      createdAt: todayRange,
-    };
-    const deletedLogs = await this.orderLogRepository.getTotal(logFilter);
-    await this.orderLogRepository.permanentlyDeleteMany(logFilter);
-
-    return { success: true, data: { matchedOrders: orderIds.length, deletedLogs, orderIds } };
   }
 
   /**

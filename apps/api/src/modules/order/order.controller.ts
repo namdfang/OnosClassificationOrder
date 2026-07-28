@@ -22,8 +22,6 @@ import {
   ClaimDesignerTasksDto,
   DesignerBacklogResDto,
   DesignerBreakdownResDto,
-  FixAssignDesignLogDto,
-  FixAssignDesignLogResDto,
   FulfillmentStatusCountsResDto,
   GetCancelledOrdersDto,
   GetCancelledOrdersResDto,
@@ -977,35 +975,6 @@ export class OrderController {
       },
       { ip, userAgent },
     ) as Promise<SetDesignReviewResultResDto>;
-  }
-
-  // TẠM THỜI — data-fix 1 lần, PUBLIC (không cần token, gọi trực tiếp qua
-  // trình duyệt/curl). XÓA SAU KHI DÙNG XONG (route + OrderService.fixAssignDesignLog
-  // + shared DTOs FixAssignDesignLogZod/FixAssignDesignLogResZod). Xóa log
-  // "gán design" (OrderLog field=assignee) bị ghi SAI trong ngày hôm nay cho 1
-  // sản phẩm. `productionId` để test trên đúng 1 đơn trước khi chạy diện rộng
-  // theo `type`. Log ip/userAgent làm audit trace duy nhất (giống các cron public khác).
-  @Get('fix-assign-design-log')
-  @Auth([], [], { public: true })
-  @ApiOperation({ summary: '[Public][Tạm thời] Data-fix: xóa log gán design trong ngày hôm nay theo tên sản phẩm (hoặc 1 productionId để test)' })
-  @HttpCode(HttpStatus.OK)
-  @ApiOkResponse({ type: FixAssignDesignLogResDto })
-  async fixAssignDesignLog(
-    @Query() dto: FixAssignDesignLogDto,
-    @ClientIp() ip: string,
-    @UserAgent() userAgent: string,
-  ): Promise<FixAssignDesignLogResDto> {
-    this.logger.info({
-      message: JSON.stringify({
-        method: 'GET',
-        url: '/orders/fix-assign-design-log',
-        type: dto.type,
-        productionId: dto.productionId,
-        ip,
-        userAgent,
-      }),
-    });
-    return this.orderService.fixAssignDesignLog(dto);
   }
 
   @Get('by-production-id/:code')
