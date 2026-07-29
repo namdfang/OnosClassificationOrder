@@ -19,6 +19,8 @@ import { ApiFile, IFile } from 'core';
 import type { FastifyRequest } from 'fastify';
 import { createReadStream } from 'fs';
 import {
+  CrawlProductMockupsDto,
+  CrawlProductMockupsResDto,
   CreateProductConfigDto,
   CreateProductConfigResDto,
   GetProductConfigResDto,
@@ -124,6 +126,18 @@ export class ProductConfigController {
   @ApiOkResponse({ type: ImportProductConfigResDto })
   async importProductConfigs(@Body() dto: ImportProductConfigDto): Promise<ImportProductConfigResDto> {
     return this.productConfigService.importProductConfigs(dto);
+  }
+
+  @Post('crawl-mockups')
+  @Auth([RoleType.Admin, RoleType.Manager])
+  @ApiOperation({
+    summary:
+      'Crawl ảnh mockup từ onospod.com cho sản phẩm chưa có ảnh — theo lô, FE gọi lặp với cursor đến khi done',
+  })
+  @HttpCode(HttpStatus.OK)
+  @ApiOkResponse({ type: CrawlProductMockupsResDto })
+  async crawlProductMockups(@Body() dto: CrawlProductMockupsDto): Promise<CrawlProductMockupsResDto> {
+    return { success: true, data: await this.productConfigService.crawlMockups(dto.limit, dto.cursor) };
   }
 
   @Post('upload-image')

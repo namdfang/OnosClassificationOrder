@@ -1,5 +1,6 @@
 import { auth } from './auth';
 import { cache } from './cache';
+import { collection } from './collection';
 import { customRoles } from './custom-roles';
 import { customer } from './customer';
 import { customerAssignment } from './customerAssignment';
@@ -33,6 +34,7 @@ export const RepositoryRemote = {
   customRoles,
   factory,
   machineType,
+  collection,
   productCategory,
   productConfig,
   order,

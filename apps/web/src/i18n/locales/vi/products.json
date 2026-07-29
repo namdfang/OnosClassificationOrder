@@ -25,7 +25,8 @@
     "tabs": {
       "config": "Config",
       "category": "Danh mục",
-      "factory": "Xưởng"
+      "factory": "Xưởng",
+      "collection": "Collection"
     }
   },
   "configTab": {
@@ -70,7 +71,8 @@
       "editTitle": "Chỉnh sửa sản phẩm",
       "deleteTitle": "Xóa sản phẩm (chỉ xóa được nếu không có đơn hàng)",
       "openMockup": "Mở ảnh mockup"
-    }
+    },
+    "uploadButton": "Tải config lên"
   },
   "categoryTab": {
     "title": "Danh mục sản phẩm",
@@ -286,6 +288,199 @@
       "skuMissing": "thiếu SKU sản phẩm / thuộc tính",
       "selling": "Đang bán",
       "stopped": "Ngừng"
+    },
+    "sections": {
+      "production": {
+        "label": "Sản xuất",
+        "desc": "Ảnh, xưởng/máy, giá trị mặc định áp cho đơn import + hướng dẫn nội bộ."
+      },
+      "details": {
+        "label": "Chi tiết sản phẩm",
+        "desc": "Thông tin catalog hiển thị cho khách hàng ở Customer Portal."
+      },
+      "variants": {
+        "label": "Biến thể & Giá",
+        "desc": "Định nghĩa nhóm option, tạo tổ hợp, nhập giá — tạo lại KHÔNG mất giá đã nhập."
+      },
+      "printAreas": {
+        "label": "Vị trí in",
+        "desc": "Key map 1-1 sang order.designs (cột design_<key> khi khách đặt qua CSV/API)."
+      }
+    },
+    "counts": {
+      "variants": "{{count}} biến thể",
+      "printAreas": "{{count}} vị trí"
+    },
+    "production": {
+      "slug": "Slug"
+    },
+    "toggles": {
+      "hideForSeller": "Ẩn sản phẩm với seller",
+      "designCheck": "Bật design check",
+      "affiliate": "Bật hoa hồng affiliate"
+    },
+    "shippingTime": {
+      "title": "Shipping time",
+      "maxProduction": "Max Production time (ngày)",
+      "maxShipping": "Max shipping time (ngày)"
+    },
+    "logistics": {
+      "title": "Logistics Information",
+      "weight": "Weight * (Gr)",
+      "width": "Package Width (Cm)",
+      "height": "Package Height (Cm)",
+      "length": "Package Length (Cm)",
+      "hint": "Đóng gói mặc định — dùng khi biến thể không override."
+    },
+    "descriptions": {
+      "short": "Short description",
+      "shortPlaceholder": "Tóm tắt gạch đầu dòng (chất liệu, size, MOQ…)",
+      "item": "Item description (hiển thị cho khách)",
+      "itemPlaceholder": "Mô tả đầy đủ sản phẩm…",
+      "template": "Template description",
+      "templatePlaceholder": "Yêu cầu file in, link template & mockup, lưu ý…"
+    },
+    "collectionsField": {
+      "label": "Collection (chọn nhiều)",
+      "empty": "Chưa có collection nào — tạo ở tab Collection trang Sản phẩm."
+    },
+    "gallery": {
+      "label": "Ảnh sản phẩm",
+      "primary": "Ảnh chính",
+      "pending": "Chờ upload",
+      "setPrimary": "Đặt làm ảnh chính",
+      "remove": "Xóa ảnh",
+      "empty": "Chưa có ảnh — dán link hoặc tải file bên dưới.",
+      "urlPlaceholder": "Dán URL ảnh rồi Enter",
+      "addUrl": "Thêm URL",
+      "upload": "Tải lên",
+      "hint": "Ảnh đầu tiên là ảnh CHÍNH (hiển thị bảng danh sách & catalog khách). Hover ảnh để đặt chính / xóa. Tối đa {{max}} ảnh.",
+      "pendingHint": "{{count}} ảnh mới — sẽ upload khi bấm Lưu",
+      "duplicateUrl": "URL ảnh này đã có trong danh sách",
+      "maxReached": "Tối đa {{max}} ảnh"
+    },
+    "groups": {
+      "title": "Nhóm option (tối đa {{max}})",
+      "addGroup": "Thêm nhóm",
+      "namePlaceholder": "Tên nhóm (VD: Color, Size, Ship By Label)",
+      "noOptions": "Chưa có option nào.",
+      "optionPlaceholder": "Thêm option — Enter hoặc dán 'Red, Blue, Green'",
+      "removeGroup": "Xóa nhóm",
+      "duplicateSkipped": "Bỏ qua {{count}} option trùng",
+      "empty": "Chưa có nhóm option — VD thêm \"Color\" (Đỏ, Xanh) + \"Size\" (S, M, L) rồi bấm tạo biến thể.",
+      "generate": "Tạo biến thể ({{count}})",
+      "batchEdit": "Sửa hàng loạt",
+      "needGroup": "Thêm ít nhất 1 nhóm option trước",
+      "needName": "Mỗi nhóm option phải có tên",
+      "emptyGroup": "Nhóm \"{{name}}\" chưa có option nào",
+      "duplicateName": "Trùng tên nhóm: \"{{name}}\"",
+      "tooMany": "Quá nhiều tổ hợp ({{count}}) — tối đa {{max}} biến thể",
+      "generated": "Đã tạo biến thể: {{created}} mới, {{kept}} giữ nguyên",
+      "generatedOrphans": "Đã tạo biến thể: {{created}} mới, {{kept}} giữ nguyên, {{orphans}} mồ côi (tô vàng — xóa nếu không dùng)",
+      "variantName": "Tên variant",
+      "option": "Option",
+      "optionValuePlaceholder": "Option",
+      "addOption": "Thêm option",
+      "done": "Xong",
+      "addVariant": "Thêm variant",
+      "variationList": "Danh sách biến thể",
+      "duplicateOption": "Trùng option: \"{{name}}\"",
+      "maxGroups": "Tối đa {{max}} nhóm option"
+    },
+    "table": {
+      "empty": "Chưa có biến thể — thêm option ở nhóm bên trái rồi bấm \"Tạo biến thể\".",
+      "optionFallback": "Option {{index}}",
+      "cost": "Cost",
+      "shipCosts": "EXP US/TIKTOK US",
+      "nonShip": "Non-Ship",
+      "wholesale": "Wholesale",
+      "expUsPrice": "EXP US $",
+      "ttUsPrice": "TT US $",
+      "package": "Package",
+      "active": "Bán",
+      "orphanTitle": "Không khớp bộ option hiện tại — sửa option hoặc xóa dòng này",
+      "skuTitle": "SKU tự sinh theo SKU sản phẩm + thuộc tính — không sửa trực tiếp (chỉnh database nếu cần khác quy ước)",
+      "skuMissing": "thiếu SKU sản phẩm / thuộc tính",
+      "expShipTitle": "Phí ship Express US",
+      "ttShipTitle": "Phí ship TikTok (SBTT)"
+    },
+    "batchEdit": {
+      "title": "Sửa hàng loạt biến thể",
+      "filterHint": "Lọc theo option — bỏ trống nhóm = khớp mọi giá trị của nhóm đó",
+      "matches": "Khớp",
+      "valuesHint": "Giá trị mới — ô BỎ TRỐNG giữ nguyên giá trị hiện tại",
+      "statusKeep": "Trạng thái bán — giữ nguyên",
+      "noValues": "Chưa nhập giá trị nào để áp dụng",
+      "noMatch": "Không có biến thể nào khớp bộ lọc",
+      "applied": "Đã áp dụng cho {{count}} biến thể",
+      "apply": "Áp dụng ({{count}})",
+      "fields": {
+        "cost": "Cost",
+        "expUsShipCost": "EXP US ship",
+        "tiktokShipCost": "TIKTOK US ship",
+        "nonShipCost": "Non-Ship",
+        "wholesalePrice": "Wholesale",
+        "retailPrice": "EXP US $",
+        "tiktokPrice": "TT US $",
+        "weight": "Weight (g)",
+        "width": "Width (cm)",
+        "height": "Height (cm)",
+        "length": "Length (cm)"
+      },
+      "allOf": "Tất cả - {{name}}",
+      "someOf": "{{count}} - {{name}}",
+      "clear": "Xóa lọc"
     }
+  },
+  "collectionTab": {
+    "title": "Collection sản phẩm",
+    "description": "Nhóm sản phẩm theo bộ sưu tập (1 sản phẩm thuộc nhiều collection) — chọn ở trang chi tiết sản phẩm.",
+    "table": {
+      "image": "Ảnh",
+      "name": "Tên",
+      "shortName": "Viết tắt",
+      "sortOrder": "Thứ tự",
+      "status": "Trạng thái",
+      "empty": "Chưa có collection nào.",
+      "active": "Hoạt động",
+      "inactive": "Tắt"
+    },
+    "dialog": {
+      "createTitle": "Thêm collection",
+      "editTitle": "Sửa collection"
+    },
+    "form": {
+      "name": "Tên",
+      "namePlaceholder": "VD: Summer 2026",
+      "shortName": "Tên viết tắt",
+      "shortNamePlaceholder": "VD: SUMMER26",
+      "image": "Ảnh (URL)",
+      "description": "Mô tả",
+      "sortOrder": "Thứ tự hiển thị",
+      "active": "Hoạt động",
+      "nameRequired": "Tên và viết tắt là bắt buộc",
+      "createSuccess": "Đã tạo collection",
+      "updateSuccess": "Đã cập nhật"
+    }
+  },
+  "uploadConfigDialog": {
+    "title": "Tải file config lên",
+    "description": "Chọn file Excel (.xlsx) chứa danh sách sản phẩm (cột Tên SP / Tên viết tắt / Nhà máy / Phòng — giống file SKU THÁI NGUYÊN-MÊ LINH). Hệ thống so tên với config hiện có và chỉ hiển thị các sản phẩm CHƯA có config để bạn chọn thêm. Dòng thiếu Tên viết tắt vẫn được nhận — tự sinh từ tên sản phẩm (badge \"tự sinh\").",
+    "chooseFile": "Chọn file Excel",
+    "parseError": "Không đọc được dữ liệu từ file — kiểm tra file có dòng header \"Tên SP\", cột Nhà máy và cột Phòng.",
+    "parsed": "{{total}} dòng hợp lệ trong file — {{existing}} đã có config, {{fresh}} chưa có.",
+    "noNew": "Tất cả sản phẩm trong file đều đã có trong config.",
+    "selectAll": "Chọn / bỏ chọn tất cả",
+    "table": {
+      "name": "Tên sản phẩm",
+      "shortName": "Tên viết tắt",
+      "factory": "Xưởng",
+      "department": "Phòng"
+    },
+    "importButton": "Thêm {{count}} sản phẩm vào config",
+    "importSuccess": "Đã thêm {{imported}} sản phẩm vào config, {{skippedCount}} cảnh báo",
+    "invalidRows": "{{count}} dòng thiếu Xưởng/Phòng đã bị bỏ qua.",
+    "autoShortBadge": "tự sinh",
+    "autoShortTitle": "File thiếu Tên viết tắt — hệ thống tự lấy tên sản phẩm làm tên viết tắt, sửa lại sau ở trang Products nếu cần"
   }
 }

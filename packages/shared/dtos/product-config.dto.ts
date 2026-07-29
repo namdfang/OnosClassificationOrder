@@ -44,8 +44,16 @@ export const ProductVariationZod = z.object({
   cost: PriceZod.optional(),
   /** Giá vốn KHÔNG gồm phí ship. */
   nonShipCost: PriceZod.optional(),
-  /** Giá bán niêm yết cho khách (trước khi áp chương trình giảm giá). */
+  /** Giá bán niêm yết cho khách ("EXP US $" hệ cũ — trước khi áp chương trình giảm giá). */
   retailPrice: PriceZod.optional(),
+  /** Giá bán sỉ ("Wholesale" hệ cũ). */
+  wholesalePrice: PriceZod.optional(),
+  /** Giá bán kênh TikTok ("TT US $" hệ cũ). */
+  tiktokPrice: PriceZod.optional(),
+  /** Phí ship Express US ("EXP US" hệ cũ — hệ cũ auto từ onosexpress, hiện nhập tay). */
+  expUsShipCost: PriceZod.optional(),
+  /** Phí ship TikTok US ("TIKTOK US" hệ cũ — nhập tay). */
+  tiktokShipCost: PriceZod.optional(),
   weight: z.coerce.number().min(0).optional(),
   width: z.coerce.number().min(0).optional(),
   height: z.coerce.number().min(0).optional(),
@@ -59,6 +67,8 @@ export const ProductConfigZod = BaseEntityZod.extend({
   shortName: z.string().min(1).max(60),
   /** Mã SKU riêng của sản phẩm (KHÔNG phải SKU biến thể) — unique toàn hệ thống nếu có. */
   sku: z.string().max(100).optional(),
+  /** Slug SEO/URL (parity hệ cũ) — chưa dùng để routing, chỉ lưu. */
+  slug: z.string().max(300).optional(),
   /** Active = hiện catalog khách hàng, Inactive = ẩn catalog nhưng vẫn hiện quản trị, Hidden = ẩn cả 2 (KHÔNG xóa). */
   status: z.enum(getObjectValues(ProductConfigStatus)).default(ProductConfigStatus.Active),
   /** Machine number/identifier (e.g. "94", "27"). Empty → product has no tool. */
@@ -76,12 +86,16 @@ export const ProductConfigZod = BaseEntityZod.extend({
   fabricType: z.string().max(60).optional(),
   /** workshop_config code (category=tool_result). Default tool status at import. */
   toolResult: z.string().max(60).optional(),
-  /** Ảnh/URL mockup sản phẩm — hiển thị cột đầu bảng config. */
+  /** Ảnh/URL mockup sản phẩm (ảnh CHÍNH — index 0 của gallery) — hiển thị cột đầu bảng config. */
   mockup: z.string().max(1000).optional(),
+  /** Gallery ảnh bổ sung (ngoài `mockup`) — URL hoặc ảnh upload local-disk. */
+  images: z.array(z.string().max(1000)).max(20).optional(),
+  /** ref CollectionEntity — 1 sản phẩm thuộc nhiều collection (multi-select). */
+  collectionIds: IDZod.array().max(20).optional(),
   /** Cấp độ sản phẩm 1..10 (PRODUCT_LEVELS) — hiển thị badge màu. */
   level: z.number().int().min(1).max(10).optional(),
-  /** Hướng dẫn / ghi chú sản phẩm (free-text, nhập ở textarea). */
-  guide: z.string().max(5000).optional(),
+  /** Hướng dẫn / ghi chú sản xuất (HTML từ rich text editor). */
+  guide: z.string().max(20000).optional(),
 
   // ─── Thông tin chi tiết sản phẩm (catalog cho khách hàng) ───────
   /** ref ProductCategoryEntity — module riêng, xem `product-category.dto.ts`. */
@@ -92,8 +106,22 @@ export const ProductConfigZod = BaseEntityZod.extend({
   printArea: ProductPrintAreaZod.optional(),
   /** Ảnh/URL bảng size. */
   sizeChartUrl: z.string().max(1000).optional(),
-  /** Mô tả sản phẩm — hiển thị cho khách hàng ở Customer Portal. */
-  description: z.string().max(5000).optional(),
+  /** Mô tả sản phẩm (HTML) — hiển thị cho khách hàng ở Customer Portal ("Item description" hệ cũ). */
+  description: z.string().max(20000).optional(),
+  /** Mô tả ngắn (HTML) — "Short description" hệ cũ. */
+  shortDescription: z.string().max(20000).optional(),
+  /** Mô tả template/file in (HTML) — "Template description" hệ cũ. */
+  templateDescription: z.string().max(20000).optional(),
+  /** "Shipping time" hệ cũ — Max Production time (ngày). */
+  maxProductionTime: z.coerce.number().min(0).optional(),
+  /** "Shipping time" hệ cũ — Max shipping time (ngày). */
+  maxShippingTime: z.coerce.number().min(0).optional(),
+  /** "Hide product for seller" hệ cũ — mới lưu, CHƯA wire vào logic nào. */
+  hideForSeller: z.boolean().optional(),
+  /** "Enable design check" hệ cũ — mới lưu, CHƯA wire vào logic nào. */
+  enableDesignCheck: z.boolean().optional(),
+  /** "Enable affiliate commission" hệ cũ — mới lưu, CHƯA wire vào logic nào. */
+  enableAffiliate: z.boolean().optional(),
   /** Thông số kỹ thuật dạng key-value tự do (chất liệu, kiểu dáng...). */
   itemSpecifics: ProductItemSpecificZod.array().max(50).optional(),
   /** Đóng gói mặc định (áp dụng khi biến thể không override). */
@@ -127,6 +155,7 @@ export const CreateProductConfigZod = z.object({
   fullName: ProductConfigZod.shape.fullName,
   shortName: ProductConfigZod.shape.shortName,
   sku: ProductConfigZod.shape.sku,
+  slug: ProductConfigZod.shape.slug,
   status: ProductConfigZod.shape.status,
   machineNumber: ProductConfigZod.shape.machineNumber,
   machineTypeId: ProductConfigZod.shape.machineTypeId,
@@ -134,6 +163,8 @@ export const CreateProductConfigZod = z.object({
   fabricType: ProductConfigZod.shape.fabricType,
   toolResult: ProductConfigZod.shape.toolResult,
   mockup: ProductConfigZod.shape.mockup,
+  images: ProductConfigZod.shape.images,
+  collectionIds: ProductConfigZod.shape.collectionIds,
   level: ProductConfigZod.shape.level,
   guide: ProductConfigZod.shape.guide,
   productCategoryId: ProductConfigZod.shape.productCategoryId,
@@ -141,6 +172,13 @@ export const CreateProductConfigZod = z.object({
   printArea: ProductConfigZod.shape.printArea,
   sizeChartUrl: ProductConfigZod.shape.sizeChartUrl,
   description: ProductConfigZod.shape.description,
+  shortDescription: ProductConfigZod.shape.shortDescription,
+  templateDescription: ProductConfigZod.shape.templateDescription,
+  maxProductionTime: ProductConfigZod.shape.maxProductionTime,
+  maxShippingTime: ProductConfigZod.shape.maxShippingTime,
+  hideForSeller: ProductConfigZod.shape.hideForSeller,
+  enableDesignCheck: ProductConfigZod.shape.enableDesignCheck,
+  enableAffiliate: ProductConfigZod.shape.enableAffiliate,
   itemSpecifics: ProductConfigZod.shape.itemSpecifics,
   weight: ProductConfigZod.shape.weight,
   width: ProductConfigZod.shape.width,
@@ -158,6 +196,7 @@ export const UpdateProductConfigZod = z.object({
   fullName: ProductConfigZod.shape.fullName.optional(),
   shortName: ProductConfigZod.shape.shortName.optional(),
   sku: ProductConfigZod.shape.sku,
+  slug: ProductConfigZod.shape.slug,
   status: ProductConfigZod.shape.status.optional(),
   machineNumber: ProductConfigZod.shape.machineNumber,
   machineTypeId: ProductConfigZod.shape.machineTypeId.optional(),
@@ -165,6 +204,8 @@ export const UpdateProductConfigZod = z.object({
   fabricType: ProductConfigZod.shape.fabricType,
   toolResult: ProductConfigZod.shape.toolResult,
   mockup: ProductConfigZod.shape.mockup,
+  images: ProductConfigZod.shape.images,
+  collectionIds: ProductConfigZod.shape.collectionIds,
   level: ProductConfigZod.shape.level,
   guide: ProductConfigZod.shape.guide,
   productCategoryId: ProductConfigZod.shape.productCategoryId,
@@ -172,6 +213,13 @@ export const UpdateProductConfigZod = z.object({
   printArea: ProductConfigZod.shape.printArea,
   sizeChartUrl: ProductConfigZod.shape.sizeChartUrl,
   description: ProductConfigZod.shape.description,
+  shortDescription: ProductConfigZod.shape.shortDescription,
+  templateDescription: ProductConfigZod.shape.templateDescription,
+  maxProductionTime: ProductConfigZod.shape.maxProductionTime,
+  maxShippingTime: ProductConfigZod.shape.maxShippingTime,
+  hideForSeller: ProductConfigZod.shape.hideForSeller,
+  enableDesignCheck: ProductConfigZod.shape.enableDesignCheck,
+  enableAffiliate: ProductConfigZod.shape.enableAffiliate,
   itemSpecifics: ProductConfigZod.shape.itemSpecifics,
   weight: ProductConfigZod.shape.weight,
   width: ProductConfigZod.shape.width,
@@ -249,6 +297,58 @@ export type UnmatchedOrderType = z.infer<typeof UnmatchedOrderTypeZod>;
 
 export const GetUnmatchedOrderTypesResZod = ResZod.extend({ data: UnmatchedOrderTypeZod.array() });
 export class GetUnmatchedOrderTypesResDto extends createZodDto(extendApi(GetUnmatchedOrderTypesResZod)) {}
+
+// ─── Crawl ảnh mockup từ onospod.com cho sản phẩm chưa có ảnh ───
+
+/**
+ * Xử lý theo lô (FE gọi lặp): mỗi call quét tối đa `limit` sản phẩm thiếu
+ * mockup có `_id > cursor` (sort `_id` tăng dần). Cursor tiến đơn điệu nên
+ * sản phẩm đã thử-nhưng-không-khớp KHÔNG bị quét lại vòng sau — tránh loop
+ * vô hạn. FE truyền lại `nextCursor` từ response đến khi `done=true`.
+ */
+export const CrawlProductMockupsZod = z.object({
+  limit: z.coerce.number().int().min(1).max(50).default(10),
+  cursor: IDZod.optional(),
+});
+export class CrawlProductMockupsDto extends createZodDto(extendApi(CrawlProductMockupsZod)) {}
+
+/**
+ * Kết quả crawl CHI TIẾT từng sản phẩm trong lô:
+ * - `created`  — sản phẩm chưa có ảnh, đã tìm được và gán mới.
+ * - `updated`  — sản phẩm đã có ảnh, bị ghi đè (hiện crawl chỉ quét sản phẩm thiếu ảnh nên hiếm gặp).
+ * - `no-match` — search CÓ kết quả nhưng không cái nào trùng tên (xem `foundTitles` để biết site trả gì).
+ * - `no-results` — search không trả kết quả nào (sản phẩm không tồn tại trên onospod).
+ * - `error`    — request lỗi/timeout (xem `message`).
+ */
+export const CrawlMockupResultItemZod = z.object({
+  productConfigId: IDZod,
+  fullName: z.string(),
+  status: z.enum(['created', 'updated', 'no-match', 'no-results', 'error']),
+  imageUrl: z.string().optional(),
+  /** Tên sản phẩm trên onospod đã khớp (có thể khớp sau khi bỏ mã `[...]`/tiền tố — xem `note`). */
+  matchedTitle: z.string().optional(),
+  /** Tối đa 3 tên gần nhất site trả về khi `no-match` — để người dùng biết vì sao không khớp. */
+  foundTitles: z.string().array().optional(),
+  /** Ghi chú thêm (vd "khớp sau khi bỏ mã [PANT]") hoặc thông điệp lỗi. */
+  note: z.string().optional(),
+});
+export type CrawlMockupResultItem = z.infer<typeof CrawlMockupResultItemZod>;
+
+export const CrawlProductMockupsResZod = ResZod.extend({
+  data: z.object({
+    /** Số sản phẩm đã quét trong lô này. */
+    processed: z.number(),
+    /** Số sản phẩm tìm được ảnh trùng tên và đã gán mockup. */
+    updated: z.number(),
+    /** Số sản phẩm thiếu mockup còn lại SAU cursor (chưa quét). */
+    remaining: z.number(),
+    nextCursor: IDZod.optional(),
+    done: z.boolean(),
+    /** Chi tiết từng sản phẩm trong lô — lấy được hay không, vì sao. */
+    results: CrawlMockupResultItemZod.array(),
+  }),
+});
+export class CrawlProductMockupsResDto extends createZodDto(extendApi(CrawlProductMockupsResZod)) {}
 
 // ─── Customer Portal — Catalog (chỉ field an toàn cho khách hàng) ───
 // KHÔNG bao giờ trả `cost` / `nonShipCost` (giá vốn nội bộ) ra Customer Portal.

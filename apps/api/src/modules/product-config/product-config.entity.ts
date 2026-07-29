@@ -20,6 +20,10 @@ export class ProductConfigEntity extends DatabaseEntityAbstract {
   @Prop({ trim: true, uppercase: true })
   sku?: string;
 
+  /** Slug SEO/URL (parity hệ cũ) — chưa dùng để routing, chỉ lưu. */
+  @Prop({ trim: true })
+  slug?: string;
+
   /** Active = hiện catalog khách hàng, Inactive = ẩn catalog nhưng vẫn hiện quản trị, Hidden = ẩn cả 2 (KHÔNG xóa DB). */
   @Prop({ type: String, default: ProductConfigStatus.Active, enum: getObjectValues(ProductConfigStatus), index: true })
   status: ProductConfigStatus;
@@ -43,9 +47,17 @@ export class ProductConfigEntity extends DatabaseEntityAbstract {
   @Prop({ trim: true })
   toolResult?: string;
 
-  /** Ảnh/URL mockup sản phẩm — hiển thị cột đầu bảng config. */
+  /** Ảnh/URL mockup sản phẩm (ảnh CHÍNH — index 0 của gallery) — hiển thị cột đầu bảng config. */
   @Prop({ trim: true })
   mockup?: string;
+
+  /** Gallery ảnh bổ sung (ngoài `mockup`) — URL hoặc ảnh upload local-disk. */
+  @Prop({ type: [String], default: undefined })
+  images?: string[];
+
+  /** ref CollectionEntity — 1 sản phẩm thuộc nhiều collection. */
+  @Prop({ type: [String], ref: 'CollectionEntity', index: true, default: undefined })
+  collectionIds?: string[];
 
   /** Cấp độ sản phẩm 1..10 (PRODUCT_LEVELS) — badge màu. */
   @Prop({ type: Number, min: 1, max: 10 })
@@ -73,9 +85,37 @@ export class ProductConfigEntity extends DatabaseEntityAbstract {
   @Prop({ trim: true })
   sizeChartUrl?: string;
 
-  /** Mô tả sản phẩm — hiển thị cho khách hàng ở Customer Portal. */
+  /** Mô tả sản phẩm (HTML) — hiển thị cho khách hàng ở Customer Portal ("Item description" hệ cũ). */
   @Prop({ trim: true })
   description?: string;
+
+  /** Mô tả ngắn (HTML) — "Short description" hệ cũ. */
+  @Prop({ trim: true })
+  shortDescription?: string;
+
+  /** Mô tả template/file in (HTML) — "Template description" hệ cũ. */
+  @Prop({ trim: true })
+  templateDescription?: string;
+
+  /** "Shipping time" hệ cũ — Max Production time (ngày). */
+  @Prop({ type: Number, min: 0 })
+  maxProductionTime?: number;
+
+  /** "Shipping time" hệ cũ — Max shipping time (ngày). */
+  @Prop({ type: Number, min: 0 })
+  maxShippingTime?: number;
+
+  /** "Hide product for seller" hệ cũ — mới lưu, CHƯA wire vào logic nào. */
+  @Prop({ type: Boolean })
+  hideForSeller?: boolean;
+
+  /** "Enable design check" hệ cũ — mới lưu, CHƯA wire vào logic nào. */
+  @Prop({ type: Boolean })
+  enableDesignCheck?: boolean;
+
+  /** "Enable affiliate commission" hệ cũ — mới lưu, CHƯA wire vào logic nào. */
+  @Prop({ type: Boolean })
+  enableAffiliate?: boolean;
 
   /** Thông số kỹ thuật dạng key-value tự do (chất liệu, kiểu dáng...). */
   @Prop({
@@ -110,6 +150,10 @@ export class ProductConfigEntity extends DatabaseEntityAbstract {
         cost: { type: Number, min: 0 },
         nonShipCost: { type: Number, min: 0 },
         retailPrice: { type: Number, min: 0 },
+        wholesalePrice: { type: Number, min: 0 },
+        tiktokPrice: { type: Number, min: 0 },
+        expUsShipCost: { type: Number, min: 0 },
+        tiktokShipCost: { type: Number, min: 0 },
         weight: { type: Number, min: 0 },
         width: { type: Number, min: 0 },
         height: { type: Number, min: 0 },

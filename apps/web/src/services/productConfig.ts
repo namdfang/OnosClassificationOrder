@@ -1,4 +1,9 @@
-import type { CreateProductConfigDto, ImportProductConfigDto, UpdateProductConfigDto } from 'shared';
+import type {
+  CrawlProductMockupsDto,
+  CreateProductConfigDto,
+  ImportProductConfigDto,
+  UpdateProductConfigDto,
+} from 'shared';
 
 import { callApi } from '../apis';
 import { CONFIG } from '../constants';
@@ -41,6 +46,11 @@ const getUnmatchedOrderTypes = (query: string = '') => {
   return callApi(`/${CONFIG.API_VERSION}/product-configs/unmatched-order-types${query}`, 'get');
 };
 
+/** Crawl ảnh mockup từ onospod.com theo lô — FE gọi lặp với `cursor` từ response trước đến khi `done`. */
+const crawlProductMockups = (data: CrawlProductMockupsDto) => {
+  return callApi(`/${CONFIG.API_VERSION}/product-configs/crawl-mockups`, 'post', data);
+};
+
 export const productConfig = {
   getProductConfigs,
   getProductConfig,
@@ -51,4 +61,5 @@ export const productConfig = {
   clearAllProductConfigs,
   uploadProductImage,
   getUnmatchedOrderTypes,
+  crawlProductMockups,
 };

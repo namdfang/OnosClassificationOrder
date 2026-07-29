@@ -26,6 +26,7 @@ import { WinstonModule } from '@/modules/winston/winston.module';
 import { FastifyThrottlerGuard } from './guards/fastify-throttler.guard';
 import { ActionModule } from './modules/actions/action.module';
 import { AmqpModule } from './modules/amqp/amqp.module';
+import { CollectionModule } from './modules/collection/collection.module';
 import { CustomerModule } from './modules/customer/customer.module';
 import { CustomerAssignmentModule } from './modules/customer-assignment/customer-assignment.module';
 import { CustomerNotificationModule } from './modules/customer-notification/customer-notification.module';
@@ -68,6 +69,7 @@ import { SharedModule } from './shared/shared.module';
     FactoryModule,
     MachineTypeModule,
     ProductCategoryModule,
+    CollectionModule,
     ProductConfigModule,
     PromotionModule,
     WorkshopConfigModule,
