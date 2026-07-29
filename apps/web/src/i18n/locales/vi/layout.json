@@ -1,6 +1,7 @@
 {
   "sidebar": {
     "groups": {
+      "orders": "Đơn hàng",
       "catalog": "Danh mục",
       "personal": "Cá nhân",
       "admin": "Quản trị"

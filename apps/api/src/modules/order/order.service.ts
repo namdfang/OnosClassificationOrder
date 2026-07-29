@@ -4850,8 +4850,6 @@ export class OrderService implements OnModuleInit {
     roleName?: RoleType,
     ctx?: AuditContext,
     permissionCodes?: string[],
-    /** `skipAutoAssign` — bỏ qua hook auto-gán designer theo `toolResultNote` (KHÔNG ảnh hưởng nhánh `autoReworkApplied`/`productionError`). Dùng ở `setDesignReviewResult()` — tool ngoài soát KHÔNG tự gán designer, khác sửa tay/import rework. */
-    opts?: { skipAutoAssign?: boolean },
   ): Promise<UpdateOrderFieldResDto> {
     this.assertCanEditField(dto.field, roleName, permissionCodes);
     if (dto.field === 'assignee') {
@@ -5156,17 +5154,15 @@ export class OrderService implements OnModuleInit {
 
     void this.invalidateListCache();
 
-    // Soát tool thủ công xong (đặt toolResultNote có giá trị & != 'ok') → auto-gán
+    // Soát tool xong (đặt toolResultNote có giá trị & != 'ok') → auto-gán
     // designer theo cấu hình xưởng. Engine tự xác minh đủ điều kiện (chưa gán, có
-    // xưởng, xưởng có cấu hình). Bulk toolResultNote delegate qua đây nên cũng phủ.
-    // `opts.skipAutoAssign` → bỏ qua (dùng ở setDesignReviewResult(), tool ngoài
-    // soát KHÔNG tự gán designer).
+    // xưởng, xưởng có cấu hình). Bulk toolResultNote + setDesignReviewResult()
+    // (tool ngoài soát) đều delegate qua đây nên cũng phủ.
     if (
       dto.field === 'toolResultNote' &&
       typeof normalized === 'string' &&
       normalized.trim() &&
-      normalized !== READY_FOR_FULFILL_CODE &&
-      !opts?.skipAutoAssign
+      normalized !== READY_FOR_FULFILL_CODE
     ) {
       void this.autoAssignAfterImport([id], ctx);
     }
@@ -5750,13 +5746,13 @@ export class OrderService implements OnModuleInit {
    *
    * Tái dùng NGUYÊN VẸN `updateField()` — gọi TUẦN TỰ tối đa 4 lần:
    * `toolResult` trước (KHÔNG có side-effect hook), rồi `toolResultNote` nếu
-   * có (CÓ side-effect hook — auto rework-back/fulfillment entry set, xem
-   * nhánh `dto.field === 'toolResultNote'` trong `updateField()`) — cùng cơ
-   * chế 'ok' xưởng đánh tay ở Danh sách đơn, NGOẠI TRỪ auto-gán designer
-   * (`autoAssignAfterImport`) — gọi với `{ skipAutoAssign: true }` vì tool
-   * ngoài soát xong KHÔNG được tự gán designer (khác sửa tay/import rework,
-   * xem `DesignerAutoAssign.md`) — đơn nằm ở backlog "Cần gán" chờ Leader/Admin
-   * gán tay, rồi `errorFile` nếu có, rồi
+   * có (CÓ side-effect hook — auto rework-back/fulfillment entry set + auto-gán
+   * designer theo cấu hình xưởng nếu giá trị khác rỗng/'ok', xem nhánh
+   * `dto.field === 'toolResultNote'` trong `updateField()`) — CÙNG cơ chế
+   * 'ok' xưởng đánh tay ở Danh sách đơn/import rework, KHÔNG còn
+   * `skipAutoAssign` riêng cho path này nữa (trước đây tool ngoài soát xong
+   * KHÔNG tự gán designer, đơn nằm chờ Leader/Admin gán tay ở backlog "Cần
+   * gán" — đã bỏ, xem `DesignerAutoAssign.md`), rồi `errorFile` nếu có, rồi
    * `errorFileNote` nếu có (2 field cuối KHÔNG có side-effect hook, chỉ field
    * đơn thuần), rồi `printFileUrl` nếu có (set thẳng, KHÔNG qua
    * `assertCanEditField`/`assertValueAllowed`). Trả về kết quả của lần gọi/
@@ -5801,8 +5797,6 @@ export class OrderService implements OnModuleInit {
         { field: 'toolResultNote', value: input.toolResultNote },
         RoleType.SuperAdmin,
         ctx,
-        undefined,
-        { skipAutoAssign: true },
       );
     }
 
