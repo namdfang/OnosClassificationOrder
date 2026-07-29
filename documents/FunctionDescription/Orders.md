@@ -601,8 +601,12 @@ Permission code chi tiết — xem `packages/shared/constants/permission-catalog
 | POST | `/v1/orders/:id/unhold` | `unholdOrder` | `$unset heldAt/holdReason`. 400 nếu không đang giữ. Log `unhold`. |
 | PATCH | `/v1/orders/bulk-hold` | `bulkSetHold` | `{ ids, hold: boolean, reason? }`. hold=true chỉ set đơn chưa giữ & chưa hủy; false chỉ clear đơn đang giữ. Trả `{ matched, modified }`. |
 
+**Giữ với lý do `HOLD_REASON_WAITING_DESIGN` ("Đợi khách sửa design") → reset `toolResult` + `toolResultNote` về rỗng** (cả `holdOrder` lẫn `bulkSetHold`, cùng `$set` với `heldAt`/`holdReason`, ghi thẳng qua Mongo — KHÔNG qua `updateField()` nên KHÔNG kích hoạt side-effect hook thường theo `toolResultNote`) — design cũ coi như không còn giá trị: `toolResult` rỗng khiến đơn tự rơi lại vào điều kiện `toolResult: { $in: [null, ''] }` của hàng đợi `getNextDesignReviewOrder()` (§18) → tool ngoài tự soát lại NGAY KHI mở giữ; `toolResultNote` rỗng để mọi luồng nội bộ khác đọc field này (Soát tool, Dashboard, auto-gán designer...) cũng coi đơn là "chưa soát" nhất quán. KHÔNG đụng `toolCheckErrorNotes` (lịch sử bền vững). So khớp CHÍNH XÁC chuỗi lý do (không phải substring) — đổi text preset ở `HoldOrderDialog.tsx` phải đổi cả `HOLD_REASON_WAITING_DESIGN` (`packages/shared/constants/hold-reason.ts`).
+
 ### 9b.3 Khóa thao tác (BE guard `assertNotHeld`)
 Đơn `heldAt` set → chặn (400 *"Đơn đang bị giữ — mở lại…"*) ở: `updateField`, `setProductionError`, `DesignerTaskService.transition`, `FulfillmentTaskService.transition`. `bulkUpdateField` (nhánh updateMany) + `bulkAssignDesigner` **loại** đơn giữ qua filter `heldAt: { $exists: false }` → `matched` thấp hơn để FE biết bị bỏ (nhánh side-effect loop `updateField` tự skip vì guard throw). **Không** chặn `/unhold` (để mở lại được).
+
+Đơn giữ **VẪN xuất hiện** trong `GET /orders` (mặc định — chỉ tô xám, KHÔNG ẩn, khác `cancelledAt` bị loại mặc định) — trừ hàng đợi `getNextDesignReviewOrder()` (§18): filter riêng `heldAt: { $exists: false }` LOẠI đơn giữ khỏi hàng đợi "chưa soát" cho tool ngoài, tránh tool nhặt nhầm đơn đang tạm dừng chờ khách. Lookup trực tiếp theo `productionId` (`getDesignReviewOrderByProductionId`/`GET design-review/by-production-id/:productionId`) KHÔNG áp filter này — tra cứu 1 mã cụ thể vẫn thấy đơn giữ.
 
 ### 9b.4 Thống kê
 - **Dashboard tab Stats** (`getDashboard` → `totals.heldOrders`): card **"Đơn đang giữ"** (hổ phách) ở `OrderStatsTab.tsx`. VẪN nằm trong `totalOrders` (chỉ tạm dừng, không loại như đơn hủy).
