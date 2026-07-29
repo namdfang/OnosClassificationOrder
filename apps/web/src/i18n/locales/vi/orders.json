@@ -572,6 +572,8 @@
     "filterMapped": "Đã mapping",
     "factoryErrorOnlyTitle": "Chỉ hiện đơn xưởng đã báo lỗi",
     "factoryError": "Lỗi xưởng",
+    "holdReasonFilterTitle": "Lọc đơn đang giữ theo lý do",
+    "holdReasonFilterAll": "— Lý do giữ (tất cả) —",
     "clearDesignerFilter": "Xoá filter designer",
     "factoryMachine": "Xưởng / Máy",
     "emptyState": "Chưa có order nào. Sang tab \"Import Order\" để thêm.",
@@ -616,6 +618,9 @@
       "line2After": "rồi click checkbox khác để chọn nhanh tất cả đơn ở giữa (giống Excel / Google Sheets)."
     },
     "selectAllOnPage": "Tick để chọn toàn bộ đơn trên trang này",
+    "selectAllPagesPrompt": "Đã chọn {{count}} đơn trên trang này.",
+    "selectAllPagesBtn": "Chọn tất cả {{total}} đơn khớp bộ lọc",
+    "selectedAllPages": "Đã chọn tất cả {{total}} đơn khớp bộ lọc (mọi trang).",
     "noMatchingOrders": "Không có đơn hàng nào phù hợp",
     "selectAllOfProduct": "Tick toàn bộ {{count}} đơn của sản phẩm này",
     "orderCount": "{{count}} đơn",
@@ -628,6 +633,10 @@
     "noPermission": "Bạn không có quyền xem trang này.",
     "title": "Danh sách đơn",
     "subtitle": "Quản lý production orders"
+  },
+  "classicPage": {
+    "title": "Đơn hàng",
+    "subtitle": "Dàn phẳng, phân trang, không gộp theo sản phẩm — cùng cột với Danh sách đơn"
   },
   "unmapped": {
     "unmappedCount": "đơn chưa xác định xưởng",

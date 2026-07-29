@@ -22,6 +22,7 @@ import { useWorkshopConfigStore } from '@/store/workshopConfigStore';
 import { RepositoryRemote } from '@/services';
 
 import { ImagePreviewDialog } from '@/components/common/ImagePreviewDialog';
+import { LoadingOverlay } from '@/components/common/LoadingOverlay';
 import { PaginationBar } from '@/components/common/PaginationBar';
 import { Spinner } from '@/components/common/Spinner';
 import { CancelledBadge } from '@/components/orders/CancelledBadge';
@@ -758,7 +759,7 @@ export function ErrorLogTab() {
           }}
         />
 
-        <div className="rounded-lg border border-border bg-card overflow-hidden">
+        <LoadingOverlay active={loading && items.length > 0} className="rounded-lg border border-border bg-card overflow-hidden">
           <div className="overflow-x-auto">
             <Table>
               <TableHeader>
@@ -941,7 +942,7 @@ export function ErrorLogTab() {
               setPageSize(ps);
             }}
           />
-        </div>
+        </LoadingOverlay>
 
         {canBulk && selected.size > 0 && (
           <div className="sticky bottom-3 z-30 flex justify-center px-4 pointer-events-none">

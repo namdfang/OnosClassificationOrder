@@ -50,6 +50,8 @@
       "confirm": "Xóa toàn bộ Product Config? Hành động này không thể hoàn tác.",
       "success": "Đã xóa {{count}} product config"
     },
+    "deleteConfirm": "Xóa sản phẩm \"{{name}}\"? Chỉ xóa được nếu sản phẩm không có đơn hàng nào.",
+    "deleteSuccess": "Đã xóa sản phẩm \"{{name}}\"",
     "table": {
       "mockup": "Mockup",
       "productName": "Tên sản phẩm",
@@ -66,6 +68,7 @@
       "variationsCount": "{{count}} biến thể",
       "notSelected": "— Chưa chọn —",
       "editTitle": "Chỉnh sửa sản phẩm",
+      "deleteTitle": "Xóa sản phẩm (chỉ xóa được nếu không có đơn hàng)",
       "openMockup": "Mở ảnh mockup"
     }
   },
@@ -175,10 +178,12 @@
     "unsavedConfirm": "Bạn có thay đổi CHƯA LƯU. Rời trang sẽ mất thay đổi — vẫn thoát?",
     "shortNameRequired": "Tên viết tắt không được để trống",
     "fullNameRequired": "Tên đầy đủ sản phẩm không được để trống",
-    "factoryRequired": "Vui lòng chọn xưởng",
-    "machineTypeRequired": "Vui lòng chọn phòng",
     "saveSuccess": "Đã lưu sản phẩm",
     "createSuccess": "Đã tạo sản phẩm mới",
+    "deleteButton": "Xóa sản phẩm",
+    "deleteTitle": "Xóa sản phẩm (chỉ xóa được nếu không có đơn hàng)",
+    "deleteConfirm": "Xóa sản phẩm \"{{name}}\"? Chỉ xóa được nếu sản phẩm không có đơn hàng nào.",
+    "deleteSuccess": "Đã xóa sản phẩm \"{{name}}\"",
     "applyBulkPriceConfirm": "Áp dụng giá vừa nhập cho toàn bộ {{count}} biến thể — ghi đè giá hiện tại?",
     "notSelected": "— Chưa chọn —",
     "header": {

@@ -1,25 +1,22 @@
 import React, { useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useNavigate } from 'react-router-dom';
-import { ImageIcon, PackageSearch } from 'lucide-react';
+import { PackageSearch, Search, X } from 'lucide-react';
 import type { CustomerCatalogItem } from 'shared';
 
 import { PATHS } from '@/constants/paths';
 
 import { RepositoryRemote } from '@/services';
 
-import { CopyButton } from '@/components/common/CopyButton';
+import { LoadingOverlay } from '@/components/common/LoadingOverlay';
 import { PaginationBar } from '@/components/common/PaginationBar';
 import { Spinner } from '@/components/common/Spinner';
-import { Badge } from '@/components/ui/badge';
+import { CatalogProductCard } from '@/components/customer/CatalogProductCard';
 import { Input } from '@/components/ui/input';
 
 import { handleAxiosError } from '@/utils';
 
-const usdFormatter = new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD' });
-function formatPrice(value?: number): string {
-  return value == null ? '—' : usdFormatter.format(value);
-}
+import { useDebounce } from '@/hooks/useDebounce';
 
 function CustomerCatalog() {
   const { t } = useTranslation('customerPortal');
@@ -30,12 +27,13 @@ function CustomerCatalog() {
   const [page, setPage] = useState(1);
   const [pageSize, setPageSize] = useState(12);
   const [total, setTotal] = useState(0);
+  const debouncedSearch = useDebounce(search, 300);
 
   const fetchData = async () => {
     try {
       setLoading(true);
       const params = new URLSearchParams({ page: String(page), limit: String(pageSize) });
-      if (search) params.set('search', search);
+      if (debouncedSearch) params.set('search', debouncedSearch);
       const res = await RepositoryRemote.customerCatalog.getCatalog(`?${params.toString()}`);
       setItems(res?.data?.data ?? []);
       setTotal(res?.data?.total ?? 0);
@@ -49,30 +47,54 @@ function CustomerCatalog() {
   useEffect(() => {
     fetchData();
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [page, pageSize]);
+  }, [page, pageSize, debouncedSearch]);
 
-  const handleSearch = () => {
-    if (page !== 1) setPage(1);
-    else fetchData();
-  };
+  // Đổi search → luôn quay về trang 1 (bỏ qua lần render đầu, tránh ghi đè page đọc từ URL nếu có).
+  const isFirstRender = React.useRef(true);
+  useEffect(() => {
+    if (isFirstRender.current) {
+      isFirstRender.current = false;
+      return;
+    }
+    setPage(1);
+  }, [debouncedSearch]);
 
   return (
     <div>
-      <div className="flex items-center justify-between mb-5 gap-3">
+      <div className="flex items-center justify-between mb-5 gap-3 flex-wrap">
         <div>
           <h1 className="text-lg font-semibold">{t('catalog.title')}</h1>
           <p className="text-xs text-muted-foreground">{t('catalog.subtitle')}</p>
         </div>
-        <Input
-          placeholder={t('catalog.searchPlaceholder')}
-          value={search}
-          onChange={(e) => setSearch(e.target.value)}
-          onKeyDown={(e) => e.key === 'Enter' && handleSearch()}
-          className="max-w-xs"
-        />
+        <div className="relative w-full sm:w-auto">
+          <Search size={15} className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground" />
+          <Input
+            placeholder={t('catalog.searchPlaceholder')}
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+            className="h-10 pl-9 pr-8 sm:w-72"
+          />
+          {search && (
+            <button
+              type="button"
+              onClick={() => {
+                setSearch('');
+                setPage(1);
+              }}
+              aria-label={t('catalog.clearSearch')}
+              className="absolute right-2.5 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
+            >
+              <X size={14} />
+            </button>
+          )}
+        </div>
       </div>
 
-      {loading ? (
+      {!loading && items.length > 0 && (
+        <p className="text-xs text-muted-foreground mb-3">{t('catalog.resultsCount', { count: total })}</p>
+      )}
+
+      {loading && items.length === 0 ? (
         <div className="flex justify-center py-16">
           <Spinner size={24} />
         </div>
@@ -82,81 +104,25 @@ function CustomerCatalog() {
           <p className="text-sm">{t('catalog.empty')}</p>
         </div>
       ) : (
-        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+        <LoadingOverlay active={loading} className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-4">
           {items.map((item) => (
-            <div
+            <CatalogProductCard
               key={item._id}
-              role="button"
-              tabIndex={0}
-              onClick={() => navigate(PATHS.CUSTOMER_CATALOG_DETAIL.replace(':id', item._id))}
-              onKeyDown={(e) => {
-                if (e.key === 'Enter' || e.key === ' ') navigate(PATHS.CUSTOMER_CATALOG_DETAIL.replace(':id', item._id));
-              }}
-              className="bg-card border border-border rounded-xl p-4 flex gap-3 cursor-pointer hover:border-primary/50 hover:shadow-sm transition-colors"
-            >
-              {item.mockup ? (
-                <img
-                  src={item.mockup}
-                  alt={item.fullName}
-                  className="w-20 h-20 rounded-lg object-cover border border-border bg-muted shrink-0"
-                />
-              ) : (
-                <div className="w-20 h-20 rounded-lg border border-dashed border-border flex items-center justify-center text-muted-foreground shrink-0">
-                  <ImageIcon size={18} />
-                </div>
-              )}
-
-              <div className="flex-1 min-w-0 space-y-1.5">
-                <div className="flex items-center gap-1.5">
-                  <p className="font-medium text-sm truncate">{item.fullName}</p>
-                  <CopyButton value={item.fullName} label={t('catalog.copyProductName')} />
-                </div>
-
-                <div className="flex flex-wrap gap-1.5">
-                  {item.printMethod && <Badge variant="outline">{item.printMethod}</Badge>}
-                  {item.productCategory && <Badge variant="outline">{item.productCategory}</Badge>}
-                </div>
-
-                {item.description && <p className="text-xs text-muted-foreground line-clamp-2">{item.description}</p>}
-
-                <div className="space-y-1 pt-1">
-                  {item.variations.slice(0, 4).map((v) => (
-                    <div key={v.sku} className="flex items-center justify-between text-xs">
-                      <span className="text-muted-foreground truncate">
-                        {(v.attributes || []).map((a) => a.value).join(' / ') || v.sku}
-                      </span>
-                      <span className="font-medium">
-                        {v.discountedPrice != null && v.discountedPrice !== v.retailPrice ? (
-                          <>
-                            <span className="line-through text-muted-foreground mr-1">{formatPrice(v.retailPrice)}</span>
-                            <span className="text-rose-600">{formatPrice(v.discountedPrice)}</span>
-                          </>
-                        ) : (
-                          formatPrice(v.retailPrice)
-                        )}
-                      </span>
-                    </div>
-                  ))}
-                  {item.variations.length > 4 && (
-                    <p className="text-xs text-muted-foreground">
-                      {t('catalog.moreVariations', { count: item.variations.length - 4 })}
-                    </p>
-                  )}
-                </div>
-              </div>
-            </div>
+              item={item}
+              onSelect={() => navigate(PATHS.CUSTOMER_CATALOG_DETAIL.replace(':id', item._id))}
+            />
           ))}
-        </div>
+        </LoadingOverlay>
       )}
 
-      {!loading && items.length > 0 && (
+      {items.length > 0 && (
         <div className="mt-4">
           <PaginationBar
             position="bottom"
             page={page}
             pageSize={pageSize}
             total={total}
-            loading={false}
+            loading={loading}
             onChange={(p, ps) => {
               setPage(p);
               setPageSize(ps);

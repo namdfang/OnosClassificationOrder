@@ -11,6 +11,7 @@ import { useWorkshopConfigStore } from '@/store/workshopConfigStore';
 import { RepositoryRemote } from '@/services';
 
 import { ImagePreviewDialog } from '@/components/common/ImagePreviewDialog';
+import { LoadingOverlay } from '@/components/common/LoadingOverlay';
 import { PaginationBar } from '@/components/common/PaginationBar';
 import { Spinner } from '@/components/common/Spinner';
 import { BulkEditToolbar } from '@/components/orders/BulkEditToolbar';
@@ -681,7 +682,7 @@ export function PrintOrderTable({
           </div>
         )}
 
-        <div className="rounded-lg border border-border bg-card overflow-hidden">
+        <LoadingOverlay active={loading && items.length > 0} className="rounded-lg border border-border bg-card overflow-hidden">
           <div className="overflow-x-auto">
             <Table>
               <TableHeader>
@@ -842,7 +843,7 @@ export function PrintOrderTable({
               setPageSize(ps);
             }}
           />
-        </div>
+        </LoadingOverlay>
 
         {renderBulkBar ? (
           selected.size > 0 &&

@@ -5,6 +5,9 @@
     "newOrder": "Place new order",
     "logout": "Sign out"
   },
+  "fileInput": {
+    "uploadUnavailable": "File upload isn't available yet — please paste an image URL (Google Drive, Imgur...)"
+  },
   "login": {
     "title": "Sign in to Customer Portal",
     "subtitle": "Track and manage your orders",
@@ -48,6 +51,7 @@
   },
   "orders": {
     "title": "Your orders",
+    "resultsCount": "{{count}} orders",
     "empty": "You don't have any orders yet.",
     "placeFirst": "Place your first order",
     "columns": {
@@ -59,33 +63,60 @@
       "orderDate": "Order date"
     },
     "statusCancelled": "Cancelled",
-    "statusProcessing": "Processing"
+    "statusProcessing": "Processing",
+    "statusCompleted": "Completed",
+    "quantityShort": "Qty",
+    "orderedOn": "Ordered on",
+    "inProductionOn": "In production since",
+    "completedOn": "Completed on",
+    "viewTimeline": "View full timeline →",
+    "viewDetail": "View details"
   },
   "orderNew": {
     "title": "Place new order",
-    "type": "Product type",
-    "typePlaceholder": "e.g. T-shirt, Mug...",
-    "color": "Color",
-    "colorPlaceholder": "Black",
-    "size": "Size",
-    "sizePlaceholder": "M",
+    "subtitle": "Add one or more products to the order, then enter one shipping address shared by the whole order.",
+    "pickProduct": "Pick a product",
     "quantity": "Quantity",
-    "mockupUrl": "Mockup/design image link (optional)",
-    "mockupUrlPlaceholder": "https://...",
-    "printMethod": "Print method (optional)",
-    "printMethodPlaceholder": "DTG, DTF...",
-    "note": "Note (optional)",
+    "mockupUrl": "Mockup image",
+    "mockupUrlPlaceholder": "Paste mockup image URL...",
+    "mockupUrlHelp": "The mockup image YOU provide for production — NOT the product's sample photo.",
+    "note": "Note",
     "notePlaceholder": "Additional note for this order...",
-    "submit": "Place order",
+    "orderSummary": "Order summary",
+    "addToCart": "Add to order",
+    "cartTitle": "Products in this order ({{count}})",
+    "cartEmpty": "No products yet — pick one on the left to get started.",
+    "cartTotal": "Subtotal",
+    "removeFromCart": "Remove from order",
+    "addAnotherHint": "Pick another product — every product in this order shares one shipping address.",
+    "shippingTitle": "Shipping address",
+    "shippingFirstName": "First name",
+    "shippingLastName": "Last name",
+    "shippingCompany": "Company",
+    "shippingPhone": "Phone number",
+    "shippingEmail": "Email",
+    "shippingAddress1": "Address",
+    "shippingAddress2": "Address line 2",
+    "shippingCity": "City / Province",
+    "shippingState": "State",
+    "shippingPostcode": "Postal code",
+    "shippingCountry": "Country",
+    "submit": "Place order ({{count}} products)",
     "success": "Order placed successfully — order code {{code}}",
     "changeProduct": "Choose a different product",
     "designUrl": "Design link — {{area}}",
     "designUrlPlaceholder": "https://drive.google.com/...",
-    "useCatalogPicker": "Pick from the product catalog",
-    "useManualEntry": "Can't find your product? Enter manually",
     "searchPlaceholder": "Search products by name…",
     "searchEmpty": "No matching products found.",
     "validation": {
+      "cartRequired": "Please add at least 1 product to the order",
+      "mockupRequired": "Please provide a mockup image before adding to the order",
+      "designRequired": "Please provide a design file for the \"{{area}}\" print position",
+      "shippingNameRequired": "First name is required",
+      "shippingPhoneRequired": "Phone number is required",
+      "shippingAddress1Required": "Address is required",
+      "shippingCityRequired": "City / Province is required",
+      "shippingEmailInvalid": "Invalid email",
       "typeRequired": "Product type is required",
       "productRequired": "Please select a product from the catalog"
     }
@@ -96,7 +127,12 @@
     "completed": "Completed",
     "processing": "Processing",
     "progressTitle": "Order progress",
-    "quantityShort": "Qty"
+    "quantityShort": "Qty",
+    "editTitle": "Edit order",
+    "editCancelledHint": "This order is cancelled and can't be edited.",
+    "saveChanges": "Save changes",
+    "saveSuccess": "Order updated",
+    "missingRequiredFields": "Please fill in all required fields (*)"
   },
   "catalog": {
     "title": "Product catalog",
@@ -104,7 +140,10 @@
     "searchPlaceholder": "Search products…",
     "empty": "No products in the catalog yet.",
     "copyProductName": "product name",
-    "moreVariations": "+ {{count}} more variations"
+    "moreVariations": "+ {{count}} more variations",
+    "variationCount": "{{count}} variations",
+    "resultsCount": "{{count}} products",
+    "clearSearch": "Clear search"
   },
   "catalogDetail": {
     "notFound": "This product could not be found.",

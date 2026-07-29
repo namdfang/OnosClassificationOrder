@@ -1,4 +1,4 @@
-import React, { useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import { useForm } from 'react-hook-form';
 import { useTranslation } from 'react-i18next';
 import { Link, useNavigate } from 'react-router-dom';
@@ -35,7 +35,14 @@ function CustomerLogin() {
   const { t } = useTranslation('customerPortal');
   const [loading, setLoading] = useState(false);
   const [showPassword, setShowPassword] = useState(false);
-  const { setProfile, setToken, setTokenExpiredAt } = useCustomerAuthStore();
+  const { setProfile, setToken, setTokenExpiredAt, isAuthenticated } = useCustomerAuthStore();
+
+  // Khách đã đăng nhập (token còn hạn) mà vào lại trang login → tự chuyển
+  // hướng sang trang đơn hàng, khỏi phải đăng nhập lại.
+  useEffect(() => {
+    if (isAuthenticated()) navigate(PATHS.CUSTOMER_ORDERS, { replace: true });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   const loginSchema = useMemo(() => buildLoginSchema(t), [t]);
   const form = useForm<LoginFormValues>({
@@ -68,7 +75,9 @@ function CustomerLogin() {
     <div className="min-h-screen bg-background flex items-center justify-center p-4">
       <div className="w-full max-w-[440px]">
         <div className="text-center mb-8">
-          <img src={logoUrl} alt="Logo" className="h-10 w-auto object-contain mx-auto mb-5" />
+          <Link to={PATHS.LANDING} className="inline-block">
+            <img src={logoUrl} alt="Logo" className="h-10 w-auto object-contain mx-auto mb-5" />
+          </Link>
           <h1 className="text-2xl font-bold text-foreground tracking-tight">{t('login.title')}</h1>
           <p className="text-sm text-muted-foreground mt-1.5">{t('login.subtitle')}</p>
         </div>

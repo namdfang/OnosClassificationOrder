@@ -18,6 +18,7 @@
     "orders": {
       "title": "Order management",
       "list": "Order list",
+      "classic": "Orders",
       "errorLog": "Error correction log",
       "scanError": "Scan code",
       "stageErrors": "Stage error catalog",

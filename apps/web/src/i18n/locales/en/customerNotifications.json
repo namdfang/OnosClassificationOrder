@@ -1,0 +1,34 @@
+{
+  "sender": {
+    "title": "Send notification to customers",
+    "subtitle": "Compose a notification for one customer or broadcast to everyone — customers see it in the Customer Portal bell.",
+    "titleLabel": "Title",
+    "titlePlaceholder": "e.g. Your order is about to ship...",
+    "bodyLabel": "Body (optional)",
+    "bodyPlaceholder": "Notification details...",
+    "targetLabel": "Send to",
+    "targetAll": "All customers",
+    "targetOne": "A specific customer",
+    "customerSearchPlaceholder": "Search by SKU or email...",
+    "customerNotSelected": "No customer selected",
+    "changeCustomer": "Change customer",
+    "send": "Send notification",
+    "sendSuccess": "Notification sent",
+    "titleRequired": "Title is required",
+    "customerRequired": "Please select a customer",
+    "historyTitle": "Sent history",
+    "historyEmpty": "No notifications sent yet.",
+    "columns": {
+      "title": "Title",
+      "target": "Sent to",
+      "sentBy": "Sent by",
+      "sentAt": "Time"
+    }
+  },
+  "bell": {
+    "title": "Notifications",
+    "empty": "No notifications yet.",
+    "markAllRead": "Mark all as read",
+    "broadcastLabel": "General notice"
+  }
+}

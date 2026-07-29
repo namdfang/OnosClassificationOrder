@@ -1,4 +1,4 @@
-import type { CustomerLoginDto, CustomerRegisterDto, PlaceCustomerOrderDto } from 'shared';
+import type { CustomerLoginDto, CustomerRegisterDto, PlaceCustomerOrderDto, UpdateCustomerOrderDto } from 'shared';
 
 import { callApi } from '../apis';
 import { CONFIG } from '../constants';
@@ -29,7 +29,11 @@ const trackOrder = (productionId: string) => {
   return callApi(`/${CONFIG.API_VERSION}/customer/orders/${encodeURIComponent(productionId)}`, 'get');
 };
 
-export const customerOrder = { placeOrder, listOrders, trackOrder };
+const updateOrder = (productionId: string, data: UpdateCustomerOrderDto) => {
+  return callApi(`/${CONFIG.API_VERSION}/customer/orders/${encodeURIComponent(productionId)}`, 'patch', data);
+};
+
+export const customerOrder = { placeOrder, listOrders, trackOrder, updateOrder };
 
 const getCatalog = (query: string = '') => {
   return callApi(`/${CONFIG.API_VERSION}/customer/catalog${query}`, 'get');
@@ -40,3 +44,13 @@ const getCatalogItem = (id: string) => {
 };
 
 export const customerCatalog = { getCatalog, getCatalogItem };
+
+const listNotifications = (page = 1, limit = 20) => {
+  return callApi(`/${CONFIG.API_VERSION}/customer/notifications?page=${page}&limit=${limit}`, 'get');
+};
+
+const markNotificationsRead = () => {
+  return callApi(`/${CONFIG.API_VERSION}/customer/notifications/read`, 'post');
+};
+
+export const customerNotificationPortal = { listNotifications, markNotificationsRead };

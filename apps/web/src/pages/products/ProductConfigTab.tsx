@@ -1,7 +1,7 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useNavigate } from 'react-router-dom';
-import { ImageIcon, Pencil, Plus, RotateCw } from 'lucide-react';
+import { ImageIcon, Pencil, Plus, RotateCw, Trash2 } from 'lucide-react';
 import type { ProductItemSpecific, ProductPrintArea, ProductVariation } from 'shared';
 import { PRODUCT_LEVEL_MAP, PRODUCT_LEVELS, ProductConfigStatus, WorkshopConfigCategory } from 'shared';
 import { toast } from 'sonner';
@@ -12,6 +12,7 @@ import { useWorkshopConfigStore } from '@/store/workshopConfigStore';
 
 import { RepositoryRemote } from '@/services';
 
+import { LoadingOverlay } from '@/components/common/LoadingOverlay';
 import { PaginationBar } from '@/components/common/PaginationBar';
 import { Spinner } from '@/components/common/Spinner';
 import { Badge } from '@/components/ui/badge';
@@ -227,6 +228,18 @@ export function ProductConfigTab() {
     else fetchData();
   };
 
+  const handleDelete = async (id: string, fullName: string) => {
+    if (!confirm(t('configTab.deleteConfirm', { name: fullName }))) return;
+    try {
+      await RepositoryRemote.productConfig.deleteProductConfig(id);
+      toast.success(t('configTab.deleteSuccess', { name: fullName }));
+      if (items.length === 1 && page > 1) setPage(page - 1);
+      else fetchData();
+    } catch (error) {
+      handleAxiosError(error);
+    }
+  };
+
   const handleClearAll = async () => {
     if (!confirm(t('configTab.clearAll.confirm'))) return;
     try {
@@ -298,7 +311,7 @@ export function ProductConfigTab() {
         </div>
       </div>
 
-      <div className="rounded-lg border border-border bg-card">
+      <LoadingOverlay active={loading && items.length > 0} className="rounded-lg border border-border bg-card">
         <Table>
           <TableHeader>
             <TableRow>
@@ -317,7 +330,7 @@ export function ProductConfigTab() {
             </TableRow>
           </TableHeader>
           <TableBody>
-            {loading && (
+            {loading && items.length === 0 && (
               <TableRow>
                 <TableCell colSpan={12} className="text-center py-8">
                   <Spinner size={20} className="text-muted-foreground" />
@@ -331,8 +344,7 @@ export function ProductConfigTab() {
                 </TableCell>
               </TableRow>
             )}
-            {!loading &&
-              items.map((it) => (
+            {items.map((it) => (
                 <TableRow key={it._id}>
                   <TableCell>
                     {it.mockup ? (
@@ -490,14 +502,24 @@ export function ProductConfigTab() {
                     </div>
                   </TableCell>
                   <TableCell>
-                    <Button
-                      variant="ghost"
-                      size="icon"
-                      onClick={() => navigate(PATHS.PRODUCT_DETAIL.replace(':id', it._id))}
-                      title={t('configTab.table.editTitle')}
-                    >
-                      <Pencil size={14} />
-                    </Button>
+                    <div className="flex items-center gap-0.5">
+                      <Button
+                        variant="ghost"
+                        size="icon"
+                        onClick={() => navigate(PATHS.PRODUCT_DETAIL.replace(':id', it._id))}
+                        title={t('configTab.table.editTitle')}
+                      >
+                        <Pencil size={14} />
+                      </Button>
+                      <Button
+                        variant="ghost"
+                        size="icon"
+                        onClick={() => handleDelete(it._id, it.fullName)}
+                        title={t('configTab.table.deleteTitle')}
+                      >
+                        <Trash2 size={14} className="text-destructive" />
+                      </Button>
+                    </div>
                   </TableCell>
                 </TableRow>
               ))}
@@ -508,13 +530,13 @@ export function ProductConfigTab() {
           page={page}
           pageSize={pageSize}
           total={total}
-          loading={loading && items.length === 0}
+          loading={loading}
           onChange={(p, ps) => {
             setPage(p);
             setPageSize(ps);
           }}
         />
-      </div>
+      </LoadingOverlay>
 
       <ImportProductConfigDialog
         open={importOpen}

@@ -572,6 +572,8 @@
     "filterMapped": "Mapped",
     "factoryErrorOnlyTitle": "Only show orders the factory has reported errors on",
     "factoryError": "Factory error",
+    "holdReasonFilterTitle": "Filter held orders by reason",
+    "holdReasonFilterAll": "— Hold reason (all) —",
     "clearDesignerFilter": "Clear designer filter",
     "factoryMachine": "Factory / Machine",
     "emptyState": "No orders yet. Go to the \"Import Order\" tab to add some.",
@@ -616,6 +618,9 @@
       "line2After": "then click another checkbox to quickly select all orders in between (like Excel / Google Sheets)."
     },
     "selectAllOnPage": "Tick to select every order on this page",
+    "selectAllPagesPrompt": "{{count}} orders on this page are selected.",
+    "selectAllPagesBtn": "Select all {{total}} orders matching the filter",
+    "selectedAllPages": "All {{total}} orders matching the filter are selected (every page).",
     "noMatchingOrders": "No matching orders",
     "selectAllOfProduct": "Tick all {{count}} orders of this product",
     "orderCount": "{{count}} orders",
@@ -628,6 +633,10 @@
     "noPermission": "You don't have permission to view this page.",
     "title": "Order list",
     "subtitle": "Manage production orders"
+  },
+  "classicPage": {
+    "title": "Orders",
+    "subtitle": "Flat, paginated, not grouped by product — same columns as the Order list"
   },
   "unmapped": {
     "unmappedCount": "orders with an undetermined factory",

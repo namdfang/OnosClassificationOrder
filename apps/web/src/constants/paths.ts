@@ -8,6 +8,7 @@ export const PATHS = {
     // con riêng, điều hướng qua aside menu (KHÔNG dùng `?tab=` nữa).
     ORDERS: '/ffm/orders',
     ORDERS_WORKSHOP: '/ffm/orders/workshop',
+    ORDERS_CLASSIC: '/ffm/orders/classic',
     ORDERS_ERROR_LOG: '/ffm/orders/error-log',
     ORDERS_IMPORT: '/ffm/orders/import',
     ORDERS_CUTTING_FILES: '/ffm/orders/cutting-files',

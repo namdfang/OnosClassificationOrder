@@ -348,6 +348,7 @@ export default function ProductDetailPage() {
   const [item, setItem] = useState<ProductConfigRow | null>(null);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
+  const [deleting, setDeleting] = useState(false);
 
   const [factories, setFactories] = useState<RefItem[]>([]);
   const [machineTypes, setMachineTypes] = useState<RefItem[]>([]);
@@ -584,6 +585,21 @@ export default function ProductDetailPage() {
     navigate(PATHS.PRODUCTS);
   };
 
+  const handleDeleteProduct = async () => {
+    if (!item || isNew) return;
+    if (!window.confirm(t('detail.deleteConfirm', { name: item.fullName }))) return;
+    try {
+      setDeleting(true);
+      await RepositoryRemote.productConfig.deleteProductConfig(item._id);
+      toast.success(t('detail.deleteSuccess', { name: item.fullName }));
+      navigate(PATHS.PRODUCTS);
+    } catch (error) {
+      handleAxiosError(error);
+    } finally {
+      setDeleting(false);
+    }
+  };
+
   if (loading || !item) {
     return (
       <div className="flex items-center justify-center py-20">
@@ -636,15 +652,6 @@ export default function ProductDetailPage() {
       toast.error(t('detail.shortNameRequired'));
       return;
     }
-    if (isNew && !factoryId) {
-      toast.error(t('detail.factoryRequired'));
-      return;
-    }
-    if (isNew && !machineTypeId) {
-      toast.error(t('detail.machineTypeRequired'));
-      return;
-    }
-
     setSaving(true);
     let finalMockup = mockup.trim();
     let finalSizeChartUrl = sizeChartUrl.trim();
@@ -772,10 +779,18 @@ export default function ProductDetailPage() {
             </div>
           </div>
         </div>
-        <Button onClick={handleSave} disabled={saving || (!isNew && !dirty)} className="shrink-0">
-          {saving && <Spinner size={14} />}
-          {t(isNew ? 'detail.header.createProduct' : 'detail.header.saveChanges')}
-        </Button>
+        <div className="flex items-center gap-2 shrink-0">
+          {!isNew && (
+            <Button variant="outline" onClick={handleDeleteProduct} disabled={deleting || saving} title={t('detail.deleteTitle')}>
+              {deleting ? <Spinner size={14} /> : <Trash2 size={14} className="text-destructive" />}
+              {t('detail.deleteButton')}
+            </Button>
+          )}
+          <Button onClick={handleSave} disabled={saving || (!isNew && !dirty)} className="shrink-0">
+            {saving && <Spinner size={14} />}
+            {t(isNew ? 'detail.header.createProduct' : 'detail.header.saveChanges')}
+          </Button>
+        </div>
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-[300px_1fr] gap-4 items-start">

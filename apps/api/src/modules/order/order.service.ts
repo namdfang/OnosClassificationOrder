@@ -1310,6 +1310,9 @@ export class OrderService implements OnModuleInit {
     // Toggle "Đang giữ" (workshop): held=true → chỉ đơn giữ; held=false → chỉ
     // đơn không giữ. Không truyền → hiện cả 2 (đơn giữ chỉ tô xám, không ẩn).
     if (typeof dto.held === 'boolean') filter.heldAt = { $exists: dto.held };
+    // Lọc theo lý do giữ — exact match, field chỉ tồn tại khi đang giữ (unset
+    // cùng heldAt lúc mở giữ) nên tự ngụ ý held=true, không cần kết hợp thêm.
+    if (dto.holdReason) filter.holdReason = dto.holdReason;
     // Toggle "Đã hủy": true → CHỈ đơn đã hủy; mặc định (không bật) → LOẠI đơn đã
     // hủy khỏi list + mọi facet. Đơn hủy chỉ xem qua toggle "Đã hủy" (hoặc dialog
     // "Đơn đã hủy" riêng). Áp cho mọi caller của buildOrderListFilter.
@@ -4571,11 +4574,27 @@ export class OrderService implements OnModuleInit {
       }
 
       const set: Record<string, unknown> = {};
+      const beforeSnapshot: Record<string, unknown> = {};
+      const afterSnapshot: Record<string, unknown> = {};
       for (const [key, value] of Object.entries(changed)) {
         set[`designs.${key}`] = value;
         set[`designsOriginal.${key}`] = value;
+        beforeSnapshot[`designs.${key}`] = (baseline as Record<string, string | undefined>)[key];
+        afterSnapshot[`designs.${key}`] = value;
       }
       await this.orderModel.findByIdAndUpdate(order._id, { $set: set, $unset: { heldAt: 1, holdReason: 1 } });
+      // Log riêng design đã đổi field nào (before/after) — CÙNG convention với
+      // updateOrderDesign() (action='update_design'), KHÁC log 'unhold' bên dưới
+      // (chỉ ghi nhận việc mở giữ, không có chi tiết design). Chỉ đơn ĐANG GIỮ
+      // lý do "Đợi khách sửa design" mới vào nhánh này nên tự nó đã đúng phạm vi.
+      void this.orderLogService.write({
+        orderId: String(order._id),
+        action: 'update_design',
+        field: 'designs',
+        before: beforeSnapshot,
+        after: afterSnapshot,
+        ctx,
+      });
       void this.orderLogService.write({
         orderId: String(order._id),
         action: 'unhold',
@@ -6115,6 +6134,7 @@ export class OrderService implements OnModuleInit {
           referent: row.referent?.trim(),
           orderAt: parseImportDate(row.orderAt),
           inProductionAt: parseImportDate(row.inProductionAt),
+          ...(row.shippingAddress ? { shippingAddress: row.shippingAddress } : {}),
           isMapped,
           productConfigId,
           factoryId,

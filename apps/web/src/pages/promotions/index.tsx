@@ -7,6 +7,7 @@ import { toast } from 'sonner';
 
 import { RepositoryRemote } from '@/services';
 
+import { LoadingOverlay } from '@/components/common/LoadingOverlay';
 import { PaginationBar } from '@/components/common/PaginationBar';
 import { Spinner } from '@/components/common/Spinner';
 import { Badge } from '@/components/ui/badge';
@@ -176,7 +177,7 @@ export default function PromotionsPage() {
         </Button>
       </div>
 
-      <div className="rounded-lg border border-border bg-card">
+      <LoadingOverlay active={loading && items.length > 0} className="rounded-lg border border-border bg-card">
         <Table>
           <TableHeader>
             <TableRow>
@@ -191,7 +192,7 @@ export default function PromotionsPage() {
             </TableRow>
           </TableHeader>
           <TableBody>
-            {loading && (
+            {loading && items.length === 0 && (
               <TableRow>
                 <TableCell colSpan={8} className="text-center py-8">
                   <Spinner size={20} className="text-muted-foreground" />
@@ -205,8 +206,7 @@ export default function PromotionsPage() {
                 </TableCell>
               </TableRow>
             )}
-            {!loading &&
-              items.map((p) => (
+            {items.map((p) => (
                 <TableRow key={String(p._id)}>
                   <TableCell className="font-medium">
                     {p.name}
@@ -252,13 +252,13 @@ export default function PromotionsPage() {
           page={page}
           pageSize={pageSize}
           total={total}
-          loading={loading && items.length === 0}
+          loading={loading}
           onChange={(p, ps) => {
             setPage(p);
             setPageSize(ps);
           }}
         />
-      </div>
+      </LoadingOverlay>
 
       <PromotionEditDialog
         open={dialogOpen}

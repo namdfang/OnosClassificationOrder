@@ -2,7 +2,6 @@ import { Module } from '@nestjs/common';
 import { MongooseModule } from '@nestjs/mongoose';
 
 import { AuthModule } from '@/modules/auth/auth.module';
-import { CounterModule } from '@/modules/counter/counter.module';
 import { CustomerModule } from '@/modules/customer/customer.module';
 import { OrderEntity, OrderSchema } from '@/modules/order/order.entity';
 import { OrderModule } from '@/modules/order/order.module';
@@ -27,7 +26,6 @@ import { CustomerOrderService } from './customer-order.service';
     AuthModule,
     CustomerModule,
     OrderModule,
-    CounterModule,
     PromotionModule,
   ],
   controllers: [CustomerAuthController, CustomerOrderController, CustomerCatalogController],

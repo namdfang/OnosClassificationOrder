@@ -5,6 +5,9 @@
     "newOrder": "Đặt đơn mới",
     "logout": "Đăng xuất"
   },
+  "fileInput": {
+    "uploadUnavailable": "Tải file lên chưa khả dụng — vui lòng dán URL ảnh (Google Drive, Imgur...)"
+  },
   "login": {
     "title": "Đăng nhập Customer Portal",
     "subtitle": "Theo dõi và quản lý đơn hàng của bạn",
@@ -48,6 +51,7 @@
   },
   "orders": {
     "title": "Đơn hàng của bạn",
+    "resultsCount": "{{count}} đơn hàng",
     "empty": "Bạn chưa có đơn hàng nào.",
     "placeFirst": "Đặt đơn đầu tiên",
     "columns": {
@@ -59,33 +63,59 @@
       "orderDate": "Ngày đặt"
     },
     "statusCancelled": "Đã hủy",
-    "statusProcessing": "Đang xử lý"
+    "statusProcessing": "Đang xử lý",
+    "statusCompleted": "Hoàn thành",
+    "quantityShort": "SL",
+    "orderedOn": "Đặt ngày",
+    "inProductionOn": "Vào sản xuất",
+    "completedOn": "Hoàn thành ngày",
+    "viewTimeline": "Xem tiến trình đầy đủ →",
+    "viewDetail": "Xem chi tiết"
   },
   "orderNew": {
     "title": "Đặt đơn mới",
-    "type": "Loại sản phẩm",
-    "typePlaceholder": "Vd: Áo thun, Cốc sứ...",
-    "color": "Màu",
-    "colorPlaceholder": "Đen",
-    "size": "Size",
-    "sizePlaceholder": "M",
+    "subtitle": "Thêm 1 hoặc nhiều sản phẩm vào đơn, sau đó nhập 1 địa chỉ giao hàng dùng chung cho cả đơn.",
+    "pickProduct": "Chọn sản phẩm",
     "quantity": "Số lượng",
-    "mockupUrl": "Link ảnh mockup/thiết kế (không bắt buộc)",
-    "mockupUrlPlaceholder": "https://...",
-    "printMethod": "Phương pháp in (không bắt buộc)",
-    "printMethodPlaceholder": "DTG, DTF...",
-    "note": "Ghi chú (không bắt buộc)",
+    "mockupUrl": "Ảnh mockup",
+    "mockupUrlPlaceholder": "Dán URL ảnh mockup...",
+    "mockupUrlHelp": "Ảnh mockup do BẠN cung cấp để xưởng sản xuất — KHÔNG phải ảnh mẫu của sản phẩm.",
+    "note": "Ghi chú",
     "notePlaceholder": "Ghi chú thêm cho đơn hàng...",
-    "submit": "Đặt đơn",
+    "orderSummary": "Tóm tắt đơn hàng",
+    "addToCart": "Thêm vào đơn hàng",
+    "cartTitle": "Sản phẩm trong đơn ({{count}})",
+    "cartEmpty": "Chưa có sản phẩm nào — chọn 1 sản phẩm ở bên trái để bắt đầu.",
+    "cartTotal": "Tạm tính",
+    "removeFromCart": "Xóa khỏi đơn",
+    "shippingTitle": "Địa chỉ giao hàng",
+    "shippingFirstName": "Tên",
+    "shippingLastName": "Họ",
+    "shippingCompany": "Công ty",
+    "shippingPhone": "Số điện thoại",
+    "shippingEmail": "Email",
+    "shippingAddress1": "Địa chỉ",
+    "shippingAddress2": "Địa chỉ (dòng 2)",
+    "shippingCity": "Thành phố / Tỉnh",
+    "shippingState": "Bang / Quận",
+    "shippingPostcode": "Mã bưu điện",
+    "shippingCountry": "Quốc gia",
+    "submit": "Đặt đơn ({{count}} sản phẩm)",
     "success": "Đặt đơn thành công — mã đơn {{code}}",
     "changeProduct": "Đổi sản phẩm khác",
     "designUrl": "Link thiết kế — {{area}}",
     "designUrlPlaceholder": "https://drive.google.com/...",
-    "useCatalogPicker": "Chọn từ danh mục sản phẩm",
-    "useManualEntry": "Không tìm thấy sản phẩm? Nhập tay",
     "searchPlaceholder": "Tìm sản phẩm theo tên…",
     "searchEmpty": "Không tìm thấy sản phẩm phù hợp.",
     "validation": {
+      "cartRequired": "Vui lòng thêm ít nhất 1 sản phẩm vào đơn",
+      "mockupRequired": "Vui lòng cung cấp ảnh mockup trước khi thêm vào đơn",
+      "designRequired": "Vui lòng cung cấp file thiết kế cho vị trí in \"{{area}}\"",
+      "shippingNameRequired": "Tên người nhận là bắt buộc",
+      "shippingPhoneRequired": "Số điện thoại là bắt buộc",
+      "shippingAddress1Required": "Địa chỉ là bắt buộc",
+      "shippingCityRequired": "Thành phố / Tỉnh là bắt buộc",
+      "shippingEmailInvalid": "Email không hợp lệ",
       "typeRequired": "Loại sản phẩm là bắt buộc",
       "productRequired": "Vui lòng chọn 1 sản phẩm từ danh mục"
     }
@@ -96,7 +126,12 @@
     "completed": "Hoàn thành",
     "processing": "Đang xử lý",
     "progressTitle": "Tiến trình đơn hàng",
-    "quantityShort": "SL"
+    "quantityShort": "SL",
+    "editTitle": "Chỉnh sửa đơn hàng",
+    "editCancelledHint": "Đơn đã hủy, không thể chỉnh sửa.",
+    "saveChanges": "Lưu thay đổi",
+    "saveSuccess": "Đã cập nhật đơn hàng",
+    "missingRequiredFields": "Vui lòng điền đầy đủ các trường bắt buộc (*)"
   },
   "catalog": {
     "title": "Danh mục sản phẩm",
@@ -104,7 +139,10 @@
     "searchPlaceholder": "Tìm sản phẩm…",
     "empty": "Chưa có sản phẩm nào trong danh mục.",
     "copyProductName": "tên sản phẩm",
-    "moreVariations": "+ {{count}} biến thể khác"
+    "moreVariations": "+ {{count}} biến thể khác",
+    "variationCount": "{{count}} biến thể",
+    "resultsCount": "{{count}} sản phẩm",
+    "clearSearch": "Xóa tìm kiếm"
   },
   "catalogDetail": {
     "notFound": "Không tìm thấy sản phẩm này.",

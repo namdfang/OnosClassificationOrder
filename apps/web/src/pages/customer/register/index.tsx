@@ -58,7 +58,9 @@ function CustomerRegister() {
     <div className="min-h-screen bg-background flex items-center justify-center p-4">
       <div className="w-full max-w-[440px]">
         <div className="text-center mb-8">
-          <img src={logoUrl} alt="Logo" className="h-10 w-auto object-contain mx-auto mb-5" />
+          <Link to={PATHS.LANDING} className="inline-block">
+            <img src={logoUrl} alt="Logo" className="h-10 w-auto object-contain mx-auto mb-5" />
+          </Link>
           <h1 className="text-2xl font-bold text-foreground tracking-tight">{t('register.title')}</h1>
           <p className="text-sm text-muted-foreground mt-1.5">{t('register.subtitle')}</p>
         </div>

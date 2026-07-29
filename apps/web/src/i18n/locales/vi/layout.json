@@ -18,6 +18,7 @@
     "orders": {
       "title": "Quản lý đơn",
       "list": "Danh sách đơn",
+      "classic": "Đơn hàng",
       "errorLog": "Nhật ký bù lỗi",
       "scanError": "Quét mã",
       "stageErrors": "Danh mục lỗi công đoạn",

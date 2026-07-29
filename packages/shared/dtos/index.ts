@@ -8,6 +8,7 @@ export * from './cronjob.dto';
 export * from './custom-role.dto';
 export * from './customer.dto';
 export * from './customer-assignment.dto';
+export * from './customer-notification.dto';
 export * from './department.dto';
 export * from './designer.dto';
 export * from './designer-assignment.dto';

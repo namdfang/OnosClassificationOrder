@@ -479,6 +479,16 @@ export const GetProductionOrdersZod = PageQueryZod.extend({
   held: z.coerce.boolean().optional(),
 
   /**
+   * Lọc theo LÝ DO giữ đơn — exact match `holdReason` (field chỉ tồn tại khi
+   * đơn đang giữ, bị `$unset` cùng `heldAt` lúc mở giữ — nên tự nó đã ngụ ý
+   * "đang giữ", không cần kết hợp thêm `held=true`). Không truyền → KHÔNG lọc
+   * theo lý do (mặc định, giữ nguyên hành vi cũ). Giá trị thường là 1 trong
+   * `HOLD_REASON_PRESETS` (FE) nhưng field là free-text nên chấp nhận bất kỳ
+   * chuỗi nào khách/nhân viên đã nhập lúc giữ đơn.
+   */
+  holdReason: z.string().optional(),
+
+  /**
    * Toggle "Đã hủy". Truthy → CHỈ lấy đơn đã hủy (`cancelledAt` set). Bỏ qua khi
    * không truyền (list mặc định vẫn hiện đơn hủy tô xám). Đơn hủy LUÔN bị loại
    * khỏi mọi facet count (dropdown filter) trừ khi toggle này bật.
@@ -590,6 +600,7 @@ export const ImportProductionOrderRowZod = z.object({
   referent: z.string().optional(),
   orderAt: z.string().optional(),
   inProductionAt: z.string().optional(),
+  shippingAddress: ProductionOrderShippingAddressZod.optional(),
 });
 export type ImportProductionOrderRow = z.infer<typeof ImportProductionOrderRowZod>;
 
@@ -2139,7 +2150,13 @@ export class ToolCheckOverviewResDto extends createZodDto(extendApi(ToolCheckOve
 // Đặt đơn CHỈ gồm thông tin cơ bản (KHÔNG có factory/machine/toolResult/
 // designer/fulfillment...) — các field sản xuất được default giống hệt
 // luồng import nội bộ (`OrderService.importOrders`), xem `CustomerOrderService`.
-export const PlaceCustomerOrderZod = z.object({
+//
+// 1 lần "Đặt đơn" = NHIỀU sản phẩm (`items[]`, mỗi item → 1 `OrderEntity` row
+// riêng, giống hệt logic 1-sản-phẩm cũ) nhưng CHỈ 1 địa chỉ ship dùng chung
+// cho mọi item (`shippingAddress`) — snapshot vào field `shippingAddress` có
+// sẵn trên `OrderEntity` (trước đây chỉ set qua luồng khôi phục OnosPod, xem
+// Orders.md §9c).
+export const PlaceCustomerOrderItemZod = z.object({
   type: z.string().min(1),
   color: z.string().max(200).optional(),
   size: z.string().max(200).optional(),
@@ -2151,6 +2168,22 @@ export const PlaceCustomerOrderZod = z.object({
   length: z.number().nonnegative().optional(),
   quantity: z.number().int().positive().default(1),
   designs: DesignFieldsZod.optional(),
+});
+export type PlaceCustomerOrderItem = z.infer<typeof PlaceCustomerOrderItemZod>;
+
+/** Bắt buộc tối thiểu: tên người nhận + SĐT + địa chỉ + thành phố. */
+export const PlaceCustomerOrderShippingAddressZod = ProductionOrderShippingAddressZod.extend({
+  firstName: z.string().min(1).max(200),
+  phone: z.string().min(1).max(50),
+  address1: z.string().min(1).max(500),
+  city: z.string().min(1).max(200),
+});
+export type PlaceCustomerOrderShippingAddress = z.infer<typeof PlaceCustomerOrderShippingAddressZod>;
+
+export const PlaceCustomerOrderZod = z.object({
+  items: PlaceCustomerOrderItemZod.array().min(1).max(50),
+  shippingAddress: PlaceCustomerOrderShippingAddressZod,
+  /** Ghi chú chung — áp dụng cho MỌI item trong lần đặt đơn này. */
   referent: z.string().max(500).optional(),
 });
 export class PlaceCustomerOrderDto extends createZodDto(extendApi(PlaceCustomerOrderZod)) {}
@@ -2169,11 +2202,44 @@ export const CustomerOrderSummaryZod = z.object({
   cancelledAt: z.coerce.date().optional(),
   cancelReason: z.string().optional(),
   createdAt: z.coerce.date().optional(),
+  /** Ngày vào sản xuất — mốc mở đầu timeline sản xuất, hiển thị ở listing. */
+  inProductionAt: z.coerce.date().optional(),
+  /** Nhãn chặng sản xuất hiện tại (vd "Đang in", "Đóng hàng"...) — rút gọn từ
+   *  LifecycleTrack cho listing; xem `track.tsx` (GET .../track) để có timeline đầy đủ từng chặng. */
+  currentStageLabel: z.string().optional(),
+  /** Mốc thời gian vào chặng hiện tại. */
+  currentStageAt: z.coerce.date().optional(),
+  /** Đơn đã hoàn thành toàn bộ luồng (đóng hàng xong). */
+  completed: z.boolean().optional(),
+  /** Link thiết kế theo từng vị trí in — khách XEM/SỬA ở trang chi tiết (`track.tsx`), key khớp `printArea[].key` của sản phẩm. */
+  designs: DesignFieldsZod.optional(),
+  /** `ProductConfig._id` — trang chi tiết dùng để gọi `GET /customer/catalog/:id` lấy `printArea[]`, biết cần hiện ô sửa design nào. */
+  productConfigId: IDZod.optional(),
+  /** Địa chỉ ship hiện tại — khách XEM/SỬA ở trang chi tiết. */
+  shippingAddress: ProductionOrderShippingAddressZod.optional(),
 });
 export type CustomerOrderSummary = z.infer<typeof CustomerOrderSummaryZod>;
 
-export const PlaceCustomerOrderResZod = ResZod.extend({ data: CustomerOrderSummaryZod });
+export const PlaceCustomerOrderResZod = ResZod.extend({ data: CustomerOrderSummaryZod.array() });
 export class PlaceCustomerOrderResDto extends createZodDto(extendApi(PlaceCustomerOrderResZod)) {}
+
+/**
+ * Khách tự sửa 1 đơn ĐÃ đặt — mockup/design/địa chỉ ship (KHÔNG sửa được
+ * type/color/size/quantity, chỉ đổi được qua support nội bộ). Ít nhất 1 field.
+ */
+export const UpdateCustomerOrderZod = z
+  .object({
+    mockupUrl: z.string().max(2000).optional(),
+    designs: DesignFieldsZod.optional(),
+    shippingAddress: PlaceCustomerOrderShippingAddressZod.optional(),
+  })
+  .refine((v) => v.mockupUrl !== undefined || v.designs !== undefined || v.shippingAddress !== undefined, {
+    message: 'Cần ít nhất 1 field để cập nhật',
+  });
+export class UpdateCustomerOrderDto extends createZodDto(extendApi(UpdateCustomerOrderZod)) {}
+
+export const UpdateCustomerOrderResZod = ResZod.extend({ data: CustomerOrderSummaryZod });
+export class UpdateCustomerOrderResDto extends createZodDto(extendApi(UpdateCustomerOrderResZod)) {}
 
 export const GetCustomerOrdersZod = z.object({
   page: z.coerce.number().int().positive().default(1),

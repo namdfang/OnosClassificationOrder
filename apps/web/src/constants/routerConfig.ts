@@ -10,6 +10,7 @@ const ProductDetail = lazy(() => import('../pages/products/detail'));
 const Promotions = lazy(() => import('../pages/promotions'));
 const Orders = lazy(() => import('../pages/orders'));
 const OrdersWorkshop = lazy(() => import('../pages/orders/workshop'));
+const OrdersClassic = lazy(() => import('../pages/orders/classic'));
 const OrdersErrorLog = lazy(() => import('../pages/orders/error-log'));
 const OrdersImport = lazy(() => import('../pages/orders/import'));
 const OrdersCuttingFiles = lazy(() => import('../pages/orders/cutting-files'));
@@ -40,6 +41,7 @@ export const routerConfig: RouterConfig[] = [
   { path: PATHS.PROMOTIONS, component: Promotions },
   { path: PATHS.ORDERS, component: Orders },
   { path: PATHS.ORDERS_WORKSHOP, component: OrdersWorkshop },
+  { path: PATHS.ORDERS_CLASSIC, component: OrdersClassic },
   { path: PATHS.ORDERS_ERROR_LOG, component: OrdersErrorLog },
   { path: PATHS.ORDERS_IMPORT, component: OrdersImport },
   { path: PATHS.ORDERS_CUTTING_FILES, component: OrdersCuttingFiles },

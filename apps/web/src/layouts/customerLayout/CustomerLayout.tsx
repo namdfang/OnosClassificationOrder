@@ -3,6 +3,7 @@ import { useTranslation } from 'react-i18next';
 import { Link, Outlet, useNavigate } from 'react-router-dom';
 import { Languages, LayoutGrid, LogOut, PackagePlus } from 'lucide-react';
 
+import { NotificationBell } from '@/components/customer/NotificationBell';
 import { Button } from '@/components/ui/button';
 
 import logoUrl from '@/assets/images/logo.png';
@@ -33,7 +34,7 @@ function CustomerLayout() {
   return (
     <div className="min-h-screen bg-background flex flex-col">
       <header className="border-b border-border">
-        <div className="max-w-4xl mx-auto px-4 h-14 flex items-center justify-between">
+        <div className="max-w-6xl mx-auto px-4 h-14 flex items-center justify-between">
           <Link to={PATHS.CUSTOMER_ORDERS} className="flex items-center gap-2">
             <img src={logoUrl} alt="Logo" className="h-7 w-auto object-contain" />
             <span className="font-semibold text-sm">{t('layout.brand')}</span>
@@ -51,6 +52,7 @@ function CustomerLayout() {
             {profile?.userEmail && (
               <span className="text-xs text-muted-foreground hidden sm:inline">{profile.userEmail}</span>
             )}
+            <NotificationBell />
             <Button
               size="sm"
               variant="ghost"
@@ -74,7 +76,7 @@ function CustomerLayout() {
       </header>
 
       <main className="flex-1">
-        <div className="max-w-4xl mx-auto px-4 py-6">
+        <div className="max-w-6xl mx-auto px-4 py-6">
           <Outlet />
         </div>
       </main>

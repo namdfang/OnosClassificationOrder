@@ -1,6 +1,6 @@
 import React from 'react';
 import { useTranslation } from 'react-i18next';
-import { useNavigate } from 'react-router-dom';
+import { Link, useNavigate } from 'react-router-dom';
 import type { TFunction } from 'i18next';
 import { ClipboardList, Factory, LineChart, ShieldCheck } from 'lucide-react';
 
@@ -37,10 +37,9 @@ function Landing() {
     <div className="min-h-screen bg-background flex flex-col">
       <header className="border-b border-border">
         <div className="max-w-6xl mx-auto px-4 h-16 flex items-center justify-between">
-          <div className="flex items-center gap-2">
+          <Link to={PATHS.LANDING} className="flex items-center gap-2">
             <img src={logoUrl} alt="Logo" className="h-8 w-auto object-contain" />
-            <span className="font-bold text-foreground tracking-tight">Printsel</span>
-          </div>
+          </Link>
 
           <nav className="hidden md:flex items-center gap-6 text-sm text-muted-foreground">
             <a href="#features" className="hover:text-foreground transition-colors">
@@ -114,7 +113,7 @@ function Landing() {
 
       <footer className="border-t border-border">
         <div className="max-w-6xl mx-auto px-4 h-16 flex items-center justify-between text-sm text-muted-foreground">
-          <span>© {new Date().getFullYear()} Printsel</span>
+          <span>© {new Date().getFullYear()}</span>
           <span>{t('footer.tagline')}</span>
         </div>
       </footer>

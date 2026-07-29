@@ -1,5 +1,5 @@
 import { ZodValidationPipe } from '@anatine/zod-nestjs';
-import { Body, Controller, Get, HttpCode, HttpStatus, Inject, Param, Post, Query, UsePipes } from '@nestjs/common';
+import { Body, Controller, Get, HttpCode, HttpStatus, Inject, Param, Patch, Post, Query, UsePipes } from '@nestjs/common';
 import { ApiOkResponse, ApiOperation, ApiTags } from '@nestjs/swagger';
 import { AuthUser } from 'core';
 import {
@@ -9,6 +9,8 @@ import {
   PlaceCustomerOrderDto,
   PlaceCustomerOrderResDto,
   RoleType,
+  UpdateCustomerOrderDto,
+  UpdateCustomerOrderResDto,
 } from 'shared';
 import { Logger } from 'winston';
 
@@ -63,5 +65,21 @@ export class CustomerOrderController {
     @AuthUser() customer: CustomerDocument,
   ): Promise<GetCustomerOrderTrackResDto> {
     return this.customerOrderService.trackOrder(customer, productionId);
+  }
+
+  @Patch(':productionId')
+  @Auth([RoleType.Customer])
+  @ApiOperation({ summary: 'Khách sửa mockup/design/địa chỉ ship của 1 đơn đã đặt' })
+  @HttpCode(HttpStatus.OK)
+  @ApiOkResponse({ type: UpdateCustomerOrderResDto })
+  async updateOrder(
+    @Param('productionId') productionId: string,
+    @Body() dto: UpdateCustomerOrderDto,
+    @AuthUser() customer: CustomerDocument,
+  ): Promise<UpdateCustomerOrderResDto> {
+    this.logger.info({
+      message: JSON.stringify({ method: 'PATCH', url: `/customer/orders/${productionId}`, customerId: customer._id }),
+    });
+    return this.customerOrderService.updateOrder(customer, productionId, dto);
   }
 }

@@ -4,6 +4,7 @@ import i18n from 'i18next';
 import authEn from './locales/en/auth.json';
 import commonEn from './locales/en/common.json';
 import customerFactoryAssignmentEn from './locales/en/customerFactoryAssignment.json';
+import customerNotificationsEn from './locales/en/customerNotifications.json';
 import customerPortalEn from './locales/en/customerPortal.json';
 import dashboardEn from './locales/en/dashboard.json';
 import designerAutoAssignEn from './locales/en/designerAutoAssign.json';
@@ -23,6 +24,7 @@ import workshopConfigEn from './locales/en/workshopConfig.json';
 import authVi from './locales/vi/auth.json';
 import commonVi from './locales/vi/common.json';
 import customerFactoryAssignmentVi from './locales/vi/customerFactoryAssignment.json';
+import customerNotificationsVi from './locales/vi/customerNotifications.json';
 import customerPortalVi from './locales/vi/customerPortal.json';
 import dashboardVi from './locales/vi/dashboard.json';
 import designerAutoAssignVi from './locales/vi/designerAutoAssign.json';
@@ -73,6 +75,7 @@ export const resources = {
     designerAutoAssign: designerAutoAssignVi,
     customerFactoryAssignment: customerFactoryAssignmentVi,
     customerPortal: customerPortalVi,
+    customerNotifications: customerNotificationsVi,
     landing: landingVi,
   },
   en: {
@@ -94,6 +97,7 @@ export const resources = {
     designerAutoAssign: designerAutoAssignEn,
     customerFactoryAssignment: customerFactoryAssignmentEn,
     customerPortal: customerPortalEn,
+    customerNotifications: customerNotificationsEn,
     landing: landingEn,
   },
 } as const;

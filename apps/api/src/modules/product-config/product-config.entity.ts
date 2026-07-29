@@ -31,8 +31,9 @@ export class ProductConfigEntity extends DatabaseEntityAbstract {
   @Prop({ ref: 'MachineTypeEntity', index: true })
   machineTypeId?: string;
 
-  @Prop({ required: true, ref: 'FactoryEntity', index: true })
-  factoryId: string;
+  /** Optional — sản phẩm có thể tạo mà chưa gán xưởng, bổ sung sau ở trang Products. */
+  @Prop({ ref: 'FactoryEntity', index: true })
+  factoryId?: string;
 
   /** workshop_config code (category=fabric_type). Default fabric for orders mapped to this product. */
   @Prop({ trim: true })

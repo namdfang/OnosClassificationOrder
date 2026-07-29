@@ -13,6 +13,8 @@ interface PaginationProps {
   pageSizeOptions?: number[];
   onChange: (page: number, pageSize: number) => void;
   className?: string;
+  /** Đang tải lại dữ liệu — vô hiệu hoá điều khiển thay vì ẩn cả bar. */
+  disabled?: boolean;
 }
 
 export function Pagination({
@@ -22,6 +24,7 @@ export function Pagination({
   pageSizeOptions = [10, 20, 50, 100],
   onChange,
   className,
+  disabled = false,
 }: PaginationProps) {
   const { t } = useTranslation('common');
   const totalPages = Math.max(1, Math.ceil(total / pageSize));
@@ -43,7 +46,7 @@ export function Pagination({
   };
 
   return (
-    <div className={cn('flex items-center justify-between gap-3 flex-wrap', className)}>
+    <div className={cn('flex items-center justify-between gap-3 flex-wrap', disabled && 'opacity-60', className)}>
       <p className="text-xs text-muted-foreground">
         {total === 0 ? t('pagination.noResults') : t('pagination.showing', { from, to, total })}
       </p>
@@ -52,6 +55,7 @@ export function Pagination({
         <select
           value={pageSize}
           onChange={(e) => onChange(1, Number(e.target.value))}
+          disabled={disabled}
           className="h-8 rounded-md border border-input bg-background px-2 text-xs"
         >
           {pageSizeOptions.map((s) => (
@@ -61,7 +65,13 @@ export function Pagination({
           ))}
         </select>
 
-        <Button variant="outline" size="icon" className="h-8 w-8" onClick={() => go(1)} disabled={safePage === 1}>
+        <Button
+          variant="outline"
+          size="icon"
+          className="h-8 w-8"
+          onClick={() => go(1)}
+          disabled={disabled || safePage === 1}
+        >
           <ChevronsLeft size={14} />
         </Button>
         <Button
@@ -69,7 +79,7 @@ export function Pagination({
           size="icon"
           className="h-8 w-8"
           onClick={() => go(safePage - 1)}
-          disabled={safePage === 1}
+          disabled={disabled || safePage === 1}
         >
           <ChevronLeft size={14} />
         </Button>
@@ -81,6 +91,7 @@ export function Pagination({
             size="sm"
             className="h-8 min-w-8 px-2"
             onClick={() => go(p)}
+            disabled={disabled}
           >
             {p}
           </Button>
@@ -91,7 +102,7 @@ export function Pagination({
           size="icon"
           className="h-8 w-8"
           onClick={() => go(safePage + 1)}
-          disabled={safePage === totalPages}
+          disabled={disabled || safePage === totalPages}
         >
           <ChevronRight size={14} />
         </Button>
@@ -100,7 +111,7 @@ export function Pagination({
           size="icon"
           className="h-8 w-8"
           onClick={() => go(totalPages)}
-          disabled={safePage === totalPages}
+          disabled={disabled || safePage === totalPages}
         >
           <ChevronsRight size={14} />
         </Button>

@@ -1,7 +1,7 @@
 # Orders — Function Description
 
 > **File FE:** `apps/web/src/pages/orders/index.tsx` (Tabs wrapper, route theo permission)
-> **File FE tabs:** `ListOrderTab.tsx` (Admin), `ErrorLogTab.tsx` (mọi role — Nhật ký bù lỗi), `OrderTableWorkshop.tsx` (Designer/Fulfill/Support), `ImportOrderTab.tsx`, `parseOrders.ts`
+> **File FE tabs:** `ListOrderTab.tsx` (KHÔNG dùng nữa — đã tách route riêng, xem `pages/orders/index.tsx`), `ErrorLogTab.tsx` (mọi role — Nhật ký bù lỗi), `OrderTableWorkshop.tsx` (grouped theo sản phẩm — Designer/Fulfill/Support), `OrderTableClassic.tsx` (flat + phân trang thật, KHÔNG gộp theo sản phẩm — §10.2b), `ImportOrderTab.tsx`, `parseOrders.ts`
 > **Cell components:** `apps/web/src/components/orders/cells/{ColorBadgeSelectCell,IconSelectCell,TextEditCell,ImageThumbCell,DesignThumbsCell,SelectPopover,AssigneeSelectCell,ProductionErrorSelectCell,ProductionErrorOtherDialog,ErrorSourceCell}.tsx`
 > **Bulk edit:** `apps/web/src/components/orders/BulkEditToolbar.tsx` + `AssignDesignerDialog.tsx`
 > **Workshop columns (shared with Dashboard Tab C):** `apps/web/src/components/orders/workshopTableConfig.tsx` (`WORKSHOP_COLS` + `WorkshopOrderRow` + `WorkshopRenderCtx`)
@@ -591,7 +591,7 @@ Permission code chi tiết — xem `packages/shared/constants/permission-catalog
 
 ### 9b.1 Schema
 - `OrderEntity.heldAt?: Date` (index) + `holdReason?: string` (`order.entity.ts`). Set khác null ⇒ đơn "đang giữ".
-- Shared `ProductionOrderZod`: `heldAt` + `holdReason`. Filter param `held: z.coerce.boolean()` trong `GetProductionOrdersZod` (held=true → chỉ đơn giữ; false → chỉ đơn không giữ; bỏ trống → cả 2).
+- Shared `ProductionOrderZod`: `heldAt` + `holdReason`. Filter param `held: z.coerce.boolean()` trong `GetProductionOrdersZod` (held=true → chỉ đơn giữ; false → chỉ đơn không giữ; bỏ trống → cả 2). Filter param `holdReason: z.string()` (exact match, tự ngụ ý `held=true` vì field bị `$unset` cùng `heldAt` lúc mở giữ) — bỏ trống → KHÔNG lọc theo lý do (mặc định).
 - `ORDER_LOG_ACTIONS` thêm `'hold'` + `'unhold'`.
 
 ### 9b.2 Endpoints (`@Auth(ORDER_WRITE_ROLES)`)
@@ -613,6 +613,7 @@ Permission code chi tiết — xem `packages/shared/constants/permission-catalog
 - `HeldBadge.tsx` (hổ phách "Đang giữ" + reason) — mirror `CancelledBadge`.
 - `HoldOrderDialog.tsx` (giữ 1 đơn, lý do KHÔNG bắt buộc). Export `HOLD_REASON_PRESETS` — 5 lý do phổ biến dạng chip (Đợi khách sửa design / địa chỉ / thông tin đơn, Chờ khách xác nhận, Thiếu vật tư): click chip = điền nhanh vào textarea (click lại = bỏ chọn), vẫn sửa tay/tự gõ lý do khác được — KHÔNG phải danh mục cấu hình được (khác `workshop_config`), chỉ là preset tĩnh FE.
 - Tô xám + badge + **cell read-only** (override `ctx.canEditField=()=>false`) ở: `OrderTableWorkshop`, `ErrorLogTab`, `OrdersMiniTable`; tô xám + badge ở `ListOrderTab`.
+- `ListOrderTab.tsx`: select **"Lý do giữ"** (options = `HOLD_REASON_PRESETS` tĩnh, KHÔNG có count/facet) — chọn 1 lý do → filter `holdReason` (param URL `lhold`); không chọn → không lọc. Đặt cạnh nút "Lỗi xưởng" trong hàng filter, tách biệt khỏi khối filter designer (`canSeeDesignerSummary`) vì áp cho MỌI role xem được danh sách đơn.
 - `OrderRowActionsMenu.tsx`: item **"Giữ đơn"** (mở dialog) / **"Mở giữ"** (gọi trực tiếp) cho role `canUserHold`; menu hiện khi `isAdmin || canUserHold`.
 - `BulkEditToolbar.tsx`: nút **"Giữ đơn"** (dialog lý do bulk, tái dùng CHUNG `HOLD_REASON_PRESETS` từ `HoldOrderDialog.tsx`) + **"Mở giữ"** (bulk trực tiếp) → `RepositoryRemote.order.bulkHold({ ids, hold, reason })`.
 - Service `services/order.ts`: `holdOrder` · `unholdOrder` · `bulkHold`.
@@ -676,7 +677,12 @@ address_1,address_2,city,state,postcode,country,email,phone}`.
   `order.designsOriginal ?? order.designs` (đã có sẵn từ lúc import, hợp lệ để
   so sánh ngay). Khác baseline (ở BẤT KỲ vị trí in nào OnosPod trả về giá trị)
   → `$set designs.<k>` + `designsOriginal.<k>` cho các vị trí đổi + `$unset
-  heldAt/holdReason` (mở giữ) + log `unhold`.
+  heldAt/holdReason` (mở giữ) + **2 log riêng**: `update_design` (field=`designs`,
+  before/after snapshot theo TỪNG vị trí đổi — CÙNG convention với
+  `updateOrderDesign()` thường, để phân biệt được lịch sử SỬA GÌ, không chỉ
+  MỞ GIỮ) rồi `unhold` (field=`heldAt`, chỉ ghi nhận mốc mở giữ). Chỉ chạy
+  cho đơn đang giữ đúng lý do "Đợi khách sửa design" nên log `update_design`
+  này CHỈ phát sinh cho đơn giữ, không lẫn với design sửa tay ở Danh sách đơn.
 - **Địa chỉ**: `order.shippingAddress` là field MỚI, chưa từng có baseline →
   **lần check đầu chỉ SNAPSHOT** (`$set shippingAddress`), **KHÔNG tự mở giữ**
   (chưa biết có đổi hay không). Từ lần thứ 2 trở đi mới so sánh snapshot đã
@@ -780,6 +786,28 @@ Thứ tự group MẶC ĐỊNH (mọi role trừ Support) đặt `toolCheck` (g�
 > **Trang Fulfillment "In"** dùng bảng **phẳng riêng** `PrintOrderTable` (KHÔNG group sản phẩm), KHÔNG reuse `OrderTableWorkshop`. Lấy data từ `GET /v1/orders` (`sort=grouped`). Xem `FulfillmentWorkflow.md §4.5`.
 
 `WorkshopOrderRow` có thêm field optional `currentFulfillmentStage` + `fulfillmentStages` để consumer (PrintOrderTable) quyết định hiển thị action theo trạng thái stage.
+
+### 10.2b `OrderTableClassic.tsx` — "Đơn hàng", flat + phân trang thật
+
+> **Mục tiêu:** Bản thay thế KHÔNG gộp theo sản phẩm của `OrderTableWorkshop` — cùng cột/filter/bulk edit, chỉ khác cách hiển thị (phẳng, phân trang theo SỐ DÒNG ĐƠN thay vì SỐ LOẠI SẢN PHẨM) và KHÔNG có block Designer Summary. Route riêng `/ffm/orders/classic`, menu sidebar **"Đơn hàng"** (`Rows3` icon, key `sidebar.orders.classic`) — đặt ở **CUỐI** nhóm menu "Quản lý đơn" (sau "Cắt file"), gate cùng permission `page.orders` + `order.view_workshop_table` (mirror `OrdersWorkshopPage`).
+
+**Tái dùng NGUYÊN VẸN** (không duplicate logic, chỉ đổi cách render/fetch):
+- `WORKSHOP_COLS` + `buildColGroups()` + `GroupCellContent` + `groupTitle` (`workshopTableConfig.tsx`) — CÙNG 7 group cột như §10.2/§10.2a.
+- `<OrderFilterBar>` — CÙNG 10 facet chuẩn (bao gồm `designerStatus`, vẫn gate theo `canSeeDesignerSummary` cho quyền XEM facet đó — khác việc ẩn PANEL thống kê) + toggle "Đang giữ"/"Đã hủy" + chip "Đang lọc".
+- `<BulkEditToolbar>` — y hệt, bao gồm nút "Bỏ gán design" (§ DesignerAutoAssign) mới thêm.
+- `AssigneeSelectCell`/`OrderRowActionsMenu`/`OrderDetailDialog`/`OrderLogTimelineDialog`/`ImagePreviewDialog` — mọi cell/dialog dùng chung.
+
+**Khác `OrderTableWorkshop`:**
+1. **Fetch** qua `RepositoryRemote.order.getOrders()` (endpoint `GET /v1/orders` thường) thay vì `getOrdersGrouped()` — `page`/`limit` áp trực tiếp lên số dòng đơn, KHÔNG phải số loại sản phẩm. Response phẳng `{ data: OrderRow[], total }`, không có `groups[]`.
+2. **KHÔNG virtualize** — bảng render toàn bộ `items` của trang hiện tại bằng `<TableBody>` thường (không cần `useVirtualizer`/`scrollMargin`/measure vì không còn hàng trăm dòng ẩn trong group chưa mở).
+3. **KHÔNG có**: header hàng "loại sản phẩm" (`collapsedTypes`/`toggleType`), nút "Mở hết/Đóng hết", badge combo "×N"/heaviest-combo highlight (`comboKeyOf`), `DesignerSummaryPanel` + nút "Chi tiết tồn đọng" + `DesignerBacklogDialog`.
+4. **URL param prefix `c`** (khác `w` của Workshop, `l` của `ListOrderTab` cũ đã tắt) — `csearch`/`cfrom`/`cto`/`cprint`/`cnote`/`cassign`/`cerror`/`cfabric`/`cmnum`/`ctool`/`cerrfile`/`cdstatus`/`cusersku`/`cheld`/`ccancel`/`cpage`/`csize` + `pid` (share chung tên với Workshop, không prefix). Toàn bộ filter sync 2 chiều với URL (`useSearchParams` + `{replace:true}`) — copy URL chia sẻ được nguyên trạng bộ lọc đang xem, giống Workshop. Ngày `createdFrom`/`createdTo` mặc định RỖNG (không tự set "hôm nay" như Workshop) — trang cổ điển ưu tiên xem toàn bộ theo mặc định.
+5. **"Cập nhật toàn bộ trang"** cho các thao tác bulk: vì đơn vị phân trang = dòng đơn thật (không phải sản phẩm), checkbox header "Chọn tất cả trang này" (`toggleAll`) tick 1 lần là chọn được TOÀN BỘ đơn đang hiển thị trên trang → `<BulkEditToolbar>` áp bulk action (gán design, đổi field, giữ đơn, ưu tiên...) cho **nguyên trang** ngay lập tức, không cần chọn tay từng dòng như khi các đơn còn nằm rải trong nhiều group đóng.
+6. **`patchRow`** chỉ cần update 1 state `items` (không có `groups` song song để đồng bộ như Workshop).
+7. **Sort mặc định**: `sort=inProductionAt&order=desc` — đơn vào sản xuất MỚI NHẤT hiện trước (giống default `getOrders()` khi không truyền `sort`, đặt tường minh cho rõ ràng). `priority: -1` vẫn luôn ưu tiên trước (hardcode ở BE, không đổi được qua `sort`/`order`).
+8. **"Chọn tất cả N đơn khớp bộ lọc" — xuyên MỌI trang** (`handleSelectAllPages`, CHỈ có ở trang này, không có ở Workshop): khi đã tick hết trang hiện tại và còn đơn ở trang khác (`total > items.length`), hiện banner mời chọn tiếp toàn bộ `total` đơn khớp filter hiện tại. Bấm vào gọi lại `getOrders()` với CÙNG `buildFilterParams()` nhưng `page=1`/`limit=total` để lấy đủ `_id` mọi trang rồi đổ thẳng vào `selected` — mọi bulk action ở `<BulkEditToolbar>` tự áp dụng cho toàn tập vì chỉ nhận mảng `ids`, không quan tâm chúng đến từ trang nào. KHÔNG còn box "Mẹo chọn nhiều đơn" (`selectionHint`, đã bỏ khỏi trang này — vẫn còn ở Workshop).
+
+**File FE:** `apps/web/src/pages/orders/OrderTableClassic.tsx` (component) + `apps/web/src/pages/orders/classic/index.tsx` (page wrapper, mirror `orders/workshop/index.tsx`).
 
 **Filter chips "Đang lọc" + reset selection** (`OrderTableWorkshop.tsx`):
 - **Reset chọn đơn về 0 khi BẤT KỲ filter nào đổi** (search/date/9 facet) — `useEffect` deps = toàn bộ filter, KHÔNG gồm `page/pageSize` (đổi trang vẫn giữ selection). Tránh gán nhầm đơn không còn hiển thị sau khi đổi filter.

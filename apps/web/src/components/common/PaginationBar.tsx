@@ -16,7 +16,9 @@ import { Pagination } from './Pagination';
  *
  * - `position="top"` → standalone card có viền + nền (đặt trên cụm table).
  * - `position="bottom"` → 1 dải có `border-t` (đặt bên trong card của table).
- * - `total === 0 || loading === true` → render `null`.
+ * - `total === 0` → render `null` (chưa có gì để phân trang, kể cả khi đang loading lần đầu).
+ * - `loading === true` (đã có `total` từ lần fetch trước) → GIỮ bar, chỉ vô hiệu hoá điều khiển
+ *   (`disabled`) thay vì ẩn — tránh nhấp nháy/giật layout khi reload lại cùng trang.
  */
 interface PaginationBarProps {
   page: number;
@@ -26,14 +28,14 @@ interface PaginationBarProps {
   onChange: (page: number, pageSize: number) => void;
   /** Đặt ở đâu — quyết định kiểu wrapper. */
   position: 'top' | 'bottom';
-  /** Khi đang loading lần đầu (chưa có total) ẩn bar tránh nhấp nháy. */
+  /** Đang tải lại dữ liệu — vô hiệu hoá bar thay vì ẩn. */
   loading?: boolean;
 }
 
 export function PaginationBar({ position, loading = false, total, ...rest }: PaginationBarProps) {
-  if (loading || total <= 0) return null;
+  if (total <= 0) return null;
 
-  const inner = <Pagination {...rest} total={total} />;
+  const inner = <Pagination {...rest} total={total} disabled={loading} />;
 
   if (position === 'top') {
     return <div className="rounded-lg border border-border bg-card p-3">{inner}</div>;

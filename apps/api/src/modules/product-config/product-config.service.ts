@@ -303,8 +303,13 @@ export class ProductConfigService {
   }
 
   async createProductConfig(dto: CreateProductConfigDto) {
-    const factory = await this.factoryService.getFactory(dto.factoryId);
-    if (!factory) throw new BadRequestException('Invalid factoryId');
+    // factoryId optional — sản phẩm có thể tạo mà chưa gán xưởng, bổ sung sau
+    // ở trang Products (đơn import khớp sản phẩm này sẽ rơi vào "Không xác
+    // định xưởng", cùng cách xử lý đơn chưa map product config — Orders.md §19).
+    if (dto.factoryId) {
+      const factory = await this.factoryService.getFactory(dto.factoryId);
+      if (!factory) throw new BadRequestException('Invalid factoryId');
+    }
     if (dto.productCategoryId) await this.productCategoryService.getProductCategory(dto.productCategoryId);
 
     try {
@@ -352,7 +357,28 @@ export class ProductConfigService {
     }
   }
 
+  /**
+   * Chỉ cho xóa (soft) khi sản phẩm KHÔNG còn đơn hàng nào tham chiếu — đơn
+   * tham chiếu sản phẩm qua `order.type` khớp `fullName` (case-insensitive,
+   * exact match — CÙNG cách `importOrders()` map ProductConfig lúc import,
+   * xem `OrderService`). Đếm mọi đơn chưa xóa (kể cả đã hủy — hủy vẫn là lịch
+   * sử tham chiếu sản phẩm này) để tránh mất liên kết dữ liệu.
+   */
   async deleteProductConfig(id: string) {
+    const product = await this.productConfigRepository.findOne({ _id: id });
+    if (!product) throw new NotFoundException('Không tìm thấy sản phẩm.');
+
+    const escaped = product.fullName.trim().replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+    const orderCount = await this.orderModel.countDocuments({
+      type: { $regex: `^${escaped}$`, $options: 'i' },
+      deletedAt: { $exists: false },
+    });
+    if (orderCount > 0) {
+      throw new BadRequestException(
+        `Không thể xóa — sản phẩm "${product.fullName}" đang có ${orderCount} đơn hàng.`,
+      );
+    }
+
     return this.productConfigRepository.softDelete({ _id: id });
   }
 

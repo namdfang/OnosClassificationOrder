@@ -3,7 +3,8 @@ import { cache } from './cache';
 import { customRoles } from './custom-roles';
 import { customer } from './customer';
 import { customerAssignment } from './customerAssignment';
-import { customerAuth, customerCatalog, customerOrder } from './customerPortal';
+import { customerNotification } from './customerNotification';
+import { customerAuth, customerCatalog, customerNotificationPortal, customerOrder } from './customerPortal';
 import { departments } from './departments';
 import { designer } from './designer';
 import { designerAssignment } from './designerAssignment';
@@ -43,6 +44,8 @@ export const RepositoryRemote = {
   customerAuth,
   customerOrder,
   customerCatalog,
+  customerNotification,
+  customerNotificationPortal,
   fulfillment,
   reports,
   promotion,

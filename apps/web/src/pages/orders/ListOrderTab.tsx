@@ -9,6 +9,7 @@ import { RepositoryRemote } from '@/services';
 import { CopyButton } from '@/components/common/CopyButton';
 import { Hint } from '@/components/common/Hint';
 import { ImagePreviewDialog } from '@/components/common/ImagePreviewDialog';
+import { LoadingOverlay } from '@/components/common/LoadingOverlay';
 import { PaginationBar } from '@/components/common/PaginationBar';
 import { SelectFilter } from '@/components/common/SelectFilter';
 import { Spinner } from '@/components/common/Spinner';
@@ -16,6 +17,7 @@ import { BulkProductionIdDialog, parseProductionIds } from '@/components/orders/
 import { CancelledBadge } from '@/components/orders/CancelledBadge';
 import { PrioritySelectCell } from '@/components/orders/cells/PrioritySelectCell';
 import { HeldBadge } from '@/components/orders/HeldBadge';
+import { HOLD_REASON_PRESETS } from '@/components/orders/HoldOrderDialog';
 import { OrderLogTimelineDialog } from '@/components/orders/OrderLogTimelineDialog';
 import { OrderRowActionsMenu } from '@/components/orders/OrderRowActionsMenu';
 import type { WorkshopOrderRow } from '@/components/orders/workshopTableConfig';
@@ -26,6 +28,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@
 import { TooltipProvider } from '@/components/ui/tooltip';
 
 import { handleAxiosError } from '@/utils';
+import { cn } from '@/utils/cn';
 import { formatDate } from '@/utils/date';
 import { smallThumb } from '@/utils/driveThumb';
 import { isCancelled, isHeld } from '@/utils/orderActions';
@@ -363,6 +366,10 @@ export function ListOrderTab({ refreshKey }: ListOrderTabProps) {
     return v === 'mapped' || v === 'unmapped' ? v : 'all';
   });
   const [filterError, setFilterError] = useState<boolean>(() => searchParams.get('lerror') === 'true');
+  // Lọc đơn đang GIỮ theo lý do — không chọn thì không lọc (hiện cả giữ lẫn
+  // không giữ, hành vi mặc định cũ). Chọn 1 lý do → CHỈ đơn đang giữ đúng lý
+  // do đó (field `holdReason` tự ngụ ý held=true, xem `buildOrderListFilter`).
+  const [filterHoldReason, setFilterHoldReason] = useState<string>(() => searchParams.get('lhold') || '');
   // Designer summary filters — Admin / Leader.
   const [filterAssignee, setFilterAssignee] = useState<string>(() => searchParams.get('lassign') || '');
   const [filterDesignerStatus, setFilterDesignerStatus] = useState<string>(() => searchParams.get('ldstatus') || '');
@@ -399,13 +406,14 @@ export function ListOrderTab({ refreshKey }: ListOrderTabProps) {
         filterError ? sp.set('lerror', 'true') : sp.delete('lerror');
         filterAssignee ? sp.set('lassign', filterAssignee) : sp.delete('lassign');
         filterDesignerStatus ? sp.set('ldstatus', filterDesignerStatus) : sp.delete('ldstatus');
+        filterHoldReason ? sp.set('lhold', filterHoldReason) : sp.delete('lhold');
         page > 1 ? sp.set('lpage', String(page)) : sp.delete('lpage');
         pageSize !== DEFAULT_PAGE_SIZE ? sp.set('lsize', String(pageSize)) : sp.delete('lsize');
         return sp;
       },
       { replace: true },
     );
-  }, [search, filterMapped, filterError, filterAssignee, filterDesignerStatus, page, pageSize, setSearchParams]);
+  }, [search, filterMapped, filterError, filterAssignee, filterDesignerStatus, filterHoldReason, page, pageSize, setSearchParams]);
 
   /** Build filter params dùng cho cả fetchData, fetchFilters, summary panel. */
   const buildFilterParams = (): URLSearchParams => {
@@ -417,6 +425,7 @@ export function ListOrderTab({ refreshKey }: ListOrderTabProps) {
     if (filterError) params.set('hasError', 'true');
     if (filterAssignee) params.set('assignee', filterAssignee);
     if (filterDesignerStatus) params.set('designerStatus', filterDesignerStatus);
+    if (filterHoldReason) params.set('holdReason', filterHoldReason);
     return params;
   };
 
@@ -458,7 +467,7 @@ export function ListOrderTab({ refreshKey }: ListOrderTabProps) {
     fetchData();
     fetchFilters();
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [refreshKey, filterMapped, filterError, filterAssignee, filterDesignerStatus, bulkIds, page, pageSize]);
+  }, [refreshKey, filterMapped, filterError, filterAssignee, filterDesignerStatus, filterHoldReason, bulkIds, page, pageSize]);
 
   // Skip lần render đầu — nếu không sẽ ghi đè `lpage` đọc từ URL khi F5.
   const isFirstRender = React.useRef(true);
@@ -468,7 +477,7 @@ export function ListOrderTab({ refreshKey }: ListOrderTabProps) {
       return;
     }
     setPage(1);
-  }, [filterMapped, filterError, filterAssignee, filterDesignerStatus]);
+  }, [filterMapped, filterError, filterAssignee, filterDesignerStatus, filterHoldReason]);
 
   const handleSearch = () => {
     if (bulkIds.length) setBulkIds([]); // search thường loại bỏ bộ lọc bulk
@@ -640,6 +649,22 @@ export function ListOrderTab({ refreshKey }: ListOrderTabProps) {
             >
               {t('listTab.factoryError')}
             </Button>
+            <select
+              value={filterHoldReason}
+              onChange={(e) => setFilterHoldReason(e.target.value)}
+              title={t('listTab.holdReasonFilterTitle')}
+              className={cn(
+                'h-8 rounded-md border bg-background px-2 text-xs focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring',
+                filterHoldReason ? 'border-primary text-primary' : 'border-input',
+              )}
+            >
+              <option value="">{t('listTab.holdReasonFilterAll')}</option>
+              {HOLD_REASON_PRESETS.map((preset) => (
+                <option key={preset} value={preset}>
+                  {preset}
+                </option>
+              ))}
+            </select>
           </div>
         </div>
 
@@ -676,7 +701,7 @@ export function ListOrderTab({ refreshKey }: ListOrderTabProps) {
 
         <PaginationBar position="top" {...paginationProps} />
 
-        <div className="rounded-lg border border-border bg-card">
+        <LoadingOverlay active={loading && items.length > 0} className="rounded-lg border border-border bg-card">
           <Table>
             <TableHeader>
               <TableRow>
@@ -692,7 +717,7 @@ export function ListOrderTab({ refreshKey }: ListOrderTabProps) {
               </TableRow>
             </TableHeader>
             <TableBody>
-              {loading && (
+              {loading && items.length === 0 && (
                 <TableRow>
                   <TableCell colSpan={8} className="text-center py-10">
                     <Spinner size={20} className="text-muted-foreground" />
@@ -706,24 +731,23 @@ export function ListOrderTab({ refreshKey }: ListOrderTabProps) {
                   </TableCell>
                 </TableRow>
               )}
-              {!loading &&
-                items.map((it) => (
-                  <OrderRowItem
-                    key={it._id}
-                    it={it}
-                    onPreview={openPreview}
-                    onDelete={handleDelete}
-                    onHistory={openHistory}
-                    onChanged={handleChanged}
-                    canEditPriority={canEditField('priority')}
-                    onPriorityUpdated={(id, priority) => patchRow(id, { priority: priority ?? undefined })}
-                  />
-                ))}
+              {items.map((it) => (
+                <OrderRowItem
+                  key={it._id}
+                  it={it}
+                  onPreview={openPreview}
+                  onDelete={handleDelete}
+                  onHistory={openHistory}
+                  onChanged={handleChanged}
+                  canEditPriority={canEditField('priority')}
+                  onPriorityUpdated={(id, priority) => patchRow(id, { priority: priority ?? undefined })}
+                />
+              ))}
             </TableBody>
           </Table>
 
           <PaginationBar position="bottom" {...paginationProps} />
-        </div>
+        </LoadingOverlay>
 
         <ImagePreviewDialog
           open={!!preview}

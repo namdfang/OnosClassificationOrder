@@ -32,6 +32,12 @@ export class CustomerEntity extends DatabaseEntityAbstract {
 
   @Prop({ default: Status.Active })
   status: string;
+
+  // Mốc "đã đọc thông báo tới lúc này" — bump khi khách bấm "Đánh dấu đã đọc"
+  // ở chuông thông báo Customer Portal. KHÔNG public qua `toSafeCustomer()`/
+  // `CustomerZod` — chỉ đọc/ghi nội bộ trong `customer-notification` module.
+  @Prop({ type: Date, default: null })
+  notificationsReadAt: Date | null;
 }
 
 export const CustomerSchema = SchemaFactory.createForClass(CustomerEntity);

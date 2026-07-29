@@ -21,6 +21,7 @@ import {
   MapPin,
   Package,
   Palette,
+  Rows3,
   ScanLine,
   Scissors,
   Settings,
@@ -186,6 +187,16 @@ function buildNavGroups(t: TFunction<'layout'>): NavGroup[] {
               to: PATHS.ORDERS_CUTTING_FILES,
               icon: <Scissors size={14} />,
               perm: 'order.import',
+            },
+            // "Đơn hàng" — flat + phân trang THẬT, KHÔNG gộp theo sản phẩm
+            // (khác "Danh sách đơn" ở trên dùng getOrdersGrouped). Cùng
+            // cột/filter/bulk với Workshop, chỉ khác cách hiển thị + KHÔNG có
+            // Designer Summary. Đặt cuối nhóm Đơn hàng. Xem OrderTableClassic.tsx.
+            {
+              key: 'orders-classic',
+              label: t('sidebar.orders.classic'),
+              to: PATHS.ORDERS_CLASSIC,
+              icon: <Rows3 size={14} />,
             },
           ],
         },

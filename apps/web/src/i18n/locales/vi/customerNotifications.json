@@ -1,0 +1,34 @@
+{
+  "sender": {
+    "title": "Gửi thông báo cho khách hàng",
+    "subtitle": "Soạn thông báo gửi 1 khách cụ thể hoặc broadcast tất cả — khách xem ở chuông thông báo trên Customer Portal.",
+    "titleLabel": "Tiêu đề",
+    "titlePlaceholder": "VD: Đơn hàng của bạn sắp được giao...",
+    "bodyLabel": "Nội dung (không bắt buộc)",
+    "bodyPlaceholder": "Chi tiết thông báo...",
+    "targetLabel": "Gửi tới",
+    "targetAll": "Tất cả khách hàng",
+    "targetOne": "1 khách cụ thể",
+    "customerSearchPlaceholder": "Tìm theo SKU hoặc email...",
+    "customerNotSelected": "Chưa chọn khách hàng",
+    "changeCustomer": "Đổi khách khác",
+    "send": "Gửi thông báo",
+    "sendSuccess": "Đã gửi thông báo",
+    "titleRequired": "Tiêu đề là bắt buộc",
+    "customerRequired": "Vui lòng chọn 1 khách hàng",
+    "historyTitle": "Lịch sử đã gửi",
+    "historyEmpty": "Chưa gửi thông báo nào.",
+    "columns": {
+      "title": "Tiêu đề",
+      "target": "Gửi tới",
+      "sentBy": "Người gửi",
+      "sentAt": "Thời gian"
+    }
+  },
+  "bell": {
+    "title": "Thông báo",
+    "empty": "Chưa có thông báo nào.",
+    "markAllRead": "Đánh dấu đã đọc",
+    "broadcastLabel": "Thông báo chung"
+  }
+}

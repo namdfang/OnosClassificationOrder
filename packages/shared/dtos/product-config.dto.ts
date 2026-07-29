@@ -65,7 +65,13 @@ export const ProductConfigZod = BaseEntityZod.extend({
   machineNumber: z.string().max(60).optional(),
   /** Optional từ 2026-07 — sản phẩm tạo nhanh từ kanban Settings (kéo từ cột "Chưa xác định xưởng") chưa có loại máy, bổ sung sau ở trang Products. */
   machineTypeId: IDZod.optional(),
-  factoryId: IDZod,
+  /**
+   * Optional — sản phẩm có thể tạo mà chưa gán xưởng, bổ sung sau ở trang
+   * Products. Đơn import khớp sản phẩm chưa có `factoryId` sẽ tự rơi vào
+   * "Không xác định xưởng" (xem `Orders.md §19`), CÙNG cách xử lý với đơn
+   * chưa map product config.
+   */
+  factoryId: IDZod.optional(),
   /** workshop_config code (category=fabric_type). Default fabric used at import. */
   fabricType: z.string().max(60).optional(),
   /** workshop_config code (category=tool_result). Default tool status at import. */
