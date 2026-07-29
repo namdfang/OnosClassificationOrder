@@ -198,6 +198,14 @@ const FIELD_EDIT_ROLES: Record<OrderWorkshopField, RoleType[]> = {
 };
 
 const READY_FOR_FULFILL_CODE = 'ok';
+/**
+ * Mã `toolResultNote` = "Lỗi" (workshop_config category tool_result_note, seed
+ * mặc định) — DUY NHẤT mã kích hoạt auto-gán designer theo xưởng. Các mã khác
+ * != 'ok' (vd 'no-tool' "Không có tool", 'no-pdf' "Không có file PDF") KHÔNG
+ * tự gán — không phải lỗi thiết kế cần designer sửa, chỉ là đơn chưa đủ điều
+ * kiện soát (thiếu tool/PDF), auto-gán sẽ giao nhầm việc cho designer.
+ */
+const TOOL_CHECK_ERROR_CODE = 'error';
 
 /**
  * Lease window cho `getNextDesignReviewOrder()` — client xử lý xong 1 đơn mất
@@ -5154,16 +5162,12 @@ export class OrderService implements OnModuleInit {
 
     void this.invalidateListCache();
 
-    // Soát tool xong (đặt toolResultNote có giá trị & != 'ok') → auto-gán
-    // designer theo cấu hình xưởng. Engine tự xác minh đủ điều kiện (chưa gán, có
-    // xưởng, xưởng có cấu hình). Bulk toolResultNote + setDesignReviewResult()
-    // (tool ngoài soát) đều delegate qua đây nên cũng phủ.
-    if (
-      dto.field === 'toolResultNote' &&
-      typeof normalized === 'string' &&
-      normalized.trim() &&
-      normalized !== READY_FOR_FULFILL_CODE
-    ) {
+    // Soát tool xong VÀ ĐÚNG lỗi thiết kế (toolResultNote === 'error') → auto-gán
+    // designer theo cấu hình xưởng. Các mã khác != 'ok' (vd 'no-tool', 'no-pdf')
+    // KHÔNG tự gán — không phải việc của designer. Engine tự xác minh đủ điều
+    // kiện (chưa gán, có xưởng, xưởng có cấu hình). Bulk toolResultNote +
+    // setDesignReviewResult() (tool ngoài soát) đều delegate qua đây nên cũng phủ.
+    if (dto.field === 'toolResultNote' && normalized === TOOL_CHECK_ERROR_CODE) {
       void this.autoAssignAfterImport([id], ctx);
     }
 
@@ -6422,12 +6426,11 @@ export class OrderService implements OnModuleInit {
       await this.orderModel.updateOne({ _id: order._id }, reworkUpdate);
       updated += 1;
 
-      // Ứng viên auto-gán: soát tool xong (note có giá trị & != 'ok'), KHÔNG gán
-      // tay trong sheet, đơn đã có xưởng & chưa ai ôm. Engine xác minh lại trên DB.
+      // Ứng viên auto-gán: soát tool xong ĐÚNG lỗi thiết kế (toolResultNote ===
+      // 'error' — các mã khác != 'ok' như 'no-tool'/'no-pdf' KHÔNG tính), KHÔNG
+      // gán tay trong sheet, đơn đã có xưởng & chưa ai ôm. Engine xác minh lại trên DB.
       if (
-        typeof $set.toolResultNote === 'string' &&
-        $set.toolResultNote.trim() &&
-        $set.toolResultNote !== READY_FOR_FULFILL_CODE &&
+        $set.toolResultNote === TOOL_CHECK_ERROR_CODE &&
         !$set.assignee &&
         order.factoryId &&
         (!order.designerStatus || order.designerStatus === DesignerStatus.Unassigned) &&

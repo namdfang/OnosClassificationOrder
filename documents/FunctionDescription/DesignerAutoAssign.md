@@ -9,9 +9,18 @@
 
 
 Cho phép Admin cấu hình **mỗi xưởng có những designer nào + trọng số (%) nhận
-task**. Sau khi **soát tool xong** cho một đơn (`toolResultNote` **có giá trị &
-!= 'ok'** — tức đã soát và có lỗi cần designer), hệ thống **tự động gán** đơn cho
-designer của xưởng đó theo tỉ lệ đã cấu hình, **không cần gán tay**.
+task**. Sau khi **soát tool xong** cho một đơn với `toolResultNote === 'error'`
+(hằng `TOOL_CHECK_ERROR_CODE` trong `order.service.ts`) — tức ĐÚNG lỗi thiết kế
+cần designer sửa — hệ thống **tự động gán** đơn cho designer của xưởng đó theo
+tỉ lệ đã cấu hình, **không cần gán tay**.
+
+**CHỈ mã `'error'` mới auto-gán** — các mã `toolResultNote` khác != `'ok'` (vd
+`'no-tool'` "Không có tool", `'no-pdf'` "Không có file PDF", hoặc mã tuỳ biến
+Admin thêm sau này qua `workshop_config` category `tool_result_note`) **KHÔNG**
+tự gán designer, vì đây không phải lỗi thiết kế — đơn chỉ đang thiếu điều kiện
+soát (thiếu tool/PDF), auto-gán sẽ giao nhầm việc không thuộc trách nhiệm
+designer. Đơn với các mã này vẫn được lưu bình thường, chỉ KHÔNG kích hoạt
+`autoAssignAfterImport()`.
 
 Ngoài luồng soát tool, **đơn bị báo lỗi nguồn designer khi CHƯA ai ôm** (đơn soát
 'ok' từ đầu đi thẳng fulfillment nên chưa từng có designer) cũng được auto-gán —
@@ -27,22 +36,32 @@ khỏi nằm backlog "Cần gán" chờ leader phân / designer self-claim (xem 
 
 1. Admin vào `/settings` → section "Gán designer theo xưởng". Chọn designer cho
    từng xưởng + nhập trọng số → **Lưu** (`PUT /v1/designer-assignment/config`).
-2. Đơn được **soát tool** đặt `toolResultNote != 'ok'` qua 1 trong các đường —
-   **CẢ 4 đường đều auto-gán, không còn ngoại lệ**:
-   - `importRework` (import file soát tool) — hook gom ứng viên trong vòng lặp.
+2. Đơn được **soát tool** đặt `toolResultNote === 'error'` qua 1 trong các
+   đường — **CẢ 4 đường đều auto-gán, không còn ngoại lệ theo path, chỉ lọc
+   theo GIÁ TRỊ `'error'`**:
+   - `importRework` (import file soát tool) — hook gom ứng viên trong vòng lặp,
+     điều kiện `$set.toolResultNote === TOOL_CHECK_ERROR_CODE`.
    - `updateField('toolResultNote', code)` sửa tay ô "Note kq Tool" (bulk
      `bulkUpdateField` field `toolResultNote` **delegate** qua `updateField` nên
-     cũng phủ).
+     cũng phủ) — điều kiện `normalized === TOOL_CHECK_ERROR_CODE`.
    - `markToolCheckDone` (nút "Đã soát xong" list "Cần làm lại" tab Soát tool —
      đơn hold In trả về, chưa có designer; note giữ nguyên `'error'`; **await**
-     để trả outcome thật cho FE toast — xem `ToolCheckWorkflow.md §2.2b`).
+     để trả outcome thật cho FE toast — xem `ToolCheckWorkflow.md §2.2b`) — hàm
+     này CHỈ chạy được khi `toolResultNote` đã là `'error'` từ trước (guard đầu
+     hàm), nên luôn auto-gán đúng.
    - `OrderService.setDesignReviewResult()` (public API `POST /orders/design-review/result`
      cho tool ngoài duyệt thiết kế, xem `Orders.md §18.7`) — cũng delegate qua
      `updateField('toolResultNote', ...)` NGUYÊN VẸN nên cũng tự động gán ngay
-     khi tool ngoài lưu kết quả soát != 'ok'. (Trước đây path này có ngoại lệ
+     khi tool ngoài lưu kết quả soát = `'error'` (KHÔNG gán nếu tool trả
+     `'no-tool'`/`'no-pdf'`). (Trước đây path này có ngoại lệ
      `opts.skipAutoAssign: true` — đơn nằm chờ Leader/Admin gán tay ở backlog
      "Cần gán" — đã BỎ, tham số `skipAutoAssign` cũng đã xoá khỏi
      `updateField()` vì không còn nơi nào dùng.)
+
+   Field `toolCheckErrorNotes` (lịch sử BỀN VỮNG mọi mã note ≠ 'ok' người soát
+   từng đánh, dùng cho thống kê tab Soát tool) **KHÔNG đổi** — vẫn ghi nhận CẢ
+   `'no-tool'`/`'no-pdf'`, chỉ riêng trigger auto-gán designer là thu hẹp về
+   `'error'`.
 
 2b. **Báo lỗi nguồn designer trên đơn CHƯA ai ôm** (`designerStatus` thành
    `'rework'` + `assignee` rỗng) qua 1 trong 3 đường — hook fire sau khi ghi DB:
