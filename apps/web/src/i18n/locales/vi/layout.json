@@ -44,7 +44,16 @@
     "customRoles": "Vai trò tùy chỉnh",
     "settings": "Cài đặt",
     "signOut": "Đăng xuất",
-    "member": "Thành viên"
+    "member": "Thành viên",
+    "badges": {
+      "errorLogTodo": "Đơn lỗi cần xử lý trong công đoạn của bạn",
+      "errorLogTodoAll": "Tổng đơn lỗi chưa xử lý xong (toàn hệ thống)",
+      "designerUnassigned": "Đơn chưa gán designer (7 ngày gần nhất)",
+      "designerBacklog": "Tổng tồn thiết kế (7 ngày gần nhất)",
+      "designerBacklogSelf": "Tồn thiết kế của bạn (7 ngày gần nhất)",
+      "toolCheckRework": "Soát tool — đơn cần làm lại",
+      "toolCheckUnreviewed": "Soát tool — đơn chưa soát (7 ngày gần nhất)"
+    }
   },
   "header": {
     "toggleSidebar": "Đóng/mở sidebar",

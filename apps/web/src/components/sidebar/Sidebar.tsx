@@ -35,6 +35,7 @@ import {
 } from 'lucide-react';
 
 import { Sheet, SheetContent } from '@/components/ui/sheet';
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 
 import { cn } from '@/utils/cn';
 
@@ -44,8 +45,91 @@ import { PATHS } from '../../constants/paths';
 import { useIsMobile } from '../../hooks/useMediaQuery';
 import { RepositoryRemote } from '../../services';
 import { useAuthStore } from '../../store/authStore';
+import { useSidebarBadgeStore } from '../../store/sidebarBadgeStore';
 import { useSidebarResetStore } from '../../store/sidebarResetStore';
 import { handleAxiosError } from '../../utils';
+
+/** Badge số đếm trên 1 entry sidebar (đỏ = cần xử lý gấp, vàng = chờ gán/làm lại). */
+interface SidebarBadge {
+  count: number;
+  tone: 'red' | 'amber';
+  title: string;
+}
+
+type BadgeMap = Record<string, SidebarBadge[]>;
+
+const SIDEBAR_BADGE_POLL_MS = 60_000;
+// Mutation bump store → đợi ngắn cho các call liên tiếp (bulk) gộp 1 lần fetch.
+const SIDEBAR_BADGE_DEBOUNCE_MS = 1_200;
+
+async function fetchSidebarCounts(): Promise<void> {
+  try {
+    const res = await RepositoryRemote.designer.sidebarCounts();
+    useSidebarBadgeStore.getState().setCounts(res.data?.data ?? null);
+  } catch {
+    // Poll nền — lỗi tạm thời thì giữ số cũ, không toast spam.
+  }
+}
+
+function BadgePill({ badge }: { badge: SidebarBadge }) {
+  return (
+    <Tooltip>
+      <TooltipTrigger asChild>
+        <span
+          className={cn(
+            'min-w-[18px] h-[18px] px-1 rounded-full text-[10px] font-semibold leading-none flex items-center justify-center shrink-0',
+            badge.tone === 'red' ? 'bg-red-500 text-white' : 'bg-amber-400 text-amber-950',
+          )}
+        >
+          {badge.count}
+        </span>
+      </TooltipTrigger>
+      <TooltipContent side="right" className="whitespace-pre-line">
+        {badge.title}
+      </TooltipContent>
+    </Tooltip>
+  );
+}
+
+/** Chấm màu góc icon khi sidebar thu gọn / parent thu gọn — tooltip liệt kê từng số. */
+function BadgeDot({ badges }: { badges: SidebarBadge[] }) {
+  return (
+    <Tooltip>
+      <TooltipTrigger asChild>
+        <span
+          className={cn(
+            'absolute top-1 right-1 w-2 h-2 rounded-full',
+            badges.some((b) => b.tone === 'red') ? 'bg-red-500' : 'bg-amber-400',
+          )}
+        />
+      </TooltipTrigger>
+      <TooltipContent side="right">
+        {badges.map((b) => (
+          <div key={b.title}>
+            {b.title}: {b.count}
+          </div>
+        ))}
+      </TooltipContent>
+    </Tooltip>
+  );
+}
+
+/** Gộp badge của các entry con về 2 pill (đỏ/vàng) cho hàng parent đang đóng. */
+function aggregateBadges(badges: SidebarBadge[]): SidebarBadge[] {
+  const byTone = new Map<SidebarBadge['tone'], { count: number; titles: string[] }>();
+  for (const b of badges) {
+    const cur = byTone.get(b.tone) || { count: 0, titles: [] };
+    cur.count += b.count;
+    cur.titles.push(`${b.title}: ${b.count}`);
+    byTone.set(b.tone, cur);
+  }
+  return (['red', 'amber'] as const)
+    .filter((tone) => byTone.has(tone))
+    .map((tone) => {
+      const { count, titles } = byTone.get(tone)!;
+      return { tone, count, title: titles.join('\n') };
+    });
+}
 
 interface NavChild {
   key: string;
@@ -256,7 +340,12 @@ function buildNavGroups(t: TFunction<'layout'>): NavGroup[] {
     {
       title: t('sidebar.groups.personal'),
       items: [
-        { key: PATHS.NOTIFICATIONS, label: t('sidebar.notifications'), to: PATHS.NOTIFICATIONS, icon: <Bell size={17} /> },
+        {
+          key: PATHS.NOTIFICATIONS,
+          label: t('sidebar.notifications'),
+          to: PATHS.NOTIFICATIONS,
+          icon: <Bell size={17} />,
+        },
         { key: PATHS.ACCOUNT, label: t('sidebar.account'), to: PATHS.ACCOUNT, icon: <User size={17} /> },
       ],
     },
@@ -376,10 +465,21 @@ function isLinkActive(linkPath: string, currentPath: string, currentSearch: stri
   return true;
 }
 
-function SidebarLeaf({ item, collapsed, level = 0 }: { item: NavChild; collapsed: boolean; level?: number }) {
+function SidebarLeaf({
+  item,
+  collapsed,
+  level = 0,
+  badges,
+}: {
+  item: NavChild;
+  collapsed: boolean;
+  level?: number;
+  badges?: SidebarBadge[];
+}) {
   const location = useLocation();
   const active = isLinkActive(item.to, location.pathname, location.search, item.matchPrefix);
   const requestReset = useSidebarResetStore((s) => s.requestReset);
+  const hasBadges = !!badges?.length;
   return (
     <Link
       to={item.to}
@@ -394,19 +494,28 @@ function SidebarLeaf({ item, collapsed, level = 0 }: { item: NavChild; collapsed
         active
           ? 'bg-accent text-accent-foreground font-medium'
           : 'text-muted-foreground hover:bg-accent/50 hover:text-foreground',
-        collapsed && 'justify-center',
+        collapsed && 'justify-center relative',
         !collapsed && level > 0 && 'ml-5 py-1.5 text-[13px]',
       )}
     >
       <span className={active ? 'text-foreground' : 'text-muted-foreground'}>{item.icon}</span>
-      {!collapsed && <span className="truncate">{item.label}</span>}
+      {!collapsed && <span className={cn('truncate', hasBadges && 'flex-1')}>{item.label}</span>}
+      {!collapsed && hasBadges && (
+        <span className="flex items-center gap-1 shrink-0">
+          {badges!.map((b) => (
+            <BadgePill key={b.title} badge={b} />
+          ))}
+        </span>
+      )}
+      {collapsed && hasBadges && <BadgeDot badges={badges!} />}
     </Link>
   );
 }
 
-function SidebarParent({ item, collapsed }: { item: NavItem; collapsed: boolean }) {
+function SidebarParent({ item, collapsed, badgeMap }: { item: NavItem; collapsed: boolean; badgeMap: BadgeMap }) {
   const location = useLocation();
   const hasChildren = !!item.children?.length;
+  const childBadges = hasChildren ? item.children!.flatMap((c) => badgeMap[c.key] || []) : [];
 
   // Open by default if any child matches current path
   const initialOpen = hasChildren
@@ -416,13 +525,16 @@ function SidebarParent({ item, collapsed }: { item: NavItem; collapsed: boolean 
 
   useEffect(() => {
     // Auto-expand when navigating to a child
-    if (hasChildren && item.children!.some((c) => isLinkActive(c.to, location.pathname, location.search, c.matchPrefix))) {
+    if (
+      hasChildren &&
+      item.children!.some((c) => isLinkActive(c.to, location.pathname, location.search, c.matchPrefix))
+    ) {
       setOpen(true);
     }
   }, [location.pathname, location.search]);
 
   if (!hasChildren && item.to) {
-    return <SidebarLeaf item={item as NavChild} collapsed={collapsed} />;
+    return <SidebarLeaf item={item as NavChild} collapsed={collapsed} badges={badgeMap[item.key]} />;
   }
 
   // Parent with children
@@ -437,13 +549,14 @@ function SidebarParent({ item, collapsed }: { item: NavItem; collapsed: boolean 
         to={item.children![0].to}
         title={item.label}
         className={cn(
-          'flex items-center justify-center px-3 py-2 rounded-md text-sm transition-colors',
+          'flex items-center justify-center px-3 py-2 rounded-md text-sm transition-colors relative',
           anyChildActive
             ? 'bg-accent text-accent-foreground'
             : 'text-muted-foreground hover:bg-accent/50 hover:text-foreground',
         )}
       >
         <span className={anyChildActive ? 'text-foreground' : 'text-muted-foreground'}>{item.icon}</span>
+        {childBadges.length > 0 && <BadgeDot badges={childBadges} />}
       </Link>
     );
   }
@@ -462,12 +575,19 @@ function SidebarParent({ item, collapsed }: { item: NavItem; collapsed: boolean 
       >
         <span className={anyChildActive ? 'text-foreground' : 'text-muted-foreground'}>{item.icon}</span>
         <span className="truncate flex-1">{item.label}</span>
+        {!open && childBadges.length > 0 && (
+          <span className="flex items-center gap-1 shrink-0">
+            {aggregateBadges(childBadges).map((b) => (
+              <BadgePill key={b.tone} badge={b} />
+            ))}
+          </span>
+        )}
         {open ? <ChevronDown size={14} /> : <ChevronRight size={14} />}
       </button>
       {open && (
         <div className="space-y-0.5 mt-0.5">
           {item.children!.map((c) => (
-            <SidebarLeaf key={c.key} item={c} collapsed={false} level={1} />
+            <SidebarLeaf key={c.key} item={c} collapsed={false} level={1} badges={badgeMap[c.key]} />
           ))}
         </div>
       )}
@@ -492,6 +612,56 @@ function Sidebar({ collapsed, mobileOpen, onMobileClose }: SidebarProps) {
     [t, permissionCodes, isAdmin, roleName],
   );
 
+  const counts = useSidebarBadgeStore((s) => s.counts);
+  const refreshRequestedAt = useSidebarBadgeStore((s) => s.refreshRequestedAt);
+  const profileId = profile?._id;
+
+  // Polling nhẹ 60s (chỉ khi tab đang hiển thị) — endpoint count-only, vài chục ms.
+  useEffect(() => {
+    if (!profileId) return;
+    fetchSidebarCounts();
+    const id = setInterval(() => {
+      if (document.visibilityState === 'visible') fetchSidebarCounts();
+    }, SIDEBAR_BADGE_POLL_MS);
+    return () => clearInterval(id);
+  }, [profileId]);
+
+  // Mutation liên quan vừa thành công (bump từ axios interceptor) → refetch ngay
+  // sau debounce ngắn để số giảm liền khi chính user làm xong task.
+  useEffect(() => {
+    if (!profileId || !refreshRequestedAt) return;
+    const timer = setTimeout(fetchSidebarCounts, SIDEBAR_BADGE_DEBOUNCE_MS);
+    return () => clearTimeout(timer);
+  }, [profileId, refreshRequestedAt]);
+
+  const badgeMap = useMemo<BadgeMap>(() => {
+    if (!counts) return {};
+    const map: BadgeMap = {};
+    const add = (key: string, count: number | null | undefined, tone: SidebarBadge['tone'], title: string) => {
+      if (typeof count !== 'number' || count <= 0) return;
+      (map[key] ||= []).push({ count, tone, title });
+    };
+    // Nhật ký bù lỗi: số theo góc nhìn chặng của viewer (Fulfillment/Designer =
+    // việc của mình; Admin/Manager = toàn hệ thống) — title đổi theo cho đúng nghĩa.
+    const personalErrorView = roleName === 'Fulfillment' || roleName === 'Designer' || roleName === 'DesignerLeader';
+    add(
+      'orders-error-log',
+      counts.errorLogTodo,
+      'red',
+      personalErrorView ? t('sidebar.badges.errorLogTodo') : t('sidebar.badges.errorLogTodoAll'),
+    );
+    add('dash-designer', counts.designerUnassigned, 'amber', t('sidebar.badges.designerUnassigned'));
+    add(
+      'dash-designer',
+      counts.designerBacklog,
+      'red',
+      roleName === 'Designer' ? t('sidebar.badges.designerBacklogSelf') : t('sidebar.badges.designerBacklog'),
+    );
+    add('dash-tool-check', counts.toolCheckRework, 'amber', t('sidebar.badges.toolCheckRework'));
+    add('dash-tool-check', counts.toolCheckUnreviewed, 'red', t('sidebar.badges.toolCheckUnreviewed'));
+    return map;
+  }, [counts, roleName, t]);
+
   const handleLogout = async () => {
     try {
       await RepositoryRemote.auth.logout();
@@ -505,53 +675,57 @@ function Sidebar({ collapsed, mobileOpen, onMobileClose }: SidebarProps) {
   const showLabels = !collapsed || isMobile;
 
   const renderContent = () => (
-    <div className="flex flex-col h-full bg-background">
-      <div
-        className={cn('flex items-center gap-2.5 h-16 px-4 border-b border-border', !showLabels && 'justify-center')}
-      >
-        {showLabels ? (
-          <img src={logoUrl} alt="Logo" className="h-7 w-auto object-contain" />
-        ) : (
-          <img src={logoUrl} alt="Logo" className="h-6 w-auto object-contain" />
+    // TooltipProvider cho tooltip badge (BadgePill/BadgeDot) — delay ngắn để
+    // hover là thấy ngay con số nghĩa là gì.
+    <TooltipProvider delayDuration={150}>
+      <div className="flex flex-col h-full bg-background">
+        <div
+          className={cn('flex items-center gap-2.5 h-16 px-4 border-b border-border', !showLabels && 'justify-center')}
+        >
+          {showLabels ? (
+            <img src={logoUrl} alt="Logo" className="h-7 w-auto object-contain" />
+          ) : (
+            <img src={logoUrl} alt="Logo" className="h-6 w-auto object-contain" />
+          )}
+        </div>
+
+        <div className="flex-1 overflow-y-auto overflow-x-hidden px-3 py-4 space-y-5">
+          {navGroups.map((group, idx) => (
+            <div key={group.title || `group-${idx}`}>
+              {showLabels && group.title && (
+                <p className="px-2 mb-2 text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">
+                  {group.title}
+                </p>
+              )}
+              <div className="space-y-0.5">
+                {group.items.map((item) => (
+                  <SidebarParent key={item.key} item={item} collapsed={!showLabels} badgeMap={badgeMap} />
+                ))}
+              </div>
+            </div>
+          ))}
+        </div>
+
+        {showLabels && profile && (
+          <div className="border-t border-border p-3 flex items-center gap-2.5">
+            <div className="w-9 h-9 rounded-full bg-muted flex items-center justify-center text-muted-foreground">
+              <User size={16} />
+            </div>
+            <div className="flex-1 min-w-0">
+              <p className="text-sm font-semibold text-foreground truncate">{profile?.fullName}</p>
+              <p className="text-[11px] text-muted-foreground truncate">{profile?.role?.name || t('sidebar.member')}</p>
+            </div>
+            <button
+              onClick={handleLogout}
+              title={t('sidebar.signOut')}
+              className="w-8 h-8 rounded-md flex items-center justify-center text-muted-foreground hover:text-destructive hover:bg-destructive/10 transition-colors bg-transparent border-none cursor-pointer"
+            >
+              <LogOut size={15} />
+            </button>
+          </div>
         )}
       </div>
-
-      <div className="flex-1 overflow-y-auto overflow-x-hidden px-3 py-4 space-y-5">
-        {navGroups.map((group, idx) => (
-          <div key={group.title || `group-${idx}`}>
-            {showLabels && group.title && (
-              <p className="px-2 mb-2 text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">
-                {group.title}
-              </p>
-            )}
-            <div className="space-y-0.5">
-              {group.items.map((item) => (
-                <SidebarParent key={item.key} item={item} collapsed={!showLabels} />
-              ))}
-            </div>
-          </div>
-        ))}
-      </div>
-
-      {showLabels && profile && (
-        <div className="border-t border-border p-3 flex items-center gap-2.5">
-          <div className="w-9 h-9 rounded-full bg-muted flex items-center justify-center text-muted-foreground">
-            <User size={16} />
-          </div>
-          <div className="flex-1 min-w-0">
-            <p className="text-sm font-semibold text-foreground truncate">{profile?.fullName}</p>
-            <p className="text-[11px] text-muted-foreground truncate">{profile?.role?.name || t('sidebar.member')}</p>
-          </div>
-          <button
-            onClick={handleLogout}
-            title={t('sidebar.signOut')}
-            className="w-8 h-8 rounded-md flex items-center justify-center text-muted-foreground hover:text-destructive hover:bg-destructive/10 transition-colors bg-transparent border-none cursor-pointer"
-          >
-            <LogOut size={15} />
-          </button>
-        </div>
-      )}
-    </div>
+    </TooltipProvider>
   );
 
   if (isMobile) {

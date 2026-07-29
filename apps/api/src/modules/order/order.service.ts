@@ -7440,26 +7440,17 @@ export class OrderService implements OnModuleInit {
   }
 
   /**
-   * Tab "Nhật ký bù lỗi" — danh sách đơn đang ở trạng thái lỗi xưởng
-   * (productionError set, toolResultNote chưa 'ok'). Sort theo
-   * `productionFirstErrorAt` ASC để đơn nằm lâu nhất hiện đầu tiên.
-   *
-   * Visibility: cùng quy tắc như list orders.
-   *   - Designer chỉ thấy đơn assignee = userId
-   *   - Fulfillment chỉ thấy đơn factory của mình
-   *   - Admin/Manager/DesignerLeader thấy hết
-   *
-   * `byUrgency` tính trên TOÀN bộ scope (bỏ qua pagination) để FE hiện badge
-   * count theo mức độ khẩn.
+   * Filter chung tab "Nhật ký bù lỗi" (base + góc nhìn chặng viewer + tab).
+   * Dùng bởi CẢ `getErrorLog` (trang) lẫn `countErrorLogTodo` (badge sidebar)
+   * để 2 con số luôn khớp nhau.
    */
-  async getErrorLog(
-    dto: GetErrorLogDto,
+  private buildErrorLogBaseFilter(
+    tab: 'todo' | 'done',
     roleName?: RoleType,
     assigneeUserId?: string,
     fulfillmentFactoryId?: string,
     fulfillmentStage?: string,
-  ): Promise<GetErrorLogResDto> {
-    const tab: 'todo' | 'done' = dto.tab === 'done' ? 'done' : 'todo';
+  ): Record<string, unknown> {
     const filter: Record<string, unknown> = {};
     // "Đơn lỗi" = từng bị báo lỗi (productionError set), hiển thị mọi thời gian;
     // loại đơn đã hủy / đã xóa. KHÔNG ràng buộc productionFirstErrorAt nữa (đơn
@@ -7489,6 +7480,46 @@ export class OrderService implements OnModuleInit {
       // Tab "Đã xong": chỉ 14 ngày gần nhất (theo updatedAt).
       filter.updatedAt = { $gte: new Date(Date.now() - 14 * 24 * 60 * 60 * 1000) };
     }
+    return filter;
+  }
+
+  /**
+   * Badge sidebar "Nhật ký bù lỗi" — số đơn tab "Cần xử lý" theo đúng góc nhìn
+   * chặng của người xem (Fulfillment: stage + xưởng mình; Designer: đơn mình ôm;
+   * Admin/Manager: toàn cục).
+   */
+  async countErrorLogTodo(
+    roleName?: RoleType,
+    assigneeUserId?: string,
+    fulfillmentFactoryId?: string,
+    fulfillmentStage?: string,
+  ): Promise<number> {
+    const filter = this.buildErrorLogBaseFilter('todo', roleName, assigneeUserId, fulfillmentFactoryId, fulfillmentStage);
+    return this.orderModel.countDocuments(filter);
+  }
+
+  /**
+   * Tab "Nhật ký bù lỗi" — danh sách đơn đang ở trạng thái lỗi xưởng
+   * (productionError set, toolResultNote chưa 'ok'). Sort theo
+   * `productionFirstErrorAt` ASC để đơn nằm lâu nhất hiện đầu tiên.
+   *
+   * Visibility: cùng quy tắc như list orders.
+   *   - Designer chỉ thấy đơn assignee = userId
+   *   - Fulfillment chỉ thấy đơn factory của mình
+   *   - Admin/Manager/DesignerLeader thấy hết
+   *
+   * `byUrgency` tính trên TOÀN bộ scope (bỏ qua pagination) để FE hiện badge
+   * count theo mức độ khẩn.
+   */
+  async getErrorLog(
+    dto: GetErrorLogDto,
+    roleName?: RoleType,
+    assigneeUserId?: string,
+    fulfillmentFactoryId?: string,
+    fulfillmentStage?: string,
+  ): Promise<GetErrorLogResDto> {
+    const tab: 'todo' | 'done' = dto.tab === 'done' ? 'done' : 'todo';
+    const filter = this.buildErrorLogBaseFilter(tab, roleName, assigneeUserId, fulfillmentFactoryId, fulfillmentStage);
 
     if (dto.search) {
       const searchOr = buildSearchOr(dto.search);

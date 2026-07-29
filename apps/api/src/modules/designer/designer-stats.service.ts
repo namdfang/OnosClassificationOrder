@@ -685,6 +685,142 @@ export class DesignerStatsService {
   }
 
   /**
+   * Bộ điều kiện aggregation dùng chung của flow designer (lăng kính tồn).
+   * Dùng bởi `getDailyOverview` (bảng Tổng quan N ngày) và `getSidebarCounts`
+   * (badge sidebar) — sửa công thức ở ĐÂY để 2 nơi luôn khớp số.
+   */
+  private designerFlowConds() {
+    const noteExpr = { $ifNull: ['$toolResultNote', ''] };
+    const statusExpr = { $ifNull: ['$designerStatus', DesignerStatus.Unassigned] };
+    // Đơn ĐANG lỗi (note set & ≠ ok) / từng bị soát ra lỗi / assignee rỗng.
+    const curErrorCond = { $and: [{ $ne: [noteExpr, ''] }, { $ne: [noteExpr, 'ok'] }] };
+    const toolErrHasCond = { $gt: [{ $size: { $ifNull: ['$toolCheckErrorNotes', []] } }, 0] };
+    const assigneeExpr = { $ifNull: ['$assignee', ''] };
+    // designerStatus thuộc 4 trạng thái làm việc (đã vào flow designer).
+    const s4Cond = {
+      $in: [
+        statusExpr,
+        [DesignerStatus.Assigned, DesignerStatus.InProgress, DesignerStatus.Rework, DesignerStatus.Done],
+      ],
+    };
+    // "Đã gán designer" — MIRROR match của getTeamDailyBreakdown (assignee set +
+    // designerStatus ∈ 4 trạng thái) để assignedToolError + assignedWasOk =
+    // Tổng/ngày bảng "Tất cả designer theo ngày" chính xác từng ngày.
+    const assignedCond = { $and: [{ $ne: [assigneeExpr, ''] }, s4Cond] };
+    // Pool cần/qua designer + 2 lát cắt dùng chung cho unassignedNeed & backlog.
+    const poolCond = { $or: [toolErrHasCond, s4Cond] };
+    const unassignedNeedCond = { $and: [poolCond, { $not: [assignedCond] }, curErrorCond] };
+    // Đã gán & CHƯA xong (assigned/in-progress/rework) = assignedTotal − designDone.
+    const pendingAssignedCond = {
+      $and: [
+        { $ne: [assigneeExpr, ''] },
+        { $in: [statusExpr, [DesignerStatus.Assigned, DesignerStatus.InProgress, DesignerStatus.Rework]] },
+      ],
+    };
+    // Tổng tồn (lăng kính designer) = UNION: chưa soát ∨ đã gán chưa xong ∨
+    // đang lỗi chưa gán — đơn thuộc 2 nhóm chỉ đếm 1 lần.
+    const backlogCond = { $or: [{ $eq: [noteExpr, ''] }, pendingAssignedCond, unassignedNeedCond] };
+    return {
+      noteExpr,
+      statusExpr,
+      assigneeExpr,
+      curErrorCond,
+      toolErrHasCond,
+      s4Cond,
+      assignedCond,
+      poolCond,
+      unassignedNeedCond,
+      pendingAssignedCond,
+      backlogCond,
+    };
+  }
+
+  /**
+   * Badge sidebar — 4 số đếm gọn trong cửa sổ 7 ngày (đồng bộ định nghĩa với
+   * các trang tương ứng, xem SidebarBadges.md):
+   *   - designerUnassigned : MIRROR match `getAssignBacklog` (cần gán designer)
+   *   - designerBacklog    : scope 'all' = MIRROR `columnTotals.backlog` của
+   *     `getDailyOverview`; scope 'self' = tồn của chính designer (MIRROR
+   *     backlogAgg per-designer: assignee = userId, status ∈ 3 trạng thái tồn)
+   *   - toolCheckRework / toolCheckUnreviewed : MIRROR reworkMatch /
+   *     unreviewedMatch của `getToolCheckOverview`
+   */
+  async getSidebarCounts(opts: {
+    designerScope: 'all' | 'self' | 'none';
+    includeToolCheck: boolean;
+    userId?: string;
+  }): Promise<{
+    designerUnassigned: number | null;
+    designerBacklog: number | null;
+    toolCheckRework: number | null;
+    toolCheckUnreviewed: number | null;
+  }> {
+    const { start, end } = this.resolveVnWindow(7);
+    const inWindow = { $gte: start, $lte: end };
+    const factoryClause = productionFactoryClause(this.orderModel.db);
+    const alive = { deletedAt: null, cancelledAt: null, factoryId: factoryClause };
+
+    const wantDesigner = opts.designerScope !== 'none';
+    const [designerUnassigned, designerBacklog, toolCheckRework, toolCheckUnreviewed] = await Promise.all([
+      wantDesigner
+        ? this.orderModel.countDocuments({
+            inProductionAt: inWindow,
+            cancelledAt: null,
+            toolResultNote: { $nin: [null, '', 'ok'] },
+            factoryId: factoryClause,
+            $or: [
+              { designerStatus: DesignerStatus.Unassigned },
+              { designerStatus: DesignerStatus.Rejected },
+              { designerStatus: DesignerStatus.Rework, assignee: { $in: [null] } },
+            ],
+          })
+        : Promise.resolve(null),
+      opts.designerScope === 'all'
+        ? this.orderModel
+            .aggregate<{ n: number }>([
+              {
+                $match: {
+                  inProductionAt: inWindow,
+                  cancelledAt: null,
+                  factoryId: factoryClause,
+                  $expr: this.designerFlowConds().backlogCond,
+                },
+              },
+              { $count: 'n' },
+            ])
+            .then((r) => r[0]?.n ?? 0)
+        : opts.designerScope === 'self'
+          ? this.orderModel.countDocuments({
+              inProductionAt: inWindow,
+              cancelledAt: null,
+              factoryId: factoryClause,
+              assignee: opts.userId,
+              designerStatus: {
+                $in: [DesignerStatus.Assigned, DesignerStatus.InProgress, DesignerStatus.Rework],
+              },
+            })
+          : Promise.resolve(null),
+      opts.includeToolCheck
+        ? this.orderModel.countDocuments({
+            inProductionAt: inWindow,
+            productionErrorSource: 'tool-check',
+            toolResultNote: 'error',
+            ...alive,
+          })
+        : Promise.resolve(null),
+      opts.includeToolCheck
+        ? this.orderModel.countDocuments({
+            inProductionAt: inWindow,
+            toolResultNote: { $in: [null, ''] },
+            ...alive,
+          })
+        : Promise.resolve(null),
+    ]);
+
+    return { designerUnassigned, designerBacklog, toolCheckRework, toolCheckUnreviewed };
+  }
+
+  /**
    * Bảng tổng quan N ngày (7/14/30) cho tab Designer — các hàng:
    *   1. total       — tất cả đơn inProductionAt ngày đó (mọi trạng thái)
    *   2. unreviewed  — toolResultNote null/'' (chưa soát)
@@ -785,33 +921,18 @@ export class DesignerStatsService {
     };
 
     const dayExpr = { $dateToString: { format: '%Y-%m-%d', date: '$inProductionAt', timezone: '+07:00' } };
-    const noteExpr = { $ifNull: ['$toolResultNote', ''] };
-    const statusExpr = { $ifNull: ['$designerStatus', DesignerStatus.Unassigned] };
-    // Đơn ĐANG lỗi (note set & ≠ ok) / từng bị soát ra lỗi / assignee rỗng.
-    const curErrorCond = { $and: [{ $ne: [noteExpr, ''] }, { $ne: [noteExpr, 'ok'] }] };
-    const toolErrHasCond = { $gt: [{ $size: { $ifNull: ['$toolCheckErrorNotes', []] } }, 0] };
-    const assigneeExpr = { $ifNull: ['$assignee', ''] };
-    // designerStatus thuộc 4 trạng thái làm việc (đã vào flow designer).
-    const s4Cond = {
-      $in: [
-        statusExpr,
-        [DesignerStatus.Assigned, DesignerStatus.InProgress, DesignerStatus.Rework, DesignerStatus.Done],
-      ],
-    };
-    // "Đã gán designer" — MIRROR match của getTeamDailyBreakdown (assignee set +
-    // designerStatus ∈ 4 trạng thái) để assignedToolError + assignedWasOk =
-    // Tổng/ngày bảng "Tất cả designer theo ngày" chính xác từng ngày.
-    const assignedCond = { $and: [{ $ne: [assigneeExpr, ''] }, s4Cond] };
-    // Pool cần/qua designer + 2 lát cắt dùng chung cho unassignedNeed & backlog.
-    const poolCond = { $or: [toolErrHasCond, s4Cond] };
-    const unassignedNeedCond = { $and: [poolCond, { $not: [assignedCond] }, curErrorCond] };
-    // Đã gán & CHƯA xong (assigned/in-progress/rework) = assignedTotal − designDone.
-    const pendingAssignedCond = {
-      $and: [
-        { $ne: [assigneeExpr, ''] },
-        { $in: [statusExpr, [DesignerStatus.Assigned, DesignerStatus.InProgress, DesignerStatus.Rework]] },
-      ],
-    };
+    const {
+      noteExpr,
+      statusExpr,
+      assigneeExpr,
+      curErrorCond,
+      toolErrHasCond,
+      s4Cond,
+      assignedCond,
+      poolCond,
+      unassignedNeedCond,
+      backlogCond,
+    } = this.designerFlowConds();
 
     const [rowsAgg, noteAgg, toolNoteAgg, backlogAgg, designerRole] = await Promise.all([
       // (a) per-day counts
@@ -911,15 +1032,7 @@ export class DesignerStatsService {
             // xong ∨ đang lỗi chưa gán — đơn thuộc 2 nhóm chỉ đếm 1 lần.
             // = Chưa soát + (Đã gán − Đã xong) + Chưa gán khi các nhóm không
             // trùng (đơn CHƯA SOÁT nhưng ĐÃ GÁN sẽ làm tổng số học lớn hơn union).
-            backlog: {
-              $sum: {
-                $cond: [
-                  { $or: [{ $eq: [noteExpr, ''] }, pendingAssignedCond, unassignedNeedCond] },
-                  1,
-                  0,
-                ],
-              },
-            },
+            backlog: { $sum: { $cond: [backlogCond, 1, 0] } },
             // Đơn designerStatus=unassigned (cho bảng xổ "Chưa gán").
             unassigned: {
               $sum: { $cond: [{ $eq: [statusExpr, DesignerStatus.Unassigned] }, 1, 0] },

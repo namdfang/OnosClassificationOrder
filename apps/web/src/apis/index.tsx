@@ -5,6 +5,7 @@ import { PATHS } from '@/constants/paths';
 
 import { useAuthStore } from '@/store/authStore';
 import { useCustomerAuthStore } from '@/store/customerAuthStore';
+import { useSidebarBadgeStore } from '@/store/sidebarBadgeStore';
 
 import i18n from '@/i18n';
 
@@ -43,8 +44,24 @@ apiAxios.interceptors.request.use(
   (error) => Promise.reject(error),
 );
 
+// Mutation nhân viên chạm tới orders/designer/fulfillment → số badge sidebar
+// có thể đổi (hoàn thành task, gán designer, báo lỗi, soát tool...). Bump
+// store để Sidebar debounce-refetch ngay thay vì đợi chu kỳ polling 60s.
+const BADGE_AFFECTING_PATH = /\/(orders|designer|fulfillment)(\/|\?|$)/;
+const isBadgeAffectingMutation = (method?: string, url?: string) =>
+  !!method &&
+  !!url &&
+  ['post', 'patch', 'put', 'delete'].includes(method.toLowerCase()) &&
+  !isCustomerRoute(url) &&
+  BADGE_AFFECTING_PATH.test(url);
+
 apiAxios.interceptors.response.use(
-  (response) => response,
+  (response) => {
+    if (isBadgeAffectingMutation(response.config?.method, response.config?.url)) {
+      useSidebarBadgeStore.getState().requestRefresh();
+    }
+    return response;
+  },
   (error) => {
     const requestUrl = (error?.config?.url as string | undefined) || '';
 
