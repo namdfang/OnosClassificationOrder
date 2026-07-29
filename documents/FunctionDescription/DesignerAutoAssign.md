@@ -47,7 +47,8 @@ khỏi nằm backlog "Cần gán" chờ leader phân / designer self-claim (xem 
      bấm **Lưu**.
    Cả auto-save lẫn nút **Lưu** đều gửi trọn cả 3 phần
    (`PUT /v1/designer-assignment/config`).
-2. Đơn được **soát tool** đặt `toolResultNote != 'ok'` qua 1 trong các đường:
+2. Đơn được **soát tool** đặt `toolResultNote != 'ok'` qua 1 trong các đường —
+   **CẢ 4 đường đều auto-gán, không còn ngoại lệ**:
    - `importRework` (import file soát tool) — hook gom ứng viên trong vòng lặp.
    - `updateField('toolResultNote', code)` sửa tay ô "Note kq Tool" (bulk
      `bulkUpdateField` field `toolResultNote` **delegate** qua `updateField` nên
@@ -55,13 +56,13 @@ khỏi nằm backlog "Cần gán" chờ leader phân / designer self-claim (xem 
    - `markToolCheckDone` (nút "Đã soát xong" list "Cần làm lại" tab Soát tool —
      đơn hold In trả về, chưa có designer; note giữ nguyên `'error'`; **await**
      để trả outcome thật cho FE toast — xem `ToolCheckWorkflow.md §2.2b`).
-
-   **NGOẠI LỆ:** `OrderService.setDesignReviewResult()` (public API
-   `POST /orders/design-review/result` cho tool ngoài duyệt thiết kế, xem
-   `Orders.md §18.7`) gọi `updateField('toolResultNote', ...)` với
-   `opts.skipAutoAssign: true` — tool ngoài soát xong **KHÔNG** tự gán
-   designer (khác sửa tay/import rework ở trên); đơn nằm ở backlog "Cần gán"
-   chờ Leader/Admin gán tay.
+   - `OrderService.setDesignReviewResult()` (public API `POST /orders/design-review/result`
+     cho tool ngoài duyệt thiết kế, xem `Orders.md §18.7`) — cũng delegate qua
+     `updateField('toolResultNote', ...)` NGUYÊN VẸN nên cũng tự động gán ngay
+     khi tool ngoài lưu kết quả soát != 'ok'. (Trước đây path này có ngoại lệ
+     `opts.skipAutoAssign: true` — đơn nằm chờ Leader/Admin gán tay ở backlog
+     "Cần gán" — đã BỎ, tham số `skipAutoAssign` cũng đã xoá khỏi
+     `updateField()` vì không còn nơi nào dùng.)
 
 2b. **Báo lỗi nguồn designer trên đơn CHƯA ai ôm** (`designerStatus` thành
    `'rework'` + `assignee` rỗng) qua 1 trong 3 đường — hook fire sau khi ghi DB:

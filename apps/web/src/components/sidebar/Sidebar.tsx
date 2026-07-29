@@ -280,16 +280,6 @@ function buildNavGroups(t: TFunction<'layout'>): NavGroup[] {
               icon: <Scissors size={14} />,
               perm: 'order.import',
             },
-            // "Đơn hàng" — flat + phân trang THẬT, KHÔNG gộp theo sản phẩm
-            // (khác "Danh sách đơn" ở trên dùng getOrdersGrouped). Cùng
-            // cột/filter/bulk với Workshop, chỉ khác cách hiển thị + KHÔNG có
-            // Designer Summary. Đặt cuối nhóm Đơn hàng. Xem OrderTableClassic.tsx.
-            {
-              key: 'orders-classic',
-              label: t('sidebar.orders.classic'),
-              to: PATHS.ORDERS_CLASSIC,
-              icon: <Rows3 size={14} />,
-            },
           ],
         },
         {
@@ -312,6 +302,22 @@ function buildNavGroups(t: TFunction<'layout'>): NavGroup[] {
               perm: 'page.fulfillment_my_tasks',
             },
           ],
+        },
+      ],
+    },
+    {
+      // Nhóm menu RIÊNG cho "Đơn hàng" (bảng phẳng, phân trang THẬT, KHÔNG gộp
+      // theo sản phẩm — khác "Danh sách đơn" ở nhóm trên dùng getOrdersGrouped).
+      // Cùng cột/filter/bulk với Workshop, chỉ khác cách hiển thị + KHÔNG có
+      // Designer Summary. Xem OrderTableClassic.tsx.
+      title: t('sidebar.groups.orders'),
+      items: [
+        {
+          key: PATHS.ORDERS_CLASSIC,
+          label: t('sidebar.orders.classic'),
+          to: PATHS.ORDERS_CLASSIC,
+          icon: <Rows3 size={17} />,
+          perm: 'page.orders',
         },
       ],
     },
