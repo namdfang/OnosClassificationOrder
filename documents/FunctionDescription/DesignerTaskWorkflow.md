@@ -120,6 +120,8 @@ State machine 6 trạng thái:
 - **Log ai nhận / lúc nào**: `orderLog.writeMany` (field `assignee`, `after=userId`, `ctx.user` = người nhận + timestamp) — audit trail giống bulk-assign.
 - KHÔNG cần permission `order.field.assignee.edit` (self-claim là quyền tự thân của designer, chặn ở controller theo role).
 
+**Nút "Tự động gán" (2026-07, `SuperAdmin/Admin/Manager/DesignerLeader`)**: icon `Wand2` trên header bảng "Cần gán", phạm vi = TOÀN BỘ đơn đang hiển thị theo filter bảng (không cần tick). Bấm → `POST /orders/auto-assign-preview {orderIds}` chạy đúng routing 3 mức khách→sản phẩm→xưởng của `autoAssignAfterImport` nhưng KHÔNG ghi → dialog xác nhận liệt kê mỗi designer nhận bao nhiêu đơn + số đơn không gán được (ngoài cấu hình) → "Gán {N} đơn" → `POST /orders/auto-assign-apply {assignments}` áp ĐÚNG plan đã xem (đơn vừa bị người khác ôm/đổi trạng thái → skip, toast `assigned/skipped`). Chi tiết BE: `DesignerAutoAssign.md §3`. **Bảng backlog giới hạn `max-h-[80vh]` — vượt quá thì scroll trong bảng, header (các nút gán) luôn thấy.**
+
 ### 2.3 Sub Designer xử lý task
 
 Login Designer → auto redirect `/my-tasks` (xem `pages/login/index.tsx`).

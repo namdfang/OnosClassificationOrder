@@ -1,7 +1,7 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { ChevronDown, ChevronRight, Clock, Grab, ImageOff, UserPlus } from 'lucide-react';
-import type { AssignBacklogGroup } from 'shared';
+import { ChevronDown, ChevronRight, Clock, Grab, ImageOff, UserPlus, Wand2 } from 'lucide-react';
+import type { AssignBacklogGroup, AutoAssignPlanRow } from 'shared';
 import { PRODUCT_LEVEL_MAP } from 'shared';
 import { toast } from 'sonner';
 
@@ -21,6 +21,7 @@ import {
 } from '@/components/orders/workshopTableConfig';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
+import { Dialog, DialogContent, DialogTitle } from '@/components/ui/dialog';
 import { TooltipProvider } from '@/components/ui/tooltip';
 
 import { handleAxiosError } from '@/utils';
@@ -168,6 +169,57 @@ export function DesignerAssignBacklog({ days = 7, from, to, type, customer, relo
   const selectedCount = selected.size;
   const selectedIds = useMemo(() => [...selected], [selected]);
 
+  // ── Nút "Tự động gán theo config" — preview plan (KHÔNG ghi) rồi xác nhận
+  // mới gán ĐÚNG plan đã xem. Phạm vi = toàn bộ đơn đang hiển thị theo filter.
+  const allIds = useMemo(() => groups.flatMap((g) => g.orderIds), [groups]);
+  const [autoPlan, setAutoPlan] = useState<{
+    plan: AutoAssignPlanRow[];
+    unassignedCount: number;
+    totalRequested: number;
+  } | null>(null);
+  const [autoLoading, setAutoLoading] = useState(false);
+  const [autoApplying, setAutoApplying] = useState(false);
+  const autoPlanTotal = autoPlan?.plan.reduce((s, r) => s + r.count, 0) ?? 0;
+
+  const handleAutoPreview = async () => {
+    if (allIds.length === 0) return;
+    try {
+      setAutoLoading(true);
+      const res = await RepositoryRemote.order.autoAssignPreview({ orderIds: allIds });
+      setAutoPlan(res.data?.data ?? null);
+    } catch (err) {
+      handleAxiosError(err);
+    } finally {
+      setAutoLoading(false);
+    }
+  };
+
+  const handleAutoApply = async () => {
+    if (!autoPlan || autoPlan.plan.length === 0) return;
+    try {
+      setAutoApplying(true);
+      const res = await RepositoryRemote.order.autoAssignApply({
+        assignments: autoPlan.plan.map((r) => ({ userId: r.userId, orderIds: r.orderIds })),
+      });
+      const data = res.data?.data as { assigned: number; skipped: number };
+      if (data.skipped > 0) {
+        toast.warning(t('assignBacklog.autoAssignDoneSkipped', { assigned: data.assigned, skipped: data.skipped }), {
+          duration: 7000,
+        });
+      } else {
+        toast.success(t('assignBacklog.autoAssignDone', { assigned: data.assigned }));
+      }
+      setAutoPlan(null);
+      setSelected(new Set());
+      fetchData();
+      onAssigned?.();
+    } catch (err) {
+      handleAxiosError(err);
+    } finally {
+      setAutoApplying(false);
+    }
+  };
+
   // Designer TỰ NHẬN các đơn đã chọn về chính mình (self-claim). BE chỉ nhận đơn
   // chưa ai ôm + ghi log ai nhận / lúc nào.
   const handleClaimSelf = async () => {
@@ -246,6 +298,12 @@ export function DesignerAssignBacklog({ days = 7, from, to, type, customer, relo
                   {t('assignBacklog.assignDesign', { count: selectedCount })}
                 </Button>
               )}
+              {canAssignOthers && (
+                <Button size="sm" variant="outline" onClick={handleAutoPreview} disabled={autoLoading || total === 0}>
+                  <Wand2 size={13} />
+                  {autoLoading ? t('assignBacklog.autoAssignLoading') : t('assignBacklog.autoAssign')}
+                </Button>
+              )}
             </div>
           )}
         </div>
@@ -253,7 +311,8 @@ export function DesignerAssignBacklog({ days = 7, from, to, type, customer, relo
         {!loading && groups.length === 0 ? (
           <p className="text-xs text-muted-foreground text-center py-10">{t('assignBacklog.noOrders')}</p>
         ) : (
-          <div className="divide-y divide-border/60">
+          // Vượt quá 80vh → scroll trong bảng, header panel vẫn thấy.
+          <div className="divide-y divide-border/60 max-h-[80vh] overflow-y-auto">
             {groups.map((g) => {
               const isOpen = expanded.has(g.key);
               const selInGroup = g.orderIds.filter((id) => selected.has(id)).length;
@@ -405,6 +464,54 @@ export function DesignerAssignBacklog({ days = 7, from, to, type, customer, relo
             })}
           </div>
         )}
+
+        {/* Dialog xác nhận "Tự động gán theo config" — hiển thị plan gọn theo
+          designer; Xác nhận → áp ĐÚNG plan này (đơn đổi trạng thái bị skip). */}
+        <Dialog open={autoPlan !== null} onOpenChange={(v) => !v && !autoApplying && setAutoPlan(null)}>
+          <DialogContent className="max-w-md">
+            <DialogTitle>{t('assignBacklog.autoAssignTitle')}</DialogTitle>
+            {autoPlan &&
+              (autoPlan.plan.length === 0 ? (
+                <p className="text-sm text-muted-foreground">{t('assignBacklog.autoAssignEmpty')}</p>
+              ) : (
+                <>
+                  <p className="text-xs text-muted-foreground">
+                    {t('assignBacklog.autoAssignSummary', {
+                      assigned: autoPlanTotal,
+                      total: autoPlan.totalRequested,
+                    })}
+                  </p>
+                  <div className="max-h-[50vh] overflow-y-auto divide-y divide-border/60 rounded-md border border-border">
+                    {autoPlan.plan.map((r) => (
+                      <div key={r.userId} className="flex items-center justify-between gap-3 px-3 py-2 text-sm">
+                        <div className="min-w-0">
+                          <div className="font-medium truncate">{r.fullName}</div>
+                          {r.email && <div className="text-[11px] text-muted-foreground truncate">{r.email}</div>}
+                        </div>
+                        <Badge variant="secondary" className="shrink-0">
+                          {t('assignBacklog.orderCount', { count: r.count })}
+                        </Badge>
+                      </div>
+                    ))}
+                  </div>
+                  {autoPlan.unassignedCount > 0 && (
+                    <p className="text-xs text-amber-600 dark:text-amber-400">
+                      {t('assignBacklog.autoAssignUnassigned', { count: autoPlan.unassignedCount })}
+                    </p>
+                  )}
+                  <div className="flex justify-end gap-2">
+                    <Button variant="outline" size="sm" onClick={() => setAutoPlan(null)} disabled={autoApplying}>
+                      {t('assignBacklog.autoAssignCancel')}
+                    </Button>
+                    <Button size="sm" onClick={handleAutoApply} disabled={autoApplying}>
+                      {autoApplying && <Spinner size={13} />}
+                      {t('assignBacklog.autoAssignConfirm', { count: autoPlanTotal })}
+                    </Button>
+                  </div>
+                </>
+              ))}
+          </DialogContent>
+        </Dialog>
 
         <AssignDesignerDialog
           open={assignOpen}

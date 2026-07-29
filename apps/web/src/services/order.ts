@@ -1,5 +1,7 @@
 import type {
   ApplyCuttingFilesDto,
+  AutoAssignApplyDto,
+  AutoAssignPreviewDto,
   BulkAssignDesignerDto,
   BulkAssignDesignerPreviewDto,
   BulkAssignOrderDto,
@@ -156,6 +158,14 @@ const claimDesignerTasks = (data: ClaimDesignerTasksDto) => {
   return callApi(`/${CONFIG.API_VERSION}/orders/claim-designer-tasks`, 'post', data);
 };
 
+const autoAssignPreview = (data: AutoAssignPreviewDto) => {
+  return callApi(`/${CONFIG.API_VERSION}/orders/auto-assign-preview`, 'post', data);
+};
+
+const autoAssignApply = (data: AutoAssignApplyDto) => {
+  return callApi(`/${CONFIG.API_VERSION}/orders/auto-assign-apply`, 'post', data);
+};
+
 const setProductionError = (id: string, data: SetProductionErrorDto) => {
   return callApi(`/${CONFIG.API_VERSION}/orders/${id}/set-production-error`, 'post', data);
 };
@@ -243,6 +253,8 @@ export const order = {
   bulkAssignDesignerPreview,
   bulkAssignDesigner,
   claimDesignerTasks,
+  autoAssignPreview,
+  autoAssignApply,
   setProductionError,
   getErrorLog,
   getByProductionId,

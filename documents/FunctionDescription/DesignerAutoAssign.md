@@ -91,6 +91,10 @@ khỏi nằm backlog "Cần gán" chờ leader phân / designer self-claim (xem 
 | ------ | -------------------------------- | ---------------- | --------------------------------- |
 | GET    | `/v1/designer-assignment/config` | `@Auth([Admin])` | Lấy cấu hình                      |
 | PUT    | `/v1/designer-assignment/config` | `@Auth([Admin])` | Lưu (validate 1-designer-1-xưởng) |
+| POST   | `/v1/orders/auto-assign-preview` | SuperAdmin/Admin/Manager/DesignerLeader | Nút "Tự động gán" bảng "Cần gán designer": chạy routing 3 mức (`computeAutoAssignPlan`) KHÔNG ghi DB → `{ plan: [{userId, fullName, count, orderIds}], unassignedCount, totalRequested }` (DTO `AutoAssignPreview*` ở `production-order.dto.ts`) |
+| POST   | `/v1/orders/auto-assign-apply`   | SuperAdmin/Admin/Manager/DesignerLeader | Áp ĐÚNG plan đã preview (`applyAutoAssignPlan` — KHÔNG tính lại): đơn đổi trạng thái giữa chừng / designer bị tắt → skip, trả `{assigned, skipped}` |
+
+> **Refactor 2026-07:** routing 3 mức tách thành `computeAutoAssignPlan(orderIds)` (private, trả `Map<designerId, orderIds[]>`, KHÔNG ghi) + `assignDesignerSlice()` (2 lệnh ghi) + `buildAutoAssignEligibleFilter()` (điều kiện ứng viên dùng chung compute/apply) — `autoAssignAfterImport` giờ = compute rồi ghi, hành vi không đổi. Preview/apply cho nút "Tự động gán" ở `DesignerAssignBacklog.tsx` (xem `DesignerTaskWorkflow.md`) dùng chung các mảnh này.
 
 Lưu blob JSON trong collection `system_configs` (key `designer_assignment_config`,
 Redis-cache 1h qua `SystemConfigService`). Shared DTO

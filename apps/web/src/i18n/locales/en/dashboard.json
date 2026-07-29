@@ -230,7 +230,17 @@
     "orderCount": "{{count}} orders",
     "claimedSelf": "Claimed {{modified}}/{{matched}} orders for yourself",
     "claimedSelfWithSkipped": "{{msg}}. {{count}} orders skipped.",
-    "skippedOrders": "Skipped orders"
+    "skippedOrders": "Skipped orders",
+    "autoAssign": "Auto-assign",
+    "autoAssignLoading": "Computing...",
+    "autoAssignTitle": "Confirm auto-assignment by config",
+    "autoAssignSummary": "Will assign {{assigned}}/{{total}} displayed orders by config (customer → product → factory):",
+    "autoAssignUnassigned": "{{count}} orders can't be assigned (outside config / not eligible) — left for manual assignment.",
+    "autoAssignEmpty": "No orders match the config — check the Designer Auto-assign config in Settings.",
+    "autoAssignConfirm": "Assign {{count}} orders",
+    "autoAssignCancel": "Cancel",
+    "autoAssignDone": "Auto-assigned {{assigned}} orders",
+    "autoAssignDoneSkipped": "Assigned {{assigned}} orders · {{skipped}} skipped (just claimed / status changed)"
   },
   "teamDailyMatrix": {
     "title": "All designers by day",
