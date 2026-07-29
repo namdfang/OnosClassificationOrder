@@ -22,8 +22,11 @@ import { RepositoryRemote } from '@/services';
 
 import { CopyButton } from '@/components/common/CopyButton';
 import { DateRangePicker } from '@/components/common/DateRangePicker';
+import { Hint } from '@/components/common/Hint';
 import { ImagePreviewDialog } from '@/components/common/ImagePreviewDialog';
-import { PipelineDailyOverview } from '@/components/common/PipelineDailyOverview';
+// Bảng pipeline TOÀN nhà máy TẠM ẨN (2026-07, không cần nữa) — bật lại: bỏ
+// comment import này + khối <PipelineDailyOverview/> bên dưới (cùng ghi chú).
+// import { PipelineDailyOverview } from '@/components/common/PipelineDailyOverview';
 import { SelectFilter } from '@/components/common/SelectFilter';
 import { Spinner } from '@/components/common/Spinner';
 import { ColorBadgeSelectCell } from '@/components/orders/cells/ColorBadgeSelectCell';
@@ -417,6 +420,23 @@ export default function ToolCheckTab() {
 
   const days = useMemo(() => [...(data?.days || [])].reverse(), [data]);
 
+  // ── Hàng "Note không ok" (lịch sử soát lỗi) tách dòng con theo MÃ MỚI NHẤT
+  // của đơn (`errorByNote` từ BE). Dòng con ĐỘNG: mọi mã có đơn trong kỳ, 3 mã
+  // chính (Lỗi / Không có file PDF / Không có tool) ghim lên đầu, mã admin
+  // thêm sau tự xuất hiện; label tra từ workshop_config tool_result_note. ──
+  const noteLabel = (code: string) => resolveConfig(WorkshopConfigCategory.ToolResultNote, code)?.name || code;
+  const noteTotals = useMemo(() => {
+    const m = new Map<string, number>();
+    for (const d of days) for (const n of d.errorByNote) m.set(n.code, (m.get(n.code) || 0) + n.count);
+    return m;
+  }, [days]);
+  const noteCodes = useMemo(() => {
+    const rest = [...noteTotals.keys()].filter((c) => !PINNED_NOTE_CODES.includes(c));
+    rest.sort((a, b) => (noteTotals.get(b) || 0) - (noteTotals.get(a) || 0));
+    return [...PINNED_NOTE_CODES.filter((c) => noteTotals.has(c)), ...rest];
+  }, [noteTotals]);
+  const pickNote = (d: ToolCheckDayRow, code: string) => d.errorByNote.find((n) => n.code === code)?.count ?? 0;
+
   // ── Drill dải "Tổng quan theo ngày" — query cho GET /orders/overview-list
   // (mirror openMetric của DesignerDailyOverview; createdFrom/To lọc theo
   // inProductionAt VN, cùng trục với cột ngày). Mang theo 4 filter tab.
@@ -425,7 +445,7 @@ export default function ToolCheckTab() {
     total: t('dailyStrip.metrics.total'),
     unreviewed: t('dailyStrip.metrics.unreviewed'),
     reviewed: t('dailyStrip.metrics.reviewed'),
-    reviewedError: t('dailyStrip.metrics.reviewedError'),
+    reviewedError: t('dailyStrip.metrics.noteNotOk'),
     reviewedOk: t('dailyStrip.metrics.reviewedOk'),
     rework: t('dailyStrip.metrics.rework'),
   };
@@ -462,6 +482,43 @@ export default function ToolCheckTab() {
       query: sp.toString(),
     });
   };
+
+  // Drill 1 mã lỗi soát tool (dòng con / dòng tooltip breakdown) — lọc theo MÃ
+  // MỚI NHẤT của đơn (`toolErrorNote`, khớp aggregation errorByNote).
+  const openNoteDrill = (code: string, fromDay?: string, toDay?: string, dayLabel?: string) => {
+    const sp = new URLSearchParams();
+    if (fromDay) sp.set('createdFrom', fromDay);
+    if (toDay) sp.set('createdTo', toDay);
+    if (filterType) sp.set('type', filterType);
+    if (filterCustomer) sp.set('userSku', filterCustomer);
+    if (filterMachine) sp.set('machineNumber', filterMachine);
+    if (filterPriority) sp.set('priority', filterPriority);
+    sp.set('sort', 'grouped');
+    sp.set('toolErrorNote', code);
+    setDrill({
+      title: (
+        <>
+          {t('header.title')} · {t('dailyStrip.metrics.noteNotOk')} · {noteLabel(code)}
+          {dayLabel ? ` · ${dayLabel}` : ` · ${t('dailyStrip.dayLabelAll')}`}
+        </>
+      ),
+      query: sp.toString(),
+    });
+  };
+
+  // Tooltip breakdown cho hàng "Note không ok" (per-ngày + cột Tổng) — từng
+  // dòng bấm được để drill đúng mã lỗi đó.
+  const noteBreakdownFor = (d: ToolCheckDayRow): BreakdownLine[] =>
+    d.errorByNote.map((n) => ({
+      label: noteLabel(n.code),
+      count: n.count,
+      onClick: () => openNoteDrill(n.code, d.day, d.day, fmtDayHead(d.day).dm),
+    }));
+  const noteTotalBreakdown: BreakdownLine[] = noteCodes.map((code) => ({
+    label: noteLabel(code),
+    count: noteTotals.get(code) || 0,
+    onClick: () => openNoteDrill(code, dateFrom, dateTo),
+  }));
 
   // 3 ô thống kê lỗi Soát tool (lịch sử, kể cả đơn đã sửa). Đếm ĐƠN riêng biệt
   // (dedup theo orderId). Cross-filter: chọn Khách → lọc Sản phẩm + Loại lỗi;
@@ -856,7 +913,62 @@ export default function ToolCheckTab() {
                       { metric: 'total', label: t('dailyStrip.metrics.total'), cls: 'text-foreground', pick: (d: ToolCheckDayRow) => d.total },
                       { metric: 'unreviewed', label: t('dailyStrip.metrics.unreviewed'), cls: 'text-amber-600', pick: (d: ToolCheckDayRow) => d.unreviewed },
                       { metric: 'reviewed', label: t('dailyStrip.metrics.reviewed'), cls: 'text-slate-600 dark:text-slate-300', pick: (d: ToolCheckDayRow) => d.reviewed },
-                      { metric: 'reviewedError', label: t('dailyStrip.metrics.reviewedError'), cls: 'text-red-600 dark:text-red-400', pick: (d: ToolCheckDayRow) => d.reviewedError },
+                    ] as const
+                  ).map((row) => (
+                    <DayMetricRow
+                      key={row.metric}
+                      label={row.label}
+                      cls={row.cls}
+                      days={days}
+                      dayFilter={dayFilter}
+                      pick={row.pick}
+                      total={data?.columnTotals[row.metric] ?? 0}
+                      onPick={toggleDay}
+                      onDrill={(day) => openStripDrill(row.metric, day, day, fmtDayHead(day).dm)}
+                      onDrillTotal={() => openStripDrill(row.metric, dateFrom, dateTo)}
+                    />
+                  ))}
+                  {/* Hàng "Note không ok" (= "Soát lỗi" cũ, lịch sử) — hover con
+                    số hiện breakdown theo mã (bấm từng dòng để drill). */}
+                  <DayMetricRow
+                    label={t('dailyStrip.metrics.noteNotOk')}
+                    cls="text-red-600 dark:text-red-400"
+                    days={days}
+                    dayFilter={dayFilter}
+                    pick={(d) => d.reviewedError}
+                    total={data?.columnTotals.reviewedError ?? 0}
+                    onPick={toggleDay}
+                    onDrill={(day) => openStripDrill('reviewedError', day, day, fmtDayHead(day).dm)}
+                    onDrillTotal={() => openStripDrill('reviewedError', dateFrom, dateTo)}
+                    breakdownFor={noteBreakdownFor}
+                    totalBreakdown={noteTotalBreakdown}
+                  />
+                  {/* Dòng con động theo mã note ≠ ok — dòng "Soát lỗi" (error)
+                    tô nền theo % so với tổng đơn: <8% xanh · 8–15% vàng · ≥15% đỏ. */}
+                  {noteCodes.map((code) => (
+                    <DayMetricRow
+                      key={`note-${code}`}
+                      indent
+                      label={noteLabel(code)}
+                      labelHint={code === 'error' ? t('dailyStrip.errorPctHint') : undefined}
+                      cls="text-red-600/90 dark:text-red-400/90"
+                      days={days}
+                      dayFilter={dayFilter}
+                      pick={(d) => pickNote(d, code)}
+                      total={noteTotals.get(code) || 0}
+                      onPick={toggleDay}
+                      onDrill={(day) => openNoteDrill(code, day, day, fmtDayHead(day).dm)}
+                      onDrillTotal={() => openNoteDrill(code, dateFrom, dateTo)}
+                      cellBg={code === 'error' ? (d, v) => pctBg(v, d.total) : undefined}
+                      totalBg={
+                        code === 'error' ? pctBg(noteTotals.get('error') || 0, data?.columnTotals.total || 0) : undefined
+                      }
+                      pctBase={code === 'error' ? (d) => d.total : undefined}
+                      totalPctBase={code === 'error' ? data?.columnTotals.total || 0 : undefined}
+                    />
+                  ))}
+                  {(
+                    [
                       { metric: 'reviewedOk', label: t('dailyStrip.metrics.reviewedOk'), cls: 'text-emerald-600 dark:text-emerald-400', pick: (d: ToolCheckDayRow) => d.reviewedOk },
                       { metric: 'rework', label: t('dailyStrip.metrics.rework'), cls: 'text-orange-600 dark:text-orange-400', pick: (d: ToolCheckDayRow) => d.rework },
                     ] as const
@@ -880,9 +992,8 @@ export default function ToolCheckTab() {
           )}
         </div>
 
-        {/* Tổng quan theo ngày FULL luồng (toàn nhà máy) — highlight lane Soát tool.
-          Ăn cùng filter ngày; click 1 ngày → lọc danh sách bên dưới (dùng chung
-          dayFilter với dải focus phía dưới). */}
+        {/* Bảng pipeline TOÀN nhà máy TẠM ẨN (2026-07, không cần nữa) — bật
+          lại: bỏ comment khối này + import PipelineDailyOverview ở đầu file.
         <PipelineDailyOverview
           lane="tool"
           from={dateFrom}
@@ -890,7 +1001,7 @@ export default function ToolCheckTab() {
           dayFilter={dayFilter || undefined}
           onPickDay={toggleDay}
           caption={t('pipelineCaption')}
-        />
+        /> */}
 
         {/* Panel drill-down inline — bấm con số trên dải → danh sách đơn gom
           nhóm sản phẩm + filter Designer/Khách (dùng chung DesignerDailyOverview). */}
@@ -1565,6 +1676,53 @@ export default function ToolCheckTab() {
   );
 }
 
+/** 3 mã note chính ghim đầu danh sách dòng con "Note không ok". */
+const PINNED_NOTE_CODES = ['error', 'no-pdf', 'no-tool'];
+
+/** Nền màu theo % so với tổng đơn (dòng con "Soát lỗi"): <8% xanh · 8–15% vàng · ≥15% đỏ. */
+function pctBg(count: number, total: number): string {
+  if (!count || !total) return '';
+  const p = (count / total) * 100;
+  if (p < 8) return 'bg-emerald-100 dark:bg-emerald-500/20';
+  if (p < 15) return 'bg-amber-100 dark:bg-amber-500/25';
+  return 'bg-red-100 dark:bg-red-500/30';
+}
+
+/** 1 dòng trong tooltip breakdown ô số (mirror BreakdownNumCell của DesignerDailyOverview). */
+interface BreakdownLine {
+  label: string;
+  count: number;
+  onClick?: () => void;
+}
+
+function BreakdownContent({ lines }: { lines: BreakdownLine[] }) {
+  return (
+    <div className="text-left space-y-0.5 -mx-1">
+      {lines.map((l) =>
+        l.onClick && l.count > 0 ? (
+          <button
+            key={l.label}
+            type="button"
+            onClick={(e) => {
+              e.stopPropagation();
+              l.onClick?.();
+            }}
+            className="flex justify-between gap-3 w-full rounded px-1 hover:bg-primary/15 cursor-pointer text-left"
+          >
+            <span>{l.label}</span>
+            <span className="tabular-nums font-semibold">{l.count}</span>
+          </button>
+        ) : (
+          <div key={l.label} className="flex justify-between gap-3 px-1">
+            <span>{l.label}</span>
+            <span className="tabular-nums font-semibold">{l.count}</span>
+          </div>
+        ),
+      )}
+    </div>
+  );
+}
+
 function DayMetricRow({
   label,
   cls,
@@ -1575,6 +1733,14 @@ function DayMetricRow({
   onPick,
   onDrill,
   onDrillTotal,
+  indent,
+  labelHint,
+  breakdownFor,
+  totalBreakdown,
+  cellBg,
+  totalBg,
+  pctBase,
+  totalPctBase,
 }: {
   label: string;
   cls: string;
@@ -1587,52 +1753,122 @@ function DayMetricRow({
   onDrill?: (day: string) => void;
   /** Bấm con số cột "Tổng" → drill cả kỳ. */
   onDrillTotal?: () => void;
+  /** Dòng con (thụt đầu dòng, chữ nhỏ hơn). */
+  indent?: boolean;
+  /** Tooltip giải thích trên label (vd chú giải màu % của dòng "Soát lỗi"). */
+  labelHint?: string;
+  /** Hover con số 1 ngày → tooltip breakdown (từng dòng bấm được để drill). */
+  breakdownFor?: (d: ToolCheckDayRow) => BreakdownLine[];
+  /** Hover con số cột "Tổng" → tooltip breakdown cả kỳ. */
+  totalBreakdown?: BreakdownLine[];
+  /** Nền màu từng ô ngày (vd theo % lỗi/tổng đơn). */
+  cellBg?: (d: ToolCheckDayRow, v: number) => string;
+  /** Nền màu ô cột "Tổng". */
+  totalBg?: string;
+  /** Mẫu số tính % hiển thị cạnh con số từng ngày (dòng "Lỗi": tổng đơn ngày đó). */
+  pctBase?: (d: ToolCheckDayRow) => number;
+  /** Mẫu số tính % cho ô cột "Tổng". */
+  totalPctBase?: number;
 }) {
+  const withBreakdown = (node: React.ReactNode, lines?: BreakdownLine[]) =>
+    lines && lines.length > 0 ? (
+      <Hint forceRich content={<BreakdownContent lines={lines} />}>
+        {node as React.ReactElement}
+      </Hint>
+    ) : (
+      node
+    );
+  // Dòng chính: số to + đậm; dòng con (indent): giữ cỡ hiện tại, KHÔNG bold.
+  // `relative` để % neo absolute bên phải con số — số vẫn căn giữa THẲNG HÀNG
+  // với các dòng khác, % chỉ đứng cạnh chứ không đẩy lệch số.
+  const numCls = `relative ${indent ? 'font-normal' : 'font-semibold text-[17px]'}`;
+  const pctText = (v: number, base?: number) => {
+    if (!v || !base) return null;
+    return (
+      <span className="absolute left-full top-1/2 -translate-y-1/2 ml-0.5 text-[10px] opacity-70 tabular-nums whitespace-nowrap">
+        ({Math.round((v / base) * 100)}%)
+      </span>
+    );
+  };
+  const labelNode = (
+    <span className={indent ? 'inline-flex items-center' : undefined}>
+      {indent && <span className="text-muted-foreground/50 mr-1">└</span>}
+      {label}
+    </span>
+  );
   return (
     <tr className="group">
-      <td className={`sticky left-0 z-10 bg-card px-3 py-1.5 border-b border-border/60 font-medium ${cls}`}>{label}</td>
+      <td
+        className={`sticky left-0 z-10 bg-card px-3 py-1.5 border-b border-border/60 ${indent ? 'pl-6 font-normal text-[12px]' : 'font-medium'
+          } ${cls}`}
+      >
+        {labelHint ? (
+          <Hint forceRich content={labelHint}>
+            <span className="cursor-help underline decoration-dotted decoration-muted-foreground/50 underline-offset-2">
+              {labelNode}
+            </span>
+          </Hint>
+        ) : (
+          labelNode
+        )}
+      </td>
       {days.map((d) => {
         const v = pick(d);
         const active = dayFilter === d.day;
+        const bg = cellBg?.(d, v) || '';
         return (
           <td
             key={d.day}
             onClick={() => onPick(d.day)}
-            className={`border-b border-l border-border/60 text-center px-1 py-1.5 cursor-pointer transition-colors ${active ? 'bg-indigo-100 dark:bg-indigo-500/25' : 'hover:bg-muted/50'
+            className={`border-b border-l border-border/60 text-center px-1 py-1.5 cursor-pointer transition-colors ${active ? 'bg-indigo-100 dark:bg-indigo-500/25' : bg || 'hover:bg-muted/50'
               }`}
           >
             {v === 0 ? (
               <span className="text-muted-foreground/30">·</span>
             ) : onDrill ? (
-              <button
-                type="button"
-                onClick={(e) => {
-                  e.stopPropagation();
-                  onDrill(d.day);
-                }}
-                className={`font-semibold rounded px-1 -mx-1 hover:bg-primary/15 cursor-pointer tabular-nums ${cls}`}
-              >
-                {v}
-              </button>
+              withBreakdown(
+                <button
+                  type="button"
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    onDrill(d.day);
+                  }}
+                  className={`${numCls} rounded px-1 -mx-1 hover:bg-primary/15 cursor-pointer tabular-nums ${cls}`}
+                >
+                  {v}
+                  {pctText(v, pctBase?.(d))}
+                </button>,
+                breakdownFor?.(d),
+              )
             ) : (
-              <span className={`font-semibold ${cls}`}>{v}</span>
+              <span className={`${numCls} ${cls}`}>
+                {v}
+                {pctText(v, pctBase?.(d))}
+              </span>
             )}
           </td>
         );
       })}
-      <td className={`bg-muted/30 border-b border-l border-border text-center px-2 py-1.5 font-semibold ${cls}`}>
+      <td className={`border-b border-l border-border text-center px-2 py-1.5 ${totalBg || 'bg-muted/30'} ${cls}`}>
         {total === 0 ? (
           <span className="text-muted-foreground/40">·</span>
         ) : onDrillTotal ? (
-          <button
-            type="button"
-            onClick={onDrillTotal}
-            className={`font-semibold rounded px-1 -mx-1 hover:bg-primary/15 cursor-pointer tabular-nums ${cls}`}
-          >
-            {total}
-          </button>
+          withBreakdown(
+            <button
+              type="button"
+              onClick={onDrillTotal}
+              className={`${numCls} rounded px-1 -mx-1 hover:bg-primary/15 cursor-pointer tabular-nums ${cls}`}
+            >
+              {total}
+              {pctText(total, totalPctBase)}
+            </button>,
+            totalBreakdown,
+          )
         ) : (
-          total
+          <span className={`${numCls} ${cls}`}>
+            {total}
+            {pctText(total, totalPctBase)}
+          </span>
         )}
       </td>
     </tr>

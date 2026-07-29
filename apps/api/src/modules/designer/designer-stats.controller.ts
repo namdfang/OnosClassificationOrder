@@ -19,6 +19,7 @@ import {
   GetPersonErrorOverviewDto,
   GetProductBreakdownDto,
   GetProductBreakdownResDto,
+  GetSidebarCountsResDto,
   GetStageErrorDailyDto,
   GetTeamDailyBreakdownDto,
   GetTeamDailyBreakdownResDto,
@@ -33,6 +34,7 @@ import { Logger } from 'winston';
 
 import { Auth } from '@/decorators';
 
+import { OrderService } from '../order/order.service';
 import { UserDocument } from '../user/user.entity';
 import { DesignerStatsService } from './designer-stats.service';
 
@@ -73,14 +75,64 @@ const STAGE_ERROR_ROLES = [
   RoleType.Fulfillment,
 ];
 
+// Badge sidebar — mọi role nhân viên gọi được, từng số tự null theo quyền.
+const SIDEBAR_COUNT_ROLES = [
+  RoleType.SuperAdmin,
+  RoleType.Admin,
+  RoleType.Manager,
+  RoleType.SupportManager,
+  RoleType.Support,
+  RoleType.DesignerLeader,
+  RoleType.Designer,
+  RoleType.Fulfillment,
+];
+
 @Controller()
 @ApiTags('designer')
 @UsePipes(ZodValidationPipe)
 export class DesignerStatsController {
   constructor(
     private readonly statsService: DesignerStatsService,
+    private readonly orderService: OrderService,
     @Inject('winston') private readonly logger: Logger,
   ) {}
+
+  @Get('designer/sidebar-counts')
+  @Auth(SIDEBAR_COUNT_ROLES)
+  @ApiOperation({
+    summary:
+      'Badge sidebar: đơn lỗi cần xử lý (góc nhìn chặng viewer) + cần gán designer / tồn 7 ngày + soát tool cần làm lại / chưa soát. Số ngoài quyền role → null.',
+  })
+  @HttpCode(HttpStatus.OK)
+  @ApiOkResponse({ type: GetSidebarCountsResDto })
+  async getSidebarCounts(@AuthUser() user: UserDocument): Promise<GetSidebarCountsResDto> {
+    this.logger.info({
+      message: JSON.stringify({ method: 'GET', url: '/designer/sidebar-counts', userId: user._id }),
+    });
+    const roleName = user?.role?.name;
+    const designerScope = !roleName || !LEADER_ROLES.includes(roleName)
+      ? 'none'
+      : roleName === RoleType.Designer
+        ? 'self'
+        : 'all';
+    const [counts, errorLogTodo] = await Promise.all([
+      this.statsService.getSidebarCounts({
+        designerScope,
+        includeToolCheck: !!roleName && TOOL_CHECK_ROLES.includes(roleName),
+        userId: user?._id ? String(user._id) : undefined,
+      }),
+      // Support: tab Nhật ký bù lỗi bị ẩn (mirror hideForRoles FE) → null.
+      roleName === RoleType.Support
+        ? Promise.resolve(null)
+        : this.orderService.countErrorLogTodo(
+            roleName,
+            user?._id ? String(user._id) : undefined,
+            user?.factoryId,
+            user?.fulfillmentStage,
+          ),
+    ]);
+    return { success: true, data: { errorLogTodo, ...counts } };
+  }
 
   @Get('designer/performance')
   @Auth(LEADER_ROLES)

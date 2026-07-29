@@ -832,3 +832,21 @@ export const StageErrorDailyResZod = ResZod.extend({
   }),
 });
 export class StageErrorDailyResDto extends createZodDto(extendApi(StageErrorDailyResZod)) {}
+
+// ─── Sidebar badge counts ───────────────────────────────────────────
+// Số đếm gọn cho badge sidebar (Nhật ký bù lỗi / Designer / Soát tool).
+// `null` = role người gọi không được xem con số đó → FE ẩn badge.
+export const SidebarCountsZod = z.object({
+  /** Đơn lỗi tab "Cần xử lý" theo góc nhìn chặng của người xem (mirror getErrorLog todo). */
+  errorLogTodo: z.number().int().nonnegative().nullable(),
+  /** Đơn cần gán designer trong 7 ngày (mirror getAssignBacklog.total). */
+  designerUnassigned: z.number().int().nonnegative().nullable(),
+  /** Tồn thiết kế 7 ngày (Admin/Leader: mirror columnTotals.backlog; Designer: tồn của chính họ). */
+  designerBacklog: z.number().int().nonnegative().nullable(),
+  /** Soát tool — đơn In trả về cần làm lại (mirror errorCount). */
+  toolCheckRework: z.number().int().nonnegative().nullable(),
+  /** Soát tool — đơn chưa soát trong 7 ngày (mirror unreviewedList). */
+  toolCheckUnreviewed: z.number().int().nonnegative().nullable(),
+});
+export type SidebarCounts = z.infer<typeof SidebarCountsZod>;
+export class GetSidebarCountsResDto extends createZodDto(extendApi(ResZod.extend({ data: SidebarCountsZod }))) {}

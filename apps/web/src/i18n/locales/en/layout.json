@@ -45,7 +45,16 @@
     "customRoles": "Custom roles",
     "settings": "Settings",
     "signOut": "Sign out",
-    "member": "Member"
+    "member": "Member",
+    "badges": {
+      "errorLogTodo": "Error orders pending in your stage",
+      "errorLogTodoAll": "Total unresolved error orders (all factories)",
+      "designerUnassigned": "Orders awaiting designer assignment (last 7 days)",
+      "designerBacklog": "Total design backlog (last 7 days)",
+      "designerBacklogSelf": "Your design backlog (last 7 days)",
+      "toolCheckRework": "Tool check — orders needing rework",
+      "toolCheckUnreviewed": "Tool check — unreviewed orders (last 7 days)"
+    }
   },
   "header": {
     "toggleSidebar": "Toggle sidebar",

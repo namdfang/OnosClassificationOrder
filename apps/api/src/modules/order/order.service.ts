@@ -116,11 +116,8 @@ import {
 } from 'shared';
 import { Logger } from 'winston';
 
-import {
-  getExcludedFactoryIdSync,
-  loadExcludedFactoryId,
-  productionFactoryClause,
-} from '../../utils/excluded-factory';
+import { getExcludedFactoryIdSync, loadExcludedFactoryId, productionFactoryClause } from '../../utils/excluded-factory';
+import { CustomerRepository } from '../customer/customer.repository';
 import { CustomerAssignmentService } from '../customer-assignment/customer-assignment.service';
 import { DESIGN_PREVIEW_QUEUE, DESIGN_THUMB_QUEUE, DesignImageJobData } from '../design-image/design-image.processor';
 import { DesignImageService } from '../design-image/design-image.service';
@@ -408,6 +405,7 @@ export class OrderService implements OnModuleInit {
     private readonly driveFileNameService: DriveFileNameService,
     private readonly systemConfigService: SystemConfigService,
     private readonly customerAssignmentService: CustomerAssignmentService,
+    private readonly customerRepository: CustomerRepository,
     private readonly onospodOrderLookupService: OnospodOrderLookupService,
   ) {}
 
@@ -1550,10 +1548,7 @@ export class OrderService implements OnModuleInit {
           ...(Array.isArray(filter.$and) ? (filter.$and as unknown[]) : []),
           {
             $expr: {
-              $in: [
-                { $ifNull: [{ $arrayElemAt: [{ $ifNull: ['$toolCheckErrorNotes', []] }, -1] }, ''] },
-                codes,
-              ],
+              $in: [{ $ifNull: [{ $arrayElemAt: [{ $ifNull: ['$toolCheckErrorNotes', []] }, -1] }, ''] }, codes],
             },
           },
         ];
@@ -2793,9 +2788,7 @@ export class OrderService implements OnModuleInit {
    * chỉ điền khi đơn đang trống (tôn trọng chỉnh tay của xưởng — cùng tinh thần
    * insert-only của import).
    */
-  async remapUnmappedOrders(
-    ctx?: AuditContext,
-  ): Promise<{ scanned: number; matchedTypes: number; assigned: number }> {
+  async remapUnmappedOrders(ctx?: AuditContext): Promise<{ scanned: number; matchedTypes: number; assigned: number }> {
     const unmappedFilter = {
       $or: [{ factoryId: { $exists: false } }, { factoryId: null }],
       deletedAt: { $exists: false },
@@ -4740,10 +4733,7 @@ export class OrderService implements OnModuleInit {
     }
     // "Đã soát xong" = xác nhận đơn có lỗi thật sau soát lại → ghi lịch sử soát
     // lỗi bền vững (mã 'error' — In trả về) cho thống kê "Soát lỗi" Tổng quan.
-    await this.orderModel.updateOne(
-      { _id: id },
-      { $set: set, $addToSet: { toolCheckErrorNotes: 'error' } },
-    );
+    await this.orderModel.updateOne({ _id: id }, { $set: set, $addToSet: { toolCheckErrorNotes: 'error' } });
     void this.orderLogService.write({
       orderId: id,
       action: 'update',
@@ -5335,7 +5325,7 @@ export class OrderService implements OnModuleInit {
   }
 
   /**
-   * Auto-gán đơn cho designer theo cấu hình xưởng (`designer_assignment_config`).
+   * Auto-gán đơn cho designer theo cấu hình `designer_assignment_config`.
    * Được gọi từ: `importRework` + `updateField('toolResultNote')` (bulk delegate
    * qua updateField nên cũng phủ) + `markToolCheckDone` + các đường BÁO LỖI
    * DESIGNER trên đơn chưa ai ôm (`setProductionError`, `updateField`
@@ -5343,93 +5333,28 @@ export class OrderService implements OnModuleInit {
    * public để `FulfillmentTaskService` gọi). Fire-and-forget.
    *
    * Ứng viên (tự xác minh lại trên DB, không tin state truyền vào) — chung:
-   * có `factoryId` & xưởng CÓ cấu hình designer, `assignee` rỗng, không
+   * có `factoryId` (đã map, không phải xưởng US), `assignee` rỗng, không
    * hủy/giữ/xóa. Theo trạng thái:
    *   - `unassigned` + `toolResultNote` CÓ giá trị & != 'ok' (sau soát tool).
    *   - `rework` chưa ai ôm — xưởng báo lỗi designer trên đơn CHƯA TỪNG có
    *     designer (soát 'ok' đi thẳng fulfillment). Không điều kiện toolResultNote
    *     (đường rework-back từ kanban không set 'error'). Gán xong GIỮ status
    *     `rework` → task vào thẳng cột "Cần làm lại" của designer.
-   * Phân bổ cân bằng tải thực tế theo trọng số (`allocateByLoad`) cho các
-   * designer Active của xưởng — đơn về người có (đơn chưa xong)/weight thấp nhất.
+   *
+   * Chọn designer theo **chuỗi ưu tiên 3 mức**:
+   *   1. **Khách hàng** — đơn khớp `customerMatchKey(userSku, userEmail)` với
+   *      khách đã gán designer → gán thẳng designer đó, BẤT KỂ xưởng.
+   *   2. **Sản phẩm** — `productConfigId` của đơn nằm trong cấu hình → gán thẳng,
+   *      BẤT KỂ xưởng.
+   *   3. **Xưởng** — chia cho designer của xưởng, cân bằng tải thực tế theo trọng
+   *      số (`allocateByLoad`) — đơn về người có (đơn chưa xong)/weight thấp nhất;
+   *      đơn vừa gán thẳng ở mức 1/2 được cộng vào tải trước khi chia.
+   * Designer chỉ định ở mức 1/2 không hợp lệ (tắt/đổi role) → rơi xuống mức sau.
    */
   async autoAssignAfterImport(orderIds: string[], ctx?: AuditContext): Promise<void> {
     try {
-      const ids = Array.from(new Set(orderIds.map((x) => String(x)).filter(Boolean)));
-      if (!ids.length) return;
-
-      const config = await this.systemConfigService.get<DesignerAssignmentConfig>(DESIGNER_ASSIGNMENT_CONFIG_KEY, null);
-      if (!config?.factories?.length) return;
-
-      const byFactory = new Map<string, { designerId: string; weight: number }[]>();
-      for (const f of config.factories) {
-        if (f?.factoryId && f.designers?.length) {
-          byFactory.set(
-            String(f.factoryId),
-            f.designers.map((d) => ({ designerId: String(d.designerId), weight: d.weight })),
-          );
-        }
-      }
-      // Xưởng US (ngoài luồng sản xuất) không auto-gán designer, kể cả khi Admin
-      // lỡ cấu hình designer cho nó.
-      const excludedFactoryId = getExcludedFactoryIdSync(this.orderModel.db);
-      if (excludedFactoryId) byFactory.delete(excludedFactoryId);
-      if (!byFactory.size) return;
-
-      // Xác minh trạng thái thực trên DB (authoritative).
-      const eligible = await this.orderModel
-        .find(
-          {
-            _id: { $in: ids },
-            assignee: { $in: [null, ''] },
-            factoryId: { $in: Array.from(byFactory.keys()) },
-            cancelledAt: null,
-            heldAt: null,
-            deletedAt: { $exists: false },
-            $or: [
-              {
-                designerStatus: DesignerStatus.Unassigned,
-                toolResultNote: { $nin: [null, '', READY_FOR_FULFILL_CODE] },
-              },
-              { designerStatus: DesignerStatus.Rework },
-            ],
-          },
-          { _id: 1, factoryId: 1 },
-        )
-        .lean();
-      if (!eligible.length) return;
-
-      // Chỉ giữ designer đang Active + đúng role Designer.
-      const allDesignerIds = Array.from(
-        new Set(config.factories.flatMap((f) => (f.designers || []).map((d) => String(d.designerId)))),
-      );
-      const designerRole = await this.roleRepository.findOne({ name: RoleType.Designer });
-      const activeUsers = await this.userModel
-        .find({ _id: { $in: allDesignerIds }, roleId: designerRole?._id, status: Status.Active }, { _id: 1 })
-        .lean();
-      const validIds = new Set(activeUsers.map((u) => String(u._id)));
-
-      // Tải thực tế: số đơn CHƯA XONG mỗi designer đang giữ (kể cả gán tay,
-      // mọi xưởng) — để cân bằng khi chia, đặc biệt khi soát lẻ từng đơn (N=1).
-      const loadRows = await this.orderModel.aggregate<{ _id: string; count: number }>([
-        {
-          $match: {
-            assignee: { $in: Array.from(validIds) },
-            designerStatus: { $in: DESIGNER_ACTIVE_STATUSES },
-            cancelledAt: null,
-            deletedAt: { $exists: false },
-          },
-        },
-        { $group: { _id: '$assignee', count: { $sum: 1 } } },
-      ]);
-      const loadByDesigner = new Map(loadRows.map((r) => [String(r._id), r.count]));
-
-      const groups = new Map<string, string[]>();
-      for (const o of eligible) {
-        const fid = String((o as unknown as { factoryId?: string }).factoryId);
-        if (!groups.has(fid)) groups.set(fid, []);
-        groups.get(fid)!.push(String(o._id));
-      }
+      const plan = await this.computeAutoAssignPlan(orderIds);
+      if (!plan.size) return;
 
       const now = new Date();
       const logRows: Array<{
@@ -5440,48 +5365,12 @@ export class OrderService implements OnModuleInit {
         after: unknown;
         ctx?: AuditContext;
       }> = [];
-
-      for (const [fid, orderList] of groups) {
-        const designers = (byFactory.get(fid) || []).filter((d) => validIds.has(d.designerId));
-        if (!designers.length) continue;
-        const alloc = this.allocateByLoad(
-          orderList.length,
-          designers.map((d) => d.weight),
-          designers.map((d) => loadByDesigner.get(d.designerId) || 0),
-        );
-        let cursor = 0;
-        for (let i = 0; i < designers.length; i++) {
-          const count = alloc[i];
-          if (count <= 0) continue;
-          const slice = orderList.slice(cursor, cursor + count);
-          cursor += count;
-          if (!slice.length) continue;
-          const designerId = designers[i].designerId;
-          await this.orderModel.updateMany(
-            { _id: { $in: slice }, designerStatus: DesignerStatus.Unassigned },
-            {
-              $set: {
-                assignee: designerId,
-                designerStatus: DesignerStatus.Assigned,
-                designerAssignedAt: now,
-                designerRejectedReason: null,
-                designerRejectedAt: null,
-              },
-            },
-          );
-          // Đơn rework chưa ai ôm → chỉ gán người, GIỮ designerStatus='rework'
-          // để task hiện đúng cột "Cần làm lại" (guard assignee rỗng chống race
-          // với gán tay / self-claim giữa lúc query eligible và update).
-          await this.orderModel.updateMany(
-            { _id: { $in: slice }, designerStatus: DesignerStatus.Rework, assignee: { $in: [null, ''] } },
-            { $set: { assignee: designerId, designerAssignedAt: now } },
-          );
-          for (const oid of slice) {
-            logRows.push({ orderId: oid, action: 'update', field: 'assignee', before: null, after: designerId, ctx });
-          }
+      for (const [designerId, orderList] of plan) {
+        await this.assignDesignerSlice(designerId, orderList, now);
+        for (const oid of orderList) {
+          logRows.push({ orderId: oid, action: 'update', field: 'assignee', before: null, after: designerId, ctx });
         }
       }
-
       if (logRows.length) {
         void this.orderLogService.writeMany(logRows);
         void this.invalidateListCache();
@@ -5491,6 +5380,295 @@ export class OrderService implements OnModuleInit {
         message: JSON.stringify({ scope: 'autoAssignAfterImport', error: String(err) }),
       });
     }
+  }
+
+  /** Điều kiện đơn còn đủ tư cách auto-gán — dùng chung `computeAutoAssignPlan`
+   *  (tính plan) + `applyAutoAssignPlan` (chống race giữa preview và xác nhận). */
+  private buildAutoAssignEligibleFilter(ids: string[]): Record<string, unknown> {
+    const excludedFactoryId = getExcludedFactoryIdSync(this.orderModel.db);
+    return {
+      _id: { $in: ids },
+      assignee: { $in: [null, ''] },
+      factoryId: excludedFactoryId
+        ? { $exists: true, $nin: [null, '', excludedFactoryId] }
+        : { $exists: true, $nin: [null, ''] },
+      cancelledAt: null,
+      heldAt: null,
+      deletedAt: { $exists: false },
+      $or: [
+        {
+          designerStatus: DesignerStatus.Unassigned,
+          toolResultNote: { $nin: [null, '', READY_FOR_FULFILL_CODE] },
+        },
+        { designerStatus: DesignerStatus.Rework },
+      ],
+    };
+  }
+
+  /** 2 lệnh ghi gán 1 slice đơn cho 1 designer: unassigned → assigned; rework
+   *  chưa ai ôm → chỉ gán người, GIỮ `designerStatus='rework'` để task vào thẳng
+   *  cột "Cần làm lại" (guard assignee rỗng chống race với gán tay/self-claim). */
+  private async assignDesignerSlice(designerId: string, slice: string[], now: Date): Promise<void> {
+    await this.orderModel.updateMany(
+      { _id: { $in: slice }, designerStatus: DesignerStatus.Unassigned },
+      {
+        $set: {
+          assignee: designerId,
+          designerStatus: DesignerStatus.Assigned,
+          designerAssignedAt: now,
+          designerRejectedReason: null,
+          designerRejectedAt: null,
+        },
+      },
+    );
+    await this.orderModel.updateMany(
+      { _id: { $in: slice }, designerStatus: DesignerStatus.Rework, assignee: { $in: [null, ''] } },
+      { $set: { assignee: designerId, designerAssignedAt: now } },
+    );
+  }
+
+  /**
+   * Tính plan auto-gán (KHÔNG ghi DB) — routing 3 mức khách → sản phẩm → xưởng
+   * như docstring `autoAssignAfterImport`. Trả Map designerId → orderIds; rỗng
+   * khi chưa có config / không đơn nào đủ điều kiện. Dùng bởi cả
+   * `autoAssignAfterImport` (ghi ngay) lẫn `previewAutoAssign` (nút "Tự động
+   * gán" có xác nhận ở bảng "Cần gán designer").
+   */
+  private async computeAutoAssignPlan(orderIds: string[]): Promise<Map<string, string[]>> {
+    const empty = new Map<string, string[]>();
+    const ids = Array.from(new Set(orderIds.map((x) => String(x)).filter(Boolean)));
+    if (!ids.length) return empty;
+
+    const config = await this.systemConfigService.get<DesignerAssignmentConfig>(DESIGNER_ASSIGNMENT_CONFIG_KEY, null);
+    if (!config) return empty;
+
+    const byFactory = new Map<string, { designerId: string; weight: number }[]>();
+    for (const f of config.factories || []) {
+      if (f?.factoryId && f.designers?.length) {
+        byFactory.set(
+          String(f.factoryId),
+          f.designers.map((d) => ({ designerId: String(d.designerId), weight: d.weight })),
+        );
+      }
+    }
+    // Xưởng US (ngoài luồng sản xuất) không auto-gán designer, kể cả khi Admin
+    // lỡ cấu hình designer cho nó.
+    const excludedFactoryId = getExcludedFactoryIdSync(this.orderModel.db);
+    if (excludedFactoryId) byFactory.delete(excludedFactoryId);
+
+    // Ưu tiên 1/2 — map id → designer chỉ định (config cũ chưa có field → rỗng).
+    const designerByCustomerId = new Map<string, string>();
+    for (const c of config.customers || []) {
+      for (const cid of c.customerIds || []) designerByCustomerId.set(String(cid), String(c.designerId));
+    }
+    const designerByProductConfigId = new Map<string, string>();
+    for (const p of config.products || []) {
+      for (const pid of p.productConfigIds || []) designerByProductConfigId.set(String(pid), String(p.designerId));
+    }
+    if (!byFactory.size && !designerByCustomerId.size && !designerByProductConfigId.size) return empty;
+
+    // Ưu tiên 1: khớp đơn ↔ khách qua customerMatchKey(userSku, userEmail) —
+    // cùng khóa so khớp với tính năng gán xưởng theo khách.
+    const designerByCustomerKey = new Map<string, string>();
+    if (designerByCustomerId.size) {
+      const customers = await this.customerRepository.findAll({
+        _id: { $in: Array.from(designerByCustomerId.keys()) },
+      });
+      for (const c of customers) {
+        const did = designerByCustomerId.get(String(c._id));
+        if (did) designerByCustomerKey.set(customerMatchKey(c.userSku, c.userEmail), did);
+      }
+    }
+
+    // Xác minh trạng thái thực trên DB (authoritative). Mức 1/2 gán thẳng BẤT
+    // KỂ xưởng nên không giới hạn factoryId theo cấu hình mức 3 — chỉ cần đơn
+    // đã map xưởng và không phải xưởng US.
+    const eligible = await this.orderModel
+      .find(this.buildAutoAssignEligibleFilter(ids), {
+        _id: 1,
+        factoryId: 1,
+        userSku: 1,
+        userEmail: 1,
+        productConfigId: 1,
+      })
+      .lean();
+    if (!eligible.length) return empty;
+
+    // Chỉ giữ designer đang Active + đúng role Designer (cả 3 mức).
+    const allDesignerIds = Array.from(
+      new Set([
+        ...(config.factories || []).flatMap((f) => (f.designers || []).map((d) => String(d.designerId))),
+        ...designerByCustomerId.values(),
+        ...designerByProductConfigId.values(),
+      ]),
+    );
+    const designerRole = await this.roleRepository.findOne({ name: RoleType.Designer });
+    const activeUsers = await this.userModel
+      .find({ _id: { $in: allDesignerIds }, roleId: designerRole?._id, status: Status.Active }, { _id: 1 })
+      .lean();
+    const validIds = new Set(activeUsers.map((u) => String(u._id)));
+
+    // Tải thực tế: số đơn CHƯA XONG mỗi designer đang giữ (kể cả gán tay,
+    // mọi xưởng) — để cân bằng khi chia, đặc biệt khi soát lẻ từng đơn (N=1).
+    const loadRows = await this.orderModel.aggregate<{ _id: string; count: number }>([
+      {
+        $match: {
+          assignee: { $in: Array.from(validIds) },
+          designerStatus: { $in: DESIGNER_ACTIVE_STATUSES },
+          cancelledAt: null,
+          deletedAt: { $exists: false },
+        },
+      },
+      { $group: { _id: '$assignee', count: { $sum: 1 } } },
+    ]);
+    const loadByDesigner = new Map(loadRows.map((r) => [String(r._id), r.count]));
+
+    // Route từng đơn theo chuỗi ưu tiên: khách → sản phẩm → xưởng. Designer
+    // chỉ định không hợp lệ (tắt/đổi role) → thử mức tiếp theo.
+    const directGroups = new Map<string, string[]>(); // designerId → orderIds (mức 1/2)
+    const factoryGroups = new Map<string, string[]>(); // factoryId → orderIds (mức 3)
+    for (const o of eligible) {
+      const doc = o as unknown as {
+        _id: unknown;
+        factoryId?: string;
+        userSku?: string;
+        userEmail?: string;
+        productConfigId?: string;
+      };
+      const byCustomer = designerByCustomerKey.get(customerMatchKey(doc.userSku, doc.userEmail));
+      const byProduct = doc.productConfigId ? designerByProductConfigId.get(String(doc.productConfigId)) : undefined;
+      const direct =
+        (byCustomer && validIds.has(byCustomer) && byCustomer) ||
+        (byProduct && validIds.has(byProduct) && byProduct) ||
+        '';
+      if (direct) {
+        if (!directGroups.has(direct)) directGroups.set(direct, []);
+        directGroups.get(direct)!.push(String(doc._id));
+        continue;
+      }
+      const fid = String(doc.factoryId);
+      if (!byFactory.has(fid)) continue;
+      if (!factoryGroups.has(fid)) factoryGroups.set(fid, []);
+      factoryGroups.get(fid)!.push(String(doc._id));
+    }
+
+    // Gộp plan: mức 1/2 gán thẳng (cộng vào tải để mức 3 chia ngay sau vẫn
+    // cân), mức 3 chia theo xưởng cân bằng tải thực tế theo trọng số.
+    const plan = new Map<string, string[]>();
+    const push = (designerId: string, slice: string[]) => {
+      if (!slice.length) return;
+      plan.set(designerId, [...(plan.get(designerId) || []), ...slice]);
+    };
+    for (const [designerId, orderList] of directGroups) {
+      push(designerId, orderList);
+      loadByDesigner.set(designerId, (loadByDesigner.get(designerId) || 0) + orderList.length);
+    }
+    for (const [fid, orderList] of factoryGroups) {
+      const designers = (byFactory.get(fid) || []).filter((d) => validIds.has(d.designerId));
+      if (!designers.length) continue;
+      const alloc = this.allocateByLoad(
+        orderList.length,
+        designers.map((d) => d.weight),
+        designers.map((d) => loadByDesigner.get(d.designerId) || 0),
+      );
+      let cursor = 0;
+      for (let i = 0; i < designers.length; i++) {
+        const count = alloc[i];
+        if (count <= 0) continue;
+        push(designers[i].designerId, orderList.slice(cursor, cursor + count));
+        cursor += count;
+      }
+    }
+    return plan;
+  }
+
+  /**
+   * Preview nút "Tự động gán theo config" ở bảng "Cần gán designer" — chạy
+   * cùng routing với autoAssignAfterImport nhưng KHÔNG ghi, trả về mỗi designer
+   * nhận bao nhiêu đơn (kèm orderIds để FE gửi lại y nguyên khi xác nhận) +
+   * số đơn không gán được (ngoài cấu hình / không đủ điều kiện).
+   */
+  async previewAutoAssign(orderIds: string[]): Promise<{
+    plan: Array<{ userId: string; fullName: string; email?: string; count: number; orderIds: string[] }>;
+    unassignedCount: number;
+    totalRequested: number;
+  }> {
+    const ids = Array.from(new Set(orderIds.map((x) => String(x)).filter(Boolean)));
+    const planMap = await this.computeAutoAssignPlan(ids);
+    const rows: Array<{ userId: string; fullName: string; email?: string; count: number; orderIds: string[] }> = [];
+    if (planMap.size) {
+      const users = await this.userModel
+        .find({ _id: { $in: Array.from(planMap.keys()) } }, { fullName: 1, email: 1 })
+        .lean();
+      const nameMap = new Map(users.map((u) => [String(u._id), u as { fullName?: string; email?: string }]));
+      for (const [userId, list] of planMap) {
+        const info = nameMap.get(userId);
+        rows.push({
+          userId,
+          fullName: info?.fullName || `#${userId.slice(-4)}`,
+          email: info?.email,
+          count: list.length,
+          orderIds: list,
+        });
+      }
+      rows.sort((a, b) => b.count - a.count || a.fullName.localeCompare(b.fullName));
+    }
+    const assigned = rows.reduce((s, r) => s + r.count, 0);
+    return { plan: rows, unassignedCount: ids.length - assigned, totalRequested: ids.length };
+  }
+
+  /**
+   * Áp ĐÚNG plan người dùng đã xem ở preview (không tính lại). Đơn đổi trạng
+   * thái giữa lúc preview và xác nhận (đã có người ôm / hủy / giữ) → BỎ QUA và
+   * đếm vào `skipped`; designer bị tắt/đổi role giữa chừng → skip cả slice.
+   */
+  async applyAutoAssignPlan(
+    assignments: Array<{ userId: string; orderIds: string[] }>,
+    ctx?: AuditContext,
+  ): Promise<{ assigned: number; skipped: number }> {
+    const designerRole = await this.roleRepository.findOne({ name: RoleType.Designer });
+    const activeUsers = await this.userModel
+      .find(
+        { _id: { $in: assignments.map((a) => String(a.userId)) }, roleId: designerRole?._id, status: Status.Active },
+        { _id: 1 },
+      )
+      .lean();
+    const validIds = new Set(activeUsers.map((u) => String(u._id)));
+
+    const now = new Date();
+    const logRows: Array<{
+      orderId: string;
+      action: 'update';
+      field: string;
+      before: unknown;
+      after: unknown;
+      ctx?: AuditContext;
+    }> = [];
+    let assigned = 0;
+    let skipped = 0;
+    for (const a of assignments) {
+      const ids = Array.from(new Set((a.orderIds || []).map((x) => String(x)).filter(Boolean)));
+      if (!ids.length) continue;
+      const userId = String(a.userId);
+      if (!validIds.has(userId)) {
+        skipped += ids.length;
+        continue;
+      }
+      const eligible = await this.orderModel.find(this.buildAutoAssignEligibleFilter(ids), { _id: 1 }).lean();
+      const eligibleIds = eligible.map((e) => String(e._id));
+      skipped += ids.length - eligibleIds.length;
+      if (!eligibleIds.length) continue;
+      await this.assignDesignerSlice(userId, eligibleIds, now);
+      assigned += eligibleIds.length;
+      for (const oid of eligibleIds) {
+        logRows.push({ orderId: oid, action: 'update', field: 'assignee', before: null, after: userId, ctx });
+      }
+    }
+    if (logRows.length) {
+      void this.orderLogService.writeMany(logRows);
+      void this.invalidateListCache();
+    }
+    return { assigned, skipped };
   }
 
   /**
@@ -5788,12 +5966,7 @@ export class OrderService implements OnModuleInit {
     if (!order) throw new NotFoundException('Không tìm thấy đơn với mã này.');
     const id = String((order as { _id: string })._id);
 
-    let result = await this.updateField(
-      id,
-      { field: 'toolResult', value: input.toolResult },
-      RoleType.SuperAdmin,
-      ctx,
-    );
+    let result = await this.updateField(id, { field: 'toolResult', value: input.toolResult }, RoleType.SuperAdmin, ctx);
 
     if (input.toolResultNote !== undefined) {
       result = await this.updateField(
@@ -5805,12 +5978,7 @@ export class OrderService implements OnModuleInit {
     }
 
     if (input.errorFile !== undefined) {
-      result = await this.updateField(
-        id,
-        { field: 'errorFile', value: input.errorFile },
-        RoleType.SuperAdmin,
-        ctx,
-      );
+      result = await this.updateField(id, { field: 'errorFile', value: input.errorFile }, RoleType.SuperAdmin, ctx);
     }
 
     if (input.errorFileNote !== undefined) {
@@ -7378,26 +7546,17 @@ export class OrderService implements OnModuleInit {
   }
 
   /**
-   * Tab "Nhật ký bù lỗi" — danh sách đơn đang ở trạng thái lỗi xưởng
-   * (productionError set, toolResultNote chưa 'ok'). Sort theo
-   * `productionFirstErrorAt` ASC để đơn nằm lâu nhất hiện đầu tiên.
-   *
-   * Visibility: cùng quy tắc như list orders.
-   *   - Designer chỉ thấy đơn assignee = userId
-   *   - Fulfillment chỉ thấy đơn factory của mình
-   *   - Admin/Manager/DesignerLeader thấy hết
-   *
-   * `byUrgency` tính trên TOÀN bộ scope (bỏ qua pagination) để FE hiện badge
-   * count theo mức độ khẩn.
+   * Filter chung tab "Nhật ký bù lỗi" (base + góc nhìn chặng viewer + tab).
+   * Dùng bởi CẢ `getErrorLog` (trang) lẫn `countErrorLogTodo` (badge sidebar)
+   * để 2 con số luôn khớp nhau.
    */
-  async getErrorLog(
-    dto: GetErrorLogDto,
+  private buildErrorLogBaseFilter(
+    tab: 'todo' | 'done',
     roleName?: RoleType,
     assigneeUserId?: string,
     fulfillmentFactoryId?: string,
     fulfillmentStage?: string,
-  ): Promise<GetErrorLogResDto> {
-    const tab: 'todo' | 'done' = dto.tab === 'done' ? 'done' : 'todo';
+  ): Record<string, unknown> {
     const filter: Record<string, unknown> = {};
     // "Đơn lỗi" = từng bị báo lỗi (productionError set), hiển thị mọi thời gian;
     // loại đơn đã hủy / đã xóa. KHÔNG ràng buộc productionFirstErrorAt nữa (đơn
@@ -7427,6 +7586,52 @@ export class OrderService implements OnModuleInit {
       // Tab "Đã xong": chỉ 14 ngày gần nhất (theo updatedAt).
       filter.updatedAt = { $gte: new Date(Date.now() - 14 * 24 * 60 * 60 * 1000) };
     }
+    return filter;
+  }
+
+  /**
+   * Badge sidebar "Nhật ký bù lỗi" — số đơn tab "Cần xử lý" theo đúng góc nhìn
+   * chặng của người xem (Fulfillment: stage + xưởng mình; Designer: đơn mình ôm;
+   * Admin/Manager: toàn cục).
+   */
+  async countErrorLogTodo(
+    roleName?: RoleType,
+    assigneeUserId?: string,
+    fulfillmentFactoryId?: string,
+    fulfillmentStage?: string,
+  ): Promise<number> {
+    const filter = this.buildErrorLogBaseFilter(
+      'todo',
+      roleName,
+      assigneeUserId,
+      fulfillmentFactoryId,
+      fulfillmentStage,
+    );
+    return this.orderModel.countDocuments(filter);
+  }
+
+  /**
+   * Tab "Nhật ký bù lỗi" — danh sách đơn đang ở trạng thái lỗi xưởng
+   * (productionError set, toolResultNote chưa 'ok'). Sort theo
+   * `productionFirstErrorAt` ASC để đơn nằm lâu nhất hiện đầu tiên.
+   *
+   * Visibility: cùng quy tắc như list orders.
+   *   - Designer chỉ thấy đơn assignee = userId
+   *   - Fulfillment chỉ thấy đơn factory của mình
+   *   - Admin/Manager/DesignerLeader thấy hết
+   *
+   * `byUrgency` tính trên TOÀN bộ scope (bỏ qua pagination) để FE hiện badge
+   * count theo mức độ khẩn.
+   */
+  async getErrorLog(
+    dto: GetErrorLogDto,
+    roleName?: RoleType,
+    assigneeUserId?: string,
+    fulfillmentFactoryId?: string,
+    fulfillmentStage?: string,
+  ): Promise<GetErrorLogResDto> {
+    const tab: 'todo' | 'done' = dto.tab === 'done' ? 'done' : 'todo';
+    const filter = this.buildErrorLogBaseFilter(tab, roleName, assigneeUserId, fulfillmentFactoryId, fulfillmentStage);
 
     if (dto.search) {
       const searchOr = buildSearchOr(dto.search);

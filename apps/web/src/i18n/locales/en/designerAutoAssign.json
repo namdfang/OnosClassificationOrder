@@ -1,12 +1,33 @@
 {
-  "title": "Assign designers by factory",
-  "subtitle": "After tool check is done (result other than OK), orders are automatically distributed to designers by weight. Each designer belongs to only 1 factory.",
+  "title": "Auto-assign designers",
+  "subtitle": "After tool check is done (result other than OK), orders are automatically distributed to designers by priority chain: customer → product → factory.",
   "save": "Save",
   "noFactories": "No factories yet.",
   "noDesigners": "No designers assigned yet.",
+  "noDesignersAvailable": "No active designers yet.",
   "removeFromFactory": "Remove from factory",
   "addDesignerPlaceholder": "— Add designer —",
   "usedElsewhere": "(already in {{factory}})",
+  "autoSaving": "Saving...",
+  "priority1": {
+    "title": "Priority 1 — Customer → Designer",
+    "subtitle": "Drag customers into a designer's column — saved instantly on drop. Orders from an assigned customer always go to that designer, regardless of factory."
+  },
+  "priority2": {
+    "title": "Priority 2 — Product → Designer",
+    "subtitle": "Drag products into a designer's column — saved instantly on drop. Orders that don't match a customer but match a product go to that designer, regardless of factory."
+  },
+  "priority3": {
+    "title": "Priority 3 — By factory",
+    "subtitle": "Remaining orders are distributed to the factory's designers by weight, auto-balanced by each designer's current open-order count. Each designer belongs to only 1 factory."
+  },
+  "kanban": {
+    "unassignedColumn": "Unassigned",
+    "searchCustomerPlaceholder": "Search customers (SKU / email)...",
+    "searchProductPlaceholder": "Search products...",
+    "emptyColumn": "Empty",
+    "noSearchMatch": "No search match"
+  },
   "toasts": {
     "saveSuccess": "Designer assignment config saved"
   }

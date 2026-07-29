@@ -35,6 +35,7 @@ type RouterConfig = {
 export const routerConfig: RouterConfig[] = [
   { path: PATHS.HOME, component: Home },
   { path: PATHS.SETTINGS, component: Settings },
+  { path: PATHS.SETTINGS_SECTION, component: Settings },
   { path: PATHS.ACCOUNT, component: Account },
   { path: PATHS.PRODUCTS, component: Products },
   { path: PATHS.PRODUCT_DETAIL, component: ProductDetail },

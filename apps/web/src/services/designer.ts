@@ -242,6 +242,10 @@ const stageErrorDaily = (
   return callApi(`/${CONFIG.API_VERSION}/fulfillment/stage-error-daily${suffix}`, 'get');
 };
 
+const sidebarCounts = () => {
+  return callApi(`/${CONFIG.API_VERSION}/designer/sidebar-counts`, 'get');
+};
+
 export const designer = {
   listTeam,
   createMember,
@@ -269,4 +273,5 @@ export const designer = {
   personErrorOverview,
   personErrorOrders,
   stageErrorDaily,
+  sidebarCounts,
 };

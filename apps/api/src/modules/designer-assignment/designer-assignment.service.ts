@@ -7,7 +7,7 @@ import {
 
 import { SystemConfigService } from '../system-config/system-config.service';
 
-const EMPTY_CONFIG: DesignerAssignmentConfig = { factories: [] };
+const EMPTY_CONFIG: DesignerAssignmentConfig = { customers: [], products: [], factories: [] };
 
 @Injectable()
 export class DesignerAssignmentService {
@@ -22,11 +22,34 @@ export class DesignerAssignmentService {
   }
 
   /**
-   * Lưu cấu hình. Bất biến **1 designer chỉ thuộc 1 xưởng** — nếu 1 designerId
-   * xuất hiện ở ≥ 2 xưởng thì từ chối (BadRequest). Trọng số tự do, không kiểm
-   * tra tổng = 100.
+   * Lưu cấu hình. Bất biến:
+   * - **1 designer chỉ thuộc 1 xưởng** (mức 3) — designerId ở ≥ 2 xưởng → BadRequest.
+   * - **1 khách / 1 sản phẩm chỉ thuộc 1 designer** (mức 1/2) — id xuất hiện ở
+   *   ≥ 2 designer → BadRequest (kanban FE vốn không cho, guard chống payload tay).
+   * Trọng số tự do, không kiểm tra tổng = 100.
    */
   async saveConfig(dto: SaveDesignerAssignmentConfigDto): Promise<DesignerAssignmentConfig> {
+    const seenCustomers = new Set<string>();
+    for (const c of dto.customers || []) {
+      for (const raw of c.customerIds) {
+        const id = String(raw);
+        if (seenCustomers.has(id)) {
+          throw new BadRequestException('Khách hàng đã được gán cho designer khác — mỗi khách chỉ thuộc một designer.');
+        }
+        seenCustomers.add(id);
+      }
+    }
+    const seenProducts = new Set<string>();
+    for (const p of dto.products || []) {
+      for (const raw of p.productConfigIds) {
+        const id = String(raw);
+        if (seenProducts.has(id)) {
+          throw new BadRequestException('Sản phẩm đã được gán cho designer khác — mỗi sản phẩm chỉ thuộc một designer.');
+        }
+        seenProducts.add(id);
+      }
+    }
+
     const seen = new Set<string>();
     for (const f of dto.factories) {
       // Loại designer trùng trong CÙNG 1 xưởng (giữ entry đầu).
@@ -49,13 +72,15 @@ export class DesignerAssignmentService {
     }
 
     const value: DesignerAssignmentConfig = {
+      customers: (dto.customers || []).filter((c) => c.customerIds.length > 0),
+      products: (dto.products || []).filter((p) => p.productConfigIds.length > 0),
       factories: dto.factories,
       updatedAt: new Date().toISOString(),
     };
     await this.systemConfigService.set(
       DESIGNER_ASSIGNMENT_CONFIG_KEY,
       value,
-      'Cấu hình auto-gán designer theo xưởng',
+      'Cấu hình auto-gán designer (khách hàng / sản phẩm / xưởng)',
     );
     return value;
   }

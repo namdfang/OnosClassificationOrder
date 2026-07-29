@@ -6,17 +6,38 @@ import { z } from 'zod';
 import { IDZod } from '../constants/common-zod';
 
 /**
- * Cấu hình auto-gán designer theo xưởng.
+ * Cấu hình auto-gán designer — chuỗi ưu tiên 3 mức khi `OrderService.autoAssignAfterImport`
+ * chọn designer cho đơn (sau soát tool `toolResultNote` != 'ok' / báo lỗi designer):
  *
- * - Mỗi xưởng (`factoryId`) có một danh sách designer + trọng số (`weight`).
- * - **Bất biến:** 1 designer chỉ thuộc 1 xưởng (validate ở BE lúc lưu + FE lúc chọn).
- * - Trọng số tự do (không cần cộng đủ 100); hệ thống tự quy tỉ lệ `weight/Σweight`.
- * - Dùng cho `OrderService.autoAssignAfterImport` — sau khi soát tool xong
- *   (`toolResultNote` có giá trị & != 'ok') thì tự gán đơn cho designer theo tỉ lệ.
+ * 1. **Khách hàng → designer** (`customers`): đơn khớp khách (customerMatchKey
+ *    userSku+userEmail với bảng `customers`) → gán thẳng designer đó, BẤT KỂ xưởng.
+ * 2. **Sản phẩm → designer** (`products`): đơn có `productConfigId` nằm trong cấu
+ *    hình → gán thẳng designer đó, BẤT KỂ xưởng.
+ * 3. **Theo xưởng** (`factories`): chia cho designer của xưởng theo trọng số,
+ *    cân bằng tải thực tế (`allocateByLoad`).
+ *
+ * Bất biến:
+ * - 1 designer chỉ thuộc 1 xưởng (mức 3); 1 khách / 1 sản phẩm chỉ thuộc 1 designer
+ *   (mức 1/2) — validate ở BE lúc lưu + FE (kanban 1 card 1 cột).
+ * - Trọng số mức 3 tự do (không cần cộng đủ 100); tỉ lệ thực = `weight/Σweight`.
  *
  * Lưu dưới dạng blob JSON trong collection `system_configs` (key bên dưới).
  */
 export const DESIGNER_ASSIGNMENT_CONFIG_KEY = 'designer_assignment_config';
+
+/** Ưu tiên 1 — các khách hàng (bảng `customers`) do 1 designer đảm nhận. */
+export const DesignerCustomerAllocZod = z.object({
+  designerId: IDZod,
+  customerIds: IDZod.array(),
+});
+export type DesignerCustomerAlloc = z.infer<typeof DesignerCustomerAllocZod>;
+
+/** Ưu tiên 2 — các sản phẩm (Product Config) do 1 designer đảm nhận. */
+export const DesignerProductAllocZod = z.object({
+  designerId: IDZod,
+  productConfigIds: IDZod.array(),
+});
+export type DesignerProductAlloc = z.infer<typeof DesignerProductAllocZod>;
 
 export const DesignerAllocEntryZod = z.object({
   designerId: IDZod,
@@ -32,6 +53,11 @@ export const DesignerFactoryAllocZod = z.object({
 export type DesignerFactoryAlloc = z.infer<typeof DesignerFactoryAllocZod>;
 
 export const DesignerAssignmentConfigZod = z.object({
+  /** Ưu tiên 1 — khách hàng → designer. Config cũ chưa có field → coi như []. */
+  customers: DesignerCustomerAllocZod.array().default([]),
+  /** Ưu tiên 2 — sản phẩm → designer. Config cũ chưa có field → coi như []. */
+  products: DesignerProductAllocZod.array().default([]),
+  /** Ưu tiên 3 — chia theo xưởng (trọng số + cân bằng tải). */
   factories: DesignerFactoryAllocZod.array(),
   updatedAt: z.string().optional(),
 });

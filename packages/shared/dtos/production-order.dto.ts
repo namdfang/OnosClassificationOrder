@@ -917,6 +917,48 @@ export const BulkAssignDesignerResZod = ResZod.extend({
 });
 export class BulkAssignDesignerResDto extends createZodDto(extendApi(BulkAssignDesignerResZod)) {}
 
+// ─── Tự động gán designer theo config (nút ở bảng "Cần gán designer") ─
+// Preview chạy cùng routing 3 mức với autoAssignAfterImport nhưng KHÔNG ghi;
+// xác nhận → apply ĐÚNG plan đã xem (đơn đổi trạng thái giữa chừng bị skip).
+export const AutoAssignPreviewZod = z.object({
+  orderIds: z.string().array().min(1).max(3000),
+});
+export class AutoAssignPreviewDto extends createZodDto(extendApi(AutoAssignPreviewZod)) {}
+
+export const AutoAssignPlanRowZod = z.object({
+  userId: z.string(),
+  fullName: z.string(),
+  email: z.string().optional(),
+  count: z.number().int().nonnegative(),
+  /** FE gửi lại y nguyên khi xác nhận — đảm bảo gán đúng cái đã xem. */
+  orderIds: z.string().array(),
+});
+export type AutoAssignPlanRow = z.infer<typeof AutoAssignPlanRowZod>;
+export const AutoAssignPreviewResZod = ResZod.extend({
+  data: z.object({
+    plan: AutoAssignPlanRowZod.array(),
+    /** Đơn không gán được (ngoài cấu hình / không đủ điều kiện). */
+    unassignedCount: z.number().int().nonnegative(),
+    totalRequested: z.number().int().nonnegative(),
+  }),
+});
+export class AutoAssignPreviewResDto extends createZodDto(extendApi(AutoAssignPreviewResZod)) {}
+
+export const AutoAssignApplyZod = z.object({
+  assignments: z
+    .object({ userId: z.string(), orderIds: z.string().array() })
+    .array()
+    .min(1),
+});
+export class AutoAssignApplyDto extends createZodDto(extendApi(AutoAssignApplyZod)) {}
+export const AutoAssignApplyResZod = ResZod.extend({
+  data: z.object({
+    assigned: z.number().int().nonnegative(),
+    skipped: z.number().int().nonnegative(),
+  }),
+});
+export class AutoAssignApplyResDto extends createZodDto(extendApi(AutoAssignApplyResZod)) {}
+
 /** Designer tự nhận (self-claim) N đơn từ pool "cần gán" về chính mình. */
 export const ClaimDesignerTasksZod = z.object({
   ids: IDZod.array().min(1),
@@ -2065,6 +2107,13 @@ export const ToolCheckDayRowZod = z.object({
   reviewed: z.number().int().nonnegative(),
   /** TỪNG bị soát ra lỗi (`toolCheckErrorNotes` non-empty) — LỊCH SỬ, không giảm khi đơn đã sửa xong. */
   reviewedError: z.number().int().nonnegative(),
+  /**
+   * Breakdown `reviewedError` theo MÃ LỖI MỚI NHẤT của đơn (phần tử cuối
+   * `toolCheckErrorNotes`) — mỗi đơn đúng 1 dòng nên tổng = reviewedError.
+   * FE dựng các dòng con "Soát lỗi / Không có file PDF / Không có tool..."
+   * + tooltip breakdown dưới hàng "Note không ok".
+   */
+  errorByNote: z.object({ code: z.string(), count: z.number().int().nonnegative() }).array(),
   /** Đã soát & CHƯA TỪNG lỗi = soát ok ngay (gồm cả đơn ok bị In trả về treo note='error'). */
   reviewedOk: z.number().int().nonnegative(),
   /** Đơn In trả về (source=tool-check + note=error) vào SX ngày đó. */

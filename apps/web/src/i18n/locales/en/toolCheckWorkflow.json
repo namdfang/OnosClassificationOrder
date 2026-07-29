@@ -11,7 +11,7 @@
   },
   "dailyStrip": {
     "title": "Daily overview",
-    "subtitle": "click a day to filter the list below · click a NUMBER to view the order list",
+    "subtitle": "click a day to filter the list below · click a NUMBER to view the order list · hover a Not-OK notes number for a per-error breakdown",
     "filtering": "Filtering {{date}}",
     "noData": "No data.",
     "metricColumn": "Metric",
@@ -21,10 +21,11 @@
       "total": "Total orders",
       "unreviewed": "Unreviewed",
       "reviewed": "Reviewed",
-      "reviewedError": "Review error",
+      "noteNotOk": "Not-OK notes",
       "reviewedOk": "Review OK",
       "rework": "Needs rework"
-    }
+    },
+    "errorPctHint": "Background color by % of that day's total orders: under 8% green · 8–15% yellow · 15%+ red"
   },
   "pipelineCaption": "— WHOLE factory · Tool check lane highlighted · hover for details · click a day to filter the list",
   "kpi": {
