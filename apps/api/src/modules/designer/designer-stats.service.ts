@@ -1573,6 +1573,7 @@ export class DesignerStatsService {
       unreviewedRaw,
       candidatesRaw,
       dailyByDay,
+      dailyNoteAgg,
       typeFacetAgg,
       customerFacetAgg,
       machineFacetAgg,
@@ -1618,6 +1619,20 @@ export class DesignerStatsService {
             },
           },
         },
+      ]),
+      // Breakdown "Note không ok" per-day theo MÃ MỚI NHẤT của đơn (phần tử
+      // cuối `toolCheckErrorNotes` — $addToSet append đuôi khi gặp mã mới).
+      // Mỗi đơn đúng 1 dòng → tổng breakdown = reviewedError, khớp con số
+      // ngoài ô. MIRROR toolNoteAgg (b2) của getDailyOverview tab Designer.
+      this.orderModel.aggregate<{ _id: { day: string; note: string }; count: number }>([
+        { $match: withFilters({ inProductionAt: inWindow, 'toolCheckErrorNotes.0': { $exists: true }, ...alive }) },
+        {
+          $group: {
+            _id: { day: dayExpr, note: { $arrayElemAt: ['$toolCheckErrorNotes', -1] } },
+            count: { $sum: 1 },
+          },
+        },
+        { $sort: { count: -1 } },
       ]),
       // Facet options (phạm vi Support, KHÔNG áp 4 filter → ổn định).
       facetAgg('type'),
@@ -1706,6 +1721,12 @@ export class DesignerStatsService {
 
     // Dải theo ngày: căn theo `days` (mới→cũ) từ resolveVnWindow.
     const dailyDayMap = new Map(dailyByDay.map((r) => [r._id, r]));
+    const noteByDay = new Map<string, { code: string; count: number }[]>();
+    for (const r of dailyNoteAgg) {
+      const list = noteByDay.get(r._id.day) || [];
+      list.push({ code: r._id.note, count: r.count });
+      noteByDay.set(r._id.day, list);
+    }
     const columnTotals = { total: 0, unreviewed: 0, reviewed: 0, reviewedError: 0, reviewedOk: 0, rework: 0 };
     const dayRows: ToolCheckDayRow[] = days.map((day) => {
       const r = dailyDayMap.get(day);
@@ -1721,7 +1742,7 @@ export class DesignerStatsService {
       columnTotals.reviewedError += reviewedError;
       columnTotals.reviewedOk += reviewedOk;
       columnTotals.rework += rework;
-      return { day, total, unreviewed, reviewed, reviewedError, reviewedOk, rework };
+      return { day, total, unreviewed, reviewed, reviewedError, errorByNote: noteByDay.get(day) || [], reviewedOk, rework };
     });
 
     return {

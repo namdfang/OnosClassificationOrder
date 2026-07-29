@@ -2065,6 +2065,13 @@ export const ToolCheckDayRowZod = z.object({
   reviewed: z.number().int().nonnegative(),
   /** TỪNG bị soát ra lỗi (`toolCheckErrorNotes` non-empty) — LỊCH SỬ, không giảm khi đơn đã sửa xong. */
   reviewedError: z.number().int().nonnegative(),
+  /**
+   * Breakdown `reviewedError` theo MÃ LỖI MỚI NHẤT của đơn (phần tử cuối
+   * `toolCheckErrorNotes`) — mỗi đơn đúng 1 dòng nên tổng = reviewedError.
+   * FE dựng các dòng con "Soát lỗi / Không có file PDF / Không có tool..."
+   * + tooltip breakdown dưới hàng "Note không ok".
+   */
+  errorByNote: z.object({ code: z.string(), count: z.number().int().nonnegative() }).array(),
   /** Đã soát & CHƯA TỪNG lỗi = soát ok ngay (gồm cả đơn ok bị In trả về treo note='error'). */
   reviewedOk: z.number().int().nonnegative(),
   /** Đơn In trả về (source=tool-check + note=error) vào SX ngày đó. */

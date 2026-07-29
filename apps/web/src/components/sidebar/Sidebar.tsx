@@ -11,7 +11,6 @@ import {
   Building2,
   ChevronDown,
   ChevronRight,
-  ClipboardList,
   Factory,
   FileDown,
   FileSearch,
@@ -185,12 +184,15 @@ function buildNavGroups(t: TFunction<'layout'>): NavGroup[] {
               to: `${PATHS.HOME}?tab=stats`,
               icon: <BarChart3 size={14} />,
             },
-            {
-              key: 'dash-status',
-              label: t('sidebar.dashboard.status'),
-              to: `${PATHS.HOME}?tab=status`,
-              icon: <ClipboardList size={14} />,
-            },
+            // Entry "Tình trạng đơn hàng" TẠM ẨN (2026-07, không cần nữa) —
+            // bật lại: bỏ comment + import lại ClipboardList từ lucide-react,
+            // đồng bộ với tab "status" đang comment ở pages/home/index.tsx.
+            // {
+            //   key: 'dash-status',
+            //   label: t('sidebar.dashboard.status'),
+            //   to: `${PATHS.HOME}?tab=status`,
+            //   icon: <ClipboardList size={14} />,
+            // },
             {
               key: 'dash-lifecycle',
               label: t('sidebar.dashboard.lifecycle'),
@@ -204,13 +206,15 @@ function buildNavGroups(t: TFunction<'layout'>): NavGroup[] {
               icon: <FileSearch size={14} />,
               perm: 'page.tool_check',
             },
-            {
-              key: 'dash-person-error',
-              label: t('sidebar.dashboard.personError'),
-              to: `${PATHS.HOME}?tab=person-error`,
-              icon: <AlertTriangle size={14} />,
-              anyPerm: ['page.designer_stats', 'page.tool_check'],
-            },
+            // Entry "Lỗi theo người" TẠM ẨN (2026-07, không cần nữa) — đồng bộ
+            // với tab "person-error" đang comment ở pages/home/index.tsx.
+            // {
+            //   key: 'dash-person-error',
+            //   label: t('sidebar.dashboard.personError'),
+            //   to: `${PATHS.HOME}?tab=person-error`,
+            //   icon: <AlertTriangle size={14} />,
+            //   anyPerm: ['page.designer_stats', 'page.tool_check'],
+            // },
             {
               key: 'dash-designer',
               label: t('sidebar.dashboard.designer'),
