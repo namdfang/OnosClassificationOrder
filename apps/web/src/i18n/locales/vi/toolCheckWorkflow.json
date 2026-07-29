@@ -11,7 +11,7 @@
   },
   "dailyStrip": {
     "title": "Tổng quan theo ngày",
-    "subtitle": "bấm 1 ngày để lọc danh sách bên dưới · bấm CON SỐ để xem danh sách đơn",
+    "subtitle": "bấm 1 ngày để lọc danh sách bên dưới · bấm CON SỐ để xem danh sách đơn · trỏ vào số hàng Note không ok để xem chi tiết từng loại lỗi",
     "filtering": "Đang lọc {{date}}",
     "noData": "Không có dữ liệu.",
     "metricColumn": "Chỉ số",
@@ -21,10 +21,11 @@
       "total": "Tổng đơn",
       "unreviewed": "Chưa soát",
       "reviewed": "Đã soát",
-      "reviewedError": "Soát lỗi",
+      "noteNotOk": "Note không ok",
       "reviewedOk": "Soát OK",
       "rework": "Cần làm lại"
-    }
+    },
+    "errorPctHint": "Nền màu theo % so với tổng đơn ngày đó: dưới 8% xanh · 8–15% vàng · từ 15% trở lên đỏ"
   },
   "pipelineCaption": "— TOÀN nhà máy · lane Soát tool được tô đậm · di chuột xem chi tiết · bấm 1 ngày để lọc danh sách",
   "kpi": {

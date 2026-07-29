@@ -230,7 +230,17 @@
     "orderCount": "{{count}} đơn",
     "claimedSelf": "Đã nhận {{modified}}/{{matched}} đơn về mình",
     "claimedSelfWithSkipped": "{{msg}}. {{count}} đơn bị bỏ qua.",
-    "skippedOrders": "Đơn bị bỏ qua"
+    "skippedOrders": "Đơn bị bỏ qua",
+    "autoAssign": "Tự động gán",
+    "autoAssignLoading": "Đang tính...",
+    "autoAssignTitle": "Xác nhận tự động gán theo cấu hình",
+    "autoAssignSummary": "Sẽ gán {{assigned}}/{{total}} đơn đang hiển thị theo cấu hình (khách hàng → sản phẩm → xưởng):",
+    "autoAssignUnassigned": "{{count}} đơn không gán được (ngoài cấu hình / chưa đủ điều kiện) — giữ nguyên chờ gán tay.",
+    "autoAssignEmpty": "Không có đơn nào khớp cấu hình để gán — kiểm tra cấu hình Auto-gán Designer ở trang Cài đặt.",
+    "autoAssignConfirm": "Gán {{count}} đơn",
+    "autoAssignCancel": "Hủy",
+    "autoAssignDone": "Đã tự động gán {{assigned}} đơn",
+    "autoAssignDoneSkipped": "Đã gán {{assigned}} đơn · {{skipped}} đơn bị bỏ qua (vừa có người ôm / đổi trạng thái)"
   },
   "teamDailyMatrix": {
     "title": "Tất cả designer theo ngày",

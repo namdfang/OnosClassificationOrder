@@ -4,6 +4,10 @@ import { AuthUser } from 'core';
 import {
   ApplyCuttingFilesDto,
   ApplyCuttingFilesResDto,
+  AutoAssignApplyDto,
+  AutoAssignApplyResDto,
+  AutoAssignPreviewDto,
+  AutoAssignPreviewResDto,
   BulkAssignDesignerDto,
   BulkAssignDesignerPreviewDto,
   BulkAssignDesignerPreviewResDto,
@@ -777,6 +781,44 @@ export class OrderController {
       { user, ip, userAgent },
       user?.role?.permissionCodes,
     );
+  }
+
+  @Post('auto-assign-preview')
+  @Auth([RoleType.SuperAdmin, RoleType.Admin, RoleType.Manager, RoleType.DesignerLeader])
+  @ApiOperation({
+    summary:
+      'Preview "Tự động gán theo config" cho pool Cần gán — routing 3 mức khách→sản phẩm→xưởng, KHÔNG ghi DB. Trả plan mỗi designer nhận bao nhiêu đơn + số không gán được.',
+  })
+  @HttpCode(HttpStatus.OK)
+  @ApiOkResponse({ type: AutoAssignPreviewResDto })
+  async autoAssignPreview(@Body() dto: AutoAssignPreviewDto, @AuthUser() user: UserDocument): Promise<AutoAssignPreviewResDto> {
+    this.logger.info({
+      message: JSON.stringify({ method: 'POST', url: '/orders/auto-assign-preview', userId: user?._id }),
+    });
+    return { success: true, data: await this.orderService.previewAutoAssign(dto.orderIds) };
+  }
+
+  @Post('auto-assign-apply')
+  @Auth([RoleType.SuperAdmin, RoleType.Admin, RoleType.Manager, RoleType.DesignerLeader])
+  @ApiOperation({
+    summary:
+      'Áp ĐÚNG plan auto-gán đã preview (không tính lại). Đơn đổi trạng thái giữa chừng bị bỏ qua, trả {assigned, skipped}.',
+  })
+  @HttpCode(HttpStatus.OK)
+  @ApiOkResponse({ type: AutoAssignApplyResDto })
+  async autoAssignApply(
+    @Body() dto: AutoAssignApplyDto,
+    @AuthUser() user: UserDocument,
+    @ClientIp() ip: string,
+    @UserAgent() userAgent: string,
+  ): Promise<AutoAssignApplyResDto> {
+    this.logger.info({
+      message: JSON.stringify({ method: 'POST', url: '/orders/auto-assign-apply', userId: user?._id }),
+    });
+    return {
+      success: true,
+      data: await this.orderService.applyAutoAssignPlan(dto.assignments, { user, ip, userAgent }),
+    };
   }
 
   @Post('claim-designer-tasks')

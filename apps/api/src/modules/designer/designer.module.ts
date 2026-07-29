@@ -2,6 +2,7 @@ import { Module } from '@nestjs/common';
 import { MongooseModule } from '@nestjs/mongoose';
 
 import { OrderEntity, OrderSchema } from '../order/order.entity';
+import { OrderModule } from '../order/order.module';
 import { OrderLogEntity, OrderLogSchema } from '../order-log/order-log.entity';
 import { OrderLogModule } from '../order-log/order-log.module';
 import { ProductConfigEntity, ProductConfigSchema } from '../product-config/product-config.entity';
@@ -28,6 +29,8 @@ import { DesignerTeamService } from './designer-team.service';
  */
 @Module({
   imports: [
+    // OrderService cho badge sidebar (`countErrorLogTodo` ở /designer/sidebar-counts).
+    OrderModule,
     OrderLogModule,
     MongooseModule.forFeature([{ name: UserEntity.name, schema: UserSchema }]),
     MongooseModule.forFeature([{ name: OrderEntity.name, schema: OrderSchema }]),

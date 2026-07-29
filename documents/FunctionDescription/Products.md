@@ -142,7 +142,7 @@ Cột `fabricType` cho phép admin set sẵn loại vải mặc định — khi 
 
 Cột `toolResult` **KHÔNG còn được auto-copy vào order lúc import nữa** (API OnosPod lẫn CSV) — đơn mới luôn tạo với `toolResult` rỗng để tool tự động soát (`GET /v1/orders/design-review/next`) nhận diện đúng đơn chưa soát, xem `Orders.md §3.3`. Cột này ở Products chỉ còn ý nghĩa cấu hình/hiển thị, KHÔNG ảnh hưởng đơn mới. UI bảng config vẫn giữ dropdown chọn fabric / tool inline (không đổi UI Products).
 
-### 2.6 Kanban gán xưởng theo sản phẩm (trang `/adm/settings`)
+### 2.6 Kanban gán xưởng theo sản phẩm (mục `/adm/settings/product-factory`)
 
 `apps/web/src/components/settings/ProductFactoryKanban.tsx` — section trong trang Settings (`apps/web/src/pages/settings/index.tsx`, gate `role.manage` chung với các config khác), thay cho việc chọn `<select>` Xưởng từng dòng ở bảng Config khi cần chuyển hàng loạt.
 

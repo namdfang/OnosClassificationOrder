@@ -1,7 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useSearchParams } from 'react-router-dom';
-import { BarChart3, ClipboardList, Factory, FileSearch, Palette, TriangleAlert, Workflow } from 'lucide-react';
+import { BarChart3, Factory, FileSearch, Palette, Workflow } from 'lucide-react';
 
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 
@@ -12,12 +12,16 @@ import LifecycleStrip from './LifecycleStrip';
 import LifecycleTab from './LifecycleTab';
 import OrderFactoryTab from './OrderFactoryTab';
 import OrderStatsTab from './OrderStatsTab';
-import OrderStatusTab from './OrderStatusTab';
-import PersonErrorTab from './PersonErrorTab';
+// Tab "status" (Tình trạng đơn hàng) + "person-error" (Lỗi theo người) TẠM ẨN
+// (2026-07, không cần nữa) — muốn bật lại: bỏ comment 2 import dưới + thêm lại
+// 'status'/'person-error' vào TABS + bỏ comment các khối canSeePersonError /
+// isTabAllowed / TabsTrigger / TabsContent đánh dấu cùng ghi chú này.
+// import OrderStatusTab from './OrderStatusTab';
+// import PersonErrorTab from './PersonErrorTab';
 import { SendTelegramReportButton } from './SendTelegramReportButton';
 import ToolCheckTab from './ToolCheckTab';
 
-const TABS = ['factory', 'stats', 'status', 'lifecycle', 'tool-check', 'person-error', 'designer'] as const;
+const TABS = ['factory', 'stats', 'lifecycle', 'tool-check', 'designer'] as const;
 type TabKey = (typeof TABS)[number];
 
 export default function Home() {
@@ -29,16 +33,10 @@ export default function Home() {
   const canSeeLifecycle = true;
   // Tab "Soát tool" chỉ Support + Admin.
   const canSeeToolCheck = isAdmin || has('page.tool_check');
-  // Tab "Lỗi theo người" — quản lý (dùng chung quyền xem thống kê designer/tool).
-  const canSeePersonError = isAdmin || has('page.designer_stats') || has('page.tool_check');
+  // Tab "Lỗi theo người" TẠM ẨN — xem ghi chú ở khối import.
+  // const canSeePersonError = isAdmin || has('page.designer_stats') || has('page.tool_check');
   const isTabAllowed = (t: TabKey) =>
-    t === 'lifecycle'
-      ? canSeeLifecycle
-      : t === 'tool-check'
-        ? canSeeToolCheck
-        : t === 'person-error'
-          ? canSeePersonError
-          : true;
+    t === 'lifecycle' ? canSeeLifecycle : t === 'tool-check' ? canSeeToolCheck : true;
   const initial = (searchParams.get('tab') as TabKey) || 'factory';
   const [activeTab, setActiveTab] = useState<TabKey>(
     TABS.includes(initial) && isTabAllowed(initial) ? initial : 'stats',
@@ -150,9 +148,10 @@ export default function Home() {
           <TabsTrigger value="stats" className="gap-1.5">
             <BarChart3 size={14} /> {t('tabs.stats')}
           </TabsTrigger>
+          {/* Tab "status" TẠM ẨN — xem ghi chú ở khối import.
           <TabsTrigger value="status" className="gap-1.5">
             <ClipboardList size={14} /> {t('tabs.status')}
-          </TabsTrigger>
+          </TabsTrigger> */}
           {canSeeLifecycle && (
             <TabsTrigger value="lifecycle" className="gap-1.5">
               <Workflow size={14} /> {t('tabs.lifecycle')}
@@ -163,11 +162,12 @@ export default function Home() {
               <FileSearch size={14} /> {t('tabs.toolCheck')}
             </TabsTrigger>
           )}
+          {/* Tab "person-error" TẠM ẨN — xem ghi chú ở khối import.
           {canSeePersonError && (
             <TabsTrigger value="person-error" className="gap-1.5">
               <TriangleAlert size={14} /> {t('tabs.personError')}
             </TabsTrigger>
-          )}
+          )} */}
           {canSeeDesigner && (
             <TabsTrigger value="designer" className="gap-1.5">
               <Palette size={14} /> {t('tabs.designer')}
@@ -178,9 +178,10 @@ export default function Home() {
         <TabsContent value="stats">
           <OrderStatsTab />
         </TabsContent>
+        {/* Tab "status" TẠM ẨN — xem ghi chú ở khối import.
         <TabsContent value="status">
           <OrderStatusTab />
-        </TabsContent>
+        </TabsContent> */}
         <TabsContent value="factory">
           <OrderFactoryTab />
         </TabsContent>
@@ -194,11 +195,12 @@ export default function Home() {
             <ToolCheckTab />
           </TabsContent>
         )}
+        {/* Tab "person-error" TẠM ẨN — xem ghi chú ở khối import.
         {canSeePersonError && (
           <TabsContent value="person-error">
             <PersonErrorTab />
           </TabsContent>
-        )}
+        )} */}
         {canSeeDesigner && (
           <TabsContent value="designer">
             <DesignerStatsTab />
