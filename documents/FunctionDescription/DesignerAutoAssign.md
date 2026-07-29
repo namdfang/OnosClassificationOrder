@@ -1,6 +1,6 @@
 # Auto-gán Designer (chuỗi ưu tiên khách hàng → sản phẩm → xưởng) — Function Description
 
-> **File FE:** `apps/web/src/pages/settings/index.tsx` + `apps/web/src/components/settings/DesignerAssignmentConfig.tsx` + `apps/web/src/components/settings/DesignerAssignKanban.tsx` + `apps/web/src/services/designerAssignment.ts` > **File BE:** `apps/api/src/modules/designer-assignment/` (service + controller + module) + `apps/api/src/modules/order/order.service.ts` → `autoAssignAfterImport()` (public) + `allocateByLoad()` + hook `importRework`/`updateField`/`setProductionError`/`markToolCheckDone` + `apps/api/src/modules/fulfillment/fulfillment-task.service.ts` → hook `transition()` rework-back target=designer > **Route:** `/adm/settings` (gate quyền `role.manage`)
+> **File FE:** `apps/web/src/pages/settings/index.tsx` + `apps/web/src/components/settings/DesignerAssignmentConfig.tsx` + `apps/web/src/components/settings/DesignerAssignKanban.tsx` + `apps/web/src/services/designerAssignment.ts` > **File BE:** `apps/api/src/modules/designer-assignment/` (service + controller + module) + `apps/api/src/modules/order/order.service.ts` → `autoAssignAfterImport()` (public) + `allocateByLoad()` + hook `importRework`/`updateField`/`setProductionError`/`markToolCheckDone` + `apps/api/src/modules/fulfillment/fulfillment-task.service.ts` → hook `transition()` rework-back target=designer > **Route:** `/adm/settings/designer-assign` (mục "Tự động gán designer" trong Settings, gate quyền `role.manage`)
 > **API:** `GET/PUT /v1/designer-assignment/config`
 
 ## 1. Overview
@@ -9,7 +9,7 @@
 
 Sau khi **soát tool xong** cho một đơn (`toolResultNote` **có giá trị & != 'ok'**
 — tức đã soát và có lỗi cần designer), hệ thống **tự động gán** đơn cho designer
-theo **chuỗi ưu tiên 3 mức** Admin cấu hình ở `/adm/settings`, **không cần gán tay**:
+theo **chuỗi ưu tiên 3 mức** Admin cấu hình ở `/adm/settings/designer-assign`, **không cần gán tay**:
 
 1. **Khách hàng → Designer** (kanban kéo thả, card = khách bảng `customers`):
    đơn khớp khách qua `customerMatchKey(userSku, userEmail)` → gán **thẳng**

@@ -323,7 +323,7 @@ active/không có biến thể — khác `getCatalog()` trả mảng có thể r
 
 ## 8. Thông báo cho khách hàng — Admin/nội bộ chủ động gửi (KHÔNG tự sinh theo trạng thái đơn)
 
-> **File FE:** `apps/web/src/components/customer/NotificationBell.tsx` (chuông ở `CustomerLayout.tsx`), `apps/web/src/components/settings/CustomerNotificationSender.tsx` (soạn + lịch sử, nhúng vào `/adm/settings` — cùng gate `role.manage` như `CustomerAssignmentConfig`/`DesignerAssignmentConfig`, KHÔNG route/permission riêng), `apps/web/src/services/customerNotification.ts` (admin) + `services/customerPortal.ts` → `customerNotificationPortal` (khách hàng)
+> **File FE:** `apps/web/src/components/customer/NotificationBell.tsx` (chuông ở `CustomerLayout.tsx`), `apps/web/src/components/settings/CustomerNotificationSender.tsx` (soạn + lịch sử, mục `/adm/settings/customer-notify` — cùng gate `role.manage` như `CustomerAssignmentConfig`/`DesignerAssignmentConfig`, KHÔNG route/permission riêng), `apps/web/src/services/customerNotification.ts` (admin) + `services/customerPortal.ts` → `customerNotificationPortal` (khách hàng)
 > **File BE:** `apps/api/src/modules/customer-notification/` (`customer-notification.entity.ts`, `.repository.ts`, `.service.ts`, `customer-notification.controller.ts` (admin), `customer-notification-portal.controller.ts` (khách hàng), `.module.ts`), `apps/api/src/modules/customer/customer.entity.ts` (+ `notificationsReadAt`)
 > **API:** `POST /v1/customer-notifications` + `GET /v1/customer-notifications/sent` (`@Auth([Admin])`), `GET /v1/customer/notifications` + `POST /v1/customer/notifications/read` (`@Auth([Customer])`)
 

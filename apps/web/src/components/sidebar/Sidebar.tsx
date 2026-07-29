@@ -58,6 +58,8 @@ interface NavChild {
   anyPerm?: string[];
   /** Role names to hide this entry from (bổ sung cho check `perm`). */
   hideForRoles?: string[];
+  /** Active cả khi đang ở route con của `to` (vd `/adm/settings/<section>`). */
+  matchPrefix?: boolean;
 }
 
 interface NavItem {
@@ -67,6 +69,8 @@ interface NavItem {
   icon: React.ReactNode;
   children?: NavChild[];
   perm?: string;
+  /** Active cả khi đang ở route con của `to` (vd `/adm/settings/<section>`). */
+  matchPrefix?: boolean;
 }
 
 interface NavGroup {
@@ -307,6 +311,7 @@ function buildNavGroups(t: TFunction<'layout'>): NavGroup[] {
           to: PATHS.SETTINGS,
           icon: <Settings size={17} />,
           perm: 'role.manage',
+          matchPrefix: true,
         },
       ],
     },
@@ -354,10 +359,13 @@ interface SidebarProps {
   onMobileClose: () => void;
 }
 
-function isLinkActive(linkPath: string, currentPath: string, currentSearch: string): boolean {
+function isLinkActive(linkPath: string, currentPath: string, currentSearch: string, matchPrefix = false): boolean {
   // linkPath may include `?...` for children
   const [pathPart, queryPart] = linkPath.split('?');
-  if (pathPart !== currentPath) return false;
+  const pathMatches = matchPrefix
+    ? currentPath === pathPart || currentPath.startsWith(`${pathPart}/`)
+    : pathPart === currentPath;
+  if (!pathMatches) return false;
   if (!queryPart) return true;
   // exact query param subset check
   const linkParams = new URLSearchParams(queryPart);
@@ -370,7 +378,7 @@ function isLinkActive(linkPath: string, currentPath: string, currentSearch: stri
 
 function SidebarLeaf({ item, collapsed, level = 0 }: { item: NavChild; collapsed: boolean; level?: number }) {
   const location = useLocation();
-  const active = isLinkActive(item.to, location.pathname, location.search);
+  const active = isLinkActive(item.to, location.pathname, location.search, item.matchPrefix);
   const requestReset = useSidebarResetStore((s) => s.requestReset);
   return (
     <Link
@@ -402,13 +410,13 @@ function SidebarParent({ item, collapsed }: { item: NavItem; collapsed: boolean 
 
   // Open by default if any child matches current path
   const initialOpen = hasChildren
-    ? item.children!.some((c) => isLinkActive(c.to, location.pathname, location.search))
+    ? item.children!.some((c) => isLinkActive(c.to, location.pathname, location.search, c.matchPrefix))
     : false;
   const [open, setOpen] = useState(initialOpen);
 
   useEffect(() => {
     // Auto-expand when navigating to a child
-    if (hasChildren && item.children!.some((c) => isLinkActive(c.to, location.pathname, location.search))) {
+    if (hasChildren && item.children!.some((c) => isLinkActive(c.to, location.pathname, location.search, c.matchPrefix))) {
       setOpen(true);
     }
   }, [location.pathname, location.search]);
@@ -418,7 +426,9 @@ function SidebarParent({ item, collapsed }: { item: NavItem; collapsed: boolean 
   }
 
   // Parent with children
-  const anyChildActive = item.children!.some((c) => isLinkActive(c.to, location.pathname, location.search));
+  const anyChildActive = item.children!.some((c) =>
+    isLinkActive(c.to, location.pathname, location.search, c.matchPrefix),
+  );
 
   if (collapsed) {
     // Collapsed: show parent icon only; clicking still navigates to first child

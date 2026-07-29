@@ -28,7 +28,10 @@ export const PATHS = {
     FULFILLMENT_STATS: '/ffm/fulfillment/stats',
 
     // ---- Root router /adm — các trang dùng chung / quản trị ----
+    // `/adm/settings` (bare) redirect về mục đầu tiên user có quyền — mỗi mục
+    // cài đặt là 1 route con `:section` (menu trái trong trang, lazy-mount).
     SETTINGS: '/adm/settings',
+    SETTINGS_SECTION: '/adm/settings/:section',
     ACCOUNT: '/adm/account',
     PRODUCTS: '/adm/products',
     PRODUCT_DETAIL: '/adm/products/:id',
