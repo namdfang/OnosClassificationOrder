@@ -1,6 +1,7 @@
 import { Module } from '@nestjs/common';
 import { MongooseModule } from '@nestjs/mongoose';
 
+import { CustomerModule } from '../customer/customer.module';
 import { CustomerAssignmentModule } from '../customer-assignment/customer-assignment.module';
 import { DesignImageModule } from '../design-image/design-image.module';
 import { FactoryModule } from '../factory/factory.module';
@@ -39,6 +40,8 @@ import { OrderService } from './order.service';
     DesignImageModule,
     SystemConfigModule,
     CustomerAssignmentModule,
+    // CustomerRepository cho auto-gán designer ưu tiên 1 (khách → designer).
+    CustomerModule,
   ],
   controllers: [OrderController],
   providers: [
