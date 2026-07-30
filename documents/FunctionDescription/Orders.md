@@ -676,26 +676,30 @@ qua + log lý do (an toàn hơn đoán đại 1 cái). `shipping` lấy ở leve
 (không phải per-item): `order.shipping.{first_name,last_name,company,
 address_1,address_2,city,state,postcode,country,email,phone}`.
 
-### 9c.3 Logic so sánh + mở giữ — `OrderService.recoverHeldOrders()`
-- **Design**: so sánh TRỰC TIẾP từ lần check đầu tiên — baseline =
-  `order.designsOriginal ?? order.designs` (đã có sẵn từ lúc import, hợp lệ để
-  so sánh ngay). Khác baseline (ở BẤT KỲ vị trí in nào OnosPod trả về giá trị)
-  → `$set designs.<k>` + `designsOriginal.<k>` cho các vị trí đổi + `$unset
-  heldAt/holdReason` (mở giữ) + **2 log riêng**: `update_design` (field=`designs`,
-  before/after snapshot theo TỪNG vị trí đổi — CÙNG convention với
-  `updateOrderDesign()` thường, để phân biệt được lịch sử SỬA GÌ, không chỉ
-  MỞ GIỮ) rồi `unhold` (field=`heldAt`, chỉ ghi nhận mốc mở giữ). Chỉ chạy
-  cho đơn đang giữ đúng lý do "Đợi khách sửa design" nên log `update_design`
-  này CHỈ phát sinh cho đơn giữ, không lẫn với design sửa tay ở Danh sách đơn.
+### 9c.3 Logic so sánh + mở giữ — `OrderService.recoverHeldOrders()` + `applyDesignFromOnospod()`
+- **Design**: logic lookup + so sánh + ghi nằm ở `OrderService.applyDesignFromOnospod()`
+  (private helper, dùng chung bởi cron `recoverHeldOrders()` VÀ nút thủ công
+  `checkOrderDesignFromOnospod()` — xem §9c.5). So sánh TRỰC TIẾP từ lần check
+  đầu tiên — baseline = `order.designsOriginal ?? order.designs` (đã có sẵn từ
+  lúc import, hợp lệ để so sánh ngay). Khác baseline (ở BẤT KỲ vị trí in nào
+  OnosPod trả về giá trị) → `$set designs.<k>` + `designsOriginal.<k>` cho các
+  vị trí đổi + log `update_design` (field=`designs`, before/after snapshot
+  theo TỪNG vị trí đổi — CÙNG convention với `updateOrderDesign()` thường).
+  **Chỉ khi đơn ĐANG giữ đúng lý do "Đợi khách sửa design"** (`heldAt` +
+  `holdReason=HOLD_REASON_WAITING_DESIGN`) mới thêm `$unset heldAt/holdReason`
+  (mở giữ) + log `unhold` riêng — đơn KHÔNG giữ (hoặc giữ lý do khác, vd nút
+  thủ công bấm trên đơn bình thường) chỉ cập nhật `designs`, KHÔNG đụng
+  `heldAt`.
 - **Địa chỉ**: `order.shippingAddress` là field MỚI, chưa từng có baseline →
   **lần check đầu chỉ SNAPSHOT** (`$set shippingAddress`), **KHÔNG tự mở giữ**
   (chưa biết có đổi hay không). Từ lần thứ 2 trở đi mới so sánh snapshot đã
   lưu với dữ liệu OnosPod hiện tại (so từng field, rỗng coi như `''`) — khác
   → cập nhật snapshot + mở giữ + log `unhold`; giống → giữ nguyên (vẫn chờ).
+  Logic địa chỉ CHƯA có bản thủ công per-order (chỉ chạy trong cron).
 - Đơn thiếu `orderId` (chưa từng có mã đơn OnosPod) → skip, lý do rõ ràng
   trong response `skipped[]` (không đoán, không throw).
 
-### 9c.4 API
+### 9c.4 API — cron (toàn bộ đơn giữ)
 | Method | Path | Auth | Mô tả |
 |---|---|---|---|
 | GET | `/v1/orders/recover-held-from-onospod/cron` | public (`@Auth([],[],{public:true})`) | Cron — quét TOÀN BỘ đơn giữ khớp 1 trong 2 lý do trên, trả `{ checkedDesign, checkedAddress, designUpdated, addressPrimed, addressUpdated, unheld, skipped[] }`. Log ip/userAgent làm audit trace (giống `import-from-onospod/cron`). |
@@ -703,6 +707,33 @@ address_1,address_2,city,state,postcode,country,email,phone}`.
 Không có body/param — cron gọi trực tiếp qua `curl`, không cần token (giống
 mẫu `import-from-onospod/cron` đã có). Đặt lịch chạy ở crontab ngoài, độc lập
 với cron import.
+
+### 9c.5 Nút thủ công "Kiểm tra design mới" (Danh sách đơn, 1 đơn)
+> Cho phép nhân viên ép tra OnosPod cho **1 ĐƠN BẤT KỲ**, không cần đơn đang
+> giữ (KHÁC cron §9c.4 chỉ quét đơn hold) — dùng khi cần check ngay, không đợi
+> lịch cron. Dùng lại NGUYÊN VẸN `applyDesignFromOnospod()` — chỉ khác input
+> (1 đơn cụ thể thay vì query hàng loạt).
+
+| Method | Path | Auth | Mô tả |
+|---|---|---|---|
+| POST | `/v1/orders/:id/check-design-from-onospod` | `ORDER_WRITE_ROLES` (SuperAdmin/Admin/Manager/Support/DesignerLeader/Fulfillment) | Kiểm tra + cập nhật design cho 1 đơn, trả `{ updated, reason?, changed?, order? }` (`order` = đơn SAU cập nhật, chỉ có khi `updated=true`). |
+
+- `OrderService.checkOrderDesignFromOnospod(id, ctx)`: fetch đơn theo `id` →
+  404 nếu không có; đơn ĐÃ HỦY (`cancelledAt`) → trả thẳng `{updated:false,
+  reason:'Đơn đã hủy...'}`, KHÔNG gọi OnosPod; còn lại gọi
+  `applyDesignFromOnospod()` — nếu `updated=true` → `invalidateListCache()`.
+  Đơn ĐANG giữ đúng lý do design → helper tự mở giữ như cron (mirror hành vi);
+  đơn không giữ → chỉ cập nhật `designs`, không đụng `heldAt`.
+- **UI**: `apps/web/src/components/orders/OrderRowActionsMenu.tsx` — menu item
+  "Kiểm tra design mới" (icon `RefreshCw`), hiện cho role `ORDER_WRITE_ROLES`
+  (mirror `HOLD_ALLOWED_ROLES`/`canUserHold` — cùng role set với Giữ đơn/Mở
+  giữ), disable khi đơn đã hủy. Bấm → `POST .../check-design-from-onospod` →
+  `updated=true`: toast success + patch row bằng `data.order` (`onChanged`,
+  giữ trạng thái group đang mở giống Hold/Unhold); `updated=false`: `toast.info`
+  hiển thị THẲNG `data.reason` từ BE (free text tiếng Việt, không qua i18n —
+  cùng cách `skipped[].reason` của cron đã hiển thị dạng free text).
+- Shared DTO: `CheckOrderDesignResZod`/`CheckOrderDesignResDto`
+  (`packages/shared/dtos/production-order.dto.ts`).
 
 ---
 

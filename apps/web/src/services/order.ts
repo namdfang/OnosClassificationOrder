@@ -206,6 +206,10 @@ const unholdOrder = (id: string) => {
   return callApi(`/${CONFIG.API_VERSION}/orders/${id}/unhold`, 'post', {});
 };
 
+const checkDesignFromOnospod = (id: string) => {
+  return callApi(`/${CONFIG.API_VERSION}/orders/${id}/check-design-from-onospod`, 'post', {});
+};
+
 const bulkHold = (data: BulkHoldOrderDto) => {
   return callApi(`/${CONFIG.API_VERSION}/orders/bulk-hold`, 'patch', data);
 };
@@ -265,6 +269,7 @@ export const order = {
   cancelOrder,
   holdOrder,
   unholdOrder,
+  checkDesignFromOnospod,
   bulkHold,
   markToolCheckDone,
   updateOrderDesign,

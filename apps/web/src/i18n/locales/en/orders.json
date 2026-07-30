@@ -504,7 +504,9 @@
     "alreadyCancelled": "Order cancelled",
     "hold": "Hold order",
     "heldReopenFirst": "Order on hold — release it first",
-    "cancelOrder": "Cancel order"
+    "cancelOrder": "Cancel order",
+    "checkDesign": "Check for new design",
+    "checkDesignUpdated": "Found and applied new design from OnosPod"
   },
   "orderActions": {
     "alreadyCancelled": "Order already cancelled."

@@ -2344,6 +2344,22 @@ export const RecoverHeldOrdersResZod = ResZod.extend({
 });
 export class RecoverHeldOrdersResDto extends createZodDto(extendApi(RecoverHeldOrdersResZod)) {}
 
+// ─── Kiểm tra design mới thủ công (nút action menu Danh sách đơn, 1 đơn) ──
+// Dùng chung logic với recoverHeldOrders() nhưng áp dụng cho MỌI đơn (không
+// cần đang giữ) — xem OrderService.checkOrderDesignFromOnospod, Orders.md §9c.
+export const CheckOrderDesignResZod = ResZod.extend({
+  data: z.object({
+    updated: z.boolean(),
+    /** Lý do KHÔNG cập nhật (design chưa đổi, không tra được OnosPod, đơn đã hủy...). */
+    reason: z.string().optional(),
+    /** Field design đã đổi (chỉ có khi `updated=true`). */
+    changed: DesignFieldsZod.partial().optional(),
+    /** Đơn SAU khi cập nhật (chỉ có khi `updated=true`) — FE patch local row. */
+    order: ProductionOrderZod.optional(),
+  }),
+});
+export class CheckOrderDesignResDto extends createZodDto(extendApi(CheckOrderDesignResZod)) {}
+
 // ─── Action "Đã soát xong" (tab Soát tool, list "Cần làm lại") ──────
 // Support xác nhận đã soát xong 1 đơn hold (source=tool-check + note=error) và
 // đơn CẦN THIẾT KẾ (khác nhánh đổi Note kq Tool → 'ok' = file ổn, về In):

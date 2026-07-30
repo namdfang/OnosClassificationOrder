@@ -23,6 +23,7 @@ import {
   BulkUpdateOrderFieldResDto,
   CancelOrderDto,
   CancelOrderResDto,
+  CheckOrderDesignResDto,
   ClaimDesignerTasksDto,
   DesignerBacklogResDto,
   DesignerBreakdownResDto,
@@ -491,6 +492,34 @@ export class OrderController {
     @UserAgent() userAgent: string,
   ): Promise<HoldOrderResDto> {
     return this.orderService.unholdOrder(id, user?.role?.name as RoleType, { user, ip, userAgent });
+  }
+
+  // Nút thủ công "Kiểm tra design mới" (Danh sách đơn, action menu từng
+  // hàng) — ép tra OnosPod cho 1 đơn bất kỳ, dùng chung logic với cron
+  // recover-held-from-onospod (Orders.md §9c) nhưng KHÔNG yêu cầu đơn đang
+  // giữ.
+  @Post(':id/check-design-from-onospod')
+  @Auth(ORDER_WRITE_ROLES)
+  @ApiOperation({ summary: 'Kiểm tra design mới từ OnosPod cho 1 đơn (thủ công, không cần đang giữ)' })
+  @HttpCode(HttpStatus.OK)
+  @ApiOkResponse({ type: CheckOrderDesignResDto })
+  async checkOrderDesignFromOnospod(
+    @Param('id') id: string,
+    @AuthUser() user: UserDocument,
+    @ClientIp() ip: string,
+    @UserAgent() userAgent: string,
+  ): Promise<CheckOrderDesignResDto> {
+    this.logger.info({
+      message: JSON.stringify({
+        method: 'POST',
+        url: '/orders/:id/check-design-from-onospod',
+        id,
+        userId: user?._id,
+        ip,
+        userAgent,
+      }),
+    });
+    return this.orderService.checkOrderDesignFromOnospod(id, { user, ip, userAgent });
   }
 
   @Post(':id/tool-check-done')

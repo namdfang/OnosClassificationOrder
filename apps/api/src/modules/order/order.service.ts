@@ -28,6 +28,7 @@ import type {
   BulkUpdateOrderFieldResDto,
   CancelledOrderRow,
   CancelOrderDto,
+  CheckOrderDesignResDto,
   CuttingFileBreakdownRow,
   CuttingFileConflict,
   CuttingFileInvalid,
@@ -4527,12 +4528,107 @@ export class OrderService implements OnModuleInit {
   }
 
   /**
+   * Dùng chung bởi `recoverHeldOrders()` (cron, chỉ đơn đang giữ lý do chờ
+   * design) VÀ `checkOrderDesignFromOnospod()` (nút thủ công "Kiểm tra design
+   * mới" — MỌI đơn, không cần đang giữ). Tra OnosPod theo `orderId`, so sánh
+   * design mới với baseline (`designsOriginal ?? designs`), nếu khác → ghi đè
+   * `designs`/`designsOriginal` + log `update_design`. Nếu đơn ĐANG giữ đúng
+   * lý do "Đợi khách sửa design" (`heldAt` + `holdReason=HOLD_REASON_WAITING_DESIGN`)
+   * → tự MỞ GIỮ luôn (unset `heldAt`/`holdReason` + log `unhold`); đơn không
+   * giữ (hoặc giữ lý do khác) → chỉ cập nhật design, KHÔNG đụng `heldAt`.
+   */
+  private async applyDesignFromOnospod(
+    order: {
+      _id: unknown;
+      productionId: string;
+      orderId?: string;
+      designs?: DesignFields;
+      designsOriginal?: DesignFields;
+      heldAt?: Date | null;
+      holdReason?: string | null;
+    },
+    ctx?: AuditContext,
+  ): Promise<{
+    updated: boolean;
+    reason?: string;
+    changed?: Partial<DesignFields>;
+    updatedOrder?: OrderDocument | null;
+  }> {
+    const productionId = order.productionId;
+    const orderNumber = order.orderId;
+    if (!orderNumber) {
+      return { updated: false, reason: 'Thiếu orderId (mã đơn OnosPod) — không tra được' };
+    }
+
+    const lookup = await this.onospodOrderLookupService.lookupByProductionId(orderNumber, productionId);
+    if (!lookup) {
+      return { updated: false, reason: 'OnosPod chưa cấu hình hoặc gọi API thất bại' };
+    }
+    if (lookup.ambiguous) {
+      return { updated: false, reason: 'Nhiều line_item cùng khớp productionId — cần review tay' };
+    }
+    if (!lookup.matched || !lookup.design || Object.keys(lookup.design).length === 0) {
+      return { updated: false, reason: 'Không tìm thấy design tương ứng trên OnosPod' };
+    }
+
+    const baseline = order.designsOriginal ?? order.designs ?? {};
+    const changed: Partial<DesignFields> = {};
+    for (const [key, value] of Object.entries(lookup.design) as Array<[keyof DesignFields, string]>) {
+      if ((baseline as Record<string, string | undefined>)[key] !== value) changed[key] = value;
+    }
+    if (Object.keys(changed).length === 0) {
+      return { updated: false, reason: 'Design chưa thay đổi — vẫn giống hiện tại' };
+    }
+
+    const set: Record<string, unknown> = {};
+    const beforeSnapshot: Record<string, unknown> = {};
+    const afterSnapshot: Record<string, unknown> = {};
+    for (const [key, value] of Object.entries(changed)) {
+      set[`designs.${key}`] = value;
+      set[`designsOriginal.${key}`] = value;
+      beforeSnapshot[`designs.${key}`] = (baseline as Record<string, string | undefined>)[key];
+      afterSnapshot[`designs.${key}`] = value;
+    }
+    const wasHeldForDesign = !!order.heldAt && order.holdReason === HOLD_REASON_WAITING_DESIGN;
+    const updatedOrder = await this.orderModel.findByIdAndUpdate(
+      order._id,
+      wasHeldForDesign ? { $set: set, $unset: { heldAt: 1, holdReason: 1 } } : { $set: set },
+      { new: true },
+    );
+    // Log riêng design đã đổi field nào (before/after) — CÙNG convention với
+    // updateOrderDesign() (action='update_design'), KHÁC log 'unhold' bên dưới
+    // (chỉ ghi nhận việc mở giữ, không có chi tiết design).
+    void this.orderLogService.write({
+      orderId: String(order._id),
+      action: 'update_design',
+      field: 'designs',
+      before: beforeSnapshot,
+      after: afterSnapshot,
+      ctx,
+    });
+    if (wasHeldForDesign) {
+      void this.orderLogService.write({
+        orderId: String(order._id),
+        action: 'unhold',
+        field: 'heldAt',
+        before: HOLD_REASON_WAITING_DESIGN,
+        after: null,
+        ctx,
+      });
+    }
+
+    return { updated: true, changed, updatedOrder };
+  }
+
+  /**
    * Cron công khai — quét đơn đang GIỮ lý do "chờ khách cập nhật" (design hoặc
    * địa chỉ), gọi OnosPod kiểm tra khách đã cập nhật chưa, nếu có → cập nhật +
    * tự MỞ GIỮ. Xem `Orders.md §9c` + `OnospodOrderLookupService`.
    *
    * - Design: so sánh trực tiếp từ lần đầu — `designs`/`designsOriginal` hiện
-   *   có đã là baseline hợp lệ (populate từ lúc import).
+   *   có đã là baseline hợp lệ (populate từ lúc import). Logic thực (lookup +
+   *   so sánh + ghi) nằm ở `applyDesignFromOnospod()` (dùng chung với nút thủ
+   *   công `checkOrderDesignFromOnospod()`).
    * - Địa chỉ: `shippingAddress` là field MỚI chưa có baseline → lần check đầu
    *   chỉ SNAPSHOT (không tự mở giữ); từ lần thứ 2 mới thực sự so sánh + mở
    *   giữ khi khác snapshot đã lưu.
@@ -4557,69 +4653,13 @@ export class OrderService implements OnModuleInit {
 
     for (const order of designOrders) {
       checkedDesign++;
-      const productionId = order.productionId;
-      const orderNumber = order.orderId;
-      if (!orderNumber) {
-        skipped.push({ productionId, reason: 'Thiếu orderId (mã đơn OnosPod) — không tra được' });
-        continue;
+      const res = await this.applyDesignFromOnospod(order, ctx);
+      if (res.updated) {
+        designUpdated++;
+        unheld++;
+      } else {
+        skipped.push({ productionId: order.productionId, reason: res.reason! });
       }
-
-      const lookup = await this.onospodOrderLookupService.lookupByProductionId(orderNumber, productionId);
-      if (!lookup) {
-        skipped.push({ productionId, reason: 'OnosPod chưa cấu hình hoặc gọi API thất bại' });
-        continue;
-      }
-      if (lookup.ambiguous) {
-        skipped.push({ productionId, reason: 'Nhiều line_item cùng khớp productionId — cần review tay' });
-        continue;
-      }
-      if (!lookup.matched || !lookup.design || Object.keys(lookup.design).length === 0) {
-        skipped.push({ productionId, reason: 'Không tìm thấy design tương ứng trên OnosPod' });
-        continue;
-      }
-
-      const baseline = order.designsOriginal ?? order.designs ?? {};
-      const changed: Partial<DesignFields> = {};
-      for (const [key, value] of Object.entries(lookup.design) as Array<[keyof DesignFields, string]>) {
-        if ((baseline as Record<string, string | undefined>)[key] !== value) changed[key] = value;
-      }
-      if (Object.keys(changed).length === 0) {
-        skipped.push({ productionId, reason: 'Design chưa thay đổi — vẫn đang chờ khách' });
-        continue;
-      }
-
-      const set: Record<string, unknown> = {};
-      const beforeSnapshot: Record<string, unknown> = {};
-      const afterSnapshot: Record<string, unknown> = {};
-      for (const [key, value] of Object.entries(changed)) {
-        set[`designs.${key}`] = value;
-        set[`designsOriginal.${key}`] = value;
-        beforeSnapshot[`designs.${key}`] = (baseline as Record<string, string | undefined>)[key];
-        afterSnapshot[`designs.${key}`] = value;
-      }
-      await this.orderModel.findByIdAndUpdate(order._id, { $set: set, $unset: { heldAt: 1, holdReason: 1 } });
-      // Log riêng design đã đổi field nào (before/after) — CÙNG convention với
-      // updateOrderDesign() (action='update_design'), KHÁC log 'unhold' bên dưới
-      // (chỉ ghi nhận việc mở giữ, không có chi tiết design). Chỉ đơn ĐANG GIỮ
-      // lý do "Đợi khách sửa design" mới vào nhánh này nên tự nó đã đúng phạm vi.
-      void this.orderLogService.write({
-        orderId: String(order._id),
-        action: 'update_design',
-        field: 'designs',
-        before: beforeSnapshot,
-        after: afterSnapshot,
-        ctx,
-      });
-      void this.orderLogService.write({
-        orderId: String(order._id),
-        action: 'unhold',
-        field: 'heldAt',
-        before: HOLD_REASON_WAITING_DESIGN,
-        after: null,
-        ctx,
-      });
-      designUpdated++;
-      unheld++;
     }
 
     for (const order of addressOrders) {
@@ -4681,6 +4721,28 @@ export class OrderService implements OnModuleInit {
     return {
       success: true,
       data: { checkedDesign, checkedAddress, designUpdated, addressPrimed, addressUpdated, unheld, skipped },
+    };
+  }
+
+  /**
+   * Nút thủ công "Kiểm tra design mới" (Danh sách đơn, action menu từng
+   * hàng) — Admin/Manager/Support/DesignerLeader/Fulfillment bấm để ép tra
+   * OnosPod cho 1 ĐƠN BẤT KỲ (không cần đang giữ, KHÁC `recoverHeldOrders()`
+   * chỉ quét đơn hold). Dùng chung logic `applyDesignFromOnospod()`. Đơn đã
+   * hủy → skip (không kiểm tra).
+   */
+  async checkOrderDesignFromOnospod(id: string, ctx?: AuditContext): Promise<CheckOrderDesignResDto> {
+    const order = await this.orderModel.findById(id).lean();
+    if (!order) throw new NotFoundException('Order not found');
+    if (order.cancelledAt) {
+      return { success: true, data: { updated: false, reason: 'Đơn đã hủy — không kiểm tra design.' } };
+    }
+
+    const res = await this.applyDesignFromOnospod(order, ctx);
+    if (res.updated) void this.invalidateListCache();
+    return {
+      success: true,
+      data: { updated: res.updated, reason: res.reason, changed: res.changed, order: res.updatedOrder ?? undefined },
     };
   }
 

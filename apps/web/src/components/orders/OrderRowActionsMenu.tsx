@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { Ban, MoreHorizontal, PauseCircle, Pencil, PlayCircle } from 'lucide-react';
+import { Ban, MoreHorizontal, PauseCircle, Pencil, PlayCircle, RefreshCw } from 'lucide-react';
 import { toast } from 'sonner';
 
 import { RepositoryRemote } from '@/services';
@@ -31,8 +31,11 @@ interface Props {
 
 /**
  * Menu "..." cuối mỗi hàng order. Admin: Đổi design · Hủy đơn. ORDER_WRITE_ROLES
- * (Admin/Manager/Support/Leader/Fulfillment): Giữ đơn · Mở giữ. Đơn đã hủy →
- * disable design/hủy. Đơn đang giữ → chỉ còn "Mở giữ" (mọi action khác khóa).
+ * (Admin/Manager/Support/Leader/Fulfillment): Giữ đơn · Mở giữ · Kiểm tra design
+ * mới (ép tra OnosPod cho đơn NÀY, không cần đang giữ — dùng chung logic cron
+ * `recover-held-from-onospod`, Orders.md §9c). Đơn đã hủy → disable design/hủy/
+ * kiểm tra design. Đơn đang giữ → chỉ còn "Mở giữ" (mọi action khác khóa, TRỪ
+ * "Kiểm tra design mới" — vẫn bấm được để tự mở giữ nếu design đã cập nhật).
  */
 export function OrderRowActionsMenu({ order, onChanged }: Props) {
   const { t } = useTranslation('orders');
@@ -41,6 +44,7 @@ export function OrderRowActionsMenu({ order, onChanged }: Props) {
   const [designOpen, setDesignOpen] = useState(false);
   const [holdOpen, setHoldOpen] = useState(false);
   const [unholding, setUnholding] = useState(false);
+  const [checkingDesign, setCheckingDesign] = useState(false);
 
   const canHold = canUserHold(roleName);
   if (!isAdmin && !canHold) return null;
@@ -63,6 +67,24 @@ export function OrderRowActionsMenu({ order, onChanged }: Props) {
     }
   };
 
+  const doCheckDesign = async () => {
+    try {
+      setCheckingDesign(true);
+      const res = await RepositoryRemote.order.checkDesignFromOnospod(order._id);
+      const data = res.data?.data as { updated: boolean; reason?: string; order?: WorkshopOrderRow } | undefined;
+      if (data?.updated) {
+        toast.success(t('rowActionsMenu.checkDesignUpdated'));
+        onChanged(data.order ?? order);
+      } else {
+        toast.info(data?.reason ?? t('rowActionsMenu.checkDesignUpdated'));
+      }
+    } catch (err) {
+      handleAxiosError(err);
+    } finally {
+      setCheckingDesign(false);
+    }
+  };
+
   return (
     <>
       <DropdownMenu>
@@ -81,6 +103,18 @@ export function OrderRowActionsMenu({ order, onChanged }: Props) {
           {isAdmin && (
             <DropdownMenuItem disabled={cancelled || held} onSelect={() => setDesignOpen(true)}>
               <Pencil size={14} className="mr-2" /> {t('rowActionsMenu.changeDesign')}
+            </DropdownMenuItem>
+          )}
+          {canHold && (
+            <DropdownMenuItem
+              disabled={cancelled || checkingDesign}
+              title={cancelled ? t('rowActionsMenu.alreadyCancelled') : undefined}
+              onSelect={(e) => {
+                e.preventDefault();
+                void doCheckDesign();
+              }}
+            >
+              <RefreshCw size={14} className="mr-2" /> {t('rowActionsMenu.checkDesign')}
             </DropdownMenuItem>
           )}
           {canHold &&
