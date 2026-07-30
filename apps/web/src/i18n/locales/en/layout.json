@@ -48,7 +48,7 @@
     "member": "Member",
     "badges": {
       "errorLogTodo": "Error orders pending in your stage",
-      "errorLogTodoAll": "Total unresolved error orders (all factories)",
+      "errorLogTodoAll": "Error orders not yet reworked past the reporting stage (all factories)",
       "designerUnassigned": "Orders awaiting designer assignment (last 7 days)",
       "designerBacklog": "Total design backlog (last 7 days)",
       "designerBacklogSelf": "Your design backlog (last 7 days)",
