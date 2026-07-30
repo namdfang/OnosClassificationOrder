@@ -44,10 +44,13 @@ export class OrderEntity extends DatabaseEntityAbstract {
   mockupOriginalUrl?: string;
 
   /**
-   * Drive URL của file cutting (.pdf). Set qua flow import riêng
-   * `POST /orders/cutting-files/apply` — KHÔNG set lúc import đơn ban đầu.
-   * Match với đơn qua productionId parse từ filename — pattern 2 chữ cái + "-" +
-   * 5 số + "-" + 5 số (vd `BH-96341-30608-*.pdf`, `ML-12345-67890-*.pdf`).
+   * Drive URL của file cutting (.pdf) — cũng là file in (design đã duyệt),
+   * dùng ở stage "In" của fulfillment. Set qua flow import riêng
+   * `POST /orders/cutting-files/apply` (match theo productionId parse từ
+   * filename — pattern 2 chữ cái + "-" + 5 số + "-" + 5 số, vd
+   * `BH-96341-30608-*.pdf`, `ML-12345-67890-*.pdf`) HOẶC qua
+   * `POST /orders/design-review/result` (public API tool ngoài soát design —
+   * xem `OrderService.setDesignReviewResult`, Orders.md §18.7).
    */
   @Prop()
   cuttingFileUrl?: string;
@@ -57,12 +60,14 @@ export class OrderEntity extends DatabaseEntityAbstract {
   cuttingFileName?: string;
 
   /**
-   * Drive URL của file in (design đã duyệt, dùng ở stage "In" của fulfillment).
-   * Set qua `POST /orders/design-review/result` (public API tool ngoài soát
-   * design) — xem `OrderService.setDesignReviewResult`, Orders.md §18.7.
+   * Drive URL của file in tạm (.pdf hoặc file design) — dùng khi đơn đang bị
+   * lỗi (`toolResultNote='error'`), tool ngoài lưu tạm để tham khảo trong lúc
+   * chờ xử lý, KHÁC `cuttingFileUrl` (file chính thức đã duyệt). Set qua
+   * `POST /orders/design-review/result` — xem `OrderService.setDesignReviewResult`,
+   * Orders.md §18.7.
    */
   @Prop()
-  printFileUrl?: string;
+  tempFileUrl?: string;
 
   @Prop()
   printMethod?: string;

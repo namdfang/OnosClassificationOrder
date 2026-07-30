@@ -169,19 +169,22 @@ export const ProductionOrderZod = BaseEntityZod.extend({
   mockupUrl: z.string().optional(),
   mockupOriginalUrl: z.string().optional(),
   /**
-   * Drive URL của file cutting (.pdf). KHÔNG set lúc import đơn — populate qua
-   * flow riêng `POST /orders/cutting-files/apply`. Filename gốc dạng
-   * 2 chữ cái + "-" + 5 số + "-" + 5 số (vd `BH-96341-30608-*.pdf`,
-   * `ML-12345-67890-*.pdf`) → parse productionId match đơn.
+   * Drive URL của file cutting (.pdf) — cũng là file in (design đã duyệt).
+   * KHÔNG set lúc import đơn — populate qua flow riêng
+   * `POST /orders/cutting-files/apply` (filename gốc dạng 2 chữ cái + "-" +
+   * 5 số + "-" + 5 số, vd `BH-96341-30608-*.pdf`, `ML-12345-67890-*.pdf` →
+   * parse productionId match đơn) HOẶC qua `POST /orders/design-review/result`
+   * (tool ngoài soát design, set thẳng free text — Orders.md §18.7).
    */
   cuttingFileUrl: z.string().optional(),
   /** Tên file cache lúc map (FE hiện ở dialog detail mà không re-fetch Drive). */
   cuttingFileName: z.string().optional(),
   /**
-   * Drive URL của file in (design đã duyệt) — set qua
-   * `POST /orders/design-review/result` (tool ngoài soát design, Orders.md §18.7).
+   * Drive URL của file in tạm (.pdf hoặc file design) — dùng khi đơn đang bị
+   * lỗi (`toolResultNote='error'`), KHÁC `cuttingFileUrl` (file chính thức đã
+   * duyệt). Set qua `POST /orders/design-review/result` (Orders.md §18.7).
    */
-  printFileUrl: z.string().optional(),
+  tempFileUrl: z.string().optional(),
   printMethod: z.string().optional(),
   weight: z.number().optional(),
   width: z.number().optional(),
@@ -1115,13 +1118,24 @@ export const SetDesignReviewResultZod = z.object({
    */
   errorFileNote: z.string().nullable().optional(),
   /**
-   * Optional — Drive URL của "File in" (design đã duyệt, dùng ở stage "In" của
-   * fulfillment). Free text (KHÔNG qua workshop_config, không validate format).
-   * Cùng cơ chế optional như `errorFileNote`. Không truyền field này → giữ
-   * nguyên hành vi cũ, KHÔNG đụng field. Truyền (kể cả `null`/`''` để xoá) →
-   * ghi đè. KHÔNG có side-effect hook.
+   * Optional — Drive URL của file cutting/file in (design đã duyệt, dùng ở
+   * stage "In" của fulfillment — cùng field `cuttingFileUrl` được set ở
+   * `applyCuttingFiles()`). Free text (KHÔNG qua workshop_config, không
+   * validate format). Cùng cơ chế optional như `errorFileNote`. Không truyền
+   * field này → giữ nguyên hành vi cũ, KHÔNG đụng field. Truyền (kể cả
+   * `null`/`''` để xoá) → ghi đè. KHÔNG có side-effect hook.
    */
-  printFileUrl: z.string().nullable().optional(),
+  cuttingFileUrl: z.string().nullable().optional(),
+  /**
+   * Optional — Drive URL của file in tạm (.pdf hoặc file design), dùng khi
+   * đơn đang bị lỗi (`toolResultNote='error'`) để tool lưu tạm tham khảo
+   * trong lúc chờ xử lý — KHÁC `cuttingFileUrl` (file chính thức đã duyệt).
+   * Free text (KHÔNG qua workshop_config, không validate format). Cùng cơ
+   * chế optional như `errorFileNote`. Không truyền field này → giữ nguyên
+   * hành vi cũ, KHÔNG đụng field. Truyền (kể cả `null`/`''` để xoá) → ghi
+   * đè. KHÔNG có side-effect hook.
+   */
+  tempFileUrl: z.string().nullable().optional(),
 });
 export class SetDesignReviewResultDto extends createZodDto(extendApi(SetDesignReviewResultZod)) {}
 
