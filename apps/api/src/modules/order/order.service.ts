@@ -4844,9 +4844,23 @@ export class OrderService implements OnModuleInit {
         skipped.push({ productionId: order.productionId, reason: 'Đơn đã hủy — không kiểm tra design.' });
         continue;
       }
-      const res = await this.applyDesignFromOnospod(order, ctx, { forceUnhold: true });
-      if (res.updated) updated++;
-      else skipped.push({ productionId: order.productionId, reason: res.reason! });
+      // Cô lập lỗi TỪNG đơn — 1 đơn gặp lỗi bất ngờ (khác lỗi gọi OnosPod, cái
+      // đó `applyDesignFromOnospod()` đã tự bắt và trả `reason`) không được
+      // làm crash cả batch, mất kết quả các đơn đã xử lý xong trước đó.
+      try {
+        const res = await this.applyDesignFromOnospod(order, ctx, { forceUnhold: true });
+        if (res.updated) updated++;
+        else skipped.push({ productionId: order.productionId, reason: res.reason! });
+      } catch (err) {
+        this.logger.error({
+          message: JSON.stringify({
+            action: 'bulkCheckOrderDesignFromOnospod',
+            productionId: order.productionId,
+            error: err instanceof Error ? err.message : String(err),
+          }),
+        });
+        skipped.push({ productionId: order.productionId, reason: 'Lỗi hệ thống khi xử lý đơn này — thử lại sau.' });
+      }
     }
 
     if (updated > 0) void this.invalidateListCache();
