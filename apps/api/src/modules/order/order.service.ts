@@ -4443,10 +4443,20 @@ export class OrderService implements OnModuleInit {
     // các luồng soát tool nội bộ khác đọc để biết đã soát hay chưa) về rỗng để
     // đơn tự vào lại hàng đợi soát tool ngay khi mở giữ, thay vì giữ nguyên
     // kết quả/note soát trên design cũ. KHÔNG đụng `toolCheckErrorNotes`
-    // (lịch sử bền vững, không phải trạng thái hiện tại).
+    // (lịch sử bền vững, không phải trạng thái hiện tại). Đồng thời HỦY GÁN
+    // DESIGNER hiện tại (`assignee`/`designerStatus` về `unassigned`) — design
+    // cũ đang làm/đã làm không còn giá trị, đơn cần được gán lại từ đầu khi mở
+    // giữ (qua auto-assign hoặc leader gán tay), thay vì giữ nguyên người cũ.
     if (dto.reason === HOLD_REASON_WAITING_DESIGN) {
       set.toolResult = '';
       set.toolResultNote = '';
+      set.assignee = null;
+      set.designerStatus = DesignerStatus.Unassigned;
+      set.designerAssignedAt = null;
+      set.designerStartedAt = null;
+      set.designerCompletedAt = null;
+      set.designerRejectedAt = null;
+      set.designerRejectedReason = null;
     }
     const updated = await this.orderModel.findByIdAndUpdate(id, { $set: set }, { new: true });
     if (!updated) throw new NotFoundException('Order not found');
@@ -4499,10 +4509,18 @@ export class OrderService implements OnModuleInit {
     let result: { matchedCount: number; modifiedCount: number };
     if (dto.hold) {
       const set: Record<string, unknown> = { heldAt: new Date(), holdReason: dto.reason ?? '' };
-      // Cùng logic với `holdOrder()` — chờ khách sửa design → reset toolResult + toolResultNote.
+      // Cùng logic với `holdOrder()` — chờ khách sửa design → reset toolResult +
+      // toolResultNote + hủy gán designer hiện tại.
       if (dto.reason === HOLD_REASON_WAITING_DESIGN) {
         set.toolResult = '';
         set.toolResultNote = '';
+        set.assignee = null;
+        set.designerStatus = DesignerStatus.Unassigned;
+        set.designerAssignedAt = null;
+        set.designerStartedAt = null;
+        set.designerCompletedAt = null;
+        set.designerRejectedAt = null;
+        set.designerRejectedReason = null;
       }
       result = await this.orderModel.updateMany(
         { ...baseFilter, heldAt: { $exists: false }, cancelledAt: { $exists: false } },
