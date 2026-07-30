@@ -14,6 +14,8 @@ import {
   BulkAssignDesignerResDto,
   BulkAssignOrderDto,
   BulkAssignOrderResDto,
+  BulkCheckOrderDesignDto,
+  BulkCheckOrderDesignResDto,
   BulkHoldOrderDto,
   BulkHoldOrderResDto,
   BulkResolveErrorDto,
@@ -522,6 +524,33 @@ export class OrderController {
       }),
     });
     return this.orderService.checkOrderDesignFromOnospod(id, { user, ip, userAgent });
+  }
+
+  // Nút "Kiểm tra design mới" bản HÀNG LOẠT (bulk toolbar, các đơn ĐANG TICK
+  // CHỌN ở Danh sách đơn) — CÙNG logic check-design-from-onospod (reset
+  // toolResult/toolResultNote + forceUnhold) áp cho từng đơn trong `ids`.
+  @Patch('bulk-check-design-from-onospod')
+  @Auth(ORDER_WRITE_ROLES)
+  @ApiOperation({ summary: 'Kiểm tra design mới từ OnosPod cho nhiều đơn (bulk, các đơn đang tick chọn)' })
+  @HttpCode(HttpStatus.OK)
+  @ApiOkResponse({ type: BulkCheckOrderDesignResDto })
+  async bulkCheckOrderDesignFromOnospod(
+    @Body() dto: BulkCheckOrderDesignDto,
+    @AuthUser() user: UserDocument,
+    @ClientIp() ip: string,
+    @UserAgent() userAgent: string,
+  ): Promise<BulkCheckOrderDesignResDto> {
+    this.logger.info({
+      message: JSON.stringify({
+        method: 'PATCH',
+        url: '/orders/bulk-check-design-from-onospod',
+        ids: dto.ids,
+        userId: user?._id,
+        ip,
+        userAgent,
+      }),
+    });
+    return this.orderService.bulkCheckOrderDesignFromOnospod(dto.ids, { user, ip, userAgent });
   }
 
   // Nút thủ công "Đồng bộ design theo mã khách hàng" — truyền `userSku`, tìm

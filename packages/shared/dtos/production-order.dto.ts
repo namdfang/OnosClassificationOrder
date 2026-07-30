@@ -2383,6 +2383,30 @@ export const SyncDesignByCustomerResZod = ResZod.extend({
 });
 export class SyncDesignByCustomerResDto extends createZodDto(extendApi(SyncDesignByCustomerResZod)) {}
 
+// ─── Kiểm tra design mới hàng loạt (nút bulk toolbar, các đơn ĐANG TICK CHỌN) ──
+// Nhận danh sách `ids` (đơn đang chọn ở Danh sách đơn) — CÙNG logic
+// `checkOrderDesignFromOnospod` (reset toolResult/toolResultNote +
+// forceUnhold) áp cho TỪNG đơn trong danh sách, khác `syncDesignByCustomer`
+// (theo userSku, KHÔNG reset tool/heldAt) — xem OrderService.bulkCheckOrderDesignFromOnospod.
+export const BulkCheckOrderDesignZod = z.object({
+  ids: z.string().array().min(1),
+});
+export class BulkCheckOrderDesignDto extends createZodDto(extendApi(BulkCheckOrderDesignZod)) {}
+
+export const BulkCheckOrderDesignSkipZod = z.object({
+  productionId: z.string(),
+  reason: z.string(),
+});
+
+export const BulkCheckOrderDesignResZod = ResZod.extend({
+  data: z.object({
+    total: z.number().int().nonnegative(),
+    updated: z.number().int().nonnegative(),
+    skipped: BulkCheckOrderDesignSkipZod.array(),
+  }),
+});
+export class BulkCheckOrderDesignResDto extends createZodDto(extendApi(BulkCheckOrderDesignResZod)) {}
+
 // ─── Action "Đã soát xong" (tab Soát tool, list "Cần làm lại") ──────
 // Support xác nhận đã soát xong 1 đơn hold (source=tool-check + note=error) và
 // đơn CẦN THIẾT KẾ (khác nhánh đổi Note kq Tool → 'ok' = file ổn, về In):

@@ -300,6 +300,8 @@
     "priorityBtn": "Ưu tiên",
     "holdBtn": "Giữ đơn",
     "unholdBtn": "Mở giữ",
+    "checkDesignBtn": "Kiểm tra design mới",
+    "checkDesignResult": "Đã cập nhật design {{updated}}/{{total}} đơn",
     "exportTitle": "Xuất Excel các đơn đang chọn",
     "exportBtn": "Xuất Excel",
     "priorityDialogTitle": "Đổi mức ưu tiên {{count}} đơn",

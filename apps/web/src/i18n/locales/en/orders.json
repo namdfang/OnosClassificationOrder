@@ -300,6 +300,8 @@
     "priorityBtn": "Priority",
     "holdBtn": "Hold order",
     "unholdBtn": "Release",
+    "checkDesignBtn": "Check for new design",
+    "checkDesignResult": "Updated design for {{updated}}/{{total}} orders",
     "exportTitle": "Export the selected orders to Excel",
     "exportBtn": "Export Excel",
     "priorityDialogTitle": "Change priority for {{count}} orders",

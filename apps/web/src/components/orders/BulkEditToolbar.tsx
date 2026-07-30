@@ -1,7 +1,7 @@
 import React, { useMemo, useState } from 'react';
 import { Trans, useTranslation } from 'react-i18next';
 import type { TFunction } from 'i18next';
-import { CheckCircle2, Download, Flag, PauseCircle, PlayCircle, UserMinus, UserPlus, X } from 'lucide-react';
+import { CheckCircle2, Download, Flag, PauseCircle, PlayCircle, RefreshCw, UserMinus, UserPlus, X } from 'lucide-react';
 import type { OrderWorkshopField, WorkshopConfigCategory } from 'shared';
 import { ORDER_PRIORITIES, ORDER_PRIORITY_LABELS, ORDER_WORKSHOP_FIELDS } from 'shared';
 import { toast } from 'sonner';
@@ -94,6 +94,7 @@ export function BulkEditToolbar({ selectedIds, onClear, onApplied }: Props) {
   const [priorityValue, setPriorityValue] = useState('');
   const [applyingPriority, setApplyingPriority] = useState(false);
   const [unassigning, setUnassigning] = useState(false);
+  const [checkingDesign, setCheckingDesign] = useState(false);
 
   // Export ĐÚNG các đơn đang tick chọn — gọi /orders/export với `ids` (bỏ qua
   // phân trang, đúng cả khi chọn xuyên trang vì BE lọc theo `_id`). Chỉ 1 sheet
@@ -172,6 +173,23 @@ export function BulkEditToolbar({ selectedIds, onClear, onApplied }: Props) {
       handleAxiosError(err);
     } finally {
       setUnassigning(false);
+    }
+  };
+
+  // Kiểm tra design mới hàng loạt — ép tra OnosPod cho từng đơn đang tick
+  // chọn, CÙNG logic với nút "Kiểm tra design mới" ở action menu từng dòng
+  // (reset toolResult/toolResultNote + tự mở giữ nếu đang giữ, bất kể lý do).
+  const submitCheckDesign = async () => {
+    try {
+      setCheckingDesign(true);
+      const res = await RepositoryRemote.order.bulkCheckDesignFromOnospod(selectedIds);
+      const { updated, total } = res.data?.data || { updated: 0, total: 0 };
+      toast.success(t('bulkEdit.checkDesignResult', { updated, total }));
+      onApplied();
+    } catch (err) {
+      handleAxiosError(err);
+    } finally {
+      setCheckingDesign(false);
     }
   };
 
@@ -261,6 +279,10 @@ export function BulkEditToolbar({ selectedIds, onClear, onApplied }: Props) {
                 disabled={holding}
               >
                 <PlayCircle size={14} /> {t('bulkEdit.unholdBtn')}
+              </Button>
+              <Button size="sm" variant="outline" onClick={submitCheckDesign} disabled={checkingDesign}>
+                {checkingDesign ? <Spinner size={13} className="text-muted-foreground" /> : <RefreshCw size={14} />}
+                {t('bulkEdit.checkDesignBtn')}
               </Button>
             </>
           )}

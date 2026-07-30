@@ -210,6 +210,10 @@ const checkDesignFromOnospod = (id: string) => {
   return callApi(`/${CONFIG.API_VERSION}/orders/${id}/check-design-from-onospod`, 'post', {});
 };
 
+const bulkCheckDesignFromOnospod = (ids: string[]) => {
+  return callApi(`/${CONFIG.API_VERSION}/orders/bulk-check-design-from-onospod`, 'patch', { ids });
+};
+
 const bulkHold = (data: BulkHoldOrderDto) => {
   return callApi(`/${CONFIG.API_VERSION}/orders/bulk-hold`, 'patch', data);
 };
@@ -270,6 +274,7 @@ export const order = {
   holdOrder,
   unholdOrder,
   checkDesignFromOnospod,
+  bulkCheckDesignFromOnospod,
   bulkHold,
   markToolCheckDone,
   updateOrderDesign,

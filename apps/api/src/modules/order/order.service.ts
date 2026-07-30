@@ -21,6 +21,7 @@ import type {
   BulkAssignDesignerResDto,
   BulkAssignOrderDto,
   BulkAssignOrderResDto,
+  BulkCheckOrderDesignResDto,
   BulkHoldOrderDto,
   BulkHoldOrderResDto,
   BulkTransferOrderDto,
@@ -4817,6 +4818,33 @@ export class OrderService implements OnModuleInit {
         continue;
       }
       const res = await this.applyDesignFromOnospod(order, ctx, { skipSideEffects: true });
+      if (res.updated) updated++;
+      else skipped.push({ productionId: order.productionId, reason: res.reason! });
+    }
+
+    if (updated > 0) void this.invalidateListCache();
+    return { success: true, data: { total: orders.length, updated, skipped } };
+  }
+
+  /**
+   * Nút "Kiểm tra design mới" bản HÀNG LOẠT (bulk toolbar, Danh sách đơn) —
+   * áp cho TỪNG đơn trong danh sách `ids` đang tick chọn. CÙNG logic/cơ chế
+   * `checkOrderDesignFromOnospod()` (reset `toolResult`/`toolResultNote` +
+   * `forceUnhold: true` — mở giữ bất kể lý do gì nếu đơn đang giữ), KHÁC
+   * `syncDesignByCustomer()` (theo `userSku`, KHÔNG reset tool/heldAt). Đơn
+   * đã hủy → skip.
+   */
+  async bulkCheckOrderDesignFromOnospod(ids: string[], ctx?: AuditContext): Promise<BulkCheckOrderDesignResDto> {
+    const orders = await this.orderModel.find({ _id: { $in: ids } }).lean();
+
+    const skipped: Array<{ productionId: string; reason: string }> = [];
+    let updated = 0;
+    for (const order of orders) {
+      if (order.cancelledAt) {
+        skipped.push({ productionId: order.productionId, reason: 'Đơn đã hủy — không kiểm tra design.' });
+        continue;
+      }
+      const res = await this.applyDesignFromOnospod(order, ctx, { forceUnhold: true });
       if (res.updated) updated++;
       else skipped.push({ productionId: order.productionId, reason: res.reason! });
     }

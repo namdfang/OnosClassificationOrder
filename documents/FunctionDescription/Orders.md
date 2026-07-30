@@ -777,6 +777,35 @@ với cron import.
 - Chưa có UI riêng (gọi trực tiếp API) — nếu cần nút bấm trên FE, thêm dialog
   nhập `userSku` (tương tự `AssignFactoryDialog`) rồi gọi endpoint trên.
 
+### 9c.7 Nút "Kiểm tra design mới" bản HÀNG LOẠT (bulk toolbar, các đơn đang tick chọn)
+> Bulk toolbar (`BulkEditToolbar.tsx`, hiện khi tick chọn ≥1 đơn ở Danh sách
+> đơn) — áp `checkOrderDesignFromOnospod()` (§9c.5, KHÔNG phải
+> `syncDesignByCustomer()` §9c.6) cho TỪNG đơn trong danh sách `ids` đang tick
+> chọn: reset `toolResult`/`toolResultNote` + `forceUnhold: true` (mở giữ bất
+> kể lý do gì nếu đơn đang giữ).
+
+| Method | Path | Auth | Mô tả |
+|---|---|---|---|
+| PATCH | `/v1/orders/bulk-check-design-from-onospod` | `ORDER_WRITE_ROLES` (SuperAdmin/Admin/Manager/Support/DesignerLeader/Fulfillment) | Body `{ ids: string[] }` (min 1). Trả `{ total, updated, skipped[] }` (`total` = số đơn tìm thấy theo `ids`, `skipped[]` = `{productionId, reason}`). |
+
+- `OrderService.bulkCheckOrderDesignFromOnospod(ids, ctx)`: `find({ _id: {
+  $in: ids } })` → với mỗi đơn: đã hủy (`cancelledAt`) → skip lý do `'Đơn đã
+  hủy — không kiểm tra design.'`, KHÔNG gọi OnosPod; còn lại gọi
+  `applyDesignFromOnospod(order, ctx, {forceUnhold: true})` — `updated=true`
+  → tăng đếm `updated`, ngược lại đẩy `{productionId, reason}` vào
+  `skipped[]`. Có ít nhất 1 đơn update → `invalidateListCache()`.
+- **UI**: `apps/web/src/components/orders/BulkEditToolbar.tsx` — nút "Kiểm
+  tra design mới" (icon `RefreshCw`) trong nhóm nút cùng Giữ đơn/Mở giữ, gate
+  theo `canHold` (mirror `HOLD_ALLOWED_ROLES`/`ORDER_WRITE_ROLES`). Bấm →
+  `PATCH .../bulk-check-design-from-onospod` với `ids: selectedIds` → toast
+  success hiển thị `{{updated}}/{{total}}` → `onApplied()` (reload danh sách,
+  KHÔNG patch từng row cục bộ như bản đơn lẻ §9c.5 vì số lượng đơn ảnh hưởng
+  có thể lớn/không xác định trước — reload cả trang đơn giản + đáng tin cậy
+  hơn).
+- Shared DTO: `BulkCheckOrderDesignZod`/`BulkCheckOrderDesignDto` +
+  `BulkCheckOrderDesignResZod`/`BulkCheckOrderDesignResDto`
+  (`packages/shared/dtos/production-order.dto.ts`).
+
 ---
 
 ## 10. Danh sách đơn (Phase 4)
