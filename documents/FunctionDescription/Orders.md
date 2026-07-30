@@ -678,17 +678,31 @@ address_1,address_2,city,state,postcode,country,email,phone}`.
 
 ### 9c.3 Logic so sánh + mở giữ — `OrderService.recoverHeldOrders()` + `applyDesignFromOnospod()`
 - **Design**: logic lookup + so sánh + ghi nằm ở `OrderService.applyDesignFromOnospod()`
-  (private helper, dùng chung bởi cron `recoverHeldOrders()` VÀ nút thủ công
-  `checkOrderDesignFromOnospod()` — xem §9c.5). So sánh TRỰC TIẾP từ lần check
+  (private helper, dùng chung bởi cron `recoverHeldOrders()`, nút thủ công
+  `checkOrderDesignFromOnospod()` (§9c.5) VÀ nút thủ công theo mã khách hàng
+  `syncDesignByCustomer()` (§9c.6, truyền `opts.skipSideEffects=true` — bỏ
+  qua HOÀN TOÀN đoạn reset `toolResult`/mở giữ bên dưới, CHỈ ghi
+  `designs`/`designsOriginal`). So sánh TRỰC TIẾP từ lần check
   đầu tiên — baseline = `order.designsOriginal ?? order.designs` (đã có sẵn từ
   lúc import, hợp lệ để so sánh ngay). Khác baseline (ở BẤT KỲ vị trí in nào
   OnosPod trả về giá trị) → `$set designs.<k>` + `designsOriginal.<k>` cho các
-  vị trí đổi + log `update_design` (field=`designs`, before/after snapshot
-  theo TỪNG vị trí đổi — CÙNG convention với `updateOrderDesign()` thường).
-  **Chỉ khi đơn ĐANG giữ đúng lý do "Đợi khách sửa design"** (`heldAt` +
-  `holdReason=HOLD_REASON_WAITING_DESIGN`) mới thêm `$unset heldAt/holdReason`
-  (mở giữ) + log `unhold` riêng — đơn KHÔNG giữ (hoặc giữ lý do khác, vd nút
-  thủ công bấm trên đơn bình thường) chỉ cập nhật `designs`, KHÔNG đụng
+  vị trí đổi, **VÀ LUÔN reset `toolResult`/`toolResultNote` về `''`** (design
+  cũ đã soát coi như không còn giá trị — CÙNG cơ chế `holdOrder()` làm khi giữ
+  đơn lý do "Đợi khách sửa design" — để đơn tự rơi lại hàng đợi
+  `getNextDesignReviewOrder()`, tool soát lại design mới; set thẳng KHÔNG qua
+  `updateField()` nên KHÔNG side-effect hook, áp dụng **BẤT KỂ đơn đang ở công
+  đoạn nào** kể cả đã vào Fulfillment In/Ép/May — có thể khiến đơn nằm ĐỒNG
+  THỜI trong hàng đợi soát tool VÀ kanban Fulfillment công đoạn hiện tại, đây
+  là lựa chọn CHỦ ĐÍCH, không phải bug) + log `update_design` (field=`designs`,
+  before/after snapshot theo TỪNG vị trí đổi + `toolResult`/`toolResultNote` —
+  CÙNG convention với `updateOrderDesign()` thường).
+  Mở giữ (`$unset heldAt/holdReason` + log `unhold` riêng) khi: đơn ĐANG giữ
+  ĐÚNG lý do "Đợi khách sửa design" (`holdReason=HOLD_REASON_WAITING_DESIGN`)
+  **HOẶC** caller truyền `opts.forceUnhold=true` (chỉ nút thủ công §9c.5 dùng
+  — mở giữ đơn đang giữ BẤT KỂ lý do gì, vì nhân viên đã chủ động bấm kiểm
+  tra đúng đơn này). Cron `recoverHeldOrders()` KHÔNG truyền cờ này (giữ
+  hành vi cũ, khớp CHÍNH XÁC lý do — chạy tự động không người giám sát nên
+  cần thận trọng hơn). Đơn không giữ → chỉ cập nhật `designs`, KHÔNG đụng
   `heldAt`.
 - **Địa chỉ**: `order.shippingAddress` là field MỚI, chưa từng có baseline →
   **lần check đầu chỉ SNAPSHOT** (`$set shippingAddress`), **KHÔNG tự mở giữ**
@@ -721,9 +735,12 @@ với cron import.
 - `OrderService.checkOrderDesignFromOnospod(id, ctx)`: fetch đơn theo `id` →
   404 nếu không có; đơn ĐÃ HỦY (`cancelledAt`) → trả thẳng `{updated:false,
   reason:'Đơn đã hủy...'}`, KHÔNG gọi OnosPod; còn lại gọi
-  `applyDesignFromOnospod()` — nếu `updated=true` → `invalidateListCache()`.
-  Đơn ĐANG giữ đúng lý do design → helper tự mở giữ như cron (mirror hành vi);
-  đơn không giữ → chỉ cập nhật `designs`, không đụng `heldAt`.
+  `applyDesignFromOnospod(order, ctx, {forceUnhold: true})` — nếu `updated=true`
+  → `invalidateListCache()`. **`forceUnhold: true`** — KHÁC cron: đơn ĐANG giữ
+  (BẤT KỂ `holdReason` là gì, không riêng "Đợi khách sửa design") mà tìm thấy
+  design mới → TỰ MỞ GIỮ luôn (nhân viên chủ động bấm kiểm tra đúng đơn này
+  nên coi tìm thấy design mới là đủ điều kiện mở giữ). Đơn không giữ → chỉ
+  cập nhật `designs`, không đụng `heldAt`.
 - **UI**: `apps/web/src/components/orders/OrderRowActionsMenu.tsx` — menu item
   "Kiểm tra design mới" (icon `RefreshCw`), hiện cho role `ORDER_WRITE_ROLES`
   (mirror `HOLD_ALLOWED_ROLES`/`canUserHold` — cùng role set với Giữ đơn/Mở
@@ -734,6 +751,31 @@ với cron import.
   cùng cách `skipped[].reason` của cron đã hiển thị dạng free text).
 - Shared DTO: `CheckOrderDesignResZod`/`CheckOrderDesignResDto`
   (`packages/shared/dtos/production-order.dto.ts`).
+
+### 9c.6 Nút thủ công "Đồng bộ design theo mã khách hàng" (thủ công, hàng loạt)
+> Truyền `userSku` (mã khách hàng) → tìm **TOÀN BỘ đơn** của khách đó (mọi
+> `productionId`, không giới hạn ngày/công đoạn), tra lại OnosPod cho từng
+> đơn, **CHỈ cập nhật `designs`/`designsOriginal` — KHÔNG reset
+> `toolResult`/`toolResultNote`, KHÔNG đụng `heldAt`/`holdReason`** (khác
+> `checkOrderDesignFromOnospod` §9c.5 — yêu cầu nghiệp vụ rõ ràng: chạy đồng
+> bộ hàng loạt không được kèm side-effect nào ngoài design).
+
+| Method | Path | Auth | Mô tả |
+|---|---|---|---|
+| POST | `/v1/orders/design-sync-by-customer` | `ORDER_WRITE_ROLES` (SuperAdmin/Admin/Manager/Support/DesignerLeader/Fulfillment) | Body `{ userSku }`. Trả `{ total, updated, skipped[] }` (`total` = số đơn tìm thấy theo `userSku`, `skipped[]` = `{productionId, reason}`). |
+
+- `OrderService.syncDesignByCustomer(userSku, ctx)`: `find({ userSku })` (không
+  lọc xưởng/ngày — mã khách hàng đã là điều kiện lọc tường minh) → với mỗi
+  đơn: đã hủy (`cancelledAt`) → skip lý do `'Đơn đã hủy — không đồng bộ.'`,
+  KHÔNG gọi OnosPod; còn lại gọi `applyDesignFromOnospod(order, ctx,
+  {skipSideEffects: true})` — `updated=true` → tăng đếm `updated`, ngược lại
+  đẩy `{productionId, reason}` vào `skipped[]`. Có ít nhất 1 đơn update →
+  `invalidateListCache()`.
+- Shared DTO: `SyncDesignByCustomerZod`/`SyncDesignByCustomerDto` +
+  `SyncDesignByCustomerResZod`/`SyncDesignByCustomerResDto`
+  (`packages/shared/dtos/production-order.dto.ts`).
+- Chưa có UI riêng (gọi trực tiếp API) — nếu cần nút bấm trên FE, thêm dialog
+  nhập `userSku` (tương tự `AssignFactoryDialog`) rồi gọi endpoint trên.
 
 ---
 

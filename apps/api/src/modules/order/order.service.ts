@@ -85,6 +85,7 @@ import type {
   SetProductionErrorResDto,
   SizeMatrixRow,
   SizeSummary,
+  SyncDesignByCustomerResDto,
   ToolCheckDoneResDto,
   TransferOrderDto,
   TransferOrderResDto,
@@ -4532,10 +4533,17 @@ export class OrderService implements OnModuleInit {
    * design) VÀ `checkOrderDesignFromOnospod()` (nút thủ công "Kiểm tra design
    * mới" — MỌI đơn, không cần đang giữ). Tra OnosPod theo `orderId`, so sánh
    * design mới với baseline (`designsOriginal ?? designs`), nếu khác → ghi đè
-   * `designs`/`designsOriginal` + log `update_design`. Nếu đơn ĐANG giữ đúng
-   * lý do "Đợi khách sửa design" (`heldAt` + `holdReason=HOLD_REASON_WAITING_DESIGN`)
-   * → tự MỞ GIỮ luôn (unset `heldAt`/`holdReason` + log `unhold`); đơn không
-   * giữ (hoặc giữ lý do khác) → chỉ cập nhật design, KHÔNG đụng `heldAt`.
+   * `designs`/`designsOriginal` + **reset `toolResult`/`toolResultNote` về
+   * rỗng** (design cũ đã soát coi như không còn giá trị — CÙNG cơ chế
+   * `holdOrder()` làm khi giữ đơn lý do "Đợi khách sửa design", để đơn tự rơi
+   * lại hàng đợi `getNextDesignReviewOrder()`) + log `update_design`. Set
+   * thẳng, KHÔNG qua `updateField()` nên KHÔNG có side-effect hook — áp dụng
+   * BẤT KỂ đơn đang ở công đoạn nào (kể cả đã vào Fulfillment In/Ép/May).
+   * Mở giữ (`$unset heldAt/holdReason` + log `unhold`) khi: đơn ĐANG giữ ĐÚNG
+   * lý do "Đợi khách sửa design" (`holdReason=HOLD_REASON_WAITING_DESIGN`,
+   * luôn đúng) HOẶC `opts.forceUnhold=true` (nút thủ công — mở giữ đơn đang
+   * giữ BẤT KỂ lý do gì, xem `opts` doc). Đơn không giữ → chỉ cập nhật design
+   * + reset tool, KHÔNG đụng `heldAt`.
    */
   private async applyDesignFromOnospod(
     order: {
@@ -4546,8 +4554,29 @@ export class OrderService implements OnModuleInit {
       designsOriginal?: DesignFields;
       heldAt?: Date | null;
       holdReason?: string | null;
+      toolResult?: string | null;
+      toolResultNote?: string | null;
     },
     ctx?: AuditContext,
+    opts?: {
+      /**
+       * Nút thủ công "Kiểm tra design mới" — mở giữ khi phát hiện design mới
+       * BẤT KỂ `holdReason` là gì (nhân viên đã chủ động bấm kiểm tra ĐÚNG
+       * đơn này nên coi việc tìm thấy design mới là đủ điều kiện mở giữ, dù
+       * lý do giữ ban đầu không CHÍNH XÁC = `HOLD_REASON_WAITING_DESIGN`).
+       * Cron `recoverHeldOrders()` KHÔNG truyền cờ này — giữ nguyên hành vi
+       * cũ (chỉ mở giữ khi khớp CHÍNH XÁC lý do, vì cron chạy tự động không
+       * người giám sát).
+       */
+      forceUnhold?: boolean;
+      /**
+       * `syncDesignByCustomer()` (nút thủ công đồng bộ design theo mã khách
+       * hàng) — CHỈ ghi `designs`/`designsOriginal`, KHÔNG reset
+       * `toolResult`/`toolResultNote` và KHÔNG đụng `heldAt`/`holdReason`
+       * (yêu cầu rõ: chỉ cập nhật design, không cập nhật gì khác).
+       */
+      skipSideEffects?: boolean;
+    },
   ): Promise<{
     updated: boolean;
     reason?: string;
@@ -4589,10 +4618,30 @@ export class OrderService implements OnModuleInit {
       beforeSnapshot[`designs.${key}`] = (baseline as Record<string, string | undefined>)[key];
       afterSnapshot[`designs.${key}`] = value;
     }
-    const wasHeldForDesign = !!order.heldAt && order.holdReason === HOLD_REASON_WAITING_DESIGN;
+    // Design đổi → design cũ (đã soát tool trên đó, nếu có) coi như không còn
+    // giá trị. Reset `toolResult`/`toolResultNote` về rỗng để đơn tự rơi lại
+    // hàng đợi `getNextDesignReviewOrder()` (tool soát lại design mới) — CÙNG
+    // cơ chế `holdOrder()` đã làm khi giữ đơn lý do "Đợi khách sửa design".
+    // Set thẳng (KHÔNG qua `updateField()`) nên KHÔNG chạy side-effect hook
+    // (không đụng `currentFulfillmentStage`/`fulfillmentStages`) — áp dụng
+    // BẤT KỂ đơn đang ở công đoạn nào trong Fulfillment. Bỏ qua toàn bộ nếu
+    // `opts.skipSideEffects` (chỉ cập nhật design, không đụng gì khác).
+    if (!opts?.skipSideEffects) {
+      set.toolResult = '';
+      set.toolResultNote = '';
+      beforeSnapshot.toolResult = order.toolResult ?? '';
+      afterSnapshot.toolResult = '';
+      beforeSnapshot.toolResultNote = order.toolResultNote ?? '';
+      afterSnapshot.toolResultNote = '';
+    }
+
+    const shouldUnhold =
+      !opts?.skipSideEffects &&
+      !!order.heldAt &&
+      (order.holdReason === HOLD_REASON_WAITING_DESIGN || !!opts?.forceUnhold);
     const updatedOrder = await this.orderModel.findByIdAndUpdate(
       order._id,
-      wasHeldForDesign ? { $set: set, $unset: { heldAt: 1, holdReason: 1 } } : { $set: set },
+      shouldUnhold ? { $set: set, $unset: { heldAt: 1, holdReason: 1 } } : { $set: set },
       { new: true },
     );
     // Log riêng design đã đổi field nào (before/after) — CÙNG convention với
@@ -4606,12 +4655,12 @@ export class OrderService implements OnModuleInit {
       after: afterSnapshot,
       ctx,
     });
-    if (wasHeldForDesign) {
+    if (shouldUnhold) {
       void this.orderLogService.write({
         orderId: String(order._id),
         action: 'unhold',
         field: 'heldAt',
-        before: HOLD_REASON_WAITING_DESIGN,
+        before: order.holdReason ?? HOLD_REASON_WAITING_DESIGN,
         after: null,
         ctx,
       });
@@ -4728,8 +4777,11 @@ export class OrderService implements OnModuleInit {
    * Nút thủ công "Kiểm tra design mới" (Danh sách đơn, action menu từng
    * hàng) — Admin/Manager/Support/DesignerLeader/Fulfillment bấm để ép tra
    * OnosPod cho 1 ĐƠN BẤT KỲ (không cần đang giữ, KHÁC `recoverHeldOrders()`
-   * chỉ quét đơn hold). Dùng chung logic `applyDesignFromOnospod()`. Đơn đã
-   * hủy → skip (không kiểm tra).
+   * chỉ quét đơn hold). Dùng chung logic `applyDesignFromOnospod()`, truyền
+   * `{forceUnhold: true}` — đơn ĐANG GIỮ (bất kể lý do gì, không riêng "Đợi
+   * khách sửa design") mà tìm thấy design mới → TỰ MỞ GIỮ luôn (nhân viên đã
+   * chủ động bấm kiểm tra đúng đơn này, coi tìm thấy design mới là đủ điều
+   * kiện mở giữ). Đơn đã hủy → skip (không kiểm tra).
    */
   async checkOrderDesignFromOnospod(id: string, ctx?: AuditContext): Promise<CheckOrderDesignResDto> {
     const order = await this.orderModel.findById(id).lean();
@@ -4738,12 +4790,39 @@ export class OrderService implements OnModuleInit {
       return { success: true, data: { updated: false, reason: 'Đơn đã hủy — không kiểm tra design.' } };
     }
 
-    const res = await this.applyDesignFromOnospod(order, ctx);
+    const res = await this.applyDesignFromOnospod(order, ctx, { forceUnhold: true });
     if (res.updated) void this.invalidateListCache();
     return {
       success: true,
       data: { updated: res.updated, reason: res.reason, changed: res.changed, order: res.updatedOrder ?? undefined },
     };
+  }
+
+  /**
+   * Nút thủ công "Đồng bộ design theo mã khách hàng" — truyền `userSku`, tìm
+   * TOÀN BỘ đơn của khách (kể cả đơn đã hủy → skip, không kiểm tra), tra lại
+   * OnosPod cho từng đơn qua `applyDesignFromOnospod({skipSideEffects: true})`
+   * — CHỈ ghi `designs`/`designsOriginal`, KHÔNG reset `toolResult`/
+   * `toolResultNote`, KHÔNG đụng `heldAt`/`holdReason` (khác
+   * `checkOrderDesignFromOnospod` — yêu cầu rõ: chỉ cập nhật design).
+   */
+  async syncDesignByCustomer(userSku: string, ctx?: AuditContext): Promise<SyncDesignByCustomerResDto> {
+    const orders = await this.orderModel.find({ userSku }).lean();
+
+    const skipped: Array<{ productionId: string; reason: string }> = [];
+    let updated = 0;
+    for (const order of orders) {
+      if (order.cancelledAt) {
+        skipped.push({ productionId: order.productionId, reason: 'Đơn đã hủy — không đồng bộ.' });
+        continue;
+      }
+      const res = await this.applyDesignFromOnospod(order, ctx, { skipSideEffects: true });
+      if (res.updated) updated++;
+      else skipped.push({ productionId: order.productionId, reason: res.reason! });
+    }
+
+    if (updated > 0) void this.invalidateListCache();
+    return { success: true, data: { total: orders.length, updated, skipped } };
   }
 
   /**

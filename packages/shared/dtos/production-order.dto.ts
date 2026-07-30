@@ -2360,6 +2360,29 @@ export const CheckOrderDesignResZod = ResZod.extend({
 });
 export class CheckOrderDesignResDto extends createZodDto(extendApi(CheckOrderDesignResZod)) {}
 
+// ─── Đồng bộ lại design theo mã khách hàng (userSku, thủ công) ──────
+// Tìm TOÀN BỘ đơn cùng userSku, tra OnosPod theo từng đơn — CHỈ ghi
+// designs/designsOriginal, KHÔNG đụng toolResult/heldAt (khác
+// checkOrderDesignFromOnospod) — xem OrderService.syncDesignByCustomer.
+export const SyncDesignByCustomerZod = z.object({
+  userSku: z.string(),
+});
+export class SyncDesignByCustomerDto extends createZodDto(extendApi(SyncDesignByCustomerZod)) {}
+
+export const SyncDesignByCustomerSkipZod = z.object({
+  productionId: z.string(),
+  reason: z.string(),
+});
+
+export const SyncDesignByCustomerResZod = ResZod.extend({
+  data: z.object({
+    total: z.number().int().nonnegative(),
+    updated: z.number().int().nonnegative(),
+    skipped: SyncDesignByCustomerSkipZod.array(),
+  }),
+});
+export class SyncDesignByCustomerResDto extends createZodDto(extendApi(SyncDesignByCustomerResZod)) {}
+
 // ─── Action "Đã soát xong" (tab Soát tool, list "Cần làm lại") ──────
 // Support xác nhận đã soát xong 1 đơn hold (source=tool-check + note=error) và
 // đơn CẦN THIẾT KẾ (khác nhánh đổi Note kq Tool → 'ok' = file ổn, về In):

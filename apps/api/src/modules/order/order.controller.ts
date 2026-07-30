@@ -71,6 +71,8 @@ import {
   SetDesignReviewResultResDto,
   SetProductionErrorDto,
   SetProductionErrorResDto,
+  SyncDesignByCustomerDto,
+  SyncDesignByCustomerResDto,
   ToolCheckDoneResDto,
   TransferOrderDto,
   TransferOrderResDto,
@@ -520,6 +522,33 @@ export class OrderController {
       }),
     });
     return this.orderService.checkOrderDesignFromOnospod(id, { user, ip, userAgent });
+  }
+
+  // Nút thủ công "Đồng bộ design theo mã khách hàng" — truyền `userSku`, tìm
+  // TOÀN BỘ đơn của khách để tra lại OnosPod, CHỈ cập nhật designs (KHÔNG
+  // reset toolResult, KHÔNG đụng heldAt như check-design-from-onospod).
+  @Post('design-sync-by-customer')
+  @Auth(ORDER_WRITE_ROLES)
+  @ApiOperation({ summary: 'Đồng bộ lại design từ OnosPod cho TOÀN BỘ đơn của 1 mã khách hàng (thủ công)' })
+  @HttpCode(HttpStatus.OK)
+  @ApiOkResponse({ type: SyncDesignByCustomerResDto })
+  async syncDesignByCustomer(
+    @Body() dto: SyncDesignByCustomerDto,
+    @AuthUser() user: UserDocument,
+    @ClientIp() ip: string,
+    @UserAgent() userAgent: string,
+  ): Promise<SyncDesignByCustomerResDto> {
+    this.logger.info({
+      message: JSON.stringify({
+        method: 'POST',
+        url: '/orders/design-sync-by-customer',
+        userSku: dto.userSku,
+        userId: user?._id,
+        ip,
+        userAgent,
+      }),
+    });
+    return this.orderService.syncDesignByCustomer(dto.userSku, { user, ip, userAgent });
   }
 
   @Post(':id/tool-check-done')
