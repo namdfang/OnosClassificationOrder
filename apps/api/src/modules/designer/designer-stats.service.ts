@@ -967,14 +967,20 @@ export class DesignerStatsService {
 
   /**
    * Danh sách option cho 2 dropdown filter (sản phẩm = `type`, khách hàng =
-   * `userSku`) của tab Designer. Chỉ tính đơn đã gán designer (assignee set) để
-   * khớp phạm vi của ma trận/biểu đồ. Customer cap 300 để payload không phình.
+   * `userSku`) của tab Designer. Scope = "task đã gán designer TRONG KỲ LỌC"
+   * (`buildProductTimeMatch`: inProductionAt [from,to] + loại đơn hủy/chưa map
+   * xưởng) để option/count khớp đúng số liệu ma trận/panel theo thời gian đang
+   * chọn. Customer cap 300 để payload không phình.
    */
-  async getBreakdownFilters(): Promise<{
+  async getBreakdownFilters(
+    from?: string,
+    to?: string,
+  ): Promise<{
     products: { value: string; label: string; count: number }[];
     customers: { value: string; label: string; count: number }[];
   }> {
-    const scope = { assignee: { $exists: true, $ne: null } };
+    const { start, end } = this.resolveVnWindow(7, from, to);
+    const scope = this.buildProductTimeMatch(start, end);
     const [typeRows, customerRows] = await Promise.all([
       this.orderModel.aggregate<{ _id: string; count: number }>([
         { $match: { ...scope, type: { $exists: true, $nin: [null, ''] } } },

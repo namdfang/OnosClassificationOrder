@@ -649,6 +649,8 @@
     "moreOrders": "... còn {{count}} đơn cũ hơn không hiển thị (chỉ tải 300 đơn mới nhất)",
     "titleDesigner": "Thời gian theo sản phẩm — {{name}}",
     "subtitleDesigner": "— chỉ số liệu của riêng designer này trong kỳ lọc",
-    "customerTip": "Khách hàng của đơn"
+    "customerTip": "Khách hàng của đơn",
+    "searchProductPlaceholder": "Tìm sản phẩm...",
+    "noMatch": "Không có sản phẩm nào khớp bộ lọc."
   }
 }

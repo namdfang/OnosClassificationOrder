@@ -140,8 +140,12 @@ const teamDailyBreakdown = (
   return callApi(`/${CONFIG.API_VERSION}/designer/team-daily-breakdown?${qs.toString()}`, 'get');
 };
 
-const breakdownFilters = () => {
-  return callApi(`/${CONFIG.API_VERSION}/designer/breakdown-filters`, 'get');
+const breakdownFilters = (params: { from?: string; to?: string } = {}) => {
+  const qs = new URLSearchParams();
+  if (params.from) qs.set('from', params.from);
+  if (params.to) qs.set('to', params.to);
+  const suffix = qs.toString() ? `?${qs.toString()}` : '';
+  return callApi(`/${CONFIG.API_VERSION}/designer/breakdown-filters${suffix}`, 'get');
 };
 
 const productTimeOverview = (

@@ -301,6 +301,13 @@ export class GetTeamDailyBreakdownDto extends createZodDto(extendApi(GetTeamDail
 
 // ─── Filter options cho matrix/biểu đồ designer (sản phẩm + khách hàng) ──
 
+export const GetBreakdownFiltersZod = z.object({
+  /** YYYY-MM-DD (VN) — option/count tính trong kỳ này. Bỏ trống = 7 ngày gần nhất. */
+  from: z.string().optional(),
+  to: z.string().optional(),
+});
+export class GetBreakdownFiltersDto extends createZodDto(extendApi(GetBreakdownFiltersZod)) {}
+
 export const BreakdownFilterOptionZod = z.object({
   value: z.string(),
   label: z.string(),

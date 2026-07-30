@@ -92,18 +92,26 @@ export default function DesignerStatsTab() {
   const [products, setProducts] = useState<BreakdownFilterOption[]>([]);
   const [customers, setCustomers] = useState<BreakdownFilterOption[]>([]);
 
+  // Option list 2 dropdown filter — refetch theo kỳ lọc để count/danh sách
+  // khớp đúng khoảng thời gian đang chọn (BE scope inProductionAt [from,to]).
   useEffect(() => {
     (async () => {
       try {
-        const res = await RepositoryRemote.designer.breakdownFilters();
+        const res = await RepositoryRemote.designer.breakdownFilters({
+          from: dateFrom || undefined,
+          to: dateTo || undefined,
+        });
         const data = res.data?.data as { products?: BreakdownFilterOption[]; customers?: BreakdownFilterOption[] };
         setProducts(data?.products || []);
         setCustomers(data?.customers || []);
+        // Giá trị đang chọn không còn trong kỳ mới → tự bỏ để khỏi lọc "rỗng" ngầm.
+        setFilterType((cur) => (cur && !(data?.products || []).some((o) => o.value === cur) ? '' : cur));
+        setFilterCustomer((cur) => (cur && !(data?.customers || []).some((o) => o.value === cur) ? '' : cur));
       } catch (err) {
         handleAxiosError(err);
       }
     })();
-  }, []);
+  }, [dateFrom, dateTo]);
 
   const range = useMemo(() => rangeFromPeriod(period, customFrom, customTo), [period, customFrom, customTo]);
 

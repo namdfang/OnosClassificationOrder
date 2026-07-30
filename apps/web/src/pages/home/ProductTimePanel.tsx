@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import dayjs from 'dayjs';
 import {
@@ -7,6 +7,7 @@ import {
   ChevronRight,
   ImageOff,
   Package,
+  Search,
   Timer,
   User,
   UserRound,
@@ -61,6 +62,9 @@ export function ProductTimePanel({
   // Nhóm designer đang mở trong drill — key `${type}::${userId}`, mặc định thu gọn.
   const [openDesigners, setOpenDesigners] = useState<Set<string>>(new Set());
   const [preview, setPreview] = useState<{ url: string; title?: string } | null>(null);
+  // Filter nội bộ panel: CHỈ search sản phẩm (client-side) — khách hàng ăn
+  // theo filter chung của tab (prop `customer`).
+  const [searchType, setSearchType] = useState('');
 
   useEffect(() => {
     (async () => {
@@ -78,6 +82,12 @@ export function ProductTimePanel({
       }
     })();
   }, [from, to, type, customer, designerId, reloadToken]);
+
+  const visibleRows = useMemo(() => {
+    const q = searchType.trim().toLowerCase();
+    if (!q) return rows;
+    return rows.filter((r) => (r.type || t('productTimes.noType')).toLowerCase().includes(q));
+  }, [rows, searchType, t]);
 
   const formatDuration = (mins: number): string => {
     if (mins < 60) return t('topDesigners.durationMin', { count: mins });
@@ -148,16 +158,35 @@ export function ProductTimePanel({
         </button>
       </div>
 
+      {/* Filter nội bộ: CHỈ search sản phẩm (lọc tại chỗ) — khách theo lọc tổng của tab */}
+      <div className="border-b border-border px-4 py-2.5">
+        <div className="relative sm:max-w-xs">
+          <Search size={13} className="absolute left-2 top-1/2 -translate-y-1/2 text-muted-foreground" />
+          <input
+            type="text"
+            value={searchType}
+            onChange={(e) => setSearchType(e.target.value)}
+            placeholder={t('productTimes.searchProductPlaceholder')}
+            className={cn(
+              'w-full rounded-md border bg-background py-1.5 pl-7 pr-2 text-xs focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring',
+              searchType ? 'border-primary' : 'border-input',
+            )}
+          />
+        </div>
+      </div>
+
       {loading && rows.length === 0 && (
         <div className="flex items-center justify-center py-10">
           <Spinner size={18} className="text-muted-foreground" />
         </div>
       )}
-      {!loading && rows.length === 0 && (
-        <p className="py-8 text-center text-sm text-muted-foreground">{t('productTimes.empty')}</p>
+      {!loading && visibleRows.length === 0 && (
+        <p className="py-8 text-center text-sm text-muted-foreground">
+          {rows.length > 0 ? t('productTimes.noMatch') : t('productTimes.empty')}
+        </p>
       )}
 
-      {rows.length > 0 && (
+      {visibleRows.length > 0 && (
         <div className="max-h-[70vh] overflow-y-auto overflow-x-auto">
           <table className="w-full text-sm">
             <thead className="sticky top-0 z-10 bg-card">
@@ -178,7 +207,7 @@ export function ProductTimePanel({
               </tr>
             </thead>
             <tbody>
-              {rows.map((r) => {
+              {visibleRows.map((r) => {
                 const isOpen = expanded === r.type;
                 const drill = orderRows[r.type];
                 return (

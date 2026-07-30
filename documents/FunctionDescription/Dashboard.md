@@ -77,7 +77,7 @@ Layout (thứ tự render trên tab: **Bộ lọc chung → Tổng quan N ngày 
 
 - 2 dropdown `<SelectFilter>` (native select có count + typeahead): **Sản phẩm** (`order.type`) + **Khách hàng** (`order.userSku`). State `filterType`/`filterCustomer`, truyền **props `type`/`customer`** xuống StatusBarCharts + TeamDailyMatrix + DesignerDailyOverview + DesignerAssignBacklog.
 - **Thanh ngày `<DateRangePicker variant="inline">`** (preset ngang full-width: Hôm nay · Hôm qua · 7/14/30 ngày · Tháng này · Tháng trước · Tùy chỉnh) — state `dateFrom`/`dateTo`, **mặc định 7 ngày gần nhất** (`last-7d`). Điều khiển **CẢ** `DesignerDailyOverview` VÀ `DesignerAssignBacklog` VÀ biểu đồ cột. Đã **bỏ nhóm nút 7/14/30 riêng** (model `rangeDays` cũ) — nay luôn gửi `from`/`to`; prop `days` truyền hằng `7` (BE bỏ qua khi có from/to). Xem `DateRangePicker-InlineRedesign.md`.
-- Option list load 1 lần lúc mount từ `GET /v1/designer/breakdown-filters`. Nút **"Xóa lọc"** hiện khi có filter active.
+- Option list load từ `GET /v1/designer/breakdown-filters?from&to` — **refetch mỗi khi đổi khoảng ngày**, BE scope `buildProductTimeMatch` (đơn đã gán designer có `inProductionAt` trong [from,to] + loại hủy/chưa map xưởng) nên danh sách + count khớp đúng kỳ đang lọc (DTO `GetBreakdownFiltersDto`). Giá trị đang chọn không còn trong kỳ mới → FE tự reset về '' (tránh lọc rỗng ngầm). Nút **"Xóa lọc"** hiện khi có filter active.
 - **Ảnh hưởng section 0b (tổng quan) + 0c (cần gán) + 2 (ma trận) + 2b (biểu đồ cột)** — KHÔNG ảnh hưởng Leaderboard/Timeline/Error pie (period switcher riêng).
 - **Card "Top Designer"** (`TopDesigners.tsx`) nằm **bên phải card Bộ lọc chung**
   (flex row, cột phải `lg:w-80 xl:w-96`; mobile xuống dưới): top **3** designer
@@ -111,7 +111,10 @@ Layout (thứ tự render trên tab: **Bộ lọc chung → Tổng quan N ngày 
   `productTimesOpen`): bảng thời gian TB nhận/làm task theo TỪNG loại sản phẩm
   (`order.type`) của **TOÀN BỘ designer** trong kỳ lọc chung (from/to +
   type/customer, refetch theo `matrixToken`). Body scroll `max-h-[70vh]` +
-  thead sticky, font `text-sm`. Cột: Sản phẩm (kèm **thumbnail mockup đại diện**
+  thead sticky, font `text-sm`. **Thanh filter nội bộ panel** (dưới header):
+  CHỈ ô search sản phẩm (lọc client-side `visibleRows` theo tên type, không
+  refetch) — khách hàng KHÔNG có select riêng, ăn theo filter chung của tab
+  (prop `customer`). i18n `productTimes.{searchProductPlaceholder,noMatch}`. Cột: Sản phẩm (kèm **thumbnail mockup đại diện**
   `rows[].mockupUrl` = `$max mockupUrl` của loại đó, click → `ImagePreviewDialog`,
   `stopPropagation` khỏi toggle row) · Task · Đã xong ·
   `Zap` Nhận TB · `Timer` Làm TB — API `GET /v1/designer/product-time-overview`

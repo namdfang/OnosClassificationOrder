@@ -6,6 +6,7 @@ import type { FulfillmentStage } from 'shared';
 import {
   GetAssignBacklogDto,
   GetAssignBacklogResDto,
+  GetBreakdownFiltersDto,
   GetBreakdownFiltersResDto,
   GetDailyOverviewDto,
   GetDailyOverviewResDto,
@@ -264,15 +265,18 @@ export class DesignerStatsController {
   @Get('designer/breakdown-filters')
   @Auth(LEADER_ROLES)
   @ApiOperation({
-    summary: 'Option list cho 2 dropdown filter (sản phẩm + khách hàng) của tab Designer.',
+    summary: 'Option list cho 2 dropdown filter (sản phẩm + khách hàng) của tab Designer — theo kỳ lọc from/to.',
   })
   @HttpCode(HttpStatus.OK)
   @ApiOkResponse({ type: GetBreakdownFiltersResDto })
-  async getBreakdownFilters(@AuthUser() user: UserDocument): Promise<GetBreakdownFiltersResDto> {
+  async getBreakdownFilters(
+    @Query() query: GetBreakdownFiltersDto,
+    @AuthUser() user: UserDocument,
+  ): Promise<GetBreakdownFiltersResDto> {
     this.logger.info({
       message: JSON.stringify({ method: 'GET', url: '/designer/breakdown-filters', userId: user._id }),
     });
-    const data = await this.statsService.getBreakdownFilters();
+    const data = await this.statsService.getBreakdownFilters(query.from, query.to);
     return { success: true, data };
   }
 

@@ -649,6 +649,8 @@
     "moreOrders": "... {{count}} older orders not shown (only latest 300 loaded)",
     "titleDesigner": "Time by product — {{name}}",
     "subtitleDesigner": "— this designer's own numbers in the filtered range",
-    "customerTip": "Order customer"
+    "customerTip": "Order customer",
+    "searchProductPlaceholder": "Search products...",
+    "noMatch": "No products match the filter."
   }
 }
