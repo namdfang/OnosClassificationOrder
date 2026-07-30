@@ -527,20 +527,20 @@ export class OrderController {
   // Nút thủ công "Đồng bộ design theo mã khách hàng" — truyền `userSku`, tìm
   // TOÀN BỘ đơn của khách để tra lại OnosPod, CHỈ cập nhật designs (KHÔNG
   // reset toolResult, KHÔNG đụng heldAt như check-design-from-onospod).
-  @Post('design-sync-by-customer')
+  @Get('design-sync-by-customer')
   @Auth(ORDER_WRITE_ROLES)
   @ApiOperation({ summary: 'Đồng bộ lại design từ OnosPod cho TOÀN BỘ đơn của 1 mã khách hàng (thủ công)' })
   @HttpCode(HttpStatus.OK)
   @ApiOkResponse({ type: SyncDesignByCustomerResDto })
   async syncDesignByCustomer(
-    @Body() dto: SyncDesignByCustomerDto,
+    @Query() dto: SyncDesignByCustomerDto,
     @AuthUser() user: UserDocument,
     @ClientIp() ip: string,
     @UserAgent() userAgent: string,
   ): Promise<SyncDesignByCustomerResDto> {
     this.logger.info({
       message: JSON.stringify({
-        method: 'POST',
+        method: 'GET',
         url: '/orders/design-sync-by-customer',
         userSku: dto.userSku,
         userId: user?._id,

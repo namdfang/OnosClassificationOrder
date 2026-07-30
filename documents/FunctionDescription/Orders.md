@@ -762,7 +762,7 @@ với cron import.
 
 | Method | Path | Auth | Mô tả |
 |---|---|---|---|
-| POST | `/v1/orders/design-sync-by-customer` | `ORDER_WRITE_ROLES` (SuperAdmin/Admin/Manager/Support/DesignerLeader/Fulfillment) | Body `{ userSku }`. Trả `{ total, updated, skipped[] }` (`total` = số đơn tìm thấy theo `userSku`, `skipped[]` = `{productionId, reason}`). |
+| GET | `/v1/orders/design-sync-by-customer` | `ORDER_WRITE_ROLES` (SuperAdmin/Admin/Manager/Support/DesignerLeader/Fulfillment) | Query `{ userSku }`. Trả `{ total, updated, skipped[] }` (`total` = số đơn tìm thấy theo `userSku`, `skipped[]` = `{productionId, reason}`). |
 
 - `OrderService.syncDesignByCustomer(userSku, ctx)`: `find({ userSku })` (không
   lọc xưởng/ngày — mã khách hàng đã là điều kiện lọc tường minh) → với mỗi
