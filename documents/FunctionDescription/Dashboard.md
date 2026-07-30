@@ -87,6 +87,65 @@ Layout (thứ tự render trên tab: **Bộ lọc chung → Tổng quan N ngày 
   huy chương 🥇🥈🥉 + avatar chữ cái đầu (chưa có ảnh thật — API không trả avatar)
   - tên + progress bar tím (tỉ lệ so với hạng 1) + "N thiết kế". Refetch theo
     `matrixToken` (nút Làm mới).
+- **Dòng chỉ số phụ mỗi hàng Top Designer** (đọc `rows[].metrics` — field optional
+  của `TeamDailyRowZod`): 3 chip icon Lucide + số trên CÙNG 1 hàng (no-wrap),
+  tooltip Radix qua `Hint forceRich` (bọc `TooltipProvider delayDuration=150`):
+  `Package` "N SP" (số **LOẠI** sản phẩm khác nhau = distinct `order.type`,
+  KHÔNG phải sum `quantity` — mỗi production = 1 sản phẩm nên sum quantity ≈ số
+  task, vô nghĩa; **hover → liệt kê tên từng loại** từ `metrics.productTypeNames`,
+  BE sort A→Z cap 30, dư hiện "+N loại khác") · `Zap` phản hồi TB · `Timer` làm
+  TB (`metrics.totalTasks` vẫn trả về nhưng FE không hiển thị — đã bỏ chip task
+  theo yêu cầu). BE (`getTeamDailyBreakdown`) chạy thêm 1
+  aggregation song song cùng `$match` scope ma trận (`inProductionAt` trong kỳ +
+  type/customer + loại đơn hủy/chưa map xưởng), group theo `assignee`:
+  `totalTasks` + `typeSet` (`$addToSet type` → FE nhận `productTypes` đã đếm);
+  `avgResponseMin`/`avgWorkMin` CHỈ trên task done — cùng công thức leaderboard
+  `getPerformance` (response = `designerFirstStartedAt`||`designerStartedAt`
+  − `designerAssignedAt`; work = `designerWorkMs` cộng dồn, fallback
+  `completedAt − startedAt` legacy). Row `__inactive__` không có metrics. FE format
+  `<60p → "Xp"`, còn lại `"XgYp"`; giá trị 0 (chưa có task done) hiển thị `—`.
+  i18n `topDesigners.{productTypes,moreTypes,*Tip,durationMin,durationHourMin}`.
+- **Nút "Xem tất cả"** (góc phải header card Top Designer, prop `onViewAll`/`viewAllOpen`)
+  → toggle **panel "Thời gian theo sản phẩm"** (`ProductTimePanel.tsx`, render
+  full-width NGAY DƯỚI hàng Filter+TopDesigners trong `DesignerStatsTab`, state
+  `productTimesOpen`): bảng thời gian TB nhận/làm task theo TỪNG loại sản phẩm
+  (`order.type`) của **TOÀN BỘ designer** trong kỳ lọc chung (from/to +
+  type/customer, refetch theo `matrixToken`). Body scroll `max-h-[70vh]` +
+  thead sticky, font `text-sm`. Cột: Sản phẩm (kèm **thumbnail mockup đại diện**
+  `rows[].mockupUrl` = `$max mockupUrl` của loại đó, click → `ImagePreviewDialog`,
+  `stopPropagation` khỏi toggle row) · Task · Đã xong ·
+  `Zap` Nhận TB · `Timer` Làm TB — API `GET /v1/designer/product-time-overview`
+  (`getProductTimeOverview()`: group `$type` cùng match scope ma trận qua
+  `buildProductTimeMatch()`, time exprs dùng chung `designerTimeAggExprs()`/
+  `designerTimeGroupFields()` với metrics Top Designer, sort taskCount desc).
+  **Click 1 hàng sản phẩm** → expand inline **GOM THEO DESIGNER** (lazy-load
+  1 lần, cache theo type trong state `orderRows`): mỗi designer 1 nhóm
+  **tự mở rộng/thu gọn riêng** (button header, state `openDesigners` Set key
+  `type::userId`, **mặc định THU GỌN** — reset khi refetch) — header chevron +
+  `User` tên + badge "N đơn" + "xong M" + `Zap`/`Timer` TB **của riêng designer
+  đó trên sản phẩm đó** (aggregation `$group assignee` trên TOÀN BỘ đơn khớp,
+  không cap — field `designers[]` của response, sort taskCount desc); mở nhóm →
+  TỪNG đơn của designer đó (viền trái tím): thumbnail `mockupUrl`
+  (click → `ImagePreviewDialog`) + `productionId` + `UserRound` **khách hàng**
+  (`rows[].userSku`) + `CalendarDays` **ngày vào SX**
+  (`rows[].inProductionAt` ISO, FE format `DD/MM`) + `Zap`/`Timer` thời gian
+  nhận/làm riêng mỗi đơn — API `GET /v1/designer/product-time-orders?type=...`
+  (`getProductTimeOrders()`: `designers[]` + `rows[]` cap 300 đơn mới nhất theo
+  `inProductionAt` có `assigneeId` để FE gom nhóm; thiếu đơn cũ hơn cap → dòng
+  "... còn N đơn"; đơn chưa đủ mốc thời gian → `—`; `type=''` match đơn không
+  có type). Cả 2 endpoint `@Auth(LEADER_ROLES)`. DTOs `ProductTimeRowZod`/
+  `ProductTimeDesignerZod`/`ProductTimeOrderRowZod` + Get* DTOs trong
+  `designer.dto.ts`. i18n block `productTimes.*` + nút `topDesigners.viewAll`.
+- **Nút "Xem chi tiết" per-designer** (icon `Eye` cuối mỗi hàng widget Top
+  Designer, props `onViewDesigner`/`activeDesignerId`): mở CÙNG `ProductTimePanel`
+  nhưng chế độ 1 designer — cả 2 endpoint nhận query `designerId` optional
+  (`buildProductTimeMatch` ép `assignee = designerId`), title panel
+  `productTimes.titleDesigner` kèm tên; drill sản phẩm chỉ có 1 nhóm designer →
+  **tự mở sẵn** danh sách đơn (auto-add key vào `openDesigners` khi
+  `designers.length === 1`). State `DesignerStatsTab.productTimesView`
+  (`{designerId?, designerName?} | null` — `{}` = Xem tất cả); bấm lại nút đang
+  active → đóng panel. i18n `topDesigners.viewDetail` +
+  `productTimes.{titleDesigner,subtitleDesigner,customerTip}`.
 
 **0c. Bảng "Cần gán designer"** (`DesignerAssignBacklog.tsx` — render **NGAY DƯỚI bảng tổng quan**; gom theo sản phẩm):
 

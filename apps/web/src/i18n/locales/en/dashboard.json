@@ -15,7 +15,16 @@
   "topDesigners": {
     "title": "Top Designer",
     "empty": "No designs finished in this range yet.",
-    "count": "{{count}} designs"
+    "count": "{{count}} designs",
+    "durationMin": "{{count}}m",
+    "durationHourMin": "{{hours}}h {{mins}}m",
+    "productTypes": "{{count}} products",
+    "productTypesTip": "Distinct product types in the filtered range",
+    "avgResponseTip": "Average response time (assigned → started)",
+    "avgWorkTip": "Average work time (completed tasks)",
+    "moreTypes": "+{{count}} more types",
+    "viewAll": "View all",
+    "viewDetail": "View details by product"
   },
   "telegramReport": {
     "button": "Send Telegram report",
@@ -620,5 +629,26 @@
       "exportTitle": "PRODUCTION ORDER",
       "factory": "Factory"
     }
+  },
+  "productTimes": {
+    "title": "Time by product",
+    "subtitle": "— avg response/work time of all designers in the filtered range",
+    "colProduct": "Product",
+    "colTasks": "Tasks",
+    "colDone": "Done",
+    "colAvgResponse": "Avg response",
+    "colAvgWork": "Avg work",
+    "noType": "(no type)",
+    "empty": "No tasks in this range yet.",
+    "loadingOrders": "Loading orders...",
+    "ordersEmpty": "No orders.",
+    "noAssignee": "(unknown designer)",
+    "close": "Close",
+    "orderCount": "{{count}} orders",
+    "doneCount": "{{count}} done",
+    "moreOrders": "... {{count}} older orders not shown (only latest 300 loaded)",
+    "titleDesigner": "Time by product — {{name}}",
+    "subtitleDesigner": "— this designer's own numbers in the filtered range",
+    "customerTip": "Order customer"
   }
 }

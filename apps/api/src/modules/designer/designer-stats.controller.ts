@@ -19,6 +19,10 @@ import {
   GetPersonErrorOverviewDto,
   GetProductBreakdownDto,
   GetProductBreakdownResDto,
+  GetProductTimeOrdersDto,
+  GetProductTimeOrdersResDto,
+  GetProductTimeOverviewDto,
+  GetProductTimeOverviewResDto,
   GetSidebarCountsResDto,
   GetStageErrorDailyDto,
   GetTeamDailyBreakdownDto,
@@ -196,6 +200,63 @@ export class DesignerStatsController {
       query.to,
       query.type,
       query.customer,
+    );
+    return { success: true, data };
+  }
+
+  @Get('designer/product-time-overview')
+  @Auth(LEADER_ROLES)
+  @ApiOperation({
+    summary: 'Thời gian TB nhận/làm task theo từng loại sản phẩm — panel "Xem tất cả" của widget Top Designer.',
+  })
+  @HttpCode(HttpStatus.OK)
+  @ApiOkResponse({ type: GetProductTimeOverviewResDto })
+  async getProductTimeOverview(
+    @Query() query: GetProductTimeOverviewDto,
+    @AuthUser() user: UserDocument,
+  ): Promise<GetProductTimeOverviewResDto> {
+    this.logger.info({
+      message: JSON.stringify({
+        method: 'GET',
+        url: '/designer/product-time-overview',
+        userId: user._id,
+      }),
+    });
+    const data = await this.statsService.getProductTimeOverview(
+      query.from,
+      query.to,
+      query.type,
+      query.customer,
+      query.designerId,
+    );
+    return { success: true, data };
+  }
+
+  @Get('designer/product-time-orders')
+  @Auth(LEADER_ROLES)
+  @ApiOperation({
+    summary: 'Danh sách đơn/thiết kế của 1 loại sản phẩm trong kỳ — drill từ panel "Xem tất cả".',
+  })
+  @HttpCode(HttpStatus.OK)
+  @ApiOkResponse({ type: GetProductTimeOrdersResDto })
+  async getProductTimeOrders(
+    @Query() query: GetProductTimeOrdersDto,
+    @AuthUser() user: UserDocument,
+  ): Promise<GetProductTimeOrdersResDto> {
+    this.logger.info({
+      message: JSON.stringify({
+        method: 'GET',
+        url: '/designer/product-time-orders',
+        userId: user._id,
+        type: query.type,
+      }),
+    });
+    const data = await this.statsService.getProductTimeOrders(
+      query.type,
+      query.from,
+      query.to,
+      query.customer,
+      query.designerId,
     );
     return { success: true, data };
   }

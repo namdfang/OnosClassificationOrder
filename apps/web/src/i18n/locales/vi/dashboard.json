@@ -15,7 +15,16 @@
   "topDesigners": {
     "title": "Top Designer",
     "empty": "Chưa có thiết kế nào xong trong khoảng này.",
-    "count": "{{count}} thiết kế"
+    "count": "{{count}} thiết kế",
+    "durationMin": "{{count}}p",
+    "durationHourMin": "{{hours}}g {{mins}}p",
+    "productTypes": "{{count}} SP",
+    "productTypesTip": "Số loại sản phẩm khác nhau trong kỳ lọc",
+    "avgResponseTip": "Thời gian phản hồi trung bình (được gán → bắt đầu làm)",
+    "avgWorkTip": "Thời gian làm task trung bình (task đã xong)",
+    "moreTypes": "+{{count}} loại khác",
+    "viewAll": "Xem tất cả",
+    "viewDetail": "Xem chi tiết theo sản phẩm"
   },
   "telegramReport": {
     "button": "Gửi báo cáo Telegram",
@@ -620,5 +629,26 @@
       "exportTitle": "LỆNH SẢN XUẤT",
       "factory": "Xưởng"
     }
+  },
+  "productTimes": {
+    "title": "Thời gian theo sản phẩm",
+    "subtitle": "— TB nhận/làm task của toàn bộ designer trong kỳ lọc",
+    "colProduct": "Sản phẩm",
+    "colTasks": "Task",
+    "colDone": "Đã xong",
+    "colAvgResponse": "Nhận TB",
+    "colAvgWork": "Làm TB",
+    "noType": "(không có loại)",
+    "empty": "Chưa có task nào trong khoảng này.",
+    "loadingOrders": "Đang tải danh sách đơn...",
+    "ordersEmpty": "Không có đơn nào.",
+    "noAssignee": "(chưa rõ designer)",
+    "close": "Đóng",
+    "orderCount": "{{count}} đơn",
+    "doneCount": "xong {{count}}",
+    "moreOrders": "... còn {{count}} đơn cũ hơn không hiển thị (chỉ tải 300 đơn mới nhất)",
+    "titleDesigner": "Thời gian theo sản phẩm — {{name}}",
+    "subtitleDesigner": "— chỉ số liệu của riêng designer này trong kỳ lọc",
+    "customerTip": "Khách hàng của đơn"
   }
 }

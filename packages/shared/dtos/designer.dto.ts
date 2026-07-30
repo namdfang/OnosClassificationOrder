@@ -266,6 +266,23 @@ export const TeamDailyRowZod = z.object({
   cells: TeamDailyCellZod.array(),
   /** Tổng theo designer trên toàn window. */
   totals: TeamDailyCellZod,
+  /**
+   * Chỉ số phụ trong kỳ (widget Top Designer): tổng task mọi trạng thái +
+   * số LOẠI sản phẩm khác nhau (distinct `order.type`) trong các task đó;
+   * avg response/work chỉ tính trên task done (cùng công thức leaderboard
+   * `getPerformance`). Không set cho row inactive.
+   */
+  metrics: z
+    .object({
+      totalTasks: z.number().int().nonnegative(),
+      productTypes: z.number().int().nonnegative(),
+      /** Tên các loại (sort A→Z, cap 30) cho tooltip — FE hiện "+N khác" nếu thiếu. */
+      productTypeNames: z.string().array(),
+      /** 0 nếu chưa có task done trong kỳ. */
+      avgResponseMin: z.number().nonnegative(),
+      avgWorkMin: z.number().nonnegative(),
+    })
+    .optional(),
 });
 export type TeamDailyRow = z.infer<typeof TeamDailyRowZod>;
 
@@ -314,6 +331,93 @@ export const GetTeamDailyBreakdownResZod = ResZod.extend({
   }),
 });
 export class GetTeamDailyBreakdownResDto extends createZodDto(extendApi(GetTeamDailyBreakdownResZod)) {}
+
+// ─── Product time (panel "Xem tất cả" từ widget Top Designer) ────────────
+// Thời gian TB nhận/làm task theo TỪNG loại sản phẩm (`order.type`) của TOÀN
+// BỘ designer trong kỳ lọc; drill 1 sản phẩm → danh sách đơn/thiết kế.
+
+export const GetProductTimeOverviewZod = z.object({
+  /** YYYY-MM-DD (VN). Bỏ trống = 7 ngày gần nhất. */
+  from: z.string().optional(),
+  to: z.string().optional(),
+  /** Lọc theo sản phẩm (`order.type`) — filter chung của tab. */
+  type: z.string().optional(),
+  /** Lọc theo khách hàng (`order.userSku`). */
+  customer: z.string().optional(),
+  /** Set → chế độ "Xem chi tiết" 1 designer (chỉ đơn của người này). */
+  designerId: z.string().optional(),
+});
+export class GetProductTimeOverviewDto extends createZodDto(extendApi(GetProductTimeOverviewZod)) {}
+
+export const ProductTimeRowZod = z.object({
+  /** `order.type` — '' nếu đơn không có type. */
+  type: z.string(),
+  /** Ảnh đại diện (mockup của 1 đơn thuộc loại này — `$max mockupUrl`). */
+  mockupUrl: z.string().optional(),
+  /** Tổng task đã gán designer trong kỳ (mọi trạng thái). */
+  taskCount: z.number().int().nonnegative(),
+  doneCount: z.number().int().nonnegative(),
+  /** TB trên task done — 0 nếu chưa có. Cùng công thức leaderboard. */
+  avgResponseMin: z.number().nonnegative(),
+  avgWorkMin: z.number().nonnegative(),
+});
+export type ProductTimeRow = z.infer<typeof ProductTimeRowZod>;
+
+export const GetProductTimeOverviewResZod = ResZod.extend({
+  data: z.object({ rows: ProductTimeRowZod.array() }),
+});
+export class GetProductTimeOverviewResDto extends createZodDto(extendApi(GetProductTimeOverviewResZod)) {}
+
+export const GetProductTimeOrdersZod = z.object({
+  /** `order.type` của sản phẩm đang drill (bắt buộc; '' = đơn không có type). */
+  type: z.string(),
+  from: z.string().optional(),
+  to: z.string().optional(),
+  customer: z.string().optional(),
+  /** Set → chế độ "Xem chi tiết" 1 designer (chỉ đơn của người này). */
+  designerId: z.string().optional(),
+});
+export class GetProductTimeOrdersDto extends createZodDto(extendApi(GetProductTimeOrdersZod)) {}
+
+export const ProductTimeDesignerZod = z.object({
+  userId: z.string(),
+  name: z.string().optional(),
+  /** Số đơn của sản phẩm này designer đó ôm trong kỳ (mọi trạng thái, KHÔNG cap). */
+  taskCount: z.number().int().nonnegative(),
+  doneCount: z.number().int().nonnegative(),
+  /** TB trên task done của riêng designer đó — 0 nếu chưa có. */
+  avgResponseMin: z.number().nonnegative(),
+  avgWorkMin: z.number().nonnegative(),
+});
+export type ProductTimeDesigner = z.infer<typeof ProductTimeDesignerZod>;
+
+export const ProductTimeOrderRowZod = z.object({
+  _id: z.string(),
+  productionId: z.string().optional(),
+  /** Khách hàng của đơn (`order.userSku`). */
+  userSku: z.string().optional(),
+  /** = user._id — FE gom đơn về nhóm designer tương ứng. */
+  assigneeId: z.string().optional(),
+  assigneeName: z.string().optional(),
+  designerStatus: z.string().optional(),
+  mockupUrl: z.string().optional(),
+  /** ISO — ngày vào sản xuất. */
+  inProductionAt: z.string().optional(),
+  /** Phút — undefined nếu chưa đủ mốc thời gian để tính. */
+  responseMin: z.number().nonnegative().optional(),
+  workMin: z.number().nonnegative().optional(),
+});
+export type ProductTimeOrderRow = z.infer<typeof ProductTimeOrderRowZod>;
+
+export const GetProductTimeOrdersResZod = ResZod.extend({
+  data: z.object({
+    /** Thống kê per-designer trên TOÀN BỘ đơn khớp, sort taskCount desc. */
+    designers: ProductTimeDesignerZod.array(),
+    /** Cap 300 đơn mới nhất theo `inProductionAt`. */
+    rows: ProductTimeOrderRowZod.array(),
+  }),
+});
+export class GetProductTimeOrdersResDto extends createZodDto(extendApi(GetProductTimeOrdersResZod)) {}
 
 // ─── Daily overview (bảng 4 hàng: tổng đơn / chưa soát / lỗi / tồn) ──────
 
