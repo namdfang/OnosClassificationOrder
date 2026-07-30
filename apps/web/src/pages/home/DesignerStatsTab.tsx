@@ -29,6 +29,7 @@ import { DATE_PRESETS } from '@/utils/dateRangePresets';
 
 import { DesignerAssignBacklog } from './DesignerAssignBacklog';
 import { DesignerDailyOverview } from './DesignerDailyOverview';
+import { ProductTimePanel } from './ProductTimePanel';
 import { StatusBarCharts } from './StatusBarCharts';
 import { TeamDailyMatrix } from './TeamDailyMatrix';
 import { TopDesigners } from './TopDesigners';
@@ -75,6 +76,9 @@ export default function DesignerStatsTab() {
   const [loading, setLoading] = useState(false);
   // Bump để TeamDailyMatrix refetch khi bấm Refresh (ma trận dùng range riêng).
   const [matrixToken, setMatrixToken] = useState(0);
+  // Panel "Thời gian theo sản phẩm" — nút "Xem tất cả" (toàn team) hoặc nút
+  // "Xem chi tiết" 1 designer trong widget TopDesigners. null = đóng.
+  const [productTimesView, setProductTimesView] = useState<{ designerId?: string; designerName?: string } | null>(null);
 
   // Filter dùng chung cho biểu đồ cột + ma trận: sản phẩm (type) + khách (userSku).
   const [filterType, setFilterType] = useState('');
@@ -88,18 +92,26 @@ export default function DesignerStatsTab() {
   const [products, setProducts] = useState<BreakdownFilterOption[]>([]);
   const [customers, setCustomers] = useState<BreakdownFilterOption[]>([]);
 
+  // Option list 2 dropdown filter — refetch theo kỳ lọc để count/danh sách
+  // khớp đúng khoảng thời gian đang chọn (BE scope inProductionAt [from,to]).
   useEffect(() => {
     (async () => {
       try {
-        const res = await RepositoryRemote.designer.breakdownFilters();
+        const res = await RepositoryRemote.designer.breakdownFilters({
+          from: dateFrom || undefined,
+          to: dateTo || undefined,
+        });
         const data = res.data?.data as { products?: BreakdownFilterOption[]; customers?: BreakdownFilterOption[] };
         setProducts(data?.products || []);
         setCustomers(data?.customers || []);
+        // Giá trị đang chọn không còn trong kỳ mới → tự bỏ để khỏi lọc "rỗng" ngầm.
+        setFilterType((cur) => (cur && !(data?.products || []).some((o) => o.value === cur) ? '' : cur));
+        setFilterCustomer((cur) => (cur && !(data?.customers || []).some((o) => o.value === cur) ? '' : cur));
       } catch (err) {
         handleAxiosError(err);
       }
     })();
-  }, []);
+  }, [dateFrom, dateTo]);
 
   const range = useMemo(() => rangeFromPeriod(period, customFrom, customTo), [period, customFrom, customTo]);
 
@@ -194,7 +206,12 @@ export default function DesignerStatsTab() {
             />
           </div>
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
-            <SelectFilter label={t('designerStats.product')} value={filterType} onChange={setFilterType} options={products} />
+            <SelectFilter
+              label={t('designerStats.product')}
+              value={filterType}
+              onChange={setFilterType}
+              options={products}
+            />
             <SelectFilter
               label={t('designerStats.customer')}
               value={filterCustomer}
@@ -211,9 +228,31 @@ export default function DesignerStatsTab() {
             type={filterType || undefined}
             customer={filterCustomer || undefined}
             reloadToken={matrixToken}
+            viewAllOpen={!!productTimesView && !productTimesView.designerId}
+            onViewAll={() => setProductTimesView((v) => (v && !v.designerId ? null : {}))}
+            activeDesignerId={productTimesView?.designerId}
+            onViewDesigner={(userId, fullName) =>
+              setProductTimesView((v) =>
+                v?.designerId === userId ? null : { designerId: userId, designerName: fullName },
+              )
+            }
           />
         </div>
       </div>
+
+      {/* Panel thời gian TB nhận/làm theo sản phẩm — "Xem tất cả" / chi tiết 1 designer. */}
+      {productTimesView && (
+        <ProductTimePanel
+          from={dateFrom || undefined}
+          to={dateTo || undefined}
+          type={filterType || undefined}
+          customer={filterCustomer || undefined}
+          reloadToken={matrixToken}
+          designerId={productTimesView.designerId}
+          designerName={productTimesView.designerName}
+          onClose={() => setProductTimesView(null)}
+        />
+      )}
 
       {/* Bảng "Cần gán designer" gom theo sản phẩm — dưới bảng tổng quan. */}
       <DesignerAssignBacklog
@@ -234,6 +273,7 @@ export default function DesignerStatsTab() {
         reloadToken={matrixToken}
         type={filterType || undefined}
         customer={filterCustomer || undefined}
+        onAssigned={() => setMatrixToken((t) => t + 1)}
       />
 
       {/* Ma trận toàn team × ngày (7/14/30 riêng) — snapshot đơn chưa xong. */}
@@ -271,10 +311,11 @@ export default function DesignerStatsTab() {
                 key={p}
                 type="button"
                 onClick={() => setPeriod(p)}
-                className={`px-3 py-1.5 ${period === p
-                  ? 'bg-primary text-primary-foreground'
-                  : 'bg-background text-muted-foreground hover:bg-muted'
-                  }`}
+                className={`px-3 py-1.5 ${
+                  period === p
+                    ? 'bg-primary text-primary-foreground'
+                    : 'bg-background text-muted-foreground hover:bg-muted'
+                }`}
               >
                 {p === 'today'
                   ? t('designerStats.periodOptions.today')

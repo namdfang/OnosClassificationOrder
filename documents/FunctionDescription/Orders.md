@@ -1155,7 +1155,7 @@ Bảng theo dõi **đơn từng bị báo lỗi mà ĐÃ vào fulfillment** (in 
 
 **Điều kiện vào bảng (base filter, mọi role):**
 - `productionError ≠ null/''` AND **KHÔNG hủy/xóa** (`cancelledAt`/`deletedAt` không tồn tại).
-- **`currentFulfillmentStage` đã set** — CHỈ đơn đã vào fulfillment. Loại đơn còn ở soát-tool / thiết kế trước fulfillment.
+- **`currentFulfillmentStage` đã set** — CHỈ đơn đã vào fulfillment. Loại đơn còn ở soát-tool / thiết kế trước fulfillment. **Riêng tab `done`**: chấp nhận thêm đơn `currentFulfillmentStage=null` nhưng **`fulfillmentCompletedAt` đã set** (đóng hàng xong reset stage về null — nếu không nới, đơn hoàn tất biến mất khỏi CẢ 2 tab).
 - **`productionErrorSource ≠ 'tool-check'`** — **bỏ hẳn lỗi soát-tool** khỏi tab này (Support tạm ẩn tab — xem `§14.3`).
 - **KHÔNG** ràng buộc `productionFirstErrorAt` (đơn designer sửa xong vẫn còn lỗi ở các chặng sau, phải hiển thị tiếp).
 
@@ -1165,7 +1165,7 @@ Bảng theo dõi **đơn từng bị báo lỗi mà ĐÃ vào fulfillment** (in 
 
 Ví dụ Ép báo lỗi → đẩy về designer: designer/in/ép đều thấy ở `todo`; designer xong → designer sang `done`, in vẫn `todo`; in xong → in sang `done`; ép (reporter) xong → tất cả `done`.
 
-Sort `todo` vẫn theo `productionFirstErrorAt` ASC (lỗi cũ nhất trước).
+Sort `todo`: `priority` DESC (đơn ưu tiên lên đầu) rồi `inProductionAt` ASC (đơn vào sản xuất lâu nhất trước — khớp thang mức độ khẩn §14.2).
 
 ### 14.2 Mức độ khẩn cấp (theo GIỜ)
 
@@ -1180,7 +1180,7 @@ Tính theo **tuổi đơn kể từ ngày VÀO SẢN XUẤT** (`now - inProducti
 
 Header tab có 4 chip filter mức độ + count. Click chip để toggle filter; chỉ 1 mức độ active tại 1 lúc.
 
-**BE (`getErrorLog`):** badge counts (`byUrgency` aggregation) + filter chip đều tính trên `inProductionAt` (aggregation `$subtract: [now, '$inProductionAt']`; filter đẩy range vào clause `$and/$or` riêng theo `inProductionAt`, KHÔNG merge vào `filter.inProductionAt` của date-range để tránh đè). `countFilter` snapshot **trước** khi thêm clause urgency → badge luôn hiện đủ 4 mức. **Sort danh sách vẫn theo `productionFirstErrorAt` ASC** (đơn báo lỗi lâu nhất lên đầu) — độc lập với thang mức độ.
+**BE (`getErrorLog`):** badge counts (`byUrgency` aggregation) + filter chip đều tính trên `inProductionAt` (aggregation `$subtract: [now, '$inProductionAt']`; filter đẩy range vào clause `$and/$or` riêng theo `inProductionAt`, KHÔNG merge vào `filter.inProductionAt` của date-range để tránh đè). `countFilter` snapshot **trước** khi thêm clause urgency → badge luôn hiện đủ 4 mức. **Sort danh sách: `priority` DESC → `inProductionAt` ASC** (đơn ưu tiên trước, rồi đơn vào SX lâu nhất lên đầu — cùng trục thời gian với thang mức độ).
 
 ### 14.3 Góc nhìn chặng + phạm vi + thao tác (theo role)
 
@@ -1191,7 +1191,7 @@ Header tab có 4 chip filter mức độ + count. Click chip để toggle filter
 | **Fulfillment** | `user.fulfillmentStage` (in→đóng) | **chỉ xưởng mình** (`factoryId`/`originalFactoryId`) | `currentFulfillmentStage === myStage` & cùng xưởng → Bắt đầu/Hoàn thành/Báo lỗi (`fulfillment.transition` + `ReworkBackDialog`) |
 | **Support** | — (**tab tạm ẩn**) | — | Lỗi soát-tool không còn hiển thị ở tab này. BE trả rỗng (`_id: '__support_hidden__'`); FE ẩn tab + sidebar entry (`orders/index.tsx errorLogVisible`, `Sidebar.tsx hideForRoles:['Support']`). |
 | **Designer / DesignerLeader** | designer (đơn bị đẩy lỗi NGƯỢC từ fulfillment về) | **chỉ task của mình** (`assignee = user._id`) | `todo` = `designerStatus ∈ {rework, in-progress}` → Bắt đầu/Hoàn thành (`designer.transition`); `done` = `designerStatus=done` & timeline có `reworkTarget:'designer'` (đã sửa xong, đẩy lại vào fulfillment) |
-| **Admin / Manager / SuperAdmin** | — (toàn cục, trong scope base = đã vào fulfillment) | mọi xưởng | thấy MỌI đơn lỗi fulfillment: `todo` = chưa hoàn tất pipeline (`fulfillmentCompletedAt` chưa set); `done` = đã đóng hàng xong HOẶC đã resolve tay. Nút **"Đánh dấu xong"** (`POST /orders/:id/resolve-error` → `resolveError`) set `errorResolvedAt` → đơn rời "Cần xử lý" (mọi role), hiện ở "Đã xong" của Admin 14 ngày. Đảo tự động khi báo lỗi mới (`setProductionError` clear `errorResolvedAt`). **Bulk:** tab "Cần xử lý" của Admin có cột **checkbox** (+ chọn-tất-cả header) + thanh nổi **"Đánh dấu xong (N)"** → `POST /orders/bulk-resolve-error`. |
+| **Admin / Manager / SuperAdmin** | **chặng BÁO LỖI của từng đơn** (entry `rework-back` CUỐI trong `fulfillmentTimeline`, field `stage` = người báo) | mọi xưởng | thấy MỌI đơn lỗi fulfillment, positional theo chặng báo lỗi (`$expr` so index): `todo` = chặng báo lỗi CHƯA làm lại xong — vị trí hiện tại của đơn ≤ chặng báo lỗi (đang làm lại ở designer = trước mọi chặng; đơn không có entry rework-back → fallback `fulfillmentCompletedAt` chưa set); `done` = đã đi QUA lại chặng báo lỗi / đã đóng hàng xong / đã resolve tay. Nút **"Đánh dấu xong"** (`POST /orders/:id/resolve-error` → `resolveError`) set `errorResolvedAt` → đơn rời "Cần xử lý" (mọi role), hiện ở "Đã xong" của Admin 14 ngày. Đảo tự động khi báo lỗi mới (`setProductionError` clear `errorResolvedAt`). **Bulk:** tab "Cần xử lý" của Admin có cột **checkbox** (+ chọn-tất-cả header) + thanh nổi **"Đánh dấu xong (N)"** → `POST /orders/bulk-resolve-error`. |
 
 FE: đơn KHÔNG thuộc chặng viewer → hàng **xám** (`opacity-50`) + cell read-only + không nút. Với Fulfillment/Admin visibility KHÔNG lọc theo assignee (thấy hết đơn trong chặng/scope mình) — chỉ nút thao tác mới gate. Riêng **Designer** visibility LỌC theo `assignee = mình` (chỉ task được đẩy về cho mình).
 
@@ -1215,7 +1215,7 @@ Cột (reuse từ `WORKSHOP_COLS` của `workshopTableConfig.tsx` nhưng filter 
 
 | Cột | Cell |
 |-----|------|
-| Mức độ | Badge `new/attention/urgent/critical` |
+| Mức độ | `PriorityBadge` (nhãn ưu tiên read-only dùng chung kanban/ToolCheckTab, ẩn khi đơn không có `priority`) xếp trên badge `new/attention/urgent/critical` |
 | Tuổi đơn | Duration text `Nd Mh` + ngày vào SX |
 | Xưởng | `factory.shortName` |
 | Production ID | `WORKSHOP_COLS.productionId` cell (copy + tooltip). **Click mã → mở `OrderDetailDialog`** (fetch qua `getByProductionId`, hiện info + link mockup/design + preview file cutting) — wire qua `renderCtx.openDetail` |

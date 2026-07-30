@@ -44,6 +44,7 @@
     "noUnreviewedOrders": "No unreviewed orders.",
     "columns": {
       "orderCode": "Order code",
+      "mockup": "Mockup",
       "productionDate": "Production date",
       "priority": "Priority",
       "customer": "Customer",
@@ -59,7 +60,8 @@
     "markDoneToastAuto": "{{id}}: auto-assigned to designer{{name}}.",
     "markDoneToastNone": "{{id}}: the factory has no assignment config — the order went to the \"Needs assignment\" backlog (designer self-claim or manual assignment).",
     "errorReportedTimes": "The factory reported this order {{count}} time(s)",
-    "mockupTitle": "Mockup: {{id}}"
+    "mockupTitle": "Mockup: {{id}}",
+    "clickToViewFullImage": "Click to view the full image"
   },
   "errorStats": {
     "title": "Tool check error stats",

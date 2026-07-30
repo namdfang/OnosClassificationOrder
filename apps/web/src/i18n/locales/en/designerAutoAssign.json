@@ -26,7 +26,8 @@
     "searchCustomerPlaceholder": "Search customers (SKU / email)...",
     "searchProductPlaceholder": "Search products...",
     "emptyColumn": "Empty",
-    "noSearchMatch": "No search match"
+    "noSearchMatch": "No search match",
+    "expiresAt": "Until {{date}}"
   },
   "toasts": {
     "saveSuccess": "Designer assignment config saved"

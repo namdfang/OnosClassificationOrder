@@ -777,19 +777,60 @@ export class OrderService implements OnModuleInit {
       return;
     }
 
-    // ─── Admin/Manager/khác: TOÀN CỤC (read-only) — thấy MỌI đơn lỗi mọi xưởng.
-    // todo = chưa hoàn tất pipeline (còn đang xử lý ở đâu đó); done = đã đóng hàng
-    // xong (`fulfillmentCompletedAt` set). KHÔNG dùng "rework marker" vì bỏ sót đơn
-    // đang waiting/in-progress giữa chuỗi → admin sẽ thấy ít hơn acc theo chặng.
+    // ─── Admin/Manager/khác: TOÀN CỤC (read-only) — thấy MỌI đơn lỗi mọi xưởng,
+    // positional theo CHẶNG BÁO LỖI (entry `rework-back` CUỐI trong
+    // `fulfillmentTimeline`, field `stage` = chặng người báo):
+    //  - todo = chặng báo lỗi CHƯA làm lại xong — đơn chưa đi QUA lại chặng đó
+    //    (vị trí hiện tại <= chặng báo lỗi; đang làm lại ở designer = trước mọi chặng).
+    //  - done = đã đi qua lại chặng báo lỗi / đã đóng hàng xong / đã resolve tay.
+    // Đơn lỗi KHÔNG có entry rework-back (báo lỗi không đẩy lùi) → fallback
+    // định nghĩa cũ: todo tới khi đóng hàng xong (`fulfillmentCompletedAt`).
+    const stageList: string[] = [...FULFILLMENT_STAGES];
+    const todoExpr = {
+      $let: {
+        vars: {
+          rw: {
+            $filter: {
+              input: { $ifNull: ['$fulfillmentTimeline', []] },
+              as: 't',
+              cond: { $eq: ['$$t.action', FulfillmentTransitionAction.ReworkBack] },
+            },
+          },
+          // Vị trí hiện tại của đơn: 999 = đã đóng hàng xong · -1 = đang làm
+          // lại ở designer · else index `currentFulfillmentStage` trong chuỗi.
+          curIdx: {
+            $cond: [
+              { $gt: ['$fulfillmentCompletedAt', null] },
+              999,
+              {
+                $cond: [
+                  { $in: ['$designerStatus', [DesignerStatus.Rework, DesignerStatus.InProgress]] },
+                  -1,
+                  { $indexOfArray: [stageList, '$currentFulfillmentStage'] },
+                ],
+              },
+            ],
+          },
+        },
+        in: {
+          $cond: [
+            { $eq: [{ $size: '$$rw' }, 0] },
+            { $lt: ['$$curIdx', 999] },
+            {
+              $let: {
+                vars: { lastRw: { $arrayElemAt: ['$$rw', -1] } },
+                in: { $lte: ['$$curIdx', { $indexOfArray: [stageList, '$$lastRw.stage'] }] },
+              },
+            },
+          ],
+        },
+      },
+    };
     if (tab === 'todo') {
-      pushAnd({ $or: [{ fulfillmentCompletedAt: { $exists: false } }, { fulfillmentCompletedAt: null }] });
+      pushAnd({ $expr: todoExpr });
     } else {
-      // Đã đóng hàng xong HOẶC Admin đã đánh dấu hoàn thành lỗi thủ công.
       pushAnd({
-        $or: [
-          { fulfillmentCompletedAt: { $exists: true, $ne: null } },
-          { errorResolvedAt: { $exists: true, $ne: null } },
-        ],
+        $or: [{ $expr: { $not: [todoExpr] } }, { errorResolvedAt: { $exists: true, $ne: null } }],
       });
     }
   }
@@ -5667,9 +5708,17 @@ export class OrderService implements OnModuleInit {
     for (const c of config.customers || []) {
       for (const cid of c.customerIds || []) designerByCustomerId.set(String(cid), String(c.designerId));
     }
+    // Mapping sản phẩm có hạn (`productExpiries`, từ nút "Ghi nhớ cấu hình") —
+    // quá hạn thì bỏ qua tại chỗ (lazy expiry), đơn rơi xuống mức 3.
+    const productExpiries = config.productExpiries || {};
+    const nowMs = Date.now();
     const designerByProductConfigId = new Map<string, string>();
     for (const p of config.products || []) {
-      for (const pid of p.productConfigIds || []) designerByProductConfigId.set(String(pid), String(p.designerId));
+      for (const pid of p.productConfigIds || []) {
+        const expTs = productExpiries[String(pid)] ? Date.parse(productExpiries[String(pid)]) : NaN;
+        if (Number.isFinite(expTs) && expTs <= nowMs) continue;
+        designerByProductConfigId.set(String(pid), String(p.designerId));
+      }
     }
     if (!byFactory.size && !designerByCustomerId.size && !designerByProductConfigId.size) return empty;
 
@@ -7776,8 +7825,21 @@ export class OrderService implements OnModuleInit {
     filter.deletedAt = { $exists: false };
     filter.cancelledAt = { $exists: false };
     // CHỈ đơn ĐÃ vào fulfillment (in→ép→…→đóng gói): `currentFulfillmentStage` set.
-    // Loại đơn còn ở soát-tool / thiết kế trước fulfillment.
-    filter.currentFulfillmentStage = { $exists: true, $ne: null };
+    // Loại đơn còn ở soát-tool / thiết kế trước fulfillment. Riêng tab "Đã xong":
+    // đơn đóng hàng xong bị set stage=null (+ `fulfillmentCompletedAt`) — vẫn
+    // phải hiện, nếu không đơn hoàn tất biến mất khỏi CẢ 2 tab.
+    if (tab === 'todo') {
+      filter.currentFulfillmentStage = { $exists: true, $ne: null };
+    } else {
+      filter.$and = [
+        {
+          $or: [
+            { currentFulfillmentStage: { $exists: true, $ne: null } },
+            { fulfillmentCompletedAt: { $exists: true, $ne: null } },
+          ],
+        },
+      ];
+    }
     // Bỏ hẳn lỗi nguồn soát-tool khỏi tab này.
     filter.productionErrorSource = { $ne: 'tool-check' };
     // Đơn chưa map xưởng + đơn xưởng US (ngoài luồng sản xuất) bị loại khỏi
@@ -7947,8 +8009,10 @@ export class OrderService implements OnModuleInit {
     const { page, limit } = dto;
     const skip = limit * ((page || 1) - 1);
 
-    // Cần xử lý: lỗi cũ nhất trước. Đã xong: mới xử lý xong lên đầu.
-    const sort: Record<string, 1 | -1> = tab === 'done' ? { updatedAt: -1 } : { productionFirstErrorAt: 1 };
+    // Cần xử lý: đơn VÀO SẢN XUẤT lâu nhất trước (khớp thang mức độ khẩn §14.2;
+    // `priority: -1` prefix bên dưới đưa đơn ưu tiên lên đầu). Đã xong: mới xử
+    // lý xong lên đầu.
+    const sort: Record<string, 1 | -1> = tab === 'done' ? { updatedAt: -1 } : { inProductionAt: 1 };
 
     const [pageRes, urgencyAgg] = await Promise.all([
       this.orderRepository.findAllAndCount(filter, {

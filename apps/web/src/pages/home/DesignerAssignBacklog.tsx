@@ -1,7 +1,7 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { ChevronDown, ChevronRight, Clock, Grab, ImageOff, UserPlus, Wand2 } from 'lucide-react';
-import type { AssignBacklogGroup, AutoAssignPlanRow } from 'shared';
+import { BookmarkPlus, ChevronDown, ChevronRight, Clock, Grab, ImageOff, UserPlus, Wand2 } from 'lucide-react';
+import type { AssignBacklogGroup } from 'shared';
 import { PRODUCT_LEVEL_MAP } from 'shared';
 import { toast } from 'sonner';
 
@@ -12,6 +12,11 @@ import { RepositoryRemote } from '@/services';
 import { ImagePreviewDialog } from '@/components/common/ImagePreviewDialog';
 import { Spinner } from '@/components/common/Spinner';
 import { AssignDesignerDialog } from '@/components/orders/AssignDesignerDialog';
+import { type AutoAssignPlan,AutoAssignPlanDialog } from '@/components/orders/AutoAssignPlanDialog';
+import {
+  RememberAssignConfigDialog,
+  type RememberProductItem,
+} from '@/components/orders/RememberAssignConfigDialog';
 import {
   buildColGroups,
   GroupCellContent,
@@ -21,7 +26,6 @@ import {
 } from '@/components/orders/workshopTableConfig';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
-import { Dialog, DialogContent, DialogTitle } from '@/components/ui/dialog';
 import { TooltipProvider } from '@/components/ui/tooltip';
 
 import { handleAxiosError } from '@/utils';
@@ -34,6 +38,8 @@ import { usePermission } from '@/hooks/usePermission';
 // Role được TỰ NHẬN task về mình (self-claim) vs. role được gán cho người khác.
 const CLAIM_SELF_ROLES = ['Designer', 'DesignerLeader'];
 const ASSIGN_OTHERS_ROLES = ['SuperAdmin', 'Admin', 'Manager', 'DesignerLeader'];
+// Role được "Ghi nhớ cấu hình" (ghi vào config auto-gán — endpoint @Auth([Admin])).
+const REMEMBER_CONFIG_ROLES = ['SuperAdmin', 'Admin'];
 
 interface Props {
   days?: 7 | 14 | 30;
@@ -67,6 +73,8 @@ export function DesignerAssignBacklog({ days = 7, from, to, type, customer, relo
   const { roleName, canViewField, canEditField } = usePermission();
   const canClaimSelf = !!roleName && CLAIM_SELF_ROLES.includes(roleName);
   const canAssignOthers = !!roleName && ASSIGN_OTHERS_ROLES.includes(roleName);
+  const canRememberConfig = !!roleName && REMEMBER_CONFIG_ROLES.includes(roleName);
+  const [rememberOpen, setRememberOpen] = useState(false);
 
   const loadConfig = useWorkshopConfigStore((s) => s.load);
   const configLoaded = useWorkshopConfigStore((s) => s.loaded);
@@ -169,17 +177,26 @@ export function DesignerAssignBacklog({ days = 7, from, to, type, customer, relo
   const selectedCount = selected.size;
   const selectedIds = useMemo(() => [...selected], [selected]);
 
+  // "Ghi nhớ cấu hình": sản phẩm = nhóm có ≥ 1 đơn được chọn; nhóm "Chưa map
+  // sản phẩm" (key='unmapped') không có productConfigId nên chỉ gán ngay.
+  const rememberProducts = useMemo<RememberProductItem[]>(
+    () =>
+      groups
+        .map((g) => ({ id: g.key, name: g.fullName, selectedCount: g.orderIds.filter((id) => selected.has(id)).length }))
+        .filter((p) => p.selectedCount > 0 && p.id !== 'unmapped'),
+    [groups, selected],
+  );
+  const unmappedSelectedCount = useMemo(() => {
+    const g = groups.find((x) => x.key === 'unmapped');
+    return g ? g.orderIds.filter((id) => selected.has(id)).length : 0;
+  }, [groups, selected]);
+
   // ── Nút "Tự động gán theo config" — preview plan (KHÔNG ghi) rồi xác nhận
   // mới gán ĐÚNG plan đã xem. Phạm vi = toàn bộ đơn đang hiển thị theo filter.
   const allIds = useMemo(() => groups.flatMap((g) => g.orderIds), [groups]);
-  const [autoPlan, setAutoPlan] = useState<{
-    plan: AutoAssignPlanRow[];
-    unassignedCount: number;
-    totalRequested: number;
-  } | null>(null);
+  const [autoPlan, setAutoPlan] = useState<AutoAssignPlan | null>(null);
   const [autoLoading, setAutoLoading] = useState(false);
   const [autoApplying, setAutoApplying] = useState(false);
-  const autoPlanTotal = autoPlan?.plan.reduce((s, r) => s + r.count, 0) ?? 0;
 
   const handleAutoPreview = async () => {
     if (allIds.length === 0) return;
@@ -296,6 +313,17 @@ export function DesignerAssignBacklog({ days = 7, from, to, type, customer, relo
                 >
                   <UserPlus size={13} />
                   {t('assignBacklog.assignDesign', { count: selectedCount })}
+                </Button>
+              )}
+              {canRememberConfig && (
+                <Button
+                  size="sm"
+                  variant="outline"
+                  onClick={() => setRememberOpen(true)}
+                  disabled={claiming || selectedCount === 0}
+                >
+                  <BookmarkPlus size={13} />
+                  {t('assignBacklog.rememberConfig')}
                 </Button>
               )}
               {canAssignOthers && (
@@ -465,53 +493,14 @@ export function DesignerAssignBacklog({ days = 7, from, to, type, customer, relo
           </div>
         )}
 
-        {/* Dialog xác nhận "Tự động gán theo config" — hiển thị plan gọn theo
-          designer; Xác nhận → áp ĐÚNG plan này (đơn đổi trạng thái bị skip). */}
-        <Dialog open={autoPlan !== null} onOpenChange={(v) => !v && !autoApplying && setAutoPlan(null)}>
-          <DialogContent className="max-w-md">
-            <DialogTitle>{t('assignBacklog.autoAssignTitle')}</DialogTitle>
-            {autoPlan &&
-              (autoPlan.plan.length === 0 ? (
-                <p className="text-sm text-muted-foreground">{t('assignBacklog.autoAssignEmpty')}</p>
-              ) : (
-                <>
-                  <p className="text-xs text-muted-foreground">
-                    {t('assignBacklog.autoAssignSummary', {
-                      assigned: autoPlanTotal,
-                      total: autoPlan.totalRequested,
-                    })}
-                  </p>
-                  <div className="max-h-[50vh] overflow-y-auto divide-y divide-border/60 rounded-md border border-border">
-                    {autoPlan.plan.map((r) => (
-                      <div key={r.userId} className="flex items-center justify-between gap-3 px-3 py-2 text-sm">
-                        <div className="min-w-0">
-                          <div className="font-medium truncate">{r.fullName}</div>
-                          {r.email && <div className="text-[11px] text-muted-foreground truncate">{r.email}</div>}
-                        </div>
-                        <Badge variant="secondary" className="shrink-0">
-                          {t('assignBacklog.orderCount', { count: r.count })}
-                        </Badge>
-                      </div>
-                    ))}
-                  </div>
-                  {autoPlan.unassignedCount > 0 && (
-                    <p className="text-xs text-amber-600 dark:text-amber-400">
-                      {t('assignBacklog.autoAssignUnassigned', { count: autoPlan.unassignedCount })}
-                    </p>
-                  )}
-                  <div className="flex justify-end gap-2">
-                    <Button variant="outline" size="sm" onClick={() => setAutoPlan(null)} disabled={autoApplying}>
-                      {t('assignBacklog.autoAssignCancel')}
-                    </Button>
-                    <Button size="sm" onClick={handleAutoApply} disabled={autoApplying}>
-                      {autoApplying && <Spinner size={13} />}
-                      {t('assignBacklog.autoAssignConfirm', { count: autoPlanTotal })}
-                    </Button>
-                  </div>
-                </>
-              ))}
-          </DialogContent>
-        </Dialog>
+        {/* Dialog xác nhận "Tự động gán theo config" (dùng chung với panel
+          drill-down) — Xác nhận → áp ĐÚNG plan này (đơn đổi trạng thái bị skip). */}
+        <AutoAssignPlanDialog
+          plan={autoPlan}
+          applying={autoApplying}
+          onCancel={() => setAutoPlan(null)}
+          onConfirm={handleAutoApply}
+        />
 
         <AssignDesignerDialog
           open={assignOpen}
@@ -519,6 +508,19 @@ export function DesignerAssignBacklog({ days = 7, from, to, type, customer, relo
           onClose={() => setAssignOpen(false)}
           onApplied={() => {
             setAssignOpen(false);
+            setSelected(new Set());
+            fetchData();
+            onAssigned?.();
+          }}
+        />
+
+        <RememberAssignConfigDialog
+          open={rememberOpen}
+          products={rememberProducts}
+          selectedOrderIds={selectedIds}
+          unmappedSelectedCount={unmappedSelectedCount}
+          onClose={() => setRememberOpen(false)}
+          onApplied={() => {
             setSelected(new Set());
             fetchData();
             onAssigned?.();

@@ -26,7 +26,8 @@
     "searchCustomerPlaceholder": "Tìm khách (SKU / email)...",
     "searchProductPlaceholder": "Tìm sản phẩm...",
     "emptyColumn": "Trống",
-    "noSearchMatch": "Không khớp tìm kiếm"
+    "noSearchMatch": "Không khớp tìm kiếm",
+    "expiresAt": "Đến {{date}}"
   },
   "toasts": {
     "saveSuccess": "Đã lưu cấu hình gán designer"

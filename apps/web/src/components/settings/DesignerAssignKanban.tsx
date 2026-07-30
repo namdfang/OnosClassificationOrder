@@ -30,6 +30,8 @@ export interface DesignerAssignItem {
   subtitle?: string;
   tier?: number | null;
   mockup?: string;
+  /** Nhãn hạn hiệu lực (mapping tạm thời từ "Ghi nhớ cấu hình") — chip vàng. */
+  expiryLabel?: string;
 }
 
 interface DesignerLite {
@@ -59,6 +61,11 @@ function ItemCard({ it }: { it: DesignerAssignItem }) {
           </p>
           {it.subtitle && <p className="truncate text-[11px] text-slate-400">{it.subtitle}</p>}
         </div>
+        {it.expiryLabel && (
+          <span className="shrink-0 rounded px-1.5 py-0.5 text-[10px] font-medium bg-amber-100 dark:bg-amber-500/15 text-amber-700 dark:text-amber-400">
+            {it.expiryLabel}
+          </span>
+        )}
         {it.tier !== undefined && <TierBadge tier={it.tier} />}
       </div>
     </div>

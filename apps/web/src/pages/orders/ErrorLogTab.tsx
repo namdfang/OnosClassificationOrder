@@ -26,6 +26,7 @@ import { LoadingOverlay } from '@/components/common/LoadingOverlay';
 import { PaginationBar } from '@/components/common/PaginationBar';
 import { Spinner } from '@/components/common/Spinner';
 import { CancelledBadge } from '@/components/orders/CancelledBadge';
+import { PriorityBadge } from '@/components/orders/cells/PrioritySelectCell';
 import { HeldBadge } from '@/components/orders/HeldBadge';
 import { OrderDetailDialog } from '@/components/orders/OrderDetailDialog';
 import { OrderFilterBar, type OrderFilterFacet } from '@/components/orders/OrderFilterBar';
@@ -71,7 +72,9 @@ type TabKey = 'todo' | 'done';
 
 const DEFAULT_PAGE_SIZE = 30;
 
-function buildUrgencyMeta(t: TFunction<'orderLog'>): Record<UrgencyKey, { label: string; cls: string; chipCls: string; ringCls: string }> {
+function buildUrgencyMeta(
+  t: TFunction<'orderLog'>,
+): Record<UrgencyKey, { label: string; cls: string; chipCls: string; ringCls: string }> {
   return {
     new: {
       label: t('urgency.new'),
@@ -670,7 +673,9 @@ export function ErrorLogTab() {
                   {t('page.clearUrgencyFilter')}
                 </button>
               )}
-              <span className="text-[11px] text-muted-foreground ml-1">{t('page.totalToProcess', { count: totalErrors })}</span>
+              <span className="text-[11px] text-muted-foreground ml-1">
+                {t('page.totalToProcess', { count: totalErrors })}
+              </span>
             </div>
           )}
         </div>
@@ -759,7 +764,10 @@ export function ErrorLogTab() {
           }}
         />
 
-        <LoadingOverlay active={loading && items.length > 0} className="rounded-lg border border-border bg-card overflow-hidden">
+        <LoadingOverlay
+          active={loading && items.length > 0}
+          className="rounded-lg border border-border bg-card overflow-hidden"
+        >
           <div className="overflow-x-auto">
             <Table>
               <TableHeader>
@@ -836,7 +844,12 @@ export function ErrorLogTab() {
                         </TableCell>
                       )}
                       <TableCell className="py-2">
-                        <Badge className={cn('font-mono text-[11px]', meta.cls)}>{meta.label}</Badge>
+                        {/* Nhãn ưu tiên (badge read-only dùng chung kanban/ToolCheckTab)
+                          xếp trên badge mức độ — đơn ưu tiên được sort lên đầu. */}
+                        <div className="flex flex-col gap-1 items-start">
+                          <PriorityBadge priority={row.priority} />
+                          <Badge className={cn('font-mono text-[11px]', meta.cls)}>{meta.label}</Badge>
+                        </div>
                       </TableCell>
                       <TableCell className="py-2">
                         <div className="flex flex-col leading-tight">

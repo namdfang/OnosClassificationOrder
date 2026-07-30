@@ -81,6 +81,8 @@ interface Props {
   type?: string;
   /** Filter chung khách hàng (`order.userSku`). */
   customer?: string;
+  /** Gọi sau khi gán/nhận đơn từ panel drill-down (bump matrixToken ở tab cha). */
+  onAssigned?: () => void;
 }
 
 function fmtHead(day: string): { wd: string; dm: string } {
@@ -91,7 +93,7 @@ function fmtHead(day: string): { wd: string; dm: string } {
   };
 }
 
-export function DesignerDailyOverview({ days: range = 7, from, to, reloadToken, type, customer }: Props) {
+export function DesignerDailyOverview({ days: range = 7, from, to, reloadToken, type, customer, onAssigned }: Props) {
   const { t } = useTranslation('dashboard');
   const [data, setData] = useState<Data>(EMPTY);
   const [loading, setLoading] = useState(false);
@@ -322,6 +324,9 @@ export function DesignerDailyOverview({ days: range = 7, from, to, reloadToken, 
         </>
       ),
       query: sp.toString(),
+      // Đơn chưa ai ôm → bật chế độ chọn + cụm nút gán trong panel ('resolved'
+      // = đã về 'ok' không cần designer nên không bật).
+      selectable: kind !== 'resolved',
     });
   };
 
@@ -944,7 +949,7 @@ export function DesignerDailyOverview({ days: range = 7, from, to, reloadToken, 
 
       {/* Panel drill-down inline — sibling của card (TooltipProvider không render
           DOM) nên nằm GIỮA bảng tổng quan và bảng "Cần gán designer" (space-y). */}
-      <DesignerDrillPanel target={drill} onClose={() => setDrill(null)} />
+      <DesignerDrillPanel target={drill} onClose={() => setDrill(null)} onMutated={onAssigned} />
     </TooltipProvider>
   );
 }
