@@ -7,6 +7,7 @@ import {
   ClipboardCheck,
   Clock,
   FileSearch,
+  Image as ImageIcon,
   PackageSearch,
   RefreshCw,
   Users,
@@ -38,11 +39,13 @@ import { TextEditCell } from '@/components/orders/cells/TextEditCell';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Dialog, DialogContent, DialogTitle } from '@/components/ui/dialog';
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { TooltipProvider } from '@/components/ui/tooltip';
 
 import { handleAxiosError } from '@/utils';
 import { cn } from '@/utils/cn';
 import { DATE_PRESETS } from '@/utils/dateRangePresets';
+import { smallThumb } from '@/utils/driveThumb';
 import { formatCountdown, getStageDeadline } from '@/utils/priorityEstimate';
 
 import { useNow } from '@/hooks/useNow';
@@ -201,10 +204,10 @@ export default function ToolCheckTab() {
     setData((prev) =>
       prev
         ? {
-          ...prev,
-          reworkList: prev.reworkList.map((o) => (o._id === id ? { ...o, ...partial } : o)),
-          unreviewedList: prev.unreviewedList.map((o) => (o._id === id ? { ...o, ...partial } : o)),
-        }
+            ...prev,
+            reworkList: prev.reworkList.map((o) => (o._id === id ? { ...o, ...partial } : o)),
+            unreviewedList: prev.unreviewedList.map((o) => (o._id === id ? { ...o, ...partial } : o)),
+          }
         : prev,
     );
 
@@ -251,70 +254,110 @@ export default function ToolCheckTab() {
   const canEditErrNote = canEditField('errorFileNote');
   const canEditProdErr = canEditField('productionError');
 
-  // Render 1 dòng đơn — cột theo thứ tự bảng "Đơn theo xưởng" (mockup → type/size
-  // → Note kq Tool → File sửa lỗi → Ghi chú file lỗi → Lỗi xưởng). Cell edit trực
-  // tiếp giống Danh sách đơn; đổi Note kq Tool / Lỗi xưởng có thể đổi list → refetch.
+  // Render 1 dòng đơn — GIAO DIỆN MIRROR dòng "Danh sách đơn" (`ListOrderTab`):
+  // mã đơn mono + CopyButton + ngày SX bên dưới → mockup 48px bg-checker →
+  // sản phẩm đậm + dòng phụ size/màu → SKU khách. Các cell edit (Note kq Tool /
+  // File sửa lỗi / Ghi chú file lỗi / Lỗi xưởng) giữ nguyên; đổi Note kq Tool /
+  // Lỗi xưởng có thể đổi list → refetch.
   const renderRow = (o: ToolCheckOrder) => {
     const showCount = o.toolResultNote === 'error' && (o.productionErrorCount || 0) >= 2;
+    const variantBits = [o.size, o.color].filter(Boolean);
+    const mockupThumbSrc = smallThumb(o.mockupUrl, 200);
     return (
-      <tr key={o._id} className="border-t border-border/40 hover:bg-muted/30 align-middle">
-        <td className="w-12 px-1 py-1.5">
-          <ImageThumbCell
-            url={o.mockupUrl}
-            originalUrl={o.mockupOriginalUrl}
-            title={t('list.mockupTitle', { id: o.productionId })}
-            onOpen={(url, title, originalUrl) => setPreview({ url, title, originalUrl })}
-          />
-        </td>
-        <td className="px-2 py-1.5">
-          <div className="flex items-center gap-1">
-            <span className="font-medium whitespace-nowrap">{o.productionId}</span>
-            <CopyButton value={o.productionId} label="Production ID" iconSize={11} />
+      <TableRow key={o._id}>
+        {/* Mã đơn + ngày vào SX (VN) bên dưới */}
+        <TableCell>
+          <div className="flex flex-col gap-0.5">
+            <div className="flex items-center gap-1">
+              <CopyButton value={o.productionId} label="Production ID" />
+              <Hint content="Production ID">
+                <span className="font-mono text-xs font-semibold text-foreground cursor-help">{o.productionId}</span>
+              </Hint>
+            </div>
+            {o.inProductionAt && (
+              <Hint content={`${t('list.columns.productionDate')}: ${vnDay(o.inProductionAt)}`}>
+                <span className="text-[10px] text-muted-foreground inline-flex items-center gap-1 cursor-help">
+                  <span className="opacity-60">🏭</span>
+                  {(() => {
+                    const h = fmtDayHead(vnDay(o.inProductionAt));
+                    return `${h.wd} ${h.dm}`;
+                  })()}
+                </span>
+              </Hint>
+            )}
           </div>
-        </td>
-        {/* Ngày vào SX (VN) — biết đơn thuộc ngày nào ngay trong list. */}
-        <td className="px-2 py-1.5 text-muted-foreground whitespace-nowrap" title={vnDay(o.inProductionAt) || undefined}>
-          {o.inProductionAt
-            ? (() => {
-              const h = fmtDayHead(vnDay(o.inProductionAt));
-              return `${h.wd} ${h.dm}`;
-            })()
-            : '—'}
-        </td>
-        <td className="px-2 py-1.5">
-          {(() => {
-            // Cả 2 list (cần làm lại/chưa soát) đều đang chờ bước "tool-check"
-            // — mốc vào bước dùng thẳng `inProductionAt` (không có mốc riêng
-            // "quay lại Support"/"vào hàng chờ soát" trong dữ liệu).
-            const deadline = getStageDeadline(o.priority, 'tool-check', o.inProductionAt);
-            const countdown = deadline ? formatCountdown(deadline, now, t) : undefined;
-            return (
-              <div className="flex flex-col gap-1 items-start">
-                <PriorityBadge priority={o.priority} />
-                {deadline && countdown && (
-                  <span
-                    className={cn(
-                      'text-[10px] inline-flex items-center gap-1 whitespace-nowrap',
-                      countdown.overdue ? 'text-rose-600 dark:text-rose-400' : 'text-muted-foreground',
-                    )}
-                  >
-                    <Clock size={10} /> {countdown.text}
-                  </span>
-                )}
-              </div>
-            );
-          })()}
-        </td>
-        <td className="px-2 py-1.5 text-muted-foreground whitespace-nowrap">{o.userSku || '—'}</td>
-        <td className="px-2 py-1.5 text-muted-foreground max-w-[200px] truncate" title={o.type}>
-          {o.type || '—'}
-        </td>
-        <td className="px-2 py-1.5 text-muted-foreground whitespace-nowrap">
-          {o.size || '—'}
-          {o.color ? ` / ${o.color}` : ''}
-        </td>
+        </TableCell>
+
+        {/* Mockup */}
+        <TableCell>
+          {o.mockupUrl ? (
+            <Hint content={t('list.clickToViewFullImage')}>
+              <button
+                type="button"
+                onClick={() =>
+                  setPreview({
+                    url: o.mockupUrl,
+                    title: t('list.mockupTitle', { id: o.productionId }),
+                    originalUrl: o.mockupOriginalUrl,
+                  })
+                }
+                className="bg-transparent border-none p-0 cursor-pointer"
+              >
+                <img
+                  src={mockupThumbSrc}
+                  alt="mockup"
+                  className="w-12 h-12 object-contain rounded border border-border bg-checker bg-checker-sm hover:ring-2 hover:ring-ring transition-all"
+                  loading="lazy"
+                  decoding="async"
+                  referrerPolicy="no-referrer"
+                  onError={(e) => {
+                    (e.currentTarget as HTMLImageElement).style.display = 'none';
+                  }}
+                />
+              </button>
+            </Hint>
+          ) : (
+            <div className="w-12 h-12 rounded border border-border bg-muted flex items-center justify-center text-muted-foreground">
+              <ImageIcon size={16} />
+            </div>
+          )}
+        </TableCell>
+
+        {/* Sản phẩm + size/màu */}
+        <TableCell className="max-w-[300px]">
+          <div className="flex flex-col gap-0.5">
+            <div className="flex items-center gap-1 min-w-0">
+              {o.type && <CopyButton value={o.type} label={t('list.columns.product')} />}
+              <Hint content={o.type || t('list.columns.product')}>
+                <span className="text-sm font-semibold text-foreground truncate cursor-help min-w-0">
+                  {o.type || '—'}
+                </span>
+              </Hint>
+            </div>
+            {variantBits.length > 0 && (
+              <Hint content={t('list.columns.sizeColor')}>
+                <span className="text-[11px] text-muted-foreground cursor-help">{variantBits.join(' / ')}</span>
+              </Hint>
+            )}
+          </div>
+        </TableCell>
+
+        {/* Khách (SKU) */}
+        <TableCell>
+          {o.userSku ? (
+            <div className="flex items-center gap-1">
+              <CopyButton value={o.userSku} label="SKU" iconSize={10} />
+              <Hint content={t('list.columns.customer')}>
+                <span className="text-xs font-medium cursor-help">{o.userSku}</span>
+              </Hint>
+            </div>
+          ) : (
+            <span className="text-xs font-medium">—</span>
+          )}
+        </TableCell>
+
         {/* Note kq Tool 1 — edit → 'ok' đẩy đơn về In (đổi list → refetch). */}
-        <td className="px-2 py-1.5">
+        <TableCell>
           <span className="inline-flex items-center gap-1.5">
             <ColorBadgeSelectCell
               orderId={o._id}
@@ -336,9 +379,9 @@ export default function ToolCheckTab() {
               </span>
             )}
           </span>
-        </td>
+        </TableCell>
         {/* File sửa lỗi */}
-        <td className="px-2 py-1.5">
+        <TableCell>
           <MultiIconSelectCell
             orderId={o._id}
             field="errorFile"
@@ -348,9 +391,9 @@ export default function ToolCheckTab() {
             maxVisible={2}
             onUpdated={(v) => patchRow(o._id, { errorFile: v ?? undefined })}
           />
-        </td>
+        </TableCell>
         {/* Ghi chú file lỗi */}
-        <td className="px-2 py-1.5 min-w-[150px]">
+        <TableCell className="min-w-[150px]">
           <TextEditCell
             orderId={o._id}
             field="errorFileNote"
@@ -359,9 +402,9 @@ export default function ToolCheckTab() {
             onUpdated={(v) => patchRow(o._id, { errorFileNote: v ?? undefined })}
             tooltipLabel={t('list.columns.errorFileNote')}
           />
-        </td>
+        </TableCell>
         {/* Lỗi xưởng */}
-        <td className="px-2 py-1.5">
+        <TableCell>
           <ProductionErrorSelectCell
             orderId={o._id}
             category={WorkshopConfigCategory.ProductionError}
@@ -373,10 +416,34 @@ export default function ToolCheckTab() {
               fetchData();
             }}
           />
-        </td>
-        {/* Action "Đã soát xong" — chỉ list "Cần làm lại" (đơn hold In trả về). */}
+        </TableCell>
+        {/* Ưu tiên + hạn dự kiến (mốc vào bước = `inProductionAt`, cả 2 list
+          đều đang chờ bước "tool-check"). */}
+        <TableCell>
+          {(() => {
+            const deadline = getStageDeadline(o.priority, 'tool-check', o.inProductionAt);
+            const countdown = deadline ? formatCountdown(deadline, now, t) : undefined;
+            return (
+              <div className="flex flex-col gap-1 items-start">
+                <PriorityBadge priority={o.priority} />
+                {deadline && countdown && (
+                  <span
+                    className={cn(
+                      'text-[10px] inline-flex items-center gap-1 whitespace-nowrap',
+                      countdown.overdue ? 'text-rose-600 dark:text-rose-400' : 'text-muted-foreground',
+                    )}
+                  >
+                    <Clock size={10} /> {countdown.text}
+                  </span>
+                )}
+              </div>
+            );
+          })()}
+        </TableCell>
+        {/* Action "Đã soát xong" — chỉ list "Cần làm lại" (đơn hold In trả về);
+          pin cố định BÊN PHẢI như cột thao tác của Danh sách đơn. */}
         {listTab === 'rework' && (
-          <td className="px-2 py-1.5">
+          <TableCell className="sticky right-0 z-10 bg-card shadow-[-1px_0_0_0_var(--border)]">
             <Button
               variant="outline"
               size="sm"
@@ -387,9 +454,9 @@ export default function ToolCheckTab() {
               <ClipboardCheck size={13} />
               {t('list.markDoneButton')}
             </Button>
-          </td>
+          </TableCell>
         )}
-      </tr>
+      </TableRow>
     );
   };
 
@@ -894,8 +961,9 @@ export default function ToolCheckTab() {
                         <th
                           key={d.day}
                           onClick={() => toggleDay(d.day)}
-                          className={`font-medium px-1.5 py-1.5 border-b border-l border-border text-center min-w-[58px] cursor-pointer transition-colors ${active ? 'bg-indigo-100 dark:bg-indigo-500/25' : 'bg-card hover:bg-muted/60'
-                            }`}
+                          className={`font-medium px-1.5 py-1.5 border-b border-l border-border text-center min-w-[58px] cursor-pointer transition-colors ${
+                            active ? 'bg-indigo-100 dark:bg-indigo-500/25' : 'bg-card hover:bg-muted/60'
+                          }`}
                         >
                           <div className="text-[11px] text-muted-foreground leading-tight">{wd}</div>
                           <div className="leading-tight font-semibold">{dm}</div>
@@ -910,9 +978,24 @@ export default function ToolCheckTab() {
                 <tbody>
                   {(
                     [
-                      { metric: 'total', label: t('dailyStrip.metrics.total'), cls: 'text-foreground', pick: (d: ToolCheckDayRow) => d.total },
-                      { metric: 'unreviewed', label: t('dailyStrip.metrics.unreviewed'), cls: 'text-amber-600', pick: (d: ToolCheckDayRow) => d.unreviewed },
-                      { metric: 'reviewed', label: t('dailyStrip.metrics.reviewed'), cls: 'text-slate-600 dark:text-slate-300', pick: (d: ToolCheckDayRow) => d.reviewed },
+                      {
+                        metric: 'total',
+                        label: t('dailyStrip.metrics.total'),
+                        cls: 'text-foreground',
+                        pick: (d: ToolCheckDayRow) => d.total,
+                      },
+                      {
+                        metric: 'unreviewed',
+                        label: t('dailyStrip.metrics.unreviewed'),
+                        cls: 'text-amber-600',
+                        pick: (d: ToolCheckDayRow) => d.unreviewed,
+                      },
+                      {
+                        metric: 'reviewed',
+                        label: t('dailyStrip.metrics.reviewed'),
+                        cls: 'text-slate-600 dark:text-slate-300',
+                        pick: (d: ToolCheckDayRow) => d.reviewed,
+                      },
                     ] as const
                   ).map((row) => (
                     <DayMetricRow
@@ -961,7 +1044,9 @@ export default function ToolCheckTab() {
                       onDrillTotal={() => openNoteDrill(code, dateFrom, dateTo)}
                       cellBg={code === 'error' ? (d, v) => pctBg(v, d.total) : undefined}
                       totalBg={
-                        code === 'error' ? pctBg(noteTotals.get('error') || 0, data?.columnTotals.total || 0) : undefined
+                        code === 'error'
+                          ? pctBg(noteTotals.get('error') || 0, data?.columnTotals.total || 0)
+                          : undefined
                       }
                       pctBase={code === 'error' ? (d) => d.total : undefined}
                       totalPctBase={code === 'error' ? data?.columnTotals.total || 0 : undefined}
@@ -969,8 +1054,18 @@ export default function ToolCheckTab() {
                   ))}
                   {(
                     [
-                      { metric: 'reviewedOk', label: t('dailyStrip.metrics.reviewedOk'), cls: 'text-emerald-600 dark:text-emerald-400', pick: (d: ToolCheckDayRow) => d.reviewedOk },
-                      { metric: 'rework', label: t('dailyStrip.metrics.rework'), cls: 'text-orange-600 dark:text-orange-400', pick: (d: ToolCheckDayRow) => d.rework },
+                      {
+                        metric: 'reviewedOk',
+                        label: t('dailyStrip.metrics.reviewedOk'),
+                        cls: 'text-emerald-600 dark:text-emerald-400',
+                        pick: (d: ToolCheckDayRow) => d.reviewedOk,
+                      },
+                      {
+                        metric: 'rework',
+                        label: t('dailyStrip.metrics.rework'),
+                        cls: 'text-orange-600 dark:text-orange-400',
+                        pick: (d: ToolCheckDayRow) => d.rework,
+                      },
                     ] as const
                   ).map((row) => (
                     <DayMetricRow
@@ -1024,20 +1119,22 @@ export default function ToolCheckTab() {
               <button
                 type="button"
                 onClick={() => setListTab('rework')}
-                className={`px-3 py-1.5 font-medium ${listTab === 'rework'
+                className={`px-3 py-1.5 font-medium ${
+                  listTab === 'rework'
                     ? 'bg-amber-500 text-white'
                     : 'bg-background text-muted-foreground hover:bg-muted'
-                  }`}
+                }`}
               >
                 {t('list.reworkTab', { count: reworkList.length })}
               </button>
               <button
                 type="button"
                 onClick={() => setListTab('unreviewed')}
-                className={`px-3 py-1.5 font-medium ${listTab === 'unreviewed'
+                className={`px-3 py-1.5 font-medium ${
+                  listTab === 'unreviewed'
                     ? 'bg-slate-600 text-white'
                     : 'bg-background text-muted-foreground hover:bg-muted'
-                  }`}
+                }`}
               >
                 {t('list.unreviewedTab', { count: unreviewedList.length })}
               </button>
@@ -1056,27 +1153,23 @@ export default function ToolCheckTab() {
               {listTab === 'rework' ? t('list.noReworkOrders') : t('list.noUnreviewedOrders')}
             </p>
           ) : (
-            <div className="overflow-x-auto">
-              <table className="w-full text-[13px]">
-                <thead>
-                  <tr className="border-b border-border/60 text-left text-[11px] uppercase text-muted-foreground whitespace-nowrap">
-                    <th className="w-12 px-1 py-2" />
-                    <th className="px-2 py-2">{t('list.columns.orderCode')}</th>
-                    <th className="px-2 py-2">{t('list.columns.productionDate')}</th>
-                    <th className="px-2 py-2">{t('list.columns.priority')}</th>
-                    <th className="px-2 py-2">{t('list.columns.customer')}</th>
-                    <th className="px-2 py-2">{t('list.columns.product')}</th>
-                    <th className="px-2 py-2">{t('list.columns.sizeColor')}</th>
-                    <th className="px-2 py-2">{t('list.columns.toolNote')}</th>
-                    <th className="px-2 py-2">{t('list.columns.errorFile')}</th>
-                    <th className="px-2 py-2">{t('list.columns.errorFileNote')}</th>
-                    <th className="px-2 py-2">{t('list.columns.factoryError')}</th>
-                    {listTab === 'rework' && <th className="px-2 py-2" />}
-                  </tr>
-                </thead>
-                <tbody>{activeList.map(renderRow)}</tbody>
-              </table>
-            </div>
+            <Table>
+              <TableHeader>
+                <TableRow>
+                  <TableHead className="min-w-[140px]">{t('list.columns.orderCode')}</TableHead>
+                  <TableHead className="w-16">{t('list.columns.mockup')}</TableHead>
+                  <TableHead className="min-w-[200px]">{t('list.columns.product')}</TableHead>
+                  <TableHead>{t('list.columns.customer')}</TableHead>
+                  <TableHead>{t('list.columns.toolNote')}</TableHead>
+                  <TableHead>{t('list.columns.errorFile')}</TableHead>
+                  <TableHead>{t('list.columns.errorFileNote')}</TableHead>
+                  <TableHead>{t('list.columns.factoryError')}</TableHead>
+                  <TableHead>{t('list.columns.priority')}</TableHead>
+                  {listTab === 'rework' && <TableHead className="w-24 sticky right-0 z-20 bg-card" />}
+                </TableRow>
+              </TableHeader>
+              <TableBody>{activeList.map(renderRow)}</TableBody>
+            </Table>
           )}
         </div>
 
@@ -1146,8 +1239,9 @@ export default function ToolCheckTab() {
                         key={c.key}
                         type="button"
                         onClick={() => setSelCust((cur) => (cur === c.key ? '' : c.key))}
-                        className={`w-full flex items-center gap-2 text-[13px] rounded px-2 py-1 text-left transition-colors ${active ? 'bg-indigo-100 dark:bg-indigo-500/20' : 'hover:bg-muted/60'
-                          }`}
+                        className={`w-full flex items-center gap-2 text-[13px] rounded px-2 py-1 text-left transition-colors ${
+                          active ? 'bg-indigo-100 dark:bg-indigo-500/20' : 'hover:bg-muted/60'
+                        }`}
                       >
                         <div className="flex-1 min-w-0">
                           <div className="truncate font-medium" title={c.userSku || t('errorStats.unknown')}>
@@ -1193,8 +1287,9 @@ export default function ToolCheckTab() {
                         key={p.key}
                         type="button"
                         onClick={() => setSelType((cur) => (cur === p.key ? '' : p.key))}
-                        className={`w-full flex items-center gap-2 text-[13px] rounded px-2 py-1 text-left transition-colors ${active ? 'bg-indigo-100 dark:bg-indigo-500/20' : 'hover:bg-muted/60'
-                          }`}
+                        className={`w-full flex items-center gap-2 text-[13px] rounded px-2 py-1 text-left transition-colors ${
+                          active ? 'bg-indigo-100 dark:bg-indigo-500/20' : 'hover:bg-muted/60'
+                        }`}
                       >
                         {p.mockup ? (
                           <img
@@ -1217,7 +1312,10 @@ export default function ToolCheckTab() {
                             {t('level', { level: p.level })}
                           </Badge>
                         )}
-                        <span className="flex-1 min-w-0 truncate" title={p.fullName || p.type || t('errorStats.unknown')}>
+                        <span
+                          className="flex-1 min-w-0 truncate"
+                          title={p.fullName || p.type || t('errorStats.unknown')}
+                        >
                           {p.fullName || p.type || t('errorStats.unknown')}
                         </span>
                         <span className="text-muted-foreground tabular-nums shrink-0">{p.count}</span>
@@ -1248,8 +1346,9 @@ export default function ToolCheckTab() {
                         key={e.code || '(unknown)'}
                         type="button"
                         onClick={() => setSelCode((cur) => (cur === (e.code || '') ? '' : e.code || ''))}
-                        className={`w-full flex items-center gap-2 text-[13px] rounded px-2 py-1 text-left transition-colors ${active ? 'bg-amber-100 dark:bg-amber-500/20' : 'hover:bg-muted/60'
-                          }`}
+                        className={`w-full flex items-center gap-2 text-[13px] rounded px-2 py-1 text-left transition-colors ${
+                          active ? 'bg-amber-100 dark:bg-amber-500/20' : 'hover:bg-muted/60'
+                        }`}
                       >
                         <Badge
                           variant="outline"
@@ -1296,9 +1395,7 @@ export default function ToolCheckTab() {
                 </div>
               </div>
               {codeDetail.items.length === 0 ? (
-                <p className="text-xs text-muted-foreground text-center py-4">
-                  {t('errorStats.detail.noMatching')}
-                </p>
+                <p className="text-xs text-muted-foreground text-center py-4">{t('errorStats.detail.noMatching')}</p>
               ) : (
                 <div className={cn('overflow-x-auto', detailExpanded ? '' : 'max-h-80 overflow-y-auto')}>
                   <table className="w-full text-[13px]">
@@ -1547,11 +1644,15 @@ export default function ToolCheckTab() {
                 <span className="text-[12px] text-muted-foreground">{custDetailData.userEmail}</span>
               )}
               <span className="inline-flex items-baseline gap-1 rounded-md bg-rose-100 text-rose-700 border border-rose-300 dark:bg-rose-500/20 dark:text-rose-300 dark:border-rose-500/40 px-2.5 py-1">
-                <span className="text-lg font-extrabold tabular-nums leading-none">{custDetailData?.totalOrders ?? 0}</span>
+                <span className="text-lg font-extrabold tabular-nums leading-none">
+                  {custDetailData?.totalOrders ?? 0}
+                </span>
                 <span className="text-[11px] font-medium">{t('customerModal.errorOrders')}</span>
               </span>
               <span className="inline-flex items-baseline gap-1 rounded-md bg-indigo-100 text-indigo-700 border border-indigo-300 dark:bg-indigo-500/20 dark:text-indigo-300 dark:border-indigo-500/40 px-2.5 py-1">
-                <span className="text-lg font-extrabold tabular-nums leading-none">{custDetailData?.totalProducts ?? 0}</span>
+                <span className="text-lg font-extrabold tabular-nums leading-none">
+                  {custDetailData?.totalProducts ?? 0}
+                </span>
                 <span className="text-[11px] font-medium">{t('custDetailModal.errorProducts')}</span>
               </span>
               <div className="ml-auto mr-8 w-56">
@@ -1559,15 +1660,17 @@ export default function ToolCheckTab() {
                   label={t('custDetailModal.filterProduct')}
                   value={custDetailProduct}
                   onChange={setCustDetailProduct}
-                  options={(custDetailData?.productOptions ?? []).map((p) => ({ value: p.value, label: p.label, count: p.count }))}
+                  options={(custDetailData?.productOptions ?? []).map((p) => ({
+                    value: p.value,
+                    label: p.label,
+                    count: p.count,
+                  }))}
                 />
               </div>
             </div>
             <div className="flex-1 overflow-auto p-4">
               {!custDetailData || custDetailData.orders.length === 0 ? (
-                <p className="text-sm text-muted-foreground text-center py-16">
-                  {t('errorStats.detail.noMatching')}
-                </p>
+                <p className="text-sm text-muted-foreground text-center py-16">{t('errorStats.detail.noMatching')}</p>
               ) : (
                 <table className="w-full text-[13px]">
                   <thead>
@@ -1603,7 +1706,11 @@ export default function ToolCheckTab() {
                         <td className="px-2 py-1.5">
                           <div className="flex items-center gap-2">
                             {it.mockup ? (
-                              <img src={it.mockup} alt="" className="w-6 h-6 rounded object-cover border border-border shrink-0" />
+                              <img
+                                src={it.mockup}
+                                alt=""
+                                className="w-6 h-6 rounded object-cover border border-border shrink-0"
+                              />
                             ) : (
                               <div className="w-6 h-6 rounded border border-dashed border-border shrink-0" />
                             )}
@@ -1619,7 +1726,9 @@ export default function ToolCheckTab() {
                                 {t('level', { level: it.level })}
                               </Badge>
                             )}
-                            <span className="min-w-0 truncate" title={it.product}>{it.product}</span>
+                            <span className="min-w-0 truncate" title={it.product}>
+                              {it.product}
+                            </span>
                           </div>
                         </td>
                         <td className="px-2 py-1.5 text-muted-foreground whitespace-nowrap">
@@ -1799,8 +1908,9 @@ function DayMetricRow({
   return (
     <tr className="group">
       <td
-        className={`sticky left-0 z-10 bg-card px-3 py-1.5 border-b border-border/60 ${indent ? 'pl-6 font-normal text-[12px]' : 'font-medium'
-          } ${cls}`}
+        className={`sticky left-0 z-10 bg-card px-3 py-1.5 border-b border-border/60 ${
+          indent ? 'pl-6 font-normal text-[12px]' : 'font-medium'
+        } ${cls}`}
       >
         {labelHint ? (
           <Hint forceRich content={labelHint}>
@@ -1820,8 +1930,9 @@ function DayMetricRow({
           <td
             key={d.day}
             onClick={() => onPick(d.day)}
-            className={`border-b border-l border-border/60 text-center px-1 py-1.5 cursor-pointer transition-colors ${active ? 'bg-indigo-100 dark:bg-indigo-500/25' : bg || 'hover:bg-muted/50'
-              }`}
+            className={`border-b border-l border-border/60 text-center px-1 py-1.5 cursor-pointer transition-colors ${
+              active ? 'bg-indigo-100 dark:bg-indigo-500/25' : bg || 'hover:bg-muted/50'
+            }`}
           >
             {v === 0 ? (
               <span className="text-muted-foreground/30">·</span>

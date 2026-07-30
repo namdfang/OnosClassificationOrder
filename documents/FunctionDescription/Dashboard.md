@@ -77,7 +77,7 @@ Layout (thứ tự render trên tab: **Bộ lọc chung → Tổng quan N ngày 
 
 - 2 dropdown `<SelectFilter>` (native select có count + typeahead): **Sản phẩm** (`order.type`) + **Khách hàng** (`order.userSku`). State `filterType`/`filterCustomer`, truyền **props `type`/`customer`** xuống StatusBarCharts + TeamDailyMatrix + DesignerDailyOverview + DesignerAssignBacklog.
 - **Thanh ngày `<DateRangePicker variant="inline">`** (preset ngang full-width: Hôm nay · Hôm qua · 7/14/30 ngày · Tháng này · Tháng trước · Tùy chỉnh) — state `dateFrom`/`dateTo`, **mặc định 7 ngày gần nhất** (`last-7d`). Điều khiển **CẢ** `DesignerDailyOverview` VÀ `DesignerAssignBacklog` VÀ biểu đồ cột. Đã **bỏ nhóm nút 7/14/30 riêng** (model `rangeDays` cũ) — nay luôn gửi `from`/`to`; prop `days` truyền hằng `7` (BE bỏ qua khi có from/to). Xem `DateRangePicker-InlineRedesign.md`.
-- Option list load 1 lần lúc mount từ `GET /v1/designer/breakdown-filters`. Nút **"Xóa lọc"** hiện khi có filter active.
+- Option list load từ `GET /v1/designer/breakdown-filters?from&to` — **refetch mỗi khi đổi khoảng ngày**, BE scope `buildProductTimeMatch` (đơn đã gán designer có `inProductionAt` trong [from,to] + loại hủy/chưa map xưởng) nên danh sách + count khớp đúng kỳ đang lọc (DTO `GetBreakdownFiltersDto`). Giá trị đang chọn không còn trong kỳ mới → FE tự reset về '' (tránh lọc rỗng ngầm). Nút **"Xóa lọc"** hiện khi có filter active.
 - **Ảnh hưởng section 0b (tổng quan) + 0c (cần gán) + 2 (ma trận) + 2b (biểu đồ cột)** — KHÔNG ảnh hưởng Leaderboard/Timeline/Error pie (period switcher riêng).
 - **Card "Top Designer"** (`TopDesigners.tsx`) nằm **bên phải card Bộ lọc chung**
   (flex row, cột phải `lg:w-80 xl:w-96`; mobile xuống dưới): top **3** designer
@@ -87,6 +87,68 @@ Layout (thứ tự render trên tab: **Bộ lọc chung → Tổng quan N ngày 
   huy chương 🥇🥈🥉 + avatar chữ cái đầu (chưa có ảnh thật — API không trả avatar)
   - tên + progress bar tím (tỉ lệ so với hạng 1) + "N thiết kế". Refetch theo
     `matrixToken` (nút Làm mới).
+- **Dòng chỉ số phụ mỗi hàng Top Designer** (đọc `rows[].metrics` — field optional
+  của `TeamDailyRowZod`): 3 chip icon Lucide + số trên CÙNG 1 hàng (no-wrap),
+  tooltip Radix qua `Hint forceRich` (bọc `TooltipProvider delayDuration=150`):
+  `Package` "N SP" (số **LOẠI** sản phẩm khác nhau = distinct `order.type`,
+  KHÔNG phải sum `quantity` — mỗi production = 1 sản phẩm nên sum quantity ≈ số
+  task, vô nghĩa; **hover → liệt kê tên từng loại** từ `metrics.productTypeNames`,
+  BE sort A→Z cap 30, dư hiện "+N loại khác") · `Zap` phản hồi TB · `Timer` làm
+  TB (`metrics.totalTasks` vẫn trả về nhưng FE không hiển thị — đã bỏ chip task
+  theo yêu cầu). BE (`getTeamDailyBreakdown`) chạy thêm 1
+  aggregation song song cùng `$match` scope ma trận (`inProductionAt` trong kỳ +
+  type/customer + loại đơn hủy/chưa map xưởng), group theo `assignee`:
+  `totalTasks` + `typeSet` (`$addToSet type` → FE nhận `productTypes` đã đếm);
+  `avgResponseMin`/`avgWorkMin` CHỈ trên task done — cùng công thức leaderboard
+  `getPerformance` (response = `designerFirstStartedAt`||`designerStartedAt`
+  − `designerAssignedAt`; work = `designerWorkMs` cộng dồn, fallback
+  `completedAt − startedAt` legacy). Row `__inactive__` không có metrics. FE format
+  `<60p → "Xp"`, còn lại `"XgYp"`; giá trị 0 (chưa có task done) hiển thị `—`.
+  i18n `topDesigners.{productTypes,moreTypes,*Tip,durationMin,durationHourMin}`.
+- **Nút "Xem tất cả"** (góc phải header card Top Designer, prop `onViewAll`/`viewAllOpen`)
+  → toggle **panel "Thời gian theo sản phẩm"** (`ProductTimePanel.tsx`, render
+  full-width NGAY DƯỚI hàng Filter+TopDesigners trong `DesignerStatsTab`, state
+  `productTimesOpen`): bảng thời gian TB nhận/làm task theo TỪNG loại sản phẩm
+  (`order.type`) của **TOÀN BỘ designer** trong kỳ lọc chung (from/to +
+  type/customer, refetch theo `matrixToken`). Body scroll `max-h-[70vh]` +
+  thead sticky, font `text-sm`. **Thanh filter nội bộ panel** (dưới header):
+  CHỈ ô search sản phẩm (lọc client-side `visibleRows` theo tên type, không
+  refetch) — khách hàng KHÔNG có select riêng, ăn theo filter chung của tab
+  (prop `customer`). i18n `productTimes.{searchProductPlaceholder,noMatch}`. Cột: Sản phẩm (kèm **thumbnail mockup đại diện**
+  `rows[].mockupUrl` = `$max mockupUrl` của loại đó, click → `ImagePreviewDialog`,
+  `stopPropagation` khỏi toggle row) · Task · Đã xong ·
+  `Zap` Nhận TB · `Timer` Làm TB — API `GET /v1/designer/product-time-overview`
+  (`getProductTimeOverview()`: group `$type` cùng match scope ma trận qua
+  `buildProductTimeMatch()`, time exprs dùng chung `designerTimeAggExprs()`/
+  `designerTimeGroupFields()` với metrics Top Designer, sort taskCount desc).
+  **Click 1 hàng sản phẩm** → expand inline **GOM THEO DESIGNER** (lazy-load
+  1 lần, cache theo type trong state `orderRows`): mỗi designer 1 nhóm
+  **tự mở rộng/thu gọn riêng** (button header, state `openDesigners` Set key
+  `type::userId`, **mặc định THU GỌN** — reset khi refetch) — header chevron +
+  `User` tên + badge "N đơn" + "xong M" + `Zap`/`Timer` TB **của riêng designer
+  đó trên sản phẩm đó** (aggregation `$group assignee` trên TOÀN BỘ đơn khớp,
+  không cap — field `designers[]` của response, sort taskCount desc); mở nhóm →
+  TỪNG đơn của designer đó (viền trái tím): thumbnail `mockupUrl`
+  (click → `ImagePreviewDialog`) + `productionId` + `UserRound` **khách hàng**
+  (`rows[].userSku`) + `CalendarDays` **ngày vào SX**
+  (`rows[].inProductionAt` ISO, FE format `DD/MM`) + `Zap`/`Timer` thời gian
+  nhận/làm riêng mỗi đơn — API `GET /v1/designer/product-time-orders?type=...`
+  (`getProductTimeOrders()`: `designers[]` + `rows[]` cap 300 đơn mới nhất theo
+  `inProductionAt` có `assigneeId` để FE gom nhóm; thiếu đơn cũ hơn cap → dòng
+  "... còn N đơn"; đơn chưa đủ mốc thời gian → `—`; `type=''` match đơn không
+  có type). Cả 2 endpoint `@Auth(LEADER_ROLES)`. DTOs `ProductTimeRowZod`/
+  `ProductTimeDesignerZod`/`ProductTimeOrderRowZod` + Get* DTOs trong
+  `designer.dto.ts`. i18n block `productTimes.*` + nút `topDesigners.viewAll`.
+- **Nút "Xem chi tiết" per-designer** (icon `Eye` cuối mỗi hàng widget Top
+  Designer, props `onViewDesigner`/`activeDesignerId`): mở CÙNG `ProductTimePanel`
+  nhưng chế độ 1 designer — cả 2 endpoint nhận query `designerId` optional
+  (`buildProductTimeMatch` ép `assignee = designerId`), title panel
+  `productTimes.titleDesigner` kèm tên; drill sản phẩm chỉ có 1 nhóm designer →
+  **tự mở sẵn** danh sách đơn (auto-add key vào `openDesigners` khi
+  `designers.length === 1`). State `DesignerStatsTab.productTimesView`
+  (`{designerId?, designerName?} | null` — `{}` = Xem tất cả); bấm lại nút đang
+  active → đóng panel. i18n `topDesigners.viewDetail` +
+  `productTimes.{titleDesigner,subtitleDesigner,customerTip}`.
 
 **0c. Bảng "Cần gán designer"** (`DesignerAssignBacklog.tsx` — render **NGAY DƯỚI bảng tổng quan**; gom theo sản phẩm):
 
@@ -95,6 +157,7 @@ Layout (thứ tự render trên tab: **Bộ lọc chung → Tổng quan N ngày 
 - **Mở nhóm** → bảng đơn **ĐẦY ĐỦ inline** (giống bảng workshop / drill-down §0b): checkbox chọn + **nhóm cột nghiệp vụ** `buildColGroups`/`GroupCellContent`/`WORKSHOP_COLS` (Mã đơn·Ưu tiên · Sản phẩm · Kết quả Tool · Xưởng·Vải·Máy · Trạng thái in · File lỗi · Lỗi xưởng · Người TH…). **Lazy-load per-nhóm** qua `GET /v1/orders/by-ids?ids=<CSV _id>` (`order.service.getOrdersByIds` — populate factory/machineType/productConfig, **KHÔNG scoping role** vì đơn CHƯA gán, nếu dùng `getOrders` role Designer sẽ bị lọc `assignee=self` → ẩn hết); cache theo `g.key` trong state `fullRows`, xóa khi refetch pool. Inline edit field qua `patchRow` (đổi state cục bộ), ảnh qua `openPreview`.
 - **Chip đếm ngược hạn design** (`getStageDeadline(priority,'designer',inProductionAt)` + `formatCountdown`, đơn ở đây CHƯA chạy bước designer nên mốc = `inProductionAt`, xem `Orders.md §17.4`) gắn cạnh badge **Ưu tiên** trong group `identity` qua prop `extra` của `GroupCellContent`.
 - **Chọn đơn lẻ / cả nhóm** → nút **"Gán design (N)"** mở `AssignDesignerDialog` (tái dùng preview + `bulk-assign-designer`). 2 nút **"Gán design"** / **"Nhận về mình"** **LUÔN hiển thị** (theo role), **mờ/`disabled` khi chưa chọn đơn nào** — không còn ẩn cả cụm khi selection rỗng; "Bỏ chọn" chỉ hiện khi có chọn. Gán xong → refetch bảng này + `onAssigned()` bump `matrixToken` → **Tổng quan refetch cập nhật số Tổng tồn/Chưa gán**.
+- **Nút "Ghi nhớ cấu hình"** (CHỈ `SuperAdmin/Admin`, icon `BookmarkPlus`, disabled khi chưa tick): mở `RememberAssignConfigDialog` — gán ngay các đơn đang tick cho designer + tùy chọn ghi nhớ mapping sản phẩm→designer vào config auto-gán Ưu tiên 2 với hạn **Hiện tại / 1 ngày / 7 ngày / Vĩnh viễn** (mặc định Vĩnh viễn; hết hạn tự vô hiệu). Chi tiết `DesignerAutoAssign.md §2c`.
 - Data từ `GET /v1/designer/assign-backlog?days=7|14|30` (+ `type`/`customer`). v1 trả full compact rows (thu/mở chỉ là UI).
 
 **0b. Bảng "Tổng quan N ngày"** (`DesignerDailyOverview.tsx` — render **NGAY DƯỚI bộ lọc, TRÊN bảng cần gán**; nhận `days` từ switcher §0 (bỏ switcher nội bộ); cột = ngày `inProductionAt` VN, cũ→mới trái→phải; BE trả mới→cũ, FE `reverse()` days+rows):
@@ -116,6 +179,7 @@ Layout (thứ tự render trên tab: **Bộ lọc chung → Tổng quan N ngày 
   - Ô ngày → `createdFrom=createdTo=day`; ô cột **Tổng** → `days[0]..days[last]` (cả kỳ).
   - **Tổng đơn** = không lọc note · **Tổng xong** = `toolResultNote=ok` · **Chưa soát** = `toolResultNote=__none__` · **Soát lỗi** = `toolCheckedError=1` (filter `GetProductionOrdersZod` enum '1'/'0' → `'toolCheckErrorNotes.0': {$exists:true/false}` — khớp chính xác aggregation) · **OK/chưa soát → đẩy về** = `toolCheckedError=0&designerStatus=assigned,in-progress,rework,done` (+ `assignee=__any__/__none__` khi bấm dòng tooltip Đã gán/Chưa gán) · **Chưa gán designer** = `needDesigner=1&assignee=__none__&toolResultNote=<mã lỗi>` (filter `needDesigner` = pool `toolCheckErrorNotes` non-empty ∨ `designerStatus ∈ 4`; kèm mã note lỗi để CHỈ ra đơn đang lỗi; dòng Từ soát lỗi = `toolCheckedError=1&...`; dòng Đã-xử-lý = `needDesigner=1&assignee=__none__&toolResultNote=ok`) · **Đã gán designer** = `assignee=__any__&designerStatus=assigned,in-progress,rework,done` (token `__any__` = đơn đã gán bất kỳ ai; + `toolCheckedError=1/0` khi bấm dòng tooltip Từ soát lỗi / OK-đẩy-về) · **Tổng lỗi** = `needDesigner=1` (toàn pool; 2 dòng tooltip mở drill của hàng Soát lỗi / OK-đẩy-về) · **Tổng tồn** = `designBacklog=1` (union 3 nhóm — filter mới, mirror aggregation). Số trên hàng "Tổng tồn" `stopPropagation` để không toggle bảng con.
   - Bảng con "Tồn theo designer": ô Cần làm/Đang làm/Làm lại/Tổng click được → `getOrders?assignee=<userId>&designerStatus=assigned|in-progress|rework[,...]` (cùng range `inProductionAt` cả kỳ). Dòng "Chưa gán" **không** click (lăng kính `designerStatus=unassigned` lệch filter `getOrders`).
+- **Chế độ chọn + gán trong panel (2026-07, CHỈ drill hàng "Chưa gán designer"):** `DrillTarget.selectable=true` (set ở `openUnassignedNeed` các kind `all`/`tool`/`wasOk` — KHÔNG bật cho dòng "đã xử lý không cần designer" vì đơn đã về 'ok'). Panel hiện **checkbox chọn đơn** (per-row + tristate per-nhóm sản phẩm) + thanh nút **GIỐNG HỆT bảng "Cần gán designer"**: "Nhận về mình" (`Designer/DesignerLeader` → `claimDesignerTasks`), "Gán design" (`SuperAdmin/Admin/Manager/DesignerLeader` → `AssignDesignerDialog`), "Ghi nhớ cấu hình" (`SuperAdmin/Admin` → `RememberAssignConfigDialog`, xem `DesignerAutoAssign.md §2c`), "Tự động gán" (phạm vi = toàn bộ đơn đang hiển thị trong panel SAU filter chip, qua `AutoAssignPlanDialog` — component tách chung từ backlog, `apps/web/src/components/orders/AutoAssignPlanDialog.tsx`). Gán xong → panel tự refetch (`reloadKey`) + `onMutated` → `DesignerDailyOverview.onAssigned` → bump `matrixToken` ở `DesignerStatsTab` (bảng Tổng quan + "Cần gán" + ma trận cùng cập nhật số). i18n tái dùng `dashboard:assignBacklog.*`.
 - Data từ `GET /v1/designer/daily-overview?days=7|14|30` (+ `type`/`customer` từ bộ lọc chung). Row + `columnTotals` có thêm **`errorUnassigned`** + **`toolError`/`toolErrorFixed`/`toolErrorUnassigned`** (+ row-level `toolErrorByNote`) + **`assignedToolError`/`assignedWasOk`/`wasOkPushed`/`unassignedNeed`/`unassignedNeedTool`/`unassignedResolved`/`designDone`** — ĐÃ BỎ `errorTotal`, `stageError/stageErrorTotal`, `errorAssignedPending/errorReworkPrevError/errorReworkWasOk` (DTO `DailyOverviewRowZod`/`DailyOverviewColumnTotalsZod`, agg trong `DesignerStatsService.getDailyOverview`). Nhận `reloadToken` (= `matrixToken`). Seq-guard chống race.
 - **Lưu ý QA:** bảng con "Tồn theo designer" là **lăng kính `designerStatus`** (chỉ đơn ĐÃ gán ở assigned/in-progress/rework + dòng Chưa gán; **rejected/"Không làm được" KHÔNG tính**) → tổng của nó (`backlogGrand`) **có thể lệch** với "Tổng tồn" (theo Tool, gồm cả đơn chưa soát chưa ai xử lý). Đã ghi chú rõ trong header bảng con. Số "Chưa soát" hiển thị luôn để đối chiếu.
 

@@ -59,11 +59,32 @@ export const DesignerAssignmentConfigZod = z.object({
   products: DesignerProductAllocZod.array().default([]),
   /** Ưu tiên 3 — chia theo xưởng (trọng số + cân bằng tải). */
   factories: DesignerFactoryAllocZod.array(),
+  /**
+   * Hạn hiệu lực mapping sản phẩm→designer (mức 2): `productConfigId → ISO date`.
+   * Sản phẩm KHÔNG có entry = vĩnh viễn. Quá hạn → engine bỏ qua + bị prune
+   * khỏi `products` khi đọc/lưu config (lazy expiry, không cần cron).
+   * Ghi từ nút "Ghi nhớ cấu hình" ở bảng "Cần gán designer" (1 ngày / 7 ngày).
+   */
+  productExpiries: z.record(z.string()).optional(),
   updatedAt: z.string().optional(),
 });
 export type DesignerAssignmentConfig = z.infer<typeof DesignerAssignmentConfigZod>;
 
 export class SaveDesignerAssignmentConfigDto extends createZodDto(extendApi(DesignerAssignmentConfigZod)) {}
+
+/**
+ * "Ghi nhớ cấu hình" từ bảng "Cần gán designer": gán các sản phẩm cho 1 designer
+ * ở mức Ưu tiên 2, kèm hạn hiệu lực. `expiresAt` bỏ trống = vĩnh viễn.
+ * Sản phẩm đang thuộc designer khác sẽ bị chuyển sang designer mới (FE cảnh báo).
+ */
+export const RememberProductAssignmentZod = z.object({
+  designerId: IDZod,
+  productConfigIds: IDZod.array().min(1),
+  /** ISO date — thời điểm hết hạn ghi nhớ. Bỏ trống = vĩnh viễn. */
+  expiresAt: z.string().optional(),
+});
+export type RememberProductAssignment = z.infer<typeof RememberProductAssignmentZod>;
+export class RememberProductAssignmentDto extends createZodDto(extendApi(RememberProductAssignmentZod)) {}
 
 export const GetDesignerAssignmentConfigResZod = ResZod.extend({
   data: DesignerAssignmentConfigZod,

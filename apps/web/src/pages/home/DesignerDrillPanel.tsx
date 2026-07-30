@@ -1,7 +1,8 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { ChevronDown, ChevronRight, History, ImageOff, ListChecks, Plus, X } from 'lucide-react';
+import { BookmarkPlus, ChevronDown, ChevronRight, Grab, History, ImageOff, ListChecks, Plus, UserPlus, Wand2, X } from 'lucide-react';
 import { PRODUCT_LEVEL_MAP } from 'shared';
+import { toast } from 'sonner';
 
 import { useDesignerTeamStore } from '@/store/designerTeamStore';
 
@@ -9,8 +10,14 @@ import { RepositoryRemote } from '@/services';
 
 import { ImagePreviewDialog } from '@/components/common/ImagePreviewDialog';
 import { Spinner } from '@/components/common/Spinner';
+import { AssignDesignerDialog } from '@/components/orders/AssignDesignerDialog';
 import { AssignFactoryDialog } from '@/components/orders/AssignFactoryDialog';
+import { type AutoAssignPlan,AutoAssignPlanDialog } from '@/components/orders/AutoAssignPlanDialog';
 import { OrderLogTimelineDialog } from '@/components/orders/OrderLogTimelineDialog';
+import {
+  RememberAssignConfigDialog,
+  type RememberProductItem,
+} from '@/components/orders/RememberAssignConfigDialog';
 import {
   buildColGroups,
   GroupCellContent,
@@ -29,16 +36,29 @@ import { usePermission } from '@/hooks/usePermission';
 /** Cap số đơn fetch cho 1 lần drill — đủ cho mọi con số theo ngày thực tế. */
 const FETCH_LIMIT = 500;
 
+// Cùng phân quyền nút với bảng "Cần gán designer" (DesignerAssignBacklog.tsx).
+const CLAIM_SELF_ROLES = ['Designer', 'DesignerLeader'];
+const ASSIGN_OTHERS_ROLES = ['SuperAdmin', 'Admin', 'Manager', 'DesignerLeader'];
+const REMEMBER_CONFIG_ROLES = ['SuperAdmin', 'Admin'];
+
 export interface DrillTarget {
   /** Mô tả con số vừa bấm (vd. "Tổng lỗi · 12/07"). */
   title: React.ReactNode;
   /** Query string (không `?`, không page/limit) cho `GET /orders/overview-list`. */
   query: string;
+  /**
+   * Bật chế độ chọn đơn + cụm nút gán (Nhận về mình / Gán design / Ghi nhớ cấu
+   * hình / Tự động gán — giống hệt bảng "Cần gán designer"). CHỈ set cho các
+   * con số hàng "Chưa gán designer" (đơn chưa ai ôm).
+   */
+  selectable?: boolean;
 }
 
 interface Props {
   target: DrillTarget | null;
   onClose: () => void;
+  /** Gọi sau khi gán/nhận xong để bảng tổng quan phía trên refetch cập nhật số. */
+  onMutated?: () => void;
 }
 
 interface ProductGroup {
@@ -58,11 +78,15 @@ interface ProductGroup {
  * → bảng cột workshop đầy đủ, inline edit theo quyền + lịch sử).
  * Fetch qua `overview-list` (không scoping role — khớp con số team-wide).
  */
-export function DesignerDrillPanel({ target, onClose }: Props) {
+export function DesignerDrillPanel({ target, onClose, onMutated }: Props) {
   const { t } = useTranslation('dashboard');
   const { t: tOrders } = useTranslation('orders');
   const { canViewField, canEditField, roleName, has, isAdmin } = usePermission();
   const canTransfer = isAdmin || has('order.transfer');
+  const selectable = !!target?.selectable;
+  const canClaimSelf = selectable && !!roleName && CLAIM_SELF_ROLES.includes(roleName);
+  const canAssignOthers = selectable && !!roleName && ASSIGN_OTHERS_ROLES.includes(roleName);
+  const canRememberConfig = selectable && !!roleName && REMEMBER_CONFIG_ROLES.includes(roleName);
   const [rows, setRows] = useState<WorkshopOrderRow[]>([]);
   const [total, setTotal] = useState(0);
   const [loading, setLoading] = useState(false);
@@ -78,6 +102,14 @@ export function DesignerDrillPanel({ target, onClose }: Props) {
   // Filter nội bộ panel: theo designer ('__none__' = chưa gán) + theo khách (userSku).
   const [filterAssignee, setFilterAssignee] = useState<string | null>(null);
   const [filterCustomer, setFilterCustomer] = useState<string | null>(null);
+  // Chế độ chọn đơn để gán (chỉ khi target.selectable) — mirror DesignerAssignBacklog.
+  const [selected, setSelected] = useState<Set<string>>(new Set());
+  const [assignOpen, setAssignOpen] = useState(false);
+  const [rememberOpen, setRememberOpen] = useState(false);
+  const [claiming, setClaiming] = useState(false);
+  const [autoPlan, setAutoPlan] = useState<AutoAssignPlan | null>(null);
+  const [autoLoading, setAutoLoading] = useState(false);
+  const [autoApplying, setAutoApplying] = useState(false);
   const seqRef = useRef(0);
   const rootRef = useRef<HTMLDivElement>(null);
 
@@ -102,6 +134,8 @@ export function DesignerDrillPanel({ target, onClose }: Props) {
         if (seq !== seqRef.current) return;
         setRows((res.data?.data || []) as WorkshopOrderRow[]);
         setTotal(res.data?.total || 0);
+        // Pool đổi → bỏ chọn để không giữ id đã biến mất khỏi danh sách.
+        setSelected(new Set());
       } catch (err) {
         if (seq === seqRef.current) handleAxiosError(err);
       } finally {
@@ -174,7 +208,120 @@ export function DesignerDrillPanel({ target, onClose }: Props) {
     return [...map.values()].sort((a, b) => b.rows.length - a.rows.length || a.fullName.localeCompare(b.fullName));
   }, [filteredRows, t]);
 
+  // ── Chọn đơn + hành động gán (chỉ khi selectable) — mirror DesignerAssignBacklog. ──
+  const selectedCount = selected.size;
+  const selectedIds = useMemo(() => [...selected], [selected]);
+  const rememberProducts = useMemo<RememberProductItem[]>(
+    () =>
+      groups
+        .map((g) => ({
+          id: g.key,
+          name: g.fullName,
+          selectedCount: g.rows.filter((r) => selected.has(r._id)).length,
+        }))
+        .filter((p) => p.selectedCount > 0 && p.id !== 'unmapped'),
+    [groups, selected],
+  );
+  const unmappedSelectedCount = useMemo(() => {
+    const g = groups.find((x) => x.key === 'unmapped');
+    return g ? g.rows.filter((r) => selected.has(r._id)).length : 0;
+  }, [groups, selected]);
+
   if (!target) return null;
+
+  const finishMutation = () => {
+    setSelected(new Set());
+    setReloadKey((k) => k + 1);
+    onMutated?.();
+  };
+
+  const toggleOrderSel = (id: string) =>
+    setSelected((prev) => {
+      const next = new Set(prev);
+      next.has(id) ? next.delete(id) : next.add(id);
+      return next;
+    });
+
+  const toggleGroupSel = (g: ProductGroup) =>
+    setSelected((prev) => {
+      const next = new Set(prev);
+      const allSelected = g.rows.every((r) => next.has(r._id));
+      if (allSelected) g.rows.forEach((r) => next.delete(r._id));
+      else g.rows.forEach((r) => next.add(r._id));
+      return next;
+    });
+
+  const handleClaimSelf = async () => {
+    if (selectedIds.length === 0) return;
+    try {
+      setClaiming(true);
+      const res = await RepositoryRemote.order.claimDesignerTasks({ ids: selectedIds });
+      const data = res.data?.data as {
+        matched: number;
+        modified: number;
+        skipped: { orderId: string; productionId: string; reason: string }[];
+      };
+      const msg = t('assignBacklog.claimedSelf', { modified: data.modified, matched: data.matched });
+      if (data.skipped.length === 0) {
+        toast.success(msg);
+      } else {
+        toast.warning(t('assignBacklog.claimedSelfWithSkipped', { msg, count: data.skipped.length }), {
+          duration: 6000,
+        });
+        toast.message(t('assignBacklog.skippedOrders'), {
+          description: data.skipped
+            .slice(0, 5)
+            .map((s) => `• ${s.productionId}: ${s.reason}`)
+            .join('\n'),
+          duration: 9000,
+        });
+      }
+      finishMutation();
+    } catch (err) {
+      handleAxiosError(err);
+    } finally {
+      setClaiming(false);
+    }
+  };
+
+  // "Tự động gán": phạm vi = toàn bộ đơn đang hiển thị trong panel (đã áp filter chip).
+  const handleAutoPreview = async () => {
+    const ids = filteredRows.map((r) => r._id);
+    if (ids.length === 0) return;
+    try {
+      setAutoLoading(true);
+      const res = await RepositoryRemote.order.autoAssignPreview({ orderIds: ids });
+      setAutoPlan((res.data?.data ?? null) as AutoAssignPlan | null);
+    } catch (err) {
+      handleAxiosError(err);
+    } finally {
+      setAutoLoading(false);
+    }
+  };
+
+  const handleAutoApply = async () => {
+    if (!autoPlan || autoPlan.plan.length === 0) return;
+    try {
+      setAutoApplying(true);
+      const res = await RepositoryRemote.order.autoAssignApply({
+        assignments: autoPlan.plan.map((r) => ({ userId: r.userId, orderIds: r.orderIds })),
+      });
+      const data = res.data?.data as { assigned: number; skipped: number };
+      if (data.skipped > 0) {
+        toast.warning(t('assignBacklog.autoAssignDoneSkipped', { assigned: data.assigned, skipped: data.skipped }), {
+          duration: 7000,
+        });
+      } else {
+        toast.success(t('assignBacklog.autoAssignDone', { assigned: data.assigned }));
+      }
+      setAutoPlan(null);
+      finishMutation();
+    } catch (err) {
+      handleAxiosError(err);
+    } finally {
+      setAutoApplying(false);
+    }
+  };
 
   const toggleGroup = (key: string) =>
     setExpanded((prev) => {
@@ -212,6 +359,61 @@ export function DesignerDrillPanel({ target, onClose }: Props) {
         </button>
       </div>
 
+      {/* Cụm nút gán (chỉ drill "Chưa gán designer") — giống hệt bảng "Cần gán
+          designer": Nhận về mình / Gán design / Ghi nhớ cấu hình / Tự động gán. */}
+      {selectable && (canClaimSelf || canAssignOthers) && (
+        <div className="flex items-center justify-end gap-2 px-3 py-2 border-b border-border flex-wrap">
+          {selectedCount > 0 && (
+            <button
+              type="button"
+              onClick={() => setSelected(new Set())}
+              className="text-[11px] text-muted-foreground hover:text-foreground"
+            >
+              {t('assignBacklog.deselect', { count: selectedCount })}
+            </button>
+          )}
+          {canClaimSelf && (
+            <Button size="sm" onClick={handleClaimSelf} disabled={claiming || selectedCount === 0}>
+              <Grab size={13} />
+              {t('assignBacklog.claimSelf', { count: selectedCount })}
+            </Button>
+          )}
+          {canAssignOthers && (
+            <Button
+              size="sm"
+              variant={canClaimSelf ? 'outline' : 'default'}
+              onClick={() => setAssignOpen(true)}
+              disabled={claiming || selectedCount === 0}
+            >
+              <UserPlus size={13} />
+              {t('assignBacklog.assignDesign', { count: selectedCount })}
+            </Button>
+          )}
+          {canRememberConfig && (
+            <Button
+              size="sm"
+              variant="outline"
+              onClick={() => setRememberOpen(true)}
+              disabled={claiming || selectedCount === 0}
+            >
+              <BookmarkPlus size={13} />
+              {t('assignBacklog.rememberConfig')}
+            </Button>
+          )}
+          {canAssignOthers && (
+            <Button
+              size="sm"
+              variant="outline"
+              onClick={handleAutoPreview}
+              disabled={autoLoading || filteredRows.length === 0}
+            >
+              <Wand2 size={13} />
+              {autoLoading ? t('assignBacklog.autoAssignLoading') : t('assignBacklog.autoAssign')}
+            </Button>
+          )}
+        </div>
+      )}
+
       {/* Thanh thống kê + filter theo Designer / Khách hàng (client-side,
           cross-facet: count mỗi chiều tính trên rows đã lọc bởi chiều kia). */}
       {rows.length > 0 && (
@@ -245,6 +447,20 @@ export function DesignerDrillPanel({ target, onClose }: Props) {
               <div key={g.key}>
                 {/* Group header — mockup + level + tên + count (giống bảng Cần gán). */}
                 <div className="flex items-center gap-2 px-3 py-2 hover:bg-muted/30">
+                  {selectable && (
+                    <input
+                      type="checkbox"
+                      className="size-4 shrink-0 cursor-pointer"
+                      checked={g.rows.length > 0 && g.rows.every((r) => selected.has(r._id))}
+                      ref={(el) => {
+                        if (el) {
+                          const n = g.rows.filter((r) => selected.has(r._id)).length;
+                          el.indeterminate = n > 0 && n < g.rows.length;
+                        }
+                      }}
+                      onChange={() => toggleGroupSel(g)}
+                    />
+                  )}
                   <button type="button" onClick={() => toggleGroup(g.key)} className="text-muted-foreground shrink-0">
                     {isOpen ? <ChevronDown size={16} /> : <ChevronRight size={16} />}
                   </button>
@@ -292,6 +508,7 @@ export function DesignerDrillPanel({ target, onClose }: Props) {
                     <table className="w-full text-[13px]">
                       <thead>
                         <tr className="text-[11px] text-muted-foreground border-b border-border/50">
+                          {selectable && <th className="w-8 px-3 py-1.5"></th>}
                           {colGroups.map((grp) => (
                             <th
                               key={grp.key}
@@ -308,7 +525,23 @@ export function DesignerDrillPanel({ target, onClose }: Props) {
                         {g.rows.map((row) => {
                           const renderedByKey = new Map(visibleCols.map((c) => [c.key, c.render(row, ctx)]));
                           return (
-                            <tr key={row._id} className="border-t border-border/40 hover:bg-muted/30 align-top">
+                            <tr
+                              key={row._id}
+                              className={cn(
+                                'border-t border-border/40 hover:bg-muted/30 align-top',
+                                selectable && selected.has(row._id) && 'bg-primary/5',
+                              )}
+                            >
+                              {selectable && (
+                                <td className="w-8 px-3 py-2">
+                                  <input
+                                    type="checkbox"
+                                    className="size-4 cursor-pointer"
+                                    checked={selected.has(row._id)}
+                                    onChange={() => toggleOrderSel(row._id)}
+                                  />
+                                </td>
+                              )}
                               {colGroups.map((grp) => (
                                 <td key={grp.key} className="px-2 py-2 align-top">
                                   <GroupCellContent
@@ -363,6 +596,29 @@ export function DesignerDrillPanel({ target, onClose }: Props) {
           setAssignDialog(null);
           setReloadKey((k) => k + 1);
         }}
+      />
+      <AssignDesignerDialog
+        open={assignOpen}
+        selectedIds={selectedIds}
+        onClose={() => setAssignOpen(false)}
+        onApplied={() => {
+          setAssignOpen(false);
+          finishMutation();
+        }}
+      />
+      <RememberAssignConfigDialog
+        open={rememberOpen}
+        products={rememberProducts}
+        selectedOrderIds={selectedIds}
+        unmappedSelectedCount={unmappedSelectedCount}
+        onClose={() => setRememberOpen(false)}
+        onApplied={finishMutation}
+      />
+      <AutoAssignPlanDialog
+        plan={autoPlan}
+        applying={autoApplying}
+        onCancel={() => setAutoPlan(null)}
+        onConfirm={handleAutoApply}
       />
       <ImagePreviewDialog
         open={!!preview}

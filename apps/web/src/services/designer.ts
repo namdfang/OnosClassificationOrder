@@ -140,8 +140,41 @@ const teamDailyBreakdown = (
   return callApi(`/${CONFIG.API_VERSION}/designer/team-daily-breakdown?${qs.toString()}`, 'get');
 };
 
-const breakdownFilters = () => {
-  return callApi(`/${CONFIG.API_VERSION}/designer/breakdown-filters`, 'get');
+const breakdownFilters = (params: { from?: string; to?: string } = {}) => {
+  const qs = new URLSearchParams();
+  if (params.from) qs.set('from', params.from);
+  if (params.to) qs.set('to', params.to);
+  const suffix = qs.toString() ? `?${qs.toString()}` : '';
+  return callApi(`/${CONFIG.API_VERSION}/designer/breakdown-filters${suffix}`, 'get');
+};
+
+const productTimeOverview = (
+  params: { from?: string; to?: string; type?: string; customer?: string; designerId?: string } = {},
+) => {
+  const qs = new URLSearchParams();
+  if (params.from) qs.set('from', params.from);
+  if (params.to) qs.set('to', params.to);
+  if (params.type) qs.set('type', params.type);
+  if (params.customer) qs.set('customer', params.customer);
+  if (params.designerId) qs.set('designerId', params.designerId);
+  const suffix = qs.toString() ? `?${qs.toString()}` : '';
+  return callApi(`/${CONFIG.API_VERSION}/designer/product-time-overview${suffix}`, 'get');
+};
+
+const productTimeOrders = (params: {
+  type: string;
+  from?: string;
+  to?: string;
+  customer?: string;
+  designerId?: string;
+}) => {
+  const qs = new URLSearchParams();
+  qs.set('type', params.type);
+  if (params.from) qs.set('from', params.from);
+  if (params.to) qs.set('to', params.to);
+  if (params.customer) qs.set('customer', params.customer);
+  if (params.designerId) qs.set('designerId', params.designerId);
+  return callApi(`/${CONFIG.API_VERSION}/designer/product-time-orders?${qs.toString()}`, 'get');
 };
 
 const dailyOverview = (
@@ -265,6 +298,8 @@ export const designer = {
   timeline,
   teamDailyBreakdown,
   breakdownFilters,
+  productTimeOverview,
+  productTimeOrders,
   dailyOverview,
   assignBacklog,
   productBreakdown,

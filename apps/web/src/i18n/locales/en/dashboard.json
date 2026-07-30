@@ -15,7 +15,16 @@
   "topDesigners": {
     "title": "Top Designer",
     "empty": "No designs finished in this range yet.",
-    "count": "{{count}} designs"
+    "count": "{{count}} designs",
+    "durationMin": "{{count}}m",
+    "durationHourMin": "{{hours}}h {{mins}}m",
+    "productTypes": "{{count}} products",
+    "productTypesTip": "Distinct product types in the filtered range",
+    "avgResponseTip": "Average response time (assigned → started)",
+    "avgWorkTip": "Average work time (completed tasks)",
+    "moreTypes": "+{{count}} more types",
+    "viewAll": "View all",
+    "viewDetail": "View details by product"
   },
   "telegramReport": {
     "button": "Send Telegram report",
@@ -240,7 +249,42 @@
     "autoAssignConfirm": "Assign {{count}} orders",
     "autoAssignCancel": "Cancel",
     "autoAssignDone": "Auto-assigned {{assigned}} orders",
-    "autoAssignDoneSkipped": "Assigned {{assigned}} orders · {{skipped}} skipped (just claimed / status changed)"
+    "autoAssignDoneSkipped": "Assigned {{assigned}} orders · {{skipped}} skipped (just claimed / status changed)",
+    "rememberConfig": "Remember config",
+    "remember": {
+      "title": "Remember designer assignment config",
+      "productsLabel": "Products to remember ({{count}})",
+      "noRememberableProducts": "No rememberable products — all selected orders are unmapped.",
+      "assignNowNote": "Will immediately assign {{count}} selected orders to the designer below.",
+      "unmappedNote": "{{count}} orders have no mapped product — assigned now only, cannot be remembered.",
+      "durationLabel": "Remember duration",
+      "durations": {
+        "now": "Now only",
+        "day": "1 day",
+        "week": "7 days",
+        "forever": "Forever"
+      },
+      "durationHints": {
+        "now": "Only assign the selected orders, do NOT save the config.",
+        "day": "Remember until the end of today — new orders of these products auto-assign to this designer.",
+        "week": "Remember until the end of day 7 — new orders of these products auto-assign to this designer.",
+        "forever": "Remember forever — same as dragging in Priority 2 config (Settings page)."
+      },
+      "designerLabel": "Designer",
+      "designerPlaceholder": "— Select designer —",
+      "designerOption": "{{fullName}} — holding {{count}} orders",
+      "noDesigners": "No active designers.",
+      "chooseDesignerFirst": "Select a designer first.",
+      "conflictTitle": "{{count}} products currently belong to another designer — confirming will move them:",
+      "conflictLine": "{{product}} — currently belongs to {{designer}}",
+      "conflictMore": "… and {{count}} more products",
+      "savedConfig": "Remembered config for {{count}} products",
+      "assigned": "Assigned {{modified}}/{{matched}} orders",
+      "assignedWithSkipped": "Assigned {{modified}} orders · {{count}} skipped",
+      "confirm": "Remember + assign {{orders}} orders",
+      "confirmAssignOnly": "Assign {{count}} orders",
+      "cancel": "Cancel"
+    }
   },
   "teamDailyMatrix": {
     "title": "All designers by day",
@@ -585,5 +629,28 @@
       "exportTitle": "PRODUCTION ORDER",
       "factory": "Factory"
     }
+  },
+  "productTimes": {
+    "title": "Time by product",
+    "subtitle": "— avg response/work time of all designers in the filtered range",
+    "colProduct": "Product",
+    "colTasks": "Tasks",
+    "colDone": "Done",
+    "colAvgResponse": "Avg response",
+    "colAvgWork": "Avg work",
+    "noType": "(no type)",
+    "empty": "No tasks in this range yet.",
+    "loadingOrders": "Loading orders...",
+    "ordersEmpty": "No orders.",
+    "noAssignee": "(unknown designer)",
+    "close": "Close",
+    "orderCount": "{{count}} orders",
+    "doneCount": "{{count}} done",
+    "moreOrders": "... {{count}} older orders not shown (only latest 300 loaded)",
+    "titleDesigner": "Time by product — {{name}}",
+    "subtitleDesigner": "— this designer's own numbers in the filtered range",
+    "customerTip": "Order customer",
+    "searchProductPlaceholder": "Search products...",
+    "noMatch": "No products match the filter."
   }
 }

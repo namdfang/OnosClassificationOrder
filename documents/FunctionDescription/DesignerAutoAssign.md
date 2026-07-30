@@ -40,6 +40,12 @@ Ngoài luồng soát tool, **đơn bị báo lỗi nguồn designer khi CHƯA ai
 'ok' từ đầu đi thẳng fulfillment nên chưa từng có designer) cũng được auto-gán —
 khỏi nằm backlog "Cần gán" chờ leader phân / designer self-claim (xem §2 bước 2b).
 
+- **Mapping sản phẩm CÓ THỜI HẠN (2026-07):** ngoài kéo thả kanban (vĩnh viễn),
+  Admin/SuperAdmin có thể "Ghi nhớ cấu hình" từ bảng **"Cần gán designer"** trên
+  Dashboard — chọn sản phẩm + designer + hạn **1 ngày / 7 ngày / vĩnh viễn**
+  (lưu vào `productExpiries`). Quá hạn → mapping tự vô hiệu (**lazy expiry**,
+  không cron): engine bỏ qua tại chỗ, card sản phẩm tự về cột "Chưa gán" ở lần
+  đọc config kế tiếp. Xem §2c + §5.4.
 - **Bất biến:** 1 designer chỉ thuộc **1 xưởng** (mức 3); 1 khách / 1 sản phẩm
   chỉ thuộc **1 designer** (mức 1/2 — kanban 1 card 1 cột; BE validate lại lúc lưu).
 - **% tự do (mức 3):** nhập trọng số bất kỳ (>= 0), không cần cộng đủ 100; tỉ lệ
@@ -95,6 +101,22 @@ khỏi nằm backlog "Cần gán" chờ leader phân / designer self-claim (xem 
      (FulfillmentModule import OrderModule, không vòng lặp).
    Đơn đã có assignee (rework về designer cũ) → engine tự lọc, không đụng.
 
+2c. **"Ghi nhớ cấu hình" từ bảng "Cần gán designer"** (Dashboard §0c, CHỈ
+   `SuperAdmin`/`Admin` — nút `BookmarkPlus` ở `DesignerAssignBacklog.tsx`,
+   active khi tick ≥ 1 đơn; **cũng có ở panel drill-down hàng "Chưa gán
+   designer"** — `DesignerDrillPanel.tsx` khi `DrillTarget.selectable`, xem
+   `Dashboard.md §0b`): mở `RememberAssignConfigDialog.tsx` →
+   - Liệt kê **sản phẩm sẽ ghi nhớ** = các nhóm (group key = `productConfigId`)
+     có ≥ 1 đơn được tick; nhóm `unmapped` không ghi nhớ được (chỉ gán ngay).
+   - Chọn thời hạn: **Hiện tại** (chỉ gán, không lưu) / **1 ngày** (đến HẾT hôm
+     nay, giờ máy người bấm) / **7 ngày** (đến hết ngày thứ 7 = hôm nay + 6 ngày,
+     `endOf('day')`) / **Vĩnh viễn** (mặc định, không hạn).
+   - Chọn designer (list Active + số đơn đang giữ). Sản phẩm đang thuộc designer
+     KHÁC trong config mức 2 → cảnh báo ghi đè ngay trong dialog (liệt kê tối đa 5).
+   - Xác nhận → nếu hạn ≠ "Hiện tại": `POST /designer-assignment/remember-products`
+     (ghi config, xem §5.4) → rồi LUÔN `POST /orders/bulk-assign` gán ngay các
+     đơn đang tick (`reassignOthers=false` — đơn backlog vốn chưa ai ôm).
+
 3. Hook gọi `OrderService.autoAssignAfterImport(orderIds, ctx)` (fire-and-forget,
    riêng `markToolCheckDone` await).
 4. Engine xác minh lại điều kiện trên DB → **route từng đơn theo chuỗi ưu tiên**
@@ -113,6 +135,7 @@ khỏi nằm backlog "Cần gán" chờ leader phân / designer self-claim (xem 
 | ------ | -------------------------------- | ---------------- | --------------------------------- |
 | GET    | `/v1/designer-assignment/config` | `@Auth([Admin])` | Lấy cấu hình                      |
 | PUT    | `/v1/designer-assignment/config` | `@Auth([Admin])` | Lưu (validate 1-designer-1-xưởng) |
+| POST   | `/v1/designer-assignment/remember-products` | `@Auth([Admin])` (SuperAdmin auto-pass RolesGuard) | "Ghi nhớ cấu hình" từ bảng "Cần gán designer": chuyển các `productConfigIds` về 1 designer ở mức 2 + set/clear hạn `productExpiries` (body `RememberProductAssignmentDto {designerId, productConfigIds, expiresAt?}` — `expiresAt` trống = vĩnh viễn, quá khứ → BadRequest) |
 | POST   | `/v1/orders/auto-assign-preview` | SuperAdmin/Admin/Manager/DesignerLeader | Nút "Tự động gán" bảng "Cần gán designer": chạy routing 3 mức (`computeAutoAssignPlan`) KHÔNG ghi DB → `{ plan: [{userId, fullName, count, orderIds}], unassignedCount, totalRequested }` (DTO `AutoAssignPreview*` ở `production-order.dto.ts`) |
 | POST   | `/v1/orders/auto-assign-apply`   | SuperAdmin/Admin/Manager/DesignerLeader | Áp ĐÚNG plan đã preview (`applyAutoAssignPlan` — KHÔNG tính lại): đơn đổi trạng thái giữa chừng / designer bị tắt → skip, trả `{assigned, skipped}` |
 
@@ -133,6 +156,9 @@ DesignerAssignmentConfig = {
     factoryId: string;
     designers: Array<{ designerId: string; weight: number }>; // weight >= 0
   }>;
+  // Hạn hiệu lực mapping mức 2: productConfigId → ISO date. Không có entry =
+  // vĩnh viễn. Quá hạn → engine bỏ qua + prune khi đọc/lưu (lazy expiry).
+  productExpiries?: Record<string, string>;
   updatedAt?: string;
 }
 ```
@@ -162,22 +188,39 @@ Constant `DESIGNER_ASSIGNMENT_CONFIG_KEY = 'designer_assignment_config'`.
 - **Chặn 1-designer-nhiều-xưởng:** designer đã ở xưởng khác hiển thị `disabled` +
   ghi chú "(đã ở {xưởng})" trong dropdown.
 - Nút **Lưu** → `saveConfig` (chỉ gửi designer/xưởng có ≥ 1 item).
+- **Hạn hiệu lực mức 2 trên kanban:** card sản phẩm có hạn (`productExpiries`)
+  hiện chip vàng "Đến {DD/MM HH:mm}" (`DesignerAssignItem.expiryLabel`). Mọi
+  payload save từ trang này (auto-save kéo thả + nút Lưu) **gửi kèm
+  `productExpiries`** để không xóa mất hạn; riêng **kéo tay card sản phẩm**
+  (sang designer khác / về "Chưa gán") = quyết định lại → FE xóa hạn của card đó
+  (thành vĩnh viễn / bỏ gán).
 - i18n namespace `designerAutoAssign` (keys `priority1/2/3.*`, `kanban.*`).
+- **Dialog "Ghi nhớ cấu hình"** (`apps/web/src/components/orders/RememberAssignConfigDialog.tsx`,
+  mở từ `DesignerAssignBacklog.tsx`, i18n `dashboard:assignBacklog.remember.*`):
+  xem luồng §2c. FE service `designerAssignment.rememberProducts()`.
 
 ## 5. Backend logic
 
-### 5.1 `DesignerAssignmentService.saveConfig(dto)`
+### 5.1 `DesignerAssignmentService.saveConfig(dto)` + `getConfig()`
 
 - Validate: 1 `designerId` không xuất hiện ở ≥ 2 xưởng (và không lặp trong cùng
   xưởng); 1 `customerId` / 1 `productConfigId` không xuất hiện ở ≥ 2 designer →
   `BadRequestException`. Không kiểm tra tổng %.
-- `SystemConfigService.set(KEY, { customers, products, factories, updatedAt })`
-  (lọc bỏ entry rỗng).
+- `SystemConfigService.set(KEY, { customers, products, factories, productExpiries, updatedAt })`
+  (lọc bỏ entry rỗng; `productExpiries` chỉ giữ key còn trong `products` và hạn
+  còn ở tương lai — **save là điểm dọn bền vững** cho lazy expiry).
+- `getConfig()` → `pruneExpiredProducts()`: bỏ sản phẩm quá hạn khỏi `products`
+  + `productExpiries` NGAY khi đọc (không ghi DB, không mutate object cache) —
+  kanban Settings và dialog "Ghi nhớ cấu hình" luôn thấy trạng thái đúng, card
+  hết hạn tự "nhảy về Chưa gán".
 
 ### 5.2 `OrderService.autoAssignAfterImport(orderIds, ctx)`
 
 - Đọc config; dựng `byFactory` (mức 3) + `designerByCustomerId`/`designerByProductConfigId`
-  (mức 1/2); cả 3 rỗng → return.
+  (mức 1/2); cả 3 rỗng → return. Khi dựng map mức 2, sản phẩm có
+  `productExpiries[pid]` **đã quá hạn bị bỏ qua tại chỗ** (lazy expiry — đọc
+  config qua cache của SystemConfigService, không cần chờ prune) → đơn của sản
+  phẩm đó rơi xuống mức 3 như chưa từng cấu hình.
 - **Mức 1:** load khách theo id cấu hình (`CustomerRepository.findAll`) → map
   `customerMatchKey(userSku, userEmail) → designerId` (cùng khóa so khớp với
   tính năng gán xưởng theo khách — `CustomerFactoryAssignment.md`).
@@ -216,6 +259,17 @@ lâu dài** và tự bù trừ khi 1 designer đang bị dồn đơn từ nguồ
 khắc phục bug cũ của `allocateByWeight` (floor + dư dồn designer đầu → N=1 luôn
 về người đứng đầu danh sách). Σw = 0 → coi mọi trọng số = 1 (chia đều theo tải);
 trọng số 0/âm khi có người khác > 0 → người đó không nhận đơn.
+
+### 5.4 `DesignerAssignmentService.rememberProducts(dto)`
+
+- Body `{designerId, productConfigIds[], expiresAt?}`. `expiresAt` phải là ISO
+  hợp lệ ở tương lai (quá khứ/hỏng → `BadRequestException`); trống = vĩnh viễn.
+- Đọc-sửa-ghi trọn config (qua `getConfig()` đã prune): gỡ các `productConfigIds`
+  khỏi MỌI designer đang giữ (giữ bất biến 1 sản phẩm 1 designer — **ghi đè chủ
+  cũ**, FE đã cảnh báo) → dồn về designer đích → set `productExpiries[pid]=expiresAt`
+  (hoặc delete khi vĩnh viễn) → `SystemConfigService.set(KEY, ...)`.
+- Việc GÁN các đơn đang tick KHÔNG nằm ở đây — FE gọi tiếp `POST /orders/bulk-assign`
+  (flow gán tay sẵn có, ghi `orderLog` như thường).
 
 ## 6. Performance notes
 

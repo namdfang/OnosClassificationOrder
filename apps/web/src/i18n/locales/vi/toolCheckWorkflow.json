@@ -44,6 +44,7 @@
     "noUnreviewedOrders": "Không có đơn chưa soát.",
     "columns": {
       "orderCode": "Mã đơn",
+      "mockup": "Mockup",
       "productionDate": "Ngày SX",
       "priority": "Ưu tiên",
       "customer": "Khách",
@@ -59,7 +60,8 @@
     "markDoneToastAuto": "{{id}}: đã tự gán cho designer{{name}}.",
     "markDoneToastNone": "{{id}}: xưởng chưa có cấu hình gán — đơn vào backlog \"Cần gán\" (designer tự nhận hoặc phân tay).",
     "errorReportedTimes": "Xưởng đã báo lỗi {{count}} lần trên đơn này",
-    "mockupTitle": "Mockup: {{id}}"
+    "mockupTitle": "Mockup: {{id}}",
+    "clickToViewFullImage": "Click để xem ảnh đầy đủ"
   },
   "errorStats": {
     "title": "Thống kê lỗi Soát tool",

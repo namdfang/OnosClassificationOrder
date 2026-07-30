@@ -1,9 +1,10 @@
 import { ZodValidationPipe } from '@anatine/zod-nestjs';
-import { Body, Controller, Get, HttpCode, HttpStatus, Inject, Put, UsePipes } from '@nestjs/common';
+import { Body, Controller, Get, HttpCode, HttpStatus, Inject, Post, Put, UsePipes } from '@nestjs/common';
 import { ApiOkResponse, ApiOperation, ApiTags } from '@nestjs/swagger';
 import { AuthUser } from 'core';
 import {
   GetDesignerAssignmentConfigResDto,
+  RememberProductAssignmentDto,
   RoleType,
   SaveDesignerAssignmentConfigDto,
   SaveDesignerAssignmentConfigResDto,
@@ -49,5 +50,20 @@ export class DesignerAssignmentController {
       message: JSON.stringify({ method: 'PUT', url: '/designer-assignment/config', userId: user?._id }),
     });
     return { success: true, data: await this.designerAssignmentService.saveConfig(dto) };
+  }
+
+  @Post('remember-products')
+  @Auth([RoleType.Admin])
+  @ApiOperation({ summary: 'Ghi nhớ sản phẩm → designer (Ưu tiên 2) kèm hạn hiệu lực, từ bảng "Cần gán designer"' })
+  @HttpCode(HttpStatus.OK)
+  @ApiOkResponse({ type: SaveDesignerAssignmentConfigResDto })
+  async rememberProducts(
+    @Body() dto: RememberProductAssignmentDto,
+    @AuthUser() user: UserDocument,
+  ): Promise<SaveDesignerAssignmentConfigResDto> {
+    this.logger.info({
+      message: JSON.stringify({ method: 'POST', url: '/designer-assignment/remember-products', userId: user?._id }),
+    });
+    return { success: true, data: await this.designerAssignmentService.rememberProducts(dto) };
   }
 }

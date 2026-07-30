@@ -437,6 +437,13 @@ export class DesignerStatsService {
       email?: string;
       cells: TeamDailyCellShape[];
       totals: TeamDailyCellShape;
+      metrics?: {
+        totalTasks: number;
+        productTypes: number;
+        productTypeNames: string[];
+        avgResponseMin: number;
+        avgWorkMin: number;
+      };
     }[];
     columnTotals: TeamDailyCellShape[];
     grandTotals: TeamDailyCellShape;
@@ -522,24 +529,25 @@ export class DesignerStatsService {
         { $group: { _id: { uid: uidField, day: rejectionDayExpr }, count: { $sum: 1 } } },
       ]);
 
-    const [agg, rejAgg, recvAgg, designerRole] = await Promise.all([
+    // Match dùng chung cho ma trận + metrics per-designer (widget Top Designer).
+    const matrixMatch = {
+      assignee: { $exists: true, $nin: [null, ''] },
+      inProductionAt: { $gte: start, $lte: end },
+      designerStatus: {
+        $in: [DesignerStatus.Assigned, DesignerStatus.InProgress, DesignerStatus.Rework, DesignerStatus.Done],
+      },
+      // Đồng bộ scope với Tổng quan: loại đơn hủy + đơn chưa map xưởng.
+      cancelledAt: null,
+      factoryId: productionFactoryClause(this.orderModel.db),
+      ...extraMatch,
+    };
+
+    const [agg, rejAgg, recvAgg, metricsAgg, designerRole] = await Promise.all([
       this.orderModel.aggregate<{
         _id: { uid: string; day: string; status: DesignerStatus };
         count: number;
       }>([
-        {
-          $match: {
-            assignee: { $exists: true, $nin: [null, ''] },
-            inProductionAt: { $gte: start, $lte: end },
-            designerStatus: {
-              $in: [DesignerStatus.Assigned, DesignerStatus.InProgress, DesignerStatus.Rework, DesignerStatus.Done],
-            },
-            // Đồng bộ scope với Tổng quan: loại đơn hủy + đơn chưa map xưởng.
-            cancelledAt: null,
-            factoryId: productionFactoryClause(this.orderModel.db),
-            ...extraMatch,
-          },
-        },
+        { $match: matrixMatch },
         {
           $group: {
             _id: {
@@ -555,6 +563,27 @@ export class DesignerStatsService {
       buildRejectionAgg('$designerRejections.fromUserId'),
       // Số LẦN nhận bàn giao thêm theo (designer, ngày vào SX).
       buildRejectionAgg('$designerRejections.toUserId'),
+      this.orderModel.aggregate<{
+        _id: string;
+        totalTasks: number;
+        typeSet: string[];
+        responseMsSum: number;
+        responseN: number;
+        workMsSum: number;
+        workN: number;
+      }>([
+        { $match: matrixMatch },
+        {
+          $group: {
+            _id: '$assignee',
+            totalTasks: { $sum: 1 },
+            // Số LOẠI sản phẩm khác nhau (order.type) — KHÔNG phải tổng quantity
+            // (mỗi production = 1 sản phẩm nên sum quantity ≈ số task, vô nghĩa).
+            typeSet: { $addToSet: { $ifNull: ['$type', ''] } },
+            ...this.designerTimeGroupFields(),
+          },
+        },
+      ]),
       this.roleRepository.findOne({ name: RoleType.Designer }),
     ]);
 
@@ -627,6 +656,30 @@ export class DesignerStatsService {
       for (const u of extra) nameMap.set(String(u._id), { fullName: u.fullName, email: u.email });
     }
 
+    // Metrics chỉ gắn cho designer đang bật — row "Khác (đã tắt)" bỏ qua.
+    const metricsMap = new Map<
+      string,
+      {
+        totalTasks: number;
+        productTypes: number;
+        productTypeNames: string[];
+        avgResponseMin: number;
+        avgWorkMin: number;
+      }
+    >();
+    for (const m of metricsAgg) {
+      if (!m._id || !activeIds.has(m._id)) continue;
+      const typeNames = m.typeSet.filter((s) => s !== '').sort((a, b) => a.localeCompare(b));
+      metricsMap.set(m._id, {
+        totalTasks: m.totalTasks,
+        productTypes: typeNames.length,
+        // Cap 30 tên cho tooltip — FE hiện "+N khác" nếu productTypes lớn hơn.
+        productTypeNames: typeNames.slice(0, 30),
+        avgResponseMin: m.responseN > 0 ? Math.round(m.responseMsSum / m.responseN / 60000) : 0,
+        avgWorkMin: m.workN > 0 ? Math.round(m.workMsSum / m.workN / 60000) : 0,
+      });
+    }
+
     const columnTotals = days.map(() => emptyCell());
     const grandTotals = emptyCell();
     const rows = [...rowTotals.entries()].map(([uid, totals]) => {
@@ -642,6 +695,7 @@ export class DesignerStatsService {
         email: info?.email,
         cells,
         totals,
+        metrics: metricsMap.get(uid),
       };
     });
 
@@ -657,15 +711,276 @@ export class DesignerStatsService {
   }
 
   /**
-   * Danh sách option cho 2 dropdown filter (sản phẩm = `type`, khách hàng =
-   * `userSku`) của tab Designer. Chỉ tính đơn đã gán designer (assignee set) để
-   * khớp phạm vi của ma trận/biểu đồ. Customer cap 300 để payload không phình.
+   * Expression aggregation dùng chung tính thời gian nhận/làm task designer —
+   * CÙNG công thức leaderboard `getPerformance` (response = firstStartedAt ||
+   * startedAt − assignedAt; work = designerWorkMs cộng dồn, fallback
+   * completedAt − startedAt cho đơn legacy). Chỉ tính trên task done.
    */
-  async getBreakdownFilters(): Promise<{
+  private designerTimeAggExprs() {
+    const isDone = { $eq: ['$designerStatus', DesignerStatus.Done] };
+    const respStart = { $ifNull: ['$designerFirstStartedAt', { $ifNull: ['$designerStartedAt', null] }] };
+    const hasResp = {
+      $and: [isDone, { $ne: [respStart, null] }, { $ne: [{ $ifNull: ['$designerAssignedAt', null] }, null] }],
+    };
+    const cumWork = { $ifNull: ['$designerWorkMs', 0] };
+    const hasCumWork = { $gt: [cumWork, 0] };
+    const hasLegacyWork = {
+      $and: [
+        { $ne: [{ $ifNull: ['$designerStartedAt', null] }, null] },
+        { $ne: [{ $ifNull: ['$designerCompletedAt', null] }, null] },
+      ],
+    };
+    const hasWork = { $and: [isDone, { $or: [hasCumWork, hasLegacyWork] }] };
+    return { isDone, respStart, hasResp, cumWork, hasCumWork, hasWork };
+  }
+
+  /**
+   * 4 field `$group` tổng thời gian nhận/làm — dùng bởi metrics per-designer
+   * (`getTeamDailyBreakdown`) + per-sản phẩm (`getProductTimeOverview`).
+   */
+  private designerTimeGroupFields() {
+    const e = this.designerTimeAggExprs();
+    return {
+      responseMsSum: {
+        $sum: { $cond: [e.hasResp, { $subtract: [e.respStart, '$designerAssignedAt'] }, 0] },
+      },
+      responseN: { $sum: { $cond: [e.hasResp, 1, 0] } },
+      workMsSum: {
+        $sum: {
+          $cond: [
+            e.hasWork,
+            { $cond: [e.hasCumWork, e.cumWork, { $subtract: ['$designerCompletedAt', '$designerStartedAt'] }] },
+            0,
+          ],
+        },
+      },
+      workN: { $sum: { $cond: [e.hasWork, 1, 0] } },
+    };
+  }
+
+  /** Match dùng chung của scope "task đã gán designer trong kỳ" (mirror ma trận). */
+  private buildProductTimeMatch(
+    start: Date,
+    end: Date,
+    type?: string,
+    customer?: string,
+    designerId?: string,
+  ): Record<string, unknown> {
+    const match: Record<string, unknown> = {
+      // designerId set → chế độ "Xem chi tiết" 1 designer từ widget Top Designer.
+      assignee: designerId || { $exists: true, $nin: [null, ''] },
+      inProductionAt: { $gte: start, $lte: end },
+      designerStatus: {
+        $in: [DesignerStatus.Assigned, DesignerStatus.InProgress, DesignerStatus.Rework, DesignerStatus.Done],
+      },
+      cancelledAt: null,
+      factoryId: productionFactoryClause(this.orderModel.db),
+    };
+    if (type !== undefined) match.type = type;
+    if (customer) match.userSku = customer;
+    return match;
+  }
+
+  /**
+   * Panel "Xem tất cả" từ widget Top Designer: thời gian TB nhận/làm task theo
+   * TỪNG loại sản phẩm (`order.type`) của TOÀN BỘ designer trong kỳ lọc.
+   * Cùng scope ma trận (`inProductionAt` + type/customer + loại hủy/chưa map).
+   */
+  async getProductTimeOverview(
+    from?: string,
+    to?: string,
+    type?: string,
+    customer?: string,
+    designerId?: string,
+  ): Promise<{
+    rows: {
+      type: string;
+      mockupUrl?: string;
+      taskCount: number;
+      doneCount: number;
+      avgResponseMin: number;
+      avgWorkMin: number;
+    }[];
+  }> {
+    const { start, end } = this.resolveVnWindow(7, from, to);
+    const { isDone } = this.designerTimeAggExprs();
+    const agg = await this.orderModel.aggregate<{
+      _id: string | null;
+      mockupUrl?: string | null;
+      taskCount: number;
+      doneCount: number;
+      responseMsSum: number;
+      responseN: number;
+      workMsSum: number;
+      workN: number;
+    }>([
+      { $match: this.buildProductTimeMatch(start, end, type || undefined, customer, designerId) },
+      {
+        $group: {
+          _id: { $ifNull: ['$type', ''] },
+          // Ảnh đại diện sản phẩm: $max ưu tiên string non-null (null < string).
+          mockupUrl: { $max: '$mockupUrl' },
+          taskCount: { $sum: 1 },
+          doneCount: { $sum: { $cond: [isDone, 1, 0] } },
+          ...this.designerTimeGroupFields(),
+        },
+      },
+      { $sort: { taskCount: -1 } },
+    ]);
+    return {
+      rows: agg.map((r) => ({
+        type: r._id || '',
+        mockupUrl: r.mockupUrl || undefined,
+        taskCount: r.taskCount,
+        doneCount: r.doneCount,
+        avgResponseMin: r.responseN > 0 ? Math.round(r.responseMsSum / r.responseN / 60000) : 0,
+        avgWorkMin: r.workN > 0 ? Math.round(r.workMsSum / r.workN / 60000) : 0,
+      })),
+    };
+  }
+
+  /**
+   * Drill 1 sản phẩm trong panel "Xem tất cả": thống kê per-designer (làm bao
+   * đơn của sản phẩm đó + TB nhận/làm — aggregation trên TOÀN BỘ đơn khớp,
+   * không cap) + danh sách đơn/thiết kế (cap 300 mới nhất theo `inProductionAt`)
+   * kèm thời gian nhận/làm từng đơn để FE gom nhóm theo designer. Cùng công
+   * thức leaderboard; đơn chưa đủ mốc thời gian → bỏ trống.
+   */
+  async getProductTimeOrders(
+    productType: string,
+    from?: string,
+    to?: string,
+    customer?: string,
+    designerId?: string,
+  ): Promise<{
+    designers: {
+      userId: string;
+      name?: string;
+      taskCount: number;
+      doneCount: number;
+      avgResponseMin: number;
+      avgWorkMin: number;
+    }[];
+    rows: {
+      _id: string;
+      productionId?: string;
+      userSku?: string;
+      assigneeId?: string;
+      assigneeName?: string;
+      designerStatus?: string;
+      mockupUrl?: string;
+      inProductionAt?: string;
+      responseMin?: number;
+      workMin?: number;
+    }[];
+  }> {
+    const { start, end } = this.resolveVnWindow(7, from, to);
+    const match = this.buildProductTimeMatch(start, end, undefined, customer, designerId);
+    match.type = productType === '' ? { $in: [null, ''] } : productType;
+    const { isDone } = this.designerTimeAggExprs();
+    const [statAgg, docs] = await Promise.all([
+      this.orderModel.aggregate<{
+        _id: string;
+        taskCount: number;
+        doneCount: number;
+        responseMsSum: number;
+        responseN: number;
+        workMsSum: number;
+        workN: number;
+      }>([
+        { $match: match },
+        {
+          $group: {
+            _id: '$assignee',
+            taskCount: { $sum: 1 },
+            doneCount: { $sum: { $cond: [isDone, 1, 0] } },
+            ...this.designerTimeGroupFields(),
+          },
+        },
+        { $sort: { taskCount: -1 } },
+      ]),
+      this.orderModel
+        .find(match, {
+          productionId: 1,
+          userSku: 1,
+          assignee: 1,
+          designerStatus: 1,
+          designerAssignedAt: 1,
+          designerFirstStartedAt: 1,
+          designerStartedAt: 1,
+          designerCompletedAt: 1,
+          designerWorkMs: 1,
+          mockupUrl: 1,
+          inProductionAt: 1,
+        })
+        .sort({ inProductionAt: -1 })
+        .limit(300)
+        .lean(),
+    ]);
+
+    const assigneeIds = [
+      ...new Set([...docs.map((d) => String(d.assignee || '')), ...statAgg.map((s) => String(s._id || ''))]),
+    ].filter(Boolean);
+    const users = assigneeIds.length
+      ? await this.userModel.find({ _id: { $in: assigneeIds } }, { _id: 1, fullName: 1 }).lean()
+      : [];
+    const nameMap = new Map(users.map((u) => [String(u._id), u.fullName]));
+
+    return {
+      designers: statAgg
+        .filter((s) => s._id)
+        .map((s) => ({
+          userId: String(s._id),
+          name: nameMap.get(String(s._id)) || undefined,
+          taskCount: s.taskCount,
+          doneCount: s.doneCount,
+          avgResponseMin: s.responseN > 0 ? Math.round(s.responseMsSum / s.responseN / 60000) : 0,
+          avgWorkMin: s.workN > 0 ? Math.round(s.workMsSum / s.workN / 60000) : 0,
+        })),
+      rows: docs.map((d) => {
+        const respStart = d.designerFirstStartedAt || d.designerStartedAt;
+        const responseMin =
+          d.designerAssignedAt && respStart
+            ? Math.max(0, Math.round((respStart.getTime() - d.designerAssignedAt.getTime()) / 60000))
+            : undefined;
+        let workMin: number | undefined;
+        if (d.designerStatus === DesignerStatus.Done) {
+          if (d.designerWorkMs && d.designerWorkMs > 0) workMin = Math.round(d.designerWorkMs / 60000);
+          else if (d.designerStartedAt && d.designerCompletedAt)
+            workMin = Math.max(0, Math.round((d.designerCompletedAt.getTime() - d.designerStartedAt.getTime()) / 60000));
+        }
+        return {
+          _id: String(d._id),
+          productionId: d.productionId || undefined,
+          userSku: d.userSku || undefined,
+          assigneeId: d.assignee ? String(d.assignee) : undefined,
+          assigneeName: nameMap.get(String(d.assignee || '')) || undefined,
+          designerStatus: d.designerStatus || undefined,
+          mockupUrl: (d as { mockupUrl?: string }).mockupUrl || undefined,
+          inProductionAt: d.inProductionAt ? new Date(d.inProductionAt).toISOString() : undefined,
+          responseMin,
+          workMin,
+        };
+      }),
+    };
+  }
+
+  /**
+   * Danh sách option cho 2 dropdown filter (sản phẩm = `type`, khách hàng =
+   * `userSku`) của tab Designer. Scope = "task đã gán designer TRONG KỲ LỌC"
+   * (`buildProductTimeMatch`: inProductionAt [from,to] + loại đơn hủy/chưa map
+   * xưởng) để option/count khớp đúng số liệu ma trận/panel theo thời gian đang
+   * chọn. Customer cap 300 để payload không phình.
+   */
+  async getBreakdownFilters(
+    from?: string,
+    to?: string,
+  ): Promise<{
     products: { value: string; label: string; count: number }[];
     customers: { value: string; label: string; count: number }[];
   }> {
-    const scope = { assignee: { $exists: true, $ne: null } };
+    const { start, end } = this.resolveVnWindow(7, from, to);
+    const scope = this.buildProductTimeMatch(start, end);
     const [typeRows, customerRows] = await Promise.all([
       this.orderModel.aggregate<{ _id: string; count: number }>([
         { $match: { ...scope, type: { $exists: true, $nin: [null, ''] } } },
