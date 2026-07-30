@@ -5153,7 +5153,10 @@ export class OrderService implements OnModuleInit {
           `Đơn cần làm lại đang có người ôm — không gán cho người khác. Chỉ gán được đơn chưa có ai ôm.`,
         );
       }
-      if (!this.canAssignDesignerByStatus(currentDesignerStatus, !!beforeAssignee)) {
+      // Chỉ chặn theo trạng thái khi GÁN (normalized có giá trị) — BỎ GÁN
+      // (normalized=null/'') luôn cho phép, kể cả đang in-progress/done/rework,
+      // vì đây là thao tác sửa sai của leader/admin, không phải reassign.
+      if (normalized && !this.canAssignDesignerByStatus(currentDesignerStatus, !!beforeAssignee)) {
         throw new ConflictException(
           `Không reassign được — task đang '${currentDesignerStatus}'. Yêu cầu designer hoàn thành hoặc reset trước.`,
         );
@@ -5423,9 +5426,11 @@ export class OrderService implements OnModuleInit {
     //  return sớm ở trên qua delegate updateField — nhánh dưới chỉ còn assignee +
     //  các field thuần config không side-effect.)
 
-    // Bulk assignee → mirror updateField: chỉ assign cho order ở trạng thái
-    // reassignable; orders đang in-progress/done/rework sẽ KHÔNG match filter
-    // và returned matchedCount thấp hơn ids.length để FE biết phần nào bị bỏ.
+    // Bulk assignee → mirror updateField: chỉ GÁN cho order ở trạng thái
+    // reassignable (in-progress/done/rework-có-người-ôm sẽ KHÔNG match filter,
+    // matchedCount thấp hơn ids.length để FE biết phần nào bị bỏ). BỎ GÁN
+    // (normalized=null) KHÔNG lọc theo trạng thái — luôn cho phép, kể cả đơn
+    // đang in-progress/done/rework (thao tác sửa sai của leader/admin).
     let extraMatchFilter: Record<string, unknown> | null = null;
     if (dto.field === 'assignee') {
       if (normalized) {
@@ -5433,6 +5438,17 @@ export class OrderService implements OnModuleInit {
         patch.designerAssignedAt = new Date();
         patch.designerRejectedReason = null;
         patch.designerRejectedAt = null;
+        // Đơn đã soát 'ok' → không cho GÁN designer (vẫn cho bỏ chọn). Loại khỏi
+        // matchFilter → không update + matchedCount thấp hơn để FE biết bị bỏ.
+        extraMatchFilter = {
+          $or: [
+            { designerStatus: { $exists: false } },
+            { designerStatus: { $in: DESIGNER_REASSIGNABLE_STATUSES } },
+            // Cần làm lại CHƯA có ai ôm → cũng gán được (assignee rỗng/missing).
+            { designerStatus: DesignerStatus.Rework, assignee: { $in: [null, ''] } },
+          ],
+          toolResultNote: { $ne: READY_FOR_FULFILL_CODE },
+        };
       } else {
         patch.designerStatus = 'unassigned';
         patch.designerAssignedAt = null;
@@ -5443,17 +5459,6 @@ export class OrderService implements OnModuleInit {
         patch.designerRejectedReason = null;
         patch.designerReworkCount = 0;
       }
-      extraMatchFilter = {
-        $or: [
-          { designerStatus: { $exists: false } },
-          { designerStatus: { $in: DESIGNER_REASSIGNABLE_STATUSES } },
-          // Cần làm lại CHƯA có ai ôm → cũng gán được (assignee rỗng/missing).
-          { designerStatus: DesignerStatus.Rework, assignee: { $in: [null, ''] } },
-        ],
-      };
-      // Đơn đã soát 'ok' → không cho GÁN designer (vẫn cho bỏ chọn). Loại khỏi
-      // matchFilter → không update + matchedCount thấp hơn để FE biết bị bỏ.
-      if (normalized) extraMatchFilter.toolResultNote = { $ne: READY_FOR_FULFILL_CODE };
     }
 
     // Snapshot before-values for the audit log. Cheap because we only need the

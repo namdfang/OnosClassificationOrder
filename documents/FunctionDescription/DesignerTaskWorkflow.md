@@ -89,12 +89,14 @@ State machine 6 trạng thái:
 > | `in-progress` / `done` | ❌ |
 >
 > Ngoài ra **đơn `toolResultNote === 'ok'`** (`READY_FOR_FULFILL_CODE`, đã soát xong) → KHÔNG cho gán (chỉ chặn khi GÁN, vẫn cho bỏ chọn).
+>
+> **Bảng trên CHỈ áp khi GÁN** (`normalized` có giá trị). **BỎ GÁN** (`normalized=null`, xóa lựa chọn/nút "Bỏ gán design") **KHÔNG bị chặn bởi bất kỳ trạng thái nào** (kể cả `in-progress`/`done`/`rework`-có-người-ôm) — đây là thao tác sửa sai của leader/admin, luôn cho phép reset `designerStatus` về `unassigned` (2026-07-30, xem dòng 97 + 114).
 
 **Single order**: Leader vào `/orders` workshop table → cell "Người thực hiện" (`AssigneeSelectCell`) → pick user từ dropdown load `/designer/team` cache (zustand `designerTeamStore`). `updateField('assignee')` BE:
 - **Đơn `toolResultNote='ok'` + đang gán → `BadRequestException`** "Đơn đã 'ok' — không cần gán designer."
 - **Đơn `rework` đang có người ôm + đang gán → `ConflictException`** "Đơn cần làm lại đang có người ôm — không gán cho người khác."
 - Gán hợp lệ (gồm `rework` chưa ai ôm) → set `designerStatus='assigned'`, `designerAssignedAt=now`, clear reject fields.
-- Block 409 nếu `!canAssignDesignerByStatus` (in-progress/done, hoặc rework-held khi clear).
+- Block 409 nếu `!canAssignDesignerByStatus` **CHỈ khi GÁN** (`normalized` có giá trị) — in-progress/done, hoặc rework-held. **Bỏ chọn** (`normalized=null`) **KHÔNG qua check này nữa** (2026-07-30) → luôn set `designerStatus='unassigned'` + clear mốc thời gian, bất kể trạng thái hiện tại.
 - FE: `AssigneeSelectCell` nhận prop `blockedReason` (set khi `r.toolResultNote==='ok'` ở `workshopTableConfig.tsx`) → cell **disabled + opacity-60 + tooltip** lý do.
 
 **Bulk assign**: Workshop table → tick nhiều row → toolbar **"Gán design"** → `AssignDesignerDialog`:
@@ -111,7 +113,7 @@ State machine 6 trạng thái:
    - `noToolCount=0` + không conflict → "Gán".
 5. `POST /bulk-assign-designer { ids, userId, reassignOthers, skipUnreviewed }` → skip đơn `ok` + (nếu `skipUnreviewed`) đơn chưa soát + **đơn rework đang có người ôm** ("Cần làm lại đang có người ôm — chỉ gán được đơn chưa có ai ôm.") + đơn in-progress/done → report skipped → toast + detail.
 
-**Bulk UNassign** (`BulkEditToolbar.tsx` — nút **"Bỏ gán design"** cạnh "Gán design", cùng gate `canEditField('assignee')`, KHÔNG dialog): gọi thẳng `bulkUpdateField({ ids, field: 'assignee', value: null })` — **tái dùng nguyên vẹn** nhánh `dto.field === 'assignee'` trong `OrderService.bulkUpdateField()` (KHÔNG phải flow riêng), `normalized=null` → reset `designerStatus='unassigned'` + clear toàn bộ mốc thời gian designer (`designerAssignedAt/StartedAt/CompletedAt/RejectedAt/ReworkAt/RejectedReason/ReworkCount`). Cùng `matchFilter` reassignable-status như bulk assign (đơn in-progress/done bị loại → `matchedCount` thấp hơn `ids.length`). Mirror hành vi "Xóa lựa chọn" ở `AssigneeSelectCell` (inline, per-order) nhưng áp cho nhiều đơn cùng lúc.
+**Bulk UNassign** (`BulkEditToolbar.tsx` — nút **"Bỏ gán design"** cạnh "Gán design", cùng gate `canEditField('assignee')`, KHÔNG dialog): gọi thẳng `bulkUpdateField({ ids, field: 'assignee', value: null })` — **tái dùng nguyên vẹn** nhánh `dto.field === 'assignee'` trong `OrderService.bulkUpdateField()` (KHÔNG phải flow riêng), `normalized=null` → reset `designerStatus='unassigned'` + clear toàn bộ mốc thời gian designer (`designerAssignedAt/StartedAt/CompletedAt/RejectedAt/ReworkAt/RejectedReason/ReworkCount`). **KHÔNG còn áp `matchFilter` reassignable-status khi bỏ gán** (2026-07-30 — trước đây mirror bulk assign, loại đơn in-progress/done khỏi `matchFilter` khiến `matchedCount` thấp hơn `ids.length`; giờ `extraMatchFilter` CHỈ set khi GÁN, bỏ gán match TOÀN BỘ `ids` bất kể `designerStatus`/`assignee` hiện tại — kể cả đơn đang `in-progress`). Mirror hành vi "Xóa lựa chọn" ở `AssigneeSelectCell` (inline, per-order, cũng đã bỏ check `canAssignDesignerByStatus` khi clear) nhưng áp cho nhiều đơn cùng lúc.
 
 > **Auto-gán khi báo lỗi designer (2026-07):** đơn bị xưởng báo lỗi nguồn designer mà **chưa ai ôm** (soát 'ok' từ đầu → chưa từng có designer, thành `rework`+assignee rỗng) giờ được **auto-gán theo cấu hình xưởng** ngay sau khi báo lỗi (hook ở `setProductionError`/`updateField`/rework-back kanban Fulfillment — giữ status `rework` → vào thẳng cột "Cần làm lại"). Backlog "Cần gán" + self-claim chỉ còn hứng đơn ngoài cấu hình auto-gán / chưa map xưởng. Xem `DesignerAutoAssign.md`.
 
