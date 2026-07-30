@@ -234,6 +234,7 @@ export default function DesignerStatsTab() {
         reloadToken={matrixToken}
         type={filterType || undefined}
         customer={filterCustomer || undefined}
+        onAssigned={() => setMatrixToken((t) => t + 1)}
       />
 
       {/* Ma trận toàn team × ngày (7/14/30 riêng) — snapshot đơn chưa xong. */}

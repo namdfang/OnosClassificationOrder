@@ -5667,9 +5667,17 @@ export class OrderService implements OnModuleInit {
     for (const c of config.customers || []) {
       for (const cid of c.customerIds || []) designerByCustomerId.set(String(cid), String(c.designerId));
     }
+    // Mapping sản phẩm có hạn (`productExpiries`, từ nút "Ghi nhớ cấu hình") —
+    // quá hạn thì bỏ qua tại chỗ (lazy expiry), đơn rơi xuống mức 3.
+    const productExpiries = config.productExpiries || {};
+    const nowMs = Date.now();
     const designerByProductConfigId = new Map<string, string>();
     for (const p of config.products || []) {
-      for (const pid of p.productConfigIds || []) designerByProductConfigId.set(String(pid), String(p.designerId));
+      for (const pid of p.productConfigIds || []) {
+        const expTs = productExpiries[String(pid)] ? Date.parse(productExpiries[String(pid)]) : NaN;
+        if (Number.isFinite(expTs) && expTs <= nowMs) continue;
+        designerByProductConfigId.set(String(pid), String(p.designerId));
+      }
     }
     if (!byFactory.size && !designerByCustomerId.size && !designerByProductConfigId.size) return empty;
 

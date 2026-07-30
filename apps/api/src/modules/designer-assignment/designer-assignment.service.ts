@@ -2,6 +2,7 @@ import { BadRequestException, Injectable } from '@nestjs/common';
 import {
   DESIGNER_ASSIGNMENT_CONFIG_KEY,
   DesignerAssignmentConfig,
+  RememberProductAssignmentDto,
   SaveDesignerAssignmentConfigDto,
 } from 'shared';
 
@@ -18,7 +19,28 @@ export class DesignerAssignmentService {
       DESIGNER_ASSIGNMENT_CONFIG_KEY,
       EMPTY_CONFIG,
     );
-    return cfg ?? EMPTY_CONFIG;
+    return this.pruneExpiredProducts(cfg ?? EMPTY_CONFIG);
+  }
+
+  /**
+   * Lazy expiry mức Ưu tiên 2: bỏ sản phẩm đã quá hạn `productExpiries` khỏi
+   * `products` (card tự "nhảy về Chưa gán" trong kanban, engine không dùng nữa) —
+   * KHÔNG ghi lại DB, config được dọn bền vững ở lần save kế tiếp. Không mutate
+   * object gốc (có thể là tham chiếu từ cache của SystemConfigService).
+   */
+  private pruneExpiredProducts(cfg: DesignerAssignmentConfig): DesignerAssignmentConfig {
+    const expiries = cfg.productExpiries || {};
+    if (Object.keys(expiries).length === 0) return cfg;
+    const now = Date.now();
+    const isExpired = (pid: string) => {
+      const ts = expiries[pid] ? Date.parse(expiries[pid]) : NaN;
+      return Number.isFinite(ts) && ts <= now;
+    };
+    const products = (cfg.products || [])
+      .map((p) => ({ ...p, productConfigIds: p.productConfigIds.filter((pid) => !isExpired(String(pid))) }))
+      .filter((p) => p.productConfigIds.length > 0);
+    const productExpiries = Object.fromEntries(Object.entries(expiries).filter(([pid]) => !isExpired(pid)));
+    return { ...cfg, products, productExpiries };
   }
 
   /**
@@ -71,10 +93,72 @@ export class DesignerAssignmentService {
       }
     }
 
+    // Chỉ giữ hạn của sản phẩm còn trong cấu hình và chưa quá hạn — save là
+    // điểm dọn bền vững cho lazy expiry.
+    const keptProducts = (dto.products || []).filter((p) => p.productConfigIds.length > 0);
+    const keptIds = new Set(keptProducts.flatMap((p) => p.productConfigIds.map(String)));
+    const now = Date.now();
+    const productExpiries = Object.fromEntries(
+      Object.entries(dto.productExpiries || {}).filter(([pid, iso]) => {
+        const ts = Date.parse(iso);
+        return keptIds.has(pid) && Number.isFinite(ts) && ts > now;
+      }),
+    );
+
     const value: DesignerAssignmentConfig = {
       customers: (dto.customers || []).filter((c) => c.customerIds.length > 0),
-      products: (dto.products || []).filter((p) => p.productConfigIds.length > 0),
+      products: keptProducts,
       factories: dto.factories,
+      productExpiries,
+      updatedAt: new Date().toISOString(),
+    };
+    await this.systemConfigService.set(
+      DESIGNER_ASSIGNMENT_CONFIG_KEY,
+      value,
+      'Cấu hình auto-gán designer (khách hàng / sản phẩm / xưởng)',
+    );
+    return value;
+  }
+
+  /**
+   * "Ghi nhớ cấu hình" từ bảng "Cần gán designer": chuyển các sản phẩm về 1
+   * designer ở mức Ưu tiên 2 (ghi đè chủ cũ nếu có — FE đã cảnh báo), kèm hạn
+   * hiệu lực (`expiresAt` trống = vĩnh viễn). Đọc-sửa-ghi trọn config để giữ
+   * nguyên mức 1/3.
+   */
+  async rememberProducts(dto: RememberProductAssignmentDto): Promise<DesignerAssignmentConfig> {
+    const designerId = String(dto.designerId);
+    const pids = Array.from(new Set(dto.productConfigIds.map(String)));
+    let expiresAt: string | undefined;
+    if (dto.expiresAt) {
+      const ts = Date.parse(dto.expiresAt);
+      if (!Number.isFinite(ts) || ts <= Date.now()) {
+        throw new BadRequestException('Thời hạn ghi nhớ không hợp lệ — phải là thời điểm trong tương lai.');
+      }
+      expiresAt = new Date(ts).toISOString();
+    }
+
+    const cfg = await this.getConfig();
+    const pidSet = new Set(pids);
+    // Gỡ khỏi mọi designer đang giữ (bất biến 1 sản phẩm 1 designer) rồi dồn về
+    // designer đích.
+    const products = (cfg.products || [])
+      .map((p) => ({ ...p, productConfigIds: p.productConfigIds.filter((pid) => !pidSet.has(String(pid))) }))
+      .filter((p) => p.productConfigIds.length > 0);
+    const target = products.find((p) => String(p.designerId) === designerId);
+    if (target) target.productConfigIds = [...target.productConfigIds, ...pids];
+    else products.push({ designerId, productConfigIds: pids });
+
+    const productExpiries = { ...(cfg.productExpiries || {}) };
+    for (const pid of pids) {
+      if (expiresAt) productExpiries[pid] = expiresAt;
+      else delete productExpiries[pid];
+    }
+
+    const value: DesignerAssignmentConfig = {
+      ...cfg,
+      products,
+      productExpiries,
       updatedAt: new Date().toISOString(),
     };
     await this.systemConfigService.set(

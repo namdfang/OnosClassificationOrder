@@ -240,7 +240,42 @@
     "autoAssignConfirm": "Assign {{count}} orders",
     "autoAssignCancel": "Cancel",
     "autoAssignDone": "Auto-assigned {{assigned}} orders",
-    "autoAssignDoneSkipped": "Assigned {{assigned}} orders · {{skipped}} skipped (just claimed / status changed)"
+    "autoAssignDoneSkipped": "Assigned {{assigned}} orders · {{skipped}} skipped (just claimed / status changed)",
+    "rememberConfig": "Remember config",
+    "remember": {
+      "title": "Remember designer assignment config",
+      "productsLabel": "Products to remember ({{count}})",
+      "noRememberableProducts": "No rememberable products — all selected orders are unmapped.",
+      "assignNowNote": "Will immediately assign {{count}} selected orders to the designer below.",
+      "unmappedNote": "{{count}} orders have no mapped product — assigned now only, cannot be remembered.",
+      "durationLabel": "Remember duration",
+      "durations": {
+        "now": "Now only",
+        "day": "1 day",
+        "week": "7 days",
+        "forever": "Forever"
+      },
+      "durationHints": {
+        "now": "Only assign the selected orders, do NOT save the config.",
+        "day": "Remember until the end of today — new orders of these products auto-assign to this designer.",
+        "week": "Remember until the end of day 7 — new orders of these products auto-assign to this designer.",
+        "forever": "Remember forever — same as dragging in Priority 2 config (Settings page)."
+      },
+      "designerLabel": "Designer",
+      "designerPlaceholder": "— Select designer —",
+      "designerOption": "{{fullName}} — holding {{count}} orders",
+      "noDesigners": "No active designers.",
+      "chooseDesignerFirst": "Select a designer first.",
+      "conflictTitle": "{{count}} products currently belong to another designer — confirming will move them:",
+      "conflictLine": "{{product}} — currently belongs to {{designer}}",
+      "conflictMore": "… and {{count}} more products",
+      "savedConfig": "Remembered config for {{count}} products",
+      "assigned": "Assigned {{modified}}/{{matched}} orders",
+      "assignedWithSkipped": "Assigned {{modified}} orders · {{count}} skipped",
+      "confirm": "Remember + assign {{orders}} orders",
+      "confirmAssignOnly": "Assign {{count}} orders",
+      "cancel": "Cancel"
+    }
   },
   "teamDailyMatrix": {
     "title": "All designers by day",

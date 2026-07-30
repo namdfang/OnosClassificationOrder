@@ -1,5 +1,6 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
+import dayjs from 'dayjs';
 import { Factory as FactoryIcon, Plus, Save, Trash2, Users } from 'lucide-react';
 import type { Customer, DesignerAssignmentConfig as Config } from 'shared';
 import { toast } from 'sonner';
@@ -56,16 +57,26 @@ export default function DesignerAssignmentConfig() {
   const [alloc, setAlloc] = useState<AllocState>({});
   const [customerAlloc, setCustomerAlloc] = useState<IdAllocState>({});
   const [productAlloc, setProductAlloc] = useState<IdAllocState>({});
+  // Hạn hiệu lực mapping sản phẩm (từ nút "Ghi nhớ cấu hình" ở Dashboard):
+  // productConfigId → ISO date. Kéo thả card sản phẩm = quyết định lại bằng tay
+  // → xóa hạn (thành vĩnh viễn / bỏ gán).
+  const [productExpiries, setProductExpiries] = useState<Record<string, string>>({});
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [autoSaving, setAutoSaving] = useState(false);
 
   // Snapshot MỚI NHẤT của cả 3 cấu hình cho auto-save: cập nhật ĐỒNG BỘ ngay lúc
   // kéo thả (setState của React commit sau, chuỗi save có thể chạy trước render).
-  const latestRef = useRef<{ customers: IdAllocState; products: IdAllocState; factories: AllocState }>({
+  const latestRef = useRef<{
+    customers: IdAllocState;
+    products: IdAllocState;
+    factories: AllocState;
+    productExpiries: Record<string, string>;
+  }>({
     customers: {},
     products: {},
     factories: {},
+    productExpiries: {},
   });
   // Chuỗi hóa các lần auto-save để nhiều lần kéo liên tiếp không đè nhau sai thứ tự.
   const saveChainRef = useRef<Promise<void>>(Promise.resolve());
@@ -102,7 +113,9 @@ export default function DesignerAssignmentConfig() {
         const nextProd: IdAllocState = {};
         for (const p of cfg.products || []) nextProd[String(p.designerId)] = (p.productConfigIds || []).map(String);
         setProductAlloc(nextProd);
-        latestRef.current = { customers: nextCus, products: nextProd, factories: next };
+        const nextExp = cfg.productExpiries || {};
+        setProductExpiries(nextExp);
+        latestRef.current = { customers: nextCus, products: nextProd, factories: next, productExpiries: nextExp };
       } catch (err) {
         handleAxiosError(err);
       } finally {
@@ -132,11 +145,19 @@ export default function DesignerAssignmentConfig() {
         title: p.fullName,
         subtitle: p.shortName,
         mockup: p.mockup,
+        expiryLabel: productExpiries[String(p._id)]
+          ? t('kanban.expiresAt', { date: dayjs(productExpiries[String(p._id)]).format('DD/MM HH:mm') })
+          : undefined,
       })),
-    [products],
+    [products, productExpiries, t],
   );
 
-  const buildPayload = (cus: IdAllocState, prod: IdAllocState, fac: AllocState): Config => ({
+  const buildPayload = (
+    cus: IdAllocState,
+    prod: IdAllocState,
+    fac: AllocState,
+    exp: Record<string, string>,
+  ): Config => ({
     customers: designers
       .map((d) => ({ designerId: d._id, customerIds: cus[d._id] || [] }))
       .filter((c) => c.customerIds.length > 0),
@@ -152,6 +173,7 @@ export default function DesignerAssignmentConfig() {
         })),
       }))
       .filter((f) => f.designers.length > 0),
+    productExpiries: exp,
   });
 
   // Kéo thả kanban: gỡ item khỏi mọi cột, thêm vào cột đích (null = Chưa gán),
@@ -165,11 +187,17 @@ export default function DesignerAssignmentConfig() {
       if (targetDesignerId) next[targetDesignerId] = [...(next[targetDesignerId] || []), itemId];
       latestRef.current = { ...latestRef.current, [kind]: next };
       (kind === 'customers' ? setCustomerAlloc : setProductAlloc)(next);
+      if (kind === 'products' && latestRef.current.productExpiries[itemId]) {
+        // Kéo tay = quyết định lại → mapping trở thành vĩnh viễn (hoặc bỏ gán).
+        const { [itemId]: _removed, ...restExp } = latestRef.current.productExpiries;
+        latestRef.current = { ...latestRef.current, productExpiries: restExp };
+        setProductExpiries(restExp);
+      }
       saveChainRef.current = saveChainRef.current.then(async () => {
         try {
           setAutoSaving(true);
-          const { customers: cus, products: prod, factories: fac } = latestRef.current;
-          await RepositoryRemote.designerAssignment.saveConfig(buildPayload(cus, prod, fac));
+          const { customers: cus, products: prod, factories: fac, productExpiries: exp } = latestRef.current;
+          await RepositoryRemote.designerAssignment.saveConfig(buildPayload(cus, prod, fac, exp));
         } catch (err) {
           handleAxiosError(err);
         } finally {
@@ -220,7 +248,9 @@ export default function DesignerAssignmentConfig() {
   const handleSave = async () => {
     try {
       setSaving(true);
-      await RepositoryRemote.designerAssignment.saveConfig(buildPayload(customerAlloc, productAlloc, alloc));
+      await RepositoryRemote.designerAssignment.saveConfig(
+        buildPayload(customerAlloc, productAlloc, alloc, productExpiries),
+      );
       toast.success(t('toasts.saveSuccess'));
     } catch (err) {
       handleAxiosError(err);

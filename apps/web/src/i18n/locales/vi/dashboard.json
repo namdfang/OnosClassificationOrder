@@ -240,7 +240,42 @@
     "autoAssignConfirm": "Gán {{count}} đơn",
     "autoAssignCancel": "Hủy",
     "autoAssignDone": "Đã tự động gán {{assigned}} đơn",
-    "autoAssignDoneSkipped": "Đã gán {{assigned}} đơn · {{skipped}} đơn bị bỏ qua (vừa có người ôm / đổi trạng thái)"
+    "autoAssignDoneSkipped": "Đã gán {{assigned}} đơn · {{skipped}} đơn bị bỏ qua (vừa có người ôm / đổi trạng thái)",
+    "rememberConfig": "Ghi nhớ cấu hình",
+    "remember": {
+      "title": "Ghi nhớ cấu hình gán designer",
+      "productsLabel": "Sản phẩm sẽ ghi nhớ ({{count}})",
+      "noRememberableProducts": "Không có sản phẩm nào ghi nhớ được — các đơn đã chọn đều chưa map sản phẩm.",
+      "assignNowNote": "Sẽ gán ngay {{count}} đơn đang chọn cho designer bên dưới.",
+      "unmappedNote": "{{count}} đơn chưa map sản phẩm — chỉ gán ngay, không ghi nhớ được.",
+      "durationLabel": "Thời hạn ghi nhớ",
+      "durations": {
+        "now": "Hiện tại",
+        "day": "1 ngày",
+        "week": "7 ngày",
+        "forever": "Vĩnh viễn"
+      },
+      "durationHints": {
+        "now": "Chỉ gán các đơn đang chọn, KHÔNG lưu cấu hình.",
+        "day": "Ghi nhớ đến hết hôm nay — đơn mới của sản phẩm tự gán cho designer này.",
+        "week": "Ghi nhớ đến hết ngày thứ 7 — đơn mới của sản phẩm tự gán cho designer này.",
+        "forever": "Ghi nhớ vĩnh viễn — giống kéo thả ở cấu hình Ưu tiên 2 (trang Cài đặt)."
+      },
+      "designerLabel": "Designer",
+      "designerPlaceholder": "— Chọn designer —",
+      "designerOption": "{{fullName}} — đang giữ {{count}} đơn",
+      "noDesigners": "Chưa có designer đang hoạt động.",
+      "chooseDesignerFirst": "Chọn designer trước.",
+      "conflictTitle": "{{count}} sản phẩm đang thuộc designer khác — xác nhận sẽ chuyển sang designer mới:",
+      "conflictLine": "{{product}} — đang thuộc {{designer}}",
+      "conflictMore": "… và {{count}} sản phẩm khác",
+      "savedConfig": "Đã ghi nhớ cấu hình cho {{count}} sản phẩm",
+      "assigned": "Đã gán {{modified}}/{{matched}} đơn",
+      "assignedWithSkipped": "Đã gán {{modified}} đơn · {{count}} đơn bị bỏ qua",
+      "confirm": "Ghi nhớ + gán {{orders}} đơn",
+      "confirmAssignOnly": "Gán {{count}} đơn",
+      "cancel": "Hủy"
+    }
   },
   "teamDailyMatrix": {
     "title": "Tất cả designer theo ngày",
