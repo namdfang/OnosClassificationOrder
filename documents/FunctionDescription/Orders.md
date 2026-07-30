@@ -794,6 +794,15 @@ với cron import.
   `applyDesignFromOnospod(order, ctx, {forceUnhold: true})` — `updated=true`
   → tăng đếm `updated`, ngược lại đẩy `{productionId, reason}` vào
   `skipped[]`. Có ít nhất 1 đơn update → `invalidateListCache()`.
+- **Xử lý lỗi:** lỗi gọi OnosPod (network/timeout/403...) cho 1 đơn KHÔNG làm
+  gián đoạn — `OnospodOrderLookupService.lookupByProductionId()` tự bắt mọi
+  lỗi axios/GraphQL, log rồi trả `null` (KHÔNG throw), đơn đó chỉ vào
+  `skipped[]` với lý do `'OnosPod chưa cấu hình hoặc gọi API thất bại'`, các
+  đơn còn lại trong `ids` vẫn xử lý tiếp bình thường. Riêng vòng lặp còn bọc
+  thêm `try/catch` quanh TỪNG đơn — lỗi bất ngờ khác (vd Mongo write fail)
+  cũng KHÔNG làm crash cả batch/mất kết quả các đơn đã xử lý trước đó, chỉ đẩy
+  đơn lỗi vào `skipped[]` với lý do `'Lỗi hệ thống khi xử lý đơn này — thử lại
+  sau.'` + log Winston (`action: 'bulkCheckOrderDesignFromOnospod'`).
 - **UI**: `apps/web/src/components/orders/BulkEditToolbar.tsx` — nút "Kiểm
   tra design mới" (icon `RefreshCw`) trong nhóm nút cùng Giữ đơn/Mở giữ, gate
   theo `canHold` (mirror `HOLD_ALLOWED_ROLES`/`ORDER_WRITE_ROLES`). Bấm →
