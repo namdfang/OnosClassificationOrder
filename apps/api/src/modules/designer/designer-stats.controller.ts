@@ -20,8 +20,8 @@ import {
   GetPerformanceScoresResDto,
   GetPersonErrorOrdersDto,
   GetPersonErrorOverviewDto,
-  GetProductBreakdownDto,
-  GetProductBreakdownResDto,
+  // GetProductBreakdownDto + GetProductBreakdownResDto — TẠM ẨN cùng endpoint
+  // product-breakdown bên dưới, thêm lại khi bật lại.
   GetProductTimeOrdersDto,
   GetProductTimeOrdersResDto,
   GetProductTimeOverviewDto,
@@ -119,11 +119,8 @@ export class DesignerStatsController {
       message: JSON.stringify({ method: 'GET', url: '/designer/sidebar-counts', userId: user._id }),
     });
     const roleName = user?.role?.name;
-    const designerScope = !roleName || !LEADER_ROLES.includes(roleName)
-      ? 'none'
-      : roleName === RoleType.Designer
-        ? 'self'
-        : 'all';
+    const designerScope =
+      !roleName || !LEADER_ROLES.includes(roleName) ? 'none' : roleName === RoleType.Designer ? 'self' : 'all';
     const [counts, errorLogTodo] = await Promise.all([
       this.statsService.getSidebarCounts({
         designerScope,
@@ -382,34 +379,40 @@ export class DesignerStatsController {
     return { success: true, data };
   }
 
-  @Get('designer/product-breakdown')
-  @Auth(LEADER_ROLES)
-  @ApiOperation({
-    summary: 'Breakdown sản phẩm theo từng designer (số đơn/sản phẩm + level + mockup) cho tooltip.',
-  })
-  @HttpCode(HttpStatus.OK)
-  @ApiOkResponse({ type: GetProductBreakdownResDto })
-  async getProductBreakdown(
-    @Query() query: GetProductBreakdownDto,
-    @AuthUser() user: UserDocument,
-  ): Promise<GetProductBreakdownResDto> {
-    this.logger.info({
-      message: JSON.stringify({
-        method: 'GET',
-        url: '/designer/product-breakdown',
-        userId: user._id,
-        days: query.days,
-      }),
-    });
-    const data = await this.statsService.getProductBreakdown(
-      Number(query.days),
-      query.type,
-      query.customer,
-      query.from,
-      query.to,
-    );
-    return { success: true, data };
-  }
+  // ─── TẠM ẨN (2026-07): endpoint tooltip breakdown sản phẩm CHỈ phục vụ khối
+  // "Cơ cấu trạng thái" (`StatusBarCharts.tsx`) đã comment ở FE
+  // (`DesignerStatsTab.tsx`) → comment theo. Service `getProductBreakdown()` +
+  // DTOs shared giữ nguyên. Bật lại: bỏ comment block dưới + thêm lại
+  // `GetProductBreakdownDto`/`GetProductBreakdownResDto` vào import 'shared'
+  // + bỏ comment import/render StatusBarCharts ở FE. ───
+  // @Get('designer/product-breakdown')
+  // @Auth(LEADER_ROLES)
+  // @ApiOperation({
+  //   summary: 'Breakdown sản phẩm theo từng designer (số đơn/sản phẩm + level + mockup) cho tooltip.',
+  // })
+  // @HttpCode(HttpStatus.OK)
+  // @ApiOkResponse({ type: GetProductBreakdownResDto })
+  // async getProductBreakdown(
+  //   @Query() query: GetProductBreakdownDto,
+  //   @AuthUser() user: UserDocument,
+  // ): Promise<GetProductBreakdownResDto> {
+  //   this.logger.info({
+  //     message: JSON.stringify({
+  //       method: 'GET',
+  //       url: '/designer/product-breakdown',
+  //       userId: user._id,
+  //       days: query.days,
+  //     }),
+  //   });
+  //   const data = await this.statsService.getProductBreakdown(
+  //     Number(query.days),
+  //     query.type,
+  //     query.customer,
+  //     query.from,
+  //     query.to,
+  //   );
+  //   return { success: true, data };
+  // }
 
   @Get('designer/tool-check-overview')
   @Auth(TOOL_CHECK_ROLES)

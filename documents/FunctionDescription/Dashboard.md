@@ -72,7 +72,7 @@ Data từ `GET /v1/orders/factory-overview` + `GET /v1/orders?sort=grouped&...` 
 
 **Chỉ hiển thị khi user có perm `page.designer_stats`** (DesignerLeader / Admin / Manager **+ Designer sub** — sub-designer cũng xem được thống kê toàn team). BE: 5 endpoint tab (`designer-stats.controller.ts`, const `LEADER_ROLES`) đã bao gồm `RoleType.Designer`. Xem `DesignerTaskWorkflow.md` để hiểu workflow tổng.
 
-Layout (thứ tự render trên tab: **Bộ lọc chung → Tổng quan N ngày → panel drill-down inline (khi bấm số) → Cần gán designer → Biểu đồ cột cơ cấu → Ma trận toàn team → nút "Làm mới"**). **Period switcher + Leaderboard + Timeline + Error pie TẠM TẮT** — flag `SHOW_LEGACY_STATS = false` trong `DesignerStatsTab.tsx` (code giữ nguyên để bật lại), KHÔNG gọi 3 API `designer/performance` / `designer/timeline/:userId` / `orders/error-stats`. Đánh số dưới đây theo nhóm chức năng, không theo thứ tự dọc:
+Layout (thứ tự render trên tab: **Bộ lọc chung → Tổng quan N ngày → panel drill-down inline (khi bấm số) → Cần gán designer → Ma trận toàn team → nút "Làm mới"**). **Period switcher + Leaderboard + Timeline + Error pie TẠM TẮT** — flag `SHOW_LEGACY_STATS = false` trong `DesignerStatsTab.tsx` (code giữ nguyên để bật lại), KHÔNG gọi 3 API `designer/performance` / `designer/timeline/:userId` / `orders/error-stats`. **Khối "Cơ cấu trạng thái" (§2b, `StatusBarCharts.tsx`) TẠM ẨN (2026-07)** — comment import + render trong `DesignerStatsTab.tsx` VÀ comment endpoint `GET /designer/product-breakdown` (CHỈ khối này dùng) trong `designer-stats.controller.ts`; file component + service `getProductBreakdown()` + DTOs shared + i18n giữ nguyên, bật lại theo ghi chú "TẠM ẨN" tại chỗ trong 2 file đó. Đánh số dưới đây theo nhóm chức năng, không theo thứ tự dọc:
 
 **0. Bộ lọc chung sản phẩm + khách hàng + switcher ngày** (card `Filter` render **ĐẦU TIÊN trên cùng tab**):
 
@@ -284,7 +284,7 @@ Click row → set `selectedUserId` → reload timeline chart.
 - Data từ `GET /v1/designer/team-daily-breakdown?days=7|14|30`. Refetch khi bấm Refresh của tab (prop `reloadToken` = `matrixToken` bump trong `fetchAll`) **hoặc khi đổi bộ lọc chung** (props `type`/`customer` → thêm vào query `&type=&customer=`).
 - **Lưu ý window:** đếm `inProductionAt ∈ [today−(N−1)..today]` → đơn tồn ngoài N ngày ẩn; dùng 14/30 để mở rộng. `done` gộp theo `inProductionAt` (KHÁC "completed in period" của Leaderboard dùng `designerCompletedAt`).
 
-**2b. Biểu đồ cột cơ cấu trạng thái** (`StatusBarCharts.tsx` — 1 card có **toggle**, render **ĐẦU TIÊN trên cùng tab**, trên cả ma trận; Recharts `BarChart` stacked):
+**2b. Biểu đồ cột cơ cấu trạng thái — ⚠️ TẠM ẨN (2026-07, xem ghi chú đầu Tab D)** (`StatusBarCharts.tsx` — 1 card có **toggle**, render **ĐẦU TIÊN trên cùng tab**, trên cả ma trận; Recharts `BarChart` stacked):
 
 - **Toggle "Theo designer / Theo ngày"** — 1 khu vực biểu đồ, 2 chế độ, chung bộ màu 4 trạng thái (Cần làm zinc `#71717A` · Cần làm lại amber `#F59E0B` · Đang làm indigo `#6366F1` · Đã xong emerald `#10B981`) + legend + custom tooltip (hover hiện **số lượng + %** từng trạng thái + Tổng).
 - **Breakdown sản phẩm mode "Theo designer":** dữ liệu = sản phẩm designer được gán (mọi đơn assigned/in-progress/rework/done) **theo bộ lọc chung tab** (days/from/to + type/customer), mỗi sản phẩm = **ảnh mockup + badge level** (ProductConfig) + **số đơn**. Data từ `GET /v1/designer/product-breakdown` (props `filterDays`/`filterFrom`/`filterTo`; map `userId → {products,total}`; `designerData` có `userId`).

@@ -37,7 +37,8 @@ import { DesignerAssignBacklog } from './DesignerAssignBacklog';
 import { DesignerDailyOverview } from './DesignerDailyOverview';
 import { DesignerPerformanceCard } from './DesignerPerformanceCard';
 import { ProductTimePanel } from './ProductTimePanel';
-import { StatusBarCharts } from './StatusBarCharts';
+// Khối "Cơ cấu trạng thái" TẠM ẨN (2026-07) — xem ghi chú "TẠM ẨN" tại vị trí render bên dưới.
+// import { StatusBarCharts } from './StatusBarCharts';
 import { TeamDailyMatrix } from './TeamDailyMatrix';
 import { TopDesigners } from './TopDesigners';
 
@@ -301,14 +302,18 @@ export default function DesignerStatsTab() {
         customer={filterCustomer || undefined}
       />
 
-      {/* Biểu đồ cột: toggle "Theo designer (100%)" / "Theo ngày (số lượng)". */}
+      {/* Khối "Cơ cấu trạng thái" (biểu đồ cột theo designer/ngày) TẠM ẨN
+        (2026-07, không cần nữa) — code `StatusBarCharts.tsx` + i18n giữ nguyên.
+        Bật lại: bỏ comment import ở đầu file + khối dưới + bỏ comment endpoint
+        `GET /designer/product-breakdown` trong `designer-stats.controller.ts`
+        (API tooltip breakdown sản phẩm CHỈ khối này dùng nên đã comment theo).
       <StatusBarCharts
         type={filterType || undefined}
         customer={filterCustomer || undefined}
         filterDays={7}
         filterFrom={dateFrom || undefined}
         filterTo={dateTo || undefined}
-      />
+      /> */}
 
       {/* Nút làm mới các bảng bên trên (period switcher tạm ẩn cùng 3 khối legacy). */}
       {!SHOW_LEGACY_STATS && (
