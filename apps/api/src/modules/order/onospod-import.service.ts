@@ -528,11 +528,11 @@ export class OnospodImportService {
     // trước, mỗi item đã tự mang sẵn field `manufacture{_id,name,sku}`.
     //
     // Query GraphQL chỉ nhận `status: String` đơn (không phải mảng) → phải
-    // gọi riêng cho từng status trong `MRP_STATUSES` rồi gộp kết quả.
-    const allItems: MrpProductItem[] = [];
-    for (const status of MRP_STATUSES) {
-      allItems.push(...(await this.fetchAllPages(config, status, start, end)));
-    }
+    // gọi riêng cho từng status trong `MRP_STATUSES` rồi gộp kết quả. Chạy
+    // ĐỒNG THỜI (Promise.all) thay vì tuần tự — 2 status độc lập nhau, không
+    // cần chờ status trước xong mới gọi status sau, giảm tổng thời gian chờ.
+    const itemsByStatus = await Promise.all(MRP_STATUSES.map((status) => this.fetchAllPages(config, status, start, end)));
+    const allItems = itemsByStatus.flat();
 
     if (allItems.length === 0) {
       // Không có đơn "To Do"/"Ready" mới trong khoảng này — trạng thái BÌNH

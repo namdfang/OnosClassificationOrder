@@ -211,11 +211,13 @@ từng manufacture — đã bỏ, vì mỗi item trả về đã tự mang sẵn
 User bấm "Lấy đơn từ OnosPod"
   → POST /v1/orders/import-from-onospod (body {} → BE tự tính period theo giờ gọi, xem bên dưới)
   → OnospodImportService:
-      1. Loop từng status trong `MRP_STATUSES = ['To Do', 'Ready']` (query GraphQL chỉ nhận
-         `status: String` đơn, KHÔNG phải mảng → phải gọi riêng 1 lượt phân trang/status rồi
-         gộp kết quả) — mỗi lượt: loop page=1.. gọi `paginateMrpProduct(mrp_status=status,
-         start, end, page, perpage=500)` — KHÔNG truyền `manufacture_id` — tới khi hết
-         `paginate.total_pages`. (Bearer token tĩnh lưu trong env `ONOSPOD_QC_API_URL` /
+      1. Gọi ĐỒNG THỜI (`Promise.all`) 1 lượt phân trang riêng cho từng status trong
+         `MRP_STATUSES = ['To Do', 'Ready']` (query GraphQL chỉ nhận `status: String` đơn,
+         KHÔNG phải mảng → không gộp filter được, phải gọi riêng) — 2 lượt độc lập không
+         cần chờ nhau nên chạy song song thay vì tuần tự, `.flat()` gộp kết quả lại. Mỗi
+         lượt: loop page=1.. gọi `paginateMrpProduct(mrp_status=status, start, end, page,
+         perpage=500)` — KHÔNG truyền `manufacture_id` — tới khi hết `paginate.total_pages`.
+         (Bearer token tĩnh lưu trong env `ONOSPOD_QC_API_URL` /
          `ONOSPOD_QC_BEARER_TOKEN` — đọc qua `ApiConfigService.onospodQcConfig`, trả `null`
          nếu chưa cấu hình thay vì crash app boot, giống `r2Config`)
       2. Map từng `MrpProduct` → `ImportProductionOrderRow` (field mapping xác nhận qua
