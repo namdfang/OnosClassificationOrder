@@ -2,6 +2,9 @@
   "strip": {
     "title": "Order lifecycle",
     "searchPlaceholder": "Look up productionId…",
+    "factoryAll": "All factories",
+    "customerPlaceholder": "Pick a customer…",
+    "customerNoMatch": "No matching customer.",
     "bulkLookup": "Multiple codes",
     "bulkLookupTitle": "Look up multiple Production IDs",
     "dateRangePlaceholder": "Date range",
@@ -66,9 +69,18 @@
       "days": "{{count}}d"
     },
     "kpi": {
-      "inProgress": { "label": "Orders in process", "sub": "Not shipped yet" },
-      "completed": { "label": "Completed", "sub": "Orders entering production {{from}} → {{to}} that shipped" },
-      "cycleTime": { "label": "Average cycle time", "sub": "Design → shipped" },
+      "inProgress": {
+        "label": "Orders in process",
+        "sub": "Not shipped yet"
+      },
+      "completed": {
+        "label": "Completed",
+        "sub": "Orders entering production {{from}} → {{to}} that shipped"
+      },
+      "cycleTime": {
+        "label": "Average cycle time",
+        "sub": "Design → shipped"
+      },
       "bottleneck": {
         "label": "Bottleneck stage",
         "subWaiting": "{{count}} orders waiting",

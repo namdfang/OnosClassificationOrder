@@ -3,15 +3,6 @@
     "title": "Dashboard",
     "subtitle": "Workshop activity overview"
   },
-  "tabs": {
-    "factory": "Orders by factory",
-    "stats": "Order & product stats",
-    "status": "Order status",
-    "lifecycle": "Order lifecycle",
-    "toolCheck": "Tool check",
-    "personError": "Errors by person",
-    "designer": "Designer"
-  },
   "topDesigners": {
     "title": "Top Designer",
     "empty": "No designs finished in this range yet.",

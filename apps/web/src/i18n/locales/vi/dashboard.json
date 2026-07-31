@@ -3,15 +3,6 @@
     "title": "Dashboard",
     "subtitle": "Tổng quan hoạt động xưởng"
   },
-  "tabs": {
-    "factory": "Đơn hàng theo xưởng",
-    "stats": "Thống kê đơn & sản phẩm",
-    "status": "Tình trạng đơn hàng",
-    "lifecycle": "Vòng đời đơn",
-    "toolCheck": "Soát tool",
-    "personError": "Lỗi theo người",
-    "designer": "Designer"
-  },
   "topDesigners": {
     "title": "Top Designer",
     "empty": "Chưa có thiết kế nào xong trong khoảng này.",
