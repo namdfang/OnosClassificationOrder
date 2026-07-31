@@ -1,0 +1,111 @@
+{
+    "meta": {
+        "title": "Careers at Onos Group"
+    },
+    "nav": {
+        "responsibilities": "Responsibilities",
+        "qualifications": "Qualifications",
+        "benefits": "Benefits",
+        "apply": "Apply"
+    },
+    "hero": {
+        "badge": "We're Hiring!",
+        "roleTitle": "Machine Operator",
+        "openPositions": "10 Open Positions",
+        "tagline": "Join Onos. Build a stronger tomorrow.",
+        "ctaApply": "Apply Today",
+        "ctaApplyForm": "Job Application Form"
+    },
+    "infoStrip": {
+        "location": {
+            "label": "Location",
+            "value": "1230 Kress Street, Houston, TX 77020, United States"
+        },
+        "pay": {
+            "label": "Competitive Pay",
+            "value": "Competitive pay & great benefits"
+        },
+        "shift": {
+            "label": "Flexible Shift Options",
+            "value": "Overtime opportunities may be available"
+        },
+        "safety": {
+            "label": "OSHA-Compliant Workplace",
+            "value": "Safety first, always"
+        }
+    },
+    "responsibilities": {
+        "title": "Job Responsibilities",
+        "items": [
+            "Operate industrial Print-on-Demand (POD) production equipment.",
+            "Monitor machine performance and product quality throughout the production process.",
+            "Perform machine setup, operation, and basic maintenance following standard operating procedures.",
+            "Report equipment malfunctions or technical issues to supervisors.",
+            "Follow production procedures and OSHA workplace safety standards.",
+            "Collaborate with team members to ensure production schedules and quality standards are achieved."
+        ]
+    },
+    "qualifications": {
+        "title": "Qualifications",
+        "items": [
+            "Legally authorized to work in the United States.",
+            "Vietnamese language skills are preferred.",
+            "Ability to work in a manufacturing environment.",
+            "Interest in manufacturing and production technology is a plus.",
+            "Responsible, detail-oriented, and willing to learn.",
+            "Able to work independently as well as in a team environment."
+        ]
+    },
+    "benefits": {
+        "title": "Compensation & Benefits",
+        "items": [
+            "Competitive pay based on qualifications and experience.",
+            "Paid training provided.",
+            "Modern, clean, and safe working environment.",
+            "Supportive and professional team.",
+            "Career growth opportunities within a rapidly expanding manufacturing company.",
+            "Benefits available for eligible full-time employees.",
+            "Benefits are subject to eligibility requirements and company policies."
+        ]
+    },
+    "schedule": {
+        "title": "Work Schedule",
+        "items": [
+            "Flexible shift schedules available.",
+            "Overtime opportunities may be available."
+        ]
+    },
+    "employmentType": {
+        "title": "Employment Type",
+        "items": [
+            "Full-Time",
+            "Permanent Position",
+            "Immediate Hiring"
+        ]
+    },
+    "apply": {
+        "title": "Apply Today!",
+        "subtitle": "Join Onos and help build the future of Print-on-Demand manufacturing in the United States.",
+        "waysTitle": "Apply in one of the following ways:",
+        "email": {
+            "label": "Email Your Resume",
+            "value": "careers@onosgroup.com"
+        },
+        "applicationForm": {
+            "label": "Job Application Form",
+            "value": "Scan the QR code to open our job application form.",
+            "link": "https://docs.google.com/forms/d/e/1FAIpQLSejNYPnUMZ6SWPXY6FbqgLf7qDq5Im0l2JX36dv7tMuMFmkuw/viewform"
+        },
+        "online": {
+            "label": "Apply Online",
+            "value": "Apply using the form on this page"
+        },
+        "subjectPrefix": "Application"
+    },
+    "footer": {
+        "website": "onosfactory.com/company/careers",
+        "email": "careers@onosgroup.com",
+        "eeo": "Onos Group is an Equal Opportunity Employer.",
+        "backToHome": "Back to home"
+    }
+}

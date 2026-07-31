@@ -26,7 +26,7 @@ services:
     ports:
       - ${ELASTICSEARCH_PORT}:9200
     networks:
-      - printsel
+      - onosfactory
 
   kibana:
     image: docker.elastic.co/kibana/kibana:8.7.1
@@ -35,7 +35,7 @@ services:
       - ELASTICSEARCH_USERNAME=${ELASTIC_USERNAME}
       - ELASTICSEARCH_PASSWORD=${ELASTIC_PASSWORD}
     networks:
-      - printsel
+      - onosfactory
     ports:
       - ${KIBANA_PORT}:5601
     depends_on:
@@ -50,8 +50,8 @@ services:
       - elasticsearch
       - kibana
     networks:
-      - printsel
+      - onosfactory
 
 networks:
-  printsel:
+  onosfactory:
     driver: bridge

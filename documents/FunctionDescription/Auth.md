@@ -12,7 +12,7 @@
 
 ## 1. Overview
 
-Module Auth bao gồm toàn bộ luồng xác thực + phân quyền của hệ thống, kế thừa từ Printsel base và **giữ lại sau khi cleanup** (các module business khác đã xóa). Bao gồm:
+Module Auth bao gồm toàn bộ luồng xác thực + phân quyền của hệ thống, kế thừa từ OnosFactory base và **giữ lại sau khi cleanup** (các module business khác đã xóa). Bao gồm:
 
 - **Auth flow** — login bằng email/password, JWT access + refresh token
 - **User** — CRUD user, gán role + custom role + department

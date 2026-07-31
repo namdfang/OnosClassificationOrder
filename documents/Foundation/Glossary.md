@@ -1,6 +1,6 @@
 # Glossary & Domain Dictionary
 
-Bảng thuật ngữ nghiệp vụ của hệ thống **Printsel** — hệ thống quản lý đơn hàng fulfillment nội bộ cho ngành Print-on-Demand (POD).
+Bảng thuật ngữ nghiệp vụ của hệ thống **OnosFactory** — hệ thống quản lý đơn hàng fulfillment nội bộ cho ngành Print-on-Demand (POD).
 
 > **Quy ước:** Mỗi thuật ngữ được mô tả kèm theo tên module/entity/enum tương ứng trong code để tiện tra cứu.
 
@@ -363,7 +363,7 @@ Danh sách các nhà cung cấp được tích hợp trong hệ thống:
 
 | Code | Tên | Loại | Service trong code |
 |------|-----|------|-------------------|
-| `PRINTSEL` | Printsel (nội bộ) | Factory | — |
+| `PRINTSEL` | OnosFactory (nội bộ) | Factory | — |
 | `BEEFUN` | Beefun | Factory | `BeefunService` |
 | `FLASHSHIP` | Flashship | Factory | `FlashshipService` |
 | `ONOS` | OnosPod | Factory | `OnosPodService` |

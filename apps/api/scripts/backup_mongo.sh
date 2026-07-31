@@ -4,10 +4,10 @@ set -euo pipefail
 # ============ CONFIG ============
 USER_NAME="namdfang"
 BACKUP_DIR="/home/$USER_NAME/db_backups"
-CONTAINER_NAME="printsel-mongodb"
-DB_NAME="printsel"
+CONTAINER_NAME="onosfactory-mongodb"
+DB_NAME="onosfactory"
 REMOTE_NAME="ggdrive"
-REMOTE_DIR="backupDbPrintsel"
+REMOTE_DIR="backupDbOnosFactory"
 RETENTION_DAYS=7
 DATE=$(date +%Y-%m-%d_%H-%M-%S)
 # ================================

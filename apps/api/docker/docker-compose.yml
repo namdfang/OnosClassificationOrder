@@ -13,7 +13,7 @@ services:
       - RABBITMQ_DEFAULT_USER=${RABBITMQ_USER}
       - RABBITMQ_DEFAULT_PASS=${RABBITMQ_PASSWORD}
     networks:
-      - printsel
+      - onosfactory
 
   redis:
     image: redis:alpine
@@ -27,19 +27,19 @@ services:
       - REDIS_DATABASE=${REDIS_DB}
     entrypoint: ['sh', '-c', 'redis-server --requirepass $$REDIS_PASSWORD']
     networks:
-      - printsel
+      - onosfactory
 
   mongodb:
     image: mongo:6.0
-    container_name: 'printsel-mongodb'
+    container_name: 'onosfactory-mongodb'
     ports:
       - 127.0.0.1:27017:27017
     volumes:
       - ~/.docker-conf/mongodb/data:/data/db
     command: ['mongod', '--replSet', 'rs0', '--bind_ip_all']
     networks:
-      - printsel
+      - onosfactory
 
 networks:
-  printsel:
+  onosfactory:
     driver: bridge
