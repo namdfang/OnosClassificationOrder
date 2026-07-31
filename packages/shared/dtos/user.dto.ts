@@ -13,7 +13,7 @@ import {
   PHONE_MAX_LENGTH,
   // PHONE_MIN_LENGTH,
 } from '@shared/constants';
-import { FulfillmentStage, Gender, Status } from '@shared/enums';
+import { DesignerRank, FulfillmentStage, Gender, Status } from '@shared/enums';
 import { BaseEntityZod, PageQueryZod, PageResZod, ResZod } from '@shared/types';
 import { z } from 'zod';
 
@@ -77,6 +77,12 @@ export const UserZod = BaseEntityZod.extend({
    * `currentFulfillmentStage = fulfillmentStage` của mình.
    */
   fulfillmentStage: z.nativeEnum(FulfillmentStage).optional(),
+  /**
+   * Level CHÍNH THỨC của designer (S cao nhất → D) — admin set (có gợi ý từ
+   * điểm hiệu suất rolling 60 ngày, endpoint `PATCH /designer/level/:userId`).
+   * Về sau dùng để gán task khó/dễ theo `productConfig.level`.
+   */
+  designerLevel: z.nativeEnum(DesignerRank).optional(),
 });
 export type User = z.infer<typeof UserZod>;
 

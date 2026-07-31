@@ -3,15 +3,6 @@
     "title": "Dashboard",
     "subtitle": "Workshop activity overview"
   },
-  "tabs": {
-    "factory": "Orders by factory",
-    "stats": "Order & product stats",
-    "status": "Order status",
-    "lifecycle": "Order lifecycle",
-    "toolCheck": "Tool check",
-    "personError": "Errors by person",
-    "designer": "Designer"
-  },
   "topDesigners": {
     "title": "Top Designer",
     "empty": "No designs finished in this range yet.",
@@ -651,6 +642,140 @@
     "subtitleDesigner": "— this designer's own numbers in the filtered range",
     "customerTip": "Order customer",
     "searchProductPlaceholder": "Search products...",
-    "noMatch": "No products match the filter."
+    "noMatch": "No products match the filter.",
+    "colLevel": "Level",
+    "colSuggest": "Suggested",
+    "levelSaved": "Level {{level}} assigned to product",
+    "noConfigTip": "No Product Config yet — create it on the Products page before assigning a level",
+    "suggestTipTitle": "Difficulty suggestion (last 60 days)",
+    "suggestTip": "{{done}} done orders · avg work {{work}} · {{rework}}% rework — relative to other products (70% time + 30% rework)",
+    "suggestApplyTip": "Click to assign this level to the product",
+    "suggestInsufficient": "Not enough data — needs at least 5 done orders in the last 60 days"
+  },
+  "performance": {
+    "title": "Performance ranking",
+    "subtitle": "— 0-100 score for the filtered range, S is highest",
+    "empty": "No designers yet.",
+    "colDesigner": "Designer",
+    "colScore": "Score",
+    "colTrend": "Trend",
+    "colComponents": "Components",
+    "colDone": "Done/Total",
+    "colLevel": "Official level",
+    "insufficientBadge": "not enough data",
+    "insufficientTip": "Fewer than {{minDone}} done in range — score is indicative only",
+    "rankTip": "Score this range: {{score}}/100",
+    "components": {
+      "speed": "Speed (30%)",
+      "quality": "Quality (25%)",
+      "throughput": "Throughput (15%)",
+      "response": "Response (10%)",
+      "reliability": "Reliability (10%)",
+      "proactive": "Initiative (10%)"
+    },
+    "componentTips": {
+      "speed": "Work time vs team average on the SAME product mix — 50 = team average, 100 = twice as fast",
+      "quality": "Share of done tasks without rework",
+      "throughput": "Done count vs team median in range",
+      "response": "Pickup time vs team median — faster is higher",
+      "reliability": "Share of tasks NOT handed off as \"can't do\"",
+      "proactive": "Times they SELF-claimed via \"Claim for me\" in range — 50 = never (neutral, no penalty), claiming more vs the claiming-peers baseline → approaches 100"
+    },
+    "rawWork": "avg work {{value}}m",
+    "rawRework": "{{count}} reworks",
+    "rawResponse": "avg response {{value}}m",
+    "rawRejections": "{{count}} handoffs",
+    "suggestChip": "Suggest: {{level}}",
+    "suggestTip": "Suggested rank from last-60-day score — click to apply as official level",
+    "levelSaved": "Level {{level}} set for {{name}}",
+    "formulaTitle": "How the score works (0-100)",
+    "formulaSpeed": "• Speed 30% — normalized by product-mix difficulty",
+    "formulaQuality": "• Quality 25% — 1 − rework rate",
+    "formulaThroughput": "• Throughput 15% — vs team median",
+    "formulaResponse": "• Response 10% — vs team median",
+    "formulaReliability": "• Reliability 10% — penalized per \"can't do\" handoff",
+    "formulaNote": "At least {{minDone}} done tasks in range required for an official rank. S≥85 · A≥70 · B≥55 · C≥40 · D<40",
+    "vizDonut": "Show as donut chart",
+    "vizBars": "Show as bars",
+    "donutTipTitle": "Score {{score}}/100 — contribution by component",
+    "guide": {
+      "button": "Guide",
+      "title": "Where do the numbers come from? (scope: orders with PRODUCTION ENTRY DATE in the filtered range, assigned to a designer; excludes cancelled + unmapped-factory orders)",
+      "designer": "Active accounts with the Designer role. Badge = rank from this range's score (S≥85 · A≥70 · B≥55 · C≥40 · D<40).",
+      "score": "0-100 score from 6 parts: Speed 30 + Quality 25 + Throughput 15 + Response 10 + Reliability 10 + Initiative 10. Click \"Guide\" for a walkthrough with examples.",
+      "trend": "Compared with the immediately preceding range of the same length (e.g. filtering 7 days → vs the 7 days before). — means one of the two ranges lacks data.",
+      "componentsCol": "The 5 score components. Donut: colored part = points earned, gray = missing to 100. Hover for details.",
+      "speed": "Total actual work time (clock runs from \"Start\" to \"Complete\", accumulated across reworks) VS the team's average time on the SAME product types — hard products don't penalize you.",
+      "quality": "Share of done orders NOT sent back for rework due to a designer error.",
+      "throughput": "Orders completed in range vs the team median.",
+      "response": "Time from being ASSIGNED to first pressing \"Start\", vs team median — faster pickup scores higher.",
+      "reliability": "Penalized per \"can't do\" handoff over total assigned orders.",
+      "done": "Completed orders / total orders assigned in range (all statuses).",
+      "level": "OFFICIAL level set by Admin (S-D select). The \"Suggest\" chip = rank from the last 60 days' score — click to apply. Used later for hard/easy task routing.",
+      "scope": "At least {{minDone}} done orders in range are required for an official rank — below that, \"not enough data\" is shown and the badge is dimmed.",
+      "proactive": "Counts SELF-clicks of \"Claim for me\" in the assign backlog/drill panel (leader assignments do NOT count; by click time). Zero claims = neutral 50; matching the claimers' median = 75; double = 100."
+    },
+    "rawClaims": "{{count}} self-claims",
+    "formulaProactive": "• Initiative 10% — self \"Claim for me\" count (reward only, no penalty)",
+    "guideDialog": {
+      "title": "How to read this ranking",
+      "intro": "Each designer gets a 0-100 score for the filtered date range. Higher = more effective. A score of 50 means right at the team average — no better, no worse than anyone.",
+      "ranksTitle": "Score to rank",
+      "rankLabels": {
+        "S": "Excellent",
+        "A": "Good",
+        "B": "Fair",
+        "C": "Average",
+        "D": "Needs support"
+      },
+      "partsTitle": "The 100 points split into 6 parts",
+      "maxPts": "max {{pts}} pts",
+      "exampleLabel": "Example:",
+      "parts": {
+        "speed": {
+          "name": "Speed",
+          "q": "Fast or slow?",
+          "how": "Compares your time per order with the team's average time on the SAME product types — so taking hard products never hurts you.",
+          "ex": "Team averages 60 minutes per Hoodie order. You take 30 (twice as fast) → full 30 pts. Exactly 60 → 15 pts. 120+ minutes → 0 pts."
+        },
+        "quality": {
+          "name": "Quality",
+          "q": "Any errors?",
+          "how": "Counts done orders that got sent back for rework.",
+          "ex": "100 done, 10 sent back → 90% → 22.5/25 pts. None sent back → full 25 pts."
+        },
+        "throughput": {
+          "name": "Throughput",
+          "q": "A lot or a little?",
+          "how": "Compares your completed count with the middle person of the team (half do more, half do less).",
+          "ex": "Middle person finishes 20 orders. You finish 20 → 7.5 pts. 40+ → full 15 pts."
+        },
+        "response": {
+          "name": "Response",
+          "q": "Quick to pick up work?",
+          "how": "From being assigned to first pressing \"Start\", vs the team's middle person.",
+          "ex": "Team usually starts 30 minutes after assignment. You start after 15 → twice as fast → full 10 pts."
+        },
+        "reliability": {
+          "name": "Reliability",
+          "q": "Hand work back often?",
+          "how": "Each \"can't do\" handoff to someone else deducts points.",
+          "ex": "50 assigned, zero handoffs → full 10 pts. 5 of 50 handed off → −10% → 9 pts."
+        },
+        "proactive": {
+          "name": "Initiative",
+          "q": "Volunteer for extra work?",
+          "how": "Counts times you SELF-click \"Claim for me\" in the assign backlog. Leader assignments don't count. Bonus only — never a penalty.",
+          "ex": "Never self-claim → still 5/10 pts (no penalty). Claim at the claimers' baseline → 7.5. Double it → full 10."
+        }
+      },
+      "notesTitle": "Notes",
+      "notes": {
+        "scope": "Only orders ENTERING PRODUCTION within the filtered dates count (cancelled and unmapped-factory orders excluded). Initiative counts by click time.",
+        "minDone": "Fewer than {{minDone}} done in range → \"not enough data\", dimmed badge — the score is indicative only.",
+        "trend": "Trend column: points gained/lost vs the immediately preceding range of the same length.",
+        "level": "Official level is the Admin's call — the \"Suggest\" chip is just computed from the last 60 days' score."
+      }
+    }
   }
 }

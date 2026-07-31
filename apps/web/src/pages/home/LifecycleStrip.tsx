@@ -28,6 +28,8 @@ import {
 } from 'lucide-react';
 import type { LifecycleOverview, LifecycleTrack } from 'shared';
 
+import { useAuthStore } from '@/store/authStore';
+
 import { RepositoryRemote } from '@/services';
 
 import { DateRangePicker } from '@/components/common/DateRangePicker';
@@ -37,6 +39,8 @@ import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/comp
 
 import { handleAxiosError } from '@/utils';
 import { cn } from '@/utils/cn';
+
+import { usePermission } from '@/hooks/usePermission';
 
 /** Nhãn ngắn cho từng chặng — hiện trên đầu mỗi box. */
 function buildStageShort(t: TFunction<'orderLifecycle'>): Record<string, string> {
@@ -147,6 +151,25 @@ export default function LifecycleStrip() {
   const [bulkOpen, setBulkOpen] = useState(false);
   const [cancelledOpen, setCancelledOpen] = useState(false);
 
+  // Lọc xưởng + khách hàng (chỉ chế độ tổng quan; track theo productionId bỏ qua).
+  // Mirror khóa xưởng của LifecycleTab: role quản lý chọn mọi xưởng, còn lại
+  // (Fulfillment) BE tự khóa theo xưởng mình → ẩn select.
+  const { profile } = useAuthStore();
+  const { roleName } = usePermission();
+  const isOverrideRole = ['SuperAdmin', 'Admin', 'Manager', 'SupportManager', 'Support'].includes(roleName ?? '');
+  const lockedFactoryId = !isOverrideRole ? profile?.factoryId : undefined;
+  const [factoryId, setFactoryId] = useState('');
+  const effectiveFactory = lockedFactoryId ?? factoryId;
+  // Combobox khách: chọn từ danh sách `customers` của response overview (facet
+  // BE, scope theo xưởng/ngày đang lọc) → lọc CHÍNH XÁC theo cặp SKU+email.
+  const [custQuery, setCustQuery] = useState('');
+  const [custOpen, setCustOpen] = useState(false);
+  const [selCust, setSelCust] = useState<{ userSku: string; userEmail: string } | null>(null);
+  // Options xưởng/khách cache từ lần fetch KHÔNG lọc chiều tương ứng (facet BE
+  // chạy sau $match nên khi đang lọc danh sách sẽ co lại).
+  const [factoryOpts, setFactoryOpts] = useState<Array<{ factoryId: string; factoryName: string }>>([]);
+  const [customerOpts, setCustomerOpts] = useState<Array<{ userSku: string; userEmail: string; count: number }>>([]);
+
   const [agg, setAgg] = useState<LifecycleOverview | null>(null);
   const [track, setTrack] = useState<LifecycleTrack | null>(null);
   const [loading, setLoading] = useState(false);
@@ -168,8 +191,18 @@ export default function LifecycleStrip() {
         const params = new URLSearchParams();
         if (from) params.set('from', from);
         if (to) params.set('to', to);
+        if (effectiveFactory) params.set('factoryId', effectiveFactory);
+        if (selCust) {
+          params.set('userSku', selCust.userSku);
+          if (selCust.userEmail) params.set('userEmail', selCust.userEmail);
+        }
         const resp = await RepositoryRemote.order.getLifecycleOverview(`?${params.toString()}`);
-        if (!cancelled) setAgg(resp.data.data);
+        if (!cancelled) {
+          setAgg(resp.data.data);
+          // Cache options từ response KHÔNG lọc chiều tương ứng.
+          if (!effectiveFactory && !selCust) setFactoryOpts(resp.data.data?.factories ?? []);
+          if (!selCust) setCustomerOpts(resp.data.data?.customers ?? []);
+        }
       } catch (error) {
         if (!cancelled) handleAxiosError(error);
       } finally {
@@ -179,7 +212,16 @@ export default function LifecycleStrip() {
     return () => {
       cancelled = true;
     };
-  }, [from, to, isTrack]);
+  }, [from, to, isTrack, effectiveFactory, selCust]);
+
+  // Lọc client-side danh sách khách theo text gõ vào combobox.
+  const filteredCust = useMemo(() => {
+    const q = custQuery.trim().toLowerCase();
+    const list = q
+      ? customerOpts.filter((c) => c.userSku.toLowerCase().includes(q) || c.userEmail.toLowerCase().includes(q))
+      : customerOpts;
+    return list.slice(0, 50);
+  }, [customerOpts, custQuery]);
 
   useEffect(() => {
     const code = debouncedPid.trim();
@@ -277,6 +319,93 @@ export default function LifecycleStrip() {
               setTo(t2);
             }}
           />
+        )}
+        {!isTrack && !lockedFactoryId && (
+          <select
+            value={factoryId}
+            onChange={(e) => setFactoryId(e.target.value)}
+            className={cn(
+              'h-7 px-2 rounded-md border bg-background text-xs outline-none focus:ring-1 focus:ring-indigo-300',
+              factoryId ? 'border-indigo-400 text-foreground' : 'border-border text-muted-foreground',
+            )}
+          >
+            <option value="">{t('strip.factoryAll')}</option>
+            {factoryOpts.map((f) => (
+              <option key={f.factoryId} value={f.factoryId}>
+                {f.factoryName}
+              </option>
+            ))}
+          </select>
+        )}
+        {!isTrack && (
+          <div className="relative w-[190px]">
+            <Search size={13} className="absolute left-2 top-1/2 -translate-y-1/2 text-muted-foreground" />
+            <input
+              value={selCust ? selCust.userSku : custQuery}
+              onChange={(e) => {
+                setSelCust(null);
+                setCustQuery(e.target.value);
+                setCustOpen(true);
+              }}
+              onFocus={() => setCustOpen(true)}
+              onBlur={() => setCustOpen(false)}
+              placeholder={t('strip.customerPlaceholder')}
+              className={cn(
+                'w-full h-7 pl-7 pr-6 rounded-md border bg-background text-xs outline-none focus:ring-1 focus:ring-indigo-300',
+                selCust ? 'border-indigo-400' : 'border-border',
+              )}
+            />
+            {(selCust || custQuery) && (
+              <button
+                type="button"
+                onClick={() => {
+                  setSelCust(null);
+                  setCustQuery('');
+                }}
+                className="absolute right-1.5 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
+              >
+                <X size={13} />
+              </button>
+            )}
+            {/* Dropdown danh sách khách — mousedown preventDefault để không blur input trước khi click chọn */}
+            {custOpen && (
+              <div
+                onMouseDown={(e) => e.preventDefault()}
+                className="absolute left-0 top-full mt-1 w-[280px] max-h-64 overflow-y-auto rounded-md border border-border bg-popover shadow-md py-1 z-30"
+              >
+                {filteredCust.length === 0 ? (
+                  <p className="text-xs text-muted-foreground text-center py-3">{t('strip.customerNoMatch')}</p>
+                ) : (
+                  filteredCust.map((c) => {
+                    const isSelected = selCust?.userSku === c.userSku && selCust?.userEmail === c.userEmail;
+                    return (
+                      <button
+                        key={`${c.userSku}|${c.userEmail}`}
+                        type="button"
+                        onClick={() => {
+                          setSelCust({ userSku: c.userSku, userEmail: c.userEmail });
+                          setCustQuery('');
+                          setCustOpen(false);
+                        }}
+                        className={cn(
+                          'w-full px-2 py-1.5 text-left hover:bg-accent flex items-center gap-2',
+                          isSelected && 'bg-accent/60',
+                        )}
+                      >
+                        <span className="text-xs font-medium text-foreground truncate">{c.userSku}</span>
+                        {c.userEmail && (
+                          <span className="text-[10px] text-muted-foreground truncate flex-1">{c.userEmail}</span>
+                        )}
+                        <span className="text-[10px] tabular-nums text-muted-foreground shrink-0">
+                          {c.count.toLocaleString('en-US')}
+                        </span>
+                      </button>
+                    );
+                  })
+                )}
+              </div>
+            )}
+          </div>
         )}
         {!isTrack && (
           <button
@@ -530,7 +659,15 @@ export default function LifecycleStrip() {
         }}
       />
 
-      <CancelledOrdersDialog open={cancelledOpen} onClose={() => setCancelledOpen(false)} from={from} to={to} />
+      <CancelledOrdersDialog
+        open={cancelledOpen}
+        onClose={() => setCancelledOpen(false)}
+        from={from}
+        to={to}
+        factoryId={effectiveFactory || undefined}
+        userSku={selCust?.userSku}
+        userEmail={selCust?.userEmail || undefined}
+      />
     </div>
   );
 }

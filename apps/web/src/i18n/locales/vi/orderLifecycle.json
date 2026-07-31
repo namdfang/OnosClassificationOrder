@@ -2,6 +2,9 @@
   "strip": {
     "title": "Vòng đời đơn",
     "searchPlaceholder": "Tra cứu productionId…",
+    "factoryAll": "Tất cả xưởng",
+    "customerPlaceholder": "Chọn khách hàng…",
+    "customerNoMatch": "Không có khách nào khớp.",
     "bulkLookup": "Nhiều mã",
     "bulkLookupTitle": "Tra cứu nhiều Production ID",
     "dateRangePlaceholder": "Khoảng ngày",
@@ -66,9 +69,18 @@
       "days": "{{count}} ngày"
     },
     "kpi": {
-      "inProgress": { "label": "Đơn đang trong quy trình", "sub": "Chưa đóng hàng xong" },
-      "completed": { "label": "Hoàn thành", "sub": "Đơn vào SX {{from}} → {{to}} đã đóng hàng xong" },
-      "cycleTime": { "label": "Cycle time trung bình", "sub": "Thiết kế → đóng hàng" },
+      "inProgress": {
+        "label": "Đơn đang trong quy trình",
+        "sub": "Chưa đóng hàng xong"
+      },
+      "completed": {
+        "label": "Hoàn thành",
+        "sub": "Đơn vào SX {{from}} → {{to}} đã đóng hàng xong"
+      },
+      "cycleTime": {
+        "label": "Cycle time trung bình",
+        "sub": "Thiết kế → đóng hàng"
+      },
       "bottleneck": {
         "label": "Công đoạn tắc nghẽn",
         "subWaiting": "{{count}} đơn đang chờ",

@@ -4,6 +4,8 @@ import type { CallbackWithoutResultAndOptionalError, HydratedDocument } from 'mo
 import type { User } from 'shared';
 import {
   CODE_LENGTH,
+  DESIGNER_RANKS,
+  DesignerRank,
   FULFILLMENT_STAGES,
   FulfillmentStage,
   Gender,
@@ -200,6 +202,13 @@ export class UserEntity extends DatabaseEntityAbstract {
    */
   @Prop({ type: String, enum: FULFILLMENT_STAGES, index: true })
   fulfillmentStage?: FulfillmentStage;
+
+  /**
+   * Level chính thức của designer (S/A/B/C/D) — admin set qua
+   * `PATCH /designer/level/:userId` (có gợi ý từ điểm rolling 60 ngày).
+   */
+  @Prop({ type: String, enum: DESIGNER_RANKS })
+  designerLevel?: DesignerRank;
 }
 
 assertSameType<User, UserEntity>();

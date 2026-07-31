@@ -1,5 +1,6 @@
 export * from './barcode-prefix';
 export * from './commons';
+export * from './designer-rank';
 export * from './designer-status';
 export * from './export-type';
 export * from './file-type';

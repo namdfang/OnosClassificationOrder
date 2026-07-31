@@ -1,7 +1,8 @@
 # Dashboard — Function Description
 
-> **File FE:** `apps/web/src/pages/home/index.tsx` (Tabs wrapper, 6 tab: `stats|status|factory|lifecycle|tool-check|designer`)
-> **⚠️ TẠM ẨN (2026-07):** tab **`status` (Tình trạng đơn hàng)** và **`person-error` (Lỗi theo người)** đang bị comment (không cần nữa) — code/BE/i18n giữ nguyên, chỉ comment ở `pages/home/index.tsx` (import + `TABS` + `canSeePersonError`/`isTabAllowed` + TabsTrigger/TabsContent) và 2 entry `dash-status`/`dash-person-error` trong `components/sidebar/Sidebar.tsx`. Bật lại theo ghi chú "TẠM ẨN" tại chỗ trong 2 file đó.
+> **File FE:** `apps/web/src/pages/home/index.tsx` (6 tab: `stats|status|factory|lifecycle|tool-check|designer`)
+> **⚠️ BỎ thanh tab tại chỗ (2026-07):** `index.tsx` KHÔNG còn render `TabsList/TabsTrigger` — chuyển tab CHỈ qua submenu sidebar (`Sidebar.tsx` Link `?tab=<key>`, thay cả query string nên param của tab cũ tự biến mất; đã xóa `handleTabChange` + logic strip param chéo tab). `index.tsx` render điều kiện `{activeTab === 'x' && <XTab/>}`, vẫn đọc/gắn `?tab=` để deep-link + sidebar highlight; nhóm i18n `dashboard:tabs.*` đã xóa (vi+en).
+> **⚠️ TẠM ẨN (2026-07):** tab **`status` (Tình trạng đơn hàng)** và **`person-error` (Lỗi theo người)** đang bị comment (không cần nữa) — code/BE/i18n giữ nguyên, chỉ comment ở `pages/home/index.tsx` (import + `TABS` + `canSeePersonError`/`isTabAllowed` + khối render điều kiện) và 2 entry `dash-status`/`dash-person-error` trong `components/sidebar/Sidebar.tsx`. Bật lại theo ghi chú "TẠM ẨN" tại chỗ trong 2 file đó.
 > **Tab "Soát tool" (`tool-check`)** — Support/Admin: đơn In trả về "do soát tool" + backlog chưa soát + **dải tổng quan theo ngày (6 hàng: Tổng đơn/Chưa soát/Đã soát/Soát lỗi/Soát OK/Cần làm lại; click ngày → lọc list, click CON SỐ → drill `DesignerDrillPanel` có filter Designer/Khách)** + **3 filter Sản phẩm/Khách/Máy** + thống kê lỗi theo sản phẩm/khách. **Doc riêng:** [`ToolCheckWorkflow.md`](ToolCheckWorkflow.md) (API `GET /v1/designer/tool-check-overview`, perm `page.tool_check`, gate `isAdmin || has('page.tool_check')`).
 > **Tab "Vòng đời đơn" (`lifecycle`)** — phễu 9 chặng soát tool→thiết kế→7 stage fulfillment. **MỌI tài khoản** (Fulfillment khóa xưởng). **Doc riêng:** [`OrderLifecycle.md`](OrderLifecycle.md) (API `GET /v1/orders/lifecycle-overview`).
 > **Strip "Vòng đời đơn"** (`LifecycleStrip.tsx`) — 1 dòng gọn trên đầu Dashboard, TRÊN mọi tab, cho mọi tài khoản: mặc định mini-phễu backlog theo ngày; nhập `productionId` → hành trình 1 đơn (API `GET /v1/orders/lifecycle-track/:code`). Xem `OrderLifecycle.md`.
@@ -71,7 +72,7 @@ Data từ `GET /v1/orders/factory-overview` + `GET /v1/orders?sort=grouped&...` 
 
 **Chỉ hiển thị khi user có perm `page.designer_stats`** (DesignerLeader / Admin / Manager **+ Designer sub** — sub-designer cũng xem được thống kê toàn team). BE: 5 endpoint tab (`designer-stats.controller.ts`, const `LEADER_ROLES`) đã bao gồm `RoleType.Designer`. Xem `DesignerTaskWorkflow.md` để hiểu workflow tổng.
 
-Layout (thứ tự render trên tab: **Bộ lọc chung → Tổng quan N ngày → panel drill-down inline (khi bấm số) → Cần gán designer → Biểu đồ cột cơ cấu → Ma trận toàn team → nút "Làm mới"**). **Period switcher + Leaderboard + Timeline + Error pie TẠM TẮT** — flag `SHOW_LEGACY_STATS = false` trong `DesignerStatsTab.tsx` (code giữ nguyên để bật lại), KHÔNG gọi 3 API `designer/performance` / `designer/timeline/:userId` / `orders/error-stats`. Đánh số dưới đây theo nhóm chức năng, không theo thứ tự dọc:
+Layout (thứ tự render trên tab: **Bộ lọc chung → Tổng quan N ngày → panel drill-down inline (khi bấm số) → Cần gán designer → Ma trận toàn team → nút "Làm mới"**). **Period switcher + Leaderboard + Timeline + Error pie TẠM TẮT** — flag `SHOW_LEGACY_STATS = false` trong `DesignerStatsTab.tsx` (code giữ nguyên để bật lại), KHÔNG gọi 3 API `designer/performance` / `designer/timeline/:userId` / `orders/error-stats`. **Khối "Cơ cấu trạng thái" (§2b, `StatusBarCharts.tsx`) TẠM ẨN (2026-07)** — comment import + render trong `DesignerStatsTab.tsx` VÀ comment endpoint `GET /designer/product-breakdown` (CHỈ khối này dùng) trong `designer-stats.controller.ts`; file component + service `getProductBreakdown()` + DTOs shared + i18n giữ nguyên, bật lại theo ghi chú "TẠM ẨN" tại chỗ trong 2 file đó. Đánh số dưới đây theo nhóm chức năng, không theo thứ tự dọc:
 
 **0. Bộ lọc chung sản phẩm + khách hàng + switcher ngày** (card `Filter` render **ĐẦU TIÊN trên cùng tab**):
 
@@ -139,6 +140,81 @@ Layout (thứ tự render trên tab: **Bộ lọc chung → Tổng quan N ngày 
   có type). Cả 2 endpoint `@Auth(LEADER_ROLES)`. DTOs `ProductTimeRowZod`/
   `ProductTimeDesignerZod`/`ProductTimeOrderRowZod` + Get* DTOs trong
   `designer.dto.ts`. i18n block `productTimes.*` + nút `topDesigners.viewAll`.
+- **2 cột "Level" + "Gợi ý" trong panel Thời gian theo sản phẩm** (độ khó
+  sản phẩm 1..10, hiện ở cả chế độ Xem tất cả lẫn per-designer):
+  - **Level** = `ProductConfig.level` sẵn có (badge màu `PRODUCT_LEVEL_MAP`
+    ở `packages/shared/constants/product-level.ts` — CÙNG dữ liệu với trang
+    chi tiết sản phẩm). BE map row→config theo `fullName` khớp `order.type`
+    case-insensitive (cùng cách `importOrders`), fallback `productConfigId`
+    (`$max`) trên đơn; load 1 query `productConfigModel.find({deletedAt
+    $exists false}, {fullName, level})`. Row không có config → "—" + tooltip
+    `noConfigTip` (phải tạo config trước). FE: SuperAdmin/Admin/Manager
+    (mirror `@Auth` của `PATCH /product-configs/:id`, const
+    `LEVEL_EDIT_ROLES`) thấy **select 1..10 nền màu level** đổi tại chỗ —
+    tái dùng `RepositoryRemote.productConfig.updateProductConfig(id,
+    {level})`, KHÔNG endpoint mới; role khác chỉ xem badge (`LevelBadge`).
+  - **Gợi ý** (`suggestedLevel` + căn cứ `suggestDone`/`suggestAvgWorkMin`/
+    `suggestReworkPct` trong `ProductTimeRowZod`) — BE
+    `computeProductLevelSuggestions()`: thang **TƯƠNG ĐỐI** (percentile nội
+    bộ, tự cân chỉnh, KHÔNG trừ hao tay nghề) trên cửa sổ **60 ngày CỐ ĐỊNH**
+    toàn hệ thống (không theo kỳ lọc — đổi filter gợi ý không nhảy):
+    `độ khó = 0.7 × percentile(thời gian làm TB) + 0.3 × percentile(tỉ lệ
+    làm lại = Σ designerReworkCount / done)` → level `1 + round(độ khó × 9)`.
+    Chỉ xét sản phẩm ≥ `PRODUCT_SUGGEST_MIN_DONE (5)` đơn xong trong cửa sổ
+    (util `percentileOf` tie = TB thứ hạng, ≤1 phần tử → 0.5); thiếu dữ liệu
+    → "—" + tooltip `suggestInsufficient`. FE: chip `→ n` viền màu level,
+    hover tooltip căn cứ ("X đơn xong · làm TB Y · Z% làm lại"), Admin/Manager
+    bấm chip → gán luôn level đó (chip mờ `opacity-40` khi đã trùng level
+    chính thức). i18n `productTimes.{colLevel,colSuggest,levelSaved,
+    noConfigTip,suggestTipTitle,suggestTip,suggestApplyTip,suggestInsufficient}`.
+    Level này là nền cho auto-gán task khó/dễ theo `designerLevel` (chưa làm).
+- **Bảng "Xếp hạng hiệu suất"** (`DesignerPerformanceCard.tsx`, render dưới
+  hàng Filter+TopDesigners, theo kỳ lọc chung + refetch `matrixToken`): mỗi
+  designer đang bật 1 hàng — **badge hạng S/A/B/C/D** (S≥85 teal · A≥70 xanh ·
+  B≥55 vàng · C≥40 cam · D đỏ, util `rankFromScore` ở
+  `packages/shared/enums/designer-rank.ts`) + **điểm 0-100** + **trend** so kỳ
+  liền trước cùng độ dài (↑/↓) + **5 bar thành phần** (hover tooltip giải thích
+  + số thô) + Xong/Nhận + cột **Level chính thức**. Công thức điểm (BE
+  `getPerformanceScores` + `computePerfWindow`/`scorePerfWindow`, mỗi thành
+  phần 0..1, 0.5 = trung bình team/thiếu dữ liệu): **tốc độ 30%** =
+  `expectedMs/actualMs` trong đó expected = Σ(giờ TB của TEAM cho loại SP đó ×
+  số đơn done theo loại) — chuẩn hóa theo ĐỘ KHÓ rổ sản phẩm, người làm hàng
+  khó không bị thiệt; **chất lượng 25%** = 1 − tỉ lệ làm lại
+  (`designerReworkCount`/done); **sản lượng 15%** = done so median team;
+  **phản hồi 10%** = avgResponse so median team; **độ tin cậy 10%** = 1 − tỉ
+  lệ bàn giao "Không làm được" (`designerRejections`); **chủ động 10%** = số
+  lần TỰ "Nhận về mình" (OrderLog `field='assignee'` mà actor `userId` ===
+  `after` — leader gán hộ không tính, trục thời gian `createdAt` của log;
+  0 lần = 0.5 trung lập KHÔNG phạt, = median người-có-nhận → 0.75, gấp đôi →
+  1). `done < minDone (10)` →
+  `insufficient` (badge xám mờ "chưa đủ dữ liệu", trend null). API
+  `GET /designer/performance-scores?from&to` (`@Auth(LEADER_ROLES)`), DTOs
+  `PerformanceScoreRowZod`/`GetPerformanceScoresDto/Res` + enum `DesignerRank`.
+  Card `onLoaded` đẩy rows lên `DesignerStatsTab.scoreRows` → **badge hạng
+  cũng gắn cạnh tên trong widget Top Designer** (prop `scoreRows`, component
+  `RankBadge` export từ card). i18n block `performance.*`. **Hướng dẫn nguồn
+  số liệu**: nút `BookOpen` "Hướng dẫn" mở **DIALOG** (Radix Dialog, max-w-2xl
+  scroll 85vh) viết bằng ngôn ngữ đời thường: intro thang điểm → dải 5 badge
+  hạng kèm khoảng điểm + nhãn (Xuất sắc/Tốt/Khá/TB/Cần hỗ trợ) → 6 card thành
+  phần (chấm màu khớp donut + chip "tối đa N điểm" + câu hỏi nó trả lời + cách
+  đo + **ví dụ số cụ thể**) → mục Lưu ý (phạm vi/ngưỡng/trend/level). i18n
+  `performance.guideDialog.*`. MỌI header cột vẫn có tooltip riêng (gạch chấm
+  dưới chữ, hover) dùng string `performance.guide.*`.
+  **Cột Thành phần 2 chế độ** (toggle icon `PieChart`/`BarChart3` trên header,
+  state `vizMode`, mặc định donut): **donut** = conic-gradient thuần CSS
+  (`ComponentDonut`, KHÔNG dùng recharts) — mỗi màu là số điểm thành phần đó
+  ĐÓNG GÓP (component × trọng số × 100), phần xám = điểm thiếu tới 100, số
+  điểm ở lỗ giữa, hover ra breakdown X/35, Y/25...; **bars** = 5 cột mini như
+  cũ (tooltip từng cột kèm số thô).
+- **Level chính thức designer (`UserEntity.designerLevel`, enum S-D)**: cột
+  cuối bảng xếp hạng — Admin/SuperAdmin thấy select S/A/B/C/D/— (set/xóa qua
+  `PATCH /designer/level/:userId` `@Auth([Admin])`, service `setDesignerLevel`
+  validate role Designer; DTO `SetDesignerLevelDto/Res`) + **chip "Gợi ý: X"**
+  = hạng từ điểm **rolling 60 ngày** (field `suggestedLevel`, null nếu thiếu
+  dữ liệu; bấm chip → áp dụng làm level). Role khác chỉ xem badge. Field đã
+  add vào CẢ 2 `$project` `getUserById` + `getMe` (Common_Pitfalls §1) +
+  `UserZod.designerLevel`. Level này để SAU nối vào auto-gán task khó/dễ theo
+  `productConfig.level` (chưa làm).
 - **Nút "Xem chi tiết" per-designer** (icon `Eye` cuối mỗi hàng widget Top
   Designer, props `onViewDesigner`/`activeDesignerId`): mở CÙNG `ProductTimePanel`
   nhưng chế độ 1 designer — cả 2 endpoint nhận query `designerId` optional
@@ -208,7 +284,7 @@ Click row → set `selectedUserId` → reload timeline chart.
 - Data từ `GET /v1/designer/team-daily-breakdown?days=7|14|30`. Refetch khi bấm Refresh của tab (prop `reloadToken` = `matrixToken` bump trong `fetchAll`) **hoặc khi đổi bộ lọc chung** (props `type`/`customer` → thêm vào query `&type=&customer=`).
 - **Lưu ý window:** đếm `inProductionAt ∈ [today−(N−1)..today]` → đơn tồn ngoài N ngày ẩn; dùng 14/30 để mở rộng. `done` gộp theo `inProductionAt` (KHÁC "completed in period" của Leaderboard dùng `designerCompletedAt`).
 
-**2b. Biểu đồ cột cơ cấu trạng thái** (`StatusBarCharts.tsx` — 1 card có **toggle**, render **ĐẦU TIÊN trên cùng tab**, trên cả ma trận; Recharts `BarChart` stacked):
+**2b. Biểu đồ cột cơ cấu trạng thái — ⚠️ TẠM ẨN (2026-07, xem ghi chú đầu Tab D)** (`StatusBarCharts.tsx` — 1 card có **toggle**, render **ĐẦU TIÊN trên cùng tab**, trên cả ma trận; Recharts `BarChart` stacked):
 
 - **Toggle "Theo designer / Theo ngày"** — 1 khu vực biểu đồ, 2 chế độ, chung bộ màu 4 trạng thái (Cần làm zinc `#71717A` · Cần làm lại amber `#F59E0B` · Đang làm indigo `#6366F1` · Đã xong emerald `#10B981`) + legend + custom tooltip (hover hiện **số lượng + %** từng trạng thái + Tổng).
 - **Breakdown sản phẩm mode "Theo designer":** dữ liệu = sản phẩm designer được gán (mọi đơn assigned/in-progress/rework/done) **theo bộ lọc chung tab** (days/from/to + type/customer), mỗi sản phẩm = **ảnh mockup + badge level** (ProductConfig) + **số đơn**. Data từ `GET /v1/designer/product-breakdown` (props `filterDays`/`filterFrom`/`filterTo`; map `userId → {products,total}`; `designerData` có `userId`).

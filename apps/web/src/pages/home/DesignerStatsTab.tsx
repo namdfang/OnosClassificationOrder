@@ -12,7 +12,13 @@ import {
   XAxis,
   YAxis,
 } from 'recharts';
-import type { BreakdownFilterOption, DesignerLeaderboardRow, DesignerTimelineBucket, ErrorStats } from 'shared';
+import type {
+  BreakdownFilterOption,
+  DesignerLeaderboardRow,
+  DesignerTimelineBucket,
+  ErrorStats,
+  PerformanceScoreRow,
+} from 'shared';
 
 import { RepositoryRemote } from '@/services';
 
@@ -29,8 +35,10 @@ import { DATE_PRESETS } from '@/utils/dateRangePresets';
 
 import { DesignerAssignBacklog } from './DesignerAssignBacklog';
 import { DesignerDailyOverview } from './DesignerDailyOverview';
+import { DesignerPerformanceCard } from './DesignerPerformanceCard';
 import { ProductTimePanel } from './ProductTimePanel';
-import { StatusBarCharts } from './StatusBarCharts';
+// Khối "Cơ cấu trạng thái" TẠM ẨN (2026-07) — xem ghi chú "TẠM ẨN" tại vị trí render bên dưới.
+// import { StatusBarCharts } from './StatusBarCharts';
 import { TeamDailyMatrix } from './TeamDailyMatrix';
 import { TopDesigners } from './TopDesigners';
 
@@ -79,6 +87,8 @@ export default function DesignerStatsTab() {
   // Panel "Thời gian theo sản phẩm" — nút "Xem tất cả" (toàn team) hoặc nút
   // "Xem chi tiết" 1 designer trong widget TopDesigners. null = đóng.
   const [productTimesView, setProductTimesView] = useState<{ designerId?: string; designerName?: string } | null>(null);
+  // Rows điểm hiệu suất (từ DesignerPerformanceCard) — TopDesigners dùng gắn badge hạng.
+  const [scoreRows, setScoreRows] = useState<PerformanceScoreRow[]>([]);
 
   // Filter dùng chung cho biểu đồ cột + ma trận: sản phẩm (type) + khách (userSku).
   const [filterType, setFilterType] = useState('');
@@ -236,6 +246,7 @@ export default function DesignerStatsTab() {
                 v?.designerId === userId ? null : { designerId: userId, designerName: fullName },
               )
             }
+            scoreRows={scoreRows}
           />
         </div>
       </div>
@@ -253,6 +264,14 @@ export default function DesignerStatsTab() {
           onClose={() => setProductTimesView(null)}
         />
       )}
+
+      {/* Bảng xếp hạng hiệu suất — điểm 0-100 + hạng S-D + level chính thức. */}
+      <DesignerPerformanceCard
+        from={dateFrom || undefined}
+        to={dateTo || undefined}
+        reloadToken={matrixToken}
+        onLoaded={setScoreRows}
+      />
 
       {/* Bảng "Cần gán designer" gom theo sản phẩm — dưới bảng tổng quan. */}
       <DesignerAssignBacklog
@@ -283,14 +302,18 @@ export default function DesignerStatsTab() {
         customer={filterCustomer || undefined}
       />
 
-      {/* Biểu đồ cột: toggle "Theo designer (100%)" / "Theo ngày (số lượng)". */}
+      {/* Khối "Cơ cấu trạng thái" (biểu đồ cột theo designer/ngày) TẠM ẨN
+        (2026-07, không cần nữa) — code `StatusBarCharts.tsx` + i18n giữ nguyên.
+        Bật lại: bỏ comment import ở đầu file + khối dưới + bỏ comment endpoint
+        `GET /designer/product-breakdown` trong `designer-stats.controller.ts`
+        (API tooltip breakdown sản phẩm CHỈ khối này dùng nên đã comment theo).
       <StatusBarCharts
         type={filterType || undefined}
         customer={filterCustomer || undefined}
         filterDays={7}
         filterFrom={dateFrom || undefined}
         filterTo={dateTo || undefined}
-      />
+      /> */}
 
       {/* Nút làm mới các bảng bên trên (period switcher tạm ẩn cùng 3 khối legacy). */}
       {!SHOW_LEGACY_STATS && (

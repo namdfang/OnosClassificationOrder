@@ -97,6 +97,8 @@ export class UserService {
           // `user.fulfillmentStage` undefined → `FulfillmentTaskService.getMyTasks()`
           // throw "Thiếu stage" + state machine check ownership fail.
           fulfillmentStage: 1,
+          // Level designer (S-D) — hiển thị badge ở tab Designer/bảng xếp hạng.
+          designerLevel: 1,
           role: {
             name: 1,
             permissionCodes: 1,
@@ -176,6 +178,7 @@ export class UserService {
           // resolve `myStage` từ authStore — thiếu field này → page báo "Tài
           // khoản chưa được gán Stage Fulfillment" dù user đã được admin gán.
           fulfillmentStage: 1,
+          designerLevel: 1,
           avatar: {
             url: 1,
             previewUrl: 1,
