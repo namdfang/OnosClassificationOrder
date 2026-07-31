@@ -1,7 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Eye, List, Package, Palette, Timer, Zap } from 'lucide-react';
-import type { TeamDailyRow } from 'shared';
+import type { PerformanceScoreRow, TeamDailyRow } from 'shared';
 
 import { RepositoryRemote } from '@/services';
 
@@ -11,6 +11,8 @@ import { TooltipProvider } from '@/components/ui/tooltip';
 
 import { handleAxiosError } from '@/utils';
 import { cn } from '@/utils/cn';
+
+import { RankBadge } from './DesignerPerformanceCard';
 
 const MEDALS = ['🥇', '🥈', '🥉'];
 const AVATAR_STYLES = [
@@ -42,6 +44,8 @@ interface TopDesignersProps {
   onViewDesigner?: (userId: string, fullName: string) => void;
   /** Designer đang xem chi tiết (highlight nút). */
   activeDesignerId?: string;
+  /** Rows điểm hiệu suất (từ DesignerPerformanceCard) — gắn badge hạng cạnh tên. */
+  scoreRows?: PerformanceScoreRow[];
 }
 
 /**
@@ -65,6 +69,7 @@ export function TopDesigners({
   viewAllOpen,
   onViewDesigner,
   activeDesignerId,
+  scoreRows,
 }: TopDesignersProps) {
   const { t } = useTranslation('dashboard');
   const [rows, setRows] = useState<TopRow[]>([]);
@@ -146,7 +151,13 @@ export function TopDesigners({
                 {initials(r.fullName)}
               </span>
               <div className="flex-1 min-w-0">
-                <p className="truncate text-sm font-semibold text-slate-700 dark:text-slate-200">{r.fullName}</p>
+                <p className="flex items-center gap-1.5 truncate text-sm font-semibold text-slate-700 dark:text-slate-200">
+                  <span className="truncate">{r.fullName}</span>
+                  {(() => {
+                    const sc = scoreRows?.find((s) => s.userId === r.userId);
+                    return sc ? <RankBadge rank={sc.rank} muted={sc.insufficient} size="sm" /> : null;
+                  })()}
+                </p>
                 <div className="mt-1 h-1.5 rounded-full bg-slate-100 dark:bg-slate-700/60 overflow-hidden">
                   <div
                     className="h-full rounded-full bg-violet-500 transition-all"

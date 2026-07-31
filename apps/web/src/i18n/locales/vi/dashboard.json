@@ -652,5 +652,131 @@
     "customerTip": "Khách hàng của đơn",
     "searchProductPlaceholder": "Tìm sản phẩm...",
     "noMatch": "Không có sản phẩm nào khớp bộ lọc."
+  },
+  "performance": {
+    "title": "Xếp hạng hiệu suất",
+    "subtitle": "— điểm 0-100 theo kỳ lọc chung, hạng S cao nhất",
+    "empty": "Chưa có designer nào.",
+    "colDesigner": "Designer",
+    "colScore": "Điểm",
+    "colTrend": "Xu hướng",
+    "colComponents": "Thành phần",
+    "colDone": "Xong/Nhận",
+    "colLevel": "Level chính thức",
+    "insufficientBadge": "chưa đủ dữ liệu",
+    "insufficientTip": "Xong dưới {{minDone}} đơn trong kỳ — điểm chỉ tham khảo",
+    "rankTip": "Điểm kỳ này: {{score}}/100",
+    "components": {
+      "speed": "Tốc độ (30%)",
+      "quality": "Chất lượng (25%)",
+      "throughput": "Sản lượng (15%)",
+      "response": "Phản hồi (10%)",
+      "reliability": "Độ tin cậy (10%)",
+      "proactive": "Chủ động (10%)"
+    },
+    "componentTips": {
+      "speed": "Giờ làm so với mặt bằng team trên CÙNG rổ sản phẩm — 50 = ngang team, 100 = nhanh gấp đôi",
+      "quality": "Tỉ lệ đơn xong không bị báo lỗi phải làm lại",
+      "throughput": "Số đơn xong so với median team trong kỳ",
+      "response": "Thời gian nhận task so với median team — càng nhanh càng cao",
+      "reliability": "Tỉ lệ KHÔNG bàn giao \"không làm được\"",
+      "proactive": "Số lần TỰ bấm \"Nhận về mình\" trong kỳ — 50 = không tự nhận (trung lập, không bị phạt), nhận nhiều so với mặt bằng người có nhận → tiến tới 100"
+    },
+    "rawWork": "làm TB {{value}}p",
+    "rawRework": "{{count}} lần làm lại",
+    "rawResponse": "phản hồi TB {{value}}p",
+    "rawRejections": "{{count}} lần bàn giao",
+    "suggestChip": "Gợi ý: {{level}}",
+    "suggestTip": "Hạng gợi ý từ điểm 60 ngày gần nhất — bấm để áp dụng làm level chính thức",
+    "levelSaved": "Đã set level {{level}} cho {{name}}",
+    "formulaTitle": "Cách tính điểm (0-100)",
+    "formulaSpeed": "• Tốc độ 30% — chuẩn hóa theo độ khó rổ sản phẩm",
+    "formulaQuality": "• Chất lượng 25% — 1 − tỉ lệ làm lại",
+    "formulaThroughput": "• Sản lượng 15% — so median team",
+    "formulaResponse": "• Phản hồi 10% — so median team",
+    "formulaReliability": "• Độ tin cậy 10% — trừ theo lần \"không làm được\"",
+    "formulaNote": "Cần tối thiểu {{minDone}} đơn xong trong kỳ để xếp hạng chính thức. S≥85 · A≥70 · B≥55 · C≥40 · D<40",
+    "vizDonut": "Xem dạng biểu đồ tròn",
+    "vizBars": "Xem dạng cột",
+    "donutTipTitle": "Điểm {{score}}/100 — đóng góp từng thành phần",
+    "guide": {
+      "button": "Hướng dẫn",
+      "title": "Số liệu lấy từ đâu? (phạm vi: đơn có NGÀY VÀO SẢN XUẤT trong kỳ lọc, đã gán designer; loại đơn hủy + đơn chưa xác định xưởng)",
+      "designer": "Tài khoản role Designer đang bật. Badge = hạng theo điểm kỳ này (S≥85 · A≥70 · B≥55 · C≥40 · D<40).",
+      "score": "Điểm 0-100 gộp từ 6 phần: Tốc độ 30 + Chất lượng 25 + Sản lượng 15 + Phản hồi 10 + Tin cậy 10 + Chủ động 10. Bấm nút \"Hướng dẫn\" để xem giải thích kèm ví dụ.",
+      "trend": "So với kỳ liền trước có cùng số ngày (ví dụ đang lọc 7 ngày → so với 7 ngày trước đó). — nghĩa là 1 trong 2 kỳ chưa đủ dữ liệu.",
+      "componentsCol": "5 thành phần của điểm. Dạng tròn: phần tô màu = điểm đạt được, xám = còn thiếu tới 100. Hover để xem chi tiết từng phần.",
+      "speed": "Tổng giờ làm thực tế (đồng hồ chạy từ lúc bấm \"Nhận làm\" đến \"Hoàn thành\", cộng dồn cả các lần làm lại) SO VỚI giờ trung bình cả team làm CÙNG các loại sản phẩm đó — người ôm hàng khó không bị thiệt.",
+      "quality": "Tỉ lệ đơn xong KHÔNG bị báo lỗi phải làm lại (đếm số lần đơn bị chuyển sang \"Cần làm lại\" do lỗi designer).",
+      "throughput": "Số đơn hoàn thành trong kỳ so với mức giữa (median) của team.",
+      "response": "Thời gian từ lúc ĐƯỢC GÁN đơn đến lúc bấm \"Nhận làm\" lần đầu, so với median team — nhận càng nhanh điểm càng cao.",
+      "reliability": "Trừ điểm theo số lần bấm \"Không làm được\" (bàn giao đơn cho người khác) trên tổng đơn nhận.",
+      "done": "Số đơn đã hoàn thành / tổng đơn được gán trong kỳ (mọi trạng thái).",
+      "level": "Level CHÍNH THỨC do Admin set (select S-D). Chip \"Gợi ý\" = hạng tính từ điểm 60 ngày gần nhất — bấm để áp dụng. Level này về sau dùng để gán task khó/dễ.",
+      "scope": "Cần tối thiểu {{minDone}} đơn xong trong kỳ để xếp hạng chính thức — dưới ngưỡng sẽ hiện \"chưa đủ dữ liệu\" và badge bị làm mờ.",
+      "proactive": "Đếm số lần TỰ bấm \"Nhận về mình\" ở bảng \"Cần gán designer\"/panel drill (leader gán hộ KHÔNG tính; theo thời điểm bấm nút). Không tự nhận lần nào = 50 điểm trung lập; nhận bằng mặt bằng người-có-nhận = 75; gấp đôi = 100."
+    },
+    "rawClaims": "{{count}} lần tự nhận",
+    "formulaProactive": "• Chủ động 10% — số lần tự \"Nhận về mình\" (chỉ thưởng, không phạt)",
+    "guideDialog": {
+      "title": "Cách đọc bảng xếp hạng",
+      "intro": "Mỗi designer được chấm 1 điểm từ 0 đến 100 cho khoảng thời gian đang lọc. Điểm càng cao = làm việc càng hiệu quả. 50 điểm nghĩa là ngang mức trung bình của team — không giỏi hơn, không kém hơn ai.",
+      "ranksTitle": "Điểm quy ra hạng",
+      "rankLabels": {
+        "S": "Xuất sắc",
+        "A": "Tốt",
+        "B": "Khá",
+        "C": "Trung bình",
+        "D": "Cần hỗ trợ"
+      },
+      "partsTitle": "100 điểm được chia thành 6 phần",
+      "maxPts": "tối đa {{pts}} điểm",
+      "exampleLabel": "Ví dụ:",
+      "parts": {
+        "speed": {
+          "name": "Tốc độ",
+          "q": "Làm nhanh hay chậm?",
+          "how": "So thời gian bạn làm 1 đơn với thời gian trung bình cả team mất khi làm CÙNG loại sản phẩm đó. Nhờ vậy người hay ôm hàng khó không bị chấm thiệt.",
+          "ex": "Cả team trung bình mất 60 phút cho 1 đơn Hoodie. Bạn mất 30 phút (nhanh gấp đôi) → ăn trọn 30 điểm. Mất đúng 60 phút → 15 điểm. Mất 120 phút trở lên → 0 điểm."
+        },
+        "quality": {
+          "name": "Chất lượng",
+          "q": "Làm có bị lỗi không?",
+          "how": "Đếm những đơn đã xong nhưng bị báo lỗi trả lại làm lại.",
+          "ex": "Xong 100 đơn, có 10 đơn bị trả lại sửa → còn 90% → được 22,5/25 điểm. Không đơn nào bị trả → trọn 25 điểm."
+        },
+        "throughput": {
+          "name": "Sản lượng",
+          "q": "Làm được nhiều hay ít?",
+          "how": "So số đơn bạn hoàn thành với người đứng giữa bảng team (một nửa team làm nhiều hơn, một nửa làm ít hơn người này).",
+          "ex": "Người giữa bảng xong 20 đơn. Bạn cũng xong 20 → 7,5 điểm. Xong 40 đơn trở lên → trọn 15 điểm."
+        },
+        "response": {
+          "name": "Phản hồi",
+          "q": "Nhận việc có nhanh không?",
+          "how": "Tính từ lúc được gán đơn đến lúc bạn bấm \"Nhận làm\" lần đầu, so với người giữa bảng team.",
+          "ex": "Team thường 30 phút sau khi gán mới bấm nhận. Bạn bấm sau 15 phút → nhanh gấp đôi → trọn 10 điểm."
+        },
+        "reliability": {
+          "name": "Độ tin cậy",
+          "q": "Có hay trả việc lại không?",
+          "how": "Mỗi lần bấm \"Không làm được\" để đẩy đơn sang người khác sẽ bị trừ điểm.",
+          "ex": "Nhận 50 đơn, không trả lần nào → trọn 10 điểm. Trả 5 trên 50 đơn → mất 10% → còn 9 điểm."
+        },
+        "proactive": {
+          "name": "Chủ động",
+          "q": "Có tự xin thêm việc không?",
+          "how": "Đếm số lần bạn TỰ bấm \"Nhận về mình\" ở bảng Cần gán designer. Leader gán hộ thì không tính. Phần này chỉ cộng thêm, không trừ.",
+          "ex": "Không tự nhận lần nào → vẫn được 5/10 điểm (không bị phạt). Tự nhận ngang mặt bằng những người hay nhận → 7,5 điểm. Nhận gấp đôi → trọn 10 điểm."
+        }
+      },
+      "notesTitle": "Lưu ý",
+      "notes": {
+        "scope": "Chỉ tính các đơn VÀO SẢN XUẤT trong khoảng ngày đang lọc (không tính đơn hủy và đơn chưa xác định xưởng). Riêng phần Chủ động tính theo thời điểm bấm nút.",
+        "minDone": "Xong dưới {{minDone}} đơn trong kỳ → hiện \"chưa đủ dữ liệu\", badge làm mờ — điểm lúc đó chỉ để tham khảo.",
+        "trend": "Cột Xu hướng: hơn/kém bao nhiêu điểm so với kỳ liền trước có cùng số ngày.",
+        "level": "Cột Level chính thức do Admin quyết định — chip \"Gợi ý\" chỉ là máy tính sẵn từ điểm 60 ngày gần nhất."
+      }
+    }
   }
 }

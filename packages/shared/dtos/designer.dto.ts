@@ -1,7 +1,14 @@
 import { createZodDto } from '@anatine/zod-nestjs';
 import { extendApi } from '@anatine/zod-openapi';
 import { IDZod, PASSWORD_MAX_LENGTH, PASSWORD_MIN_LENGTH } from '@shared/constants';
-import { DesignerStatus, DesignerTransitionAction, FulfillmentStage, OrderPriority, Status } from '@shared/enums';
+import {
+  DesignerRank,
+  DesignerStatus,
+  DesignerTransitionAction,
+  FulfillmentStage,
+  OrderPriority,
+  Status,
+} from '@shared/enums';
 import { PageResZod, ResZod } from '@shared/types';
 import { z } from 'zod';
 
@@ -338,6 +345,84 @@ export const GetTeamDailyBreakdownResZod = ResZod.extend({
   }),
 });
 export class GetTeamDailyBreakdownResDto extends createZodDto(extendApi(GetTeamDailyBreakdownResZod)) {}
+
+// ─── Performance scores (bảng xếp hạng hiệu suất + designerLevel) ────────
+// Điểm 0-100 mỗi designer trong kỳ lọc = tổng 6 thành phần có trọng số:
+// tốc độ chuẩn hóa theo rổ sản phẩm 30% + chất lượng 25% + sản lượng 15% +
+// phản hồi 10% + độ tin cậy 10% + chủ động nhận task 10%. Hạng S/A/B/C/D
+// qua `rankFromScore`.
+
+export const GetPerformanceScoresZod = z.object({
+  /** YYYY-MM-DD (VN). Bỏ trống = 7 ngày gần nhất. */
+  from: z.string().optional(),
+  to: z.string().optional(),
+});
+export class GetPerformanceScoresDto extends createZodDto(extendApi(GetPerformanceScoresZod)) {}
+
+export const PerformanceComponentsZod = z.object({
+  /** Mỗi thành phần 0..1 (0.5 = trung bình team / thiếu dữ liệu). */
+  speed: z.number(),
+  quality: z.number(),
+  throughput: z.number(),
+  response: z.number(),
+  reliability: z.number(),
+  /**
+   * Chủ động nhận thêm task: đếm số lần TỰ "Nhận về mình" (OrderLog
+   * field='assignee' mà actor = người được gán, theo createdAt trong kỳ).
+   * 0 lần = 0.5 trung lập (không bị phạt), nhận càng nhiều so với mặt bằng
+   * người có nhận càng tiến tới 1.
+   */
+  proactive: z.number(),
+});
+export type PerformanceComponents = z.infer<typeof PerformanceComponentsZod>;
+
+export const PerformanceScoreRowZod = z.object({
+  userId: z.string(),
+  fullName: z.string(),
+  email: z.string().optional(),
+  /** Task trong kỳ (mọi trạng thái) / đã xong. */
+  totalTasks: z.number().int().nonnegative(),
+  done: z.number().int().nonnegative(),
+  score: z.number().int().min(0).max(100),
+  rank: z.nativeEnum(DesignerRank),
+  /** done < minDone → điểm chỉ tham khảo, FE hiển thị "chưa đủ dữ liệu". */
+  insufficient: z.boolean(),
+  components: PerformanceComponentsZod,
+  /** Số liệu thô để tooltip giải thích. */
+  avgWorkMin: z.number().nonnegative(),
+  avgResponseMin: z.number().nonnegative(),
+  reworkCount: z.number().int().nonnegative(),
+  rejections: z.number().int().nonnegative(),
+  /** Số lần tự "Nhận về mình" trong kỳ. */
+  claims: z.number().int().nonnegative(),
+  /** score − điểm kỳ liền trước cùng độ dài; null nếu kỳ trước thiếu dữ liệu. */
+  trend: z.number().nullable(),
+  /** Hạng gợi ý từ rolling 60 ngày (nguồn cho designerLevel); null nếu thiếu dữ liệu. */
+  suggestedLevel: z.nativeEnum(DesignerRank).nullable(),
+  /** Level chính thức đang set trên user (nếu có). */
+  designerLevel: z.nativeEnum(DesignerRank).optional(),
+});
+export type PerformanceScoreRow = z.infer<typeof PerformanceScoreRowZod>;
+
+export const GetPerformanceScoresResZod = ResZod.extend({
+  data: z.object({
+    rows: PerformanceScoreRowZod.array(),
+    /** Ngưỡng done tối thiểu để xếp hạng chính thức. */
+    minDone: z.number().int().positive(),
+  }),
+});
+export class GetPerformanceScoresResDto extends createZodDto(extendApi(GetPerformanceScoresResZod)) {}
+
+export const SetDesignerLevelZod = z.object({
+  /** null = xóa level (về "chưa xếp"). */
+  level: z.nativeEnum(DesignerRank).nullable(),
+});
+export class SetDesignerLevelDto extends createZodDto(extendApi(SetDesignerLevelZod)) {}
+
+export const SetDesignerLevelResZod = ResZod.extend({
+  data: z.object({ userId: z.string(), level: z.nativeEnum(DesignerRank).nullable() }),
+});
+export class SetDesignerLevelResDto extends createZodDto(extendApi(SetDesignerLevelResZod)) {}
 
 // ─── Product time (panel "Xem tất cả" từ widget Top Designer) ────────────
 // Thời gian TB nhận/làm task theo TỪNG loại sản phẩm (`order.type`) của TOÀN

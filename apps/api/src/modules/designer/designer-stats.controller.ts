@@ -1,5 +1,5 @@
 import { ZodValidationPipe } from '@anatine/zod-nestjs';
-import { Controller, Get, HttpCode, HttpStatus, Inject, Param, Query, UsePipes } from '@nestjs/common';
+import { Body, Controller, Get, HttpCode, HttpStatus, Inject, Param, Patch, Query, UsePipes } from '@nestjs/common';
 import { ApiOkResponse, ApiOperation, ApiTags } from '@nestjs/swagger';
 import { AuthUser } from 'core';
 import type { FulfillmentStage } from 'shared';
@@ -16,6 +16,8 @@ import {
   GetDesignerTimelineResDto,
   GetErrorStatsDto,
   GetErrorStatsResDto,
+  GetPerformanceScoresDto,
+  GetPerformanceScoresResDto,
   GetPersonErrorOrdersDto,
   GetPersonErrorOverviewDto,
   GetProductBreakdownDto,
@@ -32,6 +34,8 @@ import {
   PersonErrorOrdersResDto,
   PersonErrorOverviewResDto,
   RoleType,
+  SetDesignerLevelDto,
+  SetDesignerLevelResDto,
   StageErrorDailyResDto,
   ToolCheckOverviewResDto,
 } from 'shared';
@@ -202,6 +206,46 @@ export class DesignerStatsController {
       query.type,
       query.customer,
     );
+    return { success: true, data };
+  }
+
+  @Get('designer/performance-scores')
+  @Auth(LEADER_ROLES)
+  @ApiOperation({
+    summary: 'Bảng xếp hạng hiệu suất: điểm 0-100 + hạng S/A/B/C/D + trend + hạng gợi ý 60 ngày.',
+  })
+  @HttpCode(HttpStatus.OK)
+  @ApiOkResponse({ type: GetPerformanceScoresResDto })
+  async getPerformanceScores(
+    @Query() query: GetPerformanceScoresDto,
+    @AuthUser() user: UserDocument,
+  ): Promise<GetPerformanceScoresResDto> {
+    this.logger.info({
+      message: JSON.stringify({ method: 'GET', url: '/designer/performance-scores', userId: user._id }),
+    });
+    const data = await this.statsService.getPerformanceScores(query.from, query.to);
+    return { success: true, data };
+  }
+
+  @Patch('designer/level/:userId')
+  @Auth([RoleType.Admin])
+  @ApiOperation({ summary: 'Set/xóa level chính thức (S-D) cho 1 designer — Admin/SuperAdmin.' })
+  @HttpCode(HttpStatus.OK)
+  @ApiOkResponse({ type: SetDesignerLevelResDto })
+  async setDesignerLevel(
+    @Param('userId') userId: string,
+    @Body() body: SetDesignerLevelDto,
+    @AuthUser() user: UserDocument,
+  ): Promise<SetDesignerLevelResDto> {
+    this.logger.info({
+      message: JSON.stringify({
+        method: 'PATCH',
+        url: `/designer/level/${userId}`,
+        userId: user._id,
+        level: body.level,
+      }),
+    });
+    const data = await this.statsService.setDesignerLevel(userId, body.level);
     return { success: true, data };
   }
 

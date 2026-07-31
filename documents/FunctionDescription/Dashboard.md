@@ -139,6 +139,53 @@ Layout (thứ tự render trên tab: **Bộ lọc chung → Tổng quan N ngày 
   có type). Cả 2 endpoint `@Auth(LEADER_ROLES)`. DTOs `ProductTimeRowZod`/
   `ProductTimeDesignerZod`/`ProductTimeOrderRowZod` + Get* DTOs trong
   `designer.dto.ts`. i18n block `productTimes.*` + nút `topDesigners.viewAll`.
+- **Bảng "Xếp hạng hiệu suất"** (`DesignerPerformanceCard.tsx`, render dưới
+  hàng Filter+TopDesigners, theo kỳ lọc chung + refetch `matrixToken`): mỗi
+  designer đang bật 1 hàng — **badge hạng S/A/B/C/D** (S≥85 teal · A≥70 xanh ·
+  B≥55 vàng · C≥40 cam · D đỏ, util `rankFromScore` ở
+  `packages/shared/enums/designer-rank.ts`) + **điểm 0-100** + **trend** so kỳ
+  liền trước cùng độ dài (↑/↓) + **5 bar thành phần** (hover tooltip giải thích
+  + số thô) + Xong/Nhận + cột **Level chính thức**. Công thức điểm (BE
+  `getPerformanceScores` + `computePerfWindow`/`scorePerfWindow`, mỗi thành
+  phần 0..1, 0.5 = trung bình team/thiếu dữ liệu): **tốc độ 30%** =
+  `expectedMs/actualMs` trong đó expected = Σ(giờ TB của TEAM cho loại SP đó ×
+  số đơn done theo loại) — chuẩn hóa theo ĐỘ KHÓ rổ sản phẩm, người làm hàng
+  khó không bị thiệt; **chất lượng 25%** = 1 − tỉ lệ làm lại
+  (`designerReworkCount`/done); **sản lượng 15%** = done so median team;
+  **phản hồi 10%** = avgResponse so median team; **độ tin cậy 10%** = 1 − tỉ
+  lệ bàn giao "Không làm được" (`designerRejections`); **chủ động 10%** = số
+  lần TỰ "Nhận về mình" (OrderLog `field='assignee'` mà actor `userId` ===
+  `after` — leader gán hộ không tính, trục thời gian `createdAt` của log;
+  0 lần = 0.5 trung lập KHÔNG phạt, = median người-có-nhận → 0.75, gấp đôi →
+  1). `done < minDone (10)` →
+  `insufficient` (badge xám mờ "chưa đủ dữ liệu", trend null). API
+  `GET /designer/performance-scores?from&to` (`@Auth(LEADER_ROLES)`), DTOs
+  `PerformanceScoreRowZod`/`GetPerformanceScoresDto/Res` + enum `DesignerRank`.
+  Card `onLoaded` đẩy rows lên `DesignerStatsTab.scoreRows` → **badge hạng
+  cũng gắn cạnh tên trong widget Top Designer** (prop `scoreRows`, component
+  `RankBadge` export từ card). i18n block `performance.*`. **Hướng dẫn nguồn
+  số liệu**: nút `BookOpen` "Hướng dẫn" mở **DIALOG** (Radix Dialog, max-w-2xl
+  scroll 85vh) viết bằng ngôn ngữ đời thường: intro thang điểm → dải 5 badge
+  hạng kèm khoảng điểm + nhãn (Xuất sắc/Tốt/Khá/TB/Cần hỗ trợ) → 6 card thành
+  phần (chấm màu khớp donut + chip "tối đa N điểm" + câu hỏi nó trả lời + cách
+  đo + **ví dụ số cụ thể**) → mục Lưu ý (phạm vi/ngưỡng/trend/level). i18n
+  `performance.guideDialog.*`. MỌI header cột vẫn có tooltip riêng (gạch chấm
+  dưới chữ, hover) dùng string `performance.guide.*`.
+  **Cột Thành phần 2 chế độ** (toggle icon `PieChart`/`BarChart3` trên header,
+  state `vizMode`, mặc định donut): **donut** = conic-gradient thuần CSS
+  (`ComponentDonut`, KHÔNG dùng recharts) — mỗi màu là số điểm thành phần đó
+  ĐÓNG GÓP (component × trọng số × 100), phần xám = điểm thiếu tới 100, số
+  điểm ở lỗ giữa, hover ra breakdown X/35, Y/25...; **bars** = 5 cột mini như
+  cũ (tooltip từng cột kèm số thô).
+- **Level chính thức designer (`UserEntity.designerLevel`, enum S-D)**: cột
+  cuối bảng xếp hạng — Admin/SuperAdmin thấy select S/A/B/C/D/— (set/xóa qua
+  `PATCH /designer/level/:userId` `@Auth([Admin])`, service `setDesignerLevel`
+  validate role Designer; DTO `SetDesignerLevelDto/Res`) + **chip "Gợi ý: X"**
+  = hạng từ điểm **rolling 60 ngày** (field `suggestedLevel`, null nếu thiếu
+  dữ liệu; bấm chip → áp dụng làm level). Role khác chỉ xem badge. Field đã
+  add vào CẢ 2 `$project` `getUserById` + `getMe` (Common_Pitfalls §1) +
+  `UserZod.designerLevel`. Level này để SAU nối vào auto-gán task khó/dễ theo
+  `productConfig.level` (chưa làm).
 - **Nút "Xem chi tiết" per-designer** (icon `Eye` cuối mỗi hàng widget Top
   Designer, props `onViewDesigner`/`activeDesignerId`): mở CÙNG `ProductTimePanel`
   nhưng chế độ 1 designer — cả 2 endpoint nhận query `designerId` optional

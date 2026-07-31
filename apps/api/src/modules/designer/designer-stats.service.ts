@@ -1,4 +1,4 @@
-import { Injectable, Logger } from '@nestjs/common';
+import { BadRequestException, Injectable, Logger, NotFoundException } from '@nestjs/common';
 import { InjectModel } from '@nestjs/mongoose';
 import { Model } from 'mongoose';
 import type {
@@ -7,6 +7,8 @@ import type {
   DesignerLeaderboardRow,
   DesignerTimelineBucket,
   ErrorStats,
+  PerformanceComponents,
+  PerformanceScoreRow,
   PersonErrorRow,
   ProductBreakdownDesigner,
   ToolCheckDayRow,
@@ -15,9 +17,11 @@ import type {
   ToolCheckOrder,
 } from 'shared';
 import {
+  DesignerRank,
   DesignerStatus,
   FULFILLMENT_STAGE_LABELS,
   FulfillmentStage,
+  rankFromScore,
   RoleType,
   Status,
   WorkshopConfigCategory,
@@ -39,6 +43,9 @@ import { WorkshopConfigEntity } from '../workshop-config/workshop-config.entity'
  *
  * Identity: assignee = user._id. Resolve fullName từ users collection.
  */
+/** Ngưỡng done tối thiểu trong kỳ để xếp hạng hiệu suất chính thức. */
+const PERF_MIN_DONE = 10;
+
 /** Cell ma trận team — 4 trạng thái + sự kiện bàn giao (Không làm được / Nhận thêm). */
 type TeamDailyCellShape = {
   assigned: number;
@@ -963,6 +970,312 @@ export class DesignerStatsService {
         };
       }),
     };
+  }
+
+  // ─── Performance scores (bảng xếp hạng hiệu suất + designerLevel) ────
+
+  /**
+   * Số liệu thô per-designer trong 1 cửa sổ ngày — input cho scoring.
+   * `expectedMs` = Σ(giờ TB của TEAM cho loại SP đó × số đơn done của designer
+   * theo loại) → chuẩn hóa tốc độ theo ĐỘ KHÓ rổ sản phẩm họ thực làm.
+   */
+  private async computePerfWindow(
+    start: Date,
+    end: Date,
+  ): Promise<
+    Map<
+      string,
+      {
+        tasks: number;
+        done: number;
+        workMs: number;
+        workN: number;
+        respMs: number;
+        respN: number;
+        rework: number;
+        expectedMs: number;
+        rejections: number;
+        claims: number;
+      }
+    >
+  > {
+    const { isDone } = this.designerTimeAggExprs();
+    const [agg, rejAgg, claimAgg] = await Promise.all([
+      this.orderModel.aggregate<{
+        _id: { uid: string; type: string };
+        taskCount: number;
+        done: number;
+        reworkSum: number;
+        responseMsSum: number;
+        responseN: number;
+        workMsSum: number;
+        workN: number;
+      }>([
+        { $match: this.buildProductTimeMatch(start, end) },
+        {
+          $group: {
+            _id: { uid: '$assignee', type: { $ifNull: ['$type', ''] } },
+            taskCount: { $sum: 1 },
+            done: { $sum: { $cond: [isDone, 1, 0] } },
+            reworkSum: { $sum: { $cond: [isDone, { $ifNull: ['$designerReworkCount', 0] }, 0] } },
+            ...this.designerTimeGroupFields(),
+          },
+        },
+      ]),
+      // Số lần "Không làm được" (bàn giao đi) — trừ vào độ tin cậy.
+      this.orderModel.aggregate<{ _id: string; count: number }>([
+        {
+          $match: {
+            'designerRejections.0': { $exists: true },
+            inProductionAt: { $gte: start, $lte: end },
+            cancelledAt: null,
+            factoryId: productionFactoryClause(this.orderModel.db),
+          },
+        },
+        { $unwind: '$designerRejections' },
+        { $group: { _id: '$designerRejections.fromUserId', count: { $sum: 1 } } },
+      ]),
+      // Chủ động "Nhận về mình": log đổi assignee mà ACTOR chính là người được
+      // gán (leader gán hộ → after ≠ userId → không tính). Trục thời gian =
+      // createdAt của log (thời điểm bấm nút).
+      this.orderLogModel.aggregate<{ _id: string; count: number }>([
+        {
+          $match: {
+            field: 'assignee',
+            userId: { $exists: true, $nin: [null, ''] },
+            createdAt: { $gte: start, $lte: end },
+            $expr: { $eq: ['$after', '$userId'] },
+          },
+        },
+        { $group: { _id: '$userId', count: { $sum: 1 } } },
+      ]),
+    ]);
+
+    const teamType = new Map<string, { ms: number; n: number }>();
+    for (const r of agg) {
+      const t = teamType.get(r._id.type) || { ms: 0, n: 0 };
+      t.ms += r.workMsSum;
+      t.n += r.workN;
+      teamType.set(r._id.type, t);
+    }
+
+    const perUid = new Map<
+      string,
+      {
+        tasks: number;
+        done: number;
+        workMs: number;
+        workN: number;
+        respMs: number;
+        respN: number;
+        rework: number;
+        expectedMs: number;
+        rejections: number;
+        claims: number;
+      }
+    >();
+    const ensure = (uid: string) => {
+      let u = perUid.get(uid);
+      if (!u) {
+        u = {
+          tasks: 0,
+          done: 0,
+          workMs: 0,
+          workN: 0,
+          respMs: 0,
+          respN: 0,
+          rework: 0,
+          expectedMs: 0,
+          rejections: 0,
+          claims: 0,
+        };
+        perUid.set(uid, u);
+      }
+      return u;
+    };
+    for (const r of agg) {
+      const u = ensure(r._id.uid);
+      u.tasks += r.taskCount;
+      u.done += r.done;
+      u.workMs += r.workMsSum;
+      u.workN += r.workN;
+      u.respMs += r.responseMsSum;
+      u.respN += r.responseN;
+      u.rework += r.reworkSum;
+      const tt = teamType.get(r._id.type)!;
+      if (tt.n > 0 && r.workN > 0) u.expectedMs += (tt.ms / tt.n) * r.workN;
+    }
+    for (const r of rejAgg) if (r._id) ensure(r._id).rejections += r.count;
+    for (const r of claimAgg) if (r._id) ensure(r._id).claims += r.count;
+    return perUid;
+  }
+
+  /**
+   * Chấm điểm 0-100 từ số liệu cửa sổ. 6 thành phần (mỗi cái 0..1, 0.5 =
+   * trung bình team / thiếu dữ liệu): tốc độ chuẩn hóa 30% + chất lượng 25%
+   * + sản lượng 15% + phản hồi 10% + độ tin cậy 10% + chủ động nhận task 10%
+   * (0 lần = 0.5 trung lập, không phạt người không tự nhận). Median tính NỘI
+   * BỘ cửa sổ trên designer đang bật.
+   */
+  private scorePerfWindow(perUid: Awaited<ReturnType<DesignerStatsService['computePerfWindow']>>): Map<
+    string,
+    {
+      score: number;
+      insufficient: boolean;
+      components: PerformanceComponents;
+      avgWorkMin: number;
+      avgResponseMin: number;
+      reworkCount: number;
+      rejections: number;
+      claims: number;
+      done: number;
+      tasks: number;
+    }
+  > {
+    const median = (arr: number[]) => {
+      if (arr.length === 0) return 0;
+      const s = [...arr].sort((a, b) => a - b);
+      return s[Math.floor(s.length / 2)];
+    };
+    const medDone = median([...perUid.values()].map((u) => u.done).filter((d) => d > 0));
+    const medResp = median([...perUid.values()].filter((u) => u.respN > 0).map((u) => u.respMs / u.respN));
+    const medClaims = median([...perUid.values()].map((u) => u.claims).filter((c) => c > 0));
+    const clamp02 = (v: number) => Math.max(0, Math.min(2, v));
+
+    const out = new Map<
+      string,
+      {
+        score: number;
+        insufficient: boolean;
+        components: PerformanceComponents;
+        avgWorkMin: number;
+        avgResponseMin: number;
+        reworkCount: number;
+        rejections: number;
+        claims: number;
+        done: number;
+        tasks: number;
+      }
+    >();
+    for (const [uid, u] of perUid) {
+      // >1 = nhanh hơn mặt bằng team trên cùng rổ sản phẩm → map [0..2]/2.
+      const speed = u.workN > 0 && u.workMs > 0 && u.expectedMs > 0 ? clamp02(u.expectedMs / u.workMs) / 2 : 0.5;
+      const quality = u.done > 0 ? 1 - Math.min(1, u.rework / u.done) : 0.5;
+      const throughput = medDone > 0 ? clamp02(u.done / medDone) / 2 : 0.5;
+      const avgRespMs = u.respN > 0 ? u.respMs / u.respN : 0;
+      const response =
+        u.respN > 0 && medResp > 0 ? (avgRespMs > 0 ? clamp02(medResp / avgRespMs) / 2 : 1) : 0.5;
+      const reliability = u.tasks > 0 ? 1 - Math.min(1, u.rejections / u.tasks) : 0.5;
+      // Chủ động: 0 lần tự nhận = 0.5 trung lập; = median người-có-nhận → 0.75;
+      // gấp đôi median → 1. Chỉ thưởng, không phạt dưới mức trung lập.
+      const proactive =
+        u.claims === 0 || medClaims === 0 ? 0.5 : Math.min(1, 0.5 + (u.claims / medClaims) * 0.25);
+      const score = Math.round(
+        100 * (0.3 * speed + 0.25 * quality + 0.15 * throughput + 0.1 * response + 0.1 * reliability + 0.1 * proactive),
+      );
+      out.set(uid, {
+        score,
+        insufficient: u.done < PERF_MIN_DONE,
+        components: { speed, quality, throughput, response, reliability, proactive },
+        avgWorkMin: u.workN > 0 ? Math.round(u.workMs / u.workN / 60000) : 0,
+        avgResponseMin: u.respN > 0 ? Math.round(u.respMs / u.respN / 60000) : 0,
+        reworkCount: u.rework,
+        rejections: u.rejections,
+        claims: u.claims,
+        done: u.done,
+        tasks: u.tasks,
+      });
+    }
+    return out;
+  }
+
+  /**
+   * Bảng xếp hạng hiệu suất (tab Designer): điểm + hạng S/A/B/C/D theo kỳ lọc,
+   * trend so kỳ liền trước cùng độ dài, hạng gợi ý từ rolling 60 ngày (nguồn
+   * cho `designerLevel`) + level chính thức đang set. Chỉ designer đang bật.
+   */
+  async getPerformanceScores(from?: string, to?: string): Promise<{ rows: PerformanceScoreRow[]; minDone: number }> {
+    const { start, end } = this.resolveVnWindow(7, from, to);
+    const winMs = end.getTime() - start.getTime() + 1;
+    const sixty = this.resolveVnWindow(60);
+    const [curW, prevW, sixtyW, designerRole] = await Promise.all([
+      this.computePerfWindow(start, end),
+      this.computePerfWindow(new Date(start.getTime() - winMs), new Date(start.getTime() - 1)),
+      this.computePerfWindow(sixty.start, sixty.end),
+      this.roleRepository.findOne({ name: RoleType.Designer }),
+    ]);
+    const teamUsers = designerRole
+      ? await this.userModel
+          .find({ roleId: designerRole._id, status: Status.Active }, { _id: 1, fullName: 1, email: 1, designerLevel: 1 })
+          .lean()
+      : [];
+    const activeIds = new Set(teamUsers.map((u) => String(u._id)));
+    // Median chỉ tính trong team đang bật — loại assignee đã tắt/ngoài team.
+    const onlyTeam = (m: Awaited<ReturnType<DesignerStatsService['computePerfWindow']>>) => {
+      const n = new Map<string, ReturnType<typeof m.get> & object>() as typeof m;
+      for (const [k, v] of m) if (activeIds.has(k)) n.set(k, v);
+      return n;
+    };
+    const curS = this.scorePerfWindow(onlyTeam(curW));
+    const prevS = this.scorePerfWindow(onlyTeam(prevW));
+    const sixtyS = this.scorePerfWindow(onlyTeam(sixtyW));
+
+    const rows: PerformanceScoreRow[] = teamUsers.map((u) => {
+      const uid = String(u._id);
+      const cur = curS.get(uid);
+      const prev = prevS.get(uid);
+      const sx = sixtyS.get(uid);
+      const score = cur?.score ?? 50; // không có task nào trong kỳ → toàn neutral 0.5
+      return {
+        userId: uid,
+        fullName: u.fullName,
+        email: u.email,
+        totalTasks: cur?.tasks ?? 0,
+        done: cur?.done ?? 0,
+        score,
+        rank: rankFromScore(score),
+        insufficient: cur ? cur.insufficient : true,
+        components: cur?.components ?? {
+          speed: 0.5,
+          quality: 0.5,
+          throughput: 0.5,
+          response: 0.5,
+          reliability: 0.5,
+          proactive: 0.5,
+        },
+        avgWorkMin: cur?.avgWorkMin ?? 0,
+        avgResponseMin: cur?.avgResponseMin ?? 0,
+        reworkCount: cur?.reworkCount ?? 0,
+        rejections: cur?.rejections ?? 0,
+        claims: cur?.claims ?? 0,
+        trend: cur && !cur.insufficient && prev && !prev.insufficient ? cur.score - prev.score : null,
+        suggestedLevel: sx && !sx.insufficient ? rankFromScore(sx.score) : null,
+        designerLevel: (u as { designerLevel?: DesignerRank }).designerLevel,
+      };
+    });
+    // Đủ dữ liệu lên trước, trong nhóm sort điểm giảm dần.
+    rows.sort((a, b) => Number(a.insufficient) - Number(b.insufficient) || b.score - a.score);
+    return { rows, minDone: PERF_MIN_DONE };
+  }
+
+  /**
+   * Set/xóa level chính thức (S-D) cho 1 designer — CHỈ tài khoản role
+   * Designer. Gọi từ bảng xếp hạng (Admin).
+   */
+  async setDesignerLevel(userId: string, level: DesignerRank | null): Promise<{ userId: string; level: DesignerRank | null }> {
+    const [user, designerRole] = await Promise.all([
+      this.userModel.findOne({ _id: userId }, { _id: 1, roleId: 1 }).lean(),
+      this.roleRepository.findOne({ name: RoleType.Designer }),
+    ]);
+    if (!user) throw new NotFoundException('User không tồn tại');
+    if (!designerRole || String(user.roleId) !== String(designerRole._id)) {
+      throw new BadRequestException('Chỉ set level cho tài khoản role Designer');
+    }
+    await this.userModel.updateOne(
+      { _id: userId },
+      level ? { $set: { designerLevel: level } } : { $unset: { designerLevel: 1 } },
+    );
+    return { userId, level };
   }
 
   /**

@@ -12,7 +12,13 @@ import {
   XAxis,
   YAxis,
 } from 'recharts';
-import type { BreakdownFilterOption, DesignerLeaderboardRow, DesignerTimelineBucket, ErrorStats } from 'shared';
+import type {
+  BreakdownFilterOption,
+  DesignerLeaderboardRow,
+  DesignerTimelineBucket,
+  ErrorStats,
+  PerformanceScoreRow,
+} from 'shared';
 
 import { RepositoryRemote } from '@/services';
 
@@ -29,6 +35,7 @@ import { DATE_PRESETS } from '@/utils/dateRangePresets';
 
 import { DesignerAssignBacklog } from './DesignerAssignBacklog';
 import { DesignerDailyOverview } from './DesignerDailyOverview';
+import { DesignerPerformanceCard } from './DesignerPerformanceCard';
 import { ProductTimePanel } from './ProductTimePanel';
 import { StatusBarCharts } from './StatusBarCharts';
 import { TeamDailyMatrix } from './TeamDailyMatrix';
@@ -79,6 +86,8 @@ export default function DesignerStatsTab() {
   // Panel "Thời gian theo sản phẩm" — nút "Xem tất cả" (toàn team) hoặc nút
   // "Xem chi tiết" 1 designer trong widget TopDesigners. null = đóng.
   const [productTimesView, setProductTimesView] = useState<{ designerId?: string; designerName?: string } | null>(null);
+  // Rows điểm hiệu suất (từ DesignerPerformanceCard) — TopDesigners dùng gắn badge hạng.
+  const [scoreRows, setScoreRows] = useState<PerformanceScoreRow[]>([]);
 
   // Filter dùng chung cho biểu đồ cột + ma trận: sản phẩm (type) + khách (userSku).
   const [filterType, setFilterType] = useState('');
@@ -236,6 +245,7 @@ export default function DesignerStatsTab() {
                 v?.designerId === userId ? null : { designerId: userId, designerName: fullName },
               )
             }
+            scoreRows={scoreRows}
           />
         </div>
       </div>
@@ -253,6 +263,14 @@ export default function DesignerStatsTab() {
           onClose={() => setProductTimesView(null)}
         />
       )}
+
+      {/* Bảng xếp hạng hiệu suất — điểm 0-100 + hạng S-D + level chính thức. */}
+      <DesignerPerformanceCard
+        from={dateFrom || undefined}
+        to={dateTo || undefined}
+        reloadToken={matrixToken}
+        onLoaded={setScoreRows}
+      />
 
       {/* Bảng "Cần gán designer" gom theo sản phẩm — dưới bảng tổng quan. */}
       <DesignerAssignBacklog
