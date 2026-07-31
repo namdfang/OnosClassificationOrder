@@ -452,6 +452,24 @@ export const ProductTimeRowZod = z.object({
   /** TB trên task done — 0 nếu chưa có. Cùng công thức leaderboard. */
   avgResponseMin: z.number().nonnegative(),
   avgWorkMin: z.number().nonnegative(),
+  /**
+   * ProductConfig khớp `type` (fullName case-insensitive — cùng cách importOrders
+   * map config; fallback `productConfigId` phổ biến nhất trên đơn). FE gán level
+   * qua `PATCH /product-configs/:id` sẵn có. Rỗng = chưa có config → không gán được.
+   */
+  productConfigId: z.string().optional(),
+  /** Level chính thức 1..10 từ `ProductConfig.level` (PRODUCT_LEVELS). */
+  level: z.number().int().min(1).max(10).optional(),
+  /**
+   * Gợi ý level 1..10 — percentile tương đối 60 ngày gần nhất (cố định, không theo
+   * kỳ lọc): 0.7×percentile thời gian làm TB + 0.3×percentile tỉ lệ làm lại.
+   * Chỉ có khi ≥ PRODUCT_SUGGEST_MIN_DONE đơn xong trong cửa sổ.
+   */
+  suggestedLevel: z.number().int().min(1).max(10).optional(),
+  /** Căn cứ gợi ý (cửa sổ 60 ngày): số đơn xong / TB phút làm / % làm lại. */
+  suggestDone: z.number().int().nonnegative().optional(),
+  suggestAvgWorkMin: z.number().nonnegative().optional(),
+  suggestReworkPct: z.number().nonnegative().optional(),
 });
 export type ProductTimeRow = z.infer<typeof ProductTimeRowZod>;
 

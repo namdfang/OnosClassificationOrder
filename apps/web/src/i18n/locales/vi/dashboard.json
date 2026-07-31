@@ -642,7 +642,15 @@
     "subtitleDesigner": "— chỉ số liệu của riêng designer này trong kỳ lọc",
     "customerTip": "Khách hàng của đơn",
     "searchProductPlaceholder": "Tìm sản phẩm...",
-    "noMatch": "Không có sản phẩm nào khớp bộ lọc."
+    "noMatch": "Không có sản phẩm nào khớp bộ lọc.",
+    "colLevel": "Level",
+    "colSuggest": "Gợi ý",
+    "levelSaved": "Đã gán level {{level}} cho sản phẩm",
+    "noConfigTip": "Sản phẩm chưa có Product Config — tạo ở trang Sản phẩm trước rồi mới gán level được",
+    "suggestTipTitle": "Gợi ý độ khó (60 ngày gần nhất)",
+    "suggestTip": "{{done}} đơn xong · làm TB {{work}} · {{rework}}% làm lại — so tương đối với các sản phẩm khác (70% thời gian + 30% làm lại)",
+    "suggestApplyTip": "Bấm để gán level này cho sản phẩm",
+    "suggestInsufficient": "Chưa đủ dữ liệu — cần từ 5 đơn xong trong 60 ngày gần nhất"
   },
   "performance": {
     "title": "Xếp hạng hiệu suất",

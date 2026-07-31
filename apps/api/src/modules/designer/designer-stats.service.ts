@@ -11,6 +11,7 @@ import type {
   PerformanceScoreRow,
   PersonErrorRow,
   ProductBreakdownDesigner,
+  ProductTimeRow,
   ToolCheckDayRow,
   ToolCheckErrorRow,
   ToolCheckFacet,
@@ -45,6 +46,22 @@ import { WorkshopConfigEntity } from '../workshop-config/workshop-config.entity'
  */
 /** Ngưỡng done tối thiểu trong kỳ để xếp hạng hiệu suất chính thức. */
 const PERF_MIN_DONE = 10;
+
+/** Ngưỡng đơn xong tối thiểu (cửa sổ 60 ngày) để gợi ý level sản phẩm. */
+const PRODUCT_SUGGEST_MIN_DONE = 5;
+
+/** Percentile 0..1 của `v` trong `values` (tie lấy trung bình thứ hạng); ≤1 phần tử → 0.5. */
+function percentileOf(values: number[], v: number): number {
+  const n = values.length;
+  if (n <= 1) return 0.5;
+  let less = 0;
+  let equal = 0;
+  for (const x of values) {
+    if (x < v) less++;
+    else if (x === v) equal++;
+  }
+  return (less + (equal - 1) / 2) / (n - 1);
+}
 
 /** Cell ma trận team — 4 trạng thái + sự kiện bàn giao (Không làm được / Nhận thêm). */
 type TeamDailyCellShape = {
@@ -639,10 +656,7 @@ export class DesignerStatsService {
       }
     }
     // Đổ sự kiện bàn giao vào cells/totals — cùng bucket "Khác" cho user đã tắt.
-    const bumpEvents = (
-      list: { _id: { uid: string; day: string }; count: number }[],
-      key: 'rejected' | 'received',
-    ) => {
+    const bumpEvents = (list: { _id: { uid: string; day: string }; count: number }[], key: 'rejected' | 'received') => {
       for (const r of list) {
         if (!r._id.uid) continue;
         const uid = activeIds.has(r._id.uid) ? r._id.uid : INACTIVE_UID;
@@ -792,6 +806,10 @@ export class DesignerStatsService {
    * Panel "Xem tất cả" từ widget Top Designer: thời gian TB nhận/làm task theo
    * TỪNG loại sản phẩm (`order.type`) của TOÀN BỘ designer trong kỳ lọc.
    * Cùng scope ma trận (`inProductionAt` + type/customer + loại hủy/chưa map).
+   *
+   * Mỗi row kèm level chính thức (`ProductConfig.level`, khớp fullName ~ type
+   * case-insensitive như importOrders, fallback `productConfigId` trên đơn) +
+   * gợi ý level 1..10 từ `computeProductLevelSuggestions()` (60 ngày cố định).
    */
   async getProductTimeOverview(
     from?: string,
@@ -799,51 +817,121 @@ export class DesignerStatsService {
     type?: string,
     customer?: string,
     designerId?: string,
-  ): Promise<{
-    rows: {
-      type: string;
-      mockupUrl?: string;
-      taskCount: number;
-      doneCount: number;
-      avgResponseMin: number;
-      avgWorkMin: number;
-    }[];
-  }> {
+  ): Promise<{ rows: ProductTimeRow[] }> {
     const { start, end } = this.resolveVnWindow(7, from, to);
+    const { isDone } = this.designerTimeAggExprs();
+    const [agg, suggestByType, configs] = await Promise.all([
+      this.orderModel.aggregate<{
+        _id: string | null;
+        mockupUrl?: string | null;
+        productConfigId?: string | null;
+        taskCount: number;
+        doneCount: number;
+        responseMsSum: number;
+        responseN: number;
+        workMsSum: number;
+        workN: number;
+      }>([
+        { $match: this.buildProductTimeMatch(start, end, type || undefined, customer, designerId) },
+        {
+          $group: {
+            _id: { $ifNull: ['$type', ''] },
+            // Ảnh đại diện sản phẩm: $max ưu tiên string non-null (null < string).
+            mockupUrl: { $max: '$mockupUrl' },
+            productConfigId: { $max: '$productConfigId' },
+            taskCount: { $sum: 1 },
+            doneCount: { $sum: { $cond: [isDone, 1, 0] } },
+            ...this.designerTimeGroupFields(),
+          },
+        },
+        { $sort: { taskCount: -1 } },
+      ]),
+      this.computeProductLevelSuggestions(),
+      this.productConfigModel
+        .find({ deletedAt: { $exists: false } }, { fullName: 1, level: 1 })
+        .lean<{ _id: unknown; fullName: string; level?: number }[]>(),
+    ]);
+
+    const configByName = new Map<string, { id: string; level?: number }>();
+    const configById = new Map<string, { id: string; level?: number }>();
+    for (const c of configs) {
+      const entry = { id: String(c._id), level: c.level };
+      configByName.set(c.fullName.trim().toLowerCase(), entry);
+      configById.set(entry.id, entry);
+    }
+
+    return {
+      rows: agg.map((r) => {
+        const typeKey = r._id || '';
+        const cfg =
+          configByName.get(typeKey.trim().toLowerCase()) ||
+          (r.productConfigId ? configById.get(String(r.productConfigId)) : undefined);
+        return {
+          type: typeKey,
+          mockupUrl: r.mockupUrl || undefined,
+          taskCount: r.taskCount,
+          doneCount: r.doneCount,
+          avgResponseMin: r.responseN > 0 ? Math.round(r.responseMsSum / r.responseN / 60000) : 0,
+          avgWorkMin: r.workN > 0 ? Math.round(r.workMsSum / r.workN / 60000) : 0,
+          productConfigId: cfg?.id,
+          level: cfg?.level,
+          ...suggestByType.get(typeKey),
+        };
+      }),
+    };
+  }
+
+  /**
+   * Gợi ý level sản phẩm 1..10 — thang TƯƠNG ĐỐI (percentile nội bộ, tự cân
+   * chỉnh) trên cửa sổ 60 ngày CỐ ĐỊNH toàn hệ thống (không theo kỳ lọc để
+   * gợi ý không nhảy khi admin đổi filter): 0.7 × percentile thời gian làm TB
+   * + 0.3 × percentile tỉ lệ làm lại (reworkSum/done). Chỉ xét sản phẩm có
+   * ≥ PRODUCT_SUGGEST_MIN_DONE đơn xong.
+   */
+  private async computeProductLevelSuggestions(): Promise<
+    Map<string, Pick<ProductTimeRow, 'suggestedLevel' | 'suggestDone' | 'suggestAvgWorkMin' | 'suggestReworkPct'>>
+  > {
+    const sixty = this.resolveVnWindow(60);
     const { isDone } = this.designerTimeAggExprs();
     const agg = await this.orderModel.aggregate<{
       _id: string | null;
-      mockupUrl?: string | null;
-      taskCount: number;
       doneCount: number;
+      reworkSum: number;
       responseMsSum: number;
       responseN: number;
       workMsSum: number;
       workN: number;
     }>([
-      { $match: this.buildProductTimeMatch(start, end, type || undefined, customer, designerId) },
+      { $match: this.buildProductTimeMatch(sixty.start, sixty.end) },
       {
         $group: {
           _id: { $ifNull: ['$type', ''] },
-          // Ảnh đại diện sản phẩm: $max ưu tiên string non-null (null < string).
-          mockupUrl: { $max: '$mockupUrl' },
-          taskCount: { $sum: 1 },
           doneCount: { $sum: { $cond: [isDone, 1, 0] } },
+          reworkSum: { $sum: { $cond: [isDone, { $ifNull: ['$designerReworkCount', 0] }, 0] } },
           ...this.designerTimeGroupFields(),
         },
       },
-      { $sort: { taskCount: -1 } },
     ]);
-    return {
-      rows: agg.map((r) => ({
-        type: r._id || '',
-        mockupUrl: r.mockupUrl || undefined,
-        taskCount: r.taskCount,
-        doneCount: r.doneCount,
-        avgResponseMin: r.responseN > 0 ? Math.round(r.responseMsSum / r.responseN / 60000) : 0,
-        avgWorkMin: r.workN > 0 ? Math.round(r.workMsSum / r.workN / 60000) : 0,
-      })),
-    };
+
+    const eligible = agg.filter((s) => s.doneCount >= PRODUCT_SUGGEST_MIN_DONE && s.workN > 0);
+    const avgWorks = eligible.map((s) => s.workMsSum / s.workN);
+    const reworkRates = eligible.map((s) => s.reworkSum / s.doneCount);
+    const result = new Map<
+      string,
+      Pick<ProductTimeRow, 'suggestedLevel' | 'suggestDone' | 'suggestAvgWorkMin' | 'suggestReworkPct'>
+    >();
+    for (const s of eligible) {
+      const avgWork = s.workMsSum / s.workN;
+      const reworkRate = s.reworkSum / s.doneCount;
+      const difficulty = 0.7 * percentileOf(avgWorks, avgWork) + 0.3 * percentileOf(reworkRates, reworkRate);
+      result.set(s._id || '', {
+        suggestedLevel: Math.min(10, Math.max(1, 1 + Math.round(difficulty * 9))),
+        suggestDone: s.doneCount,
+        suggestAvgWorkMin: Math.round(avgWork / 60000),
+        suggestReworkPct: Math.round(reworkRate * 100),
+      });
+    }
+    return result;
   }
 
   /**
@@ -954,7 +1042,10 @@ export class DesignerStatsService {
         if (d.designerStatus === DesignerStatus.Done) {
           if (d.designerWorkMs && d.designerWorkMs > 0) workMin = Math.round(d.designerWorkMs / 60000);
           else if (d.designerStartedAt && d.designerCompletedAt)
-            workMin = Math.max(0, Math.round((d.designerCompletedAt.getTime() - d.designerStartedAt.getTime()) / 60000));
+            workMin = Math.max(
+              0,
+              Math.round((d.designerCompletedAt.getTime() - d.designerStartedAt.getTime()) / 60000),
+            );
         }
         return {
           _id: String(d._id),
@@ -1163,13 +1254,11 @@ export class DesignerStatsService {
       const quality = u.done > 0 ? 1 - Math.min(1, u.rework / u.done) : 0.5;
       const throughput = medDone > 0 ? clamp02(u.done / medDone) / 2 : 0.5;
       const avgRespMs = u.respN > 0 ? u.respMs / u.respN : 0;
-      const response =
-        u.respN > 0 && medResp > 0 ? (avgRespMs > 0 ? clamp02(medResp / avgRespMs) / 2 : 1) : 0.5;
+      const response = u.respN > 0 && medResp > 0 ? (avgRespMs > 0 ? clamp02(medResp / avgRespMs) / 2 : 1) : 0.5;
       const reliability = u.tasks > 0 ? 1 - Math.min(1, u.rejections / u.tasks) : 0.5;
       // Chủ động: 0 lần tự nhận = 0.5 trung lập; = median người-có-nhận → 0.75;
       // gấp đôi median → 1. Chỉ thưởng, không phạt dưới mức trung lập.
-      const proactive =
-        u.claims === 0 || medClaims === 0 ? 0.5 : Math.min(1, 0.5 + (u.claims / medClaims) * 0.25);
+      const proactive = u.claims === 0 || medClaims === 0 ? 0.5 : Math.min(1, 0.5 + (u.claims / medClaims) * 0.25);
       const score = Math.round(
         100 * (0.3 * speed + 0.25 * quality + 0.15 * throughput + 0.1 * response + 0.1 * reliability + 0.1 * proactive),
       );
@@ -1206,7 +1295,10 @@ export class DesignerStatsService {
     ]);
     const teamUsers = designerRole
       ? await this.userModel
-          .find({ roleId: designerRole._id, status: Status.Active }, { _id: 1, fullName: 1, email: 1, designerLevel: 1 })
+          .find(
+            { roleId: designerRole._id, status: Status.Active },
+            { _id: 1, fullName: 1, email: 1, designerLevel: 1 },
+          )
           .lean()
       : [];
     const activeIds = new Set(teamUsers.map((u) => String(u._id)));
@@ -1262,7 +1354,10 @@ export class DesignerStatsService {
    * Set/xóa level chính thức (S-D) cho 1 designer — CHỈ tài khoản role
    * Designer. Gọi từ bảng xếp hạng (Admin).
    */
-  async setDesignerLevel(userId: string, level: DesignerRank | null): Promise<{ userId: string; level: DesignerRank | null }> {
+  async setDesignerLevel(
+    userId: string,
+    level: DesignerRank | null,
+  ): Promise<{ userId: string; level: DesignerRank | null }> {
     const [user, designerRole] = await Promise.all([
       this.userModel.findOne({ _id: userId }, { _id: 1, roleId: 1 }).lean(),
       this.roleRepository.findOne({ name: RoleType.Designer }),
@@ -1613,11 +1708,7 @@ export class DesignerStatsService {
             // Design ĐÃ XONG (assignee + status done) — khớp cột "Đã xong" ma trận.
             designDone: {
               $sum: {
-                $cond: [
-                  { $and: [{ $ne: [assigneeExpr, ''] }, { $eq: [statusExpr, DesignerStatus.Done] }] },
-                  1,
-                  0,
-                ],
+                $cond: [{ $and: [{ $ne: [assigneeExpr, ''] }, { $eq: [statusExpr, DesignerStatus.Done] }] }, 1, 0],
               },
             },
             // "Đã gán designer" tách 2 nguồn — tổng 2 số = Tổng/ngày ma trận team.
@@ -2370,7 +2461,16 @@ export class DesignerStatsService {
       columnTotals.reviewedError += reviewedError;
       columnTotals.reviewedOk += reviewedOk;
       columnTotals.rework += rework;
-      return { day, total, unreviewed, reviewed, reviewedError, errorByNote: noteByDay.get(day) || [], reviewedOk, rework };
+      return {
+        day,
+        total,
+        unreviewed,
+        reviewed,
+        reviewedError,
+        errorByNote: noteByDay.get(day) || [],
+        reviewedOk,
+        rework,
+      };
     });
 
     return {

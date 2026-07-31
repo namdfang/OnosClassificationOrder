@@ -140,6 +140,34 @@ Layout (thứ tự render trên tab: **Bộ lọc chung → Tổng quan N ngày 
   có type). Cả 2 endpoint `@Auth(LEADER_ROLES)`. DTOs `ProductTimeRowZod`/
   `ProductTimeDesignerZod`/`ProductTimeOrderRowZod` + Get* DTOs trong
   `designer.dto.ts`. i18n block `productTimes.*` + nút `topDesigners.viewAll`.
+- **2 cột "Level" + "Gợi ý" trong panel Thời gian theo sản phẩm** (độ khó
+  sản phẩm 1..10, hiện ở cả chế độ Xem tất cả lẫn per-designer):
+  - **Level** = `ProductConfig.level` sẵn có (badge màu `PRODUCT_LEVEL_MAP`
+    ở `packages/shared/constants/product-level.ts` — CÙNG dữ liệu với trang
+    chi tiết sản phẩm). BE map row→config theo `fullName` khớp `order.type`
+    case-insensitive (cùng cách `importOrders`), fallback `productConfigId`
+    (`$max`) trên đơn; load 1 query `productConfigModel.find({deletedAt
+    $exists false}, {fullName, level})`. Row không có config → "—" + tooltip
+    `noConfigTip` (phải tạo config trước). FE: SuperAdmin/Admin/Manager
+    (mirror `@Auth` của `PATCH /product-configs/:id`, const
+    `LEVEL_EDIT_ROLES`) thấy **select 1..10 nền màu level** đổi tại chỗ —
+    tái dùng `RepositoryRemote.productConfig.updateProductConfig(id,
+    {level})`, KHÔNG endpoint mới; role khác chỉ xem badge (`LevelBadge`).
+  - **Gợi ý** (`suggestedLevel` + căn cứ `suggestDone`/`suggestAvgWorkMin`/
+    `suggestReworkPct` trong `ProductTimeRowZod`) — BE
+    `computeProductLevelSuggestions()`: thang **TƯƠNG ĐỐI** (percentile nội
+    bộ, tự cân chỉnh, KHÔNG trừ hao tay nghề) trên cửa sổ **60 ngày CỐ ĐỊNH**
+    toàn hệ thống (không theo kỳ lọc — đổi filter gợi ý không nhảy):
+    `độ khó = 0.7 × percentile(thời gian làm TB) + 0.3 × percentile(tỉ lệ
+    làm lại = Σ designerReworkCount / done)` → level `1 + round(độ khó × 9)`.
+    Chỉ xét sản phẩm ≥ `PRODUCT_SUGGEST_MIN_DONE (5)` đơn xong trong cửa sổ
+    (util `percentileOf` tie = TB thứ hạng, ≤1 phần tử → 0.5); thiếu dữ liệu
+    → "—" + tooltip `suggestInsufficient`. FE: chip `→ n` viền màu level,
+    hover tooltip căn cứ ("X đơn xong · làm TB Y · Z% làm lại"), Admin/Manager
+    bấm chip → gán luôn level đó (chip mờ `opacity-40` khi đã trùng level
+    chính thức). i18n `productTimes.{colLevel,colSuggest,levelSaved,
+    noConfigTip,suggestTipTitle,suggestTip,suggestApplyTip,suggestInsufficient}`.
+    Level này là nền cho auto-gán task khó/dễ theo `designerLevel` (chưa làm).
 - **Bảng "Xếp hạng hiệu suất"** (`DesignerPerformanceCard.tsx`, render dưới
   hàng Filter+TopDesigners, theo kỳ lọc chung + refetch `matrixToken`): mỗi
   designer đang bật 1 hàng — **badge hạng S/A/B/C/D** (S≥85 teal · A≥70 xanh ·

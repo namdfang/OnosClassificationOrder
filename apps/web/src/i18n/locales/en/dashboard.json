@@ -642,7 +642,15 @@
     "subtitleDesigner": "— this designer's own numbers in the filtered range",
     "customerTip": "Order customer",
     "searchProductPlaceholder": "Search products...",
-    "noMatch": "No products match the filter."
+    "noMatch": "No products match the filter.",
+    "colLevel": "Level",
+    "colSuggest": "Suggested",
+    "levelSaved": "Level {{level}} assigned to product",
+    "noConfigTip": "No Product Config yet — create it on the Products page before assigning a level",
+    "suggestTipTitle": "Difficulty suggestion (last 60 days)",
+    "suggestTip": "{{done}} done orders · avg work {{work}} · {{rework}}% rework — relative to other products (70% time + 30% rework)",
+    "suggestApplyTip": "Click to assign this level to the product",
+    "suggestInsufficient": "Not enough data — needs at least 5 done orders in the last 60 days"
   },
   "performance": {
     "title": "Performance ranking",
