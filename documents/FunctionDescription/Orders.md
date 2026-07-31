@@ -189,6 +189,14 @@ Thay cho thao tác thủ công hàng ngày (8h/17h): vào `qc.onospod.com` bấm
 xlsx → paste vào tab Import. Nút "Lấy đơn từ OnosPod" (chỉ hiện ở mode `new`) tự động hoá
 toàn bộ chuỗi này trong 1 click.
 
+Cạnh nút có 1 `DateRangePicker` (`apps/web/src/components/common/DateRangePicker.tsx`, component
+dùng chung toàn app) cho phép chọn khoảng ngày tùy ý — state `onosPodFrom`/`onosPodTo` ở
+`ImportOrderTab.tsx`. Để trống (mặc định) → gọi `POST /v1/orders/import-from-onospod` với
+body `{}`, BE tự tính period theo giờ gọi (xem bên dưới). Nếu chọn cả 2 ngày → FE convert
+sang ISO datetime bằng `dayjs(from).startOf('day').toISOString()` /
+`dayjs(to).endOf('day').toISOString()` rồi truyền `{ start, end }` — khớp `ImportFromOnosPodZod`
+(`packages/shared/dtos/production-order.dto.ts`).
+
 **Cách lấy dữ liệu:** query GraphQL `paginateMrpProduct` trực tiếp (KHÔNG dùng cơ chế
 export/tải file — thử ban đầu nhưng mutation `createExportProductionReport` chạy bất đồng
 bộ và không tìm được API polling đúng, xem lịch sử ở git log nếu cần). `paginateMrpProduct`
@@ -203,11 +211,13 @@ từng manufacture — đã bỏ, vì mỗi item trả về đã tự mang sẵn
 User bấm "Lấy đơn từ OnosPod"
   → POST /v1/orders/import-from-onospod (body {} → BE tự tính period theo giờ gọi, xem bên dưới)
   → OnospodImportService:
-      1. Loop page=1.. gọi query `paginateMrpProduct(status="To Do", start, end, page,
-         perpage=500)` — KHÔNG truyền `manufacture_id` — tới khi hết `paginate.total_pages`.
-         (Bearer token tĩnh lưu trong env `ONOSPOD_QC_API_URL` / `ONOSPOD_QC_BEARER_TOKEN`
-         — đọc qua `ApiConfigService.onospodQcConfig`, trả `null` nếu chưa cấu hình thay
-         vì crash app boot, giống `r2Config`)
+      1. Loop từng status trong `MRP_STATUSES = ['To Do', 'Ready']` (query GraphQL chỉ nhận
+         `status: String` đơn, KHÔNG phải mảng → phải gọi riêng 1 lượt phân trang/status rồi
+         gộp kết quả) — mỗi lượt: loop page=1.. gọi `paginateMrpProduct(mrp_status=status,
+         start, end, page, perpage=500)` — KHÔNG truyền `manufacture_id` — tới khi hết
+         `paginate.total_pages`. (Bearer token tĩnh lưu trong env `ONOSPOD_QC_API_URL` /
+         `ONOSPOD_QC_BEARER_TOKEN` — đọc qua `ApiConfigService.onospodQcConfig`, trả `null`
+         nếu chưa cấu hình thay vì crash app boot, giống `r2Config`)
       2. Map từng `MrpProduct` → `ImportProductionOrderRow` (field mapping xác nhận qua
          test đối chiếu 1:1 với dòng CSV export thật — xem bảng field mapping bên dưới)
       3. `groupByManufacture()` — group lại TẤT CẢ item theo field `manufacture` có sẵn
@@ -233,7 +243,7 @@ User bấm "Lấy đơn từ OnosPod"
 | `mockupUrl` | `src` | |
 | `designs.{key}` | quét ĐỘNG mọi key `design_*` trong `print` (`extractDesigns()`) — snake→camel (`design_chest_left`→`chestLeft`), đối chiếu whitelist 18 key `DesignFields`; response chỉ chứa key ở vị trí đơn CÓ design | query thêm vị trí mới là tự map, không phải sửa code; key lạ ngoài `DesignFields` bị bỏ qua |
 | `designs.frontEmbroidery` / `backEmbroidery` | fallback khi quét động chưa có: `print.print_areas_customs[]` — entry `is_embroidery=true` + `file.src`, match front/back qua `key`/`name` lowercase (`pickEmbroiderySrc()`) | nguồn mới từ khi đồng bộ `PAGINATE_QUERY` với query thật FE OnosPod (2026-07); không match → để trống |
-| `status` | `mrp_status` | luôn filter `status: "To Do"` khi query (chỉ lấy đơn MỚI chưa vào sản xuất) |
+| `status` | `mrp_status` | filter `status` lấy TỪNG giá trị trong `MRP_STATUSES = ['To Do', 'Ready']` (gộp kết quả) — chỉ lấy đơn MỚI/chưa in, KHÔNG lấy status sau đó (In Production/Done/...). Thêm `'Ready'` từ 2026-07-31: đơn có thể chuyển "To Do"→"Ready" rất nhanh trên OnosPod, nếu chỉ lọc "To Do" sẽ lọt mất dù đúng khoảng ngày (case thật: `XQ-91783-27005`) |
 | `quantity` | `quantity` | |
 | `inProductionAt` | `mrp_created_at` (ISO) → format VN local | |
 | `orderAt` | decode timestamp từ 4 byte đầu của `order_id` (ObjectId) → format VN local | **KHÔNG có field ngày riêng** — order_id là Mongo ObjectId, tự chứa timestamp tạo doc |
@@ -251,7 +261,7 @@ phải `createIndex` tay; nhớ bước này khi restore DB mới) — chặn ra
 thời (cron + nút UI) cùng insert 1 đơn.
 
 **Error semantics (quan trọng cho cron monitoring):**
-- Batch rỗng (không có đơn "To Do" mới — sáng vắng/ngày lễ) → **200 success** với
+- Batch rỗng (không có đơn "To Do"/"Ready" mới — sáng vắng/ngày lễ) → **200 success** với
   `totalFetched: 0`, KHÔNG phải 400 — tránh báo động giả làm nhờn cảnh báo.
 - Fetch lỗi (token hết hạn, OnosPod down, network) ở BẤT KỲ trang nào → **400**, throw ngay
   (KHÔNG còn cô lập lỗi theo từng manufacture như trước — giờ chỉ 1 lượt phân trang duy

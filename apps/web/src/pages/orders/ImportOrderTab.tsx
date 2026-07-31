@@ -1,11 +1,13 @@
 import React, { useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
+import dayjs from 'dayjs';
 import { CloudDownload, FileCheck2, FilePlus2, FileText, Upload } from 'lucide-react';
 import { toast } from 'sonner';
 import * as XLSX from 'xlsx';
 
 import { RepositoryRemote } from '@/services';
 
+import { DateRangePicker } from '@/components/common/DateRangePicker';
 import { Spinner } from '@/components/common/Spinner';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
@@ -44,6 +46,8 @@ export function ImportOrderTab({ onImported }: ImportOrderTabProps) {
   const [text, setText] = useState('');
   const [loading, setLoading] = useState(false);
   const [onosPodLoading, setOnosPodLoading] = useState(false);
+  const [onosPodFrom, setOnosPodFrom] = useState('');
+  const [onosPodTo, setOnosPodTo] = useState('');
   const [lastNewResult, setLastNewResult] = useState<NewImportResult | null>(null);
   const [lastReworkResult, setLastReworkResult] = useState<ReworkImportResult | null>(null);
 
@@ -138,7 +142,11 @@ export function ImportOrderTab({ onImported }: ImportOrderTabProps) {
   const handleImportFromOnosPod = async () => {
     try {
       setOnosPodLoading(true);
-      const resp = await RepositoryRemote.order.importFromOnosPod();
+      const payload =
+        onosPodFrom && onosPodTo
+          ? { start: dayjs(onosPodFrom).startOf('day').toISOString(), end: dayjs(onosPodTo).endOf('day').toISOString() }
+          : {};
+      const resp = await RepositoryRemote.order.importFromOnosPod(payload);
       const result = resp.data.data as NewImportResult & {
         totalFetched: number;
         byManufacture: { id: string; name: string; sku: string; fetched: number; error?: string }[];
@@ -185,19 +193,33 @@ export function ImportOrderTab({ onImported }: ImportOrderTabProps) {
             <p className="text-xs text-muted-foreground mt-0.5">
               {mode === 'new' ? t('importTab.pasteHintNew') : t('importTab.pasteHintRework')}
             </p>
+            {mode === 'new' && !onosPodFrom && !onosPodTo && (
+              <p className="text-[11px] text-muted-foreground mt-0.5">{t('importTab.onosPodDateRangeHint')}</p>
+            )}
           </div>
           <div className="flex items-center gap-2">
             {mode === 'new' && (
-              <Button
-                type="button"
-                variant="outline"
-                className="h-9"
-                disabled={onosPodLoading}
-                onClick={handleImportFromOnosPod}
-              >
-                {onosPodLoading ? <Spinner size={14} /> : <CloudDownload size={14} />}
-                {t('importTab.fetchOnosPod')}
-              </Button>
+              <>
+                <DateRangePicker
+                  from={onosPodFrom}
+                  to={onosPodTo}
+                  onChange={(f, t2) => {
+                    setOnosPodFrom(f);
+                    setOnosPodTo(t2);
+                  }}
+                  placeholder={t('importTab.onosPodDateRangePlaceholder')}
+                />
+                <Button
+                  type="button"
+                  variant="outline"
+                  className="h-9"
+                  disabled={onosPodLoading}
+                  onClick={handleImportFromOnosPod}
+                >
+                  {onosPodLoading ? <Spinner size={14} /> : <CloudDownload size={14} />}
+                  {t('importTab.fetchOnosPod')}
+                </Button>
+              </>
             )}
             <label className="cursor-pointer">
               <input

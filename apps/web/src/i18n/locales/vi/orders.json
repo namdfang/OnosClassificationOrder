@@ -4,6 +4,8 @@
     "pasteHintNew": "Sao chép cả khối (gồm header) từ sheet đơn mới rồi paste vào đây.",
     "pasteHintRework": "Sheet soát: cập nhật QC fields (kết quả tool, file lỗi, ghi chú, người thực hiện) cho đơn đã có.",
     "fetchOnosPod": "Lấy đơn từ OnosPod",
+    "onosPodDateRangePlaceholder": "Chọn khoảng ngày (mặc định: tự động)",
+    "onosPodDateRangeHint": "Để trống để lấy theo khung giờ tự động (ca sáng/chiều).",
     "chooseFile": "Chọn file",
     "modeNew": "Import đơn mới",
     "modeRework": "Import file soát",
