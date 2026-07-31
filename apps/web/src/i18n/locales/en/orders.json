@@ -4,6 +4,8 @@
     "pasteHintNew": "Copy the whole block (including header) from the new-order sheet and paste it here.",
     "pasteHintRework": "Rework sheet: updates QC fields (tool result, error file, note, assignee) for existing orders.",
     "fetchOnosPod": "Fetch orders from OnosPod",
+    "onosPodDateRangePlaceholder": "Pick a date range (default: automatic)",
+    "onosPodDateRangeHint": "Leave empty to use the automatic time window (morning/afternoon shift).",
     "chooseFile": "Choose file",
     "modeNew": "Import new orders",
     "modeRework": "Import rework sheet",

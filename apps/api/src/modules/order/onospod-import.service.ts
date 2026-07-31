@@ -9,9 +9,13 @@ import { OrderService } from './order.service';
 
 const TZ_OFFSET_MINUTES = 7 * 60;
 
-// Chỉ pull đơn "To Do" — đúng với thao tác thủ công hàng ngày (lấy đơn MỚI
-// chưa vào sản xuất, không lấy lại đơn đã xử lý).
-const MRP_STATUS = 'To Do';
+// Pull đơn "To Do" (MỚI, chưa vào sản xuất) + "Ready" (đã lên kế hoạch nhưng
+// chưa in) — 1 số đơn chuyển thẳng từ "To Do" sang "Ready" rất nhanh trên
+// OnosPod nên nếu chỉ lọc "To Do" sẽ bị lọt mất (verify test gọi thật
+// 2026-07-31: đơn `XQ-91783-27005` tạo cùng ngày nhưng status đã là "Ready"
+// nên fetch cũ bỏ lỡ dù đúng khoảng ngày). KHÔNG lấy các status sau đó
+// (In Production/Done/...) — đơn đã thực sự vào sản xuất thì không lấy lại.
+const MRP_STATUSES = ['To Do', 'Ready'];
 
 const PAGE_SIZE = 500;
 // an toàn — 200 * 500 = 100k rows, dư sức cho 1 ngày TOÀN BỘ account (không
@@ -522,12 +526,18 @@ export class OnospodImportService {
     // tổng `total_items` khớp 100% với cộng dồn từng manufacture riêng lẻ) —
     // bỏ hẳn bước gọi `manufactures` + loop tuần tự từng manufacture như
     // trước, mỗi item đã tự mang sẵn field `manufacture{_id,name,sku}`.
-    const allItems = await this.fetchAllPages(config, start, end);
+    //
+    // Query GraphQL chỉ nhận `status: String` đơn (không phải mảng) → phải
+    // gọi riêng cho từng status trong `MRP_STATUSES` rồi gộp kết quả. Chạy
+    // ĐỒNG THỜI (Promise.all) thay vì tuần tự — 2 status độc lập nhau, không
+    // cần chờ status trước xong mới gọi status sau, giảm tổng thời gian chờ.
+    const itemsByStatus = await Promise.all(MRP_STATUSES.map((status) => this.fetchAllPages(config, status, start, end)));
+    const allItems = itemsByStatus.flat();
 
     if (allItems.length === 0) {
-      // Không có đơn "To Do" mới trong khoảng này — trạng thái BÌNH THƯỜNG
-      // (sáng vắng, ngày lễ), đặc biệt với đường cron tự động. Trả success
-      // với số 0 thay vì 400 để cron monitoring không báo động giả.
+      // Không có đơn "To Do"/"Ready" mới trong khoảng này — trạng thái BÌNH
+      // THƯỜNG (sáng vắng, ngày lễ), đặc biệt với đường cron tự động. Trả
+      // success với số 0 thay vì 400 để cron monitoring không báo động giả.
       return {
         success: true,
         data: {
@@ -640,6 +650,7 @@ export class OnospodImportService {
 
   private async fetchAllPages(
     config: { apiUrl: string; bearerToken: string },
+    status: string,
     start: Date,
     end: Date,
   ): Promise<MrpProductItem[]> {
@@ -648,7 +659,7 @@ export class OnospodImportService {
     let totalPages = 1;
 
     do {
-      const pageItems = await this.fetchPage(config, start, end, page, (tp) => {
+      const pageItems = await this.fetchPage(config, status, start, end, page, (tp) => {
         totalPages = tp;
       });
       items.push(...pageItems);
@@ -662,6 +673,7 @@ export class OnospodImportService {
   // (xem comment ở `importFromOnosPod()`).
   private async fetchPage(
     config: { apiUrl: string; bearerToken: string },
+    status: string,
     start: Date,
     end: Date,
     page: number,
@@ -676,7 +688,7 @@ export class OnospodImportService {
           variables: {
             page_size: PAGE_SIZE,
             page,
-            status: MRP_STATUS,
+            status,
             start: start.toISOString(),
             end: end.toISOString(),
           },
