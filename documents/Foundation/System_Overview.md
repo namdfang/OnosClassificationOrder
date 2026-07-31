@@ -1,8 +1,8 @@
-# System Overview — Printsel
+# System Overview — OnosFactory
 
 ## 1. Bài toán kinh doanh
 
-**Printsel** là hệ thống quản lý đơn hàng fulfillment nội bộ, phục vụ cho công ty hoạt động trong lĩnh vực **Print-on-Demand (POD)** và **Dropshipping**.
+**OnosFactory** là hệ thống quản lý đơn hàng fulfillment nội bộ, phục vụ cho công ty hoạt động trong lĩnh vực **Print-on-Demand (POD)** và **Dropshipping**.
 
 ### Vấn đề cần giải quyết
 

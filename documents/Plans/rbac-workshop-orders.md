@@ -21,7 +21,7 @@
 # Phase 0 — RBAC redesign (foundation, phải làm trước)
 
 ## 0.1 Vấn đề hiện tại
-- Đang có **`RoleType` enum cứng** (17 role legacy từ Printsel) + `CustomRoleEntity` (DB).
+- Đang có **`RoleType` enum cứng** (17 role legacy từ OnosFactory) + `CustomRoleEntity` (DB).
 - User muốn 4 role nhưng cho phép CRUD → phải dẹp enum cứng, đưa hết vào DB.
 
 ## 0.2 Đề xuất

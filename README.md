@@ -105,13 +105,13 @@ Sau khi chạy:
 **Khởi tạo MongoDB replica set** (chỉ cần lần đầu — Mongoose của NestJS cần điều này):
 
 ```bash
-docker exec -it printsel-mongodb mongosh --eval "rs.initiate()"
+docker exec -it onosfactory-mongodb mongosh --eval "rs.initiate()"
 ```
 
 Kiểm tra status:
 
 ```bash
-docker exec -it printsel-mongodb mongosh --eval "rs.status().ok"
+docker exec -it onosfactory-mongodb mongosh --eval "rs.status().ok"
 ```
 
 ### 3. Cấu hình env cho API
@@ -222,7 +222,7 @@ Hiện tại chưa có seed script — database trống sau khi khởi tạo. C�
 **Cách 2 (khuyến nghị):** Insert thủ công vào MongoDB qua mongosh:
 
 ```bash
-docker exec -it printsel-mongodb mongosh workspace
+docker exec -it onosfactory-mongodb mongosh workspace
 ```
 
 ```js
@@ -256,7 +256,7 @@ Sau đó dùng `POST /api/v1/auth/register` qua Swagger để tạo user. Vào D
 → Kiểm tra MongoDB / Redis / RabbitMQ containers đã chạy chưa: `docker ps`. Nếu thiếu thì `docker compose up -d` lại trong `apps/api/docker`.
 
 **MongoDB báo `not primary` hoặc transactions fail**
-→ Replica set chưa được khởi tạo. Chạy: `docker exec -it printsel-mongodb mongosh --eval "rs.initiate()"`.
+→ Replica set chưa được khởi tạo. Chạy: `docker exec -it onosfactory-mongodb mongosh --eval "rs.initiate()"`.
 
 **Frontend gọi API bị CORS**
 → Trong `apps/api/.env.development`, set `ALLOWED_ORIGINS=http://localhost:5173`.

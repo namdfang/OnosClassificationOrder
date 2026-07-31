@@ -1,17 +1,17 @@
-# Project Structure — Printsel
+# Project Structure — OnosFactory
 
-Tài liệu mô tả cấu trúc thư mục, tổ chức code, và vai trò của từng phần trong monorepo **Printsel**.
+Tài liệu mô tả cấu trúc thư mục, tổ chức code, và vai trò của từng phần trong monorepo **OnosFactory**.
 
 ---
 
 ## 1. Tổng quan Monorepo
 
-Printsel sử dụng kiến trúc **Monorepo** với:
+OnosFactory sử dụng kiến trúc **Monorepo** với:
 - **pnpm workspaces** — quản lý dependencies chung
 - **Turborepo** — orchestrate build/dev/lint giữa các packages
 
 ```
-printsel/                          ← Root monorepo
+onosfactory/                          ← Root monorepo
 ├── apps/
 │   ├── api/                       ← Backend — NestJS + Fastify
 │   └── web/                       ← Frontend — React + Vite

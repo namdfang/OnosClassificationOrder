@@ -317,7 +317,7 @@ importers:
       '@nestjs/testing':
         specifier: ^10.1.2
         version: 10.1.2(@nestjs/common@10.3.5)(@nestjs/core@10.2.7)(@nestjs/microservices@10.3.9)
-      '@printsel/eslint-config':
+      '@onosfactory/eslint-config':
         specifier: workspace:*
         version: link:../../packages/eslint-config
       '@swc/cli':
@@ -621,7 +621,7 @@ importers:
         specifier: ^4.3.8
         version: 4.4.1(@types/react@18.3.0)(react@18.2.0)
     devDependencies:
-      '@printsel/eslint-config':
+      '@onosfactory/eslint-config':
         specifier: workspace:*
         version: link:../../packages/eslint-config
       '@types/big.js':
@@ -775,7 +775,7 @@ importers:
         specifier: ^3.22.4
         version: 3.22.4
     devDependencies:
-      '@printsel/eslint-config':
+      '@onosfactory/eslint-config':
         specifier: workspace:*
         version: link:../eslint-config
       '@types/bcryptjs':
@@ -863,7 +863,7 @@ importers:
         specifier: ^3.22.4
         version: 3.22.4
     devDependencies:
-      '@printsel/eslint-config':
+      '@onosfactory/eslint-config':
         specifier: workspace:*
         version: link:../eslint-config
       '@swc/cli':
@@ -950,7 +950,7 @@ importers:
       '@commitlint/config-conventional':
         specifier: ^18.4.2
         version: 18.4.2
-      '@printsel/eslint-config':
+      '@onosfactory/eslint-config':
         specifier: workspace:*
         version: link:../eslint-config
       cspell:

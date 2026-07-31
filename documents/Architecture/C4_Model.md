@@ -1,6 +1,6 @@
-# C4 Model — Printsel Architecture
+# C4 Model — OnosFactory Architecture
 
-Tài liệu mô tả kiến trúc hệ thống Printsel theo mô hình [C4](https://c4model.com/) — từ tổng quan (Context) đến chi tiết bên trong (Component).
+Tài liệu mô tả kiến trúc hệ thống OnosFactory theo mô hình [C4](https://c4model.com/) — từ tổng quan (Context) đến chi tiết bên trong (Component).
 
 > Diagrams sử dụng Mermaid syntax — render được trên GitHub, GitLab, và hầu hết Markdown viewers.
 
@@ -8,7 +8,7 @@ Tài liệu mô tả kiến trúc hệ thống Printsel theo mô hình [C4](http
 
 ## Level 1 — System Context
 
-Mô tả Printsel tương tác với ai và hệ thống nào bên ngoài.
+Mô tả OnosFactory tương tác với ai và hệ thống nào bên ngoài.
 
 ```mermaid
 graph TB
@@ -20,7 +20,7 @@ graph TB
         Admin["Admin<br/><i>Quản trị hệ thống</i>"]
     end
 
-    Printsel["🔶 PRINTSEL<br/>Order Management System<br/><i>Quản lý đơn hàng fulfillment<br/>nội bộ POD & Dropship</i>"]
+    OnosFactory["🔶 PRINTSEL<br/>Order Management System<br/><i>Quản lý đơn hàng fulfillment<br/>nội bộ POD & Dropship</i>"]
 
     subgraph Providers["🏭 Print Providers"]
         Printify["Printify"]
@@ -42,40 +42,40 @@ graph TB
         PayOS["PayOS<br/><i>Payment Gateway</i>"]
     end
 
-    Users -->|HTTPS / Browser| Printsel
-    Printsel -->|REST API| Providers
-    Providers -->|Webhooks| Printsel
-    Printsel -->|S3 API| S3
-    Printsel -->|SMTP / Gmail API| Gmail
-    Printsel -->|Bot API| Telegram
-    Printsel -->|REST API| TrackingAPI
-    Printsel -->|REST API| PayOS
+    Users -->|HTTPS / Browser| OnosFactory
+    OnosFactory -->|REST API| Providers
+    Providers -->|Webhooks| OnosFactory
+    OnosFactory -->|S3 API| S3
+    OnosFactory -->|SMTP / Gmail API| Gmail
+    OnosFactory -->|Bot API| Telegram
+    OnosFactory -->|REST API| TrackingAPI
+    OnosFactory -->|REST API| PayOS
 ```
 
 ### Mô tả quan hệ
 
 | Từ | Đến | Protocol | Mô tả |
 |---|---|---|---|
-| Users | Printsel | HTTPS (Browser) | Truy cập Web App qua browser |
-| Printsel | Print Providers | REST API | Gửi đơn, lấy trạng thái, lấy tracking |
-| Print Providers | Printsel | Webhooks (HTTP POST) | Callback khi trạng thái đơn thay đổi |
-| Printsel | Backblaze/S3 | S3 API | Upload/download artwork, mockup, label, export files |
-| Printsel | Gmail/SMTP | SMTP/API | Gửi email thông báo, scheduled emails |
-| Printsel | Telegram | Bot API | Alert khi có lỗi critical, order summary |
-| Printsel | Tracking API | REST | Fetch trạng thái vận chuyển từ carrier |
-| Printsel | PayOS | REST | Payment processing (optional) |
+| Users | OnosFactory | HTTPS (Browser) | Truy cập Web App qua browser |
+| OnosFactory | Print Providers | REST API | Gửi đơn, lấy trạng thái, lấy tracking |
+| Print Providers | OnosFactory | Webhooks (HTTP POST) | Callback khi trạng thái đơn thay đổi |
+| OnosFactory | Backblaze/S3 | S3 API | Upload/download artwork, mockup, label, export files |
+| OnosFactory | Gmail/SMTP | SMTP/API | Gửi email thông báo, scheduled emails |
+| OnosFactory | Telegram | Bot API | Alert khi có lỗi critical, order summary |
+| OnosFactory | Tracking API | REST | Fetch trạng thái vận chuyển từ carrier |
+| OnosFactory | PayOS | REST | Payment processing (optional) |
 
 ---
 
 ## Level 2 — Container Diagram
 
-Mô tả các "container" (ứng dụng, database, message broker...) bên trong hệ thống Printsel.
+Mô tả các "container" (ứng dụng, database, message broker...) bên trong hệ thống OnosFactory.
 
 ```mermaid
 graph TB
     Browser["🌐 Browser<br/><i>User's Web Browser</i>"]
 
-    subgraph PrintselSystem["PRINTSEL SYSTEM"]
+    subgraph OnosFactorySystem["PRINTSEL SYSTEM"]
         WebApp["📱 Web App<br/><b>React + Vite + Ant Design</b><br/><i>SPA Admin Panel</i><br/>Port: varies"]
 
         API["⚙️ API Server<br/><b>NestJS + Fastify</b><br/><i>REST API + Microservice</i><br/>Port: 3007"]

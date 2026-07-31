@@ -1,4 +1,4 @@
-# Event-Driven Architecture — Printsel
+# Event-Driven Architecture — OnosFactory
 
 Tài liệu mô tả hệ thống messaging bất đồng bộ: **RabbitMQ** (message broker) và **BullMQ** (job queue).
 
@@ -6,7 +6,7 @@ Tài liệu mô tả hệ thống messaging bất đồng bộ: **RabbitMQ** (me
 
 ## 1. Tổng quan
 
-Printsel sử dụng hai cơ chế xử lý bất đồng bộ:
+OnosFactory sử dụng hai cơ chế xử lý bất đồng bộ:
 
 | Cơ chế | Công nghệ | Mục đích | Backing Store |
 |--------|-----------|---------|--------------|

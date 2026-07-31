@@ -1,4 +1,4 @@
-# Infrastructure & Deployment — Printsel
+# Infrastructure & Deployment — OnosFactory
 
 Tài liệu mô tả infrastructure, deployment pipeline, và hướng dẫn cấu hình môi trường.
 
@@ -344,7 +344,7 @@ Filebeat watches `apps/api/logs/` directory and ships to Elasticsearch.
 ```
 ┌──────────────────────────────────┐
 │          Docker Network          │
-│          "printsel" (bridge)     │
+│          "onosfactory" (bridge)     │
 │                                  │
 │  ┌──────────┐  ┌──────────────┐  │
 │  │ RabbitMQ │  │ Redis        │  │

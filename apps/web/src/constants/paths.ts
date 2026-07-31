@@ -55,6 +55,9 @@ export const PATHS = {
     CUSTOMER_CATALOG: '/customer/catalog',
     CUSTOMER_CATALOG_DETAIL: '/customer/catalog/:id',
 
+    // ---- Public marketing routes (không gate auth, không dùng MainLayout/Sidebar) ----
+    COMPANY_CAREERS: '/company/careers',
+
     ERROR_403: '/forbidden',
     ERROR_404: '/error/404',
     ANY: '*',

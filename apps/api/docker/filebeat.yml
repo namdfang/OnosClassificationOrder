@@ -4,7 +4,7 @@ filebeat.inputs:
 
     paths:
       - /usr/share/filebeat/logs/*.log
-    id: printsel-log
+    id: onosfactory-log
 
     json.keys_under_root: true
     json.add_error_key: true

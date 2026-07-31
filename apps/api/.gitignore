@@ -114,7 +114,7 @@ src/metadata.ts
 
 node_modules/
 
-# Printsel
+# OnosFactory
 data
 tmp
 .env.uat

@@ -7,7 +7,7 @@
 
 ## 1. Overview
 
-Trang **All Orders** là trang quản lý đơn hàng chính của hệ thống Printsel. Cho phép user xem, lọc, tìm kiếm, xuất file, và thực hiện các thao tác hàng loạt trên đơn hàng.
+Trang **All Orders** là trang quản lý đơn hàng chính của hệ thống OnosFactory. Cho phép user xem, lọc, tìm kiếm, xuất file, và thực hiện các thao tác hàng loạt trên đơn hàng.
 
 ---
 

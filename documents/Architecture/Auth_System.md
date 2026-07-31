@@ -1,6 +1,6 @@
-# Authentication & Authorization — Printsel
+# Authentication & Authorization — OnosFactory
 
-Tài liệu mô tả hệ thống xác thực (Authentication) và phân quyền (Authorization) của Printsel.
+Tài liệu mô tả hệ thống xác thực (Authentication) và phân quyền (Authorization) của OnosFactory.
 
 ---
 

@@ -2,6 +2,7 @@ import { initReactI18next } from 'react-i18next';
 import i18n from 'i18next';
 
 import authEn from './locales/en/auth.json';
+import careersEn from './locales/en/careers.json';
 import commonEn from './locales/en/common.json';
 import customerFactoryAssignmentEn from './locales/en/customerFactoryAssignment.json';
 import customerNotificationsEn from './locales/en/customerNotifications.json';
@@ -22,6 +23,7 @@ import stageErrorCatalogEn from './locales/en/stageErrorCatalog.json';
 import toolCheckWorkflowEn from './locales/en/toolCheckWorkflow.json';
 import workshopConfigEn from './locales/en/workshopConfig.json';
 import authVi from './locales/vi/auth.json';
+import careersVi from './locales/vi/careers.json';
 import commonVi from './locales/vi/common.json';
 import customerFactoryAssignmentVi from './locales/vi/customerFactoryAssignment.json';
 import customerNotificationsVi from './locales/vi/customerNotifications.json';
@@ -77,6 +79,7 @@ export const resources = {
     customerPortal: customerPortalVi,
     customerNotifications: customerNotificationsVi,
     landing: landingVi,
+    careers: careersVi,
   },
   en: {
     common: commonEn,
@@ -99,6 +102,7 @@ export const resources = {
     customerPortal: customerPortalEn,
     customerNotifications: customerNotificationsEn,
     landing: landingEn,
+    careers: careersEn,
   },
 } as const;
 

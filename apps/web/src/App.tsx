@@ -14,6 +14,8 @@ import Register from './pages/register';
 import { useAuthStore } from './store/authStore';
 import { useCustomerAuthStore } from './store/customerAuthStore';
 
+const CompanyCareers = lazy(() => import('./pages/company/careers'));
+
 const CustomerLogin = lazy(() => import('./pages/customer/login'));
 const CustomerRegister = lazy(() => import('./pages/customer/register'));
 const CustomerOrders = lazy(() => import('./pages/customer/orders'));
@@ -42,23 +44,20 @@ function CustomerPrivateRoute() {
   return <Outlet />;
 }
 
-// `/` là trang chủ public của domain chính — người đã đăng nhập được đưa
-// thẳng vào dashboard sản xuất (/ffm) thay vì thấy lại trang giới thiệu.
-function RootRoute() {
-  const isAuthenticated = useAuthStore((s) => s.isAuthenticated());
-
-  if (isAuthenticated) {
-    return <Navigate to={PATHS.HOME} replace />;
-  }
-
-  return <Landing />;
-}
-
 function App() {
   return (
     <BrowserRouter>
       <Routes>
-        <Route path={PATHS.LANDING} element={<RootRoute />} />
+        <Route path={PATHS.LANDING} element={<Landing />} />
+
+        <Route
+          path={PATHS.COMPANY_CAREERS}
+          element={
+            <Suspense fallback={<Loading />}>
+              <CompanyCareers />
+            </Suspense>
+          }
+        />
 
         <Route element={<PrivateRoute />}>
           <Route element={<MainLayout />}>
