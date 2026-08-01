@@ -19,30 +19,17 @@
   },
   "telegramReport": {
     "button": "Send Telegram report",
-    "chooseSlot": "Choose shift",
-    "chooseType": "Report type",
-    "cancel": "Cancel",
-    "sendNow": "Send now",
-    "slots": {
-      "auto": "Auto by time",
-      "autoHint": "Backend picks the slot based on the current time",
-      "morning": "Morning shift",
-      "morningHint": "07:30 — period previous 18:30 → 07:30",
-      "noon": "Noon shift",
-      "noonHint": "13:00 — period 07:30 → 13:00",
-      "evening": "Evening shift",
-      "eveningHint": "18:30 — period 13:00 → 18:30"
+    "choose": "Choose report to send",
+    "views": {
+      "daily": "Overview",
+      "designer": "By designer",
+      "tool-check": "Tool check",
+      "factory": "Factory {{name}}"
     },
-    "types": {
-      "all": "All 3 reports",
-      "designer": "Designer only",
-      "factory": "Factory only",
-      "error": "Error orders only"
-    },
-    "sentSuccess": "Sent {{count}} report(s) ({{names}}){{slot}}",
-    "noneSent": "No reports were sent",
-    "skipped": "Skipped: {{names}}",
-    "disabledHint": "SCHEDULED_REPORTS_ENABLED may be false"
+    "sentView": "Sent {{view}} report to Telegram",
+    "busy": "A report is already running — wait for it to finish and try again",
+    "failed": "Report could not be sent",
+    "disabledHint": "Check TELEGRAM_NOTIFICATION_ENABLED / Telegram channel"
   },
   "breakdownCard": {
     "noData": "No data",

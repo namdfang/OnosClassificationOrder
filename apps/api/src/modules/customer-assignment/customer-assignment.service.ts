@@ -162,4 +162,33 @@ export class CustomerAssignmentService {
     }
     return { enabled: map.size > 0, map };
   }
+
+  /**
+   * Danh sách khách ưu tiên (kèm mức) cho báo cáo Telegram — sort mức cao →
+   * thấp rồi userSku A→Z. KHÔNG check `enabled`: công tắc chỉ điều khiển
+   * auto-gán priority lúc import; báo cáo luôn hiện khách đã kéo vào cột.
+   */
+  async getPriorityCustomers(): Promise<Array<{ priority: OrderPriority; userSku: string; userEmail: string }>> {
+    const cfg = await this.getPriorityConfig();
+    if (cfg.levels.length === 0) return [];
+
+    const idToPriority = new Map<string, OrderPriority>();
+    for (const level of cfg.levels) {
+      for (const cid of level.customerIds) idToPriority.set(String(cid), level.priority);
+    }
+    if (idToPriority.size === 0) return [];
+
+    const customers = await this.customerRepository.findAll({
+      _id: { $in: Array.from(idToPriority.keys()) },
+    });
+
+    return customers
+      .map((c) => ({
+        priority: idToPriority.get(String(c._id)) as OrderPriority,
+        userSku: c.userSku,
+        userEmail: c.userEmail,
+      }))
+      .filter((c) => !!c.priority)
+      .sort((a, b) => b.priority - a.priority || a.userSku.localeCompare(b.userSku));
+  }
 }

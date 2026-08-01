@@ -1,150 +1,124 @@
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import type { TFunction } from 'i18next';
-import { Loader2, MessageCircle, Send } from 'lucide-react';
+import { Factory, LayoutList, Loader2, Search, Send, User } from 'lucide-react';
 import { toast } from 'sonner';
 
 import { RepositoryRemote } from '@/services';
-import type { ReportSlot, ReportType } from '@/services/reports';
+import type { ReportView } from '@/services/reports';
 
 import { Button } from '@/components/ui/button';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 
 import { handleAxiosError } from '@/utils';
-import { cn } from '@/utils/cn';
 
-function buildSlotOptions(t: TFunction<'dashboard'>): Array<{ value: ReportSlot | ''; label: string; hint: string }> {
-  return [
-    { value: '', label: t('telegramReport.slots.auto'), hint: t('telegramReport.slots.autoHint') },
-    { value: 'morning', label: t('telegramReport.slots.morning'), hint: t('telegramReport.slots.morningHint') },
-    { value: 'noon', label: t('telegramReport.slots.noon'), hint: t('telegramReport.slots.noonHint') },
-    { value: 'evening', label: t('telegramReport.slots.evening'), hint: t('telegramReport.slots.eveningHint') },
-  ];
+interface FactoryOpt {
+  _id: string;
+  name: string;
+  shortName?: string;
 }
 
-function buildReportOptions(t: TFunction<'dashboard'>): Array<{ value: ReportType; label: string; emoji: string }> {
-  return [
-    { value: 'all', label: t('telegramReport.types.all'), emoji: '📨' },
-    { value: 'designer', label: t('telegramReport.types.designer'), emoji: '🎨' },
-    { value: 'factory', label: t('telegramReport.types.factory'), emoji: '🏭' },
-    { value: 'error', label: t('telegramReport.types.error'), emoji: '⚠️' },
-  ];
-}
-
+/**
+ * Nút gửi báo cáo Telegram — popover chọn view: Tổng quan / Theo designer /
+ * Soát tool + 1 nút mỗi xưởng sản xuất (phễu lọc theo xưởng). BE giữ khóa
+ * in-flight, trả `busy` nếu đang chạy.
+ */
 export function SendTelegramReportButton() {
   const { t } = useTranslation('dashboard');
-  const SLOT_OPTIONS = buildSlotOptions(t);
-  const REPORT_OPTIONS = buildReportOptions(t);
   const [open, setOpen] = useState(false);
-  const [slot, setSlot] = useState<ReportSlot | ''>('');
-  const [report, setReport] = useState<ReportType>('all');
-  const [loading, setLoading] = useState(false);
+  const [loading, setLoading] = useState<string | null>(null);
+  const [factories, setFactories] = useState<FactoryOpt[]>([]);
 
-  const handleSend = async () => {
-    setLoading(true);
+  useEffect(() => {
+    (async () => {
+      try {
+        const res = await RepositoryRemote.factory.getFactories();
+        const list = ((res.data?.data || []) as FactoryOpt[]).filter((f) => f.shortName !== 'US');
+        setFactories(list);
+      } catch {
+        // Không chặn nút chính nếu lấy danh sách xưởng lỗi.
+      }
+    })();
+  }, []);
+
+  const send = async (key: string, view: ReportView, factoryId?: string, successLabel?: string) => {
+    setLoading(key);
     try {
-      const res = await RepositoryRemote.reports.runNow({
-        slot: slot || undefined,
-        report,
-      });
-      const data = res.data?.data;
-      const ran = (data?.ran as string[]) || [];
-      const skipped = (data?.skipped as string[]) || [];
-      const resolvedSlot = data?.slot as string | undefined;
-      if (ran.length > 0) {
-        toast.success(
-          t('telegramReport.sentSuccess', {
-            count: ran.length,
-            names: ran.join(', '),
-            slot: resolvedSlot ? ` · slot=${resolvedSlot}` : '',
-          }),
-        );
+      const res = await RepositoryRemote.reports.runNow(view, factoryId);
+      const data = res.data?.data as { ok?: boolean; busy?: boolean } | undefined;
+      if (data?.ok) {
+        toast.success(t('telegramReport.sentView', { view: successLabel }));
+      } else if (data?.busy) {
+        toast.warning(t('telegramReport.busy'));
       } else {
-        toast.warning(t('telegramReport.noneSent'), {
-          description: skipped.length
-            ? t('telegramReport.skipped', { names: skipped.join(', ') })
-            : t('telegramReport.disabledHint'),
-        });
+        toast.warning(t('telegramReport.failed'), { description: t('telegramReport.disabledHint') });
       }
       setOpen(false);
     } catch (err) {
       handleAxiosError(err);
     } finally {
-      setLoading(false);
+      setLoading(null);
     }
   };
+
+  const viewOptions: Array<{ view: ReportView; icon: React.ReactNode }> = [
+    { view: 'daily', icon: <LayoutList size={15} /> },
+    { view: 'designer', icon: <User size={15} /> },
+    { view: 'tool-check', icon: <Search size={15} /> },
+  ];
 
   return (
     <Popover open={open} onOpenChange={setOpen}>
       <PopoverTrigger asChild>
-        <Button variant="outline" size="sm" className="gap-2" disabled={loading}>
-          {loading ? <Loader2 size={14} className="animate-spin" /> : <Send size={14} />}
+        <Button variant="outline" size="sm" className="gap-2">
+          <Send size={14} />
           {t('telegramReport.button')}
         </Button>
       </PopoverTrigger>
-      <PopoverContent align="end" className="w-[320px] p-3 space-y-3">
-        <div className="flex items-center gap-2">
-          <MessageCircle size={14} className="text-indigo-600" />
-          <p className="text-sm font-semibold text-foreground">{t('telegramReport.button')}</p>
-        </div>
+      <PopoverContent align="end" className="w-60 p-1.5">
+        <p className="px-2 py-1 text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">
+          {t('telegramReport.choose')}
+        </p>
+        {viewOptions.map((o) => (
+          <button
+            key={o.view}
+            type="button"
+            disabled={loading !== null}
+            onClick={() => send(o.view, o.view, undefined, t(`telegramReport.views.${o.view}`))}
+            className="w-full flex items-center gap-2 px-2 py-1.5 rounded-md text-sm text-left hover:bg-accent disabled:opacity-50 disabled:cursor-not-allowed"
+          >
+            <span className="text-muted-foreground">
+              {loading === o.view ? <Loader2 size={15} className="animate-spin" /> : o.icon}
+            </span>
+            <span>{t(`telegramReport.views.${o.view}`)}</span>
+          </button>
+        ))}
 
-        <div className="space-y-1.5">
-          <p className="text-[11px] font-semibold uppercase text-muted-foreground tracking-wider">
-            {t('telegramReport.chooseSlot')}
-          </p>
-          <div className="grid grid-cols-2 gap-1">
-            {SLOT_OPTIONS.map((opt) => (
-              <button
-                key={opt.value || 'auto'}
-                type="button"
-                onClick={() => setSlot(opt.value)}
-                title={opt.hint}
-                className={cn(
-                  'text-xs px-2 py-1.5 rounded border transition-colors text-left',
-                  slot === opt.value
-                    ? 'border-indigo-500 bg-indigo-50 text-indigo-700 dark:bg-indigo-900/30 dark:text-indigo-300'
-                    : 'border-border bg-background hover:bg-accent text-muted-foreground hover:text-foreground',
-                )}
-              >
-                {opt.label}
-              </button>
-            ))}
-          </div>
-        </div>
-
-        <div className="space-y-1.5">
-          <p className="text-[11px] font-semibold uppercase text-muted-foreground tracking-wider">
-            {t('telegramReport.chooseType')}
-          </p>
-          <div className="space-y-1">
-            {REPORT_OPTIONS.map((opt) => (
-              <button
-                key={opt.value}
-                type="button"
-                onClick={() => setReport(opt.value)}
-                className={cn(
-                  'w-full text-xs px-2 py-1.5 rounded border transition-colors flex items-center gap-2',
-                  report === opt.value
-                    ? 'border-indigo-500 bg-indigo-50 text-indigo-700 dark:bg-indigo-900/30 dark:text-indigo-300'
-                    : 'border-border bg-background hover:bg-accent text-muted-foreground hover:text-foreground',
-                )}
-              >
-                <span>{opt.emoji}</span>
-                <span>{opt.label}</span>
-              </button>
-            ))}
-          </div>
-        </div>
-
-        <div className="flex items-center justify-end gap-2 pt-1">
-          <Button variant="ghost" size="sm" onClick={() => setOpen(false)} disabled={loading}>
-            {t('telegramReport.cancel')}
-          </Button>
-          <Button size="sm" onClick={handleSend} disabled={loading} className="gap-1.5">
-            {loading ? <Loader2 size={13} className="animate-spin" /> : <Send size={13} />}
-            {t('telegramReport.sendNow')}
-          </Button>
-        </div>
+        {factories.length > 0 && (
+          <>
+            <div className="my-1 border-t border-border" />
+            {factories.map((f) => {
+              const label = t('telegramReport.views.factory', { name: f.shortName || f.name });
+              return (
+                <button
+                  key={f._id}
+                  type="button"
+                  disabled={loading !== null}
+                  onClick={() => send(`fac:${f._id}`, 'daily', f._id, label)}
+                  className="w-full flex items-center gap-2 px-2 py-1.5 rounded-md text-sm text-left hover:bg-accent disabled:opacity-50 disabled:cursor-not-allowed"
+                >
+                  <span className="text-muted-foreground">
+                    {loading === `fac:${f._id}` ? (
+                      <Loader2 size={15} className="animate-spin" />
+                    ) : (
+                      <Factory size={15} />
+                    )}
+                  </span>
+                  <span>{label}</span>
+                </button>
+              );
+            })}
+          </>
+        )}
       </PopoverContent>
     </Popover>
   );

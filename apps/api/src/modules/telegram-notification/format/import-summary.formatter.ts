@@ -25,9 +25,7 @@ export function formatImportSummary(payload: ImportSummaryNotification): string 
   const lines: string[] = [];
 
   lines.push(`📦 *Đã import xong*`);
-  lines.push(
-    `_${formatDateTime(finishedAt)} · ${formatDurationMs(finishedAt.getTime() - startedAt.getTime())}_`,
-  );
+  lines.push(`_${formatDateTime(finishedAt)} · ${formatDurationMs(finishedAt.getTime() - startedAt.getTime())}_`);
 
   if (triggeredBy?.email || triggeredBy?.fullName) {
     const who = triggeredBy.fullName
