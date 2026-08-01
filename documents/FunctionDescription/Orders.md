@@ -1430,6 +1430,7 @@ Dùng **role gate `isAdmin`** (SuperAdmin/Admin) cả FE lẫn BE — KHÔNG th�
 - **Tab List** (`ListOrderTab.tsx`): cột "Ưu tiên" tương tự (sửa từng dòng), **không có bulk** (tab này không có cơ chế chọn nhiều dòng).
 - **Tab "Soát tool"** (`ToolCheckTab.tsx`, dashboard): chỉ **hiển thị** (`PriorityBadge` + chip đếm ngược, không sửa được ở đây) — cột "Ưu tiên" cạnh "Mã đơn" trong cả 2 list `reworkList`/`unreviewedList` + dropdown filter "Ưu tiên" (4 cột filter cùng hàng với Sản phẩm/Khách hàng/Máy). Estimate tính theo bước `tool-check` (bước đầu `LIFECYCLE_STAGE_KEYS`), mốc `enteredAt` = thẳng `inProductionAt` (không có mốc riêng "vào hàng chờ soát"/"quay lại Support" trong dữ liệu — xem `Orders.md §17.4`). Muốn đổi mức ưu tiên của đơn → sửa ở Danh sách đơn/Tab List.
 - Permission: `order.field.priority.view` / `.edit` (permission-catalog, nhóm `order_field`). Fallback hard-code (`FIELD_EDIT_ROLES.priority`): Admin/SuperAdmin/Manager + DesignerLeader.
+- **Auto-gán theo khách hàng lúc import**: Admin cấu hình kanban khách → 3 mức ưu tiên ở `/adm/settings/customer-priority`; `importOrders` (tay lẫn tự động) tự gán `priority` cho đơn khớp khách — CHỈ khi đơn chưa có priority (không đè chỉnh tay, không backfill đơn đang chạy). Xem `CustomerFactoryAssignment.md §8`.
 
 ### 17.3 Sort — đơn ưu tiên lên đầu
 `priority: -1` là **sort key đầu tiên** (trước mọi sort/trục nhóm khác) ở **toàn bộ danh sách đơn trong dự án** — đơn KHÔNG có `priority` (missing field) tự nhiên xếp cuối khi sort desc, không ảnh hưởng thứ tự đơn thường:

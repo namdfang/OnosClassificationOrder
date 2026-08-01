@@ -1,4 +1,4 @@
-import type { CustomerAssignmentConfig } from 'shared';
+import type { CustomerAssignmentConfig, CustomerPriorityConfig } from 'shared';
 
 import { callApi } from '../apis';
 import { CONFIG } from '../constants';
@@ -11,4 +11,12 @@ const saveConfig = (data: CustomerAssignmentConfig) => {
   return callApi(`/${CONFIG.API_VERSION}/customer-assignment/config`, 'put', data);
 };
 
-export const customerAssignment = { getConfig, saveConfig };
+const getPriorityConfig = () => {
+  return callApi(`/${CONFIG.API_VERSION}/customer-assignment/priority-config`, 'get');
+};
+
+const savePriorityConfig = (data: CustomerPriorityConfig) => {
+  return callApi(`/${CONFIG.API_VERSION}/customer-assignment/priority-config`, 'put', data);
+};
+
+export const customerAssignment = { getConfig, saveConfig, getPriorityConfig, savePriorityConfig };

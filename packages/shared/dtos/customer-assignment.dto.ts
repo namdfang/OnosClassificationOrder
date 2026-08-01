@@ -4,6 +4,7 @@ import { ResZod } from '@shared/types';
 import { z } from 'zod';
 
 import { IDZod } from '../constants/common-zod';
+import { OrderPriorityZod } from './production-order.dto';
 
 /**
  * Cấu hình **ưu tiên gán xưởng theo khách hàng** (cao hơn product config).
@@ -42,3 +43,44 @@ export const SaveCustomerAssignmentConfigResZod = ResZod.extend({
   data: CustomerAssignmentConfigZod,
 });
 export class SaveCustomerAssignmentConfigResDto extends createZodDto(extendApi(SaveCustomerAssignmentConfigResZod)) {}
+
+/**
+ * Cấu hình **ưu tiên đơn theo khách hàng** — kéo khách vào 1 trong 3 cột mức
+ * ưu tiên (`OrderPriority` 1|2|3), lúc `importOrders` (tay lẫn tự động) đơn
+ * khớp `customerMatchKey(userSku, userEmail)` được auto-gán `priority` đó.
+ *
+ * - CHỈ gán khi đơn **chưa có** `priority` (đơn mới, hoặc đơn cũ import lại mà
+ *   chưa ai set) — không bao giờ đè chỉnh tay. KHÔNG backfill đơn đang chạy.
+ * - Khách không nằm trong cột nào ("Chưa gán") → đơn thường (không priority).
+ * - **Bất biến:** 1 khách chỉ thuộc 1 mức (validate BE lúc lưu + FE kanban).
+ * - Độc lập với tier VIP 0..5 (tier chỉ hiển thị/sort card trong cột).
+ *
+ * Lưu blob JSON trong `system_configs` (key bên dưới, cache Redis 1h) — cùng
+ * pattern `customer_assignment_config` phía trên.
+ */
+export const CUSTOMER_PRIORITY_CONFIG_KEY = 'customer_priority_config';
+
+export const CustomerPriorityAllocZod = z.object({
+  priority: OrderPriorityZod,
+  customerIds: IDZod.array(),
+});
+export type CustomerPriorityAlloc = z.infer<typeof CustomerPriorityAllocZod>;
+
+export const CustomerPriorityConfigZod = z.object({
+  enabled: z.boolean().default(false),
+  levels: CustomerPriorityAllocZod.array(),
+  updatedAt: z.string().optional(),
+});
+export type CustomerPriorityConfig = z.infer<typeof CustomerPriorityConfigZod>;
+
+export class SaveCustomerPriorityConfigDto extends createZodDto(extendApi(CustomerPriorityConfigZod)) {}
+
+export const GetCustomerPriorityConfigResZod = ResZod.extend({
+  data: CustomerPriorityConfigZod,
+});
+export class GetCustomerPriorityConfigResDto extends createZodDto(extendApi(GetCustomerPriorityConfigResZod)) {}
+
+export const SaveCustomerPriorityConfigResZod = ResZod.extend({
+  data: CustomerPriorityConfigZod,
+});
+export class SaveCustomerPriorityConfigResDto extends createZodDto(extendApi(SaveCustomerPriorityConfigResZod)) {}

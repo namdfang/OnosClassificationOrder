@@ -1,0 +1,14 @@
+{
+  "title": "Order priority by customer",
+  "subtitle": "When enabled, orders from assigned customers automatically receive the corresponding priority at import time (manual and automatic) — only applied when the order has no priority yet, never overrides manual edits, and does not backfill running orders. Customers in the \"Unassigned\" column → normal orders. Each customer belongs to only 1 level — drag & drop then click Save.",
+  "enabledOn": "Enabled",
+  "enabledOff": "Disabled",
+  "unsavedBadge": "Unsaved",
+  "syncCustomers": "Sync customers",
+  "customerCount": "{{count}} customers",
+  "leaveConfirm": "You have UNSAVED priority assignment changes. Leaving will discard them — continue anyway?",
+  "toasts": {
+    "syncSuccess": "Sync complete: +{{created}} new customers (total {{total}})",
+    "saveSuccess": "Customer order-priority config saved"
+  }
+}

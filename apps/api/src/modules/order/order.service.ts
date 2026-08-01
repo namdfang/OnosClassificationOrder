@@ -6529,6 +6529,9 @@ export class OrderService implements OnModuleInit {
     // Ưu tiên gán xưởng theo khách hàng (nếu config bật): map (userSku,userEmail)
     // → factoryId ép, override factory của product config. Đọc 1 lần trước loop.
     const customerOverride = await this.customerAssignmentService.getImportOverride();
+    // Ưu tiên đơn theo khách hàng (nếu config bật): map (userSku,userEmail) →
+    // OrderPriority auto-gán — CHỈ khi đơn chưa có priority (không đè chỉnh tay).
+    const priorityOverride = await this.customerAssignmentService.getPriorityImportOverride();
 
     for (let i = 0; i < dto.rows.length; i++) {
       const row = dto.rows[i];
@@ -6575,6 +6578,10 @@ export class OrderService implements OnModuleInit {
           const forced = customerOverride.map.get(customerMatchKey(row.userSku, row.userEmail));
           if (forced) factoryId = forced;
         }
+
+        const forcedPriority = priorityOverride.enabled
+          ? priorityOverride.map.get(customerMatchKey(row.userSku, row.userEmail))
+          : undefined;
 
         if (factoryId) {
           factoryCount.set(factoryId, (factoryCount.get(factoryId) ?? 0) + 1);
@@ -6634,9 +6641,20 @@ export class OrderService implements OnModuleInit {
         // xem comment ở khối map product config phía trên, KHÔNG bảo vệ các
         // field này khỏi bị re-import ghi đè, chỉ log lại để truy vết).
         const beforeDoc = await this.orderModel
-          .findOne({ productionId: data.productionId }, Object.fromEntries(Object.keys(data).map((k) => [k, 1])))
+          .findOne(
+            { productionId: data.productionId },
+            // `priority: 1` thêm ngoài keys của `data` — cần biết đơn cũ đã có
+            // priority chưa để quyết định auto-gán bên dưới.
+            { ...Object.fromEntries(Object.keys(data).map((k) => [k, 1])), priority: 1 },
+          )
           .lean();
         const existed = !!beforeDoc;
+        // Ưu tiên đơn theo khách: chỉ gán khi đơn CHƯA có priority (đơn mới,
+        // hoặc đơn cũ import lại mà chưa ai set) — thêm vào `data` TRƯỚC upsert
+        // nên diff log bên dưới tự ghi lại thay đổi này.
+        if (forcedPriority && beforeDoc?.priority == null) {
+          (data as Record<string, unknown>).priority = forcedPriority;
+        }
         const upserted = await this.orderModel.findOneAndUpdate(
           { productionId: data.productionId },
           { $set: data, $setOnInsert: { createdAt: new Date(), ...insertOnly } },

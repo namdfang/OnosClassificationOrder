@@ -7,6 +7,7 @@ import commonEn from './locales/en/common.json';
 import customerFactoryAssignmentEn from './locales/en/customerFactoryAssignment.json';
 import customerNotificationsEn from './locales/en/customerNotifications.json';
 import customerPortalEn from './locales/en/customerPortal.json';
+import customerPriorityEn from './locales/en/customerPriority.json';
 import dashboardEn from './locales/en/dashboard.json';
 import designerAutoAssignEn from './locales/en/designerAutoAssign.json';
 import designerTaskWorkflowEn from './locales/en/designerTaskWorkflow.json';
@@ -28,6 +29,7 @@ import commonVi from './locales/vi/common.json';
 import customerFactoryAssignmentVi from './locales/vi/customerFactoryAssignment.json';
 import customerNotificationsVi from './locales/vi/customerNotifications.json';
 import customerPortalVi from './locales/vi/customerPortal.json';
+import customerPriorityVi from './locales/vi/customerPriority.json';
 import dashboardVi from './locales/vi/dashboard.json';
 import designerAutoAssignVi from './locales/vi/designerAutoAssign.json';
 import designerTaskWorkflowVi from './locales/vi/designerTaskWorkflow.json';
@@ -49,71 +51,73 @@ const STORAGE_KEY = 'onosfactory-language';
 export type AppLanguage = 'vi' | 'en';
 
 export function getStoredLanguage(): AppLanguage {
-    try {
-        const stored = JSON.parse(localStorage.getItem(STORAGE_KEY) || '{}');
-        return stored?.state?.language === 'en' ? 'en' : 'vi';
-    } catch {
-        return 'vi';
-    }
+  try {
+    const stored = JSON.parse(localStorage.getItem(STORAGE_KEY) || '{}');
+    return stored?.state?.language === 'en' ? 'en' : 'vi';
+  } catch {
+    return 'vi';
+  }
 }
 
 export const resources = {
-    vi: {
-        common: commonVi,
-        auth: authVi,
-        layout: layoutVi,
-        dashboard: dashboardVi,
-        orderLifecycle: orderLifecycleVi,
-        orders: ordersVi,
-        orderLog: orderLogVi,
-        scanError: scanErrorVi,
-        stageErrorCatalog: stageErrorCatalogVi,
-        designerTaskWorkflow: designerTaskWorkflowVi,
-        fulfillmentWorkflow: fulfillmentWorkflowVi,
-        toolCheckWorkflow: toolCheckWorkflowVi,
-        products: productsVi,
-        promotion: promotionVi,
-        workshopConfig: workshopConfigVi,
-        designerAutoAssign: designerAutoAssignVi,
-        customerFactoryAssignment: customerFactoryAssignmentVi,
-        customerPortal: customerPortalVi,
-        customerNotifications: customerNotificationsVi,
-        landing: landingVi,
-        careers: careersVi,
-    },
-    en: {
-        common: commonEn,
-        auth: authEn,
-        layout: layoutEn,
-        dashboard: dashboardEn,
-        orderLifecycle: orderLifecycleEn,
-        orders: ordersEn,
-        orderLog: orderLogEn,
-        scanError: scanErrorEn,
-        stageErrorCatalog: stageErrorCatalogEn,
-        designerTaskWorkflow: designerTaskWorkflowEn,
-        fulfillmentWorkflow: fulfillmentWorkflowEn,
-        toolCheckWorkflow: toolCheckWorkflowEn,
-        products: productsEn,
-        promotion: promotionEn,
-        workshopConfig: workshopConfigEn,
-        designerAutoAssign: designerAutoAssignEn,
-        customerFactoryAssignment: customerFactoryAssignmentEn,
-        customerPortal: customerPortalEn,
-        customerNotifications: customerNotificationsEn,
-        landing: landingEn,
-        careers: careersEn,
-    },
+  vi: {
+    common: commonVi,
+    auth: authVi,
+    layout: layoutVi,
+    dashboard: dashboardVi,
+    orderLifecycle: orderLifecycleVi,
+    orders: ordersVi,
+    orderLog: orderLogVi,
+    scanError: scanErrorVi,
+    stageErrorCatalog: stageErrorCatalogVi,
+    designerTaskWorkflow: designerTaskWorkflowVi,
+    fulfillmentWorkflow: fulfillmentWorkflowVi,
+    toolCheckWorkflow: toolCheckWorkflowVi,
+    products: productsVi,
+    promotion: promotionVi,
+    workshopConfig: workshopConfigVi,
+    designerAutoAssign: designerAutoAssignVi,
+    customerFactoryAssignment: customerFactoryAssignmentVi,
+    customerPriority: customerPriorityVi,
+    customerPortal: customerPortalVi,
+    customerNotifications: customerNotificationsVi,
+    landing: landingVi,
+    careers: careersVi,
+  },
+  en: {
+    common: commonEn,
+    auth: authEn,
+    layout: layoutEn,
+    dashboard: dashboardEn,
+    orderLifecycle: orderLifecycleEn,
+    orders: ordersEn,
+    orderLog: orderLogEn,
+    scanError: scanErrorEn,
+    stageErrorCatalog: stageErrorCatalogEn,
+    designerTaskWorkflow: designerTaskWorkflowEn,
+    fulfillmentWorkflow: fulfillmentWorkflowEn,
+    toolCheckWorkflow: toolCheckWorkflowEn,
+    products: productsEn,
+    promotion: promotionEn,
+    workshopConfig: workshopConfigEn,
+    designerAutoAssign: designerAutoAssignEn,
+    customerFactoryAssignment: customerFactoryAssignmentEn,
+    customerPriority: customerPriorityEn,
+    customerPortal: customerPortalEn,
+    customerNotifications: customerNotificationsEn,
+    landing: landingEn,
+    careers: careersEn,
+  },
 } as const;
 
 i18n.use(initReactI18next).init({
-    resources,
-    lng: getStoredLanguage(),
-    fallbackLng: 'vi',
-    defaultNS: 'common',
-    ns: Object.keys(resources.vi),
-    interpolation: { escapeValue: false },
-    returnNull: false,
+  resources,
+  lng: getStoredLanguage(),
+  fallbackLng: 'vi',
+  defaultNS: 'common',
+  ns: Object.keys(resources.vi),
+  interpolation: { escapeValue: false },
+  returnNull: false,
 });
 
 export default i18n;
