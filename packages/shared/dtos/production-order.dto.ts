@@ -948,10 +948,7 @@ export const AutoAssignPreviewResZod = ResZod.extend({
 export class AutoAssignPreviewResDto extends createZodDto(extendApi(AutoAssignPreviewResZod)) {}
 
 export const AutoAssignApplyZod = z.object({
-  assignments: z
-    .object({ userId: z.string(), orderIds: z.string().array() })
-    .array()
-    .min(1),
+  assignments: z.object({ userId: z.string(), orderIds: z.string().array() }).array().min(1),
 });
 export class AutoAssignApplyDto extends createZodDto(extendApi(AutoAssignApplyZod)) {}
 export const AutoAssignApplyResZod = ResZod.extend({
@@ -1871,6 +1868,8 @@ export const LifecycleOverviewZod = z.object({
   completionTimeline: LifecycleTimelineBucketZod.array(),
   /** Options cho dropdown lọc xưởng (chỉ xưởng có đơn). */
   factories: z.object({ factoryId: z.string(), factoryName: z.string() }).array(),
+  /** Options cho combobox lọc khách (khách có đơn trong scope, nhiều đơn nhất trước, cap 300). */
+  customers: z.object({ userSku: z.string(), userEmail: z.string(), count: z.number() }).array(),
   filter: z.object({ factoryId: z.string().optional(), from: z.string().optional(), to: z.string().optional() }),
 });
 export type LifecycleOverview = z.infer<typeof LifecycleOverviewZod>;
@@ -1879,6 +1878,10 @@ export const GetLifecycleOverviewZod = z.object({
   factoryId: IDZod.optional(),
   from: z.string().optional(),
   to: z.string().optional(),
+  /** Lọc theo khách hàng (chọn từ `LifecycleOverviewZod.customers`) — khớp CHÍNH XÁC
+   * `userSku` (+ `userEmail` nếu gửi kèm), case-insensitive. */
+  userSku: z.string().optional(),
+  userEmail: z.string().optional(),
 });
 export class GetLifecycleOverviewDto extends createZodDto(extendApi(GetLifecycleOverviewZod)) {}
 
@@ -1893,6 +1896,9 @@ export const GetCancelledOrdersZod = z.object({
   from: z.string().optional(),
   to: z.string().optional(),
   factoryId: IDZod.optional(),
+  /** Lọc theo khách hàng — cùng ngữ nghĩa `GetLifecycleOverviewZod.userSku`/`userEmail`. */
+  userSku: z.string().optional(),
+  userEmail: z.string().optional(),
 });
 export class GetCancelledOrdersDto extends createZodDto(extendApi(GetCancelledOrdersZod)) {}
 

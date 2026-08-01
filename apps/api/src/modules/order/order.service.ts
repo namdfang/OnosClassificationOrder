@@ -2955,6 +2955,18 @@ export class OrderService implements OnModuleInit {
       match.factoryId = productionFactoryClause(this.orderModel.db);
     }
 
+    // Lọc theo khách hàng (chọn từ combobox strip — options do facet `customers`
+    // bên dưới trả về) — khớp CHÍNH XÁC userSku (+ userEmail nếu có),
+    // case-insensitive. Dùng $and để không đè $or scope xưởng ở trên.
+    if (dto.userSku?.trim()) {
+      const and = (match.$and as unknown[] | undefined) ?? [];
+      and.push({ userSku: { $regex: `^${escapeRegex(dto.userSku.trim())}$`, $options: 'i' } });
+      if (dto.userEmail?.trim()) {
+        and.push({ userEmail: { $regex: `^${escapeRegex(dto.userEmail.trim())}$`, $options: 'i' } });
+      }
+      match.$and = and;
+    }
+
     // Đếm RIÊNG đơn hủy trong cùng window inProductionAt + xưởng (funnel đã loại
     // đơn hủy) → thống kê "Đơn đã hủy" trên strip/dashboard vòng đời.
     const cancelledInRange = await this.orderModel.countDocuments({
@@ -3179,6 +3191,21 @@ export class OrderService implements OnModuleInit {
             },
             { $sort: { factoryName: 1 } },
           ],
+          // Danh sách khách trong scope đang lọc (options cho combobox strip) —
+          // group theo cặp (userSku,userEmail) như `customerMatchKey`, nhiều đơn
+          // nhất trước, cap 300.
+          customers: [
+            { $match: { userSku: { $exists: true, $nin: [null, ''] } } },
+            {
+              $group: {
+                _id: { sku: '$userSku', email: { $ifNull: ['$userEmail', ''] } },
+                n: { $sum: 1 },
+              },
+            },
+            { $sort: { n: -1 } },
+            { $limit: 300 },
+            { $project: { _id: 0, userSku: '$_id.sku', userEmail: '$_id.email', count: '$n' } },
+          ],
         },
       },
     ]);
@@ -3269,6 +3296,7 @@ export class OrderService implements OnModuleInit {
           factoryId: String(f.factoryId),
           factoryName: f.factoryName,
         })),
+        customers: (agg.customers as Array<{ userSku: string; userEmail: string; count: number }>) ?? [],
         filter: { factoryId: scopedFactoryId, from: dto.from, to: dto.to },
       },
     };
@@ -3307,6 +3335,15 @@ export class OrderService implements OnModuleInit {
       // Đơn chưa map xưởng + đơn xưởng US (ngoài luồng sản xuất) bị loại khỏi
       // drill-down "Đơn đã hủy".
       match.factoryId = productionFactoryClause(this.orderModel.db);
+    }
+    // Lọc theo khách hàng — cùng ngữ nghĩa `getLifecycleOverview` (exact pair).
+    if (dto.userSku?.trim()) {
+      const and = (match.$and as unknown[] | undefined) ?? [];
+      and.push({ userSku: { $regex: `^${escapeRegex(dto.userSku.trim())}$`, $options: 'i' } });
+      if (dto.userEmail?.trim()) {
+        and.push({ userEmail: { $regex: `^${escapeRegex(dto.userEmail.trim())}$`, $options: 'i' } });
+      }
+      match.$and = and;
     }
 
     type Lean = {

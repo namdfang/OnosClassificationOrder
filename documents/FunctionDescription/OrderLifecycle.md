@@ -26,7 +26,7 @@ Soát tool → Thiết kế → In → Ép → QC sau ép → May vào → May r
   tài khoản `Fulfillment` gắn xưởng tự **khóa theo xưởng** (BE), role khác thấy
   toàn bộ (xem §7).
 - **Strip** (`LifecycleStrip`) hiện trên đầu Dashboard, trên MỌI tab — không cuộn ngang:
-  - **Hàng điều khiển tách riêng:** tiêu đề + ô tra cứu `productionId` + nút **"Nhiều mã"** + `DateRangePicker` + chip **"Hủy: N"** (`Ban`, đỏ khi >0) = `totals.cancelledInRange` → bấm mở `CancelledOrdersDialog` (danh sách đơn hủy trong kỳ, `GET /orders/cancelled-list`). Đơn hủy **không** nằm trong phễu — đây là thống kê riêng.
+  - **Hàng điều khiển tách riêng:** tiêu đề + ô tra cứu `productionId` + nút **"Nhiều mã"** + `DateRangePicker` + **select Xưởng** ("Tất cả xưởng" / từng xưởng; ẨN khi role bị khóa xưởng, mirror `lockedFactoryId` của LifecycleTab) + **combobox Khách hàng** (gõ để lọc client-side, dropdown hiện danh sách khách từ field `customers` của response overview — SKU + email + số đơn, nhiều đơn nhất trước; chọn 1 khách → lọc CHÍNH XÁC theo cặp params `userSku`+`userEmail`) + chip **"Hủy: N"** (`Ban`, đỏ khi >0) = `totals.cancelledInRange` → bấm mở `CancelledOrdersDialog` (danh sách đơn hủy trong kỳ, `GET /orders/cancelled-list`, nhận cùng `factoryId`/`userSku`/`userEmail` để khớp scope). Options xưởng/khách cache từ lần fetch KHÔNG lọc chiều tương ứng (facet BE chạy sau `$match` nên khi đang lọc danh sách sẽ co lại). 2 filter xưởng/khách chỉ áp chế độ tổng quan (nhập `productionId` → track 1 đơn bỏ qua). Đơn hủy **không** nằm trong phễu — đây là thống kê riêng.
   - **Tra cứu nhiều mã:** nút "Nhiều mã" (`ListChecks`) mở `BulkProductionIdDialog` (mode=`lookup`,
     `apps/web/src/components/orders/BulkProductionIdDialog.tsx`). Dán nhiều `productionId` (mỗi mã 1 dòng) →
     "Tìm" → gọi `GET /orders?productionIds=<CSV>` → bảng tóm tắt trong modal (Production ID · Sản phẩm ·
@@ -59,9 +59,9 @@ Soát tool → Thiết kế → In → Ép → QC sau ép → May vào → May r
 
 | Method | Path | Mô tả |
 |---|---|---|
-| GET | `/v1/orders/lifecycle-overview` | Phễu 8 chặng + KPI + timeline + danh sách xưởng + `totals.cancelledInRange` |
+| GET | `/v1/orders/lifecycle-overview?from&to&factoryId&userSku&userEmail` | Phễu 8 chặng + KPI + timeline + danh sách xưởng + facet `customers` (options combobox khách: group cặp (userSku,userEmail), nhiều đơn nhất trước, cap 300) + `totals.cancelledInRange`. `userSku`/`userEmail` = khớp CHÍNH XÁC cặp khách (anchored regex, case-insensitive, `$and` để không đè `$or` scope xưởng) |
 | GET | `/v1/orders/lifecycle-track/:code` | Hành trình 8 chặng của 1 đơn theo `productionId` (cho strip) |
-| GET | `/v1/orders/cancelled-list?from&to&factoryId` | Danh sách đơn HỦY (drill-down chip "Hủy" + KPI Stats). Scope xưởng + khoảng `inProductionAt`, sort `cancelledAt` desc, cap 500. `getCancelledOrders()` |
+| GET | `/v1/orders/cancelled-list?from&to&factoryId&userSku&userEmail` | Danh sách đơn HỦY (drill-down chip "Hủy" + KPI Stats). Scope xưởng + khách + khoảng `inProductionAt`, sort `cancelledAt` desc, cap 500. `getCancelledOrders()` |
 
 `getLifecycleTrack(code, roleName, userFactoryId)`: `findOne` theo `productionId`
 (exact, case-insensitive), khóa xưởng cho `Fulfillment`. Suy **currentIndex** (0..9)
@@ -195,5 +195,6 @@ trên collection `orders`:
 - **Mọi tài khoản** — cả 2 endpoint `@Auth(ORDER_VIEW_ROLES)`; FE render strip +
   tab chi tiết cho mọi role (`canSeeLifecycle = true`).
 - **Factory isolation** trong service khóa role `Fulfillment` về xưởng của họ
-  (`isFactoryBound`); role khác thấy toàn bộ (hoặc lọc theo dropdown xưởng ở tab
-  chi tiết). Strip không có dropdown xưởng → không truyền `factoryId`, để BE tự lo.
+  (`isFactoryBound`); role khác thấy toàn bộ hoặc lọc qua dropdown xưởng (có ở CẢ
+  strip lẫn tab chi tiết). Strip ẩn dropdown khi role bị khóa xưởng
+  (`lockedFactoryId`) — BE vẫn tự khóa bất kể FE gửi gì.

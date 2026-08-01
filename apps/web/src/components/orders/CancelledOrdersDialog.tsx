@@ -20,9 +20,12 @@ interface Props {
   to?: string;
   /** Xưởng đang lọc (nếu có) để khớp scope con số. */
   factoryId?: string;
+  /** Khách đang lọc (exact pair, chọn từ combobox strip) để khớp scope con số. */
+  userSku?: string;
+  userEmail?: string;
 }
 
-export function CancelledOrdersDialog({ open, onClose, from, to, factoryId }: Props) {
+export function CancelledOrdersDialog({ open, onClose, from, to, factoryId, userSku, userEmail }: Props) {
   const { t } = useTranslation('orders');
   const [rows, setRows] = useState<CancelledOrderRow[]>([]);
   const [total, setTotal] = useState(0);
@@ -37,6 +40,8 @@ export function CancelledOrdersDialog({ open, onClose, from, to, factoryId }: Pr
         if (from) params.set('from', from);
         if (to) params.set('to', to);
         if (factoryId) params.set('factoryId', factoryId);
+        if (userSku) params.set('userSku', userSku);
+        if (userEmail) params.set('userEmail', userEmail);
         const qs = params.toString();
         const res = await RepositoryRemote.order.getCancelledOrders(qs ? `?${qs}` : '');
         setRows((res.data?.data || []) as CancelledOrderRow[]);
@@ -47,7 +52,7 @@ export function CancelledOrdersDialog({ open, onClose, from, to, factoryId }: Pr
         setLoading(false);
       }
     })();
-  }, [open, from, to, factoryId]);
+  }, [open, from, to, factoryId, userSku, userEmail]);
 
   const fmt = (d?: Date) => (d ? dayjs(d).format('DD/MM/YYYY HH:mm') : '—');
 

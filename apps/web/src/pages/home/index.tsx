@@ -1,9 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useSearchParams } from 'react-router-dom';
-import { BarChart3, Factory, FileSearch, Palette, Workflow } from 'lucide-react';
-
-import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
+import { BarChart3 } from 'lucide-react';
 
 import { usePermission } from '@/hooks/usePermission';
 
@@ -14,13 +12,16 @@ import OrderFactoryTab from './OrderFactoryTab';
 import OrderStatsTab from './OrderStatsTab';
 // Tab "status" (Tình trạng đơn hàng) + "person-error" (Lỗi theo người) TẠM ẨN
 // (2026-07, không cần nữa) — muốn bật lại: bỏ comment 2 import dưới + thêm lại
-// 'status'/'person-error' vào TABS + bỏ comment các khối canSeePersonError /
-// isTabAllowed / TabsTrigger / TabsContent đánh dấu cùng ghi chú này.
+// 'status'/'person-error' vào TABS + bỏ comment khối canSeePersonError /
+// isTabAllowed / render điều kiện đánh dấu cùng ghi chú này + thêm lại entry
+// sidebar tương ứng (Sidebar.tsx đang comment `dash-status`/`dash-person-error`).
 // import OrderStatusTab from './OrderStatusTab';
 // import PersonErrorTab from './PersonErrorTab';
 import { SendTelegramReportButton } from './SendTelegramReportButton';
 import ToolCheckTab from './ToolCheckTab';
 
+// KHÔNG còn thanh tab tại chỗ — chuyển tab CHỈ qua submenu sidebar (Link
+// `?tab=<key>`, thay cả query string nên param của tab cũ tự biến mất).
 const TABS = ['factory', 'stats', 'lifecycle', 'tool-check', 'designer'] as const;
 type TabKey = (typeof TABS)[number];
 
@@ -36,7 +37,13 @@ export default function Home() {
   // Tab "Lỗi theo người" TẠM ẨN — xem ghi chú ở khối import.
   // const canSeePersonError = isAdmin || has('page.designer_stats') || has('page.tool_check');
   const isTabAllowed = (t: TabKey) =>
-    t === 'lifecycle' ? canSeeLifecycle : t === 'tool-check' ? canSeeToolCheck : true;
+    t === 'lifecycle'
+      ? canSeeLifecycle
+      : t === 'tool-check'
+        ? canSeeToolCheck
+        : t === 'designer'
+          ? canSeeDesigner
+          : true;
   const initial = (searchParams.get('tab') as TabKey) || 'factory';
   const [activeTab, setActiveTab] = useState<TabKey>(
     TABS.includes(initial) && isTabAllowed(initial) ? initial : 'stats',
@@ -63,67 +70,6 @@ export default function Home() {
     }
   }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
-  const handleTabChange = (val: string) => {
-    setActiveTab(val as TabKey);
-    setSearchParams(
-      (prev) => {
-        const sp = new URLSearchParams(prev);
-        sp.set('tab', val);
-        // Mỗi tab có namespace riêng (xem hook / component tương ứng):
-        //   stats:   sfrom, sto, stype, suser
-        //   status:  printStatus*, toolResult*, errorFile, assignee*, factoryId,
-        //            machineTypeId, readyForFulfill, createdFrom, createdTo, search
-        //   factory: ffrom, fto, ffactory, fmode, fstage, ftype, ffabric, ftool,
-        //            fmachine, fpage, fsize
-        // Đổi tab → strip param của 2 tab kia để URL không lẫn.
-        if (val !== 'stats') {
-          ['sfrom', 'sto', 'stype', 'suser'].forEach((k) => sp.delete(k));
-        }
-        if (val !== 'status') {
-          [
-            'printStatus',
-            'printStatusNote',
-            'toolResult',
-            'toolResultNote',
-            'errorFile',
-            'assignee',
-            'assigneeNote',
-            'factoryId',
-            'machineTypeId',
-            'readyForFulfill',
-            'createdFrom',
-            'createdTo',
-            'search',
-          ].forEach((k) => sp.delete(k));
-        }
-        if (val !== 'factory') {
-          [
-            'ffrom',
-            'fto',
-            'fview',
-            'ffactory',
-            'fmode',
-            'fstage',
-            'ftype',
-            'ffabric',
-            'ftool',
-            'fmachine',
-            'fmnum',
-            'ftoolnote',
-            'fuser',
-            'fpage',
-            'fsize',
-          ].forEach((k) => sp.delete(k));
-        }
-        if (val !== 'lifecycle') {
-          ['lfrom', 'lto', 'lfactory'].forEach((k) => sp.delete(k));
-        }
-        return sp;
-      },
-      { replace: true },
-    );
-  };
-
   return (
     <div className="space-y-6">
       <div className="flex items-center gap-3">
@@ -140,73 +86,15 @@ export default function Home() {
       {/* Strip vòng đời đơn — gọn, hiện trên đầu mọi tab, cho mọi tài khoản */}
       <LifecycleStrip />
 
-      <Tabs value={activeTab} onValueChange={handleTabChange} className="w-full">
-        <TabsList>
-          <TabsTrigger value="factory" className="gap-1.5">
-            <Factory size={14} /> {t('tabs.factory')}
-          </TabsTrigger>
-          <TabsTrigger value="stats" className="gap-1.5">
-            <BarChart3 size={14} /> {t('tabs.stats')}
-          </TabsTrigger>
-          {/* Tab "status" TẠM ẨN — xem ghi chú ở khối import.
-          <TabsTrigger value="status" className="gap-1.5">
-            <ClipboardList size={14} /> {t('tabs.status')}
-          </TabsTrigger> */}
-          {canSeeLifecycle && (
-            <TabsTrigger value="lifecycle" className="gap-1.5">
-              <Workflow size={14} /> {t('tabs.lifecycle')}
-            </TabsTrigger>
-          )}
-          {canSeeToolCheck && (
-            <TabsTrigger value="tool-check" className="gap-1.5">
-              <FileSearch size={14} /> {t('tabs.toolCheck')}
-            </TabsTrigger>
-          )}
-          {/* Tab "person-error" TẠM ẨN — xem ghi chú ở khối import.
-          {canSeePersonError && (
-            <TabsTrigger value="person-error" className="gap-1.5">
-              <TriangleAlert size={14} /> {t('tabs.personError')}
-            </TabsTrigger>
-          )} */}
-          {canSeeDesigner && (
-            <TabsTrigger value="designer" className="gap-1.5">
-              <Palette size={14} /> {t('tabs.designer')}
-            </TabsTrigger>
-          )}
-        </TabsList>
-
-        <TabsContent value="stats">
-          <OrderStatsTab />
-        </TabsContent>
-        {/* Tab "status" TẠM ẨN — xem ghi chú ở khối import.
-        <TabsContent value="status">
-          <OrderStatusTab />
-        </TabsContent> */}
-        <TabsContent value="factory">
-          <OrderFactoryTab />
-        </TabsContent>
-        {canSeeLifecycle && (
-          <TabsContent value="lifecycle">
-            <LifecycleTab />
-          </TabsContent>
-        )}
-        {canSeeToolCheck && (
-          <TabsContent value="tool-check">
-            <ToolCheckTab />
-          </TabsContent>
-        )}
-        {/* Tab "person-error" TẠM ẨN — xem ghi chú ở khối import.
-        {canSeePersonError && (
-          <TabsContent value="person-error">
-            <PersonErrorTab />
-          </TabsContent>
-        )} */}
-        {canSeeDesigner && (
-          <TabsContent value="designer">
-            <DesignerStatsTab />
-          </TabsContent>
-        )}
-      </Tabs>
+      {activeTab === 'stats' && <OrderStatsTab />}
+      {/* Tab "status" TẠM ẨN — xem ghi chú ở khối import.
+      {activeTab === 'status' && <OrderStatusTab />} */}
+      {activeTab === 'factory' && <OrderFactoryTab />}
+      {canSeeLifecycle && activeTab === 'lifecycle' && <LifecycleTab />}
+      {canSeeToolCheck && activeTab === 'tool-check' && <ToolCheckTab />}
+      {/* Tab "person-error" TẠM ẨN — xem ghi chú ở khối import.
+      {canSeePersonError && activeTab === 'person-error' && <PersonErrorTab />} */}
+      {canSeeDesigner && activeTab === 'designer' && <DesignerStatsTab />}
     </div>
   );
 }

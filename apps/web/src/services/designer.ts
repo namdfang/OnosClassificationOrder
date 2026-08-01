@@ -140,6 +140,18 @@ const teamDailyBreakdown = (
   return callApi(`/${CONFIG.API_VERSION}/designer/team-daily-breakdown?${qs.toString()}`, 'get');
 };
 
+const performanceScores = (params: { from?: string; to?: string } = {}) => {
+  const qs = new URLSearchParams();
+  if (params.from) qs.set('from', params.from);
+  if (params.to) qs.set('to', params.to);
+  const suffix = qs.toString() ? `?${qs.toString()}` : '';
+  return callApi(`/${CONFIG.API_VERSION}/designer/performance-scores${suffix}`, 'get');
+};
+
+const setDesignerLevel = (userId: string, level: string | null) => {
+  return callApi(`/${CONFIG.API_VERSION}/designer/level/${userId}`, 'patch', { level });
+};
+
 const breakdownFilters = (params: { from?: string; to?: string } = {}) => {
   const qs = new URLSearchParams();
   if (params.from) qs.set('from', params.from);
@@ -300,6 +312,8 @@ export const designer = {
   breakdownFilters,
   productTimeOverview,
   productTimeOrders,
+  performanceScores,
+  setDesignerLevel,
   dailyOverview,
   assignBacklog,
   productBreakdown,
