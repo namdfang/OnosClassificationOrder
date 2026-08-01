@@ -19,30 +19,17 @@
   },
   "telegramReport": {
     "button": "Gửi báo cáo Telegram",
-    "chooseSlot": "Chọn ca",
-    "chooseType": "Loại báo cáo",
-    "cancel": "Hủy",
-    "sendNow": "Gửi ngay",
-    "slots": {
-      "auto": "Tự động theo giờ",
-      "autoHint": "BE chọn slot dựa trên giờ hiện tại",
-      "morning": "Ca sáng",
-      "morningHint": "07:30 — period 18:30 hôm trước → 07:30",
-      "noon": "Ca trưa",
-      "noonHint": "13:00 — period 07:30 → 13:00",
-      "evening": "Ca chiều",
-      "eveningHint": "18:30 — period 13:00 → 18:30"
+    "choose": "Chọn báo cáo gửi",
+    "views": {
+      "daily": "Tổng quan",
+      "designer": "Theo designer",
+      "tool-check": "Soát tool",
+      "factory": "Xưởng {{name}}"
     },
-    "types": {
-      "all": "Tất cả 3 báo cáo",
-      "designer": "Chỉ Designer",
-      "factory": "Chỉ Xưởng",
-      "error": "Chỉ Đơn lỗi"
-    },
-    "sentSuccess": "Đã gửi {{count}} báo cáo ({{names}}){{slot}}",
-    "noneSent": "Không có báo cáo nào được gửi",
-    "skipped": "Skipped: {{names}}",
-    "disabledHint": "Có thể SCHEDULED_REPORTS_ENABLED=false"
+    "sentView": "Đã gửi báo cáo {{view}} vào Telegram",
+    "busy": "Báo cáo đang chạy — chờ xong rồi gửi lại nhé",
+    "failed": "Không gửi được báo cáo",
+    "disabledHint": "Kiểm tra TELEGRAM_NOTIFICATION_ENABLED / channel Telegram"
   },
   "breakdownCard": {
     "noData": "Không có data",

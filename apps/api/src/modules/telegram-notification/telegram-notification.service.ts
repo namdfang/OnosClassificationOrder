@@ -1,21 +1,41 @@
 import { Inject, Injectable } from '@nestjs/common';
+import type { TelegramReplyMarkup } from 'core';
 import { TelegramService } from 'core';
 import { Logger } from 'winston';
 
 import { ApiConfigService } from '@/shared/services';
 
-import { formatDesignerReport } from './format/designer-report.formatter';
-import { formatErrorReport } from './format/error-report.formatter';
-import { formatFactoryReport } from './format/factory-report.formatter';
+import {
+  formatDailyOrdersReport,
+  formatDesignerViewReport,
+  formatToolCheckReport,
+} from './format/daily-orders-report.formatter';
 import { formatImportSummary } from './format/import-summary.formatter';
 import type {
-  DesignerReportNotification,
-  ErrorReportNotification,
-  FactoryReportNotification,
+  DailyOrdersReportNotification,
   ImportSummaryNotification,
   NotificationChannelKey,
   TelegramMention,
 } from './types';
+
+/**
+ * Hàng nút dưới mỗi message báo cáo — dựng ĐỘNG theo danh sách xưởng: mỗi xưởng
+ * 1 nút `🏭 <tên>` (callback `rpt:fac:<id>`) → gửi phễu lọc theo xưởng đó.
+ */
+function buildReportKeyboard(factories: DailyOrdersReportNotification['data']['factories']): TelegramReplyMarkup {
+  const facButtons = factories.map((f) => ({ text: `🏭 ${f.name}`, callback_data: `rpt:fac:${f.id}` }));
+
+  return {
+    inline_keyboard: [
+      [
+        { text: '🔄 Cập nhật', callback_data: 'rpt:daily' },
+        { text: '👤 Designer', callback_data: 'rpt:designer' },
+        { text: '🔍 Soát tool', callback_data: 'rpt:tool' },
+      ],
+      ...(facButtons.length > 0 ? [facButtons] : []),
+    ],
+  };
+}
 
 @Injectable()
 export class TelegramNotificationService {
@@ -30,22 +50,23 @@ export class TelegramNotificationService {
     await this.dispatch('importSummary', text);
   }
 
-  async notifyDesignerReport(payload: DesignerReportNotification): Promise<void> {
-    const text = withMentions(formatDesignerReport(payload), payload.mentions);
-    await this.dispatch('dailyReport', text);
+  /** `factoryName` có = phễu lọc theo 1 xưởng (nút "🏭 <tên>"). */
+  async notifyDailyOrdersReport(payload: DailyOrdersReportNotification, factoryName?: string): Promise<void> {
+    const text = withMentions(formatDailyOrdersReport(payload, factoryName), payload.mentions);
+    await this.dispatch('dailyReport', text, buildReportKeyboard(payload.data.factories));
   }
 
-  async notifyFactoryReport(payload: FactoryReportNotification): Promise<void> {
-    const text = withMentions(formatFactoryReport(payload), payload.mentions);
-    await this.dispatch('dailyReport', text);
+  async notifyDesignerViewReport(payload: DailyOrdersReportNotification): Promise<void> {
+    const text = withMentions(formatDesignerViewReport(payload), payload.mentions);
+    await this.dispatch('dailyReport', text, buildReportKeyboard(payload.data.factories));
   }
 
-  async notifyErrorReport(payload: ErrorReportNotification): Promise<void> {
-    const text = withMentions(formatErrorReport(payload), payload.mentions);
-    await this.dispatch('dailyReport', text);
+  async notifyToolCheckReport(payload: DailyOrdersReportNotification): Promise<void> {
+    const text = withMentions(formatToolCheckReport(payload), payload.mentions);
+    await this.dispatch('dailyReport', text, buildReportKeyboard(payload.data.factories));
   }
 
-  private async dispatch(key: NotificationChannelKey, text: string): Promise<void> {
+  private async dispatch(key: NotificationChannelKey, text: string, replyMarkup?: TelegramReplyMarkup): Promise<void> {
     if (!this.config.telegram.notificationEnabled) return;
 
     const channels = this.channelsFor(key);
@@ -62,6 +83,7 @@ export class TelegramNotificationService {
         this.telegramService.sendMessageToChannel(id, text, {
           parseMode: 'Markdown',
           disableWebPagePreview: true,
+          replyMarkup,
         }),
       ),
     );
@@ -72,6 +94,11 @@ export class TelegramNotificationService {
         message: `[telegram-notification][WARN] ${key} ${failures.length}/${channels.length} channel(s) failed`,
       });
     }
+  }
+
+  /** Danh sách chat_id hợp lệ của channel báo cáo — webhook dùng làm allowlist callback. */
+  reportChannelIds(): string[] {
+    return this.channelsFor('dailyReport');
   }
 
   private channelsFor(key: NotificationChannelKey): string[] {

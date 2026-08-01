@@ -61,12 +61,14 @@ function Column({
   id,
   title,
   shortName,
+  icon,
   customers,
   visible,
 }: {
   id: string;
   title: string;
   shortName?: string;
+  icon?: React.ReactNode;
   customers: Customer[];
   visible: Customer[];
 }) {
@@ -88,7 +90,7 @@ function Column({
         {isUnassigned ? (
           <Inbox size={15} className="text-slate-400" />
         ) : (
-          <FactoryIcon size={15} className="text-sky-600 dark:text-sky-400" />
+          icon ?? <FactoryIcon size={15} className="text-sky-600 dark:text-sky-400" />
         )}
         <span className="flex-1 truncate text-sm font-medium text-slate-700 dark:text-slate-200">{title}</span>
         {shortName && (
@@ -114,20 +116,31 @@ function Column({
   );
 }
 
-interface FactoryLite {
-  _id: string;
-  name: string;
+/**
+ * Kanban khách hàng dùng chung — cột do parent định nghĩa (xưởng ở tab
+ * "Gán xưởng theo khách", 3 mức ưu tiên ở tab "Ưu tiên đơn theo khách").
+ * Cột "Chưa gán" luôn tự thêm ở đầu.
+ */
+export interface CustomerKanbanColumnDef {
+  id: string;
+  title: string;
   shortName?: string;
+  icon?: React.ReactNode; // mặc định icon xưởng
 }
 
 interface CustomerFactoryKanbanProps {
-  factories: FactoryLite[];
+  columns: CustomerKanbanColumnDef[];
   customers: Customer[];
-  alloc: Record<string, string[]>; // factoryId → customerIds
-  onMove: (customerId: string, targetFactoryId: string | null) => void;
+  alloc: Record<string, string[]>; // columnId → customerIds
+  onMove: (customerId: string, targetColumnId: string | null) => void;
 }
 
-export default function CustomerFactoryKanban({ factories, customers, alloc, onMove }: CustomerFactoryKanbanProps) {
+export default function CustomerFactoryKanban({
+  columns: columnDefs,
+  customers,
+  alloc,
+  onMove,
+}: CustomerFactoryKanbanProps) {
   const { t } = useTranslation('customerFactoryAssignment');
   const [search, setSearch] = useState('');
   const [activeId, setActiveId] = useState('');
@@ -137,17 +150,19 @@ export default function CustomerFactoryKanban({ factories, customers, alloc, onM
 
   const columns = useMemo(() => {
     const assigned = new Set<string>();
-    const cols: { id: string; title: string; shortName?: string; customers: Customer[] }[] = [];
-    for (const f of factories) {
-      const list = (alloc[f._id] || [])
-        .map((id) => byId.get(id))
-        .filter((c): c is Customer => !!c);
+    const cols: { id: string; title: string; shortName?: string; icon?: React.ReactNode; customers: Customer[] }[] = [];
+    for (const def of columnDefs) {
+      const list = (alloc[def.id] || []).map((id) => byId.get(id)).filter((c): c is Customer => !!c);
       for (const c of list) assigned.add(String(c._id));
-      cols.push({ id: f._id, title: f.name, shortName: f.shortName, customers: sortCustomers(list) });
+      cols.push({ ...def, customers: sortCustomers(list) });
     }
     const unassigned = sortCustomers(customers.filter((c) => !assigned.has(String(c._id))));
-    return [{ id: UNASSIGNED_COL, title: t('kanban.unassignedColumn'), customers: unassigned }, ...cols];
-  }, [factories, customers, alloc, byId, t]);
+    const all: typeof cols = [
+      { id: UNASSIGNED_COL, title: t('kanban.unassignedColumn'), customers: unassigned },
+      ...cols,
+    ];
+    return all;
+  }, [columnDefs, customers, alloc, byId, t]);
 
   const q = search.trim().toLowerCase();
   const matches = (c: Customer) =>
@@ -187,6 +202,7 @@ export default function CustomerFactoryKanban({ factories, customers, alloc, onM
               id={col.id}
               title={col.title}
               shortName={col.shortName}
+              icon={col.icon}
               customers={col.customers}
               visible={col.customers.filter(matches)}
             />

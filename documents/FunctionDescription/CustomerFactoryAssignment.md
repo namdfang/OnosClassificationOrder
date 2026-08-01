@@ -1,7 +1,7 @@
 # Ưu tiên gán xưởng theo khách hàng — Function Description
 
-> **File FE:** `apps/web/src/pages/settings/index.tsx` + `apps/web/src/components/settings/CustomerAssignmentConfig.tsx` + `apps/web/src/components/settings/CustomerFactoryKanban.tsx` + `apps/web/src/components/settings/CustomerListDialog.tsx` + `apps/web/src/services/customer.ts` + `apps/web/src/services/customerAssignment.ts` > **File BE:** `apps/api/src/modules/customer/` (entity + repository + service + controller + module) + `apps/api/src/modules/customer-assignment/` (service + controller + module) + `apps/api/src/modules/order/order.service.ts` → hook trong `importOrders` > **Route:** `/adm/settings/customer-factory` (mục "Gán xưởng theo khách" trong Settings, gate quyền `role.manage`)
-> **API:** `GET/POST /v1/customers`, `POST /v1/customers/sync`, `PATCH /v1/customers/:id/tier`, `POST /v1/customers/import-tiers`, `GET/PUT /v1/customer-assignment/config`
+> **File FE:** `apps/web/src/pages/settings/index.tsx` + `apps/web/src/components/settings/CustomerAssignmentConfig.tsx` + `apps/web/src/components/settings/CustomerPriorityConfig.tsx` (§8) + `apps/web/src/components/settings/CustomerFactoryKanban.tsx` (kanban khách dùng chung, prop `columns`) + `apps/web/src/components/settings/CustomerListDialog.tsx` + `apps/web/src/services/customer.ts` + `apps/web/src/services/customerAssignment.ts` > **File BE:** `apps/api/src/modules/customer/` (entity + repository + service + controller + module) + `apps/api/src/modules/customer-assignment/` (service + controller + module) + `apps/api/src/modules/order/order.service.ts` → hook trong `importOrders` > **Route:** `/adm/settings/customer-factory` (mục "Gán xưởng theo khách") + `/adm/settings/customer-priority` (mục "Ưu tiên đơn theo khách", §8) trong Settings, gate quyền `role.manage`
+> **API:** `GET/POST /v1/customers`, `POST /v1/customers/sync`, `PATCH /v1/customers/:id/tier`, `POST /v1/customers/import-tiers`, `GET/PUT /v1/customer-assignment/config`, `GET/PUT /v1/customer-assignment/priority-config` (§8)
 
 ## 1. Overview
 
@@ -52,6 +52,8 @@ khách) và **Import tier** hàng loạt từ file `TÊN TÀI KHOẢN | VIP n`.
 | POST   | `/v1/customers/import-tiers`     | `@Auth([Admin])` | Import tier hàng loạt (`{ rows: [{userSku, tier}] }`, max 2000) → `{ matchedSkus, updatedCustomers, skippedSkus }` |
 | GET    | `/v1/customer-assignment/config` | `@Auth([Admin])` | Lấy cấu hình                                                                                                       |
 | PUT    | `/v1/customer-assignment/config` | `@Auth([Admin])` | Lưu (validate 1-khách-1-xưởng)                                                                                     |
+| GET    | `/v1/customer-assignment/priority-config` | `@Auth([Admin])` | Lấy cấu hình ưu tiên đơn theo khách (§8)                                                                  |
+| PUT    | `/v1/customer-assignment/priority-config` | `@Auth([Admin])` | Lưu cấu hình ưu tiên đơn theo khách (validate 1-khách-1-mức, §8)                                          |
 
 Collection `customers`: `{ userSku, userEmail, source: 'sync'|'manual'|'register', tier: number|null, password, fullName, phone, status }`,
 **unique index `{ userSku: 1, userEmail: 1 }`**. Zod: `CustomerTierZod`
@@ -167,3 +169,62 @@ Constant `CUSTOMER_ASSIGNMENT_CONFIG_KEY = 'customer_assignment_config'`.
 
 - Cấu hình + customers CRUD: `@Auth([Admin])` (FE gate `role.manage`).
 - Ép xưởng chạy server-side trong `importOrders` theo actor import.
+
+## 8. Ưu tiên đơn theo khách hàng
+
+Tab Settings riêng **"Ưu tiên đơn theo khách"** (`/adm/settings/customer-priority`,
+component `CustomerPriorityConfig.tsx`, gate `role.manage`) — kéo khách vào 1
+trong **3 cột mức ưu tiên** (`OrderPriority` 1=Ưu tiên / 2=Ưu tiên cao / 3=Ưu
+tiên nhất, xem `Orders.md §17`), lúc **import đơn** (tay lẫn tự động — cùng đi
+qua `importOrders`) đơn khớp khách được **auto-gán `priority`** đó.
+
+### 8.1 Quy tắc gán (chốt với user)
+
+- **CHỈ gán khi đơn chưa có `priority`**: đơn mới luôn được gán; đơn cũ
+  re-import mà chưa ai set thì được điền; đơn đã chỉnh tay **không bao giờ bị
+  đè** (config đổi mức cũng không đè đơn đã có priority).
+- **KHÔNG backfill** đơn đang chạy khi lưu config — chỉ áp cho đơn import từ
+  lúc đó trở đi.
+- Khách ở cột **"Chưa gán"** → đơn thường (không badge/estimate, xếp sau).
+- **Bất biến:** 1 khách chỉ thuộc 1 mức (validate BE `savePriorityConfig` + FE
+  kanban tự gỡ khỏi cột cũ khi thả).
+- **Độc lập với tier VIP 0..5** — tier chỉ để hiển thị + sort card trong cột
+  (VIP 0→5 lên đầu, khách lẻ cuối, như kanban gán xưởng).
+
+### 8.2 Schema / BE
+
+Config blob `system_configs` key `CUSTOMER_PRIORITY_CONFIG_KEY =
+'customer_priority_config'` (cache Redis 1h qua `SystemConfigService`), shared
+DTO trong `packages/shared/dtos/customer-assignment.dto.ts`:
+
+```ts
+CustomerPriorityConfig = {
+  enabled: boolean;
+  levels: Array<{ priority: OrderPriority; customerIds: string[] }>;
+  updatedAt?: string;
+}
+```
+
+`CustomerAssignmentService` (mirror 3 hàm của config gán xưởng):
+`getPriorityConfig()` / `savePriorityConfig()` (validate 1-khách-1-mức) /
+`getPriorityImportOverride()` → `Map<customerMatchKey, OrderPriority>`.
+
+Hook `OrderService.importOrders`: đọc `priorityOverride` 1 lần trước loop
+(cạnh `customerOverride` gán xưởng); mỗi row tính `forcedPriority` theo
+`customerMatchKey(row.userSku, row.userEmail)`; projection `beforeDoc` thêm
+`priority: 1`, và chỉ khi `beforeDoc?.priority == null` mới thêm `priority`
+vào `data` **trước** upsert — nhờ vậy diff log import tự ghi lại thay đổi
+(`before: null → after: <mức>`) trong Order Log, không cần code log riêng.
+
+### 8.3 UI
+
+`CustomerPriorityConfig.tsx` — copy pattern `CustomerAssignmentConfig.tsx`:
+switch bật/tắt + nút Sync khách hàng + nút Lưu + chip "● Chưa lưu" + dirty
+guard (beforeunload + chặn click link). Kanban tái dùng
+`CustomerFactoryKanban.tsx` — component đã generalize nhận prop
+`columns: CustomerKanbanColumnDef[]` (`{ id, title, shortName?, icon? }`,
+cột "Chưa gán" luôn tự thêm ở đầu): tab gán xưởng truyền danh sách xưởng, tab
+này truyền 3 mức từ `ORDER_PRIORITIES` với icon `Flag` màu theo
+`buildPriorityMeta` (`PrioritySelectCell.tsx` — xanh lam/vàng/đỏ, label từ
+namespace `orders` key `priority.*`). i18n namespace mới `customerPriority`
+(vi+en) + key nav `auth.settings.nav.customerPriority`.

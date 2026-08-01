@@ -1,15 +1,15 @@
 import { callApi } from '../apis';
 import { CONFIG } from '../constants';
 
-export type ReportSlot = 'morning' | 'noon' | 'evening';
-export type ReportType = 'all' | 'designer' | 'factory' | 'error';
+/** 3 view báo cáo Telegram — khớp `ReportKind` BE. Xưởng = `daily` + `factoryId`. */
+export type ReportView = 'daily' | 'designer' | 'tool-check';
 
-const runNow = (params?: { slot?: ReportSlot; report?: ReportType }) => {
-  const q = new URLSearchParams();
-  if (params?.slot) q.set('slot', params.slot);
-  if (params?.report) q.set('report', params.report);
-  const qs = q.toString();
-  return callApi(`/${CONFIG.API_VERSION}/reports/run-now${qs ? `?${qs}` : ''}`, 'post');
+/** Gửi ngay 1 view báo cáo vào Telegram — `factoryId` = lọc phễu theo 1 xưởng. BE trả `{ ok, busy? }`. */
+const runNow = (view: ReportView = 'daily', factoryId?: string) => {
+  const q = new URLSearchParams({ view });
+  if (factoryId) q.set('factoryId', factoryId);
+
+  return callApi(`/${CONFIG.API_VERSION}/reports/run-now?${q.toString()}`, 'post');
 };
 
 export const reports = { runNow };

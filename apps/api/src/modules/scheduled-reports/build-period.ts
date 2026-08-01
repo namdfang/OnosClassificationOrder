@@ -1,39 +1,37 @@
-import type { ReportPeriod, ReportSlot } from './types';
+import type { ReportDayWindow } from './types';
 
 const TZ_OFFSET_MINUTES = 7 * 60;
 
-const SLOT_LABEL: Record<ReportSlot, string> = {
-  morning: 'Ca đêm/sáng sớm',
-  noon: 'Ca sáng',
-  evening: 'Ca chiều',
-};
-
-function vnTimeFor(now: Date, hh: number, mm: number, dayOffset = 0): Date {
-  const utcMs = now.getTime();
-  const vnMs = utcMs + TZ_OFFSET_MINUTES * 60_000;
-  const vn = new Date(vnMs);
-  vn.setUTCHours(hh, mm, 0, 0);
+/** 00:00 (giờ VN) của ngày chứa `now`, cộng thêm `dayOffset` ngày — trả mốc UTC. */
+function vnStartOfDay(now: Date, dayOffset = 0): Date {
+  const vn = new Date(now.getTime() + TZ_OFFSET_MINUTES * 60_000);
+  vn.setUTCHours(0, 0, 0, 0);
   vn.setUTCDate(vn.getUTCDate() + dayOffset);
 
   return new Date(vn.getTime() - TZ_OFFSET_MINUTES * 60_000);
 }
 
-export function buildShiftPeriod(now: Date, slot: ReportSlot): ReportPeriod {
-  let from: Date;
-  let to: Date;
+function fmtDdMm(windowStart: Date): string {
+  const vn = new Date(windowStart.getTime() + TZ_OFFSET_MINUTES * 60_000);
+  const pad = (n: number) => String(n).padStart(2, '0');
 
-  if (slot === 'morning') {
-    from = vnTimeFor(now, 18, 30, -1);
-    to = vnTimeFor(now, 7, 30);
-  } else if (slot === 'noon') {
-    from = vnTimeFor(now, 7, 30);
-    to = vnTimeFor(now, 13, 0);
-  } else {
-    from = vnTimeFor(now, 13, 0);
-    to = vnTimeFor(now, 18, 30);
-  }
+  return `${pad(vn.getUTCDate())}/${pad(vn.getUTCMonth() + 1)}`;
+}
 
-  return { from, to, slot, slotLabel: SLOT_LABEL[slot] };
+/** Số ngày liền kề trong báo cáo — đổi 1 chỗ này là toàn bộ pipeline + formatter tự theo. */
+export const REPORT_DAY_COUNT = 4;
+
+/**
+ * `REPORT_DAY_COUNT` ngày liền kề theo giờ VN, cũ → mới (phần tử cuối = hôm
+ * nay) — mỗi window `[00:00, 00:00 ngày sau)`.
+ */
+export function buildReportDayWindows(now: Date): ReportDayWindow[] {
+  return Array.from({ length: REPORT_DAY_COUNT }, (_, i) => {
+    const offset = i - (REPORT_DAY_COUNT - 1); // ...-2, -1, 0
+    const start = vnStartOfDay(now, offset);
+
+    return { label: fmtDdMm(start), from: start, to: vnStartOfDay(now, offset + 1) };
+  });
 }
 
 export function formatVnDateTime(date: Date): string {
@@ -44,11 +42,4 @@ export function formatVnDateTime(date: Date): string {
     `${pad(vn.getUTCDate())}/${pad(vn.getUTCMonth() + 1)}/${vn.getUTCFullYear()} ` +
     `${pad(vn.getUTCHours())}:${pad(vn.getUTCMinutes())}`
   );
-}
-
-export function formatVnHourMinute(date: Date): string {
-  const vn = new Date(date.getTime() + TZ_OFFSET_MINUTES * 60_000);
-  const pad = (n: number) => String(n).padStart(2, '0');
-
-  return `${pad(vn.getUTCHours())}:${pad(vn.getUTCMinutes())}`;
 }

@@ -26,3 +26,5 @@ local-----
 scp nam@157.11.11.111:/tmp/onos-20260713.archive ./
 
 mongorestore --uri="mongodb://localhost:27017/?directConnection=true" --archive=./onos-20260713.archive --gzip --drop --nsFrom='onosfactory-prod._' --nsTo='onos-classifycation._'
+
+sudo chown -R $(whoami):$(whoami) /var/www/onosfactory-web

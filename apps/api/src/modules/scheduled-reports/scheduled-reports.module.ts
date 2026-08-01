@@ -1,36 +1,26 @@
 import { Module } from '@nestjs/common';
 import { MongooseModule } from '@nestjs/mongoose';
 
+import { CustomerAssignmentModule } from '../customer-assignment/customer-assignment.module';
 import { FactoryModule } from '../factory/factory.module';
 import { OrderEntity, OrderSchema } from '../order/order.entity';
-import { RoleEntity, RoleSchema } from '../role/role.entity';
-import { RoleRepository } from '../role/role.repository';
 import { TelegramNotificationModule } from '../telegram-notification/telegram-notification.module';
 import { UserEntity, UserSchema } from '../user/user.entity';
-import { WorkshopConfigModule } from '../workshop-config/workshop-config.module';
-import { DesignerAggregator } from './aggregators/designer-aggregator';
-import { ErrorAggregator } from './aggregators/error-aggregator';
-import { FactoryAggregator } from './aggregators/factory-aggregator';
+import { DailyOrdersAggregator } from './aggregators/daily-orders-aggregator';
 import { ScheduledReportsController } from './scheduled-reports.controller';
 import { ScheduledReportsService } from './scheduled-reports.service';
+import { TelegramWebhookController } from './telegram-webhook.controller';
 
 @Module({
   imports: [
     MongooseModule.forFeature([{ name: OrderEntity.name, schema: OrderSchema }]),
     MongooseModule.forFeature([{ name: UserEntity.name, schema: UserSchema }]),
-    MongooseModule.forFeature([{ name: RoleEntity.name, schema: RoleSchema }]),
+    CustomerAssignmentModule,
     FactoryModule,
-    WorkshopConfigModule,
     TelegramNotificationModule,
   ],
-  controllers: [ScheduledReportsController],
-  providers: [
-    ScheduledReportsService,
-    DesignerAggregator,
-    FactoryAggregator,
-    ErrorAggregator,
-    RoleRepository,
-  ],
+  controllers: [ScheduledReportsController, TelegramWebhookController],
+  providers: [ScheduledReportsService, DailyOrdersAggregator],
   exports: [ScheduledReportsService],
 })
 export class ScheduledReportsModule {}

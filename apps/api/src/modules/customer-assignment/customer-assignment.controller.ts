@@ -4,9 +4,12 @@ import { ApiOkResponse, ApiOperation, ApiTags } from '@nestjs/swagger';
 import { AuthUser } from 'core';
 import {
   GetCustomerAssignmentConfigResDto,
+  GetCustomerPriorityConfigResDto,
   RoleType,
   SaveCustomerAssignmentConfigDto,
   SaveCustomerAssignmentConfigResDto,
+  SaveCustomerPriorityConfigDto,
+  SaveCustomerPriorityConfigResDto,
 } from 'shared';
 import { Logger } from 'winston';
 
@@ -49,5 +52,32 @@ export class CustomerAssignmentController {
       message: JSON.stringify({ method: 'PUT', url: '/customer-assignment/config', userId: user?._id }),
     });
     return { success: true, data: await this.customerAssignmentService.saveConfig(dto) };
+  }
+
+  @Get('priority-config')
+  @Auth([RoleType.Admin])
+  @ApiOperation({ summary: 'Lấy cấu hình ưu tiên đơn theo khách hàng' })
+  @HttpCode(HttpStatus.OK)
+  @ApiOkResponse({ type: GetCustomerPriorityConfigResDto })
+  async getPriorityConfig(@AuthUser() user: UserDocument): Promise<GetCustomerPriorityConfigResDto> {
+    this.logger.info({
+      message: JSON.stringify({ method: 'GET', url: '/customer-assignment/priority-config', userId: user?._id }),
+    });
+    return { success: true, data: await this.customerAssignmentService.getPriorityConfig() };
+  }
+
+  @Put('priority-config')
+  @Auth([RoleType.Admin])
+  @ApiOperation({ summary: 'Lưu cấu hình ưu tiên đơn theo khách hàng' })
+  @HttpCode(HttpStatus.OK)
+  @ApiOkResponse({ type: SaveCustomerPriorityConfigResDto })
+  async savePriorityConfig(
+    @Body() dto: SaveCustomerPriorityConfigDto,
+    @AuthUser() user: UserDocument,
+  ): Promise<SaveCustomerPriorityConfigResDto> {
+    this.logger.info({
+      message: JSON.stringify({ method: 'PUT', url: '/customer-assignment/priority-config', userId: user?._id }),
+    });
+    return { success: true, data: await this.customerAssignmentService.savePriorityConfig(dto) };
   }
 }

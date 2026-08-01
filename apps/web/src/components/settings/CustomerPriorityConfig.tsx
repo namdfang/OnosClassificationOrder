@@ -1,42 +1,37 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { List, RefreshCw, Save, UserPlus, Users } from 'lucide-react';
-import type { Customer, CustomerAssignmentConfig as Config } from 'shared';
+import { Flag, RefreshCw, Save } from 'lucide-react';
+import type { Customer, CustomerPriorityConfig as Config } from 'shared';
+import { ORDER_PRIORITIES } from 'shared';
 import { toast } from 'sonner';
 
 import { RepositoryRemote } from '@/services';
 
 import { Spinner } from '@/components/common/Spinner';
+import { buildPriorityMeta } from '@/components/orders/cells/PrioritySelectCell';
 import CustomerFactoryKanban from '@/components/settings/CustomerFactoryKanban';
-import CustomerListDialog from '@/components/settings/CustomerListDialog';
 import { Button } from '@/components/ui/button';
-import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
-import { Input } from '@/components/ui/input';
 import { Switch } from '@/components/ui/switch';
 
 import { handleAxiosError } from '@/utils';
 
-interface FactoryLite {
-  _id: string;
-  name: string;
-  shortName?: string;
-}
-type AllocState = Record<string, string[]>; // factoryId → customerIds[]
+type AllocState = Record<string, string[]>; // String(priority) → customerIds[]
 
-/** Snapshot ổn định (sort ids, bỏ xưởng rỗng) để so sánh dirty — thứ tự trong cột không có ý nghĩa. */
+/** Snapshot ổn định (sort ids, bỏ mức rỗng) để so sánh dirty — thứ tự trong cột không có ý nghĩa. */
 function snapshot(enabled: boolean, alloc: AllocState): string {
   const norm = Object.fromEntries(
     Object.entries(alloc)
-      .map(([fid, ids]) => [fid, [...ids].sort()] as const)
+      .map(([p, ids]) => [p, [...ids].sort()] as const)
       .filter(([, ids]) => ids.length > 0)
       .sort(([a], [b]) => a.localeCompare(b)),
   );
   return JSON.stringify({ enabled, alloc: norm });
 }
 
-export default function CustomerAssignmentConfig() {
-  const { t } = useTranslation(['customerFactoryAssignment', 'common']);
-  const [factories, setFactories] = useState<FactoryLite[]>([]);
+export default function CustomerPriorityConfig() {
+  const { t } = useTranslation(['customerPriority', 'common']);
+  // Label + màu 3 mức lấy từ dictionary priority sẵn có (namespace `orders`).
+  const { t: tOrders } = useTranslation('orders');
   const [customers, setCustomers] = useState<Customer[]>([]);
   const [alloc, setAlloc] = useState<AllocState>({});
   const [enabled, setEnabled] = useState(false);
@@ -45,11 +40,16 @@ export default function CustomerAssignmentConfig() {
   const [saving, setSaving] = useState(false);
   const [syncing, setSyncing] = useState(false);
 
-  const [listOpen, setListOpen] = useState(false);
-  const [addOpen, setAddOpen] = useState(false);
-  const [newSku, setNewSku] = useState('');
-  const [newEmail, setNewEmail] = useState('');
-  const [adding, setAdding] = useState(false);
+  const priorityMeta = useMemo(() => buildPriorityMeta(tOrders), [tOrders]);
+  const columns = useMemo(
+    () =>
+      ORDER_PRIORITIES.map((p) => ({
+        id: String(p),
+        title: priorityMeta[p].label,
+        icon: <Flag size={15} style={{ color: priorityMeta[p].dot }} />,
+      })),
+    [priorityMeta],
+  );
 
   const loadCustomers = async () => {
     const res = await RepositoryRemote.customer.list();
@@ -60,18 +60,13 @@ export default function CustomerAssignmentConfig() {
     (async () => {
       try {
         setLoading(true);
-        const [facRes, cfgRes] = await Promise.all([
-          RepositoryRemote.factory.getFactories(),
-          RepositoryRemote.customerAssignment.getConfig(),
-        ]);
+        const cfgRes = await RepositoryRemote.customerAssignment.getPriorityConfig();
         await loadCustomers();
-        const facs = (facRes.data?.data || []) as FactoryLite[];
-        const cfg = (cfgRes.data?.data || { enabled: false, factories: [] }) as Config;
-        setFactories(facs);
+        const cfg = (cfgRes.data?.data || { enabled: false, levels: [] }) as Config;
         setEnabled(!!cfg.enabled);
         const next: AllocState = {};
-        for (const f of cfg.factories || []) {
-          next[String(f.factoryId)] = (f.customerIds || []).map(String);
+        for (const level of cfg.levels || []) {
+          next[String(level.priority)] = (level.customerIds || []).map(String);
         }
         setAlloc(next);
         setBaseline(snapshot(!!cfg.enabled, next));
@@ -86,18 +81,17 @@ export default function CustomerAssignmentConfig() {
   const dirty = useMemo(() => !loading && snapshot(enabled, alloc) !== baseline, [loading, enabled, alloc, baseline]);
 
   // Kéo thả kanban: gỡ khách khỏi mọi cột rồi thêm vào cột đích (null = "Chưa gán")
-  // → tự đảm bảo 1 khách 1 xưởng.
-  const moveCustomer = (customerId: string, targetFactoryId: string | null) => {
+  // → tự đảm bảo 1 khách 1 mức ưu tiên.
+  const moveCustomer = (customerId: string, targetPriority: string | null) => {
     setAlloc((prev) => {
       const next: AllocState = {};
-      for (const [fid, ids] of Object.entries(prev)) next[fid] = ids.filter((id) => id !== customerId);
-      if (targetFactoryId) next[targetFactoryId] = [...(next[targetFactoryId] || []), customerId];
+      for (const [p, ids] of Object.entries(prev)) next[p] = ids.filter((id) => id !== customerId);
+      if (targetPriority) next[targetPriority] = [...(next[targetPriority] || []), customerId];
       return next;
     });
   };
 
-  // Guard thoát khi có thay đổi chưa lưu: beforeunload (đóng tab/reload) + chặn
-  // click link trong app (BrowserRouter không có API block điều hướng).
+  // Guard thoát khi có thay đổi chưa lưu — cùng pattern CustomerAssignmentConfig.
   useEffect(() => {
     if (!dirty) return;
     const onBeforeUnload = (e: BeforeUnloadEvent) => {
@@ -137,36 +131,16 @@ export default function CustomerAssignmentConfig() {
     }
   };
 
-  const handleAdd = async () => {
-    if (!newSku.trim()) {
-      toast.error(t('toasts.skuRequired'));
-      return;
-    }
-    try {
-      setAdding(true);
-      await RepositoryRemote.customer.create({ userSku: newSku.trim(), userEmail: newEmail.trim() });
-      await loadCustomers();
-      toast.success(t('toasts.addSuccess'));
-      setAddOpen(false);
-      setNewSku('');
-      setNewEmail('');
-    } catch (err) {
-      handleAxiosError(err);
-    } finally {
-      setAdding(false);
-    }
-  };
-
   const handleSave = async () => {
     const payload: Config = {
       enabled,
-      factories: factories
-        .map((f) => ({ factoryId: f._id, customerIds: alloc[f._id] || [] }))
-        .filter((f) => f.customerIds.length > 0),
+      levels: ORDER_PRIORITIES.map((p) => ({ priority: p, customerIds: alloc[String(p)] || [] })).filter(
+        (l) => l.customerIds.length > 0,
+      ),
     };
     try {
       setSaving(true);
-      await RepositoryRemote.customerAssignment.saveConfig(payload);
+      await RepositoryRemote.customerAssignment.savePriorityConfig(payload);
       setBaseline(snapshot(enabled, alloc));
       toast.success(t('toasts.saveSuccess'));
     } catch (err) {
@@ -188,8 +162,8 @@ export default function CustomerAssignmentConfig() {
     <div className="space-y-4">
       <div className="flex items-start justify-between gap-3">
         <div className="flex items-center gap-2.5">
-          <div className="w-9 h-9 rounded-lg bg-emerald-100 dark:bg-emerald-500/15 flex items-center justify-center">
-            <Users size={18} className="text-emerald-600 dark:text-emerald-400" />
+          <div className="w-9 h-9 rounded-lg bg-rose-100 dark:bg-rose-500/15 flex items-center justify-center">
+            <Flag size={18} className="text-rose-600 dark:text-rose-400" />
           </div>
           <div>
             <h2 className="text-base font-semibold text-slate-800 dark:text-slate-100">{t('title')}</h2>
@@ -221,66 +195,10 @@ export default function CustomerAssignmentConfig() {
           {syncing ? <Spinner size={13} className="mr-1.5" /> : <RefreshCw size={14} />}
           {t('syncCustomers')}
         </Button>
-        <Button size="sm" variant="outline" onClick={() => setAddOpen(true)}>
-          <UserPlus size={14} /> {t('addCustomer')}
-        </Button>
-        <Button size="sm" variant="outline" onClick={() => setListOpen(true)}>
-          <List size={14} /> {t('customerList')}
-        </Button>
         <span className="text-xs text-slate-400">{t('customerCount', { count: customers.length })}</span>
       </div>
 
-      {factories.length === 0 && <p className="text-sm text-slate-500 dark:text-slate-400">{t('noFactories')}</p>}
-
-      {factories.length > 0 && (
-        <CustomerFactoryKanban
-          columns={factories.map((f) => ({ id: f._id, title: f.name, shortName: f.shortName }))}
-          customers={customers}
-          alloc={alloc}
-          onMove={moveCustomer}
-        />
-      )}
-
-      <CustomerListDialog open={listOpen} onOpenChange={setListOpen} customers={customers} onReload={loadCustomers} />
-
-      <Dialog open={addOpen} onOpenChange={setAddOpen}>
-        <DialogContent>
-          <DialogHeader>
-            <DialogTitle>{t('addDialog.title')}</DialogTitle>
-          </DialogHeader>
-          <div className="space-y-3 pt-1">
-            <div className="space-y-1">
-              <label className="text-xs font-medium text-slate-600 dark:text-slate-300">
-                {t('addDialog.skuLabel')}
-              </label>
-              <Input
-                value={newSku}
-                onChange={(e) => setNewSku(e.target.value)}
-                placeholder={t('addDialog.skuPlaceholder')}
-              />
-            </div>
-            <div className="space-y-1">
-              <label className="text-xs font-medium text-slate-600 dark:text-slate-300">
-                {t('addDialog.emailLabel')}
-              </label>
-              <Input
-                value={newEmail}
-                onChange={(e) => setNewEmail(e.target.value)}
-                placeholder={t('addDialog.emailPlaceholder')}
-              />
-            </div>
-          </div>
-          <DialogFooter>
-            <Button variant="outline" onClick={() => setAddOpen(false)} disabled={adding}>
-              {t('actions.cancel', { ns: 'common' })}
-            </Button>
-            <Button onClick={handleAdd} disabled={adding}>
-              {adding ? <Spinner size={13} className="mr-1.5" /> : null}
-              {t('addDialog.submit')}
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
+      <CustomerFactoryKanban columns={columns} customers={customers} alloc={alloc} onMove={moveCustomer} />
     </div>
   );
 }

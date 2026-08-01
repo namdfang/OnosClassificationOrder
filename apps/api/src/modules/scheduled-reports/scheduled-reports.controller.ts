@@ -1,4 +1,4 @@
-import { BadRequestException, Controller, HttpCode, HttpStatus, Inject, Post, Query } from '@nestjs/common';
+import { Controller, HttpCode, HttpStatus, Inject, Post, Query } from '@nestjs/common';
 import { ApiOperation, ApiTags } from '@nestjs/swagger';
 import { AuthUser } from 'core';
 import { RoleType } from 'shared';
@@ -7,12 +7,11 @@ import { Logger } from 'winston';
 import { Auth } from '@/decorators';
 
 import type { UserDocument } from '../user/user.entity';
+import type { RunReportResult } from './scheduled-reports.service';
 import { ScheduledReportsService } from './scheduled-reports.service';
-import type { ReportSlot } from './types';
+import type { ReportKind } from './types';
 
 const ADMIN_ROLES = [RoleType.SuperAdmin, RoleType.Admin];
-const VALID_SLOTS: ReportSlot[] = ['morning', 'noon', 'evening'];
-const VALID_REPORTS = ['designer', 'factory', 'error', 'all'] as const;
 
 @Controller('reports')
 @ApiTags('reports')
@@ -24,60 +23,20 @@ export class ScheduledReportsController {
 
   @Post('run-now')
   @Auth(ADMIN_ROLES)
-  @ApiOperation({ summary: 'Manual trigger scheduled reports (Admin debug)' })
+  @ApiOperation({
+    summary: 'Gửi ngay 1 view báo cáo Telegram (Admin) — `view=daily|designer|tool-check` + `factoryId` optional',
+  })
   @HttpCode(HttpStatus.OK)
   async runNow(
     @AuthUser() user: UserDocument,
-    @Query('slot') slot?: string,
-    @Query('report') report?: string,
-  ): Promise<{ success: true; data: { ran: string[]; skipped: string[]; slot: ReportSlot } }> {
-    const resolvedSlot: ReportSlot | undefined = slot ? validateSlot(slot) : undefined;
-    const reports = parseReports(report);
-
+    @Query('view') view?: string,
+    @Query('factoryId') factoryId?: string,
+  ): Promise<{ success: true; data: RunReportResult }> {
+    const kind: ReportKind = view === 'designer' || view === 'tool-check' ? view : 'daily';
     this.logger.info({
-      message: JSON.stringify({
-        method: 'POST',
-        url: '/reports/run-now',
-        userId: user._id,
-        slot: resolvedSlot,
-        reports,
-      }),
+      message: JSON.stringify({ method: 'POST', url: '/reports/run-now', userId: user._id, view: kind, factoryId }),
     });
 
-    const result = await this.service.run({ slot: resolvedSlot, reports });
-
-    return {
-      success: true,
-      data: {
-        ran: result.ran,
-        skipped: result.skipped,
-        slot: resolvedSlot ?? inferSlotForResponse(new Date()),
-      },
-    };
+    return { success: true, data: await this.service.run(kind, factoryId || undefined) };
   }
-}
-
-function validateSlot(slot: string): ReportSlot {
-  if (!VALID_SLOTS.includes(slot as ReportSlot)) {
-    throw new BadRequestException(`Invalid slot. Must be one of: ${VALID_SLOTS.join(', ')}`);
-  }
-
-  return slot as ReportSlot;
-}
-
-function parseReports(report?: string): Array<'designer' | 'factory' | 'error'> | undefined {
-  if (!report || report === 'all') return undefined;
-  if (!VALID_REPORTS.includes(report as (typeof VALID_REPORTS)[number])) {
-    throw new BadRequestException(`Invalid report. Must be one of: ${VALID_REPORTS.join(', ')}`);
-  }
-
-  return [report as 'designer' | 'factory' | 'error'];
-}
-
-function inferSlotForResponse(now: Date): ReportSlot {
-  const vnHour = (now.getUTCHours() + 7) % 24;
-  if (vnHour < 7 || (vnHour === 7 && now.getUTCMinutes() < 30)) return 'morning';
-  if (vnHour < 13) return 'noon';
-
-  return 'evening';
 }

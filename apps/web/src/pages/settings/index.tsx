@@ -1,7 +1,7 @@
 import React, { lazy, Suspense, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Link, Navigate, useParams } from 'react-router-dom';
-import { Bell, Package, Settings as SettingsIcon, UserCog, Users } from 'lucide-react';
+import { Bell, Flag, Package, Settings as SettingsIcon, UserCog, Users } from 'lucide-react';
 
 import { PATHS } from '@/constants/paths';
 
@@ -13,6 +13,7 @@ import { usePermission } from '@/hooks/usePermission';
 
 // Lazy theo mục — chỉ mount (và fetch data) mục đang mở.
 const CustomerAssignmentConfig = lazy(() => import('@/components/settings/CustomerAssignmentConfig'));
+const CustomerPriorityConfig = lazy(() => import('@/components/settings/CustomerPriorityConfig'));
 const DesignerAssignmentConfig = lazy(() => import('@/components/settings/DesignerAssignmentConfig'));
 const ProductFactoryKanban = lazy(() => import('@/components/settings/ProductFactoryKanban'));
 const CustomerNotificationSender = lazy(() => import('@/components/settings/CustomerNotificationSender'));
@@ -44,6 +45,13 @@ function buildGroups(t: (key: string) => string): SettingsGroup[] {
           icon: <Users size={15} />,
           perm: 'role.manage',
           component: CustomerAssignmentConfig,
+        },
+        {
+          key: 'customer-priority',
+          label: t('settings.nav.customerPriority'),
+          icon: <Flag size={15} />,
+          perm: 'role.manage',
+          component: CustomerPriorityConfig,
         },
         {
           key: 'designer-assign',

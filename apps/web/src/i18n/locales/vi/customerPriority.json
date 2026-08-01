@@ -1,0 +1,14 @@
+{
+  "title": "Ưu tiên đơn theo khách hàng",
+  "subtitle": "Khi bật, đơn của khách đã gán sẽ tự nhận mức ưu tiên tương ứng lúc import (tay lẫn tự động) — chỉ gán khi đơn chưa có ưu tiên, không đè chỉnh tay, không áp cho đơn đang chạy. Khách ở cột \"Chưa gán\" → đơn thường. Mỗi khách chỉ thuộc 1 mức — kéo thả rồi bấm Lưu.",
+  "enabledOn": "Đang bật",
+  "enabledOff": "Đang tắt",
+  "unsavedBadge": "Chưa lưu",
+  "syncCustomers": "Sync khách hàng",
+  "customerCount": "{{count}} khách",
+  "leaveConfirm": "Bạn có thay đổi gán mức ưu tiên CHƯA LƯU. Rời trang sẽ mất thay đổi — vẫn thoát?",
+  "toasts": {
+    "syncSuccess": "Sync xong: +{{created}} khách mới (tổng {{total}})",
+    "saveSuccess": "Đã lưu cấu hình ưu tiên đơn theo khách"
+  }
+}
