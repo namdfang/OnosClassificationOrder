@@ -110,7 +110,12 @@ const PRODUCT_TYPE_CODE_MAP: Record<string, string> = {
     "all-over print boxy mesh football jersey": "FBCROPTOPBOXY",
     "all-over print raglan men's polo shirt": "VUDANJLPOLO",
     "all-over print raglan soccer jersey ver 1": "VUDANJLSC",
-    "all-over print raglan soccer jersey ver 2": "VUDANJLSC2"
+    "all-over print raglan soccer jersey ver 2": "VUDANJLSC2",
+    "all-over print v-neck pet jersey": "PETJERCOTIM",
+    "all-over print overlap v-neck pet jersey": "PETJERCOV",
+    "aop kids and youth mesh v-neck football jersey": "BDLUOIKIDTIM",
+    "aop kids and youth mesh overlap v-neck football jersey": "BDLUOIKIDCOV",
+    "all-over print mesh baseball jersey": "BBJERLUOI",
 };
 
 /** Case-insensitive, trim khoảng trắng thừa. Không khớp → null. */

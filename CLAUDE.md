@@ -43,14 +43,6 @@
 - Commit message: English, concise, bắt đầu bằng verb (add, fix, update, remove, refactor).
 - KHÔNG commit files chứa secrets (.env, credentials).
 
-### Code Quality
-
-- KHÔNG để `console.log` trong production code (dùng logger ở backend).
-- KHÔNG tạo file mới nếu có thể edit file hiện tại.
-- KHÔNG thêm comments/docstrings cho code self-explanatory.
-- KHÔNG thêm error handling cho scenarios không thể xảy ra.
-- KHÔNG tạo abstractions cho operations chỉ dùng 1 lần.
-
 ---
 
 ## Documentation Rules (documents/FunctionDescription)
@@ -102,36 +94,6 @@
 | [`documents/FunctionDescription/Orders.md`](documents/FunctionDescription/Orders.md) §20 | **Trước khi** thêm 1 trang danh sách/filter mới có entry sidebar, hoặc sửa `Sidebar.tsx`/`sidebarResetStore.ts`/`useSidebarResetSignal.ts`. Cơ chế "click lại menu sidebar đang active → tự xóa filter trang đó" (React Router không remount khi click Link trùng URL hiện tại) + bảng các trang đã wire. |
 | [`documents/FunctionDescription/I18n.md`](documents/FunctionDescription/I18n.md) | **Trước khi** thêm text hiển thị người dùng mới ở bất kỳ trang/component nào trong `apps/web`, hoặc sửa `src/i18n/`/`src/store/languageStore.ts`. Quy tắc bắt buộc dùng `react-i18next` thay vì hardcode string (namespace theo feature, convert module-scope label map/zod schema thành factory function nhận `t`, cách xử lý label nguồn gốc `packages/shared`). |
 
-### Doc file structure (template cho file mới)
+### Doc file structure & quy tắc viết doc
 
-```markdown
-# [Feature Name] — Function Description
-
-> **File FE:** đường dẫn
-> **File BE:** đường dẫn
-> **Route:** /xxx
-> **API:** /v1/xxx
-
-## 1. Overview
-
-## 2. Luồng hoạt động
-
-## 3. API / Schema
-
-## 4. UI Components
-
-## 5. Backend logic
-
-## 6. Performance notes
-
-## 7. Permissions
-```
-
-### Quy tắc viết doc
-
-- Viết bằng **tiếng Việt** (giống các file hiện có).
-- Trỏ đến **file path tuyệt đối tính từ repo root** + tên function / class cụ thể (không nói chung chung).
-- Khi liệt kê endpoint dùng bảng `Method | Path | Mô tả`.
-- Khi liệt kê schema dùng code block TypeScript-ish.
-- KHÔNG copy nguyên code dài vào doc — chỉ trích đoạn ngắn minh họa.
-- Số liệu performance phải có trước/sau cụ thể (ms, MB, lần request...).
+> Template file mới + quy tắc viết doc: xem skill `write-feature-doc` (`.claude/skills/write-feature-doc/SKILL.md`) — tự load khi tạo file doc mới trong `documents/FunctionDescription/`.
