@@ -29,8 +29,19 @@ const placeOrder = (data: PlaceCustomerOrderDto) => {
   return callApi(`/${CONFIG.API_VERSION}/customer/orders`, 'post', data);
 };
 
-const listOrders = (page = 1, limit = 20) => {
-  return callApi(`/${CONFIG.API_VERSION}/customer/orders?page=${page}&limit=${limit}`, 'get');
+const listOrders = (page = 1, limit = 20, filters?: { search?: string; type?: string }) => {
+  const params = new URLSearchParams({ page: String(page), limit: String(limit) });
+  if (filters?.search?.trim()) params.set('search', filters.search.trim());
+  if (filters?.type?.trim()) params.set('type', filters.type.trim());
+  return callApi(`/${CONFIG.API_VERSION}/customer/orders?${params.toString()}`, 'get');
+};
+
+const listProductTypes = () => {
+  return callApi(`/${CONFIG.API_VERSION}/customer/orders/product-types`, 'get');
+};
+
+const getDashboard = () => {
+  return callApi(`/${CONFIG.API_VERSION}/customer/orders/dashboard`, 'get');
 };
 
 const trackOrder = (productionId: string) => {
@@ -41,7 +52,7 @@ const updateOrder = (productionId: string, data: UpdateCustomerOrderDto) => {
   return callApi(`/${CONFIG.API_VERSION}/customer/orders/${encodeURIComponent(productionId)}`, 'patch', data);
 };
 
-export const customerOrder = { placeOrder, listOrders, trackOrder, updateOrder };
+export const customerOrder = { placeOrder, listOrders, listProductTypes, getDashboard, trackOrder, updateOrder };
 
 const getCatalog = (query: string = '') => {
   return callApi(`/${CONFIG.API_VERSION}/customer/catalog${query}`, 'get');

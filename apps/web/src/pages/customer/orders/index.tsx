@@ -2,13 +2,15 @@ import React, { useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Link } from 'react-router-dom';
 import dayjs from 'dayjs';
-import { ImageIcon, PackageSearch } from 'lucide-react';
+import { ImageIcon, PackageSearch, Search, X } from 'lucide-react';
 import type { CustomerOrderSummary } from 'shared';
 
+import { CopyButton } from '@/components/common/CopyButton';
 import { LoadingOverlay } from '@/components/common/LoadingOverlay';
 import { PaginationBar } from '@/components/common/PaginationBar';
 import { Spinner } from '@/components/common/Spinner';
 import { Badge } from '@/components/ui/badge';
+import { Input } from '@/components/ui/input';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 
 import { PATHS } from '../../../constants/paths';
@@ -43,12 +45,15 @@ function OrderTableRow({ order }: { order: CustomerOrderSummary }) {
         )}
       </TableCell>
       <TableCell>
-        <Link
-          to={PATHS.CUSTOMER_ORDER_DETAIL.replace(':productionId', order.productionId)}
-          className="font-mono text-xs font-semibold text-primary hover:underline"
-        >
-          {order.productionId}
-        </Link>
+        <span className="inline-flex items-center gap-1">
+          <Link
+            to={PATHS.CUSTOMER_ORDER_DETAIL.replace(':productionId', order.productionId)}
+            className="font-mono text-xs font-semibold text-primary hover:underline"
+          >
+            {order.productionId}
+          </Link>
+          <CopyButton value={order.productionId} label={t('orders.columns.code')} />
+        </span>
       </TableCell>
       <TableCell>
         <p className="text-sm text-foreground truncate max-w-[220px]">{order.type || '-'}</p>
@@ -89,24 +94,97 @@ function CustomerOrders() {
   const [pageSize, setPageSize] = useState(PAGE_SIZE);
   const [total, setTotal] = useState(0);
 
+  const [searchInput, setSearchInput] = useState('');
+  const [search, setSearch] = useState('');
+  const [productType, setProductType] = useState('');
+  const [productTypes, setProductTypes] = useState<string[]>([]);
+
+  useEffect(() => {
+    RepositoryRemote.customerOrder
+      .listProductTypes()
+      .then((res) => setProductTypes(res?.data?.data ?? []))
+      .catch(() => {
+        /* filter sản phẩm không load được thì vẫn dùng được listing */
+      });
+  }, []);
+
   useEffect(() => {
     setLoading(true);
     RepositoryRemote.customerOrder
-      .listOrders(page, pageSize)
+      .listOrders(page, pageSize, { search, type: productType })
       .then((res) => {
         setOrders(res?.data?.data ?? []);
         setTotal(res?.data?.total ?? 0);
       })
       .catch(handleAxiosError)
       .finally(() => setLoading(false));
-  }, [page, pageSize]);
+  }, [page, pageSize, search, productType]);
+
+  const applySearch = () => {
+    setPage(1);
+    setSearch(searchInput.trim());
+  };
+
+  const clearFilters = () => {
+    setSearchInput('');
+    setSearch('');
+    setProductType('');
+    setPage(1);
+  };
+
+  const hasFilter = !!search || !!productType;
+  const emptyBecauseFilter = orders.length === 0 && hasFilter;
 
   return (
     <div>
-      <div className="mb-5">
+      <div className="mb-4">
         <h1 className="text-lg font-semibold">{t('orders.title')}</h1>
         {!loading && total > 0 && (
           <p className="text-xs text-muted-foreground mt-0.5">{t('orders.resultsCount', { count: total })}</p>
+        )}
+      </div>
+
+      <div className="mb-4 flex flex-wrap items-center gap-2">
+        <div className="relative">
+          <Search size={14} className="absolute left-2.5 top-1/2 -translate-y-1/2 text-muted-foreground" />
+          <Input
+            value={searchInput}
+            onChange={(e) => setSearchInput(e.target.value)}
+            onKeyDown={(e) => {
+              if (e.key === 'Enter') applySearch();
+            }}
+            onBlur={applySearch}
+            placeholder={t('orders.searchPlaceholder')}
+            className="h-9 w-56 pl-8 text-sm"
+          />
+        </div>
+
+        <select
+          value={productType}
+          onChange={(e) => {
+            setPage(1);
+            setProductType(e.target.value);
+          }}
+          className="h-9 max-w-[260px] rounded-md border border-input bg-background px-2.5 text-sm focus:outline-none focus:ring-1 focus:ring-ring"
+          aria-label={t('orders.filterProduct')}
+        >
+          <option value="">{t('orders.allProducts')}</option>
+          {productTypes.map((type) => (
+            <option key={type} value={type}>
+              {type}
+            </option>
+          ))}
+        </select>
+
+        {hasFilter && (
+          <button
+            type="button"
+            onClick={clearFilters}
+            className="inline-flex items-center gap-1 text-xs text-muted-foreground hover:text-foreground transition-colors"
+          >
+            <X size={12} />
+            {t('orders.clearFilters')}
+          </button>
         )}
       </div>
 
@@ -117,10 +195,16 @@ function CustomerOrders() {
       ) : orders.length === 0 ? (
         <div className="flex flex-col items-center justify-center py-16 text-muted-foreground">
           <PackageSearch size={32} className="mb-3" />
-          <p className="text-sm">{t('orders.empty')}</p>
-          <Link to={PATHS.CUSTOMER_ORDER_NEW} className="text-primary text-sm hover:underline mt-2">
-            {t('orders.placeFirst')}
-          </Link>
+          <p className="text-sm">{emptyBecauseFilter ? t('orders.emptyFiltered') : t('orders.empty')}</p>
+          {emptyBecauseFilter ? (
+            <button type="button" onClick={clearFilters} className="text-primary text-sm hover:underline mt-2">
+              {t('orders.clearFilters')}
+            </button>
+          ) : (
+            <Link to={PATHS.CUSTOMER_ORDER_NEW} className="text-primary text-sm hover:underline mt-2">
+              {t('orders.placeFirst')}
+            </Link>
+          )}
         </div>
       ) : (
         <>

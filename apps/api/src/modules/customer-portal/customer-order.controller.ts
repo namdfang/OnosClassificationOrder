@@ -1,8 +1,22 @@
 import { ZodValidationPipe } from '@anatine/zod-nestjs';
-import { Body, Controller, Get, HttpCode, HttpStatus, Inject, Param, Patch, Post, Query, UsePipes } from '@nestjs/common';
+import {
+  Body,
+  Controller,
+  Get,
+  HttpCode,
+  HttpStatus,
+  Inject,
+  Param,
+  Patch,
+  Post,
+  Query,
+  UsePipes,
+} from '@nestjs/common';
 import { ApiOkResponse, ApiOperation, ApiTags } from '@nestjs/swagger';
 import { AuthUser } from 'core';
 import {
+  GetCustomerDashboardResDto,
+  GetCustomerOrderProductTypesResDto,
   GetCustomerOrdersDto,
   GetCustomerOrdersResDto,
   GetCustomerOrderTrackResDto,
@@ -53,6 +67,25 @@ export class CustomerOrderController {
     @AuthUser() customer: CustomerDocument,
   ): Promise<GetCustomerOrdersResDto> {
     return this.customerOrderService.listOrders(customer, dto);
+  }
+
+  // 2 route static BẮT BUỘC khai TRƯỚC `:productionId` — Nest match theo thứ tự khai báo.
+  @Get('product-types')
+  @Auth([RoleType.Customer])
+  @ApiOperation({ summary: 'Distinct sản phẩm khách đã đặt — option filter listing' })
+  @HttpCode(HttpStatus.OK)
+  @ApiOkResponse({ type: GetCustomerOrderProductTypesResDto })
+  async listProductTypes(@AuthUser() customer: CustomerDocument): Promise<GetCustomerOrderProductTypesResDto> {
+    return this.customerOrderService.listProductTypes(customer);
+  }
+
+  @Get('dashboard')
+  @Auth([RoleType.Customer])
+  @ApiOperation({ summary: 'Dashboard Customer Portal — tổng quan đơn + đơn gần đây' })
+  @HttpCode(HttpStatus.OK)
+  @ApiOkResponse({ type: GetCustomerDashboardResDto })
+  async getDashboard(@AuthUser() customer: CustomerDocument): Promise<GetCustomerDashboardResDto> {
+    return this.customerOrderService.getDashboard(customer);
   }
 
   @Get(':productionId')

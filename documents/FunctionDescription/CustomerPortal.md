@@ -1,9 +1,9 @@
 # Customer Portal — Function Description
 
-> **File FE:** `apps/web/src/pages/customer/{login,register}/index.tsx`, `apps/web/src/pages/customer/orders/{index,new,track}.tsx`, `apps/web/src/pages/customer/catalog/{index,detail}.tsx`, `apps/web/src/layouts/customerLayout/CustomerLayout.tsx`, `apps/web/src/store/customerAuthStore.ts`, `apps/web/src/services/customerPortal.ts`, `apps/web/src/components/customer/CatalogProductCard.tsx`, `apps/web/src/components/common/FileUrlOrUploadInput.tsx`, `apps/web/src/pages/landing/index.tsx` (logo/link về `PATHS.LANDING`, đã bỏ text "OnosFactory")
+> **File FE:** `apps/web/src/pages/customer/{login,register}/index.tsx`, `apps/web/src/pages/customer/dashboard/index.tsx`, `apps/web/src/pages/customer/orders/{index,new,track}.tsx`, `apps/web/src/pages/customer/catalog/{index,detail}.tsx`, `apps/web/src/layouts/customerLayout/CustomerLayout.tsx`, `apps/web/src/store/customerAuthStore.ts`, `apps/web/src/services/customerPortal.ts`, `apps/web/src/components/customer/CatalogProductCard.tsx`, `apps/web/src/components/common/FileUrlOrUploadInput.tsx`, `apps/web/src/pages/landing/index.tsx` (logo/link về `PATHS.LANDING`, đã bỏ text "OnosFactory")
 > **File BE:** `apps/api/src/modules/customer-portal/` (`customer-auth.controller.ts`, `customer-order.controller.ts`, `customer-order.service.ts`, `customer-catalog.controller.ts`, `customer-catalog.service.ts`, `customer-portal.module.ts`), `apps/api/src/modules/customer/` (`customer.entity.ts`, `customer.service.ts` → `register()`/`validateLogin()`/`getById()`/`toSafeCustomer()`), `apps/api/src/modules/auth/jwt.strategy.ts` (branch theo `RoleType.Customer`)
-> **Route:** `/customer/login`, `/customer/register`, `/customer/orders`, `/customer/orders/new`, `/customer/orders/:productionId`, `/customer/catalog`, `/customer/catalog/:id`
-> **API:** `POST /v1/customer/auth/register`, `POST /v1/customer/auth/login`, `GET /v1/customer/auth/me`, `POST /v1/customer/orders`, `GET /v1/customer/orders`, `GET /v1/customer/orders/:productionId`, `PATCH /v1/customer/orders/:productionId`, `GET /v1/customer/catalog`, `GET /v1/customer/catalog/:id`
+> **Route:** `/customer/login`, `/customer/register`, `/customer/dashboard`, `/customer/orders`, `/customer/orders/new`, `/customer/orders/:productionId`, `/customer/catalog`, `/customer/catalog/:id`
+> **API:** `POST /v1/customer/auth/register`, `POST /v1/customer/auth/login`, `GET /v1/customer/auth/me`, `POST /v1/customer/orders`, `GET /v1/customer/orders`, `GET /v1/customer/orders/product-types`, `GET /v1/customer/orders/dashboard`, `GET /v1/customer/orders/:productionId`, `PATCH /v1/customer/orders/:productionId`, `GET /v1/customer/catalog`, `GET /v1/customer/catalog/:id`
 
 ---
 
@@ -98,7 +98,12 @@ này (vd auto-match cutting file) thay vì bị bỏ sót do khác format.
 
 `GET /customer/orders` và `GET /customer/orders/:productionId` luôn filter
 `{ userSku: customer.userSku, userEmail: customer.userEmail }` — khách chỉ
-thấy đơn của chính mình. Tiến trình 1 đơn (`track.tsx`) tái dùng thẳng
+thấy đơn của chính mình. Listing hỗ trợ thêm 2 query filter
+(`GetCustomerOrdersZod`): `search` (mã đơn — regex chứa, case-insensitive,
+escape regex) + `type` (sản phẩm — match CHÍNH XÁC; option lấy từ
+`GET /customer/orders/product-types` = distinct `type` các đơn của khách).
+2 route static `product-types`/`dashboard` khai báo TRƯỚC `:productionId`
+trong controller (Nest match theo thứ tự khai báo). Tiến trình 1 đơn (`track.tsx`) tái dùng thẳng
 `OrderService.getLifecycleTrack()` (phễu 8 chặng đã có sẵn cho
 Dashboard/OrderLifecycle — xem [`OrderLifecycle.md`](OrderLifecycle.md)), sau
 khi đã xác nhận đơn thuộc về khách hàng đang đăng nhập.
@@ -158,6 +163,21 @@ entry "Tài khoản" trên header `CustomerLayout.tsx`):
   role Customer khỏi mọi API ngoài prefix `customer/...`
   (RolesGuard — xem `Customers.md` §6).
 
+### 2.7 Dashboard (`/customer/dashboard`) — trang mặc định sau đăng nhập
+
+`pages/customer/dashboard/index.tsx` (route `PATHS.CUSTOMER_DASHBOARD`; index
+`/customer` redirect về đây). Gọi 1 API `GET /customer/orders/dashboard`
+(`GetCustomerDashboardResDto`, `CustomerDashboardZod`):
+
+- **4 KPI card**: Tổng đơn / Đang sản xuất / Hoàn thành / Đã hủy.
+  `CustomerOrderService.getDashboard()` đếm bằng 3 `countDocuments` song song
+  (scope (userSku, userEmail)): `cancelled` = có `cancelledAt`; `completed` =
+  có `fulfillmentCompletedAt` VÀ chưa hủy; `processing` = phần còn lại.
+- **Bảng "Đơn gần đây"**: 5 đơn mới nhất (`recentOrders`, sort `createdAt`
+  desc) — mã đơn (link + `CopyButton`) + sản phẩm + SL + badge trạng thái +
+  ngày đặt, link "Xem tất cả đơn".
+- **Quick action**: nút Đặt đơn mới + Sản phẩm (catalog).
+
 ## 3. API / Schema
 
 | Method | Path | Auth | Mô tả |
@@ -168,7 +188,9 @@ entry "Tài khoản" trên header `CustomerLayout.tsx`):
 | PATCH | `/v1/customer/auth/me` | `@Auth([Customer])` | Khách tự sửa hồ sơ (`fullName`/`phone`) — xem §2.6 |
 | POST | `/v1/customer/auth/change-password` | `@Auth([Customer])` + Throttle 10/15' | Khách tự đổi mật khẩu (bắt buộc mật khẩu cũ) — xem §2.6 |
 | POST | `/v1/customer/orders` | `@Auth([Customer])` | Đặt đơn mới (thông tin cơ bản) |
-| GET | `/v1/customer/orders` | `@Auth([Customer])` | Danh sách đơn của khách (phân trang) |
+| GET | `/v1/customer/orders` | `@Auth([Customer])` | Danh sách đơn của khách (phân trang + `search` mã đơn + `type` sản phẩm — xem §2.4) |
+| GET | `/v1/customer/orders/product-types` | `@Auth([Customer])` | Distinct sản phẩm khách đã đặt — option filter listing |
+| GET | `/v1/customer/orders/dashboard` | `@Auth([Customer])` | Dashboard: `totals` (total/processing/completed/cancelled) + 5 đơn mới nhất — xem §2.7 |
 | GET | `/v1/customer/orders/:productionId` | `@Auth([Customer])` | Tiến trình 1 đơn (scope theo khách) |
 | PATCH | `/v1/customer/orders/:productionId` | `@Auth([Customer])` | Sửa mockup/design/địa chỉ ship đơn ĐÃ đặt (chặn nếu đơn đã hủy) — xem §2.5 |
 | GET | `/v1/customer/catalog` | `@Auth([Customer])` | Danh sách sản phẩm + giá tham khảo (đã áp discount theo tier) — xem §7 |
@@ -178,7 +200,10 @@ entry "Tài khoản" trên header `CustomerLayout.tsx`):
 field cơ bản (`productionId`/`type`/`color`/`size`/`quantity`/`mockupUrl`/
 `status`/`orderAt`/`cancelledAt`/`cancelReason`/`createdAt`) + field rút gọn
 tiến trình dùng cho listing: `inProductionAt`, `currentStageLabel`,
-`currentStageAt`, `completed` (xem §2.4).
+`currentStageAt`, `completed` (xem §2.4). Cùng file:
+`GetCustomerOrdersZod` (+ `search`/`type`),
+`GetCustomerOrderProductTypesResDto` (data: string[]),
+`CustomerDashboardZod`/`GetCustomerDashboardResDto` (xem §2.7).
 
 Schema `customers` (mở rộng — xem [`CustomerFactoryAssignment.md §3`](CustomerFactoryAssignment.md)):
 ```ts
@@ -202,15 +227,26 @@ Schema `customers` (mở rộng — xem [`CustomerFactoryAssignment.md §3`](Cus
   login **tự chuyển hướng sang `/customer/orders`** nếu `customerAuthStore`
   đã có token còn hạn (`isAuthenticated()`, check 1 lần lúc mount) — khỏi bắt
   đăng nhập lại khi khách quay lại URL login.
-- `layouts/customerLayout/CustomerLayout.tsx` — header (logo link về
-  `PATHS.LANDING` + nút "Đặt đơn mới"/"Danh mục" + email khách + đăng xuất),
-  container **`max-w-6xl`** (đã nới rộng từ `max-w-4xl` — nội dung catalog/đặt
-  đơn cần nhiều cột hơn), KHÔNG dùng `Sidebar`/`MainLayout` của khu vực nhân
-  viên.
+- `layouts/customerLayout/CustomerLayout.tsx` — **header giữ nguyên** (logo +
+  nút "Danh mục"/"Đặt đơn mới"/"Tài khoản" + email khách + chuông + đổi ngôn
+  ngữ + đăng xuất) + **sidebar điều hướng BÊN TRÁI** (desktop `md:` trở lên,
+  `w-56` border-right, `NavLink` active `bg-primary/10 text-primary`): 3 entry
+  Dashboard (`end` match exact) / Quản lý đơn / Sản phẩm (catalog), build qua
+  `buildNavItems(t)` (`useMemo` — quy tắc i18n label map), kèm nút "Đặt đơn
+  mới" dưới cùng. Mobile (`<md`): sidebar thu thành **thanh nav ngang** (chip
+  pill, scroll ngang) ngay dưới header. Container nới `max-w-7xl` (thêm cột
+  sidebar), main `flex-1 min-w-0`. KHÔNG dùng `Sidebar`/`MainLayout` của khu
+  vực nhân viên.
+- `pages/customer/dashboard/index.tsx` — xem §2.7.
 - `pages/customer/orders/index.tsx` — listing dạng **BẢNG** (shadcn `Table`,
-  không phải card): mỗi hàng = ảnh mockup thumb + mã đơn (link) + sản phẩm/màu-size
-  + SL + badge chặng hiện tại/trạng thái + ngày đặt + ngày vào sản xuất + link
-  "Xem chi tiết", phân trang (`PaginationBar`, `GET /customer/orders?page&limit`).
+  không phải card): toolbar **search theo mã đơn** (Enter/blur mới apply, icon
+  Search) + **select lọc theo sản phẩm** (option từ `GET /customer/orders/product-types`,
+  native select) + nút "Xóa bộ lọc" (chỉ hiện khi có filter; empty-state khi
+  filter không khớp cũng có nút này thay vì "Đặt đơn đầu tiên"); mỗi hàng =
+  ảnh mockup thumb + mã đơn (link + **`CopyButton`** copy productionId) +
+  sản phẩm/màu-size + SL + badge chặng hiện tại/trạng thái + ngày đặt + ngày
+  vào sản xuất + link "Xem chi tiết", phân trang (`PaginationBar`,
+  `GET /customer/orders?page&limit&search&type` — đổi filter reset `page=1`).
   Click mã đơn/"Xem chi tiết" → `track.tsx` (chi tiết + timeline + sửa đơn).
 - `pages/customer/orders/new.tsx` — form đặt đơn dạng **GIỎ HÀNG** (nhiều sản
   phẩm/1 địa chỉ ship — xem §2.3), **CHỈ chọn từ catalog** (đã bỏ chế độ nhập

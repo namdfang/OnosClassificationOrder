@@ -1,10 +1,12 @@
-import React, { useEffect } from 'react';
+import React, { useEffect, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
-import { Link, Outlet, useNavigate } from 'react-router-dom';
-import { Languages, LayoutGrid, LogOut, PackagePlus, UserCircle2 } from 'lucide-react';
+import { Link, NavLink, Outlet, useNavigate } from 'react-router-dom';
+import { Languages, LayoutDashboard, LayoutGrid, LogOut, Package, PackagePlus, UserCircle2 } from 'lucide-react';
 
 import { NotificationBell } from '@/components/customer/NotificationBell';
 import { Button } from '@/components/ui/button';
+
+import { cn } from '@/utils/cn';
 
 import logoUrl from '@/assets/images/logo.png';
 
@@ -13,11 +15,33 @@ import { RepositoryRemote } from '../../services';
 import { useCustomerAuthStore } from '../../store/customerAuthStore';
 import { useLanguageStore } from '../../store/languageStore';
 
+interface CustomerNavItem {
+  path: string;
+  label: string;
+  icon: React.ReactNode;
+  /** NavLink `end` — Dashboard match exact, Orders/Catalog match cả route con. */
+  end?: boolean;
+}
+
+function buildNavItems(t: (key: string) => string): CustomerNavItem[] {
+  return [
+    {
+      path: PATHS.CUSTOMER_DASHBOARD,
+      label: t('layout.nav.dashboard'),
+      icon: <LayoutDashboard size={18} />,
+      end: true,
+    },
+    { path: PATHS.CUSTOMER_ORDERS, label: t('layout.nav.orders'), icon: <Package size={18} /> },
+    { path: PATHS.CUSTOMER_CATALOG, label: t('layout.nav.catalog'), icon: <LayoutGrid size={18} /> },
+  ];
+}
+
 function CustomerLayout() {
   const navigate = useNavigate();
   const { t } = useTranslation('customerPortal');
   const { profile, setProfile, clearToken } = useCustomerAuthStore();
   const { language, toggleLanguage } = useLanguageStore();
+  const navItems = useMemo(() => buildNavItems(t), [t]);
 
   useEffect(() => {
     RepositoryRemote.customerAuth
@@ -31,11 +55,19 @@ function CustomerLayout() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
+  const navLinkClass = ({ isActive }: { isActive: boolean }) =>
+    cn(
+      'flex items-center gap-2.5 rounded-lg px-3 py-2 text-sm transition-colors',
+      isActive
+        ? 'bg-primary/10 text-primary font-medium'
+        : 'text-muted-foreground hover:bg-muted hover:text-foreground',
+    );
+
   return (
     <div className="min-h-screen bg-background flex flex-col">
       <header className="border-b border-border">
-        <div className="max-w-6xl mx-auto px-4 h-14 flex items-center justify-between">
-          <Link to={PATHS.CUSTOMER_ORDERS} className="flex items-center gap-2">
+        <div className="max-w-7xl mx-auto px-4 h-14 flex items-center justify-between">
+          <Link to={PATHS.CUSTOMER_DASHBOARD} className="flex items-center gap-2">
             <img src={logoUrl} alt="Logo" className="h-7 w-auto object-contain" />
             <span className="font-semibold text-sm">{t('layout.brand')}</span>
           </Link>
@@ -79,11 +111,55 @@ function CustomerLayout() {
         </div>
       </header>
 
-      <main className="flex-1">
-        <div className="max-w-6xl mx-auto px-4 py-6">
-          <Outlet />
+      {/* Mobile: sidebar thu thành thanh nav ngang dưới header */}
+      <nav className="md:hidden border-b border-border">
+        <div className="px-4 py-2 flex items-center gap-2 overflow-x-auto">
+          {navItems.map((item) => (
+            <NavLink
+              key={item.path}
+              to={item.path}
+              end={item.end}
+              className={({ isActive }) =>
+                cn(
+                  'flex items-center gap-1.5 rounded-full px-3 py-1.5 text-xs whitespace-nowrap transition-colors',
+                  isActive ? 'bg-primary/10 text-primary font-medium' : 'text-muted-foreground hover:bg-muted',
+                )
+              }
+            >
+              {item.icon}
+              {item.label}
+            </NavLink>
+          ))}
         </div>
-      </main>
+      </nav>
+
+      <div className="flex-1 max-w-7xl w-full mx-auto flex items-stretch">
+        {/* Desktop: sidebar điều hướng BÊN TRÁI */}
+        <aside className="hidden md:block w-56 shrink-0 border-r border-border px-3 py-6">
+          <p className="px-3 mb-2 text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">
+            {t('layout.nav.title')}
+          </p>
+          <div className="space-y-1">
+            {navItems.map((item) => (
+              <NavLink key={item.path} to={item.path} end={item.end} className={navLinkClass}>
+                {item.icon}
+                {item.label}
+              </NavLink>
+            ))}
+          </div>
+
+          <div className="mt-6 pt-4 border-t border-border">
+            <Button size="sm" className="w-full" onClick={() => navigate(PATHS.CUSTOMER_ORDER_NEW)}>
+              <PackagePlus size={14} className="mr-1.5" />
+              {t('layout.newOrder')}
+            </Button>
+          </div>
+        </aside>
+
+        <main className="flex-1 min-w-0 px-4 py-6">
+          <Outlet />
+        </main>
+      </div>
     </div>
   );
 }

@@ -4,6 +4,8 @@ import { Model } from 'mongoose';
 import type {
   CustomerOrderSummary,
   DesignFields,
+  GetCustomerDashboardResDto,
+  GetCustomerOrderProductTypesResDto,
   GetCustomerOrdersDto,
   GetCustomerOrdersResDto,
   GetCustomerOrderTrackResDto,
@@ -26,6 +28,10 @@ import {
 import type { CustomerDocument } from '@/modules/customer/customer.entity';
 import { OrderEntity } from '@/modules/order/order.entity';
 import { OrderService } from '@/modules/order/order.service';
+
+function escapeRegex(s: string): string {
+  return s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+}
 
 /**
  * Random `productionId` — CÙNG pattern với mã đơn thật từ hệ thống chính (2
@@ -94,8 +100,8 @@ function computeCurrentStage(d: RawStageFields): { label?: string; at?: Date; co
     key === 'tool-check'
       ? d.toolCheckedAt
       : key === 'designer'
-        ? (d.designerCompletedAt ?? d.designerFirstStartedAt ?? d.designerAssignedAt)
-        : (d.fulfillmentStages?.[key]?.startedAt ?? d.fulfillmentStages?.[key]?.waitingAt);
+        ? d.designerCompletedAt ?? d.designerFirstStartedAt ?? d.designerAssignedAt
+        : d.fulfillmentStages?.[key]?.startedAt ?? d.fulfillmentStages?.[key]?.waitingAt;
 
   return { label: CUSTOMER_STAGE_LABELS[key] ?? key, at, completed };
 }
@@ -203,14 +209,57 @@ export class CustomerOrderService {
 
   /** Danh sách đơn của CHÍNH khách hàng đang đăng nhập — khớp (userSku, userEmail). */
   async listOrders(customer: CustomerDocument, dto: GetCustomerOrdersDto): Promise<GetCustomerOrdersResDto> {
-    const filter = { userSku: customer.userSku, userEmail: customer.userEmail };
+    const filter: Record<string, unknown> = { userSku: customer.userSku, userEmail: customer.userEmail };
+    if (dto.search?.trim()) filter.productionId = { $regex: escapeRegex(dto.search.trim()), $options: 'i' };
+    if (dto.type?.trim()) filter.type = dto.type.trim();
     const skip = (dto.page - 1) * dto.limit;
     const [data, total] = await Promise.all([
-      this.orderModel.find(filter).select(CUSTOMER_ORDER_FIELDS).sort({ createdAt: -1 }).skip(skip).limit(dto.limit).lean(),
+      this.orderModel
+        .find(filter)
+        .select(CUSTOMER_ORDER_FIELDS)
+        .sort({ createdAt: -1 })
+        .skip(skip)
+        .limit(dto.limit)
+        .lean(),
       this.orderModel.countDocuments(filter),
     ]);
 
     return { success: true, data: data.map((d) => this.toSummary(d)), total };
+  }
+
+  /** Distinct `type` các đơn của khách — option cho filter "Sản phẩm" ở listing. */
+  async listProductTypes(customer: CustomerDocument): Promise<GetCustomerOrderProductTypesResDto> {
+    const types = await this.orderModel.distinct('type', {
+      userSku: customer.userSku,
+      userEmail: customer.userEmail,
+    });
+    const cleaned = types
+      .filter((t): t is string => typeof t === 'string' && t.trim() !== '')
+      .sort((a, b) => a.localeCompare(b, 'vi'));
+    return { success: true, data: cleaned };
+  }
+
+  /**
+   * Dashboard portal — đếm 4 nhóm + 5 đơn mới nhất. `processing` = phần còn
+   * lại sau khi trừ hủy/hoàn thành (đơn hủy KHÔNG tính vào hoàn thành dù có
+   * `fulfillmentCompletedAt`).
+   */
+  async getDashboard(customer: CustomerDocument): Promise<GetCustomerDashboardResDto> {
+    const base = { userSku: customer.userSku, userEmail: customer.userEmail };
+    const [total, cancelled, completed, recent] = await Promise.all([
+      this.orderModel.countDocuments(base),
+      this.orderModel.countDocuments({ ...base, cancelledAt: { $ne: null } }),
+      this.orderModel.countDocuments({ ...base, cancelledAt: null, fulfillmentCompletedAt: { $ne: null } }),
+      this.orderModel.find(base).select(CUSTOMER_ORDER_FIELDS).sort({ createdAt: -1 }).limit(5).lean(),
+    ]);
+
+    return {
+      success: true,
+      data: {
+        totals: { total, processing: Math.max(0, total - cancelled - completed), completed, cancelled },
+        recentOrders: recent.map((d) => this.toSummary(d)),
+      },
+    };
   }
 
   /**

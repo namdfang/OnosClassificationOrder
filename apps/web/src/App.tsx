@@ -18,6 +18,7 @@ const CompanyCareers = lazy(() => import('./pages/company/careers'));
 
 const CustomerLogin = lazy(() => import('./pages/customer/login'));
 const CustomerRegister = lazy(() => import('./pages/customer/register'));
+const CustomerDashboard = lazy(() => import('./pages/customer/dashboard'));
 const CustomerOrders = lazy(() => import('./pages/customer/orders'));
 const CustomerCatalog = lazy(() => import('./pages/customer/catalog'));
 const CustomerCatalogDetail = lazy(() => import('./pages/customer/catalog/detail'));
@@ -100,7 +101,15 @@ function App() {
         />
         <Route element={<CustomerPrivateRoute />}>
           <Route element={<CustomerLayout />}>
-            <Route path="/customer" element={<Navigate to={PATHS.CUSTOMER_ORDERS} replace />} />
+            <Route path="/customer" element={<Navigate to={PATHS.CUSTOMER_DASHBOARD} replace />} />
+            <Route
+              path={PATHS.CUSTOMER_DASHBOARD}
+              element={
+                <Suspense fallback={<Loading />}>
+                  <CustomerDashboard />
+                </Suspense>
+              }
+            />
             <Route
               path={PATHS.CUSTOMER_ORDERS}
               element={

@@ -4,7 +4,23 @@
     "catalog": "Product catalog",
     "newOrder": "Place new order",
     "logout": "Sign out",
-    "account": "Account"
+    "account": "Account",
+    "nav": {
+      "title": "Navigation",
+      "dashboard": "Dashboard",
+      "orders": "Order management",
+      "catalog": "Products"
+    }
+  },
+  "dashboard": {
+    "title": "Dashboard",
+    "subtitle": "Overview of your orders",
+    "totalOrders": "Total orders",
+    "processingOrders": "In production",
+    "completedOrders": "Completed",
+    "cancelledOrders": "Cancelled",
+    "recentOrders": "Recent orders",
+    "viewAllOrders": "View all orders →"
   },
   "fileInput": {
     "uploadUnavailable": "File upload isn't available yet — please paste an image URL (Google Drive, Imgur...)"
@@ -54,7 +70,12 @@
     "title": "Your orders",
     "resultsCount": "{{count}} orders",
     "empty": "You don't have any orders yet.",
+    "emptyFiltered": "No orders match the current filters.",
     "placeFirst": "Place your first order",
+    "searchPlaceholder": "Search by order code…",
+    "filterProduct": "Filter by product",
+    "allProducts": "All products",
+    "clearFilters": "Clear filters",
     "columns": {
       "code": "Order code",
       "product": "Product",

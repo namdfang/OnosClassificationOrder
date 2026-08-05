@@ -4,7 +4,23 @@
     "catalog": "Danh mục sản phẩm",
     "newOrder": "Đặt đơn mới",
     "logout": "Đăng xuất",
-    "account": "Tài khoản"
+    "account": "Tài khoản",
+    "nav": {
+      "title": "Điều hướng",
+      "dashboard": "Dashboard",
+      "orders": "Quản lý đơn",
+      "catalog": "Sản phẩm"
+    }
+  },
+  "dashboard": {
+    "title": "Dashboard",
+    "subtitle": "Tổng quan đơn hàng của bạn",
+    "totalOrders": "Tổng đơn",
+    "processingOrders": "Đang sản xuất",
+    "completedOrders": "Hoàn thành",
+    "cancelledOrders": "Đã hủy",
+    "recentOrders": "Đơn gần đây",
+    "viewAllOrders": "Xem tất cả đơn →"
   },
   "fileInput": {
     "uploadUnavailable": "Tải file lên chưa khả dụng — vui lòng dán URL ảnh (Google Drive, Imgur...)"
@@ -54,7 +70,12 @@
     "title": "Đơn hàng của bạn",
     "resultsCount": "{{count}} đơn hàng",
     "empty": "Bạn chưa có đơn hàng nào.",
+    "emptyFiltered": "Không có đơn nào khớp bộ lọc hiện tại.",
     "placeFirst": "Đặt đơn đầu tiên",
+    "searchPlaceholder": "Tìm theo mã đơn…",
+    "filterProduct": "Lọc theo sản phẩm",
+    "allProducts": "Tất cả sản phẩm",
+    "clearFilters": "Xóa bộ lọc",
     "columns": {
       "code": "Mã đơn",
       "product": "Sản phẩm",

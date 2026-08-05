@@ -50,6 +50,7 @@ export const PATHS = {
   // ---- Root router /customer — Customer Portal (khách hàng tự đặt đơn) ----
   CUSTOMER_LOGIN: '/customer/login',
   CUSTOMER_REGISTER: '/customer/register',
+  CUSTOMER_DASHBOARD: '/customer/dashboard',
   CUSTOMER_ORDERS: '/customer/orders',
   CUSTOMER_ORDER_NEW: '/customer/orders/new',
   CUSTOMER_ORDER_DETAIL: '/customer/orders/:productionId',
