@@ -116,6 +116,7 @@ const PRODUCT_TYPE_CODE_MAP: Record<string, string> = {
     "aop kids and youth mesh v-neck football jersey": "BDLUOIKIDTIM",
     "aop kids and youth mesh overlap v-neck football jersey": "BDLUOIKIDCOV",
     "all-over print mesh baseball jersey": "BBJERLUOI",
+    "new all-over print short-sleeve hawaiian shirt": "HW",
 };
 
 /** Case-insensitive, trim khoảng trắng thừa. Không khớp → null. */
