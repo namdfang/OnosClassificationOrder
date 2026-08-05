@@ -3,7 +3,8 @@
     "brand": "Customer Portal",
     "catalog": "Product catalog",
     "newOrder": "Place new order",
-    "logout": "Sign out"
+    "logout": "Sign out",
+    "account": "Account"
   },
   "fileInput": {
     "uploadUnavailable": "File upload isn't available yet — please paste an image URL (Google Drive, Imgur...)"
@@ -153,5 +154,23 @@
     "printArea": "Print area",
     "newOrder": "New order",
     "downloadSizeChart": "Download size chart"
+  },
+  "account": {
+    "title": "My account",
+    "profileSection": "Profile",
+    "emailLabel": "Login email",
+    "skuLabel": "User SKU",
+    "lockedKeyNote": "Email and SKU form your account identity — they cannot be changed here; contact support if needed.",
+    "nameLabel": "Full name",
+    "phoneLabel": "Phone",
+    "profileSaved": "Profile saved",
+    "passwordSection": "Change password",
+    "currentPasswordLabel": "Current password",
+    "newPasswordLabel": "New password",
+    "confirmPasswordLabel": "Confirm new password",
+    "passwordTooShort": "New password must be at least 6 characters",
+    "passwordMismatch": "Passwords do not match",
+    "passwordChanged": "Password changed",
+    "changePasswordButton": "Change password"
   }
 }

@@ -8,6 +8,7 @@ import customerFactoryAssignmentEn from './locales/en/customerFactoryAssignment.
 import customerNotificationsEn from './locales/en/customerNotifications.json';
 import customerPortalEn from './locales/en/customerPortal.json';
 import customerPriorityEn from './locales/en/customerPriority.json';
+import customersEn from './locales/en/customers.json';
 import dashboardEn from './locales/en/dashboard.json';
 import designerAutoAssignEn from './locales/en/designerAutoAssign.json';
 import designerTaskWorkflowEn from './locales/en/designerTaskWorkflow.json';
@@ -30,6 +31,7 @@ import customerFactoryAssignmentVi from './locales/vi/customerFactoryAssignment.
 import customerNotificationsVi from './locales/vi/customerNotifications.json';
 import customerPortalVi from './locales/vi/customerPortal.json';
 import customerPriorityVi from './locales/vi/customerPriority.json';
+import customersVi from './locales/vi/customers.json';
 import dashboardVi from './locales/vi/dashboard.json';
 import designerAutoAssignVi from './locales/vi/designerAutoAssign.json';
 import designerTaskWorkflowVi from './locales/vi/designerTaskWorkflow.json';
@@ -78,6 +80,7 @@ export const resources = {
     workshopConfig: workshopConfigVi,
     designerAutoAssign: designerAutoAssignVi,
     customerFactoryAssignment: customerFactoryAssignmentVi,
+    customers: customersVi,
     customerPriority: customerPriorityVi,
     customerPortal: customerPortalVi,
     customerNotifications: customerNotificationsVi,
@@ -102,6 +105,7 @@ export const resources = {
     workshopConfig: workshopConfigEn,
     designerAutoAssign: designerAutoAssignEn,
     customerFactoryAssignment: customerFactoryAssignmentEn,
+    customers: customersEn,
     customerPriority: customerPriorityEn,
     customerPortal: customerPortalEn,
     customerNotifications: customerNotificationsEn,

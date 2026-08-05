@@ -54,7 +54,8 @@
       "designerBacklogSelf": "Tồn thiết kế của bạn (7 ngày gần nhất)",
       "toolCheckRework": "Soát tool — đơn cần làm lại",
       "toolCheckUnreviewed": "Soát tool — đơn chưa soát (7 ngày gần nhất)"
-    }
+    },
+    "customers": "Khách hàng"
   },
   "header": {
     "toggleSidebar": "Đóng/mở sidebar",

@@ -34,7 +34,8 @@ export class JwtStrategy extends PassportStrategy(Strategy) {
     // roleId/RoleEntity) để RolesGuard/PermissionsGuard tái dùng nguyên vẹn.
     if (args.role === RoleType.Customer) {
       const customer = await this.customerService.getById(args.userId);
-      if (!customer) throw new NotFoundException('Tài khoản không tồn tại');
+      // Khách xóa mềm (deletedAt) coi như không tồn tại — token cũ hết tác dụng ngay.
+      if (!customer || customer.deletedAt) throw new NotFoundException('Tài khoản không tồn tại');
       if (customer.status === Status.Inactive) {
         throw new BadRequestException('Your account is inactive, please contact support');
       }

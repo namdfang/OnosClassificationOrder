@@ -60,5 +60,6 @@
       "submit": "Import",
       "toastSuccess": "Đã gán tier cho {{updated}} khách ({{matched}} tài khoản khớp)"
     }
-  }
+  },
+  "openCustomersPage": "Mở trang Khách hàng"
 }

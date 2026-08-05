@@ -13,7 +13,7 @@ import {
   useSensors,
 } from '@dnd-kit/core';
 
-import { TierBadge } from '@/components/settings/CustomerListDialog';
+import { TierBadge } from '@/components/common/TierBadge';
 import { Input } from '@/components/ui/input';
 
 import { cn } from '@/utils/cn';

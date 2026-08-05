@@ -15,7 +15,15 @@ const getMe = () => {
   return callApi(`/${CONFIG.API_VERSION}/customer/auth/me`, 'get');
 };
 
-export const customerAuth = { register, login, getMe };
+const updateMe = (data: { fullName?: string; phone?: string }) => {
+  return callApi(`/${CONFIG.API_VERSION}/customer/auth/me`, 'patch', data);
+};
+
+const changePassword = (data: { currentPassword: string; newPassword: string }) => {
+  return callApi(`/${CONFIG.API_VERSION}/customer/auth/change-password`, 'post', data);
+};
+
+export const customerAuth = { register, login, getMe, updateMe, changePassword };
 
 const placeOrder = (data: PlaceCustomerOrderDto) => {
   return callApi(`/${CONFIG.API_VERSION}/customer/orders`, 'post', data);

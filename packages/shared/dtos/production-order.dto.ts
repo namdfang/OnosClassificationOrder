@@ -411,6 +411,8 @@ export const GetProductionOrdersZod = PageQueryZod.extend({
   type: z.string().optional(),
   /** Exact match (CSV) — lọc theo SKU khách (bảng phẳng trang "In"). */
   userSku: z.string().optional(),
+  /** Exact match (case-insensitive) — cặp với userSku cho drill-down "Đơn hàng của khách" (/adm/customers). */
+  userEmail: z.string().optional(),
   /** Comma-separated workshop_config codes for fabric_type. */
   fabricType: z.string().optional(),
   /** Comma-separated workshop_config codes for tool_result. */

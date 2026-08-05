@@ -139,6 +139,25 @@ timeline — có form sửa NGAY DƯỚI, ẩn nếu đơn đã hủy (`order.ca
   giữ nguyên vị trí in khác chưa đổi) — khớp UI sửa từng ô riêng lẻ, không
   bắt gửi lại toàn bộ.
 
+### 2.6 Trang "Tài khoản của tôi" (`/customer/account`)
+
+`apps/web/src/pages/customer/account/index.tsx` (route `PATHS.CUSTOMER_ACCOUNT`,
+entry "Tài khoản" trên header `CustomerLayout.tsx`):
+
+- Khối **Hồ sơ**: email + userSku read-only (khóa định danh — Admin cũng không
+  sửa được, xem `Customers.md`), tự sửa `fullName`/`phone` →
+  `PATCH /customer/auth/me` (`UpdateCustomerMeDto`) → cập nhật
+  `customerAuthStore.profile`.
+- Khối **Đổi mật khẩu**: nhập mật khẩu hiện tại + mật khẩu mới ×2 →
+  `POST /customer/auth/change-password` (`ChangeCustomerPasswordDto`,
+  validate `validateHash` mật khẩu cũ, sai → 400).
+- **Quên mật khẩu**: CHƯA có gửi email — quy trình hiện tại là khách liên hệ →
+  Admin reset ở trang `/adm/customers` (2 chế độ, xem `Customers.md` §4).
+- Giao diện khách nằm TRỌN trong `CustomerLayout` (header/menu riêng) — ranh
+  giới bắt buộc: KHÔNG dùng bất kỳ component layout xưởng nào; BE chặn cứng
+  role Customer khỏi mọi API ngoài prefix `customer/...`
+  (RolesGuard — xem `Customers.md` §6).
+
 ## 3. API / Schema
 
 | Method | Path | Auth | Mô tả |
@@ -146,6 +165,8 @@ timeline — có form sửa NGAY DƯỚI, ẩn nếu đơn đã hủy (`order.ca
 | POST | `/v1/customer/auth/register` | public | Đăng ký / claim tài khoản |
 | POST | `/v1/customer/auth/login` | public | Đăng nhập → JWT `role=Customer` |
 | GET | `/v1/customer/auth/me` | `@Auth([Customer])` | Thông tin tài khoản hiện tại |
+| PATCH | `/v1/customer/auth/me` | `@Auth([Customer])` | Khách tự sửa hồ sơ (`fullName`/`phone`) — xem §2.6 |
+| POST | `/v1/customer/auth/change-password` | `@Auth([Customer])` + Throttle 10/15' | Khách tự đổi mật khẩu (bắt buộc mật khẩu cũ) — xem §2.6 |
 | POST | `/v1/customer/orders` | `@Auth([Customer])` | Đặt đơn mới (thông tin cơ bản) |
 | GET | `/v1/customer/orders` | `@Auth([Customer])` | Danh sách đơn của khách (phân trang) |
 | GET | `/v1/customer/orders/:productionId` | `@Auth([Customer])` | Tiến trình 1 đơn (scope theo khách) |
@@ -168,6 +189,7 @@ Schema `customers` (mở rộng — xem [`CustomerFactoryAssignment.md §3`](Cus
   fullName: string;
   phone: string;
   status: Status;    // Active mặc định
+  deletedAt?: Date;  // xóa mềm từ /adm/customers — chặn login + ẩn mọi list (Customers.md)
 }
 ```
 

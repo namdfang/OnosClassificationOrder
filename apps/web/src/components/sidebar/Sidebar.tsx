@@ -11,6 +11,7 @@ import {
   Building2,
   ChevronDown,
   ChevronRight,
+  Contact,
   Factory,
   FileDown,
   FileSearch,
@@ -403,6 +404,13 @@ function buildNavGroups(t: TFunction<'layout'>): NavGroup[] {
               perm: 'role.manage',
             },
           ],
+        },
+        {
+          key: PATHS.CUSTOMERS,
+          label: t('sidebar.customers'),
+          to: PATHS.CUSTOMERS,
+          icon: <Contact size={17} />,
+          perm: 'page.customers',
         },
         {
           key: PATHS.SETTINGS,

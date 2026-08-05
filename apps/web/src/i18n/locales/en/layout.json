@@ -54,7 +54,8 @@
       "designerBacklogSelf": "Your design backlog (last 7 days)",
       "toolCheckRework": "Tool check — orders needing rework",
       "toolCheckUnreviewed": "Tool check — unreviewed orders (last 7 days)"
-    }
+    },
+    "customers": "Customers"
   },
   "header": {
     "toggleSidebar": "Toggle sidebar",

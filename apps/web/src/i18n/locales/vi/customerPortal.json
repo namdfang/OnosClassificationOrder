@@ -3,7 +3,8 @@
     "brand": "Customer Portal",
     "catalog": "Danh mục sản phẩm",
     "newOrder": "Đặt đơn mới",
-    "logout": "Đăng xuất"
+    "logout": "Đăng xuất",
+    "account": "Tài khoản"
   },
   "fileInput": {
     "uploadUnavailable": "Tải file lên chưa khả dụng — vui lòng dán URL ảnh (Google Drive, Imgur...)"
@@ -152,5 +153,23 @@
     "printArea": "Vị trí in",
     "newOrder": "Đặt đơn mới",
     "downloadSizeChart": "Tải bảng size"
+  },
+  "account": {
+    "title": "Tài khoản của tôi",
+    "profileSection": "Thông tin hồ sơ",
+    "emailLabel": "Email đăng nhập",
+    "skuLabel": "User SKU",
+    "lockedKeyNote": "Email và SKU là khóa định danh tài khoản — không thể tự sửa, liên hệ hỗ trợ nếu cần thay đổi.",
+    "nameLabel": "Họ tên",
+    "phoneLabel": "Số điện thoại",
+    "profileSaved": "Đã lưu hồ sơ",
+    "passwordSection": "Đổi mật khẩu",
+    "currentPasswordLabel": "Mật khẩu hiện tại",
+    "newPasswordLabel": "Mật khẩu mới",
+    "confirmPasswordLabel": "Nhập lại mật khẩu mới",
+    "passwordTooShort": "Mật khẩu mới tối thiểu 6 ký tự",
+    "passwordMismatch": "Mật khẩu nhập lại không khớp",
+    "passwordChanged": "Đã đổi mật khẩu",
+    "changePasswordButton": "Đổi mật khẩu"
   }
 }

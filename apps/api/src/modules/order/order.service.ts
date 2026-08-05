@@ -1400,6 +1400,11 @@ export class OrderService implements OnModuleInit {
     // Factory tab filters — exact product name / fabric code / tool code.
     if (dto.type) filter.type = { $in: dto.type.split(',').filter(Boolean) };
     if (dto.userSku) filter.userSku = { $in: dto.userSku.split(',').filter(Boolean) };
+    // Exact-pair với userSku — drill-down "Đơn hàng của khách" ở /adm/customers
+    // (email so khớp không phân biệt hoa/thường, khớp customerMatchKey).
+    if (dto.userEmail?.trim()) {
+      filter.userEmail = { $regex: `^${escapeRegex(dto.userEmail.trim())}$`, $options: 'i' };
+    }
     if (dto.fabricType) filter.fabricType = { $in: dto.fabricType.split(',').filter(Boolean) };
     if (dto.toolResult) {
       // Token đặc biệt __none__ ↔ "Chưa xác định" (chưa soát toolResult) — mirror

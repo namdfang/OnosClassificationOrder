@@ -1,17 +1,17 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { List, RefreshCw, Save, UserPlus, Users } from 'lucide-react';
+import { Link } from 'react-router-dom';
+import { Contact, Save, Users } from 'lucide-react';
 import type { Customer, CustomerAssignmentConfig as Config } from 'shared';
 import { toast } from 'sonner';
+
+import { PATHS } from '@/constants/paths';
 
 import { RepositoryRemote } from '@/services';
 
 import { Spinner } from '@/components/common/Spinner';
 import CustomerFactoryKanban from '@/components/settings/CustomerFactoryKanban';
-import CustomerListDialog from '@/components/settings/CustomerListDialog';
 import { Button } from '@/components/ui/button';
-import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
-import { Input } from '@/components/ui/input';
 import { Switch } from '@/components/ui/switch';
 
 import { handleAxiosError } from '@/utils';
@@ -43,13 +43,6 @@ export default function CustomerAssignmentConfig() {
   const [baseline, setBaseline] = useState('');
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
-  const [syncing, setSyncing] = useState(false);
-
-  const [listOpen, setListOpen] = useState(false);
-  const [addOpen, setAddOpen] = useState(false);
-  const [newSku, setNewSku] = useState('');
-  const [newEmail, setNewEmail] = useState('');
-  const [adding, setAdding] = useState(false);
 
   const loadCustomers = async () => {
     const res = await RepositoryRemote.customer.list();
@@ -123,40 +116,6 @@ export default function CustomerAssignmentConfig() {
     };
   }, [dirty, t]);
 
-  const handleSync = async () => {
-    try {
-      setSyncing(true);
-      const res = await RepositoryRemote.customer.sync();
-      const d = res.data?.data as { created: number; total: number };
-      await loadCustomers();
-      toast.success(t('toasts.syncSuccess', { created: d?.created ?? 0, total: d?.total ?? 0 }));
-    } catch (err) {
-      handleAxiosError(err);
-    } finally {
-      setSyncing(false);
-    }
-  };
-
-  const handleAdd = async () => {
-    if (!newSku.trim()) {
-      toast.error(t('toasts.skuRequired'));
-      return;
-    }
-    try {
-      setAdding(true);
-      await RepositoryRemote.customer.create({ userSku: newSku.trim(), userEmail: newEmail.trim() });
-      await loadCustomers();
-      toast.success(t('toasts.addSuccess'));
-      setAddOpen(false);
-      setNewSku('');
-      setNewEmail('');
-    } catch (err) {
-      handleAxiosError(err);
-    } finally {
-      setAdding(false);
-    }
-  };
-
   const handleSave = async () => {
     const payload: Config = {
       enabled,
@@ -217,15 +176,10 @@ export default function CustomerAssignmentConfig() {
           </span>
         </div>
         <div className="flex-1" />
-        <Button size="sm" variant="outline" onClick={handleSync} disabled={syncing}>
-          {syncing ? <Spinner size={13} className="mr-1.5" /> : <RefreshCw size={14} />}
-          {t('syncCustomers')}
-        </Button>
-        <Button size="sm" variant="outline" onClick={() => setAddOpen(true)}>
-          <UserPlus size={14} /> {t('addCustomer')}
-        </Button>
-        <Button size="sm" variant="outline" onClick={() => setListOpen(true)}>
-          <List size={14} /> {t('customerList')}
+        <Button size="sm" variant="outline" asChild>
+          <Link to={PATHS.CUSTOMERS}>
+            <Contact size={14} /> {t('openCustomersPage')}
+          </Link>
         </Button>
         <span className="text-xs text-slate-400">{t('customerCount', { count: customers.length })}</span>
       </div>
@@ -240,47 +194,6 @@ export default function CustomerAssignmentConfig() {
           onMove={moveCustomer}
         />
       )}
-
-      <CustomerListDialog open={listOpen} onOpenChange={setListOpen} customers={customers} onReload={loadCustomers} />
-
-      <Dialog open={addOpen} onOpenChange={setAddOpen}>
-        <DialogContent>
-          <DialogHeader>
-            <DialogTitle>{t('addDialog.title')}</DialogTitle>
-          </DialogHeader>
-          <div className="space-y-3 pt-1">
-            <div className="space-y-1">
-              <label className="text-xs font-medium text-slate-600 dark:text-slate-300">
-                {t('addDialog.skuLabel')}
-              </label>
-              <Input
-                value={newSku}
-                onChange={(e) => setNewSku(e.target.value)}
-                placeholder={t('addDialog.skuPlaceholder')}
-              />
-            </div>
-            <div className="space-y-1">
-              <label className="text-xs font-medium text-slate-600 dark:text-slate-300">
-                {t('addDialog.emailLabel')}
-              </label>
-              <Input
-                value={newEmail}
-                onChange={(e) => setNewEmail(e.target.value)}
-                placeholder={t('addDialog.emailPlaceholder')}
-              />
-            </div>
-          </div>
-          <DialogFooter>
-            <Button variant="outline" onClick={() => setAddOpen(false)} disabled={adding}>
-              {t('actions.cancel', { ns: 'common' })}
-            </Button>
-            <Button onClick={handleAdd} disabled={adding}>
-              {adding ? <Spinner size={13} className="mr-1.5" /> : null}
-              {t('addDialog.submit')}
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
     </div>
   );
 }

@@ -1,7 +1,7 @@
 import React, { useEffect } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Link, Outlet, useNavigate } from 'react-router-dom';
-import { Languages, LayoutGrid, LogOut, PackagePlus } from 'lucide-react';
+import { Languages, LayoutGrid, LogOut, PackagePlus, UserCircle2 } from 'lucide-react';
 
 import { NotificationBell } from '@/components/customer/NotificationBell';
 import { Button } from '@/components/ui/button';
@@ -48,6 +48,10 @@ function CustomerLayout() {
             <Button size="sm" variant="secondary" onClick={() => navigate(PATHS.CUSTOMER_ORDER_NEW)}>
               <PackagePlus size={14} className="mr-1.5" />
               {t('layout.newOrder')}
+            </Button>
+            <Button size="sm" variant="ghost" onClick={() => navigate(PATHS.CUSTOMER_ACCOUNT)}>
+              <UserCircle2 size={14} className="mr-1.5" />
+              {t('layout.account')}
             </Button>
             {profile?.userEmail && (
               <span className="text-xs text-muted-foreground hidden sm:inline">{profile.userEmail}</span>
