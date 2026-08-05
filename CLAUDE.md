@@ -1,6 +1,39 @@
+# CLAUDE.md
+
+This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
+
 # OnosFactory — Coding Rules
 
 > Đọc file này trước khi code bất kỳ thứ gì. Tuân thủ 100% các quy tắc bên dưới.
+
+---
+
+## Commands
+
+Chạy ở thư mục gốc (pnpm + Turborepo):
+
+```bash
+pnpm dev            # Chạy cả API + Web song song
+pnpm dev:api        # Chỉ API (nodemon watch toàn workspace → rebuild + node start.js)
+pnpm dev:web        # Chỉ Web (Vite, port 5173)
+pnpm build          # Build tất cả (lần đầu clone PHẢI chạy 1 lần để build packages/shared + core)
+pnpm lint           # ESLint tất cả packages (lint:fix để auto-fix)
+pnpm build-types    # Type-check toàn bộ (tsc --noEmit) — dùng để verify thay cho build
+pnpm spell          # cspell check
+```
+
+Test (chỉ `apps/api` có Jest):
+
+```bash
+cd apps/api
+pnpm test                              # Toàn bộ unit tests (NODE_ENV=test)
+NODE_ENV=test npx jest path/to/file    # Chạy 1 file test
+pnpm test:e2e                          # E2E (test/jest-e2e.json)
+pnpm seed                              # Seed data (src/seed/seed-runner.ts)
+```
+
+- API dev chạy ở `http://localhost:3007`, global prefix `api/v1`, Swagger ở `/documentation`. Web dev ở `http://localhost:5173`.
+- Setup lần đầu (Docker MongoDB replica set `rs0` + Redis + RabbitMQ, env files từ `.env.development.example` / `.env.example`): xem [`README.md`](README.md).
 
 ---
 
@@ -8,6 +41,15 @@
 
 - **Package manager:** pnpm workspaces
 - **Shared types:** Frontend và Backend cùng import từ `shared` package. Khi tạo mới DTO/enum/constant, đặt trong `packages/shared/`.
+
+### Architecture (big picture)
+
+- `apps/api` — NestJS + Fastify, MongoDB qua Mongoose (**bắt buộc replica set** cho transactions), Redis cache, RabbitMQ. Mỗi feature là 1 module đủ bộ `module/controller/service/repository/entity`; mọi endpoint gắn `@Auth(roles, permissions, options)` (tự stack AuthGuard → RateLimiter → Permissions → RolesGuard), response format `{ success, data, total?, message? }`.
+- `apps/web` — React + Vite + Tailwind + Radix/shadcn (KHÔNG Ant Design), Zustand stores, react-i18next (mặc định tiếng Việt). 3 root router: `/adm` + `/ffm` (chung MainLayout/Sidebar/staff `authStore`) và `/customer` (Customer Portal — auth + layout + token RIÊNG qua `customerAuthStore`/`RoleType.Customer`), cộng landing/careers public.
+- `packages/shared` — nguồn type-safety duy nhất: Zod schema → `createZodDto` cho BE validation/Swagger, FE import cùng type cho services. **Sửa 1 DTO ở đây ảnh hưởng CẢ 2 app** — phải type-check cả FE lẫn BE.
+- `packages/core` — NestJS utilities dùng chung (guards, decorators, database abstracts, Telegram service).
+- **Domain pipeline chính** (xuyên suốt nhiều module): import đơn (`importOrders`) → soát tool → auto-gán designer (3 mức khách hàng→sản phẩm→xưởng) → Designer workflow → 6-stage Fulfillment (In→Ép→QC→May vào→May ra→Đóng hàng) → Dashboard/stats. Hook giữa các chặng nằm chủ yếu trong `apps/api/src/modules/order/order.service.ts` (`updateField`/`bulkUpdateField` là điểm ghi trung tâm — order log, auto-rework, entry fulfillment đều móc vào đây).
+- **Đơn bị loại khỏi thống kê mặc định:** đơn hủy (`cancelledAt`), đơn chưa map xưởng (`factoryId` missing), đơn xưởng US (`excluded-factory.ts`) — thêm query/aggregation mới về orders phải áp cùng bộ filter này (xem Orders.md §19/§21).
 
 ---
 
