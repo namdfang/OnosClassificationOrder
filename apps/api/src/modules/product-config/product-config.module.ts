@@ -7,6 +7,7 @@ import { MachineTypeModule } from '../machine-type/machine-type.module';
 import { OrderEntity, OrderSchema } from '../order/order.entity';
 import { ProductCategoryModule } from '../product-category/product-category.module';
 import { WorkshopConfigModule } from '../workshop-config/workshop-config.module';
+import { OnospodProductImportService } from './onospod-product-import.service';
 import { ProductConfigController } from './product-config.controller';
 import { ProductConfigEntity, ProductConfigSchema } from './product-config.entity';
 import { ProductConfigRepository } from './product-config.repository';
@@ -25,7 +26,7 @@ import { ProductConfigService } from './product-config.service';
     WorkshopConfigModule,
   ],
   controllers: [ProductConfigController],
-  providers: [ProductConfigService, ProductConfigRepository],
+  providers: [ProductConfigService, ProductConfigRepository, OnospodProductImportService],
   exports: [ProductConfigService, ProductConfigRepository],
 })
 export class ProductConfigModule {}

@@ -3,7 +3,7 @@
 > **File FE:** `apps/web/src/pages/customer/{login,register}/index.tsx`, `apps/web/src/pages/customer/dashboard/index.tsx`, `apps/web/src/pages/customer/orders/{index,new,track}.tsx`, `apps/web/src/pages/customer/catalog/{index,detail}.tsx`, `apps/web/src/layouts/customerLayout/CustomerLayout.tsx`, `apps/web/src/store/customerAuthStore.ts`, `apps/web/src/services/customerPortal.ts`, `apps/web/src/components/customer/CatalogProductCard.tsx`, `apps/web/src/components/common/FileUrlOrUploadInput.tsx`, `apps/web/src/pages/landing/index.tsx` (logo/link về `PATHS.LANDING`, đã bỏ text "OnosFactory")
 > **File BE:** `apps/api/src/modules/customer-portal/` (`customer-auth.controller.ts`, `customer-order.controller.ts`, `customer-order.service.ts`, `customer-catalog.controller.ts`, `customer-catalog.service.ts`, `customer-portal.module.ts`), `apps/api/src/modules/customer/` (`customer.entity.ts`, `customer.service.ts` → `register()`/`validateLogin()`/`getById()`/`toSafeCustomer()`), `apps/api/src/modules/auth/jwt.strategy.ts` (branch theo `RoleType.Customer`)
 > **Route:** `/customer/login`, `/customer/register`, `/customer/dashboard`, `/customer/orders`, `/customer/orders/new`, `/customer/orders/:productionId`, `/customer/catalog`, `/customer/catalog/:id`
-> **API:** `POST /v1/customer/auth/register`, `POST /v1/customer/auth/login`, `GET /v1/customer/auth/me`, `POST /v1/customer/orders`, `GET /v1/customer/orders`, `GET /v1/customer/orders/product-types`, `GET /v1/customer/orders/dashboard`, `GET /v1/customer/orders/:productionId`, `PATCH /v1/customer/orders/:productionId`, `GET /v1/customer/catalog`, `GET /v1/customer/catalog/:id`
+> **API:** `POST /v1/customer/auth/register`, `POST /v1/customer/auth/login`, `GET /v1/customer/auth/me`, `POST /v1/customer/orders`, `GET /v1/customer/orders`, `GET /v1/customer/orders/product-types`, `GET /v1/customer/orders/dashboard`, `GET /v1/customer/orders/:productionId`, `PATCH /v1/customer/orders/:productionId`, `GET /v1/customer/catalog`, `GET /v1/customer/catalog/facets`, `GET /v1/customer/catalog/:id`
 
 ---
 
@@ -327,16 +327,40 @@ dùng chung 1 hàm `mapRow()` (map `ProductConfigEntity` → `CustomerCatalogIte
 1. `getCatalog()` — danh sách, phân trang.
 2. `getCatalogItem()` — 1 sản phẩm theo `_id`, dùng cho trang chi tiết
    `/customer/catalog/:id`. 404 nếu không khớp filter hiển thị bên dưới.
+3. `getFacets()` — bộ lọc duyệt catalog (KHÔNG dùng `mapRow`): danh mục +
+   collection đang `isActive` kèm số sản phẩm khách thấy được (aggregate
+   `$group` theo `productCategoryId` / `$unwind collectionIds`, cùng filter
+   hiển thị), chỉ trả mục count > 0. Route `GET /customer/catalog/facets`
+   khai báo **TRƯỚC** `GET :id` trong controller (route param sẽ nuốt path).
 
 **Filter hiển thị (cả 2 API):** `ProductConfigEntity` với `variations` không
 rỗng (chỉ sản phẩm đã được enrich đầy đủ mới hiện trong catalog — xem
 [`Products.md §2.5`](Products.md)) **VÀ `status=active`** (Inactive/Hidden bị
 loại khỏi catalog khách hàng — xem [`Products.md §2.2`](Products.md); data cũ
 chưa có field `status` vẫn coi như active qua `$in: [Active, null]`).
-`getCatalog()` filter thêm `search`/`productCategoryId` nếu có. `productCategory`
+`getCatalog()` filter thêm `search`/`productCategoryId`/`collectionId` nếu có
+(`collectionId` match phần tử trong mảng `ProductConfig.collectionIds` —
+[`Collections.md`](Collections.md)). `productCategory`
 trả về trong response là TÊN đã resolve từ `productCategoryId` (populate
 virtual qua `ProductCategory` module — [`Products.md §4`](Products.md)), KHÔNG
-phải id.
+phải id. `getCatalogItem()` trả thêm `collections: string[]` (TÊN các
+collection active sản phẩm thuộc về, sort `sortOrder`) + `shortDescription` +
+`templateDescription`; cả 2 API trả `images[]`/`usImportTaxPerUnit` (map
+trong `CATALOG_ROW_SELECT`) + `variations[].packageGram` (HTML `short_description`/`template_description` import
+từ hệ cũ — nội dung tab "Chi tiết sản phẩm"/"Mockup & Template" ở §7.1) — CHỈ
+API chi tiết, danh sách không trả để nhẹ payload.
+
+**UI danh sách (`pages/customer/catalog/index.tsx`)** duyệt theo collection +
+danh mục, mọi số liệu lấy từ `GET /customer/catalog/facets` (gọi 1 lần khi
+mount):
+
+- **Hàng "Bộ sưu tập"**: card cuộn ngang (ảnh `image` của collection, fallback
+  gradient + icon; tên + số sản phẩm) — click chọn/bỏ chọn làm filter, card
+  đang chọn viền + ring primary. Ẩn cả hàng khi không có collection nào.
+- **Pill bar danh mục**: "Tất cả" + mỗi category 1 pill kèm count, cuộn ngang.
+- **Chip filter đang áp** cạnh dòng đếm kết quả (X từng chip riêng) + nút "Xóa
+  bộ lọc" (xóa cả search + category + collection). Đổi bất kỳ filter nào →
+  reset về trang 1.
 
 Với mỗi biến thể, dùng `promotionMatches()` + `applyPromotionDiscount()` (tái
 dùng từ `promotion.service.ts`) để tìm promotion đang active + trong khoảng
@@ -351,13 +375,56 @@ nội bộ) ra Customer Portal. Xem `CustomerCatalogVariationZod` trong
 
 ### 7.1 Trang chi tiết (`pages/customer/catalog/detail.tsx`)
 
-- Gallery trái: `mockup` làm ảnh chính, `sizeChartUrl` (nếu có) làm ảnh phụ —
-  strip thumbnail chỉ hiện khi có ≥2 ảnh (data hiện tại tối đa 2: mockup +
-  size chart, KHÔNG có field gallery nhiều ảnh trong `ProductConfigZod`).
-- Panel phải: breadcrumb (Home › Danh mục › tên sản phẩm), badge `printMethod`,
-  giá (ưu tiên `discountedPrice`, gạch ngang `retailPrice` nếu có giảm), SKU
-  của biến thể đang chọn, bộ chọn thuộc tính, vị trí in (`printArea[].label`),
-  mô tả, nút "Đặt đơn mới", nút tải bảng size (nếu có `sizeChartUrl`).
+- Gallery trái: hiện TẤT CẢ ảnh — `mockup` (ảnh chính) + gallery `images[]` +
+  `sizeChartUrl`, dedupe giữ thứ tự; strip thumbnail bo tròn 80px CUỘN NGANG
+  DƯỚI ảnh chính (mirror trang hệ cũ), chỉ hiện khi ≥2 ảnh.
+- **Ảnh thumb WordPress:** nhiều `mockup` import từ OnosPod là URL thumbnail
+  có hậu tố `-100x100` → hiển thị to sẽ mờ. URL trong DB GIỮ NGUYÊN làm ảnh
+  nhỏ; chỗ hiển thị to (ảnh chính gallery, `CatalogProductCard`) derive bản
+  full-size qua `toFullSizeImageUrl()` (`apps/web/src/utils/imageUrl.ts`, bỏ
+  hậu tố `-WxH`) + `onError` fallback về URL gốc đúng 1 lần (`data-fell-back`)
+  phòng file full-size không tồn tại. Strip thumbnail (56px) + preview 64px ở
+  `orders/new.tsx` vẫn dùng URL thumb gốc.
+- Panel phải: breadcrumb (Home › Danh mục › tên sản phẩm), badge `printMethod`
+  + badge secondary cho từng collection (`item.collections`), giá, **selector
+  "Phương thức ship"** (pill COD / Express US / Ship By Tiktok — chỉ hiện
+  method có giá trên ít nhất 1 biến thể; giá phía trên đổi theo method:
+  COD→`shipCodPrice`, Express US→`retailPrice` (CHỈ cột này áp promotion:
+  ưu tiên `discountedPrice` + gạch ngang), TikTok→`tiktokPrice`), bộ chọn
+  thuộc tính, **info block** (nền muted, mirror hệ cũ): "Thuế nhập US:
+  ${`usImportTaxPerUnit`}/sản phẩm" (đỏ) + "SKU: {sku}" kèm `CopyButton` +
+  "Đóng gói: {`packageGram` ?? `weight`}gram ({H}cm x {L}cm x {W}cm)" (kích
+  thước đỏ) — 2 giá trị tax/packageGram crawl từ trang WP hệ cũ, xem
+  [`Products.md §2.8`](Products.md), vị trí in (`printArea[].label`
+  + kích thước px nếu có `widthPx`/`heightPx`; kèm 2 link "Tải template thiết
+  kế"/"Tài liệu hướng dẫn design" khi sản phẩm có `printTemplate`/`printDocument`),
+  bảng "Thông số sản phẩm" (`itemSpecifics[]` label/value, chỉ hiện khi
+  có), nút "Đặt đơn mới", nút tải bảng size (nếu có `sizeChartUrl`).
+- **Block "Thông tin {tên} " (tab, full-width DƯỚI CÙNG trang)** — mirror
+  trang sản phẩm hệ OnosPod cũ, dùng `ui/tabs` (Radix) style gạch chân, tab
+  không có nội dung tự ẩn:
+  1. **Chi tiết sản phẩm** — `shortDescription` (bullet HTML
+     `short_description` hệ cũ) + `description`.
+  2. **Mockup & Template** — `templateDescription` (HTML `template_description`
+     hệ cũ: Print File Requirements, hướng dẫn đặt design...) + list link 👉
+     tải `printTemplate`/`printDocument`/`printArea[].templateUrl` (kèm size px).
+  3. **Biến thể & Giá** — bảng mirror layout hệ cũ, luôn hiện: 1 cột / label
+     thuộc tính (SIZE, COLOR... — union label của mọi biến thể) | SKU dạng
+     chip teal + `CopyButton` | Cân nặng `{weight}g ({height}cm x {length}cm
+     x {width}cm)` (kích thước đỏ) | Ship COD (xanh lá, `shipCodPrice`) |
+     Ship Express US (`retailPrice`, promotion áp vào cột này: discounted +
+     gạch retail) | Ship by TikTok (`tiktokPrice`). Cột weight/giá tự ẩn khi
+     KHÔNG biến thể nào có giá trị (vd biến thể `-DEFAULT` tự tạo).
+     **`shipCodPrice` = giá trị `nonShipCost`** — đây là GIÁ BÁN nonship
+     public trên trang sản phẩm hệ cũ (`nonship_price`), KHÔNG phải giá vốn;
+     giá vốn thật `cost` (`base_price`) + `wholesalePrice` vẫn tuyệt đối
+     KHÔNG trả ra Customer Portal.
+  Nội dung HTML render qua component `HtmlContent` (trong `detail.tsx`):
+  `dangerouslySetInnerHTML` + **`DOMPurify.sanitize()`** (bắt buộc — data từ
+  hệ ngoài) với bộ class Tailwind arbitrary-variant style sẵn
+  p/heading/list/img/table (ảnh trong mô tả `max-w-full` + bo góc); plain
+  text → `<p>` với `whitespace-pre-line`. Mô tả KHÔNG nằm trong panel phải
+  (HTML dài kèm ảnh làm trang lệch).
 - **Bộ chọn thuộc tính (màu/size...):** `attributes` của từng biến thể là
   key-value tự do (`label`/`value`, xem `Products.md §2.5`) — FE **gom nhóm
   theo `label`** (giữ thứ tự xuất hiện đầu tiên), mỗi label → danh sách
@@ -368,7 +435,7 @@ nội bộ) ra Customer Portal. Xem `CustomerCatalogVariationZod` trong
   (`findMatchingVariation`) để lấy SKU/giá hiển thị.
 - **Nút "Đặt đơn mới"** (`handleNewOrder`) điều hướng sang
   `PATHS.CUSTOMER_ORDER_NEW` kèm `location.state`:
-  `{ fromCatalog: true, productId, fullName, mockupUrl, printMethod, printArea, sku, color, size, attributes, price }`.
+  `{ fromCatalog: true, product (nguyên `CustomerCatalogItem` — gồm printArea giàu/printTemplate/printDocument), selectedAttrs }`.
   `color`/`size` được đoán từ `attributes` đã chọn qua `pickColorSize()` —
   match `label` chứa "color"/"colour"/"màu" → `color`, chứa "size"/"cỡ" →
   `size` (heuristic, vì `label` tự do không có key cố định "color"/"size").

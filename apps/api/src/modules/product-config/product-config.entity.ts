@@ -77,9 +77,36 @@ export class ProductConfigEntity extends DatabaseEntityAbstract {
   @Prop({ trim: true })
   printMethod?: string;
 
-  /** Danh sách vị trí in — mảng key CỐ ĐỊNH (xem `PRODUCT_PRINT_AREA_KEYS`), map 1-1 sang `order.designs`, KHÔNG còn free-text. */
-  @Prop({ type: [String], enum: PRODUCT_PRINT_AREA_KEYS, default: undefined })
+  /**
+   * Danh sách vị trí in — object giàu MIRROR `print_areas[]` hệ cũ, `key` CỐ
+   * ĐỊNH (xem `PRODUCT_PRINT_AREA_KEYS`) map 1-1 sang `order.designs`. Data
+   * cũ dạng mảng string key được backfill thành `{key, isRequired: true}` ở
+   * `ProductConfigService.onModuleInit`.
+   */
+  @Prop({
+    type: [
+      raw({
+        key: { type: String, required: true, enum: PRODUCT_PRINT_AREA_KEYS },
+        templateUrl: { type: String, trim: true },
+        widthPx: { type: Number, min: 0 },
+        heightPx: { type: Number, min: 0 },
+        isRequired: { type: Boolean },
+        additionPrice: { type: Number, min: 0 },
+        isEmbroidery: { type: Boolean },
+      }),
+    ],
+    default: undefined,
+    _id: false,
+  })
   printArea?: ProductPrintArea;
+
+  /** URL trang tài liệu hướng dẫn design/template ("print_document" hệ cũ). */
+  @Prop({ trim: true })
+  printDocument?: string;
+
+  /** URL template thiết kế CHUNG của sản phẩm ("print_template" hệ cũ) — template riêng từng vị trí xem `printArea[].templateUrl`. */
+  @Prop({ trim: true })
+  printTemplate?: string;
 
   /** Ảnh/URL bảng size. */
   @Prop({ trim: true })
@@ -96,6 +123,10 @@ export class ProductConfigEntity extends DatabaseEntityAbstract {
   /** Mô tả template/file in (HTML) — "Template description" hệ cũ. */
   @Prop({ trim: true })
   templateDescription?: string;
+
+  /** "IMPORT US TAX: ${n}/unit" hệ cũ — crawl từ trang WP public (xem ProductConfigZod). */
+  @Prop({ type: Number, min: 0 })
+  usImportTaxPerUnit?: number;
 
   /** "Shipping time" hệ cũ — Max Production time (ngày). */
   @Prop({ type: Number, min: 0 })
@@ -119,7 +150,9 @@ export class ProductConfigEntity extends DatabaseEntityAbstract {
 
   /** Thông số kỹ thuật dạng key-value tự do (chất liệu, kiểu dáng...). */
   @Prop({
-    type: [raw({ label: { type: String, required: true, trim: true }, value: { type: String, required: true, trim: true } })],
+    type: [
+      raw({ label: { type: String, required: true, trim: true }, value: { type: String, required: true, trim: true } }),
+    ],
     default: undefined,
     _id: false,
   })
@@ -144,7 +177,12 @@ export class ProductConfigEntity extends DatabaseEntityAbstract {
       raw({
         sku: { type: String, required: true, trim: true, uppercase: true },
         attributes: {
-          type: [raw({ label: { type: String, required: true, trim: true }, value: { type: String, required: true, trim: true } })],
+          type: [
+            raw({
+              label: { type: String, required: true, trim: true },
+              value: { type: String, required: true, trim: true },
+            }),
+          ],
           default: undefined,
         },
         cost: { type: Number, min: 0 },
@@ -158,6 +196,7 @@ export class ProductConfigEntity extends DatabaseEntityAbstract {
         width: { type: Number, min: 0 },
         height: { type: Number, min: 0 },
         length: { type: Number, min: 0 },
+        packageGram: { type: Number, min: 0 },
         status: { type: String, default: Status.Active },
       }),
     ],

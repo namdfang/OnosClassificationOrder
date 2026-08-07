@@ -127,6 +127,11 @@
     "changeProduct": "Đổi sản phẩm khác",
     "designUrl": "Link thiết kế — {{area}}",
     "designUrlPlaceholder": "https://drive.google.com/...",
+    "designOptional": "không bắt buộc",
+    "downloadAreaTemplate": "Tải template vị trí này",
+    "designSizeHint": "Kích thước chuẩn: {{size}}",
+    "productTemplate": "Template thiết kế sản phẩm",
+    "productPrintDocs": "Tài liệu hướng dẫn design",
     "searchPlaceholder": "Tìm sản phẩm theo tên…",
     "searchEmpty": "Không tìm thấy sản phẩm phù hợp.",
     "validation": {
@@ -164,7 +169,10 @@
     "moreVariations": "+ {{count}} biến thể khác",
     "variationCount": "{{count}} biến thể",
     "resultsCount": "{{count}} sản phẩm",
-    "clearSearch": "Xóa tìm kiếm"
+    "clearSearch": "Xóa tìm kiếm",
+    "collectionsTitle": "Bộ sưu tập",
+    "allCategories": "Tất cả",
+    "clearFilters": "Xóa bộ lọc"
   },
   "catalogDetail": {
     "notFound": "Không tìm thấy sản phẩm này.",
@@ -173,7 +181,30 @@
     "sku": "SKU",
     "printArea": "Vị trí in",
     "newOrder": "Đặt đơn mới",
-    "downloadSizeChart": "Tải bảng size"
+    "downloadSizeChart": "Tải bảng size",
+    "downloadPrintTemplate": "Tải template thiết kế",
+    "printDocs": "Tài liệu hướng dẫn design",
+    "specs": "Thông số sản phẩm",
+    "infoTitle": "Thông tin {{name}}",
+    "infoTabs": {
+      "details": "Chi tiết sản phẩm",
+      "template": "Mockup & Template",
+      "variations": "Biến thể & Giá"
+    },
+    "downloadAreaTemplate": "Tải template {{label}}{{size}}",
+    "colWeight": "Cân nặng",
+    "colShipCod": "Ship COD",
+    "colShipExpressUs": "Ship Express US",
+    "colShipTiktok": "Ship by TikTok",
+    "shippingMethod": "Phương thức ship",
+    "shipMethods": {
+      "cod": "COD",
+      "expressUs": "Express US",
+      "tiktok": "Ship By Tiktok"
+    },
+    "importUsTax": "Thuế nhập US",
+    "perUnit": "/sản phẩm",
+    "package": "Đóng gói"
   },
   "account": {
     "title": "Tài khoản của tôi",

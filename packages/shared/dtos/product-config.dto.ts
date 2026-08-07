@@ -16,16 +16,38 @@ export const ProductItemSpecificZod = z.object({
 export type ProductItemSpecific = z.infer<typeof ProductItemSpecificZod>;
 
 /**
- * Danh sách vị trí in của 1 sản phẩm — mỗi phần tử là 1 key CỐ ĐỊNH trong
+ * 1 vị trí in của sản phẩm — object giàu MIRROR `print_areas[]` hệ cũ
+ * (`print`→`templateUrl`, `width`/`height`→`widthPx`/`heightPx`,
+ * `is_required`→`isRequired`, `addition_price`→`additionPrice`,
+ * `is_embroidery`→`isEmbroidery`). `key` vẫn CỐ ĐỊNH trong
  * `PRODUCT_PRINT_AREAS` (`packages/shared/constants/product-print-area.ts`,
- * map 1-1 với `DesignFields`/order.designs). KHÔNG cho tự gõ key/label —
- * admin chỉ CHỌN trong danh mục cố định để tránh sai chính tả / trỏ tới field
- * design không tồn tại. Nhãn hiển thị resolve từ constant, không lưu trùng
- * lặp theo từng sản phẩm.
+ * map 1-1 với `DesignFields`/order.designs) — KHÔNG cho tự gõ key/label,
+ * nhãn hiển thị resolve từ constant.
  */
-export const ProductPrintAreaZod = ProductPrintAreaKeyZod.array()
+export const ProductPrintAreaItemZod = z.object({
+  key: ProductPrintAreaKeyZod,
+  /** URL template thiết kế cho vị trí này ("print" hệ cũ — Drive link...). */
+  templateUrl: z.string().max(1000).optional(),
+  /** Kích thước file in chuẩn theo pixel ("width"/"height" hệ cũ). */
+  widthPx: z.coerce.number().min(0).optional(),
+  heightPx: z.coerce.number().min(0).optional(),
+  /**
+   * Bắt buộc khách nộp design cho vị trí này ("is_required" hệ cũ). Data cũ
+   * dạng bare key được backfill `isRequired: true` — consumer coi
+   * `isRequired !== false` là bắt buộc (giữ behavior cũ: mọi vị trí đều bắt buộc).
+   */
+  isRequired: z.boolean().optional(),
+  /** Phụ phí in vị trí này ("addition_price" hệ cũ) — mới lưu, CHƯA wire vào tính giá. */
+  additionPrice: PriceZod.optional(),
+  /** Vị trí thêu ("is_embroidery" hệ cũ). */
+  isEmbroidery: z.boolean().optional(),
+});
+export type ProductPrintAreaItem = z.infer<typeof ProductPrintAreaItemZod>;
+
+/** Danh sách vị trí in của 1 sản phẩm — key không trùng lặp. */
+export const ProductPrintAreaZod = ProductPrintAreaItemZod.array()
   .max(30)
-  .refine((keys) => new Set(keys).size === keys.length, { message: 'Vị trí in bị trùng lặp' });
+  .refine((items) => new Set(items.map((i) => i.key)).size === items.length, { message: 'Vị trí in bị trùng lặp' });
 export type ProductPrintArea = z.infer<typeof ProductPrintAreaZod>;
 
 /**
@@ -58,6 +80,12 @@ export const ProductVariationZod = z.object({
   width: z.coerce.number().min(0).optional(),
   height: z.coerce.number().min(0).optional(),
   length: z.coerce.number().min(0).optional(),
+  /**
+   * Khối lượng ĐÓNG GÓI hiển thị "PACKAGE: {n}gram" trang sản phẩm hệ cũ —
+   * số nhập tay bên WP (KHÔNG suy được từ `weight`, vd weight 90 → package
+   * 110), crawl 1 lần qua `POST /product-configs/crawl-page-info`.
+   */
+  packageGram: z.coerce.number().min(0).optional(),
   status: z.enum(getObjectValues(Status)).default(Status.Active),
 });
 export type ProductVariation = z.infer<typeof ProductVariationZod>;
@@ -102,8 +130,12 @@ export const ProductConfigZod = BaseEntityZod.extend({
   productCategoryId: IDZod.optional(),
   /** workshop_config code (category=print_method). */
   printMethod: z.string().max(60).optional(),
-  /** Danh sách vị trí in — mảng key CỐ ĐỊNH (xem `PRODUCT_PRINT_AREAS`), KHÔNG còn free-text. */
+  /** Danh sách vị trí in — object giàu theo key CỐ ĐỊNH (xem `ProductPrintAreaItemZod`). */
   printArea: ProductPrintAreaZod.optional(),
+  /** URL trang tài liệu hướng dẫn design/template ("print_document" hệ cũ). */
+  printDocument: z.string().max(1000).optional(),
+  /** URL template thiết kế CHUNG của sản phẩm ("print_template" hệ cũ) — template riêng từng vị trí xem `printArea[].templateUrl`. */
+  printTemplate: z.string().max(1000).optional(),
   /** Ảnh/URL bảng size. */
   sizeChartUrl: z.string().max(1000).optional(),
   /** Mô tả sản phẩm (HTML) — hiển thị cho khách hàng ở Customer Portal ("Item description" hệ cũ). */
@@ -112,6 +144,13 @@ export const ProductConfigZod = BaseEntityZod.extend({
   shortDescription: z.string().max(20000).optional(),
   /** Mô tả template/file in (HTML) — "Template description" hệ cũ. */
   templateDescription: z.string().max(20000).optional(),
+  /**
+   * "IMPORT US TAX: ${n}/unit" trang sản phẩm hệ cũ — GIÁ TRỊ CỐ ĐỊNH nhập
+   * tay bên WP theo sản phẩm (đối chiếu thật: KHÔNG suy được từ % `tax_groups`
+   * GraphQL — 3 sản phẩm giá khác nhau cùng $0.40), crawl 1 lần qua
+   * `POST /product-configs/crawl-page-info`.
+   */
+  usImportTaxPerUnit: PriceZod.optional(),
   /** "Shipping time" hệ cũ — Max Production time (ngày). */
   maxProductionTime: z.coerce.number().min(0).optional(),
   /** "Shipping time" hệ cũ — Max shipping time (ngày). */
@@ -170,6 +209,8 @@ export const CreateProductConfigZod = z.object({
   productCategoryId: ProductConfigZod.shape.productCategoryId,
   printMethod: ProductConfigZod.shape.printMethod,
   printArea: ProductConfigZod.shape.printArea,
+  printDocument: ProductConfigZod.shape.printDocument,
+  printTemplate: ProductConfigZod.shape.printTemplate,
   sizeChartUrl: ProductConfigZod.shape.sizeChartUrl,
   description: ProductConfigZod.shape.description,
   shortDescription: ProductConfigZod.shape.shortDescription,
@@ -211,6 +252,8 @@ export const UpdateProductConfigZod = z.object({
   productCategoryId: ProductConfigZod.shape.productCategoryId,
   printMethod: ProductConfigZod.shape.printMethod,
   printArea: ProductConfigZod.shape.printArea,
+  printDocument: ProductConfigZod.shape.printDocument,
+  printTemplate: ProductConfigZod.shape.printTemplate,
   sizeChartUrl: ProductConfigZod.shape.sizeChartUrl,
   description: ProductConfigZod.shape.description,
   shortDescription: ProductConfigZod.shape.shortDescription,
@@ -279,6 +322,57 @@ export class UploadProductImageDto extends createZodDto(extendApi(UploadProductI
 
 export const UploadProductImageResZod = ResZod.extend({ data: z.object({ url: z.string() }) });
 export class UploadProductImageResDto extends createZodDto(extendApi(UploadProductImageResZod)) {}
+
+// ─── Import sản phẩm từ OnosPod (GraphQL productPreset) ───
+
+/**
+ * Import theo lô (FE gọi lặp từng trang tới khi `nextPage` null): mỗi call
+ * fetch 1 trang `productPreset` từ api.onospod.com (page/limit qua header
+ * `x-page`/`x-per-page`, tổng ở response header `x-total`) rồi upsert
+ * FILL-ONLY vào Product Config — xem `OnospodProductImportService`.
+ */
+export const ImportFromOnospodZod = z.object({
+  page: z.coerce.number().int().positive().default(1),
+  /**
+   * Nên gọi 1 LẦN DUY NHẤT với limit lớn (500) — phân trang bên OnosPod KHÔNG
+   * ổn định (thứ tự trượt giữa các lần gọi → trùng + LỌT sản phẩm, verify
+   * 2026-08-05: 9 trang × 20 chỉ thu 167 dòng có trùng lặp, thiếu PAOPPOLO).
+   */
+  limit: z.coerce.number().int().positive().max(500).default(500),
+});
+export class ImportFromOnospodDto extends createZodDto(extendApi(ImportFromOnospodZod)) {}
+
+export const OnospodImportErrorZod = z.object({
+  sku: z.string(),
+  name: z.string(),
+  reason: z.string(),
+});
+export type OnospodImportError = z.infer<typeof OnospodImportErrorZod>;
+
+export const ImportFromOnospodResZod = ResZod.extend({
+  data: z.object({
+    /** Tổng sản phẩm bên OnosPod (header `x-total`). */
+    total: z.number(),
+    /** Số sản phẩm xử lý trong trang này. */
+    processed: z.number(),
+    /** Tạo mới (chưa tồn tại theo sku/fullName). */
+    created: z.number(),
+    /** Đã tồn tại + có ít nhất 1 field trống được fill. */
+    filled: z.number(),
+    /** Đã tồn tại, không có gì để fill. */
+    skipped: z.number(),
+    errors: OnospodImportErrorZod.array(),
+    /** Trang kế tiếp — null = đã hết. */
+    nextPage: z.number().nullable(),
+    /**
+     * Bước cuối (khi `nextPage` null): số sản phẩm KHÔNG có biến thể (kể cả
+     * không có bên OnosPod) được tự tạo 1 biến thể mặc định (chưa có giá) để
+     * hiện được trong catalog khách — giá nhập sau ở trang chi tiết sản phẩm.
+     */
+    defaultVariationsCreated: z.number().optional(),
+  }),
+});
+export class ImportFromOnospodResDto extends createZodDto(extendApi(ImportFromOnospodResZod)) {}
 
 // ─── Kanban Settings — sync sản phẩm chưa có config từ đơn gần đây ───
 
@@ -351,22 +445,49 @@ export const CrawlProductMockupsResZod = ResZod.extend({
 export class CrawlProductMockupsResDto extends createZodDto(extendApi(CrawlProductMockupsResZod)) {}
 
 // ─── Customer Portal — Catalog (chỉ field an toàn cho khách hàng) ───
-// KHÔNG bao giờ trả `cost` / `nonShipCost` (giá vốn nội bộ) ra Customer Portal.
+// KHÔNG bao giờ trả `cost` (giá vốn `base_price` nội bộ) ra Customer Portal.
+// `nonShipCost` là giá bán nonship public trên trang sản phẩm hệ cũ — được trả
+// dưới tên `shipCodPrice` (xem CustomerCatalogVariationZod bên dưới).
 
 export const CustomerCatalogVariationZod = z.object({
   sku: ProductVariationZod.shape.sku,
   attributes: ProductVariationZod.shape.attributes,
+  /** Cột "SHIP Express US" bảng biến thể hệ cũ (`sale_price`) — giá bán chuẩn, promotion áp lên giá này. */
   retailPrice: ProductVariationZod.shape.retailPrice,
   /** Giá sau khi áp chương trình giảm giá tốt nhất theo tier của khách (nếu có). */
   discountedPrice: PriceZod.optional(),
   appliedPromotionName: z.string().optional(),
+  /**
+   * Cột "SHIP COD" bảng biến thể hệ cũ — map từ `nonShipCost` (`nonship_price`):
+   * đây là GIÁ BÁN nonship public trên trang sản phẩm cũ, KHÔNG phải giá vốn.
+   * Giá vốn thật (`cost`/`base_price`) vẫn tuyệt đối KHÔNG trả ra Customer Portal.
+   */
+  shipCodPrice: PriceZod.optional(),
+  /** Cột "Ship by TikTok" bảng biến thể hệ cũ (`tiktok_final_price`). */
+  tiktokPrice: PriceZod.optional(),
+  /** Cân nặng gram + kích thước đóng gói cm — cột "WEIGHT" hiển thị `{weight}g ({height}cm x {length}cm x {width}cm)`. */
+  weight: z.number().optional(),
+  width: z.number().optional(),
+  height: z.number().optional(),
+  length: z.number().optional(),
+  /** Khối lượng đóng gói — dòng "PACKAGE: {n}gram (...)" panel phải (crawl từ trang hệ cũ, xem `ProductVariationZod.packageGram`). */
+  packageGram: z.number().optional(),
 });
 export type CustomerCatalogVariation = z.infer<typeof CustomerCatalogVariationZod>;
 
-/** Vị trí in đã resolve nhãn hiển thị — trả cho API khách hàng thay vì bare key. */
+/**
+ * Vị trí in đã resolve nhãn hiển thị — trả cho API khách hàng thay vì bare
+ * key. Kèm template/kích thước px/isRequired để khách chuẩn bị file design
+ * đúng chuẩn (KHÔNG trả `additionPrice`/`isEmbroidery` — thông tin nội bộ).
+ */
 export const CustomerCatalogPrintAreaZod = z.object({
   key: ProductPrintAreaKeyZod,
   label: z.string(),
+  templateUrl: z.string().optional(),
+  widthPx: z.number().optional(),
+  heightPx: z.number().optional(),
+  /** `false` = vị trí tùy chọn, khách được bỏ trống design; mặc định coi là bắt buộc. */
+  isRequired: z.boolean().optional(),
 });
 export type CustomerCatalogPrintArea = z.infer<typeof CustomerCatalogPrintAreaZod>;
 
@@ -378,16 +499,31 @@ export const CustomerCatalogItemZod = z.object({
   productCategory: z.string().optional(),
   printMethod: z.string().optional(),
   printArea: CustomerCatalogPrintAreaZod.array().optional(),
+  /** URL trang tài liệu hướng dẫn design ("print_document" hệ cũ). */
+  printDocument: z.string().optional(),
+  /** URL template thiết kế chung ("print_template" hệ cũ). */
+  printTemplate: z.string().optional(),
   mockup: z.string().optional(),
+  /** Gallery ảnh bổ sung — trang chi tiết hiện TẤT CẢ: mockup + images + sizeChart. */
+  images: z.string().array().optional(),
+  /** Dòng "IMPORT US TAX: ${n}/unit" panel phải (crawl từ trang hệ cũ, xem `ProductConfigZod.usImportTaxPerUnit`). */
+  usImportTaxPerUnit: PriceZod.optional(),
   sizeChartUrl: z.string().optional(),
   description: z.string().optional(),
+  /** Bullet tóm tắt (HTML `short_description` hệ cũ) — chỉ trả ở API chi tiết, hiện trong tab "Chi tiết sản phẩm". */
+  shortDescription: z.string().optional(),
+  /** Nội dung tab "Mockup & Template" (HTML `template_description` hệ cũ: yêu cầu file in, hướng dẫn đặt design...) — chỉ trả ở API chi tiết. */
+  templateDescription: z.string().optional(),
   itemSpecifics: ProductItemSpecificZod.array().optional(),
   variations: CustomerCatalogVariationZod.array(),
+  /** Tên các collection sản phẩm thuộc về (resolve từ `collectionIds`) — chỉ trả ở API chi tiết. */
+  collections: z.string().array().optional(),
 });
 export type CustomerCatalogItem = z.infer<typeof CustomerCatalogItemZod>;
 
 export const GetCustomerCatalogZod = PageQueryZod.extend({
   productCategoryId: IDZod.optional(),
+  collectionId: IDZod.optional(),
 });
 export class GetCustomerCatalogDto extends createZodDto(extendApi(GetCustomerCatalogZod)) {}
 
@@ -397,3 +533,58 @@ export class GetCustomerCatalogResDto extends createZodDto(extendApi(GetCustomer
 /** 1 sản phẩm — dùng cho trang chi tiết `/customer/catalog/:id` (gallery + chọn biến thể + "Đặt đơn mới"). */
 export const GetCustomerCatalogItemResZod = ResZod.extend({ data: CustomerCatalogItemZod });
 export class GetCustomerCatalogItemResDto extends createZodDto(extendApi(GetCustomerCatalogItemResZod)) {}
+
+/**
+ * Crawl "Import US Tax" + "Package gram" từ trang sản phẩm public hệ cũ
+ * (`onospod.com/product/{slug}/` — 2 giá trị này CHỈ có trên trang WP, không
+ * có trong GraphQL) — theo lô cursor như crawl-mockups, FE gọi lặp đến `done`.
+ * Chỉ quét sản phẩm có `slug` và còn thiếu ít nhất 1 trong 2 giá trị.
+ */
+export const CrawlPageInfoZod = z.object({
+  limit: z.coerce.number().int().min(1).max(50).default(10),
+  cursor: IDZod.optional(),
+});
+export class CrawlPageInfoDto extends createZodDto(extendApi(CrawlPageInfoZod)) {}
+
+export const CrawlPageInfoResultItemZod = z.object({
+  productConfigId: IDZod,
+  fullName: z.string(),
+  status: z.enum(['updated', 'no-data', 'error']),
+  usImportTaxPerUnit: PriceZod.optional(),
+  /** Số biến thể đã gán được packageGram (match theo giá trị thuộc tính trên điều kiện hiển thị của trang cũ). */
+  packageGramMatched: z.number().optional(),
+  message: z.string().optional(),
+});
+export type CrawlPageInfoResultItem = z.infer<typeof CrawlPageInfoResultItemZod>;
+
+export const CrawlPageInfoResZod = ResZod.extend({
+  data: z.object({
+    processed: z.number(),
+    updated: z.number(),
+    /** Số sản phẩm còn thiếu data SAU cursor (chưa quét). */
+    remaining: z.number(),
+    nextCursor: IDZod.optional(),
+    done: z.boolean(),
+    results: CrawlPageInfoResultItemZod.array(),
+  }),
+});
+export class CrawlPageInfoResDto extends createZodDto(extendApi(CrawlPageInfoResZod)) {}
+
+/** 1 mục lọc (danh mục hoặc collection) kèm số sản phẩm khách thấy được — chỉ trả mục đang active và count > 0. */
+export const CustomerCatalogFacetZod = z.object({
+  _id: IDZod,
+  name: z.string(),
+  /** Ảnh đại diện (chỉ collection có). */
+  image: z.string().optional(),
+  count: z.number(),
+});
+export type CustomerCatalogFacet = z.infer<typeof CustomerCatalogFacetZod>;
+
+/** Bộ lọc duyệt catalog `/customer/catalog` — categories (pill bar) + collections (hàng card). */
+export const GetCustomerCatalogFacetsResZod = ResZod.extend({
+  data: z.object({
+    categories: CustomerCatalogFacetZod.array(),
+    collections: CustomerCatalogFacetZod.array(),
+  }),
+});
+export class GetCustomerCatalogFacetsResDto extends createZodDto(extendApi(GetCustomerCatalogFacetsResZod)) {}

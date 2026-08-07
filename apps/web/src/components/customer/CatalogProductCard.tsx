@@ -6,6 +6,7 @@ import type { CustomerCatalogItem } from 'shared';
 import { Badge } from '@/components/ui/badge';
 
 import { cn } from '@/utils/cn';
+import { toFullSizeImageUrl } from '@/utils/imageUrl';
 
 const usdFormatter = new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD' });
 function formatPrice(value?: number): string {
@@ -27,7 +28,7 @@ export function CatalogProductCard({ item, onSelect, className }: CatalogProduct
   const { t } = useTranslation('customerPortal');
   const cheapest = item.variations.reduce<CustomerCatalogItem['variations'][number] | undefined>((min, v) => {
     const price = v.discountedPrice ?? v.retailPrice ?? Infinity;
-    const minPrice = min ? (min.discountedPrice ?? min.retailPrice ?? Infinity) : Infinity;
+    const minPrice = min ? min.discountedPrice ?? min.retailPrice ?? Infinity : Infinity;
     return price < minPrice ? v : min;
   }, undefined);
   const hasDiscount = cheapest?.discountedPrice != null && cheapest.discountedPrice !== cheapest.retailPrice;
@@ -44,11 +45,18 @@ export function CatalogProductCard({ item, onSelect, className }: CatalogProduct
     >
       <div className="aspect-square bg-muted flex items-center justify-center overflow-hidden">
         {item.mockup ? (
+          // Card khá to (~250px) — dùng bản full-size, URL thumb `-100x100` sẽ mờ.
           <img
-            src={item.mockup}
+            src={toFullSizeImageUrl(item.mockup)}
             alt={item.fullName}
             className="w-full h-full object-contain transition-transform group-hover:scale-105"
             loading="lazy"
+            onError={(e) => {
+              if (item.mockup && e.currentTarget.src !== item.mockup && !e.currentTarget.dataset.fellBack) {
+                e.currentTarget.dataset.fellBack = '1';
+                e.currentTarget.src = item.mockup;
+              }
+            }}
           />
         ) : (
           <ImageIcon size={28} className="text-muted-foreground" />
@@ -65,9 +73,13 @@ export function CatalogProductCard({ item, onSelect, className }: CatalogProduct
 
         <div className="flex items-center justify-between pt-0.5">
           <div className="flex items-baseline gap-1.5">
-            <span className="text-sm font-semibold text-primary">{formatPrice(cheapest?.discountedPrice ?? cheapest?.retailPrice)}</span>
+            <span className="text-sm font-semibold text-primary">
+              {formatPrice(cheapest?.discountedPrice ?? cheapest?.retailPrice)}
+            </span>
             {hasDiscount && (
-              <span className="text-[11px] line-through text-muted-foreground">{formatPrice(cheapest?.retailPrice)}</span>
+              <span className="text-[11px] line-through text-muted-foreground">
+                {formatPrice(cheapest?.retailPrice)}
+              </span>
             )}
           </div>
           {item.variations.length > 1 && (

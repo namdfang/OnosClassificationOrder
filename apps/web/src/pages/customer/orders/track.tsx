@@ -236,19 +236,44 @@ function CustomerOrderTrack() {
           <div className="space-y-5">
             <div className="space-y-1.5">
               <label className="text-sm font-medium leading-none">{t('orderNew.mockupUrl')}</label>
-              <FileUrlOrUploadInput value={mockupUrl} onChange={setMockupUrl} placeholder={t('orderNew.mockupUrlPlaceholder')} />
+              <FileUrlOrUploadInput
+                value={mockupUrl}
+                onChange={setMockupUrl}
+                placeholder={t('orderNew.mockupUrlPlaceholder')}
+              />
             </div>
 
-            {printAreas.map((area) => (
-              <div key={area.key} className="space-y-1.5">
-                <label className="text-sm font-medium leading-none">{t('orderNew.designUrl', { area: area.label })}</label>
-                <FileUrlOrUploadInput
-                  value={designUrls[area.key] ?? ''}
-                  onChange={(v) => setDesignUrls((prev) => ({ ...prev, [area.key]: v }))}
-                  placeholder={t('orderNew.designUrlPlaceholder')}
-                />
-              </div>
-            ))}
+            {printAreas.map((area) => {
+              const sizeHint = area.widthPx && area.heightPx ? `${area.widthPx} × ${area.heightPx} px` : undefined;
+              return (
+                <div key={area.key} className="space-y-1.5">
+                  <label className="text-sm font-medium leading-none">
+                    {t('orderNew.designUrl', { area: area.label })}
+                  </label>
+                  {(area.templateUrl || sizeHint) && (
+                    <p className="text-[11px] text-muted-foreground">
+                      {area.templateUrl && (
+                        <a
+                          href={area.templateUrl}
+                          target="_blank"
+                          rel="noreferrer"
+                          className="text-primary hover:underline"
+                        >
+                          {t('orderNew.downloadAreaTemplate')}
+                        </a>
+                      )}
+                      {area.templateUrl && sizeHint && ' · '}
+                      {sizeHint && t('orderNew.designSizeHint', { size: sizeHint })}
+                    </p>
+                  )}
+                  <FileUrlOrUploadInput
+                    value={designUrls[area.key] ?? ''}
+                    onChange={(v) => setDesignUrls((prev) => ({ ...prev, [area.key]: v }))}
+                    placeholder={t('orderNew.designUrlPlaceholder')}
+                  />
+                </div>
+              );
+            })}
 
             <div>
               <h3 className="text-xs font-semibold uppercase tracking-wide text-muted-foreground mb-2">

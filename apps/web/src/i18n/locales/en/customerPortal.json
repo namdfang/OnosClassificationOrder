@@ -128,6 +128,11 @@
     "changeProduct": "Choose a different product",
     "designUrl": "Design link — {{area}}",
     "designUrlPlaceholder": "https://drive.google.com/...",
+    "designOptional": "optional",
+    "downloadAreaTemplate": "Download area template",
+    "designSizeHint": "Recommended size: {{size}}",
+    "productTemplate": "Product design template",
+    "productPrintDocs": "Design guidelines",
     "searchPlaceholder": "Search products by name…",
     "searchEmpty": "No matching products found.",
     "validation": {
@@ -165,7 +170,10 @@
     "moreVariations": "+ {{count}} more variations",
     "variationCount": "{{count}} variations",
     "resultsCount": "{{count}} products",
-    "clearSearch": "Clear search"
+    "clearSearch": "Clear search",
+    "collectionsTitle": "Collections",
+    "allCategories": "All",
+    "clearFilters": "Clear filters"
   },
   "catalogDetail": {
     "notFound": "This product could not be found.",
@@ -174,7 +182,30 @@
     "sku": "SKU",
     "printArea": "Print area",
     "newOrder": "New order",
-    "downloadSizeChart": "Download size chart"
+    "downloadSizeChart": "Download size chart",
+    "downloadPrintTemplate": "Download design template",
+    "printDocs": "Design guidelines",
+    "specs": "Product specifications",
+    "infoTitle": "{{name}} Information",
+    "infoTabs": {
+      "details": "Product Details",
+      "template": "Mockup & Template",
+      "variations": "Variations & Price"
+    },
+    "downloadAreaTemplate": "Download {{label}} template{{size}}",
+    "colWeight": "Weight",
+    "colShipCod": "Ship COD",
+    "colShipExpressUs": "Ship Express US",
+    "colShipTiktok": "Ship by TikTok",
+    "shippingMethod": "Shipping Method",
+    "shipMethods": {
+      "cod": "COD",
+      "expressUs": "Express US",
+      "tiktok": "Ship By Tiktok"
+    },
+    "importUsTax": "Import US Tax",
+    "perUnit": "/unit",
+    "package": "Package"
   },
   "account": {
     "title": "My account",

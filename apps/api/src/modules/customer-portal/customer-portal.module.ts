@@ -2,9 +2,11 @@ import { Module } from '@nestjs/common';
 import { MongooseModule } from '@nestjs/mongoose';
 
 import { AuthModule } from '@/modules/auth/auth.module';
+import { CollectionEntity, CollectionSchema } from '@/modules/collection/collection.entity';
 import { CustomerModule } from '@/modules/customer/customer.module';
 import { OrderEntity, OrderSchema } from '@/modules/order/order.entity';
 import { OrderModule } from '@/modules/order/order.module';
+import { ProductCategoryEntity, ProductCategorySchema } from '@/modules/product-category/product-category.entity';
 import { ProductConfigEntity, ProductConfigSchema } from '@/modules/product-config/product-config.entity';
 import { PromotionModule } from '@/modules/promotion/promotion.module';
 
@@ -22,6 +24,8 @@ import { CustomerOrderService } from './customer-order.service';
     MongooseModule.forFeature([
       { name: OrderEntity.name, schema: OrderSchema },
       { name: ProductConfigEntity.name, schema: ProductConfigSchema },
+      { name: ProductCategoryEntity.name, schema: ProductCategorySchema },
+      { name: CollectionEntity.name, schema: CollectionSchema },
     ]),
     AuthModule,
     CustomerModule,

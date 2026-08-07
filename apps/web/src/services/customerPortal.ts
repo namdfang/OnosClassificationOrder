@@ -62,7 +62,11 @@ const getCatalogItem = (id: string) => {
   return callApi(`/${CONFIG.API_VERSION}/customer/catalog/${encodeURIComponent(id)}`, 'get');
 };
 
-export const customerCatalog = { getCatalog, getCatalogItem };
+const getCatalogFacets = () => {
+  return callApi(`/${CONFIG.API_VERSION}/customer/catalog/facets`, 'get');
+};
+
+export const customerCatalog = { getCatalog, getCatalogItem, getCatalogFacets };
 
 const listNotifications = (page = 1, limit = 20) => {
   return callApi(`/${CONFIG.API_VERSION}/customer/notifications?page=${page}&limit=${limit}`, 'get');

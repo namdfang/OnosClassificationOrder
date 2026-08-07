@@ -72,7 +72,25 @@
       "deleteTitle": "Delete product (only allowed if it has no orders)",
       "openMockup": "Open mockup image"
     },
-    "uploadButton": "Upload config"
+    "uploadButton": "Upload config",
+    "onospodImport": {
+      "button": "Import from OnosPod",
+      "title": "Fetch ALL products from OnosPod — only fills empty fields, never overwrites current data/factory",
+      "confirm": "Import ALL products from OnosPod?\n\n- Only FILLS empty fields, never overwrites existing data.\n- Current Factory/Department/Fabric are kept untouched.\n- Products that don't exist yet will be created (no factory assigned).",
+      "importing": "Importing…",
+      "progress": "Importing {{done}}/{{total}}…",
+      "done": "OnosPod import finished: {{created}} created · {{filled}} filled · {{skipped}} skipped",
+      "errors": "{{count}} products had errors — e.g. {{first}}",
+      "defaultsCreated": "Created a default variation (no price yet) for {{count}} products without variations — set retail prices on the product detail page."
+    },
+    "pageInfoCrawl": {
+      "button": "Crawl tax & package",
+      "title": "Fetch \"Import US Tax\" + \"Package gram\" from the legacy public product pages (by slug)",
+      "confirm": "Crawl Import US Tax + Package gram from onospod.com for products still missing them? (only products with a slug)",
+      "crawling": "Crawling…",
+      "progress": "Scanned {{done}} — {{remaining}} left",
+      "done": "Done: updated {{updated}}/{{processed}} products"
+    }
   },
   "categoryTab": {
     "title": "Product categories",
@@ -224,6 +242,17 @@
       "sizeChart": "Size chart",
       "description": "Product description",
       "descriptionPlaceholder": "Product description…"
+    },
+    "printAreaConfig": {
+      "title": "Per-area configuration",
+      "printDocument": "Design guide document (URL)",
+      "printTemplate": "Master design template (URL)",
+      "templateUrl": "Area template (URL)",
+      "widthPx": "Width (px)",
+      "heightPx": "Height (px)",
+      "additionPrice": "Extra charge ($)",
+      "isRequired": "Design required",
+      "isEmbroidery": "Embroidery"
     },
     "packaging": {
       "title": "Default packaging",

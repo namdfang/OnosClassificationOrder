@@ -1,7 +1,7 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useNavigate } from 'react-router-dom';
-import { FileUp, ImageIcon, Pencil, Plus, RotateCw, Trash2 } from 'lucide-react';
+import { CloudDownload, FileUp, ImageIcon, Pencil, Plus, Receipt, RotateCw, Trash2 } from 'lucide-react';
 import type { ProductItemSpecific, ProductPrintArea, ProductVariation } from 'shared';
 import { PRODUCT_LEVEL_MAP, PRODUCT_LEVELS, ProductConfigStatus, WorkshopConfigCategory } from 'shared';
 import { toast } from 'sonner';
@@ -29,9 +29,18 @@ import { UploadConfigFileDialog } from './UploadConfigFileDialog';
 export const buildStatusMeta = (
   t: (key: string) => string,
 ): Record<ProductConfigStatus, { label: string; className: string }> => ({
-  [ProductConfigStatus.Active]: { label: t('configTab.status.active'), className: 'bg-emerald-500 text-white border-emerald-500' },
-  [ProductConfigStatus.Inactive]: { label: t('configTab.status.inactive'), className: 'bg-amber-500 text-white border-amber-500' },
-  [ProductConfigStatus.Hidden]: { label: t('configTab.status.hidden'), className: 'bg-slate-500 text-white border-slate-500' },
+  [ProductConfigStatus.Active]: {
+    label: t('configTab.status.active'),
+    className: 'bg-emerald-500 text-white border-emerald-500',
+  },
+  [ProductConfigStatus.Inactive]: {
+    label: t('configTab.status.inactive'),
+    className: 'bg-amber-500 text-white border-amber-500',
+  },
+  [ProductConfigStatus.Hidden]: {
+    label: t('configTab.status.hidden'),
+    className: 'bg-slate-500 text-white border-slate-500',
+  },
 });
 
 export interface ProductConfigRow {
@@ -59,6 +68,8 @@ export interface ProductConfigRow {
   productCategory?: { name: string; shortName: string };
   printMethod?: string;
   printArea?: ProductPrintArea;
+  printDocument?: string;
+  printTemplate?: string;
   sizeChartUrl?: string;
   description?: string;
   shortDescription?: string;
@@ -99,6 +110,9 @@ export function ProductConfigTab() {
   const [total, setTotal] = useState(0);
   const [importOpen, setImportOpen] = useState(false);
   const [uploadOpen, setUploadOpen] = useState(false);
+  const [onospodImporting, setOnospodImporting] = useState(false);
+  const [pageInfoCrawling, setPageInfoCrawling] = useState(false);
+  const [onospodProgress, setOnospodProgress] = useState('');
   // Danh sách Xưởng / Phòng cho dropdown chỉnh sửa inline + trang chi tiết.
   const [factories, setFactories] = useState<RefItem[]>([]);
   const [machineTypes, setMachineTypes] = useState<RefItem[]>([]);
@@ -127,6 +141,86 @@ export function ProductConfigTab() {
       }
     })();
   }, []);
+
+  /**
+   * Import TẤT CẢ sản phẩm từ OnosPod — gọi lặp từng trang tới khi `nextPage`
+   * null. Fill-only: KHÔNG đè field đã có, KHÔNG đụng xưởng/phòng/vải hiện tại.
+   */
+  const handleImportFromOnospod = async () => {
+    if (!window.confirm(t('configTab.onospodImport.confirm'))) return;
+    setOnospodImporting(true);
+    const totals = { created: 0, filled: 0, skipped: 0 };
+    const errors: { sku: string; name: string; reason: string }[] = [];
+    let defaultsCreated = 0;
+    try {
+      let nextPage: number | null = 1;
+      // Limit LỚN (1 request cho toàn bộ catalog) — phân trang bên OnosPod
+      // không ổn định, chia trang nhỏ sẽ trùng + LỌT sản phẩm.
+      const limit = 500;
+      while (nextPage) {
+        const res = await RepositoryRemote.productConfig.importFromOnospod({ page: nextPage, limit });
+        const d = res.data?.data;
+        if (!d) break;
+        totals.created += d.created;
+        totals.filled += d.filled;
+        totals.skipped += d.skipped;
+        defaultsCreated += d.defaultVariationsCreated ?? 0;
+        errors.push(...(d.errors ?? []));
+        setOnospodProgress(
+          t('configTab.onospodImport.progress', { done: Math.min(nextPage * limit, d.total), total: d.total }),
+        );
+        nextPage = d.nextPage;
+      }
+      toast.success(t('configTab.onospodImport.done', totals));
+      if (defaultsCreated > 0) {
+        toast.info(t('configTab.onospodImport.defaultsCreated', { count: defaultsCreated }), { duration: 10000 });
+      }
+      if (errors.length > 0) {
+        toast.warning(t('configTab.onospodImport.errors', { count: errors.length, first: errors[0].reason }), {
+          duration: 10000,
+        });
+      }
+      fetchData();
+    } catch (error) {
+      handleAxiosError(error);
+    } finally {
+      setOnospodImporting(false);
+      setOnospodProgress('');
+    }
+  };
+
+  /**
+   * Crawl "Import US Tax" + "Package gram" từ trang sản phẩm public hệ cũ —
+   * gọi lặp theo `cursor` tới khi `done` (2 giá trị này chỉ có trên trang WP,
+   * import GraphQL không lấy được).
+   */
+  const handleCrawlPageInfo = async () => {
+    if (!window.confirm(t('configTab.pageInfoCrawl.confirm'))) return;
+    setPageInfoCrawling(true);
+    let updated = 0;
+    let processed = 0;
+    try {
+      let cursor: string | undefined;
+      let done = false;
+      while (!done) {
+        const res = await RepositoryRemote.productConfig.crawlPageInfo({ limit: 10, cursor });
+        const d = res.data?.data;
+        if (!d) break;
+        processed += d.processed;
+        updated += d.updated;
+        setOnospodProgress(t('configTab.pageInfoCrawl.progress', { done: processed, remaining: d.remaining }));
+        cursor = d.nextCursor;
+        done = d.done || !d.nextCursor;
+      }
+      toast.success(t('configTab.pageInfoCrawl.done', { updated, processed }));
+      fetchData();
+    } catch (error) {
+      handleAxiosError(error);
+    } finally {
+      setPageInfoCrawling(false);
+      setOnospodProgress('');
+    }
+  };
 
   const handleFactoryChange = async (id: string, factoryId: string) => {
     if (!factoryId) return; // Xưởng là bắt buộc — không cho về rỗng.
@@ -326,6 +420,28 @@ export function ProductConfigTab() {
             <FileUp size={14} />
             {t('configTab.uploadButton')}
           </Button>
+          <Button
+            variant="outline"
+            onClick={handleImportFromOnospod}
+            disabled={onospodImporting}
+            title={t('configTab.onospodImport.title')}
+          >
+            {onospodImporting ? <Spinner size={14} /> : <CloudDownload size={14} />}
+            {onospodImporting
+              ? onospodProgress || t('configTab.onospodImport.importing')
+              : t('configTab.onospodImport.button')}
+          </Button>
+          <Button
+            variant="outline"
+            onClick={handleCrawlPageInfo}
+            disabled={pageInfoCrawling}
+            title={t('configTab.pageInfoCrawl.title')}
+          >
+            {pageInfoCrawling ? <Spinner size={14} /> : <Receipt size={14} />}
+            {pageInfoCrawling
+              ? onospodProgress || t('configTab.pageInfoCrawl.crawling')
+              : t('configTab.pageInfoCrawl.button')}
+          </Button>
         </div>
       </div>
 
@@ -363,190 +479,198 @@ export function ProductConfigTab() {
               </TableRow>
             )}
             {items.map((it) => (
-                <TableRow key={it._id}>
-                  <TableCell>
-                    {it.mockup ? (
-                      // Mockup crawl từ onospod lưu thumbnail -100x100 — mở tab thì bỏ hậu tố để xem ảnh gốc.
-                      <a
-                        href={toFullSizeImageUrl(it.mockup)}
-                        target="_blank"
-                        rel="noreferrer"
-                        title={t('configTab.table.openMockup')}
-                      >
-                        <img
-                          src={it.mockup}
-                          alt="mockup"
-                          className="w-14 h-14 rounded object-cover border border-border bg-muted"
-                        />
-                      </a>
-                    ) : (
-                      <div className="w-14 h-14 rounded border border-dashed border-border flex items-center justify-center text-muted-foreground">
-                        <ImageIcon size={16} />
-                      </div>
-                    )}
-                  </TableCell>
-                  <TableCell className="font-medium">{it.fullName}</TableCell>
-                  <TableCell>
-                    <Badge variant="outline">{it.shortName}</Badge>
-                  </TableCell>
-                  <TableCell>
-                    {it.machineNumber ? (
-                      (() => {
-                        const m = machineOptions.find((o) => o.code === it.machineNumber);
-                        if (m?.color) {
-                          return (
-                            <Badge
-                              className="font-normal border"
-                              style={{ backgroundColor: m.color, color: '#fff', borderColor: m.color }}
-                            >
-                              {m.name}
-                            </Badge>
-                          );
-                        }
-                        return <Badge variant="secondary">{m?.name ?? it.machineNumber}</Badge>;
-                      })()
-                    ) : (
-                      <span className="text-muted-foreground text-xs">—</span>
-                    )}
-                  </TableCell>
-                  <TableCell>
-                    <select
-                      value={it.machineTypeId || ''}
-                      onChange={(e) => handleMachineTypeChange(it._id, e.target.value)}
-                      className="w-full min-w-[130px] rounded-md border border-input bg-background px-2 py-1 text-xs focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
+              <TableRow key={it._id}>
+                <TableCell>
+                  {it.mockup ? (
+                    // Mockup crawl từ onospod lưu thumbnail -100x100 — mở tab thì bỏ hậu tố để xem ảnh gốc.
+                    <a
+                      href={toFullSizeImageUrl(it.mockup)}
+                      target="_blank"
+                      rel="noreferrer"
+                      title={t('configTab.table.openMockup')}
                     >
-                      {!it.machineTypeId && <option value="">{t('configTab.table.notSelected')}</option>}
-                      {machineTypes.map((m) => (
-                        <option key={m._id} value={m._id}>
-                          {m.shortName} · {m.name}
-                        </option>
-                      ))}
-                    </select>
-                  </TableCell>
-                  <TableCell>
-                    <select
-                      value={it.factoryId || ''}
-                      onChange={(e) => handleFactoryChange(it._id, e.target.value)}
-                      className="w-full min-w-[130px] rounded-md border border-input bg-background px-2 py-1 text-xs focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
-                    >
-                      {!it.factoryId && <option value="">{t('configTab.table.notSelected')}</option>}
-                      {factories.map((f) => (
-                        <option key={f._id} value={f._id}>
-                          {f.shortName} · {f.name}
-                        </option>
-                      ))}
-                    </select>
-                  </TableCell>
-                  <TableCell>
-                    <select
-                      value={it.fabricType || ''}
-                      onChange={(e) => handleFabricChange(it._id, e.target.value)}
-                      className="w-full rounded-md border border-input bg-background px-2 py-1 text-xs focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
-                    >
-                      <option value="">{t('configTab.table.notSelected')}</option>
-                      {fabricOptions.map((opt) => (
-                        <option key={opt.code} value={opt.code}>
-                          {opt.name}
-                        </option>
-                      ))}
-                    </select>
-                  </TableCell>
-                  <TableCell>
-                    <select
-                      value={it.toolResult || ''}
-                      onChange={(e) => handleToolChange(it._id, e.target.value)}
-                      className="w-full rounded-md border border-input bg-background px-2 py-1 text-xs focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
-                    >
-                      <option value="">{t('configTab.table.notSelected')}</option>
-                      {toolOptions.map((opt) => (
-                        <option key={opt.code} value={opt.code}>
-                          {opt.name}
-                        </option>
-                      ))}
-                    </select>
-                  </TableCell>
-                  <TableCell>
-                    <div className="flex items-center gap-1.5">
-                      {it.level ? (
-                        <Badge
-                          className="font-normal border shrink-0"
-                          style={{
-                            backgroundColor: PRODUCT_LEVEL_MAP[it.level]?.color,
-                            color: '#fff',
-                            borderColor: PRODUCT_LEVEL_MAP[it.level]?.color,
-                          }}
-                        >
-                          Lv {it.level}
-                        </Badge>
-                      ) : (
-                        <span className="text-muted-foreground text-xs shrink-0">—</span>
-                      )}
-                      <select
-                        value={it.level ?? ''}
-                        onChange={(e) => handleLevelChange(it._id, e.target.value)}
-                        className="w-full rounded-md border border-input bg-background px-2 py-1 text-xs focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
-                      >
-                        <option value="">{t('configTab.table.notSelected')}</option>
-                        {PRODUCT_LEVELS.map((lv) => (
-                          <option key={lv.value} value={lv.value}>
-                            {lv.label}
-                          </option>
-                        ))}
-                      </select>
+                      <img
+                        src={it.mockup}
+                        alt="mockup"
+                        className="w-14 h-14 rounded object-cover border border-border bg-muted"
+                      />
+                    </a>
+                  ) : (
+                    <div className="w-14 h-14 rounded border border-dashed border-border flex items-center justify-center text-muted-foreground">
+                      <ImageIcon size={16} />
                     </div>
-                  </TableCell>
-                  <TableCell>
-                    <div className="flex flex-col gap-1 text-xs">
-                      {it.productCategory ? (
-                        <Badge variant="secondary" className="w-fit font-normal">
-                          {it.productCategory.name}
-                        </Badge>
-                      ) : (
-                        <span className="text-muted-foreground">—</span>
-                      )}
-                      <span className="text-muted-foreground">
-                        {t('configTab.table.variationsCount', { count: it.variations?.length || 0 })}
-                      </span>
-                    </div>
-                  </TableCell>
-                  <TableCell>
-                    <div className="flex flex-col gap-1">
-                      <Badge className={`font-normal border w-fit ${STATUS_META[it.status || ProductConfigStatus.Active].className}`}>
-                        {STATUS_META[it.status || ProductConfigStatus.Active].label}
+                  )}
+                </TableCell>
+                <TableCell className="font-medium">{it.fullName}</TableCell>
+                <TableCell>
+                  <Badge variant="outline">{it.shortName}</Badge>
+                </TableCell>
+                <TableCell>
+                  {it.machineNumber ? (
+                    (() => {
+                      const m = machineOptions.find((o) => o.code === it.machineNumber);
+                      if (m?.color) {
+                        return (
+                          <Badge
+                            className="font-normal border"
+                            style={{ backgroundColor: m.color, color: '#fff', borderColor: m.color }}
+                          >
+                            {m.name}
+                          </Badge>
+                        );
+                      }
+                      return <Badge variant="secondary">{m?.name ?? it.machineNumber}</Badge>;
+                    })()
+                  ) : (
+                    <span className="text-muted-foreground text-xs">—</span>
+                  )}
+                </TableCell>
+                <TableCell>
+                  <select
+                    value={it.machineTypeId || ''}
+                    onChange={(e) => handleMachineTypeChange(it._id, e.target.value)}
+                    className="w-full min-w-[130px] rounded-md border border-input bg-background px-2 py-1 text-xs focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
+                  >
+                    {!it.machineTypeId && <option value="">{t('configTab.table.notSelected')}</option>}
+                    {machineTypes.map((m) => (
+                      <option key={m._id} value={m._id}>
+                        {m.shortName} · {m.name}
+                      </option>
+                    ))}
+                  </select>
+                </TableCell>
+                <TableCell>
+                  <select
+                    value={it.factoryId || ''}
+                    onChange={(e) => handleFactoryChange(it._id, e.target.value)}
+                    className="w-full min-w-[130px] rounded-md border border-input bg-background px-2 py-1 text-xs focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
+                  >
+                    {!it.factoryId && <option value="">{t('configTab.table.notSelected')}</option>}
+                    {factories.map((f) => (
+                      <option key={f._id} value={f._id}>
+                        {f.shortName} · {f.name}
+                      </option>
+                    ))}
+                  </select>
+                </TableCell>
+                <TableCell>
+                  <select
+                    value={it.fabricType || ''}
+                    onChange={(e) => handleFabricChange(it._id, e.target.value)}
+                    className="w-full rounded-md border border-input bg-background px-2 py-1 text-xs focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
+                  >
+                    <option value="">{t('configTab.table.notSelected')}</option>
+                    {fabricOptions.map((opt) => (
+                      <option key={opt.code} value={opt.code}>
+                        {opt.name}
+                      </option>
+                    ))}
+                  </select>
+                </TableCell>
+                <TableCell>
+                  <select
+                    value={it.toolResult || ''}
+                    onChange={(e) => handleToolChange(it._id, e.target.value)}
+                    className="w-full rounded-md border border-input bg-background px-2 py-1 text-xs focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
+                  >
+                    <option value="">{t('configTab.table.notSelected')}</option>
+                    {toolOptions.map((opt) => (
+                      <option key={opt.code} value={opt.code}>
+                        {opt.name}
+                      </option>
+                    ))}
+                  </select>
+                </TableCell>
+                <TableCell>
+                  <div className="flex items-center gap-1.5">
+                    {it.level ? (
+                      <Badge
+                        className="font-normal border shrink-0"
+                        style={{
+                          backgroundColor: PRODUCT_LEVEL_MAP[it.level]?.color,
+                          color: '#fff',
+                          borderColor: PRODUCT_LEVEL_MAP[it.level]?.color,
+                        }}
+                      >
+                        Lv {it.level}
                       </Badge>
-                      <select
-                        value={it.status || ProductConfigStatus.Active}
-                        onChange={(e) => handleStatusChange(it._id, e.target.value as ProductConfigStatus)}
-                        className="w-full rounded-md border border-input bg-background px-2 py-1 text-xs focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
-                      >
-                        <option value={ProductConfigStatus.Active}>{STATUS_META[ProductConfigStatus.Active].label}</option>
-                        <option value={ProductConfigStatus.Inactive}>{STATUS_META[ProductConfigStatus.Inactive].label}</option>
-                        <option value={ProductConfigStatus.Hidden}>{STATUS_META[ProductConfigStatus.Hidden].label}</option>
-                      </select>
-                    </div>
-                  </TableCell>
-                  <TableCell>
-                    <div className="flex items-center gap-0.5">
-                      <Button
-                        variant="ghost"
-                        size="icon"
-                        onClick={() => navigate(PATHS.PRODUCT_DETAIL.replace(':id', it._id))}
-                        title={t('configTab.table.editTitle')}
-                      >
-                        <Pencil size={14} />
-                      </Button>
-                      <Button
-                        variant="ghost"
-                        size="icon"
-                        onClick={() => handleDelete(it._id, it.fullName)}
-                        title={t('configTab.table.deleteTitle')}
-                      >
-                        <Trash2 size={14} className="text-destructive" />
-                      </Button>
-                    </div>
-                  </TableCell>
-                </TableRow>
-              ))}
+                    ) : (
+                      <span className="text-muted-foreground text-xs shrink-0">—</span>
+                    )}
+                    <select
+                      value={it.level ?? ''}
+                      onChange={(e) => handleLevelChange(it._id, e.target.value)}
+                      className="w-full rounded-md border border-input bg-background px-2 py-1 text-xs focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
+                    >
+                      <option value="">{t('configTab.table.notSelected')}</option>
+                      {PRODUCT_LEVELS.map((lv) => (
+                        <option key={lv.value} value={lv.value}>
+                          {lv.label}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+                </TableCell>
+                <TableCell>
+                  <div className="flex flex-col gap-1 text-xs">
+                    {it.productCategory ? (
+                      <Badge variant="secondary" className="w-fit font-normal">
+                        {it.productCategory.name}
+                      </Badge>
+                    ) : (
+                      <span className="text-muted-foreground">—</span>
+                    )}
+                    <span className="text-muted-foreground">
+                      {t('configTab.table.variationsCount', { count: it.variations?.length || 0 })}
+                    </span>
+                  </div>
+                </TableCell>
+                <TableCell>
+                  <div className="flex flex-col gap-1">
+                    <Badge
+                      className={`font-normal border w-fit ${STATUS_META[it.status || ProductConfigStatus.Active].className}`}
+                    >
+                      {STATUS_META[it.status || ProductConfigStatus.Active].label}
+                    </Badge>
+                    <select
+                      value={it.status || ProductConfigStatus.Active}
+                      onChange={(e) => handleStatusChange(it._id, e.target.value as ProductConfigStatus)}
+                      className="w-full rounded-md border border-input bg-background px-2 py-1 text-xs focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
+                    >
+                      <option value={ProductConfigStatus.Active}>
+                        {STATUS_META[ProductConfigStatus.Active].label}
+                      </option>
+                      <option value={ProductConfigStatus.Inactive}>
+                        {STATUS_META[ProductConfigStatus.Inactive].label}
+                      </option>
+                      <option value={ProductConfigStatus.Hidden}>
+                        {STATUS_META[ProductConfigStatus.Hidden].label}
+                      </option>
+                    </select>
+                  </div>
+                </TableCell>
+                <TableCell>
+                  <div className="flex items-center gap-0.5">
+                    <Button
+                      variant="ghost"
+                      size="icon"
+                      onClick={() => navigate(PATHS.PRODUCT_DETAIL.replace(':id', it._id))}
+                      title={t('configTab.table.editTitle')}
+                    >
+                      <Pencil size={14} />
+                    </Button>
+                    <Button
+                      variant="ghost"
+                      size="icon"
+                      onClick={() => handleDelete(it._id, it.fullName)}
+                      title={t('configTab.table.deleteTitle')}
+                    >
+                      <Trash2 size={14} className="text-destructive" />
+                    </Button>
+                  </div>
+                </TableCell>
+              </TableRow>
+            ))}
           </TableBody>
         </Table>
         <PaginationBar

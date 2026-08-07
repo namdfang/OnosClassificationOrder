@@ -3,8 +3,20 @@ import { Trans, useTranslation } from 'react-i18next';
 import { useNavigate, useParams } from 'react-router-dom';
 import type { TFunction } from 'i18next';
 import type { LucideIcon } from 'lucide-react';
-import { ArrowLeft, ChevronDown, ChevronUp, Factory, ImageIcon, Info, Layers, Plus, Printer, Trash2, Upload } from 'lucide-react';
-import type { ProductItemSpecific, ProductPrintArea, ProductVariation } from 'shared';
+import {
+  ArrowLeft,
+  ChevronDown,
+  ChevronUp,
+  Factory,
+  ImageIcon,
+  Info,
+  Layers,
+  Plus,
+  Printer,
+  Trash2,
+  Upload,
+} from 'lucide-react';
+import type { ProductItemSpecific, ProductPrintArea, ProductPrintAreaItem, ProductVariation } from 'shared';
 import { PRODUCT_LEVELS, PRODUCT_PRINT_AREAS, ProductConfigStatus, WorkshopConfigCategory } from 'shared';
 import { toast } from 'sonner';
 
@@ -93,7 +105,10 @@ function ImageUploadField({
       <button
         type="button"
         onClick={() => inputRef.current?.click()}
-        className={cn('relative w-full rounded-md border border-border bg-muted overflow-hidden group', aspectClassName)}
+        className={cn(
+          'relative w-full rounded-md border border-border bg-muted overflow-hidden group',
+          aspectClassName,
+        )}
         title={t('detail.imageUpload.title')}
       >
         {displayValue ? (
@@ -177,7 +192,10 @@ function SectionCard({
   children: React.ReactNode;
 }) {
   return (
-    <section id={meta.id} className={`scroll-mt-36 rounded-lg border border-border border-l-4 ${meta.accent} bg-card shadow-sm`}>
+    <section
+      id={meta.id}
+      className={`scroll-mt-36 rounded-lg border border-border border-l-4 ${meta.accent} bg-card shadow-sm`}
+    >
       <div className="flex items-center gap-3 px-5 py-3.5 border-b border-border bg-muted/40 rounded-tr-lg">
         <div className={`w-9 h-9 rounded-lg flex items-center justify-center shrink-0 ${meta.tile}`}>
           <meta.icon size={18} />
@@ -218,6 +236,8 @@ interface FormSnapshot {
   collectionIds: string[];
   printMethod: string;
   printArea: ProductPrintArea;
+  printDocument: string;
+  printTemplate: string;
   sizeChartUrl: string;
   description: string;
   shortDescription: string;
@@ -281,6 +301,8 @@ export default function ProductDetailPage() {
   const [collectionIds, setCollectionIds] = useState<string[]>([]);
   const [printMethod, setPrintMethod] = useState('');
   const [printArea, setPrintArea] = useState<ProductPrintArea>([]);
+  const [printDocument, setPrintDocument] = useState('');
+  const [printTemplate, setPrintTemplate] = useState('');
   const [sizeChartUrl, setSizeChartUrl] = useState('');
   const [description, setDescription] = useState('');
   const [shortDescription, setShortDescription] = useState('');
@@ -346,6 +368,8 @@ export default function ProductDetailPage() {
     collectionIds,
     printMethod,
     printArea,
+    printDocument,
+    printTemplate,
     sizeChartUrl,
     description,
     shortDescription,
@@ -383,6 +407,8 @@ export default function ProductDetailPage() {
       collectionIds: row.collectionIds || [],
       printMethod: row.printMethod || '',
       printArea: row.printArea || [],
+      printDocument: row.printDocument || '',
+      printTemplate: row.printTemplate || '',
       sizeChartUrl: row.sizeChartUrl || '',
       description: row.description || '',
       shortDescription: row.shortDescription || '',
@@ -416,6 +442,8 @@ export default function ProductDetailPage() {
     setCollectionIds(s.collectionIds);
     setPrintMethod(s.printMethod);
     setPrintArea(s.printArea);
+    setPrintDocument(s.printDocument);
+    setPrintTemplate(s.printTemplate);
     setSizeChartUrl(s.sizeChartUrl);
     setDescription(s.description);
     setShortDescription(s.shortDescription);
@@ -487,6 +515,8 @@ export default function ProductDetailPage() {
       collectionIds,
       printMethod,
       printArea,
+      printDocument,
+      printTemplate,
       sizeChartUrl,
       description,
       shortDescription,
@@ -583,8 +613,12 @@ export default function ProductDetailPage() {
     setItemSpecifics((prev) => prev.map((s, i) => (i === idx ? { ...s, ...patch } : s)));
   const removeSpecific = (idx: number) => setItemSpecifics((prev) => prev.filter((_, i) => i !== idx));
 
-  const togglePrintArea = (key: ProductPrintArea[number], checked: boolean) =>
-    setPrintArea((prev) => (checked ? [...prev, key] : prev.filter((k) => k !== key)));
+  // Tick mới → mặc định `isRequired: true` (giữ behavior cũ: mọi vị trí đều bắt buộc design).
+  const togglePrintArea = (key: ProductPrintAreaItem['key'], checked: boolean) =>
+    setPrintArea((prev) => (checked ? [...prev, { key, isRequired: true }] : prev.filter((i) => i.key !== key)));
+
+  const updatePrintAreaItem = (key: ProductPrintAreaItem['key'], patch: Partial<ProductPrintAreaItem>) =>
+    setPrintArea((prev) => prev.map((i) => (i.key === key ? { ...i, ...patch } : i)));
 
   /**
    * Tự sinh lại bảng variants (diff-preserve) khi 1 nhóm bấm Done hoặc bị xóa —
@@ -603,7 +637,9 @@ export default function ProductDetailPage() {
     const result = generateVariants(cleaned, variations);
     setVariations(result.variants);
     if (result.orphans) {
-      toast.warning(t('detail.groups.generatedOrphans', { created: result.created, kept: result.kept, orphans: result.orphans }));
+      toast.warning(
+        t('detail.groups.generatedOrphans', { created: result.created, kept: result.kept, orphans: result.orphans }),
+      );
     } else {
       toast.success(t('detail.groups.generated', { created: result.created, kept: result.kept }));
     }
@@ -631,7 +667,9 @@ export default function ProductDetailPage() {
   );
 
   const applyBatch = (patch: Partial<ProductVariation>) => {
-    setVariations((prev) => prev.map((v) => (matchesSelection(v, effectiveGroups, batchSelected) ? { ...v, ...patch } : v)));
+    setVariations((prev) =>
+      prev.map((v) => (matchesSelection(v, effectiveGroups, batchSelected) ? { ...v, ...patch } : v)),
+    );
     toast.success(t('detail.batchEdit.applied', { count: batchMatchedCount }));
   };
 
@@ -708,6 +746,8 @@ export default function ProductDetailPage() {
       collectionIds,
       printMethod: printMethod || undefined,
       printArea,
+      printDocument: printDocument.trim() || undefined,
+      printTemplate: printTemplate.trim() || undefined,
       sizeChartUrl: finalSizeChartUrl || undefined,
       description: cleanHtml(description) || undefined,
       shortDescription: cleanHtml(shortDescription) || undefined,
@@ -772,7 +812,13 @@ export default function ProductDetailPage() {
       <div className="sticky top-0 z-30 bg-background/95 backdrop-blur border-b border-border px-4 md:px-6">
         <div className="flex items-center justify-between gap-3 py-3">
           <div className="flex items-center gap-3 min-w-0">
-            <Button variant="ghost" size="icon" onClick={handleBack} title={t('detail.backToList')} className="shrink-0">
+            <Button
+              variant="ghost"
+              size="icon"
+              onClick={handleBack}
+              title={t('detail.backToList')}
+              className="shrink-0"
+            >
               <ArrowLeft size={18} />
             </Button>
             {primaryImage ? (
@@ -791,7 +837,9 @@ export default function ProductDetailPage() {
                   className="h-8 text-lg font-bold"
                 />
               ) : (
-                <h1 className="text-base md:text-lg font-bold text-foreground truncate leading-tight">{item.fullName}</h1>
+                <h1 className="text-base md:text-lg font-bold text-foreground truncate leading-tight">
+                  {item.fullName}
+                </h1>
               )}
               <div className="flex flex-wrap items-center gap-2 mt-1">
                 <div className="flex items-center gap-1">
@@ -820,7 +868,9 @@ export default function ProductDetailPage() {
                   )}
                 >
                   <option value={ProductConfigStatus.Active}>{STATUS_META[ProductConfigStatus.Active].label}</option>
-                  <option value={ProductConfigStatus.Inactive}>{STATUS_META[ProductConfigStatus.Inactive].label}</option>
+                  <option value={ProductConfigStatus.Inactive}>
+                    {STATUS_META[ProductConfigStatus.Inactive].label}
+                  </option>
                   <option value={ProductConfigStatus.Hidden}>{STATUS_META[ProductConfigStatus.Hidden].label}</option>
                 </select>
                 {dirty && (
@@ -833,7 +883,12 @@ export default function ProductDetailPage() {
           </div>
           <div className="flex items-center gap-2 shrink-0">
             {!isNew && (
-              <Button variant="outline" onClick={handleDeleteProduct} disabled={deleting || saving} title={t('detail.deleteTitle')}>
+              <Button
+                variant="outline"
+                onClick={handleDeleteProduct}
+                disabled={deleting || saving}
+                title={t('detail.deleteTitle')}
+              >
                 {deleting ? <Spinner size={14} /> : <Trash2 size={14} className="text-destructive" />}
                 {t('detail.deleteButton')}
               </Button>
@@ -851,7 +906,8 @@ export default function ProductDetailPage() {
         <nav className="flex items-center gap-1 overflow-x-auto">
           {SECTIONS.map((s, i) => {
             const active = activeSection === s.id;
-            const count = s.id === 'sec-variants' ? variations.length : s.id === 'sec-print-areas' ? printArea.length : null;
+            const count =
+              s.id === 'sec-variants' ? variations.length : s.id === 'sec-print-areas' ? printArea.length : null;
             return (
               <button
                 key={s.id}
@@ -926,7 +982,9 @@ export default function ProductDetailPage() {
                           'w-7 h-7 rounded-md text-xs font-semibold border transition-colors',
                           active ? 'text-white' : 'bg-background text-muted-foreground hover:bg-muted',
                         )}
-                        style={active ? { backgroundColor: lv.color, borderColor: lv.color } : { borderColor: lv.color }}
+                        style={
+                          active ? { backgroundColor: lv.color, borderColor: lv.color } : { borderColor: lv.color }
+                        }
                       >
                         {lv.value}
                       </button>
@@ -949,7 +1007,11 @@ export default function ProductDetailPage() {
                 </div>
                 <div className="space-y-1.5">
                   <Label>{t('detail.sidebar.department')}</Label>
-                  <select value={machineTypeId} onChange={(e) => setMachineTypeId(e.target.value)} className={selectCls}>
+                  <select
+                    value={machineTypeId}
+                    onChange={(e) => setMachineTypeId(e.target.value)}
+                    className={selectCls}
+                  >
                     {!machineTypeId && <option value="">{t('detail.notSelected')}</option>}
                     {machineTypes.map((m) => (
                       <option key={m._id} value={m._id}>
@@ -1000,7 +1062,12 @@ export default function ProductDetailPage() {
 
               <div className="space-y-1.5">
                 <Label>{t('detail.sidebar.guide')}</Label>
-                <RichTextEditor value={guide} onChange={setGuide} placeholder={t('detail.sidebar.guidePlaceholder')} minHeight={140} />
+                <RichTextEditor
+                  value={guide}
+                  onChange={setGuide}
+                  placeholder={t('detail.sidebar.guidePlaceholder')}
+                  minHeight={140}
+                />
               </div>
             </div>
           </div>
@@ -1013,7 +1080,11 @@ export default function ProductDetailPage() {
               <div className="grid md:grid-cols-2 gap-3">
                 <div className="space-y-1.5">
                   <Label>{t('detail.classification.productCategory')}</Label>
-                  <select value={productCategoryId} onChange={(e) => setProductCategoryId(e.target.value)} className={selectCls}>
+                  <select
+                    value={productCategoryId}
+                    onChange={(e) => setProductCategoryId(e.target.value)}
+                    className={selectCls}
+                  >
                     <option value="">{t('detail.notSelected')}</option>
                     {sortCategoryTree(productCategoryOptions).map((opt) => (
                       <option key={opt._id} value={opt._id}>
@@ -1071,11 +1142,21 @@ export default function ProductDetailPage() {
                 <div className="grid grid-cols-2 gap-2">
                   <div className="space-y-1">
                     <span className="text-xs text-muted-foreground">{t('detail.shippingTime.maxProduction')}</span>
-                    <Input type="number" min={0} value={maxProductionTime} onChange={(e) => setMaxProductionTime(e.target.value)} />
+                    <Input
+                      type="number"
+                      min={0}
+                      value={maxProductionTime}
+                      onChange={(e) => setMaxProductionTime(e.target.value)}
+                    />
                   </div>
                   <div className="space-y-1">
                     <span className="text-xs text-muted-foreground">{t('detail.shippingTime.maxShipping')}</span>
-                    <Input type="number" min={0} value={maxShippingTime} onChange={(e) => setMaxShippingTime(e.target.value)} />
+                    <Input
+                      type="number"
+                      min={0}
+                      value={maxShippingTime}
+                      onChange={(e) => setMaxShippingTime(e.target.value)}
+                    />
                   </div>
                 </div>
               </div>
@@ -1106,7 +1187,11 @@ export default function ProductDetailPage() {
               <div className="space-y-1.5">
                 <div className="flex items-center justify-between">
                   <Label>{t('detail.itemSpecifics.title')}</Label>
-                  <Button variant="outline" size="sm" onClick={() => setItemSpecifics((prev) => [...prev, { label: '', value: '' }])}>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => setItemSpecifics((prev) => [...prev, { label: '', value: '' }])}
+                  >
                     <Plus size={14} /> {t('detail.itemSpecifics.addRow')}
                   </Button>
                 </div>
@@ -1130,7 +1215,9 @@ export default function ProductDetailPage() {
                       </Button>
                     </div>
                   ))}
-                  {itemSpecifics.length === 0 && <p className="text-xs text-muted-foreground">{t('detail.itemSpecifics.empty')}</p>}
+                  {itemSpecifics.length === 0 && (
+                    <p className="text-xs text-muted-foreground">{t('detail.itemSpecifics.empty')}</p>
+                  )}
                 </div>
               </div>
             </div>
@@ -1221,7 +1308,8 @@ export default function ProductDetailPage() {
                   </Badge>
                 </p>
                 <p className="text-[11px] text-muted-foreground mt-0.5">
-                  {t('detail.variations.skuHintPrefix')} <span className="font-mono">{t('detail.variations.skuFormat')}</span>
+                  {t('detail.variations.skuHintPrefix')}{' '}
+                  <span className="font-mono">{t('detail.variations.skuFormat')}</span>
                   {t('detail.variations.skuHintSuffix')}
                   {!sku.trim() && <span className="text-amber-600"> {t('detail.variations.noSkuWarning')}</span>}
                 </p>
@@ -1265,12 +1353,35 @@ export default function ProductDetailPage() {
               components={{ code: <span className="font-mono">order.designs</span> }}
             />
           </p>
+
+          {/* Tài liệu + template chung cấp sản phẩm (print_document / print_template hệ cũ) */}
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-3 mb-4">
+            <div>
+              <Label className="text-xs">{t('detail.printAreaConfig.printDocument')}</Label>
+              <Input
+                value={printDocument}
+                onChange={(e) => setPrintDocument(e.target.value)}
+                placeholder="https://..."
+                className="h-9 mt-1"
+              />
+            </div>
+            <div>
+              <Label className="text-xs">{t('detail.printAreaConfig.printTemplate')}</Label>
+              <Input
+                value={printTemplate}
+                onChange={(e) => setPrintTemplate(e.target.value)}
+                placeholder="https://drive.google.com/..."
+                className="h-9 mt-1"
+              />
+            </div>
+          </div>
+
           <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-x-3 gap-y-2 rounded-md border border-border p-3">
             {PRODUCT_PRINT_AREAS.map((pa) => (
               <label key={pa.key} className="flex items-center gap-2 text-sm cursor-pointer">
                 <input
                   type="checkbox"
-                  checked={printArea.includes(pa.key)}
+                  checked={printArea.some((i) => i.key === pa.key)}
                   onChange={(e) => togglePrintArea(pa.key, e.target.checked)}
                   className="rounded border-input"
                 />
@@ -1278,12 +1389,120 @@ export default function ProductDetailPage() {
               </label>
             ))}
           </div>
+
+          {/* Cấu hình chi tiết từng vị trí đã tick — mirror print_areas[] hệ cũ */}
+          {printArea.length > 0 && (
+            <div className="mt-4 space-y-3">
+              <p className="text-xs font-medium text-muted-foreground">{t('detail.printAreaConfig.title')}</p>
+              {printArea.map((area) => {
+                const meta = PRODUCT_PRINT_AREAS.find((pa) => pa.key === area.key);
+                return (
+                  <div key={area.key} className="rounded-md border border-border p-3">
+                    <div className="flex flex-wrap items-center justify-between gap-2 mb-2">
+                      <span className="text-sm font-medium">
+                        {t(`printAreas.${area.key}`, { defaultValue: meta?.label ?? area.key })}
+                      </span>
+                      <div className="flex items-center gap-4">
+                        <label className="flex items-center gap-1.5 text-xs cursor-pointer">
+                          <input
+                            type="checkbox"
+                            checked={area.isRequired !== false}
+                            onChange={(e) => updatePrintAreaItem(area.key, { isRequired: e.target.checked })}
+                            className="rounded border-input"
+                          />
+                          {t('detail.printAreaConfig.isRequired')}
+                        </label>
+                        <label className="flex items-center gap-1.5 text-xs cursor-pointer">
+                          <input
+                            type="checkbox"
+                            checked={!!area.isEmbroidery}
+                            onChange={(e) =>
+                              updatePrintAreaItem(area.key, { isEmbroidery: e.target.checked || undefined })
+                            }
+                            className="rounded border-input"
+                          />
+                          {t('detail.printAreaConfig.isEmbroidery')}
+                        </label>
+                      </div>
+                    </div>
+                    <div className="grid grid-cols-2 md:grid-cols-[1fr_110px_110px_110px] gap-2">
+                      <div className="col-span-2 md:col-span-1">
+                        <Label className="text-[11px] text-muted-foreground">
+                          {t('detail.printAreaConfig.templateUrl')}
+                        </Label>
+                        <Input
+                          value={area.templateUrl ?? ''}
+                          onChange={(e) => updatePrintAreaItem(area.key, { templateUrl: e.target.value || undefined })}
+                          placeholder="https://drive.google.com/..."
+                          className="h-8 mt-0.5 text-xs"
+                        />
+                      </div>
+                      <div>
+                        <Label className="text-[11px] text-muted-foreground">
+                          {t('detail.printAreaConfig.widthPx')}
+                        </Label>
+                        <Input
+                          type="number"
+                          min={0}
+                          value={area.widthPx ?? ''}
+                          onChange={(e) =>
+                            updatePrintAreaItem(area.key, {
+                              widthPx: e.target.value ? Number(e.target.value) : undefined,
+                            })
+                          }
+                          className="h-8 mt-0.5 text-xs"
+                        />
+                      </div>
+                      <div>
+                        <Label className="text-[11px] text-muted-foreground">
+                          {t('detail.printAreaConfig.heightPx')}
+                        </Label>
+                        <Input
+                          type="number"
+                          min={0}
+                          value={area.heightPx ?? ''}
+                          onChange={(e) =>
+                            updatePrintAreaItem(area.key, {
+                              heightPx: e.target.value ? Number(e.target.value) : undefined,
+                            })
+                          }
+                          className="h-8 mt-0.5 text-xs"
+                        />
+                      </div>
+                      <div>
+                        <Label className="text-[11px] text-muted-foreground">
+                          {t('detail.printAreaConfig.additionPrice')}
+                        </Label>
+                        <Input
+                          type="number"
+                          min={0}
+                          step="0.01"
+                          value={area.additionPrice ?? ''}
+                          onChange={(e) =>
+                            updatePrintAreaItem(area.key, {
+                              additionPrice: e.target.value ? Number(e.target.value) : undefined,
+                            })
+                          }
+                          className="h-8 mt-0.5 text-xs"
+                        />
+                      </div>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          )}
         </SectionCard>
 
         {/* Footer save */}
         <div className="flex items-center justify-end gap-2 pb-6">
           {!isNew && (
-            <Button variant="outline" onClick={handleDeleteProduct} disabled={deleting || saving} title={t('detail.deleteTitle')}>
+            <Button
+              variant="outline"
+              onClick={handleDeleteProduct}
+              disabled={deleting || saving}
+              title={t('detail.deleteTitle')}
+            >
               {deleting ? <Spinner size={14} /> : <Trash2 size={14} className="text-destructive" />}
               {t('detail.deleteButton')}
             </Button>
@@ -1297,7 +1516,6 @@ export default function ProductDetailPage() {
           </Button>
         </div>
       </div>
-
     </div>
   );
 }

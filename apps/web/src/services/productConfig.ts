@@ -1,6 +1,8 @@
 import type {
+  CrawlPageInfoDto,
   CrawlProductMockupsDto,
   CreateProductConfigDto,
+  ImportFromOnospodDto,
   ImportProductConfigDto,
   UpdateProductConfigDto,
 } from 'shared';
@@ -51,6 +53,16 @@ const crawlProductMockups = (data: CrawlProductMockupsDto) => {
   return callApi(`/${CONFIG.API_VERSION}/product-configs/crawl-mockups`, 'post', data);
 };
 
+/** Import TẤT CẢ sản phẩm từ OnosPod theo trang — FE gọi lặp với `page` đến khi `nextPage` null. Fill-only, KHÔNG đè field đã có. */
+const importFromOnospod = (data: ImportFromOnospodDto) => {
+  return callApi(`/${CONFIG.API_VERSION}/product-configs/import-from-onospod`, 'post', data);
+};
+
+/** Crawl "Import US Tax" + "Package gram" từ trang sản phẩm public hệ cũ theo lô — FE gọi lặp với `cursor` đến khi `done`. */
+const crawlPageInfo = (data: CrawlPageInfoDto) => {
+  return callApi(`/${CONFIG.API_VERSION}/product-configs/crawl-page-info`, 'post', data);
+};
+
 export const productConfig = {
   getProductConfigs,
   getProductConfig,
@@ -62,4 +74,6 @@ export const productConfig = {
   uploadProductImage,
   getUnmatchedOrderTypes,
   crawlProductMockups,
+  importFromOnospod,
+  crawlPageInfo,
 };
