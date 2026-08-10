@@ -117,7 +117,12 @@ const PRODUCT_TYPE_CODE_MAP: Record<string, string> = {
     "aop kids and youth mesh overlap v-neck football jersey": "BDLUOIKIDCOV",
     "all-over print mesh baseball jersey": "BBJERLUOI",
     "new all-over print short-sleeve hawaiian shirt": "HW",
-    'new all-over print baseball jersey': 'BBJERNEW',
+    "new all-over print baseball jersey": "BBJERNEW",
+    "comfort colors - garment-dyed heavyweight t-shirt - 1717": "TIFF",
+    "gildan - heavy blend™ crewneck sweatshirt - 18000": "TIFF",
+    "gildan unisex heavy blend™ hooded sweatshirt - 18500": "TIFF",
+    "bella + canvas - women's micro rib baby tee - 1010": "TIFF",
+    "usa gildan - heavy cotton™ t-shirt - 5000": "TIFF",
 };
 
 /** Case-insensitive, trim khoảng trắng thừa. Không khớp → null. */
