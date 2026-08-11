@@ -231,6 +231,48 @@ Khác biệt local/server **không phải lúc nào cũng do timezone.** Phiên 
 
 ---
 
+## 7. ⚠️ CORS whitelist cứng 1 cổng → dev server nhảy cổng là "Network Error" mù mịt
+
+### Triệu chứng
+
+Trang FE gọi API và chỉ báo `Network Error` (axios), không status code, không log
+lỗi ở BE. `curl` cùng URL lại trả 200 bình thường → dễ tưởng BE hỏng hoặc endpoint
+chưa nạp, trong khi thật ra request bị **trình duyệt** chặn trước khi tới server.
+
+### Root cause
+
+`apps/api/src/main-nest.ts` whitelist CORS đúng `http://localhost:5173`. Nhưng
+`apps/web` chạy `vite --host`, nên:
+
+- 5173 bị chiếm (đã mở sẵn 1 dev server khác) → Vite tự nhảy 5174, 5175…
+- mở trang qua IP LAN để test trên điện thoại → origin là `http://192.168.x.x:5173`.
+
+Cả 2 trường hợp đều không khớp whitelist → không có header
+`access-control-allow-origin` → trình duyệt chặn. `curl` không gửi `Origin` nên
+không dính CORS, vì vậy **`curl` 200 KHÔNG chứng minh FE gọi được**.
+
+### Fix
+
+`origin` nhận **hàm** thay vì mảng cố định: giữ nguyên whitelist, và CHỈ khi
+`NODE_ENV !== 'production'` thì chấp nhận thêm origin máy dev
+(`localhost`/`127.0.0.1`/`::1`/IP LAN riêng tư, cổng bất kỳ) qua `isLocalDevOrigin()`.
+Từ chối bằng `callback(null, false)` — ném `Error` sẽ thành lỗi 500 thay vì để
+trình duyệt chặn như bình thường.
+
+### Rule chung
+
+- Chẩn đoán `Network Error` thì **so sánh curl CÓ và KHÔNG có header `Origin`**.
+  Khác nhau ⇒ CORS, không phải lỗi server.
+- Whitelist CORS không bao giờ nên cứng đúng 1 cổng localhost khi dev script dùng
+  `--host` hoặc cổng có thể tự nhảy.
+- Nới lỏng cho dev phải gate bằng `NODE_ENV !== 'production'`, đừng nới ở production.
+
+### Precedent đã xảy ra
+
+2026-08: trang `/catalog` public báo `Network Error` suốt dù API trả 200 qua curl
+— Vite phải chạy ở `:5175` vì 5173/5174 đã bị chiếm. Trang chủ `/` không lộ lỗi
+này vì nó là trang tĩnh, không gọi API nào.
+
 ## Khi nào update file này
 
 - Phát hiện bug pattern cross-cutting (ảnh hưởng > 1 module).
