@@ -16,6 +16,10 @@ import { useCustomerAuthStore } from './store/customerAuthStore';
 
 const CompanyCareers = lazy(() => import('./pages/company/careers'));
 
+// Catalog công khai — cùng nhóm route public với landing/careers, KHÔNG qua PrivateRoute.
+const PublicCatalog = lazy(() => import('./pages/catalog'));
+const PublicCatalogDetail = lazy(() => import('./pages/catalog/detail'));
+
 const CustomerLogin = lazy(() => import('./pages/customer/login'));
 const CustomerRegister = lazy(() => import('./pages/customer/register'));
 const CustomerOrders = lazy(() => import('./pages/customer/orders'));
@@ -49,6 +53,23 @@ function App() {
     <BrowserRouter>
       <Routes>
         <Route path={PATHS.LANDING} element={<Landing />} />
+
+        <Route
+          path={PATHS.CATALOG}
+          element={
+            <Suspense fallback={<Loading />}>
+              <PublicCatalog />
+            </Suspense>
+          }
+        />
+        <Route
+          path={PATHS.CATALOG_DETAIL}
+          element={
+            <Suspense fallback={<Loading />}>
+              <PublicCatalogDetail />
+            </Suspense>
+          }
+        />
 
         <Route
           path={PATHS.COMPANY_CAREERS}

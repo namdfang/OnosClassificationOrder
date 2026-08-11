@@ -88,6 +88,7 @@
     "cartEmpty": "Chưa có sản phẩm nào — chọn 1 sản phẩm ở bên trái để bắt đầu.",
     "cartTotal": "Tạm tính",
     "removeFromCart": "Xóa khỏi đơn",
+    "addAnotherHint": "Chọn thêm sản phẩm khác — mọi sản phẩm trong đơn này dùng chung một địa chỉ giao hàng.",
     "shippingTitle": "Địa chỉ giao hàng",
     "shippingFirstName": "Tên",
     "shippingLastName": "Họ",

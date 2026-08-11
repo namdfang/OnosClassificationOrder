@@ -29,7 +29,8 @@
     "sentView": "Đã gửi báo cáo {{view}} vào Telegram",
     "busy": "Báo cáo đang chạy — chờ xong rồi gửi lại nhé",
     "failed": "Không gửi được báo cáo",
-    "disabledHint": "Kiểm tra TELEGRAM_NOTIFICATION_ENABLED / channel Telegram"
+    "disabledHint": "Kiểm tra TELEGRAM_NOTIFICATION_ENABLED / channel Telegram",
+    "cancel": "Hủy"
   },
   "breakdownCard": {
     "noData": "Không có data",

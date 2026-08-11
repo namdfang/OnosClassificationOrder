@@ -29,7 +29,8 @@
     "sentView": "Sent {{view}} report to Telegram",
     "busy": "A report is already running — wait for it to finish and try again",
     "failed": "Report could not be sent",
-    "disabledHint": "Check TELEGRAM_NOTIFICATION_ENABLED / Telegram channel"
+    "disabledHint": "Check TELEGRAM_NOTIFICATION_ENABLED / Telegram channel",
+    "cancel": "Cancel"
   },
   "breakdownCard": {
     "noData": "No data",

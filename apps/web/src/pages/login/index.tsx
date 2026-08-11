@@ -18,6 +18,7 @@ import logoUrl from '@/assets/images/logo.png';
 import { PATHS } from '../../constants/paths';
 import { RepositoryRemote } from '../../services';
 import { useAuthStore } from '../../store/authStore';
+import { AUTH_IDENTITY_KEY, getRememberedIdentity, setRememberedIdentity } from '../../store/sessionPersist';
 import { handleAxiosError } from '../../utils';
 
 function buildLoginSchema(t: TFunction<'auth'>) {
@@ -38,9 +39,12 @@ function Login() {
   const { setProfile, setToken, setTokenExpiredAt } = useAuthStore();
 
   const loginSchema = useMemo(() => buildLoginSchema(t), [t]);
+  // Lần trước tick "Ghi nhớ đăng nhập" → prefill email + tick sẵn checkbox
+  // (chỉ email, không bao giờ lưu mật khẩu).
+  const rememberedEmail = useMemo(() => getRememberedIdentity(AUTH_IDENTITY_KEY), []);
   const form = useForm<LoginFormValues>({
     resolver: zodResolver(loginSchema),
-    defaultValues: { email: '', password: '', rememberMe: false },
+    defaultValues: { email: rememberedEmail, password: '', rememberMe: !!rememberedEmail },
   });
 
   const onSubmit = async (values: LoginFormValues) => {
@@ -55,6 +59,7 @@ function Login() {
         setToken(loginInfo.accessToken, values.rememberMe);
         setTokenExpiredAt(expirationTime);
         setProfile(loginInfo.user);
+        setRememberedIdentity(AUTH_IDENTITY_KEY, values.rememberMe ? values.email : null);
 
         // Pull fresh profile (with role.permissionCodes populated) — login
         // response itself doesn't always include permission data.

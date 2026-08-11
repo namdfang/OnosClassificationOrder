@@ -1,0 +1,55 @@
+{
+  "meta": {
+    "eyebrow": "Product catalog",
+    "titleLead": "What Onos",
+    "titleAccent": "prints for you",
+    "subtitle": "The products our factory currently takes on demand. Pick one and create an account to send a request — we quote pricing and full specs per request."
+  },
+  "search": {
+    "placeholder": "Search by product name…",
+    "clear": "Clear search"
+  },
+  "filters": {
+    "label": "Quick filter",
+    "all": "All"
+  },
+  "result": {
+    "count_one": "{{count}} product",
+    "count_other": "{{count}} products",
+    "empty": "No products match your search.",
+    "emptyHint": "Try a shorter keyword, or hit \"All\" to see the whole catalog.",
+    "error": "Could not load the product catalog.",
+    "retry": "Try again"
+  },
+  "card": {
+    "from": "From",
+    "view": "View details",
+    "variations_one": "{{count}} variant",
+    "variations_other": "{{count}} variants"
+  },
+  "detail": {
+    "back": "Back to catalog",
+    "notFound": "This product could not be found.",
+    "printMethod": "Print method",
+    "printArea": "Print area",
+    "category": "Category",
+    "sizeChart": "View size chart",
+    "specifics": "Specifications",
+    "variations": "Variants & pricing",
+    "sku": "SKU",
+    "attributes": "Attributes",
+    "price": "List price",
+    "orderCta": "Send a request for this product",
+    "signInHint": "Already have an account? Sign in to order faster.",
+    "pending": {
+      "title": "Detailed specs are still being added",
+      "description": "This product does not yet have a public description, size chart or price list. Send a request with your artwork and we will come back with exact specs and a quote for your order.",
+      "contact": "Or ask us directly by email"
+    }
+  },
+  "cta": {
+    "title": "Not seeing what you need?",
+    "subtitle": "Create an account and send us a request — we'll work through the product you have in mind together.",
+    "action": "Create an account"
+  }
+}

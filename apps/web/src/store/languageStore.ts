@@ -2,7 +2,7 @@ import dayjs from 'dayjs';
 import { create } from 'zustand';
 import { persist } from 'zustand/middleware';
 
-import i18n, { type AppLanguage } from '@/i18n';
+import i18n, { type AppLanguage, DEFAULT_LANGUAGE } from '@/i18n';
 
 interface LanguageStore {
     language: AppLanguage;
@@ -13,7 +13,7 @@ interface LanguageStore {
 export const useLanguageStore = create<LanguageStore>()(
     persist(
         (set, get) => ({
-            language: 'vi',
+            language: DEFAULT_LANGUAGE,
             setLanguage: (language) => {
                 set({ language });
                 applyLanguage(language);

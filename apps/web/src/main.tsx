@@ -11,6 +11,16 @@ import weekday from 'dayjs/plugin/weekday';
 import App from './App';
 import { Toaster } from './components/ui/sonner';
 import { getStoredLanguage } from './i18n';
+import { useAuthStore } from './store/authStore';
+import { useCustomerAuthStore } from './store/customerAuthStore';
+import {
+  AUTH_REMEMBER_KEY,
+  AUTH_STORE_KEY,
+  CUSTOMER_REMEMBER_KEY,
+  CUSTOMER_STORE_KEY,
+  requestSessionHandoff,
+  serveSessionHandoff,
+} from './store/sessionPersist';
 import { useThemeStore } from './store/themeStore';
 import { registerImageCacheSW } from './utils/registerSW';
 
@@ -48,4 +58,29 @@ function Root() {
   );
 }
 
-ReactDOM.createRoot(document.getElementById('root')!).render(<Root />);
+/**
+ * Khởi động app:
+ *  1. Sẵn sàng chuyền phiên cho tab mới (`serve`).
+ *  2. Nếu chính tab này là tab mới của một phiên "không ghi nhớ" thì đi xin phiên
+ *     từ các tab anh em (`request`) — không có tab nào trả lời thì thôi.
+ *  3. Hydrate 2 auth store (đang bật `skipHydration`) RỒI mới render, để lần
+ *     render đầu tiên đã biết chính xác user còn đăng nhập hay không.
+ */
+async function bootstrap() {
+  try {
+    serveSessionHandoff(AUTH_STORE_KEY);
+    serveSessionHandoff(CUSTOMER_STORE_KEY);
+
+    await Promise.all([
+      requestSessionHandoff(AUTH_STORE_KEY, AUTH_REMEMBER_KEY),
+      requestSessionHandoff(CUSTOMER_STORE_KEY, CUSTOMER_REMEMBER_KEY),
+    ]);
+  } finally {
+    // Dù handoff lỗi (storage bị chặn...) vẫn phải hydrate + render app.
+    await Promise.all([useAuthStore.persist.rehydrate(), useCustomerAuthStore.persist.rehydrate()]);
+
+    ReactDOM.createRoot(document.getElementById('root')!).render(<Root />);
+  }
+}
+
+void bootstrap();

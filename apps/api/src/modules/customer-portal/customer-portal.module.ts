@@ -13,6 +13,7 @@ import { CustomerCatalogController } from './customer-catalog.controller';
 import { CustomerCatalogService } from './customer-catalog.service';
 import { CustomerOrderController } from './customer-order.controller';
 import { CustomerOrderService } from './customer-order.service';
+import { PublicCatalogController } from './public-catalog.controller';
 
 @Module({
   imports: [
@@ -28,7 +29,7 @@ import { CustomerOrderService } from './customer-order.service';
     OrderModule,
     PromotionModule,
   ],
-  controllers: [CustomerAuthController, CustomerOrderController, CustomerCatalogController],
+  controllers: [CustomerAuthController, CustomerOrderController, CustomerCatalogController, PublicCatalogController],
   providers: [CustomerOrderService, CustomerCatalogService],
 })
 export class CustomerPortalModule {}

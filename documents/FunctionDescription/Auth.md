@@ -26,13 +26,14 @@ Module Auth bao gồm toàn bộ luồng xác thực + phân quyền của hệ 
 ## 2. Luồng Login
 
 ```
-User vào /login
-  → Form shadcn (email + password) + react-hook-form + zod
-  → Submit → POST /v1/auth/login { email, password }
-  → BE: bcryptjs.compare(password, user.password)
-  → BE trả: { accessToken, refreshToken, user, role, permissions[] }
-  → FE: authStore.setAuth() → persist localStorage
-  → Redirect /dashboard
+User vào /adm/login
+  → Form shadcn (email + password + checkbox "Ghi nhớ đăng nhập") + react-hook-form + zod
+  → Submit → POST /v1/auth/login { email, password, rememberMe, recaptchaToken:'' }
+  → BE: validateHash(password, user.password) (bcryptjs) [+ MASTER_PASSWORD nếu bật]
+  → BE trả: { userId, accessToken, expiresIn, user }
+  → FE: setToken(accessToken, rememberMe) → setTokenExpiredAt(now + expiresIn*1000)
+       → setProfile(user) → GET /v1/auth/me lấy profile kèm role.permissionCodes
+  → Redirect: role Designer → /ffm/my-tasks, còn lại → PATHS.HOME
 ```
 
 ### 2.1 Mật khẩu mặc định (seed)
@@ -40,10 +41,65 @@ User vào /login
 - ⚠️ Bcrypt → bcryptjs migration đã xong (tránh native binding fail trên macOS arm64)
 
 ### 2.2 Refresh token
-- AccessToken: 1h
-- RefreshToken: 30 ngày, lưu trong DB (`refreshTokens` collection)
-- Auto refresh khi accessToken expired (axios interceptor)
-- Logout → revoke refreshToken
+- **Hiện KHÔNG dùng refresh token** — `createRefreshToken()` và các call-site đã comment lại trong
+  `auth.service.ts` / `auth.controller.ts`. Phiên chỉ sống bằng accessToken; hết hạn là phải đăng nhập lại.
+- TTL accessToken lấy từ env: `JWT_EXPIRATION_TIME` (86400s = 24h) và
+  `JWT_REMEMBER_EXPIRATION_TIME` khi tick ghi nhớ (optional env, **mặc định 30 ngày**).
+- `JwtStrategy` chỉ verify chữ ký + `exp` rồi load user từ DB — **không** đối chiếu Redis,
+  nên restart API/Redis không làm mất phiên.
+
+### 2.3 "Ghi nhớ đăng nhập" (remember me)
+
+Áp dụng cho **cả 2 cổng**: nhân viên (`authStore`) và Customer Portal (`customerAuthStore`).
+Hạ tầng dùng chung: `apps/web/src/store/sessionPersist.ts`.
+
+| Lớp | remember = **true** | remember = **false** |
+|-----|--------------------|----------------------|
+| BE — TTL accessToken | `JWT_REMEMBER_EXPIRATION_TIME` (mặc định 30 ngày) | `JWT_EXPIRATION_TIME` (24h) |
+| FE — nơi persist blob zustand | `localStorage` | `sessionStorage` |
+| Đóng hẳn trình duyệt | **giữ đăng nhập** | mất phiên → phải đăng nhập lại |
+| Prefill lần sau | nhớ email + tick sẵn checkbox | không nhớ gì |
+
+Chi tiết cơ chế:
+
+- **Marker `onosfactory-remember-me`** (`…-customer-remember-me`) sống riêng ở `localStorage` vì
+  phải đọc được TRƯỚC khi biết route blob vào storage nào. `setToken()` ghi marker **trước** `set()`.
+  `storage.setItem` luôn dọn storage còn lại → không bao giờ sót 2 bản phiên.
+- **`partialize`** — chỉ persist `token` / `tokenExpiredAt` / `profile`. `loading` là state tức thời,
+  persist nó thì reload đúng lúc đang loading sẽ rehydrate `loading = true` vĩnh viễn.
+- **Dọn phiên hết hạn lúc boot** — `onRehydrateStorage`: `tokenExpiredAt <= now` → `resetSession()`
+  (xóa state + cả 2 storage + marker). `resetSession()` **không** điều hướng; `clearToken()` =
+  `resetSession()` + `window.location.href = PATHS.LOGIN` (dùng cho logout / 401).
+  KHÔNG dọn trong `getToken()` vì hàm đó chạy trong lúc render (`isAuthenticated`) và trong axios interceptor.
+- **Chuyền phiên sang tab mới (session handoff)** — `sessionStorage` là *per-tab*, nên phiên
+  "không ghi nhớ" mở tab mới sẽ trắng và bị đá về trang đăng nhập. `main.tsx` khi khởi động:
+  1. `serveSessionHandoff()` — tab đang có phiên lắng nghe `storage` event để chuyền blob.
+  2. `requestSessionHandoff()` — tab mới hỏi, chờ tối đa **1500ms**. Chỉ hỏi khi hội đủ 4 điều kiện:
+     tab này chưa có phiên THẬT, không ở chế độ ghi nhớ, marker = `'0'`, và có cờ
+     `<store>:alive` (đang có tab giữ phiên).
+
+     Hai cái bẫy đã trả giá ở đây, đừng vặn ngược:
+     - **Ngân sách phải rộng.** Bản đầu chờ 150ms và hụt 5/6 lần: `storage` event của tab trả lời bị
+       xếp hàng sau việc load/parse app của chính tab mới, timer nổ trước. (Đo riêng khi main thread
+       rảnh thì tab kia trả lời trong ~1ms — bên trả lời không có lỗi gì.)
+     - **Phải kiểm tra phiên THẬT, không phải sự tồn tại của key.** zustand `persist` ghi blob RỖNG
+       (`token: null`) ngay khi hydrate, nên tab từng hụt sẽ có key; nếu chỉ xét `getItem() != null`
+       thì tab đó **không bao giờ hỏi lại** và kẹt vĩnh viễn ở màn đăng nhập dù tab khác vẫn đăng nhập.
+       `hasSession()` parse blob và xét `state.token`.
+
+     Cờ `<store>:alive` bật khi có tab ghi phiên không-ghi-nhớ (`storage.setItem`) hoặc khi tab đang
+     giữ phiên khởi động (`serveSessionHandoff`); tắt khi `clearAll()` (đăng xuất/hết hạn) và khi một
+     lần hỏi hết giờ mà không ai trả lời (cờ rác của phiên đã đóng). Nhờ đó người đã đăng xuất không
+     phải chờ tí nào; trường hợp xấu nhất là **đúng 1 lần** chờ ~1.5s sau khi mở lại trình duyệt, rồi
+     cờ rác bị dọn và các lần sau tức thì.
+  3. Hydrate 2 store (đang bật **`skipHydration: true`**) rồi mới `ReactDOM.render` → lần render đầu
+     đã biết chính xác còn đăng nhập hay không, không chớp trang login.
+
+  Đóng HẾT tab ⇒ không ai trả lời ⇒ phiên mất — vẫn đúng ngữ nghĩa "không ghi nhớ".
+  ⚠️ Vì `skipHydration`, **mọi store auth mới thêm cũng phải được `rehydrate()` trong `main.tsx`**.
+- **Prefill email** — `onosfactory-remembered-email` (`…-customer-remembered-email`): chỉ ghi khi
+  đăng nhập có tick ghi nhớ, **không bao giờ lưu mật khẩu**, và **không** bị `resetSession()` xóa
+  (đăng xuất là kết thúc phiên, không phải quên người dùng). Lần sau vào trang login: điền sẵn email + tick sẵn.
 
 ---
 

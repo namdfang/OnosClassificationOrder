@@ -179,6 +179,8 @@
     "backToList": "Back to list",
     "unsavedConfirm": "You have UNSAVED changes. Leaving this page will lose them — leave anyway?",
     "shortNameRequired": "Short name cannot be empty",
+    "factoryRequired": "Please select a factory",
+    "machineTypeRequired": "Please select a machine type",
     "fullNameRequired": "Product full name cannot be empty",
     "saveSuccess": "Product saved",
     "createSuccess": "Product created",

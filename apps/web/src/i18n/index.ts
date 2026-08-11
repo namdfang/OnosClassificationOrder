@@ -3,6 +3,7 @@ import i18n from 'i18next';
 
 import authEn from './locales/en/auth.json';
 import careersEn from './locales/en/careers.json';
+import catalogEn from './locales/en/catalog.json';
 import commonEn from './locales/en/common.json';
 import customerFactoryAssignmentEn from './locales/en/customerFactoryAssignment.json';
 import customerNotificationsEn from './locales/en/customerNotifications.json';
@@ -25,6 +26,7 @@ import toolCheckWorkflowEn from './locales/en/toolCheckWorkflow.json';
 import workshopConfigEn from './locales/en/workshopConfig.json';
 import authVi from './locales/vi/auth.json';
 import careersVi from './locales/vi/careers.json';
+import catalogVi from './locales/vi/catalog.json';
 import commonVi from './locales/vi/common.json';
 import customerFactoryAssignmentVi from './locales/vi/customerFactoryAssignment.json';
 import customerNotificationsVi from './locales/vi/customerNotifications.json';
@@ -50,12 +52,20 @@ const STORAGE_KEY = 'onosfactory-language';
 
 export type AppLanguage = 'vi' | 'en';
 
+/** Ngôn ngữ mặc định toàn hệ thống khi người dùng chưa chọn gì. */
+export const DEFAULT_LANGUAGE: AppLanguage = 'en';
+
+/**
+ * Ngôn ngữ khởi động. Đọc THẲNG từ localStorage (không qua `languageStore`) vì
+ * i18n phải init xong trước khi bất kỳ component nào render.
+ * Chưa từng chọn ngôn ngữ → **tiếng Anh** (mặc định của hệ thống).
+ */
 export function getStoredLanguage(): AppLanguage {
   try {
     const stored = JSON.parse(localStorage.getItem(STORAGE_KEY) || '{}');
-    return stored?.state?.language === 'en' ? 'en' : 'vi';
+    return stored?.state?.language === 'vi' ? 'vi' : 'en';
   } catch {
-    return 'vi';
+    return DEFAULT_LANGUAGE;
   }
 }
 
@@ -83,6 +93,7 @@ export const resources = {
     customerNotifications: customerNotificationsVi,
     landing: landingVi,
     careers: careersVi,
+    catalog: catalogVi,
   },
   en: {
     common: commonEn,
@@ -107,13 +118,14 @@ export const resources = {
     customerNotifications: customerNotificationsEn,
     landing: landingEn,
     careers: careersEn,
+    catalog: catalogEn,
   },
 } as const;
 
 i18n.use(initReactI18next).init({
   resources,
   lng: getStoredLanguage(),
-  fallbackLng: 'vi',
+  fallbackLng: DEFAULT_LANGUAGE,
   defaultNS: 'common',
   ns: Object.keys(resources.vi),
   interpolation: { escapeValue: false },

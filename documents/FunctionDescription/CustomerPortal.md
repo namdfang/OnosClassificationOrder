@@ -270,11 +270,18 @@ dùng chung 1 hàm `mapRow()` (map `ProductConfigEntity` → `CustomerCatalogIte
 2. `getCatalogItem()` — 1 sản phẩm theo `_id`, dùng cho trang chi tiết
    `/customer/catalog/:id`. 404 nếu không khớp filter hiển thị bên dưới.
 
-**Filter hiển thị (cả 2 API):** `ProductConfigEntity` với `variations` không
-rỗng (chỉ sản phẩm đã được enrich đầy đủ mới hiện trong catalog — xem
-[`Products.md §2.5`](Products.md)) **VÀ `status=active`** (Inactive/Hidden bị
-loại khỏi catalog khách hàng — xem [`Products.md §2.2`](Products.md); data cũ
-chưa có field `status` vẫn coi như active qua `$in: [Active, null]`).
+**Filter hiển thị (cả 2 API):** CHỈ `status=active` (Inactive/Hidden bị loại
+khỏi catalog khách hàng — xem [`Products.md §2.2`](Products.md); data cũ chưa có
+field `status` vẫn coi như active qua `$in: [Active, null]`).
+
+> ⚠️ Filter này **không** đòi sản phẩm phải có `variations`. Bản đầu có thêm
+> `variations: { $exists: true, $ne: [] }` với ý "chỉ sản phẩm đã enrich đủ giá
+> mới hiện" — nhưng thực tế gần như không sản phẩm nào nhập biến thể (2/151 doc
+> có field, cả 2 đều rỗng) nên **catalog luôn trống**. Biến thể chỉ là dữ liệu
+> giá/SKU tùy chọn: sản phẩm chưa có biến thể vẫn xem được (card hiện giá "—")
+> và vẫn đặt đơn được vì `PlaceCustomerOrderItemZod` chỉ bắt buộc `type`,
+> `color`/`size` là optional. Muốn ẩn 1 sản phẩm khỏi catalog thì đặt
+> `status = inactive/hidden`, đừng dựa vào biến thể.
 `getCatalog()` filter thêm `search`/`productCategoryId` nếu có. `productCategory`
 trả về trong response là TÊN đã resolve từ `productCategoryId` (populate
 virtual qua `ProductCategory` module — [`Products.md §4`](Products.md)), KHÔNG
