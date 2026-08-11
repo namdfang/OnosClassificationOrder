@@ -146,12 +146,17 @@ function CustomerDashboardPage() {
                   <TableRow key={order._id} className={cancelled ? 'opacity-60' : undefined}>
                     <TableCell>
                       <span className="inline-flex items-center gap-1">
-                        <Link
-                          to={PATHS.CUSTOMER_ORDER_DETAIL.replace(':productionId', order.productionId)}
-                          className="font-mono text-xs font-semibold text-primary hover:underline"
-                        >
-                          {order.productionId}
-                        </Link>
+                        {/* Item pending/hủy-trước-push đã có mã nhưng CHƯA có đơn sản xuất — trang track sẽ 404, chỉ hiện text. */}
+                        {order.currentStageLabel || order.completed ? (
+                          <Link
+                            to={PATHS.CUSTOMER_ORDER_DETAIL.replace(':productionId', order.productionId)}
+                            className="font-mono text-xs font-semibold text-primary hover:underline"
+                          >
+                            {order.productionId}
+                          </Link>
+                        ) : (
+                          <span className="font-mono text-xs font-semibold">{order.productionId}</span>
+                        )}
                         <CopyButton value={order.productionId} label={t('orders.columns.code')} />
                       </span>
                     </TableCell>

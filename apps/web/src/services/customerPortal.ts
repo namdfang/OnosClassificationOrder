@@ -1,4 +1,15 @@
-import type { CustomerLoginDto, CustomerRegisterDto, PlaceCustomerOrderDto, UpdateCustomerOrderDto } from 'shared';
+import type {
+  CancelCustomerStagingOrderDto,
+  CustomerLoginDto,
+  CustomerOrderStatus,
+  CustomerRegisterDto,
+  ImportCustomerOrdersDto,
+  PlaceCustomerOrderDto,
+  PushCustomerOrdersDto,
+  ResolveImportSkusDto,
+  UpdateCustomerOrderDto,
+  UpdateCustomerStagingOrderDto,
+} from 'shared';
 
 import { callApi } from '../apis';
 import { CONFIG } from '../constants';
@@ -29,11 +40,44 @@ const placeOrder = (data: PlaceCustomerOrderDto) => {
   return callApi(`/${CONFIG.API_VERSION}/customer/orders`, 'post', data);
 };
 
-const listOrders = (page = 1, limit = 20, filters?: { search?: string; type?: string }) => {
+const listOrders = (
+  page = 1,
+  limit = 20,
+  filters?: { search?: string; status?: CustomerOrderStatus | ''; held?: boolean },
+) => {
   const params = new URLSearchParams({ page: String(page), limit: String(limit) });
   if (filters?.search?.trim()) params.set('search', filters.search.trim());
-  if (filters?.type?.trim()) params.set('type', filters.type.trim());
+  if (filters?.status) params.set('status', filters.status);
+  if (filters?.held) params.set('held', 'true');
   return callApi(`/${CONFIG.API_VERSION}/customer/orders?${params.toString()}`, 'get');
+};
+
+const getCounts = () => {
+  return callApi(`/${CONFIG.API_VERSION}/customer/orders/counts`, 'get');
+};
+
+const importOrders = (data: ImportCustomerOrdersDto) => {
+  return callApi(`/${CONFIG.API_VERSION}/customer/orders/import`, 'post', data);
+};
+
+const resolveImportSkus = (data: ResolveImportSkusDto) => {
+  return callApi(`/${CONFIG.API_VERSION}/customer/orders/import/resolve`, 'post', data);
+};
+
+const previewPush = (data: PushCustomerOrdersDto) => {
+  return callApi(`/${CONFIG.API_VERSION}/customer/orders/push-preview`, 'post', data);
+};
+
+const pushToProduction = (data: PushCustomerOrdersDto) => {
+  return callApi(`/${CONFIG.API_VERSION}/customer/orders/push`, 'post', data);
+};
+
+const updateStagingOrder = (id: string, data: UpdateCustomerStagingOrderDto) => {
+  return callApi(`/${CONFIG.API_VERSION}/customer/orders/staging/${encodeURIComponent(id)}`, 'patch', data);
+};
+
+const cancelStagingOrder = (id: string, data: CancelCustomerStagingOrderDto = {}) => {
+  return callApi(`/${CONFIG.API_VERSION}/customer/orders/staging/${encodeURIComponent(id)}/cancel`, 'post', data);
 };
 
 const listProductTypes = () => {
@@ -52,7 +96,21 @@ const updateOrder = (productionId: string, data: UpdateCustomerOrderDto) => {
   return callApi(`/${CONFIG.API_VERSION}/customer/orders/${encodeURIComponent(productionId)}`, 'patch', data);
 };
 
-export const customerOrder = { placeOrder, listOrders, listProductTypes, getDashboard, trackOrder, updateOrder };
+export const customerOrder = {
+  placeOrder,
+  listOrders,
+  getCounts,
+  importOrders,
+  resolveImportSkus,
+  previewPush,
+  pushToProduction,
+  updateStagingOrder,
+  cancelStagingOrder,
+  listProductTypes,
+  getDashboard,
+  trackOrder,
+  updateOrder,
+};
 
 const getCatalog = (query: string = '') => {
   return callApi(`/${CONFIG.API_VERSION}/customer/catalog${query}`, 'get');

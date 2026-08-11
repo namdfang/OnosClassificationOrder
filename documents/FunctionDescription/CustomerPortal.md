@@ -58,32 +58,21 @@ persist `customer-auth-store`) — tách biệt hoàn toàn khỏi `authStore.ts
 (nhân viên). `apis/index.tsx` phân luồng token theo URL: request tới
 `/customer/...` → lấy token từ `customerAuthStore`, còn lại → `authStore`.
 
-### 2.3 Đặt đơn — NHIỀU sản phẩm/1 địa chỉ ship, default sản xuất TÁI DÙNG luồng import
+### 2.3 Đặt đơn — staging PENDING 2 pha (xem `CustomerOrderIntake.md`)
 
-`PlaceCustomerOrderDto` (`packages/shared/dtos/production-order.dto.ts`) =
-`{ items: PlaceCustomerOrderItemZod[], shippingAddress: PlaceCustomerOrderShippingAddressZod, referent? }`.
-1 lần "Đặt đơn" có thể gồm **nhiều sản phẩm** (`items[]`, mỗi item =
-`type/color/size/mockupUrl/printMethod/weight/width/height/length/quantity/designs`,
-tách từ shape cũ) nhưng CHỈ **1 địa chỉ ship dùng chung** cho mọi item
-(`shippingAddress`, bắt buộc `firstName`/`phone`/`address1`/`city` — các field
-còn lại của `ProductionOrderShippingAddressZod` optional). KHÔNG có
-factory/machine/fabric/toolResult/designer/fulfillment — các field này được
-**default tự động giống hệt** lúc import nội bộ.
+> **ĐÃ ĐỔI KIẾN TRÚC:** từ đợt Customer Order Intake, `placeOrder()` KHÔNG gọi
+> `importOrders()` nữa. Đơn form/CSV vào **staging `customer_orders`**
+> (Pending — 1 document = 1 đơn nhiều item + 1 địa chỉ chung); khách tick chọn
+> → **Push to production** (chốt giá + ledger `customer_payments`) mới nổ ra
+> mỗi item 1 `OrderEntity` qua `importOrders()`. Listing `/customer/orders`
+> giờ 8 tab trạng thái derive at read-time + badge On Hold/Rework. Chi tiết
+> đầy đủ (CSV template cũ, idempotency `(customerId, orderKey)`, backfill
+> Luồng A): [`CustomerOrderIntake.md`](CustomerOrderIntake.md).
 
-`CustomerOrderService.placeOrder()`:
-1. Với MỖI item trong `dto.items`: sinh `productionId` random qua
-   `generateUniqueProductionId()` — format `XX-NNNNN-NNNNN` (2 chữ cái + 5 số +
-   5 số, CÙNG pattern với mã đơn thật/`CUTTING_FILE_PRODUCTION_ID_REGEX` — xem
-   §2.3.1), check trùng qua `orderModel.exists()`, retry tối đa 10 lần.
-2. Gộp TOÀN BỘ items thành 1 mảng `rows[]` — mỗi row mang theo CÙNG
-   `shippingAddress` (snapshot vào field `OrderEntity.shippingAddress`, trước
-   đây chỉ set qua luồng khôi phục OnosPod — xem Orders.md §9c) — rồi gọi
-   **1 lần duy nhất** `OrderService.importOrders({ rows }, ctx)` cho cả batch —
-   TÁI DÙNG map ProductConfig theo `type`, ưu tiên gán xưởng theo khách
-   (`customer-assignment`), xử lý `designs`... y hệt luồng import file Excel
-   nội bộ, thay vì viết lại logic default riêng.
-3. Đọc lại TOÀN BỘ đơn vừa tạo theo `productionId $in [...]`, giữ đúng thứ tự
-   submit, trả mảng `CustomerOrderSummary[]` (khác response cũ — object đơn lẻ).
+`PlaceCustomerOrderDto` (`packages/shared/dtos/production-order.dto.ts`) giữ
+nguyên input `{ items[], shippingAddress, referent? }` — response giờ là
+`CustomerStagingOrderResDto` (1 staging order, chưa có `productionId`).
+`productionId` chỉ sinh lúc push qua `generateUniqueProductionId()` (§2.3.1).
 
 #### 2.3.1 Format `productionId` tự sinh — khớp pattern mã đơn thật
 

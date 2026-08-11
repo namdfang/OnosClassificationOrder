@@ -82,7 +82,13 @@
       "colorSize": "Màu / Size",
       "quantity": "SL",
       "status": "Trạng thái",
-      "orderDate": "Ngày đặt"
+      "orderDate": "Ngày đặt",
+      "order": "Đơn hàng",
+      "items": "Sản phẩm",
+      "total": "Tổng tiền",
+      "date": "Ngày",
+      "customer": "Khách nhận",
+      "tracking": "Vận chuyển"
     },
     "statusCancelled": "Đã hủy",
     "statusProcessing": "Đang xử lý",
@@ -92,7 +98,48 @@
     "inProductionOn": "Vào sản xuất",
     "completedOn": "Hoàn thành ngày",
     "viewTimeline": "Xem tiến trình đầy đủ →",
-    "viewDetail": "Xem chi tiết"
+    "viewDetail": "Xem chi tiết",
+    "importCsv": "Import CSV",
+    "tabs": {
+      "all": "Tất cả",
+      "pending": "Chờ đẩy SX",
+      "processing": "Đang xử lý",
+      "in-production": "Đang sản xuất",
+      "fulfilled": "Đã xuất kho",
+      "completed": "Hoàn tất",
+      "refunded": "Hoàn tiền",
+      "cancelled": "Đã hủy"
+    },
+    "status": {
+      "pending": "Chờ đẩy SX",
+      "processing": "Đang xử lý",
+      "in-production": "Đang sản xuất",
+      "fulfilled": "Đã xuất kho",
+      "completed": "Hoàn tất",
+      "refunded": "Đã hoàn tiền",
+      "cancelled": "Đã hủy"
+    },
+    "badgeHold": "Đang giữ",
+    "badgeRework": "Đang sửa lỗi",
+    "notPushed": "Chưa vào sản xuất",
+    "itemCount": "{{count}} sản phẩm",
+    "expand": "Mở rộng",
+    "collapse": "Thu gọn",
+    "pushSelected": "Push to production ({{count}})",
+    "pushOne": "Push",
+    "cancelConfirm": "Hủy đơn {{name}}? Đơn chưa vào sản xuất nên hủy miễn phí.",
+    "cancelSuccess": "Đã hủy đơn.",
+    "shipTo": "Giao tới",
+    "note": "Ghi chú",
+    "source": {
+      "form": "Đặt tay",
+      "csv": "Import CSV",
+      "api": "API",
+      "sync": "Đồng bộ hệ cũ"
+    },
+    "paymentUnpaid": "Chưa thanh toán",
+    "paymentWaived": "Miễn thanh toán",
+    "moreItems": "+{{count}} sản phẩm khác"
   },
   "orderNew": {
     "title": "Đặt đơn mới",
@@ -145,7 +192,8 @@
       "shippingEmailInvalid": "Email không hợp lệ",
       "typeRequired": "Loại sản phẩm là bắt buộc",
       "productRequired": "Vui lòng chọn 1 sản phẩm từ danh mục"
-    }
+    },
+    "successPending": "Đã tạo đơn ({{count}} sản phẩm) ở trạng thái Chờ đẩy SX — chọn đơn và bấm Push to production để đưa vào sản xuất."
   },
   "track": {
     "notFound": "Không tìm thấy đơn hàng này.",
@@ -223,5 +271,155 @@
     "passwordMismatch": "Mật khẩu nhập lại không khớp",
     "passwordChanged": "Đã đổi mật khẩu",
     "changePasswordButton": "Đổi mật khẩu"
+  },
+  "push": {
+    "title": "Push to production — {{count}} đơn",
+    "confirm": "Xác nhận push ({{count}})",
+    "total": "Tổng cộng",
+    "priceNote": "Giá chốt tại thời điểm push (đã áp ưu đãi theo hạng của bạn).",
+    "quoteWarning": "Một số dòng chưa chốt được giá — đơn vẫn push được, giá sẽ được đối soát sau.",
+    "successToast": "Đã đẩy {{pushed}} đơn vào sản xuất.",
+    "failedToast": "{{failed}} đơn không push được."
+  },
+  "importCsv": {
+    "title": "Import đơn từ file (template OnosPod)",
+    "subtitle": "Dùng đúng file template quen thuộc của hệ cũ — nhiều dòng cùng order_id là 1 đơn nhiều sản phẩm.",
+    "backToOrders": "Quản lý đơn",
+    "downloadTemplate": "Tải file mẫu",
+    "dropHint": "Chọn file .csv / .xlsx / .xls theo template cũ",
+    "chooseFile": "Chọn file",
+    "reset": "Chọn lại",
+    "formatHint": "Tối đa {{max}} dòng mỗi lần import. Block hướng dẫn cuối file mẫu sẽ tự được bỏ qua.",
+    "parsedSummary": "{{lines}} dòng → {{orders}} đơn",
+    "validOrders": "{{count}} đơn hợp lệ",
+    "errorOrders": "{{count}} đơn lỗi (bị bỏ qua)",
+    "importValidOnly": "Import {{count}} đơn hợp lệ",
+    "importAll": "Import {{count}} đơn",
+    "linesLabel": "dòng {{lines}}",
+    "successToast": "Đã tạo {{count}} đơn ở trạng thái Chờ đẩy SX.",
+    "goToPending": "Xem đơn vừa tạo",
+    "resultCreated": "{{count}} tạo mới",
+    "resultDuplicated": "{{count}} trùng (bỏ qua)",
+    "resultFailed": "{{count}} lỗi",
+    "statusCreated": "Đã tạo",
+    "statusDuplicated": "Trùng đơn",
+    "statusFailed": "Lỗi",
+    "itemErrorLine": "Dòng {{index}}",
+    "errors": {
+      "emptyFile": "File không có dữ liệu.",
+      "missingColumn": "Thiếu cột bắt buộc \"{{column}}\" trong header.",
+      "missingOrderId": "Dòng {{line}}: thiếu order_id.",
+      "missingSku": "Dòng {{line}}: thiếu sku.",
+      "badQuantity": "Dòng {{line}}: quantity \"{{value}}\" không hợp lệ.",
+      "badShipping": "Dòng {{line}}: shipping \"{{value}}\" không hợp lệ (COD / EXPRESS_US / ECONOMY_US / SBTT).",
+      "missingAddressField": "Dòng {{line}}: thiếu {{column}} (bắt buộc).",
+      "tooManyLines": "File vượt quá {{max}} dòng — tách nhỏ file rồi import nhiều lần.",
+      "parseFailed": "Không đọc được file — kiểm tra định dạng .csv/.xlsx."
+    },
+    "warnings": {
+      "addressMismatch": "Dòng {{line}}: địa chỉ khác dòng đầu của cùng đơn — dùng địa chỉ dòng đầu."
+    },
+    "allValid": "Tất cả dòng hợp lệ",
+    "cellErrorCount": "{{count}} ô lỗi",
+    "warningCount": "{{count}} cảnh báo",
+    "fixErrorsToSubmit": "File còn ô lỗi (bôi đỏ bên dưới) — sửa file rồi tải lại mới import được.",
+    "cellErrors": {
+      "required": "Bắt buộc — không được để trống",
+      "badQuantity": "Số lượng phải là số nguyên dương",
+      "badShipping": "Chỉ nhận: cod / express_us / economy_us / tiktok (SBTT)",
+      "tooLong": "Quá dài (tối đa {{max}} ký tự)",
+      "invalid": "Giá trị không hợp lệ",
+      "skuNotFound": "SKU không tồn tại trong catalog"
+    },
+    "columns": {
+      "order_id": "Mã đơn",
+      "identifier": "Định danh",
+      "sku": "SKU",
+      "item": "Tên sản phẩm",
+      "quantity": "Số lượng",
+      "shipping": "Vận chuyển",
+      "name": "Tên người nhận",
+      "telephone": "Điện thoại",
+      "address_1": "Địa chỉ",
+      "city": "Thành phố",
+      "state": "Bang/Tỉnh",
+      "postcode": "Mã bưu điện",
+      "country": "Quốc gia",
+      "systemProduct": "Sản phẩm hệ thống"
+    },
+    "resolving": "Đang đối chiếu SKU với catalog…",
+    "systemProductHint": "resolve từ SKU — kiểm tra trước khi import"
+  },
+  "orderDetail": {
+    "reference": "Mã tham chiếu",
+    "steps": {
+      "created": "Tạo đơn",
+      "pushed": "Gửi sản xuất",
+      "manufactured": "Sản xuất xong",
+      "pickedUp": "Đã lấy hàng",
+      "delivered": "Đã giao hàng"
+    },
+    "cancelledAt": "Đơn đã hủy lúc {{date}}",
+    "itemsTitle": "Chi tiết đơn hàng",
+    "designs": "Design",
+    "subtotal": "Tạm tính",
+    "total": "Tổng cộng",
+    "paid": "Đã thanh toán",
+    "addressTitle": "Địa chỉ nhận hàng",
+    "address": {
+      "firstName": "Tên",
+      "lastName": "Họ",
+      "phone": "Điện thoại",
+      "email": "Email",
+      "address1": "Địa chỉ 1",
+      "address2": "Địa chỉ 2",
+      "city": "Thành phố",
+      "state": "Bang / Tỉnh",
+      "postcode": "Mã bưu điện",
+      "country": "Quốc gia",
+      "company": "Công ty"
+    },
+    "updateAddress": "Cập nhật địa chỉ",
+    "noteTitle": "Ghi chú",
+    "notePlaceholder": "Nhập ghi chú cho đơn…",
+    "updateNote": "Cập nhật ghi chú",
+    "noNote": "Không có ghi chú.",
+    "trackingTitle": "Vận chuyển",
+    "trackingNumber": "Mã vận đơn",
+    "trackingLink": "Theo dõi vận đơn",
+    "shippingLabel": "Shipping label",
+    "noTracking": "Chưa có thông tin vận chuyển.",
+    "saveSuccess": "Đã lưu thay đổi.",
+    "pushToProduction": "Push to production",
+    "activityTitle": "Hoạt động đơn hàng",
+    "idLabel": "ID",
+    "merchantLabel": "Merchant",
+    "fulfillLabel": "Fulfill",
+    "productionsTitle": "Sản xuất",
+    "shippingFee": "Phí vận chuyển",
+    "carrier": "Đơn vị vận chuyển",
+    "shipMethodTitle": "Phương thức vận chuyển",
+    "shipMethods": {
+      "cod": "Không cần vận chuyển (COD)",
+      "express_us": "Express US",
+      "economy_us": "Economy US",
+      "tiktok": "Ship by TikTok"
+    },
+    "shipMethodHints": {
+      "cod": "Tôi tự xử lý vận chuyển.",
+      "express_us": "Giao nhanh nội địa Mỹ.",
+      "economy_us": "Giao tiết kiệm nội địa Mỹ.",
+      "tiktok": "Dùng label TikTok Shop (SBTT)."
+    },
+    "activeService": "Kích hoạt tracking bởi USPS",
+    "records": {
+      "title": "Nhật ký đơn hàng",
+      "created": "Tạo đơn",
+      "createdDesc": "Tạo qua {{source}}",
+      "pushed": "Gửi sản xuất",
+      "pushedDesc": "Đơn được đẩy vào sản xuất — {{codes}}",
+      "manufactured": "Sản xuất xong",
+      "cancelled": "Hủy đơn"
+    }
   }
 }

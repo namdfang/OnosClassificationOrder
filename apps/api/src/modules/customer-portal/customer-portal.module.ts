@@ -9,12 +9,15 @@ import { OrderModule } from '@/modules/order/order.module';
 import { ProductCategoryEntity, ProductCategorySchema } from '@/modules/product-category/product-category.entity';
 import { ProductConfigEntity, ProductConfigSchema } from '@/modules/product-config/product-config.entity';
 import { PromotionModule } from '@/modules/promotion/promotion.module';
+import { SystemConfigModule } from '@/modules/system-config/system-config.module';
 
 import { CustomerAuthController } from './customer-auth.controller';
 import { CustomerCatalogController } from './customer-catalog.controller';
 import { CustomerCatalogService } from './customer-catalog.service';
 import { CustomerOrderController } from './customer-order.controller';
+import { CustomerOrderEntity, CustomerOrderSchema } from './customer-order.entity';
 import { CustomerOrderService } from './customer-order.service';
+import { CustomerPaymentEntity, CustomerPaymentSchema } from './customer-payment.entity';
 
 @Module({
   imports: [
@@ -26,11 +29,15 @@ import { CustomerOrderService } from './customer-order.service';
       { name: ProductConfigEntity.name, schema: ProductConfigSchema },
       { name: ProductCategoryEntity.name, schema: ProductCategorySchema },
       { name: CollectionEntity.name, schema: CollectionSchema },
+      { name: CustomerOrderEntity.name, schema: CustomerOrderSchema },
+      { name: CustomerPaymentEntity.name, schema: CustomerPaymentSchema },
     ]),
     AuthModule,
     CustomerModule,
     OrderModule,
     PromotionModule,
+    // Payment gate switch + số ngày Completed (`customer_order_completed_days`).
+    SystemConfigModule,
   ],
   controllers: [CustomerAuthController, CustomerOrderController, CustomerCatalogController],
   providers: [CustomerOrderService, CustomerCatalogService],

@@ -53,6 +53,7 @@ export const PATHS = {
   CUSTOMER_DASHBOARD: '/customer/dashboard',
   CUSTOMER_ORDERS: '/customer/orders',
   CUSTOMER_ORDER_NEW: '/customer/orders/new',
+  CUSTOMER_ORDER_IMPORT: '/customer/orders/import',
   CUSTOMER_ORDER_DETAIL: '/customer/orders/:productionId',
   CUSTOMER_CATALOG: '/customer/catalog',
   CUSTOMER_CATALOG_DETAIL: '/customer/catalog/:id',

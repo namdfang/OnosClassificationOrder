@@ -23,6 +23,7 @@ const CustomerOrders = lazy(() => import('./pages/customer/orders'));
 const CustomerCatalog = lazy(() => import('./pages/customer/catalog'));
 const CustomerCatalogDetail = lazy(() => import('./pages/customer/catalog/detail'));
 const CustomerOrderNew = lazy(() => import('./pages/customer/orders/new'));
+const CustomerOrderImport = lazy(() => import('./pages/customer/orders/import'));
 const CustomerOrderTrack = lazy(() => import('./pages/customer/orders/track'));
 const CustomerAccount = lazy(() => import('./pages/customer/account'));
 
@@ -123,6 +124,14 @@ function App() {
               element={
                 <Suspense fallback={<Loading />}>
                   <CustomerOrderNew />
+                </Suspense>
+              }
+            />
+            <Route
+              path={PATHS.CUSTOMER_ORDER_IMPORT}
+              element={
+                <Suspense fallback={<Loading />}>
+                  <CustomerOrderImport />
                 </Suspense>
               }
             />

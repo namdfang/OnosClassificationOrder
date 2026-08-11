@@ -4,7 +4,7 @@ import { useTranslation } from 'react-i18next';
 import { useLocation, useNavigate } from 'react-router-dom';
 import type { TFunction } from 'i18next';
 import { ImageIcon, PackageSearch, Search, ShoppingCart, Trash2, X } from 'lucide-react';
-import type { CustomerCatalogItem, CustomerOrderSummary } from 'shared';
+import type { CustomerCatalogItem, CustomerStagingOrder } from 'shared';
 import { toast } from 'sonner';
 import { z } from 'zod';
 import { zodResolver } from '@hookform/resolvers/zod';
@@ -260,8 +260,10 @@ function CustomerOrderNew() {
         },
         referent: values.referent?.trim() || undefined,
       });
-      const codes = ((res?.data?.data ?? []) as CustomerOrderSummary[]).map((o) => o.productionId).join(', ');
-      toast.success(t('orderNew.success', { code: codes }));
+      // Đơn giờ vào staging PENDING (chưa có productionId) — khách chọn rồi
+      // "Push to production" ở trang danh sách đơn mới vào sản xuất.
+      const created = res?.data?.data as CustomerStagingOrder | undefined;
+      toast.success(t('orderNew.successPending', { count: created?.items.length ?? cart.length }));
       navigate(PATHS.CUSTOMER_ORDERS);
     } catch (error) {
       handleAxiosError(error);

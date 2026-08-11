@@ -15,16 +15,26 @@ import {
 import { ApiOkResponse, ApiOperation, ApiTags } from '@nestjs/swagger';
 import { AuthUser } from 'core';
 import {
+  CancelCustomerStagingOrderDto,
+  CustomerStagingOrderResDto,
   GetCustomerDashboardResDto,
+  GetCustomerOrderCountsResDto,
   GetCustomerOrderProductTypesResDto,
-  GetCustomerOrdersDto,
-  GetCustomerOrdersResDto,
   GetCustomerOrderTrackResDto,
+  GetCustomerStagingOrdersDto,
+  GetCustomerStagingOrdersResDto,
+  ImportCustomerOrdersDto,
+  ImportCustomerOrdersResDto,
   PlaceCustomerOrderDto,
-  PlaceCustomerOrderResDto,
+  PreviewPushCustomerOrdersResDto,
+  PushCustomerOrdersDto,
+  PushCustomerOrdersResDto,
+  ResolveImportSkusDto,
+  ResolveImportSkusResDto,
   RoleType,
   UpdateCustomerOrderDto,
   UpdateCustomerOrderResDto,
+  UpdateCustomerStagingOrderDto,
 } from 'shared';
 import { Logger } from 'winston';
 
@@ -44,13 +54,13 @@ export class CustomerOrderController {
 
   @Post()
   @Auth([RoleType.Customer])
-  @ApiOperation({ summary: 'Khách hàng đặt đơn mới (chỉ thông tin cơ bản)' })
+  @ApiOperation({ summary: 'Khách hàng đặt đơn mới → staging PENDING (chưa vào sản xuất)' })
   @HttpCode(HttpStatus.OK)
-  @ApiOkResponse({ type: PlaceCustomerOrderResDto })
+  @ApiOkResponse({ type: CustomerStagingOrderResDto })
   async placeOrder(
     @Body() dto: PlaceCustomerOrderDto,
     @AuthUser() customer: CustomerDocument,
-  ): Promise<PlaceCustomerOrderResDto> {
+  ): Promise<CustomerStagingOrderResDto> {
     this.logger.info({
       message: JSON.stringify({ method: 'POST', url: '/customer/orders', customerId: customer._id }),
     });
@@ -59,17 +69,26 @@ export class CustomerOrderController {
 
   @Get()
   @Auth([RoleType.Customer])
-  @ApiOperation({ summary: 'Danh sách đơn của khách hàng đang đăng nhập' })
+  @ApiOperation({ summary: 'Danh sách ĐƠN khách (staging + derive 8 trạng thái, 1 đơn nhiều item)' })
   @HttpCode(HttpStatus.OK)
-  @ApiOkResponse({ type: GetCustomerOrdersResDto })
+  @ApiOkResponse({ type: GetCustomerStagingOrdersResDto })
   async listOrders(
-    @Query() dto: GetCustomerOrdersDto,
+    @Query() dto: GetCustomerStagingOrdersDto,
     @AuthUser() customer: CustomerDocument,
-  ): Promise<GetCustomerOrdersResDto> {
+  ): Promise<GetCustomerStagingOrdersResDto> {
     return this.customerOrderService.listOrders(customer, dto);
   }
 
-  // 2 route static BẮT BUỘC khai TRƯỚC `:productionId` — Nest match theo thứ tự khai báo.
+  // Các route static BẮT BUỘC khai TRƯỚC `:productionId` — Nest match theo thứ tự khai báo.
+  @Get('counts')
+  @Auth([RoleType.Customer])
+  @ApiOperation({ summary: 'Đếm đơn theo 8 trạng thái + badge held/rework (tab bar listing)' })
+  @HttpCode(HttpStatus.OK)
+  @ApiOkResponse({ type: GetCustomerOrderCountsResDto })
+  async getCounts(@AuthUser() customer: CustomerDocument): Promise<GetCustomerOrderCountsResDto> {
+    return this.customerOrderService.getCounts(customer);
+  }
+
   @Get('product-types')
   @Auth([RoleType.Customer])
   @ApiOperation({ summary: 'Distinct sản phẩm khách đã đặt — option filter listing' })
@@ -88,9 +107,100 @@ export class CustomerOrderController {
     return this.customerOrderService.getDashboard(customer);
   }
 
+  @Post('import/resolve')
+  @Auth([RoleType.Customer])
+  @ApiOperation({ summary: 'Đối chiếu SKU với catalog cho preview import (tên/ảnh/giá tham khảo)' })
+  @HttpCode(HttpStatus.OK)
+  @ApiOkResponse({ type: ResolveImportSkusResDto })
+  async resolveImportSkus(
+    @Body() dto: ResolveImportSkusDto,
+    @AuthUser() customer: CustomerDocument,
+  ): Promise<ResolveImportSkusResDto> {
+    return this.customerOrderService.resolveImportSkus(customer, dto);
+  }
+
+  @Post('import')
+  @Auth([RoleType.Customer])
+  @ApiOperation({ summary: 'Import CSV/XLSX theo template OnosPod cũ → staging PENDING (group theo (order_id, identifier))' })
+  @HttpCode(HttpStatus.OK)
+  @ApiOkResponse({ type: ImportCustomerOrdersResDto })
+  async importOrders(
+    @Body() dto: ImportCustomerOrdersDto,
+    @AuthUser() customer: CustomerDocument,
+  ): Promise<ImportCustomerOrdersResDto> {
+    this.logger.info({
+      message: JSON.stringify({
+        method: 'POST',
+        url: '/customer/orders/import',
+        customerId: customer._id,
+        orders: dto.orders.length,
+      }),
+    });
+    return this.customerOrderService.importOrdersCsv(customer, dto);
+  }
+
+  @Post('push-preview')
+  @Auth([RoleType.Customer])
+  @ApiOperation({ summary: 'Xem bảng giá chốt trước khi Push to production (không commit)' })
+  @HttpCode(HttpStatus.OK)
+  @ApiOkResponse({ type: PreviewPushCustomerOrdersResDto })
+  async previewPush(
+    @Body() dto: PushCustomerOrdersDto,
+    @AuthUser() customer: CustomerDocument,
+  ): Promise<PreviewPushCustomerOrdersResDto> {
+    return this.customerOrderService.previewPush(customer, dto);
+  }
+
+  @Post('push')
+  @Auth([RoleType.Customer])
+  @ApiOperation({ summary: 'Push to production — chốt giá + ledger + đẩy vào pipeline sản xuất' })
+  @HttpCode(HttpStatus.OK)
+  @ApiOkResponse({ type: PushCustomerOrdersResDto })
+  async pushToProduction(
+    @Body() dto: PushCustomerOrdersDto,
+    @AuthUser() customer: CustomerDocument,
+  ): Promise<PushCustomerOrdersResDto> {
+    this.logger.info({
+      message: JSON.stringify({ method: 'POST', url: '/customer/orders/push', customerId: customer._id, ids: dto.ids }),
+    });
+    return this.customerOrderService.pushToProduction(customer, dto);
+  }
+
+  @Patch('staging/:id')
+  @Auth([RoleType.Customer])
+  @ApiOperation({ summary: 'Sửa đơn PENDING tự do (thông tin đơn/địa chỉ/items)' })
+  @HttpCode(HttpStatus.OK)
+  @ApiOkResponse({ type: CustomerStagingOrderResDto })
+  async updateStagingOrder(
+    @Param('id') id: string,
+    @Body() dto: UpdateCustomerStagingOrderDto,
+    @AuthUser() customer: CustomerDocument,
+  ): Promise<CustomerStagingOrderResDto> {
+    this.logger.info({
+      message: JSON.stringify({ method: 'PATCH', url: `/customer/orders/staging/${id}`, customerId: customer._id }),
+    });
+    return this.customerOrderService.updateStagingOrder(customer, id, dto);
+  }
+
+  @Post('staging/:id/cancel')
+  @Auth([RoleType.Customer])
+  @ApiOperation({ summary: 'Hủy đơn PENDING (trước push — miễn phí, không refund)' })
+  @HttpCode(HttpStatus.OK)
+  @ApiOkResponse({ type: CustomerStagingOrderResDto })
+  async cancelStagingOrder(
+    @Param('id') id: string,
+    @Body() dto: CancelCustomerStagingOrderDto,
+    @AuthUser() customer: CustomerDocument,
+  ): Promise<CustomerStagingOrderResDto> {
+    this.logger.info({
+      message: JSON.stringify({ method: 'POST', url: `/customer/orders/staging/${id}/cancel`, customerId: customer._id }),
+    });
+    return this.customerOrderService.cancelStagingOrder(customer, id, dto);
+  }
+
   @Get(':productionId')
   @Auth([RoleType.Customer])
-  @ApiOperation({ summary: 'Xem tiến trình 1 đơn của khách hàng' })
+  @ApiOperation({ summary: 'Xem tiến trình 1 đơn sản xuất (item đã push) của khách hàng' })
   @HttpCode(HttpStatus.OK)
   @ApiOkResponse({ type: GetCustomerOrderTrackResDto })
   async trackOrder(
@@ -102,7 +212,7 @@ export class CustomerOrderController {
 
   @Patch(':productionId')
   @Auth([RoleType.Customer])
-  @ApiOperation({ summary: 'Khách sửa mockup/design/địa chỉ ship của 1 đơn đã đặt' })
+  @ApiOperation({ summary: 'Khách sửa mockup/design/địa chỉ ship của 1 đơn ĐÃ PUSH' })
   @HttpCode(HttpStatus.OK)
   @ApiOkResponse({ type: UpdateCustomerOrderResDto })
   async updateOrder(
