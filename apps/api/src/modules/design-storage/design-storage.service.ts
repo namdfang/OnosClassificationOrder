@@ -92,25 +92,31 @@ export class DesignStorageService {
     }
 
     // failed/deleted/chưa có → nhận upload lại. Upsert giữ nguyên unique sha256.
-    const doc = await this.repo.findOneAndUpdate<DesignFileDocument>(
-      { sha256: dto.sha256 },
-      {
-        $set: { status: 'processing', errorMessage: null },
-        $setOnInsert: {
-          sha256: dto.sha256,
-          fileName: dto.fileName,
-          mime: dto.mime,
-          size: dto.size,
-          hasPreview: false,
-          storageClass: 'standard',
-          lastUsedAt: new Date(),
-          usageCount: 0,
-          sourceKeys: [],
-          uploadedBy: { customerId: String(customer._id), userEmail: customer.userEmail },
+    // Gọi model TRỰC TIẾP: repo.findOneAndUpdate của core KHÔNG hỗ trợ upsert
+    // (hardcode {new:true} + tự chèn filter deletedAt → trả null khi chưa có doc).
+    const model = await this.repo.model();
+    const doc = await model
+      .findOneAndUpdate(
+        { sha256: dto.sha256 },
+        {
+          $set: { status: 'processing', errorMessage: null },
+          $setOnInsert: {
+            sha256: dto.sha256,
+            fileName: dto.fileName,
+            mime: dto.mime,
+            size: dto.size,
+            hasPreview: false,
+            storageClass: 'standard',
+            lastUsedAt: new Date(),
+            usageCount: 0,
+            sourceKeys: [],
+            uploadedBy: { customerId: String(customer._id), userEmail: customer.userEmail },
+          },
         },
-      },
-      { upsert: true, new: true } as never,
-    );
+        { upsert: true, new: true },
+      )
+      .lean();
+    if (!doc) throw new BadRequestException('Không tạo được record design — thử lại.');
 
     const tmpKey = `${TMP_PREFIX}${randomUUID()}`;
     const uploadUrl = await getSignedUrl(
@@ -120,7 +126,7 @@ export class DesignStorageService {
     );
     return {
       mode: 'upload' as const,
-      file: this.toSafe(doc as DesignFileDocument),
+      file: this.toSafe(doc as unknown as DesignFileDocument),
       publicBase: c.publicBase,
       uploadUrl,
       tmpKey,

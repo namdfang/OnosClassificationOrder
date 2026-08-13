@@ -164,6 +164,18 @@ async function touchUsage(sha256: string): Promise<void> {
 /** Thay URL design ở OrderEntity + staging item sau khi ingest xong (job kind='url'). */
 async function replaceOrderDesignUrl(job: DesignIngestUrlJob, sha256: string): Promise<void> {
   const cdnOriginal = designCdnUrl(config.r2.publicBase, sha256, 'original');
+
+  // Label vận chuyển: CHỈ thay ở staging (OrderEntity chưa có field tracking — Phase 2).
+  if (job.target === 'tracking-label') {
+    if (job.stagingId) {
+      await CustomerOrderModel.updateOne(
+        { _id: job.stagingId, 'items.productionId': job.productionId },
+        { $set: { 'items.$.tracking.labelUrl': cdnOriginal } },
+      );
+    }
+    return;
+  }
+
   await OrderModel.updateOne(
     { productionId: job.productionId },
     {

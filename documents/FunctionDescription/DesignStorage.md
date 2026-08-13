@@ -16,9 +16,9 @@ Design khách hàng (20–100MB+/file, hàng nghìn đơn/ngày) được lưu t
 - 3 biến thể mỗi design, key theo sha (URL bất biến → cache CDN immutable 1 năm):
 
 ```
-designs/<sha256>/original       — file gốc giữ nguyên format (file để in)
-designs/<sha256>/preview.webp   — 500×500 fit-inside (dialog/drawer)
-designs/<sha256>/thumb.webp     — 100×100 (listing/kanban)
+designs/original/<sha256>       — file gốc giữ nguyên format (file để in)
+designs/preview/<sha256>.webp   — 500×500 fit-inside (dialog/drawer)
+designs/thumb/<sha256>.webp     — 100×100 (listing/kanban)
 uploads/tmp/<uuid>              — vùng chờ upload, worker dọn sau xử lý
 ```
 
@@ -42,7 +42,7 @@ FileUrlOrUploadInput: chọn file → sha256 (WebCrypto)
 
 ### 2.2 Ingest từ URL ngoài lúc Push to production (đơn CSV giữ URL Drive)
 
-Đơn CSV/staging giữ nguyên URL Drive ở Pending (**đơn không push = 0 đồng storage**). Lúc `pushToProduction()`: design là URL ngoài → publish job `{kind:'url', url, designKey, productionId, stagingId}`; push **KHÔNG chờ worker** — đơn vào sản xuất ngay với URL Drive, worker xử lý xong **thay URL bằng CDN original ở CẢ `OrderEntity.designs.{k}` lẫn staging `items[].designs.{k}`** (`designsOriginal` giữ URL Drive làm provenance). Cùng link Drive từng ingest → dedup qua `sourceKeys` (URL-hash alias), khỏi tải lại.
+Đơn CSV/staging giữ nguyên URL Drive ở Pending (**đơn không push = 0 đồng storage**). Lúc `pushToProduction()`: design là URL ngoài → publish job `{kind:'url', url, designKey, productionId, stagingId}`; push **KHÔNG chờ worker** — đơn vào sản xuất ngay với URL Drive, worker xử lý xong **thay URL bằng CDN original ở CẢ `OrderEntity.designs.{k}` lẫn staging `items[].designs.{k}`** (`designsOriginal` giữ URL Drive làm provenance). Cùng link Drive từng ingest → dedup qua `sourceKeys` (URL-hash alias), khỏi tải lại. **Label vận chuyển khách cấp** (`items[].tracking.labelUrl`) cũng được ingest cùng lúc push (job `target='tracking-label'`) — worker CHỈ thay `labelUrl` ở staging (OrderEntity chưa có field tracking, Phase 2); PDF → `hasPreview=false`, chỉ có link original.
 
 ### 2.3 Worker xử lý 1 job (`apps/design-worker/src/processor.ts`)
 

@@ -1221,8 +1221,9 @@ export class CustomerOrderService implements OnModuleInit {
     const cdnUrls: string[] = [];
     for (const u of pendingUpdates) {
       for (const it of u.items) {
+        if (!it.productionId) continue;
         for (const [designKey, url] of Object.entries(it.designs ?? {})) {
-          if (!url || !it.productionId) continue;
+          if (!url) continue;
           if (extractDesignSha(url)) {
             cdnUrls.push(url);
           } else if (/^https?:\/\//i.test(url)) {
@@ -1230,6 +1231,25 @@ export class CustomerOrderService implements OnModuleInit {
               kind: 'url',
               url,
               designKey,
+              productionId: it.productionId,
+              stagingId: u.stagingId,
+              customerId: String(customer._id),
+              userEmail: customer.userEmail,
+            });
+          }
+        }
+        // Label khách cấp cũng lưu về R2 cho chắc (link ngoài có thể chết) —
+        // worker chỉ thay staging tracking.labelUrl (target='tracking-label').
+        const labelUrl = it.tracking?.labelUrl;
+        if (labelUrl) {
+          if (extractDesignSha(labelUrl)) {
+            cdnUrls.push(labelUrl);
+          } else if (/^https?:\/\//i.test(labelUrl)) {
+            await this.designStorageService.enqueueUrlIngest({
+              kind: 'url',
+              url: labelUrl,
+              designKey: 'labelUrl',
+              target: 'tracking-label',
               productionId: it.productionId,
               stagingId: u.stagingId,
               customerId: String(customer._id),

@@ -102,9 +102,9 @@ DesignFileEntity {
 Key trên R2 (URL ghép `${DESIGN_CDN_BASE_URL}/${key}`):
 
 ```
-designs/<sha256>/original          (giữ nguyên format gốc — file in KHÔNG nén lossy)
-designs/<sha256>/preview.webp      (500×500 fit-inside, q80, ~100KB)
-designs/<sha256>/thumb.webp        (100×100 cover, ~10KB)
+designs/original/<sha256>          (giữ nguyên format gốc — file in KHÔNG nén lossy)
+designs/preview/<sha256>.webp      (500×500 fit-inside, q80, ~100KB)
+designs/thumb/<sha256>.webp        (100×100, ~10KB)
 uploads/tmp/<uuid>                 (vùng chờ upload trực tiếp — worker dọn sau khi xử lý)
 ```
 

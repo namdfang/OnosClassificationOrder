@@ -1,6 +1,13 @@
 import mongoose, { Schema } from 'mongoose';
+import { customAlphabet } from 'nanoid';
+import { ID_LENGTH } from 'shared';
 
 import { config } from './config';
+
+// MIRROR packages/core/abstracts/entity.abstract.ts — toàn hệ thống dùng _id
+// STRING tự sinh (nanoid A-Z0-9), KHÔNG phải ObjectId. Thiếu khai báo này thì
+// mọi query theo _id bị "Cast to ObjectId failed".
+const generateId = customAlphabet('0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZ', ID_LENGTH);
 
 /**
  * Worker ghi Mongo TRỰC TIẾP (qua Tailscale) với schema tối thiểu
@@ -11,6 +18,7 @@ import { config } from './config';
 
 const designFileSchema = new Schema(
   {
+    _id: { type: String, default: () => generateId() },
     sha256: { type: String, required: true, unique: true, index: true },
     status: { type: String, default: 'processing' },
     sourceKeys: { type: [String], index: true, default: [] },
@@ -18,8 +26,8 @@ const designFileSchema = new Schema(
   { strict: false, timestamps: true, collection: 'design_files' },
 );
 
-const orderSchema = new Schema({}, { strict: false, collection: 'orders' });
-const customerOrderSchema = new Schema({}, { strict: false, collection: 'customer_orders' });
+const orderSchema = new Schema({ _id: { type: String } }, { strict: false, collection: 'orders' });
+const customerOrderSchema = new Schema({ _id: { type: String } }, { strict: false, collection: 'customer_orders' });
 
 export const DesignFileModel = mongoose.model('DesignFile', designFileSchema);
 export const OrderModel = mongoose.model('Order', orderSchema);
