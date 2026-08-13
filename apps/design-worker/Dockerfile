@@ -1,22 +1,18 @@
-# design-worker — build từ ROOT monorepo:
-#   docker build -f apps/design-worker/Dockerfile -t design-worker .
-# (docker-compose.yml trong thư mục này đã set context đúng, chỉ cần `docker compose up -d --build`)
-
-FROM node:20-slim AS build
-RUN corepack enable && corepack prepare pnpm@8.12.1 --activate
-WORKDIR /repo
-COPY . .
-# Chỉ install deps của worker + shared (tránh kéo cả api/web vào image).
-RUN pnpm install --frozen-lockfile --filter design-worker --filter shared
-RUN pnpm --filter shared build && pnpm --filter design-worker build
-# Gom node_modules production đã resolve symlink cho runtime.
-RUN pnpm --filter design-worker deploy --prod /out
+# design-worker — build từ ROOT monorepo (docker-compose.yml đã set context đúng):
+#   cd apps/design-worker && docker compose up -d --build
+#
+# 1 stage duy nhất — cố tình KHÔNG dùng `pnpm deploy` (bug ENOENT unlink với
+# workspace trên pnpm 8). Image ~1.5GB, đổi lấy build ổn định.
 
 FROM node:20-slim
 ENV NODE_ENV=production
-WORKDIR /app
-COPY --from=build /out /app
-COPY --from=build /repo/apps/design-worker/dist /app/dist
-# Thư mục tạm xử lý file lớn (mount tmpfs/NVMe nếu muốn).
+RUN corepack enable
+WORKDIR /repo
+COPY . .
+# Chỉ install deps của worker + shared (tránh kéo cả api/web vào image).
+# --prod=false vì cần typescript/tsup (devDeps) để build ngay dưới.
+RUN pnpm install --frozen-lockfile --prod=false --filter design-worker --filter shared
+RUN pnpm --filter shared build && pnpm --filter design-worker build
+# Thư mục tạm xử lý file lớn (compose mount tmpfs đè lên).
 RUN mkdir -p /tmp/design-worker
-CMD ["node", "dist/index.js"]
+CMD ["node", "apps/design-worker/dist/index.js"]
