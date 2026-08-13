@@ -291,6 +291,10 @@ const sidebarCounts = () => {
   return callApi(`/${CONFIG.API_VERSION}/designer/sidebar-counts`, 'get');
 };
 
+const overdueAlert = () => {
+  return callApi(`/${CONFIG.API_VERSION}/designer/overdue-alert`, 'get');
+};
+
 export const designer = {
   listTeam,
   createMember,
@@ -323,4 +327,5 @@ export const designer = {
   personErrorOrders,
   stageErrorDaily,
   sidebarCounts,
+  overdueAlert,
 };
