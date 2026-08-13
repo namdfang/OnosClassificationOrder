@@ -12,6 +12,28 @@ export default {
     },
     extend: {
       colors: {
+        // Identity thương hiệu Onos (lấy từ onosglobal.com): tím #6f26c2 = brand.600.
+        // Chỉ dùng cho các trang public (landing/marketing); app nội bộ vẫn dùng token shadcn.
+        brand: {
+          50: '#f6f1fd',
+          100: '#ede1fb',
+          200: '#dcc6f7',
+          300: '#c4a1f0',
+          400: '#a875e6',
+          500: '#8d4ed8',
+          600: '#6f26c2',
+          700: '#5d1fa4',
+          800: '#4d1c86',
+          900: '#401a6d',
+          950: '#270d47',
+        },
+        // Nền các band tối (stat band, CTA cuối, footer) của trang public.
+        ink: {
+          DEFAULT: '#2b2739',
+          700: '#3a3550',
+          800: '#2b2739',
+          900: '#211e2d',
+        },
         border: 'hsl(var(--border))',
         input: 'hsl(var(--input))',
         ring: 'hsl(var(--ring))',
@@ -47,6 +69,8 @@ export default {
         },
       },
       fontFamily: {
+        // Font tiêu đề của trang public — khớp identity onosglobal.com.
+        display: ['Lexend Deca', 'Inter', '-apple-system', 'Segoe UI', 'sans-serif'],
         sans: ['Inter', '-apple-system', 'BlinkMacSystemFont', 'Segoe UI', 'sans-serif'],
         mono: ['JetBrains Mono', 'Fira Code', 'Menlo', 'monospace'],
       },
@@ -68,16 +92,22 @@ export default {
           '0%': { transform: 'translateX(-100%)' },
           '100%': { transform: 'translateX(400%)' },
         },
-        'shimmer': {
+        shimmer: {
           '0%': { backgroundPosition: '-200% 0' },
           '100%': { backgroundPosition: '200% 0' },
+        },
+        // Dải chữ chạy ngang ở trang public (landing).
+        marquee: {
+          from: { transform: 'translateX(0)' },
+          to: { transform: 'translateX(-50%)' },
         },
       },
       animation: {
         'accordion-down': 'accordion-down 0.2s ease-out',
         'accordion-up': 'accordion-up 0.2s ease-out',
         'indeterminate-bar': 'indeterminate-bar 1.2s ease-in-out infinite',
-        'shimmer': 'shimmer 1.6s linear infinite',
+        shimmer: 'shimmer 1.6s linear infinite',
+        marquee: 'marquee 40s linear infinite',
       },
     },
   },

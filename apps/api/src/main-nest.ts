@@ -17,6 +17,26 @@ import { setupSwagger } from './setup-swagger';
 import { ApiConfigService } from './shared/services';
 import { SharedModule } from './shared/shared.module';
 
+const ALLOWED_ORIGINS = process.env.ALLOWED_ORIGINS?.split(',') || [
+  'http://localhost:5173',
+  'https://onosfactory.com',
+  'https://api.onosfactory.com',
+];
+
+/**
+ * Origin của máy dev: `localhost`/`127.0.0.1`/`::1` hoặc IP LAN riêng tư, cổng bất kỳ.
+ *
+ * `apps/web` chạy `vite --host` nên cổng có thể tự nhảy sang 5174/5175… khi 5173
+ * đã bị chiếm, và trang còn mở được qua IP LAN để test trên điện thoại. Nếu chỉ
+ * whitelist đúng `localhost:5173` thì mọi trường hợp đó đều bị chặn, và trình
+ * duyệt chỉ báo "Network Error" chung chung — rất khó lần ra nguyên nhân.
+ */
+function isLocalDevOrigin(origin: string): boolean {
+  return /^https?:\/\/(localhost|127\.0\.0\.1|\[::1\]|10(\.\d{1,3}){3}|192\.168(\.\d{1,3}){2}|172\.(1[6-9]|2\d|3[01])(\.\d{1,3}){2})(:\d+)?$/.test(
+    origin,
+  );
+}
+
 export async function bootstrap(): Promise<NestFastifyApplication> {
   const app = await NestFactory.create<NestFastifyApplication>(
     AppModule,
@@ -25,11 +45,21 @@ export async function bootstrap(): Promise<NestFastifyApplication> {
     }),
     {
       cors: {
-        origin: process.env.ALLOWED_ORIGINS?.split(',') || [
-          'http://localhost:5173',
-          'https://onosfactory.com',
-          'https://api.onosfactory.com',
-        ],
+        origin: (origin, callback) => {
+          // Request không có Origin (curl, server-to-server, health check) — không phải CORS.
+          if (!origin) {
+            callback(null, true);
+            return;
+          }
+
+          // Nới cho máy dev, và CHỈ ngoài production — production vẫn đúng whitelist.
+          const allowed =
+            ALLOWED_ORIGINS.includes(origin) || (process.env.NODE_ENV !== 'production' && isLocalDevOrigin(origin));
+
+          // Từ chối bằng `false` (không gắn header CORS) thay vì ném Error — ném
+          // Error sẽ biến thành lỗi 500 thay vì để trình duyệt chặn như bình thường.
+          callback(null, allowed);
+        },
         methods: 'GET,HEAD,PUT,PATCH,POST,DELETE',
         preflightContinue: false,
         optionsSuccessStatus: 204,

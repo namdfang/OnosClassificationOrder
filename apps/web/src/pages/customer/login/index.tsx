@@ -18,6 +18,7 @@ import logoUrl from '@/assets/images/logo.png';
 import { PATHS } from '../../../constants/paths';
 import { RepositoryRemote } from '../../../services';
 import { useCustomerAuthStore } from '../../../store/customerAuthStore';
+import { CUSTOMER_IDENTITY_KEY, getRememberedIdentity, setRememberedIdentity } from '../../../store/sessionPersist';
 import { handleAxiosError } from '../../../utils';
 
 function buildLoginSchema(t: TFunction<'customerPortal'>) {
@@ -45,9 +46,11 @@ function CustomerLogin() {
   }, []);
 
   const loginSchema = useMemo(() => buildLoginSchema(t), [t]);
+  // Lần trước tick "Ghi nhớ đăng nhập" → prefill email + tick sẵn checkbox.
+  const rememberedEmail = useMemo(() => getRememberedIdentity(CUSTOMER_IDENTITY_KEY), []);
   const form = useForm<LoginFormValues>({
     resolver: zodResolver(loginSchema),
-    defaultValues: { userEmail: '', password: '', rememberMe: false },
+    defaultValues: { userEmail: rememberedEmail, password: '', rememberMe: !!rememberedEmail },
   });
 
   const onSubmit = async (values: LoginFormValues) => {
@@ -61,6 +64,7 @@ function CustomerLogin() {
         setToken(loginInfo.accessToken, values.rememberMe);
         setTokenExpiredAt(expirationTime);
         setProfile(loginInfo.user);
+        setRememberedIdentity(CUSTOMER_IDENTITY_KEY, values.rememberMe ? values.userEmail : null);
         navigate(PATHS.CUSTOMER_ORDERS);
         toast.success(t('login.success'));
       }

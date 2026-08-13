@@ -1,0 +1,55 @@
+{
+  "meta": {
+    "eyebrow": "Danh mục sản phẩm",
+    "titleLead": "Onos nhận in",
+    "titleAccent": "những gì",
+    "subtitle": "Danh sách sản phẩm xưởng đang nhận in theo yêu cầu. Chọn sản phẩm rồi tạo tài khoản để gửi đơn — chúng tôi báo giá và thông số chi tiết theo từng yêu cầu."
+  },
+  "search": {
+    "placeholder": "Tìm theo tên sản phẩm…",
+    "clear": "Xoá tìm kiếm"
+  },
+  "filters": {
+    "label": "Lọc nhanh",
+    "all": "Tất cả"
+  },
+  "result": {
+    "count_one": "{{count}} sản phẩm",
+    "count_other": "{{count}} sản phẩm",
+    "empty": "Không tìm thấy sản phẩm nào khớp.",
+    "emptyHint": "Thử từ khoá ngắn hơn, hoặc bấm \"Tất cả\" để xem toàn bộ danh mục.",
+    "error": "Không tải được danh mục sản phẩm.",
+    "retry": "Thử lại"
+  },
+  "card": {
+    "from": "Từ",
+    "view": "Xem chi tiết",
+    "variations_one": "{{count}} biến thể",
+    "variations_other": "{{count}} biến thể"
+  },
+  "detail": {
+    "back": "Về danh mục",
+    "notFound": "Không tìm thấy sản phẩm này.",
+    "printMethod": "Cách in",
+    "printArea": "Vùng in",
+    "category": "Danh mục",
+    "sizeChart": "Xem bảng size",
+    "specifics": "Thông số",
+    "variations": "Biến thể & giá",
+    "sku": "SKU",
+    "attributes": "Thuộc tính",
+    "price": "Giá niêm yết",
+    "orderCta": "Gửi yêu cầu cho sản phẩm này",
+    "signInHint": "Đã có tài khoản? Đăng nhập để đặt đơn nhanh hơn.",
+    "pending": {
+      "title": "Thông số chi tiết đang được cập nhật",
+      "description": "Sản phẩm này chưa có sẵn mô tả, bảng size và bảng giá trên trang công khai. Gửi yêu cầu kèm thiết kế, chúng tôi sẽ trả lời bằng thông số và báo giá cụ thể cho đơn của bạn.",
+      "contact": "Hoặc hỏi trực tiếp qua email"
+    }
+  },
+  "cta": {
+    "title": "Chưa thấy thứ bạn cần?",
+    "subtitle": "Tạo tài khoản rồi gửi yêu cầu — chúng tôi sẽ trao đổi trực tiếp về sản phẩm bạn muốn làm.",
+    "action": "Tạo tài khoản"
+  }
+}

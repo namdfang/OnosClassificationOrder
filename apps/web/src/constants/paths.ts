@@ -61,6 +61,10 @@ export const PATHS = {
 
   // ---- Public marketing routes (không gate auth, không dùng MainLayout/Sidebar) ----
   COMPANY_CAREERS: '/company/careers',
+  // Catalog công khai — khách CHƯA đăng nhập xem hàng trước khi đăng ký đặt đơn.
+  // Khác `CUSTOMER_CATALOG` (/customer/catalog) vốn nằm sau đăng nhập và có giá theo tier.
+  CATALOG: '/catalog',
+  CATALOG_DETAIL: '/catalog/:id',
 
   ERROR_403: '/forbidden',
   ERROR_404: '/error/404',

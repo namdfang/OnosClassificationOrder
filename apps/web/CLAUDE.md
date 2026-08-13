@@ -20,7 +20,7 @@
 - **Zod schema có message lỗi** khai module scope → factory function `buildXSchema(t)`, gọi qua `useMemo` trong component (mẫu: `buildLoginSchema(t)` ở `pages/login/index.tsx`).
 - Label lấy từ `packages/shared` (enum/constant dùng chung BE, vd permission-catalog, fulfillment-stage) → **KHÔNG sửa file shared**. Tạo dictionary riêng trong namespace FE + tra bằng `t(key, { defaultValue: originalLabel })` để tự fallback khi thiếu key (mẫu: `utils/fulfillmentStageLabel.ts`, `permissions.*`/`permissionGroups.*` trong `auth.json`).
 - Module KHÔNG phải React component (axios interceptor, export util gọi từ click handler...) → import `i18n` default export từ `@/i18n`, gọi `i18n.t(key, { ns: '<namespace>' })` thay vì dùng hook.
-- Ngôn ngữ mặc định: **Tiếng Việt**. Không đổi behavior mặc định khi thêm string mới.
+- Ngôn ngữ mặc định: **Tiếng Anh** (`DEFAULT_LANGUAGE` trong `src/i18n/index.ts` — cũng là `fallbackLng`). Người dùng đã chọn ngôn ngữ thì lựa chọn được nhớ qua `localStorage` (`onosfactory-language`), sống qua restart trình duyệt. Thêm string mới → viết CẢ `en` lẫn `vi`, **file `en` phải luôn phủ đủ key** vì fallback trỏ vào đó.
 
 ### State Management
 

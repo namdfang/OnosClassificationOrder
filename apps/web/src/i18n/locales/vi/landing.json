@@ -1,41 +1,313 @@
 {
+  "brand": {
+    "name": "OnosFactory",
+    "company": "Onos Group",
+    "tagline": "Xưởng in theo yêu cầu — đặt đơn trực tuyến"
+  },
   "nav": {
-    "features": "Tính năng",
-    "howItWorks": "Quy trình"
+    "catalog": "Sản phẩm",
+    "how": "Cách đặt đơn",
+    "why": "Vì sao Onos",
+    "quality": "Chất lượng",
+    "team": "Đội ngũ"
   },
-  "customer": "Khách hàng",
-  "signIn": "Đăng nhập",
+  "actions": {
+    "order": "Đặt đơn ngay",
+    "customerSignIn": "Đăng nhập",
+    "customerSignInLong": "Đã có tài khoản? Đăng nhập",
+    "staffSignIn": "Nhân viên",
+    "staffSignInLong": "Đăng nhập nhân viên",
+    "seeHow": "Xem cách đặt đơn",
+    "backToTop": "Lên đầu trang",
+    "switchLanguage": "Đổi ngôn ngữ",
+    "menu": "Mở menu"
+  },
   "hero": {
-    "title": "Hệ thống quản lý sản xuất & đơn hàng in ấn theo yêu cầu",
-    "subtitle": "Quản lý đơn hàng, điều phối xưởng sản xuất và theo dõi tiến trình trên một nền tảng duy nhất.",
-    "signInSystem": "Đăng nhập hệ thống",
-    "customerOrderNow": "Khách hàng — Đặt đơn ngay"
+    "eyebrow": "Xưởng in theo yêu cầu · Onos Group",
+    "titleLead": "Gửi đơn hôm nay,",
+    "titleAccent": "biết đơn ở đâu",
+    "titleTail": "mỗi ngày sau đó",
+    "subtitle": "Đặt đơn in theo yêu cầu trực tuyến và theo dõi từng bước cho tới khi hàng rời xưởng. Không phải nhắn tin hỏi, không phải chờ ai trả lời.",
+    "note": "Tạo tài khoản miễn phí · Đặt đơn ngay trên trình duyệt",
+    "panelCaption": "Ảnh minh hoạ giao diện cổng khách hàng.",
+    "badgeUpdate": "Cập nhật theo thời gian thực",
+    "badgeNotify": "Có thay đổi là báo ngay"
   },
-  "features": {
-    "orders": {
-      "title": "Quản lý đơn hàng",
-      "description": "Theo dõi toàn bộ đơn hàng từ import, phân loại đến xử lý lỗi trên một màn hình duy nhất."
-    },
-    "production": {
-      "title": "Điều phối sản xuất",
-      "description": "Gán xưởng, phân công thiết kế và theo dõi từng công đoạn fulfillment theo thời gian thực."
-    },
-    "reports": {
-      "title": "Báo cáo & thống kê",
-      "description": "Dashboard trực quan cho năng suất, tỉ lệ lỗi và tiến độ theo từng xưởng, từng người."
-    },
-    "tracking": {
-      "title": "Theo dõi tiến trình",
-      "description": "Khách hàng tự đặt đơn và tra cứu tiến trình xử lý mọi lúc, không cần liên hệ trực tiếp."
+  "capabilities": {
+    "eyebrow": "Vì sao đặt đơn ở Onos",
+    "items": {
+      "selfServe": {
+        "title": "Tự đặt, không qua trung gian",
+        "label": "Chọn sản phẩm, gửi thiết kế và gửi đơn ngay trên trình duyệt, bất kể múi giờ."
+      },
+      "visibility": {
+        "title": "Luôn biết đơn ở đâu",
+        "label": "Mỗi đơn có trang tiến trình riêng, bạn mở xem bất cứ lúc nào mà không cần hỏi ai."
+      },
+      "accountable": {
+        "title": "Có lỗi là có người chịu trách nhiệm",
+        "label": "Mọi thao tác trên đơn đều được ghi lại, nên sai ở đâu sửa đúng ở đó."
+      },
+      "factory": {
+        "title": "Xưởng của chính chúng tôi",
+        "label": "Sản xuất tại xưởng Onos ở Việt Nam, không phải nhận đơn rồi đẩy đi nơi khác."
+      }
     }
   },
+  "problems": {
+    "eyebrow": "Vấn đề",
+    "titleLead": "Đặt hàng gia công",
+    "titleAccent": "thường rất mù mờ",
+    "subtitle": "Đây là bốn điều khách hàng hay gặp nhất khi làm việc với một xưởng in — và cách chúng tôi xử lý.",
+    "items": {
+      "silence": {
+        "problem": "Gửi đơn xong rồi im lặng, không biết bao giờ xong",
+        "solution": "Đơn của bạn có trang tiến trình riêng, cập nhật ngay khi xưởng chuyển bước. Bạn không cần nhắn hỏi."
+      },
+      "chat": {
+        "problem": "Đặt đơn qua chat, thông tin trôi mất giữa hàng trăm tin nhắn",
+        "solution": "Đơn đặt trực tuyến, mọi thông tin và file thiết kế lưu lại theo đơn — tra lại lúc nào cũng được."
+      },
+      "quality": {
+        "problem": "Hàng lỗi mà không rõ lỗi từ khâu nào",
+        "solution": "Mỗi công đoạn đều được kiểm và ghi nhận, nên khi có lỗi chúng tôi làm lại đúng khâu sai thay vì đổ lỗi vòng quanh."
+      },
+      "scale": {
+        "problem": "Đơn nhiều lên thì mọi thứ bắt đầu rối",
+        "solution": "Cùng một quy trình dù bạn gửi một đơn hay hàng trăm đơn; danh sách đơn của bạn luôn ở một chỗ."
+      }
+    },
+    "problemLabel": "Vấn đề",
+    "solutionLabel": "Ở Onos thì"
+  },
   "howItWorks": {
-    "title": "Quy trình đơn giản",
-    "step1": { "title": "Đặt đơn", "description": "Khách hàng tạo tài khoản và đặt đơn trực tuyến." },
-    "step2": { "title": "Sản xuất", "description": "Đơn được phân xưởng, thiết kế và sản xuất theo quy trình." },
-    "step3": { "title": "Theo dõi", "description": "Tra cứu tiến trình xử lý đơn hàng theo thời gian thực." }
+    "eyebrow": "Cách đặt đơn",
+    "titleLead": "Bốn bước",
+    "titleAccent": "từ ý tưởng tới hàng",
+    "subtitle": "Không cần gọi điện, không cần chờ báo giá mới bắt đầu được.",
+    "steps": {
+      "account": {
+        "title": "Tạo tài khoản",
+        "description": "Đăng ký bằng email trong khoảng một phút và đăng nhập vào cổng khách hàng của bạn."
+      },
+      "choose": {
+        "title": "Chọn sản phẩm",
+        "description": "Duyệt catalog theo loại sản phẩm và biến thể, xem thông tin in ấn và bảng size trước khi đặt."
+      },
+      "submit": {
+        "title": "Gửi đơn kèm thiết kế",
+        "description": "Điền thông tin đơn và đính kèm file thiết kế. Đơn vào thẳng hệ thống sản xuất, không qua bước nhập tay."
+      },
+      "track": {
+        "title": "Theo dõi tới khi nhận hàng",
+        "description": "Mở trang tiến trình bất cứ lúc nào để xem đơn đang ở bước nào, và nhận thông báo khi có cập nhật."
+      }
+    }
+  },
+  "showcase": {
+    "eyebrow": "Trải nghiệm",
+    "titleLead": "Những gì bạn thấy",
+    "titleAccent": "khi đặt đơn",
+    "subtitle": "Toàn bộ việc đặt đơn và theo dõi diễn ra trong cổng khách hàng của riêng bạn.",
+    "caption": "Ảnh minh hoạ giao diện",
+    "items": {
+      "catalog": {
+        "eyebrow": "Chọn hàng",
+        "title": "Catalog sản phẩm với đủ thông tin để quyết",
+        "description": "Mỗi sản phẩm có biến thể, cách in, vùng in và bảng size, để bạn chọn đúng ngay từ đầu thay vì hỏi đi hỏi lại.",
+        "points": [
+          "Lọc theo loại sản phẩm và bộ sưu tập",
+          "Xem ảnh mockup và vùng in trước khi đặt",
+          "Giá tham khảo hiển thị theo hạng khách hàng của bạn"
+        ]
+      },
+      "tracking": {
+        "eyebrow": "Theo dõi",
+        "title": "Mỗi đơn có một trang tiến trình riêng",
+        "description": "Mở lên là thấy đơn đang ở bước nào và đã qua những bước nào. Cần tra lại đơn cũ thì mọi đơn của bạn đều nằm trong một danh sách.",
+        "points": [
+          "Tra cứu theo mã sản xuất của từng đơn",
+          "Nhận thông báo ngay khi đơn có thay đổi",
+          "Xem lại toàn bộ đơn đã đặt bất cứ lúc nào"
+        ]
+      },
+      "production": {
+        "eyebrow": "Hậu trường",
+        "title": "Phía sau là một xưởng được theo dõi chặt",
+        "description": "Bạn không phải quan tâm phần này, nhưng nó là lý do trang tiến trình của bạn luôn đúng: mỗi đơn trong xưởng đều có người phụ trách và trạng thái rõ ràng ở từng bước.",
+        "points": [
+          "Từng bước sản xuất có người chịu trách nhiệm",
+          "Chỗ ùn được phát hiện sớm trước khi thành trễ hẹn",
+          "Hàng lỗi được làm lại đúng khâu, không làm lại cả đơn"
+        ]
+      }
+    }
+  },
+  "benefits": {
+    "eyebrow": "Bạn được gì",
+    "titleLead": "Bớt việc phải lo",
+    "titleAccent": "sau khi gửi đơn",
+    "subtitle": "Điều thay đổi rõ nhất không nằm ở sản phẩm, mà ở việc bạn không còn phải đi hỏi.",
+    "items": [
+      "Không phải nhắn tin hỏi tiến độ, mở trang đơn là biết.",
+      "Không sợ đơn bị bỏ quên, vì mỗi đơn luôn có người phụ trách.",
+      "Thông tin và file thiết kế của đơn cũ luôn tra lại được.",
+      "Đặt lại đơn tương tự nhanh hơn vì mọi thứ đã có sẵn trong tài khoản.",
+      "Biết sớm khi có trục trặc, thay vì biết vào phút chót.",
+      "Gửi một đơn hay hàng trăm đơn thì cách làm vẫn như nhau."
+    ],
+    "cardTitle": "Một tài khoản cho mọi đơn",
+    "cardDescription": "Catalog, đơn đang chạy, đơn đã xong và thông báo — tất cả nằm trong cùng một cổng khách hàng."
+  },
+  "trust": {
+    "marquee": "Sản xuất tại xưởng Onos Group — Việt Nam",
+    "eyebrow": "Chất lượng & minh bạch",
+    "titleLead": "Vì sao bạn",
+    "titleAccent": "yên tâm giao đơn",
+    "items": {
+      "own": {
+        "title": "Xưởng do chúng tôi vận hành",
+        "description": "Đơn được sản xuất tại xưởng của Onos Group ở Việt Nam, không qua trung gian nhận rồi đẩy đi nơi khác."
+      },
+      "audit": {
+        "title": "Mọi thao tác đều có dấu vết",
+        "description": "Từng thay đổi trên đơn được ghi lại kèm người thực hiện và thời điểm, nên có gì cũng truy lại được."
+      },
+      "privacy": {
+        "title": "Dữ liệu của bạn là của bạn",
+        "description": "Tài khoản khách hàng tách riêng khỏi hệ thống nội bộ, và bạn chỉ thấy đúng đơn của mình."
+      }
+    }
+  },
+  "team": {
+    "eyebrow": "Kết nối với chúng tôi",
+    "titleLead": "Đội ngũ",
+    "titleAccent": "dẫn dắt Onos",
+    "subtitle": "Những người đứng sau hoạt động sản xuất và công nghệ của Onos Group, ở cả Việt Nam và Hoa Kỳ.",
+    "members": {
+      "claudeVlandis": {
+        "name": "Claude Vlandis",
+        "role": "Đồng sáng lập & Giám đốc Công nghệ"
+      },
+      "ricardoBialystocki": {
+        "name": "Ricardo Bialystocki",
+        "role": "Đồng sáng lập"
+      },
+      "ricardoCastillo": {
+        "name": "Ricardo Castillo",
+        "role": "Đồng sáng lập"
+      },
+      "thuyNguyen": {
+        "name": "Thuy Nguyen",
+        "role": "Đồng sáng lập & Phụ trách Việt Nam"
+      },
+      "jacobShapira": {
+        "name": "Jacob Shapira",
+        "role": "Giám đốc Phát triển Kinh doanh"
+      },
+      "soiLe": {
+        "name": "Soi Le",
+        "role": "Vận hành & Đối tác"
+      }
+    }
+  },
+  "cta": {
+    "eyebrow": "Bắt đầu",
+    "title": "Gửi đơn đầu tiên của bạn",
+    "subtitle": "Tạo tài khoản, chọn sản phẩm và gửi đơn ngay hôm nay — phần còn lại là việc của xưởng.",
+    "staffNote": "Bạn là nhân viên Onos?",
+    "staffLink": "Đăng nhập hệ thống nội bộ",
+    "careers": {
+      "text": "Onos Group đang tuyển thêm người cho xưởng.",
+      "link": "Xem vị trí đang tuyển"
+    },
+    "supportNote": "Cần hỗ trợ trước khi đặt đơn?"
+  },
+  "mockup": {
+    "catalog": {
+      "title": "Catalog sản phẩm",
+      "subtitle": "Tất cả sản phẩm",
+      "order": "Đặt đơn",
+      "products": {
+        "hoodie": {
+          "name": "Hoodie in lưng",
+          "variant": "5 màu · S–3XL"
+        },
+        "tshirt": {
+          "name": "Áo thun in ngực",
+          "variant": "8 màu · S–3XL"
+        },
+        "cap": {
+          "name": "Mũ thêu logo",
+          "variant": "4 màu · Freesize"
+        },
+        "tote": {
+          "name": "Túi tote in 2 mặt",
+          "variant": "2 màu · 1 cỡ"
+        }
+      }
+    },
+    "tracking": {
+      "title": "Đơn của tôi",
+      "orderLabel": "Mã sản xuất",
+      "currentLabel": "Đang ở đây",
+      "notify": "Sẽ báo cho bạn khi đơn sang bước tiếp theo",
+      "steps": {
+        "received": "Đã nhận đơn",
+        "design": "Thiết kế xong",
+        "printing": "Đang sản xuất",
+        "packing": "Đóng hàng",
+        "shipped": "Đã xuất xưởng"
+      }
+    },
+    "production": {
+      "title": "Theo dõi sản xuất",
+      "subtitle": "Tổng quan tiến trình"
+    },
+    "stages": {
+      "intake": "Tiếp nhận",
+      "design": "Thiết kế",
+      "production": "Sản xuất",
+      "check": "Kiểm tra",
+      "finishing": "Hoàn thiện",
+      "pack": "Đóng gói"
+    },
+    "metrics": {
+      "total": "Tổng đơn",
+      "running": "Đang chạy",
+      "completed": "Đã xong",
+      "waiting": "Chờ",
+      "inProgress": "Làm",
+      "rework": "Lại"
+    }
   },
   "footer": {
-    "tagline": "Hệ thống quản lý sản xuất & đơn hàng in ấn theo yêu cầu"
+    "description": "Xưởng in theo yêu cầu của Onos Group — đặt đơn trực tuyến và theo dõi tới khi hàng rời xưởng.",
+    "columns": {
+      "order": "Đặt đơn",
+      "company": "Công ty",
+      "access": "Truy cập"
+    },
+    "links": {
+      "how": "Cách đặt đơn",
+      "why": "Vì sao Onos",
+      "benefits": "Bạn được gì",
+      "team": "Đội ngũ",
+      "careers": "Tuyển dụng",
+      "customerRegister": "Tạo tài khoản",
+      "customerSignIn": "Đăng nhập khách hàng",
+      "staffSignIn": "Đăng nhập nhân viên"
+    },
+    "locations": {
+      "title": "Địa điểm",
+      "us": "Trụ sở Hoa Kỳ — Miami, Florida",
+      "vn": "Sản xuất & Cung ứng — TP. Hồ Chí Minh, Việt Nam"
+    },
+    "copyright": "Onos Group. Bảo lưu mọi quyền.",
+    "contact": {
+      "title": "Liên hệ",
+      "hint": "Hỗ trợ đặt đơn và giải đáp thắc mắc",
+      "email": "support@onosfactory.com"
+    }
   }
 }

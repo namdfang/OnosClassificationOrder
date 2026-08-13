@@ -197,6 +197,8 @@
     "backToList": "Quay lại danh sách",
     "unsavedConfirm": "Bạn có thay đổi CHƯA LƯU. Rời trang sẽ mất thay đổi — vẫn thoát?",
     "shortNameRequired": "Tên viết tắt không được để trống",
+    "factoryRequired": "Vui lòng chọn xưởng sản xuất",
+    "machineTypeRequired": "Vui lòng chọn loại máy",
     "fullNameRequired": "Tên đầy đủ sản phẩm không được để trống",
     "saveSuccess": "Đã lưu sản phẩm",
     "createSuccess": "Đã tạo sản phẩm mới",

@@ -17,6 +17,7 @@ import { order } from './order';
 import { productCategory } from './productCategory';
 import { productConfig } from './productConfig';
 import { promotion } from './promotion';
+import { publicCatalog } from './publicCatalog';
 import { reports } from './reports';
 import { roles } from './roles';
 import { upload } from './upload';
@@ -47,6 +48,7 @@ export const RepositoryRemote = {
   customerOrder,
   customerCatalog,
   customerDesign,
+  publicCatalog,
   customerNotification,
   customerNotificationPortal,
   fulfillment,

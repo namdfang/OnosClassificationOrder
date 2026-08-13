@@ -1,41 +1,313 @@
 {
+  "brand": {
+    "name": "OnosFactory",
+    "company": "Onos Group",
+    "tagline": "Print-on-demand factory — order online"
+  },
   "nav": {
-    "features": "Features",
-    "howItWorks": "How it works"
+    "catalog": "Catalog",
+    "how": "How to order",
+    "why": "Why Onos",
+    "quality": "Quality",
+    "team": "Team"
   },
-  "customer": "Customer",
-  "signIn": "Sign in",
+  "actions": {
+    "order": "Place an order",
+    "customerSignIn": "Sign in",
+    "customerSignInLong": "Already have an account? Sign in",
+    "staffSignIn": "Staff",
+    "staffSignInLong": "Staff sign in",
+    "seeHow": "See how it works",
+    "backToTop": "Back to top",
+    "switchLanguage": "Switch language",
+    "menu": "Open menu"
+  },
   "hero": {
-    "title": "Production management & on-demand print order system",
-    "subtitle": "Manage orders, coordinate production workshops, and track progress on a single platform.",
-    "signInSystem": "Sign in to system",
-    "customerOrderNow": "Customer — Order now"
+    "eyebrow": "Print-on-demand factory · Onos Group",
+    "titleLead": "Send an order today,",
+    "titleAccent": "know where it is",
+    "titleTail": "every day after",
+    "subtitle": "Place print-on-demand orders online and follow every step until the goods leave the floor. No chasing anyone, no waiting for a reply.",
+    "note": "Free account · Order straight from your browser",
+    "panelCaption": "Illustrative customer portal interface.",
+    "badgeUpdate": "Updated in real time",
+    "badgeNotify": "Notified on every change"
   },
-  "features": {
-    "orders": {
-      "title": "Order management",
-      "description": "Track every order from import, classification to error handling on a single screen."
-    },
-    "production": {
-      "title": "Production coordination",
-      "description": "Assign factories, delegate designs, and track every fulfillment stage in real time."
-    },
-    "reports": {
-      "title": "Reports & analytics",
-      "description": "Visual dashboards for productivity, error rate, and progress by factory and by person."
-    },
-    "tracking": {
-      "title": "Progress tracking",
-      "description": "Customers place orders and track progress anytime, with no need for direct contact."
+  "capabilities": {
+    "eyebrow": "Why order with Onos",
+    "items": {
+      "selfServe": {
+        "title": "Order it yourself",
+        "label": "Pick a product, upload your artwork and submit the order in your browser, in any time zone."
+      },
+      "visibility": {
+        "title": "Always know where it is",
+        "label": "Every order has its own progress page you can open at any time without asking anyone."
+      },
+      "accountable": {
+        "title": "Someone owns every step",
+        "label": "Every action on an order is recorded, so whatever goes wrong gets fixed where it went wrong."
+      },
+      "factory": {
+        "title": "Our own factory floor",
+        "label": "Produced at the Onos factory in Vietnam — we don't take your order and pass it elsewhere."
+      }
     }
   },
+  "problems": {
+    "eyebrow": "The problem",
+    "titleLead": "Ordering from a factory",
+    "titleAccent": "is usually a black box",
+    "subtitle": "These are the four things customers run into most with a print factory — and how we handle them.",
+    "items": {
+      "silence": {
+        "problem": "You send the order, then silence — no idea when it lands",
+        "solution": "Your order gets its own progress page that updates the moment the floor moves it forward. Nothing to chase."
+      },
+      "chat": {
+        "problem": "Orders placed over chat, details lost in hundreds of messages",
+        "solution": "Orders are placed online, and every detail and artwork file stays attached to the order — look it up any time."
+      },
+      "quality": {
+        "problem": "Something comes back wrong and nobody knows which step caused it",
+        "solution": "Every stage is checked and recorded, so when there is a defect we redo the step that failed instead of passing blame around."
+      },
+      "scale": {
+        "problem": "The moment volume grows, everything gets messy",
+        "solution": "The same process whether you send one order or hundreds, and your order list always lives in one place."
+      }
+    },
+    "problemLabel": "Problem",
+    "solutionLabel": "At Onos"
+  },
   "howItWorks": {
-    "title": "Simple process",
-    "step1": { "title": "Place order", "description": "Customer creates an account and places an order online." },
-    "step2": { "title": "Production", "description": "The order is assigned to a factory, designed, and produced." },
-    "step3": { "title": "Track", "description": "Track order progress in real time." }
+    "eyebrow": "How to order",
+    "titleLead": "Four steps",
+    "titleAccent": "from idea to goods",
+    "subtitle": "No phone call and no waiting on a quote before you can start.",
+    "steps": {
+      "account": {
+        "title": "Create an account",
+        "description": "Sign up with your email in about a minute and log in to your own customer portal."
+      },
+      "choose": {
+        "title": "Pick your product",
+        "description": "Browse the catalog by product type and variant, with print details and size charts before you commit."
+      },
+      "submit": {
+        "title": "Submit the order with artwork",
+        "description": "Fill in the order details and attach your artwork. It goes straight into production with no manual re-entry."
+      },
+      "track": {
+        "title": "Follow it until delivery",
+        "description": "Open the progress page any time to see which step your order is on, and get notified when it changes."
+      }
+    }
+  },
+  "showcase": {
+    "eyebrow": "The experience",
+    "titleLead": "What you see",
+    "titleAccent": "when you order",
+    "subtitle": "Ordering and tracking both happen inside your own customer portal.",
+    "caption": "Illustrative interface",
+    "items": {
+      "catalog": {
+        "eyebrow": "Choosing",
+        "title": "A catalog with enough detail to decide",
+        "description": "Every product carries its variants, print method, print area and size chart, so you get it right the first time instead of asking back and forth.",
+        "points": [
+          "Filter by product type and collection",
+          "See mockups and print areas before ordering",
+          "Reference prices shown for your customer tier"
+        ]
+      },
+      "tracking": {
+        "eyebrow": "Tracking",
+        "title": "Every order has its own progress page",
+        "description": "Open it and you see which step the order is on and which steps it has cleared. Need an older order? They all sit in one list.",
+        "points": [
+          "Look any order up by its production ID",
+          "Get notified the moment something changes",
+          "Revisit every order you have placed, any time"
+        ]
+      },
+      "production": {
+        "eyebrow": "Behind the scenes",
+        "title": "Backed by a closely tracked factory floor",
+        "description": "You never have to think about this part, but it is why your progress page stays accurate: every order on the floor has an owner and a clear status at each step.",
+        "points": [
+          "Each production step has someone accountable",
+          "Pile-ups get caught before they turn into late deliveries",
+          "Defects are redone at the failing step, not on the whole order"
+        ]
+      }
+    }
+  },
+  "benefits": {
+    "eyebrow": "What you get",
+    "titleLead": "Less to worry about",
+    "titleAccent": "once the order is in",
+    "subtitle": "The clearest change is not in the product — it is that you stop having to ask.",
+    "items": [
+      "No messaging anyone for status; open the order page and you know.",
+      "No fear of a forgotten order, because every order has an owner.",
+      "Details and artwork from past orders stay available for reference.",
+      "Reordering something similar is faster because it is already in your account.",
+      "You hear about problems early instead of at the last minute.",
+      "One order or hundreds — the way you work stays the same."
+    ],
+    "cardTitle": "One account for every order",
+    "cardDescription": "Catalog, orders in progress, completed orders and notifications — all in the same customer portal."
+  },
+  "trust": {
+    "marquee": "Produced at the Onos Group factory — Vietnam",
+    "eyebrow": "Quality & transparency",
+    "titleLead": "Why you can",
+    "titleAccent": "hand us the order",
+    "items": {
+      "own": {
+        "title": "A factory we run ourselves",
+        "description": "Orders are produced at the Onos Group factory in Vietnam, not taken by a middleman and pushed somewhere else."
+      },
+      "audit": {
+        "title": "Every action leaves a trace",
+        "description": "Each change to an order is recorded with who did it and when, so anything can be traced back."
+      },
+      "privacy": {
+        "title": "Your data stays yours",
+        "description": "Customer accounts are separate from our internal system, and you only ever see your own orders."
+      }
+    }
+  },
+  "team": {
+    "eyebrow": "Connect to us",
+    "titleLead": "Meet our",
+    "titleAccent": "leadership team",
+    "subtitle": "The people behind the production and technology operations of Onos Group, across both Vietnam and the United States.",
+    "members": {
+      "claudeVlandis": {
+        "name": "Claude Vlandis",
+        "role": "Co-Founder & Technology Director"
+      },
+      "ricardoBialystocki": {
+        "name": "Ricardo Bialystocki",
+        "role": "Co-Founder"
+      },
+      "ricardoCastillo": {
+        "name": "Ricardo Castillo",
+        "role": "Co-Founder"
+      },
+      "thuyNguyen": {
+        "name": "Thuy Nguyen",
+        "role": "Co-Founder & Vietnam Lead"
+      },
+      "jacobShapira": {
+        "name": "Jacob Shapira",
+        "role": "Business Development Executive"
+      },
+      "soiLe": {
+        "name": "Soi Le",
+        "role": "Operations & Partnerships"
+      }
+    }
+  },
+  "cta": {
+    "eyebrow": "Get started",
+    "title": "Send us your first order",
+    "subtitle": "Create an account, pick a product and submit an order today — the rest is the factory's job.",
+    "staffNote": "Are you Onos staff?",
+    "staffLink": "Sign in to the internal system",
+    "careers": {
+      "text": "Onos Group is hiring for the factory floor.",
+      "link": "See open roles"
+    },
+    "supportNote": "Need help before you order?"
+  },
+  "mockup": {
+    "catalog": {
+      "title": "Product catalog",
+      "subtitle": "All products",
+      "order": "Order",
+      "products": {
+        "hoodie": {
+          "name": "Back-print hoodie",
+          "variant": "5 colours · S–3XL"
+        },
+        "tshirt": {
+          "name": "Chest-print tee",
+          "variant": "8 colours · S–3XL"
+        },
+        "cap": {
+          "name": "Embroidered cap",
+          "variant": "4 colours · One size"
+        },
+        "tote": {
+          "name": "Two-side tote bag",
+          "variant": "2 colours · One size"
+        }
+      }
+    },
+    "tracking": {
+      "title": "My orders",
+      "orderLabel": "Production ID",
+      "currentLabel": "Currently here",
+      "notify": "We'll notify you when it moves to the next step",
+      "steps": {
+        "received": "Order received",
+        "design": "Design done",
+        "printing": "In production",
+        "packing": "Packing",
+        "shipped": "Shipped out"
+      }
+    },
+    "production": {
+      "title": "Production tracking",
+      "subtitle": "Pipeline overview"
+    },
+    "stages": {
+      "intake": "Intake",
+      "design": "Design",
+      "production": "Production",
+      "check": "Check",
+      "finishing": "Finishing",
+      "pack": "Pack"
+    },
+    "metrics": {
+      "total": "Total",
+      "running": "Running",
+      "completed": "Done",
+      "waiting": "Wait",
+      "inProgress": "Doing",
+      "rework": "Redo"
+    }
   },
   "footer": {
-    "tagline": "Production management & on-demand print order system"
+    "description": "The print-on-demand factory of Onos Group — order online and follow it until the goods leave the floor.",
+    "columns": {
+      "order": "Ordering",
+      "company": "Company",
+      "access": "Access"
+    },
+    "links": {
+      "how": "How to order",
+      "why": "Why Onos",
+      "benefits": "What you get",
+      "team": "Team",
+      "careers": "Careers",
+      "customerRegister": "Create an account",
+      "customerSignIn": "Customer sign in",
+      "staffSignIn": "Staff sign in"
+    },
+    "locations": {
+      "title": "Locations",
+      "us": "U.S. Headquarters — Miami, Florida",
+      "vn": "Manufacturing & Sourcing — Ho Chi Minh City, Vietnam"
+    },
+    "copyright": "Onos Group. All rights reserved.",
+    "contact": {
+      "title": "Contact",
+      "hint": "Order support and general questions",
+      "email": "support@onosfactory.com"
+    }
   }
 }

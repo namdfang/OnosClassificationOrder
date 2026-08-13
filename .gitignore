@@ -65,3 +65,5 @@ yarn.lock
 .vscode
 .turbo
 data
+# Local dev tasks (not tracked)
+.devtasks

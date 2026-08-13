@@ -39,7 +39,19 @@ export class CustomerCatalogService {
     private readonly promotionService: PromotionService,
   ) {}
 
-  /** Chỉ Active mới hiện catalog khách hàng — `null` để tương thích ngược data cũ chưa có field `status`. */
+  /**
+   * Cổng hiển thị catalog khách hàng: **chỉ dựa vào `status`** — Active, hoặc
+   * `null`/thiếu field để tương thích ngược data cũ (`$in: [x, null]` của
+   * MongoDB khớp cả document không có field).
+   *
+   * KHÔNG lọc theo `variations` nữa. Trước đây filter có thêm
+   * `variations: { $exists: true, $ne: [] }` để ngầm hiểu "phải có biến thể mới
+   * có giá mà hiện" — thực tế dữ liệu gần như không sản phẩm nào nhập biến thể
+   * (2/151 doc có field, cả 2 đều là mảng rỗng) nên catalog LUÔN trống. Biến thể
+   * chỉ là dữ liệu giá/SKU tùy chọn: sản phẩm chưa có biến thể vẫn xem được
+   * (giá hiển thị "—") và vẫn đặt đơn được — `PlaceCustomerOrderItemZod` chỉ bắt
+   * buộc `type`, còn `color`/`size` là optional.
+   */
   private static readonly VISIBLE_FILTER = { status: { $in: [ProductConfigStatus.Active, null] } };
 
   /** Map 1 dòng `ProductConfig` (đã `.lean()` + populate `productCategory`) → `CustomerCatalogItem`, áp discount theo tier. */
@@ -130,14 +142,34 @@ export class CustomerCatalogService {
     };
   }
 
-  /** Filter gốc "sản phẩm khách thấy được" — mọi query catalog (list/detail/facets) đều xuất phát từ đây. */
-  private static baseVisibleFilter(): Record<string, unknown> {
-    return { variations: { $exists: true, $ne: [] }, ...CustomerCatalogService.VISIBLE_FILTER };
+  async getCatalog(customer: CustomerDocument, dto: GetCustomerCatalogDto): Promise<GetCustomerCatalogResDto> {
+    return this.listCatalog(dto, customer.tier ?? null);
   }
 
-  async getCatalog(customer: CustomerDocument, dto: GetCustomerCatalogDto): Promise<GetCustomerCatalogResDto> {
+  /**
+   * Catalog cho trang public `/catalog` (KHÔNG đăng nhập) — xem `PublicCatalogController`.
+   *
+   * Dùng chung đúng truy vấn/mapping với catalog khách đã đăng nhập, chỉ khác 2 điểm:
+   * `tier = null` và KHÔNG áp promotion → chỉ ra `retailPrice` (giá niêm yết),
+   * `discountedPrice`/`appliedPromotionName` để trống. Giá theo tier là quyền lợi
+   * riêng của khách đã có tài khoản, không lộ ra ngoài.
+   */
+  async getPublicCatalog(dto: GetCustomerCatalogDto): Promise<GetCustomerCatalogResDto> {
+    return this.listCatalog(dto, null, { applyPromotions: false });
+  }
+
+  /** 1 sản phẩm cho trang chi tiết public `/catalog/:id` — cùng quy tắc giá với `getPublicCatalog()`. */
+  async getPublicCatalogItem(id: string): Promise<GetCustomerCatalogItemResDto> {
+    return this.findCatalogItem(id, null, { applyPromotions: false });
+  }
+
+  private async listCatalog(
+    dto: GetCustomerCatalogDto,
+    tier: number | null,
+    { applyPromotions = true }: { applyPromotions?: boolean } = {},
+  ): Promise<GetCustomerCatalogResDto> {
     const { page, limit, search, productCategoryId, collectionId } = dto;
-    const filter = CustomerCatalogService.baseVisibleFilter();
+    const filter: Record<string, unknown> = { ...CustomerCatalogService.VISIBLE_FILTER };
     if (search) filter.fullName = { $regex: search, $options: 'i' };
     if (productCategoryId) filter.productCategoryId = productCategoryId;
     if (collectionId) filter.collectionIds = collectionId;
@@ -152,25 +184,32 @@ export class CustomerCatalogService {
         .limit(limit)
         .lean(),
       this.productConfigModel.countDocuments(filter),
-      this.promotionService.getActiveInDateRange(),
+      applyPromotions ? this.promotionService.getActiveInDateRange() : Promise.resolve([]),
     ]);
 
-    const tier = customer.tier ?? null;
     const data = rows.map((row) => this.mapRow(row, activePromotions, tier));
 
     return { success: true, data, total };
   }
 
-  /** 1 sản phẩm cho trang chi tiết `/customer/catalog/:id` — cùng filter Active + có biến thể như danh sách. */
+  /** 1 sản phẩm cho trang chi tiết `/customer/catalog/:id` — cùng cổng hiển thị `status` như danh sách. */
   async getCatalogItem(customer: CustomerDocument, id: string): Promise<GetCustomerCatalogItemResDto> {
+    return this.findCatalogItem(id, customer.tier ?? null);
+  }
+
+  private async findCatalogItem(
+    id: string,
+    tier: number | null,
+    { applyPromotions = true }: { applyPromotions?: boolean } = {},
+  ): Promise<GetCustomerCatalogItemResDto> {
     const [row, activePromotions] = await Promise.all([
       this.productConfigModel
-        .findOne({ _id: id, ...CustomerCatalogService.baseVisibleFilter() })
+        .findOne({ _id: id, ...CustomerCatalogService.VISIBLE_FILTER })
         // Field nặng (HTML dài) + collectionIds chỉ trả ở API chi tiết, KHÔNG cho list.
         .select(`${CATALOG_ROW_SELECT} collectionIds shortDescription templateDescription`)
         .populate<{ productCategory?: { name: string } }>({ path: 'productCategory', select: 'name' })
         .lean(),
-      this.promotionService.getActiveInDateRange(),
+      applyPromotions ? this.promotionService.getActiveInDateRange() : Promise.resolve([]),
     ]);
     if (!row) throw new NotFoundException('Không tìm thấy sản phẩm này.');
 
@@ -184,7 +223,6 @@ export class CustomerCatalogService {
             .lean()
         : [];
 
-    const tier = customer.tier ?? null;
     const data = this.mapRow(row, activePromotions, tier);
     data.collections = collections.map((c) => c.name);
     return { success: true, data };
@@ -192,10 +230,10 @@ export class CustomerCatalogService {
 
   /**
    * Bộ lọc duyệt catalog: danh mục + collection đang active kèm số sản phẩm
-   * khách thấy được (cùng filter Active + có biến thể) — chỉ trả mục count > 0.
+   * khách thấy được (cùng cổng hiển thị `status` như danh sách) — chỉ trả mục count > 0.
    */
   async getFacets(): Promise<GetCustomerCatalogFacetsResDto> {
-    const visible = CustomerCatalogService.baseVisibleFilter();
+    const visible: Record<string, unknown> = { ...CustomerCatalogService.VISIBLE_FILTER };
     const [categoryCounts, collectionCounts] = await Promise.all([
       this.productConfigModel.aggregate<{ _id: string; count: number }>([
         { $match: { ...visible, productCategoryId: { $exists: true, $nin: [null, ''] } } },

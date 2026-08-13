@@ -19,6 +19,7 @@ import { CustomerOrderController } from './customer-order.controller';
 import { CustomerOrderEntity, CustomerOrderSchema } from './customer-order.entity';
 import { CustomerOrderService } from './customer-order.service';
 import { CustomerPaymentEntity, CustomerPaymentSchema } from './customer-payment.entity';
+import { PublicCatalogController } from './public-catalog.controller';
 
 @Module({
   imports: [
@@ -42,7 +43,7 @@ import { CustomerPaymentEntity, CustomerPaymentSchema } from './customer-payment
     // Payment gate switch + số ngày Completed (`customer_order_completed_days`).
     SystemConfigModule,
   ],
-  controllers: [CustomerAuthController, CustomerOrderController, CustomerCatalogController],
+  controllers: [CustomerAuthController, CustomerOrderController, CustomerCatalogController, PublicCatalogController],
   providers: [CustomerOrderService, CustomerCatalogService],
 })
 export class CustomerPortalModule {}
