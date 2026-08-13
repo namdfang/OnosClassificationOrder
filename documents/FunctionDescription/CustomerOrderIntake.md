@@ -54,6 +54,7 @@ Tick đơn Pending → "Push to production" → POST /push-preview (bảng giá 
      5. $set items (priceSnapshot chốt) + pushedAt + paymentId vào staging doc
 ```
 
+- **Design storage hook** (xem [`DesignStorage.md`](DesignStorage.md)): sau push, design là CDN URL → `touchUsageForUrls()`; còn là URL ngoài (Drive) → enqueue job `design-worker` tải về R2 rồi thay URL ở cả `OrderEntity.designs` lẫn staging item — push KHÔNG chờ worker.
 - Push **nguyên đơn** (không lẻ item). Payment gate đọc từ `system_configs` key `customer_payment_gate_enabled` — đợt này nếu bật sẽ throw (luồng Admin confirm chưa build, plan §12.1).
 - Form `placeOrder` giờ chỉ tạo staging Pending (KHÔNG gọi `importOrders` nữa) — toast hướng khách sang listing để push.
 

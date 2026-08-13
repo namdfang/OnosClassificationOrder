@@ -45,6 +45,17 @@
     ],
     // words - list of words to be always considered correct
     "words": [
+        "dedup",
+        "khóa",
+        "Dedup",
+        "presign",
+        "Presign",
+        "PRESIGN",
+        "tailscale",
+        "Tailscale",
+        "tmpobj",
+        "usercontent",
+        "nums",
         "Addit",
         "anatine",
         "antd",

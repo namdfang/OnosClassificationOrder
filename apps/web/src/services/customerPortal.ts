@@ -126,6 +126,21 @@ const getCatalogFacets = () => {
 
 export const customerCatalog = { getCatalog, getCatalogItem, getCatalogFacets };
 
+// Design storage (R2 + worker riêng) — upload trực tiếp browser → R2 qua presigned URL.
+const presignDesignUpload = (data: { sha256: string; size: number; mime: string; fileName?: string }) => {
+  return callApi(`/${CONFIG.API_VERSION}/customer/designs/presign`, 'post', data);
+};
+
+const confirmDesignUpload = (data: { tmpKey: string; sha256: string; fileName?: string }) => {
+  return callApi(`/${CONFIG.API_VERSION}/customer/designs/confirm`, 'post', data);
+};
+
+const getDesignFile = (sha256: string) => {
+  return callApi(`/${CONFIG.API_VERSION}/customer/designs/${sha256}`, 'get');
+};
+
+export const customerDesign = { presignDesignUpload, confirmDesignUpload, getDesignFile };
+
 const listNotifications = (page = 1, limit = 20) => {
   return callApi(`/${CONFIG.API_VERSION}/customer/notifications?page=${page}&limit=${limit}`, 'get');
 };

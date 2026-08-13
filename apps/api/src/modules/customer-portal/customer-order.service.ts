@@ -42,6 +42,7 @@ import {
   CustomerOrderStatus,
   DEFAULT_CUSTOMER_SHIP_METHOD,
   DesignerStatus,
+  extractDesignSha,
   FULFILLMENT_STAGE_LABELS,
   FULFILLMENT_STAGE_ORDER,
   FulfillmentStage,
@@ -50,6 +51,7 @@ import {
 } from 'shared';
 
 import type { CustomerDocument } from '@/modules/customer/customer.entity';
+import { DesignStorageService } from '@/modules/design-storage/design-storage.service';
 import { OrderEntity } from '@/modules/order/order.entity';
 import { OrderService } from '@/modules/order/order.service';
 import { ProductConfigEntity } from '@/modules/product-config/product-config.entity';
@@ -216,6 +218,7 @@ export class CustomerOrderService implements OnModuleInit {
     private readonly orderService: OrderService,
     private readonly promotionService: PromotionService,
     private readonly systemConfigService: SystemConfigService,
+    private readonly designStorageService: DesignStorageService,
   ) {}
 
   // -------------------------------------------------------------------------
@@ -660,6 +663,14 @@ export class CustomerOrderService implements OnModuleInit {
     };
   }
 
+  /**
+   * Gom mọi URL design của list items — feed cho `touchUsageForUrls` (tự lọc
+   * URL thuộc CDN design, còn lại bỏ qua). Xem DesignStorage plan.
+   */
+  private collectDesignUrls(items: Array<{ designs?: Record<string, string | undefined> }>): string[] {
+    return items.flatMap((it) => Object.values(it.designs ?? {})).filter((u): u is string => !!u);
+  }
+
   // -------------------------------------------------------------------------
   // Đặt đơn form → staging PENDING (plan §2 — KHÔNG gọi importOrders nữa)
   // -------------------------------------------------------------------------
@@ -704,6 +715,9 @@ export class CustomerOrderService implements OnModuleInit {
       note: dto.referent,
       items,
     });
+
+    // Design đã upload lên CDN → reset sliding window lastUsedAt (dedup/lifecycle).
+    await this.designStorageService.touchUsageForUrls(this.collectDesignUrls(items));
 
     return { success: true, data: this.toStagingOrder(doc.toObject(), new Map(), cutoff) };
   }
@@ -863,6 +877,9 @@ export class CustomerOrderService implements OnModuleInit {
       set.items = await this.assignProductionIds(newItems);
     }
     await this.customerOrderModel.updateOne({ _id: doc._id }, { $set: set });
+    if (set.items) {
+      await this.designStorageService.touchUsageForUrls(this.collectDesignUrls(set.items as CustomerOrderItem[]));
+    }
     const updated = await this.customerOrderModel.findById(doc._id).lean();
     const cutoff = await this.getCompletedCutoff();
     return { success: true, data: this.toStagingOrder(updated as Record<string, unknown>, new Map(), cutoff) };
@@ -995,6 +1012,7 @@ export class CustomerOrderService implements OnModuleInit {
         });
         created++;
         results.push({ ...base, status: 'created' });
+        await this.designStorageService.touchUsageForUrls(this.collectDesignUrls(items));
       } catch (err) {
         if ((err as { code?: number }).code === 11000) {
           duplicated++;
@@ -1196,6 +1214,33 @@ export class CustomerOrderService implements OnModuleInit {
       ),
     );
 
+    // Design storage hook (plan DesignStorage-R2-ProcessingWorker §C4): design đã
+    // là CDN URL → touch lastUsedAt; design còn là URL ngoài (Drive…) → đẩy job
+    // cho design-worker tải về R2 + thay URL ở CẢ OrderEntity lẫn staging item.
+    // Push KHÔNG chờ worker — đơn vào sản xuất ngay với URL gốc.
+    const cdnUrls: string[] = [];
+    for (const u of pendingUpdates) {
+      for (const it of u.items) {
+        for (const [designKey, url] of Object.entries(it.designs ?? {})) {
+          if (!url || !it.productionId) continue;
+          if (extractDesignSha(url)) {
+            cdnUrls.push(url);
+          } else if (/^https?:\/\//i.test(url)) {
+            await this.designStorageService.enqueueUrlIngest({
+              kind: 'url',
+              url,
+              designKey,
+              productionId: it.productionId,
+              stagingId: u.stagingId,
+              customerId: String(customer._id),
+              userEmail: customer.userEmail,
+            });
+          }
+        }
+      }
+    }
+    await this.designStorageService.touchUsageForUrls(cdnUrls);
+
     return { success: true, data: { results, totalAmount: Math.round(totalAmount * 100) / 100 } };
   }
 
@@ -1286,6 +1331,7 @@ export class CustomerOrderService implements OnModuleInit {
       const merged = { ...order.designs, ...dto.designs };
       set.designs = merged;
       set.designsOriginal = merged;
+      await this.designStorageService.touchUsageForUrls(Object.values(dto.designs));
     }
     if (dto.shippingAddress) set.shippingAddress = dto.shippingAddress;
 

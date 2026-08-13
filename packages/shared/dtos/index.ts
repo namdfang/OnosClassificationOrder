@@ -13,6 +13,7 @@ export * from './customer-notification.dto';
 export * from './customer-order.dto';
 export * from './department.dto';
 export * from './designer.dto';
+export * from './design-file.dto';
 export * from './designer-assignment.dto';
 export * from './dropship-order.dto';
 export * from './dropship-order-item.dto';

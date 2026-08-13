@@ -81,6 +81,9 @@ export class ApiConfigService {
     bucket: string;
     publicBase: string;
     maxDownloadMb: number;
+    maxUploadMb: number;
+    originalTtlDays: number;
+    iaDeleteMonths: number;
     previewMaxDim: number;
     previewQuality: number;
     thumbDim: number;
@@ -104,6 +107,10 @@ export class ApiConfigService {
       bucket,
       publicBase,
       maxDownloadMb: num('R2_MAX_DOWNLOAD_MB', 120),
+      // Design storage (worker riêng) — xem documents/Plans/DesignStorage-R2-ProcessingWorker.md
+      maxUploadMb: num('DESIGN_MAX_UPLOAD_MB', 300),
+      originalTtlDays: num('DESIGN_ORIGINAL_TTL_DAYS', 60),
+      iaDeleteMonths: num('DESIGN_IA_DELETE_MONTHS', 12),
       previewMaxDim: num('R2_PREVIEW_MAX_DIM', 1000),
       previewQuality: num('R2_PREVIEW_QUALITY', 80),
       thumbDim: num('R2_THUMB_DIM', 300),

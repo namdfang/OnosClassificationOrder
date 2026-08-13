@@ -4,6 +4,7 @@ import { MongooseModule } from '@nestjs/mongoose';
 import { AuthModule } from '@/modules/auth/auth.module';
 import { CollectionEntity, CollectionSchema } from '@/modules/collection/collection.entity';
 import { CustomerModule } from '@/modules/customer/customer.module';
+import { DesignStorageModule } from '@/modules/design-storage/design-storage.module';
 import { OrderEntity, OrderSchema } from '@/modules/order/order.entity';
 import { OrderModule } from '@/modules/order/order.module';
 import { ProductCategoryEntity, ProductCategorySchema } from '@/modules/product-category/product-category.entity';
@@ -36,6 +37,8 @@ import { CustomerPaymentEntity, CustomerPaymentSchema } from './customer-payment
     CustomerModule,
     OrderModule,
     PromotionModule,
+    // Hook touchUsage + enqueue ingest design lúc place/import/push (DesignStorage).
+    DesignStorageModule,
     // Payment gate switch + số ngày Completed (`customer_order_completed_days`).
     SystemConfigModule,
   ],

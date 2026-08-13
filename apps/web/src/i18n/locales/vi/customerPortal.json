@@ -23,7 +23,14 @@
     "viewAllOrders": "Xem tất cả đơn →"
   },
   "fileInput": {
-    "uploadUnavailable": "Tải file lên chưa khả dụng — vui lòng dán URL ảnh (Google Drive, Imgur...)"
+    "uploadHint": "Tải file design lên (tối đa 300MB) hoặc dán URL",
+    "uploadUnavailable": "Tải file lên chưa khả dụng — vui lòng dán URL ảnh (Google Drive, Imgur...)",
+    "hashing": "Đang kiểm tra file (tính mã nhận dạng)...",
+    "processing": "Đã upload xong — hệ thống đang xử lý ảnh (thumb/preview)...",
+    "done": "Upload thành công",
+    "doneInstant": "File đã có sẵn trên hệ thống — không cần upload lại",
+    "processFailed": "Xử lý ảnh thất bại — thử upload lại hoặc dùng URL",
+    "uploadFailed": "Upload thất bại — kiểm tra mạng rồi thử lại"
   },
   "login": {
     "title": "Đăng nhập Customer Portal",
