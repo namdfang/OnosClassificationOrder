@@ -35,11 +35,20 @@ export class AuthService {
     userId: string;
     sessionId: string;
     rememberMe?: boolean;
+    /**
+     * AUTH-1 — SuperAdmin THẬT đang mạo danh `userId`. Có field này thì:
+     * token dùng TTL ngắn riêng, và `JwtStrategy` bỏ qua kiểm tra vô hiệu hoá.
+     * `role` vẫn là role của NGƯỜI BỊ MẠO DANH — đó là thứ giữ AC-07 (không rò
+     * rỉ quyền SuperAdmin) đúng từ kiến trúc chứ không nhờ kiểm tra rải rác.
+     */
+    impersonatorId?: string;
   }): Promise<TokenPayloadDto> {
     const cachedKey = `token:${data.sessionId}:${data.userId}`;
-    const expiresIn = data.rememberMe
-      ? this.configService.authConfig.jwtRememberExpirationTime
-      : this.configService.authConfig.jwtExpirationTime;
+    const expiresIn = data.impersonatorId
+      ? this.configService.authConfig.jwtImpersonationExpirationTime
+      : data.rememberMe
+        ? this.configService.authConfig.jwtRememberExpirationTime
+        : this.configService.authConfig.jwtExpirationTime;
     const token = {
       expiresIn,
       accessToken: await this.jwtService.signAsync(
@@ -48,6 +57,7 @@ export class AuthService {
           userId: data.userId,
           type: TokenType.ACCESS_TOKEN,
           role: data.role,
+          ...(data.impersonatorId ? { impersonatorId: data.impersonatorId } : {}),
         },
         {
           privateKey: this.configService.authConfig.privateKey,

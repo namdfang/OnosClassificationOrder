@@ -73,6 +73,12 @@ export class CustomerAuthController {
   @HttpCode(HttpStatus.OK)
   @ApiOkResponse({ type: GetCustomerMeResDto })
   me(@AuthUser() customer: CustomerDocument): GetCustomerMeResDto {
-    return { success: true, data: toSafeCustomer(customer) };
+    // AUTH-1 — `toSafeCustomer()` chạy `toObject()` nên CHỈ giữ path có trong
+    // schema; `impersonatedBy` là field ĐỘNG do JwtStrategy đính nên không sống
+    // sót. Phải ghép tường minh, nếu không dải cảnh báo "đang mạo danh ai" mất
+    // hẳn trong Customer Portal → trượt vế "kể cả Customer Portal" của AC-04.
+    const impersonatedBy = customer.impersonatedBy;
+
+    return { success: true, data: { ...toSafeCustomer(customer), ...(impersonatedBy ? { impersonatedBy } : {}) } };
   }
 }

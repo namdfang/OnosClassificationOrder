@@ -6,6 +6,8 @@ import { useAuthStore } from '@/store/authStore';
 
 import { RepositoryRemote } from '@/services';
 
+import { ImpersonationBanner } from '@/components/auth/ImpersonationBanner';
+
 import { useIsMobile } from '@/hooks/useMediaQuery';
 
 import Header from '../../components/header';
@@ -43,6 +45,9 @@ function MainLayout() {
     <div className="flex min-h-screen bg-background">
       <Sidebar collapsed={collapsed} mobileOpen={mobileOpen} onMobileClose={() => setMobileOpen(false)} />
       <div className="flex-1 flex flex-col overflow-hidden min-w-0" style={{ height: '100vh' }}>
+        {/* Dải cảnh báo mạo danh — trên CÙNG cột nội dung, ĐẨY header xuống chứ
+            không phủ đè, để không thể cuộn trôi qua (AUTH-1 BR-7/AC-04). */}
+        <ImpersonationBanner source="staff" />
         <Header
           changeCollapsed={() => (isMobile ? setMobileOpen(true) : setCollapsed(!collapsed))}
           collapsed={collapsed}

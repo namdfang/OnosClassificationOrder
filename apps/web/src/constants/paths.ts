@@ -41,6 +41,8 @@ export const PATHS = {
   ROLES: '/adm/roles',
   CUSTOM_ROLES: '/adm/custom-roles',
   NOTIFICATIONS: '/adm/notifications',
+  /** Mạo danh tài khoản khác — CHỈ SuperAdmin (AUTH-1). */
+  IMPERSONATE: '/adm/impersonate',
 
   LOGIN: '/adm/login',
   REGISTER: '/adm/register',

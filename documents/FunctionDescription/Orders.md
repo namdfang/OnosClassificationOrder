@@ -503,7 +503,31 @@ Ngoài các filter cơ bản (`createdFrom/To`, `factoryId`, `machineTypeId`, `p
 | `designBacklog` | boolean | `true` → union "Tổng tồn" lăng kính designer: chưa soát (note rỗng) ∨ đã gán & chưa xong (assignee + `designerStatus ∈ [assigned,in-progress,rework]`) ∨ đang lỗi & chưa gán (pool cần designer). Drill hàng Tổng tồn bảng Tổng quan N ngày. |
 | `rejectedBy` | string | userId → đơn có sự kiện bàn giao "Không làm được" ĐI từ user (`designerRejections.fromUserId`). Drill hàng "Không làm được" panel thống kê 7 ngày (StatusBarCharts). Số ở ma trận/panel đếm LẦN — danh sách đơn distinct nên có thể ít hơn. |
 | `receivedBy` | string | userId → đơn có sự kiện NHẬN bàn giao (`designerRejections.toUserId`). Drill hàng "Nhận thêm" panel thống kê 7 ngày. |
+| `type` | **tham số lặp** hoặc 1 chuỗi | Lọc theo **tên loại sản phẩm**, khớp CHÍNH XÁC. `?type=A&type=B` → nhiều tên; `?type=A` → đúng một tên, lấy **nguyên văn**. Token `__none__` = đơn **chưa xác định loại sản phẩm** (field thiếu/null/rỗng). **KHÔNG tách bằng dấu phẩy** — xem cảnh báo §7.x.1 ngay dưới. |
 | `sort` | `'grouped'` | Sort `(type, size, fabricType, inProductionAt desc)` thay vì `inProductionAt` mặc định — để combo trùng nhau gom liền nhau (Workshop dùng để in batch chung). |
+
+#### 7.x.1 `type` là NGOẠI LỆ CÓ CHỦ Ý — đừng "dọn cho nhất quán"
+
+Mọi facet CSV khác trong bảng trên (`userSku`, `fabricType`, `errorFile`, `productionError`…)
+mang **mã/id**, nên dấu phẩy không bao giờ nằm trong giá trị. `type` mang **tên sản phẩm tự
+do nhập từ file import** — dấu phẩy ở đây là **ký tự dữ liệu hợp lệ**, không phải ký tự phân
+tách. Vì vậy `parseTypeFilter()` (`apps/api/src/modules/order/parse-type-filter.ts`)
+**không** `.split(',')`.
+
+Tách ra sẽ làm tên kiểu `"Tee, Long Sleeve"` bị hiểu thành 2 sản phẩm và **lọc sai âm thầm,
+không báo lỗi**. Encode **không** cứu được: `URLSearchParams` mã hoá `,` thành `%2C` nhưng
+tầng parse query giải mã ngược về `,` **trước khi** `split(',')` chạy — đã đo, xem
+`.devtasks/design/ORD-1.md` §9 D1.
+
+Token `__none__` tồn tại vì `getOrdersGroupedByType()` gom nhóm bằng
+`$group: { _id: { $ifNull: ['$type', ''] } }`, tức trang Workshop **vẫn hiện nhóm "đơn không
+tên"**. Không có token này thì hai trang cho hai tập đơn khác nhau ngay khi xuất hiện 1 đơn
+thiếu `type`. Facet `type` trong `workshop-filters` trả kèm option `__none__` (label rỗng, FE
+tự đặt nhãn) và **bỏ hẳn option khi count = 0**.
+
+> **Còn một chỗ chưa xử, ngoài phạm vi:** `getFactoryOverview()` (`order.service.ts` ~L3501)
+> vẫn `dto.type.split(',')` trên `GetFactoryOverviewDto` — DTO **khác**, phục vụ tab Xưởng ở
+> Dashboard. Cùng cái bẫy, chưa sửa.
 
 ---
 
@@ -622,6 +646,17 @@ So khớp CHÍNH XÁC chuỗi lý do (không phải substring) — đổi text p
 ### 9b.3 Khóa thao tác (BE guard `assertNotHeld`)
 Đơn `heldAt` set → chặn (400 *"Đơn đang bị giữ — mở lại…"*) ở: `updateField`, `setProductionError`, `DesignerTaskService.transition`, `FulfillmentTaskService.transition`. `bulkUpdateField` (nhánh updateMany) + `bulkAssignDesigner` **loại** đơn giữ qua filter `heldAt: { $exists: false }` → `matched` thấp hơn để FE biết bị bỏ (nhánh side-effect loop `updateField` tự skip vì guard throw). **Không** chặn `/unhold` (để mở lại được).
 
+> **HỦY ĐƠN KHÔNG bị chặn bởi trạng thái giữ — ở CẢ HAI TẦNG** (ORD-2).
+> Nhánh `cancel` **cố ý không có** `assertNotHeld`, và giao diện cũng **không**
+> disable mục "Hủy đơn" khi đơn đang giữ. Nghiệp vụ: đơn giữ thường đang chờ
+> khách xác nhận — khách bảo hủy thì hủy thẳng, bắt bỏ giữ rồi mới hủy vừa thêm
+> một thao tác vừa mở ra khoảng thời gian đơn có thể lọt lại vào luồng sản xuất.
+> Trước ORD-2, `OrderRowActionsMenu.tsx` tự disable mục này kèm tooltip *"Đơn đang
+> giữ — mở lại trước"*, tức **giao diện chặt hơn máy chủ** bằng một luật không
+> yêu cầu nào quy định; đã bỏ. **Đừng "sửa cho nhất quán"** bằng cách thêm
+> `assertNotHeld` vào `cancel` — người dùng đã chốt hướng ngược lại.
+> Các nhánh chặn liệt kê ở trên vẫn giữ nguyên.
+
 Đơn giữ **VẪN xuất hiện** trong `GET /orders` (mặc định — chỉ tô xám, KHÔNG ẩn, khác `cancelledAt` bị loại mặc định) — trừ hàng đợi `getNextDesignReviewOrder()` (§18): filter riêng `heldAt: { $exists: false }` LOẠI đơn giữ khỏi hàng đợi "chưa soát" cho tool ngoài, tránh tool nhặt nhầm đơn đang tạm dừng chờ khách. Lookup trực tiếp theo `productionId` (`getDesignReviewOrderByProductionId`/`GET design-review/by-production-id/:productionId`) KHÔNG áp filter này — tra cứu 1 mã cụ thể vẫn thấy đơn giữ.
 
 ### 9b.4 Thống kê
@@ -634,7 +669,7 @@ So khớp CHÍNH XÁC chuỗi lý do (không phải substring) — đổi text p
 - `HoldOrderDialog.tsx` (giữ 1 đơn, lý do KHÔNG bắt buộc). Export `HOLD_REASON_PRESETS` — 5 lý do phổ biến dạng chip (Đợi khách sửa design / địa chỉ / thông tin đơn, Chờ khách xác nhận, Thiếu vật tư): click chip = điền nhanh vào textarea (click lại = bỏ chọn), vẫn sửa tay/tự gõ lý do khác được — KHÔNG phải danh mục cấu hình được (khác `workshop_config`), chỉ là preset tĩnh FE.
 - Tô xám + badge + **cell read-only** (override `ctx.canEditField=()=>false`) ở: `OrderTableWorkshop`, `ErrorLogTab`, `OrdersMiniTable`; tô xám + badge ở `ListOrderTab`.
 - `ListOrderTab.tsx`: select **"Lý do giữ"** (options = `HOLD_REASON_PRESETS` tĩnh, KHÔNG có count/facet) — chọn 1 lý do → filter `holdReason` (param URL `lhold`); không chọn → không lọc. Đặt cạnh nút "Lỗi xưởng" trong hàng filter, tách biệt khỏi khối filter designer (`canSeeDesignerSummary`) vì áp cho MỌI role xem được danh sách đơn.
-- `OrderRowActionsMenu.tsx`: item **"Giữ đơn"** (mở dialog) / **"Mở giữ"** (gọi trực tiếp) cho role `canUserHold`; menu hiện khi `isAdmin || canUserHold`.
+- `OrderRowActionsMenu.tsx`: item **"Giữ đơn"** (mở dialog) / **"Mở giữ"** (gọi trực tiếp) cho role `canUserHold`; menu hiện khi `isAdmin || canUserHold`. Mục **"Hủy đơn"** KHÔNG xét `held` — xem cảnh báo ở §9b.3. Các mục còn lại ("Đổi design") vẫn disable khi đơn đang giữ.
 - `BulkEditToolbar.tsx`: nút **"Giữ đơn"** (dialog lý do bulk, tái dùng CHUNG `HOLD_REASON_PRESETS` từ `HoldOrderDialog.tsx`) + **"Mở giữ"** (bulk trực tiếp) → `RepositoryRemote.order.bulkHold({ ids, hold, reason })`.
 - Service `services/order.ts`: `holdOrder` · `unholdOrder` · `bulkHold`.
 
@@ -924,7 +959,7 @@ Thứ tự group MẶC ĐỊNH (mọi role trừ Support) đặt `toolCheck` (g�
 
 **Tái dùng NGUYÊN VẸN** (không duplicate logic, chỉ đổi cách render/fetch):
 - `WORKSHOP_COLS` + `buildColGroups()` + `GroupCellContent` + `groupTitle` (`workshopTableConfig.tsx`) — CÙNG 7 group cột như §10.2/§10.2a.
-- `<OrderFilterBar>` — CÙNG 10 facet chuẩn (bao gồm `designerStatus`, vẫn gate theo `canSeeDesignerSummary` cho quyền XEM facet đó — khác việc ẩn PANEL thống kê) + toggle "Đang giữ"/"Đã hủy" + chip "Đang lọc".
+- `<OrderFilterBar>` — CÙNG 10 facet chuẩn (bao gồm `designerStatus`, vẫn gate theo `canSeeDesignerSummary` cho quyền XEM facet đó — khác việc ẩn PANEL thống kê) + toggle "Đang giữ"/"Đã hủy" + chip "Đang lọc". **Riêng Classic có thêm facet thứ 11 `type` (Sản phẩm)** — xem điểm 9 dưới.
 - `<BulkEditToolbar>` — y hệt, bao gồm nút "Bỏ gán design" (§ DesignerAutoAssign) mới thêm.
 - `AssigneeSelectCell`/`OrderRowActionsMenu`/`OrderDetailDialog`/`OrderLogTimelineDialog`/`ImagePreviewDialog` — mọi cell/dialog dùng chung.
 
@@ -932,11 +967,13 @@ Thứ tự group MẶC ĐỊNH (mọi role trừ Support) đặt `toolCheck` (g�
 1. **Fetch** qua `RepositoryRemote.order.getOrders()` (endpoint `GET /v1/orders` thường) thay vì `getOrdersGrouped()` — `page`/`limit` áp trực tiếp lên số dòng đơn, KHÔNG phải số loại sản phẩm. Response phẳng `{ data: OrderRow[], total }`, không có `groups[]`.
 2. **KHÔNG virtualize** — bảng render toàn bộ `items` của trang hiện tại bằng `<TableBody>` thường (không cần `useVirtualizer`/`scrollMargin`/measure vì không còn hàng trăm dòng ẩn trong group chưa mở).
 3. **KHÔNG có**: header hàng "loại sản phẩm" (`collapsedTypes`/`toggleType`), nút "Mở hết/Đóng hết", badge combo "×N"/heaviest-combo highlight (`comboKeyOf`), `DesignerSummaryPanel` + nút "Chi tiết tồn đọng" + `DesignerBacklogDialog`.
-4. **URL param prefix `c`** (khác `w` của Workshop, `l` của `ListOrderTab` cũ đã tắt) — `csearch`/`cfrom`/`cto`/`cprint`/`cnote`/`cassign`/`cerror`/`cfabric`/`cmnum`/`ctool`/`cerrfile`/`cdstatus`/`cusersku`/`cheld`/`ccancel`/`cpage`/`csize` + `pid` (share chung tên với Workshop, không prefix). Toàn bộ filter sync 2 chiều với URL (`useSearchParams` + `{replace:true}`) — copy URL chia sẻ được nguyên trạng bộ lọc đang xem, giống Workshop. Ngày `createdFrom`/`createdTo` mặc định RỖNG (không tự set "hôm nay" như Workshop) — trang cổ điển ưu tiên xem toàn bộ theo mặc định.
+4. **URL param prefix `c`** (khác `w` của Workshop, `l` của `ListOrderTab` cũ đã tắt) — `csearch`/`cfrom`/`cto`/**`ctype`**/`cprint`/`cnote`/`cassign`/`cerror`/`cfabric`/`cmnum`/`ctool`/`cerrfile`/`cdstatus`/`cusersku`/`cheld`/`ccancel`/`cpage`/`csize` + `pid` (share chung tên với Workshop, không prefix). Toàn bộ filter sync 2 chiều với URL (`useSearchParams` + `{replace:true}`) — copy URL chia sẻ được nguyên trạng bộ lọc đang xem, giống Workshop. Ngày `createdFrom`/`createdTo` mặc định RỖNG (không tự set "hôm nay" như Workshop) — trang cổ điển ưu tiên xem toàn bộ theo mặc định.
 5. **"Cập nhật toàn bộ trang"** cho các thao tác bulk: vì đơn vị phân trang = dòng đơn thật (không phải sản phẩm), checkbox header "Chọn tất cả trang này" (`toggleAll`) tick 1 lần là chọn được TOÀN BỘ đơn đang hiển thị trên trang → `<BulkEditToolbar>` áp bulk action (gán design, đổi field, giữ đơn, ưu tiên...) cho **nguyên trang** ngay lập tức, không cần chọn tay từng dòng như khi các đơn còn nằm rải trong nhiều group đóng.
 6. **`patchRow`** chỉ cần update 1 state `items` (không có `groups` song song để đồng bộ như Workshop).
 7. **Sort mặc định**: `sort=inProductionAt&order=desc` — đơn vào sản xuất MỚI NHẤT hiện trước (giống default `getOrders()` khi không truyền `sort`, đặt tường minh cho rõ ràng). `priority: -1` vẫn luôn ưu tiên trước (hardcode ở BE, không đổi được qua `sort`/`order`).
-8. **"Chọn tất cả N đơn khớp bộ lọc" — xuyên MỌI trang** (`handleSelectAllPages`, CHỈ có ở trang này, không có ở Workshop): khi đã tick hết trang hiện tại và còn đơn ở trang khác (`total > items.length`), hiện banner mời chọn tiếp toàn bộ `total` đơn khớp filter hiện tại. Bấm vào gọi lại `getOrders()` với CÙNG `buildFilterParams()` nhưng `page=1`/`limit=total` để lấy đủ `_id` mọi trang rồi đổ thẳng vào `selected` — mọi bulk action ở `<BulkEditToolbar>` tự áp dụng cho toàn tập vì chỉ nhận mảng `ids`, không quan tâm chúng đến từ trang nào. KHÔNG còn box "Mẹo chọn nhiều đơn" (`selectionHint`, đã bỏ khỏi trang này — vẫn còn ở Workshop).
+8. **"Chọn tất cả N đơn khớp bộ lọc" — xuyên MỌI trang** (`handleSelectAllPages`, CHỈ có ở trang này, không có ở Workshop): khi đã tick hết trang hiện tại và còn đơn ở trang khác (`total > items.length`), hiện banner mời chọn tiếp toàn bộ `total` đơn khớp filter hiện tại. Bấm vào gọi lại `getOrders()` với CÙNG `buildFilterParams()` nhưng `page=1`/`limit=total` để lấy đủ `_id` mọi trang rồi đổ thẳng vào `selected` — mọi bulk action ở `<BulkEditToolbar>` tự áp dụng cho toàn tập vì chỉ nhận mảng `ids`, không quan tâm chúng đến từ trang nào. Box "Mẹo chọn nhiều đơn" (`selectionHint`) **đã quay lại** từ ORD-1 (`AC-09`) sau một thời gian bị gỡ khỏi trang này — nhưng **chỉ hiện `line2`** (mẹo shift-click chọn dải), **cố ý bỏ `line1`** vì dòng đó mô tả thao tác tick checkbox cạnh tên sản phẩm, vốn chỉ tồn tại ở bảng nhóm của Workshop (`SRS` ORD-1 BR-15). **Lưu ý đối chiếu 2 trang:** `handleSelectAllPages` ở điểm này là chức năng **CHỈ Classic có**, Workshop không có — đây là hệ quả của việc hai trang phân trang theo đơn vị khác nhau, xem `.devtasks/ui/ORD-1.md` §3.5.
+
+9. **Lọc theo SẢN PHẨM — facet `type`, CHỈ Classic có** (ORD-1). Workshop không cần vì nó đã nhóm đơn theo sản phẩm sẵn; Classic phẳng nên trước đây không có đường nào thu hẹp theo sản phẩm. Ô select **đứng đầu** lưới facet (loại sản phẩm là cách khoanh vùng thô nhất), **đơn chọn** đúng như 10 facet còn lại, param URL `ctype`, chip màu lime. **KHÔNG đặt `perm` gate** — cột `mockupTypeSize` (nơi tên sản phẩm vốn đã hiện) khai `perm: null` nên hiện với MỌI role, gate facet ở đây sẽ là gate giả. Options lấy từ `workshopFilters.type` của **cùng** endpoint `GET /v1/orders/workshop-filters` mà cả 2 trang đang gọi — không endpoint riêng. Gửi BE bằng `params.append('type', ...)` (dạng lặp) chứ không `set`: BE nhận cả dạng lặp lẫn CSV nhưng **chỉ dạng lặp mới không tách chuỗi bằng dấu phẩy**. Token `__none__` (đơn chưa xác định loại sản phẩm) **do BE quyết định có trả hay không** — FE KHÔNG BAO GIỜ tự tạo mục đó, chỉ gán nhãn `tableWorkshop.noTypeName` nếu backend trả về kèm `label` rỗng. Chi tiết thiết kế: [`.devtasks/ui/ORD-1.md`](../../.devtasks/ui/ORD-1.md); hợp đồng BE: [`.devtasks/design/ORD-1.md`](../../.devtasks/design/ORD-1.md) §3.
 
 **File FE:** `apps/web/src/pages/orders/OrderTableClassic.tsx` (component) + `apps/web/src/pages/orders/classic/index.tsx` (page wrapper, mirror `orders/workshop/index.tsx`).
 

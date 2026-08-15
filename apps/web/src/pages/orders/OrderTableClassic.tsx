@@ -1,7 +1,7 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useSearchParams } from 'react-router-dom';
-import { Ban, FilterX, History, PauseCircle, X } from 'lucide-react';
+import { Ban, FilterX, History, MousePointerClick, PauseCircle, X } from 'lucide-react';
 import type { WorkshopAvailableFilters } from 'shared';
 
 import { PATHS } from '@/constants/paths';
@@ -71,6 +71,8 @@ const FILTER_CHIP_COLORS: Record<string, string> = {
   productionError: 'bg-red-100 text-red-700 border-red-300 dark:bg-red-900/30 dark:text-red-300 dark:border-red-800',
   userSku:
     'bg-fuchsia-100 text-fuchsia-700 border-fuchsia-300 dark:bg-fuchsia-900/30 dark:text-fuchsia-300 dark:border-fuchsia-800',
+  // Chỉ Classic có — Workshop nhóm theo sản phẩm nên không cần chip này (ORD-1).
+  type: 'bg-lime-100 text-lime-700 border-lime-300 dark:bg-lime-900/30 dark:text-lime-300 dark:border-lime-800',
 };
 const FILTER_CHIP_DEFAULT =
   'bg-zinc-100 text-zinc-700 border-zinc-300 dark:bg-zinc-800 dark:text-zinc-200 dark:border-zinc-600';
@@ -192,6 +194,9 @@ export function OrderTableClassic() {
   const [historyTarget, setHistoryTarget] = useState<{ id: string; productionId: string } | null>(null);
   const [detailTarget, setDetailTarget] = useState<{ id: string; productionId: string } | null>(null);
 
+  // Lọc theo LOẠI SẢN PHẨM — chỉ Classic có (ORD-1). Workshop không cần vì nó
+  // đã nhóm đơn theo sản phẩm sẵn; đây là ngoại lệ duy nhất `AC-02` cho phép.
+  const [filterType, setFilterType] = useState<string>(() => searchParams.get('ctype') || '');
   const [filterPrintStatus, setFilterPrintStatus] = useState<string>(() => searchParams.get('cprint') || '');
   const [filterToolResultNote, setFilterToolResultNote] = useState<string>(() => searchParams.get('cnote') || '');
   const [filterAssignee, setFilterAssignee] = useState<string>(() => searchParams.get('cassign') || '');
@@ -214,6 +219,7 @@ export function OrderTableClassic() {
         search ? sp.set('csearch', search) : sp.delete('csearch');
         createdFrom ? sp.set('cfrom', createdFrom) : sp.delete('cfrom');
         createdTo ? sp.set('cto', createdTo) : sp.delete('cto');
+        filterType ? sp.set('ctype', filterType) : sp.delete('ctype');
         filterPrintStatus ? sp.set('cprint', filterPrintStatus) : sp.delete('cprint');
         filterToolResultNote ? sp.set('cnote', filterToolResultNote) : sp.delete('cnote');
         filterAssignee ? sp.set('cassign', filterAssignee) : sp.delete('cassign');
@@ -237,6 +243,7 @@ export function OrderTableClassic() {
     search,
     createdFrom,
     createdTo,
+    filterType,
     filterPrintStatus,
     filterToolResultNote,
     filterAssignee,
@@ -268,6 +275,12 @@ export function OrderTableClassic() {
     const pidTrimmed = pid.trim();
     if (pidTrimmed) params.set('productionIds', pidTrimmed);
     else if (bulkIds.length) params.set('productionIds', bulkIds.join(','));
+    // `append` chứ KHÔNG `set`: `type` là facet DUY NHẤT nhận tham số lặp
+    // (`?type=A&type=B`) — BE `parseTypeFilter()` cố ý KHÔNG tách dấu phẩy vì
+    // tên sản phẩm nhập tự do từ file import, dấu phẩy là ký tự DỮ LIỆU chứ
+    // không phải ký tự phân tách. Giữ `append` để nâng lên đa chọn sau này
+    // không phải sửa gì. Xem `Orders.md` §7.x.1.
+    if (filterType) params.append('type', filterType);
     if (filterPrintStatus) params.set('printStatus', filterPrintStatus);
     if (filterToolResultNote) params.set('toolResultNote', filterToolResultNote);
     if (filterAssignee) params.set('assignee', filterAssignee);
@@ -323,6 +336,7 @@ export function OrderTableClassic() {
     debouncedSearch,
     pid,
     bulkIds,
+    filterType,
     filterPrintStatus,
     filterToolResultNote,
     filterAssignee,
@@ -446,6 +460,22 @@ export function OrderTableClassic() {
 
   const designerStatusOptions = workshopFilters?.designerStatus || [];
 
+  /**
+   * Options facet sản phẩm. KHÁC `assigneeOptions`: FE **không bao giờ tự tạo**
+   * mục `__none__` (đơn chưa xác định loại sản phẩm) — chỉ backend mới biết có
+   * đơn nào khớp hay không, và hôm nay không có đơn nào nên mục này không xuất
+   * hiện (`SRS` BR-13). Nếu backend trả về thì nó gửi kèm `label` RỖNG và FE
+   * gán nhãn ở đây, đúng mẫu `assignee`/`toolResult` — không xử thì option sẽ
+   * render ra một dòng trắng không ai hiểu.
+   */
+  const typeOptions = useMemo(
+    () =>
+      (workshopFilters?.type || []).map((o) =>
+        o.value === '__none__' ? { ...o, label: o.label || t('tableWorkshop.noTypeName') } : o,
+      ),
+    [workshopFilters?.type, t],
+  );
+
   useEffect(() => {
     setSelected(new Set());
     setLastClickedId(null);
@@ -454,6 +484,7 @@ export function OrderTableClassic() {
     bulkIds,
     createdFrom,
     createdTo,
+    filterType,
     filterPrintStatus,
     filterToolResultNote,
     filterAssignee,
@@ -469,6 +500,17 @@ export function OrderTableClassic() {
   ]);
 
   const facets: OrderFilterFacet[] = [
+    // Sản phẩm đứng ĐẦU: đây là cách người dùng khoanh vùng thô nhất, các facet
+    // còn lại là thuộc tính bên trong một loại hàng. KHÔNG đặt `perm` — cột
+    // `mockupTypeSize` (nơi tên sản phẩm vốn đã hiện) khai `perm: null` nên hiện
+    // với MỌI role; gate facet ở đây sẽ là gate giả. Xem `.devtasks/ui/ORD-1.md` §2.
+    {
+      key: 'type',
+      label: t('tableWorkshop.facets.type'),
+      value: filterType,
+      onChange: setFilterType,
+      options: typeOptions,
+    },
     {
       key: 'fabricType',
       label: t('tableWorkshop.facets.fabricType'),
@@ -645,8 +687,11 @@ export function OrderTableClassic() {
     setPid('');
     setBulkIds([]);
     setFilterHeld(false);
+    // KHÔNG reset về hôm nay như Workshop — Classic cố ý mặc định rỗng (BR-8,
+    // người dùng đã chọn giữ nguyên khác biệt này).
     setCreatedFrom('');
     setCreatedTo('');
+    setFilterType('');
     setFilterFabricType('');
     setFilterMachineNumber('');
     setFilterPrintStatus('');
@@ -759,6 +804,22 @@ export function OrderTableClassic() {
               <FilterX size={13} className="mr-1" />
               {t('tableWorkshop.clearAllFilters')}
             </Button>
+          </div>
+        )}
+
+        {/* Gợi ý chọn nhiều đơn (ORD-1 AC-09) — mirror Workshop, CÙNG điều kiện
+            hiện. Cố ý BỎ `selectionHint.line1`: dòng đó mô tả thao tác tick
+            checkbox cạnh tên sản phẩm, vốn chỉ có ở bảng nhóm của Workshop —
+            giữ lại sẽ là nhãn cho một thao tác không tồn tại ở đây (BR-15). */}
+        {selected.size === 0 && items.length > 0 && (
+          <div className="flex items-start gap-2 rounded-md border border-dashed border-border bg-muted/30 px-3 py-2 text-[11px] text-muted-foreground">
+            <MousePointerClick size={13} className="mt-0.5 shrink-0 text-primary" />
+            <p>
+              <span className="font-medium text-foreground">{t('tableWorkshop.selectionHint.title')}</span>{' '}
+              {t('tableWorkshop.selectionHint.line2Before')}{' '}
+              <kbd className="rounded border border-border bg-background px-1 py-0.5 font-mono text-[10px]">Shift</kbd>{' '}
+              {t('tableWorkshop.selectionHint.line2After')}
+            </p>
           </div>
         )}
 

@@ -170,10 +170,66 @@ export const CreateUserResZod = ResZod.extend({
 export class CreateUserResDto extends createZodDto(extendApi(CreateUserResZod)) {}
 
 //
+/**
+ * AUTH-1 — danh tính SuperAdmin THẬT khi phiên hiện tại là phiên mạo danh.
+ * Rỗng ở phiên thường. Là nguồn dữ liệu DUY NHẤT cho dải cảnh báo "đang mạo
+ * danh ai" (BR-7), nên CẢ HAI endpoint `me` (`/auth/me` nhân viên và
+ * `/customer/auth/me` khách) đều phải trả field này với cùng hình dạng.
+ */
+export const ImpersonatedByZod = z.object({
+  _id: z.string(),
+  fullName: z.string().optional(),
+  email: z.string().optional(),
+});
+export type ImpersonatedBy = z.infer<typeof ImpersonatedByZod>;
+
 export const GetMeResZod = ResZod.extend({
-  data: UserZod,
+  data: UserZod.extend({ impersonatedBy: ImpersonatedByZod.optional() }),
 });
 export class GetMeResDto extends createZodDto(extendApi(GetMeResZod)) {}
+
+// ─── AUTH-1: mạo danh tài khoản khác ────────────────────────────────
+/**
+ * `POST /v1/auth/impersonate`. Chỉ SuperAdmin (BR-1) — kiểm tra TƯỜNG MINH
+ * trong service chứ không chỉ bằng `@Auth`, vì AC-02 đòi lần thử trái phép
+ * cũng phải được ghi vết mà guard thì ném trước khi vào controller.
+ */
+export const StartImpersonationZod = z.object({
+  targetType: z.enum(['user', 'customer']),
+  targetId: IDZod,
+});
+export class StartImpersonationDto extends createZodDto(extendApi(StartImpersonationZod)) {}
+
+export const ImpersonationTokenZod = z.object({
+  accessToken: z.string(),
+  expiresIn: z.number(),
+  /** Ai đang bị mạo danh — FE dùng `targetType` để điều hướng đúng khu vực (BR-5). */
+  impersonating: z
+    .object({
+      _id: z.string(),
+      fullName: z.string().optional(),
+      email: z.string().optional(),
+      targetType: z.enum(['user', 'customer']),
+    })
+    .optional(),
+});
+export const StartImpersonationResZod = ResZod.extend({ data: ImpersonationTokenZod });
+export class StartImpersonationResDto extends createZodDto(extendApi(StartImpersonationResZod)) {}
+
+export const StopImpersonationResZod = ResZod.extend({
+  data: z.object({ accessToken: z.string(), expiresIn: z.number() }),
+});
+export class StopImpersonationResDto extends createZodDto(extendApi(StopImpersonationResZod)) {}
+
+/**
+ * Mã lỗi trả về khi phiên mạo danh hết hạn / đã kết thúc — KHÔNG dùng 401 trơn.
+ *
+ * BẮT BUỘC: `apps/web/src/apis/index.tsx` bắt 401 rồi gọi `authStore.clearToken()`,
+ * mà hàm đó `resetSession()` + `sessionPersist.clearAll()` + chuyển hẳn sang trang
+ * đăng nhập. Không có mã riêng thì hết hạn phiên mạo danh sẽ XOÁ SẠCH phiên thật
+ * của SuperAdmin — trượt AC-09, vi phạm BR-14 ngay trên chính người đi mạo danh.
+ */
+export const IMPERSONATION_EXPIRED_CODE = 'error.impersonationExpired';
 
 //
 export const LoginZod = z.object({

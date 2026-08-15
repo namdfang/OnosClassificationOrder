@@ -11,6 +11,7 @@ import { designer } from './designer';
 import { designerAssignment } from './designerAssignment';
 import { factory } from './factory';
 import { fulfillment } from './fulfillment';
+import { impersonate } from './impersonate';
 import { machineType } from './machineType';
 import { notifications } from './notifications';
 import { order } from './order';
@@ -34,6 +35,7 @@ export const RepositoryRemote = {
   notifications,
   customRoles,
   factory,
+  impersonate,
   machineType,
   collection,
   productCategory,

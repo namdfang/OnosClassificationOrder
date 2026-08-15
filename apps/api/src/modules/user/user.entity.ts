@@ -257,6 +257,19 @@ UserSchema.virtual('referrer', {
 });
 
 export type UserDocument = HydratedDocument<UserEntity> & {
+  /**
+   * AUTH-1 — SuperAdmin THẬT khi phiên hiện tại là phiên mạo danh.
+   *
+   * KHÔNG có `@Prop` tương ứng: đây là field ĐỘNG do `JwtStrategy.validate()`
+   * đính lên document, không nằm trong schema Mongo. Nó sống sót qua guard và
+   * service (đọc thẳng từ instance) nhưng CHẾT ở mọi chỗ tuần tự hoá lại —
+   * `toObject()`, `$project`, aggregation. Nơi nào trả nó ra API phải chép
+   * TƯỜNG MINH; xem `UserService.getMe()`.
+   *
+   * KHÔNG guard nào được đọc field này để cấp quyền (AC-07/BR-4).
+   */
+  impersonatedBy?: { _id: string; fullName?: string; email?: string };
+
   role?: RoleDocument;
 
   customRole?: CustomRoleDocument;

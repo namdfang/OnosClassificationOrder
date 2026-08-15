@@ -34,6 +34,12 @@ function escapeRegex(s: string): string {
 export function toSafeCustomer(doc: CustomerDocument): Customer {
   const obj = doc.toObject() as Record<string, unknown>;
   delete obj.password;
+  // AUTH-1 — `passwordSource === 'system'` là tín hiệu "tài khoản này đang dùng
+  // mật khẩu mặc định do mạo danh đặt". Để lọt ra API thì bất kỳ ai đọc được
+  // danh sách khách đều lọc ra ngay tập tài khoản đăng nhập được. `toObject()`
+  // trả MỌI path trong schema nên phải xoá tường minh, thêm field mới vào
+  // CustomerEntity cũng phải cân nhắc đúng chỗ này.
+  delete obj.passwordSource;
   return obj as unknown as Customer;
 }
 
@@ -171,9 +177,21 @@ export class CustomerService {
   }
   /**
    * Đăng ký Customer Portal. Nếu đã có record (sync/thêm tay) khớp đúng
-   * (userSku, userEmail) và CHƯA đăng ký (`password=''`) → "nhận" (claim) lại
-   * record đó thay vì tạo trùng. Nếu record đã có password → tài khoản đã tồn
-   * tại, từ chối đăng ký lại.
+   * (userSku, userEmail) và CHƯA đăng ký → "nhận" (claim) lại record đó thay vì
+   * tạo trùng. Nếu record đã có password của CHÍNH KHÁCH → từ chối đăng ký lại.
+   *
+   * AUTH-1 AC-14/BR-15 — "chưa đăng ký" KHÔNG còn đồng nghĩa với `password=''`:
+   * mạo danh (BR-8) đặt mật khẩu mặc định cho tài khoản chưa có, và trước đây
+   * chính điều đó khoá chính chủ khỏi luồng này vĩnh viễn (103/105 khách có
+   * password rỗng nên gần như toàn bộ tệp khách dính). Nay phân biệt bằng
+   * `passwordSource`:
+   *   'system'            → mật khẩu do hệ thống đặt, VẪN cho chính chủ claim đè
+   *   'self' / thiếu field → khách tự đặt, từ chối như cũ
+   *
+   * TUYỆT ĐỐI KHÔNG nhận biết bằng cách so giá trị mật khẩu với chuỗi mặc định:
+   * khách hoàn toàn có thể TỰ CHỌN đúng chuỗi đó, và khi ấy tài khoản của họ sẽ
+   * bị coi là chưa claim → người khác đăng ký đè lên được. Vá một lỗ hổng bằng
+   * cách mở một lỗ hổng nặng hơn.
    */
   async register(dto: CustomerRegisterDto): Promise<Customer> {
     const userEmail = dto.userEmail.trim().toLowerCase();
@@ -182,13 +200,17 @@ export class CustomerService {
 
     const existing = await this.customerModel.findOne({ userSku, userEmail });
     if (existing) {
-      if (existing.password) {
+      const claimable = !existing.password || existing.passwordSource === 'system';
+      if (!claimable) {
         throw new ConflictException('Email này đã được đăng ký');
       }
       const claimed = await this.customerModel.findOneAndUpdate(
         { _id: existing._id },
         {
           password: passwordHash,
+          // Đánh dấu 'self' là BẮT BUỘC: thiếu bước này thì tài khoản ở trạng
+          // thái claim-được vĩnh viễn, ai cũng đăng ký đè lên được.
+          passwordSource: 'self',
           fullName: dto.fullName?.trim() || existing.fullName,
           phone: dto.phone?.trim() || existing.phone,
           status: Status.Active,
@@ -203,6 +225,7 @@ export class CustomerService {
       userEmail,
       source: 'register',
       password: passwordHash,
+      passwordSource: 'self',
       fullName: dto.fullName?.trim() || '',
       phone: dto.phone?.trim() || '',
       status: Status.Active,

@@ -25,6 +25,20 @@ import type { UserDocument, UserEntity } from './user.entity';
 import { UserRepository } from './user.repository';
 import { UserLogRepository } from './user-log.repository';
 
+/**
+ * AUTH-1 AC-06 — trường "ai gây ra thay đổi" cho `userLogs`.
+ *
+ * `actorId` vẫn là danh tính HIỆU LỰC (người bị mạo danh nếu đang ở phiên mạo
+ * danh); `impersonatorId` mới cho biết ai thực sự ngồi gõ. Gom vào một helper
+ * để 7 chỗ ghi log không lệch nhau và sau này đổi chỉ sửa một nơi.
+ */
+function actorFields(actor: { _id: unknown; impersonatedBy?: { _id: string } }): {
+  actorId: string;
+  impersonatorId?: string;
+} {
+  return { actorId: String(actor._id), impersonatorId: actor.impersonatedBy?._id };
+}
+
 @Injectable()
 export class UserService {
   constructor(
@@ -200,6 +214,12 @@ export class UserService {
 
     userInfo.role = user.role;
     userInfo.customRole = user.customRole;
+    // AUTH-1 — BẮT BUỘC chép tay, y như 2 dòng trên. `getMe()` truy vấn LẠI DB
+    // rồi trả object MỚI, nên field `impersonatedBy` mà JwtStrategy đính lên
+    // document đã xác thực KHÔNG tự có mặt ở đây. Thiếu dòng này thì dải cảnh
+    // báo "đang mạo danh ai" mất ở toàn bộ /adm và /ffm → trượt AC-04.
+    // Cùng lý do, `CustomerAuthController.me()` cũng phải chép tường minh.
+    userInfo.impersonatedBy = user.impersonatedBy;
 
     // [cache disabled]
     // const fieldsToCache = Object.entries(userInfo).map(([key, value]) => ({ field: key, value }));
@@ -296,7 +316,7 @@ export class UserService {
     }
 
     await this.userLogRepository.create({
-      actorId: user._id,
+      ...actorFields(user),
       userId: newUser._id,
       type: UserLogType.Create,
     });
@@ -345,7 +365,7 @@ export class UserService {
 
       const passwordHash = generateHash(password);
       await this.userLogRepository.create({
-        actorId: user._id,
+        ...actorFields(user),
         userId,
         type: UserLogType.ResetPassword,
       });
@@ -392,7 +412,7 @@ export class UserService {
     for (const [key, value] of Object.entries(user)) {
       if (key in updateData && updateData[key] && updateData[key] !== value) {
         userLogs.push({
-          actorId: user._id,
+          ...actorFields(user),
           userId: user._id,
           field: key,
           before: value,
@@ -503,7 +523,7 @@ export class UserService {
     await this.userRepository.findOneAndUpdate({ _id: user._id }, { password: passwordHash, forcePassChange: false });
 
     await this.userLogRepository.create({
-      actorId: user._id,
+      ...actorFields(user),
       userId: user._id,
       field: 'password',
       type: UserLogType.ChangePassword,
@@ -563,7 +583,7 @@ export class UserService {
     if (!updated) throw new NotFoundException('User not found');
 
     await this.userLogRepository.create({
-      actorId: actor._id,
+      ...actorFields(actor),
       userId: targetId,
       type: UserLogType.Update,
     });
@@ -580,7 +600,7 @@ export class UserService {
     }
     const result = await this.userRepository.softDelete({ _id: targetId });
     await this.userLogRepository.create({
-      actorId: actor._id,
+      ...actorFields(actor),
       userId: targetId,
       type: UserLogType.Update,
     });
@@ -598,7 +618,7 @@ export class UserService {
     const updated = await this.userRepository.findOneAndUpdate({ _id: targetId }, { status: next });
     if (!updated) throw new NotFoundException('User not found');
     await this.userLogRepository.create({
-      actorId: actor._id,
+      ...actorFields(actor),
       userId: targetId,
       field: 'status',
       before: String(target.status),

@@ -1,10 +1,15 @@
-import React, { useState } from 'react';
+import React from 'react';
 import { Shirt } from 'lucide-react';
 
 import { cn } from '@/utils/cn';
 
+import { useImageFallback } from '@/hooks/useImageFallback';
+
 interface ProductImageProps {
+  /** URL ưu tiên — với catalog là `mockupLarge` (ảnh gốc full-size). */
   src?: string;
+  /** URL dự phòng khi `src` hỏng — với catalog là `mockup` (thumbnail `-100x100`). */
+  fallbackSrc?: string;
   alt: string;
   className?: string;
   /** Cỡ icon của ảnh mặc định — thẻ trong lưới nhỏ, trang chi tiết lớn. */
@@ -20,15 +25,18 @@ interface ProductImageProps {
  * mờ + icon áo) thay vì tải 1 file ảnh: không thêm request nào, không bao giờ
  * hỏng, và co giãn theo mọi kích thước.
  *
- * `onError` cũng rơi về ảnh mặc định — link mockup hỏng sẽ không để lại ô vỡ.
+ * **Chuỗi dự phòng 3 bậc** (`Catalog.md` §5.1): `src` (ảnh gốc full-size) → hỏng
+ * thì `fallbackSrc` (thumbnail) → hỏng nốt thì ảnh mặc định. Ảnh gốc có thể đã
+ * bị xóa khỏi onospod trong khi thumbnail vẫn còn, nên bậc giữa là thứ giữ cho
+ * sản phẩm không tụt từ "ảnh mờ" xuống "không có ảnh". Không bậc nào để lại ô vỡ.
  *
  * Nhánh mặc định là **trang trí thuần**, không gắn nhãn cho screen reader: thẻ
  * và trang chi tiết đều đã có tên sản phẩm ở `<h3>`/`<h1>` ngay cạnh, thêm nữa
  * sẽ khiến trình đọc màn hình đọc tên hai lần.
  */
-function ProductImage({ src, alt, className, iconSize = 30, priority = false }: ProductImageProps) {
-  const [failed, setFailed] = useState(false);
-  const showPlaceholder = !src || failed;
+function ProductImage({ src, fallbackSrc, alt, className, iconSize = 30, priority = false }: ProductImageProps) {
+  const { src: current, onError } = useImageFallback([src, fallbackSrc]);
+  const showPlaceholder = !current;
 
   return (
     <div className={cn('relative flex items-center justify-center overflow-hidden bg-slate-50', className)}>
@@ -52,11 +60,14 @@ function ProductImage({ src, alt, className, iconSize = 30, priority = false }: 
         </>
       ) : (
         <img
-          src={src}
+          // `key` theo URL → mỗi bậc dự phòng là một phần tử <img> mới, thay vì
+          // dựa vào việc trình duyệt bắn lại `error` trên đúng thẻ vừa hỏng.
+          key={current}
+          src={current}
           alt={alt}
           loading={priority ? 'eager' : 'lazy'}
           decoding="async"
-          onError={() => setFailed(true)}
+          onError={onError}
           className="h-full w-full object-contain"
         />
       )}

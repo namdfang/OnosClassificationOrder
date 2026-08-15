@@ -1,4 +1,4 @@
-import type { User } from 'shared';
+import type { ImpersonatedBy, User } from 'shared';
 import { create } from 'zustand';
 import { createJSONStorage, persist } from 'zustand/middleware';
 
@@ -12,6 +12,13 @@ import { AUTH_REMEMBER_KEY, AUTH_STORE_KEY, createSessionPersist } from './sessi
  */
 export type UserProfile = User & {
     role?: { name: string; permissionCodes?: string[]; isSystem?: boolean };
+    /**
+     * Có giá trị ⇔ phiên hiện tại là PHIÊN MẠO DANH, và đây là SuperAdmin thật
+     * đứng sau (AUTH-1 `BR-7`). Nguồn DUY NHẤT cho dải cảnh báo. Rỗng ở phiên
+     * thường. Backend chép tường minh trong `getMe()` — field này KHÔNG nằm
+     * trong schema Mongo nên mọi chỗ tuần tự hoá lại đều làm rơi nó.
+     */
+    impersonatedBy?: ImpersonatedBy;
 };
 
 const sessionPersist = createSessionPersist(AUTH_STORE_KEY, AUTH_REMEMBER_KEY);

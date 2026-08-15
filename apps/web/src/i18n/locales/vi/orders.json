@@ -507,7 +507,6 @@
     "unhold": "Mở giữ",
     "alreadyCancelled": "Đơn đã hủy",
     "hold": "Giữ đơn",
-    "heldReopenFirst": "Đơn đang giữ — mở lại trước",
     "cancelOrder": "Hủy đơn",
     "checkDesign": "Kiểm tra design mới",
     "checkDesignUpdated": "Đã tìm thấy và cập nhật design mới từ OnosPod"
@@ -589,6 +588,7 @@
     "shiftClickRangeSelect": "Shift+click để chọn cả range tới checkbox trước đó",
     "history": "Lịch sử",
     "facets": {
+      "type": "Sản phẩm",
       "fabricType": "Loại vải",
       "machineNumber": "Máy",
       "printStatus": "Trạng thái in",

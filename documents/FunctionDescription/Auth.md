@@ -350,3 +350,165 @@ Permission constants (subset) trong `shared/enums/permission.enum.ts`:
 - Refresh token rotation: mỗi lần refresh → tạo token mới, revoke token cũ
 - Rate limit: 10 req/s mặc định, 5 req/min cho `/login`
 - Không log password / token (Winston filter)
+
+---
+
+## 10. Mạo danh tài khoản (SuperAdmin fake login) — `AUTH-1`
+
+> **Đây là đường vòng xác thực có chủ đích.** Đọc hết mục này trước khi sửa bất
+> kỳ file nào bên dưới. Thiết kế đầy đủ + lý do từng đánh đổi:
+> [`.devtasks/design/AUTH-1.md`](../../.devtasks/design/AUTH-1.md).
+
+### 10.1 Nguyên tắc lõi
+
+**Danh tính hiệu lực trong phiên là NGƯỜI BỊ MẠO DANH; SuperAdmin chỉ là siêu dữ
+liệu đi kèm.**
+
+```
+JWT thường:   { sessionId, userId, type, role }
+JWT mạo danh: { sessionId, userId, type, role, impersonatorId }
+                              ↑ người BỊ mạo danh   ↑ SuperAdmin thật
+```
+
+`JwtStrategy.validate()` load **người bị mạo danh** từ `userId` như bình thường,
+nên `RolesGuard` / `PermissionsGuard` / mọi service **không hề biết** có mạo danh.
+Vì thế **quyền SuperAdmin không có đường nào rò rỉ vào phiên**: token không mang
+role SuperAdmin, và **không guard nào được đọc `impersonatorId` để cấp quyền**.
+
+### 10.2 Endpoint
+
+| Method | Path | Auth | Ghi chú |
+|---|---|---|---|
+| POST | `/v1/auth/impersonate` | `@Auth()` — chỉ yêu cầu đã đăng nhập | Chặn "chỉ SuperAdmin" nằm **tường minh trong service**, xem 10.5 |
+| POST | `/v1/auth/impersonate/stop` | `@Auth([], [], { public: true })` | **Cố ý public**, xem 10.4 |
+| GET | `/v1/auth/me` · `/v1/customer/auth/me` | như cũ | Trả thêm `impersonatedBy`, xem 10.3 |
+
+### 10.3 `impersonatedBy` là field ĐỘNG — bẫy dễ sót nhất
+
+`impersonatedBy` do `JwtStrategy.validate()` **đính lên document**, **không tồn
+tại trong schema Mongo**. Hệ quả:
+
+- **Sống sót** qua guard và service — chúng đọc thẳng từ instance.
+- **CHẾT** ở mọi chỗ tuần tự hoá lại: `toObject()`, `$project`, aggregation.
+
+Nên **cả hai** endpoint `me` phải chép nó **tường minh**:
+
+| Endpoint | Vì sao rơi | Chép ở đâu |
+|---|---|---|
+| `/v1/auth/me` | `UserService.getMe()` truy vấn **lại** DB rồi trả object MỚI; nó chỉ chép tay `role` + `customRole` | `getMe()`, ngay cạnh 2 dòng đó |
+| `/v1/customer/auth/me` | `toSafeCustomer()` chạy `toObject()` → chỉ giữ path trong schema | `CustomerAuthController.me()` |
+
+> `role` sống được **chỉ vì** `getMe()` chép tay nó. `impersonatedBy` cần đúng đối
+> xử đó. Cùng họ với [`Common_Pitfalls.md`](../Architecture/Common_Pitfalls.md) §1,
+> khác ở chỗ thêm vào `$project` **không cứu được** vì field không nằm trong DB.
+
+### 10.4 Thoát mạo danh — vì sao endpoint để public
+
+`POST /auth/impersonate/stop` **không đi qua guard `jwt`**; service tự xác thực
+**chữ ký thôi, bỏ qua hạn** (`ignoreExpiration: true`).
+
+Lý do: token mạo danh có TTL ngắn (mặc định 60 phút). Nếu endpoint thoát đòi token
+còn hạn thì **token hết hạn sẽ không thoát được** — đúng kịch bản mà tính năng
+"tự đưa về SuperAdmin khi hết hạn" sinh ra để xử lý.
+
+Bù lại là **3 lớp siết**. Bỏ bất kỳ lớp nào thì token mạo danh cũ thành **vé đổi ra
+quyền SuperAdmin vô thời hạn**:
+
+1. Đọc lại SuperAdmin từ DB **ngay lúc thoát** — còn đúng role, còn hoạt động.
+2. Phiên còn bản ghi trong `actions` và **chưa** đánh dấu kết thúc.
+3. Chặn cứng theo `iat` — quá `IMPERSONATION_EXCHANGE_MAX_AGE` (mặc định 24h) thì từ chối.
+
+### 10.5 Chỉ SuperAdmin — nhưng kiểm trong service, không phải `@Auth`
+
+Yêu cầu đòi **vừa** từ chối **vừa** ghi vết lần thử trái phép. `@Auth([SuperAdmin])`
+ném ngay ở guard nên **không có chỗ nào ghi**. Vì vậy endpoint dùng `@Auth()` rồi
+kiểm role tường minh trong `ImpersonationService.start()`, ghi
+`ActionType.ImpersonateRejected` trước khi ném `ForbiddenException`.
+
+> **Đánh đổi có ý thức, CHỈ áp cho endpoint này. Đừng nhân rộng mẫu này.**
+
+### 10.6 Mật khẩu mặc định + `passwordSource`
+
+Mạo danh một tài khoản **chưa có mật khẩu** sẽ đặt mật khẩu mặc định cho nó. Hai
+ràng buộc đi kèm, cả hai đều dễ làm hỏng:
+
+**a) Tài khoản ĐÃ có mật khẩu thì tuyệt đối không đụng.** Điều kiện nằm **ngay
+trong filter** của lệnh update, **không** đọc-rồi-ghi:
+
+```js
+updateOne({ _id, $or: [{password: {$exists:false}}, {password: null}, {password: ''}] }, { $set: {...} })
+```
+
+Đọc rồi ghi có khe đua: giữa lúc đọc và lúc ghi, chính chủ có thể vừa đặt mật khẩu
+— ghi đè lên là **khoá họ khỏi tài khoản của chính họ**.
+
+**b) Không được khoá chính chủ khỏi luồng tự đăng ký.**
+`CustomerService.register()` vốn coi `password !== ''` là "đã đăng ký". Nếu giữ
+nguyên, mạo danh một lần là khách **vĩnh viễn** không tự đăng ký được. Nay phân
+biệt bằng `CustomerEntity.passwordSource`:
+
+| `password` | `passwordSource` | `register()` |
+|---|---|---|
+| rỗng | — | claim (như cũ) |
+| có | `'system'` | **vẫn claim** — chính chủ ghi đè được |
+| có | `'self'` hoặc **thiếu** | từ chối (như cũ; bản ghi cũ = khách tự đặt) |
+
+> **TUYỆT ĐỐI KHÔNG nhận biết bằng cách so giá trị mật khẩu với chuỗi mặc định.**
+> Khách có thể **tự chọn** đúng chuỗi đó; khi ấy tài khoản của họ bị coi là chưa
+> claim và **người khác đăng ký đè lên được** — vá một lỗ hổng bằng cách mở một
+> lỗ hổng nặng hơn.
+>
+> **Và KHÔNG BAO GIỜ trả `passwordSource` ra API.** `'system'` chính là tín hiệu
+> *"tài khoản này đang dùng mật khẩu mặc định"*; lộ ra thì bất kỳ ai đọc được danh
+> sách khách đều lọc ra ngay tập tài khoản đăng nhập được. `toSafeCustomer()` xoá
+> tường minh — thêm field nhạy cảm vào `CustomerEntity` phải cân nhắc đúng chỗ đó.
+
+### 10.7 Ghi vết
+
+Tái dùng collection `actions` (đã có `ip`/`userAgent`/`sessionId`/`active`) thay vì
+dựng bảng mới. `ActionType` thêm 4 giá trị: `Impersonate`, `ImpersonateStop`,
+`ImpersonateRejected`, `ImpersonatePasswordSet`.
+
+Thay đổi dữ liệu trong phiên mạo danh truy được về **cả hai** danh tính ở 2 nơi hệ
+thống đã có ghi vết: `orderLogs` (`impersonatorId` + `impersonatorName`) và
+`userLogs` (`impersonatorId`).
+
+> **Thêm field vào bảng log thì phải sửa CẢ HAI nơi: Zod DTO *và* `@Prop` trong
+> entity.** Mongoose chạy strict mode — field không có trong schema bị **âm thầm
+> loại bỏ** lúc ghi: không lỗi, không cảnh báo, dữ liệu chỉ đơn giản biến mất.
+>
+> `assertSameType<UserLog, UserLogEntity>()` **không** cứu được: field optional mà
+> thiếu ở một bên vẫn assignable trong TypeScript, nên typecheck xanh trong khi
+> schema và DTO đã lệch. Đây chính là bug `AUTH-1-B1` — `userLogs` mất dấu
+> SuperAdmin thật suốt trong khi `orderLogs` làm đúng.
+>
+> Guard hiện có: `apps/api/src/modules/user/user-log-schema.spec.ts` kiểm thẳng
+> `Schema.path(...)`. Thêm field truy vết mới thì thêm case vào đó.
+
+> **Rủi ro tồn dư đã biết:** 14 module còn lại **không có ghi vết nào** (product-config,
+> promotion, factory, workshop-config, các bảng cấu hình, role/permission…). Mạo danh
+> không tạo ra lỗ hổng này nhưng làm nó nghiêm trọng hơn — trước đây người sửa luôn là
+> người đăng nhập thật. Giảm nhẹ: mốc bắt đầu/kết thúc từng phiên trong `actions` giúp
+> khoanh được khoảng thời gian khi điều tra.
+
+### 10.8 Không đá ai ra khỏi phiên
+
+Phiên mạo danh **bắt buộc dùng `sessionId` MỚI**. Cache token khoá theo
+`token:${sessionId}:${userId}` và `clearTokens()` xoá theo đúng khoá đó — tái dùng
+`sessionId` của phiên thật sẽ đá người bị mạo danh (hoặc chính SuperAdmin) ra.
+
+### 10.9 Mã lỗi riêng khi phiên hết hiệu lực
+
+BE trả **`error.impersonationExpired`** thay vì 401 trơn.
+
+Bắt buộc, không phải tuỳ chọn: `apps/web/src/apis/index.tsx` bắt 401 rồi gọi
+`authStore.clearToken()`, mà hàm đó `resetSession()` + `sessionPersist.clearAll()` +
+chuyển hẳn sang trang đăng nhập. Không có mã riêng thì hết hạn phiên mạo danh sẽ
+**xoá sạch phiên thật của SuperAdmin** và đá về màn hình đăng nhập.
+
+### 10.10 Env
+
+| Biến | Mặc định | Ý nghĩa |
+|---|---|---|
+| `JWT_IMPERSONATION_EXPIRATION_TIME` | `3600` | TTL phiên mạo danh (giây) — **ngắn hơn** phiên thường |
+| `IMPERSONATION_EXCHANGE_MAX_AGE` | `86400` | Quá hạn này thì token mạo danh không đổi ra SuperAdmin được nữa |

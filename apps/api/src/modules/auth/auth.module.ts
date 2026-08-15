@@ -3,8 +3,10 @@ import { JwtModule } from '@nestjs/jwt';
 import { MongooseModule } from '@nestjs/mongoose';
 import { PassportModule } from '@nestjs/passport';
 
+import { CustomerEntity, CustomerSchema } from '@/modules/customer/customer.entity';
 import { CustomerModule } from '@/modules/customer/customer.module';
 import { SystemConfigModule } from '@/modules/system-config/system-config.module';
+import { UserEntity, UserSchema } from '@/modules/user/user.entity';
 import { UserModule } from '@/modules/user/user.module';
 import { ApiConfigService } from '@/shared/services';
 
@@ -14,6 +16,7 @@ import { RedisCacheService } from '../redis-cache/redis-cache.service';
 import { AuthConsumer } from './auth.consumer';
 import { AuthController } from './auth.controller';
 import { AuthService } from './auth.service';
+import { ImpersonationService } from './impersonation.service';
 import { JwtStrategy } from './jwt.strategy';
 import { PublicStrategy } from './public.strategy';
 
@@ -42,10 +45,22 @@ import { PublicStrategy } from './public.strategy';
         name: ActionEntity.name,
         schema: ActionSchema,
       },
+      // AUTH-1 — ImpersonationService ghi mật khẩu mặc định (BR-8) thẳng qua
+      // model với update CÓ ĐIỀU KIỆN, không qua service, để giữ tính nguyên tử.
+      { name: UserEntity.name, schema: UserSchema },
+      { name: CustomerEntity.name, schema: CustomerSchema },
     ]),
   ],
   controllers: [AuthController],
-  providers: [AuthService, JwtStrategy, PublicStrategy, RedisCacheService, ActionRepository, AuthConsumer],
+  providers: [
+    AuthService,
+    ImpersonationService,
+    JwtStrategy,
+    PublicStrategy,
+    RedisCacheService,
+    ActionRepository,
+    AuthConsumer,
+  ],
   exports: [JwtModule, AuthService],
 })
 export class AuthModule {}

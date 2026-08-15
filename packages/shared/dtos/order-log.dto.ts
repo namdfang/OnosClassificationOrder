@@ -24,6 +24,13 @@ export const ProductionOrderLogZod = BaseEntityZod.extend({
   userName: z.string().optional(), // snapshot fullName
   userEmail: z.string().optional(), // snapshot email
   roleCode: z.string().optional(), // snapshot role.name
+  /**
+   * AUTH-1 AC-06 — SuperAdmin THẬT khi thay đổi phát sinh trong phiên mạo danh.
+   * `userId`/`userName` vẫn là người bị mạo danh (danh tính hiệu lực trong
+   * phiên), 2 field này mới cho biết ai thực sự ngồi gõ. Rỗng ở phiên thường.
+   */
+  impersonatorId: z.string().optional(),
+  impersonatorName: z.string().optional(),
   action: ProductionOrderLogActionZod,
   field: z.string().optional(), // field name khi action = update/bulk_update
   before: z.any().optional(),

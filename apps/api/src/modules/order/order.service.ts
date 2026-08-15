@@ -141,6 +141,7 @@ import { DriveFileNameService } from './drive-file-name.service';
 import { OnospodOrderLookupService } from './onospod-order-lookup.service';
 import { OrderDocument, OrderEntity } from './order.entity';
 import { OrderRepository } from './order.repository';
+import { parseTypeFilter, TYPE_NONE_TOKEN } from './parse-type-filter';
 
 const FIELD_CONFIG_CATEGORY: Record<OrderWorkshopField, WorkshopConfigCategory | null> = {
   printStatus: WorkshopConfigCategory.PrintStatus,
@@ -244,6 +245,7 @@ function buildFulfillmentEntrySet(): Record<string, unknown> {
 
 /** Field workshop có schema array thay vì string đơn. */
 const MULTI_VALUE_FIELDS: OrderWorkshopField[] = ['errorFile'];
+
 
 /**
  * Normalize giá trị PATCH cho field workshop trước khi $set vào DB.
@@ -1398,7 +1400,24 @@ export class OrderService implements OnModuleInit {
     }
     if (dto.errorFile) filter.errorFile = { $in: dto.errorFile.split(',').filter(Boolean) };
     // Factory tab filters — exact product name / fabric code / tool code.
-    if (dto.type) filter.type = { $in: dto.type.split(',').filter(Boolean) };
+    if (dto.type) {
+      const { names, hasNone } = parseTypeFilter(dto.type);
+      // Token __none__ = đơn chưa xác định loại sản phẩm — mirror toolResult/
+      // toolResultNote/assignee. Workshop gom nhóm bằng $ifNull nên VẪN hiện
+      // nhóm "đơn không tên"; thiếu nhánh này thì 2 trang lệch ngay khi có 1 đơn
+      // thiếu `type` (xem .devtasks/design/ORD-1.md D2).
+      if (hasNone && names.length === 0) {
+        filter.type = { $in: [null, ''] };
+      } else if (hasNone) {
+        filter.$or = [
+          ...(Array.isArray(filter.$or) ? (filter.$or as unknown[]) : []),
+          { type: { $in: [null, ''] } },
+          { type: { $in: names } },
+        ];
+      } else if (names.length > 0) {
+        filter.type = { $in: names };
+      }
+    }
     if (dto.userSku) filter.userSku = { $in: dto.userSku.split(',').filter(Boolean) };
     if (dto.fabricType) filter.fabricType = { $in: dto.fabricType.split(',').filter(Boolean) };
     if (dto.toolResult) {
@@ -4123,6 +4142,26 @@ export class OrderService implements OnModuleInit {
       return this.orderModel.countDocuments(noneMatch);
     })();
 
+    // Count "chưa xác định loại sản phẩm" cho facet type — mirror 2 khối trên.
+    // Cần vì aggregateFacet loại thẳng giá trị rỗng ($nin ['']) nên đơn thiếu
+    // `type` không bao giờ sinh ra option, trong khi Workshop gom nhóm bằng
+    // $ifNull nên VẪN hiện nhóm "đơn không tên" → 2 trang lệch (ORD-1 AC-05/AC-08).
+    const typeNoneCount = await (async () => {
+      const sanitizedDto = { ...dto, type: undefined } as GetProductionOrdersDto;
+      const baseFilter = this.buildOrderListFilter(sanitizedDto, roleName, assigneeCode);
+      const noneClauses = [{ type: { $exists: false } }, { type: null }, { type: '' }];
+      let noneMatch: Record<string, unknown>;
+      if (Array.isArray(baseFilter.$or)) {
+        const { $or: existingOr, ...rest } = baseFilter as Record<string, unknown> & {
+          $or: unknown[];
+        };
+        noneMatch = { ...rest, ...excludeCancelled, $and: [{ $or: existingOr }, { $or: noneClauses }] };
+      } else {
+        noneMatch = { ...baseFilter, ...excludeCancelled, $or: noneClauses };
+      }
+      return this.orderModel.countDocuments(noneMatch);
+    })();
+
     const nameMap = async (category: WorkshopConfigCategory) =>
       new Map<string, string>((await this.workshopConfigRepository.findAll({ category })).map((d) => [d.code, d.name]));
     const [
@@ -4306,7 +4345,16 @@ export class OrderService implements OnModuleInit {
           return [{ value: r._id, label: DESIGNER_STATUS_LABELS[r._id] || r._id, count: r.count }];
         }),
         // Tên sản phẩm + SKU khách — label = chính value (không có name map).
-        type: typeRows.map((r) => ({ value: r._id, label: r._id, count: r.count })),
+        type: [
+          ...typeRows.map((r) => ({ value: r._id, label: r._id, count: r.count })),
+          // Option "chưa xác định" đặt CUỐI (khác toolResult/toolResultNote đặt
+          // đầu): danh sách này sắp theo count giảm dần và là tên sản phẩm thật,
+          // nhét token vào đầu sẽ đẩy sản phẩm nhiều đơn nhất xuống dòng 2.
+          // Bỏ hẳn khi count=0 để facet không lủng lẳng option rỗng.
+          // `label` để rỗng — FE tự đặt nhãn (`orders:tableWorkshop.noTypeName`),
+          // vì mọi label khác của facet này là tên sản phẩm nguyên văn từ DB.
+          ...(typeNoneCount > 0 ? [{ value: TYPE_NONE_TOKEN, label: '', count: typeNoneCount }] : []),
+        ],
         userSku: userSkuRows.map((r) => ({ value: r._id, label: r._id, count: r.count })),
       },
     };

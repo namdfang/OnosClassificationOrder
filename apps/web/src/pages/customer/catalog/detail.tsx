@@ -16,9 +16,48 @@ import { handleAxiosError } from '@/utils';
 import { findMatchingVariation, groupAttributeOptions } from '@/utils/catalogVariant';
 import { cn } from '@/utils/cn';
 
+import { useImageFallback } from '@/hooks/useImageFallback';
+
 const usdFormatter = new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD' });
 function formatUsd(value?: number): string {
   return value == null ? '—' : usdFormatter.format(value);
+}
+
+/** 1 ảnh trong gallery: URL ưu tiên + URL dự phòng (xem `GalleryImage`). */
+interface GallerySource {
+  /** Ảnh gốc full-size — `mockupLarge` với ảnh sản phẩm. */
+  src?: string;
+  /** Bậc dự phòng khi `src` hỏng — `mockup` (thumbnail) với ảnh sản phẩm. */
+  fallback?: string;
+}
+
+interface GalleryImageProps {
+  source: GallerySource;
+  alt: string;
+  className: string;
+  /** Cỡ icon khi hết bậc dự phòng — ảnh chính lớn, thumbnail nhỏ. */
+  iconSize: number;
+}
+
+/**
+ * Ảnh gallery kèm **chuỗi dự phòng 3 bậc** `mockupLarge` → `mockup` → icon mặc
+ * định (`Catalog.md` §5.1). Tách thành component riêng vì hook không gọi được
+ * trong vòng lặp render strip thumbnail.
+ *
+ * Thumbnail dùng CÙNG chuỗi với ảnh chính chứ không cố ý tải bản nhỏ: trình
+ * duyệt tái dùng ảnh đã tải nên không thêm request, đổi lại thumbnail không bao
+ * giờ lệch bậc với ảnh chính đang xem.
+ */
+function GalleryImage({ source, alt, className, iconSize }: GalleryImageProps) {
+  const { src, onError } = useImageFallback([source.src, source.fallback]);
+  if (!src) {
+    return <ImageIcon size={iconSize} className="text-muted-foreground" />;
+  }
+  return (
+    // `key` theo URL → mỗi bậc dự phòng là một phần tử <img> mới, thay vì
+    // dựa vào việc trình duyệt bắn lại `error` trên đúng thẻ vừa hỏng.
+    <img key={src} src={src} alt={alt} className={className} decoding="async" onError={onError} />
+  );
 }
 
 function CustomerCatalogDetail() {
@@ -55,10 +94,13 @@ function CustomerCatalogDetail() {
     [item, selected],
   );
 
-  const images = useMemo(() => {
-    const list: string[] = [];
-    if (item?.mockup) list.push(item.mockup);
-    if (item?.sizeChartUrl) list.push(item.sizeChartUrl);
+  // Mỗi ảnh là một CẶP (ưu tiên, dự phòng), không phải 1 URL: ảnh sản phẩm ưu
+  // tiên `mockupLarge` và rơi về `mockup` khi ảnh gốc đã bị xóa khỏi onospod.
+  // Bảng size chỉ có 1 URL nên không có bậc dự phòng.
+  const images = useMemo<GallerySource[]>(() => {
+    const list: GallerySource[] = [];
+    if (item?.mockupLarge || item?.mockup) list.push({ src: item.mockupLarge, fallback: item.mockup });
+    if (item?.sizeChartUrl) list.push({ src: item.sizeChartUrl });
     return list;
   }, [item]);
 
@@ -110,24 +152,34 @@ function CustomerCatalogDetail() {
         <div className="flex gap-3 min-w-0">
           {images.length > 1 && (
             <div className="flex flex-col gap-2 shrink-0">
-              {images.map((src, i) => (
+              {images.map((source, i) => (
                 <button
-                  key={src + i}
+                  key={(source.src || source.fallback || '') + i}
                   type="button"
                   onClick={() => setActiveImage(i)}
                   className={cn(
-                    'w-14 h-14 rounded-lg border overflow-hidden bg-muted shrink-0',
+                    'w-14 h-14 rounded-lg border overflow-hidden bg-muted shrink-0 flex items-center justify-center',
                     i === activeImage ? 'border-primary ring-1 ring-primary' : 'border-border',
                   )}
                 >
-                  <img src={src} alt={`${item.fullName} ${i + 1}`} className="w-full h-full object-cover" />
+                  <GalleryImage
+                    source={source}
+                    alt={`${item.fullName} ${i + 1}`}
+                    className="w-full h-full object-cover"
+                    iconSize={18}
+                  />
                 </button>
               ))}
             </div>
           )}
           <div className="flex-1 min-w-0 aspect-square rounded-xl border border-border bg-white flex items-center justify-center overflow-hidden">
             {images[activeImage] ? (
-              <img src={images[activeImage]} alt={item.fullName} className="w-full h-full object-contain" />
+              <GalleryImage
+                source={images[activeImage]}
+                alt={item.fullName}
+                className="w-full h-full object-contain"
+                iconSize={40}
+              />
             ) : (
               <ImageIcon size={40} className="text-muted-foreground" />
             )}
