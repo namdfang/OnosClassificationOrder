@@ -10,6 +10,7 @@ import { ImpersonationBanner } from '@/components/auth/ImpersonationBanner';
 
 import { useIsMobile } from '@/hooks/useMediaQuery';
 
+import OverdueAlertBanner from '../../components/common/OverdueAlertBanner';
 import Header from '../../components/header';
 import Sidebar from '../../components/sidebar/Sidebar';
 
@@ -53,6 +54,8 @@ function MainLayout() {
           collapsed={collapsed}
           isMobile={isMobile}
         />
+        {/* Banner đỏ quá hạn 2 ngày — nằm NGOÀI <main> (vùng cuộn) để luôn trong tầm mắt. */}
+        <OverdueAlertBanner />
         <main className="flex-1 overflow-auto p-4 md:p-6">
           {/*
             KHÔNG dùng `exit` animation (trước đây có, đã bỏ) — với
