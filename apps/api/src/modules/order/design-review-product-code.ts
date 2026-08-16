@@ -24,13 +24,13 @@ const PRODUCT_TYPE_CODE_MAP: Record<string, string> = {
     "all-over print sweatpants 270 gsm": "SP270",
     "all-over print kids hoodie": "HDKIDS",
     "double-sided printed canvas flag": "CANVASFLAG",
-    "all-over print women's t-shirt": "TSWOMEN",
+    "all-over print women's t-shirt": "TSWOMEN",//
     "all-over print and embroidered men's polo shirt": "PLNGUC",
     "all-over print chest embroidered logo men's polo shirt us tag": "PLUSTAG",
     "all-over print embroidered logo men's polo shirt": "PLTRU",
     "aop men's polo shirt with woven placket label": "PLMAC",
     "all-over print curved hem t-shirt": "TXMEXICO",
-    "all-over print baseball jersey - no piping": "BBJERNP",
+    "all-over print baseball jersey - no piping": "BBJERNP",//
     "all-over print vietnam football jersey": "FBVN",
     "all-over print satin long-sleeve pajama set": "PJMV",
     "all-over print satin short-sleeve pajama set with long pants": "LPANTSSHIRTV",
@@ -45,7 +45,7 @@ const PRODUCT_TYPE_CODE_MAP: Record<string, string> = {
     "all-over print youth hawaiian shorts": "QCKIDS",
     "all-over print overlap v-neck mesh football crop top jerseykhop": "FBCRTKHOP",
     "all-over print kids and youth baseball jersey": "BRKIDS",
-    "all-over print soccer jersey": "JLSC",
+    "all-over print soccer jersey": "JLSC",//
     "all-over print kids and youth baseball jersey - no piping": "BRKIDSKL",
     "all-over print loose sweatpants": "SUONG",
     "all over print premium 3d t-shirtg": "TXG",
@@ -86,7 +86,7 @@ const PRODUCT_TYPE_CODE_MAP: Record<string, string> = {
     "aop double-layer smooth satin bandana": "BANDANA3",
     "all-over print zip hoodie 230 gsm": "LLY",
     "all-over print premium zip hoodie 270 gsm": "LLY270",
-    "all-over print baseball jersey": "BBJER",
+    "all-over print baseball jersey": "BBJER",//
     "all-over print hoodie 230 gsm": "OHP",
     "all-over print premium hoodie 270 gsm": "OHP270",
     "all-over print premium men's polo shirt": "PL",
@@ -96,28 +96,30 @@ const PRODUCT_TYPE_CODE_MAP: Record<string, string> = {
     "all-over print short-sleeve hawaiian shirt": "HW",
     "all-over print basketball mesh shirts": "TTOPLUOI",
     "all-over print overlap v-neck mesh football jersey": "BDLUOI",
-    "all-over print seamless sleeve t-shirt": "TX2",
+    "all-over print seamless sleeve t-shirt": "TS2",//=>old TX2
     "all-over print women's hoodie": "OHPNU",
-    "all-over print premium baseball jersey": "PRBBJER",
-    "all-over print premium baseball jersey - no pipping": "PRBBJERNP",
+    "all-over print premium baseball jersey": "PRBBJER",//
+    "all-over print premium baseball jersey - no pipping": "PRBBJERNP",//
     "all-over print kid short-sleeve hawaiian shirt": "HW KIDS",
     "all-over print sweatshirt 230 gsm": "SW",
     "all-over print premium sweatshirt 270 gsm": "SW270",
     "all-over print unisex t-shirtzg": "TXZG2930",
     "all-over print men's tank top": "TTOPVAI",
-    "all-over print mesh baseball jersey - no piping": "BBJERNPLUOI",
+    "all-over print mesh baseball jersey - no piping": "BBJERNPLUOI",//
     "all-over print pocket unisex hawaiian shirt": "HT",
     "all-over print boxy mesh football jersey": "FBCROPTOPBOXY",
     "all-over print raglan men's polo shirt": "VUDANJLPOLO",
-    "all-over print raglan soccer jersey ver 1": "VUDANJLSC",
-    "all-over print raglan soccer jersey ver 2": "VUDANJLSC2",
-    "all-over print v-neck pet jersey": "PETJERCOTIM",
-    "all-over print overlap v-neck pet jersey": "PETJERCOV",
+    "all-over print raglan soccer jersey ver 1": "VUDANJLSC",//
+    "all-over print raglan soccer jersey ver 2": "VUDANJLSC2",//
+    "all-over print v-neck pet jersey": "PETJERCOTIM",//
+    "all-over print overlap v-neck pet jersey": "PETJERCOV",//
     "aop kids and youth mesh v-neck football jersey": "BDLUOIKIDTIM",
     "aop kids and youth mesh overlap v-neck football jersey": "BDLUOIKIDCOV",
-    "all-over print mesh baseball jersey": "BBJERLUOI",
+    "all-over print mesh baseball jersey": "BBJERLUOI",//
     "new all-over print short-sleeve hawaiian shirt": "HW",
     "new all-over print baseball jersey": "BBJERNEW",
+    "all-over print sleeveless baseball jersey": "BBJER0TAY",//
+    "all-over print sleeveless baseball jersey no-piping": "BBJER0TAYNP",//
     "comfort colors - garment-dyed heavyweight t-shirt - 1717": "TIFF",
     "gildan - heavy blend™ crewneck sweatshirt - 18000": "TIFF",
     "gildan unisex heavy blend™ hooded sweatshirt - 18500": "TIFF",
