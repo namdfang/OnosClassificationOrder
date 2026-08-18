@@ -56,12 +56,27 @@ describe('AGENT_TABLE_REGISTRY — bất biến của danh sách trắng', () =>
     expect(bad.map((f) => `${f.table}.${f.name}`)).toEqual([]);
   });
 
-  it('I6: văn bản tự do KHÔNG lọc/sắp xếp/nhóm được — che chỉ chạy ở đầu ra', () => {
+  // `API-11` bỏ che email/điện thoại trong văn bản tự do, nên LÝ DO của bất
+  // biến này đã đổi — nhưng bất biến thì GIỮ NGUYÊN, và nay nó nặng hơn trước.
+  //
+  // Trước: không cho lọc vì che chạy ở đầu ra còn lọc chạy trên giá trị thô,
+  // nên lọc được là đọc được bản chưa che.
+  // Nay:   không cho lọc vì cho lọc trên văn bản tự do là cho QUÉT TOÀN BỘ dữ
+  //        liệu theo một mảnh thông tin liên hệ — dò dần từng ký tự cho tới khi
+  //        ra đơn của một người cụ thể. Đọc được nguyên văn một ghi chú đã cầm
+  //        trên tay là một chuyện; tìm ra đơn nào chứa một số điện thoại là
+  //        chuyện nặng hơn hẳn, và người dùng đã bác việc nới mức lọc ở `API-6`.
+  it('I6: văn bản tự do KHÔNG lọc/sắp xếp/nhóm được — cho lọc là cho quét toàn bộ dữ liệu', () => {
     const bad = allFields().filter(
       (f) => f.policy.freeText && (f.policy.filter !== 'none' || f.policy.sortable || f.policy.groupable),
     );
     expect(bad.map((f) => `${f.table}.${f.name}`)).toEqual([]);
   });
+
+  // I6b (QA-1) đã GỠ ở `API-11`: nó chặn `freeText` nằm ở đường dẫn lồng vì
+  // `maskRows` chỉ che được trường cấp một. Nay `maskRows` không che nữa nên
+  // bất biến đó mất lý do tồn tại. **Nếu sau này có change request khôi phục
+  // việc che, phải khôi phục cả I6b** — không thì lỗ hổng cũ quay lại im lặng.
 
   it('I3: không tên trường bị cấm nào xuất hiện với read:true (lưới an toàn thứ hai)', () => {
     const denied = new Set(AGENT_DENY_FIELD_NAMES);

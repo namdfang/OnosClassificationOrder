@@ -44,6 +44,7 @@ export const PERMISSION_CATALOG: PermissionItem[] = [
   { code: 'page.unmapped_factory', label: 'Đơn chưa xác định xưởng (menu tạm)', group: 'page' },
   { code: 'page.promotions', label: 'Quản lý chương trình giảm giá', group: 'page' },
   { code: 'page.customers', label: 'Quản trị khách hàng', group: 'page' },
+  { code: 'page.agent_api', label: 'Hướng dẫn Agent API', group: 'page' },
 
   // ─── Order actions ──────────────────────────────────────────────
   { code: 'order.import', label: 'Import đơn hàng', group: 'order' },
@@ -234,6 +235,13 @@ export const PERMISSION_CATALOG: PermissionItem[] = [
 export const ALL_PERMISSION_CODES = PERMISSION_CATALOG.map((p) => p.code);
 
 /**
+ * Trang chỉ Admin/SuperAdmin được vào — Manager KHÔNG nhận các mã này dù nhận
+ * mọi mã còn lại. BE chặn lớp thứ hai bằng `@Auth([RoleType.Admin], [...])`,
+ * xem `Customers.md` và `AgentApi.md`.
+ */
+export const ADMIN_ONLY_PAGE_CODES: string[] = ['page.customers', 'page.agent_api'];
+
+/**
  * Default permission preset per system role. Used by RoleService seed +
  * resetPermissionsToDefault().
  */
@@ -241,9 +249,13 @@ export const DEFAULT_ROLE_PERMISSIONS: Partial<Record<RoleType, string[]>> = {
   [RoleType.SuperAdmin]: ALL_PERMISSION_CODES,
   [RoleType.Admin]: ALL_PERMISSION_CODES,
 
-  // Manager có mọi quyền TRỪ trang Quản trị khách hàng (chỉ Admin/SuperAdmin —
-  // BE cũng chặn @Auth([Admin]), xem Customers.md).
-  [RoleType.Manager]: ALL_PERMISSION_CODES.filter((c) => c !== 'page.customers'),
+  // Manager có mọi quyền TRỪ các trang chỉ dành cho Admin/SuperAdmin.
+  //
+  // Dùng DANH SÁCH chứ không lọc đặc cách từng mã: bản cũ viết
+  // `filter((c) => c !== 'page.customers')`, nên mã admin-only THỨ HAI thêm vào
+  // mà quên sửa dòng này thì Manager lặng lẽ có quyền — không có lỗi nào bật ra,
+  // chỉ lộ ra khi ai đó kiểm thử phân quyền bằng tay (`API-3` AC-02).
+  [RoleType.Manager]: ALL_PERMISSION_CODES.filter((c) => !ADMIN_ONLY_PAGE_CODES.includes(c)),
 
   [RoleType.Support]: [
     'page.dashboard',

@@ -7,8 +7,8 @@ import { ApiConfigService } from '@/shared/services/api-config.service';
 
 import { AgentApiRepository } from './agent-api.repository';
 import { fieldNotAllowed, invalidQuery, isMongoTimeout, queryTimeout, tableNotAllowed } from './agent-errors';
-import { maskFreeTextDeep } from './mask-free-text';
 import { applyOrderLogValuePolicy } from './order-log-value-policy';
+import { pickProjected } from './pick-projected';
 import type { AgentFieldPolicy, AgentTableSpec } from './registry';
 import { AGENT_TABLE_REGISTRY } from './registry';
 
@@ -111,7 +111,12 @@ export class AgentQueryService {
       throw fieldNotAllowed(
         c.field,
         p.freeText
-          ? 'is free text and cannot be filtered — masking applies to output only, so filtering on it would leak the raw value.'
+          ? // `API-11` bỏ che văn bản tự do, nên thông điệp cũ ("che chỉ chạy ở
+            // đầu ra") nay sai sự thật — và bên đọc nó là agent, thứ sẽ tin
+            // nguyên văn những gì ta viết. Lý do thật của lệnh cấm là phạm vi:
+            // đọc một ghi chú đã cầm trên tay khác hẳn việc TÌM ra đơn nào chứa
+            // một số điện thoại.
+            'is free text and can be read but not filtered: filtering it would allow scanning the whole table for a contact detail. Filter by an identifier instead.'
           : 'cannot be used as a filter condition.',
       );
     }
@@ -203,19 +208,26 @@ export class AgentQueryService {
   // ─── Che du lieu dau ra ───────────────────────────────────────────────
 
   /**
-   * Áp bộ che theo mẫu cho mọi trường văn bản tự do (BR-4a §5b), và ghép
-   * `before`/`after` có kiểm soát cho `orderLogs` (AC-17).
+   * Ghép `before`/`after` có kiểm soát cho `orderLogs` (AC-17).
+   *
+   * KHÔNG còn che email/điện thoại trong trường văn bản tự do (`API-11`):
+   * người dùng yêu cầu agent đọc **nguyên văn** ghi chú, vì văn bản bị cắt xén
+   * làm agent trả lời khách dựa trên một bản đã mất ngữ cảnh.
+   *
+   * Rủi ro đã nêu rõ và người dùng vẫn quyết: agent đang chăm sóc khách A có
+   * thể đọc được email hoặc số điện thoại của khách B nằm trong ghi chú của một
+   * đơn khác. Đây là rò rỉ **chéo giữa các khách hàng**, không phải rò ra ngoài
+   * công ty — bộ API vẫn nằm sau khoá và vẫn chỉ đọc. Không phải bug mới phát
+   * hiện; siết lại là change request.
+   *
+   * Bỏ che **không** kéo theo cho lọc: trường văn bản tự do vẫn `filter: 'none'`
+   * (xem `condition()`). Cho lọc là cho **quét toàn bộ dữ liệu** theo một mảnh
+   * thông tin liên hệ — nặng hơn hẳn việc đọc, và người dùng đã bác việc nới
+   * mức lọc ở `API-6`.
    */
   maskRows(spec: AgentTableSpec, rows: Row[], raw?: Row[]): Row[] {
-    const freeTextFields = Object.entries(spec.fields)
-      .filter(([, p]) => p.freeText)
-      .map(([name]) => name);
-
     return rows.map((row, i) => {
       const out: Row = { ...row };
-      for (const f of freeTextFields) {
-        if (out[f] !== undefined) out[f] = maskFreeTextDeep(out[f]);
-      }
       if (spec.key === 'orderLogs') {
         const source = raw?.[i] ?? {};
         Object.assign(out, applyOrderLogValuePolicy(out.field, source.before, source.after));
@@ -277,17 +289,8 @@ export class AgentQueryService {
       timeoutMs,
     );
 
-    const rows = raw.map((r) => this.stripToProjection(r, projection));
+    const rows = raw.map((r) => pickProjected(r, projection));
     return { items: this.maskRows(spec, rows, raw), limitApplied: limit };
-  }
-
-  /** Bỏ các khoá chỉ mượn để tính chính sách (`before`/`after` của nhật ký). */
-  private stripToProjection(row: Row, projection: Record<string, 1>): Row {
-    const out: Row = {};
-    for (const key of Object.keys(projection)) {
-      if (row[key] !== undefined) out[key] = row[key];
-    }
-    return out;
   }
 
   async aggregate(
@@ -330,10 +333,26 @@ export class AgentQueryService {
     ]);
     const sort = this.buildSort(spec, agg.sort, resultKeys);
 
-    const pipeline: PipelineStage[] = [
-      { $match: filter },
-      { $group: groupStage as PipelineStage.Group['$group'] },
-    ];
+    // `variations.retailPrice` nằm trong MẢNG subdoc, nên `$group` nhận cả mảng
+    // thay vì từng giá trị: `$sum` ra 0, `$avg` ra null, `$min`/`$max` trả về
+    // chính cái mảng, và nhóm theo `variations.sku` gom theo BẢN GHI chứ không
+    // theo sku. Tất cả đều HTTP 200 nên bên gọi không biết câu trả lời đã sai
+    // (`QA-3`). Trải mảng ra trước khi nhóm là điều kiện để phép tính có nghĩa.
+    //
+    // Chỉ thêm `$unwind` khi thật sự có đường dẫn lồng: truy vấn trên trường
+    // phẳng giữ nguyên pipeline cũ, từng bước một.
+    const unwindRoots = new Set<string>();
+    for (const path of [...groupBy, ...agg.metrics.map((m) => m.field ?? '')]) {
+      if (path.includes('.')) unwindRoots.add(path.split('.')[0]);
+    }
+
+    const pipeline: PipelineStage[] = [{ $match: filter }];
+    for (const root of unwindRoots) {
+      // Không `preserveNullAndEmptyArrays`: bản ghi không có biến thể nào thì
+      // không có giá nào để cộng — giữ lại chỉ tạo ra nhóm rỗng giả.
+      pipeline.push({ $unwind: `$${root}` });
+    }
+    pipeline.push({ $group: groupStage as PipelineStage.Group['$group'] });
     // Trải khoá nhóm ra cấp trên cho dễ đọc; tên đã được chuẩn hoá ở `groupId`.
     if (groupBy.length) {
       const projectStage: Record<string, unknown> = { _id: 0 };

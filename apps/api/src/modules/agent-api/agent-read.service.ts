@@ -1,13 +1,15 @@
 import { Injectable } from '@nestjs/common';
 import type { AgentRowsPayload, AgentTableSummary } from 'shared';
+import { AgentFilterNodeZod } from 'shared';
 
 import { ApiConfigService } from '@/shared/services/api-config.service';
 
 import { AgentApiRepository } from './agent-api.repository';
+import { invalidQuery } from './agent-errors';
 import { AgentQueryService } from './agent-query.service';
+import { pickProjected } from './pick-projected';
+import type { AgentTableSpec } from './registry';
 import { AGENT_TABLE_REGISTRY } from './registry';
-
-type Row = Record<string, unknown>;
 
 /**
  * Năng lực A của bộ API agent (`API-1`): liệt kê bảng và đọc dữ liệu thô theo
@@ -37,7 +39,13 @@ export class AgentReadService {
    * Hết dữ liệu thì `items` rỗng và KHÔNG có `nextCursor` — phân biệt được với
    * trường hợp bị từ chối (403), đúng luồng ngoại lệ của SRS mục 6.
    */
-  async readRows(table: string, limit?: number, cursor?: string, fields?: string[]): Promise<AgentRowsPayload> {
+  async readRows(
+    table: string,
+    limit?: number,
+    cursor?: string,
+    fields?: string[],
+    filterJson?: string,
+  ): Promise<AgentRowsPayload> {
     const spec = this.queries.spec(table);
     const timeoutMs = this.config.agentApi.readTimeoutMs;
     const limitApplied = this.queries.clampLimit(limit);
@@ -46,7 +54,19 @@ export class AgentReadService {
     const dbProjection =
       spec.key === 'orderLogs' ? { ...projection, before: 1 as const, after: 1 as const } : projection;
 
-    const filter = cursor ? { _id: { $gt: cursor } } : {};
+    // Lọc theo dữ liệu (`API-6`) dùng LẠI đúng cơ chế của `POST /query` — hai
+    // đường lọc với hai bộ luật là cách chắc chắn để một ngày chúng lệch nhau,
+    // và đường lỏng hơn sẽ thành lỗ hổng.
+    const dataFilter = this.parseFilter(spec, filterJson);
+    const cursorFilter = cursor ? { _id: { $gt: cursor } } : undefined;
+
+    // `$and` chứ không trộn khoá: điều kiện của bên gọi có thể chạm `_id`, và
+    // trộn nông sẽ để nó ĐÈ con trỏ phân trang — trang sau lặp lại trang trước.
+    const filter = cursorFilter
+      ? Object.keys(dataFilter).length
+        ? { $and: [dataFilter, cursorFilter] }
+        : cursorFilter
+      : dataFilter;
 
     const raw = await this.queries.run(
       () =>
@@ -62,11 +82,7 @@ export class AgentReadService {
       timeoutMs,
     );
 
-    const rows = raw.map((r) => {
-      const out: Row = {};
-      for (const key of Object.keys(projection)) if (r[key] !== undefined) out[key] = r[key];
-      return out;
-    });
+    const rows = raw.map((r) => pickProjected(r, projection));
     const items = this.queries.maskRows(spec, rows, raw);
 
     // Còn trang sau khi lô đầy tới trần — lô vơi nghĩa là đã hết dữ liệu.
@@ -74,5 +90,34 @@ export class AgentReadService {
     const nextCursor = items.length === limitApplied && last?._id ? String(last._id) : undefined;
 
     return { items, nextCursor, meta: { table: spec.key, returned: items.length, limitApplied } };
+  }
+
+  /**
+   * `filter` tới đây dưới dạng chuỗi JSON vì GET không có thân yêu cầu. Ba bước
+   * kiểm chạy đúng thứ tự của `POST /query`, không bớt bước nào:
+   * chặn khoá toán tử → kiểm hình dạng DSL → dựng điều kiện theo chính sách
+   * trường. Trường `filter: 'none'` vẫn không lọc được, `filter: 'eq'` vẫn chỉ
+   * so bằng — người dùng đã bác việc nới mức lọc (`API-6` change note §3).
+   */
+  private parseFilter(spec: AgentTableSpec, filterJson?: string): Record<string, unknown> {
+    if (!filterJson) return {};
+
+    let parsed: unknown;
+    try {
+      parsed = JSON.parse(filterJson);
+    } catch {
+      throw invalidQuery('Query parameter `filter` must be valid JSON.');
+    }
+
+    // Chặn `$where`/`$function`/khoá có dấu chấm TRƯỚC khi Zod chạm tới, y như
+    // `POST /query`: lớp này không được phép phụ thuộc vào thứ tự của lớp kia.
+    this.queries.assertNoOperatorKeys(parsed);
+
+    const result = AgentFilterNodeZod.safeParse(parsed);
+    if (!result.success) {
+      throw invalidQuery(`Query parameter \`filter\` is not a valid filter expression. ${result.error.message}`);
+    }
+
+    return this.queries.buildFilter(spec, result.data);
   }
 }

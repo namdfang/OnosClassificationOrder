@@ -32,6 +32,16 @@ export class ListAgentTablesResDto extends createZodDto(extendApi(ListAgentTable
 export const ReadAgentTableQueryZod = z.object({
   limit: z.coerce.number().int().min(1).optional(),
   cursor: z.string().trim().min(1).optional(),
+  /**
+   * Cay dieu kien `AgentFilterNode` dang chuoi JSON (`API-6`) — GET khong co
+   * than yeu cau nen DSL long phai di qua query string.
+   *
+   * Giu la CHUOI o day, khong `transform` sang object: JSON hong hay dieu kien
+   * sai chinh sach phai bao bang ma loi cua module (`INVALID_QUERY` /
+   * `FIELD_NOT_ALLOWED`), chu khong roi vao 422 cua tang validate — bang 8 ma
+   * la hop dong voi agent.
+   */
+  filter: z.string().max(4000).optional(),
   /** Tap con cua cac truong `read:true`; truong ngoai danh sach trang bi tu choi. */
   fields: z
     .union([z.string(), z.string().array()])
@@ -222,3 +232,77 @@ export const AGENT_ERROR_CODES = {
   docsUnavailable: 'DOCS_UNAVAILABLE',
 } as const;
 export type AgentErrorCode = (typeof AGENT_ERROR_CODES)[keyof typeof AGENT_ERROR_CODES];
+
+// ─── Be mat QUAN TRI (API-3) — KHONG phai be mat cua agent ──────────────
+
+/**
+ * Trang hướng dẫn Agent API trong `/adm` (`API-3`). Đây là bề mặt **thứ hai**,
+ * admin-only: xác thực bằng JWT + vai + quyền, không bằng khoá agent.
+ *
+ * Khác toàn bộ phần trên của file này, các kiểu dưới đây **FE có dùng** —
+ * `apps/web` import thẳng, nên đổi một trường ở đây là đổi hợp đồng với FE.
+ *
+ * Thiết kế: `.devtasks/design/API-3.md` §3.
+ */
+export const AgentAdminFieldZod = z.object({
+  name: z.string(),
+  type: z.enum(['string', 'number', 'date', 'bool', 'objectId', 'enum']),
+  /** Có xuất hiện trong dữ liệu trả về hay không. */
+  read: z.boolean(),
+  /** `none` không lọc được · `eq` chỉ so bằng · `full` mọi toán tử. */
+  filter: z.enum(['none', 'eq', 'full']),
+  sortable: z.boolean(),
+  groupable: z.boolean(),
+  aggregatable: z.boolean().optional(),
+  /** Văn bản người dùng gõ tay — che email/điện thoại trước khi trả ra. */
+  freeText: z.boolean().optional(),
+  note: z.string().optional(),
+});
+export type AgentAdminField = z.infer<typeof AgentAdminFieldZod>;
+
+export const AgentAdminTableZod = z.object({
+  key: z.string(),
+  description: z.string(),
+  entityName: z.string(),
+  defaultSort: z.string(),
+  fields: AgentAdminFieldZod.array(),
+  /**
+   * TÊN các trường agent cố ý KHÔNG đọc được (`API-3` AC-16). Chỉ tên, không
+   * bao giờ là giá trị — người vận hành cần biết agent im lặng vì trường bị
+   * che chứ không phải vì hỏng.
+   */
+  excludedFields: z.string().array(),
+});
+export type AgentAdminTable = z.infer<typeof AgentAdminTableZod>;
+
+export const AgentAdminLimitsZod = z.object({
+  /** Con số ĐANG CHẶN THẬT, đọc từ hằng số dùng chung với `@Throttle` (`API-4`). */
+  rateLimitPerMin: z.number().int().positive(),
+  maxLimit: z.number().int().positive(),
+  readTimeoutMs: z.number().int().positive(),
+  queryTimeoutMs: z.number().int().positive(),
+});
+export type AgentAdminLimits = z.infer<typeof AgentAdminLimitsZod>;
+
+export const AgentAdminOverviewZod = z.object({
+  /** Đường TƯƠNG ĐỐI; FE ghép origin của nó để dựng lời gọi thật và dòng curl. */
+  basePath: z.string(),
+  authHeader: z.string(),
+  /** Đã cấu hình khoá chưa — về ngay khi mở trang, KHÔNG kèm giá trị khoá. */
+  keyConfigured: z.boolean(),
+  /** Tên biến môi trường cần đặt, để trang khỏi phải đoán. */
+  keyEnvName: z.string(),
+  limits: AgentAdminLimitsZod,
+  tables: AgentAdminTableZod.array(),
+});
+export type AgentAdminOverview = z.infer<typeof AgentAdminOverviewZod>;
+
+export const GetAgentAdminOverviewResZod = ResZod.extend({ data: AgentAdminOverviewZod });
+export class GetAgentAdminOverviewResDto extends createZodDto(extendApi(GetAgentAdminOverviewResZod)) {}
+
+/** Giá trị khoá — chỉ lấy khi người xem CHỦ ĐỘNG bấm hiện (`API-3` §3.2). */
+export const AgentAdminKeyZod = z.object({ key: z.string() });
+export type AgentAdminKey = z.infer<typeof AgentAdminKeyZod>;
+
+export const GetAgentAdminKeyResZod = ResZod.extend({ data: AgentAdminKeyZod });
+export class GetAgentAdminKeyResDto extends createZodDto(extendApi(GetAgentAdminKeyResZod)) {}

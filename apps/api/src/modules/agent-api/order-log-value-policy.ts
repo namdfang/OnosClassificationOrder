@@ -1,5 +1,3 @@
-import { maskFreeTextDeep } from './mask-free-text';
-
 /**
  * Giá trị cũ/mới trong nhật ký đơn (`API-1`, AC-17).
  *
@@ -43,9 +41,19 @@ export type OrderLogValueResult = { before?: unknown; after?: unknown; valueOmit
  *    để agent biết là bị lược chứ không phải giá trị vốn rỗng.
  * 2. Giá trị là object hoặc mảng → lược như trên. `before`/`after` kiểu tuỳ ý
  *    nên không kiểm được nội dung lồng nhau theo tên trường.
- * 3. Còn lại → trả về, nhưng chuỗi vẫn phải đi qua bộ che theo mẫu. Hai tên
- *    trong danh sách trắng là văn bản gõ tay (`cancelReason`, `holdReason`)
- *    nên bước này bắt buộc.
+ * 3. Còn lại → trả về NGUYÊN VĂN.
+ *
+ * Bước che theo mẫu ở mục 3 đã bị bỏ (`API-12`). `API-11` bỏ che cho trường văn
+ * bản tự do nhưng chỗ này còn che, tạo ra một sự bất nhất mà agent không có cách
+ * nào hiểu: nội dung hiện tại của một ghi chú thì nguyên văn, còn LỊCH SỬ THAY
+ * ĐỔI của chính ghi chú đó lại là bản đã che. Cùng một nội dung, hai câu trả lời
+ * khác nhau tuỳ đường hỏi — agent sẽ tưởng dữ liệu hỏng hoặc tưởng ghi chú đã bị
+ * sửa.
+ *
+ * Danh sách trắng 17 tên **không đổi**: bỏ che và nới danh sách là hai chuyện
+ * khác nhau, và chỉ chuyện thứ nhất được yêu cầu. Hai tên trong danh sách là văn
+ * bản gõ tay (`cancelReason`, `holdReason`) — đó chính là chỗ email/điện thoại
+ * có thể xuất hiện, và nay chúng đi ra nguyên vẹn.
  */
 export function applyOrderLogValuePolicy(
   field: unknown,
@@ -57,7 +65,7 @@ export function applyOrderLogValuePolicy(
   if (!isPrimitive(after) && after !== undefined) return { valueOmitted: true };
 
   const out: OrderLogValueResult = {};
-  if (before !== undefined) out.before = maskFreeTextDeep(before);
-  if (after !== undefined) out.after = maskFreeTextDeep(after);
+  if (before !== undefined) out.before = before;
+  if (after !== undefined) out.after = after;
   return out;
 }

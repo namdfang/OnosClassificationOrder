@@ -224,12 +224,16 @@ describe('AC-14 — nhật ký không chứa dữ liệu bị che', () => {
   });
 });
 
-describe('BR-4a §5b — văn bản tự do đọc được nhưng không lọc được', () => {
+describe('văn bản tự do: ĐỌC được nguyên văn nhưng KHÔNG lọc được (API-11)', () => {
   it('ghi chú có trong projection mặc định', () => {
     expect(service.buildProjection(orders).toolResultNote).toBe(1);
   });
 
-  it('lọc trên ghi chú bị chặn — che chạy ở đầu ra, lọc chạy trên giá trị thô', () => {
+  // Ranh giới của `API-11`: bỏ che là cho ĐỌC, không phải cho TÌM. Cho lọc trên
+  // văn bản tự do là cho quét toàn bộ dữ liệu theo một mảnh thông tin liên hệ —
+  // dò dần từng ký tự cho tới khi ra đơn của một người cụ thể. Người dùng đã bác
+  // việc nới mức lọc ở `API-6`, và bỏ che KHÔNG kéo theo điều đó.
+  it('lọc trên ghi chú vẫn bị chặn — cho lọc là cho quét dữ liệu theo thông tin liên hệ', () => {
     expect(
       codeOf(() => service.buildFilter(orders, { field: 'toolResultNote', op: 'startsWith', value: 'a' })),
     ).toBe('FIELD_NOT_ALLOWED');
@@ -241,8 +245,10 @@ describe('BR-4a §5b — văn bản tự do đọc được nhưng không lọc 
     );
   });
 
-  it('maskRows che email trong ghi chú của dữ liệu bảng', () => {
-    const [row] = service.maskRows(orders, [{ toolResultNote: 'liên hệ khach@example.com' }]);
-    expect(row.toolResultNote).toBe('liên hệ [email đã ẩn]');
+  it('API-11: ghi chú trả về NGUYÊN VĂN, không còn che email/điện thoại', () => {
+    const raw = 'liên hệ khach@example.com hoặc 0912345678';
+    const [row] = service.maskRows(orders, [{ toolResultNote: raw }]);
+
+    expect(row.toolResultNote).toBe(raw);
   });
 });

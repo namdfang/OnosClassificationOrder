@@ -1,7 +1,12 @@
 # Từ điển dữ liệu cho AI agent
 
 > Bảng nào dùng để trả lời câu hỏi gì, trường nào nghĩa là gì, và tra thế nào.
-> Đọc kèm [`ImportantNotes.md`](ImportantNotes.md) — không có nó thì mọi con số bạn đếm ra đều có nguy cơ sai.
+>
+> Ba file đi kèm, đọc đủ cả bốn thì mới trả lời khách được:
+>
+> - [`ImportantNotes.md`](ImportantNotes.md) — **không có nó thì mọi con số bạn đếm ra đều có nguy cơ sai**
+> - [`ValueSemantics.md`](ValueSemantics.md) — mỗi giá trị nghĩa là gì **với khách**, và nói câu nào
+> - [`WhatYouCannotSee.md`](WhatYouCannotSee.md) — thứ bạn không đọc được, và cách từ chối cho đúng
 
 ---
 
@@ -31,6 +36,10 @@ Hình dạng của `POST /agent/query`:
 
 Lô mặc định 50 dòng, trần 200 — xin nhiều hơn thì bị kẹp xuống trần và `meta.limitApplied` cho biết mức thực tế.
 
+**Hạn mức: 600 lời gọi mỗi phút.** Vượt thì nhận HTTP 429 và phải chờ hết phút đó. Con số này đủ rộng
+cho một cuộc trò chuyện bình thường; nếu bạn chạm trần thì gần như chắc chắn là đang gọi lặp vô ích —
+hãy xem lại vòng lặp của mình thay vì thử lại ngay.
+
 ---
 
 ## 1. `orders` — đơn sản xuất
@@ -45,7 +54,7 @@ Lô mặc định 50 dòng, trần 200 — xin nhiều hơn thì bị kẹp xu�
 | `type` | Tên sản phẩm dạng chữ, khớp `productConfigs.fullName` |
 | `color`, `size`, `quantity`, `printMethod` | Thuộc tính đơn |
 | `status` | Trạng thái từ hệ thống nguồn — **không** phải trạng thái sản xuất |
-| `designerStatus` | `unassigned` · `assigned` · `in-progress` · `done` · `rework` |
+| `designerStatus` | `unassigned` · `assigned` · `in-progress` · `done` · `rejected` · `rework` — nghĩa từng giá trị ở [`ValueSemantics.md`](ValueSemantics.md) §2 |
 | `currentFulfillmentStage` | Công đoạn xưởng hiện tại; **rỗng có hai nghĩa** — xem `ImportantNotes.md` §3 |
 | `fulfillmentCompletedAt` | Có giá trị = đã xong Đóng hàng |
 | `cancelledAt` / `cancelReason` | Có giá trị = **đã hủy**, bị loại khỏi mọi thống kê |
@@ -53,7 +62,7 @@ Lô mặc định 50 dòng, trần 200 — xin nhiều hơn thì bị kẹp xu�
 | `factoryId` | Xưởng; **rỗng = chưa gán xưởng**, bị loại mặc định |
 | `inProductionAt` | Ngày vào sản xuất — trục thời gian của hầu hết thống kê |
 | `toolResult`, `productionError`, `errorFile` | **Mã**, tra nghĩa ở `workshopConfigs` |
-| `*Note` | Ghi chú gõ tay; email/điện thoại đã bị che. **Không lọc được** |
+| `*Note` | Ghi chú gõ tay — đọc được **nguyên văn**, nhưng **không lọc được**. Xem [`WhatYouCannotSee.md`](WhatYouCannotSee.md) §2 trước khi đọc lại cho khách |
 | `priority` | Mức ưu tiên |
 
 **Không có ở đây:** địa chỉ giao, tiền, tên người xử lý. Xem `ImportantNotes.md` §2.

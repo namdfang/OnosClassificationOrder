@@ -15,12 +15,15 @@ import { ProductCategoryEntity, ProductCategorySchema } from '../product-categor
 import { ProductConfigEntity, ProductConfigSchema } from '../product-config/product-config.entity';
 import { PromotionEntity, PromotionSchema } from '../promotion/promotion.entity';
 import { WorkshopConfigEntity, WorkshopConfigSchema } from '../workshop-config/workshop-config.entity';
+import { AgentAdminService } from './agent-admin.service';
 import { AgentApiController } from './agent-api.controller';
 import { AgentApiRepository } from './agent-api.repository';
+import { AgentApiAdminController } from './agent-api-admin.controller';
 import { AgentApiKeyGuard } from './agent-api-key.guard';
 import { AgentApiLogEntity, AgentApiLogSchema } from './agent-audit.entity';
 import { AgentAuditService } from './agent-audit.service';
 import { AgentDocsService } from './agent-docs.service';
+import { AgentExceptionFilter } from './agent-exception.filter';
 import { AgentQueryService } from './agent-query.service';
 import { AgentReadService } from './agent-read.service';
 
@@ -48,9 +51,11 @@ import { AgentReadService } from './agent-read.service';
       { name: CustomerNotificationEntity.name, schema: CustomerNotificationSchema },
     ]),
   ],
-  controllers: [AgentApiController],
+  controllers: [AgentApiController, AgentApiAdminController],
   providers: [
+    AgentAdminService,
     AgentApiKeyGuard,
+    AgentExceptionFilter,
     AgentApiRepository,
     AgentAuditService,
     AgentDocsService,

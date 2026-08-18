@@ -65,7 +65,11 @@ export async function bootstrap(): Promise<NestFastifyApplication> {
         optionsSuccessStatus: 204,
         credentials: true,
         maxAge: 86_400,
-        allowedHeaders: 'Origin, X-Requested-With, Content-Type, Accept, Authorization',
+        // `X-Agent-Api-Key` cho phần "Thử gọi" của trang hướng dẫn Agent API (`API-3`):
+        // trình duyệt gọi thẳng /v1/agent/* nên preflight phải cho gửi header này.
+        // Chỉ nới HEADER — whitelist `origin` ở trên giữ nguyên, bên thứ ba vẫn bị
+        // chặn từ vòng origin trước khi tới đây.
+        allowedHeaders: 'Origin, X-Requested-With, Content-Type, Accept, Authorization, X-Agent-Api-Key',
       },
     },
   );

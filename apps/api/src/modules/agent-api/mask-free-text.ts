@@ -1,6 +1,16 @@
 /**
  * Che theo mẫu cho văn bản người dùng gõ tay (`API-1`, BR-4a §5b).
  *
+ * ⚠️ **HIỆN KHÔNG CÒN NƠI NÀO GỌI HÀM NÀY.** `API-11` bỏ che cho trường văn bản
+ * tự do, `API-12` bỏ nốt cho `before`/`after` của nhật ký đơn — người dùng yêu
+ * cầu agent đọc nguyên văn. Chỉ còn unit test tham chiếu tới đây.
+ *
+ * Giữ lại (thay vì xoá) để khôi phục được ngay nếu có change request siết lại:
+ * bộ mẫu bên dưới đã qua kiểm thử kỹ, đặc biệt là ca mã sản xuất
+ * `XQ-91783-27005` **không** bị che nhầm thành số điện thoại — viết lại từ đầu
+ * dễ vấp đúng chỗ đó. Nhưng **đừng nhìn file này rồi kết luận là hệ thống đang
+ * che**: nó đang không che.
+ *
  * Luật che theo TÊN TRƯỜNG không chạm tới nội dung tự do: một ghi chú gõ tay
  * có thể chứa email hoặc số điện thoại khách và sẽ đi thẳng ra ngoài trong khi
  * vẫn "đúng" mọi luật che. Hàm này bịt đúng lỗ đó.

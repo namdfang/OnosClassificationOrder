@@ -259,12 +259,30 @@ export class ApiConfigService {
       maxLimit: Number(process.env.AGENT_API_MAX_LIMIT || 200),
       readTimeoutMs: Number(process.env.AGENT_API_READ_TIMEOUT_MS || 3000),
       queryTimeoutMs: Number(process.env.AGENT_API_QUERY_TIMEOUT_MS || 8000),
-      rateLimitPerMin: Number(process.env.AGENT_API_RATE_LIMIT_PER_MIN || 60),
+      // Hạn mức KHÔNG cấu hình được bằng env — con số chặn thật nằm ở
+      // `agent-api/agent-api.constants.ts`. Xem `API-4`: biến env cũ ở đây
+      // chưa từng được tiêu thụ, nên nó chỉ hứa suông với người vận hành.
       /** Ghi đè thư mục tài liệu; rỗng thì tự dò theo thứ tự ở `agent-docs.service.ts`. */
       docsDir: process.env.AGENT_DOCS_DIR || '',
     };
   }
 
+  /**
+   * CHƯA CÓ TÍNH NĂNG NÀO DÙNG CỤM NÀY (`QA-4`).
+   *
+   * Không module partner nào tồn tại trong `apps/api/src/modules`, và
+   * `grep partnerApi` toàn `apps/api/src` chỉ ra đúng dòng khai báo dưới đây.
+   * Đặt `PARTNER_API_*` trong `.env` **không đổi hành vi nào của hệ thống** —
+   * ghi rõ ở đây để người vận hành không tưởng là đã siết được hạn mức hay cửa
+   * sổ nonce, giống hiểu nhầm mà `API-4` vừa phải gỡ cho cụm `agentApi`.
+   *
+   * Cụm này có từ commit đầu tiên của repo. Giữ nguyên chứ không xoá: nếu đây
+   * là phần chuẩn bị cho Partner API sắp làm thì xoá là phá. Đã hỏi người dùng
+   * ở `task_notes` #15; có câu trả lời rồi mới quyết dọn hay giữ.
+   *
+   * Lưu ý khi dọn: `masterKey` dùng `getString(...)` nên là biến **bắt buộc** —
+   * nó chưa nổ chỉ vì getter này chưa từng được gọi.
+   */
   get partnerApi() {
     return {
       masterKey: this.getString('API_KEY_MASTER_KEY'),
