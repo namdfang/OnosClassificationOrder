@@ -12,7 +12,7 @@ import type {
   GetCustomerCatalogResDto,
   ProductPrintAreaItem,
 } from 'shared';
-import { PRODUCT_PRINT_AREA_LABEL_MAP, ProductConfigStatus } from 'shared';
+import { PRODUCT_PRINT_AREA_LABEL_MAP, ProductConfigStatus, toFullSizeImageUrl } from 'shared';
 
 import { CollectionEntity } from '@/modules/collection/collection.entity';
 import type { CustomerDocument } from '@/modules/customer/customer.entity';
@@ -121,6 +121,12 @@ export class CustomerCatalogService {
       },
     );
 
+    // Mockup crawl từ onospod lưu bản thumbnail `-100x100`, trong khi ô ảnh
+    // catalog rộng ~300px → phóng lên là nhòe. Trả THÊM bản full-size thay vì
+    // đè lên `mockup`: ảnh gốc có thể đã bị xóa dù thumbnail còn, nên FE cần
+    // giữ được bậc dự phòng rơi ngược về `mockup` trước khi tới ảnh mặc định.
+    const mockup = row.mockup as string | undefined;
+
     return {
       _id: productConfigId,
       fullName: row.fullName as string,
@@ -130,9 +136,10 @@ export class CustomerCatalogService {
       printArea,
       printDocument: row.printDocument as string | undefined,
       printTemplate: row.printTemplate as string | undefined,
-      mockup: row.mockup as string | undefined,
       images: row.images as string[] | undefined,
       usImportTaxPerUnit: row.usImportTaxPerUnit as number | undefined,
+      mockup,
+      mockupLarge: toFullSizeImageUrl(mockup),
       sizeChartUrl: row.sizeChartUrl as string | undefined,
       description: row.description as string | undefined,
       shortDescription: row.shortDescription as string | undefined,

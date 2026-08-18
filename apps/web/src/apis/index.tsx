@@ -1,4 +1,5 @@
 import axios, { HttpStatusCode } from 'axios';
+import { IMPERSONATION_EXPIRED_CODE } from 'shared';
 import { toast } from 'sonner';
 
 import { PATHS } from '@/constants/paths';
@@ -6,6 +7,8 @@ import { PATHS } from '@/constants/paths';
 import { useAuthStore } from '@/store/authStore';
 import { useCustomerAuthStore } from '@/store/customerAuthStore';
 import { useSidebarBadgeStore } from '@/store/sidebarBadgeStore';
+
+import { exitImpersonation, goToImpersonateHome } from '@/utils/impersonation';
 
 import i18n from '@/i18n';
 
@@ -64,6 +67,28 @@ apiAxios.interceptors.response.use(
   },
   (error) => {
     const requestUrl = (error?.config?.url as string | undefined) || '';
+
+    // ── AUTH-1 AC-09: phiên MẠO DANH hết hạn / đã kết thúc ───────────────────
+    // PHẢI đứng TRƯỚC mọi nhánh 401 bên dưới. Backend trả mã riêng thay vì 401
+    // trơn chính vì `clearToken()` dưới kia chạy `resetSession()` +
+    // `sessionPersist.clearAll()` rồi chuyển hẳn sang trang đăng nhập — tức hết
+    // hạn phiên mạo danh sẽ XOÁ SẠCH phiên thật của SuperAdmin và đá họ ra
+    // ngoài, trượt AC-09 và vi phạm BR-14 ngay trên chính người đi mạo danh.
+    // Thay vào đó: tự gọi `stop` để lấy lại token SuperAdmin rồi đưa về màn hình
+    // Mạo danh. `exitImpersonation()` tự chống gọi trùng khi nhiều request cùng
+    // hỏng, và chỉ khi NÓ hỏng nốt mới rơi về `clearToken` như cũ.
+    if (error?.response?.data?.message === IMPERSONATION_EXPIRED_CODE) {
+      error.__silent = true;
+      void exitImpersonation().then((ok) => {
+        if (ok) {
+          toast.info(i18n.t('impersonate.expired', { ns: 'auth' }));
+          goToImpersonateHome();
+        } else {
+          useAuthStore.getState().clearToken();
+        }
+      });
+      return Promise.reject(error);
+    }
 
     if (isCustomerRoute(requestUrl)) {
       if (error?.response?.status === HttpStatusCode.Unauthorized && !requestUrl.includes('/customer/auth/login')) {

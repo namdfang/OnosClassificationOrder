@@ -30,9 +30,11 @@ import {
   ShoppingCart,
   Tag,
   User,
+  UserCog,
   Users,
   Workflow,
 } from 'lucide-react';
+import { RoleType } from 'shared';
 
 import { Sheet, SheetContent } from '@/components/ui/sheet';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
@@ -142,6 +144,12 @@ interface NavChild {
   anyPerm?: string[];
   /** Role names to hide this entry from (bổ sung cho check `perm`). */
   hideForRoles?: string[];
+  /**
+   * CHỈ hiện cho đúng các role này. Khác `perm`: nhánh tắt `isAdmin` trong
+   * `allow()` cho Admin lẫn SuperAdmin qua hết, nên `perm` KHÔNG thu hẹp được
+   * xuống riêng SuperAdmin. Dùng cho mục Mạo danh (AUTH-1 BR-1).
+   */
+  onlyForRoles?: string[];
   /** Active cả khi đang ở route con của `to` (vd `/adm/settings/<section>`). */
   matchPrefix?: boolean;
 }
@@ -403,6 +411,13 @@ function buildNavGroups(t: TFunction<'layout'>): NavGroup[] {
               icon: <ShieldHalf size={14} />,
               perm: 'role.manage',
             },
+            {
+              key: PATHS.IMPERSONATE,
+              label: t('sidebar.impersonate'),
+              to: PATHS.IMPERSONATE,
+              icon: <UserCog size={14} />,
+              onlyForRoles: [RoleType.SuperAdmin],
+            },
           ],
         },
         {
@@ -444,7 +459,8 @@ function filterMenuByPermissions(
     if (anyPerm?.length) return anyPerm.some((p) => codes.has(p));
     return !perm || codes.has(perm);
   };
-  const visibleForRole = (c: NavChild) => !(roleName && c.hideForRoles?.includes(roleName));
+  const visibleForRole = (c: NavChild) =>
+    !(roleName && c.hideForRoles?.includes(roleName)) && (!c.onlyForRoles || (!!roleName && c.onlyForRoles.includes(roleName)));
   return groups
     .map((g) => ({
       ...g,

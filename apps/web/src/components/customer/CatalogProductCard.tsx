@@ -6,7 +6,8 @@ import type { CustomerCatalogItem } from 'shared';
 import { Badge } from '@/components/ui/badge';
 
 import { cn } from '@/utils/cn';
-import { toFullSizeImageUrl } from '@/utils/imageUrl';
+
+import { useImageFallback } from '@/hooks/useImageFallback';
 
 const usdFormatter = new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD' });
 function formatPrice(value?: number): string {
@@ -23,9 +24,15 @@ interface CatalogProductCardProps {
  * Card sản phẩm dùng chung cho trang Danh mục (`catalog/index.tsx`) VÀ bộ
  * chọn sản phẩm inline ở "Đặt đơn mới" (`orders/new.tsx`) — 1 nguồn cho giao
  * diện thẻ sản phẩm phía khách hàng, ảnh nổi bật trên đầu thay vì hàng ngang.
+ *
+ * **Chuỗi dự phòng 3 bậc** (`Catalog.md` §5.1): `mockupLarge` (ảnh gốc full-size,
+ * đủ nét cho ô ~300px) → hỏng thì `mockup` (thumbnail `-100x100` đang lưu) →
+ * hỏng nốt thì icon mặc định. Bậc giữa là thứ giữ cho sản phẩm không tụt từ
+ * "ảnh mờ" xuống "không có ảnh" khi ảnh gốc đã bị xóa khỏi onospod.
  */
 export function CatalogProductCard({ item, onSelect, className }: CatalogProductCardProps) {
   const { t } = useTranslation('customerPortal');
+  const { src: imageSrc, onError: onImageError } = useImageFallback([item.mockupLarge, item.mockup]);
   const cheapest = item.variations.reduce<CustomerCatalogItem['variations'][number] | undefined>((min, v) => {
     const price = v.discountedPrice ?? v.retailPrice ?? Infinity;
     const minPrice = min ? min.discountedPrice ?? min.retailPrice ?? Infinity : Infinity;
@@ -44,19 +51,17 @@ export function CatalogProductCard({ item, onSelect, className }: CatalogProduct
       )}
     >
       <div className="aspect-square bg-muted flex items-center justify-center overflow-hidden">
-        {item.mockup ? (
-          // Card khá to (~250px) — dùng bản full-size, URL thumb `-100x100` sẽ mờ.
+        {imageSrc ? (
           <img
-            src={toFullSizeImageUrl(item.mockup)}
+            // `key` theo URL → mỗi bậc dự phòng là một phần tử <img> mới, thay vì
+            // dựa vào việc trình duyệt bắn lại `error` trên đúng thẻ vừa hỏng.
+            key={imageSrc}
+            src={imageSrc}
             alt={item.fullName}
             className="w-full h-full object-contain transition-transform group-hover:scale-105"
             loading="lazy"
-            onError={(e) => {
-              if (item.mockup && e.currentTarget.src !== item.mockup && !e.currentTarget.dataset.fellBack) {
-                e.currentTarget.dataset.fellBack = '1';
-                e.currentTarget.src = item.mockup;
-              }
-            }}
+            decoding="async"
+            onError={onImageError}
           />
         ) : (
           <ImageIcon size={28} className="text-muted-foreground" />

@@ -1,4 +1,4 @@
-import type { Customer } from 'shared';
+import type { Customer, ImpersonatedBy } from 'shared';
 import { create } from 'zustand';
 import { createJSONStorage, persist } from 'zustand/middleware';
 
@@ -13,10 +13,13 @@ import { createSessionPersist, CUSTOMER_REMEMBER_KEY, CUSTOMER_STORE_KEY } from 
  */
 const sessionPersist = createSessionPersist(CUSTOMER_STORE_KEY, CUSTOMER_REMEMBER_KEY);
 
+/** Khách + cờ mạo danh — xem `UserProfile.impersonatedBy` ở `authStore`. */
+export type CustomerProfile = Customer & { impersonatedBy?: ImpersonatedBy };
+
 interface CustomerAuthStore {
     token: string | null;
     tokenExpiredAt: number;
-    profile: Customer | null;
+    profile: CustomerProfile | null;
     setToken: (data: string, remember?: boolean) => void;
     getToken: () => string | null;
     isAuthenticated: () => boolean;
@@ -24,7 +27,7 @@ interface CustomerAuthStore {
     /** Xóa phiên KHÔNG điều hướng — dùng khi dọn phiên hết hạn lúc khởi động. */
     resetSession: () => void;
     clearToken: () => void;
-    setProfile: (data: Customer) => void;
+    setProfile: (data: CustomerProfile) => void;
 }
 
 export const useCustomerAuthStore = create<CustomerAuthStore>()(

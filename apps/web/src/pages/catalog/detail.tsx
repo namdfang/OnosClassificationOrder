@@ -104,7 +104,8 @@ function PublicCatalogDetail() {
               <div className="mt-8 grid gap-10 lg:grid-cols-2 lg:gap-14">
                 <Reveal>
                   <ProductImage
-                    src={item.mockup}
+                    src={item.mockupLarge}
+                    fallbackSrc={item.mockup}
                     alt={item.fullName}
                     iconSize={64}
                     priority

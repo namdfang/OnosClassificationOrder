@@ -109,14 +109,20 @@ CustomerCatalogVariation {
 | ---------------------------------------- | ------------------------------------------------------------------------------------------------------------------ |
 | `pages/catalog/index.tsx`                | Lưới sản phẩm + ô tìm kiếm + phân trang + CTA đóng trang. Dùng `PublicHeader`/`PublicFooter`/`BackToTop`.           |
 | `pages/catalog/detail.tsx`               | Chi tiết 1 sản phẩm + bảng biến thể & giá niêm yết.                                                                 |
-| `components/public/PublicProductCard.tsx` | Thẻ sản phẩm: ảnh → TÊN (font `display`) → meta/giá có điều kiện → "Xem chi tiết". Vệt tím chạy dọc mép trái khi hover. |
-| `components/public/ProductImage.tsx`      | Ảnh sản phẩm + **ảnh mặc định** khi thiếu `mockup` hoặc link ảnh hỏng (`onError`). Nhánh mặc định `aria-hidden` hoàn toàn — tên đã có ở `<h3>`/`<h1>` cạnh đó, gắn thêm `sr-only` sẽ khiến screen reader đọc tên 2 lần. |
+| `components/public/PublicProductCard.tsx` | Thẻ sản phẩm: ảnh → TÊN (font `display`) → meta/giá có điều kiện → "Xem chi tiết". Vệt tím chạy dọc mép trái khi hover. Truyền `src={item.mockupLarge}` + `fallbackSrc={item.mockup}`. |
+| `components/public/ProductImage.tsx`      | Ảnh sản phẩm + **ảnh mặc định**. Nhận `src` (ưu tiên) và `fallbackSrc` (dự phòng) → dựng đủ 3 bậc của §5.1 qua `useImageFallback`. Nhánh mặc định `aria-hidden` hoàn toàn — tên đã có ở `<h3>`/`<h1>` cạnh đó, gắn thêm `sr-only` sẽ khiến screen reader đọc tên 2 lần. |
+| `hooks/useImageFallback.ts`              | Chuỗi dự phòng nhiều bậc cho 1 `<img>`: thử lần lượt, `onError` thì tụt bậc, hết bậc trả `src === undefined` để nơi gọi vẽ ảnh mặc định **của riêng nó**. Loại URL rỗng và **khử trùng lặp** (ảnh upload tay có `mockupLarge === mockup` → chỉ 1 bậc, không thử lại URL vừa hỏng). Dùng chung với `components/customer/CatalogProductCard.tsx` và gallery `pages/customer/catalog/detail.tsx` (`CustomerPortal.md` §7.1). |
 | `components/public/catalogPrice.ts`      | `lowestRetailPrice()` — giá thấp nhất trong các biến thể, cho nhãn "Từ …".                                          |
 
 > **Vì sao không dùng chung `components/customer/CatalogProductCard.tsx`:** thẻ
 > đó dựng theo token shadcn của app nội bộ và nhận callback `onSelect` để mở
 > form đặt đơn; thẻ public theo hệ nhận diện marketing và điều hướng bằng `Link`.
 > Hai hệ thiết kế khác nhau, không phải trùng lặp vô ích.
+>
+> Cái **được** dùng chung giữa hai thẻ là `useImageFallback` — tức phần *logic*
+> dự phòng ảnh, không phải phần *giao diện*. Ảnh mặc định vẫn của ai nấy vẽ
+> (public: gradient tím + icon áo; portal khách: `bg-muted` + `ImageIcon`), nên
+> gộp logic không kéo theo việc trộn hai hệ thiết kế.
 
 Responsive: lưới `sm:grid-cols-2 lg:grid-cols-3` (thẻ thiên về chữ nên cần rộng
 hơn lưới 4 cột kiểu shop ảnh); bảng biến thể ở
@@ -147,6 +153,39 @@ hoặc `null` (tương thích data cũ). KHÔNG đòi `variations` không rỗng
 đó từng làm catalog luôn trống vì hầu như không sản phẩm nào có biến thể — xem
 [`CustomerPortal.md §7`](CustomerPortal.md).
 
+### 5.1 Độ nét ảnh sản phẩm — `mockup` vs `mockupLarge`
+
+Ảnh mockup crawl từ onospod.com được lưu **nguyên dạng thumbnail WordPress**
+`...-100x100.jpeg` (xem khối comment "Crawl ảnh mockup từ onospod.com" ở
+`product-config.service.ts`). Ô ảnh catalog là `aspect-square` trong lưới ~300px,
+nên ảnh nguồn 100×100 bị phóng lên gấp ~3 lần và hiện ra nhòe.
+
+`mapRow()` vì vậy trả **hai** URL cho mỗi sản phẩm — dùng chung cho cả lưới
+`/catalog`, chi tiết `/catalog/:id` và `/customer/catalog` vì cả ba đều đi qua
+đúng hàm map này:
+
+| Field         | Giá trị                                                                   |
+| ------------- | ------------------------------------------------------------------------- |
+| `mockup`      | URL **đúng như đang lưu trong DB** — bản `-100x100` với ảnh crawl.         |
+| `mockupLarge` | `toFullSizeImageUrl(mockup)` — bỏ hậu tố `-{w}x{h}` để ra ảnh gốc full-size. |
+
+`toFullSizeImageUrl()` nằm ở [`packages/shared/utils/image-url.ts`](../../packages/shared/utils/image-url.ts)
+để BE và FE dùng **một** bản; nó là hàm thuần dựng URL, có cả bản trùng ý đồ ở
+`apps/web/src/utils/imageUrl.ts` dành cho màn hình quản trị sản phẩm.
+
+> **Quy tắc bắt buộc với mọi nơi hiển thị — 3 bậc dự phòng:**
+> `mockupLarge` → (`onError`) `mockup` → (`onError`) ảnh mặc định.
+>
+> `mockupLarge` **không đảm bảo tồn tại**: WordPress có thể đã xóa ảnh gốc trong
+> khi thumbnail vẫn còn. Vì vậy BE **cố tình không đè** `mockup` bằng bản
+> full-size — đè xong mà ảnh gốc 404 thì sản phẩm đó tụt từ "ảnh mờ" xuống
+> "không có ảnh", tệ hơn hiện trạng. Bỏ bậc giữa hoặc bỏ `onError` là làm hỏng
+> chính điều kiện chống hồi quy này.
+
+Trường hợp biên: `mockup` rỗng → `mockupLarge` cũng `undefined`; `mockup` không
+có hậu tố kích thước (ảnh upload tay lưu local-disk) → `mockupLarge` **bằng đúng**
+`mockup`, nên bậc dự phòng chỉ là một bước thừa vô hại.
+
 ---
 
 ## 6. Performance notes
@@ -155,7 +194,7 @@ hoặc `null` (tương thích data cũ). KHÔNG đòi `variations` không rỗng
 | -------------- | ----------------------------------------------------------------------------------------------------- |
 | Route loading  | Cả 2 route `lazy()` trong `App.tsx` — không nằm trong bundle của trang chủ.                            |
 | Query          | Trang public bỏ hẳn query promotion (1 round-trip DB ít hơn so với `/customer/catalog`).               |
-| Ảnh sản phẩm   | `loading="lazy"` + `decoding="async"` trong lưới. Ảnh mặc định vẽ bằng CSS → **0 request** dù ~99% sản phẩm rơi vào nhánh này. |
+| Ảnh sản phẩm   | `loading="lazy"` + `decoding="async"` trong lưới. Ảnh mặc định vẽ bằng CSS → **0 request** dù ~99% sản phẩm rơi vào nhánh này. Từ `mockupLarge` (§5.1) ảnh tải về là bản gốc chứ không còn thumbnail 100×100 nên **nặng hơn**, nhưng chỉ ~1% sản phẩm có ảnh và ảnh vẫn lazy-load; nếu độ phủ ảnh tăng mạnh thì đây là chỗ cần đo lại đầu tiên. Ảnh gốc 404 tốn thêm **1 request hỏng** rồi mới rơi về `mockup`. |
 | Tìm kiếm       | Debounce 400ms → gõ 1 từ khoá 10 ký tự chỉ bắn 1 request thay vì 10.                                   |
 | Dependency mới | **0**.                                                                                                 |
 

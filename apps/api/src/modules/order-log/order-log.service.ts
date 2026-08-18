@@ -5,7 +5,7 @@ import type { UserDocument } from '../user/user.entity';
 import { OrderLogRepository } from './order-log.repository';
 
 export type AuditContext = {
-  user?: Pick<UserDocument, '_id' | 'fullName' | 'email'> & { role?: { name?: RoleType } };
+  user?: Pick<UserDocument, '_id' | 'fullName' | 'email' | 'impersonatedBy'> & { role?: { name?: RoleType } };
   ip?: string;
   userAgent?: string;
 };
@@ -40,6 +40,10 @@ export class OrderLogService {
         userName: params.ctx?.user?.fullName,
         userEmail: params.ctx?.user?.email,
         roleCode: params.ctx?.user?.role?.name,
+        // AUTH-1 AC-06 — MỘT điểm chạm duy nhất cho toàn bộ log đơn hàng, vì
+        // mọi đường ghi log đều đi qua đúng hàm này.
+        impersonatorId: params.ctx?.user?.impersonatedBy?._id,
+        impersonatorName: params.ctx?.user?.impersonatedBy?.fullName,
         ip: params.ctx?.ip,
         userAgent: params.ctx?.userAgent,
       });

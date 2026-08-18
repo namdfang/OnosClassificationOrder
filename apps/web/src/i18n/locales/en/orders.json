@@ -507,7 +507,6 @@
     "unhold": "Release",
     "alreadyCancelled": "Order cancelled",
     "hold": "Hold order",
-    "heldReopenFirst": "Order on hold — release it first",
     "cancelOrder": "Cancel order",
     "checkDesign": "Check for new design",
     "checkDesignUpdated": "Found and applied new design from OnosPod"
@@ -589,6 +588,7 @@
     "shiftClickRangeSelect": "Shift+click to select the whole range to the previous checkbox",
     "history": "History",
     "facets": {
+      "type": "Product",
       "fabricType": "Fabric type",
       "machineNumber": "Machine",
       "printStatus": "Print status",

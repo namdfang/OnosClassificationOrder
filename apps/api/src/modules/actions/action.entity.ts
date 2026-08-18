@@ -38,6 +38,18 @@ export class ActionEntity extends DatabaseEntityAbstract {
   })
   active?: boolean;
 
+  // AUTH-1 — tài khoản BỊ mạo danh. `userId` là SuperAdmin đi mạo danh.
+  @Prop({ required: false, index: true })
+  targetUserId?: string;
+
+  // Nguồn tài khoản bị mạo danh: bảng `users` hay `customers`.
+  @Prop({ required: false })
+  targetType?: 'user' | 'customer';
+
+  // Mốc kết thúc phiên mạo danh (AC-05). `active=false` là cờ, đây là thời điểm.
+  @Prop({ required: false, type: Date })
+  endedAt?: Date;
+
   @Prop({
     type: String,
     enum: getObjectValues(ActionType),

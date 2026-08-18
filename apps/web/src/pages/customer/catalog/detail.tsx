@@ -20,6 +20,8 @@ import { findMatchingVariation, groupAttributeOptions } from '@/utils/catalogVar
 import { cn } from '@/utils/cn';
 import { toFullSizeImageUrl } from '@/utils/imageUrl';
 
+import { useImageFallback } from '@/hooks/useImageFallback';
+
 const usdFormatter = new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD' });
 function formatUsd(value?: number): string {
   return value == null ? '—' : usdFormatter.format(value);
@@ -65,6 +67,43 @@ function HtmlContent({ html, className }: { html: string; className?: string }) 
   );
 }
 
+/** 1 ảnh trong gallery: URL ưu tiên + URL dự phòng (xem `GalleryImage`). */
+interface GallerySource {
+  /** Ảnh gốc full-size — `mockupLarge` với ảnh sản phẩm. */
+  src?: string;
+  /** Bậc dự phòng khi `src` hỏng — `mockup` (thumbnail) với ảnh sản phẩm. */
+  fallback?: string;
+}
+
+interface GalleryImageProps {
+  source: GallerySource;
+  alt: string;
+  className: string;
+  /** Cỡ icon khi hết bậc dự phòng — ảnh chính lớn, thumbnail nhỏ. */
+  iconSize: number;
+}
+
+/**
+ * Ảnh gallery kèm **chuỗi dự phòng 3 bậc** `mockupLarge` → `mockup` → icon mặc
+ * định (`Catalog.md` §5.1). Tách thành component riêng vì hook không gọi được
+ * trong vòng lặp render strip thumbnail.
+ *
+ * Thumbnail dùng CÙNG chuỗi với ảnh chính chứ không cố ý tải bản nhỏ: trình
+ * duyệt tái dùng ảnh đã tải nên không thêm request, đổi lại thumbnail không bao
+ * giờ lệch bậc với ảnh chính đang xem.
+ */
+function GalleryImage({ source, alt, className, iconSize }: GalleryImageProps) {
+  const { src, onError } = useImageFallback([source.src, source.fallback]);
+  if (!src) {
+    return <ImageIcon size={iconSize} className="text-muted-foreground" />;
+  }
+  return (
+    // `key` theo URL → mỗi bậc dự phòng là một phần tử <img> mới, thay vì
+    // dựa vào việc trình duyệt bắn lại `error` trên đúng thẻ vừa hỏng.
+    <img key={src} src={src} alt={alt} className={className} decoding="async" onError={onError} />
+  );
+}
+
 function CustomerCatalogDetail() {
   const { t } = useTranslation('customerPortal');
   const navigate = useNavigate();
@@ -100,10 +139,22 @@ function CustomerCatalogDetail() {
     [item, selected],
   );
 
-  // TẤT CẢ ảnh sản phẩm: mockup (ảnh chính) + gallery `images[]` + bảng size — dedupe giữ thứ tự.
-  const images = useMemo(() => {
-    const list = [item?.mockup, ...(item?.images || []), item?.sizeChartUrl].filter((u): u is string => Boolean(u));
-    return [...new Set(list)];
+  // Mỗi ảnh là một CẶP (ưu tiên, dự phòng), không phải 1 URL: ảnh sản phẩm ưu
+  // tiên `mockupLarge` và rơi về `mockup` khi ảnh gốc đã bị xóa khỏi onospod.
+  // Gallery `images[]` + bảng size: URL DB nhiều bản là thumb WordPress
+  // `-100x100` → ưu tiên bản full-size, dự phòng URL gốc. Dedupe theo src giữ thứ tự.
+  const images = useMemo<GallerySource[]>(() => {
+    const list: GallerySource[] = [];
+    if (item?.mockupLarge || item?.mockup) list.push({ src: item.mockupLarge, fallback: item.mockup });
+    for (const u of item?.images || []) list.push({ src: toFullSizeImageUrl(u), fallback: u });
+    if (item?.sizeChartUrl) list.push({ src: toFullSizeImageUrl(item.sizeChartUrl), fallback: item.sizeChartUrl });
+    const seen = new Set<string>();
+    return list.filter((g) => {
+      const key = g.src || g.fallback || '';
+      if (!key || seen.has(key)) return false;
+      seen.add(key);
+      return true;
+    });
   }, [item]);
 
   if (loading) {
@@ -186,19 +237,11 @@ function CustomerCatalogDetail() {
         <div className="min-w-0">
           <div className="aspect-square rounded-2xl border border-border bg-white flex items-center justify-center overflow-hidden p-4">
             {images[activeImage] ? (
-              // Ảnh to phải dùng bản full-size — URL trong DB nhiều bản là thumb WordPress `-100x100` sẽ mờ.
-              <img
-                key={activeImage}
-                src={toFullSizeImageUrl(images[activeImage])}
+              <GalleryImage
+                source={images[activeImage]}
                 alt={item.fullName}
                 className="w-full h-full object-contain"
-                onError={(e) => {
-                  const original = images[activeImage];
-                  if (original && e.currentTarget.src !== original && !e.currentTarget.dataset.fellBack) {
-                    e.currentTarget.dataset.fellBack = '1';
-                    e.currentTarget.src = original;
-                  }
-                }}
+                iconSize={40}
               />
             ) : (
               <ImageIcon size={40} className="text-muted-foreground" />
@@ -207,24 +250,25 @@ function CustomerCatalogDetail() {
           {images.length > 1 && (
             // overflow-x-auto cũng clip theo trục dọc → cần py/px trong vùng cuộn kẻo ring ảnh đang chọn bị cắt.
             <div className="flex gap-3 mt-1.5 overflow-x-auto py-1.5 px-1 -mx-1">
-              {images.map((src, i) => (
+              {images.map((source, i) => (
                 <button
-                  key={src + i}
+                  key={(source.src || source.fallback || '') + i}
                   type="button"
                   onClick={() => setActiveImage(i)}
                   className={cn(
                     'w-20 h-20 rounded-2xl overflow-hidden bg-muted shrink-0 transition-all duration-200 border',
+                    'flex items-center justify-center',
                     // Ảnh đang chọn nổi bật, các ảnh còn lại LU MỜ (không viền đậm — viền tối nhìn thô).
                     i === activeImage
                       ? 'border-primary/60 ring-2 ring-primary/25 shadow-sm'
                       : 'border-transparent opacity-45 hover:opacity-100 hover:border-border',
                   )}
                 >
-                  <img
-                    src={src}
+                  <GalleryImage
+                    source={source}
                     alt={`${item.fullName} ${i + 1}`}
-                    loading="lazy"
                     className="w-full h-full object-cover"
+                    iconSize={18}
                   />
                 </button>
               ))}

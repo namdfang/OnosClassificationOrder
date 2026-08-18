@@ -56,6 +56,7 @@ export class MailConsumer implements OnModuleInit, OnModuleDestroy {
   private async setupDLQ() {
     try {
       const channel = this.amqpConnection.channel;
+      // Non-null: env bắt buộc có (validate ở api-config), @types/amqplib mới siết string|undefined.
       const dlExchange = process.env.RABBITMQ_MAIN_EXCHANGE!;
       const sendDlq = process.env.RABBITMQ_MAIN_EXCHANGE + '.mail.send.dlq';
 

@@ -152,3 +152,16 @@ Khi user click → `openHistory(id, productionId)` set state → dialog mở →
 | Auth | `@AuthUser()`, `@ClientIp()`, `@UserAgent()` cung cấp `AuditContext`. |
 | RBAC (Phase 0) | Sẽ thay role-array trong controller bằng permission `order.log.view`. |
 | OrderTableWorkshop (Phase 4) | Sẽ tái dùng `OrderLogTimelineDialog` — cùng signature. |
+
+---
+
+## Ghi vết phiên mạo danh (`AUTH-1`)
+
+`ProductionOrderLogEntity` có thêm `impersonatorId` + `impersonatorName`: khi thay đổi
+phát sinh trong **phiên mạo danh** của SuperAdmin, `userId`/`userName` vẫn là **người bị
+mạo danh** (danh tính hiệu lực trong phiên), 2 field mới cho biết **ai thực sự ngồi gõ**.
+Rỗng ở phiên thường.
+
+Đọc từ `params.ctx.user.impersonatedBy` trong `OrderLogService.write()` — **một điểm chạm
+duy nhất**, vì mọi đường ghi log đơn hàng đều đi qua đúng hàm đó. Chi tiết cơ chế:
+[`Auth.md §10`](Auth.md).

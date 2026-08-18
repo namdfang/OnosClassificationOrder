@@ -55,7 +55,8 @@
       "toolCheckRework": "Tool check — orders needing rework",
       "toolCheckUnreviewed": "Tool check — unreviewed orders (last 7 days)"
     },
-    "customers": "Customers"
+    "customers": "Customers",
+    "impersonate": "Impersonate"
   },
   "header": {
     "toggleSidebar": "Toggle sidebar",
@@ -64,5 +65,12 @@
     "myAccount": "My account",
     "signOut": "Sign out",
     "member": "Member"
+  },
+  "overdueAlert": {
+    "title": "2+ days overdue — orders from {{date}} and earlier still pending:",
+    "toolCheck": "{{count}} orders not tool-checked",
+    "unassigned": "{{count}} orders without a designer",
+    "backlog": "{{count}} design tasks unfinished",
+    "callToAction": "— please jump on these now!"
   }
 }

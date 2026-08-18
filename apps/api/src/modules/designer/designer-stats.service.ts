@@ -1504,6 +1504,87 @@ export class DesignerStatsService {
   }
 
   /**
+   * Banner đỏ "quá hạn 2 ngày" (MainLayout, xem OverdueAlertBanner.md) — đơn
+   * `inProductionAt` từ 2 ngày trước trở về trước (hôm nay 13 → ngày 11 về
+   * trước, chặn dưới = cửa sổ 7 ngày như SidebarCounts) mà vẫn còn:
+   *   - toolCheckUnreviewed : chưa soát tool (MIRROR unreviewedMatch ToolCheck)
+   *   - designerUnassigned  : cần gán designer (MIRROR match getAssignBacklog)
+   *   - byDesigner          : đã gán nhưng chưa xong, group theo assignee
+   *     (MIRROR backlogAgg per-designer của getDailyOverview)
+   * Số là TOÀN HỆ THỐNG cho mọi role được xem — không scope theo người gọi.
+   */
+  async getOverdueAlert(): Promise<{
+    cutoffDay: string;
+    toolCheckUnreviewed: number;
+    designerUnassigned: number;
+    designerBacklog: number;
+    byDesigner: { userId: string; name: string; count: number }[];
+  }> {
+    const MS_DAY = 86_400_000;
+    const { start } = this.resolveVnWindow(7);
+    const vnToday = new Date(Date.now() + 7 * 60 * 60 * 1000).toISOString().slice(0, 10);
+    // Quá hạn = trước 00:00 HÔM QUA (giờ VN): hôm nay 13 → chỉ đếm ngày 11 về trước.
+    const overdueBefore = new Date(new Date(`${vnToday}T00:00:00+07:00`).getTime() - MS_DAY);
+    const cutoffDay = new Date(overdueBefore.getTime() - MS_DAY + 7 * 60 * 60 * 1000).toISOString().slice(0, 10);
+    const inOverdue = { $gte: start, $lt: overdueBefore };
+    const factoryClause = productionFactoryClause(this.orderModel.db);
+    const alive = { deletedAt: null, cancelledAt: null, factoryId: factoryClause };
+
+    const [toolCheckUnreviewed, designerUnassigned, backlogRows] = await Promise.all([
+      this.orderModel.countDocuments({
+        inProductionAt: inOverdue,
+        toolResultNote: { $in: [null, ''] },
+        ...alive,
+      }),
+      this.orderModel.countDocuments({
+        inProductionAt: inOverdue,
+        cancelledAt: null,
+        toolResultNote: { $nin: [null, '', 'ok'] },
+        factoryId: factoryClause,
+        $or: [
+          { designerStatus: DesignerStatus.Unassigned },
+          { designerStatus: DesignerStatus.Rejected },
+          { designerStatus: DesignerStatus.Rework, assignee: { $in: [null] } },
+        ],
+      }),
+      this.orderModel.aggregate<{ _id: string; count: number }>([
+        {
+          $match: {
+            inProductionAt: inOverdue,
+            cancelledAt: null,
+            factoryId: factoryClause,
+            assignee: { $nin: [null, ''] },
+            designerStatus: { $in: [DesignerStatus.Assigned, DesignerStatus.InProgress, DesignerStatus.Rework] },
+          },
+        },
+        { $group: { _id: '$assignee', count: { $sum: 1 } } },
+        { $sort: { count: -1 } },
+      ]),
+    ]);
+
+    const users = backlogRows.length
+      ? await this.userModel
+          .find({ _id: { $in: backlogRows.map((r) => r._id) } }, { _id: 1, fullName: 1, email: 1 })
+          .lean()
+      : [];
+    const nameMap = new Map(users.map((u) => [String(u._id), u.fullName || u.email || String(u._id)]));
+
+    const byDesigner = backlogRows.map((r) => ({
+      userId: String(r._id),
+      name: nameMap.get(String(r._id)) ?? String(r._id),
+      count: r.count,
+    }));
+
+    return {
+      cutoffDay,
+      toolCheckUnreviewed,
+      designerUnassigned,
+      designerBacklog: byDesigner.reduce((s, r) => s + r.count, 0),
+      byDesigner,
+    };
+  }
+
+  /**
    * Bảng tổng quan N ngày (7/14/30) cho tab Designer — các hàng:
    *   1. total       — tất cả đơn inProductionAt ngày đó (mọi trạng thái)
    *   2. unreviewed  — toolResultNote null/'' (chưa soát)

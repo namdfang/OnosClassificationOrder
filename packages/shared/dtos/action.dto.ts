@@ -17,6 +17,14 @@ export const ActionZod = BaseEntityZod.extend({
   active: z.boolean().optional(),
   type: z.enum(getObjectValues(ActionType)),
   userId: z.string(),
+  /**
+   * AUTH-1 — tài khoản BỊ mạo danh (`userId` là SuperAdmin đi mạo danh).
+   * `targetType` phân biệt nguồn tài khoản: `users` hay `customers`.
+   */
+  targetUserId: z.string().optional(),
+  targetType: z.enum(['user', 'customer']).optional(),
+  /** Mốc kết thúc phiên mạo danh (AC-05). `active=false` là cờ, field này là thời điểm. */
+  endedAt: z.coerce.date().optional(),
 });
 export type Action = z.infer<typeof ActionZod>;
 

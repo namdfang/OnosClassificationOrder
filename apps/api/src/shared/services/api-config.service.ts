@@ -143,6 +143,14 @@ export class ApiConfigService {
       // TTL khi user check "Ghi nhớ đăng nhập" — optional env, mặc định 30 ngày
       // nếu không set (không dùng helper `get()` vì nó throw khi thiếu key).
       jwtRememberExpirationTime: Number(this.configService.get('JWT_REMEMBER_EXPIRATION_TIME')) || 30 * 24 * 60 * 60,
+      // TTL phiên mạo danh (AUTH-1 BR-10) — NGẮN hơn phiên thường. Mặc định 60
+      // phút đúng con số BA chốt ở AC-09; optional env để test hạ xuống cho dễ
+      // kiểm chứ không phải để nới dài ra.
+      jwtImpersonationExpirationTime: Number(this.configService.get('JWT_IMPERSONATION_EXPIRATION_TIME')) || 60 * 60,
+      // Chặn cứng: token mạo danh phát quá lâu thì KHÔNG cho đổi ra token
+      // SuperAdmin nữa, kể cả chữ ký còn hợp lệ (lớp 3 của endpoint thoát).
+      impersonationExchangeMaxAge:
+        Number(this.configService.get('IMPERSONATION_EXCHANGE_MAX_AGE')) || 24 * 60 * 60,
     };
   }
 

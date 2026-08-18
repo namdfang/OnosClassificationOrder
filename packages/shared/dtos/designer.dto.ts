@@ -1064,3 +1064,31 @@ export const SidebarCountsZod = z.object({
 });
 export type SidebarCounts = z.infer<typeof SidebarCountsZod>;
 export class GetSidebarCountsResDto extends createZodDto(extendApi(ResZod.extend({ data: SidebarCountsZod }))) {}
+
+// ─── Overdue alert banner ───────────────────────────────────────────
+// Banner đỏ toàn cục (MainLayout) — đơn quá hạn 2 NGÀY vẫn còn tồn: hôm nay 13
+// thì đếm đơn `inProductionAt` ngày 11 trở về trước (trong cửa sổ 7 ngày, đồng
+// bộ định nghĩa với SidebarCounts) còn chưa soát tool / chưa gán / designer
+// chưa làm xong. Mọi role được xem (Admin/Support/Designer) nhận CÙNG số toàn
+// hệ thống — chủ đích để mọi người cùng thấy và thúc nhau xử lý.
+export const OverdueDesignerRowZod = z.object({
+  userId: IDZod,
+  name: z.string(),
+  count: z.number().int().nonnegative(),
+});
+export type OverdueDesignerRow = z.infer<typeof OverdueDesignerRowZod>;
+
+export const OverdueAlertZod = z.object({
+  /** Ngày VN (yyyy-mm-dd) muộn nhất bị coi là quá hạn — vd hôm nay 13 → "…-11". */
+  cutoffDay: z.string(),
+  /** Đơn chưa soát tool (toolResultNote null/'') quá hạn — mirror unreviewedList ToolCheck. */
+  toolCheckUnreviewed: z.number().int().nonnegative(),
+  /** Đơn cần gán designer quá hạn — mirror match getAssignBacklog. */
+  designerUnassigned: z.number().int().nonnegative(),
+  /** Đơn đã gán designer nhưng chưa xong (assigned/in-progress/rework) quá hạn = tổng byDesigner. */
+  designerBacklog: z.number().int().nonnegative(),
+  /** Breakdown tồn theo từng designer (sort giảm dần) — hiện tên trên banner. */
+  byDesigner: OverdueDesignerRowZod.array(),
+});
+export type OverdueAlert = z.infer<typeof OverdueAlertZod>;
+export class GetOverdueAlertResDto extends createZodDto(extendApi(ResZod.extend({ data: OverdueAlertZod }))) {}

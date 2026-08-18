@@ -55,7 +55,8 @@
       "toolCheckRework": "Soát tool — đơn cần làm lại",
       "toolCheckUnreviewed": "Soát tool — đơn chưa soát (7 ngày gần nhất)"
     },
-    "customers": "Khách hàng"
+    "customers": "Khách hàng",
+    "impersonate": "Mạo danh"
   },
   "header": {
     "toggleSidebar": "Đóng/mở sidebar",
@@ -64,5 +65,12 @@
     "myAccount": "Tài khoản của tôi",
     "signOut": "Đăng xuất",
     "member": "Thành viên"
+  },
+  "overdueAlert": {
+    "title": "Quá hạn 2 ngày — đơn từ {{date}} trở về trước vẫn chưa xử lý:",
+    "toolCheck": "{{count}} đơn chưa soát tool",
+    "unassigned": "{{count}} đơn chưa gán designer",
+    "backlog": "{{count}} đơn thiết kế chưa xong",
+    "callToAction": "— mọi người chủ động xử lý ngay nhé!"
   }
 }

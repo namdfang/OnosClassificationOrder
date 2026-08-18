@@ -6,8 +6,11 @@ import { useAuthStore } from '@/store/authStore';
 
 import { RepositoryRemote } from '@/services';
 
+import { ImpersonationBanner } from '@/components/auth/ImpersonationBanner';
+
 import { useIsMobile } from '@/hooks/useMediaQuery';
 
+import OverdueAlertBanner from '../../components/common/OverdueAlertBanner';
 import Header from '../../components/header';
 import Sidebar from '../../components/sidebar/Sidebar';
 
@@ -43,11 +46,16 @@ function MainLayout() {
     <div className="flex min-h-screen bg-background">
       <Sidebar collapsed={collapsed} mobileOpen={mobileOpen} onMobileClose={() => setMobileOpen(false)} />
       <div className="flex-1 flex flex-col overflow-hidden min-w-0" style={{ height: '100vh' }}>
+        {/* Dải cảnh báo mạo danh — trên CÙNG cột nội dung, ĐẨY header xuống chứ
+            không phủ đè, để không thể cuộn trôi qua (AUTH-1 BR-7/AC-04). */}
+        <ImpersonationBanner source="staff" />
         <Header
           changeCollapsed={() => (isMobile ? setMobileOpen(true) : setCollapsed(!collapsed))}
           collapsed={collapsed}
           isMobile={isMobile}
         />
+        {/* Banner đỏ quá hạn 2 ngày — nằm NGOÀI <main> (vùng cuộn) để luôn trong tầm mắt. */}
+        <OverdueAlertBanner />
         <main className="flex-1 overflow-auto p-4 md:p-6">
           {/*
             KHÔNG dùng `exit` animation (trước đây có, đã bỏ) — với

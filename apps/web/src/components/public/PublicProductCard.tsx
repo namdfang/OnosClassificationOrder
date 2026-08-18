@@ -27,7 +27,8 @@ interface PublicProductCardProps {
  *
  * - Tên sản phẩm là nội dung chính (font `display`, cỡ lớn) chứ không phải ảnh.
  * - Ô ảnh luôn hiện để lưới đều nhau; thiếu `mockup` thì `ProductImage` vẽ ảnh
- *   mặc định (gradient tím + icon áo) chứ không để ô trống.
+ *   mặc định (gradient tím + icon áo) chứ không để ô trống. Ưu tiên `mockupLarge`
+ *   (ảnh gốc full-size) và để `mockup` làm bậc dự phòng — xem `Catalog.md` §5.1.
  * - Mọi dòng phụ (danh mục, cách in, giá, số biến thể) đều render có điều kiện;
  *   không bịa nhãn thay thế kiểu "Liên hệ" lặp lại 151 lần.
  *
@@ -59,7 +60,8 @@ function PublicProductCard({ item, to, className }: PublicProductCardProps) {
       />
 
       <ProductImage
-        src={item.mockup}
+        src={item.mockupLarge}
+        fallbackSrc={item.mockup}
         alt={item.fullName}
         iconSize={30}
         className="mb-4 h-32 rounded-xl transition-transform duration-300 group-hover:scale-[1.02] motion-reduce:transition-none"

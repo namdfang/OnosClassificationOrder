@@ -37,6 +37,13 @@ sung field `password` (hash, mặc định `''`), `fullName`, `phone`, `status`:
   đầu (chưa có lịch sử đơn) vẫn tạo được tài khoản với `userSku=''`.
 - `password` KHÔNG BAO GIỜ trả ra API (kể cả cho chính khách đó) — mọi read
   path đi qua `CustomerService.toSafeCustomer()` hoặc `.select('-password')`.
+- **`passwordSource` (`AUTH-1`)** — `'self' | 'system'`, cũng **không bao giờ**
+  trả ra API. Cần vì tính năng mạo danh đặt mật khẩu mặc định cho tài khoản chưa
+  có mật khẩu, mà luồng claim ở trên lại dựa **đúng vào field đó** để biết "đã
+  đăng ký hay chưa": nếu không phân biệt thì mạo danh một lần là khách **vĩnh
+  viễn** không tự đăng ký được. `'system'` → `register()` **vẫn cho** chính chủ
+  claim đè; `'self'`/thiếu field → từ chối như cũ. Bảng đầy đủ + hai điều cấm
+  (không so giá trị mật khẩu, không lộ field ra API): [`Auth.md §10.6`](Auth.md).
 
 ### 2.2 Đăng nhập — JWT dùng chung hạ tầng nhân viên
 
@@ -326,6 +333,20 @@ dùng chung 1 hàm `mapRow()` (map `ProductConfigEntity` → `CustomerCatalogIte
 khỏi catalog khách hàng — xem [`Products.md §2.2`](Products.md); data cũ chưa có
 field `status` vẫn coi như active qua `$in: [Active, null]`).
 
+**Ảnh sản phẩm — luôn đọc `mockupLarge` trước, `mockup` chỉ là bậc dự phòng.**
+`mapRow()` trả 2 URL: `mockup` (đúng giá trị trong DB — với ảnh crawl từ
+onospod là bản thumbnail `-100x100`, hiện nhòe trong ô ~300px) và `mockupLarge`
+(ảnh gốc full-size dẫn xuất qua `toFullSizeImageUrl()`). Mọi nơi hiển thị phải
+dự phòng đủ 3 bậc `mockupLarge` → `mockup` → ảnh mặc định, vì ảnh gốc có thể đã
+bị xóa khỏi onospod trong khi thumbnail vẫn còn. Lý do đầy đủ + trường hợp biên:
+[`Catalog.md §5.1`](Catalog.md).
+
+Phía FE, 3 bậc đó do `components/customer/CatalogProductCard.tsx` dựng qua hook
+dùng chung `hooks/useImageFallback.ts` (cùng hook với thẻ catalog public). Thẻ
+này **trước đây không có `onError` nào** nên `mockup` hỏng để lại icon ảnh vỡ của
+trình duyệt — bậc cuối (`ImageIcon` trên nền `bg-muted`) là thứ bịt lỗ đó. Thẻ
+dùng chung với bộ chọn sản phẩm ở "Đặt đơn mới" nên cả 2 nơi cùng hưởng.
+
 > ⚠️ Filter này **không** đòi sản phẩm phải có `variations`. Bản đầu có thêm
 > `variations: { $exists: true, $ne: [] }` với ý "chỉ sản phẩm đã enrich đủ giá
 > mới hiện" — nhưng thực tế gần như không sản phẩm nào nhập biến thể (2/151 doc
@@ -372,16 +393,21 @@ nội bộ) ra Customer Portal. Xem `CustomerCatalogVariationZod` trong
 
 ### 7.1 Trang chi tiết (`pages/customer/catalog/detail.tsx`)
 
-- Gallery trái: hiện TẤT CẢ ảnh — `mockup` (ảnh chính) + gallery `images[]` +
-  `sizeChartUrl`, dedupe giữ thứ tự; strip thumbnail bo tròn 80px CUỘN NGANG
-  DƯỚI ảnh chính (mirror trang hệ cũ), chỉ hiện khi ≥2 ảnh.
-- **Ảnh thumb WordPress:** nhiều `mockup` import từ OnosPod là URL thumbnail
-  có hậu tố `-100x100` → hiển thị to sẽ mờ. URL trong DB GIỮ NGUYÊN làm ảnh
-  nhỏ; chỗ hiển thị to (ảnh chính gallery, `CatalogProductCard`) derive bản
-  full-size qua `toFullSizeImageUrl()` (`apps/web/src/utils/imageUrl.ts`, bỏ
-  hậu tố `-WxH`) + `onError` fallback về URL gốc đúng 1 lần (`data-fell-back`)
-  phòng file full-size không tồn tại. Strip thumbnail (56px) + preview 64px ở
-  `orders/new.tsx` vẫn dùng URL thumb gốc.
+- Gallery trái: hiện TẤT CẢ ảnh — ảnh sản phẩm (ảnh chính) + gallery `images[]` +
+  `sizeChartUrl`, dedupe theo `src` giữ thứ tự; strip thumbnail bo tròn 80px CUỘN
+  NGANG DƯỚI ảnh chính (mirror trang hệ cũ), chỉ hiện khi ≥2 ảnh.
+- **Gallery áp chuỗi dự phòng ảnh (merge 2 nhánh 2026-08-18):** `images` KHÔNG
+  phải mảng URL mà là mảng **cặp** `{ src, fallback }` — ảnh sản phẩm là
+  `{ mockupLarge, mockup }` (3 bậc `mockupLarge` → `mockup` → `ImageIcon`, xem
+  `Catalog.md §5.1`); `images[]` + bảng size là `{ toFullSizeImageUrl(u), u }`
+  (nhiều URL DB là thumb WordPress `-100x100` → ưu tiên bản full-size qua
+  `toFullSizeImageUrl()` `apps/web/src/utils/imageUrl.ts`, hỏng thì về URL gốc).
+  Ảnh chính + từng thumbnail đều render qua component `GalleryImage` (khai trong
+  chính file, gọi `useImageFallback` — tách riêng vì hook không gọi được trong
+  vòng lặp render strip). Hết bậc thì vẽ `ImageIcon`, không để lại ô ảnh vỡ.
+  > Thumbnail dùng **cùng chuỗi** với ảnh chính chứ không cố ý tải bản nhỏ:
+  > trình duyệt tái dùng ảnh đã tải nên không thêm request, đổi lại thumbnail
+  > không bao giờ lệch bậc với ảnh chính đang xem.
 - Panel phải: breadcrumb (Home › Danh mục › tên sản phẩm), badge `printMethod`
   + badge secondary cho từng collection (`item.collections`), giá, **selector
   "Phương thức ship"** (pill COD / Express US / Ship By Tiktok — chỉ hiện

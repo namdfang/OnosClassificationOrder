@@ -3,6 +3,7 @@ import { useTranslation } from 'react-i18next';
 import { Link, NavLink, Outlet, useNavigate } from 'react-router-dom';
 import { Languages, LayoutDashboard, LayoutGrid, LogOut, Package, PackagePlus, UserCircle2 } from 'lucide-react';
 
+import { ImpersonationBanner } from '@/components/auth/ImpersonationBanner';
 import { NotificationBell } from '@/components/customer/NotificationBell';
 import { Button } from '@/components/ui/button';
 
@@ -65,6 +66,8 @@ function CustomerLayout() {
 
   return (
     <div className="min-h-screen bg-background flex flex-col">
+      {/* Dải cảnh báo mạo danh — trên CÙNG, trước cả header (AUTH-1 BR-7/AC-04). */}
+      <ImpersonationBanner source="customer" />
       <header className="border-b border-border">
         <div className="max-w-7xl mx-auto px-4 h-14 flex items-center justify-between">
           <Link to={PATHS.CUSTOMER_DASHBOARD} className="flex items-center gap-2">

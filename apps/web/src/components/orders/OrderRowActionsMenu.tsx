@@ -52,7 +52,14 @@ export function OrderRowActionsMenu({ order, onChanged }: Props) {
   const cancelled = isCancelled(order);
   const held = isHeld(order);
   const cancelCheck = canCancelOrder(order, t);
-  const cancelDisabled = cancelled || held || !cancelCheck.ok;
+  // Đơn ĐANG GIỮ vẫn hủy được — CỐ Ý không đưa `held` vào đây (ORD-2). Máy chủ
+  // chưa bao giờ chặn hủy vì trạng thái giữ (`Orders.md` §9b liệt kê đúng các
+  // nhánh bị chặn, cancel không nằm trong đó); disable ở giao diện là luật do
+  // chính FE tự đặt ra, chặt hơn máy chủ mà không yêu cầu nào quy định.
+  // Nghiệp vụ: đơn giữ thường đang chờ khách xác nhận, khách bảo hủy thì hủy
+  // luôn — bắt bỏ giữ rồi mới hủy vừa thêm một thao tác, vừa mở ra khoảng thời
+  // gian đơn có thể lọt lại vào luồng sản xuất.
+  const cancelDisabled = cancelled || !cancelCheck.ok;
 
   const doUnhold = async () => {
     try {
@@ -143,13 +150,7 @@ export function OrderRowActionsMenu({ order, onChanged }: Props) {
             <DropdownMenuItem
               disabled={cancelDisabled}
               className="text-rose-600 focus:text-rose-600"
-              title={
-                cancelled
-                  ? t('rowActionsMenu.alreadyCancelled')
-                  : held
-                    ? t('rowActionsMenu.heldReopenFirst')
-                    : cancelCheck.reason
-              }
+              title={cancelled ? t('rowActionsMenu.alreadyCancelled') : cancelCheck.reason}
               onSelect={() => setCancelOpen(true)}
             >
               <Ban size={14} className="mr-2" /> {t('rowActionsMenu.cancelOrder')}

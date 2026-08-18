@@ -407,8 +407,24 @@ export const GetProductionOrdersZod = PageQueryZod.extend({
   /** CSV user._id. Token: `__none__` = chưa gán · `__any__` = đã gán (bất kỳ ai). */
   assignee: z.string().optional(),
   errorFile: z.string().optional(),
-  /** Exact match (CSV) — used by the factory tab product filter. */
-  type: z.string().optional(),
+  /**
+   * Lọc theo TÊN loại sản phẩm, khớp CHÍNH XÁC. Nhận 2 dạng:
+   *   `?type=A&type=B`  → mảng, mỗi phần tử là 1 tên (KHUYẾN NGHỊ)
+   *   `?type=A`         → chuỗi, ĐÚNG MỘT tên, lấy nguyên văn
+   *
+   * KHÔNG tách bằng dấu phẩy — khác các facet CSV còn lại (`userSku`,
+   * `fabricType`, `errorFile`…). Đây là NGOẠI LỆ CÓ CHỦ Ý: những facet kia mang
+   * mã/id nên dấu phẩy không bao giờ nằm trong giá trị, còn `type` mang tên sản
+   * phẩm tự do nhập từ file import nên dấu phẩy là ký tự dữ liệu hợp lệ. Tách nó
+   * ra sẽ lọc SAI ÂM THẦM (không báo lỗi) với tên kiểu `"Tee, Long Sleeve"`.
+   * Đừng "dọn cho nhất quán" bằng cách trả lại `.split(',')`.
+   *
+   * Token `__none__` = đơn CHƯA XÁC ĐỊNH loại sản phẩm (field thiếu/null/rỗng) —
+   * mirror `toolResult`/`toolResultNote`/`assignee`. Cần token này vì Workshop
+   * gom nhóm bằng `$ifNull` nên vẫn hiện nhóm "đơn không tên"; thiếu nó thì hai
+   * trang lệch ngay khi có 1 đơn thiếu `type`.
+   */
+  type: z.union([z.string(), z.string().array()]).optional(),
   /** Exact match (CSV) — lọc theo SKU khách (bảng phẳng trang "In"). */
   userSku: z.string().optional(),
   /** Exact match (case-insensitive) — cặp với userSku cho drill-down "Đơn hàng của khách" (/adm/customers). */

@@ -22,5 +22,14 @@ export const ActionType = {
   Login: 'Login',
   ResetPassword: 'Reset Password',
   ChangePassword: 'Change Password',
+  // AUTH-1 — mạo danh tài khoản. Ghi vào CÙNG collection `actions` với Login
+  // thay vì dựng bảng mới: nó đã có sẵn ip/userAgent/sessionId/active và chính
+  // `clearTokens()` đang dùng `active` để đánh dấu phiên kết thúc.
+  Impersonate: 'Impersonate',
+  ImpersonateStop: 'Impersonate Stop',
+  /** Lần gọi endpoint mạo danh bị từ chối vì không đủ quyền (AC-02). */
+  ImpersonateRejected: 'Impersonate Rejected',
+  /** Đặt mật khẩu mặc định cho tài khoản chưa có mật khẩu (BR-8/BR-13). */
+  ImpersonatePasswordSet: 'Impersonate Password Set',
 } as const;
 export type ActionType = (typeof ActionType)[keyof typeof ActionType];

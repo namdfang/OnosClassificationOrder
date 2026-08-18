@@ -26,6 +26,7 @@ import {
   GetProductTimeOrdersResDto,
   GetProductTimeOverviewDto,
   GetProductTimeOverviewResDto,
+  GetOverdueAlertResDto,
   GetSidebarCountsResDto,
   GetStageErrorDailyDto,
   GetTeamDailyBreakdownDto,
@@ -84,6 +85,18 @@ const STAGE_ERROR_ROLES = [
   RoleType.Fulfillment,
 ];
 
+// Banner đỏ quá hạn 2 ngày — Admin/Support/Designer (+ cấp quản lý tương ứng)
+// cùng thấy CHUNG số toàn hệ thống để thúc nhau xử lý (OverdueAlertBanner.md).
+const OVERDUE_ALERT_ROLES = [
+  RoleType.SuperAdmin,
+  RoleType.Admin,
+  RoleType.Manager,
+  RoleType.SupportManager,
+  RoleType.Support,
+  RoleType.DesignerLeader,
+  RoleType.Designer,
+];
+
 // Badge sidebar — mọi role nhân viên gọi được, từng số tự null theo quyền.
 const SIDEBAR_COUNT_ROLES = [
   RoleType.SuperAdmin,
@@ -138,6 +151,21 @@ export class DesignerStatsController {
           ),
     ]);
     return { success: true, data: { errorLogTodo, ...counts } };
+  }
+
+  @Get('designer/overdue-alert')
+  @Auth(OVERDUE_ALERT_ROLES)
+  @ApiOperation({
+    summary:
+      'Banner đỏ quá hạn 2 ngày: đơn inProductionAt từ 2 ngày trước về trước còn chưa soát tool / chưa gán / designer chưa xong (kèm breakdown theo designer). Số toàn hệ thống, mọi role thấy như nhau.',
+  })
+  @HttpCode(HttpStatus.OK)
+  @ApiOkResponse({ type: GetOverdueAlertResDto })
+  async getOverdueAlert(@AuthUser() user: UserDocument): Promise<GetOverdueAlertResDto> {
+    this.logger.info({
+      message: JSON.stringify({ method: 'GET', url: '/designer/overdue-alert', userId: user._id }),
+    });
+    return { success: true, data: await this.statsService.getOverdueAlert() };
   }
 
   @Get('designer/performance')

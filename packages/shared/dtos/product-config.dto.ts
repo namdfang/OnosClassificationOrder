@@ -508,6 +508,16 @@ export const CustomerCatalogItemZod = z.object({
   images: z.string().array().optional(),
   /** Dòng "IMPORT US TAX: ${n}/unit" panel phải (crawl từ trang hệ cũ, xem `ProductConfigZod.usImportTaxPerUnit`). */
   usImportTaxPerUnit: PriceZod.optional(),
+  /** URL mockup ĐÚNG như đang lưu — với ảnh crawl từ onospod là bản thumbnail `-100x100`. Bậc dự phòng của `mockupLarge`. */
+  /**
+   * URL ảnh mockup full-size dẫn xuất từ `mockup` bằng `toFullSizeImageUrl()`
+   * — ô ảnh catalog rộng ~300px nên bản `-100x100` bị phóng lên nhòe.
+   *
+   * KHÔNG đảm bảo ảnh tồn tại: ảnh gốc có thể đã bị xóa khỏi onospod trong khi
+   * thumbnail vẫn còn. Nơi hiển thị PHẢI dự phòng `mockupLarge` → `mockup` →
+   * ảnh mặc định, KHÔNG để ô ảnh vỡ (`Catalog.md` §6).
+   */
+  mockupLarge: z.string().optional(),
   sizeChartUrl: z.string().optional(),
   description: z.string().optional(),
   /** Bullet tóm tắt (HTML `short_description` hệ cũ) — chỉ trả ở API chi tiết, hiện trong tab "Chi tiết sản phẩm". */

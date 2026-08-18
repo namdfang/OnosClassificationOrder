@@ -24,6 +24,7 @@ const Departments = lazy(() => import('../pages/departments'));
 const Roles = lazy(() => import('../pages/roles'));
 const CustomRoles = lazy(() => import('../pages/custom-roles'));
 const Notifications = lazy(() => import('../pages/notifications'));
+const Impersonate = lazy(() => import('../pages/impersonate'));
 const DesignerTeam = lazy(() => import('../pages/designer/team'));
 const MyTasks = lazy(() => import('../pages/designer/my-tasks'));
 const FulfillmentMyTasks = lazy(() => import('../pages/fulfillment/my-tasks'));
@@ -57,6 +58,7 @@ export const routerConfig: RouterConfig[] = [
   { path: PATHS.ROLES, component: Roles },
   { path: PATHS.CUSTOM_ROLES, component: CustomRoles },
   { path: PATHS.NOTIFICATIONS, component: Notifications },
+  { path: PATHS.IMPERSONATE, component: Impersonate },
   { path: PATHS.DESIGNER_TEAM, component: DesignerTeam },
   { path: PATHS.MY_TASKS, component: MyTasks },
   { path: PATHS.FULFILLMENT_MY_TASKS, component: FulfillmentMyTasks },

@@ -12,16 +12,20 @@ import {
   myNanoid,
   ResDto,
   RoleType,
+  StartImpersonationDto,
+  StartImpersonationResDto,
+  StopImpersonationResDto,
 } from 'shared';
 import { Logger } from 'winston';
 
-import { Auth, ClientIp, UserAgent } from '@/decorators';
+import { AccessToken, Auth, ClientIp, UserAgent } from '@/decorators';
 import { UserDocument } from '@/modules/user/user.entity';
 import { UserService } from '@/modules/user/user.service';
 
 import { ActionRepository } from '../actions/action.repository';
 import { RedisCacheService } from '../redis-cache/redis-cache.service';
 import { AuthService } from './auth.service';
+import { ImpersonationService } from './impersonation.service';
 
 @Controller('auth')
 @ApiTags('auth')
@@ -30,6 +34,7 @@ export class AuthController {
     private userService: UserService,
     private authService: AuthService,
     private actionRepository: ActionRepository,
+    private impersonationService: ImpersonationService,
     private redisCacheService: RedisCacheService,
     private readonly amqpConnection: AmqpConnection,
     @Inject('winston') private readonly logger: Logger,
@@ -229,5 +234,71 @@ export class AuthController {
   })
   async getMe(@AuthUser() user: UserDocument): Promise<GetMeResDto> {
     return { success: true, data: await this.userService.getMe(user._id, user) };
+  }
+
+  /**
+   * AUTH-1 — bắt đầu phiên mạo danh.
+   *
+   * `@Auth()` chỉ yêu cầu ĐÃ ĐĂNG NHẬP; việc chặn "chỉ SuperAdmin" (BR-1) nằm
+   * TƯỜNG MINH trong service. Lý do: AC-02 đòi lần thử trái phép cũng phải được
+   * ghi vết, mà `@Auth([SuperAdmin])` ném ngay ở guard nên không có chỗ nào ghi.
+   * Đánh đổi có ý thức, CHỈ áp cho endpoint này — đừng nhân rộng.
+   */
+  @Post('impersonate')
+  @Auth()
+  @ApiOperation({ summary: 'SuperAdmin bắt đầu mạo danh tài khoản khác' })
+  @HttpCode(HttpStatus.OK)
+  @ApiOkResponse({ type: StartImpersonationResDto })
+  async startImpersonation(
+    @Body() dto: StartImpersonationDto,
+    @AuthUser() user: UserDocument,
+    @ClientIp() ip: string,
+    @UserAgent() userAgent: string,
+  ): Promise<StartImpersonationResDto> {
+    this.logger.info({
+      message: JSON.stringify({
+        action: 'startImpersonation',
+        method: 'POST',
+        url: '/auth/impersonate',
+        actorId: user?._id,
+        target: dto,
+      }),
+    });
+
+    return {
+      success: true,
+      data: await this.impersonationService.start(user, dto, {
+        ip,
+        userAgent,
+        // Có claim này nghĩa là người gọi ĐANG ở trong phiên mạo danh → cấm
+        // mạo danh lồng nhau (BR-6/AC-08). `impersonatedBy` do JwtStrategy đính.
+        actorImpersonatorId: user?.impersonatedBy?._id,
+      }),
+    };
+  }
+
+  /**
+   * AUTH-1 — thoát phiên mạo danh, trả token SuperAdmin mới.
+   *
+   * `@Auth([], [], { public: true })` là CỐ Ý: token mạo danh có thể ĐÃ HẾT HẠN
+   * lúc người dùng bấm thoát, và guard `jwt` sẽ chặn nó. Nếu chặn thì AC-09
+   * trượt đúng tại kịch bản nó sinh ra để bảo vệ. Service tự xác thực chữ ký
+   * (bỏ qua hạn) rồi siết bằng 3 lớp khác — xem `impersonation.service.ts`.
+   */
+  @Post('impersonate/stop')
+  @Auth([], [], { public: true })
+  @ApiOperation({ summary: 'Thoát phiên mạo danh, trả về token SuperAdmin ban đầu' })
+  @HttpCode(HttpStatus.OK)
+  @ApiOkResponse({ type: StopImpersonationResDto })
+  async stopImpersonation(
+    @AccessToken() accessToken: string,
+    @ClientIp() ip: string,
+    @UserAgent() userAgent: string,
+  ): Promise<StopImpersonationResDto> {
+    this.logger.info({
+      message: JSON.stringify({ action: 'stopImpersonation', method: 'POST', url: '/auth/impersonate/stop' }),
+    });
+
+    return { success: true, data: await this.impersonationService.stop(accessToken, { ip, userAgent }) };
   }
 }
