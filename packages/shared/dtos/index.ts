@@ -1,4 +1,5 @@
 export * from './action.dto';
+export * from './agent-api.dto';
 export * from './api-key.dto';
 export * from './artwork.dto';
 export * from './category.dto';
