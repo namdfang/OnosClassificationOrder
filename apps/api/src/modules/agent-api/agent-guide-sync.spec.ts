@@ -2,6 +2,7 @@ import fs from 'fs';
 import path from 'path';
 import { AGENT_CAPABILITY_SUMMARY, AGENT_ERROR_CODES, AGENT_ERROR_HTTP, AGENT_ERROR_MEANING } from 'shared';
 
+import { AGENT_API_RATE_LIMIT_PER_MIN } from './agent-api.constants';
 import { docNotFound, docsUnavailable, fieldNotAllowed, invalidQuery, queryTimeout, tableNotAllowed, writeNotSupported } from './agent-errors';
 import { AGENT_SWAGGER_DESCRIPTION } from './agent-swagger-guide';
 
@@ -125,6 +126,40 @@ describe('API-16 — hướng dẫn Agent API không lệch giữa trang quản 
       // thật sự, không phải bằng test.
       expect(AGENT_SWAGGER_DESCRIPTION.listTables).toContain('`orders`');
       expect(AGENT_SWAGGER_DESCRIPTION.listTables).toContain('`workshopConfigs`');
+    });
+  });
+  /**
+   * `QA-7` — tài liệu ghi cứng hạn mức 60 lần/phút, hằng số thật là 600. Sai
+   * gấp mười, và con số sai đó được dùng làm **lý do** cho một quyết định thiết
+   * kế trong cùng đoạn.
+   *
+   * Đã sửa bằng cách bỏ con số khỏi chỗ đó, nhưng chỗ khác vẫn được phép nêu
+   * con số. Test này quét mọi tài liệu và bắt mọi con số hạn mức phải bằng hằng
+   * số đang chặn thật — vá một dòng chỉ sửa lần này, quét thì chặn cả lần sau.
+   */
+  describe('QA-7 — không tài liệu nào nêu hạn mức khác hằng số đang chặn', () => {
+    const docDirs = ['FunctionDescription', 'AgentGuide'].map((section) =>
+      path.resolve(__dirname, '../../../../../documents', section),
+    );
+
+    /** Bắt "600 lời gọi mỗi phút", "600 lần/phút", "600 lần mỗi phút". */
+    const RATE_MENTION = /(\d+)\s*(?:lời gọi|lần)\s*(?:\/\s*phút|mỗi phút)/g;
+
+    const mentions: { file: string; value: number }[] = [];
+    for (const dir of docDirs) {
+      if (!fs.existsSync(dir)) continue;
+      for (const name of fs.readdirSync(dir).filter((n) => n.endsWith('.md'))) {
+        const text = fs.readFileSync(path.join(dir, name), 'utf8');
+        for (const m of text.matchAll(RATE_MENTION)) mentions.push({ file: name, value: Number(m[1]) });
+      }
+    }
+
+    it('quét được ít nhất một chỗ — quét ra rỗng nghĩa là biểu thức hỏng, không phải tài liệu sạch', () => {
+      expect(mentions.length).toBeGreaterThan(0);
+    });
+
+    it.each(mentions.map((m) => [`${m.file}: ${m.value}`, m]))('%s', (_label, mention) => {
+      expect((mention as { value: number }).value).toBe(AGENT_API_RATE_LIMIT_PER_MIN);
     });
   });
 });

@@ -45,9 +45,18 @@ Ba nguyên tắc chi phối toàn bộ thiết kế:
    └─ Tab D "Thử gọi"    (lazy) dựng lời gọi → chạy thẳng /api/v1/agent/* → mã HTTP + JSON + curl
 ```
 
-**Nạp dữ liệu có chủ đích.** Hạn mức 60 lần/phút của bộ API là tài nguyên dùng chung với agent thật,
-nên trang **không polling** và **không prefetch cả bốn tab lúc mount**: danh mục tài liệu đợi đến khi
-mở tab C, khoá đợi đến khi người xem bấm hiện hoặc bấm Chạy.
+**Nạp dữ liệu có chủ đích.** Hạn mức của bộ API là **tài nguyên dùng chung với agent thật** — mỗi lần
+admin bấm thử là một lời gọi agent không thực hiện được. Nên trang **không polling** và **không prefetch
+cả bốn tab lúc mount**: danh mục tài liệu đợi đến khi mở tab C, khoá đợi đến khi người xem bấm hiện hoặc
+bấm Chạy.
+
+> Con số hạn mức **cố ý không viết ở đây**. Nó nằm ở `AGENT_API_RATE_LIMIT_PER_MIN`
+> (`apps/api/src/modules/agent-api/agent-api.constants.ts`) và trang hiển thị đúng hằng số đó qua
+> `GET /agent-admin/overview`. Trước `QA-7` dòng này ghi cứng con số 60; `API-9` nâng nó lên gấp mười mà
+> không ai sửa tài liệu, nên nó nói sai gấp mười trong một khoảng thời gian — và cái sai đó được dùng
+> làm **lý do** cho quyết định không-polling ngay bên trên. Lý do vẫn đúng ở mức nguyên tắc (tài nguyên
+> dùng chung), nhưng ai đọc để cân nhắc đổi cách nạp dữ liệu sẽ tính trên một con số sai. Cách chắc chắn
+> nhất để chuyện đó không lặp lại là **không chép con số vào tài liệu**.
 
 **Hiện khoá và dùng khoá là hai việc khác nhau.** Bấm Chạy ở tab D không cần bấm "Hiện khoá" trước —
 trang tự lấy khoá để gọi nhưng không hiển thị nó.
