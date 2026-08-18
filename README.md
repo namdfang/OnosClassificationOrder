@@ -138,8 +138,9 @@ REDIS_PORT=6379
 REDIS_PASSWORD=12345678
 REDIS_DB=1
 
-# RabbitMQ
-RabbitMQ_URI=amqp://admin:admin123@localhost:5672
+# RabbitMQ — CẢ HAI biến đều bắt buộc, thiếu 1 cái là app không boot được
+RABBITMQ_URI=amqp://admin:admin123@localhost:5672
+RABBITMQ_MAIN_EXCHANGE=onosfactory
 
 # JWT — đã có keypair sẵn trong file mẫu, giữ nguyên cho dev
 JWT_EXPIRATION_TIME=86400
@@ -160,7 +161,10 @@ Sửa `apps/web/.env.development`:
 
 ```env
 NODE_ENV=development
-VITE_API_URL=http://localhost:3007/api/v1
+# CHỈ tới `/api`, KHÔNG kèm `/v1` — services tự nối `/${CONFIG.API_VERSION}`
+# (`src/constants/index.ts`) vào trước mỗi endpoint. Ghi thừa `/v1` ở đây thì
+# mọi request thành `/api/v1/v1/...` và trả 404.
+VITE_API_URL=http://localhost:3007/api
 ```
 
 ### 5. Chạy dev
@@ -203,6 +207,26 @@ pnpm build:web      # Build Web
 pnpm lint           # ESLint tất cả packages
 pnpm format         # Prettier format
 ```
+
+### Trên Windows — dùng bộ lệnh `:win`
+
+Bộ lệnh ở trên viết cho shell POSIX (macOS / Linux / WSL / Git Bash): dùng nháy đơn trong `--exec`, biến môi trường inline `NODE_OPTIONS=...`, và `mkdir` / `cp -rf`. Chạy bằng `cmd.exe` hoặc PowerShell sẽ lỗi kiểu `''pnpm' is not recognized...` hoặc `'cp' is not recognized...`.
+
+Trên Windows dùng bản `:win` tương ứng (hành vi giống hệt, chỉ khác cú pháp shell):
+
+```powershell
+pnpm dev:win          # Chạy cả API + Web song song
+pnpm dev:api:win      # Chỉ API
+pnpm dev:web:win      # Chỉ Web
+pnpm build:win        # Build tất cả
+pnpm build:api:win    # Build API
+pnpm build:web:win    # Build Web
+pnpm start:api:win    # Chạy API đã build (dùng ./start.js, tự fallback dist-prod → dist)
+```
+
+Các lệnh còn lại (`lint`, `format`, `build-types`, `spell`, `clean-node-modules`, `clean-dist`, `reset`) chạy được trên cả hai môi trường, không cần bản `:win`.
+
+> Nếu bạn dùng WSL hoặc Git Bash trên Windows thì cứ dùng bộ lệnh POSIX bình thường.
 
 Dọn dẹp khi gặp vấn đề:
 
@@ -251,6 +275,15 @@ Sau đó dùng `POST /api/v1/auth/register` qua Swagger để tạo user. Vào D
 ---
 
 ## Troubleshooting
+
+**API in `env undefined ...` rồi tắt với `NODE_ENV must be defined`**
+→ File env thiếu dòng `NODE_ENV`. `start.js` bắt buộc phải có biến này (dùng để nạp tiếp `.env.${NODE_ENV}`). Thêm `NODE_ENV=development` vào `apps/api/.env` (hoặc `.env.development`).
+
+**`RABBITMQ_MAIN_EXCHANGE environment variable does not set`**
+→ Thêm `RABBITMQ_MAIN_EXCHANGE=onosfactory` vào file env. Lưu ý tên biến code đọc là `RABBITMQ_URI` (VIẾT HOA HẾT) — file env ghi `RabbitMQ_URI` thì trên Windows vẫn chạy (env Windows không phân biệt hoa/thường) nhưng **trên Linux/macOS sẽ lỗi**.
+
+**`ERR AUTH <password> called without any password configured for the default user`**
+→ Redis local không bật auth nhưng env lại có `REDIS_PASSWORD`. Hoặc để trống `REDIS_PASSWORD=`, hoặc chạy Redis bằng `docker compose` trong `apps/api/docker` (bản compose có set password).
 
 **API báo lỗi `ECONNREFUSED` khi khởi động**
 → Kiểm tra MongoDB / Redis / RabbitMQ containers đã chạy chưa: `docker ps`. Nếu thiếu thì `docker compose up -d` lại trong `apps/api/docker`.

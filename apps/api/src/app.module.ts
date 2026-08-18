@@ -25,6 +25,7 @@ import { WinstonModule } from '@/modules/winston/winston.module';
 
 import { FastifyThrottlerGuard } from './guards/fastify-throttler.guard';
 import { ActionModule } from './modules/actions/action.module';
+import { AgentApiModule } from './modules/agent-api/agent-api.module';
 import { AmqpModule } from './modules/amqp/amqp.module';
 import { CollectionModule } from './modules/collection/collection.module';
 import { CustomerModule } from './modules/customer/customer.module';
@@ -80,6 +81,7 @@ import { SharedModule } from './shared/shared.module';
     DesignerAssignmentModule,
     CustomerModule,
     CustomerAssignmentModule,
+    AgentApiModule,
     CustomerNotificationModule,
     CustomerPortalModule,
     DesignStorageModule,

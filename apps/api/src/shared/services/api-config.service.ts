@@ -246,6 +246,25 @@ export class ApiConfigService {
     };
   }
 
+  /**
+   * Bộ API nội bộ cho AI agent (`API-1`). Khoá RIÊNG, tách hẳn khỏi tài khoản
+   * người thật và khỏi cụm `partnerApi` bên dưới — xem quyết định D5 ở
+   * `.devtasks/design/API-1.md`. Thiếu `AGENT_API_KEY` thì mọi endpoint đóng,
+   * không có chế độ "mở khi thiếu cấu hình".
+   */
+  get agentApi() {
+    return {
+      key: process.env.AGENT_API_KEY || '',
+      /** Trần lô cứng — `limit` lớn hơn bị KẸP xuống đây, không báo lỗi (AC-03). */
+      maxLimit: Number(process.env.AGENT_API_MAX_LIMIT || 200),
+      readTimeoutMs: Number(process.env.AGENT_API_READ_TIMEOUT_MS || 3000),
+      queryTimeoutMs: Number(process.env.AGENT_API_QUERY_TIMEOUT_MS || 8000),
+      rateLimitPerMin: Number(process.env.AGENT_API_RATE_LIMIT_PER_MIN || 60),
+      /** Ghi đè thư mục tài liệu; rỗng thì tự dò theo thứ tự ở `agent-docs.service.ts`. */
+      docsDir: process.env.AGENT_DOCS_DIR || '',
+    };
+  }
+
   get partnerApi() {
     return {
       masterKey: this.getString('API_KEY_MASTER_KEY'),
