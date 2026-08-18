@@ -18,11 +18,46 @@ import { ResZod } from '../types/Res';
 
 // ─── Nang luc A — liet ke bang + doc tho ────────────────────────────────
 
+/**
+ * Mo ta MOT truong cua mot bang — dinh nghia DUY NHAT, dung chung cho ca hai
+ * be mat (`API-18`).
+ *
+ * Truoc `API-18`, be mat agent chi tra ve TEN truong con be mat quan tri tra
+ * du sau thuoc tinh nay. Hai noi mo ta cung mot truong theo hai kieu khac nhau
+ * la thu AC-03 cam, nen chung nay la mot dinh nghia va `AgentAdminFieldZod`
+ * chi la ten goi cu tro toi day.
+ */
+export const AgentFieldMetaZod = z.object({
+  name: z.string(),
+  type: z.enum(['string', 'number', 'date', 'bool', 'objectId', 'enum']),
+  /** Co xuat hien trong du lieu tra ve hay khong. */
+  read: z.boolean(),
+  /** `none` khong loc duoc · `eq` chi so bang · `full` moi toan tu. */
+  filter: z.enum(['none', 'eq', 'full']),
+  sortable: z.boolean(),
+  groupable: z.boolean(),
+  aggregatable: z.boolean().optional(),
+  /** Van ban nguoi dung go tay. */
+  freeText: z.boolean().optional(),
+  note: z.string().optional(),
+});
+export type AgentFieldMeta = z.infer<typeof AgentFieldMetaZod>;
+
 export const AgentTableSummaryZod = z.object({
   key: z.string(),
   description: z.string(),
+  entityName: z.string(),
+  defaultSort: z.string(),
   fieldCount: z.number().int().nonnegative(),
+  /** Ten cac truong `read:true`. Suy duoc tu `fields`, giu lai vi da cong bo. */
   readableFields: z.string().array(),
+  /** Chinh sach day du tung truong (`API-18`). */
+  fields: AgentFieldMetaZod.array(),
+  /**
+   * TEN cac truong agent co y KHONG doc duoc. Chi TEN, khong bao gio la gia
+   * tri: endpoint nay mo ta CAU TRUC, khong tra du lieu ban ghi (AC-02).
+   */
+  excludedFields: z.string().array(),
 });
 export type AgentTableSummary = z.infer<typeof AgentTableSummaryZod>;
 
@@ -253,35 +288,20 @@ export type AgentErrorCode = (typeof AGENT_ERROR_CODES)[keyof typeof AGENT_ERROR
  *
  * Thiết kế: `.devtasks/design/API-3.md` §3.
  */
-export const AgentAdminFieldZod = z.object({
-  name: z.string(),
-  type: z.enum(['string', 'number', 'date', 'bool', 'objectId', 'enum']),
-  /** Có xuất hiện trong dữ liệu trả về hay không. */
-  read: z.boolean(),
-  /** `none` không lọc được · `eq` chỉ so bằng · `full` mọi toán tử. */
-  filter: z.enum(['none', 'eq', 'full']),
-  sortable: z.boolean(),
-  groupable: z.boolean(),
-  aggregatable: z.boolean().optional(),
-  /** Văn bản người dùng gõ tay — che email/điện thoại trước khi trả ra. */
-  freeText: z.boolean().optional(),
-  note: z.string().optional(),
-});
-export type AgentAdminField = z.infer<typeof AgentAdminFieldZod>;
+/** Ten goi cu, giu cho frontend khoi phai doi import. MOT dinh nghia (`API-18`). */
+export const AgentAdminFieldZod = AgentFieldMetaZod;
+export type AgentAdminField = AgentFieldMeta;
 
-export const AgentAdminTableZod = z.object({
-  key: z.string(),
-  description: z.string(),
-  entityName: z.string(),
-  defaultSort: z.string(),
-  fields: AgentAdminFieldZod.array(),
-  /**
-   * TÊN các trường agent cố ý KHÔNG đọc được (`API-3` AC-16). Chỉ tên, không
-   * bao giờ là giá trị — người vận hành cần biết agent im lặng vì trường bị
-   * che chứ không phải vì hỏng.
-   */
-  excludedFields: z.string().array(),
-});
+/**
+ * Bang cho trang quan tri — DAN XUAT tu `AgentTableSummaryZod` (`API-18`), bo
+ * hai khoa chi be mat agent can. Dan xuat chu khong khai lai: hai noi mo ta
+ * cung mot truong theo hai kieu khac nhau la thu AC-03 cam, va cach chac chan
+ * nhat de dieu do khong xay ra la khong co dinh nghia thu hai de lech.
+ *
+ * `excludedFields` chi la TEN truong (`API-3` AC-16) — nguoi van hanh can biet
+ * agent im lang vi truong bi che chu khong phai vi hong.
+ */
+export const AgentAdminTableZod = AgentTableSummaryZod.omit({ fieldCount: true, readableFields: true });
 export type AgentAdminTable = z.infer<typeof AgentAdminTableZod>;
 
 export const AgentAdminLimitsZod = z.object({

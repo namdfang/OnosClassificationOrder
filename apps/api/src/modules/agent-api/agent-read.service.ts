@@ -6,6 +6,7 @@ import { ApiConfigService } from '@/shared/services/api-config.service';
 import { AgentApiRepository } from './agent-api.repository';
 import { invalidQuery } from './agent-errors';
 import { AgentQueryService } from './agent-query.service';
+import { buildTableMeta } from './agent-table-meta';
 import { pickProjected } from './pick-projected';
 import type { AgentTableSpec } from './registry';
 import { AGENT_TABLE_REGISTRY } from './registry';
@@ -23,12 +24,10 @@ export class AgentReadService {
   ) {}
 
   listTables(): AgentTableSummary[] {
-    return Object.values(AGENT_TABLE_REGISTRY).map((spec) => ({
-      key: spec.key,
-      description: spec.description,
-      fieldCount: Object.keys(spec.fields).length,
-      readableFields: this.queries.readableFields(spec),
-    }));
+    // Dùng chung hàm dựng với bề mặt quản trị (`API-18`) — hai nơi mô tả cùng
+    // một trường theo hai kiểu khác nhau là thứ AC-03 cấm, nên chỉ có một chỗ
+    // đọc registry rồi dựng mô tả.
+    return Object.values(AGENT_TABLE_REGISTRY).map(buildTableMeta);
   }
 
   /**

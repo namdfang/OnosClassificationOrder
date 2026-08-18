@@ -1,9 +1,10 @@
 import { Injectable } from '@nestjs/common';
-import type { AgentAdminField, AgentAdminOverview, AgentAdminTable } from 'shared';
+import type { AgentAdminOverview, AgentAdminTable } from 'shared';
 
 import { ApiConfigService } from '@/shared/services/api-config.service';
 
 import { AGENT_API_RATE_LIMIT_PER_MIN } from './agent-api.constants';
+import { buildTableMeta } from './agent-table-meta';
 import { AGENT_TABLE_REGISTRY } from './registry';
 
 /** Đường gốc của bộ API agent — tương đối, FE ghép origin của nó. */
@@ -42,29 +43,13 @@ export class AgentAdminService {
         readTimeoutMs: this.config.agentApi.readTimeoutMs,
         queryTimeoutMs: this.config.agentApi.queryTimeoutMs,
       },
-      tables: Object.values(AGENT_TABLE_REGISTRY).map(
-        (spec): AgentAdminTable => ({
-          key: spec.key,
-          description: spec.description,
-          entityName: spec.entityName,
-          defaultSort: spec.defaultSort,
-          fields: Object.entries(spec.fields).map(
-            ([name, policy]): AgentAdminField => ({
-              name,
-              type: policy.type,
-              read: policy.read,
-              filter: policy.filter,
-              sortable: policy.sortable,
-              groupable: policy.groupable,
-              aggregatable: policy.aggregatable,
-              freeText: policy.freeText,
-              note: policy.note,
-            }),
-          ),
-          // Chỉ TÊN trường, không bao giờ giá trị (AC-16).
-          excludedFields: [...spec.deliberatelyExcluded],
-        }),
-      ),
+      // Dùng chung hàm dựng với bề mặt agent (`API-18`), rồi bỏ hai khoá trang
+      // này không cần. Dựng lại từ registry ở đây sẽ tạo bản thứ hai để lệch —
+      // đúng thứ AC-03 của `API-18` cấm.
+      tables: Object.values(AGENT_TABLE_REGISTRY).map((spec): AgentAdminTable => {
+        const { fieldCount: _fieldCount, readableFields: _readableFields, ...table } = buildTableMeta(spec);
+        return table;
+      }),
     };
   }
 

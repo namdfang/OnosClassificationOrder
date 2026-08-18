@@ -50,7 +50,7 @@ Guard chạy **trước** mọi validate tham số. Nếu làm ngược lại, m
 
 | Method | Path | Mô tả |
 |---|---|---|
-| `GET` | `/v1/agent/tables` | Liệt kê 11 bảng đọc được, kèm mô tả và danh sách trường trả về |
+| `GET` | `/v1/agent/tables` | Liệt kê 11 bảng đọc được, kèm mô tả bảng và **chính sách đầy đủ từng trường** (`API-18`) — xem §3.1 |
 | `GET` | `/v1/agent/tables/:table/rows` | Đọc thô, phân trang theo con trỏ trên `_id`. Query: `limit`, `cursor`, `fields`, `filter` (`API-6`) |
 | `POST` | `/v1/agent/query` | Truy vấn có kiểm soát: lọc, sắp xếp, đếm, nhóm, tổng hợp |
 | `GET` | `/v1/agent/docs` | Danh mục tài liệu nghiệp vụ |
@@ -157,6 +157,34 @@ là **siêu tập** của hình dạng trước, không phải hình dạng khá
 Bộ lọc riêng cũng chuyển lỗi của tầng validate (Zod ném `UnprocessableEntityException` → 422) thành
 **400 `INVALID_QUERY`** kèm tên trường sai: bảng mã trên là hợp đồng với agent, mà agent không phân
 biệt được "tôi gõ sai toán tử" với "máy chủ hỏng" nếu mã trả về không nằm trong bảng.
+
+
+### 3.1. `GET /agent/tables` trả metadata đầy đủ (`API-18`)
+
+Trước `API-18`, endpoint này chỉ trả `key`, `description`, `fieldCount` và `readableFields` — tức agent
+chỉ biết **tên** trường. Muốn lọc thì phải thử rồi nhận `FIELD_NOT_ALLOWED` mới biết trường đó lọc được
+hay không, và với `API-8` (cú pháp MongoDB) cộng `API-17` (mở gần hết trường), số lần thử-sai đó chỉ
+tăng lên.
+
+Nay mỗi bảng trả thêm `entityName`, `defaultSort`, `fields[]` (đủ sáu thuộc tính chính sách mỗi trường)
+và `excludedFields[]`.
+
+**Chỉ lộ CẤU TRÚC, không lộ dữ liệu.** Metadata nói bảng có trường gì và dùng được thế nào; nó không
+chứa giá trị của bất kỳ bản ghi nào, và `excludedFields` chỉ là **tên** trường. Hàm dựng chỉ đọc hằng
+số trong bộ nhớ, không chạm collection nào — nên "lộ giá trị bản ghi" không phải điều nó có thể làm.
+
+**Một hàm dựng, hai bề mặt.** `agent-table-meta.ts` là nơi duy nhất đọc registry rồi dựng mô tả; cả bề
+mặt agent lẫn `GET /agent-admin/overview` của trang quản trị đều gọi nó, và trang chỉ bỏ đi hai khoá nó
+không cần. Ở tầng kiểu, `AgentAdminTableZod` được **dẫn xuất** từ `AgentTableSummaryZod` thay vì khai
+lại. Hai nơi mô tả cùng một trường theo hai kiểu khác nhau là thứ `API-18` AC-03 cấm, và cách chắc chắn
+nhất để điều đó không xảy ra là không có định nghĩa thứ hai để mà lệch.
+
+Đã đối chiếu thật trên API đang chạy: **11 bảng, 142 trường, 0 chỗ lệch** giữa hai bề mặt.
+
+> **Đây là lật một quyết định cũ, có lý do.** Ở `API-3` BA từng chốt KHÔNG mở rộng `GET /agent/tables`,
+> vì khi đó việc mở rộng chỉ phục vụ một trang quản trị — đổi thứ agent nhìn thấy để tiện cho trang là
+> đánh đổi sai. Nay nó phục vụ chính agent, và người dùng đã xác nhận chưa có agent thật nào gọi
+> production nên không phá vỡ tương thích với ai.
 
 ## 4. UI Components
 

@@ -17,7 +17,7 @@ Ba năng lực, dưới `/api/v1/agent`, đều cần header `X-Agent-Api-Key`:
 
 | Gọi gì | Dùng khi |
 |---|---|
-| `GET /agent/tables` | Xem đọc được những bảng nào |
+| `GET /agent/tables` | Xem đọc được những bảng nào, và **chính sách từng trường**: kiểu dữ liệu, đọc được không, lọc được ở mức nào, sắp xếp/nhóm được không. Gọi nó trước khi đoán — nó nói thẳng trường nào lọc được, đỡ phải thử rồi nhận `FIELD_NOT_ALLOWED` |
 | `GET /agent/tables/:table/rows?limit=&cursor=` | Đọc thô, phân trang theo con trỏ |
 | `POST /agent/query` | Lọc, sắp xếp, đếm, nhóm, tổng hợp — **dùng cái này là chính** |
 | `GET /agent/docs` · `GET /agent/docs/:slug` | Danh mục tài liệu và nội dung từng file |
