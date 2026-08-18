@@ -2,6 +2,7 @@ import { Prop, SchemaFactory } from '@nestjs/mongoose';
 import { assertSameType, DatabaseEntity, DatabaseEntityAbstract } from 'core';
 import type { HydratedDocument } from 'mongoose';
 import type { Factory } from 'shared';
+import { FACTORY_FLOW_TYPES, FactoryFlowType } from 'shared';
 
 @DatabaseEntity({ collection: 'factories' })
 export class FactoryEntity extends DatabaseEntityAbstract {
@@ -13,6 +14,15 @@ export class FactoryEntity extends DatabaseEntityAbstract {
 
   @Prop({ required: true, default: true })
   isActive: boolean;
+
+  /**
+   * Luồng fulfillment của xưởng. `merged` = luồng rút gọn (xưởng gỗ): In xong
+   * → Ép tự xong → QC; May vào xong → May ra tự xong → Đóng hàng. Xưởng cũ
+   * trong DB thiếu field này → coi như `standard` (cache merged-flow chỉ nhặt
+   * đúng giá trị 'merged').
+   */
+  @Prop({ type: String, required: true, default: FactoryFlowType.Standard, enum: FACTORY_FLOW_TYPES })
+  flowType: FactoryFlowType;
 }
 
 assertSameType<Factory, FactoryEntity>();

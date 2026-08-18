@@ -43,6 +43,16 @@ export class ProductCategoryService implements OnModuleInit {
     return category;
   }
 
+  /** Khớp label từ file import với `name` hoặc `shortName` — exact, case-insensitive. */
+  async findByLabel(label: string) {
+    const cleaned = label.trim();
+    if (!cleaned) return null;
+    const escaped = cleaned.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+    return this.productCategoryRepository.findOne({
+      $or: [{ name: { $regex: `^${escaped}$`, $options: 'i' } }, { shortName: cleaned.toUpperCase() }],
+    });
+  }
+
   async createProductCategory(dto: CreateProductCategoryDto) {
     const existing = await this.productCategoryRepository.findOne({ shortName: dto.shortName.toUpperCase() });
     if (existing) throw new BadRequestException('ProductCategory shortName already exists');

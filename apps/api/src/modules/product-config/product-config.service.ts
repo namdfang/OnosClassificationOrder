@@ -11,8 +11,11 @@ import type {
   CreateProductConfigDto,
   GetProductConfigsDto,
   GetProductConfigsResDto,
+  ImportFullProductsDto,
+  ImportFullProductsResDto,
   ImportProductConfigDto,
   ImportProductConfigResDto,
+  ProductVariation,
   UnmatchedOrderType,
   UpdateProductConfigDto,
 } from 'shared';
@@ -559,6 +562,121 @@ export class ProductConfigService implements OnModuleInit {
     }
 
     return { success: true, data: { imported, updated, skipped } };
+  }
+
+  /**
+   * Import SẢN PHẨM HOÀN CHỈNH từ file xlsx (catalog + biến thể) — xem doc
+   * contract ở `ImportFullProductZod` (shared). Khác `importProductConfigs`
+   * (6 cột config): nhận đủ catalog + `variations[]`, resolve thêm Danh mục /
+   * Collection. Upsert theo `fullName`; chỉ ghi field CÓ trong payload;
+   * variations merge theo SKU (không xóa biến thể cũ ngoài file).
+   */
+  async importFullProducts(dto: ImportFullProductsDto): Promise<ImportFullProductsResDto> {
+    const skipped: Array<{ product: string; reason: string }> = [];
+    const warnings: Array<{ product: string; reason: string }> = [];
+    let imported = 0;
+    let updated = 0;
+
+    /** Bỏ key undefined để merge không ghi đè giá trị cũ bằng rỗng. */
+    const defined = <T extends Record<string, unknown>>(obj: T): Partial<T> =>
+      Object.fromEntries(Object.entries(obj).filter(([, v]) => v !== undefined)) as Partial<T>;
+
+    for (const p of dto.products) {
+      const fullName = p.fullName.trim();
+
+      // Xưởng sai là hỏng routing đơn → skip cả sản phẩm (khớp hành vi import cũ).
+      let factoryId: string | undefined;
+      if (p.factoryLabel?.trim()) {
+        const factory = await this.factoryService.findByLabel(p.factoryLabel);
+        if (!factory) {
+          skipped.push({ product: fullName, reason: `Xưởng '${p.factoryLabel}' không khớp danh sách xưởng` });
+          continue;
+        }
+        factoryId = String(factory._id);
+      }
+      // Phòng/Danh mục/Collection sai chỉ mất field đó → warning, vẫn import.
+      let machineTypeId: string | undefined;
+      if (p.departmentLabel?.trim()) {
+        const machineType = await this.machineTypeService.findByLabel(p.departmentLabel);
+        if (machineType) machineTypeId = String(machineType._id);
+        else warnings.push({ product: fullName, reason: `Phòng '${p.departmentLabel}' không khớp Loại máy — bỏ qua` });
+      }
+      let productCategoryId: string | undefined;
+      if (p.categoryLabel?.trim()) {
+        const category = await this.productCategoryService.findByLabel(p.categoryLabel);
+        if (category) productCategoryId = String(category._id);
+        else warnings.push({ product: fullName, reason: `Danh mục '${p.categoryLabel}' chưa tồn tại — bỏ qua` });
+      }
+      const collectionIds: string[] = [];
+      for (const label of p.collectionLabels ?? []) {
+        const collection = await this.collectionService.findByLabel(label);
+        if (collection) collectionIds.push(String(collection._id));
+        else warnings.push({ product: fullName, reason: `Collection '${label}' chưa tồn tại — bỏ qua` });
+      }
+
+      const patch: Record<string, unknown> = defined({
+        printMethod: p.printMethod,
+        mockup: p.mockup,
+        images: p.images,
+        sizeChartUrl: p.sizeChartUrl,
+        description: p.description,
+        shortDescription: p.shortDescription,
+        itemSpecifics: p.itemSpecifics,
+        maxProductionTime: p.maxProductionTime,
+        maxShippingTime: p.maxShippingTime,
+        weight: p.weight,
+        width: p.width,
+        height: p.height,
+        length: p.length,
+        factoryId,
+        machineTypeId,
+        productCategoryId,
+        ...(collectionIds.length > 0 ? { collectionIds } : {}),
+        ...(p.shortName?.trim() ? { shortName: p.shortName.trim().toUpperCase() } : {}),
+      });
+
+      const fileVariations = (p.variations ?? []).map((v) => ({ ...v, sku: v.sku.trim().toUpperCase() }));
+
+      try {
+        const existing = await this.productConfigRepository.findOne({ fullName });
+        if (existing) {
+          if (fileVariations.length > 0) {
+            // Merge theo SKU: biến thể cũ ngoài file GIỮ NGUYÊN, SKU trùng thì
+            // update field có dữ liệu, SKU mới append.
+            const merged: ProductVariation[] = (existing.variations ?? []).map((v) =>
+              JSON.parse(JSON.stringify(v)),
+            );
+            for (const v of fileVariations) {
+              const idx = merged.findIndex((m) => m.sku === v.sku);
+              if (idx >= 0) merged[idx] = { ...merged[idx], ...defined(v) } as ProductVariation;
+              else merged.push(v);
+            }
+            patch.variations = merged;
+          }
+          await this.productConfigRepository.findOneAndUpdate({ _id: existing._id }, patch);
+          updated++;
+        } else {
+          await this.productConfigRepository.create({
+            fullName,
+            shortName: (p.shortName?.trim() || fullName.slice(0, 60)).toUpperCase(),
+            // File full không có cột Máy/Tool → sản phẩm mới mặc định KHÔNG tool
+            // (cấu hình tool bổ sung qua file SKU cũ hoặc trang chi tiết).
+            toolResult: TOOL_RESULT_NONE,
+            ...patch,
+            ...(fileVariations.length > 0 ? { variations: fileVariations } : {}),
+          });
+          imported++;
+        }
+      } catch (err) {
+        if (isDuplicateVariationSkuError(err)) {
+          skipped.push({ product: fullName, reason: 'SKU biến thể đã tồn tại ở sản phẩm khác' });
+          continue;
+        }
+        throw err;
+      }
+    }
+
+    return { success: true, data: { imported, updated, skipped, warnings } };
   }
 
   /**

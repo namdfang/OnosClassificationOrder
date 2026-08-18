@@ -90,7 +90,9 @@
       "crawling": "Đang crawl…",
       "progress": "Đã quét {{done}} — còn {{remaining}}",
       "done": "Xong: cập nhật {{updated}}/{{processed}} sản phẩm"
-    }
+    },
+    "importFullButton": "Import sản phẩm từ file",
+    "importFullTitle": "Import sản phẩm HOÀN CHỈNH (catalog + biến thể/giá) từ file xlsx — sản phẩm đã có sẽ được cập nhật field có dữ liệu"
   },
   "categoryTab": {
     "title": "Danh mục sản phẩm",
@@ -126,13 +128,16 @@
       "shortName": "Viết tắt",
       "status": "Trạng thái",
       "active": "Hoạt động",
-      "inactive": "Tắt"
+      "inactive": "Tắt",
+      "mergedFlowBadge": "Rút gọn"
     },
     "form": {
       "nameShortNameRequired": "Tên và viết tắt là bắt buộc",
       "createSuccess": "Đã tạo",
       "updateSuccess": "Đã cập nhật",
-      "active": "Hoạt động"
+      "active": "Hoạt động",
+      "mergedFlow": "Luồng rút gọn (xưởng gỗ)",
+      "mergedFlowHint": "In xong → Ép tự xong; May vào xong → May ra tự xong. Chỉ bật cho xưởng gỗ."
     },
     "factory": {
       "title": "Xưởng",
@@ -513,5 +518,25 @@
     "invalidRows": "{{count}} dòng thiếu Xưởng/Phòng đã bị bỏ qua.",
     "autoShortBadge": "tự sinh",
     "autoShortTitle": "File thiếu Tên viết tắt — hệ thống tự lấy tên sản phẩm làm tên viết tắt, sửa lại sau ở trang Products nếu cần"
+  },
+  "importFullDialog": {
+    "title": "Import sản phẩm hoàn chỉnh từ file",
+    "description": "Chọn file Excel (.xlsx) theo mẫu sản phẩm hoàn chỉnh: mỗi sản phẩm 1 dòng (kèm cột catalog: Danh mục, Collection, Mockup URL, Mô tả, Thông số...), biến thể trải nhiều dòng bên dưới (SKU, Màu, Size, giá). Sản phẩm ĐÃ có sẽ được CẬP NHẬT — chỉ field có dữ liệu trong file mới ghi đè, biến thể merge theo SKU.",
+    "chooseFile": "Chọn file",
+    "parseError": "Không đọc được sản phẩm nào — kiểm tra file có cột \"Tên SP\" và cột SKU/Danh mục/Mockup",
+    "parsed": "Đọc được {{total}} sản phẩm ({{variations}} biến thể).",
+    "skippedRows": "{{count}} dòng bị bỏ qua (không có Tên SP lẫn SKU).",
+    "selectAll": "Chọn tất cả",
+    "table": {
+      "name": "Tên sản phẩm",
+      "factory": "Xưởng",
+      "category": "Danh mục",
+      "variations": "Biến thể",
+      "action": "Hành động"
+    },
+    "updateBadge": "Cập nhật",
+    "newBadge": "Tạo mới",
+    "importSuccess": "Đã tạo {{imported}}, cập nhật {{updated}} sản phẩm ({{skippedCount}} bị bỏ qua)",
+    "importButton": "Import {{count}} sản phẩm"
   }
 }

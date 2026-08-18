@@ -32,6 +32,8 @@ import {
   GetUnmatchedOrderTypesResDto,
   ImportFromOnospodDto,
   ImportFromOnospodResDto,
+  ImportFullProductsDto,
+  ImportFullProductsResDto,
   ImportProductConfigDto,
   ImportProductConfigResDto,
   ResDto,
@@ -134,6 +136,15 @@ export class ProductConfigController {
   @ApiOkResponse({ type: ImportProductConfigResDto })
   async importProductConfigs(@Body() dto: ImportProductConfigDto): Promise<ImportProductConfigResDto> {
     return this.productConfigService.importProductConfigs(dto);
+  }
+
+  @Post('import-full')
+  @Auth([RoleType.Admin, RoleType.Manager])
+  @ApiOperation({ summary: 'Bulk import FULL products (catalog + variations) from parsed Excel rows' })
+  @HttpCode(HttpStatus.OK)
+  @ApiOkResponse({ type: ImportFullProductsResDto })
+  async importFullProducts(@Body() dto: ImportFullProductsDto): Promise<ImportFullProductsResDto> {
+    return this.productConfigService.importFullProducts(dto);
   }
 
   @Post('import-from-onospod')

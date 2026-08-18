@@ -27,6 +27,16 @@ export class CollectionService {
     return collection;
   }
 
+  /** Khớp label từ file import với `name` hoặc `shortName` — exact, case-insensitive. */
+  async findByLabel(label: string) {
+    const cleaned = label.trim();
+    if (!cleaned) return null;
+    const escaped = cleaned.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+    return this.collectionRepository.findOne({
+      $or: [{ name: { $regex: `^${escaped}$`, $options: 'i' } }, { shortName: cleaned.toUpperCase() }],
+    });
+  }
+
   async createCollection(dto: CreateCollectionDto) {
     const existing = await this.collectionRepository.findOne({ shortName: dto.shortName.toUpperCase() });
     if (existing) throw new BadRequestException('Collection shortName already exists');
