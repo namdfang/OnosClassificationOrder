@@ -14,7 +14,7 @@ Hệ thống loại một số nhóm đơn ra khỏi thống kê theo những qu
 Đơn có `cancelledAt` khác rỗng bị loại khỏi **mọi công đoạn và mọi thống kê**. Nó không nằm trong bất kỳ hàng chờ nào, không tính vào năng suất, không tính vào tồn.
 
 ```jsonc
-{ "field": "cancelledAt", "op": "exists", "value": false }
+{ "cancelledAt": { "$exists": false } }
 ```
 
 ### 1.2 Đơn chưa gán xưởng — `factoryId` rỗng
@@ -22,7 +22,7 @@ Hệ thống loại một số nhóm đơn ra khỏi thống kê theo những qu
 Đơn chưa map được xưởng bị loại **mặc định** khỏi mọi danh sách và mọi API nội bộ; nhân viên chỉ xem được qua một menu riêng. Nếu bạn đếm cả nhóm này, số của bạn sẽ **lớn hơn** số trên màn hình.
 
 ```jsonc
-{ "field": "factoryId", "op": "exists", "value": true }
+{ "factoryId": { "$exists": true } }
 ```
 
 ### 1.3 Xưởng ngoài luồng sản xuất
@@ -32,17 +32,17 @@ Hệ thống loại một số nhóm đơn ra khỏi thống kê theo những qu
 Cách áp: tra `factories` lấy `_id` của xưởng có `shortName = "US"`, rồi loại nó ra:
 
 ```jsonc
-{ "field": "factoryId", "op": "nin", "value": ["<_id của xưởng US>"] }
+{ "factoryId": { "$nin": ["<_id của xưởng US>"] } }
 ```
 
 **Ba điều kiện trên gần như luôn phải đi cùng nhau.** Mẫu chuẩn khi đếm bất cứ thứ gì trên `orders`:
 
 ```jsonc
 {
-  "and": [
-    { "field": "cancelledAt", "op": "exists", "value": false },
-    { "field": "factoryId", "op": "exists", "value": true },
-    { "field": "factoryId", "op": "nin", "value": ["<_id xưởng US>"] }
+  "$and": [
+    { "cancelledAt": { "$exists": false } },
+    { "factoryId": { "$exists": true } },
+    { "factoryId": { "$nin": ["<_id xưởng US>"] } }
   ]
 }
 ```
@@ -73,7 +73,7 @@ Email và điện thoại khách **lọc được** (bạn đã biết giá tr�
 | `orders.type` | Là **tên** sản phẩm dạng chữ, khớp với `productConfigs.fullName`, không phải id |
 | `orders.toolResult`, `productionError`, `errorFile` | Là **mã**, không phải chữ đọc được. Phải tra `workshopConfigs` theo `code` để lấy `name` |
 | `orderLogs` không có `before`/`after` | Không phải lỗi: giá trị cũ/mới chỉ được trả với các trường tình trạng sản xuất nằm trong danh sách cho phép. Trường khác trả kèm `valueOmitted: true` |
-| Ghi chú gõ tay | Email và số điện thoại trong ghi chú đã bị thay bằng `[email đã ẩn]` / `[số điện thoại đã ẩn]`. Đó là kết quả đúng, không phải dữ liệu hỏng |
+| Ghi chú gõ tay | Đọc được **nguyên văn**, kể cả email và số điện thoại nhân viên gõ trong đó. Nhưng **không lọc được** theo nội dung ghi chú, và **không đọc lại nguyên văn cho khách** — ghi chú là văn bản nội bộ, có thể chứa thông tin của khách hàng khác. Xem [`WhatYouCannotSee.md`](WhatYouCannotSee.md) §2 |
 
 ---
 

@@ -165,7 +165,16 @@ export type AgentAggregate = z.infer<typeof AgentAggregateZod>;
 export const AgentQueryZod = z
   .object({
     table: z.string().min(1).max(60),
-    filter: AgentFilterNodeZod.optional(),
+    /**
+     * Dieu kien loc dang MongoDB (`API-8` thay han DSL cay cu).
+     *
+     * KHONG kiem hinh dang o day: bo kiem that nam o `mongo-filter.ts` phia BE,
+     * noi co danh sach trang toan tu VA chinh sach truong. Zod chi biet hinh
+     * dang, khong biet truong nao duoc loc o muc nao — de Zod tu choi truoc thi
+     * ban goi nhan 422 cua tang validate thay vi ma loi cua module, ma bang 8 ma
+     * loi la hop dong voi agent.
+     */
+    filter: z.unknown().optional(),
     select: AgentSelectZod.optional(),
     aggregate: AgentAggregateZod.optional(),
   })

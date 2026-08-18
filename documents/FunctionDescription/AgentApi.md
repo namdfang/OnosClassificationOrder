@@ -58,14 +58,14 @@ Guard chạy **trước** mọi validate tham số. Nếu làm ngược lại, m
 
 Tất cả yêu cầu header `X-Agent-Api-Key`, khớp env `AGENT_API_KEY`.
 
-**`filter` trên endpoint đọc bảng** (`API-6`) là cây điều kiện `AgentFilterNode` **dạng chuỗi JSON** —
-`GET` không có thân yêu cầu nên DSL lồng phải đi qua query string. Nó **dùng lại đúng** `buildFilter`
-và `assertNoOperatorKeys` của `POST /query`, không có bộ luật thứ hai: hai đường lọc với hai bộ luật là
-cách chắc chắn để một ngày chúng lệch nhau, và đường lỏng hơn sẽ thành lỗ hổng. Chính sách trường giữ
-nguyên hiệu lực — `filter: 'none'` vẫn không lọc được, `filter: 'eq'` vẫn chỉ so bằng.
+**`filter` trên endpoint đọc bảng** (`API-6`) là điều kiện **dạng chuỗi JSON** — `GET` không có thân
+yêu cầu nên nó phải đi qua query string. Nó **dùng lại đúng** bộ dịch của `POST /query`, không có bộ
+luật thứ hai: hai đường lọc với hai bộ luật là cách chắc chắn để một ngày chúng lệch nhau, và đường
+lỏng hơn sẽ thành lỗ hổng. Chính sách trường giữ nguyên hiệu lực — `filter: 'none'` vẫn không lọc được,
+`filter: 'eq'` vẫn chỉ so bằng.
 
-JSON hỏng hoặc hình dạng sai trả `400 INVALID_QUERY` chứ không rơi vào 422 của tầng validate: bảng mã
-lỗi là hợp đồng với agent. Điều kiện của bên gọi và con trỏ phân trang ghép bằng `$and`, không trộn
+JSON hỏng hoặc toán tử ngoài danh sách trắng trả `400 INVALID_QUERY` chứ không rơi vào 422 của tầng
+validate: bảng mã lỗi là hợp đồng với agent. Điều kiện của bên gọi và con trỏ phân trang ghép bằng `$and`, không trộn
 nông — điều kiện chạm `_id` mà đè mất con trỏ thì trang sau sẽ lặp lại trang trước.
 
 ### DSL truy vấn
@@ -73,13 +73,37 @@ nông — điều kiện chạm `_id` mà đè mất con trỏ thì trang sau s�
 ```ts
 {
   table: string;
-  filter?: AgentFilterNode;              // cây and/or/not, sâu tối đa 5 mức
+  filter?: object;                       // cú pháp MongoDB, sâu tối đa 5 mức
   select?: { kind: 'rows'; fields?: string[]; sort?: AgentSort[]; limit?: number; offset?: number };
   aggregate?: { groupBy?: string[]; metrics: AgentMetric[]; sort?: AgentSort[]; limit?: number };
 }
 ```
 
-`select` và `aggregate` loại trừ nhau. Toán tử: `eq · ne · in · nin · gt · gte · lt · lte · between · exists · startsWith`. Metric: `count · sum · avg · min · max`.
+`select` và `aggregate` loại trừ nhau. Metric: `count · sum · avg · min · max`.
+
+**Điều kiện lọc dùng cú pháp MongoDB** (`API-8` thay hẳn DSL cây `{field, op, value}` cũ — cú pháp cũ nay bị từ chối kèm thông điệp chỉ sang dạng mới, không im lặng trả kết quả sai). Ba dạng:
+
+```jsonc
+{ "status": "active" }                          // rút gọn, ngầm hiểu $eq
+{ "productionId": { "$eq": "SQ-01964-03971" } } // một toán tử
+{ "quantity": { "$gte": 1, "$lte": 9 } }        // nhiều toán tử trên cùng trường
+```
+
+Danh sách trắng toán tử — **ngoài bảng này là bị từ chối**:
+
+| Nhóm | Toán tử |
+|---|---|
+| So sánh | `$eq` `$ne` `$gt` `$gte` `$lt` `$lte` |
+| Tập hợp | `$in` `$nin` (mảng nguyên thuỷ, không rỗng) |
+| Tồn tại | `$exists` (boolean) |
+| Ghép | `$and` `$or` `$nor` `$not` |
+| Tiền tố | `$startsWith` — xem dưới |
+
+Không có `$between` (MongoDB không có); khoảng giá trị viết bằng dạng nhiều toán tử. Mất cú pháp, **không** mất năng lực.
+
+**`$startsWith` là tên không tồn tại trong MongoDB, và đó là chủ ý.** Bên gọi truyền **chuỗi thường**; server escape rồi tự neo `^`, nên không có đường nào để một mẫu biểu thức đi vào và không có ReDoS. `$regex` bị từ chối như mọi toán tử ngoài danh sách trắng. Vì sao không mượn luôn tên `$regex` cho năng lực này: một toán tử mang tên chuẩn MongoDB nhưng ngữ nghĩa khác là **bẫy im lặng** — agent quen Mongo sẽ gửi `".*abc.*"` rồi nhận kết quả rỗng mà không hiểu vì sao. Tên lạ buộc nó tra tài liệu.
+
+**Cú pháp đổi, quyền KHÔNG đổi.** Mỗi cặp (trường, toán tử) vẫn đi qua đúng bộ kiểm cũ: trường `filter: 'none'` không lọc được, trường `filter: 'eq'` chỉ nhận `$eq/$ne/$in/$nin`. Dạng rút gọn tính là `$eq` **trước khi** kiểm mức lọc, nên `{ "userEmail": "a@b.c" }` qua được còn `{ "userEmail": { "$gt": "a" } }` thì không — hai câu chỉ khác nhau một lớp object.
 
 **Không nhận pipeline aggregation thô.** Lý do: tên trường đầu ra khi đó do chính bên gọi đặt (`$project { x: "$shippingAddress.email" }`), nên không có cách nào lọc đầu ra theo tên trường.
 
@@ -93,7 +117,7 @@ type AgentFieldPolicy = {
   sortable: boolean;
   groupable: boolean;
   aggregatable?: boolean;
-  freeText?: boolean;                 // che theo mẫu trước khi ra; BẮT BUỘC filter='none'
+  freeText?: boolean;                 // văn bản gõ tay: đọc nguyên văn nhưng BẮT BUỘC filter='none'
 };
 ```
 
@@ -115,7 +139,7 @@ Index `{ at: -1 }` cộng TTL 90 ngày, tạo ở `AgentAuditService.onModuleIni
 | 403 | `TABLE_NOT_ALLOWED` | Bảng ngoài registry. Dùng chung thân lỗi cho bảng cấm và bảng không tồn tại |
 | 400 | `FIELD_NOT_ALLOWED` | Trường không đọc/lọc/nhóm/sắp xếp được |
 | 400 | `WRITE_NOT_SUPPORTED` | Truy vấn mang ý ghi |
-| 400 | `INVALID_QUERY` | Khoá bắt đầu bằng `$` hoặc chứa dấu chấm, cú pháp sai |
+| 400 | `INVALID_QUERY` | Toán tử ngoài danh sách trắng (kể cả nhóm cấm), giá trị không phải nguyên thuỷ, cây quá sâu, JSON hỏng, hoặc **cú pháp lọc CŨ** |
 | 408 | `QUERY_TIMEOUT` | Vượt `maxTimeMS` |
 | 404 | `DOC_NOT_FOUND` | Slug không có; trả kèm danh mục đang có |
 | 503 | `DOCS_UNAVAILABLE` | Không tìm thấy thư mục tài liệu lúc boot |
@@ -148,7 +172,7 @@ Không nhánh code nào nhận tên collection từ bên gọi rồi truyền xu
 
 ### 5.2 Ba lớp chặn ghi và chạy mã
 
-1. `AgentQueryService.assertNoOperatorKeys()` — quét sâu payload, từ chối mọi khoá bắt đầu bằng `$` hoặc chứa dấu chấm. Chặn `$where`, `$function`, `$accumulator`, `$merge`, `$out`.
+1. `AgentQueryService.assertNoOperatorKeysOutsideFilter()` — quét sâu payload **trừ nhánh `filter`**, từ chối mọi khoá bắt đầu bằng `$` hoặc chứa dấu chấm. Nhánh `filter` có bộ kiểm riêng với danh sách trắng toán tử (`mongo-filter.ts`), chặt hơn vì nó kiểm cả chính sách trường. Hai **hàm riêng** chứ không phải một hàm mang cờ: một hàm có cờ "cho phép `$`" sẽ có ngày bị gọi với cờ bật ở chỗ không nên, mà không gì trong kiểu dữ liệu ngăn được (`API-8`). Chặn `$where`, `$function`, `$accumulator`, `$merge`, `$out`.
 2. Zod `.strict()` ở mọi cấp của `AgentQueryZod`.
 3. `AgentApiRepository` **chỉ phơi ra** `find`, `aggregate`, `insertLog`, `ensureLogTtlIndex`. Không service nào của module chạm được `save`/`updateOne`/`deleteOne` — BR-3 được giữ bằng hình dạng của lớp, không bằng kỷ luật người viết.
 
@@ -223,7 +247,7 @@ Văn bản tự do vẫn **`filter: 'none'`**, và lý do nay khác trước: kh
 ra đơn của một người cụ thể. Đọc được nguyên văn một ghi chú đã cầm trên tay là một chuyện; *tìm ra*
 đơn nào chứa một số điện thoại là chuyện nặng hơn hẳn. Bất biến I6 giữ nguyên với lý do mới này.
 
-`mask-free-text.ts` **vẫn còn và vẫn được dùng** — nhưng chỉ ở §5.5 cho `before`/`after` của nhật ký,
+`mask-free-text.ts` **vẫn còn** — nhưng chỉ ở §5.5 cho `before`/`after` của nhật ký,
 là cơ chế riêng với danh sách trắng riêng. Ca kiểm quan trọng nhất của nó không đổi: mã sản xuất dạng
 `XQ-91783-27005` **không** được che nhầm thành số điện thoại.
 

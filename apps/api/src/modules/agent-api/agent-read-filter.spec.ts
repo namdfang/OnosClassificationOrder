@@ -39,7 +39,7 @@ beforeEach(() => {
 
 describe('AC-01: lọc theo trường có mức lọc đầy đủ', () => {
   it('điều kiện đơn được dựng đúng và gửi xuống DB', async () => {
-    await service.readRows('orders', 10, undefined, ['productionId'], JSON.stringify({ field: 'type', op: 'eq', value: 'Hoodie' }));
+    await service.readRows('orders', 10, undefined, ['productionId'], JSON.stringify({ type: 'Hoodie' }));
 
     expect(calls[0].filter).toEqual({ type: 'Hoodie' });
   });
@@ -50,7 +50,7 @@ describe('AC-01: lọc theo trường có mức lọc đầy đủ', () => {
       10,
       undefined,
       undefined,
-      JSON.stringify({ and: [{ field: 'type', op: 'eq', value: 'Hoodie' }, { field: 'quantity', op: 'gte', value: 5 }] }),
+      JSON.stringify({ $and: [{ type: 'Hoodie' }, { quantity: { $gte: 5 } }] }),
     );
 
     expect(calls[0].filter).toEqual({ $and: [{ type: 'Hoodie' }, { quantity: { $gte: 5 } }] });
@@ -61,7 +61,7 @@ describe('AC-02: chính sách trường KHÔNG bị nới ở đường mới', 
   it('trường văn bản tự do (filter: none) vẫn không lọc được', async () => {
     expect(
       await codeOf(() =>
-        service.readRows('orders', 10, undefined, undefined, JSON.stringify({ field: 'note', op: 'eq', value: 'x' })),
+        service.readRows('orders', 10, undefined, undefined, JSON.stringify({ note: 'x' })),
       ),
     ).toBe('FIELD_NOT_ALLOWED');
   });
@@ -74,7 +74,7 @@ describe('AC-02: chính sách trường KHÔNG bị nới ở đường mới', 
           10,
           undefined,
           undefined,
-          JSON.stringify({ field: 'userEmail', op: 'startsWith', value: 'a' }),
+          JSON.stringify({ userEmail: { $startsWith: 'a' } }),
         ),
       ),
     ).toBe('FIELD_NOT_ALLOWED');
@@ -88,7 +88,7 @@ describe('AC-02: chính sách trường KHÔNG bị nới ở đường mới', 
           10,
           undefined,
           undefined,
-          JSON.stringify({ field: 'variations.cost', op: 'gt', value: 1 }),
+          JSON.stringify({ 'variations.cost': { $gt: 1 } }),
         ),
       ),
     ).toBe('FIELD_NOT_ALLOWED');
@@ -96,7 +96,7 @@ describe('AC-02: chính sách trường KHÔNG bị nới ở đường mới', 
 
   it('không lời gọi DB nào khi điều kiện bị từ chối', async () => {
     await codeOf(() =>
-      service.readRows('orders', 10, undefined, undefined, JSON.stringify({ field: 'note', op: 'eq', value: 'x' })),
+      service.readRows('orders', 10, undefined, undefined, JSON.stringify({ note: 'x' })),
     );
 
     expect(calls).toEqual([]);
@@ -105,12 +105,28 @@ describe('AC-02: chính sách trường KHÔNG bị nới ở đường mới', 
 
 describe('chặn ghi và chạy mã ở đường mới, y như POST /query', () => {
   it.each([
-    ['khoá toán tử', JSON.stringify({ $where: '1 == 1' })],
-    ['khoá có dấu chấm', JSON.stringify({ 'a.b': 1 })],
+    ['toán tử chạy mã', JSON.stringify({ $where: '1 == 1' })],
+    ['toán tử ngoài danh sách trắng', JSON.stringify({ productionId: { $regex: '.*' } })],
     ['JSON hỏng', '{khong-phai-json'],
-    ['hình dạng không phải cây điều kiện', JSON.stringify({ bừa: true })],
+    ['cú pháp CŨ', JSON.stringify({ field: 'type', op: 'eq', value: 'Hoodie' })],
   ])('%s bị từ chối bằng INVALID_QUERY, không phải 422 của tầng validate', async (_label, raw) => {
     expect(await codeOf(() => service.readRows('orders', 10, undefined, undefined, raw))).toBe('INVALID_QUERY');
+  });
+
+  // `API-8` đổi MÃ LỖI của hai ca này, và mã mới chính xác hơn. Trước đây khoá
+  // có dấu chấm bị chặn thẳng vì DSL cũ không có trường lồng nào; nay
+  // `variations.sku` là tên trường hợp lệ, nên dấu chấm không còn là dấu hiệu
+  // tấn công — `a.b` chỉ đơn giản là một trường KHÔNG TỒN TẠI. Cùng lẽ đó,
+  // `{bừa: true}` nay là điều kiện trên một trường không có thật.
+  //
+  // Cả hai vẫn bị TỪ CHỐI; chỉ có lời giải thích gửi cho bên gọi là đúng hơn.
+  it.each([
+    ['khoá có dấu chấm không phải trường thật', JSON.stringify({ 'a.b': 1 })],
+    ['tên trường không tồn tại', JSON.stringify({ bừa: true })],
+  ])('%s bị từ chối bằng FIELD_NOT_ALLOWED', async (_label, raw) => {
+    expect(await codeOf(() => service.readRows('orders', 10, undefined, undefined, raw))).toBe(
+      'FIELD_NOT_ALLOWED',
+    );
   });
 });
 
@@ -121,7 +137,7 @@ describe('AC-03: phân trang theo con trỏ vẫn đúng khi có lọc', () => {
       10,
       '000000000000000000000001',
       undefined,
-      JSON.stringify({ field: 'type', op: 'eq', value: 'Hoodie' }),
+      JSON.stringify({ type: 'Hoodie' }),
     );
 
     expect(calls[0].filter).toEqual({
@@ -135,7 +151,7 @@ describe('AC-03: phân trang theo con trỏ vẫn đúng khi có lọc', () => {
       10,
       '000000000000000000000005',
       undefined,
-      JSON.stringify({ field: '_id', op: 'ne', value: '000000000000000000000009' }),
+      JSON.stringify({ _id: { $ne: '000000000000000000000009' } }),
     );
 
     expect(calls[0].filter).toEqual({

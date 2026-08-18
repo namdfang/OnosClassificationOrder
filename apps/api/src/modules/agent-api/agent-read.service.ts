@@ -1,6 +1,5 @@
 import { Injectable } from '@nestjs/common';
 import type { AgentRowsPayload, AgentTableSummary } from 'shared';
-import { AgentFilterNodeZod } from 'shared';
 
 import { ApiConfigService } from '@/shared/services/api-config.service';
 
@@ -93,11 +92,16 @@ export class AgentReadService {
   }
 
   /**
-   * `filter` tới đây dưới dạng chuỗi JSON vì GET không có thân yêu cầu. Ba bước
-   * kiểm chạy đúng thứ tự của `POST /query`, không bớt bước nào:
-   * chặn khoá toán tử → kiểm hình dạng DSL → dựng điều kiện theo chính sách
-   * trường. Trường `filter: 'none'` vẫn không lọc được, `filter: 'eq'` vẫn chỉ
-   * so bằng — người dùng đã bác việc nới mức lọc (`API-6` change note §3).
+   * `filter` tới đây dưới dạng chuỗi JSON vì GET không có thân yêu cầu, rồi đi
+   * qua **đúng cùng một bộ dịch** với `POST /query` (`API-8`). Hai đường lọc với
+   * hai bộ luật là cách chắc chắn để một ngày chúng lệch nhau, và đường lỏng hơn
+   * thành lỗ hổng.
+   *
+   * KHÔNG còn gọi `assertNoOperatorKeys` ở đây: từ `API-8`, `$` trong `filter`
+   * là cú pháp hợp lệ. Việc kiểm do danh sách trắng toán tử trong
+   * `mongo-filter.ts` đảm nhiệm — chặt hơn hẳn phép quét `$`, vì nó còn kiểm cả
+   * chính sách trường. Trường `filter: 'none'` vẫn không lọc được,
+   * `filter: 'eq'` vẫn chỉ so bằng.
    */
   private parseFilter(spec: AgentTableSpec, filterJson?: string): Record<string, unknown> {
     if (!filterJson) return {};
@@ -109,15 +113,6 @@ export class AgentReadService {
       throw invalidQuery('Query parameter `filter` must be valid JSON.');
     }
 
-    // Chặn `$where`/`$function`/khoá có dấu chấm TRƯỚC khi Zod chạm tới, y như
-    // `POST /query`: lớp này không được phép phụ thuộc vào thứ tự của lớp kia.
-    this.queries.assertNoOperatorKeys(parsed);
-
-    const result = AgentFilterNodeZod.safeParse(parsed);
-    if (!result.success) {
-      throw invalidQuery(`Query parameter \`filter\` is not a valid filter expression. ${result.error.message}`);
-    }
-
-    return this.queries.buildFilter(spec, result.data);
+    return this.queries.buildFilter(spec, parsed);
   }
 }

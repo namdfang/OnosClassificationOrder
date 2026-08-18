@@ -67,7 +67,7 @@ describe('AC-09 — giá vốn bị cấm ở CẢ BỐN vị trí (BR-4a §2)',
   });
 
   it.each(costFields)('%s không lọc được — cho lọc là dựng sẵn máy đoán nhị phân', (field) => {
-    expect(codeOf(() => service.buildFilter(products, { field, op: 'gt', value: 10 }))).toBe(
+    expect(codeOf(() => service.buildFilter(products, { [field]: { $gt: 10 } }))).toBe(
       'FIELD_NOT_ALLOWED',
     );
   });
@@ -85,7 +85,7 @@ describe('AC-09 — giá vốn bị cấm ở CẢ BỐN vị trí (BR-4a §2)',
 
 describe('AC-10/11 — liên hệ khách: LỌC được, KHÔNG đọc được', () => {
   it('lọc bằng đúng email tìm ra đơn (AC-11)', () => {
-    expect(service.buildFilter(orders, { field: 'userEmail', op: 'eq', value: 'a@b.com' })).toEqual({
+    expect(service.buildFilter(orders, { userEmail: 'a@b.com' })).toEqual({
       userEmail: 'a@b.com',
     });
   });
@@ -99,7 +99,7 @@ describe('AC-10/11 — liên hệ khách: LỌC được, KHÔNG đọc được
   });
 
   it('startsWith trên email bị chặn — đó là dò dần từng ký tự, không phải tra cứu', () => {
-    expect(codeOf(() => service.buildFilter(orders, { field: 'userEmail', op: 'startsWith', value: 'a' }))).toBe(
+    expect(codeOf(() => service.buildFilter(orders, { userEmail: { $startsWith: 'a' } }))).toBe(
       'FIELD_NOT_ALLOWED',
     );
   });
@@ -112,7 +112,7 @@ describe('AC-10/11 — liên hệ khách: LỌC được, KHÔNG đọc được
 
   it('khối địa chỉ giao KHÔNG lọc được, kể cả từng trường con (BA xác nhận ở design_review)', () => {
     for (const field of ['shippingAddress', 'shippingAddress.country', 'shippingAddress.email']) {
-      expect(codeOf(() => service.buildFilter(orders, { field, op: 'eq', value: 'VN' }))).toBe(
+      expect(codeOf(() => service.buildFilter(orders, { [field]: 'VN' }))).toBe(
         'FIELD_NOT_ALLOWED',
       );
     }
@@ -122,7 +122,7 @@ describe('AC-10/11 — liên hệ khách: LỌC được, KHÔNG đọc được
 describe('AC-16 — danh tính người thao tác không dùng được ở bất kỳ vị trí nào', () => {
   it.each(['assignee', 'designerRejections', 'fulfillmentTimeline'])('orders.%s bị chặn mọi hướng', (field) => {
     expect(codeOf(() => service.buildProjection(orders, [field]))).toBe('FIELD_NOT_ALLOWED');
-    expect(codeOf(() => service.buildFilter(orders, { field, op: 'eq', value: 'x' }))).toBe(
+    expect(codeOf(() => service.buildFilter(orders, { [field]: 'x' }))).toBe(
       'FIELD_NOT_ALLOWED',
     );
     expect(codeOf(() => service.buildSort(orders, [{ field, dir: 'asc' }]))).toBe('FIELD_NOT_ALLOWED');
@@ -140,10 +140,7 @@ describe('AC-16 — danh tính người thao tác không dùng được ở bấ
 describe('AC-07 — lọc, sắp xếp, tổng hợp hợp lệ vẫn chạy được', () => {
   it('dựng được điều kiện lồng and/or', () => {
     const filter = service.buildFilter(orders, {
-      and: [
-        { field: 'userSku', op: 'eq', value: 'ABC' },
-        { or: [{ field: 'designerStatus', op: 'eq', value: 'done' }, { field: 'quantity', op: 'gte', value: 5 }] },
-      ],
+      $and: [{ userSku: 'ABC' }, { $or: [{ designerStatus: 'done' }, { quantity: { $gte: 5 } }] }],
     });
     expect(filter).toEqual({
       $and: [{ userSku: 'ABC' }, { $or: [{ designerStatus: 'done' }, { quantity: { $gte: 5 } }] }],
@@ -151,10 +148,10 @@ describe('AC-07 — lọc, sắp xếp, tổng hợp hợp lệ vẫn chạy đ�
   });
 
   it('chuỗi ISO trên trường ngày được đổi thành Date, không so sánh chuỗi', () => {
+    // `API-8` bỏ `between` vì MongoDB không có nó. Khoảng giá trị nay viết bằng
+    // hai toán tử trên cùng một trường — mất cú pháp, KHÔNG mất năng lực.
     const filter = service.buildFilter(orders, {
-      field: 'inProductionAt',
-      op: 'between',
-      value: ['2026-08-01', '2026-08-18'],
+      inProductionAt: { $gte: '2026-08-01', $lte: '2026-08-18' },
     }) as { inProductionAt: { $gte: unknown; $lte: unknown } };
     expect(filter.inProductionAt.$gte).toBeInstanceOf(Date);
     expect(filter.inProductionAt.$lte).toBeInstanceOf(Date);
@@ -162,15 +159,13 @@ describe('AC-07 — lọc, sắp xếp, tổng hợp hợp lệ vẫn chạy đ�
 
   it('ngày sai định dạng bị từ chối thay vì lọc ra kết quả rỗng âm thầm', () => {
     expect(
-      codeOf(() => service.buildFilter(orders, { field: 'inProductionAt', op: 'gt', value: 'hôm qua' })),
+      codeOf(() => service.buildFilter(orders, { inProductionAt: { $gt: 'hôm qua' } })),
     ).toBe('INVALID_QUERY');
   });
 
   it('startsWith escape ký tự đặc biệt — giá trị không trở thành cú pháp regex', () => {
     const filter = service.buildFilter(orders, {
-      field: 'productionId',
-      op: 'startsWith',
-      value: 'XQ.(1',
+      productionId: { $startsWith: 'XQ.(1' },
     }) as { productionId: { $regex: string } };
     expect(filter.productionId.$regex).toBe('^XQ\\.\\(1');
   });
@@ -192,34 +187,22 @@ describe('AC-03 — trần lô', () => {
 
 describe('AC-14 — nhật ký không chứa dữ liệu bị che', () => {
   it('giá trị lọc trên trường không đọc được bị thay bằng <redacted>', () => {
-    expect(service.digest(orders, { field: 'userEmail', op: 'eq', value: 'khach@example.com' })).toEqual({
-      field: 'userEmail',
-      op: 'eq',
-      value: '<redacted>',
+    expect(service.digest(orders, { userEmail: 'khach@example.com' })).toEqual({
+      userEmail: '<redacted>',
     });
   });
 
   it('giá trị lọc trên trường đọc được vẫn ghi nguyên — nó không thuộc nhóm bị che', () => {
-    expect(service.digest(orders, { field: 'userSku', op: 'eq', value: 'ABC' })).toEqual({
-      field: 'userSku',
-      op: 'eq',
-      value: 'ABC',
-    });
+    expect(service.digest(orders, { userSku: 'ABC' })).toEqual({ userSku: 'ABC' });
   });
 
   it('che cả khi email nằm sâu trong cây điều kiện', () => {
     expect(
       service.digest(orders, {
-        and: [
-          { field: 'userEmail', op: 'eq', value: 'khach@example.com' },
-          { field: 'quantity', op: 'gt', value: 1 },
-        ],
+        $and: [{ userEmail: 'khach@example.com' }, { quantity: { $gt: 1 } }],
       }),
     ).toEqual({
-      and: [
-        { field: 'userEmail', op: 'eq', value: '<redacted>' },
-        { field: 'quantity', op: 'gt', value: 1 },
-      ],
+      $and: [{ userEmail: '<redacted>' }, { quantity: { $gt: 1 } }],
     });
   });
 });
@@ -235,7 +218,7 @@ describe('văn bản tự do: ĐỌC được nguyên văn nhưng KHÔNG lọc �
   // việc nới mức lọc ở `API-6`, và bỏ che KHÔNG kéo theo điều đó.
   it('lọc trên ghi chú vẫn bị chặn — cho lọc là cho quét dữ liệu theo thông tin liên hệ', () => {
     expect(
-      codeOf(() => service.buildFilter(orders, { field: 'toolResultNote', op: 'startsWith', value: 'a' })),
+      codeOf(() => service.buildFilter(orders, { toolResultNote: { $startsWith: 'a' } })),
     ).toBe('FIELD_NOT_ALLOWED');
   });
 

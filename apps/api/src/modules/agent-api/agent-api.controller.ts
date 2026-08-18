@@ -119,7 +119,7 @@ export class AgentApiController {
     let digest: unknown;
     try {
       // Lớp chặn thứ nhất của AC-06 — chạy trước cả khi tra bảng.
-      this.queries.assertNoOperatorKeys(body);
+      this.queries.assertNoOperatorKeysOutsideFilter(body);
 
       const spec = this.queries.spec(body.table);
       digest = this.queries.digest(spec, body.filter);

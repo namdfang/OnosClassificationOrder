@@ -2,10 +2,11 @@
 
 > Bảng nào dùng để trả lời câu hỏi gì, trường nào nghĩa là gì, và tra thế nào.
 >
-> Ba file đi kèm, đọc đủ cả bốn thì mới trả lời khách được:
+> Bốn file đi kèm, đọc đủ cả năm thì mới trả lời khách được:
 >
 > - [`ImportantNotes.md`](ImportantNotes.md) — **không có nó thì mọi con số bạn đếm ra đều có nguy cơ sai**
 > - [`ValueSemantics.md`](ValueSemantics.md) — mỗi giá trị nghĩa là gì **với khách**, và nói câu nào
+> - [`HowToFilter.md`](HowToFilter.md) — **cách viết điều kiện lọc**, kèm ví dụ chạy được cho câu hỏi thật
 > - [`WhatYouCannotSee.md`](WhatYouCannotSee.md) — thứ bạn không đọc được, và cách từ chối cho đúng
 
 ---
@@ -26,13 +27,16 @@ Hình dạng của `POST /agent/query`:
 ```jsonc
 {
   "table": "orders",
-  "filter": { "and": [ { "field": "userSku", "op": "eq", "value": "ABC" } ] },
+  "filter": { "userSku": "ABC" },
   "select":    { "fields": ["productionId", "currentFulfillmentStage"], "sort": [{ "field": "inProductionAt", "dir": "desc" }], "limit": 20 },
   "aggregate": { "groupBy": ["currentFulfillmentStage"], "metrics": [{ "op": "count", "as": "n" }] }
 }
 ```
 
-`select` và `aggregate` **loại trừ nhau**. Toán tử lọc: `eq · ne · in · nin · gt · gte · lt · lte · between · exists · startsWith`. Metric: `count · sum · avg · min · max`.
+`select` và `aggregate` **loại trừ nhau**. Metric: `count · sum · avg · min · max`.
+
+Điều kiện lọc dùng **cú pháp MongoDB** — cách viết đầy đủ, danh sách toán tử và các lỗi thường gặp ở
+[`HowToFilter.md`](HowToFilter.md). Đọc file đó trước khi viết lời gọi đầu tiên.
 
 Lô mặc định 50 dòng, trần 200 — xin nhiều hơn thì bị kẹp xuống trần và `meta.limitApplied` cho biết mức thực tế.
 
@@ -73,7 +77,7 @@ hãy xem lại vòng lặp của mình thay vì thử lại ngay.
 
 ```jsonc
 { "table": "orders",
-  "filter": { "field": "productionId", "op": "eq", "value": "XQ-91783-27005" },
+  "filter": { "productionId": "XQ-91783-27005" },
   "select": { "fields": ["productionId","status","designerStatus","currentFulfillmentStage",
                          "fulfillmentCompletedAt","heldAt","holdReason","cancelledAt","factoryId"] } }
 ```
@@ -84,11 +88,11 @@ hãy xem lại vòng lặp của mình thay vì thử lại ngay.
 
 ```jsonc
 { "table": "orders",
-  "filter": { "and": [
-    { "field": "userSku", "op": "eq", "value": "ABC" },
-    { "field": "cancelledAt", "op": "exists", "value": false },
-    { "field": "factoryId", "op": "exists", "value": true },
-    { "field": "fulfillmentCompletedAt", "op": "exists", "value": false } ] },
+  "filter": { "$and": [
+    { "userSku": "ABC" },
+    { "cancelledAt": { "$exists": false } },
+    { "factoryId": { "$exists": true } },
+    { "fulfillmentCompletedAt": { "$exists": false } } ] },
   "aggregate": { "groupBy": ["currentFulfillmentStage"], "metrics": [{ "op": "count", "as": "n" }] } }
 ```
 
@@ -110,8 +114,8 @@ Dùng để kể lại **đơn đã đi qua những chặng nào, lúc nào**. K
 
 ```jsonc
 { "table": "orderLogs",
-  "filter": { "and": [ { "field": "orderId", "op": "eq", "value": "<orders._id>" },
-                       { "field": "field", "op": "in", "value": ["productionError","toolResult","printStatus"] } ] },
+  "filter": { "$and": [ { "orderId": "<orders._id>" },
+                        { "field": { "$in": ["productionError","toolResult","printStatus"] } } ] },
   "select": { "sort": [{ "field": "createdAt", "dir": "asc" }], "limit": 50 } }
 ```
 
@@ -125,7 +129,7 @@ Dùng để kể lại **đơn đã đi qua những chặng nào, lúc nào**. K
 
 ```jsonc
 { "table": "customers",
-  "filter": { "field": "userEmail", "op": "eq", "value": "khach@example.com" },
+  "filter": { "userEmail": "khach@example.com" },
   "select": { "fields": ["_id","userSku","fullName","tier","status"] } }
 ```
 
@@ -152,7 +156,7 @@ Mọi trường giá khác (giá vốn, giá sỉ, giá sàn) đều không tồ
 
 ```jsonc
 { "table": "productConfigs",
-  "filter": { "field": "fullName", "op": "startsWith", "value": "Hoodie" },
+  "filter": { "fullName": { "$startsWith": "Hoodie" } },
   "select": { "fields": ["fullName","variations.sku","variations.attributes","variations.retailPrice"] } }
 ```
 
@@ -174,8 +178,7 @@ Mọi trường giá khác (giá vốn, giá sỉ, giá sàn) đều không tồ
 
 ```jsonc
 { "table": "workshopConfigs",
-  "filter": { "and": [ { "field": "category", "op": "eq", "value": "production_error" },
-                       { "field": "code", "op": "eq", "value": "<mã lấy từ đơn>" } ] },
+  "filter": { "category": "production_error", "code": "<mã lấy từ đơn>" },
   "select": { "fields": ["code","name","errorSource","stage"] } }
 ```
 
@@ -201,8 +204,7 @@ Ba trường: `name`, `shortName`, `isActive`. Dùng để dịch `orders.factor
 
 ```jsonc
 { "table": "promotions",
-  "filter": { "and": [ { "field": "status", "op": "eq", "value": "Active" },
-                       { "field": "applicableTiers", "op": "in", "value": [2] } ] },
+  "filter": { "status": "Active", "applicableTiers": { "$in": [2] } },
   "select": { "fields": ["name","discountType","discountValue","scope","startDate","endDate"] } }
 ```
 
@@ -224,8 +226,8 @@ Bảng tra nghĩa cho `productConfigs.productCategoryId` và `productConfigs.col
 
 ```jsonc
 { "table": "customer_notifications",
-  "filter": { "or": [ { "field": "customerId", "op": "eq", "value": "<customers._id>" },
-                      { "field": "customerId", "op": "exists", "value": false } ] },
+  "filter": { "$or": [ { "customerId": "<customers._id>" },
+                       { "customerId": { "$exists": false } } ] },
   "select": { "sort": [{ "field": "createdAt", "dir": "desc" }], "limit": 10 } }
 ```
 

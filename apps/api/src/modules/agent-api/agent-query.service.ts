@@ -1,20 +1,19 @@
 import { Injectable } from '@nestjs/common';
 import type { PipelineStage } from 'mongoose';
-import type { AgentAggregate, AgentCondition, AgentFilterNode, AgentSelect, AgentSort } from 'shared';
+import type { AgentAggregate, AgentSelect, AgentSort } from 'shared';
 import { AGENT_FILTER_MAX_DEPTH } from 'shared';
 
 import { ApiConfigService } from '@/shared/services/api-config.service';
 
 import { AgentApiRepository } from './agent-api.repository';
 import { fieldNotAllowed, invalidQuery, isMongoTimeout, queryTimeout, tableNotAllowed } from './agent-errors';
+import { buildMongoFilter } from './mongo-filter';
 import { applyOrderLogValuePolicy } from './order-log-value-policy';
 import { pickProjected } from './pick-projected';
 import type { AgentFieldPolicy, AgentTableSpec } from './registry';
 import { AGENT_TABLE_REGISTRY } from './registry';
 
 type Row = Record<string, unknown>;
-
-const EQ_ONLY_OPS = new Set(['eq', 'ne', 'in', 'nin']);
 
 /**
  * Lõi của bộ API agent (`API-1`): tra bảng, dựng pipeline, che dữ liệu.
@@ -103,66 +102,35 @@ export class AgentQueryService {
     }
   }
 
-  // ─── Dieu kien loc ────────────────────────────────────────────────────
-
-  private condition(spec: AgentTableSpec, c: AgentCondition): Record<string, unknown> {
-    const p = this.policy(spec, c.field);
-    if (p.filter === 'none') {
-      throw fieldNotAllowed(
-        c.field,
-        p.freeText
-          ? // `API-11` bỏ che văn bản tự do, nên thông điệp cũ ("che chỉ chạy ở
-            // đầu ra") nay sai sự thật — và bên đọc nó là agent, thứ sẽ tin
-            // nguyên văn những gì ta viết. Lý do thật của lệnh cấm là phạm vi:
-            // đọc một ghi chú đã cầm trên tay khác hẳn việc TÌM ra đơn nào chứa
-            // một số điện thoại.
-            'is free text and can be read but not filtered: filtering it would allow scanning the whole table for a contact detail. Filter by an identifier instead.'
-          : 'cannot be used as a filter condition.',
-      );
+  /**
+   * Như trên, nhưng bỏ qua nhánh `filter` — nơi `$` là cú pháp hợp lệ kể từ
+   * `API-8`.
+   *
+   * Đây là hàm RIÊNG chứ không phải một cờ trên hàm cũ, và đó là chủ ý
+   * (`.devtasks/design/API-8.md` §8): một hàm mang cờ "cho phép `$`" sẽ có ngày
+   * bị gọi với cờ bật ở chỗ không nên, mà không gì trong kiểu dữ liệu ngăn được.
+   * Hai hàm riêng thì không gọi nhầm.
+   *
+   * `filter` được kiểm bằng danh sách trắng toán tử ở `mongo-filter.ts`, chặt
+   * hơn hẳn phép quét `$` này — nên bỏ qua ở đây không phải là bỏ trống.
+   */
+  assertNoOperatorKeysOutsideFilter(payload: unknown): void {
+    if (typeof payload !== 'object' || payload === null || Array.isArray(payload)) {
+      this.assertNoOperatorKeys(payload);
+      return;
     }
-    if (p.filter === 'eq' && !EQ_ONLY_OPS.has(c.op)) {
-      throw fieldNotAllowed(
-        c.field,
-        `only supports exact-match filtering (eq, ne, in, nin). Operator '${c.op}' would allow probing its value.`,
-      );
-    }
-
-    const v = c.value;
-    switch (c.op) {
-      case 'eq':
-        return { [c.field]: v };
-      case 'ne':
-        return { [c.field]: { $ne: v } };
-      case 'in':
-      case 'nin': {
-        if (!Array.isArray(v)) throw invalidQuery(`Operator '${c.op}' requires an array value.`);
-        return { [c.field]: c.op === 'in' ? { $in: v } : { $nin: v } };
+    for (const [key, value] of Object.entries(payload)) {
+      if (key === 'filter') continue;
+      if (key.startsWith('$') || key.includes('.')) {
+        throw invalidQuery(
+          `Key '${key}' is not allowed. This API accepts only its own query language, not raw database operators.`,
+        );
       }
-      case 'gt':
-      case 'gte':
-      case 'lt':
-      case 'lte': {
-        if (Array.isArray(v)) throw invalidQuery(`Operator '${c.op}' requires a single value.`);
-        return { [c.field]: { [`$${c.op}`]: this.coerce(p, v) } };
-      }
-      case 'between': {
-        if (!Array.isArray(v) || v.length !== 2) {
-          throw invalidQuery("Operator 'between' requires an array of exactly two values.");
-        }
-        return { [c.field]: { $gte: this.coerce(p, v[0]), $lte: this.coerce(p, v[1]) } };
-      }
-      case 'exists':
-        return { [c.field]: { $exists: v !== false } };
-      case 'startsWith': {
-        if (typeof v !== 'string') throw invalidQuery("Operator 'startsWith' requires a string value.");
-        // Escape trước khi dựng `^...` — giá trị của bên gọi không được trở
-        // thành cú pháp biểu thức chính quy.
-        return { [c.field]: { $regex: `^${v.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}` } };
-      }
-      default:
-        throw invalidQuery(`Unsupported operator '${String(c.op)}'.`);
+      this.assertNoOperatorKeys(value);
     }
   }
+
+  // ─── Dieu kien loc ────────────────────────────────────────────────────
 
   /** Chuỗi ISO trên trường ngày phải thành `Date`, nếu không so sánh khoảng sẽ sai âm thầm. */
   private coerce(p: AgentFieldPolicy, value: unknown): unknown {
@@ -174,15 +142,23 @@ export class AgentQueryService {
     return value;
   }
 
-  buildFilter(spec: AgentTableSpec, node?: AgentFilterNode, depth = 0): Record<string, unknown> {
-    if (!node) return {};
-    if (depth > AGENT_FILTER_MAX_DEPTH) {
-      throw invalidQuery(`Filter is nested deeper than ${AGENT_FILTER_MAX_DEPTH} levels.`);
-    }
-    if ('and' in node) return { $and: node.and.map((n) => this.buildFilter(spec, n, depth + 1)) };
-    if ('or' in node) return { $or: node.or.map((n) => this.buildFilter(spec, n, depth + 1)) };
-    if ('not' in node) return { $nor: [this.buildFilter(spec, node.not, depth + 1)] };
-    return this.condition(spec, node);
+  /**
+   * Điều kiện lọc, **cú pháp MongoDB** (`API-8` thay hẳn DSL cây cũ).
+   *
+   * Cả `POST /query` lẫn `GET /tables/:table/rows` đều đi qua đây — một bộ luật
+   * duy nhất. Hai đường lọc với hai bộ luật là cách chắc chắn để một ngày chúng
+   * lệch nhau, và đường lỏng hơn thành lỗ hổng.
+   *
+   * Cú pháp cũ bị từ chối kèm thông điệp nêu rõ, không im lặng trả kết quả sai.
+   */
+  buildFilter(spec: AgentTableSpec, node?: unknown): Record<string, unknown> {
+    return buildMongoFilter(
+      spec,
+      node,
+      AGENT_FILTER_MAX_DEPTH,
+      (s, field) => this.policy(s, field),
+      (policy, value) => this.coerce(policy, value),
+    );
   }
 
   // ─── Sap xep ──────────────────────────────────────────────────────────
@@ -384,13 +360,36 @@ export class AgentQueryService {
    * lọc LÀ dữ liệu BR-4, ghi nguyên vào nhật ký là tự tạo ra một kho email thứ
    * hai ngay trong hệ thống.
    */
-  digest(spec: AgentTableSpec, node?: AgentFilterNode): unknown {
-    if (!node) return undefined;
-    if ('and' in node) return { and: node.and.map((n) => this.digest(spec, n)) };
-    if ('or' in node) return { or: node.or.map((n) => this.digest(spec, n)) };
-    if ('not' in node) return { not: this.digest(spec, node.not) };
-    const p = spec.fields[node.field];
-    if (p && !p.read) return { field: node.field, op: node.op, value: '<redacted>' };
-    return { field: node.field, op: node.op, value: node.value };
+  digest(spec: AgentTableSpec, node?: unknown): unknown {
+    if (node === undefined || node === null) return undefined;
+    if (typeof node !== 'object' || Array.isArray(node)) return node;
+
+    const out: Record<string, unknown> = {};
+    for (const [key, value] of Object.entries(node as Record<string, unknown>)) {
+      if (key === '$and' || key === '$or' || key === '$nor') {
+        out[key] = Array.isArray(value) ? value.map((child) => this.digest(spec, child)) : value;
+        continue;
+      }
+      if (key === '$not') {
+        out.$not = this.digest(spec, value);
+        continue;
+      }
+
+      // Tên trường: giữ tên, nhưng GIÁ TRỊ của trường không đọc được phải bị
+      // lược. Email khách dùng làm điều kiện lọc vẫn là dữ liệu của khách.
+      const policy = spec.fields[key];
+      if (policy && !policy.read) {
+        out[key] = this.redactOperand(value);
+        continue;
+      }
+      out[key] = value;
+    }
+    return out;
+  }
+
+  /** Giữ TÊN toán tử để nhật ký còn đọc được, thay mọi giá trị bằng dấu lược. */
+  private redactOperand(operand: unknown): unknown {
+    if (typeof operand !== 'object' || operand === null || Array.isArray(operand)) return '<redacted>';
+    return Object.fromEntries(Object.keys(operand as Record<string, unknown>).map((op) => [op, '<redacted>']));
   }
 }
