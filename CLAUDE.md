@@ -32,7 +32,7 @@ pnpm test:e2e                          # E2E (test/jest-e2e.json)
 pnpm seed                              # Seed data (src/seed/seed-runner.ts)
 ```
 
-- API dev chạy ở `http://localhost:3007`, global prefix `api/v1`, Swagger ở `/documentation?key=<AGENT_API_KEY>` (dùng chung khoá agent; thiếu khoá thì đóng cả hai — xem `AgentApi.md` §8). Web dev ở `http://localhost:5173`.
+- API dev chạy ở `http://localhost:3007`, global prefix `api/v1`, Swagger ở `/documentation?key=<AGENT_API_KEY>` (dùng chung khoá agent; thiếu khoá thì đóng cả hai — xem `AgentApi.md` §8). **Trang này CHỈ mô tả 5 endpoint `/api/v1/agent` — API nội bộ cố ý không có trong đặc tả** (`AgentApi.md` §8.1); hình dạng request/response của API nội bộ tra ở DTO Zod trong `packages/shared`. Web dev ở `http://localhost:5173`.
 - Setup lần đầu (Docker MongoDB replica set `rs0` + Redis + RabbitMQ, env files từ `.env.development.example` / `.env.example`): xem [`README.md`](README.md).
 
 ---

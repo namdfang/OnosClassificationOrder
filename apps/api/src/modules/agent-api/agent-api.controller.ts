@@ -23,6 +23,7 @@ import { AgentDocsService } from './agent-docs.service';
 import { AgentExceptionFilter } from './agent-exception.filter';
 import { AgentQueryService } from './agent-query.service';
 import { AgentReadService } from './agent-read.service';
+import { AGENT_SWAGGER_DESCRIPTION, agentSummary } from './agent-swagger-guide';
 
 /**
  * Bộ API nội bộ cho AI agent (`API-1`) — xem
@@ -61,7 +62,7 @@ export class AgentApiController {
   @Get('tables')
   @Auth([], [], { public: true })
   @Throttle({ default: { limit: AGENT_API_RATE_LIMIT_PER_MIN, ttl: AGENT_API_RATE_LIMIT_TTL_MS } })
-  @ApiOperation({ summary: 'Liệt kê các bảng agent đọc được' })
+  @ApiOperation({ summary: agentSummary('listTables'), description: AGENT_SWAGGER_DESCRIPTION.listTables })
   @HttpCode(HttpStatus.OK)
   listTables(): ListAgentTablesResDto {
     const startedAt = Date.now();
@@ -79,7 +80,7 @@ export class AgentApiController {
   @Get('tables/:table/rows')
   @Auth([], [], { public: true })
   @Throttle({ default: { limit: AGENT_API_RATE_LIMIT_PER_MIN, ttl: AGENT_API_RATE_LIMIT_TTL_MS } })
-  @ApiOperation({ summary: 'Đọc dữ liệu thô của một bảng, theo lô có giới hạn' })
+  @ApiOperation({ summary: agentSummary('readRows'), description: AGENT_SWAGGER_DESCRIPTION.readRows })
   @HttpCode(HttpStatus.OK)
   async readRows(
     @Param('table') table: string,
@@ -111,7 +112,7 @@ export class AgentApiController {
   @Post('query')
   @Auth([], [], { public: true })
   @Throttle({ default: { limit: AGENT_API_RATE_LIMIT_PER_MIN, ttl: AGENT_API_RATE_LIMIT_TTL_MS } })
-  @ApiOperation({ summary: 'Truy vấn có kiểm soát: lọc, sắp xếp, đếm, nhóm, tổng hợp' })
+  @ApiOperation({ summary: agentSummary('query'), description: AGENT_SWAGGER_DESCRIPTION.query })
   @HttpCode(HttpStatus.OK)
   async query(@Body() body: AgentQueryDto): Promise<AgentQueryResDto> {
     const startedAt = Date.now();
@@ -162,7 +163,7 @@ export class AgentApiController {
   @Get('docs')
   @Auth([], [], { public: true })
   @Throttle({ default: { limit: AGENT_API_RATE_LIMIT_PER_MIN, ttl: AGENT_API_RATE_LIMIT_TTL_MS } })
-  @ApiOperation({ summary: 'Danh mục tài liệu nghiệp vụ' })
+  @ApiOperation({ summary: agentSummary('listDocs'), description: AGENT_SWAGGER_DESCRIPTION.listDocs })
   @HttpCode(HttpStatus.OK)
   listDocs(): ListAgentDocsResDto {
     const startedAt = Date.now();
@@ -180,7 +181,7 @@ export class AgentApiController {
   @Get('docs/:slug')
   @Auth([], [], { public: true })
   @Throttle({ default: { limit: AGENT_API_RATE_LIMIT_PER_MIN, ttl: AGENT_API_RATE_LIMIT_TTL_MS } })
-  @ApiOperation({ summary: 'Nội dung markdown của một tài liệu' })
+  @ApiOperation({ summary: agentSummary('getDoc'), description: AGENT_SWAGGER_DESCRIPTION.getDoc })
   @HttpCode(HttpStatus.OK)
   getDoc(@Param('slug') slug: string): GetAgentDocResDto {
     const startedAt = Date.now();

@@ -4,6 +4,8 @@ import type { NestFastifyApplication } from '@nestjs/platform-fastify';
 import { DocumentBuilder, SwaggerModule } from '@nestjs/swagger';
 import crypto from 'crypto';
 
+import { AgentApiModule } from './modules/agent-api/agent-api.module';
+
 /** Tên định danh của ô nhập khoá agent trong Swagger — dùng ở `@ApiSecurity`. */
 export const SWAGGER_AGENT_KEY_SECURITY = 'agent-api-key';
 
@@ -93,52 +95,25 @@ function readCookie(header: string | undefined, name: string): string | undefine
 
 export function setupSwagger(app: INestApplication) {
   const documentBuilder = new DocumentBuilder()
-    .setTitle('PrintEra Private API')
+    .setTitle('OnosFactory Agent API')
     .setDescription(
-      `### REST
+      `Trang này mô tả **bộ API dành cho AI agent** — 5 endpoint chỉ đọc dưới \`/api/v1/agent\`.
 
-Routes is following REST standard (Richardson level 3)
+Đây **không** phải bản đồ toàn hệ thống. Endpoint nội bộ của OnosFactory cố ý không có mặt ở đây, kể cả
+trong đặc tả JSON thô: chúng vẫn chạy bình thường, chỉ là không được mô tả trên trang này.
 
-<details><summary>Detailed specification</summary>
-<p>
+**Xác thực:** header \`X-Agent-Api-Key\`. Bấm *Authorize* rồi dán khoá vào ô \`${SWAGGER_AGENT_KEY_SECURITY}\`;
+nhập một lần là mọi lời gọi thử bên dưới đều mang đúng khoá đó.
 
-**List:**
-- \`GET /<resources>/\`
-  - Get the list of **<resources>** as admin
-- \`GET /user/<user_id>/<resources>/\`
-  - Get the list of **<resources>** for a given **<user_id>**
-  - Output a **403** if logged user is not **<user_id>**
-
-**Detail:**
-- \`GET /<resources>/<resource_id>\`
-  - Get the detail for **<resources>** of id **<resource_id>**
-  - Output a **404** if not found
-- \`GET /user/<user_id>/<resources>/<resource_id>\`
-  - Get the list of **<resources>** for a given **user_id**
-  - Output a **404** if not found
-  - Output a **403** if:
-    - Logged user is not **<user_id>**
-    - The **<user_id>** have no access to **<resource_id>**
-
-**Creation / Edition / Replacement / Suppression:**
-- \`<METHOD>\` is:
-  - **POST** for creation
-  - **PATCH** for update (one or more fields)
-  - **PUT** for replacement (all fields, not used)
-  - **DELETE** for suppression (all fields, not used)
-- \`<METHOD> /<resources>/<resource_id>\`
-  - Create **<resources>** with id **<resource_id>** as admin
-  - Output a **400** if **<resource_id>** conflicts with existing **<resources>**
-- \`<METHOD> /user/<user_id>/<resources>/<resource_id>\`
-  - Create **<resources>** with id **<resource_id>** as a given **user_id**
-  - Output a **409** if **<resource_id>** conflicts with existing **<resources>**
-  - Output a **403** if:
-    - Logged user is not **<user_id>**
-    - The **<user_id>** have no access to **<resource_id>**
-</p>
-</details>`,
+**Tài liệu nghiệp vụ** cho agent — bảng dữ liệu, ý nghĩa từng giá trị, cách viết điều kiện lọc, và những
+thứ agent không được phép thấy — lấy qua \`GET /api/v1/agent/docs\`.`,
     )
-    .addBearerAuth()
+    // KHÔNG khai `addBearerAuth()` (`HF-1`). Trang này chỉ mô tả nhóm endpoint
+    // agent, mà cửa của chúng là `AgentApiKeyGuard` chứ không phải JWT — khai
+    // bearer sẽ thêm một ô "bearer (http, Bearer)" vào hộp Authorize, ô đó
+    // không dùng được vào việc gì và khiến người đọc tưởng phải đăng nhập.
+    // Nếu sau này dựng lại trang tài liệu cho API nội bộ thì khai bearer ở
+    // trang ĐÓ, không khai lại ở đây.
     // MỘT ô nhập duy nhất cho khoá agent, thay cho `@ApiHeader` lặp ở từng
     // endpoint (`API-5`). Cùng `persistAuthorization: true` bên dưới: nhập một
     // lần là mọi lời gọi thử trong nhóm agent đều mang đúng khoá đó.
@@ -149,7 +124,23 @@ Routes is following REST standard (Richardson level 3)
   }
 
   patchNestjsSwagger();
-  const document = SwaggerModule.createDocument(app, documentBuilder.build());
+
+  // `include` là chỗ yêu cầu `API-15` được thực thi, và nó nằm ở tầng SINH ĐẶC
+  // TẢ chứ không phải tầng hiển thị: bộ quét của `@nestjs/swagger` chỉ đi vào
+  // module được liệt kê, nên controller nội bộ không được đọc tới lần nào.
+  // Đường dẫn của chúng vì thế KHÔNG CÓ MẶT trong JSON mà trang tải về, không
+  // phải là có mặt nhưng bị giấu khỏi màn hình — ẩn ở lớp hiển thị thì ai mở
+  // đặc tả thô vẫn thấy đủ, mà người mở được chính là người ta muốn giấu.
+  //
+  // Đây thuần tuý là thay đổi TÀI LIỆU: `include` không đụng gì tới bộ định
+  // tuyến. Mọi endpoint nội bộ vẫn đăng ký, vẫn chạy, vẫn cùng cơ chế xác thực
+  // như trước.
+  //
+  // Bên trong module này còn `AgentApiAdminController` — bề mặt quản trị nội
+  // bộ — bị loại riêng bằng `@ApiExcludeController` tại chỗ khai báo nó.
+  const document = SwaggerModule.createDocument(app, documentBuilder.build(), {
+    include: [AgentApiModule],
+  });
 
   guardDocumentationRoute(app);
 

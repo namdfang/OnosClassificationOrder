@@ -1,5 +1,5 @@
 import { Controller, Get, HttpCode, HttpStatus, Inject } from '@nestjs/common';
-import { ApiOperation, ApiTags } from '@nestjs/swagger';
+import { ApiExcludeController, ApiOperation, ApiTags } from '@nestjs/swagger';
 import { AuthUser } from 'core';
 import { RoleType } from 'shared';
 import { GetAgentAdminKeyResDto, GetAgentAdminOverviewResDto } from 'shared';
@@ -37,6 +37,15 @@ import { AgentAdminService } from './agent-admin.service';
  */
 @Controller('agent-admin')
 @ApiTags('agent-api')
+// Không xuất hiện trong đặc tả OpenAPI (`API-15`). Trang tài liệu nay chỉ mô tả
+// bề mặt DÀNH CHO AGENT; controller này là bề mặt quản trị nội bộ, xác thực
+// bằng JWT + vai, nên nó thuộc nhóm "nội bộ" mà yêu cầu đòi ẩn — dù nó nằm
+// cùng module với `AgentApiController`.
+//
+// Ẩn khỏi TÀI LIỆU, không ẩn khỏi hệ thống: route vẫn đăng ký, vẫn chạy, vẫn
+// cùng cơ chế xác thực. Decorator này chỉ tác động tới bộ quét của
+// `@nestjs/swagger`.
+@ApiExcludeController()
 export class AgentApiAdminController {
   constructor(
     private readonly admin: AgentAdminService,

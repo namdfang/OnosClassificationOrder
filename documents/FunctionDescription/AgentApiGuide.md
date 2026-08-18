@@ -177,6 +177,7 @@ không chỉnh được bằng biến môi trường; đổi con số thì sửa
 - **`@Throttle` tính theo IP**, nên người bấm thử tiêu hạn mức của IP họ, không ăn vào hạn mức của
   agent (IP khác).
 
+
 ## 7. Permissions
 
 | Vai | Quyền |
@@ -204,3 +205,19 @@ lỗi nào bật ra.
 
 Việc hiển thị thẳng giá trị khoá trên trang là **rủi ro đã được chấp nhận** sau khi hai phương án an
 toàn hơn được nêu ra — xem `.devtasks/srs/API-3.md` §8/A4. Siết hơn về sau là change request.
+
+## 8. Đồng bộ với trang tài liệu API (`API-16`)
+
+Trang này là **chuẩn**: trang `/documentation` phải nói cùng một thứ, không phải ngược lại.
+
+Phần cấu trúc (bảng, trường, hạn mức) hai nơi cùng đọc từ registry và hằng số throttle, nên tự khớp.
+Phần **văn bản tự do** — nhãn 5 năng lực (`capabilities.*`) và nghĩa 8 mã lỗi (`errors.*`) trong
+`src/i18n/locales/{vi,en}/agentApi.json`, cùng bảng `ERROR_HTTP` trong
+`src/components/settings/agent-api/types.ts` — hiện vẫn là bản riêng của frontend.
+
+Bản khai báo tương ứng nằm ở `packages/shared/constants/agent-api-guide.ts`, và
+`apps/api/src/modules/agent-api/agent-guide-sync.spec.ts` giữ hai bên khớp: **sửa một trong ba chỗ mà
+quên hai chỗ kia thì test backend đỏ**. Chi tiết ở [`AgentApi.md`](AgentApi.md) §8.2.
+
+Muốn bỏ hẳn bản chép: đổi trang để đọc thẳng hằng số dùng chung thay cho key i18n. Việc đó cần BA mở
+phạm vi vì `API-16` §4 cấm đổi trang.

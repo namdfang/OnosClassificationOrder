@@ -310,7 +310,7 @@ Cụm `partnerApi` sẵn có trong `ApiConfigService` **cố ý không được 
 
 So sánh khoá bằng `crypto.timingSafeEqual` trên bản băm SHA-256 — độ dài khác nhau không làm lộ thông tin qua thời gian. Thiếu cấu hình khoá thì mọi endpoint **đóng**, không có chế độ "mở khi thiếu cấu hình".
 
-## 8. Trang Swagger `/documentation` (`API-5`)
+## 8. Trang Swagger `/documentation` (`API-5`, `API-15`, `HF-1`, `API-16`)
 
 Trang Swagger nằm **ngoài** global prefix `api/v1` và trước `API-5` thì mở tự do — ai biết địa chỉ là
 đọc được toàn bộ bề mặt API. Nay nó cần khoá trên địa chỉ:
@@ -344,16 +344,101 @@ cách mở bằng đường dẫn mà người dùng đã chọn, không phải 
 
 Trang Swagger **dùng chung `AGENT_API_KEY`** với bộ API agent (`API-7`). Người dùng chọn vậy sau khi
 được nêu rõ hệ quả: khoá agent hiển thị công khai trên trang quản trị của `API-3`, nên ai mở được trang
-đó cũng vào được Swagger — tức thấy **toàn bộ** bề mặt API chứ không riêng nhóm agent. Cả hai đều giới
-hạn ở SuperAdmin/Admin nên phạm vi người thấy là như nhau; cái mất là tính tách bạch giữa hai mức nhạy
-cảm. Đây là **rủi ro đã chấp nhận**, không phải bug mới; muốn tách lại thì mở change request.
+đó cũng vào được Swagger. Cả hai đều giới hạn ở SuperAdmin/Admin nên phạm vi người thấy là như nhau;
+cái mất là tính tách bạch giữa hai mức nhạy cảm. Đây là **rủi ro đã chấp nhận**, không phải bug mới;
+muốn tách lại thì mở change request.
+
+`API-15` đã thu hẹp phần còn lại của rủi ro đó: người qua được khoá **không còn thấy toàn bộ bề mặt
+API** nữa, chỉ thấy nhóm agent (xem §8.1).
 
 Hệ quả vận hành: thiếu `AGENT_API_KEY` là **đóng cùng lúc** cả bộ API agent lẫn trang tài liệu.
 
-Khoá agent trong Swagger là **một ô nhập duy nhất** (security scheme `agent-api-key`), khai ở
-`DocumentBuilder.addApiKey(...)` và gắn vào controller bằng `@ApiSecurity`, thay cho `@ApiHeader` vốn
-bắt nhập lại ở từng endpoint. Cùng với `persistAuthorization: true`, nhập một lần là mọi lời gọi thử
+Khoá agent trong Swagger là **ô nhập duy nhất trong hộp Authorize** (security scheme `agent-api-key`),
+khai ở `DocumentBuilder.addApiKey(...)` và gắn vào controller bằng `@ApiSecurity`, thay cho `@ApiHeader`
+vốn bắt nhập lại ở từng endpoint. Cùng với `persistAuthorization: true`, nhập một lần là mọi lời gọi thử
 đều mang đúng khoá. Đây chỉ là phần khai báo tài liệu — cửa thật vẫn là `AgentApiKeyGuard`.
+
+**Không còn ô `bearer` (`HF-1`).** Trước đó hộp Authorize có thêm một ô `bearer (http, Bearer)` không
+dùng được vào việc gì, và đặc tả khai 5 endpoint agent là cần **cả** khoá agent lẫn JWT — sai, vì cửa
+của chúng chỉ là `AgentApiKeyGuard`. Nguyên nhân ở `apps/api/src/decorators/http.decorator.ts`: `Auth()`
+gắn `ApiBearerAuth()` **vô điều kiện**, nên route khai `{ public: true }` vẫn bị dán nhãn JWT. Nay nhãn
+đó chỉ gắn cho route thật sự đi qua JWT, và `DocumentBuilder` không khai `addBearerAuth()` nữa.
+
+`ApiBearerAuth` là decorator **tài liệu**, không phải guard — sửa nó không đổi quyền gọi của bất kỳ
+route nào. Cửa vẫn là `AuthGuard({ public })` khai ngay cạnh nó. Dựng lại trang tài liệu cho API nội bộ
+về sau thì khai bearer ở **trang đó**, đừng khai lại ở trang agent.
+
+### 8.2. Mô tả endpoint dựng từ nguồn chung, không chép tay (`API-16`)
+
+Yêu cầu người dùng: trang quản trị `/adm/settings/agent-api` là **chuẩn**, trang tài liệu phải nói cùng
+một thứ và đạt cùng mức hướng dẫn. Điều then chốt là **"đồng bộ" không phải chép**: chép tay thì hai bản
+lệch nhau ngay lần sửa đầu, và điều đó đã xảy ra ở `API-14` — trang còn dạy cú pháp lọc cũ sau khi
+`API-8` đổi cú pháp.
+
+Mô tả 5 endpoint nằm ở `apps/api/src/modules/agent-api/agent-swagger-guide.ts`, dựng từ hai nguồn:
+
+| Phần nội dung | Nguồn | Sửa một chỗ thì |
+|---|---|---|
+| Danh sách bảng + mô tả từng bảng | `AGENT_TABLE_REGISTRY` — đúng nguồn trang quản trị đọc qua `GET /agent-admin/overview` | **cả hai nơi cùng đổi**, không phải sửa hai chỗ |
+| Hạn mức gọi | `AGENT_API_RATE_LIMIT_PER_MIN` — đúng hằng số `@Throttle` dùng | con số trên tài liệu không thể lệch con số máy chủ áp |
+| Nhãn năng lực · nghĩa 8 mã lỗi · mã HTTP · ví dụ curl | `packages/shared/constants/agent-api-guide.ts` | frontend vẫn giữ bản i18n riêng — xem đoạn dưới |
+
+**Đã kiểm bằng cách làm thật, không suy luận:** đổi một dòng `description` trong registry rồi đọc lại cả
+hai đầu ra — `swagger-ui-init.js` của trang tài liệu **và** `GET /agent-admin/overview` của trang quản
+trị — cả hai cùng đổi theo.
+
+**Phần chưa dùng chung được, và vì sao.** Nhãn năng lực và nghĩa mã lỗi hiện tồn tại hai bản: hằng số ở
+`packages/shared` và key i18n trong `apps/web/src/i18n/locales/{vi,en}/agentApi.json`. Bỏ bản i18n đi
+nghĩa là **đổi trang quản trị**, mà đó là thứ `API-16` §4 để ngoài phạm vi — trang là chuẩn, không phải
+thứ bị sửa theo. Đặt hằng số ở `packages/shared` (chứ không ở `apps/api`) là để ngày phạm vi được mở,
+frontend chỉ việc bỏ key i18n và đọc thẳng hằng số, **không phải đụng backend lần nữa**.
+
+Trong lúc chờ, thứ giữ hai bên không lệch là `agent-guide-sync.spec.ts`:
+
+- so **từng ký tự** nhãn năng lực và nghĩa mã lỗi với `vi/agentApi.json`;
+- kiểm `en/agentApi.json` có **đúng bộ khoá** (bản dịch nên không so chuỗi);
+- và phần đáng giá nhất: so bảng mã HTTP với **mã trạng thái thật** mà từng hàm trong `agent-errors.ts`
+  ném ra, rồi mới so tiếp với bảng `ERROR_HTTP` của frontend. So hai bảng với nhau thì cả hai cùng sai
+  vẫn xanh; neo vào hàm dựng lỗi thì không.
+
+Test này là **test backend đọc file frontend** — trông sai, nhưng repo chỉ `apps/api` có Jest nên đó là
+chỗ duy nhất đặt được. Lý do ghi ngay đầu file để nó không bị dọn nhầm.
+
+> Vì sao phần neo-vào-lỗi-thật đáng giá: khi viết bảng mã HTTP lần đầu, DEV đoán sai **ba trên tám**
+> dòng và chỉ phát hiện vì mở mã nguồn ra đọc. Ba bản chép mà không có gì đối chiếu thì sai kiểu đó chỉ
+> lộ ra khi đã có người thật đọc tài liệu rồi làm theo.
+
+### 8.1. Trang chỉ mô tả nhóm agent (`API-15`)
+
+Đặc tả mà trang tải về **chỉ chứa 5 endpoint dưới `/api/v1/agent`**. Endpoint nội bộ — đơn hàng, khách
+hàng, người dùng, phân quyền, Customer Portal, cấu hình — không có mặt trong đó.
+
+**Chặn ở tầng sinh đặc tả, không ở tầng hiển thị.** `setup-swagger.ts` truyền
+`{ include: [AgentApiModule] }` cho `SwaggerModule.createDocument`, nên bộ quét của `@nestjs/swagger`
+không đi vào module nội bộ lần nào. Khác biệt này quan trọng: ẩn ở lớp hiển thị thì đường dẫn vẫn nằm
+trong JSON, ai mở đặc tả thô vẫn đọc được đủ — mà người mở được chính là người ta muốn giấu.
+
+`AgentApiAdminController` nằm **cùng module** nhưng là bề mặt quản trị nội bộ (JWT + vai), nên bị loại
+riêng bằng `@ApiExcludeController()` tại chỗ khai báo nó. Không có nó thì `include` sẽ kéo theo cả
+`/v1/agent-admin/*` — đúng loại endpoint yêu cầu này muốn giấu.
+
+**Không endpoint nào đổi hành vi.** `include` chỉ tác động tới bộ sinh tài liệu, không tới bộ định
+tuyến: mọi endpoint nội bộ vẫn đăng ký, vẫn chạy, vẫn cùng cơ chế xác thực. `/v1/agent-admin/*` vẫn
+phục vụ trang hướng dẫn trong `/adm` bình thường dù đã biến mất khỏi tài liệu.
+
+Số đo trước/sau, lấy từ `swagger-ui-init.js` mà trang thật tải về trên API dev:
+
+| | Trước | Sau |
+|---|---|---|
+| Kích thước đặc tả | ~600 KB | **12,2 KB** |
+| Số đường dẫn | toàn hệ thống | **5**, tất cả dưới `/api/v1/agent` |
+| Số schema trong `components` | hàng trăm | **1** |
+
+**Cái mất:** không còn Swagger cho API nội bộ, kể cả ở máy dev. Repo bù được phần lớn nhờ DTO Zod dùng
+chung trong `packages/shared` — FE import thẳng cùng kiểu, nên Swagger không phải nguồn duy nhất biết
+hình dạng request/response. Phần thật sự mất là chỗ **bấm thử endpoint nội bộ ngay trên trình duyệt**.
+Nếu chỗ đó cần thiết thì hướng đã đề xuất là dựng trang thứ hai chỉ bật ngoài môi trường production —
+xem note ký `implement` của `API-15`; BA duyệt trước khi làm.
 
 ## 9. Bề mặt quản trị `/v1/agent-admin/*` (`API-3`)
 
