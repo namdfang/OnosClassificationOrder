@@ -23,12 +23,16 @@ const DISPLAY_LIMIT = 200_000;
 const sample = (body: unknown): string => JSON.stringify(body, null, 2);
 
 /**
- * Ba mau day nguoi dung goi cho dung — hinh dang PHAI khop `AgentQueryZod`
- * (`packages/shared/dtos/agent-api.dto.ts`), khong phai hinh dang tu nghi ra:
- *   filter    = cay dieu kien { field, op, value }
+ * Ba mau day nguoi dung goi cho dung. Hinh dang PHAI khop `AgentQueryZod`
+ * (`packages/shared/dtos/agent-api.dto.ts`) va bo dich filter
+ * (`apps/api/src/modules/agent-api/mongo-filter.ts`) — KHONG viet theo tri nho:
+ *   filter    = CU PHAP MONGODB, vd { "quantity": { "$gte": 1, "$lte": 9 } }
  *   select    = { kind, fields[], sort: [{ field, dir }], limit }
  *   aggregate = { groupBy: [...], metrics: [{ op, field?, as }] }
  * `select` va `aggregate` LOAI TRU nhau — gui ca hai la INVALID_QUERY.
+ *
+ * Cu phap cay { field, op, value } la cua DSL CU, `API-8` da bo. Gui dang do
+ * nay se nhan 400 INVALID_QUERY.
  */
 const QUERY_SAMPLES: Record<string, string> = {
   sampleCount: sample({
@@ -37,7 +41,7 @@ const QUERY_SAMPLES: Record<string, string> = {
   }),
   sampleFilter: sample({
     table: 'orders',
-    filter: { field: 'inProductionAt', op: 'gte', value: '2026-08-01' },
+    filter: { inProductionAt: { $gte: '2026-08-01' }, status: { $eq: 'Ready' } },
     select: { kind: 'rows', fields: ['productionId', 'status', 'inProductionAt'], limit: 20 },
   }),
   sampleSort: sample({
@@ -49,6 +53,13 @@ const QUERY_SAMPLES: Record<string, string> = {
       limit: 10,
     },
   }),
+};
+
+/** Mau cho O NHAP FILTER cua phan doc tho — cung cu phap MongoDB. */
+const READ_FILTER_SAMPLES: Record<string, string> = {
+  filterSampleEq: sample({ productionId: { $eq: 'SQ-01912-84416' } }),
+  filterSampleRange: sample({ quantity: { $gte: 1, $lte: 9 } }),
+  filterSamplePrefix: sample({ productionId: { $startsWith: 'SQ-019' } }),
 };
 
 interface Props {
@@ -75,6 +86,7 @@ export function TryTab({ overview, presetTable, ensureKey }: Props) {
   const [limit, setLimit] = useState('20');
   const [cursor, setCursor] = useState('');
   const [fields, setFields] = useState('');
+  const [readFilter, setReadFilter] = useState('');
   const [slug, setSlug] = useState('');
   const [queryBody, setQueryBody] = useState(QUERY_SAMPLES.sampleCount);
 
@@ -93,7 +105,14 @@ export function TryTab({ overview, presetTable, ensureKey }: Props) {
           url: agentUrl(overview.basePath, `/tables/${encodeURIComponent(table)}/rows`, {
             limit,
             cursor,
-            fields,
+            // QA-6: nhan o hua "cach nhau bang dau phay" nen phai TACH o day roi
+            // gui thanh nhieu tham so `fields`; gui nguyen chuoi la 400.
+            fields: fields
+              .split(',')
+              .map((f) => f.trim())
+              .filter(Boolean),
+            // API-6: dieu kien loc di qua query string duoi dang chuoi JSON.
+            filter: readFilter.trim(),
           }),
         };
       case 'query':
@@ -105,7 +124,7 @@ export function TryTab({ overview, presetTable, ensureKey }: Props) {
       default:
         return { method: 'GET' as const, url: agentUrl(overview.basePath, '/tables') };
     }
-  }, [capability, overview.basePath, table, limit, cursor, fields, slug, queryBody]);
+  }, [capability, overview.basePath, table, limit, cursor, fields, readFilter, slug, queryBody]);
 
   const curl = buildCurl({
     method: request.method,
@@ -182,6 +201,28 @@ export function TryTab({ overview, presetTable, ensureKey }: Props) {
                 <span className="text-xs font-medium text-slate-500 dark:text-slate-400">{t('try.fields')}</span>
                 <Input value={fields} onChange={(e) => setFields(e.target.value)} placeholder="productionId,status" />
               </label>
+              {/* API-14: nang luc loc cua API-6 phai dung duoc TU TRANG, khong bat mo terminal. */}
+              <div className="space-y-2 sm:col-span-2">
+                <div className="flex flex-wrap items-center gap-2">
+                  <span className="text-xs font-medium text-slate-500 dark:text-slate-400">{t('try.filterSamples')}:</span>
+                  {Object.keys(READ_FILTER_SAMPLES).map((k) => (
+                    <Button key={k} variant="outline" size="sm" type="button" onClick={() => setReadFilter(READ_FILTER_SAMPLES[k])}>
+                      {t(`try.${k}`)}
+                    </Button>
+                  ))}
+                </div>
+                <label className="block space-y-1">
+                  <span className="text-xs font-medium text-slate-500 dark:text-slate-400">{t('try.readFilter')}</span>
+                  <Textarea
+                    value={readFilter}
+                    onChange={(e) => setReadFilter(e.target.value)}
+                    rows={4}
+                    className="font-mono text-xs"
+                    placeholder={'{ "status": { "$eq": "Ready" } }'}
+                  />
+                </label>
+                <p className="text-[11px] text-slate-500 dark:text-slate-400">{t('try.readFilterHint')}</p>
+              </div>
             </>
           ) : null}
 

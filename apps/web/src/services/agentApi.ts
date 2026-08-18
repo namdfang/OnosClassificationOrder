@@ -37,10 +37,26 @@ export const apiOrigin = (): string => {
   }
 };
 
-/** `basePath` BE tra ve la duong TUONG DOI (`/api/v1/agent`) — ghep voi origin o day. */
-export const agentUrl = (basePath: string, suffix: string, query?: Record<string, string>): string => {
+/**
+ * `basePath` BE tra ve la duong TUONG DOI (`/api/v1/agent`) — ghep voi origin o day.
+ *
+ * Gia tri MANG duoc gui bang cach LAP LAI ten tham so (`fields=a&fields=b`),
+ * khong phai mot chuoi ngan cach bang dau phay (`QA-6`): DTO dung chung nhan
+ * `string | string[]` va KHONG tach theo dau phay, nen `fields=a,b` bi hieu la
+ * MOT ten truong ten la "a,b" va tra 400 FIELD_NOT_ALLOWED.
+ */
+export const agentUrl = (
+  basePath: string,
+  suffix: string,
+  query?: Record<string, string | string[] | undefined>,
+): string => {
   const url = new URL(`${basePath}${suffix}`, apiOrigin());
-  if (query) for (const [k, v] of Object.entries(query)) if (v) url.searchParams.set(k, v);
+  if (query) {
+    for (const [k, v] of Object.entries(query)) {
+      if (Array.isArray(v)) v.forEach((item) => item && url.searchParams.append(k, item));
+      else if (v) url.searchParams.set(k, v);
+    }
+  }
   return url.toString();
 };
 

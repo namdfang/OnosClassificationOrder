@@ -127,6 +127,25 @@ markdown, và người xem trang là người vận hành hệ thống chấp nh
 
 Sau mọi lỗi, **nội dung form được giữ nguyên** để người xem sửa lại chính lời gọi vừa gửi.
 
+### Ô nhập điều kiện lọc (API-14)
+
+Phần **Đọc thô một bảng** có ô nhập `filter` riêng, gửi điều kiện lọc dưới dạng **chuỗi JSON qua query
+string** — đúng năng lực `API-6` thêm cho endpoint đọc bảng. Không có ô này thì người vận hành phải mở
+terminal gõ `curl`, đúng thứ trang này sinh ra để khỏi phải làm.
+
+Cú pháp là **MongoDB** (`API-8` đã thay hẳn DSL cây `{field, op, value}` cũ):
+
+```
+{ "productionId": { "$eq": "SQ-01912-84416" } }
+{ "quantity": { "$gte": 1, "$lte": 9 } }
+{ "productionId": { "$startsWith": "SQ-019" } }
+```
+
+Toán tử được phép: `$eq $ne $gt $gte $lt $lte $in $nin $exists $startsWith`, cộng `$and $or $nor $not`.
+Danh sách này và chính sách từng trường do `apps/api/src/modules/agent-api/mongo-filter.ts` quyết định —
+**sửa mẫu hay chú thích trên trang thì mở file đó ra đối chiếu, đừng viết theo trí nhớ.** Cú pháp đã đổi
+hai lần (`API-3-B2`, rồi `API-14`), cả hai lần đều vì mẫu được viết theo trí nhớ.
+
 ## 5. Backend logic
 
 Metadata dựng **tại thời điểm gọi** từ `AGENT_TABLE_REGISTRY`

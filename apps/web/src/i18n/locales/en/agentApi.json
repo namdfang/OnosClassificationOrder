@@ -122,6 +122,12 @@
     "networkError": "Could not reach the server. Check that the API is running and that the browser is not blocking the request via CORS.",
     "curlTitle": "Equivalent curl",
     "curlWithKey": "Insert the real key instead of $AGENT_API_KEY",
-    "idle": "Pick a capability and press Run to see a real result."
+    "idle": "Pick a capability and press Run to see a real result.",
+    "readFilter": "Filter (JSON, MongoDB syntax)",
+    "readFilterHint": "Example: { \"quantity\": { \"$gte\": 1, \"$lte\": 9 } }. Allowed operators: $eq $ne $gt $gte $lt $lte $in $nin $exists $startsWith, plus $and $or $nor $not. Leave empty for no filter.",
+    "filterSamples": "Filter samples",
+    "filterSampleEq": "Exact match",
+    "filterSampleRange": "Value range",
+    "filterSamplePrefix": "Starts with"
   }
 }

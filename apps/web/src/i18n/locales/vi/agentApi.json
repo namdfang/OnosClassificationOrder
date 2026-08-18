@@ -122,6 +122,12 @@
     "networkError": "Không gọi được tới máy chủ. Kiểm tra API có đang chạy không, và trình duyệt có bị CORS chặn không.",
     "curlTitle": "curl tương đương",
     "curlWithKey": "Chèn khoá thật thay cho $AGENT_API_KEY",
-    "idle": "Chọn một năng lực rồi bấm Chạy để xem kết quả thật."
+    "idle": "Chọn một năng lực rồi bấm Chạy để xem kết quả thật.",
+    "readFilter": "Điều kiện lọc (JSON, cú pháp MongoDB)",
+    "readFilterHint": "Ví dụ: { \"quantity\": { \"$gte\": 1, \"$lte\": 9 } }. Toán tử dùng được: $eq $ne $gt $gte $lt $lte $in $nin $exists $startsWith, và $and $or $nor $not. Để trống là không lọc.",
+    "filterSamples": "Mẫu lọc",
+    "filterSampleEq": "So bằng",
+    "filterSampleRange": "Khoảng giá trị",
+    "filterSamplePrefix": "Bắt đầu bằng"
   }
 }
