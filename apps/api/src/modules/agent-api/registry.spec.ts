@@ -110,7 +110,7 @@ describe('AGENT_TABLE_REGISTRY — bất biến của danh sách trắng', () =>
     }
   });
 
-  it('thông tin liên hệ khách: lọc được bằng đúng giá trị, KHÔNG đọc được (BR-5, AC-11)', () => {
+  it('API-17: liên hệ khách NAY ĐỌC ĐƯỢC, mức lọc giữ nguyên `eq` (AC-05, AC-07)', () => {
     const contact = [
       ['orders', 'userEmail'],
       ['customers', 'userEmail'],
@@ -119,7 +119,8 @@ describe('AGENT_TABLE_REGISTRY — bất biến của danh sách trắng', () =>
     for (const [table, field] of contact) {
       const p = AGENT_TABLE_REGISTRY[table].fields[field];
       expect({ table, field, ...p }).toMatchObject({
-        read: false,
+        read: true,
+        // `eq` chứ không phải `full`: lọc bằng giá trị đã biết, không dò dần.
         filter: 'eq',
         sortable: false,
         groupable: false,
@@ -132,92 +133,120 @@ describe('AGENT_TABLE_REGISTRY — bất biến của danh sách trắng', () =>
     expect(AGENT_TABLE_REGISTRY.customers.fields.fullName.read).toBe(true);
   });
 
-  it('giá niêm yết đọc được, mọi trường giá khác của biến thể KHÔNG có trong registry (AC-09)', () => {
-    const fields = AGENT_TABLE_REGISTRY.productConfigs.fields;
-    expect(fields['variations.retailPrice'].read).toBe(true);
-    for (const banned of [
-      'variations.cost',
-      'variations.nonShipCost',
-      'variations.wholesalePrice',
-      'variations.tiktokPrice',
-      'variations.expUsShipCost',
-      'variations.tiktokShipCost',
-    ]) {
-      expect(fields[banned]).toBeUndefined();
+  it('giá niêm yết đọc được, TÁM trường tiền KHÔNG có trong registry (AC-02)', () => {
+    const money: [string, string][] = [
+      ['productConfigs', 'variations.cost'],
+      ['productConfigs', 'variations.nonShipCost'],
+      ['productConfigs', 'variations.wholesalePrice'],
+      ['productConfigs', 'variations.tiktokPrice'],
+      ['productConfigs', 'variations.expUsShipCost'],
+      ['productConfigs', 'variations.tiktokShipCost'],
+      ['orders', 'baseCost'],
+      ['orders', 'shipCost'],
+    ];
+    expect(AGENT_TABLE_REGISTRY.productConfigs.fields['variations.retailPrice'].read).toBe(true);
+    for (const [table, field] of money) {
+      expect({ table, field, present: AGENT_TABLE_REGISTRY[table].fields[field] !== undefined }).toEqual({
+        table,
+        field,
+        present: false,
+      });
     }
   });
 
-  it('orders: khối địa chỉ, tiền và danh tính người thao tác đều KHÔNG có trong registry', () => {
-    const fields = AGENT_TABLE_REGISTRY.orders.fields;
-    for (const banned of [
-      'shippingAddress',
-      'baseCost',
-      'shipCost',
-      'assignee',
-      'designerRejections',
-      'fulfillmentTimeline',
-      'fulfillmentStages',
-    ]) {
-      expect(fields[banned]).toBeUndefined();
+  it('AC-03: BỐN bí mật kỹ thuật KHÔNG có trong registry', () => {
+    const secrets: [string, string][] = [
+      ['customers', 'password'],
+      ['customers', 'passwordSource'],
+      ['orderLogs', 'ip'],
+      ['orderLogs', 'userAgent'],
+    ];
+    for (const [table, field] of secrets) {
+      expect({ table, field, present: AGENT_TABLE_REGISTRY[table].fields[field] !== undefined }).toEqual({
+        table,
+        field,
+        present: false,
+      });
     }
   });
 
-  it('orderLogs: 8 trường danh tính đều KHÔNG có trong registry (AC-16)', () => {
-    const fields = AGENT_TABLE_REGISTRY.orderLogs.fields;
-    for (const banned of [
-      'userId',
-      'userName',
-      'userEmail',
-      'roleCode',
-      'impersonatorId',
-      'impersonatorName',
-      'ip',
-      'userAgent',
-    ]) {
-      expect(fields[banned]).toBeUndefined();
-    }
-    // Phần còn giữ lại và đủ dùng theo BR-4a §4
-    for (const kept of ['orderId', 'action', 'field', 'createdAt']) {
-      expect(fields[kept].read).toBe(true);
+  /**
+   * `API-17` — ca quan trọng nhất của task: vế "MỌI THỨ KHÁC ĐỀU MỞ ĐỌC" của
+   * AC-03. Bỏ sót một trường giữa ~79 trường chuyển sang danh sách trắng sẽ đi qua
+   * MỌI ca khác mà không ai biết — chỉ ca này bắt được.
+   */
+  it('AC-01/AC-03: ngoài 12 tên bị chặn, KHÔNG trường nào còn bị loại trừ', () => {
+    /** Hai ngoại lệ KHÔNG phải "bị chặn", lý do ghi tại chỗ trong registry. */
+    const NOT_BLOCKED_BUT_EXCLUDED: Record<string, string[]> = {
+      // Ghép lại có kiểm soát ở tầng service qua danh sách trắng tên trường.
+      orderLogs: ['before', 'after'],
+      // Trường ĐỘNG, không có trên schema — không có gì để phơi.
+      customers: ['impersonatedBy'],
+    };
+    const leftovers = Object.entries(AGENT_TABLE_REGISTRY).flatMap(([table, spec]) =>
+      spec.deliberatelyExcluded
+        .filter((f) => !(NOT_BLOCKED_BUT_EXCLUDED[table] ?? []).includes(f))
+        .filter((f) => !AGENT_DENY_FIELD_NAMES.includes(f.split('.').at(-1) ?? f))
+        .map((f) => `${table}.${f}`),
+    );
+    expect(leftovers).toEqual([]);
+  });
+
+  it('AC-05: trường mở đọc theo API-17 KHÔNG kèm quyền lọc/sắp xếp/nhóm', () => {
+    const opened: [string, string][] = [
+      ['orders', 'shippingAddress'],
+      ['orders', 'assignee'],
+      ['orders', 'fulfillmentTimeline'],
+      ['orders', 'deletedAt'],
+      ['orderLogs', 'userName'],
+      ['orderLogs', 'impersonatorName'],
+      ['customer_notifications', 'createdByName'],
+      ['productConfigs', 'itemSpecifics'],
+    ];
+    for (const [table, field] of opened) {
+      const p = AGENT_TABLE_REGISTRY[table].fields[field];
+      expect({ table, field, ...p }).toMatchObject({
+        read: true,
+        filter: 'none',
+        sortable: false,
+        groupable: false,
+      });
+      expect(p.aggregatable).toBeUndefined();
     }
   });
 
-  it('customer_notifications: danh tính nhân viên gửi bị che (AC-16, BA bổ sung 2026-08-18)', () => {
-    const fields = AGENT_TABLE_REGISTRY.customer_notifications.fields;
-    expect(fields.createdByUserId).toBeUndefined();
-    expect(fields.createdByName).toBeUndefined();
-    expect(fields.title.read).toBe(true);
-    expect(fields.body.read).toBe(true);
+  it('AC-06: không mô tả bảng nào còn phủ nhận thứ nay đọc được', () => {
+    const LIES = [/KHÔNG chứa địa chỉ giao/i, /KHÔNG trả email/i, /KHÔNG kèm danh tính/i, /KHÔNG kèm tên nhân viên/i];
+    for (const [table, spec] of Object.entries(AGENT_TABLE_REGISTRY)) {
+      for (const lie of LIES) {
+        expect({ table, lie: lie.source, hit: lie.test(spec.description) }).toEqual({
+          table,
+          lie: lie.source,
+          hit: false,
+        });
+      }
+    }
   });
 });
 
-describe('ORDER_LOG_VALUE_WHITELIST — danh sách BA chốt ở BR-4a §5a', () => {
-  it('I7: khớp CHÍNH XÁC 17 tên trường BA chốt, không thêm không bớt', () => {
-    expect([...ORDER_LOG_VALUE_WHITELIST]).toEqual([
-      'printStatus',
-      'toolResult',
-      'errorFile',
-      'fabricType',
-      'machineNumber',
-      'productionError',
-      'productionErrorSource',
-      'priority',
-      'type',
-      'color',
-      'size',
-      'quantity',
-      'factoryId',
-      'cancelledAt',
-      'cancelReason',
-      'heldAt',
-      'holdReason',
-    ]);
-    expect(ORDER_LOG_VALUE_WHITELIST).toHaveLength(17);
+describe('ORDER_LOG_VALUE_WHITELIST — nới ở `API-17` bằng cách SUY RA, không chép tay', () => {
+  it('I7: khớp CHÍNH XÁC tập tên trường đọc được của `orders`', () => {
+    const readable = Object.entries(AGENT_TABLE_REGISTRY.orders.fields)
+      .filter(([, p]) => p.read)
+      .map(([name]) => name);
+    expect([...ORDER_LOG_VALUE_WHITELIST].sort()).toEqual(readable.sort());
   });
 
-  it('không tên nào trong danh sách là id người dùng', () => {
-    const names = ORDER_LOG_VALUE_WHITELIST as readonly string[];
-    expect(names).not.toContain('assignee');
-    expect(names).not.toContain('userId');
+  it('I7: không tên nào trong danh sách là trường tiền hay bí mật kỹ thuật', () => {
+    for (const name of ORDER_LOG_VALUE_WHITELIST) {
+      expect({ name, denied: AGENT_DENY_FIELD_NAMES.includes(name.split('.').at(-1) ?? name) }).toEqual({
+        name,
+        denied: false,
+      });
+    }
+  });
+
+  it('danh sách không rỗng — suỷ ra từ registry mà ra rỗng nghĩa là đường suy đã hỏng', () => {
+    expect(ORDER_LOG_VALUE_WHITELIST.length).toBeGreaterThan(10);
   });
 });

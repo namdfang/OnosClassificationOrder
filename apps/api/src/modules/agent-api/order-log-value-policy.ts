@@ -1,30 +1,21 @@
+import { ordersRegistry } from './registry/orders.registry';
+
 /**
- * Giá trị cũ/mới trong nhật ký đơn (`API-1`, AC-17).
+ * Giá trị cũ/mới trong nhật ký đơn (`API-1` AC-17, nới ở `API-17`).
  *
- * Danh sách trắng dưới đây **do BA chốt**, không phải DEV đề xuất — SRS
- * `.devtasks/srs/API-1.md` BR-4a §5a, đúng 17 tên. Đây là quyết định phơi lộ
- * dữ liệu nên thuộc BA; sửa nó phải qua BA, và bất biến I7 khoá cứng con số 17
- * trong unit test để không ai nới lặng lẽ.
+ * Trước `API-17` đây là danh sách **17 tên chép tay** do BA chốt. Nay bề mặt dữ
+ * liệu mở rộng nên danh sách đó trở thành ảnh chụp của một thời điểm đã qua — và
+ * nó đã trôi khỏi thực tế **một lần rồi**. Thay vì chép tay lần thứ hai, danh sách
+ * nay **suy ra từ registry `orders`**: đúng những tên trường có `read: true`.
+ *
+ * Đây VẪN LÀ DANH SÁCH TRẮNG, không phải danh sách đen — điểm BA lo khi từ chối
+ * mở thẳng `before`/`after`: tám trường tiền không bao giờ lọt vào vì chúng không
+ * có `read: true` ở đâu cả. Trường mới chỉ xuất hiện ở đây khi có người CỐ Ý mở
+ * nó trong registry, và bất biến I4 canh việc đó.
  */
-export const ORDER_LOG_VALUE_WHITELIST = [
-  'printStatus',
-  'toolResult',
-  'errorFile',
-  'fabricType',
-  'machineNumber',
-  'productionError',
-  'productionErrorSource',
-  'priority',
-  'type',
-  'color',
-  'size',
-  'quantity',
-  'factoryId',
-  'cancelledAt',
-  'cancelReason',
-  'heldAt',
-  'holdReason',
-] as const;
+export const ORDER_LOG_VALUE_WHITELIST = Object.entries(ordersRegistry.fields)
+  .filter(([, policy]) => policy.read)
+  .map(([name]) => name);
 
 const WHITELIST = new Set<string>(ORDER_LOG_VALUE_WHITELIST);
 
@@ -50,10 +41,11 @@ export type OrderLogValueResult = { before?: unknown; after?: unknown; valueOmit
  * khác nhau tuỳ đường hỏi — agent sẽ tưởng dữ liệu hỏng hoặc tưởng ghi chú đã bị
  * sửa.
  *
- * Danh sách trắng 17 tên **không đổi**: bỏ che và nới danh sách là hai chuyện
- * khác nhau, và chỉ chuyện thứ nhất được yêu cầu. Hai tên trong danh sách là văn
- * bản gõ tay (`cancelReason`, `holdReason`) — đó chính là chỗ email/điện thoại
- * có thể xuất hiện, và nay chúng đi ra nguyên vẹn.
+ * Quy tắc 2 giữ nguyên sau `API-17` dù registry `orders` nay có trường kiểu
+ * khối (địa chỉ giao, các chặng xưởng): giá trị lịch sử của chúng vẫn bị lược, vì
+ * `before`/`after` kiểu tuỳ ý nên không kiểm được nội dung lồng nhau theo tên
+ * trường. Đọc ĐƯỢC trường ở bản ghi hiện tại khác với đọc được LỊCH SỬ THAY
+ * ĐỔI của nó.
  */
 export function applyOrderLogValuePolicy(
   field: unknown,

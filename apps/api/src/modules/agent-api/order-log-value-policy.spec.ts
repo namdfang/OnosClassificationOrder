@@ -18,13 +18,31 @@ describe('applyOrderLogValuePolicy — giá trị cũ/mới của nhật ký đ�
   });
 
   it('trường NGOÀI danh sách trắng: bỏ giá trị, đánh dấu valueOmitted', () => {
-    expect(applyOrderLogValuePolicy('toolResultNote', 'ghi chú cũ', 'ghi chú mới')).toEqual({
+    expect(applyOrderLogValuePolicy('khongTonTai', 'cũ', 'mới')).toEqual({
       valueOmitted: true,
     });
   });
 
-  it('assignee bị bỏ giá trị — danh tính người làm không bao giờ ra ngoài (AC-16)', () => {
-    expect(applyOrderLogValuePolicy('assignee', 'USER001', 'USER002')).toEqual({ valueOmitted: true });
+  /**
+   * `API-17` nới danh sách bằng cách SUY RA từ registry `orders`, nên tên trường
+   * nghiệp vụ nay qua được (`toolResultNote`, `assignee`). Chốt chặn thật là hai
+   * ca dưới: tiền không đọc được ở bản ghi hiện tại thì cũng không đọc được qua
+   * lịch sử thay đổi — đúng điểm BA lo khi từ chối mở thẳng before/after.
+   */
+  it('API-17: tên trường nghiệp vụ nay qua được — danh sách suy từ registry', () => {
+    expect(applyOrderLogValuePolicy('toolResultNote', 'ghi chú cũ', 'ghi chú mới')).toEqual({
+      before: 'ghi chú cũ',
+      after: 'ghi chú mới',
+    });
+    expect(applyOrderLogValuePolicy('assignee', 'USER001', 'USER002')).toEqual({
+      before: 'USER001',
+      after: 'USER002',
+    });
+  });
+
+  it('AC-02: tiền VẪN bị lược — không có đường vòng qua lịch sử thay đổi', () => {
+    expect(applyOrderLogValuePolicy('shipCost', 10, 20)).toEqual({ valueOmitted: true });
+    expect(applyOrderLogValuePolicy('baseCost', 10, 20)).toEqual({ valueOmitted: true });
   });
 
   it('field rỗng (log dạng import ghi nguyên payload): bỏ giá trị', () => {

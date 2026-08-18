@@ -243,16 +243,34 @@ describe('AC-06 — độ sâu và hình dạng', () => {
   });
 });
 
-describe('AC-14 — nhật ký vẫn không chứa giá trị của trường bị che', () => {
-  it('giá trị lọc trên trường không đọc được bị lược, tên toán tử thì giữ', () => {
+describe('AC-14 sau `API-17` — nhật ký ghi nguyên giá trị lọc, vì không còn trường nào không đọc được', () => {
+  /**
+   * Cơ chế lược VẪN CÒN và vẫn đúng luật "giá trị của trường không đọc được
+   * thì không ghi vào nhật ký". Nhưng sau `API-17` KHÔNG còn trường nào trong
+   * registry có `read: false`, nên trên thực tế không có gì để lược nữa.
+   *
+   * Hệ quả cần biết: email khách dùng làm điều kiện lọc NAY ĐƯỢC GHI NGUYÊN VĂN
+   * vào nhật ký gọi API. Đó là hệ quả trực tiếp của việc người dùng chốt mở đọc
+   * email, không phải một quyết định riêng của tầng nhật ký.
+   */
+  it('giá trị lọc trên email nay ghi nguyên văn', () => {
     expect(service.digest(orders, { userEmail: { $in: ['a@b.c', 'c@d.e'] } })).toEqual({
-      userEmail: { $in: '<redacted>' },
+      userEmail: { $in: ['a@b.c', 'c@d.e'] },
     });
   });
 
-  it('che cả khi nằm sâu trong cây', () => {
-    expect(service.digest(orders, { $and: [{ userEmail: 'a@b.c' }, { quantity: { $gt: 1 } }] })).toEqual({
-      $and: [{ userEmail: '<redacted>' }, { quantity: { $gt: 1 } }],
-    });
+  it('cơ chế lược vẫn sống: trường có `read: false` thì giá trị bị thay bằng dấu lược', () => {
+    const fake = {
+      ...orders,
+      fields: { ...orders.fields, secretish: { ...orders.fields.userSku, read: false } },
+    };
+    expect(service.digest(fake, { secretish: 'x' })).toEqual({ secretish: '<redacted>' });
+  });
+
+  it('không trường nào trong registry còn `read: false` — nhánh lược nay không có đầu vào thật', () => {
+    const hidden = Object.entries(orders.fields)
+      .filter(([, p]) => !p.read)
+      .map(([name]) => name);
+    expect(hidden).toEqual([]);
   });
 });

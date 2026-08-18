@@ -29,7 +29,7 @@ describe('API-18 — metadata bảng cho agent', () => {
     for (const spec of specs) {
       for (const field of buildTableMeta(spec).fields) {
         expect(typeof field.name).toBe('string');
-        expect(['string', 'number', 'date', 'bool', 'objectId', 'enum']).toContain(field.type);
+        expect(['string', 'number', 'date', 'bool', 'objectId', 'enum', 'object']).toContain(field.type);
         expect(typeof field.read).toBe('boolean');
         expect(['none', 'eq', 'full']).toContain(field.filter);
         expect(typeof field.sortable).toBe('boolean');

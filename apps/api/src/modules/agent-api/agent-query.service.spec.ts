@@ -59,8 +59,17 @@ describe('AC-06 — chặn ghi và chạy mã tuỳ ý', () => {
   });
 });
 
-describe('AC-09 — giá vốn bị cấm ở CẢ BỐN vị trí (BR-4a §2)', () => {
-  const costFields = ['variations.cost', 'variations.nonShipCost', 'variations.wholesalePrice'];
+describe('AC-02 — TÁM trường tiền bị cấm ở CẢ BỐN vị trí', () => {
+  // `API-17` dàn đủ tám tên BA chốt đích danh, thay vì ba tên mẫu như trước.
+  // `tiktokShipCost` là tên thứ tám, BA bổ sung ở note #41.
+  const costFields = [
+    'variations.cost',
+    'variations.nonShipCost',
+    'variations.wholesalePrice',
+    'variations.tiktokPrice',
+    'variations.expUsShipCost',
+    'variations.tiktokShipCost',
+  ];
 
   it.each(costFields)('%s không đọc được', (field) => {
     expect(codeOf(() => service.buildProjection(products, [field]))).toBe('FIELD_NOT_ALLOWED');
@@ -76,6 +85,19 @@ describe('AC-09 — giá vốn bị cấm ở CẢ BỐN vị trí (BR-4a §2)',
     expect(codeOf(() => service.buildSort(products, [{ field, dir: 'desc' }]))).toBe('FIELD_NOT_ALLOWED');
   });
 
+  it.each(['baseCost', 'shipCost'])('orders.%s bị cấm ở cả ba vị trí', (field) => {
+    expect(codeOf(() => service.buildProjection(orders, [field]))).toBe('FIELD_NOT_ALLOWED');
+    expect(codeOf(() => service.buildFilter(orders, { [field]: { $gt: 10 } }))).toBe('FIELD_NOT_ALLOWED');
+    expect(codeOf(() => service.buildSort(orders, [{ field, dir: 'desc' }]))).toBe('FIELD_NOT_ALLOWED');
+  });
+
+  it('tám tên tiền cũng không tổng hợp được — vị trí thứ tư', () => {
+    expect(codeOf(() => service.buildProjection(products, ['variations.tiktokShipCost']))).toBe(
+      'FIELD_NOT_ALLOWED',
+    );
+    expect(codeOf(() => service.buildFilter(orders, { shipCost: 1 }))).toBe('FIELD_NOT_ALLOWED');
+  });
+
   it('giá niêm yết thì đọc được bình thường', () => {
     expect(service.buildProjection(products, ['variations.retailPrice'])).toEqual({
       'variations.retailPrice': 1,
@@ -83,34 +105,35 @@ describe('AC-09 — giá vốn bị cấm ở CẢ BỐN vị trí (BR-4a §2)',
   });
 });
 
-describe('AC-10/11 — liên hệ khách: LỌC được, KHÔNG đọc được', () => {
-  it('lọc bằng đúng email tìm ra đơn (AC-11)', () => {
+describe('AC-07/AC-11 (API-17) — liên hệ khách: ĐỌC được, lọc bằng đúng giá trị', () => {
+  it('lọc bằng đúng email tìm ra đơn', () => {
     expect(service.buildFilter(orders, { userEmail: 'a@b.com' })).toEqual({
       userEmail: 'a@b.com',
     });
   });
 
-  it('xin đọc email → FIELD_NOT_ALLOWED', () => {
-    expect(codeOf(() => service.buildProjection(orders, ['userEmail']))).toBe('FIELD_NOT_ALLOWED');
+  it('AC-07: xin đọc email — NAY ĐƯỢC', () => {
+    expect(service.buildProjection(orders, ['userEmail']).userEmail).toBe(1);
   });
 
-  it('email KHÔNG có trong projection mặc định', () => {
-    expect(service.buildProjection(orders).userEmail).toBeUndefined();
+  it('AC-07: email CÓ trong projection mặc định', () => {
+    expect(service.buildProjection(orders).userEmail).toBe(1);
   });
 
-  it('startsWith trên email bị chặn — đó là dò dần từng ký tự, không phải tra cứu', () => {
+  it('AC-05: startsWith trên email VẪN bị chặn — đó là dò dần từng ký tự, mở ĐỌC không kéo theo mở LỌC', () => {
     expect(codeOf(() => service.buildFilter(orders, { userEmail: { $startsWith: 'a' } }))).toBe(
       'FIELD_NOT_ALLOWED',
     );
   });
 
-  it('sắp xếp theo email bị chặn — thứ tự cũng để lộ quan hệ so sánh', () => {
+  it('AC-05: sắp xếp theo email VẪN bị chặn — thứ tự cũng để lộ quan hệ so sánh', () => {
     expect(codeOf(() => service.buildSort(orders, [{ field: 'userEmail', dir: 'asc' }]))).toBe(
       'FIELD_NOT_ALLOWED',
     );
   });
 
-  it('khối địa chỉ giao KHÔNG lọc được, kể cả từng trường con (BA xác nhận ở design_review)', () => {
+  it('AC-05: khối địa chỉ giao ĐỌC được nhưng VẪN không lọc được', () => {
+    expect(service.buildProjection(orders, ['shippingAddress']).shippingAddress).toBe(1);
     for (const field of ['shippingAddress', 'shippingAddress.country', 'shippingAddress.email']) {
       expect(codeOf(() => service.buildFilter(orders, { [field]: 'VN' }))).toBe(
         'FIELD_NOT_ALLOWED',
@@ -119,22 +142,25 @@ describe('AC-10/11 — liên hệ khách: LỌC được, KHÔNG đọc được
   });
 });
 
-describe('AC-16 — danh tính người thao tác không dùng được ở bất kỳ vị trí nào', () => {
-  it.each(['assignee', 'designerRejections', 'fulfillmentTimeline'])('orders.%s bị chặn mọi hướng', (field) => {
-    expect(codeOf(() => service.buildProjection(orders, [field]))).toBe('FIELD_NOT_ALLOWED');
+describe('AC-01/AC-05 (API-17) — danh tính người thao tác: ĐỌC được, không lọc/sắp xếp được', () => {
+  it.each(['assignee', 'designerRejections', 'fulfillmentTimeline'])('orders.%s', (field) => {
+    expect(service.buildProjection(orders, [field])[field]).toBe(1);
     expect(codeOf(() => service.buildFilter(orders, { [field]: 'x' }))).toBe(
       'FIELD_NOT_ALLOWED',
     );
     expect(codeOf(() => service.buildSort(orders, [{ field, dir: 'asc' }]))).toBe('FIELD_NOT_ALLOWED');
   });
 
-  it.each(['userName', 'userEmail', 'ip', 'userAgent', 'impersonatorName'])(
-    'orderLogs.%s bị chặn',
-    (field) => {
-      const logs = AGENT_TABLE_REGISTRY.orderLogs;
-      expect(codeOf(() => service.buildProjection(logs, [field]))).toBe('FIELD_NOT_ALLOWED');
-    },
-  );
+  it.each(['userName', 'userEmail', 'impersonatorName'])('orderLogs.%s đọc được', (field) => {
+    const logs = AGENT_TABLE_REGISTRY.orderLogs;
+    expect(service.buildProjection(logs, [field])[field]).toBe(1);
+  });
+
+  it.each(['ip', 'userAgent'])('AC-03: orderLogs.%s VẪN bị chặn — bí mật kỹ thuật', (field) => {
+    const logs = AGENT_TABLE_REGISTRY.orderLogs;
+    expect(codeOf(() => service.buildProjection(logs, [field]))).toBe('FIELD_NOT_ALLOWED');
+    expect(codeOf(() => service.buildFilter(logs, { [field]: 'x' }))).toBe('FIELD_NOT_ALLOWED');
+  });
 });
 
 describe('AC-07 — lọc, sắp xếp, tổng hợp hợp lệ vẫn chạy được', () => {
@@ -185,24 +211,24 @@ describe('AC-03 — trần lô', () => {
   });
 });
 
-describe('AC-14 — nhật ký không chứa dữ liệu bị che', () => {
-  it('giá trị lọc trên trường không đọc được bị thay bằng <redacted>', () => {
+describe('AC-14 sau `API-17` — nhật ký gọi API', () => {
+  it('giá trị lọc trên email nay ghi nguyên văn — email đã là dữ liệu đọc được', () => {
     expect(service.digest(orders, { userEmail: 'khach@example.com' })).toEqual({
-      userEmail: '<redacted>',
+      userEmail: 'khach@example.com',
     });
   });
 
-  it('giá trị lọc trên trường đọc được vẫn ghi nguyên — nó không thuộc nhóm bị che', () => {
+  it('giá trị lọc trên trường đọc được vẫn ghi nguyên', () => {
     expect(service.digest(orders, { userSku: 'ABC' })).toEqual({ userSku: 'ABC' });
   });
 
-  it('che cả khi email nằm sâu trong cây điều kiện', () => {
+  it('cây điều kiện lồng nhau giữ nguyên hình dạng', () => {
     expect(
       service.digest(orders, {
         $and: [{ userEmail: 'khach@example.com' }, { quantity: { $gt: 1 } }],
       }),
     ).toEqual({
-      $and: [{ userEmail: '<redacted>' }, { quantity: { $gt: 1 } }],
+      $and: [{ userEmail: 'khach@example.com' }, { quantity: { $gt: 1 } }],
     });
   });
 });

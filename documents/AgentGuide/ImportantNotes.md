@@ -49,17 +49,30 @@ Cách áp: tra `factories` lấy `_id` của xưởng có `shortName = "US"`, r�
 
 ---
 
-## 2. Ranh giới — ba loại câu hỏi bạn KHÔNG trả lời được
+## 2. Ranh giới — đúng MƯỜI HAI trường bị chặn
 
-Đây không phải giới hạn kỹ thuật tạm thời mà là quyết định có chủ ý. Gặp ba loại này thì **chuyển cho người thật**, đừng suy đoán và đừng nói vòng vo.
+Danh sách đầy đủ và lời từ chối mẫu ở [`WhatYouCannotSee.md`](WhatYouCannotSee.md) §1. Tóm tắt:
+**tám trường tiền** (giá vốn, giá sỉ, phí ship nội bộ của đơn và của biến thể) và **bốn bí
+mật kỹ thuật** (mật khẩu, nguồn mật khẩu, địa chỉ mạng, trình duyệt của phiên thao tác).
 
-| Khách hỏi | Vì sao không trả lời được | Nói gì với khách |
-|---|---|---|
-| "Đơn của tôi giao tới địa chỉ nào?" | Toàn bộ khối địa chỉ giao bị che, kể cả quốc gia và tỉnh | Chuyển cho nhân viên hỗ trợ |
-| "Đơn này bao nhiêu tiền?" | Mọi trường tiền của đơn và giá vốn sản phẩm đều bị che | Chuyển cho nhân viên hỗ trợ. **Giá niêm yết** của sản phẩm trong `productConfigs.variations[].retailPrice` thì trả lời được |
-| "Ai đang làm đơn của tôi?" | Mọi dấu vết danh tính nhân viên bị che ở tất cả các bảng | Trả lời đơn đang ở **công đoạn** nào, **xưởng** nào — đó là thứ khách thực sự cần biết |
+**Mọi trường nghiệp vụ khác đọc được** — gồm cả địa chỉ giao, email và điện thoại
+khách, tên người xử lý. Đừng từ chối một câu hỏi vì **tưởng** dữ liệu bị che: từ chối thứ
+mình đọc được cũng là một câu trả lời sai, chỉ là sai theo hướng ngược lại.
 
-Email và điện thoại khách **lọc được** (bạn đã biết giá trị từ cuộc trò chuyện) nhưng **không đọc được**. Đừng cố lấy chúng ra bằng cách nhóm, sắp xếp, hay tổng hợp — API từ chối, và đó là chủ ý.
+Hai điều KHÔNG đổi theo việc mở này, và cả hai đều quan trọng:
+
+| Điều | Nghĩa |
+|---|---|
+| **Đọc được ≠ nói được** | Tên nhân viên, địa chỉ giao, liên hệ khách đọc được nhưng có luật riêng khi nói ra — `WhatYouCannotSee.md` §1b |
+| **Mở ĐỌC không kéo theo mở LỌC** | Nhiều trường vừa mở chỉ đọc được trên đơn bạn đã tra ra, không dùng để đi tìm đơn — `WhatYouCannotSee.md` §1c |
+
+Ba loại câu hỏi vẫn nên chuyển cho người thật, vì lý do khác chứ không phải vì bị che:
+
+| Khách hỏi | Vì sao |
+|---|---|
+| "Đơn này bao nhiêu tiền?" | Tiền của đơn nằm trong tám trường bị chặn. Giá niêm yết của sản phẩm thì trả lời được |
+| "Đổi địa chỉ giao giúp tôi" | Bạn đọc được địa chỉ nhưng **không ghi được** gì vào hệ thống |
+| "Ai làm sai đơn của tôi?" | Đọc được tên, nhưng nêu tên nhân viên cho khách là quyết định của con người |
 
 ---
 
@@ -72,7 +85,7 @@ Email và điện thoại khách **lọc được** (bạn đã biết giá tr�
 | `orders.heldAt` | Khác rỗng = đơn **đang bị giữ**, không chạy tiếp công đoạn nào. Đây thường là câu trả lời thật cho "sao đơn tôi đứng im" |
 | `orders.type` | Là **tên** sản phẩm dạng chữ, khớp với `productConfigs.fullName`, không phải id |
 | `orders.toolResult`, `productionError`, `errorFile` | Là **mã**, không phải chữ đọc được. Phải tra `workshopConfigs` theo `code` để lấy `name` |
-| `orderLogs` không có `before`/`after` | Không phải lỗi: giá trị cũ/mới chỉ được trả với các trường tình trạng sản xuất nằm trong danh sách cho phép. Trường khác trả kèm `valueOmitted: true` |
+| `orderLogs` không có `before`/`after` | Không phải lỗi: giá trị cũ/mới chỉ được trả với những tên trường của `orders` mà bạn đọc được, và chỉ khi giá trị là một giá trị đơn. Tiền và khối dữ liệu trả kèm `valueOmitted: true` |
 | Ghi chú gõ tay | Đọc được **nguyên văn**, kể cả email và số điện thoại nhân viên gõ trong đó. Nhưng **không lọc được** theo nội dung ghi chú, và **không đọc lại nguyên văn cho khách** — ghi chú là văn bản nội bộ, có thể chứa thông tin của khách hàng khác. Xem [`WhatYouCannotSee.md`](WhatYouCannotSee.md) §2 |
 
 ---

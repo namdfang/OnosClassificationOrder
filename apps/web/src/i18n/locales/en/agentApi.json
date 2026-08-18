@@ -84,7 +84,8 @@
     "date": "date",
     "bool": "boolean",
     "objectId": "identifier",
-    "enum": "enum"
+    "enum": "enum",
+    "object": "object"
   },
   "filterLevel": {
     "none": "not filterable",

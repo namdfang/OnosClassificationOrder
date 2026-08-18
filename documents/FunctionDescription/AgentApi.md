@@ -3,7 +3,7 @@
 > **File BE:** `apps/api/src/modules/agent-api/` (controller, guard, repository, 4 service, registry 5 file, 2 hàm thuần che dữ liệu)
 > **File FE:** không có — bên tiêu thụ là AI agent nội bộ, không phải trình duyệt
 > **Shared:** `packages/shared/dtos/agent-api.dto.ts`
-> **Tài liệu cho agent:** `documents/AgentGuide/DataDictionary.md`, `documents/AgentGuide/ImportantNotes.md`
+> **Tài liệu cho agent:** toàn bộ `documents/AgentGuide/` — và CHỈ thư mục đó (`API-13`)
 > **API:** `/api/v1/agent/*`
 > **Nguồn yêu cầu:** task `API-1` — SRS `.devtasks/srs/API-1.md`, thiết kế `.devtasks/design/API-1.md`
 
@@ -17,7 +17,7 @@ Vì agent nói chuyện trực tiếp với khách, **mọi dữ liệu agent đ
 
 Bảng không có tên trong registry là không tồn tại. Trường không được liệt kê tường minh thì không đọc được, không lọc được, không nhóm được, không sắp xếp được.
 
-**Ba loại câu hỏi agent cố ý KHÔNG trả lời được**, đều chuyển cho người thật: địa chỉ giao hàng · tiền của đơn · ai đang xử lý đơn.
+**Từ `API-17`, bề mặt dữ liệu mở rộng**: agent đọc được **mọi trường nghiệp vụ** của 11 bảng — gồm địa chỉ giao, email/điện thoại khách và danh tính người thao tác. **Đúng 12 trường bị chặn**: tám trường tiền (`baseCost`, `shipCost`, `variations.cost`/`nonShipCost`/`wholesalePrice`/`tiktokPrice`/`expUsShipCost`/`tiktokShipCost`) và bốn bí mật kỹ thuật (`password`, `passwordSource`, `ip`, `userAgent`). Mở ĐỌC **không** kéo theo mở LỌC: trường vừa mở giữ `filter: 'none'`, liên hệ khách giữ `filter: 'eq'`.
 
 ## 2. Luồng hoạt động
 
@@ -111,7 +111,7 @@ Không có `$between` (MongoDB không có); khoảng giá trị viết bằng d�
 
 ```ts
 type AgentFieldPolicy = {
-  type: 'string' | 'number' | 'date' | 'bool' | 'objectId' | 'enum';
+  type: 'string' | 'number' | 'date' | 'bool' | 'objectId' | 'enum' | 'object';  // 'object' từ `API-17`: trường là KHỐI, trả nguyên khối
   read: boolean;                      // được xuất hiện trong dữ liệu trả về
   filter: 'none' | 'eq' | 'full';     // 'eq' = chỉ eq/ne/in/nin (thông tin liên hệ khách)
   sortable: boolean;
@@ -213,7 +213,7 @@ Hai bất biến không viết trong yêu cầu mà bắt buộc phải có:
 - `sortable ⇒ read` — thứ tự sắp xếp để lộ quan hệ so sánh giữa các bản ghi.
 - `groupable ⇒ read` — khoá nhóm hiện nguyên ở kết quả tổng hợp.
 
-Giá vốn (`cost`, `nonShipCost`) và bốn trường giá nội bộ khác của biến thể **không có mặt trong registry ở bất kỳ vai trò nào**: cho lọc trên một trường số bị che là dựng sẵn một máy đoán nhị phân (`cost > 10` trả 0, `cost > 5` trả 3 → ra giá trị thật sau vài lời gọi).
+Tám trường tiền (sáu của biến thể cộng `orders.baseCost`/`shipCost`) **không có mặt trong registry ở bất kỳ vai trò nào**: cho lọc trên một trường số bị che là dựng sẵn một máy đoán nhị phân (`cost > 10` trả 0, `cost > 5` trả 3 → ra giá trị thật sau vài lời gọi).
 
 Ranh giới của việc che là **giá nội bộ**, không phải "mọi con số tiền". Ba trường của `productConfigs` dưới đây đọc được vì chúng đã công khai với chính khách hàng ở Customer Portal Catalog (`customer-catalog.service.ts` `$project`) — agent thấy ít hơn khách là bất nhất chứ không an toàn hơn (quyết định `API-2`):
 
@@ -281,11 +281,11 @@ là cơ chế riêng với danh sách trắng riêng. Ca kiểm quan trọng nh�
 
 ### 5.5 Giá trị cũ/mới của nhật ký
 
-`order-log-value-policy.ts` — `before`/`after` chỉ trả khi tên trường bị đổi nằm trong danh sách trắng 17 tên trường nghiệp vụ. Trường ngoài danh sách trả `valueOmitted: true` để agent biết là bị lược, không phải giá trị vốn rỗng.
+`order-log-value-policy.ts` — `before`/`after` chỉ trả khi tên trường bị đổi nằm trong danh sách trắng. Từ `API-17` danh sách đó **suy ra từ registry `orders`** (đúng các tên có `read: true`) thay vì chép tay 17 tên — bản chép tay đã trôi khỏi thực tế một lần, chép lần thứ hai là hẹn lỗi lần sau. Trường ngoài danh sách trả `valueOmitted: true` để agent biết là bị lược, không phải giá trị vốn rỗng.
 
 **Giá trị ra nguyên văn, không còn qua bộ che** (`API-12`). `API-11` bỏ che cho trường văn bản tự do nhưng chỗ này còn che, tạo ra một sự bất nhất agent không có cách nào hiểu: nội dung hiện tại của một ghi chú thì nguyên văn, còn *lịch sử thay đổi của chính ghi chú đó* lại là bản đã che — cùng một nội dung, hai câu trả lời khác nhau tuỳ đường hỏi.
 
-Hệ quả: **danh sách trắng 17 tên nay là chốt chặn duy nhất ở đây**, không còn lớp thứ hai đỡ phía sau. Hai tên trong danh sách là văn bản gõ tay (`cancelReason`, `holdReason`) — đó chính là chỗ email/điện thoại có thể xuất hiện. Nới danh sách này là quyết định của BA, và bất biến I7 khoá cứng con số 17 để không ai nới lặng lẽ.
+Hệ quả: **danh sách trắng nay là chốt chặn duy nhất ở đây**, không còn lớp thứ hai đỡ phía sau. Nó VẪN là danh sách trắng sau `API-17`: tám trường tiền không bao giờ lọt vào vì chúng không có `read: true` ở đâu cả — đúng điểm BA lo khi từ chối mở thẳng `before`/`after` thành trường đọc bình thường. Giá trị kiểu khối vẫn bị lược: đọc được trường ở bản ghi hiện tại khác với đọc được lịch sử thay đổi của nó.
 
 ### 5.6 Tám bất biến có unit test
 
@@ -295,18 +295,18 @@ Hệ quả: **danh sách trắng 17 tên nay là chốt chặn duy nhất ở đ
 |---|---|
 | I1 | `sortable ⇒ read`, `groupable ⇒ read` |
 | I2 | Danh sách bảng khớp chính xác 11 tên khoá cứng |
-| I3 | Không tên trường bị cấm nào lọt vào registry |
+| I3 | Không tên trường bị cấm nào lọt vào registry — từ `API-17` là đúng **12 tên** (8 tiền + 4 bí mật kỹ thuật) |
 | I4 | **Mọi** đường dẫn của schema phải hoặc nằm trong registry, hoặc nằm trong `deliberatelyExcluded` |
 | I5 | Metric chỉ trên trường `aggregatable && read` |
 | I6 | Văn bản tự do phải `filter: 'none'`, không sắp xếp, không nhóm |
 | I6b | Văn bản tự do KHÔNG được nằm ở đường dẫn lồng — `maskRows` chỉ che được trường cấp một (`QA-1`) |
-| I7 | Danh sách trắng `before`/`after` khớp chính xác 17 tên |
+| I7 | Danh sách trắng `before`/`after` khớp chính xác tập tên `read: true` của `orders`, và không tên nào trong đó là trường bị chặn |
 
 **I4 là bất biến quan trọng nhất**: thêm một field mới vào `OrderEntity` mà không quyết định gì về nó thì test đỏ. Đây là cơ chế duy nhất ngăn kiểu rò "field mới lọt vào theo mặc định" khi hệ thống tiến hoá — đúng loại lỗi mà test chạy qua API không bao giờ bắt được, vì lúc viết test thì field đó còn chưa tồn tại.
 
 ### 5.7 Tài liệu
 
-`AgentDocsService` dựng danh mục **một lần lúc boot** từ `documents/{AgentGuide,FunctionDescription,Architecture}`; `documents/Plans/` cố ý bị loại. `:slug` chỉ tra trong danh mục đó nên bên gọi không bao giờ đưa được đường dẫn xuống `fs`.
+`AgentDocsService` dựng danh mục **một lần lúc boot** từ `documents/AgentGuide` — và **chỉ** thư mục đó (`API-13`): `FunctionDescription` và `Architecture` viết cho người sửa mã nên thôi được phơi, `documents/Plans/` cố ý bị loại từ đầu. Cả ba thư mục vẫn nguyên trong repo, task `API-13` chỉ đổi cái được **phơi**. Mốc nhận diện gốc `documents/` lúc dò thư mục cũng là `AgentGuide` — đổi danh sách nhóm mà quên mốc này thì danh mục rỗng và cổng trả `503` cho mọi lời gọi. `:slug` chỉ tra trong danh mục đó nên bên gọi không bao giờ đưa được đường dẫn xuống `fs`.
 
 Thứ tự tìm thư mục: env `AGENT_DOCS_DIR` → `<thư mục chạy>/agent-docs` → đi ngược lên tìm `documents/` ở gốc repo. `apps/api/scripts/copy-agent-docs.mjs` chạy sau `build`, chép tài liệu vào cả `dist/agent-docs` lẫn `dist-prod/agent-docs` — vì `start:prod` chạy `node dist-prod/main.js` và không có gì bảo đảm gốc repo nằm cạnh tiến trình.
 

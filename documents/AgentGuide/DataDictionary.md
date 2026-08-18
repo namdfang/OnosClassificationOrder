@@ -54,7 +54,7 @@ hãy xem lại vòng lặp của mình thay vì thử lại ngay.
 |---|---|
 | `productionId` | Mã đơn khách dùng để tra — **khoá tra chính** |
 | `userSku` | Mã tài khoản khách; nối sang `customers.userSku` |
-| `userEmail` | **Lọc được, không đọc được.** Dùng khi bạn đã biết email từ cuộc trò chuyện |
+| `userEmail` | **Đọc được; lọc bằng đúng giá trị** (không dò dần, không sắp xếp theo nó) |
 | `type` | Tên sản phẩm dạng chữ, khớp `productConfigs.fullName` |
 | `color`, `size`, `quantity`, `printMethod` | Thuộc tính đơn |
 | `status` | Trạng thái từ hệ thống nguồn — **không** phải trạng thái sản xuất |

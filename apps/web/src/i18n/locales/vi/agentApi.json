@@ -84,7 +84,8 @@
     "date": "ngày",
     "bool": "đúng/sai",
     "objectId": "mã định danh",
-    "enum": "danh sách chọn"
+    "enum": "danh sách chọn",
+    "object": "khối dữ liệu"
   },
   "filterLevel": {
     "none": "không lọc",

@@ -8,7 +8,8 @@ import type { Model } from 'mongoose';
  * xếp được. Xem `.devtasks/design/API-1.md` §4.
  */
 export type AgentFieldPolicy = {
-  type: 'string' | 'number' | 'date' | 'bool' | 'objectId' | 'enum';
+  /** `object` — trường là KHỐI dữ liệu, trả ra nguyên khối (`API-17`). */
+  type: 'string' | 'number' | 'date' | 'bool' | 'objectId' | 'enum' | 'object';
   /** Được xuất hiện trong dữ liệu trả về. */
   read: boolean;
   /**
@@ -84,12 +85,39 @@ export const freeText = (note?: string): AgentFieldPolicy => ({
 });
 
 /**
- * Thông tin liên hệ khách: LỌC được bằng đúng giá trị đã biết, nhưng KHÔNG
- * bao giờ đọc được (BR-5, AC-11).
+ * Trường **mở đọc theo `API-17`**: đọc được, nhưng KHÔNG lọc/sắp xếp/nhóm.
+ *
+ * Vì sao đây là khuôn riêng chứ không dùng `plain`: `API-17` mở đọc ~79 trường
+ * vốn nằm ngoài danh sách trắng, và AC-05 buộc **mức lọc giữ nguyên như trước**
+ * — trước đó chúng không có mặt trong registry nên mức lọc của chúng là *không
+ * lọc được*. Mở đọc KHÔNG kéo theo mở lọc; muốn lọc một trường trong nhóm này
+ * thì đó là một quyết định riêng, đổi sang `plain` và có người chịu trách nhiệm.
+ *
+ * `plain` vẫn dành cho trường đã được cân nhắc mở đủ quyền.
  */
-export const contactFilterOnly = (note?: string): AgentFieldPolicy => ({
+export const readOnly = (type: AgentFieldPolicy['type'], note?: string): AgentFieldPolicy => ({
+  type,
+  read: true,
+  filter: 'none',
+  sortable: false,
+  groupable: false,
+  note,
+});
+
+/**
+ * Thông tin liên hệ khách: LỌC bằng đúng giá trị đã biết, và **nay đọc được**.
+ *
+ * `API-17` mở đọc ba trường liên hệ (`orders.userEmail`, `customers.userEmail`,
+ * `customers.phone`) theo quyết định của người dùng — nhất quán với `API-11`
+ * (thôi che email/điện thoại trong văn bản tự do): giữ kín ở trường có cấu trúc
+ * trong khi đã mở ở văn bản tự do là bảo vệ nửa vời.
+ *
+ * Mức lọc **giữ nguyên `eq`** (AC-05): lọc bằng giá trị đã biết, không dò dần
+ * từng ký tự — nên vẫn không `startsWith`, không sắp xếp, không nhóm.
+ */
+export const contactField = (note?: string): AgentFieldPolicy => ({
   type: 'string',
-  read: false,
+  read: true,
   filter: 'eq',
   sortable: false,
   groupable: false,

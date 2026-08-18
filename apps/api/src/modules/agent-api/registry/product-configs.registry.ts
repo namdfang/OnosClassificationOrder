@@ -1,5 +1,5 @@
 import type { AgentTableSpec } from './field-policy';
-import { freeText, numeric, plain } from './field-policy';
+import { freeText, numeric, plain, readOnly } from './field-policy';
 
 /**
  * `productConfigs` — trả lời về sản phẩm, biến thể, cấu hình sản xuất.
@@ -53,36 +53,39 @@ export const productConfigsRegistry: AgentTableSpec = {
     'variations.attributes': plain('string', 'Thuộc tính biến thể dạng nhãn - giá trị'),
     'variations.retailPrice': numeric('Giá niêm yết — trường giá DUY NHẤT được trả ra'),
     'variations.status': plain('enum'),
+
+    // ── `API-17` mở đọc: mở ĐỌC không kéo theo mở LỌC (AC-05)
+    'variations.weight': readOnly('number'),
+    'variations.width': readOnly('number'),
+    'variations.height': readOnly('number'),
+    'variations.length': readOnly('number'),
+    machineNumber: readOnly('string', 'Mã máy mặc định, tra nghĩa ở workshopConfigs'),
+    toolResult: readOnly('string', 'Mã kết quả soát tool mặc định, tra nghĩa ở workshopConfigs'),
+    images: readOnly('string', 'Danh sách ảnh sản phẩm'),
+    level: readOnly('number', 'Mức độ khó của sản phẩm, dùng điều độ nội bộ'),
+    guide: readOnly('string', 'Hướng dẫn sản xuất'),
+    templateDescription: readOnly('string'),
+    itemSpecifics: readOnly('object', 'Thông số kỹ thuật công bố của sản phẩm'),
+    hideForSeller: readOnly('bool'),
+    enableDesignCheck: readOnly('bool'),
+    enableAffiliate: readOnly('bool'),
+    weight: readOnly('number'),
+    width: readOnly('number'),
+    height: readOnly('number'),
+    length: readOnly('number'),
+    updatedAt: readOnly('date'),
+    deletedAt: readOnly('date', 'Bản ghi bị xoá mềm. Mở ĐỌC KHÔNG đổi bộ lọc mặc định của truy vấn'),
   },
   deliberatelyExcluded: [
-    // BR-4a §2 — giá vốn
+    // `API-17` — SÁU trong TÁM trường tiền BA chốt đích danh ở AC-02.
+    // `tiktokShipCost` được BA bổ sung ở note #41: cùng khối khai báo và cùng
+    // bản chất phí ship nội bộ với `nonShipCost`/`expUsShipCost`, mở lẻ một cái
+    // là phơi đúng thứ vừa khoá. Agent chỉ đọc được GIÁ BÁN (`retailPrice`).
     'variations.cost',
     'variations.nonShipCost',
-    // BA xác nhận ở design_review — giá nội bộ, cùng bản chất rủi ro với giá vốn
     'variations.wholesalePrice',
     'variations.tiktokPrice',
     'variations.expUsShipCost',
     'variations.tiktokShipCost',
-    // Không phục vụ việc trả lời khách
-    'variations.weight',
-    'variations.width',
-    'variations.height',
-    'variations.length',
-    'machineNumber',
-    'toolResult',
-    'images',
-    'level',
-    'guide',
-    'templateDescription',
-    'itemSpecifics',
-    'hideForSeller',
-    'enableDesignCheck',
-    'enableAffiliate',
-    'weight',
-    'width',
-    'height',
-    'length',
-    'updatedAt',
-    'deletedAt',
   ],
 };

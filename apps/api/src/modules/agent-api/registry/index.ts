@@ -42,35 +42,30 @@ export const AGENT_ALLOWED_TABLE_KEYS = Object.keys(AGENT_TABLE_REGISTRY);
  * Lưới an toàn THỨ HAI (bất biến I3). Danh sách trắng ở trên vẫn là cơ chế
  * chính; danh sách đen này chỉ để bắt lỗi tay — ai đó vô tình thêm một trường
  * tên `password` hay `cost` vào registry thì unit test đỏ ngay.
+ *
+ * `API-17` THU TỪ 28 TÊN XUỐNG 12: người dùng chốt agent đọc được **mọi
+ * trường nghiệp vụ**, chỉ còn tiền và bí mật kỹ thuật bị chặn. Danh sách cũ chứa
+ * đúng những tên nay phải mở (`shippingAddress`, `assignee`, `userName`…) nên
+ * giữ nguyên là tự chặn chính mình. Thu chứ KHÔNG bỏ: lưới không biến mất, nó
+ * trỏ đúng vào 12 thứ còn phải giữ.
+ *
+ * So khớp bằng **tên lá**, nên `cost` phủ cả `variations.cost`.
  */
 export const AGENT_DENY_FIELD_NAMES = [
-  'password',
-  'passwordSource',
+  // TÁM trường tiền (AC-02) — giá vốn và phí nội bộ. Agent chỉ đọc được GIÁ BÁN.
+  'baseCost',
   'cost',
-  'nonShipCost',
   'wholesalePrice',
+  'nonShipCost',
   'tiktokPrice',
   'expUsShipCost',
   'tiktokShipCost',
-  'baseCost',
   'shipCost',
-  'shippingAddress',
-  'assignee',
-  'userId',
-  'userName',
-  'roleCode',
-  'impersonatorId',
-  'impersonatorName',
-  'impersonatedBy',
+  // BỐN bí mật kỹ thuật (AC-03)
+  'password',
+  'passwordSource',
   'ip',
   'userAgent',
-  'byUserId',
-  'byUserName',
-  'createdByUserId',
-  'createdByName',
-  'designerRejections',
-  'fulfillmentTimeline',
-  'fulfillmentStages',
 ];
 
 export * from './field-policy';

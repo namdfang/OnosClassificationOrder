@@ -1,5 +1,5 @@
 import type { AgentTableSpec } from './field-policy';
-import { freeText, numeric, plain } from './field-policy';
+import { freeText, numeric, plain, readOnly } from './field-policy';
 
 /**
  * Sáu bảng danh mục nhỏ cộng bảng thông báo khách. Gom chung một file vì mỗi
@@ -23,8 +23,12 @@ export const productCategoriesRegistry: AgentTableSpec = {
     shortName: plain('string'),
     isActive: plain('bool'),
     parentId: plain('objectId', 'Danh mục cha, nếu có'),
+
+    // ── `API-17` mở đọc
+    updatedAt: readOnly('date'),
+    deletedAt: readOnly('date', 'Bản ghi bị xoá mềm. Mở ĐỌC KHÔNG đổi bộ lọc mặc định của truy vấn'),
   },
-  deliberatelyExcluded: ['updatedAt', 'deletedAt'],
+  deliberatelyExcluded: [],
 };
 
 export const collectionsRegistry: AgentTableSpec = {
@@ -41,8 +45,12 @@ export const collectionsRegistry: AgentTableSpec = {
     image: plain('string'),
     sortOrder: numeric(),
     isActive: plain('bool'),
+
+    // ── `API-17` mở đọc
+    updatedAt: readOnly('date'),
+    deletedAt: readOnly('date', 'Bản ghi bị xoá mềm. Mở ĐỌC KHÔNG đổi bộ lọc mặc định của truy vấn'),
   },
-  deliberatelyExcluded: ['updatedAt', 'deletedAt'],
+  deliberatelyExcluded: [],
 };
 
 export const promotionsRegistry: AgentTableSpec = {
@@ -68,8 +76,12 @@ export const promotionsRegistry: AgentTableSpec = {
     startDate: plain('date'),
     endDate: plain('date'),
     status: plain('enum'),
+
+    // ── `API-17` mở đọc
+    updatedAt: readOnly('date'),
+    deletedAt: readOnly('date', 'Bản ghi bị xoá mềm. Mở ĐỌC KHÔNG đổi bộ lọc mặc định của truy vấn'),
   },
-  deliberatelyExcluded: ['updatedAt', 'deletedAt'],
+  deliberatelyExcluded: [],
 };
 
 export const factoriesRegistry: AgentTableSpec = {
@@ -85,8 +97,12 @@ export const factoriesRegistry: AgentTableSpec = {
     name: plain('string'),
     shortName: plain('string'),
     isActive: plain('bool'),
+
+    // ── `API-17` mở đọc
+    updatedAt: readOnly('date'),
+    deletedAt: readOnly('date', 'Bản ghi bị xoá mềm. Mở ĐỌC KHÔNG đổi bộ lọc mặc định của truy vấn'),
   },
-  deliberatelyExcluded: ['updatedAt', 'deletedAt'],
+  deliberatelyExcluded: [],
 };
 
 export const machineTypesRegistry: AgentTableSpec = {
@@ -100,8 +116,12 @@ export const machineTypesRegistry: AgentTableSpec = {
     name: plain('string'),
     shortName: plain('string'),
     isActive: plain('bool'),
+
+    // ── `API-17` mở đọc
+    updatedAt: readOnly('date'),
+    deletedAt: readOnly('date', 'Bản ghi bị xoá mềm. Mở ĐỌC KHÔNG đổi bộ lọc mặc định của truy vấn'),
   },
-  deliberatelyExcluded: ['updatedAt', 'deletedAt'],
+  deliberatelyExcluded: [],
 };
 
 export const workshopConfigsRegistry: AgentTableSpec = {
@@ -122,8 +142,15 @@ export const workshopConfigsRegistry: AgentTableSpec = {
     isActive: plain('bool'),
     errorSource: plain('enum', 'Nguồn lỗi: designer | factory | tool-check'),
     stage: plain('enum', 'Công đoạn xưởng gắn với mã lỗi này'),
+
+    // ── `API-17` mở đọc
+    color: readOnly('string', 'Màu hiển thị của mã trên giao diện nội bộ'),
+    icon: readOnly('string'),
+    reworkTarget: readOnly('string', 'Chặng mà đơn bị đẩy về khi gặp mã lỗi này'),
+    updatedAt: readOnly('date'),
+    deletedAt: readOnly('date', 'Bản ghi bị xoá mềm. Mở ĐỌC KHÔNG đổi bộ lọc mặc định của truy vấn'),
   },
-  deliberatelyExcluded: ['color', 'icon', 'reworkTarget', 'updatedAt', 'deletedAt'],
+  deliberatelyExcluded: [],
 };
 
 /**
@@ -138,8 +165,7 @@ export const workshopConfigsRegistry: AgentTableSpec = {
 export const customerNotificationsRegistry: AgentTableSpec = {
   key: 'customer_notifications',
   description:
-    'Thông báo đã gửi cho khách. Trả lời "hệ thống đã báo gì cho tôi, lúc nào". ' +
-    'KHÔNG kèm tên nhân viên đã gửi.',
+    'Thông báo đã gửi cho khách. Trả lời "hệ thống đã báo gì cho tôi, lúc nào".',
   entityName: 'CustomerNotificationEntity',
   defaultSort: '_id',
   fields: {
@@ -148,12 +174,12 @@ export const customerNotificationsRegistry: AgentTableSpec = {
     title: freeText('Tiêu đề thông báo khách đã nhận'),
     body: freeText('Nội dung thông báo khách đã nhận'),
     customerId: plain('objectId', 'Trỏ tới customers._id; rỗng = gửi cho TẤT CẢ khách'),
+
+    // ── `API-17` mở đọc: danh tính nhân viên đã gửi
+    createdByUserId: readOnly('string'),
+    createdByName: readOnly('string', 'Tên nhân viên đã gửi thông báo'),
+    updatedAt: readOnly('date'),
+    deletedAt: readOnly('date', 'Bản ghi bị xoá mềm. Mở ĐỌC KHÔNG đổi bộ lọc mặc định của truy vấn'),
   },
-  deliberatelyExcluded: [
-    // BR-4a §4 — danh tính nhân viên đã gửi
-    'createdByUserId',
-    'createdByName',
-    'updatedAt',
-    'deletedAt',
-  ],
+  deliberatelyExcluded: [],
 };

@@ -19,7 +19,10 @@ const here = path.dirname(fileURLToPath(import.meta.url));
 const apiRoot = path.resolve(here, '..');
 const repoRoot = path.resolve(apiRoot, '..', '..');
 
-const SECTIONS = ['AgentGuide', 'FunctionDescription', 'Architecture'];
+// `API-13` thu còn đúng `AgentGuide` — phải khớp `SECTION_DIRS` của
+// `agent-docs.service.ts`, lệch nhau là dev xanh còn production thiếu tài liệu.
+// `agent-docs-scope.spec.ts` đối chiếu hai chỗ này.
+const SECTIONS = ['AgentGuide'];
 const TARGETS = ['dist', 'dist-prod'];
 
 let copied = 0;

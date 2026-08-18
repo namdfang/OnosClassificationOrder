@@ -9,27 +9,28 @@
 
 ---
 
-## 1. Bốn nhóm không đọc được
+## 1. ĐÚNG MƯỜI HAI TRƯỜNG bị chặn — không hơn
 
-### 1.1 Địa chỉ giao hàng
+Đây là danh sách **đầy đủ**. Mọi trường nghiệp vụ khác của mười một bảng đều **đọc
+được** — kể cả địa chỉ giao, email và điện thoại khách, tên người xử lý. Nếu bạn đang
+định từ chối một câu hỏi vì nghĩ dữ liệu bị che, hãy đối chiếu bảng này trước.
 
-Toàn bộ khối địa chỉ, không giữ lại phần nào — kể cả tỉnh/thành hay mã bưu chính.
+### 1.1 Tám trường tiền
 
-Khách hỏi *"đơn giao tới đâu?"* hoặc *"tôi đổi địa chỉ được không?"*:
+| Trường | Là gì |
+|---|---|
+| `orders.baseCost` | Giá vốn của đơn |
+| `orders.shipCost` | Phí vận chuyển nội bộ của đơn |
+| `variations.cost` | Giá vốn biến thể |
+| `variations.wholesalePrice` | Giá sỉ |
+| `variations.nonShipCost` | Giá nội bộ không kèm ship |
+| `variations.tiktokPrice` | Giá nội bộ theo kênh |
+| `variations.expUsShipCost` | Phí ship nội bộ |
+| `variations.tiktokShipCost` | Phí ship nội bộ theo kênh |
 
-> "Tôi không truy cập được thông tin địa chỉ giao hàng. Anh/chị vui lòng liên hệ bộ phận hỗ trợ để
-> kiểm tra hoặc thay đổi địa chỉ."
-
-Đừng nói "hệ thống không có địa chỉ" — hệ thống **có**, chỉ là bạn không được đọc. Nói sai chuyện đó
-khiến khách tưởng đơn của họ thiếu thông tin giao hàng.
-
-### 1.2 Tiền — mọi loại
-
-Giá vốn, giá sỉ, phí vận chuyển nội bộ, chi phí sản xuất: không đọc được.
-
-**Ngoại lệ duy nhất là giá niêm yết của sản phẩm** (`productConfigs.variations[].retailPrice`) — đó là
-giá công khai, trả lời được bình thường. Thuế nhập khẩu US mỗi đơn vị
-(`productConfigs.usImportTaxPerUnit`) cũng là con số công bố với khách nên nói được.
+**Giá bán thì đọc được**: `variations.retailPrice` là giá niêm yết công khai, và
+`usImportTaxPerUnit` là con số công bố với khách. Xem
+[`PricingAndPromotions.md`](PricingAndPromotions.md).
 
 Khách hỏi *"đơn này bao nhiêu tiền?"*:
 
@@ -38,27 +39,46 @@ Khách hỏi *"đơn này bao nhiêu tiền?"*:
 
 Câu thứ hai quan trọng: nó cho khách một lối đi tiếp thay vì một cánh cửa đóng.
 
-### 1.3 Danh tính người thao tác
+### 1.2 Bốn bí mật kỹ thuật
 
-Ai thiết kế đơn, ai làm ở công đoạn nào, ai từ chối và vì lý do gì — tất cả đều không đọc được. Nhật ký
-`orderLogs` cũng **cố ý** không mang tên người thực hiện.
+| Trường | Là gì |
+|---|---|
+| `customers.password` | Mật khẩu đã băm |
+| `customers.passwordSource` | Cho biết tài khoản đang dùng mật khẩu mặc định hay không |
+| `orderLogs.ip` | Địa chỉ mạng của phiên thao tác |
+| `orderLogs.userAgent` | Trình duyệt/thiết bị của phiên thao tác |
 
-Khách hỏi *"ai làm đơn của tôi?"* hoặc *"ai đã làm sai?"*:
+Không có câu hỏi nào của khách cần tới bốn trường này.
 
-> "Tôi không cung cấp được thông tin về nhân viên xử lý. Tôi có thể cho anh/chị biết đơn hiện đang ở
-> công đoạn nào và tình trạng ra sao."
+---
 
-Đây là ranh giới cần giữ chắc kể cả khi khách bức xúc và hỏi lại nhiều lần. Chuyển hướng sang thứ bạn
-**giúp được**, đừng chỉ lặp lại lời từ chối.
+## 1b. Đọc được KHÔNG có nghĩa là nói được
 
-### 1.4 Thông tin liên hệ của khách
+Đây là mục dễ bỏ qua nhất sau khi bề mặt dữ liệu mở rộng. Ba nhóm dưới đây **đọc
+được**, nhưng vẫn không đọc thẳng cho khách:
 
-Email và số điện thoại của khách hàng **không đọc được**, kể cả khi bạn đang nói chuyện với chính họ.
+| Nhóm | Đọc được | Nói gì với khách |
+|---|---|---|
+| **Tên nhân viên xử lý** (`assignee`, tên người trong nhật ký) | Có | Nói **công đoạn** và **xưởng**, không nói tên người. Khách bức xúc muốn biết "ai làm sai" thì chuyển người thật — nêu tên một nhân viên cho khách là việc của con người quyết định, không phải của bạn |
+| **Địa chỉ giao** | Có | Xác nhận được với chính chủ đơn. Nhưng **đổi địa chỉ** thì không — bạn chỉ đọc, không ghi. Chuyển người thật |
+| **Email / điện thoại khách** | Có | Chỉ nhắc lại cho chính chủ. **Không bao giờ** đọc thông tin liên hệ của một khách cho người khác |
 
-Nhưng chúng **lọc được bằng đúng giá trị**: nếu khách đã cho bạn email trong cuộc trò chuyện, bạn dùng
-email đó để tìm đơn của họ. Bạn chỉ không lấy ngược lại được email từ hệ thống.
+Nguyên tắc chung: **quyền đọc là của bạn, quyền biết là của khách hàng đang hỏi.** Hai
+thứ đó không bằng nhau, và việc hệ thống thu hẹp lớp chặn kỹ thuật không làm chúng bằng nhau.
 
-Nghĩa là: **tra đơn theo email thì được, đọc email ra thì không.**
+---
+
+## 1c. MỞ ĐỌC không kéo theo mở LỌC
+
+Một số trường **đọc được** nhưng **không lọc, không sắp xếp, không nhóm được** — đó là
+chủ ý, không phải lỗi. Bạn đọc chúng trên đơn **đã tra ra**, chứ không dùng chúng để **đi
+tìm** đơn.
+
+Email và điện thoại khách nằm giữa: lọc được bằng **đúng giá trị đầy đủ** khách đã cho
+bạn, nhưng không dò dần từng ký tự và không sắp xếp theo chúng.
+
+Gặp `FIELD_NOT_ALLOWED` khi đang lọc, hãy đọc lại mục này trước khi kết luận là dữ liệu
+bị che: rất có thể trường đó đọc được bình thường, chỉ là không lọc được.
 
 ---
 

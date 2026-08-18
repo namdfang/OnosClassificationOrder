@@ -29,7 +29,14 @@ import { ResZod } from '../types/Res';
  */
 export const AgentFieldMetaZod = z.object({
   name: z.string(),
-  type: z.enum(['string', 'number', 'date', 'bool', 'objectId', 'enum']),
+  /**
+   * `object` them o `API-17`: mo be mat du lieu keo theo mot so truong la KHOI
+   * (dia chi giao, cac chang xuong, nhat ky chuyen chang) — chung tra ra nguyen
+   * khoi chu khong phai mot gia tri le. Them gia tri moi vao union nay la thay
+   * doi CONG THEM: trang quan tri hien nhan qua i18n co defaultValue nen gia tri
+   * chua co ban dich van hien ra duoc.
+   */
+  type: z.enum(['string', 'number', 'date', 'bool', 'objectId', 'enum', 'object']),
   /** Co xuat hien trong du lieu tra ve hay khong. */
   read: z.boolean(),
   /** `none` khong loc duoc · `eq` chi so bang · `full` moi toan tu. */
