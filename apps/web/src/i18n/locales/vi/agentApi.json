@@ -1,0 +1,127 @@
+{
+  "title": "Agent API",
+  "subtitle": "Bộ API chỉ đọc dành cho AI agent chăm sóc khách hàng",
+  "status": {
+    "active": "Đang hoạt động",
+    "notConfigured": "Chưa cấu hình khoá"
+  },
+  "tabs": {
+    "start": "Bắt đầu",
+    "tables": "Bảng dữ liệu",
+    "docs": "Tài liệu",
+    "try": "Thử gọi"
+  },
+  "common": {
+    "retry": "Thử lại",
+    "loadFailed": "Không tải được dữ liệu từ máy chủ.",
+    "loading": "Đang tải…"
+  },
+  "start": {
+    "authTitle": "Xác thực",
+    "authIntro": "Mọi lời gọi phải gửi kèm header:",
+    "baseUrl": "Địa chỉ gốc",
+    "rateLimit": "Hạn mức",
+    "rateLimitValue": "{{n}} lần/phút cho mỗi endpoint, tính theo địa chỉ IP",
+    "maxLimit": "Số dòng tối đa mỗi lô",
+    "readTimeout": "Hạn thời gian đọc thô",
+    "queryTimeout": "Hạn thời gian truy vấn",
+    "capabilitiesTitle": "Năm năng lực",
+    "errorsTitle": "Bảng mã lỗi",
+    "errorsCode": "Mã",
+    "errorsHttp": "HTTP",
+    "errorsMeaning": "Nghĩa"
+  },
+  "capabilities": {
+    "listTables": "Liệt kê bảng đọc được",
+    "readRows": "Đọc thô theo lô, phân trang bằng con trỏ",
+    "query": "Truy vấn có kiểm soát: lọc, sắp xếp, đếm, nhóm, tổng hợp",
+    "listDocs": "Danh mục tài liệu nghiệp vụ",
+    "getDoc": "Nội dung markdown của một tài liệu"
+  },
+  "key": {
+    "title": "Khoá API",
+    "reveal": "Hiện khoá",
+    "hide": "Ẩn khoá",
+    "warning": "Khoá này mở toàn bộ bộ API. Không dán vào chat, không chụp màn hình khi đang hiện.",
+    "notConfiguredTitle": "Bộ API đang đóng — máy chủ chưa cấu hình khoá.",
+    "notConfiguredHint": "Đặt biến môi trường {{env}} rồi khởi động lại API. Mọi lời gọi hiện trả về 401 UNAUTHORIZED.",
+    "revealFailed": "Không lấy được khoá từ máy chủ."
+  },
+  "errors": {
+    "UNAUTHORIZED": "Thiếu hoặc sai khoá ở header X-Agent-Api-Key. Cũng trả về khi máy chủ chưa cấu hình khoá.",
+    "TABLE_NOT_ALLOWED": "Bảng này không nằm trong danh sách trắng. Xem tab Bảng dữ liệu để biết bảng nào đọc được.",
+    "FIELD_NOT_ALLOWED": "Trường này không đọc/lọc/nhóm được theo chính sách. Xem cột Lọc và Nhóm của bảng trường.",
+    "WRITE_NOT_SUPPORTED": "Bộ API chỉ đọc. Không có thao tác ghi nào được hỗ trợ.",
+    "INVALID_QUERY": "Truy vấn sai cú pháp hoặc dùng toán tử không được phép.",
+    "QUERY_TIMEOUT": "Truy vấn chạy quá lâu và đã bị dừng. Thu hẹp điều kiện lọc hoặc giảm số dòng rồi thử lại.",
+    "DOC_NOT_FOUND": "Không có tài liệu nào mang mã này. Xem danh mục ở tab Tài liệu.",
+    "DOCS_UNAVAILABLE": "Máy chủ chưa tìm thấy thư mục tài liệu."
+  },
+  "tables": {
+    "listTitle": "Bảng ({{n}})",
+    "fieldCount": "{{readable}}/{{total}} trường đọc được",
+    "defaultSort": "Sắp xếp mặc định",
+    "entityName": "Entity",
+    "tryThis": "Thử đọc bảng này",
+    "empty": "Bộ API hiện không cho đọc bảng nào.",
+    "colField": "Trường",
+    "colType": "Kiểu",
+    "colRead": "Đọc được",
+    "colFilter": "Lọc",
+    "colSort": "Sắp xếp",
+    "colGroup": "Nhóm",
+    "colNote": "Ghi chú",
+    "masked": "Che email & SĐT",
+    "aggregatable": "Cộng/trung bình được",
+    "readOnlyFilter": "Chỉ dùng để lọc, không bao giờ trả ra",
+    "excludedTitle": "Trường agent KHÔNG đọc được ({{n}})",
+    "excludedHint": "Danh sách loại trừ CÓ CHỦ Ý — những trường này tồn tại trên dữ liệu nhưng cố tình không đưa vào bộ API. Chỉ hiện tên trường, không bao giờ hiện giá trị.",
+    "excludedEmpty": "Bảng này không loại trừ trường nào."
+  },
+  "types": {
+    "string": "chuỗi",
+    "number": "số",
+    "date": "ngày",
+    "bool": "đúng/sai",
+    "objectId": "mã định danh",
+    "enum": "danh sách chọn"
+  },
+  "filterLevel": {
+    "none": "không lọc",
+    "eq": "chỉ so bằng",
+    "full": "đầy đủ"
+  },
+  "docs": {
+    "listTitle": "Danh mục ({{n}})",
+    "lines": "{{n}} dòng",
+    "empty": "Không có tài liệu nào.",
+    "pickOne": "Chọn một tài liệu bên trái để xem nội dung.",
+    "unavailable": "Máy chủ chưa tìm thấy thư mục tài liệu. Agent hiện không đọc được tài liệu nghiệp vụ nào. Ba phần còn lại của trang vẫn dùng được bình thường.",
+    "loadFailed": "Không tải được danh mục tài liệu."
+  },
+  "try": {
+    "capability": "Năng lực",
+    "table": "Bảng",
+    "limit": "Số dòng",
+    "cursor": "Con trỏ",
+    "fields": "Trường (cách nhau bằng dấu phẩy)",
+    "slug": "Mã tài liệu",
+    "queryBody": "Nội dung truy vấn (JSON)",
+    "samples": "Mẫu",
+    "sampleCount": "Đếm theo nhóm",
+    "sampleFilter": "Lọc theo khoảng ngày",
+    "sampleSort": "Sắp xếp + giới hạn",
+    "run": "Chạy",
+    "running": "Đang chạy…",
+    "disabledNoKey": "Chưa cấu hình khoá nên không gọi được. Đặt biến môi trường {{env}} rồi khởi động lại API.",
+    "resultTitle": "Kết quả",
+    "rows": "{{n}} dòng",
+    "emptySuccess": "Lời gọi thành công. Không có dòng dữ liệu nào khớp điều kiện.",
+    "truncated": "… đã cắt bớt để hiển thị. Lời gọi trả về đủ {{n}} dòng.",
+    "truncatedNoCount": "… đã cắt bớt để hiển thị. Nút sao chép vẫn lấy toàn bộ nội dung.",
+    "networkError": "Không gọi được tới máy chủ. Kiểm tra API có đang chạy không, và trình duyệt có bị CORS chặn không.",
+    "curlTitle": "curl tương đương",
+    "curlWithKey": "Chèn khoá thật thay cho $AGENT_API_KEY",
+    "idle": "Chọn một năng lực rồi bấm Chạy để xem kết quả thật."
+  }
+}

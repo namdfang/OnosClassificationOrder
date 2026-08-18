@@ -1,6 +1,7 @@
 import { initReactI18next } from 'react-i18next';
 import i18n from 'i18next';
 
+import agentApiEn from './locales/en/agentApi.json';
 import authEn from './locales/en/auth.json';
 import careersEn from './locales/en/careers.json';
 import catalogEn from './locales/en/catalog.json';
@@ -25,6 +26,7 @@ import scanErrorEn from './locales/en/scanError.json';
 import stageErrorCatalogEn from './locales/en/stageErrorCatalog.json';
 import toolCheckWorkflowEn from './locales/en/toolCheckWorkflow.json';
 import workshopConfigEn from './locales/en/workshopConfig.json';
+import agentApiVi from './locales/vi/agentApi.json';
 import authVi from './locales/vi/auth.json';
 import careersVi from './locales/vi/careers.json';
 import catalogVi from './locales/vi/catalog.json';
@@ -97,6 +99,7 @@ export const resources = {
     landing: landingVi,
     careers: careersVi,
     catalog: catalogVi,
+    agentApi: agentApiVi,
   },
   en: {
     common: commonEn,
@@ -123,6 +126,7 @@ export const resources = {
     landing: landingEn,
     careers: careersEn,
     catalog: catalogEn,
+    agentApi: agentApiEn,
   },
 } as const;
 

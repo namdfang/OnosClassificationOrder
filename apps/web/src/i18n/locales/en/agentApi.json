@@ -1,0 +1,127 @@
+{
+  "title": "Agent API",
+  "subtitle": "Read-only API for the customer-support AI agent",
+  "status": {
+    "active": "Active",
+    "notConfigured": "API key not configured"
+  },
+  "tabs": {
+    "start": "Getting started",
+    "tables": "Data tables",
+    "docs": "Documents",
+    "try": "Try a call"
+  },
+  "common": {
+    "retry": "Retry",
+    "loadFailed": "Could not load data from the server.",
+    "loading": "Loading…"
+  },
+  "start": {
+    "authTitle": "Authentication",
+    "authIntro": "Every call must send the header:",
+    "baseUrl": "Base URL",
+    "rateLimit": "Rate limit",
+    "rateLimitValue": "{{n}} calls/minute per endpoint, counted per IP address",
+    "maxLimit": "Maximum rows per batch",
+    "readTimeout": "Raw read timeout",
+    "queryTimeout": "Query timeout",
+    "capabilitiesTitle": "Five capabilities",
+    "errorsTitle": "Error codes",
+    "errorsCode": "Code",
+    "errorsHttp": "HTTP",
+    "errorsMeaning": "Meaning"
+  },
+  "capabilities": {
+    "listTables": "List the readable tables",
+    "readRows": "Raw read in batches, cursor-paginated",
+    "query": "Controlled query: filter, sort, count, group, aggregate",
+    "listDocs": "Business document catalogue",
+    "getDoc": "Markdown content of one document"
+  },
+  "key": {
+    "title": "API key",
+    "reveal": "Show key",
+    "hide": "Hide key",
+    "warning": "This key unlocks the entire API. Do not paste it into chat or screenshot the page while it is visible.",
+    "notConfiguredTitle": "The API is closed — the server has no key configured.",
+    "notConfiguredHint": "Set the {{env}} environment variable and restart the API. Every call currently returns 401 UNAUTHORIZED.",
+    "revealFailed": "Could not fetch the key from the server."
+  },
+  "errors": {
+    "UNAUTHORIZED": "Missing or wrong key in the X-Agent-Api-Key header. Also returned when the server has no key configured.",
+    "TABLE_NOT_ALLOWED": "This table is not in the allowlist. See the Data tables tab for what is readable.",
+    "FIELD_NOT_ALLOWED": "This field cannot be read, filtered or grouped under policy. Check the Filter and Group columns.",
+    "WRITE_NOT_SUPPORTED": "The API is read-only. No write operation is supported.",
+    "INVALID_QUERY": "The query is malformed or uses a disallowed operator.",
+    "QUERY_TIMEOUT": "The query ran too long and was stopped. Narrow the filter or lower the row limit, then retry.",
+    "DOC_NOT_FOUND": "No document has this slug. See the catalogue in the Documents tab.",
+    "DOCS_UNAVAILABLE": "The server cannot find the documents directory."
+  },
+  "tables": {
+    "listTitle": "Tables ({{n}})",
+    "fieldCount": "{{readable}}/{{total}} fields readable",
+    "defaultSort": "Default sort",
+    "entityName": "Entity",
+    "tryThis": "Try reading this table",
+    "empty": "The API currently exposes no readable table.",
+    "colField": "Field",
+    "colType": "Type",
+    "colRead": "Readable",
+    "colFilter": "Filter",
+    "colSort": "Sort",
+    "colGroup": "Group",
+    "colNote": "Note",
+    "masked": "Emails & phones masked",
+    "aggregatable": "Sum/average allowed",
+    "readOnlyFilter": "Filter-only, never returned",
+    "excludedTitle": "Fields the agent CANNOT read ({{n}})",
+    "excludedHint": "A DELIBERATE exclusion list — these fields exist on the data but are intentionally kept out of the API. Field names only, never values.",
+    "excludedEmpty": "This table excludes no field."
+  },
+  "types": {
+    "string": "string",
+    "number": "number",
+    "date": "date",
+    "bool": "boolean",
+    "objectId": "identifier",
+    "enum": "enum"
+  },
+  "filterLevel": {
+    "none": "not filterable",
+    "eq": "exact match only",
+    "full": "full"
+  },
+  "docs": {
+    "listTitle": "Catalogue ({{n}})",
+    "lines": "{{n}} lines",
+    "empty": "No documents.",
+    "pickOne": "Pick a document on the left to read it.",
+    "unavailable": "The server cannot find the documents directory. The agent currently reads no business documents. The other three sections still work normally.",
+    "loadFailed": "Could not load the document catalogue."
+  },
+  "try": {
+    "capability": "Capability",
+    "table": "Table",
+    "limit": "Rows",
+    "cursor": "Cursor",
+    "fields": "Fields (comma separated)",
+    "slug": "Document slug",
+    "queryBody": "Query body (JSON)",
+    "samples": "Samples",
+    "sampleCount": "Count by group",
+    "sampleFilter": "Filter by date range",
+    "sampleSort": "Sort + limit",
+    "run": "Run",
+    "running": "Running…",
+    "disabledNoKey": "No key is configured, so calls cannot run. Set the {{env}} environment variable and restart the API.",
+    "resultTitle": "Result",
+    "rows": "{{n}} rows",
+    "emptySuccess": "The call succeeded. No rows matched the criteria.",
+    "truncated": "… truncated for display. The call returned {{n}} rows in full.",
+    "truncatedNoCount": "… truncated for display. The copy button still takes the whole content.",
+    "networkError": "Could not reach the server. Check that the API is running and that the browser is not blocking the request via CORS.",
+    "curlTitle": "Equivalent curl",
+    "curlWithKey": "Insert the real key instead of $AGENT_API_KEY",
+    "idle": "Pick a capability and press Run to see a real result."
+  }
+}

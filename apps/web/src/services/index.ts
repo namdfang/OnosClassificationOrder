@@ -1,3 +1,4 @@
+import { agentApi } from './agentApi';
 import { auth } from './auth';
 import { cache } from './cache';
 import { collection } from './collection';
@@ -26,6 +27,7 @@ import { users } from './users';
 import { workshopConfig } from './workshopConfig';
 
 export const RepositoryRemote = {
+  agentApi,
   auth,
   roles,
   upload,
