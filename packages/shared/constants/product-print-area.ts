@@ -1,6 +1,6 @@
 import { z } from 'zod';
 
-import { DesignFieldsZod } from '../dtos/production-order.dto';
+import type { DesignFieldsZod } from '../dtos/production-order.dto';
 
 /** 1 trong các key hợp lệ của `DesignFields` (order.designs) — xem `production-order.dto.ts`. */
 export type ProductPrintAreaKey = keyof typeof DesignFieldsZod.shape;

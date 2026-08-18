@@ -3,10 +3,10 @@ import { extendApi } from '@anatine/zod-openapi';
 import { PageQueryZod, PageResZod, ResZod } from '@shared/types';
 import { z } from 'zod';
 
-import { ResImageZod } from './upload.dto';
 import { Status } from '../enums/commons';
 import { BaseEntityZod } from '../types/BaseEntity';
 import { getObjectValues } from '../utils/getObjectValues';
+import { ResImageZod } from './upload.dto';
 
 export const ResArtworkZod = ResImageZod;
 export type ResArtwork = z.infer<typeof ResArtworkZod>;

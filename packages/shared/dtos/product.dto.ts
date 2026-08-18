@@ -18,12 +18,12 @@ import { z } from 'zod';
 
 import { ID_LENGTH } from '../constants/common-length';
 import { BooleanZod } from '../constants/common-zod';
-import { CategoryZod } from './category.dto';
-import { UserZod } from './user.dto';
-import { getObjectValues } from '../utils/getObjectValues';
 import { Status, Tier } from '../enums';
+import { getObjectValues } from '../utils/getObjectValues';
+import { CategoryZod } from './category.dto';
 import { CreateProductVariantZod, UpdateProductVariantZod } from './product-variant.dto';
 import { ResImageZod } from './upload.dto';
+import { UserZod } from './user.dto';
 
 const ArtworkRequirementsZod = z.object({
   dpi: z.number(),

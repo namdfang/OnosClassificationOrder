@@ -6,6 +6,8 @@
     "scripts": {
         "dev": "vite --host",
         "build": "NODE_OPTIONS=\"--max-old-space-size=${NODE_HEAP_MB:-4096}\" vite build && rimraf ./dist-prod && mkdir ./dist-prod && cp -rf ./dist/* ./dist-prod/",
+        "dev:win": "vite --host",
+        "build:win": "node --max-old-space-size=4096 ./node_modules/vite/bin/vite.js build && node -e \"const fs=require('fs');fs.rmSync('dist-prod',{recursive:true,force:true});fs.cpSync('dist','dist-prod',{recursive:true})\"",
         "format": "prettier --write .",
         "lint": "eslint . --cache",
         "lint:fix": "eslint . --fix --cache",
