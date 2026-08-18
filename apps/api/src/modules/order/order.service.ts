@@ -133,7 +133,6 @@ import { ProductConfigRepository } from '../product-config/product-config.reposi
 import { RedisCacheService } from '../redis-cache/redis-cache.service';
 import { RoleRepository } from '../role/role.repository';
 import { SystemConfigService } from '../system-config/system-config.service';
-import { TelegramNotificationService } from '../telegram-notification/telegram-notification.service';
 import { UserEntity } from '../user/user.entity';
 import { WorkshopConfigRepository } from '../workshop-config/workshop-config.repository';
 import { mapProductTypeToCode } from './design-review-product-code';
@@ -399,7 +398,6 @@ export class OrderService implements OnModuleInit {
     private readonly redisCacheService: RedisCacheService,
     private readonly factoryRepository: FactoryRepository,
     private readonly machineTypeRepository: MachineTypeRepository,
-    private readonly telegramNotificationService: TelegramNotificationService,
     private readonly designImageService: DesignImageService,
     @InjectQueue(DESIGN_THUMB_QUEUE) private readonly designThumbQueue: Queue<DesignImageJobData>,
     @InjectQueue(DESIGN_PREVIEW_QUEUE) private readonly designPreviewQueue: Queue<DesignImageJobData>,
@@ -6513,14 +6511,11 @@ export class OrderService implements OnModuleInit {
   }
 
   async importOrders(dto: ImportProductionOrdersDto, ctx?: AuditContext): Promise<ImportProductionOrdersResDto> {
-    const startedAt = new Date();
     const skipped: Array<{ row: number; reason: string }> = [];
     let imported = 0;
     let updated = 0;
     let mapped = 0;
     let unmapped = 0;
-    const factoryCount = new Map<string, number>();
-    let unassignedFactoryCount = 0;
     const logRows: Array<
       | { orderId: string; action: 'create' | 'update'; after: Record<string, unknown> }
       | { orderId: string; field: string; before: unknown; after: unknown }
@@ -6587,12 +6582,6 @@ export class OrderService implements OnModuleInit {
         const forcedPriority = priorityOverride.enabled
           ? priorityOverride.map.get(customerMatchKey(row.userSku, row.userEmail))
           : undefined;
-
-        if (factoryId) {
-          factoryCount.set(factoryId, (factoryCount.get(factoryId) ?? 0) + 1);
-        } else {
-          unassignedFactoryCount++;
-        }
 
         const { designJobs, ...designData } = this.processDesigns(row.designs);
 
@@ -6757,16 +6746,6 @@ export class OrderService implements OnModuleInit {
         console.error(`[design-preview] addBulk failed (${previewJobs.length} jobs):`, err);
       });
     }
-
-    void this.sendImportSummaryNotification({
-      factoryCount,
-      unassignedFactoryCount,
-      imported,
-      updated,
-      skippedCount: skipped.length,
-      startedAt,
-      ctx,
-    });
 
     return { success: true, data: { imported, updated, mapped, unmapped, skipped } };
   }
@@ -6965,41 +6944,6 @@ export class OrderService implements OnModuleInit {
       success: true,
       data: { updated, notFound, cancelled, assigneeMatched, skipped },
     };
-  }
-
-  private async sendImportSummaryNotification(args: {
-    factoryCount: Map<string, number>;
-    unassignedFactoryCount: number;
-    imported: number;
-    updated: number;
-    skippedCount: number;
-    startedAt: Date;
-    ctx?: AuditContext;
-  }): Promise<void> {
-    try {
-      const ids = [...args.factoryCount.keys()];
-      const factories = ids.length > 0 ? await this.factoryRepository.findAll({ _id: { $in: ids } }) : [];
-      const nameById = new Map(factories.map((f) => [String(f._id), f.name]));
-
-      const byFactory = ids.map((id) => ({
-        name: nameById.get(id) ?? `#${id.slice(-6)}`,
-        count: args.factoryCount.get(id) ?? 0,
-      }));
-
-      await this.telegramNotificationService.notifyImportSummary({
-        triggeredBy: args.ctx?.user ? { email: args.ctx.user.email, fullName: args.ctx.user.fullName } : undefined,
-        totals: { imported: args.imported, updated: args.updated, skipped: args.skippedCount },
-        byFactory,
-        unassignedFactoryCount: args.unassignedFactoryCount,
-        startedAt: args.startedAt,
-        finishedAt: new Date(),
-      });
-    } catch (error) {
-      this.logger.info({
-        message: '[order.import][WARN] telegram notification failed',
-        error: error instanceof Error ? error.message : String(error),
-      });
-    }
   }
 
   /**

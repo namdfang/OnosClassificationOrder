@@ -22,12 +22,31 @@ function fmtDdMm(windowStart: Date): string {
 export const REPORT_DAY_COUNT = 4;
 
 /**
- * `REPORT_DAY_COUNT` ngày liền kề theo giờ VN, cũ → mới (phần tử cuối = hôm
- * nay) — mỗi window `[00:00, 00:00 ngày sau)`.
+ * Cửa sổ section "SLA sản xuất" — nhìn lùi 7 ngày liền kề (TÍNH CẢ Chủ nhật —
+ * khách lên đơn cả CN, đã cân nhắc phương án bỏ CN rồi user chốt tính đủ) để
+ * soi đủ các lô đã đến hạn N2.
  */
-export function buildReportDayWindows(now: Date): ReportDayWindow[] {
-  return Array.from({ length: REPORT_DAY_COUNT }, (_, i) => {
-    const offset = i - (REPORT_DAY_COUNT - 1); // ...-2, -1, 0
+export const SLA_DAY_COUNT = 7;
+
+/**
+ * Chỉ tiêu % CỘNG DỒN stock out theo mốc N (ngày lịch VN kể từ ngày vào SX) —
+ * lô đã qua trọn mốc mà dưới ngưỡng → ⚠; riêng N2 là cam kết chu kỳ, quá hạn
+ * mà chưa 100% → 🔴 kèm breakdown kẹt ở chặng nào. Đổi chỉ tiêu: sửa TẠI ĐÂY.
+ */
+export const SLA_TARGETS: { n: number; pct: number }[] = [
+  { n: 0, pct: 30 },
+  { n: 1, pct: 80 },
+  { n: 2, pct: 100 },
+];
+
+/**
+ * `count` ngày liền kề theo giờ VN, cũ → mới (phần tử cuối = hôm nay) — mỗi
+ * window `[00:00, 00:00 ngày sau)`. Mặc định `REPORT_DAY_COUNT` (phễu chính),
+ * section SLA truyền `SLA_DAY_COUNT`.
+ */
+export function buildReportDayWindows(now: Date, count = REPORT_DAY_COUNT): ReportDayWindow[] {
+  return Array.from({ length: count }, (_, i) => {
+    const offset = i - (count - 1); // ...-2, -1, 0
     const start = vnStartOfDay(now, offset);
 
     return { label: fmtDdMm(start), from: start, to: vnStartOfDay(now, offset + 1) };

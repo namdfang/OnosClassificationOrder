@@ -4,7 +4,7 @@ import type { OrderPriority } from 'shared';
  * Loại view báo cáo — mỗi nút Telegram/web trigger 1 view. `daily` kèm
  * `factoryId` = phễu tổng quan LỌC theo 1 xưởng (nút "🏭 <tên xưởng>").
  */
-export type ReportKind = 'daily' | 'designer' | 'tool-check';
+export type ReportKind = 'daily' | 'designer' | 'tool-check' | 'detail';
 
 /** 1 ngày (giờ VN) trong cửa sổ báo cáo — `[from, to)` UTC, `label` dạng `dd/MM`. */
 export type ReportDayWindow = {
@@ -84,11 +84,40 @@ export type ToolCheckReportDay = {
 /** Xưởng sản xuất (nút "🏭 <tên>" trên keyboard) — 1 nút/xưởng, callback `rpt:fac:<id>`. */
 export type ReportFactory = { id: string; name: string };
 
+/**
+ * 1 lô ngày sản xuất trong section "SLA sản xuất" (cohort theo `inProductionAt`
+ * ngày lịch VN, cửa sổ `SLA_DAY_COUNT` ngày). Độ trễ N = hiệu NGÀY LỊCH VN giữa
+ * stock out (`fulfillmentCompletedAt`) và ngày vào sản xuất — cam kết 100% đơn
+ * kết thúc chu kỳ chậm nhất N2 (`SLA_TARGETS`).
+ */
+export type SlaCohortRow = {
+  label: string;
+  /** Tuổi lô = hôm nay − ngày SX (0 = hôm nay, TÍNH CẢ CN). Quyết định mốc nào đã "đến hạn". */
+  ageDays: number;
+  total: number;
+  doneN0: number; // stock out ngay trong ngày vào SX
+  doneN1: number; // stock out đúng ngày N+1
+  doneN2: number; // stock out đúng ngày N+2
+  doneN3: number; // stock out đúng ngày N+3
+  doneLate: number; // stock out từ N+4 trở đi (trễ sâu)
+  notDone: number; // chưa stock out
+  // Đơn CHƯA XONG đang kẹt ở chặng nào (partition, tổng = notDone) — cho dòng cảnh báo.
+  stuckSoat: number;
+  stuckDesign: number;
+  stuckInPressQc: number;
+  stuckSew: number;
+  stuckPack: number;
+};
+
 /** Toàn bộ dữ liệu 1 lần aggregate — các view format từ các lát cắt khác nhau. */
 export type DailyOrdersReportData = {
   days: ReportDayStats[];
   priorityRows: PriorityCustomerReportRow[];
   designerDays: DesignerReportDay[];
   toolCheckDays: ToolCheckReportDay[];
+  slaDays: SlaCohortRow[]; // section "SLA sản xuất" — cũ → mới, SLA_DAY_COUNT ngày liền kề (tính cả CN)
+  // Tồn sau hạn N2 theo xưởng (view tổng; rỗng khi đang lọc 1 xưởng) — sort `total` giảm
+  // dần; `byDay[i]` = tồn của xưởng trong lô `slaDays[i]` (chỉ các lô đã đến hạn = bỏ 2 lô cuối).
+  slaFactories: { name: string; total: number; byDay: number[] }[];
   factories: ReportFactory[]; // để dựng nút xưởng (KHÔNG phụ thuộc factoryId đang lọc)
 };

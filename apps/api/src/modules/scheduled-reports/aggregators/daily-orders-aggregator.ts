@@ -10,8 +10,8 @@ import { UserEntity } from '@/modules/user/user.entity';
 import { designerFlowConds } from '@/utils/designer-flow';
 import { getExcludedFactoryIdSync, productionFactoryClause } from '@/utils/excluded-factory';
 
-import { buildReportDayWindows } from '../build-period';
-import type { DailyOrdersReportData, DesignerReportDay, ReportDayStats } from '../types';
+import { buildReportDayWindows, SLA_DAY_COUNT } from '../build-period';
+import type { DailyOrdersReportData, DesignerReportDay, ReportDayStats, SlaCohortRow } from '../types';
 
 type MetricShape = {
   total: number;
@@ -302,9 +302,166 @@ export class DailyOrdersAggregator {
       };
     });
 
-    const factories = await this.listProductionFactories();
+    const [factories, { slaDays, slaFactories }] = await Promise.all([
+      this.listProductionFactories(),
+      this.aggregateSla(now, factoryId),
+    ]);
 
-    return { days, priorityRows, designerDays, toolCheckDays, factories };
+    return { days, priorityRows, designerDays, toolCheckDays, slaDays, slaFactories, factories };
+  }
+
+  /**
+   * Section "SLA sản xuất" — cohort theo ngày vào SX (`SLA_DAY_COUNT` ngày
+   * liền kề, TÍNH CẢ Chủ nhật — khách lên đơn cả CN, user đã chốt; cửa sổ
+   * RỘNG hơn phễu chính nên aggregate riêng): mỗi lô đếm stock out theo độ
+   * trễ NGÀY LỊCH VN (N0/N1/N2/N3/trễ hơn/chưa xong) + đơn chưa xong đang kẹt
+   * ở chặng nào; kèm `slaFactories` = tồn sau hạn N2 gộp theo xưởng (chỉ view
+   * tổng). Cùng scope phễu chính (loại đơn hủy/chưa map xưởng/US, lọc 1 xưởng
+   * khi có `factoryId`). Đơn giữ (hold) TÍNH GỘP. Chỉ tiêu: `SLA_TARGETS`.
+   */
+  private async aggregateSla(
+    now: Date,
+    factoryId?: string,
+  ): Promise<{ slaDays: SlaCohortRow[]; slaFactories: { name: string; total: number; byDay: number[] }[] }> {
+    const windows = buildReportDayWindows(now, SLA_DAY_COUNT);
+    const MS_DAY = 86_400_000;
+    const TZ_MS = 7 * 3_600_000;
+    // Chỉ số ngày-lịch-VN của 1 mốc thời gian (epoch-day sau khi dịch +7h).
+    const vnDayIdx = (field: string) => ({ $floor: { $divide: [{ $add: [{ $toLong: field }, TZ_MS] }, MS_DAY] } });
+
+    const completedExpr = { $ne: [{ $ifNull: ['$fulfillmentCompletedAt', null] }, null] };
+    const notCompletedExpr = { $eq: [{ $ifNull: ['$fulfillmentCompletedAt', null] }, null] };
+    const cfsExpr = { $ifNull: ['$currentFulfillmentStage', ''] };
+    const preFulfillExpr = { $and: [{ $eq: [cfsExpr, ''] }, notCompletedExpr] };
+    const noteEmptyExpr = { $eq: [{ $ifNull: ['$toolResultNote', ''] }, ''] };
+    // Độ trễ = hiệu ngày lịch VN (KHÁC cột %≤2 ngày của phễu vốn tính 48h tròn).
+    const lagExpr = { $subtract: [vnDayIdx('$fulfillmentCompletedAt'), vnDayIdx('$inProductionAt')] };
+    const doneAtLag = (cond: Record<string, unknown>) => ({
+      $sum: { $cond: [{ $and: [completedExpr, cond] }, 1, 0] },
+    });
+
+    // Lô "đã đến hạn N2" = tuổi ≥ 2 ngày → mọi window trừ 2 window cuối.
+    const overdueWindows = windows.slice(0, -2);
+
+    const [agg] = await this.orderModel.aggregate<{
+      days: (Omit<SlaCohortRow, 'label' | 'ageDays'> & { _id: number })[];
+      factories: { _id: { day: number; factoryId: string }; notDone: number }[];
+    }>([
+      {
+        $match: {
+          cancelledAt: null,
+          factoryId: factoryId || productionFactoryClause(this.orderModel.db),
+          inProductionAt: { $gte: windows[0].from, $lt: windows[windows.length - 1].to },
+        },
+      },
+      {
+        $addFields: {
+          __dayIdx: {
+            $switch: {
+              branches: windows.map((w, i) => ({ case: { $lt: ['$inProductionAt', w.to] }, then: i })),
+              default: windows.length - 1,
+            },
+          },
+        },
+      },
+      {
+        $facet: {
+          days: [
+            {
+              $group: {
+                _id: '$__dayIdx',
+                total: { $sum: 1 },
+                // lag ≤ 0 gom về N0 (phòng data lệch: completedAt sớm hơn inProductionAt).
+                doneN0: doneAtLag({ $lte: [lagExpr, 0] }),
+                doneN1: doneAtLag({ $eq: [lagExpr, 1] }),
+                doneN2: doneAtLag({ $eq: [lagExpr, 2] }),
+                doneN3: doneAtLag({ $eq: [lagExpr, 3] }),
+                doneLate: doneAtLag({ $gte: [lagExpr, 4] }),
+                notDone: { $sum: { $cond: [notCompletedExpr, 1, 0] } },
+                // Chưa xong đang kẹt ở đâu — cùng định nghĩa 5 chặng của phễu chính.
+                stuckSoat: { $sum: { $cond: [{ $and: [preFulfillExpr, noteEmptyExpr] }, 1, 0] } },
+                stuckDesign: { $sum: { $cond: [{ $and: [preFulfillExpr, { $not: [noteEmptyExpr] }] }, 1, 0] } },
+                stuckInPressQc: {
+                  $sum: {
+                    $cond: [
+                      {
+                        $in: [
+                          cfsExpr,
+                          [FulfillmentStage.Print, FulfillmentStage.Press, FulfillmentStage.QCPostPress],
+                        ],
+                      },
+                      1,
+                      0,
+                    ],
+                  },
+                },
+                stuckSew: {
+                  $sum: { $cond: [{ $in: [cfsExpr, [FulfillmentStage.SewIn, FulfillmentStage.SewOut]] }, 1, 0] },
+                },
+                stuckPack: { $sum: { $cond: [{ $eq: [cfsExpr, FulfillmentStage.Pack] }, 1, 0] } },
+              },
+            },
+          ],
+          // Tồn sau hạn N2 theo (ngày, xưởng) — ma trận ngày × xưởng cho bảng
+          // "tồn theo xưởng". Chỉ tính khi view tổng (không lọc xưởng) và có lô
+          // đã đến hạn. Nhánh rỗng: match không bao giờ khớp.
+          factories:
+            !factoryId && overdueWindows.length > 0
+              ? [
+                  { $match: { $expr: { $lt: ['$__dayIdx', overdueWindows.length] }, fulfillmentCompletedAt: null } },
+                  { $group: { _id: { day: '$__dayIdx', factoryId: '$factoryId' }, notDone: { $sum: 1 } } },
+                ]
+              : [{ $match: { _id: { $exists: false } } }],
+        },
+      },
+    ]);
+
+    const slaDays = windows.map((w, idx) => {
+      const r = (agg?.days || []).find((x) => x._id === idx);
+
+      return {
+        label: w.label,
+        ageDays: windows.length - 1 - idx,
+        total: r?.total ?? 0,
+        doneN0: r?.doneN0 ?? 0,
+        doneN1: r?.doneN1 ?? 0,
+        doneN2: r?.doneN2 ?? 0,
+        doneN3: r?.doneN3 ?? 0,
+        doneLate: r?.doneLate ?? 0,
+        notDone: r?.notDone ?? 0,
+        stuckSoat: r?.stuckSoat ?? 0,
+        stuckDesign: r?.stuckDesign ?? 0,
+        stuckInPressQc: r?.stuckInPressQc ?? 0,
+        stuckSew: r?.stuckSew ?? 0,
+        stuckPack: r?.stuckPack ?? 0,
+      };
+    });
+
+    // Gom (ngày, xưởng) → ma trận byDay per xưởng; resolve tên (list đã loại
+    // xưởng US — xưởng ngoài list bỏ qua), sort tổng tồn giảm dần.
+    const factoryRows = agg?.factories || [];
+    let slaFactories: { name: string; total: number; byDay: number[] }[] = [];
+    if (factoryRows.length > 0) {
+      const names = await this.listProductionFactories();
+      const nameById = new Map(names.map((f) => [f.id, f.name]));
+      const byFactory = new Map<string, number[]>();
+      for (const r of factoryRows) {
+        const id = String(r._id.factoryId);
+        if (!nameById.has(id)) continue;
+        const byDay = byFactory.get(id) ?? new Array(overdueWindows.length).fill(0);
+        byDay[r._id.day] = r.notDone;
+        byFactory.set(id, byDay);
+      }
+      slaFactories = [...byFactory.entries()]
+        .map(([id, byDay]) => ({
+          name: nameById.get(id) as string,
+          total: byDay.reduce((s, n) => s + n, 0),
+          byDay,
+        }))
+        .sort((a, b) => b.total - a.total);
+    }
+
+    return { slaDays, slaFactories };
   }
 
   /** Danh sách xưởng sản xuất (loại xưởng US) để dựng nút "🏭 <tên>" — độc lập filter. */

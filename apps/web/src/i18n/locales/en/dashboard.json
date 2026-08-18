@@ -22,6 +22,7 @@
     "choose": "Choose report to send",
     "views": {
       "daily": "Overview",
+      "detail": "Details (funnel + priority customers)",
       "designer": "By designer",
       "tool-check": "Tool check",
       "factory": "Factory {{name}}"
