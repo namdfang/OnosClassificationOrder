@@ -21,7 +21,7 @@ const PRODUCT_TYPE_CODE_MAP: Record<string, string> = {
     "all-over print sleeveless jersey tank top": "TTOP",
     "all-over print premium women's polo shirt": "PLN",
     "women's sleeveless performance polo shirt": "PLNSN",
-    "all-over print sweatpants 270 gsm": "SP270",
+    "all-over print sweatpants 270 gsm": "SP270A",//=>SP270 Old
     "all-over print kids hoodie": "HDKIDS",
     "double-sided printed canvas flag": "CANVASFLAG",
     "all-over print women's t-shirt": "TSWOMEN",//
