@@ -7,12 +7,12 @@ import { CODE_LENGTH, DESCRIPTION_MAX_LENGTH, EXTERNAL_ID_MAX_LENGTH, ID_LENGTH,
 import { BooleanZod, CodeZod, ExternalIDZod, IDZod, NameZod, optionalStringTransform, OptionalURLZod, TrackingNumberZod, URLZod } from '../constants/common-zod';
 import { Marketplace } from '../constants/marketplace';
 import { BulkImportUpdateOrderType, DownloadStatus, LabelService, OrderStatisticChartGroupBy, OrderStatisticChartType, OrderStatus, OrderType, ProductionLine, ShippingMethod, ShippingStatus, ShippingType, ThirdShippingService } from '../constants/order';
-import { TransactionZod } from './transaction.dto';
 import { PrintArea } from '../enums/product';
 import { ProviderCode } from '../enums/provider-code';
 import { TrackingStatus } from '../enums/tracking';
 import { getObjectValues } from '../utils/getObjectValues';
 import { CreateLineItemZod } from './order-item.dto';
+import { TransactionZod } from './transaction.dto';
 
 export const ShippingAddressZod = z.object({
   firstName: NameZod,

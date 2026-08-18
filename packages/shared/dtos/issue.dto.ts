@@ -5,10 +5,10 @@ import { z } from 'zod';
 import { PRIORITY_MAX, PRIORITY_MIN } from '../constants/common-length';
 import { CodeZod, IDZod } from '../constants/common-zod';
 import { IssueSolution, IssueStatus, IssueType } from '../constants/issue';
-import { OrderZod } from './order.dto';
 import { PageQueryZod } from '../types/PageQuery';
 import { PageResZod } from '../types/PageRes';
 import { ResZod } from '../types/Res';
+import { OrderZod } from './order.dto';
 
 export const IssueZod = z.object({
   code: CodeZod,

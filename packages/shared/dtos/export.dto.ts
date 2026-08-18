@@ -4,11 +4,11 @@ import { z } from 'zod';
 
 import { IDZod, NameZod, TrackingNumberZod } from '../constants/common-zod';
 import { ExportStatus, ExportType } from '../constants/export-status';
-import { OrderZod } from './order.dto';
 import { TrackingStatus } from '../enums/tracking';
 import { BaseEntityZod } from '../types/BaseEntity';
 import { ResZod } from '../types/Res';
 import { getObjectValues } from '../utils/getObjectValues';
+import { OrderZod } from './order.dto';
 
 export const ExportZod = BaseEntityZod.extend({
   url: z.string().optional(),

@@ -9,11 +9,11 @@ import { ExternalIDZod, IDZod, NameZod, optionalStringTransform, OptionalURLZod,
 import { UAT_SHIP_FEE } from '../constants/dropship-order';
 import { Marketplace } from '../constants/marketplace';
 import { BETA_STOCK_SHIP_FEE, STOCK_ORDER_TYPE, StockOrderStatus } from '../constants/stock-order';
+import { TrackingStatus } from '../enums/tracking';
+import { getObjectValues } from '../utils/getObjectValues';
 import { GetStatisticsZod, OrderTrackingZod, SendToProviderZod, UpdateLineItemsZod } from './order.dto';
 import { CreateStockLineItemZod } from './stock-order-item.dto';
 import { TransactionZod } from './transaction.dto';
-import { TrackingStatus } from '../enums/tracking';
-import { getObjectValues } from '../utils/getObjectValues';
 // import { CreateLineItemZod } from './StockOrder-item.dto';
 
 export const ShippingAddressStockZod = z.object({
