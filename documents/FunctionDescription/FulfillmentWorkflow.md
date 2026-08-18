@@ -81,6 +81,22 @@ Tiếp tục Press → QCPostPress → QCSorting → SewIn → SewOut → QCPost
 - `fulfillmentCompletedAt = now`
 - Đơn hoàn thành toàn bộ workflow.
 
+### 2.2b Luồng rút gọn theo xưởng (`FactoryEntity.flowType='merged'` — xưởng gỗ, 2026-08)
+
+Xưởng có `flowType='merged'` (checkbox "Luồng rút gọn (xưởng gỗ)" ở tab Xưởng `FactoryTab.tsx`, Products.md §3.2) chạy pipeline 6 công đoạn nhưng **2 công đoạn GỘP tự hoàn thành theo công đoạn GỐC** (map `MERGED_STAGE_SOURCE` trong `packages/shared/enums/factory-flow.ts`):
+
+- **In (`print`) complete → Ép (`press`) tự Done** cùng thời điểm → đơn nhảy thẳng QC (`qc-post-press`).
+- **May vào (`sew-in`) complete → May ra (`sew-out`) tự Done** → đơn nhảy thẳng Đóng hàng (`pack`).
+
+Chi tiết auto-complete (trong `resolveTransition()` case Complete, `fulfillment-task.service.ts`):
+
+- Stage gộp được ghi **ĐỦ state**: `status='done'`, `waitingAt=startedAt=firstStartedAt=completedAt=now` (mọi phép trừ duration ra 0 thay vì NaN), `workMs=0`, `assignee` = worker công đoạn gốc; push riêng 1 `fulfillmentTimeline` entry (`byUserId` = worker gốc, `reason='Tự động hoàn thành (luồng rút gọn)'`).
+- Vòng rework (stage gộp từng `completedAt`): auto-complete lại set `reworkAt` + `$inc reworkCount` — khớp ngữ nghĩa auto-advance thường.
+- **Rework-back redirect**: đích lùi là stage gộp → tự chuyển về stage gốc (`redirectMergedTarget`: press→print, sew-out→sew-in) ở CẢ 2 đường: `resolveTransition()` case ReworkBack (kanban/dialog) + `OrderService.buildFulfillmentReworkBack()` (scan lỗi / danh mục lỗi công đoạn `reworkTarget` / admin) — đơn merged không bao giờ dừng ở stage gộp nên lùi về đó sẽ kẹt (xưởng không có worker giữ).
+- Nhận diện xưởng merged: cache process-wide `utils/merged-flow-factory.ts` (`isMergedFlowFactorySync`, TTL 60s, load ở `OrderService.onModuleInit` — pattern `excluded-factory.ts` nhưng theo field `flowType`, KHÔNG hardcode shortName).
+
+**Vận hành:** xưởng merged chỉ cần 4 worker (Print / QCPostPress / SewIn / Pack) — KHÔNG tạo user cho Press/SewOut (unique index partial cho phép thiếu). **Bật flag NGAY khi tạo xưởng, trước khi cho đơn chảy vào** — bật muộn thì đơn đã lỡ nằm ở Ép/May ra sẽ kẹt (chỉ admin override cứu được). Mọi màn hình giữ nguyên 6 công đoạn; stage gộp hiển thị Done tức thì với timestamp trùng stage gốc. Unit tests: `fulfillment-transition-merged.spec.ts`.
+
 ### 2.3 Báo lỗi (rework-back)
 
 Trong tab "Đang làm", bấm "Báo lỗi" mở dialog:

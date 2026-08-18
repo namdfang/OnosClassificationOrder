@@ -216,6 +216,18 @@ Kéo TOÀN BỘ catalog từ hệ cũ (GraphQL `productPreset` — `api.onospod.
 
 Crawl fetch `onospod.com/product/{slug}/` (chỉ sản phẩm CÓ `slug` còn thiếu ít nhất 1 giá trị), parse label baked trong JSON `data-form` của theme; block package có điều kiện `value_field` (vd "48x24") → match với GIÁ TRỊ thuộc tính của từng biến thể, block không điều kiện = áp mọi biến thể. Batch cursor `_id` như crawl-mockups (§2.6); slug 404 (sản phẩm đã gỡ khỏi site cũ) → `error`, cursor vẫn tiến. Kết quả chạy thật local 2026-08-06: 120/165 sản phẩm có tax, 125 có packageGram, ~40 slug 404. 2 giá trị này hiển thị ở Customer Portal detail (CustomerPortal.md §7.1 — info block + bảng Biến thể & Giá).
 
+### 2.9 Import SẢN PHẨM HOÀN CHỈNH từ file (nút "Import sản phẩm từ file")
+
+> **File:** FE `apps/web/src/pages/products/ImportFullProductFileDialog.tsx` (nút toolbar `ProductConfigTab.tsx`, i18n `configTab.importFullButton` + `importFullDialog.*`) → BE `POST /product-configs/import-full` (`@Auth([Admin, Manager])`, `ProductConfigService.importFullProducts()`) + DTOs `ImportFullProductZod`/`ImportFullProductsDto`/`ResDto` (`product-config.dto.ts`) + `findByLabel()` mới ở `ProductCategoryService`/`CollectionService`. Unit tests: `import-full-products.spec.ts`. File mẫu: `Data/Mau-Import-Go-TNW.xlsx` (tab "Import sản phẩm gỗ" + tab Hướng dẫn).
+
+Khác `POST /import` (§2.1 — 6 cột config tối thiểu): nhận sản phẩm ĐỦ catalog + biến thể/giá. Format file (map theo TÊN header, không positional):
+
+- **Biến thể trải NHIỀU DÒNG**: dòng có "Tên SP" = bắt đầu sản phẩm (điền đủ cột catalog + biến thể đầu nếu có SKU); dòng dưới trống Tên SP + có SKU = biến thể tiếp theo.
+- Cột: Tên SP\* / Tên viết tắt / Xưởng\* / Phòng\* / Danh mục / Collection (nhiều, phẩy) / Print method / Mockup URL / Ảnh phụ (nhiều URL, xuống dòng hoặc `|`) / Bảng size URL / Mô tả ngắn / Mô tả / Thông số ("Nhãn: giá trị" mỗi dòng → `itemSpecifics`) / Thời gian SX + ship (ngày) / Cân nặng-Rộng-Cao-Dài (đóng gói) / SKU / Màu / Size (→ `attributes`) / Giá vốn / Giá nonship / Giá bán lẻ / Giá sỉ. (\* = bắt buộc thực dụng — Xưởng sai label → skip cả sản phẩm; Phòng/Danh mục/Collection sai → warning + bỏ field.)
+- **Upsert theo `fullName`** (exact, trim): sản phẩm đã có → CẬP NHẬT, chỉ field CÓ dữ liệu trong file mới ghi đè, `variations` merge theo SKU (biến thể cũ ngoài file giữ nguyên). Tạo MỚI → mặc định `toolResult='no-tool'` (file không có cột Máy/Tool — cấu hình tool qua §2.1 hoặc trang chi tiết).
+- Response `{ imported, updated, skipped[{product,reason}], warnings[{product,reason}] }`; SKU biến thể trùng sản phẩm khác (E11000) → skip + lý do.
+- Dialog FE: quét mọi sheet, nhận sheet đầu tiên có header "Tên SP" KÈM cột SKU/Danh mục/Mockup (phân biệt với sheet file SKU §2.1); preview badge Tạo mới/Cập nhật; ảnh phải là URL sẵn (không bulk-upload file ảnh).
+
 ---
 
 ## 3. Tab `Xưởng` (`apps/web/src/pages/products/FactoryTab.tsx`)
@@ -232,6 +244,7 @@ Crawl fetch `onospod.com/product/{slug}/` (chỉ sản phẩm CÓ `slug` còn th
 | `name` | string | Required, trim |
 | `shortName` | string | Required, uppercase, unique |
 | `isActive` | boolean | Default true (switch toggle) |
+| `flowType` | `'standard' \| 'merged'` | Default `standard`. Switch "Luồng rút gọn (xưởng gỗ)" (chỉ hiện với factory, không hiện với machineType). `merged` = In xong → Ép tự xong, May vào xong → May ra tự xong — xem [`FulfillmentWorkflow.md`](FulfillmentWorkflow.md) §2.2b. Bảng hiện badge "Rút gọn". Enum + helper: `packages/shared/enums/factory-flow.ts`. |
 
 ### 3.3 MachineType CRUD
 | Field | Type | Validation |

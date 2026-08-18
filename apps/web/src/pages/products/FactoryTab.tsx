@@ -2,7 +2,7 @@ import React, { useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Pencil, Plus, RotateCw, Trash2 } from 'lucide-react';
 import type { CreateWorkshopConfigDto, WorkshopConfig } from 'shared';
-import { WorkshopConfigCategory } from 'shared';
+import { FactoryFlowType, WorkshopConfigCategory } from 'shared';
 import { toast } from 'sonner';
 
 import { useWorkshopConfigStore } from '@/store/workshopConfigStore';
@@ -55,20 +55,22 @@ interface ListItem {
   name: string;
   shortName: string;
   isActive: boolean;
+  /** Chỉ factory có — xưởng cũ trong DB có thể thiếu field (coi như 'standard'). */
+  flowType?: FactoryFlowType;
 }
 
 interface FormState {
   open: boolean;
   mode: 'create' | 'edit';
   type: 'factory' | 'machineType';
-  data: { _id?: string; name: string; shortName: string; isActive: boolean };
+  data: { _id?: string; name: string; shortName: string; isActive: boolean; flowType: FactoryFlowType };
 }
 
 const DEFAULT_FORM: FormState = {
   open: false,
   mode: 'create',
   type: 'factory',
-  data: { name: '', shortName: '', isActive: true },
+  data: { name: '', shortName: '', isActive: true, flowType: FactoryFlowType.Standard },
 };
 
 export function FactoryTab() {
@@ -192,14 +194,25 @@ export function FactoryTab() {
   }, []);
 
   const openCreate = (type: 'factory' | 'machineType') =>
-    setForm({ open: true, mode: 'create', type, data: { name: '', shortName: '', isActive: true } });
+    setForm({
+      open: true,
+      mode: 'create',
+      type,
+      data: { name: '', shortName: '', isActive: true, flowType: FactoryFlowType.Standard },
+    });
 
   const openEdit = (type: 'factory' | 'machineType', item: ListItem) =>
     setForm({
       open: true,
       mode: 'edit',
       type,
-      data: { _id: item._id, name: item.name, shortName: item.shortName, isActive: item.isActive },
+      data: {
+        _id: item._id,
+        name: item.name,
+        shortName: item.shortName,
+        isActive: item.isActive,
+        flowType: item.flowType ?? FactoryFlowType.Standard,
+      },
     });
 
   const handleSubmit = async () => {
@@ -216,6 +229,7 @@ export function FactoryTab() {
             name: data.name,
             shortName: data.shortName,
             isActive: data.isActive,
+            flowType: data.flowType,
           });
         } else {
           await RepositoryRemote.machineType.createMachineType({
@@ -231,6 +245,7 @@ export function FactoryTab() {
             name: data.name,
             shortName: data.shortName,
             isActive: data.isActive,
+            flowType: data.flowType,
           });
         } else {
           await RepositoryRemote.machineType.updateMachineType(data._id, {
@@ -287,7 +302,14 @@ export function FactoryTab() {
           {!loading &&
             items.map((it) => (
               <TableRow key={it._id}>
-                <TableCell className="font-medium">{it.name}</TableCell>
+                <TableCell className="font-medium">
+                  {it.name}
+                  {type === 'factory' && it.flowType === FactoryFlowType.Merged && (
+                    <Badge variant="secondary" className="ml-2">
+                      {t('factoryTab.table.mergedFlowBadge')}
+                    </Badge>
+                  )}
+                </TableCell>
                 <TableCell>
                   <Badge variant="outline">{it.shortName}</Badge>
                 </TableCell>
@@ -496,6 +518,23 @@ export function FactoryTab() {
                 onCheckedChange={(v) => setForm({ ...form, data: { ...form.data, isActive: v } })}
               />
             </div>
+            {form.type === 'factory' && (
+              <div className="flex items-center justify-between gap-3 rounded-md border border-border p-3">
+                <div className="space-y-0.5">
+                  <Label>{t('factoryTab.form.mergedFlow')}</Label>
+                  <p className="text-xs text-muted-foreground">{t('factoryTab.form.mergedFlowHint')}</p>
+                </div>
+                <Switch
+                  checked={form.data.flowType === FactoryFlowType.Merged}
+                  onCheckedChange={(v) =>
+                    setForm({
+                      ...form,
+                      data: { ...form.data, flowType: v ? FactoryFlowType.Merged : FactoryFlowType.Standard },
+                    })
+                  }
+                />
+              </div>
+            )}
           </div>
           <DialogFooter>
             <Button variant="outline" onClick={() => setForm(DEFAULT_FORM)}>

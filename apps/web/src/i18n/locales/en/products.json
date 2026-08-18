@@ -90,7 +90,9 @@
       "crawling": "Crawling…",
       "progress": "Scanned {{done}} — {{remaining}} left",
       "done": "Done: updated {{updated}}/{{processed}} products"
-    }
+    },
+    "importFullButton": "Import products from file",
+    "importFullTitle": "Import FULL products (catalog + variations/pricing) from xlsx — existing products get updated with provided fields"
   },
   "categoryTab": {
     "title": "Product categories",
@@ -126,13 +128,16 @@
       "shortName": "Short name",
       "status": "Status",
       "active": "Active",
-      "inactive": "Inactive"
+      "inactive": "Inactive",
+      "mergedFlowBadge": "Merged"
     },
     "form": {
       "nameShortNameRequired": "Name and short name are required",
       "createSuccess": "Created successfully",
       "updateSuccess": "Updated successfully",
-      "active": "Active"
+      "active": "Active",
+      "mergedFlow": "Merged flow (wood factory)",
+      "mergedFlowHint": "Print done auto-completes Press; Sew-in done auto-completes Sew-out. Enable for wood factories only."
     },
     "factory": {
       "title": "Factories",
@@ -513,5 +518,25 @@
     "invalidRows": "{{count}} rows missing Factory/Department were skipped.",
     "autoShortBadge": "auto",
     "autoShortTitle": "Short name missing in file — the product name is used as the short name; edit later on the Products page if needed"
+  },
+  "importFullDialog": {
+    "title": "Import full products from file",
+    "description": "Choose an Excel file (.xlsx) using the full-product template: one row per product (with catalog columns: Category, Collection, Mockup URL, Description, Specifics...), variations on following rows (SKU, Color, Size, prices). Existing products are UPDATED — only fields present in the file overwrite, variations merge by SKU.",
+    "chooseFile": "Choose file",
+    "parseError": "No products found — check the file has a \"Tên SP\" column plus SKU/Category/Mockup columns",
+    "parsed": "Parsed {{total}} products ({{variations}} variations).",
+    "skippedRows": "{{count}} rows skipped (no product name or SKU).",
+    "selectAll": "Select all",
+    "table": {
+      "name": "Product name",
+      "factory": "Factory",
+      "category": "Category",
+      "variations": "Variations",
+      "action": "Action"
+    },
+    "updateBadge": "Update",
+    "newBadge": "Create",
+    "importSuccess": "Created {{imported}}, updated {{updated}} products ({{skippedCount}} skipped)",
+    "importButton": "Import {{count}} products"
   }
 }

@@ -113,6 +113,7 @@ import {
   HOLD_REASON_WAITING_DESIGN,
   LIFECYCLE_STAGE_KEYS,
   parseProductionIdFromCuttingFilename,
+  redirectMergedTarget,
   RoleType,
   Status,
   WorkshopConfigCategory,
@@ -120,6 +121,7 @@ import {
 import { Logger } from 'winston';
 
 import { getExcludedFactoryIdSync, loadExcludedFactoryId, productionFactoryClause } from '../../utils/excluded-factory';
+import { isMergedFlowFactorySync, loadMergedFlowFactoryIds } from '../../utils/merged-flow-factory';
 import { CustomerRepository } from '../customer/customer.repository';
 import { CustomerAssignmentService } from '../customer-assignment/customer-assignment.service';
 import { DESIGN_PREVIEW_QUEUE, DESIGN_THUMB_QUEUE, DesignImageJobData } from '../design-image/design-image.processor';
@@ -441,6 +443,8 @@ export class OrderService implements OnModuleInit {
     // Load _id xưởng US (ngoài luồng sản xuất) TRƯỚC mọi backfill/traffic —
     // các builder filter đọc sync từ cache này (xem utils/excluded-factory.ts).
     await loadExcludedFactoryId(this.orderModel.db).catch(() => undefined);
+    // Cache xưởng luồng rút gọn (flowType='merged') — transition/rework đọc sync.
+    await loadMergedFlowFactoryIds(this.orderModel.db).catch(() => undefined);
 
     const result = await this.orderModel.updateMany(
       { originalFactoryId: { $exists: false }, factoryId: { $exists: true, $ne: null } },
@@ -1063,12 +1067,20 @@ export class OrderService implements OnModuleInit {
     ctx?: AuditContext,
   ): { set: Record<string, unknown>; timelineEntry: FulfillmentTimelineEntry } | null {
     const b = before as {
+      factoryId?: string | null;
       currentFulfillmentStage?: string | null;
       fulfillmentCompletedAt?: Date | null;
       fulfillmentStages?: Record<string, { status?: string; reworkCount?: number } | undefined>;
     };
     const userId = ctx?.user?._id ? String(ctx.user._id) : undefined;
     if (!userId) return null;
+
+    // Xưởng luồng rút gọn: đích là công đoạn gộp (Ép/May ra) → redirect về công
+    // đoạn gốc (In/May vào) — đơn không bao giờ dừng ở stage gộp nên lùi về đó
+    // sẽ kẹt (không có worker giữ stage).
+    if (isMergedFlowFactorySync(this.orderModel.db, b.factoryId)) {
+      target = redirectMergedTarget(target);
+    }
 
     const current = (b.currentFulfillmentStage || undefined) as FulfillmentStage | undefined;
     const furthest: FulfillmentStage =

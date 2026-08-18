@@ -4,6 +4,7 @@ export * from './customer-order-status';
 export * from './designer-rank';
 export * from './designer-status';
 export * from './export-type';
+export * from './factory-flow';
 export * from './file-type';
 export * from './fulfillment-stage';
 export * from './image-type';

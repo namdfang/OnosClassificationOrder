@@ -3,6 +3,7 @@ import type {
   CrawlProductMockupsDto,
   CreateProductConfigDto,
   ImportFromOnospodDto,
+  ImportFullProductsDto,
   ImportProductConfigDto,
   UpdateProductConfigDto,
 } from 'shared';
@@ -63,6 +64,10 @@ const crawlPageInfo = (data: CrawlPageInfoDto) => {
   return callApi(`/${CONFIG.API_VERSION}/product-configs/crawl-page-info`, 'post', data);
 };
 
+const importFullProducts = (data: ImportFullProductsDto) => {
+  return callApi(`/${CONFIG.API_VERSION}/product-configs/import-full`, 'post', data);
+};
+
 export const productConfig = {
   getProductConfigs,
   getProductConfig,
@@ -70,6 +75,7 @@ export const productConfig = {
   updateProductConfig,
   deleteProductConfig,
   importProductConfigs,
+  importFullProducts,
   clearAllProductConfigs,
   uploadProductImage,
   getUnmatchedOrderTypes,
