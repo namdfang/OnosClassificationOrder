@@ -1061,10 +1061,10 @@ function Column({
                               onRejectCard(c);
                             }}
                             onPointerDown={(e) => e.stopPropagation()}
-                            className="absolute top-1 right-1 text-[10px] text-rose-600 hover:text-rose-700 opacity-0 group-hover:opacity-100 transition-opacity bg-background/80 rounded px-1.5 py-0.5"
+                            className="absolute top-1 right-1 text-[10px] font-semibold text-rose-600 hover:text-rose-700 opacity-0 group-hover:opacity-100 transition-opacity bg-background/80 border border-rose-200 dark:border-rose-800 rounded px-1.5 py-0.5"
                             title={t('myTasks.rejectCardButton')}
                           >
-                            {t('myTasks.rejectCardButton')}
+                            {t('myTasks.rejectCardButtonShort')}
                           </button>
                         )}
                       </div>

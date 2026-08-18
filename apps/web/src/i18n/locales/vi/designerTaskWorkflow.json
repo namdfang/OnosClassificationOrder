@@ -62,10 +62,19 @@
       "collapse": "Click để thu gọn",
       "empty": "Trống"
     },
-    "rejectCardButton": "Không làm được"
+    "rejectCardButton": "Không làm được",
+    "rejectCardButtonShort": "KLĐ"
   },
   "dailyBreakdown": {
-    "weekdays": ["CN", "T2", "T3", "T4", "T5", "T6", "T7"],
+    "weekdays": [
+      "CN",
+      "T2",
+      "T3",
+      "T4",
+      "T5",
+      "T6",
+      "T7"
+    ],
     "ageToday": "Hôm nay",
     "ageYesterday": "Hôm qua",
     "ageDaysAgo": "{{count}} ngày trước",

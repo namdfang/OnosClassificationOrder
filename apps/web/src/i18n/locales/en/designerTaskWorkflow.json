@@ -62,10 +62,19 @@
       "collapse": "Click to collapse",
       "empty": "Empty"
     },
-    "rejectCardButton": "Reject"
+    "rejectCardButton": "Reject",
+    "rejectCardButtonShort": "KLĐ"
   },
   "dailyBreakdown": {
-    "weekdays": ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"],
+    "weekdays": [
+      "Sun",
+      "Mon",
+      "Tue",
+      "Wed",
+      "Thu",
+      "Fri",
+      "Sat"
+    ],
     "ageToday": "Today",
     "ageYesterday": "Yesterday",
     "ageDaysAgo": "{{count}} days ago",
