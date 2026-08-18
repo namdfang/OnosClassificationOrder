@@ -19,6 +19,7 @@
         "prebuild": "rimraf dist",
         "build": "pnpm tsup index.ts --format cjs,esm --clean",
         "dev": "pnpm run build --watch",
+        "dev:win": "pnpm run build --watch",
         "lint": "eslint . --cache",
         "lint:fix": "eslint . --fix --cache",
         "build-types": "pnpm tsc --noEmit -p tsconfig.json"
