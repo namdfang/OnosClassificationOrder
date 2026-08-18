@@ -139,6 +139,14 @@ Hai bất biến không viết trong yêu cầu mà bắt buộc phải có:
 
 Giá vốn (`cost`, `nonShipCost`) và bốn trường giá nội bộ khác của biến thể **không có mặt trong registry ở bất kỳ vai trò nào**: cho lọc trên một trường số bị che là dựng sẵn một máy đoán nhị phân (`cost > 10` trả 0, `cost > 5` trả 3 → ra giá trị thật sau vài lời gọi).
 
+Ranh giới của việc che là **giá nội bộ**, không phải "mọi con số tiền". Ba trường của `productConfigs` dưới đây đọc được vì chúng đã công khai với chính khách hàng ở Customer Portal Catalog (`customer-catalog.service.ts` `$project`) — agent thấy ít hơn khách là bất nhất chứ không an toàn hơn (quyết định `API-2`):
+
+| Trường | Nghĩa | Chính sách |
+|---|---|---|
+| `printDocument` | URL tài liệu hướng dẫn design/template của sản phẩm | `plain('string')` |
+| `printTemplate` | URL template thiết kế chung của sản phẩm | `plain('string')` |
+| `usImportTaxPerUnit` | Thuế nhập khẩu US mỗi đơn vị (USD), số công bố với khách | `numeric` — cộng/trung bình được |
+
 ### 5.4 Che văn bản tự do
 
 `mask-free-text.ts` thay email và số điện thoại trong mọi chuỗi rời khỏi module. Ca kiểm quan trọng nhất: mã sản xuất dạng `XQ-91783-27005` **không** được che nhầm thành số điện thoại.

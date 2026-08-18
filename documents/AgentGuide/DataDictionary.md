@@ -130,7 +130,10 @@ Lấy `userSku` rồi dùng nó để tra đơn ở bảng `orders`.
 |---|---|
 | `fullName` | Tên sản phẩm, khớp `orders.type` |
 | `printArea` | Danh sách mã vị trí in |
+| `printDocument` | URL tài liệu hướng dẫn design/template của sản phẩm |
+| `printTemplate` | URL template thiết kế chung của sản phẩm |
 | `maxProductionTime` / `maxShippingTime` | Cam kết sản xuất / giao (ngày) |
+| `usImportTaxPerUnit` | Thuế nhập khẩu US mỗi đơn vị (USD) — con số **công bố với khách** trên trang catalog, không phải giá vốn |
 | `variations.sku` / `variations.attributes` | Biến thể |
 | `variations.retailPrice` | **Giá niêm yết — trường giá duy nhất trả về** |
 

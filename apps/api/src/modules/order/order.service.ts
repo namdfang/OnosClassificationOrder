@@ -8263,12 +8263,12 @@ export class OrderService implements OnModuleInit {
     // Bước 2: split outcomes thành buckets + detect conflicts.
     const okOutcomes = outcomes.filter((o): o is Extract<FetchOutcome, { status: 'ok' }> => o.status === 'ok');
     const invalid: CuttingFileInvalid[] = outcomes
-      .filter((o) => o.status !== 'ok')
+      .filter((o): o is Exclude<FetchOutcome, { status: 'ok' }> => o.status !== 'ok')
       .map((o) => {
         if (o.status === 'no-production-id') {
           return { link: o.link, reason: 'no-production-id' as const, fileName: o.fileName };
         }
-        return { link: o.link, reason: o.status as 'invalid-url' | 'fetch-failed' | 'parse-failed' };
+        return { link: o.link, reason: o.status };
       });
 
     // Detect conflict: cùng productionId xuất hiện > 1 link → user phải xoá bớt.

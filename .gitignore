@@ -67,3 +67,6 @@ yarn.lock
 data
 # Local dev tasks (not tracked)
 .devtasks
+
+# Vite ghi file tạm cạnh vite.config khi nạp config (thường tự xoá, trên Windows hay kẹt lại)
+vite.config.*.timestamp-*

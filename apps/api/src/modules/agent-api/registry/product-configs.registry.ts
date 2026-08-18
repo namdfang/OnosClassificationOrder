@@ -11,6 +11,10 @@ import { freeText, numeric, plain } from './field-policy';
  * nhưng cùng bản chất rủi ro (giá nội bộ / biên lợi nhuận) và BA đã xác nhận
  * che ở bước `design_review`.
  *
+ * `usImportTaxPerUnit` KHÔNG thuộc nhóm giá bị che: đó là thuế nhập khẩu US
+ * công bố với khách ngay trên trang catalog (`customer-catalog.service.ts`),
+ * nên agent CSKH thấy được là nhất quán với thứ khách đã thấy — xem `API-2`.
+ *
  * `variations` là mảng subdoc nên được chiếu theo từng trường con
  * (`variations.sku`, ...) — mongo `$project` giữ nguyên hình mảng.
  */
@@ -31,6 +35,8 @@ export const productConfigsRegistry: AgentTableSpec = {
     status: plain('enum'),
     printMethod: plain('string'),
     printArea: plain('string', 'Danh sách mã vị trí in của sản phẩm'),
+    printDocument: plain('string', 'URL tài liệu hướng dẫn design/template của sản phẩm'),
+    printTemplate: plain('string', 'URL template thiết kế chung của sản phẩm'),
     productCategoryId: plain('objectId', 'Trỏ tới productCategories'),
     collectionIds: plain('objectId', 'Trỏ tới collections'),
     factoryId: plain('objectId'),
@@ -39,6 +45,7 @@ export const productConfigsRegistry: AgentTableSpec = {
     maxProductionTime: numeric('Thời gian sản xuất tối đa cam kết (ngày)'),
     maxShippingTime: numeric('Thời gian giao tối đa cam kết (ngày)'),
     sizeChartUrl: plain('string'),
+    usImportTaxPerUnit: numeric('Thuế nhập khẩu US trên mỗi đơn vị (USD) — con số CÔNG BỐ với khách ở Customer Portal Catalog, không phải giá vốn'),
     mockup: plain('string'),
     description: freeText('Mô tả sản phẩm'),
     shortDescription: freeText(),
