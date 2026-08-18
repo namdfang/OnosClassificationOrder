@@ -22,11 +22,14 @@ const PublicCatalogDetail = lazy(() => import('./pages/catalog/detail'));
 
 const CustomerLogin = lazy(() => import('./pages/customer/login'));
 const CustomerRegister = lazy(() => import('./pages/customer/register'));
+const CustomerDashboard = lazy(() => import('./pages/customer/dashboard'));
 const CustomerOrders = lazy(() => import('./pages/customer/orders'));
 const CustomerCatalog = lazy(() => import('./pages/customer/catalog'));
 const CustomerCatalogDetail = lazy(() => import('./pages/customer/catalog/detail'));
 const CustomerOrderNew = lazy(() => import('./pages/customer/orders/new'));
+const CustomerOrderImport = lazy(() => import('./pages/customer/orders/import'));
 const CustomerOrderTrack = lazy(() => import('./pages/customer/orders/track'));
+const CustomerAccount = lazy(() => import('./pages/customer/account'));
 
 function PrivateRoute() {
   const isAuthenticated = useAuthStore((s) => s.isAuthenticated());
@@ -120,7 +123,15 @@ function App() {
         />
         <Route element={<CustomerPrivateRoute />}>
           <Route element={<CustomerLayout />}>
-            <Route path="/customer" element={<Navigate to={PATHS.CUSTOMER_ORDERS} replace />} />
+            <Route path="/customer" element={<Navigate to={PATHS.CUSTOMER_DASHBOARD} replace />} />
+            <Route
+              path={PATHS.CUSTOMER_DASHBOARD}
+              element={
+                <Suspense fallback={<Loading />}>
+                  <CustomerDashboard />
+                </Suspense>
+              }
+            />
             <Route
               path={PATHS.CUSTOMER_ORDERS}
               element={
@@ -134,6 +145,14 @@ function App() {
               element={
                 <Suspense fallback={<Loading />}>
                   <CustomerOrderNew />
+                </Suspense>
+              }
+            />
+            <Route
+              path={PATHS.CUSTOMER_ORDER_IMPORT}
+              element={
+                <Suspense fallback={<Loading />}>
+                  <CustomerOrderImport />
                 </Suspense>
               }
             />
@@ -158,6 +177,14 @@ function App() {
               element={
                 <Suspense fallback={<Loading />}>
                   <CustomerCatalogDetail />
+                </Suspense>
+              }
+            />
+            <Route
+              path={PATHS.CUSTOMER_ACCOUNT}
+              element={
+                <Suspense fallback={<Loading />}>
+                  <CustomerAccount />
                 </Suspense>
               }
             />

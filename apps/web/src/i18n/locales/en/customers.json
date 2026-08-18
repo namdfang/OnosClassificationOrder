@@ -1,0 +1,118 @@
+{
+  "page": {
+    "title": "Customers",
+    "subtitle": "Manage customers, VIP tiers and Customer Portal accounts — unified in one place",
+    "searchPlaceholder": "Search SKU / email / name / phone…",
+    "addButton": "Add customer",
+    "sync": "Sync from orders",
+    "importTier": "Import tiers",
+    "showDeleted": "Deleted",
+    "showActive": "Active",
+    "totalCount": "{{total}} customers"
+  },
+  "filters": {
+    "tierAll": "All tiers",
+    "retail": "Retail",
+    "vip": "VIP {{tier}}",
+    "accountAll": "Account: all",
+    "accountRegistered": "Registered",
+    "accountNotRegistered": "Not registered",
+    "accountLocked": "Locked"
+  },
+  "table": {
+    "sku": "SKU",
+    "email": "Email",
+    "name": "Name",
+    "phone": "Phone",
+    "tier": "Tier",
+    "account": "Account",
+    "source": "Source",
+    "factory": "Factory",
+    "designer": "Designer",
+    "orders": "Orders",
+    "lastOrder": "Last order",
+    "empty": "No customers found",
+    "deletedAt": "Deleted at"
+  },
+  "account": {
+    "none": "Not registered",
+    "active": "Active",
+    "locked": "Locked"
+  },
+  "source": {
+    "sync": "Sync",
+    "manual": "Manual",
+    "register": "Self-registered"
+  },
+  "actions": {
+    "edit": "Edit info",
+    "resetPassword": "Reset password",
+    "lock": "Lock account",
+    "unlock": "Unlock",
+    "delete": "Delete",
+    "restore": "Restore",
+    "viewOrders": "View orders",
+    "changeTier": "Change tier"
+  },
+  "editDialog": {
+    "createTitle": "Add customer",
+    "editTitle": "Edit customer",
+    "skuLabel": "User SKU",
+    "skuPlaceholder": "e.g. FASHIONYODA",
+    "emailLabel": "Email",
+    "emailPlaceholder": "e.g. shop@example.com",
+    "lockedKeyNote": "SKU + Email form the identity key (order matching + portal account) — cannot be changed.",
+    "nameLabel": "Full name",
+    "phoneLabel": "Phone",
+    "tierLabel": "Tier",
+    "passwordLabel": "Password (optional)",
+    "passwordHint": "Set a password → the customer can log in to the portal immediately; leave blank → they register later.",
+    "skuRequired": "User SKU is required",
+    "passwordTooShort": "Password must be at least 6 characters"
+  },
+  "resetDialog": {
+    "title": "Reset password — {{sku}}",
+    "manualLabel": "New password",
+    "confirmLabel": "Confirm password",
+    "mismatch": "Passwords do not match",
+    "tooShort": "Password must be at least 6 characters",
+    "orDivider": "or",
+    "generate": "Generate random",
+    "generatedTitle": "New password (shown only once)",
+    "generatedWarning": "Copy it now — it cannot be viewed again after closing.",
+    "submit": "Set password",
+    "success": "Password reset for {{sku}}"
+  },
+  "deleteConfirm": {
+    "title": "Delete customer \"{{sku}}\"?",
+    "message": "Soft delete — the customer is hidden from all lists/kanbans, blocked from portal login, and automatically removed from factory / priority / designer auto-assign configs. Can be restored later from the \"Deleted\" tab.",
+    "removedFrom": "Removed from configs: {{configs}}"
+  },
+  "configNames": {
+    "customer_assignment_config": "Customer → factory assignment",
+    "customer_priority_config": "Customer order priority",
+    "designer_assignment_config": "Designer auto-assign"
+  },
+  "ordersDialog": {
+    "title": "Orders of {{sku}}",
+    "colProductionId": "Production ID",
+    "colProduct": "Product",
+    "colFactory": "Factory",
+    "colInProduction": "In production",
+    "colStage": "Status",
+    "stageCompleted": "Completed",
+    "stageCancelled": "Cancelled",
+    "stageNotStarted": "Not in fulfillment",
+    "empty": "This customer has no orders yet"
+  },
+  "toasts": {
+    "addSuccess": "Customer added",
+    "editSuccess": "Customer updated",
+    "lockSuccess": "Locked account {{sku}}",
+    "unlockSuccess": "Unlocked {{sku}}",
+    "deleteSuccess": "Deleted customer {{sku}}",
+    "restoreSuccess": "Restored {{sku}}",
+    "syncSuccess": "Sync done: +{{created}} new, {{total}} total",
+    "tierChangeSuccess": "Changed tier of {{sku}} → {{tier}}"
+  }
+}

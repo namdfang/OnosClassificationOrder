@@ -19,6 +19,8 @@ import { ApiFile, IFile } from 'core';
 import type { FastifyRequest } from 'fastify';
 import { createReadStream } from 'fs';
 import {
+  CrawlPageInfoDto,
+  CrawlPageInfoResDto,
   CrawlProductMockupsDto,
   CrawlProductMockupsResDto,
   CreateProductConfigDto,
@@ -28,6 +30,8 @@ import {
   GetProductConfigsResDto,
   GetUnmatchedOrderTypesDto,
   GetUnmatchedOrderTypesResDto,
+  ImportFromOnospodDto,
+  ImportFromOnospodResDto,
   ImportProductConfigDto,
   ImportProductConfigResDto,
   ResDto,
@@ -40,12 +44,16 @@ import {
 
 import { Auth } from '@/decorators';
 
+import { OnospodProductImportService } from './onospod-product-import.service';
 import { ProductConfigService } from './product-config.service';
 
 @Controller('product-configs')
 @ApiTags('product-configs')
 export class ProductConfigController {
-  constructor(private readonly productConfigService: ProductConfigService) {}
+  constructor(
+    private readonly productConfigService: ProductConfigService,
+    private readonly onospodProductImportService: OnospodProductImportService,
+  ) {}
 
   @Get()
   @Auth([RoleType.Admin, RoleType.Manager])
@@ -128,16 +136,39 @@ export class ProductConfigController {
     return this.productConfigService.importProductConfigs(dto);
   }
 
+  @Post('import-from-onospod')
+  @Auth([RoleType.Admin])
+  @ApiOperation({
+    summary:
+      'Import TẤT CẢ sản phẩm từ OnosPod (GraphQL productPreset) — theo trang, FE gọi lặp đến khi nextPage null; fill-only, KHÔNG đè field đã có',
+  })
+  @HttpCode(HttpStatus.OK)
+  @ApiOkResponse({ type: ImportFromOnospodResDto })
+  async importFromOnospod(@Body() dto: ImportFromOnospodDto): Promise<ImportFromOnospodResDto> {
+    return this.onospodProductImportService.importFromOnospod(dto);
+  }
+
   @Post('crawl-mockups')
   @Auth([RoleType.Admin, RoleType.Manager])
   @ApiOperation({
-    summary:
-      'Crawl ảnh mockup từ onospod.com cho sản phẩm chưa có ảnh — theo lô, FE gọi lặp với cursor đến khi done',
+    summary: 'Crawl ảnh mockup từ onospod.com cho sản phẩm chưa có ảnh — theo lô, FE gọi lặp với cursor đến khi done',
   })
   @HttpCode(HttpStatus.OK)
   @ApiOkResponse({ type: CrawlProductMockupsResDto })
   async crawlProductMockups(@Body() dto: CrawlProductMockupsDto): Promise<CrawlProductMockupsResDto> {
     return { success: true, data: await this.productConfigService.crawlMockups(dto.limit, dto.cursor) };
+  }
+
+  @Post('crawl-page-info')
+  @Auth([RoleType.Admin, RoleType.Manager])
+  @ApiOperation({
+    summary:
+      'Crawl "Import US Tax" + "Package gram" từ trang sản phẩm public hệ cũ (onospod.com/product/{slug}) — theo lô cursor, FE gọi lặp đến done',
+  })
+  @HttpCode(HttpStatus.OK)
+  @ApiOkResponse({ type: CrawlPageInfoResDto })
+  async crawlPageInfo(@Body() dto: CrawlPageInfoDto): Promise<CrawlPageInfoResDto> {
+    return { success: true, data: await this.productConfigService.crawlPageInfo(dto.limit, dto.cursor) };
   }
 
   @Post('upload-image')

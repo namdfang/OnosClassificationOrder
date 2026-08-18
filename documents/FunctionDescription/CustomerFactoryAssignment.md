@@ -1,6 +1,6 @@
 # Ưu tiên gán xưởng theo khách hàng — Function Description
 
-> **File FE:** `apps/web/src/pages/settings/index.tsx` + `apps/web/src/components/settings/CustomerAssignmentConfig.tsx` + `apps/web/src/components/settings/CustomerPriorityConfig.tsx` (§8) + `apps/web/src/components/settings/CustomerFactoryKanban.tsx` (kanban khách dùng chung, prop `columns`) + `apps/web/src/components/settings/CustomerListDialog.tsx` + `apps/web/src/services/customer.ts` + `apps/web/src/services/customerAssignment.ts` > **File BE:** `apps/api/src/modules/customer/` (entity + repository + service + controller + module) + `apps/api/src/modules/customer-assignment/` (service + controller + module) + `apps/api/src/modules/order/order.service.ts` → hook trong `importOrders` > **Route:** `/adm/settings/customer-factory` (mục "Gán xưởng theo khách") + `/adm/settings/customer-priority` (mục "Ưu tiên đơn theo khách", §8) trong Settings, gate quyền `role.manage`
+> **File FE:** `apps/web/src/pages/settings/index.tsx` + `apps/web/src/components/settings/CustomerAssignmentConfig.tsx` + `apps/web/src/components/settings/CustomerPriorityConfig.tsx` (§8) + `apps/web/src/components/settings/CustomerFactoryKanban.tsx` (kanban khách dùng chung, prop `columns`) + `apps/web/src/services/customer.ts` (CRUD khách đã HỢP NHẤT về trang `/adm/customers` — xem `Customers.md`) + `apps/web/src/services/customerAssignment.ts` > **File BE:** `apps/api/src/modules/customer/` (entity + repository + service + controller + module) + `apps/api/src/modules/customer-assignment/` (service + controller + module) + `apps/api/src/modules/order/order.service.ts` → hook trong `importOrders` > **Route:** `/adm/settings/customer-factory` (mục "Gán xưởng theo khách") + `/adm/settings/customer-priority` (mục "Ưu tiên đơn theo khách", §8) trong Settings, gate quyền `role.manage`
 > **API:** `GET/POST /v1/customers`, `POST /v1/customers/sync`, `PATCH /v1/customers/:id/tier`, `POST /v1/customers/import-tiers`, `GET/PUT /v1/customer-assignment/config`, `GET/PUT /v1/customer-assignment/priority-config` (§8)
 
 ## 1. Overview
@@ -86,8 +86,9 @@ Constant `CUSTOMER_ASSIGNMENT_CONFIG_KEY = 'customer_assignment_config'`.
 
 - Mount: `factory.getFactories()` + `customer.list()` + `customerAssignment.getConfig()`.
 - Header + nút **Lưu** (kèm chip cam "● Chưa lưu" khi dirty). Thanh công cụ:
-  `ui/switch` bật/tắt + nút **Sync khách hàng** + **Thêm khách** (`ui/dialog`
-  userSku + userEmail) + **Danh sách khách** (mở `CustomerListDialog`).
+  `ui/switch` bật/tắt + nút link **Mở trang Khách hàng** → `/adm/customers`
+  (Sync / Thêm tay / Danh sách / Import tier đã DỜI hết sang trang đó — xem
+  `Customers.md`; `CustomerListDialog.tsx` đã xóa).
 - Gán khách ↔ xưởng bằng **kanban kéo thả** (`CustomerFactoryKanban.tsx`, xem dưới).
 - **Dirty tracking**: `snapshot(enabled, alloc)` (sort ids + bỏ xưởng rỗng) so với
   `baseline` (set lúc load + sau save). Khi dirty: `beforeunload` (đóng tab/reload
@@ -103,7 +104,7 @@ Constant `CUSTOMER_ASSIGNMENT_CONFIG_KEY = 'customer_assignment_config'`.
   alloc nào) + 1 cột / xưởng. Grid `xl:grid-cols-4`, mỗi cột cao cố định
   `h-[70vh]` scroll riêng, hiện toàn bộ khách. Section này đặt TRÊN
   `DesignerAssignmentConfig` trong `/settings` (`pages/settings/index.tsx`).
-- Mỗi khách 1 card: userSku + email + `TierBadge` (import từ `CustomerListDialog`).
+- Mỗi khách 1 card: userSku + email + `TierBadge` (import từ `@/components/common/TierBadge`).
 - **Sort trong cột**: có tier lên đầu theo **VIP 0 → VIP 5** (`tierRank`, khách lẻ
   rank 999 xuống cuối), cùng nhóm xếp A→Z theo userSku. Thứ tự trong cột KHÔNG
   lưu — luôn auto-sort.
@@ -115,18 +116,12 @@ Constant `CUSTOMER_ASSIGNMENT_CONFIG_KEY = 'customer_assignment_config'`.
   mọi list rồi thêm vào đích (tự đảm bảo 1 khách 1 xưởng). Thay đổi chỉ trong
   state, phải bấm **Lưu** mới ghi config.
 
-`CustomerListDialog.tsx` (mở từ nút **Danh sách khách** trên toolbar):
-
-- Bảng khách: search (SKU/email, client-side) + hàng chip filter theo tier
-  (Tất cả / Khách lẻ / VIP 0..5, kèm số lượng) + cột Tier là `TierBadge` màu
-  (VIP 0 cyan, 1 emerald, 2 sky, 3 violet, 4 fuchsia, 5 amber/vàng; khách lẻ
-  xám) — bấm badge mở native `<select>` phủ trong suốt để đổi tier
-  (`PATCH /customers/:id/tier`, toast + reload).
-- Dialog con **Import tier**: upload `.xlsx/.xls/.csv/.txt` hoặc dán text; parse
-  FE (`parseTierText` regex `^(sku)[\s,;]+VIP [0-5]$` / `parseTierGrid` 2 cột
-  xlsx qua thư viện `xlsx`), tự bỏ dòng header "TÊN TÀI KHOẢN", báo số dòng
-  hợp lệ/không hợp lệ trước khi gửi → `POST /customers/import-tiers` → hiện
-  kết quả `updatedCustomers` + danh sách `skippedSkus` bị bỏ qua.
+**Danh sách khách / đổi tier / Import tier** — đã HỢP NHẤT về trang
+`/adm/customers` (xem `Customers.md` §4): bảng khách + `TierBadge` đổi nhanh
+(`PATCH /customers/:id/tier`) nằm ở trang mới; flow Import tier tách thành
+`pages/customers/ImportTiersDialog.tsx` (giữ nguyên parse `parseTierText`/
+`parseTierGrid` + i18n keys `customerListDialog.import.*` của namespace này).
+`CustomerListDialog.tsx` đã XÓA.
 
 ## 5. Backend logic
 

@@ -1,4 +1,4 @@
-import { BadRequestException, Injectable, NotFoundException } from '@nestjs/common';
+import { BadRequestException, Injectable, NotFoundException, OnModuleInit } from '@nestjs/common';
 import { InjectModel } from '@nestjs/mongoose';
 import axios from 'axios';
 import type { IFile } from 'core';
@@ -7,6 +7,7 @@ import { Model } from 'mongoose';
 import path from 'path';
 import type {
   CrawlMockupResultItem,
+  CrawlPageInfoResultItem,
   CreateProductConfigDto,
   GetProductConfigsDto,
   GetProductConfigsResDto,
@@ -103,8 +104,7 @@ const normalizeProductName = (s: string): string =>
  * All-Over Print Short-Sleeve Hawaiian Shirt" vs site "All-Over Print
  * Short-Sleeve Hawaiian Shirt Set"). Vẫn yêu cầu đúng đủ từng từ, không fuzzy.
  */
-const normalizeSortedWords = (s: string): string =>
-  normalizeProductName(s).split(' ').sort().join(' ');
+const normalizeSortedWords = (s: string): string => normalizeProductName(s).split(' ').sort().join(' ');
 
 /**
  * Các biến thể tên để thử search lần lượt (dừng ở lần khớp đầu tiên):
@@ -117,7 +117,10 @@ const normalizeSortedWords = (s: string): string =>
  */
 const buildNameAttempts = (name: string): Array<{ term: string; note?: string }> => {
   const attempts: Array<{ term: string; note?: string }> = [{ term: name }];
-  const noBrackets = name.replace(/\[[^\]]*\]/g, ' ').replace(/\s+/g, ' ').trim();
+  const noBrackets = name
+    .replace(/\[[^\]]*\]/g, ' ')
+    .replace(/\s+/g, ' ')
+    .trim();
   if (noBrackets && noBrackets !== name) {
     attempts.push({ term: noBrackets, note: 'khớp sau khi bỏ mã [...]' });
   }
@@ -141,7 +144,7 @@ const slugify = (input: string): string =>
     .replace(/(^-|-$)/g, '');
 
 @Injectable()
-export class ProductConfigService {
+export class ProductConfigService implements OnModuleInit {
   constructor(
     private readonly productConfigRepository: ProductConfigRepository,
     private readonly factoryService: FactoryService,
@@ -154,6 +157,24 @@ export class ProductConfigService {
     @InjectModel(OrderEntity.name)
     private readonly orderModel: Model<OrderEntity>,
   ) {}
+
+  /**
+   * Backfill 1 lần: `printArea` dạng cũ (mảng string key) → object giàu
+   * `{key, isRequired: true}` (`isRequired: true` GIỮ behavior cũ — mọi vị
+   * trí đều bắt buộc design). Idempotent — doc đã là object bị bỏ qua.
+   */
+  async onModuleInit(): Promise<void> {
+    const legacy = await this.productConfigModel
+      .find({ 'printArea.0': { $type: 'string' } })
+      .select('printArea')
+      .lean<{ _id: string; printArea?: unknown[] }[]>();
+    for (const doc of legacy) {
+      const converted = (doc.printArea ?? [])
+        .filter((k): k is string => typeof k === 'string')
+        .map((key) => ({ key, isRequired: true }));
+      await this.productConfigModel.updateOne({ _id: doc._id }, { $set: { printArea: converted } });
+    }
+  }
 
   /**
    * Quét đơn `days` ngày gần nhất (theo `inProductionAt`, fallback `createdAt`
@@ -185,9 +206,7 @@ export class ProductConfigService {
 
     const configs = await this.productConfigModel.find({}, { fullName: 1 }).lean();
     const known = new Set(configs.map((c) => c.fullName.trim().toLowerCase()));
-    return groups
-      .filter((g) => g._id && !known.has(g._id))
-      .map((g) => ({ type: g.type, orderCount: g.orderCount }));
+    return groups.filter((g) => g._id && !known.has(g._id)).map((g) => ({ type: g.type, orderCount: g.orderCount }));
   }
 
   /**
@@ -196,10 +215,7 @@ export class ProductConfigService {
    * trailing punctuation and case differences so import data copied from
    * spreadsheets doesn't have to be sanitized first.
    */
-  private async resolveWorkshopCode(
-    category: WorkshopConfigCategory,
-    label?: string,
-  ): Promise<string | undefined> {
+  private async resolveWorkshopCode(category: WorkshopConfigCategory, label?: string): Promise<string | undefined> {
     if (!label) return undefined;
     const cleaned = label.replace(/[\s:.,;]+$/, '').trim();
     if (!cleaned) return undefined;
@@ -463,9 +479,7 @@ export class ProductConfigService {
       deletedAt: { $exists: false },
     });
     if (orderCount > 0) {
-      throw new BadRequestException(
-        `Không thể xóa — sản phẩm "${product.fullName}" đang có ${orderCount} đơn hàng.`,
-      );
+      throw new BadRequestException(`Không thể xóa — sản phẩm "${product.fullName}" đang có ${orderCount} đơn hàng.`);
     }
 
     return this.productConfigRepository.softDelete({ _id: id });
@@ -633,17 +647,13 @@ export class ProductConfigService {
         for (const attempt of buildNameAttempts(name)) {
           const found = await this.searchOnospod(attempt.term);
           if (found.length > 0 && foundTitles.length === 0) foundTitles = found.map((r) => r.title);
-          match = found.find(
-            (r) => r.imageUrl && normalizeProductName(r.title) === normalizeProductName(attempt.term),
-          );
+          match = found.find((r) => r.imageUrl && normalizeProductName(r.title) === normalizeProductName(attempt.term));
           if (match) {
             matchNote = attempt.note;
             break;
           }
           // Fallback cùng attempt: cùng bộ từ nhưng đảo thứ tự ("Set X" vs "X Set").
-          match = found.find(
-            (r) => r.imageUrl && normalizeSortedWords(r.title) === normalizeSortedWords(attempt.term),
-          );
+          match = found.find((r) => r.imageUrl && normalizeSortedWords(r.title) === normalizeSortedWords(attempt.term));
           if (match) {
             matchNote = [attempt.note, 'khớp đảo thứ tự từ'].filter(Boolean).join(' + ');
             break;
@@ -688,6 +698,122 @@ export class ProductConfigService {
         });
       }
       await sleep(150);
+    }
+
+    const lastId = batch.length > 0 ? String(batch[batch.length - 1]._id) : cursor;
+    const remaining =
+      batch.length < limit
+        ? 0
+        : await this.productConfigModel.countDocuments({ ...missingFilter, _id: { $gt: lastId } });
+
+    return {
+      processed: batch.length,
+      updated,
+      remaining,
+      nextCursor: remaining > 0 ? lastId : undefined,
+      done: remaining === 0,
+      results,
+    };
+  }
+
+  /**
+   * Crawl "Import US Tax" ($/unit theo sản phẩm) + "Package gram" (theo biến
+   * thể) từ trang sản phẩm PUBLIC hệ cũ `onospod.com/product/{slug}/` — 2 giá
+   * trị này là số NHẬP TAY bên WP, KHÔNG có trong GraphQL `productPreset`
+   * (đối chiếu thật 2026-08-06: tax không suy được từ % `tax_groups`, package
+   * gram không suy được từ `weight` — vd weight 90 → package 110, 47 → 60).
+   * Batch cursor `_id` như `crawlMockups`; chỉ quét sản phẩm có `slug` còn
+   * thiếu ít nhất 1 trong 2 giá trị. Trang cũ render package theo size qua
+   * điều kiện `value_field` → match với GIÁ TRỊ thuộc tính của biến thể.
+   */
+  async crawlPageInfo(limit: number, cursor?: string) {
+    const missingFilter = {
+      deletedAt: { $exists: false },
+      slug: { $exists: true, $nin: [null, ''] },
+      $or: [
+        { usImportTaxPerUnit: { $exists: false } },
+        { variations: { $elemMatch: { packageGram: { $exists: false } } } },
+      ],
+    };
+
+    const batch = await this.productConfigModel
+      .find(
+        { ...missingFilter, ...(cursor ? { _id: { $gt: cursor } } : {}) },
+        { fullName: 1, slug: 1, usImportTaxPerUnit: 1, variations: 1 },
+      )
+      .sort({ _id: 1 })
+      .limit(limit)
+      .lean();
+
+    let updated = 0;
+    const results: CrawlPageInfoResultItem[] = [];
+    for (const item of batch) {
+      const id = String(item._id);
+      try {
+        const res = await axios.get<string>(`${ONOSPOD_ORIGIN}/product/${item.slug}/`, {
+          headers: { 'user-agent': CRAWL_UA, accept: 'text/html' },
+          timeout: 20_000,
+          responseType: 'text',
+        });
+        const html = res.data;
+
+        // "Import Us Tax: &#036;0.26\/unit" nằm trong JSON của attr data-form (header field "-tax-fee").
+        const taxRaw = html.match(/Import\s+Us\s+Tax:[\s\S]{0,300}?#036;([\d.]+)/i)?.[1];
+        const usImportTaxPerUnit = taxRaw != null ? Number(taxRaw) : undefined;
+
+        // Mỗi block "Package: {n}gram" là 1 div data-form + data-condition (rules value_field = giá trị thuộc tính, vd "48x24").
+        const packageEntries: Array<{ gram: number; values: string[] }> = [];
+        for (const m of html.matchAll(/data-form='([^']*Package:[^']*gram[^']*)'\s+data-condition='([^']*)'/gi)) {
+          const gram = m[1].match(/([\d.]+)\s*gram/i)?.[1];
+          if (gram == null) continue;
+          const values = [...m[2].matchAll(/"value_field":"([^"]+)"/g)].map((v) => v[1].trim().toLowerCase());
+          packageEntries.push({ gram: Number(gram), values });
+        }
+
+        let packageGramMatched = 0;
+        let variations = item.variations;
+        if (packageEntries.length > 0 && variations && variations.length > 0) {
+          variations = variations.map((v) => {
+            const attrValues = (v.attributes || []).map((a) => a.value.trim().toLowerCase());
+            const entry =
+              packageEntries.find((e) => e.values.some((val) => attrValues.includes(val))) ??
+              // Block không điều kiện = áp cho mọi biến thể (sản phẩm 1 package chung).
+              packageEntries.find((e) => e.values.length === 0);
+            if (!entry) return v;
+            packageGramMatched++;
+            return { ...v, packageGram: entry.gram };
+          });
+        }
+
+        if (usImportTaxPerUnit == null && packageGramMatched === 0) {
+          results.push({ productConfigId: id, fullName: item.fullName, status: 'no-data' });
+        } else {
+          await this.productConfigRepository.findOneAndUpdate(
+            { _id: item._id },
+            {
+              ...(usImportTaxPerUnit != null ? { usImportTaxPerUnit } : {}),
+              ...(packageGramMatched > 0 ? { variations } : {}),
+            },
+          );
+          updated++;
+          results.push({
+            productConfigId: id,
+            fullName: item.fullName,
+            status: 'updated',
+            usImportTaxPerUnit,
+            packageGramMatched,
+          });
+        }
+      } catch (err) {
+        // Request lỗi/timeout (404 slug đổi...) → ghi nhận, cursor vẫn tiến nên không retry vô hạn.
+        results.push({
+          productConfigId: id,
+          fullName: item.fullName,
+          status: 'error',
+          message: err instanceof Error ? err.message : 'Request lỗi',
+        });
+      }
+      await sleep(200);
     }
 
     const lastId = batch.length > 0 ? String(batch[batch.length - 1]._id) : cursor;

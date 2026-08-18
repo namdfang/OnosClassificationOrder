@@ -36,6 +36,7 @@ export const PATHS = {
   PRODUCTS: '/adm/products',
   PRODUCT_DETAIL: '/adm/products/:id',
   PROMOTIONS: '/adm/promotions',
+  CUSTOMERS: '/adm/customers',
   USERS: '/adm/users',
   DEPARTMENTS: '/adm/departments',
   ROLES: '/adm/roles',
@@ -51,11 +52,14 @@ export const PATHS = {
   // ---- Root router /customer — Customer Portal (khách hàng tự đặt đơn) ----
   CUSTOMER_LOGIN: '/customer/login',
   CUSTOMER_REGISTER: '/customer/register',
+  CUSTOMER_DASHBOARD: '/customer/dashboard',
   CUSTOMER_ORDERS: '/customer/orders',
   CUSTOMER_ORDER_NEW: '/customer/orders/new',
+  CUSTOMER_ORDER_IMPORT: '/customer/orders/import',
   CUSTOMER_ORDER_DETAIL: '/customer/orders/:productionId',
   CUSTOMER_CATALOG: '/customer/catalog',
   CUSTOMER_CATALOG_DETAIL: '/customer/catalog/:id',
+  CUSTOMER_ACCOUNT: '/customer/account',
 
   // ---- Public marketing routes (không gate auth, không dùng MainLayout/Sidebar) ----
   COMPANY_CAREERS: '/company/careers',

@@ -2,21 +2,26 @@ import { Injectable, NotFoundException } from '@nestjs/common';
 import { InjectModel } from '@nestjs/mongoose';
 import { Model } from 'mongoose';
 import type {
+  CustomerCatalogFacet,
   CustomerCatalogItem,
   CustomerCatalogPrintArea,
   CustomerCatalogVariation,
   GetCustomerCatalogDto,
+  GetCustomerCatalogFacetsResDto,
   GetCustomerCatalogItemResDto,
   GetCustomerCatalogResDto,
+  ProductPrintAreaItem,
 } from 'shared';
 import { PRODUCT_PRINT_AREA_LABEL_MAP, ProductConfigStatus, toFullSizeImageUrl } from 'shared';
 
+import { CollectionEntity } from '@/modules/collection/collection.entity';
 import type { CustomerDocument } from '@/modules/customer/customer.entity';
+import { ProductCategoryEntity } from '@/modules/product-category/product-category.entity';
 import { ProductConfigEntity } from '@/modules/product-config/product-config.entity';
 import { applyPromotionDiscount, promotionMatches, PromotionService } from '@/modules/promotion/promotion.service';
 
 const CATALOG_ROW_SELECT =
-  'fullName shortName productCategoryId printMethod printArea mockup sizeChartUrl description itemSpecifics variations';
+  'fullName shortName productCategoryId printMethod printArea printDocument printTemplate mockup images usImportTaxPerUnit sizeChartUrl description itemSpecifics variations';
 
 type ActivePromotion = Awaited<ReturnType<PromotionService['getActiveInDateRange']>>[number];
 
@@ -29,6 +34,8 @@ type ActivePromotion = Awaited<ReturnType<PromotionService['getActiveInDateRange
 export class CustomerCatalogService {
   constructor(
     @InjectModel(ProductConfigEntity.name) private readonly productConfigModel: Model<ProductConfigEntity>,
+    @InjectModel(ProductCategoryEntity.name) private readonly productCategoryModel: Model<ProductCategoryEntity>,
+    @InjectModel(CollectionEntity.name) private readonly collectionModel: Model<CollectionEntity>,
     private readonly promotionService: PromotionService,
   ) {}
 
@@ -60,6 +67,13 @@ export class CustomerCatalogService {
       attributes?: CustomerCatalogVariation['attributes'];
       status?: string;
       retailPrice?: number;
+      nonShipCost?: number;
+      tiktokPrice?: number;
+      weight?: number;
+      width?: number;
+      height?: number;
+      length?: number;
+      packageGram?: number;
     }>;
 
     const variations: CustomerCatalogVariation[] = rowVariations
@@ -67,7 +81,10 @@ export class CustomerCatalogService {
       .map((v) => {
         const matched = activePromotions
           .filter((p) => promotionMatches(p, { productConfigId, productCategoryId, tier, quantity: 1 }))
-          .map((p) => ({ promotion: p, price: v.retailPrice != null ? applyPromotionDiscount(v.retailPrice, p) : undefined }))
+          .map((p) => ({
+            promotion: p,
+            price: v.retailPrice != null ? applyPromotionDiscount(v.retailPrice, p) : undefined,
+          }))
           .filter((x): x is { promotion: ActivePromotion; price: number } => x.price != null)
           .sort((a, b) => a.price - b.price);
         const best = matched[0];
@@ -77,13 +94,32 @@ export class CustomerCatalogService {
           retailPrice: v.retailPrice,
           discountedPrice: best?.price,
           appliedPromotionName: best?.promotion.name,
+          // `nonShipCost` = GIÁ BÁN nonship hệ cũ (cột "SHIP COD" public trang cũ) — xem CustomerCatalogVariationZod.
+          shipCodPrice: v.nonShipCost,
+          tiktokPrice: v.tiktokPrice,
+          weight: v.weight,
+          width: v.width,
+          height: v.height,
+          length: v.length,
+          packageGram: v.packageGram,
         };
       });
 
-    const printArea: CustomerCatalogPrintArea[] = ((row.printArea || []) as CustomerCatalogPrintArea['key'][]).map((key) => ({
-      key,
-      label: PRODUCT_PRINT_AREA_LABEL_MAP[key],
-    }));
+    // Chịu được cả 2 dạng data: object giàu (mới) lẫn bare string key (cũ,
+    // trước khi backfill onModuleInit chạy) — KHÔNG trả additionPrice/isEmbroidery.
+    const printArea: CustomerCatalogPrintArea[] = ((row.printArea || []) as Array<ProductPrintAreaItem | string>).map(
+      (p) => {
+        const item: ProductPrintAreaItem = typeof p === 'string' ? { key: p as ProductPrintAreaItem['key'] } : p;
+        return {
+          key: item.key,
+          label: PRODUCT_PRINT_AREA_LABEL_MAP[item.key],
+          templateUrl: item.templateUrl,
+          widthPx: item.widthPx,
+          heightPx: item.heightPx,
+          isRequired: item.isRequired,
+        };
+      },
+    );
 
     // Mockup crawl từ onospod lưu bản thumbnail `-100x100`, trong khi ô ảnh
     // catalog rộng ~300px → phóng lên là nhòe. Trả THÊM bản full-size thay vì
@@ -98,10 +134,16 @@ export class CustomerCatalogService {
       productCategory: row.productCategory?.name,
       printMethod: row.printMethod as string | undefined,
       printArea,
+      printDocument: row.printDocument as string | undefined,
+      printTemplate: row.printTemplate as string | undefined,
+      images: row.images as string[] | undefined,
+      usImportTaxPerUnit: row.usImportTaxPerUnit as number | undefined,
       mockup,
       mockupLarge: toFullSizeImageUrl(mockup),
       sizeChartUrl: row.sizeChartUrl as string | undefined,
       description: row.description as string | undefined,
+      shortDescription: row.shortDescription as string | undefined,
+      templateDescription: row.templateDescription as string | undefined,
       itemSpecifics: row.itemSpecifics as CustomerCatalogItem['itemSpecifics'],
       variations,
     };
@@ -133,10 +175,11 @@ export class CustomerCatalogService {
     tier: number | null,
     { applyPromotions = true }: { applyPromotions?: boolean } = {},
   ): Promise<GetCustomerCatalogResDto> {
-    const { page, limit, search, productCategoryId } = dto;
+    const { page, limit, search, productCategoryId, collectionId } = dto;
     const filter: Record<string, unknown> = { ...CustomerCatalogService.VISIBLE_FILTER };
     if (search) filter.fullName = { $regex: search, $options: 'i' };
     if (productCategoryId) filter.productCategoryId = productCategoryId;
+    if (collectionId) filter.collectionIds = collectionId;
 
     const [rows, total, activePromotions] = await Promise.all([
       this.productConfigModel
@@ -169,13 +212,80 @@ export class CustomerCatalogService {
     const [row, activePromotions] = await Promise.all([
       this.productConfigModel
         .findOne({ _id: id, ...CustomerCatalogService.VISIBLE_FILTER })
-        .select(CATALOG_ROW_SELECT)
+        // Field nặng (HTML dài) + collectionIds chỉ trả ở API chi tiết, KHÔNG cho list.
+        .select(`${CATALOG_ROW_SELECT} collectionIds shortDescription templateDescription`)
         .populate<{ productCategory?: { name: string } }>({ path: 'productCategory', select: 'name' })
         .lean(),
       applyPromotions ? this.promotionService.getActiveInDateRange() : Promise.resolve([]),
     ]);
     if (!row) throw new NotFoundException('Không tìm thấy sản phẩm này.');
 
-    return { success: true, data: this.mapRow(row, activePromotions, tier) };
+    const collectionIds = row.collectionIds || [];
+    const collections =
+      collectionIds.length > 0
+        ? await this.collectionModel
+            .find({ _id: { $in: collectionIds }, isActive: true })
+            .select('name sortOrder')
+            .sort({ sortOrder: 1, name: 1 })
+            .lean()
+        : [];
+
+    const data = this.mapRow(row, activePromotions, tier);
+    data.collections = collections.map((c) => c.name);
+    return { success: true, data };
+  }
+
+  /**
+   * Bộ lọc duyệt catalog: danh mục + collection đang active kèm số sản phẩm
+   * khách thấy được (cùng cổng hiển thị `status` như danh sách) — chỉ trả mục count > 0.
+   */
+  async getFacets(): Promise<GetCustomerCatalogFacetsResDto> {
+    const visible: Record<string, unknown> = { ...CustomerCatalogService.VISIBLE_FILTER };
+    const [categoryCounts, collectionCounts] = await Promise.all([
+      this.productConfigModel.aggregate<{ _id: string; count: number }>([
+        { $match: { ...visible, productCategoryId: { $exists: true, $nin: [null, ''] } } },
+        { $group: { _id: '$productCategoryId', count: { $sum: 1 } } },
+      ]),
+      this.productConfigModel.aggregate<{ _id: string; count: number }>([
+        { $match: visible },
+        { $unwind: '$collectionIds' },
+        { $group: { _id: '$collectionIds', count: { $sum: 1 } } },
+      ]),
+    ]);
+
+    const categoryCountMap = new Map(categoryCounts.map((c) => [String(c._id), c.count]));
+    const collectionCountMap = new Map(collectionCounts.map((c) => [String(c._id), c.count]));
+
+    const [categories, collections] = await Promise.all([
+      categoryCountMap.size > 0
+        ? this.productCategoryModel
+            .find({ _id: { $in: [...categoryCountMap.keys()] }, isActive: true })
+            .select('name')
+            .sort({ name: 1 })
+            .lean()
+        : Promise.resolve([]),
+      collectionCountMap.size > 0
+        ? this.collectionModel
+            .find({ _id: { $in: [...collectionCountMap.keys()] }, isActive: true })
+            .select('name image sortOrder')
+            .sort({ sortOrder: 1, name: 1 })
+            .lean()
+        : Promise.resolve([]),
+    ]);
+
+    const toFacet = (row: { _id: unknown; name: string; image?: string }, count: number): CustomerCatalogFacet => ({
+      _id: String(row._id),
+      name: row.name,
+      image: row.image,
+      count,
+    });
+
+    return {
+      success: true,
+      data: {
+        categories: categories.map((c) => toFacet(c, categoryCountMap.get(String(c._id)) ?? 0)),
+        collections: collections.map((c) => toFacet(c, collectionCountMap.get(String(c._id)) ?? 0)),
+      },
+    };
   }
 }

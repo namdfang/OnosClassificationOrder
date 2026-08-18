@@ -1,3 +1,5 @@
+import { designVariantUrl } from 'shared';
+
 /**
  * Convert a self-hosted R2 preview URL to the smaller thumb variant.
  *
@@ -10,6 +12,8 @@
  */
 export function smallThumb(url?: string, _legacySize = 200): string {
   if (!url || typeof url !== 'string') return url || '';
+  const v = designVariantUrl(url, 'thumb');
+  if (v) return v;
   if (url.includes('/designs/preview/')) return url.replace('/designs/preview/', '/designs/thumb/');
   return url;
 }
@@ -39,6 +43,9 @@ export function driveThumbUrl(url?: string, width = 400): string {
   if (!url || typeof url !== 'string') return url || '';
   const id = extractDriveId(url);
   if (id) return `https://drive.google.com/thumbnail?id=${id}&sz=w${width}`;
+  // CDN design mới (designs/<sha256>/original) → biến thể thumb/preview theo width.
+  const v = designVariantUrl(url, width > 200 ? 'preview' : 'thumb');
+  if (v) return v;
   if (url.includes('/designs/preview/')) return url.replace('/designs/preview/', '/designs/thumb/');
   return url;
 }

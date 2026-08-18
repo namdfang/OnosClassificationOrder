@@ -24,7 +24,7 @@ export class ScheduledReportsController {
   @Post('run-now')
   @Auth(ADMIN_ROLES)
   @ApiOperation({
-    summary: 'Gửi ngay 1 view báo cáo Telegram (Admin) — `view=daily|designer|tool-check` + `factoryId` optional',
+    summary: 'Gửi ngay 1 view báo cáo Telegram (Admin) — `view=daily|detail|designer|tool-check` + `factoryId` optional',
   })
   @HttpCode(HttpStatus.OK)
   async runNow(
@@ -32,7 +32,7 @@ export class ScheduledReportsController {
     @Query('view') view?: string,
     @Query('factoryId') factoryId?: string,
   ): Promise<{ success: true; data: RunReportResult }> {
-    const kind: ReportKind = view === 'designer' || view === 'tool-check' ? view : 'daily';
+    const kind: ReportKind = view === 'designer' || view === 'tool-check' || view === 'detail' ? view : 'daily';
     this.logger.info({
       message: JSON.stringify({ method: 'POST', url: '/reports/run-now', userId: user._id, view: kind, factoryId }),
     });

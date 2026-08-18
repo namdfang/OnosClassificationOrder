@@ -22,6 +22,7 @@
     "choose": "Chọn báo cáo gửi",
     "views": {
       "daily": "Tổng quan",
+      "detail": "Chi tiết (phễu + khách ưu tiên)",
       "designer": "Theo designer",
       "tool-check": "Soát tool",
       "factory": "Xưởng {{name}}"

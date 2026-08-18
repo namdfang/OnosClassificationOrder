@@ -35,7 +35,7 @@ export function CatalogProductCard({ item, onSelect, className }: CatalogProduct
   const { src: imageSrc, onError: onImageError } = useImageFallback([item.mockupLarge, item.mockup]);
   const cheapest = item.variations.reduce<CustomerCatalogItem['variations'][number] | undefined>((min, v) => {
     const price = v.discountedPrice ?? v.retailPrice ?? Infinity;
-    const minPrice = min ? (min.discountedPrice ?? min.retailPrice ?? Infinity) : Infinity;
+    const minPrice = min ? min.discountedPrice ?? min.retailPrice ?? Infinity : Infinity;
     return price < minPrice ? v : min;
   }, undefined);
   const hasDiscount = cheapest?.discountedPrice != null && cheapest.discountedPrice !== cheapest.retailPrice;
@@ -78,9 +78,13 @@ export function CatalogProductCard({ item, onSelect, className }: CatalogProduct
 
         <div className="flex items-center justify-between pt-0.5">
           <div className="flex items-baseline gap-1.5">
-            <span className="text-sm font-semibold text-primary">{formatPrice(cheapest?.discountedPrice ?? cheapest?.retailPrice)}</span>
+            <span className="text-sm font-semibold text-primary">
+              {formatPrice(cheapest?.discountedPrice ?? cheapest?.retailPrice)}
+            </span>
             {hasDiscount && (
-              <span className="text-[11px] line-through text-muted-foreground">{formatPrice(cheapest?.retailPrice)}</span>
+              <span className="text-[11px] line-through text-muted-foreground">
+                {formatPrice(cheapest?.retailPrice)}
+              </span>
             )}
           </div>
           {item.variations.length > 1 && (

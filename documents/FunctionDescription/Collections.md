@@ -10,7 +10,7 @@
 
 **Collection** = bộ sưu tập sản phẩm cho catalog (VD "Summer 2026", "Best seller") — nhóm gán tay, **phẳng** (không phân cấp), 1 sản phẩm thuộc **NHIỀU** collection qua `ProductConfig.collectionIds` (mảng ref, tối đa 20). KHÁC `ProductCategory` (phân loại cấu trúc, cây đa cấp, 1 sản phẩm 1 danh mục).
 
-Mục đích: nền tảng cho tính năng khách hàng đặt đơn theo sản phẩm/CSV về sau (lọc catalog theo collection).
+Mục đích: nền tảng cho tính năng khách hàng đặt đơn theo sản phẩm/CSV về sau (lọc catalog theo collection). **Đã dùng thật ở Customer Portal Catalog** — hàng card "Bộ sưu tập" + filter `collectionId` ở `/customer/catalog` (xem [`CustomerPortal.md §7`](CustomerPortal.md)).
 
 ## 2. Luồng hoạt động
 

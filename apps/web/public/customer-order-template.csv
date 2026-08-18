@@ -1,0 +1,53 @@
+order_id ,identifier,order_name,item,quantity ,color,size,shipping,active_service,sku,merchant_sku,telephone,email,name,country ,state,city,address_1 ,address_2,company,postcode,design_back,design_front,design_sleeve,design_hood,design_placket,design_sleeve_left,design_sleeve_right,design_chest_left,design_chest_right,mockup,note,tracking_number,tracking_carrier,tracking_url,shipping_label
+70621,example.com,#670093493,New Multi Piece T-shirt,1,,S,EXPRESS_US,1,GDU-SCRARF-ASDES,286483,16239803333,example@example.com,Vanessa Blankenship,US,Kentucky,RACCOON,3835 Raccoon Rd,,,41557,,https://example.com/image.png,,,,,,,,https://example.com/image.png,,9434609106029699785252,USPS,https://tools.usps.com/go/TrackConfirmAction?tRef=fullpage&tLc=2&text28777=&tLabels=576542085722509486,https://drive.google.com/uc?export=download&id=135A5QerciNGHHFEs8ZT4MHg-yXzT3Keh
+70622,example-1.com,#92281418,New Multi Piece T-shirt,1,,L,EXPRESS_US,1,3DSHIRT-AS-DESIGN-L,286481,16239803333,,Amy Collins,US,Georgia,CLEVELAND,132 Jonney Thomas Road,PO number 220,,30528,,https://example.com/image.png,,,,,,,,https://example.com/image.png,,9434609106029699785253,USPS,https://tools.usps.com/go/TrackConfirmAction?tRef=fullpage&tLc=2&text28777=&tLabels=576542085722509487,https://drive.google.com/uc?export=download&id=135A5QerciNGHHFEs8ZT4MHg-yXzT3Keh
+70621,example-2.com,#279150226,New Multi Piece T-shirt,1,,Xl,EXPRESS_US,0,3DSHIRT-AS-DESIGN-XL,286775,16239803333,,Kalliedburke,US,Kentucky,STAMPING GROUND,113 POE CT,,,40379-9101,,https://example.com/image.png,,,,,,,,https://example.com/image.png,,9434609106029699785254,USPS,https://tools.usps.com/go/TrackConfirmAction?tRef=fullpage&tLc=2&text28777=&tLabels=576542085722509488,https://drive.google.com/uc?export=download&id=135A5QerciNGHHFEs8ZT4MHg-yXzT3Keh
+70629,,#1873150905,New Multi Piece T-shirt,1,,L,EXPRESS_US,1,3DSHIRT-AS-DESIGN-L,286502,16239803333,,Christian Jennings-Brown,US,Michigan,Adrian,1048 BOWERMAN DR APT A,,,49221,,https://example.com/image.png,,,,,,,,https://example.com/image.png,,9434609106029699785255,USPS,https://tools.usps.com/go/TrackConfirmAction?tRef=fullpage&tLc=2&text28777=&tLabels=576542085722509489,https://drive.google.com/uc?export=download&id=135A5QerciNGHHFEs8ZT4MHg-yXzT3Keh
+70630,,#1873848497,Hawaii Shirt,1,,Xl,EXPRESS_US,1,3DSHIRT-AS-DESIGN-XL,286486,16239803333,,Teresa Riffe,US,Virginia,Grundy,27841 Riverside Drive,,,24614,,https://example.com/image.png,,,,,,,,https://example.com/image.png,,9434609106029699785256,USPS,https://tools.usps.com/go/TrackConfirmAction?tRef=fullpage&tLc=2&text28777=&tLabels=576542085722509490,https://drive.google.com/uc?export=download&id=135A5QerciNGHHFEs8ZT4MHg-yXzT3Keh
+70631,,#1873810129,Beach Shorts,1,,M,EXPRESS_US,1,3DSHIRT-AS-DESIGN-M,286487,16239803333,,Jill Knuth,US,Michigan,Holly,871 Academy Rd,,,48442,,https://example.com/image.png,,,,,,,,https://example.com/image.png,,9434609106029699785257,USPS,https://tools.usps.com/go/TrackConfirmAction?tRef=fullpage&tLc=2&text28777=&tLabels=576542085722509491,https://drive.google.com/uc?export=download&id=135A5QerciNGHHFEs8ZT4MHg-yXzT3Keh
+70632,,#1873603837,Hawaii Shirt,1,,M,EXPRESS_US,0,3DSHIRT-AS-DESIGN-M,286497,16239803333,,Lucia Lucia,US,New Jersey,Tenafly,Flotta ,,,7670,,https://example.com/image.png,,,,,,,,https://example.com/image.png,,9434609106029699785258,USPS,https://tools.usps.com/go/TrackConfirmAction?tRef=fullpage&tLc=2&text28777=&tLabels=576542085722509492,https://drive.google.com/uc?export=download&id=135A5QerciNGHHFEs8ZT4MHg-yXzT3Keh
+70633,,#1853333650,Hawaii Shirt,1,,M,EXPRESS_US,1,3DSHIRT-AS-DESIGN-M,286500,16239803333,,April Huycke,US,Tennessee,Clarksville,2777 Ridgepole Drive,,,37040,,https://example.com/image.png,,,,,,,,https://example.com/image.png,,9434609106029699785259,USPS,https://tools.usps.com/go/TrackConfirmAction?tRef=fullpage&tLc=2&text28777=&tLabels=576542085722509493,https://drive.google.com/uc?export=download&id=135A5QerciNGHHFEs8ZT4MHg-yXzT3Keh
+70634,,#1853677212,Leggings,1,,L,EXPRESS_US,1,3DSHIRT-AS-DESIGN-L,286494,16239803333,,Angelica Reyes,US,Montana,Great Falls,Great Falls,,,59405,,https://example.com/image.png,,,,,,,,https://example.com/image.png,,9434609106029699785260,USPS,https://tools.usps.com/go/TrackConfirmAction?tRef=fullpage&tLc=2&text28777=&tLabels=576542085722509494,https://drive.google.com/uc?export=download&id=135A5QerciNGHHFEs8ZT4MHg-yXzT3Keh
+70634,,#1853677212,Leggings,1,,S,EXPRESS_US,1,3DSHIRT-AS-DESIGN-S,286495,16239803333,,Angelica Reyes,US,Montana,Great Falls,800 Cedar Street,,,59405,,https://example.com/image.png,,,,,,,,https://example.com/image.png,,9434609106029699785261,USPS,https://tools.usps.com/go/TrackConfirmAction?tRef=fullpage&tLc=2&text28777=&tLabels=576542085722509495,https://drive.google.com/uc?export=download&id=135A5QerciNGHHFEs8ZT4MHg-yXzT3Keh
+70635,,#1853703704,Leggings,1,,S,EXPRESS_US,0,3DSHIRT-AS-DESIGN-S,286493,16239803333,,Patrice Settles,US,Georgia,POWDER SPRINGS,3308 Pathway Cir,,,30127,,https://example.com/image.png,,,,,,,,https://example.com/image.png,,9434609106029699785262,USPS,https://tools.usps.com/go/TrackConfirmAction?tRef=fullpage&tLc=2&text28777=&tLabels=576542085722509496,https://drive.google.com/uc?export=download&id=135A5QerciNGHHFEs8ZT4MHg-yXzT3Keh
+70636,,#1853744830,Leggings,1,,M,EXPRESS_US,0,3DSHIRT-AS-DESIGN-M,286492,16239803333,,courtnie davis,US,Illinois,Pontiac,1002 West Madison Street,,,61764,,https://example.com/image.png,,,,,,,,https://example.com/image.png,,9434609106029699785263,USPS,https://tools.usps.com/go/TrackConfirmAction?tRef=fullpage&tLc=2&text28777=&tLabels=576542085722509497,https://drive.google.com/uc?export=download&id=135A5QerciNGHHFEs8ZT4MHg-yXzT3Keh
+70637,,#1873808853,Baseball Jersey,1,,L,EXPRESS_US,1,3DSHIRT-AS-DESIGN-L,286488,16239803333,,Sabrina De Beau,US,California,Manteca,643 Carlisle way,,,95336-3426,,https://example.com/image.png,,,,,,,,https://example.com/image.png,,9434609106029699785264,USPS,https://tools.usps.com/go/TrackConfirmAction?tRef=fullpage&tLc=2&text28777=&tLabels=576542085722509498,https://drive.google.com/uc?export=download&id=135A5QerciNGHHFEs8ZT4MHg-yXzT3Keh
+70638,,#1873882457,Baseball Jersey,1,,M,EXPRESS_US,0,3DSHIRT-AS-DESIGN-M,286517,16239803333,,Lenae Kosakowski,US,Utah,SALT LAKE CITY,1139 N 1300 W,,,84116-3638,,https://example.com/image.png,,,,,,,,https://example.com/image.png,,9434609106029699785265,USPS,https://tools.usps.com/go/TrackConfirmAction?tRef=fullpage&tLc=2&text28777=&tLabels=576542085722509499,https://drive.google.com/uc?export=download&id=135A5QerciNGHHFEs8ZT4MHg-yXzT3Keh
+70638,,#1873882457,Hawaii Shirt,1,,Xl,EXPRESS_US,0,3DSHIRT-AS-DESIGN-XL,286516,16239803333,,Lenae Kosakowski,US,Utah,SALT LAKE CITY,1139 N 1300 W,,,84116-3638,,https://example.com/image.png,,,,,,,,https://example.com/image.png,,9434609106029699785266,USPS,https://tools.usps.com/go/TrackConfirmAction?tRef=fullpage&tLc=2&text28777=&tLabels=576542085722509500,https://drive.google.com/uc?export=download&id=135A5QerciNGHHFEs8ZT4MHg-yXzT3Keh
+70674,,#AZ8738824,New Multi Piece Hoodie,1,,L,EXPRESS_US,0,3DSHIRT-AS-DESIGN-L,HDBL-Z-S-212,14154198616,,kylei mccollum,US,Colorado,MONTROSE,60149 OAK GROVE RD,,,81403-9681,,https://example.com/image.png,,,,,,,,https://example.com/image.png,,9434609106029699785267,USPS,https://tools.usps.com/go/TrackConfirmAction?tRef=fullpage&tLc=2&text28777=&tLabels=576542085722509501,https://drive.google.com/uc?export=download&id=135A5QerciNGHHFEs8ZT4MHg-yXzT3Keh
+,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,
+,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,
+UPDATED,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,
+NOTE,,Design template: https://drive.google.com/drive/folders/1SpVbPMudpDA0N1Y9PoLxwnxOn9wGXUdw,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,
+order_id,,Bắt buộc: Order ID của bạn,,"1 order đc xác định là duy nhất dựa trên 2 key, order_id và identifier.
+Nếu 2 line có dùng order_id và khác identifier. sẽ đc hiểu là 2 đơn khác nhau.",,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,
+identifier,,"Tùy chọn: Nguồn của đơn, Shopify, Amazon, Etsy",,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,
+order_name,,Optional: Tên ngắn ngọn của đơn,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,
+item,,"Bắt buộc: Tên sản phẩm của bạn. Dễ hiểu, ngắn gọn",,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,
+quantity,,Bắt buộc: Số lượng item của 1 dòng,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,
+sku,,"Bắt buộc: SKU variant của OnosPOD. Đảm bảo đúng sku theo từng size, để không bị dừng process. Lấy trong catalog của seller.onospod.com",,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,
+color,,Tùy chọn: Màu muốn fulfill. Mặc định để trống,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,
+size,,Tùy chọn: Size muốn fulfill,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,
+shipping,,Bắt buộc,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,
+,,"COD nếu bạn ko muốn chúng tôi ship sang US, dành cho đơn sample",,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,
+,,EXPRESS_US: cấp tracking ngay lập tức,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,
+,,"ECONOMY_US: cấp tracking sau 48h đơn được xử lý, hoặc đơn hàng được đóng gói. Huỷ ship chỉ được hỗ trợ refund 1 phần phí cân nặng",,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,
+,,"SBTT để sử dụng Ship by Tiktok, yêu cầu cung cấp tracking và label",,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,
+merchant_sku,,Tùy chọn: Mã sku của bạn,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,
+telephone,Tùy chọn,"Địa chỉ khách không bao gồm dấu ngoặc và dài tối đa 35 kí tự đối với address 1
+",,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,
+email,Tùy chọn,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,
+name,Lưu ý: phần tên bao gồm 2 thành tố họ và tên,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,
+country,Bắt buộc,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,
+address_1,Bắt buộc,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,
+address_2,Tùy chọn,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,
+company,Tùy chọn,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,
+postcode,Bắt buộc,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,
+city,Bắt buộc,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,
+state,Bắt buộc,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,
+tracking_number,,"Optional: Nếu bạn cung cấp các trường dữ liệu này, onos sẽ không tạo tracking mới mà sử dụng label đã cung cấp để dán cho đơn hàng.",,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,
+tracking_carrier,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,
+tracking_url,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,
+shipping_label,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,
+active_service,,"Optional: Sử dụng dịch vụ active by USPS. Chấp nhận giá trị 1 hoặc 0. 1 là có sử dụng, 0 là không sử dụng. Nếu không điền mặc định không sử dụng với EXPRESS_US. Chỉ hoạt động với Shipping method là EXPRESS_US",,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,
+"design_front, design_back, design_hood, design_sleeve, design_sleeve_left, design_sleeve_right, design_chest_left, design_chest_right",,,,,,,"Nghiên cứu kĩ print areas trong catalog để đảm bảo không thiếu design, với 3D products, hãy để 1 file design dạng jpg đúng template vào design_front",,,,,,,,,,,,,,,,,,,,,,,,,,,,

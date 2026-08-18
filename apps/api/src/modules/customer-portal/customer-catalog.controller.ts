@@ -2,7 +2,13 @@ import { ZodValidationPipe } from '@anatine/zod-nestjs';
 import { Controller, Get, HttpCode, HttpStatus, Param, Query, UsePipes } from '@nestjs/common';
 import { ApiOkResponse, ApiOperation, ApiTags } from '@nestjs/swagger';
 import { AuthUser } from 'core';
-import { GetCustomerCatalogDto, GetCustomerCatalogItemResDto, GetCustomerCatalogResDto, RoleType } from 'shared';
+import {
+  GetCustomerCatalogDto,
+  GetCustomerCatalogFacetsResDto,
+  GetCustomerCatalogItemResDto,
+  GetCustomerCatalogResDto,
+  RoleType,
+} from 'shared';
 
 import { Auth } from '@/decorators';
 import type { CustomerDocument } from '@/modules/customer/customer.entity';
@@ -25,6 +31,16 @@ export class CustomerCatalogController {
     @AuthUser() customer: CustomerDocument,
   ): Promise<GetCustomerCatalogResDto> {
     return this.customerCatalogService.getCatalog(customer, dto);
+  }
+
+  // Khai báo TRƯỚC `@Get(':id')` — route param 1 segment sẽ nuốt path này nếu đứng sau.
+  @Get('facets')
+  @Auth([RoleType.Customer])
+  @ApiOperation({ summary: 'Bộ lọc duyệt catalog: danh mục + collection active kèm số sản phẩm khách thấy được' })
+  @HttpCode(HttpStatus.OK)
+  @ApiOkResponse({ type: GetCustomerCatalogFacetsResDto })
+  async getFacets(): Promise<GetCustomerCatalogFacetsResDto> {
+    return this.customerCatalogService.getFacets();
   }
 
   @Get(':id')
