@@ -3,10 +3,34 @@
     "brand": "Customer Portal",
     "catalog": "Product catalog",
     "newOrder": "Place new order",
-    "logout": "Sign out"
+    "logout": "Sign out",
+    "account": "Account",
+    "nav": {
+      "title": "Navigation",
+      "dashboard": "Dashboard",
+      "orders": "Order management",
+      "catalog": "Products"
+    }
+  },
+  "dashboard": {
+    "title": "Dashboard",
+    "subtitle": "Overview of your orders",
+    "totalOrders": "Total orders",
+    "processingOrders": "In production",
+    "completedOrders": "Completed",
+    "cancelledOrders": "Cancelled",
+    "recentOrders": "Recent orders",
+    "viewAllOrders": "View all orders →"
   },
   "fileInput": {
-    "uploadUnavailable": "File upload isn't available yet — please paste an image URL (Google Drive, Imgur...)"
+    "uploadHint": "Upload design file (max 300MB) or paste a URL",
+    "uploadUnavailable": "File upload isn't available yet — please paste an image URL (Google Drive, Imgur...)",
+    "hashing": "Checking file (computing fingerprint)...",
+    "processing": "Uploaded — the system is processing the image (thumb/preview)...",
+    "done": "Upload successful",
+    "doneInstant": "File already exists in the system — no upload needed",
+    "processFailed": "Image processing failed — retry the upload or use a URL",
+    "uploadFailed": "Upload failed — check your connection and retry"
   },
   "login": {
     "title": "Sign in to Customer Portal",
@@ -53,14 +77,25 @@
     "title": "Your orders",
     "resultsCount": "{{count}} orders",
     "empty": "You don't have any orders yet.",
+    "emptyFiltered": "No orders match the current filters.",
     "placeFirst": "Place your first order",
+    "searchPlaceholder": "Search by order code…",
+    "filterProduct": "Filter by product",
+    "allProducts": "All products",
+    "clearFilters": "Clear filters",
     "columns": {
       "code": "Order code",
       "product": "Product",
       "colorSize": "Color / Size",
       "quantity": "Qty",
       "status": "Status",
-      "orderDate": "Order date"
+      "orderDate": "Order date",
+      "order": "Order",
+      "items": "Items",
+      "total": "Total",
+      "date": "Date",
+      "customer": "Customer",
+      "tracking": "Tracking"
     },
     "statusCancelled": "Cancelled",
     "statusProcessing": "Processing",
@@ -70,7 +105,48 @@
     "inProductionOn": "In production since",
     "completedOn": "Completed on",
     "viewTimeline": "View full timeline →",
-    "viewDetail": "View details"
+    "viewDetail": "View details",
+    "importCsv": "Import CSV",
+    "tabs": {
+      "all": "All",
+      "pending": "Pending",
+      "processing": "Processing",
+      "in-production": "In Production",
+      "fulfilled": "Fulfilled",
+      "completed": "Completed",
+      "refunded": "Refunded",
+      "cancelled": "Cancelled"
+    },
+    "status": {
+      "pending": "Pending",
+      "processing": "Processing",
+      "in-production": "In Production",
+      "fulfilled": "Fulfilled",
+      "completed": "Completed",
+      "refunded": "Refunded",
+      "cancelled": "Cancelled"
+    },
+    "badgeHold": "On Hold",
+    "badgeRework": "Reworking",
+    "notPushed": "Not in production yet",
+    "itemCount": "{{count}} items",
+    "expand": "Expand",
+    "collapse": "Collapse",
+    "pushSelected": "Push to production ({{count}})",
+    "pushOne": "Push",
+    "cancelConfirm": "Cancel order {{name}}? It has not entered production, so cancelling is free.",
+    "cancelSuccess": "Order cancelled.",
+    "shipTo": "Ship to",
+    "note": "Note",
+    "source": {
+      "form": "Manual",
+      "csv": "CSV import",
+      "api": "API",
+      "sync": "Legacy sync"
+    },
+    "paymentUnpaid": "Unpaid",
+    "paymentWaived": "Waived",
+    "moreItems": "+{{count}} more items"
   },
   "orderNew": {
     "title": "Place new order",
@@ -106,6 +182,11 @@
     "changeProduct": "Choose a different product",
     "designUrl": "Design link — {{area}}",
     "designUrlPlaceholder": "https://drive.google.com/...",
+    "designOptional": "optional",
+    "downloadAreaTemplate": "Download area template",
+    "designSizeHint": "Recommended size: {{size}}",
+    "productTemplate": "Product design template",
+    "productPrintDocs": "Design guidelines",
     "searchPlaceholder": "Search products by name…",
     "searchEmpty": "No matching products found.",
     "validation": {
@@ -119,7 +200,8 @@
       "shippingEmailInvalid": "Invalid email",
       "typeRequired": "Product type is required",
       "productRequired": "Please select a product from the catalog"
-    }
+    },
+    "successPending": "Order created ({{count}} items) in Pending — select it and hit Push to production to start manufacturing."
   },
   "track": {
     "notFound": "This order could not be found.",
@@ -143,7 +225,10 @@
     "moreVariations": "+ {{count}} more variations",
     "variationCount": "{{count}} variations",
     "resultsCount": "{{count}} products",
-    "clearSearch": "Clear search"
+    "clearSearch": "Clear search",
+    "collectionsTitle": "Collections",
+    "allCategories": "All",
+    "clearFilters": "Clear filters"
   },
   "catalogDetail": {
     "notFound": "This product could not be found.",
@@ -152,6 +237,197 @@
     "sku": "SKU",
     "printArea": "Print area",
     "newOrder": "New order",
-    "downloadSizeChart": "Download size chart"
+    "downloadSizeChart": "Download size chart",
+    "downloadPrintTemplate": "Download design template",
+    "printDocs": "Design guidelines",
+    "specs": "Product specifications",
+    "infoTitle": "{{name}} Information",
+    "infoTabs": {
+      "details": "Product Details",
+      "template": "Mockup & Template",
+      "variations": "Variations & Price"
+    },
+    "downloadAreaTemplate": "Download {{label}} template{{size}}",
+    "colWeight": "Weight",
+    "colShipCod": "Ship COD",
+    "colShipExpressUs": "Ship Express US",
+    "colShipTiktok": "Ship by TikTok",
+    "shippingMethod": "Shipping Method",
+    "shipMethods": {
+      "cod": "COD",
+      "expressUs": "Express US",
+      "tiktok": "Ship By Tiktok"
+    },
+    "importUsTax": "Import US Tax",
+    "perUnit": "/unit",
+    "package": "Package"
+  },
+  "account": {
+    "title": "My account",
+    "profileSection": "Profile",
+    "emailLabel": "Login email",
+    "skuLabel": "User SKU",
+    "lockedKeyNote": "Email and SKU form your account identity — they cannot be changed here; contact support if needed.",
+    "nameLabel": "Full name",
+    "phoneLabel": "Phone",
+    "profileSaved": "Profile saved",
+    "passwordSection": "Change password",
+    "currentPasswordLabel": "Current password",
+    "newPasswordLabel": "New password",
+    "confirmPasswordLabel": "Confirm new password",
+    "passwordTooShort": "New password must be at least 6 characters",
+    "passwordMismatch": "Passwords do not match",
+    "passwordChanged": "Password changed",
+    "changePasswordButton": "Change password"
+  },
+  "push": {
+    "title": "Push to production — {{count}} orders",
+    "confirm": "Confirm push ({{count}})",
+    "total": "Total",
+    "priceNote": "Prices are locked at push time (your tier promotions applied).",
+    "quoteWarning": "Some lines could not be priced — the order can still be pushed; pricing will be reconciled later.",
+    "successToast": "Pushed {{pushed}} orders to production.",
+    "failedToast": "{{failed}} orders failed to push."
+  },
+  "importCsv": {
+    "title": "Import orders from file (OnosPod template)",
+    "subtitle": "Use the same template you know from the legacy system — multiple lines with the same order_id form one multi-item order.",
+    "backToOrders": "Orders",
+    "downloadTemplate": "Download template",
+    "dropHint": "Choose a .csv / .xlsx / .xls file using the legacy template",
+    "chooseFile": "Choose file",
+    "reset": "Start over",
+    "formatHint": "Up to {{max}} lines per import. The instruction block at the bottom of the template is ignored automatically.",
+    "parsedSummary": "{{lines}} lines → {{orders}} orders",
+    "validOrders": "{{count}} valid orders",
+    "errorOrders": "{{count}} orders with errors (skipped)",
+    "importValidOnly": "Import {{count}} valid orders",
+    "importAll": "Import {{count}} orders",
+    "linesLabel": "lines {{lines}}",
+    "successToast": "Created {{count}} orders in Pending.",
+    "goToPending": "View created orders",
+    "resultCreated": "{{count}} created",
+    "resultDuplicated": "{{count}} duplicated (skipped)",
+    "resultFailed": "{{count}} failed",
+    "statusCreated": "Created",
+    "statusDuplicated": "Duplicated",
+    "statusFailed": "Failed",
+    "itemErrorLine": "Line {{index}}",
+    "errors": {
+      "emptyFile": "The file has no data.",
+      "missingColumn": "Missing required column \"{{column}}\" in the header.",
+      "missingOrderId": "Line {{line}}: missing order_id.",
+      "missingSku": "Line {{line}}: missing sku.",
+      "badQuantity": "Line {{line}}: invalid quantity \"{{value}}\".",
+      "badShipping": "Line {{line}}: invalid shipping \"{{value}}\" (COD / EXPRESS_US / ECONOMY_US / SBTT).",
+      "missingAddressField": "Line {{line}}: missing required {{column}}.",
+      "tooManyLines": "The file exceeds {{max}} lines — split it and import in batches.",
+      "parseFailed": "Could not read the file — check the .csv/.xlsx format."
+    },
+    "warnings": {
+      "addressMismatch": "Line {{line}}: address differs from the first line of the same order — the first line's address is used."
+    },
+    "allValid": "All lines valid",
+    "cellErrorCount": "{{count}} cell errors",
+    "warningCount": "{{count}} warnings",
+    "fixErrorsToSubmit": "The file still has invalid cells (highlighted in red below) — fix the file and re-upload to import.",
+    "cellErrors": {
+      "required": "Required — must not be empty",
+      "badQuantity": "Quantity must be a positive integer",
+      "badShipping": "Allowed: cod / express_us / economy_us / tiktok (SBTT)",
+      "tooLong": "Too long (max {{max}} characters)",
+      "invalid": "Invalid value",
+      "skuNotFound": "SKU not found in catalog"
+    },
+    "columns": {
+      "order_id": "Order ID",
+      "identifier": "Identifier",
+      "sku": "SKU",
+      "item": "Item name",
+      "quantity": "Quantity",
+      "shipping": "Shipping",
+      "name": "Recipient name",
+      "telephone": "Phone",
+      "address_1": "Address",
+      "city": "City",
+      "state": "State",
+      "postcode": "Zip code",
+      "country": "Country",
+      "systemProduct": "System product"
+    },
+    "resolving": "Matching SKUs against catalog…",
+    "systemProductHint": "resolved from SKU — verify before importing"
+  },
+  "orderDetail": {
+    "reference": "Reference",
+    "steps": {
+      "created": "Created",
+      "pushed": "Sent to fulfillment",
+      "manufactured": "Manufacturing finished",
+      "pickedUp": "Picked up",
+      "delivered": "Delivered"
+    },
+    "cancelledAt": "Order cancelled at {{date}}",
+    "itemsTitle": "Order details",
+    "designs": "Designs",
+    "subtotal": "Subtotal",
+    "total": "Total",
+    "paid": "Paid",
+    "addressTitle": "Shipping address",
+    "address": {
+      "firstName": "First name",
+      "lastName": "Last name",
+      "phone": "Phone",
+      "email": "Email",
+      "address1": "Address line 1",
+      "address2": "Address line 2",
+      "city": "City",
+      "state": "State",
+      "postcode": "Zip code",
+      "country": "Country",
+      "company": "Company"
+    },
+    "updateAddress": "Update address",
+    "noteTitle": "Buyer note",
+    "notePlaceholder": "Enter buyer note…",
+    "updateNote": "Update note",
+    "noNote": "No note.",
+    "trackingTitle": "Tracking",
+    "trackingNumber": "Tracking number",
+    "trackingLink": "Track shipment",
+    "shippingLabel": "Shipping label",
+    "noTracking": "No tracking info yet.",
+    "saveSuccess": "Changes saved.",
+    "pushToProduction": "Push to production",
+    "activityTitle": "Order activity",
+    "idLabel": "ID",
+    "merchantLabel": "Merchant",
+    "fulfillLabel": "Fulfill",
+    "productionsTitle": "Productions",
+    "shippingFee": "Shipping",
+    "carrier": "Carrier",
+    "shipMethodTitle": "Shipping method",
+    "shipMethods": {
+      "cod": "No delivery needed (COD)",
+      "express_us": "Express US",
+      "economy_us": "Economy US",
+      "tiktok": "Ship by TikTok"
+    },
+    "shipMethodHints": {
+      "cod": "I will handle shipping myself.",
+      "express_us": "Fast US domestic delivery.",
+      "economy_us": "Economy US domestic delivery.",
+      "tiktok": "Use TikTok Shop label (SBTT)."
+    },
+    "activeService": "Activate tracking by USPS",
+    "records": {
+      "title": "Order records",
+      "created": "Order created",
+      "createdDesc": "Created via {{source}}",
+      "pushed": "Sent to fulfillment",
+      "pushedDesc": "Order pushed to production — {{codes}}",
+      "manufactured": "Manufacturing finished",
+      "cancelled": "Order cancelled"
+    }
   }
 }

@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { Factory, LayoutList, Loader2, Search, Send, User } from 'lucide-react';
+import { Factory, FileText, LayoutList, Loader2, Search, Send, User } from 'lucide-react';
 import { toast } from 'sonner';
 
 import { RepositoryRemote } from '@/services';
@@ -18,9 +18,10 @@ interface FactoryOpt {
 }
 
 /**
- * Nút gửi báo cáo Telegram — popover chọn view: Tổng quan / Theo designer /
- * Soát tool + 1 nút mỗi xưởng sản xuất (phễu lọc theo xưởng). BE giữ khóa
- * in-flight, trả `busy` nếu đang chạy.
+ * Nút gửi báo cáo Telegram — popover chọn view: Tổng quan (SLA) / Chi tiết
+ * (phễu + khách ưu tiên) / Theo designer / Soát tool + 1 nút mỗi xưởng sản
+ * xuất (phễu + SLA lọc theo xưởng). BE giữ khóa in-flight, trả `busy` nếu
+ * đang chạy.
  */
 export function SendTelegramReportButton() {
   const { t } = useTranslation('dashboard');
@@ -62,6 +63,7 @@ export function SendTelegramReportButton() {
 
   const viewOptions: Array<{ view: ReportView; icon: React.ReactNode }> = [
     { view: 'daily', icon: <LayoutList size={15} /> },
+    { view: 'detail', icon: <FileText size={15} /> },
     { view: 'designer', icon: <User size={15} /> },
     { view: 'tool-check', icon: <Search size={15} /> },
   ];

@@ -427,6 +427,8 @@ export const GetProductionOrdersZod = PageQueryZod.extend({
   type: z.union([z.string(), z.string().array()]).optional(),
   /** Exact match (CSV) — lọc theo SKU khách (bảng phẳng trang "In"). */
   userSku: z.string().optional(),
+  /** Exact match (case-insensitive) — cặp với userSku cho drill-down "Đơn hàng của khách" (/adm/customers). */
+  userEmail: z.string().optional(),
   /** Comma-separated workshop_config codes for fabric_type. */
   fabricType: z.string().optional(),
   /** Comma-separated workshop_config codes for tool_result. */
@@ -2329,8 +2331,33 @@ export class UpdateCustomerOrderResDto extends createZodDto(extendApi(UpdateCust
 export const GetCustomerOrdersZod = z.object({
   page: z.coerce.number().int().positive().default(1),
   limit: z.coerce.number().int().positive().max(100).default(20),
+  /** Tìm theo mã đơn (`productionId`) — match chứa, không phân biệt hoa thường. */
+  search: z.string().max(100).optional(),
+  /** Lọc theo sản phẩm — match CHÍNH XÁC field `type` (lấy option từ GET /customer/orders/product-types). */
+  type: z.string().max(200).optional(),
 });
 export class GetCustomerOrdersDto extends createZodDto(extendApi(GetCustomerOrdersZod)) {}
+
+/** Danh sách sản phẩm (distinct `type`) khách đã từng đặt — option cho filter listing. */
+export const GetCustomerOrderProductTypesResZod = ResZod.extend({ data: z.string().array() });
+export class GetCustomerOrderProductTypesResDto extends createZodDto(extendApi(GetCustomerOrderProductTypesResZod)) {}
+
+/** Dashboard Customer Portal — tổng quan đơn của chính khách đang đăng nhập. */
+export const CustomerDashboardZod = z.object({
+  totals: z.object({
+    total: z.number(),
+    /** Đơn đang trong luồng sản xuất (chưa hoàn thành, chưa hủy). */
+    processing: z.number(),
+    /** Đơn đã đóng hàng xong (`fulfillmentCompletedAt`). */
+    completed: z.number(),
+    cancelled: z.number(),
+  }),
+  /** 5 đơn mới nhất — hiển thị bảng "Đơn gần đây". */
+  recentOrders: CustomerOrderSummaryZod.array(),
+});
+export type CustomerDashboard = z.infer<typeof CustomerDashboardZod>;
+export const GetCustomerDashboardResZod = ResZod.extend({ data: CustomerDashboardZod });
+export class GetCustomerDashboardResDto extends createZodDto(extendApi(GetCustomerDashboardResZod)) {}
 
 export const GetCustomerOrdersResZod = ResZod.extend({
   data: CustomerOrderSummaryZod.array(),

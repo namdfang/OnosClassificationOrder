@@ -2,7 +2,7 @@
 
 > **File BE:**
 >  - `apps/api/src/modules/telegram-notification/` — gửi tin + format 3 view báo cáo (+ `REPORT_CALLBACKS`)
->  - `apps/api/src/modules/scheduled-reports/` — cron 3 lần/ngày + aggregate + webhook nút bấm Telegram
+>  - `apps/api/src/modules/scheduled-reports/` — cron 2 lần/ngày (11:30 + 17:00, mỗi lần 2 message SLA + Designer) + aggregate + webhook nút bấm Telegram
 >  - `apps/api/src/utils/designer-flow.ts` — `designerFlowConds()` (TÁCH từ `DesignerStatsService`, dùng chung Dashboard + sidebar + báo cáo)
 >  - `packages/core/services/telegram.service.ts` — HTTP client bot (`sendMessage` + `answerCallbackQuery` + `setWebhook`)
 >  - `apps/api/src/shared/services/api-config.service.ts` → `config.telegram` (+ `webhookUrl`/`webhookSecret`) + `config.scheduledReports`
@@ -17,8 +17,8 @@
 
 ## 1. Overview
 
-### 1.1 Phase 1 — Notification theo sự kiện
-Import summary khi `POST /v1/orders/import` — không đổi.
+### 1.1 Phase 1 — Notification theo sự kiện (ĐÃ GỠ 2026-08-17)
+Import summary khi `POST /v1/orders/import` — **đã gỡ theo yêu cầu user** (xóa hook `sendImportSummaryNotification` + `notifyImportSummary` + `format/import-summary.formatter.ts` + type/channel key `importSummary`; OrderModule không còn import TelegramNotificationModule).
 
 ### 1.2 Phase 3 — Báo cáo "Đơn 3 ngày liền kề" + 3 view (2026-08, thay 3 báo cáo cũ)
 
@@ -26,10 +26,11 @@ Import summary khi `POST /v1/orders/import` — không đổi.
 
 | Nút | callback_data | Nội dung |
 |---|---|---|
-| 🔄 Cập nhật | `rpt:daily` | View chính: từng ngày `total` + `stockOut` + dòng thiết kế (xong/đang làm/làm lại/cần làm + tồn) + section ⭐ Khách ưu tiên |
+| 🔄 Cập nhật | `rpt:daily` | **View chính (cron gửi view này) = SLA-only**: bảng SLA 7 ngày làm việc + bảng 🚨 tồn sau hạn N2 + bảng 🏭 tồn theo xưởng (%). Phễu + khách ưu tiên KHÔNG còn ở đây (2026-08-17, dời sang 📋 Chi tiết) |
+| 📋 Chi tiết | `rpt:detail` | Phễu vòng đời `REPORT_DAY_COUNT` ngày + section ⭐ Khách ưu tiên (`formatDetailReport` — nguyên trạng view chính CŨ) |
 | 👤 Designer | `rpt:designer` | Tách theo ngày, mỗi designer 1 dòng (mirror bảng "Tất cả designer theo ngày") + dòng 🚨 lỗi chưa gán |
 | 🔍 Soát tool | `rpt:tool` | Bảng soát tool xoay ngang (Tổng/Chưa soát/Đã soát/Note ko ok/Soát OK/Cần làm lại × N ngày) — mirror "Tổng quan theo ngày" tab Soát tool |
-| 🏭 <tên xưởng> | `rpt:fac:<factoryId>` | **1 nút / xưởng SX** (động, loại US) → phễu Tổng quan LỌC theo xưởng đó (bỏ section khách ưu tiên) |
+| 🏭 <tên xưởng> | `rpt:fac:<factoryId>` | **1 nút / xưởng SX** (động, loại US) → phễu + section SLA cùng LỌC theo xưởng đó (bỏ khách ưu tiên + bỏ bảng tồn theo xưởng) |
 
 > `REPORT_DAY_COUNT = 4` ngày. Nút xưởng dựng động từ `data.factories` (`listProductionFactories`). Nút cũ "🏭 Xưởng" gộp (per-day factory summary) đã bỏ.
 
@@ -51,7 +52,7 @@ Không rate-limit — chỉ chặn chạy chồng: `ScheduledReportsService.runn
 
 ```
 Trigger:
-  - Cron 07:30/13:00/18:30 VN (check SCHEDULED_REPORTS_ENABLED) → run('daily')
+  - Cron 11:30/17:00 VN (check SCHEDULED_REPORTS_ENABLED) → run('daily') RỒI run('designer') — 2 message/lịch
   - Nút web Dashboard (popover 3 view) → POST /reports/run-now?view=… → run(view)
   - Nút Telegram → webhook → REPORT_CALLBACKS[cq.data] → run(kind)
 
@@ -95,6 +96,8 @@ DailyOrdersReportData = { days, priorityRows, designerDays, toolCheckDays, facto
 ToolCheckReportDay = { label, total, unreviewed, reviewed, noteNotOk, reviewedOk, rework }
 ReportFactory = { id, name }   // dựng nút xưởng
 ReportDayStats += { soat, design, inPressQc, sew, pack, completedWithin2d }   // phễu vòng đời (partition)
+SlaCohortRow = { label, ageDays, total, doneN0..doneN3, doneLate(≥N4), notDone, stuck{Soat,Design,InPressQc,Sew,Pack} }   // section SLA sản xuất
+DailyOrdersReportData += { slaDays: SlaCohortRow[] }
 FactoryReportDay = { label, rows: { name, total, stockOut, backlog }[] }
 ```
 
@@ -103,7 +106,7 @@ FactoryReportDay = { label, rows: { name, total, stockOut, backlog }[] }
 ## 4. Backend modules
 
 - `telegram-notification/`: service (`notifyImportSummary` + 3 `notify*Report` cùng `REPORT_KEYBOARD` 3 nút + `reportChannelIds()`), `types.ts` (`REPORT_CALLBACKS` map), `format/daily-orders-report.formatter.ts` (3 hàm `formatDailyOrdersReport` / `formatDesignerViewReport` / `formatFactoryViewReport`) + `import-summary.formatter.ts` + `_helpers.ts`.
-- `scheduled-reports/`: service (`run(kind)` + lock + onModuleInit setWebhook + 3 @Cron), `scheduled-reports.controller.ts`, `telegram-webhook.controller.ts`, `build-period.ts` (`REPORT_DAY_COUNT` + `buildReportDayWindows` + `formatVnDateTime`), `aggregators/daily-orders-aggregator.ts`.
+- `scheduled-reports/`: service (`run(kind)` + lock + onModuleInit setWebhook + 2 @Cron 11:30/17:00 — `runScheduled()` gửi tuần tự daily→designer), `scheduled-reports.controller.ts`, `telegram-webhook.controller.ts`, `build-period.ts` (`REPORT_DAY_COUNT` + `SLA_DAY_COUNT`/`SLA_TARGETS` + `buildReportDayWindows(now, count?)` + `formatVnDateTime`), `aggregators/daily-orders-aggregator.ts` (+ `aggregateSla()` — aggregate riêng $facet 2 nhánh days/factories, cửa sổ 7 ngày).
 - Aggregator: 1 aggregation `$facet` 4 nhánh (`days` / `customers` (pre-filter `userSku $in` khách ưu tiên, join JS qua `customerMatchKey`) / `designers` (match assignee set + s4, group (day, assignee), resolve fullName qua `userModel`) / `factories` (group **(day, factoryId)** → per-day, resolve tên qua `FactoryRepository`)). Module imports: OrderEntity + UserEntity mongoose, CustomerAssignmentModule (`getPriorityCustomers()`), FactoryModule, TelegramNotificationModule.
 - `DesignerStatsService.designerFlowConds()` giờ là delegate mỏng → `utils/designer-flow.ts`.
 
@@ -111,7 +114,7 @@ FactoryReportDay = { label, rows: { name, total, stockOut, backlog }[] }
 
 ## 5. Message format (3 view — bảng canh cột + viết tắt)
 
-Số liệu render trong **bảng monospace** (helper `table()` → ` ```code``` ` block, cột đầu canh trái, các cột số canh phải → số thẳng hàng dọc, dễ soi nhất). Telegram **cuộn ngang** trong code block nếu rộng — KHÔNG vỡ dòng như text thường (bài học Phase 2.1). Tiêu đề cột **viết tắt**, giải nghĩa ở dòng legend cuối message. Ô tên (designer/xưởng) qua `fit(s, n)` (cắt gọn + bỏ `` ` ``/newline khỏi phá block). **Số 0 → `-`** (helper `cellStr` trong `table()`) cho đỡ nhiễu mắt.
+Số liệu render trong **bảng monospace** (helper `table()` → ` ```code``` ` block, cột đầu canh trái, các cột số canh phải → số thẳng hàng dọc, dễ soi nhất). Bảng hẹp được **giãn đều khoảng cách cột tới `TABLE_TARGET_WIDTH = 34` ký tự** — mọi bảng bằng nhau, chiếm trọn bề ngang điện thoại; KHÔNG tăng target vì dòng dài hơn ~35 ký tự sẽ bị Telegram mobile wrap. Telegram **cuộn ngang** trong code block nếu rộng — KHÔNG vỡ dòng như text thường (bài học Phase 2.1). Tiêu đề cột **viết tắt**, giải nghĩa ở dòng legend cuối message. Ô tên (designer/xưởng) qua `fit(s, n)` (cắt gọn + bỏ `` ` ``/newline khỏi phá block). **Số 0 → `-`** (helper `cellStr` trong `table()`) cho đỡ nhiễu mắt.
 
 > **Giới hạn Telegram (đã chốt với user):** tô màu chữ (vàng/xanh) và in đậm **KHÔNG** render trong code block (bảng monospace phẳng), và Telegram vốn không hỗ trợ màu chữ tuỳ ý. User đã chọn **giữ bảng canh cột** thay vì đổi sang kiểu thẻ emoji-màu (mất canh cột) — chấp nhận không màu/đậm, đổi lại số thẳng hàng.
 
@@ -140,6 +143,19 @@ Bảng **xoay ngang** (`funnelTable` + `FUNNEL_ROWS`): **chặng = HÀNG, ngày 
 
 Đơn=tổng·XK=xuất kho·Lỗi=tổng lỗi TK·Xong=TK xong·ĐL=đang làm·LL=làm lại·CL=cần làm·Tồn=TK tồn
 [🔄 Cập nhật] [👤 Designer] [🏭 Xưởng]
+```
+**Section "⏱ SLA SẢN XUẤT"** (ngay dưới bảng phễu, cả view Tổng quan LẪN view xưởng) — cohort theo ngày vào SX, cửa sổ **7 ngày liền kề — TÍNH CẢ Chủ nhật** (khách lên đơn cả CN; từng làm bản bỏ CN rồi user đảo lại — xem changelog 3.7.1; cửa sổ RỘNG hơn phễu 4 ngày → aggregate riêng `aggregateSla()`), trả lời "hàng của N ngày trước đã kết thúc chu kỳ chưa": mỗi lô 1 dòng `Ngày · Tổng · N0 · N1 · N2 · N3+ · Còn` — % **TỪNG MỐC RỜI NHAU** theo **NGÀY LỊCH VN** (`lag = vnDay(fulfillmentCompletedAt) − vnDay(inProductionAt)`, KHÁC `%≤2 ngày` của phễu vốn tính 48h tròn), `N3+` gộp xong-từ-N3-trở-đi → **các cột cộng ngang = 100%** (bài học: bản đầu dùng % CỘNG DỒN ≤N1/≤N2, user cộng ngang ra >100% không hiểu — ĐÃ BỎ). Mốc lô chưa sống tới → `—`, mốc đã qua nhưng 0 đơn → `-`. Bề ngang giữ ~33 ký tự — **Telegram mobile VẪN wrap trong code block nếu rộng hơn** (bản gap-2-space + ô `476 (62%)` từng bị bẻ dòng — ĐÃ BỎ, `table()` giữ nguyên gap 1 space). Chỉ tiêu `SLA_TARGETS` (build-period.ts, nghĩa CỘNG DỒN: N0≥30 · N1≥80 · **N2=100 cam kết chu kỳ**) chỉ nêu ở tiêu đề, KHÔNG gắn cờ vào ô. Dưới bảng: bảng **"🚨 TỒN SAU HẠN N2"** — dòng đếm `🔴 quá hạn X lô · ⚠️ hạn hôm nay Y lô`, mỗi lô đến hạn (`NAY`, ageDays=2)/quá hạn (`QUÁ`, ageDays≥3) 1 dòng, cột = chặng đang kẹt (`TK`=Soát+Thiết kế gộp cho hẹp · `IÉQ` · `May` · `Đóng`) + legend, kết section 1 dòng trống. Sau đó (CHỈ view tổng, không lọc xưởng): bảng **"🏭 TỒN SAU HẠN N2 THEO XƯỞNG"** — MA TRẬN NGÀY × XƯỞNG (`slaFactories` — group `(day, factoryId)` trên đơn chưa xong của các lô đã đến hạn, mỗi lô 1 dòng + 2 dòng chốt `Tổng`/`%` tỷ trọng, sort tổng giảm dần, tên xưởng `fit(7)`). Đơn giữ (hold) TÍNH GỘP — cam kết áp mọi đơn (chốt với user):
+```
+⏱ SLA SẢN XUẤT · 7 NGÀY (chỉ tiêu cộng dồn N0≥30·N1≥80·N2≥100)
+| Ngày  Tổng N0  N1  N2 N3+  Còn |
+| 12/08  726  - 26%  8%   -  66% |
+| 15/08  618  -   -  4%   —  96% |
+| 17/08  239  -   —   —   — 100% |
+🚨 TỒN SAU HẠN N2 — 🔴 quá hạn 4 lô · ⚠️ hạn hôm nay 1 lô · kẹt ở:
+| Ngày  Hạn Còn TK IÉQ May Đóng |
+| 12/08 QUÁ 478  -   4 428   46 |
+| 15/08 NAY 592  7 128 408   49 |
+TK=soát tool+thiết kế · IÉQ=In/Ép/QC · NAY=hạn N2 là hôm nay
 ```
 View designer — mỗi ngày 1 bảng `Designer · Lỗi · Xong · ĐL · LL · CL` + **dòng Tổng** (cộng mọi designer trong ngày). Tên `fit` 12 ký tự; **Lỗi** per-designer = số đơn của họ TỪNG bị soát tool ra lỗi `toolErrHasCond` (KHÔNG dùng poolCond vì nhánh này đã lọc s4 → poolCond luôn = tổng đơn):
 ```
@@ -216,6 +232,13 @@ SuperAdmin/Admin: nút web + `/reports/run-now`. Member channel báo cáo: 3 nú
 | Phase 3.4.2 | 2026-08-01 | **Gộp cột %2n vào Xong** thành ô "số (%)" (vd `479 (61%)`, helper `xongCell`) — bỏ 1 cột cho đỡ rộng/xuống dòng trên mobile |
 | Phase 3.4.3 | 2026-08-01 | Bảng vẫn wrap trên mobile → **xoay ngang phễu** (`funnelTable`/`FUNNEL_ROWS`): chặng=hàng, ngày=cột (4 cột, vừa 1 dòng); nhãn hàng đầy đủ Tổng/Soát/Thiết kế/In/Ép/QC/May vào ra/Đóng hàng/Hoàn thành/% ≤2 ngày → **bỏ legend**; %2n về lại 1 hàng riêng |
 | Phase 3.5 | 2026-08-01 | **4 ngày** (`REPORT_DAY_COUNT=4`). **Nút xưởng động**: bỏ view "factory summary" cũ → mỗi xưởng SX (loại US) 1 nút `🏭 <tên>` (`rpt:fac:<id>`) = phễu Tổng quan lọc theo xưởng (`aggregate(now, factoryId)` + `formatDailyOrdersReport(payload, factoryName)`, bỏ section khách). **Nút "🔍 Soát tool"** (`rpt:tool`) = báo cáo soát tool xoay ngang (facet `toolCheck` + `formatToolCheckReport`, mirror bảng "Tổng quan theo ngày" tab Soát tool). `ReportKind`='daily'\|'designer'\|'tool-check'; `run(kind, factoryId?)`; keyboard động `buildReportKeyboard(factories)`; web popover thêm Soát tool + 1 mục/xưởng (`runNow(view, factoryId?)`) |
+| Phase 3.6 | 2026-08-17 | **Section "⏱ SLA SẢN XUẤT"** trong view Tổng quan + view xưởng: cohort 7 ngày SX (`SLA_DAY_COUNT`, aggregate riêng `aggregateSla()`), % cộng dồn stock out theo NGÀY LỊCH VN mốc N0/≤N1/≤N2 + cột Còn; chỉ tiêu `SLA_TARGETS` N0≥30·N1≥80·N2=100 (hụt → `!`, quá hạn N2 → `X`); dòng cảnh báo ⚠️(đến hạn hôm nay)/🔴(quá hạn) kèm breakdown kẹt ở chặng nào; đơn hold tính gộp. `SlaCohortRow` + `DailyOrdersReportData.slaDays` |
+| Phase 3.6.1 | 2026-08-17 | Redesign section SLA theo feedback screenshot thật: thêm cột **≤N3** (`doneN3`, `doneLate` thành ≥N4); cột `Còn` kèm **%** trên tổng lô; `table()` thêm tham số `gap` — bảng SLA dùng 2 space cho thoáng/rộng hết màn hình; phần cảnh báo đổi từ prose (bị wrap) → bảng **"🚨 TỒN SAU HẠN N2"** (`Ngày·Hạn(NAY/QUÁ)·Còn·Soát·TK·IÉQ·May·Đóng`) + dòng đếm 🔴/⚠️ + legend + dòng trống ngăn section khách ưu tiên |
+| Phase 3.6.2 | 2026-08-17 | Fix 2 lỗi bản 3.6.1 theo screenshot điện thoại: (1) bảng gap-2 + ô `476 (62%)` quá rộng → **Telegram mobile wrap** → bỏ `gap` (table() về nguyên bản), Còn chỉ còn `%`, bề ngang ~33 ký tự; (2) % cộng dồn ≤N1/≤N2 khiến user cộng ngang >100% → đổi sang **% từng mốc rời nhau** `N0+N1+N2+N3+ +Còn = 100%` (cột `N3+` = doneN3+doneLate), bỏ cờ `!`/`X` trong ô (chỉ tiêu chỉ nêu ở tiêu đề); bảng tồn gộp Soát+TK thành cột `TK` cho hẹp |
+| Phase 3.7 | 2026-08-17 | **View chính → SLA-only**: SLA + 🚨 tồn sau hạn N2 + bảng mới **🏭 tồn theo xưởng %** (`slaFactories` facet); phễu + khách ưu tiên dời sang **nút mới 📋 Chi tiết** (`rpt:detail`/`ReportKind='detail'`/`formatDetailReport`/`notifyDetailReport` + web popover mục "Chi tiết"); nút xưởng giữ phễu+SLA lọc xưởng. Kèm bản bỏ Chủ nhật khỏi chu kỳ N (7 ngày làm việc + lag trừ CN) |
+| Phase 3.7.1 | 2026-08-17 | **Đảo quyết định bỏ CN** — user chốt TÍNH CẢ Chủ nhật (khách lên đơn cả CN): revert về 7 ngày liền kề + lag ngày lịch thuần (`buildSlaWorkingDayWindows`/`sundaysUpTo` ĐÃ XÓA); giữ nguyên view SLA-only + nút Chi tiết + bảng tồn theo xưởng |
+| Phase 3.7.2 | 2026-08-17 | **(1) Giãn bảng full-width**: `table()` thêm `TABLE_TARGET_WIDTH=34` — bảng hẹp giãn đều gap (xoay vòng) cho mọi bảng bằng nhau chiếm trọn màn điện thoại (không vượt 34 → không wrap). **(2) Bảng xưởng → ma trận NGÀY × XƯỞNG**: facet factories group `(day, factoryId)`, `slaFactories` đổi shape `{name,total,byDay[]}` — mỗi lô đến hạn 1 dòng tồn từng xưởng + dòng Tổng + dòng % tỷ trọng (thấy Mê Linh tồn bao nhiêu ở từng lô ngày) |
+| Phase 3.8 | 2026-08-17 | **Gỡ import summary noti** (hook trong `importOrders` + `notifyImportSummary` + formatter + channel key — Phase 1 kết thúc); **đổi lịch cron 3 lần/ngày → 2 lần 11:30 + 17:00 VN**, mỗi lịch gửi 2 message: Tổng quan SLA (kèm bảng xưởng) rồi Designer (`runScheduled()` chạy tuần tự `run('daily')` → `run('designer')`); bỏ dòng đếm 🔴/⚠️ lô trên header bảng tồn (user tự gọn) |
 
 ---
 

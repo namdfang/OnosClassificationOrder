@@ -50,6 +50,10 @@ export class CustomerEntity extends DatabaseEntityAbstract {
   // `CustomerZod` — chỉ đọc/ghi nội bộ trong `customer-notification` module.
   @Prop({ type: Date, default: null })
   notificationsReadAt: Date | null;
+
+  // Xóa mềm dùng field `deletedAt` KẾ THỪA từ DatabaseEntityAbstract (core) —
+  // khách đã xóa: ẩn khỏi mọi list/kanban, chặn đăng nhập, sync không hồi sinh
+  // (unique index giữ record → upsert coi như existing). KHÔNG khai báo lại ở đây.
 }
 
 export const CustomerSchema = SchemaFactory.createForClass(CustomerEntity);

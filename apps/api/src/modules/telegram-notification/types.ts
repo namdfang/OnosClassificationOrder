@@ -1,21 +1,9 @@
 import type { DailyOrdersReportData } from '../scheduled-reports/types';
 
-export type ImportSummaryNotification = {
-  triggeredBy?: { email?: string; fullName?: string };
-  totals: {
-    imported: number;
-    updated: number;
-    skipped: number;
-  };
-  byFactory: Array<{ name: string; count: number }>;
-  unassignedFactoryCount: number;
-  startedAt: Date;
-  finishedAt: Date;
-};
-
 /**
- * Payload chung 3 view báo cáo (chính / theo designer / theo xưởng) — cùng 1
- * lần aggregate `DailyOrdersReportData`, formatter cắt lát khác nhau.
+ * Payload chung các view báo cáo (SLA / chi tiết / designer / soát tool /
+ * xưởng) — cùng 1 lần aggregate `DailyOrdersReportData`, formatter cắt lát
+ * khác nhau.
  */
 export type DailyOrdersReportNotification = {
   data: DailyOrdersReportData;
@@ -30,7 +18,7 @@ export type TelegramMention = {
   displayName: string;
 };
 
-export type NotificationChannelKey = 'importSummary' | 'hourlyStats' | 'criticalError' | 'dailyReport';
+export type NotificationChannelKey = 'hourlyStats' | 'criticalError' | 'dailyReport';
 
 /**
  * `callback_data` các nút gắn dưới message báo cáo — webhook
@@ -38,6 +26,7 @@ export type NotificationChannelKey = 'importSummary' | 'hourlyStats' | 'critical
  */
 export const REPORT_CALLBACKS = {
   'rpt:daily': 'daily',
+  'rpt:detail': 'detail',
   'rpt:designer': 'designer',
   'rpt:tool': 'tool-check',
 } as const;

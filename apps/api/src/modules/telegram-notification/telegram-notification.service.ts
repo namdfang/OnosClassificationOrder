@@ -8,15 +8,10 @@ import { ApiConfigService } from '@/shared/services';
 import {
   formatDailyOrdersReport,
   formatDesignerViewReport,
+  formatDetailReport,
   formatToolCheckReport,
 } from './format/daily-orders-report.formatter';
-import { formatImportSummary } from './format/import-summary.formatter';
-import type {
-  DailyOrdersReportNotification,
-  ImportSummaryNotification,
-  NotificationChannelKey,
-  TelegramMention,
-} from './types';
+import type { DailyOrdersReportNotification, NotificationChannelKey, TelegramMention } from './types';
 
 /**
  * Hàng nút dưới mỗi message báo cáo — dựng ĐỘNG theo danh sách xưởng: mỗi xưởng
@@ -29,6 +24,7 @@ function buildReportKeyboard(factories: DailyOrdersReportNotification['data']['f
     inline_keyboard: [
       [
         { text: '🔄 Cập nhật', callback_data: 'rpt:daily' },
+        { text: '📋 Chi tiết', callback_data: 'rpt:detail' },
         { text: '👤 Designer', callback_data: 'rpt:designer' },
         { text: '🔍 Soát tool', callback_data: 'rpt:tool' },
       ],
@@ -45,14 +41,15 @@ export class TelegramNotificationService {
     @Inject('winston') private readonly logger: Logger,
   ) {}
 
-  async notifyImportSummary(payload: ImportSummaryNotification): Promise<void> {
-    const text = formatImportSummary(payload);
-    await this.dispatch('importSummary', text);
-  }
-
   /** `factoryName` có = phễu lọc theo 1 xưởng (nút "🏭 <tên>"). */
   async notifyDailyOrdersReport(payload: DailyOrdersReportNotification, factoryName?: string): Promise<void> {
     const text = withMentions(formatDailyOrdersReport(payload, factoryName), payload.mentions);
+    await this.dispatch('dailyReport', text, buildReportKeyboard(payload.data.factories));
+  }
+
+  /** View "📋 Chi tiết" — phễu vòng đời + khách ưu tiên (view chính cũ trước khi chuyển SLA-only). */
+  async notifyDetailReport(payload: DailyOrdersReportNotification): Promise<void> {
+    const text = withMentions(formatDetailReport(payload), payload.mentions);
     await this.dispatch('dailyReport', text, buildReportKeyboard(payload.data.factories));
   }
 
@@ -110,7 +107,6 @@ export class TelegramNotificationService {
         .filter(Boolean);
 
     switch (key) {
-      case 'importSummary':
       case 'hourlyStats':
       case 'dailyReport':
         return csv(c.notificationChannelId || c.channelId || '');

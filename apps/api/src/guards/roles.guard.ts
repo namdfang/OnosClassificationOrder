@@ -10,6 +10,15 @@ import { RedisCacheService } from '@/modules/redis-cache/redis-cache.service';
 
 import type { UserDocument } from '../modules/user/user.entity';
 
+/**
+ * Token role=Customer (Customer Portal) là token "ngoài" — CHỈ được gọi API
+ * dưới các prefix này. Mọi route khác deny mặc định, KỂ CẢ route roles-rỗng
+ * `@Auth([])` (vd `GET /orders/:id/logs`). Endpoint mới muốn cho khách gọi
+ * BẮT BUỘC đặt dưới `customer/...` (phase Public API sẽ thêm `open-api/`).
+ * Xem documents/FunctionDescription/Customers.md.
+ */
+const CUSTOMER_ALLOWED_PREFIXES = ['/customer/'];
+
 @Injectable()
 export class RolesGuard implements CanActivate {
   constructor(
@@ -24,6 +33,16 @@ export class RolesGuard implements CanActivate {
 
     const request = context.switchToHttp().getRequest();
     const user = <UserDocument>request.user;
+
+    if (user?.role?.name === RoleType.Customer) {
+      const url: string = (request.url ?? '').split('?')[0];
+
+      // Chỉ deny-sớm route ngoài whitelist; route hợp lệ vẫn đi tiếp flow
+      // kiểm tra session Redis + roles bên dưới như mọi token khác.
+      if (!CUSTOMER_ALLOWED_PREFIXES.some((prefix) => url.includes(prefix))) {
+        return false;
+      }
+    }
 
     if (_.isEmpty(roles)) {
       return true;

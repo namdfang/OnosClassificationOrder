@@ -60,5 +60,6 @@
       "submit": "Import",
       "toastSuccess": "Assigned tier to {{updated}} customers ({{matched}} accounts matched)"
     }
-  }
+  },
+  "openCustomersPage": "Open Customers page"
 }

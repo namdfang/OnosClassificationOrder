@@ -1,0 +1,118 @@
+{
+  "page": {
+    "title": "Khách hàng",
+    "subtitle": "Quản trị khách hàng, tier VIP và tài khoản Customer Portal — hợp nhất 1 nơi",
+    "searchPlaceholder": "Tìm SKU / email / tên / SĐT…",
+    "addButton": "Thêm khách hàng",
+    "sync": "Sync từ đơn hàng",
+    "importTier": "Import tier",
+    "showDeleted": "Đã xóa",
+    "showActive": "Đang hoạt động",
+    "totalCount": "{{total}} khách hàng"
+  },
+  "filters": {
+    "tierAll": "Mọi tier",
+    "retail": "Khách lẻ",
+    "vip": "VIP {{tier}}",
+    "accountAll": "Tài khoản: tất cả",
+    "accountRegistered": "Đã đăng ký",
+    "accountNotRegistered": "Chưa đăng ký",
+    "accountLocked": "Đã khóa"
+  },
+  "table": {
+    "sku": "SKU",
+    "email": "Email",
+    "name": "Tên",
+    "phone": "SĐT",
+    "tier": "Tier",
+    "account": "Tài khoản",
+    "source": "Nguồn",
+    "factory": "Xưởng gán",
+    "designer": "Designer gán",
+    "orders": "Số đơn",
+    "lastOrder": "Đơn gần nhất",
+    "empty": "Không có khách hàng nào",
+    "deletedAt": "Đã xóa lúc"
+  },
+  "account": {
+    "none": "Chưa đăng ký",
+    "active": "Hoạt động",
+    "locked": "Đã khóa"
+  },
+  "source": {
+    "sync": "Sync",
+    "manual": "Thêm tay",
+    "register": "Tự đăng ký"
+  },
+  "actions": {
+    "edit": "Sửa thông tin",
+    "resetPassword": "Reset mật khẩu",
+    "lock": "Khóa tài khoản",
+    "unlock": "Mở khóa",
+    "delete": "Xóa",
+    "restore": "Khôi phục",
+    "viewOrders": "Xem đơn hàng",
+    "changeTier": "Đổi tier"
+  },
+  "editDialog": {
+    "createTitle": "Thêm khách hàng",
+    "editTitle": "Sửa khách hàng",
+    "skuLabel": "User SKU",
+    "skuPlaceholder": "vd: FASHIONYODA",
+    "emailLabel": "Email",
+    "emailPlaceholder": "vd: shop@example.com",
+    "lockedKeyNote": "SKU + Email là khóa định danh (khớp đơn hàng + tài khoản portal) — không thể sửa.",
+    "nameLabel": "Họ tên",
+    "phoneLabel": "SĐT",
+    "tierLabel": "Tier",
+    "passwordLabel": "Mật khẩu (tùy chọn)",
+    "passwordHint": "Đặt mật khẩu → khách đăng nhập portal được ngay; bỏ trống → khách tự đăng ký sau.",
+    "skuRequired": "User SKU không được để trống",
+    "passwordTooShort": "Mật khẩu tối thiểu 6 ký tự"
+  },
+  "resetDialog": {
+    "title": "Reset mật khẩu — {{sku}}",
+    "manualLabel": "Mật khẩu mới",
+    "confirmLabel": "Nhập lại mật khẩu",
+    "mismatch": "Mật khẩu nhập lại không khớp",
+    "tooShort": "Mật khẩu tối thiểu 6 ký tự",
+    "orDivider": "hoặc",
+    "generate": "Tạo ngẫu nhiên",
+    "generatedTitle": "Mật khẩu mới (chỉ hiển thị 1 lần)",
+    "generatedWarning": "Sao chép ngay — đóng hộp thoại sẽ không xem lại được.",
+    "submit": "Đặt mật khẩu",
+    "success": "Đã reset mật khẩu cho {{sku}}"
+  },
+  "deleteConfirm": {
+    "title": "Xóa khách hàng \"{{sku}}\"?",
+    "message": "Xóa mềm — khách bị ẩn khỏi mọi danh sách/kanban, chặn đăng nhập portal, và tự gỡ khỏi các cấu hình gán xưởng / ưu tiên đơn / auto-gán designer. Có thể Khôi phục sau ở tab \"Đã xóa\".",
+    "removedFrom": "Đã gỡ khỏi cấu hình: {{configs}}"
+  },
+  "configNames": {
+    "customer_assignment_config": "Gán xưởng theo khách",
+    "customer_priority_config": "Ưu tiên đơn theo khách",
+    "designer_assignment_config": "Auto-gán designer"
+  },
+  "ordersDialog": {
+    "title": "Đơn hàng của {{sku}}",
+    "colProductionId": "Production ID",
+    "colProduct": "Sản phẩm",
+    "colFactory": "Xưởng",
+    "colInProduction": "Vào sản xuất",
+    "colStage": "Trạng thái",
+    "stageCompleted": "Hoàn thành",
+    "stageCancelled": "Đã hủy",
+    "stageNotStarted": "Chưa vào fulfillment",
+    "empty": "Khách chưa có đơn hàng nào"
+  },
+  "toasts": {
+    "addSuccess": "Đã thêm khách hàng",
+    "editSuccess": "Đã cập nhật khách hàng",
+    "lockSuccess": "Đã khóa tài khoản {{sku}}",
+    "unlockSuccess": "Đã mở khóa {{sku}}",
+    "deleteSuccess": "Đã xóa khách hàng {{sku}}",
+    "restoreSuccess": "Đã khôi phục {{sku}}",
+    "syncSuccess": "Sync xong: +{{created}} khách mới, tổng {{total}}",
+    "tierChangeSuccess": "Đã đổi tier {{sku}} → {{tier}}"
+  }
+}

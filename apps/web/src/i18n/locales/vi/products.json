@@ -72,7 +72,25 @@
       "deleteTitle": "Xóa sản phẩm (chỉ xóa được nếu không có đơn hàng)",
       "openMockup": "Mở ảnh mockup"
     },
-    "uploadButton": "Tải config lên"
+    "uploadButton": "Tải config lên",
+    "onospodImport": {
+      "button": "Import từ OnosPod",
+      "title": "Lấy TẤT CẢ sản phẩm từ OnosPod — chỉ fill field trống, không đè dữ liệu/xưởng hiện tại",
+      "confirm": "Import TẤT CẢ sản phẩm từ OnosPod?\n\n- Chỉ FILL vào field đang trống, KHÔNG đè dữ liệu đã có.\n- Xưởng/Phòng/Vải hiện tại được GIỮ NGUYÊN tuyệt đối.\n- Sản phẩm chưa tồn tại sẽ được tạo mới (chưa gán xưởng).",
+      "importing": "Đang import…",
+      "progress": "Đang import {{done}}/{{total}}…",
+      "done": "Import OnosPod xong: {{created}} tạo mới · {{filled}} bổ sung field trống · {{skipped}} bỏ qua",
+      "errors": "{{count}} sản phẩm gặp lỗi — vd: {{first}}",
+      "defaultsCreated": "Đã tạo biến thể mặc định (chưa có giá) cho {{count}} sản phẩm trống biến thể — vào trang chi tiết sản phẩm nhập giá bán."
+    },
+    "pageInfoCrawl": {
+      "button": "Crawl tax & package",
+      "title": "Lấy \"Import US Tax\" + \"Package gram\" từ trang sản phẩm public hệ cũ (theo slug)",
+      "confirm": "Crawl Import US Tax + Package gram từ onospod.com cho các sản phẩm còn thiếu? (chỉ quét sản phẩm có slug)",
+      "crawling": "Đang crawl…",
+      "progress": "Đã quét {{done}} — còn {{remaining}}",
+      "done": "Xong: cập nhật {{updated}}/{{processed}} sản phẩm"
+    }
   },
   "categoryTab": {
     "title": "Danh mục sản phẩm",
@@ -226,6 +244,17 @@
       "sizeChart": "Bảng size",
       "description": "Mô tả sản phẩm",
       "descriptionPlaceholder": "Mô tả sản phẩm…"
+    },
+    "printAreaConfig": {
+      "title": "Cấu hình chi tiết từng vị trí",
+      "printDocument": "Tài liệu hướng dẫn design (URL)",
+      "printTemplate": "Template thiết kế chung (URL)",
+      "templateUrl": "Template vị trí này (URL)",
+      "widthPx": "Rộng (px)",
+      "heightPx": "Cao (px)",
+      "additionPrice": "Phụ phí ($)",
+      "isRequired": "Bắt buộc design",
+      "isEmbroidery": "Vị trí thêu"
     },
     "packaging": {
       "title": "Đóng gói mặc định",

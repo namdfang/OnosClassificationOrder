@@ -4,7 +4,7 @@ import { useTranslation } from 'react-i18next';
 import { useLocation, useNavigate } from 'react-router-dom';
 import type { TFunction } from 'i18next';
 import { ImageIcon, PackageSearch, Search, ShoppingCart, Trash2, X } from 'lucide-react';
-import type { CustomerCatalogItem, CustomerOrderSummary } from 'shared';
+import type { CustomerCatalogItem, CustomerStagingOrder } from 'shared';
 import { toast } from 'sonner';
 import { z } from 'zod';
 import { zodResolver } from '@hookform/resolvers/zod';
@@ -86,7 +86,9 @@ function CustomerOrderNew() {
   const { t } = useTranslation('customerPortal');
   const [loading, setLoading] = useState(false);
 
-  const navState = (location.state as CatalogOrderState | null)?.fromCatalog ? (location.state as CatalogOrderState) : null;
+  const navState = (location.state as CatalogOrderState | null)?.fromCatalog
+    ? (location.state as CatalogOrderState)
+    : null;
 
   // Sản phẩm ĐANG cấu hình (chưa "Thêm vào đơn hàng") — khác `cart`, xem CartItem.
   const [product, setProduct] = useState<CustomerCatalogItem | null>(navState?.product ?? null);
@@ -155,7 +157,7 @@ function CustomerOrderNew() {
 
   const attributeGroups = useMemo(() => groupAttributeOptions(product?.variations || []), [product]);
   const matched = useMemo(
-    () => (product ? (findMatchingVariation(product.variations, selectedAttrs) ?? product.variations[0]) : undefined),
+    () => (product ? findMatchingVariation(product.variations, selectedAttrs) ?? product.variations[0] : undefined),
     [product, selectedAttrs],
   );
   const printAreas = product?.printArea ?? [];
@@ -180,10 +182,11 @@ function CustomerOrderNew() {
     setMockupUrl('');
   };
 
-  // Bắt buộc mockup + design (mọi vị trí in) TRƯỚC khi cho thêm vào đơn — xưởng
-  // không thể sản xuất thiếu 1 trong 2.
+  // Bắt buộc mockup + design các vị trí in BẮT BUỘC (`isRequired !== false` —
+  // vị trí không set cờ coi như bắt buộc, giữ behavior cũ) TRƯỚC khi cho thêm
+  // vào đơn — xưởng không thể sản xuất thiếu.
   const missingMockup = !mockupUrl.trim();
-  const missingDesignAreas = printAreas.filter((a) => !designUrls[a.key]?.trim());
+  const missingDesignAreas = printAreas.filter((a) => a.isRequired !== false && !designUrls[a.key]?.trim());
   const canAddToCart = !missingMockup && missingDesignAreas.length === 0;
 
   const handleAddToCart = () => {
@@ -207,7 +210,8 @@ function CustomerOrderNew() {
         mockupUrl,
         printMethod: product.printMethod,
         quantity: itemQuantity,
-        designs: { ...designUrls },
+        // Vị trí optional bỏ trống → không gửi key rỗng vào order.designs.
+        designs: Object.fromEntries(Object.entries(designUrls).filter(([, v]) => v.trim())),
         printAreaLabels: Object.fromEntries(printAreas.map((a) => [a.key, a.label])),
         displayMockup: mockupUrl,
         displaySku: matched?.sku,
@@ -256,8 +260,10 @@ function CustomerOrderNew() {
         },
         referent: values.referent?.trim() || undefined,
       });
-      const codes = ((res?.data?.data ?? []) as CustomerOrderSummary[]).map((o) => o.productionId).join(', ');
-      toast.success(t('orderNew.success', { code: codes }));
+      // Đơn giờ vào staging PENDING (chưa có productionId) — khách chọn rồi
+      // "Push to production" ở trang danh sách đơn mới vào sản xuất.
+      const created = res?.data?.data as CustomerStagingOrder | undefined;
+      toast.success(t('orderNew.successPending', { count: created?.items.length ?? cart.length }));
       navigate(PATHS.CUSTOMER_ORDERS);
     } catch (error) {
       handleAxiosError(error);
@@ -313,7 +319,10 @@ function CustomerOrderNew() {
                       <p className="text-sm">{t('orderNew.searchEmpty')}</p>
                     </div>
                   ) : (
-                    <LoadingOverlay active={pickerLoading} className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-4">
+                    <LoadingOverlay
+                      active={pickerLoading}
+                      className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-4"
+                    >
                       {pickerItems.map((p) => (
                         <CatalogProductCard key={p._id} item={p} onSelect={() => handleSelectProduct(p)} />
                       ))}
@@ -361,7 +370,11 @@ function CustomerOrderNew() {
                             </Badge>
                           )}
                         </div>
-                        <button type="button" onClick={handleCancelConfiguring} className="text-xs text-primary underline mt-1">
+                        <button
+                          type="button"
+                          onClick={handleCancelConfiguring}
+                          className="text-xs text-primary underline mt-1"
+                        >
                           {t('orderNew.changeProduct')}
                         </button>
                       </div>
@@ -371,7 +384,9 @@ function CustomerOrderNew() {
                       <div className="space-y-2.5">
                         {attributeGroups.map((group) => (
                           <div key={group.label}>
-                            <p className="text-[11px] font-semibold uppercase tracking-wide text-muted-foreground mb-1.5">{group.label}</p>
+                            <p className="text-[11px] font-semibold uppercase tracking-wide text-muted-foreground mb-1.5">
+                              {group.label}
+                            </p>
                             <div className="flex flex-wrap gap-1.5">
                               {group.values.map((value) => (
                                 <button
@@ -407,25 +422,83 @@ function CustomerOrderNew() {
                       />
                     </div>
 
+                    {(product.printTemplate || product.printDocument) && (
+                      <p className="text-[11px] text-muted-foreground">
+                        {product.printTemplate && (
+                          <a
+                            href={product.printTemplate}
+                            target="_blank"
+                            rel="noreferrer"
+                            className="text-primary hover:underline"
+                          >
+                            {t('orderNew.productTemplate')}
+                          </a>
+                        )}
+                        {product.printTemplate && product.printDocument && ' · '}
+                        {product.printDocument && (
+                          <a
+                            href={product.printDocument}
+                            target="_blank"
+                            rel="noreferrer"
+                            className="text-primary hover:underline"
+                          >
+                            {t('orderNew.productPrintDocs')}
+                          </a>
+                        )}
+                      </p>
+                    )}
+
                     <div className="space-y-1.5">
                       <label className="text-sm font-medium leading-none">
                         {t('orderNew.mockupUrl')} <span className="text-destructive">*</span>
                       </label>
-                      <FileUrlOrUploadInput value={mockupUrl} onChange={setMockupUrl} placeholder={t('orderNew.mockupUrlPlaceholder')} />
+                      <FileUrlOrUploadInput
+                        value={mockupUrl}
+                        onChange={setMockupUrl}
+                        placeholder={t('orderNew.mockupUrlPlaceholder')}
+                      />
                     </div>
 
-                    {printAreas.map((area) => (
-                      <div key={area.key} className="space-y-1.5">
-                        <label className="text-sm font-medium leading-none">
-                          {t('orderNew.designUrl', { area: area.label })} <span className="text-destructive">*</span>
-                        </label>
-                        <FileUrlOrUploadInput
-                          value={designUrls[area.key] ?? ''}
-                          onChange={(v) => setDesignUrls((prev) => ({ ...prev, [area.key]: v }))}
-                          placeholder={t('orderNew.designUrlPlaceholder')}
-                        />
-                      </div>
-                    ))}
+                    {printAreas.map((area) => {
+                      const required = area.isRequired !== false;
+                      const sizeHint =
+                        area.widthPx && area.heightPx ? `${area.widthPx} × ${area.heightPx} px` : undefined;
+                      return (
+                        <div key={area.key} className="space-y-1.5">
+                          <label className="text-sm font-medium leading-none">
+                            {t('orderNew.designUrl', { area: area.label })}{' '}
+                            {required ? (
+                              <span className="text-destructive">*</span>
+                            ) : (
+                              <span className="text-xs font-normal text-muted-foreground">
+                                ({t('orderNew.designOptional')})
+                              </span>
+                            )}
+                          </label>
+                          {(area.templateUrl || sizeHint) && (
+                            <p className="text-[11px] text-muted-foreground">
+                              {area.templateUrl && (
+                                <a
+                                  href={area.templateUrl}
+                                  target="_blank"
+                                  rel="noreferrer"
+                                  className="text-primary hover:underline"
+                                >
+                                  {t('orderNew.downloadAreaTemplate')}
+                                </a>
+                              )}
+                              {area.templateUrl && sizeHint && ' · '}
+                              {sizeHint && t('orderNew.designSizeHint', { size: sizeHint })}
+                            </p>
+                          )}
+                          <FileUrlOrUploadInput
+                            value={designUrls[area.key] ?? ''}
+                            onChange={(v) => setDesignUrls((prev) => ({ ...prev, [area.key]: v }))}
+                            placeholder={t('orderNew.designUrlPlaceholder')}
+                          />
+                        </div>
+                      );
+                    })}
 
                     <Button type="button" onClick={handleAddToCart} disabled={!canAddToCart} className="w-full h-10">
                       <ShoppingCart size={15} />

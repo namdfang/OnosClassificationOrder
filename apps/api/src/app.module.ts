@@ -31,6 +31,7 @@ import { CustomerModule } from './modules/customer/customer.module';
 import { CustomerAssignmentModule } from './modules/customer-assignment/customer-assignment.module';
 import { CustomerNotificationModule } from './modules/customer-notification/customer-notification.module';
 import { CustomerPortalModule } from './modules/customer-portal/customer-portal.module';
+import { DesignStorageModule } from './modules/design-storage/design-storage.module';
 import { DepartmentModule } from './modules/departments/department.module';
 import { DesignerModule } from './modules/designer/designer.module';
 import { DesignerAssignmentModule } from './modules/designer-assignment/designer-assignment.module';
@@ -81,6 +82,7 @@ import { SharedModule } from './shared/shared.module';
     CustomerAssignmentModule,
     CustomerNotificationModule,
     CustomerPortalModule,
+    DesignStorageModule,
     FulfillmentModule,
     TelegramNotificationModule,
     ScheduledReportsModule,

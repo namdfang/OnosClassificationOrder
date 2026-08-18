@@ -1,0 +1,19 @@
+# Chạy trên server worker (DigitalOcean droplet):
+#   cd <repo>/apps/design-worker
+#   cp .env.example .env   # điền giá trị thật
+#   docker compose up -d --build
+services:
+  design-worker:
+    build:
+      context: ../..
+      dockerfile: apps/design-worker/Dockerfile
+    env_file: .env
+    restart: always
+    # Vùng tạm xử lý file lớn — giới hạn để file rác không ăn hết đĩa.
+    tmpfs:
+      - /tmp/design-worker:size=4g
+    logging:
+      driver: json-file
+      options:
+        max-size: '50m'
+        max-file: '3'

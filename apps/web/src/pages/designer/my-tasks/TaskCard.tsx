@@ -174,53 +174,58 @@ export function TaskCard({ card, onPreview, onClickProductionId }: Props) {
         )}
 
         <div className="flex-1 min-w-0 space-y-1">
-          {/* productionId + nút copy, kèm note kết quả Tool ở góc trên phải */}
-          <div className="flex items-center gap-1.5">
-            <div className="flex items-center gap-1 min-w-0 flex-1">
-              <span className="shrink-0" onPointerDown={(e) => e.stopPropagation()}>
-                <CopyButton
-                  value={card.productionId ?? ''}
-                  label={t('taskCard.copyLabel', { productionId: card.productionId })}
-                  iconSize={16}
-                  className="p-1 text-foreground [&_svg]:stroke-[2.5]"
-                />
-              </span>
-              {onClickProductionId ? (
-                <button
-                  type="button"
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    onClickProductionId();
-                  }}
-                  onPointerDown={(e) => e.stopPropagation()}
-                  className="font-mono text-xs font-semibold text-foreground hover:text-primary hover:underline truncate text-left"
+          {/* Hàng badge (ưu tiên + note kết quả Tool) TÁCH RIÊNG lên trên — chừa
+              `pr-9` cho nút KLĐ absolute góc phải, để productionId ở hàng dưới
+              luôn hiện trọn vẹn không bị badge/nút nào đè (yêu cầu user). */}
+          {(card.priority || card.toolResultNote) && (
+            <div className="flex items-center gap-1.5 flex-wrap pr-9">
+              <PriorityBadge priority={card.priority} />
+              {card.toolResultNote && (
+                <Hint
+                  content={t('taskCard.toolNoteHint', { name: toolNoteCfg?.name || card.toolResultNote })}
+                  forceRich
                 >
-                  {card.productionId}
-                </button>
-              ) : (
-                <div className="font-mono text-xs font-semibold text-foreground truncate">{card.productionId}</div>
+                  <span
+                    className={cn(
+                      'shrink-0 max-w-full truncate rounded border px-1.5 py-0.5 text-[9px] font-medium',
+                      !toolNoteCfg && 'border-border/60 bg-muted text-muted-foreground',
+                    )}
+                    style={
+                      toolNoteCfg?.color
+                        ? { backgroundColor: toolNoteCfg.color, color: '#fff', borderColor: toolNoteCfg.color }
+                        : undefined
+                    }
+                  >
+                    {toolNoteCfg?.name || card.toolResultNote}
+                  </span>
+                </Hint>
               )}
             </div>
-            <PriorityBadge priority={card.priority} />
-            {card.toolResultNote && (
-              <Hint
-                content={t('taskCard.toolNoteHint', { name: toolNoteCfg?.name || card.toolResultNote })}
-                forceRich
+          )}
+          {/* productionId + nút copy — 1 hàng riêng, full bề ngang */}
+          <div className="flex items-center gap-1 min-w-0">
+            <span className="shrink-0" onPointerDown={(e) => e.stopPropagation()}>
+              <CopyButton
+                value={card.productionId ?? ''}
+                label={t('taskCard.copyLabel', { productionId: card.productionId })}
+                iconSize={16}
+                className="p-1 text-foreground [&_svg]:stroke-[2.5]"
+              />
+            </span>
+            {onClickProductionId ? (
+              <button
+                type="button"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  onClickProductionId();
+                }}
+                onPointerDown={(e) => e.stopPropagation()}
+                className="font-mono text-xs font-semibold text-foreground hover:text-primary hover:underline truncate text-left"
               >
-                <span
-                  className={cn(
-                    'shrink-0 max-w-[45%] truncate rounded border px-1.5 py-0.5 text-[9px] font-medium',
-                    !toolNoteCfg && 'border-border/60 bg-muted text-muted-foreground',
-                  )}
-                  style={
-                    toolNoteCfg?.color
-                      ? { backgroundColor: toolNoteCfg.color, color: '#fff', borderColor: toolNoteCfg.color }
-                      : undefined
-                  }
-                >
-                  {toolNoteCfg?.name || card.toolResultNote}
-                </span>
-              </Hint>
+                {card.productionId}
+              </button>
+            ) : (
+              <div className="font-mono text-xs font-semibold text-foreground truncate">{card.productionId}</div>
             )}
           </div>
           {card.type && (

@@ -12,7 +12,7 @@ import {
   useSensors,
 } from '@dnd-kit/core';
 
-import { TierBadge } from '@/components/settings/CustomerListDialog';
+import { TierBadge } from '@/components/common/TierBadge';
 import { Input } from '@/components/ui/input';
 
 import { cn } from '@/utils/cn';
@@ -53,7 +53,11 @@ function ItemCard({ it }: { it: DesignerAssignItem }) {
     <div className="rounded-lg border border-slate-200 dark:border-slate-700/60 bg-white dark:bg-slate-800 px-2.5 py-1.5 shadow-sm">
       <div className="flex items-center gap-2">
         {it.mockup && (
-          <img src={it.mockup} alt="" className="w-7 h-7 rounded object-cover shrink-0 bg-slate-100 dark:bg-slate-700" />
+          <img
+            src={it.mockup}
+            alt=""
+            className="w-7 h-7 rounded object-cover shrink-0 bg-slate-100 dark:bg-slate-700"
+          />
         )}
         <div className="flex-1 min-w-0">
           <p className="truncate text-xs font-semibold text-slate-700 dark:text-slate-200" title={it.title}>

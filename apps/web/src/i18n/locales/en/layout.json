@@ -55,6 +55,7 @@
       "toolCheckRework": "Tool check — orders needing rework",
       "toolCheckUnreviewed": "Tool check — unreviewed orders (last 7 days)"
     },
+    "customers": "Customers",
     "impersonate": "Impersonate"
   },
   "header": {

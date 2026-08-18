@@ -2,17 +2,23 @@ import { Module } from '@nestjs/common';
 import { MongooseModule } from '@nestjs/mongoose';
 
 import { AuthModule } from '@/modules/auth/auth.module';
+import { CollectionEntity, CollectionSchema } from '@/modules/collection/collection.entity';
 import { CustomerModule } from '@/modules/customer/customer.module';
+import { DesignStorageModule } from '@/modules/design-storage/design-storage.module';
 import { OrderEntity, OrderSchema } from '@/modules/order/order.entity';
 import { OrderModule } from '@/modules/order/order.module';
+import { ProductCategoryEntity, ProductCategorySchema } from '@/modules/product-category/product-category.entity';
 import { ProductConfigEntity, ProductConfigSchema } from '@/modules/product-config/product-config.entity';
 import { PromotionModule } from '@/modules/promotion/promotion.module';
+import { SystemConfigModule } from '@/modules/system-config/system-config.module';
 
 import { CustomerAuthController } from './customer-auth.controller';
 import { CustomerCatalogController } from './customer-catalog.controller';
 import { CustomerCatalogService } from './customer-catalog.service';
 import { CustomerOrderController } from './customer-order.controller';
+import { CustomerOrderEntity, CustomerOrderSchema } from './customer-order.entity';
 import { CustomerOrderService } from './customer-order.service';
+import { CustomerPaymentEntity, CustomerPaymentSchema } from './customer-payment.entity';
 import { PublicCatalogController } from './public-catalog.controller';
 
 @Module({
@@ -23,11 +29,19 @@ import { PublicCatalogController } from './public-catalog.controller';
     MongooseModule.forFeature([
       { name: OrderEntity.name, schema: OrderSchema },
       { name: ProductConfigEntity.name, schema: ProductConfigSchema },
+      { name: ProductCategoryEntity.name, schema: ProductCategorySchema },
+      { name: CollectionEntity.name, schema: CollectionSchema },
+      { name: CustomerOrderEntity.name, schema: CustomerOrderSchema },
+      { name: CustomerPaymentEntity.name, schema: CustomerPaymentSchema },
     ]),
     AuthModule,
     CustomerModule,
     OrderModule,
     PromotionModule,
+    // Hook touchUsage + enqueue ingest design lúc place/import/push (DesignStorage).
+    DesignStorageModule,
+    // Payment gate switch + số ngày Completed (`customer_order_completed_days`).
+    SystemConfigModule,
   ],
   controllers: [CustomerAuthController, CustomerOrderController, CustomerCatalogController, PublicCatalogController],
   providers: [CustomerOrderService, CustomerCatalogService],

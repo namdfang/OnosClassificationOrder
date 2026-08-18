@@ -53,28 +53,25 @@ export class ScheduledReportsService implements OnModuleInit {
     return this.running;
   }
 
-  @Cron('30 7 * * *', { name: 'scheduled-reports-morning', timeZone: TZ })
-  async morningReport(): Promise<void> {
-    await this.runScheduled();
-  }
-
-  @Cron('0 13 * * *', { name: 'scheduled-reports-noon', timeZone: TZ })
+  @Cron('30 11 * * *', { name: 'scheduled-reports-noon', timeZone: TZ })
   async noonReport(): Promise<void> {
     await this.runScheduled();
   }
 
-  @Cron('30 18 * * *', { name: 'scheduled-reports-evening', timeZone: TZ })
+  @Cron('0 17 * * *', { name: 'scheduled-reports-evening', timeZone: TZ })
   async eveningReport(): Promise<void> {
     await this.runScheduled();
   }
 
+  /** Mỗi lịch gửi 2 message: Tổng quan SLA (kèm bảng xưởng) rồi báo cáo Designer. */
   private async runScheduled(): Promise<void> {
     if (!this.config.scheduledReports.enabled) {
       this.logger.info({ message: '[scheduled-reports] skipped (disabled)' });
 
       return;
     }
-    await this.run();
+    await this.run('daily');
+    await this.run('designer');
   }
 
   async run(kind: ReportKind = 'daily', factoryId?: string): Promise<RunReportResult> {
@@ -86,6 +83,8 @@ export class ScheduledReportsService implements OnModuleInit {
       const payload = { data, generatedAt: now, isProduction: this.config.isProduction };
       if (kind === 'designer') {
         await this.telegram.notifyDesignerViewReport(payload);
+      } else if (kind === 'detail') {
+        await this.telegram.notifyDetailReport(payload);
       } else if (kind === 'tool-check') {
         await this.telegram.notifyToolCheckReport(payload);
       } else {
