@@ -308,6 +308,65 @@ export class ImportProductConfigResDto extends createZodDto(extendApi(ImportProd
 
 //
 /**
+ * Import SẢN PHẨM HOÀN CHỈNH từ file xlsx (`POST /product-configs/import-full`)
+ * — khác `POST /import` (chỉ config tối thiểu 6 cột): mỗi phần tử = 1 sản phẩm
+ * đủ catalog (danh mục, collection, ảnh, mô tả, thông số, đóng gói, thời gian
+ * SX/ship) + `variations[]` (FE group biến thể trải nhiều dòng theo Tên SP).
+ * Các label Xưởng/Phòng/Danh mục/Collection resolve phía server: Xưởng không
+ * khớp → skip sản phẩm; Phòng/Danh mục/Collection không khớp → warning + bỏ
+ * field. Upsert theo `fullName` (exact, trim): chỉ field CÓ trong payload mới
+ * ghi đè; variations merge theo SKU (không xóa biến thể cũ ngoài file). Tạo
+ * MỚI mặc định `toolResult = 'none'` (file full không có cột Máy/Tool — cấu
+ * hình tool bổ sung qua file SKU cũ hoặc trang chi tiết).
+ */
+export const ImportFullProductZod = z.object({
+  fullName: ProductConfigZod.shape.fullName,
+  /** Trống → tự sinh từ fullName (max 60, BE uppercase). */
+  shortName: z.string().max(60).optional(),
+  /** Nhãn xưởng ("TNW", "Xưởng gỗ Thái Nguyên"...) — resolve qua `factoryService.findByLabel`. */
+  factoryLabel: z.string().max(120).optional(),
+  /** Nhãn Loại máy/Phòng — resolve qua `machineTypeService.findByLabel`. */
+  departmentLabel: z.string().max(120).optional(),
+  /** Tên/viết tắt Danh mục sản phẩm — resolve exact case-insensitive. */
+  categoryLabel: z.string().max(120).optional(),
+  /** Tên/viết tắt Collection (nhiều) — resolve exact case-insensitive từng cái. */
+  collectionLabels: z.string().max(120).array().max(20).optional(),
+  printMethod: ProductConfigZod.shape.printMethod,
+  mockup: ProductConfigZod.shape.mockup,
+  images: ProductConfigZod.shape.images,
+  sizeChartUrl: ProductConfigZod.shape.sizeChartUrl,
+  description: ProductConfigZod.shape.description,
+  shortDescription: ProductConfigZod.shape.shortDescription,
+  itemSpecifics: ProductConfigZod.shape.itemSpecifics,
+  maxProductionTime: ProductConfigZod.shape.maxProductionTime,
+  maxShippingTime: ProductConfigZod.shape.maxShippingTime,
+  weight: ProductConfigZod.shape.weight,
+  width: ProductConfigZod.shape.width,
+  height: ProductConfigZod.shape.height,
+  length: ProductConfigZod.shape.length,
+  variations: ProductConfigZod.shape.variations,
+});
+export type ImportFullProduct = z.infer<typeof ImportFullProductZod>;
+
+export const ImportFullProductsZod = z.object({
+  products: ImportFullProductZod.array().min(1).max(500),
+});
+export class ImportFullProductsDto extends createZodDto(extendApi(ImportFullProductsZod)) {}
+
+export const ImportFullProductsResZod = ResZod.extend({
+  data: z.object({
+    imported: z.number(),
+    updated: z.number(),
+    /** Sản phẩm bị bỏ qua hoàn toàn (Xưởng không khớp, SKU trùng sản phẩm khác...). */
+    skipped: z.array(z.object({ product: z.string(), reason: z.string() })),
+    /** Sản phẩm vẫn import nhưng có field bị bỏ (Phòng/Danh mục/Collection không khớp). */
+    warnings: z.array(z.object({ product: z.string(), reason: z.string() })),
+  }),
+});
+export class ImportFullProductsResDto extends createZodDto(extendApi(ImportFullProductsResZod)) {}
+
+//
+/**
  * Upload ảnh mockup/bảng size — lưu **local disk** trên server API (KHÔNG qua
  * S3/Backblaze, khác hẳn `/v1/upload/image`). Lý do tách riêng: pipeline S3
  * hiện có (`apps/api/src/modules/upload/`) cần `AWS_S3_*`/`BACKBLAZE_*`

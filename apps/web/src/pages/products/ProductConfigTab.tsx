@@ -23,6 +23,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@
 import { handleAxiosError } from '@/utils';
 import { toFullSizeImageUrl } from '@/utils/imageUrl';
 
+import { ImportFullProductFileDialog } from './ImportFullProductFileDialog';
 import { ImportProductConfigDialog } from './ImportProductConfigDialog';
 import { UploadConfigFileDialog } from './UploadConfigFileDialog';
 
@@ -110,6 +111,7 @@ export function ProductConfigTab() {
   const [total, setTotal] = useState(0);
   const [importOpen, setImportOpen] = useState(false);
   const [uploadOpen, setUploadOpen] = useState(false);
+  const [importFullOpen, setImportFullOpen] = useState(false);
   const [onospodImporting, setOnospodImporting] = useState(false);
   const [pageInfoCrawling, setPageInfoCrawling] = useState(false);
   const [onospodProgress, setOnospodProgress] = useState('');
@@ -420,6 +422,10 @@ export function ProductConfigTab() {
             <FileUp size={14} />
             {t('configTab.uploadButton')}
           </Button>
+          <Button variant="outline" onClick={() => setImportFullOpen(true)} title={t('configTab.importFullTitle')}>
+            <FileUp size={14} />
+            {t('configTab.importFullButton')}
+          </Button>
           <Button
             variant="outline"
             onClick={handleImportFromOnospod}
@@ -698,6 +704,15 @@ export function ProductConfigTab() {
       <UploadConfigFileDialog
         open={uploadOpen}
         onOpenChange={setUploadOpen}
+        onSuccess={() => {
+          fetchData();
+          loadConfig(true);
+        }}
+      />
+
+      <ImportFullProductFileDialog
+        open={importFullOpen}
+        onOpenChange={setImportFullOpen}
         onSuccess={() => {
           fetchData();
           loadConfig(true);

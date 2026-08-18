@@ -25,10 +25,13 @@ import {
   FulfillmentStage,
   FulfillmentStageStatus,
   FulfillmentTransitionAction,
+  MERGED_STAGE_SOURCE,
+  redirectMergedTarget,
   RoleType,
 } from 'shared';
 
 import { productionFactoryClause } from '../../utils/excluded-factory';
+import { isMergedFlowFactorySync } from '../../utils/merged-flow-factory';
 import { OrderDocument, OrderEntity } from '../order/order.entity';
 import { OrderService } from '../order/order.service';
 import type { AuditContext } from '../order-log/order-log.service';
@@ -182,6 +185,10 @@ export class FulfillmentTaskService {
     const stageState = stages[body.stage] ?? this.emptyState();
     const currentStatus = stageState.status ?? FulfillmentStageStatus.Waiting;
 
+    // Xưởng luồng rút gọn (flowType='merged' — xưởng gỗ): Ép/May ra tự hoàn
+    // thành theo In/May vào, rework-back nhắm về stage gộp redirect về stage gốc.
+    const mergedFlow = isMergedFlowFactorySync(this.orderModel.db, order.factoryId ? String(order.factoryId) : null);
+
     const plan = this.resolveTransition({
       stage: body.stage,
       action: body.action,
@@ -191,6 +198,7 @@ export class FulfillmentTaskService {
       reason: body.reason,
       stages,
       user,
+      mergedFlow,
     });
 
     // Build atomic update — patch all stage state + timeline + top-level
@@ -240,12 +248,14 @@ export class FulfillmentTaskService {
     reason?: string;
     stages: FulfillmentStages;
     user: UserDocument;
+    /** Đơn thuộc xưởng luồng rút gọn (`FactoryEntity.flowType='merged'`). */
+    mergedFlow?: boolean;
   }): {
     nextStatus: FulfillmentStageStatus;
     patch: Record<string, unknown>;
   } {
     const now = new Date();
-    const { stage, action, currentStatus, stageState, target, reason, stages, user } = input;
+    const { stage, action, currentStatus, stageState, target, reason, stages, user, mergedFlow } = input;
     const userId = String(user._id);
     const userName = user.fullName;
 
@@ -298,11 +308,52 @@ export class FulfillmentTaskService {
         const inc: Record<string, number> = {};
         if (delta > 0) inc[`fulfillmentStages.${stage}.workMs`] = delta;
 
+        const timelineEntries: FulfillmentTimelineEntry[] = [timelineEntry(FulfillmentStageStatus.Done)];
+
         // Auto-advance: stage tiếp theo (nếu có). Set waiting bất kể đã từng
         // done hay chưa — workMs giữ nguyên cumulative cho stage đó. `waitingAt`
         // reset mỗi cycle (rework-back về lại stage này sẽ overwrite) — FE
         // hiển thị "Nhận task lúc..." cho user trong tab Đang chờ.
-        const nextStage = this.nextStage(stage);
+        let nextStage = this.nextStage(stage);
+
+        // Luồng rút gọn (xưởng gỗ): stage kế là stage GỘP của stage vừa xong
+        // (print→press, sew-in→sew-out) → tự hoàn thành stage gộp cùng thời
+        // điểm rồi nhảy tiếp 1 stage nữa (In→QC, May vào→Đóng hàng). Ghi ĐỦ
+        // timestamp (waitingAt/startedAt/firstStartedAt/completedAt = now) để
+        // mọi phép tính duration ra 0 thay vì NaN; người thực hiện = worker
+        // stage gốc; workMs = 0.
+        if (mergedFlow && nextStage && MERGED_STAGE_SOURCE[nextStage] === stage) {
+          const merged = nextStage;
+          const mergedState = stages[merged];
+          set[`fulfillmentStages.${merged}.status`] = FulfillmentStageStatus.Done;
+          set[`fulfillmentStages.${merged}.assignee`] = userId;
+          set[`fulfillmentStages.${merged}.assignedAt`] = now;
+          set[`fulfillmentStages.${merged}.waitingAt`] = now;
+          set[`fulfillmentStages.${merged}.startedAt`] = now;
+          set[`fulfillmentStages.${merged}.completedAt`] = now;
+          if (!mergedState?.firstStartedAt) {
+            set[`fulfillmentStages.${merged}.firstStartedAt`] = now;
+          }
+          if (mergedState?.completedAt) {
+            // Vòng rework (đơn bị lùi về trước đó chạy lại): đánh dấu "làm lại"
+            // như auto-advance thường.
+            set[`fulfillmentStages.${merged}.reworkAt`] = now;
+            inc[`fulfillmentStages.${merged}.reworkCount`] = (inc[`fulfillmentStages.${merged}.reworkCount`] ?? 0) + 1;
+          } else if (!mergedState?.status) {
+            // State chưa từng init (đơn legacy) → set đủ counter mặc định.
+            set[`fulfillmentStages.${merged}.reworkCount`] = 0;
+            set[`fulfillmentStages.${merged}.workMs`] = 0;
+          }
+          timelineEntries.push(
+            timelineEntry(FulfillmentStageStatus.Done, {
+              stage: merged,
+              fromStatus: mergedState?.status ?? FulfillmentStageStatus.Waiting,
+              reason: 'Tự động hoàn thành (luồng rút gọn)',
+            }),
+          );
+          nextStage = this.nextStage(merged);
+        }
+
         if (nextStage) {
           set.currentFulfillmentStage = nextStage;
           set[`fulfillmentStages.${nextStage}.status`] = FulfillmentStageStatus.Waiting;
@@ -328,7 +379,7 @@ export class FulfillmentTaskService {
           patch: {
             $set: set,
             ...(Object.keys(inc).length > 0 ? { $inc: inc } : {}),
-            $push: { fulfillmentTimeline: timelineEntry(FulfillmentStageStatus.Done) },
+            $push: { fulfillmentTimeline: { $each: timelineEntries } },
           },
         };
       }
@@ -386,11 +437,16 @@ export class FulfillmentTaskService {
           };
         }
 
+        // Xưởng luồng rút gọn: đích là stage GỘP (Ép/May ra) → redirect về stage
+        // gốc (In/May vào) — đơn merged không bao giờ dừng ở stage gộp, lùi về
+        // đó sẽ kẹt vì xưởng không có worker giữ stage.
+        const resolvedTarget = mergedFlow ? redirectMergedTarget(target) : target;
+
         // Target = FulfillmentStage → must be index < current.
         const reporterIdx = FULFILLMENT_STAGE_ORDER[stage];
-        const targetIdx = FULFILLMENT_STAGE_ORDER[target];
+        const targetIdx = FULFILLMENT_STAGE_ORDER[resolvedTarget];
         if (targetIdx >= reporterIdx) {
-          throw new BadRequestException(`Target stage '${target}' không trước stage hiện tại '${stage}'.`);
+          throw new BadRequestException(`Target stage '${resolvedTarget}' không trước stage hiện tại '${stage}'.`);
         }
 
         // Chỉ target → rework (đơn về đó NGAY, chờ Bắt đầu). Các stage trung gian
@@ -398,13 +454,13 @@ export class FulfillmentTaskService {
         // tab-filter positional cho chúng vào "Đang chờ quay lại" khi đơn đang
         // upstream, và auto-advance sẽ reworkCount++ khi đơn thực sự quay về từng
         // stage. Tránh đánh dấu rework sớm (đơn chưa tới nơi) + double-count.
-        set.currentFulfillmentStage = target;
-        set[`fulfillmentStages.${target}.status`] = FulfillmentStageStatus.Rework;
-        set[`fulfillmentStages.${target}.reworkAt`] = now;
-        set[`fulfillmentStages.${target}.reworkFromStage`] = stage;
-        set[`fulfillmentStages.${target}.reworkReason`] = reason;
-        const targetState = stages[target] ?? this.emptyState();
-        set[`fulfillmentStages.${target}.reworkCount`] = (targetState.reworkCount ?? 0) + 1;
+        set.currentFulfillmentStage = resolvedTarget;
+        set[`fulfillmentStages.${resolvedTarget}.status`] = FulfillmentStageStatus.Rework;
+        set[`fulfillmentStages.${resolvedTarget}.reworkAt`] = now;
+        set[`fulfillmentStages.${resolvedTarget}.reworkFromStage`] = stage;
+        set[`fulfillmentStages.${resolvedTarget}.reworkReason`] = reason;
+        const targetState = stages[resolvedTarget] ?? this.emptyState();
+        set[`fulfillmentStages.${resolvedTarget}.reworkCount`] = (targetState.reworkCount ?? 0) + 1;
 
         return {
           nextStatus: FulfillmentStageStatus.Waiting,
@@ -413,7 +469,7 @@ export class FulfillmentTaskService {
             ...(Object.keys(inc).length > 0 ? { $inc: inc } : {}),
             $push: {
               fulfillmentTimeline: timelineEntry(FulfillmentStageStatus.Waiting, {
-                reworkTarget: target,
+                reworkTarget: resolvedTarget,
                 reason,
               }),
             },

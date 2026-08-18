@@ -1,5 +1,6 @@
 import { createZodDto } from '@anatine/zod-nestjs';
 import { extendApi } from '@anatine/zod-openapi';
+import { FactoryFlowType } from '@shared/enums';
 import { BaseEntityZod, PageQueryZod, PageResZod, ResZod } from '@shared/types';
 import { z } from 'zod';
 
@@ -7,6 +8,8 @@ export const FactoryZod = BaseEntityZod.extend({
   name: z.string().min(1).max(120),
   shortName: z.string().min(1).max(20),
   isActive: z.boolean().default(true),
+  /** Luồng fulfillment: 'standard' 6 công đoạn | 'merged' rút gọn (xưởng gỗ — Ép/May ra tự xong). */
+  flowType: z.nativeEnum(FactoryFlowType).default(FactoryFlowType.Standard),
 });
 export type Factory = z.infer<typeof FactoryZod>;
 
@@ -24,6 +27,7 @@ export const CreateFactoryZod = z.object({
   name: FactoryZod.shape.name,
   shortName: FactoryZod.shape.shortName,
   isActive: FactoryZod.shape.isActive.optional(),
+  flowType: z.nativeEnum(FactoryFlowType).optional(),
 });
 export class CreateFactoryDto extends createZodDto(extendApi(CreateFactoryZod)) {}
 
@@ -35,6 +39,7 @@ export const UpdateFactoryZod = z.object({
   name: FactoryZod.shape.name.optional(),
   shortName: FactoryZod.shape.shortName.optional(),
   isActive: FactoryZod.shape.isActive.optional(),
+  flowType: z.nativeEnum(FactoryFlowType).optional(),
 });
 export class UpdateFactoryDto extends createZodDto(extendApi(UpdateFactoryZod)) {}
 
