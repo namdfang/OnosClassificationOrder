@@ -18,7 +18,17 @@
 ## 1. Overview
 
 ### 1.1 Phase 1 — Notification theo sự kiện
-Import summary khi `POST /v1/orders/import` — không đổi.
+Import summary khi `POST /v1/orders/import` — nội dung/định dạng tin không đổi.
+
+**Điều kiện gửi (ORD-1, 2026-08-18):** chỉ gửi khi lần import **tạo được ít nhất 1 đơn mới** HOẶC **có ít nhất 1 dòng bị bỏ qua**. Import chỉ cập nhật lại đơn cũ (`imported = 0`, `skipped = 0`) thì **không gửi tin** — số đơn `updated` không tham gia quyết định.
+
+| `imported` | `skipped` | Gửi tin? |
+|---|---|---|
+| > 0 | bất kỳ | Có |
+| = 0 | > 0 | Có — dòng lỗi là dấu hiệu file import hỏng, phải báo |
+| = 0 | = 0 | **Không** — kể cả khi có đơn được cập nhật |
+
+Quy tắc nằm ở hàm thuần `apps/api/src/modules/order/should-notify-import-summary.ts` (spec cùng tên), được gọi ngay đầu `OrderService.sendImportSummaryNotification()` nên mọi lối gọi đều đi qua cùng một điều kiện. Kết quả import trả về cho người bấm import **không đổi**, không phụ thuộc việc có gửi tin hay không.
 
 ### 1.2 Phase 3 — Báo cáo "Đơn 3 ngày liền kề" + 3 view (2026-08, thay 3 báo cáo cũ)
 
@@ -102,6 +112,7 @@ FactoryReportDay = { label, rows: { name, total, stockOut, backlog }[] }
 
 ## 4. Backend modules
 
+- `order/should-notify-import-summary.ts`: hàm thuần quyết định CÓ gửi tin import summary hay không (ORD-1 — xem §1.1).
 - `telegram-notification/`: service (`notifyImportSummary` + 3 `notify*Report` cùng `REPORT_KEYBOARD` 3 nút + `reportChannelIds()`), `types.ts` (`REPORT_CALLBACKS` map), `format/daily-orders-report.formatter.ts` (3 hàm `formatDailyOrdersReport` / `formatDesignerViewReport` / `formatFactoryViewReport`) + `import-summary.formatter.ts` + `_helpers.ts`.
 - `scheduled-reports/`: service (`run(kind)` + lock + onModuleInit setWebhook + 3 @Cron), `scheduled-reports.controller.ts`, `telegram-webhook.controller.ts`, `build-period.ts` (`REPORT_DAY_COUNT` + `buildReportDayWindows` + `formatVnDateTime`), `aggregators/daily-orders-aggregator.ts`.
 - Aggregator: 1 aggregation `$facet` 4 nhánh (`days` / `customers` (pre-filter `userSku $in` khách ưu tiên, join JS qua `customerMatchKey`) / `designers` (match assignee set + s4, group (day, assignee), resolve fullName qua `userModel`) / `factories` (group **(day, factoryId)** → per-day, resolve tên qua `FactoryRepository`)). Module imports: OrderEntity + UserEntity mongoose, CustomerAssignmentModule (`getPriorityCustomers()`), FactoryModule, TelegramNotificationModule.

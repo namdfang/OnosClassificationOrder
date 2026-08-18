@@ -142,6 +142,7 @@ import { OnospodOrderLookupService } from './onospod-order-lookup.service';
 import { OrderDocument, OrderEntity } from './order.entity';
 import { OrderRepository } from './order.repository';
 import { parseTypeFilter, TYPE_NONE_TOKEN } from './parse-type-filter';
+import { shouldNotifyImportSummary } from './should-notify-import-summary';
 
 const FIELD_CONFIG_CATEGORY: Record<OrderWorkshopField, WorkshopConfigCategory | null> = {
   printStatus: WorkshopConfigCategory.PrintStatus,
@@ -7019,6 +7020,11 @@ export class OrderService implements OnModuleInit {
     startedAt: Date;
     ctx?: AuditContext;
   }): Promise<void> {
+    // ORD-1: im lặng khi lần import không tạo đơn mới nào VÀ không có dòng nào
+    // bị bỏ qua — kể cả khi có đơn được cập nhật. Chặn ở đây (không phải ở
+    // call-site) để mọi lối gọi về sau đều đi qua cùng một quy tắc.
+    if (!shouldNotifyImportSummary({ imported: args.imported, skippedCount: args.skippedCount })) return;
+
     try {
       const ids = [...args.factoryCount.keys()];
       const factories = ids.length > 0 ? await this.factoryRepository.findAll({ _id: { $in: ids } }) : [];
