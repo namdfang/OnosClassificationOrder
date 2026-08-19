@@ -4,7 +4,8 @@ import type { AgentAdminOverview, AgentAdminTable } from 'shared';
 import { ApiConfigService } from '@/shared/services/api-config.service';
 
 import { AGENT_API_RATE_LIMIT_PER_MIN } from './agent-api.constants';
-import { buildTableMeta } from './agent-table-meta';
+import { AgentApiRepository } from './agent-api.repository';
+import { buildOpenTableMeta, buildTableMeta } from './agent-table-meta';
 import { AGENT_TABLE_REGISTRY } from './registry';
 
 /** Đường gốc của bộ API agent — tương đối, FE ghép origin của nó. */
@@ -21,15 +22,23 @@ const AGENT_KEY_ENV_NAME = 'AGENT_API_KEY';
  * phải sửa dòng nào ở đây lẫn ở FE (AC-05). Trang chép cứng là trang nói về một
  * bề mặt dữ liệu không có thật.
  *
- * Service này **không chạm collection nghiệp vụ nào** — chỉ đọc hằng số trong
- * bộ nhớ. Nên "lộ giá trị dữ liệu" không phải là điều nó có thể làm, kể cả khi
- * trả ra tên các trường bị che.
+ * Service này **không đọc bản ghi nào** — chỉ đọc hằng số trong bộ nhớ cộng
+ * DANH SÁCH TÊN collection (`API-19`). Nên "lộ giá trị dữ liệu" vẫn không phải
+ * điều nó có thể làm, kể cả khi trả ra tên các trường bị che.
+ *
+ * Từ `API-19` trang quản trị phải hiện **mọi bảng agent với tới được**, không
+ * chỉ 11 bảng có mô tả: người vận hành mở trang này để biết agent đọc được
+ * những gì, và một trang chỉ kể 11 bảng trong khi agent đọc được cả trăm là
+ * trang nói sai về hệ thống.
  */
 @Injectable()
 export class AgentAdminService {
-  constructor(private readonly config: ApiConfigService) {}
+  constructor(
+    private readonly config: ApiConfigService,
+    private readonly repository: AgentApiRepository,
+  ) {}
 
-  overview(): AgentAdminOverview {
+  async overview(): Promise<AgentAdminOverview> {
     return {
       basePath: AGENT_BASE_PATH,
       authHeader: AGENT_AUTH_HEADER,
@@ -46,11 +55,19 @@ export class AgentAdminService {
       // Dùng chung hàm dựng với bề mặt agent (`API-18`), rồi bỏ hai khoá trang
       // này không cần. Dựng lại từ registry ở đây sẽ tạo bản thứ hai để lệch —
       // đúng thứ AC-03 của `API-18` cấm.
-      tables: Object.values(AGENT_TABLE_REGISTRY).map((spec): AgentAdminTable => {
-        const { fieldCount: _fieldCount, readableFields: _readableFields, ...table } = buildTableMeta(spec);
+      tables: (await this.tableKeys()).map((key): AgentAdminTable => {
+        const documented = AGENT_TABLE_REGISTRY[key];
+        const meta = documented ? buildTableMeta(documented) : buildOpenTableMeta(key);
+        const { fieldCount: _fieldCount, readableFields: _readableFields, ...table } = meta;
         return table;
       }),
     };
+  }
+
+  /** Bảng có mô tả HỢP với mọi collection đang có — cùng phép hợp `AgentReadService` dùng. */
+  private async tableKeys(): Promise<string[]> {
+    const names = await this.repository.listCollections();
+    return [...new Set([...names, ...Object.keys(AGENT_TABLE_REGISTRY)])].sort();
   }
 
   /**

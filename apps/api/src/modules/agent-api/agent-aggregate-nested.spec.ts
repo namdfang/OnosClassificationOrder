@@ -91,26 +91,56 @@ describe('AC-04: trường phẳng KHÔNG đổi hành vi', () => {
   });
 });
 
-describe('AC-03: làm đúng phép tổng hợp KHÔNG mở thêm trường nào', () => {
-  it('giá vốn vẫn bị từ chối ở metric', async () => {
+/**
+ * `API-19` đảo ca này: giá vốn NAY tổng hợp được (người dùng chốt mở hết), nên
+ * ca cũ đổi sang thứ duy nhất còn bị chặn — bốn tên bí mật kỹ thuật.
+ */
+describe('AC-03: làm đúng phép tổng hợp KHÔNG mở thêm cửa nào', () => {
+  const customers = AGENT_TABLE_REGISTRY.customers;
+
+  it('API-19: giá vốn NAY tổng hợp được, và vẫn trải mảng đúng', async () => {
     expect(
       await codeOf(() =>
         service.aggregate(products, {}, { metrics: [{ op: 'sum', field: 'variations.cost', as: 'v' }] }),
       ),
+    ).toBe('NO_ERROR');
+    expect(stagesOf(captured[0])).toEqual(['$match', '$unwind', '$group', '$project', '$limit']);
+  });
+
+  it('bí mật xác thực vẫn bị từ chối ở metric', async () => {
+    expect(
+      await codeOf(() => service.aggregate(customers, {}, { metrics: [{ op: 'max', field: 'password', as: 'v' }] })),
     ).toBe('FIELD_NOT_ALLOWED');
   });
 
-  it('giá vốn vẫn bị từ chối ở groupBy', async () => {
+  it('bí mật xác thực vẫn bị từ chối ở groupBy', async () => {
     expect(
       await codeOf(() =>
-        service.aggregate(products, {}, { groupBy: ['variations.cost'], metrics: [{ op: 'count', as: 'n' }] }),
+        service.aggregate(customers, {}, { groupBy: ['password'], metrics: [{ op: 'count', as: 'n' }] }),
       ),
     ).toBe('FIELD_NOT_ALLOWED');
   });
 
-  it('trường bị từ chối KHÔNG kịp sinh ra $unwind — không lời gọi DB nào', async () => {
-    await codeOf(() => service.aggregate(products, {}, { groupBy: ['variations.cost'], metrics: [{ op: 'count', as: 'n' }] }));
+  it('trường bị từ chối KHÔNG kịp chạm DB — không lời gọi nào', async () => {
+    await codeOf(() =>
+      service.aggregate(customers, {}, { groupBy: ['password'], metrics: [{ op: 'count', as: 'n' }] }),
+    );
 
     expect(captured).toEqual([]);
+  });
+});
+
+/**
+ * `API-19` — bảng KHÔNG có mô tả cũng tổng hợp được. Đây là ca duy nhất chứng
+ * minh vế "mọi collection": nếu `policy()` lỡ quay lại đòi trường phải khai
+ * trước, ca này đỏ còn mọi ca khác vẫn xanh vì chúng chạy trên bảng có mô tả.
+ */
+describe('API-19: bảng ngoài từ điển', () => {
+  it('nhóm được trên trường chưa ai mô tả', async () => {
+    const open = AgentQueryService.openSpec('zz_undocumented');
+    expect(
+      await codeOf(() => service.aggregate(open, {}, { groupBy: ['whatever'], metrics: [{ op: 'count', as: 'n' }] })),
+    ).toBe('NO_ERROR');
+    expect(stagesOf(captured[0])).toEqual(['$match', '$group', '$project', '$limit']);
   });
 });

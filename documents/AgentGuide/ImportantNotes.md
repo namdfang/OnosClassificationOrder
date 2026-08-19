@@ -49,28 +49,32 @@ Cách áp: tra `factories` lấy `_id` của xưởng có `shortName = "US"`, r�
 
 ---
 
-## 2. Ranh giới — đúng MƯỜI HAI trường bị chặn
+## 2. Ranh giới — đúng BỐN trường bị chặn
 
-Danh sách đầy đủ và lời từ chối mẫu ở [`WhatYouCannotSee.md`](WhatYouCannotSee.md) §1. Tóm tắt:
-**tám trường tiền** (giá vốn, giá sỉ, phí ship nội bộ của đơn và của biến thể) và **bốn bí
-mật kỹ thuật** (mật khẩu, nguồn mật khẩu, địa chỉ mạng, trình duyệt của phiên thao tác).
+Danh sách đầy đủ và lời từ chối mẫu ở [`WhatYouCannotSee.md`](WhatYouCannotSee.md) §1. Tóm tắt: chỉ còn
+**bốn bí mật kỹ thuật** — `password`, `passwordSource`, `ip`, `userAgent` — bị chặn, ở mọi bảng và mọi
+độ sâu.
 
-**Mọi trường nghiệp vụ khác đọc được** — gồm cả địa chỉ giao, email và điện thoại
-khách, tên người xử lý. Đừng từ chối một câu hỏi vì **tưởng** dữ liệu bị che: từ chối thứ
-mình đọc được cũng là một câu trả lời sai, chỉ là sai theo hướng ngược lại.
+**Mọi thứ khác đọc được**: mọi collection trong hệ thống, mọi trường, và lọc/sắp xếp/nhóm được trên tất
+cả. Đừng từ chối một câu hỏi vì **tưởng** dữ liệu bị che: từ chối thứ mình đọc được cũng là một câu trả
+lời sai, chỉ là sai theo hướng ngược lại.
 
-Hai điều KHÔNG đổi theo việc mở này, và cả hai đều quan trọng:
+### ⚠️ Điều KHÔNG đổi, và nay quan trọng hơn hẳn: đọc được ≠ nói được
 
-| Điều | Nghĩa |
+Hệ thống đã thôi chặn hộ bạn, nên kỷ luật chuyển sang bạn. Ba nhóm dưới đây đọc được đầy đủ và **không
+nhóm nào được đọc cho khách**:
+
+| Nhóm | Vì sao vẫn không nói |
 |---|---|
-| **Đọc được ≠ nói được** | Tên nhân viên, địa chỉ giao, liên hệ khách đọc được nhưng có luật riêng khi nói ra — `WhatYouCannotSee.md` §1b |
-| **Mở ĐỌC không kéo theo mở LỌC** | Nhiều trường vừa mở chỉ đọc được trên đơn bạn đã tra ra, không dùng để đi tìm đơn — `WhatYouCannotSee.md` §1c |
+| **Tiền nội bộ** (`baseCost`, `shipCost`, `variations.cost`, giá sỉ, phí ship nội bộ…) | Giá vốn và biên lợi nhuận của công ty. Chỉ nói **giá niêm yết** `variations.retailPrice` |
+| **Tên nhân viên** (`assignee`, tên trong nhật ký) | Nêu tên một nhân viên cho khách là quyết định của con người, không phải của bạn. Nói **công đoạn** và **xưởng** |
+| **Bảng nội bộ** (`users`, cấu hình hệ thống, nhật ký nội bộ) | Không phải nguồn để trả lời khách |
 
-Ba loại câu hỏi vẫn nên chuyển cho người thật, vì lý do khác chứ không phải vì bị che:
+Ba loại câu hỏi vẫn chuyển cho người thật, vì lý do khác chứ không phải vì bị che:
 
 | Khách hỏi | Vì sao |
 |---|---|
-| "Đơn này bao nhiêu tiền?" | Tiền của đơn nằm trong tám trường bị chặn. Giá niêm yết của sản phẩm thì trả lời được |
+| "Đơn này bao nhiêu tiền?" | Bạn đọc được, nhưng đó là tiền nội bộ. Giá niêm yết của sản phẩm thì trả lời được |
 | "Đổi địa chỉ giao giúp tôi" | Bạn đọc được địa chỉ nhưng **không ghi được** gì vào hệ thống |
 | "Ai làm sai đơn của tôi?" | Đọc được tên, nhưng nêu tên nhân viên cho khách là quyết định của con người |
 
@@ -85,8 +89,9 @@ Ba loại câu hỏi vẫn nên chuyển cho người thật, vì lý do khác c
 | `orders.heldAt` | Khác rỗng = đơn **đang bị giữ**, không chạy tiếp công đoạn nào. Đây thường là câu trả lời thật cho "sao đơn tôi đứng im" |
 | `orders.type` | Là **tên** sản phẩm dạng chữ, khớp với `productConfigs.fullName`, không phải id |
 | `orders.toolResult`, `productionError`, `errorFile` | Là **mã**, không phải chữ đọc được. Phải tra `workshopConfigs` theo `code` để lấy `name` |
-| `orderLogs` không có `before`/`after` | Không phải lỗi: giá trị cũ/mới chỉ được trả với những tên trường của `orders` mà bạn đọc được, và chỉ khi giá trị là một giá trị đơn. Tiền và khối dữ liệu trả kèm `valueOmitted: true` |
-| Ghi chú gõ tay | Đọc được **nguyên văn**, kể cả email và số điện thoại nhân viên gõ trong đó. Nhưng **không lọc được** theo nội dung ghi chú, và **không đọc lại nguyên văn cho khách** — ghi chú là văn bản nội bộ, có thể chứa thông tin của khách hàng khác. Xem [`WhatYouCannotSee.md`](WhatYouCannotSee.md) §2 |
+| `orderLogs` không có `before`/`after` | Nay hai trường này trả **nguyên văn** cho mọi trường. Thiếu chúng nghĩa là bản ghi nhật ký đó vốn không lưu giá trị (ví dụ thao tác `import`), không phải bị lược |
+| Ghi chú gõ tay | Đọc **nguyên văn** và nay lọc được, kể cả email và số điện thoại nhân viên gõ trong đó. Nhưng **không đọc lại nguyên văn cho khách** — ghi chú là văn bản nội bộ, có thể chứa thông tin của khách hàng khác. Xem [`WhatYouCannotSee.md`](WhatYouCannotSee.md) §2 |
+| Nhóm theo một trường ngày | Ra mỗi mốc mili giây một nhóm, vô dụng. Muốn thống kê theo ngày thì gọi nhiều lần, mỗi ngày một khoảng |
 
 ---
 
@@ -105,5 +110,6 @@ Trước sáu công đoạn này còn hai chặng nữa: **soát tool** (`toolCh
 1. Con số nào cũng phải áp đủ **ba điều kiện loại trừ** ở mục 1.
 2. Mã nào cũng phải tra `workshopConfigs` ra chữ trước khi nói.
 3. Không thấy dữ liệu **không** có nghĩa là không có đơn — kiểm lại xem có phải bạn đang lọc trúng một trong ba nhóm bị loại không.
-4. API trả về lỗi `FIELD_NOT_ALLOWED` hay `TABLE_NOT_ALLOWED` nghĩa là **thứ đó cố ý không dành cho bạn**. Đừng tìm đường vòng; chuyển câu hỏi cho người thật.
+4. `FIELD_NOT_ALLOWED` nay chỉ xảy ra với **bốn** tên bị chặn; gặp ở trường khác nghĩa là bạn gõ sai tên. `TABLE_NOT_ALLOWED` nghĩa là tên bảng không hợp lệ, không phải bảng bị cấm.
+6. Đọc được không có nghĩa là nói được — soát lại §2 trước khi đọc một con số tiền hay một cái tên nhân viên cho khách.
 5. Kết quả rỗng hợp lệ (`items: []` không kèm lỗi) khác hẳn bị từ chối (có `code`). Đừng nói "anh không có đơn nào" khi thực ra bạn bị từ chối truy vấn.

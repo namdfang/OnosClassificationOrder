@@ -3,9 +3,12 @@
 > Trả lời hai câu: *"sản phẩm này có những mẫu nào, giá bao nhiêu"* và *"khuyến mãi áp cho tôi thế
 > nào"*.
 >
-> Đây là vùng dữ liệu **dễ nói sai thành cam kết tiền bạc**. Đọc §3 trước khi báo bất kỳ con số nào,
-> và nhớ ranh giới ở [`WhatYouCannotSee.md`](WhatYouCannotSee.md) §1.1: **tám trường tiền tuyệt đối
-> không đọc được**, còn giá niêm yết thì trả lời được.
+> Đây là vùng dữ liệu **dễ nói sai thành cam kết tiền bạc**. Đọc §3 trước khi báo bất kỳ con số nào.
+>
+> ⚠️ Tám trường giá nội bộ (`variations.cost`, `wholesalePrice`, `nonShipCost`, `tiktokPrice`,
+> `expUsShipCost`, `tiktokShipCost`, `orders.baseCost`, `orders.shipCost`) nay **đọc được** — và
+> **tuyệt đối không được nói cho khách**. Chỉ `variations.retailPrice` và `usImportTaxPerUnit` là con
+> số công bố. Xem [`WhatYouCannotSee.md`](WhatYouCannotSee.md) §1b.
 
 ---
 
@@ -85,7 +88,7 @@ Bạn có thể tính được giá sau giảm từ các trường trên. Nhưng
 Ba lý do **không** được nói đó là số tiền chắc chắn:
 
 1. Chương trình có thể kết thúc hoặc đổi giữa lúc bạn trả lời và lúc khách đặt.
-2. Số tiền cuối còn phụ thuộc phí vận chuyển và các khoản khác mà **bạn không đọc được**.
+2. Số tiền cuối còn phụ thuộc phí vận chuyển và các khoản khác **không phải thứ bạn được báo cho khách**.
 3. Khuyến mãi hiển thị ở nơi khách xem hàng là **giá tham khảo**; nó chưa được nối vào bước thanh toán.
 
 Khách hỏi tại sao giá họ thấy khác giá bạn nói → **đừng tranh luận**, chuyển cho nhân viên hỗ trợ. Bạn

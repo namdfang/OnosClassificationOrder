@@ -65,13 +65,15 @@ export const agentSummary = (key: AgentCapabilityKey): string => AGENT_CAPABILIT
 
 export const AGENT_SWAGGER_DESCRIPTION: Record<AgentCapabilityKey, string> = {
   listTables: [
-    'Trả về **cấu trúc dữ liệu** mà bộ API này cho đọc: mỗi bảng kèm mô tả dùng để trả lời loại câu hỏi gì, tên entity, thứ tự sắp xếp mặc định, và chính sách của từng trường (đọc được không, lọc ở mức nào, sắp xếp/nhóm/tổng hợp được không).',
+    'Trả về **cấu trúc dữ liệu** của mọi collection: mỗi bảng kèm mô tả dùng để trả lời loại câu hỏi gì, tên entity, thứ tự sắp xếp mặc định, và chính sách của từng trường.',
     '',
-    'Gọi endpoint này **trước tiên**: nó cho biết bảng nào và trường nào tồn tại đối với bạn. Bảng không có trong danh sách là không tồn tại — gọi tới sẽ nhận `TABLE_NOT_ALLOWED`.',
+    'Gọi endpoint này **trước tiên**. Bảng nào cũng đọc được, kể cả bảng không có mô tả — bảng như vậy trả về danh sách trường RỖNG, nghĩa là chưa ai mô tả nó chứ không phải nó bị khoá; đọc thử `?limit=1` để biết nó có những trường gì.',
+    '',
+    'Che duy nhất còn lại: `password`, `passwordSource`, `ip`, `userAgent` — xin tới sẽ nhận `FIELD_NOT_ALLOWED`.',
     '',
     '**Không có tham số.**',
     '',
-    `**${Object.keys(AGENT_TABLE_REGISTRY).length} bảng hiện có**`,
+    `**${Object.keys(AGENT_TABLE_REGISTRY).length} bảng có mô tả nghiệp vụ** (các bảng khác vẫn đọc được, chỉ chưa có ghi chú)`,
     '',
     tableList(),
     '',
@@ -92,7 +94,7 @@ export const AGENT_SWAGGER_DESCRIPTION: Record<AgentCapabilityKey, string> = {
       '`filter` — điều kiện lọc, **cú pháp MongoDB**, dạng chuỗi JSON. Cùng bộ toán tử với `POST /agent/query`.',
     ]),
     '',
-    'Trường không xin thì không trả; trường không được đọc thì **không bao giờ** trả, dù có xin.',
+    'Không truyền `fields` thì trả **nguyên bản ghi**. Bốn trường bị che (`password`, `passwordSource`, `ip`, `userAgent`) không bao giờ trả, dù có xin.',
     '',
     example('readRows'),
     commonFooter(),

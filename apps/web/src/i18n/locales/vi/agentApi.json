@@ -49,7 +49,7 @@
   },
   "errors": {
     "UNAUTHORIZED": "Thiếu hoặc sai khoá ở header X-Agent-Api-Key. Cũng trả về khi máy chủ chưa cấu hình khoá.",
-    "TABLE_NOT_ALLOWED": "Bảng này không nằm trong danh sách trắng. Xem tab Bảng dữ liệu để biết bảng nào đọc được.",
+    "TABLE_NOT_ALLOWED": "Tên bảng không hợp lệ. Mọi collection có thật đều đọc được — kiểm tra lại chính tả tên bảng ở tab Bảng dữ liệu.",
     "FIELD_NOT_ALLOWED": "Trường này không đọc/lọc/nhóm được theo chính sách. Xem cột Lọc và Nhóm của bảng trường.",
     "WRITE_NOT_SUPPORTED": "Bộ API chỉ đọc. Không có thao tác ghi nào được hỗ trợ.",
     "INVALID_QUERY": "Truy vấn sai cú pháp hoặc dùng toán tử không được phép.",
@@ -85,7 +85,8 @@
     "bool": "đúng/sai",
     "objectId": "mã định danh",
     "enum": "danh sách chọn",
-    "object": "khối dữ liệu"
+    "object": "khối dữ liệu",
+    "any": "chưa rõ kiểu"
   },
   "filterLevel": {
     "none": "không lọc",

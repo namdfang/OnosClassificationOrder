@@ -6,7 +6,7 @@ import { ApiConfigService } from '@/shared/services/api-config.service';
 import { AgentApiRepository } from './agent-api.repository';
 import { invalidQuery } from './agent-errors';
 import { AgentQueryService } from './agent-query.service';
-import { buildTableMeta } from './agent-table-meta';
+import { buildOpenTableMeta, buildTableMeta } from './agent-table-meta';
 import { pickProjected } from './pick-projected';
 import type { AgentTableSpec } from './registry';
 import { AGENT_TABLE_REGISTRY } from './registry';
@@ -23,16 +23,32 @@ export class AgentReadService {
     private readonly config: ApiConfigService,
   ) {}
 
-  listTables(): AgentTableSummary[] {
-    // Dùng chung hàm dựng với bề mặt quản trị (`API-18`) — hai nơi mô tả cùng
-    // một trường theo hai kiểu khác nhau là thứ AC-03 cấm, nên chỉ có một chỗ
-    // đọc registry rồi dựng mô tả.
-    return Object.values(AGENT_TABLE_REGISTRY).map(buildTableMeta);
+  /**
+   * MỌI collection đang có, không chỉ 11 bảng có mô tả (`API-19`).
+   *
+   * Bảng có mô tả trả về đầy đủ ghi chú nghiệp vụ; bảng còn lại trả về khung
+   * rỗng kèm lời nhắc đọc thử vài bản ghi để biết cấu trúc. Hợp nhất hai nguồn
+   * bằng `Set` để bảng có mô tả nhưng chưa có bản ghi nào vẫn hiện ra — nếu
+   * không, agent sẽ tưởng bảng đó không tồn tại chỉ vì nó đang rỗng.
+   *
+   * Dùng chung hàm dựng với bề mặt quản trị (`API-18`) — hai nơi mô tả cùng một
+   * trường theo hai kiểu khác nhau là thứ AC-03 cấm.
+   */
+  async listTables(): Promise<AgentTableSummary[]> {
+    const names = await this.repository.listCollections();
+    const all = [...new Set([...names, ...Object.keys(AGENT_TABLE_REGISTRY)])].sort();
+    return all.map((name) => {
+      const documented = AGENT_TABLE_REGISTRY[name];
+      return documented ? buildTableMeta(documented) : buildOpenTableMeta(name);
+    });
   }
 
   /**
    * Đọc thô, phân trang THEO CON TRỎ trên `_id` tăng dần. Không dùng `skip`:
    * bảng `orders` lớn, `skip` sâu vừa chậm vừa vi phạm BR-6.
+   *
+   * Không xin `fields` thì trả **nguyên bản ghi** (`API-19`) trừ bốn tên bị
+   * chặn — đây là cách duy nhất đọc được trường của collection chưa ai mô tả.
    *
    * Hết dữ liệu thì `items` rỗng và KHÔNG có `nextCursor` — phân biệt được với
    * trường hợp bị từ chối (403), đúng luồng ngoại lệ của SRS mục 6.
@@ -48,9 +64,6 @@ export class AgentReadService {
     const timeoutMs = this.config.agentApi.readTimeoutMs;
     const limitApplied = this.queries.clampLimit(limit);
     const projection = this.queries.buildProjection(spec, fields);
-
-    const dbProjection =
-      spec.key === 'orderLogs' ? { ...projection, before: 1 as const, after: 1 as const } : projection;
 
     // Lọc theo dữ liệu (`API-6`) dùng LẠI đúng cơ chế của `POST /query` — hai
     // đường lọc với hai bộ luật là cách chắc chắn để một ngày chúng lệch nhau,
@@ -69,9 +82,9 @@ export class AgentReadService {
     const raw = await this.queries.run(
       () =>
         this.repository.find({
-          entityName: spec.entityName,
+          collection: spec.key,
           filter,
-          projection: dbProjection,
+          projection,
           sort: { _id: 1 },
           skip: 0,
           limit: limitApplied,
@@ -80,8 +93,8 @@ export class AgentReadService {
       timeoutMs,
     );
 
-    const rows = raw.map((r) => pickProjected(r, projection));
-    const items = this.queries.maskRows(spec, rows, raw);
+    const rows = Object.keys(projection).length ? raw.map((r) => pickProjected(r, projection)) : raw;
+    const items = this.queries.maskRows(spec, rows);
 
     // Còn trang sau khi lô đầy tới trần — lô vơi nghĩa là đã hết dữ liệu.
     const last = raw.at(-1);

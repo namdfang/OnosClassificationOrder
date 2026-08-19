@@ -14,15 +14,18 @@ import { WorkshopConfigSchema } from '../workshop-config/workshop-config.entity'
 import { AGENT_TABLE_REGISTRY } from './registry';
 
 /**
- * Bất biến I4 của bộ API agent (`API-1`, thiết kế §7.4) — **bất biến mạnh nhất**.
+ * Bất biến I4 của bộ API agent (`API-1`, thiết kế §7.4).
  *
- * Mọi đường dẫn có thật trên schema phải hoặc nằm trong danh sách trắng, hoặc
- * nằm trong `deliberatelyExcluded`. Nghĩa là: thêm một field mới vào
- * `OrderEntity` mà không quyết định gì về nó thì test này ĐỎ.
+ * Mọi đường dẫn có thật trên schema phải hoặc có mô tả trong `fields`, hoặc nằm
+ * trong `deliberatelyExcluded`. Thêm một field mới vào `OrderEntity` mà không
+ * quyết định gì về nó thì test này ĐỎ.
  *
- * Đây là cơ chế duy nhất ngăn kiểu rò "field mới lọt vào theo mặc định" khi hệ
- * thống tiến hoá — đúng loại lỗi mà một bộ test chạy qua API không bao giờ bắt
- * được, vì lúc viết test thì field đó còn chưa tồn tại.
+ * ⚠️ **Ý NGHĨA ĐÃ ĐỔI Ở `API-19`.** Trước đây đây là chốt an toàn: field mới
+ * lọt vào danh sách trắng theo mặc định là rò dữ liệu. Nay field mới **đọc được
+ * ngay** dù không khai ở đâu cả, nên test này không còn giữ dữ liệu — nó giữ
+ * **chất lượng từ điển**: field mới phải có người viết ghi chú nghiệp vụ cho
+ * nó, nếu không agent sẽ đọc được một trường mà không hiểu nó là gì và đoán bừa
+ * khi trả lời khách. Đỏ ở đây nghĩa là "còn thiếu mô tả", không phải "đang rò".
  */
 const SCHEMAS: Record<string, Schema> = {
   orders: OrderSchema,

@@ -1,23 +1,39 @@
 # Agent API — Function Description
 
-> **File BE:** `apps/api/src/modules/agent-api/` (controller, guard, repository, 4 service, registry 5 file, 2 hàm thuần che dữ liệu)
+> **File BE:** `apps/api/src/modules/agent-api/` (controller, guard, repository, 4 service, registry 5 file)
 > **File FE:** không có — bên tiêu thụ là AI agent nội bộ, không phải trình duyệt
 > **Shared:** `packages/shared/dtos/agent-api.dto.ts`
 > **Tài liệu cho agent:** toàn bộ `documents/AgentGuide/` — và CHỈ thư mục đó (`API-13`)
 > **API:** `/api/v1/agent/*`
-> **Nguồn yêu cầu:** task `API-1` — SRS `.devtasks/srs/API-1.md`, thiết kế `.devtasks/design/API-1.md`
+> **Nguồn yêu cầu:** task `API-1` — SRS `.devtasks/srs/API-1.md`, thiết kế `.devtasks/design/API-1.md`. **Mở hết bề mặt ở `API-19`.**
 
 ## 1. Overview
 
 Bộ API **chỉ đọc** phục vụ một AI agent nội bộ trả lời khách hàng qua tin nhắn. Agent cần hai thứ: **hiểu nghiệp vụ** (đọc tài liệu) và **tra được dữ liệu thực** (đọc đơn của khách).
 
-Vì agent nói chuyện trực tiếp với khách, **mọi dữ liệu agent đọc được đều phải coi là có nguy cơ bị nói ra cho khách**. Toàn bộ thiết kế xoay quanh một nguyên tắc:
+### ⚠️ `API-19` — nguyên tắc đã ĐẢO CHIỀU
 
-> **Danh sách trắng ở tầng TRƯỜNG, cấm là mặc định.**
+Tới `API-18`, thiết kế xoay quanh *"danh sách trắng ở tầng trường, cấm là mặc định"*. Người dùng đã chốt bỏ vế đó. Nguyên tắc hiện hành:
 
-Bảng không có tên trong registry là không tồn tại. Trường không được liệt kê tường minh thì không đọc được, không lọc được, không nhóm được, không sắp xếp được.
+> **Mở là mặc định. Mọi collection, mọi trường — trừ đúng bốn tên.**
 
-**Từ `API-17`, bề mặt dữ liệu mở rộng**: agent đọc được **mọi trường nghiệp vụ** của 11 bảng — gồm địa chỉ giao, email/điện thoại khách và danh tính người thao tác. **Đúng 12 trường bị chặn**: tám trường tiền (`baseCost`, `shipCost`, `variations.cost`/`nonShipCost`/`wholesalePrice`/`tiktokPrice`/`expUsShipCost`/`tiktokShipCost`) và bốn bí mật kỹ thuật (`password`, `passwordSource`, `ip`, `userAgent`). Mở ĐỌC **không** kéo theo mở LỌC: trường vừa mở giữ `filter: 'none'`, liên hệ khách giữ `filter: 'eq'`.
+| | Trước `API-19` | Sau `API-19` |
+|---|---|---|
+| Bảng đọc được | 11 bảng trong registry | **mọi collection** trong DB, kể cả bảng thêm sau này |
+| Trường đọc được | chỉ trường khai trong registry | **mọi trường**, kể cả trường chưa ai mô tả |
+| Lọc / sắp xếp / nhóm | theo `filter`/`sortable`/`groupable` từng trường | **mở hết** |
+| Tiền | 8 trường bị che | đọc được (kể cả giá vốn, biên lợi nhuận) |
+| Giá trị cũ/mới của nhật ký | lọc qua danh sách trắng tên trường | nguyên văn |
+| Còn bị chặn | 12 tên | **4 tên**: `password`, `passwordSource`, `ip`, `userAgent` |
+
+**Hệ quả phải biết, không phải điều bất ngờ:**
+
+- Agent đọc được **giá vốn và biên lợi nhuận**. API không còn chặn hộ việc nói con số đó cho khách — chỗ chặn duy nhất còn lại là chính lời nhắc của agent (`documents/AgentGuide/WhatYouCannotSee.md`).
+- Agent đọc được **danh tính nhân viên** ở mọi bảng, và nhóm được theo nó — đây chính là năng lực "sản lượng theo từng designer" mà `API-17` còn chặn.
+- Agent **quét ngược được** từ một mảnh email/điện thoại ra khách nào, vì mức lọc mở hoàn toàn.
+- Agent đọc được **mọi collection nội bộ** — `users`, `system_configs`, nhật ký nội bộ… Bốn tên bị chặn áp ở **mọi bảng, mọi độ sâu**, nên hash mật khẩu và dấu vết phiên vẫn không ra.
+
+Ba thứ **không** đổi ở `API-19`: chỉ đọc (BR-3), danh sách trắng **toán tử** lọc, và các hạn mức tải (trần lô, `maxTimeMS`, độ sâu điều kiện, đọc trên secondary).
 
 ## 2. Luồng hoạt động
 
@@ -38,7 +54,7 @@ Agent  ──[X-Agent-Api-Key]──►  AgentApiKeyGuard          401 nếu thi
                        (find / aggregate)
                               │
                               ▼
-                     mask-free-text + order-log-value-policy
+                     stripDeniedDeep (4 tên bị chặn, mọi độ sâu)
                               │
                               ▼
                         AgentAuditService  → collection `agentApiLogs`
@@ -50,7 +66,7 @@ Guard chạy **trước** mọi validate tham số. Nếu làm ngược lại, m
 
 | Method | Path | Mô tả |
 |---|---|---|
-| `GET` | `/v1/agent/tables` | Liệt kê 11 bảng đọc được, kèm mô tả bảng và **chính sách đầy đủ từng trường** (`API-18`) — xem §3.1 |
+| `GET` | `/v1/agent/tables` | Liệt kê **mọi collection** (`API-19`), kèm mô tả bảng và **chính sách đầy đủ từng trường** (`API-18`) — xem §3.1 |
 | `GET` | `/v1/agent/tables/:table/rows` | Đọc thô, phân trang theo con trỏ trên `_id`. Query: `limit`, `cursor`, `fields`, `filter` (`API-6`) |
 | `POST` | `/v1/agent/query` | Truy vấn có kiểm soát: lọc, sắp xếp, đếm, nhóm, tổng hợp |
 | `GET` | `/v1/agent/docs` | Danh mục tài liệu nghiệp vụ |
@@ -61,11 +77,12 @@ Tất cả yêu cầu header `X-Agent-Api-Key`, khớp env `AGENT_API_KEY`.
 **`filter` trên endpoint đọc bảng** (`API-6`) là điều kiện **dạng chuỗi JSON** — `GET` không có thân
 yêu cầu nên nó phải đi qua query string. Nó **dùng lại đúng** bộ dịch của `POST /query`, không có bộ
 luật thứ hai: hai đường lọc với hai bộ luật là cách chắc chắn để một ngày chúng lệch nhau, và đường
-lỏng hơn sẽ thành lỗ hổng. Chính sách trường giữ nguyên hiệu lực — `filter: 'none'` vẫn không lọc được,
-`filter: 'eq'` vẫn chỉ so bằng.
+lỏng hơn sẽ thành lỗ hổng. Cơ chế chính sách trường vẫn còn trong mã (`filter: 'none'` / `'eq'`) nhưng sau `API-19` **không
+trường nào còn ở hai mức đó** — nó là đường lui nếu có change request siết lại, và có unit test canh.
 
 JSON hỏng hoặc toán tử ngoài danh sách trắng trả `400 INVALID_QUERY` chứ không rơi vào 422 của tầng
-validate: bảng mã lỗi là hợp đồng với agent. Điều kiện của bên gọi và con trỏ phân trang ghép bằng `$and`, không trộn
+validate: bảng mã lỗi là hợp đồng với agent. Sau `API-19`, `TABLE_NOT_ALLOWED` chỉ còn nghĩa **tên
+collection không hợp lệ** (rỗng, quá dài, có ký tự lạ) — không còn bảng nào bị cấm vì chính sách. Điều kiện của bên gọi và con trỏ phân trang ghép bằng `$and`, không trộn
 nông — điều kiện chạm `_id` mà đè mất con trỏ thì trang sau sẽ lặp lại trang trước.
 
 ### DSL truy vấn
@@ -103,7 +120,9 @@ Không có `$between` (MongoDB không có); khoảng giá trị viết bằng d�
 
 **`$startsWith` là tên không tồn tại trong MongoDB, và đó là chủ ý.** Bên gọi truyền **chuỗi thường**; server escape rồi tự neo `^`, nên không có đường nào để một mẫu biểu thức đi vào và không có ReDoS. `$regex` bị từ chối như mọi toán tử ngoài danh sách trắng. Vì sao không mượn luôn tên `$regex` cho năng lực này: một toán tử mang tên chuẩn MongoDB nhưng ngữ nghĩa khác là **bẫy im lặng** — agent quen Mongo sẽ gửi `".*abc.*"` rồi nhận kết quả rỗng mà không hiểu vì sao. Tên lạ buộc nó tra tài liệu.
 
-**Cú pháp đổi, quyền KHÔNG đổi.** Mỗi cặp (trường, toán tử) vẫn đi qua đúng bộ kiểm cũ: trường `filter: 'none'` không lọc được, trường `filter: 'eq'` chỉ nhận `$eq/$ne/$in/$nin`. Dạng rút gọn tính là `$eq` **trước khi** kiểm mức lọc, nên `{ "userEmail": "a@b.c" }` qua được còn `{ "userEmail": { "$gt": "a" } }` thì không — hai câu chỉ khác nhau một lớp object.
+**Mức lọc sau `API-19`: `full` ở mọi trường.** Bộ kiểm mức lọc vẫn chạy nhưng không còn trường nào bị siết, nên `{ "userEmail": { "$startsWith": "a" } }` nay qua được. Chỉ bốn tên bị chặn là hỏng, ở mọi dạng cú pháp và mọi độ sâu của cây điều kiện.
+
+**Trường chưa ai mô tả cũng lọc được.** Nó nhận `OPEN_POLICY` với `type: 'any'`, nên phép ép ngày chuyển sang phỏng đoán theo mẫu: chuỗi ISO đầy đủ (`2026-08-01T00:00:00Z`) thành `Date`, chuỗi ngày trần (`2026-08-01`) giữ nguyên là chuỗi. Trường **có** mô tả `type: 'date'` vẫn ép chắc chắn như trước.
 
 **Không nhận pipeline aggregation thô.** Lý do: tên trường đầu ra khi đó do chính bên gọi đặt (`$project { x: "$shippingAddress.email" }`), nên không có cách nào lọc đầu ra theo tên trường.
 
@@ -111,15 +130,19 @@ Không có `$between` (MongoDB không có); khoảng giá trị viết bằng d�
 
 ```ts
 type AgentFieldPolicy = {
-  type: 'string' | 'number' | 'date' | 'bool' | 'objectId' | 'enum' | 'object';  // 'object' từ `API-17`: trường là KHỐI, trả nguyên khối
-  read: boolean;                      // được xuất hiện trong dữ liệu trả về
-  filter: 'none' | 'eq' | 'full';     // 'eq' = chỉ eq/ne/in/nin (thông tin liên hệ khách)
-  sortable: boolean;
-  groupable: boolean;
+  type: 'string' | 'number' | 'date' | 'bool' | 'objectId' | 'enum' | 'object' | 'any';
+  //   'object' (`API-17`): trường là KHỐI, trả nguyên khối
+  //   'any'    (`API-19`): CHƯA BIẾT kiểu — trường không có mô tả
+  read: boolean;
+  filter: 'none' | 'eq' | 'full';     // sau `API-19` luôn là 'full'; hai mức kia là đường lui
+  sortable: boolean;                  // sau `API-19` luôn true
+  groupable: boolean;                 // sau `API-19` luôn true
   aggregatable?: boolean;
-  freeText?: boolean;                 // văn bản gõ tay: đọc nguyên văn nhưng BẮT BUỘC filter='none'
+  freeText?: boolean;                 // nhãn MÔ TẢ: nội dung là câu chữ gõ tay, không còn ràng buộc quyền
 };
 ```
+
+Trường **không** có trong `fields` nhận `OPEN_POLICY` (`type: 'any'`, mở đủ quyền) thay vì bị từ chối — đó là toàn bộ khác biệt của `API-19` ở tầng này.
 
 ### Collection mới — `agentApiLogs`
 
@@ -192,11 +215,13 @@ Không có. Bộ API này không phục vụ trình duyệt và không có màn 
 
 ## 5. Backend logic
 
-### 5.1 Registry — nguồn sự thật duy nhất
+### 5.1 Registry — nay là TỪ ĐIỂN, không phải cổng (`API-19`)
 
-`apps/api/src/modules/agent-api/registry/index.ts` → `AGENT_TABLE_REGISTRY`, đúng 11 bảng: `orders`, `orderLogs`, `customers`, `productConfigs`, `productCategories`, `collections`, `promotions`, `factories`, `machineTypes`, `workshopConfigs`, `customer_notifications`.
+`apps/api/src/modules/agent-api/registry/index.ts` → `AGENT_TABLE_REGISTRY`, 11 bảng **có mô tả nghiệp vụ**: `orders`, `orderLogs`, `customers`, `productConfigs`, `productCategories`, `collections`, `promotions`, `factories`, `machineTypes`, `workshopConfigs`, `customer_notifications`.
 
-Không nhánh code nào nhận tên collection từ bên gọi rồi truyền xuống mongoose — luôn phải qua `AgentQueryService.spec()` trước.
+Đây **không còn là danh sách bảng đọc được**. Bảng ngoài danh sách vẫn đọc/lọc/nhóm được đầy đủ; nó chỉ không có ghi chú nghiệp vụ, và `GET /agent/tables` trả về với `fields: []` cộng lời nhắc đọc thử `?limit=1` để biết cấu trúc. Nói rõ điều đó trong mô tả là bắt buộc — một danh sách trường rỗng nhìn từ phía agent trông y hệt một bảng bị khoá.
+
+`AgentQueryService.spec()` vẫn là cửa duy nhất: bảng có mô tả trả spec của nó, bảng còn lại trả một spec MỞ sau khi tên collection qua được mẫu ký tự hợp lệ (`^[A-Za-z0-9_][A-Za-z0-9_.-]{0,119}$`). Tên bảng là thứ **duy nhất** của bên gọi đi thẳng vào một lời gọi MongoDB mà không qua bộ dịch nào, nên phép kiểm đó ở lại.
 
 ### 5.2 Ba lớp chặn ghi và chạy mã
 
@@ -204,24 +229,19 @@ Không nhánh code nào nhận tên collection từ bên gọi rồi truyền xu
 2. Zod `.strict()` ở mọi cấp của `AgentQueryZod`.
 3. `AgentApiRepository` **chỉ phơi ra** `find`, `aggregate`, `insertLog`, `ensureLogTtlIndex`. Không service nào của module chạm được `save`/`updateOne`/`deleteOne` — BR-3 được giữ bằng hình dạng của lớp, không bằng kỷ luật người viết.
 
-### 5.3 Che dữ liệu bằng cấu trúc
+### 5.3 Bốn tên bị chặn — chốt DUY NHẤT còn lại (`API-19`)
 
-`$project` **luôn** dựng từ registry, không bao giờ từ tham số bên gọi. Trường bị che không được đọc lên khỏi DB — không có bước "lấy hết rồi xoá trường nhạy cảm", vì bước đó chỉ cần quên một nhánh là rò.
+`password`, `passwordSource`, `ip`, `userAgent`. Không phải dữ liệu nghiệp vụ: hai cái đầu là bí mật xác thực (hash mật khẩu lọt ra là cho phép dò ngược ngoại tuyến toàn bộ tài khoản khách; `passwordSource = 'system'` chỉ điểm tài khoản đang dùng mật khẩu mặc định), hai cái sau là dấu vết phiên làm việc.
 
-Hai bất biến không viết trong yêu cầu mà bắt buộc phải có:
+Vì đây là cơ chế **duy nhất**, nó không còn nằm ở unit test như một lưới an toàn thứ hai mà chạy ở **tầng truy vấn**, ba lớp chồng nhau:
 
-- `sortable ⇒ read` — thứ tự sắp xếp để lộ quan hệ so sánh giữa các bản ghi.
-- `groupable ⇒ read` — khoá nhóm hiện nguyên ở kết quả tổng hợp.
+1. **`AgentQueryService.policy()`** — cửa chung của mọi đường (đọc, lọc, sắp xếp, nhóm, tổng hợp). So khớp theo **từng đoạn** của đường dẫn, nên `password.hash` hỏng y như `password`; áp cho mọi bảng, kể cả bảng không ai mô tả.
+2. **`$project` loại trừ ở tầng kho dữ liệu** — truy vấn không xin trường cụ thể thì lấy nguyên bản ghi TRỪ bốn tên, nên chúng không được đọc lên khỏi DB.
+3. **`stripDeniedDeep()` ở đầu ra** — quét mọi độ sâu, kể cả trong mảng. Lớp 2 chỉ phủ cấp một; nhánh lồng của collection không ai mô tả phải nhờ lớp này.
 
-Tám trường tiền (sáu của biến thể cộng `orders.baseCost`/`shipCost`) **không có mặt trong registry ở bất kỳ vai trò nào**: cho lọc trên một trường số bị che là dựng sẵn một máy đoán nhị phân (`cost > 10` trả 0, `cost > 5` trả 3 → ra giá trị thật sau vài lời gọi).
+**Projection mặc định nay là NGUYÊN bản ghi.** Không xin `fields` thì không có `$project` thu hẹp — chiếu theo danh sách khai sẵn sẽ âm thầm nuốt mất mọi trường chưa kịp mô tả, và với bảng ngoài từ điển thì nuốt sạch. Có xin `fields` thì chiếu đúng thứ đã xin và `pick-projected.ts` cắt lại theo đường dẫn.
 
-Ranh giới của việc che là **giá nội bộ**, không phải "mọi con số tiền". Ba trường của `productConfigs` dưới đây đọc được vì chúng đã công khai với chính khách hàng ở Customer Portal Catalog (`customer-catalog.service.ts` `$project`) — agent thấy ít hơn khách là bất nhất chứ không an toàn hơn (quyết định `API-2`):
-
-| Trường | Nghĩa | Chính sách |
-|---|---|---|
-| `printDocument` | URL tài liệu hướng dẫn design/template của sản phẩm | `plain('string')` |
-| `printTemplate` | URL template thiết kế chung của sản phẩm | `plain('string')` |
-| `usImportTaxPerUnit` | Thuế nhập khẩu US mỗi đơn vị (USD), số công bố với khách | `numeric` — cộng/trung bình được |
+**Cái mất đi, ghi để về sau không ai tưởng là bug:** mở lọc trên trường tiền nghĩa là agent đoán được giá trị bằng nhị phân (`cost > 10` rỗng, `cost > 5` có 3 → ra giá thật sau vài lời gọi). Nay điều đó không còn nghĩa gì vì chính con số cũng đọc thẳng được.
 
 ### 5.3b Trường lồng: chiếu rồi lọc lại theo từng trường con
 
@@ -230,10 +250,9 @@ Ranh giới của việc che là **giá nội bộ**, không phải "mọi con s
 mảng** — `{ variations: [{ sku, retailPrice }] }` — chứ không phải một khoá tên `'variations.sku'`.
 
 Bước lọc sau khi đọc (`pick-projected.ts`) vì thế phải đi theo đường dẫn, không đọc thẳng
-`row['variations.sku']`. Bước này tồn tại để bỏ các khoá chỉ **mượn** để tính chính sách
-(`before`/`after` của `orderLogs`, §5.5), nên nó không được nới thành "trả nguyên khối `variations`":
-mỗi phần tử mảng chỉ giữ đúng các trường con trong danh sách trắng, nên `variations.cost` vẫn không
-có đường nào ra ngoài.
+`row['variations.sku']`. Sau `API-19` bước này **chỉ chạy khi bên gọi xin `fields` cụ thể** — nó cắt
+kết quả đúng theo danh sách đã xin, để "xin ba trường con" không trả về nguyên khối biến thể. Không
+xin gì thì trả nguyên bản ghi, không qua bước này.
 
 `QA-1` là lúc điều này hỏng: bản đầu đọc `row[key]` với `key` có dấu chấm nên luôn nhận `undefined`
 và **im lặng** vứt toàn bộ dữ liệu biến thể — không lỗi, không cảnh báo, agent chỉ thấy sản phẩm
@@ -259,7 +278,7 @@ Hệ quả ngữ nghĩa cần biết khi đọc kết quả: một khi đã `$un
 (số biến thể) chứ không theo bản ghi. Đó là điều đúng cho câu hỏi "có bao nhiêu biến thể giá X", và là
 điều phải nhớ khi trộn `count` với metric trên trường lồng trong cùng một truy vấn.
 
-### 5.4 Văn bản tự do: đọc được nguyên văn, nhưng không lọc được
+### 5.4 Văn bản tự do: đọc nguyên văn VÀ lọc được (`API-19`)
 
 **Từ `API-11`, văn bản tự do KHÔNG còn bị che email/số điện thoại** — agent đọc nguyên văn. Người dùng
 yêu cầu điều này vì văn bản bị cắt xén làm agent trả lời khách dựa trên một bản đã mất ngữ cảnh.
@@ -270,39 +289,50 @@ trong hội thoại. Đây là rò rỉ **chéo giữa các khách hàng**, khô
 nằm sau khoá và vẫn chỉ đọc. Ghi ở đây để về sau không ai coi là bug mới phát hiện; siết lại là change
 request.
 
-Văn bản tự do vẫn **`filter: 'none'`**, và lý do nay khác trước: không phải vì che chạy ở đầu ra, mà vì
-**cho lọc là cho quét toàn bộ dữ liệu theo một mảnh thông tin liên hệ** — dò dần từng ký tự cho tới khi
-ra đơn của một người cụ thể. Đọc được nguyên văn một ghi chú đã cầm trên tay là một chuyện; *tìm ra*
-đơn nào chứa một số điện thoại là chuyện nặng hơn hẳn. Bất biến I6 giữ nguyên với lý do mới này.
+**`API-19` gỡ nốt vế cấm lọc.** Tới `API-18`, văn bản tự do giữ `filter: 'none'` với lý do "cho lọc là
+cho quét toàn bộ dữ liệu theo một mảnh thông tin liên hệ — dò dần từng ký tự cho tới khi ra đơn của một
+người cụ thể". Người dùng chốt mở, và điều đó **đúng là** năng lực quét ngược nói trên: nay tìm được
+đơn nào chứa một số điện thoại. Cùng lẽ đó, `orders.userEmail` / `customers.userEmail` / `customers.phone`
+bỏ mức `eq`, nên `$startsWith` trên email chạy được.
 
-`mask-free-text.ts` **vẫn còn** — nhưng chỉ ở §5.5 cho `before`/`after` của nhật ký,
-là cơ chế riêng với danh sách trắng riêng. Ca kiểm quan trọng nhất của nó không đổi: mã sản xuất dạng
-`XQ-91783-27005` **không** được che nhầm thành số điện thoại.
+`mask-free-text.ts` **không còn nơi nào gọi** (từ `API-11`/`API-12`, và `API-19` gỡ nốt đường cuối).
+File giữ lại kèm cảnh báo ở đầu vì bộ mẫu đã qua kiểm thử kỹ — đặc biệt ca mã sản xuất
+`XQ-91783-27005` **không** bị che nhầm thành số điện thoại — nên khôi phục được ngay nếu có change
+request siết lại. Đừng nhìn file đó rồi kết luận hệ thống đang che: nó đang không che.
 
-### 5.5 Giá trị cũ/mới của nhật ký
+### 5.5 Giá trị cũ/mới của nhật ký — nay là trường bình thường
 
-`order-log-value-policy.ts` — `before`/`after` chỉ trả khi tên trường bị đổi nằm trong danh sách trắng. Từ `API-17` danh sách đó **suy ra từ registry `orders`** (đúng các tên có `read: true`) thay vì chép tay 17 tên — bản chép tay đã trôi khỏi thực tế một lần, chép lần thứ hai là hẹn lỗi lần sau. Trường ngoài danh sách trả `valueOmitted: true` để agent biết là bị lược, không phải giá trị vốn rỗng.
+`order-log-value-policy.ts` **đã bị xoá** ở `API-19`. `orderLogs.before`/`after` nay là hai trường
+`plain('object')` như mọi trường khác, đọc nguyên văn kể cả giá trị dạng khối.
 
-**Giá trị ra nguyên văn, không còn qua bộ che** (`API-12`). `API-11` bỏ che cho trường văn bản tự do nhưng chỗ này còn che, tạo ra một sự bất nhất agent không có cách nào hiểu: nội dung hiện tại của một ghi chú thì nguyên văn, còn *lịch sử thay đổi của chính ghi chú đó* lại là bản đã che — cùng một nội dung, hai câu trả lời khác nhau tuỳ đường hỏi.
+Lý do cũ để lọc chúng qua một danh sách trắng tên trường là *"giá trị cũ/mới của tám trường tiền sẽ lọt
+ra"*. Sau `API-19` tiền cũng mở, nên cái cổng đó không còn chặn gì — giữ lại chỉ tạo ra một sự bất nhất
+mới: lịch sử thay đổi của một trường bị lược trong khi giá trị hiện tại của chính nó đọc thẳng được.
 
-Hệ quả: **danh sách trắng nay là chốt chặn duy nhất ở đây**, không còn lớp thứ hai đỡ phía sau. Nó VẪN là danh sách trắng sau `API-17`: tám trường tiền không bao giờ lọt vào vì chúng không có `read: true` ở đâu cả — đúng điểm BA lo khi từ chối mở thẳng `before`/`after` thành trường đọc bình thường. Giá trị kiểu khối vẫn bị lược: đọc được trường ở bản ghi hiện tại khác với đọc được lịch sử thay đổi của nó.
+Kèm theo, `valueOmitted` biến mất khỏi kết quả và tầng đọc thô không còn phải xin thêm `before`/`after`
+ngoài `$project` — hai chỗ đặc biệt hoá cho `orderLogs` trong `agent-query.service.ts` và
+`agent-read.service.ts` đều đã gỡ.
 
-### 5.6 Tám bất biến có unit test
+### 5.6 Bất biến có unit test — sau `API-19`
 
-`registry.spec.ts` và `registry-schema.spec.ts` — đây là phần **thực sự** bảo đảm việc che dữ liệu, vì AC dạng "không bao giờ xuất hiện" không thể chứng minh bằng một bộ test hữu hạn chạy qua API.
+`registry.spec.ts` và `registry-schema.spec.ts`. Phần lớn bất biến cũ **đã mất đối tượng để canh** vì
+mọi thứ nay mở có chủ ý; những cái còn lại đổi cả mục đích:
 
-| Mã | Bất biến |
-|---|---|
-| I1 | `sortable ⇒ read`, `groupable ⇒ read` |
-| I2 | Danh sách bảng khớp chính xác 11 tên khoá cứng |
-| I3 | Không tên trường bị cấm nào lọt vào registry — từ `API-17` là đúng **12 tên** (8 tiền + 4 bí mật kỹ thuật) |
-| I4 | **Mọi** đường dẫn của schema phải hoặc nằm trong registry, hoặc nằm trong `deliberatelyExcluded` |
-| I5 | Metric chỉ trên trường `aggregatable && read` |
-| I6 | Văn bản tự do phải `filter: 'none'`, không sắp xếp, không nhóm |
-| I6b | Văn bản tự do KHÔNG được nằm ở đường dẫn lồng — `maskRows` chỉ che được trường cấp một (`QA-1`) |
-| I7 | Danh sách trắng `before`/`after` khớp chính xác tập tên `read: true` của `orders`, và không tên nào trong đó là trường bị chặn |
+| Mã | Bất biến | Trạng thái |
+|---|---|---|
+| I1 | `sortable ⇒ read`, `groupable ⇒ read` | **GỠ** — mọi trường đều `read` |
+| I2 | Danh sách bảng khớp chính xác 11 tên | **ĐỔI NGHĨA** — nay là "11 bảng **có mô tả**", không phải "11 bảng đọc được" |
+| I3 | Không tên bị chặn nào lọt vào từ điển | **GIỮ, siết hơn** — đúng 4 tên, so khớp theo từng đoạn đường dẫn, cộng ca cho `stripDeniedDeep` |
+| I4 | Mọi đường dẫn của schema phải có mô tả hoặc nằm ở `deliberatelyExcluded` | **GIỮ, đổi mục đích** — nay canh **chất lượng từ điển**, không canh rò dữ liệu: đỏ nghĩa là "field mới chưa ai viết ghi chú", không phải "đang rò" |
+| I5 | Metric chỉ trên trường `aggregatable && read` | **GỠ** — tổng hợp trên trường chữ trả 0/null, không còn bị chặn trước |
+| I6 | Văn bản tự do phải `filter: 'none'` | **GỠ** — `API-19` cho lọc |
+| I6b | Văn bản tự do không nằm ở đường dẫn lồng | Đã gỡ từ `API-11` |
+| I7 | Danh sách trắng `before`/`after` | **GỠ** — cơ chế đã xoá (§5.5) |
+| **MỚI** | Mọi trường trong từ điển phải mở đủ quyền (`read` + `filter: 'full'` + `sortable` + `groupable`) | Ca **quan trọng nhất** của `API-19`: `mongo-filter.ts` vẫn đọc `policy.filter`, nên một dòng `filter: 'none'` sót lại sẽ âm thầm khoá đúng thứ vừa mở, và chỉ lộ ra khi có người thật gặp lỗi |
+| **MỚI** | Nhóm/sắp xếp theo `orders.assignee`, `orderLogs.userId` phải chạy | Khoá đúng ca người dùng báo hỏng — sản lượng theo từng người |
 
-**I4 là bất biến quan trọng nhất**: thêm một field mới vào `OrderEntity` mà không quyết định gì về nó thì test đỏ. Đây là cơ chế duy nhất ngăn kiểu rò "field mới lọt vào theo mặc định" khi hệ thống tiến hoá — đúng loại lỗi mà test chạy qua API không bao giờ bắt được, vì lúc viết test thì field đó còn chưa tồn tại.
+Ngoài ra `agent-query.service.spec.ts` giữ ma trận probe cũ nhưng đảo chiều: năm hướng đầu phải **chạy
+được** (kể cả trên bảng không ai mô tả), hướng thứ sáu — bốn tên bị chặn — phải hỏng ở **mọi** vị trí.
 
 ### 5.7 Tài liệu
 
@@ -328,6 +358,7 @@ Thứ tự tìm thư mục: env `AGENT_DOCS_DIR` → `<thư mục chạy>/agent-
   đó nên số hiển thị không lệch khỏi số chặn (`API-4`).
 - `maxTimeMS` **chưa từng được dùng ở đâu khác trong repo**. Nó phải có mặt ở mọi `find()` và `aggregate()` của module; sót một chỗ là mất chốt chặn đúng ở chỗ đó.
 - `readPreference: 'secondaryPreferred'` — tải đọc của agent rơi vào secondary của replica set, không vào primary đang phục vụ sản xuất.
+- **Đọc thẳng qua `Connection.collection()`, không qua model mongoose** (`API-19`): bề mặt là mọi collection nên tra model theo `entityName` không còn với tới được. An toàn vì toàn repo dùng `_id` **chuỗi** (`DatabaseEntityAbstract` sinh nanoid). **Giới hạn đã biết:** collection nào dùng `ObjectId` làm `_id` thì lọc theo `_id` và phân trang theo con trỏ trên bảng đó sẽ không khớp, vì mất lớp ép kiểu của mongoose.
 - Phân trang đọc thô dùng **con trỏ trên `_id`**, không dùng `skip`: bảng `orders` lớn, `skip` sâu vừa chậm vừa vi phạm giới hạn tải.
 
 ## 7. Permissions
@@ -337,6 +368,8 @@ Thứ tự tìm thư mục: env `AGENT_DOCS_DIR` → `<thư mục chạy>/agent-
 Cụm `partnerApi` sẵn có trong `ApiConfigService` **cố ý không được tái dùng**: nó thiết kế cho ký HMAC theo đối tác và chưa module nào dùng, kéo vào đây chỉ làm bề mặt xác thực phức tạp hơn mà không thêm bảo đảm nào cho một bên gọi duy nhất.
 
 So sánh khoá bằng `crypto.timingSafeEqual` trên bản băm SHA-256 — độ dài khác nhau không làm lộ thông tin qua thời gian. Thiếu cấu hình khoá thì mọi endpoint **đóng**, không có chế độ "mở khi thiếu cấu hình".
+
+**Sau `API-19`, khoá này là ranh giới bảo vệ gần như duy nhất.** Trước đây ai cầm khoá cũng chỉ đọc được 11 bảng đã lọc trường; nay cầm khoá là đọc được gần như toàn bộ cơ sở dữ liệu. Hai việc vận hành đi kèm, không phải khuyến nghị suông: **đừng phơi `/v1/agent/*` ra Internet công cộng** khi không cần, và **đổi khoá** như đổi một mật khẩu quản trị chứ không như một token đọc.
 
 ## 8. Trang Swagger `/documentation` (`API-5`, `API-15`, `HF-1`, `API-16`)
 

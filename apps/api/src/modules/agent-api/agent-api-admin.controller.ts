@@ -56,9 +56,9 @@ export class AgentApiAdminController {
   @Auth([RoleType.Admin])
   @ApiOperation({ summary: 'Bảng/trường agent đọc được, hạn mức, tình trạng khoá' })
   @HttpCode(HttpStatus.OK)
-  overview(@AuthUser() user: UserDocument): GetAgentAdminOverviewResDto {
+  async overview(@AuthUser() user: UserDocument): Promise<GetAgentAdminOverviewResDto> {
     this.logger.info({ message: JSON.stringify({ method: 'GET', url: '/agent-admin/overview', userId: user._id }) });
-    return { success: true, data: this.admin.overview() };
+    return { success: true, data: await this.admin.overview() };
   }
 
   /**

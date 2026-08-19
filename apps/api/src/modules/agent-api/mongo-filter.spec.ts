@@ -102,47 +102,59 @@ describe('BR-4 — giá trị chỉ nhận nguyên thuỷ', () => {
   });
 });
 
-describe('AC-05 — chính sách trường: cú pháp đổi, QUYỀN KHÔNG ĐỔI', () => {
-  // Ca đắt nhất nếu sai: hai câu chỉ khác nhau MỘT LỚP OBJECT, và một câu phải
-  // qua còn câu kia phải chặn.
-  it('dạng rút gọn trên trường chỉ-so-bằng ĐƯỢC PHÉP (nó là $eq)', () => {
+/**
+ * `API-19` — mức lọc nay là `full` ở mọi trường, nên phần lớn ca cũ của nhóm
+ * này đã đảo chiều. Giữ lại hai thứ đáng giữ:
+ *  1. Bốn tên bị chặn phải hỏng ở mọi dạng cú pháp, kể cả nằm sâu trong cây.
+ *  2. Cơ chế `filter: 'eq'` / `'none'` VẪN chạy — nó là đường lui của một
+ *     change request siết lại. Kiểm bằng spec giả, vì từ điển thật không còn
+ *     trường nào ở hai mức đó.
+ */
+describe('API-19 — mức lọc: mở hết, trừ bốn tên bị chặn', () => {
+  it('email khách lọc được ở MỌI dạng, kể cả dò theo phần đầu', () => {
     expect(service.buildFilter(orders, { userEmail: 'a@b.c' })).toEqual({ userEmail: 'a@b.c' });
+    expect(codeOf(() => service.buildFilter(orders, { userEmail: { $gt: 'a' } }))).toBe('NO_ERROR');
+    expect(codeOf(() => service.buildFilter(customers, { userEmail: { $startsWith: 'a' } }))).toBe('NO_ERROR');
   });
 
-  it('$gt trên chính trường đó bị TỪ CHỐI — đó là dò dần giá trị', () => {
-    expect(codeOf(() => service.buildFilter(orders, { userEmail: { $gt: 'a' } }))).toBe('FIELD_NOT_ALLOWED');
-    expect(dbCalls).toEqual([]);
+  it('văn bản gõ tay lọc được, kể cả dạng rút gọn', () => {
+    expect(codeOf(() => service.buildFilter(orders, { toolResultNote: 'x' }))).toBe('NO_ERROR');
+    expect(codeOf(() => service.buildFilter(orders, { toolResultNote: { $eq: 'x' } }))).toBe('NO_ERROR');
   });
 
-  it.each([
-    ['$ne', { userEmail: { $ne: 'a@b.c' } }],
-    ['$in', { userEmail: { $in: ['a@b.c'] } }],
-    ['$nin', { userEmail: { $nin: ['a@b.c'] } }],
-  ])('%s vẫn được phép trên trường chỉ-so-bằng', (_label, filter) => {
-    expect(codeOf(() => service.buildFilter(customers, filter))).toBe('NO_ERROR');
-  });
-
-  it.each([
-    ['$lt', { userEmail: { $lt: 'z' } }],
-    ['$startsWith', { userEmail: { $startsWith: 'a' } }],
-  ])('%s bị từ chối trên trường chỉ-so-bằng', (_label, filter) => {
-    expect(codeOf(() => service.buildFilter(customers, filter))).toBe('FIELD_NOT_ALLOWED');
-  });
-
-  it('văn bản tự do không lọc được, kể cả dạng rút gọn', () => {
-    expect(codeOf(() => service.buildFilter(orders, { toolResultNote: 'x' }))).toBe('FIELD_NOT_ALLOWED');
-    expect(codeOf(() => service.buildFilter(orders, { toolResultNote: { $eq: 'x' } }))).toBe('FIELD_NOT_ALLOWED');
-  });
-
-  it('giá vốn vẫn không lọc được ở mọi dạng', () => {
+  it('giá vốn lọc được ở mọi dạng', () => {
     for (const filter of [
       { 'variations.cost': 1 },
       { 'variations.cost': { $gt: 1 } },
       { $and: [{ 'variations.cost': { $lt: 99 } }] },
     ]) {
-      expect(codeOf(() => service.buildFilter(products, filter))).toBe('FIELD_NOT_ALLOWED');
+      expect(codeOf(() => service.buildFilter(products, filter))).toBe('NO_ERROR');
+    }
+  });
+
+  it('bí mật xác thực bị từ chối ở mọi dạng, và KHÔNG chạm DB', () => {
+    for (const filter of [
+      { password: 'x' },
+      { password: { $startsWith: '$2b$' } },
+      { $and: [{ userSku: 'ABC' }, { $or: [{ passwordSource: 'system' }] }] },
+    ]) {
+      expect(codeOf(() => service.buildFilter(customers, filter))).toBe('FIELD_NOT_ALLOWED');
     }
     expect(dbCalls).toEqual([]);
+  });
+
+  it('đường lui còn nguyên: `filter: eq` vẫn chặn toán tử quét, `none` vẫn chặn tất', () => {
+    const tightened = {
+      ...orders,
+      fields: {
+        ...orders.fields,
+        eqOnly: { ...orders.fields.userSku, filter: 'eq' as const },
+        noFilter: { ...orders.fields.userSku, filter: 'none' as const },
+      },
+    };
+    expect(codeOf(() => service.buildFilter(tightened, { eqOnly: 'x' }))).toBe('NO_ERROR');
+    expect(codeOf(() => service.buildFilter(tightened, { eqOnly: { $gt: 'x' } }))).toBe('FIELD_NOT_ALLOWED');
+    expect(codeOf(() => service.buildFilter(tightened, { noFilter: 'x' }))).toBe('FIELD_NOT_ALLOWED');
   });
 });
 
@@ -243,31 +255,28 @@ describe('AC-06 — độ sâu và hình dạng', () => {
   });
 });
 
-describe('AC-14 sau `API-17` — nhật ký ghi nguyên giá trị lọc, vì không còn trường nào không đọc được', () => {
+describe('AC-14 sau `API-19` — nhật ký ghi nguyên câu hỏi agent đã hỏi', () => {
   /**
-   * Cơ chế lược VẪN CÒN và vẫn đúng luật "giá trị của trường không đọc được
-   * thì không ghi vào nhật ký". Nhưng sau `API-17` KHÔNG còn trường nào trong
-   * registry có `read: false`, nên trên thực tế không có gì để lược nữa.
+   * Cơ chế lược giá trị đã được GỠ ở `API-19`: nó chỉ áp cho trường
+   * `read: false`, mà nay không còn trường nào như vậy — bốn tên bị chặn thì
+   * không lọc được nên không bao giờ tới tầng nhật ký.
    *
-   * Hệ quả cần biết: email khách dùng làm điều kiện lọc NAY ĐƯỢC GHI NGUYÊN VĂN
-   * vào nhật ký gọi API. Đó là hệ quả trực tiếp của việc người dùng chốt mở đọc
-   * email, không phải một quyết định riêng của tầng nhật ký.
+   * Hệ quả cần biết: email và điện thoại khách dùng làm điều kiện lọc được ghi
+   * NGUYÊN VĂN vào `agentApiLogs`. Đó là hệ quả trực tiếp của việc mở đọc
+   * chúng, không phải một quyết định riêng của tầng nhật ký.
    */
-  it('giá trị lọc trên email nay ghi nguyên văn', () => {
+  it('giá trị lọc trên email ghi nguyên văn', () => {
     expect(service.digest(orders, { userEmail: { $in: ['a@b.c', 'c@d.e'] } })).toEqual({
       userEmail: { $in: ['a@b.c', 'c@d.e'] },
     });
   });
 
-  it('cơ chế lược vẫn sống: trường có `read: false` thì giá trị bị thay bằng dấu lược', () => {
-    const fake = {
-      ...orders,
-      fields: { ...orders.fields, secretish: { ...orders.fields.userSku, read: false } },
-    };
-    expect(service.digest(fake, { secretish: 'x' })).toEqual({ secretish: '<redacted>' });
+  it('cây điều kiện lồng giữ nguyên hình dạng', () => {
+    const node = { $and: [{ userSku: 'ABC' }, { $or: [{ quantity: { $gte: 5 } }] }] };
+    expect(service.digest(orders, node)).toEqual(node);
   });
 
-  it('không trường nào trong registry còn `read: false` — nhánh lược nay không có đầu vào thật', () => {
+  it('không trường nào trong từ điển còn `read: false`', () => {
     const hidden = Object.entries(orders.fields)
       .filter(([, p]) => !p.read)
       .map(([name]) => name);

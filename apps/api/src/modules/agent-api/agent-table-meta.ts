@@ -1,6 +1,7 @@
 import type { AgentFieldMeta, AgentTableSummary } from 'shared';
 
 import type { AgentTableSpec } from './registry';
+import { AGENT_DENY_FIELD_NAMES } from './registry';
 
 /**
  * Dựng metadata của một bảng từ registry — **nơi duy nhất** làm việc này
@@ -46,3 +47,27 @@ export const buildTableMeta = (spec: AgentTableSpec): AgentTableSummary => {
     excludedFields: [...spec.deliberatelyExcluded],
   };
 };
+
+/**
+ * Khung mô tả cho collection KHÔNG có trong từ điển (`API-19`).
+ *
+ * `fields: []` không có nghĩa "không đọc được trường nào" mà là "chưa ai mô tả
+ * trường nào" — bảng vẫn đọc, lọc, nhóm được đầy đủ. Nói rõ điều đó trong
+ * `description` là bắt buộc: một danh sách trường rỗng nhìn từ phía agent
+ * trông y hệt một bảng bị khoá, và nó sẽ bỏ qua bảng đó.
+ *
+ * `excludedFields` vẫn liệt kê bốn tên bị chặn để agent biết vì sao chúng vắng
+ * mặt, thay vì tưởng dữ liệu hỏng.
+ */
+export const buildOpenTableMeta = (key: string): AgentTableSummary => ({
+  key,
+  description:
+    'Bảng chưa có mô tả nghiệp vụ. Đọc/lọc/nhóm được đầy đủ như mọi bảng khác; ' +
+    'gọi GET /agent/tables/' + key + '/rows?limit=1 để xem nó có những trường nào.',
+  entityName: '',
+  defaultSort: '_id',
+  fieldCount: 0,
+  readableFields: [],
+  fields: [],
+  excludedFields: [...AGENT_DENY_FIELD_NAMES],
+});

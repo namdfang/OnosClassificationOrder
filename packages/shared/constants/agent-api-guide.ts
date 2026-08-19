@@ -47,7 +47,7 @@ export const AGENT_ERROR_MEANING: Record<AgentErrorCode, string> = {
   [AGENT_ERROR_CODES.unauthorized]:
     'Thiếu hoặc sai khoá ở header X-Agent-Api-Key. Cũng trả về khi máy chủ chưa cấu hình khoá.',
   [AGENT_ERROR_CODES.tableNotAllowed]:
-    'Bảng này không nằm trong danh sách trắng. Xem tab Bảng dữ liệu để biết bảng nào đọc được.',
+    'Tên bảng không hợp lệ. Mọi collection có thật đều đọc được — kiểm tra lại chính tả tên bảng ở tab Bảng dữ liệu.',
   [AGENT_ERROR_CODES.fieldNotAllowed]:
     'Trường này không đọc/lọc/nhóm được theo chính sách. Xem cột Lọc và Nhóm của bảng trường.',
   [AGENT_ERROR_CODES.writeNotSupported]: 'Bộ API chỉ đọc. Không có thao tác ghi nào được hỗ trợ.',

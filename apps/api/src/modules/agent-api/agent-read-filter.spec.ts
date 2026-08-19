@@ -57,48 +57,50 @@ describe('AC-01: lọc theo trường có mức lọc đầy đủ', () => {
   });
 });
 
-describe('AC-02: chính sách trường KHÔNG bị nới ở đường mới', () => {
-  it('trường văn bản tự do (filter: none) vẫn không lọc được', async () => {
+/**
+ * `API-19` đảo phần lớn nhóm này: mức lọc nay mở khắp nơi, nên "không nới ở
+ * đường mới" đổi nghĩa thành "**không siết nhầm** ở đường mới, và bốn tên bị
+ * chặn thì vẫn chặn ở cả hai đường".
+ */
+describe('AC-02: hai đường lọc phải nói cùng một luật', () => {
+  it('văn bản tự do lọc được ở đường đọc thô, y như POST /query', async () => {
     expect(
       await codeOf(() =>
-        service.readRows('orders', 10, undefined, undefined, JSON.stringify({ note: 'x' })),
+        service.readRows('orders', 10, undefined, undefined, JSON.stringify({ holdReason: 'x' })),
       ),
-    ).toBe('FIELD_NOT_ALLOWED');
+    ).toBe('NO_ERROR');
   });
 
-  it('trường liên hệ khách vẫn CHỈ so bằng — toán tử quét bị từ chối', async () => {
+  it('email khách dò được theo phần đầu', async () => {
     expect(
       await codeOf(() =>
-        service.readRows(
-          'customers',
-          10,
-          undefined,
-          undefined,
-          JSON.stringify({ userEmail: { $startsWith: 'a' } }),
-        ),
+        service.readRows('customers', 10, undefined, undefined, JSON.stringify({ userEmail: { $startsWith: 'a' } })),
       ),
-    ).toBe('FIELD_NOT_ALLOWED');
+    ).toBe('NO_ERROR');
   });
 
-  it('trường ngoài danh sách trắng vẫn bị từ chối', async () => {
+  it('giá vốn lọc được', async () => {
     expect(
       await codeOf(() =>
-        service.readRows(
-          'productConfigs',
-          10,
-          undefined,
-          undefined,
-          JSON.stringify({ 'variations.cost': { $gt: 1 } }),
-        ),
+        service.readRows('productConfigs', 10, undefined, undefined, JSON.stringify({ 'variations.cost': { $gt: 1 } })),
       ),
-    ).toBe('FIELD_NOT_ALLOWED');
+    ).toBe('NO_ERROR');
   });
 
-  it('không lời gọi DB nào khi điều kiện bị từ chối', async () => {
-    await codeOf(() =>
-      service.readRows('orders', 10, undefined, undefined, JSON.stringify({ note: 'x' })),
-    );
+  it('bảng ngoài từ điển đọc được, lọc được', async () => {
+    expect(
+      await codeOf(() => service.readRows('users', 10, undefined, undefined, JSON.stringify({ status: 'active' }))),
+    ).toBe('NO_ERROR');
+    expect(calls[0].filter).toEqual({ status: 'active' });
+  });
 
+  it('bí mật xác thực vẫn bị từ chối, và KHÔNG lời gọi DB nào', async () => {
+    expect(
+      await codeOf(() => service.readRows('users', 10, undefined, undefined, JSON.stringify({ password: 'x' }))),
+    ).toBe('FIELD_NOT_ALLOWED');
+    expect(
+      await codeOf(() => service.readRows('customers', 10, undefined, ['password'])),
+    ).toBe('FIELD_NOT_ALLOWED');
     expect(calls).toEqual([]);
   });
 });
@@ -113,20 +115,17 @@ describe('chặn ghi và chạy mã ở đường mới, y như POST /query', ()
     expect(await codeOf(() => service.readRows('orders', 10, undefined, undefined, raw))).toBe('INVALID_QUERY');
   });
 
-  // `API-8` đổi MÃ LỖI của hai ca này, và mã mới chính xác hơn. Trước đây khoá
-  // có dấu chấm bị chặn thẳng vì DSL cũ không có trường lồng nào; nay
-  // `variations.sku` là tên trường hợp lệ, nên dấu chấm không còn là dấu hiệu
-  // tấn công — `a.b` chỉ đơn giản là một trường KHÔNG TỒN TẠI. Cùng lẽ đó,
-  // `{bừa: true}` nay là điều kiện trên một trường không có thật.
-  //
-  // Cả hai vẫn bị TỪ CHỐI; chỉ có lời giải thích gửi cho bên gọi là đúng hơn.
+  /**
+   * `API-19`: tên trường lạ KHÔNG còn là lỗi. Trước đây `{bừa: true}` bị từ
+   * chối vì trường phải khai trước; nay nó chỉ là điều kiện lọc trên một trường
+   * có thể tồn tại hoặc không — mongo trả về rỗng, đúng như khi hỏi mongo trực
+   * tiếp. Chặn nó lại chính là thứ làm agent tưởng bảng hỏng.
+   */
   it.each([
-    ['khoá có dấu chấm không phải trường thật', JSON.stringify({ 'a.b': 1 })],
-    ['tên trường không tồn tại', JSON.stringify({ bừa: true })],
-  ])('%s bị từ chối bằng FIELD_NOT_ALLOWED', async (_label, raw) => {
-    expect(await codeOf(() => service.readRows('orders', 10, undefined, undefined, raw))).toBe(
-      'FIELD_NOT_ALLOWED',
-    );
+    ['khoá có dấu chấm', JSON.stringify({ 'a.b': 1 })],
+    ['tên trường chưa ai mô tả', JSON.stringify({ bừa: true })],
+  ])('%s đi qua được, điều kiện gửi xuống nguyên dạng', async (_label, raw) => {
+    expect(await codeOf(() => service.readRows('orders', 10, undefined, undefined, raw))).toBe('NO_ERROR');
   });
 });
 

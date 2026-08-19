@@ -1,19 +1,14 @@
 import type { AgentTableSpec } from './field-policy';
-import { freeText, numeric, plain, readOnly } from './field-policy';
+import { freeText, numeric, plain } from './field-policy';
 
 /**
  * `productConfigs` — trả lời về sản phẩm, biến thể, cấu hình sản xuất.
  *
- * GIÁ: chỉ `variations[].retailPrice` được đọc. Sáu trường giá còn lại của
- * biến thể — `cost`, `nonShipCost`, `wholesalePrice`, `tiktokPrice`,
- * `expUsShipCost`, `tiktokShipCost` — đều **không có trong danh sách trắng**.
- * Hai trường đầu là giá vốn theo BR-4a §2; bốn trường sau SRS không nhắc tới
- * nhưng cùng bản chất rủi ro (giá nội bộ / biên lợi nhuận) và BA đã xác nhận
- * che ở bước `design_review`.
- *
- * `usImportTaxPerUnit` KHÔNG thuộc nhóm giá bị che: đó là thuế nhập khẩu US
- * công bố với khách ngay trên trang catalog (`customer-catalog.service.ts`),
- * nên agent CSKH thấy được là nhất quán với thứ khách đã thấy — xem `API-2`.
+ * GIÁ: `API-19` mở nốt sáu trường giá nội bộ của biến thể (`cost`,
+ * `nonShipCost`, `wholesalePrice`, `tiktokPrice`, `expUsShipCost`,
+ * `tiktokShipCost`) — trước đây chúng là nhóm bị che kỹ nhất của bảng này.
+ * Agent nay đọc được cả giá vốn lẫn biên lợi nhuận, nên **tự nó phải biết
+ * không đọc mấy con số đó cho khách nghe**; API không còn chặn hộ nữa.
  *
  * `variations` là mảng subdoc nên được chiếu theo từng trường con
  * (`variations.sku`, ...) — mongo `$project` giữ nguyên hình mảng.
@@ -22,7 +17,7 @@ export const productConfigsRegistry: AgentTableSpec = {
   key: 'productConfigs',
   description:
     'Cấu hình sản phẩm và biến thể. Trả lời sản phẩm có những biến thể nào, giá niêm yết bao nhiêu, ' +
-    'in được ở những vị trí nào, thời gian sản xuất và giao dự kiến. KHÔNG chứa giá vốn.',
+    'in được ở những vị trí nào, thời gian sản xuất và giao dự kiến, giá bán và giá vốn.',
   entityName: 'ProductConfigEntity',
   defaultSort: '_id',
   fields: {
@@ -51,41 +46,37 @@ export const productConfigsRegistry: AgentTableSpec = {
     shortDescription: freeText(),
     'variations.sku': plain('string', 'SKU biến thể, unique toàn hệ thống'),
     'variations.attributes': plain('string', 'Thuộc tính biến thể dạng nhãn - giá trị'),
-    'variations.retailPrice': numeric('Giá niêm yết — trường giá DUY NHẤT được trả ra'),
+    'variations.retailPrice': numeric('Giá niêm yết — con số công bố với khách'),
+    'variations.cost': numeric('GIÁ VỐN biến thể — nội bộ, không đọc cho khách'),
+    'variations.nonShipCost': numeric('Giá bán nonship hệ cũ'),
+    'variations.wholesalePrice': numeric('Giá sỉ — nội bộ'),
+    'variations.tiktokPrice': numeric('Giá kênh TikTok'),
+    'variations.expUsShipCost': numeric('Phí ship express US — nội bộ'),
+    'variations.tiktokShipCost': numeric('Phí ship kênh TikTok — nội bộ'),
     'variations.status': plain('enum'),
 
-    // ── `API-17` mở đọc: mở ĐỌC không kéo theo mở LỌC (AC-05)
-    'variations.weight': readOnly('number'),
-    'variations.width': readOnly('number'),
-    'variations.height': readOnly('number'),
-    'variations.length': readOnly('number'),
-    machineNumber: readOnly('string', 'Mã máy mặc định, tra nghĩa ở workshopConfigs'),
-    toolResult: readOnly('string', 'Mã kết quả soát tool mặc định, tra nghĩa ở workshopConfigs'),
-    images: readOnly('string', 'Danh sách ảnh sản phẩm'),
-    level: readOnly('number', 'Mức độ khó của sản phẩm, dùng điều độ nội bộ'),
-    guide: readOnly('string', 'Hướng dẫn sản xuất'),
-    templateDescription: readOnly('string'),
-    itemSpecifics: readOnly('object', 'Thông số kỹ thuật công bố của sản phẩm'),
-    hideForSeller: readOnly('bool'),
-    enableDesignCheck: readOnly('bool'),
-    enableAffiliate: readOnly('bool'),
-    weight: readOnly('number'),
-    width: readOnly('number'),
-    height: readOnly('number'),
-    length: readOnly('number'),
-    updatedAt: readOnly('date'),
-    deletedAt: readOnly('date', 'Bản ghi bị xoá mềm. Mở ĐỌC KHÔNG đổi bộ lọc mặc định của truy vấn'),
+    // ── `API-17` mở đọc; `API-19` mở nốt lọc/sắp xếp/nhóm.
+    'variations.weight': plain('number'),
+    'variations.width': plain('number'),
+    'variations.height': plain('number'),
+    'variations.length': plain('number'),
+    machineNumber: plain('string', 'Mã máy mặc định, tra nghĩa ở workshopConfigs'),
+    toolResult: plain('string', 'Mã kết quả soát tool mặc định, tra nghĩa ở workshopConfigs'),
+    images: plain('string', 'Danh sách ảnh sản phẩm'),
+    level: plain('number', 'Mức độ khó của sản phẩm, dùng điều độ nội bộ'),
+    guide: plain('string', 'Hướng dẫn sản xuất'),
+    templateDescription: plain('string'),
+    itemSpecifics: plain('object', 'Thông số kỹ thuật công bố của sản phẩm'),
+    hideForSeller: plain('bool'),
+    enableDesignCheck: plain('bool'),
+    enableAffiliate: plain('bool'),
+    weight: plain('number'),
+    width: plain('number'),
+    height: plain('number'),
+    length: plain('number'),
+    updatedAt: plain('date'),
+    deletedAt: plain('date', 'Bản ghi bị xoá mềm. Mở ĐỌC KHÔNG đổi bộ lọc mặc định của truy vấn'),
   },
-  deliberatelyExcluded: [
-    // `API-17` — SÁU trong TÁM trường tiền BA chốt đích danh ở AC-02.
-    // `tiktokShipCost` được BA bổ sung ở note #41: cùng khối khai báo và cùng
-    // bản chất phí ship nội bộ với `nonShipCost`/`expUsShipCost`, mở lẻ một cái
-    // là phơi đúng thứ vừa khoá. Agent chỉ đọc được GIÁ BÁN (`retailPrice`).
-    'variations.cost',
-    'variations.nonShipCost',
-    'variations.wholesalePrice',
-    'variations.tiktokPrice',
-    'variations.expUsShipCost',
-    'variations.tiktokShipCost',
-  ],
+  // `API-19`: không còn trường nào của bảng này bị loại trừ.
+  deliberatelyExcluded: [],
 };

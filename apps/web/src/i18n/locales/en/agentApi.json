@@ -49,7 +49,7 @@
   },
   "errors": {
     "UNAUTHORIZED": "Missing or wrong key in the X-Agent-Api-Key header. Also returned when the server has no key configured.",
-    "TABLE_NOT_ALLOWED": "This table is not in the allowlist. See the Data tables tab for what is readable.",
+    "TABLE_NOT_ALLOWED": "Invalid table name. Every real collection is readable — check the spelling against the Tables tab.",
     "FIELD_NOT_ALLOWED": "This field cannot be read, filtered or grouped under policy. Check the Filter and Group columns.",
     "WRITE_NOT_SUPPORTED": "The API is read-only. No write operation is supported.",
     "INVALID_QUERY": "The query is malformed or uses a disallowed operator.",
@@ -85,7 +85,8 @@
     "bool": "boolean",
     "objectId": "identifier",
     "enum": "enum",
-    "object": "object"
+    "object": "object",
+    "any": "unknown type"
   },
   "filterLevel": {
     "none": "not filterable",

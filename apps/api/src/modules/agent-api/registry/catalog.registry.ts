@@ -1,5 +1,5 @@
 import type { AgentTableSpec } from './field-policy';
-import { freeText, numeric, plain, readOnly } from './field-policy';
+import { freeText, numeric, plain } from './field-policy';
 
 /**
  * Sáu bảng danh mục nhỏ cộng bảng thông báo khách. Gom chung một file vì mỗi
@@ -25,8 +25,8 @@ export const productCategoriesRegistry: AgentTableSpec = {
     parentId: plain('objectId', 'Danh mục cha, nếu có'),
 
     // ── `API-17` mở đọc
-    updatedAt: readOnly('date'),
-    deletedAt: readOnly('date', 'Bản ghi bị xoá mềm. Mở ĐỌC KHÔNG đổi bộ lọc mặc định của truy vấn'),
+    updatedAt: plain('date'),
+    deletedAt: plain('date', 'Bản ghi bị xoá mềm. Mở ĐỌC KHÔNG đổi bộ lọc mặc định của truy vấn'),
   },
   deliberatelyExcluded: [],
 };
@@ -47,8 +47,8 @@ export const collectionsRegistry: AgentTableSpec = {
     isActive: plain('bool'),
 
     // ── `API-17` mở đọc
-    updatedAt: readOnly('date'),
-    deletedAt: readOnly('date', 'Bản ghi bị xoá mềm. Mở ĐỌC KHÔNG đổi bộ lọc mặc định của truy vấn'),
+    updatedAt: plain('date'),
+    deletedAt: plain('date', 'Bản ghi bị xoá mềm. Mở ĐỌC KHÔNG đổi bộ lọc mặc định của truy vấn'),
   },
   deliberatelyExcluded: [],
 };
@@ -78,8 +78,8 @@ export const promotionsRegistry: AgentTableSpec = {
     status: plain('enum'),
 
     // ── `API-17` mở đọc
-    updatedAt: readOnly('date'),
-    deletedAt: readOnly('date', 'Bản ghi bị xoá mềm. Mở ĐỌC KHÔNG đổi bộ lọc mặc định của truy vấn'),
+    updatedAt: plain('date'),
+    deletedAt: plain('date', 'Bản ghi bị xoá mềm. Mở ĐỌC KHÔNG đổi bộ lọc mặc định của truy vấn'),
   },
   deliberatelyExcluded: [],
 };
@@ -97,10 +97,14 @@ export const factoriesRegistry: AgentTableSpec = {
     name: plain('string'),
     shortName: plain('string'),
     isActive: plain('bool'),
+    flowType: plain(
+      'enum',
+      "Luồng fulfillment của xưởng: 'standard' đủ 6 công đoạn, 'merged' luồng rút gọn (Ép và May ra tự xong theo chặng trước)",
+    ),
 
     // ── `API-17` mở đọc
-    updatedAt: readOnly('date'),
-    deletedAt: readOnly('date', 'Bản ghi bị xoá mềm. Mở ĐỌC KHÔNG đổi bộ lọc mặc định của truy vấn'),
+    updatedAt: plain('date'),
+    deletedAt: plain('date', 'Bản ghi bị xoá mềm. Mở ĐỌC KHÔNG đổi bộ lọc mặc định của truy vấn'),
   },
   deliberatelyExcluded: [],
 };
@@ -118,8 +122,8 @@ export const machineTypesRegistry: AgentTableSpec = {
     isActive: plain('bool'),
 
     // ── `API-17` mở đọc
-    updatedAt: readOnly('date'),
-    deletedAt: readOnly('date', 'Bản ghi bị xoá mềm. Mở ĐỌC KHÔNG đổi bộ lọc mặc định của truy vấn'),
+    updatedAt: plain('date'),
+    deletedAt: plain('date', 'Bản ghi bị xoá mềm. Mở ĐỌC KHÔNG đổi bộ lọc mặc định của truy vấn'),
   },
   deliberatelyExcluded: [],
 };
@@ -144,11 +148,11 @@ export const workshopConfigsRegistry: AgentTableSpec = {
     stage: plain('enum', 'Công đoạn xưởng gắn với mã lỗi này'),
 
     // ── `API-17` mở đọc
-    color: readOnly('string', 'Màu hiển thị của mã trên giao diện nội bộ'),
-    icon: readOnly('string'),
-    reworkTarget: readOnly('string', 'Chặng mà đơn bị đẩy về khi gặp mã lỗi này'),
-    updatedAt: readOnly('date'),
-    deletedAt: readOnly('date', 'Bản ghi bị xoá mềm. Mở ĐỌC KHÔNG đổi bộ lọc mặc định của truy vấn'),
+    color: plain('string', 'Màu hiển thị của mã trên giao diện nội bộ'),
+    icon: plain('string'),
+    reworkTarget: plain('string', 'Chặng mà đơn bị đẩy về khi gặp mã lỗi này'),
+    updatedAt: plain('date'),
+    deletedAt: plain('date', 'Bản ghi bị xoá mềm. Mở ĐỌC KHÔNG đổi bộ lọc mặc định của truy vấn'),
   },
   deliberatelyExcluded: [],
 };
@@ -176,10 +180,10 @@ export const customerNotificationsRegistry: AgentTableSpec = {
     customerId: plain('objectId', 'Trỏ tới customers._id; rỗng = gửi cho TẤT CẢ khách'),
 
     // ── `API-17` mở đọc: danh tính nhân viên đã gửi
-    createdByUserId: readOnly('string'),
-    createdByName: readOnly('string', 'Tên nhân viên đã gửi thông báo'),
-    updatedAt: readOnly('date'),
-    deletedAt: readOnly('date', 'Bản ghi bị xoá mềm. Mở ĐỌC KHÔNG đổi bộ lọc mặc định của truy vấn'),
+    createdByUserId: plain('string'),
+    createdByName: plain('string', 'Tên nhân viên đã gửi thông báo'),
+    updatedAt: plain('date'),
+    deletedAt: plain('date', 'Bản ghi bị xoá mềm. Mở ĐỌC KHÔNG đổi bộ lọc mặc định của truy vấn'),
   },
   deliberatelyExcluded: [],
 };

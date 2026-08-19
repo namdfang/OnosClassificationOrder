@@ -128,7 +128,7 @@ Kết quả trả về mã công đoạn — **dịch sang tên tiếng Việt**
 |---|---|---|
 | `INVALID_QUERY` — *old filter syntax* | Bạn viết `{field, op, value}` — **cú pháp cũ, đã bỏ** | Viết lại theo §1 |
 | `INVALID_QUERY` — *Operator ... not supported* | Toán tử ngoài bảng §2 | Xem lại §2; `$regex` thì đổi sang `$startsWith` |
-| `FIELD_NOT_ALLOWED` — *only supports exact-match* | Trường liên hệ khách chỉ so bằng được | Dùng `$eq` với đúng giá trị bạn đã biết |
+| `FIELD_NOT_ALLOWED` — *authentication secret or session trace* | Bạn chạm vào một trong bốn tên bị chặn (`password`, `passwordSource`, `ip`, `userAgent`) | Không có đường vòng. Mọi trường khác đều lọc được |
 | `FIELD_NOT_ALLOWED` — *is free text* | Bạn đang lọc trên ghi chú | Không lọc được. Tra bằng mã đơn hoặc mã khách rồi **đọc** ghi chú |
 | `FIELD_NOT_ALLOWED` — *is not available* | Trường không có, hoặc bạn không được đọc | Xem [`WhatYouCannotSee.md`](WhatYouCannotSee.md) |
 | `INVALID_QUERY` — *nested deeper than* | Cây điều kiện quá sâu | Gộp lại; hiếm khi cần quá hai tầng |

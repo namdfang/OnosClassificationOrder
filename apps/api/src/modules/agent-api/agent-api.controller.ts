@@ -64,10 +64,10 @@ export class AgentApiController {
   @Throttle({ default: { limit: AGENT_API_RATE_LIMIT_PER_MIN, ttl: AGENT_API_RATE_LIMIT_TTL_MS } })
   @ApiOperation({ summary: agentSummary('listTables'), description: AGENT_SWAGGER_DESCRIPTION.listTables })
   @HttpCode(HttpStatus.OK)
-  listTables(): ListAgentTablesResDto {
+  async listTables(): Promise<ListAgentTablesResDto> {
     const startedAt = Date.now();
     this.log('GET', '/agent/tables');
-    const data = this.read.listTables();
+    const data = await this.read.listTables();
     this.audit.write({
       capability: 'list_tables',
       returned: data.length,
