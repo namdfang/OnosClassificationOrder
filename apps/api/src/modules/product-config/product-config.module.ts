@@ -24,7 +24,7 @@ import { ProductConfigService } from './product-config.service';
     FactoryModule,
     MachineTypeModule,
     ProductCategoryModule,
-    // Cờ migration 1 lần `design_review_shortname_migration` (ORD-3).
+    // Cờ migration 1 lần `design_review_code_migration` (PRD-2).
     SystemConfigModule,
     WorkshopConfigModule,
   ],

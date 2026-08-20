@@ -41,11 +41,21 @@ const TOOL_RESULT_HAS = 'has-tool';
 const TOOL_RESULT_NONE = 'no-tool';
 
 /**
- * Cờ system_configs đánh dấu migration ORD-3 đã chạy — CHỈ chạy 1 lần mỗi môi
- * trường; restart sau đó KHÔNG được đè `shortName` admin đã chỉnh tay. Value
- * lưu kèm log {oldShortName → newShortName} từng sản phẩm để đối chiếu.
+ * Cờ system_configs của migration PRD-2 — đổ `PRODUCT_TYPE_CODE_MAP` vào
+ * `designReviewCode`. CHỈ chạy 1 lần mỗi môi trường: restart sau đó KHÔNG
+ * được đè mã người dùng đã chỉnh tay trên UI.
+ *
+ * PHỤC HỒI: hỏng giữa chừng thì lần khởi động sau tự nhận lại việc khi cờ đã
+ * ở `running` quá `MIGRATION_STALE_MS`. Muốn chạy lại từ đầu bằng tay thì xoá
+ * document có `key` này trong `system_configs`.
+ *
+ * Migration ORD-3 ghi vào `shortName` đã bị GỠ HẲN (PRD-2) — khoá cũ
+ * `design_review_shortname_migration` không còn được đọc/ghi ở bất kỳ đâu.
  */
-const DESIGN_REVIEW_SHORTNAME_MIGRATION_KEY = 'design_review_shortname_migration';
+const DESIGN_REVIEW_CODE_MIGRATION_KEY = 'design_review_code_migration';
+
+/** Cờ `running` cũ hơn mốc này coi như lần chạy trước đã chết → được nhận lại. */
+const MIGRATION_STALE_MS = 10 * 60 * 1000;
 
 /** MongoDB duplicate-key error E11000 từ unique index `variations.sku`. */
 function isDuplicateVariationSkuError(err: unknown): boolean {
@@ -192,81 +202,140 @@ export class ProductConfigService implements OnModuleInit {
       await this.productConfigModel.updateOne({ _id: doc._id }, { $set: { printArea: converted } });
     }
 
-    await this.migrateShortNameToDesignReviewCodes();
+    await this.migrateDesignReviewCodes();
   }
 
   /**
-   * Migration MỘT LẦN (ORD-3): đổ mã tool duyệt thiết kế từ map hardcode
-   * `PRODUCT_TYPE_CODE_MAP` vào `ProductConfig.shortName` — sản phẩm khớp map
-   * (fullName trim + lowercase, đúng quy tắc map cũ khớp `order.type`) nhận
-   * mã GIỮ NGUYÊN TỪNG KÝ TỰ; sản phẩm KHÔNG khớp → shortName = '' (xóa giá
-   * trị auto-sinh cũ). Cờ `system_configs` chặn chạy lại — restart sau đó
-   * KHÔNG đè giá trị admin đã chỉnh tay. Giá trị cũ từng sản phẩm lưu vào
-   * value của cờ + console để đối chiếu (dữ liệu production ghi một chiều).
+   * Migration MỘT LẦN (PRD-2): đổ mã chạy tool duyệt thiết kế từ map hardcode
+   * `PRODUCT_TYPE_CODE_MAP` vào `ProductConfig.designReviewCode`.
+   *
+   * Khác migration ORD-3 đã bị gỡ (nó ghi vào `shortName` và XOÁ TRẮNG mọi sản
+   * phẩm không khớp map — 84 bản ghi mất tên viết tắt trên local):
+   *  - Chỉ ghi vào `designReviewCode`, TUYỆT ĐỐI không đụng `shortName`.
+   *  - Sản phẩm không khớp map thì BỎ QUA, không ghi, không xoá.
+   *  - Ghi kế hoạch (kèm giá trị cũ) vào cờ TRƯỚC khi sửa dữ liệu, để hỏng
+   *    giữa chừng vẫn còn dấu vết đối chiếu.
+   *  - Cờ `running` quá hạn thì lần khởi động sau nhận lại việc, không kẹt
+   *    vĩnh viễn như cách chiếm cờ của ORD-3.
+   *
+   * Quy tắc khớp GIỮ NGUYÊN của ORD-3 (fullName trim + lowercase) để mã gán ra
+   * không đổi. Idempotent: chạy lần hai không đổi thêm bản ghi nào.
    */
-  private async migrateShortNameToDesignReviewCodes(): Promise<void> {
-    // CLAIM ATOMIC trước khi migrate: app bootstrap 2 Nest context song song
-    // (`bootstrap()` + `bootstrapMicroservice()` ở main.ts) nên onModuleInit
-    // chạy 2 lần cùng lúc — get-rồi-create sẽ đụng E11000 trên unique `key`.
-    // Upsert $setOnInsert: chỉ context TẠO được cờ (upsertedCount=1) mới chạy;
-    // cờ đã tồn tại (context kia / lần deploy trước) → bỏ qua.
+  private async migrateDesignReviewCodes(): Promise<void> {
+    const systemConfigs = this.productConfigModel.db.collection('system_configs');
     const now = new Date();
-    const claimed = await this.productConfigModel.db.collection('system_configs').updateOne(
-      { key: DESIGN_REVIEW_SHORTNAME_MIGRATION_KEY },
+    const description = 'PRD-2: designReviewCode = mã chạy tool duyệt thiết kế (migrate 1 lần từ PRODUCT_TYPE_CODE_MAP)';
+
+    // CLAIM: app bootstrap 2 Nest context song song (`bootstrap()` +
+    // `bootstrapMicroservice()` ở main.ts) nên onModuleInit chạy 2 lần cùng
+    // lúc. Context TẠO được cờ mới chạy; cờ đã có thì chỉ nhận lại khi lần
+    // chạy trước đã chết (running quá hạn).
+    const claimed = await systemConfigs.updateOne(
+      { key: DESIGN_REVIEW_CODE_MIGRATION_KEY },
       {
         $setOnInsert: {
-          key: DESIGN_REVIEW_SHORTNAME_MIGRATION_KEY,
+          key: DESIGN_REVIEW_CODE_MIGRATION_KEY,
           value: { status: 'running', startedAt: now.toISOString() },
-          description: 'ORD-3: shortName = mã tool design review (migrate 1 lần từ PRODUCT_TYPE_CODE_MAP)',
+          description,
           createdAt: now,
           updatedAt: now,
         },
       },
       { upsert: true },
     );
-    if (claimed.upsertedCount === 0) return;
+    if (claimed.upsertedCount === 0) {
+      const staleBefore = new Date(now.getTime() - MIGRATION_STALE_MS).toISOString();
+      const takeover = await systemConfigs.updateOne(
+        {
+          key: DESIGN_REVIEW_CODE_MIGRATION_KEY,
+          'value.status': 'running',
+          'value.startedAt': { $lt: staleBefore },
+        },
+        { $set: { value: { status: 'running', startedAt: now.toISOString() }, updatedAt: now } },
+      );
+      if (takeover.modifiedCount === 0) {
+        // Đã chạy ở lần khởi động trước (hoặc context song song đang chạy) →
+        // KHÔNG đụng dữ liệu nữa, nói rõ ra log để khỏi tưởng migration im lặng.
+        const flag = await systemConfigs.findOne<{ value?: { status?: string; updated?: number } }>({
+          key: DESIGN_REVIEW_CODE_MIGRATION_KEY,
+        });
+        console.log(
+          `[product-config-migration] designReviewCode: bỏ qua, cờ '${DESIGN_REVIEW_CODE_MIGRATION_KEY}' đã ở trạng thái ` +
+            `'${flag?.value?.status ?? '?'}' (lần trước cập nhật ${flag?.value?.updated ?? 0} sản phẩm) — 0 bản ghi đổi thêm`,
+        );
+        return;
+      }
+      console.warn('[product-config-migration] designReviewCode: nhận lại lần chạy trước đã chết');
+    }
 
     const products = await this.productConfigModel
-      .find({}, { fullName: 1, shortName: 1 })
-      .lean<{ _id: unknown; fullName?: string; shortName?: string }[]>();
+      .find({}, { fullName: 1, shortName: 1, designReviewCode: 1 })
+      .lean<{ _id: unknown; fullName?: string; shortName?: string; designReviewCode?: string }[]>();
 
-    const changes: Array<{ _id: string; fullName: string; oldShortName: string; newShortName: string }> = [];
+    const plan: Array<{ _id: string; fullName: string; oldCode: string; newCode: string; shortName: string }> = [];
     const knownNames = new Set<string>();
     for (const p of products) {
       const key = (p.fullName ?? '').trim().toLowerCase();
       knownNames.add(key);
-      const code = PRODUCT_TYPE_CODE_MAP[key] ?? '';
-      const current = (p.shortName ?? '').trim();
+      const code = PRODUCT_TYPE_CODE_MAP[key];
+      // Không khớp map → để trống, KHÔNG ghi gì (khác hẳn ORD-3).
+      if (!code) continue;
+      const current = (p.designReviewCode ?? '').trim();
       if (current === code) continue;
-      await this.productConfigModel.updateOne({ _id: p._id }, { $set: { shortName: code } });
-      changes.push({ _id: String(p._id), fullName: p.fullName ?? '', oldShortName: current, newShortName: code });
+      plan.push({
+        _id: String(p._id),
+        fullName: p.fullName ?? '',
+        oldCode: current,
+        newCode: code,
+        shortName: (p.shortName ?? '').trim(),
+      });
     }
 
     // Dòng map không khớp sản phẩm nào trong DB → bỏ qua + cảnh báo (không chặn).
     const unmatchedMapKeys = Object.keys(PRODUCT_TYPE_CODE_MAP).filter((k) => !knownNames.has(k));
+
+    // Ghi kế hoạch (kèm giá trị cũ) TRƯỚC khi sửa dữ liệu.
+    await systemConfigs.updateOne(
+      { key: DESIGN_REVIEW_CODE_MIGRATION_KEY },
+      {
+        $set: {
+          value: {
+            status: 'running',
+            startedAt: now.toISOString(),
+            scanned: products.length,
+            planned: plan.length,
+            unmatchedMapKeys,
+            plan,
+          },
+          description,
+          updatedAt: new Date(),
+        },
+      },
+    );
+
+    for (const c of plan) {
+      await this.productConfigModel.updateOne({ _id: c._id }, { $set: { designReviewCode: c.newCode } });
+    }
+
     console.log(
-      `[product-config-migration] design-review shortName: ${changes.length}/${products.length} sản phẩm cập nhật, ` +
-        `${unmatchedMapKeys.length} dòng map không khớp sản phẩm nào`,
+      `[product-config-migration] designReviewCode: ${plan.length}/${products.length} sản phẩm cập nhật, ` +
+        `${unmatchedMapKeys.length} dòng map không khớp sản phẩm nào (shortName KHÔNG bị đụng)`,
     );
     if (unmatchedMapKeys.length > 0) {
       console.warn(`[product-config-migration] map keys không khớp DB: ${unmatchedMapKeys.join(' | ')}`);
     }
-    for (const c of changes) {
-      console.log(`[product-config-migration] ${c.fullName}: '${c.oldShortName}' → '${c.newShortName}'`);
-    }
 
-    // Cờ đã tồn tại (claim ở trên) → set() đi nhánh update, không đụng unique key.
     await this.systemConfigService.set(
-      DESIGN_REVIEW_SHORTNAME_MIGRATION_KEY,
+      DESIGN_REVIEW_CODE_MIGRATION_KEY,
       {
         status: 'done',
         migratedAt: new Date().toISOString(),
         scanned: products.length,
-        updated: changes.length,
+        updated: plan.length,
         unmatchedMapKeys,
-        changes,
+        plan,
       },
-      'ORD-3: shortName = mã tool design review (migrate 1 lần từ PRODUCT_TYPE_CODE_MAP, kèm giá trị cũ)',
+      description,
     );
   }
 
@@ -524,7 +593,9 @@ export class ProductConfigService implements OnModuleInit {
     try {
       return await this.productConfigRepository.create({
         ...dto,
-        // KHÔNG auto-sinh shortName từ fullName (ORD-3) — không nhập thì để trống.
+        // KHÔNG auto-sinh shortName từ fullName — không nhập thì để trống
+        // (shortName là tên viết tắt của người dùng; mã chạy tool nằm ở
+        // `designReviewCode` — PRD-2).
         shortName: dto.shortName?.trim() ? dto.shortName.toUpperCase() : '',
         ...(dto.sku ? { sku: dto.sku.trim().toUpperCase() } : {}),
       });
@@ -646,7 +717,8 @@ export class ProductConfigService implements OnModuleInit {
 
       const data = {
         fullName: row.fullName.trim(),
-        // File trống cột viết tắt → giữ nguyên shortName hiện có / tạo mới để trống (ORD-3).
+        // File trống cột viết tắt → GIỮ NGUYÊN shortName hiện có / tạo mới để
+        // trống. Import chỉ ghi khi file có giá trị thật, không bao giờ xoá trắng.
         ...(row.shortName?.trim() ? { shortName: row.shortName.trim().toUpperCase() } : {}),
         machineNumber,
         machineTypeId: machineType._id,
@@ -762,7 +834,7 @@ export class ProductConfigService implements OnModuleInit {
         } else {
           await this.productConfigRepository.create({
             fullName,
-            // KHÔNG auto-sinh shortName từ fullName (ORD-3) — file trống thì để trống
+            // KHÔNG auto-sinh shortName từ fullName — file trống thì để trống
             // (`patch` đã chứa shortName khi file có giá trị).
             // File full không có cột Máy/Tool → sản phẩm mới mặc định KHÔNG tool
             // (cấu hình tool bổ sung qua file SKU cũ hoặc trang chi tiết).

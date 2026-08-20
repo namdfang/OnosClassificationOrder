@@ -221,6 +221,7 @@ function SectionCard({
 interface FormSnapshot {
   fullName: string;
   shortName: string;
+  designReviewCode: string;
   sku: string;
   slug: string;
   status: ProductConfigStatus;
@@ -283,6 +284,7 @@ export default function ProductDetailPage() {
 
   const [fullName, setFullName] = useState('');
   const [shortName, setShortName] = useState('');
+  const [designReviewCode, setDesignReviewCode] = useState('');
   const [sku, setSku] = useState('');
   const [slug, setSlug] = useState('');
   const [status, setStatus] = useState<ProductConfigStatus>(ProductConfigStatus.Active);
@@ -353,6 +355,7 @@ export default function ProductDetailPage() {
   const buildSnapshot = (): FormSnapshot => ({
     fullName,
     shortName,
+    designReviewCode,
     sku,
     slug,
     status,
@@ -392,6 +395,7 @@ export default function ProductDetailPage() {
     const s: FormSnapshot = {
       fullName: row.fullName || '',
       shortName: row.shortName || '',
+      designReviewCode: row.designReviewCode || '',
       sku: row.sku || '',
       slug: row.slug || '',
       status: row.status || ProductConfigStatus.Active,
@@ -427,6 +431,7 @@ export default function ProductDetailPage() {
     };
     setFullName(s.fullName);
     setShortName(s.shortName);
+    setDesignReviewCode(s.designReviewCode);
     setSku(s.sku);
     setSlug(s.slug);
     setStatus(s.status);
@@ -500,6 +505,7 @@ export default function ProductDetailPage() {
       sizeChartFile,
       fullName,
       shortName,
+      designReviewCode,
       sku,
       slug,
       status,
@@ -692,7 +698,8 @@ export default function ProductDetailPage() {
       toast.error(t('detail.fullNameRequired'));
       return;
     }
-    // shortName ĐƯỢC PHÉP trống (ORD-3): là mã tool design review, trống = sản phẩm không có mã.
+    // shortName và mã chạy tool (`designReviewCode`) đều ĐƯỢC PHÉP trống (PRD-2).
+    // Mã tool trống = sản phẩm không có mã, Design Review API trả `productCode: null`.
     if (isNew && !factoryId) {
       toast.error(t('detail.factoryRequired'));
       scrollToSection('sec-production');
@@ -727,6 +734,7 @@ export default function ProductDetailPage() {
     const patch: Partial<ProductConfigRow> = {
       fullName: fullName.trim(),
       shortName: shortName.trim(),
+      designReviewCode: designReviewCode.trim().toUpperCase(),
       sku: sku.trim() || undefined,
       slug: slug.trim() || undefined,
       status,
@@ -962,6 +970,22 @@ export default function ProductDetailPage() {
                     placeholder={t('detail.sidebar.machineNumberPlaceholder')}
                   />
                 </div>
+              </div>
+
+              {/*
+                Mã chạy tool duyệt thiết kế (PRD-2) — trường RIÊNG, cố ý đặt ở
+                khu Sản xuất chứ không cạnh ô "Tên viết tắt" trên header để
+                không ai nhầm hai thứ với nhau nữa.
+              */}
+              <div className="space-y-1.5 md:max-w-md">
+                <Label>{t('detail.production.designReviewCode')}</Label>
+                <Input
+                  value={designReviewCode}
+                  onChange={(e) => setDesignReviewCode(e.target.value)}
+                  placeholder={t('detail.production.designReviewCodePlaceholder')}
+                  className="font-mono uppercase"
+                />
+                <p className="text-xs text-muted-foreground">{t('detail.production.designReviewCodeHint')}</p>
               </div>
 
               <div className="space-y-1.5">

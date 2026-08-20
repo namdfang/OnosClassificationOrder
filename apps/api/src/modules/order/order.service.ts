@@ -6184,20 +6184,22 @@ export class OrderService implements OnModuleInit {
    * §7.0b). Không truyền → không giới hạn ngày (hành vi cũ).
    */
   /**
-   * `productCode` cho tool duyệt thiết kế — đọc từ `ProductConfig.shortName`
-   * trong DB (ORD-3, thay map hardcode `PRODUCT_TYPE_CODE_MAP` cũ). Quy tắc
-   * khớp GIỮ NGUYÊN như map cũ: `order.type` ↔ `fullName` exact, trim +
-   * case-insensitive. Không khớp sản phẩm nào / `shortName` trống → null
-   * (tool xử lý như "không khớp map" trước đây).
+   * `productCode` cho tool duyệt thiết kế — đọc từ `ProductConfig.designReviewCode`
+   * (PRD-2, trường RIÊNG; trước đó ORD-3 mượn `shortName` nên tên viết tắt của
+   * người dùng bị coi là khoá kỹ thuật). Quy tắc khớp GIỮ NGUYÊN như map cũ:
+   * `order.type` ↔ `fullName` exact, trim + case-insensitive. Không khớp sản
+   * phẩm nào / mã trống → null (tool xử lý như "không khớp map" trước đây).
+   *
+   * Tên field `productCode` trong response KHÔNG đổi — tool ngoài đang đọc.
    */
   private async resolveDesignReviewProductCode(type?: string | null): Promise<string | null> {
     const trimmed = type?.trim();
     if (!trimmed) return null;
     const escaped = trimmed.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-    const pc = await this.productConfigRepository.findOne<{ shortName?: string }>({
+    const pc = await this.productConfigRepository.findOne<{ designReviewCode?: string }>({
       fullName: { $regex: `^${escaped}$`, $options: 'i' },
     });
-    return pc?.shortName?.trim() || null;
+    return pc?.designReviewCode?.trim() || null;
   }
 
   /** Map raw order doc (field cần cho design review) → `DesignReviewOrder`. Dùng chung bởi `getNextDesignReviewOrder`/`getDesignReviewOrderByProductionId`. */

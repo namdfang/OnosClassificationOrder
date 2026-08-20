@@ -1497,7 +1497,7 @@ Hiển thị (chip đồng hồ, đỏ nếu quá hạn):
 
 ## 18. Design Review — public API cho tool ngoài duyệt thiết kế
 
-> **File BE:** `apps/api/src/modules/order/order.controller.ts` → `GET /v1/orders/design-review/next` + `GET /v1/orders/design-review/by-production-id/:productionId` + `GET /v1/orders/design-review/error-file-options` + `POST /v1/orders/design-review/result`, `apps/api/src/modules/order/order.service.ts` → `getNextDesignReviewOrder()` + `getDesignReviewOrderByProductionId()` + `getDesignReviewErrorFileOptions()` + `setDesignReviewResult()`, `apps/api/src/modules/order/design-review-product-code.ts` (`PRODUCT_TYPE_CODE_MAP` — CHỈ còn là dữ liệu migration 1 lần, runtime đọc `ProductConfig.shortName` qua `resolveDesignReviewProductCode()` — ORD-3, xem §18.5)
+> **File BE:** `apps/api/src/modules/order/order.controller.ts` → `GET /v1/orders/design-review/next` + `GET /v1/orders/design-review/by-production-id/:productionId` + `GET /v1/orders/design-review/error-file-options` + `POST /v1/orders/design-review/result`, `apps/api/src/modules/order/order.service.ts` → `getNextDesignReviewOrder()` + `getDesignReviewOrderByProductionId()` + `getDesignReviewErrorFileOptions()` + `setDesignReviewResult()`, `apps/api/src/modules/order/design-review-product-code.ts` (`PRODUCT_TYPE_CODE_MAP` — CHỈ còn là dữ liệu migration 1 lần, runtime đọc `ProductConfig.designReviewCode` qua `resolveDesignReviewProductCode()` — PRD-2, xem §18.5)
 > **Shared:** `packages/shared/dtos/production-order.dto.ts` (`GetNextDesignReviewOrderZod`/`GetNextDesignReviewOrderDto` + `DesignReviewOrderZod`/`DesignReviewAttributesZod`/`GetNextDesignReviewOrderResDto` + `GetDesignReviewOrderByIdResDto` + `DesignReviewErrorFileOptionZod`/`GetDesignReviewErrorFileOptionsResDto` + `SetDesignReviewResultZod`/`SetDesignReviewResultResDto`)
 > **Route:** không có FE — chỉ API cho hệ thống ngoài gọi.
 > **API:** `GET /v1/orders/design-review/next`, `GET /v1/orders/design-review/by-production-id/:productionId`, `GET /v1/orders/design-review/error-file-options`, `POST /v1/orders/design-review/result`
@@ -1540,7 +1540,7 @@ Sort: `priority desc` → `inProductionAt asc` → `createdAt asc` (đơn ưu ti
   data: {
     productionId: string;          // khóa duy nhất, luôn có — dùng để gọi lại POST /design-review/result
     orderId?: string;              // mã đơn marketplace/sàn (import từ sheet) — có thể rỗng với 1 số đơn
-    productCode: string | null;    // = `ProductConfig.shortName` của sản phẩm khớp `type` (ORD-3, đọc DB) — null nếu không khớp sản phẩm nào hoặc shortName trống
+    productCode: string | null;    // = `ProductConfig.designReviewCode` của sản phẩm khớp `type` (PRD-2, đọc DB) — null nếu không khớp sản phẩm nào hoặc mã trống. TÊN FIELD giữ nguyên cho tool ngoài
     attributes: { size?: string; color?: string };
     designs: DesignFields;        // chỉ các key có URL (front/back/sleeve/...), raw Drive URL (R2 pipeline đang tắt — xem ImageOptimization.md)
     mockupUrl?: string;            // ảnh mockup sản phẩm — tham chiếu trực quan khi soát design
@@ -1550,10 +1550,21 @@ Sort: `priority desc` → `inProductionAt asc` → `createdAt asc` (đơn ưu ti
 }
 ```
 
-### 18.5 Nguồn `productCode` — `ProductConfig.shortName` trong DB (ORD-3)
-`productCode` đọc từ **DB lúc gọi API**: `resolveDesignReviewProductCode()` (`order.service.ts`) khớp `OrderEntity.type` ↔ `ProductConfig.fullName` (exact, trim + case-insensitive — đúng quy tắc map cũ) rồi trả `shortName` của sản phẩm; không khớp sản phẩm nào / `shortName` trống → `null`. **Sửa/thêm mã ngay trên UI Products** (field "Tên viết tắt" trang chi tiết sản phẩm), không cần deploy.
+### 18.5 Nguồn `productCode` — `ProductConfig.designReviewCode` trong DB (PRD-2)
+`productCode` đọc từ **DB lúc gọi API**: `resolveDesignReviewProductCode()` (`order.service.ts`) khớp `OrderEntity.type` ↔ `ProductConfig.fullName` (exact, trim + case-insensitive — đúng quy tắc map cũ) rồi trả **`designReviewCode`** của sản phẩm; không khớp sản phẩm nào / mã trống → `null`. **Sửa/thêm mã ngay trên UI Products** (ô "Mã chạy tool duyệt thiết kế", khu Sản xuất trang chi tiết sản phẩm), không cần deploy.
 
-Map hardcode cũ `PRODUCT_TYPE_CODE_MAP` (`design-review-product-code.ts`) chỉ còn là **dữ liệu migration một lần** `migrateShortNameToDesignReviewCodes()` (`product-config.service.ts` `onModuleInit`): đổ mã vào `shortName` (sản phẩm không khớp map → `shortName=''`), cờ `system_configs` key `design_review_shortname_migration` chặn chạy lại (giá trị cũ từng sản phẩm lưu trong value của cờ). `shortName` từ ORD-3 **được phép trống** ở entity/DTO/form và **không còn auto-sinh** từ fullName ở mọi đường tạo sản phẩm — xem Products.md §2.
+> **PRD-2 — mã tool KHÔNG còn nằm ở `shortName`.** ORD-3 mượn `shortName` làm khoá kỹ thuật nên tên viết tắt do người dùng đặt bị coi là mã tool; nay mã có trường riêng `designReviewCode`, còn `shortName` trở lại đúng nghĩa tên viết tắt và **không migration/import nào được ghi đè nó nữa**. Tên field `productCode` trong response GIỮ NGUYÊN — tool ngoài (`.localdev`) đang đọc đúng tên đó.
+
+Map hardcode cũ `PRODUCT_TYPE_CODE_MAP` (`design-review-product-code.ts`) chỉ còn là **dữ liệu migration một lần** `migrateDesignReviewCodes()` (`product-config.service.ts` `onModuleInit`): đổ mã vào `designReviewCode` cho sản phẩm khớp map; **sản phẩm không khớp thì bỏ qua, không ghi, không xoá gì** — khác hẳn bản ORD-3 đã bị gỡ (nó ghi vào `shortName` và xoá trắng sản phẩm không khớp).
+
+Cơ chế chạy-một-lần: cờ `system_configs` key `design_review_code_migration`.
+
+- Kế hoạch đổi (kèm mã cũ + `shortName` từng sản phẩm) ghi vào cờ **TRƯỚC** khi sửa dữ liệu, nên hỏng giữa chừng vẫn còn dấu vết đối chiếu.
+- Cờ kẹt ở `running` quá 10 phút → lần khởi động sau tự nhận lại việc (ORD-3 chiếm cờ rồi mới làm nên chết máy là kẹt vĩnh viễn).
+- Chạy lại từ đầu bằng tay: xoá document `design_review_code_migration` trong `system_configs`.
+- Lần khởi động sau khi đã `done` in log `bỏ qua ... 0 bản ghi đổi thêm` và KHÔNG đụng dữ liệu — mã người dùng sửa tay không bị đè.
+
+`shortName` **được phép trống** ở entity/DTO/form và **không còn auto-sinh** từ fullName ở mọi đường tạo sản phẩm — xem Products.md §2.
 
 ### 18.6 `GET /design-review/error-file-options` — danh mục "File lỗi"
 

@@ -51,7 +51,10 @@ export const buildStatusMeta = (
 export interface ProductConfigRow {
   _id: string;
   fullName: string;
+  /** Tên viết tắt do người dùng đặt — KHÔNG phải mã chạy tool (xem `designReviewCode`, PRD-2). */
   shortName: string;
+  /** Mã chạy tool duyệt thiết kế (PRD-2) — sửa ở trang chi tiết, trống = không có mã. */
+  designReviewCode?: string;
   sku?: string;
   slug?: string;
   status?: ProductConfigStatus;

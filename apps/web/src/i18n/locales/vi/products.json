@@ -373,7 +373,10 @@
       "printAreas": "{{count}} vị trí"
     },
     "production": {
-      "slug": "Slug"
+      "slug": "Slug",
+      "designReviewCode": "Mã chạy tool duyệt thiết kế",
+      "designReviewCodePlaceholder": "VD: BBJERNP — để trống nếu sản phẩm không chạy tool",
+      "designReviewCodeHint": "Tool duyệt thiết kế bên ngoài đọc mã này. Khác với Tên viết tắt ở đầu trang; sửa xong lưu là có hiệu lực ngay."
     },
     "toggles": {
       "hideForSeller": "Ẩn sản phẩm với seller",

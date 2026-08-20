@@ -13,9 +13,21 @@ export class ProductConfigEntity extends DatabaseEntityAbstract {
   @Prop({ required: true, trim: true, index: true })
   fullName: string;
 
-  /** Mã ngắn chạy tool duyệt thiết kế (ORD-3) — TRỐNG = sản phẩm không có mã, tool nhận `productCode: null`. */
+  /**
+   * Tên viết tắt do người dùng đặt. Từ PRD-2 trường này KHÔNG còn mang mã chạy
+   * tool duyệt thiết kế nữa (xem `designReviewCode`) và KHÔNG migration/import
+   * nào được ghi đè nó — chỉ người dùng sửa tay trên UI.
+   */
   @Prop({ trim: true, uppercase: true, index: true, default: '' })
   shortName: string;
+
+  /**
+   * Mã chạy tool duyệt thiết kế (PRD-2) — nguồn DUY NHẤT của `productCode` ở
+   * 2 endpoint design-review public. TRỐNG = sản phẩm không có mã, tool nhận
+   * `productCode: null`.
+   */
+  @Prop({ trim: true, uppercase: true, index: true, default: '' })
+  designReviewCode?: string;
 
   /** Mã SKU riêng của sản phẩm (KHÔNG phải SKU biến thể trong `variations[]`). */
   @Prop({ trim: true, uppercase: true })

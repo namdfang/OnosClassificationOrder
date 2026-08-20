@@ -373,7 +373,10 @@
       "printAreas": "{{count}} areas"
     },
     "production": {
-      "slug": "Slug"
+      "slug": "Slug",
+      "designReviewCode": "Design review tool code",
+      "designReviewCodePlaceholder": "E.g. BBJERNP — leave empty if the product has no code",
+      "designReviewCodeHint": "The external design review tool reads this code. It is separate from Short name at the top; saving applies it right away."
     },
     "toggles": {
       "hideForSeller": "Hide product for seller",

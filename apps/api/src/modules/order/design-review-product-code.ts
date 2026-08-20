@@ -1,12 +1,16 @@
 /**
- * DỮ LIỆU MIGRATION MỘT LẦN (ORD-3) — KHÔNG còn được tra lúc runtime.
+ * DỮ LIỆU MIGRATION MỘT LẦN — KHÔNG còn được tra lúc runtime.
  *
- * Map tên sản phẩm (khớp `ProductConfig.fullName`, lowercase) → mã ngắn cho
- * tool duyệt thiết kế bên ngoài. Trước ORD-3 map này được tra trực tiếp ở
- * `getNextDesignReviewOrder()`; nay mã sống trong `ProductConfig.shortName`
- * (admin sửa trên trang Products) và API đọc từ DB. File này chỉ còn là nguồn
- * dữ liệu cho migration `migrateShortNameToDesignReviewCodes()`
- * (`product-config.service.ts`) — chạy đúng 1 lần mỗi môi trường.
+ * Map tên sản phẩm (khớp `ProductConfig.fullName`, lowercase) → mã chạy tool
+ * duyệt thiết kế bên ngoài. Trước ORD-3 map này được tra trực tiếp ở
+ * `getNextDesignReviewOrder()`; nay mã sống trong
+ * `ProductConfig.designReviewCode` (người dùng sửa ở trang chi tiết sản phẩm)
+ * và API đọc từ DB. File này chỉ còn là nguồn dữ liệu cho migration
+ * `migrateDesignReviewCodes()` (`product-config.service.ts`) — chạy đúng 1 lần
+ * mỗi môi trường.
+ *
+ * PRD-2: bản ORD-3 đổ map này vào `shortName` đã bị gỡ; `shortName` là tên
+ * viết tắt của người dùng và không migration nào được ghi vào nó nữa.
  */
 export const PRODUCT_TYPE_CODE_MAP: Record<string, string> = {
     "all-over print satin short-sleeve pajama shirt": "SSHIRTV",

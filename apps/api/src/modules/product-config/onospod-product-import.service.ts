@@ -184,8 +184,8 @@ function escapeRegex(s: string): string {
 /**
  * Sinh mã ngắn từ sku (fallback identity/name), bỏ dấu + uppercase — dùng cho
  * shortName của Collection/ProductCategory tạo kèm và SKU biến thể mặc định.
- * KHÔNG còn dùng cho `ProductConfig.shortName` (ORD-3 — field đó giờ là mã
- * tool duyệt thiết kế, import để trống).
+ * KHÔNG còn dùng cho `ProductConfig.shortName` — import để trống, người dùng
+ * tự đặt tên viết tắt. Mã chạy tool nằm ở `designReviewCode` (PRD-2).
  */
 function deriveShortName(p: OnospodProduct): string {
   const base = cleanStr(p.sku) ?? cleanStr(p.identity) ?? cleanStr(p.name) ?? 'ONOSPOD';
@@ -346,8 +346,8 @@ export class OnospodProductImportService {
 
     return {
       fullName: cleanStr(p.name),
-      // KHÔNG derive shortName cho ProductConfig nữa (ORD-3) — field giờ là mã
-      // tool duyệt thiết kế, sản phẩm import mới để trống, admin tự gán nếu cần.
+      // KHÔNG derive shortName cho ProductConfig — sản phẩm import mới để trống,
+      // người dùng tự đặt. Mã chạy tool là trường riêng `designReviewCode` (PRD-2).
       sku: cleanStr(p.sku)?.toUpperCase(),
       slug: cleanStr(p.slug),
       status: p.visible === false ? ProductConfigStatus.Inactive : ProductConfigStatus.Active,

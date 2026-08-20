@@ -94,6 +94,13 @@ export const ProductConfigZod = BaseEntityZod.extend({
   fullName: z.string().min(1).max(300),
   /** Mã ngắn chạy tool duyệt thiết kế (ORD-3) — trống = không có mã, Design Review API trả `productCode: null`. */
   shortName: z.string().max(60),
+  /**
+   * Mã chạy tool duyệt thiết kế (PRD-2) — trường RIÊNG, KHÔNG dùng `shortName`
+   * nữa. Trống = sản phẩm không có mã, Design Review API trả `productCode: null`.
+   * Chỉ người dùng sửa tay trên trang chi tiết sản phẩm mới đổi được, trừ lần
+   * migration một-lần đổ từ `PRODUCT_TYPE_CODE_MAP`.
+   */
+  designReviewCode: z.string().max(60).optional(),
   /** Mã SKU riêng của sản phẩm (KHÔNG phải SKU biến thể) — unique toàn hệ thống nếu có. */
   sku: z.string().max(100).optional(),
   /** Slug SEO/URL (parity hệ cũ) — chưa dùng để routing, chỉ lưu. */
@@ -213,6 +220,8 @@ export const CreateProductConfigZod = z.object({
   fullName: ProductConfigZod.shape.fullName,
   /** Không truyền / trống → shortName để trống (KHÔNG auto-sinh từ fullName — ORD-3). */
   shortName: ProductConfigZod.shape.shortName.optional(),
+  /** Mã chạy tool duyệt thiết kế (PRD-2) — tách hẳn khỏi `shortName`. */
+  designReviewCode: ProductConfigZod.shape.designReviewCode,
   sku: ProductConfigZod.shape.sku,
   slug: ProductConfigZod.shape.slug,
   status: ProductConfigZod.shape.status,
@@ -256,6 +265,8 @@ export class CreateProductConfigResDto extends createZodDto(extendApi(CreateProd
 export const UpdateProductConfigZod = z.object({
   fullName: ProductConfigZod.shape.fullName.optional(),
   shortName: ProductConfigZod.shape.shortName.optional(),
+  /** Mã chạy tool duyệt thiết kế (PRD-2) — sửa tay ở trang chi tiết, có hiệu lực ngay. */
+  designReviewCode: ProductConfigZod.shape.designReviewCode,
   sku: ProductConfigZod.shape.sku,
   slug: ProductConfigZod.shape.slug,
   status: ProductConfigZod.shape.status.optional(),
