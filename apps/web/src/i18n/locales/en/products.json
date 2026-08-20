@@ -35,6 +35,8 @@
       "fullNamePlaceholder": "Search by name…",
       "shortName": "Short name",
       "shortNamePlaceholder": "Search by short name…",
+      "designReviewCode": "Tool code",
+      "designReviewCodePlaceholder": "Search by tool code…",
       "factory": "Factory",
       "allFactories": "All factories",
       "department": "Department",

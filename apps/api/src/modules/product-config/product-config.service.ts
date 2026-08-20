@@ -469,7 +469,20 @@ export class ProductConfigService implements OnModuleInit {
   }
 
   async getProductConfigs(dto: GetProductConfigsDto): Promise<GetProductConfigsResDto> {
-    const { page, limit, sort, order, search, fullName, shortName, fabricType, factoryId, machineTypeId, status } = dto;
+    const {
+      page,
+      limit,
+      sort,
+      order,
+      search,
+      fullName,
+      shortName,
+      designReviewCode,
+      fabricType,
+      factoryId,
+      machineTypeId,
+      status,
+    } = dto;
     const filter: Record<string, unknown> = {};
     // `search` (đường cũ, nhiều nơi đang dùng) gộp 3 trường bằng $or — GIỮ NGUYÊN.
     if (search) {
@@ -482,6 +495,9 @@ export class ProductConfigService implements OnModuleInit {
     // PRD-1 — hai ô lọc riêng, tổ hợp AND với nhau và với $or ở trên.
     if (fullName) filter.fullName = { $regex: escapeRegex(fullName), $options: 'i' };
     if (shortName) filter.shortName = { $regex: escapeRegex(shortName), $options: 'i' };
+    // PRD-5 — lọc theo mã chạy tool, cùng khuôn với shortName. Doc chưa đặt mã (thiếu field
+    // hoặc chuỗi rỗng) tự rớt khỏi kết quả vì $regex không khớp giá trị vắng mặt.
+    if (designReviewCode) filter.designReviewCode = { $regex: escapeRegex(designReviewCode), $options: 'i' };
     if (fabricType) {
       filter.fabricType =
         fabricType === PRODUCT_FABRIC_TYPE_NONE

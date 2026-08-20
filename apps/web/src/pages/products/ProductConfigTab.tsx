@@ -122,6 +122,8 @@ function FilterField({ label, children }: { label: string; children: React.React
 interface ProductConfigFilters {
   fullName: string;
   shortName: string;
+  /** PRD-5 — mã chạy tool duyệt thiết kế (chứa chuỗi, không phân biệt hoa thường). */
+  designReviewCode: string;
   factoryId: string;
   machineTypeId: string;
   /** Mã vải, hoặc `PRODUCT_FABRIC_TYPE_NONE` = chưa đặt loại vải. */
@@ -133,6 +135,7 @@ interface ProductConfigFilters {
 const EMPTY_FILTERS: ProductConfigFilters = {
   fullName: '',
   shortName: '',
+  designReviewCode: '',
   factoryId: '',
   machineTypeId: '',
   fabricType: '',
@@ -154,8 +157,10 @@ export function ProductConfigTab({ refreshKey = 0 }: ProductConfigTabProps) {
   // Ô chữ gõ tới đâu lọc tới đó — tách state gõ khỏi state lọc để debounce.
   const [nameInput, setNameInput] = useState('');
   const [shortNameInput, setShortNameInput] = useState('');
+  const [designReviewCodeInput, setDesignReviewCodeInput] = useState('');
   const debouncedName = useDebounce(nameInput, 400) as string;
   const debouncedShortName = useDebounce(shortNameInput, 400) as string;
+  const debouncedDesignReviewCode = useDebounce(designReviewCodeInput, 400) as string;
   const [page, setPage] = useState(1);
   const [pageSize, setPageSize] = useState(20);
   const [total, setTotal] = useState(0);
@@ -284,6 +289,7 @@ export function ProductConfigTab({ refreshKey = 0 }: ProductConfigTabProps) {
       const params = new URLSearchParams({ page: String(page), limit: String(pageSize) });
       if (filters.fullName) params.set('fullName', filters.fullName);
       if (filters.shortName) params.set('shortName', filters.shortName);
+      if (filters.designReviewCode) params.set('designReviewCode', filters.designReviewCode);
       if (filters.factoryId) params.set('factoryId', filters.factoryId);
       if (filters.machineTypeId) params.set('machineTypeId', filters.machineTypeId);
       if (filters.fabricType) params.set('fabricType', filters.fabricType);
@@ -325,11 +331,17 @@ export function ProductConfigTab({ refreshKey = 0 }: ProductConfigTabProps) {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [debouncedShortName]);
 
+  useEffect(() => {
+    setFilterField('designReviewCode', debouncedDesignReviewCode);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [debouncedDesignReviewCode]);
+
   const hasFilters = Object.values(filters).some(Boolean);
 
   const handleClearFilters = () => {
     setNameInput('');
     setShortNameInput('');
+    setDesignReviewCodeInput('');
     setFilters(EMPTY_FILTERS);
     setPage(1);
   };
@@ -367,7 +379,7 @@ export function ProductConfigTab({ refreshKey = 0 }: ProductConfigTabProps) {
         lọc đọc được bằng mắt mà không phải bấm vào.
       */}
       <div className="rounded-lg border border-border bg-card p-3">
-        <div className="grid grid-cols-1 gap-2 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6">
+        <div className="grid grid-cols-1 gap-2 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-7">
           <FilterField label={t('configTab.filters.fullName')}>
             <div className="relative">
               <Search size={14} className="absolute left-2.5 top-1/2 -translate-y-1/2 text-muted-foreground" />
@@ -387,6 +399,18 @@ export function ProductConfigTab({ refreshKey = 0 }: ProductConfigTabProps) {
                 value={shortNameInput}
                 onChange={(e) => setShortNameInput(e.target.value)}
                 placeholder={t('configTab.filters.shortNamePlaceholder')}
+                className="h-9 pl-8"
+              />
+            </div>
+          </FilterField>
+
+          <FilterField label={t('configTab.filters.designReviewCode')}>
+            <div className="relative">
+              <Search size={14} className="absolute left-2.5 top-1/2 -translate-y-1/2 text-muted-foreground" />
+              <Input
+                value={designReviewCodeInput}
+                onChange={(e) => setDesignReviewCodeInput(e.target.value)}
+                placeholder={t('configTab.filters.designReviewCodePlaceholder')}
                 className="h-9 pl-8"
               />
             </div>

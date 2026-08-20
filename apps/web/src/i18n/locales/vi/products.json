@@ -35,6 +35,8 @@
       "fullNamePlaceholder": "Tìm theo tên…",
       "shortName": "Tên viết tắt",
       "shortNamePlaceholder": "Tìm theo tên viết tắt…",
+      "designReviewCode": "Mã chạy tool",
+      "designReviewCodePlaceholder": "Tìm theo mã chạy tool…",
       "factory": "Xưởng",
       "allFactories": "Tất cả xưởng",
       "department": "Phòng",

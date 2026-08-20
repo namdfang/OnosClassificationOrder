@@ -201,6 +201,12 @@ export const GetProductConfigsZod = PageQueryZod.extend({
   fullName: z.string().trim().optional(),
   /** PRD-1 — lọc riêng theo TÊN VIẾT TẮT (chứa chuỗi, không phân biệt hoa thường). */
   shortName: z.string().trim().optional(),
+  /**
+   * PRD-5 — lọc riêng theo MÃ CHẠY TOOL duyệt thiết kế (chứa chuỗi, không phân biệt
+   * hoa thường), cùng khuôn với `shortName`. Sản phẩm chưa đặt mã không lọt vào kết
+   * quả khi tham số này có giá trị; KHÔNG gộp vào `$or` của `search`.
+   */
+  designReviewCode: z.string().trim().optional(),
   /** PRD-1 — mã loại vải (`workshop_configs` category `fabric_type`), hoặc `none` = chưa đặt loại vải. */
   fabricType: z.string().trim().optional(),
   /** Không truyền ⇒ mặc định loại `Hidden` khỏi danh sách (vẫn thấy Active + Inactive). Truyền cụ thể để xem đúng 1 trạng thái (VD: `hidden` để xem sản phẩm đã ẩn). */
