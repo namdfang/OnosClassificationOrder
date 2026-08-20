@@ -19,7 +19,7 @@ import type {
   UnmatchedOrderType,
   UpdateProductConfigDto,
 } from 'shared';
-import { myNanoid, ProductConfigStatus, WorkshopConfigCategory } from 'shared';
+import { myNanoid, PRODUCT_FABRIC_TYPE_NONE, ProductConfigStatus, WorkshopConfigCategory } from 'shared';
 
 import { CollectionService } from '../collection/collection.service';
 import { FactoryService } from '../factory/factory.service';
@@ -31,6 +31,10 @@ import { SystemConfigService } from '../system-config/system-config.service';
 import { WorkshopConfigRepository } from '../workshop-config/workshop-config.repository';
 import { ProductConfigEntity } from './product-config.entity';
 import { ProductConfigRepository } from './product-config.repository';
+
+function escapeRegex(s: string): string {
+  return s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+}
 
 /** workshop_config codes (category=tool_result) emitted by import defaults. */
 const TOOL_RESULT_HAS = 'has-tool';
@@ -396,14 +400,25 @@ export class ProductConfigService implements OnModuleInit {
   }
 
   async getProductConfigs(dto: GetProductConfigsDto): Promise<GetProductConfigsResDto> {
-    const { page, limit, sort, order, search, factoryId, machineTypeId, status } = dto;
+    const { page, limit, sort, order, search, fullName, shortName, fabricType, factoryId, machineTypeId, status } = dto;
     const filter: Record<string, unknown> = {};
+    // `search` (đường cũ, nhiều nơi đang dùng) gộp 3 trường bằng $or — GIỮ NGUYÊN.
     if (search) {
       filter.$or = [
         { fullName: { $regex: search, $options: 'i' } },
         { shortName: { $regex: search, $options: 'i' } },
         { sku: { $regex: search, $options: 'i' } },
       ];
+    }
+    // PRD-1 — hai ô lọc riêng, tổ hợp AND với nhau và với $or ở trên.
+    if (fullName) filter.fullName = { $regex: escapeRegex(fullName), $options: 'i' };
+    if (shortName) filter.shortName = { $regex: escapeRegex(shortName), $options: 'i' };
+    if (fabricType) {
+      filter.fabricType =
+        fabricType === PRODUCT_FABRIC_TYPE_NONE
+          ? // Chưa đặt loại vải: doc cũ không có field, doc mới lưu null hoặc chuỗi rỗng.
+            { $in: [null, ''] }
+          : fabricType;
     }
     if (factoryId) filter.factoryId = factoryId;
     if (machineTypeId) filter.machineTypeId = machineTypeId;

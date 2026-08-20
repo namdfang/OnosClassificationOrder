@@ -30,7 +30,21 @@
     }
   },
   "configTab": {
-    "searchPlaceholder": "Tìm theo tên, viết tắt, SKU…",
+    "filters": {
+      "fullName": "Tên sản phẩm",
+      "fullNamePlaceholder": "Tìm theo tên…",
+      "shortName": "Tên viết tắt",
+      "shortNamePlaceholder": "Tìm theo tên viết tắt…",
+      "factory": "Xưởng",
+      "allFactories": "Tất cả xưởng",
+      "department": "Phòng",
+      "allDepartments": "Tất cả phòng",
+      "fabricType": "Loại vải",
+      "allFabrics": "Tất cả loại vải",
+      "fabricNotSet": "Chưa đặt loại vải",
+      "status": "Trạng thái",
+      "clear": "Xóa bộ lọc"
+    },
     "statusFilter": {
       "title": "Lọc theo trạng thái — mặc định ẩn các sản phẩm Đã ẩn",
       "allExceptHidden": "Tất cả (trừ Đã ẩn)"

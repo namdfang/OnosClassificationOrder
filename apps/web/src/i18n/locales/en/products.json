@@ -30,7 +30,21 @@
     }
   },
   "configTab": {
-    "searchPlaceholder": "Search by name, short name, SKU…",
+    "filters": {
+      "fullName": "Product name",
+      "fullNamePlaceholder": "Search by name…",
+      "shortName": "Short name",
+      "shortNamePlaceholder": "Search by short name…",
+      "factory": "Factory",
+      "allFactories": "All factories",
+      "department": "Department",
+      "allDepartments": "All departments",
+      "fabricType": "Fabric type",
+      "allFabrics": "All fabric types",
+      "fabricNotSet": "Fabric type not set",
+      "status": "Status",
+      "clear": "Clear filters"
+    },
     "statusFilter": {
       "title": "Filter by status — hidden products are excluded by default",
       "allExceptHidden": "All (except Hidden)"

@@ -175,9 +175,27 @@ export const ProductConfigZod = BaseEntityZod.extend({
 export type ProductConfig = z.infer<typeof ProductConfigZod>;
 
 //
+/**
+ * Giá trị `fabricType` nghĩa "CHƯA đặt loại vải" khi lọc (PRD-1) — 53/194 sản
+ * phẩm đang bỏ trống trường này, không có lựa chọn riêng thì không ai tìm ra
+ * chúng. Cùng quy ước với bộ lọc tier khách (`tier='none'`). KHÔNG trùng mã vải
+ * thật nào trong `workshop_configs` (category `fabric_type`).
+ */
+export const PRODUCT_FABRIC_TYPE_NONE = 'none';
+
 export const GetProductConfigsZod = PageQueryZod.extend({
   factoryId: IDZod.optional(),
   machineTypeId: IDZod.optional(),
+  /**
+   * PRD-1 — lọc riêng theo TÊN sản phẩm (chứa chuỗi, không phân biệt hoa thường).
+   * Khác `search` sẵn có: `search` gộp fullName/shortName/sku bằng `$or`, còn
+   * `fullName`/`shortName` là hai điều kiện AND với nhau. Đường cũ giữ nguyên.
+   */
+  fullName: z.string().trim().optional(),
+  /** PRD-1 — lọc riêng theo TÊN VIẾT TẮT (chứa chuỗi, không phân biệt hoa thường). */
+  shortName: z.string().trim().optional(),
+  /** PRD-1 — mã loại vải (`workshop_configs` category `fabric_type`), hoặc `none` = chưa đặt loại vải. */
+  fabricType: z.string().trim().optional(),
   /** Không truyền ⇒ mặc định loại `Hidden` khỏi danh sách (vẫn thấy Active + Inactive). Truyền cụ thể để xem đúng 1 trạng thái (VD: `hidden` để xem sản phẩm đã ẩn). */
   status: z.enum(getObjectValues(ProductConfigStatus)).optional(),
 });

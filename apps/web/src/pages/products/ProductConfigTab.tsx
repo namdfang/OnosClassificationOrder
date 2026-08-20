@@ -1,9 +1,15 @@
-import React, { useEffect, useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useNavigate } from 'react-router-dom';
-import { CloudDownload, FileUp, ImageIcon, Pencil, Plus, Receipt, RotateCw, Trash2 } from 'lucide-react';
+import { FilterX, ImageIcon, Pencil, Search, Trash2 } from 'lucide-react';
 import type { ProductItemSpecific, ProductPrintArea, ProductVariation } from 'shared';
-import { PRODUCT_LEVEL_MAP, PRODUCT_LEVELS, ProductConfigStatus, WorkshopConfigCategory } from 'shared';
+import {
+  PRODUCT_FABRIC_TYPE_NONE,
+  PRODUCT_LEVEL_MAP,
+  PRODUCT_LEVELS,
+  ProductConfigStatus,
+  WorkshopConfigCategory,
+} from 'shared';
 import { toast } from 'sonner';
 
 import { PATHS } from '@/constants/paths';
@@ -23,9 +29,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@
 import { handleAxiosError } from '@/utils';
 import { toFullSizeImageUrl } from '@/utils/imageUrl';
 
-import { ImportFullProductFileDialog } from './ImportFullProductFileDialog';
-import { ImportProductConfigDialog } from './ImportProductConfigDialog';
-import { UploadConfigFileDialog } from './UploadConfigFileDialog';
+import { useDebounce } from '@/hooks/useDebounce';
 
 export const buildStatusMeta = (
   t: (key: string) => string,
@@ -97,24 +101,61 @@ export interface RefItem {
   parentId?: string;
 }
 
-export function ProductConfigTab() {
+/** Select của khu lọc — cao bằng ô Input (h-9) để hàng lọc thẳng hàng. */
+const FILTER_SELECT_CLASS =
+  'h-9 w-full rounded-md border border-input bg-background px-2 text-sm focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring';
+
+/** Một ô lọc: nhãn nhỏ phía trên, control phía dưới. */
+function FilterField({ label, children }: { label: string; children: React.ReactNode }) {
+  return (
+    <label className="flex flex-col gap-1">
+      <span className="text-[11px] font-medium uppercase tracking-wide text-muted-foreground">{label}</span>
+      {children}
+    </label>
+  );
+}
+
+/** Bộ lọc của tab (PRD-1) — mọi trường tổ hợp với nhau bằng AND. */
+interface ProductConfigFilters {
+  fullName: string;
+  shortName: string;
+  factoryId: string;
+  machineTypeId: string;
+  /** Mã vải, hoặc `PRODUCT_FABRIC_TYPE_NONE` = chưa đặt loại vải. */
+  fabricType: string;
+  /** Rỗng = mặc định BE (loại Hidden, vẫn thấy Active + Inactive). */
+  status: '' | ProductConfigStatus;
+}
+
+const EMPTY_FILTERS: ProductConfigFilters = {
+  fullName: '',
+  shortName: '',
+  factoryId: '',
+  machineTypeId: '',
+  fabricType: '',
+  status: '',
+};
+
+interface ProductConfigTabProps {
+  /** Tăng lên mỗi khi khu hành động ngoài tab đổi dữ liệu → tải lại danh sách. */
+  refreshKey?: number;
+}
+
+export function ProductConfigTab({ refreshKey = 0 }: ProductConfigTabProps) {
   const { t } = useTranslation('products');
   const navigate = useNavigate();
   const STATUS_META = useMemo(() => buildStatusMeta(t), [t]);
   const [items, setItems] = useState<ProductConfigRow[]>([]);
   const [loading, setLoading] = useState(false);
-  const [search, setSearch] = useState('');
-  // Rỗng = mặc định BE (loại Hidden, vẫn thấy Active + Inactive).
-  const [statusFilter, setStatusFilter] = useState<'' | ProductConfigStatus>('');
+  const [filters, setFilters] = useState<ProductConfigFilters>(EMPTY_FILTERS);
+  // Ô chữ gõ tới đâu lọc tới đó — tách state gõ khỏi state lọc để debounce.
+  const [nameInput, setNameInput] = useState('');
+  const [shortNameInput, setShortNameInput] = useState('');
+  const debouncedName = useDebounce(nameInput, 400) as string;
+  const debouncedShortName = useDebounce(shortNameInput, 400) as string;
   const [page, setPage] = useState(1);
   const [pageSize, setPageSize] = useState(20);
   const [total, setTotal] = useState(0);
-  const [importOpen, setImportOpen] = useState(false);
-  const [uploadOpen, setUploadOpen] = useState(false);
-  const [importFullOpen, setImportFullOpen] = useState(false);
-  const [onospodImporting, setOnospodImporting] = useState(false);
-  const [pageInfoCrawling, setPageInfoCrawling] = useState(false);
-  const [onospodProgress, setOnospodProgress] = useState('');
   // Danh sách Xưởng / Phòng cho dropdown chỉnh sửa inline + trang chi tiết.
   const [factories, setFactories] = useState<RefItem[]>([]);
   const [machineTypes, setMachineTypes] = useState<RefItem[]>([]);
@@ -143,86 +184,6 @@ export function ProductConfigTab() {
       }
     })();
   }, []);
-
-  /**
-   * Import TẤT CẢ sản phẩm từ OnosPod — gọi lặp từng trang tới khi `nextPage`
-   * null. Fill-only: KHÔNG đè field đã có, KHÔNG đụng xưởng/phòng/vải hiện tại.
-   */
-  const handleImportFromOnospod = async () => {
-    if (!window.confirm(t('configTab.onospodImport.confirm'))) return;
-    setOnospodImporting(true);
-    const totals = { created: 0, filled: 0, skipped: 0 };
-    const errors: { sku: string; name: string; reason: string }[] = [];
-    let defaultsCreated = 0;
-    try {
-      let nextPage: number | null = 1;
-      // Limit LỚN (1 request cho toàn bộ catalog) — phân trang bên OnosPod
-      // không ổn định, chia trang nhỏ sẽ trùng + LỌT sản phẩm.
-      const limit = 500;
-      while (nextPage) {
-        const res = await RepositoryRemote.productConfig.importFromOnospod({ page: nextPage, limit });
-        const d = res.data?.data;
-        if (!d) break;
-        totals.created += d.created;
-        totals.filled += d.filled;
-        totals.skipped += d.skipped;
-        defaultsCreated += d.defaultVariationsCreated ?? 0;
-        errors.push(...(d.errors ?? []));
-        setOnospodProgress(
-          t('configTab.onospodImport.progress', { done: Math.min(nextPage * limit, d.total), total: d.total }),
-        );
-        nextPage = d.nextPage;
-      }
-      toast.success(t('configTab.onospodImport.done', totals));
-      if (defaultsCreated > 0) {
-        toast.info(t('configTab.onospodImport.defaultsCreated', { count: defaultsCreated }), { duration: 10000 });
-      }
-      if (errors.length > 0) {
-        toast.warning(t('configTab.onospodImport.errors', { count: errors.length, first: errors[0].reason }), {
-          duration: 10000,
-        });
-      }
-      fetchData();
-    } catch (error) {
-      handleAxiosError(error);
-    } finally {
-      setOnospodImporting(false);
-      setOnospodProgress('');
-    }
-  };
-
-  /**
-   * Crawl "Import US Tax" + "Package gram" từ trang sản phẩm public hệ cũ —
-   * gọi lặp theo `cursor` tới khi `done` (2 giá trị này chỉ có trên trang WP,
-   * import GraphQL không lấy được).
-   */
-  const handleCrawlPageInfo = async () => {
-    if (!window.confirm(t('configTab.pageInfoCrawl.confirm'))) return;
-    setPageInfoCrawling(true);
-    let updated = 0;
-    let processed = 0;
-    try {
-      let cursor: string | undefined;
-      let done = false;
-      while (!done) {
-        const res = await RepositoryRemote.productConfig.crawlPageInfo({ limit: 10, cursor });
-        const d = res.data?.data;
-        if (!d) break;
-        processed += d.processed;
-        updated += d.updated;
-        setOnospodProgress(t('configTab.pageInfoCrawl.progress', { done: processed, remaining: d.remaining }));
-        cursor = d.nextCursor;
-        done = d.done || !d.nextCursor;
-      }
-      toast.success(t('configTab.pageInfoCrawl.done', { updated, processed }));
-      fetchData();
-    } catch (error) {
-      handleAxiosError(error);
-    } finally {
-      setPageInfoCrawling(false);
-      setOnospodProgress('');
-    }
-  };
 
   const handleFactoryChange = async (id: string, factoryId: string) => {
     if (!factoryId) return; // Xưởng là bắt buộc — không cho về rỗng.
@@ -289,7 +250,7 @@ export function ProductConfigTab() {
     try {
       await RepositoryRemote.productConfig.updateProductConfig(id, { status: value });
       // Nếu đang lọc theo 1 trạng thái cụ thể, đổi sang trạng thái khác thì dòng này biến mất khỏi filter hiện tại.
-      if (statusFilter && statusFilter !== value) fetchData();
+      if (filters.status && filters.status !== value) fetchData();
     } catch (error) {
       handleAxiosError(error);
       fetchData();
@@ -310,32 +271,64 @@ export function ProductConfigTab() {
     patchField(id, { level: value ? Number(value) : undefined });
   };
 
+  /** Chống kết quả về trễ đè kết quả mới hơn khi gõ liên tục vào ô lọc. */
+  const requestIdRef = useRef(0);
+
   const fetchData = async () => {
+    const requestId = ++requestIdRef.current;
     try {
       setLoading(true);
       const params = new URLSearchParams({ page: String(page), limit: String(pageSize) });
-      if (search) params.set('search', search);
-      if (statusFilter) params.set('status', statusFilter);
+      if (filters.fullName) params.set('fullName', filters.fullName);
+      if (filters.shortName) params.set('shortName', filters.shortName);
+      if (filters.factoryId) params.set('factoryId', filters.factoryId);
+      if (filters.machineTypeId) params.set('machineTypeId', filters.machineTypeId);
+      if (filters.fabricType) params.set('fabricType', filters.fabricType);
+      if (filters.status) params.set('status', filters.status);
       const resp = await RepositoryRemote.productConfig.getProductConfigs(`?${params.toString()}`);
+      if (requestId !== requestIdRef.current) return;
       const rows: ProductConfigRow[] = resp.data.data || [];
       setTotal(resp.data.total || 0);
       setItems(rows);
     } catch (error) {
       handleAxiosError(error);
     } finally {
-      setLoading(false);
+      if (requestId === requestIdRef.current) setLoading(false);
     }
   };
 
   useEffect(() => {
     fetchData();
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [page, pageSize, statusFilter]);
+  }, [page, pageSize, filters, refreshKey]);
 
-  // Search → luôn về trang 1 (setPage(1) tự trigger refetch; nếu đang ở 1 thì gọi tay).
-  const handleSearch = () => {
-    if (page !== 1) setPage(1);
-    else fetchData();
+  /**
+   * Đổi bất kỳ bộ lọc nào → luôn về trang 1. Đặt cả hai state trong CÙNG một
+   * lượt xử lý nên React gộp thành 1 lần render → chỉ 1 request; giá trị không
+   * đổi thì trả về đúng object cũ để React bỏ qua hẳn (tránh gọi lại lúc mount).
+   */
+  const setFilterField = <K extends keyof ProductConfigFilters>(key: K, value: ProductConfigFilters[K]) => {
+    setFilters((prev) => (prev[key] === value ? prev : { ...prev, [key]: value }));
+    setPage(1);
+  };
+
+  useEffect(() => {
+    setFilterField('fullName', debouncedName);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [debouncedName]);
+
+  useEffect(() => {
+    setFilterField('shortName', debouncedShortName);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [debouncedShortName]);
+
+  const hasFilters = Object.values(filters).some(Boolean);
+
+  const handleClearFilters = () => {
+    setNameInput('');
+    setShortNameInput('');
+    setFilters(EMPTY_FILTERS);
+    setPage(1);
   };
 
   const handleDelete = async (id: string, fullName: string) => {
@@ -365,90 +358,107 @@ export function ProductConfigTab() {
 
   return (
     <div className="space-y-4">
-      <div className="flex items-center justify-between gap-3">
-        <div className="flex items-center gap-2">
-          <Input
-            placeholder={t('configTab.searchPlaceholder')}
-            value={search}
-            onChange={(e) => setSearch(e.target.value)}
-            onKeyDown={(e) => e.key === 'Enter' && handleSearch()}
-            className="max-w-sm"
-          />
-          <select
-            value={statusFilter}
-            onChange={(e) => {
-              setStatusFilter(e.target.value as '' | ProductConfigStatus);
-              setPage(1);
-            }}
-            className="rounded-md border border-input bg-background px-2 py-2 text-sm focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
-            title={t('configTab.statusFilter.title')}
-          >
-            <option value="">{t('configTab.statusFilter.allExceptHidden')}</option>
-            <option value={ProductConfigStatus.Active}>{STATUS_META[ProductConfigStatus.Active].label}</option>
-            <option value={ProductConfigStatus.Inactive}>{STATUS_META[ProductConfigStatus.Inactive].label}</option>
-            <option value={ProductConfigStatus.Hidden}>{STATUS_META[ProductConfigStatus.Hidden].label}</option>
-          </select>
+      {/*
+        Khu bộ lọc (PRD-1) — chiếm đúng chỗ thanh công cụ cũ, mọi trường nhìn
+        thấy ngay, không giấu sau menu. Nhãn nhỏ trên từng ô để trạng thái đang
+        lọc đọc được bằng mắt mà không phải bấm vào.
+      */}
+      <div className="rounded-lg border border-border bg-card p-3">
+        <div className="grid grid-cols-1 gap-2 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6">
+          <FilterField label={t('configTab.filters.fullName')}>
+            <div className="relative">
+              <Search size={14} className="absolute left-2.5 top-1/2 -translate-y-1/2 text-muted-foreground" />
+              <Input
+                value={nameInput}
+                onChange={(e) => setNameInput(e.target.value)}
+                placeholder={t('configTab.filters.fullNamePlaceholder')}
+                className="h-9 pl-8"
+              />
+            </div>
+          </FilterField>
+
+          <FilterField label={t('configTab.filters.shortName')}>
+            <div className="relative">
+              <Search size={14} className="absolute left-2.5 top-1/2 -translate-y-1/2 text-muted-foreground" />
+              <Input
+                value={shortNameInput}
+                onChange={(e) => setShortNameInput(e.target.value)}
+                placeholder={t('configTab.filters.shortNamePlaceholder')}
+                className="h-9 pl-8"
+              />
+            </div>
+          </FilterField>
+
+          <FilterField label={t('configTab.filters.factory')}>
+            <select
+              value={filters.factoryId}
+              onChange={(e) => setFilterField('factoryId', e.target.value)}
+              className={FILTER_SELECT_CLASS}
+            >
+              <option value="">{t('configTab.filters.allFactories')}</option>
+              {factories.map((f) => (
+                <option key={f._id} value={f._id}>
+                  {f.shortName} · {f.name}
+                </option>
+              ))}
+            </select>
+          </FilterField>
+
+          <FilterField label={t('configTab.filters.department')}>
+            <select
+              value={filters.machineTypeId}
+              onChange={(e) => setFilterField('machineTypeId', e.target.value)}
+              className={FILTER_SELECT_CLASS}
+            >
+              <option value="">{t('configTab.filters.allDepartments')}</option>
+              {machineTypes.map((m) => (
+                <option key={m._id} value={m._id}>
+                  {m.shortName} · {m.name}
+                </option>
+              ))}
+            </select>
+          </FilterField>
+
+          <FilterField label={t('configTab.filters.fabricType')}>
+            <select
+              value={filters.fabricType}
+              onChange={(e) => setFilterField('fabricType', e.target.value)}
+              className={FILTER_SELECT_CLASS}
+            >
+              <option value="">{t('configTab.filters.allFabrics')}</option>
+              {/* 53/194 sản phẩm bỏ trống loại vải — không có mục này thì không tìm ra chúng. */}
+              <option value={PRODUCT_FABRIC_TYPE_NONE}>{t('configTab.filters.fabricNotSet')}</option>
+              {fabricOptions.map((opt) => (
+                <option key={opt.code} value={opt.code}>
+                  {opt.name}
+                </option>
+              ))}
+            </select>
+          </FilterField>
+
+          <FilterField label={t('configTab.filters.status')}>
+            <select
+              value={filters.status}
+              onChange={(e) => setFilterField('status', e.target.value as '' | ProductConfigStatus)}
+              className={FILTER_SELECT_CLASS}
+              title={t('configTab.statusFilter.title')}
+            >
+              <option value="">{t('configTab.statusFilter.allExceptHidden')}</option>
+              <option value={ProductConfigStatus.Active}>{STATUS_META[ProductConfigStatus.Active].label}</option>
+              <option value={ProductConfigStatus.Inactive}>{STATUS_META[ProductConfigStatus.Inactive].label}</option>
+              <option value={ProductConfigStatus.Hidden}>{STATUS_META[ProductConfigStatus.Hidden].label}</option>
+            </select>
+          </FilterField>
         </div>
-        <div className="flex items-center gap-2">
-          <Button
-            variant="outline"
-            onClick={async () => {
-              try {
-                const res = await RepositoryRemote.order.backfillFabric();
-                const { scanned, updated } = res.data.data;
-                toast.success(t('configTab.backfill.success', { updated, scanned }));
-              } catch (error) {
-                handleAxiosError(error);
-              }
-            }}
-            title={t('configTab.backfill.title')}
-          >
-            <RotateCw size={14} />
-            {t('configTab.backfill.button')}
-          </Button>
-          {/* <Button variant="outline" onClick={handleClearAll} title="Xóa toàn bộ product config — dùng khi bắt đầu lại từ đầu">
-            <Eraser size={14} />
-            Xóa tất cả
-          </Button> */}
-          <Button variant="outline" onClick={() => navigate(PATHS.PRODUCT_DETAIL.replace(':id', 'new'))}>
-            <Plus size={14} />
-            {t('configTab.addButton')}
-          </Button>
-          <Button onClick={() => setImportOpen(true)}>
-            <Plus size={14} />
-            {t('configTab.importButton')}
-          </Button>
-          <Button variant="outline" onClick={() => setUploadOpen(true)}>
-            <FileUp size={14} />
-            {t('configTab.uploadButton')}
-          </Button>
-          <Button variant="outline" onClick={() => setImportFullOpen(true)} title={t('configTab.importFullTitle')}>
-            <FileUp size={14} />
-            {t('configTab.importFullButton')}
-          </Button>
-          <Button
-            variant="outline"
-            onClick={handleImportFromOnospod}
-            disabled={onospodImporting}
-            title={t('configTab.onospodImport.title')}
-          >
-            {onospodImporting ? <Spinner size={14} /> : <CloudDownload size={14} />}
-            {onospodImporting
-              ? onospodProgress || t('configTab.onospodImport.importing')
-              : t('configTab.onospodImport.button')}
-          </Button>
-          <Button
-            variant="outline"
-            onClick={handleCrawlPageInfo}
-            disabled={pageInfoCrawling}
-            title={t('configTab.pageInfoCrawl.title')}
-          >
-            {pageInfoCrawling ? <Spinner size={14} /> : <Receipt size={14} />}
-            {pageInfoCrawling
-              ? onospodProgress || t('configTab.pageInfoCrawl.crawling')
-              : t('configTab.pageInfoCrawl.button')}
-          </Button>
-        </div>
+
+        {hasFilters && (
+          <div className="mt-2 flex items-center justify-end">
+            <Button variant="ghost" size="sm" onClick={handleClearFilters}>
+              <FilterX size={14} />
+              {t('configTab.filters.clear')}
+            </Button>
+          </div>
+        )}
       </div>
 
       <LoadingOverlay active={loading && items.length > 0} className="rounded-lg border border-border bg-card">
@@ -695,33 +705,6 @@ export function ProductConfigTab() {
           }}
         />
       </LoadingOverlay>
-
-      <ImportProductConfigDialog
-        open={importOpen}
-        onOpenChange={setImportOpen}
-        onSuccess={() => {
-          fetchData();
-          loadConfig(true);
-        }}
-      />
-
-      <UploadConfigFileDialog
-        open={uploadOpen}
-        onOpenChange={setUploadOpen}
-        onSuccess={() => {
-          fetchData();
-          loadConfig(true);
-        }}
-      />
-
-      <ImportFullProductFileDialog
-        open={importFullOpen}
-        onOpenChange={setImportFullOpen}
-        onSuccess={() => {
-          fetchData();
-          loadConfig(true);
-        }}
-      />
     </div>
   );
 }
