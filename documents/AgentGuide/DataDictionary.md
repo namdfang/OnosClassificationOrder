@@ -42,8 +42,8 @@ Không truyền `fields` thì trả **nguyên bản ghi** — đó là cách duy
 
 Lô mặc định 50 dòng, trần 200 — xin nhiều hơn thì bị kẹp xuống trần và `meta.limitApplied` cho biết mức thực tế.
 
-**Bề mặt dữ liệu hiện tại: mọi bảng, mọi trường, lọc/sắp xếp/nhóm được hết.** Đúng bốn tên bị chặn ở
-mọi bảng: `password`, `passwordSource`, `ip`, `userAgent`. Mười một bảng dưới đây là những bảng **có
+**Bề mặt dữ liệu hiện tại: mọi bảng, mọi trường, lọc/sắp xếp/nhóm được hết.** Đúng sáu tên bị chặn ở
+mọi bảng: `password`, `passwordSource`, `ip`, `userAgent`, `apiKeys`, `secret`. Mười một bảng dưới đây là những bảng **có
 mô tả nghiệp vụ** — đọc chúng để hiểu nghiệp vụ; các bảng khác đọc được nhưng bạn phải tự suy cấu trúc.
 
 ⚠️ **Đọc được không có nghĩa là nói được.** Tiền nội bộ, tên nhân viên, bảng cấu hình nội bộ đều đọc

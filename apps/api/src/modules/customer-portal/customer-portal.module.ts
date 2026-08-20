@@ -13,9 +13,11 @@ import { ProductConfigEntity, ProductConfigSchema } from '@/modules/product-conf
 import { PromotionModule } from '@/modules/promotion/promotion.module';
 import { SystemConfigModule } from '@/modules/system-config/system-config.module';
 
+import { CustomerApiKeyController } from './customer-api-key.controller';
 import { CustomerAuthController } from './customer-auth.controller';
 import { CustomerCatalogController } from './customer-catalog.controller';
 import { CustomerCatalogService } from './customer-catalog.service';
+import { CustomerOpenApiController } from './customer-open-api.controller';
 import { CustomerOrderController } from './customer-order.controller';
 import { CustomerOrderEntity, CustomerOrderSchema } from './customer-order.entity';
 import { CustomerOrderService } from './customer-order.service';
@@ -46,7 +48,15 @@ import { PublicCatalogController } from './public-catalog.controller';
     // Sự kiện `order.pushed` khi push — webhook (ORD-4) + noti portal (ORD-5).
     CustomerEventModule,
   ],
-  controllers: [CustomerAuthController, CustomerOrderController, CustomerCatalogController, PublicCatalogController],
+  controllers: [
+    CustomerAuthController,
+    CustomerOrderController,
+    CustomerCatalogController,
+    PublicCatalogController,
+    // ORD-4 — API keys (portal, JWT) + Public Order API (API key, không JWT).
+    CustomerApiKeyController,
+    CustomerOpenApiController,
+  ],
   providers: [CustomerOrderService, CustomerCatalogService],
 })
 export class CustomerPortalModule {}

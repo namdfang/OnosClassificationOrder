@@ -60,6 +60,8 @@ export const PATHS = {
   CUSTOMER_CATALOG: '/customer/catalog',
   CUSTOMER_CATALOG_DETAIL: '/customer/catalog/:id',
   CUSTOMER_ACCOUNT: '/customer/account',
+  /** API & Webhook — Public Order API self-service (ORD-4). */
+  CUSTOMER_API: '/customer/api',
 
   // ---- Public marketing routes (không gate auth, không dùng MainLayout/Sidebar) ----
   COMPANY_CAREERS: '/company/careers',

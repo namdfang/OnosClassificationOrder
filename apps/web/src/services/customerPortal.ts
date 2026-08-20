@@ -1,5 +1,7 @@
 import type {
   CancelCustomerStagingOrderDto,
+  CreateCustomerApiKeyDto,
+  CreateCustomerWebhookDto,
   CustomerLoginDto,
   CustomerOrderStatus,
   CustomerRegisterDto,
@@ -150,3 +152,39 @@ const markNotificationsRead = () => {
 };
 
 export const customerNotificationPortal = { listNotifications, markNotificationsRead };
+
+// ─── API keys + webhooks — Public Order API (ORD-4) ─────────────────────────
+
+const listApiKeys = () => {
+  return callApi(`/${CONFIG.API_VERSION}/customer/api-keys`, 'get');
+};
+
+/** Response chứa `key` plain — CHỈ hiện 1 lần ở dialog, KHÔNG lưu lại. */
+const createApiKey = (data: CreateCustomerApiKeyDto) => {
+  return callApi(`/${CONFIG.API_VERSION}/customer/api-keys`, 'post', data);
+};
+
+const revokeApiKey = (id: string) => {
+  return callApi(`/${CONFIG.API_VERSION}/customer/api-keys/${id}`, 'delete');
+};
+
+const listWebhooks = () => {
+  return callApi(`/${CONFIG.API_VERSION}/customer/webhooks`, 'get');
+};
+
+const createWebhook = (data: CreateCustomerWebhookDto) => {
+  return callApi(`/${CONFIG.API_VERSION}/customer/webhooks`, 'post', data);
+};
+
+const deleteWebhook = (id: string) => {
+  return callApi(`/${CONFIG.API_VERSION}/customer/webhooks/${id}`, 'delete');
+};
+
+export const customerApiAccess = {
+  listApiKeys,
+  createApiKey,
+  revokeApiKey,
+  listWebhooks,
+  createWebhook,
+  deleteWebhook,
+};

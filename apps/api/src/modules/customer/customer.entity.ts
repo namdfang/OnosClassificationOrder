@@ -45,6 +45,36 @@ export class CustomerEntity extends DatabaseEntityAbstract {
   @Prop({ default: Status.Active })
   status: string;
 
+  /**
+   * API keys cho Public Order API (ORD-4, plan §7). Key plain `onos_live_<32hex>`
+   * hiển thị đúng 1 lần lúc tạo — DB chỉ giữ `hash` (sha256 hex) + `prefix`
+   * hiển thị. Thu hồi = set `revokedAt` (giữ record để đối chiếu). Tối đa
+   * `CUSTOMER_API_KEY_MAX_ACTIVE` key hoạt động / khách.
+   * TUYỆT ĐỐI không trả `hash` ra API — `toSafeCustomer()` xóa cả mảng.
+   */
+  @Prop({
+    type: [
+      {
+        label: { type: String, trim: true, default: '' },
+        prefix: { type: String, default: '' },
+        hash: { type: String, required: true },
+        createdAt: { type: Date, default: null },
+        lastUsedAt: { type: Date, default: null },
+        revokedAt: { type: Date, default: null },
+      },
+    ],
+    default: undefined,
+  })
+  apiKeys?: Array<{
+    _id?: unknown;
+    label: string;
+    prefix: string;
+    hash: string;
+    createdAt?: Date | null;
+    lastUsedAt?: Date | null;
+    revokedAt?: Date | null;
+  }>;
+
   // Mốc "đã đọc thông báo tới lúc này" — bump khi khách bấm "Đánh dấu đã đọc"
   // ở chuông thông báo Customer Portal. KHÔNG public qua `toSafeCustomer()`/
   // `CustomerZod` — chỉ đọc/ghi nội bộ trong `customer-notification` module.
@@ -59,6 +89,8 @@ export class CustomerEntity extends DatabaseEntityAbstract {
 export const CustomerSchema = SchemaFactory.createForClass(CustomerEntity);
 // Khóa nhận diện khách = cặp (userSku, userEmail) → chống trùng.
 CustomerSchema.index({ userSku: 1, userEmail: 1 }, { unique: true });
+// Tra khách theo hash API key (ApiKeyGuard) — sparse vì đa số khách không có key.
+CustomerSchema.index({ 'apiKeys.hash': 1 }, { sparse: true });
 
 export type CustomerDocument = HydratedDocument<CustomerEntity> & {
   /**

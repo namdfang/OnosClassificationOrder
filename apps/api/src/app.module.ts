@@ -32,6 +32,7 @@ import { CustomerModule } from './modules/customer/customer.module';
 import { CustomerAssignmentModule } from './modules/customer-assignment/customer-assignment.module';
 import { CustomerNotificationModule } from './modules/customer-notification/customer-notification.module';
 import { CustomerPortalModule } from './modules/customer-portal/customer-portal.module';
+import { CustomerWebhookModule } from './modules/customer-webhook/customer-webhook.module';
 import { DepartmentModule } from './modules/departments/department.module';
 import { DesignStorageModule } from './modules/design-storage/design-storage.module';
 import { DesignerModule } from './modules/designer/designer.module';
@@ -84,6 +85,8 @@ import { SharedModule } from './shared/shared.module';
     AgentApiModule,
     CustomerNotificationModule,
     CustomerPortalModule,
+    // ORD-4 — webhook báo đổi trạng thái đơn cho khách API.
+    CustomerWebhookModule,
     DesignStorageModule,
     FulfillmentModule,
     TelegramNotificationModule,

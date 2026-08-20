@@ -5,7 +5,12 @@ import { PageResZod, ResZod } from '@shared/types';
 import { z } from 'zod';
 
 import { IDZod } from '..';
-import { DesignFieldsZod, ProductionOrderShippingAddressZod } from './production-order.dto';
+import {
+  CustomerOrderSummaryZod,
+  DesignFieldsZod,
+  LifecycleTrackZod,
+  ProductionOrderShippingAddressZod,
+} from './production-order.dto';
 
 /**
  * Staging đơn khách hàng `customer_orders` — 1 document = 1 ĐƠN nhiều item +
@@ -409,3 +414,58 @@ export const PushCustomerOrdersResZod = ResZod.extend({
   }),
 });
 export class PushCustomerOrdersResDto extends createZodDto(extendApi(PushCustomerOrdersResZod)) {}
+
+// ---------------------------------------------------------------------------
+// Public Order API (ORD-4) — xác thực bằng API key (`X-Api-Key`), KHÔNG JWT.
+// Đơn tạo qua API đi ĐÚNG luồng staging: Pending → push → importOrders().
+// ---------------------------------------------------------------------------
+
+/** Cap tạo đơn theo lô qua Public API (plan §8): ≤100 đơn/lần gọi. */
+export const OPEN_API_MAX_ORDERS_PER_CALL = 100;
+
+/**
+ * 1 đơn tạo qua Public API — `externalRef` là mã tham chiếu của KHÁCH
+ * (idempotency: gọi lại cùng mã → `duplicated`, không tạo trùng; map vào
+ * `orderKey`/`orderId` staging). Items dùng CHUNG shape với CSV import —
+ * SKU bắt buộc match `variations[].sku`.
+ */
+export const OpenApiCreateOrderZod = z.object({
+  externalRef: z.string().min(1).max(200),
+  orderName: z.string().max(300).optional(),
+  note: z.string().max(1000).optional(),
+  shippingAddress: CustomerImportShippingAddressZod,
+  items: CustomerImportOrderItemZod.array().min(1).max(100),
+});
+export type OpenApiCreateOrder = z.infer<typeof OpenApiCreateOrderZod>;
+
+export const OpenApiCreateOrdersZod = z.object({
+  orders: OpenApiCreateOrderZod.array().min(1).max(OPEN_API_MAX_ORDERS_PER_CALL),
+});
+export class OpenApiCreateOrdersDto extends createZodDto(extendApi(OpenApiCreateOrdersZod)) {}
+// Response tái dùng shape kết quả từng đơn của CSV import (`created|duplicated|failed`).
+
+/** Push qua Public API — theo `externalRefs` (mã của khách) hoặc `ids` (staging id). Ít nhất 1 trong 2. */
+export const OpenApiPushOrdersZod = z
+  .object({
+    externalRefs: z.string().min(1).max(200).array().max(OPEN_API_MAX_ORDERS_PER_CALL).optional(),
+    ids: IDZod.array().max(OPEN_API_MAX_ORDERS_PER_CALL).optional(),
+  })
+  .refine((v) => (v.externalRefs?.length ?? 0) + (v.ids?.length ?? 0) > 0, {
+    message: 'Cần ít nhất 1 externalRef hoặc id',
+  });
+export class OpenApiPushOrdersDto extends createZodDto(extendApi(OpenApiPushOrdersZod)) {}
+
+/**
+ * Tra 1 đơn theo `:ref` = externalRef HOẶC productionId của 1 item.
+ * `order` = đúng shape listing portal (derive 8 trạng thái + badge held/rework);
+ * `items[].timeline` có qua endpoint track riêng của portal — ở đây trả kèm
+ * `track` cho productionId được hỏi (nếu `:ref` là productionId đã push).
+ */
+export const OpenApiGetOrderResZod = ResZod.extend({
+  data: z.object({
+    order: CustomerStagingOrderZod,
+    /** Chỉ có khi `:ref` là productionId của 1 item đã push — mirror trang track portal. */
+    track: z.object({ order: CustomerOrderSummaryZod, track: LifecycleTrackZod }).optional(),
+  }),
+});
+export class OpenApiGetOrderResDto extends createZodDto(extendApi(OpenApiGetOrderResZod)) {}

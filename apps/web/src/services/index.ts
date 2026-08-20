@@ -6,7 +6,14 @@ import { customRoles } from './custom-roles';
 import { customer } from './customer';
 import { customerAssignment } from './customerAssignment';
 import { customerNotification } from './customerNotification';
-import { customerAuth, customerCatalog, customerDesign, customerNotificationPortal, customerOrder } from './customerPortal';
+import {
+  customerApiAccess,
+  customerAuth,
+  customerCatalog,
+  customerDesign,
+  customerNotificationPortal,
+  customerOrder,
+} from './customerPortal';
 import { departments } from './departments';
 import { designer } from './designer';
 import { designerAssignment } from './designerAssignment';
@@ -52,6 +59,7 @@ export const RepositoryRemote = {
   customerOrder,
   customerCatalog,
   customerDesign,
+  customerApiAccess,
   publicCatalog,
   customerNotification,
   customerNotificationPortal,

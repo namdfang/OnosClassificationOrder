@@ -30,6 +30,7 @@ const CustomerOrderNew = lazy(() => import('./pages/customer/orders/new'));
 const CustomerOrderImport = lazy(() => import('./pages/customer/orders/import'));
 const CustomerOrderTrack = lazy(() => import('./pages/customer/orders/track'));
 const CustomerAccount = lazy(() => import('./pages/customer/account'));
+const CustomerApi = lazy(() => import('./pages/customer/api'));
 
 function PrivateRoute() {
   const isAuthenticated = useAuthStore((s) => s.isAuthenticated());
@@ -185,6 +186,14 @@ function App() {
               element={
                 <Suspense fallback={<Loading />}>
                   <CustomerAccount />
+                </Suspense>
+              }
+            />
+            <Route
+              path={PATHS.CUSTOMER_API}
+              element={
+                <Suspense fallback={<Loading />}>
+                  <CustomerApi />
                 </Suspense>
               }
             />

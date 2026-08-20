@@ -22,6 +22,7 @@ import type {
   ImportCustomerOrdersDto,
   ImportCustomerOrdersResDto,
   ImportProductionOrderRow,
+  OpenApiGetOrderResDto,
   PlaceCustomerOrderDto,
   PreviewPushCustomerOrdersResDto,
   ProductionOrderShippingAddress,
@@ -821,6 +822,76 @@ export class CustomerOrderService implements OnModuleInit {
   }
 
   // -------------------------------------------------------------------------
+  // Public Order API (ORD-4) — adapter mỏng trên các method sẵn có, cùng ranh
+  // giới dữ liệu: mọi query đều scoped theo customerId của key.
+  // -------------------------------------------------------------------------
+
+  /**
+   * Resolve staging ids từ `externalRefs` (orderKey của khách) + `ids` — CHỈ
+   * đơn của CHÍNH khách. Ref không tồn tại đơn giản là không có trong kết quả
+   * (push sẽ báo `failed: Không tìm thấy đơn` cho id lạ, không lộ tồn tại).
+   */
+  async resolveStagingIdsForApi(
+    customer: CustomerDocument,
+    dto: { externalRefs?: string[]; ids?: string[] },
+  ): Promise<string[]> {
+    const ids = [...(dto.ids ?? [])];
+    if (dto.externalRefs?.length) {
+      const keys = dto.externalRefs.map((r) => customerOrderKey(r, undefined));
+      const docs = await this.customerOrderModel
+        .find({ customerId: String(customer._id), orderKey: { $in: keys } })
+        .select('_id')
+        .lean();
+      ids.push(...docs.map((d) => String(d._id)));
+    }
+    return [...new Set(ids)];
+  }
+
+  /**
+   * Tra 1 đơn theo `externalRef` HOẶC `productionId` của 1 item — đúng shape
+   * listing portal (derive 8 trạng thái + badge). Không thuộc khách này → 404
+   * chung chung (không lộ đơn tồn tại). Nếu ref là productionId đã push → kèm
+   * `track` mirror trang track portal (cùng `trackOrder`, vốn không chứa tên
+   * nhân viên/giá vốn).
+   */
+  async getOrderByRefForApi(customer: CustomerDocument, ref: string): Promise<OpenApiGetOrderResDto> {
+    await this.syncLegacyOrdersForCustomer({
+      _id: customer._id,
+      userSku: customer.userSku,
+      userEmail: customer.userEmail,
+    });
+    const trimmed = (ref ?? '').trim();
+    if (!trimmed) throw new NotFoundException('Không tìm thấy đơn');
+    const cutoff = await this.getCompletedCutoff();
+    const rx = { $regex: `^${escapeRegex(trimmed)}$`, $options: 'i' };
+    const pipeline = [
+      ...this.buildDerivePipeline(String(customer._id), cutoff),
+      { $match: { $or: [{ orderKey: customerOrderKey(trimmed, undefined) }, { 'items.productionId': rx }] } },
+      { $limit: 1 },
+    ];
+    const [doc] = await this.customerOrderModel.aggregate<
+      Record<string, unknown> & { prodOrders?: ProdDeriveFields[] }
+    >(pipeline as never[]);
+    if (!doc) throw new NotFoundException('Không tìm thấy đơn');
+
+    const prodByPid = new Map<string, ProdDeriveFields>(
+      (doc.prodOrders ?? []).map((p) => [p.productionId as string, p]),
+    );
+    const order = this.toStagingOrder(doc, prodByPid, cutoff);
+
+    const matchedItem = order.items.find((i) => i.productionId?.toLowerCase() === trimmed.toLowerCase());
+    let track: OpenApiGetOrderResDto['data']['track'];
+    if (matchedItem?.productionId && order.pushedAt) {
+      try {
+        track = (await this.trackOrder(customer, matchedItem.productionId)).data;
+      } catch {
+        track = undefined;
+      }
+    }
+    return { success: true, data: { order, track } };
+  }
+
+  // -------------------------------------------------------------------------
   // Sửa / hủy đơn PENDING (plan §2 — sửa tự do trước push)
   // -------------------------------------------------------------------------
 
@@ -938,6 +1009,8 @@ export class CustomerOrderService implements OnModuleInit {
   async importOrdersCsv(
     customer: CustomerDocument,
     dto: ImportCustomerOrdersDto,
+    // 'api' khi gọi qua Public Order API (ORD-4) — cùng luồng staging, chỉ khác nguồn.
+    source: 'csv' | 'api' = 'csv',
   ): Promise<ImportCustomerOrdersResDto> {
     const totalLines = dto.orders.reduce((s, o) => s + o.items.length, 0);
     if (totalLines > 500) throw new BadRequestException('Tối đa 500 dòng mỗi lần import.');
@@ -1007,7 +1080,7 @@ export class CustomerOrderService implements OnModuleInit {
           identifier: order.identifier,
           orderName: order.orderName,
           note: order.note,
-          source: 'csv',
+          source,
           status: 'pending',
           shippingAddress: order.shippingAddress,
           items,

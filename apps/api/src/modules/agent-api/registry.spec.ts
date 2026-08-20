@@ -180,8 +180,15 @@ describe('AGENT_TABLE_REGISTRY — từ điển mô tả', () => {
 });
 
 describe('AGENT_DENY_FIELD_NAMES — chốt chặn DUY NHẤT còn lại', () => {
-  it('đúng bốn tên: hai bí mật xác thực, hai dấu vết phiên', () => {
-    expect([...AGENT_DENY_FIELD_NAMES].sort()).toEqual(['ip', 'password', 'passwordSource', 'userAgent']);
+  it('đúng sáu tên: bốn bí mật xác thực, hai dấu vết phiên', () => {
+    expect([...AGENT_DENY_FIELD_NAMES].sort()).toEqual([
+      'apiKeys',
+      'ip',
+      'password',
+      'passwordSource',
+      'secret',
+      'userAgent',
+    ]);
   });
 
   it('chặn theo TỪNG ĐOẠN của đường dẫn, không chỉ đoạn cuối', () => {
@@ -190,6 +197,10 @@ describe('AGENT_DENY_FIELD_NAMES — chốt chặn DUY NHẤT còn lại', () =>
     // không thì `password.hash` là cửa sau đi thẳng vào thứ vừa cấm.
     expect(isDeniedFieldPath('password.hash')).toBe(true);
     expect(isDeniedFieldPath('meta.session.ip')).toBe(true);
+    // ORD-4 — bí mật của Public Order API, chặn cả khi xin trường con.
+    expect(isDeniedFieldPath('apiKeys')).toBe(true);
+    expect(isDeniedFieldPath('apiKeys.hash')).toBe(true);
+    expect(isDeniedFieldPath('secret')).toBe(true);
     // Không bắt nhầm theo chuỗi con: `passwordChangedAt` là trường bình thường.
     expect(isDeniedFieldPath('passwordChangedAt')).toBe(false);
     expect(isDeniedFieldPath('shippingAddress')).toBe(false);

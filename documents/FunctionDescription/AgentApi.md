@@ -15,7 +15,7 @@ Bộ API **chỉ đọc** phục vụ một AI agent nội bộ trả lời khá
 
 Tới `API-18`, thiết kế xoay quanh *"danh sách trắng ở tầng trường, cấm là mặc định"*. Người dùng đã chốt bỏ vế đó. Nguyên tắc hiện hành:
 
-> **Mở là mặc định. Mọi collection, mọi trường — trừ đúng bốn tên.**
+> **Mở là mặc định. Mọi collection, mọi trường — trừ đúng sáu tên.**
 
 | | Trước `API-19` | Sau `API-19` |
 |---|---|---|
@@ -24,7 +24,7 @@ Tới `API-18`, thiết kế xoay quanh *"danh sách trắng ở tầng trườn
 | Lọc / sắp xếp / nhóm | theo `filter`/`sortable`/`groupable` từng trường | **mở hết** |
 | Tiền | 8 trường bị che | đọc được (kể cả giá vốn, biên lợi nhuận) |
 | Giá trị cũ/mới của nhật ký | lọc qua danh sách trắng tên trường | nguyên văn |
-| Còn bị chặn | 12 tên | **4 tên**: `password`, `passwordSource`, `ip`, `userAgent` |
+| Còn bị chặn | 12 tên | **6 tên**: `password`, `passwordSource`, `ip`, `userAgent`, `apiKeys`, `secret` (2 tên cuối thêm ở ORD-4) |
 
 **Hệ quả phải biết, không phải điều bất ngờ:**
 
@@ -54,7 +54,7 @@ Agent  ──[X-Agent-Api-Key]──►  AgentApiKeyGuard          401 nếu thi
                        (find / aggregate)
                               │
                               ▼
-                     stripDeniedDeep (4 tên bị chặn, mọi độ sâu)
+                     stripDeniedDeep (6 tên bị chặn, mọi độ sâu)
                               │
                               ▼
                         AgentAuditService  → collection `agentApiLogs`
@@ -120,7 +120,7 @@ Không có `$between` (MongoDB không có); khoảng giá trị viết bằng d�
 
 **`$startsWith` là tên không tồn tại trong MongoDB, và đó là chủ ý.** Bên gọi truyền **chuỗi thường**; server escape rồi tự neo `^`, nên không có đường nào để một mẫu biểu thức đi vào và không có ReDoS. `$regex` bị từ chối như mọi toán tử ngoài danh sách trắng. Vì sao không mượn luôn tên `$regex` cho năng lực này: một toán tử mang tên chuẩn MongoDB nhưng ngữ nghĩa khác là **bẫy im lặng** — agent quen Mongo sẽ gửi `".*abc.*"` rồi nhận kết quả rỗng mà không hiểu vì sao. Tên lạ buộc nó tra tài liệu.
 
-**Mức lọc sau `API-19`: `full` ở mọi trường.** Bộ kiểm mức lọc vẫn chạy nhưng không còn trường nào bị siết, nên `{ "userEmail": { "$startsWith": "a" } }` nay qua được. Chỉ bốn tên bị chặn là hỏng, ở mọi dạng cú pháp và mọi độ sâu của cây điều kiện.
+**Mức lọc sau `API-19`: `full` ở mọi trường.** Bộ kiểm mức lọc vẫn chạy nhưng không còn trường nào bị siết, nên `{ "userEmail": { "$startsWith": "a" } }` nay qua được. Chỉ sáu tên bị chặn là hỏng, ở mọi dạng cú pháp và mọi độ sâu của cây điều kiện.
 
 **Trường chưa ai mô tả cũng lọc được.** Nó nhận `OPEN_POLICY` với `type: 'any'`, nên phép ép ngày chuyển sang phỏng đoán theo mẫu: chuỗi ISO đầy đủ (`2026-08-01T00:00:00Z`) thành `Date`, chuỗi ngày trần (`2026-08-01`) giữ nguyên là chuỗi. Trường **có** mô tả `type: 'date'` vẫn ép chắc chắn như trước.
 
@@ -231,12 +231,12 @@ Không có. Bộ API này không phục vụ trình duyệt và không có màn 
 
 ### 5.3 Bốn tên bị chặn — chốt DUY NHẤT còn lại (`API-19`)
 
-`password`, `passwordSource`, `ip`, `userAgent`. Không phải dữ liệu nghiệp vụ: hai cái đầu là bí mật xác thực (hash mật khẩu lọt ra là cho phép dò ngược ngoại tuyến toàn bộ tài khoản khách; `passwordSource = 'system'` chỉ điểm tài khoản đang dùng mật khẩu mặc định), hai cái sau là dấu vết phiên làm việc.
+`password`, `passwordSource`, `ip`, `userAgent`, `apiKeys`, `secret`. Không phải dữ liệu nghiệp vụ: hai cái đầu là bí mật xác thực (hash mật khẩu lọt ra là cho phép dò ngược ngoại tuyến toàn bộ tài khoản khách; `passwordSource = 'system'` chỉ điểm tài khoản đang dùng mật khẩu mặc định), hai cái giữa là dấu vết phiên làm việc, hai cái cuối (ORD-4) là bí mật của Public Order API: `customers.apiKeys[].hash` là sha256 của API key khách, `customer_webhooks.secret` là khoá ký HMAC webhook — ai có nó thì giả mạo được thông báo gửi cho khách.
 
 Vì đây là cơ chế **duy nhất**, nó không còn nằm ở unit test như một lưới an toàn thứ hai mà chạy ở **tầng truy vấn**, ba lớp chồng nhau:
 
 1. **`AgentQueryService.policy()`** — cửa chung của mọi đường (đọc, lọc, sắp xếp, nhóm, tổng hợp). So khớp theo **từng đoạn** của đường dẫn, nên `password.hash` hỏng y như `password`; áp cho mọi bảng, kể cả bảng không ai mô tả.
-2. **`$project` loại trừ ở tầng kho dữ liệu** — truy vấn không xin trường cụ thể thì lấy nguyên bản ghi TRỪ bốn tên, nên chúng không được đọc lên khỏi DB.
+2. **`$project` loại trừ ở tầng kho dữ liệu** — truy vấn không xin trường cụ thể thì lấy nguyên bản ghi TRỪ sáu tên, nên chúng không được đọc lên khỏi DB.
 3. **`stripDeniedDeep()` ở đầu ra** — quét mọi độ sâu, kể cả trong mảng. Lớp 2 chỉ phủ cấp một; nhánh lồng của collection không ai mô tả phải nhờ lớp này.
 
 **Projection mặc định nay là NGUYÊN bản ghi.** Không xin `fields` thì không có `$project` thu hẹp — chiếu theo danh sách khai sẵn sẽ âm thầm nuốt mất mọi trường chưa kịp mô tả, và với bảng ngoài từ điển thì nuốt sạch. Có xin `fields` thì chiếu đúng thứ đã xin và `pick-projected.ts` cắt lại theo đường dẫn.
@@ -322,7 +322,7 @@ mọi thứ nay mở có chủ ý; những cái còn lại đổi cả mục đ�
 |---|---|---|
 | I1 | `sortable ⇒ read`, `groupable ⇒ read` | **GỠ** — mọi trường đều `read` |
 | I2 | Danh sách bảng khớp chính xác 11 tên | **ĐỔI NGHĨA** — nay là "11 bảng **có mô tả**", không phải "11 bảng đọc được" |
-| I3 | Không tên bị chặn nào lọt vào từ điển | **GIỮ, siết hơn** — đúng 4 tên, so khớp theo từng đoạn đường dẫn, cộng ca cho `stripDeniedDeep` |
+| I3 | Không tên bị chặn nào lọt vào từ điển | **GIỮ, siết hơn** — đúng 6 tên, so khớp theo từng đoạn đường dẫn, cộng ca cho `stripDeniedDeep` |
 | I4 | Mọi đường dẫn của schema phải có mô tả hoặc nằm ở `deliberatelyExcluded` | **GIỮ, đổi mục đích** — nay canh **chất lượng từ điển**, không canh rò dữ liệu: đỏ nghĩa là "field mới chưa ai viết ghi chú", không phải "đang rò" |
 | I5 | Metric chỉ trên trường `aggregatable && read` | **GỠ** — tổng hợp trên trường chữ trả 0/null, không còn bị chặn trước |
 | I6 | Văn bản tự do phải `filter: 'none'` | **GỠ** — `API-19` cho lọc |
@@ -332,7 +332,7 @@ mọi thứ nay mở có chủ ý; những cái còn lại đổi cả mục đ�
 | **MỚI** | Nhóm/sắp xếp theo `orders.assignee`, `orderLogs.userId` phải chạy | Khoá đúng ca người dùng báo hỏng — sản lượng theo từng người |
 
 Ngoài ra `agent-query.service.spec.ts` giữ ma trận probe cũ nhưng đảo chiều: năm hướng đầu phải **chạy
-được** (kể cả trên bảng không ai mô tả), hướng thứ sáu — bốn tên bị chặn — phải hỏng ở **mọi** vị trí.
+được** (kể cả trên bảng không ai mô tả), hướng thứ sáu — sáu tên bị chặn — phải hỏng ở **mọi** vị trí.
 
 ### 5.7 Tài liệu
 

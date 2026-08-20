@@ -9,7 +9,51 @@
       "title": "Navigation",
       "dashboard": "Dashboard",
       "orders": "Order management",
-      "catalog": "Products"
+      "catalog": "Products",
+      "api": "API & Webhooks"
+    }
+  },
+  "apiAccess": {
+    "title": "API & Webhooks",
+    "subtitle": "Connect your system to the factory: create a key, register where to receive updates, then run the sample commands.",
+    "copied": "Copied",
+    "keys": {
+      "title": "API keys",
+      "description": "Send the key in the X-Api-Key header on every call. Up to 5 active keys.",
+      "createBtn": "Create key",
+      "empty": "No keys yet. Create your first key to start calling the API.",
+      "createdAt": "Created {{date}}",
+      "lastUsedAt": "Last used {{date}}",
+      "neverUsed": "Never used",
+      "revokeBtn": "Revoke",
+      "revoked": "Revoked key \"{{label}}\"",
+      "labelRequired": "Name the key so you can recognize it later",
+      "labelPlaceholder": "For example: Storefront backend",
+      "dialogTitle": "Create API key",
+      "dialogDescription": "Name it after the system where you will use this key.",
+      "plainTitle": "Your key",
+      "plainWarning": "This key is shown once. Copy it somewhere safe before closing.",
+      "plainLabel": "API KEY",
+      "plainDone": "I saved the key"
+    },
+    "webhooks": {
+      "title": "Webhooks",
+      "description": "We POST to your URL whenever an order changes status. Up to 3 URLs.",
+      "addBtn": "Add URL",
+      "urlRequired": "Enter the URL to notify",
+      "created": "Webhook added",
+      "deleted": "Webhook deleted",
+      "eventsLabel": "Events we send:",
+      "secretLabel": "Signing secret:"
+    },
+    "guide": {
+      "title": "Sample commands",
+      "description": "Replace onos_live_... with your key and run them as is.",
+      "createLabel": "CREATE ORDERS",
+      "pushLabel": "PUSH TO PRODUCTION",
+      "trackLabel": "TRACK ORDER",
+      "payloadLabel": "PAYLOAD",
+      "webhookPayloadNote": "Every webhook call carries X-Onos-Signature = HMAC-SHA256 of the body, signed with the secret above."
     }
   },
   "dashboard": {

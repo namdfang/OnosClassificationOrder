@@ -1,7 +1,16 @@
 import React, { useEffect, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Link, NavLink, Outlet, useNavigate } from 'react-router-dom';
-import { Languages, LayoutDashboard, LayoutGrid, LogOut, Package, PackagePlus, UserCircle2 } from 'lucide-react';
+import {
+  KeyRound,
+  Languages,
+  LayoutDashboard,
+  LayoutGrid,
+  LogOut,
+  Package,
+  PackagePlus,
+  UserCircle2,
+} from 'lucide-react';
 
 import { ImpersonationBanner } from '@/components/auth/ImpersonationBanner';
 import { NotificationBell } from '@/components/customer/NotificationBell';
@@ -34,6 +43,7 @@ function buildNavItems(t: (key: string) => string): CustomerNavItem[] {
     },
     { path: PATHS.CUSTOMER_ORDERS, label: t('layout.nav.orders'), icon: <Package size={18} /> },
     { path: PATHS.CUSTOMER_CATALOG, label: t('layout.nav.catalog'), icon: <LayoutGrid size={18} /> },
+    { path: PATHS.CUSTOMER_API, label: t('layout.nav.api'), icon: <KeyRound size={18} /> },
   ];
 }
 

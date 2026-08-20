@@ -9,7 +9,51 @@
       "title": "Điều hướng",
       "dashboard": "Dashboard",
       "orders": "Quản lý đơn",
-      "catalog": "Sản phẩm"
+      "catalog": "Sản phẩm",
+      "api": "API & Webhook"
+    }
+  },
+  "apiAccess": {
+    "title": "API & Webhook",
+    "subtitle": "Nối hệ thống của bạn vào xưởng: tạo key, đăng ký nơi nhận thông báo, rồi dán lệnh mẫu để chạy thử.",
+    "copied": "Đã sao chép",
+    "keys": {
+      "title": "API key",
+      "description": "Dùng key trong header X-Api-Key ở mọi lệnh gọi. Tối đa 5 key hoạt động.",
+      "createBtn": "Tạo key",
+      "empty": "Chưa có key nào. Tạo key đầu tiên để bắt đầu gọi API.",
+      "createdAt": "Tạo {{date}}",
+      "lastUsedAt": "Dùng lần cuối {{date}}",
+      "neverUsed": "Chưa dùng lần nào",
+      "revokeBtn": "Thu hồi",
+      "revoked": "Đã thu hồi key \"{{label}}\"",
+      "labelRequired": "Đặt tên cho key để sau này nhận ra nó",
+      "labelPlaceholder": "Ví dụ: Hệ thống bán hàng",
+      "dialogTitle": "Tạo API key",
+      "dialogDescription": "Đặt tên gợi nhớ nơi bạn sẽ dùng key này.",
+      "plainTitle": "Key của bạn",
+      "plainWarning": "Key chỉ hiện lần này. Sao chép và lưu vào nơi an toàn trước khi đóng.",
+      "plainLabel": "API KEY",
+      "plainDone": "Tôi đã lưu key"
+    },
+    "webhooks": {
+      "title": "Webhook",
+      "description": "Chúng tôi gọi POST tới URL của bạn mỗi khi đơn đổi trạng thái. Tối đa 3 URL.",
+      "addBtn": "Thêm URL",
+      "urlRequired": "Nhập URL nhận thông báo",
+      "created": "Đã thêm webhook",
+      "deleted": "Đã xóa webhook",
+      "eventsLabel": "Sự kiện được gửi:",
+      "secretLabel": "Secret ký chữ ký:"
+    },
+    "guide": {
+      "title": "Lệnh mẫu",
+      "description": "Thay onos_live_... bằng key của bạn rồi chạy trực tiếp.",
+      "createLabel": "TẠO ĐƠN",
+      "pushLabel": "ĐẨY SẢN XUẤT",
+      "trackLabel": "TRA TRẠNG THÁI",
+      "payloadLabel": "PAYLOAD",
+      "webhookPayloadNote": "Mỗi lần gọi webhook kèm header X-Onos-Signature = sha256 HMAC của body, ký bằng secret ở trên."
     }
   },
   "dashboard": {
