@@ -14,6 +14,7 @@ Bộ khung dự án sạch gồm **NestJS + Fastify** (backend) và **React + Vi
   - [3. Cấu hình env cho API](#3-cấu-hình-env-cho-api)
   - [4. Cấu hình env cho Web](#4-cấu-hình-env-cho-web)
   - [5. Chạy dev](#5-chạy-dev)
+  - [6. (Tuỳ chọn) Mở dev ra ngoài bằng Cloudflare Tunnel](#6-tuỳ-chọn-mở-dev-ra-ngoài-bằng-cloudflare-tunnel)
 - [Các lệnh hay dùng](#các-lệnh-hay-dùng)
 - [Tài khoản đăng nhập](#tài-khoản-đăng-nhập)
 - [Troubleshooting](#troubleshooting)
@@ -191,6 +192,41 @@ pnpm dev
 Web app sẽ chạy ở `http://localhost:5173`. Mở trình duyệt và bạn sẽ thấy trang Login.
 
 > Hoặc chạy cả hai cùng lúc từ thư mục gốc: `pnpm dev`.
+
+---
+
+### 6. (Tuỳ chọn) Mở dev ra ngoài bằng Cloudflare Tunnel
+
+Web và API chạy ở 2 cổng khác nhau nên cần **2 hostname**, theo quy ước
+`<sub>.<domain>` cho web và `api-<sub>.<domain>` cho API:
+
+```yaml
+# ~/.cloudflared/config.yml
+ingress:
+  - hostname: task.lcndev.online       # web
+    service: http://127.0.0.1:5173
+  - hostname: api-task.lcndev.online   # API
+    service: http://127.0.0.1:3007
+  - service: http_status:404
+```
+
+Phía web **không cần sửa gì**: khi chạy `vite dev`, `resolveApiUrl()` trong
+`apps/web/src/constants/index.ts` tự nhận biết trang đang mở bằng localhost/IP
+LAN hay bằng domain thật — localhost thì dùng `VITE_API_URL`, domain thật thì
+đổi sang `api-<sub>.<domain>`. Tunnel API nằm ở hostname khác quy ước thì đặt
+thêm `VITE_TUNNEL_API_URL` trong `apps/web/.env.development`.
+
+Phía API chỉ cần thêm origin của web vào CORS — biến này **bổ sung** vào 3
+origin cố định chứ không thay thế:
+
+```env
+# apps/api/.env.development
+ALLOWED_ORIGINS=https://task.lcndev.online
+```
+
+Vite còn chặn Host header lạ, nên chạy web kèm `--host` và khai báo hostname
+tunnel qua `vite dev --host --allowed-hosts task.lcndev.online` (hoặc thêm
+`server.allowedHosts` vào `apps/web/vite.config.js`).
 
 ---
 

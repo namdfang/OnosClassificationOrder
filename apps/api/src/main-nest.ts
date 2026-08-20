@@ -17,10 +17,28 @@ import { setupSwagger } from './setup-swagger';
 import { ApiConfigService } from './shared/services';
 import { SharedModule } from './shared/shared.module';
 
-const ALLOWED_ORIGINS = process.env.ALLOWED_ORIGINS?.split(',') || [
+/**
+ * 3 origin cố định của hệ thống. Trước đây `ALLOWED_ORIGINS` trong env sẽ THAY
+ * THẾ trọn bộ này — đặt env cho tunnel là mất luôn quyền truy cập từ
+ * onosfactory.com. Giờ env chỉ BỔ SUNG thêm.
+ */
+const DEFAULT_ALLOWED_ORIGINS = [
   'http://localhost:5173',
   'https://onosfactory.com',
   'https://api.onosfactory.com',
+];
+
+/**
+ * Origin ngoài danh sách cứng — khai báo qua env `ALLOWED_ORIGINS`, ngăn cách
+ * bằng dấu phẩy. Dùng cho domain Cloudflare Tunnel khi dev (vd
+ * `https://task.lcndev.online`) vì `isLocalDevOrigin()` bên dưới chỉ nhận
+ * localhost/IP LAN, không nhận domain thật.
+ */
+const ALLOWED_ORIGINS = [
+  ...new Set([
+    ...DEFAULT_ALLOWED_ORIGINS,
+    ...(process.env.ALLOWED_ORIGINS?.split(',') ?? []).map((origin) => origin.trim()).filter(Boolean),
+  ]),
 ];
 
 /**
