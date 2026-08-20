@@ -13,13 +13,15 @@ import {
   GetCustomerMeResDto,
   myNanoid,
   RoleType,
+  StopImpersonationResDto,
   UpdateCustomerMeDto,
   UpdateCustomerMeResDto,
 } from 'shared';
 import { Logger } from 'winston';
 
-import { Auth } from '@/decorators';
+import { AccessToken, Auth, ClientIp, UserAgent } from '@/decorators';
 import { AuthService } from '@/modules/auth/auth.service';
+import { ImpersonationService } from '@/modules/auth/impersonation.service';
 import type { CustomerDocument } from '@/modules/customer/customer.entity';
 import { CustomerService, toSafeCustomer } from '@/modules/customer/customer.service';
 
@@ -30,6 +32,9 @@ export class CustomerAuthController {
   constructor(
     private readonly customerService: CustomerService,
     private readonly authService: AuthService,
+    // AUTH-3 — dùng CHUNG service dừng mạo danh với `POST /auth/impersonate/stop`,
+    // không nhân bản logic: sửa quy tắc dừng chỉ có đúng một chỗ để sửa.
+    private readonly impersonationService: ImpersonationService,
     @Inject('winston') private readonly logger: Logger,
   ) {}
 
@@ -118,5 +123,36 @@ export class CustomerAuthController {
     });
     await this.customerService.changePassword(customer._id.toString(), dto);
     return { success: true, data: { changed: true } };
+  }
+
+  /**
+   * AUTH-3 — thoát phiên mạo danh KHÁCH HÀNG. Cùng một việc với
+   * `POST /auth/impersonate/stop` (AUTH-1) và gọi ĐÚNG service đó, chỉ khác chỗ
+   * đứng: token của phiên mạo danh khách mang role `Customer`, mà `RolesGuard`
+   * chặn cứng role đó khỏi mọi URL không chứa `/customer/` — nên đường thoát
+   * cũ trả 403. Cách sửa là đưa đường thoát VÀO TRONG rào, KHÔNG nới rào
+   * (`CUSTOMER_ALLOWED_PREFIXES` giữ nguyên `['/customer/']`).
+   *
+   * `public: true` giữ đúng tính chất của đường cũ: token mạo danh có thể ĐÃ
+   * HẾT HẠN lúc bấm thoát — chặn nó là nhốt người dùng trong chính phiên mà
+   * đường thoát sinh ra để cứu. Hàng rào thật nằm trong service: token khách
+   * THẬT không có claim `impersonatorId` nên bị từ chối ngay, không có đường
+   * nào đổi token khách lấy token nhân viên.
+   */
+  @Post('impersonate/stop')
+  @Auth([], [], { public: true })
+  @ApiOperation({ summary: 'Thoát phiên mạo danh khách hàng, trả về token SuperAdmin ban đầu' })
+  @HttpCode(HttpStatus.OK)
+  @ApiOkResponse({ type: StopImpersonationResDto })
+  async stopImpersonation(
+    @AccessToken() accessToken: string,
+    @ClientIp() ip: string,
+    @UserAgent() userAgent: string,
+  ): Promise<StopImpersonationResDto> {
+    this.logger.info({
+      message: JSON.stringify({ action: 'stopImpersonation', method: 'POST', url: '/customer/auth/impersonate/stop' }),
+    });
+
+    return { success: true, data: await this.impersonationService.stop(accessToken, { ip, userAgent }) };
   }
 }

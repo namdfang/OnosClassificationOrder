@@ -61,6 +61,9 @@ import { PublicStrategy } from './public.strategy';
     ActionRepository,
     AuthConsumer,
   ],
-  exports: [JwtModule, AuthService],
+  // AUTH-3 — `ImpersonationService` xuất ra cho `CustomerAuthController` dùng
+  // CHUNG đường dừng mạo danh (endpoint thoát của khách phải nằm dưới prefix
+  // `/customer/` mới đi qua được `RolesGuard`).
+  exports: [JwtModule, AuthService, ImpersonationService],
 })
 export class AuthModule {}

@@ -385,7 +385,8 @@ role SuperAdmin, và **không guard nào được đọc `impersonatorId` để 
 | Method | Path | Auth | Ghi chú |
 |---|---|---|---|
 | POST | `/v1/auth/impersonate` | `@Auth()` — chỉ yêu cầu đã đăng nhập | Chặn "chỉ SuperAdmin" nằm **tường minh trong service**, xem 10.5 |
-| POST | `/v1/auth/impersonate/stop` | `@Auth([], [], { public: true })` | **Cố ý public**, xem 10.4 |
+| POST | `/v1/auth/impersonate/stop` | `@Auth([], [], { public: true })` | **Cố ý public**, xem 10.4. Đường thoát của phiên mạo danh **NHÂN VIÊN** |
+| POST | `/v1/customer/auth/impersonate/stop` | `@Auth([], [], { public: true })` | `AUTH-3` — đường thoát của phiên mạo danh **KHÁCH HÀNG**, xem 10.4a. Gọi CHUNG `ImpersonationService.stop()` với đường trên |
 | GET | `/v1/auth/me` · `/v1/customer/auth/me` | như cũ | Trả thêm `impersonatedBy`, xem 10.3 |
 
 ### 10.3 `impersonatedBy` là field ĐỘNG — bẫy dễ sót nhất
@@ -406,6 +407,29 @@ Nên **cả hai** endpoint `me` phải chép nó **tường minh**:
 > `role` sống được **chỉ vì** `getMe()` chép tay nó. `impersonatedBy` cần đúng đối
 > xử đó. Cùng họ với [`Common_Pitfalls.md`](../Architecture/Common_Pitfalls.md) §1,
 > khác ở chỗ thêm vào `$project` **không cứu được** vì field không nằm trong DB.
+
+### 10.4a Vì sao có HAI đường thoát (`AUTH-3`)
+
+Token của phiên mạo danh **khách** mang role `Customer`, mà `RolesGuard`
+(`apps/api/src/guards/roles.guard.ts`, `CUSTOMER_ALLOWED_PREFIXES = ['/customer/']`)
+chặn cứng role đó khỏi **mọi** URL không chứa `/customer/` — kể cả route khai
+`public`, vì guard vẫn đọc được user từ token. Nên `POST /auth/impersonate/stop`
+trả **403** khi đang mạo danh khách, và người dùng kẹt trong portal khách.
+
+Cách sửa đã chốt: **đưa đường thoát VÀO TRONG rào, không nới rào**. Endpoint
+`POST /customer/auth/impersonate/stop` (`CustomerAuthController`) gọi ĐÚNG
+`ImpersonationService.stop()` của `AUTH-1` — không nhân bản logic, hai đường cho
+kết quả giống hệt nhau. `CUSTOMER_ALLOWED_PREFIXES` **giữ nguyên**, không thêm
+phần tử nào.
+
+Hàng rào thật vẫn nằm trong service: token khách **thật** không có claim
+`impersonatorId` nên bị từ chối ngay — không có đường đổi token khách lấy token
+nhân viên.
+
+FE chọn đường theo loại phiên trong `apps/web/src/utils/impersonation.ts`
+(`activeImpersonationSession()` + bảng `STOP_PATH`): phiên nào giữ
+`profile.impersonatedBy` ở `customerAuthStore` thì đi đường khách, còn lại đi
+đường nhân viên.
 
 ### 10.4 Thoát mạo danh — vì sao endpoint để public
 
