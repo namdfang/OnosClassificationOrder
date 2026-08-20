@@ -98,7 +98,9 @@
     "selectAll": "Select all"
   },
   "selectFilter": {
-    "all": "— All ({{count}}) —"
+    "all": "— All ({{count}}) —",
+    "searchPlaceholder": "Search...",
+    "noResults": "No results"
   },
   "imagePreview": {
     "title": "Image preview",

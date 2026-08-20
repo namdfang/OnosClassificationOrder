@@ -510,6 +510,8 @@ export function OrderTableClassic() {
       value: filterType,
       onChange: setFilterType,
       options: typeOptions,
+      // Danh sách sản phẩm dài → select có ô tìm kiếm (ORD-2). Các facet khác giữ native select.
+      searchable: true,
     },
     {
       key: 'fabricType',

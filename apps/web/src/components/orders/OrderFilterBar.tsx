@@ -4,6 +4,7 @@ import { ListChecks, RefreshCw, Search } from 'lucide-react';
 
 import { DateRangePicker } from '@/components/common/DateRangePicker';
 import { Hint } from '@/components/common/Hint';
+import { SearchableSelectFilter } from '@/components/common/SearchableSelectFilter';
 import { SelectFilter } from '@/components/common/SelectFilter';
 import { BulkProductionIdDialog, parseProductionIds } from '@/components/orders/BulkProductionIdDialog';
 import { Button } from '@/components/ui/button';
@@ -25,6 +26,9 @@ export interface OrderFilterFacet {
   perm?: string;
   /** Override để ẩn không qua perm (vd: role-specific). */
   hidden?: boolean;
+  /** Render `SearchableSelectFilter` (popover + ô tìm kiếm) thay cho native
+   *  select — dùng cho facet có danh sách option dài. */
+  searchable?: boolean;
 }
 
 export interface OrderFilterBarProps {
@@ -162,9 +166,19 @@ export function OrderFilterBar({
 
       {visibleFacets.length > 0 && (
         <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-2">
-          {visibleFacets.map((f) => (
-            <SelectFilter key={f.key} label={f.label} value={f.value} onChange={f.onChange} options={f.options} />
-          ))}
+          {visibleFacets.map((f) =>
+            f.searchable ? (
+              <SearchableSelectFilter
+                key={f.key}
+                label={f.label}
+                value={f.value}
+                onChange={f.onChange}
+                options={f.options}
+              />
+            ) : (
+              <SelectFilter key={f.key} label={f.label} value={f.value} onChange={f.onChange} options={f.options} />
+            ),
+          )}
         </div>
       )}
 
