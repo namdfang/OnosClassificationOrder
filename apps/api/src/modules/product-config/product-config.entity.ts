@@ -115,6 +115,19 @@ export class ProductConfigEntity extends DatabaseEntityAbstract {
         isRequired: { type: Boolean },
         additionPrice: { type: Number, min: 0 },
         isEmbroidery: { type: Boolean },
+        // PRD-7 — kích thước in theo từng size (cm). CỘNG THÊM vào widthPx/heightPx
+        // (px, mirror hệ cũ + import OnosPod), KHÔNG thay thế chúng.
+        sizeDimensions: {
+          type: [
+            raw({
+              size: { type: String, required: true, trim: true },
+              widthCm: { type: Number, min: 0 },
+              lengthCm: { type: Number, min: 0 },
+            }),
+          ],
+          default: undefined,
+          _id: false,
+        },
       }),
     ],
     default: undefined,

@@ -47,3 +47,11 @@ export const PRODUCT_PRINT_AREA_LABEL_MAP: Record<ProductPrintAreaKey, string> =
 
 /** Zod validator — chỉ chấp nhận 1 trong các key cố định ở trên. */
 export const ProductPrintAreaKeyZod = z.enum(PRODUCT_PRINT_AREA_KEYS);
+
+/**
+ * PRD-7 — trần CHIỀU RỘNG (cm) của một vùng in: giấy DTF khổ 60 cm, trừ 1 cm
+ * kẹp giấy mỗi bên còn 58 cm in được. Chiều DÀI không có trần (giấy cuộn).
+ * Dùng chung cho validate ở BE (zod) và cho nhãn/thông báo lỗi ở FE — đừng chép
+ * số 58 ra chỗ khác.
+ */
+export const PRINT_AREA_MAX_WIDTH_CM = 58;

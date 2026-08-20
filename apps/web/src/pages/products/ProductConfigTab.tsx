@@ -325,17 +325,17 @@ export function ProductConfigTab({ refreshKey = 0 }: ProductConfigTabProps) {
 
   useEffect(() => {
     setFilterField('fullName', debouncedName);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
+     
   }, [debouncedName]);
 
   useEffect(() => {
     setFilterField('shortName', debouncedShortName);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
+     
   }, [debouncedShortName]);
 
   useEffect(() => {
     setFilterField('designReviewCode', debouncedDesignReviewCode);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
+     
   }, [debouncedDesignReviewCode]);
 
   const hasFilters = Object.values(filters).some(Boolean);

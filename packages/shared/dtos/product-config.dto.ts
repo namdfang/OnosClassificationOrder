@@ -1,6 +1,6 @@
 import { createZodDto } from '@anatine/zod-nestjs';
 import { extendApi } from '@anatine/zod-openapi';
-import { PriceZod, ProductPrintAreaKeyZod } from '@shared/constants';
+import { PriceZod, PRINT_AREA_MAX_WIDTH_CM, ProductPrintAreaKeyZod } from '@shared/constants';
 import { ProductConfigStatus, Status } from '@shared/enums';
 import { BaseEntityZod, PageQueryZod, PageResZod, ResZod } from '@shared/types';
 import { z } from 'zod';
@@ -24,6 +24,26 @@ export type ProductItemSpecific = z.infer<typeof ProductItemSpecificZod>;
  * map 1-1 với `DesignFields`/order.designs) — KHÔNG cho tự gõ key/label,
  * nhãn hiển thị resolve từ constant.
  */
+/**
+ * PRD-7 — kích thước in THẬT của một vị trí in ở MỘT size sản phẩm, đơn vị **cm**.
+ *
+ * Cộng THÊM vào `widthPx`/`heightPx` chứ không thay thế: hai trường px kia mirror
+ * `print_areas[].width/height` hệ cũ và đang mang dữ liệu import OnosPod. Ở đây
+ * dùng cm vì xưởng và giấy DTF đều nói bằng cm; quy đổi cm → px theo DPI là việc
+ * của tool dựng file (ORD-6), KHÔNG phải của cấu hình này.
+ *
+ * `size` là chuỗi lấy từ thuộc tính "Size" của `variations[]` — KHÔNG cho gõ tự do
+ * ở giao diện, để sau này ghép với size của đơn không bị lệch chính tả.
+ */
+export const ProductPrintAreaSizeDimensionZod = z.object({
+  size: z.string().min(1).max(60).trim(),
+  /** Chiều rộng (cm) — trần `PRINT_AREA_MAX_WIDTH_CM` = vùng in thật của giấy DTF. */
+  widthCm: z.coerce.number().positive().max(PRINT_AREA_MAX_WIDTH_CM),
+  /** Chiều dài (cm) — KHÔNG có trần vì giấy in là giấy cuộn. */
+  lengthCm: z.coerce.number().positive(),
+});
+export type ProductPrintAreaSizeDimension = z.infer<typeof ProductPrintAreaSizeDimensionZod>;
+
 export const ProductPrintAreaItemZod = z.object({
   key: ProductPrintAreaKeyZod,
   /** URL template thiết kế cho vị trí này ("print" hệ cũ — Drive link...). */
@@ -41,6 +61,16 @@ export const ProductPrintAreaItemZod = z.object({
   additionPrice: PriceZod.optional(),
   /** Vị trí thêu ("is_embroidery" hệ cũ). */
   isEmbroidery: z.boolean().optional(),
+  /**
+   * PRD-7 — kích thước in theo TỪNG size, mỗi size tối đa 1 dòng. Trống/thiếu =
+   * vị trí này chưa cấu hình kích thước (KHÔNG chặn lưu sản phẩm).
+   */
+  sizeDimensions: ProductPrintAreaSizeDimensionZod.array()
+    .max(50)
+    .optional()
+    .refine((items) => !items || new Set(items.map((i) => i.size.toLowerCase())).size === items.length, {
+      message: 'Duplicated size in print area dimensions',
+    }),
 });
 export type ProductPrintAreaItem = z.infer<typeof ProductPrintAreaItemZod>;
 

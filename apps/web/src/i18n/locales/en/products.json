@@ -288,7 +288,19 @@
       "heightPx": "Height (px)",
       "additionPrice": "Extra charge ($)",
       "isRequired": "Design required",
-      "isEmbroidery": "Embroidery"
+      "isEmbroidery": "Embroidery",
+      "sizeDims": {
+        "title": "Print size per product size",
+        "filled": "{{filled}}/{{total}} sizes filled",
+        "size": "Size",
+        "width": "Width (cm) ≤ {{max}}",
+        "length": "Length (cm)",
+        "noSizes": "This product has no sizes yet. Add variants with an \"Item Size\" (or \"Size\") attribute in section ③ Variants & Price.",
+        "errorPositive": "Enter a number greater than 0",
+        "errorMaxWidth": "Width tops out at {{max}} cm — 60 cm DTF paper minus 1 cm of grip on each side",
+        "errorBoth": "Enter both width and length",
+        "errorToast": "{{count}} print size field(s) are still invalid — fix them to save"
+      }
     },
     "packaging": {
       "title": "Default packaging",

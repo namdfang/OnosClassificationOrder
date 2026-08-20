@@ -24,3 +24,4 @@ export * from './tracking';
 export * from './transaction';
 export * from './us-states';
 export * from './user';
+export * from './variation-attribute';

@@ -288,7 +288,19 @@
       "heightPx": "Cao (px)",
       "additionPrice": "Phụ phí ($)",
       "isRequired": "Bắt buộc design",
-      "isEmbroidery": "Vị trí thêu"
+      "isEmbroidery": "Vị trí thêu",
+      "sizeDims": {
+        "title": "Kích thước in theo size",
+        "filled": "{{filled}}/{{total}} size đã nhập",
+        "size": "Size",
+        "width": "Rộng (cm) ≤ {{max}}",
+        "length": "Dài (cm)",
+        "noSizes": "Sản phẩm chưa có size nào. Thêm biến thể có thuộc tính \"Item Size\" (hoặc \"Size\") ở khu ③ Biến thể & Giá.",
+        "errorPositive": "Phải là số lớn hơn 0",
+        "errorMaxWidth": "Rộng tối đa {{max}} cm — giấy DTF khổ 60 cm trừ 1 cm kẹp mỗi bên",
+        "errorBoth": "Nhập cả rộng và dài",
+        "errorToast": "Còn {{count}} ô kích thước in chưa hợp lệ — sửa xong mới lưu được"
+      }
     },
     "packaging": {
       "title": "Đóng gói mặc định",
