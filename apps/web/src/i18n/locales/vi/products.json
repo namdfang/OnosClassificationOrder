@@ -219,7 +219,7 @@
   },
   "importDialog": {
     "title": "Import Product Config",
-    "description": "Paste dữ liệu từ Excel (tab-separated). 7 cột theo thứ tự: <b>Tên đầy đủ</b> — <b>Tên viết tắt</b> — <b>Máy</b> (số máy, vd 94/27, để trống = không có tool) — <b>Xưởng</b> (vd \"MÊ LINH\") — <b>Loại vải</b> (POLY 2 DA, MÈ 64, LỤA 4B, LỤA VÂN GỖ…) — <b>Kết quả Tool</b> (để trống = có tool; \"không tool\" = không có tool) — <b>Phòng</b> (loại máy in, vd \"IN và CẮT LASER\"). Hệ thống match label theo tên (case-insensitive).",
+    "description": "Paste dữ liệu từ Excel (tab-separated). 7 cột theo thứ tự: <b>Tên đầy đủ</b> — <b>Tên viết tắt</b> (để trống được) — <b>Máy</b> (số máy, vd 94/27, để trống = không có tool) — <b>Xưởng</b> (vd \"MÊ LINH\") — <b>Loại vải</b> (POLY 2 DA, MÈ 64, LỤA 4B, LỤA VÂN GỖ…) — <b>Kết quả Tool</b> (để trống = có tool; \"không tool\" = không có tool) — <b>Phòng</b> (loại máy in, vd \"IN và CẮT LASER\"). Hệ thống match label theo tên (case-insensitive).",
     "parseError": "Không parse được dòng nào. Kiểm tra format (đủ 7 cột, cách nhau bằng Tab).",
     "importSuccess": "Imported {{imported}}, updated {{updated}}, {{skippedCount}} cảnh báo",
     "validRows": "{{count}} dòng hợp lệ sẽ được import."

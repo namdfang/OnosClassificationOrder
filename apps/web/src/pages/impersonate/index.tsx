@@ -118,6 +118,13 @@ function ImpersonatePage() {
                           {c.targetType === 'user' ? t('impersonate.badgeStaff') : t('impersonate.badgeCustomer')}
                         </Badge>
                         <span className="truncate text-sm font-medium">{c.title}</span>
+                        {/* Vai trò (AUTH-5) — hiện thô, không dịch nhãn; khách hàng
+                            không có vai trò nội bộ nên bỏ trống. */}
+                        {c.role && (
+                          <Badge variant="secondary" className="text-[10px] font-normal">
+                            {c.role}
+                          </Badge>
+                        )}
                         {/* Tài khoản đã vô hiệu hoá VẪN mạo danh được (`BR-2`/`AC-03`)
                             — badge chỉ để người dùng biết mình đang vào cái gì. */}
                         {c.inactive && (

@@ -56,6 +56,22 @@ OnosFactory sử dụng hai cơ chế xử lý bất đồng bộ:
 - **Heartbeat:** 15 seconds
 - **Reconnect:** 30 seconds
 
+### 2.1b Log khi broker chưa lên
+
+Khi RabbitMQ không kết nối được, **hai** chỗ độc lập cùng retry vô hạn và cùng đổ log:
+`AmqpConnection` của `@golevelup` (mỗi 30s) và microservice `Transport.RMQ` trong
+`bootstrapMicroservice()` (mỗi 5s, log dạng `[Server] Connection to transport failed`).
+
+`QuietBrokerLogger` (`apps/api/src/utils/quiet-broker-logger.ts`, gắn bằng
+`Logger.overrideLogger()` ở `apps/api/src/main.ts` TRƯỚC cả hai bootstrap) gom nhóm chỗ này:
+lần hỏng đầu tiên in **đúng 1 dòng** `WARN [RabbitMQ]` kèm host lấy từ `RABBITMQ_URI`
+(không kèm credential), các lần retry sau im lặng. Kết nối lại được thì mở khoá — lần rớt
+kế tiếp lại báo 1 lần nữa. App **vẫn thử kết nối ngầm**, nên bật broker lên là tự vào lại
+mà không cần restart. Mọi log khác đi thẳng qua `ConsoleLogger` như cũ.
+
+> Thêm nguồn log retry mới (broker khác, transport khác) thì bổ sung chuỗi nhận dạng vào
+> `BROKER_DOWN_PATTERNS`/`BROKER_UP_PATTERNS`, đừng tắt log ở tầng transport.
+
 ### 2.2 Exchange & Queues
 
 Hệ thống sử dụng **1 direct exchange** với nhiều routing keys. Mỗi routing key map tới 1 queue:

@@ -27,7 +27,8 @@ Rectangle Fence Flag	cờ bán nguyệt	94	MÊ LINH	LỤA 4B		IN và CẮT LASER
 
 interface ParsedRow {
   fullName: string;
-  shortName: string;
+  /** ĐƯỢC PHÉP trống (PRD-3) — tên viết tắt do người dùng đặt, không phải cột bắt buộc. */
+  shortName?: string;
   machineNumber?: string;
   factoryLabel: string;
   fabricLabel?: string;
@@ -53,10 +54,12 @@ function parseRows(raw: string): ParsedRow[] {
     const cols = lines[i].split('\t').map((c) => c.trim());
     if (cols.length < 7) continue;
     const [fullName, shortName, machineNumber, factoryLabel, fabricLabel, toolResultLabel, departmentLabel] = cols;
-    if (!fullName || !shortName || !factoryLabel || !departmentLabel) continue;
+    // Cột "Tên viết tắt" KHÔNG bắt buộc (PRD-3): trước đây thiếu nó là dòng bị
+    // loại im lặng, lệch với entity/form tạo/import file vốn đã cho trống.
+    if (!fullName || !factoryLabel || !departmentLabel) continue;
     rows.push({
       fullName,
-      shortName,
+      shortName: shortName || undefined,
       machineNumber: machineNumber || undefined,
       factoryLabel,
       fabricLabel: fabricLabel || undefined,

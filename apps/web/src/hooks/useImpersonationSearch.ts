@@ -34,10 +34,10 @@ const deaccent = (s: string): string =>
  * Hạng của một dòng kết quả theo yêu cầu "khớp đúng lên đầu":
  * 0 = khớp CHÍNH XÁC cả chuỗi · 1 = khớp từ ĐẦU chuỗi · 2 = khớp ở GIỮA.
  * Tính trên MỌI trường đang tìm (title + subtitle gộp sẵn tên/email/SKU/điện
- * thoại), lấy hạng tốt nhất trong các trường.
+ * thoại, cộng vai trò), lấy hạng tốt nhất trong các trường.
  */
 const matchRank = (c: ImpersonationCandidate, needle: string): number => {
-  const fields = [c.title, ...c.subtitle.split(' · ')].map(deaccent).filter(Boolean);
+  const fields = [c.title, ...c.subtitle.split(' · '), c.role ?? ''].map(deaccent).filter(Boolean);
   let best = 3;
   for (const f of fields) {
     if (f === needle) return 0;
@@ -91,9 +91,10 @@ export function useImpersonationSearch(keyword: string) {
                   targetType: 'user' as const,
                   id: x._id,
                   title: x.fullName || x.email,
-                  subtitle: [x.email, (x as User & { role?: { name?: string } }).role?.name]
-                    .filter(Boolean)
-                    .join(' · '),
+                  subtitle: x.email,
+                  // Hiển thị THÔ đúng tiền lệ repo (trang Users, dải mạo danh):
+                  // không dịch nhãn vai trò.
+                  role: (x as User & { role?: { name?: string } }).role?.name,
                   inactive: isInactive(x.status),
                 }))
             : null,

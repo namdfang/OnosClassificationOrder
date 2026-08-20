@@ -25,8 +25,14 @@ export interface ImpersonationCandidate {
   id: string;
   /** Dòng đầu — tên hiển thị. */
   title: string;
-  /** Dòng phụ — email / SKU / vai trò. */
+  /** Dòng phụ — email (khách kèm hạng VIP). */
   subtitle: string;
+  /**
+   * Tên vai trò của NHÂN VIÊN (AUTH-5) — hiện thành badge riêng để không bị cắt
+   * mất trong popup hẹp. Tài khoản khách hàng để trống: họ không có vai trò nội
+   * bộ, badge "Khách hàng" đã nói đủ.
+   */
+  role?: string;
   inactive: boolean;
 }
 

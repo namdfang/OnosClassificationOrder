@@ -117,17 +117,26 @@ docker exec -it onosfactory-mongodb mongosh --eval "rs.status().ok"
 
 ### 3. Cấu hình env cho API
 
-Trong `apps/api/`, copy file env mẫu:
+API dùng **2 file env với 2 vai trò tách bạch**:
+
+| File | Vai trò | Nội dung |
+| --- | --- | --- |
+| `.env` | công tắc chọn môi trường | **đúng 1 dòng** `NODE_ENV=...` |
+| `.env.<NODE_ENV>` | toàn bộ config thật | ~260 dòng |
+
+`src/main.ts` nạp `.env` trước để biết `NODE_ENV`, rồi mới nạp `.env.${NODE_ENV}`.
+
+> ⚠️ **dotenv KHÔNG ghi đè biến đã tồn tại.** Vì `.env` nạp trước, mọi key bạn thêm vào `.env` sẽ **âm thầm vô hiệu hoá** key cùng tên trong `.env.development` — sửa bên `.env.development` sẽ "không ăn" mà không có lỗi nào báo. Giữ `.env` đúng 1 dòng.
 
 ```bash
 cd ../..              # về thư mục gốc
-cp apps/api/.env.development.example apps/api/.env.development
+cp apps/api/.env.example apps/api/.env                          # công tắc
+cp apps/api/.env.development.example apps/api/.env.development  # config
 ```
 
 Mở `apps/api/.env.development` và đảm bảo các biến quan trọng:
 
 ```env
-NODE_ENV=development
 PORT=3007
 
 # MongoDB
@@ -146,9 +155,12 @@ RABBITMQ_MAIN_EXCHANGE=onosfactory
 # JWT — đã có keypair sẵn trong file mẫu, giữ nguyên cho dev
 JWT_EXPIRATION_TIME=86400
 
-# CORS
-ALLOWED_ORIGINS=http://localhost:5173
+# CORS — BỔ SUNG vào 3 origin cố định trong `src/main-nest.ts`, không thay thế.
+# Để trống khi chỉ chạy localhost.
+ALLOWED_ORIGINS=
 ```
+
+> `NODE_ENV` **không cần** đặt trong `.env.development` — lúc file này được nạp thì `NODE_ENV` đã có sẵn từ `.env` rồi, và dotenv cũng sẽ không ghi đè nó.
 
 > `.env.development.example` chứa khá nhiều biến cho các tính năng đã bị xoá (Backblaze, Telegram, providers...). Bạn có thể bỏ qua hoặc xoá bớt cho gọn — API vẫn chạy nếu chúng để trống.
 

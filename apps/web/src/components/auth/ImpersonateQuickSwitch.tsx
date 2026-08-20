@@ -141,6 +141,13 @@ export function ImpersonateQuickSwitch() {
                                   : t('impersonate.badgeCustomer')}
                               </Badge>
                               <span className="truncate text-xs font-medium">{c.title}</span>
+                              {/* Vai trò (AUTH-5) — badge riêng, KHÔNG nhét vào dòng phụ
+                                  vì email dài sẽ cắt mất nó trong popup hẹp. */}
+                              {c.role && (
+                                <Badge variant="secondary" className="text-[10px] font-normal">
+                                  {c.role}
+                                </Badge>
+                              )}
                               {c.inactive && (
                                 <Badge variant="destructive" className="text-[10px]">
                                   {t('impersonate.badgeInactive')}

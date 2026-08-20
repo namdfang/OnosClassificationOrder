@@ -219,7 +219,7 @@
   },
   "importDialog": {
     "title": "Import Product Config",
-    "description": "Paste data from Excel (tab-separated). 7 columns in order: <b>Full name</b> — <b>Short name</b> — <b>Machine</b> (machine number, e.g. 94/27, leave blank = no tool) — <b>Factory</b> (e.g. \"ME LINH\") — <b>Fabric type</b> (POLY 2 DA, ME 64, LUA 4B, LUA VAN GO…) — <b>Tool result</b> (leave blank = has tool; \"no tool\" = no tool) — <b>Department</b> (machine type, e.g. \"PRINT AND LASER CUT\"). The system matches labels by name (case-insensitive).",
+    "description": "Paste data from Excel (tab-separated). 7 columns in order: <b>Full name</b> — <b>Short name</b> (may be left blank) — <b>Machine</b> (machine number, e.g. 94/27, leave blank = no tool) — <b>Factory</b> (e.g. \"ME LINH\") — <b>Fabric type</b> (POLY 2 DA, ME 64, LUA 4B, LUA VAN GO…) — <b>Tool result</b> (leave blank = has tool; \"no tool\" = no tool) — <b>Department</b> (machine type, e.g. \"PRINT AND LASER CUT\"). The system matches labels by name (case-insensitive).",
     "parseError": "No rows could be parsed. Check the format (7 columns, separated by Tab).",
     "importSuccess": "Imported {{imported}}, updated {{updated}}, {{skippedCount}} warnings",
     "validRows": "{{count}} valid rows will be imported."

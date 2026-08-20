@@ -513,6 +513,12 @@ gõ nhanh gần như không tìm ra ai.
 Hai endpoint này dùng chung với trang **Quản trị Khách hàng** (`Customers.md`)
 nên các màn đó cũng tìm được không dấu — cải thiện kèm theo, không đổi gì khác.
 
+**Dòng kết quả** (`AUTH-5`): nhân viên hiện `[Nhân viên] tên [vai trò]` rồi email
+ở dòng dưới — vai trò là badge RIÊNG chứ không ghép vào dòng email, vì email dài
+cắt mất nó trong popup 340px. Nhãn vai trò hiện **thô**, không dịch (đúng tiền lệ
+trang Users và dải cảnh báo mạo danh). Tài khoản khách giữ nguyên badge
+`Khách hàng`, KHÔNG bịa vai trò.
+
 ### 10.7 Ghi vết
 
 Tái dùng collection `actions` (đã có `ip`/`userAgent`/`sessionId`/`active`) thay vì
