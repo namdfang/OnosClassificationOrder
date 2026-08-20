@@ -40,7 +40,9 @@ export const productConfigsRegistry: AgentTableSpec = {
     maxProductionTime: numeric('Thời gian sản xuất tối đa cam kết (ngày)'),
     maxShippingTime: numeric('Thời gian giao tối đa cam kết (ngày)'),
     sizeChartUrl: plain('string'),
-    usImportTaxPerUnit: numeric('Thuế nhập khẩu US trên mỗi đơn vị (USD) — con số CÔNG BỐ với khách ở Customer Portal Catalog, không phải giá vốn'),
+    usImportTaxPerUnit: numeric(
+      'Thuế nhập khẩu US trên mỗi đơn vị (USD) — con số CÔNG BỐ với khách ở Customer Portal Catalog, không phải giá vốn',
+    ),
     mockup: plain('string'),
     description: freeText('Mô tả sản phẩm'),
     shortDescription: freeText(),

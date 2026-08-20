@@ -129,15 +129,27 @@
       "status": "Status",
       "active": "Active",
       "inactive": "Inactive",
-      "mergedFlowBadge": "Merged"
+      "flowBadge": {
+        "merged": "Merged (wood)",
+        "noSew": "No-sew"
+      }
     },
     "form": {
       "nameShortNameRequired": "Name and short name are required",
       "createSuccess": "Created successfully",
       "updateSuccess": "Updated successfully",
       "active": "Active",
-      "mergedFlow": "Merged flow (wood factory)",
-      "mergedFlowHint": "Print done auto-completes Press; Sew-in done auto-completes Sew-out. Enable for wood factories only."
+      "flowType": "Production flow",
+      "flowOptions": {
+        "standard": "Standard — all 6 stages",
+        "merged": "Wood merged — Press into Print, Sew-out into Sew-in",
+        "noSew": "No-sew — QC jumps straight to Pack"
+      },
+      "flowHint": {
+        "standard": "Orders go through all 6 stages: Print → Press → QC → Sew-in → Sew-out → Pack.",
+        "merged": "Print done auto-completes Press; Sew-in done auto-completes Sew-out. Wood factories only.",
+        "noSew": "QC done auto-completes Sew-in + Sew-out; order waits at Pack (still confirmed manually). For factories without sewing."
+      }
     },
     "factory": {
       "title": "Factories",

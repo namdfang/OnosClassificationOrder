@@ -1,6 +1,6 @@
 # Plan — Ngách Gỗ (Woodcraft) + Xưởng gỗ Thái Nguyên với luồng fulfillment rút gọn
 
-> **Trạng thái:** PLAN — chưa implement.
+> **Trạng thái:** ĐÃ IMPLEMENT. Lưu ý 2026-08-20: API trong plan này đã được TỔNG QUÁT HÓA khi thêm flowType `no-sew` (xưởng Mê Linh — QC xong bỏ qua May vào/May ra) — `MERGED_STAGE_SOURCE`/`redirectMergedTarget`/`isMergedFlowFactorySync` đã thay bằng `FACTORY_FLOW_AUTO_STAGES`/`isAutoStage`/`redirectAutoTarget`/`getFactoryFlowTypeSync`. Source of truth hiện tại: `documents/FunctionDescription/FulfillmentWorkflow.md` §2.2b.
 > **Ngày:** 2026-08-18
 > **Quyết định đã chốt với chủ dự án:**
 > 1. Routing đơn → xưởng gỗ dùng cơ chế sẵn có Product Config → xưởng (kanban `/adm/settings/product-factory`). Collection "Woodcraft" CHỈ để hiển thị catalog như 2D/3D/Embroidery.

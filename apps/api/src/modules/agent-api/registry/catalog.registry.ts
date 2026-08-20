@@ -99,7 +99,7 @@ export const factoriesRegistry: AgentTableSpec = {
     isActive: plain('bool'),
     flowType: plain(
       'enum',
-      "Luồng fulfillment của xưởng: 'standard' đủ 6 công đoạn, 'merged' luồng rút gọn (Ép và May ra tự xong theo chặng trước)",
+      'Luồng fulfillment của xưởng: standard (đủ 6 công đoạn) / merged (gộp Ép vào In, May ra vào May vào) / no-sew (QC xong bỏ qua 2 công đoạn may)',
     ),
 
     // ── `API-17` mở đọc
@@ -168,8 +168,7 @@ export const workshopConfigsRegistry: AgentTableSpec = {
  */
 export const customerNotificationsRegistry: AgentTableSpec = {
   key: 'customer_notifications',
-  description:
-    'Thông báo đã gửi cho khách. Trả lời "hệ thống đã báo gì cho tôi, lúc nào".',
+  description: 'Thông báo đã gửi cho khách. Trả lời "hệ thống đã báo gì cho tôi, lúc nào".',
   entityName: 'CustomerNotificationEntity',
   defaultSort: '_id',
   fields: {

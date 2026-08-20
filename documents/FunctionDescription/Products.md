@@ -244,7 +244,7 @@ Khác `POST /import` (§2.1 — 6 cột config tối thiểu): nhận sản ph�
 | `name` | string | Required, trim |
 | `shortName` | string | Required, uppercase, unique |
 | `isActive` | boolean | Default true (switch toggle) |
-| `flowType` | `'standard' \| 'merged'` | Default `standard`. Switch "Luồng rút gọn (xưởng gỗ)" (chỉ hiện với factory, không hiện với machineType). `merged` = In xong → Ép tự xong, May vào xong → May ra tự xong — xem [`FulfillmentWorkflow.md`](FulfillmentWorkflow.md) §2.2b. Bảng hiện badge "Rút gọn". Enum + helper: `packages/shared/enums/factory-flow.ts`. |
+| `flowType` | `'standard' \| 'merged' \| 'no-sew'` | Default `standard`. Select "Luồng sản xuất" (chỉ hiện với factory, không hiện với machineType). `merged` (xưởng gỗ) = In xong → Ép tự xong, May vào xong → May ra tự xong; `no-sew` (Mê Linh) = QC sau ép xong → May vào + May ra tự xong → chờ Đóng hàng — xem [`FulfillmentWorkflow.md`](FulfillmentWorkflow.md) §2.2b. Bảng hiện badge "Rút gọn (gỗ)" / "Bỏ may". Enum + helper: `packages/shared/enums/factory-flow.ts` (`FACTORY_FLOW_AUTO_STAGES`/`isAutoStage`/`redirectAutoTarget`). |
 
 ### 3.3 MachineType CRUD
 | Field | Type | Validation |

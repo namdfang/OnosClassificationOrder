@@ -304,9 +304,11 @@ export function FactoryTab() {
               <TableRow key={it._id}>
                 <TableCell className="font-medium">
                   {it.name}
-                  {type === 'factory' && it.flowType === FactoryFlowType.Merged && (
+                  {type === 'factory' && it.flowType && it.flowType !== FactoryFlowType.Standard && (
                     <Badge variant="secondary" className="ml-2">
-                      {t('factoryTab.table.mergedFlowBadge')}
+                      {it.flowType === FactoryFlowType.Merged
+                        ? t('factoryTab.table.flowBadge.merged')
+                        : t('factoryTab.table.flowBadge.noSew')}
                     </Badge>
                   )}
                 </TableCell>
@@ -519,20 +521,24 @@ export function FactoryTab() {
               />
             </div>
             {form.type === 'factory' && (
-              <div className="flex items-center justify-between gap-3 rounded-md border border-border p-3">
-                <div className="space-y-0.5">
-                  <Label>{t('factoryTab.form.mergedFlow')}</Label>
-                  <p className="text-xs text-muted-foreground">{t('factoryTab.form.mergedFlowHint')}</p>
-                </div>
-                <Switch
-                  checked={form.data.flowType === FactoryFlowType.Merged}
-                  onCheckedChange={(v) =>
-                    setForm({
-                      ...form,
-                      data: { ...form.data, flowType: v ? FactoryFlowType.Merged : FactoryFlowType.Standard },
-                    })
+              <div className="space-y-2 rounded-md border border-border p-3">
+                <Label>{t('factoryTab.form.flowType')}</Label>
+                <select
+                  value={form.data.flowType}
+                  onChange={(e) =>
+                    setForm({ ...form, data: { ...form.data, flowType: e.target.value as FactoryFlowType } })
                   }
-                />
+                  className="w-full h-9 rounded-md border border-input bg-background px-3 text-sm"
+                >
+                  <option value={FactoryFlowType.Standard}>{t('factoryTab.form.flowOptions.standard')}</option>
+                  <option value={FactoryFlowType.Merged}>{t('factoryTab.form.flowOptions.merged')}</option>
+                  <option value={FactoryFlowType.NoSew}>{t('factoryTab.form.flowOptions.noSew')}</option>
+                </select>
+                <p className="text-xs text-muted-foreground">
+                  {form.data.flowType === FactoryFlowType.Merged && t('factoryTab.form.flowHint.merged')}
+                  {form.data.flowType === FactoryFlowType.NoSew && t('factoryTab.form.flowHint.noSew')}
+                  {form.data.flowType === FactoryFlowType.Standard && t('factoryTab.form.flowHint.standard')}
+                </p>
               </div>
             )}
           </div>

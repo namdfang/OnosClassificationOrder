@@ -1,19 +1,21 @@
 import type { FulfillmentStages, FulfillmentStageState, FulfillmentTimelineEntry } from 'shared';
 import {
+  FactoryFlowType,
   FulfillmentStage,
   FulfillmentStageStatus,
   FulfillmentTransitionAction,
-  redirectMergedTarget,
+  redirectAutoTarget,
 } from 'shared';
 
 import type { UserDocument } from '../user/user.entity';
 import { FulfillmentTaskService } from './fulfillment-task.service';
 
 /**
- * Luồng rút gọn xưởng gỗ (`FactoryEntity.flowType='merged'`) — test thẳng
- * `resolveTransition` (pure: chỉ build patch, không đụng Mongo) bằng cách
- * instantiate service với deps null. Nếu constructor thêm dep mới chỉ cần thêm
- * null tương ứng.
+ * Luồng rút gọn theo xưởng (`FactoryEntity.flowType`): `merged` (xưởng gỗ —
+ * In+Ép, May vào+May ra) và `no-sew` (Mê Linh — QC xong bỏ qua 2 công đoạn
+ * may, dừng ở Đóng hàng). Test thẳng `resolveTransition` (pure: chỉ build
+ * patch, không đụng Mongo) bằng cách instantiate service với deps null. Nếu
+ * constructor thêm dep mới chỉ cần thêm null tương ứng.
  */
 const svc = new FulfillmentTaskService(null as never, null as never, null as never, null as never);
 
@@ -26,7 +28,7 @@ type TransitionInput = {
   reason?: string;
   stages: FulfillmentStages;
   user: UserDocument;
-  mergedFlow?: boolean;
+  flowType?: FactoryFlowType;
 };
 type TransitionPlan = {
   nextStatus: FulfillmentStageStatus;
@@ -53,16 +55,27 @@ const timelineEntries = (plan: TransitionPlan): FulfillmentTimelineEntry[] => {
   return '$each' in pushed ? pushed.$each : [pushed];
 };
 
-describe('redirectMergedTarget — đích rework trên xưởng luồng rút gọn', () => {
-  it('stage gộp về stage gốc: press→print, sew-out→sew-in', () => {
-    expect(redirectMergedTarget(FulfillmentStage.Press)).toBe(FulfillmentStage.Print);
-    expect(redirectMergedTarget(FulfillmentStage.SewOut)).toBe(FulfillmentStage.SewIn);
+describe('redirectAutoTarget — đích rework trên xưởng luồng rút gọn', () => {
+  it('merged: stage gộp về stage gốc — press→print, sew-out→sew-in', () => {
+    expect(redirectAutoTarget(FactoryFlowType.Merged, FulfillmentStage.Press)).toBe(FulfillmentStage.Print);
+    expect(redirectAutoTarget(FactoryFlowType.Merged, FulfillmentStage.SewOut)).toBe(FulfillmentStage.SewIn);
   });
 
-  it('stage thường giữ nguyên', () => {
-    expect(redirectMergedTarget(FulfillmentStage.Print)).toBe(FulfillmentStage.Print);
-    expect(redirectMergedTarget(FulfillmentStage.QCPostPress)).toBe(FulfillmentStage.QCPostPress);
-    expect(redirectMergedTarget(FulfillmentStage.Pack)).toBe(FulfillmentStage.Pack);
+  it('merged: stage thường giữ nguyên', () => {
+    expect(redirectAutoTarget(FactoryFlowType.Merged, FulfillmentStage.Print)).toBe(FulfillmentStage.Print);
+    expect(redirectAutoTarget(FactoryFlowType.Merged, FulfillmentStage.QCPostPress)).toBe(FulfillmentStage.QCPostPress);
+    expect(redirectAutoTarget(FactoryFlowType.Merged, FulfillmentStage.Pack)).toBe(FulfillmentStage.Pack);
+  });
+
+  it('no-sew: May vào/May ra đều lùi về QC sau ép (walk qua 2 auto-stage liên tiếp)', () => {
+    expect(redirectAutoTarget(FactoryFlowType.NoSew, FulfillmentStage.SewIn)).toBe(FulfillmentStage.QCPostPress);
+    expect(redirectAutoTarget(FactoryFlowType.NoSew, FulfillmentStage.SewOut)).toBe(FulfillmentStage.QCPostPress);
+    expect(redirectAutoTarget(FactoryFlowType.NoSew, FulfillmentStage.Press)).toBe(FulfillmentStage.Press);
+  });
+
+  it('standard: mọi target giữ nguyên', () => {
+    expect(redirectAutoTarget(FactoryFlowType.Standard, FulfillmentStage.Press)).toBe(FulfillmentStage.Press);
+    expect(redirectAutoTarget(FactoryFlowType.Standard, FulfillmentStage.SewOut)).toBe(FulfillmentStage.SewOut);
   });
 });
 
@@ -75,7 +88,7 @@ describe('Complete trên xưởng merged — auto-complete stage gộp', () => {
       stageState: inProgress(new Date(Date.now() - 60_000)),
       stages: {} as FulfillmentStages,
       user: worker,
-      mergedFlow: true,
+      flowType: FactoryFlowType.Merged,
     });
 
     const set = plan.patch.$set;
@@ -109,7 +122,7 @@ describe('Complete trên xưởng merged — auto-complete stage gộp', () => {
       stageState: inProgress(),
       stages: {} as FulfillmentStages,
       user: worker,
-      mergedFlow: true,
+      flowType: FactoryFlowType.Merged,
     });
     const set = plan.patch.$set;
     expect(set['fulfillmentStages.sew-out.status']).toBe(FulfillmentStageStatus.Done);
@@ -132,7 +145,7 @@ describe('Complete trên xưởng merged — auto-complete stage gộp', () => {
         },
       } as FulfillmentStages,
       user: worker,
-      mergedFlow: true,
+      flowType: FactoryFlowType.Merged,
     });
     const set = plan.patch.$set;
     expect(set['fulfillmentStages.press.reworkAt']).toBeInstanceOf(Date);
@@ -141,7 +154,7 @@ describe('Complete trên xưởng merged — auto-complete stage gộp', () => {
     expect(set['fulfillmentStages.press.reworkCount']).toBeUndefined();
   });
 
-  it('xưởng thường (mergedFlow=false): In xong dừng ở Ép như cũ', () => {
+  it('xưởng thường (flowType=standard): In xong dừng ở Ép như cũ', () => {
     const plan = resolve({
       stage: FulfillmentStage.Print,
       action: FulfillmentTransitionAction.Complete,
@@ -149,7 +162,7 @@ describe('Complete trên xưởng merged — auto-complete stage gộp', () => {
       stageState: inProgress(),
       stages: {} as FulfillmentStages,
       user: worker,
-      mergedFlow: false,
+      flowType: FactoryFlowType.Standard,
     });
     const set = plan.patch.$set;
     expect(set.currentFulfillmentStage).toBe(FulfillmentStage.Press);
@@ -166,16 +179,78 @@ describe('Complete trên xưởng merged — auto-complete stage gộp', () => {
       stageState: inProgress(),
       stages: {} as FulfillmentStages,
       user: worker,
-      mergedFlow: true,
+      flowType: FactoryFlowType.Merged,
     });
-    // MERGED_STAGE_SOURCE[qc-post-press] không tồn tại → không auto-complete gì thêm.
+    // QC không phải auto-stage của merged → không auto-complete gì thêm.
     expect(plan.patch.$set.currentFulfillmentStage).toBe(FulfillmentStage.QCPostPress);
     expect(timelineEntries(plan)).toHaveLength(1);
   });
 });
 
-describe('ReworkBack trên xưởng merged — redirect đích về stage gốc', () => {
-  it('QC báo lỗi target=Ép → lùi về In', () => {
+describe('Complete trên xưởng no-sew (Mê Linh) — QC xong bỏ qua 2 công đoạn may', () => {
+  it('QC xong → May vào + May ra tự Done cùng lúc, đơn chờ ở Đóng hàng (chưa hoàn tất flow)', () => {
+    const plan = resolve({
+      stage: FulfillmentStage.QCPostPress,
+      action: FulfillmentTransitionAction.Complete,
+      currentStatus: FulfillmentStageStatus.InProgress,
+      stageState: inProgress(),
+      stages: {} as FulfillmentStages,
+      user: worker,
+      flowType: FactoryFlowType.NoSew,
+    });
+
+    const set = plan.patch.$set;
+    for (const stg of ['sew-in', 'sew-out']) {
+      expect(set[`fulfillmentStages.${stg}.status`]).toBe(FulfillmentStageStatus.Done);
+      expect(set[`fulfillmentStages.${stg}.assignee`]).toBe('worker-1');
+      expect(set[`fulfillmentStages.${stg}.workMs`]).toBe(0);
+      for (const field of ['waitingAt', 'startedAt', 'firstStartedAt', 'completedAt']) {
+        expect(set[`fulfillmentStages.${stg}.${field}`]).toBeInstanceOf(Date);
+      }
+    }
+    // Dừng CHỜ ở Đóng hàng — pack KHÔNG tự done, flow chưa kết thúc.
+    expect(set.currentFulfillmentStage).toBe(FulfillmentStage.Pack);
+    expect(set['fulfillmentStages.pack.status']).toBe(FulfillmentStageStatus.Waiting);
+    expect(set.fulfillmentCompletedAt).toBeUndefined();
+
+    // Timeline 3 entry: qc complete + sew-in + sew-out auto.
+    const entries = timelineEntries(plan);
+    expect(entries).toHaveLength(3);
+    expect(entries[1].stage).toBe(FulfillmentStage.SewIn);
+    expect(entries[2].stage).toBe(FulfillmentStage.SewOut);
+  });
+
+  it('In/Ép vẫn tuần tự bình thường (không auto ở nửa đầu flow)', () => {
+    const plan = resolve({
+      stage: FulfillmentStage.Print,
+      action: FulfillmentTransitionAction.Complete,
+      currentStatus: FulfillmentStageStatus.InProgress,
+      stageState: inProgress(),
+      stages: {} as FulfillmentStages,
+      user: worker,
+      flowType: FactoryFlowType.NoSew,
+    });
+    expect(plan.patch.$set.currentFulfillmentStage).toBe(FulfillmentStage.Press);
+    expect(timelineEntries(plan)).toHaveLength(1);
+  });
+
+  it('Đóng hàng vẫn xác nhận tay → complete pack mới kết thúc flow', () => {
+    const plan = resolve({
+      stage: FulfillmentStage.Pack,
+      action: FulfillmentTransitionAction.Complete,
+      currentStatus: FulfillmentStageStatus.InProgress,
+      stageState: inProgress(),
+      stages: {} as FulfillmentStages,
+      user: worker,
+      flowType: FactoryFlowType.NoSew,
+    });
+    expect(plan.patch.$set.currentFulfillmentStage).toBeNull();
+    expect(plan.patch.$set.fulfillmentCompletedAt).toBeInstanceOf(Date);
+  });
+});
+
+describe('ReworkBack trên xưởng luồng rút gọn — redirect đích', () => {
+  it('merged: QC báo lỗi target=Ép → lùi về In', () => {
     const plan = resolve({
       stage: FulfillmentStage.QCPostPress,
       action: FulfillmentTransitionAction.ReworkBack,
@@ -185,7 +260,7 @@ describe('ReworkBack trên xưởng merged — redirect đích về stage gốc'
       reason: 'Lỗi ép',
       stages: {} as FulfillmentStages,
       user: worker,
-      mergedFlow: true,
+      flowType: FactoryFlowType.Merged,
     });
     const set = plan.patch.$set;
     expect(set.currentFulfillmentStage).toBe(FulfillmentStage.Print);
@@ -194,7 +269,7 @@ describe('ReworkBack trên xưởng merged — redirect đích về stage gốc'
     expect(timelineEntries(plan)[0].reworkTarget).toBe(FulfillmentStage.Print);
   });
 
-  it('Đóng hàng báo lỗi target=May ra → lùi về May vào', () => {
+  it('merged: Đóng hàng báo lỗi target=May ra → lùi về May vào', () => {
     const plan = resolve({
       stage: FulfillmentStage.Pack,
       action: FulfillmentTransitionAction.ReworkBack,
@@ -204,9 +279,27 @@ describe('ReworkBack trên xưởng merged — redirect đích về stage gốc'
       reason: 'Lỗi may',
       stages: {} as FulfillmentStages,
       user: worker,
-      mergedFlow: true,
+      flowType: FactoryFlowType.Merged,
     });
     expect(plan.patch.$set.currentFulfillmentStage).toBe(FulfillmentStage.SewIn);
+  });
+
+  it('no-sew: Đóng hàng báo lỗi target=May vào/May ra → đều lùi về QC sau ép', () => {
+    for (const target of [FulfillmentStage.SewIn, FulfillmentStage.SewOut]) {
+      const plan = resolve({
+        stage: FulfillmentStage.Pack,
+        action: FulfillmentTransitionAction.ReworkBack,
+        currentStatus: FulfillmentStageStatus.InProgress,
+        stageState: inProgress(),
+        target,
+        reason: 'Lỗi hàng',
+        stages: {} as FulfillmentStages,
+        user: worker,
+        flowType: FactoryFlowType.NoSew,
+      });
+      expect(plan.patch.$set.currentFulfillmentStage).toBe(FulfillmentStage.QCPostPress);
+      expect(plan.patch.$set['fulfillmentStages.qc-post-press.status']).toBe(FulfillmentStageStatus.Rework);
+    }
   });
 
   it('xưởng thường: target=Ép giữ nguyên (không redirect)', () => {
@@ -219,7 +312,7 @@ describe('ReworkBack trên xưởng merged — redirect đích về stage gốc'
       reason: 'Lỗi ép',
       stages: {} as FulfillmentStages,
       user: worker,
-      mergedFlow: false,
+      flowType: FactoryFlowType.Standard,
     });
     expect(plan.patch.$set.currentFulfillmentStage).toBe(FulfillmentStage.Press);
   });
