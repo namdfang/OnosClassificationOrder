@@ -125,6 +125,9 @@ const PRODUCT_TYPE_CODE_MAP: Record<string, string> = {
     "gildan unisex heavy blend™ hooded sweatshirt - 18500": "TIFF",
     "bella + canvas - women's micro rib baby tee - 1010": "TIFF",
     "usa gildan - heavy cotton™ t-shirt - 5000": "TIFF",
+    "all-over print raglan v-neck soccer jersey": "JLSCV",
+    "all-over print v-neck soccer jersey – ver 2": "JLSCV2",
+    "all-over print v-neck mesh football jersey": "BDLUOITIM",
 };
 
 /** Case-insensitive, trim khoảng trắng thừa. Không khớp → null. */
