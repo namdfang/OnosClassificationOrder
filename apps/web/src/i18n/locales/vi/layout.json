@@ -1,4 +1,10 @@
 {
+  "noAccess": {
+    "title": "Bạn không có quyền truy cập trang này",
+    "description": "Tài khoản của bạn chưa được cấp quyền vào trang này. Nếu bạn cần dùng, hãy liên hệ quản trị viên để được cấp quyền.",
+    "back": "Quay lại",
+    "home": "Về Dashboard"
+  },
   "sidebar": {
     "groups": {
       "orders": "Đơn hàng",

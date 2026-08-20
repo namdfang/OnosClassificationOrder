@@ -1,6 +1,7 @@
 import React, { lazy, Suspense } from 'react';
 import { BrowserRouter, Navigate, Outlet, Route, Routes } from 'react-router-dom';
 
+import { RequirePagePermission } from './components/common/RequirePagePermission';
 import Loading from './components/loading';
 import { PATHS } from './constants/paths';
 import { routerConfig } from './constants/routerConfig';
@@ -94,9 +95,13 @@ function App() {
                 key={route.path}
                 path={route.path}
                 element={
-                  <Suspense fallback={<Loading />}>
-                    <route.component />
-                  </Suspense>
+                  // AUTH-7 — chặn theo QUYỀN TRANG trước khi dựng, để vai không có
+                  // quyền gõ thẳng URL không nhận bảng trống khó hiểu nữa.
+                  <RequirePagePermission path={route.path}>
+                    <Suspense fallback={<Loading />}>
+                      <route.component />
+                    </Suspense>
+                  </RequirePagePermission>
                 }
               />
             ))}
