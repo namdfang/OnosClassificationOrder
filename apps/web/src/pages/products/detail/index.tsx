@@ -237,6 +237,27 @@ const pruneSizeDimDraft = (draft: Record<string, string>): Record<string, string
   return out;
 };
 
+/**
+ * PRD-8 vòng 2 — bỏ thứ Mongo gắn thêm (`_id` của từng subdoc) khỏi cặp
+ * label/value trước khi đưa vào form.
+ *
+ * Vì sao cần: `attributes` lấy thẳng từ API mang theo `_id`, còn khi bảng biến
+ * thể được dựng lại (`generateVariants`, chạy mỗi lần áp nhóm option) thì mỗi
+ * thuộc tính được viết lại thành ĐÚNG `{label, value}`. Hai hình dạng khác nhau
+ * cho cùng một dữ liệu ⇒ thêm một biến thể rồi xoá đi, bảng về y như cũ nhưng
+ * chuỗi so sánh vẫn lệch ⇒ badge "Chưa lưu" không tắt.
+ *
+ * Đây KHÔNG phải loại một trường khỏi phép so sánh: `_id` của subdoc không phải
+ * dữ liệu người dùng, form không sửa nó, và bản PATCH gửi lên vốn đã không mang
+ * nó theo sau lần dựng lại đầu tiên. Chuẩn hoá NGAY LÚC NẠP để state và baseline
+ * cùng một hình dạng từ đầu; label/value giữ nguyên từng ký tự.
+ */
+const toFormSpecifics = (list?: ProductItemSpecific[]): ProductItemSpecific[] =>
+  (list ?? []).map(({ label, value }) => ({ label, value }));
+
+const toFormVariations = (list?: ProductVariation[]): ProductVariation[] =>
+  (list ?? []).map((v) => (v.attributes ? { ...v, attributes: toFormSpecifics(v.attributes) } : v));
+
 /** Khoá 1 ô nhập kích thước in: vị trí in + size + chiều. */
 const sizeDimKey = (areaKey: string, size: string, dim: 'w' | 'l'): string => `${areaKey}::${size}::${dim}`;
 
@@ -505,12 +526,12 @@ export default function ProductDetailPage() {
       hideForSeller: !!row.hideForSeller,
       enableDesignCheck: !!row.enableDesignCheck,
       enableAffiliate: !!row.enableAffiliate,
-      itemSpecifics: row.itemSpecifics || [],
+      itemSpecifics: toFormSpecifics(row.itemSpecifics),
       weight: row.weight != null ? String(row.weight) : '',
       width: row.width != null ? String(row.width) : '',
       height: row.height != null ? String(row.height) : '',
       length: row.length != null ? String(row.length) : '',
-      variations: row.variations || [],
+      variations: toFormVariations(row.variations),
     };
     setFullName(s.fullName);
     setShortName(s.shortName);
