@@ -17,6 +17,8 @@ import { Textarea } from '@/components/ui/textarea';
 
 import { handleAxiosError } from '@/utils';
 
+import { useProductWriteAccess } from '@/hooks/useProductWriteAccess';
+
 interface CollectionRow {
   _id: string;
   name: string;
@@ -42,6 +44,8 @@ const DEFAULT_FORM: FormState = {
 /** CRUD collection sản phẩm — cùng pattern `ProductCategoryTab` (bảng + dialog). */
 export function CollectionTab() {
   const { t } = useTranslation(['products', 'common']);
+  // AUTH-6 - vai chi doc (Support) xem duoc, khong tao/sua duoc.
+  const { canWriteProducts } = useProductWriteAccess();
   const [items, setItems] = useState<CollectionRow[]>([]);
   const [loading, setLoading] = useState(false);
   const [form, setForm] = useState<FormState>(DEFAULT_FORM);
@@ -121,10 +125,12 @@ export function CollectionTab() {
             <h3 className="text-sm font-semibold text-foreground">{t('collectionTab.title')}</h3>
             <p className="text-xs text-muted-foreground mt-0.5">{t('collectionTab.description')}</p>
           </div>
-          <Button size="sm" onClick={openCreate}>
-            <Plus size={14} />
-            {t('common:actions.add')}
-          </Button>
+          {canWriteProducts && (
+            <Button size="sm" onClick={openCreate}>
+              <Plus size={14} />
+              {t('common:actions.add')}
+            </Button>
+          )}
         </div>
         <Table>
           <TableHeader>
@@ -180,9 +186,11 @@ export function CollectionTab() {
                     )}
                   </TableCell>
                   <TableCell>
-                    <Button variant="ghost" size="sm" onClick={() => openEdit(it)}>
-                      {t('common:actions.edit')}
-                    </Button>
+                    {canWriteProducts && (
+                      <Button variant="ghost" size="sm" onClick={() => openEdit(it)}>
+                        {t('common:actions.edit')}
+                      </Button>
+                    )}
                   </TableCell>
                 </TableRow>
               ))}

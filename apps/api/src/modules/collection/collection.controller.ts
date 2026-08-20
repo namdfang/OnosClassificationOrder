@@ -20,7 +20,9 @@ export class CollectionController {
   constructor(private readonly collectionService: CollectionService) {}
 
   @Get()
-  @Auth([RoleType.Admin, RoleType.Manager])
+  // AUTH-6 - Support DOC duoc (trang /adm/products). Route GHI ben duoi GIU NGUYEN
+  // Admin+Manager: chan o lop API, khong phu thuoc viec giao dien co an nut hay khong.
+  @Auth([RoleType.Admin, RoleType.Manager, RoleType.Support])
   @ApiOperation({ summary: 'Get collections' })
   @HttpCode(HttpStatus.OK)
   @ApiOkResponse({ type: GetCollectionsResDto })

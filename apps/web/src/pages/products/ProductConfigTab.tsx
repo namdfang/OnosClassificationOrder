@@ -30,6 +30,7 @@ import { handleAxiosError } from '@/utils';
 import { toFullSizeImageUrl } from '@/utils/imageUrl';
 
 import { useDebounce } from '@/hooks/useDebounce';
+import { useProductWriteAccess } from '@/hooks/useProductWriteAccess';
 
 export const buildStatusMeta = (
   t: (key: string) => string,
@@ -151,6 +152,9 @@ interface ProductConfigTabProps {
 
 export function ProductConfigTab({ refreshKey = 0 }: ProductConfigTabProps) {
   const { t } = useTranslation('products');
+  // AUTH-6 - vai chi DOC (Support) van xem duoc bang nhung khong sua duoc gi.
+  // Day chi la lop giao dien; API van tu choi moi route ghi cua vai nay.
+  const { canWriteProducts } = useProductWriteAccess();
   const navigate = useNavigate();
   const STATUS_META = useMemo(() => buildStatusMeta(t), [t]);
   const [items, setItems] = useState<ProductConfigRow[]>([]);
@@ -609,6 +613,7 @@ export function ProductConfigTab({ refreshKey = 0 }: ProductConfigTabProps) {
                   <select
                     value={it.machineTypeId || ''}
                     onChange={(e) => handleMachineTypeChange(it._id, e.target.value)}
+                    disabled={!canWriteProducts}
                     className="w-full min-w-[130px] rounded-md border border-input bg-background px-2 py-1 text-xs focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
                   >
                     {!it.machineTypeId && <option value="">{t('configTab.table.notSelected')}</option>}
@@ -623,6 +628,7 @@ export function ProductConfigTab({ refreshKey = 0 }: ProductConfigTabProps) {
                   <select
                     value={it.factoryId || ''}
                     onChange={(e) => handleFactoryChange(it._id, e.target.value)}
+                    disabled={!canWriteProducts}
                     className="w-full min-w-[130px] rounded-md border border-input bg-background px-2 py-1 text-xs focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
                   >
                     {!it.factoryId && <option value="">{t('configTab.table.notSelected')}</option>}
@@ -637,6 +643,7 @@ export function ProductConfigTab({ refreshKey = 0 }: ProductConfigTabProps) {
                   <select
                     value={it.fabricType || ''}
                     onChange={(e) => handleFabricChange(it._id, e.target.value)}
+                    disabled={!canWriteProducts}
                     className="w-full rounded-md border border-input bg-background px-2 py-1 text-xs focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
                   >
                     <option value="">{t('configTab.table.notSelected')}</option>
@@ -651,6 +658,7 @@ export function ProductConfigTab({ refreshKey = 0 }: ProductConfigTabProps) {
                   <select
                     value={it.toolResult || ''}
                     onChange={(e) => handleToolChange(it._id, e.target.value)}
+                    disabled={!canWriteProducts}
                     className="w-full rounded-md border border-input bg-background px-2 py-1 text-xs focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
                   >
                     <option value="">{t('configTab.table.notSelected')}</option>
@@ -680,6 +688,7 @@ export function ProductConfigTab({ refreshKey = 0 }: ProductConfigTabProps) {
                     <select
                       value={it.level ?? ''}
                       onChange={(e) => handleLevelChange(it._id, e.target.value)}
+                      disabled={!canWriteProducts}
                       className="w-full rounded-md border border-input bg-background px-2 py-1 text-xs focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
                     >
                       <option value="">{t('configTab.table.notSelected')}</option>
@@ -715,6 +724,7 @@ export function ProductConfigTab({ refreshKey = 0 }: ProductConfigTabProps) {
                     <select
                       value={it.status || ProductConfigStatus.Active}
                       onChange={(e) => handleStatusChange(it._id, e.target.value as ProductConfigStatus)}
+                      disabled={!canWriteProducts}
                       className="w-full rounded-md border border-input bg-background px-2 py-1 text-xs focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
                     >
                       <option value={ProductConfigStatus.Active}>
@@ -730,24 +740,27 @@ export function ProductConfigTab({ refreshKey = 0 }: ProductConfigTabProps) {
                   </div>
                 </TableCell>
                 <TableCell>
-                  <div className="flex items-center gap-0.5">
-                    <Button
-                      variant="ghost"
-                      size="icon"
-                      onClick={() => navigate(PATHS.PRODUCT_DETAIL.replace(':id', it._id))}
-                      title={t('configTab.table.editTitle')}
-                    >
-                      <Pencil size={14} />
-                    </Button>
-                    <Button
-                      variant="ghost"
-                      size="icon"
-                      onClick={() => handleDelete(it._id, it.fullName)}
-                      title={t('configTab.table.deleteTitle')}
-                    >
-                      <Trash2 size={14} className="text-destructive" />
-                    </Button>
-                  </div>
+                  {/* AUTH-6 - an han voi vai chi doc: sua/xoa deu la thao tac ghi. */}
+                  {canWriteProducts && (
+                    <div className="flex items-center gap-0.5">
+                      <Button
+                        variant="ghost"
+                        size="icon"
+                        onClick={() => navigate(PATHS.PRODUCT_DETAIL.replace(':id', it._id))}
+                        title={t('configTab.table.editTitle')}
+                      >
+                        <Pencil size={14} />
+                      </Button>
+                      <Button
+                        variant="ghost"
+                        size="icon"
+                        onClick={() => handleDelete(it._id, it.fullName)}
+                        title={t('configTab.table.deleteTitle')}
+                      >
+                        <Trash2 size={14} className="text-destructive" />
+                      </Button>
+                    </div>
+                  )}
                 </TableCell>
               </TableRow>
             ))}

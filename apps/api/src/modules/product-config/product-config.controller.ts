@@ -58,7 +58,9 @@ export class ProductConfigController {
   ) {}
 
   @Get()
-  @Auth([RoleType.Admin, RoleType.Manager])
+  // AUTH-6 — Support ĐỌC được (trang /adm/products). Các route GHI bên dưới GIỮ NGUYÊN
+  // Admin+Manager: chặn lớp API, không phụ thuộc việc giao diện có ẩn nút hay không.
+  @Auth([RoleType.Admin, RoleType.Manager, RoleType.Support])
   @ApiOperation({ summary: 'List product configs' })
   @HttpCode(HttpStatus.OK)
   @ApiOkResponse({ type: GetProductConfigsResDto })

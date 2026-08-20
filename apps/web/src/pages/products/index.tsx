@@ -4,6 +4,8 @@ import { Package } from 'lucide-react';
 
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 
+import { useProductWriteAccess } from '@/hooks/useProductWriteAccess';
+
 import { CollectionTab } from './CollectionTab';
 import { FactoryTab } from './FactoryTab';
 import { ProductCategoryTab } from './ProductCategoryTab';
@@ -18,6 +20,9 @@ export default function Products() {
    * nên phải báo ngược vào tab khi import/crawl đổi dữ liệu — tab tải lại danh sách.
    */
   const [configRefreshKey, setConfigRefreshKey] = useState(0);
+  // AUTH-6 - 7 nut cong cu deu la thao tac GHI (import, crawl, backfill, xoa...),
+  // an het voi vai chi doc thay vi de bam roi an 403.
+  const { canWriteProducts } = useProductWriteAccess();
 
   return (
     <div className="space-y-6">
@@ -31,7 +36,9 @@ export default function Products() {
             <p className="text-sm text-muted-foreground">{t('page.subtitle')}</p>
           </div>
         </div>
-        {tab === 'config' && <ProductConfigActions onChanged={() => setConfigRefreshKey((k) => k + 1)} />}
+        {tab === 'config' && canWriteProducts && (
+          <ProductConfigActions onChanged={() => setConfigRefreshKey((k) => k + 1)} />
+        )}
       </div>
 
       <Tabs value={tab} onValueChange={setTab} className="w-full">

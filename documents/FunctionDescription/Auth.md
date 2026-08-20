@@ -240,7 +240,15 @@ Hệ thống dùng **catalog tĩnh** trong `packages/shared/constants/permission
 | Role | Page | Order action | Field view | Field edit | Khác |
 |------|------|--------------|-----------|-----------|------|
 | SuperAdmin / Admin / Manager | tất cả | tất cả | tất cả | tất cả | tất cả |
-| Support | dashboard / orders / products | `order.import`, `order.view_workshop_table` | tất cả | ❌ | `order.log.view` |
+| Support | dashboard / orders / products | `order.import`, `order.view_workshop_table` | tất cả | ❌ | `order.log.view` · **trang Sản phẩm CHỈ ĐỌC (AUTH-6)** |
+
+> **AUTH-6 — Support đọc được trang Sản phẩm, không ghi được.** Support vốn có `page.products` nên vào được `/adm/products`, nhưng 5 API phía sau chỉ mở cho Admin+Manager ⇒ mọi tab đều trống vì 403 (dữ liệu KHÔNG rò rỉ, chỉ khó hiểu). Người dùng chốt cho Support **xem** (note #10 trên ORD-7). Cách làm: thêm `RoleType.Support` vào **duy nhất các route GET danh sách** của `product-configs` · `factories` · `machine-types` · `product-categories` · `collections`; **mọi route ghi GIỮ NGUYÊN `@Auth([Admin, Manager])`**. `GET /product-configs/:id` và `GET /product-configs/unmatched-order-types` CỐ Ý không mở — chúng thuộc trang chi tiết và kanban Settings, ngoài phạm vi 4 tab.
+>
+> Chặn **hai lớp**: giao diện ẩn/vô hiệu thao tác ghi qua hook `apps/web/src/hooks/useProductWriteAccess.ts` (mirror đúng SuperAdmin/Admin/Manager), API vẫn từ chối độc lập. Sửa một bên mà quên bên kia thì hoặc Support bấm nút rồi ăn 403, hoặc tệ hơn là ghi được thật — **đổi ở hook thì đổi cả ở `@Auth`**.
+>
+> **Support đọc được giá vốn qua API**: response danh sách kèm `variations[]` có `cost`/`nonShipCost`/`wholesalePrice` dù bảng không hiện cột giá. BA đã chấp nhận (quy tắc cứng của repo chỉ cấm lộ giá vốn ra **khách/public**, Support là nhân viên nội bộ). Muốn siết thì phải lọc trường riêng cho vai này — **task riêng, không tự chế**.
+
+> **KHÔNG có mã quyền mới nào được thêm** vào `permission-catalog.ts` cho việc này — `page.products` sẵn có đã đủ diễn đạt. Đây là chủ ý: preset `Manager` tính bằng `ALL_PERMISSION_CODES.filter(...)` nên thêm mã quyền có thể lặng lẽ đổi quyền Manager, và `role.service.ts onModuleInit` sync preset mỗi lần boot.
 | **DesignerLeader** | dashboard / orders / workshop_config / **designer_team** / **designer_stats** / my_tasks | `order.import`, `order.transfer`, `order.delete`, `order.view_workshop_table` | tất cả designer/order field + designerStatus | `assignee` + `toolResultNote` + `productionErrorSource` + machineNumber + tool/errorFile* + assigneeNote | `designer.team.manage`, `designer.task.assign`, `designer.task.override`, `order.log.view` |
 | **Designer** (sub) | dashboard / orders / **my_tasks** | `order.view_workshop_table` | tool* / errorFile* / assigneeNote* / designerStatus / productionError | tool / errorFile* / errorFileNote / assigneeNote / machineNumber (**KHÔNG** edit assignee + toolResultNote — BE auto derive khi state machine `complete`) | `designer.task.transition` |
 | Fulfillment | dashboard / orders | `order.view_workshop_table`, `order.transfer` | printStatus* / machineNumber / productionError* / **productionErrorSource** | printStatus* / machineNumber / productionError* / **productionErrorSource** | ❌ |

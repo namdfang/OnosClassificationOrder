@@ -17,6 +17,8 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@
 import { handleAxiosError } from '@/utils';
 import { sortCategoryTree } from '@/utils/categoryTree';
 
+import { useProductWriteAccess } from '@/hooks/useProductWriteAccess';
+
 interface ProductCategoryRow {
   _id: string;
   name: string;
@@ -39,6 +41,8 @@ const DEFAULT_FORM: FormState = {
 
 export function ProductCategoryTab() {
   const { t } = useTranslation(['products', 'common']);
+  // AUTH-6 - vai chi doc (Support) xem duoc, khong tao/sua duoc.
+  const { canWriteProducts } = useProductWriteAccess();
   const [items, setItems] = useState<ProductCategoryRow[]>([]);
   const [loading, setLoading] = useState(false);
   const [form, setForm] = useState<FormState>(DEFAULT_FORM);
@@ -115,10 +119,12 @@ export function ProductCategoryTab() {
             <h3 className="text-sm font-semibold text-foreground">{t('categoryTab.title')}</h3>
             <p className="text-xs text-muted-foreground mt-0.5">{t('categoryTab.description')}</p>
           </div>
-          <Button size="sm" onClick={openCreate}>
-            <Plus size={14} />
-            {t('common:actions.add')}
-          </Button>
+          {canWriteProducts && (
+            <Button size="sm" onClick={openCreate}>
+              <Plus size={14} />
+              {t('common:actions.add')}
+            </Button>
+          )}
         </div>
         <Table>
           <TableHeader>
@@ -164,9 +170,11 @@ export function ProductCategoryTab() {
                     )}
                   </TableCell>
                   <TableCell>
-                    <Button variant="ghost" size="sm" onClick={() => openEdit(it)}>
-                      {t('common:actions.edit')}
-                    </Button>
+                    {canWriteProducts && (
+                      <Button variant="ghost" size="sm" onClick={() => openEdit(it)}>
+                        {t('common:actions.edit')}
+                      </Button>
+                    )}
                   </TableCell>
                 </TableRow>
               ))}
