@@ -1043,6 +1043,33 @@ export const GetNextDesignReviewOrderZod = z.object({
 });
 export class GetNextDesignReviewOrderDto extends createZodDto(extendApi(GetNextDesignReviewOrderZod)) {}
 
+/**
+ * ORD-6 — 1 vị trí in của đơn, kèm kích thước in THẬT (cm) ứng với size của
+ * CHÍNH đơn đó (nguồn `ProductConfig.printArea[].sizeDimensions`, PRD-7).
+ *
+ * Danh sách là HỢP của: vị trí in đã cấu hình ở sản phẩm + vị trí có mặt trong
+ * `designs` của đơn. Vị trí có design mà sản phẩm chưa cấu hình vẫn được liệt kê
+ * với `configured: false` để tool biết là "có file nhưng chưa có cấu hình" thay
+ * vì im lặng bỏ qua.
+ *
+ * `widthCm`/`lengthCm` = null khi size của đơn KHÔNG khớp size nào trong cấu
+ * hình, hoặc vị trí chưa nhập kích thước. TUYỆT ĐỐI không lấy tạm size khác /
+ * số mặc định — tool phải dừng và báo lỗi thay vì in sai kích thước lên giấy.
+ */
+export const DesignReviewPrintAreaZod = z.object({
+  /** Trùng key trong `designs` (`DesignFields`) — dùng để ghép 1-1 với file design. */
+  key: z.string(),
+  /** Nhãn tiếng Việt của vị trí in (từ `PRODUCT_PRINT_AREA_LABEL_MAP`) — để in nhãn/hiển thị. */
+  label: z.string(),
+  /** false = vị trí này có design nhưng sản phẩm CHƯA cấu hình nó. */
+  configured: z.boolean(),
+  /** Chiều rộng in (cm) theo size của đơn. null = chưa xác định được, xem doc ở trên. */
+  widthCm: z.number().nullable(),
+  /** Chiều dài in (cm) theo size của đơn. null = chưa xác định được. */
+  lengthCm: z.number().nullable(),
+});
+export type DesignReviewPrintArea = z.infer<typeof DesignReviewPrintAreaZod>;
+
 export const DesignReviewOrderZod = z.object({
   /** Mã đơn nội bộ — khóa duy nhất, luôn có, dùng để gọi lại các API khác (vd cập nhật toolResultNote). */
   productionId: z.string(),
@@ -1056,6 +1083,19 @@ export const DesignReviewOrderZod = z.object({
   mockupUrl: z.string().optional(),
   /** Ngày đơn chuyển sang sản xuất (đơn vào production) — null nếu đơn chưa có mốc này. */
   inProductionAt: z.coerce.date().nullable().optional(),
+  /**
+   * ORD-6 — đơn này có in DTF không. Suy từ cấu hình sản phẩm
+   * (`ProductConfig.printMethod === 'dtf'`), CỘNG quy ước cũ `productCode === 'TIFF'`
+   * để tool bản đang chạy ở xưởng không gãy. Không tra được sản phẩm → false.
+   */
+  isDtf: z.boolean(),
+  /** ORD-6 — vị trí in + kích thước theo size của đơn. Rỗng khi sản phẩm chưa cấu hình vị trí nào. */
+  printAreas: DesignReviewPrintAreaZod.array(),
+  /**
+   * ORD-6 — SKU biến thể khớp size + màu của đơn. null khi không tra được sản
+   * phẩm, không có biến thể nào khớp, hoặc khớp NHIỀU biến thể (không đoán).
+   */
+  variantSku: z.string().nullable(),
 });
 export type DesignReviewOrder = z.infer<typeof DesignReviewOrderZod>;
 

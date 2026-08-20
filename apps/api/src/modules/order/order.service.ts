@@ -98,10 +98,13 @@ import type {
 } from 'shared';
 import type {
   CustomerWebhookEvent,
+  DesignReviewPrintArea,
   GetOrderLogsDto,
   LifecycleTrack,
   LifecycleTrackStage,
   LifecycleTrackStatus,
+  ProductPrintArea,
+  ProductVariation,
 } from 'shared';
 import {
   customerMatchKey,
@@ -117,9 +120,13 @@ import {
   FulfillmentTransitionAction,
   HOLD_REASON_WAITING_ADDRESS,
   HOLD_REASON_WAITING_DESIGN,
+  isVariationColorLabel,
   LIFECYCLE_STAGE_KEYS,
+  normalizeVariationText,
   parseProductionIdFromCuttingFilename,
+  PRODUCT_PRINT_AREA_LABEL_MAP,
   redirectAutoTarget,
+  resolveVariationSizeLabel,
   RoleType,
   Status,
   WorkshopConfigCategory,
@@ -311,6 +318,27 @@ const ADDRESS_FIELDS: Array<keyof ProductionOrderShippingAddress> = [
   'email',
   'phone',
 ];
+
+/**
+ * ORD-6 — mã `printMethod` (danh mục `workshop_config` category `print_method`)
+ * được coi là in DTF. Danh mục thật hiện có: dtg · dtf · sublimation · embroidery.
+ */
+const DTF_PRINT_METHOD_CODE = 'dtf';
+
+/**
+ * ORD-6 — quy ước CŨ của tool: mã chạy tool đúng chữ `TIFF` nghĩa là đơn in DTF.
+ * GIỮ LẠI vì tool bản đang chạy ở xưởng dựa vào nó; nay chỉ là đường phụ, đường
+ * chính là `printMethod` của sản phẩm.
+ */
+const LEGACY_DTF_PRODUCT_CODE = 'TIFF';
+
+/** Phần cấu hình sản phẩm mà design review cần đọc — xem `OrderService.toDesignReviewOrder`. */
+type DesignReviewProductDoc = {
+  designReviewCode?: string;
+  printMethod?: string;
+  printArea?: ProductPrintArea;
+  variations?: ProductVariation[];
+};
 
 /** Field cần cho `getNextDesignReviewOrder`/`getDesignReviewOrderByProductionId` — xem `OrderService.toDesignReviewOrder`. */
 type DesignReviewSourceDoc = {
@@ -6184,6 +6212,10 @@ export class OrderService implements OnModuleInit {
    * §7.0b). Không truyền → không giới hạn ngày (hành vi cũ).
    */
   /**
+   * Cấu hình sản phẩm của đơn, tra theo `order.type`. ORD-6 dùng chung một lần
+   * đọc này cho `productCode` + cờ DTF + vị trí in + biến thể (trước đó chỉ đọc
+   * mỗi `designReviewCode`).
+   *
    * `productCode` cho tool duyệt thiết kế — đọc từ `ProductConfig.designReviewCode`
    * (PRD-2, trường RIÊNG; trước đó ORD-3 mượn `shortName` nên tên viết tắt của
    * người dùng bị coi là khoá kỹ thuật). Quy tắc khớp GIỮ NGUYÊN như map cũ:
@@ -6192,27 +6224,106 @@ export class OrderService implements OnModuleInit {
    *
    * Tên field `productCode` trong response KHÔNG đổi — tool ngoài đang đọc.
    */
-  private async resolveDesignReviewProductCode(type?: string | null): Promise<string | null> {
+  private async resolveDesignReviewProduct(type?: string | null): Promise<DesignReviewProductDoc | null> {
     const trimmed = type?.trim();
     if (!trimmed) return null;
     const escaped = trimmed.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-    const pc = await this.productConfigRepository.findOne<{ designReviewCode?: string }>({
-      fullName: { $regex: `^${escaped}$`, $options: 'i' },
-    });
-    return pc?.designReviewCode?.trim() || null;
+    return (
+      (await this.productConfigRepository.findOne<DesignReviewProductDoc>({
+        fullName: { $regex: `^${escaped}$`, $options: 'i' },
+      })) ?? null
+    );
   }
 
   /** Map raw order doc (field cần cho design review) → `DesignReviewOrder`. Dùng chung bởi `getNextDesignReviewOrder`/`getDesignReviewOrderByProductionId`. */
   private async toDesignReviewOrder(doc: DesignReviewSourceDoc): Promise<DesignReviewOrder> {
+    const product = await this.resolveDesignReviewProduct(doc.type);
+    const productCode = product?.designReviewCode?.trim() || null;
     return {
       productionId: doc.productionId,
       orderId: doc.orderId,
-      productCode: await this.resolveDesignReviewProductCode(doc.type),
+      productCode,
       attributes: { size: doc.size, color: doc.color },
       designs: doc.designs ?? {},
       mockupUrl: doc.mockupUrl,
       inProductionAt: doc.inProductionAt ?? null,
+      // ORD-6 — cấu hình sản phẩm là nguồn CHÍNH; quy ước cũ mã = TIFF giữ lại để
+      // tool bản đang chạy ở xưởng (và các sản phẩm đang mang mã đó) không gãy.
+      isDtf:
+        product?.printMethod?.trim().toLowerCase() === DTF_PRINT_METHOD_CODE ||
+        productCode?.toUpperCase() === LEGACY_DTF_PRODUCT_CODE,
+      printAreas: OrderService.buildDesignReviewPrintAreas(product?.printArea, doc.designs, doc.size),
+      variantSku: OrderService.resolveDesignReviewVariantSku(product?.variations, doc.size, doc.color),
     };
+  }
+
+  /**
+   * ORD-6 — vị trí in + kích thước (cm) ứng với size của CHÍNH đơn này.
+   *
+   * Danh sách = HỢP của vị trí đã cấu hình ở sản phẩm và vị trí có mặt trong
+   * `designs` của đơn, để tool thấy được cả ca "có file nhưng sản phẩm chưa cấu
+   * hình vị trí đó". Ghép size: trim + không phân biệt hoa thường. KHÔNG khớp ⇒
+   * kích thước null — tuyệt đối không lấy tạm size khác hay số mặc định, vì in
+   * sai kích thước lên giấy tệ hơn nhiều so với việc tool dừng lại và báo lỗi.
+   */
+  private static buildDesignReviewPrintAreas(
+    printArea: ProductPrintArea | undefined,
+    designs: DesignFields | undefined,
+    orderSize?: string,
+  ): DesignReviewPrintArea[] {
+    const norm = (v?: string | null): string => (v ?? '').trim().toLowerCase();
+    const wantedSize = norm(orderSize);
+    const configured = new Map((printArea ?? []).map((a) => [a.key as string, a]));
+    const designKeys = Object.entries(designs ?? {})
+      .filter(([, url]) => !!url)
+      .map(([key]) => key);
+
+    return [...new Set([...configured.keys(), ...designKeys])].map((key) => {
+      const area = configured.get(key);
+      const match = wantedSize ? (area?.sizeDimensions ?? []).find((d) => norm(d.size) === wantedSize) : undefined;
+      return {
+        key,
+        label: PRODUCT_PRINT_AREA_LABEL_MAP[key as keyof typeof PRODUCT_PRINT_AREA_LABEL_MAP] ?? key,
+        configured: !!area,
+        widthCm: match?.widthCm ?? null,
+        lengthCm: match?.lengthCm ?? null,
+      };
+    });
+  }
+
+  /**
+   * ORD-6 — SKU biến thể khớp size + màu của đơn. Chỉ trả khi khớp DUY NHẤT một
+   * biến thể; khớp nhiều hoặc không khớp → null. Đoán bừa ở đây nghĩa là dán
+   * nhầm nhãn nhận diện lên kiện hàng.
+   */
+  private static resolveDesignReviewVariantSku(
+    variations: ProductVariation[] | undefined,
+    size?: string,
+    color?: string,
+  ): string | null {
+    // Nhận diện nhãn size/màu đi qua `packages/shared/constants/variation-attribute.ts`
+    // — CÙNG chỗ với bảng nhập kích thước ở trang sản phẩm (PRD-7). Chép luật ra
+    // đây là cách chắc chắn nhất để hai bên lệch nhau mà không ai biết.
+    const wantedSize = normalizeVariationText(size);
+    const wantedColor = normalizeVariationText(color);
+    if (!wantedSize && !wantedColor) return null;
+    const sizeLabel = resolveVariationSizeLabel(variations);
+
+    const hits = (variations ?? []).filter((v) => {
+      const attrs = v.attributes ?? [];
+      if (wantedSize) {
+        const ok = attrs.some(
+          (a) => normalizeVariationText(a.label) === sizeLabel && normalizeVariationText(a.value) === wantedSize,
+        );
+        if (!ok) return false;
+      }
+      if (wantedColor) {
+        const ok = attrs.some((a) => isVariationColorLabel(a.label) && normalizeVariationText(a.value) === wantedColor);
+        if (!ok) return false;
+      }
+      return true;
+    });
+    return hits.length === 1 ? (hits[0].sku ?? null) : null;
   }
 
   private static readonly DESIGN_REVIEW_PROJECTION = {

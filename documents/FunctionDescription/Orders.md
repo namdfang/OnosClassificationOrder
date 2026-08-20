@@ -1497,7 +1497,7 @@ Hiển thị (chip đồng hồ, đỏ nếu quá hạn):
 
 ## 18. Design Review — public API cho tool ngoài duyệt thiết kế
 
-> **File BE:** `apps/api/src/modules/order/order.controller.ts` → `GET /v1/orders/design-review/next` + `GET /v1/orders/design-review/by-production-id/:productionId` + `GET /v1/orders/design-review/error-file-options` + `POST /v1/orders/design-review/result`, `apps/api/src/modules/order/order.service.ts` → `getNextDesignReviewOrder()` + `getDesignReviewOrderByProductionId()` + `getDesignReviewErrorFileOptions()` + `setDesignReviewResult()`, `apps/api/src/modules/order/design-review-product-code.ts` (`PRODUCT_TYPE_CODE_MAP` — CHỈ còn là dữ liệu migration 1 lần, runtime đọc `ProductConfig.designReviewCode` qua `resolveDesignReviewProductCode()` — PRD-2, xem §18.5)
+> **File BE:** `apps/api/src/modules/order/order.controller.ts` → `GET /v1/orders/design-review/next` + `GET /v1/orders/design-review/by-production-id/:productionId` + `GET /v1/orders/design-review/error-file-options` + `POST /v1/orders/design-review/result`, `apps/api/src/modules/order/order.service.ts` → `getNextDesignReviewOrder()` + `getDesignReviewOrderByProductionId()` + `getDesignReviewErrorFileOptions()` + `setDesignReviewResult()`, `apps/api/src/modules/order/design-review-product-code.ts` (`PRODUCT_TYPE_CODE_MAP` — CHỈ còn là dữ liệu migration 1 lần, runtime đọc `ProductConfig.designReviewCode` qua `resolveDesignReviewProduct()` — PRD-2, xem §18.5)
 > **Shared:** `packages/shared/dtos/production-order.dto.ts` (`GetNextDesignReviewOrderZod`/`GetNextDesignReviewOrderDto` + `DesignReviewOrderZod`/`DesignReviewAttributesZod`/`GetNextDesignReviewOrderResDto` + `GetDesignReviewOrderByIdResDto` + `DesignReviewErrorFileOptionZod`/`GetDesignReviewErrorFileOptionsResDto` + `SetDesignReviewResultZod`/`SetDesignReviewResultResDto`)
 > **Route:** không có FE — chỉ API cho hệ thống ngoài gọi.
 > **API:** `GET /v1/orders/design-review/next`, `GET /v1/orders/design-review/by-production-id/:productionId`, `GET /v1/orders/design-review/error-file-options`, `POST /v1/orders/design-review/result`
@@ -1545,13 +1545,46 @@ Sort: `priority desc` → `inProductionAt asc` → `createdAt asc` (đơn ưu ti
     designs: DesignFields;        // chỉ các key có URL (front/back/sleeve/...), raw Drive URL (R2 pipeline đang tắt — xem ImageOptimization.md)
     mockupUrl?: string;            // ảnh mockup sản phẩm — tham chiếu trực quan khi soát design
     inProductionAt: string | null; // ngày đơn chuyển sang sản xuất (ISO date) — null nếu đơn chưa có mốc này
+    // ↓ ORD-6 — CHỈ THÊM, không field cũ nào đổi tên/đổi kiểu (tool bản cũ ở xưởng phải chạy tiếp được)
+    isDtf: boolean;                // đơn có in DTF không — xem §18.4a
+    printAreas: {                  // vị trí in + kích thước THẬT theo size của CHÍNH đơn này — xem §18.4b
+      key: string;                 //   trùng key trong `designs` (DesignFields)
+      label: string;               //   nhãn tiếng Việt (PRODUCT_PRINT_AREA_LABEL_MAP)
+      configured: boolean;         //   false = đơn có design ở vị trí này nhưng sản phẩm CHƯA cấu hình nó
+      widthCm: number | null;      //   null = không xác định được (xem §18.4b) — KHÔNG BAO GIỜ là số đoán
+      lengthCm: number | null;
+    }[];
+    variantSku: string | null;     // SKU biến thể khớp size+màu của đơn — null nếu không khớp hoặc khớp NHIỀU biến thể
   } | null;   // null khi không còn đơn nào ở bước đầu tiên
   remaining: number;   // tổng số đơn còn cần xử lý (đúng điều kiện §18.3, KHÔNG xét claim/lease) — bao gồm cả đơn trong `data`, đếm bằng countDocuments() song song (Promise.all) với findOneAndUpdate
 }
 ```
 
+Cả hai endpoint đọc đơn (`/next` và `/by-production-id/:productionId`) dùng CHUNG mapper `toDesignReviewOrder()` nên shape luôn giống hệt nhau — thêm field mới phải sửa đúng một chỗ.
+
+### 18.4a `isDtf` — cờ đơn in DTF (ORD-6)
+`true` khi **một trong hai**:
+
+1. **Đường chính** — cấu hình sản phẩm: `ProductConfig.printMethod === 'dtf'` (mã trong danh mục `workshop_config` category `print_method`; danh mục thật: `dtg` · `dtf` · `sublimation` · `embroidery`). Hằng `DTF_PRINT_METHOD_CODE` ở `order.service.ts`.
+2. **Đường phụ, quy ước CŨ** — `productCode` (tức `designReviewCode`) đúng chữ `TIFF`, không phân biệt hoa thường. Hằng `LEGACY_DTF_PRODUCT_CODE`. **GIỮ LẠI có chủ ý**: tool bản đang chạy ở xưởng nhận diện DTF bằng quy ước này, gỡ đi là gãy dây chuyền soát design. Quy ước đó cũng là lý do mọi sản phẩm DTF từng buộc phải mang cùng một mã `TIFF` nên **không phân biệt được sản phẩm nào với sản phẩm nào** — nay `printMethod` giải quyết việc đó.
+
+Đơn không tra được sản phẩm (chưa map `type`) → `false`, response vẫn `200`.
+
+### 18.4b `printAreas` — kích thước in theo size của ĐƠN (ORD-6)
+Danh sách là **HỢP** của: vị trí in đã cấu hình ở sản phẩm (`ProductConfig.printArea[]`) **và** vị trí có URL trong `designs` của đơn. Vị trí có design mà sản phẩm chưa cấu hình vẫn được liệt kê với `configured: false` — để tool thấy được ca "có file nhưng thiếu cấu hình" thay vì im lặng bỏ qua.
+
+`widthCm`/`lengthCm` lấy từ `ProductConfig.printArea[].sizeDimensions[]` (PRD-7) khớp **size của chính đơn** (`OrderEntity.size`), ghép **trim + không phân biệt hoa thường**. Trả `null` khi: size của đơn không khớp size nào trong cấu hình · vị trí chưa nhập kích thước · đơn không có size · sản phẩm chưa cấu hình vị trí đó.
+
+> **KHÔNG ĐOÁN.** Không khớp thì trả rỗng, tuyệt đối không lấy tạm size khác hay số mặc định — tool dừng lại và báo lỗi vẫn tốt hơn nhiều so với in sai kích thước lên giấy DTF. Đơn vị là **cm** đúng như PRD-7 lưu; quy đổi cm → pixel theo DPI là việc của tool.
+
+Sản phẩm chưa cấu hình vị trí in nào và đơn cũng không có design → mảng rỗng, không lỗi.
+
+`variantSku` ghép size + màu của đơn với `variations[].attributes` qua **hàm dùng chung** `packages/shared/constants/variation-attribute.ts` (nhãn size `Item Size`/`Size` — có cả hai thì ưu tiên `Item Size`; nhãn màu `Màu`/`Color`/`Colour`), cũng trim + không phân biệt hoa thường. **Cùng file mà trang sản phẩm dùng để dựng bảng kích thước theo size (Products.md §2.4a)** — chép luật ra hai nơi là cách chắc chắn nhất để nhập được kích thước ở trang sản phẩm mà API trả rỗng; **chỉ trả khi khớp DUY NHẤT 1 biến thể** — khớp nhiều thì `null`, vì đoán sai SKU là dán nhầm nhãn nhận diện lên kiện hàng.
+
+> **API này CÔNG KHAI, không cần JWT** — mọi field thêm vào là công khai với bất kỳ ai gọi được. Vì thế response **không có** trường tiền nào (`cost`/`retailPrice`/`wholesalePrice`/`nonShipCost`) và **không có** danh tính người thao tác. Thêm field mới ở đây phải soi lại đúng hai điều này.
+
 ### 18.5 Nguồn `productCode` — `ProductConfig.designReviewCode` trong DB (PRD-2)
-`productCode` đọc từ **DB lúc gọi API**: `resolveDesignReviewProductCode()` (`order.service.ts`) khớp `OrderEntity.type` ↔ `ProductConfig.fullName` (exact, trim + case-insensitive — đúng quy tắc map cũ) rồi trả **`designReviewCode`** của sản phẩm; không khớp sản phẩm nào / mã trống → `null`. **Sửa/thêm mã ngay trên UI Products** (ô "Mã chạy tool duyệt thiết kế", khu Sản xuất trang chi tiết sản phẩm), không cần deploy.
+`productCode` đọc từ **DB lúc gọi API**: `resolveDesignReviewProduct()` (`order.service.ts` — từ ORD-6 đọc CẢ cấu hình sản phẩm một lần cho `productCode` + `isDtf` + `printAreas` + `variantSku`) khớp `OrderEntity.type` ↔ `ProductConfig.fullName` (exact, trim + case-insensitive — đúng quy tắc map cũ) rồi trả **`designReviewCode`** của sản phẩm; không khớp sản phẩm nào / mã trống → `null`. **Sửa/thêm mã ngay trên UI Products** (ô "Mã chạy tool duyệt thiết kế", khu Sản xuất trang chi tiết sản phẩm), không cần deploy.
 
 > **PRD-2 — mã tool KHÔNG còn nằm ở `shortName`.** ORD-3 mượn `shortName` làm khoá kỹ thuật nên tên viết tắt do người dùng đặt bị coi là mã tool; nay mã có trường riêng `designReviewCode`, còn `shortName` trở lại đúng nghĩa tên viết tắt và **không migration/import nào được ghi đè nó nữa**. Tên field `productCode` trong response GIỮ NGUYÊN — tool ngoài (`.localdev`) đang đọc đúng tên đó.
 
