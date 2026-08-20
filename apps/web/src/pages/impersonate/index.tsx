@@ -1,17 +1,12 @@
-import React, { useEffect, useMemo, useState } from 'react';
+import React, { useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Navigate } from 'react-router-dom';
 import { AlertTriangle, Search, UserCog } from 'lucide-react';
-import type { Customer, StartImpersonationDto, User } from 'shared';
-import { RoleType, Status } from 'shared';
+import { RoleType } from 'shared';
 
 import { PATHS } from '@/constants/paths';
 
 import { useAuthStore } from '@/store/authStore';
-import { useCustomerAuthStore } from '@/store/customerAuthStore';
-import { AUTH_REMEMBER_KEY } from '@/store/sessionPersist';
-
-import { RepositoryRemote } from '@/services';
 
 import { Spinner } from '@/components/common/Spinner';
 import { Badge } from '@/components/ui/badge';
@@ -27,28 +22,11 @@ import {
 import { Input } from '@/components/ui/input';
 
 import { handleAxiosError } from '@/utils';
+import type { ImpersonationCandidate } from '@/utils/impersonationStart';
+import { startImpersonation } from '@/utils/impersonationStart';
 
-import { useDebounce } from '@/hooks/useDebounce';
+import { useImpersonationSearch } from '@/hooks/useImpersonationSearch';
 import { usePermission } from '@/hooks/usePermission';
-
-/** 1 dòng kết quả — gộp chung 2 nguồn tài khoản về một hình dạng để render. */
-interface Candidate {
-  targetType: 'user' | 'customer';
-  id: string;
-  /** Dòng đầu — tên hiển thị. */
-  title: string;
-  /** Dòng phụ — email / SKU / role. */
-  subtitle: string;
-  inactive: boolean;
-}
-
-/**
- * `users.status` trong DB lưu LẪN KIỂU (chuỗi `"1"`, chuỗi `"0"`, và cả số
- * nguyên `1`) — TESTER đo được trên dữ liệu thật. So sánh chặt với `Status.Active`
- * sẽ đánh nhầm nhiều tài khoản đang hoạt động thành "đã vô hiệu hoá", nên chuẩn
- * hoá về chuỗi trước khi so.
- */
-const isInactive = (status: unknown): boolean => String(status ?? Status.Active) === String(Status.Inactive);
 
 /**
  * Màn hình **Mạo danh tài khoản** — CHỈ SuperAdmin (AUTH-1 `BR-1`).
@@ -66,100 +44,17 @@ function ImpersonatePage() {
   const impersonatedBy = useAuthStore((s) => s.profile?.impersonatedBy);
 
   const [keyword, setKeyword] = useState('');
-  const debounced = useDebounce(keyword, 400);
-  const [loading, setLoading] = useState(false);
-  const [users, setUsers] = useState<Candidate[] | null>(null);
-  const [customers, setCustomers] = useState<Candidate[] | null>(null);
-  const [target, setTarget] = useState<Candidate | null>(null);
+  const [target, setTarget] = useState<ImpersonationCandidate | null>(null);
   const [starting, setStarting] = useState(false);
+  const { debounced, loading, users, customers, results } = useImpersonationSearch(keyword);
 
   const isSuperAdmin = roleName === RoleType.SuperAdmin;
-
-  useEffect(() => {
-    const q = debounced.trim();
-    if (!q) {
-      setUsers(null);
-      setCustomers(null);
-      return;
-    }
-    let cancelled = false;
-    setLoading(true);
-    // Hai nguồn chạy SONG SONG và độc lập: một bên hỏng thì bên kia vẫn hiện
-    // được, thay vì để trắng cả màn hình vì một nửa lỗi.
-    void Promise.allSettled([
-      RepositoryRemote.users.getUsers(`?page=1&limit=50&search=${encodeURIComponent(q)}`),
-      RepositoryRemote.customer.list(q),
-    ])
-      .then(([u, c]) => {
-        if (cancelled) return;
-        setUsers(
-          u.status === 'fulfilled'
-            ? ((u.value?.data?.data || []) as User[])
-                // `_id` là optional trong DTO dùng chung — bỏ bản ghi thiếu id
-                // thay vì ép kiểu, vì không có id thì cũng không mạo danh được.
-                .filter((x): x is User & { _id: string } => !!x._id)
-                .map((x) => ({
-                targetType: 'user' as const,
-                id: x._id,
-                title: x.fullName || x.email,
-                subtitle: [x.email, (x as User & { role?: { name?: string } }).role?.name].filter(Boolean).join(' · '),
-                inactive: isInactive(x.status),
-              }))
-            : null,
-        );
-        setCustomers(
-          c.status === 'fulfilled'
-            ? ((c.value?.data?.data || []) as Customer[])
-                .filter((x): x is Customer & { _id: string } => !!x._id)
-                .map((x) => ({
-                targetType: 'customer' as const,
-                id: x._id,
-                title: x.fullName || x.userSku,
-                subtitle: [x.userEmail, x.tier != null ? `VIP ${x.tier}` : null].filter(Boolean).join(' · '),
-                inactive: isInactive(x.status),
-              }))
-            : null,
-        );
-      })
-      .finally(() => !cancelled && setLoading(false));
-    return () => {
-      cancelled = true;
-    };
-  }, [debounced]);
-
-  const results = useMemo(() => [...(users || []), ...(customers || [])], [users, customers]);
 
   const doStart = async () => {
     if (!target) return;
     try {
       setStarting(true);
-      const payload: StartImpersonationDto = { targetType: target.targetType, targetId: target.id };
-      const res = await RepositoryRemote.impersonate.start(payload);
-      const data = res.data?.data as
-        | { accessToken: string; expiresIn: number; impersonating?: { targetType: 'user' | 'customer' } }
-        | undefined;
-      if (!data?.accessToken) throw new Error('missing token');
-
-      // Điều hướng theo `targetType` do BE trả, KHÔNG tự đoán từ id (`BR-5`).
-      const kind = data.impersonating?.targetType ?? target.targetType;
-      const expiredAt = Date.now() + (data.expiresIn ?? 0) * 1000;
-
-      if (kind === 'customer') {
-        // Mạo danh KHÁCH ghi vào store riêng — phiên nhân viên thật của
-        // SuperAdmin trong `authStore` GIỮ NGUYÊN (`BR-14`).
-        const store = useCustomerAuthStore.getState();
-        store.setToken(data.accessToken);
-        store.setTokenExpiredAt(expiredAt);
-        window.location.href = PATHS.CUSTOMER_ORDERS;
-        return;
-      }
-
-      const store = useAuthStore.getState();
-      // Giữ nguyên marker "ghi nhớ đăng nhập" — mặc định `false` của `setToken`
-      // sẽ âm thầm chuyển blob phiên sang sessionStorage.
-      store.setToken(data.accessToken, localStorage.getItem(AUTH_REMEMBER_KEY) === '1');
-      store.setTokenExpiredAt(expiredAt);
-      window.location.href = PATHS.ORDERS_WORKSHOP;
+      await startImpersonation(target);
     } catch (err) {
       handleAxiosError(err);
       setStarting(false);

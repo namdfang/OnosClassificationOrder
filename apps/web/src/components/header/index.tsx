@@ -3,6 +3,7 @@ import { useTranslation } from 'react-i18next';
 import { Link, useNavigate } from 'react-router-dom';
 import { Languages, LogOut, Menu as MenuIcon, Moon, PanelLeft, PanelLeftClose, Sun, User } from 'lucide-react';
 
+import { ImpersonateQuickSwitch } from '@/components/auth/ImpersonateQuickSwitch';
 import { Avatar, AvatarFallback } from '@/components/ui/avatar';
 import { Button } from '@/components/ui/button';
 import {
@@ -51,6 +52,9 @@ function Header({ collapsed, changeCollapsed, isMobile }: HeaderProps) {
       </Button>
 
       <div className="flex items-center gap-1.5">
+        {/* Lối vào nhanh mạo danh (AUTH-2) — tự ẩn với vai không phải SuperAdmin. */}
+        <ImpersonateQuickSwitch />
+
         <Button
           variant="ghost"
           size="icon"
