@@ -1,5 +1,6 @@
 export * from './assert-same-type';
 export * from './common-service-filters';
+export * from './diacritic-regex';
 export * from './escape-regex';
 export * from './file';
 export * from './gen-code';

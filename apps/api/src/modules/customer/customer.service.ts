@@ -45,14 +45,12 @@ import {
   Status,
 } from 'shared';
 
+import { diacriticInsensitiveRegex } from '@/utils';
+
 import { OrderEntity } from '../order/order.entity';
 import { SystemConfigService } from '../system-config/system-config.service';
 import type { CustomerDocument } from './customer.entity';
 import { CustomerEntity } from './customer.entity';
-
-function escapeRegex(s: string): string {
-  return s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-}
 
 /** Không bao giờ trả `password` (hash) ra ngoài API — kể cả cho chính khách hàng đó. */
 export function toSafeCustomer(doc: CustomerDocument): Customer {
@@ -89,7 +87,9 @@ export class CustomerService {
       deletedAt: dto.deleted ? { $ne: null } : null,
     };
     if (dto.search?.trim()) {
-      const rx = { $regex: escapeRegex(dto.search.trim()), $options: 'i' };
+      // AUTH-4 — khớp BỎ DẤU (xem `diacriticInsensitiveRegex`); lớp ký tự là
+      // tập cha của chữ gõ vào nên chuỗi có dấu vẫn ra đúng như trước.
+      const rx = { $regex: diacriticInsensitiveRegex(dto.search.trim()), $options: 'i' };
       filter.$or = [{ userSku: rx }, { userEmail: rx }, { fullName: rx }, { phone: rx }];
     }
     if (dto.tier !== undefined && dto.tier !== '') {

@@ -69,7 +69,7 @@ DTOs: `packages/shared/dtos/customer.dto.ts` — `CustomerAdminRowZod`
 
 `pages/customers/index.tsx`:
 
-- Toolbar: search (SKU/email/tên/SĐT, Enter) + select tier + select tài khoản
+- Toolbar: search (SKU/email/tên/SĐT, Enter — **khớp BỎ DẤU** từ `AUTH-4`, xem `Auth.md §10.6a`) + select tier + select tài khoản
   (Tất cả / Đã đăng ký / Chưa đăng ký / Đã khóa) + toggle **Đã xóa** + nút
   **Sync từ đơn hàng** + **Import tier** + **Thêm khách hàng** (2 nút Sync/Import
   DỜI từ toolbar settings cũ sang đây).

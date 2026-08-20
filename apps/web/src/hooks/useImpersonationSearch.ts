@@ -17,6 +17,37 @@ import { useDebounce } from '@/hooks/useDebounce';
 const isInactive = (status: unknown): boolean => String(status ?? Status.Active) === String(Status.Inactive);
 
 /**
+ * Bỏ dấu tiếng Việt + hạ hoa thường để XẾP HẠNG phía giao diện (AUTH-4).
+ * `đ`/`Đ` phải gộp tay: chuẩn hoá NFD tách được dấu của nguyên âm nhưng KHÔNG
+ * tách được `đ`. Cùng quy tắc với `diacriticInsensitiveRegex` ở backend, nên thứ
+ * hạng không mâu thuẫn với tập kết quả trả về.
+ */
+const deaccent = (s: string): string =>
+  s
+    .normalize('NFD')
+    .replace(/[̀-ͯ]/g, '')
+    .replace(/[đĐ]/g, 'd')
+    .toLowerCase()
+    .trim();
+
+/**
+ * Hạng của một dòng kết quả theo yêu cầu "khớp đúng lên đầu":
+ * 0 = khớp CHÍNH XÁC cả chuỗi · 1 = khớp từ ĐẦU chuỗi · 2 = khớp ở GIỮA.
+ * Tính trên MỌI trường đang tìm (title + subtitle gộp sẵn tên/email/SKU/điện
+ * thoại), lấy hạng tốt nhất trong các trường.
+ */
+const matchRank = (c: ImpersonationCandidate, needle: string): number => {
+  const fields = [c.title, ...c.subtitle.split(' · ')].map(deaccent).filter(Boolean);
+  let best = 3;
+  for (const f of fields) {
+    if (f === needle) return 0;
+    if (f.startsWith(needle)) best = Math.min(best, 1);
+    else if (f.includes(needle)) best = Math.min(best, 2);
+  }
+  return best;
+};
+
+/**
  * Tìm tài khoản mạo danh được từ CẢ HAI nguồn — nhân viên (`GET /users`) và
  * khách hàng Customer Portal (`GET /customers`). Dùng chung cho trang
  * `/impersonate` (AUTH-1) và nút truy cập nhanh trên thanh nav (AUTH-2), nên hai
@@ -87,7 +118,21 @@ export function useImpersonationSearch(keyword: string) {
     };
   }, [debounced]);
 
-  const results = useMemo(() => [...(users || []), ...(customers || [])], [users, customers]);
+  /**
+   * Gộp 2 nguồn rồi XẾP HẠNG (AUTH-4): khớp chính xác → khớp đầu chuỗi → khớp
+   * giữa chuỗi. Sắp bằng `sort` của JS (ổn định theo chuẩn) trên mảng đã gộp
+   * theo thứ tự cố định nhân viên-trước-khách, nên gõ lại cùng chuỗi cho ra
+   * cùng thứ tự, không nhảy lung tung.
+   */
+  const results = useMemo(() => {
+    const merged = [...(users || []), ...(customers || [])];
+    const needle = deaccent(debounced);
+    if (!needle) return merged;
+    return merged
+      .map((c, index) => ({ c, index, rank: matchRank(c, needle) }))
+      .sort((a, b) => a.rank - b.rank || a.index - b.index)
+      .map((x) => x.c);
+  }, [users, customers, debounced]);
 
   return { debounced, loading, users, customers, results };
 }

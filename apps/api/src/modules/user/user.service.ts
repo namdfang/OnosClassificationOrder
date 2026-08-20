@@ -15,7 +15,7 @@ import type {
 import { ChangePasswordZod, CODE_LENGTH, RoleType, Status, UserLogType } from 'shared';
 
 import { ApiConfigService } from '@/shared/services';
-import { escapeRegExp, genCode, parseUrls } from '@/utils';
+import { diacriticInsensitiveRegex, genCode, parseUrls } from '@/utils';
 
 import { CustomRoleRepository } from '../custom-role/custom-role.repository';
 import { DepartmentRepository } from '../departments/department.repository';
@@ -439,12 +439,12 @@ export class UserService {
     let query = {};
 
     if (search) {
+      // AUTH-4 — khớp BỎ DẤU: `me linh` ra `Mê Linh`, `dang` ra `Đăng`. Lớp ký
+      // tự sinh ra là TẬP CHA của chữ vừa gõ nên chuỗi có dấu vẫn ra như cũ,
+      // không mất kết quả nào so với trước.
+      const rx = { $regex: diacriticInsensitiveRegex(search), $options: 'i' };
       query = {
-        $or: [
-          { email: { $regex: escapeRegExp(search), $options: 'i' } },
-          { _id: search },
-          { fullName: { $regex: escapeRegExp(search), $options: 'i' } },
-        ],
+        $or: [{ email: rx }, { _id: search }, { fullName: rx }],
       };
     }
 

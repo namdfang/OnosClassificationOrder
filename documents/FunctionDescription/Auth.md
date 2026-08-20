@@ -492,6 +492,27 @@ biệt bằng `CustomerEntity.passwordSource`:
 > sách khách đều lọc ra ngay tập tài khoản đăng nhập được. `toSafeCustomer()` xoá
 > tường minh — thêm field nhạy cảm vào `CustomerEntity` phải cân nhắc đúng chỗ đó.
 
+### 10.6a Tìm tài khoản: gõ KHÔNG DẤU vẫn ra, khớp đúng lên đầu (`AUTH-4`)
+
+Ô tìm tài khoản (popup trên thanh nav lẫn trang `/impersonate`) gọi hai nguồn
+sẵn có: `GET /users?search=` và `GET /customers?search=`. Cả hai từng dùng
+`$regex` thô nên chỉ bỏ qua hoa thường — 35/45 nhân viên có dấu trong tên nên
+gõ nhanh gần như không tìm ra ai.
+
+- **Khớp bỏ dấu** làm ở BACKEND bằng `diacriticInsensitiveRegex()`
+  (`apps/api/src/utils/diacritic-regex.ts`): đổi từng chữ cái người dùng gõ
+  thành lớp ký tự gồm cả biến thể có dấu (`a` → `[aàáảãạăằắẳẵặâầấẩẫậ]`), `đ`
+  nằm trong lớp `d` vì NFD KHÔNG tách được `đ`. Lớp ký tự là **tập cha** của
+  chữ vừa gõ nên chuỗi CÓ dấu vẫn ra đúng như trước — không mất kết quả nào.
+  > **Collation của MongoDB KHÔNG áp dụng cho `$regex`** — đừng đi hướng đó.
+- **Xếp hạng** làm ở FRONTEND trong `useImpersonationSearch` (khớp chính xác →
+  khớp đầu chuỗi → khớp giữa chuỗi, tính trên mọi trường đang tìm, sort ổn
+  định nên gõ lại cùng chuỗi cho cùng thứ tự). Cố ý KHÔNG đụng thứ tự của
+  màn quản trị người dùng / khách hàng.
+
+Hai endpoint này dùng chung với trang **Quản trị Khách hàng** (`Customers.md`)
+nên các màn đó cũng tìm được không dấu — cải thiện kèm theo, không đổi gì khác.
+
 ### 10.7 Ghi vết
 
 Tái dùng collection `actions` (đã có `ip`/`userAgent`/`sessionId`/`active`) thay vì
