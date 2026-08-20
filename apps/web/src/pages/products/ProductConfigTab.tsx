@@ -509,7 +509,11 @@ export function ProductConfigTab() {
                 </TableCell>
                 <TableCell className="font-medium">{it.fullName}</TableCell>
                 <TableCell>
-                  <Badge variant="outline">{it.shortName}</Badge>
+                  {it.shortName ? (
+                    <Badge variant="outline">{it.shortName}</Badge>
+                  ) : (
+                    <span className="text-xs text-muted-foreground">—</span>
+                  )}
                 </TableCell>
                 <TableCell>
                   {it.machineNumber ? (

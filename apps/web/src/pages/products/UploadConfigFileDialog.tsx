@@ -28,10 +28,8 @@ const normalize = (s: unknown): string =>
     .replace(/\s+/g, ' ')
     .trim();
 
-/** 1 dòng parse từ file — `autoShort` = file thiếu Tên viết tắt, đã tự sinh từ tên sản phẩm. */
-interface ParsedFileRow extends ImportProductConfigRow {
-  autoShort?: boolean;
-}
+/** 1 dòng parse từ file. */
+type ParsedFileRow = ImportProductConfigRow;
 
 interface ParseResult {
   rows: ParsedFileRow[];
@@ -44,8 +42,8 @@ interface ParseResult {
  * "Tên SP"/"Tên đầy đủ" rồi map cột theo tên header (cột tên viết tắt thường
  * KHÔNG có header → lấy cột ngay sau cột Tên SP). Chịu được cả format 7 cột
  * của dialog import paste (Máy / Loại vải / Kết quả Tool). Dòng thiếu Tên
- * viết tắt KHÔNG bị loại — tự sinh từ tên sản phẩm (đánh dấu `autoShort`);
- * chỉ loại dòng thiếu Xưởng/Phòng (import endpoint bắt buộc 2 cột này).
+ * viết tắt KHÔNG bị loại — để trống, KHÔNG auto-sinh (ORD-3: shortName là mã
+ * tool design review); chỉ loại dòng thiếu Xưởng/Phòng (endpoint bắt buộc).
  */
 function parseWorkbook(wb: XLSX.WorkBook): ParseResult {
   const rows: ParsedFileRow[] = [];
@@ -88,9 +86,9 @@ function parseWorkbook(wb: XLSX.WorkBook): ParseResult {
       const shortName = cell(shortCol);
       rows.push({
         fullName,
-        // shortName trống trong file → dùng chính tên sản phẩm (BE tự uppercase), max 60 theo schema.
-        shortName: shortName || fullName.slice(0, 60),
-        autoShort: !shortName,
+        // shortName trống trong file → để trống, KHÔNG auto-sinh từ tên (ORD-3 —
+        // field giờ là mã tool design review, BE giữ nguyên giá trị hiện có khi update).
+        ...(shortName ? { shortName } : {}),
         factoryLabel,
         departmentLabel,
         machineNumber: cell(machineCol) || undefined,
@@ -183,9 +181,7 @@ export function UploadConfigFileDialog({ open, onOpenChange, onSuccess }: Upload
     setSelected(allSelected ? new Set() : new Set(freshRows.map((r) => normalize(r.fullName))));
 
   const handleImport = async () => {
-    const rows: ImportProductConfigRow[] = freshRows
-      .filter((r) => selected.has(normalize(r.fullName)))
-      .map(({ autoShort: _autoShort, ...row }) => row);
+    const rows: ImportProductConfigRow[] = freshRows.filter((r) => selected.has(normalize(r.fullName)));
     if (rows.length === 0) return;
     try {
       setImporting(true);
@@ -283,20 +279,7 @@ export function UploadConfigFileDialog({ open, onOpenChange, onSuccess }: Upload
                           />
                         </TableCell>
                         <TableCell className="text-sm font-medium">{r.fullName}</TableCell>
-                        <TableCell className="text-xs text-muted-foreground">
-                          <span className="inline-flex items-center gap-1.5">
-                            {r.shortName}
-                            {r.autoShort && (
-                              <Badge
-                                variant="outline"
-                                className="border-amber-400 text-amber-600 dark:text-amber-400 text-[10px] px-1 py-0 font-normal"
-                                title={t('uploadConfigDialog.autoShortTitle')}
-                              >
-                                {t('uploadConfigDialog.autoShortBadge')}
-                              </Badge>
-                            )}
-                          </span>
-                        </TableCell>
+                        <TableCell className="text-xs text-muted-foreground">{r.shortName || '—'}</TableCell>
                         <TableCell>
                           <Badge variant="outline">{r.factoryLabel}</Badge>
                         </TableCell>

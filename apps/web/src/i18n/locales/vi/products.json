@@ -201,7 +201,6 @@
   "detail": {
     "backToList": "Quay lại danh sách",
     "unsavedConfirm": "Bạn có thay đổi CHƯA LƯU. Rời trang sẽ mất thay đổi — vẫn thoát?",
-    "shortNameRequired": "Tên viết tắt không được để trống",
     "factoryRequired": "Vui lòng chọn xưởng sản xuất",
     "machineTypeRequired": "Vui lòng chọn loại máy",
     "fullNameRequired": "Tên đầy đủ sản phẩm không được để trống",
@@ -515,9 +514,7 @@
     },
     "importButton": "Thêm {{count}} sản phẩm vào config",
     "importSuccess": "Đã thêm {{imported}} sản phẩm vào config, {{skippedCount}} cảnh báo",
-    "invalidRows": "{{count}} dòng thiếu Xưởng/Phòng đã bị bỏ qua.",
-    "autoShortBadge": "tự sinh",
-    "autoShortTitle": "File thiếu Tên viết tắt — hệ thống tự lấy tên sản phẩm làm tên viết tắt, sửa lại sau ở trang Products nếu cần"
+    "invalidRows": "{{count}} dòng thiếu Xưởng/Phòng đã bị bỏ qua."
   },
   "importFullDialog": {
     "title": "Import sản phẩm hoàn chỉnh từ file",

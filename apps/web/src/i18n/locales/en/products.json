@@ -201,7 +201,6 @@
   "detail": {
     "backToList": "Back to list",
     "unsavedConfirm": "You have UNSAVED changes. Leaving this page will lose them — leave anyway?",
-    "shortNameRequired": "Short name cannot be empty",
     "factoryRequired": "Please select a factory",
     "machineTypeRequired": "Please select a machine type",
     "fullNameRequired": "Product full name cannot be empty",
@@ -515,9 +514,7 @@
     },
     "importButton": "Add {{count}} products to config",
     "importSuccess": "Added {{imported}} products to config, {{skippedCount}} warnings",
-    "invalidRows": "{{count}} rows missing Factory/Department were skipped.",
-    "autoShortBadge": "auto",
-    "autoShortTitle": "Short name missing in file — the product name is used as the short name; edit later on the Products page if needed"
+    "invalidRows": "{{count}} rows missing Factory/Department were skipped."
   },
   "importFullDialog": {
     "title": "Import full products from file",

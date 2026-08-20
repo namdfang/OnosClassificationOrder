@@ -1,10 +1,14 @@
 /**
- * Map `OrderEntity.type` (tên sản phẩm tiếng Anh, khớp `ProductConfig.fullName`
- * lúc import) → mã ngắn cho tool duyệt thiết kế bên ngoài. Chỉ dùng ở
- * `getNextDesignReviewOrder()` — KHÔNG liên quan tới mapping xưởng/machine
- * (`productConfigId`, xem `importOrders`).
+ * DỮ LIỆU MIGRATION MỘT LẦN (ORD-3) — KHÔNG còn được tra lúc runtime.
+ *
+ * Map tên sản phẩm (khớp `ProductConfig.fullName`, lowercase) → mã ngắn cho
+ * tool duyệt thiết kế bên ngoài. Trước ORD-3 map này được tra trực tiếp ở
+ * `getNextDesignReviewOrder()`; nay mã sống trong `ProductConfig.shortName`
+ * (admin sửa trên trang Products) và API đọc từ DB. File này chỉ còn là nguồn
+ * dữ liệu cho migration `migrateShortNameToDesignReviewCodes()`
+ * (`product-config.service.ts`) — chạy đúng 1 lần mỗi môi trường.
  */
-const PRODUCT_TYPE_CODE_MAP: Record<string, string> = {
+export const PRODUCT_TYPE_CODE_MAP: Record<string, string> = {
     "all-over print satin short-sleeve pajama shirt": "SSHIRTV",
     "all-over print satin long pajama pants - no piping": "LPJM",
     "all-over print satin short-sleeve pajama set": "SPJMV",
@@ -129,9 +133,3 @@ const PRODUCT_TYPE_CODE_MAP: Record<string, string> = {
     "all-over print v-neck soccer jersey – ver 2": "JLSCV2",
     "all-over print v-neck mesh football jersey": "BDLUOITIM",
 };
-
-/** Case-insensitive, trim khoảng trắng thừa. Không khớp → null. */
-export function mapProductTypeToCode(type?: string | null): string | null {
-    if (!type) return null;
-    return PRODUCT_TYPE_CODE_MAP[type.trim().toLowerCase()] ?? null;
-}

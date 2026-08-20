@@ -130,7 +130,7 @@ export class CustomerCatalogService {
     return {
       _id: productConfigId,
       fullName: row.fullName as string,
-      shortName: row.shortName as string,
+      shortName: (row.shortName as string | undefined) ?? '',
       productCategory: row.productCategory?.name,
       printMethod: row.printMethod as string | undefined,
       printArea,

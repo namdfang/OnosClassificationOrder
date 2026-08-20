@@ -92,7 +92,8 @@ export type ProductVariation = z.infer<typeof ProductVariationZod>;
 
 export const ProductConfigZod = BaseEntityZod.extend({
   fullName: z.string().min(1).max(300),
-  shortName: z.string().min(1).max(60),
+  /** Mã ngắn chạy tool duyệt thiết kế (ORD-3) — trống = không có mã, Design Review API trả `productCode: null`. */
+  shortName: z.string().max(60),
   /** Mã SKU riêng của sản phẩm (KHÔNG phải SKU biến thể) — unique toàn hệ thống nếu có. */
   sku: z.string().max(100).optional(),
   /** Slug SEO/URL (parity hệ cũ) — chưa dùng để routing, chỉ lưu. */
@@ -192,7 +193,8 @@ export class GetProductConfigResDto extends createZodDto(extendApi(GetProductCon
 //
 export const CreateProductConfigZod = z.object({
   fullName: ProductConfigZod.shape.fullName,
-  shortName: ProductConfigZod.shape.shortName,
+  /** Không truyền / trống → shortName để trống (KHÔNG auto-sinh từ fullName — ORD-3). */
+  shortName: ProductConfigZod.shape.shortName.optional(),
   sku: ProductConfigZod.shape.sku,
   slug: ProductConfigZod.shape.slug,
   status: ProductConfigZod.shape.status,
@@ -278,7 +280,8 @@ export class UpdateProductConfigResDto extends createZodDto(extendApi(UpdateProd
 //
 export const ImportProductConfigRowZod = z.object({
   fullName: z.string().min(1),
-  shortName: z.string().min(1),
+  /** Trống → giữ nguyên shortName hiện có (update) / để trống (tạo mới) — KHÔNG auto-sinh (ORD-3). */
+  shortName: z.string().optional(),
   /** Machine number ("94", "27"). Empty → product has no tool. */
   machineNumber: z.string().optional(),
   /** Factory name ("MÊ LINH", "MÊ LINH"…) — matched server-side, "Xưởng " prefix tolerant. */
@@ -321,7 +324,7 @@ export class ImportProductConfigResDto extends createZodDto(extendApi(ImportProd
  */
 export const ImportFullProductZod = z.object({
   fullName: ProductConfigZod.shape.fullName,
-  /** Trống → tự sinh từ fullName (max 60, BE uppercase). */
+  /** Trống → shortName để trống (KHÔNG auto-sinh từ fullName — ORD-3; max 60, BE uppercase). */
   shortName: z.string().max(60).optional(),
   /** Nhãn xưởng ("TNW", "Xưởng gỗ Thái Nguyên"...) — resolve qua `factoryService.findByLabel`. */
   factoryLabel: z.string().max(120).optional(),

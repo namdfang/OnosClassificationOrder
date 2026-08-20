@@ -104,7 +104,6 @@ type MappedProduct = Partial<
   Pick<
     ProductConfig,
     | 'fullName'
-    | 'shortName'
     | 'sku'
     | 'slug'
     | 'status'
@@ -182,7 +181,12 @@ function escapeRegex(s: string): string {
   return s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 }
 
-/** shortName bắt buộc bên mới nhưng hệ cũ không có — sinh từ sku (fallback identity/name), bỏ dấu + uppercase. */
+/**
+ * Sinh mã ngắn từ sku (fallback identity/name), bỏ dấu + uppercase — dùng cho
+ * shortName của Collection/ProductCategory tạo kèm và SKU biến thể mặc định.
+ * KHÔNG còn dùng cho `ProductConfig.shortName` (ORD-3 — field đó giờ là mã
+ * tool duyệt thiết kế, import để trống).
+ */
 function deriveShortName(p: OnospodProduct): string {
   const base = cleanStr(p.sku) ?? cleanStr(p.identity) ?? cleanStr(p.name) ?? 'ONOSPOD';
   const normalized = base
@@ -342,7 +346,8 @@ export class OnospodProductImportService {
 
     return {
       fullName: cleanStr(p.name),
-      shortName: deriveShortName(p),
+      // KHÔNG derive shortName cho ProductConfig nữa (ORD-3) — field giờ là mã
+      // tool duyệt thiết kế, sản phẩm import mới để trống, admin tự gán nếu cần.
       sku: cleanStr(p.sku)?.toUpperCase(),
       slug: cleanStr(p.slug),
       status: p.visible === false ? ProductConfigStatus.Inactive : ProductConfigStatus.Active,

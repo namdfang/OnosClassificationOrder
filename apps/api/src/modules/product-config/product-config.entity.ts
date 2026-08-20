@@ -13,7 +13,8 @@ export class ProductConfigEntity extends DatabaseEntityAbstract {
   @Prop({ required: true, trim: true, index: true })
   fullName: string;
 
-  @Prop({ required: true, trim: true, uppercase: true, index: true })
+  /** Mã ngắn chạy tool duyệt thiết kế (ORD-3) — TRỐNG = sản phẩm không có mã, tool nhận `productCode: null`. */
+  @Prop({ trim: true, uppercase: true, index: true, default: '' })
   shortName: string;
 
   /** Mã SKU riêng của sản phẩm (KHÔNG phải SKU biến thể trong `variations[]`). */

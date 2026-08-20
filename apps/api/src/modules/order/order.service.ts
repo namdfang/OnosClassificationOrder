@@ -137,7 +137,6 @@ import { RoleRepository } from '../role/role.repository';
 import { SystemConfigService } from '../system-config/system-config.service';
 import { UserEntity } from '../user/user.entity';
 import { WorkshopConfigRepository } from '../workshop-config/workshop-config.repository';
-import { mapProductTypeToCode } from './design-review-product-code';
 import { DriveFileNameService } from './drive-file-name.service';
 import { OnospodOrderLookupService } from './onospod-order-lookup.service';
 import { OrderDocument, OrderEntity } from './order.entity';
@@ -6126,12 +6125,29 @@ export class OrderService implements OnModuleInit {
    * tz) — cùng semantics `createdFrom`/`createdTo` ở danh sách đơn (Orders.md
    * §7.0b). Không truyền → không giới hạn ngày (hành vi cũ).
    */
+  /**
+   * `productCode` cho tool duyệt thiết kế — đọc từ `ProductConfig.shortName`
+   * trong DB (ORD-3, thay map hardcode `PRODUCT_TYPE_CODE_MAP` cũ). Quy tắc
+   * khớp GIỮ NGUYÊN như map cũ: `order.type` ↔ `fullName` exact, trim +
+   * case-insensitive. Không khớp sản phẩm nào / `shortName` trống → null
+   * (tool xử lý như "không khớp map" trước đây).
+   */
+  private async resolveDesignReviewProductCode(type?: string | null): Promise<string | null> {
+    const trimmed = type?.trim();
+    if (!trimmed) return null;
+    const escaped = trimmed.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+    const pc = await this.productConfigRepository.findOne<{ shortName?: string }>({
+      fullName: { $regex: `^${escaped}$`, $options: 'i' },
+    });
+    return pc?.shortName?.trim() || null;
+  }
+
   /** Map raw order doc (field cần cho design review) → `DesignReviewOrder`. Dùng chung bởi `getNextDesignReviewOrder`/`getDesignReviewOrderByProductionId`. */
-  private toDesignReviewOrder(doc: DesignReviewSourceDoc): DesignReviewOrder {
+  private async toDesignReviewOrder(doc: DesignReviewSourceDoc): Promise<DesignReviewOrder> {
     return {
       productionId: doc.productionId,
       orderId: doc.orderId,
-      productCode: mapProductTypeToCode(doc.type),
+      productCode: await this.resolveDesignReviewProductCode(doc.type),
       attributes: { size: doc.size, color: doc.color },
       designs: doc.designs ?? {},
       mockupUrl: doc.mockupUrl,
@@ -6213,7 +6229,7 @@ export class OrderService implements OnModuleInit {
 
     return {
       success: true,
-      data: this.toDesignReviewOrder(doc as unknown as DesignReviewSourceDoc),
+      data: await this.toDesignReviewOrder(doc as unknown as DesignReviewSourceDoc),
       remaining,
     };
   }
@@ -6242,7 +6258,7 @@ export class OrderService implements OnModuleInit {
 
     return {
       success: true,
-      data: this.toDesignReviewOrder(doc as unknown as DesignReviewSourceDoc),
+      data: await this.toDesignReviewOrder(doc as unknown as DesignReviewSourceDoc),
     };
   }
 

@@ -24,8 +24,10 @@ import { myNanoid, ProductConfigStatus, WorkshopConfigCategory } from 'shared';
 import { CollectionService } from '../collection/collection.service';
 import { FactoryService } from '../factory/factory.service';
 import { MachineTypeService } from '../machine-type/machine-type.service';
+import { PRODUCT_TYPE_CODE_MAP } from '../order/design-review-product-code';
 import { OrderEntity } from '../order/order.entity';
 import { ProductCategoryService } from '../product-category/product-category.service';
+import { SystemConfigService } from '../system-config/system-config.service';
 import { WorkshopConfigRepository } from '../workshop-config/workshop-config.repository';
 import { ProductConfigEntity } from './product-config.entity';
 import { ProductConfigRepository } from './product-config.repository';
@@ -33,6 +35,13 @@ import { ProductConfigRepository } from './product-config.repository';
 /** workshop_config codes (category=tool_result) emitted by import defaults. */
 const TOOL_RESULT_HAS = 'has-tool';
 const TOOL_RESULT_NONE = 'no-tool';
+
+/**
+ * Cờ system_configs đánh dấu migration ORD-3 đã chạy — CHỈ chạy 1 lần mỗi môi
+ * trường; restart sau đó KHÔNG được đè `shortName` admin đã chỉnh tay. Value
+ * lưu kèm log {oldShortName → newShortName} từng sản phẩm để đối chiếu.
+ */
+const DESIGN_REVIEW_SHORTNAME_MIGRATION_KEY = 'design_review_shortname_migration';
 
 /** MongoDB duplicate-key error E11000 từ unique index `variations.sku`. */
 function isDuplicateVariationSkuError(err: unknown): boolean {
@@ -155,6 +164,7 @@ export class ProductConfigService implements OnModuleInit {
     private readonly productCategoryService: ProductCategoryService,
     private readonly collectionService: CollectionService,
     private readonly workshopConfigRepository: WorkshopConfigRepository,
+    private readonly systemConfigService: SystemConfigService,
     @InjectModel(ProductConfigEntity.name)
     private readonly productConfigModel: Model<ProductConfigEntity>,
     @InjectModel(OrderEntity.name)
@@ -177,6 +187,83 @@ export class ProductConfigService implements OnModuleInit {
         .map((key) => ({ key, isRequired: true }));
       await this.productConfigModel.updateOne({ _id: doc._id }, { $set: { printArea: converted } });
     }
+
+    await this.migrateShortNameToDesignReviewCodes();
+  }
+
+  /**
+   * Migration MỘT LẦN (ORD-3): đổ mã tool duyệt thiết kế từ map hardcode
+   * `PRODUCT_TYPE_CODE_MAP` vào `ProductConfig.shortName` — sản phẩm khớp map
+   * (fullName trim + lowercase, đúng quy tắc map cũ khớp `order.type`) nhận
+   * mã GIỮ NGUYÊN TỪNG KÝ TỰ; sản phẩm KHÔNG khớp → shortName = '' (xóa giá
+   * trị auto-sinh cũ). Cờ `system_configs` chặn chạy lại — restart sau đó
+   * KHÔNG đè giá trị admin đã chỉnh tay. Giá trị cũ từng sản phẩm lưu vào
+   * value của cờ + console để đối chiếu (dữ liệu production ghi một chiều).
+   */
+  private async migrateShortNameToDesignReviewCodes(): Promise<void> {
+    // CLAIM ATOMIC trước khi migrate: app bootstrap 2 Nest context song song
+    // (`bootstrap()` + `bootstrapMicroservice()` ở main.ts) nên onModuleInit
+    // chạy 2 lần cùng lúc — get-rồi-create sẽ đụng E11000 trên unique `key`.
+    // Upsert $setOnInsert: chỉ context TẠO được cờ (upsertedCount=1) mới chạy;
+    // cờ đã tồn tại (context kia / lần deploy trước) → bỏ qua.
+    const now = new Date();
+    const claimed = await this.productConfigModel.db.collection('system_configs').updateOne(
+      { key: DESIGN_REVIEW_SHORTNAME_MIGRATION_KEY },
+      {
+        $setOnInsert: {
+          key: DESIGN_REVIEW_SHORTNAME_MIGRATION_KEY,
+          value: { status: 'running', startedAt: now.toISOString() },
+          description: 'ORD-3: shortName = mã tool design review (migrate 1 lần từ PRODUCT_TYPE_CODE_MAP)',
+          createdAt: now,
+          updatedAt: now,
+        },
+      },
+      { upsert: true },
+    );
+    if (claimed.upsertedCount === 0) return;
+
+    const products = await this.productConfigModel
+      .find({}, { fullName: 1, shortName: 1 })
+      .lean<{ _id: unknown; fullName?: string; shortName?: string }[]>();
+
+    const changes: Array<{ _id: string; fullName: string; oldShortName: string; newShortName: string }> = [];
+    const knownNames = new Set<string>();
+    for (const p of products) {
+      const key = (p.fullName ?? '').trim().toLowerCase();
+      knownNames.add(key);
+      const code = PRODUCT_TYPE_CODE_MAP[key] ?? '';
+      const current = (p.shortName ?? '').trim();
+      if (current === code) continue;
+      await this.productConfigModel.updateOne({ _id: p._id }, { $set: { shortName: code } });
+      changes.push({ _id: String(p._id), fullName: p.fullName ?? '', oldShortName: current, newShortName: code });
+    }
+
+    // Dòng map không khớp sản phẩm nào trong DB → bỏ qua + cảnh báo (không chặn).
+    const unmatchedMapKeys = Object.keys(PRODUCT_TYPE_CODE_MAP).filter((k) => !knownNames.has(k));
+    console.log(
+      `[product-config-migration] design-review shortName: ${changes.length}/${products.length} sản phẩm cập nhật, ` +
+        `${unmatchedMapKeys.length} dòng map không khớp sản phẩm nào`,
+    );
+    if (unmatchedMapKeys.length > 0) {
+      console.warn(`[product-config-migration] map keys không khớp DB: ${unmatchedMapKeys.join(' | ')}`);
+    }
+    for (const c of changes) {
+      console.log(`[product-config-migration] ${c.fullName}: '${c.oldShortName}' → '${c.newShortName}'`);
+    }
+
+    // Cờ đã tồn tại (claim ở trên) → set() đi nhánh update, không đụng unique key.
+    await this.systemConfigService.set(
+      DESIGN_REVIEW_SHORTNAME_MIGRATION_KEY,
+      {
+        status: 'done',
+        migratedAt: new Date().toISOString(),
+        scanned: products.length,
+        updated: changes.length,
+        unmatchedMapKeys,
+        changes,
+      },
+      'ORD-3: shortName = mã tool design review (migrate 1 lần từ PRODUCT_TYPE_CODE_MAP, kèm giá trị cũ)',
+    );
   }
 
   /**
@@ -422,7 +509,8 @@ export class ProductConfigService implements OnModuleInit {
     try {
       return await this.productConfigRepository.create({
         ...dto,
-        shortName: dto.shortName.toUpperCase(),
+        // KHÔNG auto-sinh shortName từ fullName (ORD-3) — không nhập thì để trống.
+        shortName: dto.shortName?.trim() ? dto.shortName.toUpperCase() : '',
         ...(dto.sku ? { sku: dto.sku.trim().toUpperCase() } : {}),
       });
     } catch (err) {
@@ -543,7 +631,8 @@ export class ProductConfigService implements OnModuleInit {
 
       const data = {
         fullName: row.fullName.trim(),
-        shortName: row.shortName.trim().toUpperCase(),
+        // File trống cột viết tắt → giữ nguyên shortName hiện có / tạo mới để trống (ORD-3).
+        ...(row.shortName?.trim() ? { shortName: row.shortName.trim().toUpperCase() } : {}),
         machineNumber,
         machineTypeId: machineType._id,
         factoryId: factory._id,
@@ -658,7 +747,8 @@ export class ProductConfigService implements OnModuleInit {
         } else {
           await this.productConfigRepository.create({
             fullName,
-            shortName: (p.shortName?.trim() || fullName.slice(0, 60)).toUpperCase(),
+            // KHÔNG auto-sinh shortName từ fullName (ORD-3) — file trống thì để trống
+            // (`patch` đã chứa shortName khi file có giá trị).
             // File full không có cột Máy/Tool → sản phẩm mới mặc định KHÔNG tool
             // (cấu hình tool bổ sung qua file SKU cũ hoặc trang chi tiết).
             toolResult: TOOL_RESULT_NONE,

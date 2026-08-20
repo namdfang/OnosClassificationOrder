@@ -692,10 +692,7 @@ export default function ProductDetailPage() {
       toast.error(t('detail.fullNameRequired'));
       return;
     }
-    if (!shortName.trim()) {
-      toast.error(t('detail.shortNameRequired'));
-      return;
-    }
+    // shortName ĐƯỢC PHÉP trống (ORD-3): là mã tool design review, trống = sản phẩm không có mã.
     if (isNew && !factoryId) {
       toast.error(t('detail.factoryRequired'));
       scrollToSection('sec-production');
