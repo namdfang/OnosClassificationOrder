@@ -9,11 +9,20 @@ import { docNotFound, docsUnavailable } from './agent-errors';
 
 type DocEntry = AgentDocSummary & { filePath: string };
 
-/** Thư mục con của `documents/` được phục vụ, theo thứ tự agent nên đọc. */
-const SECTION_DIRS: { section: AgentDocSection; dir: string }[] = [
+/**
+ * Thư mục con của `documents/` được phục vụ, theo thứ tự agent nên đọc.
+ *
+ * `API-13` thu còn **đúng `AgentGuide`**: `FunctionDescription` và
+ * `Architecture` viết cho người sửa mã (30/31 file có đường dẫn mã nguồn frontend),
+ * agent đọc vào chỉ nhiễu. Hai thư mục đó **vẫn nguyên trong repo**, chỉ thôi
+ * được phơi qua cổng này.
+ *
+ * ⚠ Đổi danh sách này thì phải đổi CÙNG LÚC hai chỗ nữa, nếu không hỏng im lặng:
+ * mốc nhận diện thư mục ở `resolveRoot` bên dưới, và `SECTIONS` của
+ * `scripts/copy-agent-docs.mjs`. `agent-docs-scope.spec.ts` canh chỗ thứ hai.
+ */
+export const SECTION_DIRS: { section: AgentDocSection; dir: string }[] = [
   { section: 'agent-guide', dir: 'AgentGuide' },
-  { section: 'feature', dir: 'FunctionDescription' },
-  { section: 'architecture', dir: 'Architecture' },
 ];
 
 /**
@@ -64,10 +73,17 @@ export class AgentDocsService implements OnModuleInit {
 
     // Máy dev: đi ngược lên tìm `documents/` ở gốc repo, để sửa doc là thấy
     // ngay mà không phải build lại.
+    //
+    // Mốc nhận diện PHẢI là thư mục đang được phơi (`API-13`). Trước đó mốc là
+    // `FunctionDescription`; giữ nguyên nó sau khi thu hẹp thì hàm này nhận
+    // diện bằng một thư mục KHÔNG còn liên quan gì tới cái đang phục vụ, và sẽ
+    // gãy im lặng ngay khi bản đóng gói thôi chép thư mục đó. Xoá hẳn dòng này
+    // cho "sạch" còn tệ hơn: `rootDir` rỗng → danh mục rỗng → cổng trả 503 cho
+    // MỌI lời gọi.
     let dir = __dirname;
     for (let i = 0; i < 8; i += 1) {
       const guess = path.resolve(dir, 'documents');
-      if (fs.existsSync(path.join(guess, 'FunctionDescription'))) return guess;
+      if (fs.existsSync(path.join(guess, 'AgentGuide'))) return guess;
       dir = path.dirname(dir);
     }
     return '';

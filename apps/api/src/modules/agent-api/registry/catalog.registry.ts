@@ -23,8 +23,12 @@ export const productCategoriesRegistry: AgentTableSpec = {
     shortName: plain('string'),
     isActive: plain('bool'),
     parentId: plain('objectId', 'Danh mục cha, nếu có'),
+
+    // ── `API-17` mở đọc
+    updatedAt: plain('date'),
+    deletedAt: plain('date', 'Bản ghi bị xoá mềm. Mở ĐỌC KHÔNG đổi bộ lọc mặc định của truy vấn'),
   },
-  deliberatelyExcluded: ['updatedAt', 'deletedAt'],
+  deliberatelyExcluded: [],
 };
 
 export const collectionsRegistry: AgentTableSpec = {
@@ -41,8 +45,12 @@ export const collectionsRegistry: AgentTableSpec = {
     image: plain('string'),
     sortOrder: numeric(),
     isActive: plain('bool'),
+
+    // ── `API-17` mở đọc
+    updatedAt: plain('date'),
+    deletedAt: plain('date', 'Bản ghi bị xoá mềm. Mở ĐỌC KHÔNG đổi bộ lọc mặc định của truy vấn'),
   },
-  deliberatelyExcluded: ['updatedAt', 'deletedAt'],
+  deliberatelyExcluded: [],
 };
 
 export const promotionsRegistry: AgentTableSpec = {
@@ -68,8 +76,12 @@ export const promotionsRegistry: AgentTableSpec = {
     startDate: plain('date'),
     endDate: plain('date'),
     status: plain('enum'),
+
+    // ── `API-17` mở đọc
+    updatedAt: plain('date'),
+    deletedAt: plain('date', 'Bản ghi bị xoá mềm. Mở ĐỌC KHÔNG đổi bộ lọc mặc định của truy vấn'),
   },
-  deliberatelyExcluded: ['updatedAt', 'deletedAt'],
+  deliberatelyExcluded: [],
 };
 
 export const factoriesRegistry: AgentTableSpec = {
@@ -89,8 +101,12 @@ export const factoriesRegistry: AgentTableSpec = {
       'enum',
       'Luồng fulfillment của xưởng: standard (đủ 6 công đoạn) / merged (gộp Ép vào In, May ra vào May vào) / no-sew (QC xong bỏ qua 2 công đoạn may)',
     ),
+
+    // ── `API-17` mở đọc
+    updatedAt: plain('date'),
+    deletedAt: plain('date', 'Bản ghi bị xoá mềm. Mở ĐỌC KHÔNG đổi bộ lọc mặc định của truy vấn'),
   },
-  deliberatelyExcluded: ['updatedAt', 'deletedAt'],
+  deliberatelyExcluded: [],
 };
 
 export const machineTypesRegistry: AgentTableSpec = {
@@ -104,8 +120,12 @@ export const machineTypesRegistry: AgentTableSpec = {
     name: plain('string'),
     shortName: plain('string'),
     isActive: plain('bool'),
+
+    // ── `API-17` mở đọc
+    updatedAt: plain('date'),
+    deletedAt: plain('date', 'Bản ghi bị xoá mềm. Mở ĐỌC KHÔNG đổi bộ lọc mặc định của truy vấn'),
   },
-  deliberatelyExcluded: ['updatedAt', 'deletedAt'],
+  deliberatelyExcluded: [],
 };
 
 export const workshopConfigsRegistry: AgentTableSpec = {
@@ -126,8 +146,15 @@ export const workshopConfigsRegistry: AgentTableSpec = {
     isActive: plain('bool'),
     errorSource: plain('enum', 'Nguồn lỗi: designer | factory | tool-check'),
     stage: plain('enum', 'Công đoạn xưởng gắn với mã lỗi này'),
+
+    // ── `API-17` mở đọc
+    color: plain('string', 'Màu hiển thị của mã trên giao diện nội bộ'),
+    icon: plain('string'),
+    reworkTarget: plain('string', 'Chặng mà đơn bị đẩy về khi gặp mã lỗi này'),
+    updatedAt: plain('date'),
+    deletedAt: plain('date', 'Bản ghi bị xoá mềm. Mở ĐỌC KHÔNG đổi bộ lọc mặc định của truy vấn'),
   },
-  deliberatelyExcluded: ['color', 'icon', 'reworkTarget', 'updatedAt', 'deletedAt'],
+  deliberatelyExcluded: [],
 };
 
 /**
@@ -141,9 +168,7 @@ export const workshopConfigsRegistry: AgentTableSpec = {
  */
 export const customerNotificationsRegistry: AgentTableSpec = {
   key: 'customer_notifications',
-  description:
-    'Thông báo đã gửi cho khách. Trả lời "hệ thống đã báo gì cho tôi, lúc nào". ' +
-    'KHÔNG kèm tên nhân viên đã gửi.',
+  description: 'Thông báo đã gửi cho khách. Trả lời "hệ thống đã báo gì cho tôi, lúc nào".',
   entityName: 'CustomerNotificationEntity',
   defaultSort: '_id',
   fields: {
@@ -152,12 +177,12 @@ export const customerNotificationsRegistry: AgentTableSpec = {
     title: freeText('Tiêu đề thông báo khách đã nhận'),
     body: freeText('Nội dung thông báo khách đã nhận'),
     customerId: plain('objectId', 'Trỏ tới customers._id; rỗng = gửi cho TẤT CẢ khách'),
+
+    // ── `API-17` mở đọc: danh tính nhân viên đã gửi
+    createdByUserId: plain('string'),
+    createdByName: plain('string', 'Tên nhân viên đã gửi thông báo'),
+    updatedAt: plain('date'),
+    deletedAt: plain('date', 'Bản ghi bị xoá mềm. Mở ĐỌC KHÔNG đổi bộ lọc mặc định của truy vấn'),
   },
-  deliberatelyExcluded: [
-    // BR-4a §4 — danh tính nhân viên đã gửi
-    'createdByUserId',
-    'createdByName',
-    'updatedAt',
-    'deletedAt',
-  ],
+  deliberatelyExcluded: [],
 };

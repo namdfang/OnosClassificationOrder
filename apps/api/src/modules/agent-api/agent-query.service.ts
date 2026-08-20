@@ -1,30 +1,33 @@
 import { Injectable } from '@nestjs/common';
 import type { PipelineStage } from 'mongoose';
-import type { AgentAggregate, AgentCondition, AgentFilterNode, AgentSelect, AgentSort } from 'shared';
+import type { AgentAggregate, AgentSelect, AgentSort } from 'shared';
 import { AGENT_FILTER_MAX_DEPTH } from 'shared';
 
 import { ApiConfigService } from '@/shared/services/api-config.service';
 
 import { AgentApiRepository } from './agent-api.repository';
 import { fieldNotAllowed, invalidQuery, isMongoTimeout, queryTimeout, tableNotAllowed } from './agent-errors';
-import { maskFreeTextDeep } from './mask-free-text';
-import { applyOrderLogValuePolicy } from './order-log-value-policy';
+import { buildMongoFilter } from './mongo-filter';
+import { pickProjected } from './pick-projected';
 import type { AgentFieldPolicy, AgentTableSpec } from './registry';
-import { AGENT_TABLE_REGISTRY } from './registry';
+import { AGENT_TABLE_REGISTRY, isDeniedFieldPath, OPEN_POLICY, stripDeniedDeep } from './registry';
 
 type Row = Record<string, unknown>;
 
-const EQ_ONLY_OPS = new Set(['eq', 'ne', 'in', 'nin']);
-
 /**
- * Lõi của bộ API agent (`API-1`): tra bảng, dựng pipeline, che dữ liệu.
+ * Lõi của bộ API agent (`API-1`, mở hết ở `API-19`): tra bảng, dựng pipeline.
  *
- * Ba điều giữ cho lớp che không thủng, xem `.devtasks/design/API-1.md` §7.1:
- *  1. `$project` LUÔN dựng từ registry, không bao giờ từ tham số bên gọi —
- *     trường bị che không được đọc lên khỏi DB, chứ không phải lấy lên rồi xoá.
- *  2. Tên trường của bên gọi luôn phải đi qua registry trước khi chạm mongo.
- *  3. Giá trị của bên gọi chỉ nằm ở VỊ TRÍ GIÁ TRỊ, không bao giờ ở vị trí
- *     toán tử hay tên trường.
+ * ⚠️ **ĐỌC TRƯỚC KHI SỬA.** Tới `API-18`, file này thi hành một danh sách
+ * trắng: bảng ngoài registry không tồn tại, trường ngoài registry không tồn
+ * tại, `$project` luôn dựng từ registry. `API-19` gỡ toàn bộ vế đó theo quyết
+ * định của người dùng — **mọi collection, mọi trường đều đọc và lọc được**.
+ *
+ * Ba thứ còn giữ, đừng gỡ nhầm khi dọn dẹp:
+ *  1. `AGENT_DENY_FIELD_NAMES` — bốn tên bí mật kỹ thuật. Kiểm ở `policy()` nên
+ *     mọi đường (đọc, lọc, sắp xếp, nhóm, tổng hợp) đều đi qua một chốt.
+ *  2. Giá trị của bên gọi chỉ nằm ở VỊ TRÍ GIÁ TRỊ, không bao giờ ở vị trí tên
+ *     trường hay toán tử (`mongo-filter.ts` dựng lại từ đầu, không truyền tiếp).
+ *  3. Chỉ đọc, có trần lô, có `maxTimeMS`, đọc trên secondary.
  */
 @Injectable()
 export class AgentQueryService {
@@ -36,46 +39,80 @@ export class AgentQueryService {
   // ─── Tra bang / truong ────────────────────────────────────────────────
 
   /**
-   * Bảng không có khoá trong registry là KHÔNG TỒN TẠI đối với bộ API. Dùng
-   * cùng một thân lỗi cho bảng-có-thật-nhưng-cấm (`users`) và bảng-không-tồn-
-   * tại (`zz_qa_probe`) — vừa thoả AC-04/AC-05, vừa không biến API thành công
-   * cụ dò xem collection nào đang tồn tại (AC-04).
+   * Bảng nào cũng đọc được (`API-19`) — kể cả bảng không ai mô tả. Bảng có mô
+   * tả thì dùng `spec` của nó (để còn ghi chú nghiệp vụ và kiểu dữ liệu); bảng
+   * còn lại nhận một spec MỞ, không trường nào khai sẵn.
+   *
+   * `TABLE_NOT_ALLOWED` nay chỉ còn dùng cho tên collection **không hợp lệ**:
+   * tên rỗng, quá dài, hay chứa ký tự ngoài bộ MongoDB cho phép. Đây không phải
+   * chính sách dữ liệu mà là chặn một chuỗi lạ đi thẳng vào tên collection.
    */
   spec(table: string): AgentTableSpec {
     const found = AGENT_TABLE_REGISTRY[table];
-    if (!found) throw tableNotAllowed(table);
-    return found;
+    if (found) return found;
+    if (!AgentQueryService.SAFE_COLLECTION_NAME.test(table)) throw tableNotAllowed(table);
+    return AgentQueryService.openSpec(table);
   }
 
-  private policy(spec: AgentTableSpec, field: string): AgentFieldPolicy {
-    const p = spec.fields[field];
-    if (!p) throw fieldNotAllowed(field, `is not available on table '${spec.key}'.`);
-    return p;
-  }
+  /** Tên collection hợp lệ của MongoDB, thu hẹp thêm cho chắc: không `$`, không rỗng. */
+  private static readonly SAFE_COLLECTION_NAME = /^[A-Za-z0-9_][A-Za-z0-9_.-]{0,119}$/;
 
-  /** Các trường được phép có mặt trong dữ liệu trả về. */
-  readableFields(spec: AgentTableSpec): string[] {
-    return Object.entries(spec.fields)
-      .filter(([, p]) => p.read)
-      .map(([name]) => name);
+  static openSpec(table: string): AgentTableSpec {
+    return {
+      key: table,
+      description:
+        'Bảng chưa có mô tả nghiệp vụ. Đọc được đầy đủ; lấy vài bản ghi bằng ' +
+        'GET /agent/tables/{table}/rows?limit=1 để biết nó có những trường nào.',
+      entityName: '',
+      defaultSort: '_id',
+      fields: {},
+      deliberatelyExcluded: [],
+    };
   }
 
   /**
-   * `$project` của server. `requested` (nếu có) chỉ được THU HẸP tập này —
-   * trường ngoài danh sách trắng bị từ chối tường minh, không im lặng bỏ qua:
-   * bên gọi phải biết mình xin sai để tự sửa.
+   * Chốt chặn DUY NHẤT còn lại (`API-19`), và là chốt chung cho mọi đường:
+   * đọc, lọc, sắp xếp, nhóm, tổng hợp đều gọi qua đây.
+   *
+   * Trường không có mô tả KHÔNG còn bị từ chối — nó nhận `OPEN_POLICY`. Đây là
+   * chỗ đảo chiều so với `API-1`: trước là "không khai thì không tồn tại", nay
+   * là "không khai thì vẫn dùng được, chỉ không có ghi chú".
+   */
+  private policy(spec: AgentTableSpec, field: string): AgentFieldPolicy {
+    if (isDeniedFieldPath(field)) {
+      throw fieldNotAllowed(
+        field,
+        'is an authentication secret or a session trace and is never exposed by this API.',
+      );
+    }
+    return spec.fields[field] ?? OPEN_POLICY;
+  }
+
+  /** Các trường CÓ MÔ TẢ — nay chỉ dùng để gợi ý, không phải để giới hạn. */
+  readableFields(spec: AgentTableSpec): string[] {
+    return Object.keys(spec.fields);
+  }
+
+  /**
+   * `$project` của server.
+   *
+   * KHÔNG xin gì → trả về `{}` nghĩa là **lấy nguyên bản ghi**: sau `API-19`,
+   * chiếu theo danh sách khai sẵn sẽ âm thầm nuốt mất mọi trường chưa kịp mô
+   * tả — đúng loại lỗi im lặng mà `pick-projected.ts` đã vấp một lần.
+   *
+   * Có xin → chỉ kiểm tên bị chặn, rồi chiếu đúng thứ đã xin.
    */
   buildProjection(spec: AgentTableSpec, requested?: string[]): Record<string, 1> {
-    let fields = this.readableFields(spec);
-    if (requested?.length) {
-      for (const f of requested) {
-        const p = spec.fields[f];
-        if (!p) throw fieldNotAllowed(f, `is not available on table '${spec.key}'.`);
-        if (!p.read) throw fieldNotAllowed(f, 'exists but is never returned by this API.');
+    if (!requested?.length) return {};
+    for (const f of requested) {
+      if (isDeniedFieldPath(f)) {
+        throw fieldNotAllowed(
+          f,
+          'is an authentication secret or a session trace and is never exposed by this API.',
+        );
       }
-      fields = requested;
     }
-    return Object.fromEntries(fields.map((f) => [f, 1 as const]));
+    return Object.fromEntries(requested.map((f) => [f, 1 as const]));
   }
 
   // ─── Chan ghi va chay ma ──────────────────────────────────────────────
@@ -103,81 +140,76 @@ export class AgentQueryService {
     }
   }
 
+  /**
+   * Như trên, nhưng bỏ qua nhánh `filter` — nơi `$` là cú pháp hợp lệ kể từ
+   * `API-8`.
+   *
+   * Đây là hàm RIÊNG chứ không phải một cờ trên hàm cũ, và đó là chủ ý
+   * (`.devtasks/design/API-8.md` §8): một hàm mang cờ "cho phép `$`" sẽ có ngày
+   * bị gọi với cờ bật ở chỗ không nên, mà không gì trong kiểu dữ liệu ngăn được.
+   * Hai hàm riêng thì không gọi nhầm.
+   *
+   * `filter` được kiểm bằng danh sách trắng toán tử ở `mongo-filter.ts`, chặt
+   * hơn hẳn phép quét `$` này — nên bỏ qua ở đây không phải là bỏ trống.
+   */
+  assertNoOperatorKeysOutsideFilter(payload: unknown): void {
+    if (typeof payload !== 'object' || payload === null || Array.isArray(payload)) {
+      this.assertNoOperatorKeys(payload);
+      return;
+    }
+    for (const [key, value] of Object.entries(payload)) {
+      if (key === 'filter') continue;
+      if (key.startsWith('$') || key.includes('.')) {
+        throw invalidQuery(
+          `Key '${key}' is not allowed. This API accepts only its own query language, not raw database operators.`,
+        );
+      }
+      this.assertNoOperatorKeys(value);
+    }
+  }
+
   // ─── Dieu kien loc ────────────────────────────────────────────────────
 
-  private condition(spec: AgentTableSpec, c: AgentCondition): Record<string, unknown> {
-    const p = this.policy(spec, c.field);
-    if (p.filter === 'none') {
-      throw fieldNotAllowed(
-        c.field,
-        p.freeText
-          ? 'is free text and cannot be filtered — masking applies to output only, so filtering on it would leak the raw value.'
-          : 'cannot be used as a filter condition.',
-      );
-    }
-    if (p.filter === 'eq' && !EQ_ONLY_OPS.has(c.op)) {
-      throw fieldNotAllowed(
-        c.field,
-        `only supports exact-match filtering (eq, ne, in, nin). Operator '${c.op}' would allow probing its value.`,
-      );
-    }
-
-    const v = c.value;
-    switch (c.op) {
-      case 'eq':
-        return { [c.field]: v };
-      case 'ne':
-        return { [c.field]: { $ne: v } };
-      case 'in':
-      case 'nin': {
-        if (!Array.isArray(v)) throw invalidQuery(`Operator '${c.op}' requires an array value.`);
-        return { [c.field]: c.op === 'in' ? { $in: v } : { $nin: v } };
-      }
-      case 'gt':
-      case 'gte':
-      case 'lt':
-      case 'lte': {
-        if (Array.isArray(v)) throw invalidQuery(`Operator '${c.op}' requires a single value.`);
-        return { [c.field]: { [`$${c.op}`]: this.coerce(p, v) } };
-      }
-      case 'between': {
-        if (!Array.isArray(v) || v.length !== 2) {
-          throw invalidQuery("Operator 'between' requires an array of exactly two values.");
-        }
-        return { [c.field]: { $gte: this.coerce(p, v[0]), $lte: this.coerce(p, v[1]) } };
-      }
-      case 'exists':
-        return { [c.field]: { $exists: v !== false } };
-      case 'startsWith': {
-        if (typeof v !== 'string') throw invalidQuery("Operator 'startsWith' requires a string value.");
-        // Escape trước khi dựng `^...` — giá trị của bên gọi không được trở
-        // thành cú pháp biểu thức chính quy.
-        return { [c.field]: { $regex: `^${v.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}` } };
-      }
-      default:
-        throw invalidQuery(`Unsupported operator '${String(c.op)}'.`);
-    }
-  }
-
-  /** Chuỗi ISO trên trường ngày phải thành `Date`, nếu không so sánh khoảng sẽ sai âm thầm. */
+  /**
+   * Chuỗi ISO trên trường ngày phải thành `Date`, nếu không so sánh khoảng sẽ
+   * sai âm thầm.
+   *
+   * Trường KHÔNG có mô tả (`type: 'any'`, mọi collection ngoài từ điển) thì
+   * không biết kiểu, nên phỏng đoán theo mẫu: chuỗi có `T` và múi giờ mới đổi
+   * sang `Date`. Chuỗi ngày trần `2026-08-19` giữ nguyên là chuỗi — đổi bừa sẽ
+   * làm hỏng việc lọc trên trường vốn lưu chuỗi.
+   */
   private coerce(p: AgentFieldPolicy, value: unknown): unknown {
-    if (p.type === 'date' && typeof value === 'string') {
-      const d = new Date(value);
-      if (Number.isNaN(d.getTime())) throw invalidQuery(`Value '${value}' is not a valid date.`);
-      return d;
+    if (typeof value !== 'string') return value;
+    const looksLikeDate = p.type === 'date' || (p.type === 'any' && AgentQueryService.ISO_DATETIME.test(value));
+    if (!looksLikeDate) return value;
+    const d = new Date(value);
+    if (Number.isNaN(d.getTime())) {
+      if (p.type === 'any') return value;
+      throw invalidQuery(`Value '${value}' is not a valid date.`);
     }
-    return value;
+    return d;
   }
 
-  buildFilter(spec: AgentTableSpec, node?: AgentFilterNode, depth = 0): Record<string, unknown> {
-    if (!node) return {};
-    if (depth > AGENT_FILTER_MAX_DEPTH) {
-      throw invalidQuery(`Filter is nested deeper than ${AGENT_FILTER_MAX_DEPTH} levels.`);
-    }
-    if ('and' in node) return { $and: node.and.map((n) => this.buildFilter(spec, n, depth + 1)) };
-    if ('or' in node) return { $or: node.or.map((n) => this.buildFilter(spec, n, depth + 1)) };
-    if ('not' in node) return { $nor: [this.buildFilter(spec, node.not, depth + 1)] };
-    return this.condition(spec, node);
+  private static readonly ISO_DATETIME = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}(:\d{2})?(\.\d+)?(Z|[+-]\d{2}:?\d{2})$/;
+
+  /**
+   * Điều kiện lọc, **cú pháp MongoDB** (`API-8` thay hẳn DSL cây cũ).
+   *
+   * Cả `POST /query` lẫn `GET /tables/:table/rows` đều đi qua đây — một bộ luật
+   * duy nhất. Hai đường lọc với hai bộ luật là cách chắc chắn để một ngày chúng
+   * lệch nhau, và đường lỏng hơn thành lỗ hổng.
+   *
+   * Cú pháp cũ bị từ chối kèm thông điệp nêu rõ, không im lặng trả kết quả sai.
+   */
+  buildFilter(spec: AgentTableSpec, node?: unknown): Record<string, unknown> {
+    return buildMongoFilter(
+      spec,
+      node,
+      AGENT_FILTER_MAX_DEPTH,
+      (s, field) => this.policy(s, field),
+      (policy, value) => this.coerce(policy, value),
+    );
   }
 
   // ─── Sap xep ──────────────────────────────────────────────────────────
@@ -191,10 +223,8 @@ export class AgentQueryService {
         out[s.field] = s.dir === 'desc' ? -1 : 1;
         continue;
       }
-      const p = this.policy(spec, s.field);
-      // `sortable ⇒ read`: sắp xếp theo trường không đọc được vẫn để lộ quan hệ
-      // so sánh giữa các bản ghi.
-      if (!p.sortable) throw fieldNotAllowed(s.field, 'cannot be used for sorting.');
+      // `policy()` chỉ còn chặn bốn tên bí mật; mọi trường khác sắp xếp được.
+      this.policy(spec, s.field);
       out[s.field] = s.dir === 'desc' ? -1 : 1;
     }
     return out;
@@ -203,25 +233,20 @@ export class AgentQueryService {
   // ─── Che du lieu dau ra ───────────────────────────────────────────────
 
   /**
-   * Áp bộ che theo mẫu cho mọi trường văn bản tự do (BR-4a §5b), và ghép
-   * `before`/`after` có kiểm soát cho `orderLogs` (AC-17).
+   * Lưới CUỐI cho bốn tên bị chặn (`API-19`).
+   *
+   * Vì sao vẫn cần dù `policy()` đã chặn ở đầu vào: khi bên gọi không xin
+   * trường nào, truy vấn lấy **nguyên bản ghi**, nên một `password` nằm sẵn
+   * trong tài liệu sẽ đi ra mà không ai phải hỏi xin nó. Tầng kho dữ liệu đã
+   * loại bốn tên đó ở cấp một bằng `$project` loại trừ; hàm này quét tiếp mọi
+   * độ sâu, cho cả nhánh lồng của collection không ai mô tả.
+   *
+   * KHÔNG còn che email/điện thoại trong văn bản tự do (`API-11`), không còn
+   * lọc `before`/`after` của nhật ký qua danh sách trắng (`API-19`) — mọi thứ
+   * khác ra nguyên văn.
    */
-  maskRows(spec: AgentTableSpec, rows: Row[], raw?: Row[]): Row[] {
-    const freeTextFields = Object.entries(spec.fields)
-      .filter(([, p]) => p.freeText)
-      .map(([name]) => name);
-
-    return rows.map((row, i) => {
-      const out: Row = { ...row };
-      for (const f of freeTextFields) {
-        if (out[f] !== undefined) out[f] = maskFreeTextDeep(out[f]);
-      }
-      if (spec.key === 'orderLogs') {
-        const source = raw?.[i] ?? {};
-        Object.assign(out, applyOrderLogValuePolicy(out.field, source.before, source.after));
-      }
-      return out;
-    });
+  maskRows(spec: AgentTableSpec, rows: Row[]): Row[] {
+    return rows.map((row) => stripDeniedDeep(row));
   }
 
   // ─── Chay truy van ────────────────────────────────────────────────────
@@ -257,18 +282,12 @@ export class AgentQueryService {
     const offset = select?.offset ?? 0;
     if (offset > 10_000) throw invalidQuery('Offset above 10000 is not supported. Narrow the filter instead.');
 
-    // `orderLogs` cần đọc thêm `before`/`after` để chính sách AC-17 quyết định
-    // — chúng KHÔNG có trong registry nên phải xin riêng ở đây, và không bao
-    // giờ ra ngoài mà chưa qua `applyOrderLogValuePolicy`.
-    const dbProjection =
-      spec.key === 'orderLogs' ? { ...projection, before: 1 as const, after: 1 as const } : projection;
-
     const raw = await this.run(
       () =>
         this.repository.find({
-          entityName: spec.entityName,
+          collection: spec.key,
           filter,
-          projection: dbProjection,
+          projection,
           sort: Object.keys(sort).length ? sort : { [spec.defaultSort]: 1 },
           skip: offset,
           limit,
@@ -277,17 +296,10 @@ export class AgentQueryService {
       timeoutMs,
     );
 
-    const rows = raw.map((r) => this.stripToProjection(r, projection));
-    return { items: this.maskRows(spec, rows, raw), limitApplied: limit };
-  }
-
-  /** Bỏ các khoá chỉ mượn để tính chính sách (`before`/`after` của nhật ký). */
-  private stripToProjection(row: Row, projection: Record<string, 1>): Row {
-    const out: Row = {};
-    for (const key of Object.keys(projection)) {
-      if (row[key] !== undefined) out[key] = row[key];
-    }
-    return out;
+    // Không xin trường nào thì trả nguyên bản ghi — `pickProjected` chỉ dùng khi
+    // có `$project` thu hẹp, vì nó cắt đúng theo danh sách đã xin.
+    const rows = Object.keys(projection).length ? raw.map((r) => pickProjected(r, projection)) : raw;
+    return { items: this.maskRows(spec, rows), limitApplied: limit };
   }
 
   async aggregate(
@@ -298,13 +310,10 @@ export class AgentQueryService {
     const timeoutMs = this.config.agentApi.queryTimeoutMs;
     const limit = Math.min(agg.limit ?? 200, 1000);
 
+    // Nhóm theo trường nào cũng được sau `API-19` — kể cả `assignee` hay
+    // `userId`, tức sản lượng theo từng người. `policy()` chỉ chặn bốn tên bí mật.
     const groupBy = agg.groupBy ?? [];
-    for (const g of groupBy) {
-      const p = this.policy(spec, g);
-      // `groupable ⇒ read`: khoá nhóm hiện nguyên ở kết quả, nên nhóm theo
-      // trường không đọc được chính là đọc nó dưới một cái tên khác.
-      if (!p.groupable) throw fieldNotAllowed(g, 'cannot be used for grouping.');
-    }
+    for (const g of groupBy) this.policy(spec, g);
 
     const groupId =
       groupBy.length === 0 ? null : Object.fromEntries(groupBy.map((g) => [g.replace(/\./g, '__'), `$${g}`]));
@@ -316,11 +325,10 @@ export class AgentQueryService {
         continue;
       }
       if (!m.field) throw invalidQuery(`Metric '${m.op}' requires a field.`);
-      const p = this.policy(spec, m.field);
-      // Bất biến I5: `min`/`max` trên trường không đọc được chính là đọc giá trị.
-      if (!p.aggregatable || !p.read) {
-        throw fieldNotAllowed(m.field, `cannot be used with metric '${m.op}'.`);
-      }
+      // Tổng hợp trên trường chữ không còn bị chặn: `$sum` trả 0, `$avg` trả
+      // null. Người dùng chốt không chặn, nên con số vô nghĩa là kết quả đúng
+      // theo chính sách — agent tự nhìn kiểu dữ liệu ở `GET /agent/tables`.
+      this.policy(spec, m.field);
       groupStage[m.as] = { [`$${m.op}`]: `$${m.field}` };
     }
 
@@ -330,10 +338,26 @@ export class AgentQueryService {
     ]);
     const sort = this.buildSort(spec, agg.sort, resultKeys);
 
-    const pipeline: PipelineStage[] = [
-      { $match: filter },
-      { $group: groupStage as PipelineStage.Group['$group'] },
-    ];
+    // `variations.retailPrice` nằm trong MẢNG subdoc, nên `$group` nhận cả mảng
+    // thay vì từng giá trị: `$sum` ra 0, `$avg` ra null, `$min`/`$max` trả về
+    // chính cái mảng, và nhóm theo `variations.sku` gom theo BẢN GHI chứ không
+    // theo sku. Tất cả đều HTTP 200 nên bên gọi không biết câu trả lời đã sai
+    // (`QA-3`). Trải mảng ra trước khi nhóm là điều kiện để phép tính có nghĩa.
+    //
+    // Chỉ thêm `$unwind` khi thật sự có đường dẫn lồng: truy vấn trên trường
+    // phẳng giữ nguyên pipeline cũ, từng bước một.
+    const unwindRoots = new Set<string>();
+    for (const path of [...groupBy, ...agg.metrics.map((m) => m.field ?? '')]) {
+      if (path.includes('.')) unwindRoots.add(path.split('.')[0]);
+    }
+
+    const pipeline: PipelineStage[] = [{ $match: filter }];
+    for (const root of unwindRoots) {
+      // Không `preserveNullAndEmptyArrays`: bản ghi không có biến thể nào thì
+      // không có giá nào để cộng — giữ lại chỉ tạo ra nhóm rỗng giả.
+      pipeline.push({ $unwind: `$${root}` });
+    }
+    pipeline.push({ $group: groupStage as PipelineStage.Group['$group'] });
     // Trải khoá nhóm ra cấp trên cho dễ đọc; tên đã được chuẩn hoá ở `groupId`.
     if (groupBy.length) {
       const projectStage: Record<string, unknown> = { _id: 0 };
@@ -352,26 +376,22 @@ export class AgentQueryService {
     pipeline.push({ $limit: limit });
 
     const items = await this.run(
-      () => this.repository.aggregate({ entityName: spec.entityName, pipeline, maxTimeMS: timeoutMs }),
+      () => this.repository.aggregate({ collection: spec.key, pipeline, maxTimeMS: timeoutMs }),
       timeoutMs,
     );
 
-    return { items, limitApplied: limit };
+    return { items: items.map((row) => stripDeniedDeep(row)), limitApplied: limit };
   }
 
   /**
-   * Bản DSL đã chuẩn hoá để ghi nhật ký (BR-7, AC-14). Điều kiện lọc trên
-   * trường `read:false` chỉ giữ `{field, op}` — email khách dùng làm điều kiện
-   * lọc LÀ dữ liệu BR-4, ghi nguyên vào nhật ký là tự tạo ra một kho email thứ
-   * hai ngay trong hệ thống.
+   * Bản điều kiện lọc để ghi nhật ký (BR-7, AC-14).
+   *
+   * Sau `API-19` KHÔNG còn trường nào bị lược: không còn trường "không đọc
+   * được" để phải giấu giá trị, và bốn tên bị chặn thì không lọc được nên
+   * không bao giờ tới đây. Nhật ký ghi đúng câu hỏi agent đã hỏi.
    */
-  digest(spec: AgentTableSpec, node?: AgentFilterNode): unknown {
-    if (!node) return undefined;
-    if ('and' in node) return { and: node.and.map((n) => this.digest(spec, n)) };
-    if ('or' in node) return { or: node.or.map((n) => this.digest(spec, n)) };
-    if ('not' in node) return { not: this.digest(spec, node.not) };
-    const p = spec.fields[node.field];
-    if (p && !p.read) return { field: node.field, op: node.op, value: '<redacted>' };
-    return { field: node.field, op: node.op, value: node.value };
+  digest(_spec: AgentTableSpec, node?: unknown): unknown {
+    if (node === undefined || node === null) return undefined;
+    return node;
   }
 }

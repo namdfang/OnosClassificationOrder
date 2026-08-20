@@ -1,7 +1,7 @@
 import React, { lazy, Suspense, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Link, Navigate, useParams } from 'react-router-dom';
-import { Bell, Flag, Package, Settings as SettingsIcon, UserCog, Users } from 'lucide-react';
+import { Bell, Bot, Flag, Package, Settings as SettingsIcon, UserCog, Users } from 'lucide-react';
 
 import { PATHS } from '@/constants/paths';
 
@@ -17,6 +17,7 @@ const CustomerPriorityConfig = lazy(() => import('@/components/settings/Customer
 const DesignerAssignmentConfig = lazy(() => import('@/components/settings/DesignerAssignmentConfig'));
 const ProductFactoryKanban = lazy(() => import('@/components/settings/ProductFactoryKanban'));
 const CustomerNotificationSender = lazy(() => import('@/components/settings/CustomerNotificationSender'));
+const AgentApiGuide = lazy(() => import('@/components/settings/AgentApiGuide'));
 
 interface SettingsSection {
   key: string; // segment URL /adm/settings/<key>
@@ -78,6 +79,21 @@ function buildGroups(t: (key: string) => string): SettingsGroup[] {
           icon: <Bell size={15} />,
           perm: 'role.manage',
           component: CustomerNotificationSender,
+        },
+      ],
+    },
+    {
+      label: t('settings.groups.system'),
+      items: [
+        {
+          // API-3 — CHI SuperAdmin/Admin. `page.agent_api` da loai tru Manager
+          // tuong minh o permission-catalog (AC-02); dung `role.manage` nhu cac
+          // muc khac se cho Manager vao.
+          key: 'agent-api',
+          label: t('settings.nav.agentApi'),
+          icon: <Bot size={15} />,
+          perm: 'page.agent_api',
+          component: AgentApiGuide,
         },
       ],
     },

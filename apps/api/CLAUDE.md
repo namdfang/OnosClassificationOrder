@@ -51,7 +51,7 @@ async getUsers(
 )
 ```
 
-- `@Auth()` tự apply: AuthGuard → RateLimiterGuard → PermissionsGuard → RolesGuard.
+- `@Auth()` tự apply: AuthGuard → RateLimiterGuard → PermissionsGuard → RolesGuard. Phần khai cho Swagger: `ApiBearerAuth` **chỉ gắn khi `public !== true`** (`HF-1`) — nhãn tài liệu, không phải guard.
 - Public routes: `@Auth([], [], { public: true })`.
 - Role/Permission types: import từ `shared` package.
 

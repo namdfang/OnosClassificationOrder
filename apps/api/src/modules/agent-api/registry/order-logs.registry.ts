@@ -4,23 +4,23 @@ import { plain } from './field-policy';
 /**
  * `orderLogs` — dòng thời gian đơn đã đi qua những chặng nào, lúc nào.
  *
- * Vế "AI xử lý" bị **cắt khỏi phạm vi** (BR-4a §4): tám trường danh tính
- * (`userId`, `userName`, `userEmail`, `roleCode`, `impersonatorId`,
- * `impersonatorName`, `ip`, `userAgent`) không có trong danh sách trắng.
- * Khách không bao giờ được biết tên nhân viên nào chạm vào đơn của họ, càng
- * không được biết địa chỉ mạng hay dấu vết phiên mạo danh của quản trị.
+ * `API-17` mở vế "AI xử lý": sáu trường danh tính (`userId`, `userName`,
+ * `userEmail`, `roleCode`, `impersonatorId`, `impersonatorName`) **nay đọc
+ * được** theo quyết định của người dùng. Chỉ còn `ip` và `userAgent` bị che —
+ * chúng thuộc BỐN trường bí mật kỹ thuật BA chốt ở AC-03, và là dấu vết phiên
+ * làm việc chứ không phải thông tin nghiệp vụ.
  *
- * `before`/`after` KHÔNG nằm trong `fields`: chúng kiểu `Object` tuỳ ý nên
- * không che được theo tên trường. Chúng được ghép lại vào kết quả bởi
- * `applyOrderLogValuePolicy()` (xem `order-log-value-policy.ts`, AC-17) sau khi
- * đã đi qua danh sách trắng 17 tên trường mà BA chốt ở BR-4a §5a.
+ * `before`/`after` NAY LÀ TRƯỜNG BÌNH THƯỜNG (`API-19`). Lý do cũ để lọc chúng
+ * qua một danh sách trắng tên trường là "giá trị cũ/mới của trường tiền sẽ lọt
+ * ra" — nay tiền cũng mở, nên cái cổng ấy không còn chặn gì và đã bị gỡ cùng
+ * `order-log-value-policy.ts`. Lịch sử thay đổi của MỌI trường đọc được nguyên
+ * văn, kể cả giá trị dạng khối.
  */
 export const orderLogsRegistry: AgentTableSpec = {
   key: 'orderLogs',
   description:
-    'Nhật ký thao tác trên đơn — giải thích đơn đã đi qua những chặng nào, lúc nào. ' +
-    'KHÔNG kèm danh tính người thực hiện. Giá trị cũ/mới chỉ có với các trường tình trạng ' +
-    'sản xuất nằm trong danh sách cho phép.',
+    'Nhật ký thao tác trên đơn — giải thích đơn đã đi qua những chặng nào, lúc nào, ai làm. ' +
+    'Kèm giá trị cũ/mới nguyên văn của trường bị đổi.',
   entityName: 'OrderLogEntity',
   defaultSort: '_id',
   fields: {
@@ -29,21 +29,24 @@ export const orderLogsRegistry: AgentTableSpec = {
     orderId: plain('objectId', 'Trỏ tới orders._id — nối với bảng orders để biết đơn nào'),
     action: plain('enum', 'Loại thao tác: import, update, hold, unhold, ...'),
     field: plain('string', 'Tên trường bị đổi trong thao tác này'),
+    before: plain('object', 'Giá trị TRƯỚC khi đổi — nguyên văn, kiểu tuỳ trường (`API-19`)'),
+    after: plain('object', 'Giá trị SAU khi đổi — nguyên văn, kiểu tuỳ trường (`API-19`)'),
+
+    // ── `API-17` mở đọc danh tính người thao tác; `API-19` mở nốt lọc/nhóm —
+    // nhóm theo `userId` là ra sản lượng theo từng người.
+    userId: plain('string', 'Người thực hiện thao tác'),
+    userName: plain('string', 'Tên người thực hiện'),
+    userEmail: plain('string', 'Email người thực hiện'),
+    roleCode: plain('string', 'Vai trò của người thực hiện'),
+    impersonatorId: plain('string', 'Người đăng nhập thay, nếu có'),
+    impersonatorName: plain('string', 'Tên người đăng nhập thay, nếu có'),
+    updatedAt: plain('date'),
+    deletedAt: plain('date', 'Bản ghi bị xoá mềm. Mở ĐỌC KHÔNG đổi bộ lọc mặc định của truy vấn'),
   },
   deliberatelyExcluded: [
-    // BR-4a §4 — danh tính người thực hiện thao tác
-    'userId',
-    'userName',
-    'userEmail',
-    'roleCode',
-    'impersonatorId',
-    'impersonatorName',
+    // Hai trong BỐN tên bị chặn còn lại sau `API-19` — dấu vết phiên làm việc,
+    // không phải thông tin nghiệp vụ.
     'ip',
     'userAgent',
-    // Ghép lại có kiểm soát ở tầng service, không đi qua registry — xem AC-17
-    'before',
-    'after',
-    'updatedAt',
-    'deletedAt',
   ],
 };

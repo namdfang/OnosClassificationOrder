@@ -18,7 +18,15 @@ export function Auth(
     SetMetadata('roles', roles),
     SetMetadata('permission', permission),
     UseGuards(AuthGuard({ public: isPublicRoute }), RateLimiterGuard, PermissionsGuard, RolesGuard), // RateLimiterGuard
-    ApiBearerAuth(),
+    // Nhãn bearer CHỈ gắn cho route thật sự đi qua JWT (`HF-1`). Trước đây nó
+    // gắn vô điều kiện, nên route `public: true` vẫn bị Swagger khai là cần
+    // bearer — nhóm endpoint agent là chỗ lộ ra: cửa thật của chúng là
+    // `AgentApiKeyGuard`, mà đặc tả lại đòi thêm JWT, khiến người đọc tưởng
+    // phải đăng nhập mới gọi được.
+    //
+    // Đây là decorator TÀI LIỆU, không phải guard: bỏ nó không đổi quyền gọi
+    // của bất kỳ route nào. Cửa vẫn là `AuthGuard({ public })` ngay phía trên.
+    ...(isPublicRoute ? [] : [ApiBearerAuth()]),
     UseInterceptors(AuthUserInterceptor),
     ApiUnauthorizedResponse({ description: 'Unauthorized' }),
     PublicRoute(isPublicRoute),

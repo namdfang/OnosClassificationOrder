@@ -4,12 +4,11 @@ import { freeText, numeric, plain } from './field-policy';
 /**
  * `productConfigs` — trả lời về sản phẩm, biến thể, cấu hình sản xuất.
  *
- * GIÁ: chỉ `variations[].retailPrice` được đọc. Sáu trường giá còn lại của
- * biến thể — `cost`, `nonShipCost`, `wholesalePrice`, `tiktokPrice`,
- * `expUsShipCost`, `tiktokShipCost` — đều **không có trong danh sách trắng**.
- * Hai trường đầu là giá vốn theo BR-4a §2; bốn trường sau SRS không nhắc tới
- * nhưng cùng bản chất rủi ro (giá nội bộ / biên lợi nhuận) và BA đã xác nhận
- * che ở bước `design_review`.
+ * GIÁ: `API-19` mở nốt sáu trường giá nội bộ của biến thể (`cost`,
+ * `nonShipCost`, `wholesalePrice`, `tiktokPrice`, `expUsShipCost`,
+ * `tiktokShipCost`) — trước đây chúng là nhóm bị che kỹ nhất của bảng này.
+ * Agent nay đọc được cả giá vốn lẫn biên lợi nhuận, nên **tự nó phải biết
+ * không đọc mấy con số đó cho khách nghe**; API không còn chặn hộ nữa.
  *
  * `variations` là mảng subdoc nên được chiếu theo từng trường con
  * (`variations.sku`, ...) — mongo `$project` giữ nguyên hình mảng.
@@ -18,7 +17,7 @@ export const productConfigsRegistry: AgentTableSpec = {
   key: 'productConfigs',
   description:
     'Cấu hình sản phẩm và biến thể. Trả lời sản phẩm có những biến thể nào, giá niêm yết bao nhiêu, ' +
-    'in được ở những vị trí nào, thời gian sản xuất và giao dự kiến. KHÔNG chứa giá vốn.',
+    'in được ở những vị trí nào, thời gian sản xuất và giao dự kiến, giá bán và giá vốn.',
   entityName: 'ProductConfigEntity',
   defaultSort: '_id',
   fields: {
@@ -31,6 +30,8 @@ export const productConfigsRegistry: AgentTableSpec = {
     status: plain('enum'),
     printMethod: plain('string'),
     printArea: plain('string', 'Danh sách mã vị trí in của sản phẩm'),
+    printDocument: plain('string', 'URL tài liệu hướng dẫn design/template của sản phẩm'),
+    printTemplate: plain('string', 'URL template thiết kế chung của sản phẩm'),
     productCategoryId: plain('objectId', 'Trỏ tới productCategories'),
     collectionIds: plain('objectId', 'Trỏ tới collections'),
     factoryId: plain('objectId'),
@@ -39,48 +40,45 @@ export const productConfigsRegistry: AgentTableSpec = {
     maxProductionTime: numeric('Thời gian sản xuất tối đa cam kết (ngày)'),
     maxShippingTime: numeric('Thời gian giao tối đa cam kết (ngày)'),
     sizeChartUrl: plain('string'),
+    usImportTaxPerUnit: numeric(
+      'Thuế nhập khẩu US trên mỗi đơn vị (USD) — con số CÔNG BỐ với khách ở Customer Portal Catalog, không phải giá vốn',
+    ),
     mockup: plain('string'),
     description: freeText('Mô tả sản phẩm'),
     shortDescription: freeText(),
     'variations.sku': plain('string', 'SKU biến thể, unique toàn hệ thống'),
     'variations.attributes': plain('string', 'Thuộc tính biến thể dạng nhãn - giá trị'),
-    'variations.retailPrice': numeric('Giá niêm yết — trường giá DUY NHẤT được trả ra'),
+    'variations.retailPrice': numeric('Giá niêm yết — con số công bố với khách'),
+    'variations.cost': numeric('GIÁ VỐN biến thể — nội bộ, không đọc cho khách'),
+    'variations.nonShipCost': numeric('Giá bán nonship hệ cũ'),
+    'variations.wholesalePrice': numeric('Giá sỉ — nội bộ'),
+    'variations.tiktokPrice': numeric('Giá kênh TikTok'),
+    'variations.expUsShipCost': numeric('Phí ship express US — nội bộ'),
+    'variations.tiktokShipCost': numeric('Phí ship kênh TikTok — nội bộ'),
     'variations.status': plain('enum'),
+
+    // ── `API-17` mở đọc; `API-19` mở nốt lọc/sắp xếp/nhóm.
+    'variations.weight': plain('number'),
+    'variations.width': plain('number'),
+    'variations.height': plain('number'),
+    'variations.length': plain('number'),
+    machineNumber: plain('string', 'Mã máy mặc định, tra nghĩa ở workshopConfigs'),
+    toolResult: plain('string', 'Mã kết quả soát tool mặc định, tra nghĩa ở workshopConfigs'),
+    images: plain('string', 'Danh sách ảnh sản phẩm'),
+    level: plain('number', 'Mức độ khó của sản phẩm, dùng điều độ nội bộ'),
+    guide: plain('string', 'Hướng dẫn sản xuất'),
+    templateDescription: plain('string'),
+    itemSpecifics: plain('object', 'Thông số kỹ thuật công bố của sản phẩm'),
+    hideForSeller: plain('bool'),
+    enableDesignCheck: plain('bool'),
+    enableAffiliate: plain('bool'),
+    weight: plain('number'),
+    width: plain('number'),
+    height: plain('number'),
+    length: plain('number'),
+    updatedAt: plain('date'),
+    deletedAt: plain('date', 'Bản ghi bị xoá mềm. Mở ĐỌC KHÔNG đổi bộ lọc mặc định của truy vấn'),
   },
-  deliberatelyExcluded: [
-    // BR-4a §2 — giá vốn
-    'variations.cost',
-    'variations.nonShipCost',
-    // BA xác nhận ở design_review — giá nội bộ, cùng bản chất rủi ro với giá vốn
-    'variations.wholesalePrice',
-    'variations.tiktokPrice',
-    'variations.expUsShipCost',
-    'variations.tiktokShipCost',
-    // Không phục vụ việc trả lời khách
-    'variations.weight',
-    'variations.width',
-    'variations.height',
-    'variations.length',
-    'machineNumber',
-    'toolResult',
-    'images',
-    'level',
-    'guide',
-    'templateDescription',
-    'itemSpecifics',
-    // Tài liệu/template thiết kế nội bộ — cùng nhóm với guide/templateDescription
-    'printDocument',
-    'printTemplate',
-    // Thuế nhập US mỗi unit — thông tin chi phí, cùng bản chất rủi ro với giá vốn
-    'usImportTaxPerUnit',
-    'hideForSeller',
-    'enableDesignCheck',
-    'enableAffiliate',
-    'weight',
-    'width',
-    'height',
-    'length',
-    'updatedAt',
-    'deletedAt',
-  ],
+  // `API-19`: không còn trường nào của bảng này bị loại trừ.
+  deliberatelyExcluded: [],
 };

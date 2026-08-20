@@ -18,11 +18,54 @@ import { ResZod } from '../types/Res';
 
 // ─── Nang luc A — liet ke bang + doc tho ────────────────────────────────
 
+/**
+ * Mo ta MOT truong cua mot bang — dinh nghia DUY NHAT, dung chung cho ca hai
+ * be mat (`API-18`).
+ *
+ * Truoc `API-18`, be mat agent chi tra ve TEN truong con be mat quan tri tra
+ * du sau thuoc tinh nay. Hai noi mo ta cung mot truong theo hai kieu khac nhau
+ * la thu AC-03 cam, nen chung nay la mot dinh nghia va `AgentAdminFieldZod`
+ * chi la ten goi cu tro toi day.
+ */
+export const AgentFieldMetaZod = z.object({
+  name: z.string(),
+  /**
+   * `object` them o `API-17`: truong la KHOI du lieu, tra ra nguyen khoi chu
+   * khong phai mot gia tri le.
+   *
+   * `any` them o `API-19`: CHUA BIET kieu — truong khong co mo ta trong tu dien.
+   * Them gia tri moi vao union nay la thay doi CONG THEM: trang quan tri hien
+   * nhan qua i18n co defaultValue nen gia tri chua co ban dich van hien ra duoc.
+   */
+  type: z.enum(['string', 'number', 'date', 'bool', 'objectId', 'enum', 'object', 'any']),
+  /** Co xuat hien trong du lieu tra ve hay khong. */
+  read: z.boolean(),
+  /** `none` khong loc duoc · `eq` chi so bang · `full` moi toan tu. */
+  filter: z.enum(['none', 'eq', 'full']),
+  sortable: z.boolean(),
+  groupable: z.boolean(),
+  aggregatable: z.boolean().optional(),
+  /** Van ban nguoi dung go tay. */
+  freeText: z.boolean().optional(),
+  note: z.string().optional(),
+});
+export type AgentFieldMeta = z.infer<typeof AgentFieldMetaZod>;
+
 export const AgentTableSummaryZod = z.object({
   key: z.string(),
   description: z.string(),
+  entityName: z.string(),
+  defaultSort: z.string(),
   fieldCount: z.number().int().nonnegative(),
+  /** Ten cac truong `read:true`. Suy duoc tu `fields`, giu lai vi da cong bo. */
   readableFields: z.string().array(),
+  /** Chinh sach day du tung truong (`API-18`). */
+  fields: AgentFieldMetaZod.array(),
+  /**
+   * TEN cac truong agent co y KHONG doc duoc. Chi TEN, khong bao gio la gia
+   * tri: endpoint nay mo ta CAU TRUC, khong tra du lieu ban ghi (AC-02).
+   */
+  excludedFields: z.string().array(),
 });
 export type AgentTableSummary = z.infer<typeof AgentTableSummaryZod>;
 
@@ -32,6 +75,16 @@ export class ListAgentTablesResDto extends createZodDto(extendApi(ListAgentTable
 export const ReadAgentTableQueryZod = z.object({
   limit: z.coerce.number().int().min(1).optional(),
   cursor: z.string().trim().min(1).optional(),
+  /**
+   * Cay dieu kien `AgentFilterNode` dang chuoi JSON (`API-6`) — GET khong co
+   * than yeu cau nen DSL long phai di qua query string.
+   *
+   * Giu la CHUOI o day, khong `transform` sang object: JSON hong hay dieu kien
+   * sai chinh sach phai bao bang ma loi cua module (`INVALID_QUERY` /
+   * `FIELD_NOT_ALLOWED`), chu khong roi vao 422 cua tang validate — bang 8 ma
+   * la hop dong voi agent.
+   */
+  filter: z.string().max(4000).optional(),
   /** Tap con cua cac truong `read:true`; truong ngoai danh sach trang bi tu choi. */
   fields: z
     .union([z.string(), z.string().array()])
@@ -155,7 +208,16 @@ export type AgentAggregate = z.infer<typeof AgentAggregateZod>;
 export const AgentQueryZod = z
   .object({
     table: z.string().min(1).max(60),
-    filter: AgentFilterNodeZod.optional(),
+    /**
+     * Dieu kien loc dang MongoDB (`API-8` thay han DSL cay cu).
+     *
+     * KHONG kiem hinh dang o day: bo kiem that nam o `mongo-filter.ts` phia BE,
+     * noi co danh sach trang toan tu VA chinh sach truong. Zod chi biet hinh
+     * dang, khong biet truong nao duoc loc o muc nao — de Zod tu choi truoc thi
+     * ban goi nhan 422 cua tang validate thay vi ma loi cua module, ma bang 8 ma
+     * loi la hop dong voi agent.
+     */
+    filter: z.unknown().optional(),
     select: AgentSelectZod.optional(),
     aggregate: AgentAggregateZod.optional(),
   })
@@ -222,3 +284,62 @@ export const AGENT_ERROR_CODES = {
   docsUnavailable: 'DOCS_UNAVAILABLE',
 } as const;
 export type AgentErrorCode = (typeof AGENT_ERROR_CODES)[keyof typeof AGENT_ERROR_CODES];
+
+// ─── Be mat QUAN TRI (API-3) — KHONG phai be mat cua agent ──────────────
+
+/**
+ * Trang hướng dẫn Agent API trong `/adm` (`API-3`). Đây là bề mặt **thứ hai**,
+ * admin-only: xác thực bằng JWT + vai + quyền, không bằng khoá agent.
+ *
+ * Khác toàn bộ phần trên của file này, các kiểu dưới đây **FE có dùng** —
+ * `apps/web` import thẳng, nên đổi một trường ở đây là đổi hợp đồng với FE.
+ *
+ * Thiết kế: `.devtasks/design/API-3.md` §3.
+ */
+/** Ten goi cu, giu cho frontend khoi phai doi import. MOT dinh nghia (`API-18`). */
+export const AgentAdminFieldZod = AgentFieldMetaZod;
+export type AgentAdminField = AgentFieldMeta;
+
+/**
+ * Bang cho trang quan tri — DAN XUAT tu `AgentTableSummaryZod` (`API-18`), bo
+ * hai khoa chi be mat agent can. Dan xuat chu khong khai lai: hai noi mo ta
+ * cung mot truong theo hai kieu khac nhau la thu AC-03 cam, va cach chac chan
+ * nhat de dieu do khong xay ra la khong co dinh nghia thu hai de lech.
+ *
+ * `excludedFields` chi la TEN truong (`API-3` AC-16) — nguoi van hanh can biet
+ * agent im lang vi truong bi che chu khong phai vi hong.
+ */
+export const AgentAdminTableZod = AgentTableSummaryZod.omit({ fieldCount: true, readableFields: true });
+export type AgentAdminTable = z.infer<typeof AgentAdminTableZod>;
+
+export const AgentAdminLimitsZod = z.object({
+  /** Con số ĐANG CHẶN THẬT, đọc từ hằng số dùng chung với `@Throttle` (`API-4`). */
+  rateLimitPerMin: z.number().int().positive(),
+  maxLimit: z.number().int().positive(),
+  readTimeoutMs: z.number().int().positive(),
+  queryTimeoutMs: z.number().int().positive(),
+});
+export type AgentAdminLimits = z.infer<typeof AgentAdminLimitsZod>;
+
+export const AgentAdminOverviewZod = z.object({
+  /** Đường TƯƠNG ĐỐI; FE ghép origin của nó để dựng lời gọi thật và dòng curl. */
+  basePath: z.string(),
+  authHeader: z.string(),
+  /** Đã cấu hình khoá chưa — về ngay khi mở trang, KHÔNG kèm giá trị khoá. */
+  keyConfigured: z.boolean(),
+  /** Tên biến môi trường cần đặt, để trang khỏi phải đoán. */
+  keyEnvName: z.string(),
+  limits: AgentAdminLimitsZod,
+  tables: AgentAdminTableZod.array(),
+});
+export type AgentAdminOverview = z.infer<typeof AgentAdminOverviewZod>;
+
+export const GetAgentAdminOverviewResZod = ResZod.extend({ data: AgentAdminOverviewZod });
+export class GetAgentAdminOverviewResDto extends createZodDto(extendApi(GetAgentAdminOverviewResZod)) {}
+
+/** Giá trị khoá — chỉ lấy khi người xem CHỦ ĐỘNG bấm hiện (`API-3` §3.2). */
+export const AgentAdminKeyZod = z.object({ key: z.string() });
+export type AgentAdminKey = z.infer<typeof AgentAdminKeyZod>;
+
+export const GetAgentAdminKeyResZod = ResZod.extend({ data: AgentAdminKeyZod });
+export class GetAgentAdminKeyResDto extends createZodDto(extendApi(GetAgentAdminKeyResZod)) {}

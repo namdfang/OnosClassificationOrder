@@ -158,6 +158,11 @@ Tự apply:
 3. **PermissionsGuard** — check permissions của custom role + role mặc định
 4. **RolesGuard** — check `roleType` của user trong list cho phép
 
+Kèm theo phần khai báo cho Swagger: `ApiUnauthorizedResponse`, và `ApiBearerAuth` **chỉ khi
+`public !== true`** (`HF-1`). Trước đó nhãn bearer gắn vô điều kiện, nên route public vẫn bị đặc tả khai
+là cần JWT — chỗ lộ ra là 5 endpoint agent, cửa thật của chúng là `AgentApiKeyGuard`. Đây là decorator
+**tài liệu**: nó không tham gia quyết định cho gọi hay không, cửa vẫn là `AuthGuard({ public })`.
+
 ### 4.2 Param decorators
 - `@AuthUser()` — inject `UserDocument` đã verify
 - `@ClientIp()` — IP từ Fastify req

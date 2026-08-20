@@ -1,23 +1,24 @@
 import type { AgentTableSpec } from './field-policy';
-import { contactFilterOnly, plain } from './field-policy';
+import { plain } from './field-policy';
 
 /**
  * `customers` — nhận diện khách đang nhắn và tra đơn theo khách.
  *
- * `userSku` và `fullName` KHÔNG bị che: đó là nhãn định danh, agent cần để gọi
- * đúng tên khách (BR-4a §3). `userEmail` và `phone` là đường liên lạc — lọc
- * được bằng đúng giá trị, không đọc được (BR-5).
+ * `API-17` mở đọc `userEmail`/`phone`; `API-19` mở nốt mức lọc — nay dò được
+ * theo `$startsWith`, sắp xếp và nhóm được như mọi trường khác. Người dùng đã
+ * cân nhắc và chốt: cái giá là agent có thể quét ngược từ một mảnh liên hệ ra
+ * khách nào, và đó là điều họ muốn có.
  *
+ * Chỉ còn **hai** trường bị che, cả hai là bí mật xác thực.
  * `passwordSource` bị che dù không phải hash: giá trị `'system'` là tín hiệu
  * "tài khoản đang dùng mật khẩu mặc định", trả ra là API tự chỉ điểm tài khoản
- * nào đang mở (BR-4a §1). `impersonatedBy` mang danh tính nhân viên mạo danh
- * (BR-4a §4).
+ * nào đang mở.
  */
 export const customersRegistry: AgentTableSpec = {
   key: 'customers',
   description:
     'Tài khoản khách hàng. Dùng để biết đang nói chuyện với ai và tìm đơn theo khách. ' +
-    'Trả về mã tài khoản và tên khách; KHÔNG trả email, điện thoại.',
+    'Trả về mã tài khoản, tên khách, email và điện thoại; KHÔNG trả mật khẩu.',
   entityName: 'CustomerEntity',
   defaultSort: '_id',
   fields: {
@@ -25,20 +26,24 @@ export const customersRegistry: AgentTableSpec = {
     createdAt: plain('date'),
     userSku: plain('string', 'Mã tài khoản khách — khoá nối sang orders.userSku'),
     fullName: plain('string', 'Tên khách, dùng để xưng hô'),
-    userEmail: contactFilterOnly('LỌC được bằng đúng giá trị, KHÔNG đọc được (BR-5)'),
-    phone: contactFilterOnly('LỌC được bằng đúng giá trị, KHÔNG đọc được (BR-5)'),
+    userEmail: plain('string', 'Email khách — đọc/lọc/nhóm được đầy đủ'),
+    phone: plain('string', 'Điện thoại khách — đọc/lọc/nhóm được đầy đủ'),
     tier: plain('number', 'Hạng khách VIP 0..5; rỗng = khách lẻ'),
     status: plain('string'),
     source: plain('string'),
+
+    // ── `API-17` mở đọc
+    notificationsReadAt: plain('date', 'Lần cuối khách mở danh sách thông báo'),
+    updatedAt: plain('date'),
+    deletedAt: plain('date', 'Bản ghi bị xoá mềm. Mở ĐỌC KHÔNG đổi bộ lọc mặc định của truy vấn'),
   },
   deliberatelyExcluded: [
-    // BR-4a §1 — bí mật xác thực
+    // Hai trong BỐN tên bị chặn còn lại sau `API-19` — bí mật xác thực
     'password',
     'passwordSource',
-    // BR-4a §4 — dấu vết nhân viên mạo danh (gồm cả email nhân viên)
+    // KHÔNG phải trường bị cấm: `impersonatedBy` là trường ĐỘNG, không có
+    // khai báo trên schema nên KHÔNG tồn tại trong collection — không có gì để
+    // phơi. Đưa vào `fields` thì bất biến I4 đỏ vì nó là trường ma.
     'impersonatedBy',
-    'notificationsReadAt',
-    'updatedAt',
-    'deletedAt',
   ],
 };

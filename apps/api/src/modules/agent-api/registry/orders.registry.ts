@@ -1,27 +1,24 @@
 import type { AgentTableSpec } from './field-policy';
-import { contactFilterOnly, freeText, numeric, plain } from './field-policy';
+import { freeText, numeric, plain } from './field-policy';
 
 /**
  * `orders` — bảng chính để trả lời "đơn của tôi đang thế nào".
  *
- * ĐÂY LÀ BẢNG NHẠY CẢM NHẤT của bộ API. Ba nhóm bị che tuyệt đối, xem
- * `.devtasks/design/API-1.md` §7.2:
- *  - `shippingAddress` — che TOÀN KHỐI, kể cả `country`/`state` (BR-4a §3).
- *  - `baseCost`/`shipCost` — BA chốt che ở bước `design_review`.
- *  - Danh tính người thao tác: `assignee` (= `user._id` của designer),
- *    `designerRejections[]`, `fulfillmentTimeline[]`, `fulfillmentStages.*`
- *    (BR-4a §4, vế "mọi nơi khác có dấu vết người thao tác").
+ * `API-19` MỞ HẾT: không còn trường nào của bảng này bị che, kể cả hai trường
+ * tiền `baseCost`/`shipCost` mà `API-17` còn giữ lại. Mở đọc nay KÉO THEO mở
+ * lọc/sắp xếp/nhóm — đó chính là thứ chặn câu hỏi "sản lượng theo từng
+ * designer" (nhóm theo `assignee`) trước đây.
  *
- * Hệ quả nghiệp vụ BA đã chấp nhận có ý thức: agent KHÔNG nói được tiền của
- * đơn, KHÔNG nói được ai đang làm đơn, KHÔNG nói được đơn giao đi đâu. Ba loại
- * câu hỏi đó chuyển cho người thật.
+ * Vì mở là mặc định, `fields` bên dưới không còn là danh sách trắng: nó là
+ * **từ điển mô tả**. Trường mới thêm vào `OrderEntity` mà chưa kịp mô tả vẫn
+ * đọc và lọc được ngay; bất biến I4 chỉ còn nhắc người viết bổ sung ghi chú.
  */
 export const ordersRegistry: AgentTableSpec = {
   key: 'orders',
   description:
     'Đơn sản xuất. Trả lời tình trạng đơn của khách: đơn đang ở công đoạn nào, xưởng nào, ' +
-    'trạng thái thiết kế, đã xong chưa, có bị lỗi hay bị giữ không. KHÔNG chứa địa chỉ giao, ' +
-    'tiền, hay tên người xử lý.',
+    'trạng thái thiết kế, đã xong chưa, có bị lỗi hay bị giữ không. Có địa chỉ giao, người xử lý, ' +
+    'nhật ký chuyển công đoạn và tiền của đơn. Mọi trường đều lọc/sắp xếp/nhóm được.',
   entityName: 'OrderEntity',
   defaultSort: '_id',
   fields: {
@@ -31,7 +28,7 @@ export const ordersRegistry: AgentTableSpec = {
 
     productionId: plain('string', 'Mã đơn sản xuất khách dùng để tra cứu — khoá tra chính'),
     userSku: plain('string', 'Mã tài khoản khách. Dùng để tìm mọi đơn của một khách'),
-    userEmail: contactFilterOnly('Email khách — LỌC được bằng đúng giá trị, KHÔNG đọc được (BR-5)'),
+    userEmail: plain('string', 'Email khách — đọc/lọc/nhóm được đầy đủ'),
 
     type: plain('string', 'Tên loại sản phẩm, khớp productConfigs.fullName'),
     color: plain('string'),
@@ -73,8 +70,8 @@ export const ordersRegistry: AgentTableSpec = {
     readyForFulfill: plain('bool'),
     designerStatus: plain('enum', 'Trạng thái thiết kế: unassigned/assigned/in-progress/done/rework'),
     designerReworkCount: numeric(),
-    // Mốc thời gian của khâu thiết kế: nói được đơn nằm chờ bao lâu, KHÔNG nói
-    // ai làm — mọi trường danh tính vẫn nằm ngoài danh sách trắng (BR-4a §4).
+    // Mốc thời gian của khâu thiết kế. Ghép với `assignee` bên dưới là ra sản
+    // lượng theo từng designer — xem `documents/AgentGuide/DataDictionary.md`.
     designerAssignedAt: plain('date'),
     designerStartedAt: plain('date'),
     designerFirstStartedAt: plain('date'),
@@ -85,43 +82,41 @@ export const ordersRegistry: AgentTableSpec = {
       'Công đoạn xưởng hiện tại: print, press, qc-post-press, sew-in, sew-out, pack. Rỗng = chưa vào xưởng HOẶC đã đóng hàng xong',
     ),
     fulfillmentCompletedAt: plain('date', 'Khác rỗng = đơn đã xong công đoạn Đóng hàng'),
+
+    // ── `API-17` mở đọc; `API-19` mở nốt lọc/sắp xếp/nhóm cho cả nhóm này.
+    shippingAddress: plain('object', 'Khối địa chỉ giao — trả nguyên khối'),
+    assignee: plain('string', 'Người được giao thiết kế'),
+    assigneeNote: plain('string', 'Ghi chú khi giao việc, gõ tay'),
+    designerRejections: plain('object', 'Lịch sử từ chối nhận việc thiết kế'),
+    designerRejectedReason: plain('string', 'Lý do từ chối, gõ tay'),
+    designerRejectedAt: plain('date'),
+    fulfillmentStages: plain('object', 'Trạng thái chi tiết của từng công đoạn xưởng'),
+    fulfillmentTimeline: plain('object', 'Nhật ký chuyển công đoạn của đơn'),
+    mockupUrl: plain('string'),
+    mockupOriginalUrl: plain('string'),
+    cuttingFileUrl: plain('string'),
+    cuttingFileName: plain('string'),
+    tempFileUrl: plain('string'),
+    designs: plain('object', 'Đường dẫn file thiết kế theo từng vị trí in'),
+    designsOriginal: plain('object', 'Bản thiết kế gốc trước khi khách sửa'),
+    designsStatus: plain('object', 'Tình trạng xử lý của từng file thiết kế'),
+    weight: plain('number'),
+    width: plain('number'),
+    height: plain('number'),
+    length: plain('number'),
+    orderId: plain('string', 'Mã đơn ở hệ thống nguồn'),
+    externalId: plain('string'),
+    referent: plain('string'),
+    fabricType: plain('string', 'Mã chất liệu, tra nghĩa ở workshopConfigs'),
+    machineNumber: plain('string', 'Mã máy, tra nghĩa ở workshopConfigs'),
+    designerWorkMs: plain('number', 'Thời gian thiết kế thực tế (mili giây)'),
+    designReviewClaimedAt: plain('date'),
+    deletedAt: plain('date', 'Bản ghi bị xoá mềm. Đọc được trường này KHÔNG đổi bộ lọc mặc định của truy vấn'),
+
+    // ── `API-19` mở nốt hai trường tiền của đơn
+    baseCost: numeric('Giá vốn sản xuất của đơn'),
+    shipCost: numeric('Phí ship nội bộ của đơn'),
   },
-  deliberatelyExcluded: [
-    // BR-4a §3 — che toàn khối địa chỉ giao, không giữ lại phần nào
-    'shippingAddress',
-    // BA chốt ở design_review — không xác định được là giá bán hay giá vốn
-    'baseCost',
-    'shipCost',
-    // BR-4a §4 — danh tính người thao tác
-    'assignee',
-    'assigneeNote',
-    'designerRejections',
-    'designerRejectedReason',
-    // Đi liền `designerRejectedReason` trong cùng bản ghi từ chối — đọc lên là
-    // ghép lại được "ai từ chối, vì lý do gì".
-    'designerRejectedAt',
-    'fulfillmentStages',
-    'fulfillmentTimeline',
-    // Không mang giá trị cho việc trả lời khách, hoặc là dữ liệu kỹ thuật nội bộ
-    'mockupUrl',
-    'mockupOriginalUrl',
-    'cuttingFileUrl',
-    'cuttingFileName',
-    'tempFileUrl',
-    'designs',
-    'designsOriginal',
-    'designsStatus',
-    'weight',
-    'width',
-    'height',
-    'length',
-    'orderId',
-    'externalId',
-    'referent',
-    'fabricType',
-    'machineNumber',
-    'designerWorkMs',
-    'designReviewClaimedAt',
-    'deletedAt',
-  ],
+  // `API-19`: không còn trường nào của bảng này bị loại trừ.
+  deliberatelyExcluded: [],
 };

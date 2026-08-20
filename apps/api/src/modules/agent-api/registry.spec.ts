@@ -1,17 +1,29 @@
-import { ORDER_LOG_VALUE_WHITELIST } from './order-log-value-policy';
-import { AGENT_ALLOWED_TABLE_KEYS, AGENT_DENY_FIELD_NAMES, AGENT_TABLE_REGISTRY } from './registry';
+import {
+  AGENT_DENY_FIELD_NAMES,
+  AGENT_DOCUMENTED_TABLE_KEYS,
+  AGENT_TABLE_REGISTRY,
+  isDeniedFieldPath,
+  stripDeniedDeep,
+} from './registry';
 
 /**
- * Bảy bất biến của danh sách trắng (`API-1`, thiết kế §7.4).
+ * Bất biến của từ điển sau `API-19`.
  *
- * Đây là phần THỰC SỰ bảo đảm AC-08/09/10/16, không phải lời hứa trong tài
- * liệu: AC dạng "không bao giờ xuất hiện" không thể chứng minh bằng một bộ test
- * hữu hạn chạy qua API, nên chốt chặn phải nằm ở cấu trúc dữ liệu và được khoá
- * lại ở đây.
+ * ⚠️ **Ý NGHĨA CỦA FILE NÀY ĐÃ ĐỔI.** Tới `API-18` đây là nơi chứng minh danh
+ * sách trắng kín: "không trường nhạy cảm nào lọt vào". `API-19` bỏ danh sách
+ * trắng theo quyết định của người dùng, nên phần lớn bất biến cũ không còn đối
+ * tượng để canh — mọi thứ đều mở, cố tình.
+ *
+ * Còn lại HAI nhóm, và cả hai đều thật sự bảo vệ được thứ gì đó:
+ *  1. **Bốn tên bị chặn** — chốt duy nhất còn lại, nên phải canh kỹ hơn trước:
+ *     không lọt vào từ điển, và hàm chặn phải bắt cả nhánh lồng.
+ *  2. **Từ điển không được siết lẻ** — `mongo-filter.ts` vẫn đọc `policy.filter`,
+ *     nên một dòng `filter: 'none'` lọt vào registry sẽ âm thầm khoá lại đúng
+ *     thứ vừa mở, và chỉ lộ ra khi có người thật gặp lỗi.
  */
 
-/** BR-2 — đúng 11 bảng, khoá cứng để bảng mới không lặng lẽ lọt vào (AC-05). */
-const EXPECTED_TABLES = [
+/** 11 bảng CÓ MÔ TẢ. Không phải "bảng đọc được" — sau `API-19` bảng nào cũng đọc được. */
+const EXPECTED_DOCUMENTED_TABLES = [
   'orders',
   'orderLogs',
   'customers',
@@ -30,63 +42,114 @@ const allFields = () =>
     Object.entries(spec.fields).map(([name, policy]) => ({ table: spec.key, name, policy })),
   );
 
-describe('AGENT_TABLE_REGISTRY — bất biến của danh sách trắng', () => {
-  it('I2: danh sách bảng khớp CHÍNH XÁC 11 tên của BR-2', () => {
-    expect([...AGENT_ALLOWED_TABLE_KEYS].sort()).toEqual([...EXPECTED_TABLES].sort());
+describe('AGENT_TABLE_REGISTRY — từ điển mô tả', () => {
+  it('11 bảng có mô tả — thêm bảng vào từ điển là quyết định có ý thức', () => {
+    expect([...AGENT_DOCUMENTED_TABLE_KEYS].sort()).toEqual([...EXPECTED_DOCUMENTED_TABLES].sort());
   });
 
-  it('I2: khoá của registry trùng với `spec.key` — tên bảng ở API phải là tên collection thật', () => {
+  it('khoá của registry trùng với `spec.key` — tên bảng ở API phải là tên collection thật', () => {
     for (const [key, spec] of Object.entries(AGENT_TABLE_REGISTRY)) {
       expect(spec.key).toBe(key);
     }
   });
 
-  it('I1: sortable => read (sắp xếp theo trường không đọc được vẫn lộ quan hệ so sánh)', () => {
-    const bad = allFields().filter((f) => f.policy.sortable && !f.policy.read);
-    expect(bad.map((f) => `${f.table}.${f.name}`)).toEqual([]);
-  });
-
-  it('I1: groupable => read (khoá nhóm hiện nguyên ở kết quả tổng hợp)', () => {
-    const bad = allFields().filter((f) => f.policy.groupable && !f.policy.read);
-    expect(bad.map((f) => `${f.table}.${f.name}`)).toEqual([]);
-  });
-
-  it('I5: aggregatable => read (min của email là rò giá trị)', () => {
-    const bad = allFields().filter((f) => f.policy.aggregatable && !f.policy.read);
-    expect(bad.map((f) => `${f.table}.${f.name}`)).toEqual([]);
-  });
-
-  it('I6: văn bản tự do KHÔNG lọc/sắp xếp/nhóm được — che chỉ chạy ở đầu ra', () => {
-    const bad = allFields().filter(
-      (f) => f.policy.freeText && (f.policy.filter !== 'none' || f.policy.sortable || f.policy.groupable),
+  /**
+   * Ca quan trọng nhất của `API-19`. Một `filter: 'none'` sót lại trong từ điển
+   * không làm test nào khác đỏ, nhưng nó chặn thật ở `mongo-filter.ts` — đúng
+   * kiểu "mở rồi mà vẫn báo lỗi" mà task này sinh ra để dẹp.
+   */
+  it('API-19: mọi trường có mô tả đều mở đủ quyền — không siết lẻ trường nào', () => {
+    const restricted = allFields().filter(
+      (f) => !f.policy.read || f.policy.filter !== 'full' || !f.policy.sortable || !f.policy.groupable,
     );
+    expect(restricted.map((f) => `${f.table}.${f.name}`)).toEqual([]);
+  });
+
+  it('API-19: nhóm theo người xử lý là hợp lệ — đúng ca người dùng báo hỏng', () => {
+    for (const [table, field] of [
+      ['orders', 'assignee'],
+      ['orderLogs', 'userId'],
+      ['orderLogs', 'userName'],
+    ] as const) {
+      expect({ table, field, ...AGENT_TABLE_REGISTRY[table].fields[field] }).toMatchObject({
+        read: true,
+        groupable: true,
+        sortable: true,
+        filter: 'full',
+      });
+    }
+  });
+
+  it('API-19: tiền của đơn và giá vốn biến thể NAY ĐỌC ĐƯỢC', () => {
+    const money: [string, string][] = [
+      ['orders', 'baseCost'],
+      ['orders', 'shipCost'],
+      ['productConfigs', 'variations.cost'],
+      ['productConfigs', 'variations.nonShipCost'],
+      ['productConfigs', 'variations.wholesalePrice'],
+      ['productConfigs', 'variations.tiktokPrice'],
+      ['productConfigs', 'variations.expUsShipCost'],
+      ['productConfigs', 'variations.tiktokShipCost'],
+    ];
+    for (const [table, field] of money) {
+      expect({ table, field, read: AGENT_TABLE_REGISTRY[table].fields[field]?.read }).toEqual({
+        table,
+        field,
+        read: true,
+      });
+    }
+  });
+
+  it('API-19: giá trị cũ/mới của nhật ký đọc được nguyên văn', () => {
+    expect(AGENT_TABLE_REGISTRY.orderLogs.fields.before?.read).toBe(true);
+    expect(AGENT_TABLE_REGISTRY.orderLogs.fields.after?.read).toBe(true);
+  });
+
+  it('BỐN bí mật kỹ thuật KHÔNG có trong từ điển', () => {
+    const secrets: [string, string][] = [
+      ['customers', 'password'],
+      ['customers', 'passwordSource'],
+      ['orderLogs', 'ip'],
+      ['orderLogs', 'userAgent'],
+    ];
+    for (const [table, field] of secrets) {
+      expect({ table, field, present: AGENT_TABLE_REGISTRY[table].fields[field] !== undefined }).toEqual({
+        table,
+        field,
+        present: false,
+      });
+    }
+  });
+
+  it('không tên bị chặn nào lọt vào từ điển, kể cả ở đường dẫn lồng', () => {
+    const bad = allFields().filter((f) => isDeniedFieldPath(f.name));
     expect(bad.map((f) => `${f.table}.${f.name}`)).toEqual([]);
   });
 
-  it('I3: không tên trường bị cấm nào xuất hiện với read:true (lưới an toàn thứ hai)', () => {
-    const denied = new Set(AGENT_DENY_FIELD_NAMES);
-    const bad = allFields().filter((f) => {
-      if (!f.policy.read) return false;
-      const leaf = f.name.split('.').at(-1) ?? f.name;
-      return denied.has(f.name) || denied.has(leaf);
-    });
-    expect(bad.map((f) => `${f.table}.${f.name}`)).toEqual([]);
-  });
-
-  it('I3: không tên trường bị cấm nào lọt vào registry dù ở dạng chỉ-lọc', () => {
-    const denied = new Set(AGENT_DENY_FIELD_NAMES);
-    const bad = allFields().filter((f) => {
-      const leaf = f.name.split('.').at(-1) ?? f.name;
-      return denied.has(f.name) || denied.has(leaf);
-    });
-    expect(bad.map((f) => `${f.table}.${f.name}`)).toEqual([]);
-  });
-
-  it('I4: fields và deliberatelyExcluded không được giao nhau', () => {
+  it('fields và deliberatelyExcluded không được giao nhau', () => {
     for (const spec of Object.values(AGENT_TABLE_REGISTRY)) {
       const overlap = spec.deliberatelyExcluded.filter((f) => f in spec.fields);
       expect({ table: spec.key, overlap }).toEqual({ table: spec.key, overlap: [] });
     }
+  });
+
+  /**
+   * Sau `API-19` chỉ còn bốn tên được phép nằm ở `deliberatelyExcluded` cộng
+   * hai ngoại lệ ghi rõ lý do tại chỗ. Bỏ sót một trường ở đây nghĩa là nó bị
+   * che mà không ai còn nhớ vì sao — đúng thứ task này dẹp.
+   */
+  it('API-19: ngoài bốn tên bị chặn, KHÔNG trường nào còn bị loại trừ', () => {
+    const NOT_BLOCKED_BUT_EXCLUDED: Record<string, string[]> = {
+      // Trường ĐỘNG, không có trên schema — không có gì để phơi.
+      customers: ['impersonatedBy'],
+    };
+    const leftovers = Object.entries(AGENT_TABLE_REGISTRY).flatMap(([table, spec]) =>
+      spec.deliberatelyExcluded
+        .filter((f) => !(NOT_BLOCKED_BUT_EXCLUDED[table] ?? []).includes(f))
+        .filter((f) => !isDeniedFieldPath(f))
+        .map((f) => `${table}.${f}`),
+    );
+    expect(leftovers).toEqual([]);
   });
 
   it('mọi bảng có mô tả khác rỗng — AC-02 đòi mô tả loại câu hỏi bảng đó trả lời', () => {
@@ -95,114 +158,82 @@ describe('AGENT_TABLE_REGISTRY — bất biến của danh sách trắng', () =>
     }
   });
 
-  it('thông tin liên hệ khách: lọc được bằng đúng giá trị, KHÔNG đọc được (BR-5, AC-11)', () => {
-    const contact = [
-      ['orders', 'userEmail'],
-      ['customers', 'userEmail'],
-      ['customers', 'phone'],
-    ] as const;
-    for (const [table, field] of contact) {
-      const p = AGENT_TABLE_REGISTRY[table].fields[field];
-      expect({ table, field, ...p }).toMatchObject({
-        read: false,
-        filter: 'eq',
-        sortable: false,
-        groupable: false,
-      });
+  it('không mô tả bảng nào còn phủ nhận thứ nay đọc được', () => {
+    const LIES = [
+      /KHÔNG chứa địa chỉ giao/i,
+      /KHÔNG trả email/i,
+      /KHÔNG kèm danh tính/i,
+      /KHÔNG kèm tên nhân viên/i,
+      /KHÔNG chứa giá vốn/i,
+      /trường giá DUY NHẤT/i,
+    ];
+    for (const [table, spec] of Object.entries(AGENT_TABLE_REGISTRY)) {
+      for (const lie of LIES) {
+        expect({ table, lie: lie.source, hit: lie.test(spec.description) }).toEqual({
+          table,
+          lie: lie.source,
+          hit: false,
+        });
+      }
     }
-  });
-
-  it('mã định danh khách VẪN đọc được — agent cần để gọi đúng tên khách (BR-4a §3)', () => {
-    expect(AGENT_TABLE_REGISTRY.customers.fields.userSku.read).toBe(true);
-    expect(AGENT_TABLE_REGISTRY.customers.fields.fullName.read).toBe(true);
-  });
-
-  it('giá niêm yết đọc được, mọi trường giá khác của biến thể KHÔNG có trong registry (AC-09)', () => {
-    const fields = AGENT_TABLE_REGISTRY.productConfigs.fields;
-    expect(fields['variations.retailPrice'].read).toBe(true);
-    for (const banned of [
-      'variations.cost',
-      'variations.nonShipCost',
-      'variations.wholesalePrice',
-      'variations.tiktokPrice',
-      'variations.expUsShipCost',
-      'variations.tiktokShipCost',
-    ]) {
-      expect(fields[banned]).toBeUndefined();
-    }
-  });
-
-  it('orders: khối địa chỉ, tiền và danh tính người thao tác đều KHÔNG có trong registry', () => {
-    const fields = AGENT_TABLE_REGISTRY.orders.fields;
-    for (const banned of [
-      'shippingAddress',
-      'baseCost',
-      'shipCost',
-      'assignee',
-      'designerRejections',
-      'fulfillmentTimeline',
-      'fulfillmentStages',
-    ]) {
-      expect(fields[banned]).toBeUndefined();
-    }
-  });
-
-  it('orderLogs: 8 trường danh tính đều KHÔNG có trong registry (AC-16)', () => {
-    const fields = AGENT_TABLE_REGISTRY.orderLogs.fields;
-    for (const banned of [
-      'userId',
-      'userName',
-      'userEmail',
-      'roleCode',
-      'impersonatorId',
-      'impersonatorName',
-      'ip',
-      'userAgent',
-    ]) {
-      expect(fields[banned]).toBeUndefined();
-    }
-    // Phần còn giữ lại và đủ dùng theo BR-4a §4
-    for (const kept of ['orderId', 'action', 'field', 'createdAt']) {
-      expect(fields[kept].read).toBe(true);
-    }
-  });
-
-  it('customer_notifications: danh tính nhân viên gửi bị che (AC-16, BA bổ sung 2026-08-18)', () => {
-    const fields = AGENT_TABLE_REGISTRY.customer_notifications.fields;
-    expect(fields.createdByUserId).toBeUndefined();
-    expect(fields.createdByName).toBeUndefined();
-    expect(fields.title.read).toBe(true);
-    expect(fields.body.read).toBe(true);
   });
 });
 
-describe('ORDER_LOG_VALUE_WHITELIST — danh sách BA chốt ở BR-4a §5a', () => {
-  it('I7: khớp CHÍNH XÁC 17 tên trường BA chốt, không thêm không bớt', () => {
-    expect([...ORDER_LOG_VALUE_WHITELIST]).toEqual([
-      'printStatus',
-      'toolResult',
-      'errorFile',
-      'fabricType',
-      'machineNumber',
-      'productionError',
-      'productionErrorSource',
-      'priority',
-      'type',
-      'color',
-      'size',
-      'quantity',
-      'factoryId',
-      'cancelledAt',
-      'cancelReason',
-      'heldAt',
-      'holdReason',
-    ]);
-    expect(ORDER_LOG_VALUE_WHITELIST).toHaveLength(17);
+describe('AGENT_DENY_FIELD_NAMES — chốt chặn DUY NHẤT còn lại', () => {
+  it('đúng bốn tên: hai bí mật xác thực, hai dấu vết phiên', () => {
+    expect([...AGENT_DENY_FIELD_NAMES].sort()).toEqual(['ip', 'password', 'passwordSource', 'userAgent']);
   });
 
-  it('không tên nào trong danh sách là id người dùng', () => {
-    const names = ORDER_LOG_VALUE_WHITELIST as readonly string[];
-    expect(names).not.toContain('assignee');
-    expect(names).not.toContain('userId');
+  it('chặn theo TỪNG ĐOẠN của đường dẫn, không chỉ đoạn cuối', () => {
+    expect(isDeniedFieldPath('password')).toBe(true);
+    // Xin trường con của một khối bị chặn phải hỏng y như xin cả khối, nếu
+    // không thì `password.hash` là cửa sau đi thẳng vào thứ vừa cấm.
+    expect(isDeniedFieldPath('password.hash')).toBe(true);
+    expect(isDeniedFieldPath('meta.session.ip')).toBe(true);
+    // Không bắt nhầm theo chuỗi con: `passwordChangedAt` là trường bình thường.
+    expect(isDeniedFieldPath('passwordChangedAt')).toBe(false);
+    expect(isDeniedFieldPath('shippingAddress')).toBe(false);
+  });
+
+  it('quét sạch mọi độ sâu của bản ghi, kể cả trong mảng', () => {
+    const row = {
+      _id: 'x',
+      password: 'hash',
+      profile: { phone: '0900', passwordSource: 'system' },
+      sessions: [{ ip: '10.0.0.1', at: 'now' }],
+    };
+    expect(stripDeniedDeep(row)).toEqual({
+      _id: 'x',
+      profile: { phone: '0900' },
+      sessions: [{ at: 'now' }],
+    });
+  });
+
+  it('giữ nguyên `Date` — quét sâu không được biến ngày thành object rỗng', () => {
+    const at = new Date('2026-08-19T00:00:00.000Z');
+    expect(stripDeniedDeep({ at }).at).toBe(at);
+  });
+
+  /**
+   * Hàm quét DỰNG LẠI object, nên đi vào một instance sẽ nghiền nó thành object
+   * thường mất hết dữ liệu. Repo dùng `_id` chuỗi nên các bảng nghiệp vụ không
+   * sao, nhưng `API-19` mở cả collection không ai khai — ở đó `ObjectId` và
+   * `Buffer` là chuyện bình thường.
+   */
+  it('giữ nguyên instance của lớp khác (ObjectId, Buffer) — không nghiền thành object rỗng', () => {
+    class FakeObjectId {
+      constructor(readonly hex: string) {}
+      toString() {
+        return this.hex;
+      }
+    }
+    const id = new FakeObjectId('64f0c0ffee');
+    const buf = Buffer.from('abc');
+
+    const out = stripDeniedDeep({ _id: id, blob: buf, nested: { _id: id } });
+
+    expect(out._id).toBe(id);
+    expect(out.blob).toBe(buf);
+    expect(out.nested._id).toBe(id);
   });
 });

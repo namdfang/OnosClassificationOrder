@@ -178,7 +178,8 @@ cd apps/api
 pnpm dev
 ```
 
-API sẽ chạy ở `http://localhost:3007`. Swagger docs: `http://localhost:3007/documentation`.
+API sẽ chạy ở `http://localhost:3007`. Swagger docs: `http://localhost:3007/documentation?key=<AGENT_API_KEY>` — trang này **chỉ mô tả bộ API dành cho AI agent** (`/api/v1/agent`); API nội bộ cố ý không có trong đặc tả, xem `documents/FunctionDescription/AgentApi.md` §8.1.
+(trang bị khoá bằng chính khoá của bộ API agent — đặt `AGENT_API_KEY` trong `.env.development`; để trống thì đóng cả trang tài liệu lẫn bộ API agent).
 
 **Terminal 2 — Frontend:**
 
@@ -241,7 +242,7 @@ pnpm install              # Cài lại
 
 Hiện tại chưa có seed script — database trống sau khi khởi tạo. Có 2 cách để có user đầu tiên:
 
-**Cách 1:** Dùng endpoint `POST /api/v1/auth/register` (qua Swagger UI ở `http://localhost:3007/documentation`) để tạo tài khoản. Lưu ý: register yêu cầu trong DB phải có sẵn 1 `Role` tên `SellerManager` và 1 `Department` tên `PKD-1` — bạn cần tự seed bằng mongosh hoặc Mongo Compass.
+**Cách 1:** Gọi endpoint `POST /api/v1/auth/register` bằng curl hoặc REST client (endpoint này **không còn trên Swagger** — trang đó nay chỉ mô tả bộ API agent) để tạo tài khoản. Lưu ý: register yêu cầu trong DB phải có sẵn 1 `Role` tên `SellerManager` và 1 `Department` tên `PKD-1` — bạn cần tự seed bằng mongosh hoặc Mongo Compass.
 
 **Cách 2 (khuyến nghị):** Insert thủ công vào MongoDB qua mongosh:
 
@@ -268,7 +269,7 @@ db.departments.insertOne({
 })
 ```
 
-Sau đó dùng `POST /api/v1/auth/register` qua Swagger để tạo user. Vào DB update lại `roleId` của user thành `"role_admin"` để có quyền admin.
+Sau đó gọi `POST /api/v1/auth/register` bằng curl hoặc REST client để tạo user (endpoint này không còn trên Swagger). Vào DB update lại `roleId` của user thành `"role_admin"` để có quyền admin.
 
 > Nếu muốn, mình có thể viết một seed script nhỏ ở `apps/api/scripts/` để chạy `pnpm seed` tạo admin tự động — báo nhé.
 

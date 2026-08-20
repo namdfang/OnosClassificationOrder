@@ -1,5 +1,5 @@
-import { Body, Controller, Get, HttpCode, HttpStatus, Inject, Param, Post, Query, UseGuards } from '@nestjs/common';
-import { ApiHeader, ApiOperation, ApiTags } from '@nestjs/swagger';
+import { Body, Controller, Get, HttpCode, HttpStatus, Inject, Param, Post, Query, UseFilters, UseGuards } from '@nestjs/common';
+import { ApiOperation, ApiSecurity, ApiTags } from '@nestjs/swagger';
 import { Throttle } from '@nestjs/throttler';
 import type { AgentQueryPayload } from 'shared';
 import {
@@ -14,12 +14,16 @@ import {
 import { Logger } from 'winston';
 
 import { Auth } from '@/decorators';
+import { SWAGGER_AGENT_KEY_SECURITY } from '@/setup-swagger';
 
+import { AGENT_API_RATE_LIMIT_PER_MIN, AGENT_API_RATE_LIMIT_TTL_MS } from './agent-api.constants';
 import { AgentApiKeyGuard } from './agent-api-key.guard';
 import { AgentAuditService } from './agent-audit.service';
 import { AgentDocsService } from './agent-docs.service';
+import { AgentExceptionFilter } from './agent-exception.filter';
 import { AgentQueryService } from './agent-query.service';
 import { AgentReadService } from './agent-read.service';
+import { AGENT_SWAGGER_DESCRIPTION, agentSummary } from './agent-swagger-guide';
 
 /**
  * Bộ API nội bộ cho AI agent (`API-1`) — xem
@@ -33,7 +37,11 @@ import { AgentReadService } from './agent-read.service';
 @Controller('agent')
 @ApiTags('agent-api')
 @UseGuards(AgentApiKeyGuard)
-@ApiHeader({ name: 'X-Agent-Api-Key', required: true })
+// Thân lỗi của nhánh này mang `code` theo bảng 8 mã đã công bố — filter chung
+// của repo dựng lại thân từ đầu nên nuốt mất (`QA-2`). Chỉ gắn ở đây, không
+// đụng nhánh nào khác của app.
+@UseFilters(AgentExceptionFilter)
+@ApiSecurity(SWAGGER_AGENT_KEY_SECURITY)
 export class AgentApiController {
   constructor(
     private readonly read: AgentReadService,
@@ -53,13 +61,13 @@ export class AgentApiController {
 
   @Get('tables')
   @Auth([], [], { public: true })
-  @Throttle({ default: { limit: 60, ttl: 60_000 } })
-  @ApiOperation({ summary: 'Liệt kê các bảng agent đọc được' })
+  @Throttle({ default: { limit: AGENT_API_RATE_LIMIT_PER_MIN, ttl: AGENT_API_RATE_LIMIT_TTL_MS } })
+  @ApiOperation({ summary: agentSummary('listTables'), description: AGENT_SWAGGER_DESCRIPTION.listTables })
   @HttpCode(HttpStatus.OK)
-  listTables(): ListAgentTablesResDto {
+  async listTables(): Promise<ListAgentTablesResDto> {
     const startedAt = Date.now();
     this.log('GET', '/agent/tables');
-    const data = this.read.listTables();
+    const data = await this.read.listTables();
     this.audit.write({
       capability: 'list_tables',
       returned: data.length,
@@ -71,8 +79,8 @@ export class AgentApiController {
 
   @Get('tables/:table/rows')
   @Auth([], [], { public: true })
-  @Throttle({ default: { limit: 60, ttl: 60_000 } })
-  @ApiOperation({ summary: 'Đọc dữ liệu thô của một bảng, theo lô có giới hạn' })
+  @Throttle({ default: { limit: AGENT_API_RATE_LIMIT_PER_MIN, ttl: AGENT_API_RATE_LIMIT_TTL_MS } })
+  @ApiOperation({ summary: agentSummary('readRows'), description: AGENT_SWAGGER_DESCRIPTION.readRows })
   @HttpCode(HttpStatus.OK)
   async readRows(
     @Param('table') table: string,
@@ -81,7 +89,7 @@ export class AgentApiController {
     const startedAt = Date.now();
     this.log('GET', '/agent/tables/:table/rows', { table });
     try {
-      const data = await this.read.readRows(table, query.limit, query.cursor, query.fields);
+      const data = await this.read.readRows(table, query.limit, query.cursor, query.fields, query.filter);
       this.audit.write({
         capability: 'read_rows',
         table,
@@ -103,8 +111,8 @@ export class AgentApiController {
 
   @Post('query')
   @Auth([], [], { public: true })
-  @Throttle({ default: { limit: 60, ttl: 60_000 } })
-  @ApiOperation({ summary: 'Truy vấn có kiểm soát: lọc, sắp xếp, đếm, nhóm, tổng hợp' })
+  @Throttle({ default: { limit: AGENT_API_RATE_LIMIT_PER_MIN, ttl: AGENT_API_RATE_LIMIT_TTL_MS } })
+  @ApiOperation({ summary: agentSummary('query'), description: AGENT_SWAGGER_DESCRIPTION.query })
   @HttpCode(HttpStatus.OK)
   async query(@Body() body: AgentQueryDto): Promise<AgentQueryResDto> {
     const startedAt = Date.now();
@@ -112,7 +120,7 @@ export class AgentApiController {
     let digest: unknown;
     try {
       // Lớp chặn thứ nhất của AC-06 — chạy trước cả khi tra bảng.
-      this.queries.assertNoOperatorKeys(body);
+      this.queries.assertNoOperatorKeysOutsideFilter(body);
 
       const spec = this.queries.spec(body.table);
       digest = this.queries.digest(spec, body.filter);
@@ -154,8 +162,8 @@ export class AgentApiController {
 
   @Get('docs')
   @Auth([], [], { public: true })
-  @Throttle({ default: { limit: 60, ttl: 60_000 } })
-  @ApiOperation({ summary: 'Danh mục tài liệu nghiệp vụ' })
+  @Throttle({ default: { limit: AGENT_API_RATE_LIMIT_PER_MIN, ttl: AGENT_API_RATE_LIMIT_TTL_MS } })
+  @ApiOperation({ summary: agentSummary('listDocs'), description: AGENT_SWAGGER_DESCRIPTION.listDocs })
   @HttpCode(HttpStatus.OK)
   listDocs(): ListAgentDocsResDto {
     const startedAt = Date.now();
@@ -172,8 +180,8 @@ export class AgentApiController {
 
   @Get('docs/:slug')
   @Auth([], [], { public: true })
-  @Throttle({ default: { limit: 60, ttl: 60_000 } })
-  @ApiOperation({ summary: 'Nội dung markdown của một tài liệu' })
+  @Throttle({ default: { limit: AGENT_API_RATE_LIMIT_PER_MIN, ttl: AGENT_API_RATE_LIMIT_TTL_MS } })
+  @ApiOperation({ summary: agentSummary('getDoc'), description: AGENT_SWAGGER_DESCRIPTION.getDoc })
   @HttpCode(HttpStatus.OK)
   getDoc(@Param('slug') slug: string): GetAgentDocResDto {
     const startedAt = Date.now();
