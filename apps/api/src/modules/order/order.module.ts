@@ -3,6 +3,7 @@ import { MongooseModule } from '@nestjs/mongoose';
 
 import { CustomerModule } from '../customer/customer.module';
 import { CustomerAssignmentModule } from '../customer-assignment/customer-assignment.module';
+import { CustomerEventModule } from '../customer-event/customer-event.module';
 import { DesignImageModule } from '../design-image/design-image.module';
 import { FactoryModule } from '../factory/factory.module';
 import { MachineTypeModule } from '../machine-type/machine-type.module';
@@ -40,6 +41,9 @@ import { OrderService } from './order.service';
     CustomerAssignmentModule,
     // CustomerRepository cho auto-gán designer ưu tiên 1 (khách → designer).
     CustomerModule,
+    // ORD-4/ORD-5 — nguồn sự kiện chung: webhook khách API + noti chuông portal
+    // khi đơn hold/unhold/cancel.
+    CustomerEventModule,
   ],
   controllers: [OrderController],
   providers: [

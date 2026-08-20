@@ -1,6 +1,6 @@
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { Link } from 'react-router-dom';
+import { Link, useSearchParams } from 'react-router-dom';
 import dayjs from 'dayjs';
 import { Eye, Factory, FileUp, ImageIcon, PackagePlus, PackageSearch, PauseCircle, Search, X } from 'lucide-react';
 import type { CustomerOrderCounts, CustomerStagingOrder } from 'shared';
@@ -54,12 +54,30 @@ function CustomerOrders() {
 
   const [tab, setTab] = useState<CustomerOrderStatus | 'all'>('all');
   const [heldOnly, setHeldOnly] = useState(false);
-  const [searchInput, setSearchInput] = useState('');
-  const [search, setSearch] = useState('');
+  // Seed từ `?search=` — chuông thông báo (ORD-5) điều hướng sang đây kèm mã
+  // đơn để khách thấy ngay đúng đơn vừa được báo.
+  const [searchParams] = useSearchParams();
+  const initialSearch = searchParams.get('search') ?? '';
+  const [searchInput, setSearchInput] = useState(initialSearch);
+  const [search, setSearch] = useState(initialSearch);
 
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const [pushOpen, setPushOpen] = useState(false);
   const [detailId, setDetailId] = useState<string | null>(null);
+
+  // Bấm thông báo khi ĐANG đứng ở trang này = navigate cùng route → component
+  // KHÔNG remount nên `useState(initialSearch)` ở trên không chạy lại. Effect
+  // này đồng bộ lại filter mỗi lần query `?search=` đổi, cũng reset về trang 1
+  // và bỏ filter tab để đơn được báo chắc chắn nằm trong kết quả.
+  useEffect(() => {
+    const fromUrl = searchParams.get('search') ?? '';
+    if (!fromUrl) return;
+    setSearchInput(fromUrl);
+    setSearch(fromUrl);
+    setTab('all');
+    setHeldOnly(false);
+    setPage(1);
+  }, [searchParams]);
 
   const refresh = useCallback(() => setRefreshKey((k) => k + 1), []);
 

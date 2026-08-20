@@ -96,7 +96,13 @@ import type {
   UpdateOrderFieldResDto,
   UserBreakdown,
 } from 'shared';
-import type { GetOrderLogsDto, LifecycleTrack, LifecycleTrackStage, LifecycleTrackStatus } from 'shared';
+import type {
+  CustomerWebhookEvent,
+  GetOrderLogsDto,
+  LifecycleTrack,
+  LifecycleTrackStage,
+  LifecycleTrackStatus,
+} from 'shared';
 import {
   customerMatchKey,
   DESIGNER_ACTIVE_STATUSES,
@@ -124,6 +130,7 @@ import { getExcludedFactoryIdSync, loadExcludedFactoryId, productionFactoryClaus
 import { getFactoryFlowTypeSync, loadFactoryFlowTypes } from '../../utils/merged-flow-factory';
 import { CustomerRepository } from '../customer/customer.repository';
 import { CustomerAssignmentService } from '../customer-assignment/customer-assignment.service';
+import { CustomerOrderEventService } from '../customer-event/customer-order-event.service';
 import { DESIGN_PREVIEW_QUEUE, DESIGN_THUMB_QUEUE, DesignImageJobData } from '../design-image/design-image.processor';
 import { DesignImageService } from '../design-image/design-image.service';
 import { FactoryRepository } from '../factory/factory.repository';
@@ -411,7 +418,34 @@ export class OrderService implements OnModuleInit {
     private readonly customerAssignmentService: CustomerAssignmentService,
     private readonly customerRepository: CustomerRepository,
     private readonly onospodOrderLookupService: OnospodOrderLookupService,
+    private readonly customerOrderEventService: CustomerOrderEventService,
   ) {}
+
+  /**
+   * Bắn sự kiện hướng ra khách khi đơn đổi trạng thái — webhook cho khách API
+   * (ORD-4) + thông báo chuông portal (ORD-5), qua nguồn sự kiện DUY NHẤT.
+   * Fire-and-forget hoàn toàn: service tự nuốt lỗi và chạy nền, KHÔNG chặn hay
+   * làm chậm luồng nghiệp vụ. Đơn không thuộc khách nào → no-op.
+   *
+   * `holdReason` truyền NGUYÊN VĂN nội bộ; `CustomerOrderEventService` tự quy
+   * về nhóm an toàn trước khi hiện cho khách (không phô ghi chú nội bộ).
+   */
+  private emitCustomerOrderEvent(
+    event: CustomerWebhookEvent,
+    orders: Array<{ productionId?: string; userSku?: string; userEmail?: string }>,
+    opts?: { extra?: Record<string, string | null | undefined>; holdReason?: string },
+  ): void {
+    this.customerOrderEventService.emit(
+      event,
+      orders.map((o) => ({
+        productionId: o.productionId,
+        userSku: o.userSku,
+        userEmail: o.userEmail,
+        extra: opts?.extra,
+        holdReason: opts?.holdReason,
+      })),
+    );
+  }
 
   /** Validate giá trị assignee là userId hợp lệ (user role=Designer, ĐANG BẬT). */
   private async assertAssigneeUserValid(userId: string | null): Promise<void> {
@@ -4549,6 +4583,7 @@ export class OrderService implements OnModuleInit {
       after: dto.reason,
       ctx,
     });
+    this.emitCustomerOrderEvent('order.cancelled', [updated], { extra: { cancelReason: dto.reason ?? '' } });
     void this.invalidateListCache();
     return updated;
   }
@@ -4607,6 +4642,10 @@ export class OrderService implements OnModuleInit {
       after: dto.reason ?? '',
       ctx,
     });
+    this.emitCustomerOrderEvent('order.held', [updated], {
+      extra: { holdReason: dto.reason ?? '' },
+      holdReason: dto.reason ?? '',
+    });
     void this.invalidateListCache();
     return { success: true, data: updated } as unknown as HoldOrderResDto;
   }
@@ -4632,6 +4671,7 @@ export class OrderService implements OnModuleInit {
       after: null,
       ctx,
     });
+    this.emitCustomerOrderEvent('order.unheld', [updated]);
     void this.invalidateListCache();
     return { success: true, data: updated } as unknown as HoldOrderResDto;
   }
@@ -4679,6 +4719,25 @@ export class OrderService implements OnModuleInit {
       after: dto.hold ? dto.reason ?? '' : null,
       ctx,
     });
+    // Đường BULK cũng phải bắn sự kiện như hold/unhold lẻ (ORD-5) — thiếu ở
+    // đây là khách mất thông báo khi nội bộ thao tác hàng loạt. Đọc lại đúng
+    // các đơn VỪA đổi (updateMany không trả document) để lấy productionId.
+    if (result.modifiedCount > 0) {
+      void this.orderModel
+        .find({ _id: { $in: dto.ids } })
+        .select('productionId userSku userEmail heldAt')
+        .lean()
+        .then((rows) => {
+          const changed = rows.filter((r) => (dto.hold ? !!r.heldAt : !r.heldAt));
+          if (changed.length === 0) return;
+          this.emitCustomerOrderEvent(
+            dto.hold ? 'order.held' : 'order.unheld',
+            changed as Array<{ productionId?: string; userSku?: string; userEmail?: string }>,
+            dto.hold ? { extra: { holdReason: dto.reason ?? '' }, holdReason: dto.reason ?? '' } : undefined,
+          );
+        })
+        .catch(() => undefined);
+    }
     void this.invalidateListCache();
     return {
       success: true,

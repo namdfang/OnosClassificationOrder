@@ -469,26 +469,46 @@ nội bộ) ra Customer Portal. Xem `CustomerCatalogVariationZod` trong
 — `data: CustomerCatalogItemZod` (KHÔNG nullable, 404 nếu không tìm thấy/không
 active/không có biến thể — khác `getCatalog()` trả mảng có thể rỗng).
 
-## 8. Thông báo cho khách hàng — Admin/nội bộ chủ động gửi (KHÔNG tự sinh theo trạng thái đơn)
+## 8. Thông báo cho khách hàng — Admin soạn tay + HỆ THỐNG tự sinh theo trạng thái đơn (ORD-5)
 
 > **File FE:** `apps/web/src/components/customer/NotificationBell.tsx` (chuông ở `CustomerLayout.tsx`), `apps/web/src/components/settings/CustomerNotificationSender.tsx` (soạn + lịch sử, mục `/adm/settings/customer-notify` — cùng gate `role.manage` như `CustomerAssignmentConfig`/`DesignerAssignmentConfig`, KHÔNG route/permission riêng), `apps/web/src/services/customerNotification.ts` (admin) + `services/customerPortal.ts` → `customerNotificationPortal` (khách hàng)
 > **File BE:** `apps/api/src/modules/customer-notification/` (`customer-notification.entity.ts`, `.repository.ts`, `.service.ts`, `customer-notification.controller.ts` (admin), `customer-notification-portal.controller.ts` (khách hàng), `.module.ts`), `apps/api/src/modules/customer/customer.entity.ts` (+ `notificationsReadAt`)
 > **API:** `POST /v1/customer-notifications` + `GET /v1/customer-notifications/sent` (`@Auth([Admin])`), `GET /v1/customer/notifications` + `POST /v1/customer/notifications/read` (`@Auth([Customer])`)
 
-Admin/nội bộ soạn tiêu đề + nội dung → chọn gửi cho **1 khách cụ thể** (search
+Hai nguồn thông báo dùng CHUNG collection, chung chuông, chung cơ chế đã-đọc:
+
+**(a) Admin soạn tay** — tiêu đề + nội dung → gửi **1 khách cụ thể** (search
 theo SKU/email, tái dùng `GET /customers` đã có sẵn cho tính năng gán xưởng)
-hoặc **broadcast TẤT CẢ khách hàng** (bỏ trống `customerId`). KHÔNG có luồng
-tự động sinh thông báo theo trạng thái đơn/chặng sản xuất (quyết định phạm
-vi ban đầu — có thể mở rộng sau).
+hoặc **broadcast TẤT CẢ khách hàng** (bỏ trống `customerId`).
+
+**(b) Hệ thống tự sinh theo trạng thái đơn (ORD-5)** — `event` + `eventData` có
+giá trị, không có người gửi. **Gộp ở MỨC ĐƠN** để khách không bị dội:
+
+| `event` | Bắn khi | Ghi chú |
+| --- | --- | --- |
+| `order.pushed` | Push 1 đơn staging sang sản xuất | Đúng 1 thông báo/đơn dù nhiều item |
+| `order.production_completed` | MỌI item chưa hủy của đơn đã `fulfillmentCompletedAt` | Đơn còn item dở → chưa bắn |
+| `order.held` | Đơn chuyển từ 0 → ≥1 item bị giữ | Giữ thêm item nữa KHÔNG bắn lại |
+| `order.unheld` | Đơn hết sạch item bị giữ | |
+| `order.item_cancelled` | Mỗi item bị hủy | Báo theo ITEM (khách cần biết đích danh mã nào) |
+
+- **Nguồn sự kiện DUY NHẤT**: `apps/api/src/modules/customer-event/customer-order-event.service.ts` (`CustomerOrderEventService.emit()`) — fan-out sang webhook khách API (ORD-4) *và* thông báo chuông này. Mọi call site (`pushToProduction`, `holdOrder`/`unholdOrder`/`bulkSetHold`/`cancelOrder` ở `order.service.ts`, transition hoàn thành ở `fulfillment-task.service.ts`) chỉ gọi `emit()`; **đường BULK cũng đã gắn** — thêm điểm đổi trạng thái mới thì gọi đúng hàm này, đừng tự chế đường bắn riêng.
+- **Không chặn nghiệp vụ**: `emit()` trả về ngay, lỗi nuốt tại chỗ; `createSystemNotification()` còn bọc try/catch riêng. Push/hold/hủy vẫn thành công kể cả khi ghi thông báo lỗi.
+- **Lý do giữ không phô nguyên văn**: BE quy `holdReason` nội bộ về nhóm an toàn `holdKind` (`waiting-design` / `waiting-address` / `other`) trước khi lưu; FE tra chuỗi theo nhóm. Nội dung KHÔNG chứa tên nhân viên, mã lỗi nội bộ, giá vốn, thông tin xưởng.
+- **Chỉ đơn có staging row** mới sinh thông báo — đơn Luồng A (sync hệ cũ) chưa lazy-sync thì bỏ qua, thà im lặng còn hơn báo sai.
+- **Đa ngôn ngữ**: BE lưu `title` bản tiếng Việt DỰ PHÒNG; FE `NotificationBell.tsx` (`systemNotificationText()`) dựng chữ từ `event`/`eventData` theo ngôn ngữ khách đang chọn (i18n `customerNotifications.bell.events.*`, vi + en). Bấm thông báo hệ thống → điều hướng `/customer/orders?search=<orderCode>` (listing seed state từ query `search`).
+- Không backfill đơn cũ, không bắn lại khi chạy migration nội bộ.
 
 **Model lưu trữ** — `customer_notifications` (collection RIÊNG, KHÔNG dùng
 chung `NotificationEntity` của nhân viên vì entity đó `ref: 'UserEntity'`,
 khác domain/collection với `CustomerEntity`):
 ```ts
-{ title: string; body?: string;
-  customerId: string | null;   // null = broadcast tới TẤT CẢ khách hàng
-  createdByUserId: string;     // ref UserEntity (admin gửi)
-  createdByName: string;       // snapshot tên, tránh phải populate lúc hiển thị lịch sử
+{ title: string; body?: string;          // admin soạn tay: văn bản thật; hệ thống: bản VI dự phòng
+  customerId: string | null;             // null = broadcast tới TẤT CẢ khách hàng
+  event: CustomerNotificationEvent|null; // ORD-5 — rỗng = admin soạn tay
+  eventData: { orderCode?; productionId?; holdKind?; stagingId? } | null;
+  createdByUserId?: string | null;       // ref UserEntity; rỗng với thông báo hệ thống
+  createdByName?: string;                // snapshot tên, tránh populate lúc hiển thị lịch sử
 }
 ```
 

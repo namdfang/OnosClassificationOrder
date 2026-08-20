@@ -1,6 +1,7 @@
 import { Prop, SchemaFactory } from '@nestjs/mongoose';
 import { DatabaseEntity, DatabaseEntityAbstract } from 'core';
 import type { HydratedDocument } from 'mongoose';
+import type { CustomerNotificationEvent, CustomerNotificationEventData } from 'shared';
 
 import type { CustomerDocument } from '../customer/customer.entity';
 import type { UserDocument } from '../user/user.entity';
@@ -20,11 +21,23 @@ export class CustomerNotificationEntity extends DatabaseEntityAbstract {
   @Prop({ type: String, ref: 'CustomerEntity', default: null })
   customerId: string | null;
 
-  @Prop({ required: true, ref: 'UserEntity' })
-  createdByUserId: string;
+  /**
+   * ORD-5 — thông báo HỆ THỐNG tự sinh theo trạng thái đơn: `event` +
+   * `eventData` có giá trị, không có người gửi. FE render theo ngôn ngữ khách;
+   * `title`/`body` chỉ là bản tiếng Việt dự phòng. Rỗng = admin soạn tay.
+   */
+  @Prop({ type: String, default: null, index: true })
+  event: CustomerNotificationEvent | null;
 
-  @Prop({ required: true, trim: true })
-  createdByName: string;
+  @Prop({ type: Object, default: null })
+  eventData: CustomerNotificationEventData | null;
+
+  /** Rỗng với thông báo hệ thống (ORD-5) — chỉ admin soạn tay mới có người gửi. */
+  @Prop({ type: String, ref: 'UserEntity', default: null })
+  createdByUserId?: string | null;
+
+  @Prop({ trim: true, default: '' })
+  createdByName?: string;
 }
 
 export const CustomerNotificationSchema = SchemaFactory.createForClass(CustomerNotificationEntity);

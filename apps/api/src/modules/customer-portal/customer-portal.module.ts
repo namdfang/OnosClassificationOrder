@@ -4,6 +4,7 @@ import { MongooseModule } from '@nestjs/mongoose';
 import { AuthModule } from '@/modules/auth/auth.module';
 import { CollectionEntity, CollectionSchema } from '@/modules/collection/collection.entity';
 import { CustomerModule } from '@/modules/customer/customer.module';
+import { CustomerEventModule } from '@/modules/customer-event/customer-event.module';
 import { DesignStorageModule } from '@/modules/design-storage/design-storage.module';
 import { OrderEntity, OrderSchema } from '@/modules/order/order.entity';
 import { OrderModule } from '@/modules/order/order.module';
@@ -42,6 +43,8 @@ import { PublicCatalogController } from './public-catalog.controller';
     DesignStorageModule,
     // Payment gate switch + số ngày Completed (`customer_order_completed_days`).
     SystemConfigModule,
+    // Sự kiện `order.pushed` khi push — webhook (ORD-4) + noti portal (ORD-5).
+    CustomerEventModule,
   ],
   controllers: [CustomerAuthController, CustomerOrderController, CustomerCatalogController, PublicCatalogController],
   providers: [CustomerOrderService, CustomerCatalogService],

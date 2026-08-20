@@ -51,6 +51,7 @@ import {
 } from 'shared';
 
 import type { CustomerDocument } from '@/modules/customer/customer.entity';
+import { CustomerOrderEventService } from '@/modules/customer-event/customer-order-event.service';
 import { DesignStorageService } from '@/modules/design-storage/design-storage.service';
 import { OrderEntity } from '@/modules/order/order.entity';
 import { OrderService } from '@/modules/order/order.service';
@@ -219,6 +220,7 @@ export class CustomerOrderService implements OnModuleInit {
     private readonly promotionService: PromotionService,
     private readonly systemConfigService: SystemConfigService,
     private readonly designStorageService: DesignStorageService,
+    private readonly customerOrderEventService: CustomerOrderEventService,
   ) {}
 
   // -------------------------------------------------------------------------
@@ -1211,6 +1213,20 @@ export class CustomerOrderService implements OnModuleInit {
           { _id: u.stagingId },
           { $set: { items: u.items, pushedAt: now, paymentId: String(payment._id) } },
         ),
+      ),
+    );
+
+    // Webhook `order.pushed` cho khách API (ORD-4) — fire-and-forget, không chặn response.
+    this.customerOrderEventService.emit(
+      'order.pushed',
+      pendingUpdates.flatMap((u) =>
+        u.items
+          .filter((it) => it.productionId)
+          .map((it) => ({
+            productionId: it.productionId,
+            customerId: String(customer._id),
+            extra: { externalRef: (targets.find((t) => t.id === u.stagingId)?.doc?.orderId as string) ?? null },
+          })),
       ),
     );
 
