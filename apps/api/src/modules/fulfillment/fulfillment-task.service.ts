@@ -20,18 +20,19 @@ import type {
 } from 'shared';
 import {
   DesignerStatus,
+  FactoryFlowType,
   FULFILLMENT_STAGE_ORDER,
   FULFILLMENT_STAGES,
   FulfillmentStage,
   FulfillmentStageStatus,
   FulfillmentTransitionAction,
-  MERGED_STAGE_SOURCE,
-  redirectMergedTarget,
+  isAutoStage,
+  redirectAutoTarget,
   RoleType,
 } from 'shared';
 
 import { productionFactoryClause } from '../../utils/excluded-factory';
-import { isMergedFlowFactorySync } from '../../utils/merged-flow-factory';
+import { getFactoryFlowTypeSync } from '../../utils/merged-flow-factory';
 import { OrderDocument, OrderEntity } from '../order/order.entity';
 import { OrderService } from '../order/order.service';
 import type { AuditContext } from '../order-log/order-log.service';
@@ -185,9 +186,10 @@ export class FulfillmentTaskService {
     const stageState = stages[body.stage] ?? this.emptyState();
     const currentStatus = stageState.status ?? FulfillmentStageStatus.Waiting;
 
-    // Xưởng luồng rút gọn (flowType='merged' — xưởng gỗ): Ép/May ra tự hoàn
-    // thành theo In/May vào, rework-back nhắm về stage gộp redirect về stage gốc.
-    const mergedFlow = isMergedFlowFactorySync(this.orderModel.db, order.factoryId ? String(order.factoryId) : null);
+    // Xưởng luồng rút gọn: các auto-stage của flowType (merged: Ép/May ra —
+    // no-sew: May vào/May ra) tự hoàn thành khi đơn chảy tới, rework-back nhắm
+    // về auto-stage redirect lùi về công đoạn thường gần nhất phía trước.
+    const flowType = getFactoryFlowTypeSync(this.orderModel.db, order.factoryId ? String(order.factoryId) : null);
 
     const plan = this.resolveTransition({
       stage: body.stage,
@@ -198,7 +200,7 @@ export class FulfillmentTaskService {
       reason: body.reason,
       stages,
       user,
-      mergedFlow,
+      flowType,
     });
 
     // Build atomic update — patch all stage state + timeline + top-level
@@ -248,14 +250,15 @@ export class FulfillmentTaskService {
     reason?: string;
     stages: FulfillmentStages;
     user: UserDocument;
-    /** Đơn thuộc xưởng luồng rút gọn (`FactoryEntity.flowType='merged'`). */
-    mergedFlow?: boolean;
+    /** Luồng của xưởng (`FactoryEntity.flowType`) — quyết định auto-stage. */
+    flowType?: FactoryFlowType;
   }): {
     nextStatus: FulfillmentStageStatus;
     patch: Record<string, unknown>;
   } {
     const now = new Date();
-    const { stage, action, currentStatus, stageState, target, reason, stages, user, mergedFlow } = input;
+    const { stage, action, currentStatus, stageState, target, reason, stages, user } = input;
+    const flowType = input.flowType ?? FactoryFlowType.Standard;
     const userId = String(user._id);
     const userName = user.fullName;
 
@@ -316,13 +319,13 @@ export class FulfillmentTaskService {
         // hiển thị "Nhận task lúc..." cho user trong tab Đang chờ.
         let nextStage = this.nextStage(stage);
 
-        // Luồng rút gọn (xưởng gỗ): stage kế là stage GỘP của stage vừa xong
-        // (print→press, sew-in→sew-out) → tự hoàn thành stage gộp cùng thời
-        // điểm rồi nhảy tiếp 1 stage nữa (In→QC, May vào→Đóng hàng). Ghi ĐỦ
-        // timestamp (waitingAt/startedAt/firstStartedAt/completedAt = now) để
-        // mọi phép tính duration ra 0 thay vì NaN; người thực hiện = worker
-        // stage gốc; workMs = 0.
-        if (mergedFlow && nextStage && MERGED_STAGE_SOURCE[nextStage] === stage) {
+        // Luồng rút gọn: chừng nào stage kế còn là AUTO-STAGE của flow
+        // (merged: In→Ép, May vào→May ra — no-sew: QC→May vào→May ra) thì tự
+        // hoàn thành nó cùng thời điểm rồi nhảy tiếp, đơn dừng ở stage thường
+        // đầu tiên. Ghi ĐỦ timestamp (waitingAt/startedAt/firstStartedAt/
+        // completedAt = now) để mọi phép tính duration ra 0 thay vì NaN;
+        // người thực hiện = worker stage vừa xong; workMs = 0.
+        while (nextStage && isAutoStage(flowType, nextStage)) {
           const merged = nextStage;
           const mergedState = stages[merged];
           set[`fulfillmentStages.${merged}.status`] = FulfillmentStageStatus.Done;
@@ -437,10 +440,10 @@ export class FulfillmentTaskService {
           };
         }
 
-        // Xưởng luồng rút gọn: đích là stage GỘP (Ép/May ra) → redirect về stage
-        // gốc (In/May vào) — đơn merged không bao giờ dừng ở stage gộp, lùi về
-        // đó sẽ kẹt vì xưởng không có worker giữ stage.
-        const resolvedTarget = mergedFlow ? redirectMergedTarget(target) : target;
+        // Xưởng luồng rút gọn: đích là AUTO-STAGE → redirect lùi về công đoạn
+        // thường gần nhất phía trước — đơn không bao giờ dừng ở auto-stage,
+        // lùi về đó sẽ kẹt vì xưởng không có worker giữ stage.
+        const resolvedTarget = redirectAutoTarget(flowType, target);
 
         // Target = FulfillmentStage → must be index < current.
         const reporterIdx = FULFILLMENT_STAGE_ORDER[stage];

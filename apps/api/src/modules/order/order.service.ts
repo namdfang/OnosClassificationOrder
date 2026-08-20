@@ -113,7 +113,7 @@ import {
   HOLD_REASON_WAITING_DESIGN,
   LIFECYCLE_STAGE_KEYS,
   parseProductionIdFromCuttingFilename,
-  redirectMergedTarget,
+  redirectAutoTarget,
   RoleType,
   Status,
   WorkshopConfigCategory,
@@ -121,7 +121,7 @@ import {
 import { Logger } from 'winston';
 
 import { getExcludedFactoryIdSync, loadExcludedFactoryId, productionFactoryClause } from '../../utils/excluded-factory';
-import { isMergedFlowFactorySync, loadMergedFlowFactoryIds } from '../../utils/merged-flow-factory';
+import { getFactoryFlowTypeSync, loadFactoryFlowTypes } from '../../utils/merged-flow-factory';
 import { CustomerRepository } from '../customer/customer.repository';
 import { CustomerAssignmentService } from '../customer-assignment/customer-assignment.service';
 import { DESIGN_PREVIEW_QUEUE, DESIGN_THUMB_QUEUE, DesignImageJobData } from '../design-image/design-image.processor';
@@ -444,7 +444,7 @@ export class OrderService implements OnModuleInit {
     // các builder filter đọc sync từ cache này (xem utils/excluded-factory.ts).
     await loadExcludedFactoryId(this.orderModel.db).catch(() => undefined);
     // Cache xưởng luồng rút gọn (flowType='merged') — transition/rework đọc sync.
-    await loadMergedFlowFactoryIds(this.orderModel.db).catch(() => undefined);
+    await loadFactoryFlowTypes(this.orderModel.db).catch(() => undefined);
 
     const result = await this.orderModel.updateMany(
       { originalFactoryId: { $exists: false }, factoryId: { $exists: true, $ne: null } },
@@ -1075,12 +1075,11 @@ export class OrderService implements OnModuleInit {
     const userId = ctx?.user?._id ? String(ctx.user._id) : undefined;
     if (!userId) return null;
 
-    // Xưởng luồng rút gọn: đích là công đoạn gộp (Ép/May ra) → redirect về công
-    // đoạn gốc (In/May vào) — đơn không bao giờ dừng ở stage gộp nên lùi về đó
-    // sẽ kẹt (không có worker giữ stage).
-    if (isMergedFlowFactorySync(this.orderModel.db, b.factoryId)) {
-      target = redirectMergedTarget(target);
-    }
+    // Xưởng luồng rút gọn: đích là AUTO-STAGE (merged: Ép/May ra — no-sew:
+    // May vào/May ra) → redirect lùi về công đoạn thường gần nhất phía trước —
+    // đơn không bao giờ dừng ở auto-stage nên lùi về đó sẽ kẹt (không có
+    // worker giữ stage).
+    target = redirectAutoTarget(getFactoryFlowTypeSync(this.orderModel.db, b.factoryId), target);
 
     const current = (b.currentFulfillmentStage || undefined) as FulfillmentStage | undefined;
     const furthest: FulfillmentStage =

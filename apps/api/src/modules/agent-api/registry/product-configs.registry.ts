@@ -68,6 +68,11 @@ export const productConfigsRegistry: AgentTableSpec = {
     'guide',
     'templateDescription',
     'itemSpecifics',
+    // Tài liệu/template thiết kế nội bộ — cùng nhóm với guide/templateDescription
+    'printDocument',
+    'printTemplate',
+    // Thuế nhập US mỗi unit — thông tin chi phí, cùng bản chất rủi ro với giá vốn
+    'usImportTaxPerUnit',
     'hideForSeller',
     'enableDesignCheck',
     'enableAffiliate',

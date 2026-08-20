@@ -85,6 +85,10 @@ export const factoriesRegistry: AgentTableSpec = {
     name: plain('string'),
     shortName: plain('string'),
     isActive: plain('bool'),
+    flowType: plain(
+      'enum',
+      'Luồng fulfillment của xưởng: standard (đủ 6 công đoạn) / merged (gộp Ép vào In, May ra vào May vào) / no-sew (QC xong bỏ qua 2 công đoạn may)',
+    ),
   },
   deliberatelyExcluded: ['updatedAt', 'deletedAt'],
 };

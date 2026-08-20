@@ -1,39 +1,57 @@
-import { FulfillmentStage } from './fulfillment-stage';
+import { FULFILLMENT_STAGE_ORDER, FULFILLMENT_STAGES, FulfillmentStage } from './fulfillment-stage';
 
 /**
  * Luồng fulfillment của 1 xưởng (field `FactoryEntity.flowType`).
  *
  *  - `standard`: 6 công đoạn tuần tự đầy đủ (mặc định, mọi xưởng hiện có).
- *  - `merged`  : luồng rút gọn cho xưởng gỗ — khi công đoạn GỐC hoàn thành thì
- *    công đoạn GỘP ngay sau nó tự động hoàn thành cùng thời điểm (workMs=0,
- *    người thực hiện = worker công đoạn gốc) và đơn nhảy thẳng tới công đoạn
- *    kế tiếp: In xong → Ép tự xong → QC; May vào xong → May ra tự xong → Đóng
- *    hàng. Xưởng merged KHÔNG cần user giữ 2 công đoạn gộp (Ép, May ra).
+ *  - `merged`  : luồng rút gọn xưởng gỗ — In xong → Ép tự xong → QC;
+ *    May vào xong → May ra tự xong → Đóng hàng.
+ *  - `no-sew`  : luồng bỏ may (xưởng Mê Linh) — QC sau ép xong → May vào +
+ *    May ra tự xong → Đóng hàng (Đóng hàng vẫn xác nhận tay).
  *
- * Rework-back trên xưởng merged: đích là công đoạn gộp bị redirect về công
- * đoạn gốc (`redirectMergedTarget`) — lỗi nhắm về Ép lùi về In, nhắm về May ra
- * lùi về May vào.
+ * Cơ chế chung: mỗi flowType có 1 tập AUTO-STAGE (`FACTORY_FLOW_AUTO_STAGES`).
+ * Khi 1 công đoạn hoàn thành, mọi công đoạn KẾ TIẾP LIÊN TỤC nằm trong tập
+ * auto được tự hoàn thành cùng thời điểm (workMs=0, người thực hiện = worker
+ * công đoạn vừa xong) rồi đơn dừng ở công đoạn thường đầu tiên sau đó.
+ * Auto-stage không bao giờ là `currentFulfillmentStage` — xưởng không cần
+ * user giữ các công đoạn này.
+ *
+ * Rework-back: đích là auto-stage bị redirect lùi về công đoạn thường gần
+ * nhất phía trước (`redirectAutoTarget`) — vd xưởng gỗ lỗi nhắm về Ép lùi về
+ * In; xưởng no-sew lỗi nhắm về May vào/May ra lùi về QC sau ép.
  */
 export const FactoryFlowType = {
   Standard: 'standard',
   Merged: 'merged',
+  NoSew: 'no-sew',
 } as const;
 export type FactoryFlowType = (typeof FactoryFlowType)[keyof typeof FactoryFlowType];
 
-export const FACTORY_FLOW_TYPES = [FactoryFlowType.Standard, FactoryFlowType.Merged] as const;
+export const FACTORY_FLOW_TYPES = [FactoryFlowType.Standard, FactoryFlowType.Merged, FactoryFlowType.NoSew] as const;
 
-/** Công đoạn GỘP → công đoạn GỐC "gánh" nó. Complete gốc = auto-complete gộp. */
-export const MERGED_STAGE_SOURCE: Partial<Record<FulfillmentStage, FulfillmentStage>> = {
-  [FulfillmentStage.Press]: FulfillmentStage.Print,
-  [FulfillmentStage.SewOut]: FulfillmentStage.SewIn,
+/** Tập công đoạn TỰ HOÀN THÀNH theo từng flowType. */
+export const FACTORY_FLOW_AUTO_STAGES: Record<FactoryFlowType, readonly FulfillmentStage[]> = {
+  [FactoryFlowType.Standard]: [],
+  [FactoryFlowType.Merged]: [FulfillmentStage.Press, FulfillmentStage.SewOut],
+  [FactoryFlowType.NoSew]: [FulfillmentStage.SewIn, FulfillmentStage.SewOut],
 };
 
-/** Stage bị gộp trong luồng merged (không bao giờ là `currentFulfillmentStage`). */
-export function isMergedStage(stage: FulfillmentStage): boolean {
-  return MERGED_STAGE_SOURCE[stage] != null;
+/** Stage tự hoàn thành trong flow này (không bao giờ là `currentFulfillmentStage`). */
+export function isAutoStage(flow: FactoryFlowType, stage: FulfillmentStage): boolean {
+  return FACTORY_FLOW_AUTO_STAGES[flow].includes(stage);
 }
 
-/** Đích rework-back hợp lệ trên xưởng merged: press→print, sew-out→sew-in, còn lại giữ nguyên. */
-export function redirectMergedTarget(target: FulfillmentStage): FulfillmentStage {
-  return MERGED_STAGE_SOURCE[target] ?? target;
+/**
+ * Đích rework-back hợp lệ theo flow: đích là auto-stage thì lùi về công đoạn
+ * thường gần nhất phía trước; đích thường giữ nguyên. Flow standard trả
+ * nguyên `target`.
+ */
+export function redirectAutoTarget(flow: FactoryFlowType, target: FulfillmentStage): FulfillmentStage {
+  let idx = FULFILLMENT_STAGE_ORDER[target];
+  while (idx > 0) {
+    const stage = FULFILLMENT_STAGES[idx];
+    if (!stage || !isAutoStage(flow, stage)) break;
+    idx -= 1;
+  }
+  return FULFILLMENT_STAGES[idx] ?? target;
 }

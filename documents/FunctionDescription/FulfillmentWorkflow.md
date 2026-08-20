@@ -81,21 +81,22 @@ Tiếp tục Press → QCPostPress → QCSorting → SewIn → SewOut → QCPost
 - `fulfillmentCompletedAt = now`
 - Đơn hoàn thành toàn bộ workflow.
 
-### 2.2b Luồng rút gọn theo xưởng (`FactoryEntity.flowType='merged'` — xưởng gỗ, 2026-08)
+### 2.2b Luồng rút gọn theo xưởng (`FactoryEntity.flowType` — 2026-08)
 
-Xưởng có `flowType='merged'` (checkbox "Luồng rút gọn (xưởng gỗ)" ở tab Xưởng `FactoryTab.tsx`, Products.md §3.2) chạy pipeline 6 công đoạn nhưng **2 công đoạn GỘP tự hoàn thành theo công đoạn GỐC** (map `MERGED_STAGE_SOURCE` trong `packages/shared/enums/factory-flow.ts`):
+Mỗi xưởng chọn 1 luồng ở select "Luồng sản xuất" tab Xưởng `FactoryTab.tsx` (Products.md §3.2). Cơ chế chung: mỗi `flowType` có 1 tập **AUTO-STAGE** (`FACTORY_FLOW_AUTO_STAGES` trong `packages/shared/enums/factory-flow.ts`) — khi 1 công đoạn hoàn thành, mọi công đoạn kế tiếp LIÊN TỤC nằm trong tập auto tự Done cùng thời điểm (vòng `while` trong `resolveTransition()` case Complete), đơn dừng ở công đoạn thường đầu tiên sau đó:
 
-- **In (`print`) complete → Ép (`press`) tự Done** cùng thời điểm → đơn nhảy thẳng QC (`qc-post-press`).
-- **May vào (`sew-in`) complete → May ra (`sew-out`) tự Done** → đơn nhảy thẳng Đóng hàng (`pack`).
+- **`standard`** (mặc định): đủ 6 công đoạn tuần tự, không auto gì.
+- **`merged`** (xưởng gỗ — TNW): auto = {`press`, `sew-out`}. **In complete → Ép tự Done** → QC; **May vào complete → May ra tự Done** → Đóng hàng.
+- **`no-sew`** (xưởng Mê Linh): auto = {`sew-in`, `sew-out`}. **QC sau ép complete → May vào + May ra tự Done liên tiếp** → đơn CHỜ ở Đóng hàng (Đóng hàng vẫn xác nhận tay). In/Ép/QC nửa đầu giữ nguyên tuần tự.
 
 Chi tiết auto-complete (trong `resolveTransition()` case Complete, `fulfillment-task.service.ts`):
 
-- Stage gộp được ghi **ĐỦ state**: `status='done'`, `waitingAt=startedAt=firstStartedAt=completedAt=now` (mọi phép trừ duration ra 0 thay vì NaN), `workMs=0`, `assignee` = worker công đoạn gốc; push riêng 1 `fulfillmentTimeline` entry (`byUserId` = worker gốc, `reason='Tự động hoàn thành (luồng rút gọn)'`).
-- Vòng rework (stage gộp từng `completedAt`): auto-complete lại set `reworkAt` + `$inc reworkCount` — khớp ngữ nghĩa auto-advance thường.
-- **Rework-back redirect**: đích lùi là stage gộp → tự chuyển về stage gốc (`redirectMergedTarget`: press→print, sew-out→sew-in) ở CẢ 2 đường: `resolveTransition()` case ReworkBack (kanban/dialog) + `OrderService.buildFulfillmentReworkBack()` (scan lỗi / danh mục lỗi công đoạn `reworkTarget` / admin) — đơn merged không bao giờ dừng ở stage gộp nên lùi về đó sẽ kẹt (xưởng không có worker giữ).
-- Nhận diện xưởng merged: cache process-wide `utils/merged-flow-factory.ts` (`isMergedFlowFactorySync`, TTL 60s, load ở `OrderService.onModuleInit` — pattern `excluded-factory.ts` nhưng theo field `flowType`, KHÔNG hardcode shortName).
+- Auto-stage được ghi **ĐỦ state**: `status='done'`, `waitingAt=startedAt=firstStartedAt=completedAt=now` (mọi phép trừ duration ra 0 thay vì NaN), `workMs=0`, `assignee` = worker công đoạn vừa xong; push riêng 1 `fulfillmentTimeline` entry mỗi stage (`byUserId` = worker đó, `reason='Tự động hoàn thành (luồng rút gọn)'`).
+- Vòng rework (auto-stage từng `completedAt`): auto-complete lại set `reworkAt` + `$inc reworkCount` — khớp ngữ nghĩa auto-advance thường.
+- **Rework-back redirect**: đích lùi là auto-stage → tự lùi tiếp về công đoạn thường gần nhất phía trước (`redirectAutoTarget` — merged: press→print, sew-out→sew-in; no-sew: sew-in/sew-out→qc-post-press) ở CẢ 2 đường: `resolveTransition()` case ReworkBack (kanban/dialog) + `OrderService.buildFulfillmentReworkBack()` (scan lỗi / danh mục lỗi công đoạn `reworkTarget` / admin) — đơn không bao giờ dừng ở auto-stage nên lùi về đó sẽ kẹt (xưởng không có worker giữ).
+- Nhận diện flow của xưởng: cache process-wide `utils/merged-flow-factory.ts` (`getFactoryFlowTypeSync` trả `FactoryFlowType`, TTL 60s, load `loadFactoryFlowTypes` ở `OrderService.onModuleInit` — pattern `excluded-factory.ts` nhưng theo field `flowType`, KHÔNG hardcode shortName).
 
-**Vận hành:** xưởng merged chỉ cần 4 worker (Print / QCPostPress / SewIn / Pack) — KHÔNG tạo user cho Press/SewOut (unique index partial cho phép thiếu). **Bật flag NGAY khi tạo xưởng, trước khi cho đơn chảy vào** — bật muộn thì đơn đã lỡ nằm ở Ép/May ra sẽ kẹt (chỉ admin override cứu được). Mọi màn hình giữ nguyên 6 công đoạn; stage gộp hiển thị Done tức thì với timestamp trùng stage gốc. Unit tests: `fulfillment-transition-merged.spec.ts`.
+**Vận hành:** xưởng rút gọn không cần user giữ các auto-stage (merged: bỏ Press/SewOut → 4 worker; no-sew: bỏ SewIn/SewOut — unique index partial cho phép thiếu). Với xưởng TẠO MỚI: bật flag trước khi cho đơn chảy vào — bật muộn thì đơn đã lỡ nằm ở auto-stage sẽ kẹt nếu xưởng không có worker stage đó (admin override cứu được). Với xưởng ĐANG CHẠY chuyển sang `no-sew` (Mê Linh): đơn đang nằm ở May vào/May ra KHÔNG kẹt nếu vẫn còn worker may — worker complete nốt là đơn tự trôi (May vào xong → May ra auto vì thuộc tập auto → Đóng hàng), sau đó 2 công đoạn may không nhận đơn mới nữa. Mọi màn hình giữ nguyên 6 công đoạn; auto-stage hiển thị Done tức thì. Unit tests: `fulfillment-transition-merged.spec.ts` (16 test: merged + no-sew + standard).
 
 ### 2.3 Báo lỗi (rework-back)
 
