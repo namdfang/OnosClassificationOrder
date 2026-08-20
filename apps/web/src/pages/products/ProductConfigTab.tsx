@@ -471,6 +471,7 @@ export function ProductConfigTab({ refreshKey = 0 }: ProductConfigTabProps) {
               <TableHead className="w-[130px]">{t('configTab.table.mockup')}</TableHead>
               <TableHead>{t('configTab.table.productName')}</TableHead>
               <TableHead>{t('configTab.table.shortName')}</TableHead>
+              <TableHead>{t('configTab.table.designReviewCode')}</TableHead>
               <TableHead className="w-20">{t('configTab.table.machine')}</TableHead>
               <TableHead>{t('configTab.table.department')}</TableHead>
               <TableHead>{t('configTab.table.factory')}</TableHead>
@@ -485,14 +486,14 @@ export function ProductConfigTab({ refreshKey = 0 }: ProductConfigTabProps) {
           <TableBody>
             {loading && items.length === 0 && (
               <TableRow>
-                <TableCell colSpan={12} className="text-center py-8">
+                <TableCell colSpan={13} className="text-center py-8">
                   <Spinner size={20} className="text-muted-foreground" />
                 </TableCell>
               </TableRow>
             )}
             {!loading && items.length === 0 && (
               <TableRow>
-                <TableCell colSpan={12} className="text-center py-8 text-muted-foreground">
+                <TableCell colSpan={13} className="text-center py-8 text-muted-foreground">
                   {t('configTab.table.empty')}
                 </TableCell>
               </TableRow>
@@ -524,6 +525,16 @@ export function ProductConfigTab({ refreshKey = 0 }: ProductConfigTabProps) {
                 <TableCell>
                   {it.shortName ? (
                     <Badge variant="outline">{it.shortName}</Badge>
+                  ) : (
+                    <span className="text-xs text-muted-foreground">—</span>
+                  )}
+                </TableCell>
+                {/* PRD-4 — mã chạy tool duyệt thiết kế, chỉ hiển thị. Dùng font-mono như ô nhập ở trang chi tiết. */}
+                <TableCell>
+                  {it.designReviewCode ? (
+                    <Badge variant="secondary" className="font-mono">
+                      {it.designReviewCode}
+                    </Badge>
                   ) : (
                     <span className="text-xs text-muted-foreground">—</span>
                   )}

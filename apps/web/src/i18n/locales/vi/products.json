@@ -71,6 +71,7 @@
       "mockup": "Mockup",
       "productName": "Tên sản phẩm",
       "shortName": "Viết tắt",
+      "designReviewCode": "Mã chạy tool",
       "machine": "Máy",
       "department": "Phòng",
       "factory": "Xưởng",

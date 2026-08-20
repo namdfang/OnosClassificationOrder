@@ -71,6 +71,7 @@
       "mockup": "Mockup",
       "productName": "Product name",
       "shortName": "Short name",
+      "designReviewCode": "Tool code",
       "machine": "Machine",
       "department": "Department",
       "factory": "Factory",
