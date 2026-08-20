@@ -74,6 +74,7 @@
       "productName": "Product name",
       "shortName": "Short name",
       "designReviewCode": "Tool code",
+      "designReviewCodeLinkTitle": "Open this product's tool template file",
       "machine": "Machine",
       "department": "Department",
       "factory": "Factory",
@@ -379,7 +380,11 @@
       "slug": "Slug",
       "designReviewCode": "Design review tool code",
       "designReviewCodePlaceholder": "E.g. BBJERNP — leave empty if the product has no code",
-      "designReviewCodeHint": "The external design review tool reads this code. It is separate from Short name at the top; saving applies it right away."
+      "designReviewCodeHint": "The external design review tool reads this code. It is separate from Short name at the top; saving applies it right away.",
+      "designReviewTemplateUrl": "Tool template URL",
+      "designReviewTemplateUrlPlaceholder": "https://... — leave empty if there is no template file",
+      "designReviewTemplateUrlHint": "With a URL, the tool code in the product list becomes clickable and opens this file in a new tab. Only http:// or https:// is accepted; the system does not check whether the file still exists.",
+      "designReviewTemplateUrlInvalid": "The template URL must start with http:// or https://"
     },
     "toggles": {
       "hideForSeller": "Hide product for seller",

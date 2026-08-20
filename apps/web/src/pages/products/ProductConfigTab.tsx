@@ -1,7 +1,7 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useNavigate } from 'react-router-dom';
-import { FilterX, ImageIcon, Pencil, Search, Trash2 } from 'lucide-react';
+import { ExternalLink, FilterX, ImageIcon, Pencil, Search, Trash2 } from 'lucide-react';
 import type { ProductItemSpecific, ProductPrintArea, ProductVariation } from 'shared';
 import {
   PRODUCT_FABRIC_TYPE_NONE,
@@ -55,6 +55,8 @@ export interface ProductConfigRow {
   shortName: string;
   /** Mã chạy tool duyệt thiết kế (PRD-2) — sửa ở trang chi tiết, trống = không có mã. */
   designReviewCode?: string;
+  /** PRD-6 — URL file template chạy tool. Có mã + có URL ⇒ mã thành liên kết mở file. */
+  designReviewTemplateUrl?: string;
   sku?: string;
   slug?: string;
   status?: ProductConfigStatus;
@@ -553,12 +555,32 @@ export function ProductConfigTab({ refreshKey = 0 }: ProductConfigTabProps) {
                     <span className="text-xs text-muted-foreground">—</span>
                   )}
                 </TableCell>
-                {/* PRD-4 — mã chạy tool duyệt thiết kế, chỉ hiển thị. Dùng font-mono như ô nhập ở trang chi tiết. */}
+                {/*
+                  PRD-4 — mã chạy tool duyệt thiết kế, chỉ hiển thị. Dùng font-mono như ô nhập
+                  ở trang chi tiết. PRD-6 — CÓ CẢ mã lẫn `designReviewTemplateUrl` thì bọc
+                  thành liên kết mở file template ở TAB MỚI (giữ nguyên bộ lọc/trang đang xem);
+                  thiếu một trong hai thì giữ nguyên badge thường, KHÔNG hiện liên kết chết.
+                */}
                 <TableCell>
                   {it.designReviewCode ? (
-                    <Badge variant="secondary" className="font-mono">
-                      {it.designReviewCode}
-                    </Badge>
+                    it.designReviewTemplateUrl ? (
+                      <a
+                        href={it.designReviewTemplateUrl}
+                        target="_blank"
+                        rel="noreferrer"
+                        title={t('configTab.table.designReviewCodeLinkTitle')}
+                        className="inline-flex"
+                      >
+                        <Badge variant="secondary" className="font-mono gap-1 hover:underline">
+                          {it.designReviewCode}
+                          <ExternalLink size={12} />
+                        </Badge>
+                      </a>
+                    ) : (
+                      <Badge variant="secondary" className="font-mono">
+                        {it.designReviewCode}
+                      </Badge>
+                    )
                   ) : (
                     <span className="text-xs text-muted-foreground">—</span>
                   )}

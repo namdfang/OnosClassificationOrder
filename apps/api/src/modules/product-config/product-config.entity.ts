@@ -29,6 +29,15 @@ export class ProductConfigEntity extends DatabaseEntityAbstract {
   @Prop({ trim: true, uppercase: true, index: true, default: '' })
   designReviewCode?: string;
 
+  /**
+   * PRD-6 — URL file template dùng để CHẠY TOOL. Trường RIÊNG, KHÔNG liên quan
+   * `printTemplate`/`printDocument`/`printArea[].templateUrl` (dữ liệu hệ cũ +
+   * OnosPod). Trống = chưa gắn file ⇒ mã chạy tool ngoài danh sách không bấm được.
+   * KHÔNG uppercase: URL phân biệt hoa thường.
+   */
+  @Prop({ trim: true, default: '' })
+  designReviewTemplateUrl?: string;
+
   /** Mã SKU riêng của sản phẩm (KHÔNG phải SKU biến thể trong `variations[]`). */
   @Prop({ trim: true, uppercase: true })
   sku?: string;

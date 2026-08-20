@@ -222,6 +222,7 @@ interface FormSnapshot {
   fullName: string;
   shortName: string;
   designReviewCode: string;
+  designReviewTemplateUrl: string;
   sku: string;
   slug: string;
   status: ProductConfigStatus;
@@ -285,6 +286,9 @@ export default function ProductDetailPage() {
   const [fullName, setFullName] = useState('');
   const [shortName, setShortName] = useState('');
   const [designReviewCode, setDesignReviewCode] = useState('');
+  const [designReviewTemplateUrl, setDesignReviewTemplateUrl] = useState('');
+  /** PRD-6 — lỗi hiện NGAY TẠI ô URL template (không chỉ toast) khi chuỗi không phải http(s). */
+  const [designReviewTemplateUrlError, setDesignReviewTemplateUrlError] = useState('');
   const [sku, setSku] = useState('');
   const [slug, setSlug] = useState('');
   const [status, setStatus] = useState<ProductConfigStatus>(ProductConfigStatus.Active);
@@ -356,6 +360,7 @@ export default function ProductDetailPage() {
     fullName,
     shortName,
     designReviewCode,
+    designReviewTemplateUrl,
     sku,
     slug,
     status,
@@ -396,6 +401,7 @@ export default function ProductDetailPage() {
       fullName: row.fullName || '',
       shortName: row.shortName || '',
       designReviewCode: row.designReviewCode || '',
+      designReviewTemplateUrl: row.designReviewTemplateUrl || '',
       sku: row.sku || '',
       slug: row.slug || '',
       status: row.status || ProductConfigStatus.Active,
@@ -432,6 +438,8 @@ export default function ProductDetailPage() {
     setFullName(s.fullName);
     setShortName(s.shortName);
     setDesignReviewCode(s.designReviewCode);
+    setDesignReviewTemplateUrl(s.designReviewTemplateUrl);
+    setDesignReviewTemplateUrlError('');
     setSku(s.sku);
     setSlug(s.slug);
     setStatus(s.status);
@@ -506,6 +514,7 @@ export default function ProductDetailPage() {
       fullName,
       shortName,
       designReviewCode,
+      designReviewTemplateUrl,
       sku,
       slug,
       status,
@@ -700,6 +709,15 @@ export default function ProductDetailPage() {
     }
     // shortName và mã chạy tool (`designReviewCode`) đều ĐƯỢC PHÉP trống (PRD-2).
     // Mã tool trống = sản phẩm không có mã, Design Review API trả `productCode: null`.
+    // PRD-6 — URL template chỉ nhận http(s); để trống là hợp lệ (sản phẩm chưa gắn file).
+    const trimmedTemplateUrl = designReviewTemplateUrl.trim();
+    if (trimmedTemplateUrl && !/^https?:\/\/\S+$/i.test(trimmedTemplateUrl)) {
+      setDesignReviewTemplateUrlError(t('detail.production.designReviewTemplateUrlInvalid'));
+      toast.error(t('detail.production.designReviewTemplateUrlInvalid'));
+      scrollToSection('sec-production');
+      return;
+    }
+    setDesignReviewTemplateUrlError('');
     if (isNew && !factoryId) {
       toast.error(t('detail.factoryRequired'));
       scrollToSection('sec-production');
@@ -735,6 +753,9 @@ export default function ProductDetailPage() {
       fullName: fullName.trim(),
       shortName: shortName.trim(),
       designReviewCode: designReviewCode.trim().toUpperCase(),
+      // KHÔNG uppercase — URL phân biệt hoa thường. Chuỗi rỗng gửi đi để XOÁ được URL cũ
+      // (khác printDocument/printTemplate dùng `|| undefined`, vốn không cần xoá).
+      designReviewTemplateUrl: trimmedTemplateUrl,
       sku: sku.trim() || undefined,
       slug: slug.trim() || undefined,
       status,
@@ -986,6 +1007,28 @@ export default function ProductDetailPage() {
                   className="font-mono uppercase"
                 />
                 <p className="text-xs text-muted-foreground">{t('detail.production.designReviewCodeHint')}</p>
+              </div>
+
+              {/*
+                PRD-6 — URL file template chạy tool, đặt NGAY DƯỚI ô mã vì hai thứ luôn
+                đi cùng nhau. Trường RIÊNG: không đụng printTemplate/printDocument.
+              */}
+              <div className="space-y-1.5 md:max-w-md">
+                <Label>{t('detail.production.designReviewTemplateUrl')}</Label>
+                <Input
+                  value={designReviewTemplateUrl}
+                  onChange={(e) => {
+                    setDesignReviewTemplateUrl(e.target.value);
+                    if (designReviewTemplateUrlError) setDesignReviewTemplateUrlError('');
+                  }}
+                  placeholder={t('detail.production.designReviewTemplateUrlPlaceholder')}
+                  className={designReviewTemplateUrlError ? 'border-destructive' : undefined}
+                />
+                {designReviewTemplateUrlError ? (
+                  <p className="text-xs text-destructive">{designReviewTemplateUrlError}</p>
+                ) : (
+                  <p className="text-xs text-muted-foreground">{t('detail.production.designReviewTemplateUrlHint')}</p>
+                )}
               </div>
 
               <div className="space-y-1.5">

@@ -101,6 +101,21 @@ export const ProductConfigZod = BaseEntityZod.extend({
    * migration một-lần đổ từ `PRODUCT_TYPE_CODE_MAP`.
    */
   designReviewCode: z.string().max(60).optional(),
+  /**
+   * PRD-6 — URL file template DÙNG ĐỂ CHẠY TOOL của sản phẩm. Trường RIÊNG, cố ý
+   * KHÔNG dùng lại họ `printTemplate`/`printDocument`/`printArea[].templateUrl`:
+   * ba trường đó mang dữ liệu migrate hệ cũ + import OnosPod, ghi đè là hỏng dữ
+   * liệu thật mà không có lỗi nào báo ra. Trống = sản phẩm chưa gắn file template
+   * ⇒ mã chạy tool ở danh sách hiện chữ thường, KHÔNG thành liên kết.
+   * Chỉ nhận http:// hoặc https://; hệ thống KHÔNG kiểm tra URL sống hay chết.
+   */
+  designReviewTemplateUrl: z
+    .string()
+    .max(1000)
+    .optional()
+    .refine((v) => !v || /^https?:\/\/\S+$/i.test(v), {
+      message: 'Tool template URL must start with http:// or https://',
+    }),
   /** Mã SKU riêng của sản phẩm (KHÔNG phải SKU biến thể) — unique toàn hệ thống nếu có. */
   sku: z.string().max(100).optional(),
   /** Slug SEO/URL (parity hệ cũ) — chưa dùng để routing, chỉ lưu. */
@@ -228,6 +243,8 @@ export const CreateProductConfigZod = z.object({
   shortName: ProductConfigZod.shape.shortName.optional(),
   /** Mã chạy tool duyệt thiết kế (PRD-2) — tách hẳn khỏi `shortName`. */
   designReviewCode: ProductConfigZod.shape.designReviewCode,
+  /** PRD-6 — URL file template chạy tool. */
+  designReviewTemplateUrl: ProductConfigZod.shape.designReviewTemplateUrl,
   sku: ProductConfigZod.shape.sku,
   slug: ProductConfigZod.shape.slug,
   status: ProductConfigZod.shape.status,
@@ -273,6 +290,8 @@ export const UpdateProductConfigZod = z.object({
   shortName: ProductConfigZod.shape.shortName.optional(),
   /** Mã chạy tool duyệt thiết kế (PRD-2) — sửa tay ở trang chi tiết, có hiệu lực ngay. */
   designReviewCode: ProductConfigZod.shape.designReviewCode,
+  /** PRD-6 — URL file template chạy tool; chuỗi rỗng = gỡ liên kết ở danh sách. */
+  designReviewTemplateUrl: ProductConfigZod.shape.designReviewTemplateUrl,
   sku: ProductConfigZod.shape.sku,
   slug: ProductConfigZod.shape.slug,
   status: ProductConfigZod.shape.status.optional(),

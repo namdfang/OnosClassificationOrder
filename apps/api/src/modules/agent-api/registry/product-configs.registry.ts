@@ -26,6 +26,10 @@ export const productConfigsRegistry: AgentTableSpec = {
     fullName: plain('string', 'Tên đầy đủ sản phẩm — khớp orders.type'),
     shortName: plain('string', 'Tên viết tắt do người dùng đặt (KHÔNG phải mã chạy tool duyệt thiết kế)'),
     designReviewCode: plain('string', 'Mã chạy tool duyệt thiết kế — trống = sản phẩm không có mã'),
+    designReviewTemplateUrl: plain(
+      'string',
+      'PRD-6 — URL file template dùng để chạy tool (nội bộ). Trống = sản phẩm chưa gắn file. KHÁC printTemplate/printDocument (dữ liệu hệ cũ + OnosPod)',
+    ),
     sku: plain('string'),
     slug: plain('string'),
     status: plain('enum'),

@@ -74,6 +74,7 @@
       "productName": "Tên sản phẩm",
       "shortName": "Viết tắt",
       "designReviewCode": "Mã chạy tool",
+      "designReviewCodeLinkTitle": "Bấm để mở file template chạy tool của sản phẩm này",
       "machine": "Máy",
       "department": "Phòng",
       "factory": "Xưởng",
@@ -379,7 +380,11 @@
       "slug": "Slug",
       "designReviewCode": "Mã chạy tool duyệt thiết kế",
       "designReviewCodePlaceholder": "VD: BBJERNP — để trống nếu sản phẩm không chạy tool",
-      "designReviewCodeHint": "Tool duyệt thiết kế bên ngoài đọc mã này. Khác với Tên viết tắt ở đầu trang; sửa xong lưu là có hiệu lực ngay."
+      "designReviewCodeHint": "Tool duyệt thiết kế bên ngoài đọc mã này. Khác với Tên viết tắt ở đầu trang; sửa xong lưu là có hiệu lực ngay.",
+      "designReviewTemplateUrl": "URL file template chạy tool",
+      "designReviewTemplateUrlPlaceholder": "https://... — để trống nếu chưa có file template",
+      "designReviewTemplateUrlHint": "Có URL thì mã chạy tool ngoài danh sách sản phẩm bấm được, mở file này ở tab mới. Chỉ nhận http:// hoặc https://; hệ thống không kiểm tra file còn sống hay không.",
+      "designReviewTemplateUrlInvalid": "URL file template phải bắt đầu bằng http:// hoặc https://"
     },
     "toggles": {
       "hideForSeller": "Ẩn sản phẩm với seller",
