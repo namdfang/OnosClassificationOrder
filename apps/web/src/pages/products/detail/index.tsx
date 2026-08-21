@@ -762,16 +762,29 @@ export default function ProductDetailPage() {
       độc lập hoàn toàn với trạng thái dirty. `handleSave` vẫn giữ vòng soát của
       nó để chặn lưu (và bắt cả ca nửa cặp, thứ chỉ biết được khi soát cả hàng).
     */
+    const width = parseCm(nextDraft[sizeDimKey(areaKey, size, 'w')] ?? '');
+    const length = parseCm(nextDraft[sizeDimKey(areaKey, size, 'l')] ?? '');
+
     setSizeDimError((prev) => {
       const next = { ...prev };
       const problem = describeSizeDimCell(raw, dim, t);
       if (problem) next[sizeDimKey(areaKey, size, dim)] = problem;
       else delete next[sizeDimKey(areaKey, size, dim)];
+
+      /*
+        PRD-9 — lỗi "phải nhập cả rộng lẫn dài" do `handleSave` gắn lên ô CÒN
+        LẠI của hàng, nên xoá trắng ô mình đang gõ không đụng tới nó: cả hàng
+        rỗng mà dòng chữ đỏ vẫn nằm đó. Hàng không còn chữ nào thì không còn gì
+        để báo lỗi, nên xoá lỗi của CẢ HAI ô.
+        Cố ý chỉ XOÁ chứ không THÊM lỗi nửa cặp lúc gõ: gõ xong ô rộng mà đã mắng
+        ngay là thiếu ô dài thì phiền, ca đó vẫn để `handleSave` chặn lúc lưu.
+      */
+      if (width === null && length === null) {
+        delete next[sizeDimKey(areaKey, size, 'w')];
+        delete next[sizeDimKey(areaKey, size, 'l')];
+      }
       return next;
     });
-
-    const width = parseCm(nextDraft[sizeDimKey(areaKey, size, 'w')] ?? '');
-    const length = parseCm(nextDraft[sizeDimKey(areaKey, size, 'l')] ?? '');
     const usable =
       width !== null &&
       length !== null &&
