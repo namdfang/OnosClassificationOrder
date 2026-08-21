@@ -295,6 +295,11 @@ export function OrderTableClassic() {
     if (filterCancelled) params.set('cancelled', 'true');
     if (createdFrom) params.set('createdFrom', createdFrom);
     if (createdTo) params.set('createdTo', createdTo);
+    // ORD-19 — trang này hiển thị CẢ đơn xưởng US (xưởng ngoài luồng sản xuất,
+    // mặc định bị loại khỏi mọi danh sách). Gửi theo request thay vì nới ở BE
+    // cho mọi caller: `GET /orders` còn phục vụ drill-down từ dashboard, số ở
+    // đó phải khớp số dashboard. Đơn đã hủy + đơn chưa map xưởng vẫn ẩn như cũ.
+    params.set('includeExcludedFactory', 'true');
     // Sắp theo ngày vào sản xuất, MỚI NHẤT trước.
     params.set('sort', 'inProductionAt');
     params.set('order', 'desc');

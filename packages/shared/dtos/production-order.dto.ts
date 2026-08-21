@@ -447,6 +447,17 @@ export const GetProductionOrdersZod = PageQueryZod.extend({
   /** Truthy → chỉ lấy đơn chưa map xưởng (factoryId null / không có). */
   unmapped: z.coerce.boolean().optional(),
   /**
+   * Truthy → GIỮ đơn xưởng US (xưởng ngoài luồng sản xuất) trong kết quả, thay
+   * vì loại mặc định. Đơn chưa map xưởng VẪN bị loại, đơn đã hủy VẪN bị loại —
+   * cờ này chỉ mở đúng một nhóm.
+   *
+   * Chỉ trang **Danh sách đơn classic** (`/orders/classic`) gửi cờ này. Cố ý
+   * làm cờ theo TỪNG REQUEST chứ không nới ở hàm dùng chung: `GET /orders` còn
+   * phục vụ drill-down từ dashboard, mà số ở đó phải khớp số dashboard — nới
+   * chung là lệch số mà không báo lỗi. Xem `Orders.md §21.3` (ORD-19).
+   */
+  includeExcludedFactory: z.coerce.boolean().optional(),
+  /**
    * Truthy → chỉ lấy đơn có lỗi xưởng (productionError set, khác null/empty).
    * Falsy → chỉ lấy đơn không có lỗi. Bỏ qua khi không có giá trị.
    */

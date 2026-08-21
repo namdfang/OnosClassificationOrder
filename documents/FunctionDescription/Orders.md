@@ -1800,9 +1800,30 @@ Muốn thêm trang mới: import `useSidebarResetSignal` từ `@/hooks/useSideba
 | Task Fulfillment view override-role | `fulfillment-task.service.ts` → `buildMyTaskBase()` nhánh không khóa xưởng |
 | Designer stats/backlog/tool-check/person-error/stage-error/daily-overview | `designer-stats.service.ts` — mọi chỗ `factoryId: { $exists: true, $ne: null }` → `productionFactoryClause` (9 điểm) |
 
-### 21.3 Những gì GIỮ NGUYÊN
+### 21.3 Ngoại lệ: Danh sách đơn classic (ORD-19)
+
+> Người dùng chỉ thị 2026-08-22: *"ở danh sách đơn classic, hiển thị toàn bộ đơn bao gồm cả đơn xưởng us nha"*.
+
+Trang `/orders/classic` (`OrderTableClassic.tsx`) — **và chỉ trang đó** — hiển thị cả đơn xưởng US.
+
+Cách làm: cờ **theo từng request** `GetProductionOrdersDto.includeExcludedFactory`. FE gắn cờ trong `buildFilterParams()` của `OrderTableClassic`; BE đọc ở `buildVisibilityFilter()` → clause `factoryId` thành `{ $exists: true, $ne: null }` thay cho `productionFactoryClause`.
+
+**Vì sao là cờ theo request chứ không nới ở hàm dùng chung:** `GET /orders` + `buildOrderListFilter` còn phục vụ drill-down từ dashboard và nhiều bề mặt khác; nới ở đó thì danh sách drill lệch với số dashboard **mà không báo lỗi**. HF-2 (2026-08-21) đã nới diện rộng đúng kiểu đó và bị người dùng rút lại (khôi phục ở HF-3, commit `6d361fb`) — đọc §21.4 trước khi định mở rộng thêm.
+
+Cờ này **chỉ mở đúng một nhóm**. Hai loại-trừ còn lại giữ nguyên ở trang classic:
+
+| Nhóm | Ở trang classic |
+|---|---|
+| Đơn xưởng US | **hiện** |
+| Đơn đã hủy (`cancelledAt`) | vẫn ẩn — chỉ hiện khi bật toggle "Đã hủy" |
+| Đơn chưa map xưởng | vẫn ẩn — chỉ xem ở `/orders/unmapped` |
+
+Đo trên DB local (2026-08-22): không cờ 39.606 đơn → có cờ 39.906, chênh đúng 300 = số đơn xưởng US. Giao lại tập kết quả classic: ∩ đơn hủy = 0, ∩ chưa map xưởng = 0, ∩ xưởng US = 300. Lọc tường minh `factoryId` vẫn ghi đè sau clause mặc định nên chọn xưởng ML không lẫn đơn US.
+
+### 21.4 Những gì GIỮ NGUYÊN
 
 - `getFactoryOverview` (tab "Đơn hàng theo xưởng") — US vẫn hiện card/số liệu đầy đủ.
 - Lọc tường minh `factoryId` (drill từ tab xưởng, dropdown xưởng ở Danh sách đơn/Lifecycle) — `buildOrderListFilter` ghi đè `filter.factoryId = dto.factoryId` SAU default clause → chọn đúng xưởng US vẫn xem được đơn (escape hatch, cùng semantics trang unmapped).
+- Dashboard / thống kê / soát tool / auto-gán designer / entry fulfillment — KHÔNG caller nào trong nhóm này gửi `includeExcludedFactory`, và `getStatusOverview` còn dựng dto mới (`{ createdFrom, createdTo }`) nên cờ không thể lọt vào. Clause mặc định của chúng không đổi một ký tự nào sau ORD-19.
 - Import đơn: đơn US vẫn import + map factory bình thường (chỉ không đi tiếp vào luồng).
 - Worker Fulfillment gắn xưởng US (nếu có): nhánh khóa-xưởng của `buildMyTaskBase` không áp exclusion — nhưng đơn US không bao giờ được init stage nên my-tasks rỗng.

@@ -1289,11 +1289,16 @@ export class OrderService implements OnModuleInit {
     // Đơn chưa map xưởng (factoryId null/missing) VÀ đơn xưởng US (ngoài luồng
     // sản xuất) bị loại khỏi MỌI view mặc định — unmapped xem qua trang "Không
     // xác định xưởng" (dto.unmapped=true), đơn US chỉ xem ở tab Đơn hàng theo
-    // xưởng hoặc khi lọc tường minh factoryId (Orders.md §21).
+    // xưởng, khi lọc tường minh factoryId, hoặc khi caller xin tường minh qua
+    // `dto.includeExcludedFactory` (ORD-19 — chỉ trang Danh sách đơn classic
+    // gửi cờ này; đơn chưa map xưởng vẫn bị loại). Xem Orders.md §21.
     // Designer/Fulfillment branch ở trên đã tự loại trừ null qua equality/$or
     // factoryId cụ thể nên không cần áp lại ở đây (tránh set field 2 lần).
     if (dto?.unmapped !== true && filter.factoryId === undefined && !filter.$or) {
-      filter.factoryId = productionFactoryClause(this.orderModel.db);
+      filter.factoryId =
+        dto?.includeExcludedFactory === true
+          ? { $exists: true, $ne: null }
+          : productionFactoryClause(this.orderModel.db);
     }
 
     return filter;
