@@ -2,11 +2,13 @@ import type { Connection } from 'mongoose';
 
 /**
  * Xưởng "ngoài luồng sản xuất" — hiện hardcode shortName `US` (theo yêu cầu
- * 2026-07): đơn thuộc xưởng này bị loại khỏi MỌI thống kê / danh sách / luồng
- * (dashboard, vòng đời đơn, danh sách đơn mặc định, soát tool, auto-gán
- * designer, fulfillment), CHỈ hiển thị ở tab "Đơn hàng theo xưởng"
- * (`getFactoryOverview` — KHÔNG áp exclusion) hoặc khi lọc tường minh
- * `factoryId` = xưởng US. Xem `Orders.md §21`.
+ * 2026-07): đơn thuộc xưởng này bị loại khỏi thống kê / luồng sản xuất
+ * (dashboard, vòng đời đơn, soát tool, auto-gán designer, fulfillment).
+ *
+ * **KHÔNG áp cho danh sách đơn nữa** (HF-2, 2026-08-21 — theo yêu cầu trực
+ * tiếp của người dùng): `buildOrderListFilter` truyền `includeHiddenGroups` nên
+ * bảng đơn / export / facets hiển thị TẤT CẢ đơn (kể cả đơn US, đơn chưa map
+ * xưởng, đơn đã hủy). Xem `Orders.md §21.3`.
  */
 export const EXCLUDED_PRODUCTION_FACTORY_SHORT_NAME = 'US';
 

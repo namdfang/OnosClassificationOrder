@@ -511,8 +511,9 @@ export const GetProductionOrdersZod = PageQueryZod.extend({
 
   /**
    * Toggle "Đã hủy". Truthy → CHỈ lấy đơn đã hủy (`cancelledAt` set). Bỏ qua khi
-   * không truyền (list mặc định vẫn hiện đơn hủy tô xám). Đơn hủy LUÔN bị loại
-   * khỏi mọi facet count (dropdown filter) trừ khi toggle này bật.
+   * không truyền — danh sách mặc định hiện CẢ đơn hủy (tô xám + badge "Đã hủy"),
+   * và facet count cũng tính luôn đơn hủy (HF-2, 2026-08-21; trước đó mặc định
+   * loại đơn hủy khỏi list + facet). Xem `Orders.md §21.3`.
    */
   cancelled: z.coerce.boolean().optional(),
 

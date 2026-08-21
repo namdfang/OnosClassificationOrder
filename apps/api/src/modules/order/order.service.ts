@@ -1242,6 +1242,13 @@ export class OrderService implements OnModuleInit {
     fulfillmentFactoryId?: string,
     /** = user.fulfillmentStage — stage=print được mở admin-like. */
     fulfillmentStage?: string,
+    /**
+     * true → KHÔNG áp loại-trừ mặc định nào theo `factoryId` (giữ cả đơn xưởng
+     * US lẫn đơn chưa map xưởng). Bật cho các bề mặt **danh sách đơn**
+     * (`buildOrderListFilter`); dashboard / thống kê vẫn loại như cũ.
+     * Xem `Orders.md §21.3`.
+     */
+    includeHiddenGroups?: boolean,
   ): Record<string, unknown> {
     const filter: Record<string, unknown> = {};
 
@@ -1286,13 +1293,13 @@ export class OrderService implements OnModuleInit {
       filter.inProductionAt = buildRange();
     }
 
-    // Đơn chưa map xưởng (factoryId null/missing) VÀ đơn xưởng US (ngoài luồng
-    // sản xuất) bị loại khỏi MỌI view mặc định — unmapped xem qua trang "Không
-    // xác định xưởng" (dto.unmapped=true), đơn US chỉ xem ở tab Đơn hàng theo
-    // xưởng hoặc khi lọc tường minh factoryId (Orders.md §21).
+    // Thống kê / dashboard loại mặc định 2 nhóm đơn: chưa map xưởng (factoryId
+    // null/missing) và xưởng US (ngoài luồng sản xuất) — xem `Orders.md §19/§21`.
+    // DANH SÁCH ĐƠN thì KHÔNG loại nhóm nào (includeHiddenGroups, HF-2) — người
+    // dùng yêu cầu hiển thị tất cả đơn ở đó.
     // Designer/Fulfillment branch ở trên đã tự loại trừ null qua equality/$or
     // factoryId cụ thể nên không cần áp lại ở đây (tránh set field 2 lần).
-    if (dto?.unmapped !== true && filter.factoryId === undefined && !filter.$or) {
+    if (!includeHiddenGroups && dto?.unmapped !== true && filter.factoryId === undefined && !filter.$or) {
       filter.factoryId = productionFactoryClause(this.orderModel.db);
     }
 
@@ -1404,6 +1411,10 @@ export class OrderService implements OnModuleInit {
       assigneeCode,
       fulfillmentFactoryId,
       fulfillmentStage,
+      // HF-2: danh sách đơn (rows + tab counts + export + workshop + filter
+      // options + designer breakdown) hiển thị TẤT CẢ đơn — không loại xưởng
+      // US, không loại đơn chưa map xưởng.
+      true,
     );
     if (dto.search) {
       const searchOr = buildSearchOr(dto.search);
@@ -1435,10 +1446,11 @@ export class OrderService implements OnModuleInit {
     // Lọc theo lý do giữ — exact match, field chỉ tồn tại khi đang giữ (unset
     // cùng heldAt lúc mở giữ) nên tự ngụ ý held=true, không cần kết hợp thêm.
     if (dto.holdReason) filter.holdReason = dto.holdReason;
-    // Toggle "Đã hủy": true → CHỈ đơn đã hủy; mặc định (không bật) → LOẠI đơn đã
-    // hủy khỏi list + mọi facet. Đơn hủy chỉ xem qua toggle "Đã hủy" (hoặc dialog
-    // "Đơn đã hủy" riêng). Áp cho mọi caller của buildOrderListFilter.
-    filter.cancelledAt = { $exists: dto.cancelled === true };
+    // Toggle "Đã hủy": true → CHỈ đơn đã hủy. Mặc định (không bật) → KHÔNG lọc,
+    // đơn hủy nằm lẫn trong danh sách (HF-2 — trước đây mặc định loại đơn hủy,
+    // người dùng yêu cầu danh sách đơn hiển thị tất cả). Dashboard/thống kê vẫn
+    // loại đơn hủy tại từng consumer như cũ.
+    if (dto.cancelled === true) filter.cancelledAt = { $exists: true };
     if (dto.factoryId) filter.factoryId = dto.factoryId;
     if (dto.machineTypeId) filter.machineTypeId = dto.machineTypeId;
     if (dto.status) filter.status = dto.status;
