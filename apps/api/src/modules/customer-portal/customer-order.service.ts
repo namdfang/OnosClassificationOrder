@@ -75,6 +75,14 @@ function escapeRegex(s: string): string {
  * logic parse/regex sẵn có theo pattern này (vd matching cutting file).
  */
 const PRODUCTION_ID_LETTERS = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ';
+
+/**
+ * Chỗ giữ khi đẩy đơn (`pushingAt`) quá hạn này thì coi như hết hiệu lực —
+ * tiến trình chết giữa chừng không khoá đơn vĩnh viễn. Đặt rộng hơn nhiều lần
+ * thời gian một lượt push thật (importOrders cho vài chục item tính bằng
+ * giây), để lượt đang chạy chậm không bị lượt khác cướp chỗ. Xem ORD-20.
+ */
+const PUSH_CLAIM_STALE_MS = 5 * 60_000;
 function randomDigits5(): string {
   return String(Math.floor(Math.random() * 100000)).padStart(5, '0');
 }
@@ -1127,6 +1135,50 @@ export class CustomerOrderService implements OnModuleInit {
     return ids.map((id) => ({ id, doc: byId.get(id) }));
   }
 
+  /**
+   * Giành chỗ đẩy 1 đơn staging bằng MỘT lệnh ghi có điều kiện (ORD-20).
+   * Trả `true` nếu lượt này giành được, `false` nếu đơn đã đẩy hoặc lượt khác
+   * đang đẩy.
+   *
+   * Điều kiện nằm ở LỆNH GHI chứ không phải ở bước đọc: cả luồng push là đọc →
+   * chốt giá → `importOrders()` → ghi `pushedAt`, và chỗ hở nằm ở khoảng giữa
+   * đọc và ghi. Hai lượt song song đều đọc thấy `pushedAt` rỗng nên cùng chạy
+   * tới `importOrders()`; lượt sau đụng unique index `productionId` và ném lỗi
+   * trùng khoá — hậu quả nặng thì unique index đã chặn, nhưng khách nhận về
+   * một lỗi tầng dưới khó hiểu và người đọc log tưởng hỏng khâu cấp mã.
+   *
+   * Chỗ giữ quá hạn thì coi như hết hiệu lực, để tiến trình chết giữa chừng
+   * không khoá đơn vĩnh viễn.
+   */
+  private async claimPush(stagingId: string, customerId: string): Promise<boolean> {
+    const now = Date.now();
+    const res = await this.customerOrderModel.updateOne(
+      {
+        _id: stagingId,
+        customerId,
+        pushedAt: null,
+        $or: [{ pushingAt: null }, { pushingAt: { $exists: false } }, { pushingAt: { $lt: new Date(now - PUSH_CLAIM_STALE_MS) } }],
+      },
+      { $set: { pushingAt: new Date(now) } },
+    );
+    return res.modifiedCount > 0;
+  }
+
+  /** Nhả chỗ giữ khi lượt đẩy hỏng — đơn quay lại trạng thái đẩy được. */
+  private async releasePushClaims(stagingIds: string[]): Promise<void> {
+    if (stagingIds.length === 0) return;
+    await this.customerOrderModel.updateMany(
+      { _id: { $in: stagingIds }, pushedAt: null },
+      { $set: { pushingAt: null } },
+    );
+  }
+
+  /** Lý do đơn không giành được chỗ — đọc lại để nói đúng chuyện gì đang xảy ra. */
+  private async describeLostClaim(stagingId: string): Promise<string> {
+    const doc = await this.customerOrderModel.findById(stagingId).select('pushedAt').lean();
+    return doc?.pushedAt ? 'Đơn đã đẩy sản xuất trước đó' : 'Đơn đang được đẩy sản xuất — chờ một lát rồi tải lại trang';
+  }
+
   private validatePushable(doc: Record<string, unknown> | undefined): string | undefined {
     if (!doc) return 'Không tìm thấy đơn';
     if (doc.status === 'cancelled') return 'Đơn đã hủy';
@@ -1212,6 +1264,13 @@ export class CustomerOrderService implements OnModuleInit {
         results.push({ stagingId: id, orderId: doc?.orderId, status: 'failed', error });
         continue;
       }
+      // Giành chỗ TRƯỚC khi dựng row import — lượt song song thứ hai dừng ở đây
+      // và nhận thông báo rõ ràng, thay vì chạy tiếp tới importOrders rồi vỡ ở
+      // unique index. Một đơn hỏng chỉ hỏng riêng nó, lô vẫn đẩy tiếp (ORD-20).
+      if (!(await this.claimPush(id, String(customer._id)))) {
+        results.push({ stagingId: id, orderId: doc.orderId, status: 'failed', error: await this.describeLostClaim(id) });
+        continue;
+      }
       const items = (doc.items || []) as CustomerOrderItem[];
       const { quotes, orderTotal } = this.quoteStagingOrder(doc, ctx, activePromotions, tier);
       const addr = doc.shippingAddress as ProductionOrderShippingAddress | undefined;
@@ -1270,33 +1329,43 @@ export class CustomerOrderService implements OnModuleInit {
 
     // 1 lệnh importOrders duy nhất cho mọi item của mọi đơn — pipeline sẵn có
     // (map config, ép xưởng theo khách, auto-gán designer, Telegram noti).
-    await this.orderService.importOrders(
-      { rows: importRows },
-      {
-        user: {
-          _id: customer._id,
-          fullName: customer.fullName,
-          email: customer.userEmail,
-          role: { name: RoleType.Customer },
+    // Hỏng ở đây thì NHẢ hết chỗ giữ: đơn phải quay lại trạng thái đẩy được,
+    // không được kẹt nửa vời (ORD-20).
+    let payment: { _id: unknown };
+    try {
+      await this.orderService.importOrders(
+        { rows: importRows },
+        {
+          user: {
+            _id: customer._id,
+            fullName: customer.fullName,
+            email: customer.userEmail,
+            role: { name: RoleType.Customer },
+          },
         },
-      },
-    );
+      );
 
-    // Ledger: gate OFF vẫn ghi 1 record `waived` + tổng amount (plan §12.1).
-    const payment = await this.customerPaymentModel.create({
-      customerId: String(customer._id),
-      orderIds: pendingUpdates.map((u) => u.stagingId),
-      amount: Math.round(totalAmount * 100) / 100,
-      status: 'waived',
-      method: 'waived',
-    });
+      // Ledger: gate OFF vẫn ghi 1 record `waived` + tổng amount (plan §12.1).
+      payment = await this.customerPaymentModel.create({
+        customerId: String(customer._id),
+        orderIds: pendingUpdates.map((u) => u.stagingId),
+        amount: Math.round(totalAmount * 100) / 100,
+        status: 'waived',
+        method: 'waived',
+      });
+    } catch (e) {
+      await this.releasePushClaims(pendingUpdates.map((u) => u.stagingId));
+      throw e;
+    }
 
     const now = new Date();
     await Promise.all(
       pendingUpdates.map((u) =>
         this.customerOrderModel.updateOne(
-          { _id: u.stagingId },
-          { $set: { items: u.items, pushedAt: now, paymentId: String(payment._id) } },
+          // `pushedAt: null` là lưới an toàn cuối: tới đây lượt này đang giữ chỗ
+          // nên không ai chen được, nhưng ghi có điều kiện thì rẻ mà chắc.
+          { _id: u.stagingId, pushedAt: null },
+          { $set: { items: u.items, pushedAt: now, paymentId: String(payment._id), pushingAt: null } },
         ),
       ),
     );

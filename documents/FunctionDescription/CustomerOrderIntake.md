@@ -44,6 +44,8 @@ Hai luồng đơn cùng tồn tại (plan §1.3):
 Tick đơn Pending → "Push to production" → POST /push-preview (bảng giá chốt, không commit)
   → confirm → POST /push:
      1. validate (pending, chưa push, có item, đủ địa chỉ tối thiểu)
+     1b. GIÀNH CHỖ từng đơn: updateOne có điều kiện { pushedAt: null, chưa ai giữ }
+         → $set pushingAt. Không giành được thì đơn đó 'failed' kèm lý do, lô vẫn chạy tiếp
      2. chốt giá từng item (resolveUnitPrice: cod/tiktok → nonShipCost fallback retailPrice;
         express_us/economy_us → retailPrice fallback nonShipCost; áp Promotion theo tier
         qua promotionMatches/applyPromotionDiscount — tái dùng như customer-catalog)
@@ -51,8 +53,22 @@ Tick đơn Pending → "Push to production" → POST /push-preview (bảng giá 
         cho staging doc cũ) → 1 lệnh importOrders() duy nhất
         (type = ProductConfig.fullName resolve từ SKU → map config chính xác)
      4. tạo customer_payments record { status:'waived', method:'waived', amount }
-     5. $set items (priceSnapshot chốt) + pushedAt + paymentId vào staging doc
+     5. $set items (priceSnapshot chốt) + pushedAt + paymentId, $set pushingAt=null
+        (lệnh ghi cũng có điều kiện pushedAt: null)
+     — hỏng ở bước 3 hoặc 4 → NHẢ hết chỗ giữ rồi ném lỗi, đơn quay lại đẩy được
 ```
+
+**Chống đẩy trùng (ORD-20).** Bước 1b không thừa. Cả luồng là đọc → chốt giá → `importOrders()` → ghi `pushedAt`, và chỗ hở nằm ở **khoảng giữa đọc và ghi**: khách bấm hai lần hoặc mở hai tab thì cả hai lượt đều đọc thấy `pushedAt` rỗng và cùng chạy tới `importOrders()`. Hậu quả nặng đã được unique index `productionId` chặn (push tái dùng mã cũ nên lượt sau đụng khoá, và `customer_payments` tạo SAU `importOrders` nên cũng không đẻ ledger rác) — nhưng khách nhận về **lỗi trùng khoá tầng dưới** thay vì câu rõ ràng, và người đọc log tưởng hỏng khâu cấp mã.
+
+Chi tiết cách giữ chỗ:
+
+| | |
+|---|---|
+| Trường giữ chỗ | `pushingAt` trên `customer_orders` — **KHÔNG** dùng chính `pushedAt`: đặt `pushedAt` trước khi đơn thật sự vào sản xuất thì tiến trình chết giữa chừng để lại đơn "đã đẩy" mà không có đơn sản xuất nào |
+| Hết hiệu lực | `PUSH_CLAIM_STALE_MS` = 5 phút — chỗ giữ cũ hơn thế coi như bỏ, tiến trình chết không khoá đơn vĩnh viễn |
+| Lượt thua nhận gì | đơn đã đẩy xong → *"Đơn đã đẩy sản xuất trước đó"*; lượt khác đang đẩy → *"Đơn đang được đẩy sản xuất — chờ một lát rồi tải lại trang"* |
+| Webhook `order.pushed` | chỉ lượt thắng có `pendingUpdates` cho đơn đó nên **không bắn hai lần** |
+| Test giữ luật | `apps/api/src/modules/customer-portal/push-claim.spec.ts` — soi thẳng bộ lọc; rút `pushedAt: null` khỏi đó là mở lại chỗ hở cũ |
 
 - **Design storage hook** (xem [`DesignStorage.md`](DesignStorage.md)): sau push, design là CDN URL → `touchUsageForUrls()`; còn là URL ngoài (Drive) → enqueue job `design-worker` tải về R2 rồi thay URL ở cả `OrderEntity.designs` lẫn staging item — push KHÔNG chờ worker.
 - Push **nguyên đơn** (không lẻ item). Payment gate đọc từ `system_configs` key `customer_payment_gate_enabled` — đợt này nếu bật sẽ throw (luồng Admin confirm chưa build, plan §12.1).
