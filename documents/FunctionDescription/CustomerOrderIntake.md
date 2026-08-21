@@ -44,6 +44,8 @@ Hai luồng đơn cùng tồn tại (plan §1.3):
 Tick đơn Pending → "Push to production" → POST /push-preview (bảng giá chốt, không commit)
   → confirm → POST /push:
      1. validate (pending, chưa push, có item, đủ địa chỉ tối thiểu)
+     1a. CỬA CUỐI về file thiết kế: assertArtworkComplete() — thiếu mockup hoặc thiếu
+         design ở vị trí in bắt buộc → đơn ĐÓ 'failed' kèm mã đơn + tên vị trí, lô chạy tiếp
      1b. GIÀNH CHỖ từng đơn: updateOne có điều kiện { pushedAt: null, chưa ai giữ }
          → $set pushingAt. Không giành được thì đơn đó 'failed' kèm lý do, lô vẫn chạy tiếp
      2. chốt giá từng item (resolveUnitPrice: cod/tiktok → nonShipCost fallback retailPrice;
@@ -57,6 +59,12 @@ Tick đơn Pending → "Push to production" → POST /push-preview (bảng giá 
         (lệnh ghi cũng có điều kiện pushedAt: null)
      — hỏng ở bước 3 hoặc 4 → NHẢ hết chỗ giữ rồi ném lỗi, đơn quay lại đẩy được
 ```
+
+**Cửa cuối về file thiết kế (ORD-25).** ORD-22 bắt `placeOrder` kiểm mockup + design, nhưng đó chỉ là MỘT đường vào: Public Order API đi `importOrdersCsv`, và `updateStagingOrder` cho phép gỡ design ra khỏi đơn đã tạo. Chặn ở lúc tạo là hàng rào **báo sớm**, không thể là hàng rào **đảm bảo** — mỗi đường vào mới lại phải nhớ chặn lại.
+
+Cửa đúng là bước push: nơi đơn thật sự rời vùng nháp để vào sản xuất, điểm vào duy nhất, không đi vòng được. Đơn Pending **vẫn được phép thiếu** (vùng nháp theo đúng thiết kế hai pha — `updateStagingOrder` KHÔNG bị siết, khách lưu dở rồi bổ sung sau).
+
+Dùng lại **đúng hàm** `assertArtworkComplete()` của ORD-22, không viết luật thứ hai. Gọi TRƯỚC bước giành chỗ (đơn hỏng thì đừng chiếm chỗ rồi phải nhả) và bọc `try/catch` để một đơn hỏng chỉ hỏng riêng nó. Đơn bị từ chối giữ nguyên trạng thái Pending, dữ liệu nguyên vẹn, bổ sung design rồi đẩy lại được.
 
 **Chống đẩy trùng (ORD-20).** Bước 1b không thừa. Cả luồng là đọc → chốt giá → `importOrders()` → ghi `pushedAt`, và chỗ hở nằm ở **khoảng giữa đọc và ghi**: khách bấm hai lần hoặc mở hai tab thì cả hai lượt đều đọc thấy `pushedAt` rỗng và cùng chạy tới `importOrders()`. Hậu quả nặng đã được unique index `productionId` chặn (push tái dùng mã cũ nên lượt sau đụng khoá, và `customer_payments` tạo SAU `importOrders` nên cũng không đẻ ledger rác) — nhưng khách nhận về **lỗi trùng khoá tầng dưới** thay vì câu rõ ràng, và người đọc log tưởng hỏng khâu cấp mã.
 

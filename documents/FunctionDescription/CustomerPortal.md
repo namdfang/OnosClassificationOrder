@@ -286,10 +286,12 @@ Schema `customers` (mở rộng — xem [`CustomerFactoryAssignment.md §3`](Cus
     đã vào hàng đợi soát tool. Thông báo lỗi song ngữ, nêu đúng tên vị trí in
     còn thiếu kèm key gốc (`Mặt trước (front)`). Khoá bằng
     `apps/api/src/modules/customer-portal/place-order-artwork.spec.ts`.
-    **CHƯA phủ hai đường khác** (cố ý, ngoài phạm vi ORD-22): Public Order API
-    (`POST /v1/open-api/orders`) đi `importOrdersCsv()` chứ không qua
-    `placeOrder()`, và `updateStagingOrder()` dựng lại items từ DTO mà không
-    kiểm — khách sửa đơn pending vẫn có thể gỡ design ra.
+    Hai đường khác KHÔNG kiểm ở bước tạo — **cố ý**: Public Order API
+    (`POST /v1/open-api/orders`) đi `importOrdersCsv()`, và `updateStagingOrder()`
+    dựng lại items từ DTO mà không kiểm (đơn Pending là **vùng nháp**, khách
+    được lưu dở rồi bổ sung sau). Cả hai được chặn ở **cửa cuối** là bước đẩy
+    sản xuất — xem `CustomerOrderIntake.md` §2.2 "Cửa cuối về file thiết kế
+    (ORD-25)".
   - `components/common/FileUrlOrUploadInput.tsx` — input dùng cho MỌI field
     kiểu file (mockup + design) ở Customer Portal: ô dán URL + nút "Tải file
     lên" **disabled** (chưa có storage backend, hover hiện tooltip giải thích

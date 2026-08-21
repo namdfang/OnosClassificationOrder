@@ -720,7 +720,9 @@ export class CustomerOrderService implements OnModuleInit {
    * ở một nơi và lọt ở nơi khác thì không ai giải thích được.
    */
   private assertArtworkComplete(
-    items: PlaceCustomerOrderDto['items'],
+    // Kiểu cấu trúc tối thiểu — dùng CHUNG cho item lúc đặt đơn (ORD-22) và
+    // item staging lúc đẩy sản xuất (ORD-25). Một luật, một hàm.
+    items: Array<{ type?: string; mockupUrl?: string; designs?: Record<string, string | undefined> }>,
     quotes: QuoteResult[],
     ctx: PricingContext,
   ): void {
@@ -736,7 +738,7 @@ export class CustomerOrderService implements OnModuleInit {
       // Sản phẩm chưa cấu hình vị trí in nào → không đòi design, chỉ đòi mockup.
       const missing = areas
         .filter((a) => a.isRequired !== false)
-        .filter((a) => !(item.designs as Record<string, string | undefined> | undefined)?.[a.key]?.trim());
+        .filter((a) => !item.designs?.[a.key]?.trim());
       if (missing.length > 0) {
         // Nhãn tiếng Việt lấy từ bản đồ dùng chung với FE, khỏi lệch chữ. Kèm
         // key gốc trong ngoặc vì bản đồ nhãn CHỈ có tiếng Việt — người đọc bản
@@ -1319,6 +1321,32 @@ export class CustomerOrderService implements OnModuleInit {
         results.push({ stagingId: id, orderId: doc?.orderId, status: 'failed', error });
         continue;
       }
+      const items = (doc.items || []) as CustomerOrderItem[];
+      const { quotes, orderTotal } = this.quoteStagingOrder(doc, ctx, activePromotions, tier);
+
+      // CỬA CUỐI CÙNG cho luật "phải có mockup + design ở vị trí in bắt buộc"
+      // (ORD-25). ORD-22 chặn ở `placeOrder`, nhưng đó chỉ là MỘT đường vào:
+      // Public Order API đi `importOrdersCsv`, và `updateStagingOrder` cho phép
+      // gỡ design ra khỏi đơn đã tạo. Đơn Pending là vùng nháp nên được phép
+      // thiếu — chỗ KHÔNG được phép thiếu là lúc đơn rời vùng nháp để vào sản
+      // xuất. Chặn ở đây phủ mọi đường vào, kể cả đường sinh ra sau này.
+      //
+      // Kiểm TRƯỚC khi giành chỗ: đơn hỏng thì đừng chiếm chỗ rồi phải nhả.
+      // Dùng lại đúng hàm của ORD-22 — hai luật giống nhau đặt hai nơi là mầm
+      // của lỗi lệch. Bắt lỗi để hỏng RIÊNG đơn này, lô vẫn đẩy tiếp.
+      try {
+        this.assertArtworkComplete(items, quotes, ctx);
+      } catch (e) {
+        const reason = e instanceof BadRequestException ? e.message : 'Đơn thiếu file thiết kế';
+        results.push({
+          stagingId: id,
+          orderId: doc.orderId,
+          status: 'failed',
+          error: `Đơn ${doc.orderId ?? id}: ${reason}`,
+        });
+        continue;
+      }
+
       // Giành chỗ TRƯỚC khi dựng row import — lượt song song thứ hai dừng ở đây
       // và nhận thông báo rõ ràng, thay vì chạy tiếp tới importOrders rồi vỡ ở
       // unique index. Một đơn hỏng chỉ hỏng riêng nó, lô vẫn đẩy tiếp (ORD-20).
@@ -1326,8 +1354,6 @@ export class CustomerOrderService implements OnModuleInit {
         results.push({ stagingId: id, orderId: doc.orderId, status: 'failed', error: await this.describeLostClaim(id) });
         continue;
       }
-      const items = (doc.items || []) as CustomerOrderItem[];
-      const { quotes, orderTotal } = this.quoteStagingOrder(doc, ctx, activePromotions, tier);
       const addr = doc.shippingAddress as ProductionOrderShippingAddress | undefined;
 
       const updatedItems: CustomerOrderItem[] = [];

@@ -1,3 +1,4 @@
+import { BadRequestException } from '@nestjs/common';
 import { PRODUCT_PRINT_AREA_LABEL_MAP } from 'shared';
 
 import { CustomerOrderService } from './customer-order.service';
@@ -93,5 +94,41 @@ describe('ORD-22 — máy chủ kiểm mockup + design khi đặt đơn trực t
     expect(() => place({ mockupUrl: MOCKUP }, [{ key: 'front' }, { key: 'back' }])).toThrow(
       new RegExp(`${PRODUCT_PRINT_AREA_LABEL_MAP.front}.*${PRODUCT_PRINT_AREA_LABEL_MAP.back}`),
     );
+  });
+});
+
+
+/**
+ * `ORD-25` — cùng hàm này là CỬA CUỐI ở bước đẩy sản xuất. Ở đó nó được gọi
+ * trong `try/catch` để một đơn hỏng chỉ hỏng riêng nó, lô vẫn đẩy tiếp. Hai
+ * điều dưới đây là mắt xích của cơ chế đó, dễ vỡ mà không ai để ý.
+ */
+describe('ORD-25 — giao kèo để bước đẩy sản xuất bắt được lỗi theo TỪNG đơn', () => {
+  it('ném BadRequestException — push bắt bằng `instanceof` để lấy đúng lý do', () => {
+    let caught: unknown;
+    try {
+      place({ mockupUrl: MOCKUP }, FRONT_REQUIRED);
+    } catch (e) {
+      caught = e;
+    }
+    expect(caught).toBeInstanceOf(BadRequestException);
+    // Đổi sang Error trần thì push rơi vào nhánh dự phòng và khách mất thông
+    // tin vị trí in nào còn thiếu.
+    expect((caught as BadRequestException).message).toContain(PRODUCT_PRINT_AREA_LABEL_MAP.front);
+  });
+
+  it('nhận item dạng STAGING (không có trường bắt buộc của form) — một luật, một hàm', () => {
+    // Item staging mang thêm productionId/priceSnapshot và `type` là optional.
+    const stagingItem = {
+      productionId: 'AB-12345-67890',
+      type: 'Áo thử',
+      quantity: 1,
+      mockupUrl: MOCKUP,
+      designs: GOOD_DESIGNS,
+      priceSnapshot: { lineTotal: 10 },
+    };
+    expect(() =>
+      svc.assertArtworkComplete([stagingItem], [{ productConfigId: CONFIG_ID, type: 'Áo thử' }], ctxWith(FRONT_REQUIRED)),
+    ).not.toThrow();
   });
 });
