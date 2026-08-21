@@ -1808,6 +1808,8 @@ Trang `/orders/classic` (`OrderTableClassic.tsx`) — **và chỉ trang đó** �
 
 Cách làm: cờ **theo từng request** `GetProductionOrdersDto.includeExcludedFactory`. FE gắn cờ trong `buildFilterParams()` của `OrderTableClassic`; BE đọc ở `buildVisibilityFilter()` → clause `factoryId` thành `{ $exists: true, $ne: null }` thay cho `productionFactoryClause`.
 
+Cờ phân giải bằng `BooleanFlagZod` (`packages/shared/constants/common-zod.ts`), **không phải** `z.coerce.boolean()`. `z.coerce.boolean()` theo luật truthy của JavaScript nên mọi chuỗi khác rỗng đều thành `true`: gửi `includeExcludedFactory=false` — cách tự nhiên nhất để nói "đừng gộp" — lại **gộp** đơn xưởng US vào danh sách mà không báo lỗi gì (ORD-21, TEST đo được 39.906 thay vì 39.606). Luật: bật với `true`/`1`; tắt với `false`/`0` và mọi giá trị lạ; không gửi hoặc gửi rỗng → `undefined`. Giá trị lạ **không** ném 400 — trả về mặc định an toàn là loại đơn US. Khoá bằng `apps/api/src/modules/order/order-query-flags.spec.ts`.
+
 **Vì sao là cờ theo request chứ không nới ở hàm dùng chung:** `GET /orders` + `buildOrderListFilter` còn phục vụ drill-down từ dashboard và nhiều bề mặt khác; nới ở đó thì danh sách drill lệch với số dashboard **mà không báo lỗi**. HF-2 (2026-08-21) đã nới diện rộng đúng kiểu đó và bị người dùng rút lại (khôi phục ở HF-3, commit `6d361fb`) — đọc §21.4 trước khi định mở rộng thêm.
 
 Cờ này **chỉ mở đúng một nhóm**. Hai loại-trừ còn lại giữ nguyên ở trang classic:

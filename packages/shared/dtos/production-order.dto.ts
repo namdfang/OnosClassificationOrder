@@ -12,7 +12,7 @@ import {
 import { BaseEntityZod, PageQueryZod, PageResZod, ResZod } from '@shared/types';
 import { z } from 'zod';
 
-import { IDZod } from '../constants/common-zod';
+import { BooleanFlagZod, IDZod } from '../constants/common-zod';
 
 export const DesignerStatusZod = z.nativeEnum(DesignerStatus);
 export const DesignerTransitionActionZod = z.nativeEnum(DesignerTransitionAction);
@@ -455,8 +455,13 @@ export const GetProductionOrdersZod = PageQueryZod.extend({
    * làm cờ theo TỪNG REQUEST chứ không nới ở hàm dùng chung: `GET /orders` còn
    * phục vụ drill-down từ dashboard, mà số ở đó phải khớp số dashboard — nới
    * chung là lệch số mà không báo lỗi. Xem `Orders.md §21.3` (ORD-19).
+   *
+   * Phân giải bằng `BooleanFlagZod` chứ KHÔNG phải `z.coerce.boolean()`: cái
+   * sau coi mọi chuỗi khác rỗng là bật, nên `includeExcludedFactory=false` —
+   * cách tự nhiên nhất để nói "đừng gộp" — lại GỘP đơn xưởng US vào danh sách
+   * mà không báo lỗi gì (ORD-21). Giá trị lạ → tắt, tức giữ mặc định an toàn.
    */
-  includeExcludedFactory: z.coerce.boolean().optional(),
+  includeExcludedFactory: BooleanFlagZod,
   /**
    * Truthy → chỉ lấy đơn có lỗi xưởng (productionError set, khác null/empty).
    * Falsy → chỉ lấy đơn không có lỗi. Bỏ qua khi không có giá trị.

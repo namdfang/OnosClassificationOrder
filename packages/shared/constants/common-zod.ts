@@ -159,3 +159,31 @@ export const VNDateZod = z
 
     return date as dayjs.Dayjs;
   });
+
+
+/**
+ * Cờ boolean trên query string, phân giải ĐÚNG NGHĨA.
+ *
+ * `z.coerce.boolean()` KHÔNG dùng được cho query string: nó theo luật truthy
+ * của JavaScript nên mọi chuỗi khác rỗng đều thành `true` — kể cả `'false'`,
+ * `'0'`, `'no'`. Một tham số mà `false` lại có nghĩa `true` là bẫy đặt sẵn cho
+ * người viết màn hình sau và cho chính người đang gỡ lỗi bằng cách sửa URL
+ * (ORD-21).
+ *
+ * Luật:
+ *   - bật  : `true` / `1` (và boolean `true` khi gọi từ trong mã)
+ *   - tắt  : `false` / `0`
+ *   - không gửi, hoặc chuỗi rỗng → `undefined` (giữ nguyên nghĩa optional)
+ *   - giá trị không hiểu được (`no`, `abc`, `2`…) → `false`
+ *
+ * Chọn phía AN TOÀN khi không chắc: `false`, không ném lỗi 400. Ném lỗi sẽ làm
+ * hỏng những nơi đang lỡ gửi giá trị lạ, còn `false` thì trở về đúng hành vi
+ * mặc định vốn có.
+ */
+export const BooleanFlagZod = z.preprocess((value) => {
+  if (value === undefined || value === null || value === '') return undefined;
+  if (typeof value === 'boolean') return value;
+  if (typeof value === 'number') return value === 1;
+  if (typeof value === 'string') return ['true', '1'].includes(value.trim().toLowerCase());
+  return false;
+}, z.boolean().optional());
