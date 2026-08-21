@@ -275,6 +275,21 @@ Schema `customers` (mở rộng — xem [`CustomerFactoryAssignment.md §3`](Cus
   - 1 lần bấm "Đặt đơn" gọi `RepositoryRemote.customerOrder.placeOrder({ items: cart.map(...), shippingAddress, referent })`
     — **1 API call cho TOÀN BỘ giỏ hàng**, trả về mảng `CustomerOrderSummary[]`
     (nhiều mã đơn, hiện trong toast `success`).
+  - **Đòi mockup + design ở HAI TẦNG (ORD-22).** Giao diện chặn `canAddToCart`
+    khi thiếu mockup hoặc thiếu design ở vị trí in bắt buộc; **máy chủ kiểm
+    lại** trong `placeOrder()` → `assertArtworkComplete()`. Luật giống hệt nhau:
+    **`isRequired !== false`** (vị trí không set cờ coi như bắt buộc). Sản phẩm
+    chưa cấu hình vị trí in nào thì chỉ đòi mockup.
+    Vì sao phải có tầng máy chủ: giao diện không phải hàng rào — một lần sửa
+    điều kiện chặn ở `new.tsx` là đơn rỗng lọt vào, đi tiếp sang sản xuất, và
+    **tới tận xưởng** mới lộ ra là không có gì để in, lúc đó đã chiếm mã đơn và
+    đã vào hàng đợi soát tool. Thông báo lỗi song ngữ, nêu đúng tên vị trí in
+    còn thiếu kèm key gốc (`Mặt trước (front)`). Khoá bằng
+    `apps/api/src/modules/customer-portal/place-order-artwork.spec.ts`.
+    **CHƯA phủ hai đường khác** (cố ý, ngoài phạm vi ORD-22): Public Order API
+    (`POST /v1/open-api/orders`) đi `importOrdersCsv()` chứ không qua
+    `placeOrder()`, và `updateStagingOrder()` dựng lại items từ DTO mà không
+    kiểm — khách sửa đơn pending vẫn có thể gỡ design ra.
   - `components/common/FileUrlOrUploadInput.tsx` — input dùng cho MỌI field
     kiểu file (mockup + design) ở Customer Portal: ô dán URL + nút "Tải file
     lên" **disabled** (chưa có storage backend, hover hiện tooltip giải thích

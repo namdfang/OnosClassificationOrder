@@ -26,6 +26,7 @@ import type {
   PlaceCustomerOrderDto,
   PreviewPushCustomerOrdersResDto,
   ProductionOrderShippingAddress,
+  ProductPrintArea,
   PushCustomerOrdersDto,
   PushCustomerOrdersResDto,
   ResolveImportSkusDto,
@@ -48,6 +49,7 @@ import {
   FULFILLMENT_STAGE_ORDER,
   FulfillmentStage,
   LIFECYCLE_STAGE_KEYS,
+  PRODUCT_PRINT_AREA_LABEL_MAP,
   RoleType,
 } from 'shared';
 
@@ -185,6 +187,8 @@ interface PricingConfig {
   productCategoryId?: string;
   /** Ảnh mockup sản phẩm — trả về preview import cho khách đối chiếu. */
   mockup?: string;
+  /** Vị trí in của sản phẩm — dùng để đòi design ở vị trí BẮT BUỘC (ORD-22). */
+  printArea?: ProductPrintArea;
   variations: Array<{
     sku: string;
     attributes?: Array<{ label: string; value: string }>;
@@ -196,6 +200,8 @@ interface PricingConfig {
 interface PricingContext {
   bySku: Map<string, { config: PricingConfig; variation: PricingConfig['variations'][number] }>;
   byType: Map<string, PricingConfig>;
+  /** Tra ngược theo `QuoteResult.productConfigId` — cần cho bước kiểm design (ORD-22). */
+  byId: Map<string, PricingConfig>;
 }
 type ActivePromotion = Awaited<ReturnType<PromotionService['getActiveInDateRange']>>[number];
 
@@ -586,11 +592,12 @@ export class CustomerOrderService implements OnModuleInit {
       or.push({ fullName: { $in: types.map((t) => new RegExp(`^${escapeRegex(t)}$`, 'i')) } });
     const bySku = new Map<string, { config: PricingConfig; variation: PricingConfig['variations'][number] }>();
     const byType = new Map<string, PricingConfig>();
-    if (or.length === 0) return { bySku, byType };
+    const byId = new Map<string, PricingConfig>();
+    if (or.length === 0) return { bySku, byType, byId };
 
     const configs = (await this.productConfigModel
       .find({ $or: or })
-      .select('fullName productCategoryId variations mockup')
+      .select('fullName productCategoryId variations mockup printArea')
       .lean()) as unknown as Array<PricingConfig & { _id: unknown }>;
     for (const c of configs) {
       const config: PricingConfig = {
@@ -598,14 +605,16 @@ export class CustomerOrderService implements OnModuleInit {
         fullName: c.fullName,
         productCategoryId: c.productCategoryId ? String(c.productCategoryId) : undefined,
         mockup: c.mockup,
+        printArea: c.printArea,
         variations: c.variations || [],
       };
       byType.set(config.fullName.trim().toLowerCase(), config);
+      byId.set(config._id, config);
       for (const v of config.variations) {
         if (v.sku) bySku.set(v.sku.trim().toUpperCase(), { config, variation: v });
       }
     }
-    return { bySku, byType };
+    return { bySku, byType, byId };
   }
 
   /** Chọn variation theo size/color khi item không có SKU (đơn form) — chỉ nhận khi match không mơ hồ. */
@@ -698,6 +707,49 @@ export class CustomerOrderService implements OnModuleInit {
   // Đặt đơn form → staging PENDING (plan §2 — KHÔNG gọi importOrders nữa)
   // -------------------------------------------------------------------------
 
+  /**
+   * Đòi mockup + design ở MỌI vị trí in bắt buộc, ngay tại máy chủ (ORD-22).
+   *
+   * Giao diện `new.tsx` đã chặn, nhưng giao diện không phải hàng rào: chỉ cần
+   * một lần sửa điều kiện chặn ở đó là đơn rỗng lọt vào. Và hậu quả không dừng
+   * ở staging — đơn đi tiếp sang sản xuất rồi TỚI TẬN XƯỞNG mới lộ ra là không
+   * có gì để in, lúc đó đã chiếm mã đơn và đã vào hàng đợi soát tool.
+   *
+   * Luật lấy ĐÚNG như giao diện: `isRequired !== false` (vị trí không set cờ
+   * coi như bắt buộc). Hai bên lệch nhau còn tệ hơn không kiểm — khách bị chặn
+   * ở một nơi và lọt ở nơi khác thì không ai giải thích được.
+   */
+  private assertArtworkComplete(
+    items: PlaceCustomerOrderDto['items'],
+    quotes: QuoteResult[],
+    ctx: PricingContext,
+  ): void {
+    items.forEach((item, i) => {
+      const label = quotes[i]?.type ?? item.type ?? `#${i + 1}`;
+      if (!item.mockupUrl?.trim()) {
+        throw new BadRequestException(
+          `Sản phẩm "${label}": thiếu ảnh mockup — Product "${label}": mockup image is required`,
+        );
+      }
+      const configId = quotes[i]?.productConfigId;
+      const areas = (configId ? ctx.byId.get(configId)?.printArea : undefined) ?? [];
+      // Sản phẩm chưa cấu hình vị trí in nào → không đòi design, chỉ đòi mockup.
+      const missing = areas
+        .filter((a) => a.isRequired !== false)
+        .filter((a) => !(item.designs as Record<string, string | undefined> | undefined)?.[a.key]?.trim());
+      if (missing.length > 0) {
+        // Nhãn tiếng Việt lấy từ bản đồ dùng chung với FE, khỏi lệch chữ. Kèm
+        // key gốc trong ngoặc vì bản đồ nhãn CHỈ có tiếng Việt — người đọc bản
+        // tiếng Anh vẫn cần biết chính xác vị trí nào.
+        const names = missing.map((a) => `${PRODUCT_PRINT_AREA_LABEL_MAP[a.key] ?? a.key} (${a.key})`).join(', ');
+        throw new BadRequestException(
+          `Sản phẩm "${label}": thiếu file design ở vị trí in ${names} — ` +
+            `Product "${label}": design file missing for print area ${names}`,
+        );
+      }
+    });
+  }
+
   async placeOrder(customer: CustomerDocument, dto: PlaceCustomerOrderDto): Promise<CustomerStagingOrderResDto> {
     const ctx = await this.buildPricingContext(dto.items);
     const [activePromotions, cutoff] = await Promise.all([
@@ -706,8 +758,11 @@ export class CustomerOrderService implements OnModuleInit {
     ]);
     const tier = customer.tier ?? null;
 
-    const items: CustomerOrderItem[] = dto.items.map((item) => {
-      const q = this.quoteItem(item, ctx, activePromotions, tier);
+    const quotes = dto.items.map((item) => this.quoteItem(item, ctx, activePromotions, tier));
+    this.assertArtworkComplete(dto.items, quotes, ctx);
+
+    const items: CustomerOrderItem[] = dto.items.map((item, i) => {
+      const q = quotes[i];
       return {
         type: q.type ?? item.type,
         color: q.color ?? item.color,
