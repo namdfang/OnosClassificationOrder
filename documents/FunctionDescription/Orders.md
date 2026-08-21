@@ -1857,4 +1857,8 @@ Giao diện chỉ gửi `'true'` hoặc `'1'` cho cả bảy cờ, nên đổi s
 
 Khoá bằng `apps/api/src/modules/order/order-query-flags.spec.ts` (35 ca), trong đó có bộ ca so THẲNG kết quả phân giải của hai DTO với nhau.
 
-**Còn lại chưa chuyển:** `isMapped` cùng DTO (ORD-24) và ~25 cờ ở các DTO khác trong `packages/shared`. `isMapped` đáng chú ý nhất: `ListOrderTab.tsx:424` gửi thẳng chuỗi `'false'` — chỗ **duy nhất** trong FE làm vậy — nên bộ lọc "Chưa map xưởng" ở tab đó trả về đúng điều ngược lại. Tab đó hiện đang tắt; bật lại thì phải sửa cờ này trước.
+**`isMapped` (ORD-24) — cờ duy nhất mà giao diện THẬT SỰ gửi `'false'`,** ở `ListOrderTab.tsx:424` (nút "Chưa mapping"). Nên nó không phải bẫy tiềm ẩn mà là lỗi **đang sai**: chọn "Chưa mapping" trả về đơn **đã** mapping. Đo trên DB local: `isMapped=false` trả 39.423 đơn (đã map) thay vì 187 đơn (chưa map). Sau ORD-24: `true` → 39.423, `false` → **187**, hai tập **rời nhau** và cộng lại đúng bằng 39.610 khi không lọc.
+
+Lưu ý về nghĩa: `isMapped` là cờ **map product config**, KHÔNG phải map xưởng — hệ hiện có 187 đơn `isMapped:false` nhưng **0** đơn thiếu `factoryId`. Hai khái niệm liên quan nhưng không bằng nhau; muốn lọc đơn chưa map xưởng thì dùng `unmapped` (trang `/orders/unmapped`).
+
+**Còn lại chưa chuyển:** ~25 cờ ở các DTO khác trong `packages/shared`. Trong `production-order.dto.ts` đã hết. `isMapped` đáng chú ý nhất: `ListOrderTab.tsx:424` gửi thẳng chuỗi `'false'` — chỗ **duy nhất** trong FE làm vậy — nên bộ lọc "Chưa map xưởng" ở tab đó trả về đúng điều ngược lại. Tab đó hiện đang tắt; bật lại thì phải sửa cờ này trước.

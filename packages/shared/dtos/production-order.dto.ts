@@ -378,7 +378,17 @@ export const OrderWorkshopFieldZod = z.enum(ORDER_WORKSHOP_FIELDS);
 
 //
 export const GetProductionOrdersZod = PageQueryZod.extend({
-  isMapped: z.coerce.boolean().optional(),
+  /**
+   * `true` → chỉ đơn ĐÃ map product config; `false` → chỉ đơn CHƯA map. Bỏ qua
+   * khi không truyền. `getOrders` kiểm `typeof dto.isMapped === 'boolean'` nên
+   * đây là cờ BA TRẠNG THÁI: `false` mang nghĩa riêng, không phải "tắt".
+   *
+   * Trước ORD-24 dùng `z.coerce.boolean()`, mà `z.coerce.boolean('false')` ra
+   * `true` — nên nút "Chưa mapping" ở `ListOrderTab` (chỗ DUY NHẤT trong cả FE
+   * gửi chuỗi `'false'`) trả về ĐÚNG ĐIỀU NGƯỢC LẠI: đơn đã map. Tab đó đang
+   * tắt nên chưa ai gặp; bật lại mà chưa sửa là lỗi hiện ra ngay.
+   */
+  isMapped: BooleanFlagZod,
   factoryId: IDZod.optional(),
   machineTypeId: IDZod.optional(),
   status: z.string().optional(),

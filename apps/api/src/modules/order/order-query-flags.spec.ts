@@ -129,3 +129,38 @@ describe('ORD-23 — cùng tên cờ thì cùng hành vi ở cả hai endpoint',
     expect(val(undefined)).toBeUndefined();
   });
 });
+
+
+/**
+ * `ORD-24` — `isMapped` là cờ cuối cùng của DTO này còn mang bẫy, và là cái
+ * DUY NHẤT mà giao diện thật sự gửi `'false'` (`ListOrderTab.tsx`, nút "Chưa
+ * mapping"). Nên nó không phải bẫy tiềm ẩn mà là lỗi ĐANG SAI: chọn "Chưa
+ * mapping" trả về đơn ĐÃ mapping. Đo trên dữ liệu thật: 187 đơn `isMapped:false`
+ * bị thay bằng 39.423 đơn đã map.
+ */
+describe('ORD-24 — isMapped: cờ ba trạng thái, false có nghĩa riêng', () => {
+  const val = (raw?: string) =>
+    GetProductionOrdersZod.parse(raw === undefined ? { page: 1, limit: 20 } : { page: 1, limit: 20, isMapped: raw })
+      .isMapped;
+
+  it("'false' phải ra false — đây là ca ĐANG SAI trước ORD-24", () => {
+    expect(val('false')).toBe(false);
+    expect(val('0')).toBe(false);
+  });
+
+  it("'true' và '1' ra true", () => {
+    expect(val('true')).toBe(true);
+    expect(val('1')).toBe(true);
+  });
+
+  it('không gửi hoặc rỗng thì KHÔNG lọc — `getOrders` kiểm typeof === boolean', () => {
+    expect(val(undefined)).toBeUndefined();
+    expect(val('')).toBeUndefined();
+  });
+
+  it('false và undefined KHÁC NHAU — trộn hai cái là mất bộ lọc "Chưa mapping"', () => {
+    expect(val('false')).not.toBeUndefined();
+    expect(typeof val('false')).toBe('boolean');
+    expect(typeof val(undefined)).not.toBe('boolean');
+  });
+});
