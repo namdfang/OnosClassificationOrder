@@ -386,11 +386,23 @@ export class CustomerOrderService implements OnModuleInit {
     return [
       { $match: { customerId } },
       {
+        // Nối bằng localField/foreignField để DÙNG ĐƯỢC index `productionId_1`.
+        // Bản cũ lọc bằng `$expr: { $in: ['$productionId', '$$pids'] }` — `$expr`
+        // KHÔNG dùng được index, nên mỗi document staging phải quét TOÀN BỘ
+        // `orders`: khách 3.478 đơn × 40.065 đơn sản xuất ≈ 139 triệu lượt quét,
+        // listing 71 giây. Dạng này đo lại còn 0,5 giây, kết quả khớp từng đơn.
+        //
+        // `productionId: { $ne: null }` là chốt chặn, KHÔNG phải trang trí: hai
+        // dạng nối chỉ lệch nhau ở chỗ dạng mới còn khớp cả đơn có
+        // `productionId` null/thiếu (khi `items` rỗng hoặc item thiếu
+        // `productionId`). Entity khai `required: true, unique: true` nên đơn
+        // như vậy không tồn tại, chốt này giữ cho tương lai. Xem ORD-18.
         $lookup: {
           from: 'orders',
-          let: { pids: { $map: { input: { $ifNull: ['$items', []] }, as: 'i', in: '$$i.productionId' } } },
+          localField: 'items.productionId',
+          foreignField: 'productionId',
           pipeline: [
-            { $match: { $expr: { $in: ['$productionId', '$$pids'] } } },
+            { $match: { productionId: { $ne: null } } },
             {
               $project: Object.fromEntries(PROD_DERIVE_FIELDS.split(' ').map((f) => [f, 1])),
             },

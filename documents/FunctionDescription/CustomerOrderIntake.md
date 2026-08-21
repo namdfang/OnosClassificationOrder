@@ -180,7 +180,7 @@ CustomerPaymentEntity {
 
 Tất cả trong `customer-order.service.ts`:
 
-- `buildDerivePipeline()` — aggregation dùng CHUNG listing + counts: `$lookup` orders theo `items[].productionId` (project `PROD_DERIVE_FIELDS`) → `$addFields statusDerived/heldAny/reworkAny/sortAt`. Logic MIRROR bộ hàm JS `deriveItemStatus()`/`isReworkBadge()`/`toStagingOrder()` (đổi 1 nơi phải đổi nơi kia — comment tại chỗ).
+- `buildDerivePipeline()` — aggregation dùng CHUNG listing + counts + `getOrderByRefForApi`: `$lookup` orders theo `items[].productionId` (project `PROD_DERIVE_FIELDS`) → `$addFields statusDerived/heldAny/reworkAny/sortAt`. Logic MIRROR bộ hàm JS `deriveItemStatus()`/`isReworkBadge()`/`toStagingOrder()` (đổi 1 nơi phải đổi nơi kia — comment tại chỗ). **Phép nối PHẢI viết dạng `localField`/`foreignField`** — xem §6.
 - `quoteItem()` + `buildPricingContext()` — resolve SKU→variation (map `bySku`) hoặc type→config (map `byType`, cho đơn form; chọn variation qua `pickVariation()` match attributes size/color, chỉ nhận khi không mơ hồ). Giá theo ship method + Promotion theo tier.
 - `importOrdersCsv()` — validate + create từng đơn, bắt `E11000` → `duplicated`; đơn có item lỗi → `failed` cả đơn.
 - `previewPush()` / `pushToProduction()` — mô tả ở §2.2. 1 lệnh `importOrders()` duy nhất cho mọi item (1 Telegram noti/lần push).
@@ -191,6 +191,8 @@ Tất cả trong `customer-order.service.ts`:
 ## 6. Performance notes
 
 - Listing dùng 1 aggregation duy nhất ($lookup theo `productionId` có index unique bên `orders` + index `items.productionId` bên staging) — không N+1 per đơn; `computeCurrentStage` chạy JS trên trang hiện tại (≤100 doc).
+- **ORD-18 — `$expr` trong `$lookup` không dùng được index.** Bản đầu lọc bằng `pipeline: [{ $match: { $expr: { $in: ['$productionId', '$$pids'] } } }]`. `$expr` khiến MongoDB **quét toàn bộ `orders` cho TỪNG document staging** dù `productionId_1` có sẵn: khách 3.478 đơn × 40.065 đơn sản xuất ≈ **139 triệu lượt quét**, listing **71 giây**, cả ba endpoint (listing / `counts` / `dashboard`) cùng treo vì dùng chung hàm này. Nay nối bằng `localField: 'items.productionId'` + `foreignField: 'productionId'` (giữ `pipeline` cho `$project`) — `explain` báo `indexesUsed: ["productionId_1"]`, listing **0,6 s**, counts **0,5 s**, kết quả khớp từng đơn trên cả 3.478 đơn.
+- **Chốt `productionId: { $ne: null }` trong sub-pipeline không được bỏ.** Hai dạng nối KHÔNG tương đương: dạng `localField` còn khớp cả đơn có `productionId` null/thiếu khi `items` rỗng hoặc item thiếu `productionId` (đã dựng bộ 9 ca biên để đo). `OrderEntity.productionId` khai `required: true, unique: true` nên đơn như vậy không tồn tại — chốt này giữ cho tương lai, bỏ đi là đơn `items` rỗng bỗng nối vào đơn rác.
 - `syncLegacyOrdersForCustomer` mỗi lần mở listing: 1 `distinct` + 1 `find $nin` scoped theo khách — chi phí tỉ lệ số đơn của chính khách đó. Khách có hàng chục nghìn đơn legacy sẽ chậm ở lần đầu (insertMany), các lần sau chỉ 2 query rỗng.
 - Backfill onModuleInit chạy đúng 1 lần (marker) — boot sau không quét lại.
 - Import cap 500 dòng/lần; `buildPricingContext` load config theo `$in` SKU 1 query cho cả batch.
