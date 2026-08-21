@@ -291,7 +291,21 @@ const describeSizeDimCell = (raw: string, dim: 'w' | 'l', t: TFunction): string 
   const value = parseCm(raw);
   if (value === null) return null;
   if (!Number.isFinite(value) || value <= 0) return t('detail.printAreaConfig.sizeDims.errorPositive');
-  if (dim === 'w' && value > PRINT_AREA_MAX_WIDTH_CM) {
+  // HF-1 — trần 58cm KHÔNG còn xét riêng ô rộng: một chiều vượt 58 vẫn in được vì
+  // quay ngang là vừa bề ngang giấy. Chỉ khi CẢ HAI chiều cùng vượt mới là không
+  // in được, mà ca đó phải nhìn cả cặp nên nằm ở `describeSizeDimPair`.
+  return null;
+};
+
+/**
+ * HF-1 — lỗi xét CẢ CẶP rộng/dài. Giấy DTF rộng 58cm nhưng dài vô hạn, nên khối
+ * 70x40 vẫn in được (quay ngang); chỉ khi cả hai chiều cùng vượt 58 thì quay kiểu
+ * nào cũng không lọt bề ngang giấy.
+ */
+const describeSizeDimPair = (width: number | null, length: number | null, t: TFunction): string | null => {
+  if (width === null || length === null) return null;
+  if (!Number.isFinite(width) || !Number.isFinite(length)) return null;
+  if (Math.min(width, length) > PRINT_AREA_MAX_WIDTH_CM) {
     return t('detail.printAreaConfig.sizeDims.errorMaxWidth', { max: PRINT_AREA_MAX_WIDTH_CM });
   }
   return null;
@@ -792,7 +806,9 @@ export default function ProductDetailPage() {
       Number.isFinite(length) &&
       width > 0 &&
       length > 0 &&
-      width <= PRINT_AREA_MAX_WIDTH_CM;
+      // HF-1 — chỉ chặn khi CẢ HAI chiều cùng vượt trần; một chiều vượt thì quay
+      // ngang là in được.
+      Math.min(width, length) <= PRINT_AREA_MAX_WIDTH_CM;
 
     setPrintArea((prev) =>
       prev.map((area) => {
@@ -899,11 +915,12 @@ export default function ProductDetailPage() {
         const length = parseCm(rawL);
         const bad = (v: number | null) => v !== null && (!Number.isFinite(v) || v <= 0);
         if (bad(width)) dimErrors[sizeDimKey(area.key, size, 'w')] = t('detail.printAreaConfig.sizeDims.errorPositive');
-        else if (width !== null && width > PRINT_AREA_MAX_WIDTH_CM)
-          dimErrors[sizeDimKey(area.key, size, 'w')] = t('detail.printAreaConfig.sizeDims.errorMaxWidth', {
-            max: PRINT_AREA_MAX_WIDTH_CM,
-          });
         if (bad(length)) dimErrors[sizeDimKey(area.key, size, 'l')] = t('detail.printAreaConfig.sizeDims.errorPositive');
+        // HF-1 — trần 58cm xét theo CẶP, không theo từng ô.
+        if (!dimErrors[sizeDimKey(area.key, size, 'w')] && !dimErrors[sizeDimKey(area.key, size, 'l')]) {
+          const pairProblem = describeSizeDimPair(width, length, t);
+          if (pairProblem) dimErrors[sizeDimKey(area.key, size, 'w')] = pairProblem;
+        }
         // Nửa cặp: có rộng mà thiếu dài (hoặc ngược lại) thì không dựng được vùng in.
         if (!dimErrors[sizeDimKey(area.key, size, 'w')] && !dimErrors[sizeDimKey(area.key, size, 'l')]) {
           if (width !== null && length === null)

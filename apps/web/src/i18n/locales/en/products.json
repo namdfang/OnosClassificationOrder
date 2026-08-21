@@ -293,11 +293,11 @@
         "title": "Print size per product size",
         "filled": "{{filled}}/{{total}} sizes filled",
         "size": "Size",
-        "width": "Width (cm) ≤ {{max}}",
+        "width": "Width (cm)",
         "length": "Length (cm)",
         "noSizes": "This product has no sizes yet. Add variants with an \"Item Size\" (or \"Size\") attribute in section ③ Variants & Price.",
         "errorPositive": "Enter a number greater than 0",
-        "errorMaxWidth": "Width tops out at {{max}} cm — 60 cm DTF paper minus 1 cm of grip on each side",
+        "errorMaxWidth": "Only one of the two sides may exceed {{max}} cm — DTF paper is {{max}} cm wide but endless in length, so a block can be turned sideways; both sides over the limit will not fit across the paper",
         "errorBoth": "Enter both width and length",
         "errorToast": "{{count}} print size field(s) are still invalid — fix them to save"
       }

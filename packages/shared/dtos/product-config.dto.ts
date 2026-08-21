@@ -35,13 +35,30 @@ export type ProductItemSpecific = z.infer<typeof ProductItemSpecificZod>;
  * `size` là chuỗi lấy từ thuộc tính "Size" của `variations[]` — KHÔNG cho gõ tự do
  * ở giao diện, để sau này ghép với size của đơn không bị lệch chính tả.
  */
-export const ProductPrintAreaSizeDimensionZod = z.object({
-  size: z.string().min(1).max(60).trim(),
-  /** Chiều rộng (cm) — trần `PRINT_AREA_MAX_WIDTH_CM` = vùng in thật của giấy DTF. */
-  widthCm: z.coerce.number().positive().max(PRINT_AREA_MAX_WIDTH_CM),
-  /** Chiều dài (cm) — KHÔNG có trần vì giấy in là giấy cuộn. */
-  lengthCm: z.coerce.number().positive(),
-});
+export const ProductPrintAreaSizeDimensionZod = z
+  .object({
+    size: z.string().min(1).max(60).trim(),
+    /** Chiều rộng (cm). */
+    widthCm: z.coerce.number().positive(),
+    /** Chiều dài (cm). */
+    lengthCm: z.coerce.number().positive(),
+  })
+  /**
+   * HF-1 — CHỈ MỘT trong hai chiều được vượt `PRINT_AREA_MAX_WIDTH_CM`, không phải
+   * cả hai.
+   *
+   * Vùng in thật của giấy DTF rộng 58cm nhưng dài vô hạn (giấy cuộn), nên một khối
+   * 70×40 vẫn in được — quay ngang là vừa. Trước đây trần đặt cứng trên `widthCm`,
+   * tức chặn luôn cả những vùng in in được thật, chỉ vì người nhập gõ số lớn vào
+   * ô "rộng" thay vì ô "dài".
+   *
+   * Nhưng CẢ HAI chiều cùng vượt 58 thì quay kiểu gì cũng không lọt qua bề ngang
+   * giấy — ca đó vẫn phải chặn.
+   */
+  .refine((d) => Math.min(d.widthCm, d.lengthCm) <= PRINT_AREA_MAX_WIDTH_CM, {
+    message: `Chỉ một trong hai chiều được vượt ${PRINT_AREA_MAX_WIDTH_CM} cm (chiều kia phải lọt bề ngang giấy để quay ngang được)`,
+    path: ['widthCm'],
+  });
 export type ProductPrintAreaSizeDimension = z.infer<typeof ProductPrintAreaSizeDimensionZod>;
 
 export const ProductPrintAreaItemZod = z.object({
