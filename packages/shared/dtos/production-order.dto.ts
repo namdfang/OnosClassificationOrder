@@ -444,8 +444,8 @@ export const GetProductionOrdersZod = PageQueryZod.extend({
    * biệt `__none__` để lọc đơn chưa có designerStatus (data legacy).
    */
   designerStatus: z.string().optional(),
-  /** Truthy → chỉ lấy đơn chưa map xưởng (factoryId null / không có). */
-  unmapped: z.coerce.boolean().optional(),
+  /** `true` → chỉ lấy đơn chưa map xưởng (factoryId null / không có). */
+  unmapped: BooleanFlagZod,
   /**
    * Truthy → GIỮ đơn xưởng US (xưởng ngoài luồng sản xuất) trong kết quả, thay
    * vì loại mặc định. Đơn chưa map xưởng VẪN bị loại, đơn đã hủy VẪN bị loại —
@@ -463,10 +463,12 @@ export const GetProductionOrdersZod = PageQueryZod.extend({
    */
   includeExcludedFactory: BooleanFlagZod,
   /**
-   * Truthy → chỉ lấy đơn có lỗi xưởng (productionError set, khác null/empty).
-   * Falsy → chỉ lấy đơn không có lỗi. Bỏ qua khi không có giá trị.
+   * `true` → chỉ lấy đơn có lỗi xưởng (productionError set, khác null/empty).
+   * `false` **không được hỗ trợ** — muốn xem đơn không lỗi thì đừng gửi cờ
+   * (xem comment tại `getOrders`). Comment cũ ghi "Falsy → chỉ lấy đơn không có
+   * lỗi" là SAI, mã chưa bao giờ làm vậy — sửa lại ở ORD-23.
    */
-  hasError: z.coerce.boolean().optional(),
+  hasError: BooleanFlagZod,
 
   /**
    * CSV `productionErrorSource` ('designer'|'factory'|'tool-check') — lọc theo
@@ -491,7 +493,7 @@ export const GetProductionOrdersZod = PageQueryZod.extend({
    * HOẶC `designerStatus ∈ [assigned, in-progress, rework, done]`. Kết hợp
    * `assignee=__none__` cho drill hàng "Chưa gán designer" Tổng quan N ngày.
    */
-  needDesigner: z.coerce.boolean().optional(),
+  needDesigner: BooleanFlagZod,
   /**
    * userId → đơn có sự kiện bàn giao "Không làm được" ĐI từ user này
    * (`designerRejections.fromUserId`). Drill hàng "Không làm được" panel
@@ -506,14 +508,19 @@ export const GetProductionOrdersZod = PageQueryZod.extend({
    * chưa soát (note rỗng) ∨ đã gán & chưa xong (status assigned/in-progress/
    * rework) ∨ đang lỗi & chưa gán (pool cần designer). Union — mirror aggregation.
    */
-  designBacklog: z.coerce.boolean().optional(),
+  designBacklog: BooleanFlagZod,
 
   /**
-   * Truthy → chỉ lấy đơn đang GIỮ (heldAt set). Falsy → chỉ lấy đơn KHÔNG giữ.
-   * Bỏ qua khi không truyền (mặc định hiện cả đơn giữ lẫn không giữ — đơn giữ
-   * chỉ bị tô xám + khóa, không ẩn khỏi list).
+   * `true` → chỉ lấy đơn đang GIỮ (heldAt set). `false` → chỉ lấy đơn KHÔNG
+   * giữ. Bỏ qua khi không truyền hoặc truyền rỗng (mặc định hiện cả đơn giữ
+   * lẫn không giữ — đơn giữ chỉ bị tô xám + khóa, không ẩn khỏi list).
+   *
+   * Đây là cờ BA TRẠNG THÁI thật: `false` mang nghĩa riêng chứ không phải
+   * "tắt". Trước ORD-23, `held=false` bị hiểu thành `true` nên trả về đúng điều
+   * ngược lại, còn `held=` (rỗng) bị hiểu thành `false` nên lọc mất đơn đang
+   * giữ thay vì không lọc gì. Giao diện chỉ gửi `'true'` nên chưa ai gặp.
    */
-  held: z.coerce.boolean().optional(),
+  held: BooleanFlagZod,
 
   /**
    * Lọc theo LÝ DO giữ đơn — exact match `holdReason` (field chỉ tồn tại khi
@@ -530,7 +537,7 @@ export const GetProductionOrdersZod = PageQueryZod.extend({
    * không truyền (list mặc định vẫn hiện đơn hủy tô xám). Đơn hủy LUÔN bị loại
    * khỏi mọi facet count (dropdown filter) trừ khi toggle này bật.
    */
-  cancelled: z.coerce.boolean().optional(),
+  cancelled: BooleanFlagZod,
 
   /**
    * Factory transfer filter. Values:
@@ -1471,14 +1478,21 @@ export const GetFactoryOverviewZod = z.object({
    * Optional — scope `availableFilters` chỉ về đơn có lỗi xưởng (Phase 8).
    * Mutually exclusive với printStage trên FE (chip "Lỗi xưởng" thay vị trí
    * "Đang in"). `true` → `productionError $exists & != ''`.
+   *
+   * Dùng `BooleanFlagZod` giống bản khai ở `GetProductionOrdersZod` — CÙNG TÊN
+   * CỜ thì phải CÙNG HÀNH VI. Để một bản phân giải đúng và một bản còn bẫy
+   * `false → true` là mời lỗi quay lại dưới vỏ bọc khó ngờ nhất: cùng một
+   * tham số, hai endpoint, hai kết quả (ORD-23).
    */
-  hasError: z.coerce.boolean().optional(),
+  hasError: BooleanFlagZod,
   /**
    * Optional — scope tất cả `availableFilters` về đơn chưa map xưởng. Mutually
    * exclusive với `factoryId`/`printStage`/`hasError` trên FE (chip "Chưa xác
    * định xưởng" thay cho chip xưởng).
+   *
+   * `BooleanFlagZod` — cùng lý do như `hasError` ngay trên (ORD-23).
    */
-  unmapped: z.coerce.boolean().optional(),
+  unmapped: BooleanFlagZod,
   /**
    * Faceted select filters — used to narrow OTHER `availableFilters` so the
    * dropdown counts reflect the current cross-filter scope. Each facet excludes

@@ -1808,7 +1808,7 @@ Trang `/orders/classic` (`OrderTableClassic.tsx`) — **và chỉ trang đó** �
 
 Cách làm: cờ **theo từng request** `GetProductionOrdersDto.includeExcludedFactory`. FE gắn cờ trong `buildFilterParams()` của `OrderTableClassic`; BE đọc ở `buildVisibilityFilter()` → clause `factoryId` thành `{ $exists: true, $ne: null }` thay cho `productionFactoryClause`.
 
-Cờ phân giải bằng `BooleanFlagZod` (`packages/shared/constants/common-zod.ts`), **không phải** `z.coerce.boolean()`. `z.coerce.boolean()` theo luật truthy của JavaScript nên mọi chuỗi khác rỗng đều thành `true`: gửi `includeExcludedFactory=false` — cách tự nhiên nhất để nói "đừng gộp" — lại **gộp** đơn xưởng US vào danh sách mà không báo lỗi gì (ORD-21, TEST đo được 39.906 thay vì 39.606). Luật: bật với `true`/`1`; tắt với `false`/`0` và mọi giá trị lạ; không gửi hoặc gửi rỗng → `undefined`. Giá trị lạ **không** ném 400 — trả về mặc định an toàn là loại đơn US. Khoá bằng `apps/api/src/modules/order/order-query-flags.spec.ts`.
+Cờ phân giải bằng `BooleanFlagZod` (`packages/shared/constants/common-zod.ts`), **không phải** `z.coerce.boolean()`. Từ ORD-23, sáu cờ lọc khác của cùng DTO dùng chung helper này — xem §22. `z.coerce.boolean()` theo luật truthy của JavaScript nên mọi chuỗi khác rỗng đều thành `true`: gửi `includeExcludedFactory=false` — cách tự nhiên nhất để nói "đừng gộp" — lại **gộp** đơn xưởng US vào danh sách mà không báo lỗi gì (ORD-21, TEST đo được 39.906 thay vì 39.606). Luật: bật với `true`/`1`; tắt với `false`/`0` và mọi giá trị lạ; không gửi hoặc gửi rỗng → `undefined`. Giá trị lạ **không** ném 400 — trả về mặc định an toàn là loại đơn US. Khoá bằng `apps/api/src/modules/order/order-query-flags.spec.ts`.
 
 **Vì sao là cờ theo request chứ không nới ở hàm dùng chung:** `GET /orders` + `buildOrderListFilter` còn phục vụ drill-down từ dashboard và nhiều bề mặt khác; nới ở đó thì danh sách drill lệch với số dashboard **mà không báo lỗi**. HF-2 (2026-08-21) đã nới diện rộng đúng kiểu đó và bị người dùng rút lại (khôi phục ở HF-3, commit `6d361fb`) — đọc §21.4 trước khi định mở rộng thêm.
 
@@ -1829,3 +1829,32 @@ Cờ này **chỉ mở đúng một nhóm**. Hai loại-trừ còn lại giữ n
 - Dashboard / thống kê / soát tool / auto-gán designer / entry fulfillment — KHÔNG caller nào trong nhóm này gửi `includeExcludedFactory`, và `getStatusOverview` còn dựng dto mới (`{ createdFrom, createdTo }`) nên cờ không thể lọt vào. Clause mặc định của chúng không đổi một ký tự nào sau ORD-19.
 - Import đơn: đơn US vẫn import + map factory bình thường (chỉ không đi tiếp vào luồng).
 - Worker Fulfillment gắn xưởng US (nếu có): nhánh khóa-xưởng của `buildMyTaskBase` không áp exclusion — nhưng đơn US không bao giờ được init stage nên my-tasks rỗng.
+
+
+## 22. Cờ boolean trên query string — `BooleanFlagZod`
+
+`z.coerce.boolean()` **không dùng được** cho cờ trên query string: nó theo luật truthy của JavaScript nên mọi chuỗi khác rỗng đều thành `true`, kể cả `'false'`, `'0'`, `'no'`. Một tham số mà `false` lại có nghĩa `true` là bẫy đặt sẵn cho người viết màn hình sau và cho chính người đang gỡ lỗi bằng cách sửa URL.
+
+Luật của `BooleanFlagZod` (`packages/shared/constants/common-zod.ts`): bật với `true`/`1`; tắt với `false`/`0` và **mọi giá trị lạ**; không gửi hoặc gửi rỗng → `undefined`, giữ nguyên nghĩa optional. Giá trị lạ **không** ném 400 — trả về mặc định an toàn, vì ném lỗi sẽ làm hỏng những nơi đang lỡ gửi giá trị lạ.
+
+**Cờ đã chuyển sang helper này** (ORD-21 + ORD-23) — đo trên DB local, gửi `false`:
+
+| Cờ | Trước (số đơn) | Sau | Mặc định |
+|---|---|---|---|
+| `includeExcludedFactory` | 39.906 (gộp cả đơn xưởng US) | 39.606 | 39.606 |
+| `unmapped` | **0** (đảo hẳn sang tập đơn chưa map xưởng) | 39.606 | 39.606 |
+| `cancelled` | 159 (chỉ đơn hủy) | 39.606 | 39.606 |
+| `held` | 0 (chỉ đơn đang giữ) | 39.606 | 39.606 |
+| `hasError` | 941 | 39.606 | 39.606 |
+| `designBacklog` | 3.519 | 39.606 | 39.606 |
+| `needDesigner` | 11.315 | 39.606 | 39.606 |
+
+Giao diện chỉ gửi `'true'` hoặc `'1'` cho cả bảy cờ, nên đổi sang helper **không làm màn hình nào đổi kết quả** — đã rà từng chỗ `params.set` trước khi sửa (ORD-23 bước 1).
+
+`held` là cờ **ba trạng thái** thật (`getOrders` kiểm `typeof dto.held === 'boolean'`): `false` nghĩa là *chỉ đơn KHÔNG giữ*, khác hẳn *không lọc*. Vì vậy chuỗi rỗng phải ra `undefined` chứ không phải `false` — nếu không, `held=` sẽ lọc mất đơn đang giữ thay vì không lọc gì.
+
+**Cùng tên cờ thì phải cùng hành vi.** `hasError` và `unmapped` còn một bản khai thứ hai ở `GetFactoryOverviewZod` (tab Dashboard "Đơn hàng theo xưởng") — cả hai cũng đã chuyển sang `BooleanFlagZod`. Để một bản đúng và một bản còn bẫy là cái bẫy khó ngờ nhất: cùng một tham số, hai endpoint, hai kết quả. Trước khi sửa, `unmapped=false` thu hẹp cả tab xuống **0 đơn** — dashboard trắng trơn mà không báo lỗi.
+
+Khoá bằng `apps/api/src/modules/order/order-query-flags.spec.ts` (35 ca), trong đó có bộ ca so THẲNG kết quả phân giải của hai DTO với nhau.
+
+**Còn lại chưa chuyển:** `isMapped` cùng DTO (ORD-24) và ~25 cờ ở các DTO khác trong `packages/shared`. `isMapped` đáng chú ý nhất: `ListOrderTab.tsx:424` gửi thẳng chuỗi `'false'` — chỗ **duy nhất** trong FE làm vậy — nên bộ lọc "Chưa map xưởng" ở tab đó trả về đúng điều ngược lại. Tab đó hiện đang tắt; bật lại thì phải sửa cờ này trước.
