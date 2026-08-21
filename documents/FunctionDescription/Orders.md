@@ -1776,11 +1776,9 @@ Response mẫu (`SetDesignReviewResultResDto` — `data` = `ProductionOrderZod` 
 
 Muốn thêm trang mới: import `useSidebarResetSignal` từ `@/hooks/useSidebarResetSignal`, gọi `useSidebarResetSignal(PATHS.XXX, resetFn)` với `resetFn` set lại mọi filter state về giá trị mặc định của trang đó.
 
-## 21. Xưởng ngoài luồng sản xuất — loại đơn xưởng US khỏi thống kê & luồng
+## 21. Xưởng ngoài luồng sản xuất — loại đơn xưởng US khỏi mọi thống kê & luồng
 
 > **Yêu cầu (2026-07):** đơn thuộc xưởng **US** không tham gia sản xuất tại chỗ → loại khỏi TOÀN BỘ thống kê + luồng, **chỉ hiển thị ở tab Dashboard "Đơn hàng theo xưởng"** (`getFactoryOverview` — KHÔNG áp exclusion) hoặc khi lọc tường minh `factoryId` = xưởng US.
->
-> **Sửa đổi (HF-2, 2026-08-21):** người dùng yêu cầu *"trước đây loại đơn xưởng US khỏi danh sách đơn, giờ hiển thị lại, hiển thị toàn bộ đơn"* → *"Làm đi, hiển thị tất đơn"* → **Danh sách đơn KHÔNG loại nhóm nào nữa** (US + đã hủy + chưa map xưởng). Mọi nơi còn lại (thống kê / dashboard / soát tool / auto-gán designer / entry fulfillment) GIỮ NGUYÊN exclusion — nới ở đó sẽ làm lệch số dashboard mà không báo lỗi. Chi tiết ở §21.3.
 
 ### 21.1 Cơ chế nhận diện
 
@@ -1794,8 +1792,7 @@ Muốn thêm trang mới: import `useSidebarResetSignal` từ `@/hooks/useSideba
 
 | Nhóm | Vị trí |
 |------|--------|
-| ~~Danh sách đơn~~ → **HF-2 bỏ exclusion**, xem 21.3 | — |
-| Dashboard "Trạng thái" (`getStatusOverview`) + mọi consumer gọi THẲNG `buildVisibilityFilter` | `order.service.ts` → `buildVisibilityFilter()` default clause dùng `productionFactoryClause` |
+| Danh sách đơn + facets + mọi consumer `buildVisibilityFilter`/`buildOrderListFilter` (getOrders, grouped, workshop-filters, status-overview, designer-breakdown/backlog, export...) | `order.service.ts` → `buildVisibilityFilter()` default clause dùng `productionFactoryClause` |
 | Dashboard Stats (`getDashboard`), Vòng đời (`getLifecycleOverview`), Đơn hủy (`getCancelledOrders`), Nhật ký bù lỗi (`getErrorLog`) | default `match.factoryId` từng hàm |
 | Soát tool (`GET /orders/design-review/next` + `remaining`) | `getNextDesignReviewOrder()` baseFilter thêm `factoryId: { $ne: usId }` (đơn CHƯA map xưởng vẫn vào queue như cũ) |
 | Auto-gán designer | `autoAssignAfterImport()` → `byFactory.delete(usId)` — kể cả khi Admin lỡ cấu hình designer cho US |
@@ -1803,38 +1800,7 @@ Muốn thêm trang mới: import `useSidebarResetSignal` từ `@/hooks/useSideba
 | Task Fulfillment view override-role | `fulfillment-task.service.ts` → `buildMyTaskBase()` nhánh không khóa xưởng |
 | Designer stats/backlog/tool-check/person-error/stage-error/daily-overview | `designer-stats.service.ts` — mọi chỗ `factoryId: { $exists: true, $ne: null }` → `productionFactoryClause` (9 điểm) |
 
-### 21.3 Danh sách đơn hiển thị TẤT CẢ đơn (HF-2)
-
-Trước HF-2, danh sách đơn loại mặc định **3 nhóm**. Nay bỏ cả 3 — chỉ ở danh sách:
-
-| Nhóm | Trước | Sau HF-2 |
-|------|-------|----------|
-| Đơn xưởng US | loại qua `productionFactoryClause` | **hiện** |
-| Đơn chưa map xưởng (`factoryId` thiếu) | loại, chỉ xem ở `/orders/unmapped` | **hiện** |
-| Đơn đã hủy (`cancelledAt`) | loại, chỉ xem khi bật toggle "Đã hủy" | **hiện** (tô xám + badge `CancelledBadge`) |
-
-Cách làm — 2 chỗ trong `order.service.ts`:
-- `buildVisibilityFilter()` nhận thêm cờ `includeHiddenGroups`; bật thì KHÔNG set clause `factoryId` mặc định nào (bỏ luôn `productionFactoryClause`). `buildOrderListFilter()` — hàm dựng filter dùng chung của MỌI bề mặt danh sách — luôn truyền `true`.
-- Toggle "Đã hủy" (`dto.cancelled`) đổi từ *ba trạng thái ngầm* thành *lọc thuần*: bật → CHỈ đơn hủy; tắt → **không lọc gì** (trước đây tắt = loại đơn hủy).
-
-Hệ quả cần biết:
-- Trang riêng `/orders/unmapped` (§19) **trùng lặp** với danh sách chính khi có đơn chưa map xưởng — trang vẫn chạy, chỉ là không còn độc quyền. Không xóa trang.
-- Số dòng danh sách + mọi bộ đếm theo tab đều tăng theo.
-- `cancelledCount` trên nút toggle "Đã hủy" vẫn đúng: nó strip toggle rồi tự cộng `cancelledAt: { $exists: true }`.
-
-Sửa 1 chỗ, 13 call site ăn theo — danh sách và các con số bao quanh nó khớp nhau:
-
-| Bề mặt | Hàm |
-|--------|-----|
-| Bảng đơn (classic + workshop) | `getOrders`, `getOrdersGroupedByType` |
-| Đếm theo tab trạng thái fulfillment | `getFulfillmentStatusCounts` |
-| Xuất Excel danh sách | `exportOrders` |
-| Options + đếm của thanh lọc workshop | `getWorkshopAvailableFilters` (7 call site) |
-| Bảng tổng hợp designer trên trang Đơn hàng | `getDesignerBreakdown` |
-
-Các hàm gọi THẲNG `buildVisibilityFilter` (không qua `buildOrderListFilter`) — hiện chỉ `getStatusOverview` — không nhận cờ này nên vẫn loại như cũ. `getOrdersByIds` (drill-down dashboard) cũng giữ nguyên loại đơn hủy.
-
-### 21.4 Những gì GIỮ NGUYÊN
+### 21.3 Những gì GIỮ NGUYÊN
 
 - `getFactoryOverview` (tab "Đơn hàng theo xưởng") — US vẫn hiện card/số liệu đầy đủ.
 - Lọc tường minh `factoryId` (drill từ tab xưởng, dropdown xưởng ở Danh sách đơn/Lifecycle) — `buildOrderListFilter` ghi đè `filter.factoryId = dto.factoryId` SAU default clause → chọn đúng xưởng US vẫn xem được đơn (escape hatch, cùng semantics trang unmapped).
