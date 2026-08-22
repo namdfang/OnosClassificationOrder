@@ -67,14 +67,18 @@
     "viewAllOrders": "Xem tất cả đơn →"
   },
   "fileInput": {
-    "uploadHint": "Tải file design lên (tối đa 300MB) hoặc dán URL",
+    "uploadHint": "Tải file design lên (tối đa {{max}}MB) hoặc dán URL",
     "uploadUnavailable": "Tải file lên chưa khả dụng — vui lòng dán URL ảnh (Google Drive, Imgur...)",
+    "tooLarge": "File {{size}} MB vượt giới hạn {{max}} MB — chọn file nhỏ hơn, hoặc dán URL của file.",
+    "badType": "Định dạng không dùng được — chỉ nhận {{formats}}.",
+    "configFailed": "Chưa lấy được giới hạn tải lên từ máy chủ — kiểm tra mạng rồi chọn file lại.",
     "hashing": "Đang kiểm tra file (tính mã nhận dạng)...",
     "processing": "Đã upload xong — hệ thống đang xử lý ảnh (thumb/preview)...",
     "done": "Upload thành công",
     "doneInstant": "File đã có sẵn trên hệ thống — không cần upload lại",
     "processFailed": "Xử lý ảnh thất bại — thử upload lại hoặc dùng URL",
-    "uploadFailed": "Upload thất bại — kiểm tra mạng rồi thử lại"
+    "uploadFailed": "Upload thất bại — kiểm tra mạng rồi thử lại",
+    "unconfirmed": "Chờ quá lâu nên chưa xác nhận được — file vẫn đang xử lý nền. Bạn cứ đặt đơn tiếp, không cần tải lại."
   },
   "login": {
     "title": "Đăng nhập Customer Portal",

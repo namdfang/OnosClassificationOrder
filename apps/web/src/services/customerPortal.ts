@@ -141,7 +141,12 @@ const getDesignFile = (sha256: string) => {
   return callApi(`/${CONFIG.API_VERSION}/customer/designs/${sha256}`, 'get');
 };
 
-export const customerDesign = { presignDesignUpload, confirmDesignUpload, getDesignFile };
+/** Giới hạn kích thước + định dạng — FE đọc từ server, KHÔNG chép cứng (ORD-17). */
+const getDesignUploadConfig = () => {
+  return callApi(`/${CONFIG.API_VERSION}/customer/designs/upload-config`, 'get');
+};
+
+export const customerDesign = { presignDesignUpload, confirmDesignUpload, getDesignFile, getDesignUploadConfig };
 
 const listNotifications = (page = 1, limit = 20) => {
   return callApi(`/${CONFIG.API_VERSION}/customer/notifications?page=${page}&limit=${limit}`, 'get');

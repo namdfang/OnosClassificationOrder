@@ -30,7 +30,13 @@ uploads/tmp/<uuid>              — vùng chờ upload, worker dọn sau xử l�
 ### 2.1 Upload trực tiếp (form đặt đơn / sửa đơn)
 
 ```
-FileUrlOrUploadInput: chọn file → sha256 (WebCrypto)
+FileUrlOrUploadInput: chọn file
+  → GET /customer/designs/upload-config (nạp sẵn lúc mở form, cache 1 lần/trang)
+  → 3 cổng chặn TRƯỚC khi đọc file vào RAM (ORD-17):
+      upload đang tắt (chưa cấu hình R2) → báo "dán URL", DỪNG
+      định dạng ngoài danh sách          → báo lỗi, DỪNG (không gọi presign)
+      kích thước > maxUploadMb           → báo kèm cỡ file + giới hạn, DỪNG
+  → sha256 (WebCrypto)
   → POST /customer/designs/presign {sha256,size,mime,fileName}
       dedup hit → mode='exists' → set value = CDN original URL, XONG (0 giây)
       chưa có   → mode='upload' + presigned PUT uploads/tmp/<uuid> (TTL 1h)
@@ -38,7 +44,14 @@ FileUrlOrUploadInput: chọn file → sha256 (WebCrypto)
   → POST /customer/designs/confirm {tmpKey,sha256} — BE HEAD verify + publish job RabbitMQ
   → value form = designCdnUrl(publicBase, sha, 'original') (chốt ngay, URL không đổi)
   → FE poll GET /customer/designs/:sha256 mỗi 2.5s tới `ready` (hiện trạng thái xử lý)
+      quá 60 lần (~2,5 phút) mà chưa có kết quả → phase `unconfirmed` (vàng,
+      "đang xử lý nền"), KHÔNG hiện dấu tích xanh — xem §5 ORD-17
 ```
+
+**Vì sao chặn kích thước phải nằm TRƯỚC bước băm:** `sha256OfFile()` gọi
+`file.arrayBuffer()`, nạp NGUYÊN file vào RAM của tab. Design thường 20–100 MB+
+nên khách chọn nhầm file vài GB là chuyện sẽ xảy ra — băm trước rồi mới để
+server từ chối nghĩa là tab treo trước khi kịp nhận thông báo.
 
 ### 2.2 Ingest từ URL ngoài lúc Push to production (đơn CSV giữ URL Drive)
 
@@ -67,6 +80,7 @@ FileUrlOrUploadInput: chọn file → sha256 (WebCrypto)
 | --- | --- | --- | --- |
 | POST | `/v1/customer/designs/presign` | Customer | Dedup check + presigned PUT `uploads/tmp/<uuid>`; res `{mode:'exists'\|'upload', file, publicBase, uploadUrl?, tmpKey?}` |
 | POST | `/v1/customer/designs/confirm` | Customer | HEAD verify object + size cap → publish job worker |
+| GET | `/v1/customer/designs/upload-config` | Customer | Giới hạn + định dạng cho ô tải file; res `{uploadEnabled, maxUploadMb, allowedMimeTypes, allowedExtensions}`. **Khai TRƯỚC `:sha256`** (Nest match theo thứ tự). KHÔNG ném lỗi khi thiếu R2 — trả `uploadEnabled:false` kèm giới hạn, để FE vẫn chặn sớm được |
 | GET | `/v1/customer/designs/lifecycle/cron` | public | Cron vòng đời (archive/delete/stale) — pattern cron endpoint sẵn có |
 | GET | `/v1/customer/designs/:sha256` | Customer | Poll trạng thái (FE chờ `ready`) |
 
@@ -94,13 +108,15 @@ DesignFileEntity {
 
 ## 4. UI Components
 
-- `FileUrlOrUploadInput.tsx` — dán URL HOẶC upload trực tiếp: nút UploadCloud → hash → presign → XHR PUT (progress bar) → confirm → poll; trạng thái hashing/uploading %/processing/done/doneInstant (dedup)/error. Dùng ở form `/customer/orders/new` + trang track/sửa đơn.
+- `FileUrlOrUploadInput.tsx` — dán URL HOẶC upload trực tiếp: nút UploadCloud → 3 cổng chặn (§2.1) → hash → presign → XHR PUT (progress bar) → confirm → poll; trạng thái hashing/uploading %/processing/done/doneInstant (dedup)/**unconfirmed**/error. `accept` của hộp thoại chọn file dựng từ danh sách server trả về, không viết cứng. Dùng ở form `/customer/orders/new` + trang track/sửa đơn.
 - `utils/driveThumb.ts` — `driveThumbUrl()`/`smallThumb()` nhận diện thêm URL CDN mới qua `designVariantUrl()` (original → thumb/preview) trước khi fallback Drive/R2 cũ → mọi chỗ render design thumbnail tự hỗ trợ, không sửa từng component.
 - i18n `customerPortal.json` keys `fileInput.*` (vi + en).
 
 ## 5. Backend logic
 
-- `DesignStorageService` — `presign()`/`confirm()`/`getBySha()`/`touchUsageForUrls()`/`enqueueUrlIngest()`/`runLifecycle()`; S3Client trỏ R2 endpoint, tái dùng getter `ApiConfigService.r2Config` (mở rộng thêm `maxUploadMb`/`originalTtlDays`/`iaDeleteMonths`). Publish qua `AmqpConnection` (AmqpModule global), routing key `${RABBITMQ_MAIN_EXCHANGE}.design.process`.
+- **ORD-17 — ba luật của ô tải file:** (1) giới hạn LẤY TỪ SERVER, không chép cứng vào FE hay vào chuỗi i18n (`fileInput.uploadHint` nhận `{{max}}`); server đổi `DESIGN_MAX_UPLOAD_MB` là FE đổi theo sau khi tải lại trang. (2) hết giờ chờ **≠** thành công — trạng thái `unconfirmed` nói rõ file còn xử lý nền, value vẫn là CDN URL nên khách đặt đơn tiếp được. (3) danh sách định dạng là hằng số dùng chung `DESIGN_UPLOAD_ALLOWED_MIME_TYPES`/`_EXTENSIONS` ở `packages/shared`. **Chặn định dạng hiện CHỈ ở trình duyệt** — server chưa có danh sách trắng MIME, nên gọi thẳng API vẫn đẩy được file khác; xem `design-upload-config.spec.ts` cho phần đã khoá bằng test.
+- `ApiConfigService.designUploadMaxMb` — đọc `DESIGN_MAX_UPLOAD_MB` TÁCH khỏi `r2Config` (nó không phải credential), để FE biết giới hạn ngay cả khi kho R2 chưa dựng. Cùng env + cùng mặc định 300 với `r2Config.maxUploadMb` nên không lệch.
+- `DesignStorageService` — `getUploadConfig()`/`presign()`/`confirm()`/`getBySha()`/`touchUsageForUrls()`/`enqueueUrlIngest()`/`runLifecycle()`; S3Client trỏ R2 endpoint, tái dùng getter `ApiConfigService.r2Config` (mở rộng thêm `maxUploadMb`/`originalTtlDays`/`iaDeleteMonths`). Publish qua `AmqpConnection` (AmqpModule global), routing key `${RABBITMQ_MAIN_EXCHANGE}.design.process`.
 - Hook `customer-order.service.ts`: `placeOrder`/`importOrdersCsv`/`updateStagingOrder`/`updateOrder` → `touchUsageForUrls()` (fail êm, không chặn đặt đơn); `pushToProduction` → touch CDN + `enqueueUrlIngest` cho URL ngoài (§2.2).
 - Worker (`apps/design-worker`): amqplib consumer prefetch 3, ghi Mongo trực tiếp qua Tailscale bằng schema `strict:false` tối thiểu (nguồn chân lý là entity bên api); Dockerfile multi-stage build từ root monorepo + `docker-compose.yml` + `.env.example` trong thư mục worker.
 

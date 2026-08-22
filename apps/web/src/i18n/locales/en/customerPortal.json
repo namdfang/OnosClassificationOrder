@@ -67,14 +67,18 @@
     "viewAllOrders": "View all orders →"
   },
   "fileInput": {
-    "uploadHint": "Upload design file (max 300MB) or paste a URL",
+    "uploadHint": "Upload design file (max {{max}}MB) or paste a URL",
     "uploadUnavailable": "File upload isn't available yet — please paste an image URL (Google Drive, Imgur...)",
+    "tooLarge": "This file is {{size}} MB, over the {{max}} MB limit — pick a smaller file, or paste its URL instead.",
+    "badType": "That format will not work — only {{formats}} are accepted.",
+    "configFailed": "Couldn't read the upload limit from the server — check your connection and pick the file again.",
     "hashing": "Checking file (computing fingerprint)...",
     "processing": "Uploaded — the system is processing the image (thumb/preview)...",
     "done": "Upload successful",
     "doneInstant": "File already exists in the system — no upload needed",
     "processFailed": "Image processing failed — retry the upload or use a URL",
-    "uploadFailed": "Upload failed — check your connection and retry"
+    "uploadFailed": "Upload failed — check your connection and retry",
+    "unconfirmed": "Still processing after the wait — the file is being handled in the background. Go ahead and place the order; no need to upload again."
   },
   "login": {
     "title": "Sign in to Customer Portal",

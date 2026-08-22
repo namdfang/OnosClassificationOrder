@@ -70,6 +70,17 @@ export class ApiConfigService {
   }
 
   /**
+   * Giới hạn kích thước file design khách tải lên. Đọc TÁCH khỏi `r2Config` vì
+   * nó không phải credential: FE cần biết con số này để chặn sớm ngay cả khi
+   * kho R2 chưa cấu hình (ORD-17). `r2Config.maxUploadMb` đọc cùng env, cùng
+   * mặc định, nên hai chỗ không bao giờ lệch nhau.
+   */
+  get designUploadMaxMb(): number {
+    const v = Number(this.configService.get<string>('DESIGN_MAX_UPLOAD_MB'));
+    return Number.isFinite(v) && v > 0 ? v : 300;
+  }
+
+  /**
    * R2 (Cloudflare) config. Lenient — chỉ active khi đủ 4 field cốt lõi
    * (account/key/secret/bucket/publicBase). Thiếu → trả `null` để
    * DesignImageService skip queue, importOrders fallback giữ URL gốc thẳng.

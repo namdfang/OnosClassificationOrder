@@ -3,8 +3,20 @@ import { getSignedUrl } from '@aws-sdk/s3-request-presigner';
 import { AmqpConnection } from '@golevelup/nestjs-rabbitmq';
 import { BadRequestException, Injectable, Logger, NotFoundException } from '@nestjs/common';
 import { randomUUID } from 'crypto';
-import type { ConfirmDesignUploadDto, DesignFile, DesignIngestJob, PresignDesignUploadDto } from 'shared';
-import { DESIGN_PROCESSING_QUEUE, designFileKey, extractDesignSha } from 'shared';
+import type {
+  ConfirmDesignUploadDto,
+  DesignFile,
+  DesignIngestJob,
+  DesignUploadConfig,
+  PresignDesignUploadDto,
+} from 'shared';
+import {
+  DESIGN_PROCESSING_QUEUE,
+  DESIGN_UPLOAD_ALLOWED_EXTENSIONS,
+  DESIGN_UPLOAD_ALLOWED_MIME_TYPES,
+  designFileKey,
+  extractDesignSha,
+} from 'shared';
 
 import type { CustomerDocument } from '@/modules/customer/customer.entity';
 import { ApiConfigService } from '@/shared/services';
@@ -37,6 +49,22 @@ export class DesignStorageService {
 
   isEnabled(): boolean {
     return this.cfg.r2Config !== null;
+  }
+
+  /**
+   * Giới hạn + định dạng cho ô tải file ở FE. CHỈ đọc cấu hình, không đụng
+   * luồng presign/confirm — hai lớp chặn kích thước ở đó giữ nguyên. Có mặt để
+   * FE khỏi chép cứng con số (ORD-17).
+   */
+  getUploadConfig(): DesignUploadConfig {
+    // KHÔNG ném lỗi khi thiếu R2: FE vẫn cần giới hạn để chặn file quá lớn
+    // trước khi băm, và cần biết upload đang tắt để bảo khách dán URL.
+    return {
+      uploadEnabled: this.isEnabled(),
+      maxUploadMb: this.cfg.designUploadMaxMb,
+      allowedMimeTypes: [...DESIGN_UPLOAD_ALLOWED_MIME_TYPES],
+      allowedExtensions: [...DESIGN_UPLOAD_ALLOWED_EXTENSIONS],
+    };
   }
 
   private getS3(): S3Client {

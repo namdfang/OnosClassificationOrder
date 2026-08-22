@@ -120,6 +120,34 @@ export class ConfirmDesignUploadResDto extends createZodDto(extendApi(ConfirmDes
 export const GetDesignFileResZod = ResZod.extend({ data: DesignFileZod });
 export class GetDesignFileResDto extends createZodDto(extendApi(GetDesignFileResZod)) {}
 
+//
+/**
+ * Định dạng ảnh nhận được cho design/mockup. PNG là dạng chuẩn của đơn DTF
+ * (nền trong suốt). Danh sách này là NGUỒN DUY NHẤT: BE trả ra ở
+ * `GET /customer/designs/upload-config`, FE dùng cho `accept` của hộp thoại
+ * chọn file và cho bước kiểm trước khi băm.
+ */
+export const DESIGN_UPLOAD_ALLOWED_MIME_TYPES = ['image/png', 'image/jpeg', 'image/tiff', 'image/webp'] as const;
+
+/** Đuôi file tương ứng — dùng khi trình duyệt để trống `File.type` (hay gặp với `.tif`). */
+export const DESIGN_UPLOAD_ALLOWED_EXTENSIONS = ['.png', '.jpg', '.jpeg', '.tif', '.tiff', '.webp'] as const;
+
+/**
+ * Cấu hình ô tải file, đọc lúc FE mở form. Có endpoint riêng để FE KHÔNG chép
+ * cứng giới hạn — đổi `DESIGN_MAX_UPLOAD_MB` ở server là FE đổi theo.
+ */
+export const GetDesignUploadConfigResZod = ResZod.extend({
+  data: z.object({
+    /** false = server chưa cấu hình kho R2 → ô chỉ nhận URL dán vào. */
+    uploadEnabled: z.boolean(),
+    maxUploadMb: z.number().int().positive(),
+    allowedMimeTypes: z.array(z.string()),
+    allowedExtensions: z.array(z.string()),
+  }),
+});
+export class GetDesignUploadConfigResDto extends createZodDto(extendApi(GetDesignUploadConfigResZod)) {}
+export type DesignUploadConfig = z.infer<typeof GetDesignUploadConfigResZod>['data'];
+
 // ---------------------------------------------------------------------------
 // RabbitMQ job contract (API publish ↔ design-worker consume)
 // ---------------------------------------------------------------------------
