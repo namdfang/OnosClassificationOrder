@@ -15,6 +15,16 @@
 // Spawn thẳng binary `node` với `interpreter: 'none'` thay vì để pm2 tự nạp
 // script: pm2 fork mode nạp script bằng `require()`, còn ở đây cần Nest CLI
 // chạy như tiến trình độc lập để nó tự quản tiến trình con mà nó restart.
+//
+// Vá `@nestjs/cli` (pnpm patch → `patches/@nestjs__cli@10.1.11.patch`): Nest CLI
+// spawn tiến trình chạy app bằng `shell: true` mà KHÔNG đặt `windowsHide`
+// (`actions/start.action.js`). pm2 spawn tiến trình con với `detached` +
+// `windowsHide` nên Nest CLI không có console nào; `cmd.exe` do nó đẻ ra vì thế
+// được Windows cấp console MỚI — bật một cửa sổ đen mỗi lần swc biên dịch lại.
+// Bản vá chỉ thêm `windowsHide: true` vào đúng lời gọi spawn đó.
+// KHÔNG đổi thành `shell: false`: `processArgs` có phần tử
+// '-r source-map-support/register' chứa dấu cách, chỉ chạy đúng khi qua shell.
+// Nâng phiên bản @nestjs/cli thì phải tạo lại bản vá bằng `pnpm patch`.
 
 module.exports = [
   {
