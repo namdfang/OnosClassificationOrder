@@ -4,6 +4,7 @@ import { BaseEntityZod, PageQueryZod, PageResZod, ResZod } from '@shared/types';
 import { z } from 'zod';
 
 import { IDZod } from '../constants/common-zod';
+import { BooleanFlagZod } from '../constants/common-zod';
 
 /**
  * Danh mục sản phẩm — module riêng (KHÔNG dùng workshop_config) để
@@ -27,7 +28,14 @@ export type ProductCategory = z.infer<typeof ProductCategoryZod>;
 
 //
 export const GetProductCategoriesZod = PageQueryZod.extend({
-  isActive: z.coerce.boolean().optional(),
+  /**
+   * `true` → chỉ danh mục đang bật; `false` → chỉ danh mục đã tắt. Cờ BA TRẠNG
+   * THÁI (service kiểm `typeof === 'boolean'`) — ORD-28.
+   *
+   * `BooleanFlagZod` chứ KHÔNG phải `z.coerce.boolean()` — cái sau coi mọi chuỗi
+   * khác rỗng là bật, kể cả `'false'`. Xem `Orders.md §22`.
+   */
+  isActive: BooleanFlagZod,
 });
 export class GetProductCategoriesDto extends createZodDto(extendApi(GetProductCategoriesZod)) {}
 

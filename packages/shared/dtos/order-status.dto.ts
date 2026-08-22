@@ -4,6 +4,8 @@ import { IDZod } from '@shared/constants';
 import { ResZod } from '@shared/types';
 import { z } from 'zod';
 
+import { BooleanFlagZod } from '../constants/common-zod';
+
 //
 // Status overview query — superset of order list filters.
 //
@@ -21,7 +23,19 @@ export const GetOrderStatusOverviewZod = z.object({
   hasError: z.coerce.boolean().optional(),
   factoryId: IDZod.optional(),
   machineTypeId: IDZod.optional(),
-  readyForFulfill: z.coerce.boolean().optional(),
+  /**
+   * `true` → chỉ đơn ĐÃ sẵn sàng chuyển fulfillment; `false` → chỉ đơn CHƯA sẵn
+   * sàng. Cờ BA TRẠNG THÁI (`getStatusOverview` kiểm `typeof === 'boolean'`).
+   *
+   * ĐÂY LÀ CỜ DUY NHẤT TRONG ĐỢT ORD-28 ĐANG SAI THẬT: `useStatusFilter.ts`
+   * gửi `String(value)` nên khi người dùng chọn "chưa sẵn sàng" thì URL mang
+   * `readyForFulfill=false`, mà `z.coerce.boolean('false')` ra `true` — trả về
+   * đúng nhóm NGƯỢC LẠI. Giao diện gửi đúng, bộ phân giải mới là chỗ hỏng.
+   *
+   * `BooleanFlagZod` chứ KHÔNG phải `z.coerce.boolean()` — cái sau coi mọi chuỗi
+   * khác rỗng là bật, kể cả `'false'`. Xem `Orders.md §22`.
+   */
+  readyForFulfill: BooleanFlagZod,
   createdFrom: z.string().optional(),
   createdTo: z.string().optional(),
   search: z.string().optional(),

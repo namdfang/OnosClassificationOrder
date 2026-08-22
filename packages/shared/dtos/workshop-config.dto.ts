@@ -4,6 +4,8 @@ import { FulfillmentStage, WorkshopConfigCategory } from '@shared/enums';
 import { BaseEntityZod, PageResZod, ResZod } from '@shared/types';
 import { z } from 'zod';
 
+import { BooleanFlagZod } from '../constants/common-zod';
+
 const WorkshopConfigCategoryZod = z.nativeEnum(WorkshopConfigCategory);
 const FulfillmentStageZod = z.nativeEnum(FulfillmentStage);
 
@@ -46,7 +48,14 @@ export type WorkshopConfig = z.infer<typeof WorkshopConfigZod>;
 // LIST
 export const GetWorkshopConfigsZod = z.object({
   category: WorkshopConfigCategoryZod.optional(),
-  isActive: z.coerce.boolean().optional(),
+  /**
+   * `true` → chỉ mục đang bật; `false` → chỉ mục đã tắt. Cờ BA TRẠNG THÁI
+   * (service kiểm `typeof dto.isActive === 'boolean'`) — ORD-28.
+   *
+   * `BooleanFlagZod` chứ KHÔNG phải `z.coerce.boolean()` — cái sau coi mọi chuỗi
+   * khác rỗng là bật, kể cả `'false'`. Xem `Orders.md §22`.
+   */
+  isActive: BooleanFlagZod,
 });
 export class GetWorkshopConfigsDto extends createZodDto(extendApi(GetWorkshopConfigsZod)) {}
 

@@ -1861,4 +1861,15 @@ Khoá bằng `apps/api/src/modules/order/order-query-flags.spec.ts` (35 ca), tro
 
 Lưu ý về nghĩa: `isMapped` là cờ **map product config**, KHÔNG phải map xưởng — hệ hiện có 187 đơn `isMapped:false` nhưng **0** đơn thiếu `factoryId`. Hai khái niệm liên quan nhưng không bằng nhau; muốn lọc đơn chưa map xưởng thì dùng `unmapped` (trang `/orders/unmapped`).
 
-**Còn lại chưa chuyển:** ~25 cờ ở các DTO khác trong `packages/shared`. Trong `production-order.dto.ts` đã hết. `isMapped` đáng chú ý nhất: `ListOrderTab.tsx:424` gửi thẳng chuỗi `'false'` — chỗ **duy nhất** trong FE làm vậy — nên bộ lọc "Chưa map xưởng" ở tab đó trả về đúng điều ngược lại. Tab đó hiện đang tắt; bật lại thì phải sửa cờ này trước.
+**Quét nốt phần còn lại (ORD-28).** Đếm bằng mã nguồn: đúng **21 cờ** `z.coerce.boolean` còn lại — 16 trên query string, 5 trong thân JSON.
+
+| Nhóm | Kết luận |
+|---|---|
+| `readyForFulfill` (`GetOrderStatusOverviewZod`) | **ĐÃ SỬA — đang sai thật.** `useStatusFilter.ts` gửi `String(value)` = `'false'`, nên chọn *"chưa sẵn sàng"* trả về nhóm *"đã sẵn sàng"*. Sau khi sửa: `false` → 4.145 đơn thay vì 35.411; hai tập rời nhau, cộng lại đúng 39.556 |
+| `isActive` × 5 (`GetCollections`/`GetFactories`/`GetMachineTypes`/`GetProductCategories`/`GetWorkshopConfigs`) | **ĐÃ SỬA — bẫy chưa nổ.** Service kiểm `typeof === 'boolean'` nên `false` có nghĩa riêng; hiện chưa service FE nào gửi cờ này, nên đổi không làm màn hình nào đổi kết quả |
+| `deleted` (`GetCustomersZod`), `hasError` (`GetOrderStatusOverviewZod`) | **GIỮ NGUYÊN — đang đúng.** Nơi gọi bỏ hẳn tham số khi tắt (`showDeleted \|\| undefined`, `set('hasError','true')`) |
+| `held` (`GetCustomerStagingOrdersZod`) | **GIỮ NGUYÊN.** `customerPortal.ts:53` dùng `if (filters?.held)` nên `false` không bao giờ lên URL; service cũng chỉ kiểm truthy |
+| 7 cờ trên DTO CHẾT: `isReferrerOrder` ×2, `scan`, `isExport` (`GetOrdersZod`/`GetOrderStatisticsZod`), `overdue3/5/30Days` (`GetTrackingsZod`) | **GIỮ NGUYÊN.** Không controller nào dùng ba DTO này |
+| 5 cờ trong THÂN JSON: `scanTracking` ×4 (dropship/stock), `forcePassChange` (`UserZod`) | **GIỮ NGUYÊN.** Thân JSON mang boolean thật nên `z.coerce.boolean(false)` ra `false` — đúng. Đã tìm nơi gửi chuỗi `"false"` trong thân: không có |
+
+Khoá bằng `apps/api/src/modules/order/query-flags-sweep.spec.ts` (30 ca). `isMapped` đáng chú ý nhất: `ListOrderTab.tsx:424` gửi thẳng chuỗi `'false'` — chỗ **duy nhất** trong FE làm vậy — nên bộ lọc "Chưa map xưởng" ở tab đó trả về đúng điều ngược lại. Tab đó hiện đang tắt; bật lại thì phải sửa cờ này trước.

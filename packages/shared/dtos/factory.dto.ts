@@ -4,6 +4,8 @@ import { FactoryFlowType } from '@shared/enums';
 import { BaseEntityZod, PageQueryZod, PageResZod, ResZod } from '@shared/types';
 import { z } from 'zod';
 
+import { BooleanFlagZod } from '../constants/common-zod';
+
 export const FactoryZod = BaseEntityZod.extend({
   name: z.string().min(1).max(120),
   shortName: z.string().min(1).max(20),
@@ -15,7 +17,14 @@ export type Factory = z.infer<typeof FactoryZod>;
 
 //
 export const GetFactoriesZod = PageQueryZod.extend({
-  isActive: z.coerce.boolean().optional(),
+  /**
+   * `true` → chỉ xưởng đang bật; `false` → chỉ xưởng đã tắt. Cờ BA TRẠNG THÁI
+   * (service kiểm `typeof === 'boolean'`) — ORD-28.
+   *
+   * `BooleanFlagZod` chứ KHÔNG phải `z.coerce.boolean()` — cái sau coi mọi chuỗi
+   * khác rỗng là bật, kể cả `'false'`. Xem `Orders.md §22`.
+   */
+  isActive: BooleanFlagZod,
 });
 export class GetFactoriesDto extends createZodDto(extendApi(GetFactoriesZod)) {}
 
