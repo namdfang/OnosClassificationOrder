@@ -14,6 +14,7 @@ import { I18nService } from 'nestjs-i18n';
 
 import { AppModule } from './app.module';
 import { setupSwagger } from './setup-swagger';
+import { isMachineSurfaceUrl, resolveRequestLang, runWithRequestLang } from './shared/i18n/request-language';
 import { ApiConfigService } from './shared/services';
 import { SharedModule } from './shared/shared.module';
 
@@ -140,6 +141,14 @@ export async function bootstrap(): Promise<NestFastifyApplication> {
       crossOriginEmbedderPolicy: false,
     }),
   );
+  // Ngôn ngữ của request, giữ trong AsyncLocalStorage để service ném lỗi đúng
+  // thứ tiếng mà không phải thêm tham số vào từng hàm (ORD-29). Phải gọi
+  // `next()` BÊN TRONG `runWithRequestLang` thì ngữ cảnh mới theo được chuỗi
+  // async của request. Không khai gì / thứ tiếng lạ / bề mặt máy → tiếng Việt.
+  app.use((req: { headers: Record<string, string | undefined>; url?: string }, _res: unknown, next: () => void) => {
+    const url = req.url ?? '';
+    runWithRequestLang(resolveRequestLang(req.headers['accept-language'], url), () => next(), isMachineSurfaceUrl(url));
+  });
   // app.setGlobalPrefix('/api'); use api as global prefix if you don't have subdomain
   // app.use(
   //   rateLimit({

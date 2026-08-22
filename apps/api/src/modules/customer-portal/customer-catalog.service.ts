@@ -19,6 +19,7 @@ import type { CustomerDocument } from '@/modules/customer/customer.entity';
 import { ProductCategoryEntity } from '@/modules/product-category/product-category.entity';
 import { ProductConfigEntity } from '@/modules/product-config/product-config.entity';
 import { applyPromotionDiscount, promotionMatches, PromotionService } from '@/modules/promotion/promotion.service';
+import { customerMessage } from '@/shared/i18n/customer-messages';
 
 const CATALOG_ROW_SELECT =
   'fullName shortName productCategoryId printMethod printArea printDocument printTemplate mockup images usImportTaxPerUnit sizeChartUrl description itemSpecifics variations';
@@ -218,7 +219,7 @@ export class CustomerCatalogService {
         .lean(),
       applyPromotions ? this.promotionService.getActiveInDateRange() : Promise.resolve([]),
     ]);
-    if (!row) throw new NotFoundException('Không tìm thấy sản phẩm này.');
+    if (!row) throw new NotFoundException(customerMessage('productNotFound'));
 
     const collectionIds = row.collectionIds || [];
     const collections =

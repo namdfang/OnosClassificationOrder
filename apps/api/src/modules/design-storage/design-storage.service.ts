@@ -19,6 +19,7 @@ import {
 } from 'shared';
 
 import type { CustomerDocument } from '@/modules/customer/customer.entity';
+import { customerMessage } from '@/shared/i18n/customer-messages';
 import { ApiConfigService } from '@/shared/services';
 
 import type { DesignFileDocument } from './design-file.entity';
@@ -70,7 +71,7 @@ export class DesignStorageService {
   private getS3(): S3Client {
     if (this.s3) return this.s3;
     const c = this.cfg.r2Config;
-    if (!c) throw new BadRequestException('Kho design chưa được cấu hình (R2_* env)');
+    if (!c) throw new BadRequestException(customerMessage('designStoreNotConfiguredEnv'));
     this.s3 = new S3Client({
       region: 'auto',
       endpoint: `https://${c.accountId}.r2.cloudflarestorage.com`,
@@ -108,9 +109,9 @@ export class DesignStorageService {
    */
   async presign(customer: CustomerDocument, dto: PresignDesignUploadDto) {
     const c = this.cfg.r2Config;
-    if (!c) throw new BadRequestException('Kho design chưa được cấu hình — liên hệ hỗ trợ.');
+    if (!c) throw new BadRequestException(customerMessage('designStoreNotConfigured'));
     if (dto.size > c.maxUploadMb * 1024 * 1024) {
-      throw new BadRequestException(`File ${(dto.size / 1024 / 1024).toFixed(1)} MB vượt giới hạn ${c.maxUploadMb} MB`);
+      throw new BadRequestException(customerMessage('designFileTooLargePresign', (dto.size / 1024 / 1024).toFixed(1), c.maxUploadMb));
     }
 
     const existing = await this.repo.findOne<DesignFileDocument>({ sha256: dto.sha256 });
@@ -144,7 +145,7 @@ export class DesignStorageService {
         { upsert: true, new: true },
       )
       .lean();
-    if (!doc) throw new BadRequestException('Không tạo được record design — thử lại.');
+    if (!doc) throw new BadRequestException(customerMessage('designRecordFailed'));
 
     const tmpKey = `${TMP_PREFIX}${randomUUID()}`;
     const uploadUrl = await getSignedUrl(
@@ -164,20 +165,20 @@ export class DesignStorageService {
   /** FE báo upload xong → verify object tồn tại + đẩy job cho worker. */
   async confirm(customer: CustomerDocument, dto: ConfirmDesignUploadDto): Promise<DesignFile> {
     const c = this.cfg.r2Config;
-    if (!c) throw new BadRequestException('Kho design chưa được cấu hình.');
-    if (!dto.tmpKey.startsWith(TMP_PREFIX)) throw new BadRequestException('tmpKey không hợp lệ');
+    if (!c) throw new BadRequestException(customerMessage('designStoreNotConfiguredShort'));
+    if (!dto.tmpKey.startsWith(TMP_PREFIX)) throw new BadRequestException(customerMessage('designTmpKeyInvalid'));
 
     let size = 0;
     try {
       const head = await this.getS3().send(new HeadObjectCommand({ Bucket: c.bucket, Key: dto.tmpKey }));
       size = head.ContentLength ?? 0;
     } catch {
-      throw new BadRequestException('Không tìm thấy file đã upload — thử upload lại.');
+      throw new BadRequestException(customerMessage('designUploadNotFound'));
     }
-    if (size <= 0) throw new BadRequestException('File upload rỗng — thử lại.');
+    if (size <= 0) throw new BadRequestException(customerMessage('designUploadEmpty'));
     if (size > c.maxUploadMb * 1024 * 1024) {
       void this.getS3().send(new DeleteObjectCommand({ Bucket: c.bucket, Key: dto.tmpKey }));
-      throw new BadRequestException(`File vượt giới hạn ${c.maxUploadMb} MB`);
+      throw new BadRequestException(customerMessage('designFileTooLarge', c.maxUploadMb));
     }
 
     const doc = await this.repo.findOneAndUpdate<DesignFileDocument>(
@@ -185,7 +186,7 @@ export class DesignStorageService {
       { $set: { size, ...(dto.fileName ? { fileName: dto.fileName } : {}) } },
       { new: true } as never,
     );
-    if (!doc) throw new NotFoundException('Chưa có record presign cho sha này — gọi presign trước.');
+    if (!doc) throw new NotFoundException(customerMessage('designPresignMissing'));
 
     // Đã ready (upload trùng chạy song song) → khỏi enqueue, dọn tmp.
     if (doc.status === 'ready') {
@@ -206,7 +207,7 @@ export class DesignStorageService {
 
   async getBySha(sha256: string): Promise<DesignFile> {
     const doc = await this.repo.findOne<DesignFileDocument>({ sha256 });
-    if (!doc) throw new NotFoundException('Design không tồn tại');
+    if (!doc) throw new NotFoundException(customerMessage('designNotFound'));
     return this.toSafe(doc);
   }
 
@@ -244,7 +245,7 @@ export class DesignStorageService {
       await this.amqpConnection.publish(ex, `${ex}.${DESIGN_PROCESSING_QUEUE}`, job, { persistent: true });
     } catch (err) {
       this.logger.error(`Publish design job failed (${job.kind}): ${(err as Error).message}`);
-      throw new BadRequestException('Không đẩy được job xử lý design — thử lại sau.');
+      throw new BadRequestException(customerMessage('designJobFailed'));
     }
   }
 

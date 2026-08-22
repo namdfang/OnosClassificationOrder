@@ -61,6 +61,7 @@ import { OrderService } from '@/modules/order/order.service';
 import { ProductConfigEntity } from '@/modules/product-config/product-config.entity';
 import { applyPromotionDiscount, promotionMatches, PromotionService } from '@/modules/promotion/promotion.service';
 import { SystemConfigService } from '@/modules/system-config/system-config.service';
+import { customerMessage } from '@/shared/i18n/customer-messages';
 
 import type { CustomerOrderItem } from './customer-order.entity';
 import { CustomerOrderEntity } from './customer-order.entity';
@@ -729,9 +730,7 @@ export class CustomerOrderService implements OnModuleInit {
     items.forEach((item, i) => {
       const label = quotes[i]?.type ?? item.type ?? `#${i + 1}`;
       if (!item.mockupUrl?.trim()) {
-        throw new BadRequestException(
-          `Sản phẩm "${label}": thiếu ảnh mockup — Product "${label}": mockup image is required`,
-        );
+        throw new BadRequestException(customerMessage('missingMockup', label));
       }
       const configId = quotes[i]?.productConfigId;
       const areas = (configId ? ctx.byId.get(configId)?.printArea : undefined) ?? [];
@@ -744,10 +743,7 @@ export class CustomerOrderService implements OnModuleInit {
         // key gốc trong ngoặc vì bản đồ nhãn CHỈ có tiếng Việt — người đọc bản
         // tiếng Anh vẫn cần biết chính xác vị trí nào.
         const names = missing.map((a) => `${PRODUCT_PRINT_AREA_LABEL_MAP[a.key] ?? a.key} (${a.key})`).join(', ');
-        throw new BadRequestException(
-          `Sản phẩm "${label}": thiếu file design ở vị trí in ${names} — ` +
-            `Product "${label}": design file missing for print area ${names}`,
-        );
+        throw new BadRequestException(customerMessage('missingDesign', label, names));
       }
     });
   }
@@ -938,7 +934,7 @@ export class CustomerOrderService implements OnModuleInit {
       userEmail: customer.userEmail,
     });
     const trimmed = (ref ?? '').trim();
-    if (!trimmed) throw new NotFoundException('Không tìm thấy đơn');
+    if (!trimmed) throw new NotFoundException(customerMessage('orderNotFound'));
     const cutoff = await this.getCompletedCutoff();
     const rx = { $regex: `^${escapeRegex(trimmed)}$`, $options: 'i' };
     const pipeline = [
@@ -949,7 +945,7 @@ export class CustomerOrderService implements OnModuleInit {
     const [doc] = await this.customerOrderModel.aggregate<
       Record<string, unknown> & { prodOrders?: ProdDeriveFields[] }
     >(pipeline as never[]);
-    if (!doc) throw new NotFoundException('Không tìm thấy đơn');
+    if (!doc) throw new NotFoundException(customerMessage('orderNotFound'));
 
     const prodByPid = new Map<string, ProdDeriveFields>(
       (doc.prodOrders ?? []).map((p) => [p.productionId as string, p]),
@@ -974,9 +970,9 @@ export class CustomerOrderService implements OnModuleInit {
 
   private async getPendingStagingOrder(customer: CustomerDocument, id: string) {
     const doc = await this.customerOrderModel.findOne({ _id: id, customerId: String(customer._id) });
-    if (!doc) throw new NotFoundException('Không tìm thấy đơn này.');
-    if (doc.status === 'cancelled') throw new BadRequestException('Đơn đã hủy.');
-    if (doc.pushedAt) throw new BadRequestException('Đơn đã đẩy sản xuất — chỉ sửa được mockup/design/địa chỉ qua trang chi tiết đơn.');
+    if (!doc) throw new NotFoundException(customerMessage('orderNotFoundDot'));
+    if (doc.status === 'cancelled') throw new BadRequestException(customerMessage('orderCancelled'));
+    if (doc.pushedAt) throw new BadRequestException(customerMessage('orderPushedEditLimited'));
     return doc;
   }
 
@@ -1090,7 +1086,7 @@ export class CustomerOrderService implements OnModuleInit {
     source: 'csv' | 'api' = 'csv',
   ): Promise<ImportCustomerOrdersResDto> {
     const totalLines = dto.orders.reduce((s, o) => s + o.items.length, 0);
-    if (totalLines > 500) throw new BadRequestException('Tối đa 500 dòng mỗi lần import.');
+    if (totalLines > 500) throw new BadRequestException(customerMessage('importTooManyLines'));
 
     const allItems = dto.orders.flatMap((o) => o.items);
     const ctx = await this.buildPricingContext(allItems);
@@ -1302,7 +1298,7 @@ export class CustomerOrderService implements OnModuleInit {
     const paymentGateEnabled = !!(await this.systemConfigService.get<boolean>(CUSTOMER_PAYMENT_GATE_KEY));
     // Plan §12.1: đợt này gate OFF — chưa build luồng Admin confirm nên gate ON chặn hẳn.
     if (paymentGateEnabled)
-      throw new BadRequestException('Cổng thanh toán đang bật nhưng luồng xác nhận chưa mở — liên hệ hỗ trợ.');
+      throw new BadRequestException(customerMessage('paymentGateNotReady'));
 
     const targets = await this.loadPushTargets(customer, dto.ids);
     const allItems = targets.flatMap((t) => ((t.doc?.items || []) as CustomerOrderItem[]).map((i) => i));
@@ -1583,15 +1579,15 @@ export class CustomerOrderService implements OnModuleInit {
     dto: UpdateCustomerOrderDto,
   ): Promise<UpdateCustomerOrderResDto> {
     const trimmed = (productionId ?? '').trim();
-    if (!trimmed) throw new NotFoundException('Production ID rỗng.');
+    if (!trimmed) throw new NotFoundException(customerMessage('productionIdEmpty'));
 
     const order = await this.orderModel.findOne({
       productionId: trimmed,
       userSku: customer.userSku,
       userEmail: customer.userEmail,
     });
-    if (!order) throw new NotFoundException('Không tìm thấy đơn với mã này.');
-    if (order.cancelledAt) throw new BadRequestException('Đơn đã hủy, không thể chỉnh sửa.');
+    if (!order) throw new NotFoundException(customerMessage('orderNotFoundByCode'));
+    if (order.cancelledAt) throw new BadRequestException(customerMessage('orderCancelledCannotEdit'));
 
     const set: Record<string, unknown> = {};
     if (dto.mockupUrl !== undefined) {
@@ -1625,7 +1621,7 @@ export class CustomerOrderService implements OnModuleInit {
     }
 
     const updated = await this.orderModel.findById(order._id).select('productionId').lean();
-    if (!updated) throw new NotFoundException('Không tìm thấy đơn với mã này.');
+    if (!updated) throw new NotFoundException(customerMessage('orderNotFoundByCode'));
     return this.trackSummaryRes(customer, trimmed);
   }
 
@@ -1638,7 +1634,7 @@ export class CustomerOrderService implements OnModuleInit {
           PROD_DERIVE_FIELDS,
       )
       .lean();
-    if (!order) throw new NotFoundException('Không tìm thấy đơn với mã này.');
+    if (!order) throw new NotFoundException(customerMessage('orderNotFoundByCode'));
     const stage = computeCurrentStage(order as ProdDeriveFields);
     return {
       success: true,
@@ -1669,7 +1665,7 @@ export class CustomerOrderService implements OnModuleInit {
   /** Xem tiến trình 1 đơn — chỉ cho phép xem đơn thuộc chính khách hàng đó. */
   async trackOrder(customer: CustomerDocument, productionId: string): Promise<GetCustomerOrderTrackResDto> {
     const trimmed = (productionId ?? '').trim();
-    if (!trimmed) throw new NotFoundException('Production ID rỗng.');
+    if (!trimmed) throw new NotFoundException(customerMessage('productionIdEmpty'));
 
     const summary = await this.trackSummaryRes(customer, trimmed);
     const track = await this.orderService.getLifecycleTrack(trimmed);

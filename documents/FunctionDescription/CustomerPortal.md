@@ -541,7 +541,40 @@ có `createdAt > notificationsReadAt`.
 `NotificationBell.tsx` fetch lúc mount + poll mỗi 60s (đủ cho quy mô khách
 hàng B2B, KHÔNG dùng WebSocket/SSE) + fetch lại mỗi lần mở popover.
 
-## 9. Permissions
+## 9. Thông báo lỗi backend theo ngôn ngữ khách (ORD-29)
+
+Toàn bộ message backend vốn là chuỗi tiếng Việt cứng. Khách nước ngoài (đơn US) nhận về câu không đọc được. ORD-29 dựng đường i18n cho **đúng những câu người thật đọc** — 31 câu ở ba module — và **không đụng** 124 câu còn lại của nhân viên nội bộ: người đọc chúng là người Việt, dịch sang tiếng Anh chỉ làm họ khó dùng hơn.
+
+| Module | Câu | Ai đọc |
+|---|---|---|
+| `customer-portal` (catalog + đơn hàng) | 16 | khách, trên trình duyệt |
+| `design-storage` | 12 | khách, ở ô tải file design |
+| `customer-webhook` | 3 | khách, ở trang API/webhook trong portal |
+
+**Cơ chế** — `apps/api/src/shared/i18n/`:
+- `request-language.ts` — `AsyncLocalStorage` giữ ngôn ngữ của request, gắn bằng một middleware toàn cục ở `main-nest.ts`. Nhờ vậy service ném lỗi đúng thứ tiếng mà **không phải thêm tham số vào từng hàm**.
+- `customer-messages.ts` — từ điển `{vi, en}` theo khoá; câu có tham số khai bằng hàm. `customerMessage(key, ...args)` tra theo ngôn ngữ hiện tại, thiếu bản dịch thì lùi về tiếng Việt.
+
+**Hai ràng buộc cứng, cả hai đều thuộc loại hỏng-thì-không-ai-báo:**
+
+1. **Không khai ngôn ngữ → tiếng Việt.** Cố ý **không** dùng cơ chế fallback của `nestjs-i18n` dù thư viện đã được cấu hình sẵn: `FALLBACK_LANGUAGE` của dự án đang là `en_US`, đi theo nó thì request không khai ngôn ngữ sẽ rơi vào tiếng Anh — ngược hẳn yêu cầu.
+2. **Public Order API nhận NGUYÊN VĂN chuỗi cũ.** Hai lớp, vì một lớp không đủ:
+   - `resolveRequestLang()` ép `vi` cho mọi đường `/open-api/`, bất kể `Accept-Language`.
+   - Nhưng ép tiếng Việt chỉ giữ được **ngôn ngữ**, không giữ được **câu**: hai câu "thiếu mockup" / "thiếu design" đi CHUNG `pushToProduction()` với portal, và chính bản tiếng Việt của chúng đã đổi (bỏ nửa tiếng Anh chắp vá của ORD-22). Nên hai câu đó khai thêm trường `machine` — chuỗi nguyên văn trước ORD-29 — và `customerMessage()` trả trường đó khi request đến từ bề mặt máy.
+   Bên tích hợp chỉ có mỗi chuỗi message để bám vì API chưa trả mã lỗi; đổi câu là gãy mà không ai báo. TEST bắt được thiếu sót này ở vòng 1.
+
+**Đường truyền:** `apps/web/src/apis/index.tsx` gắn `Accept-Language` **chỉ cho tuyến `/customer/...`**, lấy từ `languageStore` mà toggle VI/EN đã dùng. Không thêm trường ngôn ngữ vào bảng `customers` — bảng đó dùng chung với tính năng gán xưởng theo khách.
+
+**Đo trên API đang chạy** (`GET /api/v1/public/catalog/<id không tồn tại>`):
+
+| `Accept-Language` | Message trả về |
+|---|---|
+| không gửi · `vi` · `fr` · `xx-YY` · rỗng | `Không tìm thấy sản phẩm này.` |
+| `en` · `en-US,en;q=0.9` | `This product could not be found.` |
+
+Khoá bằng `apps/api/src/shared/i18n/customer-messages.spec.ts` (9 ca), trong đó có ca ép tiếng Việt cho `/open-api/` và ca bắt mọi khoá phải có bản tiếng Anh khác câu tiếng Việt.
+
+## 10. Permissions
 
 Không dùng `permission-catalog` nội bộ — gate hoàn toàn bằng
 `@Auth([RoleType.Customer])` (role-only, không permission code). Nhân viên

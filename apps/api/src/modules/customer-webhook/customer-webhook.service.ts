@@ -14,6 +14,7 @@ import type {
 import { CUSTOMER_WEBHOOK_MAX_ACTIVE, customerMatchKey } from 'shared';
 
 import { CustomerEntity } from '@/modules/customer/customer.entity';
+import { customerMessage } from '@/shared/i18n/customer-messages';
 
 import { CustomerWebhookDeliveryEntity, CustomerWebhookEntity } from './customer-webhook.entity';
 
@@ -73,10 +74,10 @@ export class CustomerWebhookService {
   async create(customerId: string, dto: CreateCustomerWebhookDto): Promise<CreateCustomerWebhookResDto> {
     const count = await this.webhookModel.countDocuments({ customerId, deletedAt: { $exists: false } });
     if (count >= CUSTOMER_WEBHOOK_MAX_ACTIVE) {
-      throw new BadRequestException(`Tối đa ${CUSTOMER_WEBHOOK_MAX_ACTIVE} webhook — xóa bớt URL cũ trước.`);
+      throw new BadRequestException(customerMessage('webhookTooMany', CUSTOMER_WEBHOOK_MAX_ACTIVE));
     }
     const url = dto.url.trim();
-    if (!/^https?:\/\//i.test(url)) throw new BadRequestException('URL webhook phải là http(s)');
+    if (!/^https?:\/\//i.test(url)) throw new BadRequestException(customerMessage('webhookUrlInvalid'));
     const created = await this.webhookModel.create({
       customerId,
       url,
@@ -96,7 +97,7 @@ export class CustomerWebhookService {
 
   async remove(customerId: string, id: string): Promise<DeleteCustomerWebhookResDto> {
     const res = await this.webhookModel.deleteOne({ _id: id, customerId });
-    if (res.deletedCount === 0) throw new NotFoundException('Không tìm thấy webhook');
+    if (res.deletedCount === 0) throw new NotFoundException(customerMessage('webhookNotFound'));
     return { success: true, data: { deleted: true } };
   }
 

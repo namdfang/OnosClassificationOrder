@@ -1,6 +1,8 @@
 import { BadRequestException } from '@nestjs/common';
 import { PRODUCT_PRINT_AREA_LABEL_MAP } from 'shared';
 
+import { runWithRequestLang } from '@/shared/i18n/request-language';
+
 import { CustomerOrderService } from './customer-order.service';
 
 /**
@@ -44,11 +46,18 @@ describe('ORD-22 — máy chủ kiểm mockup + design khi đặt đơn trực t
     expect(() => place({ mockupUrl: MOCKUP }, FRONT_REQUIRED)).toThrow(PRODUCT_PRINT_AREA_LABEL_MAP.front);
   });
 
-  it('thông báo có CẢ tiếng Việt lẫn tiếng Anh', () => {
+  /**
+   * ORD-22 gộp cả hai thứ tiếng vào MỘT chuỗi vì lúc đó backend chưa có
+   * đường i18n. ORD-29 dựng đường đó, nên hợp đồng đổi: mỗi request nhận
+   * ĐÚNG MỘT thứ tiếng. Mặc định (không khai ngôn ngữ) vẫn là tiếng Việt.
+   */
+  it('mặc định tiếng Việt, khai tiếng Anh thì ra tiếng Anh', () => {
     expect(() => place({ designs: GOOD_DESIGNS }, FRONT_REQUIRED)).toThrow(/thiếu ảnh mockup/);
-    expect(() => place({ designs: GOOD_DESIGNS }, FRONT_REQUIRED)).toThrow(/mockup image is required/);
     expect(() => place({ mockupUrl: MOCKUP }, FRONT_REQUIRED)).toThrow(/thiếu file design/);
-    expect(() => place({ mockupUrl: MOCKUP }, FRONT_REQUIRED)).toThrow(/design file missing/);
+    runWithRequestLang('en', () => {
+      expect(() => place({ designs: GOOD_DESIGNS }, FRONT_REQUIRED)).toThrow(/mockup image is required/);
+      expect(() => place({ mockupUrl: MOCKUP }, FRONT_REQUIRED)).toThrow(/design file missing/);
+    });
   });
 
   it('nhận khi đủ mockup + đủ design', () => {
