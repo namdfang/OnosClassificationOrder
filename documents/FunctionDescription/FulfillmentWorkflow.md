@@ -9,6 +9,8 @@
 
 > **Loại đơn xưởng US (2026-07):** đơn xưởng `US` không bao giờ được init stage In (guard ở cả 3 entry: designer complete, set `toolResultNote='ok'`, importRework + backfill onModuleInit) và bị loại khỏi view override-role của my-tasks — xem `Orders.md §21`.
 
+> **Đường ghi state DUY NHẤT KHÁC ngoài `transition()`:** thao tác **"Chuyển hoàn thành"** của SuperAdmin (`Orders.md §23`) ghi thẳng `fulfillmentStages.*` + `fulfillmentCompletedAt` cho các công đoạn chưa xong, mốc chia đều từ lúc đơn vào sản xuất tới lúc bấm. Nó cố ý KHÔNG đi qua `transition()` (vốn đòi đúng người giữ công đoạn + đúng thứ tự `waiting → in-progress → done`), nhưng vẫn ghi `fulfillmentTimeline` + tôn trọng AUTO-STAGE của `flowType` và KHÔNG cộng `workMs`. Sửa shape state ở đây thì soát luôn `order.service.ts → forceCompleteOrder()`.
+
 
 Sau khi Designer mark task `done` (`designerStatus === 'done'` + `readyForFulfill === true`), đơn được auto-route qua **6 stage tuần tự** trong phạm vi factory:
 

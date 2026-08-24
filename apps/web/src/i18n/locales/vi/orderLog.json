@@ -9,7 +9,8 @@
     "cancel": "Hủy đơn",
     "updateDesign": "Đổi design",
     "hold": "Giữ đơn",
-    "unhold": "Mở giữ"
+    "unhold": "Mở giữ",
+    "forceComplete": "Chuyển hoàn thành"
   },
   "importSubaction": {
     "create": "Tạo mới",

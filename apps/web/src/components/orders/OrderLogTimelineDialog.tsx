@@ -42,6 +42,7 @@ function buildActionBadge(
     update_design: { label: t('actionBadge.updateDesign'), variant: 'default' },
     hold: { label: t('actionBadge.hold'), variant: 'warning' },
     unhold: { label: t('actionBadge.unhold'), variant: 'success' },
+    force_complete: { label: t('actionBadge.forceComplete'), variant: 'warning' },
   };
 }
 

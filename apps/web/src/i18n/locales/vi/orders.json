@@ -263,6 +263,17 @@
       "mockupLabel": "Mockup",
       "clickToEnlarge": "Click để xem to",
       "openNewTab": "Mở tab mới"
+    },
+    "forceComplete": {
+      "title": "Chuyển hoàn thành",
+      "desc": "Đơn sẽ được đánh dấu ĐÃ HOÀN THÀNH SẢN XUẤT. Các khâu chưa xong được điền mốc thời gian chia đều từ lúc đơn vào sản xuất tới bây giờ, theo luồng của xưởng đang giữ đơn.",
+      "windowLabel": "Khoảng thời gian chia đều",
+      "windowNow": "bây giờ",
+      "noStart": "Đơn chưa có mốc vào sản xuất — mọi mốc sẽ ghi vào thời điểm bấm.",
+      "warning": "Đây là thao tác sửa dữ liệu, không hoàn tác được. Chỉ dùng cho đơn đã xong ngoài đời nhưng xưởng quên bấm.",
+      "submitBtn": "Chuyển hoàn thành",
+      "submitting": "Đang chuyển…",
+      "success": "Đã chuyển đơn sang hoàn thành"
     }
   },
   "filterBar": {
@@ -509,10 +520,14 @@
     "hold": "Giữ đơn",
     "cancelOrder": "Hủy đơn",
     "checkDesign": "Kiểm tra design mới",
-    "checkDesignUpdated": "Đã tìm thấy và cập nhật design mới từ OnosPod"
+    "checkDesignUpdated": "Đã tìm thấy và cập nhật design mới từ OnosPod",
+    "printCustomerLabel": "In nhãn khách",
+    "forceComplete": "Chuyển hoàn thành"
   },
   "orderActions": {
-    "alreadyCancelled": "Đơn đã hủy."
+    "alreadyCancelled": "Đơn đã hủy.",
+    "heldFirst": "Đơn đang bị giữ — mở giữ trước",
+    "alreadyCompleted": "Đơn đã hoàn thành sản xuất"
   },
   "priorityEstimate": {
     "dayUnit": "ng",
@@ -660,5 +675,10 @@
     "low": "Ưu tiên",
     "normal": "Ưu tiên cao",
     "high": "Ưu tiên nhất"
+  },
+  "customerLabel": {
+    "scanHint": "Quét để theo dõi đơn hàng",
+    "orderIdCaption": "Mã đơn",
+    "externalIdCaption": "Mã sàn"
   }
 }

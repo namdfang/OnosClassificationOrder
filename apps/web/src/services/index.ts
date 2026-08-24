@@ -27,6 +27,7 @@ import { productCategory } from './productCategory';
 import { productConfig } from './productConfig';
 import { promotion } from './promotion';
 import { publicCatalog } from './publicCatalog';
+import { publicTrack } from './publicTrack';
 import { reports } from './reports';
 import { roles } from './roles';
 import { upload } from './upload';
@@ -61,6 +62,7 @@ export const RepositoryRemote = {
   customerDesign,
   customerApiAccess,
   publicCatalog,
+  publicTrack,
   customerNotification,
   customerNotificationPortal,
   fulfillment,

@@ -893,7 +893,7 @@ Render tab tương ứng. User chỉ có 1 trong các quyền → 1 tab; có nhi
 
 | # | Key | Cell | Permission view |
 |---|-----|------|-----------------|
-| 1 | productionId | Composite (Production ID + Order ID + In Production At) | luôn |
+| 1 | productionId | Composite (Production ID + Order ID + **Platform ID** + In Production At). Dòng `ext: <externalId>` là mã đơn bên sàn (TikTok/Etsy…) — cột "External ID" lúc import, chỉ hiện khi đơn có. Cùng cách trình bày với `ListOrderTab`. | luôn |
 | 2 | mockupTypeSize | `ImageThumbCell` + Type + Size/Color | luôn |
 | 2b | **designs** | `DesignThumbsCell` — tối đa 2 thumb inline (32px) + "+N" badge nếu nhiều hơn 2 → click badge mở Popover grid 4 cột tất cả design. Click thumb mở `ImagePreviewDialog`. Tận dụng `ImageThumbCell` cho từng thumb (pending/failed/ready state). | luôn |
 | 3 | **fabricType** | `IconSelectCell` (category `fabric_type`) — Phase 7 | `order.field.fabricType.view` |
@@ -1420,6 +1420,8 @@ Mỗi hàng đơn (ở MỌI bảng order) có nút **"..."** (`MoreHorizontal`)
 - **Đổi design** (`EditOrderDesignDialog`) — đổi URL mockup + **các vị trí design đơn ĐANG CÓ**. Lưu **raw URL** (không qua R2); URL cũ giữ trong OrderLog.
 - **Hủy đơn** (`CancelOrderDialog`) — soft cancel + lý do (bắt buộc ≤200).
 
+Menu này về sau còn nhận thêm mục cho vai khác: **Giữ đơn / Mở giữ / Kiểm tra design mới** cho `ORDER_WRITE_ROLES` (§9b, §9c) và **"Chuyển hoàn thành"** cho riêng SuperAdmin (**§23**).
+
 **Đơn đã hủy:** vẫn hiện trong mọi bảng với component chung **`CancelledBadge`** = badge "Đã hủy" (đỏ) **+ hiện luôn LÝ DO hủy** (note, truncate + full tooltip) + **row mờ** (`opacity-60`); **KHÔNG loại khỏi thống kê/filter** (đếm bình thường). Cả 2 action **disable** khi đơn đã hủy (read-only).
 
 **Optimistic update:** cancel/đổi design trả về order đã cập nhật → `OrderTableWorkshop` **patch tại chỗ** (`patchRow`, KHÔNG refetch) → **giữ nguyên group sản phẩm đang mở** + cập nhật tức thì. Bảng phẳng khác refetch (không có group).
@@ -1451,6 +1453,34 @@ ok = !cancelledAt
 
 ### 16.5 Permissions
 Dùng **role gate `isAdmin`** (SuperAdmin/Admin) cả FE lẫn BE — KHÔNG thêm permission-catalog. Cancel là **soft** (`cancelledAt`), khác `deleteOrder` (`deletedAt`).
+
+### 16.6 "In nhãn khách" — tem 4×6cm dán kiện hàng
+
+> **File FE:** `apps/web/src/components/orders/CustomerLabelPrint.tsx` (mục menu ở `OrderRowActionsMenu.tsx`), i18n `orders.json` → `rowActionsMenu.printCustomerLabel` + `customerLabel.scanHint`
+
+Mục **"In nhãn khách"** (`Printer`) nằm ĐẦU menu "...", nên có mặt ở mọi bảng liệt kê ở §16.4 — trong đó có bảng công đoạn **In** của Task Fulfillment (`PrintOrderTable` qua `PrintWorkshopView`), nơi xưởng thực sự cần tem. Bấm là in thẳng, không có bước xem trước: hộp thoại in của trình duyệt đã là bước xác nhận.
+
+Nội dung tem, khổ **40×60mm dọc** (4×6cm — tem decal rời, KHÔNG phải 4×6 inch):
+
+| Phần | Nguồn |
+|---|---|
+| QR | `${window.location.origin}${PATHS.TRACK}/<productionId>` → trang tra cứu công khai `/track/:productionId` (không cần đăng nhập — xem [`PublicOrderTracking.md`](PublicOrderTracking.md)) |
+| Mã sản xuất | `productionId` — luôn có |
+| Mã đơn | `orderId`, nhãn "Mã đơn" |
+| Mã sàn | `externalId`, nhãn "Mã sàn" — cùng thứ tự với cột Production ID ở danh sách đơn (mã đơn trước, mã sàn dưới) |
+| Tên sản phẩm | `productConfig.fullName` → fallback `type` (đơn chưa map xưởng không có `productConfig`) |
+| Biến thể | `size · color` |
+
+**In CẢ HAI mã phụ, mỗi mã tự biến mất khi rỗng.** `externalId` chỉ có ở đơn nhập từ sheet có cột "External ID" — đo trên dữ liệu thật 2026-08-24, công đoạn **In** có 2/144 đơn mang `externalId` còn 143/144 mang `orderId`; các công đoạn sau thì `externalId` phủ 40–85%. In mỗi một mã là phần lớn tem ra dòng trống. Chiều ngược lại cũng có: đơn khách tự lên qua Customer Portal chưa có `orderId`. Mã bị cắt cụt trên tem là mã sai nên dùng `break-all` (xuống dòng) chứ KHÔNG `truncate`.
+
+Mục này **KHÔNG bị khoá** theo `cancelledAt`/`heldAt` như các mục còn lại: in tem là thao tác chỉ đọc, và kiện hàng của đơn đang giữ vẫn cần tem để tìm lại.
+
+**Cách in — CỐ Ý khác sheet barcode ở §Stage Error Catalog.** Nhãn được `createPortal` thẳng ra `document.body` rồi giấu anh chị em cùng cấp bằng `body > *:not(#customer-label-print) { display: none }`. Hai điểm không được đổi thành cách khác:
+
+- **`display: none`, KHÔNG phải `visibility: hidden`.** Trang `stage-errors` dùng `visibility` nên thân trang vẫn giữ nguyên chiều cao và máy in đẩy thêm vài trang trắng — trên giấy A4 thì chấp nhận được, trên tem rời thì mỗi trang trắng là **một con tem hỏng**.
+- **Portal ra `body`, KHÔNG để trong cây React.** Bộ chọn `body > *` không với tới phần tử nằm sâu trong `#root`.
+
+`@page { size: 40mm 60mm; margin: 0 }` chỉ tồn tại trong lúc nhãn được mount (state `printingLabel`) nên không đụng các lệnh in khác của ứng dụng. Sau khi in xong, `afterprint` (kèm hẹn giờ dự phòng cho trình duyệt không bắn sự kiện đó) gỡ nhãn xuống. QR render bằng `QRCodeSVG` (`qrcode.react`) — **SVG chứ không phải canvas**, vì canvas hay ra tem trắng ở một số đường in; và `window.print()` được gọi sau 2 khung hình để SVG kịp lên màn.
 
 ## 17. Ưu tiên đơn hàng + hạn dự kiến từng bước
 
@@ -1873,3 +1903,54 @@ Lưu ý về nghĩa: `isMapped` là cờ **map product config**, KHÔNG phải m
 | 5 cờ trong THÂN JSON: `scanTracking` ×4 (dropship/stock), `forcePassChange` (`UserZod`) | **GIỮ NGUYÊN.** Thân JSON mang boolean thật nên `z.coerce.boolean(false)` ra `false` — đúng. Đã tìm nơi gửi chuỗi `"false"` trong thân: không có |
 
 Khoá bằng `apps/api/src/modules/order/query-flags-sweep.spec.ts` (30 ca). `isMapped` đáng chú ý nhất: `ListOrderTab.tsx:424` gửi thẳng chuỗi `'false'` — chỗ **duy nhất** trong FE làm vậy — nên bộ lọc "Chưa map xưởng" ở tab đó trả về đúng điều ngược lại. Tab đó hiện đang tắt; bật lại thì phải sửa cờ này trước.
+
+---
+
+## 23. "Chuyển hoàn thành" (SuperAdmin) — ép đơn về đã hoàn thành sản xuất
+
+> **File FE:** `apps/web/src/components/orders/{OrderRowActionsMenu,ForceCompleteDialog}.tsx`, `apps/web/src/utils/orderActions.ts` (`canForceComplete`/`canForceCompleteOrder`), `apps/web/src/services/order.ts` (`forceCompleteOrder`)
+> **File BE:** `apps/api/src/modules/order/force-complete-plan.ts` (`planForceComplete`) + `order.service.ts` → `forceCompleteOrder()`; `order.controller.ts` → `POST /:id/force-complete`
+> **API:** `POST /v1/orders/:id/force-complete` — `@Auth([RoleType.SuperAdmin])`, không body
+
+### 23.1 Overview
+
+Mục **"Chuyển hoàn thành"** trong menu "..." mỗi hàng đơn (§16.4 — cùng cột thao tác pin phải), **CHỈ SuperAdmin** thấy. Bấm → dialog xác nhận → đơn được đánh dấu **đã hoàn thành sản xuất**, và **các khâu chưa xong được điền mốc thời gian chia đều** trong khoảng `[đơn vào sản xuất → lúc bấm]`, theo đúng luồng của xưởng đang giữ đơn.
+
+Đây là **cửa sửa dữ liệu**, không phải một bước của quy trình: dùng cho đơn đã xong ngoài đời nhưng xưởng quên bấm, để nó thôi treo trên Dashboard / Lifecycle / banner quá hạn (`OverdueAlertBanner.md`) / các hàng đợi soát tool + cần gán designer.
+
+Vì thế quyền **hẹp hơn cả Admin** (`RoleType.SuperAdmin`), enforce 2 lớp: `@Auth([SuperAdmin])` ở route **và** check lại `roleName !== SuperAdmin → ForbiddenException` trong service.
+
+### 23.2 Chia mốc thời gian (`planForceComplete` — hàm thuần, test không cần DB)
+
+Chuỗi khâu xét theo thứ tự dòng chảy: `tool-check` → `designer` → 6 công đoạn `FULFILLMENT_STAGES`.
+
+| Quy tắc | Vì sao |
+| --- | --- |
+| Chỉ điền khâu **chưa xong**; khâu đã có mốc thật giữ nguyên | Không ghi đè lịch sử có thật |
+| Mốc bắt đầu = `max(inProductionAt, mốc thật cuối cùng trên đơn)`, kẹp ≤ `now` | Nếu chia từ `inProductionAt` khi In đã xong lúc 05:00 thì "Ép" sẽ xong **trước** "In" — chuỗi thời gian chạy ngược |
+| Khâu cuối đóng đúng `now` (lấy thẳng `now`, không cộng dồn `n × slice`) | Sai số chia không được đẩy mốc cuối lệch khỏi `fulfillmentCompletedAt` |
+| Khâu **tự-hoàn-thành** của luồng rút gọn (`FACTORY_FLOW_AUTO_STAGES`) **không chiếm lát nào**, đóng cùng mốc khâu ngay trước | Y như khi chạy thật (§ FulfillmentWorkflow.md 2.2b): xưởng gỗ Ép dính vào In, May ra dính vào May vào; xưởng no-sew May vào + May ra dính vào QC sau ép |
+| Thiếu `inProductionAt` → lùi `orderAt` → `createdAt`; hết đường thì **mọi mốc = lúc bấm** | Thà cụm lại một chỗ còn hơn bịa ra một quá khứ không có căn cứ |
+
+Ví dụ đơn chưa làm gì, vào sản xuất 00:00, bấm lúc 08:00, xưởng `standard`: 8 khâu × 1 tiếng — `tool-check` xong 01:00, `designer` 02:00, … `pack` 08:00.
+Cùng đơn đó ở xưởng `merged`: chỉ 6 khâu chiếm lát (Ép + May ra ăn theo) → mỗi khâu 80 phút.
+
+### 23.3 Ghi gì vào đơn
+
+- **Công đoạn fulfillment:** `status='done'`, `completedAt` = mốc cuối lát; `waitingAt`/`startedAt`/`firstStartedAt` chỉ điền **khi còn trống** (= mốc đầu lát). Công đoạn chưa từng kích hoạt → khai `reworkCount: 0` + `workMs: 0`.
+- **`workMs` KHÔNG bịa** — công đoạn được ép giữ nguyên 0. Số giờ làm việc của xưởng không được phình lên vì một lần sửa dữ liệu.
+- **Kết thúc:** `currentFulfillmentStage = null`, `fulfillmentCompletedAt = now`.
+- **Hai chặng trước fulfillment** (nếu còn dở): `toolCheckedAt` + `toolResultNote='ok'` (chỉ khi trống — **KHÔNG** đụng `toolResult` vì field đó giữ mã `workshop_config`, bịa vào là dựng mã không tồn tại); `designerStatus='done'` + `designerCompletedAt`, các mốc designer khác chỉ điền khi trống. Đơn "hoàn thành sản xuất" mà vẫn nằm trong hàng đợi soát tool / backlog cần gán designer là trạng thái tự mâu thuẫn — và chính mấy hàng đợi đó là thứ người dùng muốn dọn khi bấm nút này.
+- **`fulfillmentTimeline`:** 1 dòng cho mỗi công đoạn được điền (`action='complete'`, `byUserId`/`byUserName` = người bấm, `reason='Chuyển hoàn thành'`, khâu tự động ghi `'Chuyển hoàn thành (luồng rút gọn)'`) — nhìn lịch sử là biết đơn được ép, không phải xưởng làm.
+- **OrderLog:** action mới **`force_complete`** (`ORDER_LOG_ACTIONS`), `field='fulfillmentCompletedAt'`, `before` = chặng đơn đang đứng, `after` = `{ completedAt, start, steps[] }` — đủ để dựng lại chính xác thao tác.
+- **Sự kiện khách:** emit `order.production_completed` y như lúc xưởng bấm xong thật → webhook khách (ORD-4) + chuông portal (ORD-5) không phân biệt đơn xong thật với đơn chốt tay.
+
+Ghi **thẳng** vào đơn thay vì đi qua `FulfillmentTaskService.transition()`: transition đòi đúng người giữ công đoạn và đúng thứ tự `waiting → in-progress → done`, tức phải giả lập hàng chục lượt bấm mới đi hết 6 công đoạn.
+
+### 23.4 Guard
+
+`OrderService.forceCompleteOrder` chặn: không phải SuperAdmin (403) · đơn đã hủy · đơn **đang giữ** (`assertNotHeld` — mở giữ trước rồi mới chốt) · đơn đã có `fulfillmentCompletedAt`. FE mirror ở `canForceCompleteOrder` (`orderActions.ts`) để disable mục menu + hiện lý do trong tooltip — sửa 1 nơi phải sửa cả 2.
+
+### 23.5 Test
+
+`apps/api/src/modules/order/force-complete-plan.spec.ts` — 8 ca trên hàm thuần: chia đều đủ 8 khâu, mốc liền mạch + không lọt ra ngoài khoảng, không đụng khâu đã xong, hai luồng rút gọn (`merged`/`no-sew`), thiếu `inProductionAt`, mốc bắt đầu ở tương lai, và ca "có `toolCheckedAt` nhưng `toolResultNote` trống".

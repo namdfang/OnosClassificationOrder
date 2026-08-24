@@ -8,6 +8,7 @@ import { IDZod } from '..';
 import {
   CustomerOrderSummaryZod,
   DesignFieldsZod,
+  LifecycleTrackStageZod,
   LifecycleTrackZod,
   ProductionOrderShippingAddressZod,
 } from './production-order.dto';
@@ -469,3 +470,104 @@ export const OpenApiGetOrderResZod = ResZod.extend({
   }),
 });
 export class OpenApiGetOrderResDto extends createZodDto(extendApi(OpenApiGetOrderResZod)) {}
+
+// ---------------------------------------------------------------------------
+// Tra cứu đơn CÔNG KHAI (`/track/:productionId`) — KHÔNG đăng nhập, KHÔNG API key
+// ---------------------------------------------------------------------------
+
+/**
+ * Dữ liệu 1 đơn cho trang tra cứu công khai. Ai có mã đơn đều xem được, nên
+ * shape này là **danh sách trắng tường minh**: chỉ những gì khách (và người
+ * mua cuối của khách) vốn được biết.
+ *
+ * CỐ Ý KHÔNG có: giá/`priceSnapshot`, tên nhân viên (designer/công nhân),
+ * link file thiết kế gốc, nguyên văn `holdReason`/`cancelReason`/ghi chú lỗi
+ * nội bộ, xưởng sản xuất, và địa chỉ ship đầy đủ (chỉ còn city/state/country).
+ * Thêm field mới vào đây phải soi lại đúng 1 câu hỏi: *người lạ cầm mã đơn có
+ * được phép biết thứ này không?*
+ */
+export const PublicOrderTrackZod = z.object({
+  /** Mã sản xuất — định danh chính, chính là `:productionId` trên URL. */
+  productionId: z.string(),
+  /** Mã đơn của sàn/hệ cũ (`OrderEntity.externalId`, nhãn UI "Platform ID"). */
+  externalId: z.string().optional(),
+  /** Mã đơn do khách tự đặt (`orderId` staging / sheet import). */
+  orderId: z.string().optional(),
+  /** Mã phân biệt đơn con cùng `orderId` (template fulfill cũ). */
+  identifier: z.string().optional(),
+  orderName: z.string().optional(),
+
+  status: z.nativeEnum(CustomerOrderStatus),
+  /** Đơn đang bị giữ — lý do quy về nhóm an toàn, không phô ghi chú nội bộ. */
+  onHold: z.boolean(),
+  holdKind: z.enum(['waiting-design', 'waiting-address', 'other']).optional(),
+  /** Đơn đang phải làm lại (badge chồng, không phải trạng thái). */
+  rework: z.boolean(),
+  /** Đơn đã đẩy vào sản xuất chưa — chưa đẩy thì `stages` rỗng. */
+  pushed: z.boolean(),
+  completed: z.boolean(),
+  /** Key chặng hiện tại (`LIFECYCLE_STAGE_KEYS`) — FE dịch nhãn theo ngôn ngữ người xem. */
+  currentStageKey: z.string().optional(),
+  /** Nhãn chặng hiện tại theo ngôn ngữ khách (vd "Đang thiết kế") — đường lui khi FE chưa dịch key. */
+  currentStageLabel: z.string().optional(),
+  currentStageAt: z.coerce.date().optional(),
+
+  product: z.object({
+    type: z.string().optional(),
+    color: z.string().optional(),
+    size: z.string().optional(),
+    quantity: z.number().optional(),
+    sku: z.string().optional(),
+    merchantSku: z.string().optional(),
+    printMethod: z.string().optional(),
+    /** Ảnh mockup — thứ khách vốn thấy ở portal/catalog, KHÔNG phải file in. */
+    mockupUrl: z.string().optional(),
+  }),
+
+  dates: z.object({
+    orderAt: z.coerce.date().optional(),
+    pushedAt: z.coerce.date().optional(),
+    inProductionAt: z.coerce.date().optional(),
+    fulfillmentCompletedAt: z.coerce.date().optional(),
+    cancelledAt: z.coerce.date().optional(),
+  }),
+
+  /** Vận đơn khách tự cấp — số/hãng/link tra cứu, KHÔNG kèm `labelUrl`. */
+  tracking: z
+    .object({
+      number: z.string().optional(),
+      carrier: z.string().optional(),
+      url: z.string().optional(),
+    })
+    .optional(),
+
+  /** Điểm đến rút gọn — cố ý KHÔNG có tên người nhận / địa chỉ đường / phone. */
+  destination: z
+    .object({
+      city: z.string().optional(),
+      state: z.string().optional(),
+      country: z.string().optional(),
+    })
+    .optional(),
+
+  /** 8 chặng vòng đời — rỗng khi đơn chưa đẩy sản xuất. */
+  stages: LifecycleTrackStageZod.array(),
+
+  /** Các item còn lại cùng đơn — để người tra thấy đủ đơn, mỗi dòng 1 mã. */
+  siblings: z
+    .object({
+      productionId: z.string(),
+      type: z.string().optional(),
+      color: z.string().optional(),
+      size: z.string().optional(),
+      quantity: z.number().optional(),
+      status: z.nativeEnum(CustomerOrderStatus),
+      currentStageKey: z.string().optional(),
+      currentStageLabel: z.string().optional(),
+    })
+    .array(),
+});
+export type PublicOrderTrack = z.infer<typeof PublicOrderTrackZod>;
+
+export const GetPublicOrderTrackResZod = ResZod.extend({ data: PublicOrderTrackZod });
+export class GetPublicOrderTrackResDto extends createZodDto(extendApi(GetPublicOrderTrackResZod)) {}

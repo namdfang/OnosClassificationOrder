@@ -21,6 +21,9 @@ const CompanyCareers = lazy(() => import('./pages/company/careers'));
 const PublicCatalog = lazy(() => import('./pages/catalog'));
 const PublicCatalogDetail = lazy(() => import('./pages/catalog/detail'));
 
+// Tra cứu đơn công khai — cùng component cho `/track` (ô nhập mã) và `/track/:productionId`.
+const PublicTrack = lazy(() => import('./pages/track'));
+
 const CustomerLogin = lazy(() => import('./pages/customer/login'));
 const CustomerRegister = lazy(() => import('./pages/customer/register'));
 const CustomerDashboard = lazy(() => import('./pages/customer/dashboard'));
@@ -72,6 +75,23 @@ function App() {
           element={
             <Suspense fallback={<Loading />}>
               <PublicCatalogDetail />
+            </Suspense>
+          }
+        />
+
+        <Route
+          path={PATHS.TRACK}
+          element={
+            <Suspense fallback={<Loading />}>
+              <PublicTrack />
+            </Suspense>
+          }
+        />
+        <Route
+          path={PATHS.TRACK_DETAIL}
+          element={
+            <Suspense fallback={<Loading />}>
+              <PublicTrack />
             </Suspense>
           }
         />

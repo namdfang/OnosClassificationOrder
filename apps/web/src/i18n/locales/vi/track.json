@@ -1,0 +1,105 @@
+{
+  "meta": {
+    "title": "Tra cứu đơn hàng",
+    "subtitle": "Nhập mã sản xuất trên đơn để xem đơn đang ở đâu trong xưởng."
+  },
+  "search": {
+    "label": "Mã sản xuất",
+    "placeholder": "VD: RA-05217-56631",
+    "submit": "Tra cứu",
+    "hint": "Mã sản xuất nằm trên xác nhận đơn và trên tem dán kiện hàng.",
+    "empty": "Nhập mã sản xuất để tra cứu."
+  },
+  "notFound": {
+    "title": "Không tìm thấy đơn với mã này",
+    "desc": "Kiểm tra lại mã sản xuất, hoặc liên hệ bộ phận hỗ trợ nếu bạn chắc chắn mã đúng.",
+    "back": "Tra mã khác"
+  },
+  "ids": {
+    "title": "Mã đơn",
+    "productionId": "Mã sản xuất",
+    "externalId": "Mã sàn (Platform ID)",
+    "orderId": "Mã đơn của bạn",
+    "identifier": "Mã phân biệt",
+    "orderName": "Tên đơn",
+    "copy": "Sao chép",
+    "copied": "Đã sao chép"
+  },
+  "status": {
+    "title": "Trạng thái",
+    "pending": "Chờ đẩy sản xuất",
+    "processing": "Đang xử lý",
+    "in-production": "Đang sản xuất",
+    "fulfilled": "Đã xuất kho",
+    "completed": "Hoàn tất",
+    "refunded": "Đã hoàn tiền",
+    "cancelled": "Đã hủy",
+    "onHold": "Đang tạm giữ",
+    "rework": "Đang làm lại",
+    "currentStage": "Chặng hiện tại",
+    "notStarted": "Chưa vào sản xuất"
+  },
+  "hold": {
+    "waiting-design": "Đang đợi cập nhật thiết kế",
+    "waiting-address": "Đang đợi cập nhật địa chỉ giao hàng",
+    "other": "Đơn đang tạm giữ, bộ phận hỗ trợ sẽ liên hệ"
+  },
+  "product": {
+    "title": "Sản phẩm",
+    "type": "Sản phẩm",
+    "color": "Màu",
+    "size": "Kích cỡ",
+    "quantity": "Số lượng",
+    "sku": "SKU",
+    "merchantSku": "SKU của bạn",
+    "printMethod": "Cách in",
+    "noMockup": "Chưa có ảnh mockup"
+  },
+  "dates": {
+    "title": "Mốc thời gian",
+    "orderAt": "Đặt đơn",
+    "pushedAt": "Đẩy sản xuất",
+    "inProductionAt": "Vào sản xuất",
+    "fulfillmentCompletedAt": "Đóng hàng xong",
+    "cancelledAt": "Hủy đơn"
+  },
+  "progress": {
+    "title": "Tiến trình sản xuất",
+    "notPushed": "Đơn chưa được đẩy vào sản xuất — tiến trình sẽ hiện ở đây ngay khi xưởng bắt đầu.",
+    "stages": {
+      "tool-check": "Tiếp nhận đơn",
+      "designer": "Thiết kế",
+      "print": "In",
+      "press": "Ép",
+      "qc-post-press": "Kiểm tra sau ép",
+      "sew-in": "May nhận vào",
+      "sew-out": "May xuất ra",
+      "pack": "Đóng hàng"
+    },
+    "stageStatus": {
+      "done": "Đã xong",
+      "current": "Đang làm",
+      "error": "Đang xử lý lỗi",
+      "rework": "Đang làm lại",
+      "pending": "Chưa tới"
+    }
+  },
+  "shipping": {
+    "title": "Giao hàng",
+    "destination": "Nơi nhận",
+    "trackingNumber": "Mã vận đơn",
+    "carrier": "Đơn vị vận chuyển",
+    "trackingLink": "Tra vận đơn",
+    "none": "Chưa có thông tin vận đơn."
+  },
+  "siblings": {
+    "title": "Sản phẩm khác cùng đơn",
+    "view": "Xem"
+  },
+  "share": {
+    "copyLink": "Sao chép liên kết",
+    "copied": "Đã sao chép liên kết"
+  },
+  "privacyNote": "Trang này chỉ hiện thông tin cần để theo dõi đơn. Đăng nhập tài khoản khách hàng để xem đầy đủ và chỉnh sửa đơn.",
+  "signIn": "Đăng nhập khách hàng"
+}

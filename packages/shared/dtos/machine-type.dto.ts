@@ -19,7 +19,7 @@ export const GetMachineTypesZod = PageQueryZod.extend({
    * THÁI (service kiểm `typeof === 'boolean'`) — ORD-28.
    *
    * `BooleanFlagZod` chứ KHÔNG phải `z.coerce.boolean()` — cái sau coi mọi chuỗi
-   * khác rỗng là bật, kể cả `'false'`. Xem `Orders.md §22`.
+   * khác rỗng là bật, kể cả `'false'`. Xem `Orders.md §23`.
    */
   isActive: BooleanFlagZod,
 });

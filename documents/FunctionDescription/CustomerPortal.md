@@ -116,6 +116,12 @@ logic chặng ở 1 nơi (`getLifecycleTrack` hoặc `computeCurrentStage`) ph�
 lại nơi còn lại. Nhãn chặng dùng riêng `CUSTOMER_STAGE_LABELS` (khách-hoá,
 không lộ thuật ngữ nội bộ như `sew-in`/`sew-out`).
 
+> **Cùng 1 đơn còn 1 đường xem thứ hai, KHÔNG đăng nhập:** trang tra cứu công
+> khai `/track/:productionId` (`documents/FunctionDescription/PublicOrderTracking.md`)
+> — chỉ ĐỌC, danh sách trắng field hẹp (không giá, không sửa), để khách gửi link
+> cho người mua cuối. Nó dùng lại chính `computeCurrentStage`/`deriveItemStatus`
+> của file này, nên đổi logic chặng phải soát cả hai nơi.
+
 ### 2.5 Khách tự sửa đơn ĐÃ đặt — mockup/design/địa chỉ ship
 
 Trang chi tiết đơn (`track.tsx`, `/customer/orders/:productionId`) — ngoài

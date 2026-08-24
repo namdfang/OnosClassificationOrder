@@ -45,6 +45,7 @@ import type {
   FactoryBucket,
   FactoryFlow,
   FactoryOverviewCell,
+  ForceCompleteOrderResDto,
   FulfillmentTimelineEntry,
   GetCancelledOrdersDto,
   GetCancelledOrdersResDto,
@@ -152,6 +153,7 @@ import { SystemConfigService } from '../system-config/system-config.service';
 import { UserEntity } from '../user/user.entity';
 import { WorkshopConfigRepository } from '../workshop-config/workshop-config.repository';
 import { DriveFileNameService } from './drive-file-name.service';
+import { planForceComplete } from './force-complete-plan';
 import { OnospodOrderLookupService } from './onospod-order-lookup.service';
 import { OrderDocument, OrderEntity } from './order.entity';
 import { OrderRepository } from './order.repository';
@@ -4707,6 +4709,161 @@ export class OrderService implements OnModuleInit {
     this.emitCustomerOrderEvent('order.unheld', [updated]);
     void this.invalidateListCache();
     return { success: true, data: updated } as unknown as HoldOrderResDto;
+  }
+
+  // ─── Chuyển hoàn thành (SuperAdmin) — Orders.md §23 ────────────────
+  /**
+   * Ép 1 đơn về trạng thái **đã hoàn thành sản xuất**, và điền mốc thời gian
+   * cho các khâu chưa xong bằng cách CHIA ĐỀU khoảng
+   * `[đơn vào sản xuất → lúc bấm]` theo đúng luồng của xưởng đang giữ đơn
+   * (`planForceComplete`).
+   *
+   * Đây là cửa sửa dữ liệu, không phải một bước của quy trình: dùng cho đơn đã
+   * xong ngoài đời nhưng xưởng quên bấm, để nó thôi treo trên Dashboard /
+   * Lifecycle / banner quá hạn. Vì vậy nó ghi thẳng vào đơn thay vì đi qua
+   * `FulfillmentTaskService.transition()` — transition đòi đúng người giữ công
+   * đoạn, đúng thứ tự `waiting → in-progress → done`, tức phải giả lập hàng
+   * chục lượt bấm mới đi hết 6 công đoạn.
+   *
+   * Đổi lại, ba thứ được giữ đúng như một đơn chảy thật:
+   *  - `fulfillmentTimeline` có đủ dòng cho từng công đoạn được điền, ghi rõ
+   *    ai bấm và lý do — nhìn vào lịch sử là biết đơn này được ép, không phải
+   *    xưởng làm.
+   *  - `workMs` KHÔNG bịa: công đoạn ép xong giữ nguyên 0, vì không có ai làm
+   *    thật. Số giờ làm việc của xưởng không được phép phình lên vì một lần
+   *    sửa dữ liệu.
+   *  - Mốc thật đã có trên đơn không bị ghi đè (xem `planForceComplete`).
+   *
+   * Đơn cũng được kéo qua nốt hai chặng trước fulfillment (soát tool +
+   * thiết kế) nếu còn dở: đơn "hoàn thành sản xuất" mà vẫn nằm trong hàng đợi
+   * soát tool / backlog cần gán designer là trạng thái tự mâu thuẫn, và chính
+   * mấy hàng đợi đó là thứ người dùng muốn dọn khi bấm nút này.
+   */
+  async forceCompleteOrder(id: string, roleName?: RoleType, ctx?: AuditContext): Promise<ForceCompleteOrderResDto> {
+    if (roleName !== RoleType.SuperAdmin) {
+      throw new ForbiddenException('Chỉ SuperAdmin được chuyển đơn sang hoàn thành.');
+    }
+    const order = await this.orderModel.findById(id).lean();
+    if (!order) throw new NotFoundException('Order not found');
+
+    const o = order as unknown as {
+      cancelledAt?: Date | null;
+      heldAt?: Date | null;
+      fulfillmentCompletedAt?: Date | null;
+      currentFulfillmentStage?: FulfillmentStage | null;
+      factoryId?: string;
+      inProductionAt?: Date;
+      orderAt?: Date;
+      createdAt?: Date;
+      toolCheckedAt?: Date;
+      toolResultNote?: string;
+      designerStatus?: DesignerStatus;
+      designerAssignedAt?: Date;
+      designerStartedAt?: Date;
+      designerFirstStartedAt?: Date;
+      designerCompletedAt?: Date;
+      fulfillmentStages?: Record<string, { status?: FulfillmentStageStatus; completedAt?: Date } | undefined>;
+    };
+
+    if (o.cancelledAt) throw new BadRequestException('Đơn đã hủy — không thể chuyển hoàn thành.');
+    // Đơn giữ = đang tạm dừng có chủ đích; mở giữ trước rồi mới chốt hoàn thành.
+    this.assertNotHeld(o);
+    if (o.fulfillmentCompletedAt) throw new BadRequestException('Đơn đã hoàn thành sản xuất rồi.');
+
+    const now = new Date();
+    const plan = planForceComplete({
+      now,
+      inProductionAt: o.inProductionAt,
+      orderAt: o.orderAt,
+      createdAt: o.createdAt,
+      flowType: getFactoryFlowTypeSync(this.orderModel.db, o.factoryId),
+      toolCheckedAt: o.toolCheckedAt,
+      toolResultNote: o.toolResultNote,
+      designerStatus: o.designerStatus,
+      designerCompletedAt: o.designerCompletedAt,
+      fulfillmentStages: o.fulfillmentStages,
+    });
+
+    const set: Record<string, unknown> = {};
+    const timeline: FulfillmentTimelineEntry[] = [];
+    const byUserId = ctx?.user?._id ? String(ctx.user._id) : '';
+    const byUserName = ctx?.user?.fullName;
+
+    for (const step of plan.steps) {
+      if (step.key === 'tool-check') {
+        if (!o.toolCheckedAt) set.toolCheckedAt = step.to;
+        // 'ok' là giá trị quy ước "soát xong, không lỗi" mà cả hệ thống đọc.
+        // KHÔNG đụng `toolResult` — field đó giữ mã cấu hình xưởng, bịa vào là
+        // dựng ra một mã không tồn tại trong `workshop_config`.
+        if (!(o.toolResultNote ?? '').trim()) set.toolResultNote = 'ok';
+        continue;
+      }
+      if (step.key === 'designer') {
+        set.designerStatus = DesignerStatus.Done;
+        set.designerAssignedAt = o.designerAssignedAt ?? step.from;
+        set.designerStartedAt = o.designerStartedAt ?? step.from;
+        set.designerFirstStartedAt = o.designerFirstStartedAt ?? step.from;
+        set.designerCompletedAt = step.to;
+        continue;
+      }
+
+      const stage = step.key as FulfillmentStage;
+      const state = o.fulfillmentStages?.[stage];
+      set[`fulfillmentStages.${stage}.status`] = FulfillmentStageStatus.Done;
+      set[`fulfillmentStages.${stage}.waitingAt`] =
+        (state as { waitingAt?: Date } | undefined)?.waitingAt ?? step.from;
+      set[`fulfillmentStages.${stage}.startedAt`] =
+        (state as { startedAt?: Date } | undefined)?.startedAt ?? step.from;
+      set[`fulfillmentStages.${stage}.firstStartedAt`] =
+        (state as { firstStartedAt?: Date } | undefined)?.firstStartedAt ?? step.from;
+      set[`fulfillmentStages.${stage}.completedAt`] = step.to;
+      if (!state) {
+        // Công đoạn chưa từng được kích hoạt → khai đủ counter mặc định, đừng
+        // để `undefined` lọt vào chỗ code khác cộng dồn.
+        set[`fulfillmentStages.${stage}.reworkCount`] = 0;
+        set[`fulfillmentStages.${stage}.workMs`] = 0;
+      }
+      timeline.push({
+        stage,
+        action: FulfillmentTransitionAction.Complete,
+        fromStatus: state?.status ?? FulfillmentStageStatus.Waiting,
+        toStatus: FulfillmentStageStatus.Done,
+        byUserId,
+        byUserName,
+        at: step.to,
+        reason: step.auto ? 'Chuyển hoàn thành (luồng rút gọn)' : 'Chuyển hoàn thành',
+      });
+    }
+
+    set.currentFulfillmentStage = null;
+    set.fulfillmentCompletedAt = now;
+
+    const updated = await this.orderModel.findByIdAndUpdate(
+      id,
+      { $set: set, ...(timeline.length > 0 ? { $push: { fulfillmentTimeline: { $each: timeline } } } : {}) },
+      { new: true },
+    );
+    if (!updated) throw new NotFoundException('Order not found');
+
+    void this.orderLogService.write({
+      orderId: id,
+      action: 'force_complete',
+      field: 'fulfillmentCompletedAt',
+      // `before` = đơn đang đứng ở đâu lúc bị ép; `after` = các khâu đã điền,
+      // đủ để dựng lại chính xác thao tác này khi cần đối chiếu.
+      before: o.currentFulfillmentStage ?? o.designerStatus ?? null,
+      after: {
+        completedAt: now,
+        start: plan.start,
+        steps: plan.steps.map((s) => ({ key: s.key, from: s.from, to: s.to, auto: s.auto })),
+      },
+      ctx,
+    });
+    // Cùng sự kiện với lúc xưởng bấm xong thật — webhook khách (ORD-4) + chuông
+    // portal (ORD-5) không được phân biệt đơn xong thật với đơn được chốt tay.
+    this.emitCustomerOrderEvent('order.production_completed', [updated]);
+    void this.invalidateListCache();
+    return { success: true, data: updated } as unknown as ForceCompleteOrderResDto;
   }
 
   /**

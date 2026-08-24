@@ -53,12 +53,27 @@ Tick đơn Pending → "Push to production" → POST /push-preview (bảng giá 
         qua promotionMatches/applyPromotionDiscount — tái dùng như customer-catalog)
      3. TÁI DÙNG items[].productionId đã cấp lúc tạo/import (fallback generateUniqueProductionId
         cho staging doc cũ) → 1 lệnh importOrders() duy nhất
-        (type = ProductConfig.fullName resolve từ SKU → map config chính xác)
+        (type = ProductConfig.fullName resolve từ SKU → map config chính xác;
+         mỗi dòng mang orderAt = lúc khách đặt + inProductionAt = mốc đẩy của cả lô
+         — xem "Hai mốc thời gian của đơn" bên dưới)
      4. tạo customer_payments record { status:'waived', method:'waived', amount }
      5. $set items (priceSnapshot chốt) + pushedAt + paymentId, $set pushingAt=null
         (lệnh ghi cũng có điều kiện pushedAt: null)
      — hỏng ở bước 3 hoặc 4 → NHẢ hết chỗ giữ rồi ném lỗi, đơn quay lại đẩy được
 ```
+
+**Hai mốc thời gian của đơn (`orderAt` + `inProductionAt`).** Đơn portal không đi qua sheet import nên không có sẵn cột ngày như đơn nội bộ — `pushToProduction` phải tự điền, và bước 3 truyền cả hai (dạng ISO, `importOrders` parse qua `parseImportDate`) vào từng dòng `importRows`.
+
+| Trường | Lấy từ | Ý nghĩa |
+|---|---|---|
+| `orderAt` | `customer_orders.createdAt` | lúc **khách đặt** |
+| `inProductionAt` | mốc đẩy của cả lô | lúc **vào sản xuất** |
+
+Hai mốc lệch nhau đúng bằng quãng đơn nằm ở vùng nháp Pending — có thể vài phút mà cũng có thể vài ngày. Gộp làm một là mất luôn quãng chờ đó khỏi mọi báo cáo, nên đừng "đơn giản hoá" bằng cách cho cả hai cùng một giá trị. Staging doc quá cũ không có `createdAt` thì `orderAt` lùi về mốc đẩy: sai lệch một quãng đã không còn đo được, vẫn hơn để trống rồi thủng sort `orderAt: -1` ở kanban Fulfillment.
+
+`inProductionAt` để trống thì hậu quả nặng hơn nhiều, vì nó là **trục thời gian của gần hết hệ thống**: bảng "Danh sách đơn" mặc định lọc đúng hôm nay trên chính trường này (`Orders.md §7` — hai tham số tên `createdFrom`/`createdTo` nhưng áp lên `inProductionAt`, không phải `createdAt`); Dashboard, Lifecycle, SLA và báo cáo Telegram đều bucket theo nó. Một trường **không tồn tại** thì không khoảng ngày nào khớp, nên đơn để trống sẽ vào sản xuất thật mà **vô hình với xưởng** — kể cả khi gõ đúng mã vào ô tìm kiếm, vì search áp chồng lên bộ lọc ngày chứ không thay thế nó. Đã xảy ra với `QY-02284-48568` (đẩy 2026-08-24, không ai tìm thấy trên Danh sách đơn).
+
+Mốc đẩy lấy MỘT lần cho cả lô và dùng chung cho `OrderEntity.inProductionAt` lẫn `customer_orders.pushedAt`: hai con số tả cùng một sự kiện, gọi `new Date()` hai lần chỉ đẻ ra chênh lệch vài mili giây để người đọc số sau này phải đi giải thích. Test giữ luật: `apps/api/src/modules/customer-portal/push-in-production-at.spec.ts`.
 
 **Cửa cuối về file thiết kế (ORD-25).** ORD-22 bắt `placeOrder` kiểm mockup + design, nhưng đó chỉ là MỘT đường vào: Public Order API đi `importOrdersCsv`, và `updateStagingOrder` cho phép gỡ design ra khỏi đơn đã tạo. Chặn ở lúc tạo là hàng rào **báo sớm**, không thể là hàng rào **đảm bảo** — mỗi đường vào mới lại phải nhớ chặn lại.
 

@@ -9,7 +9,8 @@
     "cancel": "Cancel order",
     "updateDesign": "Change design",
     "hold": "Hold order",
-    "unhold": "Release"
+    "unhold": "Release",
+    "forceComplete": "Marked completed"
   },
   "importSubaction": {
     "create": "Created",

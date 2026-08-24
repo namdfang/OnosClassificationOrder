@@ -95,19 +95,19 @@ function randomProductionId(): string {
 }
 
 /** Nhãn chặng hiện tại — hiển thị khách hàng, KHÔNG dùng thuật ngữ nội bộ (vd 'sew-in'). */
-const CUSTOMER_STAGE_LABELS: Record<string, string> = {
+export const CUSTOMER_STAGE_LABELS: Record<string, string> = {
   'tool-check': 'Đang xử lý',
   designer: 'Đang thiết kế',
   ...FULFILLMENT_STAGE_LABELS,
 };
 
 /** Field OrderEntity cần cho derive trạng thái khách — dùng CHUNG cho $lookup pipeline lẫn find(). */
-const PROD_DERIVE_FIELDS =
+export const PROD_DERIVE_FIELDS =
   'productionId cancelledAt fulfillmentCompletedAt currentFulfillmentStage heldAt holdReason ' +
   'designerStatus productionErrorSource toolResultNote toolCheckedAt ' +
   'designerAssignedAt designerFirstStartedAt designerCompletedAt fulfillmentStages inProductionAt';
 
-interface ProdDeriveFields {
+export interface ProdDeriveFields {
   productionId?: string;
   cancelledAt?: Date;
   fulfillmentCompletedAt?: Date;
@@ -132,7 +132,13 @@ interface ProdDeriveFields {
  * hiển thị listing nhiều đơn cùng lúc. Đổi logic chặng ở 1 nơi thì nhớ đổi
  * luôn nơi kia.
  */
-function computeCurrentStage(d: ProdDeriveFields): { label?: string; at?: Date; completed: boolean } {
+export function computeCurrentStage(d: ProdDeriveFields): {
+  /** Key chặng (`LIFECYCLE_STAGE_KEYS`) — để FE dịch nhãn theo ngôn ngữ người xem. */
+  key?: string;
+  label?: string;
+  at?: Date;
+  completed: boolean;
+} {
   const completed = !!d.fulfillmentCompletedAt;
   if (completed) return { label: undefined, at: d.fulfillmentCompletedAt, completed };
 
@@ -152,7 +158,7 @@ function computeCurrentStage(d: ProdDeriveFields): { label?: string; at?: Date; 
         ? d.designerCompletedAt ?? d.designerFirstStartedAt ?? d.designerAssignedAt
         : d.fulfillmentStages?.[key]?.startedAt ?? d.fulfillmentStages?.[key]?.waitingAt;
 
-  return { label: CUSTOMER_STAGE_LABELS[key] ?? key, at, completed };
+  return { key, label: CUSTOMER_STAGE_LABELS[key] ?? key, at, completed };
 }
 
 /**
@@ -161,7 +167,7 @@ function computeCurrentStage(d: ProdDeriveFields): { label?: string; at?: Date; 
  * MIRROR với biểu thức aggregation trong `buildDerivePipeline()` — đổi 1 nơi
  * nhớ đổi nơi kia.
  */
-function isReworkBadge(p: ProdDeriveFields): boolean {
+export function isReworkBadge(p: ProdDeriveFields): boolean {
   if (p.designerStatus === DesignerStatus.Rework) return true;
   const note = (p.toolResultNote || '').trim().toLowerCase();
   return p.productionErrorSource === 'tool-check' && note !== '' && note !== 'ok';
@@ -173,7 +179,7 @@ function isReworkBadge(p: ProdDeriveFields): boolean {
  * xong; Completed = Fulfilled + N ngày (cutoff tính sẵn từ system_configs).
  * MIRROR với `buildDerivePipeline()`.
  */
-function deriveItemStatus(p: ProdDeriveFields, completedCutoff: Date): CustomerOrderStatus {
+export function deriveItemStatus(p: ProdDeriveFields, completedCutoff: Date): CustomerOrderStatus {
   if (p.cancelledAt) return CustomerOrderStatus.Cancelled;
   if (p.fulfillmentCompletedAt)
     return p.fulfillmentCompletedAt <= completedCutoff ? CustomerOrderStatus.Completed : CustomerOrderStatus.Fulfilled;
@@ -1310,6 +1316,22 @@ export class CustomerOrderService implements OnModuleInit {
     const importRows: ImportProductionOrderRow[] = [];
     const pendingUpdates: Array<{ stagingId: string; items: CustomerOrderItem[]; orderTotal: number }> = [];
     let totalAmount = 0;
+    /**
+     * Mốc "đơn vào sản xuất" của cả lô đẩy này.
+     *
+     * Đơn portal không đi qua sheet import nên không có sẵn cột ngày như đơn
+     * nội bộ, mà `inProductionAt` lại là TRỤC THỜI GIAN của gần hết hệ thống:
+     * bảng "Danh sách đơn" mặc định lọc đúng hôm nay trên chính trường này
+     * (`Orders.md §7`), Dashboard/Lifecycle/báo cáo Telegram đều bucket theo
+     * nó. Bỏ trống thì đơn đẩy vào sản xuất xong vẫn vô hình với xưởng —
+     * không khoảng ngày nào khớp một trường không tồn tại.
+     *
+     * Một mốc duy nhất cho cả `OrderEntity.inProductionAt` lẫn
+     * `customer_orders.pushedAt` bên dưới: hai con số đó tả cùng một sự kiện,
+     * gọi `new Date()` hai lần chỉ đẻ ra chênh lệch vài mili giây để người
+     * đọc số sau này phải đi giải thích.
+     */
+    const pushedAt = new Date();
 
     for (const { id, doc } of targets) {
       const error = this.validatePushable(doc);
@@ -1389,6 +1411,18 @@ export class CustomerOrderService implements OnModuleInit {
           designs: it.designs,
           orderId: (doc.orderId) ?? undefined,
           referent: (doc.note) ?? undefined,
+          // Hai mốc thời gian của đơn, `importOrders` đọc cả hai qua
+          // `parseImportDate` (nhận ISO có tz):
+          //   orderAt        = lúc KHÁCH đặt  → staging `createdAt`
+          //   inProductionAt = lúc VÀO SX     → mốc đẩy của cả lô
+          // Chúng khác nhau đúng bằng quãng đơn nằm ở vùng nháp Pending, có
+          // thể là vài phút mà cũng có thể là vài ngày — gộp làm một là mất
+          // luôn quãng chờ đó khỏi mọi báo cáo. Staging doc quá cũ không có
+          // `createdAt` thì lùi về mốc đẩy: sai lệch một quãng đã không còn
+          // đo được, vẫn hơn để trống rồi thủng sort `orderAt: -1` ở kanban
+          // Fulfillment.
+          orderAt: (doc.createdAt ?? pushedAt).toISOString(),
+          inProductionAt: pushedAt.toISOString(),
           shippingAddress: addr,
         });
       }
@@ -1435,14 +1469,13 @@ export class CustomerOrderService implements OnModuleInit {
       throw e;
     }
 
-    const now = new Date();
     await Promise.all(
       pendingUpdates.map((u) =>
         this.customerOrderModel.updateOne(
           // `pushedAt: null` là lưới an toàn cuối: tới đây lượt này đang giữ chỗ
           // nên không ai chen được, nhưng ghi có điều kiện thì rẻ mà chắc.
           { _id: u.stagingId, pushedAt: null },
-          { $set: { items: u.items, pushedAt: now, paymentId: String(payment._id), pushingAt: null } },
+          { $set: { items: u.items, pushedAt, paymentId: String(payment._id), pushingAt: null } },
         ),
       ),
     );

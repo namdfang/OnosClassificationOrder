@@ -263,6 +263,17 @@
       "mockupLabel": "Mockup",
       "clickToEnlarge": "Click to enlarge",
       "openNewTab": "Open in new tab"
+    },
+    "forceComplete": {
+      "title": "Mark as completed",
+      "desc": "The order will be marked as PRODUCTION COMPLETED. Stages that never finished get timestamps spread evenly from when the order entered production until now, following the flow of the factory holding it.",
+      "windowLabel": "Window to spread across",
+      "windowNow": "now",
+      "noStart": "This order has no production start date — every timestamp will be written at the moment you click.",
+      "warning": "This edits data and cannot be undone. Use it only for orders finished in real life that the factory forgot to close.",
+      "submitBtn": "Mark as completed",
+      "submitting": "Marking…",
+      "success": "Order marked as completed"
     }
   },
   "filterBar": {
@@ -509,10 +520,14 @@
     "hold": "Hold order",
     "cancelOrder": "Cancel order",
     "checkDesign": "Check for new design",
-    "checkDesignUpdated": "Found and applied new design from OnosPod"
+    "checkDesignUpdated": "Found and applied new design from OnosPod",
+    "printCustomerLabel": "Print customer label",
+    "forceComplete": "Mark as completed"
   },
   "orderActions": {
-    "alreadyCancelled": "Order already cancelled."
+    "alreadyCancelled": "Order already cancelled.",
+    "heldFirst": "Order is on hold — release it first",
+    "alreadyCompleted": "Order already completed"
   },
   "priorityEstimate": {
     "dayUnit": "d",
@@ -660,5 +675,10 @@
     "low": "Priority",
     "normal": "High priority",
     "high": "Highest priority"
+  },
+  "customerLabel": {
+    "scanHint": "Scan to track your order",
+    "orderIdCaption": "Order ID",
+    "externalIdCaption": "Platform ID"
   }
 }

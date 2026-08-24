@@ -35,6 +35,27 @@ export const canUserHold = (roleName?: string): boolean =>
   !!roleName && HOLD_ALLOWED_ROLES.includes(roleName);
 
 /**
+ * "Chuyển hoàn thành" (Orders.md §23) — CHỈ SuperAdmin. Đây là cửa sửa dữ liệu
+ * (ép đơn về đã hoàn thành sản xuất + điền mốc cho các khâu chưa xong), không
+ * phải một bước của quy trình, nên cố ý hẹp hơn cả Admin.
+ * MIRROR `@Auth([RoleType.SuperAdmin])` + `forceCompleteOrder()` ở BE.
+ */
+export const canForceComplete = (roleName?: string): boolean => roleName === 'SuperAdmin';
+
+/** Đơn có chuyển hoàn thành được không — MIRROR guard ở `OrderService.forceCompleteOrder`. */
+export function canForceCompleteOrder(
+  o: { cancelledAt?: string | Date | null; heldAt?: string | Date | null; fulfillmentCompletedAt?: string | Date | null },
+  t?: TFunction<'orders'>,
+): { ok: boolean; reason?: string } {
+  if (o.cancelledAt) return { ok: false, reason: t ? t('orderActions.alreadyCancelled') : 'Đơn đã hủy.' };
+  if (o.heldAt) return { ok: false, reason: t ? t('orderActions.heldFirst') : 'Đơn đang bị giữ — mở giữ trước.' };
+  if (o.fulfillmentCompletedAt) {
+    return { ok: false, reason: t ? t('orderActions.alreadyCompleted') : 'Đơn đã hoàn thành sản xuất.' };
+  }
+  return { ok: true };
+}
+
+/**
  * Đơn có được HỦY không — MIRROR `OrderService.canCancelOrder` ở
  * `apps/api/src/modules/order/order.service.ts`. Sửa 1 nơi phải sửa cả 2.
  *

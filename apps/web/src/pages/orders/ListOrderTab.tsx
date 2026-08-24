@@ -424,7 +424,7 @@ export function ListOrderTab({ refreshKey }: ListOrderTabProps) {
     // nghĩa riêng — chỉ đơn CHƯA map product config. Đừng rút gọn thành một
     // nhánh rồi bỏ nhánh dưới: bỏ đi là mất hẳn bộ lọc "Chưa mapping".
     // Đây cũng là chỗ DUY NHẤT trong cả FE gửi chuỗi 'false', nên nó là nơi
-    // lộ ra lỗi phân giải cờ (ORD-24) — xem `Orders.md §22`.
+    // lộ ra lỗi phân giải cờ (ORD-24) — xem `Orders.md §23`.
     if (filterMapped === 'mapped') params.set('isMapped', 'true');
     if (filterMapped === 'unmapped') params.set('isMapped', 'false');
     if (filterError) params.set('hasError', 'true');

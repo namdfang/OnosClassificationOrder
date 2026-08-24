@@ -37,6 +37,8 @@ export type WorkshopOrderRow = {
   /** Trạng thái pipeline R2 cho từng vị trí design (Design-R2-Pipeline). */
   designsStatus?: Partial<Record<string, 'pending' | 'ready' | 'failed'>>;
   orderId?: string;
+  /** Mã đơn bên sàn (TikTok/Etsy...) — cột "External ID" lúc import. */
+  externalId?: string;
   /** Thời gian khách lên đơn (lấy từ cột "Order at" trong sheet). */
   orderAt?: string;
   inProductionAt?: string;
@@ -80,6 +82,8 @@ export type WorkshopOrderRow = {
   // Fulfillment — dùng cho cột action stage In trên trang Fulfillment print.
   currentFulfillmentStage?: string | null;
   fulfillmentStages?: Record<string, ({ status?: string } & Record<string, unknown>) | undefined>;
+  /** Đóng hàng xong — gate "Chuyển hoàn thành" ở menu "..." (Orders.md §23). */
+  fulfillmentCompletedAt?: string | null;
 
   // Hủy đơn (soft) — badge "Đã hủy" + gate action.
   cancelledAt?: string | null;
@@ -362,6 +366,16 @@ export const WORKSHOP_COLS: WorkshopColMeta[] = [
               <CopyButton value={r.orderId} label="Order ID" iconSize={10} />
               <Hint content={`Order ID: ${r.orderId}`} forceRich>
                 <span className="font-mono text-[10px] text-muted-foreground truncate max-w-[140px]">{r.orderId}</span>
+              </Hint>
+            </div>
+          )}
+          {r.externalId && (
+            <div className="flex items-center gap-1">
+              <CopyButton value={r.externalId} label="Platform ID" iconSize={10} />
+              <Hint content={`Platform ID (External): ${r.externalId}`} forceRich>
+                <span className="font-mono text-[10px] text-muted-foreground/70 truncate max-w-[140px]">
+                  ext: {r.externalId}
+                </span>
               </Hint>
             </div>
           )}

@@ -23,6 +23,8 @@ import { CustomerOrderEntity, CustomerOrderSchema } from './customer-order.entit
 import { CustomerOrderService } from './customer-order.service';
 import { CustomerPaymentEntity, CustomerPaymentSchema } from './customer-payment.entity';
 import { PublicCatalogController } from './public-catalog.controller';
+import { PublicTrackController } from './public-track.controller';
+import { PublicTrackService } from './public-track.service';
 
 @Module({
   imports: [
@@ -53,10 +55,12 @@ import { PublicCatalogController } from './public-catalog.controller';
     CustomerOrderController,
     CustomerCatalogController,
     PublicCatalogController,
+    // Tra cứu đơn công khai `/track/:productionId` (không đăng nhập).
+    PublicTrackController,
     // ORD-4 — API keys (portal, JWT) + Public Order API (API key, không JWT).
     CustomerApiKeyController,
     CustomerOpenApiController,
   ],
-  providers: [CustomerOrderService, CustomerCatalogService],
+  providers: [CustomerOrderService, CustomerCatalogService, PublicTrackService],
 })
 export class CustomerPortalModule {}

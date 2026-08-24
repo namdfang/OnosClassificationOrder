@@ -73,6 +73,7 @@ PublicFooter + BackToTop
 | Khách hàng đăng ký/đặt đơn  | `CUSTOMER_REGISTER`     | header, hero, HowItWorks, FinalCta, footer      |
 | Cổng khách hàng (đăng nhập) | `CUSTOMER_LOGIN`        | header, HowItWorks, FinalCta, footer            |
 | Catalog công khai           | `CATALOG`               | header (mục "Sản phẩm")                         |
+| Tra cứu đơn công khai       | `TRACK`                 | footer (cột "Đặt đơn") — xem `PublicOrderTracking.md` |
 | Đăng nhập nhân viên         | `LOGIN` (`/adm/login`)  | CTA cuối (chữ nhỏ), footer, menu mobile         |
 | Tuyển dụng                  | `COMPANY_CAREERS`       | CTA cuối, footer                                |
 | Email hỗ trợ                | `support@onosfactory.com` | CTA cuối + footer (`mailto:`)                 |

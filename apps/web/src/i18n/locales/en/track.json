@@ -1,0 +1,105 @@
+{
+  "meta": {
+    "title": "Track your order",
+    "subtitle": "Enter the production code on your order to see where it is on the factory floor."
+  },
+  "search": {
+    "label": "Production code",
+    "placeholder": "e.g. RA-05217-56631",
+    "submit": "Track",
+    "hint": "The production code is on your order confirmation and on the parcel label.",
+    "empty": "Enter a production code to track an order."
+  },
+  "notFound": {
+    "title": "No order found for this code",
+    "desc": "Double-check the production code, or contact support if you are sure it is correct.",
+    "back": "Try another code"
+  },
+  "ids": {
+    "title": "Order codes",
+    "productionId": "Production ID",
+    "externalId": "Platform ID (external)",
+    "orderId": "Your order ID",
+    "identifier": "Identifier",
+    "orderName": "Order name",
+    "copy": "Copy",
+    "copied": "Copied"
+  },
+  "status": {
+    "title": "Status",
+    "pending": "Waiting to enter production",
+    "processing": "Processing",
+    "in-production": "In production",
+    "fulfilled": "Fulfilled",
+    "completed": "Completed",
+    "refunded": "Refunded",
+    "cancelled": "Cancelled",
+    "onHold": "On hold",
+    "rework": "Rework",
+    "currentStage": "Current stage",
+    "notStarted": "Not in production yet"
+  },
+  "hold": {
+    "waiting-design": "Waiting for an updated design",
+    "waiting-address": "Waiting for an updated shipping address",
+    "other": "This order is on hold, support will be in touch"
+  },
+  "product": {
+    "title": "Product",
+    "type": "Product",
+    "color": "Color",
+    "size": "Size",
+    "quantity": "Quantity",
+    "sku": "SKU",
+    "merchantSku": "Your SKU",
+    "printMethod": "Print method",
+    "noMockup": "No mockup image"
+  },
+  "dates": {
+    "title": "Timeline",
+    "orderAt": "Ordered",
+    "pushedAt": "Sent to production",
+    "inProductionAt": "Entered production",
+    "fulfillmentCompletedAt": "Packed",
+    "cancelledAt": "Cancelled"
+  },
+  "progress": {
+    "title": "Production progress",
+    "notPushed": "This order has not entered production yet — progress appears here as soon as the factory starts.",
+    "stages": {
+      "tool-check": "Order intake",
+      "designer": "Design",
+      "print": "Print",
+      "press": "Press",
+      "qc-post-press": "QC after press",
+      "sew-in": "Sew in",
+      "sew-out": "Sew out",
+      "pack": "Pack"
+    },
+    "stageStatus": {
+      "done": "Done",
+      "current": "In progress",
+      "error": "Fixing an issue",
+      "rework": "Rework",
+      "pending": "Not reached yet"
+    }
+  },
+  "shipping": {
+    "title": "Shipping",
+    "destination": "Destination",
+    "trackingNumber": "Tracking number",
+    "carrier": "Carrier",
+    "trackingLink": "Open carrier tracking",
+    "none": "No tracking information yet."
+  },
+  "siblings": {
+    "title": "Other products in this order",
+    "view": "View"
+  },
+  "share": {
+    "copyLink": "Copy link",
+    "copied": "Link copied"
+  },
+  "privacyNote": "This page shows only what is needed to follow the order. Sign in to your customer account for the full details and to edit the order.",
+  "signIn": "Customer sign in"
+}

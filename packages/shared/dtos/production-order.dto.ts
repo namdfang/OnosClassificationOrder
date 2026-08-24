@@ -1296,6 +1296,14 @@ export class CancelOrderDto extends createZodDto(extendApi(CancelOrderZod)) {}
 export const CancelOrderResZod = ResZod.extend({ data: ProductionOrderZod });
 export class CancelOrderResDto extends createZodDto(extendApi(CancelOrderResZod)) {}
 
+/**
+ * "Chuyển hoàn thành" — SuperAdmin ép 1 đơn về trạng thái đã hoàn thành sản
+ * xuất, các khâu chưa xong được điền mốc chia đều từ lúc đơn vào sản xuất tới
+ * lúc bấm (`Orders.md §23`). Không có body: mọi thứ suy ra từ chính đơn.
+ */
+export const ForceCompleteOrderResZod = ResZod.extend({ data: ProductionOrderZod });
+export class ForceCompleteOrderResDto extends createZodDto(extendApi(ForceCompleteOrderResZod)) {}
+
 // ─── Giữ đơn (hold / unhold) ────────────────────────────────────────
 // Hold: tạm dừng đơn — set heldAt + holdReason, khóa mọi thao tác cho tới khi
 // mở lại (unhold). REVERSIBLE (khác cancel). Bulk: hold/unhold nhiều đơn 1 lần.

@@ -69,6 +69,11 @@ export const PATHS = {
   // Khác `CUSTOMER_CATALOG` (/customer/catalog) vốn nằm sau đăng nhập và có giá theo tier.
   CATALOG: '/catalog',
   CATALOG_DETAIL: '/catalog/:id',
+  // Tra cứu đơn công khai — dán thẳng mã sản xuất vào URL (`/track/RA-05217-56631`).
+  // Ai có mã đều xem được, kể cả người mua cuối của khách; dữ liệu trả về là
+  // danh sách trắng hẹp — xem `public-track.service.ts`.
+  TRACK: '/track',
+  TRACK_DETAIL: '/track/:productionId',
 
   ERROR_403: '/forbidden',
   ERROR_404: '/error/404',

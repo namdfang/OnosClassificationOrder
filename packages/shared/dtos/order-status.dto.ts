@@ -33,7 +33,7 @@ export const GetOrderStatusOverviewZod = z.object({
    * đúng nhóm NGƯỢC LẠI. Giao diện gửi đúng, bộ phân giải mới là chỗ hỏng.
    *
    * `BooleanFlagZod` chứ KHÔNG phải `z.coerce.boolean()` — cái sau coi mọi chuỗi
-   * khác rỗng là bật, kể cả `'false'`. Xem `Orders.md §22`.
+   * khác rỗng là bật, kể cả `'false'`. Xem `Orders.md §23`.
    */
   readyForFulfill: BooleanFlagZod,
   createdFrom: z.string().optional(),
