@@ -101,5 +101,14 @@
     "copied": "Đã sao chép liên kết"
   },
   "privacyNote": "Trang này chỉ hiện thông tin cần để theo dõi đơn. Đăng nhập tài khoản khách hàng để xem đầy đủ và chỉnh sửa đơn.",
-  "signIn": "Đăng nhập khách hàng"
+  "signIn": "Đăng nhập khách hàng",
+  "designs": {
+    "title": "Vị trí in & thiết kế",
+    "empty": "Đơn này chưa có thông tin vị trí in.",
+    "noFile": "Chưa có file",
+    "optional": "Tùy chọn",
+    "open": "Mở file gốc",
+    "unavailable": "Không xem trước được — mở bằng liên kết",
+    "sizeHint": "{{width}} × {{height}} px"
+  }
 }

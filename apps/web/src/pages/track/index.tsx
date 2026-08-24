@@ -11,11 +11,12 @@ import {
   CircleDot,
   Copy,
   ExternalLink,
+  ImageOff,
   PackageSearch,
   RotateCcw,
   Search,
 } from 'lucide-react';
-import type { PublicOrderTrack } from 'shared';
+import type { PublicOrderTrack, PublicOrderTrackDesign } from 'shared';
 import { CustomerOrderStatus, LIFECYCLE_STAGE_KEYS } from 'shared';
 
 import { PATHS } from '@/constants/paths';
@@ -29,6 +30,7 @@ import PublicFooter from '@/components/public/PublicFooter';
 import PublicHeader from '@/components/public/PublicHeader';
 
 import { cn } from '@/utils/cn';
+import { driveThumbUrl, driveViewUrl } from '@/utils/driveThumb';
 
 /** Màu badge theo trạng thái khách — cùng thang với listing portal. */
 const STATUS_TONE: Record<string, string> = {
@@ -95,6 +97,78 @@ function CodeField({ label, value, strong = false }: { label: string; value?: st
         >
           {copied ? <Check size={14} className="text-emerald-500" /> : <Copy size={14} />}
         </button>
+      </div>
+    </div>
+  );
+}
+
+/**
+ * 1 ô "vị trí in → file thiết kế".
+ *
+ * Ảnh render qua `driveThumbUrl`: link Drive lưu trên đơn có nhiều dạng
+ * (`open?id=…`, `/file/d/…/view`, link CDN design) và KHÔNG dạng nào đặt thẳng
+ * vào `<img>` mà hiện ra ảnh — phải đổi sang endpoint thumbnail của Google.
+ *
+ * Vẫn phải có nhánh hỏng: thumbnail chỉ ra ảnh khi file được chia sẻ "bất kỳ ai
+ * có liên kết". File để riêng tư sẽ trả về lỗi ảnh, và một ô vỡ không nói cho
+ * người tra biết vì sao — nên chỗ đó đổi thành liên kết mở file gốc.
+ */
+function DesignTile({ item }: { item: PublicOrderTrackDesign }) {
+  const { t } = useTranslation('track');
+  const [broken, setBroken] = useState(false);
+
+  const thumb = item.url ? driveThumbUrl(item.url, 600) : '';
+  const href = item.url ? driveViewUrl(item.url) : '';
+  const sizeHint =
+    item.widthPx && item.heightPx ? t('designs.sizeHint', { width: item.widthPx, height: item.heightPx }) : undefined;
+
+  return (
+    <div className="overflow-hidden rounded-xl border border-slate-200">
+      <div className="flex aspect-square items-center justify-center bg-slate-50">
+        {!item.url ? (
+          <span className="px-3 text-center text-xs text-slate-400">{t('designs.noFile')}</span>
+        ) : broken ? (
+          <a
+            href={href}
+            target="_blank"
+            rel="noreferrer noopener"
+            className="flex flex-col items-center gap-1.5 px-3 text-center text-xs text-slate-500 hover:text-brand-600"
+          >
+            <ImageOff size={20} />
+            {t('designs.unavailable')}
+          </a>
+        ) : (
+          <a href={href} target="_blank" rel="noreferrer noopener" className="block h-full w-full">
+            <img
+              src={thumb}
+              alt={item.label}
+              loading="lazy"
+              onError={() => setBroken(true)}
+              className="h-full w-full object-contain"
+            />
+          </a>
+        )}
+      </div>
+      <div className="border-t border-slate-100 px-3 py-2">
+        <div className="flex items-center justify-between gap-2">
+          <p className="truncate text-sm font-medium text-[#0f110f]">{item.label}</p>
+          {item.isRequired === false && (
+            <span className="shrink-0 rounded-full bg-slate-100 px-2 py-0.5 text-[0.6rem] font-bold uppercase tracking-[0.08em] text-slate-500">
+              {t('designs.optional')}
+            </span>
+          )}
+        </div>
+        {sizeHint && <p className="text-xs text-slate-400">{sizeHint}</p>}
+        {item.url && (
+          <a
+            href={href}
+            target="_blank"
+            rel="noreferrer noopener"
+            className="mt-1 inline-flex items-center gap-1 text-[0.68rem] font-bold uppercase tracking-[0.08em] text-brand-600"
+          >
+            {t('designs.open')} <ExternalLink size={11} />
+          </a>
+        )}
       </div>
     </div>
   );
@@ -350,13 +424,25 @@ function PublicTrackPage() {
               )}
             </SectionCard>
 
+            {/* ---- Vị trí in + file thiết kế ---- */}
+            {data.designs.length > 0 && (
+              <SectionCard title={t('designs.title')}>
+                <div className="grid gap-3 sm:grid-cols-3 lg:grid-cols-4">
+                  {data.designs.map((d) => (
+                    <DesignTile key={d.key} item={d} />
+                  ))}
+                </div>
+              </SectionCard>
+            )}
+
             <div className="grid gap-4 lg:grid-cols-2">
               {/* ---- Sản phẩm ---- */}
               <SectionCard title={t('product.title')}>
                 <div className="flex gap-4">
                   <div className="h-24 w-24 shrink-0 overflow-hidden rounded-xl border border-slate-200">
                     <ProductImage
-                      src={data.product.mockupUrl}
+                      src={driveThumbUrl(data.product.mockupUrl, 400)}
+                      fallbackSrc={data.product.mockupUrl}
                       alt={data.product.type ?? data.productionId}
                       className="h-full w-full object-cover"
                     />

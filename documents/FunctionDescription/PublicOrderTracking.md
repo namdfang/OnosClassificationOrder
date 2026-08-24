@@ -79,15 +79,22 @@ DTO ở `packages/shared/dtos/customer-order.dto.ts` (`PublicOrderTrackZod` /
   dates: { orderAt?, pushedAt?, inProductionAt?, fulfillmentCompletedAt?, cancelledAt? };
   tracking?: { number?, carrier?, url? };        // KHÔNG có labelUrl
   destination?: { city?, state?, country? };     // KHÔNG có tên/đường/phone/email
+  designs: { key, label, url?, widthPx?, heightPx?, isRequired? }[];  // vị trí in + file thiết kế
   stages: LifecycleTrackStage[];                 // rỗng khi chưa push
   siblings: { productionId, type?, color?, size?, quantity?, status, currentStageKey?, currentStageLabel? }[];
 }
 ```
 
 **Cố ý KHÔNG có** (đọc được ở DB nhưng không được nói ra): giá/`priceSnapshot`/`baseCost`,
-tên nhân viên (`assignee`, designer), `factoryId`, link file thiết kế (`designs`),
-`labelUrl`, nguyên văn `holdReason`/`cancelReason`/`productionErrorNote`, địa chỉ ship
-đầy đủ. Thêm field mới phải trả lời được: *người lạ cầm mã đơn có được biết thứ này không?*
+tên nhân viên (`assignee`, designer), `factoryId`, `labelUrl`, nguyên văn
+`holdReason`/`cancelReason`/`productionErrorNote`, địa chỉ ship đầy đủ. Thêm field mới
+phải trả lời được: *người lạ cầm mã đơn có được biết thứ này không?*
+
+**Ngoại lệ có chủ đích — `designs`:** file thiết kế CÓ trong danh sách trắng theo yêu cầu
+vận hành (người cầm mã đơn cần đối chiếu đúng file đang đi vào sản xuất). Đây là đánh đổi
+đã cân nhắc: **mã đơn trở thành thứ đủ để xem file thiết kế của đơn**, nên mã đơn không
+còn là định danh vô hại để phát tán. Muốn siết lại thì bỏ `designs` khỏi
+`PublicOrderTrackZod` + `buildDesigns()`, phần còn lại của trang không phụ thuộc nó.
 
 ## 4. UI Components
 
@@ -96,8 +103,26 @@ tên nhân viên (`assignee`, designer), `factoryId`, link file thiết kế (`d
   - `Field` — ô "nhãn — giá trị", tự ẩn khi rỗng.
   - `StageIcon` + danh sách 8 chặng dọc (done / current / error / rework / pending).
   - `SectionCard` — khung các khối Sản phẩm / Mốc thời gian / Giao hàng / Item cùng đơn.
+  - `DesignTile` — 1 ô "vị trí in → file thiết kế".
 - Tái dùng primitive public dùng chung: `PublicHeader`, `PublicFooter`, `BackToTop`,
   `ProductImage`, `Spinner` (`apps/web/src/components/public/`).
+
+### 4.1 Link Drive phải đổi mới hiện được ảnh
+
+Link thiết kế lưu trên đơn có nhiều dạng và **không dạng nào đặt thẳng vào `<img>` mà ra
+ảnh**: `https://drive.google.com/open?id=<id>&usp=drive_copy` (dạng khách hay dán nhất),
+`/file/d/<id>/view`, hoặc link CDN design nội bộ. Trang dùng `driveThumbUrl(url, 600)`
+(`apps/web/src/utils/driveThumb.ts` — bắt cả hai dạng Drive qua `extractDriveId`, đổi sang
+`https://drive.google.com/thumbnail?id=<id>&sz=w600`, và đổi link CDN sang biến thể
+`preview`); click ảnh mở `driveViewUrl(url)`. Ảnh mockup ở khối Sản phẩm đi qua đúng hàm
+này, `fallbackSrc` giữ URL gốc cho ảnh không phải Drive.
+
+**Máy chủ CỐ Ý trả URL thô**, không tự đổi sẵn: đổi link ở cả hai nơi là dựng hai bản
+logic rồi để chúng trôi khỏi nhau; bộ hàm ở FE vốn đã phục vụ các bảng nội bộ.
+
+Thumbnail của Google chỉ ra ảnh khi file được chia sẻ **"bất kỳ ai có liên kết"**. File để
+riêng tư trả lỗi ảnh → `DesignTile` bắt `onError` và đổi ô đó thành liên kết mở file gốc,
+thay vì để lại một ô vỡ không nói được vì sao.
 - Nhãn chặng dịch theo **key** (`LIFECYCLE_STAGE_KEYS`) qua `track.progress.stages.*`,
   nhãn tiếng Việt từ BE chỉ là đường lui.
 - Lối vào: link "Tra cứu đơn hàng" ở cột *Đặt đơn* của `PublicFooter`
@@ -110,6 +135,12 @@ tên nhân viên (`assignee`, designer), `factoryId`, link file thiết kế (`d
   - `holdKindOf()` — mirror `CustomerOrderEventService.holdKindOf`, quy `holdReason` nội
     bộ về 3 nhóm an toàn (`packages/shared/constants/hold-reason.ts`).
   - `buildSiblings()` — 1 query `$in` cho toàn bộ item còn lại, không N+1 theo từng mã.
+  - `buildDesigns()` — ghép `order.designs` (fallback `designsOriginal`; R2 đang tắt nên
+    hai bản trùng nhau) với `ProductConfig.printArea` theo `key`. Thứ tự + nhãn lấy từ
+    `printArea` (nhãn resolve bằng `PRODUCT_PRINT_AREA_LABEL_MAP`) nên khớp đúng thứ tự ô
+    khách đã điền ở form đặt đơn; vị trí đơn CÓ file mà sản phẩm không (còn) khai được
+    thêm ở cuối — file đó đang thực sự đi vào sản xuất, giấu đi thì người tra đối chiếu
+    thiếu. Vị trí sản phẩm khai mà đơn chưa nộp file vẫn liệt kê với `url` trống.
 - Các hàm derive được **export lại** từ `customer-order.service.ts`
   (`PROD_DERIVE_FIELDS`, `ProdDeriveFields`, `computeCurrentStage`, `deriveItemStatus`,
   `isReworkBadge`, `CUSTOMER_STAGE_LABELS`) để trang công khai và portal không bao giờ

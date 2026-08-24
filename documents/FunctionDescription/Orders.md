@@ -1470,10 +1470,27 @@ Nội dung tem, khổ **40×60mm dọc** (4×6cm — tem decal rời, KHÔNG ph�
 | Mã sàn | `externalId`, nhãn "Mã sàn" — cùng thứ tự với cột Production ID ở danh sách đơn (mã đơn trước, mã sàn dưới) |
 | Tên sản phẩm | `productConfig.fullName` → fallback `type` (đơn chưa map xưởng không có `productConfig`) |
 | Biến thể | `size · color` |
+| Vị trí in | các key trong `designs` CÓ file, nhãn + thứ tự lấy từ `DESIGN_KEY_ORDER`/`buildDesignLabels` (`cells/DesignThumbsCell.tsx` — đã export để tem dùng chung, KHÔNG chép danh sách thứ hai). Key lạ vẫn liệt kê ở cuối bằng chính tên key: mất nhãn tiếng Việt còn hơn tem giấu mất một vị trí phải in |
 
 **In CẢ HAI mã phụ, mỗi mã tự biến mất khi rỗng.** `externalId` chỉ có ở đơn nhập từ sheet có cột "External ID" — đo trên dữ liệu thật 2026-08-24, công đoạn **In** có 2/144 đơn mang `externalId` còn 143/144 mang `orderId`; các công đoạn sau thì `externalId` phủ 40–85%. In mỗi một mã là phần lớn tem ra dòng trống. Chiều ngược lại cũng có: đơn khách tự lên qua Customer Portal chưa có `orderId`. Mã bị cắt cụt trên tem là mã sai nên dùng `break-all` (xuống dòng) chứ KHÔNG `truncate`.
 
 Mục này **KHÔNG bị khoá** theo `cancelledAt`/`heldAt` như các mục còn lại: in tem là thao tác chỉ đọc, và kiện hàng của đơn đang giữ vẫn cần tem để tìm lại.
+
+**Ngân sách chiều cao — kiểm lại mỗi khi thêm dòng.** Lòng tem chỉ có 36×56mm (40×60 trừ 2mm padding mỗi bên) và mọi thứ đều `overflow-hidden`, nên một dòng thừa không báo lỗi mà lặng lẽ **cắt cụt dòng cuối**. Đo ở ca xấu nhất — tên sản phẩm, biến thể, vị trí in đều tràn 2 dòng:
+
+| Phần | Cao |
+|---|---:|
+| QR 84px | 23.28mm → **22.23mm** |
+| Dòng "Quét để theo dõi đơn hàng" 5pt + lề | 3.00mm |
+| Gạch ngang + lề trên dưới | 2.80mm |
+| `productionId` 9pt | 3.18mm |
+| Mã đơn 6pt · Mã sàn 6pt | 2.65 + 2.65mm |
+| Tên sản phẩm 7pt ×2 dòng + lề | 7.17mm |
+| Biến thể 7pt ×2 dòng | 6.17mm |
+| Vị trí in 6pt ×2 dòng + lề | 5.89mm |
+| **Tổng** | **55.74 / 56mm** |
+
+Còn dư đúng **0.26mm**. Cỡ QR là biến điều chỉnh: 84px không phải chọn cho đẹp mà là con số lớn nhất còn vừa — thêm dòng mới vào tem thì phải trừ lại ở đó. Ở 84px, QR ~48 ký tự / ECC M ra 33 module tức 0.67mm/module, vẫn trên ngưỡng camera điện thoại đọc được; nhỏ hơn nữa thì bắt đầu rủi ro. Dòng "Mã sàn" dài nhất (nhãn + 18 chữ số) rộng 30.3mm, vừa 36mm nên không xuống dòng.
 
 **Cách in — CỐ Ý khác sheet barcode ở §Stage Error Catalog.** Nhãn được `createPortal` thẳng ra `document.body` rồi giấu anh chị em cùng cấp bằng `body > *:not(#customer-label-print) { display: none }`. Hai điểm không được đổi thành cách khác:
 

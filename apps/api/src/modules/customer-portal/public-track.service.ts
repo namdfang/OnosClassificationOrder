@@ -1,17 +1,19 @@
 import { Injectable, NotFoundException } from '@nestjs/common';
 import { InjectModel } from '@nestjs/mongoose';
 import type { Model } from 'mongoose';
-import type { CustomerHoldKind, PublicOrderTrack } from 'shared';
+import type { CustomerHoldKind, DesignFields, ProductPrintArea, PublicOrderTrack } from 'shared';
 import {
   CUSTOMER_ORDER_COMPLETED_DAYS_DEFAULT,
   CUSTOMER_ORDER_COMPLETED_DAYS_KEY,
   CustomerOrderStatus,
   HOLD_REASON_WAITING_ADDRESS,
   HOLD_REASON_WAITING_DESIGN,
+  PRODUCT_PRINT_AREA_LABEL_MAP,
 } from 'shared';
 
 import { OrderEntity } from '@/modules/order/order.entity';
 import { OrderService } from '@/modules/order/order.service';
+import { ProductConfigEntity } from '@/modules/product-config/product-config.entity';
 import { SystemConfigService } from '@/modules/system-config/system-config.service';
 
 import type { CustomerOrderItem } from './customer-order.entity';
@@ -34,7 +36,7 @@ const CODE_PATTERN = /^[A-Za-z0-9][A-Za-z0-9-]{2,39}$/;
 /** Field OrderEntity trang công khai được phép đọc — cố ý KHÔNG có designer/xưởng/giá. */
 const PUBLIC_ORDER_FIELDS =
   'productionId externalId orderId type color size quantity mockupUrl printMethod orderAt shippingAddress ' +
-  'cancelledAt ' +
+  'cancelledAt designs designsOriginal productConfigId ' +
   PROD_DERIVE_FIELDS;
 
 type PublicOrderDoc = ProdDeriveFields & {
@@ -49,6 +51,9 @@ type PublicOrderDoc = ProdDeriveFields & {
   printMethod?: string;
   orderAt?: Date;
   shippingAddress?: { city?: string; state?: string; country?: string };
+  designs?: DesignFields;
+  designsOriginal?: DesignFields;
+  productConfigId?: string;
 };
 
 /**
@@ -69,6 +74,7 @@ export class PublicTrackService {
   constructor(
     @InjectModel(OrderEntity.name) private readonly orderModel: Model<OrderEntity>,
     @InjectModel(CustomerOrderEntity.name) private readonly customerOrderModel: Model<CustomerOrderEntity>,
+    @InjectModel(ProductConfigEntity.name) private readonly productConfigModel: Model<ProductConfigEntity>,
     private readonly orderService: OrderService,
     private readonly systemConfigService: SystemConfigService,
   ) {}
@@ -128,6 +134,10 @@ export class PublicTrackService {
     }
 
     const siblings = await this.buildSiblings(stagingItems, lower, cutoff);
+    const designs = await this.buildDesigns(
+      order?.designs ?? order?.designsOriginal ?? item?.designs,
+      order?.productConfigId ?? item?.productConfigId,
+    );
     const addr = order?.shippingAddress ?? staging?.shippingAddress;
 
     return {
@@ -175,10 +185,60 @@ export class PublicTrackService {
 
         destination: addr ? { city: addr.city, state: addr.state, country: addr.country } : undefined,
 
+        designs,
         stages,
         siblings,
       },
     };
+  }
+
+  /**
+   * Vị trí in của sản phẩm + file thiết kế của đơn, ghép theo `key`.
+   *
+   * Nguồn thứ tự và nhãn là `ProductConfig.printArea` — cùng nguồn mà form đặt
+   * đơn của khách dùng, nên trang tra cứu liệt kê đúng những ô khách đã điền,
+   * theo đúng thứ tự đó. Vị trí đơn CÓ file mà sản phẩm không (còn) khai vẫn
+   * được thêm ở cuối: file đó đang thực sự đi vào sản xuất, giấu đi thì người
+   * tra đối chiếu thiếu.
+   *
+   * Trả URL THÔ như đang lưu; đổi sang link ảnh xem được là việc của trang
+   * (`driveThumbUrl`/`driveViewUrl`) — xem `PublicOrderTrackDesignZod`.
+   */
+  private async buildDesigns(
+    designs: DesignFields | undefined,
+    productConfigId: string | undefined,
+  ): Promise<PublicOrderTrack['designs']> {
+    const urls = new Map<string, string>();
+    for (const [key, value] of Object.entries(designs ?? {})) {
+      if (typeof value === 'string' && value.trim()) urls.set(key, value.trim());
+    }
+
+    let printArea: ProductPrintArea = [];
+    if (productConfigId) {
+      const config = await this.productConfigModel
+        .findById(productConfigId)
+        .select('printArea')
+        .lean<{ printArea?: ProductPrintArea }>();
+      printArea = config?.printArea ?? [];
+    }
+
+    const labelOf = (key: string) => PRODUCT_PRINT_AREA_LABEL_MAP[key as keyof typeof PRODUCT_PRINT_AREA_LABEL_MAP] ?? key;
+
+    const rows: PublicOrderTrack['designs'] = printArea.map((area) => ({
+      key: area.key,
+      label: labelOf(area.key),
+      url: urls.get(area.key),
+      widthPx: area.widthPx,
+      heightPx: area.heightPx,
+      isRequired: area.isRequired,
+    }));
+
+    const declared = new Set<string>(printArea.map((a) => a.key));
+    for (const [key, url] of urls) {
+      if (declared.has(key)) continue;
+      rows.push({ key, label: labelOf(key), url });
+    }
+    return rows;
   }
 
   /** Các item CÙNG ĐƠN với mã đang tra — 1 query gộp, không N+1 theo từng mã. */

@@ -679,6 +679,7 @@
   "customerLabel": {
     "scanHint": "Scan to track your order",
     "orderIdCaption": "Order ID",
-    "externalIdCaption": "Platform ID"
+    "externalIdCaption": "Platform ID",
+    "positionsCaption": "Print areas"
   }
 }

@@ -481,11 +481,38 @@ export class OpenApiGetOrderResDto extends createZodDto(extendApi(OpenApiGetOrde
  * mua cuối của khách) vốn được biết.
  *
  * CỐ Ý KHÔNG có: giá/`priceSnapshot`, tên nhân viên (designer/công nhân),
- * link file thiết kế gốc, nguyên văn `holdReason`/`cancelReason`/ghi chú lỗi
- * nội bộ, xưởng sản xuất, và địa chỉ ship đầy đủ (chỉ còn city/state/country).
+ * nguyên văn `holdReason`/`cancelReason`/ghi chú lỗi nội bộ, xưởng sản xuất,
+ * và địa chỉ ship đầy đủ (chỉ còn city/state/country).
  * Thêm field mới vào đây phải soi lại đúng 1 câu hỏi: *người lạ cầm mã đơn có
  * được phép biết thứ này không?*
+ *
+ * File thiết kế (`designs`) CÓ trong danh sách này theo yêu cầu vận hành: người
+ * cầm mã đơn cần đối chiếu đúng file đang đi vào sản xuất. Đây là quyết định
+ * đánh đổi có chủ đích — mã đơn trở thành thứ đủ để xem file thiết kế của đơn,
+ * nên đừng phát tán mã đơn như một định danh vô hại.
  */
+/**
+ * 1 vị trí in của đơn trên trang tra cứu công khai — nhãn đã resolve sẵn
+ * (`PRODUCT_PRINT_AREA_LABEL_MAP`) + link file thiết kế khách đã nộp.
+ *
+ * `url` là ĐƯỜNG DẪN THÔ như đang lưu trên đơn (Drive `open?id=…`, CDN
+ * design…): trang tra cứu tự đổi sang link ảnh xem được bằng `driveThumbUrl`/
+ * `driveViewUrl` — cùng bộ hàm mà các bảng nội bộ đang dùng, thay vì dựng thêm
+ * một bản chuyển link thứ hai ở máy chủ rồi để hai bản trôi khỏi nhau.
+ */
+export const PublicOrderTrackDesignZod = z.object({
+  /** Key vị trí in — trùng field trong `DesignFields` (`front`/`back`/…). */
+  key: z.string(),
+  label: z.string(),
+  /** Trống = sản phẩm có vị trí in này nhưng đơn chưa có file. */
+  url: z.string().optional(),
+  widthPx: z.number().optional(),
+  heightPx: z.number().optional(),
+  /** `false` = vị trí tùy chọn; thiếu = coi như bắt buộc (giữ nghĩa dữ liệu cũ). */
+  isRequired: z.boolean().optional(),
+});
+export type PublicOrderTrackDesign = z.infer<typeof PublicOrderTrackDesignZod>;
+
 export const PublicOrderTrackZod = z.object({
   /** Mã sản xuất — định danh chính, chính là `:productionId` trên URL. */
   productionId: z.string(),
@@ -549,6 +576,13 @@ export const PublicOrderTrackZod = z.object({
       country: z.string().optional(),
     })
     .optional(),
+
+  /**
+   * Vị trí in của sản phẩm + file thiết kế tương ứng của đơn. Theo thứ tự
+   * `printArea` đã cấu hình; vị trí đơn có file mà sản phẩm không khai vẫn
+   * được liệt kê ở cuối (đừng giấu file đang thực sự đi vào sản xuất).
+   */
+  designs: PublicOrderTrackDesignZod.array(),
 
   /** 8 chặng vòng đời — rỗng khi đơn chưa đẩy sản xuất. */
   stages: LifecycleTrackStageZod.array(),

@@ -679,6 +679,7 @@
   "customerLabel": {
     "scanHint": "Quét để theo dõi đơn hàng",
     "orderIdCaption": "Mã đơn",
-    "externalIdCaption": "Mã sàn"
+    "externalIdCaption": "Mã sàn",
+    "positionsCaption": "Vị trí in"
   }
 }

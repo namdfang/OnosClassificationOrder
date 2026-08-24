@@ -6,10 +6,12 @@ import { PublicTrackService } from './public-track.service';
  * Endpoint này không có ai để xác thực: cửa vào là chính mã đơn. Hai thứ phải
  * đứng vững, và cả hai đều dễ vỡ trong im lặng khi ai đó thêm field cho tiện:
  *
- *  1. **Không rò dữ liệu nội bộ.** Giá, tên nhân viên, file thiết kế, nguyên
- *     văn ghi chú giữ đơn, xưởng, địa chỉ ship đầy đủ — không thứ nào được lọt
- *     ra. Bộ ca này soi TOÀN BỘ payload (đệ quy) chứ không chỉ vài field, nên
- *     field mới rò rỉ sẽ bị bắt ngay cả khi test không nhắc tên nó.
+ *  1. **Không rò dữ liệu nội bộ.** Giá, tên nhân viên, nguyên văn ghi chú giữ
+ *     đơn, xưởng, địa chỉ ship đầy đủ — không thứ nào được lọt ra. Bộ ca này
+ *     soi TOÀN BỘ payload (đệ quy) chứ không chỉ vài field, nên field mới rò rỉ
+ *     sẽ bị bắt ngay cả khi test không nhắc tên nó. File thiết kế là ngoại lệ
+ *     CÓ CHỦ ĐÍCH (người cầm mã đơn cần đối chiếu file đang vào sản xuất) —
+ *     xem `PublicOrderTrackZod`.
  *  2. **Không thành máy dò mã đơn.** Mã sai định dạng, mã không tồn tại đều
  *     phải ném cùng một 404, và mã sai định dạng thì không được chạm DB.
  */
@@ -43,8 +45,15 @@ const ORDER = {
     state: 'FL',
     country: 'US',
   },
+  productConfigId: 'PC1',
+  // Link Drive dạng `open?id=…` — dạng phổ biến nhất khách dán vào, và là dạng
+  // KHÔNG đặt thẳng vào `<img>` được (trang tra cứu tự đổi sang link thumbnail).
+  designs: {
+    front: 'https://drive.google.com/open?id=1A-b-d-Gjrz_KF-gp3SfGym1fmoUKqacF&usp=drive_copy',
+    // Vị trí KHÔNG có trong `printArea` của sản phẩm — vẫn phải hiện.
+    hood: 'https://drive.google.com/file/d/1zzz-hood-file-id-000000/view',
+  },
   // Những field này CÓ trên document thật nhưng không được ra ngoài.
-  designs: { front: 'https://drive.example/secret-artwork.png' },
   factoryId: 'F-TNW',
   assignee: 'U-designer-1',
   productionErrorNote: 'Lỗi canh file, designer làm lại',
@@ -69,7 +78,6 @@ const STAGING = {
       quantity: 2,
       tracking: { number: '1Z999', carrier: 'UPS', url: 'https://ups.com/1Z999', labelUrl: 'https://label.pdf' },
       priceSnapshot: { unitPrice: 19.9, lineTotal: 39.8, shipMethod: 'cod' },
-      designs: { front: 'https://drive.example/secret-artwork.png' },
     },
     { productionId: 'RA-05217-56632', type: 'HOODIE', quantity: 1 },
   ],
@@ -78,7 +86,7 @@ const STAGING = {
 /** Model giả: `findOne(...).select(...).lean()` trả về `doc`. */
 const findOneChain = (doc: unknown) => ({ select: () => ({ lean: () => Promise.resolve(doc) }) });
 
-const buildService = (opts: { order?: unknown; staging?: unknown } = {}) => {
+const buildService = (opts: { order?: unknown; staging?: unknown; printArea?: unknown } = {}) => {
   const queries: unknown[] = [];
   const svc = Object.create(PublicTrackService.prototype) as TrackSurface;
 
@@ -94,6 +102,23 @@ const buildService = (opts: { order?: unknown; staging?: unknown } = {}) => {
       queries.push(filter);
       return findOneChain(opts.staging ?? null);
     },
+  };
+  svc.productConfigModel = {
+    findById: () => ({
+      select: () => ({
+        lean: () =>
+          Promise.resolve(
+            opts.printArea === null
+              ? null
+              : {
+                  printArea: opts.printArea ?? [
+                    { key: 'front', widthPx: 4000, heightPx: 5000, isRequired: true },
+                    { key: 'back', isRequired: false },
+                  ],
+                },
+          ),
+      }),
+    }),
   };
   svc.systemConfigService = { get: () => Promise.resolve(14) };
   svc.orderService = {
@@ -147,13 +172,12 @@ describe('tra cứu đơn công khai — dữ liệu trả ra', () => {
     expect(data.pushed).toBe(true);
   });
 
-  it('KHÔNG rò giá, tên nhân viên, file thiết kế, ghi chú lỗi hay địa chỉ đầy đủ', async () => {
+  it('KHÔNG rò giá, tên nhân viên, ghi chú lỗi nội bộ hay địa chỉ đầy đủ', async () => {
     const { svc } = buildService({ order: ORDER, staging: STAGING });
     const { data } = await svc.getTrack('RA-05217-56631');
 
     const strings = allStrings(data).join('|');
     for (const leak of [
-      'secret-artwork', // file thiết kế gốc
       'U-designer-1', // nhân sự
       'F-TNW', // xưởng
       'Lỗi canh file', // ghi chú lỗi nội bộ
@@ -167,7 +191,7 @@ describe('tra cứu đơn công khai — dữ liệu trả ra', () => {
     }
 
     const keys = allKeys(data);
-    for (const key of ['designs', 'priceSnapshot', 'holdReason', 'assignee', 'factoryId', 'baseCost', 'userSku']) {
+    for (const key of ['priceSnapshot', 'holdReason', 'assignee', 'factoryId', 'baseCost', 'userSku']) {
       expect(keys).not.toContain(key);
     }
 
@@ -192,6 +216,34 @@ describe('tra cứu đơn công khai — dữ liệu trả ra', () => {
     const siblings = data.siblings as Array<{ productionId: string }>;
     expect(siblings).toHaveLength(1);
     expect(siblings[0].productionId).toBe('RA-05217-56632');
+  });
+
+  it('vị trí in: theo thứ tự sản phẩm khai, nhãn đã resolve, URL giữ NGUYÊN dạng gốc', async () => {
+    const { svc } = buildService({ order: ORDER, staging: STAGING });
+    const { data } = await svc.getTrack('RA-05217-56631');
+
+    const designs = data.designs as Array<{ key: string; label: string; url?: string; isRequired?: boolean }>;
+    // front + back (sản phẩm khai) rồi mới tới hood (đơn có file, sản phẩm không khai).
+    expect(designs.map((d) => d.key)).toEqual(['front', 'back', 'hood']);
+    expect(designs[0].label).toBe('Mặt trước');
+    expect(designs[2].label).toBe('Mũ trùm');
+    // KHÔNG tự đổi link ở máy chủ: trang tra cứu đổi sang thumbnail bằng
+    // `driveThumbUrl`, dựng thêm một bản đổi link ở đây là mở đường cho hai bản
+    // trôi khỏi nhau.
+    expect(designs[0].url).toBe('https://drive.google.com/open?id=1A-b-d-Gjrz_KF-gp3SfGym1fmoUKqacF&usp=drive_copy');
+    // Vị trí sản phẩm có khai mà đơn chưa nộp file → vẫn liệt kê, url trống.
+    expect(designs[1].url).toBeUndefined();
+    expect(designs[1].isRequired).toBe(false);
+  });
+
+  it('sản phẩm chưa cấu hình vị trí in → vẫn liệt kê đủ file đơn đang có', async () => {
+    const { svc } = buildService({ order: ORDER, staging: STAGING, printArea: [] });
+    const { data } = await svc.getTrack('RA-05217-56631');
+
+    const designs = data.designs as Array<{ key: string; url?: string }>;
+    // Giấu file đang thực sự đi vào sản xuất là làm người tra đối chiếu thiếu.
+    expect(designs.map((d) => d.key).sort()).toEqual(['front', 'hood']);
+    expect(designs.every((d) => !!d.url)).toBe(true);
   });
 
   it('đơn CHƯA đẩy sản xuất — trạng thái pending, không bịa ra chặng nào', async () => {

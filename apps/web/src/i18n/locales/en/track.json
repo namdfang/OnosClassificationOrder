@@ -101,5 +101,14 @@
     "copied": "Link copied"
   },
   "privacyNote": "This page shows only what is needed to follow the order. Sign in to your customer account for the full details and to edit the order.",
-  "signIn": "Customer sign in"
+  "signIn": "Customer sign in",
+  "designs": {
+    "title": "Print areas & artwork",
+    "empty": "No print area information for this order.",
+    "noFile": "No file yet",
+    "optional": "Optional",
+    "open": "Open original file",
+    "unavailable": "Preview unavailable — open via link",
+    "sizeHint": "{{width}} × {{height}} px"
+  }
 }
