@@ -6,6 +6,7 @@ import { PATHS } from '@/constants/paths';
 
 import { useAuthStore } from '@/store/authStore';
 import { useCustomerAuthStore } from '@/store/customerAuthStore';
+import { useLanguageStore } from '@/store/languageStore';
 import { useSidebarBadgeStore } from '@/store/sidebarBadgeStore';
 
 import { exitImpersonation, goToImpersonateHome } from '@/utils/impersonation';
@@ -32,6 +33,11 @@ apiAxios.interceptors.request.use(
     if (isCustomerRoute(url)) {
       const token = useCustomerAuthStore.getState().getToken();
       if (token) config.headers.Authorization = `Bearer ${token}`;
+      // Ngôn ngữ khách đang chọn → BE trả thông báo lỗi đúng thứ tiếng
+      // (ORD-29). CHỈ gắn cho tuyến Customer Portal: API nội bộ giữ
+      // nguyên tiếng Việt cho nhân viên, và không gửi header thì BE mặc
+      // định tiếng Việt nên mọi thứ đang chạy không đổi hành vi.
+      config.headers['Accept-Language'] = useLanguageStore.getState().language === 'en' ? 'en' : 'vi';
       return config;
     }
 

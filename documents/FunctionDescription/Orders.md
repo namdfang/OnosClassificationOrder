@@ -893,7 +893,7 @@ Render tab tương ứng. User chỉ có 1 trong các quyền → 1 tab; có nhi
 
 | # | Key | Cell | Permission view |
 |---|-----|------|-----------------|
-| 1 | productionId | Composite (Production ID + Order ID + In Production At) | luôn |
+| 1 | productionId | Composite (Production ID + Order ID + **Platform ID** + In Production At). Dòng `ext: <externalId>` là mã đơn bên sàn (TikTok/Etsy…) — cột "External ID" lúc import, chỉ hiện khi đơn có. Cùng cách trình bày với `ListOrderTab`. | luôn |
 | 2 | mockupTypeSize | `ImageThumbCell` + Type + Size/Color | luôn |
 | 2b | **designs** | `DesignThumbsCell` — tối đa 2 thumb inline (32px) + "+N" badge nếu nhiều hơn 2 → click badge mở Popover grid 4 cột tất cả design. Click thumb mở `ImagePreviewDialog`. Tận dụng `ImageThumbCell` cho từng thumb (pending/failed/ready state). | luôn |
 | 3 | **fabricType** | `IconSelectCell` (category `fabric_type`) — Phase 7 | `order.field.fabricType.view` |
@@ -973,7 +973,7 @@ Thứ tự group MẶC ĐỊNH (mọi role trừ Support) đặt `toolCheck` (g�
 7. **Sort mặc định**: `sort=inProductionAt&order=desc` — đơn vào sản xuất MỚI NHẤT hiện trước (giống default `getOrders()` khi không truyền `sort`, đặt tường minh cho rõ ràng). `priority: -1` vẫn luôn ưu tiên trước (hardcode ở BE, không đổi được qua `sort`/`order`).
 8. **"Chọn tất cả N đơn khớp bộ lọc" — xuyên MỌI trang** (`handleSelectAllPages`, CHỈ có ở trang này, không có ở Workshop): khi đã tick hết trang hiện tại và còn đơn ở trang khác (`total > items.length`), hiện banner mời chọn tiếp toàn bộ `total` đơn khớp filter hiện tại. Bấm vào gọi lại `getOrders()` với CÙNG `buildFilterParams()` nhưng `page=1`/`limit=total` để lấy đủ `_id` mọi trang rồi đổ thẳng vào `selected` — mọi bulk action ở `<BulkEditToolbar>` tự áp dụng cho toàn tập vì chỉ nhận mảng `ids`, không quan tâm chúng đến từ trang nào. Box "Mẹo chọn nhiều đơn" (`selectionHint`) **đã quay lại** từ ORD-1 (`AC-09`) sau một thời gian bị gỡ khỏi trang này — nhưng **chỉ hiện `line2`** (mẹo shift-click chọn dải), **cố ý bỏ `line1`** vì dòng đó mô tả thao tác tick checkbox cạnh tên sản phẩm, vốn chỉ tồn tại ở bảng nhóm của Workshop (`SRS` ORD-1 BR-15). **Lưu ý đối chiếu 2 trang:** `handleSelectAllPages` ở điểm này là chức năng **CHỈ Classic có**, Workshop không có — đây là hệ quả của việc hai trang phân trang theo đơn vị khác nhau, xem `.devtasks/ui/ORD-1.md` §3.5.
 
-9. **Lọc theo SẢN PHẨM — facet `type`, CHỈ Classic có** (ORD-1). Workshop không cần vì nó đã nhóm đơn theo sản phẩm sẵn; Classic phẳng nên trước đây không có đường nào thu hẹp theo sản phẩm. Ô select **đứng đầu** lưới facet (loại sản phẩm là cách khoanh vùng thô nhất), **đơn chọn** đúng như 10 facet còn lại, param URL `ctype`, chip màu lime. **KHÔNG đặt `perm` gate** — cột `mockupTypeSize` (nơi tên sản phẩm vốn đã hiện) khai `perm: null` nên hiện với MỌI role, gate facet ở đây sẽ là gate giả. Options lấy từ `workshopFilters.type` của **cùng** endpoint `GET /v1/orders/workshop-filters` mà cả 2 trang đang gọi — không endpoint riêng. Gửi BE bằng `params.append('type', ...)` (dạng lặp) chứ không `set`: BE nhận cả dạng lặp lẫn CSV nhưng **chỉ dạng lặp mới không tách chuỗi bằng dấu phẩy**. Token `__none__` (đơn chưa xác định loại sản phẩm) **do BE quyết định có trả hay không** — FE KHÔNG BAO GIỜ tự tạo mục đó, chỉ gán nhãn `tableWorkshop.noTypeName` nếu backend trả về kèm `label` rỗng. Chi tiết thiết kế: [`.devtasks/ui/ORD-1.md`](../../.devtasks/ui/ORD-1.md); hợp đồng BE: [`.devtasks/design/ORD-1.md`](../../.devtasks/design/ORD-1.md) §3.
+9. **Lọc theo SẢN PHẨM — facet `type`, CHỈ Classic có** (ORD-1). Workshop không cần vì nó đã nhóm đơn theo sản phẩm sẵn; Classic phẳng nên trước đây không có đường nào thu hẹp theo sản phẩm. Ô select **đứng đầu** lưới facet (loại sản phẩm là cách khoanh vùng thô nhất), **đơn chọn** đúng như 10 facet còn lại, param URL `ctype`, chip màu lime. Từ ORD-2 facet này khai `searchable: true` → render `SearchableSelectFilter` (`apps/web/src/components/common/SearchableSelectFilter.tsx` — Popover + ô gõ từ khóa lọc option theo label, không phân biệt hoa thường) thay cho native select; chọn xong hành vi filter/chip/URL `ctype` giữ nguyên. 10 facet còn lại vẫn là native `SelectFilter`. **KHÔNG đặt `perm` gate** — cột `mockupTypeSize` (nơi tên sản phẩm vốn đã hiện) khai `perm: null` nên hiện với MỌI role, gate facet ở đây sẽ là gate giả. Options lấy từ `workshopFilters.type` của **cùng** endpoint `GET /v1/orders/workshop-filters` mà cả 2 trang đang gọi — không endpoint riêng. Gửi BE bằng `params.append('type', ...)` (dạng lặp) chứ không `set`: BE nhận cả dạng lặp lẫn CSV nhưng **chỉ dạng lặp mới không tách chuỗi bằng dấu phẩy**. Token `__none__` (đơn chưa xác định loại sản phẩm) **do BE quyết định có trả hay không** — FE KHÔNG BAO GIỜ tự tạo mục đó, chỉ gán nhãn `tableWorkshop.noTypeName` nếu backend trả về kèm `label` rỗng. Chi tiết thiết kế: [`.devtasks/ui/ORD-1.md`](../../.devtasks/ui/ORD-1.md); hợp đồng BE: [`.devtasks/design/ORD-1.md`](../../.devtasks/design/ORD-1.md) §3.
 
 **File FE:** `apps/web/src/pages/orders/OrderTableClassic.tsx` (component) + `apps/web/src/pages/orders/classic/index.tsx` (page wrapper, mirror `orders/workshop/index.tsx`).
 
@@ -1019,7 +1019,7 @@ Mỗi cell tự đọc `canEditField(field)` từ `usePermission()`:
 **Đồng bộ via `<OrderFilterBar>` reusable** (`apps/web/src/components/orders/OrderFilterBar.tsx`). Cùng layout dùng ở 4 bảng order: `OrderTableWorkshop` (reference) · `ErrorLogTab` · `OrderFactoryTab` (Dashboard Tab C) · `OrderStatusTab` (Dashboard Tab B). Component:
 - Top row: search input (flex-1) + nút **"Nhiều mã"** (opt-in) + `<DateRangePicker>` + nút Tải lại + slot `topActionsRight` (view switcher / export / ...).
 - Middle row (optional slot `middleRow`): active chip bar / factory chip bar.
-- Facet grid: 2/3/5 cột responsive, mỗi cell `<SelectFilter>` đã gate qua `usePermission().has(perm)` từ `OrderFilterFacet.perm`.
+- Facet grid: 2/3/5 cột responsive, mỗi cell `<SelectFilter>` đã gate qua `usePermission().has(perm)` từ `OrderFilterFacet.perm`. Facet khai `searchable: true` render `<SearchableSelectFilter>` (cùng props, trigger cùng hình dạng, popover có ô tìm kiếm) thay cho native select — hiện chỉ facet `type` của Classic dùng (ORD-2).
 - **Nút "Nhiều mã"** (prop `onBulkApply`): chỉ hiện khi caller truyền callback. Mở `BulkProductionIdDialog` (mode=`filter`) — dán danh sách mã mỗi dòng 1 mã (hoặc phẩy/khoảng trắng) → trả mảng mã cho caller set param `productionIds`. `OrderTableWorkshop` wire vào state `bulkIds` (transient, không sync URL), thêm chip "Nhiều mã: N mã" vào thanh "Đang lọc", loại trừ nhau với ô search thường (set cái này clear cái kia). Search input cũng tự nhận đa mã khi dán trực tiếp (xem §7.x `search`) — nút modal chỉ tiện cho danh sách dài nhiều dòng.
 
 Mỗi consumer truyền `facets: OrderFilterFacet[]` để cấu hình field set riêng — tránh ép tất cả tab dùng cùng 1 list:
@@ -1420,6 +1420,8 @@ Mỗi hàng đơn (ở MỌI bảng order) có nút **"..."** (`MoreHorizontal`)
 - **Đổi design** (`EditOrderDesignDialog`) — đổi URL mockup + **các vị trí design đơn ĐANG CÓ**. Lưu **raw URL** (không qua R2); URL cũ giữ trong OrderLog.
 - **Hủy đơn** (`CancelOrderDialog`) — soft cancel + lý do (bắt buộc ≤200).
 
+Menu này về sau còn nhận thêm mục cho vai khác: **Giữ đơn / Mở giữ / Kiểm tra design mới** cho `ORDER_WRITE_ROLES` (§9b, §9c) và **"Chuyển hoàn thành"** cho riêng SuperAdmin (**§23**).
+
 **Đơn đã hủy:** vẫn hiện trong mọi bảng với component chung **`CancelledBadge`** = badge "Đã hủy" (đỏ) **+ hiện luôn LÝ DO hủy** (note, truncate + full tooltip) + **row mờ** (`opacity-60`); **KHÔNG loại khỏi thống kê/filter** (đếm bình thường). Cả 2 action **disable** khi đơn đã hủy (read-only).
 
 **Optimistic update:** cancel/đổi design trả về order đã cập nhật → `OrderTableWorkshop` **patch tại chỗ** (`patchRow`, KHÔNG refetch) → **giữ nguyên group sản phẩm đang mở** + cập nhật tức thì. Bảng phẳng khác refetch (không có group).
@@ -1451,6 +1453,51 @@ ok = !cancelledAt
 
 ### 16.5 Permissions
 Dùng **role gate `isAdmin`** (SuperAdmin/Admin) cả FE lẫn BE — KHÔNG thêm permission-catalog. Cancel là **soft** (`cancelledAt`), khác `deleteOrder` (`deletedAt`).
+
+### 16.6 "In nhãn khách" — tem 4×6cm dán kiện hàng
+
+> **File FE:** `apps/web/src/components/orders/CustomerLabelPrint.tsx` (mục menu ở `OrderRowActionsMenu.tsx`), i18n `orders.json` → `rowActionsMenu.printCustomerLabel` + `customerLabel.scanHint`
+
+Mục **"In nhãn khách"** (`Printer`) nằm ĐẦU menu "...", nên có mặt ở mọi bảng liệt kê ở §16.4 — trong đó có bảng công đoạn **In** của Task Fulfillment (`PrintOrderTable` qua `PrintWorkshopView`), nơi xưởng thực sự cần tem. Bấm là in thẳng, không có bước xem trước: hộp thoại in của trình duyệt đã là bước xác nhận.
+
+Nội dung tem, khổ **40×60mm dọc** (4×6cm — tem decal rời, KHÔNG phải 4×6 inch):
+
+| Phần | Nguồn |
+|---|---|
+| QR | `${window.location.origin}${PATHS.TRACK}/<productionId>` → trang tra cứu công khai `/track/:productionId` (không cần đăng nhập — xem [`PublicOrderTracking.md`](PublicOrderTracking.md)) |
+| Mã sản xuất | `productionId` — luôn có |
+| Mã đơn | `orderId`, nhãn "Mã đơn" |
+| Mã sàn | `externalId`, nhãn "Mã sàn" — cùng thứ tự với cột Production ID ở danh sách đơn (mã đơn trước, mã sàn dưới) |
+| Tên sản phẩm | `productConfig.fullName` → fallback `type` (đơn chưa map xưởng không có `productConfig`) |
+| Biến thể | `size · color` |
+| Vị trí in | các key trong `designs` CÓ file, nhãn + thứ tự lấy từ `DESIGN_KEY_ORDER`/`buildDesignLabels` (`cells/DesignThumbsCell.tsx` — đã export để tem dùng chung, KHÔNG chép danh sách thứ hai). Key lạ vẫn liệt kê ở cuối bằng chính tên key: mất nhãn tiếng Việt còn hơn tem giấu mất một vị trí phải in |
+
+**In CẢ HAI mã phụ, mỗi mã tự biến mất khi rỗng.** `externalId` chỉ có ở đơn nhập từ sheet có cột "External ID" — đo trên dữ liệu thật 2026-08-24, công đoạn **In** có 2/144 đơn mang `externalId` còn 143/144 mang `orderId`; các công đoạn sau thì `externalId` phủ 40–85%. In mỗi một mã là phần lớn tem ra dòng trống. Chiều ngược lại cũng có: đơn khách tự lên qua Customer Portal chưa có `orderId`. Mã bị cắt cụt trên tem là mã sai nên dùng `break-all` (xuống dòng) chứ KHÔNG `truncate`.
+
+Mục này **KHÔNG bị khoá** theo `cancelledAt`/`heldAt` như các mục còn lại: in tem là thao tác chỉ đọc, và kiện hàng của đơn đang giữ vẫn cần tem để tìm lại.
+
+**Ngân sách chiều cao — kiểm lại mỗi khi thêm dòng.** Lòng tem chỉ có 36×56mm (40×60 trừ 2mm padding mỗi bên) và mọi thứ đều `overflow-hidden`, nên một dòng thừa không báo lỗi mà lặng lẽ **cắt cụt dòng cuối**. Đo ở ca xấu nhất — tên sản phẩm, biến thể, vị trí in đều tràn 2 dòng:
+
+| Phần | Cao |
+|---|---:|
+| QR 84px | 23.28mm → **22.23mm** |
+| Dòng "Quét để theo dõi đơn hàng" 5pt + lề | 3.00mm |
+| Gạch ngang + lề trên dưới | 2.80mm |
+| `productionId` 9pt | 3.18mm |
+| Mã đơn 6pt · Mã sàn 6pt | 2.65 + 2.65mm |
+| Tên sản phẩm 7pt ×2 dòng + lề | 7.17mm |
+| Biến thể 7pt ×2 dòng | 6.17mm |
+| Vị trí in 6pt ×2 dòng + lề | 5.89mm |
+| **Tổng** | **55.74 / 56mm** |
+
+Còn dư đúng **0.26mm**. Cỡ QR là biến điều chỉnh: 84px không phải chọn cho đẹp mà là con số lớn nhất còn vừa — thêm dòng mới vào tem thì phải trừ lại ở đó. Ở 84px, QR ~48 ký tự / ECC M ra 33 module tức 0.67mm/module, vẫn trên ngưỡng camera điện thoại đọc được; nhỏ hơn nữa thì bắt đầu rủi ro. Dòng "Mã sàn" dài nhất (nhãn + 18 chữ số) rộng 30.3mm, vừa 36mm nên không xuống dòng.
+
+**Cách in — CỐ Ý khác sheet barcode ở §Stage Error Catalog.** Nhãn được `createPortal` thẳng ra `document.body` rồi giấu anh chị em cùng cấp bằng `body > *:not(#customer-label-print) { display: none }`. Hai điểm không được đổi thành cách khác:
+
+- **`display: none`, KHÔNG phải `visibility: hidden`.** Trang `stage-errors` dùng `visibility` nên thân trang vẫn giữ nguyên chiều cao và máy in đẩy thêm vài trang trắng — trên giấy A4 thì chấp nhận được, trên tem rời thì mỗi trang trắng là **một con tem hỏng**.
+- **Portal ra `body`, KHÔNG để trong cây React.** Bộ chọn `body > *` không với tới phần tử nằm sâu trong `#root`.
+
+`@page { size: 40mm 60mm; margin: 0 }` chỉ tồn tại trong lúc nhãn được mount (state `printingLabel`) nên không đụng các lệnh in khác của ứng dụng. Sau khi in xong, `afterprint` (kèm hẹn giờ dự phòng cho trình duyệt không bắn sự kiện đó) gỡ nhãn xuống. QR render bằng `QRCodeSVG` (`qrcode.react`) — **SVG chứ không phải canvas**, vì canvas hay ra tem trắng ở một số đường in; và `window.print()` được gọi sau 2 khung hình để SVG kịp lên màn.
 
 ## 17. Ưu tiên đơn hàng + hạn dự kiến từng bước
 
@@ -1497,7 +1544,7 @@ Hiển thị (chip đồng hồ, đỏ nếu quá hạn):
 
 ## 18. Design Review — public API cho tool ngoài duyệt thiết kế
 
-> **File BE:** `apps/api/src/modules/order/order.controller.ts` → `GET /v1/orders/design-review/next` + `GET /v1/orders/design-review/by-production-id/:productionId` + `GET /v1/orders/design-review/error-file-options` + `POST /v1/orders/design-review/result`, `apps/api/src/modules/order/order.service.ts` → `getNextDesignReviewOrder()` + `getDesignReviewOrderByProductionId()` + `getDesignReviewErrorFileOptions()` + `setDesignReviewResult()`, `apps/api/src/modules/order/design-review-product-code.ts` (`mapProductTypeToCode()` — bảng mapping cố định `type` → mã sản phẩm)
+> **File BE:** `apps/api/src/modules/order/order.controller.ts` → `GET /v1/orders/design-review/next` + `GET /v1/orders/design-review/by-production-id/:productionId` + `GET /v1/orders/design-review/error-file-options` + `POST /v1/orders/design-review/result`, `apps/api/src/modules/order/order.service.ts` → `getNextDesignReviewOrder()` + `getDesignReviewOrderByProductionId()` + `getDesignReviewErrorFileOptions()` + `setDesignReviewResult()`, `apps/api/src/modules/order/design-review-product-code.ts` (`PRODUCT_TYPE_CODE_MAP` — CHỈ còn là dữ liệu migration 1 lần, runtime đọc `ProductConfig.designReviewCode` qua `resolveDesignReviewProduct()` — PRD-2, xem §18.5)
 > **Shared:** `packages/shared/dtos/production-order.dto.ts` (`GetNextDesignReviewOrderZod`/`GetNextDesignReviewOrderDto` + `DesignReviewOrderZod`/`DesignReviewAttributesZod`/`GetNextDesignReviewOrderResDto` + `GetDesignReviewOrderByIdResDto` + `DesignReviewErrorFileOptionZod`/`GetDesignReviewErrorFileOptionsResDto` + `SetDesignReviewResultZod`/`SetDesignReviewResultResDto`)
 > **Route:** không có FE — chỉ API cho hệ thống ngoài gọi.
 > **API:** `GET /v1/orders/design-review/next`, `GET /v1/orders/design-review/by-production-id/:productionId`, `GET /v1/orders/design-review/error-file-options`, `POST /v1/orders/design-review/result`
@@ -1540,18 +1587,64 @@ Sort: `priority desc` → `inProductionAt asc` → `createdAt asc` (đơn ưu ti
   data: {
     productionId: string;          // khóa duy nhất, luôn có — dùng để gọi lại POST /design-review/result
     orderId?: string;              // mã đơn marketplace/sàn (import từ sheet) — có thể rỗng với 1 số đơn
-    productCode: string | null;    // map từ `type` qua bảng cố định trong design-review-product-code.ts, null nếu type không khớp bảng
+    productCode: string | null;    // = `ProductConfig.designReviewCode` của sản phẩm khớp `type` (PRD-2, đọc DB) — null nếu không khớp sản phẩm nào hoặc mã trống. TÊN FIELD giữ nguyên cho tool ngoài
     attributes: { size?: string; color?: string };
     designs: DesignFields;        // chỉ các key có URL (front/back/sleeve/...), raw Drive URL (R2 pipeline đang tắt — xem ImageOptimization.md)
     mockupUrl?: string;            // ảnh mockup sản phẩm — tham chiếu trực quan khi soát design
     inProductionAt: string | null; // ngày đơn chuyển sang sản xuất (ISO date) — null nếu đơn chưa có mốc này
+    // ↓ ORD-6 — CHỈ THÊM, không field cũ nào đổi tên/đổi kiểu (tool bản cũ ở xưởng phải chạy tiếp được)
+    isDtf: boolean;                // đơn có in DTF không — xem §18.4a
+    printAreas: {                  // vị trí in + kích thước THẬT theo size của CHÍNH đơn này — xem §18.4b
+      key: string;                 //   trùng key trong `designs` (DesignFields)
+      label: string;               //   nhãn tiếng Việt (PRODUCT_PRINT_AREA_LABEL_MAP)
+      configured: boolean;         //   false = đơn có design ở vị trí này nhưng sản phẩm CHƯA cấu hình nó
+      widthCm: number | null;      //   null = không xác định được (xem §18.4b) — KHÔNG BAO GIỜ là số đoán
+      lengthCm: number | null;
+    }[];
+    variantSku: string | null;     // SKU biến thể khớp size+màu của đơn — null nếu không khớp hoặc khớp NHIỀU biến thể
   } | null;   // null khi không còn đơn nào ở bước đầu tiên
   remaining: number;   // tổng số đơn còn cần xử lý (đúng điều kiện §18.3, KHÔNG xét claim/lease) — bao gồm cả đơn trong `data`, đếm bằng countDocuments() song song (Promise.all) với findOneAndUpdate
 }
 ```
 
-### 18.5 Bảng mapping `type` → `productCode`
-Bảng cố định trong `design-review-product-code.ts` (`PRODUCT_TYPE_CODE_MAP`, so khớp case-insensitive theo `ProductConfig.fullName`/`OrderEntity.type`) — sửa/thêm mã trực tiếp trong file này, không cần đổi code gọi.
+Cả hai endpoint đọc đơn (`/next` và `/by-production-id/:productionId`) dùng CHUNG mapper `toDesignReviewOrder()` nên shape luôn giống hệt nhau — thêm field mới phải sửa đúng một chỗ.
+
+### 18.4a `isDtf` — cờ đơn in DTF (ORD-6)
+`true` khi **một trong hai**:
+
+1. **Đường chính** — cấu hình sản phẩm: `ProductConfig.printMethod === 'dtf'` (mã trong danh mục `workshop_config` category `print_method`; danh mục thật: `dtg` · `dtf` · `sublimation` · `embroidery`). Hằng `DTF_PRINT_METHOD_CODE` ở `order.service.ts`.
+2. **Đường phụ, quy ước CŨ** — `productCode` (tức `designReviewCode`) đúng chữ `TIFF`, không phân biệt hoa thường. Hằng `LEGACY_DTF_PRODUCT_CODE`. **GIỮ LẠI có chủ ý**: tool bản đang chạy ở xưởng nhận diện DTF bằng quy ước này, gỡ đi là gãy dây chuyền soát design. Quy ước đó cũng là lý do mọi sản phẩm DTF từng buộc phải mang cùng một mã `TIFF` nên **không phân biệt được sản phẩm nào với sản phẩm nào** — nay `printMethod` giải quyết việc đó.
+
+Đơn không tra được sản phẩm (chưa map `type`) → `false`, response vẫn `200`.
+
+### 18.4b `printAreas` — kích thước in theo size của ĐƠN (ORD-6)
+Danh sách là **HỢP** của: vị trí in đã cấu hình ở sản phẩm (`ProductConfig.printArea[]`) **và** vị trí có URL trong `designs` của đơn. Vị trí có design mà sản phẩm chưa cấu hình vẫn được liệt kê với `configured: false` — để tool thấy được ca "có file nhưng thiếu cấu hình" thay vì im lặng bỏ qua.
+
+`widthCm`/`lengthCm` lấy từ `ProductConfig.printArea[].sizeDimensions[]` (PRD-7) khớp **size của chính đơn** (`OrderEntity.size`), ghép **trim + không phân biệt hoa thường**. Trả `null` khi: size của đơn không khớp size nào trong cấu hình · vị trí chưa nhập kích thước · đơn không có size · sản phẩm chưa cấu hình vị trí đó.
+
+> **KHÔNG ĐOÁN.** Không khớp thì trả rỗng, tuyệt đối không lấy tạm size khác hay số mặc định — tool dừng lại và báo lỗi vẫn tốt hơn nhiều so với in sai kích thước lên giấy DTF. Đơn vị là **cm** đúng như PRD-7 lưu; quy đổi cm → pixel theo DPI là việc của tool.
+
+Sản phẩm chưa cấu hình vị trí in nào và đơn cũng không có design → mảng rỗng, không lỗi.
+
+`variantSku` ghép size + màu của đơn với `variations[].attributes` qua **hàm dùng chung** `packages/shared/constants/variation-attribute.ts` (nhãn size `Item Size`/`Size` — có cả hai thì ưu tiên `Item Size`; nhãn màu `Màu`/`Color`/`Colour`), cũng trim + không phân biệt hoa thường. **Cùng file mà trang sản phẩm dùng để dựng bảng kích thước theo size (Products.md §2.4a)** — chép luật ra hai nơi là cách chắc chắn nhất để nhập được kích thước ở trang sản phẩm mà API trả rỗng; **chỉ trả khi khớp DUY NHẤT 1 biến thể** — khớp nhiều thì `null`, vì đoán sai SKU là dán nhầm nhãn nhận diện lên kiện hàng.
+
+> **API này CÔNG KHAI, không cần JWT** — mọi field thêm vào là công khai với bất kỳ ai gọi được. Vì thế response **không có** trường tiền nào (`cost`/`retailPrice`/`wholesalePrice`/`nonShipCost`) và **không có** danh tính người thao tác. Thêm field mới ở đây phải soi lại đúng hai điều này.
+
+### 18.5 Nguồn `productCode` — `ProductConfig.designReviewCode` trong DB (PRD-2)
+`productCode` đọc từ **DB lúc gọi API**: `resolveDesignReviewProduct()` (`order.service.ts` — từ ORD-6 đọc CẢ cấu hình sản phẩm một lần cho `productCode` + `isDtf` + `printAreas` + `variantSku`) khớp `OrderEntity.type` ↔ `ProductConfig.fullName` (exact, trim + case-insensitive — đúng quy tắc map cũ) rồi trả **`designReviewCode`** của sản phẩm; không khớp sản phẩm nào / mã trống → `null`. **Sửa/thêm mã ngay trên UI Products** (ô "Mã chạy tool duyệt thiết kế", khu Sản xuất trang chi tiết sản phẩm), không cần deploy.
+
+> **PRD-2 — mã tool KHÔNG còn nằm ở `shortName`.** ORD-3 mượn `shortName` làm khoá kỹ thuật nên tên viết tắt do người dùng đặt bị coi là mã tool; nay mã có trường riêng `designReviewCode`, còn `shortName` trở lại đúng nghĩa tên viết tắt và **không migration/import nào được ghi đè nó nữa**. Tên field `productCode` trong response GIỮ NGUYÊN — tool ngoài (`.localdev`) đang đọc đúng tên đó.
+
+Map hardcode cũ `PRODUCT_TYPE_CODE_MAP` (`design-review-product-code.ts`) chỉ còn là **dữ liệu migration một lần** `migrateDesignReviewCodes()` (`product-config.service.ts` `onModuleInit`): đổ mã vào `designReviewCode` cho sản phẩm khớp map; **sản phẩm không khớp thì bỏ qua, không ghi, không xoá gì** — khác hẳn bản ORD-3 đã bị gỡ (nó ghi vào `shortName` và xoá trắng sản phẩm không khớp).
+
+Cơ chế chạy-một-lần: cờ `system_configs` key `design_review_code_migration`.
+
+- Kế hoạch đổi (kèm mã cũ + `shortName` từng sản phẩm) ghi vào cờ **TRƯỚC** khi sửa dữ liệu, nên hỏng giữa chừng vẫn còn dấu vết đối chiếu.
+- Cờ kẹt ở `running` quá 10 phút → lần khởi động sau tự nhận lại việc (ORD-3 chiếm cờ rồi mới làm nên chết máy là kẹt vĩnh viễn).
+- Chạy lại từ đầu bằng tay: xoá document `design_review_code_migration` trong `system_configs`.
+- Lần khởi động sau khi đã `done` in log `bỏ qua ... 0 bản ghi đổi thêm` và KHÔNG đụng dữ liệu — mã người dùng sửa tay không bị đè.
+
+`shortName` **được phép trống** ở entity/DTO/form và **không còn auto-sinh** từ fullName ở mọi đường tạo sản phẩm — xem Products.md §2.
 
 ### 18.6 `GET /design-review/error-file-options` — danh mục "File lỗi"
 
@@ -1754,9 +1847,127 @@ Muốn thêm trang mới: import `useSidebarResetSignal` từ `@/hooks/useSideba
 | Task Fulfillment view override-role | `fulfillment-task.service.ts` → `buildMyTaskBase()` nhánh không khóa xưởng |
 | Designer stats/backlog/tool-check/person-error/stage-error/daily-overview | `designer-stats.service.ts` — mọi chỗ `factoryId: { $exists: true, $ne: null }` → `productionFactoryClause` (9 điểm) |
 
-### 21.3 Những gì GIỮ NGUYÊN
+### 21.3 Ngoại lệ: Danh sách đơn classic (ORD-19)
+
+> Người dùng chỉ thị 2026-08-22: *"ở danh sách đơn classic, hiển thị toàn bộ đơn bao gồm cả đơn xưởng us nha"*.
+
+Trang `/orders/classic` (`OrderTableClassic.tsx`) — **và chỉ trang đó** — hiển thị cả đơn xưởng US.
+
+Cách làm: cờ **theo từng request** `GetProductionOrdersDto.includeExcludedFactory`. FE gắn cờ trong `buildFilterParams()` của `OrderTableClassic`; BE đọc ở `buildVisibilityFilter()` → clause `factoryId` thành `{ $exists: true, $ne: null }` thay cho `productionFactoryClause`.
+
+Cờ phân giải bằng `BooleanFlagZod` (`packages/shared/constants/common-zod.ts`), **không phải** `z.coerce.boolean()`. Từ ORD-23, sáu cờ lọc khác của cùng DTO dùng chung helper này — xem §22. `z.coerce.boolean()` theo luật truthy của JavaScript nên mọi chuỗi khác rỗng đều thành `true`: gửi `includeExcludedFactory=false` — cách tự nhiên nhất để nói "đừng gộp" — lại **gộp** đơn xưởng US vào danh sách mà không báo lỗi gì (ORD-21, TEST đo được 39.906 thay vì 39.606). Luật: bật với `true`/`1`; tắt với `false`/`0` và mọi giá trị lạ; không gửi hoặc gửi rỗng → `undefined`. Giá trị lạ **không** ném 400 — trả về mặc định an toàn là loại đơn US. Khoá bằng `apps/api/src/modules/order/order-query-flags.spec.ts`.
+
+**Vì sao là cờ theo request chứ không nới ở hàm dùng chung:** `GET /orders` + `buildOrderListFilter` còn phục vụ drill-down từ dashboard và nhiều bề mặt khác; nới ở đó thì danh sách drill lệch với số dashboard **mà không báo lỗi**. HF-2 (2026-08-21) đã nới diện rộng đúng kiểu đó và bị người dùng rút lại (khôi phục ở HF-3, commit `6d361fb`) — đọc §21.4 trước khi định mở rộng thêm.
+
+Cờ này **chỉ mở đúng một nhóm**. Hai loại-trừ còn lại giữ nguyên ở trang classic:
+
+| Nhóm | Ở trang classic |
+|---|---|
+| Đơn xưởng US | **hiện** |
+| Đơn đã hủy (`cancelledAt`) | vẫn ẩn — chỉ hiện khi bật toggle "Đã hủy" |
+| Đơn chưa map xưởng | vẫn ẩn — chỉ xem ở `/orders/unmapped` |
+
+Đo trên DB local (2026-08-22): không cờ 39.606 đơn → có cờ 39.906, chênh đúng 300 = số đơn xưởng US. Giao lại tập kết quả classic: ∩ đơn hủy = 0, ∩ chưa map xưởng = 0, ∩ xưởng US = 300. Lọc tường minh `factoryId` vẫn ghi đè sau clause mặc định nên chọn xưởng ML không lẫn đơn US.
+
+### 21.4 Những gì GIỮ NGUYÊN
 
 - `getFactoryOverview` (tab "Đơn hàng theo xưởng") — US vẫn hiện card/số liệu đầy đủ.
 - Lọc tường minh `factoryId` (drill từ tab xưởng, dropdown xưởng ở Danh sách đơn/Lifecycle) — `buildOrderListFilter` ghi đè `filter.factoryId = dto.factoryId` SAU default clause → chọn đúng xưởng US vẫn xem được đơn (escape hatch, cùng semantics trang unmapped).
+- Dashboard / thống kê / soát tool / auto-gán designer / entry fulfillment — KHÔNG caller nào trong nhóm này gửi `includeExcludedFactory`, và `getStatusOverview` còn dựng dto mới (`{ createdFrom, createdTo }`) nên cờ không thể lọt vào. Clause mặc định của chúng không đổi một ký tự nào sau ORD-19.
 - Import đơn: đơn US vẫn import + map factory bình thường (chỉ không đi tiếp vào luồng).
 - Worker Fulfillment gắn xưởng US (nếu có): nhánh khóa-xưởng của `buildMyTaskBase` không áp exclusion — nhưng đơn US không bao giờ được init stage nên my-tasks rỗng.
+
+
+## 22. Cờ boolean trên query string — `BooleanFlagZod`
+
+`z.coerce.boolean()` **không dùng được** cho cờ trên query string: nó theo luật truthy của JavaScript nên mọi chuỗi khác rỗng đều thành `true`, kể cả `'false'`, `'0'`, `'no'`. Một tham số mà `false` lại có nghĩa `true` là bẫy đặt sẵn cho người viết màn hình sau và cho chính người đang gỡ lỗi bằng cách sửa URL.
+
+Luật của `BooleanFlagZod` (`packages/shared/constants/common-zod.ts`): bật với `true`/`1`; tắt với `false`/`0` và **mọi giá trị lạ**; không gửi hoặc gửi rỗng → `undefined`, giữ nguyên nghĩa optional. Giá trị lạ **không** ném 400 — trả về mặc định an toàn, vì ném lỗi sẽ làm hỏng những nơi đang lỡ gửi giá trị lạ.
+
+**Cờ đã chuyển sang helper này** (ORD-21 + ORD-23) — đo trên DB local, gửi `false`:
+
+| Cờ | Trước (số đơn) | Sau | Mặc định |
+|---|---|---|---|
+| `includeExcludedFactory` | 39.906 (gộp cả đơn xưởng US) | 39.606 | 39.606 |
+| `unmapped` | **0** (đảo hẳn sang tập đơn chưa map xưởng) | 39.606 | 39.606 |
+| `cancelled` | 159 (chỉ đơn hủy) | 39.606 | 39.606 |
+| `held` | 0 (chỉ đơn đang giữ) | 39.606 | 39.606 |
+| `hasError` | 941 | 39.606 | 39.606 |
+| `designBacklog` | 3.519 | 39.606 | 39.606 |
+| `needDesigner` | 11.315 | 39.606 | 39.606 |
+
+Giao diện chỉ gửi `'true'` hoặc `'1'` cho cả bảy cờ, nên đổi sang helper **không làm màn hình nào đổi kết quả** — đã rà từng chỗ `params.set` trước khi sửa (ORD-23 bước 1).
+
+`held` là cờ **ba trạng thái** thật (`getOrders` kiểm `typeof dto.held === 'boolean'`): `false` nghĩa là *chỉ đơn KHÔNG giữ*, khác hẳn *không lọc*. Vì vậy chuỗi rỗng phải ra `undefined` chứ không phải `false` — nếu không, `held=` sẽ lọc mất đơn đang giữ thay vì không lọc gì.
+
+**Cùng tên cờ thì phải cùng hành vi.** `hasError` và `unmapped` còn một bản khai thứ hai ở `GetFactoryOverviewZod` (tab Dashboard "Đơn hàng theo xưởng") — cả hai cũng đã chuyển sang `BooleanFlagZod`. Để một bản đúng và một bản còn bẫy là cái bẫy khó ngờ nhất: cùng một tham số, hai endpoint, hai kết quả. Trước khi sửa, `unmapped=false` thu hẹp cả tab xuống **0 đơn** — dashboard trắng trơn mà không báo lỗi.
+
+Khoá bằng `apps/api/src/modules/order/order-query-flags.spec.ts` (35 ca), trong đó có bộ ca so THẲNG kết quả phân giải của hai DTO với nhau.
+
+**`isMapped` (ORD-24) — cờ duy nhất mà giao diện THẬT SỰ gửi `'false'`,** ở `ListOrderTab.tsx:424` (nút "Chưa mapping"). Nên nó không phải bẫy tiềm ẩn mà là lỗi **đang sai**: chọn "Chưa mapping" trả về đơn **đã** mapping. Đo trên DB local: `isMapped=false` trả 39.423 đơn (đã map) thay vì 187 đơn (chưa map). Sau ORD-24: `true` → 39.423, `false` → **187**, hai tập **rời nhau** và cộng lại đúng bằng 39.610 khi không lọc.
+
+Lưu ý về nghĩa: `isMapped` là cờ **map product config**, KHÔNG phải map xưởng — hệ hiện có 187 đơn `isMapped:false` nhưng **0** đơn thiếu `factoryId`. Hai khái niệm liên quan nhưng không bằng nhau; muốn lọc đơn chưa map xưởng thì dùng `unmapped` (trang `/orders/unmapped`).
+
+**Quét nốt phần còn lại (ORD-28).** Đếm bằng mã nguồn: đúng **21 cờ** `z.coerce.boolean` còn lại — 16 trên query string, 5 trong thân JSON.
+
+| Nhóm | Kết luận |
+|---|---|
+| `readyForFulfill` (`GetOrderStatusOverviewZod`) | **ĐÃ SỬA — đang sai thật.** `useStatusFilter.ts` gửi `String(value)` = `'false'`, nên chọn *"chưa sẵn sàng"* trả về nhóm *"đã sẵn sàng"*. Sau khi sửa: `false` → 4.145 đơn thay vì 35.411; hai tập rời nhau, cộng lại đúng 39.556 |
+| `isActive` × 5 (`GetCollections`/`GetFactories`/`GetMachineTypes`/`GetProductCategories`/`GetWorkshopConfigs`) | **ĐÃ SỬA — bẫy chưa nổ.** Service kiểm `typeof === 'boolean'` nên `false` có nghĩa riêng; hiện chưa service FE nào gửi cờ này, nên đổi không làm màn hình nào đổi kết quả |
+| `deleted` (`GetCustomersZod`), `hasError` (`GetOrderStatusOverviewZod`) | **GIỮ NGUYÊN — đang đúng.** Nơi gọi bỏ hẳn tham số khi tắt (`showDeleted \|\| undefined`, `set('hasError','true')`) |
+| `held` (`GetCustomerStagingOrdersZod`) | **GIỮ NGUYÊN.** `customerPortal.ts:53` dùng `if (filters?.held)` nên `false` không bao giờ lên URL; service cũng chỉ kiểm truthy |
+| 7 cờ trên DTO CHẾT: `isReferrerOrder` ×2, `scan`, `isExport` (`GetOrdersZod`/`GetOrderStatisticsZod`), `overdue3/5/30Days` (`GetTrackingsZod`) | **GIỮ NGUYÊN.** Không controller nào dùng ba DTO này |
+| 5 cờ trong THÂN JSON: `scanTracking` ×4 (dropship/stock), `forcePassChange` (`UserZod`) | **GIỮ NGUYÊN.** Thân JSON mang boolean thật nên `z.coerce.boolean(false)` ra `false` — đúng. Đã tìm nơi gửi chuỗi `"false"` trong thân: không có |
+
+Khoá bằng `apps/api/src/modules/order/query-flags-sweep.spec.ts` (30 ca). `isMapped` đáng chú ý nhất: `ListOrderTab.tsx:424` gửi thẳng chuỗi `'false'` — chỗ **duy nhất** trong FE làm vậy — nên bộ lọc "Chưa map xưởng" ở tab đó trả về đúng điều ngược lại. Tab đó hiện đang tắt; bật lại thì phải sửa cờ này trước.
+
+---
+
+## 23. "Chuyển hoàn thành" (SuperAdmin) — ép đơn về đã hoàn thành sản xuất
+
+> **File FE:** `apps/web/src/components/orders/{OrderRowActionsMenu,ForceCompleteDialog}.tsx`, `apps/web/src/utils/orderActions.ts` (`canForceComplete`/`canForceCompleteOrder`), `apps/web/src/services/order.ts` (`forceCompleteOrder`)
+> **File BE:** `apps/api/src/modules/order/force-complete-plan.ts` (`planForceComplete`) + `order.service.ts` → `forceCompleteOrder()`; `order.controller.ts` → `POST /:id/force-complete`
+> **API:** `POST /v1/orders/:id/force-complete` — `@Auth([RoleType.SuperAdmin])`, không body
+
+### 23.1 Overview
+
+Mục **"Chuyển hoàn thành"** trong menu "..." mỗi hàng đơn (§16.4 — cùng cột thao tác pin phải), **CHỈ SuperAdmin** thấy. Bấm → dialog xác nhận → đơn được đánh dấu **đã hoàn thành sản xuất**, và **các khâu chưa xong được điền mốc thời gian chia đều** trong khoảng `[đơn vào sản xuất → lúc bấm]`, theo đúng luồng của xưởng đang giữ đơn.
+
+Đây là **cửa sửa dữ liệu**, không phải một bước của quy trình: dùng cho đơn đã xong ngoài đời nhưng xưởng quên bấm, để nó thôi treo trên Dashboard / Lifecycle / banner quá hạn (`OverdueAlertBanner.md`) / các hàng đợi soát tool + cần gán designer.
+
+Vì thế quyền **hẹp hơn cả Admin** (`RoleType.SuperAdmin`), enforce 2 lớp: `@Auth([SuperAdmin])` ở route **và** check lại `roleName !== SuperAdmin → ForbiddenException` trong service.
+
+### 23.2 Chia mốc thời gian (`planForceComplete` — hàm thuần, test không cần DB)
+
+Chuỗi khâu xét theo thứ tự dòng chảy: `tool-check` → `designer` → 6 công đoạn `FULFILLMENT_STAGES`.
+
+| Quy tắc | Vì sao |
+| --- | --- |
+| Chỉ điền khâu **chưa xong**; khâu đã có mốc thật giữ nguyên | Không ghi đè lịch sử có thật |
+| Mốc bắt đầu = `max(inProductionAt, mốc thật cuối cùng trên đơn)`, kẹp ≤ `now` | Nếu chia từ `inProductionAt` khi In đã xong lúc 05:00 thì "Ép" sẽ xong **trước** "In" — chuỗi thời gian chạy ngược |
+| Khâu cuối đóng đúng `now` (lấy thẳng `now`, không cộng dồn `n × slice`) | Sai số chia không được đẩy mốc cuối lệch khỏi `fulfillmentCompletedAt` |
+| Khâu **tự-hoàn-thành** của luồng rút gọn (`FACTORY_FLOW_AUTO_STAGES`) **không chiếm lát nào**, đóng cùng mốc khâu ngay trước | Y như khi chạy thật (§ FulfillmentWorkflow.md 2.2b): xưởng gỗ Ép dính vào In, May ra dính vào May vào; xưởng no-sew May vào + May ra dính vào QC sau ép |
+| Thiếu `inProductionAt` → lùi `orderAt` → `createdAt`; hết đường thì **mọi mốc = lúc bấm** | Thà cụm lại một chỗ còn hơn bịa ra một quá khứ không có căn cứ |
+
+Ví dụ đơn chưa làm gì, vào sản xuất 00:00, bấm lúc 08:00, xưởng `standard`: 8 khâu × 1 tiếng — `tool-check` xong 01:00, `designer` 02:00, … `pack` 08:00.
+Cùng đơn đó ở xưởng `merged`: chỉ 6 khâu chiếm lát (Ép + May ra ăn theo) → mỗi khâu 80 phút.
+
+### 23.3 Ghi gì vào đơn
+
+- **Công đoạn fulfillment:** `status='done'`, `completedAt` = mốc cuối lát; `waitingAt`/`startedAt`/`firstStartedAt` chỉ điền **khi còn trống** (= mốc đầu lát). Công đoạn chưa từng kích hoạt → khai `reworkCount: 0` + `workMs: 0`.
+- **`workMs` KHÔNG bịa** — công đoạn được ép giữ nguyên 0. Số giờ làm việc của xưởng không được phình lên vì một lần sửa dữ liệu.
+- **Kết thúc:** `currentFulfillmentStage = null`, `fulfillmentCompletedAt = now`.
+- **Hai chặng trước fulfillment** (nếu còn dở): `toolCheckedAt` + `toolResultNote='ok'` (chỉ khi trống — **KHÔNG** đụng `toolResult` vì field đó giữ mã `workshop_config`, bịa vào là dựng mã không tồn tại); `designerStatus='done'` + `designerCompletedAt`, các mốc designer khác chỉ điền khi trống. Đơn "hoàn thành sản xuất" mà vẫn nằm trong hàng đợi soát tool / backlog cần gán designer là trạng thái tự mâu thuẫn — và chính mấy hàng đợi đó là thứ người dùng muốn dọn khi bấm nút này.
+- **`fulfillmentTimeline`:** 1 dòng cho mỗi công đoạn được điền (`action='complete'`, `byUserId`/`byUserName` = người bấm, `reason='Chuyển hoàn thành'`, khâu tự động ghi `'Chuyển hoàn thành (luồng rút gọn)'`) — nhìn lịch sử là biết đơn được ép, không phải xưởng làm.
+- **OrderLog:** action mới **`force_complete`** (`ORDER_LOG_ACTIONS`), `field='fulfillmentCompletedAt'`, `before` = chặng đơn đang đứng, `after` = `{ completedAt, start, steps[] }` — đủ để dựng lại chính xác thao tác.
+- **Sự kiện khách:** emit `order.production_completed` y như lúc xưởng bấm xong thật → webhook khách (ORD-4) + chuông portal (ORD-5) không phân biệt đơn xong thật với đơn chốt tay.
+
+Ghi **thẳng** vào đơn thay vì đi qua `FulfillmentTaskService.transition()`: transition đòi đúng người giữ công đoạn và đúng thứ tự `waiting → in-progress → done`, tức phải giả lập hàng chục lượt bấm mới đi hết 6 công đoạn.
+
+### 23.4 Guard
+
+`OrderService.forceCompleteOrder` chặn: không phải SuperAdmin (403) · đơn đã hủy · đơn **đang giữ** (`assertNotHeld` — mở giữ trước rồi mới chốt) · đơn đã có `fulfillmentCompletedAt`. FE mirror ở `canForceCompleteOrder` (`orderActions.ts`) để disable mục menu + hiện lý do trong tooltip — sửa 1 nơi phải sửa cả 2.
+
+### 23.5 Test
+
+`apps/api/src/modules/order/force-complete-plan.spec.ts` — 8 ca trên hàm thuần: chia đều đủ 8 khâu, mốc liền mạch + không lọt ra ngoài khoảng, không đụng khâu đã xong, hai luồng rút gọn (`merged`/`no-sew`), thiếu `inProductionAt`, mốc bắt đầu ở tương lai, và ca "có `toolCheckedAt` nhưng `toolResultNote` trống".

@@ -263,6 +263,17 @@
       "mockupLabel": "Mockup",
       "clickToEnlarge": "Click to enlarge",
       "openNewTab": "Open in new tab"
+    },
+    "forceComplete": {
+      "title": "Mark as completed",
+      "desc": "The order will be marked as PRODUCTION COMPLETED. Stages that never finished get timestamps spread evenly from when the order entered production until now, following the flow of the factory holding it.",
+      "windowLabel": "Window to spread across",
+      "windowNow": "now",
+      "noStart": "This order has no production start date — every timestamp will be written at the moment you click.",
+      "warning": "This edits data and cannot be undone. Use it only for orders finished in real life that the factory forgot to close.",
+      "submitBtn": "Mark as completed",
+      "submitting": "Marking…",
+      "success": "Order marked as completed"
     }
   },
   "filterBar": {
@@ -511,10 +522,14 @@
     "cancelOrder": "Cancel order",
     "checkDesign": "Check for new design",
     "checkDesignUpdated": "Found and applied new design from OnosPod",
-    "vnpShipment": "VNP shipment"
+    "vnpShipment": "VNP shipment",
+    "printCustomerLabel": "Print customer label",
+    "forceComplete": "Mark as completed"
   },
   "orderActions": {
-    "alreadyCancelled": "Order already cancelled."
+    "alreadyCancelled": "Order already cancelled.",
+    "heldFirst": "Order is on hold — release it first",
+    "alreadyCompleted": "Order already completed"
   },
   "priorityEstimate": {
     "dayUnit": "d",
@@ -698,5 +713,11 @@
     "groupNotice": "Seller order {{orderId}} has {{count}} items — one order buys ONE label, the shipment will bundle ALL items below:",
     "noWeight": "no weight (fallback used)",
     "groupBlocked": "Another item of this seller order already has a shipment — open that item's dialog or cancel the old shipment."
+  },
+  "customerLabel": {
+    "scanHint": "Scan to track your order",
+    "orderIdCaption": "Order ID",
+    "externalIdCaption": "Platform ID",
+    "positionsCaption": "Print areas"
   }
 }

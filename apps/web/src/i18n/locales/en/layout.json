@@ -1,4 +1,10 @@
 {
+  "noAccess": {
+    "title": "You do not have access to this page",
+    "description": "Your account has not been granted access to this page. If you need it, ask an administrator to grant you the permission.",
+    "back": "Go back",
+    "home": "Go to Dashboard"
+  },
   "sidebar": {
     "groups": {
       "orders": "Orders",

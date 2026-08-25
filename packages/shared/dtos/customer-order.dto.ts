@@ -5,7 +5,13 @@ import { PageResZod, ResZod } from '@shared/types';
 import { z } from 'zod';
 
 import { IDZod } from '..';
-import { DesignFieldsZod, ProductionOrderShippingAddressZod } from './production-order.dto';
+import {
+  CustomerOrderSummaryZod,
+  DesignFieldsZod,
+  LifecycleTrackStageZod,
+  LifecycleTrackZod,
+  ProductionOrderShippingAddressZod,
+} from './production-order.dto';
 
 /**
  * Staging đơn khách hàng `customer_orders` — 1 document = 1 ĐƠN nhiều item +
@@ -409,3 +415,193 @@ export const PushCustomerOrdersResZod = ResZod.extend({
   }),
 });
 export class PushCustomerOrdersResDto extends createZodDto(extendApi(PushCustomerOrdersResZod)) {}
+
+// ---------------------------------------------------------------------------
+// Public Order API (ORD-4) — xác thực bằng API key (`X-Api-Key`), KHÔNG JWT.
+// Đơn tạo qua API đi ĐÚNG luồng staging: Pending → push → importOrders().
+// ---------------------------------------------------------------------------
+
+/** Cap tạo đơn theo lô qua Public API (plan §8): ≤100 đơn/lần gọi. */
+export const OPEN_API_MAX_ORDERS_PER_CALL = 100;
+
+/**
+ * 1 đơn tạo qua Public API — `externalRef` là mã tham chiếu của KHÁCH
+ * (idempotency: gọi lại cùng mã → `duplicated`, không tạo trùng; map vào
+ * `orderKey`/`orderId` staging). Items dùng CHUNG shape với CSV import —
+ * SKU bắt buộc match `variations[].sku`.
+ */
+export const OpenApiCreateOrderZod = z.object({
+  externalRef: z.string().min(1).max(200),
+  orderName: z.string().max(300).optional(),
+  note: z.string().max(1000).optional(),
+  shippingAddress: CustomerImportShippingAddressZod,
+  items: CustomerImportOrderItemZod.array().min(1).max(100),
+});
+export type OpenApiCreateOrder = z.infer<typeof OpenApiCreateOrderZod>;
+
+export const OpenApiCreateOrdersZod = z.object({
+  orders: OpenApiCreateOrderZod.array().min(1).max(OPEN_API_MAX_ORDERS_PER_CALL),
+});
+export class OpenApiCreateOrdersDto extends createZodDto(extendApi(OpenApiCreateOrdersZod)) {}
+// Response tái dùng shape kết quả từng đơn của CSV import (`created|duplicated|failed`).
+
+/** Push qua Public API — theo `externalRefs` (mã của khách) hoặc `ids` (staging id). Ít nhất 1 trong 2. */
+export const OpenApiPushOrdersZod = z
+  .object({
+    externalRefs: z.string().min(1).max(200).array().max(OPEN_API_MAX_ORDERS_PER_CALL).optional(),
+    ids: IDZod.array().max(OPEN_API_MAX_ORDERS_PER_CALL).optional(),
+  })
+  .refine((v) => (v.externalRefs?.length ?? 0) + (v.ids?.length ?? 0) > 0, {
+    message: 'Cần ít nhất 1 externalRef hoặc id',
+  });
+export class OpenApiPushOrdersDto extends createZodDto(extendApi(OpenApiPushOrdersZod)) {}
+
+/**
+ * Tra 1 đơn theo `:ref` = externalRef HOẶC productionId của 1 item.
+ * `order` = đúng shape listing portal (derive 8 trạng thái + badge held/rework);
+ * `items[].timeline` có qua endpoint track riêng của portal — ở đây trả kèm
+ * `track` cho productionId được hỏi (nếu `:ref` là productionId đã push).
+ */
+export const OpenApiGetOrderResZod = ResZod.extend({
+  data: z.object({
+    order: CustomerStagingOrderZod,
+    /** Chỉ có khi `:ref` là productionId của 1 item đã push — mirror trang track portal. */
+    track: z.object({ order: CustomerOrderSummaryZod, track: LifecycleTrackZod }).optional(),
+  }),
+});
+export class OpenApiGetOrderResDto extends createZodDto(extendApi(OpenApiGetOrderResZod)) {}
+
+// ---------------------------------------------------------------------------
+// Tra cứu đơn CÔNG KHAI (`/track/:productionId`) — KHÔNG đăng nhập, KHÔNG API key
+// ---------------------------------------------------------------------------
+
+/**
+ * Dữ liệu 1 đơn cho trang tra cứu công khai. Ai có mã đơn đều xem được, nên
+ * shape này là **danh sách trắng tường minh**: chỉ những gì khách (và người
+ * mua cuối của khách) vốn được biết.
+ *
+ * CỐ Ý KHÔNG có: giá/`priceSnapshot`, tên nhân viên (designer/công nhân),
+ * nguyên văn `holdReason`/`cancelReason`/ghi chú lỗi nội bộ, xưởng sản xuất,
+ * và địa chỉ ship đầy đủ (chỉ còn city/state/country).
+ * Thêm field mới vào đây phải soi lại đúng 1 câu hỏi: *người lạ cầm mã đơn có
+ * được phép biết thứ này không?*
+ *
+ * File thiết kế (`designs`) CÓ trong danh sách này theo yêu cầu vận hành: người
+ * cầm mã đơn cần đối chiếu đúng file đang đi vào sản xuất. Đây là quyết định
+ * đánh đổi có chủ đích — mã đơn trở thành thứ đủ để xem file thiết kế của đơn,
+ * nên đừng phát tán mã đơn như một định danh vô hại.
+ */
+/**
+ * 1 vị trí in của đơn trên trang tra cứu công khai — nhãn đã resolve sẵn
+ * (`PRODUCT_PRINT_AREA_LABEL_MAP`) + link file thiết kế khách đã nộp.
+ *
+ * `url` là ĐƯỜNG DẪN THÔ như đang lưu trên đơn (Drive `open?id=…`, CDN
+ * design…): trang tra cứu tự đổi sang link ảnh xem được bằng `driveThumbUrl`/
+ * `driveViewUrl` — cùng bộ hàm mà các bảng nội bộ đang dùng, thay vì dựng thêm
+ * một bản chuyển link thứ hai ở máy chủ rồi để hai bản trôi khỏi nhau.
+ */
+export const PublicOrderTrackDesignZod = z.object({
+  /** Key vị trí in — trùng field trong `DesignFields` (`front`/`back`/…). */
+  key: z.string(),
+  label: z.string(),
+  /** Trống = sản phẩm có vị trí in này nhưng đơn chưa có file. */
+  url: z.string().optional(),
+  widthPx: z.number().optional(),
+  heightPx: z.number().optional(),
+  /** `false` = vị trí tùy chọn; thiếu = coi như bắt buộc (giữ nghĩa dữ liệu cũ). */
+  isRequired: z.boolean().optional(),
+});
+export type PublicOrderTrackDesign = z.infer<typeof PublicOrderTrackDesignZod>;
+
+export const PublicOrderTrackZod = z.object({
+  /** Mã sản xuất — định danh chính, chính là `:productionId` trên URL. */
+  productionId: z.string(),
+  /** Mã đơn của sàn/hệ cũ (`OrderEntity.externalId`, nhãn UI "Platform ID"). */
+  externalId: z.string().optional(),
+  /** Mã đơn do khách tự đặt (`orderId` staging / sheet import). */
+  orderId: z.string().optional(),
+  /** Mã phân biệt đơn con cùng `orderId` (template fulfill cũ). */
+  identifier: z.string().optional(),
+  orderName: z.string().optional(),
+
+  status: z.nativeEnum(CustomerOrderStatus),
+  /** Đơn đang bị giữ — lý do quy về nhóm an toàn, không phô ghi chú nội bộ. */
+  onHold: z.boolean(),
+  holdKind: z.enum(['waiting-design', 'waiting-address', 'other']).optional(),
+  /** Đơn đang phải làm lại (badge chồng, không phải trạng thái). */
+  rework: z.boolean(),
+  /** Đơn đã đẩy vào sản xuất chưa — chưa đẩy thì `stages` rỗng. */
+  pushed: z.boolean(),
+  completed: z.boolean(),
+  /** Key chặng hiện tại (`LIFECYCLE_STAGE_KEYS`) — FE dịch nhãn theo ngôn ngữ người xem. */
+  currentStageKey: z.string().optional(),
+  /** Nhãn chặng hiện tại theo ngôn ngữ khách (vd "Đang thiết kế") — đường lui khi FE chưa dịch key. */
+  currentStageLabel: z.string().optional(),
+  currentStageAt: z.coerce.date().optional(),
+
+  product: z.object({
+    type: z.string().optional(),
+    color: z.string().optional(),
+    size: z.string().optional(),
+    quantity: z.number().optional(),
+    sku: z.string().optional(),
+    merchantSku: z.string().optional(),
+    printMethod: z.string().optional(),
+    /** Ảnh mockup — thứ khách vốn thấy ở portal/catalog, KHÔNG phải file in. */
+    mockupUrl: z.string().optional(),
+  }),
+
+  dates: z.object({
+    orderAt: z.coerce.date().optional(),
+    pushedAt: z.coerce.date().optional(),
+    inProductionAt: z.coerce.date().optional(),
+    fulfillmentCompletedAt: z.coerce.date().optional(),
+    cancelledAt: z.coerce.date().optional(),
+  }),
+
+  /** Vận đơn khách tự cấp — số/hãng/link tra cứu, KHÔNG kèm `labelUrl`. */
+  tracking: z
+    .object({
+      number: z.string().optional(),
+      carrier: z.string().optional(),
+      url: z.string().optional(),
+    })
+    .optional(),
+
+  /** Điểm đến rút gọn — cố ý KHÔNG có tên người nhận / địa chỉ đường / phone. */
+  destination: z
+    .object({
+      city: z.string().optional(),
+      state: z.string().optional(),
+      country: z.string().optional(),
+    })
+    .optional(),
+
+  /**
+   * Vị trí in của sản phẩm + file thiết kế tương ứng của đơn. Theo thứ tự
+   * `printArea` đã cấu hình; vị trí đơn có file mà sản phẩm không khai vẫn
+   * được liệt kê ở cuối (đừng giấu file đang thực sự đi vào sản xuất).
+   */
+  designs: PublicOrderTrackDesignZod.array(),
+
+  /** 8 chặng vòng đời — rỗng khi đơn chưa đẩy sản xuất. */
+  stages: LifecycleTrackStageZod.array(),
+
+  /** Các item còn lại cùng đơn — để người tra thấy đủ đơn, mỗi dòng 1 mã. */
+  siblings: z
+    .object({
+      productionId: z.string(),
+      type: z.string().optional(),
+      color: z.string().optional(),
+      size: z.string().optional(),
+      quantity: z.number().optional(),
+      status: z.nativeEnum(CustomerOrderStatus),
+      currentStageKey: z.string().optional(),
+      currentStageLabel: z.string().optional(),
+    })
+    .array(),
+});
+export type PublicOrderTrack = z.infer<typeof PublicOrderTrackZod>;
+
+export const GetPublicOrderTrackResZod = ResZod.extend({ data: PublicOrderTrackZod });
+export class GetPublicOrderTrackResDto extends createZodDto(extendApi(GetPublicOrderTrackResZod)) {}

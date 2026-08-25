@@ -30,7 +30,23 @@
     }
   },
   "configTab": {
-    "searchPlaceholder": "Search by name, short name, SKU…",
+    "filters": {
+      "fullName": "Product name",
+      "fullNamePlaceholder": "Search by name…",
+      "shortName": "Short name",
+      "shortNamePlaceholder": "Search by short name…",
+      "designReviewCode": "Tool code",
+      "designReviewCodePlaceholder": "Search by tool code…",
+      "factory": "Factory",
+      "allFactories": "All factories",
+      "department": "Department",
+      "allDepartments": "All departments",
+      "fabricType": "Fabric type",
+      "allFabrics": "All fabric types",
+      "fabricNotSet": "Fabric type not set",
+      "status": "Status",
+      "clear": "Clear filters"
+    },
     "statusFilter": {
       "title": "Filter by status — hidden products are excluded by default",
       "allExceptHidden": "All (except Hidden)"
@@ -57,6 +73,8 @@
       "mockup": "Mockup",
       "productName": "Product name",
       "shortName": "Short name",
+      "designReviewCode": "Tool code",
+      "designReviewCodeLinkTitle": "Open this product's tool template file",
       "machine": "Machine",
       "department": "Department",
       "factory": "Factory",
@@ -205,7 +223,7 @@
   },
   "importDialog": {
     "title": "Import Product Config",
-    "description": "Paste data from Excel (tab-separated). 7 columns in order: <b>Full name</b> — <b>Short name</b> — <b>Machine</b> (machine number, e.g. 94/27, leave blank = no tool) — <b>Factory</b> (e.g. \"ME LINH\") — <b>Fabric type</b> (POLY 2 DA, ME 64, LUA 4B, LUA VAN GO…) — <b>Tool result</b> (leave blank = has tool; \"no tool\" = no tool) — <b>Department</b> (machine type, e.g. \"PRINT AND LASER CUT\"). The system matches labels by name (case-insensitive).",
+    "description": "Paste data from Excel (tab-separated). 7 columns in order: <b>Full name</b> — <b>Short name</b> (may be left blank) — <b>Machine</b> (machine number, e.g. 94/27, leave blank = no tool) — <b>Factory</b> (e.g. \"ME LINH\") — <b>Fabric type</b> (POLY 2 DA, ME 64, LUA 4B, LUA VAN GO…) — <b>Tool result</b> (leave blank = has tool; \"no tool\" = no tool) — <b>Department</b> (machine type, e.g. \"PRINT AND LASER CUT\"). The system matches labels by name (case-insensitive).",
     "parseError": "No rows could be parsed. Check the format (7 columns, separated by Tab).",
     "importSuccess": "Imported {{imported}}, updated {{updated}}, {{skippedCount}} warnings",
     "validRows": "{{count}} valid rows will be imported."
@@ -213,7 +231,6 @@
   "detail": {
     "backToList": "Back to list",
     "unsavedConfirm": "You have UNSAVED changes. Leaving this page will lose them — leave anyway?",
-    "shortNameRequired": "Short name cannot be empty",
     "factoryRequired": "Please select a factory",
     "machineTypeRequired": "Please select a machine type",
     "fullNameRequired": "Product full name cannot be empty",
@@ -271,7 +288,19 @@
       "heightPx": "Height (px)",
       "additionPrice": "Extra charge ($)",
       "isRequired": "Design required",
-      "isEmbroidery": "Embroidery"
+      "isEmbroidery": "Embroidery",
+      "sizeDims": {
+        "title": "Print size per product size",
+        "filled": "{{filled}}/{{total}} sizes filled",
+        "size": "Size",
+        "width": "Width (cm)",
+        "length": "Length (cm)",
+        "noSizes": "This product has no sizes yet. Add variants with an \"Item Size\" (or \"Size\") attribute in section ③ Variants & Price.",
+        "errorPositive": "Enter a number greater than 0",
+        "errorMaxWidth": "Only one of the two sides may exceed {{max}} cm — DTF paper is {{max}} cm wide but endless in length, so a block can be turned sideways; both sides over the limit will not fit across the paper",
+        "errorBoth": "Enter both width and length",
+        "errorToast": "{{count}} print size field(s) are still invalid — fix them to save"
+      }
     },
     "packaging": {
       "title": "Default packaging",
@@ -360,7 +389,14 @@
       "printAreas": "{{count}} areas"
     },
     "production": {
-      "slug": "Slug"
+      "slug": "Slug",
+      "designReviewCode": "Design review tool code",
+      "designReviewCodePlaceholder": "E.g. BBJERNP — leave empty if the product has no code",
+      "designReviewCodeHint": "The external design review tool reads this code. It is separate from Short name at the top; saving applies it right away.",
+      "designReviewTemplateUrl": "Tool template URL",
+      "designReviewTemplateUrlPlaceholder": "https://... — leave empty if there is no template file",
+      "designReviewTemplateUrlHint": "With a URL, the tool code in the product list becomes clickable and opens this file in a new tab. Only http:// or https:// is accepted; the system does not check whether the file still exists.",
+      "designReviewTemplateUrlInvalid": "The template URL must start with http:// or https://"
     },
     "toggles": {
       "hideForSeller": "Hide product for seller",
@@ -527,9 +563,7 @@
     },
     "importButton": "Add {{count}} products to config",
     "importSuccess": "Added {{imported}} products to config, {{skippedCount}} warnings",
-    "invalidRows": "{{count}} rows missing Factory/Department were skipped.",
-    "autoShortBadge": "auto",
-    "autoShortTitle": "Short name missing in file — the product name is used as the short name; edit later on the Products page if needed"
+    "invalidRows": "{{count}} rows missing Factory/Department were skipped."
   },
   "importFullDialog": {
     "title": "Import full products from file",

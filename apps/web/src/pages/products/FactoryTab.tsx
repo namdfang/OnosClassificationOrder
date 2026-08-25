@@ -20,6 +20,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@
 
 import { handleAxiosError } from '@/utils';
 
+import { useProductWriteAccess } from '@/hooks/useProductWriteAccess';
 import { IconPicker, LucideIcon } from '@/pages/workshop-config/IconPicker';
 
 const slugify = (s: string) =>
@@ -75,6 +76,8 @@ const DEFAULT_FORM: FormState = {
 
 export function FactoryTab() {
   const { t } = useTranslation(['products', 'common']);
+  // AUTH-6 - vai chi doc (Support) xem duoc, khong tao/sua/xoa duoc.
+  const { canWriteProducts } = useProductWriteAccess();
   const [factories, setFactories] = useState<ListItem[]>([]);
   const [machineTypes, setMachineTypes] = useState<ListItem[]>([]);
   const [loading, setLoading] = useState(false);
@@ -270,10 +273,12 @@ export function FactoryTab() {
           <h3 className="text-sm font-semibold text-foreground">{title}</h3>
           <p className="text-xs text-muted-foreground mt-0.5">{description}</p>
         </div>
-        <Button size="sm" onClick={() => openCreate(type)}>
-          <Plus size={14} />
-          {t('common:actions.add')}
-        </Button>
+        {canWriteProducts && (
+          <Button size="sm" onClick={() => openCreate(type)}>
+            <Plus size={14} />
+            {t('common:actions.add')}
+          </Button>
+        )}
       </div>
       <Table>
         <TableHeader>
@@ -323,9 +328,11 @@ export function FactoryTab() {
                   )}
                 </TableCell>
                 <TableCell>
-                  <Button variant="ghost" size="sm" onClick={() => openEdit(type, it)}>
-                    {t('common:actions.edit')}
-                  </Button>
+                  {canWriteProducts && (
+                    <Button variant="ghost" size="sm" onClick={() => openEdit(type, it)}>
+                      {t('common:actions.edit')}
+                    </Button>
+                  )}
                 </TableCell>
               </TableRow>
             ))}
@@ -345,21 +352,23 @@ export function FactoryTab() {
             <h3 className="text-sm font-semibold text-foreground">{t('factoryTab.fabric.title')}</h3>
             <p className="text-xs text-muted-foreground mt-0.5">{t('factoryTab.fabric.description')}</p>
           </div>
-          <div className="flex items-center gap-2">
-            <Button
-              size="sm"
-              variant="outline"
-              onClick={handleFabricReset}
-              title={t('factoryTab.fabric.reset.title')}
-            >
-              <RotateCw size={14} />
-              {t('factoryTab.fabric.reset.button')}
-            </Button>
-            <Button size="sm" onClick={openFabricCreate}>
-              <Plus size={14} />
-              {t('common:actions.add')}
-            </Button>
-          </div>
+          {canWriteProducts && (
+            <div className="flex items-center gap-2">
+              <Button
+                size="sm"
+                variant="outline"
+                onClick={handleFabricReset}
+                title={t('factoryTab.fabric.reset.title')}
+              >
+                <RotateCw size={14} />
+                {t('factoryTab.fabric.reset.button')}
+              </Button>
+              <Button size="sm" onClick={openFabricCreate}>
+                <Plus size={14} />
+                {t('common:actions.add')}
+              </Button>
+            </div>
+          )}
         </div>
         <Table>
           <TableHeader>
@@ -404,12 +413,16 @@ export function FactoryTab() {
                     )}
                   </TableCell>
                   <TableCell className="text-right">
-                    <Button variant="ghost" size="sm" onClick={() => openFabricEdit(it)}>
-                      <Pencil size={14} />
-                    </Button>
-                    <Button variant="ghost" size="sm" onClick={() => setFabricConfirmDelete(it)}>
-                      <Trash2 size={14} className="text-destructive" />
-                    </Button>
+                    {canWriteProducts && (
+                      <>
+                        <Button variant="ghost" size="sm" onClick={() => openFabricEdit(it)}>
+                          <Pencil size={14} />
+                        </Button>
+                        <Button variant="ghost" size="sm" onClick={() => setFabricConfirmDelete(it)}>
+                          <Trash2 size={14} className="text-destructive" />
+                        </Button>
+                      </>
+                    )}
                   </TableCell>
                 </TableRow>
               ))}

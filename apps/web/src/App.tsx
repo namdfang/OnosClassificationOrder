@@ -1,6 +1,7 @@
 import React, { lazy, Suspense } from 'react';
 import { BrowserRouter, Navigate, Outlet, Route, Routes } from 'react-router-dom';
 
+import { RequirePagePermission } from './components/common/RequirePagePermission';
 import Loading from './components/loading';
 import { PATHS } from './constants/paths';
 import { routerConfig } from './constants/routerConfig';
@@ -20,6 +21,9 @@ const CompanyCareers = lazy(() => import('./pages/company/careers'));
 const PublicCatalog = lazy(() => import('./pages/catalog'));
 const PublicCatalogDetail = lazy(() => import('./pages/catalog/detail'));
 
+// Tra cứu đơn công khai — cùng component cho `/track` (ô nhập mã) và `/track/:productionId`.
+const PublicTrack = lazy(() => import('./pages/track'));
+
 const CustomerLogin = lazy(() => import('./pages/customer/login'));
 const CustomerRegister = lazy(() => import('./pages/customer/register'));
 const CustomerDashboard = lazy(() => import('./pages/customer/dashboard'));
@@ -30,6 +34,7 @@ const CustomerOrderNew = lazy(() => import('./pages/customer/orders/new'));
 const CustomerOrderImport = lazy(() => import('./pages/customer/orders/import'));
 const CustomerOrderTrack = lazy(() => import('./pages/customer/orders/track'));
 const CustomerAccount = lazy(() => import('./pages/customer/account'));
+const CustomerApi = lazy(() => import('./pages/customer/api'));
 
 function PrivateRoute() {
   const isAuthenticated = useAuthStore((s) => s.isAuthenticated());
@@ -75,6 +80,23 @@ function App() {
         />
 
         <Route
+          path={PATHS.TRACK}
+          element={
+            <Suspense fallback={<Loading />}>
+              <PublicTrack />
+            </Suspense>
+          }
+        />
+        <Route
+          path={PATHS.TRACK_DETAIL}
+          element={
+            <Suspense fallback={<Loading />}>
+              <PublicTrack />
+            </Suspense>
+          }
+        />
+
+        <Route
           path={PATHS.COMPANY_CAREERS}
           element={
             <Suspense fallback={<Loading />}>
@@ -93,9 +115,13 @@ function App() {
                 key={route.path}
                 path={route.path}
                 element={
-                  <Suspense fallback={<Loading />}>
-                    <route.component />
-                  </Suspense>
+                  // AUTH-7 — chặn theo QUYỀN TRANG trước khi dựng, để vai không có
+                  // quyền gõ thẳng URL không nhận bảng trống khó hiểu nữa.
+                  <RequirePagePermission path={route.path}>
+                    <Suspense fallback={<Loading />}>
+                      <route.component />
+                    </Suspense>
+                  </RequirePagePermission>
                 }
               />
             ))}
@@ -185,6 +211,14 @@ function App() {
               element={
                 <Suspense fallback={<Loading />}>
                   <CustomerAccount />
+                </Suspense>
+              }
+            />
+            <Route
+              path={PATHS.CUSTOMER_API}
+              element={
+                <Suspense fallback={<Loading />}>
+                  <CustomerApi />
                 </Suspense>
               }
             />

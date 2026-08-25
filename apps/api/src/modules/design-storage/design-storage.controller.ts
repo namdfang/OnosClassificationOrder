@@ -6,6 +6,7 @@ import {
   ConfirmDesignUploadDto,
   ConfirmDesignUploadResDto,
   GetDesignFileResDto,
+  GetDesignUploadConfigResDto,
   PresignDesignUploadDto,
   PresignDesignUploadResDto,
   RoleType,
@@ -68,6 +69,15 @@ export class DesignStorageController {
   }
 
   // Route static khai TRƯỚC `:sha256` — Nest match theo thứ tự khai báo.
+  @Get('upload-config')
+  @Auth([RoleType.Customer])
+  @ApiOperation({ summary: 'Giới hạn kích thước + định dạng cho ô tải design (FE khỏi chép cứng)' })
+  @HttpCode(HttpStatus.OK)
+  @ApiOkResponse({ type: GetDesignUploadConfigResDto })
+  uploadConfig(): GetDesignUploadConfigResDto {
+    return { success: true, data: this.designStorageService.getUploadConfig() };
+  }
+
   @Get('lifecycle/cron')
   @Auth([], [], { public: true })
   @ApiOperation({ summary: 'Cron vòng đời design: archive IA sau 60 ngày không dùng + xóa sau 12 tháng IA' })

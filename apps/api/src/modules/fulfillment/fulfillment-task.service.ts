@@ -33,6 +33,7 @@ import {
 
 import { productionFactoryClause } from '../../utils/excluded-factory';
 import { getFactoryFlowTypeSync } from '../../utils/merged-flow-factory';
+import { CustomerOrderEventService } from '../customer-event/customer-order-event.service';
 import { OrderDocument, OrderEntity } from '../order/order.entity';
 import { OrderService } from '../order/order.service';
 import type { AuditContext } from '../order-log/order-log.service';
@@ -100,6 +101,7 @@ export class FulfillmentTaskService {
     @InjectModel(UserEntity.name) private readonly userModel: Model<UserEntity>,
     private readonly orderLogService: OrderLogService,
     private readonly orderService: OrderService,
+    private readonly customerOrderEventService: CustomerOrderEventService,
   ) {}
 
   // ─── Transition ─────────────────────────────────────────────────
@@ -232,6 +234,21 @@ export class FulfillmentTaskService {
     // Engine tự lọc: đơn đã có assignee (rework về designer cũ) không bị đụng.
     if (body.action === FulfillmentTransitionAction.ReworkBack && body.target === 'designer') {
       void this.orderService.autoAssignAfterImport([orderId], { ...ctx, user });
+    }
+
+    // Đóng hàng xong (pack done → `fulfillmentCompletedAt` vừa được set) →
+    // webhook `order.production_completed` cho khách API (ORD-4). Chỉ bắn ở
+    // cạnh chuyển thật: đơn trước đó chưa có mốc hoàn thành.
+    const wasCompleted = (order as unknown as { fulfillmentCompletedAt?: Date | null }).fulfillmentCompletedAt;
+    const nowCompleted = (updated as unknown as { fulfillmentCompletedAt?: Date | null }).fulfillmentCompletedAt;
+    if (!wasCompleted && nowCompleted) {
+      this.customerOrderEventService.emit('order.production_completed', [
+        {
+          productionId: (updated as unknown as { productionId?: string }).productionId,
+          userSku: (updated as unknown as { userSku?: string }).userSku,
+          userEmail: (updated as unknown as { userEmail?: string }).userEmail,
+        },
+      ]);
     }
 
     return updated;

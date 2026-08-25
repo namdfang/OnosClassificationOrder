@@ -22,9 +22,11 @@ import type {
   ImportCustomerOrdersDto,
   ImportCustomerOrdersResDto,
   ImportProductionOrderRow,
+  OpenApiGetOrderResDto,
   PlaceCustomerOrderDto,
   PreviewPushCustomerOrdersResDto,
   ProductionOrderShippingAddress,
+  ProductPrintArea,
   PushCustomerOrdersDto,
   PushCustomerOrdersResDto,
   ResolveImportSkusDto,
@@ -47,16 +49,19 @@ import {
   FULFILLMENT_STAGE_ORDER,
   FulfillmentStage,
   LIFECYCLE_STAGE_KEYS,
+  PRODUCT_PRINT_AREA_LABEL_MAP,
   RoleType,
 } from 'shared';
 
 import type { CustomerDocument } from '@/modules/customer/customer.entity';
+import { CustomerOrderEventService } from '@/modules/customer-event/customer-order-event.service';
 import { DesignStorageService } from '@/modules/design-storage/design-storage.service';
 import { OrderEntity } from '@/modules/order/order.entity';
 import { OrderService } from '@/modules/order/order.service';
 import { ProductConfigEntity } from '@/modules/product-config/product-config.entity';
 import { applyPromotionDiscount, promotionMatches, PromotionService } from '@/modules/promotion/promotion.service';
 import { SystemConfigService } from '@/modules/system-config/system-config.service';
+import { customerMessage } from '@/shared/i18n/customer-messages';
 
 import type { CustomerOrderItem } from './customer-order.entity';
 import { CustomerOrderEntity } from './customer-order.entity';
@@ -73,6 +78,14 @@ function escapeRegex(s: string): string {
  * logic parse/regex sẵn có theo pattern này (vd matching cutting file).
  */
 const PRODUCTION_ID_LETTERS = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ';
+
+/**
+ * Chỗ giữ khi đẩy đơn (`pushingAt`) quá hạn này thì coi như hết hiệu lực —
+ * tiến trình chết giữa chừng không khoá đơn vĩnh viễn. Đặt rộng hơn nhiều lần
+ * thời gian một lượt push thật (importOrders cho vài chục item tính bằng
+ * giây), để lượt đang chạy chậm không bị lượt khác cướp chỗ. Xem ORD-20.
+ */
+const PUSH_CLAIM_STALE_MS = 5 * 60_000;
 function randomDigits5(): string {
   return String(Math.floor(Math.random() * 100000)).padStart(5, '0');
 }
@@ -82,19 +95,19 @@ function randomProductionId(): string {
 }
 
 /** Nhãn chặng hiện tại — hiển thị khách hàng, KHÔNG dùng thuật ngữ nội bộ (vd 'sew-in'). */
-const CUSTOMER_STAGE_LABELS: Record<string, string> = {
+export const CUSTOMER_STAGE_LABELS: Record<string, string> = {
   'tool-check': 'Đang xử lý',
   designer: 'Đang thiết kế',
   ...FULFILLMENT_STAGE_LABELS,
 };
 
 /** Field OrderEntity cần cho derive trạng thái khách — dùng CHUNG cho $lookup pipeline lẫn find(). */
-const PROD_DERIVE_FIELDS =
+export const PROD_DERIVE_FIELDS =
   'productionId cancelledAt fulfillmentCompletedAt currentFulfillmentStage heldAt holdReason ' +
   'designerStatus productionErrorSource toolResultNote toolCheckedAt ' +
   'designerAssignedAt designerFirstStartedAt designerCompletedAt fulfillmentStages inProductionAt';
 
-interface ProdDeriveFields {
+export interface ProdDeriveFields {
   productionId?: string;
   cancelledAt?: Date;
   fulfillmentCompletedAt?: Date;
@@ -119,7 +132,13 @@ interface ProdDeriveFields {
  * hiển thị listing nhiều đơn cùng lúc. Đổi logic chặng ở 1 nơi thì nhớ đổi
  * luôn nơi kia.
  */
-function computeCurrentStage(d: ProdDeriveFields): { label?: string; at?: Date; completed: boolean } {
+export function computeCurrentStage(d: ProdDeriveFields): {
+  /** Key chặng (`LIFECYCLE_STAGE_KEYS`) — để FE dịch nhãn theo ngôn ngữ người xem. */
+  key?: string;
+  label?: string;
+  at?: Date;
+  completed: boolean;
+} {
   const completed = !!d.fulfillmentCompletedAt;
   if (completed) return { label: undefined, at: d.fulfillmentCompletedAt, completed };
 
@@ -139,7 +158,7 @@ function computeCurrentStage(d: ProdDeriveFields): { label?: string; at?: Date; 
         ? d.designerCompletedAt ?? d.designerFirstStartedAt ?? d.designerAssignedAt
         : d.fulfillmentStages?.[key]?.startedAt ?? d.fulfillmentStages?.[key]?.waitingAt;
 
-  return { label: CUSTOMER_STAGE_LABELS[key] ?? key, at, completed };
+  return { key, label: CUSTOMER_STAGE_LABELS[key] ?? key, at, completed };
 }
 
 /**
@@ -148,7 +167,7 @@ function computeCurrentStage(d: ProdDeriveFields): { label?: string; at?: Date; 
  * MIRROR với biểu thức aggregation trong `buildDerivePipeline()` — đổi 1 nơi
  * nhớ đổi nơi kia.
  */
-function isReworkBadge(p: ProdDeriveFields): boolean {
+export function isReworkBadge(p: ProdDeriveFields): boolean {
   if (p.designerStatus === DesignerStatus.Rework) return true;
   const note = (p.toolResultNote || '').trim().toLowerCase();
   return p.productionErrorSource === 'tool-check' && note !== '' && note !== 'ok';
@@ -160,7 +179,7 @@ function isReworkBadge(p: ProdDeriveFields): boolean {
  * xong; Completed = Fulfilled + N ngày (cutoff tính sẵn từ system_configs).
  * MIRROR với `buildDerivePipeline()`.
  */
-function deriveItemStatus(p: ProdDeriveFields, completedCutoff: Date): CustomerOrderStatus {
+export function deriveItemStatus(p: ProdDeriveFields, completedCutoff: Date): CustomerOrderStatus {
   if (p.cancelledAt) return CustomerOrderStatus.Cancelled;
   if (p.fulfillmentCompletedAt)
     return p.fulfillmentCompletedAt <= completedCutoff ? CustomerOrderStatus.Completed : CustomerOrderStatus.Fulfilled;
@@ -175,6 +194,8 @@ interface PricingConfig {
   productCategoryId?: string;
   /** Ảnh mockup sản phẩm — trả về preview import cho khách đối chiếu. */
   mockup?: string;
+  /** Vị trí in của sản phẩm — dùng để đòi design ở vị trí BẮT BUỘC (ORD-22). */
+  printArea?: ProductPrintArea;
   variations: Array<{
     sku: string;
     attributes?: Array<{ label: string; value: string }>;
@@ -186,6 +207,8 @@ interface PricingConfig {
 interface PricingContext {
   bySku: Map<string, { config: PricingConfig; variation: PricingConfig['variations'][number] }>;
   byType: Map<string, PricingConfig>;
+  /** Tra ngược theo `QuoteResult.productConfigId` — cần cho bước kiểm design (ORD-22). */
+  byId: Map<string, PricingConfig>;
 }
 type ActivePromotion = Awaited<ReturnType<PromotionService['getActiveInDateRange']>>[number];
 
@@ -219,6 +242,7 @@ export class CustomerOrderService implements OnModuleInit {
     private readonly promotionService: PromotionService,
     private readonly systemConfigService: SystemConfigService,
     private readonly designStorageService: DesignStorageService,
+    private readonly customerOrderEventService: CustomerOrderEventService,
   ) {}
 
   // -------------------------------------------------------------------------
@@ -383,11 +407,23 @@ export class CustomerOrderService implements OnModuleInit {
     return [
       { $match: { customerId } },
       {
+        // Nối bằng localField/foreignField để DÙNG ĐƯỢC index `productionId_1`.
+        // Bản cũ lọc bằng `$expr: { $in: ['$productionId', '$$pids'] }` — `$expr`
+        // KHÔNG dùng được index, nên mỗi document staging phải quét TOÀN BỘ
+        // `orders`: khách 3.478 đơn × 40.065 đơn sản xuất ≈ 139 triệu lượt quét,
+        // listing 71 giây. Dạng này đo lại còn 0,5 giây, kết quả khớp từng đơn.
+        //
+        // `productionId: { $ne: null }` là chốt chặn, KHÔNG phải trang trí: hai
+        // dạng nối chỉ lệch nhau ở chỗ dạng mới còn khớp cả đơn có
+        // `productionId` null/thiếu (khi `items` rỗng hoặc item thiếu
+        // `productionId`). Entity khai `required: true, unique: true` nên đơn
+        // như vậy không tồn tại, chốt này giữ cho tương lai. Xem ORD-18.
         $lookup: {
           from: 'orders',
-          let: { pids: { $map: { input: { $ifNull: ['$items', []] }, as: 'i', in: '$$i.productionId' } } },
+          localField: 'items.productionId',
+          foreignField: 'productionId',
           pipeline: [
-            { $match: { $expr: { $in: ['$productionId', '$$pids'] } } },
+            { $match: { productionId: { $ne: null } } },
             {
               $project: Object.fromEntries(PROD_DERIVE_FIELDS.split(' ').map((f) => [f, 1])),
             },
@@ -563,11 +599,12 @@ export class CustomerOrderService implements OnModuleInit {
       or.push({ fullName: { $in: types.map((t) => new RegExp(`^${escapeRegex(t)}$`, 'i')) } });
     const bySku = new Map<string, { config: PricingConfig; variation: PricingConfig['variations'][number] }>();
     const byType = new Map<string, PricingConfig>();
-    if (or.length === 0) return { bySku, byType };
+    const byId = new Map<string, PricingConfig>();
+    if (or.length === 0) return { bySku, byType, byId };
 
     const configs = (await this.productConfigModel
       .find({ $or: or })
-      .select('fullName productCategoryId variations mockup')
+      .select('fullName productCategoryId variations mockup printArea')
       .lean()) as unknown as Array<PricingConfig & { _id: unknown }>;
     for (const c of configs) {
       const config: PricingConfig = {
@@ -575,14 +612,16 @@ export class CustomerOrderService implements OnModuleInit {
         fullName: c.fullName,
         productCategoryId: c.productCategoryId ? String(c.productCategoryId) : undefined,
         mockup: c.mockup,
+        printArea: c.printArea,
         variations: c.variations || [],
       };
       byType.set(config.fullName.trim().toLowerCase(), config);
+      byId.set(config._id, config);
       for (const v of config.variations) {
         if (v.sku) bySku.set(v.sku.trim().toUpperCase(), { config, variation: v });
       }
     }
-    return { bySku, byType };
+    return { bySku, byType, byId };
   }
 
   /** Chọn variation theo size/color khi item không có SKU (đơn form) — chỉ nhận khi match không mơ hồ. */
@@ -675,6 +714,46 @@ export class CustomerOrderService implements OnModuleInit {
   // Đặt đơn form → staging PENDING (plan §2 — KHÔNG gọi importOrders nữa)
   // -------------------------------------------------------------------------
 
+  /**
+   * Đòi mockup + design ở MỌI vị trí in bắt buộc, ngay tại máy chủ (ORD-22).
+   *
+   * Giao diện `new.tsx` đã chặn, nhưng giao diện không phải hàng rào: chỉ cần
+   * một lần sửa điều kiện chặn ở đó là đơn rỗng lọt vào. Và hậu quả không dừng
+   * ở staging — đơn đi tiếp sang sản xuất rồi TỚI TẬN XƯỞNG mới lộ ra là không
+   * có gì để in, lúc đó đã chiếm mã đơn và đã vào hàng đợi soát tool.
+   *
+   * Luật lấy ĐÚNG như giao diện: `isRequired !== false` (vị trí không set cờ
+   * coi như bắt buộc). Hai bên lệch nhau còn tệ hơn không kiểm — khách bị chặn
+   * ở một nơi và lọt ở nơi khác thì không ai giải thích được.
+   */
+  private assertArtworkComplete(
+    // Kiểu cấu trúc tối thiểu — dùng CHUNG cho item lúc đặt đơn (ORD-22) và
+    // item staging lúc đẩy sản xuất (ORD-25). Một luật, một hàm.
+    items: Array<{ type?: string; mockupUrl?: string; designs?: Record<string, string | undefined> }>,
+    quotes: QuoteResult[],
+    ctx: PricingContext,
+  ): void {
+    items.forEach((item, i) => {
+      const label = quotes[i]?.type ?? item.type ?? `#${i + 1}`;
+      if (!item.mockupUrl?.trim()) {
+        throw new BadRequestException(customerMessage('missingMockup', label));
+      }
+      const configId = quotes[i]?.productConfigId;
+      const areas = (configId ? ctx.byId.get(configId)?.printArea : undefined) ?? [];
+      // Sản phẩm chưa cấu hình vị trí in nào → không đòi design, chỉ đòi mockup.
+      const missing = areas
+        .filter((a) => a.isRequired !== false)
+        .filter((a) => !item.designs?.[a.key]?.trim());
+      if (missing.length > 0) {
+        // Nhãn tiếng Việt lấy từ bản đồ dùng chung với FE, khỏi lệch chữ. Kèm
+        // key gốc trong ngoặc vì bản đồ nhãn CHỈ có tiếng Việt — người đọc bản
+        // tiếng Anh vẫn cần biết chính xác vị trí nào.
+        const names = missing.map((a) => `${PRODUCT_PRINT_AREA_LABEL_MAP[a.key] ?? a.key} (${a.key})`).join(', ');
+        throw new BadRequestException(customerMessage('missingDesign', label, names));
+      }
+    });
+  }
+
   async placeOrder(customer: CustomerDocument, dto: PlaceCustomerOrderDto): Promise<CustomerStagingOrderResDto> {
     const ctx = await this.buildPricingContext(dto.items);
     const [activePromotions, cutoff] = await Promise.all([
@@ -683,8 +762,11 @@ export class CustomerOrderService implements OnModuleInit {
     ]);
     const tier = customer.tier ?? null;
 
-    const items: CustomerOrderItem[] = dto.items.map((item) => {
-      const q = this.quoteItem(item, ctx, activePromotions, tier);
+    const quotes = dto.items.map((item) => this.quoteItem(item, ctx, activePromotions, tier));
+    this.assertArtworkComplete(dto.items, quotes, ctx);
+
+    const items: CustomerOrderItem[] = dto.items.map((item, i) => {
+      const q = quotes[i];
       return {
         type: q.type ?? item.type,
         color: q.color ?? item.color,
@@ -819,14 +901,84 @@ export class CustomerOrderService implements OnModuleInit {
   }
 
   // -------------------------------------------------------------------------
+  // Public Order API (ORD-4) — adapter mỏng trên các method sẵn có, cùng ranh
+  // giới dữ liệu: mọi query đều scoped theo customerId của key.
+  // -------------------------------------------------------------------------
+
+  /**
+   * Resolve staging ids từ `externalRefs` (orderKey của khách) + `ids` — CHỈ
+   * đơn của CHÍNH khách. Ref không tồn tại đơn giản là không có trong kết quả
+   * (push sẽ báo `failed: Không tìm thấy đơn` cho id lạ, không lộ tồn tại).
+   */
+  async resolveStagingIdsForApi(
+    customer: CustomerDocument,
+    dto: { externalRefs?: string[]; ids?: string[] },
+  ): Promise<string[]> {
+    const ids = [...(dto.ids ?? [])];
+    if (dto.externalRefs?.length) {
+      const keys = dto.externalRefs.map((r) => customerOrderKey(r, undefined));
+      const docs = await this.customerOrderModel
+        .find({ customerId: String(customer._id), orderKey: { $in: keys } })
+        .select('_id')
+        .lean();
+      ids.push(...docs.map((d) => String(d._id)));
+    }
+    return [...new Set(ids)];
+  }
+
+  /**
+   * Tra 1 đơn theo `externalRef` HOẶC `productionId` của 1 item — đúng shape
+   * listing portal (derive 8 trạng thái + badge). Không thuộc khách này → 404
+   * chung chung (không lộ đơn tồn tại). Nếu ref là productionId đã push → kèm
+   * `track` mirror trang track portal (cùng `trackOrder`, vốn không chứa tên
+   * nhân viên/giá vốn).
+   */
+  async getOrderByRefForApi(customer: CustomerDocument, ref: string): Promise<OpenApiGetOrderResDto> {
+    await this.syncLegacyOrdersForCustomer({
+      _id: customer._id,
+      userSku: customer.userSku,
+      userEmail: customer.userEmail,
+    });
+    const trimmed = (ref ?? '').trim();
+    if (!trimmed) throw new NotFoundException(customerMessage('orderNotFound'));
+    const cutoff = await this.getCompletedCutoff();
+    const rx = { $regex: `^${escapeRegex(trimmed)}$`, $options: 'i' };
+    const pipeline = [
+      ...this.buildDerivePipeline(String(customer._id), cutoff),
+      { $match: { $or: [{ orderKey: customerOrderKey(trimmed, undefined) }, { 'items.productionId': rx }] } },
+      { $limit: 1 },
+    ];
+    const [doc] = await this.customerOrderModel.aggregate<
+      Record<string, unknown> & { prodOrders?: ProdDeriveFields[] }
+    >(pipeline as never[]);
+    if (!doc) throw new NotFoundException(customerMessage('orderNotFound'));
+
+    const prodByPid = new Map<string, ProdDeriveFields>(
+      (doc.prodOrders ?? []).map((p) => [p.productionId as string, p]),
+    );
+    const order = this.toStagingOrder(doc, prodByPid, cutoff);
+
+    const matchedItem = order.items.find((i) => i.productionId?.toLowerCase() === trimmed.toLowerCase());
+    let track: OpenApiGetOrderResDto['data']['track'];
+    if (matchedItem?.productionId && order.pushedAt) {
+      try {
+        track = (await this.trackOrder(customer, matchedItem.productionId)).data;
+      } catch {
+        track = undefined;
+      }
+    }
+    return { success: true, data: { order, track } };
+  }
+
+  // -------------------------------------------------------------------------
   // Sửa / hủy đơn PENDING (plan §2 — sửa tự do trước push)
   // -------------------------------------------------------------------------
 
   private async getPendingStagingOrder(customer: CustomerDocument, id: string) {
     const doc = await this.customerOrderModel.findOne({ _id: id, customerId: String(customer._id) });
-    if (!doc) throw new NotFoundException('Không tìm thấy đơn này.');
-    if (doc.status === 'cancelled') throw new BadRequestException('Đơn đã hủy.');
-    if (doc.pushedAt) throw new BadRequestException('Đơn đã đẩy sản xuất — chỉ sửa được mockup/design/địa chỉ qua trang chi tiết đơn.');
+    if (!doc) throw new NotFoundException(customerMessage('orderNotFoundDot'));
+    if (doc.status === 'cancelled') throw new BadRequestException(customerMessage('orderCancelled'));
+    if (doc.pushedAt) throw new BadRequestException(customerMessage('orderPushedEditLimited'));
     return doc;
   }
 
@@ -936,9 +1088,11 @@ export class CustomerOrderService implements OnModuleInit {
   async importOrdersCsv(
     customer: CustomerDocument,
     dto: ImportCustomerOrdersDto,
+    // 'api' khi gọi qua Public Order API (ORD-4) — cùng luồng staging, chỉ khác nguồn.
+    source: 'csv' | 'api' = 'csv',
   ): Promise<ImportCustomerOrdersResDto> {
     const totalLines = dto.orders.reduce((s, o) => s + o.items.length, 0);
-    if (totalLines > 500) throw new BadRequestException('Tối đa 500 dòng mỗi lần import.');
+    if (totalLines > 500) throw new BadRequestException(customerMessage('importTooManyLines'));
 
     const allItems = dto.orders.flatMap((o) => o.items);
     const ctx = await this.buildPricingContext(allItems);
@@ -1005,7 +1159,7 @@ export class CustomerOrderService implements OnModuleInit {
           identifier: order.identifier,
           orderName: order.orderName,
           note: order.note,
-          source: 'csv',
+          source,
           status: 'pending',
           shippingAddress: order.shippingAddress,
           items,
@@ -1038,6 +1192,50 @@ export class CustomerOrderService implements OnModuleInit {
       .lean();
     const byId = new Map(docs.map((d) => [String(d._id), d]));
     return ids.map((id) => ({ id, doc: byId.get(id) }));
+  }
+
+  /**
+   * Giành chỗ đẩy 1 đơn staging bằng MỘT lệnh ghi có điều kiện (ORD-20).
+   * Trả `true` nếu lượt này giành được, `false` nếu đơn đã đẩy hoặc lượt khác
+   * đang đẩy.
+   *
+   * Điều kiện nằm ở LỆNH GHI chứ không phải ở bước đọc: cả luồng push là đọc →
+   * chốt giá → `importOrders()` → ghi `pushedAt`, và chỗ hở nằm ở khoảng giữa
+   * đọc và ghi. Hai lượt song song đều đọc thấy `pushedAt` rỗng nên cùng chạy
+   * tới `importOrders()`; lượt sau đụng unique index `productionId` và ném lỗi
+   * trùng khoá — hậu quả nặng thì unique index đã chặn, nhưng khách nhận về
+   * một lỗi tầng dưới khó hiểu và người đọc log tưởng hỏng khâu cấp mã.
+   *
+   * Chỗ giữ quá hạn thì coi như hết hiệu lực, để tiến trình chết giữa chừng
+   * không khoá đơn vĩnh viễn.
+   */
+  private async claimPush(stagingId: string, customerId: string): Promise<boolean> {
+    const now = Date.now();
+    const res = await this.customerOrderModel.updateOne(
+      {
+        _id: stagingId,
+        customerId,
+        pushedAt: null,
+        $or: [{ pushingAt: null }, { pushingAt: { $exists: false } }, { pushingAt: { $lt: new Date(now - PUSH_CLAIM_STALE_MS) } }],
+      },
+      { $set: { pushingAt: new Date(now) } },
+    );
+    return res.modifiedCount > 0;
+  }
+
+  /** Nhả chỗ giữ khi lượt đẩy hỏng — đơn quay lại trạng thái đẩy được. */
+  private async releasePushClaims(stagingIds: string[]): Promise<void> {
+    if (stagingIds.length === 0) return;
+    await this.customerOrderModel.updateMany(
+      { _id: { $in: stagingIds }, pushedAt: null },
+      { $set: { pushingAt: null } },
+    );
+  }
+
+  /** Lý do đơn không giành được chỗ — đọc lại để nói đúng chuyện gì đang xảy ra. */
+  private async describeLostClaim(stagingId: string): Promise<string> {
+    const doc = await this.customerOrderModel.findById(stagingId).select('pushedAt').lean();
+    return doc?.pushedAt ? 'Đơn đã đẩy sản xuất trước đó' : 'Đơn đang được đẩy sản xuất — chờ một lát rồi tải lại trang';
   }
 
   private validatePushable(doc: Record<string, unknown> | undefined): string | undefined {
@@ -1106,7 +1304,7 @@ export class CustomerOrderService implements OnModuleInit {
     const paymentGateEnabled = !!(await this.systemConfigService.get<boolean>(CUSTOMER_PAYMENT_GATE_KEY));
     // Plan §12.1: đợt này gate OFF — chưa build luồng Admin confirm nên gate ON chặn hẳn.
     if (paymentGateEnabled)
-      throw new BadRequestException('Cổng thanh toán đang bật nhưng luồng xác nhận chưa mở — liên hệ hỗ trợ.');
+      throw new BadRequestException(customerMessage('paymentGateNotReady'));
 
     const targets = await this.loadPushTargets(customer, dto.ids);
     const allItems = targets.flatMap((t) => ((t.doc?.items || []) as CustomerOrderItem[]).map((i) => i));
@@ -1118,6 +1316,22 @@ export class CustomerOrderService implements OnModuleInit {
     const importRows: ImportProductionOrderRow[] = [];
     const pendingUpdates: Array<{ stagingId: string; items: CustomerOrderItem[]; orderTotal: number }> = [];
     let totalAmount = 0;
+    /**
+     * Mốc "đơn vào sản xuất" của cả lô đẩy này.
+     *
+     * Đơn portal không đi qua sheet import nên không có sẵn cột ngày như đơn
+     * nội bộ, mà `inProductionAt` lại là TRỤC THỜI GIAN của gần hết hệ thống:
+     * bảng "Danh sách đơn" mặc định lọc đúng hôm nay trên chính trường này
+     * (`Orders.md §7`), Dashboard/Lifecycle/báo cáo Telegram đều bucket theo
+     * nó. Bỏ trống thì đơn đẩy vào sản xuất xong vẫn vô hình với xưởng —
+     * không khoảng ngày nào khớp một trường không tồn tại.
+     *
+     * Một mốc duy nhất cho cả `OrderEntity.inProductionAt` lẫn
+     * `customer_orders.pushedAt` bên dưới: hai con số đó tả cùng một sự kiện,
+     * gọi `new Date()` hai lần chỉ đẻ ra chênh lệch vài mili giây để người
+     * đọc số sau này phải đi giải thích.
+     */
+    const pushedAt = new Date();
 
     for (const { id, doc } of targets) {
       const error = this.validatePushable(doc);
@@ -1127,6 +1341,37 @@ export class CustomerOrderService implements OnModuleInit {
       }
       const items = (doc.items || []) as CustomerOrderItem[];
       const { quotes, orderTotal } = this.quoteStagingOrder(doc, ctx, activePromotions, tier);
+
+      // CỬA CUỐI CÙNG cho luật "phải có mockup + design ở vị trí in bắt buộc"
+      // (ORD-25). ORD-22 chặn ở `placeOrder`, nhưng đó chỉ là MỘT đường vào:
+      // Public Order API đi `importOrdersCsv`, và `updateStagingOrder` cho phép
+      // gỡ design ra khỏi đơn đã tạo. Đơn Pending là vùng nháp nên được phép
+      // thiếu — chỗ KHÔNG được phép thiếu là lúc đơn rời vùng nháp để vào sản
+      // xuất. Chặn ở đây phủ mọi đường vào, kể cả đường sinh ra sau này.
+      //
+      // Kiểm TRƯỚC khi giành chỗ: đơn hỏng thì đừng chiếm chỗ rồi phải nhả.
+      // Dùng lại đúng hàm của ORD-22 — hai luật giống nhau đặt hai nơi là mầm
+      // của lỗi lệch. Bắt lỗi để hỏng RIÊNG đơn này, lô vẫn đẩy tiếp.
+      try {
+        this.assertArtworkComplete(items, quotes, ctx);
+      } catch (e) {
+        const reason = e instanceof BadRequestException ? e.message : 'Đơn thiếu file thiết kế';
+        results.push({
+          stagingId: id,
+          orderId: doc.orderId,
+          status: 'failed',
+          error: `Đơn ${doc.orderId ?? id}: ${reason}`,
+        });
+        continue;
+      }
+
+      // Giành chỗ TRƯỚC khi dựng row import — lượt song song thứ hai dừng ở đây
+      // và nhận thông báo rõ ràng, thay vì chạy tiếp tới importOrders rồi vỡ ở
+      // unique index. Một đơn hỏng chỉ hỏng riêng nó, lô vẫn đẩy tiếp (ORD-20).
+      if (!(await this.claimPush(id, String(customer._id)))) {
+        results.push({ stagingId: id, orderId: doc.orderId, status: 'failed', error: await this.describeLostClaim(id) });
+        continue;
+      }
       const addr = doc.shippingAddress as ProductionOrderShippingAddress | undefined;
 
       const updatedItems: CustomerOrderItem[] = [];
@@ -1166,6 +1411,18 @@ export class CustomerOrderService implements OnModuleInit {
           designs: it.designs,
           orderId: (doc.orderId) ?? undefined,
           referent: (doc.note) ?? undefined,
+          // Hai mốc thời gian của đơn, `importOrders` đọc cả hai qua
+          // `parseImportDate` (nhận ISO có tz):
+          //   orderAt        = lúc KHÁCH đặt  → staging `createdAt`
+          //   inProductionAt = lúc VÀO SX     → mốc đẩy của cả lô
+          // Chúng khác nhau đúng bằng quãng đơn nằm ở vùng nháp Pending, có
+          // thể là vài phút mà cũng có thể là vài ngày — gộp làm một là mất
+          // luôn quãng chờ đó khỏi mọi báo cáo. Staging doc quá cũ không có
+          // `createdAt` thì lùi về mốc đẩy: sai lệch một quãng đã không còn
+          // đo được, vẫn hơn để trống rồi thủng sort `orderAt: -1` ở kanban
+          // Fulfillment.
+          orderAt: (doc.createdAt ?? pushedAt).toISOString(),
+          inProductionAt: pushedAt.toISOString(),
           shippingAddress: addr,
         });
       }
@@ -1183,34 +1440,57 @@ export class CustomerOrderService implements OnModuleInit {
 
     // 1 lệnh importOrders duy nhất cho mọi item của mọi đơn — pipeline sẵn có
     // (map config, ép xưởng theo khách, auto-gán designer, Telegram noti).
-    await this.orderService.importOrders(
-      { rows: importRows },
-      {
-        user: {
-          _id: customer._id,
-          fullName: customer.fullName,
-          email: customer.userEmail,
-          role: { name: RoleType.Customer },
+    // Hỏng ở đây thì NHẢ hết chỗ giữ: đơn phải quay lại trạng thái đẩy được,
+    // không được kẹt nửa vời (ORD-20).
+    let payment: { _id: unknown };
+    try {
+      await this.orderService.importOrders(
+        { rows: importRows },
+        {
+          user: {
+            _id: customer._id,
+            fullName: customer.fullName,
+            email: customer.userEmail,
+            role: { name: RoleType.Customer },
+          },
         },
-      },
-    );
+      );
 
-    // Ledger: gate OFF vẫn ghi 1 record `waived` + tổng amount (plan §12.1).
-    const payment = await this.customerPaymentModel.create({
-      customerId: String(customer._id),
-      orderIds: pendingUpdates.map((u) => u.stagingId),
-      amount: Math.round(totalAmount * 100) / 100,
-      status: 'waived',
-      method: 'waived',
-    });
+      // Ledger: gate OFF vẫn ghi 1 record `waived` + tổng amount (plan §12.1).
+      payment = await this.customerPaymentModel.create({
+        customerId: String(customer._id),
+        orderIds: pendingUpdates.map((u) => u.stagingId),
+        amount: Math.round(totalAmount * 100) / 100,
+        status: 'waived',
+        method: 'waived',
+      });
+    } catch (e) {
+      await this.releasePushClaims(pendingUpdates.map((u) => u.stagingId));
+      throw e;
+    }
 
-    const now = new Date();
     await Promise.all(
       pendingUpdates.map((u) =>
         this.customerOrderModel.updateOne(
-          { _id: u.stagingId },
-          { $set: { items: u.items, pushedAt: now, paymentId: String(payment._id) } },
+          // `pushedAt: null` là lưới an toàn cuối: tới đây lượt này đang giữ chỗ
+          // nên không ai chen được, nhưng ghi có điều kiện thì rẻ mà chắc.
+          { _id: u.stagingId, pushedAt: null },
+          { $set: { items: u.items, pushedAt, paymentId: String(payment._id), pushingAt: null } },
         ),
+      ),
+    );
+
+    // Webhook `order.pushed` cho khách API (ORD-4) — fire-and-forget, không chặn response.
+    this.customerOrderEventService.emit(
+      'order.pushed',
+      pendingUpdates.flatMap((u) =>
+        u.items
+          .filter((it) => it.productionId)
+          .map((it) => ({
+            productionId: it.productionId,
+            customerId: String(customer._id),
+            extra: { externalRef: (targets.find((t) => t.id === u.stagingId)?.doc?.orderId as string) ?? null },
+          })),
       ),
     );
 
@@ -1332,15 +1612,15 @@ export class CustomerOrderService implements OnModuleInit {
     dto: UpdateCustomerOrderDto,
   ): Promise<UpdateCustomerOrderResDto> {
     const trimmed = (productionId ?? '').trim();
-    if (!trimmed) throw new NotFoundException('Production ID rỗng.');
+    if (!trimmed) throw new NotFoundException(customerMessage('productionIdEmpty'));
 
     const order = await this.orderModel.findOne({
       productionId: trimmed,
       userSku: customer.userSku,
       userEmail: customer.userEmail,
     });
-    if (!order) throw new NotFoundException('Không tìm thấy đơn với mã này.');
-    if (order.cancelledAt) throw new BadRequestException('Đơn đã hủy, không thể chỉnh sửa.');
+    if (!order) throw new NotFoundException(customerMessage('orderNotFoundByCode'));
+    if (order.cancelledAt) throw new BadRequestException(customerMessage('orderCancelledCannotEdit'));
 
     const set: Record<string, unknown> = {};
     if (dto.mockupUrl !== undefined) {
@@ -1374,7 +1654,7 @@ export class CustomerOrderService implements OnModuleInit {
     }
 
     const updated = await this.orderModel.findById(order._id).select('productionId').lean();
-    if (!updated) throw new NotFoundException('Không tìm thấy đơn với mã này.');
+    if (!updated) throw new NotFoundException(customerMessage('orderNotFoundByCode'));
     return this.trackSummaryRes(customer, trimmed);
   }
 
@@ -1387,7 +1667,7 @@ export class CustomerOrderService implements OnModuleInit {
           PROD_DERIVE_FIELDS,
       )
       .lean();
-    if (!order) throw new NotFoundException('Không tìm thấy đơn với mã này.');
+    if (!order) throw new NotFoundException(customerMessage('orderNotFoundByCode'));
     const stage = computeCurrentStage(order as ProdDeriveFields);
     return {
       success: true,
@@ -1418,7 +1698,7 @@ export class CustomerOrderService implements OnModuleInit {
   /** Xem tiến trình 1 đơn — chỉ cho phép xem đơn thuộc chính khách hàng đó. */
   async trackOrder(customer: CustomerDocument, productionId: string): Promise<GetCustomerOrderTrackResDto> {
     const trimmed = (productionId ?? '').trim();
-    if (!trimmed) throw new NotFoundException('Production ID rỗng.');
+    if (!trimmed) throw new NotFoundException(customerMessage('productionIdEmpty'));
 
     const summary = await this.trackSummaryRes(customer, trimmed);
     const track = await this.orderService.getLifecycleTrack(trimmed);

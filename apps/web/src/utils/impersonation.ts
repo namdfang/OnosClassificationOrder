@@ -33,12 +33,22 @@ function currentRemember(): boolean {
  * Phiên mạo danh đang nằm ở store nào. Mạo danh KHÁCH ghi token vào
  * `customerAuthStore` và **không đụng** `authStore` (phiên nhân viên thật của
  * SuperAdmin còn nguyên); mạo danh NHÂN VIÊN thì ghi đè `authStore`.
+ *
+ * AUTH-3 — trả kèm `kind` vì hai loại phiên thoát bằng HAI ĐƯỜNG khác nhau:
+ * token mạo danh khách mang role `Customer`, bị `RolesGuard` chặn khỏi mọi URL
+ * ngoài prefix `/customer/`, nên phải gọi đường thoát nằm trong prefix đó.
  */
-function activeImpersonationToken(): string | null {
+function activeImpersonationSession(): { token: string | null; kind: 'staff' | 'customer' } {
   const customer = useCustomerAuthStore.getState();
-  if (customer.profile?.impersonatedBy) return customer.token;
-  return useAuthStore.getState().token;
+  if (customer.profile?.impersonatedBy) return { token: customer.token, kind: 'customer' };
+  return { token: useAuthStore.getState().token, kind: 'staff' };
 }
+
+/** Đường thoát tương ứng — cùng một service ở backend, chỉ khác chỗ đứng so với hàng rào. */
+const STOP_PATH: Record<'staff' | 'customer', string> = {
+  staff: 'auth/impersonate/stop',
+  customer: 'customer/auth/impersonate/stop',
+};
 
 export function isImpersonating(): boolean {
   return (
@@ -50,8 +60,8 @@ export function isImpersonating(): boolean {
 let exiting: Promise<boolean> | null = null;
 
 /**
- * Gọi `POST /auth/impersonate/stop`, ghi token SuperAdmin mới vào `authStore`,
- * dọn `customerAuthStore`, rồi đưa về màn hình Mạo danh.
+ * Gọi đường thoát tương ứng với loại phiên (`STOP_PATH`), ghi token SuperAdmin
+ * mới vào `authStore`, dọn `customerAuthStore`, rồi đưa về màn hình Mạo danh.
  *
  * Trả `false` khi không cứu được phiên — nơi gọi tự quyết định bước sau (dải
  * cảnh báo hiện lỗi, interceptor rơi về `clearToken` như cũ).
@@ -60,12 +70,12 @@ export function exitImpersonation(): Promise<boolean> {
   if (exiting) return exiting;
 
   exiting = (async () => {
-    const token = activeImpersonationToken();
+    const { token, kind } = activeImpersonationSession();
     if (!token) return false;
 
     try {
       const res = await axios.post(
-        `${CONFIG.API_URL}/${CONFIG.API_VERSION}/auth/impersonate/stop`,
+        `${CONFIG.API_URL}/${CONFIG.API_VERSION}/${STOP_PATH[kind]}`,
         {},
         { headers: { Authorization: `Bearer ${token}` } },
       );

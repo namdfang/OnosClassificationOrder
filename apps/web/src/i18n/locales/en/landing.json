@@ -296,7 +296,8 @@
       "careers": "Careers",
       "customerRegister": "Create an account",
       "customerSignIn": "Customer sign in",
-      "staffSignIn": "Staff sign in"
+      "staffSignIn": "Staff sign in",
+      "track": "Track an order"
     },
     "locations": {
       "title": "Locations",

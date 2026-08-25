@@ -14,6 +14,8 @@ export const ORDER_LOG_ACTIONS = [
   'update_design',
   'hold',
   'unhold',
+  /** SuperAdmin ép đơn về "đã hoàn thành sản xuất" — xem `Orders.md §23`. */
+  'force_complete',
 ] as const;
 export type ProductionOrderLogAction = (typeof ORDER_LOG_ACTIONS)[number];
 export const ProductionOrderLogActionZod = z.enum(ORDER_LOG_ACTIONS);

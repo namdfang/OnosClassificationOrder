@@ -98,7 +98,9 @@
     "selectAll": "Chọn tất cả"
   },
   "selectFilter": {
-    "all": "— Tất cả ({{count}}) —"
+    "all": "— Tất cả ({{count}}) —",
+    "searchPlaceholder": "Tìm kiếm...",
+    "noResults": "Không có kết quả"
   },
   "imagePreview": {
     "title": "Xem trước ảnh",

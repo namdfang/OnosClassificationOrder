@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { Ban, MoreHorizontal, PauseCircle, Pencil, PlayCircle, RefreshCw, Truck } from 'lucide-react';
+import { Ban, CheckCircle2, MoreHorizontal, PauseCircle, Pencil, PlayCircle, Printer, RefreshCw, Truck } from 'lucide-react';
 import { toast } from 'sonner';
 
 import { RepositoryRemote } from '@/services';
@@ -15,12 +15,21 @@ import {
 } from '@/components/ui/dropdown-menu';
 
 import { handleAxiosError } from '@/utils';
-import { canCancelOrder, canUserHold, isCancelled, isHeld } from '@/utils/orderActions';
+import {
+  canCancelOrder,
+  canForceComplete,
+  canForceCompleteOrder,
+  canUserHold,
+  isCancelled,
+  isHeld,
+} from '@/utils/orderActions';
 
 import { usePermission } from '@/hooks/usePermission';
 
 import { CancelOrderDialog } from './CancelOrderDialog';
+import { CustomerLabelPrint } from './CustomerLabelPrint';
 import { EditOrderDesignDialog } from './EditOrderDesignDialog';
+import { ForceCompleteDialog } from './ForceCompleteDialog';
 import { HoldOrderDialog } from './HoldOrderDialog';
 import { VnpShipmentDialog } from './VnpShipmentDialog';
 
@@ -37,6 +46,8 @@ interface Props {
  * `recover-held-from-onospod`, Orders.md §9c). Đơn đã hủy → disable design/hủy/
  * kiểm tra design. Đơn đang giữ → chỉ còn "Mở giữ" (mọi action khác khóa, TRỪ
  * "Kiểm tra design mới" — vẫn bấm được để tự mở giữ nếu design đã cập nhật).
+ * SuperAdmin có thêm "Chuyển hoàn thành" (ép đơn về đã hoàn thành sản xuất —
+ * `Orders.md §23`), hẹp hơn cả Admin vì đó là cửa sửa dữ liệu.
  */
 export function OrderRowActionsMenu({ order, onChanged }: Props) {
   const { t } = useTranslation('orders');
@@ -47,9 +58,13 @@ export function OrderRowActionsMenu({ order, onChanged }: Props) {
   const [vnpOpen, setVnpOpen] = useState(false);
   const [unholding, setUnholding] = useState(false);
   const [checkingDesign, setCheckingDesign] = useState(false);
+  const [forceCompleteOpen, setForceCompleteOpen] = useState(false);
+  // Nhãn 4×6cm chỉ tồn tại trong lúc in rồi tự gỡ — xem CustomerLabelPrint.
+  const [printingLabel, setPrintingLabel] = useState(false);
 
   const canHold = canUserHold(roleName);
-  if (!isAdmin && !canHold) return null;
+  const canComplete = canForceComplete(roleName);
+  if (!isAdmin && !canHold && !canComplete) return null;
 
   const cancelled = isCancelled(order);
   const held = isHeld(order);
@@ -62,6 +77,7 @@ export function OrderRowActionsMenu({ order, onChanged }: Props) {
   // luôn — bắt bỏ giữ rồi mới hủy vừa thêm một thao tác, vừa mở ra khoảng thời
   // gian đơn có thể lọt lại vào luồng sản xuất.
   const cancelDisabled = cancelled || !cancelCheck.ok;
+  const forceCompleteCheck = canForceCompleteOrder(order, t);
 
   const doUnhold = async () => {
     try {
@@ -109,6 +125,17 @@ export function OrderRowActionsMenu({ order, onChanged }: Props) {
           </Button>
         </DropdownMenuTrigger>
         <DropdownMenuContent align="end" onClick={(e) => e.stopPropagation()}>
+          {/* In nhãn khách — thao tác CHỈ ĐỌC, không đổi gì trên đơn, nên không
+              khoá theo đơn đã hủy / đang giữ như các mục bên dưới: xưởng vẫn cần
+              dán tem lên kiện hàng của đơn giữ để tìm lại nó. */}
+          <DropdownMenuItem
+            onSelect={(e) => {
+              e.preventDefault();
+              setPrintingLabel(true);
+            }}
+          >
+            <Printer size={14} className="mr-2" /> {t('rowActionsMenu.printCustomerLabel')}
+          </DropdownMenuItem>
           {isAdmin && (
             <DropdownMenuItem disabled={cancelled || held} onSelect={() => setDesignOpen(true)}>
               <Pencil size={14} className="mr-2" /> {t('rowActionsMenu.changeDesign')}
@@ -148,6 +175,16 @@ export function OrderRowActionsMenu({ order, onChanged }: Props) {
                 <PauseCircle size={14} className="mr-2" /> {t('rowActionsMenu.hold')}
               </DropdownMenuItem>
             ))}
+          {canComplete && (
+            <DropdownMenuItem
+              disabled={!forceCompleteCheck.ok}
+              className="text-emerald-600 focus:text-emerald-600"
+              title={forceCompleteCheck.reason}
+              onSelect={() => setForceCompleteOpen(true)}
+            >
+              <CheckCircle2 size={14} className="mr-2" /> {t('rowActionsMenu.forceComplete')}
+            </DropdownMenuItem>
+          )}
           {isAdmin && (
             <DropdownMenuItem disabled={cancelled} onSelect={() => setVnpOpen(true)}>
               <Truck size={14} className="mr-2" /> {t('rowActionsMenu.vnpShipment')}
@@ -166,10 +203,17 @@ export function OrderRowActionsMenu({ order, onChanged }: Props) {
         </DropdownMenuContent>
       </DropdownMenu>
 
+      {printingLabel && <CustomerLabelPrint order={order} onDone={() => setPrintingLabel(false)} />}
       <CancelOrderDialog order={order} open={cancelOpen} onOpenChange={setCancelOpen} onDone={onChanged} />
       <HoldOrderDialog order={order} open={holdOpen} onOpenChange={setHoldOpen} onDone={onChanged} />
       <EditOrderDesignDialog order={order} open={designOpen} onOpenChange={setDesignOpen} onDone={onChanged} />
       <VnpShipmentDialog order={order} open={vnpOpen} onOpenChange={setVnpOpen} onDone={onChanged} />
+      <ForceCompleteDialog
+        order={order}
+        open={forceCompleteOpen}
+        onOpenChange={setForceCompleteOpen}
+        onDone={onChanged}
+      />
     </>
   );
 }

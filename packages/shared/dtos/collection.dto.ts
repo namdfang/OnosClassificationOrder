@@ -3,6 +3,8 @@ import { extendApi } from '@anatine/zod-openapi';
 import { BaseEntityZod, PageQueryZod, PageResZod, ResZod } from '@shared/types';
 import { z } from 'zod';
 
+import { BooleanFlagZod } from '../constants/common-zod';
+
 /**
  * Collection sản phẩm (bộ sưu tập catalog — VD "Summer 2026", "Best seller").
  * KHÁC ProductCategory (phân loại cấu trúc, đa cấp): collection là nhóm gán tay
@@ -23,7 +25,15 @@ export type Collection = z.infer<typeof CollectionZod>;
 
 //
 export const GetCollectionsZod = PageQueryZod.extend({
-  isActive: z.coerce.boolean().optional(),
+  /**
+   * `true` → chỉ collection đang bật; `false` → chỉ collection đã tắt. Service kiểm
+   * `typeof isActive === 'boolean'` nên đây là cờ BA TRẠNG THÁI: `false` mang
+   * nghĩa riêng, không phải "tắt lọc" (ORD-28).
+   *
+   * `BooleanFlagZod` chứ KHÔNG phải `z.coerce.boolean()` — cái sau coi mọi chuỗi
+   * khác rỗng là bật, kể cả `'false'`. Xem `Orders.md §23`.
+   */
+  isActive: BooleanFlagZod,
 });
 export class GetCollectionsDto extends createZodDto(extendApi(GetCollectionsZod)) {}
 

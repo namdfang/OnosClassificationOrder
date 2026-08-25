@@ -50,6 +50,7 @@ function buildService(existing: Record<string, unknown> | null = null): { svc: P
     null as never,
     null as never,
     null as never,
+    null as never,
   );
   return { svc, mocks: { repo } };
 }
@@ -65,13 +66,14 @@ const baseProduct = {
 } as unknown as ImportFullProductsDto['products'][number];
 
 describe('importFullProducts — import sản phẩm hoàn chỉnh từ file', () => {
-  it('tạo mới: resolve đủ label, shortName tự sinh uppercase, mặc định KHÔNG tool, SKU uppercase', async () => {
+  it('tạo mới: resolve đủ label, shortName KHÔNG auto-sinh (ORD-3), mặc định KHÔNG tool, SKU uppercase', async () => {
     const { svc, mocks } = buildService(null);
     const res = await svc.importFullProducts({ products: [baseProduct] } as unknown as ImportFullProductsDto);
 
     expect(res.data).toMatchObject({ imported: 1, updated: 0, skipped: [], warnings: [] });
     const created = mocks.repo.create.mock.calls[0][0];
-    expect(created.shortName).toBe('WOODEN CUSTOM NAME SIGN');
+    // File không có cột viết tắt → để trống, KHÔNG sinh từ fullName (shortName = mã tool design review).
+    expect(created.shortName).toBeUndefined();
     expect(created.toolResult).toBe('no-tool');
     expect(created.factoryId).toBe('factory-1');
     expect(created.machineTypeId).toBe('machine-1');

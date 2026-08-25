@@ -198,6 +198,11 @@ const cancelOrder = (id: string, data: CancelOrderDto) => {
   return callApi(`/${CONFIG.API_VERSION}/orders/${id}/cancel`, 'post', data);
 };
 
+/** Chuyển hoàn thành — SuperAdmin ép đơn về đã hoàn thành sản xuất (Orders.md §23). */
+const forceCompleteOrder = (id: string) => {
+  return callApi(`/${CONFIG.API_VERSION}/orders/${id}/force-complete`, 'post', {});
+};
+
 const holdOrder = (id: string, data: HoldOrderDto) => {
   return callApi(`/${CONFIG.API_VERSION}/orders/${id}/hold`, 'post', data);
 };
@@ -271,6 +276,7 @@ export const order = {
   previewCuttingFiles,
   applyCuttingFiles,
   cancelOrder,
+  forceCompleteOrder,
   holdOrder,
   unholdOrder,
   checkDesignFromOnospod,

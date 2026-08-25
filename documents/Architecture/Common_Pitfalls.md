@@ -273,6 +273,86 @@ trình duyệt chặn như bình thường.
 — Vite phải chạy ở `:5175` vì 5173/5174 đã bị chiếm. Trang chủ `/` không lộ lỗi
 này vì nó là trang tĩnh, không gọi API nào.
 
+---
+
+## 8. ⚠️ EventEmitter hạ tầng không có listener `'error'` → 1 lần mất kết nối là chết cả process
+
+### Triệu chứng
+
+API dev đang chạy bình thường thì tự chết, nodemon in `[nodemon] app crashed`,
+log kết thúc bằng:
+
+```
+node:events:502
+      throw er; // Unhandled 'error' event
+Error: read ECONNRESET
+Emitted 'error' event on Commander instance at:
+    at RedisSocket.<anonymous> (.../@redis/client/dist/lib/client/index.js:412:14)
+```
+
+Hay xảy ra sau vài phút **không ai gọi API** — càng để yên càng dễ chết, khởi
+động lại thì lại chạy được một lúc, nên rất dễ bị đổ oan cho RabbitMQ/Mongo đang
+báo lỗi kết nối cùng lúc trong log.
+
+### Root cause
+
+Hai lớp cộng lại:
+
+1. **Redis chủ động đóng connection rỗi.** `redis.conf` có `timeout 300` (mặc
+   định nhiều bản cài sẵn) ⇒ client không chạy lệnh nào trong 300s là bị Redis
+   đóng. Trên Windows cú đóng đó tới Node dưới dạng `read ECONNRESET`.
+   `tcp-keepalive` KHÔNG cứu được: Redis đếm `timeout` theo **lần chạy lệnh cuối**,
+   không theo gói keep-alive tầng TCP.
+2. **Không ai nghe `'error'`.** `redisStore()` của `cache-manager-redis-yet` chỉ
+   gọi `createClient()` rồi `connect()`, không gắn listener nào. Node quy định
+   EventEmitter phát `'error'` mà không có listener thì **ném thẳng thành uncaught
+   exception** → chết process. Nghĩa là mọi cú mất kết nối Redis thoáng qua
+   (restart Redis, mạng chớp, failover) đều đủ giết API, kể cả trên production.
+
+Đây KHÔNG phải lỗi riêng của Redis: mọi client hạ tầng dựa trên EventEmitter
+(`redis`, `ioredis`, `amqplib`, driver socket…) đều có bẫy này.
+
+### Fix
+
+`apps/api/src/app.module.ts` — tự tạo store rồi gắn handler, thay vì đưa thẳng
+`store: redisStore` cho Nest:
+
+```ts
+useFactory: async (configService: ApiConfigService) => {
+  const logger = new Logger('RedisCache');
+  const store = await redisStore({
+    /* ... */
+    socket: { host, port, reconnectStrategy: (retries) => Math.min(1000 + retries * 500, 10_000) },
+    pingInterval: 60_000, // giữ connection không bao giờ "rỗi" dưới mắt Redis
+  });
+  store.client.on('error', (error) => logger.error(`Redis client error: ${error.message}`));
+  return { store };
+};
+```
+
+`pingInterval` chặn nguyên nhân (không bị đóng nữa), `.on('error')` chặn hậu quả
+(có bị đóng cũng chỉ log + tự reconnect). Phải có **cả hai** — sửa `redis.conf`
+thành `timeout 0` chỉ chữa được máy đang ngồi, không chữa được server khác.
+
+### Rule chung
+
+- Bất kỳ client hạ tầng nào lấy ra từ thư viện (`store.client`, connection,
+  channel…) đều **phải** được gắn `.on('error')` ngay tại chỗ khởi tạo. Thư
+  viện bọc ngoài thường KHÔNG gắn hộ.
+- Crash `Unhandled 'error' event` thì đọc dòng `Emitted 'error' event on <X>` để
+  biết đúng emitter nào thiếu listener — đó mới là chỗ cần sửa, không phải chỗ
+  in ECONNRESET.
+- Lỗi kết nối in ra log liên tục (RabbitMQ ECONNREFUSED chẳng hạn) mà process vẫn
+  sống thì **không phải** thủ phạm: nó có handler nên mới in được. Thủ phạm là cái
+  làm process chết ngay lần đầu.
+
+### Precedent đã xảy ra
+
+2026-08-20: API dev trên máy Windows crash lặp đi lặp lại. Log đầy
+`AmqpConnection Failed to connect to RabbitMQ` nên ban đầu tưởng do RabbitMQ chưa
+bật, nhưng RabbitMQ chỉ retry chứ không giết process — thủ phạm là client Redis
+của `CACHE_MANAGER` bị Redis đóng vì `timeout 300` trong `D:\dev\redis\redis.conf`.
+
 ## Khi nào update file này
 
 - Phát hiện bug pattern cross-cutting (ảnh hưởng > 1 module).

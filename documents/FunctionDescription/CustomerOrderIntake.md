@@ -44,15 +44,54 @@ Hai luồng đơn cùng tồn tại (plan §1.3):
 Tick đơn Pending → "Push to production" → POST /push-preview (bảng giá chốt, không commit)
   → confirm → POST /push:
      1. validate (pending, chưa push, có item, đủ địa chỉ tối thiểu)
+     1a. CỬA CUỐI về file thiết kế: assertArtworkComplete() — thiếu mockup hoặc thiếu
+         design ở vị trí in bắt buộc → đơn ĐÓ 'failed' kèm mã đơn + tên vị trí, lô chạy tiếp
+     1b. GIÀNH CHỖ từng đơn: updateOne có điều kiện { pushedAt: null, chưa ai giữ }
+         → $set pushingAt. Không giành được thì đơn đó 'failed' kèm lý do, lô vẫn chạy tiếp
      2. chốt giá từng item (resolveUnitPrice: cod/tiktok → nonShipCost fallback retailPrice;
         express_us/economy_us → retailPrice fallback nonShipCost; áp Promotion theo tier
         qua promotionMatches/applyPromotionDiscount — tái dùng như customer-catalog)
      3. TÁI DÙNG items[].productionId đã cấp lúc tạo/import (fallback generateUniqueProductionId
         cho staging doc cũ) → 1 lệnh importOrders() duy nhất
-        (type = ProductConfig.fullName resolve từ SKU → map config chính xác)
+        (type = ProductConfig.fullName resolve từ SKU → map config chính xác;
+         mỗi dòng mang orderAt = lúc khách đặt + inProductionAt = mốc đẩy của cả lô
+         — xem "Hai mốc thời gian của đơn" bên dưới)
      4. tạo customer_payments record { status:'waived', method:'waived', amount }
-     5. $set items (priceSnapshot chốt) + pushedAt + paymentId vào staging doc
+     5. $set items (priceSnapshot chốt) + pushedAt + paymentId, $set pushingAt=null
+        (lệnh ghi cũng có điều kiện pushedAt: null)
+     — hỏng ở bước 3 hoặc 4 → NHẢ hết chỗ giữ rồi ném lỗi, đơn quay lại đẩy được
 ```
+
+**Hai mốc thời gian của đơn (`orderAt` + `inProductionAt`).** Đơn portal không đi qua sheet import nên không có sẵn cột ngày như đơn nội bộ — `pushToProduction` phải tự điền, và bước 3 truyền cả hai (dạng ISO, `importOrders` parse qua `parseImportDate`) vào từng dòng `importRows`.
+
+| Trường | Lấy từ | Ý nghĩa |
+|---|---|---|
+| `orderAt` | `customer_orders.createdAt` | lúc **khách đặt** |
+| `inProductionAt` | mốc đẩy của cả lô | lúc **vào sản xuất** |
+
+Hai mốc lệch nhau đúng bằng quãng đơn nằm ở vùng nháp Pending — có thể vài phút mà cũng có thể vài ngày. Gộp làm một là mất luôn quãng chờ đó khỏi mọi báo cáo, nên đừng "đơn giản hoá" bằng cách cho cả hai cùng một giá trị. Staging doc quá cũ không có `createdAt` thì `orderAt` lùi về mốc đẩy: sai lệch một quãng đã không còn đo được, vẫn hơn để trống rồi thủng sort `orderAt: -1` ở kanban Fulfillment.
+
+`inProductionAt` để trống thì hậu quả nặng hơn nhiều, vì nó là **trục thời gian của gần hết hệ thống**: bảng "Danh sách đơn" mặc định lọc đúng hôm nay trên chính trường này (`Orders.md §7` — hai tham số tên `createdFrom`/`createdTo` nhưng áp lên `inProductionAt`, không phải `createdAt`); Dashboard, Lifecycle, SLA và báo cáo Telegram đều bucket theo nó. Một trường **không tồn tại** thì không khoảng ngày nào khớp, nên đơn để trống sẽ vào sản xuất thật mà **vô hình với xưởng** — kể cả khi gõ đúng mã vào ô tìm kiếm, vì search áp chồng lên bộ lọc ngày chứ không thay thế nó. Đã xảy ra với `QY-02284-48568` (đẩy 2026-08-24, không ai tìm thấy trên Danh sách đơn).
+
+Mốc đẩy lấy MỘT lần cho cả lô và dùng chung cho `OrderEntity.inProductionAt` lẫn `customer_orders.pushedAt`: hai con số tả cùng một sự kiện, gọi `new Date()` hai lần chỉ đẻ ra chênh lệch vài mili giây để người đọc số sau này phải đi giải thích. Test giữ luật: `apps/api/src/modules/customer-portal/push-in-production-at.spec.ts`.
+
+**Cửa cuối về file thiết kế (ORD-25).** ORD-22 bắt `placeOrder` kiểm mockup + design, nhưng đó chỉ là MỘT đường vào: Public Order API đi `importOrdersCsv`, và `updateStagingOrder` cho phép gỡ design ra khỏi đơn đã tạo. Chặn ở lúc tạo là hàng rào **báo sớm**, không thể là hàng rào **đảm bảo** — mỗi đường vào mới lại phải nhớ chặn lại.
+
+Cửa đúng là bước push: nơi đơn thật sự rời vùng nháp để vào sản xuất, điểm vào duy nhất, không đi vòng được. Đơn Pending **vẫn được phép thiếu** (vùng nháp theo đúng thiết kế hai pha — `updateStagingOrder` KHÔNG bị siết, khách lưu dở rồi bổ sung sau).
+
+Dùng lại **đúng hàm** `assertArtworkComplete()` của ORD-22, không viết luật thứ hai. Gọi TRƯỚC bước giành chỗ (đơn hỏng thì đừng chiếm chỗ rồi phải nhả) và bọc `try/catch` để một đơn hỏng chỉ hỏng riêng nó. Đơn bị từ chối giữ nguyên trạng thái Pending, dữ liệu nguyên vẹn, bổ sung design rồi đẩy lại được.
+
+**Chống đẩy trùng (ORD-20).** Bước 1b không thừa. Cả luồng là đọc → chốt giá → `importOrders()` → ghi `pushedAt`, và chỗ hở nằm ở **khoảng giữa đọc và ghi**: khách bấm hai lần hoặc mở hai tab thì cả hai lượt đều đọc thấy `pushedAt` rỗng và cùng chạy tới `importOrders()`. Hậu quả nặng đã được unique index `productionId` chặn (push tái dùng mã cũ nên lượt sau đụng khoá, và `customer_payments` tạo SAU `importOrders` nên cũng không đẻ ledger rác) — nhưng khách nhận về **lỗi trùng khoá tầng dưới** thay vì câu rõ ràng, và người đọc log tưởng hỏng khâu cấp mã.
+
+Chi tiết cách giữ chỗ:
+
+| | |
+|---|---|
+| Trường giữ chỗ | `pushingAt` trên `customer_orders` — **KHÔNG** dùng chính `pushedAt`: đặt `pushedAt` trước khi đơn thật sự vào sản xuất thì tiến trình chết giữa chừng để lại đơn "đã đẩy" mà không có đơn sản xuất nào |
+| Hết hiệu lực | `PUSH_CLAIM_STALE_MS` = 5 phút — chỗ giữ cũ hơn thế coi như bỏ, tiến trình chết không khoá đơn vĩnh viễn |
+| Lượt thua nhận gì | đơn đã đẩy xong → *"Đơn đã đẩy sản xuất trước đó"*; lượt khác đang đẩy → *"Đơn đang được đẩy sản xuất — chờ một lát rồi tải lại trang"* |
+| Webhook `order.pushed` | chỉ lượt thắng có `pendingUpdates` cho đơn đó nên **không bắn hai lần** |
+| Test giữ luật | `apps/api/src/modules/customer-portal/push-claim.spec.ts` — soi thẳng bộ lọc; rút `pushedAt: null` khỏi đó là mở lại chỗ hở cũ |
 
 - **Design storage hook** (xem [`DesignStorage.md`](DesignStorage.md)): sau push, design là CDN URL → `touchUsageForUrls()`; còn là URL ngoài (Drive) → enqueue job `design-worker` tải về R2 rồi thay URL ở cả `OrderEntity.designs` lẫn staging item — push KHÔNG chờ worker.
 - Push **nguyên đơn** (không lẻ item). Payment gate đọc từ `system_configs` key `customer_payment_gate_enabled` — đợt này nếu bật sẽ throw (luồng Admin confirm chưa build, plan §12.1).
@@ -90,6 +129,40 @@ Tick đơn Pending → "Push to production" → POST /push-preview (bảng giá 
 | GET | `/v1/customer/orders/:productionId` | (giữ nguyên) track 1 item đã push |
 | PATCH | `/v1/customer/orders/:productionId` | (giữ nguyên) sửa mockup/designs/address đơn đã push — giờ đồng bộ ngược vào staging item |
 
+### 3.1b Public Order API + API key + Webhook (ORD-4)
+
+**API key (portal, `customer-api-key.controller.ts`, `@Auth([RoleType.Customer])`)**
+
+| Method | Path | Mô tả |
+| --- | --- | --- |
+| GET | `/v1/customer/api-keys` | Danh sách key hoạt động (label + prefix + createdAt + lastUsedAt) — KHÔNG bao giờ trả hash/key plain |
+| POST | `/v1/customer/api-keys` | Tạo key — response `data.key` là key plain, hiển thị đúng MỘT lần (max `CUSTOMER_API_KEY_MAX_ACTIVE`=5) |
+| DELETE | `/v1/customer/api-keys/:id` | Thu hồi (`revokedAt`) — vô hiệu NGAY |
+
+**Webhook (portal, `customer-webhook/customer-webhook.controller.ts`, `@Auth([RoleType.Customer])`)**: `GET|POST /v1/customer/webhooks`, `DELETE /v1/customer/webhooks/:id` (max `CUSTOMER_WEBHOOK_MAX_ACTIVE`=3).
+
+**Public Order API (`customer-open-api.controller.ts`, `@UseGuards(ApiKeyGuard)` — KHÔNG JWT, KHÔNG `@Auth`)**
+
+| Method | Path | Mô tả |
+| --- | --- | --- |
+| POST | `/v1/open-api/orders` | Tạo đơn Pending theo lô (≤`OPEN_API_MAX_ORDERS_PER_CALL`=100). Idempotent theo `externalRef` (map thành `orderId`/`orderKey`) — gọi lại → `duplicated`. Tái dùng NGUYÊN `importOrdersCsv(..., source='api')` |
+| POST | `/v1/open-api/orders/push` | Push theo `externalRefs[]` hoặc `ids[]` → `resolveStagingIdsForApi()` → `pushToProduction()` (cùng cổng duy nhất, ledger `waived`) |
+| GET | `/v1/open-api/orders` | List đơn của khách sở hữu key — cùng `listOrders()` (8 trạng thái derive + badge) |
+| GET | `/v1/open-api/orders/:ref` | Tra 1 đơn theo `externalRef` **hoặc** `productionId`; ref là productionId đã push → kèm `track` mirror trang track portal |
+
+**`ApiKeyGuard`** (`apps/api/src/guards/api-key.guard.ts`): header `X-Api-Key: onos_live_<32hex>` → sha256 → `customerService.findByApiKeyHash()` (chỉ key chưa `revokedAt`, khách `status=Active` + chưa xóa mềm) → gắn `request.user` role ảo `RoleType.Customer` (CÙNG ranh giới dữ liệu với JWT Customer — mọi service scoped theo `customer._id`). Sai/thiếu/thu hồi/khách khóa → **401 thông điệp chung**, không tiết lộ key hay khách nào tồn tại. Rate limit dùng lại `RateLimiterService` sẵn có: bucket session theo **hash key** + bucket user theo **customerId** (nhiều key của cùng khách KHÔNG nhân hạn mức) — vượt → 429. `lastUsedAt` cập nhật fire-and-forget.
+
+**Lưu ý ranh giới:** `RolesGuard` chặn role Customer ngoài prefix `customer/...` chỉ áp cho **token JWT**; Public API đi qua `ApiKeyGuard` riêng (`@UseGuards`, không `@Auth`) nên không đụng whitelist đó — bù lại guard tự giới hạn: chỉ controller `open-api/orders` dùng nó, và mọi method service đều nhận `customer` từ key.
+
+**Nguồn sự kiện chung** (ORD-5 bổ sung): mọi call site KHÔNG gọi thẳng webhook service nữa mà gọi `CustomerOrderEventService.emit()` (`customer-event/` — module trung gian import cả `CustomerWebhookModule` lẫn `CustomerNotificationModule`), service này fan-out sang **webhook cho khách API** (theo TỪNG item) *và* **thông báo chuông portal** (gộp MỨC ĐƠN — xem `CustomerPortal.md §8`). Thêm điểm đổi trạng thái mới thì gọi đúng hàm này.
+
+**Webhook engine** (`customer-webhook/` — module ĐỘC LẬP, chỉ bind model để customer-event import không tạo vòng DI):
+- 5 sự kiện `CUSTOMER_WEBHOOK_EVENTS`: `order.pushed` (emit ở `pushToProduction`), `order.production_completed` (ở `fulfillment-task.service.ts` transition khi `fulfillmentCompletedAt` vừa được set — chỉ bắn ở cạnh chuyển thật), `order.held`/`order.unheld`/`order.cancelled` (ở `order.service.ts` `holdOrder`/`unholdOrder`/`cancelOrder` **và `bulkSetHold`** qua helper `emitCustomerOrderEvent()`).
+- Resolve khách: theo `customerId` nếu caller biết sẵn (push), còn lại theo `customerMatchKey(userSku, userEmail)` như mọi tính năng khác.
+- **KHÔNG chặn luồng chính**: `emitForOrders()` là `void` + service tự nuốt lỗi; POST timeout 5s, `maxRedirects: 0`, retry 2 lần (5s/25s) rồi bỏ.
+- Chữ ký: header `X-Onos-Signature: sha256=<HMAC-SHA256(body, webhook.secret)>` + `X-Onos-Event` + `X-Onos-Delivery`. Payload `{ id, event, createdAt, data: { productionId, ...extra } }` — CHỈ dữ liệu khách vốn đã thấy ở portal (không tên nhân viên/giá vốn/xưởng).
+- Vết giao: collection `customerWebhookDeliveries` (TTL 30 ngày) — `status pending|delivered|failed` + `attempts` + `lastError`.
+
 ### 3.2 Staging entity `customer_orders` (`customer-order.entity.ts`)
 
 ```ts
@@ -126,6 +199,8 @@ CustomerPaymentEntity {
 ### 3.4 Shared (`packages/shared`)
 
 - `enums/customer-order-status.ts` — `CustomerOrderStatus` (7 giá trị + labels VI cho BE) + `CUSTOMER_ORDER_STATUS_PROGRESS` (thứ tự least-advanced).
+- `dtos/customer.dto.ts` (ORD-4) — `CUSTOMER_API_KEY_MAX_ACTIVE`/`CUSTOMER_API_KEY_PREFIX` + `CustomerApiKeyZod`/Create/List/Revoke DTOs; `CUSTOMER_WEBHOOK_MAX_ACTIVE`/`CUSTOMER_WEBHOOK_EVENTS` + `CustomerWebhookZod`/Create/List/Delete DTOs.
+- `dtos/customer-order.dto.ts` (ORD-4) — `OPEN_API_MAX_ORDERS_PER_CALL` + `OpenApiCreateOrdersDto` (`externalRef` + items dùng CHUNG shape CSV) / `OpenApiPushOrdersDto` / `OpenApiGetOrderResDto`.
 - `dtos/customer-order.dto.ts` — `CUSTOMER_SHIP_METHODS` (4 giá trị) + `parseCustomerShipMethod()` + `customerOrderKey()` + toàn bộ DTOs: `CustomerStagingOrderZod`/`CustomerStagingItemZod`, `GetCustomerStagingOrders*`, `CustomerOrderCountsZod`, `ImportCustomerOrders*` (`CustomerImportOrderZod` items SKU required), `PushCustomerOrders*`/`PreviewPush*`, `UpdateCustomerStagingOrderDto`, `CancelCustomerStagingOrderDto`, payment consts. Keys `CUSTOMER_ORDER_COMPLETED_DAYS_KEY`, `CUSTOMER_PAYMENT_GATE_KEY`.
 
 ## 4. UI Components
@@ -137,22 +212,26 @@ CustomerPaymentEntity {
 - `pages/customer/dashboard/index.tsx` — mã đơn ở "Đơn gần đây" chỉ render link track khi item đã push (pending hiện text + copy, tránh 404).
 - `pages/customer/orders/import.tsx` — 3 bước: chọn file → **preview bảng tính từng dòng** (validate bằng `CustomerImportOrderZod` shared, ô lỗi bôi đỏ + message i18n theo cột, warning lệch địa chỉ; còn lỗi → nút import disable, xem §2.1) → kết quả từng đơn `created/duplicated/failed`. Nút tải file mẫu = template cũ nguyên bản.
 - `pages/customer/orders/new.tsx` — giữ nguyên form, chỉ đổi toast sau submit (`orderNew.successPending`).
-- i18n: namespace `customerPortal` keys `orders.tabs/status/source/badge*/payment*/moreItems`, `orderDetail.*` (drawer), `push.*`, `importCsv.*` (vi + en).
+- `pages/customer/api/index.tsx` (ORD-4) — trang **"API & Webhook"** (route `PATHS.CUSTOMER_API` = `/customer/api`, entry sidebar portal). 3 khối dọc theo đúng thứ tự khách làm việc: **API key** (bảng label/prefix/ngày tạo/lần dùng cuối + nút Tạo/Thu hồi; key plain hiện trong dialog riêng đúng MỘT lần, cảnh báo amber, nút copy) → **Webhook** (input URL + danh sách URL kèm signing secret + chip 5 tên sự kiện) → **Lệnh mẫu** (3 khối `curl` tạo đơn/push/tra trạng thái + payload webhook mẫu, mỗi khối có nút copy). Mọi giá trị máy-đọc (key, URL, endpoint, payload) đặt trong khối `font-mono` nền slate-950 để tách khỏi chữ người-đọc — hướng dẫn nằm ngay trong trang, KHÔNG làm developer-portal riêng (SRS ASSUMPTION).
+- i18n: namespace `customerPortal` keys `orders.tabs/status/source/badge*/payment*/moreItems`, `orderDetail.*` (drawer), `push.*`, `importCsv.*`, `apiAccess.*` + `layout.nav.api` (vi + en).
 
 ## 5. Backend logic
 
 Tất cả trong `customer-order.service.ts`:
 
-- `buildDerivePipeline()` — aggregation dùng CHUNG listing + counts: `$lookup` orders theo `items[].productionId` (project `PROD_DERIVE_FIELDS`) → `$addFields statusDerived/heldAny/reworkAny/sortAt`. Logic MIRROR bộ hàm JS `deriveItemStatus()`/`isReworkBadge()`/`toStagingOrder()` (đổi 1 nơi phải đổi nơi kia — comment tại chỗ).
+- `buildDerivePipeline()` — aggregation dùng CHUNG listing + counts + `getOrderByRefForApi`: `$lookup` orders theo `items[].productionId` (project `PROD_DERIVE_FIELDS`) → `$addFields statusDerived/heldAny/reworkAny/sortAt`. Logic MIRROR bộ hàm JS `deriveItemStatus()`/`isReworkBadge()`/`toStagingOrder()` (đổi 1 nơi phải đổi nơi kia — comment tại chỗ). **Phép nối PHẢI viết dạng `localField`/`foreignField`** — xem §6.
 - `quoteItem()` + `buildPricingContext()` — resolve SKU→variation (map `bySku`) hoặc type→config (map `byType`, cho đơn form; chọn variation qua `pickVariation()` match attributes size/color, chỉ nhận khi không mơ hồ). Giá theo ship method + Promotion theo tier.
 - `importOrdersCsv()` — validate + create từng đơn, bắt `E11000` → `duplicated`; đơn có item lỗi → `failed` cả đơn.
 - `previewPush()` / `pushToProduction()` — mô tả ở §2.2. 1 lệnh `importOrders()` duy nhất cho mọi item (1 Telegram noti/lần push).
 - `onModuleInit()` — backfill 1 lần theo marker `system_configs['customer_orders_backfill_v1']`: mọi customer → `syncLegacyOrdersForCustomer()`. Hàm này cũng chạy **lazy mỗi lần khách mở listing** để bắt đơn Luồng A sync về sau backfill (insertMany `ordered:false`, trùng orderKey tự nuốt).
 - `updateOrder()` (đơn đã push) — sau khi sửa OrderEntity giờ **đồng bộ ngược** mockup/designs/address vào staging item tương ứng.
+- (ORD-4) `resolveStagingIdsForApi()` / `getOrderByRefForApi()` — adapter mỏng cho Public API, scoped theo `customerId` của key; ref không thuộc khách → 404 chung chung. `importOrdersCsv()` nhận thêm tham số `source` (`'csv'` mặc định, `'api'` khi gọi qua Public API) — KHÔNG rẽ nhánh logic nào khác.
 
 ## 6. Performance notes
 
 - Listing dùng 1 aggregation duy nhất ($lookup theo `productionId` có index unique bên `orders` + index `items.productionId` bên staging) — không N+1 per đơn; `computeCurrentStage` chạy JS trên trang hiện tại (≤100 doc).
+- **ORD-18 — `$expr` trong `$lookup` không dùng được index.** Bản đầu lọc bằng `pipeline: [{ $match: { $expr: { $in: ['$productionId', '$$pids'] } } }]`. `$expr` khiến MongoDB **quét toàn bộ `orders` cho TỪNG document staging** dù `productionId_1` có sẵn: khách 3.478 đơn × 40.065 đơn sản xuất ≈ **139 triệu lượt quét**, listing **71 giây**, cả ba endpoint (listing / `counts` / `dashboard`) cùng treo vì dùng chung hàm này. Nay nối bằng `localField: 'items.productionId'` + `foreignField: 'productionId'` (giữ `pipeline` cho `$project`) — `explain` báo `indexesUsed: ["productionId_1"]`, listing **0,6 s**, counts **0,5 s**, kết quả khớp từng đơn trên cả 3.478 đơn.
+- **Chốt `productionId: { $ne: null }` trong sub-pipeline không được bỏ.** Hai dạng nối KHÔNG tương đương: dạng `localField` còn khớp cả đơn có `productionId` null/thiếu khi `items` rỗng hoặc item thiếu `productionId` (đã dựng bộ 9 ca biên để đo). `OrderEntity.productionId` khai `required: true, unique: true` nên đơn như vậy không tồn tại — chốt này giữ cho tương lai, bỏ đi là đơn `items` rỗng bỗng nối vào đơn rác.
 - `syncLegacyOrdersForCustomer` mỗi lần mở listing: 1 `distinct` + 1 `find $nin` scoped theo khách — chi phí tỉ lệ số đơn của chính khách đó. Khách có hàng chục nghìn đơn legacy sẽ chậm ở lần đầu (insertMany), các lần sau chỉ 2 query rỗng.
 - Backfill onModuleInit chạy đúng 1 lần (marker) — boot sau không quét lại.
 - Import cap 500 dòng/lần; `buildPricingContext` load config theo `$in` SKU 1 query cho cả batch.
@@ -160,4 +239,5 @@ Tất cả trong `customer-order.service.ts`:
 ## 7. Permissions
 
 - Toàn bộ endpoint `@Auth([RoleType.Customer])` — không dùng permission-catalog nội bộ (pattern Customer Portal sẵn có, `RolesGuard` chặn role Customer khỏi API ngoài prefix `customer/...`).
+- (ORD-4) Public Order API `open-api/orders*` KHÔNG dùng `@Auth`/JWT mà `@UseGuards(ApiKeyGuard)`; ranh giới dữ liệu do chính guard đảm bảo (key ⇄ đúng 1 khách). API key + webhook CRUD vẫn nằm dưới prefix `customer/` với JWT như mọi trang portal khác.
 - Không có trang admin mới đợt này (payment gate OFF — plan §12.1).

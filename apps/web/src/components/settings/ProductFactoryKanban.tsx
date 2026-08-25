@@ -61,21 +61,6 @@ const PENDING_PREFIX = 'pending:';
 const UNASSIGNED_COL_ID = '__unassigned__';
 const SYNC_DAYS = 14;
 
-const stripDiacritics = (s: string) =>
-  s
-    .normalize('NFD')
-    .replace(/[̀-ͯ]/g, '')
-    .replace(/đ/g, 'd')
-    .replace(/Đ/g, 'D');
-
-/** shortName tự sinh khi tạo nhanh config từ pending type (uppercase, bỏ dấu, max 60). */
-const makeShortName = (fullName: string) =>
-  stripDiacritics(fullName)
-    .toUpperCase()
-    .replace(/[^A-Z0-9]+/g, '-')
-    .replace(/(^-+|-+$)/g, '')
-    .slice(0, 60) || 'SP';
-
 function ProductCard({ p, onPreview }: { p: ProductLite; onPreview?: (p: ProductLite) => void }) {
   return (
     <div className="rounded-lg border border-slate-200 dark:border-slate-700/60 bg-white dark:bg-slate-800 px-2 py-1.5 shadow-sm">
@@ -479,9 +464,10 @@ export default function ProductFactoryKanban() {
 
   /**
    * Thả pending type vào cột xưởng → TẠO ngay Product Config tối thiểu
-   * (fullName + shortName tự sinh + xưởng; Loại máy bổ sung sau ở trang
-   * Products — schema đã nới machineTypeId optional). Đơn tồn của loại này gán
-   * bằng nút "Tự động gán xưởng" ở trang Không xác định xưởng.
+   * (fullName + xưởng; shortName ĐỂ TRỐNG — ORD-3: field là mã tool design
+   * review, không auto-sinh; Loại máy bổ sung sau ở trang Products — schema đã
+   * nới machineTypeId optional). Đơn tồn của loại này gán bằng nút "Tự động
+   * gán xưởng" ở trang Không xác định xưởng.
    */
   const handleCreateFromPending = async (type: string, targetFactoryId: string) => {
     const item = pending.find((p) => p.type === type);
@@ -491,7 +477,6 @@ export default function ProductFactoryKanban() {
     try {
       const res = await RepositoryRemote.productConfig.createProductConfig({
         fullName: item.type,
-        shortName: makeShortName(item.type),
         factoryId: targetFactoryId,
       } as CreateProductConfigDto);
       const created = (res.data?.data || {}) as Partial<ProductLite>;
@@ -500,7 +485,7 @@ export default function ProductFactoryKanban() {
         {
           _id: created._id || `${PENDING_PREFIX}${item.type}`,
           fullName: created.fullName || item.type,
-          shortName: created.shortName || makeShortName(item.type),
+          shortName: created.shortName || '',
           mockup: created.mockup,
           factoryId: targetFactoryId,
         },

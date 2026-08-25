@@ -1,6 +1,6 @@
 import { createZodDto } from '@anatine/zod-nestjs';
 import { extendApi } from '@anatine/zod-openapi';
-import { PriceZod, ProductPrintAreaKeyZod } from '@shared/constants';
+import { PriceZod, PRINT_AREA_MAX_WIDTH_CM, ProductPrintAreaKeyZod } from '@shared/constants';
 import { ProductConfigStatus, Status } from '@shared/enums';
 import { BaseEntityZod, PageQueryZod, PageResZod, ResZod } from '@shared/types';
 import { z } from 'zod';
@@ -24,6 +24,43 @@ export type ProductItemSpecific = z.infer<typeof ProductItemSpecificZod>;
  * map 1-1 với `DesignFields`/order.designs) — KHÔNG cho tự gõ key/label,
  * nhãn hiển thị resolve từ constant.
  */
+/**
+ * PRD-7 — kích thước in THẬT của một vị trí in ở MỘT size sản phẩm, đơn vị **cm**.
+ *
+ * Cộng THÊM vào `widthPx`/`heightPx` chứ không thay thế: hai trường px kia mirror
+ * `print_areas[].width/height` hệ cũ và đang mang dữ liệu import OnosPod. Ở đây
+ * dùng cm vì xưởng và giấy DTF đều nói bằng cm; quy đổi cm → px theo DPI là việc
+ * của tool dựng file (ORD-6), KHÔNG phải của cấu hình này.
+ *
+ * `size` là chuỗi lấy từ thuộc tính "Size" của `variations[]` — KHÔNG cho gõ tự do
+ * ở giao diện, để sau này ghép với size của đơn không bị lệch chính tả.
+ */
+export const ProductPrintAreaSizeDimensionZod = z
+  .object({
+    size: z.string().min(1).max(60).trim(),
+    /** Chiều rộng (cm). */
+    widthCm: z.coerce.number().positive(),
+    /** Chiều dài (cm). */
+    lengthCm: z.coerce.number().positive(),
+  })
+  /**
+   * HF-1 — CHỈ MỘT trong hai chiều được vượt `PRINT_AREA_MAX_WIDTH_CM`, không phải
+   * cả hai.
+   *
+   * Vùng in thật của giấy DTF rộng 58cm nhưng dài vô hạn (giấy cuộn), nên một khối
+   * 70×40 vẫn in được — quay ngang là vừa. Trước đây trần đặt cứng trên `widthCm`,
+   * tức chặn luôn cả những vùng in in được thật, chỉ vì người nhập gõ số lớn vào
+   * ô "rộng" thay vì ô "dài".
+   *
+   * Nhưng CẢ HAI chiều cùng vượt 58 thì quay kiểu gì cũng không lọt qua bề ngang
+   * giấy — ca đó vẫn phải chặn.
+   */
+  .refine((d) => Math.min(d.widthCm, d.lengthCm) <= PRINT_AREA_MAX_WIDTH_CM, {
+    message: `Chỉ một trong hai chiều được vượt ${PRINT_AREA_MAX_WIDTH_CM} cm (chiều kia phải lọt bề ngang giấy để quay ngang được)`,
+    path: ['widthCm'],
+  });
+export type ProductPrintAreaSizeDimension = z.infer<typeof ProductPrintAreaSizeDimensionZod>;
+
 export const ProductPrintAreaItemZod = z.object({
   key: ProductPrintAreaKeyZod,
   /** URL template thiết kế cho vị trí này ("print" hệ cũ — Drive link...). */
@@ -41,6 +78,16 @@ export const ProductPrintAreaItemZod = z.object({
   additionPrice: PriceZod.optional(),
   /** Vị trí thêu ("is_embroidery" hệ cũ). */
   isEmbroidery: z.boolean().optional(),
+  /**
+   * PRD-7 — kích thước in theo TỪNG size, mỗi size tối đa 1 dòng. Trống/thiếu =
+   * vị trí này chưa cấu hình kích thước (KHÔNG chặn lưu sản phẩm).
+   */
+  sizeDimensions: ProductPrintAreaSizeDimensionZod.array()
+    .max(50)
+    .optional()
+    .refine((items) => !items || new Set(items.map((i) => i.size.toLowerCase())).size === items.length, {
+      message: 'Duplicated size in print area dimensions',
+    }),
 });
 export type ProductPrintAreaItem = z.infer<typeof ProductPrintAreaItemZod>;
 
@@ -92,7 +139,30 @@ export type ProductVariation = z.infer<typeof ProductVariationZod>;
 
 export const ProductConfigZod = BaseEntityZod.extend({
   fullName: z.string().min(1).max(300),
-  shortName: z.string().min(1).max(60),
+  /** Mã ngắn chạy tool duyệt thiết kế (ORD-3) — trống = không có mã, Design Review API trả `productCode: null`. */
+  shortName: z.string().max(60),
+  /**
+   * Mã chạy tool duyệt thiết kế (PRD-2) — trường RIÊNG, KHÔNG dùng `shortName`
+   * nữa. Trống = sản phẩm không có mã, Design Review API trả `productCode: null`.
+   * Chỉ người dùng sửa tay trên trang chi tiết sản phẩm mới đổi được, trừ lần
+   * migration một-lần đổ từ `PRODUCT_TYPE_CODE_MAP`.
+   */
+  designReviewCode: z.string().max(60).optional(),
+  /**
+   * PRD-6 — URL file template DÙNG ĐỂ CHẠY TOOL của sản phẩm. Trường RIÊNG, cố ý
+   * KHÔNG dùng lại họ `printTemplate`/`printDocument`/`printArea[].templateUrl`:
+   * ba trường đó mang dữ liệu migrate hệ cũ + import OnosPod, ghi đè là hỏng dữ
+   * liệu thật mà không có lỗi nào báo ra. Trống = sản phẩm chưa gắn file template
+   * ⇒ mã chạy tool ở danh sách hiện chữ thường, KHÔNG thành liên kết.
+   * Chỉ nhận http:// hoặc https://; hệ thống KHÔNG kiểm tra URL sống hay chết.
+   */
+  designReviewTemplateUrl: z
+    .string()
+    .max(1000)
+    .optional()
+    .refine((v) => !v || /^https?:\/\/\S+$/i.test(v), {
+      message: 'Tool template URL must start with http:// or https://',
+    }),
   /** Mã SKU riêng của sản phẩm (KHÔNG phải SKU biến thể) — unique toàn hệ thống nếu có. */
   sku: z.string().max(100).optional(),
   /** Slug SEO/URL (parity hệ cũ) — chưa dùng để routing, chỉ lưu. */
@@ -174,9 +244,33 @@ export const ProductConfigZod = BaseEntityZod.extend({
 export type ProductConfig = z.infer<typeof ProductConfigZod>;
 
 //
+/**
+ * Giá trị `fabricType` nghĩa "CHƯA đặt loại vải" khi lọc (PRD-1) — 53/194 sản
+ * phẩm đang bỏ trống trường này, không có lựa chọn riêng thì không ai tìm ra
+ * chúng. Cùng quy ước với bộ lọc tier khách (`tier='none'`). KHÔNG trùng mã vải
+ * thật nào trong `workshop_configs` (category `fabric_type`).
+ */
+export const PRODUCT_FABRIC_TYPE_NONE = 'none';
+
 export const GetProductConfigsZod = PageQueryZod.extend({
   factoryId: IDZod.optional(),
   machineTypeId: IDZod.optional(),
+  /**
+   * PRD-1 — lọc riêng theo TÊN sản phẩm (chứa chuỗi, không phân biệt hoa thường).
+   * Khác `search` sẵn có: `search` gộp fullName/shortName/sku bằng `$or`, còn
+   * `fullName`/`shortName` là hai điều kiện AND với nhau. Đường cũ giữ nguyên.
+   */
+  fullName: z.string().trim().optional(),
+  /** PRD-1 — lọc riêng theo TÊN VIẾT TẮT (chứa chuỗi, không phân biệt hoa thường). */
+  shortName: z.string().trim().optional(),
+  /**
+   * PRD-5 — lọc riêng theo MÃ CHẠY TOOL duyệt thiết kế (chứa chuỗi, không phân biệt
+   * hoa thường), cùng khuôn với `shortName`. Sản phẩm chưa đặt mã không lọt vào kết
+   * quả khi tham số này có giá trị; KHÔNG gộp vào `$or` của `search`.
+   */
+  designReviewCode: z.string().trim().optional(),
+  /** PRD-1 — mã loại vải (`workshop_configs` category `fabric_type`), hoặc `none` = chưa đặt loại vải. */
+  fabricType: z.string().trim().optional(),
   /** Không truyền ⇒ mặc định loại `Hidden` khỏi danh sách (vẫn thấy Active + Inactive). Truyền cụ thể để xem đúng 1 trạng thái (VD: `hidden` để xem sản phẩm đã ẩn). */
   status: z.enum(getObjectValues(ProductConfigStatus)).optional(),
 });
@@ -192,7 +286,12 @@ export class GetProductConfigResDto extends createZodDto(extendApi(GetProductCon
 //
 export const CreateProductConfigZod = z.object({
   fullName: ProductConfigZod.shape.fullName,
-  shortName: ProductConfigZod.shape.shortName,
+  /** Không truyền / trống → shortName để trống (KHÔNG auto-sinh từ fullName — ORD-3). */
+  shortName: ProductConfigZod.shape.shortName.optional(),
+  /** Mã chạy tool duyệt thiết kế (PRD-2) — tách hẳn khỏi `shortName`. */
+  designReviewCode: ProductConfigZod.shape.designReviewCode,
+  /** PRD-6 — URL file template chạy tool. */
+  designReviewTemplateUrl: ProductConfigZod.shape.designReviewTemplateUrl,
   sku: ProductConfigZod.shape.sku,
   slug: ProductConfigZod.shape.slug,
   status: ProductConfigZod.shape.status,
@@ -236,6 +335,10 @@ export class CreateProductConfigResDto extends createZodDto(extendApi(CreateProd
 export const UpdateProductConfigZod = z.object({
   fullName: ProductConfigZod.shape.fullName.optional(),
   shortName: ProductConfigZod.shape.shortName.optional(),
+  /** Mã chạy tool duyệt thiết kế (PRD-2) — sửa tay ở trang chi tiết, có hiệu lực ngay. */
+  designReviewCode: ProductConfigZod.shape.designReviewCode,
+  /** PRD-6 — URL file template chạy tool; chuỗi rỗng = gỡ liên kết ở danh sách. */
+  designReviewTemplateUrl: ProductConfigZod.shape.designReviewTemplateUrl,
   sku: ProductConfigZod.shape.sku,
   slug: ProductConfigZod.shape.slug,
   status: ProductConfigZod.shape.status.optional(),
@@ -278,7 +381,8 @@ export class UpdateProductConfigResDto extends createZodDto(extendApi(UpdateProd
 //
 export const ImportProductConfigRowZod = z.object({
   fullName: z.string().min(1),
-  shortName: z.string().min(1),
+  /** Trống → giữ nguyên shortName hiện có (update) / để trống (tạo mới) — KHÔNG auto-sinh (ORD-3). */
+  shortName: z.string().optional(),
   /** Machine number ("94", "27"). Empty → product has no tool. */
   machineNumber: z.string().optional(),
   /** Factory name ("MÊ LINH", "MÊ LINH"…) — matched server-side, "Xưởng " prefix tolerant. */
@@ -321,7 +425,7 @@ export class ImportProductConfigResDto extends createZodDto(extendApi(ImportProd
  */
 export const ImportFullProductZod = z.object({
   fullName: ProductConfigZod.shape.fullName,
-  /** Trống → tự sinh từ fullName (max 60, BE uppercase). */
+  /** Trống → shortName để trống (KHÔNG auto-sinh từ fullName — ORD-3; max 60, BE uppercase). */
   shortName: z.string().max(60).optional(),
   /** Nhãn xưởng ("TNW", "Xưởng gỗ Thái Nguyên"...) — resolve qua `factoryService.findByLabel`. */
   factoryLabel: z.string().max(120).optional(),

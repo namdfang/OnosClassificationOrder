@@ -46,11 +46,18 @@ export const AGENT_DOCUMENTED_TABLE_KEYS = Object.keys(AGENT_TABLE_REGISTRY);
 /**
  * CHỐT CHẶN DUY NHẤT còn lại của bộ API (`API-19`).
  *
- * Người dùng chốt mở hết, trừ bốn tên này. Chúng không phải dữ liệu nghiệp vụ:
+ * Người dùng chốt mở hết, trừ những tên này. Chúng không phải dữ liệu nghiệp vụ:
  *  - `password` / `passwordSource` — bí mật xác thực. Hash mật khẩu lọt ra là
  *    cho phép dò ngược ngoại tuyến toàn bộ tài khoản khách, và `passwordSource`
  *    chỉ điểm tài khoản nào đang dùng mật khẩu mặc định.
  *  - `ip` / `userAgent` — dấu vết phiên làm việc của nhân viên.
+ *  - `apiKeys` / `secret` (ORD-4) — bí mật xác thực của Public Order API:
+ *    `customers.apiKeys[].hash` là sha256 của API key khách (cùng loại rủi ro
+ *    với hash mật khẩu), `customer_webhooks.secret` là khoá ký HMAC — ai có nó
+ *    thì giả mạo được webhook gửi cho khách. Phải nằm ở ĐÂY chứ không chỉ ở
+ *    `deliberatelyExcluded` của registry: sau `API-19` mọi collection đều đọc
+ *    được kể cả collection không ai mô tả, và registry chỉ là từ điển mô tả
+ *    chứ không chặn ở tầng truy vấn.
  *
  * Khác mọi lần trước, danh sách này KHÔNG còn là "lưới an toàn thứ hai" đứng
  * sau một danh sách trắng: nó là **cơ chế chặn duy nhất**, nên nó chạy ở tầng
@@ -58,7 +65,7 @@ export const AGENT_DOCUMENTED_TABLE_KEYS = Object.keys(AGENT_TABLE_REGISTRY);
  * `password` phủ cả `a.b.password`, ở mọi collection kể cả collection không ai
  * mô tả.
  */
-export const AGENT_DENY_FIELD_NAMES = ['password', 'passwordSource', 'ip', 'userAgent'];
+export const AGENT_DENY_FIELD_NAMES = ['password', 'passwordSource', 'ip', 'userAgent', 'apiKeys', 'secret'];
 
 const DENIED = new Set(AGENT_DENY_FIELD_NAMES);
 

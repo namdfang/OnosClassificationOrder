@@ -1,6 +1,6 @@
 import { BullModule } from '@nestjs/bullmq';
 import { CacheModule } from '@nestjs/cache-manager';
-import { Module } from '@nestjs/common';
+import { Logger, Module } from '@nestjs/common';
 import { ConfigModule } from '@nestjs/config';
 import { APP_GUARD } from '@nestjs/core';
 import { MongooseModule } from '@nestjs/mongoose';
@@ -32,6 +32,7 @@ import { CustomerModule } from './modules/customer/customer.module';
 import { CustomerAssignmentModule } from './modules/customer-assignment/customer-assignment.module';
 import { CustomerNotificationModule } from './modules/customer-notification/customer-notification.module';
 import { CustomerPortalModule } from './modules/customer-portal/customer-portal.module';
+import { CustomerWebhookModule } from './modules/customer-webhook/customer-webhook.module';
 import { DepartmentModule } from './modules/departments/department.module';
 import { DesignStorageModule } from './modules/design-storage/design-storage.module';
 import { DesignerModule } from './modules/designer/designer.module';
@@ -85,6 +86,8 @@ import { SharedModule } from './shared/shared.module';
     AgentApiModule,
     CustomerNotificationModule,
     CustomerPortalModule,
+    // ORD-4 — webhook báo đổi trạng thái đơn cho khách API.
+    CustomerWebhookModule,
     DesignStorageModule,
     FulfillmentModule,
     ShippingVnpModule,
@@ -101,19 +104,44 @@ import { SharedModule } from './shared/shared.module';
         limit: 300,
       },
     ]),
+    /**
+     * Redis cache — client này dùng chung cho `CACHE_MANAGER`, `RedisCacheService` và rate limiter.
+     *
+     * KHÔNG rút gọn lại thành `{ store: redisStore, ... }`. Hai thứ bên dưới là bắt buộc:
+     *
+     * 1. `.on('error')` — `redisStore()` chỉ gọi `createClient()` chứ không gắn listener nào.
+     *    Client node-redis là EventEmitter, mà EventEmitter phát `'error'` khi không có
+     *    listener thì Node ném thẳng thành uncaught exception → chết cả process. Chỉ cần
+     *    Redis đóng connection đang rỗi (`timeout` trong redis.conf, máy dev hay để 300s)
+     *    là API tự crash sau vài phút không ai dùng, dev phải chạy lại liên tục.
+     * 2. `pingInterval` — PING định kỳ để connection không bao giờ "rỗi" dưới mắt Redis,
+     *    nên Redis không đóng nó ngay từ đầu. `tcp-keepalive` KHÔNG thay được: Redis tính
+     *    `timeout` theo lần chạy lệnh cuối, không theo gói keep-alive tầng TCP.
+     */
     CacheModule.registerAsync({
       isGlobal: true,
       imports: [ConfigModule],
       inject: [ApiConfigService],
-      useFactory: (configService: ApiConfigService) => ({
-        store: redisStore,
-        password: configService.redis.password,
-        database: configService.redis.db,
-        socket: {
-          host: configService.redis.host,
-          port: configService.redis.port,
-        },
-      }),
+      useFactory: async (configService: ApiConfigService) => {
+        const logger = new Logger('RedisCache');
+        const store = await redisStore({
+          password: configService.redis.password,
+          database: Number(configService.redis.db),
+          socket: {
+            host: configService.redis.host,
+            port: Number(configService.redis.port),
+            // Không bao giờ bỏ cuộc: backoff tăng dần rồi chốt ở 10s.
+            reconnectStrategy: (retries: number) => Math.min(1000 + retries * 500, 10_000),
+          },
+          pingInterval: 60_000,
+        });
+
+        store.client.on('error', (error: Error) => logger.error(`Redis client error: ${error.message}`));
+        store.client.on('reconnecting', () => logger.warn('Redis reconnecting...'));
+        store.client.on('ready', () => logger.log('Redis ready'));
+
+        return { store };
+      },
     }),
     ConfigModule.forRoot({
       isGlobal: true,

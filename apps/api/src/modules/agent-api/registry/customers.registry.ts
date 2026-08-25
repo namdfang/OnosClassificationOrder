@@ -41,6 +41,11 @@ export const customersRegistry: AgentTableSpec = {
     // Hai trong BỐN tên bị chặn còn lại sau `API-19` — bí mật xác thực
     'password',
     'passwordSource',
+    // `apiKeys[]` (ORD-4) — mỗi phần tử chứa `hash` (sha256 của API key khách
+    // dùng gọi Public Order API). Cùng loại với `password`: lộ hash là cho
+    // phép dò ngược/đối chiếu offline, nên loại trừ CẢ mảng thay vì phơi các
+    // trường vô hại (label/prefix/lastUsedAt) rồi để `hash` lọt theo.
+    'apiKeys',
     // KHÔNG phải trường bị cấm: `impersonatedBy` là trường ĐỘNG, không có
     // khai báo trên schema nên KHÔNG tồn tại trong collection — không có gì để
     // phơi. Đưa vào `fields` thì bất biến I4 đỏ vì nó là trường ma.

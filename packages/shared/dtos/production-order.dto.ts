@@ -12,7 +12,7 @@ import {
 import { BaseEntityZod, PageQueryZod, PageResZod, ResZod } from '@shared/types';
 import { z } from 'zod';
 
-import { IDZod } from '../constants/common-zod';
+import { BooleanFlagZod, IDZod } from '../constants/common-zod';
 import { VnpShipmentInfoZod } from './vnp-shipping.dto';
 
 export const DesignerStatusZod = z.nativeEnum(DesignerStatus);
@@ -384,7 +384,17 @@ export const OrderWorkshopFieldZod = z.enum(ORDER_WORKSHOP_FIELDS);
 
 //
 export const GetProductionOrdersZod = PageQueryZod.extend({
-  isMapped: z.coerce.boolean().optional(),
+  /**
+   * `true` → chỉ đơn ĐÃ map product config; `false` → chỉ đơn CHƯA map. Bỏ qua
+   * khi không truyền. `getOrders` kiểm `typeof dto.isMapped === 'boolean'` nên
+   * đây là cờ BA TRẠNG THÁI: `false` mang nghĩa riêng, không phải "tắt".
+   *
+   * Trước ORD-24 dùng `z.coerce.boolean()`, mà `z.coerce.boolean('false')` ra
+   * `true` — nên nút "Chưa mapping" ở `ListOrderTab` (chỗ DUY NHẤT trong cả FE
+   * gửi chuỗi `'false'`) trả về ĐÚNG ĐIỀU NGƯỢC LẠI: đơn đã map. Tab đó đang
+   * tắt nên chưa ai gặp; bật lại mà chưa sửa là lỗi hiện ra ngay.
+   */
+  isMapped: BooleanFlagZod,
   factoryId: IDZod.optional(),
   machineTypeId: IDZod.optional(),
   status: z.string().optional(),
@@ -450,13 +460,31 @@ export const GetProductionOrdersZod = PageQueryZod.extend({
    * biệt `__none__` để lọc đơn chưa có designerStatus (data legacy).
    */
   designerStatus: z.string().optional(),
-  /** Truthy → chỉ lấy đơn chưa map xưởng (factoryId null / không có). */
-  unmapped: z.coerce.boolean().optional(),
+  /** `true` → chỉ lấy đơn chưa map xưởng (factoryId null / không có). */
+  unmapped: BooleanFlagZod,
   /**
-   * Truthy → chỉ lấy đơn có lỗi xưởng (productionError set, khác null/empty).
-   * Falsy → chỉ lấy đơn không có lỗi. Bỏ qua khi không có giá trị.
+   * Truthy → GIỮ đơn xưởng US (xưởng ngoài luồng sản xuất) trong kết quả, thay
+   * vì loại mặc định. Đơn chưa map xưởng VẪN bị loại, đơn đã hủy VẪN bị loại —
+   * cờ này chỉ mở đúng một nhóm.
+   *
+   * Chỉ trang **Danh sách đơn classic** (`/orders/classic`) gửi cờ này. Cố ý
+   * làm cờ theo TỪNG REQUEST chứ không nới ở hàm dùng chung: `GET /orders` còn
+   * phục vụ drill-down từ dashboard, mà số ở đó phải khớp số dashboard — nới
+   * chung là lệch số mà không báo lỗi. Xem `Orders.md §21.3` (ORD-19).
+   *
+   * Phân giải bằng `BooleanFlagZod` chứ KHÔNG phải `z.coerce.boolean()`: cái
+   * sau coi mọi chuỗi khác rỗng là bật, nên `includeExcludedFactory=false` —
+   * cách tự nhiên nhất để nói "đừng gộp" — lại GỘP đơn xưởng US vào danh sách
+   * mà không báo lỗi gì (ORD-21). Giá trị lạ → tắt, tức giữ mặc định an toàn.
    */
-  hasError: z.coerce.boolean().optional(),
+  includeExcludedFactory: BooleanFlagZod,
+  /**
+   * `true` → chỉ lấy đơn có lỗi xưởng (productionError set, khác null/empty).
+   * `false` **không được hỗ trợ** — muốn xem đơn không lỗi thì đừng gửi cờ
+   * (xem comment tại `getOrders`). Comment cũ ghi "Falsy → chỉ lấy đơn không có
+   * lỗi" là SAI, mã chưa bao giờ làm vậy — sửa lại ở ORD-23.
+   */
+  hasError: BooleanFlagZod,
 
   /**
    * CSV `productionErrorSource` ('designer'|'factory'|'tool-check') — lọc theo
@@ -481,7 +509,7 @@ export const GetProductionOrdersZod = PageQueryZod.extend({
    * HOẶC `designerStatus ∈ [assigned, in-progress, rework, done]`. Kết hợp
    * `assignee=__none__` cho drill hàng "Chưa gán designer" Tổng quan N ngày.
    */
-  needDesigner: z.coerce.boolean().optional(),
+  needDesigner: BooleanFlagZod,
   /**
    * userId → đơn có sự kiện bàn giao "Không làm được" ĐI từ user này
    * (`designerRejections.fromUserId`). Drill hàng "Không làm được" panel
@@ -496,14 +524,19 @@ export const GetProductionOrdersZod = PageQueryZod.extend({
    * chưa soát (note rỗng) ∨ đã gán & chưa xong (status assigned/in-progress/
    * rework) ∨ đang lỗi & chưa gán (pool cần designer). Union — mirror aggregation.
    */
-  designBacklog: z.coerce.boolean().optional(),
+  designBacklog: BooleanFlagZod,
 
   /**
-   * Truthy → chỉ lấy đơn đang GIỮ (heldAt set). Falsy → chỉ lấy đơn KHÔNG giữ.
-   * Bỏ qua khi không truyền (mặc định hiện cả đơn giữ lẫn không giữ — đơn giữ
-   * chỉ bị tô xám + khóa, không ẩn khỏi list).
+   * `true` → chỉ lấy đơn đang GIỮ (heldAt set). `false` → chỉ lấy đơn KHÔNG
+   * giữ. Bỏ qua khi không truyền hoặc truyền rỗng (mặc định hiện cả đơn giữ
+   * lẫn không giữ — đơn giữ chỉ bị tô xám + khóa, không ẩn khỏi list).
+   *
+   * Đây là cờ BA TRẠNG THÁI thật: `false` mang nghĩa riêng chứ không phải
+   * "tắt". Trước ORD-23, `held=false` bị hiểu thành `true` nên trả về đúng điều
+   * ngược lại, còn `held=` (rỗng) bị hiểu thành `false` nên lọc mất đơn đang
+   * giữ thay vì không lọc gì. Giao diện chỉ gửi `'true'` nên chưa ai gặp.
    */
-  held: z.coerce.boolean().optional(),
+  held: BooleanFlagZod,
 
   /**
    * Lọc theo LÝ DO giữ đơn — exact match `holdReason` (field chỉ tồn tại khi
@@ -520,7 +553,7 @@ export const GetProductionOrdersZod = PageQueryZod.extend({
    * không truyền (list mặc định vẫn hiện đơn hủy tô xám). Đơn hủy LUÔN bị loại
    * khỏi mọi facet count (dropdown filter) trừ khi toggle này bật.
    */
-  cancelled: z.coerce.boolean().optional(),
+  cancelled: BooleanFlagZod,
 
   /**
    * Factory transfer filter. Values:
@@ -1049,6 +1082,33 @@ export const GetNextDesignReviewOrderZod = z.object({
 });
 export class GetNextDesignReviewOrderDto extends createZodDto(extendApi(GetNextDesignReviewOrderZod)) {}
 
+/**
+ * ORD-6 — 1 vị trí in của đơn, kèm kích thước in THẬT (cm) ứng với size của
+ * CHÍNH đơn đó (nguồn `ProductConfig.printArea[].sizeDimensions`, PRD-7).
+ *
+ * Danh sách là HỢP của: vị trí in đã cấu hình ở sản phẩm + vị trí có mặt trong
+ * `designs` của đơn. Vị trí có design mà sản phẩm chưa cấu hình vẫn được liệt kê
+ * với `configured: false` để tool biết là "có file nhưng chưa có cấu hình" thay
+ * vì im lặng bỏ qua.
+ *
+ * `widthCm`/`lengthCm` = null khi size của đơn KHÔNG khớp size nào trong cấu
+ * hình, hoặc vị trí chưa nhập kích thước. TUYỆT ĐỐI không lấy tạm size khác /
+ * số mặc định — tool phải dừng và báo lỗi thay vì in sai kích thước lên giấy.
+ */
+export const DesignReviewPrintAreaZod = z.object({
+  /** Trùng key trong `designs` (`DesignFields`) — dùng để ghép 1-1 với file design. */
+  key: z.string(),
+  /** Nhãn tiếng Việt của vị trí in (từ `PRODUCT_PRINT_AREA_LABEL_MAP`) — để in nhãn/hiển thị. */
+  label: z.string(),
+  /** false = vị trí này có design nhưng sản phẩm CHƯA cấu hình nó. */
+  configured: z.boolean(),
+  /** Chiều rộng in (cm) theo size của đơn. null = chưa xác định được, xem doc ở trên. */
+  widthCm: z.number().nullable(),
+  /** Chiều dài in (cm) theo size của đơn. null = chưa xác định được. */
+  lengthCm: z.number().nullable(),
+});
+export type DesignReviewPrintArea = z.infer<typeof DesignReviewPrintAreaZod>;
+
 export const DesignReviewOrderZod = z.object({
   /** Mã đơn nội bộ — khóa duy nhất, luôn có, dùng để gọi lại các API khác (vd cập nhật toolResultNote). */
   productionId: z.string(),
@@ -1062,6 +1122,19 @@ export const DesignReviewOrderZod = z.object({
   mockupUrl: z.string().optional(),
   /** Ngày đơn chuyển sang sản xuất (đơn vào production) — null nếu đơn chưa có mốc này. */
   inProductionAt: z.coerce.date().nullable().optional(),
+  /**
+   * ORD-6 — đơn này có in DTF không. Suy từ cấu hình sản phẩm
+   * (`ProductConfig.printMethod === 'dtf'`), CỘNG quy ước cũ `productCode === 'TIFF'`
+   * để tool bản đang chạy ở xưởng không gãy. Không tra được sản phẩm → false.
+   */
+  isDtf: z.boolean(),
+  /** ORD-6 — vị trí in + kích thước theo size của đơn. Rỗng khi sản phẩm chưa cấu hình vị trí nào. */
+  printAreas: DesignReviewPrintAreaZod.array(),
+  /**
+   * ORD-6 — SKU biến thể khớp size + màu của đơn. null khi không tra được sản
+   * phẩm, không có biến thể nào khớp, hoặc khớp NHIỀU biến thể (không đoán).
+   */
+  variantSku: z.string().nullable(),
 });
 export type DesignReviewOrder = z.infer<typeof DesignReviewOrderZod>;
 
@@ -1228,6 +1301,14 @@ export const CancelOrderZod = z.object({
 export class CancelOrderDto extends createZodDto(extendApi(CancelOrderZod)) {}
 export const CancelOrderResZod = ResZod.extend({ data: ProductionOrderZod });
 export class CancelOrderResDto extends createZodDto(extendApi(CancelOrderResZod)) {}
+
+/**
+ * "Chuyển hoàn thành" — SuperAdmin ép 1 đơn về trạng thái đã hoàn thành sản
+ * xuất, các khâu chưa xong được điền mốc chia đều từ lúc đơn vào sản xuất tới
+ * lúc bấm (`Orders.md §23`). Không có body: mọi thứ suy ra từ chính đơn.
+ */
+export const ForceCompleteOrderResZod = ResZod.extend({ data: ProductionOrderZod });
+export class ForceCompleteOrderResDto extends createZodDto(extendApi(ForceCompleteOrderResZod)) {}
 
 // ─── Giữ đơn (hold / unhold) ────────────────────────────────────────
 // Hold: tạm dừng đơn — set heldAt + holdReason, khóa mọi thao tác cho tới khi
@@ -1421,14 +1502,21 @@ export const GetFactoryOverviewZod = z.object({
    * Optional — scope `availableFilters` chỉ về đơn có lỗi xưởng (Phase 8).
    * Mutually exclusive với printStage trên FE (chip "Lỗi xưởng" thay vị trí
    * "Đang in"). `true` → `productionError $exists & != ''`.
+   *
+   * Dùng `BooleanFlagZod` giống bản khai ở `GetProductionOrdersZod` — CÙNG TÊN
+   * CỜ thì phải CÙNG HÀNH VI. Để một bản phân giải đúng và một bản còn bẫy
+   * `false → true` là mời lỗi quay lại dưới vỏ bọc khó ngờ nhất: cùng một
+   * tham số, hai endpoint, hai kết quả (ORD-23).
    */
-  hasError: z.coerce.boolean().optional(),
+  hasError: BooleanFlagZod,
   /**
    * Optional — scope tất cả `availableFilters` về đơn chưa map xưởng. Mutually
    * exclusive với `factoryId`/`printStage`/`hasError` trên FE (chip "Chưa xác
    * định xưởng" thay cho chip xưởng).
+   *
+   * `BooleanFlagZod` — cùng lý do như `hasError` ngay trên (ORD-23).
    */
-  unmapped: z.coerce.boolean().optional(),
+  unmapped: BooleanFlagZod,
   /**
    * Faceted select filters — used to narrow OTHER `availableFilters` so the
    * dropdown counts reflect the current cross-filter scope. Each facet excludes

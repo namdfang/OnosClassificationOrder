@@ -420,6 +420,11 @@ export function ListOrderTab({ refreshKey }: ListOrderTabProps) {
     const params = new URLSearchParams();
     if (search) params.set('search', search);
     if (bulkIds.length) params.set('productionIds', bulkIds.join(','));
+    // `isMapped` là cờ BA TRẠNG THÁI: 'false' KHÔNG phải "tắt lọc" mà mang
+    // nghĩa riêng — chỉ đơn CHƯA map product config. Đừng rút gọn thành một
+    // nhánh rồi bỏ nhánh dưới: bỏ đi là mất hẳn bộ lọc "Chưa mapping".
+    // Đây cũng là chỗ DUY NHẤT trong cả FE gửi chuỗi 'false', nên nó là nơi
+    // lộ ra lỗi phân giải cờ (ORD-24) — xem `Orders.md §23`.
     if (filterMapped === 'mapped') params.set('isMapped', 'true');
     if (filterMapped === 'unmapped') params.set('isMapped', 'false');
     if (filterError) params.set('hasError', 'true');

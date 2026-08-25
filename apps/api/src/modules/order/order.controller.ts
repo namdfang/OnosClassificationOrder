@@ -29,6 +29,7 @@ import {
   ClaimDesignerTasksDto,
   DesignerBacklogResDto,
   DesignerBreakdownResDto,
+  ForceCompleteOrderResDto,
   FulfillmentStatusCountsResDto,
   GetCancelledOrdersDto,
   GetCancelledOrdersResDto,
@@ -453,6 +454,26 @@ export class OrderController {
       userAgent,
     });
     return { success: true, data } as unknown as CancelOrderResDto;
+  }
+
+  @Post(':id/force-complete')
+  @Auth([RoleType.SuperAdmin])
+  @ApiOperation({
+    summary:
+      'Chuyển hoàn thành — ép đơn về đã hoàn thành sản xuất, khâu chưa xong được chia đều mốc từ lúc vào sản xuất tới lúc bấm. SuperAdmin only.',
+  })
+  @HttpCode(HttpStatus.OK)
+  @ApiOkResponse({ type: ForceCompleteOrderResDto })
+  async forceCompleteOrder(
+    @Param('id') id: string,
+    @AuthUser() user: UserDocument,
+    @ClientIp() ip: string,
+    @UserAgent() userAgent: string,
+  ): Promise<ForceCompleteOrderResDto> {
+    this.logger.info({
+      message: JSON.stringify({ method: 'POST', url: `/orders/${id}/force-complete`, userId: user?._id }),
+    });
+    return this.orderService.forceCompleteOrder(id, user?.role?.name as RoleType, { user, ip, userAgent });
   }
 
   @Patch('bulk-hold')

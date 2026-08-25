@@ -30,7 +30,23 @@
     }
   },
   "configTab": {
-    "searchPlaceholder": "Tìm theo tên, viết tắt, SKU…",
+    "filters": {
+      "fullName": "Tên sản phẩm",
+      "fullNamePlaceholder": "Tìm theo tên…",
+      "shortName": "Tên viết tắt",
+      "shortNamePlaceholder": "Tìm theo tên viết tắt…",
+      "designReviewCode": "Mã chạy tool",
+      "designReviewCodePlaceholder": "Tìm theo mã chạy tool…",
+      "factory": "Xưởng",
+      "allFactories": "Tất cả xưởng",
+      "department": "Phòng",
+      "allDepartments": "Tất cả phòng",
+      "fabricType": "Loại vải",
+      "allFabrics": "Tất cả loại vải",
+      "fabricNotSet": "Chưa đặt loại vải",
+      "status": "Trạng thái",
+      "clear": "Xóa bộ lọc"
+    },
     "statusFilter": {
       "title": "Lọc theo trạng thái — mặc định ẩn các sản phẩm Đã ẩn",
       "allExceptHidden": "Tất cả (trừ Đã ẩn)"
@@ -57,6 +73,8 @@
       "mockup": "Mockup",
       "productName": "Tên sản phẩm",
       "shortName": "Viết tắt",
+      "designReviewCode": "Mã chạy tool",
+      "designReviewCodeLinkTitle": "Bấm để mở file template chạy tool của sản phẩm này",
       "machine": "Máy",
       "department": "Phòng",
       "factory": "Xưởng",
@@ -205,7 +223,7 @@
   },
   "importDialog": {
     "title": "Import Product Config",
-    "description": "Paste dữ liệu từ Excel (tab-separated). 7 cột theo thứ tự: <b>Tên đầy đủ</b> — <b>Tên viết tắt</b> — <b>Máy</b> (số máy, vd 94/27, để trống = không có tool) — <b>Xưởng</b> (vd \"MÊ LINH\") — <b>Loại vải</b> (POLY 2 DA, MÈ 64, LỤA 4B, LỤA VÂN GỖ…) — <b>Kết quả Tool</b> (để trống = có tool; \"không tool\" = không có tool) — <b>Phòng</b> (loại máy in, vd \"IN và CẮT LASER\"). Hệ thống match label theo tên (case-insensitive).",
+    "description": "Paste dữ liệu từ Excel (tab-separated). 7 cột theo thứ tự: <b>Tên đầy đủ</b> — <b>Tên viết tắt</b> (để trống được) — <b>Máy</b> (số máy, vd 94/27, để trống = không có tool) — <b>Xưởng</b> (vd \"MÊ LINH\") — <b>Loại vải</b> (POLY 2 DA, MÈ 64, LỤA 4B, LỤA VÂN GỖ…) — <b>Kết quả Tool</b> (để trống = có tool; \"không tool\" = không có tool) — <b>Phòng</b> (loại máy in, vd \"IN và CẮT LASER\"). Hệ thống match label theo tên (case-insensitive).",
     "parseError": "Không parse được dòng nào. Kiểm tra format (đủ 7 cột, cách nhau bằng Tab).",
     "importSuccess": "Imported {{imported}}, updated {{updated}}, {{skippedCount}} cảnh báo",
     "validRows": "{{count}} dòng hợp lệ sẽ được import."
@@ -213,7 +231,6 @@
   "detail": {
     "backToList": "Quay lại danh sách",
     "unsavedConfirm": "Bạn có thay đổi CHƯA LƯU. Rời trang sẽ mất thay đổi — vẫn thoát?",
-    "shortNameRequired": "Tên viết tắt không được để trống",
     "factoryRequired": "Vui lòng chọn xưởng sản xuất",
     "machineTypeRequired": "Vui lòng chọn loại máy",
     "fullNameRequired": "Tên đầy đủ sản phẩm không được để trống",
@@ -271,7 +288,19 @@
       "heightPx": "Cao (px)",
       "additionPrice": "Phụ phí ($)",
       "isRequired": "Bắt buộc design",
-      "isEmbroidery": "Vị trí thêu"
+      "isEmbroidery": "Vị trí thêu",
+      "sizeDims": {
+        "title": "Kích thước in theo size",
+        "filled": "{{filled}}/{{total}} size đã nhập",
+        "size": "Size",
+        "width": "Rộng (cm)",
+        "length": "Dài (cm)",
+        "noSizes": "Sản phẩm chưa có size nào. Thêm biến thể có thuộc tính \"Item Size\" (hoặc \"Size\") ở khu ③ Biến thể & Giá.",
+        "errorPositive": "Phải là số lớn hơn 0",
+        "errorMaxWidth": "Chỉ một trong hai chiều được vượt {{max}} cm — giấy DTF rộng {{max}} cm nhưng dài vô hạn, nên khối quay ngang được; cả hai chiều cùng vượt thì không lọt bề ngang giấy",
+        "errorBoth": "Nhập cả rộng và dài",
+        "errorToast": "Còn {{count}} ô kích thước in chưa hợp lệ — sửa xong mới lưu được"
+      }
     },
     "packaging": {
       "title": "Đóng gói mặc định",
@@ -360,7 +389,14 @@
       "printAreas": "{{count}} vị trí"
     },
     "production": {
-      "slug": "Slug"
+      "slug": "Slug",
+      "designReviewCode": "Mã chạy tool duyệt thiết kế",
+      "designReviewCodePlaceholder": "VD: BBJERNP — để trống nếu sản phẩm không chạy tool",
+      "designReviewCodeHint": "Tool duyệt thiết kế bên ngoài đọc mã này. Khác với Tên viết tắt ở đầu trang; sửa xong lưu là có hiệu lực ngay.",
+      "designReviewTemplateUrl": "URL file template chạy tool",
+      "designReviewTemplateUrlPlaceholder": "https://... — để trống nếu chưa có file template",
+      "designReviewTemplateUrlHint": "Có URL thì mã chạy tool ngoài danh sách sản phẩm bấm được, mở file này ở tab mới. Chỉ nhận http:// hoặc https://; hệ thống không kiểm tra file còn sống hay không.",
+      "designReviewTemplateUrlInvalid": "URL file template phải bắt đầu bằng http:// hoặc https://"
     },
     "toggles": {
       "hideForSeller": "Ẩn sản phẩm với seller",
@@ -527,9 +563,7 @@
     },
     "importButton": "Thêm {{count}} sản phẩm vào config",
     "importSuccess": "Đã thêm {{imported}} sản phẩm vào config, {{skippedCount}} cảnh báo",
-    "invalidRows": "{{count}} dòng thiếu Xưởng/Phòng đã bị bỏ qua.",
-    "autoShortBadge": "tự sinh",
-    "autoShortTitle": "File thiếu Tên viết tắt — hệ thống tự lấy tên sản phẩm làm tên viết tắt, sửa lại sau ở trang Products nếu cần"
+    "invalidRows": "{{count}} dòng thiếu Xưởng/Phòng đã bị bỏ qua."
   },
   "importFullDialog": {
     "title": "Import sản phẩm hoàn chỉnh từ file",

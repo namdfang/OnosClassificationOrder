@@ -1,0 +1,12 @@
+diff --git a/actions/start.action.js b/actions/start.action.js
+index 2ab310687e96482517e7f545d1ea8ac5e068a8fe..5abeedadef92c9daf72afc25044ec56bd49e1935 100644
+--- a/actions/start.action.js
++++ b/actions/start.action.js
+@@ -88,6 +88,7 @@ class StartAction extends build_action_1.BuildAction {
+         return (0, child_process_1.spawn)(binaryToRun, processArgs, {
+             stdio: 'inherit',
+             shell: true,
++            windowsHide: true,
+         });
+     }
+     isSourceMapSupportPkgAvailable() {

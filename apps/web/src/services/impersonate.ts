@@ -24,4 +24,12 @@ const stop = () => {
   return callApi(`/${CONFIG.API_VERSION}/auth/impersonate/stop`, 'post');
 };
 
+/**
+ * AUTH-3 — đường thoát THẬT mà giao diện đang dùng nằm ở
+ * `utils/impersonation.ts` (`exitImpersonation()`): nó gọi bằng axios trần để
+ * tránh vòng import với interceptor, và tự chọn giữa đường nhân viên ở trên với
+ * đường khách `customer/auth/impersonate/stop`. Giữ `stop` ở đây cho đủ bộ
+ * service, đừng gọi thẳng nó cho phiên mạo danh KHÁCH — `RolesGuard` chặn 403.
+ */
+
 export const impersonate = { start, stop };

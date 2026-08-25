@@ -26,6 +26,7 @@ import promotionEn from './locales/en/promotion.json';
 import scanErrorEn from './locales/en/scanError.json';
 import stageErrorCatalogEn from './locales/en/stageErrorCatalog.json';
 import toolCheckWorkflowEn from './locales/en/toolCheckWorkflow.json';
+import trackEn from './locales/en/track.json';
 import workshopConfigEn from './locales/en/workshopConfig.json';
 import agentApiVi from './locales/vi/agentApi.json';
 import authVi from './locales/vi/auth.json';
@@ -52,6 +53,7 @@ import promotionVi from './locales/vi/promotion.json';
 import scanErrorVi from './locales/vi/scanError.json';
 import stageErrorCatalogVi from './locales/vi/stageErrorCatalog.json';
 import toolCheckWorkflowVi from './locales/vi/toolCheckWorkflow.json';
+import trackVi from './locales/vi/track.json';
 import workshopConfigVi from './locales/vi/workshopConfig.json';
 
 const STORAGE_KEY = 'onosfactory-language';
@@ -102,6 +104,7 @@ export const resources = {
     landing: landingVi,
     careers: careersVi,
     catalog: catalogVi,
+    track: trackVi,
     agentApi: agentApiVi,
   },
   en: {
@@ -130,6 +133,7 @@ export const resources = {
     landing: landingEn,
     careers: careersEn,
     catalog: catalogEn,
+    track: trackEn,
     agentApi: agentApiEn,
   },
 } as const;

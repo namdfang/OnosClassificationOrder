@@ -14,6 +14,7 @@ const COLUMNS: { titleKey: string; links: { key: string; href?: string; to?: str
       { key: 'how', href: '#how' },
       { key: 'why', href: '#why' },
       { key: 'benefits', href: '#benefits' },
+      { key: 'track', to: PATHS.TRACK },
     ],
   },
   {

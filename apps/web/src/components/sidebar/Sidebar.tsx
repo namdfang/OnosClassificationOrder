@@ -140,6 +140,12 @@ interface NavChild {
   icon: React.ReactNode;
   /** Permission code from PERMISSION_CATALOG. Empty = always visible. */
   perm?: string;
+  /**
+   * AUTH-7 — mã `page.*` của trang này, khai RIÊNG khi `perm` là mã HÀNH ĐỘNG.
+   * Menu vẫn ẩn/hiện theo `perm` như cũ (không đổi một mục nào); route thì gác
+   * theo `pagePerm` vì quyền VÀO TRANG rộng hơn quyền THAO TÁC trên trang.
+   */
+  pagePerm?: string;
   /** Hiện khi user có BẤT KỲ perm nào trong danh sách (điều kiện OR, thay cho `perm`). */
   anyPerm?: string[];
   /** Role names to hide this entry from (bổ sung cho check `perm`). */
@@ -161,6 +167,8 @@ interface NavItem {
   icon: React.ReactNode;
   children?: NavChild[];
   perm?: string;
+  /** AUTH-7 — xem `NavChild.pagePerm`. */
+  pagePerm?: string;
   /** Active cả khi đang ở route con của `to` (vd `/adm/settings/<section>`). */
   matchPrefix?: boolean;
 }
@@ -168,6 +176,44 @@ interface NavItem {
 interface NavGroup {
   title: string;
   items: NavItem[];
+}
+
+/**
+ * AUTH-7 — bảng tra "đường dẫn trang → mã quyền", dựng TỪ CHÍNH cây menu ở dưới.
+ *
+ * Cố ý KHÔNG viết một bảng ánh xạ thứ hai bằng tay: menu và route được duy trì
+ * tách rời nhau chính là thứ đẻ ra lỗi AUTH-7 (menu đã ẩn mục nhưng gõ thẳng URL
+ * vẫn vào được). Thêm một bảng nữa là thêm một chỗ nữa để quên đồng bộ.
+ *
+ * Đường dẫn KHÔNG có trong bảng ⇒ trang đó không khai mã quyền ⇒ CHO VÀO (giữ
+ * nguyên hành vi cũ). Mặc định mở là có chủ ý: chặn nhầm thì khoá nhân viên ra
+ * khỏi trang họ dùng hằng ngày, còn lọt một trang thì API vẫn tự từ chối.
+ */
+export function buildPagePermissionMap(t: TFunction<'layout'>): Map<string, string> {
+  const map = new Map<string, string>();
+  const put = (to: string | undefined, perm: string | undefined) => {
+    if (!to || !perm) return;
+    // CHỈ nhận mã `page.*`. Vài mục menu gác bằng mã HÀNH ĐỘNG (`workshop.manage`,
+    // `user.manage`, `role.manage`, `order.import`) — chúng chặt hơn quyền VÀO
+    // TRANG: DesignerLeader có `page.workshop_config` nhưng không có
+    // `workshop.manage`, lấy mã đó gác route là khoá mất trang họ được vào.
+    // Những mục đó khai `pagePerm` riêng (caller đã ưu tiên), còn mục nào KHÔNG
+    // có mã trang nào thì để route mở như trước — mặc định cho vào.
+    if (!perm.startsWith('page.')) return;
+    // Mục con của Dashboard trỏ tới cùng một trang kèm `?tab=...` — route chỉ
+    // biết phần đường dẫn, nên cắt query đi. Giữ mục ĐẦU TIÊN gặp: cùng một
+    // trang mà nhiều mục con khai perm khác nhau (vd Dashboard) thì lấy perm
+    // của chính trang đó, không lấy perm hẹp hơn của một tab bên trong.
+    const path = to.split('?')[0];
+    if (!map.has(path)) map.set(path, perm);
+  };
+  for (const group of buildNavGroups(t)) {
+    for (const item of group.items) {
+      put(item.to ?? item.key, item.pagePerm ?? item.perm);
+      for (const child of item.children ?? []) put(child.to, child.pagePerm ?? child.perm ?? item.pagePerm ?? item.perm);
+    }
+  }
+  return map;
 }
 
 function buildNavGroups(t: TFunction<'layout'>): NavGroup[] {
@@ -353,6 +399,9 @@ function buildNavGroups(t: TFunction<'layout'>): NavGroup[] {
           to: PATHS.WORKSHOP_CONFIG,
           icon: <Building2 size={17} />,
           perm: 'workshop.manage',
+          // DesignerLeader CÓ `page.workshop_config` nhưng KHÔNG có `workshop.manage`:
+          // menu vẫn ẩn như trước, còn route thì mở — đúng quyền vào trang của họ.
+          pagePerm: 'page.workshop_config',
         },
       ],
     },
@@ -389,6 +438,7 @@ function buildNavGroups(t: TFunction<'layout'>): NavGroup[] {
               to: PATHS.USERS,
               icon: <User size={14} />,
               perm: 'user.manage',
+              pagePerm: 'page.users',
             },
             {
               key: PATHS.DEPARTMENTS,
@@ -396,6 +446,7 @@ function buildNavGroups(t: TFunction<'layout'>): NavGroup[] {
               to: PATHS.DEPARTMENTS,
               icon: <Building2 size={14} />,
               perm: 'user.manage',
+              pagePerm: 'page.users',
             },
             {
               key: PATHS.ROLES,
@@ -403,6 +454,7 @@ function buildNavGroups(t: TFunction<'layout'>): NavGroup[] {
               to: PATHS.ROLES,
               icon: <ShieldCheck size={14} />,
               perm: 'role.manage',
+              pagePerm: 'page.roles',
             },
             {
               key: PATHS.CUSTOM_ROLES,
@@ -410,6 +462,7 @@ function buildNavGroups(t: TFunction<'layout'>): NavGroup[] {
               to: PATHS.CUSTOM_ROLES,
               icon: <ShieldHalf size={14} />,
               perm: 'role.manage',
+              pagePerm: 'page.roles',
             },
             {
               key: PATHS.IMPERSONATE,

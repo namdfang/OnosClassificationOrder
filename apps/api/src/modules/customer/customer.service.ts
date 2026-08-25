@@ -7,13 +7,16 @@ import {
 } from '@nestjs/common';
 import { InjectModel } from '@nestjs/mongoose';
 import { generateHash, validateHash } from 'core';
-import { randomBytes } from 'crypto';
+import { createHash, randomBytes } from 'crypto';
 import { Model } from 'mongoose';
 import type {
   ChangeCustomerPasswordDto,
+  CreateCustomerApiKeyDto,
+  CreateCustomerApiKeyResDto,
   CreateCustomerDto,
   Customer,
   CustomerAdminRow,
+  CustomerApiKey,
   CustomerAssignmentConfig,
   CustomerLoginDto,
   CustomerPriorityConfig,
@@ -23,7 +26,9 @@ import type {
   GetCustomersResDto,
   ImportCustomerTiersDto,
   ImportCustomerTiersResDto,
+  ListCustomerApiKeysResDto,
   ResetCustomerPasswordDto,
+  RevokeCustomerApiKeyResDto,
   SyncCustomersResDto,
   UpdateCustomerDto,
   UpdateCustomerMeDto,
@@ -31,6 +36,8 @@ import type {
   UpdateCustomerTierDto,
 } from 'shared';
 import {
+  CUSTOMER_API_KEY_MAX_ACTIVE,
+  CUSTOMER_API_KEY_PREFIX,
   CUSTOMER_ASSIGNMENT_CONFIG_KEY,
   CUSTOMER_PRIORITY_CONFIG_KEY,
   customerMatchKey,
@@ -38,19 +45,20 @@ import {
   Status,
 } from 'shared';
 
+import { diacriticInsensitiveRegex } from '@/utils';
+
 import { OrderEntity } from '../order/order.entity';
 import { SystemConfigService } from '../system-config/system-config.service';
 import type { CustomerDocument } from './customer.entity';
 import { CustomerEntity } from './customer.entity';
 
-function escapeRegex(s: string): string {
-  return s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-}
-
 /** Không bao giờ trả `password` (hash) ra ngoài API — kể cả cho chính khách hàng đó. */
 export function toSafeCustomer(doc: CustomerDocument): Customer {
   const obj = doc.toObject() as Record<string, unknown>;
   delete obj.password;
+  // ORD-4 — apiKeys chứa `hash` (sha256 của key plain): lộ hash là cho phép
+  // đối chiếu offline. Danh sách key có endpoint riêng đã lọc field an toàn.
+  delete obj.apiKeys;
   // AUTH-1 — `passwordSource === 'system'` là tín hiệu "tài khoản này đang dùng
   // mật khẩu mặc định do mạo danh đặt". Để lọt ra API thì bất kỳ ai đọc được
   // danh sách khách đều lọc ra ngay tập tài khoản đăng nhập được. `toObject()`
@@ -79,7 +87,9 @@ export class CustomerService {
       deletedAt: dto.deleted ? { $ne: null } : null,
     };
     if (dto.search?.trim()) {
-      const rx = { $regex: escapeRegex(dto.search.trim()), $options: 'i' };
+      // AUTH-4 — khớp BỎ DẤU (xem `diacriticInsensitiveRegex`); lớp ký tự là
+      // tập cha của chữ gõ vào nên chuỗi có dấu vẫn ra đúng như trước.
+      const rx = { $regex: diacriticInsensitiveRegex(dto.search.trim()), $options: 'i' };
       filter.$or = [{ userSku: rx }, { userEmail: rx }, { fullName: rx }, { phone: rx }];
     }
     if (dto.tier !== undefined && dto.tier !== '') {
@@ -498,5 +508,85 @@ export class CustomerService {
       throw new BadRequestException('Mật khẩu hiện tại không chính xác');
     }
     await this.customerModel.updateOne({ _id: id }, { $set: { password: generateHash(dto.newPassword) } });
+  }
+
+  // ─── API keys — Public Order API (ORD-4, plan §7) ─────────────────────────
+
+  private toSafeApiKey(k: NonNullable<CustomerEntity['apiKeys']>[number]): CustomerApiKey {
+    return {
+      _id: String(k._id),
+      label: k.label,
+      prefix: k.prefix,
+      createdAt: k.createdAt ?? undefined,
+      lastUsedAt: k.lastUsedAt ?? undefined,
+      revokedAt: k.revokedAt ?? undefined,
+    };
+  }
+
+  /** Tạo key mới — key plain `onos_live_<32hex>` trả đúng MỘT lần, DB chỉ giữ sha256. */
+  async createApiKey(customerId: string, dto: CreateCustomerApiKeyDto): Promise<CreateCustomerApiKeyResDto> {
+    const customer = await this.customerModel.findOne({ _id: customerId, deletedAt: null });
+    if (!customer) throw new NotFoundException('Không tìm thấy tài khoản');
+    const active = (customer.apiKeys ?? []).filter((k) => !k.revokedAt);
+    if (active.length >= CUSTOMER_API_KEY_MAX_ACTIVE) {
+      throw new BadRequestException(
+        `Tối đa ${CUSTOMER_API_KEY_MAX_ACTIVE} API key hoạt động — thu hồi bớt key cũ trước.`,
+      );
+    }
+
+    const plain = `${CUSTOMER_API_KEY_PREFIX}${randomBytes(16).toString('hex')}`;
+    const entry = {
+      label: dto.label.trim(),
+      // prefix hiển thị: "onos_live_ab12…" — đủ nhận diện, không đủ đoán key.
+      prefix: `${plain.slice(0, CUSTOMER_API_KEY_PREFIX.length + 4)}…`,
+      hash: createHash('sha256').update(plain).digest('hex'),
+      createdAt: new Date(),
+    };
+    const updated = await this.customerModel.findOneAndUpdate(
+      { _id: customerId },
+      { $push: { apiKeys: entry } },
+      { new: true },
+    );
+    const saved = (updated?.apiKeys ?? []).find((k) => k.hash === entry.hash);
+    if (!saved) throw new BadRequestException('Tạo key thất bại');
+    return { success: true, data: { key: plain, apiKey: this.toSafeApiKey(saved) } };
+  }
+
+  /** Danh sách key HOẠT ĐỘNG của khách — không bao giờ trả hash/key plain. */
+  async listApiKeys(customerId: string): Promise<ListCustomerApiKeysResDto> {
+    const customer = await this.customerModel.findOne({ _id: customerId, deletedAt: null }).lean();
+    if (!customer) throw new NotFoundException('Không tìm thấy tài khoản');
+    const data = (customer.apiKeys ?? []).filter((k) => !k.revokedAt).map((k) => this.toSafeApiKey(k));
+    return { success: true, data };
+  }
+
+  /** Thu hồi key (set revokedAt — giữ record đối chiếu). Key thu hồi vô hiệu NGAY. */
+  async revokeApiKey(customerId: string, keyId: string): Promise<RevokeCustomerApiKeyResDto> {
+    const res = await this.customerModel.updateOne(
+      { _id: customerId, 'apiKeys._id': keyId, 'apiKeys.revokedAt': null },
+      { $set: { 'apiKeys.$.revokedAt': new Date() } },
+    );
+    if (res.matchedCount === 0) throw new NotFoundException('Không tìm thấy key');
+    return { success: true, data: { revoked: true } };
+  }
+
+  /**
+   * Tra khách theo hash API key — dùng bởi `ApiKeyGuard`. Chỉ nhận key CHƯA thu
+   * hồi của khách CHƯA xóa mềm + đang Active; sai/thu hồi/khóa → null (guard trả
+   * 401 chung chung, không tiết lộ key/khách nào tồn tại).
+   */
+  async findByApiKeyHash(hash: string): Promise<CustomerDocument | null> {
+    return this.customerModel.findOne({
+      deletedAt: null,
+      status: Status.Active,
+      apiKeys: { $elemMatch: { hash, revokedAt: null } },
+    });
+  }
+
+  /** Cập nhật lastUsedAt của key — fire-and-forget từ guard, không chặn request. */
+  async touchApiKeyUsage(customerId: string, hash: string): Promise<void> {
+    await this.customerModel
+      .updateOne({ _id: customerId, 'apiKeys.hash': hash }, { $set: { 'apiKeys.$.lastUsedAt': new Date() } })
+      .catch(() => undefined);
   }
 }

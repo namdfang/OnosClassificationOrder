@@ -31,7 +31,9 @@ Mục tiêu: forensic — không xóa, không TTL (volume xưởng nhỏ, cần 
   userName?: string;        // snapshot fullName
   userEmail?: string;       // snapshot email
   roleCode?: string;        // snapshot role.name (vd 'Designer'), index
-  action: 'create' | 'update' | 'delete' | 'import' | 'bulk_update';  // index
+  // `ORDER_LOG_ACTIONS` (shared) — index
+  action: 'create' | 'update' | 'delete' | 'import' | 'bulk_update'
+        | 'transfer' | 'cancel' | 'update_design' | 'hold' | 'unhold' | 'force_complete';
   field?: string;           // field name khi update/bulk_update, index
   before?: unknown;
   after?: unknown;
@@ -72,6 +74,7 @@ type AuditContext = {
 | `OrderService.deleteOrder(id, ctx)` | `delete` | không có field/before/after |
 | `OrderService.updateField(id, dto, role, ctx)` | `update` | `{ field, before: orderCũ[field], after: newValue }` |
 | `OrderService.bulkUpdateField(dto, role, ctx)` | `bulk_update` | 1 row per matched order, mỗi row có `before/after` riêng |
+| `OrderService.forceCompleteOrder(id, role, ctx)` | `force_complete` | `field='fulfillmentCompletedAt'`, `before` = chặng đơn đang đứng, `after = { completedAt, start, steps[] }` — SuperAdmin ép đơn về đã hoàn thành sản xuất, xem `Orders.md §23` |
 | `OrderService.importOrders(dto, ctx)` | `import` | 1 row summary per inserted/updated order: `after = { productionId, type, isMapped, _subAction: 'create'|'update' }`. **Re-import đơn đã tồn tại**: thêm 1 row riêng cho MỖI field bị ghi đè giá trị khác so với trước (`field` + `before` + `after` — cùng shape `updateField()` nên FE render diff bình thường). So sánh ổn định qua `stableStringifyForDiff()` (key-sort trước khi stringify, tránh false-positive do thứ tự key object như `designs` khác nhau). Field bị đổi thường gặp: `factoryId`/`machineTypeId`/`type`/`color`/`size`/`designs`/`designsOriginal`/`mockupUrl` — các field này KHÔNG được bảo vệ khỏi ghi đè khi re-import (khác `toolResult`/`fabricType`/`machineNumber` — insert-only), log lại để truy vết thay vì chặn. Xem `Orders.md` phần OnosPod import. |
 
 Trong mọi case, log push **fire-and-forget** (`void`) để không chặn response.

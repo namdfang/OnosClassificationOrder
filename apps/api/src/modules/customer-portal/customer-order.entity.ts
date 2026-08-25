@@ -107,6 +107,20 @@ export class CustomerOrderEntity extends DatabaseEntityAbstract {
   @Prop({ type: Date, default: null, index: true })
   pushedAt?: Date | null;
 
+  /**
+   * Chỗ giữ trước khi gọi `importOrders()` — chống đẩy trùng (ORD-20). Đặt
+   * bằng 1 lệnh ghi có điều kiện (`pushedAt: null` + chưa ai giữ), nên hai
+   * lượt push song song chỉ 1 lượt giành được; lượt kia nhận thông báo rõ ràng
+   * thay vì lỗi trùng khoá `productionId` từ tầng dưới.
+   *
+   * KHÔNG dùng chính `pushedAt` làm chỗ giữ: đặt `pushedAt` trước khi đơn thật
+   * sự vào sản xuất thì tiến trình chết giữa chừng sẽ để lại đơn "đã đẩy" mà
+   * không có đơn sản xuất nào. Trường riêng thì hỏng giữa chừng chỉ để lại chỗ
+   * giữ cũ, và chỗ giữ quá `PUSH_CLAIM_STALE_MS` tự hết hiệu lực.
+   */
+  @Prop({ type: Date, default: null })
+  pushingAt?: Date | null;
+
   @Prop({ ref: 'CustomerPaymentEntity' })
   paymentId?: string;
 

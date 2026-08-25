@@ -45,6 +45,7 @@ import type {
   FactoryBucket,
   FactoryFlow,
   FactoryOverviewCell,
+  ForceCompleteOrderResDto,
   FulfillmentTimelineEntry,
   GetCancelledOrdersDto,
   GetCancelledOrdersResDto,
@@ -96,7 +97,16 @@ import type {
   UpdateOrderFieldResDto,
   UserBreakdown,
 } from 'shared';
-import type { GetOrderLogsDto, LifecycleTrack, LifecycleTrackStage, LifecycleTrackStatus } from 'shared';
+import type {
+  CustomerWebhookEvent,
+  DesignReviewPrintArea,
+  GetOrderLogsDto,
+  LifecycleTrack,
+  LifecycleTrackStage,
+  LifecycleTrackStatus,
+  ProductPrintArea,
+  ProductVariation,
+} from 'shared';
 import {
   customerMatchKey,
   DESIGNER_ACTIVE_STATUSES,
@@ -111,9 +121,13 @@ import {
   FulfillmentTransitionAction,
   HOLD_REASON_WAITING_ADDRESS,
   HOLD_REASON_WAITING_DESIGN,
+  isVariationColorLabel,
   LIFECYCLE_STAGE_KEYS,
+  normalizeVariationText,
   parseProductionIdFromCuttingFilename,
+  PRODUCT_PRINT_AREA_LABEL_MAP,
   redirectAutoTarget,
+  resolveVariationSizeLabel,
   RoleType,
   Status,
   WorkshopConfigCategory,
@@ -124,6 +138,7 @@ import { getExcludedFactoryIdSync, loadExcludedFactoryId, productionFactoryClaus
 import { getFactoryFlowTypeSync, loadFactoryFlowTypes } from '../../utils/merged-flow-factory';
 import { CustomerRepository } from '../customer/customer.repository';
 import { CustomerAssignmentService } from '../customer-assignment/customer-assignment.service';
+import { CustomerOrderEventService } from '../customer-event/customer-order-event.service';
 import { DESIGN_PREVIEW_QUEUE, DESIGN_THUMB_QUEUE, DesignImageJobData } from '../design-image/design-image.processor';
 import { DesignImageService } from '../design-image/design-image.service';
 import { FactoryRepository } from '../factory/factory.repository';
@@ -137,8 +152,8 @@ import { RoleRepository } from '../role/role.repository';
 import { SystemConfigService } from '../system-config/system-config.service';
 import { UserEntity } from '../user/user.entity';
 import { WorkshopConfigRepository } from '../workshop-config/workshop-config.repository';
-import { mapProductTypeToCode } from './design-review-product-code';
 import { DriveFileNameService } from './drive-file-name.service';
+import { planForceComplete } from './force-complete-plan';
 import { OnospodOrderLookupService } from './onospod-order-lookup.service';
 import { OrderDocument, OrderEntity } from './order.entity';
 import { OrderRepository } from './order.repository';
@@ -306,6 +321,27 @@ const ADDRESS_FIELDS: Array<keyof ProductionOrderShippingAddress> = [
   'phone',
 ];
 
+/**
+ * ORD-6 — mã `printMethod` (danh mục `workshop_config` category `print_method`)
+ * được coi là in DTF. Danh mục thật hiện có: dtg · dtf · sublimation · embroidery.
+ */
+const DTF_PRINT_METHOD_CODE = 'dtf';
+
+/**
+ * ORD-6 — quy ước CŨ của tool: mã chạy tool đúng chữ `TIFF` nghĩa là đơn in DTF.
+ * GIỮ LẠI vì tool bản đang chạy ở xưởng dựa vào nó; nay chỉ là đường phụ, đường
+ * chính là `printMethod` của sản phẩm.
+ */
+const LEGACY_DTF_PRODUCT_CODE = 'TIFF';
+
+/** Phần cấu hình sản phẩm mà design review cần đọc — xem `OrderService.toDesignReviewOrder`. */
+type DesignReviewProductDoc = {
+  designReviewCode?: string;
+  printMethod?: string;
+  printArea?: ProductPrintArea;
+  variations?: ProductVariation[];
+};
+
 /** Field cần cho `getNextDesignReviewOrder`/`getDesignReviewOrderByProductionId` — xem `OrderService.toDesignReviewOrder`. */
 type DesignReviewSourceDoc = {
   productionId: string;
@@ -412,7 +448,34 @@ export class OrderService implements OnModuleInit {
     private readonly customerAssignmentService: CustomerAssignmentService,
     private readonly customerRepository: CustomerRepository,
     private readonly onospodOrderLookupService: OnospodOrderLookupService,
+    private readonly customerOrderEventService: CustomerOrderEventService,
   ) {}
+
+  /**
+   * Bắn sự kiện hướng ra khách khi đơn đổi trạng thái — webhook cho khách API
+   * (ORD-4) + thông báo chuông portal (ORD-5), qua nguồn sự kiện DUY NHẤT.
+   * Fire-and-forget hoàn toàn: service tự nuốt lỗi và chạy nền, KHÔNG chặn hay
+   * làm chậm luồng nghiệp vụ. Đơn không thuộc khách nào → no-op.
+   *
+   * `holdReason` truyền NGUYÊN VĂN nội bộ; `CustomerOrderEventService` tự quy
+   * về nhóm an toàn trước khi hiện cho khách (không phô ghi chú nội bộ).
+   */
+  private emitCustomerOrderEvent(
+    event: CustomerWebhookEvent,
+    orders: Array<{ productionId?: string; userSku?: string; userEmail?: string }>,
+    opts?: { extra?: Record<string, string | null | undefined>; holdReason?: string },
+  ): void {
+    this.customerOrderEventService.emit(
+      event,
+      orders.map((o) => ({
+        productionId: o.productionId,
+        userSku: o.userSku,
+        userEmail: o.userEmail,
+        extra: opts?.extra,
+        holdReason: opts?.holdReason,
+      })),
+    );
+  }
 
   /** Validate giá trị assignee là userId hợp lệ (user role=Designer, ĐANG BẬT). */
   private async assertAssigneeUserValid(userId: string | null): Promise<void> {
@@ -1228,11 +1291,16 @@ export class OrderService implements OnModuleInit {
     // Đơn chưa map xưởng (factoryId null/missing) VÀ đơn xưởng US (ngoài luồng
     // sản xuất) bị loại khỏi MỌI view mặc định — unmapped xem qua trang "Không
     // xác định xưởng" (dto.unmapped=true), đơn US chỉ xem ở tab Đơn hàng theo
-    // xưởng hoặc khi lọc tường minh factoryId (Orders.md §21).
+    // xưởng, khi lọc tường minh factoryId, hoặc khi caller xin tường minh qua
+    // `dto.includeExcludedFactory` (ORD-19 — chỉ trang Danh sách đơn classic
+    // gửi cờ này; đơn chưa map xưởng vẫn bị loại). Xem Orders.md §21.
     // Designer/Fulfillment branch ở trên đã tự loại trừ null qua equality/$or
     // factoryId cụ thể nên không cần áp lại ở đây (tránh set field 2 lần).
     if (dto?.unmapped !== true && filter.factoryId === undefined && !filter.$or) {
-      filter.factoryId = productionFactoryClause(this.orderModel.db);
+      filter.factoryId =
+        dto?.includeExcludedFactory === true
+          ? { $exists: true, $ne: null }
+          : productionFactoryClause(this.orderModel.db);
     }
 
     return filter;
@@ -4550,6 +4618,7 @@ export class OrderService implements OnModuleInit {
       after: dto.reason,
       ctx,
     });
+    this.emitCustomerOrderEvent('order.cancelled', [updated], { extra: { cancelReason: dto.reason ?? '' } });
     void this.invalidateListCache();
     return updated;
   }
@@ -4608,6 +4677,10 @@ export class OrderService implements OnModuleInit {
       after: dto.reason ?? '',
       ctx,
     });
+    this.emitCustomerOrderEvent('order.held', [updated], {
+      extra: { holdReason: dto.reason ?? '' },
+      holdReason: dto.reason ?? '',
+    });
     void this.invalidateListCache();
     return { success: true, data: updated } as unknown as HoldOrderResDto;
   }
@@ -4633,8 +4706,164 @@ export class OrderService implements OnModuleInit {
       after: null,
       ctx,
     });
+    this.emitCustomerOrderEvent('order.unheld', [updated]);
     void this.invalidateListCache();
     return { success: true, data: updated } as unknown as HoldOrderResDto;
+  }
+
+  // ─── Chuyển hoàn thành (SuperAdmin) — Orders.md §23 ────────────────
+  /**
+   * Ép 1 đơn về trạng thái **đã hoàn thành sản xuất**, và điền mốc thời gian
+   * cho các khâu chưa xong bằng cách CHIA ĐỀU khoảng
+   * `[đơn vào sản xuất → lúc bấm]` theo đúng luồng của xưởng đang giữ đơn
+   * (`planForceComplete`).
+   *
+   * Đây là cửa sửa dữ liệu, không phải một bước của quy trình: dùng cho đơn đã
+   * xong ngoài đời nhưng xưởng quên bấm, để nó thôi treo trên Dashboard /
+   * Lifecycle / banner quá hạn. Vì vậy nó ghi thẳng vào đơn thay vì đi qua
+   * `FulfillmentTaskService.transition()` — transition đòi đúng người giữ công
+   * đoạn, đúng thứ tự `waiting → in-progress → done`, tức phải giả lập hàng
+   * chục lượt bấm mới đi hết 6 công đoạn.
+   *
+   * Đổi lại, ba thứ được giữ đúng như một đơn chảy thật:
+   *  - `fulfillmentTimeline` có đủ dòng cho từng công đoạn được điền, ghi rõ
+   *    ai bấm và lý do — nhìn vào lịch sử là biết đơn này được ép, không phải
+   *    xưởng làm.
+   *  - `workMs` KHÔNG bịa: công đoạn ép xong giữ nguyên 0, vì không có ai làm
+   *    thật. Số giờ làm việc của xưởng không được phép phình lên vì một lần
+   *    sửa dữ liệu.
+   *  - Mốc thật đã có trên đơn không bị ghi đè (xem `planForceComplete`).
+   *
+   * Đơn cũng được kéo qua nốt hai chặng trước fulfillment (soát tool +
+   * thiết kế) nếu còn dở: đơn "hoàn thành sản xuất" mà vẫn nằm trong hàng đợi
+   * soát tool / backlog cần gán designer là trạng thái tự mâu thuẫn, và chính
+   * mấy hàng đợi đó là thứ người dùng muốn dọn khi bấm nút này.
+   */
+  async forceCompleteOrder(id: string, roleName?: RoleType, ctx?: AuditContext): Promise<ForceCompleteOrderResDto> {
+    if (roleName !== RoleType.SuperAdmin) {
+      throw new ForbiddenException('Chỉ SuperAdmin được chuyển đơn sang hoàn thành.');
+    }
+    const order = await this.orderModel.findById(id).lean();
+    if (!order) throw new NotFoundException('Order not found');
+
+    const o = order as unknown as {
+      cancelledAt?: Date | null;
+      heldAt?: Date | null;
+      fulfillmentCompletedAt?: Date | null;
+      currentFulfillmentStage?: FulfillmentStage | null;
+      factoryId?: string;
+      inProductionAt?: Date;
+      orderAt?: Date;
+      createdAt?: Date;
+      toolCheckedAt?: Date;
+      toolResultNote?: string;
+      designerStatus?: DesignerStatus;
+      designerAssignedAt?: Date;
+      designerStartedAt?: Date;
+      designerFirstStartedAt?: Date;
+      designerCompletedAt?: Date;
+      fulfillmentStages?: Record<string, { status?: FulfillmentStageStatus; completedAt?: Date } | undefined>;
+    };
+
+    if (o.cancelledAt) throw new BadRequestException('Đơn đã hủy — không thể chuyển hoàn thành.');
+    // Đơn giữ = đang tạm dừng có chủ đích; mở giữ trước rồi mới chốt hoàn thành.
+    this.assertNotHeld(o);
+    if (o.fulfillmentCompletedAt) throw new BadRequestException('Đơn đã hoàn thành sản xuất rồi.');
+
+    const now = new Date();
+    const plan = planForceComplete({
+      now,
+      inProductionAt: o.inProductionAt,
+      orderAt: o.orderAt,
+      createdAt: o.createdAt,
+      flowType: getFactoryFlowTypeSync(this.orderModel.db, o.factoryId),
+      toolCheckedAt: o.toolCheckedAt,
+      toolResultNote: o.toolResultNote,
+      designerStatus: o.designerStatus,
+      designerCompletedAt: o.designerCompletedAt,
+      fulfillmentStages: o.fulfillmentStages,
+    });
+
+    const set: Record<string, unknown> = {};
+    const timeline: FulfillmentTimelineEntry[] = [];
+    const byUserId = ctx?.user?._id ? String(ctx.user._id) : '';
+    const byUserName = ctx?.user?.fullName;
+
+    for (const step of plan.steps) {
+      if (step.key === 'tool-check') {
+        if (!o.toolCheckedAt) set.toolCheckedAt = step.to;
+        // 'ok' là giá trị quy ước "soát xong, không lỗi" mà cả hệ thống đọc.
+        // KHÔNG đụng `toolResult` — field đó giữ mã cấu hình xưởng, bịa vào là
+        // dựng ra một mã không tồn tại trong `workshop_config`.
+        if (!(o.toolResultNote ?? '').trim()) set.toolResultNote = 'ok';
+        continue;
+      }
+      if (step.key === 'designer') {
+        set.designerStatus = DesignerStatus.Done;
+        set.designerAssignedAt = o.designerAssignedAt ?? step.from;
+        set.designerStartedAt = o.designerStartedAt ?? step.from;
+        set.designerFirstStartedAt = o.designerFirstStartedAt ?? step.from;
+        set.designerCompletedAt = step.to;
+        continue;
+      }
+
+      const stage = step.key as FulfillmentStage;
+      const state = o.fulfillmentStages?.[stage];
+      set[`fulfillmentStages.${stage}.status`] = FulfillmentStageStatus.Done;
+      set[`fulfillmentStages.${stage}.waitingAt`] =
+        (state as { waitingAt?: Date } | undefined)?.waitingAt ?? step.from;
+      set[`fulfillmentStages.${stage}.startedAt`] =
+        (state as { startedAt?: Date } | undefined)?.startedAt ?? step.from;
+      set[`fulfillmentStages.${stage}.firstStartedAt`] =
+        (state as { firstStartedAt?: Date } | undefined)?.firstStartedAt ?? step.from;
+      set[`fulfillmentStages.${stage}.completedAt`] = step.to;
+      if (!state) {
+        // Công đoạn chưa từng được kích hoạt → khai đủ counter mặc định, đừng
+        // để `undefined` lọt vào chỗ code khác cộng dồn.
+        set[`fulfillmentStages.${stage}.reworkCount`] = 0;
+        set[`fulfillmentStages.${stage}.workMs`] = 0;
+      }
+      timeline.push({
+        stage,
+        action: FulfillmentTransitionAction.Complete,
+        fromStatus: state?.status ?? FulfillmentStageStatus.Waiting,
+        toStatus: FulfillmentStageStatus.Done,
+        byUserId,
+        byUserName,
+        at: step.to,
+        reason: step.auto ? 'Chuyển hoàn thành (luồng rút gọn)' : 'Chuyển hoàn thành',
+      });
+    }
+
+    set.currentFulfillmentStage = null;
+    set.fulfillmentCompletedAt = now;
+
+    const updated = await this.orderModel.findByIdAndUpdate(
+      id,
+      { $set: set, ...(timeline.length > 0 ? { $push: { fulfillmentTimeline: { $each: timeline } } } : {}) },
+      { new: true },
+    );
+    if (!updated) throw new NotFoundException('Order not found');
+
+    void this.orderLogService.write({
+      orderId: id,
+      action: 'force_complete',
+      field: 'fulfillmentCompletedAt',
+      // `before` = đơn đang đứng ở đâu lúc bị ép; `after` = các khâu đã điền,
+      // đủ để dựng lại chính xác thao tác này khi cần đối chiếu.
+      before: o.currentFulfillmentStage ?? o.designerStatus ?? null,
+      after: {
+        completedAt: now,
+        start: plan.start,
+        steps: plan.steps.map((s) => ({ key: s.key, from: s.from, to: s.to, auto: s.auto })),
+      },
+      ctx,
+    });
+    // Cùng sự kiện với lúc xưởng bấm xong thật — webhook khách (ORD-4) + chuông
+    // portal (ORD-5) không được phân biệt đơn xong thật với đơn được chốt tay.
+    this.emitCustomerOrderEvent('order.production_completed', [updated]);
+    void this.invalidateListCache();
+    return { success: true, data: updated } as unknown as ForceCompleteOrderResDto;
   }
 
   /**
@@ -4680,6 +4909,25 @@ export class OrderService implements OnModuleInit {
       after: dto.hold ? dto.reason ?? '' : null,
       ctx,
     });
+    // Đường BULK cũng phải bắn sự kiện như hold/unhold lẻ (ORD-5) — thiếu ở
+    // đây là khách mất thông báo khi nội bộ thao tác hàng loạt. Đọc lại đúng
+    // các đơn VỪA đổi (updateMany không trả document) để lấy productionId.
+    if (result.modifiedCount > 0) {
+      void this.orderModel
+        .find({ _id: { $in: dto.ids } })
+        .select('productionId userSku userEmail heldAt')
+        .lean()
+        .then((rows) => {
+          const changed = rows.filter((r) => (dto.hold ? !!r.heldAt : !r.heldAt));
+          if (changed.length === 0) return;
+          this.emitCustomerOrderEvent(
+            dto.hold ? 'order.held' : 'order.unheld',
+            changed as Array<{ productionId?: string; userSku?: string; userEmail?: string }>,
+            dto.hold ? { extra: { holdReason: dto.reason ?? '' }, holdReason: dto.reason ?? '' } : undefined,
+          );
+        })
+        .catch(() => undefined);
+    }
     void this.invalidateListCache();
     return {
       success: true,
@@ -6125,17 +6373,119 @@ export class OrderService implements OnModuleInit {
    * tz) — cùng semantics `createdFrom`/`createdTo` ở danh sách đơn (Orders.md
    * §7.0b). Không truyền → không giới hạn ngày (hành vi cũ).
    */
+  /**
+   * Cấu hình sản phẩm của đơn, tra theo `order.type`. ORD-6 dùng chung một lần
+   * đọc này cho `productCode` + cờ DTF + vị trí in + biến thể (trước đó chỉ đọc
+   * mỗi `designReviewCode`).
+   *
+   * `productCode` cho tool duyệt thiết kế — đọc từ `ProductConfig.designReviewCode`
+   * (PRD-2, trường RIÊNG; trước đó ORD-3 mượn `shortName` nên tên viết tắt của
+   * người dùng bị coi là khoá kỹ thuật). Quy tắc khớp GIỮ NGUYÊN như map cũ:
+   * `order.type` ↔ `fullName` exact, trim + case-insensitive. Không khớp sản
+   * phẩm nào / mã trống → null (tool xử lý như "không khớp map" trước đây).
+   *
+   * Tên field `productCode` trong response KHÔNG đổi — tool ngoài đang đọc.
+   */
+  private async resolveDesignReviewProduct(type?: string | null): Promise<DesignReviewProductDoc | null> {
+    const trimmed = type?.trim();
+    if (!trimmed) return null;
+    const escaped = trimmed.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+    return (
+      (await this.productConfigRepository.findOne<DesignReviewProductDoc>({
+        fullName: { $regex: `^${escaped}$`, $options: 'i' },
+      })) ?? null
+    );
+  }
+
   /** Map raw order doc (field cần cho design review) → `DesignReviewOrder`. Dùng chung bởi `getNextDesignReviewOrder`/`getDesignReviewOrderByProductionId`. */
-  private toDesignReviewOrder(doc: DesignReviewSourceDoc): DesignReviewOrder {
+  private async toDesignReviewOrder(doc: DesignReviewSourceDoc): Promise<DesignReviewOrder> {
+    const product = await this.resolveDesignReviewProduct(doc.type);
+    const productCode = product?.designReviewCode?.trim() || null;
     return {
       productionId: doc.productionId,
       orderId: doc.orderId,
-      productCode: mapProductTypeToCode(doc.type),
+      productCode,
       attributes: { size: doc.size, color: doc.color },
       designs: doc.designs ?? {},
       mockupUrl: doc.mockupUrl,
       inProductionAt: doc.inProductionAt ?? null,
+      // ORD-6 — cấu hình sản phẩm là nguồn CHÍNH; quy ước cũ mã = TIFF giữ lại để
+      // tool bản đang chạy ở xưởng (và các sản phẩm đang mang mã đó) không gãy.
+      isDtf:
+        product?.printMethod?.trim().toLowerCase() === DTF_PRINT_METHOD_CODE ||
+        productCode?.toUpperCase() === LEGACY_DTF_PRODUCT_CODE,
+      printAreas: OrderService.buildDesignReviewPrintAreas(product?.printArea, doc.designs, doc.size),
+      variantSku: OrderService.resolveDesignReviewVariantSku(product?.variations, doc.size, doc.color),
     };
+  }
+
+  /**
+   * ORD-6 — vị trí in + kích thước (cm) ứng với size của CHÍNH đơn này.
+   *
+   * Danh sách = HỢP của vị trí đã cấu hình ở sản phẩm và vị trí có mặt trong
+   * `designs` của đơn, để tool thấy được cả ca "có file nhưng sản phẩm chưa cấu
+   * hình vị trí đó". Ghép size: trim + không phân biệt hoa thường. KHÔNG khớp ⇒
+   * kích thước null — tuyệt đối không lấy tạm size khác hay số mặc định, vì in
+   * sai kích thước lên giấy tệ hơn nhiều so với việc tool dừng lại và báo lỗi.
+   */
+  private static buildDesignReviewPrintAreas(
+    printArea: ProductPrintArea | undefined,
+    designs: DesignFields | undefined,
+    orderSize?: string,
+  ): DesignReviewPrintArea[] {
+    const norm = (v?: string | null): string => (v ?? '').trim().toLowerCase();
+    const wantedSize = norm(orderSize);
+    const configured = new Map((printArea ?? []).map((a) => [a.key as string, a]));
+    const designKeys = Object.entries(designs ?? {})
+      .filter(([, url]) => !!url)
+      .map(([key]) => key);
+
+    return [...new Set([...configured.keys(), ...designKeys])].map((key) => {
+      const area = configured.get(key);
+      const match = wantedSize ? (area?.sizeDimensions ?? []).find((d) => norm(d.size) === wantedSize) : undefined;
+      return {
+        key,
+        label: PRODUCT_PRINT_AREA_LABEL_MAP[key as keyof typeof PRODUCT_PRINT_AREA_LABEL_MAP] ?? key,
+        configured: !!area,
+        widthCm: match?.widthCm ?? null,
+        lengthCm: match?.lengthCm ?? null,
+      };
+    });
+  }
+
+  /**
+   * ORD-6 — SKU biến thể khớp size + màu của đơn. Chỉ trả khi khớp DUY NHẤT một
+   * biến thể; khớp nhiều hoặc không khớp → null. Đoán bừa ở đây nghĩa là dán
+   * nhầm nhãn nhận diện lên kiện hàng.
+   */
+  private static resolveDesignReviewVariantSku(
+    variations: ProductVariation[] | undefined,
+    size?: string,
+    color?: string,
+  ): string | null {
+    // Nhận diện nhãn size/màu đi qua `packages/shared/constants/variation-attribute.ts`
+    // — CÙNG chỗ với bảng nhập kích thước ở trang sản phẩm (PRD-7). Chép luật ra
+    // đây là cách chắc chắn nhất để hai bên lệch nhau mà không ai biết.
+    const wantedSize = normalizeVariationText(size);
+    const wantedColor = normalizeVariationText(color);
+    if (!wantedSize && !wantedColor) return null;
+    const sizeLabel = resolveVariationSizeLabel(variations);
+
+    const hits = (variations ?? []).filter((v) => {
+      const attrs = v.attributes ?? [];
+      if (wantedSize) {
+        const ok = attrs.some(
+          (a) => normalizeVariationText(a.label) === sizeLabel && normalizeVariationText(a.value) === wantedSize,
+        );
+        if (!ok) return false;
+      }
+      if (wantedColor) {
+        const ok = attrs.some((a) => isVariationColorLabel(a.label) && normalizeVariationText(a.value) === wantedColor);
+        if (!ok) return false;
+      }
+      return true;
+    });
+    return hits.length === 1 ? (hits[0].sku ?? null) : null;
   }
 
   private static readonly DESIGN_REVIEW_PROJECTION = {
@@ -6212,7 +6562,7 @@ export class OrderService implements OnModuleInit {
 
     return {
       success: true,
-      data: this.toDesignReviewOrder(doc as unknown as DesignReviewSourceDoc),
+      data: await this.toDesignReviewOrder(doc as unknown as DesignReviewSourceDoc),
       remaining,
     };
   }
@@ -6241,7 +6591,7 @@ export class OrderService implements OnModuleInit {
 
     return {
       success: true,
-      data: this.toDesignReviewOrder(doc as unknown as DesignReviewSourceDoc),
+      data: await this.toDesignReviewOrder(doc as unknown as DesignReviewSourceDoc),
     };
   }
 

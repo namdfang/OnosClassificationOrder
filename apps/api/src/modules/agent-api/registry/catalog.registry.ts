@@ -178,9 +178,17 @@ export const customerNotificationsRegistry: AgentTableSpec = {
     body: freeText('Nội dung thông báo khách đã nhận'),
     customerId: plain('objectId', 'Trỏ tới customers._id; rỗng = gửi cho TẤT CẢ khách'),
 
+    // ── ORD-5: thông báo HỆ THỐNG tự sinh theo trạng thái đơn
+    event: plain(
+      'string',
+      'Loại sự kiện đơn sinh ra thông báo (order.pushed / order.production_completed / ' +
+        'order.held / order.unheld / order.item_cancelled). Rỗng = thông báo nhân viên soạn tay',
+    ),
+    eventData: plain('object', 'Dữ liệu render thông báo hệ thống: orderCode, productionId, holdKind, stagingId'),
+
     // ── `API-17` mở đọc: danh tính nhân viên đã gửi
-    createdByUserId: plain('string'),
-    createdByName: plain('string', 'Tên nhân viên đã gửi thông báo'),
+    createdByUserId: plain('string', 'Rỗng với thông báo hệ thống tự sinh'),
+    createdByName: plain('string', 'Tên nhân viên đã gửi thông báo; rỗng với thông báo hệ thống'),
     updatedAt: plain('date'),
     deletedAt: plain('date', 'Bản ghi bị xoá mềm. Mở ĐỌC KHÔNG đổi bộ lọc mặc định của truy vấn'),
   },

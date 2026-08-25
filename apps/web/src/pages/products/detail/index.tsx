@@ -17,7 +17,14 @@ import {
   Upload,
 } from 'lucide-react';
 import type { ProductItemSpecific, ProductPrintArea, ProductPrintAreaItem, ProductVariation } from 'shared';
-import { PRODUCT_LEVELS, PRODUCT_PRINT_AREAS, ProductConfigStatus, WorkshopConfigCategory } from 'shared';
+import {
+  collectVariationSizes,
+  PRINT_AREA_MAX_WIDTH_CM,
+  PRODUCT_LEVELS,
+  PRODUCT_PRINT_AREAS,
+  ProductConfigStatus,
+  WorkshopConfigCategory,
+} from 'shared';
 import { toast } from 'sonner';
 
 import { PATHS } from '@/constants/paths';
@@ -217,10 +224,106 @@ function SectionCard({
   );
 }
 
+/**
+ * Bỏ ô rỗng khỏi bản nháp trước khi so dirty: ô người dùng gõ rồi xoá trắng phải
+ * quay về ĐÚNG trạng thái ban đầu, không được kẹt lại thành "có thay đổi".
+ */
+const pruneSizeDimDraft = (draft: Record<string, string>): Record<string, string> => {
+  const out: Record<string, string> = {};
+  for (const [key, value] of Object.entries(draft)) {
+    const text = (value ?? '').trim();
+    if (text) out[key] = text;
+  }
+  return out;
+};
+
+/**
+ * PRD-8 vòng 2 — bỏ thứ Mongo gắn thêm (`_id` của từng subdoc) khỏi cặp
+ * label/value trước khi đưa vào form.
+ *
+ * Vì sao cần: `attributes` lấy thẳng từ API mang theo `_id`, còn khi bảng biến
+ * thể được dựng lại (`generateVariants`, chạy mỗi lần áp nhóm option) thì mỗi
+ * thuộc tính được viết lại thành ĐÚNG `{label, value}`. Hai hình dạng khác nhau
+ * cho cùng một dữ liệu ⇒ thêm một biến thể rồi xoá đi, bảng về y như cũ nhưng
+ * chuỗi so sánh vẫn lệch ⇒ badge "Chưa lưu" không tắt.
+ *
+ * Đây KHÔNG phải loại một trường khỏi phép so sánh: `_id` của subdoc không phải
+ * dữ liệu người dùng, form không sửa nó, và bản PATCH gửi lên vốn đã không mang
+ * nó theo sau lần dựng lại đầu tiên. Chuẩn hoá NGAY LÚC NẠP để state và baseline
+ * cùng một hình dạng từ đầu; label/value giữ nguyên từng ký tự.
+ */
+const toFormSpecifics = (list?: ProductItemSpecific[]): ProductItemSpecific[] =>
+  (list ?? []).map(({ label, value }) => ({ label, value }));
+
+const toFormVariations = (list?: ProductVariation[]): ProductVariation[] =>
+  (list ?? []).map((v) => (v.attributes ? { ...v, attributes: toFormSpecifics(v.attributes) } : v));
+
+/** Khoá 1 ô nhập kích thước in: vị trí in + size + chiều. */
+const sizeDimKey = (areaKey: string, size: string, dim: 'w' | 'l'): string => `${areaKey}::${size}::${dim}`;
+
+/** Đổ số đã lưu ra chữ để hiển thị trong ô nhập (dùng cho cả state lẫn baseline dirty). */
+const buildSizeDimDraft = (printArea: ProductPrintArea): Record<string, string> => {
+  const draft: Record<string, string> = {};
+  for (const area of printArea) {
+    for (const dim of area.sizeDimensions || []) {
+      draft[sizeDimKey(area.key, dim.size, 'w')] = String(dim.widthCm);
+      draft[sizeDimKey(area.key, dim.size, 'l')] = String(dim.lengthCm);
+    }
+  }
+  return draft;
+};
+
+/**
+ * Đọc số cm người dùng gõ. `null` = để trống (hợp lệ), `NaN` = gõ bậy (chặn lưu).
+ * Nhận cả dấu phẩy thập phân vì bàn phím tiếng Việt hay ra dấu phẩy.
+ */
+const parseCm = (raw: string): number | null => {
+  const text = raw.trim().replace(',', '.');
+  if (!text) return null;
+  return Number(text);
+};
+
+/**
+ * Lỗi của MỘT ô kích thước xét riêng nó (không xét cặp) — dùng cho lúc gõ. Ca
+ * "có rộng mà thiếu dài" cần nhìn cả hàng nên vẫn nằm ở `handleSave`.
+ */
+const describeSizeDimCell = (raw: string, dim: 'w' | 'l', t: TFunction): string | null => {
+  const value = parseCm(raw);
+  if (value === null) return null;
+  if (!Number.isFinite(value) || value <= 0) return t('detail.printAreaConfig.sizeDims.errorPositive');
+  // HF-1 — trần 58cm KHÔNG còn xét riêng ô rộng: một chiều vượt 58 vẫn in được vì
+  // quay ngang là vừa bề ngang giấy. Chỉ khi CẢ HAI chiều cùng vượt mới là không
+  // in được, mà ca đó phải nhìn cả cặp nên nằm ở `describeSizeDimPair`.
+  return null;
+};
+
+/**
+ * HF-1 — lỗi xét CẢ CẶP rộng/dài. Giấy DTF rộng 58cm nhưng dài vô hạn, nên khối
+ * 70x40 vẫn in được (quay ngang); chỉ khi cả hai chiều cùng vượt 58 thì quay kiểu
+ * nào cũng không lọt bề ngang giấy.
+ */
+const describeSizeDimPair = (width: number | null, length: number | null, t: TFunction): string | null => {
+  if (width === null || length === null) return null;
+  if (!Number.isFinite(width) || !Number.isFinite(length)) return null;
+  if (Math.min(width, length) > PRINT_AREA_MAX_WIDTH_CM) {
+    return t('detail.printAreaConfig.sizeDims.errorMaxWidth', { max: PRINT_AREA_MAX_WIDTH_CM });
+  }
+  return null;
+};
+
 /** Form fields quan tâm khi so sánh dirty — không gồm data chỉ để hiển thị (factory/machineType/productCategory object). */
 interface FormSnapshot {
   fullName: string;
   shortName: string;
+  designReviewCode: string;
+  designReviewTemplateUrl: string;
+  /**
+   * PRD-7 vòng 3 — CHỮ THÔ trong các ô kích thước in phải nằm trong snapshot dirty.
+   * Trước đó chỉ cặp rộng+dài HỢP LỆ mới vào `printArea`, nên gõ giá trị SAI ("59",
+   * "abc", "-5") không làm form bẩn ⇒ nút Lưu vẫn xám ⇒ `handleSave` không bao giờ
+   * chạy ⇒ không có lỗi nào hiện ra, và rời trang thì chữ vừa gõ mất im lặng.
+   */
+  sizeDimDraft: Record<string, string>;
   sku: string;
   slug: string;
   status: ProductConfigStatus;
@@ -283,6 +386,10 @@ export default function ProductDetailPage() {
 
   const [fullName, setFullName] = useState('');
   const [shortName, setShortName] = useState('');
+  const [designReviewCode, setDesignReviewCode] = useState('');
+  const [designReviewTemplateUrl, setDesignReviewTemplateUrl] = useState('');
+  /** PRD-6 — lỗi hiện NGAY TẠI ô URL template (không chỉ toast) khi chuỗi không phải http(s). */
+  const [designReviewTemplateUrlError, setDesignReviewTemplateUrlError] = useState('');
   const [sku, setSku] = useState('');
   const [slug, setSlug] = useState('');
   const [status, setStatus] = useState<ProductConfigStatus>(ProductConfigStatus.Active);
@@ -301,6 +408,15 @@ export default function ProductDetailPage() {
   const [collectionIds, setCollectionIds] = useState<string[]>([]);
   const [printMethod, setPrintMethod] = useState('');
   const [printArea, setPrintArea] = useState<ProductPrintArea>([]);
+  /**
+   * PRD-7 — chữ THÔ trong từng ô kích thước in. Giữ riêng khỏi `printArea` để ô
+   * gõ bậy ("abc", "-5") vẫn hiện nguyên chữ và báo lỗi được, thay vì bị input
+   * số nuốt mất im lặng. `printArea` chỉ nhận cặp số hợp lệ.
+   */
+  const [sizeDimDraft, setSizeDimDraft] = useState<Record<string, string>>({});
+  const [sizeDimError, setSizeDimError] = useState<Record<string, string>>({});
+  /** Vị trí in nào đang MỞ bảng kích thước — mặc định chỉ mở vị trí đã có dữ liệu. */
+  const [openSizeDims, setOpenSizeDims] = useState<Record<string, boolean>>({});
   const [printDocument, setPrintDocument] = useState('');
   const [printTemplate, setPrintTemplate] = useState('');
   const [sizeChartUrl, setSizeChartUrl] = useState('');
@@ -353,6 +469,9 @@ export default function ProductDetailPage() {
   const buildSnapshot = (): FormSnapshot => ({
     fullName,
     shortName,
+    designReviewCode,
+    designReviewTemplateUrl,
+    sizeDimDraft: pruneSizeDimDraft(sizeDimDraft),
     sku,
     slug,
     status,
@@ -392,6 +511,9 @@ export default function ProductDetailPage() {
     const s: FormSnapshot = {
       fullName: row.fullName || '',
       shortName: row.shortName || '',
+      designReviewCode: row.designReviewCode || '',
+      designReviewTemplateUrl: row.designReviewTemplateUrl || '',
+      sizeDimDraft: pruneSizeDimDraft(buildSizeDimDraft(row.printArea || [])),
       sku: row.sku || '',
       slug: row.slug || '',
       status: row.status || ProductConfigStatus.Active,
@@ -418,15 +540,18 @@ export default function ProductDetailPage() {
       hideForSeller: !!row.hideForSeller,
       enableDesignCheck: !!row.enableDesignCheck,
       enableAffiliate: !!row.enableAffiliate,
-      itemSpecifics: row.itemSpecifics || [],
+      itemSpecifics: toFormSpecifics(row.itemSpecifics),
       weight: row.weight != null ? String(row.weight) : '',
       width: row.width != null ? String(row.width) : '',
       height: row.height != null ? String(row.height) : '',
       length: row.length != null ? String(row.length) : '',
-      variations: row.variations || [],
+      variations: toFormVariations(row.variations),
     };
     setFullName(s.fullName);
     setShortName(s.shortName);
+    setDesignReviewCode(s.designReviewCode);
+    setDesignReviewTemplateUrl(s.designReviewTemplateUrl);
+    setDesignReviewTemplateUrlError('');
     setSku(s.sku);
     setSlug(s.slug);
     setStatus(s.status);
@@ -442,6 +567,14 @@ export default function ProductDetailPage() {
     setCollectionIds(s.collectionIds);
     setPrintMethod(s.printMethod);
     setPrintArea(s.printArea);
+    // PRD-7 — đổ số đã lưu vào ô nhập, và MỞ SẴN vị trí in nào đã có kích thước.
+    const open: Record<string, boolean> = {};
+    for (const area of s.printArea) {
+      if ((area.sizeDimensions || []).length > 0) open[area.key] = true;
+    }
+    setSizeDimDraft(buildSizeDimDraft(s.printArea));
+    setSizeDimError({});
+    setOpenSizeDims(open);
     setPrintDocument(s.printDocument);
     setPrintTemplate(s.printTemplate);
     setSizeChartUrl(s.sizeChartUrl);
@@ -500,6 +633,8 @@ export default function ProductDetailPage() {
       sizeChartFile,
       fullName,
       shortName,
+      designReviewCode,
+      designReviewTemplateUrl,
       sku,
       slug,
       status,
@@ -614,11 +749,76 @@ export default function ProductDetailPage() {
   const removeSpecific = (idx: number) => setItemSpecifics((prev) => prev.filter((_, i) => i !== idx));
 
   // Tick mới → mặc định `isRequired: true` (giữ behavior cũ: mọi vị trí đều bắt buộc design).
+  /** PRD-7 — size để nhập kích thước in, đọc từ biến thể (xem `collectVariationSizes`). */
+  const variationSizes = useMemo(() => collectVariationSizes(variations), [variations]);
+
   const togglePrintArea = (key: ProductPrintAreaItem['key'], checked: boolean) =>
     setPrintArea((prev) => (checked ? [...prev, { key, isRequired: true }] : prev.filter((i) => i.key !== key)));
 
   const updatePrintAreaItem = (key: ProductPrintAreaItem['key'], patch: Partial<ProductPrintAreaItem>) =>
     setPrintArea((prev) => prev.map((i) => (i.key === key ? { ...i, ...patch } : i)));
+
+  /**
+   * PRD-7 — gõ vào 1 ô kích thước in. Chỉ khi CẢ rộng lẫn dài đều là số hợp lệ
+   * thì dòng size đó mới vào `printArea`; còn dở dang / gõ bậy thì dòng bị gỡ ra
+   * để không bao giờ lưu được nửa cặp. Chữ thô vẫn nằm ở `sizeDimDraft` nên người
+   * dùng thấy đúng thứ mình gõ và `handleSave` bắt được lỗi.
+   */
+  const changeSizeDim = (areaKey: ProductPrintAreaItem['key'], size: string, dim: 'w' | 'l', raw: string) => {
+    const nextDraft = { ...sizeDimDraft, [sizeDimKey(areaKey, size, dim)]: raw };
+    setSizeDimDraft(nextDraft);
+
+    /*
+      PRD-7 vòng 3 — soát NGAY khi gõ, không đợi bấm Lưu.
+      Trước đó lỗi chỉ hiện trong `handleSave`, mà `handleSave` chỉ chạy được khi
+      nút Lưu bật, tức khi form đã bẩn — gõ "59" trên form còn sạch thì không có
+      gì xảy ra. Soát tại chỗ làm luật trần 58cm hiện ra ngay lúc người dùng gõ,
+      độc lập hoàn toàn với trạng thái dirty. `handleSave` vẫn giữ vòng soát của
+      nó để chặn lưu (và bắt cả ca nửa cặp, thứ chỉ biết được khi soát cả hàng).
+    */
+    const width = parseCm(nextDraft[sizeDimKey(areaKey, size, 'w')] ?? '');
+    const length = parseCm(nextDraft[sizeDimKey(areaKey, size, 'l')] ?? '');
+
+    setSizeDimError((prev) => {
+      const next = { ...prev };
+      const problem = describeSizeDimCell(raw, dim, t);
+      if (problem) next[sizeDimKey(areaKey, size, dim)] = problem;
+      else delete next[sizeDimKey(areaKey, size, dim)];
+
+      /*
+        PRD-9 — lỗi "phải nhập cả rộng lẫn dài" do `handleSave` gắn lên ô CÒN
+        LẠI của hàng, nên xoá trắng ô mình đang gõ không đụng tới nó: cả hàng
+        rỗng mà dòng chữ đỏ vẫn nằm đó. Hàng không còn chữ nào thì không còn gì
+        để báo lỗi, nên xoá lỗi của CẢ HAI ô.
+        Cố ý chỉ XOÁ chứ không THÊM lỗi nửa cặp lúc gõ: gõ xong ô rộng mà đã mắng
+        ngay là thiếu ô dài thì phiền, ca đó vẫn để `handleSave` chặn lúc lưu.
+      */
+      if (width === null && length === null) {
+        delete next[sizeDimKey(areaKey, size, 'w')];
+        delete next[sizeDimKey(areaKey, size, 'l')];
+      }
+      return next;
+    });
+    const usable =
+      width !== null &&
+      length !== null &&
+      Number.isFinite(width) &&
+      Number.isFinite(length) &&
+      width > 0 &&
+      length > 0 &&
+      // HF-1 — chỉ chặn khi CẢ HAI chiều cùng vượt trần; một chiều vượt thì quay
+      // ngang là in được.
+      Math.min(width, length) <= PRINT_AREA_MAX_WIDTH_CM;
+
+    setPrintArea((prev) =>
+      prev.map((area) => {
+        if (area.key !== areaKey) return area;
+        const rest = (area.sizeDimensions || []).filter((d) => d.size !== size);
+        const rows = usable ? [...rest, { size, widthCm: width as number, lengthCm: length as number }] : rest;
+        return { ...area, sizeDimensions: rows.length > 0 ? rows : undefined };
+      }),
+    );
+  };
 
   /**
    * Tự sinh lại bảng variants (diff-preserve) khi 1 nhóm bấm Done hoặc bị xóa —
@@ -692,10 +892,58 @@ export default function ProductDetailPage() {
       toast.error(t('detail.fullNameRequired'));
       return;
     }
-    if (!shortName.trim()) {
-      toast.error(t('detail.shortNameRequired'));
+    // shortName và mã chạy tool (`designReviewCode`) đều ĐƯỢC PHÉP trống (PRD-2).
+    // Mã tool trống = sản phẩm không có mã, Design Review API trả `productCode: null`.
+    // PRD-6 — URL template chỉ nhận http(s); để trống là hợp lệ (sản phẩm chưa gắn file).
+    const trimmedTemplateUrl = designReviewTemplateUrl.trim();
+    if (trimmedTemplateUrl && !/^https?:\/\/\S+$/i.test(trimmedTemplateUrl)) {
+      setDesignReviewTemplateUrlError(t('detail.production.designReviewTemplateUrlInvalid'));
+      toast.error(t('detail.production.designReviewTemplateUrlInvalid'));
+      scrollToSection('sec-production');
       return;
     }
+    setDesignReviewTemplateUrlError('');
+
+    // PRD-7 — soát mọi ô kích thước in ĐANG CÓ CHỮ. Bắt hết trong một lượt rồi mới
+    // dừng, để người dùng thấy tất cả ô sai chứ không phải sửa xong ô này lòi ô kia.
+    const dimErrors: Record<string, string> = {};
+    for (const area of printArea) {
+      for (const size of variationSizes) {
+        const rawW = sizeDimDraft[sizeDimKey(area.key, size, 'w')] ?? '';
+        const rawL = sizeDimKey(area.key, size, 'l') in sizeDimDraft ? sizeDimDraft[sizeDimKey(area.key, size, 'l')] : '';
+        const width = parseCm(rawW);
+        const length = parseCm(rawL);
+        const bad = (v: number | null) => v !== null && (!Number.isFinite(v) || v <= 0);
+        if (bad(width)) dimErrors[sizeDimKey(area.key, size, 'w')] = t('detail.printAreaConfig.sizeDims.errorPositive');
+        if (bad(length)) dimErrors[sizeDimKey(area.key, size, 'l')] = t('detail.printAreaConfig.sizeDims.errorPositive');
+        // HF-1 — trần 58cm xét theo CẶP, không theo từng ô.
+        if (!dimErrors[sizeDimKey(area.key, size, 'w')] && !dimErrors[sizeDimKey(area.key, size, 'l')]) {
+          const pairProblem = describeSizeDimPair(width, length, t);
+          if (pairProblem) dimErrors[sizeDimKey(area.key, size, 'w')] = pairProblem;
+        }
+        // Nửa cặp: có rộng mà thiếu dài (hoặc ngược lại) thì không dựng được vùng in.
+        if (!dimErrors[sizeDimKey(area.key, size, 'w')] && !dimErrors[sizeDimKey(area.key, size, 'l')]) {
+          if (width !== null && length === null)
+            dimErrors[sizeDimKey(area.key, size, 'l')] = t('detail.printAreaConfig.sizeDims.errorBoth');
+          if (length !== null && width === null)
+            dimErrors[sizeDimKey(area.key, size, 'w')] = t('detail.printAreaConfig.sizeDims.errorBoth');
+        }
+      }
+    }
+    if (Object.keys(dimErrors).length > 0) {
+      setSizeDimError(dimErrors);
+      // Mở bảng của mọi vị trí in đang có ô sai — lỗi giấu trong khối thu gọn thì vô dụng.
+      setOpenSizeDims((prev) => {
+        const next = { ...prev };
+        for (const key of Object.keys(dimErrors)) next[key.split('::')[0]] = true;
+        return next;
+      });
+      toast.error(t('detail.printAreaConfig.sizeDims.errorToast', { count: Object.keys(dimErrors).length }));
+      scrollToSection('sec-print-areas');
+      return;
+    }
+    setSizeDimError({});
+
     if (isNew && !factoryId) {
       toast.error(t('detail.factoryRequired'));
       scrollToSection('sec-production');
@@ -730,6 +978,10 @@ export default function ProductDetailPage() {
     const patch: Partial<ProductConfigRow> = {
       fullName: fullName.trim(),
       shortName: shortName.trim(),
+      designReviewCode: designReviewCode.trim().toUpperCase(),
+      // KHÔNG uppercase — URL phân biệt hoa thường. Chuỗi rỗng gửi đi để XOÁ được URL cũ
+      // (khác printDocument/printTemplate dùng `|| undefined`, vốn không cần xoá).
+      designReviewTemplateUrl: trimmedTemplateUrl,
       sku: sku.trim() || undefined,
       slug: slug.trim() || undefined,
       status,
@@ -965,6 +1217,44 @@ export default function ProductDetailPage() {
                     placeholder={t('detail.sidebar.machineNumberPlaceholder')}
                   />
                 </div>
+              </div>
+
+              {/*
+                Mã chạy tool duyệt thiết kế (PRD-2) — trường RIÊNG, cố ý đặt ở
+                khu Sản xuất chứ không cạnh ô "Tên viết tắt" trên header để
+                không ai nhầm hai thứ với nhau nữa.
+              */}
+              <div className="space-y-1.5 md:max-w-md">
+                <Label>{t('detail.production.designReviewCode')}</Label>
+                <Input
+                  value={designReviewCode}
+                  onChange={(e) => setDesignReviewCode(e.target.value)}
+                  placeholder={t('detail.production.designReviewCodePlaceholder')}
+                  className="font-mono uppercase"
+                />
+                <p className="text-xs text-muted-foreground">{t('detail.production.designReviewCodeHint')}</p>
+              </div>
+
+              {/*
+                PRD-6 — URL file template chạy tool, đặt NGAY DƯỚI ô mã vì hai thứ luôn
+                đi cùng nhau. Trường RIÊNG: không đụng printTemplate/printDocument.
+              */}
+              <div className="space-y-1.5 md:max-w-md">
+                <Label>{t('detail.production.designReviewTemplateUrl')}</Label>
+                <Input
+                  value={designReviewTemplateUrl}
+                  onChange={(e) => {
+                    setDesignReviewTemplateUrl(e.target.value);
+                    if (designReviewTemplateUrlError) setDesignReviewTemplateUrlError('');
+                  }}
+                  placeholder={t('detail.production.designReviewTemplateUrlPlaceholder')}
+                  className={designReviewTemplateUrlError ? 'border-destructive' : undefined}
+                />
+                {designReviewTemplateUrlError ? (
+                  <p className="text-xs text-destructive">{designReviewTemplateUrlError}</p>
+                ) : (
+                  <p className="text-xs text-muted-foreground">{t('detail.production.designReviewTemplateUrlHint')}</p>
+                )}
               </div>
 
               <div className="space-y-1.5">
@@ -1486,6 +1776,83 @@ export default function ProductDetailPage() {
                           className="h-8 mt-0.5 text-xs"
                         />
                       </div>
+                    </div>
+
+                    {/*
+                      PRD-7 — kích thước in THẬT theo từng size (cm). Thu gọn mặc định:
+                      1 sản phẩm tick được cả 18 vị trí × chục size, mở hết là trang chết.
+                      Tiêu đề luôn nói đã nhập bao nhiêu size để biết vị trí nào còn thiếu
+                      mà không phải mở ra xem.
+                    */}
+                    <div className="mt-3 border-t border-border pt-2">
+                      <button
+                        type="button"
+                        onClick={() => setOpenSizeDims((prev) => ({ ...prev, [area.key]: !prev[area.key] }))}
+                        className="flex w-full items-center justify-between gap-2 text-left"
+                      >
+                        <span className="text-[11px] font-medium text-muted-foreground">
+                          {t('detail.printAreaConfig.sizeDims.title')}
+                        </span>
+                        <span className="flex items-center gap-1.5 text-[11px] text-muted-foreground">
+                          {variationSizes.length > 0 &&
+                            t('detail.printAreaConfig.sizeDims.filled', {
+                              filled: (area.sizeDimensions || []).length,
+                              total: variationSizes.length,
+                            })}
+                          <ChevronDown
+                            size={14}
+                            className={cn('transition-transform', openSizeDims[area.key] && 'rotate-180')}
+                          />
+                        </span>
+                      </button>
+
+                      {openSizeDims[area.key] &&
+                        (variationSizes.length === 0 ? (
+                          <p className="mt-2 text-[11px] text-muted-foreground">
+                            {t('detail.printAreaConfig.sizeDims.noSizes')}
+                          </p>
+                        ) : (
+                          <div className="mt-2 space-y-1.5 md:max-w-sm">
+                            <div className="grid grid-cols-[minmax(56px,1fr)_100px_100px] gap-2 text-[11px] text-muted-foreground">
+                              <span>{t('detail.printAreaConfig.sizeDims.size')}</span>
+                              <span>{t('detail.printAreaConfig.sizeDims.width', { max: PRINT_AREA_MAX_WIDTH_CM })}</span>
+                              <span>{t('detail.printAreaConfig.sizeDims.length')}</span>
+                            </div>
+                            {variationSizes.map((size) => {
+                              const wKey = sizeDimKey(area.key, size, 'w');
+                              const lKey = sizeDimKey(area.key, size, 'l');
+                              return (
+                                <div key={size} className="grid grid-cols-[minmax(56px,1fr)_100px_100px] gap-2">
+                                  <span className="self-center truncate text-xs" title={size}>
+                                    {size}
+                                  </span>
+                                  <div>
+                                    <Input
+                                      inputMode="decimal"
+                                      value={sizeDimDraft[wKey] ?? ''}
+                                      onChange={(e) => changeSizeDim(area.key, size, 'w', e.target.value)}
+                                      className={cn('h-8 text-xs', sizeDimError[wKey] && 'border-destructive')}
+                                    />
+                                    {sizeDimError[wKey] && (
+                                      <p className="mt-0.5 text-[11px] text-destructive">{sizeDimError[wKey]}</p>
+                                    )}
+                                  </div>
+                                  <div>
+                                    <Input
+                                      inputMode="decimal"
+                                      value={sizeDimDraft[lKey] ?? ''}
+                                      onChange={(e) => changeSizeDim(area.key, size, 'l', e.target.value)}
+                                      className={cn('h-8 text-xs', sizeDimError[lKey] && 'border-destructive')}
+                                    />
+                                    {sizeDimError[lKey] && (
+                                      <p className="mt-0.5 text-[11px] text-destructive">{sizeDimError[lKey]}</p>
+                                    )}
+                                  </div>
+                                </div>
+                              );
+                            })}
+                          </div>
+                        ))}
                     </div>
                   </div>
                 );

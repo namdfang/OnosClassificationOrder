@@ -13,8 +13,30 @@ export class ProductConfigEntity extends DatabaseEntityAbstract {
   @Prop({ required: true, trim: true, index: true })
   fullName: string;
 
-  @Prop({ required: true, trim: true, uppercase: true, index: true })
+  /**
+   * Tên viết tắt do người dùng đặt. Từ PRD-2 trường này KHÔNG còn mang mã chạy
+   * tool duyệt thiết kế nữa (xem `designReviewCode`) và KHÔNG migration/import
+   * nào được ghi đè nó — chỉ người dùng sửa tay trên UI.
+   */
+  @Prop({ trim: true, uppercase: true, index: true, default: '' })
   shortName: string;
+
+  /**
+   * Mã chạy tool duyệt thiết kế (PRD-2) — nguồn DUY NHẤT của `productCode` ở
+   * 2 endpoint design-review public. TRỐNG = sản phẩm không có mã, tool nhận
+   * `productCode: null`.
+   */
+  @Prop({ trim: true, uppercase: true, index: true, default: '' })
+  designReviewCode?: string;
+
+  /**
+   * PRD-6 — URL file template dùng để CHẠY TOOL. Trường RIÊNG, KHÔNG liên quan
+   * `printTemplate`/`printDocument`/`printArea[].templateUrl` (dữ liệu hệ cũ +
+   * OnosPod). Trống = chưa gắn file ⇒ mã chạy tool ngoài danh sách không bấm được.
+   * KHÔNG uppercase: URL phân biệt hoa thường.
+   */
+  @Prop({ trim: true, default: '' })
+  designReviewTemplateUrl?: string;
 
   /** Mã SKU riêng của sản phẩm (KHÔNG phải SKU biến thể trong `variations[]`). */
   @Prop({ trim: true, uppercase: true })
@@ -93,6 +115,19 @@ export class ProductConfigEntity extends DatabaseEntityAbstract {
         isRequired: { type: Boolean },
         additionPrice: { type: Number, min: 0 },
         isEmbroidery: { type: Boolean },
+        // PRD-7 — kích thước in theo từng size (cm). CỘNG THÊM vào widthPx/heightPx
+        // (px, mirror hệ cũ + import OnosPod), KHÔNG thay thế chúng.
+        sizeDimensions: {
+          type: [
+            raw({
+              size: { type: String, required: true, trim: true },
+              widthCm: { type: Number, min: 0 },
+              lengthCm: { type: Number, min: 0 },
+            }),
+          ],
+          default: undefined,
+          _id: false,
+        },
       }),
     ],
     default: undefined,

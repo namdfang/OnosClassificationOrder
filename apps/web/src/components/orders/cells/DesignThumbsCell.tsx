@@ -8,7 +8,9 @@ import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover
 
 import { cn } from '@/utils/cn';
 
-const DESIGN_KEY_ORDER = [
+/** Thứ tự vị trí in dùng CHUNG — cell thumb ở bảng đơn lẫn tem khách
+ *  (`CustomerLabelPrint`). Thêm vị trí mới thì thêm ở đây + `buildDesignLabels`. */
+export const DESIGN_KEY_ORDER = [
   'front',
   'back',
   'sleeve',
@@ -29,7 +31,8 @@ const DESIGN_KEY_ORDER = [
   'backEmbroidery',
 ] as const;
 
-function buildDesignLabels(t: TFunction<'orders'>): Record<string, string> {
+/** Nhãn tiếng người cho từng vị trí in — dùng chung với tem khách. */
+export function buildDesignLabels(t: TFunction<'orders'>): Record<string, string> {
   return {
     front: t('cells.designThumbs.labels.front'),
     back: t('cells.designThumbs.labels.back'),

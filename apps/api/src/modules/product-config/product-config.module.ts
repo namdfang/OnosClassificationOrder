@@ -6,6 +6,7 @@ import { FactoryModule } from '../factory/factory.module';
 import { MachineTypeModule } from '../machine-type/machine-type.module';
 import { OrderEntity, OrderSchema } from '../order/order.entity';
 import { ProductCategoryModule } from '../product-category/product-category.module';
+import { SystemConfigModule } from '../system-config/system-config.module';
 import { WorkshopConfigModule } from '../workshop-config/workshop-config.module';
 import { OnospodProductImportService } from './onospod-product-import.service';
 import { ProductConfigController } from './product-config.controller';
@@ -23,6 +24,8 @@ import { ProductConfigService } from './product-config.service';
     FactoryModule,
     MachineTypeModule,
     ProductCategoryModule,
+    // Cờ migration 1 lần `design_review_code_migration` (PRD-2).
+    SystemConfigModule,
     WorkshopConfigModule,
   ],
   controllers: [ProductConfigController],

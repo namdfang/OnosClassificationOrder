@@ -116,6 +116,12 @@ logic chặng ở 1 nơi (`getLifecycleTrack` hoặc `computeCurrentStage`) ph�
 lại nơi còn lại. Nhãn chặng dùng riêng `CUSTOMER_STAGE_LABELS` (khách-hoá,
 không lộ thuật ngữ nội bộ như `sew-in`/`sew-out`).
 
+> **Cùng 1 đơn còn 1 đường xem thứ hai, KHÔNG đăng nhập:** trang tra cứu công
+> khai `/track/:productionId` (`documents/FunctionDescription/PublicOrderTracking.md`)
+> — chỉ ĐỌC, danh sách trắng field hẹp (không giá, không sửa), để khách gửi link
+> cho người mua cuối. Nó dùng lại chính `computeCurrentStage`/`deriveItemStatus`
+> của file này, nên đổi logic chặng phải soát cả hai nơi.
+
 ### 2.5 Khách tự sửa đơn ĐÃ đặt — mockup/design/địa chỉ ship
 
 Trang chi tiết đơn (`track.tsx`, `/customer/orders/:productionId`) — ngoài
@@ -275,6 +281,23 @@ Schema `customers` (mở rộng — xem [`CustomerFactoryAssignment.md §3`](Cus
   - 1 lần bấm "Đặt đơn" gọi `RepositoryRemote.customerOrder.placeOrder({ items: cart.map(...), shippingAddress, referent })`
     — **1 API call cho TOÀN BỘ giỏ hàng**, trả về mảng `CustomerOrderSummary[]`
     (nhiều mã đơn, hiện trong toast `success`).
+  - **Đòi mockup + design ở HAI TẦNG (ORD-22).** Giao diện chặn `canAddToCart`
+    khi thiếu mockup hoặc thiếu design ở vị trí in bắt buộc; **máy chủ kiểm
+    lại** trong `placeOrder()` → `assertArtworkComplete()`. Luật giống hệt nhau:
+    **`isRequired !== false`** (vị trí không set cờ coi như bắt buộc). Sản phẩm
+    chưa cấu hình vị trí in nào thì chỉ đòi mockup.
+    Vì sao phải có tầng máy chủ: giao diện không phải hàng rào — một lần sửa
+    điều kiện chặn ở `new.tsx` là đơn rỗng lọt vào, đi tiếp sang sản xuất, và
+    **tới tận xưởng** mới lộ ra là không có gì để in, lúc đó đã chiếm mã đơn và
+    đã vào hàng đợi soát tool. Thông báo lỗi song ngữ, nêu đúng tên vị trí in
+    còn thiếu kèm key gốc (`Mặt trước (front)`). Khoá bằng
+    `apps/api/src/modules/customer-portal/place-order-artwork.spec.ts`.
+    Hai đường khác KHÔNG kiểm ở bước tạo — **cố ý**: Public Order API
+    (`POST /v1/open-api/orders`) đi `importOrdersCsv()`, và `updateStagingOrder()`
+    dựng lại items từ DTO mà không kiểm (đơn Pending là **vùng nháp**, khách
+    được lưu dở rồi bổ sung sau). Cả hai được chặn ở **cửa cuối** là bước đẩy
+    sản xuất — xem `CustomerOrderIntake.md` §2.2 "Cửa cuối về file thiết kế
+    (ORD-25)".
   - `components/common/FileUrlOrUploadInput.tsx` — input dùng cho MỌI field
     kiểu file (mockup + design) ở Customer Portal: ô dán URL + nút "Tải file
     lên" **disabled** (chưa có storage backend, hover hiện tooltip giải thích
@@ -469,26 +492,46 @@ nội bộ) ra Customer Portal. Xem `CustomerCatalogVariationZod` trong
 — `data: CustomerCatalogItemZod` (KHÔNG nullable, 404 nếu không tìm thấy/không
 active/không có biến thể — khác `getCatalog()` trả mảng có thể rỗng).
 
-## 8. Thông báo cho khách hàng — Admin/nội bộ chủ động gửi (KHÔNG tự sinh theo trạng thái đơn)
+## 8. Thông báo cho khách hàng — Admin soạn tay + HỆ THỐNG tự sinh theo trạng thái đơn (ORD-5)
 
 > **File FE:** `apps/web/src/components/customer/NotificationBell.tsx` (chuông ở `CustomerLayout.tsx`), `apps/web/src/components/settings/CustomerNotificationSender.tsx` (soạn + lịch sử, mục `/adm/settings/customer-notify` — cùng gate `role.manage` như `CustomerAssignmentConfig`/`DesignerAssignmentConfig`, KHÔNG route/permission riêng), `apps/web/src/services/customerNotification.ts` (admin) + `services/customerPortal.ts` → `customerNotificationPortal` (khách hàng)
 > **File BE:** `apps/api/src/modules/customer-notification/` (`customer-notification.entity.ts`, `.repository.ts`, `.service.ts`, `customer-notification.controller.ts` (admin), `customer-notification-portal.controller.ts` (khách hàng), `.module.ts`), `apps/api/src/modules/customer/customer.entity.ts` (+ `notificationsReadAt`)
 > **API:** `POST /v1/customer-notifications` + `GET /v1/customer-notifications/sent` (`@Auth([Admin])`), `GET /v1/customer/notifications` + `POST /v1/customer/notifications/read` (`@Auth([Customer])`)
 
-Admin/nội bộ soạn tiêu đề + nội dung → chọn gửi cho **1 khách cụ thể** (search
+Hai nguồn thông báo dùng CHUNG collection, chung chuông, chung cơ chế đã-đọc:
+
+**(a) Admin soạn tay** — tiêu đề + nội dung → gửi **1 khách cụ thể** (search
 theo SKU/email, tái dùng `GET /customers` đã có sẵn cho tính năng gán xưởng)
-hoặc **broadcast TẤT CẢ khách hàng** (bỏ trống `customerId`). KHÔNG có luồng
-tự động sinh thông báo theo trạng thái đơn/chặng sản xuất (quyết định phạm
-vi ban đầu — có thể mở rộng sau).
+hoặc **broadcast TẤT CẢ khách hàng** (bỏ trống `customerId`).
+
+**(b) Hệ thống tự sinh theo trạng thái đơn (ORD-5)** — `event` + `eventData` có
+giá trị, không có người gửi. **Gộp ở MỨC ĐƠN** để khách không bị dội:
+
+| `event` | Bắn khi | Ghi chú |
+| --- | --- | --- |
+| `order.pushed` | Push 1 đơn staging sang sản xuất | Đúng 1 thông báo/đơn dù nhiều item |
+| `order.production_completed` | MỌI item chưa hủy của đơn đã `fulfillmentCompletedAt` | Đơn còn item dở → chưa bắn |
+| `order.held` | Đơn chuyển từ 0 → ≥1 item bị giữ | Giữ thêm item nữa KHÔNG bắn lại |
+| `order.unheld` | Đơn hết sạch item bị giữ | |
+| `order.item_cancelled` | Mỗi item bị hủy | Báo theo ITEM (khách cần biết đích danh mã nào) |
+
+- **Nguồn sự kiện DUY NHẤT**: `apps/api/src/modules/customer-event/customer-order-event.service.ts` (`CustomerOrderEventService.emit()`) — fan-out sang webhook khách API (ORD-4) *và* thông báo chuông này. Mọi call site (`pushToProduction`, `holdOrder`/`unholdOrder`/`bulkSetHold`/`cancelOrder` ở `order.service.ts`, transition hoàn thành ở `fulfillment-task.service.ts`) chỉ gọi `emit()`; **đường BULK cũng đã gắn** — thêm điểm đổi trạng thái mới thì gọi đúng hàm này, đừng tự chế đường bắn riêng.
+- **Không chặn nghiệp vụ**: `emit()` trả về ngay, lỗi nuốt tại chỗ; `createSystemNotification()` còn bọc try/catch riêng. Push/hold/hủy vẫn thành công kể cả khi ghi thông báo lỗi.
+- **Lý do giữ không phô nguyên văn**: BE quy `holdReason` nội bộ về nhóm an toàn `holdKind` (`waiting-design` / `waiting-address` / `other`) trước khi lưu; FE tra chuỗi theo nhóm. Nội dung KHÔNG chứa tên nhân viên, mã lỗi nội bộ, giá vốn, thông tin xưởng.
+- **Chỉ đơn có staging row** mới sinh thông báo — đơn Luồng A (sync hệ cũ) chưa lazy-sync thì bỏ qua, thà im lặng còn hơn báo sai.
+- **Đa ngôn ngữ**: BE lưu `title` bản tiếng Việt DỰ PHÒNG; FE `NotificationBell.tsx` (`systemNotificationText()`) dựng chữ từ `event`/`eventData` theo ngôn ngữ khách đang chọn (i18n `customerNotifications.bell.events.*`, vi + en). Bấm thông báo hệ thống → điều hướng `/customer/orders?search=<orderCode>` (listing seed state từ query `search`).
+- Không backfill đơn cũ, không bắn lại khi chạy migration nội bộ.
 
 **Model lưu trữ** — `customer_notifications` (collection RIÊNG, KHÔNG dùng
 chung `NotificationEntity` của nhân viên vì entity đó `ref: 'UserEntity'`,
 khác domain/collection với `CustomerEntity`):
 ```ts
-{ title: string; body?: string;
-  customerId: string | null;   // null = broadcast tới TẤT CẢ khách hàng
-  createdByUserId: string;     // ref UserEntity (admin gửi)
-  createdByName: string;       // snapshot tên, tránh phải populate lúc hiển thị lịch sử
+{ title: string; body?: string;          // admin soạn tay: văn bản thật; hệ thống: bản VI dự phòng
+  customerId: string | null;             // null = broadcast tới TẤT CẢ khách hàng
+  event: CustomerNotificationEvent|null; // ORD-5 — rỗng = admin soạn tay
+  eventData: { orderCode?; productionId?; holdKind?; stagingId? } | null;
+  createdByUserId?: string | null;       // ref UserEntity; rỗng với thông báo hệ thống
+  createdByName?: string;                // snapshot tên, tránh populate lúc hiển thị lịch sử
 }
 ```
 
@@ -504,7 +547,40 @@ có `createdAt > notificationsReadAt`.
 `NotificationBell.tsx` fetch lúc mount + poll mỗi 60s (đủ cho quy mô khách
 hàng B2B, KHÔNG dùng WebSocket/SSE) + fetch lại mỗi lần mở popover.
 
-## 9. Permissions
+## 9. Thông báo lỗi backend theo ngôn ngữ khách (ORD-29)
+
+Toàn bộ message backend vốn là chuỗi tiếng Việt cứng. Khách nước ngoài (đơn US) nhận về câu không đọc được. ORD-29 dựng đường i18n cho **đúng những câu người thật đọc** — 31 câu ở ba module — và **không đụng** 124 câu còn lại của nhân viên nội bộ: người đọc chúng là người Việt, dịch sang tiếng Anh chỉ làm họ khó dùng hơn.
+
+| Module | Câu | Ai đọc |
+|---|---|---|
+| `customer-portal` (catalog + đơn hàng) | 16 | khách, trên trình duyệt |
+| `design-storage` | 12 | khách, ở ô tải file design |
+| `customer-webhook` | 3 | khách, ở trang API/webhook trong portal |
+
+**Cơ chế** — `apps/api/src/shared/i18n/`:
+- `request-language.ts` — `AsyncLocalStorage` giữ ngôn ngữ của request, gắn bằng một middleware toàn cục ở `main-nest.ts`. Nhờ vậy service ném lỗi đúng thứ tiếng mà **không phải thêm tham số vào từng hàm**.
+- `customer-messages.ts` — từ điển `{vi, en}` theo khoá; câu có tham số khai bằng hàm. `customerMessage(key, ...args)` tra theo ngôn ngữ hiện tại, thiếu bản dịch thì lùi về tiếng Việt.
+
+**Hai ràng buộc cứng, cả hai đều thuộc loại hỏng-thì-không-ai-báo:**
+
+1. **Không khai ngôn ngữ → tiếng Việt.** Cố ý **không** dùng cơ chế fallback của `nestjs-i18n` dù thư viện đã được cấu hình sẵn: `FALLBACK_LANGUAGE` của dự án đang là `en_US`, đi theo nó thì request không khai ngôn ngữ sẽ rơi vào tiếng Anh — ngược hẳn yêu cầu.
+2. **Public Order API nhận NGUYÊN VĂN chuỗi cũ.** Hai lớp, vì một lớp không đủ:
+   - `resolveRequestLang()` ép `vi` cho mọi đường `/open-api/`, bất kể `Accept-Language`.
+   - Nhưng ép tiếng Việt chỉ giữ được **ngôn ngữ**, không giữ được **câu**: hai câu "thiếu mockup" / "thiếu design" đi CHUNG `pushToProduction()` với portal, và chính bản tiếng Việt của chúng đã đổi (bỏ nửa tiếng Anh chắp vá của ORD-22). Nên hai câu đó khai thêm trường `machine` — chuỗi nguyên văn trước ORD-29 — và `customerMessage()` trả trường đó khi request đến từ bề mặt máy.
+   Bên tích hợp chỉ có mỗi chuỗi message để bám vì API chưa trả mã lỗi; đổi câu là gãy mà không ai báo. TEST bắt được thiếu sót này ở vòng 1.
+
+**Đường truyền:** `apps/web/src/apis/index.tsx` gắn `Accept-Language` **chỉ cho tuyến `/customer/...`**, lấy từ `languageStore` mà toggle VI/EN đã dùng. Không thêm trường ngôn ngữ vào bảng `customers` — bảng đó dùng chung với tính năng gán xưởng theo khách.
+
+**Đo trên API đang chạy** (`GET /api/v1/public/catalog/<id không tồn tại>`):
+
+| `Accept-Language` | Message trả về |
+|---|---|
+| không gửi · `vi` · `fr` · `xx-YY` · rỗng | `Không tìm thấy sản phẩm này.` |
+| `en` · `en-US,en;q=0.9` | `This product could not be found.` |
+
+Khoá bằng `apps/api/src/shared/i18n/customer-messages.spec.ts` (9 ca), trong đó có ca ép tiếng Việt cho `/open-api/` và ca bắt mọi khoá phải có bản tiếng Anh khác câu tiếng Việt.
+
+## 10. Permissions
 
 Không dùng `permission-catalog` nội bộ — gate hoàn toàn bằng
 `@Auth([RoleType.Customer])` (role-only, không permission code). Nhân viên

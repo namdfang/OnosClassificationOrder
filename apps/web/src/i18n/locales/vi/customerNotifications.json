@@ -29,6 +29,21 @@
     "title": "Thông báo",
     "empty": "Chưa có thông báo nào.",
     "markAllRead": "Đánh dấu đã đọc",
-    "broadcastLabel": "Thông báo chung"
+    "broadcastLabel": "Thông báo chung",
+    "events": {
+      "pushed": "Đơn {{orderCode}} đã vào sản xuất",
+      "pushedBody": "Xưởng đã tiếp nhận, bạn có thể theo dõi tiến trình trong danh sách đơn.",
+      "completed": "Đơn {{orderCode}} đã sản xuất xong",
+      "completedBody": "Toàn bộ sản phẩm trong đơn đã đóng gói xong.",
+      "held": "Đơn {{orderCode}} đang tạm giữ",
+      "unheld": "Đơn {{orderCode}} đã được tiếp tục sản xuất",
+      "itemCancelled": "Sản phẩm {{productionId}} đã bị hủy",
+      "itemCancelledBody": "Sản phẩm này thuộc đơn {{orderCode}}.",
+      "holdReason": {
+        "waiting-design": "Cần bạn bổ sung file thiết kế để tiếp tục.",
+        "waiting-address": "Cần bạn bổ sung địa chỉ nhận hàng để tiếp tục.",
+        "other": "Liên hệ hỗ trợ để biết thêm chi tiết."
+      }
+    }
   }
 }

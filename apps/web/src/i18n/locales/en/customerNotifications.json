@@ -29,6 +29,21 @@
     "title": "Notifications",
     "empty": "No notifications yet.",
     "markAllRead": "Mark all as read",
-    "broadcastLabel": "General notice"
+    "broadcastLabel": "General notice",
+    "events": {
+      "pushed": "Order {{orderCode}} is now in production",
+      "pushedBody": "The factory has accepted it. Track progress in your order list.",
+      "completed": "Order {{orderCode}} finished production",
+      "completedBody": "Every item in this order has been packed.",
+      "held": "Order {{orderCode}} is on hold",
+      "unheld": "Order {{orderCode}} is back in production",
+      "itemCancelled": "Item {{productionId}} was cancelled",
+      "itemCancelledBody": "This item belongs to order {{orderCode}}.",
+      "holdReason": {
+        "waiting-design": "Send us the design file to continue.",
+        "waiting-address": "Send us the shipping address to continue.",
+        "other": "Contact support for details."
+      }
+    }
   }
 }
