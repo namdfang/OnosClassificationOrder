@@ -1,6 +1,7 @@
-import React, { useEffect } from 'react';
+import React, { useEffect, useMemo } from 'react';
 import { createPortal } from 'react-dom';
 import { useTranslation } from 'react-i18next';
+import type { TFunction } from 'i18next';
 import { QRCodeSVG } from 'qrcode.react';
 
 import { PATHS } from '@/constants/paths';
@@ -11,9 +12,13 @@ import type { WorkshopOrderRow } from '@/components/orders/workshopTableConfig';
 /** Id cố định — bộ CSS `@media print` bên dưới nhận diện nhãn qua đúng id này. */
 const LABEL_ID = 'customer-label-print';
 
+/** Class của 1 con tem — bộ CSS in bên dưới ngắt trang theo đúng class này. */
+const PAGE_CLASS = 'customer-label-page';
+
 /**
  * Nhãn dán cho khách, khổ **40×60mm** (4×6cm, dọc) — khổ tem decal rời phổ
- * biến ở xưởng, KHÔNG phải 4×6 inch.
+ * biến ở xưởng, KHÔNG phải 4×6 inch. In được **1 hoặc nhiều** đơn trong cùng
+ * một lệnh in (mỗi đơn 1 con tem = 1 trang).
  *
  * Cách in: portal thẳng ra `document.body` rồi để `@media print` giấu mọi
  * anh chị em cùng cấp. Không dùng `visibility: hidden` như sheet barcode ở
@@ -32,6 +37,13 @@ const PRINT_CSS = `
   html, body { margin: 0 !important; padding: 0 !important; background: #fff !important; }
   body > *:not(#${LABEL_ID}) { display: none !important; }
   #${LABEL_ID} { display: block !important; }
+  /* Mỗi tem chiếm đúng 1 trang. Tem cao đúng 60mm = chiều cao trang nên về lý
+     thuyết tự sang trang, nhưng chỉ cần lệch 1 pixel do làm tròn là cả lô bị
+     trôi dần và tem thứ N in đè 2 trang — ngắt trang tường minh cho chắc.
+     Tem CUỐI cố ý không ngắt: ngắt sau tem cuối là máy đẩy thêm 1 tem trắng,
+     tức 1 con tem hỏng. */
+  .${PAGE_CLASS} { break-after: page; page-break-after: always; }
+  .${PAGE_CLASS}:last-child { break-after: auto; page-break-after: auto; }
 }
 `;
 
@@ -50,7 +62,12 @@ function printPositions(order: WorkshopOrderRow, labels: Record<string, string>)
 }
 
 interface Props {
-  order: WorkshopOrderRow;
+  /**
+   * Đơn cần in — 1 phần tử (menu "..." từng dòng) hoặc N phần tử (nút "In nhãn
+   * khách" ở thanh bulk). Thứ tự trong mảng CHÍNH LÀ thứ tự tem chui ra khỏi
+   * máy in, nên caller phải truyền đúng thứ tự người dùng đang thấy trên bảng.
+   */
+  orders: WorkshopOrderRow[];
   /** Gọi khi hộp thoại in đã đóng (in xong hoặc hủy) — caller unmount nhãn. */
   onDone: () => void;
 }
@@ -60,8 +77,9 @@ interface Props {
  * bấm "In nhãn khách" là muốn cầm được cái tem, hộp thoại in của trình duyệt
  * đã là bước xác nhận rồi.
  */
-export function CustomerLabelPrint({ order, onDone }: Props) {
+export function CustomerLabelPrint({ orders, onDone }: Props) {
   const { t } = useTranslation('orders');
+  const labels = useMemo(() => buildDesignLabels(t), [t]);
 
   useEffect(() => {
     let done = false;
@@ -70,6 +88,12 @@ export function CustomerLabelPrint({ order, onDone }: Props) {
       done = true;
       onDone();
     };
+    // Không có đơn nào thì không mở hộp thoại in — vẫn báo caller gỡ xuống để
+    // nút bấm không kẹt ở trạng thái "đang in".
+    if (orders.length === 0) {
+      finish();
+      return;
+    }
     window.addEventListener('afterprint', finish);
     // Đợi qua 2 khung hình để QR (SVG) và web font kịp lên màn trước khi chụp
     // nội dung in — in ngay trong cùng khung hình dễ ra tem trống QR.
@@ -86,68 +110,86 @@ export function CustomerLabelPrint({ order, onDone }: Props) {
       cancelAnimationFrame(raf);
       window.removeEventListener('afterprint', finish);
     };
-  }, [onDone]);
-
-  const trackUrl = `${window.location.origin}${PATHS.TRACK}/${order.productionId}`;
-  const productName = order.productConfig?.fullName || order.type;
-  const variant = [order.size, order.color].filter(Boolean).join(' · ');
-  const positions = printPositions(order, buildDesignLabels(t));
+  }, [onDone, orders.length]);
 
   return createPortal(
     <>
       <style>{PRINT_CSS}</style>
       <div id={LABEL_ID} className="hidden">
-        <div
-          className="flex flex-col items-center bg-white text-black overflow-hidden"
-          style={{ width: '40mm', height: '60mm', padding: '2mm' }}
-        >
-          {/* 84px = 22.2mm. Cỡ này KHÔNG chọn cho đẹp mà để vừa ngân sách chiều
-              cao 56mm lòng tem ở ca xấu nhất (tên sản phẩm + biến thể + vị trí in
-              đều tràn 2 dòng) — xem bảng đo ở `Orders.md §16.6`. Thêm dòng mới vào
-              tem thì phải trừ lại ở đây. QR ~48 ký tự / ECC M ra 33 module, tức
-              0.67mm/module, vẫn trên ngưỡng camera điện thoại đọc được. */}
-          <QRCodeSVG value={trackUrl} size={84} level="M" marginSize={0} />
-          <div style={{ fontSize: '5pt', marginTop: '0.8mm' }} className="text-center leading-tight">
-            {t('customerLabel.scanHint')}
-          </div>
-
-          <div style={{ height: '0.4mm' }} className="w-full my-[1.2mm] bg-black" />
-
-          <div
-            style={{ fontSize: '9pt' }}
-            className="w-full text-center font-mono font-bold leading-none tracking-tight"
-          >
-            {order.productionId}
-          </div>
-          {/* Hai mã phụ, cùng thứ tự với cột Production ID ở danh sách đơn: mã
-              đơn trước, mã sàn dưới. Mỗi mã tự biến mất khi đơn không có —
-              `externalId` rỗng ở phần lớn đơn nội bộ, `orderId` rỗng ở đơn khách
-              tự lên qua Customer Portal, nên tem nào cũng còn ít nhất `productionId`.
-              `break-all` chứ KHÔNG `truncate`: mã bị cắt cụt trên tem là mã sai,
-              thà xuống dòng. */}
-          <CodeLine caption={t('customerLabel.orderIdCaption')} value={order.orderId} />
-          <CodeLine caption={t('customerLabel.externalIdCaption')} value={order.externalId} />
-
-          {productName && (
-            <div style={{ fontSize: '7pt' }} className="w-full text-center leading-tight line-clamp-2 mt-[1mm]">
-              {productName}
-            </div>
-          )}
-          {variant && (
-            <div style={{ fontSize: '7pt' }} className="w-full text-center font-semibold leading-tight line-clamp-2">
-              {variant}
-            </div>
-          )}
-          {positions.length > 0 && (
-            <div style={{ fontSize: '6pt' }} className="w-full text-center leading-tight line-clamp-2 mt-[0.6mm]">
-              <span className="uppercase opacity-70">{t('customerLabel.positionsCaption')} </span>
-              {positions.join(' · ')}
-            </div>
-          )}
-        </div>
+        {orders.map((o) => (
+          <Label key={o._id} order={o} labels={labels} t={t} />
+        ))}
       </div>
     </>,
     document.body,
+  );
+}
+
+/** Thân 1 con tem. Tách riêng để lô N tem tái dùng đúng layout đã đo ở §16.6. */
+function Label({
+  order,
+  labels,
+  t,
+}: {
+  order: WorkshopOrderRow;
+  labels: Record<string, string>;
+  t: TFunction<'orders'>;
+}) {
+  const trackUrl = `${window.location.origin}${PATHS.TRACK}/${order.productionId}`;
+  const productName = order.productConfig?.fullName || order.type;
+  const variant = [order.size, order.color].filter(Boolean).join(' · ');
+  const positions = printPositions(order, labels);
+
+  return (
+    <div
+      className={`${PAGE_CLASS} flex flex-col items-center bg-white text-black overflow-hidden`}
+      style={{ width: '40mm', height: '60mm', padding: '2mm' }}
+    >
+      {/* 72px = 19.05mm. Cỡ này KHÔNG chọn cho đẹp mà là biến điều chỉnh của
+          ngân sách chiều cao 56mm lòng tem ở ca xấu nhất (tên sản phẩm + biến
+          thể + vị trí in đều tràn 2 dòng) — xem bảng đo ở `Orders.md §16.6`.
+          Thêm dòng mới / phóng to chữ thì phải trừ lại ở đây. QR ~48 ký tự /
+          ECC M ra 33 module, tức 0.58mm/module — vẫn trên ngưỡng ~0.5mm mà
+          camera điện thoại đọc được, nhưng đã hết chỗ để nhỏ thêm. */}
+      <QRCodeSVG value={trackUrl} size={72} level="M" marginSize={0} />
+      <div style={{ fontSize: '5pt', marginTop: '0.6mm' }} className="text-center leading-tight">
+        {t('customerLabel.scanHint')}
+      </div>
+
+      <div style={{ height: '0.4mm' }} className="w-full my-[0.9mm] bg-black" />
+
+      <div
+        style={{ fontSize: '11pt' }}
+        className="w-full text-center font-mono font-bold leading-none tracking-tight"
+      >
+        {order.productionId}
+      </div>
+      {/* Hai mã phụ, cùng thứ tự với cột Production ID ở danh sách đơn: mã
+          đơn trước, mã sàn dưới. Mỗi mã tự biến mất khi đơn không có —
+          `externalId` rỗng ở phần lớn đơn nội bộ, `orderId` rỗng ở đơn khách
+          tự lên qua Customer Portal, nên tem nào cũng còn ít nhất `productionId`.
+          `break-all` chứ KHÔNG `truncate`: mã bị cắt cụt trên tem là mã sai,
+          thà xuống dòng. */}
+      <CodeLine caption={t('customerLabel.orderIdCaption')} value={order.orderId} />
+      <CodeLine caption={t('customerLabel.externalIdCaption')} value={order.externalId} />
+
+      {productName && (
+        <div style={{ fontSize: '8pt' }} className="w-full text-center leading-tight line-clamp-2 mt-[0.8mm]">
+          {productName}
+        </div>
+      )}
+      {variant && (
+        <div style={{ fontSize: '8pt' }} className="w-full text-center font-semibold leading-tight line-clamp-2">
+          {variant}
+        </div>
+      )}
+      {positions.length > 0 && (
+        <div style={{ fontSize: '7pt' }} className="w-full text-center leading-tight line-clamp-2 mt-[0.5mm]">
+          <span className="uppercase opacity-70">{t('customerLabel.positionsCaption')} </span>
+          {positions.join(' · ')}
+        </div>
+      )}
+    </div>
   );
 }
 
@@ -155,7 +197,7 @@ export function CustomerLabelPrint({ order, onDone }: Props) {
 function CodeLine({ caption, value }: { caption: string; value?: string }) {
   if (!value) return null;
   return (
-    <div style={{ fontSize: '6pt' }} className="w-full text-center leading-tight break-all">
+    <div style={{ fontSize: '7pt' }} className="w-full text-center leading-tight break-all">
       <span className="uppercase opacity-70">{caption} </span>
       <span className="font-mono">{value}</span>
     </div>
