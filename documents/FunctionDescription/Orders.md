@@ -1456,7 +1456,7 @@ Dùng **role gate `isAdmin`** (SuperAdmin/Admin) cả FE lẫn BE — KHÔNG th�
 
 ### 16.6 "In nhãn khách" — tem 4×6cm dán kiện hàng
 
-> **File FE:** `apps/web/src/components/orders/CustomerLabelPrint.tsx` (mục menu ở `OrderRowActionsMenu.tsx`), i18n `orders.json` → `rowActionsMenu.printCustomerLabel` + `customerLabel.scanHint`
+> **File FE:** `apps/web/src/components/orders/CustomerLabelPrint.tsx` (mục menu từng dòng ở `OrderRowActionsMenu.tsx`, nút in hàng loạt ở `BulkEditToolbar.tsx`), i18n `orders.json` → `rowActionsMenu.printCustomerLabel` + `customerLabel.scanHint` + `bulkEdit.printLabel*`/`noLabel`/`labelPartial`/`labelTooMany`
 
 Mục **"In nhãn khách"** (`Printer`) nằm ĐẦU menu "...", nên có mặt ở mọi bảng liệt kê ở §16.4 — trong đó có bảng công đoạn **In** của Task Fulfillment (`PrintOrderTable` qua `PrintWorkshopView`), nơi xưởng thực sự cần tem. Bấm là in thẳng, không có bước xem trước: hộp thoại in của trình duyệt đã là bước xác nhận.
 
@@ -1480,17 +1480,27 @@ Mục này **KHÔNG bị khoá** theo `cancelledAt`/`heldAt` như các mục cò
 
 | Phần | Cao |
 |---|---:|
-| QR 84px | 23.28mm → **22.23mm** |
-| Dòng "Quét để theo dõi đơn hàng" 5pt + lề | 3.00mm |
-| Gạch ngang + lề trên dưới | 2.80mm |
-| `productionId` 9pt | 3.18mm |
-| Mã đơn 6pt · Mã sàn 6pt | 2.65 + 2.65mm |
-| Tên sản phẩm 7pt ×2 dòng + lề | 7.17mm |
-| Biến thể 7pt ×2 dòng | 6.17mm |
-| Vị trí in 6pt ×2 dòng + lề | 5.89mm |
-| **Tổng** | **55.74 / 56mm** |
+| QR 72px | **19.05mm** |
+| Dòng "Quét để theo dõi đơn hàng" 5pt + lề 0.6mm | 2.80mm |
+| Gạch ngang + lề trên dưới 0.9mm | 2.20mm |
+| `productionId` 11pt | 3.88mm |
+| Mã đơn 7pt · Mã sàn 7pt | 3.09 + 3.09mm |
+| Tên sản phẩm 8pt ×2 dòng + lề 0.8mm | 7.86mm |
+| Biến thể 8pt ×2 dòng | 7.06mm |
+| Vị trí in 7pt ×2 dòng + lề 0.5mm | 6.67mm |
+| **Tổng** | **55.69 / 56mm** |
 
-Còn dư đúng **0.26mm**. Cỡ QR là biến điều chỉnh: 84px không phải chọn cho đẹp mà là con số lớn nhất còn vừa — thêm dòng mới vào tem thì phải trừ lại ở đó. Ở 84px, QR ~48 ký tự / ECC M ra 33 module tức 0.67mm/module, vẫn trên ngưỡng camera điện thoại đọc được; nhỏ hơn nữa thì bắt đầu rủi ro. Dòng "Mã sàn" dài nhất (nhãn + 18 chữ số) rộng 30.3mm, vừa 36mm nên không xuống dòng.
+Còn dư **0.31mm**. **Cỡ QR là biến điều chỉnh duy nhất** — mỗi lần phóng to chữ hoặc thêm dòng đều phải trừ lại ở đó. Bản 2026-08-25 phóng chữ lên (mã sản xuất 9→11pt, hai mã phụ 6→7pt, tên sản phẩm + biến thể 7→8pt, vị trí in 6→7pt) nên QR phải rút 84→72px: ~48 ký tự / ECC M ra 33 module, tức **0.58mm/module** (trước là 0.67mm) — vẫn trên ngưỡng ~0.5mm mà camera điện thoại đọc được, nhưng **đã hết chỗ để nhỏ thêm**; muốn phóng chữ nữa thì phải bỏ bớt dòng chứ không rút QR được nữa. Dòng "Mã sàn" dài nhất (nhãn + 18 chữ số) ở 7pt rộng 35.4mm, vẫn vừa 36mm nên không xuống dòng — sát mép, mọi thay đổi nhãn/cỡ chữ dòng này phải đo lại.
+
+**In hàng loạt.** Nút **"In nhãn khách"** (`Printer`) trên thanh bulk (`BulkEditToolbar`, cạnh "Xuất Excel") in tem cho **mọi đơn đang tick chọn** — có mặt ở cả 3 bảng dùng thanh này: Danh sách đơn workshop (`OrderTableWorkshop`), Danh sách đơn classic (`OrderTableClassic`), bảng công đoạn In (`PrintOrderTable`). Cùng một `CustomerLabelPrint`, chỉ khác prop `orders` nhận N phần tử thay vì 1 → N con tem trong **1 lệnh in**, thứ tự tem = thứ tự đơn trên bảng. KHÔNG gate permission, giống mục menu từng dòng.
+
+Ba điểm dễ làm sai nếu viết lại:
+
+- **Dữ liệu tem lấy từ SERVER theo `ids`** (`GET /orders?ids=…&limit=<số đơn>`), KHÔNG lấy từ row đang hiển thị. Tick chọn sống xuyên trang — "Chọn tất cả N đơn khớp bộ lọc" ở Danh sách đơn classic nhét `_id` của mọi trang vào `selected` (§Classic) — nên phần lớn đơn được chọn không có mặt trong `items` của bảng; in theo row là **lặng lẽ thiếu tem**.
+- **Phải truyền `includeExcludedFactory=true`.** Đơn xưởng US bị loại mặc định khỏi `buildVisibilityFilter` (§21) mà kiện hàng của nó vẫn cần tem — thiếu cờ này thì tem biến mất không một lời báo. Đơn **đã hủy** thì ngược lại: `cancelledAt` là bộ lọc loại-trừ-hoặc-chỉ-lấy nên không kéo về chung lô được, và số tem thực in sẽ ít hơn số đơn chọn → so `rows.length` với `selectedIds.length`, lệch thì `toast.warning` (`bulkEdit.labelPartial`) chứ không im lặng.
+- **Trần `MAX_LABELS_PER_PRINT = 500`.** Toàn bộ N tem nằm trong DOM cho tới khi đóng hộp thoại in; vượt ngưỡng thì trình duyệt treo hẳn — tệ hơn nhiều so với báo người dùng chia nhỏ lô. Trần này CẦN vì "Chọn tất cả N đơn khớp bộ lọc" tick được hàng chục nghìn đơn chỉ bằng 1 cú bấm.
+
+Mỗi tem là 1 trang: `.customer-label-page { break-after: page }` cho MỌI tem trừ `:last-child`. Tem cao đúng 60mm = chiều cao trang nên về lý thuyết tự sang trang, nhưng chỉ cần lệch 1 pixel do làm tròn là cả lô trôi dần và tem thứ N in đè 2 trang. Tem cuối **cố ý không ngắt** — ngắt sau tem cuối là máy đẩy thêm 1 tem trắng, tức 1 con tem hỏng (cùng lý do với `display: none` bên dưới).
 
 **Cách in — CỐ Ý khác sheet barcode ở §Stage Error Catalog.** Nhãn được `createPortal` thẳng ra `document.body` rồi giấu anh chị em cùng cấp bằng `body > *:not(#customer-label-print) { display: none }`. Hai điểm không được đổi thành cách khác:
 

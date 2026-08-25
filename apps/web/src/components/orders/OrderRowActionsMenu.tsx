@@ -196,7 +196,7 @@ export function OrderRowActionsMenu({ order, onChanged }: Props) {
         </DropdownMenuContent>
       </DropdownMenu>
 
-      {printingLabel && <CustomerLabelPrint order={order} onDone={() => setPrintingLabel(false)} />}
+      {printingLabel && <CustomerLabelPrint orders={[order]} onDone={() => setPrintingLabel(false)} />}
       <CancelOrderDialog order={order} open={cancelOpen} onOpenChange={setCancelOpen} onDone={onChanged} />
       <HoldOrderDialog order={order} open={holdOpen} onOpenChange={setHoldOpen} onDone={onChanged} />
       <EditOrderDesignDialog order={order} open={designOpen} onOpenChange={setDesignOpen} onDone={onChanged} />

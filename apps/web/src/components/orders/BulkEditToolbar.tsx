@@ -1,7 +1,18 @@
 import React, { useMemo, useState } from 'react';
 import { Trans, useTranslation } from 'react-i18next';
 import type { TFunction } from 'i18next';
-import { CheckCircle2, Download, Flag, PauseCircle, PlayCircle, RefreshCw, UserMinus, UserPlus, X } from 'lucide-react';
+import {
+  CheckCircle2,
+  Download,
+  Flag,
+  PauseCircle,
+  PlayCircle,
+  Printer,
+  RefreshCw,
+  UserMinus,
+  UserPlus,
+  X,
+} from 'lucide-react';
 import type { OrderWorkshopField, WorkshopConfigCategory } from 'shared';
 import { ORDER_PRIORITIES, ORDER_PRIORITY_LABELS, ORDER_WORKSHOP_FIELDS } from 'shared';
 import { toast } from 'sonner';
@@ -23,7 +34,9 @@ import { buildDetailOnlyWorkbook, downloadWorkbook, type ExportableOrder } from 
 import { LucideIcon } from '@/pages/workshop-config/IconPicker';
 
 import { AssignDesignerDialog } from './AssignDesignerDialog';
+import { CustomerLabelPrint } from './CustomerLabelPrint';
 import { HOLD_REASON_PRESETS } from './HoldOrderDialog';
+import type { WorkshopOrderRow } from './workshopTableConfig';
 
 const FIELD_TO_CATEGORY: Record<OrderWorkshopField, WorkshopConfigCategory | null> = {
   printStatus: 'print_status' as WorkshopConfigCategory,
@@ -67,6 +80,15 @@ function buildFieldLabel(t: TFunction<'orders'>): Record<OrderWorkshopField, str
 /** Bulk update dropdown SKIP assignee + priority — đã có nút/dialog riêng ("Gán design" / "Ưu tiên"). */
 const BULK_UPDATE_BLACKLIST: OrderWorkshopField[] = ['assignee', 'priority'];
 
+/**
+ * Trần số tem 1 lệnh in. Mỗi tem là 1 QR + ~8 dòng chữ dựng trong DOM cùng lúc,
+ * và lệnh in giữ toàn bộ chúng trong bộ nhớ cho tới khi đóng hộp thoại — quá
+ * ngưỡng này trình duyệt treo hẳn, tệ hơn nhiều so với việc báo người dùng chia
+ * nhỏ lô. Đặc biệt cần thiết vì "Chọn tất cả N đơn khớp bộ lọc" ở Danh sách đơn
+ * classic có thể tick hàng chục nghìn đơn chỉ bằng 1 cú bấm.
+ */
+const MAX_LABELS_PER_PRINT = 500;
+
 interface Props {
   selectedIds: string[];
   onClear: () => void;
@@ -95,6 +117,48 @@ export function BulkEditToolbar({ selectedIds, onClear, onApplied }: Props) {
   const [applyingPriority, setApplyingPriority] = useState(false);
   const [unassigning, setUnassigning] = useState(false);
   const [checkingDesign, setCheckingDesign] = useState(false);
+  const [loadingLabels, setLoadingLabels] = useState(false);
+  // Đơn đã tải xong để in tem — set là nhãn mount + tự bung hộp thoại in, in
+  // xong `onDone` trả về null để gỡ khỏi DOM (xem CustomerLabelPrint).
+  const [labelOrders, setLabelOrders] = useState<WorkshopOrderRow[] | null>(null);
+
+  // In tem khách hàng loạt — CÙNG con tem 40×60mm với mục "In nhãn khách" ở
+  // menu "..." từng dòng (`CustomerLabelPrint`), chỉ khác là truyền N đơn nên
+  // ra N trang trong 1 lệnh in.
+  //
+  // Dữ liệu tem lấy từ SERVER theo `ids` chứ không lấy từ row đang hiển thị:
+  // tick chọn sống xuyên trang ("Chọn tất cả N đơn khớp bộ lọc" ở Danh sách đơn
+  // classic) nên phần lớn đơn được chọn KHÔNG có mặt trong `items` của bảng —
+  // in theo row là lặng lẽ thiếu tem. `includeExcludedFactory=true` vì đơn xưởng
+  // US bị loại mặc định khỏi list dùng chung (Orders.md §21) mà kiện hàng của nó
+  // vẫn cần tem; thiếu cờ này là tem biến mất không một lời báo.
+  const handlePrintLabels = async () => {
+    if (selectedIds.length > MAX_LABELS_PER_PRINT) {
+      return toast.error(t('bulkEdit.labelTooMany', { max: MAX_LABELS_PER_PRINT, count: selectedIds.length }));
+    }
+    try {
+      setLoadingLabels(true);
+      const params = new URLSearchParams({
+        ids: selectedIds.join(','),
+        page: '1',
+        limit: String(selectedIds.length),
+        includeExcludedFactory: 'true',
+      });
+      const res = await RepositoryRemote.order.getOrders('?' + params.toString());
+      const rows = (res.data?.data || []) as WorkshopOrderRow[];
+      if (rows.length === 0) return toast.warning(t('bulkEdit.noLabel'));
+      // Đơn ĐÃ HỦY bị loại khỏi mọi list dùng chung nên không quay về đây được;
+      // báo rõ số tem thực in thay vì để người dùng đếm thiếu sau khi bóc tem.
+      if (rows.length < selectedIds.length) {
+        toast.warning(t('bulkEdit.labelPartial', { count: rows.length, total: selectedIds.length }));
+      }
+      setLabelOrders(rows);
+    } catch (err) {
+      handleAxiosError(err);
+    } finally {
+      setLoadingLabels(false);
+    }
+  };
 
   // Export ĐÚNG các đơn đang tick chọn — gọi /orders/export với `ids` (bỏ qua
   // phân trang, đúng cả khi chọn xuyên trang vì BE lọc theo `_id`). Chỉ 1 sheet
@@ -289,6 +353,16 @@ export function BulkEditToolbar({ selectedIds, onClear, onApplied }: Props) {
           <Button
             variant="outline"
             size="sm"
+            onClick={handlePrintLabels}
+            disabled={loadingLabels}
+            title={t('bulkEdit.printLabelTitle')}
+          >
+            {loadingLabels ? <Spinner size={13} className="text-muted-foreground" /> : <Printer size={13} />}
+            {t('bulkEdit.printLabelBtn')}
+          </Button>
+          <Button
+            variant="outline"
+            size="sm"
             onClick={handleExport}
             disabled={exporting}
             title={t('bulkEdit.exportTitle')}
@@ -301,6 +375,8 @@ export function BulkEditToolbar({ selectedIds, onClear, onApplied }: Props) {
           </Button>
         </div>
       </div>
+
+      {labelOrders && <CustomerLabelPrint orders={labelOrders} onDone={() => setLabelOrders(null)} />}
 
       <AssignDesignerDialog
         open={assignOpen}
