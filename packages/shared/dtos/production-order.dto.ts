@@ -1688,6 +1688,30 @@ export const FulfillmentTransitionResZod = ResZod.extend({ data: ProductionOrder
 export class FulfillmentTransitionResDto extends createZodDto(extendApi(FulfillmentTransitionResZod)) {}
 
 /**
+ * POST `/v1/fulfillment/bulk-transition` — bulk N đơn trong 1 request (chọn cả
+ * cột ở kanban). BE loop `transition()` TỪNG đơn để giữ đủ business hook
+ * (timeline, auto-advance luồng rút gọn, stock-out, webhook) — không updateMany
+ * mù. `start-complete` = start rồi complete từng đơn (start fail — vd đơn vừa
+ * được start chỗ khác — vẫn thử complete, kết quả do complete quyết định).
+ */
+export const BulkFulfillmentTransitionZod = z.object({
+  stage: FulfillmentStageZod,
+  action: z.enum(['start', 'complete', 'start-complete']),
+  orderIds: z.array(IDZod).min(1).max(1000),
+});
+export class BulkFulfillmentTransitionDto extends createZodDto(extendApi(BulkFulfillmentTransitionZod)) {}
+
+export const BulkFulfillmentTransitionResZod = ResZod.extend({
+  data: z.object({
+    ok: z.number(),
+    fail: z.number(),
+    /** Đơn lỗi kèm message (vd sai trạng thái, đơn đang giữ) — FE hiện toast warning. */
+    failures: z.array(z.object({ orderId: z.string(), message: z.string() })),
+  }),
+});
+export class BulkFulfillmentTransitionResDto extends createZodDto(extendApi(BulkFulfillmentTransitionResZod)) {}
+
+/**
  * GET `/v1/fulfillment/my-tasks?tab=waiting|in-progress|rework|watching`.
  * Stage + factory tự suy từ user đang login (BE filter). User Manager/Admin
  * có thể override qua query `stage`/`factoryId`.
