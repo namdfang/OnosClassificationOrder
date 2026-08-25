@@ -1,7 +1,7 @@
 import React, { lazy, Suspense, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Link, Navigate, useParams } from 'react-router-dom';
-import { Bell, Bot, Flag, Package, Settings as SettingsIcon, UserCog, Users } from 'lucide-react';
+import { Bell, Bot, Flag, Package, Settings as SettingsIcon, Truck, UserCog, Users } from 'lucide-react';
 
 import { PATHS } from '@/constants/paths';
 
@@ -18,12 +18,15 @@ const DesignerAssignmentConfig = lazy(() => import('@/components/settings/Design
 const ProductFactoryKanban = lazy(() => import('@/components/settings/ProductFactoryKanban'));
 const CustomerNotificationSender = lazy(() => import('@/components/settings/CustomerNotificationSender'));
 const AgentApiGuide = lazy(() => import('@/components/settings/AgentApiGuide'));
+const VnpShippingConfig = lazy(() => import('@/components/settings/VnpShippingConfig'));
 
 interface SettingsSection {
   key: string; // segment URL /adm/settings/<key>
   label: string;
   icon: React.ReactNode;
   perm: string;
+  /** true = CHỈ role Admin/SuperAdmin thấy — perm cấp qua custom role không đủ. */
+  adminOnly?: boolean;
   component: React.ComponentType;
 }
 interface SettingsGroup {
@@ -95,6 +98,14 @@ function buildGroups(t: (key: string) => string): SettingsGroup[] {
           perm: 'page.agent_api',
           component: AgentApiGuide,
         },
+        {
+          key: 'vnp-shipping',
+          label: t('settings.nav.vnpShipping'),
+          icon: <Truck size={15} />,
+          perm: 'role.manage',
+          adminOnly: true,
+          component: VnpShippingConfig,
+        },
       ],
     },
   ];
@@ -102,14 +113,14 @@ function buildGroups(t: (key: string) => string): SettingsGroup[] {
 
 export default function Settings() {
   const { t } = useTranslation('auth');
-  const { has } = usePermission();
+  const { has, isAdmin } = usePermission();
   const { section } = useParams();
 
   const groups = useMemo(() => {
     return buildGroups(t)
-      .map((g) => ({ ...g, items: g.items.filter((it) => has(it.perm)) }))
+      .map((g) => ({ ...g, items: g.items.filter((it) => (it.adminOnly ? isAdmin : has(it.perm))) }))
       .filter((g) => g.items.length > 0);
-  }, [t, has]);
+  }, [t, has, isAdmin]);
 
   const allItems = groups.flatMap((g) => g.items);
   const active = allItems.find((it) => it.key === section);

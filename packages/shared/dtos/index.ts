@@ -49,5 +49,6 @@ export * from './transaction.dto';
 export * from './upload.dto';
 export * from './user.dto';
 export * from './user-log.dto';
+export * from './vnp-shipping.dto';
 export * from './webhook.dto';
 export * from './workshop-config.dto';

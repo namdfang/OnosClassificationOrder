@@ -14,6 +14,8 @@ import {
 import { ApiOkResponse, ApiOperation, ApiTags } from '@nestjs/swagger';
 import { AuthUser } from 'core';
 import {
+  BulkFulfillmentTransitionDto,
+  BulkFulfillmentTransitionResDto,
   FulfillmentDailyOverviewResDto,
   FulfillmentTransitionDto,
   FulfillmentTransitionResDto,
@@ -87,6 +89,34 @@ export class FulfillmentTaskController {
     });
     const data = await this.taskService.transition(id, user, dto, { user, ip, userAgent });
     return { success: true, data } as unknown as FulfillmentTransitionResDto;
+  }
+
+  @Post('fulfillment/bulk-transition')
+  @Auth(TRANSITION_ROLES)
+  @ApiOperation({
+    summary:
+      'Bulk transition N đơn trong 1 request (chọn cả cột ở kanban) — BE loop transition từng đơn giữ đủ hook.',
+  })
+  @HttpCode(HttpStatus.OK)
+  @ApiOkResponse({ type: BulkFulfillmentTransitionResDto })
+  async bulkTransition(
+    @Body() dto: BulkFulfillmentTransitionDto,
+    @AuthUser() user: UserDocument,
+    @ClientIp() ip: string,
+    @UserAgent() userAgent: string,
+  ): Promise<BulkFulfillmentTransitionResDto> {
+    this.logger.info({
+      message: JSON.stringify({
+        method: 'POST',
+        url: '/fulfillment/bulk-transition',
+        userId: user._id,
+        stage: dto.stage,
+        action: dto.action,
+        count: dto.orderIds.length,
+      }),
+    });
+    const data = await this.taskService.bulkTransition(user, dto, { user, ip, userAgent });
+    return { success: true, data };
   }
 
   @Get('fulfillment/my-tasks')

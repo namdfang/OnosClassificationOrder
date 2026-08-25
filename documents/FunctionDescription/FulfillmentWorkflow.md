@@ -263,7 +263,7 @@ Default preset:
 
 ### 4.1 `/fulfillment/my-tasks` (`pages/fulfillment/my-tasks/index.tsx`)
 
-**Layout: kanban 5 cột worker / 6 cột admin** (`waiting/in-progress/rework/done/fixed/watching` + `unassigned` cho admin) — đồng bộ pixel-by-pixel với `pages/designer/my-tasks`. Cột **"Đã xong"** = hoàn thành stage KHÔNG dính lỗi (`fulfillmentStages.<stage>.reworkCount = 0`); cột **"Đã sửa"** = hoàn thành SAU KHI stage từng bị đẩy về (`reworkCount > 0`) — 2 cột loại trừ nhau; cả 2 read-only (không checkbox/bulk/DnD). Fetch thêm 1 call `tab='fixed'`.
+**Cột "Cần làm lại" + "Đang chờ quay lại" TRỐNG (0 task, xét dữ liệu thô chưa qua filter client) → ẨN HẲN khỏi kanban** — `visibleCols` memo + `KANBAN_GRID_BY_COUNT` (Tailwind class tĩnh theo số cột 4..7); KPI strip vẫn hiện đủ mọi cột. **Layout: kanban 5 cột worker / 6 cột admin** (`waiting/in-progress/rework/done/fixed/watching` + `unassigned` cho admin) — đồng bộ pixel-by-pixel với `pages/designer/my-tasks`. Cột **"Đã xong"** = hoàn thành stage KHÔNG dính lỗi (`fulfillmentStages.<stage>.reworkCount = 0`); cột **"Đã sửa"** = hoàn thành SAU KHI stage từng bị đẩy về (`reworkCount > 0`) — 2 cột loại trừ nhau; cả 2 read-only (không checkbox/bulk/DnD). Fetch thêm 1 call `tab='fixed'`.
 
 - **Header**: icon avatar bg-indigo + "Task của tôi — {stage label}" + dòng phụ "Xưởng: {factoryId}" + nút Làm mới (ghost icon spinner khi loading).
 - **KPI bar**: 6 ô (`Đang chờ` / `Đang làm` / `Làm lại` / `Đã xong` / `Đã sửa` / `Đợi quay lại`) — derive từ length các column. Cùng style với KPI ở Designer page (border-card + label uppercase + value lớn).
@@ -276,12 +276,15 @@ Default preset:
   - Apply filter client-side trước khi group → DnD/checkbox/kanban đều thấy data đã filter.
   - **Click lại menu "Task Fulfillment" ở sidebar khi đang đứng đúng trang này** (`FulfillmentKanbanView` — CHƯA áp dụng cho `PrintWorkshopView`) → tự xóa `search`/`filters`/`dateFrom`/`dateTo`/`selected` (`useSidebarResetSignal`, xem cơ chế chung + bảng trang đã wire ở `Orders.md §20`).
 - **Selection + bulk** (clone Designer):
+  - Checkbox tại HEADER CỘT (chọn/bỏ chọn toàn bộ card trong cột, indeterminate khi partial; counter header đổi thành `đã chọn/tổng` khi có selection) — key i18n `kanban.column.selectAll`.
   - Checkbox tại group header (toàn bộ rows trong group) — indeterminate state khi partial.
   - Checkbox tại từng card (top-left absolute). Shift+click trong cùng cột để select range.
   - `selectedColumns` cross-column: nếu user chọn đơn ở > 1 cột → toolbar hiển thị warning, không cho bulk.
   - Sticky toolbar bottom-3 rounded-full: hiển thị count + button bulk theo cột:
     - waiting / rework → "Bắt đầu" (Promise.allSettled loop `transition(start)`).
     - in-progress → "Hoàn thành" (loop `transition(complete)`).
+    - **RIÊNG stage Đóng hàng (`myStage === Pack`)**: waiting / rework có thêm nút "Hoàn thành" (`BulkAction 'start-complete'`) — cùng hành vi 1 lần quét của `FulfillmentScanActionDialog`.
+    - **Mọi bulk = 1 REQUEST duy nhất `POST /v1/fulfillment/bulk-transition`** (`{stage, action: 'start'|'complete'|'start-complete', orderIds[]}` max 1000, `BulkFulfillmentTransitionDto`) — BE `bulkTransition()` loop `transition()` TỪNG đơn concurrency 5 để giữ đủ hook (timeline, auto-advance luồng rút gọn, stock-out, webhook), trả `{ok, fail, failures[]}`. Trước đây FE bắn N request song song → 400 đơn chạm rate limiter.
     - watching → không có checkbox + không có bulk (read-only).
     - Rework-back KHÔNG bulk (cần dialog per đơn → input lý do).
 - **Kanban 4 column** với border accent màu:

@@ -45,6 +45,15 @@
     ],
     // words - list of words to be always considered correct
     "words": [
+        "eglobal",
+        "EGLOBAL",
+        "Eglobal",
+        "itel",
+        "Uniuni",
+        "dimentions",
+        "subdoc",
+        "Subdoc",
+        "VNPost",
         "qrcode",
         "dedup",
         "khóa",

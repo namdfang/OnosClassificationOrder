@@ -513,7 +513,8 @@
       "clickForDetail": "Click to view details",
       "cuttingFileMapped": "Cutting file mapped",
       "factoryReportedErrors": "The factory has reported {{count}} errors on this order",
-      "blockedAssignReason": "Order is already 'ok' (Tool result note 1) — no need to assign a designer"
+      "blockedAssignReason": "Order is already 'ok' (Tool result note 1) — no need to assign a designer",
+      "vnpLabel": "VNP label — opens in new tab"
     }
   },
   "rowActionsMenu": {
@@ -526,6 +527,7 @@
     "cancelOrder": "Cancel order",
     "checkDesign": "Check for new design",
     "checkDesignUpdated": "Found and applied new design from OnosPod",
+    "vnpShipment": "VNP shipment",
     "printCustomerLabel": "Print customer label",
     "forceComplete": "Mark as completed"
   },
@@ -680,6 +682,42 @@
     "low": "Priority",
     "normal": "High priority",
     "high": "Highest priority"
+  },
+  "vnp": {
+    "title": "VNP shipment — {{code}}",
+    "subtitle": "End-to-end VNP eGlobal test: check address → create shipment → tracking. Raw responses are shown under each step to locate the label.",
+    "notConfigured": "VNP eGlobal not configured — missing env: {{missing}}. Fill apps/api/.env.development and restart the API.",
+    "step1": "1. Shipping address",
+    "step2": "2. Shipment",
+    "noAddress": "Order has no shipping address — cannot create a shipment.",
+    "checkAddress": "Check address",
+    "checking": "Calling...",
+    "addressValid": "Address valid",
+    "addressInvalid": "Address invalid",
+    "service": "Service",
+    "shippingType": "Shipping type",
+    "weightGram": "Fallback weight (gram, for items missing weight)",
+    "weightRequired": "Enter a weight (gram) > 0",
+    "packageType": "Package type (FirstClass)",
+    "createShipment": "Create shipment",
+    "creating": "Creating...",
+    "created": "Shipment {{id}} created",
+    "shipmentId": "Shipment ID",
+    "trackingCode": "Tracking code",
+    "openLabel": "Open label (print & stick)",
+    "noLabelYet": "No label found in the response yet — use \"Shipment detail\" to inspect further.",
+    "lastStatus": "Last status",
+    "getTracking": "Get tracking",
+    "getDetail": "Shipment detail",
+    "cancelShipment": "Cancel shipment",
+    "cancelled": "Shipment cancelled",
+    "rawResponse": "Raw response (VNP)",
+    "rawAddressResponse": "Raw response — createAddress",
+    "rawTracking": "Raw response — tracking",
+    "rawDetail": "Raw response — shipment detail",
+    "groupNotice": "Seller order {{orderId}} has {{count}} items — one order buys ONE label, the shipment will bundle ALL items below:",
+    "noWeight": "no weight (fallback used)",
+    "groupBlocked": "Another item of this seller order already has a shipment — open that item's dialog or cancel the old shipment."
   },
   "customerLabel": {
     "scanHint": "Scan to track your order",
