@@ -240,6 +240,39 @@ export class ApiConfigService {
     return { apiUrl, bearerToken, superToken };
   }
 
+  /**
+   * VNP eGlobal Shipment API (vận đơn/label quốc tế) — spec ở
+   * `Data/Tai_lieu_API_VNP_eGlobal_dev.pdf` + swagger `/api/v3/api-docs`.
+   * Auth bằng email/password → JWT (`POST /auth/signin`). `shippingUnitId`
+   * do Nexo cấp theo môi trường (staging/production khác nhau).
+   * Optional integration — thiếu email/password → getter trả null, feature
+   * tự disable (endpoint trả lỗi "chưa cấu hình" thay vì crash).
+   */
+  get vnpEglobalConfig(): null | {
+    apiUrl: string;
+    email: string;
+    password: string;
+    shippingUnitId: string;
+    fromAddressId: string;
+  } {
+    const apiUrl = this.configService.get<string>('VNP_EGLOBAL_API_URL') || 'https://vnp-eglobal.itel.dev/api';
+    const email = this.configService.get<string>('VNP_EGLOBAL_EMAIL') || '';
+    const password = this.configService.get<string>('VNP_EGLOBAL_PASSWORD') || '';
+    const shippingUnitId = this.configService.get<string>('VNP_EGLOBAL_SHIPPING_UNIT_ID') || '';
+    const fromAddressId = this.configService.get<string>('VNP_EGLOBAL_FROM_ADDRESS_ID') || '';
+    if (!email || !password) return null;
+    return { apiUrl, email, password, shippingUnitId, fromAddressId };
+  }
+
+  /** Tên các env còn thiếu của VNP eGlobal — cho endpoint status (không lộ giá trị). */
+  get vnpEglobalMissingEnv(): string[] {
+    const missing: string[] = [];
+    if (!this.configService.get<string>('VNP_EGLOBAL_EMAIL')) missing.push('VNP_EGLOBAL_EMAIL');
+    if (!this.configService.get<string>('VNP_EGLOBAL_PASSWORD')) missing.push('VNP_EGLOBAL_PASSWORD');
+    if (!this.configService.get<string>('VNP_EGLOBAL_SHIPPING_UNIT_ID')) missing.push('VNP_EGLOBAL_SHIPPING_UNIT_ID');
+    return missing;
+  }
+
   get cdn() {
     return {
       url: this.getString('CDN_URL'),

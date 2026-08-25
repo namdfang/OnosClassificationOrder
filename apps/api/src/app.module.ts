@@ -38,6 +38,7 @@ import { DesignerModule } from './modules/designer/designer.module';
 import { DesignerAssignmentModule } from './modules/designer-assignment/designer-assignment.module';
 import { FactoryModule } from './modules/factory/factory.module';
 import { FulfillmentModule } from './modules/fulfillment/fulfillment.module';
+import { ShippingVnpModule } from './modules/shipping-vnp/shipping-vnp.module';
 import { MachineTypeModule } from './modules/machine-type/machine-type.module';
 import { MailModule } from './modules/mail/mail.module';
 import { NotificationModule } from './modules/notifications/notification.module';
@@ -86,6 +87,7 @@ import { SharedModule } from './shared/shared.module';
     CustomerPortalModule,
     DesignStorageModule,
     FulfillmentModule,
+    ShippingVnpModule,
     TelegramNotificationModule,
     ScheduledReportsModule,
     NotificationModule,

@@ -1,0 +1,60 @@
+{
+  "title": "Vận chuyển VNP eGlobal",
+  "subtitle": "Địa chỉ gửi hàng (ShippingFrom) theo xưởng — đơn từ xưởng nào ship từ địa chỉ gán cho xưởng đó. Nhiều xưởng dùng chung 1 địa chỉ được. Cấu hình lưu theo môi trường: trên production chỉ cần bấm tạo/gán ở trang này.",
+  "notConfigured": "Chưa cấu hình VNP eGlobal — thiếu env: {{missing}}. Điền vào .env của API rồi restart.",
+  "addresses": {
+    "title": "Địa chỉ gửi (ShippingFrom)",
+    "add": "Thêm địa chỉ",
+    "empty": "Chưa có địa chỉ nào — bấm \"Thêm địa chỉ\" để tạo địa chỉ xưởng đầu tiên (tạo thẳng bên VNP).",
+    "default": "Mặc định",
+    "delete": "Gỡ khỏi danh sách (không xóa bên VNP)",
+    "deleted": "Đã gỡ địa chỉ",
+    "viewRemote": "Xem địa chỉ trên VNP",
+    "remoteRaw": "Địa chỉ đã lưu bên VNP (raw)",
+    "importById": "Thêm bằng ID có sẵn",
+    "importHint": "Với shipping unit yêu cầu gửi từ hub US của VNP (Carson CA / Jamaica NY / Garden Grove CA...): bấm \"Xem địa chỉ trên VNP\" tìm id hub rồi dán vào đây — KHÔNG tạo địa chỉ mới.",
+    "importId": "ID địa chỉ bên VNP",
+    "importLabel": "Nhãn gợi nhớ (vd: Hub Carson CA)",
+    "importNote": "Ghi chú/địa chỉ hiển thị (tùy chọn)",
+    "importSubmit": "Thêm vào danh sách",
+    "imported": "Đã thêm địa chỉ có sẵn vào cấu hình"
+  },
+  "form": {
+    "label": "Nhãn gợi nhớ (vd: Kho Thái Nguyên)",
+    "name": "Tên người liên hệ",
+    "phoneNumber": "Số điện thoại",
+    "street1": "Địa chỉ (số nhà, đường/thôn xóm)",
+    "street2": "Địa chỉ dòng 2 (tùy chọn)",
+    "ward": "Phường / Xã",
+    "district": "Quận / Huyện",
+    "city": "Tỉnh / Thành phố",
+    "zipCode": "Mã bưu chính (tùy chọn)",
+    "country": "Quốc gia (mã 2 ký tự)",
+    "missingRequired": "Điền đủ các trường bắt buộc (*)",
+    "submit": "Tạo bên VNP + lưu",
+    "creating": "Đang tạo...",
+    "created": "Đã tạo địa chỉ bên VNP và lưu cấu hình",
+    "cancel": "Hủy",
+    "state": "Bang (US, vd CA — địa chỉ Mỹ bắt buộc)"
+  },
+  "map": {
+    "title": "Gán xưởng → địa chỉ gửi",
+    "hint": "Xưởng để \"Dùng mặc định\" sẽ ship từ địa chỉ mặc định bên dưới. 2D Thái Nguyên + Gỗ Thái Nguyên chọn cùng 1 địa chỉ Thái Nguyên.",
+    "useDefault": "— Dùng mặc định —",
+    "default": "Địa chỉ mặc định",
+    "noDefault": "(chưa chọn)",
+    "save": "Lưu cấu hình",
+    "saving": "Đang lưu...",
+    "saved": "Đã lưu cấu hình",
+    "unsaved": "Có thay đổi chưa lưu",
+    "resolveNote": "Thứ tự áp: địa chỉ gán cho xưởng → mặc định ({{fallback}}) → env VNP_EGLOBAL_FROM_ADDRESS_ID."
+  },
+  "wallet": {
+    "title": "Ví VNP",
+    "hint": "Cần tối thiểu $50 mới tạo được vận đơn",
+    "check": "Kiểm tra số dư",
+    "loading": "Đang tra...",
+    "unknown": "(không dò được số dư — xem raw)",
+    "raw": "Response thô — availableBalance"
+  }
+}

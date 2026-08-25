@@ -13,6 +13,7 @@ import { BaseEntityZod, PageQueryZod, PageResZod, ResZod } from '@shared/types';
 import { z } from 'zod';
 
 import { IDZod } from '../constants/common-zod';
+import { VnpShipmentInfoZod } from './vnp-shipping.dto';
 
 export const DesignerStatusZod = z.nativeEnum(DesignerStatus);
 export const DesignerTransitionActionZod = z.nativeEnum(DesignerTransitionAction);
@@ -213,6 +214,11 @@ export const ProductionOrderZod = BaseEntityZod.extend({
    * so sánh (KHÔNG tự mở giữ), lần sau khác snapshot → mở giữ + cập nhật.
    */
   shippingAddress: ProductionOrderShippingAddressZod.optional(),
+  /**
+   * Vận đơn VNP eGlobal đã tạo cho đơn này (nếu có) — set qua module
+   * `shipping-vnp` (nút "Vận đơn VNP" ở bảng đơn hàng, giai đoạn test).
+   */
+  vnpShipment: VnpShipmentInfoZod.optional(),
   orderId: z.string().optional(),
   externalId: z.string().optional(),
   referent: z.string().optional(),

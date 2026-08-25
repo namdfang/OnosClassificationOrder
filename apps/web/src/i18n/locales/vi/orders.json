@@ -497,7 +497,8 @@
       "clickForDetail": "Click để xem chi tiết",
       "cuttingFileMapped": "Đã map file cutting",
       "factoryReportedErrors": "Xưởng đã báo lỗi {{count}} lần trên đơn này",
-      "blockedAssignReason": "Đơn đã 'ok' (Note kq Tool 1) — không cần gán designer"
+      "blockedAssignReason": "Đơn đã 'ok' (Note kq Tool 1) — không cần gán designer",
+      "vnpLabel": "Label VNP — bấm mở tab mới"
     }
   },
   "rowActionsMenu": {
@@ -509,7 +510,8 @@
     "hold": "Giữ đơn",
     "cancelOrder": "Hủy đơn",
     "checkDesign": "Kiểm tra design mới",
-    "checkDesignUpdated": "Đã tìm thấy và cập nhật design mới từ OnosPod"
+    "checkDesignUpdated": "Đã tìm thấy và cập nhật design mới từ OnosPod",
+    "vnpShipment": "Vận đơn VNP"
   },
   "orderActions": {
     "alreadyCancelled": "Đơn đã hủy."
@@ -660,5 +662,41 @@
     "low": "Ưu tiên",
     "normal": "Ưu tiên cao",
     "high": "Ưu tiên nhất"
+  },
+  "vnp": {
+    "title": "Vận đơn VNP — {{code}}",
+    "subtitle": "Test toàn trình VNP eGlobal: kiểm tra địa chỉ → tạo vận đơn → tracking. Response thô hiện bên dưới từng bước để soi label.",
+    "notConfigured": "Chưa cấu hình VNP eGlobal — thiếu env: {{missing}}. Điền vào apps/api/.env.development rồi restart API.",
+    "step1": "1. Địa chỉ nhận hàng",
+    "step2": "2. Vận đơn",
+    "noAddress": "Đơn chưa có địa chỉ nhận (shippingAddress) — không tạo được vận đơn.",
+    "checkAddress": "Kiểm tra địa chỉ",
+    "checking": "Đang gọi...",
+    "addressValid": "Địa chỉ hợp lệ",
+    "addressInvalid": "Địa chỉ không hợp lệ",
+    "service": "Dịch vụ",
+    "shippingType": "Loại vận chuyển",
+    "weightGram": "Cân nặng fallback (gram, cho item thiếu weight)",
+    "weightRequired": "Nhập cân nặng (gram) > 0",
+    "packageType": "Loại gói (FirstClass)",
+    "createShipment": "Tạo vận đơn",
+    "creating": "Đang tạo...",
+    "created": "Đã tạo vận đơn {{id}}",
+    "shipmentId": "Mã shipment",
+    "trackingCode": "Mã tracking",
+    "openLabel": "Mở label (in dán kiện)",
+    "noLabelYet": "Chưa dò được label trong response — bấm \"Chi tiết shipment\" để soi thêm.",
+    "lastStatus": "Trạng thái gần nhất",
+    "getTracking": "Tra tracking",
+    "getDetail": "Chi tiết shipment",
+    "cancelShipment": "Hủy vận đơn",
+    "cancelled": "Đã hủy vận đơn",
+    "rawResponse": "Response thô (VNP)",
+    "rawAddressResponse": "Response thô — createAddress",
+    "rawTracking": "Response thô — tracking",
+    "rawDetail": "Response thô — chi tiết shipment",
+    "groupNotice": "Đơn seller {{orderId}} có {{count}} item — 1 đơn chỉ mua 1 label, vận đơn sẽ gộp TẤT CẢ item dưới đây:",
+    "noWeight": "thiếu cân nặng (dùng fallback)",
+    "groupBlocked": "Item khác cùng đơn seller đã có vận đơn — mở dialog ở item đó hoặc hủy vận đơn cũ."
   }
 }

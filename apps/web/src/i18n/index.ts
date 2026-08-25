@@ -10,6 +10,7 @@ import customerFactoryAssignmentEn from './locales/en/customerFactoryAssignment.
 import customerNotificationsEn from './locales/en/customerNotifications.json';
 import customerPortalEn from './locales/en/customerPortal.json';
 import customerPriorityEn from './locales/en/customerPriority.json';
+import vnpShippingEn from './locales/en/vnpShipping.json';
 import customersEn from './locales/en/customers.json';
 import dashboardEn from './locales/en/dashboard.json';
 import designerAutoAssignEn from './locales/en/designerAutoAssign.json';
@@ -35,6 +36,7 @@ import customerFactoryAssignmentVi from './locales/vi/customerFactoryAssignment.
 import customerNotificationsVi from './locales/vi/customerNotifications.json';
 import customerPortalVi from './locales/vi/customerPortal.json';
 import customerPriorityVi from './locales/vi/customerPriority.json';
+import vnpShippingVi from './locales/vi/vnpShipping.json';
 import customersVi from './locales/vi/customers.json';
 import dashboardVi from './locales/vi/dashboard.json';
 import designerAutoAssignVi from './locales/vi/designerAutoAssign.json';
@@ -94,6 +96,7 @@ export const resources = {
     customerFactoryAssignment: customerFactoryAssignmentVi,
     customers: customersVi,
     customerPriority: customerPriorityVi,
+    vnpShipping: vnpShippingVi,
     customerPortal: customerPortalVi,
     customerNotifications: customerNotificationsVi,
     landing: landingVi,
@@ -121,6 +124,7 @@ export const resources = {
     customerFactoryAssignment: customerFactoryAssignmentEn,
     customers: customersEn,
     customerPriority: customerPriorityEn,
+    vnpShipping: vnpShippingEn,
     customerPortal: customerPortalEn,
     customerNotifications: customerNotificationsEn,
     landing: landingEn,

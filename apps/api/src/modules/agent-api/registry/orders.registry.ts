@@ -116,6 +116,8 @@ export const ordersRegistry: AgentTableSpec = {
     // ── `API-19` mở nốt hai trường tiền của đơn
     baseCost: numeric('Giá vốn sản xuất của đơn'),
     shipCost: numeric('Phí ship nội bộ của đơn'),
+
+    vnpShipment: plain('object', 'Vận đơn VNP eGlobal của đơn (shipmentId/trackingCode/labelUrl), nếu đã tạo'),
   },
   // `API-19`: không còn trường nào của bảng này bị loại trừ.
   deliberatelyExcluded: [],

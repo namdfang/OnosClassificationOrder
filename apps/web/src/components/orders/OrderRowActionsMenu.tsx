@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { Ban, MoreHorizontal, PauseCircle, Pencil, PlayCircle, RefreshCw } from 'lucide-react';
+import { Ban, MoreHorizontal, PauseCircle, Pencil, PlayCircle, RefreshCw, Truck } from 'lucide-react';
 import { toast } from 'sonner';
 
 import { RepositoryRemote } from '@/services';
@@ -22,6 +22,7 @@ import { usePermission } from '@/hooks/usePermission';
 import { CancelOrderDialog } from './CancelOrderDialog';
 import { EditOrderDesignDialog } from './EditOrderDesignDialog';
 import { HoldOrderDialog } from './HoldOrderDialog';
+import { VnpShipmentDialog } from './VnpShipmentDialog';
 
 interface Props {
   order: WorkshopOrderRow;
@@ -43,6 +44,7 @@ export function OrderRowActionsMenu({ order, onChanged }: Props) {
   const [cancelOpen, setCancelOpen] = useState(false);
   const [designOpen, setDesignOpen] = useState(false);
   const [holdOpen, setHoldOpen] = useState(false);
+  const [vnpOpen, setVnpOpen] = useState(false);
   const [unholding, setUnholding] = useState(false);
   const [checkingDesign, setCheckingDesign] = useState(false);
 
@@ -147,6 +149,11 @@ export function OrderRowActionsMenu({ order, onChanged }: Props) {
               </DropdownMenuItem>
             ))}
           {isAdmin && (
+            <DropdownMenuItem disabled={cancelled} onSelect={() => setVnpOpen(true)}>
+              <Truck size={14} className="mr-2" /> {t('rowActionsMenu.vnpShipment')}
+            </DropdownMenuItem>
+          )}
+          {isAdmin && (
             <DropdownMenuItem
               disabled={cancelDisabled}
               className="text-rose-600 focus:text-rose-600"
@@ -162,6 +169,7 @@ export function OrderRowActionsMenu({ order, onChanged }: Props) {
       <CancelOrderDialog order={order} open={cancelOpen} onOpenChange={setCancelOpen} onDone={onChanged} />
       <HoldOrderDialog order={order} open={holdOpen} onOpenChange={setHoldOpen} onDone={onChanged} />
       <EditOrderDesignDialog order={order} open={designOpen} onOpenChange={setDesignOpen} onDone={onChanged} />
+      <VnpShipmentDialog order={order} open={vnpOpen} onOpenChange={setVnpOpen} onDone={onChanged} />
     </>
   );
 }
