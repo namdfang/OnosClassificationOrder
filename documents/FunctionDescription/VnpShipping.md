@@ -1,7 +1,7 @@
 # VNP eGlobal Shipping — Function Description
 
 > **File FE:** `apps/web/src/components/orders/VnpShipmentDialog.tsx`, `apps/web/src/components/settings/VnpShippingConfig.tsx` (mục `/adm/settings/vnp-shipping`), `apps/web/src/services/vnpShipping.ts`, entry ở `apps/web/src/components/orders/OrderRowActionsMenu.tsx`
-> **File BE:** `apps/api/src/modules/shipping-vnp/` (`vnp-eglobal.client.ts`, `shipping-vnp.service.ts`, `shipping-vnp.controller.ts`, `shipping-vnp.module.ts`)
+> **File BE:** `apps/api/src/modules/shipping-vnp/` (`vnp-eglobal.client.ts`, `shipping-vnp.service.ts`, `shipping-vnp.controller.ts`, `shipping-vnp.module.ts`, `shipping-package.entity.ts`, `shipment.entity.ts`)
 > **Route:** không có trang riêng — dialog mở từ menu "..." của hàng đơn (trang Orders)
 > **API:** `/v1/shipping-vnp/*`
 
@@ -22,8 +22,17 @@ Nguồn spec: `Data/Tai_lieu_API_VNP_eGlobal_dev.pdf` + OpenAPI sống `https://
    - `POST /shipment/createAddress` (type `ShippingTo`, map từ `shippingAddress`) → lấy `toAddressId`;
    - `POST /shipment/createShipment` — **1 entry `package_details` cho MỖI item của nhóm** (weight riêng từng item), **`shipping_from_id` resolve THEO XƯỞNG của đơn** (xem §2b), `shipping_unit_id` = env, **`rep1` = `productionId` từng item** (unique bên VNP → chống tạo trùng, tra ngược `GET /shipment/getByRef1/{ref1}`), `rep2` = `orderId`, `ship_date`/`ready_time`/`last_time_available` = hôm nay, `disable_fallback: true` chỉ khi service Uniuni;
    - dò response (`digString` BFS các key phổ biến) nhặt `shipmentId`/`trackingCode`/`labelUrl` → **lưu subdoc `order.vnpShipment` lên CẢ nhóm** (item nào mở dialog cũng thấy); tracking/hủy/nhặt-bù-label cũng updateMany theo `vnpShipment.shipmentId`.
-5. Đơn đã có vận đơn: dialog hiện shipmentId/tracking/link label + 3 nút **Tra tracking** / **Chi tiết shipment** (GET `/shipment/{id}` — soi bù label nếu createShipment không trả) / **Hủy vận đơn** (hủy xong được phép tạo lại).
+5. Đơn đã có vận đơn: dialog hiện shipmentId/tracking/link label + 3 nút **Tra tracking** / **Chi tiết shipment** (GET `/shipment/{id}` — soi bù label nếu createShipment không trả) / **Hủy vận đơn** (hủy xong được phép tạo lại). Dưới cùng dialog có section **"Lịch sử vận đơn"** — mọi record của đơn (kể cả đã hủy) từ bảng `shipments`.
 6. Client VNP tự đăng nhập lấy JWT (`LoginRq {email,password}`), cache in-memory, dính 401 thì re-login 1 lần rồi retry.
+
+### 2a. Model lưu trữ — bảng `shipping_packages` + `shipments` (từ 26/08)
+
+Nghiệp vụ: 1 đơn sản xuất (`OrderEntity`) = 1 **item** của khách; 1 đơn khách (`orderId` seller) nhiều item; **label luôn dán lên 1 KIỆN vật lý** → shipment trỏ vào **pack**, KHÔNG trỏ đơn khách. Đơn khách **không bao giờ tách** ra nhiều pack.
+
+- **`shipping_packages`** (`ShippingPackageEntity`) — 1 kiện: `code` (`PK-XXXXXXXXXX` qua `genCode`), `factoryId`, `orderCodes[]` (orderId seller — hiện luôn ≤1), `productionOrderIds[]` (OrderEntity.\_id — index, dùng tra lịch sử theo đơn), `productionIds[]` (snapshot hiển thị), `parentPackageId` (**để dành CHƯA dùng** — sau này thùng master gom nhiều kiện đi hub có label riêng; gộp 2 đơn cùng địa chỉ 1 label = thêm phần tử `orderCodes`, đều không phải đổi schema). Pack **tự sinh ngầm** lúc Admin bấm mua label, hiện 1 pack = 1 đơn khách.
+- **`shipments`** (`ShipmentEntity`) — **mỗi lần mua label = 1 record MỚI, không bao giờ ghi đè**: `packageId` (ref), `provider` ('vnp-eglobal' — sau này thêm khi tự ship), `vnpShipmentId`/`trackingCode`/`labelUrl`/`service`/`shippingType`/`fromAddressId`/`toAddressId`/`shippingCost` (VNP trả lúc tạo), `status` (`created|cancelled`), `cancelledAt`, `lastTrackingStatus`/`lastTrackingAt` + `trackingEvents[]` (lịch sử poll — để dành cho cron tracking), `createdByUserId/Name`. Hủy → set `status='cancelled'`, mua lại → record mới ⇒ **lịch sử tự có**.
+- **`order.vnpShipment` trên orders GIỮ LẠI làm SNAPSHOT mỏng** (sync như cũ ở create/cancel/tracking/detail, updateMany cả nhóm) — để bảng đơn/list render không phải join; **nguồn sự thật là 2 bảng mới**. Data test cũ trước 26/08 không backfill (chưa lên production).
+- **Trạng thái ship cập nhật**: hiện chỉ khi bấm tay Tra tracking. Spec VNP **không có webhook đăng ký cho partner** (`POST /public/webhook` là đầu nhận phía họ) → sau này làm **cron poll** cho shipment chưa delivered; nguồn poll: `GET /tracking/public/track/{trackingCode}` (không cần token, qua hệ VietNamLogistics) làm chính, `GET /shipment/tracking/{trackingCode}` (proxy USPS Web Tools — **dính quota USPS dùng chung**, staging đã cạn 26/08) làm phụ. Chưa quyết — chờ chốt với Nexo.
 
 ### 2b. Địa chỉ gửi (ShippingFrom) theo xưởng — cấu hình UI, sống theo môi trường
 
@@ -56,6 +65,8 @@ Nguồn spec: `Data/Tai_lieu_API_VNP_eGlobal_dev.pdf` + OpenAPI sống `https://
 | GET | `/v1/shipping-vnp/orders/:orderId/tracking` | Bước 3 — tra tracking |
 | GET | `/v1/shipping-vnp/orders/:orderId/shipment-detail` | GET /shipment/{id} bên VNP, nhặt bù label/tracking |
 | PUT | `/v1/shipping-vnp/orders/:orderId/cancel` | Bước 4 — hủy vận đơn |
+| GET | `/v1/shipping-vnp/shipments` | Danh sách vận đơn toàn hệ thống (bảng `shipments`, paging + search tracking/mã kiện/mã đơn) |
+| GET | `/v1/shipping-vnp/orders/:orderId/shipments` | Lịch sử vận đơn của 1 đơn (mọi record kể cả đã hủy) — section "Lịch sử vận đơn" trong dialog |
 
 Tất cả `@Auth([SuperAdmin, Admin])`. Mọi Res kèm `raw` (JSON nguyên văn VNP).
 
@@ -64,15 +75,21 @@ Tất cả `@Auth([SuperAdmin, Admin])`. Mọi Res kèm `raw` (JSON nguyên văn
 VnpShipmentInfoZod = { shipmentId?, trackingCode?, labelUrl?, service?, shippingType?,
   toAddressId?, addressValid?, addressCheckedAt?, createdAt?, cancelledAt?,
   lastTrackingStatus?, lastTrackingAt? }
-// OrderEntity.vnpShipment (subdoc raw, order.entity.ts) + ProductionOrderZod.vnpShipment
+// OrderEntity.vnpShipment (subdoc raw, order.entity.ts) + ProductionOrderZod.vnpShipment — SNAPSHOT mỏng
 CreateVnpShipmentZod = { service, shippingType, weightGram, lengthCm?, wideCm?, heightCm?, packageType?, packages }
+// Bảng riêng (§2a):
+VnpShippingPackageZod = { _id, code, factoryId?, orderCodes[], productionOrderIds[], productionIds[], parentPackageId?, createdAt? }
+VnpShipmentRecordZod = { _id, packageId, provider, vnpShipmentId?, trackingCode?, labelUrl?, service?, shippingType?,
+  fromAddressId?, toAddressId?, shippingCost?, status ('created'|'cancelled'), cancelledAt?,
+  lastTrackingStatus?, lastTrackingAt?, createdByUserId?, createdByUserName?, createdAt?, package? }
+GetVnpShipmentsZod = { page, size, search? }
 ```
 
 Env (`apps/api/.env.development.example`): `VNP_EGLOBAL_API_URL` (default staging), `VNP_EGLOBAL_EMAIL`, `VNP_EGLOBAL_PASSWORD`, `VNP_EGLOBAL_SHIPPING_UNIT_ID` (staging: `b47b8c02-5dd0-40cf-9b22-10978d82bdc4`), `VNP_EGLOBAL_FROM_ADDRESS_ID`. Thiếu email/password → `vnpEglobalConfig` getter (api-config.service.ts) trả null, feature tự disable.
 
 ## 4. UI Components
 
-- `VnpShipmentDialog.tsx` — dialog 2 section (địa chỉ / vận đơn), mỗi call hiện `RawBlock` (details/pre collapsible) chứa raw response. Select native styled, i18n namespace `orders` key `vnp.*` + `rowActionsMenu.vnpShipment` (vi/en).
+- `VnpShipmentDialog.tsx` — dialog 3 section (địa chỉ / vận đơn / **lịch sử vận đơn** từ `GET orders/:id/shipments`, badge Đang hoạt động/Đã hủy + link label + phí + người tạo), mỗi call hiện `RawBlock` (details/pre collapsible) chứa raw response. Select native styled, i18n namespace `orders` key `vnp.*` (+ `vnp.history*`) + `rowActionsMenu.vnpShipment` (vi/en).
 - `OrderRowActionsMenu.tsx` — item "Vận đơn VNP" (icon Truck), chỉ `isAdmin`, disable khi đơn hủy.
 - `workshopTableConfig.tsx` — `WorkshopOrderRow` thêm `weight`/`shippingAddress`/`vnpShipment`.
 
@@ -90,8 +107,8 @@ Env (`apps/api/.env.development.example`): `VNP_EGLOBAL_API_URL` (default stagin
 
 ## 7. Permissions
 
-- **Mọi bề mặt VNP đều CHỈ Admin/SuperAdmin** (rà soát 25/08):
-  - BE: 14 endpoint `@Auth([SuperAdmin, Admin])`.
+- **Mọi bề mặt VNP đều CHỈ Admin/SuperAdmin** (rà soát 25/08; 2 endpoint lịch sử thêm 26/08 cùng gate):
+  - BE: 16 endpoint `@Auth([SuperAdmin, Admin])`.
   - Nút "Vận đơn VNP" + `VnpShipmentDialog`: gate `isAdmin` ở `OrderRowActionsMenu.tsx` (mount duy nhất).
   - Entry settings `/adm/settings/vnp-shipping`: `adminOnly: true` ở `pages/settings/index.tsx` — perm `role.manage` cấp qua custom role KHÔNG đủ, phải đúng role Admin/SuperAdmin.
   - Link 🏷️ Label ở cột mã đơn (`workshopTableConfig.tsx`): helper `isAdminViewer()` đọc `authStore` — role khác không thấy link/tracking.

@@ -61,6 +61,21 @@ const cancelShipment = (orderId: string) => {
   return callApi(`/${CONFIG.API_VERSION}/shipping-vnp/orders/${orderId}/cancel`, 'put');
 };
 
+/** Danh sách vận đơn toàn hệ thống (bảng shipments — lịch sử, Admin check). */
+const listShipments = (query: { page?: number; size?: number; search?: string } = {}) => {
+  const qs = new URLSearchParams();
+  if (query.page) qs.set('page', String(query.page));
+  if (query.size) qs.set('size', String(query.size));
+  if (query.search) qs.set('search', query.search);
+  const suffix = qs.toString() ? `?${qs.toString()}` : '';
+  return callApi(`/${CONFIG.API_VERSION}/shipping-vnp/shipments${suffix}`, 'get');
+};
+
+/** Lịch sử vận đơn của 1 đơn (mọi record kể cả đã hủy). */
+const getOrderShipments = (orderId: string) => {
+  return callApi(`/${CONFIG.API_VERSION}/shipping-vnp/orders/${orderId}/shipments`, 'get');
+};
+
 export const vnpShipping = {
   getStatus,
   getWallet,
@@ -76,4 +91,6 @@ export const vnpShipping = {
   getTracking,
   getShipmentDetail,
   cancelShipment,
+  listShipments,
+  getOrderShipments,
 };

@@ -2,6 +2,7 @@ import React, { useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import dayjs from 'dayjs';
 import { CheckCircle2, ExternalLink, XCircle } from 'lucide-react';
+import type { VnpShipmentRecord } from 'shared';
 import { VNP_SHIPPING_SERVICES, VNP_SHIPPING_TYPES } from 'shared';
 import { toast } from 'sonner';
 
@@ -77,6 +78,7 @@ export function VnpShipmentDialog({ order, open, onOpenChange, onDone }: Props) 
   const { t } = useTranslation('orders');
   const [status, setStatus] = useState<VnpStatus | null>(null);
   const [group, setGroup] = useState<VnpGroup | null>(null);
+  const [history, setHistory] = useState<VnpShipmentRecord[]>([]);
   const [busy, setBusy] = useState<string | null>(null);
   const [addressResult, setAddressResult] = useState<{ valid: boolean; message?: string; raw: unknown } | null>(null);
   const [createRaw, setCreateRaw] = useState<unknown>();
@@ -108,13 +110,26 @@ export function VnpShipmentDialog({ order, open, onOpenChange, onDone }: Props) 
       .then((res) => setStatus(res.data?.data as VnpStatus))
       .catch(() => setStatus(null));
     setGroup(null);
+    setHistory([]);
     if (order?._id) {
       RepositoryRemote.vnpShipping
         .getGroup(order._id)
         .then((res) => setGroup(res.data?.data as VnpGroup))
         .catch(() => setGroup(null));
+      RepositoryRemote.vnpShipping
+        .getOrderShipments(order._id)
+        .then((res) => setHistory((res.data?.data as VnpShipmentRecord[]) ?? []))
+        .catch(() => setHistory([]));
     }
   }, [open, order?._id, order?.weight]);
+
+  const reloadHistory = () => {
+    if (!order?._id) return;
+    RepositoryRemote.vnpShipping
+      .getOrderShipments(order._id)
+      .then((res) => setHistory((res.data?.data as VnpShipmentRecord[]) ?? []))
+      .catch(() => undefined);
+  };
 
   if (!order) return null;
 
@@ -159,6 +174,7 @@ export function VnpShipmentDialog({ order, open, onOpenChange, onDone }: Props) 
       setCreateRaw(data.raw);
       setCreateRawAddress(data.rawAddress);
       patchOrder(data.shipment);
+      reloadHistory();
       toast.success(t('vnp.created', { id: data.shipment.shipmentId ?? '?' }));
     });
 
@@ -181,6 +197,7 @@ export function VnpShipmentDialog({ order, open, onOpenChange, onDone }: Props) 
       const res = await RepositoryRemote.vnpShipping.cancelShipment(order._id);
       const data = res.data?.data as { shipment: RowShipment; raw: unknown };
       patchOrder(data.shipment);
+      reloadHistory();
       toast.success(t('vnp.cancelled'));
     });
 
@@ -367,6 +384,60 @@ export function VnpShipmentDialog({ order, open, onOpenChange, onDone }: Props) 
           <RawBlock label={t('vnp.rawTracking')} value={trackingRaw} />
           <RawBlock label={t('vnp.rawDetail')} value={detailRaw} />
         </section>
+
+        {/* ── Lịch sử vận đơn (bảng shipments — kể cả đã hủy) ───── */}
+        {history.length > 0 && (
+          <section className="space-y-2 border-t border-border pt-3">
+            <h3 className="text-sm font-semibold">{t('vnp.historyTitle')}</h3>
+            <ul className="space-y-1.5">
+              {history.map((rec) => (
+                <li key={rec._id} className="rounded-md border border-border px-3 py-2 text-xs space-y-0.5">
+                  <div className="flex items-center gap-2">
+                    <span
+                      className={
+                        rec.status === 'cancelled'
+                          ? 'rounded bg-rose-100 dark:bg-rose-950/40 px-1.5 py-0.5 text-[10px] font-medium text-rose-600 dark:text-rose-300'
+                          : 'rounded bg-emerald-100 dark:bg-emerald-950/40 px-1.5 py-0.5 text-[10px] font-medium text-emerald-700 dark:text-emerald-300'
+                      }
+                    >
+                      {rec.status === 'cancelled' ? t('vnp.historyCancelled') : t('vnp.historyActive')}
+                    </span>
+                    <span className="text-muted-foreground">
+                      {rec.createdAt ? dayjs(rec.createdAt).format('DD/MM/YYYY HH:mm') : ''}
+                      {rec.createdByUserName ? ` · ${rec.createdByUserName}` : ''}
+                    </span>
+                    {rec.labelUrl && !rec.cancelledAt && (
+                      <a
+                        href={rec.labelUrl}
+                        target="_blank"
+                        rel="noreferrer"
+                        className="ml-auto inline-flex items-center gap-1 text-primary underline"
+                      >
+                        <ExternalLink size={11} /> {t('vnp.openLabel')}
+                      </a>
+                    )}
+                  </div>
+                  {rec.trackingCode && (
+                    <div>
+                      <span className="text-muted-foreground">{t('vnp.trackingCode')}:</span>{' '}
+                      <span className="font-mono">{rec.trackingCode}</span>
+                    </div>
+                  )}
+                  <div className="text-muted-foreground">
+                    {[
+                      rec.package?.code,
+                      rec.service,
+                      rec.shippingCost ? t('vnp.historyCost', { cost: rec.shippingCost }) : undefined,
+                      rec.lastTrackingStatus,
+                    ]
+                      .filter(Boolean)
+                      .join(' · ')}
+                  </div>
+                </li>
+              ))}
+            </ul>
+          </section>
+        )}
       </DialogContent>
     </Dialog>
   );

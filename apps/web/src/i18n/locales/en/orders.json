@@ -717,7 +717,11 @@
     "rawDetail": "Raw response — shipment detail",
     "groupNotice": "Seller order {{orderId}} has {{count}} items — one order buys ONE label, the shipment will bundle ALL items below:",
     "noWeight": "no weight (fallback used)",
-    "groupBlocked": "Another item of this seller order already has a shipment — open that item's dialog or cancel the old shipment."
+    "groupBlocked": "Another item of this seller order already has a shipment — open that item's dialog or cancel the old shipment.",
+    "historyTitle": "Shipment history",
+    "historyActive": "Active",
+    "historyCancelled": "Cancelled",
+    "historyCost": "cost {{cost}}"
   },
   "customerLabel": {
     "scanHint": "Scan to track your order",
