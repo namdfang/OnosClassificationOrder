@@ -73,6 +73,13 @@ const PREVIEW_COLUMNS = [
   'state',
   'postcode',
   'country',
+  // Vận đơn khách tự cấp — hiện ở preview để khách thấy hệ thống ĐÃ nhận
+  // (từ ORD-26 mấy cột này đi thẳng vào module vận đơn lúc push, không còn là
+  // dữ liệu trang trí). `tracking_url` cố ý bỏ khỏi bảng: link dài, đã có ở
+  // drawer chi tiết đơn, thêm vào chỉ làm bảng khó đọc.
+  'tracking_number',
+  'tracking_carrier',
+  'shipping_label',
 ] as const;
 type PreviewColumn = (typeof PREVIEW_COLUMNS)[number];
 

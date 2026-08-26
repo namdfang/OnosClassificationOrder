@@ -135,6 +135,7 @@ errorFile, errorFileNote, assignee). Các cột khác BỎ QUA (không đè dữ
 - Parse numeric: `quantity`, `weight`, `baseCost`, `shipCost`, `width`, `height`, `length`
 - Parse date: `orderAt`, `inProductionAt` (ISO hoặc `M/d/yyyy`)
 - Parse designs: detect column như `Front`, `Back Design`, `Sleeve`, ... → nest vào `designs.{key}`
+- **Vận đơn khách tự cấp (ORD-26)**: 4 cột `Tracking Number` / `Tracking Carrier` / `Tracking URL` / `Shipping Label` (kèm alias `tracking_id`, `tracking_code`, `carrier`, `label_url`…) → `row.tracking`. Khác 39 cột còn lại, mấy cột này dò **theo TÊN header** chứ không theo vị trí: sheet đang chạy ở xưởng chưa có chúng, mà file mỗi nơi xuất ra lại đặt ở chỗ khác nhau — dò theo tên thì sheet cũ vẫn parse y như trước, sheet mới thêm cột ở đâu cũng nhận đúng. Mọi ô trống → `undefined` để BE **không ghi đè** vận đơn đã nhận lúc import lại. BE lưu snapshot `OrderEntity.tracking` + ghi record vào module vận đơn — xem [`VnpShipping.md §2c`](VnpShipping.md).
 
 ### 3.3 Upsert behavior (BE)
 ```ts
@@ -367,6 +368,10 @@ GET /v1/orders/import-from-onospod/cron
   status?: string;
   orderId?, externalId?: string;
   referent?: string;
+  tracking?: { number?, carrier?, url?, labelUrl? }; // ORD-26 — vận đơn KHÁCH TỰ CẤP (CSV khách/CSV admin/Public Order API).
+                               // Snapshot mỏng để list render không phải join; nguồn sự thật là record `shipments`
+                               // provider 'customer' (VnpShipping.md §2c). KHÁC `vnpShipment` = label hệ thống tự mua.
+                               // Index `tracking.number`. Import lại mà file không có cột tracking thì KHÔNG ghi đè.
   orderAt?, inProductionAt?: Date;
   isMapped: boolean;           // default false, index
   productConfigId?: ObjectId;  // ref ProductConfig
@@ -1456,7 +1461,7 @@ Dùng **role gate `isAdmin`** (SuperAdmin/Admin) cả FE lẫn BE — KHÔNG th�
 
 ### 16.6 "In nhãn khách" — tem 4×6cm dán kiện hàng
 
-> **File FE:** `apps/web/src/components/orders/CustomerLabelPrint.tsx` (mục menu từng dòng ở `OrderRowActionsMenu.tsx`, nút in hàng loạt ở `BulkEditToolbar.tsx`), i18n `orders.json` → `rowActionsMenu.printCustomerLabel` + `customerLabel.scanHint` + `bulkEdit.printLabel*`/`noLabel`/`labelPartial`/`labelTooMany`
+> **File FE:** `apps/web/src/components/orders/CustomerLabelPrint.tsx` (mục menu từng dòng ở `OrderRowActionsMenu.tsx`, nút in hàng loạt ở `BulkEditToolbar.tsx`), i18n `orders.json` → `rowActionsMenu.printCustomerLabel` + `customerLabel.scanHint`/`trackingCaption` + `bulkEdit.printLabel*`/`noLabel`/`labelPartial`/`labelTooMany`
 
 Mục **"In nhãn khách"** (`Printer`) nằm ĐẦU menu "...", nên có mặt ở mọi bảng liệt kê ở §16.4 — trong đó có bảng công đoạn **In** của Task Fulfillment (`PrintOrderTable` qua `PrintWorkshopView`), nơi xưởng thực sự cần tem. Bấm là in thẳng, không có bước xem trước: hộp thoại in của trình duyệt đã là bước xác nhận.
 
@@ -1466,13 +1471,16 @@ Nội dung tem, khổ **40×60mm dọc** (4×6cm — tem decal rời, KHÔNG ph�
 |---|---|
 | QR | `${window.location.origin}${PATHS.TRACK}/<productionId>` → trang tra cứu công khai `/track/:productionId` (không cần đăng nhập — xem [`PublicOrderTracking.md`](PublicOrderTracking.md)) |
 | Mã sản xuất | `productionId` — luôn có |
-| Mã đơn | `orderId`, nhãn "Mã đơn" |
-| Mã sàn | `externalId`, nhãn "Mã sàn" — cùng thứ tự với cột Production ID ở danh sách đơn (mã đơn trước, mã sàn dưới) |
+| Mã đơn | `orderId`, nhãn "Mã đơn", 6pt — **ẩn khi trùng `externalId`** (xem dưới) |
+| Mã sàn | `externalId`, nhãn "Mã sàn", 6pt — cùng thứ tự với cột Production ID ở danh sách đơn (mã đơn trước, mã sàn dưới) |
+| Vận đơn | `tracking.number` (vận đơn KHÁCH TỰ CẤP, [`VnpShipping.md §2c`](VnpShipping.md)) — **khối 2 dòng nổi bật**: nhãn 5pt ở trên (**tên hãng** `tracking.carrier` khi có, không có thì "Vận đơn") + dãy số **7.5pt mono đậm** ở dưới |
 | Tên sản phẩm | `productConfig.fullName` → fallback `type` (đơn chưa map xưởng không có `productConfig`) |
 | Biến thể | `size · color` |
 | Vị trí in | các key trong `designs` CÓ file, nhãn + thứ tự lấy từ `DESIGN_KEY_ORDER`/`buildDesignLabels` (`cells/DesignThumbsCell.tsx` — đã export để tem dùng chung, KHÔNG chép danh sách thứ hai). Key lạ vẫn liệt kê ở cuối bằng chính tên key: mất nhãn tiếng Việt còn hơn tem giấu mất một vị trí phải in |
 
-**In CẢ HAI mã phụ, mỗi mã tự biến mất khi rỗng.** `externalId` chỉ có ở đơn nhập từ sheet có cột "External ID" — đo trên dữ liệu thật 2026-08-24, công đoạn **In** có 2/144 đơn mang `externalId` còn 143/144 mang `orderId`; các công đoạn sau thì `externalId` phủ 40–85%. In mỗi một mã là phần lớn tem ra dòng trống. Chiều ngược lại cũng có: đơn khách tự lên qua Customer Portal chưa có `orderId`. Mã bị cắt cụt trên tem là mã sai nên dùng `break-all` (xuống dòng) chứ KHÔNG `truncate`.
+**Trùng mã đơn ↔ mã sàn thì chỉ in "Mã sàn".** Nhiều nguồn đơn nhét CÙNG một giá trị vào cả hai cột; in hai dòng y hệt nhau là tốn 3.09mm lòng tem để nói đúng một thứ. Giữ lại "Mã sàn" vì đó là mã **người mua cuối** tra được ở sàn. So sánh trim + không phân biệt hoa thường, **CỐ Ý không gọt tiền tố kiểu `#`**: hai mã khác nhau thật mà bị coi là một thì tem mất hẳn một mã — tệ hơn nhiều so với in thừa một dòng.
+
+**In CẢ HAI mã phụ (khi khác nhau), mỗi mã tự biến mất khi rỗng.** `externalId` chỉ có ở đơn nhập từ sheet có cột "External ID" — đo trên dữ liệu thật 2026-08-24, công đoạn **In** có 2/144 đơn mang `externalId` còn 143/144 mang `orderId`; các công đoạn sau thì `externalId` phủ 40–85%. In mỗi một mã là phần lớn tem ra dòng trống. Chiều ngược lại cũng có: đơn khách tự lên qua Customer Portal chưa có `orderId`. Mã bị cắt cụt trên tem là mã sai nên dùng `break-all` (xuống dòng) chứ KHÔNG `truncate`.
 
 Mục này **KHÔNG bị khoá** theo `cancelledAt`/`heldAt` như các mục còn lại: in tem là thao tác chỉ đọc, và kiện hàng của đơn đang giữ vẫn cần tem để tìm lại.
 
@@ -1484,13 +1492,30 @@ Mục này **KHÔNG bị khoá** theo `cancelledAt`/`heldAt` như các mục cò
 | Dòng "Quét để theo dõi đơn hàng" 5pt + lề 0.6mm | 2.80mm |
 | Gạch ngang + lề trên dưới 0.9mm | 2.20mm |
 | `productionId` 11pt | 3.88mm |
-| Mã đơn 7pt · Mã sàn 7pt | 3.09 + 3.09mm |
+| Mã đơn 6pt · Mã sàn 6pt | 2.65 + 2.65mm |
 | Tên sản phẩm 8pt ×2 dòng + lề 0.8mm | 7.86mm |
 | Biến thể 8pt ×2 dòng | 7.06mm |
 | Vị trí in 7pt ×2 dòng + lề 0.5mm | 6.67mm |
-| **Tổng** | **55.69 / 56mm** |
+| **Tổng** | **54.81 / 56mm** |
 
-Còn dư **0.31mm**. **Cỡ QR là biến điều chỉnh duy nhất** — mỗi lần phóng to chữ hoặc thêm dòng đều phải trừ lại ở đó. Bản 2026-08-25 phóng chữ lên (mã sản xuất 9→11pt, hai mã phụ 6→7pt, tên sản phẩm + biến thể 7→8pt, vị trí in 6→7pt) nên QR phải rút 84→72px: ~48 ký tự / ECC M ra 33 module, tức **0.58mm/module** (trước là 0.67mm) — vẫn trên ngưỡng ~0.5mm mà camera điện thoại đọc được, nhưng **đã hết chỗ để nhỏ thêm**; muốn phóng chữ nữa thì phải bỏ bớt dòng chứ không rút QR được nữa. Dòng "Mã sàn" dài nhất (nhãn + 18 chữ số) ở 7pt rộng 35.4mm, vẫn vừa 36mm nên không xuống dòng — sát mép, mọi thay đổi nhãn/cỡ chữ dòng này phải đo lại.
+**Thứ tự ưu tiên chữ trên tem** (bản 2026-08-26): `productionId` 11pt đậm → **vận đơn 7.5pt đậm** → tên sản phẩm / biến thể 8pt → vị trí in 7pt → **mã đơn / mã sàn 6pt**. Hai mã phụ là mã tra cứu nội bộ giữa mình với người bán; thứ người cầm kiện hàng cần đọc nhanh là **mã vận đơn**, nên nó được tách hẳn thành khối 2 dòng (nhãn nhỏ trên, số to đậm dưới) thay vì nhét chung một dòng "nhãn — mã" như hai mã kia. Hạ hai mã phụ 7→6pt cũng chính là chỗ trả lại chiều cao cho khối đó.
+
+**7.5pt là TRẦN VẬT LÝ của dãy số vận đơn, không phải lựa chọn thẩm mỹ.** Mã USPS 22 chữ số ở font mono (~0.6em/ký tự) chiếm 22 × 0.6 × 7.5pt = **34.9mm**, `tracking-tighter` kéo về ~32mm — vẫn trong 36mm lòng tem. To hơn là xuống dòng, mà xuống dòng ăn thêm 3.3mm không có trong ngân sách. Muốn số to hơn nữa thì phải **bỏ bớt dòng khác trước**, không nới cỡ chữ ở đây được.
+
+**Khối vận đơn lấy chỗ ở đâu.** Khối 2 dòng cao 5.57mm (nhãn 5pt + số 7.5pt + lề 0.5mm), ngân sách không có sẵn chỗ đó. Nó lấy ở **dòng thứ hai của "Biến thể" và "Vị trí in"** — tem CÓ vận đơn thì hai mục này tự rút xuống `line-clamp-1`, tem không có thì giữ nguyên 2 dòng. Chọn cắt ở đó vì trên tem dán kiện gửi khách thì đó là hai thứ ít quan trọng nhất, và `line-clamp` để lại dấu `…` báo là đã cắt — khác hẳn kiểu `overflow-hidden` cắt cụt lặng lẽ mà cả mục này đang phòng. Đo lại đủ 4 tổ hợp:
+
+| Tổ hợp | Dòng mã | Vận đơn | Biến thể / Vị trí in | Tổng |
+|---|---|---|---|---:|
+| 2 mã khác nhau, không vận đơn *(ca xấu nhất)* | 5.29mm | — | ×2 dòng | **54.81mm** |
+| 2 mã khác nhau + vận đơn | 5.29mm | 5.57mm | ×1 dòng | 53.77mm |
+| Trùng mã (1 dòng) + vận đơn | 2.65mm | 5.57mm | ×1 dòng | 51.13mm |
+| Trùng mã, không vận đơn | 2.65mm | — | ×2 dòng | 52.17mm |
+
+⇒ trần là **54.81mm**, dư **1.19mm** — rộng hơn bản trước (55.69mm) nhờ hạ hai mã phụ xuống 6pt. Rủi ro còn lại: vận đơn dài bất thường + tên hãng dài có thể xuống 2 dòng (`break-all` — mã cắt cụt là mã sai) → ăn nốt phần dư rồi cắt dòng "Vị trí in"; chấp nhận được, đúng thứ tự ưu tiên đã chọn.
+
+**Cỡ QR là biến điều chỉnh duy nhất** — mỗi lần phóng to chữ hoặc thêm dòng đều phải trừ lại ở đó. Bản 2026-08-25 phóng chữ lên (mã sản xuất 9→11pt, tên sản phẩm + biến thể 7→8pt, vị trí in 6→7pt) nên QR phải rút 84→72px: ~48 ký tự / ECC M ra 33 module, tức **0.58mm/module** (trước là 0.67mm) — vẫn trên ngưỡng ~0.5mm mà camera điện thoại đọc được, nhưng **đã hết chỗ để nhỏ thêm**; muốn phóng chữ nữa thì phải bỏ bớt dòng chứ không rút QR được nữa. Bản 2026-08-26 (thêm khối vận đơn) KHÔNG đụng QR: chỗ cho khối đó lấy từ hai mã phụ hạ về 6pt + `line-clamp` thu hẹp, đúng cái luật vừa nói.
+
+**Dòng dài nhất tem** giờ là dãy số vận đơn (~32mm ở 7.5pt, đo ở trên). Dòng "Mã sàn" (nhãn + 18 chữ số) ở 6pt rộng 30.3mm — hết sát mép như hồi 7pt (35.4mm/36mm), nhưng mọi thay đổi nhãn/cỡ chữ hai dòng này vẫn phải đo lại.
 
 **In hàng loạt.** Nút **"In nhãn khách"** (`Printer`) trên thanh bulk (`BulkEditToolbar`, cạnh "Xuất Excel") in tem cho **mọi đơn đang tick chọn** — có mặt ở cả 3 bảng dùng thanh này: Danh sách đơn workshop (`OrderTableWorkshop`), Danh sách đơn classic (`OrderTableClassic`), bảng công đoạn In (`PrintOrderTable`). Cùng một `CustomerLabelPrint`, chỉ khác prop `orders` nhận N phần tử thay vì 1 → N con tem trong **1 lệnh in**, thứ tự tem = thứ tự đơn trên bảng. KHÔNG gate permission, giống mục menu từng dòng.
 

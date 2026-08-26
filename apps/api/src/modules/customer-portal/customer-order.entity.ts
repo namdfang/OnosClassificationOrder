@@ -38,7 +38,11 @@ export interface CustomerOrderItem {
   height?: number;
   length?: number;
   designs?: DesignFields;
-  /** Tracking/label khách tự cấp — lưu-hiển-thị, CHƯA nối sản xuất (plan §13.3). */
+  /**
+   * Tracking/label khách tự cấp. Từ ORD-26 KHÔNG còn dừng ở mức lưu-hiển-thị:
+   * `pushToProduction` đẩy nguyên field này vào `importOrders` → snapshot lên
+   * `OrderEntity.tracking` + record `shipments` (provider `customer`).
+   */
   tracking?: CustomerOrderTracking;
   /** Tính tham khảo lúc tạo, CHỐT LẠI + đóng băng lúc push. */
   priceSnapshot?: CustomerOrderPriceSnapshot;

@@ -10,7 +10,6 @@ import customerFactoryAssignmentEn from './locales/en/customerFactoryAssignment.
 import customerNotificationsEn from './locales/en/customerNotifications.json';
 import customerPortalEn from './locales/en/customerPortal.json';
 import customerPriorityEn from './locales/en/customerPriority.json';
-import vnpShippingEn from './locales/en/vnpShipping.json';
 import customersEn from './locales/en/customers.json';
 import dashboardEn from './locales/en/dashboard.json';
 import designerAutoAssignEn from './locales/en/designerAutoAssign.json';
@@ -27,6 +26,7 @@ import scanErrorEn from './locales/en/scanError.json';
 import stageErrorCatalogEn from './locales/en/stageErrorCatalog.json';
 import toolCheckWorkflowEn from './locales/en/toolCheckWorkflow.json';
 import trackEn from './locales/en/track.json';
+import vnpShippingEn from './locales/en/vnpShipping.json';
 import workshopConfigEn from './locales/en/workshopConfig.json';
 import agentApiVi from './locales/vi/agentApi.json';
 import authVi from './locales/vi/auth.json';
@@ -37,7 +37,6 @@ import customerFactoryAssignmentVi from './locales/vi/customerFactoryAssignment.
 import customerNotificationsVi from './locales/vi/customerNotifications.json';
 import customerPortalVi from './locales/vi/customerPortal.json';
 import customerPriorityVi from './locales/vi/customerPriority.json';
-import vnpShippingVi from './locales/vi/vnpShipping.json';
 import customersVi from './locales/vi/customers.json';
 import dashboardVi from './locales/vi/dashboard.json';
 import designerAutoAssignVi from './locales/vi/designerAutoAssign.json';
@@ -54,6 +53,7 @@ import scanErrorVi from './locales/vi/scanError.json';
 import stageErrorCatalogVi from './locales/vi/stageErrorCatalog.json';
 import toolCheckWorkflowVi from './locales/vi/toolCheckWorkflow.json';
 import trackVi from './locales/vi/track.json';
+import vnpShippingVi from './locales/vi/vnpShipping.json';
 import workshopConfigVi from './locales/vi/workshopConfig.json';
 
 const STORAGE_KEY = 'onosfactory-language';

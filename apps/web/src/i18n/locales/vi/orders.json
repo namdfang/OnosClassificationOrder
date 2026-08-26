@@ -514,7 +514,9 @@
       "cuttingFileMapped": "Đã map file cutting",
       "factoryReportedErrors": "Xưởng đã báo lỗi {{count}} lần trên đơn này",
       "blockedAssignReason": "Đơn đã 'ok' (Note kq Tool 1) — không cần gán designer",
-      "vnpLabel": "Label VNP — bấm mở tab mới"
+      "vnpLabel": "Label VNP — bấm mở tab mới",
+      "customerLabel": "Label KH",
+      "customerTracking": "Vận đơn khách tự cấp"
     }
   },
   "rowActionsMenu": {
@@ -727,6 +729,7 @@
     "scanHint": "Quét để theo dõi đơn hàng",
     "orderIdCaption": "Mã đơn",
     "externalIdCaption": "Mã sàn",
-    "positionsCaption": "Vị trí in"
+    "positionsCaption": "Vị trí in",
+    "trackingCaption": "Vận đơn"
   }
 }

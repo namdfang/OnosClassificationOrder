@@ -247,6 +247,15 @@ export class CreateVnpShipmentResDto extends createZodDto(
 // `cancelledAt`, mua lại tạo record mới → lịch sử tự có. `order.vnpShipment`
 // trên orders chỉ còn là SNAPSHOT mỏng để render list không phải join.
 
+/**
+ * `provider` của record `shipments`:
+ * - `vnp-eglobal` — label HỆ THỐNG mua qua VNP eGlobal (module này).
+ * - `customer` — label KHÁCH TỰ CẤP đi kèm lúc lên đơn (CSV khách / CSV admin
+ *   / Public Order API), hệ thống chỉ nhận + in dán, không mua, không hủy được.
+ */
+export const SHIPMENT_PROVIDER_VNP = 'vnp-eglobal';
+export const SHIPMENT_PROVIDER_CUSTOMER = 'customer';
+
 export const VNP_SHIPMENT_RECORD_STATUSES = ['created', 'cancelled'] as const;
 export const VnpShipmentRecordStatusZod = z.enum(VNP_SHIPMENT_RECORD_STATUSES);
 export type VnpShipmentRecordStatus = z.infer<typeof VnpShipmentRecordStatusZod>;
@@ -279,6 +288,10 @@ export const VnpShipmentRecordZod = z.object({
   vnpShipmentId: z.string().optional(),
   trackingCode: z.string().optional(),
   labelUrl: z.string().optional(),
+  /** Hãng vận chuyển khách khai — chỉ record provider `customer`. */
+  carrier: z.string().optional(),
+  /** Link tra cứu khách gửi kèm — chỉ record provider `customer`. */
+  trackingUrl: z.string().optional(),
   service: z.string().optional(),
   shippingType: z.string().optional(),
   fromAddressId: z.string().optional(),

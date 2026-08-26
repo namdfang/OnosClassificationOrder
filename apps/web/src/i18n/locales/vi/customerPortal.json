@@ -401,7 +401,10 @@
       "state": "Bang/Tỉnh",
       "postcode": "Mã bưu điện",
       "country": "Quốc gia",
-      "systemProduct": "Sản phẩm hệ thống"
+      "systemProduct": "Sản phẩm hệ thống",
+      "tracking_number": "Mã vận đơn",
+      "tracking_carrier": "Hãng vận chuyển",
+      "shipping_label": "File label"
     },
     "resolving": "Đang đối chiếu SKU với catalog…",
     "systemProductHint": "resolve từ SKU — kiểm tra trước khi import"
