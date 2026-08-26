@@ -32,6 +32,7 @@ import { reports } from './reports';
 import { roles } from './roles';
 import { upload } from './upload';
 import { users } from './users';
+import { vnpShipping } from './vnpShipping';
 import { workshopConfig } from './workshopConfig';
 
 export const RepositoryRemote = {
@@ -68,4 +69,5 @@ export const RepositoryRemote = {
   fulfillment,
   reports,
   promotion,
+  vnpShipping,
 };

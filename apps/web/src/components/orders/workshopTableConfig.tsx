@@ -4,6 +4,8 @@ import type { TFunction } from 'i18next';
 import { Clock } from 'lucide-react';
 import { DesignerStatus, WorkshopConfigCategory } from 'shared';
 
+import { useAuthStore } from '@/store/authStore';
+
 import { CopyButton } from '@/components/common/CopyButton';
 import { Hint } from '@/components/common/Hint';
 import { AssigneeSelectCell } from '@/components/orders/cells/AssigneeSelectCell';
@@ -49,6 +51,37 @@ export type WorkshopOrderRow = {
   isMapped?: boolean;
   productConfigId?: string;
   productConfig?: { fullName?: string; shortName?: string; mockup?: string; level?: number };
+
+  weight?: number;
+  /** Snapshot địa chỉ nhận (đơn khách portal / kéo ngược từ OnosPod). */
+  shippingAddress?: {
+    firstName?: string;
+    lastName?: string;
+    company?: string;
+    address1?: string;
+    address2?: string;
+    city?: string;
+    state?: string;
+    postcode?: string;
+    country?: string;
+    email?: string;
+    phone?: string;
+  };
+  /** Vận đơn VNP eGlobal (module shipping-vnp) — date là ISO string qua JSON. */
+  vnpShipment?: {
+    shipmentId?: string;
+    trackingCode?: string;
+    labelUrl?: string;
+    service?: string;
+    shippingType?: string;
+    toAddressId?: string;
+    addressValid?: boolean;
+    addressCheckedAt?: string;
+    createdAt?: string;
+    cancelledAt?: string;
+    lastTrackingStatus?: string;
+    lastTrackingAt?: string;
+  };
 
   priority?: number;
   printStatus?: string;
@@ -224,6 +257,16 @@ export type WorkshopColMeta = {
 };
 
 /**
+ * Link label VNP chỉ hiện cho Admin/SuperAdmin — mirror guard BE `shipping-vnp`
+ * (`@Auth([SuperAdmin, Admin])`). Đọc thẳng authStore vì render cell không phải
+ * hook; role chỉ đổi khi đăng nhập lại nên không cần reactive.
+ */
+function isAdminViewer(): boolean {
+  const role = useAuthStore.getState().profile?.role?.name;
+  return role === 'Admin' || role === 'SuperAdmin';
+}
+
+/**
  * Cell "Ưu tiên" tách riêng thành component (thay vì render inline như các
  * cột khác) vì chip đếm ngược cần `useNow` tick theo thời gian thực — hook chỉ
  * hợp lệ khi gọi trong 1 component thật, không phải trong hàm `render()` được
@@ -366,6 +409,28 @@ export const WORKSHOP_COLS: WorkshopColMeta[] = [
               <CopyButton value={r.orderId} label="Order ID" iconSize={10} />
               <Hint content={`Order ID: ${r.orderId}`} forceRich>
                 <span className="font-mono text-[10px] text-muted-foreground truncate max-w-[140px]">{r.orderId}</span>
+              </Hint>
+            </div>
+          )}
+          {isAdminViewer() && r.vnpShipment?.labelUrl && !r.vnpShipment.cancelledAt && (
+            <div className="flex items-center gap-1">
+              <CopyButton value={r.vnpShipment.labelUrl} label="link label" iconSize={10} />
+              <Hint
+                content={
+                  tr(ctx, 'workshopCols.misc.vnpLabel', 'Label VNP — bấm mở tab mới') +
+                  (r.vnpShipment.trackingCode ? ` · ${r.vnpShipment.trackingCode}` : '')
+                }
+                forceRich
+              >
+                <a
+                  href={r.vnpShipment.labelUrl}
+                  target="_blank"
+                  rel="noreferrer"
+                  onClick={(e) => e.stopPropagation()}
+                  className="text-[10px] font-medium text-sky-600 dark:text-sky-400 hover:underline inline-flex items-center gap-0.5"
+                >
+                  🏷️ Label
+                </a>
               </Hint>
             </div>
           )}

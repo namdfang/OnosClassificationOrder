@@ -255,6 +255,54 @@ export class FulfillmentTaskService {
   }
 
   /**
+   * Bulk transition N đơn trong 1 request (chọn cả cột ở kanban — trước đây FE
+   * bắn N request song song, 400 đơn = 400-800 call → chạm rate limiter).
+   * Loop `transition()` TỪNG đơn để giữ đủ business hook (timeline,
+   * auto-advance luồng rút gọn, stock-out, webhook); concurrency giới hạn 5.
+   * `start-complete`: start rồi complete — start fail (vd đơn vừa được start
+   * chỗ khác) thì vẫn thử complete, kết quả do complete quyết định.
+   */
+  async bulkTransition(
+    user: UserDocument,
+    body: { stage: FulfillmentStage; action: 'start' | 'complete' | 'start-complete'; orderIds: string[] },
+    ctx: AuditContext,
+  ): Promise<{ ok: number; fail: number; failures: { orderId: string; message: string }[] }> {
+    const ids = [...new Set(body.orderIds)];
+    const failures: { orderId: string; message: string }[] = [];
+    let ok = 0;
+
+    const runOne = async (orderId: string): Promise<void> => {
+      try {
+        if (body.action === 'start-complete') {
+          await this.transition(orderId, user, { stage: body.stage, action: FulfillmentTransitionAction.Start }, ctx).catch(
+            () => undefined,
+          );
+          await this.transition(orderId, user, { stage: body.stage, action: FulfillmentTransitionAction.Complete }, ctx);
+        } else {
+          const action =
+            body.action === 'start' ? FulfillmentTransitionAction.Start : FulfillmentTransitionAction.Complete;
+          await this.transition(orderId, user, { stage: body.stage, action }, ctx);
+        }
+        ok += 1;
+      } catch (err) {
+        failures.push({ orderId, message: err instanceof Error ? err.message : String(err) });
+      }
+    };
+
+    const CONCURRENCY = 5;
+    const queue = [...ids];
+    await Promise.all(
+      Array.from({ length: Math.min(CONCURRENCY, queue.length) }, async () => {
+        for (let id = queue.shift(); id !== undefined; id = queue.shift()) {
+          await runOne(id);
+        }
+      }),
+    );
+
+    return { ok, fail: failures.length, failures };
+  }
+
+  /**
    * Quyết định patch + next status cho 1 transition. Trả `patch` để feed
    * thẳng vào `findOneAndUpdate`.
    */

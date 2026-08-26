@@ -86,6 +86,7 @@
       "clear": "Clear history"
     },
     "column": {
+      "selectAll": "Select / deselect entire column",
       "expandTitle": "Click to expand",
       "collapseTitle": "Click to collapse",
       "empty": "Empty",

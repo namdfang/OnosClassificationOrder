@@ -1,0 +1,60 @@
+{
+  "title": "VNP eGlobal Shipping",
+  "subtitle": "Per-factory ship-from (ShippingFrom) addresses — orders ship from the address assigned to their factory. Multiple factories can share one address. Config lives per environment: on production just create/assign right on this page.",
+  "notConfigured": "VNP eGlobal not configured — missing env: {{missing}}. Fill the API .env and restart.",
+  "addresses": {
+    "title": "Ship-from addresses (ShippingFrom)",
+    "add": "Add address",
+    "empty": "No addresses yet — click \"Add address\" to create the first warehouse address (created directly on VNP).",
+    "default": "Default",
+    "delete": "Remove from list (does not delete on VNP)",
+    "deleted": "Address removed",
+    "viewRemote": "View addresses on VNP",
+    "remoteRaw": "Addresses saved on VNP (raw)",
+    "importById": "Add by existing ID",
+    "importHint": "For shipping units that require shipping from a VNP US hub (Carson CA / Jamaica NY / Garden Grove CA...): click \"View addresses on VNP\" to find the hub id and paste it here — do NOT create a new address.",
+    "importId": "VNP address ID",
+    "importLabel": "Label (e.g. Carson CA hub)",
+    "importNote": "Display note/address (optional)",
+    "importSubmit": "Add to list",
+    "imported": "Existing address added to config"
+  },
+  "form": {
+    "label": "Label (e.g. Thai Nguyen warehouse)",
+    "name": "Contact name",
+    "phoneNumber": "Phone number",
+    "street1": "Address (house no., street)",
+    "street2": "Address line 2 (optional)",
+    "ward": "Ward / Commune",
+    "district": "District",
+    "city": "Province / City",
+    "zipCode": "Postal code (optional)",
+    "country": "Country (2-letter code)",
+    "missingRequired": "Fill all required fields (*)",
+    "submit": "Create on VNP + save",
+    "creating": "Creating...",
+    "created": "Address created on VNP and saved",
+    "cancel": "Cancel",
+    "state": "State (US, e.g. CA — required for US addresses)"
+  },
+  "map": {
+    "title": "Assign factory → ship-from address",
+    "hint": "Factories left as \"Use default\" ship from the default address below. 2D Thai Nguyen + Wood Thai Nguyen pick the same Thai Nguyen address.",
+    "useDefault": "— Use default —",
+    "default": "Default address",
+    "noDefault": "(not set)",
+    "save": "Save config",
+    "saving": "Saving...",
+    "saved": "Config saved",
+    "unsaved": "Unsaved changes",
+    "resolveNote": "Resolution order: factory's assigned address → default ({{fallback}}) → env VNP_EGLOBAL_FROM_ADDRESS_ID."
+  },
+  "wallet": {
+    "title": "VNP wallet",
+    "hint": "At least $50 required to create shipments",
+    "check": "Check balance",
+    "loading": "Checking...",
+    "unknown": "(balance not detected — see raw)",
+    "raw": "Raw response — availableBalance"
+  }
+}

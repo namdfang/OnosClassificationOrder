@@ -86,6 +86,7 @@
       "clear": "Xoá lịch sử"
     },
     "column": {
+      "selectAll": "Chọn / bỏ chọn cả cột",
       "expandTitle": "Click để mở",
       "collapseTitle": "Click để thu gọn",
       "empty": "Trống",

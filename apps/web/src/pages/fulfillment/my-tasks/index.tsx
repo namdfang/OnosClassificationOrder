@@ -127,7 +127,15 @@ const EMPTY_COLS: Columns = {
 const WORKER_COL_ORDER: ColKey[] = ['waiting', 'in-progress', 'rework', 'done', 'fixed', 'watching'];
 const ADMIN_COL_ORDER: ColKey[] = ['unassigned', ...WORKER_COL_ORDER];
 
-type BulkAction = 'start' | 'complete';
+// Tailwind cần class tĩnh → tra theo số cột đang hiện (rework/watching trống bị ẩn).
+const KANBAN_GRID_BY_COUNT: Record<number, string> = {
+  4: 'grid-cols-1 md:grid-cols-2 xl:grid-cols-4',
+  5: 'grid-cols-1 md:grid-cols-2 xl:grid-cols-5',
+  6: 'grid-cols-1 md:grid-cols-2 xl:grid-cols-6',
+  7: 'grid-cols-1 md:grid-cols-2 xl:grid-cols-7',
+};
+
+type BulkAction = 'start' | 'complete' | 'start-complete';
 
 type ColMeta = Record<
   ColKey,
@@ -571,26 +579,22 @@ function FulfillmentKanbanView() {
     }
   };
 
-  /** Bulk: loop transition per id song song. Không có BE bulk endpoint (queue nhỏ
-   *  + business rule per-stage độc lập). Aggregate kết quả → 1 toast. */
+  /** Bulk: 1 request duy nhất `POST /fulfillment/bulk-transition` — BE loop
+   *  transition từng đơn (giữ đủ hook). Trước đây FE bắn N request song song,
+   *  400 đơn = 400-800 call → chạm rate limiter. */
   const callBulk = async (action: BulkAction) => {
     if (!myStage || selected.size === 0) return;
     const ids = Array.from(selected);
-    const txAction = action === 'start' ? FulfillmentTransitionAction.Start : FulfillmentTransitionAction.Complete;
     try {
-      const results = await Promise.allSettled(
-        ids.map((id) =>
-          RepositoryRemote.fulfillment.transition(id, {
-            stage: myStage,
-            action: txAction,
-          } as FulfillmentTransitionDto),
-        ),
-      );
-      const ok = results.filter((r) => r.status === 'fulfilled').length;
-      const fail = results.length - ok;
+      const res = await RepositoryRemote.fulfillment.bulkTransition({
+        stage: myStage,
+        action,
+        orderIds: ids,
+      });
+      const { ok, fail } = (res.data.data ?? { ok: 0, fail: 0 }) as { ok: number; fail: number };
       const verb = actionLabelInfinitive(t, action);
       if (fail === 0) toast.success(t('toast.bulkDone', { verb, count: ok }));
-      else toast.warning(t('toast.bulkPartial', { verb, ok, total: results.length, fail }));
+      else toast.warning(t('toast.bulkPartial', { verb, ok, total: ok + fail, fail }));
       void load();
     } catch (err) {
       handleAxiosError(err);
@@ -701,6 +705,14 @@ function FulfillmentKanbanView() {
     });
   };
 
+  // Cột "Cần làm lại" / "Đang chờ quay lại" KHÔNG có task nào → ẩn hẳn cho
+  // gọn màn hình. Xét trên dữ liệu THÔ (chưa qua filter client) — cột trống
+  // do filter thì vẫn hiện, tránh cột nhấp nháy khi gõ filter.
+  const visibleCols = useMemo(
+    () => colOrder.filter((k) => (k === 'rework' || k === 'watching' ? columns[k].length > 0 : true)),
+    [colOrder, columns],
+  );
+
   // Tính cột nào có ít nhất 1 đơn đã chọn → quyết định bulk action nào hợp lệ.
   const selectedColumns = useMemo(() => {
     const cols = new Set<ColKey>();
@@ -718,8 +730,14 @@ function FulfillmentKanbanView() {
   const bulkActions = useMemo<BulkAction[]>(() => {
     if (selectedColumns.size !== 1) return [];
     const [only] = [...selectedColumns];
-    return colMeta[only].bulk;
-  }, [selectedColumns, colMeta]);
+    const actions: BulkAction[] = [...colMeta[only].bulk];
+    // Riêng Đóng hàng: cột chờ/làm lại cho "Hoàn thành" thẳng — tự start rồi
+    // complete từng đơn, cùng hành vi 1 lần quét ở FulfillmentScanActionDialog.
+    if (myStage === FulfillmentStage.Pack && (only === 'waiting' || only === 'rework')) {
+      actions.push('start-complete');
+    }
+    return actions;
+  }, [selectedColumns, colMeta, myStage]);
 
   if (!myStage) {
     return (
@@ -947,17 +965,10 @@ function FulfillmentKanbanView() {
           onPickDay={toggleDay}
         />
 
-        {/* Kanban — 6 cột worker / 7 cột admin */}
+        {/* Kanban — 6 cột worker / 7 cột admin; cột rework/watching trống bị ẩn */}
         <DndContext sensors={sensors} onDragStart={handleDragStart} onDragEnd={handleDragEnd}>
-          <div
-            className={cn(
-              'grid gap-3',
-              colOrder.length === 7
-                ? 'grid-cols-1 md:grid-cols-2 xl:grid-cols-7'
-                : 'grid-cols-1 md:grid-cols-2 xl:grid-cols-6',
-            )}
-          >
-            {colOrder.map((key) => (
+          <div className={cn('grid gap-3', KANBAN_GRID_BY_COUNT[visibleCols.length] ?? KANBAN_GRID_BY_COUNT[6])}>
+            {visibleCols.map((key) => (
               <Column
                 key={key}
                 colKey={key}
@@ -1046,6 +1057,11 @@ function FulfillmentKanbanView() {
                   )}
                   {bulkActions.includes('complete') && (
                     <Button size="sm" onClick={() => callBulk('complete')}>
+                      <CheckCircle2 size={14} /> {t('actions.complete')}
+                    </Button>
+                  )}
+                  {bulkActions.includes('start-complete') && (
+                    <Button size="sm" onClick={() => callBulk('start-complete')}>
                       <CheckCircle2 size={14} /> {t('actions.complete')}
                     </Button>
                   )}
@@ -1280,6 +1296,7 @@ function Column({
 
   // Cột done không có checkbox (đã xong rồi — không có bulk action).
   const showCheckbox = colKey !== 'done' && colKey !== 'fixed';
+  const colSelCount = useMemo(() => cards.filter((c) => selected.has(c._id)).length, [cards, selected]);
 
   return (
     <div
@@ -1292,9 +1309,24 @@ function Column({
     >
       <div className="flex items-center justify-between text-xs font-semibold text-foreground">
         <span className="inline-flex items-center gap-1.5">
+          {/* Chọn/bỏ chọn CẢ CỘT — tick 1 phát rồi bulk, khỏi tick từng đơn. */}
+          {showCheckbox && cards.length > 0 && (
+            <input
+              type="checkbox"
+              className="shrink-0 accent-indigo-500"
+              title={t('kanban.column.selectAll')}
+              ref={(el) => {
+                if (el) el.indeterminate = colSelCount > 0 && colSelCount < cards.length;
+              }}
+              checked={cards.length > 0 && colSelCount === cards.length}
+              onChange={(e) => onCheckGroup(cards, e.target.checked)}
+            />
+          )}
           <Icon size={13} /> {meta.label}
         </span>
-        <span className="text-muted-foreground">{cards.length}</span>
+        <span className="text-muted-foreground">
+          {colSelCount > 0 ? `${colSelCount}/${cards.length}` : cards.length}
+        </span>
       </div>
 
       <div className="flex-1 space-y-3 overflow-y-auto max-h-[calc(100vh-380px)]">

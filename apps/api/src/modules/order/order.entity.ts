@@ -1,7 +1,13 @@
 import { Prop, raw, SchemaFactory } from '@nestjs/mongoose';
 import { DatabaseEntity, DatabaseEntityAbstract } from 'core';
 import type { HydratedDocument } from 'mongoose';
-import type { DesignFields, FulfillmentStages, FulfillmentTimelineEntry, ProductionOrderShippingAddress } from 'shared';
+import type {
+  DesignFields,
+  FulfillmentStages,
+  FulfillmentTimelineEntry,
+  ProductionOrderShippingAddress,
+  VnpShipmentInfo,
+} from 'shared';
 import {
   DESIGNER_STATUSES,
   DesignerStatus,
@@ -220,6 +226,29 @@ export class OrderEntity extends DatabaseEntityAbstract {
     }),
   })
   shippingAddress?: ProductionOrderShippingAddress;
+
+  /**
+   * Vận đơn VNP eGlobal đã tạo cho đơn (module `shipping-vnp`, giai đoạn test
+   * — nút "Vận đơn VNP" ở bảng đơn hàng). `rep1` bên VNP = `productionId`.
+   */
+  @Prop({
+    _id: false,
+    type: raw({
+      shipmentId: String,
+      trackingCode: String,
+      labelUrl: String,
+      service: String,
+      shippingType: String,
+      toAddressId: String,
+      addressValid: Boolean,
+      addressCheckedAt: Date,
+      createdAt: Date,
+      cancelledAt: Date,
+      lastTrackingStatus: String,
+      lastTrackingAt: Date,
+    }),
+  })
+  vnpShipment?: VnpShipmentInfo;
 
   @Prop({ index: true })
   orderId?: string;
