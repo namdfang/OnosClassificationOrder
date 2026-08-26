@@ -29,6 +29,12 @@ interface Props {
   onPickDay: (day: string) => void;
   /** Bump để panel refetch sau khi có transition (đồng bộ với kanban). */
   reloadToken?: number;
+  /**
+   * Admin đang xem thay task của designer này (`Orders`/`DesignerTaskWorkflow`
+   * — "xem thay"). Phải khớp `viewUserId` mà kanban đang dùng, nếu không panel
+   * đếm đơn của người đăng nhập trong khi kanban hiện đơn của người khác.
+   */
+  viewUserId?: string;
 }
 
 /** 'YYYY-MM-DD' → { wd: 'T4', dm: '01/07' } (đọc theo giờ VN). */
@@ -46,7 +52,7 @@ function ageLabel(ageDays: number, t: TFunction<'designerTaskWorkflow'>): string
   return t('dailyBreakdown.ageDaysAgo', { count: ageDays });
 }
 
-export function DailyBreakdownPanel({ selectedDay, onPickDay, reloadToken }: Props) {
+export function DailyBreakdownPanel({ selectedDay, onPickDay, reloadToken, viewUserId }: Props) {
   const { t } = useTranslation('designerTaskWorkflow');
   const weekdays = t('dailyBreakdown.weekdays', { returnObjects: true }) as string[];
   const [open, setOpen] = useState(true);
@@ -69,7 +75,7 @@ export function DailyBreakdownPanel({ selectedDay, onPickDay, reloadToken }: Pro
     (async () => {
       try {
         setLoading(true);
-        const res = await RepositoryRemote.designer.myDailyBreakdown({ days: range });
+        const res = await RepositoryRemote.designer.myDailyBreakdown({ days: range, viewUserId });
         if (seq !== seqRef.current) return;
         const data = res.data?.data as { days: DesignerDailyBreakdownDay[]; totals: Totals } | undefined;
         setDays(data?.days || []);
@@ -80,7 +86,7 @@ export function DailyBreakdownPanel({ selectedDay, onPickDay, reloadToken }: Pro
         if (seq === seqRef.current) setLoading(false);
       }
     })();
-  }, [range, reloadToken]);
+  }, [range, reloadToken, viewUserId]);
 
   // Số ngày còn tồn đơn chưa xong (để hiện cảnh báo ở header khi panel gập).
   const daysWithBacklog = useMemo(() => days.filter((d) => d.unfinished > 0).length, [days]);

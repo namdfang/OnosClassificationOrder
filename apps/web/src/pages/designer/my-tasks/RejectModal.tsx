@@ -16,6 +16,13 @@ interface Props {
   productionId?: string;
   onConfirm: (reason: string, targetUserId: string) => Promise<void> | void;
   onClose: () => void;
+  /**
+   * Designer đang SỞ HỮU task — mặc định là người đăng nhập, nhưng khi quản lý
+   * "xem thay" kanban của nhân viên khác thì là nhân viên đó. Người này bị loại
+   * khỏi danh sách nhận thay: bàn giao cho chính người đang ôm đơn là no-op mà
+   * BE trả lỗi, để trong dropdown chỉ tổ làm người dùng chọn nhầm.
+   */
+  ownerUserId?: string;
 }
 
 const MAX_LEN = 500;
@@ -23,7 +30,7 @@ const MAX_LEN = 500;
 const selectCls =
   'w-full rounded-md border border-input bg-background px-2 py-2 text-sm focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring';
 
-export function RejectModal({ open, productionId, onConfirm, onClose }: Props) {
+export function RejectModal({ open, productionId, onConfirm, onClose, ownerUserId }: Props) {
   const { t } = useTranslation(['designerTaskWorkflow', 'common']);
   const [reason, setReason] = useState('');
   const [targetUserId, setTargetUserId] = useState('');
@@ -42,14 +49,15 @@ export function RejectModal({ open, productionId, onConfirm, onClose }: Props) {
     }
   }, [open, loaded, fetchTeam]);
 
-  // Người nhận thay = sub-designer đang Active, KHÁC chính mình. Sắp xếp theo số
-  // đơn đang ôm tăng dần để dễ chọn người đang rảnh.
+  // Người nhận thay = sub-designer đang Active, KHÁC người đang ôm đơn. Sắp xếp
+  // theo số đơn đang ôm tăng dần để dễ chọn người đang rảnh.
+  const excludeId = ownerUserId || profileId;
   const candidates = useMemo(
     () =>
       members
-        .filter((m) => m.status === Status.Active && m._id !== profileId)
+        .filter((m) => m.status === Status.Active && m._id !== excludeId)
         .sort((a, b) => (a.activeTaskCount ?? 0) - (b.activeTaskCount ?? 0)),
-    [members, profileId],
+    [members, excludeId],
   );
 
   const handleConfirm = async () => {

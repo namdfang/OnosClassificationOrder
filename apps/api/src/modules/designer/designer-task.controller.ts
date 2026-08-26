@@ -158,7 +158,7 @@ export class DesignerTaskController {
     this.logger.info({
       message: JSON.stringify({ method: 'GET', url: '/designer/my-stats', userId: user._id }),
     });
-    const data = await this.taskService.getMyStats(user, query.period, query.from, query.to);
+    const data = await this.taskService.getMyStats(user, query.period, query.from, query.to, query.viewUserId);
     return { success: true, data };
   }
 
@@ -182,7 +182,7 @@ export class DesignerTaskController {
         days: query.days,
       }),
     });
-    const data = await this.taskService.getMyDailyBreakdown(user, Number(query.days));
+    const data = await this.taskService.getMyDailyBreakdown(user, Number(query.days), query.viewUserId);
     return { success: true, data };
   }
 }

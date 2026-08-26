@@ -245,7 +245,7 @@ factoryId?: string                // ref FactoryEntity, REQUIRED khi role=Fulfil
 | POST | `/v1/designer/team/:userId/reset-password` | Admin/Leader | Force password change next login |
 | POST | `/v1/orders/:id/designer-transition` | Designer/Leader/Admin | Body `{ action, reason?, targetUserId? }` (`targetUserId` **bắt buộc khi action='reject'** — bàn giao, xem §2.3b). State machine race-safe `findOneAndUpdate({ designerStatus: expected })`. Sub-designer chỉ transition task `assignee=user._id` (owner check). Override roles (Admin/Manager/Leader) bypass |
 | POST | `/v1/designer/bulk-transition` | Same | Bulk N task, per-row state machine, skip + report |
-| GET | `/v1/designer/my-tasks` | Designer/Leader/Admin | Kanban 6 cột (`assigned/inProgress/rework/done/fixed/**watching**`; **done** = reworkCount 0, **fixed** = reworkCount>0, **watching** = "Đang chờ quay lại" đơn của mình đang giữ ở Soát tool — xem §2.3) + rejected drawer. Filter (type, fabricType, machineNumber, toolResult, search); `from`/`to` lọc **cả các cột** theo `inProductionAt` (mặc định today) |
+| GET | `/v1/designer/my-tasks` | Designer/Leader/Admin | **`viewUserId`** (optional, chỉ SuperAdmin/Admin/Manager — xem §4.2a) đổi scope sang designer khác; `fullName` trả về là tên NGƯỜI ĐƯỢC XEM. Kanban 6 cột (`assigned/inProgress/rework/done/fixed/**watching**`; **done** = reworkCount 0, **fixed** = reworkCount>0, **watching** = "Đang chờ quay lại" đơn của mình đang giữ ở Soát tool — xem §2.3) + rejected drawer. Filter (type, fabricType, machineNumber, toolResult, search); `from`/`to` lọc **cả các cột** theo `inProductionAt` (mặc định today) |
 | GET | `/v1/designer/my-task-filters` | Same | Faceted filter options (7 facets: type/fabricType/machineNumber/toolResult/toolResultNote/userSku scalar + **errorFile mảng qua `$unwind`**) cross-narrow + lọc `inProductionAt` |
 | GET | `/v1/designer/my-stats?period=today\|7d\|30d\|custom` | Same | KPI cá nhân (counts + `completedInPeriod` tổng done + **`fixedInPeriod`** = done reworkCount>0 + avgResponseMin + avgWorkMin + errorRate). "Đã xong" hiển thị = `completedInPeriod − fixedInPeriod` |
 | GET | `/v1/designer/my-daily-breakdown?days=7\|14\|30` | Same | **Breakdown số đơn CỦA USER theo NGÀY vào sản xuất** (`inProductionAt`, tz VN) trong N ngày gần nhất. Focus đơn **chưa xong** (assigned/rework/in-progress) + `done` kèm để đối chiếu. Trả `days[]` (mỗi ngày: assigned/rework/inProgress/done/unfinished + `ageDays`, sort mới→cũ, chỉ ngày có đơn) + `totals` + `rangeDays`. 1 aggregate `$group` theo `{day,status}`. Xem §4.2b. |
@@ -323,7 +323,7 @@ Xem 2.3 chi tiết.
 
 **Filter bar lưu URL params:** ngoài `from`/`to`, toàn bộ filter bar (`type`/`fabricType`/`machineNumber`/`toolResult`/`toolResultNote`/`userSku`/`errorFile` + `search`) cũng **đọc từ URL khi mount + sync vào URL khi đổi** (cùng 1 `useEffect` sync, `search` sync theo `debouncedSearch`) → F5 giữ nguyên cả bộ lọc. `fetchTasks`/`fetchFilters` gửi `...filters` xuống cả 2 endpoint nên các cột bên dưới + count facet đều lọc theo. **Hai endpoint dùng chung `buildMyTaskFilter` + cùng range `inProductionAt`** ⇒ kết quả `/my-tasks` và `/my-task-filters` luôn đồng bộ.
 
-**Click lại menu "Task của tôi" ở sidebar** khi đang đứng đúng trang này → tự xóa `search`/`filters`/`dateFrom`/`dateTo`/`selected` về mặc định (`useSidebarResetSignal`, xem cơ chế chung + bảng trang đã wire ở `Orders.md §20`).
+**Click lại menu "Task của tôi" ở sidebar** khi đang đứng đúng trang này → tự xóa `search`/`filters`/`dateFrom`/`dateTo`/`selected`/`viewUserId` về mặc định (`useSidebarResetSignal`, xem cơ chế chung + bảng trang đã wire ở `Orders.md §20`).
 
 **Chống race khi đổi ngày/filter liên tiếp (seq guard):** `fetchTasks`/`fetchFilters` mỗi lần gọi tăng `tasksSeqRef`/`filtersSeqRef`; khi response về chỉ `setState` nếu `seq` còn là mới nhất, ngược lại bỏ qua. Tránh response cũ về muộn (mạng không đảm bảo thứ tự) ghi đè data mới → trước đây gây "đổi lại ngày thì cột hiển thị loạn". Latency local ~0 nên hiếm lộ; server latency cao lộ rõ.
 
@@ -337,10 +337,30 @@ Xem 2.3 chi tiết.
 Components con:
 - `TaskCard` — drag handle, productionId button (mở `TaskDetailDialog`), mockup thumbnail (mở preview), timestamp + reworkCount badge. Hiển thị thêm (nếu có): **badge "File sửa lỗi"** (`errorFile[]`, resolve name qua `workshop_config` category `error_file_type`) + **"Ghi chú file lỗi"** (`errorFileNote`). Card zod `DesignerTaskCardZod.errorFile/errorFileNote` + `toCard` map từ order. **Badge ưu tiên** (`PriorityBadge`, `@/components/orders/cells/PrioritySelectCell`) ở hàng badge trên cùng (cùng hàng note Tool, TÁCH khỏi hàng productionId — 2026-08-18) khi `card.priority` set + **chip hạn dự kiến** (`getStageDeadline(card.priority, 'designer', designerAssignedAt|designerStartedAt)`, `@/utils/priorityEstimate`) trong hàng thời gian khi status ∈ {Assigned, InProgress} — đỏ nếu quá hạn. Xem `Orders.md §17`.
 - `TaskDetailDialog` — header status badge + grid info (9 field) + mockup + designs grid 4 cột + timeline (Khách lên đơn `orderAt` → **Vào sản xuất `inProductionAt`** → Được gán → Bắt đầu → Hoàn thành → Cần làm lại/Không làm được) + banner productionError/rejectedReason (banner "Xưởng báo lỗi" resolve **tên lỗi** qua category `production_error` — không hiện raw code kiểu `se-qc-post-press-3`) + **banner "File sửa lỗi"** (`errorFile[]` badge resolve name qua category `error_file_type` + `errorFileNote`). Fetch `GET /v1/orders/:id`
-- `RejectModal` — **picker chọn designer nhận thay (BẮT BUỘC)** + textarea reason (tùy chọn, max 500). Dùng chung single + bulk. Picker = sub-designer `Active` loại chính mình (từ `designerTeamStore`), kèm số đơn đang ôm. Nút submit disabled tới khi chọn người nhận. Xem §2.3b
+- `RejectModal` — **picker chọn designer nhận thay (BẮT BUỘC)** + textarea reason (tùy chọn, max 500). Dùng chung single + bulk. Picker = sub-designer `Active` loại **người đang ôm đơn** (prop `ownerUserId`, mặc định = chính mình; khác khi quản lý xem thay — §4.2a), từ `designerTeamStore`, kèm số đơn đang ôm. Nút submit disabled tới khi chọn người nhận. Xem §2.3b
+
+### 4.2a "Xem task của" — quản lý mở kanban của 1 nhân viên
+> File FE: `apps/web/src/pages/designer/my-tasks/index.tsx` (`VIEW_AS_ROLES` + state `viewUserId`/`effectiveViewUserId`, ô select + banner ở header) · `RejectModal.tsx` (`ownerUserId`) · `DailyBreakdownPanel.tsx` (`viewUserId`).
+> File BE: `designer-task.service.ts` (`VIEW_AS_ROLES` + `resolveViewUser()`), `designer-task.controller.ts` (truyền `query.viewUserId`).
+> Shared: `viewUserId` trong `GetMyTasksZod` / `GetMyStatsZod` / `GetMyDailyBreakdownZod`.
+
+Ô select **"Xem task của"** (icon `Eye`) ở góc phải header, **chỉ hiện với SuperAdmin/Admin/Manager**. Chọn 1 designer → **toàn trang** đổi sang góc nhìn của người đó: kanban 6 cột, rejected drawer, KPI, facet count dropdown, panel "Chi tiết theo ngày". Bỏ trống = task của chính mình (hành vi cũ, mọi role).
+
+Quản lý **thao tác được y như nhân viên** — kéo thả, bulk, báo không làm được — vì `transition`/`bulkTransition` **vốn đã** cho các role này override task của người khác (§5). Không có endpoint mới cho thao tác; chỉ có phần *xem* là mới. Order log ghi actor là **người thao tác** (quản lý), không phải designer bị xem.
+
+Vì thao tác ghi thẳng vào đơn của người khác, header có **banner hổ phách "Đang xem và thao tác trên task của X"** kèm nút "Về task của tôi". Tuyệt đối không bỏ banner: mất nó thì admin quên mình đang ở kanban người khác rồi sửa nhầm đơn.
+
+Bốn ràng buộc phải giữ khi sửa vùng này:
+
+- **`viewUserId` phải đi kèm CẢ 4 endpoint `my-*`** (`my-tasks`, `my-task-filters`, `my-stats`, `my-daily-breakdown`). Thiếu 1 cái là kanban của người A còn KPI/facet của người đang đăng nhập — số đá nhau mà không có lỗi nào nổ ra.
+- **`VIEW_AS_ROLES` = `[SuperAdmin, Admin, Manager]`, CỐ Ý không có `DesignerLeader`.** Đây là **giao** của `OVERRIDE_ROLES` (transition đơn lẻ) và danh sách override cứng trong `bulkTransition`. Mở rộng quá giao này thì trang nửa chạy nửa không — kéo được từng card nhưng bulk báo "Task không thuộc bạn". Muốn mở cho leader thì phải sửa **cả hai** chỗ cùng lúc.
+- **FE tự bỏ `viewUserId` khi role không được phép** (`effectiveViewUserId`). Link có sẵn `?viewUserId=` dán từ máy admin sang máy designer sẽ rơi về "task của tôi" thay vì 403 cả trang. BE vẫn là nơi chặn thật (`resolveViewUser` ném `Forbidden`).
+- **`fullName` trong response `/my-tasks` là tên NGƯỜI ĐƯỢC XEM**, không phải người đăng nhập — tiêu đề trang và banner đều đọc trường này. Đổi ngược lại là admin tưởng đang xem task của mình.
+
+Đổi người xem → **xoá `selected`** (cả ở select lẫn nút thoát banner): giữ lại thì bulk action bắn lên id của designer trước đó. `RejectModal` loại **người đang ôm đơn** (`ownerUserId`) khỏi danh sách nhận thay, không phải loại người đăng nhập — nếu không, khi xem thay thì chính designer đó vẫn nằm trong dropdown và chọn vào là BE trả lỗi "không thể bàn giao cho chính mình". Click lại menu sidebar cũng reset `viewUserId` về rỗng.
 
 ### 4.2b `DailyBreakdownPanel` — "Chi tiết theo ngày" (trên /my-tasks)
-> File: `apps/web/src/pages/designer/my-tasks/DailyBreakdownPanel.tsx`. Vị trí: **collapsible panel ngay dưới hàng KPI, trên kanban** (mặc định mở). Chỉ đơn CỦA USER hiện tại (scope `/my-daily-breakdown`).
+> File: `apps/web/src/pages/designer/my-tasks/DailyBreakdownPanel.tsx`. Vị trí: **collapsible panel ngay dưới hàng KPI, trên kanban** (mặc định mở). Chỉ đơn CỦA USER hiện tại (scope `/my-daily-breakdown`) — hoặc của người đang được "xem thay" khi prop `viewUserId` có giá trị (§4.2a).
 
 - **Mục đích:** trước đây KPI chỉ hiện tổng; panel này tách số đơn **theo từng ngày vào sản xuất** để designer thấy đơn **chưa làm xong** (đặc biệt đơn tồn cũ).
 - **Switcher `7/14/30 ngày`** (state `range`, độc lập với DateRangePicker của kanban) → fetch riêng, seq-guard chống race khi bấm liên tiếp.
@@ -489,7 +509,7 @@ Mỗi transition ghi entry `{ field: 'designerStatus', before, after, action: 'u
 
 | Role | Page access | Action |
 |---|---|---|
-| **SuperAdmin/Admin** | All | All transitions + assign + override |
+| **SuperAdmin/Admin** | All | All transitions + assign + override + **"Xem task của"** trên `/my-tasks` (§4.2a) |
 | **Manager** | All | Same as Admin |
 | **DesignerLeader** | `/designer/team`, `/my-tasks`, `/dashboard?tab=designer`, `/orders`, `/workshop-config` | CRUD team, assign, override transitions, transfer orders, edit toolResultNote/assignee |
 | **Designer** (sub) | `/dashboard`, `/orders`, `/my-tasks` | Transition own task only, KHÔNG edit assignee/toolResultNote (BE auto derive) |

@@ -145,6 +145,14 @@ export const GetMyTasksZod = z.object({
   errorFile: z.string().optional(),
   /** Free-text search (productionId/orderId). */
   search: z.string().optional(),
+  /**
+   * **Xem thay** — `_id` của designer cần xem thay vì chính mình. CHỈ
+   * SuperAdmin/Admin/Manager dùng được (BE 403 với role khác); bỏ trống = xem
+   * task của chính mình như cũ. Mọi endpoint `my-*` của trang này phải nhận
+   * CÙNG giá trị, nếu không kanban là của người A còn KPI/breakdown là của
+   * người đang đăng nhập — số đá nhau mà không có lỗi nào nổ ra.
+   */
+  viewUserId: IDZod.optional(),
 });
 export class GetMyTasksDto extends createZodDto(extendApi(GetMyTasksZod)) {}
 
@@ -168,8 +176,12 @@ export const GetMyTasksResZod = ResZod.extend({
   data: z.object({
     columns: MyTasksColumnsZod,
     rejected: DesignerTaskCardZod.array(),
-    /** userId của user hiện tại (= ID, không phải display). */
+    /**
+     * userId của người mà kanban này thuộc về (= ID, không phải display) —
+     * bằng người đăng nhập, HOẶC bằng `viewUserId` khi admin đang xem thay.
+     */
     userId: z.string(),
+    /** Tên của CHÍNH người ở `userId` (không phải người đăng nhập) — tiêu đề trang đọc trường này. */
     fullName: z.string().optional(),
   }),
 });
@@ -195,6 +207,14 @@ export const GetMyStatsZod = z.object({
   period: z.enum(['today', '7d', '30d', 'custom']).default('today'),
   from: z.string().optional(),
   to: z.string().optional(),
+  /**
+   * **Xem thay** — `_id` của designer cần xem thay vì chính mình. CHỈ
+   * SuperAdmin/Admin/Manager dùng được (BE 403 với role khác); bỏ trống = xem
+   * task của chính mình như cũ. Mọi endpoint `my-*` của trang này phải nhận
+   * CÙNG giá trị, nếu không kanban là của người A còn KPI/breakdown là của
+   * người đang đăng nhập — số đá nhau mà không có lỗi nào nổ ra.
+   */
+  viewUserId: IDZod.optional(),
 });
 export class GetMyStatsDto extends createZodDto(extendApi(GetMyStatsZod)) {}
 
@@ -224,6 +244,14 @@ export type DesignerDailyBreakdownDay = z.infer<typeof DesignerDailyBreakdownDay
 export const GetMyDailyBreakdownZod = z.object({
   /** Cửa sổ ngày gần nhất — chỉ 7/14/30 (string trên query, coerce ở service). */
   days: z.enum(['7', '14', '30']).default('7'),
+  /**
+   * **Xem thay** — `_id` của designer cần xem thay vì chính mình. CHỈ
+   * SuperAdmin/Admin/Manager dùng được (BE 403 với role khác); bỏ trống = xem
+   * task của chính mình như cũ. Mọi endpoint `my-*` của trang này phải nhận
+   * CÙNG giá trị, nếu không kanban là của người A còn KPI/breakdown là của
+   * người đang đăng nhập — số đá nhau mà không có lỗi nào nổ ra.
+   */
+  viewUserId: IDZod.optional(),
 });
 export class GetMyDailyBreakdownDto extends createZodDto(extendApi(GetMyDailyBreakdownZod)) {}
 

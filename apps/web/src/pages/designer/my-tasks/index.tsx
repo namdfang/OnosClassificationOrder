@@ -7,6 +7,7 @@ import {
   ChevronDown,
   ChevronRight,
   ChevronUp,
+  Eye,
   ListChecks,
   MousePointerClick,
   PlayCircle,
@@ -16,7 +17,7 @@ import {
   X,
   XCircle,
 } from 'lucide-react';
-import type { DesignerMyStats, DesignerTaskCard, DesignerTransitionDto } from 'shared';
+import type { DesignerMyStats, DesignerTaskCard, DesignerTeamMember, DesignerTransitionDto } from 'shared';
 import { DesignerStatus, DesignerTransitionAction, WorkshopConfigCategory } from 'shared';
 import { toast } from 'sonner';
 import type { DragEndEvent, DragStartEvent } from '@dnd-kit/core';
@@ -24,6 +25,7 @@ import { DndContext, DragOverlay, PointerSensor, useDroppable, useSensor, useSen
 
 import { PATHS } from '@/constants/paths';
 
+import { useAuthStore } from '@/store/authStore';
 import { useWorkshopConfigStore } from '@/store/workshopConfigStore';
 
 import { RepositoryRemote } from '@/services';
@@ -55,6 +57,13 @@ function daysAgoISO(n: number): string {
   d.setDate(d.getDate() - n);
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
 }
+
+/**
+ * Role được mở ô "Xem task của" (xem thay kanban của designer khác). PHẢI khớp
+ * `VIEW_AS_ROLES` ở `designer-task.service.ts` — BE mới là nơi chặn thật, danh
+ * sách này chỉ để không hiện ô lọc rồi cho bấm vào một cái 403.
+ */
+const VIEW_AS_ROLES = ['SuperAdmin', 'Admin', 'Manager'];
 
 type ColKey = 'assigned' | 'rework' | 'watching' | 'inProgress' | 'done' | 'fixed';
 
@@ -186,6 +195,17 @@ export default function MyTasksPage() {
   const [loading, setLoading] = useState(false);
   const [fullName, setFullName] = useState<string | undefined>(undefined);
 
+  // ── "Xem task của" — quản lý mở đúng kanban của 1 nhân viên và thao tác thay.
+  // Rỗng = xem task của chính mình (hành vi cũ với mọi designer). Giá trị đi
+  // kèm MỌI request `my-*` của trang; BE tự 403 nếu role không được phép.
+  const roleName = useAuthStore((st) => st.profile?.role?.name);
+  const canViewAs = !!roleName && VIEW_AS_ROLES.includes(roleName);
+  const [viewUserId, setViewUserId] = useState<string>(() => searchParams.get('viewUserId') || '');
+  const [designers, setDesigners] = useState<DesignerTeamMember[]>([]);
+  // `canViewAs` sai (role thường) thì KHÔNG gửi `viewUserId` dù URL có sẵn —
+  // link dán tay từ máy admin sang máy designer sẽ 403 cả trang thay vì chỉ bỏ qua.
+  const effectiveViewUserId = canViewAs ? viewUserId : '';
+
   // Filter bar cũng lưu vào URL params để F5 giữ lựa chọn (đọc 1 lần khi mount).
   const [filters, setFilters] = useState<Filters>(() => ({
     ...EMPTY_FILTERS,
@@ -222,6 +242,7 @@ export default function MyTasksPage() {
     setDateFrom(daysAgoISO(6));
     setDateTo(todayISO());
     setSelected(new Set());
+    setViewUserId('');
   });
 
   const [rejectTarget, setRejectTarget] = useState<DesignerTaskCard | null>(null);
@@ -253,6 +274,7 @@ export default function MyTasksPage() {
         from: dateFrom || undefined,
         to: dateTo || undefined,
         search: debouncedSearch || undefined,
+        viewUserId: effectiveViewUserId || undefined,
       });
       // Response cũ đến muộn → bỏ qua, không ghi đè data của request mới hơn.
       if (seq !== tasksSeqRef.current) return;
@@ -281,6 +303,7 @@ export default function MyTasksPage() {
         period: 'custom',
         from: dateFrom || undefined,
         to: dateTo || undefined,
+        viewUserId: effectiveViewUserId || undefined,
       });
       setStats((res.data?.data || null) as DesignerMyStats | null);
     } catch (err) {
@@ -295,6 +318,7 @@ export default function MyTasksPage() {
         ...filters,
         from: dateFrom || undefined,
         to: dateTo || undefined,
+        viewUserId: effectiveViewUserId || undefined,
       });
       // Response cũ đến muộn → bỏ qua (tránh facet count lệch với data đang hiện).
       if (seq !== filtersSeqRef.current) return;
@@ -331,11 +355,12 @@ export default function MyTasksPage() {
         setOrDel('userSku', filters.userSku);
         setOrDel('errorFile', filters.errorFile);
         setOrDel('search', debouncedSearch);
+        setOrDel('viewUserId', effectiveViewUserId);
         return sp;
       },
       { replace: true },
     );
-  }, [dateFrom, dateTo, filters, debouncedSearch, setSearchParams]);
+  }, [dateFrom, dateTo, filters, debouncedSearch, effectiveViewUserId, setSearchParams]);
 
   useEffect(() => {
     fetchTasks();
@@ -352,12 +377,26 @@ export default function MyTasksPage() {
     debouncedSearch,
     dateFrom,
     dateTo,
+    effectiveViewUserId,
   ]);
 
   useEffect(() => {
     fetchStats();
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [dateFrom, dateTo]);
+  }, [dateFrom, dateTo, effectiveViewUserId]);
+
+  // Danh sách designer cho ô "Xem task của" — chỉ nạp khi role được phép, 1 lần.
+  useEffect(() => {
+    if (!canViewAs) return;
+    (async () => {
+      try {
+        const res = await RepositoryRemote.designer.listTeam();
+        setDesigners((res.data?.data || []) as DesignerTeamMember[]);
+      } catch (err) {
+        handleAxiosError(err);
+      }
+    })();
+  }, [canViewAs]);
 
   // Nạp workshop_config (1 lần) để TaskCard + filter bar resolve label (name)
   // thay vì hiển thị raw code (đồng bộ với bảng đơn).
@@ -604,11 +643,60 @@ export default function MyTasksPage() {
           </div>
 
           <div className="flex items-center gap-2 flex-wrap">
+            {/* "Xem task của" — chỉ quản lý thấy. Chọn 1 designer → toàn trang
+                (kanban + KPI + Chi tiết theo ngày) đổi sang góc nhìn của người
+                đó và thao tác được y như họ. */}
+            {canViewAs && (
+              <div className="flex items-center gap-1.5">
+                <Eye size={13} className="text-muted-foreground" />
+                <select
+                  value={viewUserId}
+                  onChange={(e) => {
+                    setViewUserId(e.target.value);
+                    // Đổi người xem = đổi hẳn tập task → bỏ chọn cũ, nếu không
+                    // bulk action sẽ bắn lên id của designer trước đó.
+                    setSelected(new Set());
+                  }}
+                  className="h-7 rounded-md border border-input bg-background px-2 text-xs max-w-[220px]"
+                  title={t('myTasks.viewAs.label')}
+                >
+                  <option value="">{t('myTasks.viewAs.self')}</option>
+                  {designers.map((d) => (
+                    <option key={d._id} value={d._id}>
+                      {d.fullName}
+                    </option>
+                  ))}
+                </select>
+              </div>
+            )}
             <Button variant="ghost" size="sm" onClick={refreshAll} disabled={loading}>
               <RefreshCw size={13} className={loading ? 'animate-spin' : ''} />
             </Button>
           </div>
         </div>
+
+        {/* Banner "đang xem thay" — bắt buộc phải nổi bật: thao tác trên trang
+            này ghi vào task của NGƯỜI KHÁC (order log ghi actor là mình), nhầm
+            người là sửa nhầm đơn của designer khác. */}
+        {effectiveViewUserId && (
+          <div className="flex items-center justify-between gap-3 flex-wrap rounded-md border border-amber-300 bg-amber-50 px-3 py-2 text-xs text-amber-800 dark:border-amber-800 dark:bg-amber-950/30 dark:text-amber-200">
+            <span className="flex items-center gap-1.5">
+              <Eye size={13} className="shrink-0" />
+              {t('myTasks.viewAs.banner', { name: fullName || '—' })}
+            </span>
+            <Button
+              size="sm"
+              variant="outline"
+              className="h-6 text-[11px] border-amber-400 dark:border-amber-700"
+              onClick={() => {
+                setViewUserId('');
+                setSelected(new Set());
+              }}
+            >
+              {t('myTasks.viewAs.exit')}
+            </Button>
+          </div>
+        )}
 
         {/* Thanh ngày — preset inline full-width */}
         <DateRangePicker
@@ -669,6 +757,7 @@ export default function MyTasksPage() {
             setDateTo(day);
           }}
           reloadToken={breakdownToken}
+          viewUserId={effectiveViewUserId || undefined}
         />
 
         {/* Hint */}
@@ -862,6 +951,7 @@ export default function MyTasksPage() {
           onConfirm={(reason, targetUserId) =>
             bulkReject ? handleBulkReject(reason, targetUserId) : handleSingleReject(reason, targetUserId)
           }
+          ownerUserId={effectiveViewUserId || undefined}
         />
         <TaskDetailDialog orderId={detailId} onClose={() => setDetailId(null)} />
         <ImagePreviewDialog

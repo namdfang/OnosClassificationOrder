@@ -31,6 +31,20 @@ const READY_FOR_FULFILL_CODE = 'ok';
 const OVERRIDE_ROLES: RoleType[] = [RoleType.SuperAdmin, RoleType.Admin, RoleType.Manager, RoleType.DesignerLeader];
 
 /**
+ * Role được phép **xem thay** kanban của designer khác (`viewUserId` trên các
+ * endpoint `my-*`) — quản lý mở đúng trang /my-tasks của một nhân viên và thao
+ * tác y như nhân viên đó.
+ *
+ * CỐ Ý là **giao** của 2 danh sách override sẵn có: `OVERRIDE_ROLES` (transition
+ * đơn lẻ) và danh sách override cứng trong `bulkTransition`. Mở rộng quá giao
+ * này thì trang rơi vào trạng thái nửa chạy nửa không — kéo được từng card
+ * nhưng bulk lại báo "Task không thuộc bạn", tệ hơn là chặn hẳn từ đầu.
+ * `DesignerLeader` nằm ngoài vì `bulkTransition` không cho leader override;
+ * muốn mở cho leader thì phải sửa CẢ HAI chỗ cùng lúc.
+ */
+const VIEW_AS_ROLES: RoleType[] = [RoleType.SuperAdmin, RoleType.Admin, RoleType.Manager];
+
+/**
  * State machine cho task của Designer. Mọi transition đi qua method `transition`.
  * Race-safe bằng cách `findOneAndUpdate` với filter `designerStatus: expected` —
  * nếu 2 user transition đồng thời, người sau nhận 409 (FE refetch + retry).
@@ -395,6 +409,8 @@ export class DesignerTaskService {
       userSku?: string;
       errorFile?: string;
       search?: string;
+      /** Xem thay kanban của designer khác — chỉ VIEW_AS_ROLES (resolveViewUser). */
+      viewUserId?: string;
     },
   ): Promise<{
     columns: {
@@ -409,7 +425,7 @@ export class DesignerTaskService {
     userId: string;
     fullName?: string;
   }> {
-    const userId = String(user._id);
+    const { userId, fullName } = await this.resolveViewUser(user, query.viewUserId);
     const range = this.resolveDateRange(query.from, query.to);
     const baseFilter = this.buildMyTaskFilter(userId, query);
     // Lọc theo NGÀY VÀO SẢN XUẤT (`inProductionAt`) cho TẤT CẢ cột kanban (+
@@ -493,7 +509,7 @@ export class DesignerTaskService {
       },
       rejected: rejectedRaw.map(this.toCard),
       userId,
-      fullName: user.fullName,
+      fullName,
     };
   }
 
@@ -514,6 +530,8 @@ export class DesignerTaskService {
       toolResultNote?: string;
       userSku?: string;
       errorFile?: string;
+      /** Xem thay — facet count phải cùng scope người với kanban, nếu không số lệch. */
+      viewUserId?: string;
     },
   ): Promise<{
     type: { value: string; label: string; count: number }[];
@@ -524,7 +542,7 @@ export class DesignerTaskService {
     userSku: { value: string; label: string; count: number }[];
     errorFile: { value: string; label: string; count: number }[];
   }> {
-    const userId = String(user._id);
+    const { userId } = await this.resolveViewUser(user, query.viewUserId);
     // Đồng bộ với kanban: facet count cũng lọc theo `inProductionAt` trong khoảng.
     const range = this.resolveDateRange(query.from, query.to);
 
@@ -722,6 +740,30 @@ export class DesignerTaskService {
     return { matched: docs.length, modified, skipped };
   }
 
+  /**
+   * Quyết định kanban đang hiển thị của AI. Không truyền `viewUserId` (hoặc trỏ
+   * về chính mình) → như cũ. Có truyền → phải là role trong `VIEW_AS_ROLES`.
+   *
+   * Trả luôn `fullName` của người ĐƯỢC XEM để tiêu đề trang nói đúng tên — nếu
+   * echo tên người đăng nhập thì admin xem task của nhân viên khác mà tưởng là
+   * của mình, rồi thao tác nhầm.
+   */
+  private async resolveViewUser(
+    user: UserDocument,
+    viewUserId?: string,
+  ): Promise<{ userId: string; fullName?: string }> {
+    const selfId = String(user._id);
+    if (!viewUserId || viewUserId === selfId) return { userId: selfId, fullName: user.fullName };
+
+    const roleName = user.role?.name;
+    if (!roleName || !VIEW_AS_ROLES.includes(roleName)) {
+      throw new ForbiddenException('Không có quyền xem task của nhân viên khác.');
+    }
+    const target = await this.userModel.findById(viewUserId, { _id: 1, fullName: 1 }).lean();
+    if (!target) throw new BadRequestException('Nhân viên cần xem không tồn tại.');
+    return { userId: String(target._id), fullName: (target as { fullName?: string }).fullName };
+  }
+
   private buildMyTaskFilter(
     userId: string,
     query: {
@@ -760,8 +802,9 @@ export class DesignerTaskService {
     period: 'today' | '7d' | '30d' | 'custom',
     from?: string,
     to?: string,
+    viewUserId?: string,
   ): Promise<DesignerMyStats> {
-    const userId = String(user._id);
+    const { userId } = await this.resolveViewUser(user, viewUserId);
     const range = this.resolvePeriodRange(period, from, to);
 
     const [statusAgg, completedAgg, rejectedByMe] = await Promise.all([
@@ -851,6 +894,7 @@ export class DesignerTaskService {
   async getMyDailyBreakdown(
     user: UserDocument,
     rangeDays: number,
+    viewUserId?: string,
   ): Promise<{
     days: {
       day: string;
@@ -864,7 +908,7 @@ export class DesignerTaskService {
     totals: { assigned: number; rework: number; inProgress: number; done: number; unfinished: number };
     rangeDays: number;
   }> {
-    const userId = String(user._id);
+    const { userId } = await this.resolveViewUser(user, viewUserId);
     const MS_DAY = 86_400_000;
     // Biên ngày theo giờ VN (+07:00) — đồng bộ resolveDateRange.
     const vnStart = (d: string) => new Date(`${d}T00:00:00+07:00`);

@@ -52,6 +52,8 @@ const myTasks = (
     userSku?: string;
     errorFile?: string;
     search?: string;
+    /** Admin xem thay task của designer khác — xem `GetMyTasksZod.viewUserId`. */
+    viewUserId?: string;
   } = {},
 ) => {
   const qs = new URLSearchParams();
@@ -73,6 +75,8 @@ const myTaskFilters = (
     toolResultNote?: string;
     userSku?: string;
     errorFile?: string;
+    /** Phải khớp `viewUserId` của myTasks, nếu không facet count lệch với kanban. */
+    viewUserId?: string;
   } = {},
 ) => {
   const qs = new URLSearchParams();
@@ -91,17 +95,19 @@ const getOrderById = (id: string) => {
   return callApi(`/${CONFIG.API_VERSION}/orders/${id}`, 'get');
 };
 
-const myStats = (params: { period?: string; from?: string; to?: string } = {}) => {
+const myStats = (params: { period?: string; from?: string; to?: string; viewUserId?: string } = {}) => {
   const qs = new URLSearchParams();
   qs.set('period', params.period || 'today');
   if (params.from) qs.set('from', params.from);
   if (params.to) qs.set('to', params.to);
+  if (params.viewUserId) qs.set('viewUserId', params.viewUserId);
   return callApi(`/${CONFIG.API_VERSION}/designer/my-stats?${qs.toString()}`, 'get');
 };
 
-const myDailyBreakdown = (params: { days?: 7 | 14 | 30 } = {}) => {
+const myDailyBreakdown = (params: { days?: 7 | 14 | 30; viewUserId?: string } = {}) => {
   const qs = new URLSearchParams();
   qs.set('days', String(params.days || 7));
+  if (params.viewUserId) qs.set('viewUserId', params.viewUserId);
   return callApi(`/${CONFIG.API_VERSION}/designer/my-daily-breakdown?${qs.toString()}`, 'get');
 };
 

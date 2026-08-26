@@ -16,6 +16,12 @@
     "skippedOrdersTitle": "Skipped orders",
     "rejectHandedOver": "Order handed over to another designer",
     "greeting": "Hello",
+    "viewAs": {
+      "label": "View a staff member's tasks",
+      "self": "My tasks",
+      "banner": "Viewing and acting on {{name}}'s tasks. Every change is written to this staff member's orders.",
+      "exit": "Back to my tasks"
+    },
     "subtitle": "Drag and drop a card to change its status, or tick the checkbox to bulk update.",
     "kpi": {
       "assigned": "To do",

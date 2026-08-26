@@ -16,6 +16,12 @@
     "skippedOrdersTitle": "Đơn bị skip",
     "rejectHandedOver": "Đã bàn giao đơn cho designer khác",
     "greeting": "Xin chào",
+    "viewAs": {
+      "label": "Xem task của nhân viên",
+      "self": "Task của tôi",
+      "banner": "Đang xem và thao tác trên task của {{name}}. Mọi thay đổi ghi vào đơn của nhân viên này.",
+      "exit": "Về task của tôi"
+    },
     "subtitle": "Kéo thả card để chuyển trạng thái, hoặc tick checkbox để bulk update.",
     "kpi": {
       "assigned": "Cần làm",
