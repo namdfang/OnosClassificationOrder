@@ -4,18 +4,24 @@ import { Model } from 'mongoose';
 import type {
   CreateVnpFromAddressDto,
   CreateVnpShipmentDto,
+  GetVnpShipmentsDto,
   ProductionOrderShippingAddress,
   SaveVnpShippingMapDto,
   VnpShipmentInfo,
+  VnpShipmentRecord,
   VnpShippingConfig,
   VnpShippingStatus,
 } from 'shared';
 import { VNP_SHIPPING_CONFIG_KEY } from 'shared';
 import { Logger } from 'winston';
 
+import { genCode } from '@/utils/gen-code';
+
 import { ApiConfigService } from '../../shared/services/api-config.service';
 import { OrderEntity } from '../order/order.entity';
 import { SystemConfigService } from '../system-config/system-config.service';
+import { ShipmentDocument, ShipmentEntity } from './shipment.entity';
+import { ShippingPackageEntity } from './shipping-package.entity';
 import { VnpEglobalClient } from './vnp-eglobal.client';
 
 /**
@@ -115,6 +121,8 @@ const STATUS_KEYS = ['status', 'shipment_status', 'tracking_status', 'state'];
 export class ShippingVnpService {
   constructor(
     @InjectModel(OrderEntity.name) private readonly orderModel: Model<OrderEntity>,
+    @InjectModel(ShippingPackageEntity.name) private readonly packageModel: Model<ShippingPackageEntity>,
+    @InjectModel(ShipmentEntity.name) private readonly shipmentModel: Model<ShipmentEntity>,
     private readonly client: VnpEglobalClient,
     private readonly apiConfigService: ApiConfigService,
     private readonly systemConfigService: SystemConfigService,
@@ -437,6 +445,7 @@ export class ShippingVnpService {
   async createShipment(
     orderId: string,
     dto: CreateVnpShipmentDto,
+    createdBy?: { userId?: string; userName?: string },
   ): Promise<{ shipment: VnpShipmentInfo; groupProductionIds: string[]; raw: unknown; rawAddress?: unknown }> {
     const order = await this.loadOrder(orderId);
     const addr = this.requireAddress(order);
@@ -538,13 +547,44 @@ export class ShippingVnpService {
       toAddressId,
       createdAt: new Date(),
     };
-    // Lưu cùng vận đơn lên CẢ nhóm (1 orderId 1 label — item nào mở dialog
-    // cũng thấy). Xóa cancelledAt cũ (nếu tạo lại sau khi hủy).
     const groupIds = group.map((o) => String(o._id));
+    const groupProductionIds = group.map((o) => o.productionId);
+
+    // Nguồn sự thật: pack (kiện — tự sinh ngầm, 1 pack = 1 đơn khách) +
+    // record shipment MỚI mỗi lần mua (lịch sử không ghi đè).
+    const pack = await this.packageModel.create({
+      code: `PK-${genCode(10)}`,
+      factoryId: order.factoryId || undefined,
+      orderCodes: order.orderId?.trim() ? [order.orderId.trim()] : [],
+      productionOrderIds: groupIds,
+      productionIds: groupProductionIds,
+      createdAt: new Date(),
+    });
+    await this.shipmentModel.create({
+      packageId: pack._id,
+      provider: 'vnp-eglobal',
+      vnpShipmentId: info.shipmentId,
+      trackingCode: info.trackingCode,
+      labelUrl: info.labelUrl,
+      service: dto.service,
+      shippingType: dto.shippingType,
+      fromAddressId,
+      toAddressId,
+      shippingCost:
+        typeof rec?.shipping_cost === 'string' || typeof rec?.shipping_cost === 'number'
+          ? String(rec.shipping_cost)
+          : undefined,
+      status: 'created',
+      createdByUserId: createdBy?.userId,
+      createdByUserName: createdBy?.userName,
+      createdAt: new Date(),
+    });
+
+    // Snapshot mỏng lên CẢ nhóm orders (1 orderId 1 label — item nào mở dialog
+    // cũng thấy, list render không phải join). Xóa cancelledAt cũ nếu tạo lại.
     await this.saveShipmentInfoMany(groupIds, info);
     await this.orderModel.updateMany({ _id: { $in: groupIds } }, { $unset: { 'vnpShipment.cancelledAt': 1 } });
     const shipment = (await this.orderModel.findOne({ _id: orderId }))?.vnpShipment ?? (info as VnpShipmentInfo);
-    const groupProductionIds = group.map((o) => o.productionId);
     this.logger.info({
       message: JSON.stringify({
         action: 'vnpCreateShipment',
@@ -576,6 +616,19 @@ export class ShippingVnpService {
         },
       },
     );
+    // Sync record shipments (nguồn sự thật) + ghi event vào lịch sử poll.
+    await this.shipmentModel.updateMany(
+      { vnpShipmentId: order.vnpShipment?.shipmentId, status: 'created' },
+      {
+        $set: {
+          ...(patch.lastTrackingStatus ? { lastTrackingStatus: patch.lastTrackingStatus } : {}),
+          lastTrackingAt: patch.lastTrackingAt,
+        },
+        ...(patch.lastTrackingStatus
+          ? { $push: { trackingEvents: { status: patch.lastTrackingStatus, at: patch.lastTrackingAt } } }
+          : {}),
+      },
+    );
     const shipment = (await this.orderModel.findOne({ _id: orderId }))?.vnpShipment ?? undefined;
     return { shipment, raw };
   }
@@ -591,6 +644,10 @@ export class ShippingVnpService {
     const labelUrl = digString(raw, LABEL_KEYS);
     const trackingCode = digString(raw, TRACKING_KEYS);
     if (labelUrl || trackingCode) {
+      const $set = {
+        ...(labelUrl ? { labelUrl } : {}),
+        ...(trackingCode && !order.vnpShipment?.trackingCode ? { trackingCode } : {}),
+      };
       await this.orderModel.updateMany(
         { 'vnpShipment.shipmentId': shipmentId },
         {
@@ -600,6 +657,7 @@ export class ShippingVnpService {
           },
         },
       );
+      await this.shipmentModel.updateMany({ vnpShipmentId: shipmentId }, { $set });
     }
     return { raw };
   }
@@ -614,14 +672,94 @@ export class ShippingVnpService {
       throw new BadRequestException('VNP cancelShipment lỗi — response: ' + JSON.stringify(raw).slice(0, 6000));
     }
     // Đánh dấu hủy cho MỌI item cùng shipmentId (nhóm 1 đơn 1 label).
+    const cancelledAt = new Date();
     await this.orderModel.updateMany(
       { 'vnpShipment.shipmentId': shipmentId },
-      { $set: { 'vnpShipment.cancelledAt': new Date() } },
+      { $set: { 'vnpShipment.cancelledAt': cancelledAt } },
+    );
+    // Record shipments GIỮ NGUYÊN, chỉ chuyển trạng thái — lịch sử còn mãi.
+    await this.shipmentModel.updateMany(
+      { vnpShipmentId: shipmentId, status: 'created' },
+      { $set: { status: 'cancelled', cancelledAt } },
     );
     const shipment = (await this.orderModel.findOne({ _id: orderId }))?.vnpShipment ?? ({} as VnpShipmentInfo);
     this.logger.info({
       message: JSON.stringify({ action: 'vnpCancelShipment', orderId, productionId: order.productionId, shipmentId }),
     });
     return { shipment, raw };
+  }
+
+  // ── Lịch sử vận đơn (bảng shipments + shipping_packages) ─────────────────
+
+  private toShipmentRecord(doc: ShipmentDocument): VnpShipmentRecord {
+    const pack = doc.package;
+    return {
+      _id: String(doc._id),
+      packageId: doc.packageId,
+      provider: doc.provider,
+      vnpShipmentId: doc.vnpShipmentId,
+      trackingCode: doc.trackingCode,
+      labelUrl: doc.labelUrl,
+      service: doc.service,
+      shippingType: doc.shippingType,
+      fromAddressId: doc.fromAddressId,
+      toAddressId: doc.toAddressId,
+      shippingCost: doc.shippingCost,
+      status: doc.status,
+      cancelledAt: doc.cancelledAt,
+      lastTrackingStatus: doc.lastTrackingStatus,
+      lastTrackingAt: doc.lastTrackingAt,
+      createdByUserId: doc.createdByUserId,
+      createdByUserName: doc.createdByUserName,
+      createdAt: doc.createdAt,
+      package: pack
+        ? {
+            _id: String(pack._id),
+            code: pack.code,
+            factoryId: pack.factoryId,
+            orderCodes: pack.orderCodes ?? [],
+            productionOrderIds: pack.productionOrderIds ?? [],
+            productionIds: pack.productionIds ?? [],
+            parentPackageId: pack.parentPackageId,
+            createdAt: pack.createdAt,
+          }
+        : undefined,
+    };
+  }
+
+  /** Danh sách vận đơn toàn hệ thống — search khớp tracking/mã kiện/mã đơn. */
+  async listShipments(dto: GetVnpShipmentsDto): Promise<{ data: VnpShipmentRecord[]; total: number }> {
+    const search = dto.search?.trim();
+    let filter: Record<string, unknown> = {};
+    if (search) {
+      const rx = new RegExp(search.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), 'i');
+      // Kiện khớp theo mã kiện / productionId / orderId seller → OR với field shipment.
+      const packIds = await this.packageModel
+        .find({ $or: [{ code: rx }, { productionIds: rx }, { orderCodes: rx }] })
+        .distinct('_id');
+      filter = { $or: [{ trackingCode: rx }, { vnpShipmentId: rx }, { packageId: { $in: packIds } }] };
+    }
+    const [docs, total] = await Promise.all([
+      this.shipmentModel
+        .find(filter)
+        .sort({ createdAt: -1 })
+        .skip((dto.page - 1) * dto.size)
+        .limit(dto.size)
+        .populate('package'),
+      this.shipmentModel.countDocuments(filter),
+    ]);
+    return { data: (docs as ShipmentDocument[]).map((d) => this.toShipmentRecord(d)), total };
+  }
+
+  /** Lịch sử vận đơn của 1 đơn sản xuất — mọi record của các kiện chứa nó. */
+  async getOrderShipments(orderId: string): Promise<VnpShipmentRecord[]> {
+    const order = await this.loadOrder(orderId);
+    const packIds = await this.packageModel.find({ productionOrderIds: String(order._id) }).distinct('_id');
+    if (packIds.length === 0) return [];
+    const docs = await this.shipmentModel
+      .find({ packageId: { $in: packIds } })
+      .sort({ createdAt: -1 })
+      .populate('package');
+    return (docs as ShipmentDocument[]).map((d) => this.toShipmentRecord(d));
   }
 }

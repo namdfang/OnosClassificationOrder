@@ -717,7 +717,11 @@
     "rawDetail": "Response thô — chi tiết shipment",
     "groupNotice": "Đơn seller {{orderId}} có {{count}} item — 1 đơn chỉ mua 1 label, vận đơn sẽ gộp TẤT CẢ item dưới đây:",
     "noWeight": "thiếu cân nặng (dùng fallback)",
-    "groupBlocked": "Item khác cùng đơn seller đã có vận đơn — mở dialog ở item đó hoặc hủy vận đơn cũ."
+    "groupBlocked": "Item khác cùng đơn seller đã có vận đơn — mở dialog ở item đó hoặc hủy vận đơn cũ.",
+    "historyTitle": "Lịch sử vận đơn",
+    "historyActive": "Đang hoạt động",
+    "historyCancelled": "Đã hủy",
+    "historyCost": "phí {{cost}}"
   },
   "customerLabel": {
     "scanHint": "Quét để theo dõi đơn hàng",

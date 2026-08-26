@@ -236,6 +236,84 @@ export class CreateVnpShipmentResDto extends createZodDto(
   extendApi(ResZod.extend({ data: CreateVnpShipmentResZod })),
 ) {}
 
+// ─── Packages + Shipments (bảng riêng — lịch sử vận đơn) ─────────────────────
+//
+// Model: 1 đơn sản xuất (OrderEntity) = 1 item của khách; 1 đơn khách
+// (`orderId` seller) nhiều item; label luôn dán lên 1 KIỆN vật lý = 1 pack →
+// shipment TRỎ VÀO PACK (không trỏ đơn khách — để sau này gộp nhiều đơn cùng
+// địa chỉ vào 1 pack / thùng master đi hub qua `parentPackageId` không phải
+// đổi schema). Hiện tại pack tự sinh ngầm lúc Admin mua label, 1 pack = 1 đơn
+// khách. Mỗi lần mua label = 1 record shipment MỚI (không ghi đè) — hủy set
+// `cancelledAt`, mua lại tạo record mới → lịch sử tự có. `order.vnpShipment`
+// trên orders chỉ còn là SNAPSHOT mỏng để render list không phải join.
+
+export const VNP_SHIPMENT_RECORD_STATUSES = ['created', 'cancelled'] as const;
+export const VnpShipmentRecordStatusZod = z.enum(VNP_SHIPMENT_RECORD_STATUSES);
+export type VnpShipmentRecordStatus = z.infer<typeof VnpShipmentRecordStatusZod>;
+
+/** 1 kiện hàng vật lý (collection `shipping_packages`). */
+export const VnpShippingPackageZod = z.object({
+  _id: z.string(),
+  /** Mã kiện hiển thị, dạng `PK-XXXXXXXXXX`. */
+  code: z.string(),
+  factoryId: z.string().optional(),
+  /** orderId seller trong kiện — hiện luôn 1 phần tử (hoặc rỗng nếu đơn không có orderId). */
+  orderCodes: z.array(z.string()),
+  /** OrderEntity._id các item trong kiện. */
+  productionOrderIds: z.array(z.string()),
+  /** productionId hiển thị của các item. */
+  productionIds: z.array(z.string()),
+  /** Kiện cha (thùng master gom nhiều kiện đi hub) — để dành, CHƯA dùng. */
+  parentPackageId: z.string().optional(),
+  createdAt: z.union([z.date(), z.string()]).optional(),
+});
+export type VnpShippingPackage = z.infer<typeof VnpShippingPackageZod>;
+
+/** 1 lần mua label (collection `shipments`) — immutable trừ trạng thái/tracking. */
+export const VnpShipmentRecordZod = z.object({
+  _id: z.string(),
+  packageId: z.string(),
+  /** Nhà cung cấp label — 'vnp-eglobal'; sau này thêm khi tự đi ship. */
+  provider: z.string(),
+  /** ID shipment bên VNP (uuid). */
+  vnpShipmentId: z.string().optional(),
+  trackingCode: z.string().optional(),
+  labelUrl: z.string().optional(),
+  service: z.string().optional(),
+  shippingType: z.string().optional(),
+  fromAddressId: z.string().optional(),
+  toAddressId: z.string().optional(),
+  /** shipping_cost VNP trả lúc tạo (string nguyên văn). */
+  shippingCost: z.string().optional(),
+  status: VnpShipmentRecordStatusZod,
+  cancelledAt: z.union([z.date(), z.string()]).optional(),
+  lastTrackingStatus: z.string().optional(),
+  lastTrackingAt: z.union([z.date(), z.string()]).optional(),
+  createdByUserId: z.string().optional(),
+  createdByUserName: z.string().optional(),
+  createdAt: z.union([z.date(), z.string()]).optional(),
+  /** Kiện chứa (join khi list/history). */
+  package: VnpShippingPackageZod.optional(),
+});
+export type VnpShipmentRecord = z.infer<typeof VnpShipmentRecordZod>;
+
+/** Danh sách vận đơn (lịch sử toàn hệ thống, Admin check). */
+export const GetVnpShipmentsZod = z.object({
+  page: z.coerce.number().int().positive().default(1),
+  size: z.coerce.number().int().positive().max(100).default(20),
+  /** Khớp trackingCode / vnpShipmentId / mã kiện / productionId / orderId seller. */
+  search: z.string().optional(),
+});
+export class GetVnpShipmentsDto extends createZodDto(extendApi(GetVnpShipmentsZod)) {}
+export class GetVnpShipmentsResDto extends createZodDto(
+  extendApi(ResZod.extend({ data: z.array(VnpShipmentRecordZod), total: z.number() })),
+) {}
+
+/** Lịch sử vận đơn của 1 đơn sản xuất (mọi record của các kiện chứa nó). */
+export class GetVnpOrderShipmentsResDto extends createZodDto(
+  extendApi(ResZod.extend({ data: z.array(VnpShipmentRecordZod) })),
+) {}
+
 // ─── Tracking / get shipment / cancel ────────────────────────────────────────
 
 export const VnpTrackingResZod = z.object({

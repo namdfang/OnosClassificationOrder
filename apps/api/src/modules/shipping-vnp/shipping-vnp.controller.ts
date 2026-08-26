@@ -1,5 +1,18 @@
 import { ZodValidationPipe } from '@anatine/zod-nestjs';
-import { Body, Controller, Delete, Get, HttpCode, HttpStatus, Inject, Param, Post, Put, UsePipes } from '@nestjs/common';
+import {
+  Body,
+  Controller,
+  Delete,
+  Get,
+  HttpCode,
+  HttpStatus,
+  Inject,
+  Param,
+  Post,
+  Put,
+  Query,
+  UsePipes,
+} from '@nestjs/common';
 import { ApiOkResponse, ApiOperation, ApiTags } from '@nestjs/swagger';
 import { AuthUser } from 'core';
 import {
@@ -10,9 +23,12 @@ import {
   CreateVnpShipmentDto,
   CreateVnpShipmentResDto,
   DeleteVnpFromAddressResDto,
+  GetVnpOrderShipmentsResDto,
   GetVnpRemoteAddressesResDto,
   GetVnpShipmentGroupResDto,
   GetVnpShipmentResDto,
+  GetVnpShipmentsDto,
+  GetVnpShipmentsResDto,
   GetVnpShippingConfigResDto,
   GetVnpShippingStatusResDto,
   GetVnpTrackingResDto,
@@ -177,7 +193,47 @@ export class ShippingVnpController {
     this.logger.info({
       message: JSON.stringify({ method: 'POST', url: `/shipping-vnp/orders/${orderId}/shipment`, userId: user._id }),
     });
-    return { success: true, data: await this.shippingVnpService.createShipment(orderId, dto) };
+    return {
+      success: true,
+      data: await this.shippingVnpService.createShipment(orderId, dto, {
+        userId: String(user._id),
+        userName: user.fullName,
+      }),
+    };
+  }
+
+  @Get('shipments')
+  @Auth([RoleType.SuperAdmin, RoleType.Admin])
+  @ApiOperation({ summary: 'Danh sách vận đơn (bảng shipments — lịch sử toàn hệ thống)' })
+  @HttpCode(HttpStatus.OK)
+  @ApiOkResponse({ type: GetVnpShipmentsResDto })
+  async listShipments(
+    @Query() query: GetVnpShipmentsDto,
+    @AuthUser() user: UserDocument,
+  ): Promise<GetVnpShipmentsResDto> {
+    this.logger.info({
+      message: JSON.stringify({ method: 'GET', url: '/shipping-vnp/shipments', userId: user._id }),
+    });
+    const result = await this.shippingVnpService.listShipments(query);
+    return { success: true, data: result.data, total: result.total } as unknown as GetVnpShipmentsResDto;
+  }
+
+  @Get('orders/:orderId/shipments')
+  @Auth([RoleType.SuperAdmin, RoleType.Admin])
+  @ApiOperation({ summary: 'Lịch sử vận đơn của 1 đơn (mọi record kể cả đã hủy)' })
+  @HttpCode(HttpStatus.OK)
+  @ApiOkResponse({ type: GetVnpOrderShipmentsResDto })
+  async getOrderShipments(
+    @Param('orderId') orderId: string,
+    @AuthUser() user: UserDocument,
+  ): Promise<GetVnpOrderShipmentsResDto> {
+    this.logger.info({
+      message: JSON.stringify({ method: 'GET', url: `/shipping-vnp/orders/${orderId}/shipments`, userId: user._id }),
+    });
+    return {
+      success: true,
+      data: await this.shippingVnpService.getOrderShipments(orderId),
+    } as unknown as GetVnpOrderShipmentsResDto;
   }
 
   @Get('orders/:orderId/tracking')
