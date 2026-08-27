@@ -10,6 +10,16 @@ import { genCode } from '@/utils/gen-code';
 import { ShipmentEntity } from './shipment.entity';
 import { ShippingPackageEntity } from './shipping-package.entity';
 
+/**
+ * Chuẩn hóa số tracking: bỏ MỌI khoảng trắng + uppercase — dùng CHUNG khi
+ * lưu `trackingCode` và khi tra idempotency. Cùng một số tracking gõ
+ * "9400 1000..." và "94001000..." phải quy về 1 kiện, không đẻ record thứ hai.
+ */
+export function normalizeTrackingCode(raw?: string): string | undefined {
+  const v = (raw ?? '').replace(/\s+/g, '').toUpperCase();
+  return v || undefined;
+}
+
 /** 1 item đã có đơn sản xuất + vận đơn khách tự cấp đi kèm. */
 export interface ExternalTrackingInput {
   /** OrderEntity._id. */
@@ -60,8 +70,8 @@ export class ShipmentIngestService {
    * có gì để ghi.
    */
   private identity(tracking: ProductionOrderTracking): { key: string; byLabel: boolean } | undefined {
-    const code = tracking.number?.trim();
-    if (code) return { key: code.replace(/\s+/g, '').toUpperCase(), byLabel: false };
+    const code = normalizeTrackingCode(tracking.number);
+    if (code) return { key: code, byLabel: false };
     const label = tracking.labelUrl?.trim();
     if (label) return { key: label, byLabel: true };
     return undefined;
@@ -120,11 +130,13 @@ export class ShipmentIngestService {
     const orderIds = entries.map((e) => e.orderId);
     const productionIds = entries.map((e) => e.productionId);
     const sellerOrderId = first.sellerOrderId?.trim();
+    // Lưu + tra CÙNG dạng chuẩn hóa — khác spacing/hoa-thường không được đẻ kiện mới.
+    const trackingCode = normalizeTrackingCode(tracking.number);
 
     const existing = await this.shipmentModel
       .findOne({
         provider: SHIPMENT_PROVIDER_CUSTOMER,
-        ...(byLabel ? { labelUrl: tracking.labelUrl, trackingCode: { $in: [null, ''] } } : { trackingCode: tracking.number?.trim() }),
+        ...(byLabel ? { labelUrl: tracking.labelUrl, trackingCode: { $in: [null, ''] } } : { trackingCode }),
       })
       .lean();
 
@@ -161,7 +173,7 @@ export class ShipmentIngestService {
     await this.shipmentModel.create({
       packageId: pack._id,
       provider: SHIPMENT_PROVIDER_CUSTOMER,
-      trackingCode: tracking.number?.trim() || undefined,
+      trackingCode,
       labelUrl: tracking.labelUrl?.trim() || undefined,
       carrier: tracking.carrier?.trim() || undefined,
       trackingUrl: tracking.url?.trim() || undefined,

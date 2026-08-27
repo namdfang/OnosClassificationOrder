@@ -43,6 +43,7 @@ import {
   customerOrderKey,
   CustomerOrderStatus,
   DEFAULT_CUSTOMER_SHIP_METHOD,
+  designAcceptKeys,
   DesignerStatus,
   extractDesignSha,
   FULFILLMENT_STAGE_LABELS,
@@ -192,6 +193,8 @@ interface PricingConfig {
   _id: string;
   fullName: string;
   productCategoryId?: string;
+  /** active/inactive/hidden — khác 'active' là NGỪNG BÁN, chặn import + push. */
+  status?: string;
   /** Ảnh mockup sản phẩm — trả về preview import cho khách đối chiếu. */
   mockup?: string;
   /** Vị trí in của sản phẩm — dùng để đòi design ở vị trí BẮT BUỘC (ORD-22). */
@@ -219,6 +222,8 @@ interface QuoteResult {
   color?: string;
   snapshot?: CustomerOrderPriceSnapshot;
   error?: string;
+  /** Sản phẩm ngừng bán (status != active) — push phân biệt để fail RIÊNG đơn với message rõ. */
+  inactive?: boolean;
 }
 
 /** Lấy value thuộc tính variation theo tên label (size/color) — attributes tự do key-value. */
@@ -604,13 +609,14 @@ export class CustomerOrderService implements OnModuleInit {
 
     const configs = (await this.productConfigModel
       .find({ $or: or })
-      .select('fullName productCategoryId variations mockup printArea')
+      .select('fullName productCategoryId status variations mockup printArea')
       .lean()) as unknown as Array<PricingConfig & { _id: unknown }>;
     for (const c of configs) {
       const config: PricingConfig = {
         _id: String(c._id),
         fullName: c.fullName,
         productCategoryId: c.productCategoryId ? String(c.productCategoryId) : undefined,
+        status: c.status,
         mockup: c.mockup,
         printArea: c.printArea,
         variations: c.variations || [],
@@ -664,6 +670,14 @@ export class CustomerOrderService implements OnModuleInit {
       variation = this.pickVariation(config, item.size, item.color);
     } else {
       return { error: 'Item thiếu cả sku lẫn type' };
+    }
+
+    // Sản phẩm ngừng bán (inactive/hidden) — SKU vẫn nằm trong DB để giữ liên
+    // kết dữ liệu cũ, nhưng khách KHÔNG được đặt mới: import fail cả đơn,
+    // preview báo đỏ, push fail riêng đơn. KHÔNG trả productConfigId để mọi
+    // gate hiện có (found=false / itemErrors) tự chặn.
+    if (config.status && config.status !== 'active') {
+      return { type: config.fullName, inactive: true, error: `Sản phẩm "${config.fullName}" đã ngừng bán — liên hệ hỗ trợ` };
     }
 
     const resolved: QuoteResult = {
@@ -739,16 +753,20 @@ export class CustomerOrderService implements OnModuleInit {
         throw new BadRequestException(customerMessage('missingMockup', label));
       }
       const configId = quotes[i]?.productConfigId;
-      const areas = (configId ? ctx.byId.get(configId)?.printArea : undefined) ?? [];
-      // Sản phẩm chưa cấu hình vị trí in nào → không đòi design, chỉ đòi mockup.
-      const missing = areas
-        .filter((a) => a.isRequired !== false)
-        .filter((a) => !item.designs?.[a.key]?.trim());
-      if (missing.length > 0) {
+      const areas = configId ? ctx.byId.get(configId)?.printArea : undefined;
+      // Luật design (nới 27/08): chỉ cần 1 design ở MẶT TRƯỚC hoặc MẶT SAU là
+      // đủ — không còn đòi đủ mọi vị trí bắt buộc. Sản phẩm không có front/back
+      // → cần 1 design ở bất kỳ vị trí bắt buộc nào; không có vị trí bắt buộc
+      // nào → chỉ đòi mockup. `designAcceptKeys` là nguồn luật duy nhất (dùng
+      // chung với cảnh báo preview import).
+      const acceptKeys = designAcceptKeys(areas);
+      if (acceptKeys.length > 0 && !acceptKeys.some((k) => !!item.designs?.[k]?.trim())) {
         // Nhãn tiếng Việt lấy từ bản đồ dùng chung với FE, khỏi lệch chữ. Kèm
         // key gốc trong ngoặc vì bản đồ nhãn CHỈ có tiếng Việt — người đọc bản
         // tiếng Anh vẫn cần biết chính xác vị trí nào.
-        const names = missing.map((a) => `${PRODUCT_PRINT_AREA_LABEL_MAP[a.key] ?? a.key} (${a.key})`).join(', ');
+        const names = acceptKeys
+          .map((k) => `${(PRODUCT_PRINT_AREA_LABEL_MAP as Record<string, string>)[k] ?? k} (${k})`)
+          .join(' hoặc ');
         throw new BadRequestException(customerMessage('missingDesign', label, names));
       }
     });
@@ -1080,6 +1098,9 @@ export class CustomerOrderService implements OnModuleInit {
         imageUrl: hit?.config.mockup,
         priceSnapshot: q.snapshot,
         error: q.error,
+        // FE cảnh báo sớm "thiếu design" ngay ở preview import — cùng luật
+        // với gate push (`designAcceptKeys`): rỗng = không đòi design.
+        designAcceptKeys: q.productConfigId ? designAcceptKeys(hit?.config.printArea) : undefined,
       };
     });
     return { success: true, data };
@@ -1341,6 +1362,20 @@ export class CustomerOrderService implements OnModuleInit {
       }
       const items = (doc.items || []) as CustomerOrderItem[];
       const { quotes, orderTotal } = this.quoteStagingOrder(doc, ctx, activePromotions, tier);
+
+      // Sản phẩm NGỪNG BÁN sau khi đơn đã vào staging — chặn ở cửa push với
+      // message rõ thay vì lẳng lặng đẩy đi với giá snapshot cũ. Fail RIÊNG
+      // đơn này, lô vẫn đẩy tiếp.
+      const inactiveQuote = quotes.find((q) => q.inactive);
+      if (inactiveQuote) {
+        results.push({
+          stagingId: id,
+          orderId: doc.orderId,
+          status: 'failed',
+          error: `Đơn ${doc.orderId ?? id}: ${inactiveQuote.error}`,
+        });
+        continue;
+      }
 
       // CỬA CUỐI CÙNG cho luật "phải có mockup + design ở vị trí in bắt buộc"
       // (ORD-25). ORD-22 chặn ở `placeOrder`, nhưng đó chỉ là MỘT đường vào:

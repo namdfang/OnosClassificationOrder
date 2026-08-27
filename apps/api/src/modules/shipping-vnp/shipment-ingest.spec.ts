@@ -110,6 +110,18 @@ describe('ORD-26 — nhận vận đơn khách tự cấp vào module vận đơ
     expect(addToSet.productionIds.$each).toEqual(['AA-00001-00003']);
   });
 
+  it('cùng số tracking khác spacing/hoa-thường quy về 1 kiện — lưu dạng chuẩn hóa', async () => {
+    const { svc, packages, shipments } = buildService();
+    await svc.recordExternalTracking([entry('AA-00001-00001', '9400 1000 0001')]);
+    // Lần import sau gõ liền không space — phải match record cũ, không đẻ kiện mới.
+    const created = await svc.recordExternalTracking([entry('AA-00001-00002', '940010000001')]);
+
+    expect(created).toBe(0);
+    expect(shipments).toHaveLength(1);
+    expect(packages).toHaveLength(1);
+    expect(shipments[0].trackingCode).toBe('940010000001');
+  });
+
   it('đơn không có tracking lẫn label thì bỏ qua — không đẻ kiện rỗng', async () => {
     const { svc, packages, shipments } = buildService();
     const created = await svc.recordExternalTracking([

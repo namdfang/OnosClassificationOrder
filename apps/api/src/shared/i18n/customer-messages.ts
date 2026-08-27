@@ -81,12 +81,14 @@ export const CUSTOMER_MESSAGES = {
     // chuỗi cũ. Ép tiếng Việt không đủ: chính câu tiếng Việt đã đổi.
     machine: `Sản phẩm "${product}": thiếu ảnh mockup — Product "${product}": mockup image is required`,
   })) as MessageFn<[string]>,
+  // Luật nới 27/08: chỉ cần 1 design ở 1 trong các vị trí liệt kê (thường là
+  // "Mặt trước (front) hoặc Mặt sau (back)") — không còn đòi đủ mọi vị trí.
   missingDesign: ((product: string, areas: string): Message => ({
-    vi: `Sản phẩm "${product}": thiếu file design ở vị trí in ${areas}`,
-    en: `Product "${product}": design file missing for print area ${areas}`,
+    vi: `Sản phẩm "${product}": thiếu file design — cần ít nhất 1 design ở vị trí ${areas}`,
+    en: `Product "${product}": design file missing — need at least one design for ${areas}`,
     machine:
-      `Sản phẩm "${product}": thiếu file design ở vị trí in ${areas} — ` +
-      `Product "${product}": design file missing for print area ${areas}`,
+      `Sản phẩm "${product}": thiếu file design — cần ít nhất 1 design ở vị trí ${areas} — ` +
+      `Product "${product}": design file missing — need at least one design for ${areas}`,
   })) as MessageFn<[string, string]>,
 
   // ── Ô tải file design (design-storage) ──────────────────────────────────

@@ -407,7 +407,8 @@
       "shipping_label": "File label"
     },
     "resolving": "Đang đối chiếu SKU với catalog…",
-    "systemProductHint": "resolve từ SKU — kiểm tra trước khi import"
+    "systemProductHint": "resolve từ SKU — kiểm tra trước khi import",
+    "designWarnCell": "Chưa có design — cần ít nhất 1 design ở cột {{areas}}. Import vẫn được nhưng sẽ bị CHẶN khi Đẩy sản xuất."
   },
   "orderDetail": {
     "reference": "Mã tham chiếu",

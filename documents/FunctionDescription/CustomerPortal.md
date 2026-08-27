@@ -282,10 +282,13 @@ Schema `customers` (mở rộng — xem [`CustomerFactoryAssignment.md §3`](Cus
     — **1 API call cho TOÀN BỘ giỏ hàng**, trả về mảng `CustomerOrderSummary[]`
     (nhiều mã đơn, hiện trong toast `success`).
   - **Đòi mockup + design ở HAI TẦNG (ORD-22).** Giao diện chặn `canAddToCart`
-    khi thiếu mockup hoặc thiếu design ở vị trí in bắt buộc; **máy chủ kiểm
-    lại** trong `placeOrder()` → `assertArtworkComplete()`. Luật giống hệt nhau:
-    **`isRequired !== false`** (vị trí không set cờ coi như bắt buộc). Sản phẩm
-    chưa cấu hình vị trí in nào thì chỉ đòi mockup.
+    khi thiếu mockup hoặc thiếu design; **máy chủ kiểm lại** trong
+    `placeOrder()` → `assertArtworkComplete()`. **Luật design NỚI 27/08 — nguồn
+    duy nhất là `designAcceptKeys()` ở `packages/shared/dtos/product-config.dto.ts`
+    (FE lẫn BE cùng import)**: chỉ cần **1 design ở MẶT TRƯỚC hoặc MẶT SAU**
+    (không còn đòi đủ mọi vị trí bắt buộc); sản phẩm không có front/back trong
+    cấu hình → 1 design ở vị trí bắt buộc (`isRequired !== false`) bất kỳ; toàn
+    bộ vị trí `isRequired: false` hoặc chưa cấu hình vị trí in → chỉ đòi mockup.
     Vì sao phải có tầng máy chủ: giao diện không phải hàng rào — một lần sửa
     điều kiện chặn ở `new.tsx` là đơn rỗng lọt vào, đi tiếp sang sản xuất, và
     **tới tận xưởng** mới lộ ra là không có gì để in, lúc đó đã chiếm mã đơn và
