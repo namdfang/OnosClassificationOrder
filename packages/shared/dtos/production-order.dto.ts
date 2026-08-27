@@ -1762,6 +1762,25 @@ export const BulkFulfillmentTransitionResZod = ResZod.extend({
 export class BulkFulfillmentTransitionResDto extends createZodDto(extendApi(BulkFulfillmentTransitionResZod)) {}
 
 /**
+ * POST `/v1/fulfillment/complete-pack-backlog` — nút "Hoàn thành đơn tồn" đi
+ * kèm toggle `FactoryEntity.autoCompletePack` (toggle chỉ áp đơn MỚI chảy tới
+ * Đóng hàng; đơn tồn cũ dọn 1 lần bằng nút này). CHỈ Admin/SuperAdmin.
+ */
+export const CompletePackBacklogZod = z.object({ factoryId: IDZod });
+export class CompletePackBacklogDto extends createZodDto(extendApi(CompletePackBacklogZod)) {}
+
+export const CompletePackBacklogResZod = ResZod.extend({
+  data: z.object({
+    /** Số đơn đang tồn ở Đóng hàng lúc bấm. */
+    total: z.number(),
+    ok: z.number(),
+    fail: z.number(),
+    failures: z.array(z.object({ orderId: z.string(), message: z.string() })),
+  }),
+});
+export class CompletePackBacklogResDto extends createZodDto(extendApi(CompletePackBacklogResZod)) {}
+
+/**
  * GET `/v1/fulfillment/my-tasks?tab=waiting|in-progress|rework|watching`.
  * Stage + factory tự suy từ user đang login (BE filter). User Manager/Admin
  * có thể override qua query `stage`/`factoryId`.

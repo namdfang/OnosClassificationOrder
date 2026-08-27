@@ -58,20 +58,29 @@ interface ListItem {
   isActive: boolean;
   /** Chỉ factory có — xưởng cũ trong DB có thể thiếu field (coi như 'standard'). */
   flowType?: FactoryFlowType;
+  /** Chỉ factory — toggle "tự hoàn thành Đóng hàng" (đơn chảy tới pack tự xong). */
+  autoCompletePack?: boolean;
 }
 
 interface FormState {
   open: boolean;
   mode: 'create' | 'edit';
   type: 'factory' | 'machineType';
-  data: { _id?: string; name: string; shortName: string; isActive: boolean; flowType: FactoryFlowType };
+  data: {
+    _id?: string;
+    name: string;
+    shortName: string;
+    isActive: boolean;
+    flowType: FactoryFlowType;
+    autoCompletePack: boolean;
+  };
 }
 
 const DEFAULT_FORM: FormState = {
   open: false,
   mode: 'create',
   type: 'factory',
-  data: { name: '', shortName: '', isActive: true, flowType: FactoryFlowType.Standard },
+  data: { name: '', shortName: '', isActive: true, flowType: FactoryFlowType.Standard, autoCompletePack: false },
 };
 
 export function FactoryTab() {
@@ -201,7 +210,7 @@ export function FactoryTab() {
       open: true,
       mode: 'create',
       type,
-      data: { name: '', shortName: '', isActive: true, flowType: FactoryFlowType.Standard },
+      data: { name: '', shortName: '', isActive: true, flowType: FactoryFlowType.Standard, autoCompletePack: false },
     });
 
   const openEdit = (type: 'factory' | 'machineType', item: ListItem) =>
@@ -215,8 +224,30 @@ export function FactoryTab() {
         shortName: item.shortName,
         isActive: item.isActive,
         flowType: item.flowType ?? FactoryFlowType.Standard,
+        autoCompletePack: item.autoCompletePack ?? false,
       },
     });
+
+  // Nút "Hoàn thành đơn tồn" — dọn 1 lần mọi đơn đang chờ ở Đóng hàng của
+  // xưởng (toggle autoCompletePack chỉ áp đơn MỚI chảy tới, không đụng đơn tồn).
+  const [packBacklogBusy, setPackBacklogBusy] = useState(false);
+  const handleCompletePackBacklog = async () => {
+    const { _id, name } = form.data;
+    if (!_id) return;
+    if (!window.confirm(t('factoryTab.form.autoPack.sweepConfirm', { name }))) return;
+    try {
+      setPackBacklogBusy(true);
+      const res = await RepositoryRemote.fulfillment.completePackBacklog({ factoryId: _id });
+      const data = res.data?.data as { total: number; ok: number; fail: number };
+      if (data.total === 0) toast.info(t('factoryTab.form.autoPack.sweepEmpty'));
+      else if (data.fail > 0) toast.warning(t('factoryTab.form.autoPack.sweepPartial', { ok: data.ok, fail: data.fail }));
+      else toast.success(t('factoryTab.form.autoPack.sweepDone', { ok: data.ok }));
+    } catch (error) {
+      handleAxiosError(error);
+    } finally {
+      setPackBacklogBusy(false);
+    }
+  };
 
   const handleSubmit = async () => {
     const { mode, type, data } = form;
@@ -233,6 +264,7 @@ export function FactoryTab() {
             shortName: data.shortName,
             isActive: data.isActive,
             flowType: data.flowType,
+            autoCompletePack: data.autoCompletePack,
           });
         } else {
           await RepositoryRemote.machineType.createMachineType({
@@ -249,6 +281,7 @@ export function FactoryTab() {
             shortName: data.shortName,
             isActive: data.isActive,
             flowType: data.flowType,
+            autoCompletePack: data.autoCompletePack,
           });
         } else {
           await RepositoryRemote.machineType.updateMachineType(data._id, {
@@ -314,6 +347,11 @@ export function FactoryTab() {
                       {it.flowType === FactoryFlowType.Merged
                         ? t('factoryTab.table.flowBadge.merged')
                         : t('factoryTab.table.flowBadge.noSew')}
+                    </Badge>
+                  )}
+                  {type === 'factory' && it.autoCompletePack && (
+                    <Badge variant="outline" className="ml-2 border-emerald-400 text-emerald-600 dark:text-emerald-400">
+                      {t('factoryTab.table.autoPackBadge')}
                     </Badge>
                   )}
                 </TableCell>
@@ -552,6 +590,30 @@ export function FactoryTab() {
                   {form.data.flowType === FactoryFlowType.NoSew && t('factoryTab.form.flowHint.noSew')}
                   {form.data.flowType === FactoryFlowType.Standard && t('factoryTab.form.flowHint.standard')}
                 </p>
+              </div>
+            )}
+            {form.type === 'factory' && (
+              <div className="space-y-2 rounded-md border border-border p-3">
+                <div className="flex items-center justify-between">
+                  <Label>{t('factoryTab.form.autoPack.label')}</Label>
+                  <Switch
+                    checked={form.data.autoCompletePack}
+                    onCheckedChange={(v) => setForm({ ...form, data: { ...form.data, autoCompletePack: v } })}
+                  />
+                </div>
+                <p className="text-xs text-muted-foreground">{t('factoryTab.form.autoPack.hint')}</p>
+                {form.mode === 'edit' && (
+                  <Button
+                    type="button"
+                    size="sm"
+                    variant="outline"
+                    disabled={packBacklogBusy}
+                    onClick={handleCompletePackBacklog}
+                  >
+                    {packBacklogBusy && <Spinner size={14} className="mr-2" />}
+                    {t('factoryTab.form.autoPack.sweepBtn')}
+                  </Button>
+                )}
               </div>
             )}
           </div>

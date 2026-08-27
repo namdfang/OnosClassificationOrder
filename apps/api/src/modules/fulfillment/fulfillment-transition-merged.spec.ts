@@ -29,6 +29,7 @@ type TransitionInput = {
   stages: FulfillmentStages;
   user: UserDocument;
   flowType?: FactoryFlowType;
+  autoPack?: boolean;
 };
 type TransitionPlan = {
   nextStatus: FulfillmentStageStatus;
@@ -246,6 +247,77 @@ describe('Complete trên xưởng no-sew (Mê Linh) — QC xong bỏ qua 2 công
     });
     expect(plan.patch.$set.currentFulfillmentStage).toBeNull();
     expect(plan.patch.$set.fulfillmentCompletedAt).toBeInstanceOf(Date);
+  });
+});
+
+describe('Toggle autoCompletePack — Đóng hàng tự hoàn thành (độc lập flowType)', () => {
+  it('standard + toggle ON: May ra xong → Đóng hàng tự Done, flow KẾT THÚC luôn', () => {
+    const plan = resolve({
+      stage: FulfillmentStage.SewOut,
+      action: FulfillmentTransitionAction.Complete,
+      currentStatus: FulfillmentStageStatus.InProgress,
+      stageState: inProgress(),
+      stages: {} as FulfillmentStages,
+      user: worker,
+      flowType: FactoryFlowType.Standard,
+      autoPack: true,
+    });
+
+    const set = plan.patch.$set;
+    expect(set['fulfillmentStages.pack.status']).toBe(FulfillmentStageStatus.Done);
+    expect(set['fulfillmentStages.pack.assignee']).toBe('worker-1');
+    for (const field of ['waitingAt', 'startedAt', 'firstStartedAt', 'completedAt']) {
+      expect(set[`fulfillmentStages.pack.${field}`]).toBeInstanceOf(Date);
+    }
+    expect(set.currentFulfillmentStage).toBeNull();
+    expect(set.fulfillmentCompletedAt).toBeInstanceOf(Date);
+    // Timeline phân biệt nguồn auto: toggle chứ không phải luồng rút gọn.
+    const entries = timelineEntries(plan);
+    expect(entries).toHaveLength(2);
+    expect(entries[1].stage).toBe(FulfillmentStage.Pack);
+    expect(entries[1].reason).toContain('tự xong Đóng hàng');
+  });
+
+  it('no-sew + toggle ON: QC xong → May vào + May ra + Đóng hàng tự Done cùng lúc, flow kết thúc', () => {
+    const plan = resolve({
+      stage: FulfillmentStage.QCPostPress,
+      action: FulfillmentTransitionAction.Complete,
+      currentStatus: FulfillmentStageStatus.InProgress,
+      stageState: inProgress(),
+      stages: {} as FulfillmentStages,
+      user: worker,
+      flowType: FactoryFlowType.NoSew,
+      autoPack: true,
+    });
+    const set = plan.patch.$set;
+    for (const stg of ['sew-in', 'sew-out', 'pack']) {
+      expect(set[`fulfillmentStages.${stg}.status`]).toBe(FulfillmentStageStatus.Done);
+    }
+    expect(set.currentFulfillmentStage).toBeNull();
+    expect(set.fulfillmentCompletedAt).toBeInstanceOf(Date);
+    expect(timelineEntries(plan)).toHaveLength(4);
+  });
+
+  it('toggle OFF: May ra xong vẫn dừng CHỜ ở Đóng hàng như cũ', () => {
+    const plan = resolve({
+      stage: FulfillmentStage.SewOut,
+      action: FulfillmentTransitionAction.Complete,
+      currentStatus: FulfillmentStageStatus.InProgress,
+      stageState: inProgress(),
+      stages: {} as FulfillmentStages,
+      user: worker,
+      flowType: FactoryFlowType.Standard,
+    });
+    expect(plan.patch.$set.currentFulfillmentStage).toBe(FulfillmentStage.Pack);
+    expect(plan.patch.$set.fulfillmentCompletedAt).toBeUndefined();
+  });
+
+  it('redirectAutoTarget: target=Đóng hàng khi toggle ON lùi về công đoạn thường gần nhất', () => {
+    expect(redirectAutoTarget(FactoryFlowType.Standard, FulfillmentStage.Pack, true)).toBe(FulfillmentStage.SewOut);
+    // no-sew: pack auto → sew-out auto → sew-in auto → dừng ở QC sau ép.
+    expect(redirectAutoTarget(FactoryFlowType.NoSew, FulfillmentStage.Pack, true)).toBe(FulfillmentStage.QCPostPress);
+    // Toggle OFF: pack là stage thường, giữ nguyên.
+    expect(redirectAutoTarget(FactoryFlowType.Standard, FulfillmentStage.Pack)).toBe(FulfillmentStage.Pack);
   });
 });
 

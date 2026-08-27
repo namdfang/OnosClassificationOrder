@@ -12,6 +12,13 @@ export const FactoryZod = BaseEntityZod.extend({
   isActive: z.boolean().default(true),
   /** Luồng fulfillment: 'standard' 6 công đoạn | 'merged' rút gọn (xưởng gỗ — Ép/May ra tự xong). */
   flowType: z.nativeEnum(FactoryFlowType).default(FactoryFlowType.Standard),
+  /**
+   * Toggle ĐỘC LẬP với flowType: bật → đơn chảy tới công đoạn ĐÓNG HÀNG tự
+   * hoàn thành luôn (đơn xong fulfillment, bắn production_completed như đóng
+   * tay). Đơn ĐANG tồn ở Đóng hàng không tự xong — dùng nút "Hoàn thành đơn
+   * tồn" (`POST /fulfillment/complete-pack-backlog`).
+   */
+  autoCompletePack: z.boolean().default(false),
 });
 export type Factory = z.infer<typeof FactoryZod>;
 
@@ -37,6 +44,7 @@ export const CreateFactoryZod = z.object({
   shortName: FactoryZod.shape.shortName,
   isActive: FactoryZod.shape.isActive.optional(),
   flowType: z.nativeEnum(FactoryFlowType).optional(),
+  autoCompletePack: z.boolean().optional(),
 });
 export class CreateFactoryDto extends createZodDto(extendApi(CreateFactoryZod)) {}
 
@@ -49,6 +57,7 @@ export const UpdateFactoryZod = z.object({
   shortName: FactoryZod.shape.shortName.optional(),
   isActive: FactoryZod.shape.isActive.optional(),
   flowType: z.nativeEnum(FactoryFlowType).optional(),
+  autoCompletePack: z.boolean().optional(),
 });
 export class UpdateFactoryDto extends createZodDto(extendApi(UpdateFactoryZod)) {}
 

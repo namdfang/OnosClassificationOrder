@@ -100,6 +100,15 @@ Chi tiết auto-complete (trong `resolveTransition()` case Complete, `fulfillmen
 
 **Vận hành:** xưởng rút gọn không cần user giữ các auto-stage (merged: bỏ Press/SewOut → 4 worker; no-sew: bỏ SewIn/SewOut — unique index partial cho phép thiếu). Với xưởng TẠO MỚI: bật flag trước khi cho đơn chảy vào — bật muộn thì đơn đã lỡ nằm ở auto-stage sẽ kẹt nếu xưởng không có worker stage đó (admin override cứu được). Với xưởng ĐANG CHẠY chuyển sang `no-sew` (Mê Linh): đơn đang nằm ở May vào/May ra KHÔNG kẹt nếu vẫn còn worker may — worker complete nốt là đơn tự trôi (May vào xong → May ra auto vì thuộc tập auto → Đóng hàng), sau đó 2 công đoạn may không nhận đơn mới nữa. Mọi màn hình giữ nguyên 6 công đoạn; auto-stage hiển thị Done tức thì. Unit tests: `fulfillment-transition-merged.spec.ts` (16 test: merged + no-sew + standard).
 
+### 2.2c Toggle "Tự hoàn thành Đóng hàng" theo xưởng (`FactoryEntity.autoCompletePack` — 2026-08-27)
+
+Toggle **ĐỘC LẬP với `flowType`** (bật được cho mọi loại luồng, kể cả standard): bật → đơn chảy tới công đoạn **Đóng hàng tự Done luôn** — đơn kết thúc fulfillment (`currentFulfillmentStage=null` + `fulfillmentCompletedAt`), bắn `order.production_completed` (webhook + noti khách) y như đóng tay. Cơ chế TÁI DÙNG đúng vòng auto-stage §2.2b: `isAutoStage(flow, stage, autoPack)` / `redirectAutoTarget(flow, target, autoPack)` nhận thêm tham số thứ 3 (`packages/shared/enums/factory-flow.ts`); timeline entry ghi `reason='Tự động hoàn thành (xưởng bật tự xong Đóng hàng)'` để phân biệt với auto của luồng rút gọn.
+
+- **UI**: tab Xưởng `FactoryTab.tsx` — switch "Tự hoàn thành Đóng hàng" trong dialog sửa xưởng (badge xanh "Tự xong Đóng hàng" ở bảng) + nút **"Hoàn thành đơn tồn ở Đóng hàng"** (chỉ mode edit).
+- **Toggle CHỈ áp đơn MỚI chảy tới** — đơn đang tồn ở Đóng hàng không tự xong. Dọn tồn 1 lần bằng nút trên → `POST /fulfillment/complete-pack-backlog {factoryId}` (`@Auth([SuperAdmin, Admin])`): tìm mọi đơn `currentFulfillmentStage='pack'` status waiting/rework/in-progress (loại đơn hủy) → chạy qua `bulkTransition` start-complete từng đơn (giữ đủ hook; đơn giữ/hold fail riêng nó với message rõ, trả `{total, ok, fail, failures}`).
+- Cache sync: `merged-flow-factory.ts` mở rộng — cùng query/TTL 60s load thêm `autoCompletePack` (`getFactoryAutoPackSync`); admin bật/tắt áp dụng chậm nhất sau 60s.
+- Rework/báo lỗi nhắm về Đóng hàng khi toggle ON → redirect lùi về công đoạn thường gần nhất (standard: May ra; no-sew: QC sau ép) — cả `resolveTransition` lẫn `buildFulfillmentReworkBack`; "Chuyển hoàn thành" (`force-complete-plan.ts`) cũng coi pack là khâu auto (không chiếm lát thời gian). Unit tests: describe "Toggle autoCompletePack" trong `fulfillment-transition-merged.spec.ts`.
+
 ### 2.3 Báo lỗi (rework-back)
 
 Trong tab "Đang làm", bấm "Báo lỗi" mở dialog:

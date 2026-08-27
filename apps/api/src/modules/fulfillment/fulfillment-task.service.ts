@@ -32,7 +32,7 @@ import {
 } from 'shared';
 
 import { productionFactoryClause } from '../../utils/excluded-factory';
-import { getFactoryFlowTypeSync } from '../../utils/merged-flow-factory';
+import { getFactoryAutoPackSync, getFactoryFlowTypeSync } from '../../utils/merged-flow-factory';
 import { CustomerOrderEventService } from '../customer-event/customer-order-event.service';
 import { OrderDocument, OrderEntity } from '../order/order.entity';
 import { OrderService } from '../order/order.service';
@@ -191,7 +191,10 @@ export class FulfillmentTaskService {
     // Xưởng luồng rút gọn: các auto-stage của flowType (merged: Ép/May ra —
     // no-sew: May vào/May ra) tự hoàn thành khi đơn chảy tới, rework-back nhắm
     // về auto-stage redirect lùi về công đoạn thường gần nhất phía trước.
-    const flowType = getFactoryFlowTypeSync(this.orderModel.db, order.factoryId ? String(order.factoryId) : null);
+    // `autoPack` — toggle riêng theo xưởng: Đóng hàng cũng tự hoàn thành.
+    const factoryId = order.factoryId ? String(order.factoryId) : null;
+    const flowType = getFactoryFlowTypeSync(this.orderModel.db, factoryId);
+    const autoPack = getFactoryAutoPackSync(this.orderModel.db, factoryId);
 
     const plan = this.resolveTransition({
       stage: body.stage,
@@ -203,6 +206,7 @@ export class FulfillmentTaskService {
       stages,
       user,
       flowType,
+      autoPack,
     });
 
     // Build atomic update — patch all stage state + timeline + top-level
@@ -303,6 +307,39 @@ export class FulfillmentTaskService {
   }
 
   /**
+   * Hoàn thành TOÀN BỘ đơn đang tồn ở công đoạn ĐÓNG HÀNG của 1 xưởng — nút
+   * "Hoàn thành đơn tồn" đi kèm toggle `autoCompletePack` (toggle chỉ áp đơn
+   * MỚI chảy tới; đơn tồn cũ dọn 1 lần bằng nút này). Đi qua `bulkTransition`
+   * → `transition()` từng đơn nên giữ đủ hook (timeline, guard đơn giữ/hủy —
+   * đơn held fail riêng nó với message rõ, không chặn cả lô).
+   */
+  async completePackBacklog(
+    user: UserDocument,
+    factoryId: string,
+    ctx: AuditContext,
+  ): Promise<{ total: number; ok: number; fail: number; failures: { orderId: string; message: string }[] }> {
+    const docs = await this.orderModel
+      .find({
+        factoryId,
+        cancelledAt: null,
+        currentFulfillmentStage: FulfillmentStage.Pack,
+        'fulfillmentStages.pack.status': {
+          $in: [FulfillmentStageStatus.Waiting, FulfillmentStageStatus.Rework, FulfillmentStageStatus.InProgress],
+        },
+      })
+      .select('_id')
+      .lean();
+    const ids = docs.map((d) => String(d._id));
+    if (ids.length === 0) return { total: 0, ok: 0, fail: 0, failures: [] };
+    const result = await this.bulkTransition(
+      user,
+      { stage: FulfillmentStage.Pack, action: 'start-complete', orderIds: ids },
+      ctx,
+    );
+    return { total: ids.length, ...result };
+  }
+
+  /**
    * Quyết định patch + next status cho 1 transition. Trả `patch` để feed
    * thẳng vào `findOneAndUpdate`.
    */
@@ -317,6 +354,8 @@ export class FulfillmentTaskService {
     user: UserDocument;
     /** Luồng của xưởng (`FactoryEntity.flowType`) — quyết định auto-stage. */
     flowType?: FactoryFlowType;
+    /** Toggle riêng theo xưởng (`FactoryEntity.autoCompletePack`): Đóng hàng cũng auto. */
+    autoPack?: boolean;
   }): {
     nextStatus: FulfillmentStageStatus;
     patch: Record<string, unknown>;
@@ -324,6 +363,7 @@ export class FulfillmentTaskService {
     const now = new Date();
     const { stage, action, currentStatus, stageState, target, reason, stages, user } = input;
     const flowType = input.flowType ?? FactoryFlowType.Standard;
+    const autoPack = input.autoPack ?? false;
     const userId = String(user._id);
     const userName = user.fullName;
 
@@ -390,7 +430,7 @@ export class FulfillmentTaskService {
         // đầu tiên. Ghi ĐỦ timestamp (waitingAt/startedAt/firstStartedAt/
         // completedAt = now) để mọi phép tính duration ra 0 thay vì NaN;
         // người thực hiện = worker stage vừa xong; workMs = 0.
-        while (nextStage && isAutoStage(flowType, nextStage)) {
+        while (nextStage && isAutoStage(flowType, nextStage, autoPack)) {
           const merged = nextStage;
           const mergedState = stages[merged];
           set[`fulfillmentStages.${merged}.status`] = FulfillmentStageStatus.Done;
@@ -416,7 +456,11 @@ export class FulfillmentTaskService {
             timelineEntry(FulfillmentStageStatus.Done, {
               stage: merged,
               fromStatus: mergedState?.status ?? FulfillmentStageStatus.Waiting,
-              reason: 'Tự động hoàn thành (luồng rút gọn)',
+              // Phân biệt nguồn auto trong timeline: flow rút gọn vs toggle
+              // "tự xong Đóng hàng" của xưởng.
+              reason: isAutoStage(flowType, merged)
+                ? 'Tự động hoàn thành (luồng rút gọn)'
+                : 'Tự động hoàn thành (xưởng bật tự xong Đóng hàng)',
             }),
           );
           nextStage = this.nextStage(merged);
@@ -508,7 +552,7 @@ export class FulfillmentTaskService {
         // Xưởng luồng rút gọn: đích là AUTO-STAGE → redirect lùi về công đoạn
         // thường gần nhất phía trước — đơn không bao giờ dừng ở auto-stage,
         // lùi về đó sẽ kẹt vì xưởng không có worker giữ stage.
-        const resolvedTarget = redirectAutoTarget(flowType, target);
+        const resolvedTarget = redirectAutoTarget(flowType, target, autoPack);
 
         // Target = FulfillmentStage → must be index < current.
         const reporterIdx = FULFILLMENT_STAGE_ORDER[stage];
