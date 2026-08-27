@@ -79,6 +79,7 @@ export function VnpShipmentDialog({ order, open, onOpenChange, onDone }: Props) 
   const [status, setStatus] = useState<VnpStatus | null>(null);
   const [group, setGroup] = useState<VnpGroup | null>(null);
   const [history, setHistory] = useState<VnpShipmentRecord[]>([]);
+  const [walletBalance, setWalletBalance] = useState<string | null>(null);
   const [busy, setBusy] = useState<string | null>(null);
   const [addressResult, setAddressResult] = useState<{ valid: boolean; message?: string; raw: unknown } | null>(null);
   const [createRaw, setCreateRaw] = useState<unknown>();
@@ -109,6 +110,12 @@ export function VnpShipmentDialog({ order, open, onOpenChange, onDone }: Props) 
       .getStatus()
       .then((res) => setStatus(res.data?.data as VnpStatus))
       .catch(() => setStatus(null));
+    // Số dư ví — hiện cạnh nút tạo để khỏi dính "Insufficient wallet balance" bất ngờ.
+    setWalletBalance(null);
+    RepositoryRemote.vnpShipping
+      .getWallet()
+      .then((res) => setWalletBalance((res.data?.data as { balance?: string })?.balance ?? null))
+      .catch(() => setWalletBalance(null));
     setGroup(null);
     setHistory([]);
     if (order?._id) {
@@ -254,7 +261,14 @@ export function VnpShipmentDialog({ order, open, onOpenChange, onDone }: Props) 
 
         {/* ── Bước 2: tạo vận đơn ──────────────────────────────── */}
         <section className="space-y-2 border-t border-border pt-3">
-          <h3 className="text-sm font-semibold">{t('vnp.step2')}</h3>
+          <h3 className="flex items-center gap-2 text-sm font-semibold">
+            {t('vnp.step2')}
+            {walletBalance !== null && (
+              <span className="ml-auto text-xs font-normal text-muted-foreground">
+                {t('vnp.walletBalance')}: <span className="font-mono font-medium">{walletBalance}</span>
+              </span>
+            )}
+          </h3>
           {group && group.items.length > 1 && (
             <div className="rounded-md border border-sky-300 bg-sky-50 dark:bg-sky-950/30 px-3 py-2 text-xs text-sky-800 dark:text-sky-200 space-y-1">
               <div className="font-medium">

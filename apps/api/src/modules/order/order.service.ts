@@ -136,7 +136,7 @@ import {
 import { Logger } from 'winston';
 
 import { getExcludedFactoryIdSync, loadExcludedFactoryId, productionFactoryClause } from '../../utils/excluded-factory';
-import { getFactoryFlowTypeSync, loadFactoryFlowTypes } from '../../utils/merged-flow-factory';
+import { getFactoryAutoPackSync, getFactoryFlowTypeSync, loadFactoryFlowTypes } from '../../utils/merged-flow-factory';
 import { CustomerRepository } from '../customer/customer.repository';
 import { CustomerAssignmentService } from '../customer-assignment/customer-assignment.service';
 import { CustomerOrderEventService } from '../customer-event/customer-order-event.service';
@@ -1146,7 +1146,11 @@ export class OrderService implements OnModuleInit {
     // May vào/May ra) → redirect lùi về công đoạn thường gần nhất phía trước —
     // đơn không bao giờ dừng ở auto-stage nên lùi về đó sẽ kẹt (không có
     // worker giữ stage).
-    target = redirectAutoTarget(getFactoryFlowTypeSync(this.orderModel.db, b.factoryId), target);
+    target = redirectAutoTarget(
+      getFactoryFlowTypeSync(this.orderModel.db, b.factoryId),
+      target,
+      getFactoryAutoPackSync(this.orderModel.db, b.factoryId),
+    );
 
     const current = (b.currentFulfillmentStage || undefined) as FulfillmentStage | undefined;
     const furthest: FulfillmentStage =
@@ -4781,6 +4785,7 @@ export class OrderService implements OnModuleInit {
       orderAt: o.orderAt,
       createdAt: o.createdAt,
       flowType: getFactoryFlowTypeSync(this.orderModel.db, o.factoryId),
+      autoPack: getFactoryAutoPackSync(this.orderModel.db, o.factoryId),
       toolCheckedAt: o.toolCheckedAt,
       toolResultNote: o.toolResultNote,
       designerStatus: o.designerStatus,

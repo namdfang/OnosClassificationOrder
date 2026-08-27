@@ -6,14 +6,16 @@ import { runWithRequestLang } from '@/shared/i18n/request-language';
 import { CustomerOrderService } from './customer-order.service';
 
 /**
- * `ORD-22` — máy chủ phải đòi mockup + design ở mọi vị trí in BẮT BUỘC.
+ * `ORD-22` — máy chủ phải đòi mockup + design trước khi đơn đi sản xuất.
  *
  * Giao diện `new.tsx` đã chặn, nhưng giao diện không phải hàng rào: chỉ cần một
  * lần sửa điều kiện chặn ở đó là đơn rỗng lọt vào, đi tiếp sang sản xuất, và
  * tới tận xưởng mới lộ ra là không có gì để in.
  *
- * Luật phải TRÙNG với giao diện: `isRequired !== false`. Hai bên lệch nhau còn
- * tệ hơn không kiểm — khách bị chặn ở một nơi và lọt ở nơi khác.
+ * Luật design NỚI 27/08: không còn đòi đủ MỌI vị trí bắt buộc — chỉ cần 1
+ * design ở MẶT TRƯỚC hoặc MẶT SAU; sản phẩm không có front/back trong cấu
+ * hình thì cần 1 design ở bất kỳ vị trí bắt buộc nào (`designAcceptKeys`).
+ * `isRequired: false` toàn bộ → chỉ đòi mockup.
  */
 interface ArtworkSurface {
   assertArtworkComplete(
@@ -79,6 +81,32 @@ describe('ORD-22 — máy chủ kiểm mockup + design khi đặt đơn trực t
     expect(() => place({ mockupUrl: MOCKUP }, undefined)).not.toThrow();
   });
 
+  // ── Luật nới 27/08: 1 design ở front HOẶC back là đủ ────────────────────
+  it('front + back đều bắt buộc: chỉ có design MẶT SAU vẫn NHẬN', () => {
+    expect(() =>
+      place({ mockupUrl: MOCKUP, designs: { back: 'https://cdn.example/b.png' } }, [{ key: 'front' }, { key: 'back' }]),
+    ).not.toThrow();
+  });
+
+  it('có front/back trong cấu hình: design ở vị trí KHÁC (sleeve) không thay được', () => {
+    expect(() =>
+      place({ mockupUrl: MOCKUP, designs: { sleeve: 'https://cdn.example/s.png' } }, [
+        { key: 'front' },
+        { key: 'sleeve' },
+      ]),
+    ).toThrow(PRODUCT_PRINT_AREA_LABEL_MAP.front);
+  });
+
+  it('sản phẩm KHÔNG có front/back: 1 design ở bất kỳ vị trí bắt buộc nào là đủ', () => {
+    expect(() =>
+      place({ mockupUrl: MOCKUP, designs: { sleeve: 'https://cdn.example/s.png' } }, [
+        { key: 'sleeve' },
+        { key: 'hood' },
+      ]),
+    ).not.toThrow();
+    expect(() => place({ mockupUrl: MOCKUP }, [{ key: 'sleeve' }, { key: 'hood' }])).toThrow(/design/i);
+  });
+
   it('chuỗi toàn khoảng trắng KHÔNG tính là có file', () => {
     expect(() => place({ mockupUrl: '   ', designs: GOOD_DESIGNS }, FRONT_REQUIRED)).toThrow(/mockup/i);
     expect(() => place({ mockupUrl: MOCKUP, designs: { front: '  ' } }, FRONT_REQUIRED)).toThrow(/design/i);
@@ -99,9 +127,9 @@ describe('ORD-22 — máy chủ kiểm mockup + design khi đặt đơn trực t
     ).toThrow(/Áo thử 2/);
   });
 
-  it('gộp mọi vị trí còn thiếu vào một thông báo', () => {
+  it('thông báo liệt kê các vị trí CHẤP NHẬN được (front hoặc back)', () => {
     expect(() => place({ mockupUrl: MOCKUP }, [{ key: 'front' }, { key: 'back' }])).toThrow(
-      new RegExp(`${PRODUCT_PRINT_AREA_LABEL_MAP.front}.*${PRODUCT_PRINT_AREA_LABEL_MAP.back}`),
+      new RegExp(`${PRODUCT_PRINT_AREA_LABEL_MAP.front}.*hoặc.*${PRODUCT_PRINT_AREA_LABEL_MAP.back}`),
     );
   });
 });

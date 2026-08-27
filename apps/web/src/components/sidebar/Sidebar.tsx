@@ -29,6 +29,7 @@ import {
   ShieldHalf,
   ShoppingCart,
   Tag,
+  Truck,
   User,
   UserCog,
   Users,
@@ -320,6 +321,14 @@ function buildNavGroups(t: TFunction<'layout'>): NavGroup[] {
               to: PATHS.ORDERS_UNMAPPED,
               icon: <MapPin size={14} />,
               perm: 'page.unmapped_factory',
+            },
+            {
+              key: 'orders-shipments',
+              label: t('sidebar.orders.shipments'),
+              to: PATHS.SHIPMENTS,
+              icon: <Truck size={14} />,
+              // Toàn bộ bề mặt VNP shipping chỉ Admin/SuperAdmin (VnpShipping.md §7).
+              onlyForRoles: [RoleType.SuperAdmin, RoleType.Admin],
             },
             {
               key: 'orders-import',

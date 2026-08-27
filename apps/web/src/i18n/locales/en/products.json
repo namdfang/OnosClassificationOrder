@@ -150,7 +150,8 @@
       "flowBadge": {
         "merged": "Merged (wood)",
         "noSew": "No-sew"
-      }
+      },
+      "autoPackBadge": "Auto-pack"
     },
     "form": {
       "nameShortNameRequired": "Name and short name are required",
@@ -167,6 +168,15 @@
         "standard": "Orders go through all 6 stages: Print → Press → QC → Sew-in → Sew-out → Pack.",
         "merged": "Print done auto-completes Press; Sew-in done auto-completes Sew-out. Wood factories only.",
         "noSew": "QC done auto-completes Sew-in + Sew-out; order waits at Pack (still confirmed manually). For factories without sewing."
+      },
+      "autoPack": {
+        "label": "Auto-complete Packing",
+        "hint": "On: orders reaching the Packing stage complete automatically (production finished, notifications/webhooks fire as with manual packing). Only applies to NEW arrivals — use the button below for the current backlog.",
+        "sweepBtn": "Complete Packing backlog",
+        "sweepConfirm": "Complete ALL orders currently waiting at the Packing stage of factory {{name}}?",
+        "sweepEmpty": "No orders waiting at Packing.",
+        "sweepDone": "Completed {{ok}} orders at Packing.",
+        "sweepPartial": "Completed {{ok}} orders, {{fail}} failed (held orders / invalid state)."
       }
     },
     "factory": {

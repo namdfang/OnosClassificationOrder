@@ -58,6 +58,10 @@ export class ShipmentEntity extends DatabaseEntityAbstract {
   @Prop()
   shippingCost?: string;
 
+  /** Số dư ví NGAY SAU khi mua label này — đối soát chi phí với biến động ví. */
+  @Prop()
+  balanceAfter?: string;
+
   @Prop({ type: String, enum: VNP_SHIPMENT_RECORD_STATUSES, default: 'created', index: true })
   status: VnpShipmentRecordStatus;
 

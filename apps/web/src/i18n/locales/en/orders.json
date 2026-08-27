@@ -720,6 +720,7 @@
     "groupNotice": "Seller order {{orderId}} has {{count}} items — one order buys ONE label, the shipment will bundle ALL items below:",
     "noWeight": "no weight (fallback used)",
     "groupBlocked": "Another item of this seller order already has a shipment — open that item's dialog or cancel the old shipment.",
+    "walletBalance": "VNP wallet",
     "historyTitle": "Shipment history",
     "historyActive": "Active",
     "historyCancelled": "Cancelled",

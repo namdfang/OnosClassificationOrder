@@ -23,6 +23,15 @@ export class FactoryEntity extends DatabaseEntityAbstract {
    */
   @Prop({ type: String, required: true, default: FactoryFlowType.Standard, enum: FACTORY_FLOW_TYPES })
   flowType: FactoryFlowType;
+
+  /**
+   * Toggle ĐỘC LẬP với flowType: bật → đơn chảy tới công đoạn ĐÓNG HÀNG tự
+   * hoàn thành luôn (fulfillmentCompletedAt + production_completed như đóng
+   * tay). Đơn đang tồn ở Đóng hàng KHÔNG tự xong — dùng nút "Hoàn thành đơn
+   * tồn". Cache sync: `merged-flow-factory.ts` (`getFactoryAutoPackSync`).
+   */
+  @Prop({ required: true, default: false })
+  autoCompletePack: boolean;
 }
 
 assertSameType<Factory, FactoryEntity>();

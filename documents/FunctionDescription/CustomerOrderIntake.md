@@ -34,8 +34,8 @@ Hai luồng đơn cùng tồn tại (plan §1.3):
    - Cột `design_*` parse **động** → key `DesignFields` (snake→camel: `design_sleeve_left`→`sleeveLeft`); cột `shipping` qua `parseCustomerShipMethod()` (shared — 4 giá trị + alias `SBTT`→`tiktok`, trống→`express_us`); `tracking_number/carrier/url` + `shipping_label` → `items[].tracking` — từ **ORD-26** không còn dừng ở mức lưu-hiển-thị: lúc push, tracking đi tiếp vào `OrderEntity.tracking` + record `shipments` provider `customer` (xem [`VnpShipping.md §2c`](VnpShipping.md)).
    - **Validate bằng CHÍNH schema Zod shared** `CustomerImportOrderZod.safeParse()` từng đơn — cùng schema `ImportCustomerOrdersDto` BE validate qua ZodValidationPipe → rule FE/BE khớp 100%, KHÔNG validate tay ở FE. Giá trị thô đẩy thẳng vào Zod (quantity trống → `undefined` để default(1), coerce bắt số sai; shipping parse qua `parseCustomerShipMethod` shared, giá trị lạ giữ raw cho enum bắn `invalid_enum_value`). Zod issue được map path → (dòng file, cột template) qua `ITEM_FIELD_TO_COLUMN`/`ADDRESS_FIELD_TO_COLUMN` + dịch message theo ngôn ngữ hiện tại (`issueMessage()` → keys `importCsv.cellErrors.*`).
    - Preview = **bảng tính từng dòng** (13 cột template): ô lỗi bôi đỏ + message ngay dưới giá trị; đơn phân tách bằng border đậm. **Còn ≥1 ô lỗi → nút import DISABLE hẳn** (không còn chế độ "import đơn hợp lệ") — khách sửa file rồi tải lại.
-   - Cột **"Sản phẩm hệ thống"** (ngay sau cột sku, nền tím nhạt): sau parse FE gọi `POST /import/resolve` đối chiếu từng SKU với catalog → hiện ảnh mockup + tên sản phẩm + màu/size + giá tham khảo (gạch giá gốc khi có Promotion, tính đúng công thức import/push) để khách check trước khi submit. SKU không tồn tại → ô đỏ "SKU không tồn tại trong catalog" + **tính vào lỗi chặn submit** (khớp rule BE fail cả đơn); nút import disable trong lúc đang đối chiếu.
-3. `POST /customer/orders/import` nhận `orders[]` đã group (cap 500 dòng) → BE validate lại: **SKU bắt buộc match `variations[].sku`** (uppercase+trim, plan §13.1) → resolve `productConfigId`/`type`/`size`/`color` từ variation (SKU là nguồn chân lý; size/color file chỉ tham khảo) + tính **giá tham khảo** (`priceSnapshot`) → **cấp `productionId` từng item** (`assignProductionIds()`, xem §3.2) → tạo staging doc `pending`. Response kết quả từng đơn `created | duplicated | failed` (+ `itemErrors`).
+   - Cột **"Sản phẩm hệ thống"** (ngay sau cột sku, nền tím nhạt): sau parse FE gọi `POST /import/resolve` đối chiếu từng SKU với catalog → hiện ảnh mockup + tên sản phẩm + màu/size + giá tham khảo (gạch giá gốc khi có Promotion, tính đúng công thức import/push) để khách check trước khi submit. SKU không tồn tại / sản phẩm ngừng bán → ô đỏ message từ BE + **tính vào lỗi chặn submit** (khớp rule BE fail cả đơn); dòng chưa có design thuộc `designAcceptKeys` của sản phẩm (thường = front/back) → **cảnh báo VÀNG không chặn** "sẽ bị chặn khi Đẩy sản xuất" (luật design nới 27/08 — xem §2.2); nút import disable trong lúc đang đối chiếu.
+3. `POST /customer/orders/import` nhận `orders[]` đã group (cap 500 dòng) → BE validate lại: **SKU bắt buộc match `variations[].sku`** (uppercase+trim, plan §13.1) **+ sản phẩm phải `status='active'`** — SKU của sản phẩm ngừng bán (inactive/hidden) fail cả đơn với message "đã ngừng bán" (`quoteItem` trả cờ `inactive`, chặn ở CẢ import / preview resolve / push — SKU vẫn nằm trong DB để giữ liên kết đơn cũ) → resolve `productConfigId`/`type`/`size`/`color` từ variation (SKU là nguồn chân lý; size/color file chỉ tham khảo) + tính **giá tham khảo** (`priceSnapshot`) → **cấp `productionId` từng item** (`assignProductionIds()`, xem §3.2) → tạo staging doc `pending`. Response kết quả từng đơn `created | duplicated | failed` (+ `itemErrors`).
 4. **Idempotency mức ĐƠN:** unique index `(customerId, orderKey)` với `orderKey = customerOrderKey(order_id, identifier)` (normalize lowercase) — import lại file → mọi đơn cũ báo `duplicated`, không tạo trùng.
 
 ### 2.2 Push to production
@@ -44,8 +44,14 @@ Hai luồng đơn cùng tồn tại (plan §1.3):
 Tick đơn Pending → "Push to production" → POST /push-preview (bảng giá chốt, không commit)
   → confirm → POST /push:
      1. validate (pending, chưa push, có item, đủ địa chỉ tối thiểu)
+     1a'. sản phẩm NGỪNG BÁN (ProductConfig.status != 'active' — quoteItem trả cờ
+         `inactive`, chặn ở CẢ import lẫn push): đơn ĐÓ 'failed' kèm tên sản phẩm, lô chạy tiếp
      1a. CỬA CUỐI về file thiết kế: assertArtworkComplete() — thiếu mockup hoặc thiếu
-         design ở vị trí in bắt buộc → đơn ĐÓ 'failed' kèm mã đơn + tên vị trí, lô chạy tiếp
+         design → đơn ĐÓ 'failed' kèm mã đơn + vị trí chấp nhận, lô chạy tiếp.
+         LUẬT DESIGN (nới 27/08, nguồn duy nhất `designAcceptKeys` ở shared
+         product-config.dto.ts): chỉ cần 1 design ở MẶT TRƯỚC hoặc MẶT SAU;
+         sản phẩm không có front/back → 1 design ở vị trí bắt buộc bất kỳ;
+         toàn bộ isRequired:false → chỉ đòi mockup
      1b. GIÀNH CHỖ từng đơn: updateOne có điều kiện { pushedAt: null, chưa ai giữ }
          → $set pushingAt. Không giành được thì đơn đó 'failed' kèm lý do, lô vẫn chạy tiếp
      2. chốt giá từng item (resolveUnitPrice: cod/tiktok → nonShipCost fallback retailPrice;
@@ -82,6 +88,8 @@ Mốc đẩy lấy MỘT lần cho cả lô và dùng chung cho `OrderEntity.inP
 Cửa đúng là bước push: nơi đơn thật sự rời vùng nháp để vào sản xuất, điểm vào duy nhất, không đi vòng được. Đơn Pending **vẫn được phép thiếu** (vùng nháp theo đúng thiết kế hai pha — `updateStagingOrder` KHÔNG bị siết, khách lưu dở rồi bổ sung sau).
 
 Dùng lại **đúng hàm** `assertArtworkComplete()` của ORD-22, không viết luật thứ hai. Gọi TRƯỚC bước giành chỗ (đơn hỏng thì đừng chiếm chỗ rồi phải nhả) và bọc `try/catch` để một đơn hỏng chỉ hỏng riêng nó. Đơn bị từ chối giữ nguyên trạng thái Pending, dữ liệu nguyên vẹn, bổ sung design rồi đẩy lại được.
+
+Vì Pending được phép thiếu mà push thì chặn, trang **preview import cảnh báo SỚM** (không chặn import): `POST /import/resolve` trả thêm `designAcceptKeys` (cùng nguồn luật), FE so với cột `design_*` từng dòng → dòng nào chưa có design thuộc danh sách chấp nhận thì ô "Sản phẩm hệ thống" hiện cảnh báo vàng "sẽ bị CHẶN khi Đẩy sản xuất" + cộng vào badge cảnh báo. Form đặt đơn `new.tsx` (`canAddToCart`) cũng dùng đúng `designAcceptKeys` — 3 bề mặt 1 luật. Test: `place-order-artwork.spec.ts`.
 
 **Chống đẩy trùng (ORD-20).** Bước 1b không thừa. Cả luồng là đọc → chốt giá → `importOrders()` → ghi `pushedAt`, và chỗ hở nằm ở **khoảng giữa đọc và ghi**: khách bấm hai lần hoặc mở hai tab thì cả hai lượt đều đọc thấy `pushedAt` rỗng và cùng chạy tới `importOrders()`. Hậu quả nặng đã được unique index `productionId` chặn (push tái dùng mã cũ nên lượt sau đụng khoá, và `customer_payments` tạo SAU `importOrders` nên cũng không đẻ ledger rác) — nhưng khách nhận về **lỗi trùng khoá tầng dưới** thay vì câu rõ ràng, và người đọc log tưởng hỏng khâu cấp mã.
 

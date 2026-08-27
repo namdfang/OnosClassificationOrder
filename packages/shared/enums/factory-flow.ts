@@ -36,21 +36,29 @@ export const FACTORY_FLOW_AUTO_STAGES: Record<FactoryFlowType, readonly Fulfillm
   [FactoryFlowType.NoSew]: [FulfillmentStage.SewIn, FulfillmentStage.SewOut],
 };
 
-/** Stage tự hoàn thành trong flow này (không bao giờ là `currentFulfillmentStage`). */
-export function isAutoStage(flow: FactoryFlowType, stage: FulfillmentStage): boolean {
+/**
+ * Stage tự hoàn thành trong flow này (không bao giờ là `currentFulfillmentStage`).
+ *
+ * `autoPack` — toggle RIÊNG theo xưởng (`FactoryEntity.autoCompletePack`,
+ * độc lập với flowType): bật thì công đoạn ĐÓNG HÀNG cũng tự hoàn thành khi
+ * đơn chảy tới (đơn xong luôn fulfillment — set `fulfillmentCompletedAt`,
+ * bắn `order.production_completed` như đóng tay).
+ */
+export function isAutoStage(flow: FactoryFlowType, stage: FulfillmentStage, autoPack = false): boolean {
+  if (autoPack && stage === FulfillmentStage.Pack) return true;
   return FACTORY_FLOW_AUTO_STAGES[flow].includes(stage);
 }
 
 /**
  * Đích rework-back hợp lệ theo flow: đích là auto-stage thì lùi về công đoạn
  * thường gần nhất phía trước; đích thường giữ nguyên. Flow standard trả
- * nguyên `target`.
+ * nguyên `target` (trừ khi `autoPack` và target = Đóng hàng).
  */
-export function redirectAutoTarget(flow: FactoryFlowType, target: FulfillmentStage): FulfillmentStage {
+export function redirectAutoTarget(flow: FactoryFlowType, target: FulfillmentStage, autoPack = false): FulfillmentStage {
   let idx = FULFILLMENT_STAGE_ORDER[target];
   while (idx > 0) {
     const stage = FULFILLMENT_STAGES[idx];
-    if (!stage || !isAutoStage(flow, stage)) break;
+    if (!stage || !isAutoStage(flow, stage, autoPack)) break;
     idx -= 1;
   }
   return FULFILLMENT_STAGES[idx] ?? target;

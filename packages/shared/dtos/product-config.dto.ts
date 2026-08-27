@@ -98,6 +98,25 @@ export const ProductPrintAreaZod = ProductPrintAreaItemZod.array()
 export type ProductPrintArea = z.infer<typeof ProductPrintAreaZod>;
 
 /**
+ * Các vị trí in mà 1 design là ĐỦ cho item của sản phẩm này — luật design của
+ * Customer Portal (nới 27/08): KHÔNG đòi đủ mọi vị trí bắt buộc, chỉ cần 1
+ * design ở MẶT TRƯỚC hoặc MẶT SAU; sản phẩm không có front/back trong cấu hình
+ * → cần 1 design ở bất kỳ vị trí bắt buộc nào; không có vị trí bắt buộc nào
+ * (hoặc `isRequired: false` hết) → rỗng, không đòi design (chỉ đòi mockup).
+ *
+ * NGUỒN LUẬT DUY NHẤT — dùng chung: BE `assertArtworkComplete` (gate đặt đơn
+ * ORD-22 + push ORD-25) + `resolveImportSkus`, FE form đặt đơn `new.tsx`
+ * (`canAddToCart`) + cảnh báo preview import. Sửa luật thì sửa Ở ĐÂY.
+ */
+export function designAcceptKeys(areas: Pick<ProductPrintAreaItem, 'key' | 'isRequired'>[] | undefined): string[] {
+  const list = areas ?? [];
+  const required = list.filter((a) => a.isRequired !== false);
+  if (required.length === 0) return [];
+  const frontBack = ['front', 'back'].filter((k) => list.some((a) => a.key === k));
+  return frontBack.length > 0 ? frontBack : required.map((a) => a.key);
+}
+
+/**
  * Biến thể sản phẩm (VD: màu/size cụ thể, nhưng KHÔNG định nghĩa cứng field
  * nào — admin tự đặt tên thuộc tính qua `attributes` key-value) — SKU riêng,
  * giá vốn (cost/nonShipCost) dùng nội bộ, `retailPrice` là giá niêm yết hiển

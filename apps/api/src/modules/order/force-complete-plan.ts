@@ -49,6 +49,8 @@ export interface ForceCompleteSource {
   orderAt?: Date | null;
   createdAt?: Date | null;
   flowType: FactoryFlowType;
+  /** Toggle "tự xong Đóng hàng" của xưởng — Đóng hàng cũng là khâu auto. */
+  autoPack?: boolean;
   toolCheckedAt?: Date | null;
   toolResultNote?: string | null;
   designerStatus?: string | null;
@@ -88,7 +90,7 @@ export function planForceComplete(src: ForceCompleteSource): ForceCompletePlan {
   }
   for (const stage of FULFILLMENT_STAGES) {
     if (toDate(src.fulfillmentStages?.[stage]?.completedAt)) continue;
-    pending.push({ key: stage, auto: isAutoStage(src.flowType, stage) });
+    pending.push({ key: stage, auto: isAutoStage(src.flowType, stage, src.autoPack) });
   }
 
   const slotCount = pending.filter((p) => !p.auto).length;

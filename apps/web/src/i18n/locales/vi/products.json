@@ -150,7 +150,8 @@
       "flowBadge": {
         "merged": "Rút gọn (gỗ)",
         "noSew": "Bỏ may"
-      }
+      },
+      "autoPackBadge": "Tự xong Đóng hàng"
     },
     "form": {
       "nameShortNameRequired": "Tên và viết tắt là bắt buộc",
@@ -167,6 +168,15 @@
         "standard": "Đơn đi tuần tự đủ 6 công đoạn: In → Ép → QC → May vào → May ra → Đóng hàng.",
         "merged": "In xong → Ép tự xong → QC; May vào xong → May ra tự xong → Đóng hàng. Chỉ bật cho xưởng gỗ.",
         "noSew": "QC sau ép xong → May vào + May ra tự xong → Đóng hàng (vẫn xác nhận tay). Bật cho xưởng không có công đoạn may."
+      },
+      "autoPack": {
+        "label": "Tự hoàn thành Đóng hàng",
+        "hint": "Bật: đơn chảy tới công đoạn Đóng hàng sẽ TỰ hoàn thành luôn (đơn xong sản xuất, bắn thông báo/webhook như đóng tay). Chỉ áp dụng đơn MỚI chảy tới — đơn đang tồn dùng nút bên dưới.",
+        "sweepBtn": "Hoàn thành đơn tồn ở Đóng hàng",
+        "sweepConfirm": "Hoàn thành TOÀN BỘ đơn đang chờ ở công đoạn Đóng hàng của xưởng {{name}}?",
+        "sweepEmpty": "Không có đơn nào đang tồn ở Đóng hàng.",
+        "sweepDone": "Đã hoàn thành {{ok}} đơn ở Đóng hàng.",
+        "sweepPartial": "Hoàn thành {{ok}} đơn, {{fail}} đơn lỗi (đơn đang giữ / trạng thái không hợp lệ)."
       }
     },
     "factory": {

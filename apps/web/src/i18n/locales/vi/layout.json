@@ -30,6 +30,7 @@
       "scanError": "Quét mã",
       "stageErrors": "Danh mục lỗi công đoạn",
       "unmapped": "Không xác định xưởng",
+      "shipments": "Vận đơn",
       "import": "Import Order",
       "cuttingFiles": "Import File Cutting"
     },

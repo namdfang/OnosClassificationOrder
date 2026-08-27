@@ -407,7 +407,8 @@
       "shipping_label": "Shipping label"
     },
     "resolving": "Matching SKUs against catalog…",
-    "systemProductHint": "resolved from SKU — verify before importing"
+    "systemProductHint": "resolved from SKU — verify before importing",
+    "designWarnCell": "No design yet — need at least one design in column {{areas}}. Import still works but the order will be BLOCKED at Push to production."
   },
   "orderDetail": {
     "reference": "Reference",

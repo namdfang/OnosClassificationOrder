@@ -313,6 +313,12 @@ export const ResolvedImportSkuZod = z.object({
   /** Giá tham khảo theo ship method + Promotion tier — cùng công thức lúc import/push. */
   priceSnapshot: CustomerOrderPriceSnapshotZod.optional(),
   error: z.string().optional(),
+  /**
+   * Các vị trí in mà 1 design là ĐỦ (luật "1 trong front/back" — mirror
+   * `designAcceptKeys` BE). FE cảnh báo vàng ở preview import khi dòng chưa
+   * có design nào thuộc danh sách này; rỗng/undefined = không đòi design.
+   */
+  designAcceptKeys: z.string().array().optional(),
 });
 export type ResolvedImportSku = z.infer<typeof ResolvedImportSkuZod>;
 export const ResolveImportSkusResZod = ResZod.extend({ data: ResolvedImportSkuZod.array() });

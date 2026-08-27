@@ -1,0 +1,55 @@
+{
+  "title": "Vận đơn",
+  "subtitle": "Quản lý label + tracking (VNP eGlobal) — chỉ Admin",
+  "wallet": {
+    "title": "Số dư ví VNP",
+    "refresh": "Làm mới",
+    "unknown": "Không đọc được"
+  },
+  "stats": {
+    "total": "Tổng vận đơn",
+    "cost": "Tổng chi phí",
+    "active": "Đang hoạt động",
+    "delivered": "Đã giao",
+    "cancelled": "Đã hủy",
+    "byMonth": "Theo tháng",
+    "byFactory": "Theo xưởng",
+    "byService": "Theo service",
+    "noFactory": "(chưa map xưởng)",
+    "from": "Từ ngày",
+    "to": "Đến ngày",
+    "count": "Số label",
+    "costCol": "Chi phí",
+    "costNote": "Chi phí = tổng shipping_cost các vận đơn CHƯA hủy (chưa rõ policy hoàn tiền khi hủy của VNP)."
+  },
+  "filter": {
+    "search": "Tìm tracking / mã kiện / mã đơn sản xuất / mã đơn seller...",
+    "allStatuses": "Tất cả trạng thái"
+  },
+  "status": {
+    "created": "Mới tạo",
+    "in_transit": "Đang vận chuyển",
+    "delivered": "Đã giao",
+    "cancelled": "Đã hủy"
+  },
+  "table": {
+    "createdAt": "Tạo lúc",
+    "package": "Kiện / đơn",
+    "tracking": "Tracking",
+    "service": "Service",
+    "cost": "Phí",
+    "status": "Trạng thái",
+    "by": "Người tạo",
+    "label": "Label",
+    "empty": "Chưa có vận đơn nào"
+  },
+  "timeline": {
+    "title": "Timeline vận đơn — {{code}}",
+    "created": "Tạo vận đơn",
+    "cancelled": "Hủy vận đơn",
+    "empty": "Chưa có sự kiện tracking — label chưa được scan (cron poll 2 lần/ngày tự cập nhật khi hàng chạy).",
+    "balanceAfter": "Số dư ví sau khi mua",
+    "lastStatus": "Trạng thái gần nhất",
+    "openLabel": "Mở label"
+  }
+}

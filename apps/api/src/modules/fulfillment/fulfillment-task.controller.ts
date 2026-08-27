@@ -16,6 +16,8 @@ import { AuthUser } from 'core';
 import {
   BulkFulfillmentTransitionDto,
   BulkFulfillmentTransitionResDto,
+  CompletePackBacklogDto,
+  CompletePackBacklogResDto,
   FulfillmentDailyOverviewResDto,
   FulfillmentTransitionDto,
   FulfillmentTransitionResDto,
@@ -116,6 +118,32 @@ export class FulfillmentTaskController {
       }),
     });
     const data = await this.taskService.bulkTransition(user, dto, { user, ip, userAgent });
+    return { success: true, data };
+  }
+
+  @Post('fulfillment/complete-pack-backlog')
+  @Auth([RoleType.SuperAdmin, RoleType.Admin])
+  @ApiOperation({
+    summary:
+      'Hoàn thành TOÀN BỘ đơn đang tồn ở Đóng hàng của 1 xưởng — nút đi kèm toggle autoCompletePack (toggle chỉ áp đơn mới chảy tới).',
+  })
+  @HttpCode(HttpStatus.OK)
+  @ApiOkResponse({ type: CompletePackBacklogResDto })
+  async completePackBacklog(
+    @Body() dto: CompletePackBacklogDto,
+    @AuthUser() user: UserDocument,
+    @ClientIp() ip: string,
+    @UserAgent() userAgent: string,
+  ): Promise<CompletePackBacklogResDto> {
+    this.logger.info({
+      message: JSON.stringify({
+        method: 'POST',
+        url: '/fulfillment/complete-pack-backlog',
+        userId: user._id,
+        factoryId: dto.factoryId,
+      }),
+    });
+    const data = await this.taskService.completePackBacklog(user, dto.factoryId, { user, ip, userAgent });
     return { success: true, data };
   }
 

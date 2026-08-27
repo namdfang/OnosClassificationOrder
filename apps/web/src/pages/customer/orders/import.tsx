@@ -114,6 +114,8 @@ interface ParsedOrder {
   identifier?: string;
   /** Số dòng gốc trong file của từng item (song song với items của đơn). */
   lines: number[];
+  /** Key design có giá trị của từng dòng (song song `lines`) — cảnh báo thiếu design. */
+  itemDesignKeys: string[][];
   /** Giá trị thô từng dòng theo tên cột template — hiển thị bảng preview. */
   display: Array<Record<string, string>>;
   /** Output Zod (đã coerce/default) — CHỈ có khi đơn hợp lệ, là payload gửi BE. */
@@ -325,6 +327,7 @@ function parseTemplateRows(rows: unknown[][], t: TFn): ParseOutput {
           orderId,
           identifier,
           lines: [],
+          itemDesignKeys: [],
           display: [],
           cellErrors: new Map(),
           orderErrors: [],
@@ -344,6 +347,7 @@ function parseTemplateRows(rows: unknown[][], t: TFn): ParseOutput {
 
     entry.raw.items.push(item);
     entry.parsed.lines.push(line);
+    entry.parsed.itemDesignKeys.push(Object.keys(designs));
     entry.parsed.display.push(display);
   }
 
@@ -369,10 +373,13 @@ function SystemProductCell({
   info,
   resolving,
   hasSku,
+  designKeys,
 }: {
   info?: ResolvedImportSku;
   resolving: boolean;
   hasSku: boolean;
+  /** Key design có giá trị của dòng này — so với `designAcceptKeys` để cảnh báo sớm. */
+  designKeys?: string[];
 }) {
   const { t } = useTranslation('customerPortal');
   if (!hasSku) return <td className="px-2 py-1.5 align-top border-r border-border/40 text-muted-foreground">—</td>;
@@ -386,10 +393,16 @@ function SystemProductCell({
     return (
       <td className="px-2 py-1.5 align-top border-r border-border/40 bg-destructive/10">
         <p className="text-destructive font-medium whitespace-normal max-w-[200px]">
-          {t('importCsv.cellErrors.skuNotFound')}
+          {/* Message cụ thể từ BE (vd sản phẩm ngừng bán) — không có mới rơi về "SKU không tồn tại". */}
+          {info.error ?? t('importCsv.cellErrors.skuNotFound')}
         </p>
       </td>
     );
+  // Cảnh báo sớm (không chặn import — vùng nháp): thiếu design sẽ bị chặn lúc
+  // Đẩy sản xuất. Luật mirror BE `designAcceptKeys`: 1 design ở front HOẶC back là đủ.
+  const missingDesign =
+    (info.designAcceptKeys?.length ?? 0) > 0 && !info.designAcceptKeys?.some((k) => designKeys?.includes(k));
+  const areaNames = (info.designAcceptKeys ?? []).map((k) => `design_${k.replace(/[A-Z]/g, (c) => `_${c.toLowerCase()}`)}`).join(' / ');
   const snap = info.priceSnapshot;
   return (
     <td className="px-2 py-1.5 align-top border-r border-border/40">
@@ -425,6 +438,12 @@ function SystemProductCell({
             info.error && (
               <p className="text-[9px] text-amber-600 dark:text-amber-400 whitespace-normal">{info.error}</p>
             )
+          )}
+          {missingDesign && (
+            <p className="text-[9px] leading-tight text-amber-600 dark:text-amber-400 whitespace-normal flex items-start gap-0.5">
+              <AlertTriangle size={9} className="mt-[1px] shrink-0" />
+              {t('importCsv.designWarnCell', { areas: areaNames })}
+            </p>
           )}
         </div>
       </div>
@@ -471,7 +490,27 @@ function CustomerOrderImport() {
     [orders, skuErrorCount],
   );
   const hasErrors = errorCount > 0 || (parsed?.fileErrors.length ?? 0) > 0;
-  const warningCount = useMemo(() => orders.reduce((s, o) => s + o.warnings.length, 0), [orders]);
+  // Cảnh báo thiếu design (không chặn import, sẽ bị chặn lúc push) — mirror
+  // luật BE `designAcceptKeys`: cần 1 design ở front HOẶC back.
+  const designWarnCount = useMemo(() => {
+    let n = 0;
+    for (const o of orders) {
+      o.lines.forEach((line, i) => {
+        const info = skuInfo.get(line);
+        if (
+          info?.found &&
+          (info.designAcceptKeys?.length ?? 0) > 0 &&
+          !info.designAcceptKeys?.some((k) => o.itemDesignKeys[i]?.includes(k))
+        )
+          n++;
+      });
+    }
+    return n;
+  }, [orders, skuInfo]);
+  const warningCount = useMemo(
+    () => orders.reduce((s, o) => s + o.warnings.length, 0) + designWarnCount,
+    [orders, designWarnCount],
+  );
 
   /**
    * Đối chiếu SKU với catalog (BE `POST /import/resolve` — cùng `quoteItem`
@@ -709,6 +748,7 @@ function CustomerOrderImport() {
                                 info={skuInfo.get(line)}
                                 resolving={resolving}
                                 hasSku={!!(rowValues.sku ?? '').trim()}
+                                designKeys={order.itemDesignKeys[ri]}
                               />
                             )}
                           </React.Fragment>

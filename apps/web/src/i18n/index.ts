@@ -23,6 +23,7 @@ import ordersEn from './locales/en/orders.json';
 import productsEn from './locales/en/products.json';
 import promotionEn from './locales/en/promotion.json';
 import scanErrorEn from './locales/en/scanError.json';
+import shipmentsEn from './locales/en/shipments.json';
 import stageErrorCatalogEn from './locales/en/stageErrorCatalog.json';
 import toolCheckWorkflowEn from './locales/en/toolCheckWorkflow.json';
 import trackEn from './locales/en/track.json';
@@ -50,6 +51,7 @@ import ordersVi from './locales/vi/orders.json';
 import productsVi from './locales/vi/products.json';
 import promotionVi from './locales/vi/promotion.json';
 import scanErrorVi from './locales/vi/scanError.json';
+import shipmentsVi from './locales/vi/shipments.json';
 import stageErrorCatalogVi from './locales/vi/stageErrorCatalog.json';
 import toolCheckWorkflowVi from './locales/vi/toolCheckWorkflow.json';
 import trackVi from './locales/vi/track.json';
@@ -99,6 +101,7 @@ export const resources = {
     customers: customersVi,
     customerPriority: customerPriorityVi,
     vnpShipping: vnpShippingVi,
+    shipments: shipmentsVi,
     customerPortal: customerPortalVi,
     customerNotifications: customerNotificationsVi,
     landing: landingVi,
@@ -128,6 +131,7 @@ export const resources = {
     customers: customersEn,
     customerPriority: customerPriorityEn,
     vnpShipping: vnpShippingEn,
+    shipments: shipmentsEn,
     customerPortal: customerPortalEn,
     customerNotifications: customerNotificationsEn,
     landing: landingEn,

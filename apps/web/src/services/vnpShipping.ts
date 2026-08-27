@@ -62,13 +62,23 @@ const cancelShipment = (orderId: string) => {
 };
 
 /** Danh sách vận đơn toàn hệ thống (bảng shipments — lịch sử, Admin check). */
-const listShipments = (query: { page?: number; size?: number; search?: string } = {}) => {
+const listShipments = (query: { page?: number; size?: number; search?: string; status?: string } = {}) => {
   const qs = new URLSearchParams();
   if (query.page) qs.set('page', String(query.page));
   if (query.size) qs.set('size', String(query.size));
   if (query.search) qs.set('search', query.search);
+  if (query.status) qs.set('status', query.status);
   const suffix = qs.toString() ? `?${qs.toString()}` : '';
   return callApi(`/${CONFIG.API_VERSION}/shipping-vnp/shipments${suffix}`, 'get');
+};
+
+/** Dashboard chi phí label (tổng/tháng/xưởng/service — trang /adm/shipments). */
+const getShipmentStats = (query: { from?: string; to?: string } = {}) => {
+  const qs = new URLSearchParams();
+  if (query.from) qs.set('from', query.from);
+  if (query.to) qs.set('to', query.to);
+  const suffix = qs.toString() ? `?${qs.toString()}` : '';
+  return callApi(`/${CONFIG.API_VERSION}/shipping-vnp/shipments/stats${suffix}`, 'get');
 };
 
 /** Lịch sử vận đơn của 1 đơn (mọi record kể cả đã hủy). */
@@ -93,4 +103,5 @@ export const vnpShipping = {
   cancelShipment,
   listShipments,
   getOrderShipments,
+  getShipmentStats,
 };

@@ -5,6 +5,7 @@ import { useLocation, useNavigate } from 'react-router-dom';
 import type { TFunction } from 'i18next';
 import { ImageIcon, PackageSearch, Search, ShoppingCart, Trash2, X } from 'lucide-react';
 import type { CustomerCatalogItem, CustomerStagingOrder } from 'shared';
+import { designAcceptKeys } from 'shared';
 import { toast } from 'sonner';
 import { z } from 'zod';
 import { zodResolver } from '@hookform/resolvers/zod';
@@ -182,12 +183,14 @@ function CustomerOrderNew() {
     setMockupUrl('');
   };
 
-  // Bắt buộc mockup + design các vị trí in BẮT BUỘC (`isRequired !== false` —
-  // vị trí không set cờ coi như bắt buộc, giữ behavior cũ) TRƯỚC khi cho thêm
-  // vào đơn — xưởng không thể sản xuất thiếu.
+  // Bắt buộc mockup + design TRƯỚC khi cho thêm vào đơn — xưởng không thể sản
+  // xuất thiếu. Luật design nới 27/08 (mirror BE `assertArtworkComplete`,
+  // nguồn luật shared `designAcceptKeys`): chỉ cần 1 design ở MẶT TRƯỚC hoặc
+  // MẶT SAU; sản phẩm không có front/back → 1 design ở vị trí bắt buộc bất kỳ.
   const missingMockup = !mockupUrl.trim();
-  const missingDesignAreas = printAreas.filter((a) => a.isRequired !== false && !designUrls[a.key]?.trim());
-  const canAddToCart = !missingMockup && missingDesignAreas.length === 0;
+  const acceptKeys = useMemo(() => designAcceptKeys(printAreas), [printAreas]);
+  const missingDesign = acceptKeys.length > 0 && !acceptKeys.some((k) => designUrls[k]?.trim());
+  const canAddToCart = !missingMockup && !missingDesign;
 
   const handleAddToCart = () => {
     if (!product) return;
@@ -195,8 +198,11 @@ function CustomerOrderNew() {
       toast.error(t('orderNew.validation.mockupRequired'));
       return;
     }
-    if (missingDesignAreas.length > 0) {
-      toast.error(t('orderNew.validation.designRequired', { area: missingDesignAreas[0].label }));
+    if (missingDesign) {
+      const labels = acceptKeys
+        .map((k) => printAreas.find((a) => a.key === k)?.label ?? k)
+        .join(' / ');
+      toast.error(t('orderNew.validation.designRequired', { area: labels }));
       return;
     }
     const { color, size } = pickColorSize(selectedAttrs);

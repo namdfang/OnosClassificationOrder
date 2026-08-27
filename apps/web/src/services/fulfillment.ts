@@ -1,4 +1,10 @@
-import type { BulkFulfillmentTransitionDto, FulfillmentStage, FulfillmentTaskTab, FulfillmentTransitionDto } from 'shared';
+import type {
+  BulkFulfillmentTransitionDto,
+  CompletePackBacklogDto,
+  FulfillmentStage,
+  FulfillmentTaskTab,
+  FulfillmentTransitionDto,
+} from 'shared';
 
 import { callApi } from '../apis';
 import { CONFIG } from '../constants';
@@ -14,6 +20,14 @@ const transition = (orderId: string, data: FulfillmentTransitionDto) => {
 /** Bulk N đơn trong 1 request — BE loop transition từng đơn (giữ đủ hook). */
 const bulkTransition = (data: BulkFulfillmentTransitionDto) => {
   return callApi(`/${CONFIG.API_VERSION}/fulfillment/bulk-transition`, 'post', data);
+};
+
+/**
+ * Hoàn thành toàn bộ đơn tồn ở Đóng hàng của 1 xưởng — nút đi kèm toggle
+ * `autoCompletePack` (FactoryTab). CHỈ Admin/SuperAdmin.
+ */
+const completePackBacklog = (data: CompletePackBacklogDto) => {
+  return callApi(`/${CONFIG.API_VERSION}/fulfillment/complete-pack-backlog`, 'post', data);
 };
 
 const myTasks = (
@@ -60,6 +74,7 @@ const dailyOverview = (
 export const fulfillment = {
   transition,
   bulkTransition,
+  completePackBacklog,
   myTasks,
   dailyOverview,
 };

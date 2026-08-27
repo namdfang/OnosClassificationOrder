@@ -1,0 +1,55 @@
+{
+  "title": "Shipments",
+  "subtitle": "Label + tracking management (VNP eGlobal) — Admin only",
+  "wallet": {
+    "title": "VNP wallet balance",
+    "refresh": "Refresh",
+    "unknown": "Unreadable"
+  },
+  "stats": {
+    "total": "Total shipments",
+    "cost": "Total cost",
+    "active": "Active",
+    "delivered": "Delivered",
+    "cancelled": "Cancelled",
+    "byMonth": "By month",
+    "byFactory": "By factory",
+    "byService": "By service",
+    "noFactory": "(unmapped factory)",
+    "from": "From",
+    "to": "To",
+    "count": "Labels",
+    "costCol": "Cost",
+    "costNote": "Cost = total shipping_cost of NON-cancelled shipments (VNP refund policy on cancel is unknown)."
+  },
+  "filter": {
+    "search": "Search tracking / package code / production ID / seller order ID...",
+    "allStatuses": "All statuses"
+  },
+  "status": {
+    "created": "Created",
+    "in_transit": "In transit",
+    "delivered": "Delivered",
+    "cancelled": "Cancelled"
+  },
+  "table": {
+    "createdAt": "Created at",
+    "package": "Package / orders",
+    "tracking": "Tracking",
+    "service": "Service",
+    "cost": "Cost",
+    "status": "Status",
+    "by": "Created by",
+    "label": "Label",
+    "empty": "No shipments yet"
+  },
+  "timeline": {
+    "title": "Shipment timeline — {{code}}",
+    "created": "Shipment created",
+    "cancelled": "Shipment cancelled",
+    "empty": "No tracking events yet — the label has not been scanned (cron polls twice a day once the package moves).",
+    "balanceAfter": "Wallet balance after purchase",
+    "lastStatus": "Latest status",
+    "openLabel": "Open label"
+  }
+}
