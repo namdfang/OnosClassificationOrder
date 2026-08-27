@@ -1,0 +1,178 @@
+{
+  "title": "Tài liệu API & Webhook",
+  "subtitle": "Tự động tạo đơn, đẩy sản xuất và nhận thông báo trạng thái từ hệ thống của bạn.",
+  "backBtn": "Quản lý key & webhook",
+  "required": "Bắt buộc",
+  "optional": "Tùy chọn",
+  "defaultLabel": "mặc định",
+  "table": {
+    "field": "Trường",
+    "type": "Kiểu",
+    "requiredCol": "Bắt buộc?",
+    "desc": "Mô tả",
+    "param": "Tham số",
+    "header": "Header",
+    "event": "Sự kiện",
+    "meaning": "Ý nghĩa",
+    "method": "Method",
+    "path": "Đường dẫn",
+    "code": "Mã",
+    "when": "Khi nào"
+  },
+  "toc": "Nội dung",
+  "sections": {
+    "start": "Bắt đầu",
+    "flow": "Luồng tích hợp",
+    "endpoints": "Danh sách endpoint",
+    "create": "Tạo đơn",
+    "push": "Đẩy sản xuất",
+    "list": "Danh sách đơn",
+    "get": "Tra cứu 1 đơn",
+    "webhook": "Webhook",
+    "errors": "Lỗi & giới hạn"
+  },
+  "start": {
+    "baseUrlLabel": "Base URL",
+    "authTitle": "Xác thực",
+    "authDesc": "Mọi request gửi kèm header <1>X-Api-Key</1> với API key dạng <1>onos_live_…</1>. Tạo key ở trang API & Webhook — key đầy đủ chỉ hiển thị MỘT lần lúc tạo, tối đa {{max}} key hoạt động cùng lúc.",
+    "contentType": "Request body dùng JSON — luôn gửi kèm header <1>Content-Type: application/json</1>.",
+    "scope": "API chỉ nhìn thấy và thao tác trên đơn hàng của CHÍNH tài khoản sở hữu key.",
+    "curlLabel": "Ví dụ request đầu tiên"
+  },
+  "flow": {
+    "intro": "Tích hợp tiêu chuẩn gồm 3 bước:",
+    "step1": "<0>Tạo đơn</0> — đơn vào trạng thái Pending (chưa sản xuất). Mỗi item được cấp ngay mã sản xuất <2>productionId</2> dạng XX-#####-#####, dùng xuyên suốt để tra cứu.",
+    "step2": "<0>Đẩy sản xuất</0> — gọi push theo mã đơn của bạn. Đơn được chốt giá và đưa vào nhà máy; sau bước này chỉ sửa được design/địa chỉ (tùy công đoạn).",
+    "step3": "<0>Theo dõi</0> — đăng ký Webhook để nhận sự kiện chủ động (khuyên dùng), hoặc poll endpoint tra cứu."
+  },
+  "endpoints": {
+    "createDesc": "Tạo đơn Pending theo lô (tối đa {{max}} đơn/lần) — idempotent theo externalRef",
+    "pushDesc": "Đẩy đơn sang sản xuất theo externalRefs hoặc ids",
+    "listDesc": "Danh sách đơn của tài khoản (8 trạng thái + badge giữ/làm lại)",
+    "getDesc": "Tra 1 đơn theo externalRef hoặc productionId — trạng thái + hành trình sản xuất"
+  },
+  "create": {
+    "intro": "Tạo tối đa {{max}} đơn mỗi lần gọi. Mỗi đơn tối đa 100 item. Tổng số dòng item mỗi lần gọi tối đa 500.",
+    "idempotent": "Idempotent theo <1>externalRef</1>: gọi lại với cùng mã → trả về <1>duplicated</1>, KHÔNG tạo trùng và KHÔNG sửa đơn cũ. Muốn sửa đơn Pending, dùng Customer Portal.",
+    "wholeFail": "Đơn có ≥1 item lỗi (SKU sai, sản phẩm ngừng bán…) → CẢ đơn đó không được tạo (các đơn khác trong lô vẫn xử lý bình thường).",
+    "orderFieldsTitle": "Trường của 1 đơn (phần tử trong orders[])",
+    "addressFieldsTitle": "shippingAddress — địa chỉ nhận hàng",
+    "itemFieldsTitle": "items[] — từng sản phẩm trong đơn",
+    "fields": {
+      "externalRef": "Mã đơn phía hệ thống của bạn — khóa idempotency, dùng lại được ở bước push và tra cứu.",
+      "orderName": "Tên gợi nhớ của đơn (hiển thị trên portal).",
+      "note": "Ghi chú cho xưởng.",
+      "shippingAddress": "Địa chỉ nhận hàng — xem bảng bên dưới.",
+      "items": "Danh sách sản phẩm — xem bảng bên dưới."
+    },
+    "address": {
+      "firstName": "Tên người nhận (ghép cả họ tên vào đây được).",
+      "lastName": "Họ người nhận.",
+      "company": "Tên công ty.",
+      "address1": "Địa chỉ dòng 1.",
+      "address2": "Địa chỉ dòng 2 (số căn hộ, PO…).",
+      "city": "Thành phố.",
+      "state": "Bang / tỉnh.",
+      "postcode": "Mã bưu chính.",
+      "country": "Quốc gia (mã 2 ký tự, vd. US).",
+      "email": "Email người nhận.",
+      "phone": "Số điện thoại người nhận."
+    },
+    "item": {
+      "sku": "SKU biến thể trong catalog OnosFactory — phải khớp CHÍNH XÁC (không phân biệt hoa thường). SKU không tồn tại hoặc sản phẩm ngừng bán → đơn bị từ chối.",
+      "quantity": "Số lượng.",
+      "shipMethod": "Phương thức ship: cod | express_us | economy_us | tiktok.",
+      "merchantSku": "Mã SKU nội bộ của bạn (chỉ để đối chiếu).",
+      "activeService": "Dịch vụ Active by USPS — chỉ có tác dụng với express_us.",
+      "mockupUrl": "Link ảnh mockup sản phẩm. Tùy chọn lúc tạo nhưng BẮT BUỘC khi đẩy sản xuất — thiếu sẽ báo lỗi lúc push.",
+      "designs": "File design theo vị trí in — xem mục Design bên dưới.",
+      "tracking": "Vận đơn bạn TỰ cấp (label mua sẵn) — xem mục Tracking bên dưới.",
+      "rawItemName": "Tên sản phẩm theo hệ của bạn — chỉ để đối chiếu, không phải nguồn chân lý.",
+      "rawColor": "Màu theo hệ của bạn — chỉ để đối chiếu.",
+      "rawSize": "Size theo hệ của bạn — chỉ để đối chiếu."
+    },
+    "designsTitle": "designs — file design theo vị trí in",
+    "designsDesc": "Object với key là vị trí in, value là URL file design (link công khai tải được — Google Drive share hoặc URL trực tiếp). Các key hỗ trợ:",
+    "designsRule": "Quy tắc: sản phẩm có in mặt trước/mặt sau chỉ cần ít nhất 1 design ở <1>front</1> HOẶC <1>back</1>. Sản phẩm chỉ in vị trí khác thì cần ít nhất 1 design ở 1 vị trí in bắt buộc của sản phẩm đó. Kiểm tra lúc ĐẨY SẢN XUẤT — thiếu design thì đơn đó báo lỗi, không đẩy được.",
+    "trackingTitle": "tracking — vận đơn bạn tự cấp",
+    "trackingDesc": "Điền khi bạn đã mua label bên ngoài (vd. Ship by TikTok): hệ thống KHÔNG tạo vận đơn mới, label của bạn sẽ được in dán ở công đoạn Đóng hàng. Với shipMethod = tiktok bạn PHẢI cung cấp tracking + label.",
+    "tracking": {
+      "number": "Số tracking (dấu cách sẽ tự được chuẩn hóa).",
+      "carrier": "Hãng vận chuyển (USPS, UPS…).",
+      "url": "Link tra cứu tracking.",
+      "labelUrl": "Link file label (PDF/ảnh) để xưởng in dán."
+    },
+    "responseLabel": "Response mẫu",
+    "responseNote": "Mỗi đơn trả 1 dòng kết quả: <1>created</1> (đã tạo), <1>duplicated</1> (externalRef đã tồn tại — bỏ qua), <1>failed</1> (kèm error và itemErrors theo index).",
+    "curlLabel": "Request mẫu"
+  },
+  "push": {
+    "intro": "Đẩy đơn Pending sang sản xuất. Chọn đơn theo <1>externalRefs</1> (mã của bạn) hoặc <1>ids</1> (_id staging trả về khi list) — cần ít nhất 1 trong 2, mỗi mảng tối đa {{max}} phần tử.",
+    "fields": {
+      "externalRefs": "Mảng mã đơn của bạn (externalRef lúc tạo).",
+      "ids": "Mảng _id staging order."
+    },
+    "notes": {
+      "whole": "Push NGUYÊN đơn — không đẩy lẻ từng item.",
+      "artwork": "Chặn thiếu mockup / thiếu design (xem quy tắc ở mục Tạo đơn) — đơn thiếu trả failed kèm lý do, các đơn khác vẫn đẩy tiếp.",
+      "idempotent": "Đơn đã push hoặc đang push sẽ không bị đẩy trùng.",
+      "price": "Giá chốt theo bảng giá + khuyến mãi theo tier tại thời điểm push; tổng tiền trả trong totalAmount."
+    },
+    "responseLabel": "Response mẫu",
+    "curlLabel": "Request mẫu"
+  },
+  "list": {
+    "intro": "Trả danh sách đơn phân trang, mới nhất trước. Trạng thái đơn suy ra từ tiến độ sản xuất thực tế của từng item.",
+    "params": {
+      "page": "Trang (từ 1).",
+      "limit": "Số đơn mỗi trang (1–100).",
+      "status": "Lọc theo trạng thái: pending | processing | in-production | fulfilled | completed | refunded | cancelled.",
+      "held": "true = chỉ đơn đang bị giữ (On Hold).",
+      "search": "Tìm theo mã đơn của bạn / tên đơn / productionId."
+    },
+    "curlLabel": "Request mẫu"
+  },
+  "get": {
+    "intro": "<1>:ref</1> nhận externalRef của đơn HOẶC productionId của 1 item. Response luôn có <1>order</1> (đơn + items + trạng thái); nếu :ref là productionId của item ĐÃ push thì có thêm <1>track</1> — hành trình sản xuất chi tiết của item đó (các chặng + mốc thời gian).",
+    "curlLabel": "Request mẫu"
+  },
+  "webhook": {
+    "intro": "Đăng ký URL nhận sự kiện tại trang API & Webhook (tối đa {{max}} URL, http/https). Mỗi webhook có <1>secret</1> dạng whsec_… để xác minh chữ ký. Không chọn sự kiện = nhận TẤT CẢ.",
+    "eventsTitle": "Sự kiện",
+    "events": {
+      "pushed": "Đơn được đẩy vào sản xuất.",
+      "completed": "Item hoàn tất sản xuất (xong công đoạn Đóng hàng).",
+      "held": "Item bị tạm giữ (chờ design / địa chỉ…).",
+      "unheld": "Item được gỡ giữ, tiếp tục sản xuất.",
+      "cancelled": "Item bị hủy."
+    },
+    "deliveryTitle": "Cách hệ thống gửi",
+    "delivery": {
+      "post": "POST JSON tới URL của bạn, timeout 5 giây, không theo redirect.",
+      "retry": "Thất bại (không phải 2xx / timeout) → thử lại tối đa 2 lần sau 5s và 25s, rồi bỏ. Endpoint của bạn nên trả 2xx NGAY và xử lý bất đồng bộ.",
+      "perItem": "Sự kiện phát theo TỪNG item (mỗi productionId 1 lần gửi).",
+      "dedupe": "Dùng header X-Onos-Delivery (id duy nhất mỗi lần gửi) để chống xử lý trùng khi retry."
+    },
+    "headersTitle": "Header gửi kèm",
+    "headers": {
+      "event": "Tên sự kiện (vd. order.pushed).",
+      "delivery": "ID duy nhất của lần gửi này.",
+      "signature": "Chữ ký sha256=<HMAC-SHA256 hex của raw body, key = secret webhook>."
+    },
+    "payloadLabel": "Payload mẫu",
+    "payloadNote": "data luôn có productionId; tùy sự kiện có thêm field bổ sung (vd. lý do giữ / lý do hủy).",
+    "verifyTitle": "Xác minh chữ ký",
+    "verifyDesc": "Tính HMAC-SHA256 trên RAW body (chuỗi byte nguyên gốc, trước khi parse JSON) với secret của webhook, so sánh với header X-Onos-Signature:",
+    "verifyLabel": "Node.js"
+  },
+  "errors": {
+    "intro": "Response lỗi có dạng { \"success\": false, \"message\": \"…\" } (validation trả mảng chi tiết theo field).",
+    "rows": {
+      "e400": "Lỗi nghiệp vụ: thiếu mockup / thiếu design lúc push, đơn không đủ điều kiện…",
+      "e422": "Body sai schema (thiếu field bắt buộc, sai kiểu, vượt độ dài, SKU rỗng…) — kèm chi tiết theo từng field.",
+      "e401": "Thiếu / sai / đã thu hồi API key, hoặc tài khoản bị khóa. Thông điệp chung, không tiết lộ chi tiết.",
+      "e404": "Không tìm thấy đơn theo :ref.",
+      "e429": "Vượt giới hạn tần suất — tính theo TỪNG key và theo TỔNG tài khoản (nhiều key không nhân hạn mức). Xem các header X-RateLimit-Remaining / X-RateLimit-Reset (giây) và thử lại sau."
+    }
+  }
+}

@@ -1,16 +1,19 @@
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
+import { Link } from 'react-router-dom';
 import dayjs from 'dayjs';
-import { Check, Copy, KeyRound, Plus, Trash2, Webhook } from 'lucide-react';
+import { BookOpen, KeyRound, Plus, Trash2, Webhook } from 'lucide-react';
 import type { CustomerApiKey, CustomerWebhook } from 'shared';
 import { CUSTOMER_WEBHOOK_EVENTS } from 'shared';
 import { toast } from 'sonner';
 
 import { CONFIG } from '@/constants';
+import { PATHS } from '@/constants/paths';
 
 import { RepositoryRemote } from '@/services';
 
 import { Spinner } from '@/components/common/Spinner';
+import { ApiCodeBlock } from '@/components/customer/ApiCodeBlock';
 import { Button } from '@/components/ui/button';
 import {
   Dialog,
@@ -32,38 +35,6 @@ import { handleAxiosError } from '@/utils';
  * khối `font-mono` nền đậm để tách khỏi chữ người-đọc; key plain chỉ hiện
  * MỘT lần trong dialog ngay sau khi tạo.
  */
-
-/** Khối lệnh copy-được — dùng cho curl mẫu + payload webhook. */
-function CodeBlock({ code, label }: { code: string; label?: string }) {
-  const { t } = useTranslation('customerPortal');
-  const [copied, setCopied] = useState(false);
-
-  const handleCopy = async () => {
-    await navigator.clipboard.writeText(code);
-    setCopied(true);
-    toast.success(t('apiAccess.copied'));
-    setTimeout(() => setCopied(false), 1500);
-  };
-
-  return (
-    <div className="rounded-lg border border-slate-800 bg-slate-950 overflow-hidden">
-      <div className="flex items-center justify-between gap-2 px-3 py-1.5 border-b border-slate-800">
-        <span className="font-mono text-[11px] uppercase tracking-wider text-slate-400">{label}</span>
-        <Button
-          size="sm"
-          variant="ghost"
-          className="h-6 px-2 text-slate-300 hover:text-white hover:bg-slate-800"
-          onClick={handleCopy}
-        >
-          {copied ? <Check size={12} /> : <Copy size={12} />}
-        </Button>
-      </div>
-      <pre className="px-3 py-2.5 overflow-x-auto text-[12px] leading-relaxed font-mono text-slate-100 whitespace-pre">
-        {code}
-      </pre>
-    </div>
-  );
-}
 
 function SectionCard({
   icon,
@@ -269,9 +240,17 @@ export default function CustomerApiPage() {
 
   return (
     <div className="max-w-3xl mx-auto space-y-5">
-      <div>
-        <h1 className="text-lg font-semibold">{t('apiAccess.title')}</h1>
-        <p className="text-sm text-muted-foreground mt-1">{t('apiAccess.subtitle')}</p>
+      <div className="flex flex-wrap items-start justify-between gap-3">
+        <div>
+          <h1 className="text-lg font-semibold">{t('apiAccess.title')}</h1>
+          <p className="text-sm text-muted-foreground mt-1">{t('apiAccess.subtitle')}</p>
+        </div>
+        <Button asChild size="sm" variant="outline">
+          <Link to={PATHS.CUSTOMER_API_DOCS}>
+            <BookOpen size={14} />
+            {t('apiAccess.docsBtn')}
+          </Link>
+        </Button>
       </div>
 
       <SectionCard
@@ -370,12 +349,12 @@ export default function CustomerApiPage() {
         description={t('apiAccess.guide.description')}
       >
         <div className="space-y-4">
-          <CodeBlock label={t('apiAccess.guide.createLabel')} code={curlCreate} />
-          <CodeBlock label={t('apiAccess.guide.pushLabel')} code={curlPush} />
-          <CodeBlock label={t('apiAccess.guide.trackLabel')} code={curlTrack} />
+          <ApiCodeBlock label={t('apiAccess.guide.createLabel')} code={curlCreate} />
+          <ApiCodeBlock label={t('apiAccess.guide.pushLabel')} code={curlPush} />
+          <ApiCodeBlock label={t('apiAccess.guide.trackLabel')} code={curlTrack} />
           <div>
             <p className="text-xs text-muted-foreground mb-1.5">{t('apiAccess.guide.webhookPayloadNote')}</p>
-            <CodeBlock label={t('apiAccess.guide.payloadLabel')} code={webhookPayload} />
+            <ApiCodeBlock label={t('apiAccess.guide.payloadLabel')} code={webhookPayload} />
           </div>
         </div>
       </SectionCard>
@@ -413,7 +392,7 @@ export default function CustomerApiPage() {
               {t('apiAccess.keys.plainWarning')}
             </DialogDescription>
           </DialogHeader>
-          <CodeBlock label={t('apiAccess.keys.plainLabel')} code={plainKey} />
+          <ApiCodeBlock label={t('apiAccess.keys.plainLabel')} code={plainKey} />
           <DialogFooter>
             <Button onClick={() => setPlainKey('')}>{t('apiAccess.keys.plainDone')}</Button>
           </DialogFooter>

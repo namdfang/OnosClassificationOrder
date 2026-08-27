@@ -63,6 +63,8 @@ export const PATHS = {
   CUSTOMER_ACCOUNT: '/customer/account',
   /** API & Webhook — Public Order API self-service (ORD-4). */
   CUSTOMER_API: '/customer/api',
+  /** Tài liệu tích hợp Public Order API + Webhook — mở từ nút trên trang API. */
+  CUSTOMER_API_DOCS: '/customer/api/docs',
 
   // ---- Public marketing routes (không gate auth, không dùng MainLayout/Sidebar) ----
   COMPANY_CAREERS: '/company/careers',

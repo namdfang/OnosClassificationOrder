@@ -16,6 +16,7 @@
   "apiAccess": {
     "title": "API & Webhook",
     "subtitle": "Nối hệ thống của bạn vào xưởng: tạo key, đăng ký nơi nhận thông báo, rồi dán lệnh mẫu để chạy thử.",
+    "docsBtn": "Tài liệu API",
     "copied": "Đã sao chép",
     "keys": {
       "title": "API key",

@@ -2,6 +2,7 @@ import { initReactI18next } from 'react-i18next';
 import i18n from 'i18next';
 
 import agentApiEn from './locales/en/agentApi.json';
+import apiDocsEn from './locales/en/apiDocs.json';
 import authEn from './locales/en/auth.json';
 import careersEn from './locales/en/careers.json';
 import catalogEn from './locales/en/catalog.json';
@@ -30,6 +31,7 @@ import trackEn from './locales/en/track.json';
 import vnpShippingEn from './locales/en/vnpShipping.json';
 import workshopConfigEn from './locales/en/workshopConfig.json';
 import agentApiVi from './locales/vi/agentApi.json';
+import apiDocsVi from './locales/vi/apiDocs.json';
 import authVi from './locales/vi/auth.json';
 import careersVi from './locales/vi/careers.json';
 import catalogVi from './locales/vi/catalog.json';
@@ -109,6 +111,7 @@ export const resources = {
     catalog: catalogVi,
     track: trackVi,
     agentApi: agentApiVi,
+    apiDocs: apiDocsVi,
   },
   en: {
     common: commonEn,
@@ -139,6 +142,7 @@ export const resources = {
     catalog: catalogEn,
     track: trackEn,
     agentApi: agentApiEn,
+    apiDocs: apiDocsEn,
   },
 } as const;
 
