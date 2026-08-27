@@ -1,4 +1,4 @@
-import type { ImportProductionOrderRow, ImportReworkOrderRow } from 'shared';
+import type { ImportProductionOrderRow, ImportReworkOrderRow, ProductionOrderTracking } from 'shared';
 
 const COLUMN_INDEX = {
   productionId: 0,
@@ -42,6 +42,34 @@ const COLUMN_INDEX = {
   inProductionAt: 38,
 };
 
+/**
+ * Cột vận đơn KHÁCH TỰ CẤP — tra theo TÊN HEADER, không theo vị trí như 39 cột
+ * còn lại: sheet đang chạy ở xưởng chưa có mấy cột này, mà file mỗi nơi xuất ra
+ * lại đặt chúng ở chỗ khác nhau. Dò theo tên thì sheet cũ (không có cột) vẫn
+ * parse y như trước, sheet mới thêm cột ở đâu cũng nhận đúng.
+ */
+const TRACKING_HEADER_ALIASES: Record<keyof ProductionOrderTracking, string[]> = {
+  number: ['tracking number', 'tracking_number', 'tracking id', 'tracking_id', 'tracking code', 'tracking_code'],
+  carrier: ['tracking carrier', 'tracking_carrier', 'carrier'],
+  url: ['tracking url', 'tracking_url', 'tracking link', 'tracking_link'],
+  labelUrl: ['shipping label', 'shipping_label', 'label url', 'label_url'],
+};
+
+const normalizeHeader = (raw: string) => raw.trim().toLowerCase().replace(/\s+/g, ' ');
+
+/** Vị trí các cột vận đơn trong header (không có cột nào thì map rỗng). */
+function findTrackingColumns(headerCols: string[]): Partial<Record<keyof ProductionOrderTracking, number>> {
+  const found: Partial<Record<keyof ProductionOrderTracking, number>> = {};
+  headerCols.forEach((col, index) => {
+    const name = normalizeHeader(col);
+    if (!name) return;
+    for (const [field, aliases] of Object.entries(TRACKING_HEADER_ALIASES) as [keyof ProductionOrderTracking, string[]][]) {
+      if (found[field] === undefined && aliases.includes(name)) found[field] = index;
+    }
+  });
+  return found;
+}
+
 function parseNumber(raw: string | undefined): number | undefined {
   if (!raw) return undefined;
   // Giá / kích thước trong sheet luôn < 1000 nên không có thousand separator.
@@ -52,10 +80,28 @@ function parseNumber(raw: string | undefined): number | undefined {
   return Number.isFinite(n) ? n : undefined;
 }
 
+/**
+ * Vận đơn của 1 dòng — trả `undefined` khi mọi ô đều trống để BE KHÔNG ghi đè
+ * vận đơn đã nhận trước đó bằng object rỗng lúc import lại.
+ */
+function buildTracking(
+  columns: Partial<Record<keyof ProductionOrderTracking, number>>,
+  get: (i: number) => string | undefined,
+): ProductionOrderTracking | undefined {
+  const tracking: ProductionOrderTracking = {
+    number: columns.number === undefined ? undefined : get(columns.number),
+    carrier: columns.carrier === undefined ? undefined : get(columns.carrier),
+    url: columns.url === undefined ? undefined : get(columns.url),
+    labelUrl: columns.labelUrl === undefined ? undefined : get(columns.labelUrl),
+  };
+  return Object.values(tracking).some(Boolean) ? tracking : undefined;
+}
+
 export function parseOrderRows(raw: string): ImportProductionOrderRow[] {
   const lines = raw.split(/\r?\n/);
   const rows: ImportProductionOrderRow[] = [];
   let pastHeader = false;
+  let trackingColumns: Partial<Record<keyof ProductionOrderTracking, number>> = {};
 
   for (const line of lines) {
     if (!line.trim()) continue;
@@ -66,6 +112,7 @@ export function parseOrderRows(raw: string): ImportProductionOrderRow[] {
     if (!pastHeader) {
       if (first === 'Production ID') {
         pastHeader = true;
+        trackingColumns = findTrackingColumns(cols);
         continue;
       }
       // Skip pre-header lines (title row etc.)
@@ -118,6 +165,7 @@ export function parseOrderRows(raw: string): ImportProductionOrderRow[] {
       referent: get(COLUMN_INDEX.referent),
       orderAt: get(COLUMN_INDEX.orderAt),
       inProductionAt: get(COLUMN_INDEX.inProductionAt),
+      tracking: buildTracking(trackingColumns, get),
     });
   }
 

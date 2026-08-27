@@ -5,12 +5,15 @@ import { PageResZod, ResZod } from '@shared/types';
 import { z } from 'zod';
 
 import { IDZod } from '..';
+import type {
+  ProductionOrderTracking} from './production-order.dto';
 import {
   CustomerOrderSummaryZod,
   DesignFieldsZod,
   LifecycleTrackStageZod,
   LifecycleTrackZod,
   ProductionOrderShippingAddressZod,
+  ProductionOrderTrackingZod,
 } from './production-order.dto';
 
 /**
@@ -72,14 +75,15 @@ export type CustomerPaymentMethod = (typeof CUSTOMER_PAYMENT_METHODS)[number];
 // Sub-schemas
 // ---------------------------------------------------------------------------
 
-/** Tracking/label KHÁCH TỰ CẤP (SBTT/hệ cũ) — lưu-hiển-thị, CHƯA nối sản xuất (plan §13.3). */
-export const CustomerOrderTrackingZod = z.object({
-  number: z.string().max(200).optional(),
-  carrier: z.string().max(100).optional(),
-  url: z.string().max(2000).optional(),
-  labelUrl: z.string().max(2000).optional(),
-});
-export type CustomerOrderTracking = z.infer<typeof CustomerOrderTrackingZod>;
+/**
+ * Tracking/label KHÁCH TỰ CẤP (SBTT/hệ cũ) — ALIAS của `ProductionOrderTrackingZod`
+ * (`production-order.dto.ts`), KHÔNG định nghĩa lại shape: cùng một vận đơn đi
+ * từ staging → `OrderEntity.tracking` → record `shipments`, hai định nghĩa song
+ * song là mầm lệch field. Từ ORD-26 tracking KHÔNG còn dừng ở mức lưu-hiển-thị:
+ * push/import ghi tiếp vào module vận đơn (`shipping-vnp`, provider `customer`).
+ */
+export const CustomerOrderTrackingZod = ProductionOrderTrackingZod;
+export type CustomerOrderTracking = ProductionOrderTracking;
 
 /** Giá 1 item — tính tham khảo lúc tạo, CHỐT LẠI + đóng băng lúc push. */
 export const CustomerOrderPriceSnapshotZod = z.object({

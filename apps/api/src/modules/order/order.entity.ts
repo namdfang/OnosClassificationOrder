@@ -6,6 +6,7 @@ import type {
   FulfillmentStages,
   FulfillmentTimelineEntry,
   ProductionOrderShippingAddress,
+  ProductionOrderTracking,
   VnpShipmentInfo,
 } from 'shared';
 import {
@@ -249,6 +250,25 @@ export class OrderEntity extends DatabaseEntityAbstract {
     }),
   })
   vnpShipment?: VnpShipmentInfo;
+
+  /**
+   * Vận đơn KHÁCH TỰ CẤP đi kèm lúc lên đơn (CSV khách / CSV admin / Public
+   * Order API) — label mua sẵn bên ngoài, hệ thống chỉ nhận và in dán.
+   *
+   * Snapshot mỏng để list/dialog render không phải join; NGUỒN SỰ THẬT là
+   * record `shipments` (provider `customer`) do `ShipmentIngestService` ghi —
+   * cùng bảng với label VNP hệ thống tự mua, xem `VnpShipping.md §2a`.
+   */
+  @Prop({
+    _id: false,
+    type: raw({
+      number: { type: String, index: true },
+      carrier: String,
+      url: String,
+      labelUrl: String,
+    }),
+  })
+  tracking?: ProductionOrderTracking;
 
   @Prop({ index: true })
   orderId?: string;

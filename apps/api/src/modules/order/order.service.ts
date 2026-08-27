@@ -123,6 +123,7 @@ import {
   HOLD_REASON_WAITING_DESIGN,
   isVariationColorLabel,
   LIFECYCLE_STAGE_KEYS,
+  normalizeProductionOrderTracking,
   normalizeVariationText,
   parseProductionIdFromCuttingFilename,
   PRODUCT_PRINT_AREA_LABEL_MAP,
@@ -149,6 +150,8 @@ import { OrderLogService } from '../order-log/order-log.service';
 import { ProductConfigRepository } from '../product-config/product-config.repository';
 import { RedisCacheService } from '../redis-cache/redis-cache.service';
 import { RoleRepository } from '../role/role.repository';
+import type { ExternalTrackingInput } from '../shipping-vnp/shipment-ingest.service';
+import { ShipmentIngestService } from '../shipping-vnp/shipment-ingest.service';
 import { SystemConfigService } from '../system-config/system-config.service';
 import { UserEntity } from '../user/user.entity';
 import { WorkshopConfigRepository } from '../workshop-config/workshop-config.repository';
@@ -449,6 +452,7 @@ export class OrderService implements OnModuleInit {
     private readonly customerRepository: CustomerRepository,
     private readonly onospodOrderLookupService: OnospodOrderLookupService,
     private readonly customerOrderEventService: CustomerOrderEventService,
+    private readonly shipmentIngestService: ShipmentIngestService,
   ) {}
 
   /**
@@ -6934,6 +6938,12 @@ export class OrderService implements OnModuleInit {
      * Worker sẽ updateMany cho cả 2 sau khi xử lý xong.
      */
     const designJobMap = new Map<string, { designKey: string; sourceUrl: string; orderIds: Set<string> }>();
+    /**
+     * Vận đơn KHÁCH TỰ CẤP đi kèm dòng import (CSV admin / CSV khách / Public
+     * Order API đều đổ về đây) — gom lại, ghi vào module vận đơn SAU vòng lặp
+     * để một lỗi ghi vận đơn không làm hỏng việc tạo đơn.
+     */
+    const trackingEntries: ExternalTrackingInput[] = [];
 
     // Ưu tiên gán xưởng theo khách hàng (nếu config bật): map (userSku,userEmail)
     // → factoryId ép, override factory của product config. Đọc 1 lần trước loop.
@@ -6993,6 +7003,7 @@ export class OrderService implements OnModuleInit {
           : undefined;
 
         const { designJobs, ...designData } = this.processDesigns(row.designs);
+        const rowTracking = normalizeProductionOrderTracking(row.tracking);
 
         const data = {
           productionId: row.productionId.trim(),
@@ -7022,6 +7033,9 @@ export class OrderService implements OnModuleInit {
           orderAt: parseImportDate(row.orderAt),
           inProductionAt: parseImportDate(row.inProductionAt),
           ...(row.shippingAddress ? { shippingAddress: row.shippingAddress } : {}),
+          // Vận đơn khách tự cấp: CHỈ ghi khi dòng import thật sự có giá trị —
+          // file lần sau không có cột tracking thì đừng xoá vận đơn đã nhận.
+          ...(rowTracking ? { tracking: rowTracking } : {}),
           isMapped,
           productConfigId,
           factoryId,
@@ -7070,6 +7084,15 @@ export class OrderService implements OnModuleInit {
         }
         if (upserted?._id) {
           const orderIdStr = String(upserted._id);
+          if (rowTracking) {
+            trackingEntries.push({
+              orderId: orderIdStr,
+              productionId: data.productionId,
+              sellerOrderId: data.orderId,
+              factoryId,
+              tracking: rowTracking,
+            });
+          }
           // Gom design job sau khi đã có orderId thật. Dedup theo
           // (designKey, sourceUrl) — 2 đơn cùng URL chỉ tạo 1 job, worker
           // updateMany cho cả 2.
@@ -7154,6 +7177,27 @@ export class OrderService implements OnModuleInit {
       void this.designPreviewQueue.addBulk(previewJobs).catch((err) => {
         console.error(`[design-preview] addBulk failed (${previewJobs.length} jobs):`, err);
       });
+    }
+
+    // Vận đơn khách tự cấp → module vận đơn (`shipping_packages` + `shipments`,
+    // provider `customer`). Ghi SAU khi đơn đã vào DB để record trỏ được vào
+    // `OrderEntity._id`, và bọc try/catch: đơn đã import xong rồi, hỏng khâu
+    // ghi vận đơn không được phép biến cả lô import thành lỗi.
+    if (trackingEntries.length > 0) {
+      try {
+        await this.shipmentIngestService.recordExternalTracking(trackingEntries, {
+          userId: ctx?.user?._id ? String(ctx.user._id) : undefined,
+          userName: ctx?.user?.fullName,
+        });
+      } catch (error) {
+        this.logger.error({
+          message: JSON.stringify({
+            action: 'importOrders.recordExternalTracking',
+            count: trackingEntries.length,
+            error: error instanceof Error ? error.message : String(error),
+          }),
+        });
+      }
     }
 
     return { success: true, data: { imported, updated, mapped, unmapped, skipped } };

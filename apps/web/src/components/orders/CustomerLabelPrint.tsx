@@ -140,6 +140,29 @@ function Label({
   const variant = [order.size, order.color].filter(Boolean).join(' · ');
   const positions = printPositions(order, labels);
 
+  const orderId = order.orderId?.trim() || undefined;
+  const externalId = order.externalId?.trim() || undefined;
+  // Nhiều nguồn đơn nhét CÙNG một mã vào cả hai cột (sheet nội bộ điền
+  // `orderId` = chính mã sàn). In hai dòng y hệt nhau chỉ tốn 3.09mm lòng tem
+  // để nói đúng một thứ — giữ lại dòng "Mã sàn" vì đó là mã người mua cuối tra
+  // được ở sàn. So sánh trim + không phân biệt hoa thường; CỐ Ý không gọt tiền
+  // tố kiểu '#': hai mã khác nhau thật mà bị coi là một thì tem mất mã, tệ hơn
+  // nhiều so với in thừa một dòng.
+  const sameCode = !!orderId && !!externalId && orderId.toLowerCase() === externalId.toLowerCase();
+  const trackingNumber = order.tracking?.number?.trim() || undefined;
+  const trackingCaption = order.tracking?.carrier?.trim() || t('customerLabel.trackingCaption');
+
+  /**
+   * Khối vận đơn cao 5.51mm (nhãn 5pt + số 7.5pt), gấp đôi dòng mã thường —
+   * ngân sách 56mm ở `Orders.md §16.6` không có sẵn chỗ đó, phải lấy từ chỗ
+   * khác. Lấy ở **dòng thứ hai của "Biến thể" và "Vị trí in"**: trên tem dán
+   * kiện gửi khách thì đó là hai thứ ít quan trọng nhất, và `line-clamp` để
+   * lại dấu "…" báo là đã cắt — khác hẳn kiểu `overflow-hidden` cắt cụt lặng
+   * lẽ mà cả layout này đang phòng. Tem KHÔNG có vận đơn giữ nguyên 2 dòng.
+   */
+  const tight = !!trackingNumber;
+  const clamp = tight ? 'line-clamp-1' : 'line-clamp-2';
+
   return (
     <div
       className={`${PAGE_CLASS} flex flex-col items-center bg-white text-black overflow-hidden`}
@@ -168,10 +191,12 @@ function Label({
           đơn trước, mã sàn dưới. Mỗi mã tự biến mất khi đơn không có —
           `externalId` rỗng ở phần lớn đơn nội bộ, `orderId` rỗng ở đơn khách
           tự lên qua Customer Portal, nên tem nào cũng còn ít nhất `productionId`.
+          Hai mã trùng nhau thì chỉ in "Mã sàn" (xem `sameCode` ở trên).
           `break-all` chứ KHÔNG `truncate`: mã bị cắt cụt trên tem là mã sai,
           thà xuống dòng. */}
-      <CodeLine caption={t('customerLabel.orderIdCaption')} value={order.orderId} />
-      <CodeLine caption={t('customerLabel.externalIdCaption')} value={order.externalId} />
+      {!sameCode && <CodeLine caption={t('customerLabel.orderIdCaption')} value={orderId} />}
+      <CodeLine caption={t('customerLabel.externalIdCaption')} value={externalId} />
+      {trackingNumber && <TrackingBlock caption={trackingCaption} value={trackingNumber} />}
 
       {productName && (
         <div style={{ fontSize: '8pt' }} className="w-full text-center leading-tight line-clamp-2 mt-[0.8mm]">
@@ -179,12 +204,18 @@ function Label({
         </div>
       )}
       {variant && (
-        <div style={{ fontSize: '8pt' }} className="w-full text-center font-semibold leading-tight line-clamp-2">
+        <div
+          style={{ fontSize: '8pt' }}
+          className={`w-full text-center font-semibold leading-tight ${clamp}`}
+        >
           {variant}
         </div>
       )}
       {positions.length > 0 && (
-        <div style={{ fontSize: '7pt' }} className="w-full text-center leading-tight line-clamp-2 mt-[0.5mm]">
+        <div
+          style={{ fontSize: '7pt' }}
+          className={`w-full text-center leading-tight ${clamp} mt-[0.5mm]`}
+        >
           <span className="uppercase opacity-70">{t('customerLabel.positionsCaption')} </span>
           {positions.join(' · ')}
         </div>
@@ -193,13 +224,50 @@ function Label({
   );
 }
 
-/** 1 dòng "nhãn — mã" trên tem; không có giá trị thì bỏ hẳn dòng. */
-function CodeLine({ caption, value }: { caption: string; value?: string }) {
+/**
+ * 1 dòng "nhãn — mã" trên tem; không có giá trị thì bỏ hẳn dòng.
+ *
+ * 6pt — cố ý NHỎ hơn khối vận đơn bên dưới. Mã đơn/mã sàn là mã tra cứu nội
+ * bộ giữa mình với người bán; thứ người cầm kiện hàng cần đọc nhanh là mã vận
+ * đơn. Hạ 7→6pt cũng chính là chỗ trả lại một phần chiều cao cho khối đó.
+ */
+function CodeLine({ caption, value, sizePt = 6 }: { caption: string; value?: string; sizePt?: number }) {
   if (!value) return null;
   return (
-    <div style={{ fontSize: '7pt' }} className="w-full text-center leading-tight break-all">
+    <div style={{ fontSize: `${sizePt}pt` }} className="w-full text-center leading-tight break-all">
       <span className="uppercase opacity-70">{caption} </span>
       <span className="font-mono">{value}</span>
+    </div>
+  );
+}
+
+/**
+ * Khối vận đơn khách tự cấp (ORD-26) — phần người cầm kiện hàng đọc nhiều
+ * nhất sau QR, nên tách hẳn thành 2 dòng thay vì nhét chung một dòng như hai
+ * mã phụ: nhãn nhỏ ở trên, dãy số to đậm ở dưới.
+ *
+ * Nhãn là **tên hãng** khi có ("USPS") — vừa tự giải thích dãy số, vừa ngắn
+ * hơn chữ "Vận đơn"; không có hãng mới rơi về nhãn chung.
+ *
+ * **7.5pt là TRẦN VẬT LÝ, không phải lựa chọn thẩm mỹ.** Mã USPS 22 chữ số ở
+ * font mono (~0.6em/ký tự) chiếm 22 × 0.6 × 7.5pt = 34.9mm, `tracking-tighter`
+ * kéo về ~32mm — vẫn trong 36mm lòng tem. To hơn nữa là xuống dòng, mà xuống
+ * dòng thì ăn thêm 3.3mm không có trong ngân sách. Muốn số to hơn thì phải bỏ
+ * bớt dòng khác trước, chứ không nới cỡ chữ ở đây được.
+ */
+function TrackingBlock({ caption, value }: { caption: string; value: string }) {
+  return (
+    <div className="w-full text-center mt-[0.5mm]">
+      <div style={{ fontSize: '5pt' }} className="uppercase leading-none opacity-70">
+        {caption}
+      </div>
+      {/* `break-all` chứ KHÔNG `truncate`: mã vận đơn cắt cụt là mã sai. */}
+      <div
+        style={{ fontSize: '7.5pt' }}
+        className="w-full font-mono font-bold leading-tight tracking-tighter break-all"
+      >
+        {value}
+      </div>
     </div>
   );
 }

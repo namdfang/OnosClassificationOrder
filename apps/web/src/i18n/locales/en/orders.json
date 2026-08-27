@@ -514,7 +514,9 @@
       "cuttingFileMapped": "Cutting file mapped",
       "factoryReportedErrors": "The factory has reported {{count}} errors on this order",
       "blockedAssignReason": "Order is already 'ok' (Tool result note 1) — no need to assign a designer",
-      "vnpLabel": "VNP label — opens in new tab"
+      "vnpLabel": "VNP label — opens in new tab",
+      "customerLabel": "Cust. label",
+      "customerTracking": "Customer-supplied tracking"
     }
   },
   "rowActionsMenu": {
@@ -728,6 +730,7 @@
     "scanHint": "Scan to track your order",
     "orderIdCaption": "Order ID",
     "externalIdCaption": "Platform ID",
-    "positionsCaption": "Print areas"
+    "positionsCaption": "Print areas",
+    "trackingCaption": "Tracking"
   }
 }

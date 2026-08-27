@@ -401,7 +401,10 @@
       "state": "State",
       "postcode": "Zip code",
       "country": "Country",
-      "systemProduct": "System product"
+      "systemProduct": "System product",
+      "tracking_number": "Tracking number",
+      "tracking_carrier": "Carrier",
+      "shipping_label": "Shipping label"
     },
     "resolving": "Matching SKUs against catalog…",
     "systemProductHint": "resolved from SKU — verify before importing"

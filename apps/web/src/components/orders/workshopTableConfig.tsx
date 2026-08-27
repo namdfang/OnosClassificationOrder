@@ -82,6 +82,17 @@ export type WorkshopOrderRow = {
     lastTrackingStatus?: string;
     lastTrackingAt?: string;
   };
+  /**
+   * Vận đơn KHÁCH TỰ CẤP đi kèm lúc lên đơn (CSV khách/admin, Public Order
+   * API) — khác `vnpShipment` (label hệ thống tự mua). Xưởng cần thấy để in
+   * dán ở công đoạn Đóng hàng nên KHÔNG gate theo role admin.
+   */
+  tracking?: {
+    number?: string;
+    carrier?: string;
+    url?: string;
+    labelUrl?: string;
+  };
 
   priority?: number;
   printStatus?: string;
@@ -431,6 +442,35 @@ export const WORKSHOP_COLS: WorkshopColMeta[] = [
                 >
                   🏷️ Label
                 </a>
+              </Hint>
+            </div>
+          )}
+          {(r.tracking?.labelUrl || r.tracking?.number) && (
+            <div className="flex items-center gap-1">
+              {r.tracking.number && <CopyButton value={r.tracking.number} label="tracking" iconSize={10} />}
+              <Hint
+                content={
+                  tr(ctx, 'workshopCols.misc.customerTracking', 'Vận đơn khách tự cấp') +
+                  (r.tracking.carrier ? ` · ${r.tracking.carrier}` : '') +
+                  (r.tracking.number ? ` · ${r.tracking.number}` : '')
+                }
+                forceRich
+              >
+                {r.tracking.labelUrl ? (
+                  <a
+                    href={r.tracking.labelUrl}
+                    target="_blank"
+                    rel="noreferrer"
+                    onClick={(e) => e.stopPropagation()}
+                    className="text-[10px] font-medium text-amber-600 dark:text-amber-400 hover:underline inline-flex items-center gap-0.5"
+                  >
+                    🏷️ {tr(ctx, 'workshopCols.misc.customerLabel', 'Label KH')}
+                  </a>
+                ) : (
+                  <span className="font-mono text-[10px] text-amber-600 dark:text-amber-400 truncate max-w-[140px]">
+                    {r.tracking.number}
+                  </span>
+                )}
               </Hint>
             </div>
           )}

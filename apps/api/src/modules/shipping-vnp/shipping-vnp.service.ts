@@ -13,7 +13,7 @@ import type {
   VnpShippingConfig,
   VnpShippingStatus,
 } from 'shared';
-import { VNP_SHIPPING_CONFIG_KEY } from 'shared';
+import { SHIPMENT_PROVIDER_VNP, VNP_SHIPPING_CONFIG_KEY } from 'shared';
 import { Logger } from 'winston';
 
 import { genCode } from '@/utils/gen-code';
@@ -727,6 +727,8 @@ export class ShippingVnpService {
       vnpShipmentId: doc.vnpShipmentId,
       trackingCode: doc.trackingCode,
       labelUrl: doc.labelUrl,
+      carrier: doc.carrier,
+      trackingUrl: doc.trackingUrl,
       service: doc.service,
       shippingType: doc.shippingType,
       fromAddressId: doc.fromAddressId,
@@ -817,6 +819,9 @@ export class ShippingVnpService {
       const since = new Date(Date.now() - 30 * 24 * 3600 * 1000);
       const open = await this.shipmentModel
         .find({
+          // CHỈ label VNP hệ thống mua — label khách tự cấp (`provider='customer'`,
+          // ORD-26) mua bên ngoài, tra qua VNP vô nghĩa.
+          provider: SHIPMENT_PROVIDER_VNP,
           status: { $in: ['created', 'in_transit'] },
           createdAt: { $gte: since },
           trackingCode: { $exists: true, $nin: [null, ''] },

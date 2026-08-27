@@ -118,6 +118,10 @@ export const ordersRegistry: AgentTableSpec = {
     shipCost: numeric('Phí ship nội bộ của đơn'),
 
     vnpShipment: plain('object', 'Vận đơn VNP eGlobal của đơn (shipmentId/trackingCode/labelUrl), nếu đã tạo'),
+    tracking: plain(
+      'object',
+      'Vận đơn KHÁCH TỰ CẤP đi kèm lúc lên đơn (number/carrier/url/labelUrl) — khác vnpShipment do hệ thống mua',
+    ),
   },
   // `API-19`: không còn trường nào của bảng này bị loại trừ.
   deliberatelyExcluded: [],

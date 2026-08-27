@@ -12,6 +12,7 @@ import { ProductConfigModule } from '../product-config/product-config.module';
 import { RedisCacheModule } from '../redis-cache/redis-cache.module';
 import { RoleEntity, RoleSchema } from '../role/role.entity';
 import { RoleRepository } from '../role/role.repository';
+import { ShippingVnpModule } from '../shipping-vnp/shipping-vnp.module';
 import { SystemConfigModule } from '../system-config/system-config.module';
 import { UserEntity, UserSchema } from '../user/user.entity';
 import { WorkshopConfigModule } from '../workshop-config/workshop-config.module';
@@ -44,6 +45,9 @@ import { OrderService } from './order.service';
     // ORD-4/ORD-5 — nguồn sự kiện chung: webhook khách API + noti chuông portal
     // khi đơn hold/unhold/cancel.
     CustomerEventModule,
+    // ORD-26 — ghi vận đơn khách tự cấp (CSV/API) vào module vận đơn
+    // (`shipments`/`shipping_packages`) ngay lúc import đơn.
+    ShippingVnpModule,
   ],
   controllers: [OrderController],
   providers: [

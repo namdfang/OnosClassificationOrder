@@ -4,6 +4,7 @@ import { MongooseModule } from '@nestjs/mongoose';
 import { OrderEntity, OrderSchema } from '../order/order.entity';
 import { SystemConfigModule } from '../system-config/system-config.module';
 import { ShipmentEntity, ShipmentSchema } from './shipment.entity';
+import { ShipmentIngestService } from './shipment-ingest.service';
 import { ShippingPackageEntity, ShippingPackageSchema } from './shipping-package.entity';
 import { ShippingVnpController } from './shipping-vnp.controller';
 import { ShippingVnpService } from './shipping-vnp.service';
@@ -19,7 +20,10 @@ import { VnpEglobalClient } from './vnp-eglobal.client';
     SystemConfigModule,
   ],
   controllers: [ShippingVnpController],
-  providers: [ShippingVnpService, VnpEglobalClient],
-  exports: [ShippingVnpService],
+  providers: [ShippingVnpService, VnpEglobalClient, ShipmentIngestService],
+  // `ShipmentIngestService` export cho OrderModule ghi vận đơn KHÁCH TỰ CẤP
+  // (CSV/API) vào cùng bảng `shipments` — module này KHÔNG import OrderModule
+  // (chỉ bind model) nên chiều phụ thuộc 1 chiều, không sinh vòng DI.
+  exports: [ShippingVnpService, ShipmentIngestService],
 })
 export class ShippingVnpModule {}

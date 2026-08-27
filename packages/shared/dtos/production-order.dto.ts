@@ -123,6 +123,43 @@ export const ProductionOrderShippingAddressZod = z.object({
 });
 export type ProductionOrderShippingAddress = z.infer<typeof ProductionOrderShippingAddressZod>;
 
+/**
+ * Vận đơn KHÁCH TỰ CẤP (label mua sẵn bên ngoài — SBTT/hệ cũ/API riêng của
+ * khách): số tracking + hãng + link tra cứu + file label để xưởng in dán.
+ *
+ * Đây là shape DÙNG CHUNG cho cả staging đơn khách (`CustomerOrderTrackingZod`
+ * chỉ là alias của schema này) lẫn `OrderEntity.tracking` — một định nghĩa duy
+ * nhất để CSV khách / CSV admin / Public Order API không trôi lệch nhau.
+ *
+ * KHÁC `vnpShipment`: đó là label DO HỆ THỐNG mua qua VNP eGlobal. Cả hai cùng
+ * đổ về collection `shipments` (module `shipping-vnp`) qua `provider` khác nhau
+ * — xem `documents/FunctionDescription/VnpShipping.md §2a`.
+ */
+export const ProductionOrderTrackingZod = z.object({
+  number: z.string().max(200).optional(),
+  carrier: z.string().max(100).optional(),
+  url: z.string().max(2000).optional(),
+  labelUrl: z.string().max(2000).optional(),
+});
+export type ProductionOrderTracking = z.infer<typeof ProductionOrderTrackingZod>;
+
+/** Có ít nhất 1 giá trị thật — dùng để KHÔNG ghi đè tracking cũ bằng object rỗng. */
+export function hasProductionOrderTracking(tracking?: ProductionOrderTracking | null): boolean {
+  if (!tracking) return false;
+  return [tracking.number, tracking.carrier, tracking.url, tracking.labelUrl].some((v) => !!v?.trim());
+}
+
+/** Bỏ field rỗng + trim — chuẩn hoá trước khi ghi DB/so sánh. */
+export function normalizeProductionOrderTracking(tracking?: ProductionOrderTracking | null): ProductionOrderTracking | undefined {
+  if (!tracking) return undefined;
+  const out: ProductionOrderTracking = {};
+  if (tracking.number?.trim()) out.number = tracking.number.trim();
+  if (tracking.carrier?.trim()) out.carrier = tracking.carrier.trim();
+  if (tracking.url?.trim()) out.url = tracking.url.trim();
+  if (tracking.labelUrl?.trim()) out.labelUrl = tracking.labelUrl.trim();
+  return Object.keys(out).length > 0 ? out : undefined;
+}
+
 /** Trạng thái pipeline R2 cho từng vị trí design (Phase 6 Design-R2-Pipeline). */
 export const DesignStatusZod = z.enum(['pending', 'ready', 'failed']);
 export type DesignStatus = z.infer<typeof DesignStatusZod>;
@@ -219,6 +256,12 @@ export const ProductionOrderZod = BaseEntityZod.extend({
    * `shipping-vnp` (nút "Vận đơn VNP" ở bảng đơn hàng, giai đoạn test).
    */
   vnpShipment: VnpShipmentInfoZod.optional(),
+  /**
+   * Vận đơn KHÁCH TỰ CẤP đi kèm lúc lên đơn (CSV khách / CSV admin / Public
+   * Order API). Snapshot mỏng để render list — nguồn sự thật là record trong
+   * collection `shipments` (provider `customer`).
+   */
+  tracking: ProductionOrderTrackingZod.optional(),
   orderId: z.string().optional(),
   externalId: z.string().optional(),
   referent: z.string().optional(),
@@ -661,6 +704,13 @@ export const ImportProductionOrderRowZod = z.object({
   orderAt: z.string().optional(),
   inProductionAt: z.string().optional(),
   shippingAddress: ProductionOrderShippingAddressZod.optional(),
+  /**
+   * Vận đơn khách tự cấp (cột `tracking_number`/`tracking_carrier`/
+   * `tracking_url`/`shipping_label` của sheet import, hoặc `items[].tracking`
+   * khi push đơn portal/API). `importOrders` lưu snapshot lên đơn RỒI ghi
+   * record vào collection `shipments`.
+   */
+  tracking: ProductionOrderTrackingZod.optional(),
 });
 export type ImportProductionOrderRow = z.infer<typeof ImportProductionOrderRowZod>;
 

@@ -31,7 +31,7 @@ Hai luồng đơn cùng tồn tại (plan §1.3):
    - `raw:false` khi đọc sheet → `postcode`/`telephone` giữ dạng string (không mất số 0 đầu).
    - **Group nhiều dòng cùng `(order_id, identifier)` = 1 đơn nhiều item** (rule hệ cũ). Địa chỉ lấy dòng ĐẦU; dòng sau lệch địa chỉ → warning.
    - **Địa chỉ lưu ĐỦ bộ field hệ cũ** (`firstName/lastName/company/phone/email/address1/address2/city/state/postcode/country`): cột `name` template tự tách từ đầu = firstName, phần còn lại = lastName; file export hệ cũ có sẵn cột `first_name`/`last_name`/`phone` → ưu tiên dùng thẳng (alias `phone` ↔ `telephone`). `is_national`/`national` hệ cũ không áp dụng.
-   - Cột `design_*` parse **động** → key `DesignFields` (snake→camel: `design_sleeve_left`→`sleeveLeft`); cột `shipping` qua `parseCustomerShipMethod()` (shared — 4 giá trị + alias `SBTT`→`tiktok`, trống→`express_us`); `tracking_number/carrier/url` + `shipping_label` → `items[].tracking` (lưu-hiển-thị, chưa nối sản xuất).
+   - Cột `design_*` parse **động** → key `DesignFields` (snake→camel: `design_sleeve_left`→`sleeveLeft`); cột `shipping` qua `parseCustomerShipMethod()` (shared — 4 giá trị + alias `SBTT`→`tiktok`, trống→`express_us`); `tracking_number/carrier/url` + `shipping_label` → `items[].tracking` — từ **ORD-26** không còn dừng ở mức lưu-hiển-thị: lúc push, tracking đi tiếp vào `OrderEntity.tracking` + record `shipments` provider `customer` (xem [`VnpShipping.md §2c`](VnpShipping.md)).
    - **Validate bằng CHÍNH schema Zod shared** `CustomerImportOrderZod.safeParse()` từng đơn — cùng schema `ImportCustomerOrdersDto` BE validate qua ZodValidationPipe → rule FE/BE khớp 100%, KHÔNG validate tay ở FE. Giá trị thô đẩy thẳng vào Zod (quantity trống → `undefined` để default(1), coerce bắt số sai; shipping parse qua `parseCustomerShipMethod` shared, giá trị lạ giữ raw cho enum bắn `invalid_enum_value`). Zod issue được map path → (dòng file, cột template) qua `ITEM_FIELD_TO_COLUMN`/`ADDRESS_FIELD_TO_COLUMN` + dịch message theo ngôn ngữ hiện tại (`issueMessage()` → keys `importCsv.cellErrors.*`).
    - Preview = **bảng tính từng dòng** (13 cột template): ô lỗi bôi đỏ + message ngay dưới giá trị; đơn phân tách bằng border đậm. **Còn ≥1 ô lỗi → nút import DISABLE hẳn** (không còn chế độ "import đơn hợp lệ") — khách sửa file rồi tải lại.
    - Cột **"Sản phẩm hệ thống"** (ngay sau cột sku, nền tím nhạt): sau parse FE gọi `POST /import/resolve` đối chiếu từng SKU với catalog → hiện ảnh mockup + tên sản phẩm + màu/size + giá tham khảo (gạch giá gốc khi có Promotion, tính đúng công thức import/push) để khách check trước khi submit. SKU không tồn tại → ô đỏ "SKU không tồn tại trong catalog" + **tính vào lỗi chặn submit** (khớp rule BE fail cả đơn); nút import disable trong lúc đang đối chiếu.
@@ -53,6 +53,8 @@ Tick đơn Pending → "Push to production" → POST /push-preview (bảng giá 
         qua promotionMatches/applyPromotionDiscount — tái dùng như customer-catalog)
      3. TÁI DÙNG items[].productionId đã cấp lúc tạo/import (fallback generateUniqueProductionId
         cho staging doc cũ) → 1 lệnh importOrders() duy nhất
+        (mỗi dòng mang theo items[].tracking — vận đơn khách tự cấp: importOrders
+         snapshot lên đơn RỒI ghi record `shipments` provider `customer`, ORD-26)
         (type = ProductConfig.fullName resolve từ SKU → map config chính xác;
          mỗi dòng mang orderAt = lúc khách đặt + inProductionAt = mốc đẩy của cả lô
          — xem "Hai mốc thời gian của đơn" bên dưới)
@@ -175,7 +177,7 @@ CustomerOrderEntity {
   shippingAddress?;                       // 1 địa chỉ CHUNG cả đơn (có email/company)
   items: CustomerOrderItem[];             // sku, productConfigId, type/size/color (resolve từ SKU),
                                           // quantity, shipMethod, activeService, mockupUrl, designs,
-                                          // tracking (lưu-hiển-thị), priceSnapshot,
+                                          // tracking (khách tự cấp → module vận đơn lúc push), priceSnapshot,
                                           // productionId — cấp NGAY lúc tạo/import, xem note dưới
   note?; pushedAt?; paymentId?; cancelledAt?; cancelReason?; refundedAt?;
 }

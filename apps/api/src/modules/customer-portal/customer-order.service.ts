@@ -1409,6 +1409,11 @@ export class CustomerOrderService implements OnModuleInit {
           length: it.length,
           quantity: it.quantity ?? 1,
           designs: it.designs,
+          // Vận đơn khách tự cấp đi kèm item (CSV template cột
+          // `tracking_*`/`shipping_label`, hoặc `items[].tracking` qua Public
+          // Order API) — `importOrders` lưu lên đơn RỒI ghi record vào module
+          // vận đơn. Trước ORD-26 field này chết ở staging, xưởng không thấy.
+          tracking: it.tracking,
           orderId: (doc.orderId) ?? undefined,
           referent: (doc.note) ?? undefined,
           // Hai mốc thời gian của đơn, `importOrders` đọc cả hai qua

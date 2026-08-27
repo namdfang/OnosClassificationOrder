@@ -31,6 +31,17 @@ export class ShipmentEntity extends DatabaseEntityAbstract {
   @Prop()
   labelUrl?: string;
 
+  /**
+   * Hãng vận chuyển do KHÁCH khai (USPS/UPS/…) — chỉ có ở record provider
+   * `customer`; label VNP hệ thống mua thì hãng nằm trong `service`.
+   */
+  @Prop()
+  carrier?: string;
+
+  /** Link tra cứu khách gửi kèm (provider `customer`). */
+  @Prop()
+  trackingUrl?: string;
+
   @Prop()
   service?: string;
 

@@ -212,7 +212,16 @@ export default function CustomerApiPage() {
         `        "firstName": "Nguyen Van A", "address1": "12 Main St", "city": "Austin",`,
         `        "state": "TX", "country": "US", "postcode": "78701"`,
         `      },`,
-        `      "items": [{ "sku": "TX-BLACK-XL", "quantity": 1 }]`,
+        `      "items": [{`,
+        `        "sku": "TX-BLACK-XL", "quantity": 1,`,
+        // Vận đơn khách tự cấp (tuỳ chọn) — có thì đi thẳng vào module vận đơn
+        // lúc push, xưởng in dán ở công đoạn Đóng hàng.
+        `        "tracking": {`,
+        `          "number": "9400111899223197428490", "carrier": "USPS",`,
+        `          "url": "https://tools.usps.com/go/TrackConfirmAction?tLabels=9400111899223197428490",`,
+        `          "labelUrl": "https://example.com/label.pdf"`,
+        `        }`,
+        `      }]`,
         `    }]`,
         `  }'`,
       ].join('\n'),
