@@ -9,6 +9,7 @@ import type {
   SaveVnpShippingMapDto,
   VnpShipmentInfo,
   VnpShipmentRecord,
+  VnpShipmentStats,
   VnpShippingConfig,
   VnpShippingStatus,
 } from 'shared';
@@ -109,6 +110,17 @@ const VALID_US_STATE_SET = new Set([...Object.values(US_STATE_CODES), 'VI', 'AS'
 interface UspsVerification {
   success?: boolean;
   errors?: { code?: string; message?: string }[];
+}
+
+/**
+ * Phân loại text tracking → status record. Shape response khi hàng chạy thật
+ * CHƯA biết (label test chưa từng được scan) — chỉ nhận diện chuỗi chắc chắn,
+ * còn lại coi là đang vận chuyển; bổ sung map khi có đơn thật đầu tiên.
+ */
+export function classifyTrackingStatus(text?: string): 'in_transit' | 'delivered' | undefined {
+  if (!text?.trim()) return undefined;
+  if (/delivered|đã giao/i.test(text)) return 'delivered';
+  return 'in_transit';
 }
 
 const SHIPMENT_ID_KEYS = ['shipment_id', 'shipmentId', 'id', 'uuid'];
@@ -560,7 +572,7 @@ export class ShippingVnpService {
       productionIds: groupProductionIds,
       createdAt: new Date(),
     });
-    await this.shipmentModel.create({
+    const shipmentRecord = await this.shipmentModel.create({
       packageId: pack._id,
       provider: 'vnp-eglobal',
       vnpShipmentId: info.shipmentId,
@@ -579,6 +591,21 @@ export class ShippingVnpService {
       createdByUserName: createdBy?.userName,
       createdAt: new Date(),
     });
+    // Đối soát ví: chụp số dư NGAY SAU khi mua — lỗi thì bỏ qua, tuyệt đối
+    // không làm fail luồng mua (label đã tạo xong bên VNP rồi).
+    try {
+      const balanceAfter = digString(await this.client.availableBalance(), [
+        'balance',
+        'available_balance',
+        'availableBalance',
+        'amount',
+      ]);
+      if (balanceAfter) {
+        await this.shipmentModel.updateOne({ _id: shipmentRecord._id }, { $set: { balanceAfter } });
+      }
+    } catch {
+      // ignore — chỉ mất 1 điểm đối soát
+    }
 
     // Snapshot mỏng lên CẢ nhóm orders (1 orderId 1 label — item nào mở dialog
     // cũng thấy, list render không phải join). Xóa cancelledAt cũ nếu tạo lại.
@@ -618,7 +645,7 @@ export class ShippingVnpService {
     );
     // Sync record shipments (nguồn sự thật) + ghi event vào lịch sử poll.
     await this.shipmentModel.updateMany(
-      { vnpShipmentId: order.vnpShipment?.shipmentId, status: 'created' },
+      { vnpShipmentId: order.vnpShipment?.shipmentId, status: { $in: ['created', 'in_transit'] } },
       {
         $set: {
           ...(patch.lastTrackingStatus ? { lastTrackingStatus: patch.lastTrackingStatus } : {}),
@@ -679,7 +706,7 @@ export class ShippingVnpService {
     );
     // Record shipments GIỮ NGUYÊN, chỉ chuyển trạng thái — lịch sử còn mãi.
     await this.shipmentModel.updateMany(
-      { vnpShipmentId: shipmentId, status: 'created' },
+      { vnpShipmentId: shipmentId, status: { $in: ['created', 'in_transit'] } },
       { $set: { status: 'cancelled', cancelledAt } },
     );
     const shipment = (await this.orderModel.findOne({ _id: orderId }))?.vnpShipment ?? ({} as VnpShipmentInfo);
@@ -705,10 +732,12 @@ export class ShippingVnpService {
       fromAddressId: doc.fromAddressId,
       toAddressId: doc.toAddressId,
       shippingCost: doc.shippingCost,
+      balanceAfter: doc.balanceAfter,
       status: doc.status,
       cancelledAt: doc.cancelledAt,
       lastTrackingStatus: doc.lastTrackingStatus,
       lastTrackingAt: doc.lastTrackingAt,
+      trackingEvents: doc.trackingEvents ?? [],
       createdByUserId: doc.createdByUserId,
       createdByUserName: doc.createdByUserName,
       createdAt: doc.createdAt,
@@ -739,6 +768,7 @@ export class ShippingVnpService {
         .distinct('_id');
       filter = { $or: [{ trackingCode: rx }, { vnpShipmentId: rx }, { packageId: { $in: packIds } }] };
     }
+    if (dto.status) filter.status = dto.status;
     const [docs, total] = await Promise.all([
       this.shipmentModel
         .find(filter)
@@ -761,5 +791,168 @@ export class ShippingVnpService {
       .sort({ createdAt: -1 })
       .populate('package');
     return (docs as ShipmentDocument[]).map((d) => this.toShipmentRecord(d));
+  }
+
+  // ── Cron poll tracking (2 lần/ngày — VNP KHÔNG có webhook cho partner) ────
+
+  private trackingCronRunning = false;
+
+  /**
+   * Poll trạng thái các shipment đang "mở" (`created`/`in_transit`, tạo trong
+   * 30 ngày — quá 30 ngày coi như label chết, dừng poll). Nguồn:
+   * `tracking/public/track` (VietNamLogistics, không token, KHÔNG ăn quota
+   * USPS). Chỉ ghi `trackingEvents` khi status text ĐỔI; text chứa "delivered"
+   * → chuyển `status='delivered'` (hết poll). Khóa in-flight chống gọi chồng.
+   */
+  async pollTrackingCron(): Promise<{
+    checked: number;
+    updated: number;
+    delivered: number;
+    failed: number;
+    skipped?: boolean;
+  }> {
+    if (this.trackingCronRunning) return { checked: 0, updated: 0, delivered: 0, failed: 0, skipped: true };
+    this.trackingCronRunning = true;
+    try {
+      const since = new Date(Date.now() - 30 * 24 * 3600 * 1000);
+      const open = await this.shipmentModel
+        .find({
+          status: { $in: ['created', 'in_transit'] },
+          createdAt: { $gte: since },
+          trackingCode: { $exists: true, $nin: [null, ''] },
+        })
+        .sort({ createdAt: 1 })
+        .limit(200);
+      let updated = 0;
+      let delivered = 0;
+      let failed = 0;
+      for (const doc of open) {
+        try {
+          const raw = await this.client.publicTrack(doc.trackingCode as string);
+          const now = new Date();
+          const statusText = digString(raw, STATUS_KEYS);
+          const changed = !!statusText && statusText !== doc.lastTrackingStatus;
+          const newStatus = classifyTrackingStatus(statusText);
+          await this.shipmentModel.updateOne(
+            { _id: doc._id },
+            {
+              $set: {
+                lastTrackingAt: now,
+                ...(statusText ? { lastTrackingStatus: statusText } : {}),
+                ...(newStatus && newStatus !== doc.status ? { status: newStatus } : {}),
+              },
+              ...(changed ? { $push: { trackingEvents: { status: statusText, at: now } } } : {}),
+            },
+          );
+          if (changed) {
+            updated += 1;
+            // Sync snapshot trên orders để bảng đơn hiện trạng thái mới.
+            if (doc.vnpShipmentId) {
+              await this.orderModel.updateMany(
+                { 'vnpShipment.shipmentId': doc.vnpShipmentId },
+                { $set: { 'vnpShipment.lastTrackingStatus': statusText, 'vnpShipment.lastTrackingAt': now } },
+              );
+            }
+          }
+          if (newStatus === 'delivered' && doc.status !== 'delivered') delivered += 1;
+        } catch {
+          failed += 1;
+        }
+        // Giãn nhịp giữa các call — tránh dồn tải/quota phía VNP.
+        await new Promise((r) => setTimeout(r, 800));
+      }
+      this.logger.info({
+        message: JSON.stringify({ action: 'vnpTrackingCron', checked: open.length, updated, delivered, failed }),
+      });
+      return { checked: open.length, updated, delivered, failed };
+    } finally {
+      this.trackingCronRunning = false;
+    }
+  }
+
+  // ── Dashboard chi phí label (trang /adm/shipments) ────────────────────────
+
+  /**
+   * Cost = tổng `shippingCost` các record CHƯA HỦY (policy hoàn tiền khi hủy
+   * của VNP chưa rõ — record hủy đếm riêng, không cộng cost). Bucket tháng
+   * theo giờ VN.
+   */
+  async getShipmentStats(dto: { from?: string; to?: string }): Promise<VnpShipmentStats> {
+    const match: Record<string, unknown> = {};
+    if (dto.from || dto.to) {
+      match.createdAt = {
+        ...(dto.from ? { $gte: new Date(`${dto.from}T00:00:00+07:00`) } : {}),
+        ...(dto.to ? { $lte: new Date(`${dto.to}T23:59:59.999+07:00`) } : {}),
+      };
+    }
+    const costExpr = { $convert: { input: '$shippingCost', to: 'double', onError: 0, onNull: 0 } };
+    const notCancelled = { $match: { status: { $ne: 'cancelled' } } };
+    const [facet] = await this.shipmentModel.aggregate<{
+      totals: { count: number; cost: number; active: number; delivered: number; cancelled: number }[];
+      byMonth: { key: string; count: number; cost: number }[];
+      byFactory: { key: string; count: number; cost: number; factoryName?: string }[];
+      byService: { key: string; count: number; cost: number }[];
+    }>([
+      { $match: match },
+      {
+        $facet: {
+          totals: [
+            {
+              $group: {
+                _id: null,
+                count: { $sum: 1 },
+                cost: { $sum: { $cond: [{ $ne: ['$status', 'cancelled'] }, costExpr, 0] } },
+                active: { $sum: { $cond: [{ $in: ['$status', ['created', 'in_transit']] }, 1, 0] } },
+                delivered: { $sum: { $cond: [{ $eq: ['$status', 'delivered'] }, 1, 0] } },
+                cancelled: { $sum: { $cond: [{ $eq: ['$status', 'cancelled'] }, 1, 0] } },
+              },
+            },
+            { $project: { _id: 0 } },
+          ],
+          byMonth: [
+            notCancelled,
+            {
+              $group: {
+                _id: { $dateToString: { date: '$createdAt', format: '%Y-%m', timezone: '+07:00' } },
+                count: { $sum: 1 },
+                cost: { $sum: costExpr },
+              },
+            },
+            { $sort: { _id: -1 } },
+            { $limit: 12 },
+            { $project: { _id: 0, key: '$_id', count: 1, cost: 1 } },
+          ],
+          byFactory: [
+            notCancelled,
+            { $lookup: { from: 'shipping_packages', localField: 'packageId', foreignField: '_id', as: 'pack' } },
+            { $addFields: { factoryId: { $ifNull: [{ $arrayElemAt: ['$pack.factoryId', 0] }, ''] } } },
+            { $group: { _id: '$factoryId', count: { $sum: 1 }, cost: { $sum: costExpr } } },
+            { $lookup: { from: 'factories', localField: '_id', foreignField: '_id', as: 'factory' } },
+            {
+              $project: {
+                _id: 0,
+                key: '$_id',
+                count: 1,
+                cost: 1,
+                factoryName: { $arrayElemAt: ['$factory.shortName', 0] },
+              },
+            },
+            { $sort: { cost: -1 } },
+          ],
+          byService: [
+            notCancelled,
+            { $group: { _id: { $ifNull: ['$service', ''] }, count: { $sum: 1 }, cost: { $sum: costExpr } } },
+            { $project: { _id: 0, key: '$_id', count: 1, cost: 1 } },
+            { $sort: { cost: -1 } },
+          ],
+        },
+      },
+    ]);
+    return {
+      totals: facet?.totals?.[0] ?? { count: 0, cost: 0, active: 0, delivered: 0, cancelled: 0 },
+      byMonth: facet?.byMonth ?? [],
+      byFactory: facet?.byFactory ?? [],
+      byService: facet?.byService ?? [],
+    };
   }
 }

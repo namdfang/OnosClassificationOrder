@@ -174,6 +174,24 @@ export class VnpEglobalClient {
     return this.request('get', `/shipment/tracking/${encodeURIComponent(trackingId)}`);
   }
 
+  /**
+   * Tracking public (hệ VietNamLogistics) — KHÔNG cần token, KHÔNG ăn quota
+   * USPS Web Tools (nguồn chính của cron poll; `getTracking` proxy USPS dính
+   * quota dùng chung, staging đã cạn 26/08). Chưa có thông tin (label chưa
+   * scan) VNP trả HTTP 400 {code:400, message:"No tracking information..."}
+   * → trả body cho service tự phân loại thay vì ném lỗi.
+   */
+  async publicTrack(trackingCode: string): Promise<unknown> {
+    try {
+      const res = await this.http().get(`/tracking/public/track/${encodeURIComponent(trackingCode)}`);
+      return res.data;
+    } catch (err) {
+      const ax = err as AxiosError;
+      if (ax.response) return ax.response.data;
+      throw new BadRequestException(`VNP GET /tracking/public/track lỗi (network): ${ax.message}`);
+    }
+  }
+
   cancelShipment(shipmentId: string): Promise<unknown> {
     return this.request('put', `/shipment/${encodeURIComponent(shipmentId)}/cancel`);
   }

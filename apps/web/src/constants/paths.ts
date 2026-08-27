@@ -15,6 +15,7 @@ export const PATHS = {
   ORDERS_SCAN_ERROR: '/ffm/orders/scan-error',
   ORDERS_STAGE_ERRORS: '/ffm/orders/stage-errors',
   ORDERS_UNMAPPED: '/ffm/orders/unmapped',
+  SHIPMENTS: '/adm/shipments',
   WORKSHOP_CONFIG: '/ffm/workshop-config',
 
   // Designer Task Workflow (Phase 2+)

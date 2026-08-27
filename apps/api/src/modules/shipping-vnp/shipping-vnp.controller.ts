@@ -29,18 +29,21 @@ import {
   GetVnpShipmentResDto,
   GetVnpShipmentsDto,
   GetVnpShipmentsResDto,
+  GetVnpShipmentStatsDto,
+  GetVnpShipmentStatsResDto,
   GetVnpShippingConfigResDto,
   GetVnpShippingStatusResDto,
   GetVnpTrackingResDto,
   GetVnpWalletResDto,
   ImportVnpFromAddressDto,
   RoleType,
+  RunVnpTrackingCronResDto,
   SaveVnpShippingMapDto,
   SaveVnpShippingMapResDto,
 } from 'shared';
 import { Logger } from 'winston';
 
-import { Auth } from '@/decorators';
+import { Auth, ClientIp } from '@/decorators';
 
 import { UserDocument } from '../user/user.entity';
 import { ShippingVnpService } from './shipping-vnp.service';
@@ -200,6 +203,34 @@ export class ShippingVnpController {
         userName: user.fullName,
       }),
     };
+  }
+
+  @Get('shipments/stats')
+  @Auth([RoleType.SuperAdmin, RoleType.Admin])
+  @ApiOperation({ summary: 'Dashboard chi phí label (tổng/tháng/xưởng/service — trang /adm/shipments)' })
+  @HttpCode(HttpStatus.OK)
+  @ApiOkResponse({ type: GetVnpShipmentStatsResDto })
+  async getShipmentStats(
+    @Query() query: GetVnpShipmentStatsDto,
+    @AuthUser() user: UserDocument,
+  ): Promise<GetVnpShipmentStatsResDto> {
+    this.logger.info({
+      message: JSON.stringify({ method: 'GET', url: '/shipping-vnp/shipments/stats', userId: user._id }),
+    });
+    return { success: true, data: await this.shippingVnpService.getShipmentStats(query) };
+  }
+
+  @Get('tracking/cron')
+  @Auth([], [], { public: true })
+  @ApiOperation({
+    summary:
+      '[Public] Cron: poll tracking các vận đơn đang mở (2 lần/ngày — VNP không có webhook; dừng khi delivered hoặc quá 30 ngày)',
+  })
+  @HttpCode(HttpStatus.OK)
+  @ApiOkResponse({ type: RunVnpTrackingCronResDto })
+  async runTrackingCron(@ClientIp() ip: string): Promise<RunVnpTrackingCronResDto> {
+    this.logger.info({ message: JSON.stringify({ method: 'GET', url: '/shipping-vnp/tracking/cron', ip }) });
+    return { success: true, data: await this.shippingVnpService.pollTrackingCron() };
   }
 
   @Get('shipments')

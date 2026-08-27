@@ -247,9 +247,21 @@ export class CreateVnpShipmentResDto extends createZodDto(
 // `cancelledAt`, mua lại tạo record mới → lịch sử tự có. `order.vnpShipment`
 // trên orders chỉ còn là SNAPSHOT mỏng để render list không phải join.
 
-export const VNP_SHIPMENT_RECORD_STATUSES = ['created', 'cancelled'] as const;
+/**
+ * `in_transit`/`delivered` do cron poll tracking suy từ text trạng thái
+ * (classify conservative — shape response khi hàng chạy thật CHƯA biết, label
+ * test chưa từng được scan; chỉ nhận diện chuỗi chắc chắn như "delivered").
+ */
+export const VNP_SHIPMENT_RECORD_STATUSES = ['created', 'in_transit', 'delivered', 'cancelled'] as const;
 export const VnpShipmentRecordStatusZod = z.enum(VNP_SHIPMENT_RECORD_STATUSES);
 export type VnpShipmentRecordStatus = z.infer<typeof VnpShipmentRecordStatusZod>;
+
+/** 1 sự kiện tracking (ghi khi status text ĐỔI so với lần poll trước). */
+export const VnpTrackingEventZod = z.object({
+  status: z.string().optional(),
+  at: z.union([z.date(), z.string()]),
+});
+export type VnpTrackingEvent = z.infer<typeof VnpTrackingEventZod>;
 
 /** 1 kiện hàng vật lý (collection `shipping_packages`). */
 export const VnpShippingPackageZod = z.object({
@@ -285,10 +297,14 @@ export const VnpShipmentRecordZod = z.object({
   toAddressId: z.string().optional(),
   /** shipping_cost VNP trả lúc tạo (string nguyên văn). */
   shippingCost: z.string().optional(),
+  /** Số dư ví NGAY SAU khi mua label này — đối soát chi phí với biến động ví. */
+  balanceAfter: z.string().optional(),
   status: VnpShipmentRecordStatusZod,
   cancelledAt: z.union([z.date(), z.string()]).optional(),
   lastTrackingStatus: z.string().optional(),
   lastTrackingAt: z.union([z.date(), z.string()]).optional(),
+  /** Timeline sự kiện tracking (cron poll + bấm tay). */
+  trackingEvents: z.array(VnpTrackingEventZod).optional(),
   createdByUserId: z.string().optional(),
   createdByUserName: z.string().optional(),
   createdAt: z.union([z.date(), z.string()]).optional(),
@@ -303,6 +319,7 @@ export const GetVnpShipmentsZod = z.object({
   size: z.coerce.number().int().positive().max(100).default(20),
   /** Khớp trackingCode / vnpShipmentId / mã kiện / productionId / orderId seller. */
   search: z.string().optional(),
+  status: VnpShipmentRecordStatusZod.optional(),
 });
 export class GetVnpShipmentsDto extends createZodDto(extendApi(GetVnpShipmentsZod)) {}
 export class GetVnpShipmentsResDto extends createZodDto(
@@ -312,6 +329,50 @@ export class GetVnpShipmentsResDto extends createZodDto(
 /** Lịch sử vận đơn của 1 đơn sản xuất (mọi record của các kiện chứa nó). */
 export class GetVnpOrderShipmentsResDto extends createZodDto(
   extendApi(ResZod.extend({ data: z.array(VnpShipmentRecordZod) })),
+) {}
+
+/**
+ * Dashboard chi phí label (trang /adm/shipments). Cost = tổng `shippingCost`
+ * các record CHƯA HỦY (chưa rõ policy hoàn tiền của VNP khi hủy — record hủy
+ * đếm riêng, không cộng vào cost). from/to = YYYY-MM-DD giờ VN trên createdAt.
+ */
+export const GetVnpShipmentStatsZod = z.object({
+  from: z.string().optional(),
+  to: z.string().optional(),
+});
+export class GetVnpShipmentStatsDto extends createZodDto(extendApi(GetVnpShipmentStatsZod)) {}
+
+const StatsBucketZod = z.object({ key: z.string(), count: z.number(), cost: z.number() });
+export const VnpShipmentStatsZod = z.object({
+  totals: z.object({
+    count: z.number(),
+    cost: z.number(),
+    active: z.number(),
+    delivered: z.number(),
+    cancelled: z.number(),
+  }),
+  /** key = YYYY-MM (giờ VN), mới nhất trước. */
+  byMonth: z.array(StatsBucketZod),
+  /** key = factoryId, kèm tên xưởng resolve sẵn. */
+  byFactory: z.array(StatsBucketZod.extend({ factoryName: z.string().optional() })),
+  /** key = service (Standard/Express/...). */
+  byService: z.array(StatsBucketZod),
+});
+export type VnpShipmentStats = z.infer<typeof VnpShipmentStatsZod>;
+export class GetVnpShipmentStatsResDto extends createZodDto(
+  extendApi(ResZod.extend({ data: VnpShipmentStatsZod })),
+) {}
+
+/** Kết quả 1 lần chạy cron poll tracking (2 lần/ngày, xem VnpShipping.md §2a). */
+export const VnpTrackingCronResZod = z.object({
+  checked: z.number(),
+  updated: z.number(),
+  delivered: z.number(),
+  failed: z.number(),
+  skipped: z.boolean().optional(),
+});
+export class RunVnpTrackingCronResDto extends createZodDto(
+  extendApi(ResZod.extend({ data: VnpTrackingCronResZod })),
 ) {}
 
 // ─── Tracking / get shipment / cancel ────────────────────────────────────────

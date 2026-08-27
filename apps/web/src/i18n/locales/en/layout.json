@@ -30,6 +30,7 @@
       "scanError": "Scan code",
       "stageErrors": "Stage error catalog",
       "unmapped": "Unmapped factory",
+      "shipments": "Shipments",
       "import": "Import order",
       "cuttingFiles": "Import cutting files"
     },
