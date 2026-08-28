@@ -316,6 +316,8 @@
     "checkDesignBtn": "Check for new design",
     "checkDesignResult": "Updated design for {{updated}}/{{total}} orders",
     "printLabelTitle": "Print 4x6cm labels for the selected orders",
+    "printBarcodeBtn": "Print barcodes",
+    "printBarcodeTitle": "Print 75×50mm factory barcode labels — one page per production ID",
     "printLabelBtn": "Print customer labels",
     "noLabel": "No orders to print labels for",
     "labelPartial": "Only {{count}} of {{total}} labels printed — {{total}} orders selected but only {{count}} are still printable",

@@ -31,6 +31,8 @@ import {
   DesignerBreakdownResDto,
   ForceCompleteOrderResDto,
   FulfillmentStatusCountsResDto,
+  GetBarcodeLabelsDto,
+  GetBarcodeLabelsResDto,
   GetCancelledOrdersDto,
   GetCancelledOrdersResDto,
   GetDesignReviewErrorFileOptionsResDto,
@@ -218,6 +220,27 @@ export class OrderController {
       .map((s) => s.trim())
       .filter(Boolean);
     return this.orderService.getOrdersByIds(ids, dto.page, dto.limit);
+  }
+
+  /**
+   * POST chứ không GET: 500 id × 16 ký tự là ~8.5KB query string — quá trần URL
+   * của một số proxy; body giữ nguyên mảng, khỏi nối chuỗi dấu phẩy.
+   */
+  @Post('barcode-labels')
+  @Auth(ORDER_VIEW_ROLES)
+  @ApiOperation({
+    summary: 'Dữ liệu tem barcode xưởng theo danh sách _id — nút "In tem barcode" ở thanh bulk (Orders.md §16.7)',
+  })
+  @HttpCode(HttpStatus.OK)
+  @ApiOkResponse({ type: GetBarcodeLabelsResDto })
+  async getBarcodeLabels(
+    @Body() dto: GetBarcodeLabelsDto,
+    @AuthUser() user: UserDocument,
+  ): Promise<GetBarcodeLabelsResDto> {
+    this.logger.info({
+      message: JSON.stringify({ method: 'POST', url: '/orders/barcode-labels', userId: user._id, count: dto.ids.length }),
+    });
+    return { success: true, data: await this.orderService.getBarcodeLabels(dto.ids) };
   }
 
   @Get('overview-list')

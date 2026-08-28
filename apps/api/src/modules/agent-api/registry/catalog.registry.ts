@@ -101,6 +101,10 @@ export const factoriesRegistry: AgentTableSpec = {
       'enum',
       'Luồng fulfillment của xưởng: standard (đủ 6 công đoạn) / merged (gộp Ép vào In, May ra vào May vào) / no-sew (QC xong bỏ qua 2 công đoạn may)',
     ),
+    autoCompletePack: plain(
+      'bool',
+      'Bật = đơn chảy tới công đoạn Đóng hàng tự hoàn thành luôn (kết thúc fulfillment không cần xác nhận tay). Độc lập với flowType, chỉ áp đơn mới',
+    ),
 
     // ── `API-17` mở đọc
     updatedAt: plain('date'),

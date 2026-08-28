@@ -17,6 +17,7 @@ import type {
   BreakdownBucket,
   BulkAssignDesignerDto,
   BulkAssignDesignerPreviewDto,
+  BarcodeLabel,
   BulkAssignDesignerPreviewResDto,
   BulkAssignDesignerResDto,
   BulkAssignOrderDto,
@@ -156,6 +157,7 @@ import { SystemConfigService } from '../system-config/system-config.service';
 import { UserEntity } from '../user/user.entity';
 import { WorkshopConfigRepository } from '../workshop-config/workshop-config.repository';
 import { DriveFileNameService } from './drive-file-name.service';
+import { resolveBarcodeSkuBase } from './barcode-label';
 import { planForceComplete } from './force-complete-plan';
 import { OnospodOrderLookupService } from './onospod-order-lookup.service';
 import { OrderDocument, OrderEntity } from './order.entity';
@@ -1900,6 +1902,92 @@ export class OrderService implements OnModuleInit {
       ],
     });
     return { success: true as const, data: res.data as never, total: res.total };
+  }
+
+  /**
+   * Dữ liệu tem barcode xưởng (Orders.md §16.7) — trả theo ĐÚNG thứ tự `ids`
+   * caller gửi (= thứ tự tem chui ra máy in). Đơn hủy bị loại lặng lẽ như mọi
+   * list dùng chung; caller so độ dài kết quả với số id để báo "in thiếu tem".
+   *
+   * Mọi giá trị trên tem được resolve TẠI ĐÂY thay vì để FE tự ghép:
+   * - `sku`: từ variation SKU của Product Config + size đơn (`resolveBarcodeSkuBase`)
+   *   — `OrderEntity` không lưu SKU, và populate variations vào `getOrders`
+   *   thì phình payload mọi danh sách đơn chỉ để phục vụ lúc in.
+   * - `itemIndex/itemTotal`: vị trí item trong TOÀN BỘ item còn sống của cùng
+   *   (orderId, userEmail) trên hệ thống — người dùng chọn 1/2 item để in thì
+   *   tem vẫn phải ghi (1/2), số này để xưởng gom đủ kiện. Ghép cả `userEmail`
+   *   vì `orderId` chỉ unique theo nguồn đơn, hai khách khác nhau có thể trùng.
+   *   Thứ tự item cố định theo `productionId` để in lại tem không đổi số.
+   */
+  async getBarcodeLabels(ids: string[]): Promise<BarcodeLabel[]> {
+    const clean = [...new Set(ids.map((s) => s.trim()).filter(Boolean))];
+    if (clean.length === 0) return [];
+    type Row = {
+      _id: unknown;
+      productionId?: string;
+      userSku?: string;
+      userEmail?: string;
+      orderId?: string;
+      inProductionAt?: Date;
+      size?: string;
+      color?: string;
+      productConfigId?: unknown;
+    };
+    const select = ['productionId', 'userSku', 'userEmail', 'orderId', 'inProductionAt', 'size', 'color', 'productConfigId'];
+    const orders = await this.orderRepository.findAll<Row>(
+      { _id: { $in: clean }, cancelledAt: { $exists: false } },
+      { select },
+    );
+
+    const orderIds = [...new Set(orders.map((o) => o.orderId?.trim()).filter(Boolean))] as string[];
+    const siblings = orderIds.length
+      ? await this.orderRepository.findAll<Row>(
+          { orderId: { $in: orderIds }, cancelledAt: { $exists: false } },
+          { select: ['productionId', 'orderId', 'userEmail'] },
+        )
+      : [];
+    const groups = new Map<string, Row[]>();
+    for (const s of siblings) {
+      const key = `${s.orderId?.trim() || ''}|${(s.userEmail || '').toLowerCase()}`;
+      const list = groups.get(key);
+      if (list) list.push(s);
+      else groups.set(key, [s]);
+    }
+    const posOf = new Map<string, { index: number; total: number }>();
+    for (const rows of groups.values()) {
+      rows.sort((a, b) => (a.productionId || '').localeCompare(b.productionId || ''));
+      rows.forEach((r, i) => posOf.set(String(r._id), { index: i + 1, total: rows.length }));
+    }
+
+    const pcIds = [...new Set(orders.map((o) => o.productConfigId && String(o.productConfigId)).filter(Boolean))] as string[];
+    const configs = pcIds.length
+      ? await this.productConfigRepository.findAll<{ _id: unknown; variations?: { sku?: string }[] }>(
+          { _id: { $in: pcIds } },
+          { select: ['variations.sku'] },
+        )
+      : [];
+    const skusByPc = new Map(configs.map((c) => [String(c._id), (c.variations || []).map((v) => v.sku || '')]));
+
+    const byId = new Map(orders.map((o) => [String(o._id), o]));
+    const out: BarcodeLabel[] = [];
+    for (const id of clean) {
+      const o = byId.get(id);
+      if (!o?.productionId) continue;
+      const pos = posOf.get(String(o._id));
+      const variationSkus = o.productConfigId ? skusByPc.get(String(o.productConfigId)) || [] : [];
+      out.push({
+        _id: String(o._id),
+        productionId: o.productionId,
+        userSku: o.userSku || undefined,
+        orderId: o.orderId?.trim() || undefined,
+        inProductionAt: o.inProductionAt || undefined,
+        sku: resolveBarcodeSkuBase(variationSkus, o.size),
+        variant: [o.size, o.color].filter(Boolean).join(' ') || undefined,
+        itemIndex: pos?.index ?? 1,
+        itemTotal: pos?.total ?? 1,
+      });
+    }
+    return out;
   }
 
   /**
