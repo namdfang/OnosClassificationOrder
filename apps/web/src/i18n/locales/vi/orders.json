@@ -316,6 +316,8 @@
     "checkDesignBtn": "Kiểm tra design mới",
     "checkDesignResult": "Đã cập nhật design {{updated}}/{{total}} đơn",
     "printLabelTitle": "In tem 4×6cm cho các đơn đang chọn",
+    "printBarcodeBtn": "In tem barcode",
+    "printBarcodeTitle": "In tem barcode xưởng 75×50mm — mỗi mã sản xuất 1 trang",
     "printLabelBtn": "In nhãn khách",
     "noLabel": "Không có đơn nào để in tem",
     "labelPartial": "Chỉ in được {{count}}/{{total}} tem — {{total}} đơn đang chọn nhưng chỉ {{count}} đơn còn hợp lệ để in",

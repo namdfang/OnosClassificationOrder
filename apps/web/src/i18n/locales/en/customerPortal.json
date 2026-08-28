@@ -16,6 +16,7 @@
   "apiAccess": {
     "title": "API & Webhooks",
     "subtitle": "Connect your system to the factory: create a key, register where to receive updates, then run the sample commands.",
+    "docsBtn": "API documentation",
     "copied": "Copied",
     "keys": {
       "title": "API keys",

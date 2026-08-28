@@ -13,7 +13,7 @@ import {
   UserPlus,
   X,
 } from 'lucide-react';
-import type { OrderWorkshopField, WorkshopConfigCategory } from 'shared';
+import type { BarcodeLabel, OrderWorkshopField, WorkshopConfigCategory } from 'shared';
 import { ORDER_PRIORITIES, ORDER_PRIORITY_LABELS, ORDER_WORKSHOP_FIELDS } from 'shared';
 import { toast } from 'sonner';
 
@@ -34,6 +34,7 @@ import { buildDetailOnlyWorkbook, downloadWorkbook, type ExportableOrder } from 
 import { LucideIcon } from '@/pages/workshop-config/IconPicker';
 
 import { AssignDesignerDialog } from './AssignDesignerDialog';
+import { BarcodeLabelPrint } from './BarcodeLabelPrint';
 import { CustomerLabelPrint } from './CustomerLabelPrint';
 import { HOLD_REASON_PRESETS } from './HoldOrderDialog';
 import type { WorkshopOrderRow } from './workshopTableConfig';
@@ -121,6 +122,9 @@ export function BulkEditToolbar({ selectedIds, onClear, onApplied }: Props) {
   // Đơn đã tải xong để in tem — set là nhãn mount + tự bung hộp thoại in, in
   // xong `onDone` trả về null để gỡ khỏi DOM (xem CustomerLabelPrint).
   const [labelOrders, setLabelOrders] = useState<WorkshopOrderRow[] | null>(null);
+  const [loadingBarcodes, setLoadingBarcodes] = useState(false);
+  // Tem barcode xưởng 75×50mm — cùng vòng đời mount-in-gỡ như labelOrders.
+  const [barcodeLabels, setBarcodeLabels] = useState<BarcodeLabel[] | null>(null);
 
   // In tem khách hàng loạt — CÙNG con tem 40×60mm với mục "In nhãn khách" ở
   // menu "..." từng dòng (`CustomerLabelPrint`), chỉ khác là truyền N đơn nên
@@ -157,6 +161,31 @@ export function BulkEditToolbar({ selectedIds, onClear, onApplied }: Props) {
       handleAxiosError(err);
     } finally {
       setLoadingLabels(false);
+    }
+  };
+
+  // In tem barcode xưởng loạt (Orders.md §16.7) — mỗi productionId 1 trang
+  // 75×50mm. Dữ liệu tem BE trả sẵn qua `POST /orders/barcode-labels` (kể cả
+  // SKU sản phẩm resolve từ Product Config + chỉ số i/n của orderId) — không
+  // lấy từ row đang hiển thị, cùng lý do chọn-xuyên-trang như handlePrintLabels;
+  // đơn hủy bị BE loại lặng lẽ nên vẫn cần toast "in thiếu".
+  const handlePrintBarcodes = async () => {
+    if (selectedIds.length > MAX_LABELS_PER_PRINT) {
+      return toast.error(t('bulkEdit.labelTooMany', { max: MAX_LABELS_PER_PRINT, count: selectedIds.length }));
+    }
+    try {
+      setLoadingBarcodes(true);
+      const res = await RepositoryRemote.order.getBarcodeLabels({ ids: selectedIds });
+      const rows = (res.data?.data || []) as BarcodeLabel[];
+      if (rows.length === 0) return toast.warning(t('bulkEdit.noLabel'));
+      if (rows.length < selectedIds.length) {
+        toast.warning(t('bulkEdit.labelPartial', { count: rows.length, total: selectedIds.length }));
+      }
+      setBarcodeLabels(rows);
+    } catch (err) {
+      handleAxiosError(err);
+    } finally {
+      setLoadingBarcodes(false);
     }
   };
 
@@ -363,6 +392,16 @@ export function BulkEditToolbar({ selectedIds, onClear, onApplied }: Props) {
           <Button
             variant="outline"
             size="sm"
+            onClick={handlePrintBarcodes}
+            disabled={loadingBarcodes}
+            title={t('bulkEdit.printBarcodeTitle')}
+          >
+            {loadingBarcodes ? <Spinner size={13} className="text-muted-foreground" /> : <Printer size={13} />}
+            {t('bulkEdit.printBarcodeBtn')}
+          </Button>
+          <Button
+            variant="outline"
+            size="sm"
             onClick={handleExport}
             disabled={exporting}
             title={t('bulkEdit.exportTitle')}
@@ -377,6 +416,8 @@ export function BulkEditToolbar({ selectedIds, onClear, onApplied }: Props) {
       </div>
 
       {labelOrders && <CustomerLabelPrint orders={labelOrders} onDone={() => setLabelOrders(null)} />}
+
+      {barcodeLabels && <BarcodeLabelPrint labels={barcodeLabels} onDone={() => setBarcodeLabels(null)} />}
 
       <AssignDesignerDialog
         open={assignOpen}

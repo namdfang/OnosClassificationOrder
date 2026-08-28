@@ -1,0 +1,178 @@
+{
+  "title": "API & Webhook Documentation",
+  "subtitle": "Create orders, push them to production and receive status notifications straight from your own system.",
+  "backBtn": "Manage keys & webhooks",
+  "required": "Required",
+  "optional": "Optional",
+  "defaultLabel": "default",
+  "table": {
+    "field": "Field",
+    "type": "Type",
+    "requiredCol": "Required?",
+    "desc": "Description",
+    "param": "Parameter",
+    "header": "Header",
+    "event": "Event",
+    "meaning": "Meaning",
+    "method": "Method",
+    "path": "Path",
+    "code": "Code",
+    "when": "When"
+  },
+  "toc": "On this page",
+  "sections": {
+    "start": "Getting started",
+    "flow": "Integration flow",
+    "endpoints": "Endpoint list",
+    "create": "Create orders",
+    "push": "Push to production",
+    "list": "List orders",
+    "get": "Get one order",
+    "webhook": "Webhooks",
+    "errors": "Errors & limits"
+  },
+  "start": {
+    "baseUrlLabel": "Base URL",
+    "authTitle": "Authentication",
+    "authDesc": "Send the <1>X-Api-Key</1> header with an API key of the form <1>onos_live_…</1> on every request. Create keys on the API & Webhook page — the full key is shown exactly ONCE at creation, and up to {{max}} keys can be active at a time.",
+    "contentType": "Request bodies are JSON — always send the <1>Content-Type: application/json</1> header.",
+    "scope": "The API can only see and act on orders belonging to the account that owns the key.",
+    "curlLabel": "Your first request"
+  },
+  "flow": {
+    "intro": "A standard integration has 3 steps:",
+    "step1": "<0>Create orders</0> — orders land in Pending (not yet in production). Every item is immediately assigned a <2>productionId</2> of the form XX-#####-##### used for tracking end-to-end.",
+    "step2": "<0>Push to production</0> — call push with your order refs. Prices are locked and the order enters the factory; after this only designs/address can be edited (stage-dependent).",
+    "step3": "<0>Track</0> — register a Webhook for push-based events (recommended), or poll the lookup endpoint."
+  },
+  "endpoints": {
+    "createDesc": "Create Pending orders in batch (up to {{max}} orders/call) — idempotent by externalRef",
+    "pushDesc": "Push orders to production by externalRefs or ids",
+    "listDesc": "List the account's orders (8 derived statuses + held/rework badges)",
+    "getDesc": "Look up one order by externalRef or productionId — status + production journey"
+  },
+  "create": {
+    "intro": "Create up to {{max}} orders per call. Each order holds up to 100 items. At most 500 item lines total per call.",
+    "idempotent": "Idempotent by <1>externalRef</1>: calling again with the same ref returns <1>duplicated</1> — nothing is created twice and the existing order is NOT modified. To edit a Pending order, use the Customer Portal.",
+    "wholeFail": "If any item line in an order is invalid (unknown SKU, discontinued product…), that WHOLE order is rejected (other orders in the batch still process normally).",
+    "orderFieldsTitle": "Order fields (element of orders[])",
+    "addressFieldsTitle": "shippingAddress — delivery address",
+    "itemFieldsTitle": "items[] — each product in the order",
+    "fields": {
+      "externalRef": "Your system's order reference — idempotency key, reused for push and lookup.",
+      "orderName": "Friendly order name (shown on the portal).",
+      "note": "Note for the factory.",
+      "shippingAddress": "Delivery address — see table below.",
+      "items": "Product lines — see table below."
+    },
+    "address": {
+      "firstName": "Recipient name (full name is fine here).",
+      "lastName": "Recipient last name.",
+      "company": "Company name.",
+      "address1": "Address line 1.",
+      "address2": "Address line 2 (apartment, PO…).",
+      "city": "City.",
+      "state": "State / province.",
+      "postcode": "Postal code.",
+      "country": "Country (2-letter code, e.g. US).",
+      "email": "Recipient email.",
+      "phone": "Recipient phone number."
+    },
+    "item": {
+      "sku": "Variant SKU from the OnosFactory catalog — must match EXACTLY (case-insensitive). Unknown SKUs or discontinued products reject the order.",
+      "quantity": "Quantity.",
+      "shipMethod": "Shipping method: cod | express_us | economy_us | tiktok.",
+      "merchantSku": "Your internal SKU (reference only).",
+      "activeService": "USPS Active service — only applies to express_us.",
+      "mockupUrl": "Product mockup image URL. Optional at creation but REQUIRED at push time — missing mockups fail the push.",
+      "designs": "Design files per print area — see the Designs section below.",
+      "tracking": "A shipment YOU provide (pre-purchased label) — see the Tracking section below.",
+      "rawItemName": "Product name in your system — reference only, not the source of truth.",
+      "rawColor": "Color in your system — reference only.",
+      "rawSize": "Size in your system — reference only."
+    },
+    "designsTitle": "designs — design files by print area",
+    "designsDesc": "An object keyed by print area, values are design file URLs (publicly downloadable — Google Drive share links or direct URLs). Supported keys:",
+    "designsRule": "Rule: products printed on the front/back only need at least 1 design at <1>front</1> OR <1>back</1>. Products printed elsewhere need at least 1 design on one of that product's required print areas. Enforced at PUSH time — orders missing designs fail with a reason and are not pushed.",
+    "trackingTitle": "tracking — a shipment you provide",
+    "trackingDesc": "Fill this in when you already bought a label elsewhere (e.g. Ship by TikTok): the system will NOT create a new shipment, and your label is printed and attached at the Packing stage. With shipMethod = tiktok you MUST provide tracking + label.",
+    "tracking": {
+      "number": "Tracking number (whitespace is normalized automatically).",
+      "carrier": "Carrier (USPS, UPS…).",
+      "url": "Tracking lookup URL.",
+      "labelUrl": "Label file URL (PDF/image) for the factory to print."
+    },
+    "responseLabel": "Sample response",
+    "responseNote": "One result row per order: <1>created</1>, <1>duplicated</1> (externalRef already exists — skipped), or <1>failed</1> (with error and per-index itemErrors).",
+    "curlLabel": "Sample request"
+  },
+  "push": {
+    "intro": "Push Pending orders into production. Select orders by <1>externalRefs</1> (your refs) or <1>ids</1> (staging _id from the list endpoint) — at least one of the two, each array up to {{max}} entries.",
+    "fields": {
+      "externalRefs": "Array of your order refs (externalRef at creation).",
+      "ids": "Array of staging order _ids."
+    },
+    "notes": {
+      "whole": "Orders are pushed WHOLE — individual items cannot be pushed separately.",
+      "artwork": "Missing-mockup / missing-design gate (see the rules under Create orders) — orders missing artwork return failed with a reason; other orders still push.",
+      "idempotent": "Orders already pushed or currently pushing are never pushed twice.",
+      "price": "Prices are locked using the price list + tier promotions at push time; the grand total is returned in totalAmount."
+    },
+    "responseLabel": "Sample response",
+    "curlLabel": "Sample request"
+  },
+  "list": {
+    "intro": "Returns a paginated list, newest first. Order status is derived from the real production progress of each item.",
+    "params": {
+      "page": "Page (from 1).",
+      "limit": "Orders per page (1–100).",
+      "status": "Filter by status: pending | processing | in-production | fulfilled | completed | refunded | cancelled.",
+      "held": "true = only orders currently On Hold.",
+      "search": "Search by your order ref / order name / productionId."
+    },
+    "curlLabel": "Sample request"
+  },
+  "get": {
+    "intro": "<1>:ref</1> accepts an order's externalRef OR an item's productionId. The response always contains <1>order</1> (order + items + status); when :ref is the productionId of a PUSHED item it also contains <1>track</1> — that item's detailed production journey (stages + timestamps).",
+    "curlLabel": "Sample request"
+  },
+  "webhook": {
+    "intro": "Register receiver URLs on the API & Webhook page (up to {{max}} URLs, http/https). Every webhook has a <1>secret</1> of the form whsec_… for signature verification. Selecting no events = receive ALL of them.",
+    "eventsTitle": "Events",
+    "events": {
+      "pushed": "Order pushed into production.",
+      "completed": "Item finished production (Packing stage done).",
+      "held": "Item put on hold (waiting for design / address…).",
+      "unheld": "Item released from hold, production resumes.",
+      "cancelled": "Item cancelled."
+    },
+    "deliveryTitle": "How deliveries work",
+    "delivery": {
+      "post": "JSON POST to your URL, 5-second timeout, redirects are not followed.",
+      "retry": "On failure (non-2xx / timeout) we retry up to 2 times after 5s and 25s, then give up. Your endpoint should return 2xx IMMEDIATELY and process asynchronously.",
+      "perItem": "Events fire PER item (one delivery per productionId).",
+      "dedupe": "Use the X-Onos-Delivery header (unique per delivery) to deduplicate when retries occur."
+    },
+    "headersTitle": "Headers sent",
+    "headers": {
+      "event": "Event name (e.g. order.pushed).",
+      "delivery": "Unique ID of this delivery.",
+      "signature": "Signature sha256=<HMAC-SHA256 hex of the raw body, keyed with the webhook secret>."
+    },
+    "payloadLabel": "Sample payload",
+    "payloadNote": "data always contains productionId; some events add extra fields (e.g. hold reason / cancel reason).",
+    "verifyTitle": "Verifying signatures",
+    "verifyDesc": "Compute HMAC-SHA256 over the RAW body (the original byte string, before JSON parsing) with the webhook secret and compare with the X-Onos-Signature header:",
+    "verifyLabel": "Node.js"
+  },
+  "errors": {
+    "intro": "Error responses look like { \"success\": false, \"message\": \"…\" } (validation errors return per-field details).",
+    "rows": {
+      "e400": "Business errors: missing mockup / missing designs at push, order not eligible…",
+      "e422": "Body fails the schema (missing required fields, wrong types, length limits, empty SKU…) — includes per-field details.",
+      "e401": "Missing / invalid / revoked API key, or account locked. Generic message by design — no details are revealed.",
+      "e404": "No order found for :ref.",
+      "e429": "Rate limit exceeded — enforced PER key and PER account (extra keys don't multiply your quota). Check the X-RateLimit-Remaining / X-RateLimit-Reset (seconds) headers and retry later."
+    }
+  }
+}

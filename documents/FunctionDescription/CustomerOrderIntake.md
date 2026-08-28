@@ -173,6 +173,8 @@ Chi tiết cách giữ chỗ:
 - Chữ ký: header `X-Onos-Signature: sha256=<HMAC-SHA256(body, webhook.secret)>` + `X-Onos-Event` + `X-Onos-Delivery`. Payload `{ id, event, createdAt, data: { productionId, ...extra } }` — CHỈ dữ liệu khách vốn đã thấy ở portal (không tên nhân viên/giá vốn/xưởng).
 - Vết giao: collection `customerWebhookDeliveries` (TTL 30 ngày) — `status pending|delivered|failed` + `attempts` + `lastError`.
 
+**Trang tài liệu API cho khách** (`pages/customer/api/docs.tsx`, route `PATHS.CUSTOMER_API_DOCS` = `/customer/api/docs`, mở từ nút "Tài liệu API" ở header trang API & Webhook): tài liệu tích hợp đầy đủ NGAY TRONG portal — 9 mục có mục lục anchor (Bắt đầu/Luồng/Endpoint/Tạo đơn/Push/List/Tra cứu/Webhook/Lỗi & giới hạn), bảng field từng cấp (đơn/địa chỉ/item/tracking) kèm badge **Bắt buộc/Tùy chọn + default**, quy tắc design "1 trong front/back", bảng 5 sự kiện webhook + 3 header + snippet Node verify chữ ký HMAC, curl + response mẫu mỗi endpoint. **Mọi giới hạn/enum lấy TỪ `shared` làm nguồn sống** (`OPEN_API_MAX_ORDERS_PER_CALL`, `CUSTOMER_API_KEY_MAX_ACTIVE`, `CUSTOMER_WEBHOOK_MAX_ACTIVE`, `CUSTOMER_SHIP_METHODS`, `Object.keys(DesignFieldsZod.shape)`) — không chép cứng vào FE. Khối code dùng chung `components/customer/ApiCodeBlock.tsx` (extract từ CodeBlock cũ của `api/index.tsx`). i18n namespace riêng `apiDocs` (vi + en, đăng ký ở `i18n/index.ts`).
+
 ### 3.2 Staging entity `customer_orders` (`customer-order.entity.ts`)
 
 ```ts
@@ -223,7 +225,7 @@ CustomerPaymentEntity {
 - `pages/customer/orders/import.tsx` — 3 bước: chọn file → **preview bảng tính từng dòng** (validate bằng `CustomerImportOrderZod` shared, ô lỗi bôi đỏ + message i18n theo cột, warning lệch địa chỉ; còn lỗi → nút import disable, xem §2.1) → kết quả từng đơn `created/duplicated/failed`. Nút tải file mẫu = template cũ nguyên bản.
 - `pages/customer/orders/new.tsx` — giữ nguyên form, chỉ đổi toast sau submit (`orderNew.successPending`).
 - `pages/customer/api/index.tsx` (ORD-4) — trang **"API & Webhook"** (route `PATHS.CUSTOMER_API` = `/customer/api`, entry sidebar portal). 3 khối dọc theo đúng thứ tự khách làm việc: **API key** (bảng label/prefix/ngày tạo/lần dùng cuối + nút Tạo/Thu hồi; key plain hiện trong dialog riêng đúng MỘT lần, cảnh báo amber, nút copy) → **Webhook** (input URL + danh sách URL kèm signing secret + chip 5 tên sự kiện) → **Lệnh mẫu** (3 khối `curl` tạo đơn/push/tra trạng thái + payload webhook mẫu, mỗi khối có nút copy). Mọi giá trị máy-đọc (key, URL, endpoint, payload) đặt trong khối `font-mono` nền slate-950 để tách khỏi chữ người-đọc — hướng dẫn nằm ngay trong trang, KHÔNG làm developer-portal riêng (SRS ASSUMPTION).
-- i18n: namespace `customerPortal` keys `orders.tabs/status/source/badge*/payment*/moreItems`, `orderDetail.*` (drawer), `push.*`, `importCsv.*`, `apiAccess.*` + `layout.nav.api` (vi + en).
+- i18n: namespace `customerPortal` keys `orders.tabs/status/source/badge*/payment*/moreItems`, `orderDetail.*` (drawer), `push.*`, `importCsv.*`, `apiAccess.*` (+ `apiAccess.docsBtn` nút mở trang tài liệu) + `layout.nav.api` (vi + en); namespace `apiDocs` riêng cho trang tài liệu `/customer/api/docs`.
 
 ## 5. Backend logic
 

@@ -1534,6 +1534,27 @@ Mỗi tem là 1 trang: `.customer-label-page { break-after: page }` cho MỌI te
 
 `@page { size: 40mm 60mm; margin: 0 }` chỉ tồn tại trong lúc nhãn được mount (state `printingLabel`) nên không đụng các lệnh in khác của ứng dụng. Sau khi in xong, `afterprint` (kèm hẹn giờ dự phòng cho trình duyệt không bắn sự kiện đó) gỡ nhãn xuống. QR render bằng `QRCodeSVG` (`qrcode.react`) — **SVG chứ không phải canvas**, vì canvas hay ra tem trắng ở một số đường in; và `window.print()` được gọi sau 2 khung hình để SVG kịp lên màn.
 
+### 16.7 "In tem barcode" — tem xưởng 75×50mm quét trạm
+
+Nút **"In tem barcode"** (`Printer`) trên `BulkEditToolbar` (cạnh "In nhãn khách") — tick chọn N đơn rồi bấm, **mỗi productionId 1 trang** tem ngang **75×50mm** cho máy quét 1D ở các trạm. Layout dựng theo đúng tem OnosPod cũ mà xưởng đã quen mắt:
+
+```
+PRINTERVAL / GM-02336-03868(1/1)   ← userSku khách / orderId(item thứ i / tổng n item)
+2026/08/27                         ← ngày vào sản xuất (inProductionAt)
+▐█▌▐▌█▐█▌▐▌█▐█▌                    ← Code128 `N-<productionId>` (react-barcode SVG)
+N-PM-11594-04672
+AOP-CUS-SHAPE-TIE      10.6x62.2   ← SKU sản phẩm (trái) · biến thể size+color (phải)
+```
+
+- **Payload barcode `N-<productionId>`** — CÙNG format với luồng quét ở `pages/orders/scan-error` (`utils/scanCodes.ts` `parseScanCode`), tức tem này quét được ngay ở trang Quét mã lỗi / luồng 2 bước Stage Error Catalog.
+- **Dữ liệu tem BE trả sẵn** qua `POST /orders/barcode-labels` (`@Auth(ORDER_VIEW_ROLES)`, body `{ids: string[]}` max 500 — POST vì 500 id không nhét vừa query string): `OrderService.getBarcodeLabels()` trả `BarcodeLabel[]` theo ĐÚNG thứ tự ids. Hai giá trị phải resolve server-side:
+  - **`sku`** — `OrderEntity` KHÔNG lưu SKU; lấy `variations[].sku` của Product Config (select đúng `variations.sku`, không lộ giá) rồi `resolveBarcodeSkuBase()` (`order/barcode-label.ts`, pure + có spec `barcode-label.spec.ts`): variation nào norm-endsWith size của đơn → cắt đuôi size (`AOP-CUS-SHAPE-TIE-10.6X62.2` + size `10.6x62.2` → `AOP-CUS-SHAPE-TIE`); không khớp → tiền tố chung dài nhất của các variation; bét nhất trả nguyên variation đầu. CỐ Ý không populate variations vào `getOrders` — phình payload mọi danh sách đơn chỉ để phục vụ lúc in.
+  - **`itemIndex/itemTotal`** — vị trí item trong TOÀN BỘ item còn sống (không `cancelledAt`) của cùng **(orderId, userEmail)** trên hệ thống (ghép `userEmail` vì `orderId` chỉ unique theo nguồn đơn), KHÔNG phải trong lô đang in: chọn 1/2 item để in thì tem vẫn ghi (1/2) — số này để xưởng gom đủ kiện. Thứ tự item cố định sort theo `productionId` → in lại tem không đổi số. Đơn không có `orderId` → (1/1) và heading rơi về productionId.
+- **Đơn hủy bị BE loại lặng lẽ** (`cancelledAt: {$exists: false}`) → FE so `rows.length` với `selectedIds.length`, lệch thì `toast.warning` (`bulkEdit.labelPartial`) — cùng quy tắc và cùng trần `MAX_LABELS_PER_PRINT = 500` với "In nhãn khách" (§16.6).
+- **Cơ chế in** (`components/orders/BarcodeLabelPrint.tsx`): giống hệt tem khách §16.6 — portal ra `document.body`, `display: none` anh chị em, `@page {size: 75mm 50mm}` chỉ sống lúc mount, ngắt trang mọi tem trừ `:last-child`, in sau 2 khung hình. Barcode `width={1}`: mã cố định 16 ký tự → ~211 module ≈ 56mm luôn lọt lòng tem 69mm; KHÔNG kéo giãn SVG bằng CSS (JsBarcode xuất svg không viewBox — scale CSS chỉ cắt hình chứ không phóng vạch).
+
+FE: `services/order.ts` `getBarcodeLabels` · i18n `bulkEdit.printBarcodeBtn/printBarcodeTitle`. Shared: `GetBarcodeLabelsDto`/`BarcodeLabelZod`/`GetBarcodeLabelsResDto` (`production-order.dto.ts`).
+
 ## 17. Ưu tiên đơn hàng + hạn dự kiến từng bước
 
 > **File FE:** `apps/web/src/components/orders/cells/PrioritySelectCell.tsx` (`PrioritySelectCell` + `PriorityBadge` + `PRIORITY_META`), `apps/web/src/utils/priorityEstimate.ts` (`getStageDeadline` + `getActiveStageKey` + `formatCountdown`), `apps/web/src/hooks/useNow.ts` (tick chip đếm ngược), cột "Ưu tiên" (`PriorityCell`) trong `apps/web/src/components/orders/workshopTableConfig.tsx`, cell trong `apps/web/src/pages/orders/ListOrderTab.tsx`, nút + dialog bulk riêng trong `apps/web/src/components/orders/BulkEditToolbar.tsx`, cột hiển thị + filter trong `apps/web/src/pages/home/ToolCheckTab.tsx` (`toPriorityOpts`), badge + estimate trong `apps/web/src/pages/home/DesignerAssignBacklog.tsx`

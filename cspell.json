@@ -45,6 +45,9 @@
     ],
     // words - list of words to be always considered correct
     "words": [
+      "unheld",
+        "DSHIRT",
+        "PRINTERVAL",
         "eglobal",
         "EGLOBAL",
         "Eglobal",

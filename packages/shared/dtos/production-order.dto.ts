@@ -1391,6 +1391,37 @@ export class UpdateOrderDesignDto extends createZodDto(extendApi(UpdateOrderDesi
 export const UpdateOrderDesignResZod = ResZod.extend({ data: ProductionOrderZod });
 export class UpdateOrderDesignResDto extends createZodDto(extendApi(UpdateOrderDesignResZod)) {}
 
+/**
+ * In tem barcode xưởng (Orders.md §16.7) — `POST /orders/barcode-labels`.
+ * BE trả SẴN mọi giá trị hiện trên tem (kể cả SKU resolve từ Product Config và
+ * chỉ số item i/n của orderId) để FE chỉ việc render + in; KHÔNG phình payload
+ * `getOrders` bằng cách populate variations vào mọi danh sách đơn.
+ * Trần 500 khớp `MAX_LABELS_PER_PRINT` của thanh bulk.
+ */
+export const GetBarcodeLabelsZod = z.object({
+  ids: z.array(IDZod).min(1).max(500),
+});
+export class GetBarcodeLabelsDto extends createZodDto(extendApi(GetBarcodeLabelsZod)) {}
+export const BarcodeLabelZod = z.object({
+  _id: z.string(),
+  productionId: z.string(),
+  userSku: z.string().optional(),
+  orderId: z.string().optional(),
+  inProductionAt: z.coerce.date().optional(),
+  /** SKU sản phẩm đã BỎ đuôi biến thể (vd `AOP-CUS-SHAPE-TIE` từ variation
+   *  `AOP-CUS-SHAPE-TIE-10.6X62.2`) — resolve server-side từ Product Config. */
+  sku: z.string().optional(),
+  /** Biến thể của đơn: size + color gộp lại. */
+  variant: z.string().optional(),
+  /** Item thứ mấy / tổng item CÒN SỐNG (không hủy) của cùng (orderId, userEmail)
+   *  trên TOÀN hệ thống — không phải trong lô đang in. Đơn không có orderId → 1/1. */
+  itemIndex: z.number(),
+  itemTotal: z.number(),
+});
+export type BarcodeLabel = z.infer<typeof BarcodeLabelZod>;
+export const GetBarcodeLabelsResZod = ResZod.extend({ data: z.array(BarcodeLabelZod) });
+export class GetBarcodeLabelsResDto extends createZodDto(extendApi(GetBarcodeLabelsResZod)) {}
+
 export const TransferOrderResZod = ResZod.extend({
   data: z.object({ matched: z.number(), modified: z.number() }),
 });
