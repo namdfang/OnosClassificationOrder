@@ -19,3 +19,4 @@ export * from './tier';
 export * from './tracking';
 export * from './webhook';
 export * from './workshop-config-category';
+export * from './zalo-group-kind';
