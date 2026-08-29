@@ -1,6 +1,8 @@
 import { query } from '@anthropic-ai/claude-agent-sdk';
+import { InjectQueue } from '@nestjs/bullmq';
 import { BadRequestException, Injectable, NotFoundException, ServiceUnavailableException } from '@nestjs/common';
 import { InjectModel } from '@nestjs/mongoose';
+import type { Queue } from 'bullmq';
 import { Model } from 'mongoose';
 import type {
   GetZaloSummariesDto,
@@ -15,6 +17,8 @@ import { OrderEntity } from '../order/order.entity';
 import { ZaloGroupLinkEntity } from './zalo-group-link.entity';
 import type { ZaloGroupSummaryDocument } from './zalo-group-summary.entity';
 import { ZaloGroupSummaryEntity } from './zalo-group-summary.entity';
+import type { ZaloSummaryJobData } from './zalo-summary.queue';
+import { ZALO_SUMMARY_QUEUE } from './zalo-summary.queue';
 
 /**
  * Mô hình. Agent SDK nhận ALIAS (`opus`/`sonnet`/`haiku`), không phải model id
@@ -73,11 +77,17 @@ Trả về DUY NHẤT một khối JSON, không thêm chữ nào ngoài nó:
   "mucDo": "gap" | "can-chu-y" | "binh-thuong"
 }
 
-Chấm mức độ theo việc CÒN TREO, đừng chấm theo cảm giác:
-- "gap": tiền hoặc hàng đang rủi ro (đơn kẹt, sai địa chỉ, khiếu nại, phạt), HOẶC khách hỏi mà quá
-  24h chưa ai trả lời.
-- "can-chu-y": còn việc treo nhưng chưa chạm tiền/hàng và chưa quá hạn.
-- "binh-thuong": không còn gì treo.`;
+Chấm mức độ — CHỈ dựa vào bằng chứng CỨNG, không chấm theo giọng điệu hay cảm giác:
+- "gap": CHỈ khi có ít nhất một trong các dấu hiệu tra được từ hệ thống hoặc nói rõ trong chat:
+    · khối dữ liệu đơn hàng cho thấy đơn ĐANG BỊ GIỮ hoặc ĐANG CÓ LỖI
+    · khách nói rõ đang khiếu nại, đòi hoàn tiền, doạ huỷ hợp tác
+    · có mốc hạn cụ thể đã trôi qua (hạn giao, hạn hải quan, hạn thanh toán)
+  Chậm trả lời KHÔNG phải căn cứ cho "gap".
+- "can-chu-y": còn việc treo, hoặc khách hỏi đã quá 3 ngày chưa ai đáp.
+- "binh-thuong": việc đang chạy theo nhịp bình thường, kể cả khi còn vài việc chưa xong.
+
+Đây là nhóm khách B2B — chờ báo giá, chờ mẫu, chờ hợp đồng vài ngày là NHỊP BÌNH THƯỜNG, không
+phải sự cố. Chấm "gap" cho quá nhiều nhóm thì cái nhãn đó mất hết tác dụng cảnh báo.`;
 
 interface KetQua {
   tieuDe: string;
@@ -98,7 +108,25 @@ export class ZaloSummaryService {
     private readonly linkModel: Model<ZaloGroupLinkEntity>,
     @InjectModel(OrderEntity.name)
     private readonly orderModel: Model<OrderEntity>,
+    @InjectQueue(ZALO_SUMMARY_QUEUE) private readonly summaryQueue: Queue<ZaloSummaryJobData>,
   ) {}
+
+  /**
+   * Đẩy một nhóm vào hàng đợi thay vì tóm tắt ngay trong request.
+   *
+   * `jobId` = groupGlobalId để BullMQ tự chống trùng: gọi hai lần cho cùng một
+   * nhóm khi job trước chưa chạy xong thì lần sau bị bỏ, không tốn thêm một
+   * lượt gọi mô hình cho cùng nội dung.
+   */
+  async enqueue(dto: SummarizeZaloGroupDto): Promise<{ queued: boolean }> {
+    const job = await this.summaryQueue.add(
+      'summarize',
+      { groupGlobalId: dto.groupGlobalId, messages: dto.messages, docLaiTuDau: dto.docLaiTuDau },
+      { jobId: dto.groupGlobalId },
+    );
+
+    return { queued: !!job.id };
+  }
 
   /**
    * Danh sách nhóm đang chờ tóm tắt, kèm mốc tin cần lấy từ.

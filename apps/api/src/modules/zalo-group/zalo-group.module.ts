@@ -1,3 +1,4 @@
+import { BullModule } from '@nestjs/bullmq';
 import { Module } from '@nestjs/common';
 import { MongooseModule } from '@nestjs/mongoose';
 
@@ -8,6 +9,8 @@ import { ZaloGroupRepository } from './zalo-group.repository';
 import { ZaloGroupService } from './zalo-group.service';
 import { ZaloGroupLinkEntity, ZaloGroupLinkSchema } from './zalo-group-link.entity';
 import { ZaloGroupSummaryEntity, ZaloGroupSummarySchema } from './zalo-group-summary.entity';
+import { ZaloSummaryProcessor } from './zalo-summary.processor';
+import { ZALO_SUMMARY_QUEUE } from './zalo-summary.queue';
 import { ZaloSummaryService } from './zalo-summary.service';
 
 /**
@@ -26,9 +29,20 @@ import { ZaloSummaryService } from './zalo-summary.service';
       { name: CustomerEntity.name, schema: CustomerSchema },
       { name: OrderEntity.name, schema: OrderSchema },
     ]),
+    BullModule.registerQueue({
+      name: ZALO_SUMMARY_QUEUE,
+      defaultJobOptions: {
+        // Thử lại 3 lần cách nhau tăng dần: hỏng vì mô hình quá tải hoặc API
+        // vừa restart thì lần sau thường qua, không cần người can thiệp.
+        attempts: 3,
+        backoff: { type: 'exponential', delay: 10_000 },
+        removeOnComplete: { count: 200, age: 3 * 24 * 60 * 60 },
+        removeOnFail: { count: 500, age: 14 * 24 * 60 * 60 },
+      },
+    }),
   ],
   controllers: [ZaloGroupController],
-  providers: [ZaloGroupService, ZaloGroupRepository, ZaloSummaryService],
-  exports: [ZaloGroupService, ZaloGroupRepository, ZaloSummaryService],
+  providers: [ZaloGroupService, ZaloGroupRepository, ZaloSummaryService, ZaloSummaryProcessor],
+  exports: [ZaloGroupService, ZaloGroupRepository, ZaloSummaryService, BullModule],
 })
 export class ZaloGroupModule {}

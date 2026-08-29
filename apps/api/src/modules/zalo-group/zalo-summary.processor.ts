@@ -1,0 +1,40 @@
+import { OnWorkerEvent, Processor, WorkerHost } from '@nestjs/bullmq';
+import { Logger } from '@nestjs/common';
+import { Job } from 'bullmq';
+
+import type { ZaloSummaryJobData } from './zalo-summary.queue';
+import { ZALO_SUMMARY_QUEUE } from './zalo-summary.queue';
+import { ZaloSummaryService } from './zalo-summary.service';
+
+/**
+ * Worker tóm tắt nhóm Zalo.
+ *
+ * Vì sao phải qua hàng đợi thay vì gọi thẳng trong request: một lượt tóm tắt
+ * mất ~40 giây. Giữ nó trong một request HTTP nghĩa là bất cứ thứ gì cắt kết
+ * nối trong 40 giây đó — deploy, API restart, nginx timeout, mạng chập — là
+ * mất trắng cả lượt. Đã đứt hai lần trong lúc phát triển vì đúng lý do này.
+ *
+ * `concurrency: 2` — chạy song song vừa phải. Mỗi job là một lượt gọi mô hình;
+ * đẩy cao hơn thì vừa tốn tiền dồn cục vừa dễ chạm giới hạn tần suất, mà công
+ * việc này không ai chờ theo giây.
+ */
+@Processor(ZALO_SUMMARY_QUEUE, { concurrency: 2 })
+export class ZaloSummaryProcessor extends WorkerHost {
+  private readonly logger = new Logger(ZaloSummaryProcessor.name);
+
+  constructor(private readonly zaloSummaryService: ZaloSummaryService) {
+    super();
+  }
+
+  async process(job: Job<ZaloSummaryJobData>): Promise<void> {
+    const { groupGlobalId, messages, docLaiTuDau } = job.data;
+    await this.zaloSummaryService.summarize({ groupGlobalId, messages, docLaiTuDau });
+  }
+
+  @OnWorkerEvent('failed')
+  onFailed(job: Job<ZaloSummaryJobData>, err: Error) {
+    this.logger.error(
+      `[zalo-summary] nhóm ${job?.data?.groupGlobalId} thất bại (lần ${job?.attemptsMade}): ${err?.message}`,
+    );
+  }
+}

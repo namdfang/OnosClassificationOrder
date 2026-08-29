@@ -156,8 +156,7 @@ for (const [i, item] of hangDoi.entries()) {
 
   if (res.ok) {
     ok += 1;
-    const d = res.body.data ?? {};
-    console.log(`  [${i + 1}/${hangDoi.length}] ${ten.padEnd(46)} ${d.mucDo ?? '?'} · ${d.tieuDe ?? ''}`);
+    console.log(`  [${i + 1}/${hangDoi.length}] ${ten.padEnd(46)} ${String(tin.length).padStart(3)} tin → đã xếp hàng`);
   } else {
     const msg = res.body?.message ?? `HTTP ${res.status}`;
     loi.push({ ten, msg });
@@ -172,5 +171,15 @@ for (const [i, item] of hangDoi.entries()) {
 }
 
 console.log('');
-if (apply) console.log(`Xong: tóm tắt ${ok} · bỏ qua ${bo} · lỗi ${loi.length}`);
-else console.log(`Dry-run xong. ${hangDoi.length - bo} nhóm sẽ được tóm tắt.`);
+if (apply) {
+  console.log(`Đã xếp hàng ${ok} nhóm · bỏ qua ${bo} · lỗi ${loi.length}`);
+  console.log('');
+  // Endpoint chỉ xếp hàng rồi trả về ngay — việc thật do worker chạy nền, nên
+  // script không còn là nơi biết kết quả. Nói rõ chỗ xem thay vì để người chạy
+  // tưởng đã xong.
+  console.log('Worker đang chạy nền (2 nhóm cùng lúc, ~40 giây/nhóm).');
+  console.log('Xem tiến độ: tab "Tình hình" ở /adm/zalo-groups, hoặc');
+  console.log('  journalctl -u onos-api-dev -f | grep zalo-summary');
+} else {
+  console.log(`Dry-run xong. ${hangDoi.length - bo} nhóm sẽ được xếp hàng.`);
+}

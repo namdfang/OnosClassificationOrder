@@ -156,12 +156,14 @@ export class ZaloGroupController {
 
   @Post('summarize')
   @Auth(ZALO_GROUP_EDIT_ROLES)
-  @ApiOperation({ summary: 'Tóm tắt một nhóm từ đoạn hội thoại được đẩy sang' })
+  @ApiOperation({
+    summary: 'Đẩy một nhóm vào hàng đợi tóm tắt (trả về ngay, worker chạy nền)',
+  })
   @HttpCode(HttpStatus.OK)
   async summarize(
     @Body() dto: SummarizeZaloGroupDto,
     @AuthUser() user: UserDocument,
-  ): Promise<SummarizeZaloGroupResDto> {
+  ): Promise<{ success: true; data: { queued: boolean } }> {
     this.logger.info({
       message: JSON.stringify({
         method: 'POST',
@@ -172,7 +174,10 @@ export class ZaloGroupController {
       }),
     });
 
-    return { success: true, data: await this.zaloSummaryService.summarize(dto) } as SummarizeZaloGroupResDto;
+    // Trả về NGAY sau khi xếp hàng. Một lượt tóm tắt mất ~40 giây; giữ nó trong
+    // request là mất trắng cả lượt mỗi khi có gì cắt kết nối (deploy, restart,
+    // nginx timeout) — đã đứt hai lần trong lúc phát triển vì đúng lý do này.
+    return { success: true, data: await this.zaloSummaryService.enqueue(dto) };
   }
 
   @Patch('summaries/:groupGlobalId/task')
