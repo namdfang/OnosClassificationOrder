@@ -9,8 +9,9 @@ import type {
   ZaloSummaryQueueItem,
   ZaloSummaryTask,
 } from 'shared';
-import { ZALO_GROUP_ANALYZABLE_KINDS, ZaloSummaryLevel } from 'shared';
+import { FULFILLMENT_STAGE_LABELS, ZALO_GROUP_ANALYZABLE_KINDS, ZaloSummaryLevel } from 'shared';
 
+import { OrderEntity } from '../order/order.entity';
 import { ZaloGroupLinkEntity } from './zalo-group-link.entity';
 import type { ZaloGroupSummaryDocument } from './zalo-group-summary.entity';
 import { ZaloGroupSummaryEntity } from './zalo-group-summary.entity';
@@ -44,6 +45,14 @@ Nhiệm vụ: rút ra tình hình, viết TIẾNG VIỆT, mỗi ô 1–2 câu ng
 - việc còn treo → phải nói TREO TỪ NGÀY NÀO và ĐÃ BAO NHIÊU NGÀY
 Không có mốc thời gian và tên người thì không chấm được ai chậm — đó là mục đích của bản tóm tắt này.
 Chỉ ghi tên/ngày CÓ THẬT trong chat. Không thấy thì ghi "không rõ", tuyệt đối không đoán.
+
+Nếu có khối "DỮ LIỆU ĐƠN HÀNG THẬT", đó là trạng thái tra từ hệ thống sản xuất — nó ĐÚNG hơn
+những gì người ta nói trong chat. Dùng nó để:
+- Trả lời được câu khách hỏi: đơn đang ở công đoạn nào, có bị giữ/lỗi không, đã bao nhiêu ngày.
+- Bác bỏ lời hứa sai: ai đó nói "đã xử lý xong" mà đơn vẫn đang kẹt thì đưa vào "nghiNgo".
+- Chấm mức độ: đơn đang BỊ GIỮ hoặc CÓ LỖI là căn cứ chắc chắn cho "gap", chắc hơn nhiều so với
+  suy đoán từ giọng điệu chat.
+Đơn nào chat có nhắc mà khối dữ liệu ghi "không tra được" thì nói rõ là không tra được, đừng đoán.
 
 Nếu có khối "TÓM TẮT LẦN TRƯỚC", bạn đang cập nhật tiếp chứ không viết lại từ đầu. Làm ĐÚNG BA việc:
   a) XÁC MINH việc đã đánh dấu xong: tìm bằng chứng trong tin nhắn mới. KHÔNG thấy bằng chứng thì
@@ -87,6 +96,8 @@ export class ZaloSummaryService {
     private readonly summaryModel: Model<ZaloGroupSummaryEntity>,
     @InjectModel(ZaloGroupLinkEntity.name)
     private readonly linkModel: Model<ZaloGroupLinkEntity>,
+    @InjectModel(OrderEntity.name)
+    private readonly orderModel: Model<OrderEntity>,
   ) {}
 
   /**
@@ -151,10 +162,16 @@ export class ZaloSummaryService {
     const prev = await this.summaryModel.findOne({ groupGlobalId: dto.groupGlobalId }).lean();
     const docLaiTuDau = dto.docLaiTuDau ?? false;
 
+    const duLieuDon = await this.layDuLieuDon(
+      link as { customerId?: string; userSku?: string },
+      dto.messages,
+    );
+
     const ketQua = await this.goiMoHinh({
       title: (link as { title?: string }).title,
       messages: dto.messages,
       truoc: docLaiTuDau ? null : prev,
+      duLieuDon,
     });
 
     const now = new Date();
@@ -195,10 +212,101 @@ export class ZaloSummaryService {
     return saved;
   }
 
+  /**
+   * Tra dữ liệu ĐƠN HÀNG THẬT cho nhóm, để mô hình đối chiếu với lời nói trong chat.
+   *
+   * Đây là điểm ăn tiền của việc đặt tính năng trong OnosFactory thay vì ở máy
+   * Zalo: chat chỉ cho biết người ta NÓI gì, còn bảng `orders` cho biết đơn
+   * THỰC SỰ đang ở đâu. Không có vế thứ hai thì bản tóm tắt chỉ chép lại lời hứa.
+   */
+  private async layDuLieuDon(
+    link: { customerId?: string; userSku?: string },
+    messages: ZaloMessageInput[],
+  ): Promise<string> {
+    const phan: string[] = [];
+
+    // ─── Đơn được nhắc đích danh trong chat ───────────────────────
+    // Khách gọi đơn bằng MÃ ĐƠN OnosPod (`orderId`) chứ hiếm khi dùng
+    // `productionId` — kiểm trên dữ liệu thật: mã trong chat khớp `orderId`.
+    // Tra cả hai trường để không hụt.
+    const maTrongChat = [
+      ...new Set(
+        messages
+          .flatMap((m) => m.noiDung.match(/\b[A-Z]{1,3}-\d{4,6}-\d{4,6}\b/gi) ?? [])
+          .map((x) => x.toUpperCase()),
+      ),
+    ].slice(0, 15);
+
+    if (maTrongChat.length > 0) {
+      const dons = await this.orderModel
+        .find({ $or: [{ productionId: { $in: maTrongChat } }, { orderId: { $in: maTrongChat } }] })
+        .select('productionId orderId type currentFulfillmentStage designerStatus heldAt holdReason productionError productionErrorNote inProductionAt fulfillmentCompletedAt cancelledAt')
+        .limit(20)
+        .lean();
+
+      const thay = new Set<string>();
+      const dong: string[] = [];
+      for (const d of dons as Record<string, unknown>[]) {
+        const pid = String(d.productionId ?? '');
+        const oid = String(d.orderId ?? '');
+        thay.add(pid.toUpperCase());
+        thay.add(oid.toUpperCase());
+        dong.push(`  · ${oid || pid}: ${moTaDon(d)}`);
+      }
+      const khongThay = maTrongChat.filter((c) => !thay.has(c));
+
+      if (dong.length > 0) phan.push(`ĐƠN ĐƯỢC NHẮC TRONG CHAT:\n${dong.join('\n')}`);
+      if (khongThay.length > 0) {
+        phan.push(`Mã nhắc trong chat nhưng KHÔNG TRA ĐƯỢC trong hệ thống: ${khongThay.join(', ')}`);
+      }
+    }
+
+    // ─── Bức tranh chung của khách ────────────────────────────────
+    const sku = link.userSku?.trim();
+    if (sku) {
+      const [dangChay, giu, loi, cuNhat] = await Promise.all([
+        this.orderModel.countDocuments({
+          userSku: sku,
+          cancelledAt: null,
+          fulfillmentCompletedAt: { $exists: false },
+        }),
+        this.orderModel.countDocuments({ userSku: sku, heldAt: { $exists: true, $ne: null }, cancelledAt: null }),
+        this.orderModel.countDocuments({
+          userSku: sku,
+          productionError: { $exists: true, $nin: [null, ''] },
+          cancelledAt: null,
+          fulfillmentCompletedAt: { $exists: false },
+        }),
+        this.orderModel
+          .find({ userSku: sku, cancelledAt: null, fulfillmentCompletedAt: { $exists: false }, inProductionAt: { $exists: true } })
+          .sort({ inProductionAt: 1 })
+          .select('productionId orderId inProductionAt currentFulfillmentStage')
+          .limit(1)
+          .lean(),
+      ]);
+
+      const dòng = [`  · đang chạy: ${dangChay} đơn`, `  · đang bị giữ: ${giu}`, `  · đang có lỗi: ${loi}`];
+      const cu = (cuNhat as Record<string, unknown>[])[0];
+      if (cu?.inProductionAt) {
+        const ngay = Math.floor((Date.now() - new Date(cu.inProductionAt as Date).getTime()) / 86_400_000);
+        dòng.push(
+          `  · đơn nằm lâu nhất: ${String(cu.orderId ?? cu.productionId)} vào sản xuất ${ngay} ngày trước, đang ở ${nhanChang(cu.currentFulfillmentStage as string | undefined)}`,
+        );
+      }
+      phan.push(`TÌNH HÌNH CHUNG CỦA KHÁCH (${sku}):\n${dòng.join('\n')}`);
+    }
+
+    if (phan.length === 0) return '';
+
+    return `\n\n--- DỮ LIỆU ĐƠN HÀNG THẬT (tra từ hệ thống, đúng hơn lời nói trong chat) ---\n${phan.join('\n\n')}`;
+  }
+
   private async goiMoHinh(input: {
     title?: string;
     messages: ZaloMessageInput[];
     truoc: { tonDong?: string; checklist?: ZaloSummaryTask[] } | null;
+    /** Khối dữ liệu đơn thật, rỗng khi nhóm chưa gắn khách hoặc chat không nhắc mã nào. */
+    duLieuDon: string;
   }): Promise<KetQua> {
     // Khuôn dòng chat PHẢI khớp thứ mô tả trong lời nhắc: mô hình được yêu cầu
     // trích ngày + tên vào mọi kết luận, không có hai thứ đó trong dòng thì nó
@@ -227,7 +335,7 @@ export class ZaloSummaryService {
 
     const loiNhac = `${HE_THONG}
 
-NHÓM: ${input.title ?? '(không tên)'}${khoiTruoc}
+NHÓM: ${input.title ?? '(không tên)'}${input.duLieuDon}${khoiTruoc}
 
 --- ${input.truoc ? 'TIN NHẮN MỚI TỪ LẦN TÓM TẮT TRƯỚC' : 'ĐOẠN CHAT'} ---
 ${doanChat}`;
@@ -398,4 +506,43 @@ function dinhDangLuc(d: Date): string {
   const p = (n: number) => String(n).padStart(2, '0');
 
   return `${p(vn.getUTCDate())}/${p(vn.getUTCMonth() + 1)} ${p(vn.getUTCHours())}:${p(vn.getUTCMinutes())}`;
+}
+
+/** Nhãn công đoạn tiếng Việt; đơn chưa vào xưởng thì nói rõ đang ở đâu. */
+function nhanChang(stage?: string): string {
+  if (!stage) return 'chưa vào công đoạn xưởng';
+
+  return FULFILLMENT_STAGE_LABELS[stage as keyof typeof FULFILLMENT_STAGE_LABELS] ?? stage;
+}
+
+/**
+ * Một dòng mô tả trạng thái đơn cho mô hình đọc.
+ *
+ * Thứ tự kiểm QUAN TRỌNG và giống `OrderJourney.md §2`: hủy → giữ → xong →
+ * công đoạn. Đơn bị giữ vẫn còn nguyên công đoạn cũ trong dữ liệu, đọc sai thứ
+ * tự là báo nhầm "đang chạy" cho một đơn đứng im.
+ */
+function moTaDon(d: Record<string, unknown>): string {
+  if (d.cancelledAt) return 'ĐÃ HỦY';
+  if (d.heldAt) {
+    const ngay = Math.floor((Date.now() - new Date(d.heldAt as Date).getTime()) / 86_400_000);
+
+    return `ĐANG BỊ GIỮ ${ngay} ngày${d.holdReason ? ` (lý do: ${String(d.holdReason)})` : ''}`;
+  }
+  if (d.fulfillmentCompletedAt) {
+    const ngay = Math.floor((Date.now() - new Date(d.fulfillmentCompletedAt as Date).getTime()) / 86_400_000);
+
+    return `đã xong sản xuất ${ngay} ngày trước`;
+  }
+
+  const phan: string[] = [nhanChang(d.currentFulfillmentStage as string | undefined)];
+  if (d.productionError) {
+    phan.push(`ĐANG CÓ LỖI: ${String(d.productionError)}${d.productionErrorNote ? ` — ${String(d.productionErrorNote)}` : ''}`);
+  }
+  if (d.inProductionAt) {
+    const ngay = Math.floor((Date.now() - new Date(d.inProductionAt as Date).getTime()) / 86_400_000);
+    phan.push(`vào sản xuất ${ngay} ngày trước`);
+  }
+
+  return phan.join(', ');
 }

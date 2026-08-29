@@ -2,6 +2,7 @@ import { Module } from '@nestjs/common';
 import { MongooseModule } from '@nestjs/mongoose';
 
 import { CustomerEntity, CustomerSchema } from '../customer/customer.entity';
+import { OrderEntity, OrderSchema } from '../order/order.entity';
 import { ZaloGroupController } from './zalo-group.controller';
 import { ZaloGroupRepository } from './zalo-group.repository';
 import { ZaloGroupService } from './zalo-group.service';
@@ -23,6 +24,7 @@ import { ZaloSummaryService } from './zalo-summary.service';
       { name: ZaloGroupLinkEntity.name, schema: ZaloGroupLinkSchema },
       { name: ZaloGroupSummaryEntity.name, schema: ZaloGroupSummarySchema },
       { name: CustomerEntity.name, schema: CustomerSchema },
+      { name: OrderEntity.name, schema: OrderSchema },
     ]),
   ],
   controllers: [ZaloGroupController],
