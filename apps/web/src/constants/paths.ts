@@ -38,6 +38,7 @@ export const PATHS = {
   PRODUCT_DETAIL: '/adm/products/:id',
   PROMOTIONS: '/adm/promotions',
   CUSTOMERS: '/adm/customers',
+  ZALO_GROUPS: '/adm/zalo-groups',
   USERS: '/adm/users',
   DEPARTMENTS: '/adm/departments',
   ROLES: '/adm/roles',

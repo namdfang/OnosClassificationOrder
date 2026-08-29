@@ -1,0 +1,64 @@
+{
+  "title": "Zalo groups",
+  "subtitle": "Link Zalo groups to customers for reporting and task reminders",
+  "coverage": {
+    "totalGroups": "Total groups",
+    "unreviewed": "Unreviewed",
+    "linkedGroups": "Linked to customer",
+    "customersWithGroup": "Customers with a group",
+    "customersWithoutGroup": "Customers without a group",
+    "ofTotal": "of {{total}}"
+  },
+  "kind": {
+    "unreviewed": "Unreviewed",
+    "seller": "Customer group",
+    "operation": "Operations group",
+    "internal": "Internal / private",
+    "all": "All kinds"
+  },
+  "table": {
+    "group": "Zalo group",
+    "kind": "Kind",
+    "customer": "Customer",
+    "owner": "Owner",
+    "lastMessage": "Last message",
+    "conversations": "{{count}} conversations",
+    "nicks": "Nicks in group",
+    "actions": "Actions",
+    "empty": "No group matches the filter",
+    "noCustomer": "— not linked —",
+    "noOwner": "— not assigned —",
+    "noTitle": "(untitled)"
+  },
+  "filter": {
+    "search": "Search by group name",
+    "unlinkedOnly": "Only groups without a customer",
+    "allGroups": "All groups"
+  },
+  "suggestions": {
+    "button": "Suggestions ({{count}})",
+    "title": "Suggested group ↔ customer matches",
+    "description": "Guessed from the group name. Review each row — nothing is linked automatically.",
+    "confidence": "Confidence",
+    "reason": "Why",
+    "apply": "Link",
+    "applyAll": "Link all selected rows",
+    "applied": "Linked {{count}} groups",
+    "empty": "No suggestions — the remaining groups must be linked by hand",
+    "selectAll": "Select all"
+  },
+  "edit": {
+    "title": "Link group",
+    "kind": "Kind",
+    "customer": "Customer",
+    "customerHint": "Only customer groups can be linked to a customer",
+    "owner": "Owner",
+    "ownerHint": "Who is actually responsible — different from the nicks present in the group",
+    "note": "Note",
+    "selectCustomer": "Select customer…",
+    "selectOwner": "Select owner…",
+    "clear": "Clear",
+    "save": "Save",
+    "saved": "Saved group \"{{title}}\""
+  }
+}

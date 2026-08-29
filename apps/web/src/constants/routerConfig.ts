@@ -9,6 +9,7 @@ const Products = lazy(() => import('../pages/products'));
 const ProductDetail = lazy(() => import('../pages/products/detail'));
 const Promotions = lazy(() => import('../pages/promotions'));
 const Customers = lazy(() => import('../pages/customers'));
+const ZaloGroups = lazy(() => import('../pages/zalo-groups'));
 const Orders = lazy(() => import('../pages/orders'));
 const OrdersWorkshop = lazy(() => import('../pages/orders/workshop'));
 const OrdersClassic = lazy(() => import('../pages/orders/classic'));
@@ -44,6 +45,7 @@ export const routerConfig: RouterConfig[] = [
   { path: PATHS.PRODUCT_DETAIL, component: ProductDetail },
   { path: PATHS.PROMOTIONS, component: Promotions },
   { path: PATHS.CUSTOMERS, component: Customers },
+  { path: PATHS.ZALO_GROUPS, component: ZaloGroups },
   { path: PATHS.ORDERS, component: Orders },
   { path: PATHS.ORDERS_WORKSHOP, component: OrdersWorkshop },
   { path: PATHS.ORDERS_CLASSIC, component: OrdersClassic },

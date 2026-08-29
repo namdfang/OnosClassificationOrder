@@ -1,0 +1,64 @@
+{
+  "title": "Nhóm Zalo",
+  "subtitle": "Nối nhóm Zalo với khách hàng để làm báo cáo và nhắc việc",
+  "coverage": {
+    "totalGroups": "Tổng nhóm",
+    "unreviewed": "Chưa xét",
+    "linkedGroups": "Đã gắn khách",
+    "customersWithGroup": "Khách có nhóm",
+    "customersWithoutGroup": "Khách chưa có nhóm",
+    "ofTotal": "trên {{total}}"
+  },
+  "kind": {
+    "unreviewed": "Chưa xét",
+    "seller": "Nhóm khách",
+    "operation": "Nhóm vận hành",
+    "internal": "Nội bộ / riêng tư",
+    "all": "Tất cả phân loại"
+  },
+  "table": {
+    "group": "Nhóm Zalo",
+    "kind": "Phân loại",
+    "customer": "Khách hàng",
+    "owner": "Người phụ trách",
+    "lastMessage": "Tin cuối",
+    "conversations": "{{count}} hội thoại",
+    "nicks": "Nick trong nhóm",
+    "actions": "Thao tác",
+    "empty": "Không có nhóm nào khớp bộ lọc",
+    "noCustomer": "— chưa gắn —",
+    "noOwner": "— chưa chỉ định —",
+    "noTitle": "(không tên)"
+  },
+  "filter": {
+    "search": "Tìm theo tên nhóm",
+    "unlinkedOnly": "Chỉ nhóm chưa gắn khách",
+    "allGroups": "Tất cả nhóm"
+  },
+  "suggestions": {
+    "button": "Gợi ý ghép ({{count}})",
+    "title": "Gợi ý ghép nhóm với khách",
+    "description": "Hệ thống đoán theo tên nhóm. Duyệt từng dòng — không có gì được gắn tự động.",
+    "confidence": "Độ chắc",
+    "reason": "Vì sao",
+    "apply": "Gắn",
+    "applyAll": "Gắn tất cả dòng đã chọn",
+    "applied": "Đã gắn {{count}} nhóm",
+    "empty": "Không có gợi ý nào — mọi nhóm còn lại phải gắn tay",
+    "selectAll": "Chọn tất cả"
+  },
+  "edit": {
+    "title": "Gắn nhóm",
+    "kind": "Phân loại",
+    "customer": "Khách hàng",
+    "customerHint": "Chỉ nhóm khách mới gắn được khách hàng",
+    "owner": "Người phụ trách",
+    "ownerHint": "Ai chịu trách nhiệm chính — khác với nick đang có mặt trong nhóm",
+    "note": "Ghi chú",
+    "selectCustomer": "Chọn khách hàng…",
+    "selectOwner": "Chọn người phụ trách…",
+    "clear": "Bỏ chọn",
+    "save": "Lưu",
+    "saved": "Đã lưu nhóm \"{{title}}\""
+  }
+}

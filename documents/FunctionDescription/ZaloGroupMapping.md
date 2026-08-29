@@ -1,9 +1,9 @@
 # Nối nhóm Zalo ↔ khách hàng (Zalo Group Mapping) — Function Description
 
-> **File FE:** chưa có (P1 mới làm backend — xem §8 Lộ trình)
+> **File FE:** `apps/web/src/pages/zalo-groups/index.tsx`, `ZaloGroupEditDialog.tsx`, `SuggestionsDialog.tsx`
 > **File BE:** `apps/api/src/modules/zalo-group/zalo-group.service.ts`, `zalo-group.controller.ts`, `zalo-group-link.entity.ts`
 > **Script:** `apps/api/scripts/sync-zalo-groups.mjs`
-> **Route:** chưa có
+> **Route:** `/adm/zalo-groups`
 > **API:** `GET /v1/zalo-groups`, `GET /v1/zalo-groups/coverage`, `GET /v1/zalo-groups/suggestions`, `POST /v1/zalo-groups/sync`, `PATCH /v1/zalo-groups/:id`
 
 ## 1. Overview
@@ -82,8 +82,22 @@ Index: `groupGlobalId` (unique), `kind`, `customerId`, `userSku`, `ownerUserId`,
 
 ## 4. UI Components
 
-Chưa có — P1 mới xong backend. Dự kiến: tab "Nhóm Zalo" trong trang Khách hàng,
-kèm màn hình duyệt gợi ý hàng loạt. Xem §8.
+Trang `/adm/zalo-groups`, namespace i18n `zaloGroups`, quyền `page.zalo_groups`.
+
+**`index.tsx`** — 5 ô phủ sóng trên đầu (tổng nhóm · chưa xét · đã gắn · khách có
+nhóm · khách chưa có nhóm; ô cảnh báo tô hổ phách khi > 0), bộ lọc (tìm theo tên,
+chọn phân loại, nút bật/tắt "chỉ nhóm chưa gắn"), rồi bảng nhóm. Mỗi dòng hiện
+tên nhóm + số hội thoại + nick trong nhóm, badge phân loại, mã khách, mốc tin cuối.
+
+**`SuggestionsDialog.tsx`** — duyệt gợi ý hàng loạt. Mọi dòng **tick sẵn** vì
+phần lớn đạt 0.95; người duyệt chỉ bỏ tick dòng đáng ngờ thay vì phải tick hàng
+chục dòng đúng — nhưng vẫn phải bấm nút, không có gì tự gắn. Một dòng hỏng không
+làm dừng cả lô.
+
+**`ZaloGroupEditDialog.tsx`** — gắn tay một nhóm. Đổi phân loại khỏi "nhóm khách"
+thì tự gỡ khách đang chọn: BE sẽ từ chối nếu để lẫn, báo lỗi ở FE thì người dùng
+phải sửa hai lần. Danh sách khách lọc phía client (132 khách thì tải một lượt rẻ
+hơn gọi API mỗi lần gõ).
 
 ## 5. Backend logic
 
@@ -143,8 +157,8 @@ nhóm internal vào mô hình là đọc đời tư nhân viên.
 
 | Phase | Nội dung | Trạng thái |
 |---|---|---|
-| P1 | Mô hình dữ liệu + đồng bộ + gợi ý + API gắn nhóm | ✅ xong (backend) |
-| P1b | Màn hình gắn nhóm trong trang Khách hàng | chưa làm |
+| P1 | Mô hình dữ liệu + đồng bộ + gợi ý + API gắn nhóm | ✅ xong |
+| P1b | Màn hình gắn nhóm `/adm/zalo-groups` + duyệt gợi ý hàng loạt | ✅ xong |
 | P2 | Tóm tắt cuốn chiếu nội dung nhóm (BullMQ) | chưa làm |
 | P3 | Báo cáo cho Chủ tịch — cắm vào `ScheduledReportsModule` | chưa làm |
 | P4 | Nhắc việc hai chiều: checklist → nhắn ngược vào nhóm Zalo | chưa làm |
