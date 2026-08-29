@@ -79,6 +79,9 @@
     "pending": "Tồn đọng",
     "todo": "Việc cần làm",
     "doubt": "Đã tick xong nhưng không thấy bằng chứng",
-    "msgCount": "{{count}} tin"
+    "msgCount": "{{count}} tin",
+    "openTasks": "{{count}} việc chưa xong",
+    "notYet": "chưa tóm tắt",
+    "doneAt": "xong lúc {{at}}"
   }
 }

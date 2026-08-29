@@ -67,7 +67,27 @@ export const GetZaloGroupLinksZod = PageQueryZod.extend({
 });
 export class GetZaloGroupLinksDto extends createZodDto(extendApi(GetZaloGroupLinksZod)) {}
 
-export const GetZaloGroupLinksResZod = PageResZod.extend({ data: ZaloGroupLinkZod.array() });
+/**
+ * Tóm tắt gọn kèm theo mỗi dòng nhóm.
+ *
+ * Đính vào chính bảng gắn nhóm chứ không bắt mở màn hình khác: người vận hành
+ * nhìn danh sách nhóm là thấy ngay nhóm nào đang có việc, khỏi phải nhớ sang
+ * chỗ khác tra. (Cùng cách `thghub` làm ở trang mapping của họ.)
+ */
+export const ZaloGroupLinkTomTatZod = z.object({
+  tieuDe: z.string().optional(),
+  mucDo: z.string(),
+  /** Số việc chưa tick xong — con số người vận hành cần nhất. */
+  viecConLai: z.number(),
+  tomTatLuc: z.date().optional(),
+});
+
+export const ZaloGroupLinkRowZod = ZaloGroupLinkZod.extend({
+  tomTat: ZaloGroupLinkTomTatZod.optional(),
+});
+export type ZaloGroupLinkRow = z.infer<typeof ZaloGroupLinkRowZod>;
+
+export const GetZaloGroupLinksResZod = PageResZod.extend({ data: ZaloGroupLinkRowZod.array() });
 export class GetZaloGroupLinksResDto extends createZodDto(extendApi(GetZaloGroupLinksResZod)) {}
 
 //

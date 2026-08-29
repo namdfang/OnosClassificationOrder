@@ -79,6 +79,9 @@
     "pending": "Outstanding",
     "todo": "To do",
     "doubt": "Ticked done but no evidence found",
-    "msgCount": "{{count}} messages"
+    "msgCount": "{{count}} messages",
+    "openTasks": "{{count}} open",
+    "notYet": "not summarized",
+    "doneAt": "done at {{at}}"
   }
 }

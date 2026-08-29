@@ -20,6 +20,7 @@ import { cn } from '@/utils/cn';
 
 import SuggestionsDialog from './SuggestionsDialog';
 import SummariesPanel from './SummariesPanel';
+import ZaloGroupDetailSheet from './ZaloGroupDetailSheet';
 import ZaloGroupEditDialog from './ZaloGroupEditDialog';
 
 /** Màu badge theo phân loại — dùng chung cho bảng lẫn ô sửa. */
@@ -39,7 +40,18 @@ interface Coverage {
   totalCustomers: number;
 }
 
-type Row = ZaloGroupLink & { _id: string; customer?: { _id: string; userSku?: string; fullName?: string } };
+type Row = ZaloGroupLink & {
+  _id: string;
+  customer?: { _id: string; userSku?: string; fullName?: string };
+  tomTat?: { tieuDe?: string; mucDo: string; viecConLai: number; tomTatLuc?: string };
+};
+
+/** Màu chấm mức độ — dùng chung với tab Tình hình. */
+const MUC_DO_DOT: Record<string, string> = {
+  gap: 'bg-rose-500',
+  'can-chu-y': 'bg-amber-500',
+  'binh-thuong': 'bg-emerald-500',
+};
 
 const PAGE_SIZE = 30;
 
@@ -58,6 +70,7 @@ export default function ZaloGroupsPage() {
   const [unlinkedOnly, setUnlinkedOnly] = useState(false);
 
   const [editing, setEditing] = useState<Row | null>(null);
+  const [viewing, setViewing] = useState<Row | null>(null);
   const [showSuggestions, setShowSuggestions] = useState(false);
   const [tab, setTab] = useState<'groups' | 'summary'>('groups');
 
@@ -231,6 +244,7 @@ export default function ZaloGroupsPage() {
               <TableHead>{t('table.group')}</TableHead>
               <TableHead>{t('table.kind')}</TableHead>
               <TableHead>{t('table.customer')}</TableHead>
+              <TableHead>{t('tab.summary')}</TableHead>
               <TableHead>{t('table.lastMessage')}</TableHead>
               <TableHead className="text-right">{t('table.actions')}</TableHead>
             </TableRow>
@@ -238,14 +252,18 @@ export default function ZaloGroupsPage() {
           <TableBody>
             {rows.length === 0 && !loading && (
               <TableRow>
-                <TableCell colSpan={5} className="py-10 text-center text-sm text-slate-500">
+                <TableCell colSpan={6} className="py-10 text-center text-sm text-slate-500">
                   {t('table.empty')}
                 </TableCell>
               </TableRow>
             )}
 
             {rows.map((r) => (
-              <TableRow key={r._id}>
+              <TableRow
+                key={r._id}
+                className="cursor-pointer"
+                onClick={() => setViewing(r)}
+              >
                 <TableCell>
                   <div className="font-medium">{r.title || t('table.noTitle')}</div>
                   <div className="mt-0.5 text-xs text-slate-500">
@@ -263,11 +281,43 @@ export default function ZaloGroupsPage() {
                     <span className="text-sm text-slate-400">{t('table.noCustomer')}</span>
                   )}
                 </TableCell>
+                <TableCell className="max-w-[22rem]">
+                  {r.tomTat ? (
+                    <div className="flex items-start gap-2">
+                      <span
+                        className={cn(
+                          'mt-1.5 h-2 w-2 shrink-0 rounded-full',
+                          MUC_DO_DOT[r.tomTat.mucDo] ?? 'bg-slate-400',
+                        )}
+                        title={t(`summary.level.${r.tomTat.mucDo}`)}
+                      />
+                      <div className="min-w-0">
+                        <div className="truncate text-sm">{r.tomTat.tieuDe || '—'}</div>
+                        {r.tomTat.viecConLai > 0 && (
+                          <div className="text-xs text-amber-600 dark:text-amber-400">
+                            {t('summary.openTasks', { count: r.tomTat.viecConLai })}
+                          </div>
+                        )}
+                      </div>
+                    </div>
+                  ) : (
+                    <span className="text-xs text-slate-400">{t('summary.notYet')}</span>
+                  )}
+                </TableCell>
                 <TableCell className="whitespace-nowrap text-sm text-slate-500">
                   {r.lastMessageAt ? dayjs(r.lastMessageAt).format('DD/MM/YYYY') : '—'}
                 </TableCell>
                 <TableCell className="text-right">
-                  <Button variant="outline" size="sm" onClick={() => setEditing(r)}>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={(e) => {
+                      // Chặn nổi bọt: bấm nút Gắn nhóm thì mở hộp thoại gắn,
+                      // không mở kèm cả ngăn kéo chi tiết ở dưới.
+                      e.stopPropagation();
+                      setEditing(r);
+                    }}
+                  >
                     {t('edit.title')}
                   </Button>
                 </TableCell>
@@ -296,6 +346,18 @@ export default function ZaloGroupsPage() {
             setEditing(null);
             refreshAll();
           }}
+        />
+      )}
+
+      {viewing && (
+        <ZaloGroupDetailSheet
+          group={viewing}
+          onClose={() => setViewing(null)}
+          onEdit={() => {
+            setEditing(viewing);
+            setViewing(null);
+          }}
+          onChanged={refreshAll}
         />
       )}
 

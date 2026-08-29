@@ -13,6 +13,7 @@ import { CustomerEntity } from '../customer/customer.entity';
 import { ZaloGroupRepository } from './zalo-group.repository';
 import type { ZaloGroupLinkDocument } from './zalo-group-link.entity';
 import { ZaloGroupLinkEntity } from './zalo-group-link.entity';
+import { ZaloGroupSummaryEntity } from './zalo-group-summary.entity';
 
 /** Điểm cắt của gợi ý — dưới ngưỡng này thì đoán bừa hại hơn là không đoán. */
 const SUGGESTION_MIN_SCORE = 0.5;
@@ -25,6 +26,8 @@ export class ZaloGroupService {
     private readonly zaloGroupRepository: ZaloGroupRepository,
     @InjectModel(ZaloGroupLinkEntity.name) private readonly zaloGroupLinkModel: Model<ZaloGroupLinkEntity>,
     @InjectModel(CustomerEntity.name) private readonly customerModel: Model<CustomerEntity>,
+    @InjectModel(ZaloGroupSummaryEntity.name)
+    private readonly summaryModel: Model<ZaloGroupSummaryEntity>,
   ) {}
 
   /**
@@ -90,7 +93,37 @@ export class ZaloGroupService {
       sort: { [sort || 'lastMessageAt']: order === 'asc' ? 1 : -1 },
     });
 
-    return { data, total };
+    // Đính tóm tắt vào từng dòng: một truy vấn cho cả trang, không phải mỗi
+    // dòng một lượt. Người vận hành nhìn bảng nhóm là thấy ngay nhóm nào đang
+    // có việc, khỏi phải nhớ sang màn hình khác tra.
+    const ids = data.map((d) => String((d as unknown as { groupGlobalId: string }).groupGlobalId));
+    const summaries = await this.summaryModel
+      .find({ groupGlobalId: { $in: ids } })
+      .select('groupGlobalId tieuDe mucDo checklist tomTatLuc')
+      .lean();
+    const byGroup = new Map(summaries.map((s) => [String(s.groupGlobalId), s]));
+
+    const rows = data.map((d) => {
+      const doc = d as unknown as { groupGlobalId: string; toObject?: () => unknown };
+      const s = byGroup.get(String(doc.groupGlobalId));
+      const plain = typeof doc.toObject === 'function' ? doc.toObject() : d;
+
+      return {
+        ...(plain as Record<string, unknown>),
+        ...(s
+          ? {
+              tomTat: {
+                tieuDe: s.tieuDe,
+                mucDo: s.mucDo,
+                viecConLai: (s.checklist ?? []).filter((c) => !c.xong).length,
+                tomTatLuc: s.tomTatLuc,
+              },
+            }
+          : {}),
+      };
+    });
+
+    return { data: rows as unknown as ZaloGroupLinkDocument[], total };
   }
 
   /**
