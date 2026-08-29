@@ -62,7 +62,9 @@ async function keoTin(groupGlobalId, tuMoc) {
   // nhất mới là phần đáng đọc.
   const sql = `
     SELECT * FROM (
-      SELECT coalesce(m.sender_name,'') AS ten,
+      SELECT DISTINCT ON (m.zalo_msg_id)
+             coalesce(m.sender_name,'') AS ten,
+             coalesce(m.sender_uid,'')  AS uid,
              m.sender_type              AS phia,
              replace(replace(coalesce(m.content,''), chr(10), ' '), chr(13), ' ') AS noi_dung,
              to_char(m.sent_at AT TIME ZONE 'UTC','YYYY-MM-DD"T"HH24:MI:SS"Z"')   AS luc
@@ -72,7 +74,7 @@ async function keoTin(groupGlobalId, tuMoc) {
         AND m.is_deleted = false
         AND coalesce(m.content,'') <> ''
         ${dieuKienMoc}
-      ORDER BY m.sent_at DESC
+      ORDER BY m.zalo_msg_id, m.sent_at DESC
       LIMIT ${MAX_TIN}
     ) x ORDER BY luc ASC
   `.replace(/\s+/g, ' ');
@@ -89,12 +91,16 @@ async function keoTin(groupGlobalId, tuMoc) {
     .map((l) => l.trim())
     .filter(Boolean)
     .map((line) => {
-      const [ten, phia, noiDung, luc] = line.split(SEP);
+      const [ten, uid, phia, noiDung, luc] = line.split(SEP);
 
       return {
         nguoiGui: ten || undefined,
-        // engine dùng 'me' cho nick công ty; mọi giá trị khác coi là phía khách
-        phia: phia === 'me' ? 'me' : 'them',
+        // Khoá tra vai trò. Vai trò do BẢNG ĐỊNH DANH quyết định, không suy từ
+        // `sender_type`: engine chỉ đánh `self` cho 2 tài khoản công ty nối vào
+        // nó, còn nhân viên dùng Zalo cá nhân rơi vào `contact` y như khách.
+        zaloUid: uid || undefined,
+        // Tin của chính tài khoản công ty không mang uid — nhận diện bằng cờ này.
+        laTroLyAi: phia === 'self',
         noiDung: (noiDung || '').slice(0, 4000),
         luc: luc || undefined,
       };

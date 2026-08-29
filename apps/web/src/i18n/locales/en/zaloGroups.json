@@ -63,7 +63,8 @@
   },
   "tab": {
     "groups": "Groups",
-    "summary": "Status"
+    "summary": "Status",
+    "identity": "Who is who"
   },
   "summary": {
     "allLevels": "All levels",
@@ -83,5 +84,25 @@
     "openTasks": "{{count}} open",
     "notYet": "not summarized",
     "doneAt": "done at {{at}}"
+  },
+  "identity": {
+    "kind": {
+      "unknown": "Unreviewed",
+      "ai-support": "AI support",
+      "staff": "Staff",
+      "customer": "Customer"
+    },
+    "allKinds": "All",
+    "pending": "Unconfirmed",
+    "pendingOnly": "Unconfirmed only",
+    "searchName": "Search by name",
+    "person": "Sender",
+    "groupCount": "Groups",
+    "msgCount": "Messages",
+    "classify": "Classify",
+    "suggested": "suggested: {{kind}}",
+    "applyAll": "Apply all suggestions",
+    "applied": "Applied to {{count}}",
+    "empty": "Nobody matches the filter"
   }
 }

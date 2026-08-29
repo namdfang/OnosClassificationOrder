@@ -11,12 +11,19 @@ import type {
   ZaloSummaryQueueItem,
   ZaloSummaryTask,
 } from 'shared';
-import { FULFILLMENT_STAGE_LABELS, ZALO_GROUP_ANALYZABLE_KINDS, ZaloSummaryLevel } from 'shared';
+import {
+  FULFILLMENT_STAGE_LABELS,
+  ZALO_GROUP_ANALYZABLE_KINDS,
+  ZALO_IDENTITY_CHAT_LABELS,
+  ZaloIdentityKind,
+  ZaloSummaryLevel,
+} from 'shared';
 
 import { OrderEntity } from '../order/order.entity';
 import { ZaloGroupLinkEntity } from './zalo-group-link.entity';
 import type { ZaloGroupSummaryDocument } from './zalo-group-summary.entity';
 import { ZaloGroupSummaryEntity } from './zalo-group-summary.entity';
+import { ZaloIdentityService } from './zalo-identity.service';
 import type { ZaloSummaryJobData } from './zalo-summary.queue';
 import { ZALO_SUMMARY_QUEUE } from './zalo-summary.queue';
 
@@ -43,11 +50,14 @@ const HE_THONG = `Bạn đọc một đoạn hội thoại nhóm Zalo giữa nh�
 Nhiệm vụ: rút ra tình hình, viết TIẾNG VIỆT, mỗi ô 1–2 câu ngắn, cụ thể. KHÔNG kể lại nội dung chat.
 
 🔴 MỌI KẾT LUẬN PHẢI KÈM MỐC THỜI GIAN VÀ TÊN NGƯỜI. Mỗi dòng chat có dạng
-"[DD/MM HH:MM] KHÁCH/Tên:" hoặc "[DD/MM HH:MM] NHÂN VIÊN/Tên:" — hãy DÙNG nó:
+"[DD/MM HH:MM] VAI TRÒ/Tên:" với VAI TRÒ là KHÁCH, NHÂN VIÊN, TRỢ LÝ AI hoặc CHƯA RÕ — hãy DÙNG nó:
 - "khách hỏi X" → phải là "20/08 khách (Tên) hỏi X"
 - "đã trả lời" → phải là "21/08 (Tên nhân viên) trả lời rằng…" — nêu ĐÍCH DANH ai
 - việc còn treo → phải nói TREO TỪ NGÀY NÀO và ĐÃ BAO NHIÊU NGÀY
 Không có mốc thời gian và tên người thì không chấm được ai chậm — đó là mục đích của bản tóm tắt này.
+"TRỢ LÝ AI" là tài khoản tự động trực nhóm. Nếu chỉ có TRỢ LÝ AI trả lời khách mà KHÔNG nhân viên
+nào vào, hãy nêu rõ điều đó trong "tonDong" — đó là nhóm cần người thật tiếp quản.
+Dòng ghi "CHƯA RÕ" là người chưa được phân loại: đừng khẳng định họ là nhân viên hay khách.
 Chỉ ghi tên/ngày CÓ THẬT trong chat. Không thấy thì ghi "không rõ", tuyệt đối không đoán.
 
 Nếu có khối "DỮ LIỆU ĐƠN HÀNG THẬT", đó là trạng thái tra từ hệ thống sản xuất — nó ĐÚNG hơn
@@ -109,20 +119,33 @@ export class ZaloSummaryService {
     @InjectModel(OrderEntity.name)
     private readonly orderModel: Model<OrderEntity>,
     @InjectQueue(ZALO_SUMMARY_QUEUE) private readonly summaryQueue: Queue<ZaloSummaryJobData>,
+    private readonly identityService: ZaloIdentityService,
   ) {}
 
   /**
    * Đẩy một nhóm vào hàng đợi thay vì tóm tắt ngay trong request.
    *
-   * `jobId` = groupGlobalId để BullMQ tự chống trùng: gọi hai lần cho cùng một
-   * nhóm khi job trước chưa chạy xong thì lần sau bị bỏ, không tốn thêm một
-   * lượt gọi mô hình cho cùng nội dung.
+   * `jobId` gồm CẢ mốc tin cuối, không chỉ mã nhóm. Dùng riêng mã nhóm thì
+   * BullMQ coi mọi lần đẩy sau là trùng và nuốt luôn — kể cả khi nhóm đã có
+   * tin mới — vì job đã hoàn thành vẫn nằm lại Redis theo `removeOnComplete`.
+   * Đã dẫm phải: đẩy lại nhóm DESI hai lần, hàng đợi trống, không job nào
+   * thất bại, mà bản tóm tắt không hề đổi.
+   *
+   * Ghép thêm mốc tin cho đúng ý định ban đầu: cùng nhóm + cùng nội dung thì
+   * bỏ qua (khỏi tốn một lượt gọi mô hình), có tin mới thì chạy lại.
    */
   async enqueue(dto: SummarizeZaloGroupDto): Promise<{ queued: boolean }> {
+    const mocCuoi = dto.messages.reduce<number>((max, m) => {
+      const t = m.luc ? new Date(m.luc).getTime() : 0;
+
+      return t > max ? t : max;
+    }, 0);
+    const jobId = `${dto.groupGlobalId}:${mocCuoi}${dto.docLaiTuDau ? ':full' : ''}`;
+
     const job = await this.summaryQueue.add(
       'summarize',
       { groupGlobalId: dto.groupGlobalId, messages: dto.messages, docLaiTuDau: dto.docLaiTuDau },
-      { jobId: dto.groupGlobalId },
+      { jobId },
     );
 
     return { queued: !!job.id };
@@ -337,14 +360,28 @@ export class ZaloSummaryService {
     duLieuDon: string;
   }): Promise<KetQua> {
     // Khuôn dòng chat PHẢI khớp thứ mô tả trong lời nhắc: mô hình được yêu cầu
-    // trích ngày + tên vào mọi kết luận, không có hai thứ đó trong dòng thì nó
-    // không thể làm được.
+    // trích ngày + tên + vai trò vào mọi kết luận.
+    //
+    // Vai trò tra từ bảng ĐỊNH DANH theo `zaloUid`, không đoán từ `sender_type`:
+    // engine chỉ đánh dấu `self` cho 2 tài khoản công ty nối vào nó, còn nhân
+    // viên dùng Zalo cá nhân (Ngọc Mai 46 nhóm, Huyền 26 nhóm) đều rơi vào
+    // `contact` y như khách. Dựa vào `sender_type` là để mô hình tự đoán ai là
+    // nhân viên — nó đoán đúng nhờ ngữ cảnh, nhưng đó là may chứ không phải dữ liệu.
+    const uids = [...new Set(input.messages.map((m) => m.zaloUid).filter((x): x is string => !!x))];
+    const dinhDanh = await this.identityService.mapByUid(uids);
+
     const doanChat = input.messages
       .map((m) => {
-        const ai = m.phia === 'me' ? `NHÂN VIÊN/${m.nguoiGui || 'không rõ'}` : `KHÁCH/${m.nguoiGui || 'không rõ'}`;
+        const dd = m.zaloUid ? dinhDanh.get(m.zaloUid) : undefined;
+        // Tin của chính tài khoản công ty không mang uid — engine coi đó là
+        // "mình", nên nhận diện bằng cờ `laTaiKhoanCongTy` từ script.
+        const loai = m.laTroLyAi
+          ? ZaloIdentityKind.AiSupport
+          : (dd?.kind ?? ZaloIdentityKind.Unknown);
+        const ten = m.nguoiGui || dd?.displayName || 'không rõ';
         const luc = m.luc ? dinhDangLuc(new Date(m.luc)) : '??/?? ??:??';
 
-        return `[${luc}] ${ai}: ${m.noiDung}`;
+        return `[${luc}] ${ZALO_IDENTITY_CHAT_LABELS[loai]}/${ten}: ${m.noiDung}`;
       })
       .join('\n');
 

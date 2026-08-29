@@ -63,7 +63,8 @@
   },
   "tab": {
     "groups": "Nhóm",
-    "summary": "Tình hình"
+    "summary": "Tình hình",
+    "identity": "Ai là ai"
   },
   "summary": {
     "allLevels": "Tất cả mức độ",
@@ -83,5 +84,25 @@
     "openTasks": "{{count}} việc chưa xong",
     "notYet": "chưa tóm tắt",
     "doneAt": "xong lúc {{at}}"
+  },
+  "identity": {
+    "kind": {
+      "unknown": "Chưa xét",
+      "ai-support": "Trợ lý AI",
+      "staff": "Nhân viên",
+      "customer": "Khách hàng"
+    },
+    "allKinds": "Tất cả",
+    "pending": "Chưa xác nhận",
+    "pendingOnly": "Chỉ người chưa xác nhận",
+    "searchName": "Tìm theo tên",
+    "person": "Người gửi",
+    "groupCount": "Số nhóm",
+    "msgCount": "Số tin",
+    "classify": "Phân loại",
+    "suggested": "máy đoán: {{kind}}",
+    "applyAll": "Áp hết đề xuất",
+    "applied": "Đã áp {{count}} người",
+    "empty": "Không có ai khớp bộ lọc"
   }
 }

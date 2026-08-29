@@ -1,4 +1,4 @@
-import type { ToggleZaloSummaryTaskDto, UpdateZaloGroupLinkDto } from 'shared';
+import type { ToggleZaloSummaryTaskDto, UpdateZaloGroupLinkDto, UpdateZaloIdentityDto } from 'shared';
 
 import { callApi } from '../apis';
 import { CONFIG } from '../constants';
@@ -27,4 +27,24 @@ const toggleTask = (groupGlobalId: string, data: ToggleZaloSummaryTaskDto) => {
   return callApi(`/${CONFIG.API_VERSION}/zalo-groups/summaries/${groupGlobalId}/task`, 'patch', data);
 };
 
-export const zaloGroup = { getGroups, getCoverage, getSuggestions, updateLink, getSummaries, toggleTask };
+const getIdentities = (query: string = '') => {
+  return callApi(`/${CONFIG.API_VERSION}/zalo-groups/identities${query}`, 'get');
+};
+
+const getIdentityCounts = () => {
+  return callApi(`/${CONFIG.API_VERSION}/zalo-groups/identities/counts`, 'get');
+};
+
+const updateIdentity = (zaloUid: string, data: UpdateZaloIdentityDto) => {
+  return callApi(`/${CONFIG.API_VERSION}/zalo-groups/identities/${zaloUid}`, 'patch', data);
+};
+
+const applyIdentitySuggestions = () => {
+  return callApi(`/${CONFIG.API_VERSION}/zalo-groups/identities/apply-suggestions`, 'post');
+};
+
+export const zaloGroup = {
+  getIdentities,
+  getIdentityCounts,
+  updateIdentity,
+  applyIdentitySuggestions, getGroups, getCoverage, getSuggestions, updateLink, getSummaries, toggleTask };

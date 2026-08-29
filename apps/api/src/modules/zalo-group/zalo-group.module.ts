@@ -9,6 +9,8 @@ import { ZaloGroupRepository } from './zalo-group.repository';
 import { ZaloGroupService } from './zalo-group.service';
 import { ZaloGroupLinkEntity, ZaloGroupLinkSchema } from './zalo-group-link.entity';
 import { ZaloGroupSummaryEntity, ZaloGroupSummarySchema } from './zalo-group-summary.entity';
+import { ZaloIdentityEntity, ZaloIdentitySchema } from './zalo-identity.entity';
+import { ZaloIdentityService } from './zalo-identity.service';
 import { ZaloSummaryProcessor } from './zalo-summary.processor';
 import { ZALO_SUMMARY_QUEUE } from './zalo-summary.queue';
 import { ZaloSummaryService } from './zalo-summary.service';
@@ -26,6 +28,7 @@ import { ZaloSummaryService } from './zalo-summary.service';
     MongooseModule.forFeature([
       { name: ZaloGroupLinkEntity.name, schema: ZaloGroupLinkSchema },
       { name: ZaloGroupSummaryEntity.name, schema: ZaloGroupSummarySchema },
+      { name: ZaloIdentityEntity.name, schema: ZaloIdentitySchema },
       { name: CustomerEntity.name, schema: CustomerSchema },
       { name: OrderEntity.name, schema: OrderSchema },
     ]),
@@ -42,7 +45,7 @@ import { ZaloSummaryService } from './zalo-summary.service';
     }),
   ],
   controllers: [ZaloGroupController],
-  providers: [ZaloGroupService, ZaloGroupRepository, ZaloSummaryService, ZaloSummaryProcessor],
-  exports: [ZaloGroupService, ZaloGroupRepository, ZaloSummaryService, BullModule],
+  providers: [ZaloGroupService, ZaloGroupRepository, ZaloSummaryService, ZaloSummaryProcessor, ZaloIdentityService],
+  exports: [ZaloGroupService, ZaloGroupRepository, ZaloSummaryService, ZaloIdentityService, BullModule],
 })
 export class ZaloGroupModule {}

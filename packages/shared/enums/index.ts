@@ -20,3 +20,4 @@ export * from './tracking';
 export * from './webhook';
 export * from './workshop-config-category';
 export * from './zalo-group-kind';
+export * from './zalo-identity-kind';

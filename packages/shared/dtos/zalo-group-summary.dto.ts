@@ -95,7 +95,11 @@ export class GetZaloSummariesResDto extends createZodDto(extendApi(GetZaloSummar
 /** Một tin nhắn thô do script đẩy sang — đã lọc ở nguồn, chỉ giữ phần cần đọc. */
 export const ZaloMessageInputZod = z.object({
   nguoiGui: z.string().max(200).optional(),
-  /** `me` = nick công ty, `them` = phía khách. */
+  /** Khoá tra vai trò trong bảng định danh. Tin của chính tài khoản công ty không có. */
+  zaloUid: z.string().max(64).optional(),
+  /** Tin do chính tài khoản công ty (trợ lý AI) gửi — engine không gắn uid cho nó. */
+  laTroLyAi: z.boolean().optional(),
+  /** @deprecated Giữ để script cũ không vỡ; vai trò nay tra từ `zaloUid`. */
   phia: z.enum(['me', 'them']).optional(),
   noiDung: z.string().max(4000),
   luc: z.coerce.date().optional(),

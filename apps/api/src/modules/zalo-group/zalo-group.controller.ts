@@ -4,21 +4,27 @@ import { AuthUser } from 'core';
 import type {
   GetZaloGroupLinksResDto,
   GetZaloGroupSuggestionsResDto,
+  GetZaloIdentitiesResDto,
   GetZaloSummariesResDto,
   GetZaloSummaryQueueResDto,
   SummarizeZaloGroupResDto,
   SyncZaloGroupsResDto,
+  SyncZaloIdentitiesResDto,
   UpdateZaloGroupLinkResDto,
+  UpdateZaloIdentityResDto,
   ZaloGroupCoverageResDto,
 } from 'shared';
 import {
   GetZaloGroupLinksDto,
+  GetZaloIdentitiesDto,
   GetZaloSummariesDto,
   RoleType,
   SummarizeZaloGroupDto,
   SyncZaloGroupsDto,
+  SyncZaloIdentitiesDto,
   ToggleZaloSummaryTaskDto,
   UpdateZaloGroupLinkDto,
+  UpdateZaloIdentityDto,
 } from 'shared';
 import { Logger } from 'winston';
 
@@ -26,6 +32,7 @@ import { Auth } from '@/decorators/http.decorator';
 
 import type { UserDocument } from '../user/user.entity';
 import { ZaloGroupService } from './zalo-group.service';
+import { ZaloIdentityService } from './zalo-identity.service';
 import { ZaloSummaryService } from './zalo-summary.service';
 
 /** Xem danh sách nhóm + bảng phủ sóng. */
@@ -46,6 +53,7 @@ export class ZaloGroupController {
   constructor(
     private readonly zaloGroupService: ZaloGroupService,
     private readonly zaloSummaryService: ZaloSummaryService,
+    private readonly zaloIdentityService: ZaloIdentityService,
     @Inject('winston') private readonly logger: Logger,
   ) {}
 
@@ -202,5 +210,96 @@ export class ZaloGroupController {
       success: true,
       data: await this.zaloSummaryService.toggleTask(groupGlobalId, dto.index, dto.xong),
     } as SummarizeZaloGroupResDto;
+  }
+
+  // ─── Định danh: ai là ai trong nhóm ──────────────────────────────
+
+  @Get('identities')
+  @Auth(ZALO_GROUP_VIEW_ROLES)
+  @ApiOperation({ summary: 'Danh sách người gửi trong nhóm Zalo + phân loại' })
+  @HttpCode(HttpStatus.OK)
+  async getIdentities(
+    @Query() dto: GetZaloIdentitiesDto,
+    @AuthUser() user: UserDocument,
+  ): Promise<GetZaloIdentitiesResDto> {
+    this.logger.info({
+      message: JSON.stringify({ method: 'GET', url: '/zalo-groups/identities', userId: user._id, query: dto }),
+    });
+
+    return { success: true, ...(await this.zaloIdentityService.list(dto)) } as GetZaloIdentitiesResDto;
+  }
+
+  @Get('identities/counts')
+  @Auth(ZALO_GROUP_VIEW_ROLES)
+  @ApiOperation({ summary: 'Đếm định danh theo phân loại + số người chưa xác nhận' })
+  @HttpCode(HttpStatus.OK)
+  async getIdentityCounts(@AuthUser() user: UserDocument): Promise<{ success: true; data: Record<string, number> }> {
+    this.logger.info({
+      message: JSON.stringify({ method: 'GET', url: '/zalo-groups/identities/counts', userId: user._id }),
+    });
+
+    return { success: true, data: await this.zaloIdentityService.counts() };
+  }
+
+  @Post('identities/sync')
+  @Auth(ZALO_GROUP_EDIT_ROLES)
+  @ApiOperation({ summary: 'Nạp người gửi từ engine Zalo + gieo đề xuất phân loại' })
+  @HttpCode(HttpStatus.OK)
+  async syncIdentities(
+    @Body() dto: SyncZaloIdentitiesDto,
+    @AuthUser() user: UserDocument,
+  ): Promise<SyncZaloIdentitiesResDto> {
+    this.logger.info({
+      message: JSON.stringify({
+        method: 'POST',
+        url: '/zalo-groups/identities/sync',
+        userId: user._id,
+        count: dto.identities?.length ?? 0,
+      }),
+    });
+
+    return { success: true, data: await this.zaloIdentityService.sync(dto) };
+  }
+
+  @Post('identities/apply-suggestions')
+  @Auth(ZALO_GROUP_EDIT_ROLES)
+  @ApiOperation({ summary: 'Áp hàng loạt đề xuất của máy cho người chưa ai xác nhận' })
+  @HttpCode(HttpStatus.OK)
+  async applyIdentitySuggestions(
+    @AuthUser() user: UserDocument,
+  ): Promise<{ success: true; data: { applied: number } }> {
+    this.logger.info({
+      message: JSON.stringify({
+        method: 'POST',
+        url: '/zalo-groups/identities/apply-suggestions',
+        userId: user._id,
+      }),
+    });
+
+    return { success: true, data: await this.zaloIdentityService.applySuggestions(String(user._id)) };
+  }
+
+  @Patch('identities/:zaloUid')
+  @Auth(ZALO_GROUP_EDIT_ROLES)
+  @ApiOperation({ summary: 'Xác nhận / sửa phân loại một người gửi' })
+  @HttpCode(HttpStatus.OK)
+  async updateIdentity(
+    @Param('zaloUid') zaloUid: string,
+    @Body() dto: UpdateZaloIdentityDto,
+    @AuthUser() user: UserDocument,
+  ): Promise<UpdateZaloIdentityResDto> {
+    this.logger.info({
+      message: JSON.stringify({
+        method: 'PATCH',
+        url: `/zalo-groups/identities/${zaloUid}`,
+        userId: user._id,
+        body: dto,
+      }),
+    });
+
+    return {
+      success: true,
+      data: await this.zaloIdentityService.update(zaloUid, dto, String(user._id)),
+    } as UpdateZaloIdentityResDto;
   }
 }

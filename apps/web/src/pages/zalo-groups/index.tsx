@@ -18,6 +18,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@
 import { handleAxiosError } from '@/utils';
 import { cn } from '@/utils/cn';
 
+import IdentitiesPanel from './IdentitiesPanel';
 import SuggestionsDialog from './SuggestionsDialog';
 import SummariesPanel from './SummariesPanel';
 import ZaloGroupDetailSheet from './ZaloGroupDetailSheet';
@@ -72,7 +73,7 @@ export default function ZaloGroupsPage() {
   const [editing, setEditing] = useState<Row | null>(null);
   const [viewing, setViewing] = useState<Row | null>(null);
   const [showSuggestions, setShowSuggestions] = useState(false);
-  const [tab, setTab] = useState<'groups' | 'summary'>('groups');
+  const [tab, setTab] = useState<'groups' | 'summary' | 'identity'>('groups');
 
   const query = useMemo(() => {
     const p = new URLSearchParams();
@@ -173,7 +174,7 @@ export default function ZaloGroupsPage() {
       {/* Hai góc nhìn cùng một dữ liệu: gắn nhóm (việc thiết lập) và tình hình
           (việc theo dõi hằng ngày). Tách tab để người vào đúng việc của mình. */}
       <div className="flex gap-1 border-b">
-        {(['groups', 'summary'] as const).map((k) => (
+        {(['groups', 'summary', 'identity'] as const).map((k) => (
           <button
             key={k}
             type="button"
@@ -191,6 +192,8 @@ export default function ZaloGroupsPage() {
       </div>
 
       {tab === 'summary' && <SummariesPanel />}
+
+      {tab === 'identity' && <IdentitiesPanel />}
 
       {tab === 'groups' && (
       <>
