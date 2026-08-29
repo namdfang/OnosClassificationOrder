@@ -76,6 +76,17 @@ function genCode(length = 8) {
   return Array.from({ length }, () => chars[Math.floor(Math.random() * chars.length)]).join('');
 }
 
+/**
+ * Bản sao của `myId()` (`packages/shared/utils/myId.ts`) — cùng bảng chữ cái và
+ * ID_LENGTH=16. Viết lại tại chỗ chứ không import `shared`: gói đó là ESM kéo
+ * theo dayjs plugin không resolve được từ script `.mjs` chạy tay.
+ */
+function myId(length = 16) {
+  const chars = '0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZ';
+
+  return Array.from({ length }, () => chars[Math.floor(Math.random() * chars.length)]).join('');
+}
+
 console.log(`NODE_ENV : ${nodeEnv}`);
 console.log(`MongoDB  : ${describeTarget(uri)}`);
 console.log(`Chế độ   : ${apply ? 'GHI THẬT (--yes)' : 'DRY-RUN (thêm --yes để ghi)'}`);
@@ -104,6 +115,15 @@ try {
     // `status` đang lưu lẫn kiểu (có bản ghi là số nguyên), nên chọn dạng phổ
     // biến nhất để tài khoản test không thành ca biệt lệ thứ hai.
     await users.insertOne({
+      // `_id` PHẢI tự sinh bằng myId(). Toàn hệ thống dùng `_id` dạng CHUỖI
+      // nanoid 16 ký tự (`DatabaseEntityAbstract`), trong khi `insertOne` bỏ
+      // trống `_id` thì MongoDB tự gán ObjectId. Hậu quả không lộ ra lúc đăng
+      // nhập — `validateUser` tra theo `email` nên vẫn trả token — mà lộ ở
+      // request kế tiếp: `UserService.getUserById` chạy aggregation
+      // `$match: { _id: id }` với `id` là chuỗi lấy từ JWT, chuỗi không bao giờ
+      // khớp ObjectId, nên ném UserNotFound → 401 → giao diện đá về màn hình
+      // đăng nhập ngay sau khi báo đăng nhập thành công.
+      _id: myId(),
       email: ACCOUNT.email,
       fullName: ACCOUNT.fullName,
       password: generateHash(ACCOUNT.password),
