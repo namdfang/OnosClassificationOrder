@@ -41,7 +41,7 @@
     "dependencies": {
         "@anatine/zod-nestjs": "^2.0.8",
         "@anatine/zod-openapi": "^2.2.5",
-        "@anthropic-ai/sdk": "^0.122.0",
+        "@anthropic-ai/claude-agent-sdk": "^0.3.251",
         "@aws-sdk/client-s3": "^3.717.0",
         "@aws-sdk/s3-request-presigner": "^3.717.0",
         "@elastic/elasticsearch": "^6.8.8",

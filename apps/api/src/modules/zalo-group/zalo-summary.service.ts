@@ -1,4 +1,4 @@
-import Anthropic from '@anthropic-ai/sdk';
+import { query } from '@anthropic-ai/claude-agent-sdk';
 import { BadRequestException, Injectable, NotFoundException, ServiceUnavailableException } from '@nestjs/common';
 import { InjectModel } from '@nestjs/mongoose';
 import { Model } from 'mongoose';
@@ -16,17 +16,17 @@ import type { ZaloGroupSummaryDocument } from './zalo-group-summary.entity';
 import { ZaloGroupSummaryEntity } from './zalo-group-summary.entity';
 
 /**
- * Mô hình dùng để tóm tắt. Đổi được qua env nhưng mặc định là Opus 5 — đây là
- * việc đọc hội thoại tiếng Việt lẫn lộn nhiều người rồi rút ra việc cần làm,
- * chất lượng kết luận quan trọng hơn tiền một lượt gọi.
+ * Mô hình. Agent SDK nhận ALIAS (`opus`/`sonnet`/`haiku`), không phải model id
+ * đầy đủ — giống `HUB_ASSISTANT_MODEL` bên thghub.
  */
-const MODEL = process.env.ZALO_SUMMARY_MODEL || 'claude-opus-5';
+const MODEL = process.env.ZALO_SUMMARY_MODEL || 'opus';
 
 /**
- * Tóm tắt là việc đọc-rồi-rút-gọn, không phải bài toán suy luận nhiều bước —
- * `medium` đủ và rẻ hơn `high` đáng kể khi nhân với hơn trăm nhóm mỗi lượt.
+ * Trần thời gian một lượt gọi. Nginx cắt ở 60 giây, một lượt bình thường ~30
+ * giây. Tự dừng ở 50 để còn kịp trả lỗi có nội dung — để nginx cắt thì người
+ * dùng nhận một trang lỗi trống không nói được gì. (Bài học của thghub.)
  */
-const EFFORT = (process.env.ZALO_SUMMARY_EFFORT || 'medium') as 'low' | 'medium' | 'high';
+const HAN_GIAY = Number(process.env.ZALO_SUMMARY_TIMEOUT_SEC || 50);
 
 /** Bao lâu thì phải đọc lại từ đầu để cắt bệnh trôi dần của tóm tắt cuốn chiếu. */
 const NGAY_DOC_LAI = Number(process.env.ZALO_SUMMARY_REREAD_DAYS || 7);
@@ -34,45 +34,41 @@ const NGAY_DOC_LAI = Number(process.env.ZALO_SUMMARY_REREAD_DAYS || 7);
 /** Nhóm im lâu hơn mức này thì không tốn tiền tóm tắt lại. */
 const NGAY_BO_QUA_NHOM_IM = Number(process.env.ZALO_SUMMARY_IDLE_DAYS || 14);
 
-const HE_THONG = `Bạn đọc hội thoại của một nhóm Zalo giữa nhân viên công ty in ấn và khách hàng, rồi rút ra tình hình.
+const HE_THONG = `Bạn đọc một đoạn hội thoại nhóm Zalo giữa nhân viên công ty in ấn và khách hàng.
+Nhiệm vụ: rút ra tình hình, viết TIẾNG VIỆT, mỗi ô 1–2 câu ngắn, cụ thể. KHÔNG kể lại nội dung chat.
 
-Mục tiêu là giúp quản lý biết nhóm này có đang được xử lý tốt không. KHÔNG tóm tắt lại nội dung chat.
+🔴 MỌI KẾT LUẬN PHẢI KÈM MỐC THỜI GIAN VÀ TÊN NGƯỜI. Mỗi dòng chat có dạng
+"[DD/MM HH:MM] KHÁCH/Tên:" hoặc "[DD/MM HH:MM] NHÂN VIÊN/Tên:" — hãy DÙNG nó:
+- "khách hỏi X" → phải là "20/08 khách (Tên) hỏi X"
+- "đã trả lời" → phải là "21/08 (Tên nhân viên) trả lời rằng…" — nêu ĐÍCH DANH ai
+- việc còn treo → phải nói TREO TỪ NGÀY NÀO và ĐÃ BAO NHIÊU NGÀY
+Không có mốc thời gian và tên người thì không chấm được ai chậm — đó là mục đích của bản tóm tắt này.
+Chỉ ghi tên/ngày CÓ THẬT trong chat. Không thấy thì ghi "không rõ", tuyệt đối không đoán.
 
-Quy tắc:
-- Viết tiếng Việt, ngắn gọn, đi thẳng vào việc.
-- "checklist" là việc NHÂN VIÊN cần làm tiếp, mỗi dòng một việc làm được ngay. Không gộp nhiều việc vào một dòng. Không có việc gì thì để mảng rỗng.
-- "tonDong" là thứ khách đã hỏi/yêu cầu mà chưa được giải quyết. Không có thì để chuỗi rỗng.
-- "mucDo": "gap" khi khách đang bức xúc hoặc có việc quá hạn rõ ràng; "can-chu-y" khi có tồn đọng chưa xử lý; còn lại "binh-thuong".
-- Nếu được cung cấp bản tóm tắt lần trước, hãy CẬP NHẬT nó theo tin nhắn mới, đừng viết lại từ đầu.
-- "nghiNgo": việc trong danh sách lần trước đã được đánh dấu xong nhưng bạn KHÔNG thấy bằng chứng trong hội thoại. Không có thì để mảng rỗng.
-- Chỉ kết luận từ những gì có trong hội thoại. Không suy đoán.`;
+Nếu có khối "TÓM TẮT LẦN TRƯỚC", bạn đang cập nhật tiếp chứ không viết lại từ đầu. Làm ĐÚNG BA việc:
+  a) XÁC MINH việc đã đánh dấu xong: tìm bằng chứng trong tin nhắn mới. KHÔNG thấy bằng chứng thì
+     đưa vào "nghiNgo". Thấy rồi thì thôi, đừng nhắc lại.
+  b) GIỮ TIẾP việc còn treo nếu tin nhắn mới không cho thấy nó đã xong. Việc nào tin nhắn mới cho
+     thấy ĐÃ XONG thì BỎ khỏi checklist — đừng giữ chỉ vì lần trước có.
+  c) THÊM việc mới phát sinh.
+Tin nhắn mới là bên có tiếng nói cuối. Tóm tắt lần trước chỉ để nhớ, không phải để bảo vệ.
 
-/** Khuôn kết quả — ép mô hình trả đúng cấu trúc thay vì tự dò JSON trong văn bản. */
-const KHUON_KET_QUA = {
-  type: 'json_schema' as const,
-  schema: {
-    type: 'object',
-    additionalProperties: false,
-    required: ['tieuDe', 'khachQuanTam', 'salePhanHoi', 'tonDong', 'checklist', 'nghiNgo', 'mucDo'],
-    properties: {
-      tieuDe: { type: 'string', description: 'Một dòng dưới 100 ký tự tóm tắt tình hình nhóm' },
-      khachQuanTam: { type: 'string', description: 'Khách đang hỏi/quan tâm điều gì' },
-      salePhanHoi: { type: 'string', description: 'Nhân viên đã phản hồi ra sao' },
-      tonDong: { type: 'string', description: 'Việc khách yêu cầu mà chưa xong. Rỗng nếu không có' },
-      checklist: {
-        type: 'array',
-        items: { type: 'string' },
-        description: 'Mỗi phần tử là MỘT việc nhân viên cần làm tiếp',
-      },
-      nghiNgo: {
-        type: 'array',
-        items: { type: 'string' },
-        description: 'Việc đã tick xong nhưng không thấy bằng chứng trong hội thoại',
-      },
-      mucDo: { type: 'string', enum: ['binh-thuong', 'can-chu-y', 'gap'] },
-    },
-  },
-};
+Trả về DUY NHẤT một khối JSON, không thêm chữ nào ngoài nó:
+{
+  "tieuDe": "tối đa 12 chữ, nêu đúng việc đang treo",
+  "khachQuanTam": "NGÀY + ai bên khách + hỏi/cần gì",
+  "salePhanHoi": "NGÀY + TÊN nhân viên + đã trả lời/xử lý gì",
+  "tonDong": "việc còn treo + TREO TỪ NGÀY NÀO + đã bao nhiêu ngày. Không có thì ghi 'Không có'",
+  "checklist": ["mỗi phần tử là MỘT việc làm được ngay, bắt đầu bằng động từ, tối đa 24 chữ, tối đa 5 việc"],
+  "nghiNgo": ["việc đã tick xong nhưng không thấy bằng chứng, kèm lý do ngắn"],
+  "mucDo": "gap" | "can-chu-y" | "binh-thuong"
+}
+
+Chấm mức độ theo việc CÒN TREO, đừng chấm theo cảm giác:
+- "gap": tiền hoặc hàng đang rủi ro (đơn kẹt, sai địa chỉ, khiếu nại, phạt), HOẶC khách hỏi mà quá
+  24h chưa ai trả lời.
+- "can-chu-y": còn việc treo nhưng chưa chạm tiền/hàng và chưa quá hạn.
+- "binh-thuong": không còn gì treo.`;
 
 interface KetQua {
   tieuDe: string;
@@ -86,8 +82,6 @@ interface KetQua {
 
 @Injectable()
 export class ZaloSummaryService {
-  private readonly client = new Anthropic();
-
   constructor(
     @InjectModel(ZaloGroupSummaryEntity.name)
     private readonly summaryModel: Model<ZaloGroupSummaryEntity>,
@@ -206,11 +200,15 @@ export class ZaloSummaryService {
     messages: ZaloMessageInput[];
     truoc: { tonDong?: string; checklist?: ZaloSummaryTask[] } | null;
   }): Promise<KetQua> {
+    // Khuôn dòng chat PHẢI khớp thứ mô tả trong lời nhắc: mô hình được yêu cầu
+    // trích ngày + tên vào mọi kết luận, không có hai thứ đó trong dòng thì nó
+    // không thể làm được.
     const doanChat = input.messages
       .map((m) => {
-        const ai = m.phia === 'me' ? `NHÂN VIÊN ${m.nguoiGui ?? ''}`.trim() : (m.nguoiGui ?? 'KHÁCH');
+        const ai = m.phia === 'me' ? `NHÂN VIÊN/${m.nguoiGui || 'không rõ'}` : `KHÁCH/${m.nguoiGui || 'không rõ'}`;
+        const luc = m.luc ? dinhDangLuc(new Date(m.luc)) : '??/?? ??:??';
 
-        return `[${ai}] ${m.noiDung}`;
+        return `[${luc}] ${ai}: ${m.noiDung}`;
       })
       .join('\n');
 
@@ -227,47 +225,71 @@ export class ZaloSummaryService {
         ].join('\n')
       : '';
 
-    let res: Anthropic.Message;
+    const loiNhac = `${HE_THONG}
+
+NHÓM: ${input.title ?? '(không tên)'}${khoiTruoc}
+
+--- ${input.truoc ? 'TIN NHẮN MỚI TỪ LẦN TÓM TẮT TRƯỚC' : 'ĐOẠN CHAT'} ---
+${doanChat}`;
+
+    // Trần thời gian tự đặt: nginx cắt ở 60 giây mà không báo gì có nghĩa.
+    let hetHan = false;
+    const dongHo = setTimeout(() => {
+      hetHan = true;
+    }, HAN_GIAY * 1000);
+
+    let vanBan = '';
     try {
-      res = await this.client.messages.create({
-        model: MODEL,
-        max_tokens: 4000,
-        thinking: { type: 'adaptive' },
-        output_config: { effort: EFFORT, format: KHUON_KET_QUA },
-        system: HE_THONG,
-        messages: [
-          {
-            role: 'user',
-            content: `NHÓM: ${input.title ?? '(không tên)'}${khoiTruoc}\n\nHỘI THOẠI:\n${doanChat}`,
-          },
-        ],
+      const it = query({
+        prompt: loiNhac,
+        options: {
+          model: MODEL,
+          // Không cho công cụ nào: đây là việc đọc-rồi-trả-lời, không phải
+          // việc cần đọc file hay chạy lệnh.
+          allowedTools: [],
+          /**
+           * `maxTurns: 3` chứ KHÔNG phải 1. thghub chạy thật trên prod 24/08:
+           * một số nhóm hỏng với "Reached maximum number of turns (1)" — chat
+           * dài thì mô hình cần thêm lượt mới viết xong khối JSON. Đặt 1 là ép
+           * nó hỏng đúng ở những nhóm nhiều nội dung nhất, tức những nhóm đáng
+           * đọc nhất.
+           */
+          maxTurns: 3,
+        },
       });
-    } catch (error) {
-      if (error instanceof Anthropic.RateLimitError) {
-        throw new ServiceUnavailableException('Mô hình đang quá tải, thử lại sau.');
+
+      for await (const msg of it) {
+        if (hetHan) break;
+        if (msg.type === 'assistant') {
+          for (const b of msg.message.content) if (b.type === 'text') vanBan += b.text;
+        }
       }
-      // Khoá sai (401 từ server) VÀ hoàn toàn chưa cấu hình khoá là hai lỗi
-      // khác nhau nhưng cùng một cách chữa. Trường hợp thứ hai KHÔNG phải
-      // `APIError`: SDK ném `Error` thường ngay khi dựng header, trước lúc gửi
-      // request. Bắt cả hai, nếu không nó nổi lên thành 500 "Internal server
-      // error" và người vận hành không có manh mối nào để lần.
-      if (error instanceof Anthropic.AuthenticationError || !(error instanceof Anthropic.APIError)) {
+    } catch (error) {
+      const mo = error instanceof Error ? error.message : String(error);
+      // Agent SDK dùng phiên đăng nhập Claude Code (thư mục ~/.claude). Thiếu
+      // nó thì lỗi nói về xác thực/đăng nhập — dịch sang câu chỉ rõ phải làm gì.
+      if (/auth|credential|login|unauthor|api[ _-]?key/i.test(mo)) {
         throw new ServiceUnavailableException(
-          'Chưa cấu hình khoá Claude API cho backend — đặt ANTHROPIC_API_KEY trong apps/api/.env.<NODE_ENV> rồi khởi động lại API.',
+          'Backend chưa đăng nhập được Claude — kiểm tra phiên Claude Code (~/.claude) của user chạy API.',
         );
       }
-      throw error;
+      throw new ServiceUnavailableException(`Gọi mô hình thất bại: ${mo.slice(0, 200)}`);
+    } finally {
+      clearTimeout(dongHo);
     }
 
-    // Mô hình có thể từ chối vì lý do an toàn — kiểm TRƯỚC khi đọc content.
-    if (res.stop_reason === 'refusal') {
-      throw new ServiceUnavailableException('Mô hình từ chối tóm tắt nội dung nhóm này.');
+    if (hetHan && !vanBan) {
+      throw new ServiceUnavailableException(`Mô hình không trả lời trong ${HAN_GIAY} giây — thử lại nhóm này sau.`);
     }
 
-    const text = res.content.find((b): b is Anthropic.TextBlock => b.type === 'text')?.text ?? '';
+    // Agent SDK trả văn bản tự do, không có structured output — phải tự tách
+    // khối JSON ra khỏi phần mô hình có thể nói thêm xung quanh.
+    const m = vanBan.match(/\{[\s\S]*\}/);
+    if (!m) throw new ServiceUnavailableException('Mô hình không trả về JSON.');
+
     let parsed: unknown;
     try {
-      parsed = JSON.parse(text);
+      parsed = JSON.parse(m[0]);
     } catch {
       throw new ServiceUnavailableException('Mô hình trả về dữ liệu không đọc được.');
     }
@@ -302,16 +324,28 @@ export class ZaloSummaryService {
 
   /** Người vận hành tick / bỏ tick một việc. */
   async toggleTask(groupGlobalId: string, index: number, xong: boolean): Promise<ZaloGroupSummaryDocument> {
-    const doc = await this.summaryModel.findOne({ groupGlobalId });
-    if (!doc) throw new NotFoundException('Chưa có bản tóm tắt cho nhóm này.');
-    if (index < 0 || index >= doc.checklist.length) throw new BadRequestException('Việc không tồn tại.');
+    const truoc = await this.summaryModel.findOne({ groupGlobalId }).select('checklist').lean();
+    if (!truoc) throw new NotFoundException('Chưa có bản tóm tắt cho nhóm này.');
+    if (index < 0 || index >= (truoc.checklist?.length ?? 0)) {
+      throw new BadRequestException('Việc không tồn tại.');
+    }
 
-    doc.checklist[index].xong = xong;
-    doc.checklist[index].xongLuc = xong ? new Date().toISOString() : null;
-    doc.markModified('checklist');
-    await doc.save();
+    // Ghi thẳng vào đúng phần tử bằng `$set` theo chỉ số, KHÔNG đọc-sửa-ghi cả
+    // mảng: lượt tóm tắt kế tiếp có thể đang thay `checklist` cùng lúc, ghi đè
+    // cả mảng là nuốt mất kết quả của nó. Đây cũng là lý do repo cấm `.save()`.
+    const updated = await this.summaryModel.findOneAndUpdate(
+      { groupGlobalId },
+      {
+        $set: {
+          [`checklist.${index}.xong`]: xong,
+          [`checklist.${index}.xongLuc`]: xong ? new Date().toISOString() : null,
+        },
+      },
+      { new: true },
+    );
+    if (!updated) throw new NotFoundException('Chưa có bản tóm tắt cho nhóm này.');
 
-    return doc;
+    return updated;
   }
 }
 
@@ -356,4 +390,12 @@ function chuanHoa(o: unknown): KetQua {
       ? mucDo
       : ZaloSummaryLevel.BinhThuong,
   };
+}
+
+/** `DD/MM HH:MM` theo giờ Việt Nam — khuôn mà lời nhắc yêu cầu mô hình trích lại. */
+function dinhDangLuc(d: Date): string {
+  const vn = new Date(d.getTime() + 7 * 3_600_000);
+  const p = (n: number) => String(n).padStart(2, '0');
+
+  return `${p(vn.getUTCDate())}/${p(vn.getUTCMonth() + 1)} ${p(vn.getUTCHours())}:${p(vn.getUTCMinutes())}`;
 }
