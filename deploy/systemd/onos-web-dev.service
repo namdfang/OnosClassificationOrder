@@ -1,0 +1,19 @@
+[Unit]
+Description=onos Web dev (Vite, port 5173)
+After=network.target
+Wants=network.target
+
+[Service]
+Type=simple
+WorkingDirectory=/root/.vibedev/repos/onos/apps/web
+# Vite 4 khong kiem tra Host header nen khong can --allowed-hosts
+# (tuy chon do chi co tu Vite 5.4 tro len — them vao se loi CACError)
+ExecStart=/usr/bin/pnpm exec vite --host --port 5173 --strictPort
+Restart=always
+RestartSec=5
+StandardOutput=journal
+StandardError=journal
+SyslogIdentifier=onos-web-dev
+
+[Install]
+WantedBy=multi-user.target

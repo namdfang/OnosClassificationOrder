@@ -71,3 +71,9 @@ data
 
 # Vite ghi file tạm cạnh vite.config khi nạp config (thường tự xoá, trên Windows hay kẹt lại)
 vite.config.*.timestamp-*
+
+# Dev server tren may hub
+.logs/
+# credential tunnel — TUYET DOI khong commit (gitignore khong ho tro chu thich cuoi dong)
+cloudflared/*.json
+**/v8-compile-cache-0/
