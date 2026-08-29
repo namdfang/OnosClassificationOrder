@@ -6,6 +6,8 @@ import { ZaloGroupController } from './zalo-group.controller';
 import { ZaloGroupRepository } from './zalo-group.repository';
 import { ZaloGroupService } from './zalo-group.service';
 import { ZaloGroupLinkEntity, ZaloGroupLinkSchema } from './zalo-group-link.entity';
+import { ZaloGroupSummaryEntity, ZaloGroupSummarySchema } from './zalo-group-summary.entity';
+import { ZaloSummaryService } from './zalo-summary.service';
 
 /**
  * Nối nhóm Zalo ↔ khách hàng.
@@ -19,11 +21,12 @@ import { ZaloGroupLinkEntity, ZaloGroupLinkSchema } from './zalo-group-link.enti
   imports: [
     MongooseModule.forFeature([
       { name: ZaloGroupLinkEntity.name, schema: ZaloGroupLinkSchema },
+      { name: ZaloGroupSummaryEntity.name, schema: ZaloGroupSummarySchema },
       { name: CustomerEntity.name, schema: CustomerSchema },
     ]),
   ],
   controllers: [ZaloGroupController],
-  providers: [ZaloGroupService, ZaloGroupRepository],
-  exports: [ZaloGroupService, ZaloGroupRepository],
+  providers: [ZaloGroupService, ZaloGroupRepository, ZaloSummaryService],
+  exports: [ZaloGroupService, ZaloGroupRepository, ZaloSummaryService],
 })
 export class ZaloGroupModule {}

@@ -113,7 +113,5 @@
     "displayUrlLabel": "display URL",
     "originalUrlLabel": "original URL"
   },
-  "sidebar": {
-    "zaloGroups": "Zalo groups"
-  }
+  "sidebar": {}
 }

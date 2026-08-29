@@ -1,8 +1,8 @@
 # Nối nhóm Zalo ↔ khách hàng (Zalo Group Mapping) — Function Description
 
 > **File FE:** `apps/web/src/pages/zalo-groups/index.tsx`, `ZaloGroupEditDialog.tsx`, `SuggestionsDialog.tsx`
-> **File BE:** `apps/api/src/modules/zalo-group/zalo-group.service.ts`, `zalo-group.controller.ts`, `zalo-group-link.entity.ts`
-> **Script:** `apps/api/scripts/sync-zalo-groups.mjs`
+> **File BE:** `apps/api/src/modules/zalo-group/` — `zalo-group.service.ts`, `zalo-summary.service.ts`, `zalo-group.controller.ts`, `zalo-group-link.entity.ts`, `zalo-group-summary.entity.ts`
+> **Script:** `apps/api/scripts/sync-zalo-groups.mjs`, `apps/api/scripts/summarize-zalo-groups.mjs`
 > **Route:** `/adm/zalo-groups`
 > **API:** `GET /v1/zalo-groups`, `GET /v1/zalo-groups/coverage`, `GET /v1/zalo-groups/suggestions`, `POST /v1/zalo-groups/sync`, `PATCH /v1/zalo-groups/:id`
 
@@ -55,6 +55,10 @@ bên đó 212 dòng = 85 nhóm thật).
 | GET | `/v1/zalo-groups/suggestions` | Gợi ý ghép nhóm ↔ khách theo tên nhóm. Cap 200, điểm ≥ 0.5 |
 | POST | `/v1/zalo-groups/sync` | Nạp nhóm từ engine. **Không** đụng `kind`/`customerId`/`ownerUserId` đã gắn |
 | PATCH | `/v1/zalo-groups/:id` | Gắn/gỡ khách, đổi phân loại, chỉ định người phụ trách |
+| GET | `/v1/zalo-groups/summaries?mucDo&conViec&search` | Bảng tóm tắt tình hình, gấp lên đầu |
+| GET | `/v1/zalo-groups/summary-queue` | Nhóm chờ tóm tắt + mốc tin cần lấy từ (cho script) |
+| POST | `/v1/zalo-groups/summarize` | Tóm tắt một nhóm từ đoạn hội thoại được đẩy sang |
+| PATCH | `/v1/zalo-groups/summaries/:groupGlobalId/task` | Tick / bỏ tick một việc |
 
 Entity `zalo_group_links` (`apps/api/src/modules/zalo-group/zalo-group-link.entity.ts`):
 
@@ -129,6 +133,42 @@ phát hiện về sau.
 Một khách có thể có **nhiều nhóm** (nhóm BOD + nhóm TOPUP) — unique index đặt
 trên `groupGlobalId`, không đặt trên `customerId`.
 
+## 5b. Tóm tắt tình hình nhóm
+
+Bảng `zalo_group_summaries`, một bản ghi hiện hành cho mỗi nhóm.
+
+**Mô hình:** `claude-opus-5` qua `@anthropic-ai/sdk` (đổi được bằng `ZALO_SUMMARY_MODEL`),
+`thinking: adaptive`, `effort: medium` (`ZALO_SUMMARY_EFFORT`). Dùng structured
+output (`output_config.format` kiểu `json_schema`) để mô hình trả đúng khuôn thay
+vì phải dò JSON trong văn bản trả về.
+
+**Cần `ANTHROPIC_API_KEY`** trong `apps/api/.env.<NODE_ENV>`. Thiếu khoá thì
+endpoint trả 503 kèm câu chỉ rõ phải đặt biến nào — không để nó nổi lên thành
+500 "Internal server error" không manh mối.
+
+Bốn chốt lấy từ `thghub`:
+
+1. **Cuốn chiếu, không phải "N tin gần nhất".** Mỗi lượt nhận bản tóm tắt lần
+   trước + tin MỚI kể từ `denMocTin`. Đo trên 191 nhóm bên thghub: cửa sổ "60 tin
+   gần nhất" cho nhóm bận chỉ thấy 1,6 ngày lịch sử còn nhóm im thấy 16,2 ngày —
+   nhóm càng bận càng mù, mà đó đúng là nhóm dễ có việc treo.
+2. **Đọc lại từ đầu mỗi 7 ngày** (`docDayDuLuc`, đổi bằng `ZALO_SUMMARY_REREAD_DAYS`).
+   Tóm tắt cuốn chiếu có bệnh trôi dần — một kết luận sai được chép lại mãi.
+3. **Việc cần làm ra checklist, không phải văn xuôi.** thghub chạy thử 6 nhóm:
+   văn xuôi 3–4 dòng đọc thì hiểu nhưng không làm theo được.
+4. **Ô `nghiNgo`** — việc đã tick xong mà mô hình không thấy bằng chứng. Thiếu ô
+   này thì việc tick khống bị `gopChecklist` nuốt mất, tệ hơn cả không có nút tick.
+
+`gopChecklist()` giữ trạng thái tick của việc trùng nội dung qua các lượt — nếu
+không, mỗi lượt tóm tắt lại xoá sạch công người vận hành đã tick.
+
+**Chốt riêng tư kiểm HAI lần:** ở hàng đợi (`getQueue`) và ở chính
+`summarize()`. Endpoint gọi trực tiếp được, mà đọc nhầm nhóm `internal` là đọc
+đời tư nhân viên.
+
+**Bỏ qua nhóm im > 14 ngày** (`ZALO_SUMMARY_IDLE_DAYS`) — không tốn tiền gọi mô
+hình cho nhóm chẳng có gì thay đổi.
+
 ## 6. Performance notes
 
 - Đồng bộ 147 nhóm: 157 dòng Postgres → 147 lệnh `updateOne` upsert. Đo trên
@@ -159,7 +199,7 @@ nhóm internal vào mô hình là đọc đời tư nhân viên.
 |---|---|---|
 | P1 | Mô hình dữ liệu + đồng bộ + gợi ý + API gắn nhóm | ✅ xong |
 | P1b | Màn hình gắn nhóm `/adm/zalo-groups` + duyệt gợi ý hàng loạt | ✅ xong |
-| P2 | Tóm tắt cuốn chiếu nội dung nhóm (BullMQ) | chưa làm |
+| P2 | Tóm tắt cuốn chiếu nội dung nhóm + màn hình Tình hình | ✅ xong (chờ `ANTHROPIC_API_KEY` để chạy thật) |
 | P3 | Báo cáo cho Chủ tịch — cắm vào `ScheduledReportsModule` | chưa làm |
 | P4 | Nhắc việc hai chiều: checklist → nhắn ngược vào nhóm Zalo | chưa làm |
 

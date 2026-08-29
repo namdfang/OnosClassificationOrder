@@ -1,4 +1,4 @@
-import type { UpdateZaloGroupLinkDto } from 'shared';
+import type { ToggleZaloSummaryTaskDto, UpdateZaloGroupLinkDto } from 'shared';
 
 import { callApi } from '../apis';
 import { CONFIG } from '../constants';
@@ -19,4 +19,12 @@ const updateLink = (id: string, data: UpdateZaloGroupLinkDto) => {
   return callApi(`/${CONFIG.API_VERSION}/zalo-groups/${id}`, 'patch', data);
 };
 
-export const zaloGroup = { getGroups, getCoverage, getSuggestions, updateLink };
+const getSummaries = (query: string = '') => {
+  return callApi(`/${CONFIG.API_VERSION}/zalo-groups/summaries${query}`, 'get');
+};
+
+const toggleTask = (groupGlobalId: string, data: ToggleZaloSummaryTaskDto) => {
+  return callApi(`/${CONFIG.API_VERSION}/zalo-groups/summaries/${groupGlobalId}/task`, 'patch', data);
+};
+
+export const zaloGroup = { getGroups, getCoverage, getSuggestions, updateLink, getSummaries, toggleTask };

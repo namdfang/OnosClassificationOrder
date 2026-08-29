@@ -19,6 +19,7 @@ import { handleAxiosError } from '@/utils';
 import { cn } from '@/utils/cn';
 
 import SuggestionsDialog from './SuggestionsDialog';
+import SummariesPanel from './SummariesPanel';
 import ZaloGroupEditDialog from './ZaloGroupEditDialog';
 
 /** Màu badge theo phân loại — dùng chung cho bảng lẫn ô sửa. */
@@ -58,6 +59,7 @@ export default function ZaloGroupsPage() {
 
   const [editing, setEditing] = useState<Row | null>(null);
   const [showSuggestions, setShowSuggestions] = useState(false);
+  const [tab, setTab] = useState<'groups' | 'summary'>('groups');
 
   const query = useMemo(() => {
     const p = new URLSearchParams();
@@ -155,6 +157,30 @@ export default function ZaloGroupsPage() {
         </div>
       )}
 
+      {/* Hai góc nhìn cùng một dữ liệu: gắn nhóm (việc thiết lập) và tình hình
+          (việc theo dõi hằng ngày). Tách tab để người vào đúng việc của mình. */}
+      <div className="flex gap-1 border-b">
+        {(['groups', 'summary'] as const).map((k) => (
+          <button
+            key={k}
+            type="button"
+            onClick={() => setTab(k)}
+            className={cn(
+              '-mb-px border-b-2 px-3 py-2 text-sm font-medium transition-colors',
+              tab === k
+                ? 'border-primary-500 text-primary-600 dark:text-primary-400'
+                : 'border-transparent text-slate-500 hover:text-slate-700 dark:hover:text-slate-300',
+            )}
+          >
+            {t(`tab.${k}`)}
+          </button>
+        ))}
+      </div>
+
+      {tab === 'summary' && <SummariesPanel />}
+
+      {tab === 'groups' && (
+      <>
       <div className="flex flex-wrap items-center gap-2">
         <div className="relative">
           <Search className="absolute left-2.5 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
@@ -259,6 +285,8 @@ export default function ZaloGroupsPage() {
         loading={loading}
         onChange={(p) => setPage(p)}
       />
+      </>
+      )}
 
       {editing && (
         <ZaloGroupEditDialog

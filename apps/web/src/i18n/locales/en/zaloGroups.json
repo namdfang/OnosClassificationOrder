@@ -60,5 +60,25 @@
     "clear": "Clear",
     "save": "Save",
     "saved": "Saved group \"{{title}}\""
+  },
+  "tab": {
+    "groups": "Groups",
+    "summary": "Status"
+  },
+  "summary": {
+    "allLevels": "All levels",
+    "level": {
+      "gap": "Urgent",
+      "can-chu-y": "Needs attention",
+      "binh-thuong": "Normal"
+    },
+    "pendingOnly": "Has open tasks",
+    "empty": "No summaries yet — run the summarize script first",
+    "customerWants": "Customer asked",
+    "staffReplied": "Staff replied",
+    "pending": "Outstanding",
+    "todo": "To do",
+    "doubt": "Ticked done but no evidence found",
+    "msgCount": "{{count}} messages"
   }
 }

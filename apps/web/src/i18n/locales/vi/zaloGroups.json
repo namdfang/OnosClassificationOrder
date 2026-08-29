@@ -60,5 +60,25 @@
     "clear": "Bỏ chọn",
     "save": "Lưu",
     "saved": "Đã lưu nhóm \"{{title}}\""
+  },
+  "tab": {
+    "groups": "Nhóm",
+    "summary": "Tình hình"
+  },
+  "summary": {
+    "allLevels": "Tất cả mức độ",
+    "level": {
+      "gap": "Gấp",
+      "can-chu-y": "Cần chú ý",
+      "binh-thuong": "Bình thường"
+    },
+    "pendingOnly": "Còn việc chưa xong",
+    "empty": "Chưa có bản tóm tắt nào — chạy script tóm tắt trước",
+    "customerWants": "Khách quan tâm",
+    "staffReplied": "Nhân viên phản hồi",
+    "pending": "Tồn đọng",
+    "todo": "Việc cần làm",
+    "doubt": "Đã tick xong nhưng không thấy bằng chứng",
+    "msgCount": "{{count}} tin"
   }
 }

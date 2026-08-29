@@ -63,7 +63,8 @@
       "toolCheckUnreviewed": "Soát tool — đơn chưa soát (7 ngày gần nhất)"
     },
     "customers": "Khách hàng",
-    "impersonate": "Mạo danh"
+    "impersonate": "Mạo danh",
+    "zaloGroups": "Seller Support"
   },
   "header": {
     "toggleSidebar": "Đóng/mở sidebar",

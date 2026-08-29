@@ -4,17 +4,29 @@ import { AuthUser } from 'core';
 import type {
   GetZaloGroupLinksResDto,
   GetZaloGroupSuggestionsResDto,
+  GetZaloSummariesResDto,
+  GetZaloSummaryQueueResDto,
+  SummarizeZaloGroupResDto,
   SyncZaloGroupsResDto,
   UpdateZaloGroupLinkResDto,
   ZaloGroupCoverageResDto,
 } from 'shared';
-import { GetZaloGroupLinksDto, RoleType, SyncZaloGroupsDto, UpdateZaloGroupLinkDto } from 'shared';
+import {
+  GetZaloGroupLinksDto,
+  GetZaloSummariesDto,
+  RoleType,
+  SummarizeZaloGroupDto,
+  SyncZaloGroupsDto,
+  ToggleZaloSummaryTaskDto,
+  UpdateZaloGroupLinkDto,
+} from 'shared';
 import { Logger } from 'winston';
 
 import { Auth } from '@/decorators/http.decorator';
 
 import type { UserDocument } from '../user/user.entity';
 import { ZaloGroupService } from './zalo-group.service';
+import { ZaloSummaryService } from './zalo-summary.service';
 
 /** Xem danh sách nhóm + bảng phủ sóng. */
 const ZALO_GROUP_VIEW_ROLES = [
@@ -33,6 +45,7 @@ const ZALO_GROUP_EDIT_ROLES = [RoleType.SuperAdmin, RoleType.Admin, RoleType.Man
 export class ZaloGroupController {
   constructor(
     private readonly zaloGroupService: ZaloGroupService,
+    private readonly zaloSummaryService: ZaloSummaryService,
     @Inject('winston') private readonly logger: Logger,
   ) {}
 
@@ -110,5 +123,79 @@ export class ZaloGroupController {
     });
 
     return { success: true, data: await this.zaloGroupService.updateLink(id, dto, String(user._id)) } as UpdateZaloGroupLinkResDto;
+  }
+
+  // ─── Tóm tắt tình hình nhóm ──────────────────────────────────────
+
+  @Get('summaries')
+  @Auth(ZALO_GROUP_VIEW_ROLES)
+  @ApiOperation({ summary: 'Bảng tóm tắt tình hình các nhóm (gấp lên đầu)' })
+  @HttpCode(HttpStatus.OK)
+  async getSummaries(
+    @Query() dto: GetZaloSummariesDto,
+    @AuthUser() user: UserDocument,
+  ): Promise<GetZaloSummariesResDto> {
+    this.logger.info({
+      message: JSON.stringify({ method: 'GET', url: '/zalo-groups/summaries', userId: user._id, query: dto }),
+    });
+
+    return { success: true, ...(await this.zaloSummaryService.list(dto)) } as GetZaloSummariesResDto;
+  }
+
+  @Get('summary-queue')
+  @Auth(ZALO_GROUP_EDIT_ROLES)
+  @ApiOperation({ summary: 'Nhóm đang chờ tóm tắt + mốc tin cần lấy từ (cho script đồng bộ)' })
+  @HttpCode(HttpStatus.OK)
+  async getSummaryQueue(@AuthUser() user: UserDocument): Promise<GetZaloSummaryQueueResDto> {
+    this.logger.info({
+      message: JSON.stringify({ method: 'GET', url: '/zalo-groups/summary-queue', userId: user._id }),
+    });
+
+    return { success: true, data: await this.zaloSummaryService.getQueue() };
+  }
+
+  @Post('summarize')
+  @Auth(ZALO_GROUP_EDIT_ROLES)
+  @ApiOperation({ summary: 'Tóm tắt một nhóm từ đoạn hội thoại được đẩy sang' })
+  @HttpCode(HttpStatus.OK)
+  async summarize(
+    @Body() dto: SummarizeZaloGroupDto,
+    @AuthUser() user: UserDocument,
+  ): Promise<SummarizeZaloGroupResDto> {
+    this.logger.info({
+      message: JSON.stringify({
+        method: 'POST',
+        url: '/zalo-groups/summarize',
+        userId: user._id,
+        groupGlobalId: dto.groupGlobalId,
+        messages: dto.messages?.length ?? 0,
+      }),
+    });
+
+    return { success: true, data: await this.zaloSummaryService.summarize(dto) } as SummarizeZaloGroupResDto;
+  }
+
+  @Patch('summaries/:groupGlobalId/task')
+  @Auth(ZALO_GROUP_VIEW_ROLES)
+  @ApiOperation({ summary: 'Tick / bỏ tick một việc trong danh sách của nhóm' })
+  @HttpCode(HttpStatus.OK)
+  async toggleTask(
+    @Param('groupGlobalId') groupGlobalId: string,
+    @Body() dto: ToggleZaloSummaryTaskDto,
+    @AuthUser() user: UserDocument,
+  ): Promise<SummarizeZaloGroupResDto> {
+    this.logger.info({
+      message: JSON.stringify({
+        method: 'PATCH',
+        url: `/zalo-groups/summaries/${groupGlobalId}/task`,
+        userId: user._id,
+        body: dto,
+      }),
+    });
+
+    return {
+      success: true,
+      data: await this.zaloSummaryService.toggleTask(groupGlobalId, dto.index, dto.xong),
+    } as SummarizeZaloGroupResDto;
   }
 }
