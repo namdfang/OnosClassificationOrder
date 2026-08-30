@@ -40,6 +40,18 @@ const MODEL = process.env.ZALO_SUMMARY_MODEL || 'opus';
  */
 const HAN_GIAY = Number(process.env.ZALO_SUMMARY_TIMEOUT_SEC || 50);
 
+/**
+ * Đường dẫn CLI `claude`. Agent SDK KHÔNG tự gọi API — nó `spawn` tiến trình
+ * CLI này, nên máy chạy API bắt buộc phải có Claude Code cài sẵn.
+ *
+ * Vì sao phải khai tường minh thay vì để SDK tự tìm trong PATH: bản cài mặc
+ * định đặt CLI ở `~/.local/bin`, mà tiến trình PM2 lại chạy với PATH hệ thống
+ * (`/usr/local/bin:/usr/bin:...`) — không có thư mục đó. Kết quả là `spawn`
+ * hỏng, còn lỗi nổi lên chỉ nói chung chung về xác thực, dẫn người đọc đi tìm
+ * nhầm phía thông tin đăng nhập. Đã mất vài lượt truy vì đúng chỗ này.
+ */
+const CLAUDE_CLI = process.env.CLAUDE_CLI_PATH;
+
 /** Bao lâu thì phải đọc lại từ đầu để cắt bệnh trôi dần của tóm tắt cuốn chiếu. */
 const NGAY_DOC_LAI = Number(process.env.ZALO_SUMMARY_REREAD_DAYS || 7);
 
@@ -433,6 +445,7 @@ ${doanChat}`;
         prompt: loiNhac,
         options: {
           model: MODEL,
+          ...(CLAUDE_CLI ? { pathToClaudeCodeExecutable: CLAUDE_CLI } : {}),
           // Không cho công cụ nào: đây là việc đọc-rồi-trả-lời, không phải
           // việc cần đọc file hay chạy lệnh.
           allowedTools: [],
@@ -457,6 +470,13 @@ ${doanChat}`;
       const mo = error instanceof Error ? error.message : String(error);
       // Agent SDK dùng phiên đăng nhập Claude Code (thư mục ~/.claude). Thiếu
       // nó thì lỗi nói về xác thực/đăng nhập — dịch sang câu chỉ rõ phải làm gì.
+      // Không tìm thấy CLI là lỗi CÀI ĐẶT, khác hẳn lỗi xác thực — tách riêng
+      // để người đọc không đi tìm nhầm phía thông tin đăng nhập.
+      if (/ENOENT|not found|spawn/i.test(mo)) {
+        throw new ServiceUnavailableException(
+          'Máy chạy API chưa có CLI `claude` (Agent SDK spawn tiến trình này). Cài Claude Code rồi đặt CLAUDE_CLI_PATH trỏ tới nó.',
+        );
+      }
       if (/auth|credential|login|unauthor|api[ _-]?key/i.test(mo)) {
         throw new ServiceUnavailableException(
           'Backend chưa đăng nhập được Claude — kiểm tra phiên Claude Code (~/.claude) của user chạy API.',
