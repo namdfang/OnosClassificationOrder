@@ -1,0 +1,15 @@
+[Unit]
+Description=cloudflared (onos dev tunnel)
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+TimeoutStartSec=15
+Type=notify
+ExecStart=/usr/local/bin/cloudflared --no-autoupdate --config /root/.vibedev/repos/onos/cloudflared/config.yml tunnel run
+ExecReload=/bin/kill -HUP $MAINPID
+Restart=on-failure
+RestartSec=5s
+
+[Install]
+WantedBy=multi-user.target
