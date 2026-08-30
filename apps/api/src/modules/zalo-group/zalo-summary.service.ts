@@ -135,6 +135,10 @@ export class ZaloSummaryService {
    * bỏ qua (khỏi tốn một lượt gọi mô hình), có tin mới thì chạy lại.
    */
   async enqueue(dto: SummarizeZaloGroupDto): Promise<{ queued: boolean }> {
+    // Chặn ngay ở cửa vào: nhóm chưa phân loại thì báo lỗi cho người gọi thay
+    // vì xếp hàng rồi để job hỏng lặng lẽ trong worker.
+    await this.assertDuocDocChat(dto.groupGlobalId);
+
     const mocCuoi = dto.messages.reduce<number>((max, m) => {
       const t = m.luc ? new Date(m.luc).getTime() : 0;
 
@@ -196,19 +200,31 @@ export class ZaloSummaryService {
     return out;
   }
 
-  /** Gọi mô hình tóm tắt một nhóm rồi lưu kết quả. */
-  async summarize(dto: SummarizeZaloGroupDto): Promise<ZaloGroupSummaryDocument> {
-    const link = await this.linkModel.findOne({ groupGlobalId: dto.groupGlobalId }).lean();
+  /**
+   * Chốt riêng tư: chỉ nhóm đã phân loại `seller`/`operation` mới được đọc chat.
+   *
+   * Gọi ở CẢ hai chỗ — lúc xếp hàng và lúc worker chạy. Chỉ kiểm ở worker thì
+   * người gọi nhận `queued: true` rồi job âm thầm hỏng, lại còn tốn 3 lần thử
+   * lại cho một lỗi không bao giờ tự khỏi. Chỉ kiểm ở cửa vào thì job cũ nằm
+   * sẵn trong hàng đợi vẫn chạy được sau khi nhóm bị đổi sang `internal`.
+   */
+  private async assertDuocDocChat(groupGlobalId: string): Promise<Record<string, unknown>> {
+    const link = await this.linkModel.findOne({ groupGlobalId }).lean();
     if (!link) throw new NotFoundException('Không tìm thấy nhóm Zalo.');
 
     const kind = (link as { kind?: string }).kind;
-    // Chốt riêng tư lặp lại ở đây, KHÔNG chỉ dựa vào hàng đợi: endpoint này gọi
-    // trực tiếp được, mà đọc nhầm nhóm nội bộ là đọc đời tư nhân viên.
     if (!kind || !ZALO_GROUP_ANALYZABLE_KINDS.includes(kind as never)) {
       throw new BadRequestException(
         'Nhóm này chưa được phân loại là nhóm khách hoặc nhóm vận hành — không đọc nội dung chat.',
       );
     }
+
+    return link as Record<string, unknown>;
+  }
+
+  /** Gọi mô hình tóm tắt một nhóm rồi lưu kết quả. */
+  async summarize(dto: SummarizeZaloGroupDto): Promise<ZaloGroupSummaryDocument> {
+    const link = await this.assertDuocDocChat(dto.groupGlobalId);
 
     const prev = await this.summaryModel.findOne({ groupGlobalId: dto.groupGlobalId }).lean();
     const docLaiTuDau = dto.docLaiTuDau ?? false;

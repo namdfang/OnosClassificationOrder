@@ -7,7 +7,7 @@ import type {
   UpdateZaloGroupLinkDto,
   ZaloGroupSuggestion,
 } from 'shared';
-import { ZaloGroupKind } from 'shared';
+import { ZALO_GROUP_ANALYZABLE_KINDS, ZaloGroupKind } from 'shared';
 
 import { CustomerEntity } from '../customer/customer.entity';
 import { ZaloGroupRepository } from './zalo-group.repository';
@@ -186,6 +186,16 @@ export class ZaloGroupService {
       { new: true },
     );
     if (!updated) throw new NotFoundException('Không tìm thấy nhóm Zalo.');
+
+    // Nhóm vừa RỜI diện được phân tích (chuyển sang nội bộ/riêng tư) → xoá bản
+    // tóm tắt cũ. Đánh dấu một nhóm là riêng tư mà nội dung đã rút ra vẫn nằm
+    // trên màn hình thì cái nhãn đó vô nghĩa — người vận hành tưởng đã che,
+    // thực tế vẫn phơi. Chốt ở tầng dữ liệu, không phải chỉ lọc lúc hiển thị.
+    const daRoiDienPhanTich =
+      ZALO_GROUP_ANALYZABLE_KINDS.includes(before.kind) && !ZALO_GROUP_ANALYZABLE_KINDS.includes(nextKind);
+    if (daRoiDienPhanTich) {
+      await this.summaryModel.deleteOne({ groupGlobalId: updated.groupGlobalId });
+    }
 
     return updated;
   }

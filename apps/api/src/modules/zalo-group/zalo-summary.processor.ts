@@ -1,6 +1,6 @@
 import { OnWorkerEvent, Processor, WorkerHost } from '@nestjs/bullmq';
-import { Logger } from '@nestjs/common';
-import { Job } from 'bullmq';
+import { BadRequestException, Logger, NotFoundException } from '@nestjs/common';
+import { Job, UnrecoverableError } from 'bullmq';
 
 import type { ZaloSummaryJobData } from './zalo-summary.queue';
 import { ZALO_SUMMARY_QUEUE } from './zalo-summary.queue';
@@ -28,7 +28,17 @@ export class ZaloSummaryProcessor extends WorkerHost {
 
   async process(job: Job<ZaloSummaryJobData>): Promise<void> {
     const { groupGlobalId, messages, docLaiTuDau } = job.data;
-    await this.zaloSummaryService.summarize({ groupGlobalId, messages, docLaiTuDau });
+    try {
+      await this.zaloSummaryService.summarize({ groupGlobalId, messages, docLaiTuDau });
+    } catch (err) {
+      // Lỗi NGHIỆP VỤ (nhóm chưa phân loại, nhóm đã xoá) không bao giờ tự khỏi —
+      // thử lại 3 lần chỉ tổ lấp log. `UnrecoverableError` bảo BullMQ bỏ ngay.
+      // Lỗi hạ tầng (mô hình quá tải, mạng chập) vẫn thử lại như thường.
+      if (err instanceof BadRequestException || err instanceof NotFoundException) {
+        throw new UnrecoverableError(err.message);
+      }
+      throw err;
+    }
   }
 
   @OnWorkerEvent('failed')
