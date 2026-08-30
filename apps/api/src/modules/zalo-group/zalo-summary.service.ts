@@ -1,6 +1,6 @@
 import { query } from '@anthropic-ai/claude-agent-sdk';
 import { InjectQueue } from '@nestjs/bullmq';
-import { BadRequestException, Injectable, NotFoundException, ServiceUnavailableException } from '@nestjs/common';
+import { BadRequestException, Injectable, Logger, NotFoundException, ServiceUnavailableException } from '@nestjs/common';
 import { InjectModel } from '@nestjs/mongoose';
 import type { Queue } from 'bullmq';
 import { Model } from 'mongoose';
@@ -123,6 +123,8 @@ interface KetQua {
 
 @Injectable()
 export class ZaloSummaryService {
+  private readonly logger = new Logger(ZaloSummaryService.name);
+
   constructor(
     @InjectModel(ZaloGroupSummaryEntity.name)
     private readonly summaryModel: Model<ZaloGroupSummaryEntity>,
@@ -468,6 +470,10 @@ ${doanChat}`;
       }
     } catch (error) {
       const mo = error instanceof Error ? error.message : String(error);
+      // GHI LẠI LỖI THÔ trước khi diễn giải. Bản trước chỉ ném ra câu đã viết
+      // lại, nên khi đoán sai nguyên nhân thì không còn manh mối nào để lần —
+      // đã mất nhiều lượt truy trên production vì đúng chỗ này.
+      this.logger.error(`[zalo-summary] lỗi gốc từ Agent SDK: ${mo.slice(0, 500)}`);
       // Agent SDK dùng phiên đăng nhập Claude Code (thư mục ~/.claude). Thiếu
       // nó thì lỗi nói về xác thực/đăng nhập — dịch sang câu chỉ rõ phải làm gì.
       // Không tìm thấy CLI là lỗi CÀI ĐẶT, khác hẳn lỗi xác thực — tách riêng
