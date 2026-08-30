@@ -71,3 +71,7 @@ data
 
 # Vite ghi file tạm cạnh vite.config khi nạp config (thường tự xoá, trên Windows hay kẹt lại)
 vite.config.*.timestamp-*
+
+# deploy.sh — bản web trước đó + commit trước đó, để lùi khi bản mới hỏng
+apps/web/.dist-prod-prev/
+.deploy-previous-commit
