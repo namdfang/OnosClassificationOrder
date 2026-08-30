@@ -52,3 +52,6 @@ export * from './user-log.dto';
 export * from './vnp-shipping.dto';
 export * from './webhook.dto';
 export * from './workshop-config.dto';
+export * from './zalo-group-link.dto';
+export * from './zalo-group-summary.dto';
+export * from './zalo-identity.dto';

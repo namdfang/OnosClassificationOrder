@@ -1,0 +1,108 @@
+{
+  "title": "Nhóm Zalo",
+  "subtitle": "Nối nhóm Zalo với khách hàng để làm báo cáo và nhắc việc",
+  "coverage": {
+    "totalGroups": "Tổng nhóm",
+    "unreviewed": "Chưa xét",
+    "linkedGroups": "Đã gắn khách",
+    "customersWithGroup": "Khách có nhóm",
+    "customersWithoutGroup": "Khách chưa có nhóm",
+    "ofTotal": "trên {{total}}"
+  },
+  "kind": {
+    "unreviewed": "Chưa xét",
+    "seller": "Nhóm khách",
+    "operation": "Nhóm vận hành",
+    "internal": "Nội bộ / riêng tư",
+    "all": "Tất cả phân loại"
+  },
+  "table": {
+    "group": "Nhóm Zalo",
+    "kind": "Phân loại",
+    "customer": "Khách hàng",
+    "owner": "Người phụ trách",
+    "lastMessage": "Tin cuối",
+    "conversations": "{{count}} hội thoại",
+    "nicks": "Nick trong nhóm",
+    "actions": "Thao tác",
+    "empty": "Không có nhóm nào khớp bộ lọc",
+    "noCustomer": "— chưa gắn —",
+    "noOwner": "— chưa chỉ định —",
+    "noTitle": "(không tên)"
+  },
+  "filter": {
+    "search": "Tìm theo tên nhóm",
+    "unlinkedOnly": "Chỉ nhóm chưa gắn khách",
+    "allGroups": "Tất cả nhóm"
+  },
+  "suggestions": {
+    "button": "Gợi ý ghép ({{count}})",
+    "title": "Gợi ý ghép nhóm với khách",
+    "description": "Hệ thống đoán theo tên nhóm. Duyệt từng dòng — không có gì được gắn tự động.",
+    "confidence": "Độ chắc",
+    "reason": "Vì sao",
+    "apply": "Gắn",
+    "applyAll": "Gắn tất cả dòng đã chọn",
+    "applied": "Đã gắn {{count}} nhóm",
+    "empty": "Không có gợi ý nào — mọi nhóm còn lại phải gắn tay",
+    "selectAll": "Chọn tất cả"
+  },
+  "edit": {
+    "title": "Gắn nhóm",
+    "kind": "Phân loại",
+    "customer": "Khách hàng",
+    "customerHint": "Chỉ nhóm khách mới gắn được khách hàng",
+    "owner": "Người phụ trách",
+    "ownerHint": "Ai chịu trách nhiệm chính — khác với nick đang có mặt trong nhóm",
+    "note": "Ghi chú",
+    "selectCustomer": "Chọn khách hàng…",
+    "selectOwner": "Chọn người phụ trách…",
+    "clear": "Bỏ chọn",
+    "save": "Lưu",
+    "saved": "Đã lưu nhóm \"{{title}}\""
+  },
+  "tab": {
+    "groups": "Nhóm",
+    "summary": "Tình hình",
+    "identity": "Ai là ai"
+  },
+  "summary": {
+    "allLevels": "Tất cả mức độ",
+    "level": {
+      "gap": "Gấp",
+      "can-chu-y": "Cần chú ý",
+      "binh-thuong": "Bình thường"
+    },
+    "pendingOnly": "Còn việc chưa xong",
+    "empty": "Chưa có bản tóm tắt nào — chạy script tóm tắt trước",
+    "customerWants": "Khách quan tâm",
+    "staffReplied": "Nhân viên phản hồi",
+    "pending": "Tồn đọng",
+    "todo": "Việc cần làm",
+    "doubt": "Đã tick xong nhưng không thấy bằng chứng",
+    "msgCount": "{{count}} tin",
+    "openTasks": "{{count}} việc chưa xong",
+    "notYet": "chưa tóm tắt",
+    "doneAt": "xong lúc {{at}}"
+  },
+  "identity": {
+    "kind": {
+      "unknown": "Chưa xét",
+      "ai-support": "Trợ lý AI",
+      "staff": "Nhân viên",
+      "customer": "Khách hàng"
+    },
+    "allKinds": "Tất cả",
+    "pending": "Chưa xác nhận",
+    "pendingOnly": "Chỉ người chưa xác nhận",
+    "searchName": "Tìm theo tên",
+    "person": "Người gửi",
+    "groupCount": "Số nhóm",
+    "msgCount": "Số tin",
+    "classify": "Phân loại",
+    "suggested": "máy đoán: {{kind}}",
+    "applyAll": "Áp hết đề xuất",
+    "applied": "Đã áp {{count}} người",
+    "empty": "Không có ai khớp bộ lọc"
+  }
+}

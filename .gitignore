@@ -77,3 +77,7 @@ vite.config.*.timestamp-*
 # credential tunnel — TUYET DOI khong commit (gitignore khong ho tro chu thich cuoi dong)
 cloudflared/*.json
 **/v8-compile-cache-0/
+
+# deploy.sh — bản web trước đó + commit trước đó, để lùi khi bản mới hỏng
+apps/web/.dist-prod-prev/
+.deploy-previous-commit
