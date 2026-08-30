@@ -160,6 +160,14 @@ export class ZaloSummaryService {
     }, 0);
     const jobId = `${dto.groupGlobalId}:${mocCuoi}${dto.docLaiTuDau ? ':full' : ''}`;
 
+    // Xoá job CÙNG jobId còn sót lại trước khi thêm. `removeOnFail` giữ job
+    // hỏng tới 500 bản / 14 ngày, mà BullMQ coi jobId trùng là trùng — nên một
+    // job từng hỏng sẽ chặn mọi lần thử lại của đúng nhóm đó, im lặng: endpoint
+    // vẫn báo "đã xếp hàng", hàng đợi không nhúc nhích, không lỗi mới nào.
+    // Đã dẫm phải trên production: 52 job hỏng vì thiếu CLI, sửa xong CLI rồi
+    // mà chạy lại vẫn không có gì xảy ra.
+    await this.summaryQueue.remove(jobId).catch(() => undefined);
+
     const job = await this.summaryQueue.add(
       'summarize',
       { groupGlobalId: dto.groupGlobalId, messages: dto.messages, docLaiTuDau: dto.docLaiTuDau },
