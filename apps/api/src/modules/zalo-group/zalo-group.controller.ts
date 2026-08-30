@@ -35,14 +35,16 @@ import { ZaloGroupService } from './zalo-group.service';
 import { ZaloIdentityService } from './zalo-identity.service';
 import { ZaloSummaryService } from './zalo-summary.service';
 
-/** Xem danh sách nhóm + bảng phủ sóng. */
-const ZALO_GROUP_VIEW_ROLES = [
-  RoleType.SuperAdmin,
-  RoleType.Admin,
-  RoleType.Manager,
-  RoleType.SupportManager,
-  RoleType.Support,
-];
+/**
+ * Xem danh sách nhóm + tình hình + bảng phủ sóng.
+ *
+ * Khớp ĐÚNG với `page.zalo_groups` ở FE (SuperAdmin/Admin/Manager). Trước đây
+ * còn có Support/SupportManager: họ không thấy menu nhưng vẫn gọi API được nếu
+ * gõ thẳng URL — mà dữ liệu ở đây là tóm tắt nội dung chat với khách. Quyền
+ * thật nằm ở BE, nên hai bên lệch nhau là chỗ chắc chắn bị bỏ sót khi rà soát
+ * về sau. Cần mở cho Support thì mở ở CẢ hai nơi cùng lúc.
+ */
+const ZALO_GROUP_VIEW_ROLES = [RoleType.SuperAdmin, RoleType.Admin, RoleType.Manager];
 
 /** Gắn nhóm ↔ khách. Hẹp hơn xem: gắn sai là quy nhầm doanh thu sang khách khác. */
 const ZALO_GROUP_EDIT_ROLES = [RoleType.SuperAdmin, RoleType.Admin, RoleType.Manager];
