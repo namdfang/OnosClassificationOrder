@@ -165,8 +165,8 @@ export async function bootstrap(): Promise<NestFastifyApplication> {
   const reflector = app.get(Reflector);
 
   app.useGlobalFilters(
-    new CustomExceptionFilter(configService.isDevelopment, app.select(SharedModule).get(I18nService)),
-    new UnprocessableEntityFilter(reflector, configService.isDevelopment, app.select(SharedModule).get(I18nService)),
+    new CustomExceptionFilter(configService.exposeStackTrace, app.select(SharedModule).get(I18nService)),
+    new UnprocessableEntityFilter(reflector, configService.exposeStackTrace, app.select(SharedModule).get(I18nService)),
   );
 
   @Injectable()

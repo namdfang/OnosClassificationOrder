@@ -7,7 +7,7 @@ import type { I18nService } from 'nestjs-i18n';
 @Catch(HttpException)
 export class CustomExceptionFilter extends BaseExceptionFilter {
   constructor(
-    private readonly isDevelopment: boolean,
+    private readonly exposeStackTrace: boolean,
     private i18n: I18nService,
   ) {
     super();
@@ -32,12 +32,11 @@ export class CustomExceptionFilter extends BaseExceptionFilter {
 
     const statusCode = exception.getStatus();
     const message = exception.message;
-    let stackTrace;
-
-    if (this.isDevelopment && statusCode !== HttpStatus.TOO_MANY_REQUESTS) {
-      stackTrace = exception.stack;
-      console.error(stackTrace);
-    }
+    // LUÔN ghi log máy chủ (trừ lỗi quá tần suất — nó ồn và vô nghĩa); chỉ GỬI
+    // RA phản hồi khi bật tường minh. Xem comment cùng ý ở bad-request.filter.ts.
+    const boQuaLog = statusCode === HttpStatus.TOO_MANY_REQUESTS;
+    if (!boQuaLog) console.error(exception.stack);
+    const stackTrace = this.exposeStackTrace && !boQuaLog ? exception.stack : undefined;
 
     const translation: string = message;
     // try {
