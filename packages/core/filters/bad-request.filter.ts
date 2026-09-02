@@ -10,7 +10,7 @@ import type { ZodError } from 'zod';
 export class UnprocessableEntityFilter implements ExceptionFilter<UnprocessableEntityException> {
   constructor(
     public reflector: Reflector,
-    private readonly isDevelopment: boolean,
+    private readonly exposeStackTrace: boolean,
     private readonly i18n: I18nService,
   ) {}
 
@@ -31,12 +31,11 @@ export class UnprocessableEntityFilter implements ExceptionFilter<UnprocessableE
 
     const statusCode = exception.getStatus();
 
-    let stackTrace;
-
-    if (this.isDevelopment) {
-      stackTrace = exception.stack;
-      console.error(stackTrace);
-    }
+    // LUÔN ghi ra log máy chủ; chỉ GỬI RA phản hồi khi được bật tường minh.
+    // Hai việc này từng nằm chung một nhánh `if`, nên tắt phần gửi ra ngoài là
+    // mất luôn phần ghi log — mất manh mối lần lỗi mà không ai biết.
+    console.error(exception.stack);
+    const stackTrace = this.exposeStackTrace ? exception.stack : undefined;
 
     const exceptionResponse = exception.getResponse() as {
       errors: ZodError<unknown>[];

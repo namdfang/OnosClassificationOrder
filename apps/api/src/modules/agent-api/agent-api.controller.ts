@@ -10,6 +10,7 @@ import {
   ListAgentTablesResDto,
   ReadAgentTableQueryDto,
   ReadAgentTableResDto,
+  GetAgentSellerSupportResDto,
 } from 'shared';
 import { Logger } from 'winston';
 
@@ -23,6 +24,7 @@ import { AgentDocsService } from './agent-docs.service';
 import { AgentExceptionFilter } from './agent-exception.filter';
 import { AgentQueryService } from './agent-query.service';
 import { AgentReadService } from './agent-read.service';
+import { AgentSellerSupportService } from './agent-seller-support.service';
 import { AGENT_SWAGGER_DESCRIPTION, agentSummary } from './agent-swagger-guide';
 
 /**
@@ -47,6 +49,7 @@ export class AgentApiController {
     private readonly read: AgentReadService,
     private readonly queries: AgentQueryService,
     private readonly docs: AgentDocsService,
+    private readonly sellerSupport: AgentSellerSupportService,
     private readonly audit: AgentAuditService,
     @Inject('winston') private readonly logger: Logger,
   ) {}
@@ -158,6 +161,45 @@ export class AgentApiController {
       });
       throw error;
     }
+  }
+
+  /**
+   * `AGENT-ZALO` — MỘT lệnh gọi trả đủ cho agent hỗ trợ khách / báo cáo chủ tịch.
+   *
+   * Thay cho việc agent tự ghép `zalo_group_summaries` + `zalo_group_links` +
+   * `orders` + sản phẩm. Bốn vòng gọi cho một câu hỏi, mỗi chỗ ghép sai là một
+   * câu trả lời sai gửi tới khách.
+   *
+   * Nhóm nội bộ KHÔNG BAO GIỜ xuất hiện ở đây: nguồn `zalo_group_summaries` chỉ
+   * chứa nhóm khách/vận hành, tóm tắt bị xoá khi nhóm chuyển sang `internal`.
+   */
+  @Get('seller-support')
+  @Auth([], [], { public: true })
+  @Throttle({ default: { limit: AGENT_API_RATE_LIMIT_PER_MIN, ttl: AGENT_API_RATE_LIMIT_TTL_MS } })
+  @ApiOperation({ summary: 'Tình hình từng nhóm khách/vận hành kèm số liệu đơn sống và sản phẩm hay đặt' })
+  @HttpCode(HttpStatus.OK)
+  async getSellerSupport(
+    @Query('mucDo') mucDo?: string,
+    @Query('userSku') userSku?: string,
+    @Query('limit') limit?: string,
+    @Query('kemSanPham') kemSanPham?: string,
+  ): Promise<GetAgentSellerSupportResDto> {
+    const startedAt = Date.now();
+    this.log('GET', '/agent/seller-support', { mucDo });
+    const data = await this.sellerSupport.list({
+      mucDo,
+      userSku,
+      limit: limit ? Number(limit) : undefined,
+      kemSanPham: kemSanPham === 'false' ? false : undefined,
+    });
+    this.audit.write({
+      capability: 'seller_support',
+      returned: data.length,
+      durationMs: Date.now() - startedAt,
+      outcome: 'ok',
+    });
+
+    return { success: true, data };
   }
 
   @Get('docs')

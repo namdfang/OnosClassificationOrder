@@ -343,3 +343,72 @@ export type AgentAdminKey = z.infer<typeof AgentAdminKeyZod>;
 
 export const GetAgentAdminKeyResZod = ResZod.extend({ data: AgentAdminKeyZod });
 export class GetAgentAdminKeyResDto extends createZodDto(extendApi(GetAgentAdminKeyResZod)) {}
+
+/**
+ * `AGENT-ZALO` — một lệnh gọi trả đủ cho agent hỗ trợ khách/chủ tịch.
+ *
+ * Gộp 4 nguồn vào 1 để agent không phải tự ghép bảng: tóm tắt nhóm Zalo + phân
+ * loại nhóm + số liệu đơn SỐNG + sản phẩm khách hay đặt.
+ *
+ * Nguồn là `zalo_group_summaries` — bảng CHỈ chứa nhóm khách/vận hành, vì tóm
+ * tắt bị xoá khi nhóm chuyển sang `internal`. Nhóm cá nhân nhân viên không bao
+ * giờ lọt ra endpoint này.
+ */
+/** Quá bao nhiêu giờ thì coi bản tóm tắt là cũ. Máy chủ dùng để bật `tomTatTre`. */
+export const AGENT_TOM_TAT_HAN_GIO = 24;
+
+export const AgentSellerSupportQueryZod = z.object({
+  /** Lọc theo mức độ: `gap` | `can-chu-y` | `binh-thuong`. */
+  mucDo: z.string().optional(),
+  /** Lọc theo một khách cụ thể. */
+  userSku: z.string().optional(),
+  /** Bỏ phần sản phẩm cho nhẹ, khi chỉ cần danh sách việc gấp. */
+  kemSanPham: z.boolean().optional(),
+  limit: z.number().int().min(1).max(200).optional(),
+});
+export type AgentSellerSupportQuery = z.infer<typeof AgentSellerSupportQueryZod>;
+
+export interface AgentSellerSupportItem {
+  groupGlobalId: string;
+  title: string | null;
+  kind: string | null;
+  lastMessageAt: Date | null;
+  customerId: string | null;
+  userSku: string | null;
+  tomTat: {
+    mucDo: string | null;
+    tieuDe: string | null;
+    khachQuanTam: string | null;
+    salePhanHoi: string | null;
+    tonDong: string | null;
+    nghiNgo: string[];
+    checklist: unknown[];
+    soTin: number;
+    /** Mốc chốt của bản tóm tắt — agent phải xem trước khi tin số liệu trong đó. */
+    tomTatLuc: Date | null;
+    /**
+     * Máy chủ TỰ tính: bản tóm tắt đã quá `AGENT_TOM_TAT_HAN_GIO` giờ.
+     *
+     * Có `tomTatLuc` rồi vẫn cần cờ này, vì việc so mốc là thứ client dễ quên
+     * nhất — mà quên thì agent trả lời khách bằng dữ liệu cũ với giọng chắc
+     * chắn. Đặt ở phía máy chủ thì mọi client đều được bảo vệ như nhau.
+     * (Dev tích hợp đề xuất, đúng: họ đã dính đúng lỗi này ở hệ báo cáo của họ.)
+     */
+    tomTatTre: boolean;
+    denMocTin: Date | null;
+  };
+  /** Số liệu đơn đọc SỐNG lúc gọi, không phải ảnh chụp trong tóm tắt. */
+  donHang: {
+    tongDon: number;
+    dangLam: number;
+    dangLoi: number;
+    dangGiu: number;
+    tonLauNhatNgay: number | null;
+  } | null;
+  sanPhamHay: { sanPham: string; soDon: number }[];
+}
+
+export class GetAgentSellerSupportResDto {
+  success!: boolean;
+  data!: AgentSellerSupportItem[];
+}

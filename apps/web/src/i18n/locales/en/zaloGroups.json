@@ -27,7 +27,7 @@
     "actions": "Actions",
     "empty": "No group matches the filter",
     "noCustomer": "— not linked —",
-    "noOwner": "— not assigned —",
+    "noOwner": "— unassigned —",
     "noTitle": "(untitled)"
   },
   "filter": {
@@ -103,6 +103,9 @@
     "suggested": "suggested: {{kind}}",
     "applyAll": "Apply all suggestions",
     "applied": "Applied to {{count}}",
-    "empty": "Nobody matches the filter"
+    "empty": "Nobody matches the filter",
+    "linkedUser": "System account",
+    "noLinkedUser": "— not linked —",
+    "staffOnly": "Staff only"
   }
 }

@@ -12,6 +12,7 @@ import { AgentDocsService } from './agent-docs.service';
 import { AgentExceptionFilter } from './agent-exception.filter';
 import { AgentQueryService } from './agent-query.service';
 import { AgentReadService } from './agent-read.service';
+import { AgentSellerSupportService } from './agent-seller-support.service';
 
 /**
  * Bộ API nội bộ cho AI agent (`API-1`, mở hết ở `API-19`).
@@ -29,7 +30,7 @@ import { AgentReadService } from './agent-read.service';
     MongooseModule.forFeature([{ name: AgentApiLogEntity.name, schema: AgentApiLogSchema }]),
   ],
   controllers: [AgentApiController, AgentApiAdminController],
-  providers: [
+  providers: [AgentSellerSupportService, 
     AgentAdminService,
     AgentApiKeyGuard,
     AgentExceptionFilter,

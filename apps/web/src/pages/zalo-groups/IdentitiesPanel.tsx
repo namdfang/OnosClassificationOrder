@@ -44,6 +44,8 @@ export default function IdentitiesPanel() {
   const [counts, setCounts] = useState<Record<string, number>>({});
   const [search, setSearch] = useState('');
   const [kind, setKind] = useState<string>('');
+  /** Nhân viên cho ô nối tài khoản — tải một lần, không đổi theo bộ lọc. */
+  const [nhanVien, setNhanVien] = useState<{ _id: string; fullName?: string; email: string }[]>([]);
   const [chuaXacNhan, setChuaXacNhan] = useState(true);
 
   const query = useMemo(() => {
@@ -78,6 +80,17 @@ export default function IdentitiesPanel() {
     void load();
   }, [load]);
 
+  useEffect(() => {
+    void (async () => {
+      try {
+        const res = await RepositoryRemote.users.getUsers('?page=1&limit=200');
+        setNhanVien(res.data?.data ?? []);
+      } catch (error) {
+        handleAxiosError(error);
+      }
+    })();
+  }, []);
+
   const setKindFor = async (r: Row, next: ZaloIdentityKind) => {
     setRows((rs) => rs.map((x) => (x._id === r._id ? { ...x, kind: next, confirmedAt: new Date() } : x)));
     try {
@@ -86,6 +99,22 @@ export default function IdentitiesPanel() {
     } catch (error) {
       handleAxiosError(error);
       void load();
+    }
+  };
+
+  /**
+   * Nối nick Zalo với tài khoản nhân viên. Lưu ngay khi chọn, không có nút Lưu —
+   * nối 22 người liên tiếp mà mỗi lần bấm thêm một nút thì thao tác nặng gấp đôi.
+   * KHÔNG gọi `load()` sau khi lưu: nạp lại cả bảng làm mất chỗ đang cuộn.
+   */
+  const noiTaiKhoan = async (r: Row, userId: string) => {
+    const cu = r.userId ?? '';
+    setRows((rs) => rs.map((x) => (x._id === r._id ? { ...x, userId: userId || undefined } : x)));
+    try {
+      await RepositoryRemote.zaloGroup.updateIdentity(r.zaloUid, { kind: r.kind, userId: userId || null });
+    } catch (error) {
+      setRows((rs) => rs.map((x) => (x._id === r._id ? { ...x, userId: cu || undefined } : x)));
+      handleAxiosError(error);
     }
   };
 
@@ -162,12 +191,13 @@ export default function IdentitiesPanel() {
               <TableHead className="w-24 text-right">{t('identity.groupCount')}</TableHead>
               <TableHead className="w-24 text-right">{t('identity.msgCount')}</TableHead>
               <TableHead>{t('identity.classify')}</TableHead>
+              <TableHead className="w-52">{t('identity.linkedUser')}</TableHead>
             </TableRow>
           </TableHeader>
           <TableBody>
             {rows.length === 0 && !loading && (
               <TableRow>
-                <TableCell colSpan={4} className="py-10 text-center text-sm text-slate-500">
+                <TableCell colSpan={5} className="py-10 text-center text-sm text-slate-500">
                   {t('identity.empty')}
                 </TableCell>
               </TableRow>
@@ -210,6 +240,27 @@ export default function IdentitiesPanel() {
                         </button>
                       ))}
                     </div>
+                  </TableCell>
+                  {/* Nối nick Zalo với tài khoản hệ thống. Chỉ có ý nghĩa với
+                      NHÂN VIÊN — biết nick nào là ai thì agent mới tag đúng người
+                      trong nhóm vận hành. Khách thì nối qua `customerId` ở nơi khác. */}
+                  <TableCell>
+                    {r.kind === ZaloIdentityKind.Staff || r.kind === ZaloIdentityKind.AiSupport ? (
+                      <select
+                        className="w-full rounded border border-slate-200 bg-white px-2 py-1 text-sm dark:border-slate-700 dark:bg-slate-900"
+                        value={r.userId ?? ''}
+                        onChange={(e) => void noiTaiKhoan(r, e.target.value)}
+                      >
+                        <option value="">{t('identity.noLinkedUser')}</option>
+                        {nhanVien.map((u) => (
+                          <option key={u._id} value={u._id}>
+                            {u.fullName || u.email}
+                          </option>
+                        ))}
+                      </select>
+                    ) : (
+                      <span className="text-xs text-slate-400">{t('identity.staffOnly')}</span>
+                    )}
                   </TableCell>
                 </TableRow>
               );

@@ -207,3 +207,106 @@ nhóm internal vào mô hình là đọc đời tư nhân viên.
 tailscale (`100.124.188.28`) nhưng ở tailnet khác `onosceo` (`100.78.72.36`), và
 engine chỉ nghe `127.0.0.1:4000`. Đến khi hai máy chung tailnet thì mọi đường
 đọc chat đều phải đi vòng qua SSH như `sync-zalo-groups.mjs` đang làm.
+
+## Một lệnh gọi cho AI agent — `GET /v1/agent/seller-support`
+
+> **BE:** `apps/api/src/modules/agent-api/agent-seller-support.service.ts`
+> **Tuyến:** `apps/api/src/modules/agent-api/agent-api.controller.ts` → `getSellerSupport()`
+> **DTO:** `packages/shared/dtos/agent-api.dto.ts` (`AgentSellerSupportQueryZod` / `AgentSellerSupportItem`)
+> **Xác thực:** header `X-Agent-Api-Key` (không JWT), cùng hạn mức với các tuyến agent khác.
+
+### Vì sao có
+
+Agent trả lời khách / báo cáo chủ tịch cần 4 nguồn cùng lúc: tóm tắt nhóm Zalo,
+phân loại nhóm, số liệu đơn của khách đó, và sản phẩm họ hay đặt. Trước đó agent
+phải tự ghép 4 bảng — bốn vòng gọi cho một câu hỏi, và mỗi chỗ ghép sai là một
+câu trả lời sai gửi tới khách. Tuyến này gộp lại thành một lệnh.
+
+### Tham số
+
+| Tham số | Ý nghĩa |
+| --- | --- |
+| `mucDo` | Lọc `gap` / `can-chu-y` / `binh-thuong` |
+| `userSku` | Lọc một khách |
+| `limit` | Mặc định 50, trần 200 |
+| `kemSanPham=false` | Bỏ phần sản phẩm cho nhẹ |
+
+### Trả về mỗi nhóm
+
+- `tomTat` — nội dung do mô hình soạn, kèm **`tomTatLuc`**: agent PHẢI xem mốc này
+  trước khi tin, vì tóm tắt có thể cũ nhiều ngày nếu lịch chạy hỏng (mà hỏng thì
+  im lặng, không báo lỗi).
+- `donHang` — số liệu đọc **sống** lúc gọi: `tongDon` / `dangLam` / `dangLoi` /
+  `dangGiu` / `tonLauNhatNgay`. Khác với con số trong `tomTat` vốn là ảnh chụp
+  lúc mô hình chạy.
+- `sanPhamHay` — 5 sản phẩm khách đặt nhiều nhất 30 ngày.
+
+### Hai bẫy đã dẫm phải
+
+**Chốt riêng tư nằm ở khâu ghi, không ở tài liệu.** Nguồn là
+`zalo_group_summaries`, mà bảng đó chỉ chứa nhóm `seller`/`operation` — tóm tắt
+bị XOÁ khi nhóm chuyển sang `internal`. Nên nhóm cá nhân nhân viên không bao giờ
+lọt ra tuyến này, kể cả khi người gọi quên lọc.
+
+**`$ifNull` là bắt buộc trong phép gộp.** Nhiều đơn KHÔNG CÓ trường `heldAt` /
+`productionError` / `fulfillmentCompletedAt` chứ không phải bằng `null`. Trong
+biểu thức gộp của MongoDB, trường thiếu không bằng `null`, nên `$eq` sai ở mọi
+dòng còn `$ne` đúng ở mọi dòng. Bản đầu báo 4.496 đơn "đang giữ" trong khi thực
+tế là 0.
+
+## Gán người phụ trách + nối danh tính (chuẩn bị cho agent nhắn vào nhóm)
+
+> **FE:** `apps/web/src/pages/zalo-groups/index.tsx` (cột "Người phụ trách") ·
+> `apps/web/src/pages/zalo-groups/IdentitiesPanel.tsx` (cột "Tài khoản hệ thống")
+> **BE:** không đổi — `ownerUserId` và `userId` đã có sẵn trong entity lẫn DTO từ đầu,
+> chỉ chưa có chỗ nhập.
+
+### Vì sao cần
+
+Agent đọc được vấn đề trong nhóm vận hành, nhưng muốn **báo cáo và tag đúng người**
+thì phải trả lời được hai câu: nhóm này ai phụ trách, và nick Zalo kia là nhân viên nào.
+Trước task này cả hai đều trống — 0/53 nhóm có người phụ trách, 0/251 danh tính nối
+với tài khoản.
+
+Bằng chứng cho thấy thiếu bước này thì gửi tin vô nghĩa: nhóm `VNP/ONOS vận hành ship`
+đã có "Trợ Lý AI" báo 2 việc quá hạn từ 22/08, **treo 9 ngày không ai xác nhận** —
+vì tin gửi chung chung, không tag ai cụ thể.
+
+### Thiết kế
+
+Chọn **ngay trên danh sách**, không qua hộp thoại. Gán 53 nhóm mà phải mở 53 lần
+hộp thoại thì thực tế không ai làm hết.
+
+Lưu **ngay khi chọn**, không có nút Lưu; cập nhật màn hình trước rồi mới gọi API,
+hỏng thì trả lại giá trị cũ. Ô chọn chặn nổi bọt sự kiện để bấm vào không mở luôn
+ngăn chi tiết bên phải.
+
+Cột "Tài khoản hệ thống" chỉ hiện ô chọn với danh tính `staff` / `ai-support` —
+khách nối qua `customerId` ở chỗ khác, hiện ô ở đó chỉ gây nhầm.
+
+### Còn thiếu để agent nhắn được vào nhóm
+
+Engine Zalo bên `onosceo` **đã có sẵn đường gửi**: `POST /api/public/messages/send`
+(xác thực `X-Api-Key`, đã gửi 977 tin từ 2 tài khoản công ty). Hệ thống Onos chưa
+gọi sang. Nối được nhưng nên chạy chế độ **soạn sẵn — người duyệt — mới gửi**:
+agent tự nhắn vào nhóm vận hành mà sai một lần thì sau đó không ai đọc tin nó nữa.
+
+### Hai sửa đổi từ phản hồi của dev tích hợp (31/08)
+
+**Ngừng gửi `stackTrace` ra thân phản hồi.** Trước đó MỌI endpoint công khai trả
+về đường dẫn `/root/.vibedev/repos/onos/...` cùng cấu trúc mã cho bất kỳ ai gọi —
+kể cả khi chỉ gõ sai khoá API. Nguyên nhân: hai filter ở `packages/core/filters/`
+gắn điều kiện vào `isDevelopment`, mà **production của hệ thống này chạy với
+`NODE_ENV=development`** (env chỉ dùng để chọn file cấu hình, không phản ánh môi
+trường thật). Lỗi này đã tồn tại trên production thật từ trước, không phải mới.
+
+Sửa: thêm `ApiConfigService.exposeStackTrace` — công tắc TƯỜNG MINH `EXPOSE_STACK_TRACE=true`,
+mặc định tắt, truyền vào cả `CustomExceptionFilter`, `UnprocessableEntityFilter`
+và `AgentExceptionFilter`. Vết lỗi vẫn ghi ra log máy chủ như cũ. **Không đổi chữ
+ký hàm trong `packages/core`** — chỉ đổi giá trị truyền vào ở `main-nest.ts`.
+
+**Thêm `tomTat.tomTatTre`** (`AGENT_TOM_TAT_HAN_GIO = 24` giờ). Có `tomTatLuc` rồi
+vẫn cần cờ này: so mốc là thứ client dễ quên nhất, mà quên thì agent trả lời khách
+bằng dữ liệu cũ với giọng chắc chắn. Tính ở máy chủ thì mọi client được bảo vệ như
+nhau. Đề xuất của dev tích hợp — họ đã dính đúng lỗi đó ở hệ báo cáo bên mình.
+
