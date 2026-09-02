@@ -310,3 +310,30 @@ vẫn cần cờ này: so mốc là thứ client dễ quên nhất, mà quên th
 bằng dữ liệu cũ với giọng chắc chắn. Tính ở máy chủ thì mọi client được bảo vệ như
 nhau. Đề xuất của dev tích hợp — họ đã dính đúng lỗi đó ở hệ báo cáo bên mình.
 
+## Vận hành trên production (từ 02/09/2026)
+
+Hai máy, chia việc theo mạng — không gộp được vì **production không SSH sang
+`onosceo`** (nguồn tin nhắn Zalo), chỉ máy hub sang được.
+
+| Việc | Chạy ở | Lịch | Ghi chú |
+| --- | --- | --- | --- |
+| Kéo đơn OnosPod + phục hồi đơn giữ | production (`crontab` root) | `*/30`, `17 * * * *` | gọi `localhost:3007`, cần `ONOSPOD_*_TOKEN` |
+| Đồng bộ nhóm → danh tính → xếp hàng tóm tắt | **hub** `/root/onos-jobs/zalo-daily.sh` | `0 7 * * *` giờ VN | đăng nhập `api.onosfactory.com`, log `/var/log/onos-zalo-daily.log` |
+| Worker tóm tắt (BullMQ + Claude) | production, trong tiến trình API | theo hàng đợi | cần `CLAUDE_CLI_PATH`, `ZALO_SUMMARY_MODEL=sonnet`, `ZALO_SUMMARY_TIMEOUT_SEC=150`, và `~/.claude/.credentials.json` |
+
+Ba bước của lịch hub **phải theo thứ tự**: đồng bộ nhóm cập nhật `lastMessageAt`;
+không có nó thì hàng đợi tóm tắt luôn rỗng và báo "không có gì" — hỏng im lặng.
+
+**Hai chỗ đã dẫm phải khi dựng:**
+
+- `CLAUDE_CLI_PATH` phải là đường dẫn **ổn định** dưới
+  `~/.local/share/fnm/node-versions/<v>/installation/...`. `command -v claude`
+  trong shell trả về `/run/user/0/fnm_multishells/...` — thư mục tạm theo phiên,
+  PM2 sinh worker sẽ không thấy. File đích tên `claude.exe` nhưng là ELF thật,
+  không cần `node` trong PATH.
+- Phiên Claude chép từ hub là **phiên đăng nhập, sẽ hết hạn**. Hết hạn thì worker
+  hỏng im lặng; cờ `tomTatTre` trên endpoint agent là lưới an toàn duy nhất.
+  Đường dài nên thay bằng `ANTHROPIC_API_KEY`.
+
+`EXPOSE_STACK_TRACE` để trống trên production (mặc định tắt).
+
