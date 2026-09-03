@@ -360,7 +360,7 @@ export default function ZaloGroupsPage() {
                   )}
                 </TableCell>
                 <TableCell className="whitespace-nowrap text-sm text-slate-500">
-                  {r.lastMessageAt ? dayjs(r.lastMessageAt).format('DD/MM/YYYY') : '—'}
+                  {r.lastMessageAt ? dayjs(r.lastMessageAt).format('DD/MM/YYYY HH:mm') : '—'}
                 </TableCell>
                 <TableCell className="text-right">
                   <Button
