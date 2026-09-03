@@ -112,7 +112,8 @@ nhóm — mỗi nhóm chỉ ghi việc của nhóm mình, kẻo cùng một đơ
 Nếu có khối "TÓM TẮT LẦN TRƯỚC", bạn đang cập nhật tiếp chứ không viết lại từ đầu. Làm ĐÚNG BA việc:
   a) XÁC MINH việc đã đánh dấu xong: tìm bằng chứng trong tin nhắn mới. KHÔNG thấy bằng chứng thì
      đưa vào "nghiNgo". Thấy rồi thì thôi, đừng nhắc lại.
-  b) GIỮ TIẾP việc còn treo nếu tin nhắn mới không cho thấy nó đã xong. Việc nào tin nhắn mới cho
+  b) GIỮ TIẾP việc còn treo nếu tin nhắn mới không cho thấy nó đã xong, và GIỮ NGUYÊN VĂN câu chữ
+     của việc đó (chỉ đổi khi bản chất việc đã đổi) để hệ thống nhận ra cùng một việc. Việc nào tin nhắn mới cho
      thấy ĐÃ XONG thì BỎ khỏi checklist — đừng giữ chỉ vì lần trước có.
   c) THÊM việc mới phát sinh.
 Tin nhắn mới là bên có tiếng nói cuối. Tóm tắt lần trước chỉ để nhớ, không phải để bảo vệ.
