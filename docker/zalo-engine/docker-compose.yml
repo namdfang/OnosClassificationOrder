@@ -1,0 +1,72 @@
+# Zalo Engine — dịch vụ ĐỘC LẬP cho màn chat Zalo trong OnosFactory.
+#
+# Vì sao tách hẳn khỏi `apps/api/docker/docker-compose.yml`: engine là image của
+# bên thứ ba, có DB + Redis riêng, và theo khuyến nghị của nhà cung cấp thì
+# KHÔNG đặt chung máy giữ dữ liệu nhạy cảm, KHÔNG mount docker.sock.
+#
+# Image PIN THEO DIGEST, không dùng `:latest`: `:latest` nghĩa là mỗi lần
+# `docker compose pull` là chạy code mới chưa ai đọc. Có bản mới thì engine tự
+# ghi log "CÓ BẢN ENGINE MỚI" → đọc changelog ở https://zalo.autonow.vn → đổi
+# digest ở đây → `docker compose pull && docker compose up -d`.
+#
+# Chạy:  cd docker/zalo-engine && docker compose up -d     (cần ./.env, xem .env.example)
+services:
+  zalo-engine:
+    image: ghcr.io/zero-126/zalo-engine@sha256:35fa5c9a7a96bd80993bc03a1170ae5a8ad4b8b412bda41ee94a084bcd915d9b
+    container_name: onos-zalo-engine
+    restart: unless-stopped
+    environment:
+      DATABASE_URL: postgresql://zalo:${PG_PW}@zalo-engine-db:5432/zalo_engine
+      REDIS_URL: redis://zalo-engine-redis:6379
+      # PHẢI trùng `ZALO_ENGINE_SECRET` của API (proxy ký x-service-token bằng khoá này).
+      ZALO_ENGINE_SECRET: ${ZALO_ENGINE_SECRET}
+      ZALO_LICENSE_KEY: ${ZALO_LICENSE_KEY}
+      # AES key mã hoá phiên đăng nhập Zalo. ĐỔI = mất hết phiên, phải quét QR lại.
+      ZALO_MULTI_ENCRYPTION_KEY: ${ZALO_ENCRYPTION_KEY}
+      UPLOAD_DIR: /app/uploads
+      TZ: Asia/Ho_Chi_Minh
+    volumes:
+      - zalo_engine_uploads:/app/uploads
+    # CHỈ loopback: API chạy thẳng trên host (systemd/PM2) nên cần cổng, nhưng
+    # engine tuyệt đối không được lộ ra mạng ngoài — nó đọc được mọi hội thoại.
+    ports:
+      - '127.0.0.1:${ENGINE_PORT:-4001}:4000'
+    depends_on:
+      zalo-engine-db:
+        condition: service_healthy
+      zalo-engine-redis:
+        condition: service_started
+    healthcheck:
+      test: ['CMD', 'wget', '-qO-', 'http://127.0.0.1:4000/api/health']
+      interval: 30s
+      timeout: 5s
+      retries: 5
+      start_period: 40s
+
+  zalo-engine-db:
+    image: postgres:16-alpine
+    container_name: onos-zalo-engine-db
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: zalo
+      POSTGRES_PASSWORD: ${PG_PW}
+      POSTGRES_DB: zalo_engine
+    volumes:
+      - zalo_engine_pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ['CMD-SHELL', 'pg_isready -U zalo']
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  zalo-engine-redis:
+    image: redis:7-alpine
+    container_name: onos-zalo-engine-redis
+    restart: unless-stopped
+    volumes:
+      - zalo_engine_redis:/data
+
+volumes:
+  zalo_engine_pgdata:
+  zalo_engine_uploads:
+  zalo_engine_redis:

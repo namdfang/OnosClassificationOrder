@@ -23,7 +23,10 @@
     "paths": {
       "@/*": ["./src/*"],
       "shared": ["../../packages/shared/index.ts"],
-      "@shared/*": ["../../packages/shared/*"]
+      "@shared/*": ["../../packages/shared/*"],
+      "@zero-126/zalo-ui": ["./node_modules/@zero-126/zalo-ui/dist/index.d.ts"],
+      "@zero-126/zalo-sdk": ["./node_modules/@zero-126/zalo-sdk/dist/index.d.ts"],
+      "@zero-126/zalo-sdk/react": ["./node_modules/@zero-126/zalo-sdk/dist/react/index.d.ts"]
     }
   },
   "include": [
