@@ -1,6 +1,16 @@
 import { FULFILLMENT_STAGE_LABELS, FulfillmentStage, ZaloSummaryLevel } from 'shared';
 
-import { chuanHoa, dinhDangLuc, gopChecklist, maKhongCoTrongNguon, moTaDinhKem, moTaDon, nhanChang } from './zalo-summary.logic';
+import {
+  chuanHoa,
+  dinhDangLuc,
+  gopChecklist,
+  maKhongCoTrongNguon,
+  moTaDinhKem,
+  moTaDon,
+  nhanChang,
+  SUMMARY_JSON_SCHEMA,
+  tachJson,
+} from './zalo-summary.logic';
 
 /**
  * Test NỀN cho các hàm thuần của tóm tắt Zalo — viết TRƯỚC khi đổi hành vi, để
@@ -175,5 +185,38 @@ describe('maKhongCoTrongNguon — mã trong đầu ra không có trong chat/kh�
 
   it('từ tiếng Việt viết hoa có dấu và từ ngắn không bị coi là mã', () => {
     expect(maKhongCoTrongNguon(kq({ tonDong: 'ĐANG CHỜ MSDS và ISF' }), 'không có gì')).toEqual([]);
+  });
+});
+
+describe('tachJson — tách JSON kết quả khỏi văn bản tự do', () => {
+  const KQ = '{"tieuDe":"A","mucDo":"gap","checklist":[]}';
+
+  it('cả chuỗi là JSON', () => {
+    expect(tachJson(KQ)).toEqual({ tieuDe: 'A', mucDo: 'gap', checklist: [] });
+  });
+
+  it('có chữ quanh khối ```json', () => {
+    expect(tachJson(`Đây là kết quả:\n\`\`\`json\n${KQ}\n\`\`\`\nHết.`)?.mucDo).toBe('gap');
+  });
+
+  it('hai object liên tiếp → lấy đúng object có mucDo/tieuDe', () => {
+    expect(tachJson(`{"ghiChu":"x"} rồi ${KQ}`)?.tieuDe).toBe('A');
+  });
+
+  it('dấu } nằm trong chuỗi không làm hỏng việc đếm ngoặc', () => {
+    const o = tachJson('Kết quả {"tieuDe":"a } b","mucDo":"gap","tonDong":"x \\" y"} xong');
+
+    expect(o?.tieuDe).toBe('a } b');
+  });
+
+  it('không có JSON → null; JSON hỏng → null', () => {
+    expect(tachJson('không có gì cả')).toBeNull();
+    expect(tachJson('{"tieuDe": "A", "mucDo": ')).toBeNull();
+  });
+
+  it('schema: 7 khoá bắt buộc, không cho khoá lạ, checklist tối đa 5', () => {
+    expect(SUMMARY_JSON_SCHEMA.required).toHaveLength(7);
+    expect(SUMMARY_JSON_SCHEMA.additionalProperties).toBe(false);
+    expect(SUMMARY_JSON_SCHEMA.properties.checklist.maxItems).toBe(5);
   });
 });

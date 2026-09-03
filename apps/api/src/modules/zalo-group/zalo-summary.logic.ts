@@ -215,3 +215,80 @@ export function maKhongCoTrongNguon(ketQua: KetQua, nguon: string): string[] {
 
   return [...la];
 }
+
+/**
+ * Schema ép mô hình trả đúng khuôn (`outputFormat: json_schema` của Agent SDK).
+ * Trùng với khối JSON mô tả trong lời nhắc; `chuanHoa` vẫn là lưới cuối.
+ */
+export const SUMMARY_JSON_SCHEMA = {
+  type: 'object',
+  additionalProperties: false,
+  required: ['tieuDe', 'khachQuanTam', 'salePhanHoi', 'tonDong', 'checklist', 'nghiNgo', 'mucDo'],
+  properties: {
+    tieuDe: { type: 'string' },
+    khachQuanTam: { type: 'string' },
+    salePhanHoi: { type: 'string' },
+    tonDong: { type: 'string' },
+    checklist: { type: 'array', items: { type: 'string' }, maxItems: 5 },
+    nghiNgo: { type: 'array', items: { type: 'string' } },
+    mucDo: { type: 'string', enum: [ZaloSummaryLevel.BinhThuong, ZaloSummaryLevel.CanChuY, ZaloSummaryLevel.Gap] },
+  },
+} as const;
+
+const laKetQua = (o: unknown): o is Record<string, unknown> =>
+  !!o && typeof o === 'object' && !Array.isArray(o) && ('mucDo' in o || 'tieuDe' in o);
+
+/**
+ * Tách khối JSON kết quả khỏi văn bản tự do của mô hình — đường lui khi SDK
+ * không trả `structured_output`.
+ *
+ * Ba lớp: (1) cả chuỗi là JSON; (2) khối ```json; (3) quét từng dấu `{`, đếm
+ * ngoặc CÓ NHẬN BIẾT CHUỖI, lấy object cân bằng đầu tiên parse được và có khoá
+ * `mucDo`/`tieuDe`. Regex tham `/\{[\s\S]*\}/` của bản cũ vồ từ `{` đầu tới `}`
+ * cuối — hai object liên tiếp hay một `}` trong chuỗi là hỏng cả lượt.
+ */
+export function tachJson(vanBan: string): Record<string, unknown> | null {
+  const thu = (chuoi: string): Record<string, unknown> | null => {
+    try {
+      const o: unknown = JSON.parse(chuoi);
+
+      return laKetQua(o) ? o : null;
+    } catch {
+      return null;
+    }
+  };
+
+  const ca = thu(vanBan.trim());
+  if (ca) return ca;
+
+  const fence = /```(?:json)?\s*([\s\S]*?)```/i.exec(vanBan);
+  if (fence) {
+    const o = thu(fence[1].trim());
+    if (o) return o;
+  }
+
+  for (let bat = vanBan.indexOf('{'); bat !== -1; bat = vanBan.indexOf('{', bat + 1)) {
+    let sau = 0;
+    let trongChuoi = false;
+    for (let i = bat; i < vanBan.length; i += 1) {
+      const c = vanBan[i];
+      if (trongChuoi) {
+        if (c === '\\') i += 1;
+        else if (c === '"') trongChuoi = false;
+        continue;
+      }
+      if (c === '"') trongChuoi = true;
+      else if (c === '{') sau += 1;
+      else if (c === '}') {
+        sau -= 1;
+        if (sau === 0) {
+          const o = thu(vanBan.slice(bat, i + 1));
+          if (o) return o;
+          break;
+        }
+      }
+    }
+  }
+
+  return null;
+}

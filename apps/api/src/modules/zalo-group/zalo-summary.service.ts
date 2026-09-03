@@ -1,6 +1,6 @@
 import { query } from '@anthropic-ai/claude-agent-sdk';
 import { InjectQueue } from '@nestjs/bullmq';
-import { BadRequestException, Injectable, Logger, NotFoundException, ServiceUnavailableException } from '@nestjs/common';
+import { BadRequestException, Injectable, Logger, NotFoundException, ServiceUnavailableException, UnprocessableEntityException } from '@nestjs/common';
 import { InjectModel } from '@nestjs/mongoose';
 import type { Queue } from 'bullmq';
 import { Model } from 'mongoose';
@@ -25,7 +25,17 @@ import type { ZaloGroupSummaryDocument } from './zalo-group-summary.entity';
 import { ZaloGroupSummaryEntity } from './zalo-group-summary.entity';
 import { ZaloIdentityService } from './zalo-identity.service';
 import type { KetQua } from './zalo-summary.logic';
-import { chuanHoa, dinhDangLuc, gopChecklist, maKhongCoTrongNguon, moTaDinhKem, moTaDon, nhanChang } from './zalo-summary.logic';
+import {
+  chuanHoa,
+  dinhDangLuc,
+  gopChecklist,
+  maKhongCoTrongNguon,
+  moTaDinhKem,
+  moTaDon,
+  nhanChang,
+  SUMMARY_JSON_SCHEMA,
+  tachJson,
+} from './zalo-summary.logic';
 import type { ZaloSummaryJobData } from './zalo-summary.queue';
 import { ZALO_SUMMARY_QUEUE } from './zalo-summary.queue';
 
@@ -530,6 +540,8 @@ ${doanChat}`;
     const dongHo = setTimeout(() => ac.abort(), HAN_GIAY * 1000);
 
     let vanBan = '';
+    let coCauTruc: unknown;
+    let ketThucLoi: string | undefined;
     let it: ReturnType<typeof query> | undefined;
     try {
       it = query({
@@ -549,12 +561,23 @@ ${doanChat}`;
            * đọc nhất.
            */
           maxTurns: 3,
+          // Ép JSON đúng khuôn ngay tại SDK; `tachJson` bên dưới là đường lui
+          // khi bản CLI bỏ qua tuỳ chọn này và chỉ trả văn bản.
+          outputFormat: { type: 'json_schema', schema: SUMMARY_JSON_SCHEMA },
         },
       });
 
       for await (const msg of it) {
         if (msg.type === 'assistant') {
           for (const b of msg.message.content) if (b.type === 'text') vanBan += b.text;
+        }
+        if (msg.type === 'result') {
+          const r = msg as { subtype?: string; structured_output?: unknown };
+          if (r.subtype === 'success') {
+            if (r.structured_output !== undefined) coCauTruc = r.structured_output;
+          } else if (r.subtype) {
+            ketThucLoi = r.subtype;
+          }
         }
       }
     } catch (error) {
@@ -595,17 +618,22 @@ ${doanChat}`;
       throw new ServiceUnavailableException(`Mô hình không trả lời trong ${HAN_GIAY} giây — thử lại nhóm này sau.`);
     }
 
-    // Agent SDK trả văn bản tự do, không có structured output — phải tự tách
-    // khối JSON ra khỏi phần mô hình có thể nói thêm xung quanh.
-    const m = vanBan.match(/\{[\s\S]*\}/);
-    if (!m) throw new ServiceUnavailableException('Mô hình không trả về JSON.');
-
-    let parsed: unknown;
-    try {
-      parsed = JSON.parse(m[0]);
-    } catch {
-      throw new ServiceUnavailableException('Mô hình trả về dữ liệu không đọc được.');
+    // Hết lượt / hết số lần ép khuôn: gọi lại y nguyên cũng hỏng y nguyên —
+    // KHÔNG thử lại (422 → processor bỏ job). Nhóm tự vào hàng đợi ca sau vì
+    // `denMocTin` không tiến. Bản cũ retry 3 lần: tốn 3 lượt gọi cho 1 câu hỏng.
+    if (ketThucLoi === 'error_max_turns' || ketThucLoi === 'error_max_structured_output_retries') {
+      throw new UnprocessableEntityException(`Mô hình không hoàn thành bản tóm tắt (${ketThucLoi}) — không thử lại.`);
     }
+    if (ketThucLoi) {
+      throw new ServiceUnavailableException(`Lượt gọi kết thúc với lỗi ${ketThucLoi} — thử lại nhóm này sau.`);
+    }
+
+    const parsed = coCauTruc ?? tachJson(vanBan);
+    if (!parsed) {
+      this.logger.error(`[zalo-summary] không tách được JSON; 300 ký tự đầu: ${vanBan.slice(0, 300)}`);
+      throw new UnprocessableEntityException('Mô hình không trả về JSON đúng khuôn — không thử lại.');
+    }
+    this.logger.log(`[zalo-summary] nguồn kết quả: ${coCauTruc !== undefined ? 'structured_output' : 'văn bản (tachJson)'}`);
 
     return chuanHoa(parsed);
   }

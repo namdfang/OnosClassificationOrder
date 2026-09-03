@@ -1,5 +1,5 @@
 import { OnWorkerEvent, Processor, WorkerHost } from '@nestjs/bullmq';
-import { BadRequestException, Logger, NotFoundException } from '@nestjs/common';
+import { BadRequestException, Logger, NotFoundException, UnprocessableEntityException } from '@nestjs/common';
 import { Job, UnrecoverableError } from 'bullmq';
 
 import type { ZaloSummaryJobData } from './zalo-summary.queue';
@@ -34,7 +34,13 @@ export class ZaloSummaryProcessor extends WorkerHost {
       // Lỗi NGHIỆP VỤ (nhóm chưa phân loại, nhóm đã xoá) không bao giờ tự khỏi —
       // thử lại 3 lần chỉ tổ lấp log. `UnrecoverableError` bảo BullMQ bỏ ngay.
       // Lỗi hạ tầng (mô hình quá tải, mạng chập) vẫn thử lại như thường.
-      if (err instanceof BadRequestException || err instanceof NotFoundException) {
+      // 422 = mô hình trả sai khuôn / hết lượt: gọi lại y nguyên cũng hỏng y
+      // nguyên, và mỗi lần là một lượt gọi tốn tiền.
+      if (
+        err instanceof BadRequestException ||
+        err instanceof NotFoundException ||
+        err instanceof UnprocessableEntityException
+      ) {
         throw new UnrecoverableError(err.message);
       }
       throw err;
