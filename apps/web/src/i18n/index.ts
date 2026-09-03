@@ -31,6 +31,7 @@ import trackEn from './locales/en/track.json';
 import vnpShippingEn from './locales/en/vnpShipping.json';
 import workshopConfigEn from './locales/en/workshopConfig.json';
 import zaloGroupsEn from './locales/en/zaloGroups.json';
+import zaloChatEn from './locales/en/zaloChat.json';
 import agentApiVi from './locales/vi/agentApi.json';
 import apiDocsVi from './locales/vi/apiDocs.json';
 import authVi from './locales/vi/auth.json';
@@ -61,6 +62,7 @@ import trackVi from './locales/vi/track.json';
 import vnpShippingVi from './locales/vi/vnpShipping.json';
 import workshopConfigVi from './locales/vi/workshopConfig.json';
 import zaloGroupsVi from './locales/vi/zaloGroups.json';
+import zaloChatVi from './locales/vi/zaloChat.json';
 
 const STORAGE_KEY = 'onosfactory-language';
 
@@ -108,6 +110,7 @@ export const resources = {
     shipments: shipmentsVi,
     customerPortal: customerPortalVi,
     zaloGroups: zaloGroupsVi,
+    zaloChat: zaloChatVi,
     customerNotifications: customerNotificationsVi,
     landing: landingVi,
     careers: careersVi,
@@ -140,6 +143,7 @@ export const resources = {
     shipments: shipmentsEn,
     customerPortal: customerPortalEn,
     zaloGroups: zaloGroupsEn,
+    zaloChat: zaloChatEn,
     customerNotifications: customerNotificationsEn,
     landing: landingEn,
     careers: careersEn,

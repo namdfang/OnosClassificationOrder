@@ -7,9 +7,23 @@ export default defineConfig({
   plugins: [react()],
   resolve: {
     alias: {
+      // Gói giao diện Zalo (@zero-126/zalo-ui) viết cho Next.js và import
+      // `next/link` + `next/navigation` ngay trong mã đã build. App này chạy
+      // Vite + react-router nên hai đường đó trỏ sang shim tương đương ở
+      // `src/lib/next-shim/`. KHÔNG cài `next` chỉ để thoả một import.
+      'next/navigation': path.resolve(__dirname, './src/lib/next-shim/navigation.ts'),
+      'next/link': path.resolve(__dirname, './src/lib/next-shim/link.tsx'),
       '@': path.resolve(__dirname, './src'),
       '@core': path.resolve(__dirname, '../../packages/core'),
       '@shared': path.resolve(__dirname, '../../packages/shared'),
+    },
+  },
+  // Mở web thẳng ở :5173 (không qua tunnel) thì đường proxy Zalo vẫn phải tới
+  // API: SDK gọi `/api/zalo-multi/...` cùng origin bằng fetch trần, không đi qua
+  // axios nên không dùng VITE_API_URL.
+  server: {
+    proxy: {
+      '/api/zalo-multi': { target: 'http://127.0.0.1:3007', changeOrigin: false },
     },
   },
   define: {

@@ -20,6 +20,7 @@ import {
   LogOut,
   MapPin,
   MessageSquare,
+  MessagesSquare,
   Package,
   Palette,
   Rows3,
@@ -169,6 +170,10 @@ interface NavItem {
   icon: React.ReactNode;
   children?: NavChild[];
   perm?: string;
+  /** CHỈ hiện cho đúng các role này — xem `NavChild.onlyForRoles`. */
+  onlyForRoles?: string[];
+  /** Ẩn với các role này — xem `NavChild.hideForRoles`. */
+  hideForRoles?: string[];
   /** AUTH-7 — xem `NavChild.pagePerm`. */
   pagePerm?: string;
   /** Active cả khi đang ở route con của `to` (vd `/adm/settings/<section>`). */
@@ -498,6 +503,16 @@ function buildNavGroups(t: TFunction<'layout'>): NavGroup[] {
           perm: 'page.zalo_groups',
         },
         {
+          // Màn chat Zalo nhúng (module của nhà cung cấp). Cố ý KHÔNG gắn mã
+          // quyền: engine cho vai owner thấy MỌI hội thoại của mọi nick, nên đợt
+          // đầu khoá cứng theo vai trò thay vì để ma trận quyền mở nhầm.
+          key: PATHS.ZALO_CHAT,
+          label: t('sidebar.zaloChat'),
+          to: PATHS.ZALO_CHAT,
+          icon: <MessagesSquare size={17} />,
+          onlyForRoles: [RoleType.SuperAdmin, RoleType.Admin],
+        },
+        {
           key: PATHS.SETTINGS,
           label: t('sidebar.settings'),
           to: PATHS.SETTINGS,
@@ -529,13 +544,13 @@ function filterMenuByPermissions(
     if (anyPerm?.length) return anyPerm.some((p) => codes.has(p));
     return !perm || codes.has(perm);
   };
-  const visibleForRole = (c: NavChild) =>
+  const visibleForRole = (c: Pick<NavChild, 'hideForRoles' | 'onlyForRoles'>) =>
     !(roleName && c.hideForRoles?.includes(roleName)) && (!c.onlyForRoles || (!!roleName && c.onlyForRoles.includes(roleName)));
   return groups
     .map((g) => ({
       ...g,
       items: g.items
-        .filter((it) => allow(it.perm))
+        .filter((it) => allow(it.perm) && visibleForRole(it))
         .map((it) =>
           it.children
             ? { ...it, children: it.children.filter((c) => allow(c.perm, c.anyPerm) && visibleForRole(c)) }

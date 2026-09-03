@@ -56,6 +56,7 @@ import { TelegramNotificationModule } from './modules/telegram-notification/tele
 import { UploadModule } from './modules/upload/upload.module';
 import { WorkshopConfigModule } from './modules/workshop-config/workshop-config.module';
 import { ZaloGroupModule } from './modules/zalo-group/zalo-group.module';
+import { ZaloChatModule } from './modules/zalo-chat/zalo-chat.module';
 import { ApiConfigService } from './shared/services';
 import { RateLimiterService } from './shared/services/rate-limiter.service';
 import { SharedModule } from './shared/shared.module';
@@ -79,6 +80,7 @@ import { SharedModule } from './shared/shared.module';
     PromotionModule,
     WorkshopConfigModule,
     ZaloGroupModule,
+    ZaloChatModule,
     OrderModule,
     OrderLogModule,
     DesignerModule,

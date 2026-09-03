@@ -312,6 +312,21 @@ export class ApiConfigService {
    * `.devtasks/design/API-1.md`. Thiếu `AGENT_API_KEY` thì mọi endpoint đóng,
    * không có chế độ "mở khi thiếu cấu hình".
    */
+  /**
+   * Zalo Engine — dịch vụ của nhà cung cấp cho màn chat `/adm/zalo`.
+   *
+   * `url` trỏ vào cổng loopback mà `docker/zalo-engine/docker-compose.yml` mở
+   * (mặc định 4001). `secret` PHẢI trùng `ZALO_ENGINE_SECRET` của engine —
+   * lệch là mọi lời gọi bị engine từ chối với 401 không nói lý do.
+   * Thiếu cả hai thì proxy trả lỗi cấu hình, phần còn lại của API vẫn chạy.
+   */
+  get zaloEngine() {
+    return {
+      url: process.env.ZALO_ENGINE_URL || '',
+      secret: process.env.ZALO_ENGINE_SECRET || '',
+    };
+  }
+
   get agentApi() {
     return {
       key: process.env.AGENT_API_KEY || '',

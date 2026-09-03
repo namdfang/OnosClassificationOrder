@@ -41,6 +41,11 @@ yarn-error.log*
 !.vscode/extensions.json
 
 .npmrc
+# NGOẠI LỆ: `.npmrc` ở GỐC repo phải được commit — nó trỏ scope `@zero-126`
+# (module Zalo) sang registry riêng, và mọi máy chạy `pnpm install`, kể cả server
+# production lúc `deploy.sh`, cần nó để kéo được gói. Token KHÔNG nằm trong file:
+# nó đọc `${GHCR_TOKEN}` từ môi trường. `.npmrc` ở thư mục con vẫn bị chặn.
+!/.npmrc
 
 # turbo
 .turbo
