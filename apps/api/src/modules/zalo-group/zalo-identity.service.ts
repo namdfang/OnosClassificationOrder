@@ -4,6 +4,7 @@ import { Model } from 'mongoose';
 import type { GetZaloIdentitiesDto, SyncZaloIdentitiesDto, UpdateZaloIdentityDto } from 'shared';
 import { ZaloIdentityKind } from 'shared';
 
+import { ZaloGroupLinkEntity } from './zalo-group-link.entity';
 import type { ZaloIdentityDocument } from './zalo-identity.entity';
 import { ZaloIdentityEntity } from './zalo-identity.entity';
 import { doanPhanLoai as doanPhanLoaiThuan } from './zalo-identity.logic';
@@ -13,6 +14,8 @@ export class ZaloIdentityService {
   constructor(
     @InjectModel(ZaloIdentityEntity.name)
     private readonly identityModel: Model<ZaloIdentityEntity>,
+    @InjectModel(ZaloGroupLinkEntity.name)
+    private readonly linkModel: Model<ZaloGroupLinkEntity>,
   ) {}
 
   /**
@@ -31,8 +34,20 @@ export class ZaloIdentityService {
     let updated = 0;
     let suggested = 0;
 
+    // Loại của từng nhóm, nạp MỘT lần: người ở đúng một nhóm vận hành là đối
+    // tác chứ không phải khách — heuristic cần biết nhóm đó là loại gì.
+    const loaiNhom = new Map(
+      (await this.linkModel.find({}).select('groupGlobalId kind').lean()).map((l) => [
+        String(l.groupGlobalId),
+        (l as { kind?: string }).kind ?? null,
+      ]),
+    );
+
     for (const it of dto.identities) {
-      const goiY = this.doanPhanLoai(it.groupCount, it.laTaiKhoanCongTy);
+      // `undefined` = snapshot cũ không gửi danh sách nhóm → đoán như trước.
+      const loaiNhomDuyNhat =
+        it.groupGlobalIds && it.groupGlobalIds.length === 1 ? (loaiNhom.get(it.groupGlobalIds[0]) ?? null) : undefined;
+      const goiY = this.doanPhanLoai(it.groupCount, it.laTaiKhoanCongTy, loaiNhomDuyNhat);
       if (goiY !== ZaloIdentityKind.Unknown) suggested += 1;
 
       const res = await this.identityModel.updateOne(
@@ -61,8 +76,8 @@ export class ZaloIdentityService {
 
   /** Đề xuất phân loại từ bằng chứng đếm được. */
   /** Uỷ quyền cho hàm thuần ở `zalo-identity.logic.ts` (kiểm thử được). */
-  private doanPhanLoai(groupCount: number, laTaiKhoanCongTy?: boolean): ZaloIdentityKind {
-    return doanPhanLoaiThuan(groupCount, laTaiKhoanCongTy);
+  private doanPhanLoai(groupCount: number, laTaiKhoanCongTy?: boolean, loaiNhomDuyNhat?: string | null): ZaloIdentityKind {
+    return doanPhanLoaiThuan(groupCount, laTaiKhoanCongTy, loaiNhomDuyNhat);
   }
 
 
