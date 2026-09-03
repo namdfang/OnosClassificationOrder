@@ -36,9 +36,11 @@ import { ZALO_SUMMARY_QUEUE } from './zalo-summary.queue';
 const MODEL = process.env.ZALO_SUMMARY_MODEL || 'opus';
 
 /**
- * Trần thời gian một lượt gọi. Nginx cắt ở 60 giây, một lượt bình thường ~30
- * giây. Tự dừng ở 50 để còn kịp trả lỗi có nội dung — để nginx cắt thì người
- * dùng nhận một trang lỗi trống không nói được gì. (Bài học của thghub.)
+ * Trần thời gian một lượt gọi mô hình (giây). Lượt tóm tắt chạy trong worker
+ * BullMQ, không còn đi qua nginx; production đặt 150 (`ZALO_SUMMARY_TIMEOUT_SEC`),
+ * một nhóm 400 tin với sonnet mất ~40–100 giây. Quá hạn thì HỦY THẬT lượt gọi
+ * (`AbortController`) và đóng tiến trình CLI con — cờ mềm như bản trước chỉ
+ * ngừng đọc, còn tiến trình `claude` vẫn chạy tiếp và ngốn máy.
  */
 const HAN_GIAY = Number(process.env.ZALO_SUMMARY_TIMEOUT_SEC || 50);
 
@@ -522,18 +524,19 @@ NHÓM: ${input.title ?? '(không tên)'}${input.duLieuDon}${khoiTruoc}
 --- ${input.truoc ? 'TIN NHẮN MỚI TỪ LẦN TÓM TẮT TRƯỚC' : 'ĐOẠN CHAT'} ---
 ${doanChat}`;
 
-    // Trần thời gian tự đặt: nginx cắt ở 60 giây mà không báo gì có nghĩa.
-    let hetHan = false;
-    const dongHo = setTimeout(() => {
-      hetHan = true;
-    }, HAN_GIAY * 1000);
+    // Quá hạn → hủy thật: SDK nhận tín hiệu abort, tiến trình CLI con bị đóng
+    // ở `finally`. Không dùng cờ mềm — cờ chỉ ngừng ĐỌC, không ngừng CHẠY.
+    const ac = new AbortController();
+    const dongHo = setTimeout(() => ac.abort(), HAN_GIAY * 1000);
 
     let vanBan = '';
+    let it: ReturnType<typeof query> | undefined;
     try {
-      const it = query({
+      it = query({
         prompt: loiNhac,
         options: {
           model: MODEL,
+          abortController: ac,
           ...(CLAUDE_CLI ? { pathToClaudeCodeExecutable: CLAUDE_CLI } : {}),
           // Không cho công cụ nào: đây là việc đọc-rồi-trả-lời, không phải
           // việc cần đọc file hay chạy lệnh.
@@ -550,13 +553,18 @@ ${doanChat}`;
       });
 
       for await (const msg of it) {
-        if (hetHan) break;
         if (msg.type === 'assistant') {
           for (const b of msg.message.content) if (b.type === 'text') vanBan += b.text;
         }
       }
     } catch (error) {
       const mo = error instanceof Error ? error.message : String(error);
+      // Hết giờ là nhánh RIÊNG và phải xét TRƯỚC các nhánh map lỗi: SDK ném lỗi
+      // abort với câu chữ tuỳ bản, để nó rơi xuống dưới là dịch nhầm thành lỗi khác.
+      if (ac.signal.aborted) {
+        this.logger.warn(`[zalo-summary] quá ${HAN_GIAY}s, đã hủy lượt gọi (nhóm ${input.title ?? '?'})`);
+        throw new ServiceUnavailableException(`Mô hình không trả lời trong ${HAN_GIAY} giây — thử lại nhóm này sau.`);
+      }
       // GHI LẠI LỖI THÔ trước khi diễn giải. Bản trước chỉ ném ra câu đã viết
       // lại, nên khi đoán sai nguyên nhân thì không còn manh mối nào để lần —
       // đã mất nhiều lượt truy trên production vì đúng chỗ này.
@@ -578,9 +586,12 @@ ${doanChat}`;
       throw new ServiceUnavailableException(`Gọi mô hình thất bại: ${mo.slice(0, 200)}`);
     } finally {
       clearTimeout(dongHo);
+      // Đóng tiến trình CLI con dù thành công hay hỏng — kể cả khi vòng lặp đã
+      // đọc xong, SDK vẫn có thể còn giữ tiến trình tới khi bị đóng tường minh.
+      it?.close();
     }
 
-    if (hetHan && !vanBan) {
+    if (ac.signal.aborted && !vanBan) {
       throw new ServiceUnavailableException(`Mô hình không trả lời trong ${HAN_GIAY} giây — thử lại nhóm này sau.`);
     }
 
