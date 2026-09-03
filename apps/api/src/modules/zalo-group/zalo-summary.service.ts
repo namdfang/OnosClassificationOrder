@@ -102,6 +102,9 @@ những gì người ta nói trong chat. Dùng nó để:
 - Chấm mức độ: đơn đang BỊ GIỮ hoặc CÓ LỖI là căn cứ chắc chắn cho "gap", chắc hơn nhiều so với
   suy đoán từ giọng điệu chat.
 Đơn nào chat có nhắc mà khối dữ liệu ghi "không tra được" thì nói rõ là không tra được, đừng đoán.
+Phần "BỐI CẢNH CHUNG CỦA KHÁCH" trong khối đó là để đối chiếu và chấm mức độ. KHÔNG chép nó vào
+"tonDong" hay "checklist" trừ khi chat của CHÍNH NHÓM NÀY có nhắc tới đơn/vấn đề đó. Khách có nhiều
+nhóm — mỗi nhóm chỉ ghi việc của nhóm mình, kẻo cùng một đơn kẹt hiện ở mọi nhóm.
 
 Nếu có khối "TÓM TẮT LẦN TRƯỚC", bạn đang cập nhật tiếp chứ không viết lại từ đầu. Làm ĐÚNG BA việc:
   a) XÁC MINH việc đã đánh dấu xong: tìm bằng chứng trong tin nhắn mới. KHÔNG thấy bằng chứng thì
@@ -424,7 +427,12 @@ export class ZaloSummaryService {
 
     if (phan.length === 0) return '';
 
-    return `\n\n--- DỮ LIỆU ĐƠN HÀNG THẬT (tra từ hệ thống, đúng hơn lời nói trong chat) ---\n${phan.join('\n\n')}`;
+    // Khối này là của KHÁCH, không của nhóm: khách có nhiều nhóm thì mọi nhóm đều
+    // nhận cùng khối. Đặt tên rõ để mô hình không chép "2 đơn lỗi" vào tồn đọng
+    // của cả hai nhóm DESI như đã thấy trên production.
+    const nhanKhach = link.userSku ? ` (${link.userSku})` : '';
+
+    return `\n\n--- DỮ LIỆU ĐƠN HÀNG THẬT (tra từ hệ thống, đúng hơn lời nói trong chat) — BỐI CẢNH CHUNG CỦA KHÁCH${nhanKhach}: toàn bộ đơn của khách, KHÔNG riêng nhóm này ---\n${phan.join('\n\n')}`;
   }
 
   private async goiMoHinh(input: {
