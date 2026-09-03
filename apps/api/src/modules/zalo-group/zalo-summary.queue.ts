@@ -15,4 +15,5 @@ export interface ZaloSummaryJobData {
   groupGlobalId: string;
   messages: ZaloMessageInput[];
   docLaiTuDau?: boolean;
+  epDocLai?: boolean;
 }

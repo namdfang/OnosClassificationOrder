@@ -396,6 +396,12 @@ export interface AgentSellerSupportItem {
      */
     tomTatTre: boolean;
     denMocTin: Date | null;
+    /**
+     * Có tin nhắn SAU `denMocTin` chưa vào bản tóm tắt (so với `lastMessageAt`
+     * của nhóm). Agent nên nói "tóm tắt chưa gồm tin mới nhất" khi cờ này bật,
+     * kể cả khi `tomTatTre` còn tắt — hai cờ đo hai thứ khác nhau.
+     */
+    coTinMoi: boolean;
   };
   /** Số liệu đơn đọc SỐNG lúc gọi, không phải ảnh chụp trong tóm tắt. */
   donHang: {

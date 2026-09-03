@@ -16,6 +16,9 @@
  * Cách chạy (từ thư mục apps/api):
  *   node scripts/summarize-zalo-groups.mjs --dry-run
  *   node scripts/summarize-zalo-groups.mjs --yes --token <JWT> [--limit 10]
+ *   node scripts/summarize-zalo-groups.mjs --yes --token <JWT> --group <groupGlobalId>
+ *       ↑ ép tóm tắt lại MỘT nhóm từ đầu, bỏ qua hàng đợi — để kiểm một thay đổi
+ *         trên nhóm đích danh mà không phải chờ cron.
  */
 import { execFile as execFileCb } from 'node:child_process';
 import { promisify } from 'node:util';
@@ -35,6 +38,8 @@ const PG = argOf('--container') || 'zalo-onos-zalo-db-1';
 const API = (argOf('--api') || 'http://127.0.0.1:3007/api/v1').replace(/\/+$/, '');
 const TOKEN = argOf('--token') || process.env.ONOS_TOKEN;
 const LIMIT = Number(argOf('--limit') || 0);
+/** Ép một nhóm đọc lại từ đầu, bỏ qua hàng đợi (kiểm thử). */
+const GROUP = argOf('--group');
 
 /** Trần tin mỗi lượt — khớp trần của DTO phía API. */
 const MAX_TIN = 400;
@@ -60,23 +65,31 @@ async function keoTin(groupGlobalId, tuMoc) {
   const dieuKienMoc = tuMoc ? `AND m.sent_at > '${new Date(tuMoc).toISOString()}'::timestamptz` : '';
   // Lấy N tin CUỐI (sắp xuôi lại sau) — nhóm dồn quá nhiều tin thì phần mới
   // nhất mới là phần đáng đọc.
+  //
+  // BA LỚP, không gộp được: `DISTINCT ON` (khử một tin lưu nhiều dòng theo
+  // nick) ÉP `ORDER BY zalo_msg_id`, nên `LIMIT` đặt cùng lớp là cắt theo id —
+  // nhóm >400 tin sẽ nhận 400 tin CŨ nhất và bỏ rơi tin mới (đã gặp: tin 31/08
+  // không vào tóm tắt). `luc` là ISO cố định độ dài nên xếp chữ = xếp thời gian.
   const sql = `
     SELECT * FROM (
-      SELECT DISTINCT ON (m.zalo_msg_id)
-             coalesce(m.sender_name,'') AS ten,
-             coalesce(m.sender_uid,'')  AS uid,
-             m.sender_type              AS phia,
-             replace(replace(coalesce(m.content,''), chr(10), ' '), chr(13), ' ') AS noi_dung,
-             to_char(m.sent_at AT TIME ZONE 'UTC','YYYY-MM-DD"T"HH24:MI:SS"Z"')   AS luc
-      FROM zalo_messages m
-      JOIN zalo_conversations c ON c.id = m.conversation_id
-      WHERE c.group_global_id = '${groupGlobalId.replace(/'/g, "''")}'
-        AND m.is_deleted = false
-        AND coalesce(m.content,'') <> ''
-        ${dieuKienMoc}
-      ORDER BY m.zalo_msg_id, m.sent_at DESC
+      SELECT * FROM (
+        SELECT DISTINCT ON (m.zalo_msg_id)
+               coalesce(m.sender_name,'') AS ten,
+               coalesce(m.sender_uid,'')  AS uid,
+               m.sender_type              AS phia,
+               replace(replace(coalesce(m.content,''), chr(10), ' '), chr(13), ' ') AS noi_dung,
+               to_char(m.sent_at AT TIME ZONE 'UTC','YYYY-MM-DD"T"HH24:MI:SS"Z"')   AS luc
+        FROM zalo_messages m
+        JOIN zalo_conversations c ON c.id = m.conversation_id
+        WHERE c.group_global_id = '${groupGlobalId.replace(/'/g, "''")}'
+          AND m.is_deleted = false
+          AND coalesce(m.content,'') <> ''
+          ${dieuKienMoc}
+        ORDER BY m.zalo_msg_id, m.sent_at DESC
+      ) khu_trung
+      ORDER BY luc DESC
       LIMIT ${MAX_TIN}
-    ) x ORDER BY luc ASC
+    ) moi_nhat ORDER BY luc ASC
   `.replace(/\s+/g, ' ');
 
   const { stdout } = await execFile('ssh', [
@@ -86,7 +99,7 @@ async function keoTin(groupGlobalId, tuMoc) {
     `docker exec ${PG} psql -U zalo -d zalo -At -F'${SEP}' -c ${JSON.stringify(sql)}`,
   ]);
 
-  return stdout
+  const tin = stdout
     .split('\n')
     .map((l) => l.trim())
     .filter(Boolean)
@@ -106,15 +119,24 @@ async function keoTin(groupGlobalId, tuMoc) {
       };
     })
     .filter((m) => m.noiDung.trim() !== '');
+
+  if (tin.length >= MAX_TIN) console.log(`    (đã cắt: chỉ ${MAX_TIN} tin mới nhất)`);
+
+  return tin;
 }
 
-const q = await goiApi('/zalo-groups/summary-queue');
-if (!q.ok) {
-  console.error(`Không lấy được hàng đợi (HTTP ${q.status}):`, JSON.stringify(q.body).slice(0, 300));
-  process.exit(1);
+let hangDoi;
+if (GROUP) {
+  // Kiểm thử: không hỏi hàng đợi, ép đúng một nhóm đọc lại toàn bộ.
+  hangDoi = [{ groupGlobalId: GROUP, title: GROUP, tuMoc: null, docLaiTuDau: true, epDocLai: true }];
+} else {
+  const q = await goiApi('/zalo-groups/summary-queue');
+  if (!q.ok) {
+    console.error(`Không lấy được hàng đợi (HTTP ${q.status}):`, JSON.stringify(q.body).slice(0, 300));
+    process.exit(1);
+  }
+  hangDoi = q.body.data ?? [];
 }
-
-let hangDoi = q.body.data ?? [];
 if (LIMIT > 0) hangDoi = hangDoi.slice(0, LIMIT);
 
 console.log(`Nguồn  : ssh ${SSH_HOST} → ${PG}`);
@@ -142,6 +164,15 @@ for (const [i, item] of hangDoi.entries()) {
     continue;
   }
 
+  // Hàng đợi so `lastMessageAt` (đếm cả tin không nội dung) — kéo về rồi mới
+  // biết có tin CÓ NỘI DUNG sau mốc đã tóm tắt hay không. Không có thì không POST.
+  const mocMoiNhat = tin.reduce((m, t) => (t.luc && t.luc > m ? t.luc : m), '');
+  if (item.denMocTin && mocMoiNhat && new Date(mocMoiNhat) <= new Date(item.denMocTin)) {
+    bo += 1;
+    console.log(`  [${i + 1}/${hangDoi.length}] ${ten.padEnd(46)} bỏ qua (không có tin có nội dung sau mốc ${String(item.denMocTin).slice(0, 16)})`);
+    continue;
+  }
+
   if (!apply) {
     console.log(
       `  [${i + 1}/${hangDoi.length}] ${ten.padEnd(46)} ${String(tin.length).padStart(3)} tin${
@@ -157,6 +188,7 @@ for (const [i, item] of hangDoi.entries()) {
       groupGlobalId: item.groupGlobalId,
       messages: tin,
       docLaiTuDau: item.docLaiTuDau,
+      ...(item.epDocLai ? { epDocLai: true } : {}),
     }),
   });
 

@@ -1,6 +1,6 @@
 import { query } from '@anthropic-ai/claude-agent-sdk';
 import { InjectQueue } from '@nestjs/bullmq';
-import { BadRequestException, Injectable, Logger, NotFoundException, ServiceUnavailableException } from '@nestjs/common';
+import { BadRequestException, ConflictException, Injectable, Logger, NotFoundException, ServiceUnavailableException, UnprocessableEntityException } from '@nestjs/common';
 import { InjectModel } from '@nestjs/mongoose';
 import type { Queue } from 'bullmq';
 import { Model } from 'mongoose';
@@ -12,11 +12,11 @@ import type {
   ZaloSummaryTask,
 } from 'shared';
 import {
-  FULFILLMENT_STAGE_LABELS,
   ZALO_GROUP_ANALYZABLE_KINDS,
   ZALO_IDENTITY_CHAT_LABELS,
+  ZALO_PARTNER_CHAT_LABEL,
+  ZaloGroupKind,
   ZaloIdentityKind,
-  ZaloSummaryLevel,
 } from 'shared';
 
 import { OrderEntity } from '../order/order.entity';
@@ -24,6 +24,20 @@ import { ZaloGroupLinkEntity } from './zalo-group-link.entity';
 import type { ZaloGroupSummaryDocument } from './zalo-group-summary.entity';
 import { ZaloGroupSummaryEntity } from './zalo-group-summary.entity';
 import { ZaloIdentityService } from './zalo-identity.service';
+import type { BangChungDon, KetQua } from './zalo-summary.logic';
+import {
+  apDungSanMucDo,
+  chuanHoa,
+  dinhDangLuc,
+  gopChecklist,
+  maKhongCoTrongNguon,
+  moTaDinhKem,
+  moTaDon,
+  nhanChang,
+  quyetDinhHangDoi,
+  SUMMARY_JSON_SCHEMA,
+  tachJson,
+} from './zalo-summary.logic';
 import type { ZaloSummaryJobData } from './zalo-summary.queue';
 import { ZALO_SUMMARY_QUEUE } from './zalo-summary.queue';
 
@@ -34,9 +48,11 @@ import { ZALO_SUMMARY_QUEUE } from './zalo-summary.queue';
 const MODEL = process.env.ZALO_SUMMARY_MODEL || 'opus';
 
 /**
- * Trần thời gian một lượt gọi. Nginx cắt ở 60 giây, một lượt bình thường ~30
- * giây. Tự dừng ở 50 để còn kịp trả lỗi có nội dung — để nginx cắt thì người
- * dùng nhận một trang lỗi trống không nói được gì. (Bài học của thghub.)
+ * Trần thời gian một lượt gọi mô hình (giây). Lượt tóm tắt chạy trong worker
+ * BullMQ, không còn đi qua nginx; production đặt 150 (`ZALO_SUMMARY_TIMEOUT_SEC`),
+ * một nhóm 400 tin với sonnet mất ~40–100 giây. Quá hạn thì HỦY THẬT lượt gọi
+ * (`AbortController`) và đóng tiến trình CLI con — cờ mềm như bản trước chỉ
+ * ngừng đọc, còn tiến trình `claude` vẫn chạy tiếp và ngốn máy.
  */
 const HAN_GIAY = Number(process.env.ZALO_SUMMARY_TIMEOUT_SEC || 50);
 
@@ -58,11 +74,26 @@ const NGAY_DOC_LAI = Number(process.env.ZALO_SUMMARY_REREAD_DAYS || 7);
 /** Nhóm im lâu hơn mức này thì không tốn tiền tóm tắt lại. */
 const NGAY_BO_QUA_NHOM_IM = Number(process.env.ZALO_SUMMARY_IDLE_DAYS || 14);
 
-const HE_THONG = `Bạn đọc một đoạn hội thoại nhóm Zalo giữa nhân viên công ty in ấn và khách hàng.
-Nhiệm vụ: rút ra tình hình, viết TIẾNG VIỆT, mỗi ô 1–2 câu ngắn, cụ thể. KHÔNG kể lại nội dung chat.
+const MO_DAU_KHACH = `Bạn đọc một đoạn hội thoại nhóm Zalo giữa nhân viên công ty in ấn và khách hàng.`;
+
+const MO_DAU_VAN_HANH = `Bạn đọc một đoạn hội thoại NHÓM VẬN HÀNH của công ty in ấn: nhân viên nội bộ làm việc với nhau
+và với ĐỐI TÁC bên ngoài (nhà cung cấp vật tư, đơn vị vận chuyển/khai hải quan, xưởng gia công).
+Trong nhóm này KHÔNG có khách hàng — đừng gọi ai là "khách". VAI TRÒ trên mỗi dòng là NHÂN VIÊN,
+ĐỐI TÁC, TRỢ LÝ AI hoặc CHƯA RÕ.`;
+
+const KET_KHACH = `Đây là nhóm khách B2B — chờ báo giá, chờ mẫu, chờ hợp đồng vài ngày là NHỊP BÌNH THƯỜNG, không
+phải sự cố. Chấm "gap" cho quá nhiều nhóm thì cái nhãn đó mất hết tác dụng cảnh báo.`;
+
+const KET_VAN_HANH = `Đây là nhóm vận hành — chờ hàng về, chờ chứng từ, chờ nhà cung cấp vài ngày là NHỊP BÌNH THƯỜNG,
+không phải sự cố. Trong nhóm này các ô hiểu như sau (giữ nguyên tên khoá JSON):
+- "khachQuanTam" = DD/MM HH:MM + BÊN YÊU CẦU (đối tác hoặc nhân viên nêu vấn đề) + cần gì.
+- "salePhanHoi" = DD/MM HH:MM + TÊN NGƯỜI XỬ LÝ + đã làm gì.
+Chấm "gap" cho quá nhiều nhóm thì cái nhãn đó mất hết tác dụng cảnh báo.`;
+
+const THAN_LOI_NHAC = `Nhiệm vụ: rút ra tình hình, viết TIẾNG VIỆT, mỗi ô 1–2 câu ngắn, cụ thể. KHÔNG kể lại nội dung chat.
 
 🔴 MỌI KẾT LUẬN PHẢI KÈM MỐC THỜI GIAN (NGÀY + GIỜ PHÚT) VÀ TÊN NGƯỜI. Mỗi dòng chat có dạng
-"[DD/MM HH:MM] VAI TRÒ/Tên:" với VAI TRÒ là KHÁCH, NHÂN VIÊN, TRỢ LÝ AI hoặc CHƯA RÕ — hãy DÙNG nó:
+"[DD/MM HH:MM] VAI TRÒ/Tên:" với VAI TRÒ là KHÁCH, ĐỐI TÁC, NHÂN VIÊN, TRỢ LÝ AI hoặc CHƯA RÕ — hãy DÙNG nó:
 - "khách hỏi X" → phải là "20/08 14:35 khách (Tên) hỏi X"
 - "đã trả lời" → phải là "21/08 09:10 (Tên nhân viên) trả lời rằng…" — nêu ĐÍCH DANH ai
 - việc còn treo → phải nói TREO TỪ LÚC NÀO (ngày + giờ) và ĐÃ BAO NHIÊU NGÀY
@@ -72,7 +103,14 @@ Không có mốc thời gian và tên người thì không chấm được ai ch
 "TRỢ LÝ AI" là tài khoản tự động trực nhóm. Nếu chỉ có TRỢ LÝ AI trả lời khách mà KHÔNG nhân viên
 nào vào, hãy nêu rõ điều đó trong "tonDong" — đó là nhóm cần người thật tiếp quản.
 Dòng ghi "CHƯA RÕ" là người chưa được phân loại: đừng khẳng định họ là nhân viên hay khách.
+Dòng có [TỆP: …], [ẢNH], [VIDEO] hoặc [LIÊN KẾT: …] là BẰNG CHỨNG người đó ĐÃ GỬI thứ đó vào đúng
+giờ ghi trong ngoặc vuông — hãy ghi nhận "đã gửi tệp X lúc DD/MM HH:MM", tuyệt đối không kết luận
+"chưa gửi" khi có dòng này. Tên tệp thường nói rõ nội dung (báo giá, chứng nhận, danh sách…).
+[STICKER] không mang nội dung và KHÔNG tính là câu trả lời.
 Chỉ ghi tên/ngày CÓ THẬT trong chat. Không thấy thì ghi "không rõ", tuyệt đối không đoán.
+Mã đơn, mã sản phẩm/SKU, mã vận đơn, số tiền: CHÉP NGUYÊN VĂN từng ký tự như trong chat — không viết
+tắt, không "sửa chính tả", không ghép hai mã. Không chắc đọc đúng mã thì mô tả bằng lời và bỏ mã,
+tuyệt đối không bịa.
 
 Nếu có khối "DỮ LIỆU ĐƠN HÀNG THẬT", đó là trạng thái tra từ hệ thống sản xuất — nó ĐÚNG hơn
 những gì người ta nói trong chat. Dùng nó để:
@@ -81,11 +119,15 @@ những gì người ta nói trong chat. Dùng nó để:
 - Chấm mức độ: đơn đang BỊ GIỮ hoặc CÓ LỖI là căn cứ chắc chắn cho "gap", chắc hơn nhiều so với
   suy đoán từ giọng điệu chat.
 Đơn nào chat có nhắc mà khối dữ liệu ghi "không tra được" thì nói rõ là không tra được, đừng đoán.
+Phần "BỐI CẢNH CHUNG CỦA KHÁCH" trong khối đó là để đối chiếu và chấm mức độ. KHÔNG chép nó vào
+"tonDong" hay "checklist" trừ khi chat của CHÍNH NHÓM NÀY có nhắc tới đơn/vấn đề đó. Khách có nhiều
+nhóm — mỗi nhóm chỉ ghi việc của nhóm mình, kẻo cùng một đơn kẹt hiện ở mọi nhóm.
 
 Nếu có khối "TÓM TẮT LẦN TRƯỚC", bạn đang cập nhật tiếp chứ không viết lại từ đầu. Làm ĐÚNG BA việc:
   a) XÁC MINH việc đã đánh dấu xong: tìm bằng chứng trong tin nhắn mới. KHÔNG thấy bằng chứng thì
      đưa vào "nghiNgo". Thấy rồi thì thôi, đừng nhắc lại.
-  b) GIỮ TIẾP việc còn treo nếu tin nhắn mới không cho thấy nó đã xong. Việc nào tin nhắn mới cho
+  b) GIỮ TIẾP việc còn treo nếu tin nhắn mới không cho thấy nó đã xong, và GIỮ NGUYÊN VĂN câu chữ
+     của việc đó (chỉ đổi khi bản chất việc đã đổi) để hệ thống nhận ra cùng một việc. Việc nào tin nhắn mới cho
      thấy ĐÃ XONG thì BỎ khỏi checklist — đừng giữ chỉ vì lần trước có.
   c) THÊM việc mới phát sinh.
 Tin nhắn mới là bên có tiếng nói cuối. Tóm tắt lần trước chỉ để nhớ, không phải để bảo vệ.
@@ -108,20 +150,25 @@ Chấm mức độ — CHỈ dựa vào bằng chứng CỨNG, không chấm the
     · có mốc hạn cụ thể đã trôi qua (hạn giao, hạn hải quan, hạn thanh toán)
   Chậm trả lời KHÔNG phải căn cứ cho "gap".
 - "can-chu-y": còn việc treo, hoặc khách hỏi đã quá 3 ngày chưa ai đáp.
-- "binh-thuong": việc đang chạy theo nhịp bình thường, kể cả khi còn vài việc chưa xong.
+- "binh-thuong": việc đang chạy theo nhịp bình thường, kể cả khi còn vài việc chưa xong.`;
 
-Đây là nhóm khách B2B — chờ báo giá, chờ mẫu, chờ hợp đồng vài ngày là NHỊP BÌNH THƯỜNG, không
-phải sự cố. Chấm "gap" cho quá nhiều nhóm thì cái nhãn đó mất hết tác dụng cảnh báo.`;
+/**
+ * Lời nhắc hệ thống theo LOẠI NHÓM. Cùng một thân, khác đoạn mở đầu và đoạn kết:
+ * nhóm khách đóng khung "nhân viên ↔ khách"; nhóm vận hành không có khách, người
+ * ngoài là ĐỐI TÁC. Đo trên 111 bản: Duyên (forwarder), Đại Thịnh, Mẫn Nè (bán
+ * mỡ máy), Minh Đăng (quản lý xưởng) đều bị gọi là "khách" vì khung cũ.
+ */
+function loiNhacHeThong(kind?: string): string {
+  const vanHanh = kind === ZaloGroupKind.Operation;
 
-interface KetQua {
-  tieuDe: string;
-  khachQuanTam: string;
-  salePhanHoi: string;
-  tonDong: string;
-  checklist: string[];
-  nghiNgo: string[];
-  mucDo: string;
+  return `${vanHanh ? MO_DAU_VAN_HANH : MO_DAU_KHACH}
+${THAN_LOI_NHAC}
+
+${vanHanh ? KET_VAN_HANH : KET_KHACH}`;
 }
+
+/** Một hàng bảng theo dõi: bản tóm tắt (lean) + hai trường tính lúc gọi từ nhóm. */
+type ZaloSummaryRow = ZaloGroupSummaryEntity & { _id: string; lastMessageAt?: Date; coTinMoi?: boolean };
 
 @Injectable()
 export class ZaloSummaryService {
@@ -172,7 +219,9 @@ export class ZaloSummaryService {
 
     const job = await this.summaryQueue.add(
       'summarize',
-      { groupGlobalId: dto.groupGlobalId, messages: dto.messages, docLaiTuDau: dto.docLaiTuDau },
+      { groupGlobalId: dto.groupGlobalId, messages: dto.messages, docLaiTuDau: dto.docLaiTuDau ,
+        // Cờ kiểm thử `--group`: bỏ chốt 'không có tin có nội dung sau mốc'.
+        ...(dto.epDocLai ? { epDocLai: true } : {})},
       { jobId },
     );
 
@@ -196,29 +245,23 @@ export class ZaloSummaryService {
     const byGroup = new Map(summaries.map((s) => [String(s.groupGlobalId), s]));
 
     const now = Date.now();
-    const nguongIm = now - NGAY_BO_QUA_NHOM_IM * 86_400_000;
     const out: ZaloSummaryQueueItem[] = [];
 
     for (const g of groups) {
       const gid = String((g as { groupGlobalId: string }).groupGlobalId);
       const lastMsg = (g as { lastMessageAt?: Date }).lastMessageAt;
-      // Nhóm chưa có tin, hoặc im quá lâu → bỏ qua, khỏi tốn tiền gọi mô hình.
-      if (!lastMsg || new Date(lastMsg).getTime() < nguongIm) continue;
-
       const prev = byGroup.get(gid);
-      // Đã tóm tắt tới đúng tin cuối rồi thì không có gì mới để đọc.
-      if (prev?.denMocTin && new Date(prev.denMocTin).getTime() >= new Date(lastMsg).getTime()) continue;
-
-      const docLai =
-        !prev?.docDayDuLuc || now - new Date(prev.docDayDuLuc).getTime() > NGAY_DOC_LAI * 86_400_000;
-
-      out.push({
-        groupGlobalId: gid,
-        title: (g as { title?: string }).title,
-        // Đọc lại từ đầu thì bỏ mốc, lấy toàn bộ.
-        tuMoc: docLai ? null : (prev?.denMocTin ?? null),
-        docLaiTuDau: docLai,
+      const qd = quyetDinhHangDoi({
+        lastMessageAt: lastMsg ? new Date(lastMsg) : null,
+        denMocTin: prev?.denMocTin ? new Date(prev.denMocTin) : null,
+        docDayDuLuc: prev?.docDayDuLuc ? new Date(prev.docDayDuLuc) : null,
+        now,
+        ngayDocLai: NGAY_DOC_LAI,
+        ngayBoQua: NGAY_BO_QUA_NHOM_IM,
       });
+      if (!qd) continue;
+
+      out.push({ groupGlobalId: gid, title: (g as { title?: string }).title, ...qd });
     }
 
     return out;
@@ -253,19 +296,11 @@ export class ZaloSummaryService {
     const prev = await this.summaryModel.findOne({ groupGlobalId: dto.groupGlobalId }).lean();
     const docLaiTuDau = dto.docLaiTuDau ?? false;
 
-    const duLieuDon = await this.layDuLieuDon(
-      link as { customerId?: string; userSku?: string },
-      dto.messages,
-    );
+    // Đổi tin đính kèm (JSON thô) thành chữ MỘT LẦN, dùng cho cả regex mã đơn lẫn
+    // dòng chat — hai chỗ cùng đọc `noiDung`, đổi lệch nhau là mô hình và dữ liệu
+    // đơn nhìn hai phiên bản khác nhau của cùng một tin.
+    const messages = dto.messages.map((m) => ({ ...m, noiDung: moTaDinhKem(m.noiDung) }));
 
-    const ketQua = await this.goiMoHinh({
-      title: (link as { title?: string }).title,
-      messages: dto.messages,
-      truoc: docLaiTuDau ? null : prev,
-      duLieuDon,
-    });
-
-    const now = new Date();
     const mocCuoi = dto.messages.reduce<Date | undefined>((max, m) => {
       if (!m.luc) return max;
       const d = new Date(m.luc);
@@ -273,20 +308,76 @@ export class ZaloSummaryService {
       return !max || d > max ? d : max;
     }, undefined);
 
+    // Đọc lại định kỳ mà KHÔNG có tin có nội dung mới → không gọi mô hình: tóm
+    // tắt lại y nguyên chỉ tốn tiền và vứt ngữ cảnh checklist. KHÔNG đụng
+    // `docDayDuLuc` để lượt đọc lại nổ ngay khi có nội dung thật.
+    if (!dto.epDocLai && docLaiTuDau && prev?.denMocTin && mocCuoi && mocCuoi <= new Date(prev.denMocTin)) {
+      this.logger.log(
+        `[zalo-summary] bỏ đọc lại nhóm ${dto.groupGlobalId}: không có tin có nội dung sau ${new Date(prev.denMocTin).toISOString()}`,
+      );
+
+      return prev as unknown as ZaloGroupSummaryDocument;
+    }
+
+    const { vanBan: duLieuDon, bangChung } = await this.layDuLieuDon(
+      link as { customerId?: string; userSku?: string },
+      messages,
+    );
+
+    const kind = (link as { kind?: string }).kind;
+    const ketQua = await this.goiMoHinh({
+      title: (link as { title?: string }).title,
+      kind,
+      messages,
+      truoc: docLaiTuDau ? null : prev,
+      duLieuDon,
+    });
+
+    // Chỉ ghi log, KHÔNG tự sửa: thay bằng mã gần giống có thể sai nặng hơn. Xét
+    // lại nếu tỉ lệ cảnh báo vượt ~1/200 sau khi đã có luật "chép nguyên văn".
+    // Nguồn = ĐÚNG những gì mô hình được đọc: tin nhắn + khối đơn + bản tóm tắt
+    // lần trước (chỉ khi lượt này thực sự gửi nó, tức không đọc lại từ đầu).
+    const banTruoc =
+      !docLaiTuDau && prev
+        ? [prev.tieuDe, prev.khachQuanTam, prev.salePhanHoi, prev.tonDong, ...(prev.nghiNgo ?? []), ...(prev.checklist ?? []).map((c) => c.viec)]
+            .filter(Boolean)
+            .join('\n')
+        : '';
+    const maLa = maKhongCoTrongNguon(ketQua, `${messages.map((m) => m.noiDung).join('\n')}\n${duLieuDon}\n${banTruoc}`);
+    if (maLa.length) {
+      this.logger.warn(`[zalo-summary] mã không có trong chat: ${maLa.join(', ')} (nhóm ${dto.groupGlobalId})`);
+    }
+
+    // Sàn mức độ từ bằng chứng cứng — mô hình có thể dịu giọng, dữ liệu đơn thì không.
+    const sanMucDo = apDungSanMucDo(ketQua.mucDo, bangChung);
+    if (sanMucDo.nangTu) {
+      this.logger.log(
+        `[zalo-summary] nâng mức ${sanMucDo.nangTu} → ${sanMucDo.mucDo} theo dữ liệu đơn (nhắc: ${bangChung.donNhacBiGiuHoacLoi}, khách: ${bangChung.donKhachBiGiuHoacLoi}; nhóm ${dto.groupGlobalId})`,
+      );
+    } else if (bangChung.donNhacBiGiuHoacLoi > 0 || bangChung.donKhachBiGiuHoacLoi > 0) {
+      // Ghi cả khi KHÔNG phải nâng: đọc log là biết vì sao một nhóm màu đỏ, và
+      // biết đường đếm bằng chứng có chạy hay không (sàn im lặng thì không phân
+      // biệt được "không có bằng chứng" với "hàm đếm hỏng").
+      this.logger.log(
+        `[zalo-summary] bằng chứng đơn (nhắc: ${bangChung.donNhacBiGiuHoacLoi}, khách: ${bangChung.donKhachBiGiuHoacLoi}) — mô hình đã chấm ${sanMucDo.mucDo}, không cần nâng (nhóm ${dto.groupGlobalId})`,
+      );
+    }
+
+    const now = new Date();
+
     const set: Record<string, unknown> = {
       groupGlobalId: dto.groupGlobalId,
       customerId: (link as { customerId?: string }).customerId,
       userSku: (link as { userSku?: string }).userSku,
       title: (link as { title?: string }).title,
+      // Lưu loại nhóm lúc tóm tắt để UI đổi nhãn ô ("Bên yêu cầu"/"Người xử lý").
+      kind,
       tieuDe: ketQua.tieuDe,
       khachQuanTam: ketQua.khachQuanTam,
       salePhanHoi: ketQua.salePhanHoi,
       tonDong: ketQua.tonDong,
-      // Giữ trạng thái tick của việc trùng nội dung — nếu không, mỗi lượt tóm
-      // tắt lại xoá sạch công người vận hành đã tick.
-      checklist: gopChecklist(ketQua.checklist, (prev?.checklist as ZaloSummaryTask[]) ?? [], now),
       nghiNgo: ketQua.nghiNgo,
-      mucDo: ketQua.mucDo,
+      mucDo: sanMucDo.mucDo,
       soTin: dto.messages.length,
       model: MODEL,
       tomTatLuc: now,
@@ -294,11 +385,29 @@ export class ZaloSummaryService {
       ...(docLaiTuDau ? { docDayDuLuc: now } : {}),
     };
 
-    const saved = await this.summaryModel.findOneAndUpdate(
-      { groupGlobalId: dto.groupGlobalId },
-      { $set: set },
-      { upsert: true, new: true },
-    );
+    // Checklist: ĐỌC LẠI SAU khi mô hình trả lời rồi gộp, và ghi CÓ ĐIỀU KIỆN
+    // theo `checklistRev`. `prev` đọc trước lượt gọi 40–150 giây — người tick
+    // trong khoảng đó mà gộp từ `prev` là mất tick. Rev lệch (ai đó tick đúng
+    // vài mili giây giữa đọc và ghi) thì đọc lại, tối đa 3 vòng.
+    let saved: ZaloGroupSummaryDocument | null = null;
+    for (let vong = 0; vong < 3 && !saved; vong += 1) {
+      const hienTai = await this.summaryModel
+        .findOne({ groupGlobalId: dto.groupGlobalId })
+        .select('checklist checklistRev')
+        .lean();
+      const rev = hienTai?.checklistRev ?? 0;
+      const checklist = gopChecklist(ketQua.checklist, (hienTai?.checklist as ZaloSummaryTask[]) ?? [], now);
+      const dieuKien = hienTai
+        ? // Bản cũ chưa có `checklistRev` → coi như 0.
+          { groupGlobalId: dto.groupGlobalId, $or: [{ checklistRev: rev }, ...(rev === 0 ? [{ checklistRev: { $exists: false } }] : [])] }
+        : { groupGlobalId: dto.groupGlobalId };
+      saved = await this.summaryModel.findOneAndUpdate(
+        dieuKien,
+        { $set: { ...set, checklist }, $inc: { checklistRev: 1 } },
+        { upsert: !hienTai, new: true },
+      );
+    }
+    if (!saved) throw new ConflictException('Checklist đang được sửa liên tục — lượt tóm tắt sẽ thử lại sau.');
 
     return saved;
   }
@@ -313,8 +422,9 @@ export class ZaloSummaryService {
   private async layDuLieuDon(
     link: { customerId?: string; userSku?: string },
     messages: ZaloMessageInput[],
-  ): Promise<string> {
+  ): Promise<{ vanBan: string; bangChung: BangChungDon }> {
     const phan: string[] = [];
+    const bangChung: BangChungDon = { donNhacBiGiuHoacLoi: 0, donKhachBiGiuHoacLoi: 0 };
 
     // ─── Đơn được nhắc đích danh trong chat ───────────────────────
     // Khách gọi đơn bằng MÃ ĐƠN OnosPod (`orderId`) chứ hiếm khi dùng
@@ -330,8 +440,15 @@ export class ZaloSummaryService {
 
     if (maTrongChat.length > 0) {
       const dons = await this.orderModel
-        .find({ $or: [{ productionId: { $in: maTrongChat } }, { orderId: { $in: maTrongChat } }] })
-        .select('productionId orderId type currentFulfillmentStage designerStatus heldAt holdReason productionError productionErrorNote inProductionAt fulfillmentCompletedAt cancelledAt')
+        // `externalId` = mã nền tảng (Platform ID) khách hay đọc ra trong chat.
+        .find({
+          $or: [
+            { productionId: { $in: maTrongChat } },
+            { orderId: { $in: maTrongChat } },
+            { externalId: { $in: maTrongChat } },
+          ],
+        })
+        .select('productionId orderId externalId type currentFulfillmentStage designerStatus heldAt holdReason productionError productionErrorNote inProductionAt fulfillmentCompletedAt cancelledAt')
         .limit(20)
         .lean();
 
@@ -343,6 +460,9 @@ export class ZaloSummaryService {
         thay.add(pid.toUpperCase());
         thay.add(oid.toUpperCase());
         dong.push(`  · ${oid || pid}: ${moTaDon(d)}`);
+        if (!d.cancelledAt && (d.heldAt || (d.productionError && !d.fulfillmentCompletedAt))) {
+          bangChung.donNhacBiGiuHoacLoi += 1;
+        }
       }
       const khongThay = maTrongChat.filter((c) => !thay.has(c));
 
@@ -376,6 +496,7 @@ export class ZaloSummaryService {
           .lean(),
       ]);
 
+      bangChung.donKhachBiGiuHoacLoi = giu + loi;
       const dòng = [`  · đang chạy: ${dangChay} đơn`, `  · đang bị giữ: ${giu}`, `  · đang có lỗi: ${loi}`];
       const cu = (cuNhat as Record<string, unknown>[])[0];
       if (cu?.inProductionAt) {
@@ -387,13 +508,23 @@ export class ZaloSummaryService {
       phan.push(`TÌNH HÌNH CHUNG CỦA KHÁCH (${sku}):\n${dòng.join('\n')}`);
     }
 
-    if (phan.length === 0) return '';
+    if (phan.length === 0) return { vanBan: '', bangChung };
 
-    return `\n\n--- DỮ LIỆU ĐƠN HÀNG THẬT (tra từ hệ thống, đúng hơn lời nói trong chat) ---\n${phan.join('\n\n')}`;
+    // Khối này là của KHÁCH, không của nhóm: khách có nhiều nhóm thì mọi nhóm đều
+    // nhận cùng khối. Đặt tên rõ để mô hình không chép "2 đơn lỗi" vào tồn đọng
+    // của cả hai nhóm DESI như đã thấy trên production.
+    const nhanKhach = link.userSku ? ` (${link.userSku})` : '';
+
+    return {
+      vanBan: `\n\n--- DỮ LIỆU ĐƠN HÀNG THẬT (tra từ hệ thống, đúng hơn lời nói trong chat) — BỐI CẢNH CHUNG CỦA KHÁCH${nhanKhach}: toàn bộ đơn của khách, KHÔNG riêng nhóm này ---\n${phan.join('\n\n')}`,
+      bangChung,
+    };
   }
 
   private async goiMoHinh(input: {
     title?: string;
+    /** Loại nhóm — quyết định khung lời nhắc và nhãn ĐỐI TÁC thay KHÁCH. */
+    kind?: string;
     messages: ZaloMessageInput[];
     truoc: { tonDong?: string; checklist?: ZaloSummaryTask[] } | null;
     /** Khối dữ liệu đơn thật, rỗng khi nhóm chưa gắn khách hoặc chat không nhắc mã nào. */
@@ -421,7 +552,13 @@ export class ZaloSummaryService {
         const ten = m.nguoiGui || dd?.displayName || 'không rõ';
         const luc = m.luc ? dinhDangLuc(new Date(m.luc)) : '??/?? ??:??';
 
-        return `[${luc}] ${ZALO_IDENTITY_CHAT_LABELS[loai]}/${ten}: ${m.noiDung}`;
+        // Nhóm vận hành không có khách: người ngoài công ty ở đó là đối tác.
+        const nhan =
+          loai === ZaloIdentityKind.Customer && input.kind === ZaloGroupKind.Operation
+            ? ZALO_PARTNER_CHAT_LABEL
+            : ZALO_IDENTITY_CHAT_LABELS[loai];
+
+        return `[${luc}] ${nhan}/${ten}: ${m.noiDung}`;
       })
       .join('\n');
 
@@ -438,25 +575,28 @@ export class ZaloSummaryService {
         ].join('\n')
       : '';
 
-    const loiNhac = `${HE_THONG}
+    const loiNhac = `${loiNhacHeThong(input.kind)}
 
 NHÓM: ${input.title ?? '(không tên)'}${input.duLieuDon}${khoiTruoc}
 
 --- ${input.truoc ? 'TIN NHẮN MỚI TỪ LẦN TÓM TẮT TRƯỚC' : 'ĐOẠN CHAT'} ---
 ${doanChat}`;
 
-    // Trần thời gian tự đặt: nginx cắt ở 60 giây mà không báo gì có nghĩa.
-    let hetHan = false;
-    const dongHo = setTimeout(() => {
-      hetHan = true;
-    }, HAN_GIAY * 1000);
+    // Quá hạn → hủy thật: SDK nhận tín hiệu abort, tiến trình CLI con bị đóng
+    // ở `finally`. Không dùng cờ mềm — cờ chỉ ngừng ĐỌC, không ngừng CHẠY.
+    const ac = new AbortController();
+    const dongHo = setTimeout(() => ac.abort(), HAN_GIAY * 1000);
 
     let vanBan = '';
+    let coCauTruc: unknown;
+    let ketThucLoi: string | undefined;
+    let it: ReturnType<typeof query> | undefined;
     try {
-      const it = query({
+      it = query({
         prompt: loiNhac,
         options: {
           model: MODEL,
+          abortController: ac,
           ...(CLAUDE_CLI ? { pathToClaudeCodeExecutable: CLAUDE_CLI } : {}),
           // Không cho công cụ nào: đây là việc đọc-rồi-trả-lời, không phải
           // việc cần đọc file hay chạy lệnh.
@@ -469,17 +609,33 @@ ${doanChat}`;
            * đọc nhất.
            */
           maxTurns: 3,
+          // Ép JSON đúng khuôn ngay tại SDK; `tachJson` bên dưới là đường lui
+          // khi bản CLI bỏ qua tuỳ chọn này và chỉ trả văn bản.
+          outputFormat: { type: 'json_schema', schema: SUMMARY_JSON_SCHEMA },
         },
       });
 
       for await (const msg of it) {
-        if (hetHan) break;
         if (msg.type === 'assistant') {
           for (const b of msg.message.content) if (b.type === 'text') vanBan += b.text;
+        }
+        if (msg.type === 'result') {
+          const r = msg as { subtype?: string; structured_output?: unknown };
+          if (r.subtype === 'success') {
+            if (r.structured_output !== undefined) coCauTruc = r.structured_output;
+          } else if (r.subtype) {
+            ketThucLoi = r.subtype;
+          }
         }
       }
     } catch (error) {
       const mo = error instanceof Error ? error.message : String(error);
+      // Hết giờ là nhánh RIÊNG và phải xét TRƯỚC các nhánh map lỗi: SDK ném lỗi
+      // abort với câu chữ tuỳ bản, để nó rơi xuống dưới là dịch nhầm thành lỗi khác.
+      if (ac.signal.aborted) {
+        this.logger.warn(`[zalo-summary] quá ${HAN_GIAY}s, đã hủy lượt gọi (nhóm ${input.title ?? '?'})`);
+        throw new ServiceUnavailableException(`Mô hình không trả lời trong ${HAN_GIAY} giây — thử lại nhóm này sau.`);
+      }
       // GHI LẠI LỖI THÔ trước khi diễn giải. Bản trước chỉ ném ra câu đã viết
       // lại, nên khi đoán sai nguyên nhân thì không còn manh mối nào để lần —
       // đã mất nhiều lượt truy trên production vì đúng chỗ này.
@@ -501,28 +657,36 @@ ${doanChat}`;
       throw new ServiceUnavailableException(`Gọi mô hình thất bại: ${mo.slice(0, 200)}`);
     } finally {
       clearTimeout(dongHo);
+      // Đóng tiến trình CLI con dù thành công hay hỏng — kể cả khi vòng lặp đã
+      // đọc xong, SDK vẫn có thể còn giữ tiến trình tới khi bị đóng tường minh.
+      it?.close();
     }
 
-    if (hetHan && !vanBan) {
+    if (ac.signal.aborted && !vanBan) {
       throw new ServiceUnavailableException(`Mô hình không trả lời trong ${HAN_GIAY} giây — thử lại nhóm này sau.`);
     }
 
-    // Agent SDK trả văn bản tự do, không có structured output — phải tự tách
-    // khối JSON ra khỏi phần mô hình có thể nói thêm xung quanh.
-    const m = vanBan.match(/\{[\s\S]*\}/);
-    if (!m) throw new ServiceUnavailableException('Mô hình không trả về JSON.');
-
-    let parsed: unknown;
-    try {
-      parsed = JSON.parse(m[0]);
-    } catch {
-      throw new ServiceUnavailableException('Mô hình trả về dữ liệu không đọc được.');
+    // Hết lượt / hết số lần ép khuôn: gọi lại y nguyên cũng hỏng y nguyên —
+    // KHÔNG thử lại (422 → processor bỏ job). Nhóm tự vào hàng đợi ca sau vì
+    // `denMocTin` không tiến. Bản cũ retry 3 lần: tốn 3 lượt gọi cho 1 câu hỏng.
+    if (ketThucLoi === 'error_max_turns' || ketThucLoi === 'error_max_structured_output_retries') {
+      throw new UnprocessableEntityException(`Mô hình không hoàn thành bản tóm tắt (${ketThucLoi}) — không thử lại.`);
     }
+    if (ketThucLoi) {
+      throw new ServiceUnavailableException(`Lượt gọi kết thúc với lỗi ${ketThucLoi} — thử lại nhóm này sau.`);
+    }
+
+    const parsed = coCauTruc ?? tachJson(vanBan);
+    if (!parsed) {
+      this.logger.error(`[zalo-summary] không tách được JSON; 300 ký tự đầu: ${vanBan.slice(0, 300)}`);
+      throw new UnprocessableEntityException('Mô hình không trả về JSON đúng khuôn — không thử lại.');
+    }
+    this.logger.log(`[zalo-summary] nguồn kết quả: ${coCauTruc !== undefined ? 'structured_output' : 'văn bản (tachJson)'}`);
 
     return chuanHoa(parsed);
   }
 
-  async list(dto: GetZaloSummariesDto): Promise<{ data: ZaloGroupSummaryDocument[]; total: number }> {
+  async list(dto: GetZaloSummariesDto): Promise<{ data: ZaloSummaryRow[]; total: number }> {
     const filter: Record<string, unknown> = { deletedAt: { $exists: false } };
     if (dto.mucDo) filter.mucDo = dto.mucDo;
     if (dto.customerId) filter.customerId = dto.customerId;
@@ -544,7 +708,26 @@ ${doanChat}`;
       this.summaryModel.countDocuments(filter),
     ]);
 
-    return { data: data as ZaloGroupSummaryDocument[], total };
+    // Người đọc phải biết bản tóm tắt "biết tới đâu": đo trên production có 21
+    // nhóm >5 tin chờ mà UI không hề báo. Tính lúc gọi từ mốc tin cuối của nhóm,
+    // không lưu — tươi tới lần `sync-zalo-groups` gần nhất.
+    const links = await this.linkModel
+      .find({ groupGlobalId: { $in: data.map((d) => d.groupGlobalId) } })
+      .select('groupGlobalId lastMessageAt')
+      .lean();
+    const mocCuoi = new Map(links.map((l) => [String(l.groupGlobalId), (l as { lastMessageAt?: Date }).lastMessageAt]));
+
+    const rows: ZaloSummaryRow[] = data.map((d) => {
+      const lastMessageAt = mocCuoi.get(String(d.groupGlobalId));
+
+      return {
+        ...(d as ZaloGroupSummaryEntity & { _id: string }),
+        lastMessageAt,
+        coTinMoi: !!lastMessageAt && (!d.denMocTin || lastMessageAt > d.denMocTin),
+      };
+    });
+
+    return { data: rows, total };
   }
 
   /** Người vận hành tick / bỏ tick một việc. */
@@ -565,6 +748,8 @@ ${doanChat}`;
           [`checklist.${index}.xong`]: xong,
           [`checklist.${index}.xongLuc`]: xong ? new Date().toISOString() : null,
         },
+        // Lượt tóm tắt đang chạy sẽ thấy rev đổi và đọc lại trước khi ghi.
+        $inc: { checklistRev: 1 },
       },
       { new: true },
     );
@@ -572,94 +757,4 @@ ${doanChat}`;
 
     return updated;
   }
-}
-
-/**
- * Gộp danh sách việc mới với danh sách cũ, GIỮ trạng thái tick của việc trùng
- * nội dung. Không có bước này thì mỗi lượt tóm tắt lại xoá sạch những gì người
- * vận hành đã tick, và cái nút tick thành vô nghĩa.
- */
-function gopChecklist(moi: string[], cu: ZaloSummaryTask[], bayGio: Date): ZaloSummaryTask[] {
-  const cuTheoViec = new Map(cu.map((c) => [c.viec.trim().toLowerCase(), c]));
-
-  return moi.map((viec) => {
-    const truoc = cuTheoViec.get(viec.trim().toLowerCase());
-
-    return {
-      viec,
-      xong: truoc?.xong ?? false,
-      taoLuc: truoc?.taoLuc ?? bayGio.toISOString(),
-      xongLuc: truoc?.xongLuc ?? null,
-    };
-  });
-}
-
-/** Ép kết quả về đúng kiểu — structured output đã ràng buộc, đây là lưới cuối. */
-function chuanHoa(o: unknown): KetQua {
-  const r = (o ?? {}) as Record<string, unknown>;
-  const chuoi = (v: unknown) => (typeof v === 'string' ? v.trim() : '');
-  const mangChuoi = (v: unknown) =>
-    Array.isArray(v) ? v.filter((x): x is string => typeof x === 'string' && x.trim() !== '') : [];
-  const mucDo = chuoi(r.mucDo);
-
-  return {
-    tieuDe: chuoi(r.tieuDe),
-    khachQuanTam: chuoi(r.khachQuanTam),
-    salePhanHoi: chuoi(r.salePhanHoi),
-    tonDong: chuoi(r.tonDong),
-    checklist: mangChuoi(r.checklist),
-    nghiNgo: mangChuoi(r.nghiNgo),
-    mucDo: ([ZaloSummaryLevel.BinhThuong, ZaloSummaryLevel.CanChuY, ZaloSummaryLevel.Gap] as string[]).includes(
-      mucDo,
-    )
-      ? mucDo
-      : ZaloSummaryLevel.BinhThuong,
-  };
-}
-
-/** `DD/MM HH:MM` theo giờ Việt Nam — khuôn mà lời nhắc yêu cầu mô hình trích lại. */
-function dinhDangLuc(d: Date): string {
-  const vn = new Date(d.getTime() + 7 * 3_600_000);
-  const p = (n: number) => String(n).padStart(2, '0');
-
-  return `${p(vn.getUTCDate())}/${p(vn.getUTCMonth() + 1)} ${p(vn.getUTCHours())}:${p(vn.getUTCMinutes())}`;
-}
-
-/** Nhãn công đoạn tiếng Việt; đơn chưa vào xưởng thì nói rõ đang ở đâu. */
-function nhanChang(stage?: string): string {
-  if (!stage) return 'chưa vào công đoạn xưởng';
-
-  return FULFILLMENT_STAGE_LABELS[stage as keyof typeof FULFILLMENT_STAGE_LABELS] ?? stage;
-}
-
-/**
- * Một dòng mô tả trạng thái đơn cho mô hình đọc.
- *
- * Thứ tự kiểm QUAN TRỌNG và giống `OrderJourney.md §2`: hủy → giữ → xong →
- * công đoạn. Đơn bị giữ vẫn còn nguyên công đoạn cũ trong dữ liệu, đọc sai thứ
- * tự là báo nhầm "đang chạy" cho một đơn đứng im.
- */
-function moTaDon(d: Record<string, unknown>): string {
-  if (d.cancelledAt) return 'ĐÃ HỦY';
-  if (d.heldAt) {
-    const ngay = Math.floor((Date.now() - new Date(d.heldAt as Date).getTime()) / 86_400_000);
-
-    return `ĐANG BỊ GIỮ ${ngay} ngày${d.holdReason ? ` (lý do: ${String(d.holdReason)})` : ''}`;
-  }
-  if (d.fulfillmentCompletedAt) {
-    const ngay = Math.floor((Date.now() - new Date(d.fulfillmentCompletedAt as Date).getTime()) / 86_400_000);
-
-    return `đã xong sản xuất ${ngay} ngày trước`;
-  }
-
-  const phan: string[] = [nhanChang(d.currentFulfillmentStage as string | undefined)];
-  if (d.productionError) {
-    phan.push(`ĐANG CÓ LỖI: ${String(d.productionError)}${d.productionErrorNote ? ` — ${String(d.productionErrorNote)}` : ''}`);
-  }
-  if (d.inProductionAt) {
-    const ngay = Math.floor((Date.now() - new Date(d.inProductionAt as Date).getTime()) / 86_400_000);
-    phan.push(`vào sản xuất ${ngay} ngày trước`);
-  }
-
-  return phan.join(', ');
 }

@@ -2,7 +2,7 @@ import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import dayjs from 'dayjs';
 import { AlertTriangle, CircleAlert, CircleCheck, Search } from 'lucide-react';
-import type { ZaloGroupSummary } from 'shared';
+import type { ZaloGroupSummaryRow } from 'shared';
 import { ZaloSummaryLevel } from 'shared';
 
 import { RepositoryRemote } from '@/services';
@@ -33,7 +33,7 @@ const LEVEL_STYLE: Record<string, { cls: string; Icon: typeof AlertTriangle }> =
   },
 };
 
-type Row = ZaloGroupSummary & { _id: string };
+type Row = ZaloGroupSummaryRow & { _id: string };
 
 export default function SummariesPanel() {
   const { t } = useTranslation(['zaloGroups', 'common']);
@@ -155,15 +155,20 @@ export default function SummariesPanel() {
                   </div>
                   {r.tieuDe && <p className="mt-1 text-sm text-slate-600 dark:text-slate-300">{r.tieuDe}</p>}
                 </div>
-                <div className="whitespace-nowrap text-xs text-slate-400">
+                <div className="whitespace-nowrap text-right text-xs text-slate-400">
                   {r.tomTatLuc ? dayjs(r.tomTatLuc).format('DD/MM HH:mm') : '—'}
                   {r.soTin > 0 && <> · {t('summary.msgCount', { count: r.soTin })}</>}
+                  {r.coTinMoi && r.lastMessageAt && (
+                    <div className="mt-1 inline-block rounded bg-amber-100 px-1.5 py-0.5 text-amber-800 dark:bg-amber-900/40 dark:text-amber-300">
+                      {t('summary.newSince', { at: dayjs(r.lastMessageAt).format('DD/MM HH:mm') })}
+                    </div>
+                  )}
                 </div>
               </div>
 
               <div className="mt-3 grid gap-3 sm:grid-cols-3">
-                <Field label={t('summary.customerWants')} value={r.khachQuanTam} />
-                <Field label={t('summary.staffReplied')} value={r.salePhanHoi} />
+                <Field label={t(r.kind === 'operation' ? 'summary.requesterWants' : 'summary.customerWants')} value={r.khachQuanTam} />
+                <Field label={t(r.kind === 'operation' ? 'summary.handlerReplied' : 'summary.staffReplied')} value={r.salePhanHoi} />
                 <Field label={t('summary.pending')} value={r.tonDong} highlight={!!r.tonDong} />
               </div>
 

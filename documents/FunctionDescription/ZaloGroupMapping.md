@@ -137,16 +137,20 @@ trên `groupGlobalId`, không đặt trên `customerId`.
 
 Bảng `zalo_group_summaries`, một bản ghi hiện hành cho mỗi nhóm.
 
-**Mô hình:** `claude-opus-5` qua `@anthropic-ai/sdk` (đổi được bằng `ZALO_SUMMARY_MODEL`),
-`thinking: adaptive`, `effort: medium` (`ZALO_SUMMARY_EFFORT`). Dùng structured
-output (`output_config.format` kiểu `json_schema`) để mô hình trả đúng khuôn thay
-vì phải dò JSON trong văn bản trả về.
+**Mô hình:** gọi qua `@anthropic-ai/claude-agent-sdk` (`query()` spawn CLI `claude`
+ở `CLAUDE_CLI_PATH`; xác thực bằng phiên Claude Code `~/.claude`, KHÔNG có
+`ANTHROPIC_API_KEY`). Model là ALIAS qua `ZALO_SUMMARY_MODEL` (production: `sonnet`),
+`maxTurns: 3`, `allowedTools: []`. Trần thời gian `ZALO_SUMMARY_TIMEOUT_SEC`
+(production 150): quá hạn thì **hủy thật** bằng `AbortController` và
+`Query.close()` giết tiến trình CLI con (đo trên dev bằng cgroup của unit: sau
+dòng log hủy không còn tiến trình `claude` nào). Kết quả ép khuôn bằng
+`outputFormat: json_schema` (`SUMMARY_JSON_SCHEMA`), đọc `structured_output` từ
+message `result`; bản CLI nào bỏ qua thì `tachJson()` tách JSON khỏi văn bản
+(quét ngoặc có nhận biết chuỗi — không dùng regex tham). Lỗi cấu hình (thiếu
+CLI, chưa đăng nhập) trả 503 kèm câu chỉ rõ phải làm gì.
 
-**Cần `ANTHROPIC_API_KEY`** trong `apps/api/.env.<NODE_ENV>`. Thiếu khoá thì
-endpoint trả 503 kèm câu chỉ rõ phải đặt biến nào — không để nó nổi lên thành
-500 "Internal server error" không manh mối.
-
-Bốn chốt lấy từ `thghub`:
+Tám chốt (bốn đầu lấy từ `thghub`, bốn sau thêm 03/09/2026 sau khi đối chiếu 111
+bản tóm tắt với tin gốc):
 
 1. **Cuốn chiếu, không phải "N tin gần nhất".** Mỗi lượt nhận bản tóm tắt lần
    trước + tin MỚI kể từ `denMocTin`. Đo trên 191 nhóm bên thghub: cửa sổ "60 tin
@@ -159,8 +163,75 @@ Bốn chốt lấy từ `thghub`:
 4. **Ô `nghiNgo`** — việc đã tick xong mà mô hình không thấy bằng chứng. Thiếu ô
    này thì việc tick khống bị `gopChecklist` nuốt mất, tệ hơn cả không có nút tick.
 
-`gopChecklist()` giữ trạng thái tick của việc trùng nội dung qua các lượt — nếu
-không, mỗi lượt tóm tắt lại xoá sạch công người vận hành đã tick.
+5. **Sàn `mucDo` từ dữ liệu đơn** (`apDungSanMucDo`): đơn NHẮC TRONG CHAT đang
+   bị giữ/lỗi → ít nhất `gap`; chỉ đơn toàn khách bị giữ/lỗi → ít nhất
+   `can-chu-y`; không bao giờ hạ. Không sàn `gap` theo số toàn khách, kẻo một
+   khách lớn có một đơn giữ cũ làm mọi nhóm của họ đỏ mãi. Nâng mức thì ghi log.
+6. **Bỏ đọc lại khi không có tin có nội dung** (`quyetDinhHangDoi` + script + chốt
+   trong `summarize()`): `lastMessageAt` đếm cả tin không nội dung, `denMocTin`
+   chỉ tin có nội dung — không có tin nào sau `denMocTin` thì không gọi mô hình
+   và KHÔNG đụng `docDayDuLuc`. `--group` gửi `epDocLai: true` để bỏ chốt khi kiểm thử.
+7. **Kéo đúng 400 tin MỚI NHẤT** (`summarize-zalo-groups.mjs` `keoTin`): ba lớp
+   khử trùng → `ORDER BY luc DESC LIMIT 400` → xếp xuôi. `DISTINCT ON` ép sắp theo
+   `zalo_msg_id`, đặt `LIMIT` cùng lớp là lấy 400 tin CŨ nhất (đã gặp: tóm tắt
+   dừng ở 25/08 trong khi chat tới 01/09).
+8. **JSON hỏng / hết lượt → 422, KHÔNG thử lại** (processor coi
+   `UnprocessableEntityException` là `UnrecoverableError`): gọi lại y nguyên cũng
+   hỏng y nguyên, mỗi lần một lượt trả tiền. Nhóm tự vào hàng đợi ca sau vì
+   `denMocTin` không tiến.
+
+`gopChecklist()` giữ id/tick/mốc của việc **giống** qua các lượt — khớp mờ
+(`doGiongViec`: bỏ dấu, Dice trên tập từ, ngưỡng 0,6; hai việc cùng nhắc mã đơn
+mà khác mã thì KHÔNG BAO GIỜ gộp; mỗi việc cũ ghép đúng một việc mới). Bản cũ
+khớp y nguyên chữ nên mô hình đổi một từ là mất tick. Mỗi việc có `id` ổn định
+(uuid). Chống mất tick trong lúc mô hình chạy 40–150 giây: `summarize()` ĐỌC LẠI
+checklist SAU khi mô hình trả lời rồi ghi có điều kiện theo `checklistRev`
+(`toggleTask` `$inc`), tối đa 3 vòng. Rủi ro chấp nhận: hai việc na ná ("Gửi mẫu
+A"/"Gửi mẫu B") có thể gộp nhầm — lưới an toàn là ô `nghiNgo`, và gộp nhầm rẻ hơn
+nhiều so với mất 100% tick như trước.
+
+### Đợt điều chỉnh chất lượng nội dung (03/09/2026)
+
+Đối chiếu 111 bản tóm tắt production với tin gốc trên engine (`onosceo`), sửa
+theo bằng chứng đo được — chi tiết từng lỗi ở commit của nhánh
+`feat/zalo-summary-quality`:
+
+- **Đính kèm → chữ** (`moTaDinhKem`): 20% tin là JSON thô `{"title":"x.pdf","href":…}`.
+  Đổi thành `[TỆP: tên]`, `[ẢNH]`, `[VIDEO]`, `[LIÊN KẾT: tiêu đề]`, `[STICKER]`,
+  không in URL; lời nhắc nói rõ dòng đó là BẰNG CHỨNG đã gửi. Ca thật: PDF gửi
+  31/08 17:50 mà bản cũ kết luận "chưa gửi".
+- **Nhóm vận hành = nhân viên + ĐỐI TÁC, không có khách** (`loiNhacHeThong(kind)`,
+  `ZALO_PARTNER_CHAT_LABEL`): lời nhắc mở/kết theo `link.kind`; người ngoài công ty
+  trong nhóm `operation` dán nhãn ĐỐI TÁC; bản tóm tắt lưu `kind` để UI đổi nhãn ô
+  thành "Bên yêu cầu"/"Người xử lý". Không thêm loại danh tính `partner`: cái sai là
+  hàm của NHÓM, không phải của người.
+- **Heuristic danh tính nhìn loại nhóm** (`doanPhanLoai(groupCount, laTaiKhoanCongTy, loaiNhomDuyNhat)`):
+  người ở đúng 1 nhóm chỉ đoán "khách" khi nhóm đó là `seller`; snapshot sync mang
+  `groupGlobalIds`. Đo trên dev: gợi ý "khách" cho người 1 nhóm giảm 194 → 94.
+  Dòng đã xác nhận không bị viết lại.
+- **`coTinMoi`** (tính lúc gọi, không lưu): `lastMessageAt` của nhóm > `denMocTin`
+  của tóm tắt → bảng tóm tắt, bảng nhóm (`tomTat.coTinMoi`), và
+  `GET /v1/agent/seller-support` đều mang cờ; UI hiện huy hiệu vàng "Có tin mới lúc
+  …, chưa tóm tắt". Tươi tới lần `sync-zalo-groups` gần nhất. Khác `tomTatTre`
+  (đo tuổi bản tóm tắt) — hai cờ đo hai thứ.
+- **Khối đơn của khách là BỐI CẢNH, không phải tồn đọng của nhóm**: khách có nhiều
+  nhóm thì mọi nhóm nhận cùng khối; tiêu đề khối nói rõ và lời nhắc cấm chép vào
+  `tonDong`/`checklist` trừ khi chat nhóm đó nhắc tới. Không dedupe trong code vì
+  không có căn cứ chọn "nhóm chính".
+- **Mã chép nguyên văn**: lời nhắc cấm viết tắt/"sửa chính tả"/ghép mã; tra thêm
+  `externalId`; sau mỗi bản, mã trong đầu ra mà không có trong NGUỒN
+  (`maKhongCoTrongNguon`) ghi `warn` `[zalo-summary] mã không có trong chat: …` —
+  KHÔNG tự sửa. **Nguồn phải gồm đủ ba phần** mô hình được đọc: tin nhắn, khối dữ
+  liệu đơn, VÀ bản tóm tắt lần trước (lượt cuốn chiếu chỉ gửi tin MỚI, mã cũ nằm ở
+  bản trước); mã là khúc con của mã có thật (`AS-02077` ⊂ `AS-02077-17505`) coi là
+  cắt cụt, không báo. Đo trên dev 03/09: bản thiếu hai luật này kêu 28 lần/67 bản
+  mà 20/27 mã kiểm lại là kêu oan; sau khi sửa còn 0/5.
+- **Sàn `mucDo` ghi log cả khi không nâng** (`bằng chứng đơn (nhắc: …, khách: …)`):
+  im lặng thì không phân biệt được "không có bằng chứng" với "hàm đếm hỏng".
+- **Kiểm thử**: hàm thuần ở `zalo-summary.logic.ts` / `zalo-identity.logic.ts`
+  (+ `.spec.ts`, 54 ca) — `NODE_ENV=test npx jest src/modules/zalo-group`. Kiểm
+  một nhóm đích danh không chờ cron: `node scripts/summarize-zalo-groups.mjs --yes
+  --group <groupGlobalId> --api … --token …` (ép đọc lại toàn bộ + `epDocLai`).
 
 **Chốt riêng tư kiểm HAI lần:** ở hàng đợi (`getQueue`) và ở chính
 `summarize()`. Endpoint gọi trực tiếp được, mà đọc nhầm nhóm `internal` là đọc
@@ -199,7 +270,7 @@ nhóm internal vào mô hình là đọc đời tư nhân viên.
 |---|---|---|
 | P1 | Mô hình dữ liệu + đồng bộ + gợi ý + API gắn nhóm | ✅ xong |
 | P1b | Màn hình gắn nhóm `/adm/zalo-groups` + duyệt gợi ý hàng loạt | ✅ xong |
-| P2 | Tóm tắt cuốn chiếu nội dung nhóm + màn hình Tình hình | ✅ xong (chờ `ANTHROPIC_API_KEY` để chạy thật) |
+| P2 | Tóm tắt cuốn chiếu nội dung nhóm + màn hình Tình hình | ✅ chạy production 4 lần/ngày (7h·12h·17h·20h VN) |
 | P3 | Báo cáo cho Chủ tịch — cắm vào `ScheduledReportsModule` | chưa làm |
 | P4 | Nhắc việc hai chiều: checklist → nhắn ngược vào nhóm Zalo | chưa làm |
 
