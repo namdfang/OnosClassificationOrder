@@ -34,6 +34,7 @@ import {
   moTaDinhKem,
   moTaDon,
   nhanChang,
+  quyetDinhHangDoi,
   SUMMARY_JSON_SCHEMA,
   tachJson,
 } from './zalo-summary.logic';
@@ -218,7 +219,9 @@ export class ZaloSummaryService {
 
     const job = await this.summaryQueue.add(
       'summarize',
-      { groupGlobalId: dto.groupGlobalId, messages: dto.messages, docLaiTuDau: dto.docLaiTuDau },
+      { groupGlobalId: dto.groupGlobalId, messages: dto.messages, docLaiTuDau: dto.docLaiTuDau ,
+        // Cờ kiểm thử `--group`: bỏ chốt 'không có tin có nội dung sau mốc'.
+        ...(dto.epDocLai ? { epDocLai: true } : {})},
       { jobId },
     );
 
@@ -242,29 +245,23 @@ export class ZaloSummaryService {
     const byGroup = new Map(summaries.map((s) => [String(s.groupGlobalId), s]));
 
     const now = Date.now();
-    const nguongIm = now - NGAY_BO_QUA_NHOM_IM * 86_400_000;
     const out: ZaloSummaryQueueItem[] = [];
 
     for (const g of groups) {
       const gid = String((g as { groupGlobalId: string }).groupGlobalId);
       const lastMsg = (g as { lastMessageAt?: Date }).lastMessageAt;
-      // Nhóm chưa có tin, hoặc im quá lâu → bỏ qua, khỏi tốn tiền gọi mô hình.
-      if (!lastMsg || new Date(lastMsg).getTime() < nguongIm) continue;
-
       const prev = byGroup.get(gid);
-      // Đã tóm tắt tới đúng tin cuối rồi thì không có gì mới để đọc.
-      if (prev?.denMocTin && new Date(prev.denMocTin).getTime() >= new Date(lastMsg).getTime()) continue;
-
-      const docLai =
-        !prev?.docDayDuLuc || now - new Date(prev.docDayDuLuc).getTime() > NGAY_DOC_LAI * 86_400_000;
-
-      out.push({
-        groupGlobalId: gid,
-        title: (g as { title?: string }).title,
-        // Đọc lại từ đầu thì bỏ mốc, lấy toàn bộ.
-        tuMoc: docLai ? null : (prev?.denMocTin ?? null),
-        docLaiTuDau: docLai,
+      const qd = quyetDinhHangDoi({
+        lastMessageAt: lastMsg ? new Date(lastMsg) : null,
+        denMocTin: prev?.denMocTin ? new Date(prev.denMocTin) : null,
+        docDayDuLuc: prev?.docDayDuLuc ? new Date(prev.docDayDuLuc) : null,
+        now,
+        ngayDocLai: NGAY_DOC_LAI,
+        ngayBoQua: NGAY_BO_QUA_NHOM_IM,
       });
+      if (!qd) continue;
+
+      out.push({ groupGlobalId: gid, title: (g as { title?: string }).title, ...qd });
     }
 
     return out;
@@ -303,6 +300,24 @@ export class ZaloSummaryService {
     // dòng chat — hai chỗ cùng đọc `noiDung`, đổi lệch nhau là mô hình và dữ liệu
     // đơn nhìn hai phiên bản khác nhau của cùng một tin.
     const messages = dto.messages.map((m) => ({ ...m, noiDung: moTaDinhKem(m.noiDung) }));
+
+    const mocCuoi = dto.messages.reduce<Date | undefined>((max, m) => {
+      if (!m.luc) return max;
+      const d = new Date(m.luc);
+
+      return !max || d > max ? d : max;
+    }, undefined);
+
+    // Đọc lại định kỳ mà KHÔNG có tin có nội dung mới → không gọi mô hình: tóm
+    // tắt lại y nguyên chỉ tốn tiền và vứt ngữ cảnh checklist. KHÔNG đụng
+    // `docDayDuLuc` để lượt đọc lại nổ ngay khi có nội dung thật.
+    if (!dto.epDocLai && docLaiTuDau && prev?.denMocTin && mocCuoi && mocCuoi <= new Date(prev.denMocTin)) {
+      this.logger.log(
+        `[zalo-summary] bỏ đọc lại nhóm ${dto.groupGlobalId}: không có tin có nội dung sau ${new Date(prev.denMocTin).toISOString()}`,
+      );
+
+      return prev as unknown as ZaloGroupSummaryDocument;
+    }
 
     const { vanBan: duLieuDon, bangChung } = await this.layDuLieuDon(
       link as { customerId?: string; userSku?: string },
@@ -349,12 +364,6 @@ export class ZaloSummaryService {
     }
 
     const now = new Date();
-    const mocCuoi = dto.messages.reduce<Date | undefined>((max, m) => {
-      if (!m.luc) return max;
-      const d = new Date(m.luc);
-
-      return !max || d > max ? d : max;
-    }, undefined);
 
     const set: Record<string, unknown> = {
       groupGlobalId: dto.groupGlobalId,

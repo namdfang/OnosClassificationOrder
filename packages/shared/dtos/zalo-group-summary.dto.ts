@@ -129,6 +129,8 @@ export const SummarizeZaloGroupZod = z.object({
   messages: ZaloMessageInputZod.array().min(1).max(400),
   /** Buộc đọc lại từ đầu thay vì cuốn chiếu (cắt bệnh trôi dần). */
   docLaiTuDau: z.boolean().optional(),
+  /** Bỏ qua chốt 'không có tin có nội dung sau mốc' — CHỈ để kiểm thử (`--group`). */
+  epDocLai: z.boolean().optional(),
 });
 export class SummarizeZaloGroupDto extends createZodDto(extendApi(SummarizeZaloGroupZod)) {}
 
@@ -144,6 +146,12 @@ export const ZaloSummaryQueueItemZod = z.object({
   tuMoc: z.date().nullable().optional(),
   /** Đã tới hạn đọc lại từ đầu chưa. */
   docLaiTuDau: z.boolean(),
+  /**
+   * Mốc tin cuối đã tóm tắt. Script so với tin có nội dung kéo được: không có
+   * tin nào SAU mốc này thì không POST — `lastMessageAt` đếm cả tin không nội
+   * dung nên hàng đợi có thể "có tin mới" mà thực ra không có gì để đọc.
+   */
+  denMocTin: z.date().nullable().optional(),
 });
 export type ZaloSummaryQueueItem = z.infer<typeof ZaloSummaryQueueItemZod>;
 

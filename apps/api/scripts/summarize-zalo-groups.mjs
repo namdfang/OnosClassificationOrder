@@ -128,7 +128,7 @@ async function keoTin(groupGlobalId, tuMoc) {
 let hangDoi;
 if (GROUP) {
   // Kiểm thử: không hỏi hàng đợi, ép đúng một nhóm đọc lại toàn bộ.
-  hangDoi = [{ groupGlobalId: GROUP, title: GROUP, tuMoc: null, docLaiTuDau: true }];
+  hangDoi = [{ groupGlobalId: GROUP, title: GROUP, tuMoc: null, docLaiTuDau: true, epDocLai: true }];
 } else {
   const q = await goiApi('/zalo-groups/summary-queue');
   if (!q.ok) {
@@ -164,6 +164,15 @@ for (const [i, item] of hangDoi.entries()) {
     continue;
   }
 
+  // Hàng đợi so `lastMessageAt` (đếm cả tin không nội dung) — kéo về rồi mới
+  // biết có tin CÓ NỘI DUNG sau mốc đã tóm tắt hay không. Không có thì không POST.
+  const mocMoiNhat = tin.reduce((m, t) => (t.luc && t.luc > m ? t.luc : m), '');
+  if (item.denMocTin && mocMoiNhat && new Date(mocMoiNhat) <= new Date(item.denMocTin)) {
+    bo += 1;
+    console.log(`  [${i + 1}/${hangDoi.length}] ${ten.padEnd(46)} bỏ qua (không có tin có nội dung sau mốc ${String(item.denMocTin).slice(0, 16)})`);
+    continue;
+  }
+
   if (!apply) {
     console.log(
       `  [${i + 1}/${hangDoi.length}] ${ten.padEnd(46)} ${String(tin.length).padStart(3)} tin${
@@ -179,6 +188,7 @@ for (const [i, item] of hangDoi.entries()) {
       groupGlobalId: item.groupGlobalId,
       messages: tin,
       docLaiTuDau: item.docLaiTuDau,
+      ...(item.epDocLai ? { epDocLai: true } : {}),
     }),
   });
 

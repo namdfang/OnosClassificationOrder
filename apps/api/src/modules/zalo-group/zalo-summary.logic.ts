@@ -386,3 +386,30 @@ export function apDungSanMucDo(mucDoMoHinh: string, bangChung: BangChungDon): { 
 
   return { mucDo: mucDoMoHinh };
 }
+
+/**
+ * Quyết định một nhóm có vào hàng đợi không, và đọc kiểu gì — tách khỏi
+ * `getQueue` để kiểm thử được. `null` = không xếp.
+ */
+export function quyetDinhHangDoi(x: {
+  lastMessageAt?: Date | null;
+  denMocTin?: Date | null;
+  docDayDuLuc?: Date | null;
+  now: number;
+  ngayDocLai: number;
+  ngayBoQua: number;
+}): { tuMoc: Date | null; docLaiTuDau: boolean; denMocTin: Date | null } | null {
+  // Nhóm chưa có tin, hoặc im quá lâu → bỏ qua, khỏi tốn tiền gọi mô hình.
+  if (!x.lastMessageAt || x.lastMessageAt.getTime() < x.now - x.ngayBoQua * 86_400_000) return null;
+  // Đã tóm tắt tới đúng tin cuối rồi thì không có gì mới để đọc.
+  if (x.denMocTin && x.denMocTin.getTime() >= x.lastMessageAt.getTime()) return null;
+
+  const docLai = !x.docDayDuLuc || x.now - x.docDayDuLuc.getTime() > x.ngayDocLai * 86_400_000;
+
+  return {
+    // Đọc lại từ đầu thì bỏ mốc, lấy toàn bộ.
+    tuMoc: docLai ? null : (x.denMocTin ?? null),
+    docLaiTuDau: docLai,
+    denMocTin: x.denMocTin ?? null,
+  };
+}

@@ -27,9 +27,9 @@ export class ZaloSummaryProcessor extends WorkerHost {
   }
 
   async process(job: Job<ZaloSummaryJobData>): Promise<void> {
-    const { groupGlobalId, messages, docLaiTuDau } = job.data;
+    const { groupGlobalId, messages, docLaiTuDau, epDocLai } = job.data;
     try {
-      await this.zaloSummaryService.summarize({ groupGlobalId, messages, docLaiTuDau });
+      await this.zaloSummaryService.summarize({ groupGlobalId, messages, docLaiTuDau, epDocLai });
     } catch (err) {
       // Lỗi NGHIỆP VỤ (nhóm chưa phân loại, nhóm đã xoá) không bao giờ tự khỏi —
       // thử lại 3 lần chỉ tổ lấp log. `UnrecoverableError` bảo BullMQ bỏ ngay.

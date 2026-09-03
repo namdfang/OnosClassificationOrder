@@ -10,6 +10,7 @@ import {
   moTaDinhKem,
   moTaDon,
   nhanChang,
+  quyetDinhHangDoi,
   SUMMARY_JSON_SCHEMA,
   tachJson,
 } from './zalo-summary.logic';
@@ -290,5 +291,34 @@ describe('apDungSanMucDo — sàn mức độ từ dữ liệu đơn, không bao
 
   it('mô hình can-chu-y + đơn nhắc bị giữ → nâng lên gap, ghi lại mức cũ', () => {
     expect(apDungSanMucDo(ZaloSummaryLevel.CanChuY, { donNhacBiGiuHoacLoi: 2, donKhachBiGiuHoacLoi: 2 }).nangTu).toBe(ZaloSummaryLevel.CanChuY);
+  });
+});
+
+describe('quyetDinhHangDoi — nhóm nào vào hàng đợi, đọc kiểu gì', () => {
+  const now = NOW.getTime();
+  const base = { now, ngayDocLai: 7, ngayBoQua: 14 };
+
+  it('im hơn 14 ngày → không xếp', () => {
+    expect(quyetDinhHangDoi({ ...base, lastMessageAt: ngayTruoc(15) })).toBeNull();
+  });
+
+  it('đã tóm tắt tới đúng tin cuối → không xếp', () => {
+    expect(quyetDinhHangDoi({ ...base, lastMessageAt: ngayTruoc(1), denMocTin: ngayTruoc(1) })).toBeNull();
+  });
+
+  it('chưa có tóm tắt → đọc đủ từ đầu', () => {
+    expect(quyetDinhHangDoi({ ...base, lastMessageAt: ngayTruoc(1) })).toEqual({ tuMoc: null, docLaiTuDau: true, denMocTin: null });
+  });
+
+  it('đọc đủ đã 8 ngày + có tin mới → đọc lại từ đầu, vẫn mang denMocTin để script so', () => {
+    const r = quyetDinhHangDoi({ ...base, lastMessageAt: ngayTruoc(1), denMocTin: ngayTruoc(2), docDayDuLuc: ngayTruoc(8) });
+
+    expect(r).toEqual({ tuMoc: null, docLaiTuDau: true, denMocTin: ngayTruoc(2) });
+  });
+
+  it('đọc đủ mới 2 ngày + có tin mới → tăng dần từ denMocTin', () => {
+    const r = quyetDinhHangDoi({ ...base, lastMessageAt: ngayTruoc(1), denMocTin: ngayTruoc(2), docDayDuLuc: ngayTruoc(2) });
+
+    expect(r).toEqual({ tuMoc: ngayTruoc(2), docLaiTuDau: false, denMocTin: ngayTruoc(2) });
   });
 });
