@@ -142,7 +142,20 @@ cho máy đó, và block nginx ở §2. Phiên nick KHÔNG chuyển được gi�
 Gói npm nằm ở registry riêng: `.npmrc` ở gốc repo trỏ `@zero-126` sang `npm.pkg.github.com`, token đọc từ biến
 môi trường `GHCR_TOKEN` — **máy nào chạy `pnpm install` (kể cả server production lúc `deploy.sh`) phải có biến này**.
 
-## 7. Permissions
+## 7. Vận hành thật (từ 03/09/2026)
+
+| Mảnh | Dev (hub) | Production (`onosnew`) |
+|---|---|---|
+| Engine | `docker/zalo-engine/` trong repo hub, license "ONOS _HUB" | `/var/www/onosfactory/current/docker/zalo-engine/` (`.env` gitignored, license "ONOS _HUB_PROD", 30 nick). **Docker cài ngày 03/09 chỉ cho việc này.** |
+| Token registry | `/root/.onos-ghcr.env` (600), `~/.bashrc` nạp | y hệt; `deploy.sh` tự nạp cho shell không tương tác |
+| `/api/` trên origin web | luật `^/api` của tunnel | block `location ^~ /api/` chèn tay vào server 443 `onosfactory.com` ở `/etc/nginx/sites-enabled/onosfactory` (bản lưu `/etc/nginx/onosfactory.bak-*`) — KHÔNG nằm trong repo |
+
+**Sự cố lần deploy đầu (03/09):** pnpm hỏi "xoá node_modules cài lại?" khi tập registry đổi, chạy không tương tác thì
+**thoát 0 mà không cài gì** → API build thiếu `@zero-126/zalo-sdk` → sập. `deploy.sh` đã vá (trả lời sẵn + kiểm gói
+resolve được trước khi build). Bẫy kiểm tra: API trả `200 text/html` rỗng cho GET không có route, nên **kiểm block
+nginx bằng POST** (`/api/v1/auth/login` → 422 JSON), đừng nhìn `GET /api/v1`.
+
+## 8. Permissions
 
 | Vai trò hệ thống | Vào `/adm/zalo` | Vai trong engine |
 |---|---|---|
