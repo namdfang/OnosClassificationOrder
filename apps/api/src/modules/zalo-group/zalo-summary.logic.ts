@@ -1,3 +1,5 @@
+import { randomUUID } from 'node:crypto';
+
 import type { ZaloSummaryTask } from 'shared';
 import { FULFILLMENT_STAGE_LABELS, ZaloSummaryLevel } from 'shared';
 
@@ -20,18 +22,81 @@ export interface KetQua {
   mucDo: string;
 }
 
-/**
- * Gộp danh sách việc mới với danh sách cũ, GIỮ trạng thái tick của việc trùng
- * nội dung. Không có bước này thì mỗi lượt tóm tắt lại xoá sạch những gì người
- * vận hành đã tick, và cái nút tick thành vô nghĩa.
- */
-export function gopChecklist(moi: string[], cu: ZaloSummaryTask[], bayGio: Date): ZaloSummaryTask[] {
-  const cuTheoViec = new Map(cu.map((c) => [c.viec.trim().toLowerCase(), c]));
+const chuanHoaViec = (s: string): string =>
+  s
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .replace(/đ/g, 'd')
+    .replace(/Đ/g, 'D')
+    .toLowerCase()
+    .replace(/[^a-z0-9\s-]/g, ' ');
 
-  return moi.map((viec) => {
-    const truoc = cuTheoViec.get(viec.trim().toLowerCase());
+const MA_DON = /\b[a-z]{1,3}-\d{4,6}-\d{4,6}\b/g;
+
+/**
+ * Độ giống 0..1 giữa hai câu việc. Lỗi cần bắt là ĐỔI CHỮ ("Gửi lại báo giá"
+ * vs "Gửi báo giá"), không phải gõ sai — nên Dice trên tập từ là đủ, không cần
+ * thư viện. Hai việc cùng nhắc mã đơn mà KHÁC mã → 0 tuyệt đối: hai đơn là hai việc.
+ */
+export function doGiongViec(a: string, b: string): number {
+  const ca = chuanHoaViec(a);
+  const cb = chuanHoaViec(b);
+  const maA = new Set(ca.match(MA_DON) ?? []);
+  const maB = new Set(cb.match(MA_DON) ?? []);
+  if (maA.size > 0 && maB.size > 0 && ![...maA].some((m) => maB.has(m))) return 0;
+
+  const ta = ca.split(/\s+/).filter((t) => t.length >= 2);
+  const tb = cb.split(/\s+/).filter((t) => t.length >= 2);
+  if (ta.join(' ') === tb.join(' ')) return 1;
+  if (ta.length === 0 || tb.length === 0) return 0;
+
+  const A = new Set(ta);
+  const B = new Set(tb);
+  let chung = 0;
+  for (const t of A) if (B.has(t)) chung += 1;
+
+  return (2 * chung) / (A.size + B.size);
+}
+
+/** Từ ngưỡng này trở lên coi là cùng một việc. 0,6: "Gửi lại báo giá cho anh Nam" ~ "Gửi báo giá cho anh Nam" ≈ 0,9. */
+const NGUONG_GIONG = 0.6;
+
+/**
+ * Gộp danh sách việc mới với danh sách cũ, GIỮ id/tick/mốc của việc "giống"
+ * (khớp mờ, tham lam theo điểm giảm dần, mỗi việc cũ chỉ ghép một việc mới).
+ * Bản cũ khớp y nguyên chữ nên mô hình đổi một từ là mất tick — nút tick vô nghĩa.
+ *
+ * `taoId` tiêm được để test ổn định.
+ */
+export function gopChecklist(
+  moi: string[],
+  cu: ZaloSummaryTask[],
+  bayGio: Date,
+  taoId: () => string = randomUUID,
+): ZaloSummaryTask[] {
+  const cap: { i: number; j: number; diem: number }[] = [];
+  moi.forEach((v, i) =>
+    cu.forEach((c, j) => {
+      const diem = doGiongViec(v, c.viec);
+      if (diem >= NGUONG_GIONG) cap.push({ i, j, diem });
+    }),
+  );
+  cap.sort((x, y) => y.diem - x.diem);
+
+  const ghep = new Map<number, number>();
+  const daDung = new Set<number>();
+  for (const { i, j } of cap) {
+    if (ghep.has(i) || daDung.has(j)) continue;
+    ghep.set(i, j);
+    daDung.add(j);
+  }
+
+  return moi.map((viec, i) => {
+    const j = ghep.get(i);
+    const truoc = j === undefined ? undefined : cu[j];
 
     return {
+      id: truoc?.id ?? taoId(),
       viec,
       xong: truoc?.xong ?? false,
       taoLuc: truoc?.taoLuc ?? bayGio.toISOString(),

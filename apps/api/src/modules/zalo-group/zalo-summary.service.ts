@@ -1,6 +1,6 @@
 import { query } from '@anthropic-ai/claude-agent-sdk';
 import { InjectQueue } from '@nestjs/bullmq';
-import { BadRequestException, Injectable, Logger, NotFoundException, ServiceUnavailableException, UnprocessableEntityException } from '@nestjs/common';
+import { BadRequestException, ConflictException, Injectable, Logger, NotFoundException, ServiceUnavailableException, UnprocessableEntityException } from '@nestjs/common';
 import { InjectModel } from '@nestjs/mongoose';
 import type { Queue } from 'bullmq';
 import { Model } from 'mongoose';
@@ -367,9 +367,6 @@ export class ZaloSummaryService {
       khachQuanTam: ketQua.khachQuanTam,
       salePhanHoi: ketQua.salePhanHoi,
       tonDong: ketQua.tonDong,
-      // Giữ trạng thái tick của việc trùng nội dung — nếu không, mỗi lượt tóm
-      // tắt lại xoá sạch công người vận hành đã tick.
-      checklist: gopChecklist(ketQua.checklist, (prev?.checklist as ZaloSummaryTask[]) ?? [], now),
       nghiNgo: ketQua.nghiNgo,
       mucDo: sanMucDo.mucDo,
       soTin: dto.messages.length,
@@ -379,11 +376,29 @@ export class ZaloSummaryService {
       ...(docLaiTuDau ? { docDayDuLuc: now } : {}),
     };
 
-    const saved = await this.summaryModel.findOneAndUpdate(
-      { groupGlobalId: dto.groupGlobalId },
-      { $set: set },
-      { upsert: true, new: true },
-    );
+    // Checklist: ĐỌC LẠI SAU khi mô hình trả lời rồi gộp, và ghi CÓ ĐIỀU KIỆN
+    // theo `checklistRev`. `prev` đọc trước lượt gọi 40–150 giây — người tick
+    // trong khoảng đó mà gộp từ `prev` là mất tick. Rev lệch (ai đó tick đúng
+    // vài mili giây giữa đọc và ghi) thì đọc lại, tối đa 3 vòng.
+    let saved: ZaloGroupSummaryDocument | null = null;
+    for (let vong = 0; vong < 3 && !saved; vong += 1) {
+      const hienTai = await this.summaryModel
+        .findOne({ groupGlobalId: dto.groupGlobalId })
+        .select('checklist checklistRev')
+        .lean();
+      const rev = hienTai?.checklistRev ?? 0;
+      const checklist = gopChecklist(ketQua.checklist, (hienTai?.checklist as ZaloSummaryTask[]) ?? [], now);
+      const dieuKien = hienTai
+        ? // Bản cũ chưa có `checklistRev` → coi như 0.
+          { groupGlobalId: dto.groupGlobalId, $or: [{ checklistRev: rev }, ...(rev === 0 ? [{ checklistRev: { $exists: false } }] : [])] }
+        : { groupGlobalId: dto.groupGlobalId };
+      saved = await this.summaryModel.findOneAndUpdate(
+        dieuKien,
+        { $set: { ...set, checklist }, $inc: { checklistRev: 1 } },
+        { upsert: !hienTai, new: true },
+      );
+    }
+    if (!saved) throw new ConflictException('Checklist đang được sửa liên tục — lượt tóm tắt sẽ thử lại sau.');
 
     return saved;
   }
@@ -724,6 +739,8 @@ ${doanChat}`;
           [`checklist.${index}.xong`]: xong,
           [`checklist.${index}.xongLuc`]: xong ? new Date().toISOString() : null,
         },
+        // Lượt tóm tắt đang chạy sẽ thấy rev đổi và đọc lại trước khi ghi.
+        $inc: { checklistRev: 1 },
       },
       { new: true },
     );

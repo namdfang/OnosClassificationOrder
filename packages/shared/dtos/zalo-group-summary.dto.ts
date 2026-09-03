@@ -20,6 +20,8 @@ export const ZALO_SUMMARY_LEVELS = Object.values(ZaloSummaryLevel);
 
 /** Một việc cần làm, tách sẵn thành dòng để làm theo được ngay. */
 export const ZaloSummaryTaskZod = z.object({
+  /** Ổn định qua các lượt tóm tắt (uuid) — nền cho tick theo id thay vì theo chỉ số. Bản cũ không có. */
+  id: z.string().optional(),
   viec: z.string().min(1).max(500),
   /** Người vận hành tự tick. Mô hình KHÔNG được tự đặt `true`. */
   xong: z.boolean().default(false),

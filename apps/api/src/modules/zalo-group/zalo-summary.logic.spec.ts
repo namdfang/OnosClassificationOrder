@@ -4,6 +4,7 @@ import {
   apDungSanMucDo,
   chuanHoa,
   dinhDangLuc,
+  doGiongViec,
   gopChecklist,
   maKhongCoTrongNguon,
   moTaDinhKem,
@@ -103,26 +104,69 @@ describe('chuanHoa — lưới cuối cho JSON của mô hình', () => {
   });
 });
 
-describe('gopChecklist — giữ tick của việc trùng nội dung (hành vi HIỆN TẠI)', () => {
-  const T0 = '2026-09-01T00:00:00.000Z';
-  const T1 = '2026-09-02T00:00:00.000Z';
-
-  it('trùng y nguyên (không phân biệt hoa thường/khoảng trắng đầu cuối) → giữ tick + mốc cũ', () => {
-    const r = gopChecklist(['Gửi báo giá cho anh Nam'], [{ viec: ' gửi báo giá cho anh nam ', xong: true, taoLuc: T0, xongLuc: T1 }], NOW);
-
-    expect(r).toEqual([{ viec: 'Gửi báo giá cho anh Nam', xong: true, taoLuc: T0, xongLuc: T1 }]);
+describe('doGiongViec — độ giống hai câu việc', () => {
+  it('không dấu vs có dấu, hoa thường → 1', () => {
+    expect(doGiongViec('Gui bao gia cho anh Nam', 'GỬI BÁO GIÁ CHO ANH NAM')).toBe(1);
   });
 
-  it('việc mới → chưa tick, taoLuc = bây giờ', () => {
-    expect(gopChecklist(['Chốt mẫu vải'], [], NOW)).toEqual([
-      { viec: 'Chốt mẫu vải', xong: false, taoLuc: NOW.toISOString(), xongLuc: null },
+  it('đổi chữ cùng mã đơn → cao (≈0,77)', () => {
+    expect(doGiongViec('Giục xưởng đơn JP-88300-76764 đang kẹt', 'Giục đơn JP-88300-76764')).toBeGreaterThan(0.6);
+  });
+
+  it('cùng nhắc mã đơn mà KHÁC mã → 0 tuyệt đối', () => {
+    expect(doGiongViec('Giục đơn JP-88300-76764', 'Giục đơn JP-88300-76765')).toBe(0);
+  });
+
+  it('việc không liên quan → thấp', () => {
+    expect(doGiongViec('Gửi báo giá cho anh Nam', 'Lắp camera kho')).toBeLessThan(0.3);
+  });
+});
+
+describe('gopChecklist — giữ tick của việc GIỐNG (khớp mờ), id ổn định', () => {
+  const T0 = '2026-09-01T00:00:00.000Z';
+  const T1 = '2026-09-02T00:00:00.000Z';
+  let dem = 0;
+  const taoId = () => `id-${(dem += 1)}`;
+  beforeEach(() => {
+    dem = 0;
+  });
+
+  it('trùng y nguyên → giữ id + tick + mốc cũ', () => {
+    const r = gopChecklist(['Gửi báo giá cho anh Nam'], [{ id: 'cu-1', viec: ' gửi báo giá cho anh nam ', xong: true, taoLuc: T0, xongLuc: T1 }], NOW, taoId);
+
+    expect(r).toEqual([{ id: 'cu-1', viec: 'Gửi báo giá cho anh Nam', xong: true, taoLuc: T0, xongLuc: T1 }]);
+  });
+
+  it('việc mới → id mới, chưa tick, taoLuc = bây giờ', () => {
+    expect(gopChecklist(['Chốt mẫu vải'], [], NOW, taoId)).toEqual([
+      { id: 'id-1', viec: 'Chốt mẫu vải', xong: false, taoLuc: NOW.toISOString(), xongLuc: null },
     ]);
   });
 
-  it('đổi chữ dù nhỏ → hiện tại MẤT tick (đây là lỗi sẽ sửa ở Đợt 2-A)', () => {
-    const r = gopChecklist(['Gửi lại báo giá cho anh Nam'], [{ viec: 'Gửi báo giá cho anh Nam', xong: true, taoLuc: T0, xongLuc: T1 }], NOW);
+  it('đổi chữ nhỏ → VẪN giữ tick (lỗi cũ đã sửa)', () => {
+    const r = gopChecklist(['Gửi lại báo giá cho anh Nam'], [{ id: 'cu-1', viec: 'Gửi báo giá cho anh Nam', xong: true, taoLuc: T0, xongLuc: T1 }], NOW, taoId);
 
-    expect(r[0].xong).toBe(false);
+    expect(r[0]).toMatchObject({ id: 'cu-1', xong: true, xongLuc: T1 });
+  });
+
+  it('khác mã đơn không bao giờ gộp, dù câu chữ giống hệt', () => {
+    const r = gopChecklist(['Giục đơn JP-88300-76765'], [{ id: 'cu-1', viec: 'Giục đơn JP-88300-76764', xong: true, taoLuc: T0, xongLuc: T1 }], NOW, taoId);
+
+    expect(r[0]).toMatchObject({ id: 'id-1', xong: false });
+  });
+
+  it('một việc cũ chỉ ghép một việc mới — điểm cao thắng', () => {
+    const cu = [{ id: 'cu-1', viec: 'Gửi báo giá cho anh Nam', xong: true, taoLuc: T0, xongLuc: T1 }];
+    const r = gopChecklist(['Gửi báo giá cho anh Nam và chị Hoa', 'Gửi báo giá cho anh Nam'], cu, NOW, taoId);
+
+    expect(r[1]).toMatchObject({ id: 'cu-1', xong: true });
+    expect(r[0]).toMatchObject({ id: 'id-1', xong: false });
+  });
+
+  it('id cũ không có (dữ liệu trước đợt này) → cấp id mới nhưng vẫn giữ tick', () => {
+    const r = gopChecklist(['Chốt mẫu vải'], [{ viec: 'Chốt mẫu vải', xong: true, taoLuc: T0, xongLuc: T1 }], NOW, taoId);
+
+    expect(r[0]).toMatchObject({ id: 'id-1', xong: true, taoLuc: T0 });
   });
 });
 

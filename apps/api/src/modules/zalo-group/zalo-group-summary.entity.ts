@@ -48,10 +48,18 @@ export class ZaloGroupSummaryEntity extends DatabaseEntityAbstract {
    * tự đặt; lượt tóm tắt sau giữ lại trạng thái tick của việc trùng nội dung.
    */
   @Prop({
-    type: [{ viec: String, xong: Boolean, taoLuc: String, xongLuc: String }],
+    type: [{ id: String, viec: String, xong: Boolean, taoLuc: String, xongLuc: String }],
     default: [],
   })
   checklist: ZaloSummaryTask[];
+
+  /**
+   * Số lần `checklist` đổi (tick hoặc tóm tắt). Lượt tóm tắt ghi có điều kiện
+   * theo số này: người tick trong lúc mô hình chạy 40–150 giây thì không bị
+   * lượt tóm tắt ghi đè mất tick.
+   */
+  @Prop({ default: 0 })
+  checklistRev: number;
 
   /**
    * Việc đã tick xong nhưng mô hình không thấy bằng chứng trong hội thoại.
