@@ -85,7 +85,8 @@
     "notYet": "not summarized",
     "doneAt": "done at {{at}}",
     "requesterWants": "Requested by",
-    "handlerReplied": "Handled by"
+    "handlerReplied": "Handled by",
+    "newSince": "New messages at {{at}}, not yet summarized"
   },
   "identity": {
     "kind": {

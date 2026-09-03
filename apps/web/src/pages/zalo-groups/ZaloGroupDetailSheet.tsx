@@ -143,6 +143,13 @@ export default function ZaloGroupDetailSheet({ group, onClose, onEdit, onChanged
                     {tomTat.tomTatLuc && <> · {dayjs(tomTat.tomTatLuc).format('DD/MM HH:mm')}</>}
                     {tomTat.soTin > 0 && <> · {t('summary.msgCount', { count: tomTat.soTin })}</>}
                   </div>
+                  {/* Tính phía client: nhóm đã có `lastMessageAt`, tóm tắt có `denMocTin`. */}
+                  {group.lastMessageAt &&
+                    (!tomTat.denMocTin || dayjs(group.lastMessageAt).isAfter(dayjs(tomTat.denMocTin))) && (
+                      <div className="mt-1 inline-block rounded bg-amber-100 px-1.5 py-0.5 text-xs text-amber-800 dark:bg-amber-900/40 dark:text-amber-300">
+                        {t('summary.newSince', { at: dayjs(group.lastMessageAt).format('DD/MM HH:mm') })}
+                      </div>
+                    )}
                 </div>
                 <Button variant="ghost" size="sm" className="ml-auto" onClick={() => void load()}>
                   <RefreshCw className="h-3.5 w-3.5" />

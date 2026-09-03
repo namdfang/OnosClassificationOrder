@@ -85,7 +85,8 @@
     "notYet": "chưa tóm tắt",
     "doneAt": "xong lúc {{at}}",
     "requesterWants": "Bên yêu cầu",
-    "handlerReplied": "Người xử lý"
+    "handlerReplied": "Người xử lý",
+    "newSince": "Có tin mới lúc {{at}}, chưa tóm tắt"
   },
   "identity": {
     "kind": {

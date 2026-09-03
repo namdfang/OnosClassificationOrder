@@ -91,7 +91,19 @@ export const GetZaloSummariesZod = PageQueryZod.extend({
 });
 export class GetZaloSummariesDto extends createZodDto(extendApi(GetZaloSummariesZod)) {}
 
-export const GetZaloSummariesResZod = PageResZod.extend({ data: ZaloGroupSummaryZod.array() });
+/**
+ * Một hàng ở bảng theo dõi = bản tóm tắt + hai trường TÍNH LÚC GỌI từ nhóm:
+ * `lastMessageAt` (mốc tin cuối engine đã đồng bộ) và `coTinMoi` (có tin sau
+ * `denMocTin` chưa vào tóm tắt). Không lưu — lưu là lại có thêm một mốc lệch.
+ * Chỉ tươi tới lần `sync-zalo-groups` gần nhất.
+ */
+export const ZaloGroupSummaryRowZod = ZaloGroupSummaryZod.extend({
+  lastMessageAt: z.date().optional(),
+  coTinMoi: z.boolean().optional(),
+});
+export type ZaloGroupSummaryRow = z.infer<typeof ZaloGroupSummaryRowZod>;
+
+export const GetZaloSummariesResZod = PageResZod.extend({ data: ZaloGroupSummaryRowZod.array() });
 export class GetZaloSummariesResDto extends createZodDto(extendApi(GetZaloSummariesResZod)) {}
 
 //

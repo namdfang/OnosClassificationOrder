@@ -91,6 +91,11 @@ export class AgentSellerSupportService {
             ? bayGio - new Date(chotLuc).getTime() > AGENT_TOM_TAT_HAN_GIO * 3_600_000
             : true,
           denMocTin: (t.denMocTin as Date) ?? null,
+          // Tin mới sau mốc đã tóm tắt — khác `tomTatTre`: bản có thể vừa chốt
+          // 1 giờ trước mà nhóm đã có 30 tin mới.
+          coTinMoi:
+            !!link.lastMessageAt &&
+            (!t.denMocTin || new Date(link.lastMessageAt as Date) > new Date(t.denMocTin as Date)),
         },
         donHang: sku ? (soLieu.get(sku) ?? null) : null,
         sanPhamHay: sku ? (sanPham.get(sku) ?? []) : [],

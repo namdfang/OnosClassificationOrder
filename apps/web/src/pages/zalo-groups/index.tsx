@@ -44,7 +44,7 @@ interface Coverage {
 type Row = ZaloGroupLink & {
   _id: string;
   customer?: { _id: string; userSku?: string; fullName?: string };
-  tomTat?: { tieuDe?: string; mucDo: string; viecConLai: number; tomTatLuc?: string };
+  tomTat?: { tieuDe?: string; mucDo: string; viecConLai: number; tomTatLuc?: string; coTinMoi?: boolean };
 };
 
 /** Màu chấm mức độ — dùng chung với tab Tình hình. */
@@ -347,7 +347,15 @@ export default function ZaloGroupsPage() {
                         title={t(`summary.level.${r.tomTat.mucDo}`)}
                       />
                       <div className="min-w-0">
-                        <div className="truncate text-sm">{r.tomTat.tieuDe || '—'}</div>
+                        <div className="flex items-center gap-1.5">
+                          <div className="truncate text-sm">{r.tomTat.tieuDe || '—'}</div>
+                          {r.tomTat.coTinMoi && r.lastMessageAt && (
+                            <span
+                              className="h-2 w-2 shrink-0 rounded-full bg-amber-400"
+                              title={t('summary.newSince', { at: dayjs(r.lastMessageAt).format('DD/MM HH:mm') })}
+                            />
+                          )}
+                        </div>
                         {r.tomTat.viecConLai > 0 && (
                           <div className="text-xs text-amber-600 dark:text-amber-400">
                             {t('summary.openTasks', { count: r.tomTat.viecConLai })}

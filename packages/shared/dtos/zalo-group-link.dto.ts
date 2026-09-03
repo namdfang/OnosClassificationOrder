@@ -80,6 +80,10 @@ export const ZaloGroupLinkTomTatZod = z.object({
   /** Số việc chưa tick xong — con số người vận hành cần nhất. */
   viecConLai: z.number(),
   tomTatLuc: z.date().optional(),
+  /** Mốc tin cuối đã vào tóm tắt. */
+  denMocTin: z.date().optional(),
+  /** Nhóm có tin sau `denMocTin` chưa được tóm tắt — tính lúc gọi, không lưu. */
+  coTinMoi: z.boolean().optional(),
 });
 
 export const ZaloGroupLinkRowZod = ZaloGroupLinkZod.extend({

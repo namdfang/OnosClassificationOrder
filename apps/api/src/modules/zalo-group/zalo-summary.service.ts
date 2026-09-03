@@ -146,6 +146,9 @@ ${THAN_LOI_NHAC}
 ${vanHanh ? KET_VAN_HANH : KET_KHACH}`;
 }
 
+/** Một hàng bảng theo dõi: bản tóm tắt (lean) + hai trường tính lúc gọi từ nhóm. */
+type ZaloSummaryRow = ZaloGroupSummaryEntity & { _id: string; lastMessageAt?: Date; coTinMoi?: boolean };
+
 @Injectable()
 export class ZaloSummaryService {
   private readonly logger = new Logger(ZaloSummaryService.name);
@@ -562,7 +565,7 @@ ${doanChat}`;
     return chuanHoa(parsed);
   }
 
-  async list(dto: GetZaloSummariesDto): Promise<{ data: ZaloGroupSummaryDocument[]; total: number }> {
+  async list(dto: GetZaloSummariesDto): Promise<{ data: ZaloSummaryRow[]; total: number }> {
     const filter: Record<string, unknown> = { deletedAt: { $exists: false } };
     if (dto.mucDo) filter.mucDo = dto.mucDo;
     if (dto.customerId) filter.customerId = dto.customerId;
@@ -584,7 +587,26 @@ ${doanChat}`;
       this.summaryModel.countDocuments(filter),
     ]);
 
-    return { data: data as ZaloGroupSummaryDocument[], total };
+    // Người đọc phải biết bản tóm tắt "biết tới đâu": đo trên production có 21
+    // nhóm >5 tin chờ mà UI không hề báo. Tính lúc gọi từ mốc tin cuối của nhóm,
+    // không lưu — tươi tới lần `sync-zalo-groups` gần nhất.
+    const links = await this.linkModel
+      .find({ groupGlobalId: { $in: data.map((d) => d.groupGlobalId) } })
+      .select('groupGlobalId lastMessageAt')
+      .lean();
+    const mocCuoi = new Map(links.map((l) => [String(l.groupGlobalId), (l as { lastMessageAt?: Date }).lastMessageAt]));
+
+    const rows: ZaloSummaryRow[] = data.map((d) => {
+      const lastMessageAt = mocCuoi.get(String(d.groupGlobalId));
+
+      return {
+        ...(d as ZaloGroupSummaryEntity & { _id: string }),
+        lastMessageAt,
+        coTinMoi: !!lastMessageAt && (!d.denMocTin || lastMessageAt > d.denMocTin),
+      };
+    });
+
+    return { data: rows, total };
   }
 
   /** Người vận hành tick / bỏ tick một việc. */
