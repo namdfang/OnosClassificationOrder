@@ -19,7 +19,7 @@ import type { ZaloGroupSummaryDocument } from './zalo-group-summary.entity';
 import { ZaloGroupSummaryEntity } from './zalo-group-summary.entity';
 import { ZaloIdentityService } from './zalo-identity.service';
 import type { KetQua } from './zalo-summary.logic';
-import { chuanHoa, dinhDangLuc, gopChecklist, moTaDon, nhanChang } from './zalo-summary.logic';
+import { chuanHoa, dinhDangLuc, gopChecklist, moTaDinhKem, moTaDon, nhanChang } from './zalo-summary.logic';
 import type { ZaloSummaryJobData } from './zalo-summary.queue';
 import { ZALO_SUMMARY_QUEUE } from './zalo-summary.queue';
 
@@ -68,6 +68,10 @@ Không có mốc thời gian và tên người thì không chấm được ai ch
 "TRỢ LÝ AI" là tài khoản tự động trực nhóm. Nếu chỉ có TRỢ LÝ AI trả lời khách mà KHÔNG nhân viên
 nào vào, hãy nêu rõ điều đó trong "tonDong" — đó là nhóm cần người thật tiếp quản.
 Dòng ghi "CHƯA RÕ" là người chưa được phân loại: đừng khẳng định họ là nhân viên hay khách.
+Dòng có [TỆP: …], [ẢNH], [VIDEO] hoặc [LIÊN KẾT: …] là BẰNG CHỨNG người đó ĐÃ GỬI thứ đó vào đúng
+giờ ghi trong ngoặc vuông — hãy ghi nhận "đã gửi tệp X lúc DD/MM HH:MM", tuyệt đối không kết luận
+"chưa gửi" khi có dòng này. Tên tệp thường nói rõ nội dung (báo giá, chứng nhận, danh sách…).
+[STICKER] không mang nội dung và KHÔNG tính là câu trả lời.
 Chỉ ghi tên/ngày CÓ THẬT trong chat. Không thấy thì ghi "không rõ", tuyệt đối không đoán.
 
 Nếu có khối "DỮ LIỆU ĐƠN HÀNG THẬT", đó là trạng thái tra từ hệ thống sản xuất — nó ĐÚNG hơn
@@ -239,14 +243,19 @@ export class ZaloSummaryService {
     const prev = await this.summaryModel.findOne({ groupGlobalId: dto.groupGlobalId }).lean();
     const docLaiTuDau = dto.docLaiTuDau ?? false;
 
+    // Đổi tin đính kèm (JSON thô) thành chữ MỘT LẦN, dùng cho cả regex mã đơn lẫn
+    // dòng chat — hai chỗ cùng đọc `noiDung`, đổi lệch nhau là mô hình và dữ liệu
+    // đơn nhìn hai phiên bản khác nhau của cùng một tin.
+    const messages = dto.messages.map((m) => ({ ...m, noiDung: moTaDinhKem(m.noiDung) }));
+
     const duLieuDon = await this.layDuLieuDon(
       link as { customerId?: string; userSku?: string },
-      dto.messages,
+      messages,
     );
 
     const ketQua = await this.goiMoHinh({
       title: (link as { title?: string }).title,
-      messages: dto.messages,
+      messages,
       truoc: docLaiTuDau ? null : prev,
       duLieuDon,
     });

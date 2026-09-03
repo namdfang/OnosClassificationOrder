@@ -1,6 +1,6 @@
 import { FULFILLMENT_STAGE_LABELS, FulfillmentStage, ZaloSummaryLevel } from 'shared';
 
-import { chuanHoa, dinhDangLuc, gopChecklist, moTaDon, nhanChang } from './zalo-summary.logic';
+import { chuanHoa, dinhDangLuc, gopChecklist, moTaDinhKem, moTaDon, nhanChang } from './zalo-summary.logic';
 
 /**
  * Test NỀN cho các hàm thuần của tóm tắt Zalo — viết TRƯỚC khi đổi hành vi, để
@@ -112,5 +112,42 @@ describe('gopChecklist — giữ tick của việc trùng nội dung (hành vi H
     const r = gopChecklist(['Gửi lại báo giá cho anh Nam'], [{ viec: 'Gửi báo giá cho anh Nam', xong: true, taoLuc: T0, xongLuc: T1 }], NOW);
 
     expect(r[0].xong).toBe(false);
+  });
+});
+
+describe('moTaDinhKem — tin đính kèm dạng JSON thô → một dòng chữ, không in URL', () => {
+  it('tệp PDF có tên (ca lỗi đã gặp: báo cáo được gửi mà tóm tắt nói "chưa gửi")', () => {
+    const raw =
+      '{"title":"2026年-墨水海运运输危险性鉴定书.pdf","description":"","href":"https://fg41.dlfl.vn/b29ad01d4be3ebbdb2f2/abc.pdf?x=1"}';
+
+    expect(moTaDinhKem(raw)).toBe('[TỆP: 2026年-墨水海运运输危险性鉴定书.pdf]');
+  });
+
+  it('ảnh Zalo (title rỗng, href photo-*)', () => {
+    expect(moTaDinhKem('{"title":"","description":"","href":"https://photo-stal-29.zdn.vn/gr/jpg/590994b1/2aOboQ"}')).toBe(
+      '[ẢNH]',
+    );
+  });
+
+  it('sticker (không href, có catId/type)', () => {
+    expect(moTaDinhKem('{"id":98936,"catId":61900,"type":3}')).toBe('[STICKER]');
+  });
+
+  it('liên kết có tiêu đề + mô tả (mô tả cắt 120 ký tự)', () => {
+    const r = moTaDinhKem(`{"title":"Bảng giá 2D US","description":"${'x'.repeat(200)}","href":"https://docs.google.com/spreadsheets/d/abc"}`);
+
+    expect(r.startsWith('[LIÊN KẾT: Bảng giá 2D US] — ')).toBe(true);
+    expect(r.length).toBe('[LIÊN KẾT: Bảng giá 2D US] — '.length + 120);
+    expect(r).not.toContain('https://');
+  });
+
+  it('video theo đuôi', () => {
+    expect(moTaDinhKem('{"title":"","href":"https://video-stal-48.dlmd.me/gr/2cd6/clip.mp4"}')).toBe('[VIDEO]');
+  });
+
+  it('chữ thường giữ nguyên, kể cả khi bắt đầu bằng { nhưng không phải JSON', () => {
+    expect(moTaDinhKem('@Đặng Nam hệ thống lỗi k vào đc em ơi')).toBe('@Đặng Nam hệ thống lỗi k vào đc em ơi');
+    expect(moTaDinhKem('{không phải json}')).toBe('{không phải json}');
+    expect(moTaDinhKem('[1,2]')).toBe('[1,2]');
   });
 });

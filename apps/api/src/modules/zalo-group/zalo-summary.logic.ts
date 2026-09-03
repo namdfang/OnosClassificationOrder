@@ -112,3 +112,75 @@ export function moTaDon(d: Record<string, unknown>, bayGio: Date = new Date()): 
 
   return phan.join(', ');
 }
+
+const DUOI_ANH = new Set(['jpg', 'jpeg', 'png', 'gif', 'webp', 'heic', 'bmp']);
+const DUOI_VIDEO = new Set(['mp4', 'mov', 'm4v', 'avi']);
+const DUOI_TEP = new Set([
+  'pdf', 'xlsx', 'xls', 'docx', 'doc', 'csv', 'zip', 'rar', '7z', 'ai', 'psd', 'cdr', 'eps', 'svg', 'txt', 'pptx',
+]);
+
+const duoiCua = (s: string): string => {
+  const m = /\.([a-z0-9]{1,5})$/i.exec(s.split('?')[0].split('#')[0]);
+
+  return m ? m[1].toLowerCase() : '';
+};
+
+const tenTepTu = (href: string): string => {
+  try {
+    const p = new URL(href).pathname;
+
+    return decodeURIComponent(p.slice(p.lastIndexOf('/') + 1));
+  } catch {
+    return '';
+  }
+};
+
+const hostCua = (href: string): string => {
+  try {
+    return new URL(href).hostname;
+  } catch {
+    return '';
+  }
+};
+
+/**
+ * Đổi tin ĐÍNH KÈM (engine lưu dạng JSON thô) thành một dòng chữ mô hình đọc được.
+ *
+ * Vì sao: 20% tin trong 30 ngày là `{"title":"x.pdf","href":...}` (tệp),
+ * `{"title":"","href":"...photo..."}` (ảnh) hay `{"id":..,"catId":..,"type":3}`
+ * (sticker). Để nguyên thì mô hình phải tự đoán từ JSON — và đã đoán sai: một
+ * PDF báo cáo được gửi lúc 31/08 17:50 mà tóm tắt kết luận "hẹn gửi nhưng chưa
+ * xác nhận đã gửi". Dòng `[TỆP: tên]` là bằng chứng ĐÃ GỬI, prompt sẽ nói rõ.
+ *
+ * KHÔNG in URL: tốn token, không mang tín hiệu. Tin không phải JSON giữ nguyên.
+ */
+export function moTaDinhKem(noiDung: string): string {
+  const t = noiDung.trim();
+  if (!t.startsWith('{') || !t.endsWith('}')) return noiDung;
+
+  let o: Record<string, unknown>;
+  try {
+    const parsed: unknown = JSON.parse(t);
+    if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) return noiDung;
+    o = parsed as Record<string, unknown>;
+  } catch {
+    return noiDung;
+  }
+
+  const title = typeof o.title === 'string' ? o.title.trim() : '';
+  const desc = typeof o.description === 'string' ? o.description.trim() : '';
+  const href = typeof o.href === 'string' ? o.href : '';
+  const ext = duoiCua(title) || (href ? duoiCua(tenTepTu(href)) : '');
+
+  if (!href) {
+    const laSticker = 'catId' in o || o.type === 3 || ('id' in o && Object.keys(o).length <= 3);
+
+    return laSticker ? '[STICKER]' : '[ĐÍNH KÈM]';
+  }
+
+  if (DUOI_ANH.has(ext) || /photo-|\/photo\//i.test(href)) return `[ẢNH]${title ? ` ${title}` : ''}`;
+  if (DUOI_VIDEO.has(ext)) return `[VIDEO]${title ? ` ${title}` : ''}`;
+  if (DUOI_TEP.has(ext)) return `[TỆP: ${title || tenTepTu(href)}]${desc ? ` — ${desc}` : ''}`;
+
+  return `[LIÊN KẾT: ${title || hostCua(href) || 'không rõ'}]${desc ? ` — ${desc.slice(0, 120)}` : ''}`;
+}
