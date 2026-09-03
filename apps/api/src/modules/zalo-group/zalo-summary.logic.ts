@@ -292,3 +292,32 @@ export function tachJson(vanBan: string): Record<string, unknown> | null {
 
   return null;
 }
+
+/** Bằng chứng cứng từ dữ liệu đơn, đếm ở `layDuLieuDon`. */
+export interface BangChungDon {
+  /** Đơn ĐƯỢC NHẮC trong chat đang bị giữ hoặc có lỗi (chưa hủy, chưa xong). */
+  donNhacBiGiuHoacLoi: number;
+  /** Đơn của KHÁCH (toàn bộ) đang bị giữ hoặc có lỗi. */
+  donKhachBiGiuHoacLoi: number;
+}
+
+const THU_TU_MUC: string[] = [ZaloSummaryLevel.BinhThuong, ZaloSummaryLevel.CanChuY, ZaloSummaryLevel.Gap];
+
+/**
+ * Sàn `mucDo` từ bằng chứng cứng: đơn nhắc trong chat bị giữ/lỗi → ít nhất
+ * `gap`; chỉ đơn toàn khách bị giữ/lỗi → ít nhất `can-chu-y`. KHÔNG BAO GIỜ hạ.
+ *
+ * Vì sao không sàn `gap` theo số toàn khách: một khách lớn có một đơn giữ cũ
+ * sẽ làm mọi nhóm của họ `gap` mãi — đúng cái nhãn mất tác dụng.
+ */
+export function apDungSanMucDo(mucDoMoHinh: string, bangChung: BangChungDon): { mucDo: string; nangTu?: string } {
+  const san =
+    bangChung.donNhacBiGiuHoacLoi > 0
+      ? ZaloSummaryLevel.Gap
+      : bangChung.donKhachBiGiuHoacLoi > 0
+        ? ZaloSummaryLevel.CanChuY
+        : ZaloSummaryLevel.BinhThuong;
+  if (THU_TU_MUC.indexOf(san) > THU_TU_MUC.indexOf(mucDoMoHinh)) return { mucDo: san, nangTu: mucDoMoHinh };
+
+  return { mucDo: mucDoMoHinh };
+}

@@ -24,8 +24,9 @@ import { ZaloGroupLinkEntity } from './zalo-group-link.entity';
 import type { ZaloGroupSummaryDocument } from './zalo-group-summary.entity';
 import { ZaloGroupSummaryEntity } from './zalo-group-summary.entity';
 import { ZaloIdentityService } from './zalo-identity.service';
-import type { KetQua } from './zalo-summary.logic';
+import type { BangChungDon, KetQua } from './zalo-summary.logic';
 import {
+  apDungSanMucDo,
   chuanHoa,
   dinhDangLuc,
   gopChecklist,
@@ -303,7 +304,7 @@ export class ZaloSummaryService {
     // đơn nhìn hai phiên bản khác nhau của cùng một tin.
     const messages = dto.messages.map((m) => ({ ...m, noiDung: moTaDinhKem(m.noiDung) }));
 
-    const duLieuDon = await this.layDuLieuDon(
+    const { vanBan: duLieuDon, bangChung } = await this.layDuLieuDon(
       link as { customerId?: string; userSku?: string },
       messages,
     );
@@ -332,6 +333,21 @@ export class ZaloSummaryService {
       this.logger.warn(`[zalo-summary] mã không có trong chat: ${maLa.join(', ')} (nhóm ${dto.groupGlobalId})`);
     }
 
+    // Sàn mức độ từ bằng chứng cứng — mô hình có thể dịu giọng, dữ liệu đơn thì không.
+    const sanMucDo = apDungSanMucDo(ketQua.mucDo, bangChung);
+    if (sanMucDo.nangTu) {
+      this.logger.log(
+        `[zalo-summary] nâng mức ${sanMucDo.nangTu} → ${sanMucDo.mucDo} theo dữ liệu đơn (nhắc: ${bangChung.donNhacBiGiuHoacLoi}, khách: ${bangChung.donKhachBiGiuHoacLoi}; nhóm ${dto.groupGlobalId})`,
+      );
+    } else if (bangChung.donNhacBiGiuHoacLoi > 0 || bangChung.donKhachBiGiuHoacLoi > 0) {
+      // Ghi cả khi KHÔNG phải nâng: đọc log là biết vì sao một nhóm màu đỏ, và
+      // biết đường đếm bằng chứng có chạy hay không (sàn im lặng thì không phân
+      // biệt được "không có bằng chứng" với "hàm đếm hỏng").
+      this.logger.log(
+        `[zalo-summary] bằng chứng đơn (nhắc: ${bangChung.donNhacBiGiuHoacLoi}, khách: ${bangChung.donKhachBiGiuHoacLoi}) — mô hình đã chấm ${sanMucDo.mucDo}, không cần nâng (nhóm ${dto.groupGlobalId})`,
+      );
+    }
+
     const now = new Date();
     const mocCuoi = dto.messages.reduce<Date | undefined>((max, m) => {
       if (!m.luc) return max;
@@ -355,7 +371,7 @@ export class ZaloSummaryService {
       // tắt lại xoá sạch công người vận hành đã tick.
       checklist: gopChecklist(ketQua.checklist, (prev?.checklist as ZaloSummaryTask[]) ?? [], now),
       nghiNgo: ketQua.nghiNgo,
-      mucDo: ketQua.mucDo,
+      mucDo: sanMucDo.mucDo,
       soTin: dto.messages.length,
       model: MODEL,
       tomTatLuc: now,
@@ -382,8 +398,9 @@ export class ZaloSummaryService {
   private async layDuLieuDon(
     link: { customerId?: string; userSku?: string },
     messages: ZaloMessageInput[],
-  ): Promise<string> {
+  ): Promise<{ vanBan: string; bangChung: BangChungDon }> {
     const phan: string[] = [];
+    const bangChung: BangChungDon = { donNhacBiGiuHoacLoi: 0, donKhachBiGiuHoacLoi: 0 };
 
     // ─── Đơn được nhắc đích danh trong chat ───────────────────────
     // Khách gọi đơn bằng MÃ ĐƠN OnosPod (`orderId`) chứ hiếm khi dùng
@@ -419,6 +436,9 @@ export class ZaloSummaryService {
         thay.add(pid.toUpperCase());
         thay.add(oid.toUpperCase());
         dong.push(`  · ${oid || pid}: ${moTaDon(d)}`);
+        if (!d.cancelledAt && (d.heldAt || (d.productionError && !d.fulfillmentCompletedAt))) {
+          bangChung.donNhacBiGiuHoacLoi += 1;
+        }
       }
       const khongThay = maTrongChat.filter((c) => !thay.has(c));
 
@@ -452,6 +472,7 @@ export class ZaloSummaryService {
           .lean(),
       ]);
 
+      bangChung.donKhachBiGiuHoacLoi = giu + loi;
       const dòng = [`  · đang chạy: ${dangChay} đơn`, `  · đang bị giữ: ${giu}`, `  · đang có lỗi: ${loi}`];
       const cu = (cuNhat as Record<string, unknown>[])[0];
       if (cu?.inProductionAt) {
@@ -463,14 +484,17 @@ export class ZaloSummaryService {
       phan.push(`TÌNH HÌNH CHUNG CỦA KHÁCH (${sku}):\n${dòng.join('\n')}`);
     }
 
-    if (phan.length === 0) return '';
+    if (phan.length === 0) return { vanBan: '', bangChung };
 
     // Khối này là của KHÁCH, không của nhóm: khách có nhiều nhóm thì mọi nhóm đều
     // nhận cùng khối. Đặt tên rõ để mô hình không chép "2 đơn lỗi" vào tồn đọng
     // của cả hai nhóm DESI như đã thấy trên production.
     const nhanKhach = link.userSku ? ` (${link.userSku})` : '';
 
-    return `\n\n--- DỮ LIỆU ĐƠN HÀNG THẬT (tra từ hệ thống, đúng hơn lời nói trong chat) — BỐI CẢNH CHUNG CỦA KHÁCH${nhanKhach}: toàn bộ đơn của khách, KHÔNG riêng nhóm này ---\n${phan.join('\n\n')}`;
+    return {
+      vanBan: `\n\n--- DỮ LIỆU ĐƠN HÀNG THẬT (tra từ hệ thống, đúng hơn lời nói trong chat) — BỐI CẢNH CHUNG CỦA KHÁCH${nhanKhach}: toàn bộ đơn của khách, KHÔNG riêng nhóm này ---\n${phan.join('\n\n')}`,
+      bangChung,
+    };
   }
 
   private async goiMoHinh(input: {

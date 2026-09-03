@@ -1,6 +1,7 @@
 import { FULFILLMENT_STAGE_LABELS, FulfillmentStage, ZaloSummaryLevel } from 'shared';
 
 import {
+  apDungSanMucDo,
   chuanHoa,
   dinhDangLuc,
   gopChecklist,
@@ -218,5 +219,32 @@ describe('tachJson — tách JSON kết quả khỏi văn bản tự do', () => 
     expect(SUMMARY_JSON_SCHEMA.required).toHaveLength(7);
     expect(SUMMARY_JSON_SCHEMA.additionalProperties).toBe(false);
     expect(SUMMARY_JSON_SCHEMA.properties.checklist.maxItems).toBe(5);
+  });
+});
+
+describe('apDungSanMucDo — sàn mức độ từ dữ liệu đơn, không bao giờ hạ', () => {
+  it('đơn nhắc trong chat bị giữ/lỗi → gap, kể cả mô hình nói bình thường', () => {
+    expect(apDungSanMucDo(ZaloSummaryLevel.BinhThuong, { donNhacBiGiuHoacLoi: 1, donKhachBiGiuHoacLoi: 3 })).toEqual({
+      mucDo: ZaloSummaryLevel.Gap,
+      nangTu: ZaloSummaryLevel.BinhThuong,
+    });
+  });
+
+  it('chỉ đơn toàn khách bị giữ/lỗi → can-chu-y', () => {
+    expect(apDungSanMucDo(ZaloSummaryLevel.BinhThuong, { donNhacBiGiuHoacLoi: 0, donKhachBiGiuHoacLoi: 2 }).mucDo).toBe(
+      ZaloSummaryLevel.CanChuY,
+    );
+  });
+
+  it('mô hình đã gap, bằng chứng chỉ đủ can-chu-y → GIỮ gap (không hạ)', () => {
+    expect(apDungSanMucDo(ZaloSummaryLevel.Gap, { donNhacBiGiuHoacLoi: 0, donKhachBiGiuHoacLoi: 2 })).toEqual({ mucDo: ZaloSummaryLevel.Gap });
+  });
+
+  it('không có bằng chứng → giữ nguyên, không có nangTu', () => {
+    expect(apDungSanMucDo(ZaloSummaryLevel.CanChuY, { donNhacBiGiuHoacLoi: 0, donKhachBiGiuHoacLoi: 0 })).toEqual({ mucDo: ZaloSummaryLevel.CanChuY });
+  });
+
+  it('mô hình can-chu-y + đơn nhắc bị giữ → nâng lên gap, ghi lại mức cũ', () => {
+    expect(apDungSanMucDo(ZaloSummaryLevel.CanChuY, { donNhacBiGiuHoacLoi: 2, donKhachBiGiuHoacLoi: 2 }).nangTu).toBe(ZaloSummaryLevel.CanChuY);
   });
 });
