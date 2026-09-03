@@ -1,43 +1,19 @@
-# Tunnel onos tren may hub.
+# Dev server onos tren may hub. Production chay o may rieng, KHONG qua tunnel nay.
 #
-# Dinh tuyen THEO DUONG DAN tren cung 1 ten mien:
-#   <domain>/api/*  -> API   (localhost:3007, global prefix la /api/v1)
-#   <domain>/*      -> Web   (localhost:5173, ban build tinh)
-#
-# Vi sao: ban build cua web goi API bang duong dan TUONG DOI (/api/v1/...),
-# khac ban dev (tu suy ra api-<sub>.<domain>). Gop chung 1 ten mien thi:
-#   - mot ban build chay duoc tren MOI ten mien, khong phai build lai khi doi domain
-#   - cung nguon goc nen khong con van de CORS
-# Thu tu ingress co y nghia: luat /api phai dung TRUOC luat bat tat ca.
+# Web (vite dev) va API tach 2 hostname vi ban dev tu suy ra ten API tu ten web:
+#   toApiHostname('dev-onos.autonow.vn') -> 'api-dev-onos.autonow.vn'
+#   (apps/web/src/constants/index.ts). Doi ten web thi PHAI doi ten API cho khop.
+# Giu them luat /api tren dev-onos de ban BUILD (goi duong tuong doi) cung chay duoc.
 
 tunnel: e9a56d70-758a-4494-9a00-85dccddd18ac
 credentials-file: /root/.vibedev/repos/onos/cloudflared/e9a56d70-758a-4494-9a00-85dccddd18ac.json
 
 ingress:
-  # --- ten mien chinh (production tam thoi) ---
-  - hostname: onosfactory.com
-    path: ^/api
-    service: http://localhost:3007
-  - hostname: onosfactory.com
-    service: http://localhost:5173
-
-  - hostname: www.onosfactory.com
-    path: ^/api
-    service: http://localhost:3007
-  - hostname: www.onosfactory.com
-    service: http://localhost:5173
-
-  # --- giu ten mien cu de khong dut trong luc chuyen ---
   - hostname: dev-onos.autonow.vn
     path: ^/api
     service: http://localhost:3007
   - hostname: dev-onos.autonow.vn
     service: http://localhost:5173
-
-  # --- API rieng: script/cron va Public Order API cua khach van goi duoc ---
-  - hostname: api.onosfactory.com
-    service: http://localhost:3007
   - hostname: api-dev-onos.autonow.vn
     service: http://localhost:3007
-
   - service: http_status:404
