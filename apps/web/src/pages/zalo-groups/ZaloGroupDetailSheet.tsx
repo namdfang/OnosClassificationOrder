@@ -149,8 +149,8 @@ export default function ZaloGroupDetailSheet({ group, onClose, onEdit, onChanged
                 </Button>
               </div>
 
-              <Block label={t('summary.customerWants')} value={tomTat.khachQuanTam} />
-              <Block label={t('summary.staffReplied')} value={tomTat.salePhanHoi} />
+              <Block label={t(group.kind === 'operation' ? 'summary.requesterWants' : 'summary.customerWants')} value={tomTat.khachQuanTam} />
+              <Block label={t(group.kind === 'operation' ? 'summary.handlerReplied' : 'summary.staffReplied')} value={tomTat.salePhanHoi} />
               <Block label={t('summary.pending')} value={tomTat.tonDong} highlight />
 
               {/* ── Danh sách việc, tick được ngay ── */}

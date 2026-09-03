@@ -83,14 +83,16 @@
     "msgCount": "{{count}} messages",
     "openTasks": "{{count}} open",
     "notYet": "not summarized",
-    "doneAt": "done at {{at}}"
+    "doneAt": "done at {{at}}",
+    "requesterWants": "Requested by",
+    "handlerReplied": "Handled by"
   },
   "identity": {
     "kind": {
       "unknown": "Unreviewed",
       "ai-support": "AI support",
       "staff": "Staff",
-      "customer": "Customer"
+      "customer": "Customer / external"
     },
     "allKinds": "All",
     "pending": "Unconfirmed",

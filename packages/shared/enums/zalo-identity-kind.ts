@@ -41,6 +41,13 @@ export const ZALO_IDENTITY_CHAT_LABELS: Record<ZaloIdentityKind, string> = {
 };
 
 /**
+ * Nhãn thay cho KHÁCH khi dựng dòng chat của NHÓM VẬN HÀNH: người ngoài công ty
+ * trong nhóm đó là nhà cung cấp / forwarder / xưởng gia công, không phải khách.
+ * Đây là hàm của NHÓM chứ không phải của người, nên không thêm loại danh tính.
+ */
+export const ZALO_PARTNER_CHAT_LABEL = 'ĐỐI TÁC';
+
+/**
  * Ngưỡng gieo tự động, đo từ dữ liệu thật (262 người gửi trên 147 nhóm):
  * 23 người xuất hiện ở ≥5 nhóm — không ai trong số đó là khách; 184 người chỉ
  * ở đúng 1 nhóm — đó là khách. Khoảng giữa để người xét.

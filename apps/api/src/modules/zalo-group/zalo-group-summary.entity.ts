@@ -2,7 +2,7 @@ import { Prop, SchemaFactory } from '@nestjs/mongoose';
 import { DatabaseEntity, DatabaseEntityAbstract } from 'core';
 import type { HydratedDocument } from 'mongoose';
 import type { ZaloSummaryLevel, ZaloSummaryTask } from 'shared';
-import { ZALO_SUMMARY_LEVELS, ZaloSummaryLevel as Level } from 'shared';
+import { ZALO_GROUP_KINDS, ZALO_SUMMARY_LEVELS, ZaloGroupKind, ZaloSummaryLevel as Level } from 'shared';
 
 /**
  * Tóm tắt tình hình một nhóm Zalo do mô hình sinh.
@@ -62,6 +62,13 @@ export class ZaloGroupSummaryEntity extends DatabaseEntityAbstract {
 
   @Prop({ type: String, enum: ZALO_SUMMARY_LEVELS, default: Level.BinhThuong, index: true })
   mucDo: ZaloSummaryLevel;
+
+  /**
+   * Loại nhóm LÚC TÓM TẮT — UI đổi nhãn ô theo nó ("Bên yêu cầu"/"Người xử lý"
+   * cho nhóm vận hành). Optional: bản cũ chưa có thì dùng nhãn khách.
+   */
+  @Prop({ type: String, enum: ZALO_GROUP_KINDS })
+  kind?: ZaloGroupKind;
 
   /** Mốc tin nhắn cuối đã tóm tắt — biết bản này còn mới không, và lượt sau lấy từ đâu. */
   @Prop({ index: true })

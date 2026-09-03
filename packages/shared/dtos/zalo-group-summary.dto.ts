@@ -4,6 +4,7 @@ import { BaseEntityZod, PageQueryZod, PageResZod, ResZod } from '@shared/types';
 import { z } from 'zod';
 
 import { IDZod } from '../constants/common-zod';
+import { ZaloGroupKind } from '../enums/zalo-group-kind';
 
 /**
  * Mức độ cần chú ý của một nhóm — do mô hình chấm, người vận hành đọc để biết
@@ -38,6 +39,8 @@ export const ZaloGroupSummaryZod = BaseEntityZod.extend({
   customerId: IDZod.optional(),
   userSku: z.string().max(200).optional(),
   title: z.string().max(300).optional(),
+  /** Loại nhóm lúc tóm tắt — UI đổi nhãn ô cho nhóm vận hành. Bản cũ không có. */
+  kind: z.nativeEnum(ZaloGroupKind).optional(),
 
   /** Một dòng để liếc bảng là hiểu, khỏi phải mở chi tiết. */
   tieuDe: z.string().max(200).optional(),

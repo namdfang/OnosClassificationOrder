@@ -162,8 +162,8 @@ export default function SummariesPanel() {
               </div>
 
               <div className="mt-3 grid gap-3 sm:grid-cols-3">
-                <Field label={t('summary.customerWants')} value={r.khachQuanTam} />
-                <Field label={t('summary.staffReplied')} value={r.salePhanHoi} />
+                <Field label={t(r.kind === 'operation' ? 'summary.requesterWants' : 'summary.customerWants')} value={r.khachQuanTam} />
+                <Field label={t(r.kind === 'operation' ? 'summary.handlerReplied' : 'summary.staffReplied')} value={r.salePhanHoi} />
                 <Field label={t('summary.pending')} value={r.tonDong} highlight={!!r.tonDong} />
               </div>
 

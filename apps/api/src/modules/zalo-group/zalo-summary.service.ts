@@ -11,7 +11,13 @@ import type {
   ZaloSummaryQueueItem,
   ZaloSummaryTask,
 } from 'shared';
-import { ZALO_GROUP_ANALYZABLE_KINDS, ZALO_IDENTITY_CHAT_LABELS, ZaloIdentityKind } from 'shared';
+import {
+  ZALO_GROUP_ANALYZABLE_KINDS,
+  ZALO_IDENTITY_CHAT_LABELS,
+  ZALO_PARTNER_CHAT_LABEL,
+  ZaloGroupKind,
+  ZaloIdentityKind,
+} from 'shared';
 
 import { OrderEntity } from '../order/order.entity';
 import { ZaloGroupLinkEntity } from './zalo-group-link.entity';
@@ -54,11 +60,26 @@ const NGAY_DOC_LAI = Number(process.env.ZALO_SUMMARY_REREAD_DAYS || 7);
 /** Nhóm im lâu hơn mức này thì không tốn tiền tóm tắt lại. */
 const NGAY_BO_QUA_NHOM_IM = Number(process.env.ZALO_SUMMARY_IDLE_DAYS || 14);
 
-const HE_THONG = `Bạn đọc một đoạn hội thoại nhóm Zalo giữa nhân viên công ty in ấn và khách hàng.
-Nhiệm vụ: rút ra tình hình, viết TIẾNG VIỆT, mỗi ô 1–2 câu ngắn, cụ thể. KHÔNG kể lại nội dung chat.
+const MO_DAU_KHACH = `Bạn đọc một đoạn hội thoại nhóm Zalo giữa nhân viên công ty in ấn và khách hàng.`;
+
+const MO_DAU_VAN_HANH = `Bạn đọc một đoạn hội thoại NHÓM VẬN HÀNH của công ty in ấn: nhân viên nội bộ làm việc với nhau
+và với ĐỐI TÁC bên ngoài (nhà cung cấp vật tư, đơn vị vận chuyển/khai hải quan, xưởng gia công).
+Trong nhóm này KHÔNG có khách hàng — đừng gọi ai là "khách". VAI TRÒ trên mỗi dòng là NHÂN VIÊN,
+ĐỐI TÁC, TRỢ LÝ AI hoặc CHƯA RÕ.`;
+
+const KET_KHACH = `Đây là nhóm khách B2B — chờ báo giá, chờ mẫu, chờ hợp đồng vài ngày là NHỊP BÌNH THƯỜNG, không
+phải sự cố. Chấm "gap" cho quá nhiều nhóm thì cái nhãn đó mất hết tác dụng cảnh báo.`;
+
+const KET_VAN_HANH = `Đây là nhóm vận hành — chờ hàng về, chờ chứng từ, chờ nhà cung cấp vài ngày là NHỊP BÌNH THƯỜNG,
+không phải sự cố. Trong nhóm này các ô hiểu như sau (giữ nguyên tên khoá JSON):
+- "khachQuanTam" = DD/MM HH:MM + BÊN YÊU CẦU (đối tác hoặc nhân viên nêu vấn đề) + cần gì.
+- "salePhanHoi" = DD/MM HH:MM + TÊN NGƯỜI XỬ LÝ + đã làm gì.
+Chấm "gap" cho quá nhiều nhóm thì cái nhãn đó mất hết tác dụng cảnh báo.`;
+
+const THAN_LOI_NHAC = `Nhiệm vụ: rút ra tình hình, viết TIẾNG VIỆT, mỗi ô 1–2 câu ngắn, cụ thể. KHÔNG kể lại nội dung chat.
 
 🔴 MỌI KẾT LUẬN PHẢI KÈM MỐC THỜI GIAN (NGÀY + GIỜ PHÚT) VÀ TÊN NGƯỜI. Mỗi dòng chat có dạng
-"[DD/MM HH:MM] VAI TRÒ/Tên:" với VAI TRÒ là KHÁCH, NHÂN VIÊN, TRỢ LÝ AI hoặc CHƯA RÕ — hãy DÙNG nó:
+"[DD/MM HH:MM] VAI TRÒ/Tên:" với VAI TRÒ là KHÁCH, ĐỐI TÁC, NHÂN VIÊN, TRỢ LÝ AI hoặc CHƯA RÕ — hãy DÙNG nó:
 - "khách hỏi X" → phải là "20/08 14:35 khách (Tên) hỏi X"
 - "đã trả lời" → phải là "21/08 09:10 (Tên nhân viên) trả lời rằng…" — nêu ĐÍCH DANH ai
 - việc còn treo → phải nói TREO TỪ LÚC NÀO (ngày + giờ) và ĐÃ BAO NHIÊU NGÀY
@@ -108,10 +129,22 @@ Chấm mức độ — CHỈ dựa vào bằng chứng CỨNG, không chấm the
     · có mốc hạn cụ thể đã trôi qua (hạn giao, hạn hải quan, hạn thanh toán)
   Chậm trả lời KHÔNG phải căn cứ cho "gap".
 - "can-chu-y": còn việc treo, hoặc khách hỏi đã quá 3 ngày chưa ai đáp.
-- "binh-thuong": việc đang chạy theo nhịp bình thường, kể cả khi còn vài việc chưa xong.
+- "binh-thuong": việc đang chạy theo nhịp bình thường, kể cả khi còn vài việc chưa xong.`;
 
-Đây là nhóm khách B2B — chờ báo giá, chờ mẫu, chờ hợp đồng vài ngày là NHỊP BÌNH THƯỜNG, không
-phải sự cố. Chấm "gap" cho quá nhiều nhóm thì cái nhãn đó mất hết tác dụng cảnh báo.`;
+/**
+ * Lời nhắc hệ thống theo LOẠI NHÓM. Cùng một thân, khác đoạn mở đầu và đoạn kết:
+ * nhóm khách đóng khung "nhân viên ↔ khách"; nhóm vận hành không có khách, người
+ * ngoài là ĐỐI TÁC. Đo trên 111 bản: Duyên (forwarder), Đại Thịnh, Mẫn Nè (bán
+ * mỡ máy), Minh Đăng (quản lý xưởng) đều bị gọi là "khách" vì khung cũ.
+ */
+function loiNhacHeThong(kind?: string): string {
+  const vanHanh = kind === ZaloGroupKind.Operation;
+
+  return `${vanHanh ? MO_DAU_VAN_HANH : MO_DAU_KHACH}
+${THAN_LOI_NHAC}
+
+${vanHanh ? KET_VAN_HANH : KET_KHACH}`;
+}
 
 @Injectable()
 export class ZaloSummaryService {
@@ -253,8 +286,10 @@ export class ZaloSummaryService {
       messages,
     );
 
+    const kind = (link as { kind?: string }).kind;
     const ketQua = await this.goiMoHinh({
       title: (link as { title?: string }).title,
+      kind,
       messages,
       truoc: docLaiTuDau ? null : prev,
       duLieuDon,
@@ -273,6 +308,8 @@ export class ZaloSummaryService {
       customerId: (link as { customerId?: string }).customerId,
       userSku: (link as { userSku?: string }).userSku,
       title: (link as { title?: string }).title,
+      // Lưu loại nhóm lúc tóm tắt để UI đổi nhãn ô ("Bên yêu cầu"/"Người xử lý").
+      kind,
       tieuDe: ketQua.tieuDe,
       khachQuanTam: ketQua.khachQuanTam,
       salePhanHoi: ketQua.salePhanHoi,
@@ -389,6 +426,8 @@ export class ZaloSummaryService {
 
   private async goiMoHinh(input: {
     title?: string;
+    /** Loại nhóm — quyết định khung lời nhắc và nhãn ĐỐI TÁC thay KHÁCH. */
+    kind?: string;
     messages: ZaloMessageInput[];
     truoc: { tonDong?: string; checklist?: ZaloSummaryTask[] } | null;
     /** Khối dữ liệu đơn thật, rỗng khi nhóm chưa gắn khách hoặc chat không nhắc mã nào. */
@@ -416,7 +455,13 @@ export class ZaloSummaryService {
         const ten = m.nguoiGui || dd?.displayName || 'không rõ';
         const luc = m.luc ? dinhDangLuc(new Date(m.luc)) : '??/?? ??:??';
 
-        return `[${luc}] ${ZALO_IDENTITY_CHAT_LABELS[loai]}/${ten}: ${m.noiDung}`;
+        // Nhóm vận hành không có khách: người ngoài công ty ở đó là đối tác.
+        const nhan =
+          loai === ZaloIdentityKind.Customer && input.kind === ZaloGroupKind.Operation
+            ? ZALO_PARTNER_CHAT_LABEL
+            : ZALO_IDENTITY_CHAT_LABELS[loai];
+
+        return `[${luc}] ${nhan}/${ten}: ${m.noiDung}`;
       })
       .join('\n');
 
@@ -433,7 +478,7 @@ export class ZaloSummaryService {
         ].join('\n')
       : '';
 
-    const loiNhac = `${HE_THONG}
+    const loiNhac = `${loiNhacHeThong(input.kind)}
 
 NHÓM: ${input.title ?? '(không tên)'}${input.duLieuDon}${khoiTruoc}
 
