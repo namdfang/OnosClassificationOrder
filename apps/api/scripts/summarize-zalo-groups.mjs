@@ -16,6 +16,9 @@
  * Cách chạy (từ thư mục apps/api):
  *   node scripts/summarize-zalo-groups.mjs --dry-run
  *   node scripts/summarize-zalo-groups.mjs --yes --token <JWT> [--limit 10]
+ *   node scripts/summarize-zalo-groups.mjs --yes --token <JWT> --group <groupGlobalId>
+ *       ↑ ép tóm tắt lại MỘT nhóm từ đầu, bỏ qua hàng đợi — để kiểm một thay đổi
+ *         trên nhóm đích danh mà không phải chờ cron.
  */
 import { execFile as execFileCb } from 'node:child_process';
 import { promisify } from 'node:util';
@@ -35,6 +38,8 @@ const PG = argOf('--container') || 'zalo-onos-zalo-db-1';
 const API = (argOf('--api') || 'http://127.0.0.1:3007/api/v1').replace(/\/+$/, '');
 const TOKEN = argOf('--token') || process.env.ONOS_TOKEN;
 const LIMIT = Number(argOf('--limit') || 0);
+/** Ép một nhóm đọc lại từ đầu, bỏ qua hàng đợi (kiểm thử). */
+const GROUP = argOf('--group');
 
 /** Trần tin mỗi lượt — khớp trần của DTO phía API. */
 const MAX_TIN = 400;
@@ -108,13 +113,18 @@ async function keoTin(groupGlobalId, tuMoc) {
     .filter((m) => m.noiDung.trim() !== '');
 }
 
-const q = await goiApi('/zalo-groups/summary-queue');
-if (!q.ok) {
-  console.error(`Không lấy được hàng đợi (HTTP ${q.status}):`, JSON.stringify(q.body).slice(0, 300));
-  process.exit(1);
+let hangDoi;
+if (GROUP) {
+  // Kiểm thử: không hỏi hàng đợi, ép đúng một nhóm đọc lại toàn bộ.
+  hangDoi = [{ groupGlobalId: GROUP, title: GROUP, tuMoc: null, docLaiTuDau: true }];
+} else {
+  const q = await goiApi('/zalo-groups/summary-queue');
+  if (!q.ok) {
+    console.error(`Không lấy được hàng đợi (HTTP ${q.status}):`, JSON.stringify(q.body).slice(0, 300));
+    process.exit(1);
+  }
+  hangDoi = q.body.data ?? [];
 }
-
-let hangDoi = q.body.data ?? [];
 if (LIMIT > 0) hangDoi = hangDoi.slice(0, LIMIT);
 
 console.log(`Nguồn  : ssh ${SSH_HOST} → ${PG}`);

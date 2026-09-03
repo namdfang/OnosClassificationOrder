@@ -2,10 +2,11 @@ import { Injectable, NotFoundException } from '@nestjs/common';
 import { InjectModel } from '@nestjs/mongoose';
 import { Model } from 'mongoose';
 import type { GetZaloIdentitiesDto, SyncZaloIdentitiesDto, UpdateZaloIdentityDto } from 'shared';
-import { ZALO_STAFF_MIN_GROUPS, ZaloIdentityKind } from 'shared';
+import { ZaloIdentityKind } from 'shared';
 
 import type { ZaloIdentityDocument } from './zalo-identity.entity';
 import { ZaloIdentityEntity } from './zalo-identity.entity';
+import { doanPhanLoai as doanPhanLoaiThuan } from './zalo-identity.logic';
 
 @Injectable()
 export class ZaloIdentityService {
@@ -59,15 +60,11 @@ export class ZaloIdentityService {
   }
 
   /** Đề xuất phân loại từ bằng chứng đếm được. */
+  /** Uỷ quyền cho hàm thuần ở `zalo-identity.logic.ts` (kiểm thử được). */
   private doanPhanLoai(groupCount: number, laTaiKhoanCongTy?: boolean): ZaloIdentityKind {
-    if (laTaiKhoanCongTy) return ZaloIdentityKind.AiSupport;
-    if (groupCount >= ZALO_STAFF_MIN_GROUPS) return ZaloIdentityKind.Staff;
-    if (groupCount === 1) return ZaloIdentityKind.Customer;
-
-    // 2–4 nhóm: chưa đủ chắc để máy quyết. Có thể là nhân viên mới, cũng có
-    // thể là khách có nhiều nhóm (nhóm chính + nhóm kế toán). Để người xét.
-    return ZaloIdentityKind.Unknown;
+    return doanPhanLoaiThuan(groupCount, laTaiKhoanCongTy);
   }
+
 
   /**
    * Áp hàng loạt đề xuất của máy cho những người CHƯA ai xác nhận.
