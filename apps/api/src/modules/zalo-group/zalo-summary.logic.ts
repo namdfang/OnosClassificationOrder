@@ -184,3 +184,34 @@ export function moTaDinhKem(noiDung: string): string {
 
   return `[LIÊN KẾT: ${title || hostCua(href) || 'không rõ'}]${desc ? ` — ${desc.slice(0, 120)}` : ''}`;
 }
+
+/**
+ * Mã (đơn, SKU, vận đơn…) xuất hiện trong ĐẦU RA của mô hình mà KHÔNG có trong
+ * nguồn. Chỉ để ghi log — không tự sửa, vì thay bằng mã gần giống có thể sai nặng
+ * hơn (đã gặp: FBCRTOPTIM thay cho FBCROPTOPVNECK).
+ * Mẫu: chữ hoa ASCII đầu, ≥6 ký tự hoa/số/gạch — từ tiếng Việt có dấu không khớp.
+ *
+ * `nguon` PHẢI gồm đủ ba thứ mô hình được đọc: tin nhắn, khối dữ liệu đơn, VÀ
+ * bản tóm tắt lần trước (lượt cuốn chiếu chỉ gửi tin MỚI, mã cũ nằm ở bản trước).
+ * Thiếu phần thứ ba thì 20/27 cảnh báo là kêu oan — đo trên dev 03/09.
+ *
+ * Mã là KHÚC ĐẦU/khúc con của một mã có thật (`AS-02077` ⊂ `AS-02077-17505`) coi
+ * như cắt cụt, KHÔNG báo: nó ồn mà không chỉ ra được chuyện bịa mã.
+ */
+export function maKhongCoTrongNguon(ketQua: KetQua, nguon: string): string[] {
+  const MAU = /\b[A-Z][A-Z0-9-]{5,}\b/g;
+  const dauRa = [ketQua.tieuDe, ketQua.khachQuanTam, ketQua.salePhanHoi, ketQua.tonDong, ...ketQua.checklist, ...ketQua.nghiNgo].join(
+    '\n',
+  );
+  const trongNguon = [...new Set((nguon.toUpperCase().match(MAU) ?? []).map((m) => m.replace(/-+$/, '')))];
+  const boNguon = new Set(trongNguon);
+  const la = new Set<string>();
+  for (const m of dauRa.match(MAU) ?? []) {
+    const ma = m.replace(/-+$/, '');
+    if (boNguon.has(ma)) continue;
+    if (trongNguon.some((x) => x.includes(ma))) continue;
+    la.add(ma);
+  }
+
+  return [...la];
+}

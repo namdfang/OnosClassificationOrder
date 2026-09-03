@@ -1,6 +1,6 @@
 import { FULFILLMENT_STAGE_LABELS, FulfillmentStage, ZaloSummaryLevel } from 'shared';
 
-import { chuanHoa, dinhDangLuc, gopChecklist, moTaDinhKem, moTaDon, nhanChang } from './zalo-summary.logic';
+import { chuanHoa, dinhDangLuc, gopChecklist, maKhongCoTrongNguon, moTaDinhKem, moTaDon, nhanChang } from './zalo-summary.logic';
 
 /**
  * Test NỀN cho các hàm thuần của tóm tắt Zalo — viết TRƯỚC khi đổi hành vi, để
@@ -149,5 +149,31 @@ describe('moTaDinhKem — tin đính kèm dạng JSON thô → một dòng chữ
     expect(moTaDinhKem('@Đặng Nam hệ thống lỗi k vào đc em ơi')).toBe('@Đặng Nam hệ thống lỗi k vào đc em ơi');
     expect(moTaDinhKem('{không phải json}')).toBe('{không phải json}');
     expect(moTaDinhKem('[1,2]')).toBe('[1,2]');
+  });
+});
+
+describe('maKhongCoTrongNguon — mã trong đầu ra không có trong chat/khối đơn (chỉ để log)', () => {
+  const kq = (o: Partial<Parameters<typeof maKhongCoTrongNguon>[0]>) => ({
+    tieuDe: '', khachQuanTam: '', salePhanHoi: '', tonDong: '', checklist: [], nghiNgo: [], mucDo: 'binh-thuong', ...o,
+  });
+
+  it('mã chép sai (ca thật: FBCRTOPTIM thay cho FBCROPTOPVNECK) → báo', () => {
+    expect(maKhongCoTrongNguon(kq({ tonDong: 'tool FBCRTOPTIM chưa xong' }), 'file FBCROPTOPVNECK ok')).toEqual(['FBCRTOPTIM']);
+  });
+
+  it('mã có trong nguồn (kể cả trong khối đơn, khác hoa thường) → không báo', () => {
+    expect(maKhongCoTrongNguon(kq({ checklist: ['Giục đơn JP-88300-76764'] }), 'đơn jp-88300-76764: ĐANG BỊ GIỮ')).toEqual([]);
+  });
+
+  it('mã CẮT CỤT của mã có thật → không báo (ồn mà không chỉ ra chuyện bịa)', () => {
+    expect(maKhongCoTrongNguon(kq({ tonDong: 'đơn AS-02077 đang kẹt' }), 'đơn AS-02077-17505: ĐANG BỊ GIỮ')).toEqual([]);
+  });
+
+  it('mã lấy từ BẢN TÓM TẮT LẦN TRƯỚC (có trong nguồn) → không báo', () => {
+    expect(maKhongCoTrongNguon(kq({ tonDong: 'vẫn chờ JP-88300-76764' }), 'tin mới không nhắc mã\nTồn đọng trước: JP-88300-76764 kẹt')).toEqual([]);
+  });
+
+  it('từ tiếng Việt viết hoa có dấu và từ ngắn không bị coi là mã', () => {
+    expect(maKhongCoTrongNguon(kq({ tonDong: 'ĐANG CHỜ MSDS và ISF' }), 'không có gì')).toEqual([]);
   });
 });

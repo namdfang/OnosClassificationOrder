@@ -25,7 +25,7 @@ import type { ZaloGroupSummaryDocument } from './zalo-group-summary.entity';
 import { ZaloGroupSummaryEntity } from './zalo-group-summary.entity';
 import { ZaloIdentityService } from './zalo-identity.service';
 import type { KetQua } from './zalo-summary.logic';
-import { chuanHoa, dinhDangLuc, gopChecklist, moTaDinhKem, moTaDon, nhanChang } from './zalo-summary.logic';
+import { chuanHoa, dinhDangLuc, gopChecklist, maKhongCoTrongNguon, moTaDinhKem, moTaDon, nhanChang } from './zalo-summary.logic';
 import type { ZaloSummaryJobData } from './zalo-summary.queue';
 import { ZALO_SUMMARY_QUEUE } from './zalo-summary.queue';
 
@@ -94,6 +94,9 @@ giờ ghi trong ngoặc vuông — hãy ghi nhận "đã gửi tệp X lúc DD/M
 "chưa gửi" khi có dòng này. Tên tệp thường nói rõ nội dung (báo giá, chứng nhận, danh sách…).
 [STICKER] không mang nội dung và KHÔNG tính là câu trả lời.
 Chỉ ghi tên/ngày CÓ THẬT trong chat. Không thấy thì ghi "không rõ", tuyệt đối không đoán.
+Mã đơn, mã sản phẩm/SKU, mã vận đơn, số tiền: CHÉP NGUYÊN VĂN từng ký tự như trong chat — không viết
+tắt, không "sửa chính tả", không ghép hai mã. Không chắc đọc đúng mã thì mô tả bằng lời và bỏ mã,
+tuyệt đối không bịa.
 
 Nếu có khối "DỮ LIỆU ĐƠN HÀNG THẬT", đó là trạng thái tra từ hệ thống sản xuất — nó ĐÚNG hơn
 những gì người ta nói trong chat. Dùng nó để:
@@ -301,6 +304,21 @@ export class ZaloSummaryService {
       duLieuDon,
     });
 
+    // Chỉ ghi log, KHÔNG tự sửa: thay bằng mã gần giống có thể sai nặng hơn. Xét
+    // lại nếu tỉ lệ cảnh báo vượt ~1/200 sau khi đã có luật "chép nguyên văn".
+    // Nguồn = ĐÚNG những gì mô hình được đọc: tin nhắn + khối đơn + bản tóm tắt
+    // lần trước (chỉ khi lượt này thực sự gửi nó, tức không đọc lại từ đầu).
+    const banTruoc =
+      !docLaiTuDau && prev
+        ? [prev.tieuDe, prev.khachQuanTam, prev.salePhanHoi, prev.tonDong, ...(prev.nghiNgo ?? []), ...(prev.checklist ?? []).map((c) => c.viec)]
+            .filter(Boolean)
+            .join('\n')
+        : '';
+    const maLa = maKhongCoTrongNguon(ketQua, `${messages.map((m) => m.noiDung).join('\n')}\n${duLieuDon}\n${banTruoc}`);
+    if (maLa.length) {
+      this.logger.warn(`[zalo-summary] mã không có trong chat: ${maLa.join(', ')} (nhóm ${dto.groupGlobalId})`);
+    }
+
     const now = new Date();
     const mocCuoi = dto.messages.reduce<Date | undefined>((max, m) => {
       if (!m.luc) return max;
@@ -368,8 +386,15 @@ export class ZaloSummaryService {
 
     if (maTrongChat.length > 0) {
       const dons = await this.orderModel
-        .find({ $or: [{ productionId: { $in: maTrongChat } }, { orderId: { $in: maTrongChat } }] })
-        .select('productionId orderId type currentFulfillmentStage designerStatus heldAt holdReason productionError productionErrorNote inProductionAt fulfillmentCompletedAt cancelledAt')
+        // `externalId` = mã nền tảng (Platform ID) khách hay đọc ra trong chat.
+        .find({
+          $or: [
+            { productionId: { $in: maTrongChat } },
+            { orderId: { $in: maTrongChat } },
+            { externalId: { $in: maTrongChat } },
+          ],
+        })
+        .select('productionId orderId externalId type currentFulfillmentStage designerStatus heldAt holdReason productionError productionErrorNote inProductionAt fulfillmentCompletedAt cancelledAt')
         .limit(20)
         .lean();
 
