@@ -61,11 +61,13 @@ const NGAY_BO_QUA_NHOM_IM = Number(process.env.ZALO_SUMMARY_IDLE_DAYS || 14);
 const HE_THONG = `Bạn đọc một đoạn hội thoại nhóm Zalo giữa nhân viên công ty in ấn và khách hàng.
 Nhiệm vụ: rút ra tình hình, viết TIẾNG VIỆT, mỗi ô 1–2 câu ngắn, cụ thể. KHÔNG kể lại nội dung chat.
 
-🔴 MỌI KẾT LUẬN PHẢI KÈM MỐC THỜI GIAN VÀ TÊN NGƯỜI. Mỗi dòng chat có dạng
+🔴 MỌI KẾT LUẬN PHẢI KÈM MỐC THỜI GIAN (NGÀY + GIỜ PHÚT) VÀ TÊN NGƯỜI. Mỗi dòng chat có dạng
 "[DD/MM HH:MM] VAI TRÒ/Tên:" với VAI TRÒ là KHÁCH, NHÂN VIÊN, TRỢ LÝ AI hoặc CHƯA RÕ — hãy DÙNG nó:
-- "khách hỏi X" → phải là "20/08 khách (Tên) hỏi X"
-- "đã trả lời" → phải là "21/08 (Tên nhân viên) trả lời rằng…" — nêu ĐÍCH DANH ai
-- việc còn treo → phải nói TREO TỪ NGÀY NÀO và ĐÃ BAO NHIÊU NGÀY
+- "khách hỏi X" → phải là "20/08 14:35 khách (Tên) hỏi X"
+- "đã trả lời" → phải là "21/08 09:10 (Tên nhân viên) trả lời rằng…" — nêu ĐÍCH DANH ai
+- việc còn treo → phải nói TREO TỪ LÚC NÀO (ngày + giờ) và ĐÃ BAO NHIÊU NGÀY
+Mốc thời gian LUÔN ghi đủ ngày lẫn giờ phút đúng như trong ngoặc vuông của dòng chat, ví dụ
+"31/08 16:33" — KHÔNG rút gọn còn "31/08". Người đọc cần giờ để biết ai chậm bao lâu trong ngày.
 Không có mốc thời gian và tên người thì không chấm được ai chậm — đó là mục đích của bản tóm tắt này.
 "TRỢ LÝ AI" là tài khoản tự động trực nhóm. Nếu chỉ có TRỢ LÝ AI trả lời khách mà KHÔNG nhân viên
 nào vào, hãy nêu rõ điều đó trong "tonDong" — đó là nhóm cần người thật tiếp quản.
@@ -91,9 +93,9 @@ Tin nhắn mới là bên có tiếng nói cuối. Tóm tắt lần trước ch�
 Trả về DUY NHẤT một khối JSON, không thêm chữ nào ngoài nó:
 {
   "tieuDe": "tối đa 12 chữ, nêu đúng việc đang treo",
-  "khachQuanTam": "NGÀY + ai bên khách + hỏi/cần gì",
-  "salePhanHoi": "NGÀY + TÊN nhân viên + đã trả lời/xử lý gì",
-  "tonDong": "việc còn treo + TREO TỪ NGÀY NÀO + đã bao nhiêu ngày. Không có thì ghi 'Không có'",
+  "khachQuanTam": "DD/MM HH:MM + ai bên khách + hỏi/cần gì",
+  "salePhanHoi": "DD/MM HH:MM + TÊN nhân viên + đã trả lời/xử lý gì",
+  "tonDong": "việc còn treo + TREO TỪ LÚC NÀO (DD/MM HH:MM) + đã bao nhiêu ngày. Không có thì ghi 'Không có'",
   "checklist": ["mỗi phần tử là MỘT việc làm được ngay, bắt đầu bằng động từ, tối đa 24 chữ, tối đa 5 việc"],
   "nghiNgo": ["việc đã tick xong nhưng không thấy bằng chứng, kèm lý do ngắn"],
   "mucDo": "gap" | "can-chu-y" | "binh-thuong"
