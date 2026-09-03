@@ -65,23 +65,31 @@ async function keoTin(groupGlobalId, tuMoc) {
   const dieuKienMoc = tuMoc ? `AND m.sent_at > '${new Date(tuMoc).toISOString()}'::timestamptz` : '';
   // Lấy N tin CUỐI (sắp xuôi lại sau) — nhóm dồn quá nhiều tin thì phần mới
   // nhất mới là phần đáng đọc.
+  //
+  // BA LỚP, không gộp được: `DISTINCT ON` (khử một tin lưu nhiều dòng theo
+  // nick) ÉP `ORDER BY zalo_msg_id`, nên `LIMIT` đặt cùng lớp là cắt theo id —
+  // nhóm >400 tin sẽ nhận 400 tin CŨ nhất và bỏ rơi tin mới (đã gặp: tin 31/08
+  // không vào tóm tắt). `luc` là ISO cố định độ dài nên xếp chữ = xếp thời gian.
   const sql = `
     SELECT * FROM (
-      SELECT DISTINCT ON (m.zalo_msg_id)
-             coalesce(m.sender_name,'') AS ten,
-             coalesce(m.sender_uid,'')  AS uid,
-             m.sender_type              AS phia,
-             replace(replace(coalesce(m.content,''), chr(10), ' '), chr(13), ' ') AS noi_dung,
-             to_char(m.sent_at AT TIME ZONE 'UTC','YYYY-MM-DD"T"HH24:MI:SS"Z"')   AS luc
-      FROM zalo_messages m
-      JOIN zalo_conversations c ON c.id = m.conversation_id
-      WHERE c.group_global_id = '${groupGlobalId.replace(/'/g, "''")}'
-        AND m.is_deleted = false
-        AND coalesce(m.content,'') <> ''
-        ${dieuKienMoc}
-      ORDER BY m.zalo_msg_id, m.sent_at DESC
+      SELECT * FROM (
+        SELECT DISTINCT ON (m.zalo_msg_id)
+               coalesce(m.sender_name,'') AS ten,
+               coalesce(m.sender_uid,'')  AS uid,
+               m.sender_type              AS phia,
+               replace(replace(coalesce(m.content,''), chr(10), ' '), chr(13), ' ') AS noi_dung,
+               to_char(m.sent_at AT TIME ZONE 'UTC','YYYY-MM-DD"T"HH24:MI:SS"Z"')   AS luc
+        FROM zalo_messages m
+        JOIN zalo_conversations c ON c.id = m.conversation_id
+        WHERE c.group_global_id = '${groupGlobalId.replace(/'/g, "''")}'
+          AND m.is_deleted = false
+          AND coalesce(m.content,'') <> ''
+          ${dieuKienMoc}
+        ORDER BY m.zalo_msg_id, m.sent_at DESC
+      ) khu_trung
+      ORDER BY luc DESC
       LIMIT ${MAX_TIN}
-    ) x ORDER BY luc ASC
+    ) moi_nhat ORDER BY luc ASC
   `.replace(/\s+/g, ' ');
 
   const { stdout } = await execFile('ssh', [
@@ -91,7 +99,7 @@ async function keoTin(groupGlobalId, tuMoc) {
     `docker exec ${PG} psql -U zalo -d zalo -At -F'${SEP}' -c ${JSON.stringify(sql)}`,
   ]);
 
-  return stdout
+  const tin = stdout
     .split('\n')
     .map((l) => l.trim())
     .filter(Boolean)
@@ -111,6 +119,10 @@ async function keoTin(groupGlobalId, tuMoc) {
       };
     })
     .filter((m) => m.noiDung.trim() !== '');
+
+  if (tin.length >= MAX_TIN) console.log(`    (đã cắt: chỉ ${MAX_TIN} tin mới nhất)`);
+
+  return tin;
 }
 
 let hangDoi;

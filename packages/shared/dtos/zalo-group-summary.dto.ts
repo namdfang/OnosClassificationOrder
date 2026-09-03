@@ -108,6 +108,7 @@ export type ZaloMessageInput = z.infer<typeof ZaloMessageInputZod>;
 
 export const SummarizeZaloGroupZod = z.object({
   groupGlobalId: z.string().min(1).max(120),
+  // 400 = chặn cứng; script `summarize-zalo-groups.mjs` (MAX_TIN) đã tự lấy 400 tin MỚI NHẤT.
   messages: ZaloMessageInputZod.array().min(1).max(400),
   /** Buộc đọc lại từ đầu thay vì cuốn chiếu (cắt bệnh trôi dần). */
   docLaiTuDau: z.boolean().optional(),
