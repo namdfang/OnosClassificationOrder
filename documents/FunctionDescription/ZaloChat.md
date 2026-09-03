@@ -47,6 +47,33 @@ SDK của nhà cung cấp gọi bằng `fetch(..., { credentials: 'same-origin' 
 Nên trang chat đổi JWT lấy một cookie `HttpOnly` **phạm vi hẹp đúng `/api/zalo-multi`**, sống 8 giờ. Cookie ký
 bằng chính cặp khoá RS256 của hệ thống (`JWT_PRIVATE_KEY`/`JWT_PUBLIC_KEY`) — một nơi để xoay khoá.
 
+### Điều kiện bắt buộc: trang và proxy phải CÙNG ORIGIN
+
+Giao diện gọi `/api/zalo-multi/...` bằng đường **tương đối** và `credentials: 'same-origin'`. Kéo theo hai ràng buộc:
+
+1. Origin đang mở trang **phải phục vụ được `/api/...`**. Trên dev, tunnel đã có luật `^/api` cho
+   `dev-onos.autonow.vn`. Trên **production**, `onosfactory.com` hiện CHỈ phục vụ tệp tĩnh (web gọi API qua
+   `api.onosfactory.com`), nên trước khi bật màn chat phải thêm vào server block `onosfactory.com`:
+
+   ```nginx
+   # Đặt TRƯỚC location regex tệp tĩnh. `^~` chặn regex phía dưới cướp mất request.
+   location ^~ /api/ {
+       proxy_pass http://127.0.0.1:3007;
+       proxy_http_version 1.1;
+       proxy_set_header Host $host;
+       proxy_set_header X-Real-IP $remote_addr;
+       proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+       proxy_set_header X-Forwarded-Proto $scheme;
+       client_max_body_size 50M;   # gửi ảnh/tệp qua Zalo
+       proxy_read_timeout 120s;    # engine cho phép 45s cho đính kèm
+   }
+   ```
+
+2. Cookie phiên phải được cấp **trên chính origin của trang**, nên `useZaloSession` gọi `fetch` đường tương đối
+   `/api/v1/zalo-chat/session` chứ KHÔNG qua `RepositoryRemote`. Bản dev qua tunnel tự suy ra host API riêng
+   (`api-dev-onos.autonow.vn`); gọi qua axios sẽ đặt cookie cho host đó, còn SDK gọi host của trang — cookie
+   không bao giờ đi kèm và **mọi lời gọi trả 401**. Đây là lỗi đã dính lúc chạy thử lần đầu.
+
 ### Vì sao proxy nằm ở hook `onRequest` chứ không phải controller Nest
 
 1. **Đường dẫn `/api/zalo-multi` là cố định** — giao diện gọi thẳng chuỗi này ở 8 chỗ trong mã đã build, nên nó
@@ -105,6 +132,9 @@ Entry sidebar "Chat Zalo" nằm cạnh "Nhóm Zalo", **`onlyForRoles: [SuperAdmi
 ZALO_ENGINE_URL=http://127.0.0.1:4001
 ZALO_ENGINE_SECRET=<trùng y hệt docker/zalo-engine/.env>
 ```
+
+Production còn cần: **`GHCR_TOKEN`** trong môi trường của server (deploy chạy `pnpm install`), **license riêng**
+cho máy đó, và block nginx ở §2. Phiên nick KHÔNG chuyển được giữa hai engine — lên engine mới phải quét QR lại.
 
 `docker/zalo-engine/.env` (KHÔNG commit — xem `.env.example`): `ENGINE_PORT`, `PG_PW`, `ZALO_ENGINE_SECRET`,
 `ZALO_ENCRYPTION_KEY` (đổi = mất hết phiên, phải quét QR lại), `ZALO_LICENSE_KEY` (**mỗi server một khoá**).
