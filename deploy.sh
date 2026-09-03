@@ -59,7 +59,9 @@ if [ "$1" = "--rollback" ]; then
 # cài lại?" — chạy không tương tác nó THOÁT 0 MÀ KHÔNG CÀI GÌ, build tiếp với deps
 # thiếu và API sập lúc khởi động (sự cố 03/09/2026). Trả lời sẵn rồi kiểm lại.
 yes | pnpm install --frozen-lockfile
-node -e "require.resolve('@zero-126/zalo-sdk/next')" 2>/dev/null \
+# Giải từ THƯ MỤC apps/api, không phải gốc repo: pnpm cài theo kiểu cô lập nên
+# gói chỉ nằm ở `apps/api/node_modules`, gốc repo không thấy nó.
+node -e "require.resolve('@zero-126/zalo-sdk/next', { paths: ['$REPO_DIR/apps/api'] })" 2>/dev/null \
   || { echo "✗ Thiếu gói @zero-126/zalo-sdk sau khi cài — kiểm tra GHCR_TOKEN (/root/.onos-ghcr.env)."; exit 1; }
   pnpm --filter shared build
   pnpm build:api
@@ -91,7 +93,9 @@ echo "→ Cài dependencies..."
 # cài lại?" — chạy không tương tác nó THOÁT 0 MÀ KHÔNG CÀI GÌ, build tiếp với deps
 # thiếu và API sập lúc khởi động (sự cố 03/09/2026). Trả lời sẵn rồi kiểm lại.
 yes | pnpm install --frozen-lockfile
-node -e "require.resolve('@zero-126/zalo-sdk/next')" 2>/dev/null \
+# Giải từ THƯ MỤC apps/api, không phải gốc repo: pnpm cài theo kiểu cô lập nên
+# gói chỉ nằm ở `apps/api/node_modules`, gốc repo không thấy nó.
+node -e "require.resolve('@zero-126/zalo-sdk/next', { paths: ['$REPO_DIR/apps/api'] })" 2>/dev/null \
   || { echo "✗ Thiếu gói @zero-126/zalo-sdk sau khi cài — kiểm tra GHCR_TOKEN (/root/.onos-ghcr.env)."; exit 1; }
 
 echo "→ Build shared (DTO)..."
