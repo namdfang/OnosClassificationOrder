@@ -45,6 +45,7 @@ export const PERMISSION_CATALOG: PermissionItem[] = [
   { code: 'page.promotions', label: 'Quản lý chương trình giảm giá', group: 'page' },
   { code: 'page.customers', label: 'Quản trị khách hàng', group: 'page' },
   { code: 'page.agent_api', label: 'Hướng dẫn Agent API', group: 'page' },
+  { code: 'page.zalo_groups', label: 'Nối nhóm Zalo với khách hàng', group: 'page' },
 
   // ─── Order actions ──────────────────────────────────────────────
   { code: 'order.import', label: 'Import đơn hàng', group: 'order' },

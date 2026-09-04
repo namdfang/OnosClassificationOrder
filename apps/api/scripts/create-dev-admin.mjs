@@ -1,22 +1,26 @@
 /**
- * CÔNG CỤ CHỈ DÙNG CHO MÔI TRƯỜNG DEV/TEST — tạo MỘT tài khoản nhân viên dùng
- * riêng cho kiểm thử (`ORD-1` AC-03: cần đăng nhập bằng role hẹp hơn để đối
- * chiếu action giữa 2 role có quyền khác nhau).
+ * CÔNG CỤ CHỈ DÙNG CHO MÔI TRƯỜNG DEV/TEST — tạo MỘT tài khoản SuperAdmin để
+ * đăng nhập vào dev server (`dev-onos.autonow.vn`).
  *
- * Vì sao là script chạy tay chứ không phải seed tự động: nó GHI vào bảng `users`,
- * nên phải là hành động chủ động có người bấm, không phải thứ chạy kèm lúc khởi động.
+ * Vì sao cần script riêng thay vì đổi mật khẩu một tài khoản có sẵn: DB dev là
+ * bản sao của prod, nên mọi tài khoản trong đó là NGƯỜI THẬT. Đổi mật khẩu của
+ * họ trên dev thì bản sao lần sau lại mất, mà lỡ tay chạy nhầm vào prod là khoá
+ * mất tài khoản của người đang làm việc. Tài khoản riêng, tên cố tình dễ nhận
+ * ra là đồ kiểm thử, thì không lẫn được với ai.
  *
- * Ba chốt chặn an toàn — giống `reset-empty-passwords.mjs`:
+ * Mỗi lần nạp lại dump từ prod là tài khoản này biến mất — chạy lại script.
+ *
+ * Ba chốt chặn an toàn — giống `create-test-account.mjs` và `reset-empty-passwords.mjs`:
  *   1. Từ chối chạy khi NODE_ENV=production.
  *   2. Không ghi gì nếu thiếu cờ --yes (mặc định là dry-run).
  *   3. In rõ host + tên DB trước khi ghi.
  *
- * KHÔNG đụng bất kỳ tài khoản nào đang tồn tại. Chạy lại lần hai thì bỏ qua
- * (email đã có) chứ không ghi đè.
+ * KHÔNG đụng bất kỳ tài khoản nào đang tồn tại. Chạy lại lần hai thì đặt lại
+ * mật khẩu cho đúng tài khoản này (không tạo trùng, không động vào ai khác).
  *
  * Cách chạy (từ thư mục apps/api):
- *   node scripts/create-test-account.mjs --dry-run
- *   node scripts/create-test-account.mjs --yes
+ *   node scripts/create-dev-admin.mjs --dry-run
+ *   node scripts/create-dev-admin.mjs --yes
  */
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -46,17 +50,14 @@ if (!uri) {
 }
 
 /**
- * Tài khoản cần tạo. Email + tên CỐ TÌNH dễ nhận ra là tài khoản kiểm thử để
- * không ai nhầm với người thật khi nhìn danh sách người dùng.
- *
- * Mật khẩu KHÔNG dùng chuỗi mặc định của luồng mạo danh — chuỗi đó đã ghi công
- * khai trong tài liệu task nên không được dùng lại cho tài khoản đăng nhập được.
+ * Tên và email CỐ TÌNH dễ nhận ra là tài khoản kiểm thử, để khi nhìn danh sách
+ * người dùng không ai nhầm nó với người thật.
  */
 const ACCOUNT = {
-  email: 'qa.designer@test.local',
-  fullName: '[TEST] QA Designer',
-  password: 'Qa!Design#2026$onos',
-  roleName: 'Designer',
+  email: 'dev.admin@test.local',
+  fullName: '[DEV] Admin',
+  password: 'Dev!Admin#2026$onos',
+  roleName: 'SuperAdmin',
 };
 
 function describeTarget(rawUri) {
@@ -79,7 +80,8 @@ function genCode(length = 8) {
 /**
  * Bản sao của `myId()` (`packages/shared/utils/myId.ts`) — cùng bảng chữ cái và
  * ID_LENGTH=16. Viết lại tại chỗ chứ không import `shared`: gói đó là ESM kéo
- * theo dayjs plugin không resolve được từ script `.mjs` chạy tay.
+ * theo dayjs plugin không resolve được từ script `.mjs` chạy tay. Cùng lý do
+ * `genCode` ở trên cũng được viết lại thay vì import.
  */
 function myId(length = 16) {
   const chars = '0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZ';
@@ -105,13 +107,32 @@ try {
   }
 
   const existing = await users.findOne({ email: ACCOUNT.email });
-  if (existing) {
-    console.log(`Đã tồn tại ${ACCOUNT.email} — KHÔNG ghi đè, không đụng gì.`);
-  } else if (!apply) {
-    console.log(`Sẽ tạo: ${ACCOUNT.email} · role=${ACCOUNT.roleName} (${role._id}) · ${ACCOUNT.fullName}`);
+
+  if (!apply) {
+    console.log(
+      existing
+        ? `Sẽ đặt lại mật khẩu cho ${ACCOUNT.email} (đã tồn tại) · role=${ACCOUNT.roleName}`
+        : `Sẽ tạo: ${ACCOUNT.email} · role=${ACCOUNT.roleName} (${role._id}) · ${ACCOUNT.fullName}`,
+    );
     console.log('Chạy lại với --yes để thực hiện.');
+  } else if (existing) {
+    // Đặt lại mật khẩu thay vì bỏ qua: tài khoản kiểm thử mà quên mật khẩu thì
+    // vô dụng, và đây là tài khoản do chính script này tạo nên không giẫm lên ai.
+    await users.updateOne(
+      { _id: existing._id },
+      {
+        $set: {
+          password: generateHash(ACCOUNT.password),
+          roleId: String(role._id),
+          status: '1',
+          updatedAt: new Date(),
+        },
+      },
+    );
+    console.log(`ĐÃ ĐẶT LẠI mật khẩu cho ${ACCOUNT.email} · role=${ACCOUNT.roleName}`);
+    console.log(`Mật khẩu: ${ACCOUNT.password}`);
   } else {
-    // `status: '1'` dạng CHUỖI — khớp với 27/38 tài khoản hiện có. Trong DB này
+    // `status: '1'` dạng CHUỖI — khớp với đa số tài khoản hiện có. Trong DB này
     // `status` đang lưu lẫn kiểu (có bản ghi là số nguyên), nên chọn dạng phổ
     // biến nhất để tài khoản test không thành ca biệt lệ thứ hai.
     await users.insertOne({

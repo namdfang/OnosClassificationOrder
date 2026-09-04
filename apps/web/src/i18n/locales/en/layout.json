@@ -63,7 +63,8 @@
       "toolCheckUnreviewed": "Tool check — unreviewed orders (last 7 days)"
     },
     "customers": "Customers",
-    "impersonate": "Impersonate"
+    "impersonate": "Impersonate",
+    "zaloGroups": "Seller Support"
   },
   "header": {
     "toggleSidebar": "Toggle sidebar",

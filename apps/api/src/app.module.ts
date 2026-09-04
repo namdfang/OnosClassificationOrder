@@ -55,6 +55,7 @@ import { ShippingVnpModule } from './modules/shipping-vnp/shipping-vnp.module';
 import { TelegramNotificationModule } from './modules/telegram-notification/telegram-notification.module';
 import { UploadModule } from './modules/upload/upload.module';
 import { WorkshopConfigModule } from './modules/workshop-config/workshop-config.module';
+import { ZaloGroupModule } from './modules/zalo-group/zalo-group.module';
 import { ApiConfigService } from './shared/services';
 import { RateLimiterService } from './shared/services/rate-limiter.service';
 import { SharedModule } from './shared/shared.module';
@@ -77,6 +78,7 @@ import { SharedModule } from './shared/shared.module';
     ProductConfigModule,
     PromotionModule,
     WorkshopConfigModule,
+    ZaloGroupModule,
     OrderModule,
     OrderLogModule,
     DesignerModule,

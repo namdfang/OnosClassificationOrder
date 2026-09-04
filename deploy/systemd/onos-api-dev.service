@@ -1,0 +1,17 @@
+[Unit]
+Description=onos API dev (NestJS, port 3007)
+After=network.target docker.service
+Wants=network.target
+
+[Service]
+Type=simple
+WorkingDirectory=/root/.vibedev/repos/onos/apps/api
+ExecStart=/usr/bin/pnpm dev
+Restart=always
+RestartSec=5
+StandardOutput=journal
+StandardError=journal
+SyslogIdentifier=onos-api-dev
+
+[Install]
+WantedBy=multi-user.target

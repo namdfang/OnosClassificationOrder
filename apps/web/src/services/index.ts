@@ -34,6 +34,7 @@ import { upload } from './upload';
 import { users } from './users';
 import { vnpShipping } from './vnpShipping';
 import { workshopConfig } from './workshopConfig';
+import { zaloGroup } from './zaloGroup';
 
 export const RepositoryRemote = {
   agentApi,
@@ -46,6 +47,7 @@ export const RepositoryRemote = {
   notifications,
   customRoles,
   factory,
+  zaloGroup,
   impersonate,
   machineType,
   collection,

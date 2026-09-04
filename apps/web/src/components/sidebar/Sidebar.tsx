@@ -19,6 +19,7 @@ import {
   List,
   LogOut,
   MapPin,
+  MessageSquare,
   Package,
   Palette,
   Rows3,
@@ -488,6 +489,13 @@ function buildNavGroups(t: TFunction<'layout'>): NavGroup[] {
           to: PATHS.CUSTOMERS,
           icon: <Contact size={17} />,
           perm: 'page.customers',
+        },
+        {
+          key: PATHS.ZALO_GROUPS,
+          label: t('sidebar.zaloGroups'),
+          to: PATHS.ZALO_GROUPS,
+          icon: <MessageSquare size={17} />,
+          perm: 'page.zalo_groups',
         },
         {
           key: PATHS.SETTINGS,
