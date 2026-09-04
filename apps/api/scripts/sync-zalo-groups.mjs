@@ -46,14 +46,28 @@ const SEP = '';
  * vào danh sách chờ gắn chỉ tổ làm nhiễu.
  */
 async function docGroups() {
+  /**
+   * Mốc tin cuối đếm ĐÚNG những tin bộ tóm tắt đọc được: bỏ tin đã THU HỒI và tin
+   * rỗng. Cột `last_message_at` của engine đếm cả hai, nên nhóm mà tin mới nhất là
+   * tin thu hồi sẽ kẹt VĨNH VIỄN — hàng đợi lần nào cũng gọi nó, kéo về 0 dòng rồi
+   * bỏ qua, còn huy hiệu "có tin mới chưa tóm tắt" thì sáng mãi. Đo 04/09 trên dữ
+   * liệu thật: 3/153 nhóm lệch mốc, 0 nhóm mất hẳn mốc.
+   *
+   * KHÔNG đặt chú thích bằng `--` bên trong chuỗi SQL dưới đây: nó bị
+   * `.replace(/\s+/g, ' ')` gộp thành một dòng và sẽ nuốt phần còn lại của câu.
+   */
   const sql = `
     SELECT c.group_global_id,
            coalesce(max(c.title), '')                      AS title,
            string_agg(DISTINCT c.id::text, ',')            AS conversation_ids,
            coalesce(string_agg(DISTINCT a.display_name, ','), '') AS member_nicks,
-           to_char(max(c.last_message_at) AT TIME ZONE 'UTC', 'YYYY-MM-DD"T"HH24:MI:SS"Z"') AS last_message_at
+           to_char(max(m.sent_at) AT TIME ZONE 'UTC', 'YYYY-MM-DD"T"HH24:MI:SS"Z"') AS last_message_at
     FROM zalo_conversations c
     LEFT JOIN zalo_accounts a ON a.id = c.zalo_account_id
+    LEFT JOIN zalo_messages m
+           ON m.conversation_id = c.id
+          AND m.is_deleted = false
+          AND btrim(coalesce(m.content, '')) <> ''
     WHERE c.group_global_id IS NOT NULL AND c.left_at IS NULL
     GROUP BY c.group_global_id
   `.replace(/\s+/g, ' ');

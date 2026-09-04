@@ -212,7 +212,11 @@ theo bằng chứng đo được — chi tiết từng lỗi ở commit của nh
 - **`coTinMoi`** (tính lúc gọi, không lưu): `lastMessageAt` của nhóm > `denMocTin`
   của tóm tắt → bảng tóm tắt, bảng nhóm (`tomTat.coTinMoi`), và
   `GET /v1/agent/seller-support` đều mang cờ; UI hiện huy hiệu vàng "Có tin mới lúc
-  …, chưa tóm tắt". Tươi tới lần `sync-zalo-groups` gần nhất. Khác `tomTatTre`
+  …, chưa tóm tắt". Tươi tới lần `sync-zalo-groups` gần nhất.
+  **`lastMessageAt` phải đếm cùng bộ lọc với bộ tóm tắt** (bỏ tin đã THU HỒI và tin
+  rỗng): cột `last_message_at` của engine đếm cả hai, nên nhóm mà tin mới nhất là tin
+  thu hồi bị kẹt vĩnh viễn — hàng đợi lần nào cũng gọi, kéo về 0 dòng rồi bỏ qua, huy
+  hiệu thì sáng mãi. Đo 04/09: 2/111 nhóm đang kẹt đúng kiểu đó, sửa xong sạch cả hai. Khác `tomTatTre`
   (đo tuổi bản tóm tắt) — hai cờ đo hai thứ.
 - **Khối đơn của khách là BỐI CẢNH, không phải tồn đọng của nhóm**: khách có nhiều
   nhóm thì mọi nhóm nhận cùng khối; tiêu đề khối nói rõ và lời nhắc cấm chép vào
