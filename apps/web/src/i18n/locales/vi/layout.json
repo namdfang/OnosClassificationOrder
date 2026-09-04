@@ -64,7 +64,8 @@
     },
     "customers": "Khách hàng",
     "impersonate": "Mạo danh",
-    "zaloGroups": "Seller Support"
+    "zaloGroups": "Seller Support",
+    "zaloChat": "Chat Zalo"
   },
   "header": {
     "toggleSidebar": "Đóng/mở sidebar",

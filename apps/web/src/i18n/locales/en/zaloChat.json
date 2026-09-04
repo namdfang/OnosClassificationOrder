@@ -1,0 +1,5 @@
+{
+  "title": "Zalo chat",
+  "sessionFailed": "Could not open a Zalo chat session. This screen is for administrators only — reload the page, and tell the tech team if it keeps failing.",
+  "settingsTitle": "Zalo settings"
+}

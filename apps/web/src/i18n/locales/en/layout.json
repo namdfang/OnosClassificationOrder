@@ -64,7 +64,8 @@
     },
     "customers": "Customers",
     "impersonate": "Impersonate",
-    "zaloGroups": "Seller Support"
+    "zaloGroups": "Seller Support",
+    "zaloChat": "Zalo chat"
   },
   "header": {
     "toggleSidebar": "Toggle sidebar",

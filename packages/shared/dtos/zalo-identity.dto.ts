@@ -71,6 +71,12 @@ export const ZaloIdentitySnapshotZod = z.object({
   messageCount: z.number(),
   /** Có phải tài khoản công ty nối vào engine không (→ gợi ý `ai-support`). */
   laTaiKhoanCongTy: z.boolean().optional(),
+  /**
+   * Các nhóm người này có mặt — để heuristic nhìn LOẠI nhóm: người chỉ ở một
+   * nhóm vận hành là đối tác/nhà cung cấp, không phải khách. Thiếu thì API
+   * đoán như cũ (chỉ theo số nhóm).
+   */
+  groupGlobalIds: z.string().max(120).array().max(500).optional(),
 });
 export type ZaloIdentitySnapshot = z.infer<typeof ZaloIdentitySnapshotZod>;
 

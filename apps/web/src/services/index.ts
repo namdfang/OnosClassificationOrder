@@ -34,6 +34,7 @@ import { upload } from './upload';
 import { users } from './users';
 import { vnpShipping } from './vnpShipping';
 import { workshopConfig } from './workshopConfig';
+import { zaloChat } from './zaloChat';
 import { zaloGroup } from './zaloGroup';
 
 export const RepositoryRemote = {
@@ -47,6 +48,7 @@ export const RepositoryRemote = {
   notifications,
   customRoles,
   factory,
+  zaloChat,
   zaloGroup,
   impersonate,
   machineType,

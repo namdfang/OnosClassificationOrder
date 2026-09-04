@@ -27,7 +27,7 @@
     "actions": "Thao tác",
     "empty": "Không có nhóm nào khớp bộ lọc",
     "noCustomer": "— chưa gắn —",
-    "noOwner": "— chưa chỉ định —",
+    "noOwner": "— chưa gán —",
     "noTitle": "(không tên)"
   },
   "filter": {
@@ -83,14 +83,17 @@
     "msgCount": "{{count}} tin",
     "openTasks": "{{count}} việc chưa xong",
     "notYet": "chưa tóm tắt",
-    "doneAt": "xong lúc {{at}}"
+    "doneAt": "xong lúc {{at}}",
+    "requesterWants": "Bên yêu cầu",
+    "handlerReplied": "Người xử lý",
+    "newSince": "Có tin mới lúc {{at}}, chưa tóm tắt"
   },
   "identity": {
     "kind": {
       "unknown": "Chưa xét",
       "ai-support": "Trợ lý AI",
       "staff": "Nhân viên",
-      "customer": "Khách hàng"
+      "customer": "Khách / bên ngoài"
     },
     "allKinds": "Tất cả",
     "pending": "Chưa xác nhận",
@@ -103,6 +106,9 @@
     "suggested": "máy đoán: {{kind}}",
     "applyAll": "Áp hết đề xuất",
     "applied": "Đã áp {{count}} người",
-    "empty": "Không có ai khớp bộ lọc"
+    "empty": "Không có ai khớp bộ lọc",
+    "linkedUser": "Tài khoản hệ thống",
+    "noLinkedUser": "— chưa nối —",
+    "staffOnly": "Chỉ nối cho nhân viên"
   }
 }

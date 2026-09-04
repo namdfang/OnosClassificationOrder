@@ -44,7 +44,7 @@ interface Coverage {
 type Row = ZaloGroupLink & {
   _id: string;
   customer?: { _id: string; userSku?: string; fullName?: string };
-  tomTat?: { tieuDe?: string; mucDo: string; viecConLai: number; tomTatLuc?: string };
+  tomTat?: { tieuDe?: string; mucDo: string; viecConLai: number; tomTatLuc?: string; coTinMoi?: boolean };
 };
 
 /** Màu chấm mức độ — dùng chung với tab Tình hình. */
@@ -69,6 +69,9 @@ export default function ZaloGroupsPage() {
   const [search, setSearch] = useState('');
   const [kind, setKind] = useState<ZaloGroupKind | ''>('');
   const [unlinkedOnly, setUnlinkedOnly] = useState(false);
+
+  /** Danh sách nhân viên cho ô "Người phụ trách" ngay trên bảng. */
+  const [nhanVien, setNhanVien] = useState<{ _id: string; fullName?: string; email: string }[]>([]);
 
   const [editing, setEditing] = useState<Row | null>(null);
   const [viewing, setViewing] = useState<Row | null>(null);
@@ -99,6 +102,25 @@ export default function ZaloGroupsPage() {
     }
   }, [query]);
 
+  /**
+   * Lưu người phụ trách ngay khi chọn — không có nút Lưu.
+   * Cập nhật ngay trên màn hình rồi mới gọi API: gán liên tục 53 nhóm mà mỗi lần
+   * phải chờ mạng thì thao tác giật cục. Hỏng thì trả lại giá trị cũ.
+   */
+  const doiNguoiPhuTrach = useCallback(
+    async (row: Row, userId: string) => {
+      const cu = row.ownerUserId ?? '';
+      setRows((rs) => rs.map((x) => (x._id === row._id ? { ...x, ownerUserId: userId || undefined } : x)));
+      try {
+        await RepositoryRemote.zaloGroup.updateLink(row._id, { ownerUserId: userId || null });
+      } catch (error) {
+        setRows((rs) => rs.map((x) => (x._id === row._id ? { ...x, ownerUserId: cu || undefined } : x)));
+        handleAxiosError(error);
+      }
+    },
+    [],
+  );
+
   /** Phủ sóng + số gợi ý tải riêng: chúng không đổi theo bộ lọc bảng. */
   const loadSummary = useCallback(async () => {
     try {
@@ -120,6 +142,18 @@ export default function ZaloGroupsPage() {
   useEffect(() => {
     void loadSummary();
   }, [loadSummary]);
+
+  /** Nhân viên tải MỘT lần: danh sách này không đổi theo bộ lọc hay trang. */
+  useEffect(() => {
+    void (async () => {
+      try {
+        const res = await RepositoryRemote.users.getUsers('?page=1&limit=200');
+        setNhanVien(res.data?.data ?? []);
+      } catch (error) {
+        handleAxiosError(error);
+      }
+    })();
+  }, []);
 
   const refreshAll = useCallback(() => {
     void loadGroups();
@@ -247,6 +281,7 @@ export default function ZaloGroupsPage() {
               <TableHead>{t('table.group')}</TableHead>
               <TableHead>{t('table.kind')}</TableHead>
               <TableHead>{t('table.customer')}</TableHead>
+              <TableHead>{t('table.owner')}</TableHead>
               <TableHead>{t('tab.summary')}</TableHead>
               <TableHead>{t('table.lastMessage')}</TableHead>
               <TableHead className="text-right">{t('table.actions')}</TableHead>
@@ -255,7 +290,7 @@ export default function ZaloGroupsPage() {
           <TableBody>
             {rows.length === 0 && !loading && (
               <TableRow>
-                <TableCell colSpan={6} className="py-10 text-center text-sm text-slate-500">
+                <TableCell colSpan={7} className="py-10 text-center text-sm text-slate-500">
                   {t('table.empty')}
                 </TableCell>
               </TableRow>
@@ -284,6 +319,23 @@ export default function ZaloGroupsPage() {
                     <span className="text-sm text-slate-400">{t('table.noCustomer')}</span>
                   )}
                 </TableCell>
+                {/* Chọn NGAY trên danh sách. Gán người phụ trách cho 53 nhóm vận
+                    hành mà phải mở 53 lần hộp thoại thì thực tế không ai làm hết.
+                    Chặn nổi bọt để bấm vào ô không mở luôn ngăn chi tiết bên phải. */}
+                <TableCell onClick={(e) => e.stopPropagation()}>
+                  <select
+                    className="w-40 rounded border border-slate-200 bg-white px-2 py-1 text-sm dark:border-slate-700 dark:bg-slate-900"
+                    value={r.ownerUserId ?? ''}
+                    onChange={(e) => void doiNguoiPhuTrach(r, e.target.value)}
+                  >
+                    <option value="">{t('table.noOwner')}</option>
+                    {nhanVien.map((u) => (
+                      <option key={u._id} value={u._id}>
+                        {u.fullName || u.email}
+                      </option>
+                    ))}
+                  </select>
+                </TableCell>
                 <TableCell className="max-w-[22rem]">
                   {r.tomTat ? (
                     <div className="flex items-start gap-2">
@@ -295,7 +347,15 @@ export default function ZaloGroupsPage() {
                         title={t(`summary.level.${r.tomTat.mucDo}`)}
                       />
                       <div className="min-w-0">
-                        <div className="truncate text-sm">{r.tomTat.tieuDe || '—'}</div>
+                        <div className="flex items-center gap-1.5">
+                          <div className="truncate text-sm">{r.tomTat.tieuDe || '—'}</div>
+                          {r.tomTat.coTinMoi && r.lastMessageAt && (
+                            <span
+                              className="h-2 w-2 shrink-0 rounded-full bg-amber-400"
+                              title={t('summary.newSince', { at: dayjs(r.lastMessageAt).format('DD/MM HH:mm') })}
+                            />
+                          )}
+                        </div>
                         {r.tomTat.viecConLai > 0 && (
                           <div className="text-xs text-amber-600 dark:text-amber-400">
                             {t('summary.openTasks', { count: r.tomTat.viecConLai })}
@@ -308,7 +368,7 @@ export default function ZaloGroupsPage() {
                   )}
                 </TableCell>
                 <TableCell className="whitespace-nowrap text-sm text-slate-500">
-                  {r.lastMessageAt ? dayjs(r.lastMessageAt).format('DD/MM/YYYY') : '—'}
+                  {r.lastMessageAt ? dayjs(r.lastMessageAt).format('DD/MM/YYYY HH:mm') : '—'}
                 </TableCell>
                 <TableCell className="text-right">
                   <Button

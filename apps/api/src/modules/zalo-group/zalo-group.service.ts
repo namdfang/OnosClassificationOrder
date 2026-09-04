@@ -99,7 +99,7 @@ export class ZaloGroupService {
     const ids = data.map((d) => String((d as unknown as { groupGlobalId: string }).groupGlobalId));
     const summaries = await this.summaryModel
       .find({ groupGlobalId: { $in: ids } })
-      .select('groupGlobalId tieuDe mucDo checklist tomTatLuc')
+      .select('groupGlobalId tieuDe mucDo checklist tomTatLuc denMocTin')
       .lean();
     const byGroup = new Map(summaries.map((s) => [String(s.groupGlobalId), s]));
 
@@ -107,6 +107,7 @@ export class ZaloGroupService {
       const doc = d as unknown as { groupGlobalId: string; toObject?: () => unknown };
       const s = byGroup.get(String(doc.groupGlobalId));
       const plain = typeof doc.toObject === 'function' ? doc.toObject() : d;
+      const lastMessageAt = (plain as { lastMessageAt?: Date }).lastMessageAt;
 
       return {
         ...(plain as Record<string, unknown>),
@@ -117,6 +118,9 @@ export class ZaloGroupService {
                 mucDo: s.mucDo,
                 viecConLai: (s.checklist ?? []).filter((c) => !c.xong).length,
                 tomTatLuc: s.tomTatLuc,
+                denMocTin: s.denMocTin,
+                // Có tin sau mốc đã tóm tắt — người đọc biết bản này "biết tới đâu".
+                coTinMoi: !!lastMessageAt && (!s.denMocTin || lastMessageAt > s.denMocTin),
               },
             }
           : {}),

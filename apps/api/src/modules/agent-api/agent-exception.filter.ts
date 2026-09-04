@@ -51,7 +51,16 @@ export class AgentExceptionFilter implements ExceptionFilter<HttpException> {
     const { statusCode, code, message, extra } = this.describe(exception);
 
     const body: Body = { statusCode, success: false, code, message, ...extra };
-    if (this.config.isDevelopment && statusCode !== (HttpStatus.TOO_MANY_REQUESTS as number)) {
+
+    // Ghi log máy chủ LUÔN (trừ lỗi quá tần suất — ồn và không mang tin gì).
+    // Từ khi ngừng gửi `stackTrace` ra thân phản hồi, đây là nơi DUY NHẤT còn
+    // giữ vết lỗi của nhánh agent; thiếu nó thì lỗi xảy ra mà không để lại dấu.
+    const quaTanSuat = statusCode === (HttpStatus.TOO_MANY_REQUESTS as number);
+    if (!quaTanSuat) {
+      console.error(`[agent-api] ${statusCode} ${code ?? ''} ${exception.stack ?? message}`);
+    }
+
+    if (this.config.exposeStackTrace && !quaTanSuat) {
       body.stackTrace = exception.stack;
     }
 

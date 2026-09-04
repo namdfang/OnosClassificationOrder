@@ -13,6 +13,22 @@ export class ApiConfigService {
     return this.nodeEnv === 'development';
   }
 
+  /**
+   * Có gửi `stackTrace` ra THÂN PHẢN HỒI hay không.
+   *
+   * KHÔNG bám theo `isDevelopment`: production của hệ thống này chạy với
+   * `NODE_ENV=development` (env chọn file cấu hình, không phản ánh môi trường
+   * thật), nên gắn vào đó là mọi endpoint công khai đều trả về đường dẫn
+   * `/root/...` cùng cấu trúc mã nguồn cho bất kỳ ai gọi — kể cả lúc chỉ gõ sai
+   * khoá API. Dev bên ngoài đã báo đúng chỗ này.
+   *
+   * Muốn xem vết lỗi thì bật tường minh `EXPOSE_STACK_TRACE=true` trên máy mình.
+   * Mặc định TẮT; vết lỗi vẫn được ghi ra log máy chủ như cũ.
+   */
+  get exposeStackTrace(): boolean {
+    return this.configService.get<string>('EXPOSE_STACK_TRACE') === 'true';
+  }
+
   get isProduction(): boolean {
     return this.nodeEnv === 'production';
   }
@@ -296,6 +312,21 @@ export class ApiConfigService {
    * `.devtasks/design/API-1.md`. Thiếu `AGENT_API_KEY` thì mọi endpoint đóng,
    * không có chế độ "mở khi thiếu cấu hình".
    */
+  /**
+   * Zalo Engine — dịch vụ của nhà cung cấp cho màn chat `/adm/zalo`.
+   *
+   * `url` trỏ vào cổng loopback mà `docker/zalo-engine/docker-compose.yml` mở
+   * (mặc định 4001). `secret` PHẢI trùng `ZALO_ENGINE_SECRET` của engine —
+   * lệch là mọi lời gọi bị engine từ chối với 401 không nói lý do.
+   * Thiếu cả hai thì proxy trả lỗi cấu hình, phần còn lại của API vẫn chạy.
+   */
+  get zaloEngine() {
+    return {
+      url: process.env.ZALO_ENGINE_URL || '',
+      secret: process.env.ZALO_ENGINE_SECRET || '',
+    };
+  }
+
   get agentApi() {
     return {
       key: process.env.AGENT_API_KEY || '',

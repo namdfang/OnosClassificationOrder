@@ -1,17 +1,17 @@
-# Dev server onos tren may hub — cung pattern cac repo khac
-# (auto_facebook, new_kientre, Remotion... deu co cloudflared/config.yml rieng).
+# Dev server onos tren may hub. Production chay o may rieng, KHONG qua tunnel nay.
 #
-# Chay:  cloudflared --no-autoupdate --config /root/.vibedev/repos/onos/cloudflared/config.yml tunnel run
-#
-# Web va API tach 2 hostname vi apps/web tu suy ra ten API tu ten web:
+# Web (vite dev) va API tach 2 hostname vi ban dev tu suy ra ten API tu ten web:
 #   toApiHostname('dev-onos.autonow.vn') -> 'api-dev-onos.autonow.vn'
-#   (apps/web/src/constants/index.ts:17)
-# Doi ten hostname web thi PHAI doi hostname API cho khop tien to 'api-'.
+#   (apps/web/src/constants/index.ts). Doi ten web thi PHAI doi ten API cho khop.
+# Giu them luat /api tren dev-onos de ban BUILD (goi duong tuong doi) cung chay duoc.
 
 tunnel: e9a56d70-758a-4494-9a00-85dccddd18ac
 credentials-file: /root/.vibedev/repos/onos/cloudflared/e9a56d70-758a-4494-9a00-85dccddd18ac.json
 
 ingress:
+  - hostname: dev-onos.autonow.vn
+    path: ^/api
+    service: http://localhost:3007
   - hostname: dev-onos.autonow.vn
     service: http://localhost:5173
   - hostname: api-dev-onos.autonow.vn

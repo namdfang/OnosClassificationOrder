@@ -26,6 +26,11 @@ HEALTH_URL="http://127.0.0.1:3007/api/v1"
 
 cd "$REPO_DIR"
 
+# Gói Zalo (@zero-126/*) nằm ở registry riêng; `.npmrc` gốc repo đọc token từ
+# biến GHCR_TOKEN. Shell không tương tác (ssh, cron) không nạp ~/.bashrc nên
+# nạp thẳng ở đây — thiếu token là pnpm trả 401 giữa chừng.
+[ -f /root/.onos-ghcr.env ] && . /root/.onos-ghcr.env
+
 # ─── --status ────────────────────────────────────────────────────────
 if [ "$1" = "--status" ]; then
   echo "Đang chạy : $(git rev-parse --short HEAD) — $(git log -1 --format='%s')"
@@ -50,7 +55,14 @@ if [ "$1" = "--rollback" ]; then
   prev=$(cat "$STATE_FILE")
   echo "→ Lùi về $(git rev-parse --short "$prev") — $(git log -1 --format='%s' "$prev")"
   git reset --hard "$prev"
-  pnpm install --frozen-lockfile
+  # `yes |`: khi tập registry đổi (lần đầu có @zero-126), pnpm HỎI "xoá node_modules
+# cài lại?" — chạy không tương tác nó THOÁT 0 MÀ KHÔNG CÀI GÌ, build tiếp với deps
+# thiếu và API sập lúc khởi động (sự cố 03/09/2026). Trả lời sẵn rồi kiểm lại.
+yes | pnpm install --frozen-lockfile
+# Giải từ THƯ MỤC apps/api, không phải gốc repo: pnpm cài theo kiểu cô lập nên
+# gói chỉ nằm ở `apps/api/node_modules`, gốc repo không thấy nó.
+node -e "require.resolve('@zero-126/zalo-sdk/next', { paths: ['$REPO_DIR/apps/api'] })" 2>/dev/null \
+  || { echo "✗ Thiếu gói @zero-126/zalo-sdk sau khi cài — kiểm tra GHCR_TOKEN (/root/.onos-ghcr.env)."; exit 1; }
   pnpm --filter shared build
   pnpm build:api
   (cd apps/api && NODE_ENV=production pm2 restart ecosystem.config.cjs --update-env && pm2 save >/dev/null)
@@ -77,7 +89,14 @@ git reset --hard "origin/$BRANCH"
 echo "  → Sắp deploy: $(git rev-parse --short HEAD) — $(git log -1 --format='%s')"
 
 echo "→ Cài dependencies..."
-pnpm install --frozen-lockfile
+# `yes |`: khi tập registry đổi (lần đầu có @zero-126), pnpm HỎI "xoá node_modules
+# cài lại?" — chạy không tương tác nó THOÁT 0 MÀ KHÔNG CÀI GÌ, build tiếp với deps
+# thiếu và API sập lúc khởi động (sự cố 03/09/2026). Trả lời sẵn rồi kiểm lại.
+yes | pnpm install --frozen-lockfile
+# Giải từ THƯ MỤC apps/api, không phải gốc repo: pnpm cài theo kiểu cô lập nên
+# gói chỉ nằm ở `apps/api/node_modules`, gốc repo không thấy nó.
+node -e "require.resolve('@zero-126/zalo-sdk/next', { paths: ['$REPO_DIR/apps/api'] })" 2>/dev/null \
+  || { echo "✗ Thiếu gói @zero-126/zalo-sdk sau khi cài — kiểm tra GHCR_TOKEN (/root/.onos-ghcr.env)."; exit 1; }
 
 echo "→ Build shared (DTO)..."
 pnpm --filter shared build

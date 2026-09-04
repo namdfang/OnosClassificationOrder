@@ -56,7 +56,8 @@ const rows = await psql(`
   SELECT m.sender_uid,
          max(m.sender_name)                        AS ten,
          count(DISTINCT c.group_global_id)         AS so_nhom,
-         count(*)                                  AS so_tin
+         count(*)                                  AS so_tin,
+         string_agg(DISTINCT c.group_global_id, ',') AS cac_nhom
   FROM zalo_messages m
   JOIN zalo_conversations c ON c.id = m.conversation_id
   WHERE c.group_global_id IS NOT NULL
@@ -64,12 +65,14 @@ const rows = await psql(`
   GROUP BY 1
 `);
 
-const identities = rows.map(([zaloUid, ten, soNhom, soTin]) => ({
+const identities = rows.map(([zaloUid, ten, soNhom, soTin, cacNhom]) => ({
   zaloUid,
   displayName: ten || undefined,
   groupCount: Number(soNhom),
   messageCount: Number(soTin),
   laTaiKhoanCongTy: congTy.has(zaloUid),
+  // API nhìn LOẠI của các nhóm này: 1 nhóm vận hành → đối tác, không phải khách.
+  groupGlobalIds: (cacNhom || '').split(',').filter(Boolean),
 }));
 
 // Cùng ngưỡng với `ZALO_STAFF_MIN_GROUPS` phía API — chỉ để in ra cho người

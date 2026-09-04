@@ -4,6 +4,7 @@ import { BaseEntityZod, PageQueryZod, PageResZod, ResZod } from '@shared/types';
 import { z } from 'zod';
 
 import { IDZod } from '../constants/common-zod';
+import { ZaloGroupKind } from '../enums/zalo-group-kind';
 
 /**
  * Mức độ cần chú ý của một nhóm — do mô hình chấm, người vận hành đọc để biết
@@ -19,6 +20,8 @@ export const ZALO_SUMMARY_LEVELS = Object.values(ZaloSummaryLevel);
 
 /** Một việc cần làm, tách sẵn thành dòng để làm theo được ngay. */
 export const ZaloSummaryTaskZod = z.object({
+  /** Ổn định qua các lượt tóm tắt (uuid) — nền cho tick theo id thay vì theo chỉ số. Bản cũ không có. */
+  id: z.string().optional(),
   viec: z.string().min(1).max(500),
   /** Người vận hành tự tick. Mô hình KHÔNG được tự đặt `true`. */
   xong: z.boolean().default(false),
@@ -38,6 +41,8 @@ export const ZaloGroupSummaryZod = BaseEntityZod.extend({
   customerId: IDZod.optional(),
   userSku: z.string().max(200).optional(),
   title: z.string().max(300).optional(),
+  /** Loại nhóm lúc tóm tắt — UI đổi nhãn ô cho nhóm vận hành. Bản cũ không có. */
+  kind: z.nativeEnum(ZaloGroupKind).optional(),
 
   /** Một dòng để liếc bảng là hiểu, khỏi phải mở chi tiết. */
   tieuDe: z.string().max(200).optional(),
@@ -88,7 +93,19 @@ export const GetZaloSummariesZod = PageQueryZod.extend({
 });
 export class GetZaloSummariesDto extends createZodDto(extendApi(GetZaloSummariesZod)) {}
 
-export const GetZaloSummariesResZod = PageResZod.extend({ data: ZaloGroupSummaryZod.array() });
+/**
+ * Một hàng ở bảng theo dõi = bản tóm tắt + hai trường TÍNH LÚC GỌI từ nhóm:
+ * `lastMessageAt` (mốc tin cuối engine đã đồng bộ) và `coTinMoi` (có tin sau
+ * `denMocTin` chưa vào tóm tắt). Không lưu — lưu là lại có thêm một mốc lệch.
+ * Chỉ tươi tới lần `sync-zalo-groups` gần nhất.
+ */
+export const ZaloGroupSummaryRowZod = ZaloGroupSummaryZod.extend({
+  lastMessageAt: z.date().optional(),
+  coTinMoi: z.boolean().optional(),
+});
+export type ZaloGroupSummaryRow = z.infer<typeof ZaloGroupSummaryRowZod>;
+
+export const GetZaloSummariesResZod = PageResZod.extend({ data: ZaloGroupSummaryRowZod.array() });
 export class GetZaloSummariesResDto extends createZodDto(extendApi(GetZaloSummariesResZod)) {}
 
 //
@@ -108,9 +125,12 @@ export type ZaloMessageInput = z.infer<typeof ZaloMessageInputZod>;
 
 export const SummarizeZaloGroupZod = z.object({
   groupGlobalId: z.string().min(1).max(120),
+  // 400 = chặn cứng; script `summarize-zalo-groups.mjs` (MAX_TIN) đã tự lấy 400 tin MỚI NHẤT.
   messages: ZaloMessageInputZod.array().min(1).max(400),
   /** Buộc đọc lại từ đầu thay vì cuốn chiếu (cắt bệnh trôi dần). */
   docLaiTuDau: z.boolean().optional(),
+  /** Bỏ qua chốt 'không có tin có nội dung sau mốc' — CHỈ để kiểm thử (`--group`). */
+  epDocLai: z.boolean().optional(),
 });
 export class SummarizeZaloGroupDto extends createZodDto(extendApi(SummarizeZaloGroupZod)) {}
 
@@ -126,6 +146,12 @@ export const ZaloSummaryQueueItemZod = z.object({
   tuMoc: z.date().nullable().optional(),
   /** Đã tới hạn đọc lại từ đầu chưa. */
   docLaiTuDau: z.boolean(),
+  /**
+   * Mốc tin cuối đã tóm tắt. Script so với tin có nội dung kéo được: không có
+   * tin nào SAU mốc này thì không POST — `lastMessageAt` đếm cả tin không nội
+   * dung nên hàng đợi có thể "có tin mới" mà thực ra không có gì để đọc.
+   */
+  denMocTin: z.date().nullable().optional(),
 });
 export type ZaloSummaryQueueItem = z.infer<typeof ZaloSummaryQueueItemZod>;
 

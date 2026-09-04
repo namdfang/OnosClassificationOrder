@@ -27,7 +27,7 @@
     "actions": "Actions",
     "empty": "No group matches the filter",
     "noCustomer": "— not linked —",
-    "noOwner": "— not assigned —",
+    "noOwner": "— unassigned —",
     "noTitle": "(untitled)"
   },
   "filter": {
@@ -83,14 +83,17 @@
     "msgCount": "{{count}} messages",
     "openTasks": "{{count}} open",
     "notYet": "not summarized",
-    "doneAt": "done at {{at}}"
+    "doneAt": "done at {{at}}",
+    "requesterWants": "Requested by",
+    "handlerReplied": "Handled by",
+    "newSince": "New messages at {{at}}, not yet summarized"
   },
   "identity": {
     "kind": {
       "unknown": "Unreviewed",
       "ai-support": "AI support",
       "staff": "Staff",
-      "customer": "Customer"
+      "customer": "Customer / external"
     },
     "allKinds": "All",
     "pending": "Unconfirmed",
@@ -103,6 +106,9 @@
     "suggested": "suggested: {{kind}}",
     "applyAll": "Apply all suggestions",
     "applied": "Applied to {{count}}",
-    "empty": "Nobody matches the filter"
+    "empty": "Nobody matches the filter",
+    "linkedUser": "System account",
+    "noLinkedUser": "— not linked —",
+    "staffOnly": "Staff only"
   }
 }
