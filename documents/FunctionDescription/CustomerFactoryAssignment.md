@@ -162,7 +162,9 @@ Constant `CUSTOMER_ASSIGNMENT_CONFIG_KEY = 'customer_assignment_config'`.
 
 ## 7. Permissions
 
-- Cấu hình + customers CRUD: `@Auth([Admin])` (FE gate `role.manage`).
+- Cấu hình + customers CRUD: `@Auth([Admin])`.
+- **FE gate = `adminOnly: true`** ở registry `pages/settings/index.tsx`, KHÔNG phải `perm: 'role.manage'`. Manager có `role.manage` nên trước đây vẫn thấy mục trong menu Cài đặt, mở ra thì mọi API trả 403 và trang hiện RỖNG y hệt trạng thái "chưa cấu hình gì" (không toast, không thông báo) — hiểu nhầm là hệ thống chưa cấu hình phân bổ tự động. Áp cùng cách cho "Ưu tiên đơn theo khách", "Tự động gán designer" và "Gửi thông báo khách hàng" (đều `@Auth([Admin])`). "Gán xưởng theo sản phẩm" giữ `role.manage` vì BE cho phép Manager thật.
+- 2 trang kanban còn chốt `baseline` trong nhánh `catch` lúc load: load hỏng (403/network) mà không chốt thì cờ "• Chưa lưu" tự bật ngay khi mở và chặn rời trang dù người dùng chưa thao tác gì.
 - Ép xưởng chạy server-side trong `importOrders` theo actor import.
 
 ## 8. Ưu tiên đơn theo khách hàng

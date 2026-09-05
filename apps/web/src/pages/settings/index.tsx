@@ -48,6 +48,9 @@ function buildGroups(t: (key: string) => string): SettingsGroup[] {
           label: t('settings.nav.customerFactory'),
           icon: <Users size={15} />,
           perm: 'role.manage',
+          // BE là `@Auth([RoleType.Admin])` — Manager mở được menu thì mọi API trả
+          // 403 và trang hiện RỖNG y như "chưa cấu hình gì", không báo lỗi nào.
+          adminOnly: true,
           component: CustomerAssignmentConfig,
         },
         {
@@ -55,6 +58,9 @@ function buildGroups(t: (key: string) => string): SettingsGroup[] {
           label: t('settings.nav.customerPriority'),
           icon: <Flag size={15} />,
           perm: 'role.manage',
+          // BE là `@Auth([RoleType.Admin])` — Manager mở được menu thì mọi API trả
+          // 403 và trang hiện RỖNG y như "chưa cấu hình gì", không báo lỗi nào.
+          adminOnly: true,
           component: CustomerPriorityConfig,
         },
         {
@@ -62,6 +68,9 @@ function buildGroups(t: (key: string) => string): SettingsGroup[] {
           label: t('settings.nav.designerAssign'),
           icon: <UserCog size={15} />,
           perm: 'role.manage',
+          // BE là `@Auth([RoleType.Admin])` — Manager mở được menu thì mọi API trả
+          // 403 và trang hiện RỖNG y như "chưa cấu hình gì", không báo lỗi nào.
+          adminOnly: true,
           component: DesignerAssignmentConfig,
         },
         {
@@ -81,6 +90,9 @@ function buildGroups(t: (key: string) => string): SettingsGroup[] {
           label: t('settings.nav.customerNotify'),
           icon: <Bell size={15} />,
           perm: 'role.manage',
+          // BE là `@Auth([RoleType.Admin])` — Manager mở được menu thì mọi API trả
+          // 403 và trang hiện RỖNG y như "chưa cấu hình gì", không báo lỗi nào.
+          adminOnly: true,
           component: CustomerNotificationSender,
         },
       ],

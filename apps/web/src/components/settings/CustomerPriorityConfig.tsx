@@ -75,6 +75,9 @@ export default function CustomerPriorityConfig() {
         setAlloc(next);
         setBaseline(snapshot(!!cfg.enabled, next));
       } catch (err) {
+        // Load hỏng (403/network) → chốt baseline theo state hiện tại, nếu không
+        // trang lập tức tự bật cờ "• Chưa lưu" và chặn rời trang dù chưa thao tác gì.
+        setBaseline(snapshot(false, {}));
         handleAxiosError(err);
       } finally {
         setLoading(false);
