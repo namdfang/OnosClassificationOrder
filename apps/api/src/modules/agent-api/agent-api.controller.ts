@@ -6,11 +6,11 @@ import {
   AgentQueryDto,
   AgentQueryResDto,
   GetAgentDocResDto,
+  GetAgentSellerSupportResDto,
   ListAgentDocsResDto,
   ListAgentTablesResDto,
   ReadAgentTableQueryDto,
   ReadAgentTableResDto,
-  GetAgentSellerSupportResDto,
 } from 'shared';
 import { Logger } from 'winston';
 
@@ -36,6 +36,44 @@ import { AGENT_SWAGGER_DESCRIPTION, agentSummary } from './agent-swagger-guide';
  * `AgentApiKeyGuard` mới là cửa thật và nó chạy TRƯỚC mọi validate tham số
  * (AC-01).
  */
+/** Trần độ dài mỗi mảnh vết — nhật ký là VẾT, không phải bản sao yêu cầu. */
+const DIGEST_MAX = 2000;
+
+/**
+ * Vết của một lượt `read_rows`: bộ lọc, cột và trần lô bên gọi đã dùng.
+ *
+ * Vì sao thêm: đường `query` ghi `queryDigest` ngay từ đầu, còn `read_rows` chỉ
+ * ghi mỗi tên bảng — đo trên production 05/09: **0/10.203 lượt trong 24 giờ có
+ * vết bộ lọc**, trong khi chính đường này kéo về 1,68 triệu dòng mỗi ngày. Số
+ * bên agent báo ra mà vênh với hệ thì không truy được họ đã hỏi gì.
+ *
+ * `filter` tới dưới dạng chuỗi JSON (GET không có thân yêu cầu): parse được thì
+ * lưu dạng object cho dễ đọc và truy vấn lại; không parse được thì giữ nguyên
+ * văn — chính chuỗi hỏng đó mới là thứ cần nhìn khi bên kia gửi sai.
+ *
+ * KHÔNG cần che trường cấm ở đây: bộ lọc chứa trường cấm đã bị chặn từ vòng
+ * phân tích (`isDeniedFieldPath`), nên thứ tới được đây vốn đã hợp lệ.
+ */
+function readDigest(query: ReadAgentTableQueryDto): Record<string, unknown> | undefined {
+  const { filter, fields, limit } = query;
+  if (!filter && !fields && limit === undefined) return undefined;
+
+  let loc: unknown;
+  if (filter) {
+    try {
+      loc = JSON.parse(filter.slice(0, DIGEST_MAX));
+    } catch {
+      loc = filter.slice(0, DIGEST_MAX);
+    }
+  }
+
+  return {
+    ...(loc === undefined ? {} : { filter: loc }),
+    ...(fields ? { fields: fields.slice(0, DIGEST_MAX) } : {}),
+    ...(limit === undefined ? {} : { limit }),
+  };
+}
+
 @Controller('agent')
 @ApiTags('agent-api')
 @UseGuards(AgentApiKeyGuard)
@@ -96,6 +134,7 @@ export class AgentApiController {
       this.audit.write({
         capability: 'read_rows',
         table,
+        queryDigest: readDigest(query),
         returned: data.items.length,
         durationMs: Date.now() - startedAt,
         outcome: 'ok',
@@ -105,6 +144,7 @@ export class AgentApiController {
       this.audit.write({
         capability: 'read_rows',
         table,
+        queryDigest: readDigest(query),
         durationMs: Date.now() - startedAt,
         ...this.outcomeOf(error),
       });
