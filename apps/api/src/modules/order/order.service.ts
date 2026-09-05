@@ -4731,6 +4731,18 @@ export class OrderService implements OnModuleInit {
     }
   }
 
+  /**
+   * Guard dùng chung: chặn sửa đơn ĐÃ HỦY. Hủy là trạng thái CUỐI — đơn đã ra
+   * khỏi mọi công đoạn (xem `CancelledOrders-ExcludeFromStages`). Không chặn ở
+   * `updateField` thì 1 lần bấm ô "Note kq Tool" = 'ok' sẽ chạy hook entry và
+   * ĐẨY ĐƠN ĐÃ HỦY VÀO SẢN XUẤT lại (readyForFulfill + stage In waiting).
+   */
+  private assertNotCancelled(order: { cancelledAt?: Date | null }): void {
+    if (order?.cancelledAt) {
+      throw new BadRequestException('Đơn đã hủy — không thao tác được.');
+    }
+  }
+
   /** Set heldAt + holdReason cho 1 đơn. Chặn giữ 2 lần. */
   async holdOrder(id: string, dto: HoldOrderDto, _roleName?: RoleType, ctx?: AuditContext): Promise<HoldOrderResDto> {
     const before = await this.orderModel.findById(id).lean();
@@ -5550,6 +5562,8 @@ export class OrderService implements OnModuleInit {
     if (!before) throw new NotFoundException('Order not found');
     // Đơn đang giữ → khóa mọi chỉnh sửa field (mở lại trước khi thao tác).
     this.assertNotHeld(before as unknown as { heldAt?: Date | null });
+    // Đơn đã hủy → khóa hẳn (không có đường mở lại như hold).
+    this.assertNotCancelled(before as unknown as { cancelledAt?: Date | null });
 
     const normalized = normalizeFieldValue(dto.field, dto.value);
     const patch: Record<string, unknown> = { [dto.field]: normalized };
@@ -5957,6 +5971,8 @@ export class OrderService implements OnModuleInit {
       deletedAt: { $exists: false },
       // Đơn đang giữ → loại khỏi bulk update (matchedCount thấp hơn để FE biết bị bỏ).
       heldAt: { $exists: false },
+      // Đơn đã hủy → loại luôn, mirror guard của `updateField`.
+      cancelledAt: { $exists: false },
     };
     if (extraMatchFilter) Object.assign(matchFilter, extraMatchFilter);
     const result = await this.orderModel.updateMany(matchFilter, { $set: patch });

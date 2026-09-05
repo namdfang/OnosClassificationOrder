@@ -899,6 +899,7 @@ Render tab tương ứng. User chỉ có 1 trong các quyền → 1 tab; có nhi
 | # | Key | Cell | Permission view |
 |---|-----|------|-----------------|
 | 1 | productionId | Composite (Production ID + Order ID + **Platform ID** + In Production At). Dòng `ext: <externalId>` là mã đơn bên sàn (TikTok/Etsy…) — cột "External ID" lúc import, chỉ hiện khi đơn có. Cùng cách trình bày với `ListOrderTab`. | luôn |
+| 1b | **orderStatus** | Nhãn **trạng thái hiện tại** (chặng đơn đang nằm + chờ/đang làm/làm lại), suy từ `cancelledAt`/`fulfillmentCompletedAt`/`currentFulfillmentStage`/`designerStatus`/`toolResultNote` — xem §24. | luôn |
 | 2 | mockupTypeSize | `ImageThumbCell` + Type + Size/Color | luôn |
 | 2b | **designs** | `DesignThumbsCell` — tối đa 2 thumb inline (32px) + "+N" badge nếu nhiều hơn 2 → click badge mở Popover grid 4 cột tất cả design. Click thumb mở `ImagePreviewDialog`. Tận dụng `ImageThumbCell` cho từng thumb (pending/failed/ready state). | luôn |
 | 3 | **fabricType** | `IconSelectCell` (category `fabric_type`) — Phase 7 | `order.field.fabricType.view` |
@@ -934,7 +935,7 @@ Render tab tương ứng. User chỉ có 1 trong các quyền → 1 tab; có nhi
 
 | Group | Title header | Member field keys (thứ tự hiển thị trong cell) |
 |---|---|---|
-| `identity` (sticky đầu bảng) | Mã đơn / Ưu tiên | `productionId`, `priority`, `userSku`, `typeFullName` |
+| `identity` (sticky đầu bảng) | Mã đơn / Ưu tiên | `productionId`, `orderStatus`, `priority`, `userSku`, `typeFullName` |
 | `product` | Sản phẩm | `mockupTypeSize` |
 | `toolCheck` | Kết quả Tool / File lỗi | `toolResult`, `toolResultNote`, `errorFile`, `errorFileNote` |
 | `factory` | Xưởng · Vải · Máy | `factoryMachine`, `fabricType`, `machineNumber` |
@@ -1428,6 +1429,8 @@ Mỗi hàng đơn (ở MỌI bảng order) có nút **"..."** (`MoreHorizontal`)
 Menu này về sau còn nhận thêm mục cho vai khác: **Giữ đơn / Mở giữ / Kiểm tra design mới** cho `ORDER_WRITE_ROLES` (§9b, §9c) và **"Chuyển hoàn thành"** cho riêng SuperAdmin (**§23**).
 
 **Đơn đã hủy:** vẫn hiện trong mọi bảng với component chung **`CancelledBadge`** = badge "Đã hủy" (đỏ) **+ hiện luôn LÝ DO hủy** (note, truncate + full tooltip) + **row mờ** (`opacity-60`); **KHÔNG loại khỏi thống kê/filter** (đếm bình thường). Cả 2 action **disable** khi đơn đã hủy (read-only).
+
+**Đơn đã hủy = KHÓA CHỈNH SỬA (2026-09-05):** `updateField` gọi `assertNotCancelled(before)` và `bulkUpdateField` thêm `cancelledAt: { $exists: false }` vào `matchFilter` — mirror guard sẵn có ở `setProductionError` / `forceCompleteOrder` / `FulfillmentTaskService.transition`. Trước đó sửa ô inline trên đơn đã hủy vẫn chạy hook entry: đặt "Note kq Tool" = `ok` là đơn ĐÃ HỦY được đẩy trở lại sản xuất (`readyForFulfill=true`, `fulfillmentStages.print` = `waiting` với mốc mới tinh).
 
 **Optimistic update:** cancel/đổi design trả về order đã cập nhật → `OrderTableWorkshop` **patch tại chỗ** (`patchRow`, KHÔNG refetch) → **giữ nguyên group sản phẩm đang mở** + cập nhật tức thì. Bảng phẳng khác refetch (không có group).
 
@@ -2027,3 +2030,45 @@ Ghi **thẳng** vào đơn thay vì đi qua `FulfillmentTaskService.transition()
 ### 23.5 Test
 
 `apps/api/src/modules/order/force-complete-plan.spec.ts` — 8 ca trên hàm thuần: chia đều đủ 8 khâu, mốc liền mạch + không lọt ra ngoài khoảng, không đụng khâu đã xong, hai luồng rút gọn (`merged`/`no-sew`), thiếu `inProductionAt`, mốc bắt đầu ở tương lai, và ca "có `toolCheckedAt` nhưng `toolResultNote` trống".
+
+---
+
+## 24. Cột "Trạng thái" — đơn đang nằm ở chặng nào
+
+> **File FE:** `apps/web/src/utils/orderStatusLabel.ts` (`getOrderStatusInfo` + `makeOrderStatusTranslate` + `ORDER_STATUS_TONE_CLASS`), cột `orderStatus` trong `apps/web/src/components/orders/workshopTableConfig.tsx` (thuộc group `identity`), cell trong `apps/web/src/pages/orders/ListOrderTab.tsx`, i18n `orders.json` → `statusLabel.*` + `workshopCols.col/short.orderStatus`.
+
+### 24.1 Vì sao có cột này
+
+Bảng đơn trước đây chỉ cho thấy **từng mảnh** trạng thái nằm rải ở nhiều cột: `toolResult`/`toolResultNote` (soát tool), `designerStatus` (thiết kế), `printStatus` (in) — người xem phải tự ghép mới biết đơn **đang** kẹt ở đâu. Cột `orderStatus` trả lời thẳng câu đó bằng **1 nhãn**.
+
+Field `status` gốc trên `OrderEntity` (free-text từ file import) KHÔNG dùng được cho việc này: nó đứng im từ lúc nhập, không phản ánh tiến độ sản xuất. Ở `ListOrderTab` nó bị hạ xuống dòng phụ nhỏ dưới nhãn mới.
+
+### 24.2 Luật suy trạng thái
+
+`getOrderStatusInfo(row, tr)` tính **hoàn toàn từ field `GET /v1/orders` đã trả sẵn** — không endpoint mới, không query thêm:
+
+1. `cancelledAt` → **Đã hủy** (đỏ).
+2. `fulfillmentCompletedAt` → **Hoàn thành** (xanh lá).
+3. Ngược lại, xác định chặng đang active — **MIRROR `computeCurrentStage()`** (`customer-order.service.ts`, dùng cho Customer Portal + trang tra cứu công khai `/track`):
+   - `currentFulfillmentStage` set → chặng đó (index `2 + FULFILLMENT_STAGE_ORDER[stage]` trong `LIFECYCLE_STAGE_KEYS`);
+   - còn không, `designerStatus` khác `unassigned` → `designer` (hoặc `print` khi `done`);
+   - còn không, `toolResultNote` rỗng → `tool-check`, có giá trị → `designer`.
+4. Trạng thái CON trong chặng (phần bản FE có thêm so với BE — người trong xưởng cần biết đơn kẹt **kiểu gì**, không chỉ kẹt **ở đâu**):
+   - chặng `designer`: theo `designerStatus` → Đã giao / Đang thiết kế / Làm lại (vàng) / Không làm được (đỏ) / Chờ (chưa gán);
+   - 6 chặng fulfillment: theo `fulfillmentStages[key].status` → `waiting` = Chờ · `in-progress` = Đang · `rework` = Làm lại (vàng).
+
+> Đổi luật ở `orderStatusLabel.ts` thì **phải đổi cả `computeCurrentStage()`** — cùng 1 đơn mà bảng nội bộ và trang khách nói hai chuyện khác nhau là lỗi nghiệp vụ, không phải khác biệt giao diện.
+
+**Hold CỐ Ý không nằm trong nhãn này.** Giữ đơn là cờ *chồng lên* chặng (gỡ giữ thì đơn về đúng chặng cũ), đã có `HeldBadge` riêng cạnh mã đơn — nhét vào đây sẽ mất thông tin đơn đang kẹt ở chặng nào (§9b).
+
+### 24.3 Màu (`tone`)
+
+`neutral` xám = đang chờ người làm · `active` chàm = có người đang làm · `warn` vàng = phải làm lại · `danger` đỏ = hủy / không làm được · `success` xanh lá = hoàn thành. Class Tailwind tra ở `ORDER_STATUS_TONE_CLASS` (đủ cặp light/dark).
+
+### 24.4 Vì sao truyền hàm dịch thay vì `t`
+
+`render()` của `WorkshopColMeta` là **hàm thường, không phải component** → không gọi được `useTranslation`, và `ctx.t` là optional (consumer ngoài batch i18n vẫn gọi `c.render(row, ctx)` không kèm `t`). Nên `getOrderStatusInfo` nhận `OrderStatusTranslate` — cùng khuôn với helper `tr()` sẵn có trong `workshopTableConfig.tsx`; `makeOrderStatusTranslate(ctx.t)` bọc lại, thiếu `t` thì fallback chuỗi tiếng Việt (có tự nội suy `{{stage}}`).
+
+### 24.5 Nơi hiển thị
+
+Cột nằm trong group `identity` (`memberKeys: productionId, orderStatus, priority, userSku, typeFullName`) nên tự có mặt ở **mọi bảng dùng `buildColGroups`**: Danh sách đơn (`/ffm/orders/workshop`), Đơn hàng classic (`/ffm/orders/classic`), Dashboard tab Trạng thái (`OrdersMiniTable`) và tab Xưởng (`OrderFactoryTab`). `perm: null` — mọi role xem được bảng đơn đều thấy, vì nhãn chỉ tổng hợp lại thứ họ đã đọc được ở các cột khác.
