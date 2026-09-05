@@ -32,7 +32,10 @@ Quyết định thiết kế đã chốt (2026-08-04, xem `documents/Plans/Custo
   hành vi cũ trả toàn bộ (kanban dùng, không đổi). Cả 2 mặc định LOẠI khách
   `deletedAt`; `deleted=true` → chỉ khách đã xóa (toggle "Đã xóa" trên trang).
 - **Enrich** (chỉ trang hiện tại, ≤ limit khách): `orderCount`/`lastOrderAt`
-  (aggregation orders theo cặp key), `assignedFactoryId` (blob
+  (aggregation orders theo cặp key — `$match` gom **cả `userSku` LẪN `userEmail`**:
+  khách tự đăng ký ở Customer Portal có `userSku` rỗng nên lọc theo mình `userSku`
+  là luôn ra 0 đơn; khóa gộp vẫn là cặp `(userSku, userEmail)` nên đơn của khách
+  khác trùng email không lẫn sang), `assignedFactoryId` (blob
   `customer_assignment_config`), `assignedDesignerId` (blob
   `designer_assignment_config.customers`), `hasAccount` (`password != ''`).
 - **Xóa mềm**: set `deletedAt` → gỡ customerId khỏi `customer_assignment_config`

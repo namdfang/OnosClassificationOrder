@@ -125,14 +125,31 @@ export class CustomerService {
 
   /** Enrich row trang quản trị — chỉ tính cho đúng trang hiện tại (≤ limit khách). */
   private async enrichAdminRows(docs: (Customer & { password?: string })[]): Promise<CustomerAdminRow[]> {
+    // Khách TỰ ĐĂNG KÝ ở Customer Portal có `userSku` RỖNG (form đăng ký không
+    // có ô SKU) — lọc theo mình `userSku` là bỏ sót toàn bộ đơn của họ, cột
+    // "Số đơn"/"Đơn gần nhất" luôn ra 0/—. Nên match thêm theo email; khóa gộp
+    // vẫn là cặp (userSku, userEmail) nên đơn của khách khác trùng email không
+    // lẫn sang hàng này. Giữ dạng `$in` (index-friendly) với cả nguyên văn lẫn
+    // bản lowercase thay vì `$expr` `$toLower` quét cả collection.
     const skus = [...new Set(docs.map((d) => d.userSku).filter(Boolean))];
-    const orderAgg = skus.length
+    const emails = [
+      ...new Set(
+        docs.flatMap((d) => {
+          const e = (d.userEmail || '').trim();
+          return e ? [e, e.toLowerCase()] : [];
+        }),
+      ),
+    ];
+    const matchClauses: Record<string, unknown>[] = [];
+    if (skus.length) matchClauses.push({ userSku: { $in: skus } });
+    if (emails.length) matchClauses.push({ userEmail: { $in: emails } });
+    const orderAgg = matchClauses.length
       ? await this.orderModel.aggregate<{
           _id: { userSku: string; userEmail: string };
           count: number;
           lastAt: Date | null;
         }>([
-          { $match: { userSku: { $in: skus } } },
+          { $match: matchClauses.length === 1 ? matchClauses[0]! : { $or: matchClauses } },
           {
             $group: {
               _id: { userSku: '$userSku', userEmail: { $toLower: { $ifNull: ['$userEmail', ''] } } },
