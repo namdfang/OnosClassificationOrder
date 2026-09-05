@@ -725,6 +725,9 @@
     "walletBalance": "VNP wallet",
     "historyTitle": "Shipment history",
     "historyActive": "Active",
+    "historyCancelling": "Cancelling",
+    "historyPurchasing": "Purchasing",
+    "historyFailed": "Failed",
     "historyCancelled": "Cancelled",
     "historyCost": "cost {{cost}}"
   },

@@ -27,10 +27,13 @@ const PAGE_SIZE = 20;
 const selectCls = 'h-9 rounded-md border border-input bg-background px-3 text-sm';
 
 const STATUS_BADGE_CLS: Record<string, string> = {
+  purchasing: 'bg-violet-100 text-violet-700 dark:bg-violet-950/40 dark:text-violet-300',
   created: 'bg-sky-100 text-sky-700 dark:bg-sky-950/40 dark:text-sky-300',
   in_transit: 'bg-amber-100 text-amber-700 dark:bg-amber-950/40 dark:text-amber-300',
   delivered: 'bg-emerald-100 text-emerald-700 dark:bg-emerald-950/40 dark:text-emerald-300',
+  cancelling: 'bg-orange-100 text-orange-700 dark:bg-orange-950/40 dark:text-orange-300',
   cancelled: 'bg-rose-100 text-rose-600 dark:bg-rose-950/40 dark:text-rose-300',
+  failed: 'bg-slate-200 text-slate-600 dark:bg-slate-800 dark:text-slate-300',
 };
 
 function StatusBadge({ status }: { status: string }) {
@@ -361,6 +364,21 @@ function ShipmentsContent() {
                   </a>
                 )}
               </div>
+              {selected.scannedAt && (
+                <div className="text-muted-foreground">
+                  {t('timeline.scannedAt')}: {dayjs(selected.scannedAt).format('DD/MM/YYYY HH:mm')}
+                </div>
+              )}
+              {selected.carrierNote && (
+                <div className="rounded-md border border-amber-300/60 bg-amber-50 dark:bg-amber-950/30 px-3 py-2 text-amber-800 dark:text-amber-200">
+                  {t('timeline.carrierNote')}: {selected.carrierNote}
+                </div>
+              )}
+              {selected.failReason && (
+                <div className="rounded-md border border-border bg-muted/40 px-3 py-2 text-muted-foreground">
+                  {t('timeline.failReason')}: {selected.failReason}
+                </div>
+              )}
               {selected.balanceAfter && (
                 <div className="text-muted-foreground">
                   {t('timeline.balanceAfter')}: <span className="font-mono">{selected.balanceAfter}</span>

@@ -1,4 +1,4 @@
-import { BadRequestException, Inject, Injectable, NotFoundException } from '@nestjs/common';
+import { BadRequestException, Inject, Injectable, NotFoundException, OnModuleInit } from '@nestjs/common';
 import { InjectModel } from '@nestjs/mongoose';
 import { Model } from 'mongoose';
 import type {
@@ -13,7 +13,7 @@ import type {
   VnpShippingConfig,
   VnpShippingStatus,
 } from 'shared';
-import { SHIPMENT_PROVIDER_VNP, VNP_SHIPPING_CONFIG_KEY } from 'shared';
+import { SHIPMENT_PROVIDER_VNP, VNP_SHIPMENT_COUNTED_STATUSES, VNP_SHIPPING_CONFIG_KEY } from 'shared';
 import { Logger } from 'winston';
 
 import { genCode } from '@/utils/gen-code';
@@ -21,6 +21,8 @@ import { genCode } from '@/utils/gen-code';
 import { ApiConfigService } from '../../shared/services/api-config.service';
 import { OrderEntity } from '../order/order.entity';
 import { SystemConfigService } from '../system-config/system-config.service';
+import { buildCarrierPatch, extractStatusText, hasCarrierError, hasCarrierSignal, isCancelledStatusText } from './carrier-status';
+import { digString, interpretVnpLookup, RECONCILE_BATCH, RECONCILE_MIN_AGE_MS } from './purchase-reconcile';
 import { ShipmentDocument, ShipmentEntity } from './shipment.entity';
 import { ShippingPackageEntity } from './shipping-package.entity';
 import { VnpEglobalClient } from './vnp-eglobal.client';
@@ -34,26 +36,7 @@ import { VnpEglobalClient } from './vnp-eglobal.client';
  * dùng `digString()` dò các tên field phổ biến để nhặt id/tracking/label.
  */
 
-/** Dò sâu (BFS) giá trị string đầu tiên có key nằm trong danh sách ứng viên. */
-function digString(root: unknown, keys: string[]): string | undefined {
-  const queue: unknown[] = [root];
-  let guard = 0;
-  while (queue.length > 0 && guard < 200) {
-    guard += 1;
-    const node = queue.shift();
-    if (!node || typeof node !== 'object') continue;
-    const rec = node as Record<string, unknown>;
-    for (const key of keys) {
-      const val = rec[key];
-      if (typeof val === 'string' && val.trim()) return val;
-      if (typeof val === 'number') return String(val);
-    }
-    for (const v of Object.values(rec)) {
-      if (v && typeof v === 'object') queue.push(v);
-    }
-  }
-  return undefined;
-}
+// digString dời sang ./purchase-reconcile (dùng chung với cron đối soát).
 
 /** Response VNP kiểu chuẩn thấy ở endpoint public: {code, message, result...}. */
 function looksOk(raw: unknown): boolean {
@@ -112,25 +95,16 @@ interface UspsVerification {
   errors?: { code?: string; message?: string }[];
 }
 
-/**
- * Phân loại text tracking → status record. Shape response khi hàng chạy thật
- * CHƯA biết (label test chưa từng được scan) — chỉ nhận diện chuỗi chắc chắn,
- * còn lại coi là đang vận chuyển; bổ sung map khi có đơn thật đầu tiên.
- */
-export function classifyTrackingStatus(text?: string): 'in_transit' | 'delivered' | undefined {
-  if (!text?.trim()) return undefined;
-  if (/delivered|đã giao/i.test(text)) return 'delivered';
-  return 'in_transit';
-}
+// classifyTrackingStatus + STATUS_KEYS + buildCarrierPatch dời sang
+// ./carrier-status (trạng thái HÃNG tách khỏi trạng thái MUA — §3).
 
 const SHIPMENT_ID_KEYS = ['shipment_id', 'shipmentId', 'id', 'uuid'];
 const TRACKING_KEYS = ['tracking_id', 'trackingId', 'tracking_code', 'trackingCode', 'tracking_number', 'trackingNumber'];
 const LABEL_KEYS = ['image_url', 'label_url', 'labelUrl', 'label', 'label_pdf', 'labelPdf', 'label_link', 'pdf_url', 'pdfUrl'];
 const ADDRESS_ID_KEYS = ['address_id', 'addressId', 'id', 'uuid'];
-const STATUS_KEYS = ['status', 'shipment_status', 'tracking_status', 'state'];
 
 @Injectable()
-export class ShippingVnpService {
+export class ShippingVnpService implements OnModuleInit {
   constructor(
     @InjectModel(OrderEntity.name) private readonly orderModel: Model<OrderEntity>,
     @InjectModel(ShippingPackageEntity.name) private readonly packageModel: Model<ShippingPackageEntity>,
@@ -140,6 +114,24 @@ export class ShippingVnpService {
     private readonly systemConfigService: SystemConfigService,
     @Inject('winston') private readonly logger: Logger,
   ) {}
+
+  /**
+   * Ép build index của bảng `shipments` lúc boot + LOG RÕ khi hỏng — 2 unique
+   * partial index là chốt chống mua trùng (ShippingLabelPatterns.md §2), thiếu
+   * âm thầm là mất lớp bảo vệ DB mà không ai biết (mongoose autoIndex build
+   * nền và nuốt lỗi — đã dính ở local 2026-09-05: boot xong không có index,
+   * không một dòng log).
+   */
+  async onModuleInit(): Promise<void> {
+    try {
+      await this.shipmentModel.createIndexes();
+      await this.packageModel.createIndexes();
+    } catch (err) {
+      this.logger.error({
+        message: JSON.stringify({ action: 'vnpShipmentIndexBuildFail', error: (err as Error).message?.slice(0, 1000) }),
+      });
+    }
+  }
 
   // ── Cấu hình địa chỉ gửi theo xưởng (blob system_configs, sống theo môi
   // trường — production tự cấu hình qua UI Settings, không restore từ local).
@@ -449,6 +441,39 @@ export class ShippingVnpService {
   }
 
   /**
+   * Trả kết quả LƯỢT MUA TRƯỚC cho lời gọi lặp cùng `requestId` (§2 — không
+   * tạo nhãn thứ hai, không ném lỗi khi nhãn đã có). Record còn đang xử lý dở
+   * (`purchasing`/`cancelling`) thì chưa có nhãn để trả → lỗi mềm bảo chờ.
+   */
+  private replayPurchase(
+    prev: ShipmentDocument,
+    groupProductionIds: string[],
+  ): { shipment: VnpShipmentInfo; groupProductionIds: string[]; raw: unknown; rawAddress?: unknown } {
+    if (prev.status === 'purchasing' || prev.status === 'cancelling') {
+      throw new BadRequestException(
+        `Lượt mua với requestId này đang xử lý dở (record ${String(prev._id)}, status=${prev.status}) — ` +
+          'chờ cron đối soát chốt xong rồi thử lại.',
+      );
+    }
+    this.logger.info({
+      message: JSON.stringify({ action: 'vnpCreateShipmentReplay', recordId: String(prev._id), status: prev.status }),
+    });
+    return {
+      shipment: {
+        shipmentId: prev.vnpShipmentId,
+        trackingCode: prev.trackingCode,
+        labelUrl: prev.labelUrl,
+        service: prev.service as VnpShipmentInfo['service'],
+        shippingType: prev.shippingType as VnpShipmentInfo['shippingType'],
+        toAddressId: prev.toAddressId,
+        createdAt: prev.createdAt,
+      },
+      groupProductionIds,
+      raw: { reused: true, recordId: String(prev._id), status: prev.status },
+    };
+  }
+
+  /**
    * Bước 2 — tạo vận đơn: createAddress(ShippingTo) → createShipment.
    * Gộp theo `orderId` seller (1 đơn nhiều item = 1 label): mỗi item của nhóm
    * thành 1 entry `package_details`, `rep1` = productionId từng item (unique
@@ -463,12 +488,43 @@ export class ShippingVnpService {
     const addr = this.requireAddress(order);
     if (!order.productionId) throw new BadRequestException('Đơn thiếu productionId.');
     const group = await this.loadGroup(order);
+    const groupIds = group.map((o) => String(o._id));
+    const groupProductionIds = group.map((o) => o.productionId);
+    // Chủ thể nhóm mua cho unique index chống trùng (§2).
+    const groupKey = order.orderId?.trim() || `order:${String(order._id)}`;
+
+    // Idempotency (§2): cùng requestId đã mua rồi → trả đúng nhãn lượt trước,
+    // không tạo nhãn thứ hai, không ném lỗi (đường sống cho job retry).
+    if (dto.requestId) {
+      const prev = await this.shipmentModel.findOne({
+        provider: SHIPMENT_PROVIDER_VNP,
+        purchaseKey: dto.requestId,
+        status: { $in: ['purchasing', 'created', 'in_transit', 'delivered', 'cancelling'] },
+      });
+      if (prev) return this.replayPurchase(prev, groupProductionIds);
+    }
     const withShipment = group.find((o) => o.vnpShipment?.shipmentId && !o.vnpShipment.cancelledAt);
     if (withShipment) {
       throw new BadRequestException(
         `Đơn seller này đã có vận đơn VNP (${withShipment.vnpShipment?.shipmentId} — item ${withShipment.productionId}). ` +
           '1 đơn chỉ mua 1 label; hủy vận đơn cũ trước khi tạo lại.',
       );
+    }
+    // Chống mua CHỒNG: còn record giữ chỗ `purchasing` cho nhóm này (lượt trước
+    // đang chạy hoặc chết giữa chừng, chưa đối soát) → chặn tạo lượt mới.
+    const groupPackIds = await this.packageModel.find({ productionOrderIds: { $in: groupIds } }).distinct('_id');
+    if (groupPackIds.length > 0) {
+      const pending = await this.shipmentModel.findOne({
+        packageId: { $in: groupPackIds },
+        provider: SHIPMENT_PROVIDER_VNP,
+        status: 'purchasing',
+      });
+      if (pending) {
+        throw new BadRequestException(
+          `Đơn này đang có lượt mua label dở dang (record ${String(pending._id)}). ` +
+            'Cron tracking sẽ tự đối soát với VNP để chốt hoặc đánh lỗi record đó — chờ rồi thử lại.',
+        );
+      }
     }
     const config = this.apiConfigService.vnpEglobalConfig;
     if (!config?.shippingUnitId) {
@@ -508,10 +564,56 @@ export class ShippingVnpService {
       );
     }
 
+    // ① GIỮ CHỖ (ShippingLabelPatterns.md §1): tạo pack + record `purchasing`
+    // TRƯỚC khi gọi VNP — tiến trình chết sau lời gọi thì record kẹt này là
+    // bằng chứng có thể tồn tại label mồ côi, cron `reconcilePurchasing()` sẽ
+    // tra VNP (getByRef1 theo rep1=productionId) để chốt nốt hoặc đánh failed.
+    const pack = await this.packageModel.create({
+      code: `PK-${genCode(10)}`,
+      factoryId: order.factoryId || undefined,
+      orderCodes: order.orderId?.trim() ? [order.orderId.trim()] : [],
+      productionOrderIds: groupIds,
+      productionIds: groupProductionIds,
+      createdAt: new Date(),
+    });
+    let shipmentRecord: ShipmentDocument;
+    try {
+      shipmentRecord = (await this.shipmentModel.create({
+        packageId: pack._id,
+        provider: 'vnp-eglobal',
+        service: dto.service,
+        shippingType: dto.shippingType,
+        fromAddressId,
+        toAddressId,
+        groupKey,
+        ...(dto.requestId ? { purchaseKey: dto.requestId } : {}),
+        status: 'purchasing',
+        createdByUserId: createdBy?.userId,
+        createdByUserName: createdBy?.userName,
+        createdAt: new Date(),
+      })) as ShipmentDocument;
+    } catch (err) {
+      // Cuộc đua thắng ở tầng DB (§2): E11000 nghĩa là một lượt mua khác vừa
+      // giữ chỗ trước — quy về nhánh "trả nhãn cũ / báo đang xử lý", không
+      // được rơi xuống gọi hãng tạo nhãn thứ hai.
+      const e = err as { code?: number; keyPattern?: Record<string, unknown> };
+      if (e.code !== 11000) throw err;
+      if (e.keyPattern?.purchaseKey && dto.requestId) {
+        const prev = await this.shipmentModel.findOne({ provider: SHIPMENT_PROVIDER_VNP, purchaseKey: dto.requestId });
+        if (prev) return this.replayPurchase(prev as ShipmentDocument, groupProductionIds);
+      }
+      throw new BadRequestException(
+        'Một lượt mua label khác cho đơn này vừa được ghi nhận (unique index chặn trùng) — ' +
+          'mở lại dialog / xem "Lịch sử vận đơn" để lấy kết quả lượt đó.',
+      );
+    }
+
     const today = new Date().toISOString().slice(0, 10);
-    // 1 entry package_details / item trong nhóm — weight riêng từng item,
-    // fallback dto.weightGram cho item thiếu weight.
-    const raw = await this.client.createShipment({
+    // ② Gọi hãng. 1 entry package_details / item trong nhóm — weight riêng
+    // từng item, fallback dto.weightGram cho item thiếu weight.
+    let raw: unknown;
+    try {
+      raw = await this.client.createShipment({
       shipping_from_id: fromAddressId,
       shipping_to_id: toAddressId,
       package_details: group.map((o) => ({
@@ -529,16 +631,41 @@ export class ShippingVnpService {
         quantity: o.quantity ?? 1,
         package_type: dto.packageType || undefined,
       })),
-      shipping_unit_id: config.shippingUnitId,
-      service: dto.service,
-      ship_date: today,
-      ready_time: today,
-      last_time_available: today,
-      confirmation: true,
-      shipping_type: dto.shippingType,
-      ...(dto.service === 'Uniuni' ? { disable_fallback: true } : {}),
-    });
+        shipping_unit_id: config.shippingUnitId,
+        service: dto.service,
+        ship_date: today,
+        ready_time: today,
+        last_time_available: today,
+        confirmation: true,
+        shipping_type: dto.shippingType,
+        ...(dto.service === 'Uniuni' ? { disable_fallback: true } : {}),
+      });
+    } catch (err) {
+      // KHÔNG hỏi được hãng (network/5xx — client đã gộp thành exception):
+      // trạng thái label CHƯA BIẾT → GIỮ record `purchasing` cho cron đối soát,
+      // tuyệt đối không đánh failed (có thể label đã tạo, tiền đã trừ).
+      this.logger.warn({
+        message: JSON.stringify({
+          action: 'vnpCreateShipmentUnknown',
+          recordId: String(shipmentRecord._id),
+          orderId,
+          error: (err as Error).message?.slice(0, 500),
+        }),
+      });
+      throw new BadRequestException(
+        'Không xác định được kết quả mua label (VNP không trả lời). Hệ thống sẽ tự đối soát ở cron tracking — ' +
+          'KHÔNG bấm mua lại ngay. ' +
+          (err as Error).message?.slice(0, 2000),
+      );
+    }
     if (!looksOk(raw)) {
+      // Hãng TRẢ LỜI RÕ là lỗi → label không được tạo, không mất tiền: chốt
+      // failed (có điều kiện — cron có thể đã đụng record này).
+      const failReason = JSON.stringify(raw).slice(0, 1000);
+      await this.shipmentModel.updateOne(
+        { _id: shipmentRecord._id, status: 'purchasing' },
+        { $set: { status: 'failed', failReason } },
+      );
       throw new BadRequestException('VNP createShipment lỗi — response: ' + JSON.stringify(raw).slice(0, 6000));
     }
 
@@ -559,38 +686,40 @@ export class ShippingVnpService {
       toAddressId,
       createdAt: new Date(),
     };
-    const groupIds = group.map((o) => String(o._id));
-    const groupProductionIds = group.map((o) => o.productionId);
+    // ③ GHI NGAY mã định danh bên hãng vào record — TÁCH khỏi bước chốt ④:
+    // nếu bước chốt hỏng thì mã vẫn còn, cron đối soát tra thẳng theo id thay
+    // vì mò getByRef1. Record vẫn đang `purchasing`.
+    await this.shipmentModel.updateOne(
+      { _id: shipmentRecord._id },
+      {
+        $set: {
+          ...(info.shipmentId ? { vnpShipmentId: info.shipmentId } : {}),
+          ...(info.trackingCode ? { trackingCode: info.trackingCode } : {}),
+          ...(info.labelUrl ? { labelUrl: info.labelUrl } : {}),
+          ...(typeof rec?.shipping_cost === 'string' || typeof rec?.shipping_cost === 'number'
+            ? { shippingCost: String(rec.shipping_cost) }
+            : {}),
+        },
+      },
+    );
 
-    // Nguồn sự thật: pack (kiện — tự sinh ngầm, 1 pack = 1 đơn khách) +
-    // record shipment MỚI mỗi lần mua (lịch sử không ghi đè).
-    const pack = await this.packageModel.create({
-      code: `PK-${genCode(10)}`,
-      factoryId: order.factoryId || undefined,
-      orderCodes: order.orderId?.trim() ? [order.orderId.trim()] : [],
-      productionOrderIds: groupIds,
-      productionIds: groupProductionIds,
-      createdAt: new Date(),
-    });
-    const shipmentRecord = await this.shipmentModel.create({
-      packageId: pack._id,
-      provider: 'vnp-eglobal',
-      vnpShipmentId: info.shipmentId,
-      trackingCode: info.trackingCode,
-      labelUrl: info.labelUrl,
-      service: dto.service,
-      shippingType: dto.shippingType,
-      fromAddressId,
-      toAddressId,
-      shippingCost:
-        typeof rec?.shipping_cost === 'string' || typeof rec?.shipping_cost === 'number'
-          ? String(rec.shipping_cost)
-          : undefined,
-      status: 'created',
-      createdByUserId: createdBy?.userId,
-      createdByUserName: createdBy?.userName,
-      createdAt: new Date(),
-    });
+    // ④ Chốt sang `created` bằng CẬP NHẬT CÓ ĐIỀU KIỆN — cron đối soát cũng
+    // ghi vào đúng record này, chỉ 1 bên được thắng cuộc đua.
+    const finalized = await this.shipmentModel.updateOne(
+      { _id: shipmentRecord._id, status: 'purchasing' },
+      { $set: { status: 'created' } },
+    );
+    if (finalized.modifiedCount === 0) {
+      this.logger.warn({
+        message: JSON.stringify({
+          action: 'vnpCreateShipmentFinalizeRace',
+          recordId: String(shipmentRecord._id),
+          note: 'record đã bị chốt bởi nơi khác (cron đối soát?) — không chốt đè',
+        }),
+      });
+    }
+    // ── Từ đây trở xuống là VÙNG KHÔNG ĐƯỢC NÉM (ShippingLabelPatterns.md §5):
+    // label đã chốt, tiền đã tiêu — mọi việc phụ hỏng chỉ warn rồi đi tiếp.
     // Đối soát ví: chụp số dư NGAY SAU khi mua — lỗi thì bỏ qua, tuyệt đối
     // không làm fail luồng mua (label đã tạo xong bên VNP rồi).
     try {
@@ -609,8 +738,19 @@ export class ShippingVnpService {
 
     // Snapshot mỏng lên CẢ nhóm orders (1 orderId 1 label — item nào mở dialog
     // cũng thấy, list render không phải join). Xóa cancelledAt cũ nếu tạo lại.
-    await this.saveShipmentInfoMany(groupIds, info);
-    await this.orderModel.updateMany({ _id: { $in: groupIds } }, { $unset: { 'vnpShipment.cancelledAt': 1 } });
+    // Việc phụ — hỏng thì warn, record shipments (nguồn sự thật) đã chốt xong.
+    try {
+      await this.saveShipmentInfoMany(groupIds, info);
+      await this.orderModel.updateMany({ _id: { $in: groupIds } }, { $unset: { 'vnpShipment.cancelledAt': 1 } });
+    } catch (err) {
+      this.logger.warn({
+        message: JSON.stringify({
+          action: 'vnpCreateShipmentSnapshotFail',
+          recordId: String(shipmentRecord._id),
+          error: (err as Error).message?.slice(0, 500),
+        }),
+      });
+    }
     const shipment = (await this.orderModel.findOne({ _id: orderId }))?.vnpShipment ?? (info as VnpShipmentInfo);
     this.logger.info({
       message: JSON.stringify({
@@ -632,28 +772,35 @@ export class ShippingVnpService {
     const code = order.vnpShipment?.trackingCode || order.vnpShipment?.shipmentId;
     if (!code) throw new BadRequestException('Đơn chưa có vận đơn VNP — tạo vận đơn trước.');
     const raw = await this.client.getTracking(code);
-    // Cập nhật trạng thái cho MỌI item cùng shipmentId (nhóm 1 đơn 1 label).
-    const patch = { lastTrackingStatus: digString(raw, STATUS_KEYS), lastTrackingAt: new Date() };
+    const now = new Date();
+    // Trạng thái HÃNG dựng ở helper thuần (§3) — cần trạng thái trước đó của
+    // record active để giữ luật "scannedAt set 1 lần" + chỉ ghi event khi đổi.
+    const activeRecord = await this.shipmentModel.findOne({
+      vnpShipmentId: order.vnpShipment?.shipmentId,
+      status: { $in: ['created', 'in_transit'] },
+    });
+    const patch = buildCarrierPatch(
+      activeRecord ?? { lastTrackingStatus: order.vnpShipment?.lastTrackingStatus, scannedAt: undefined, status: 'created' },
+      raw,
+      now,
+    );
+    // Cập nhật snapshot cho MỌI item cùng shipmentId (nhóm 1 đơn 1 label).
     await this.orderModel.updateMany(
       { 'vnpShipment.shipmentId': order.vnpShipment?.shipmentId },
       {
         $set: {
-          ...(patch.lastTrackingStatus ? { 'vnpShipment.lastTrackingStatus': patch.lastTrackingStatus } : {}),
-          'vnpShipment.lastTrackingAt': patch.lastTrackingAt,
+          ...(patch.statusText ? { 'vnpShipment.lastTrackingStatus': patch.statusText } : {}),
+          'vnpShipment.lastTrackingAt': now,
+          ...(patch.set.scannedAt ? { 'vnpShipment.scannedAt': now } : {}),
         },
       },
     );
-    // Sync record shipments (nguồn sự thật) + ghi event vào lịch sử poll.
+    // Sync record shipments (nguồn sự thật) + ghi event khi trạng thái ĐỔI.
     await this.shipmentModel.updateMany(
       { vnpShipmentId: order.vnpShipment?.shipmentId, status: { $in: ['created', 'in_transit'] } },
       {
-        $set: {
-          ...(patch.lastTrackingStatus ? { lastTrackingStatus: patch.lastTrackingStatus } : {}),
-          lastTrackingAt: patch.lastTrackingAt,
-        },
-        ...(patch.lastTrackingStatus
-          ? { $push: { trackingEvents: { status: patch.lastTrackingStatus, at: patch.lastTrackingAt } } }
-          : {}),
+        $set: patch.set,
+        ...(patch.changed ? { $push: { trackingEvents: { status: patch.statusText, at: now } } } : {}),
       },
     );
     const shipment = (await this.orderModel.findOne({ _id: orderId }))?.vnpShipment ?? undefined;
@@ -689,16 +836,114 @@ export class ShippingVnpService {
     return { raw };
   }
 
-  /** Bước 4 — hủy vận đơn (để tạo lại khi test). */
+  /**
+   * Bước 4 — hủy vận đơn, FAIL-CLOSED theo chiều tiền (ShippingLabelPatterns.md
+   * §4): ① kiểm label đã vào mạng lưới chưa (scannedAt local + hỏi hãng) — đã
+   * quét / KHÔNG hỏi được → TỪ CHỐI; ② chuyển `cancelling`; ③ gọi hãng hủy;
+   * ④ chỉ khi hãng xác nhận mới chốt `cancelled`. Lệnh hủy gửi đi mà không có
+   * trả lời → record kẹt `cancelling`, cron `reconcileCancelling()` dọn.
+   */
   async cancelShipment(orderId: string): Promise<{ shipment: VnpShipmentInfo; raw: unknown }> {
     const order = await this.loadOrder(orderId);
     const shipmentId = order.vnpShipment?.shipmentId;
     if (!shipmentId) throw new BadRequestException('Đơn chưa có vận đơn VNP.');
-    const raw = await this.client.cancelShipment(shipmentId);
+    const record = await this.shipmentModel
+      .findOne({ vnpShipmentId: shipmentId, status: { $in: ['created', 'in_transit', 'cancelling'] } })
+      .sort({ createdAt: -1 });
+
+    // ① Chốt local: đã từng ghi nhận label vào mạng lưới → từ chối thẳng,
+    // không cần hỏi hãng (hủy nhầm label đang giao = hàng cứ đi, mình mất dấu).
+    const knownScan = record?.scannedAt ?? order.vnpShipment?.scannedAt;
+    if (knownScan) {
+      throw new BadRequestException(
+        `Label đã vào mạng lưới vận chuyển (quét lần đầu ${new Date(knownScan).toISOString()}) — TỪ CHỐI hủy. ` +
+          'Hàng có thể đang trên đường giao; hủy lúc này chỉ làm mất dấu kiện.',
+      );
+    }
+
+    // ① Hỏi hãng hành trình hiện tại — FAIL-CLOSED: không có mã để hỏi hoặc
+    // không hỏi được đều TỪ CHỐI (ngược chiều các chốt khác trong hệ, cùng
+    // tinh thần: nghi ngờ thì chọn hướng không mất tiền/mất hàng).
+    const trackingCode = record?.trackingCode || order.vnpShipment?.trackingCode;
+    if (!trackingCode) {
+      throw new BadRequestException(
+        'Không có tracking code để kiểm tra label đã đi chưa — TỪ CHỐI hủy (fail-closed). ' +
+          'Bấm "Chi tiết shipment" để nhặt bù tracking rồi thử lại.',
+      );
+    }
+    let trackRaw: unknown;
+    try {
+      trackRaw = await this.client.publicTrack(trackingCode);
+    } catch (err) {
+      throw new BadRequestException(
+        'Không hỏi được hành trình label (mạng/VNP lỗi) — TỪ CHỐI hủy (fail-closed), thử lại sau. ' +
+          (err as Error).message?.slice(0, 1000),
+      );
+    }
+    if (hasCarrierError(trackRaw)) {
+      // Nguồn tracking trả LỖI (vd cạn quota) — không kết luận được label đã đi
+      // chưa → cùng nhánh fail-closed với lỗi mạng.
+      throw new BadRequestException(
+        'Nguồn tracking trả lỗi — không xác định được label đã đi chưa, TỪ CHỐI hủy (fail-closed). Thử lại sau. ' +
+          JSON.stringify(trackRaw).slice(0, 1000),
+      );
+    }
+    if (hasCarrierSignal(trackRaw)) {
+      // Hãng báo đã có hành trình — ghi luôn scannedAt làm bằng chứng (đỡ phải
+      // hỏi lại lần sau) rồi từ chối.
+      const now = new Date();
+      const patch = buildCarrierPatch(record ?? { lastTrackingStatus: undefined, scannedAt: undefined, status: 'created' }, trackRaw, now);
+      if (record) await this.shipmentModel.updateOne({ _id: record._id }, { $set: patch.set });
+      await this.orderModel.updateMany(
+        { 'vnpShipment.shipmentId': shipmentId },
+        {
+          $set: {
+            'vnpShipment.scannedAt': now,
+            ...(patch.statusText ? { 'vnpShipment.lastTrackingStatus': patch.statusText } : {}),
+            'vnpShipment.lastTrackingAt': now,
+          },
+        },
+      );
+      throw new BadRequestException(
+        `Hãng báo label ĐÃ vào mạng lưới ("${patch.statusText ?? ''}") — TỪ CHỐI hủy.`,
+      );
+    }
+
+    // ② Trạng thái trung gian "đang hủy" — từ đây tới khi hãng xác nhận là
+    // vùng CHƯA BIẾT: không hoàn tiền, không coi kiện là xong, không mua mới.
+    const cancelRequestedAt = new Date();
+    if (record) {
+      await this.shipmentModel.updateOne(
+        { _id: record._id, status: { $in: ['created', 'in_transit', 'cancelling'] } },
+        { $set: { status: 'cancelling', cancelRequestedAt } },
+      );
+    }
+
+    // ③ Gọi hãng hủy. Không nhận được trả lời → GIỮ `cancelling` cho cron dọn.
+    let raw: unknown;
+    try {
+      raw = await this.client.cancelShipment(shipmentId);
+    } catch (err) {
+      throw new BadRequestException(
+        'Đã gửi lệnh hủy nhưng KHÔNG nhận được trả lời từ VNP — record chuyển "Đang hủy", cron sẽ tự đối soát. ' +
+          'KHÔNG mua label mới cho đơn này cho tới khi record chốt xong. ' +
+          (err as Error).message?.slice(0, 1000),
+      );
+    }
     if (!looksOk(raw)) {
+      // Hãng TRẢ LỜI RÕ là không hủy được → label còn sống, trả record về
+      // trạng thái mở cũ để không kẹt "cancelling" oan.
+      if (record) {
+        await this.shipmentModel.updateOne(
+          { _id: record._id, status: 'cancelling' },
+          { $set: { status: record.status === 'in_transit' ? 'in_transit' : 'created' }, $unset: { cancelRequestedAt: 1 } },
+        );
+      }
       throw new BadRequestException('VNP cancelShipment lỗi — response: ' + JSON.stringify(raw).slice(0, 6000));
     }
-    // Đánh dấu hủy cho MỌI item cùng shipmentId (nhóm 1 đơn 1 label).
+
+    // ④ Hãng xác nhận (code 200 — shape response cancel thật CHƯA đo, khi đo
+    // được thì siết thêm điều kiện xác nhận) → chốt `cancelled`, ghi sổ cả nhóm.
     const cancelledAt = new Date();
     await this.orderModel.updateMany(
       { 'vnpShipment.shipmentId': shipmentId },
@@ -706,7 +951,7 @@ export class ShippingVnpService {
     );
     // Record shipments GIỮ NGUYÊN, chỉ chuyển trạng thái — lịch sử còn mãi.
     await this.shipmentModel.updateMany(
-      { vnpShipmentId: shipmentId, status: { $in: ['created', 'in_transit'] } },
+      { vnpShipmentId: shipmentId, status: { $in: ['created', 'in_transit', 'cancelling'] } },
       { $set: { status: 'cancelled', cancelledAt } },
     );
     const shipment = (await this.orderModel.findOne({ _id: orderId }))?.vnpShipment ?? ({} as VnpShipmentInfo);
@@ -736,9 +981,13 @@ export class ShippingVnpService {
       shippingCost: doc.shippingCost,
       balanceAfter: doc.balanceAfter,
       status: doc.status,
+      failReason: doc.failReason,
+      cancelRequestedAt: doc.cancelRequestedAt,
       cancelledAt: doc.cancelledAt,
       lastTrackingStatus: doc.lastTrackingStatus,
       lastTrackingAt: doc.lastTrackingAt,
+      scannedAt: doc.scannedAt,
+      carrierNote: doc.carrierNote,
       trackingEvents: doc.trackingEvents ?? [],
       createdByUserId: doc.createdByUserId,
       createdByUserName: doc.createdByUserName,
@@ -795,6 +1044,213 @@ export class ShippingVnpService {
     return (docs as ShipmentDocument[]).map((d) => this.toShipmentRecord(d));
   }
 
+  // ── Cron đối soát record kẹt `purchasing` (ShippingLabelPatterns.md §1 ⑤) ──
+
+  /**
+   * Dọn record giữ chỗ kẹt `purchasing` quá RECONCILE_MIN_AGE_MS: hỏi VNP theo
+   * mã đã ghi ở bước ③ (`getShipment`) hoặc rep1=productionId (`getByRef1`),
+   * phân loại theo §8 — found → chốt nốt `created` + sync snapshot; hãng nói
+   * không có → `failed` (GIỮ record + failReason làm dấu vết tiền); không hỏi
+   * được → ĐỂ NGUYÊN, lượt sau thử lại. TUYỆT ĐỐI không xóa record kẹt.
+   */
+  async reconcilePurchasing(): Promise<{ scanned: number; finalized: number; failed: number; unknown: number }> {
+    const cutoff = new Date(Date.now() - RECONCILE_MIN_AGE_MS);
+    const stuck = (await this.shipmentModel
+      .find({ provider: SHIPMENT_PROVIDER_VNP, status: 'purchasing', createdAt: { $lt: cutoff } })
+      .sort({ createdAt: 1 })
+      .limit(RECONCILE_BATCH)
+      .populate('package')) as ShipmentDocument[];
+    let finalized = 0;
+    let failed = 0;
+    let unknown = 0;
+    for (const doc of stuck) {
+      const rep1 = doc.package?.productionIds?.[0];
+      const url = doc.vnpShipmentId
+        ? `/shipment/${encodeURIComponent(doc.vnpShipmentId)}`
+        : rep1
+          ? `/shipment/getByRef1/${encodeURIComponent(rep1)}`
+          : null;
+      if (!url) {
+        // Không có mã nào để tra (pack luôn có productionIds — ca này gần như
+        // không xảy ra, nhưng để record kẹt vĩnh viễn thì tệ hơn).
+        await this.shipmentModel.updateOne(
+          { _id: doc._id, status: 'purchasing' },
+          { $set: { status: 'failed', failReason: 'Không có mã nào để đối soát với VNP' } },
+        );
+        failed += 1;
+        continue;
+      }
+      const probe = await this.client.probe(url);
+      const outcome = interpretVnpLookup(probe.http, probe.body);
+      if (outcome.kind === 'found') {
+        // rep1 có thể tra ngược ra label của LƯỢT MUA TRƯỚC (đã có record giữ)
+        // → lượt này không tạo label mới, đánh failed thay vì nhận vơ.
+        const ownedElsewhere = outcome.shipmentId
+          ? await this.shipmentModel.exists({ _id: { $ne: doc._id }, vnpShipmentId: outcome.shipmentId })
+          : null;
+        if (ownedElsewhere) {
+          await this.shipmentModel.updateOne(
+            { _id: doc._id, status: 'purchasing' },
+            {
+              $set: {
+                status: 'failed',
+                failReason: `Shipment ${outcome.shipmentId} thuộc lượt mua trước — lượt này không tạo label mới`,
+              },
+            },
+          );
+          failed += 1;
+        } else {
+          // Chốt có điều kiện — người bấm mua (bước ④) có thể vừa chốt xong.
+          const res = await this.shipmentModel.updateOne(
+            { _id: doc._id, status: 'purchasing' },
+            {
+              $set: {
+                status: 'created',
+                ...(outcome.shipmentId ? { vnpShipmentId: outcome.shipmentId } : {}),
+                ...(outcome.trackingCode ? { trackingCode: outcome.trackingCode } : {}),
+                ...(outcome.labelUrl ? { labelUrl: outcome.labelUrl } : {}),
+              },
+            },
+          );
+          if (res.modifiedCount > 0) {
+            finalized += 1;
+            // Sync snapshot orders — việc phụ (§5), hỏng chỉ warn.
+            try {
+              const groupIds = doc.package?.productionOrderIds ?? [];
+              if (groupIds.length > 0) {
+                await this.saveShipmentInfoMany(groupIds, {
+                  shipmentId: outcome.shipmentId ?? doc.vnpShipmentId,
+                  trackingCode: outcome.trackingCode ?? doc.trackingCode,
+                  labelUrl: outcome.labelUrl ?? doc.labelUrl,
+                  // Entity lưu string rộng, snapshot dùng union hẹp — record do
+                  // chính createShipment ghi từ DTO nên giá trị luôn hợp lệ.
+                  service: doc.service as VnpShipmentInfo['service'],
+                  shippingType: doc.shippingType as VnpShipmentInfo['shippingType'],
+                  toAddressId: doc.toAddressId,
+                  createdAt: doc.createdAt,
+                });
+                await this.orderModel.updateMany(
+                  { _id: { $in: groupIds } },
+                  { $unset: { 'vnpShipment.cancelledAt': 1 } },
+                );
+              }
+            } catch (err) {
+              this.logger.warn({
+                message: JSON.stringify({
+                  action: 'vnpReconcileSnapshotFail',
+                  recordId: String(doc._id),
+                  error: (err as Error).message?.slice(0, 500),
+                }),
+              });
+            }
+          }
+        }
+      } else if (outcome.kind === 'not_found') {
+        await this.shipmentModel.updateOne(
+          { _id: doc._id, status: 'purchasing' },
+          { $set: { status: 'failed', failReason: outcome.reason.slice(0, 1000) } },
+        );
+        failed += 1;
+      } else {
+        unknown += 1;
+        this.logger.warn({
+          message: JSON.stringify({ action: 'vnpReconcileUnknown', recordId: String(doc._id), reason: outcome.reason }),
+        });
+      }
+      // Giãn nhịp như cron tracking — mỗi record là 1 call ra VNP.
+      await new Promise((r) => setTimeout(r, 800));
+    }
+    if (stuck.length > 0) {
+      this.logger.info({
+        message: JSON.stringify({ action: 'vnpReconcilePurchasing', scanned: stuck.length, finalized, failed, unknown }),
+      });
+    }
+    return { scanned: stuck.length, finalized, failed, unknown };
+  }
+
+  /**
+   * Dọn record kẹt `cancelling` (§4 — lệnh hủy gửi đi mà không nhận được trả
+   * lời): hỏi hãng để chốt 1 trong 3 hướng — hãng nói label KHÔNG CÒN (404 /
+   * text trạng thái dạng cancelled) → chốt `cancelled`; label hóa ra ĐANG ĐI
+   * (tracking có tín hiệu) → hủy bất thành, trả về `in_transit` + scannedAt +
+   * carrierNote cho ops; còn lại → GIỮ NGUYÊN chờ lượt sau / ops xử tay.
+   * TUYỆT ĐỐI không tự mở đường hoàn tiền ở đây — chỉ ghi sổ.
+   */
+  async reconcileCancelling(): Promise<{ scanned: number; cancelled: number; revived: number; unknown: number }> {
+    const cutoff = new Date(Date.now() - RECONCILE_MIN_AGE_MS);
+    const stuck = (await this.shipmentModel
+      .find({ provider: SHIPMENT_PROVIDER_VNP, status: 'cancelling', cancelRequestedAt: { $lt: cutoff } })
+      .sort({ cancelRequestedAt: 1 })
+      .limit(RECONCILE_BATCH)) as ShipmentDocument[];
+    let cancelled = 0;
+    let revived = 0;
+    let unknown = 0;
+    for (const doc of stuck) {
+      const unknownBefore = unknown;
+      const probe = doc.vnpShipmentId
+        ? await this.client.probe(`/shipment/${encodeURIComponent(doc.vnpShipmentId)}`)
+        : null;
+      const outcome = probe ? interpretVnpLookup(probe.http, probe.body) : null;
+      const statusText = probe ? extractStatusText(probe.body) : undefined;
+      if (outcome?.kind === 'not_found' || isCancelledStatusText(statusText)) {
+        // Hãng xác nhận label không còn → chốt sổ.
+        const cancelledAt = new Date();
+        await this.shipmentModel.updateOne(
+          { _id: doc._id, status: 'cancelling' },
+          { $set: { status: 'cancelled', cancelledAt } },
+        );
+        if (doc.vnpShipmentId) {
+          await this.orderModel.updateMany(
+            { 'vnpShipment.shipmentId': doc.vnpShipmentId },
+            { $set: { 'vnpShipment.cancelledAt': cancelledAt } },
+          );
+        }
+        cancelled += 1;
+      } else if (doc.trackingCode) {
+        // Chưa kết luận được từ shipment detail — soi hành trình: có tín hiệu
+        // scan nghĩa là label SỐNG và đang đi (lệnh hủy bất thành).
+        try {
+          const trackRaw = await this.client.publicTrack(doc.trackingCode);
+          if (hasCarrierSignal(trackRaw)) {
+            const now = new Date();
+            const patch = buildCarrierPatch(doc, trackRaw, now);
+            await this.shipmentModel.updateOne(
+              { _id: doc._id, status: 'cancelling' },
+              {
+                $set: {
+                  ...patch.set,
+                  status: patch.newStatus ?? 'in_transit',
+                  carrierNote: 'Hủy bất thành — label đã vào mạng lưới, hàng đang chạy',
+                },
+                $unset: { cancelRequestedAt: 1 },
+              },
+            );
+            revived += 1;
+          } else {
+            unknown += 1;
+          }
+        } catch {
+          unknown += 1; // không hỏi được — không kết luận
+        }
+      } else {
+        unknown += 1;
+      }
+      if (unknown > unknownBefore) {
+        // Record NÀY vẫn kẹt — log để ops soi.
+        this.logger.warn({
+          message: JSON.stringify({ action: 'vnpReconcileCancellingStuck', recordId: String(doc._id) }),
+        });
+      }
+      await new Promise((r) => setTimeout(r, 800));
+    }
+    if (stuck.length > 0) {
+      this.logger.info({
+        message: JSON.stringify({ action: 'vnpReconcileCancelling', scanned: stuck.length, cancelled, revived, unknown }),
+      });
+    }
+    return { scanned: stuck.length, cancelled, revived, unknown };
+  }
+
   // ── Cron poll tracking (2 lần/ngày — VNP KHÔNG có webhook cho partner) ────
 
   private trackingCronRunning = false;
@@ -812,10 +1268,26 @@ export class ShippingVnpService {
     delivered: number;
     failed: number;
     skipped?: boolean;
+    reconcile?: { scanned: number; finalized: number; failed: number; unknown: number };
+    reconcileCancelling?: { scanned: number; cancelled: number; revived: number; unknown: number };
   }> {
     if (this.trackingCronRunning) return { checked: 0, updated: 0, delivered: 0, failed: 0, skipped: true };
     this.trackingCronRunning = true;
     try {
+      // Dọn record kẹt `purchasing` + `cancelling` TRƯỚC khi poll tracking
+      // (chung khóa in-flight + chung lịch crontab — không thêm mảnh vận hành).
+      const reconcile = await this.reconcilePurchasing().catch((err) => {
+        this.logger.warn({
+          message: JSON.stringify({ action: 'vnpReconcileCronFail', error: (err as Error).message?.slice(0, 500) }),
+        });
+        return { scanned: 0, finalized: 0, failed: 0, unknown: 0 };
+      });
+      const reconcileCancelling = await this.reconcileCancelling().catch((err) => {
+        this.logger.warn({
+          message: JSON.stringify({ action: 'vnpReconcileCancellingCronFail', error: (err as Error).message?.slice(0, 500) }),
+        });
+        return { scanned: 0, cancelled: 0, revived: 0, unknown: 0 };
+      });
       const since = new Date(Date.now() - 30 * 24 * 3600 * 1000);
       const open = await this.shipmentModel
         .find({
@@ -835,31 +1307,34 @@ export class ShippingVnpService {
         try {
           const raw = await this.client.publicTrack(doc.trackingCode as string);
           const now = new Date();
-          const statusText = digString(raw, STATUS_KEYS);
-          const changed = !!statusText && statusText !== doc.lastTrackingStatus;
-          const newStatus = classifyTrackingStatus(statusText);
+          // Trạng thái HÃNG tách khỏi trạng thái MUA (§3): patch dựng ở helper
+          // thuần — gồm cả scannedAt (set 1 lần) + carrierNote cho ops.
+          const patch = buildCarrierPatch(doc, raw, now);
           await this.shipmentModel.updateOne(
             { _id: doc._id },
             {
-              $set: {
-                lastTrackingAt: now,
-                ...(statusText ? { lastTrackingStatus: statusText } : {}),
-                ...(newStatus && newStatus !== doc.status ? { status: newStatus } : {}),
-              },
-              ...(changed ? { $push: { trackingEvents: { status: statusText, at: now } } } : {}),
+              $set: patch.set,
+              ...(patch.changed ? { $push: { trackingEvents: { status: patch.statusText, at: now } } } : {}),
             },
           );
-          if (changed) {
-            updated += 1;
-            // Sync snapshot trên orders để bảng đơn hiện trạng thái mới.
+          if (patch.changed) updated += 1;
+          // Sync snapshot trên orders khi text đổi HOẶC vừa ghi nhận scan đầu
+          // (record cũ có thể trùng text nhưng chưa từng có scannedAt).
+          if (patch.changed || patch.set.scannedAt) {
             if (doc.vnpShipmentId) {
               await this.orderModel.updateMany(
                 { 'vnpShipment.shipmentId': doc.vnpShipmentId },
-                { $set: { 'vnpShipment.lastTrackingStatus': statusText, 'vnpShipment.lastTrackingAt': now } },
+                {
+                  $set: {
+                    'vnpShipment.lastTrackingStatus': patch.statusText,
+                    'vnpShipment.lastTrackingAt': now,
+                    ...(patch.set.scannedAt ? { 'vnpShipment.scannedAt': now } : {}),
+                  },
+                },
               );
             }
           }
-          if (newStatus === 'delivered' && doc.status !== 'delivered') delivered += 1;
+          if (patch.newStatus === 'delivered' && doc.status !== 'delivered') delivered += 1;
         } catch {
           failed += 1;
         }
@@ -869,7 +1344,7 @@ export class ShippingVnpService {
       this.logger.info({
         message: JSON.stringify({ action: 'vnpTrackingCron', checked: open.length, updated, delivered, failed }),
       });
-      return { checked: open.length, updated, delivered, failed };
+      return { checked: open.length, updated, delivered, failed, reconcile, reconcileCancelling };
     } finally {
       this.trackingCronRunning = false;
     }
@@ -891,7 +1366,9 @@ export class ShippingVnpService {
       };
     }
     const costExpr = { $convert: { input: '$shippingCost', to: 'double', onError: 0, onNull: 0 } };
-    const notCancelled = { $match: { status: { $ne: 'cancelled' } } };
+    // Chỉ tính cost/bucket cho label THẬT đã mua: loại `purchasing` (chưa chắc
+    // mua xong), `failed` (không mất tiền) bên cạnh `cancelled` như trước.
+    const counted = { $match: { status: { $in: [...VNP_SHIPMENT_COUNTED_STATUSES] } } };
     const [facet] = await this.shipmentModel.aggregate<{
       totals: { count: number; cost: number; active: number; delivered: number; cancelled: number }[];
       byMonth: { key: string; count: number; cost: number }[];
@@ -915,7 +1392,7 @@ export class ShippingVnpService {
             { $project: { _id: 0 } },
           ],
           byMonth: [
-            notCancelled,
+            counted,
             {
               $group: {
                 _id: { $dateToString: { date: '$createdAt', format: '%Y-%m', timezone: '+07:00' } },
@@ -928,7 +1405,7 @@ export class ShippingVnpService {
             { $project: { _id: 0, key: '$_id', count: 1, cost: 1 } },
           ],
           byFactory: [
-            notCancelled,
+            counted,
             { $lookup: { from: 'shipping_packages', localField: 'packageId', foreignField: '_id', as: 'pack' } },
             { $addFields: { factoryId: { $ifNull: [{ $arrayElemAt: ['$pack.factoryId', 0] }, ''] } } },
             { $group: { _id: '$factoryId', count: { $sum: 1 }, cost: { $sum: costExpr } } },
@@ -945,7 +1422,7 @@ export class ShippingVnpService {
             { $sort: { cost: -1 } },
           ],
           byService: [
-            notCancelled,
+            counted,
             { $group: { _id: { $ifNull: ['$service', ''] }, count: { $sum: 1 }, cost: { $sum: costExpr } } },
             { $project: { _id: 0, key: '$_id', count: 1, cost: 1 } },
             { $sort: { cost: -1 } },

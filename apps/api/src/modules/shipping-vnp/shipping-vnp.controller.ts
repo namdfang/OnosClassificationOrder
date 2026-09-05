@@ -4,6 +4,7 @@ import {
   Controller,
   Delete,
   Get,
+  Headers,
   HttpCode,
   HttpStatus,
   Inject,
@@ -11,6 +12,7 @@ import {
   Post,
   Put,
   Query,
+  UnauthorizedException,
   UsePipes,
 } from '@nestjs/common';
 import { ApiOkResponse, ApiOperation, ApiTags } from '@nestjs/swagger';
@@ -220,15 +222,31 @@ export class ShippingVnpController {
     return { success: true, data: await this.shippingVnpService.getShipmentStats(query) };
   }
 
+  // Public (không JWT — external crontab gọi) nhưng KHÓA bằng secret: mỗi lượt
+  // cron kéo tới 200 lần gọi ra VNP nên không được để ai gọi cũng kích được
+  // (ShippingLabelPatterns.md §7). Pattern giống telegram-webhook.controller.ts:
+  // so secret bằng env, sai/thiếu → 401 trước khi chạm logic. Fail-closed: chưa
+  // đặt env VNP_TRACKING_CRON_SECRET thì endpoint từ chối tất cả.
   @Get('tracking/cron')
   @Auth([], [], { public: true })
   @ApiOperation({
     summary:
-      '[Public] Cron: poll tracking các vận đơn đang mở (2 lần/ngày — VNP không có webhook; dừng khi delivered hoặc quá 30 ngày)',
+      '[Public + secret] Cron: poll tracking các vận đơn đang mở (2 lần/ngày — VNP không có webhook; dừng khi delivered hoặc quá 30 ngày). Yêu cầu header X-Cron-Secret hoặc query ?secret khớp env VNP_TRACKING_CRON_SECRET',
   })
   @HttpCode(HttpStatus.OK)
   @ApiOkResponse({ type: RunVnpTrackingCronResDto })
-  async runTrackingCron(@ClientIp() ip: string): Promise<RunVnpTrackingCronResDto> {
+  async runTrackingCron(
+    @ClientIp() ip: string,
+    @Headers('x-cron-secret') secretHeader?: string,
+    @Query('secret') secretQuery?: string,
+  ): Promise<RunVnpTrackingCronResDto> {
+    const expected = process.env.VNP_TRACKING_CRON_SECRET || '';
+    if (!expected || (secretHeader !== expected && secretQuery !== expected)) {
+      this.logger.warn({
+        message: JSON.stringify({ method: 'GET', url: '/shipping-vnp/tracking/cron', ip, denied: true }),
+      });
+      throw new UnauthorizedException();
+    }
     this.logger.info({ message: JSON.stringify({ method: 'GET', url: '/shipping-vnp/tracking/cron', ip }) });
     return { success: true, data: await this.shippingVnpService.pollTrackingCron() };
   }

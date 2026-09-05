@@ -54,6 +54,11 @@ export const VnpShipmentInfoZod = z.object({
   /** Trạng thái tracking gần nhất (text VNP trả về). */
   lastTrackingStatus: z.string().optional(),
   lastTrackingAt: z.date().optional(),
+  /**
+   * Lần ĐẦU hãng báo hiệu label đã vào mạng lưới (ShippingLabelPatterns.md §3)
+   * — chốt an toàn của luồng hủy: đã quét thì KHÔNG hủy. Set 1 lần, không clear.
+   */
+  scannedAt: z.date().optional(),
 });
 export type VnpShipmentInfo = z.infer<typeof VnpShipmentInfoZod>;
 
@@ -189,6 +194,13 @@ export const CreateVnpShipmentZod = z.object({
   service: VnpShippingServiceZod.default('Standard'),
   shippingType: VnpShippingTypeZod.default('GDE'),
   /**
+   * Khoá idempotency do BÊN GỌI cấp (ShippingLabelPatterns.md §2) — unique
+   * index bên BE: gọi lại cùng khoá trả về đúng nhãn của lượt trước, không
+   * tạo nhãn thứ hai, không ném lỗi. FE sinh uuid mỗi intent mua; job auto
+   * (khi hook Đóng hàng) BẮT BUỘC gửi để retry an toàn.
+   */
+  requestId: z.string().min(8).max(100).optional(),
+  /**
    * Cân nặng fallback mỗi item (gram) — chỉ áp cho item trong nhóm THIẾU
    * `order.weight`. Vận đơn gộp theo `orderId` (1 đơn seller = 1 label),
    * mỗi item của nhóm thành 1 entry `package_details` với weight riêng.
@@ -257,13 +269,40 @@ export const SHIPMENT_PROVIDER_VNP = 'vnp-eglobal';
 export const SHIPMENT_PROVIDER_CUSTOMER = 'customer';
 
 /**
+ * `purchasing` = bản ghi GIỮ CHỖ, tạo TRƯỚC khi gọi VNP mua label
+ * (ShippingLabelPatterns.md §1): tiến trình chết giữa chừng thì record kẹt
+ * `purchasing` là bằng chứng có thể tồn tại label mồ côi — cron đối soát chốt
+ * nốt thành `created` hoặc đánh `failed`, KHÔNG BAO GIỜ xóa record kẹt.
+ * `failed` = xác nhận lượt mua KHÔNG tạo được label (không mất tiền).
+ * `cancelling` = đã gọi lệnh hủy nhưng hãng CHƯA xác nhận label chết
+ * (ShippingLabelPatterns.md §4 — trạng thái "chưa biết": không hoàn tiền,
+ * không coi kiện là xong; để dành cho luồng hủy fail-closed, chưa dùng).
  * `in_transit`/`delivered` do cron poll tracking suy từ text trạng thái
  * (classify conservative — shape response khi hàng chạy thật CHƯA biết, label
  * test chưa từng được scan; chỉ nhận diện chuỗi chắc chắn như "delivered").
+ * Trạng thái HÃNG chi tiết nằm ở field riêng (`lastTrackingStatus` = text thô
+ * ≡ carrierStatus của khuôn §3, `lastTrackingAt` ≡ carrierSyncedAt,
+ * `scannedAt`, `carrierNote`) — 2 giá trị `in_transit`/`delivered` trong
+ * status chỉ là phase tổng hợp cho FE/stats, chốt an toàn KHÔNG đọc từ đây.
  */
-export const VNP_SHIPMENT_RECORD_STATUSES = ['created', 'in_transit', 'delivered', 'cancelled'] as const;
+export const VNP_SHIPMENT_RECORD_STATUSES = [
+  'purchasing',
+  'created',
+  'in_transit',
+  'delivered',
+  'cancelling',
+  'cancelled',
+  'failed',
+] as const;
 export const VnpShipmentRecordStatusZod = z.enum(VNP_SHIPMENT_RECORD_STATUSES);
 export type VnpShipmentRecordStatus = z.infer<typeof VnpShipmentRecordStatusZod>;
+
+/**
+ * Status được tính vào dashboard chi phí + coi là "label thật đang tồn tại":
+ * loại `purchasing` (chưa chắc mua xong), `failed` (không mua được, không mất
+ * tiền), `cancelled` (đếm riêng, không cộng cost).
+ */
+export const VNP_SHIPMENT_COUNTED_STATUSES = ['created', 'in_transit', 'delivered'] as const;
 
 /** 1 sự kiện tracking (ghi khi status text ĐỔI so với lần poll trước). */
 export const VnpTrackingEventZod = z.object({
@@ -313,9 +352,19 @@ export const VnpShipmentRecordZod = z.object({
   /** Số dư ví NGAY SAU khi mua label này — đối soát chi phí với biến động ví. */
   balanceAfter: z.string().optional(),
   status: VnpShipmentRecordStatusZod,
+  /** Lý do khi `status='failed'` — cron đối soát/nhánh lỗi ghi để ops đọc. */
+  failReason: z.string().optional(),
+  /** Mốc gọi lệnh hủy (vào `cancelling`) — cron dọn record kẹt lọc theo tuổi này. */
+  cancelRequestedAt: z.union([z.date(), z.string()]).optional(),
   cancelledAt: z.union([z.date(), z.string()]).optional(),
+  /** Text trạng thái THÔ của hãng (≡ carrierStatus khuôn §3). */
   lastTrackingStatus: z.string().optional(),
+  /** Lần sync tracking gần nhất (≡ carrierSyncedAt khuôn §3 — chỉ mục cron). */
   lastTrackingAt: z.union([z.date(), z.string()]).optional(),
+  /** Lần ĐẦU hãng báo label đã vào mạng lưới — chốt an toàn luồng hủy (§3/§4). */
+  scannedAt: z.union([z.date(), z.string()]).optional(),
+  /** Ghi chú/lý do từ hãng (vd nghi địa chỉ sai) — ops đọc để cứu đơn. */
+  carrierNote: z.string().optional(),
   /** Timeline sự kiện tracking (cron poll + bấm tay). */
   trackingEvents: z.array(VnpTrackingEventZod).optional(),
   createdByUserId: z.string().optional(),
@@ -376,13 +425,30 @@ export class GetVnpShipmentStatsResDto extends createZodDto(
   extendApi(ResZod.extend({ data: VnpShipmentStatsZod })),
 ) {}
 
-/** Kết quả 1 lần chạy cron poll tracking (2 lần/ngày, xem VnpShipping.md §2a). */
+/**
+ * Kết quả 1 lần chạy cron poll tracking (2 lần/ngày, xem VnpShipping.md §2a).
+ * `reconcile` = kết quả dọn record kẹt `purchasing` chạy đầu lượt cron
+ * (ShippingLabelPatterns.md §1 bước ⑤): finalized = chốt nốt thành created
+ * (label có thật bên VNP), failed = xác nhận không có label, unknown = không
+ * hỏi được VNP (để nguyên, lượt sau thử lại).
+ */
 export const VnpTrackingCronResZod = z.object({
   checked: z.number(),
   updated: z.number(),
   delivered: z.number(),
   failed: z.number(),
   skipped: z.boolean().optional(),
+  reconcile: z
+    .object({ scanned: z.number(), finalized: z.number(), failed: z.number(), unknown: z.number() })
+    .optional(),
+  /**
+   * Kết quả dọn record kẹt `cancelling` (§4): cancelled = hãng xác nhận label
+   * chết → chốt sổ; revived = label hóa ra ĐANG ĐI (hủy bất thành) → trả về
+   * in_transit + scannedAt; unknown = chưa kết luận được, giữ nguyên chờ ops.
+   */
+  reconcileCancelling: z
+    .object({ scanned: z.number(), cancelled: z.number(), revived: z.number(), unknown: z.number() })
+    .optional(),
 });
 export class RunVnpTrackingCronResDto extends createZodDto(
   extendApi(ResZod.extend({ data: VnpTrackingCronResZod })),
