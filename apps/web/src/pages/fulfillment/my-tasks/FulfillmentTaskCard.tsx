@@ -22,6 +22,7 @@ import { PriorityBadge } from '@/components/orders/cells/PrioritySelectCell';
 
 import { getStageLabel } from '@/utils/fulfillmentStageLabel';
 
+import { HeldBadge } from '@/components/orders/HeldBadge';
 import { ReworkReasonNote } from '@/components/orders/ReworkReasonNote';
 import { formatCountdown, getStageDeadline } from '@/utils/priorityEstimate';
 
@@ -120,9 +121,12 @@ export function FulfillmentTaskCard({
   const state = (order.fulfillmentStages?.[myStage] ?? null) as FulfillmentStageState | null;
   const status = state?.status ?? FulfillmentStageStatus.Waiting;
   const currentStage = order.currentFulfillmentStage as FulfillmentStage | undefined;
+  /** Đơn đang giữ — BE chặn mọi transition (`assertNotHeld`). */
+  const isHeld = !!order.heldAt;
 
   // Chỉ enable drag cho 2 column có rule: waiting/rework → in-progress.
-  const canDrag = colKey === 'waiting' || colKey === 'rework';
+  // Đơn đang giữ không kéo được (drop = start → BE trả 400).
+  const canDrag = !isHeld && (colKey === 'waiting' || colKey === 'rework');
   const { attributes, listeners, setNodeRef, transform, isDragging } = useDraggable({
     id: order._id,
     data: { col: colKey, status },
@@ -223,6 +227,10 @@ export function FulfillmentTaskCard({
             )}
             <PriorityBadge priority={order.priority} />
           </div>
+
+          {/* Đơn đang bị giữ — BE chặn mọi transition, card phải nói rõ lý do
+              thay vì để công nhân bấm "Bắt đầu" rồi ăn 400. */}
+          {isHeld && <HeldBadge reason={order.holdReason} />}
 
           {order.type && (
             <Hint content={t('taskCard.typeTooltip', { type: order.type })} forceRich>
@@ -334,8 +342,9 @@ export function FulfillmentTaskCard({
         </div>
       </div>
 
-      {/* Action buttons inline — opacity-hover cho gọn, mở rộng full khi cần thao tác */}
-      {colKey === 'unassigned' && onAssignDesigner ? (
+      {/* Action buttons inline — opacity-hover cho gọn, mở rộng full khi cần thao tác.
+          Đơn đang giữ: ẩn hẳn nút thao tác (BE chặn) — mở giữ ở menu "..." trước. */}
+      {isHeld ? null : colKey === 'unassigned' && onAssignDesigner ? (
         <div className="flex items-center gap-1.5 pt-2 mt-1 border-t border-border/40">
           <CardAction color="indigo" icon={PlayCircle} label={t('actions.assignDesigner')} onClick={onAssignDesigner} />
         </div>

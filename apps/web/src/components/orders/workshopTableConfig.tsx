@@ -15,6 +15,7 @@ import { IconSelectCell } from '@/components/orders/cells/IconSelectCell';
 import { ImageThumbCell } from '@/components/orders/cells/ImageThumbCell';
 import { MultiIconSelectCell } from '@/components/orders/cells/MultiIconSelectCell';
 import { PrioritySelectCell } from '@/components/orders/cells/PrioritySelectCell';
+import { HeldBadge } from '@/components/orders/HeldBadge';
 import { ProductionErrorSelectCell } from '@/components/orders/cells/ProductionErrorSelectCell';
 import { TextEditCell } from '@/components/orders/cells/TextEditCell';
 import { ReworkReasonNote } from '@/components/orders/ReworkReasonNote';
@@ -1119,12 +1120,28 @@ export const PRINT_COLS: WorkshopColMeta[] = (() => {
     label: 'Note TT in',
     width: 'min-w-[80px] max-w-[120px]',
   };
+  // Cột Production/Order + badge "Đang giữ": bảng In là danh sách việc của thợ,
+  // trước đây không có dấu hiệu nào cho biết đơn bị giữ (chỉ menu "..." đổi mục).
+  const baseProductionIdCol = WORKSHOP_COLS.find((c) => c.key === 'productionId')!;
+  const heldAwareProductionIdCol: WorkshopColMeta = {
+    ...baseProductionIdCol,
+    render: (r, ctx) => (
+      <div className="flex flex-col gap-0.5">
+        {baseProductionIdCol.render(r, ctx)}
+        {r.heldAt && !r.cancelledAt && <HeldBadge reason={r.holdReason} />}
+      </div>
+    ),
+  };
   const result: WorkshopColMeta[] = [];
   for (const col of WORKSHOP_COLS) {
     if (col.key === 'fabricType') continue; // đã gộp vào cột mockup
     if (MOVED_KEYS.includes(col.key)) continue; // dời lên sau printStatusNote
     if (col.key === 'mockupTypeSize') {
       result.push(printMockupCol);
+      continue;
+    }
+    if (col.key === 'productionId') {
+      result.push(heldAwareProductionIdCol);
       continue;
     }
     if (col.key === 'printStatusNote') {
