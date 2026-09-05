@@ -515,7 +515,9 @@ export class UserService {
     const isPasswordValid = await validateHash(oldPassword, currentUser!.password);
 
     if (!isPasswordValid) {
-      throw new BadRequestException('Incorrect password');
+      // Message hiển thị thẳng trên toast của FE — giữ tiếng Việt như mọi
+      // message nghiệp vụ khác (khớp `CustomerService.changePassword`).
+      throw new BadRequestException('Mật khẩu hiện tại không chính xác');
     }
 
     const passwordHash = generateHash(newPassword);
