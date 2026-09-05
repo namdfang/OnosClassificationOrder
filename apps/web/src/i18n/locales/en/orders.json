@@ -433,6 +433,7 @@
     "col": {
       "factoryMachine": "Factory / Room",
       "productionId": "Production / Order",
+      "orderStatus": "Status",
       "priority": "Priority",
       "mockupTypeSize": "Mockup / Type / Size / Color",
       "fabricType": "Fabric type",
@@ -478,7 +479,8 @@
       "productionErrorNote": "Description",
       "assignee": "Assignee",
       "assigneeNote": "Note",
-      "designerStatus": "Designer status"
+      "designerStatus": "Designer status",
+      "orderStatus": "Status"
     },
     "designerStatus": {
       "unassigned": {
@@ -519,7 +521,8 @@
       "vnpLabel": "VNP label — opens in new tab",
       "customerLabel": "Cust. label",
       "customerTracking": "Customer-supplied tracking"
-    }
+    },
+    "qty": "Qty {{quantity}}"
   },
   "rowActionsMenu": {
     "unheld": "Order released from hold",
@@ -589,7 +592,6 @@
     "userSkuHint": "User SKU — customer code",
     "factoryHint": "Factory: {{name}} (code: {{code}})",
     "machineTypeHint": "Machine type: {{name}} (code: {{code}})",
-    "statusHint": "Production status: {{status}}",
     "history": "Change history",
     "deleteOrder": "Delete this order",
     "confirmDelete": "Delete this order?",
@@ -609,6 +611,37 @@
     "factoryMachine": "Factory / Machine",
     "emptyState": "No orders yet. Go to the \"Import Order\" tab to add some.",
     "productName": "product name"
+  },
+  "statusLabel": {
+    "stage": {
+      "tool-check": "Tool check",
+      "designer": "Design",
+      "print": "Print",
+      "press": "Press",
+      "qc-post-press": "QC after press",
+      "sew-in": "Sew in",
+      "sew-out": "Sew out",
+      "pack": "Packing"
+    },
+    "waitingAt": "Waiting: {{stage}}",
+    "workingAt": "In progress: {{stage}}",
+    "assignedAt": "Assigned: {{stage}}",
+    "reworkAt": "Rework: {{stage}}",
+    "rejectedAt": "Rejected ({{stage}})",
+    "cancelled": "Cancelled",
+    "done": "Completed",
+    "doneTooltip": "Packing done — the order has left the factory",
+    "toolCheckTooltip": "Tool check not finished — the order has not reached design yet",
+    "designerUnassignedTooltip": "No designer assigned yet",
+    "designerAssignedTooltip": "Assigned to a designer, not started yet",
+    "designerWorkingTooltip": "Designer is working on the files",
+    "designerReworkTooltip": "Factory reported a design error — designer is reworking it",
+    "designerRejectedTooltip": "Designer cannot handle this file — leader must reassign",
+    "stageWaitingTooltip": "Order reached stage {{stage}}, nobody has started it",
+    "stageWorkingTooltip": "A worker is doing stage {{stage}}",
+    "stageReworkTooltip": "A later stage reported an error — {{stage}} must be redone",
+    "colStatus": "Status",
+    "rawStatusHint": "Raw status at import time: {{status}}"
   },
   "tableWorkshop": {
     "shiftClickRangeSelect": "Shift+click to select the whole range to the previous checkbox",

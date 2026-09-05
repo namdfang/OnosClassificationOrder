@@ -16,12 +16,13 @@ import { ImageThumbCell } from '@/components/orders/cells/ImageThumbCell';
 import { MultiIconSelectCell } from '@/components/orders/cells/MultiIconSelectCell';
 import { PrioritySelectCell } from '@/components/orders/cells/PrioritySelectCell';
 import { ProductionErrorSelectCell } from '@/components/orders/cells/ProductionErrorSelectCell';
-import { ReworkReasonNote } from '@/components/orders/ReworkReasonNote';
 import { TextEditCell } from '@/components/orders/cells/TextEditCell';
+import { ReworkReasonNote } from '@/components/orders/ReworkReasonNote';
 import { Badge } from '@/components/ui/badge';
 
 import { cn } from '@/utils/cn';
 import { formatDate } from '@/utils/date';
+import { getOrderStatusInfo, makeOrderStatusTranslate, ORDER_STATUS_TONE_CLASS } from '@/utils/orderStatusLabel';
 import { formatCountdown, getActiveStageKey, getStageDeadline } from '@/utils/priorityEstimate';
 
 import { useNow } from '@/hooks/useNow';
@@ -33,6 +34,8 @@ export type WorkshopOrderRow = {
   size?: string;
   color?: string;
   type?: string;
+  /** Số lượng cần sản xuất — công đoạn In quyết định in bao nhiêu bản. */
+  quantity?: number;
   mockupUrl?: string;
   mockupOriginalUrl?: string;
   designs?: { front?: string } & Record<string, string | undefined>;
@@ -558,7 +561,19 @@ export const WORKSHOP_COLS: WorkshopColMeta[] = [
             <Hint content={r.type ? `Type: ${r.type}` : ''} forceRich>
               <span className="text-xs line-clamp-1 break-all text-foreground">{r.type || '—'}</span>
             </Hint>
-            <Hint content={`Size / Color: ${sizeColorText}`} forceRich>
+            {/* Số lượng — công đoạn In quyết định in bao nhiêu bản; thiếu số này
+              là in 1 thay vì N. Nhấn mạnh khi > 1. */}
+          <span
+            className={cn(
+              'inline-flex w-fit items-center rounded px-1 py-px text-[10px] font-semibold',
+              (r.quantity ?? 1) > 1
+                ? 'bg-amber-100 text-amber-800 dark:bg-amber-900/40 dark:text-amber-200'
+                : 'bg-muted text-muted-foreground',
+            )}
+          >
+            {ctx.t ? ctx.t('workshopCols.qty', { quantity: r.quantity ?? 1 }) : `SL ${r.quantity ?? 1}`}
+          </span>
+          <Hint content={`Size / Color: ${sizeColorText}`} forceRich>
               <span className="text-[11px] text-muted-foreground line-clamp-1">
                 {r.size || '—'}
                 {r.color ? <span> / {r.color}</span> : null}
@@ -916,7 +931,7 @@ export const BASE_GROUP_DEFS: ColGroupDef[] = [
     key: 'identity',
     title: 'Mã đơn / Ưu tiên',
     width: 230,
-    memberKeys: ['productionId', 'priority', 'userSku', 'typeFullName'],
+    memberKeys: ['productionId', 'orderStatus', 'priority', 'userSku', 'typeFullName'],
   },
   { key: 'product', title: 'Sản phẩm', width: 300, memberKeys: ['mockupTypeSize'] },
   {
@@ -953,6 +968,7 @@ export const HEADLINE_KEYS = new Set(['productionId', 'mockupTypeSize', 'factory
 
 // Label ngắn cho field KHÔNG còn cột riêng — hiển thị trước value trong group.
 export const FIELD_LABELS: Record<string, string> = {
+  orderStatus: 'Trạng thái',
   priority: 'Ưu tiên',
   userSku: 'SKU',
   typeFullName: 'Loại SP',
@@ -1059,6 +1075,18 @@ const printMockupCol: WorkshopColMeta = {
           <Hint content={r.type ? `Type: ${r.type}` : ''} forceRich>
             <span className="text-xs line-clamp-1 break-all text-foreground">{r.type || '—'}</span>
           </Hint>
+          {/* Số lượng — công đoạn In quyết định in bao nhiêu bản; thiếu số này
+              là in 1 thay vì N. Nhấn mạnh khi > 1. */}
+          <span
+            className={cn(
+              'inline-flex w-fit items-center rounded px-1 py-px text-[10px] font-semibold',
+              (r.quantity ?? 1) > 1
+                ? 'bg-amber-100 text-amber-800 dark:bg-amber-900/40 dark:text-amber-200'
+                : 'bg-muted text-muted-foreground',
+            )}
+          >
+            {ctx.t ? ctx.t('workshopCols.qty', { quantity: r.quantity ?? 1 }) : `SL ${r.quantity ?? 1}`}
+          </span>
           <Hint content={`Size / Color: ${r.size || '—'}${r.color ? ' / ' + r.color : ''}`} forceRich>
             <span className="text-[11px] text-muted-foreground line-clamp-1">
               {r.size || '—'}

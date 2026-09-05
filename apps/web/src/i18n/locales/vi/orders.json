@@ -433,6 +433,7 @@
     "col": {
       "factoryMachine": "Nhà máy / Phòng",
       "productionId": "Production / Order",
+      "orderStatus": "Trạng thái",
       "priority": "Ưu tiên",
       "mockupTypeSize": "Mockup / Type / Size / Color",
       "fabricType": "Loại vải",
@@ -478,7 +479,8 @@
       "productionErrorNote": "Mô tả",
       "assignee": "Người TH",
       "assigneeNote": "Note",
-      "designerStatus": "TT Designer"
+      "designerStatus": "TT Designer",
+      "orderStatus": "Trạng thái"
     },
     "designerStatus": {
       "unassigned": {
@@ -519,7 +521,8 @@
       "vnpLabel": "Label VNP — bấm mở tab mới",
       "customerLabel": "Label KH",
       "customerTracking": "Vận đơn khách tự cấp"
-    }
+    },
+    "qty": "SL {{quantity}}"
   },
   "rowActionsMenu": {
     "unheld": "Đã mở giữ đơn",
@@ -589,7 +592,6 @@
     "userSkuHint": "User SKU — mã khách hàng",
     "factoryHint": "Nhà máy: {{name}} (mã: {{code}})",
     "machineTypeHint": "Loại máy: {{name}} (mã: {{code}})",
-    "statusHint": "Trạng thái production: {{status}}",
     "history": "Lịch sử thay đổi",
     "deleteOrder": "Xoá order này",
     "confirmDelete": "Xoá order này?",
@@ -609,6 +611,37 @@
     "factoryMachine": "Xưởng / Máy",
     "emptyState": "Chưa có order nào. Sang tab \"Import Order\" để thêm.",
     "productName": "tên sản phẩm"
+  },
+  "statusLabel": {
+    "stage": {
+      "tool-check": "Soát tool",
+      "designer": "Thiết kế",
+      "print": "In",
+      "press": "Ép",
+      "qc-post-press": "QC sau ép",
+      "sew-in": "May vào",
+      "sew-out": "May ra",
+      "pack": "Đóng hàng"
+    },
+    "waitingAt": "Chờ {{stage}}",
+    "workingAt": "Đang {{stage}}",
+    "assignedAt": "Đã giao {{stage}}",
+    "reworkAt": "Làm lại {{stage}}",
+    "rejectedAt": "Không làm được ({{stage}})",
+    "cancelled": "Đã hủy",
+    "done": "Hoàn thành",
+    "doneTooltip": "Đã đóng hàng xong — đơn ra khỏi xưởng",
+    "toolCheckTooltip": "Chưa soát tool xong — đơn chưa vào chặng thiết kế",
+    "designerUnassignedTooltip": "Chưa gán designer nào",
+    "designerAssignedTooltip": "Đã giao designer, designer chưa nhận làm",
+    "designerWorkingTooltip": "Designer đang xử lý file",
+    "designerReworkTooltip": "Xưởng báo lỗi do design — designer đang làm lại",
+    "designerRejectedTooltip": "Designer báo file không làm được — leader cần giao lại",
+    "stageWaitingTooltip": "Đơn đã tới công đoạn {{stage}}, chưa ai bấm Bắt đầu",
+    "stageWorkingTooltip": "Công nhân đang làm công đoạn {{stage}}",
+    "stageReworkTooltip": "Công đoạn sau báo lỗi — {{stage}} phải làm lại",
+    "colStatus": "Trạng thái",
+    "rawStatusHint": "Trạng thái gốc lúc import: {{status}}"
   },
   "tableWorkshop": {
     "shiftClickRangeSelect": "Shift+click để chọn cả range tới checkbox trước đó",
