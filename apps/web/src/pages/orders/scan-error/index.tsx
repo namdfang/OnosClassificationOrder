@@ -55,7 +55,9 @@ interface HistoryEntry {
   id: string;
   productionId: string;
   at: Date;
-  status: 'success' | 'not-found' | 'error';
+  /** `success` = đã gán lỗi; `completed` = đã hoàn thành công đoạn (2 thao tác
+   *  khác hẳn nhau — trước đây cùng gắn nhãn "Đã gán lỗi"). */
+  status: 'success' | 'completed' | 'not-found' | 'error';
   message?: string;
 }
 
@@ -199,7 +201,7 @@ function ScanErrorPageContent() {
         id: `${Date.now()}`,
         productionId: order.productionId,
         at: new Date(),
-        status: 'success',
+        status: 'completed',
         message: t('page.completedMsg', { stage: summary.stageLabel }),
       });
     },
@@ -235,7 +237,7 @@ function ScanErrorPageContent() {
   const stats = useMemo(() => {
     return {
       total: history.length,
-      success: history.filter((h) => h.status === 'success').length,
+      success: history.filter((h) => h.status === 'success' || h.status === 'completed').length,
       notFound: history.filter((h) => h.status === 'not-found').length,
       error: history.filter((h) => h.status === 'error').length,
     };
@@ -461,12 +463,14 @@ function HistoryRow({ entry }: { entry: HistoryEntry }) {
   const { t, i18n } = useTranslation('scanError');
   const icon = {
     success: <CheckCircle2 size={14} className="text-emerald-500" />,
+    completed: <CheckCircle2 size={14} className="text-emerald-500" />,
     'not-found': <XCircle size={14} className="text-amber-500" />,
     error: <XCircle size={14} className="text-rose-500" />,
   }[entry.status];
 
   const statusText = {
     success: t('page.historyStatusSuccess'),
+    completed: t('page.historyStatusCompleted'),
     'not-found': t('page.historyStatusNotFound'),
     error: t('page.historyStatusError'),
   }[entry.status];

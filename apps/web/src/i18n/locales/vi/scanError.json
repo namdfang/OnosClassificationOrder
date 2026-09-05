@@ -45,7 +45,8 @@
     "emptyHistory": "Chưa có quét nào. Quét hoặc gõ Production ID để bắt đầu.",
     "historyStatusSuccess": "Đã gán lỗi",
     "historyStatusNotFound": "Không tìm thấy",
-    "historyStatusError": "Lỗi"
+    "historyStatusError": "Lỗi",
+    "historyStatusCompleted": "Đã hoàn thành"
   },
   "fulfillmentDialog": {
     "statusWaiting": "Đang chờ",

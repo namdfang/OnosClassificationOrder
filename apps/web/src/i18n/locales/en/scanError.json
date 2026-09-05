@@ -45,7 +45,8 @@
     "emptyHistory": "No scans yet. Scan or type a Production ID to get started.",
     "historyStatusSuccess": "Error assigned",
     "historyStatusNotFound": "Not found",
-    "historyStatusError": "Error"
+    "historyStatusError": "Error",
+    "historyStatusCompleted": "Completed"
   },
   "fulfillmentDialog": {
     "statusWaiting": "Waiting",
