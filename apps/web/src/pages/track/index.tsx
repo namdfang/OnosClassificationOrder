@@ -264,9 +264,14 @@ function PublicTrackPage() {
     if (!data) return undefined;
     const current = data.stages.find((s) => s.status === 'current' || s.status === 'rework' || s.status === 'error');
     if (current) return stageLabel(current.key, current.label);
+    // Đơn đã đi hết 8 chặng: BE cố ý trả `currentStageLabel` rỗng
+    // (`computeCurrentStage` → `label: undefined` khi có `fulfillmentCompletedAt`).
+    // Không bắt case này thì ô rơi về "Chưa vào sản xuất" — mâu thuẫn ngay trên
+    // cùng màn hình với badge "ĐÃ XUẤT KHO" + 8 chặng "Đã xong".
+    if (data.stages.length > 0 && data.stages.every((s) => s.status === 'done')) return t('status.completed');
     if (data.currentStageKey) return stageLabel(data.currentStageKey, data.currentStageLabel ?? data.currentStageKey);
     return data.currentStageLabel;
-  }, [data, stageLabel]);
+  }, [data, stageLabel, t]);
 
   return (
     <div className="flex min-h-screen flex-col bg-slate-50">
