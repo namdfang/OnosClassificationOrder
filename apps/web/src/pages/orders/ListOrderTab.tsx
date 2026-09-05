@@ -32,6 +32,7 @@ import { cn } from '@/utils/cn';
 import { formatDate } from '@/utils/date';
 import { smallThumb } from '@/utils/driveThumb';
 import { isCancelled, isHeld } from '@/utils/orderActions';
+import { getOrderStatusInfo, makeOrderStatusTranslate, ORDER_STATUS_TONE_CLASS } from '@/utils/orderStatusLabel';
 
 import { usePermission } from '@/hooks/usePermission';
 
@@ -90,6 +91,13 @@ interface OrderRow {
   cancelReason?: string;
   heldAt?: string | null;
   holdReason?: string;
+  // Field suy ra "Trạng thái hiện tại" (cột Status) — `getOrders` trả full doc
+  // nên không cần nới projection BE.
+  toolResultNote?: string;
+  designerStatus?: string;
+  currentFulfillmentStage?: string | null;
+  fulfillmentStages?: Record<string, ({ status?: string } & Record<string, unknown>) | undefined>;
+  fulfillmentCompletedAt?: string | null;
 }
 
 interface ListOrderTabProps {
@@ -123,6 +131,7 @@ const OrderRowItem = memo(
     const mockupThumbSrc = smallThumb(it.mockupUrl, 200);
     const cancelled = isCancelled(it);
     const held = isHeld(it);
+    const status = getOrderStatusInfo(it, makeOrderStatusTranslate(t));
 
     return (
       <TableRow className={cancelled || held ? 'opacity-60' : undefined}>
@@ -297,17 +306,27 @@ const OrderRowItem = memo(
           )}
         </TableCell>
 
-        {/* Status */}
+        {/* Trạng thái hiện tại — chặng đơn đang nằm + trạng thái con (chờ/đang
+            làm/làm lại). Trạng thái gốc lúc import (`status`, free-text) xuống
+            dòng phụ vì đứng im từ lúc nhập, không phản ánh tiến độ sản xuất. */}
         <TableCell>
-          {it.status ? (
-            <Hint content={t('listTab.statusHint', { status: it.status })}>
-              <Badge variant="outline" className="cursor-help">
-                {it.status}
-              </Badge>
+          <div className="flex flex-col gap-0.5 items-start">
+            <Hint content={status.tooltip}>
+              <span
+                className={cn(
+                  'inline-flex items-center rounded-md px-1.5 py-0.5 text-[11px] font-medium whitespace-nowrap cursor-help',
+                  ORDER_STATUS_TONE_CLASS[status.tone],
+                )}
+              >
+                {status.label}
+              </span>
             </Hint>
-          ) : (
-            '—'
-          )}
+            {it.status && (
+              <Hint content={t('statusLabel.rawStatusHint', { status: it.status })}>
+                <span className="text-[10px] text-muted-foreground cursor-help">{it.status}</span>
+              </Hint>
+            )}
+          </div>
         </TableCell>
 
         {/* Ưu tiên */}
@@ -716,7 +735,7 @@ export function ListOrderTab({ refreshKey }: ListOrderTabProps) {
                 <TableHead className="min-w-[260px]">Product</TableHead>
                 <TableHead>SKU / Email</TableHead>
                 <TableHead>{t('listTab.factoryMachine')}</TableHead>
-                <TableHead>Status</TableHead>
+                <TableHead className="min-w-[130px]">{t('statusLabel.colStatus')}</TableHead>
                 <TableHead>{t('workshopCols.col.priority')}</TableHead>
                 <TableHead className="w-24 sticky right-0 z-20 bg-card"></TableHead>
               </TableRow>
