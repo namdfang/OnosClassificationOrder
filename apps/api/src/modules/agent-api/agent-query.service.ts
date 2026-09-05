@@ -103,6 +103,12 @@ export class AgentQueryService {
    * Có xin → chỉ kiểm tên bị chặn, rồi chiếu đúng thứ đã xin.
    */
   buildProjection(spec: AgentTableSpec, requested?: string[]): Record<string, 1> {
+    if (requested !== undefined && requested.length === 0) {
+      // Khai `fields` mà không còn tên nào (vd `fields=` hoặc toàn dấu phẩy) là
+      // LỖI, không phải "lấy hết": bản trước im lặng chiếu vào tên rỗng rồi trả
+      // object rỗng, bên gọi tưởng bảng không có dữ liệu.
+      throw invalidQuery('Query parameter `fields` is empty — list at least one field name, or omit the parameter.');
+    }
     if (!requested?.length) return {};
     for (const f of requested) {
       if (isDeniedFieldPath(f)) {

@@ -86,10 +86,22 @@ export const ReadAgentTableQueryZod = z.object({
    */
   filter: z.string().max(4000).optional(),
   /** Tap con cua cac truong `read:true`; truong ngoai danh sach trang bi tu choi. */
+  /**
+   * Nhận CẢ hai cách viết: `fields=a,b,c` và `fields=a&fields=b`.
+   *
+   * Bản trước chỉ bọc chuỗi vào mảng, nên `fields=a,b` thành MỘT tên trường
+   * `"a,b"` — Mongo chiếu vào một trường không tồn tại và trả về **object rỗng**,
+   * không báo lỗi. Bên tích hợp thấy "chọn cột không ăn thua" nên quay lại kéo
+   * nguyên bản ghi 42 trường mỗi dòng (đo 05/09: 1,68 triệu dòng/ngày).
+   */
   fields: z
     .union([z.string(), z.string().array()])
     .optional()
-    .transform((v) => (v === undefined ? undefined : Array.isArray(v) ? v : [v])),
+    .transform((v) =>
+      v === undefined
+        ? undefined
+        : (Array.isArray(v) ? v : [v]).flatMap((x) => x.split(',')).map((x) => x.trim()).filter(Boolean),
+    ),
 });
 export class ReadAgentTableQueryDto extends createZodDto(extendApi(ReadAgentTableQueryZod)) {}
 

@@ -143,7 +143,11 @@ Một lỗi **không** phải là dấu hiệu hệ thống hỏng — nó là c
 
 1. **Luôn kèm hai điều kiện loại trừ** (`cancelledAt` chưa có, `factoryId` đã có) cho mọi câu hỏi đếm
    hay liệt kê. Đây là nguồn sai số lớn nhất — [`ImportantNotes.md`](ImportantNotes.md) §1.
-2. **Xin đúng trường mình cần** trong `select.fields`. Lấy tất cả rồi tự lọc là cách khiến bạn vô tình
+2. **Xin đúng trường mình cần** trong `select.fields`. Với `GET /agent/tables/{bang}/rows`, tham số
+   `fields` nhận CẢ hai cách viết: `fields=productionId,type,factoryId` hoặc lặp
+   `fields=productionId&fields=type`. Không khai `fields` là trả **toàn bộ trường** của mỗi dòng
+   (bảng `orders` là 42 trường) — đó là cách nhanh nhất để biến một câu hỏi nhỏ thành vài trăm nghìn
+   dòng dữ liệu. Lấy tất cả rồi tự lọc là cách khiến bạn vô tình
    đọc thấy thứ không nên nhắc tới khi nói với khách.
 3. **Một câu trả lời, một lời gọi.** Nếu thấy mình gọi ba bốn lần cho một câu hỏi, gần như chắc chắn có
    một điều kiện `$and` gộp lại được — và ít lời gọi hơn thì cũng ít cơ hội sai hơn.
