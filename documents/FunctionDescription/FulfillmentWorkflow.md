@@ -160,6 +160,13 @@ Song song 2.3b nhưng target = **Support** (không phải designer): worker ch�
 - Suốt quá trình đó, các công đoạn CHƯA tới lượt vẫn ở "Đang chờ quay lại"; công đoạn đang giữ đơn ở "Cần làm lại".
 - Khi SewOut nhận lại → tab "Đang chờ"/"Cần làm lại" → "Bắt đầu" lần 2 (workMs cộng dồn, reworkCount SewOut = 1).
 
+### 2.3b Hiển thị lý do đẩy về (2026-09-05)
+
+`fulfillmentStages.<stage>.reworkReason` + `.reworkFromStage` được BE lưu từ đầu nhưng trước đây KHÔNG render ở đâu — thợ nhận lại đơn ở tab "Làm lại" không biết phải sửa gì. Nay:
+
+- `components/orders/ReworkReasonNote.tsx` — khối vàng "Bị đẩy về từ &lt;công đoạn&gt;" + nguyên văn lý do. Dùng ở kanban `FulfillmentTaskCard` và ở cột "Trạng thái in" của bảng công đoạn In (`workshopTableConfig`).
+- Nhật ký đơn: thao tác đẩy về ghi action riêng `rework_back` (`ORDER_LOG_ACTIONS`) — `field` = công đoạn đích (hoặc `designer`), `before` = công đoạn báo lỗi, `after` = lý do. Trước đây chỉ có 1 dòng `update` đổi status, không phân biệt được với thay đổi trạng thái thường.
+
 ### 2.4 Đơn bị hủy
 
 Nếu `cancelledAt` được set (từ flow Import file soát / Admin bấm hủy), `BadRequestException` khi transition. **My Tasks kanban tự loại đơn hủy** — `buildMyTaskBase` set `cancelledAt: null` (trước đây KHÔNG filter "để khớp Factory Tab" → đã sửa: đơn hủy biến mất khỏi mọi cột Chờ/Đang làm/Rework/Done ngay cả khi bị hủy giữa chừng). Xem `documents/Plans/CancelledOrders-ExcludeFromStages.md`.

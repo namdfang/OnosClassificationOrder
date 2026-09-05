@@ -16,6 +16,13 @@ export const ORDER_LOG_ACTIONS = [
   'unhold',
   /** SuperAdmin ép đơn về "đã hoàn thành sản xuất" — xem `Orders.md §23`. */
   'force_complete',
+  /**
+   * Đẩy đơn NGƯỢC chặng (rework-back) ở luồng fulfillment. Tách khỏi `update`
+   * để nhật ký nói rõ "đẩy về công đoạn nào, vì lý do gì" — trước đây thao tác
+   * này chỉ để lại 1 dòng đổi status trông y hệt thay đổi thường.
+   * `field` = stage đích, `before` = stage đã báo lỗi, `after` = lý do.
+   */
+  'rework_back',
 ] as const;
 export type ProductionOrderLogAction = (typeof ORDER_LOG_ACTIONS)[number];
 export const ProductionOrderLogActionZod = z.enum(ORDER_LOG_ACTIONS);

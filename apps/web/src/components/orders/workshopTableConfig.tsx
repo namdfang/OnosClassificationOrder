@@ -16,6 +16,7 @@ import { ImageThumbCell } from '@/components/orders/cells/ImageThumbCell';
 import { MultiIconSelectCell } from '@/components/orders/cells/MultiIconSelectCell';
 import { PrioritySelectCell } from '@/components/orders/cells/PrioritySelectCell';
 import { ProductionErrorSelectCell } from '@/components/orders/cells/ProductionErrorSelectCell';
+import { ReworkReasonNote } from '@/components/orders/ReworkReasonNote';
 import { TextEditCell } from '@/components/orders/cells/TextEditCell';
 import { Badge } from '@/components/ui/badge';
 
@@ -505,6 +506,29 @@ export const WORKSHOP_COLS: WorkshopColMeta[] = [
     },
   },
   {
+    key: 'orderStatus',
+    label: 'Trạng thái',
+    // Suy từ field đã có trên row (không field riêng nào để gắn quyền) — hiện
+    // cho MỌI role xem được bảng đơn: ai cũng cần biết đơn đang nằm ở chặng nào.
+    perm: null,
+    width: 'min-w-[130px]',
+    render: (r, ctx) => {
+      const st = getOrderStatusInfo(r, makeOrderStatusTranslate(ctx.t));
+      return (
+        <Hint content={st.tooltip} forceRich>
+          <span
+            className={cn(
+              'inline-flex items-center rounded-md px-1.5 py-0.5 text-[11px] font-medium whitespace-nowrap cursor-help',
+              ORDER_STATUS_TONE_CLASS[st.tone],
+            )}
+          >
+            {st.label}
+          </span>
+        </Hint>
+      );
+    },
+  },
+  {
     key: 'priority',
     label: 'Ưu tiên',
     perm: 'order.field.priority.view',
@@ -600,14 +624,21 @@ export const WORKSHOP_COLS: WorkshopColMeta[] = [
     perm: 'order.field.printStatus.view',
     width: 'min-w-[140px]',
     render: (r, ctx) => (
-      <ColorBadgeSelectCell
-        orderId={r._id}
-        field="printStatus"
-        category={WorkshopConfigCategory.PrintStatus}
-        value={r.printStatus}
-        canEdit={ctx.canEditField('printStatus')}
-        onUpdated={(v) => ctx.patchRow(r._id, { printStatus: v ?? undefined })}
-      />
+      <div className="space-y-1">
+        <ColorBadgeSelectCell
+          orderId={r._id}
+          field="printStatus"
+          category={WorkshopConfigCategory.PrintStatus}
+          value={r.printStatus}
+          canEdit={ctx.canEditField('printStatus')}
+          onUpdated={(v) => ctx.patchRow(r._id, { printStatus: v ?? undefined })}
+        />
+        {/* Lý do bị đẩy về công đoạn In — bảng In là nơi thợ nhận lại đơn. */}
+        <ReworkReasonNote
+          reason={r.fulfillmentStages?.print?.reworkReason as string | undefined}
+          fromStage={r.fulfillmentStages?.print?.reworkFromStage as string | undefined}
+        />
+      </div>
     ),
   },
   {

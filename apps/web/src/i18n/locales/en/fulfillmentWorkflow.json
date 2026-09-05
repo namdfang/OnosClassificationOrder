@@ -150,7 +150,9 @@
     "watchingPrefix": "Currently at:",
     "watchingDesignerRework": "Designer (rework)",
     "errorStageSuffix": "· currently at {{stage}}",
-    "errorDesignerSuffix": "· currently at Designer"
+    "errorDesignerSuffix": "· currently at Designer",
+    "reworkFrom": "Sent back from {{stage}}",
+    "reworkFromUnknown": "Order sent back for rework"
   },
   "reworkDialog": {
     "title": "Report error for order {{code}}",

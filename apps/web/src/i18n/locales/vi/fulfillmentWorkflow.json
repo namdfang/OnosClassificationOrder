@@ -150,7 +150,9 @@
     "watchingPrefix": "Đang ở:",
     "watchingDesignerRework": "Designer (rework)",
     "errorStageSuffix": "· đang ở {{stage}}",
-    "errorDesignerSuffix": "· đang ở Designer"
+    "errorDesignerSuffix": "· đang ở Designer",
+    "reworkFrom": "Bị đẩy về từ {{stage}}",
+    "reworkFromUnknown": "Đơn bị đẩy về làm lại"
   },
   "reworkDialog": {
     "title": "Báo lỗi đơn {{code}}",

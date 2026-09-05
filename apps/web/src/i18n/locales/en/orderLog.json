@@ -10,7 +10,8 @@
     "updateDesign": "Change design",
     "hold": "Hold order",
     "unhold": "Release",
-    "forceComplete": "Marked completed"
+    "forceComplete": "Marked completed",
+    "reworkBack": "Sent back"
   },
   "importSubaction": {
     "create": "Created",
@@ -75,7 +76,9 @@
     "reload": "Reload",
     "empty": "No change history yet.",
     "reasonLabel": "Reason:",
-    "systemUser": "system"
+    "systemUser": "system",
+    "reworkBackRoute": "From {{from}} → {{to}}",
+    "reworkBackDesigner": "Designer"
   },
   "urgency": {
     "new": "New",

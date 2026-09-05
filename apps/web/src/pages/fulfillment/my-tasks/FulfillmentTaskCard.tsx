@@ -21,6 +21,8 @@ import { Hint } from '@/components/common/Hint';
 import { PriorityBadge } from '@/components/orders/cells/PrioritySelectCell';
 
 import { getStageLabel } from '@/utils/fulfillmentStageLabel';
+
+import { ReworkReasonNote } from '@/components/orders/ReworkReasonNote';
 import { formatCountdown, getStageDeadline } from '@/utils/priorityEstimate';
 
 import { useNow } from '@/hooks/useNow';
@@ -277,6 +279,11 @@ export function FulfillmentTaskCard({
               </Hint>
             ) : null}
           </div>
+
+          {/* Lý do bị đẩy về + công đoạn đã trả về — BE lưu sẵn ở
+              `fulfillmentStages.<stage>.reworkReason/reworkFromStage`, trước
+              đây không render ở đâu nên thợ nhận lại đơn không biết sửa gì. */}
+          <ReworkReasonNote reason={state?.reworkReason} fromStage={state?.reworkFromStage} />
 
           {colKey === 'watching' && (
             <div className="text-[10px] text-sky-700 dark:text-sky-300 inline-flex items-center gap-1">

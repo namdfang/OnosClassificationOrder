@@ -224,14 +224,27 @@ export class FulfillmentTaskService {
       throw new ConflictException('Trạng thái stage vừa thay đổi bởi người khác — refresh và thử lại.');
     }
 
-    void this.orderLogService.write({
-      orderId,
-      action: 'update',
-      field: `fulfillmentStages.${body.stage}.status`,
-      before: currentStatus,
-      after: plan.nextStatus,
-      ctx: { ...ctx, user },
-    });
+    if (body.action === FulfillmentTransitionAction.ReworkBack) {
+      // Đẩy về là thao tác riêng — ghi rõ công đoạn đích + lý do, thay vì 1
+      // dòng đổi status trông giống hệt thay đổi trạng thái thường.
+      void this.orderLogService.write({
+        orderId,
+        action: 'rework_back',
+        field: String(plan.reworkTarget ?? body.target ?? ''),
+        before: body.stage,
+        after: body.reason,
+        ctx: { ...ctx, user },
+      });
+    } else {
+      void this.orderLogService.write({
+        orderId,
+        action: 'update',
+        field: `fulfillmentStages.${body.stage}.status`,
+        before: currentStatus,
+        after: plan.nextStatus,
+        ctx: { ...ctx, user },
+      });
+    }
 
     // Rework-back về designer trên đơn CHƯA ai ôm (soát 'ok' từ đầu → chưa từng
     // có designer) → auto-gán theo cấu hình xưởng, khỏi chờ leader phân/self-claim.
@@ -359,6 +372,8 @@ export class FulfillmentTaskService {
   }): {
     nextStatus: FulfillmentStageStatus;
     patch: Record<string, unknown>;
+    /** Đích THỰC SỰ của rework-back (auto-stage đã redirect lùi) — dùng cho nhật ký. */
+    reworkTarget?: string;
   } {
     const now = new Date();
     const { stage, action, currentStatus, stageState, target, reason, stages, user } = input;
@@ -536,6 +551,7 @@ export class FulfillmentTaskService {
           set.readyForFulfill = false;
           return {
             nextStatus: FulfillmentStageStatus.Waiting,
+            reworkTarget: 'designer',
             patch: {
               $set: set,
               $inc: { ...inc, designerReworkCount: 1 },
@@ -576,6 +592,7 @@ export class FulfillmentTaskService {
 
         return {
           nextStatus: FulfillmentStageStatus.Waiting,
+          reworkTarget: resolvedTarget,
           patch: {
             $set: set,
             ...(Object.keys(inc).length > 0 ? { $inc: inc } : {}),

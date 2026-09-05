@@ -43,6 +43,7 @@ function buildActionBadge(
     hold: { label: t('actionBadge.hold'), variant: 'warning' },
     unhold: { label: t('actionBadge.unhold'), variant: 'success' },
     force_complete: { label: t('actionBadge.forceComplete'), variant: 'warning' },
+    rework_back: { label: t('actionBadge.reworkBack'), variant: 'warning' },
   };
 }
 
@@ -409,6 +410,25 @@ export function OrderLogTimelineDialog({ open, onOpenChange, orderId, production
                       <div className="text-[13px] rounded bg-rose-50 dark:bg-rose-500/10 px-2 py-1">
                         <span className="text-muted-foreground">{t('timeline.reasonLabel')} </span>
                         <span className="text-foreground">{resolveDisplay(undefined, log.after).text}</span>
+                      </div>
+                    )}
+
+                    {/* Đẩy về làm lại: field = công đoạn đích, before = công đoạn báo lỗi, after = lý do. */}
+                    {log.action === 'rework_back' && (
+                      <div className="text-[13px] rounded bg-amber-50 dark:bg-amber-500/10 px-2 py-1 space-y-0.5">
+                        <div className="text-muted-foreground">
+                          {t('timeline.reworkBackRoute', {
+                            from: getStageLabel(t, String(log.before ?? '')),
+                            to:
+                              log.field === 'designer'
+                                ? t('timeline.reworkBackDesigner')
+                                : getStageLabel(t, String(log.field ?? '')),
+                          })}
+                        </div>
+                        <div>
+                          <span className="text-muted-foreground">{t('timeline.reasonLabel')} </span>
+                          <span className="text-foreground">{resolveDisplay(undefined, log.after).text}</span>
+                        </div>
                       </div>
                     )}
 
