@@ -134,6 +134,7 @@ errorFile, errorFileNote, assignee). Các cột khác BỎ QUA (không đè dữ
 - Map column theo header (vd: `Production ID` / `Prod ID` → `productionId`)
 - Parse numeric: `quantity`, `weight`, `baseCost`, `shipCost`, `width`, `height`, `length`
 - Parse date: `orderAt`, `inProductionAt` (ISO hoặc `M/d/yyyy`)
+  - **Cột "In production at" để trống (2026-09-05)**: đơn MỚI nhận mốc mặc định = **lúc import**, đi qua `$setOnInsert` nên re-import KHÔNG ghi đè mốc thật. Bắt buộc phải có: mọi màn hình đơn + dashboard lọc theo `inProductionAt` (§7.0), nên đơn thiếu mốc này là đơn **tàng hình** — import báo thành công nhưng không lọt qua bất kỳ khoảng ngày nào, không ai soát tool / gán designer / vào fulfillment được. Cùng nguyên tắc với `pushToProduction` của Customer Portal.
 - Parse designs: detect column như `Front`, `Back Design`, `Sleeve`, ... → nest vào `designs.{key}`
 - **Vận đơn khách tự cấp (ORD-26)**: 4 cột `Tracking Number` / `Tracking Carrier` / `Tracking URL` / `Shipping Label` (kèm alias `tracking_id`, `tracking_code`, `carrier`, `label_url`…) → `row.tracking`. Khác 39 cột còn lại, mấy cột này dò **theo TÊN header** chứ không theo vị trí: sheet đang chạy ở xưởng chưa có chúng, mà file mỗi nơi xuất ra lại đặt ở chỗ khác nhau — dò theo tên thì sheet cũ vẫn parse y như trước, sheet mới thêm cột ở đâu cũng nhận đúng. Mọi ô trống → `undefined` để BE **không ghi đè** vận đơn đã nhận lúc import lại. BE lưu snapshot `OrderEntity.tracking` + ghi record vào module vận đơn — xem [`VnpShipping.md §2c`](VnpShipping.md).
 

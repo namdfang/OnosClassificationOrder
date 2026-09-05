@@ -7113,6 +7113,7 @@ export class OrderService implements OnModuleInit {
 
         const { designJobs, ...designData } = this.processDesigns(row.designs);
         const rowTracking = normalizeProductionOrderTracking(row.tracking);
+        const parsedInProductionAt = parseImportDate(row.inProductionAt);
 
         const data = {
           productionId: row.productionId.trim(),
@@ -7140,7 +7141,9 @@ export class OrderService implements OnModuleInit {
           externalId: row.externalId?.trim(),
           referent: row.referent?.trim(),
           orderAt: parseImportDate(row.orderAt),
-          inProductionAt: parseImportDate(row.inProductionAt),
+          // Cột "In production at" để trống → KHÔNG set ở `$set` (re-import
+          // không được xoá mốc thật), mốc mặc định đi qua `$setOnInsert` dưới.
+          ...(parsedInProductionAt ? { inProductionAt: parsedInProductionAt } : {}),
           ...(row.shippingAddress ? { shippingAddress: row.shippingAddress } : {}),
           // Vận đơn khách tự cấp: CHỈ ghi khi dòng import thật sự có giá trị —
           // file lần sau không có cột tracking thì đừng xoá vận đơn đã nhận.
@@ -7156,6 +7159,12 @@ export class OrderService implements OnModuleInit {
         // is pinned for the same reason. `toolResult` KHÔNG nằm trong danh sách
         // này nữa — luôn để trống lúc tạo đơn mới, chờ tool tự động soát set.
         const insertOnly: Record<string, unknown> = { originalFactoryId: factoryId };
+        // Đơn MỚI mà file không có "In production at" → mặc định = lúc import.
+        // Thiếu mốc này đơn thành TÀNG HÌNH: mọi màn hình đơn lọc theo
+        // `inProductionAt` nên đơn không lọt qua bất kỳ khoảng ngày nào —
+        // không ai soát tool, không gán được designer, không vào fulfillment.
+        // Cùng nguyên tắc với `pushToProduction` của Customer Portal.
+        if (!parsedInProductionAt) insertOnly.inProductionAt = new Date();
         if (fabricType) insertOnly.fabricType = fabricType;
         if (machineNumber) insertOnly.machineNumber = machineNumber;
 
