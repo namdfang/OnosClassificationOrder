@@ -75,6 +75,7 @@ function buildCheckoutSchema(t: TFunction<'customerPortal'>) {
 type CheckoutFormValues = z.infer<ReturnType<typeof buildCheckoutSchema>>;
 
 const PICKER_PAGE_SIZE = 12;
+const PICKER_PAGE_SIZE_OPTIONS = [12, 24, 48, 96];
 
 const usdFormatter = new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD' });
 function formatUsd(value?: number): string {
@@ -104,6 +105,7 @@ function CustomerOrderNew() {
   const [pickerSearch, setPickerSearch] = useState('');
   const debouncedPickerSearch = useDebounce(pickerSearch, 300);
   const [pickerPage, setPickerPage] = useState(1);
+  const [pickerPageSize, setPickerPageSize] = useState(PICKER_PAGE_SIZE);
   const [pickerTotal, setPickerTotal] = useState(0);
   const [pickerItems, setPickerItems] = useState<CustomerCatalogItem[]>([]);
   const [pickerLoading, setPickerLoading] = useState(false);
@@ -134,7 +136,7 @@ function CustomerOrderNew() {
     (async () => {
       try {
         setPickerLoading(true);
-        const params = new URLSearchParams({ page: String(pickerPage), limit: String(PICKER_PAGE_SIZE) });
+        const params = new URLSearchParams({ page: String(pickerPage), limit: String(pickerPageSize) });
         if (debouncedPickerSearch) params.set('search', debouncedPickerSearch);
         const res = await RepositoryRemote.customerCatalog.getCatalog(`?${params.toString()}`);
         setPickerItems(res?.data?.data ?? []);
@@ -145,7 +147,7 @@ function CustomerOrderNew() {
         setPickerLoading(false);
       }
     })();
-  }, [product, pickerPage, debouncedPickerSearch]);
+  }, [product, pickerPage, pickerPageSize, debouncedPickerSearch]);
 
   const isFirstPickerRender = React.useRef(true);
   useEffect(() => {
@@ -340,10 +342,14 @@ function CustomerOrderNew() {
                       <PaginationBar
                         position="bottom"
                         page={pickerPage}
-                        pageSize={PICKER_PAGE_SIZE}
+                        pageSize={pickerPageSize}
+                        pageSizeOptions={PICKER_PAGE_SIZE_OPTIONS}
                         total={pickerTotal}
                         loading={pickerLoading}
-                        onChange={(p) => setPickerPage(p)}
+                        onChange={(p, size) => {
+                          setPickerPage(p);
+                          setPickerPageSize(size);
+                        }}
                       />
                     </div>
                   )}
