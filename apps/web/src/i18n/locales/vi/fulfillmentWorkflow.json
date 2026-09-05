@@ -90,7 +90,8 @@
       "expandTitle": "Click để mở",
       "collapseTitle": "Click để thu gọn",
       "empty": "Trống",
-      "noType": "— Chưa có type —"
+      "noType": "— Chưa có type —",
+      "showMore": "Xem thêm {{count}} đơn (đang hiện {{shown}}/{{total}})"
     },
     "dragWarning": "Chỉ kéo được \"{{waiting}}\" / \"{{rework}}\" sang \"{{inProgress}}\". Đơn hoàn thành dùng nút \"{{complete}}\"; báo lỗi dùng nút \"{{reportError}}\"."
   },

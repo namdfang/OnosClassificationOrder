@@ -90,7 +90,8 @@
       "expandTitle": "Click to expand",
       "collapseTitle": "Click to collapse",
       "empty": "Empty",
-      "noType": "— No type —"
+      "noType": "— No type —",
+      "showMore": "Show {{count}} more (showing {{shown}}/{{total}})"
     },
     "dragWarning": "You can only drag \"{{waiting}}\" / \"{{rework}}\" to \"{{inProgress}}\". Use the \"{{complete}}\" button to complete an order, or \"{{reportError}}\" to report an error."
   },

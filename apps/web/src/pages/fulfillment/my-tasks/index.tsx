@@ -71,6 +71,9 @@ function vnDay(iso?: string): string {
 
 const BARCODE_PREFIX = 'N-';
 const SEARCH_HISTORY_KEY = 'fulfillment-search-history';
+
+/** Số card tối đa render 1 lần trong 1 cột kanban (xem `Column`). */
+const COLUMN_RENDER_LIMIT = 100;
 const MAX_SEARCH_HISTORY = 20;
 
 type SearchHistoryEntry = {
@@ -1283,7 +1286,21 @@ function Column({
   const Icon = meta.icon;
   const { setNodeRef, isOver } = useDroppable({ id: colKey });
   const noTypeLabel = t('kanban.column.noType');
-  const groups = useMemo(() => groupByType(cards, noTypeLabel), [cards, noTypeLabel]);
+
+  // Trần số card RENDER mỗi cột. Cột "Đã xong" của 1 xưởng lớn có thể tới vài
+  // nghìn card (mỗi card kèm ảnh mockup) — render hết làm treo hẳn tab ngay khi
+  // gõ 1 ký tự vào ô "TÌM / QUÉT MÃ" (ô chính của máy quét tại trạm). Cắt bớt
+  // + nút "Xem thêm"; mọi phép đếm/chọn cả cột vẫn chạy trên `cards` đầy đủ.
+  const [renderLimit, setRenderLimit] = useState(COLUMN_RENDER_LIMIT);
+  useEffect(() => {
+    setRenderLimit(COLUMN_RENDER_LIMIT);
+  }, [cards]);
+  const visibleCards = useMemo(
+    () => (cards.length > renderLimit ? cards.slice(0, renderLimit) : cards),
+    [cards, renderLimit],
+  );
+  const hiddenCount = cards.length - visibleCards.length;
+  const groups = useMemo(() => groupByType(visibleCards, noTypeLabel), [visibleCards, noTypeLabel]);
 
   const [collapsed, setCollapsed] = useState<Set<string>>(new Set());
   const toggleCollapse = (type: string) =>
@@ -1443,6 +1460,19 @@ function Column({
             </div>
           );
         })}
+        {hiddenCount > 0 && (
+          <button
+            type="button"
+            onClick={() => setRenderLimit((v) => v + COLUMN_RENDER_LIMIT)}
+            className="w-full rounded border border-dashed border-border py-1.5 text-[11px] text-muted-foreground hover:bg-card"
+          >
+            {t('kanban.column.showMore', {
+              count: Math.min(hiddenCount, COLUMN_RENDER_LIMIT),
+              shown: visibleCards.length,
+              total: cards.length,
+            })}
+          </button>
+        )}
       </div>
     </div>
   );

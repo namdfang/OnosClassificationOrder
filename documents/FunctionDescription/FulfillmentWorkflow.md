@@ -631,6 +631,7 @@ Trừ khi field thuần private (chỉ DB schema, không có business logic dùn
 - **Sort**: `{ orderAt: -1, inProductionAt: -1 }` — `orderAt` primary (thời gian khách đặt), `inProductionAt` secondary tiebreak (thời gian vào xưởng). Đổi từ `createdAt` Mongo timestamp → `inProductionAt` business time để khớp với toàn bộ flow order (xem `Orders.md` §7.0b).
 - **Tab counts**: 5 query song song `countDocuments` (waiting/in-progress/rework/done/watching) — tổng < 50ms với dataset ~10k đơn/factory.
 - **Timeline**: append-only, không index. Reads chỉ khi user mở chi tiết đơn (lazy).
+- **Trần render kanban (`COLUMN_RENDER_LIMIT = 100`)**: mỗi cột chỉ render tối đa 100 card 1 lần, phần còn lại sau nút "Xem thêm" (`pages/fulfillment/my-tasks/index.tsx` → `Column`). Bắt buộc phải có: cột "Đã xong" của xưởng lớn với preset 7 ngày lên tới vài nghìn card (mỗi card kèm ảnh mockup), render hết làm ĐƠ HẲN tab ngay khi gõ 1 ký tự vào ô "TÌM / QUÉT MÃ" — ô chính của máy quét barcode tại trạm. Header cột, checkbox "chọn cả cột" và mọi phép đếm vẫn chạy trên danh sách ĐẦY ĐỦ, chỉ phần DOM bị cắt.
 - **fulfillmentTimeline** có thể grow theo thời gian → nếu đơn rework nhiều lần (>50 entry) cần consider archive sau. Hiện tại chấp nhận.
 
 ---
