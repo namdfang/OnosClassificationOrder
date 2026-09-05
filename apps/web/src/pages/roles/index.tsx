@@ -6,6 +6,7 @@ import { toast } from 'sonner';
 
 import { RepositoryRemote } from '@/services';
 
+import { useConfirm } from '@/components/common/ConfirmDialog';
 import { Spinner } from '@/components/common/Spinner';
 import { PermissionMatrix } from '@/components/roles/PermissionMatrix';
 import { Badge } from '@/components/ui/badge';
@@ -17,6 +18,7 @@ import { handleAxiosError } from '@/utils';
 
 export default function RolesPage() {
   const { t } = useTranslation(['auth', 'common']);
+  const { confirm, confirmDialog } = useConfirm();
   const [roles, setRoles] = useState<Role[]>([]);
   const [loading, setLoading] = useState(false);
   const [editing, setEditing] = useState<Role | null>(null);
@@ -66,7 +68,7 @@ export default function RolesPage() {
 
   const handleReset = async () => {
     if (!editing) return;
-    if (!confirm(t('roles.resetConfirm'))) return;
+    if (!(await confirm({ title: t('roles.resetConfirm'), destructive: true }))) return;
     try {
       const res = await RepositoryRemote.roles.resetPermissions(editing._id!);
       toast.success(t('roles.toasts.resetSuccess'));
@@ -80,6 +82,7 @@ export default function RolesPage() {
 
   return (
     <div className="space-y-6">
+      {confirmDialog}
       <div className="flex items-center gap-3">
         <div className="w-10 h-10 rounded-xl bg-indigo-50 dark:bg-indigo-900/20 flex items-center justify-center">
           <ShieldCheck size={20} className="text-indigo-600" />

@@ -14,10 +14,10 @@ import { Model, PipelineStage } from 'mongoose';
 import type {
   ApplyCuttingFilesDto,
   ApplyCuttingFilesResDto,
+  BarcodeLabel,
   BreakdownBucket,
   BulkAssignDesignerDto,
   BulkAssignDesignerPreviewDto,
-  BarcodeLabel,
   BulkAssignDesignerPreviewResDto,
   BulkAssignDesignerResDto,
   BulkAssignOrderDto,
@@ -156,8 +156,8 @@ import { ShipmentIngestService } from '../shipping-vnp/shipment-ingest.service';
 import { SystemConfigService } from '../system-config/system-config.service';
 import { UserEntity } from '../user/user.entity';
 import { WorkshopConfigRepository } from '../workshop-config/workshop-config.repository';
-import { DriveFileNameService } from './drive-file-name.service';
 import { resolveBarcodeSkuBase } from './barcode-label';
+import { DriveFileNameService } from './drive-file-name.service';
 import { planForceComplete } from './force-complete-plan';
 import { OnospodOrderLookupService } from './onospod-order-lookup.service';
 import { OrderDocument, OrderEntity } from './order.entity';

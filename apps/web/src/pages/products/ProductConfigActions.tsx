@@ -10,6 +10,7 @@ import { useWorkshopConfigStore } from '@/store/workshopConfigStore';
 
 import { RepositoryRemote } from '@/services';
 
+import { useConfirm } from '@/components/common/ConfirmDialog';
 import { Spinner } from '@/components/common/Spinner';
 import { Button } from '@/components/ui/button';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
@@ -65,6 +66,7 @@ function GroupDivider() {
  */
 export function ProductConfigActions({ onChanged }: ProductConfigActionsProps) {
   const { t } = useTranslation('products');
+  const { confirm, confirmDialog } = useConfirm();
   const navigate = useNavigate();
   const loadConfig = useWorkshopConfigStore((s) => s.load);
 
@@ -90,7 +92,7 @@ export function ProductConfigActions({ onChanged }: ProductConfigActionsProps) {
    * null. Fill-only: KHÔNG đè field đã có, KHÔNG đụng xưởng/phòng/vải hiện tại.
    */
   const handleImportFromOnospod = async () => {
-    if (!window.confirm(t('configTab.onospodImport.confirm'))) return;
+    if (!(await confirm({ title: t('configTab.onospodImport.confirm') }))) return;
     setOnospodImporting(true);
     const totals = { created: 0, filled: 0, skipped: 0 };
     const errors: { sku: string; name: string; reason: string }[] = [];
@@ -136,7 +138,7 @@ export function ProductConfigActions({ onChanged }: ProductConfigActionsProps) {
    * import GraphQL không lấy được).
    */
   const handleCrawlPageInfo = async () => {
-    if (!window.confirm(t('configTab.pageInfoCrawl.confirm'))) return;
+    if (!(await confirm({ title: t('configTab.pageInfoCrawl.confirm') }))) return;
     setPageInfoCrawling(true);
     let updated = 0;
     let processed = 0;
@@ -172,6 +174,7 @@ export function ProductConfigActions({ onChanged }: ProductConfigActionsProps) {
 
   return (
     <TooltipProvider delayDuration={200}>
+      {confirmDialog}
       <div className="flex flex-col items-end gap-1">
         <div className="flex items-center gap-1 rounded-lg border border-border bg-card p-1 shadow-sm">
           <ActionButton

@@ -149,7 +149,7 @@ export class CustomerService {
           count: number;
           lastAt: Date | null;
         }>([
-          { $match: matchClauses.length === 1 ? matchClauses[0]! : { $or: matchClauses } },
+          { $match: matchClauses.length === 1 ? matchClauses[0] : { $or: matchClauses } },
           {
             $group: {
               _id: { userSku: '$userSku', userEmail: { $toLower: { $ifNull: ['$userEmail', ''] } } },

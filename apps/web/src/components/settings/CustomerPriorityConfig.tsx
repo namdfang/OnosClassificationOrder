@@ -1,5 +1,6 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
+import { useNavigate } from 'react-router-dom';
 import { Flag, RefreshCw, Save } from 'lucide-react';
 import type { Customer, CustomerPriorityConfig as Config } from 'shared';
 import { ORDER_PRIORITIES } from 'shared';
@@ -7,6 +8,7 @@ import { toast } from 'sonner';
 
 import { RepositoryRemote } from '@/services';
 
+import { useConfirm } from '@/components/common/ConfirmDialog';
 import { Spinner } from '@/components/common/Spinner';
 import { buildPriorityMeta } from '@/components/orders/cells/PrioritySelectCell';
 import CustomerFactoryKanban from '@/components/settings/CustomerFactoryKanban';
@@ -30,6 +32,8 @@ function snapshot(enabled: boolean, alloc: AllocState): string {
 
 export default function CustomerPriorityConfig() {
   const { t } = useTranslation(['customerPriority', 'common']);
+  const navigate = useNavigate();
+  const { confirm, confirmDialog } = useConfirm();
   // Label + màu 3 mức lấy từ dictionary priority sẵn có (namespace `orders`).
   const { t: tOrders } = useTranslation('orders');
   const [customers, setCustomers] = useState<Customer[]>([]);
@@ -103,11 +107,13 @@ export default function CustomerPriorityConfig() {
       if (!anchor) return;
       const href = anchor.getAttribute('href') || '';
       if (!href || href.startsWith('#')) return;
-      const ok = window.confirm(t('leaveConfirm'));
-      if (!ok) {
-        e.preventDefault();
-        e.stopPropagation();
-      }
+      // Dialog hệ thống là async → chặn điều hướng NGAY (đồng bộ), hỏi xong
+      // mới tự đi tiếp. `window.confirm` cũ chặn cả tab nên không cần bước này.
+      e.preventDefault();
+      e.stopPropagation();
+      void confirm({ title: t('leaveConfirm'), destructive: true }).then((ok) => {
+        if (ok) navigate(href);
+      });
     };
     window.addEventListener('beforeunload', onBeforeUnload);
     document.addEventListener('click', onClickCapture, true);
@@ -115,7 +121,7 @@ export default function CustomerPriorityConfig() {
       window.removeEventListener('beforeunload', onBeforeUnload);
       document.removeEventListener('click', onClickCapture, true);
     };
-  }, [dirty, t]);
+  }, [dirty, t, confirm, navigate]);
 
   const handleSync = async () => {
     try {
@@ -160,6 +166,7 @@ export default function CustomerPriorityConfig() {
 
   return (
     <div className="space-y-4">
+      {confirmDialog}
       <div className="flex items-start justify-between gap-3">
         <div className="flex items-center gap-2.5">
           <div className="w-9 h-9 rounded-lg bg-rose-100 dark:bg-rose-500/15 flex items-center justify-center">

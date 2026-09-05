@@ -9,6 +9,7 @@ import { toast } from 'sonner';
 
 import { PATHS } from '@/constants/paths';
 
+import { useConfirm } from '@/components/common/ConfirmDialog';
 import { CopyButton } from '@/components/common/CopyButton';
 import { LoadingOverlay } from '@/components/common/LoadingOverlay';
 import { PaginationBar } from '@/components/common/PaginationBar';
@@ -44,6 +45,7 @@ const STATUS_TABS: Array<{ value: CustomerOrderStatus | 'all'; countKey: keyof C
 
 function CustomerOrders() {
   const { t } = useTranslation('customerPortal');
+  const { confirm, confirmDialog } = useConfirm();
   const [orders, setOrders] = useState<CustomerStagingOrder[]>([]);
   const [counts, setCounts] = useState<CustomerOrderCounts | null>(null);
   const [loading, setLoading] = useState(true);
@@ -126,7 +128,11 @@ function CustomerOrders() {
   };
 
   const cancelOrder = async (order: CustomerStagingOrder) => {
-    if (!window.confirm(t('orders.cancelConfirm', { name: orderDisplayCode(order) }))) return;
+    const ok = await confirm({
+      title: t('orders.cancelConfirm', { name: orderDisplayCode(order) }),
+      destructive: true,
+    });
+    if (!ok) return;
     try {
       await RepositoryRemote.customerOrder.cancelStagingOrder(order._id);
       toast.success(t('orders.cancelSuccess'));
@@ -159,6 +165,7 @@ function CustomerOrders() {
 
   return (
     <div>
+      {confirmDialog}
       <div className="mb-4 flex flex-wrap items-center justify-between gap-2">
         <div>
           <h1 className="text-lg font-semibold">{t('orders.title')}</h1>

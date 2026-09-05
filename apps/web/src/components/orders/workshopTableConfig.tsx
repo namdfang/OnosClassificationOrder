@@ -15,9 +15,9 @@ import { IconSelectCell } from '@/components/orders/cells/IconSelectCell';
 import { ImageThumbCell } from '@/components/orders/cells/ImageThumbCell';
 import { MultiIconSelectCell } from '@/components/orders/cells/MultiIconSelectCell';
 import { PrioritySelectCell } from '@/components/orders/cells/PrioritySelectCell';
-import { HeldBadge } from '@/components/orders/HeldBadge';
 import { ProductionErrorSelectCell } from '@/components/orders/cells/ProductionErrorSelectCell';
 import { TextEditCell } from '@/components/orders/cells/TextEditCell';
+import { HeldBadge } from '@/components/orders/HeldBadge';
 import { ReworkReasonNote } from '@/components/orders/ReworkReasonNote';
 import { Badge } from '@/components/ui/badge';
 

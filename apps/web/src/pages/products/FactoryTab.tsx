@@ -9,6 +9,7 @@ import { useWorkshopConfigStore } from '@/store/workshopConfigStore';
 
 import { RepositoryRemote } from '@/services';
 
+import { useConfirm } from '@/components/common/ConfirmDialog';
 import { Spinner } from '@/components/common/Spinner';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
@@ -85,6 +86,7 @@ const DEFAULT_FORM: FormState = {
 
 export function FactoryTab() {
   const { t } = useTranslation(['products', 'common']);
+  const { confirm, confirmDialog } = useConfirm();
   // AUTH-6 - vai chi doc (Support) xem duoc, khong tao/sua/xoa duoc.
   const { canWriteProducts } = useProductWriteAccess();
   const [factories, setFactories] = useState<ListItem[]>([]);
@@ -174,7 +176,7 @@ export function FactoryTab() {
   };
 
   const handleFabricReset = async () => {
-    if (!confirm(t('factoryTab.fabric.reset.confirm'))) return;
+    if (!(await confirm({ title: t('factoryTab.fabric.reset.confirm'), destructive: true }))) return;
     try {
       const res = await RepositoryRemote.workshopConfig.resetCategory(WorkshopConfigCategory.FabricType);
       const { removed, inserted } = res.data.data;
@@ -234,7 +236,7 @@ export function FactoryTab() {
   const handleCompletePackBacklog = async () => {
     const { _id, name } = form.data;
     if (!_id) return;
-    if (!window.confirm(t('factoryTab.form.autoPack.sweepConfirm', { name }))) return;
+    if (!(await confirm({ title: t('factoryTab.form.autoPack.sweepConfirm', { name }) }))) return;
     try {
       setPackBacklogBusy(true);
       const res = await RepositoryRemote.fulfillment.completePackBacklog({ factoryId: _id });
@@ -381,6 +383,7 @@ export function FactoryTab() {
 
   return (
     <div className="space-y-6">
+      {confirmDialog}
       {renderTable(factories, 'factory', t('factoryTab.factory.title'), t('factoryTab.factory.description'))}
       {renderTable(machineTypes, 'machineType', t('factoryTab.machineType.title'), t('factoryTab.machineType.description'))}
 

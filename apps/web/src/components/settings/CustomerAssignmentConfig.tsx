@@ -1,6 +1,6 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { Link } from 'react-router-dom';
+import { Link, useNavigate } from 'react-router-dom';
 import { Contact, Save, Users } from 'lucide-react';
 import type { Customer, CustomerAssignmentConfig as Config } from 'shared';
 import { toast } from 'sonner';
@@ -9,6 +9,7 @@ import { PATHS } from '@/constants/paths';
 
 import { RepositoryRemote } from '@/services';
 
+import { useConfirm } from '@/components/common/ConfirmDialog';
 import { Spinner } from '@/components/common/Spinner';
 import CustomerFactoryKanban from '@/components/settings/CustomerFactoryKanban';
 import { Button } from '@/components/ui/button';
@@ -36,6 +37,8 @@ function snapshot(enabled: boolean, alloc: AllocState): string {
 
 export default function CustomerAssignmentConfig() {
   const { t } = useTranslation(['customerFactoryAssignment', 'common']);
+  const navigate = useNavigate();
+  const { confirm, confirmDialog } = useConfirm();
   const [factories, setFactories] = useState<FactoryLite[]>([]);
   const [customers, setCustomers] = useState<Customer[]>([]);
   const [alloc, setAlloc] = useState<AllocState>({});
@@ -102,11 +105,13 @@ export default function CustomerAssignmentConfig() {
       if (!anchor) return;
       const href = anchor.getAttribute('href') || '';
       if (!href || href.startsWith('#')) return;
-      const ok = window.confirm(t('leaveConfirm'));
-      if (!ok) {
-        e.preventDefault();
-        e.stopPropagation();
-      }
+      // Dialog hệ thống là async → chặn điều hướng NGAY (đồng bộ), hỏi xong
+      // mới tự đi tiếp. `window.confirm` cũ chặn cả tab nên không cần bước này.
+      e.preventDefault();
+      e.stopPropagation();
+      void confirm({ title: t('leaveConfirm'), destructive: true }).then((ok) => {
+        if (ok) navigate(href);
+      });
     };
     window.addEventListener('beforeunload', onBeforeUnload);
     document.addEventListener('click', onClickCapture, true);
@@ -114,7 +119,7 @@ export default function CustomerAssignmentConfig() {
       window.removeEventListener('beforeunload', onBeforeUnload);
       document.removeEventListener('click', onClickCapture, true);
     };
-  }, [dirty, t]);
+  }, [dirty, t, confirm, navigate]);
 
   const handleSave = async () => {
     const payload: Config = {
@@ -145,6 +150,7 @@ export default function CustomerAssignmentConfig() {
 
   return (
     <div className="space-y-4">
+      {confirmDialog}
       <div className="flex items-start justify-between gap-3">
         <div className="flex items-center gap-2.5">
           <div className="w-9 h-9 rounded-lg bg-emerald-100 dark:bg-emerald-500/15 flex items-center justify-center">

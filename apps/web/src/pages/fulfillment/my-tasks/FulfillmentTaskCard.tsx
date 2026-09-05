@@ -19,11 +19,10 @@ import { useDraggable } from '@dnd-kit/core';
 
 import { Hint } from '@/components/common/Hint';
 import { PriorityBadge } from '@/components/orders/cells/PrioritySelectCell';
-
-import { getStageLabel } from '@/utils/fulfillmentStageLabel';
-
 import { HeldBadge } from '@/components/orders/HeldBadge';
 import { ReworkReasonNote } from '@/components/orders/ReworkReasonNote';
+
+import { getStageLabel } from '@/utils/fulfillmentStageLabel';
 import { formatCountdown, getStageDeadline } from '@/utils/priorityEstimate';
 
 import { useNow } from '@/hooks/useNow';

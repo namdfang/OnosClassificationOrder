@@ -21,6 +21,7 @@ import { toast } from 'sonner';
 
 import { RepositoryRemote } from '@/services';
 
+import { useConfirm } from '@/components/common/ConfirmDialog';
 import { LoadingOverlay } from '@/components/common/LoadingOverlay';
 import { PaginationBar } from '@/components/common/PaginationBar';
 import { Spinner } from '@/components/common/Spinner';
@@ -52,6 +53,7 @@ type AccountFilter = '' | 'registered' | 'notRegistered' | 'locked';
 
 export default function CustomersPage() {
   const { t } = useTranslation(['customers', 'customerFactoryAssignment', 'common']);
+  const { confirm, confirmDialog } = useConfirm();
   const [rows, setRows] = useState<CustomerAdminRow[]>([]);
   const [total, setTotal] = useState(0);
   const [page, setPage] = useState(1);
@@ -172,7 +174,12 @@ export default function CustomersPage() {
   };
 
   const handleDelete = async (c: CustomerAdminRow) => {
-    if (!window.confirm(`${t('deleteConfirm.title', { sku: c.userSku })}\n\n${t('deleteConfirm.message')}`)) return;
+    const ok = await confirm({
+      title: t('deleteConfirm.title', { sku: c.userSku }),
+      message: t('deleteConfirm.message'),
+      destructive: true,
+    });
+    if (!ok) return;
     try {
       const res = await RepositoryRemote.customer.softDelete(String(c._id));
       const removed = (res.data?.data?.removedFromConfigs || []) as string[];
@@ -229,6 +236,7 @@ export default function CustomersPage() {
 
   return (
     <div className="space-y-6">
+      {confirmDialog}
       <div className="flex items-center gap-3">
         <div className="w-10 h-10 rounded-xl bg-indigo-50 dark:bg-indigo-900/20 flex items-center justify-center">
           <Contact size={20} className="text-indigo-600" />

@@ -33,6 +33,7 @@ import { useWorkshopConfigStore } from '@/store/workshopConfigStore';
 
 import { RepositoryRemote } from '@/services';
 
+import { useConfirm } from '@/components/common/ConfirmDialog';
 import { RichTextEditor } from '@/components/common/RichTextEditor';
 import { Spinner } from '@/components/common/Spinner';
 import { Badge } from '@/components/ui/badge';
@@ -360,6 +361,7 @@ interface FormSnapshot {
 
 export default function ProductDetailPage() {
   const { t } = useTranslation(['products', 'common']);
+  const { confirm, confirmDialog } = useConfirm();
   const { id } = useParams<{ id: string }>();
   const isNew = id === 'new';
   const navigate = useNavigate();
@@ -683,11 +685,13 @@ export default function ProductDetailPage() {
       if (!anchor) return;
       const href = anchor.getAttribute('href') || '';
       if (!href || href.startsWith('#')) return;
-      const ok = window.confirm(t('detail.unsavedConfirm'));
-      if (!ok) {
-        e.preventDefault();
-        e.stopPropagation();
-      }
+      // Dialog của hệ thống là async → chặn điều hướng NGAY (đồng bộ), hỏi
+      // xong mới tự đi tiếp. `window.confirm` cũ chặn cả tab nên không cần.
+      e.preventDefault();
+      e.stopPropagation();
+      void confirm({ title: t('detail.unsavedConfirm'), destructive: true }).then((ok) => {
+        if (ok) navigate(href);
+      });
     };
     window.addEventListener('beforeunload', onBeforeUnload);
     document.addEventListener('click', onClickCapture, true);
@@ -695,7 +699,7 @@ export default function ProductDetailPage() {
       window.removeEventListener('beforeunload', onBeforeUnload);
       document.removeEventListener('click', onClickCapture, true);
     };
-  }, [dirty, t]);
+  }, [dirty, t, confirm, navigate]);
 
   // Scrollspy — section trong dải 20-45% phía trên viewport thì tab đó sáng.
   useEffect(() => {
@@ -721,14 +725,14 @@ export default function ProductDetailPage() {
     document.getElementById(secId)?.scrollIntoView({ behavior: 'smooth', block: 'start' });
   };
 
-  const handleBack = () => {
-    if (dirty && !window.confirm(t('detail.unsavedConfirm'))) return;
+  const handleBack = async () => {
+    if (dirty && !(await confirm({ title: t('detail.unsavedConfirm'), destructive: true }))) return;
     navigate(PATHS.PRODUCTS);
   };
 
   const handleDeleteProduct = async () => {
     if (!item || isNew) return;
-    if (!window.confirm(t('detail.deleteConfirm', { name: item.fullName }))) return;
+    if (!(await confirm({ title: t('detail.deleteConfirm', { name: item.fullName }), destructive: true }))) return;
     try {
       setDeleting(true);
       await RepositoryRemote.productConfig.deleteProductConfig(item._id);
@@ -1060,6 +1064,7 @@ export default function ProductDetailPage() {
 
   return (
     <div className="-mx-4 md:-mx-6 -mt-4 md:-mt-6">
+      {confirmDialog}
       {/* ─── Sticky header + anchor nav ─── */}
       <div className="sticky top-0 z-30 bg-background/95 backdrop-blur border-b border-border px-4 md:px-6">
         <div className="flex items-center justify-between gap-3 py-3">

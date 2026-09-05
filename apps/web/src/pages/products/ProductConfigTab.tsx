@@ -18,6 +18,7 @@ import { useWorkshopConfigStore } from '@/store/workshopConfigStore';
 
 import { RepositoryRemote } from '@/services';
 
+import { useConfirm } from '@/components/common/ConfirmDialog';
 import { LoadingOverlay } from '@/components/common/LoadingOverlay';
 import { PaginationBar } from '@/components/common/PaginationBar';
 import { Spinner } from '@/components/common/Spinner';
@@ -152,6 +153,7 @@ interface ProductConfigTabProps {
 
 export function ProductConfigTab({ refreshKey = 0 }: ProductConfigTabProps) {
   const { t } = useTranslation('products');
+  const { confirm, confirmDialog } = useConfirm();
   // AUTH-6 - vai chi DOC (Support) van xem duoc bang nhung khong sua duoc gi.
   // Day chi la lop giao dien; API van tu choi moi route ghi cua vai nay.
   const { canWriteProducts } = useProductWriteAccess();
@@ -353,7 +355,7 @@ export function ProductConfigTab({ refreshKey = 0 }: ProductConfigTabProps) {
   };
 
   const handleDelete = async (id: string, fullName: string) => {
-    if (!confirm(t('configTab.deleteConfirm', { name: fullName }))) return;
+    if (!(await confirm({ title: t('configTab.deleteConfirm', { name: fullName }), destructive: true }))) return;
     try {
       await RepositoryRemote.productConfig.deleteProductConfig(id);
       toast.success(t('configTab.deleteSuccess', { name: fullName }));
@@ -365,7 +367,7 @@ export function ProductConfigTab({ refreshKey = 0 }: ProductConfigTabProps) {
   };
 
   const handleClearAll = async () => {
-    if (!confirm(t('configTab.clearAll.confirm'))) return;
+    if (!(await confirm({ title: t('configTab.clearAll.confirm'), destructive: true }))) return;
     try {
       const res = await RepositoryRemote.productConfig.clearAllProductConfigs();
       const removed = res.data.data?.removed ?? 0;
@@ -379,6 +381,7 @@ export function ProductConfigTab({ refreshKey = 0 }: ProductConfigTabProps) {
 
   return (
     <div className="space-y-4">
+      {confirmDialog}
       {/*
         Khu bộ lọc (PRD-1) — chiếm đúng chỗ thanh công cụ cũ, mọi trường nhìn
         thấy ngay, không giấu sau menu. Nhãn nhỏ trên từng ô để trạng thái đang

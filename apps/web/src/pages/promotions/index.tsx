@@ -7,6 +7,7 @@ import { toast } from 'sonner';
 
 import { RepositoryRemote } from '@/services';
 
+import { useConfirm } from '@/components/common/ConfirmDialog';
 import { LoadingOverlay } from '@/components/common/LoadingOverlay';
 import { PaginationBar } from '@/components/common/PaginationBar';
 import { Spinner } from '@/components/common/Spinner';
@@ -50,6 +51,7 @@ function formatDiscount(p: Promotion): string {
 
 export default function PromotionsPage() {
   const { t } = useTranslation(['promotion', 'common']);
+  const { confirm, confirmDialog } = useConfirm();
   const SCOPE_LABEL = buildScopeLabel(t);
   const [items, setItems] = useState<Promotion[]>([]);
   const [loading, setLoading] = useState(false);
@@ -114,7 +116,7 @@ export default function PromotionsPage() {
   };
 
   const handleDelete = async (id: string) => {
-    if (!confirm(t('page.deleteConfirm'))) return;
+    if (!(await confirm({ title: t('page.deleteConfirm'), destructive: true }))) return;
     try {
       await RepositoryRemote.promotion.deletePromotion(id);
       toast.success(t('page.deleteSuccess'));
@@ -136,6 +138,7 @@ export default function PromotionsPage() {
 
   return (
     <div className="space-y-6">
+      {confirmDialog}
       <div className="flex items-center gap-3">
         <div className="w-10 h-10 rounded-xl bg-rose-50 dark:bg-rose-900/20 flex items-center justify-center">
           <Tag size={20} className="text-rose-600" />
