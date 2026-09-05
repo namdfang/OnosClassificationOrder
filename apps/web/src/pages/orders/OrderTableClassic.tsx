@@ -882,8 +882,12 @@ export function OrderTableClassic() {
                   {colGroups.map((g, i) => (
                     <TableHead
                       key={g.key}
-                      className={cn('whitespace-nowrap text-xs', i === 0 && 'sticky left-8 z-30 bg-card shadow-[1px_0_0_0_var(--border)]')}
-                      title={g.members.map((m) => m.label).join(' · ')}
+                      // `overflow-hidden text-ellipsis` — xem comment ở `OrderTableWorkshop`.
+                      className={cn(
+                        'whitespace-nowrap overflow-hidden text-ellipsis text-xs',
+                        i === 0 && 'sticky left-8 z-30 bg-card shadow-[1px_0_0_0_var(--border)]',
+                      )}
+                      title={`${groupTitle(t, g.key, g.title)} — ${g.members.map((m) => m.label).join(' · ')}`}
                     >
                       {groupTitle(t, g.key, g.title)}
                     </TableHead>

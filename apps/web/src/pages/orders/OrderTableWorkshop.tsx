@@ -1306,13 +1306,18 @@ export function OrderTableWorkshop() {
                     <TableHead
                       key={g.key}
                       className={cn(
-                        'whitespace-nowrap text-xs',
+                        // `overflow-hidden text-ellipsis`: bảng là `table-fixed`
+                        // + width cột cố định, mà tiêu đề `whitespace-nowrap` —
+                        // chuỗi EN dài hơn VI nên tràn ĐÈ sang cột kế bên
+                        // ("FACTORY · FABRIC · MACHINEPRINT STATUS"). Cắt bằng …,
+                        // nội dung đầy đủ vẫn ở tooltip `title`.
+                        'whitespace-nowrap overflow-hidden text-ellipsis text-xs',
                         // Group "Mã đơn/Ưu tiên" luôn đứng đầu (i===0) — sticky
                         // cạnh checkbox để khi scroll ngang vẫn nhìn thấy ID.
                         // shadow-r mô phỏng viền cho user biết chỗ sticky kết thúc.
                         i === 0 && 'sticky left-8 z-30 bg-card shadow-[1px_0_0_0_var(--border)]',
                       )}
-                      title={g.members.map((m) => m.label).join(' · ')}
+                      title={`${groupTitle(t, g.key, g.title)} — ${g.members.map((m) => m.label).join(' · ')}`}
                     >
                       {groupTitle(t, g.key, g.title)}
                     </TableHead>
