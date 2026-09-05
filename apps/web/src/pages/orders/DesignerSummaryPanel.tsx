@@ -29,6 +29,10 @@ interface Props {
       | '__unassigned_tool__'
       | null,
   ) => void;
+  /** Tăng giá trị này để ép panel gọi lại API (nút "Tải lại", sau khi sửa ô
+   * inline trên bảng…). Panel chỉ auto-fetch theo `filterQs` nên nếu thiếu
+   * cờ này, số liệu KPI đứng yên sau thao tác của chính người dùng. */
+  refreshKey?: number;
 }
 
 type Breakdown = {
@@ -82,7 +86,7 @@ function buildKpiCols(t: TFunction<'orders'>): StatusCol[] {
   ];
 }
 
-export function DesignerSummaryPanel({ filterQs, onClickCell }: Props) {
+export function DesignerSummaryPanel({ filterQs, onClickCell, refreshKey = 0 }: Props) {
   const { t } = useTranslation('orders');
   const STATUS_COLS = useMemo(() => buildStatusCols(t), [t]);
   const KPI_COLS = useMemo(() => buildKpiCols(t), [t]);
@@ -104,7 +108,7 @@ export function DesignerSummaryPanel({ filterQs, onClickCell }: Props) {
         setLoading(false);
       }
     })();
-  }, [filterQs]);
+  }, [filterQs, refreshKey]);
 
   const counts = showOverall ? data?.overall : data?.scoped;
   const overallCounts = data?.overall;

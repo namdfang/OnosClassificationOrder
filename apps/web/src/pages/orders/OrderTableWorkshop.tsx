@@ -516,6 +516,21 @@ export function OrderTableWorkshop() {
     );
   }, []);
 
+  // Panel Designer summary chỉ tự fetch theo filter → mọi thay đổi dữ liệu do
+  // chính người dùng gây ra (sửa ô inline, bulk, nút "Tải lại") phải bump cờ này.
+  const [summaryRefresh, setSummaryRefresh] = useState(0);
+  const bumpSummary = useCallback(() => setSummaryRefresh((v) => v + 1), []);
+
+  /** patchRow cho thao tác NGƯỜI DÙNG — patch row + làm mới panel KPI. Poll
+   * ảnh (usePendingDesignsPoll) vẫn dùng `patchRow` trần, không bump. */
+  const patchRowByUser = useCallback(
+    (id: string, patch: Partial<OrderRow>) => {
+      patchRow(id, patch);
+      bumpSummary();
+    },
+    [patchRow, bumpSummary],
+  );
+
   usePendingDesignsPoll(items, patchRow);
 
   const openPreview = useCallback(
@@ -789,8 +804,8 @@ export function OrderTableWorkshop() {
 
   const openDetail = useCallback((id: string, productionId: string) => setDetailTarget({ id, productionId }), []);
   const renderCtx: RenderCtx = useMemo(
-    () => ({ canEditField, patchRow, openPreview, openDetail, t }),
-    [canEditField, patchRow, openPreview, openDetail, t],
+    () => ({ canEditField, patchRow: patchRowByUser, openPreview, openDetail, t }),
+    [canEditField, patchRowByUser, openPreview, openDetail, t],
   );
   const isNoTool = useIsNoTool();
 
@@ -1110,7 +1125,7 @@ export function OrderTableWorkshop() {
                 {t('tableWorkshop.backlogDetail')}
               </Button>
             </div>
-            <DesignerSummaryPanel filterQs={summaryFilterQs} onClickCell={handleSummaryCellClick} />
+            <DesignerSummaryPanel filterQs={summaryFilterQs} onClickCell={handleSummaryCellClick} refreshKey={summaryRefresh} />
           </div>
         )}
 
@@ -1137,6 +1152,7 @@ export function OrderTableWorkshop() {
           }}
           onReload={() => {
             setLoading(true);
+            bumpSummary();
             Promise.all([fetchData(), fetchFilters()]).finally(() => setLoading(false));
           }}
           loading={loading}
@@ -1418,7 +1434,7 @@ export function OrderTableWorkshop() {
                       onCheckboxChange={handleCheckboxChange}
                       onCheckboxMouseDown={onCheckboxMouseDown}
                       onHistory={onHistory}
-                      patchRow={patchRow}
+                      patchRow={patchRowByUser}
                     />
                   );
                 })}
@@ -1450,6 +1466,7 @@ export function OrderTableWorkshop() {
           onClear={() => setSelected(new Set())}
           onApplied={() => {
             setSelected(new Set());
+            bumpSummary();
             fetchData();
           }}
         />
