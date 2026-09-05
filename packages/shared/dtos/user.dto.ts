@@ -12,6 +12,7 @@ import {
   PASSWORD_MIN_LENGTH,
   PHONE_MAX_LENGTH,
   // PHONE_MIN_LENGTH,
+  RefIDZod,
 } from '@shared/constants';
 import { DesignerRank, FulfillmentStage, Gender, Status } from '@shared/enums';
 import { BaseEntityZod, PageQueryZod, PageResZod, ResZod } from '@shared/types';
@@ -42,7 +43,7 @@ export const UserZod = BaseEntityZod.extend({
   address: z.string().min(ADDRESS_MIN_LENGTH).max(ADDRESS_MAX_LENGTH).optional(),
   otherPermissionIds: z.array(IDZod).default([]),
   status: z.enum(getObjectValues(Status)).default(Status.Active),
-  roleId: IDZod,
+  roleId: RefIDZod,
   customRoleId: z.string().optional(),
   secret: z.string().optional(),
   twoFactorEnabled: z.boolean().optional(),

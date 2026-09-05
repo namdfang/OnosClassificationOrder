@@ -63,6 +63,16 @@ export const PriceZod = z.coerce.number().min(PRICE_MIN).max(PRICE_MAX).superRef
 
 export const IDZod = z.string().length(ID_LENGTH, `String must be exactly ${ID_LENGTH} characters long`);
 
+/**
+ * Id THAM CHIẾU tới bản ghi bảng khác (roleId, customRoleId…). KHÁC `IDZod`:
+ * không ép đúng `ID_LENGTH` ký tự. Một số bản ghi hệ thống có `_id` là chuỗi
+ * cố định đặt tay chứ không phải mã 16 ký tự sinh tự động — ví dụ `roles` có
+ * `role_admin` (10) và `role_seller_manager` (19) — nên ràng buộc độ dài làm
+ * KHÔNG tạo được user Admin/SellerManager qua giao diện dù dropdown vẫn liệt
+ * kê 2 role đó. Sự tồn tại của bản ghi vẫn được service kiểm ở tầng dưới.
+ */
+export const RefIDZod = z.string().trim().min(1).max(64);
+
 export const CodeZod = z.string().length(CODE_LENGTH);
 
 export const TextZod = z
