@@ -62,17 +62,61 @@ export class ShipmentEntity extends DatabaseEntityAbstract {
   @Prop()
   balanceAfter?: string;
 
+  /**
+   * Chủ thể nhóm mua (ShippingLabelPatterns.md §2) — orderId seller, fallback
+   * `order:<OrderEntity._id>` khi đơn không có orderId. Unique partial index
+   * `unique_vnp_group_active`: 1 nhóm chỉ có 1 record ĐANG MỞ — 2 click cách
+   * nhau vài trăm ms thì click sau thua ở tầng DB, không phải ở guard đọc-ghi.
+   * Chỉ record VNP hệ thống mua mới set (label khách tự cấp nằm ngoài).
+   */
+  @Prop()
+  groupKey?: string;
+
+  /**
+   * Khoá idempotency do BÊN GỌI cấp (§2 — `requestId` trong CreateVnpShipmentDto).
+   * Unique partial index `unique_vnp_purchase_key`: gọi lại cùng khoá → trả
+   * nhãn lượt trước thay vì mua nhãn thứ hai. Record `failed`/`cancelled`
+   * thoát index → khoá tái dùng được cho lượt retry/mua lại hợp lệ.
+   */
+  @Prop()
+  purchaseKey?: string;
+
   @Prop({ type: String, enum: VNP_SHIPMENT_RECORD_STATUSES, default: 'created', index: true })
   status: VnpShipmentRecordStatus;
+
+  /** Lý do khi `status='failed'` — nhánh lỗi createShipment / cron đối soát ghi. */
+  @Prop()
+  failReason?: string;
+
+  /**
+   * Mốc gọi lệnh hủy (chuyển sang `cancelling`) — cron dọn record kẹt
+   * `cancelling` lọc theo tuổi mốc này (createdAt là lúc MUA, không dùng được).
+   */
+  @Prop({ type: Date })
+  cancelRequestedAt?: Date;
 
   @Prop({ type: Date })
   cancelledAt?: Date;
 
+  /** Text trạng thái THÔ của hãng (≡ carrierStatus — ShippingLabelPatterns.md §3). */
   @Prop()
   lastTrackingStatus?: string;
 
+  /** Lần sync tracking gần nhất (≡ carrierSyncedAt §3). */
   @Prop({ type: Date })
   lastTrackingAt?: Date;
+
+  /**
+   * Lần ĐẦU hãng báo label đã vào mạng lưới — CHỐT AN TOÀN của luồng hủy
+   * (§3/§4): có scannedAt thì từ chối hủy. Set đúng 1 lần, KHÔNG BAO GIỜ clear
+   * (kể cả khi text trạng thái sau đó đổi/mất).
+   */
+  @Prop({ type: Date })
+  scannedAt?: Date;
+
+  /** Ghi chú/lý do từ hãng (vd nghi địa chỉ người nhận sai) — ops đọc để cứu đơn. */
+  @Prop()
+  carrierNote?: string;
 
   /** Lịch sử poll trạng thái — để dành cho cron tracking, hiện ghi lúc bấm tay. */
   @Prop({ type: [Object], default: [] })
@@ -87,6 +131,36 @@ export class ShipmentEntity extends DatabaseEntityAbstract {
 
 export const ShipmentSchema = SchemaFactory.createForClass(ShipmentEntity);
 ShipmentSchema.index({ createdAt: -1 });
+// Đường quét của 2 cron (ShippingLabelPatterns.md §3 — index theo đường cron,
+// mỗi cron ghi chú tại đây): pollTrackingCron lọc {provider, status ∈
+// created/in_transit, createdAt ≥ -30d}; reconcilePurchasing lọc {provider,
+// status='purchasing', createdAt < -15m} — cùng ăn index này.
+ShipmentSchema.index({ provider: 1, status: 1, createdAt: 1 });
+// Chống mua trùng bằng RÀNG BUỘC DUY NHẤT, không bằng đọc-rồi-ghi (§2).
+// Partial theo status ĐANG MỞ: hủy/failed xong record thoát index → mua lại
+// hợp lệ. `groupKey $exists` loại record cũ + label khách tự cấp (không set).
+ShipmentSchema.index(
+  { provider: 1, groupKey: 1 },
+  {
+    name: 'unique_vnp_group_active',
+    unique: true,
+    partialFilterExpression: {
+      groupKey: { $exists: true },
+      status: { $in: ['purchasing', 'created', 'in_transit', 'delivered', 'cancelling'] },
+    },
+  },
+);
+ShipmentSchema.index(
+  { provider: 1, purchaseKey: 1 },
+  {
+    name: 'unique_vnp_purchase_key',
+    unique: true,
+    partialFilterExpression: {
+      purchaseKey: { $exists: true },
+      status: { $in: ['purchasing', 'created', 'in_transit', 'delivered', 'cancelling'] },
+    },
+  },
+);
 
 ShipmentSchema.virtual('package', {
   ref: 'ShippingPackageEntity',

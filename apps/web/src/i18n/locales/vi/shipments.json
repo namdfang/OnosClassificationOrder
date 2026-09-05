@@ -27,10 +27,13 @@
     "allStatuses": "Tất cả trạng thái"
   },
   "status": {
+    "purchasing": "Đang mua",
     "created": "Mới tạo",
     "in_transit": "Đang vận chuyển",
     "delivered": "Đã giao",
-    "cancelled": "Đã hủy"
+    "cancelling": "Đang hủy",
+    "cancelled": "Đã hủy",
+    "failed": "Mua lỗi"
   },
   "table": {
     "createdAt": "Tạo lúc",
@@ -50,6 +53,9 @@
     "empty": "Chưa có sự kiện tracking — label chưa được scan (cron poll 2 lần/ngày tự cập nhật khi hàng chạy).",
     "balanceAfter": "Số dư ví sau khi mua",
     "lastStatus": "Trạng thái gần nhất",
-    "openLabel": "Mở label"
+    "openLabel": "Mở label",
+    "scannedAt": "Vào mạng lưới lần đầu",
+    "carrierNote": "Ghi chú từ hãng",
+    "failReason": "Lý do lỗi"
   }
 }

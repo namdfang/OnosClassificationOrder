@@ -201,6 +201,34 @@ export class VnpEglobalClient {
     return this.request('get', `/shipment/getByRef1/${encodeURIComponent(ref1)}`);
   }
 
+  /**
+   * GET không-ném cho cron đối soát record kẹt `purchasing`
+   * (ShippingLabelPatterns.md §8 — phải phân biệt được 3 tình huống):
+   * trả `{ http, body }` với http = status code thật hoặc 'network', để service
+   * tự phân loại 404 = "hãng nói không có" ≠ 5xx/network = "không hỏi được".
+   * `request()` chung không dùng được vì nó gộp mọi lỗi vào 1 BadRequestException.
+   */
+  async probe(url: string): Promise<{ http: number | 'network'; body: unknown }> {
+    const call = async (bearer: string) => {
+      const res = await this.http().request({ method: 'get', url, headers: { Authorization: `Bearer ${bearer}` } });
+      return { http: res.status, body: res.data as unknown };
+    };
+    try {
+      const token = this.token ?? (await this.signin());
+      try {
+        return await call(token);
+      } catch (err) {
+        const ax = err as AxiosError;
+        if (ax.response?.status === 401) return await call(await this.signin());
+        return { http: ax.response?.status ?? 'network', body: ax.response?.data };
+      }
+    } catch (err) {
+      // signin hỏng / 401 lần 2 — coi như không hỏi được, KHÔNG kết luận gì.
+      const ax = err as AxiosError;
+      return { http: ax.response?.status ?? 'network', body: ax.response?.data ?? (err as Error).message };
+    }
+  }
+
   /** Số dư ví — VNP đòi tối thiểu $50 mới cho createShipment. */
   availableBalance(): Promise<unknown> {
     return this.request('get', '/availableBalance');

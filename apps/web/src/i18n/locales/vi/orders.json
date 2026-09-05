@@ -725,6 +725,9 @@
     "walletBalance": "Ví VNP",
     "historyTitle": "Lịch sử vận đơn",
     "historyActive": "Đang hoạt động",
+    "historyCancelling": "Đang hủy",
+    "historyPurchasing": "Đang mua",
+    "historyFailed": "Mua lỗi",
     "historyCancelled": "Đã hủy",
     "historyCost": "phí {{cost}}"
   },

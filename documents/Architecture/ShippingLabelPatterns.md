@@ -33,7 +33,7 @@ tuyệt đối không được phép làm hỏng phần đã xong (§5).
 
 ## 1. Vòng đời phải có bước GIỮ CHỖ, và phải ghi chìa trước
 
-**Sai (đang là hiện trạng của `shipping-vnp.service.ts` → `createShipment()`):**
+**Sai (hiện trạng cũ của `createShipment()` — ĐÃ SỬA 2026-09-05 theo khuôn dưới):**
 
 ```
 gọi hãng tạo nhãn ──► nhận tracking + label ──► ghi pack ──► ghi shipment ──► ghi snapshot lên order
@@ -184,7 +184,7 @@ Cron đồng bộ hành trình là đường **đốt quota và đốt tiền** 
 
 | Luật | Hiện trạng onos |
 |---|---|
-| **Phải xác thực** — secret trên query hoặc header, so bằng hằng số | ❌ `GET /shipping-vnp/tracking/cron` đang `@Auth([], [], { public: true })`, ai gọi cũng được, mỗi lượt kéo tới 200 lần gọi ra ngoài |
+| **Phải xác thực** — secret trên query hoặc header, so bằng hằng số | ✅ từ 2026-09-05 — env `VNP_TRACKING_CRON_SECRET`, header `X-Cron-Secret` hoặc `?secret=`, fail-closed khi env trống |
 | Khoá in-flight chống gọi chồng | ✅ đã có |
 | Lô có trần + giãn nhịp giữa các lượt gọi | ✅ đã có |
 | Dừng theo tuổi và theo trạng thái cuối (đã giao / quá hạn) | ✅ đã có |
@@ -217,11 +217,11 @@ Tài liệu của hãng thường không khai response. Kỷ luật:
 
 | # | Việc | Mức rủi ro nếu bỏ qua | Ghi chú |
 |---|---|---|---|
-| 1 | Khoá endpoint cron (§7) | Cao, đang hở | ~15 phút, không phụ thuộc phần còn lại |
-| 2 | Bước giữ chỗ + ghi mã hãng ngay + chốt có điều kiện + cron dọn (§1) | **Cao nhất** | Phải xong **trước** khi bật mua nhãn thật; sau đó mỗi lần hỏng là tiền thật không dấu vết |
-| 3 | Tách `carrierStatus`/`scannedAt` khỏi `status` (§3) | Trung bình | Là tiền đề của mục 4 |
-| 4 | Chốt hủy fail-closed + trạng thái "đang hủy" (§4) | Cao khi có đơn chạy thật | Cần hỏi ops mốc "đã đi" |
-| 5 | Khoá idempotency đường mua (§2) | Thấp bây giờ, **cao khi tự động hoá** | Bắt buộc trước khi nối vào công đoạn Đóng hàng |
+| 1 | Khoá endpoint cron (§7) | ~~Cao, đang hở~~ **ĐÃ XONG 2026-09-05** | env `VNP_TRACKING_CRON_SECRET` — nhớ đặt env + sửa curl trong crontab khi deploy |
+| 2 | Bước giữ chỗ + ghi mã hãng ngay + chốt có điều kiện + cron dọn (§1) | ~~Cao nhất~~ **ĐÃ XONG 2026-09-05** | Record `purchasing` tạo trước khi gọi VNP; ghi id ngay khi có (③ tách ④); chốt `updateOne({status:'purchasing'})`; cron dọn `reconcilePurchasing()` chạy đầu mỗi lượt tracking cron, phân loại §8 qua `interpretVnpLookup()` (`purchase-reconcile.ts` + spec giữ luật). Kèm guard chặn mua chồng khi còn record `purchasing` (che một phần §2 — unique index vẫn còn nợ) |
+| 3 | Tách `carrierStatus`/`scannedAt` khỏi `status` (§3) | ~~Trung bình~~ **ĐÃ XONG 2026-09-05** | `scannedAt` (set 1 lần, chốt an toàn §4) + `carrierNote` + index `(provider,status,createdAt)` theo đường 2 cron; `lastTrackingStatus`/`lastTrackingAt` GIỮ TÊN cũ (≡ carrierStatus/carrierSyncedAt — bảng đã có data ORD-26 production); status thêm `cancelling` để dành cho mục 4; `in_transit`/`delivered` vẫn nằm trong status làm phase tổng hợp cho FE/stats — chốt an toàn KHÔNG đọc từ đó. Helper thuần `carrier-status.ts` + spec giữ luật |
+| 4 | Chốt hủy fail-closed + trạng thái "đang hủy" (§4) | ~~Cao khi có đơn chạy thật~~ **ĐÃ XONG 2026-09-05** | `cancelShipment()` 4 bước: gate `scannedAt` local → hỏi hành trình (`publicTrack` + `hasCarrierSignal`, không hỏi được/không có tracking = TỪ CHỐI) → `cancelling` + `cancelRequestedAt` → chỉ chốt `cancelled` khi hãng trả lời OK. Kẹt `cancelling` → cron `reconcileCancelling()`: hãng nói không còn (404/text cancelled) → chốt sổ; tracking có tín hiệu → hủy bất thành, revive `in_transit` + carrierNote; mù mờ → giữ + warn. Mốc "đã đi" hiện = tín hiệu tracking đầu tiên (conservative) — vẫn nên đối chiếu với ops/Nexo khi có câu trả lời |
+| 5 | Khoá idempotency đường mua (§2) | ~~Thấp bây giờ, cao khi tự động hoá~~ **ĐÃ XONG 2026-09-05** | 2 unique partial index (spec `shipment-unique-index.spec.ts` giữ luật): `unique_vnp_group_active` (provider, groupKey — 1 nhóm 1 record đang mở, double-click thua ở DB) + `unique_vnp_purchase_key` (provider, purchaseKey = `requestId` bên gọi cấp — gọi lặp trả nhãn cũ qua `replayPurchase()`, E11000 quy về nhánh trả-nhãn-cũ). `cancelled`/`failed` thoát partial filter → mua lại hợp lệ. FE dialog sinh uuid mỗi intent; job auto-hook Đóng hàng sau này BẮT BUỘC gửi `requestId` |
 | 6 | Báo giá tự học (§6) | Thấp | Chỉ làm được sau khi đã có nhãn mua thật để học |
 
 ---

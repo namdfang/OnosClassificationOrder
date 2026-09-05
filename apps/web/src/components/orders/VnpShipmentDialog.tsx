@@ -83,6 +83,10 @@ export function VnpShipmentDialog({ order, open, onOpenChange, onDone }: Props) 
   const [busy, setBusy] = useState<string | null>(null);
   const [addressResult, setAddressResult] = useState<{ valid: boolean; message?: string; raw: unknown } | null>(null);
   const [createRaw, setCreateRaw] = useState<unknown>();
+  // Khoá idempotency cho 1 INTENT mua (ShippingLabelPatterns.md §2): double-click
+  // gửi cùng khoá → BE trả nhãn lượt trước thay vì mua trùng; mua xong/hủy xong
+  // muốn mua lại là intent mới → sinh khoá mới.
+  const [requestId, setRequestId] = useState<string>(() => crypto.randomUUID());
   const [createRawAddress, setCreateRawAddress] = useState<unknown>();
   const [trackingRaw, setTrackingRaw] = useState<unknown>();
   const [detailRaw, setDetailRaw] = useState<unknown>();
@@ -175,6 +179,7 @@ export function VnpShipmentDialog({ order, open, onOpenChange, onDone }: Props) 
         shippingType: shippingType as never,
         weightGram: weight,
         packages: 1,
+        requestId,
         ...(packageType.trim() ? { packageType: packageType.trim() } : {}),
       });
       const data = res.data?.data as { shipment: RowShipment; raw: unknown; rawAddress?: unknown };
@@ -182,6 +187,7 @@ export function VnpShipmentDialog({ order, open, onOpenChange, onDone }: Props) 
       setCreateRawAddress(data.rawAddress);
       patchOrder(data.shipment);
       reloadHistory();
+      setRequestId(crypto.randomUUID());
       toast.success(t('vnp.created', { id: data.shipment.shipmentId ?? '?' }));
     });
 
@@ -409,12 +415,24 @@ export function VnpShipmentDialog({ order, open, onOpenChange, onDone }: Props) 
                   <div className="flex items-center gap-2">
                     <span
                       className={
-                        rec.status === 'cancelled'
+                        rec.status === 'cancelled' || rec.status === 'cancelling'
                           ? 'rounded bg-rose-100 dark:bg-rose-950/40 px-1.5 py-0.5 text-[10px] font-medium text-rose-600 dark:text-rose-300'
-                          : 'rounded bg-emerald-100 dark:bg-emerald-950/40 px-1.5 py-0.5 text-[10px] font-medium text-emerald-700 dark:text-emerald-300'
+                          : rec.status === 'purchasing'
+                            ? 'rounded bg-violet-100 dark:bg-violet-950/40 px-1.5 py-0.5 text-[10px] font-medium text-violet-700 dark:text-violet-300'
+                            : rec.status === 'failed'
+                              ? 'rounded bg-slate-200 dark:bg-slate-800 px-1.5 py-0.5 text-[10px] font-medium text-slate-600 dark:text-slate-300'
+                              : 'rounded bg-emerald-100 dark:bg-emerald-950/40 px-1.5 py-0.5 text-[10px] font-medium text-emerald-700 dark:text-emerald-300'
                       }
                     >
-                      {rec.status === 'cancelled' ? t('vnp.historyCancelled') : t('vnp.historyActive')}
+                      {rec.status === 'cancelled'
+                        ? t('vnp.historyCancelled')
+                        : rec.status === 'cancelling'
+                          ? t('vnp.historyCancelling')
+                          : rec.status === 'purchasing'
+                            ? t('vnp.historyPurchasing')
+                            : rec.status === 'failed'
+                              ? t('vnp.historyFailed')
+                              : t('vnp.historyActive')}
                     </span>
                     <span className="text-muted-foreground">
                       {rec.createdAt ? dayjs(rec.createdAt).format('DD/MM/YYYY HH:mm') : ''}
