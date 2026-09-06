@@ -2073,3 +2073,51 @@ Field `status` gốc trên `OrderEntity` (free-text từ file import) KHÔNG dù
 ### 24.5 Nơi hiển thị
 
 Cột nằm trong group `identity` (`memberKeys: productionId, orderStatus, priority, userSku, typeFullName`) nên tự có mặt ở **mọi bảng dùng `buildColGroups`**: Danh sách đơn (`/ffm/orders/workshop`), Đơn hàng classic (`/ffm/orders/classic`), Dashboard tab Trạng thái (`OrdersMiniTable`) và tab Xưởng (`OrderFactoryTab`). `perm: null` — mọi role xem được bảng đơn đều thấy, vì nhãn chỉ tổng hợp lại thứ họ đã đọc được ở các cột khác.
+
+---
+
+## 25. Cụm menu theo xưởng ở sidebar — `?factoryId=` là phạm vi dùng chung
+
+> **Yêu cầu (2026-09):** ngoài cụm sản xuất chung (Dashboard / Quản lý đơn / Công việc), **mỗi xưởng có một cụm menu riêng y hệt**; bấm vào là trang mở ra đã lọc sẵn xưởng tương ứng.
+
+### 25.1 Phạm vi nằm trên URL, không nằm trong store
+
+Mọi link của cụm xưởng mang thêm `?factoryId=<id>`; `apps/web/src/hooks/useFactoryScope.ts` là **nơi duy nhất** đọc ra phạm vi này.
+
+Cố ý KHÔNG dùng store toàn cục: phạm vi ẩn trong store thì link gửi cho nhau mất xưởng, F5 mất xưởng, và tệ nhất là đang xem số của xưởng khác mà không có dấu hiệu gì. Hook trả thẳng `profile.factoryId` cho role `Fulfillment` — tài khoản đó bị khóa xưởng ở tầng API rồi, param có đổi cũng không đổi được dữ liệu.
+
+### 25.2 Menu (`apps/web/src/components/sidebar/Sidebar.tsx`)
+
+- `buildProductionItems(t, factoryId?, keyPrefix?)` — cụm sản xuất dựng **một lần, dùng hai chỗ**: `factoryId` rỗng → cụm chung (như trước); có `factoryId` → cụm của xưởng đó, `withFactory()` gắn param vào mọi link.
+- Cụm xưởng chèn **ngay sau** nhóm có `id === PRODUCTION_GROUP_ID`. Không chèn theo index: nhóm nào cũng có thể bị quyền lọc mất, index sẽ trượt.
+- Nguồn danh sách xưởng: `useFactoryOptionsStore` → `GET /factories/options` (`@Auth([])`, mọi tài khoản nhân viên). **KHÔNG dùng `GET /factories`** — route CRUD đó chỉ mở cho Admin/Manager/Support, Fulfillment/Designer sẽ ăn 403 và mất sạch cụm menu.
+- Tài khoản có `factoryId` (Fulfillment) chỉ thấy cụm xưởng của mình.
+- **Mục bị loại khỏi cụm xưởng** (không thuộc phạm vi một xưởng nào): `dash-designer` (designer không thuộc xưởng), `orders-scan-error` (thao tác tại trạm), `orders-stage-errors` (danh mục dùng chung), `orders-unmapped` (theo định nghĩa là đơn CHƯA có xưởng), `orders-import` + `orders-cutting-files` (nạp dữ liệu toàn hệ thống).
+- **Nhãn rút gọn** trong cụm xưởng (tiêu đề cụm đã là tên xưởng): `sidebar.factoryScope.dashboard` ("Tổng quan"), `.overview` ("Tổng quan xưởng"), `.orders` ("Đơn hàng") — i18n namespace `layout`.
+- **Badge của cụm xưởng đếm RIÊNG xưởng đó**, lấy từ `SidebarCounts.byFactory` (`GET /designer/sidebar-counts`) — tuyệt đối không dùng lại số tổng, treo số toàn hệ thống lên cụm xưởng thì ai cũng đọc thành số của riêng xưởng. Gồm `errorLogTodo` (Nhật ký bù lỗi) + `toolCheckRework`/`toolCheckUnreviewed` (Soát tool) — đúng các mục còn lại trong cụm. Key badge phải khớp `keyPrefix` = `factory-<id>-`.
+  - BE: `OrderService.countErrorLogTodoByFactory()` (dùng chung `buildErrorLogBaseFilter` với badge tổng + trang, để 3 số không lệch) + `DesignerStatsService.getSidebarCountsByFactory()`. Mỗi con số là MỘT `$group` theo `factoryId`, không phải mỗi xưởng một lượt đếm.
+  - Badge theo xưởng **KHÔNG** áp `productionFactoryClause` (bộ loại xưởng US): cụm menu xưởng US là lọc tường minh, badge phải khớp số trang đó mở ra chứ không phải luôn 0 (§21).
+- Tiêu đề cụm xưởng in đậm hơn tiêu đề nhóm thường (`NavGroup.id === FACTORY_GROUP_ID`) — tên xưởng là thứ duy nhất phân biệt các cụm trùng hình dạng nhau.
+- `resetPathOf()` cắt `factoryId` trước khi bắn tín hiệu reset filter (§20) — trang đăng ký tín hiệu bằng `to` gốc.
+- **`isLinkActive` so khớp `factoryId` HAI CHIỀU** (khác mọi param khác chỉ kiểm "link ⊆ URL"): cụm chung và cụm từng xưởng dùng CHUNG đường dẫn, chỉ khác param này. Kiểm một chiều thì mục ở cụm chung luôn sáng kể cả khi đang xem 1 xưởng — 2 mục sáng cùng lúc và bấm mục chung trông như không có tác dụng.
+
+### 25.3 Trang nào hiểu `factoryId`
+
+| Trang | Cách áp |
+| --- | --- |
+| Dashboard → Thống kê (`OrderStatsTab`) | Truyền thẳng lên `GET /orders/dashboard?factoryId=` (field mới ở `GetOrderDashboardZod`) — lọc ở BE nên MỌI KPI/biểu đồ theo xưởng, không riêng bảng size. Bảng size khóa theo xưởng đó. |
+| Dashboard → Đơn hàng theo xưởng (`OrderFactoryTab`) | `parseFilterModeFromURL` rơi về `factoryId` khi chưa có `ffactory`; chip xưởng trong tab ghi riêng `ffactory`. Chỉ hiện thẻ + luồng chuyển của xưởng đang lọc. |
+| Dashboard → Vòng đời đơn (`LifecycleTab` + `LifecycleStrip`) | Giá trị của select xưởng (seed lúc mount + effect theo dõi param). |
+| Danh sách đơn (`OrderTableWorkshop`) | `buildFilterParams()` thêm `factoryId` → `GET /orders`. |
+
+**Trang seed state từ URL PHẢI theo dõi `factoryId` bằng effect.** Đổi cụm xưởng chỉ đổi query, React Router KHÔNG remount trang; state đã seed từ lần mount đầu sẽ đứng yên và effect đồng bộ-URL của chính trang đó còn **ghi ngược giá trị cũ trở lại** — nhìn như "bấm menu mà không có gì xảy ra". `OrderFactoryTab` (re-seed `filterMode` + `setPage(1)`), `LifecycleTab` (`selectedFactory`) và `LifecycleStrip` (`factoryId`) đều có effect này, khai **TRƯỚC** effect đồng bộ-URL. `OrderStatsTab`/`OrderTableWorkshop` đọc thẳng `useFactoryScope()` vào dependency của fetch nên không cần.
+
+> **`factoryId` chỉ có MỘT chiều ghi: sidebar.** Effect đồng bộ-URL của trang **không được** `set`/`delete` param này (`OrderFactoryTab` dùng `ffactory` riêng cho chip trong tab). Lý do: `setSearchParams` của react-router 6.14 memo theo `location.search` nên **đổi identity mỗi lần URL đổi** — effect đồng bộ chạy lại với closure state CŨ và ghi giá trị cũ đè lên. Ghi cả hai chiều vào `factoryId` → effect ghi và effect đọc đẩy qua đẩy lại, **URL nhảy loạn giữa 2 xưởng không dừng**.
+
+**Đang ở cụm xưởng thì ẨN filter xưởng trong nội dung** — hai chỗ đổi xưởng chọi nhau là cách chắc chắn để sai phạm vi: `OrderFactoryTab` bỏ dãy chip "Đang ở X" (chip "Tất cả" đổi nghĩa thành "bỏ drill-down in/lỗi", GIỮ xưởng), `LifecycleTab` bỏ facet xưởng, `LifecycleStrip` bỏ select xưởng, bảng size ở `OrderStatsTab` hiện nhãn xưởng thay cho dropdown. Đường bỏ phạm vi là `FactoryScopeChip` (§25.4) hoặc bấm lại cụm chung.
+
+**Lọc tường minh `factoryId` ghi đè bộ loại trừ mặc định** ở cả 3 chỗ (`getDashboard`, `buildVisibilityFilter`, `getLifecycleOverview`) — nên cụm menu của **xưởng US cũng xem được đơn của chính nó** (§21), đúng nguyên tắc "US chỉ ẩn ở view mặc định".
+
+### 25.4 Dấu hiệu trên màn hình
+
+`apps/web/src/components/common/FactoryScopeChip.tsx` — chip "Đang lọc xưởng: X" + nút bỏ lọc, gắn ở `middleRow` của `OrderFilterBar` tại Danh sách đơn và tab Thống kê. Trang bị thu hẹp dữ liệu mà không có dấu hiệu gì là cách chắc chắn nhất để người ta đọc nhầm số. Chip không hiện khi xưởng do TÀI KHOẢN quy định (Fulfillment) — lúc đó bỏ lọc cũng không được.

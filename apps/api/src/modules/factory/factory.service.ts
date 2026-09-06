@@ -4,6 +4,7 @@ import type {
   Factory,
   GetFactoriesDto,
   GetFactoriesResDto,
+  GetFactoryOptionsResDto,
   UpdateFactoryDto,
 } from 'shared';
 
@@ -40,6 +41,21 @@ export class FactoryService implements OnModuleInit {
     });
 
     return { success: true, data, total };
+  }
+
+  /**
+   * Danh sách xưởng đang bật, rút gọn (id/name/shortName) — dùng cho sidebar
+   * "cụm menu theo xưởng" và mọi select xưởng của tài khoản KHÔNG có quyền vào
+   * `GET /factories` (Fulfillment, Designer…). Không phân trang.
+   */
+  async getFactoryOptions(): Promise<GetFactoryOptionsResDto> {
+    const data = await this.factoryRepository.findAll({ isActive: true });
+    return {
+      success: true,
+      data: data
+        .map((f) => ({ _id: String(f._id), name: f.name, shortName: f.shortName }))
+        .sort((a, b) => a.name.localeCompare(b.name)),
+    };
   }
 
   async getFactory(id: string) {

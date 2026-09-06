@@ -40,6 +40,7 @@ import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/comp
 import { handleAxiosError } from '@/utils';
 import { cn } from '@/utils/cn';
 
+import { useFactoryScope } from '@/hooks/useFactoryScope';
 import { usePermission } from '@/hooks/usePermission';
 
 /** Nhãn ngắn cho từng chặng — hiện trên đầu mỗi box. */
@@ -158,8 +159,15 @@ export default function LifecycleStrip() {
   const { roleName } = usePermission();
   const isOverrideRole = ['SuperAdmin', 'Admin', 'Manager', 'SupportManager', 'Support'].includes(roleName ?? '');
   const lockedFactoryId = !isOverrideRole ? profile?.factoryId : undefined;
-  const [factoryId, setFactoryId] = useState('');
+  // Mặc định theo "cụm menu theo xưởng" ở sidebar (`?factoryId=`) — strip nằm
+  // trên mọi tab Dashboard nên phải cùng phạm vi với tab đang xem.
+  const factoryScope = useFactoryScope();
+  const [factoryId, setFactoryId] = useState(() => factoryScope || '');
   const effectiveFactory = lockedFactoryId ?? factoryId;
+  // Đổi cụm xưởng ở sidebar → kéo theo select của strip (state đã seed lúc mount).
+  useEffect(() => {
+    setFactoryId((prev) => (prev === (factoryScope || '') ? prev : factoryScope || ''));
+  }, [factoryScope]);
   // Combobox khách: chọn từ danh sách `customers` của response overview (facet
   // BE, scope theo xưởng/ngày đang lọc) → lọc CHÍNH XÁC theo cặp SKU+email.
   const [custQuery, setCustQuery] = useState('');
@@ -320,7 +328,8 @@ export default function LifecycleStrip() {
             }}
           />
         )}
-        {!isTrack && !lockedFactoryId && (
+        {/* Xưởng do cụm menu sidebar quyết → ẩn select, tránh 2 chỗ đổi xưởng. */}
+        {!isTrack && !lockedFactoryId && !factoryScope && (
           <select
             value={factoryId}
             onChange={(e) => setFactoryId(e.target.value)}

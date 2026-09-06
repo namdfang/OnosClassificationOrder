@@ -22,6 +22,11 @@
       "personError": "Errors by person",
       "designer": "Designer"
     },
+    "factoryScope": {
+      "dashboard": "Overview",
+      "overview": "Factory overview",
+      "orders": "Orders"
+    },
     "orders": {
       "title": "Order management",
       "list": "Order list",
@@ -81,5 +86,9 @@
     "unassigned": "{{count}} orders without a designer",
     "backlog": "{{count}} design tasks unfinished",
     "callToAction": "— please jump on these now!"
+  },
+  "factoryScopeChip": {
+    "label": "Filtered by factory: {{name}}",
+    "clear": "Clear factory filter"
   }
 }

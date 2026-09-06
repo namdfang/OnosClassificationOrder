@@ -98,7 +98,7 @@ Response `LifecycleOverview`:
     cancelledInRange: number;           // đơn HỦY trong cùng window inProductionAt + xưởng (funnel đã loại; đếm riêng)
   };
   completionTimeline: { date: string; completed: number }[]; // line chart
-  factories: { factoryId: string; factoryName: string }[];   // dropdown options
+  factories: { factoryId: string; factoryName: string }[];   // dropdown options — ĐỦ xưởng đang bật (bảng `factories`, trừ xưởng US) HỢP với xưởng đang giữ đơn trong kỳ
   filter: { factoryId?: string; from?: string; to?: string };
 }
 
@@ -174,7 +174,7 @@ trên collection `orders`:
 - Facet `designer.backlog`: `status='assigned'` ∨ `unassignedNeedCond` (pool cần
   designer & đang lỗi & chưa gán — mirror bảng "Chưa gán designer", tự loại đơn
   "In trả về chờ Soát tool").
-- Facet `totalActive` / `totalCycle` / `completionTimeline` / `factories`.
+- Facet `totalActive` / `totalCycle` / `completionTimeline` / `factories`. Riêng `factories` chỉ là phần "xưởng có đơn" — response HỢP nó với `listFactoryOptions()` (đọc thẳng bảng `factories`) qua `mergeFactoryOptions()`, nếu không thì xưởng chưa có đơn nào trong kỳ biến mất khỏi dropdown lọc.
   `totalCycle` + `completionTimeline` match `fulfillmentCompletedAt` **tồn tại**
   (cohort-based, không lọc theo ngày hoàn thành — thuần trục `inProductionAt`;
   timeline có thể có ngày nằm ngoài window).

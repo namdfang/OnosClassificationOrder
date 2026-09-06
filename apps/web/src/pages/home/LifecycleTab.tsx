@@ -404,9 +404,20 @@ export default function LifecycleTab() {
   // giới hạn tập đơn → snapshot cho biết đơn của (các) ngày đó đang ở công đoạn nào.
   const [startDate, setStartDate] = useState<string>(() => searchParams.get('lfrom') || daysAgoISO(6));
   const [endDate, setEndDate] = useState<string>(() => searchParams.get('lto') || todayISO());
-  const [selectedFactory, setSelectedFactory] = useState<string>(() => searchParams.get('lfactory') || '');
+  // `lfactory` = select xưởng của chính tab. Chưa chọn thì rơi về `factoryId` —
+  // param chung của "cụm menu theo xưởng" ở sidebar.
+  const [selectedFactory, setSelectedFactory] = useState<string>(
+    () => searchParams.get('lfactory') || searchParams.get('factoryId') || '',
+  );
 
   const effectiveFactory = lockedFactoryId ?? selectedFactory;
+
+  // Đổi cụm xưởng ở sidebar chỉ đổi `factoryId` trên URL; select của tab đã seed
+  // từ lần mount đầu nên phải kéo theo, nếu không bấm menu sẽ như không có gì xảy ra.
+  const factoryScopeParam = searchParams.get('factoryId') || '';
+  useEffect(() => {
+    setSelectedFactory((prev) => (prev === factoryScopeParam ? prev : factoryScopeParam));
+  }, [factoryScopeParam]);
 
   // Số cột phễu (rắn bò) — responsive để khối luôn vuông gọn, không cuộn ngang.
   const [cols, setCols] = useState(4);
@@ -512,7 +523,9 @@ export default function LifecycleTab() {
         onReload={fetchData}
         loading={loading}
         facets={
-          lockedFactoryId
+          // Xưởng do tài khoản khóa, hoặc do cụm menu xưởng ở sidebar quyết →
+          // bỏ select xưởng trong nội dung, tránh 2 chỗ đổi xưởng chọi nhau.
+          lockedFactoryId || factoryScopeParam
             ? []
             : [
                 {

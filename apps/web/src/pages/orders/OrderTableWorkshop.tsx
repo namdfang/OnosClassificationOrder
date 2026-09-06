@@ -21,6 +21,7 @@ import { useWorkshopConfigStore } from '@/store/workshopConfigStore';
 
 import { RepositoryRemote } from '@/services';
 
+import { FactoryScopeChip } from '@/components/common/FactoryScopeChip';
 import { ImagePreviewDialog } from '@/components/common/ImagePreviewDialog';
 import { LoadingOverlay } from '@/components/common/LoadingOverlay';
 import { PaginationBar } from '@/components/common/PaginationBar';
@@ -52,6 +53,7 @@ import { cn } from '@/utils/cn';
 import { isCancelled, isHeld } from '@/utils/orderActions';
 
 import { useDebounce } from '@/hooks/useDebounce';
+import { useFactoryScope } from '@/hooks/useFactoryScope';
 import { useIsNoTool } from '@/hooks/useIsNoTool';
 import { usePendingDesignsPoll } from '@/hooks/usePendingDesignsPoll';
 import { usePermission } from '@/hooks/usePermission';
@@ -268,6 +270,7 @@ export function OrderTableWorkshop() {
   // URL params (prefix `w` = workshop). F5 giữ nguyên filter. Single-select
   // mỗi facet sau khi chuyển sang SelectFilter — multi-value support removed.
   const [searchParams, setSearchParams] = useSearchParams();
+  const factoryScope = useFactoryScope();
 
   const [items, setItems] = useState<OrderRow[]>([]);
   const [total, setTotal] = useState(0);
@@ -434,6 +437,9 @@ export function OrderTableWorkshop() {
     if (filterCancelled) params.set('cancelled', 'true');
     if (createdFrom) params.set('createdFrom', createdFrom);
     if (createdTo) params.set('createdTo', createdTo);
+    // Phạm vi xưởng từ "cụm menu theo xưởng" ở sidebar. Lọc TƯỜNG MINH nên đơn
+    // xưởng ngoài luồng sản xuất (US) cũng xem được ở cụm của chính nó.
+    if (factoryScope) params.set('factoryId', factoryScope);
     return params;
   };
 
@@ -497,6 +503,7 @@ export function OrderTableWorkshop() {
     filterCancelled,
     createdFrom,
     createdTo,
+    factoryScope,
   ]);
 
   /**
@@ -1210,6 +1217,7 @@ export function OrderTableWorkshop() {
             </>
           }
           facets={facets}
+          middleRow={<FactoryScopeChip />}
         />
 
         {/* Chip "đang lọc" — màu theo từng filter + xoá lẻ + xoá tất cả. */}

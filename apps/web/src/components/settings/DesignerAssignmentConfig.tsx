@@ -86,7 +86,7 @@ export default function DesignerAssignmentConfig() {
       try {
         setLoading(true);
         const [facRes, desRes, cfgRes, cusRes, prodRes] = await Promise.all([
-          RepositoryRemote.factory.getFactories(),
+          RepositoryRemote.factory.getFactories('?page=1&limit=200'),
           RepositoryRemote.designer.listTeam('1'), // Status.Active = '1'
           RepositoryRemote.designerAssignment.getConfig(),
           RepositoryRemote.customer.list(),

@@ -1504,6 +1504,45 @@ export class DesignerStatsService {
   }
 
   /**
+   * Badge cho cụm menu riêng từng xưởng (`Orders.md §25`) — cùng hai con số soát
+   * tool như `getSidebarCounts` nhưng TÁCH THEO XƯỞNG.
+   *
+   * Lưu ý phạm vi: ở đây KHÔNG dùng `productionFactoryClause` (loại xưởng US)
+   * — cụm menu của xưởng US là lọc tường minh, badge phải khớp với số trang đó
+   * mở ra chứ không phải luôn bằng 0 (§21). Đơn chưa map xưởng tự rơi ra vì
+   * `$group` theo `factoryId`.
+   */
+  async getSidebarCountsByFactory(): Promise<
+    Record<string, { toolCheckRework: number; toolCheckUnreviewed: number }>
+  > {
+    const { start, end } = this.resolveVnWindow(7);
+    const inWindow = { $gte: start, $lte: end };
+    const base = {
+      inProductionAt: inWindow,
+      deletedAt: null,
+      cancelledAt: null,
+      factoryId: { $exists: true, $ne: null },
+    };
+    const groupByFactory = (match: Record<string, unknown>) =>
+      this.orderModel.aggregate<{ _id: string | null; n: number }>([
+        { $match: match },
+        { $group: { _id: '$factoryId', n: { $sum: 1 } } },
+      ]);
+    const [reworkRows, unreviewedRows] = await Promise.all([
+      groupByFactory({ ...base, productionErrorSource: 'tool-check', toolResultNote: 'error' }),
+      groupByFactory({ ...base, toolResultNote: { $in: [null, ''] } }),
+    ]);
+    const out: Record<string, { toolCheckRework: number; toolCheckUnreviewed: number }> = {};
+    const put = (id: string, key: 'toolCheckRework' | 'toolCheckUnreviewed', n: number) => {
+      out[id] ||= { toolCheckRework: 0, toolCheckUnreviewed: 0 };
+      out[id][key] = n;
+    };
+    for (const r of reworkRows) if (r._id) put(String(r._id), 'toolCheckRework', r.n);
+    for (const r of unreviewedRows) if (r._id) put(String(r._id), 'toolCheckUnreviewed', r.n);
+    return out;
+  }
+
+  /**
    * Banner đỏ "quá hạn 2 ngày" (MainLayout, xem OverdueAlertBanner.md) — đơn
    * `inProductionAt` từ 2 ngày trước trở về trước (hôm nay 13 → ngày 11 về
    * trước, chặn dưới = cửa sổ 7 ngày như SidebarCounts) mà vẫn còn:

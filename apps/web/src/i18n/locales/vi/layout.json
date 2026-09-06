@@ -22,6 +22,11 @@
       "personError": "Lỗi theo người",
       "designer": "Designer"
     },
+    "factoryScope": {
+      "dashboard": "Tổng quan",
+      "overview": "Tổng quan xưởng",
+      "orders": "Đơn hàng"
+    },
     "orders": {
       "title": "Quản lý đơn",
       "list": "Danh sách đơn",
@@ -81,5 +86,9 @@
     "unassigned": "{{count}} đơn chưa gán designer",
     "backlog": "{{count}} đơn thiết kế chưa xong",
     "callToAction": "— mọi người chủ động xử lý ngay nhé!"
+  },
+  "factoryScopeChip": {
+    "label": "Đang lọc xưởng: {{name}}",
+    "clear": "Bỏ lọc xưởng"
   }
 }

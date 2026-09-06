@@ -38,6 +38,21 @@ export class GetFactoriesDto extends createZodDto(extendApi(GetFactoriesZod)) {}
 export const GetFactoriesResZod = PageResZod.extend({ data: FactoryZod.array() });
 export class GetFactoriesResDto extends createZodDto(extendApi(GetFactoriesResZod)) {}
 
+/**
+ * Danh sách xưởng RÚT GỌN cho mọi nơi chỉ cần tên xưởng để dựng menu/select —
+ * mở cho MỌI tài khoản nhân viên đã đăng nhập, khác `GET /factories` (CRUD,
+ * chỉ Admin/Manager/Support). Không phân trang: số xưởng luôn nhỏ.
+ */
+export const FactoryOptionItemZod = z.object({
+  _id: z.string(),
+  name: z.string(),
+  shortName: z.string(),
+});
+export type FactoryOptionItem = z.infer<typeof FactoryOptionItemZod>;
+
+export const GetFactoryOptionsResZod = ResZod.extend({ data: FactoryOptionItemZod.array() });
+export class GetFactoryOptionsResDto extends createZodDto(extendApi(GetFactoryOptionsResZod)) {}
+
 //
 export const CreateFactoryZod = z.object({
   name: FactoryZod.shape.name,

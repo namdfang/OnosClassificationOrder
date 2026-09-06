@@ -66,7 +66,7 @@ export default function VnpShippingConfig() {
     try {
       const [cfgRes, factoryRes, statusRes] = await Promise.all([
         RepositoryRemote.vnpShipping.getConfig(),
-        RepositoryRemote.factory.getFactories(),
+        RepositoryRemote.factory.getFactories('?page=1&limit=200'),
         RepositoryRemote.vnpShipping.getStatus(),
       ]);
       setConfig((cfgRes.data?.data as VnpConfig) ?? { addresses: [], factoryMap: {} });

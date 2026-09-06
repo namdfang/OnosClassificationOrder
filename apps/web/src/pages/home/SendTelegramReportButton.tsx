@@ -32,7 +32,7 @@ export function SendTelegramReportButton() {
   useEffect(() => {
     (async () => {
       try {
-        const res = await RepositoryRemote.factory.getFactories();
+        const res = await RepositoryRemote.factory.getFactories('?page=1&limit=200');
         const list = ((res.data?.data || []) as FactoryOpt[]).filter((f) => f.shortName !== 'US');
         setFactories(list);
       } catch {

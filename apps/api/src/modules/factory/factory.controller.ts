@@ -5,6 +5,7 @@ import {
   CreateFactoryResDto,
   GetFactoriesDto,
   GetFactoriesResDto,
+  GetFactoryOptionsResDto,
   RoleType,
   UpdateFactoryDto,
   UpdateFactoryResDto,
@@ -28,6 +29,21 @@ export class FactoryController {
   @ApiOkResponse({ type: GetFactoriesResDto })
   async getFactories(@Query() dto: GetFactoriesDto): Promise<GetFactoriesResDto> {
     return this.factoryService.getFactories(dto);
+  }
+
+  /**
+   * Danh sách xưởng rút gọn cho sidebar "cụm menu theo xưởng" + các select
+   * xưởng ở trang mà Fulfillment/Designer cũng vào được. `@Auth([])` = mọi
+   * tài khoản nhân viên đã đăng nhập (RolesGuard vẫn chặn role Customer).
+   * KHÔNG nới quyền của `GET /factories` bên trên — route đó là CRUD.
+   */
+  @Get('options')
+  @Auth([])
+  @ApiOperation({ summary: 'Get factory options (all staff)' })
+  @HttpCode(HttpStatus.OK)
+  @ApiOkResponse({ type: GetFactoryOptionsResDto })
+  async getFactoryOptions(): Promise<GetFactoryOptionsResDto> {
+    return this.factoryService.getFactoryOptions();
   }
 
   @Post()

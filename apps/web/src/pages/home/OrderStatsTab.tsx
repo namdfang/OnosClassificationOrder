@@ -22,6 +22,7 @@ import { Cell, Pie, PieChart, ResponsiveContainer, Sector, Tooltip as RechartsTo
 
 import { RepositoryRemote } from '@/services';
 
+import { FactoryScopeChip } from '@/components/common/FactoryScopeChip';
 import { CancelledOrdersDialog } from '@/components/orders/CancelledOrdersDialog';
 import { OrderFilterBar } from '@/components/orders/OrderFilterBar';
 import { Badge } from '@/components/ui/badge';
@@ -31,6 +32,7 @@ import { handleAxiosError } from '@/utils';
 import { cn } from '@/utils/cn';
 
 import { useDebounce } from '@/hooks/useDebounce';
+import { useFactoryScope } from '@/hooks/useFactoryScope';
 import { usePermission } from '@/hooks/usePermission';
 
 import { useAuthStore } from '../../store/authStore';
@@ -79,6 +81,13 @@ interface FactoryBreakdown {
   byMachineType: MachineTypeBreakdown[];
 }
 
+/** Option xưởng cho dropdown — BE trả từ bảng `factories`, không suy từ đơn. */
+interface FactoryOption {
+  factoryId: string;
+  factoryName: string;
+  factoryShortName?: string;
+}
+
 interface SizeMatrixRow {
   factoryId?: string;
   factoryName: string;
@@ -109,6 +118,7 @@ interface Dashboard {
   byType: TypeSummary[];
   byFactory: FactoryBreakdown[];
   sizeMatrix: SizeMatrixRow[];
+  factoryOptions: FactoryOption[];
   byUser: UserBreakdown[];
   filter: { startDate?: string; endDate?: string; searchType?: string; searchUser?: string };
 }
@@ -231,6 +241,11 @@ export default function OrderStatsTab() {
   // không xem được số liệu xưởng khác. Admin/Manager/Support được chọn mọi xưởng.
   const isOverrideRole = ['SuperAdmin', 'Admin', 'Manager', 'SupportManager'].includes(roleName ?? '');
   const lockedFactoryId = !isOverrideRole ? profile?.factoryId : undefined;
+  // Xưởng chọn từ cụm menu xưởng ở sidebar. Đã lọc ở BE nên bảng size cũng khóa
+  // theo xưởng này — để select mở thì user đổi được xưởng trong khi số liệu
+  // xung quanh vẫn của xưởng cũ.
+  const factoryScope = useFactoryScope();
+  const effectiveLockedFactoryId = lockedFactoryId ?? factoryScope;
   // URL params (prefix `s` = stats). F5 / share link giữ nguyên date + search.
   // Default = today + empty search → strip khỏi URL để URL gọn.
   const [searchParams, setSearchParams] = useSearchParams();
@@ -275,6 +290,10 @@ export default function OrderStatsTab() {
       if (typeTerm) params.set('searchType', typeTerm);
       const effectiveSearchUser = override?.searchUser !== undefined ? override.searchUser : debouncedUser;
       if (effectiveSearchUser.trim()) params.set('searchUser', effectiveSearchUser.trim());
+      // Cụm menu theo xưởng (`?factoryId=`) → lọc TƯỜNG MINH ở BE, không phải
+      // lọc client: mọi KPI/biểu đồ của tab đều phải theo xưởng đó, không riêng
+      // bảng size.
+      if (factoryScope) params.set('factoryId', factoryScope);
       const resp = await RepositoryRemote.order.getDashboard(`?${params.toString()}`);
       setData(resp.data.data);
     } catch (error) {
@@ -297,7 +316,7 @@ export default function OrderStatsTab() {
   useEffect(() => {
     fetchDashboard();
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [startDate, endDate, debouncedType, debouncedUser]);
+  }, [startDate, endDate, debouncedType, debouncedUser, factoryScope]);
 
   const toggleExpand = (type: string) => {
     setExpanded((prev) => {
@@ -376,6 +395,7 @@ export default function OrderStatsTab() {
             />
           </div>
         }
+        middleRow={<FactoryScopeChip />}
       />
 
       {/* Compact stats — 4 small boxes when full, only "Tổng đơn" when hidePrice */}
@@ -518,9 +538,10 @@ export default function OrderStatsTab() {
           Đặt TRƯỚC bảng "Chi tiết theo loại sản phẩm" theo yêu cầu. */}
       <SizeMatrixTable
         sizeMatrix={data?.sizeMatrix || []}
+        factoryOptions={data?.factoryOptions || []}
         loading={loading}
         isRefetching={isRefetching}
-        lockedFactoryId={lockedFactoryId}
+        lockedFactoryId={effectiveLockedFactoryId}
         dateRangeLabel={dateRangeLabel}
       />
 
@@ -676,7 +697,7 @@ export default function OrderStatsTab() {
         onClose={() => setCancelledOpen(false)}
         from={startDate}
         to={endDate}
-        factoryId={lockedFactoryId}
+        factoryId={effectiveLockedFactoryId}
       />
     </div>
   );
@@ -1308,27 +1329,32 @@ function ExpandedDetails({ row }: { row: TypeSummary }) {
  */
 function SizeMatrixTable({
   sizeMatrix,
+  factoryOptions,
   loading,
   isRefetching,
   lockedFactoryId,
   dateRangeLabel,
 }: {
   sizeMatrix: SizeMatrixRow[];
+  factoryOptions: FactoryOption[];
   loading: boolean;
   isRefetching: boolean;
   lockedFactoryId?: string;
   dateRangeLabel: string;
 }) {
   const { t } = useTranslation('dashboard');
-  // Danh sách xưởng (distinct) để build dropdown.
+  // Danh sách xưởng cho dropdown = ĐỦ xưởng đang bật (BE trả `factoryOptions`,
+  // đọc thẳng bảng `factories`) HỢP với xưởng suy từ dữ liệu — nếu chỉ distinct
+  // từ `sizeMatrix` thì xưởng chưa có đơn trong kỳ biến mất khỏi select.
   const factories = useMemo(() => {
     const map = new Map<string, string>();
+    for (const f of factoryOptions) map.set(f.factoryId, f.factoryName);
     for (const r of sizeMatrix) {
       const id = r.factoryId || '__unmapped__';
       if (!map.has(id)) map.set(id, r.factoryName);
     }
     return [...map.entries()].map(([id, name]) => ({ id, name }));
-  }, [sizeMatrix]);
+  }, [sizeMatrix, factoryOptions]);
 
   // Xưởng đang chọn. '' = tất cả. User bị khóa → ép về xưởng của họ.
   const [selectedFactory, setSelectedFactory] = useState<string>('');

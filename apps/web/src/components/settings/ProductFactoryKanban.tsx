@@ -302,7 +302,7 @@ export default function ProductFactoryKanban() {
     try {
       setLoading(true);
       const [facRes, prodRes, mtRes] = await Promise.all([
-        RepositoryRemote.factory.getFactories(),
+        RepositoryRemote.factory.getFactories('?page=1&limit=200'),
         RepositoryRemote.productConfig.getProductConfigs('?page=1&limit=2000'),
         RepositoryRemote.machineType.getMachineTypes('?page=1&limit=200'),
       ]);

@@ -32,7 +32,7 @@ Tổng quan đơn theo kỳ thời gian:
 - 4 metric card (đơn hàng / số lượng / chi phí SX / phí ship)
 - Biểu đồ tròn phân bổ **xưởng → loại máy** (hover drill-down)
 - Bảng **pivot sản phẩm × size** (`SizeMatrixTable`) — đặt **ngay trên** bảng "Chi tiết theo loại sản phẩm". Mỗi dòng 1 type, mỗi cột 1 size (XS→S→M→L→XL→2XL…, biến thể XXL/XXXL normalize về 2XL/3XL qua `normalizeSize`), ô = số lượng (0 → `–` mờ), cột cuối + dòng cuối = Tổng. Header trái + cột Tổng sticky, scroll ngang khi nhiều size.
-  - **Lọc theo xưởng**: dropdown "Tất cả xưởng" + từng xưởng (build từ distinct `sizeMatrix[].factoryId`). Lọc client-side; chọn "Tất cả" thì cộng dồn qua mọi xưởng theo type.
+  - **Lọc theo xưởng**: dropdown "Tất cả xưởng" + từng xưởng. Options = field `factoryOptions` của `getDashboard` (đọc THẲNG bảng `factories`, xưởng đang bật, đã bỏ xưởng US) **hợp** với distinct `sizeMatrix[].factoryId` — xưởng 0 đơn trong kỳ vẫn chọn được (bảng ra rỗng), xưởng đã tắt mà còn đơn vẫn lọc được. Lọc client-side; chọn "Tất cả" thì cộng dồn qua mọi xưởng theo type.
   - **Khóa xưởng theo role**: user gắn 1 xưởng (`profile.factoryId`, không thuộc SuperAdmin/Admin/Manager/SupportManager) → `lockedFactoryId` ép bảng chỉ hiển thị xưởng của họ, ẩn dropdown (thay bằng badge tên xưởng). Admin/Manager/Support chọn được mọi xưởng.
   - Dữ liệu từ field mới `sizeMatrix` của `getDashboard` (group sẵn theo factory × type × size ở BE) — không gọi API riêng.
   - **Nút "Xuất Excel"** (`buildSizeMatrixWorkbook` trong `pages/home/exportOrders.ts`) — xuất đúng bảng đang xem (theo xưởng đã lọc) ra `.xlsx`: dòng tiêu đề (LỆNH SẢN XUẤT — <xưởng> — <khoảng ngày>), header `Sản phẩm | <size…> | Tổng`, dòng cuối = tổng cột. Ô 0 để trống. Reuse `downloadWorkbook`.
@@ -57,7 +57,7 @@ Data từ `GET /v1/orders/status-overview` + `GET /v1/orders` (list).
 
 Dashboard chuyển xưởng + xuất Excel + filter chiều sâu:
 
-- **3 Factory cards** (ML / TN / US) — mỗi card: tổng đơn đang sản xuất tại đó, pure, nhận từ xưởng khác, đã chuyển đi, **5 mini stats** (sản phẩm / loại vải / **phòng** = distinct machineTypeId / **loại máy** = distinct workshop_config.machine code / có tool), **khối Design 4 số** (được gán / chưa gán / đã xong / chưa xong — theo `designerStatus`, mỗi cặp cộng lại = total)
+- **3 Factory cards** (ML / TN / US) — **đang lọc theo 1 xưởng thì CHỈ hiện thẻ của xưởng đó**, các xưởng khác ẩn đi (mọi `filterMode` có `factoryId`: `at`/`in`/`out`/`print`/`error`); khối "Luồng chuyển xưởng" cũng chỉ giữ luồng có dính xưởng đang lọc (đi hoặc đến). Chip bar phía dưới **vẫn liệt kê đủ xưởng** — đó là đường đổi xưởng / bỏ lọc. Mỗi card: tổng đơn đang sản xuất tại đó, pure, nhận từ xưởng khác, đã chuyển đi, **5 mini stats** (sản phẩm / loại vải / **phòng** = distinct machineTypeId / **loại máy** = distinct workshop_config.machine code / có tool), **khối Design 4 số** (được gán / chưa gán / đã xong / chưa xong — theo `designerStatus`, mỗi cặp cộng lại = total)
 - **Flow visualization** — danh sách luồng `(Từ xưởng → Đến xưởng, count, totalQuantity)`
 - **Filter chip bar** factory `Tất cả / Đang ở ML / Đang ở TN / Đang ở US` + **7 select filter** (Sản phẩm / Loại vải / **Phòng** = machineTypeId / **Máy** = workshop_config.machine code / Kết quả Tool / **Note Tool** = `toolResultNote` / **Khách hàng** = `userSku`) auto-scope theo factory chip đã chọn. 7 select filter dùng **faceted-search pattern**: BE nhận đủ facet, mỗi dropdown aggregate bằng `scopeMatch + (facetFilters trừ field hiện tại)` qua helper `buildFacetMatch(excludeKey)` — count phản ánh đúng cross-filter. Options trả trong `availableFilters` (thêm `toolResultNotes` + `users` — userSku giới hạn top 300 theo số đơn). Các facet **scope luôn thẻ xưởng** (flow/stats/breakdown đều dùng `cardMatch = matchMapped + facetFilters`) → vd. lọc theo khách hàng thì mỗi thẻ xưởng chỉ đếm đơn của khách đó; đồng thời lọc **bảng đơn chi tiết** (`getOrders`) + thu hẹp count các dropdown khác (cross-facet `buildFacetMatch`). Riêng chip factory/printStage/hasError chỉ áp cho bảng chi tiết + `availableFilters`, KHÔNG đổi thẻ xưởng (ma trận flow toàn cục). URL prefix `f` (`ftoolnote`, `fuser`).
   **Đơn chưa map xưởng (`factoryId` null/missing) KHÔNG còn hiện ở tab này** (đã bỏ chip "Chưa xác định xưởng" + `totals.unmapped`) — `matchMapped`/`cardMatch` mặc định chỉ tính đơn đã map. Xem toàn bộ đơn unmapped qua menu riêng **"Không xác định xưởng"** (`Orders.md §19`).
@@ -370,6 +370,7 @@ User di chuột vào 1 slice xưởng
   byType: TypeSummary[];      // Bảng "Group by Production Type"
   byFactory: FactoryBreakdown[]; // Pie chart + drill-down
   sizeMatrix: SizeMatrixRow[]; // Bảng pivot size, group theo (factory, type) → sizes[]
+  factoryOptions: FactoryOption[]; // Options dropdown xưởng — nguồn bảng `factories`, KHÔNG suy từ đơn
   byUser: UserBreakdown[];    // Top users card
   filter: { startDate, endDate, searchType, searchUser }
 }
@@ -514,7 +515,7 @@ Response:
   },
   breakdown: {
     printStatus, printStatusNote, toolResult, toolResultNote, errorFile, assignee, assigneeNote,
-    factory: [{ factoryId, name, count }],
+    factory: [{ factoryId, name, count }], // ĐỦ xưởng đang bật — xưởng 0 đơn trong kỳ vẫn có chip (count: 0) để bấm sang
     machineType: [{ machineTypeId, name, count }],
     readyForFulfill: [{ key: boolean, count }]
   },
@@ -529,6 +530,7 @@ Response:
 3. Hậu xử lý FE-friendly:
    - Workshop codes → name + color + icon qua `WorkshopConfigRepository.findAll()` (1 bulk fetch, build Map).
    - Factory / MachineType codes → name qua direct collection query.
+   - Bù chip xưởng thiếu: `listFactoryOptions()` (bảng `factories`, `isActive: true`, bỏ xưởng US) — xưởng nào chưa có trong breakdown thì push thêm `count: 0`. Nếu không, xưởng 0 đơn biến mất khỏi bộ lọc và khi đang chọn 1 xưởng thì không bấm sang xưởng khác được.
    - Per-machine KPI cho Fulfillment: lọc `printStatus` buckets theo whitelist `machine-1..4, machine-94`.
 
 ### 8.3 Per-role KPI cards (FE)
@@ -613,7 +615,8 @@ Response `FactoryOverview` (shared DTO `production-order.dto.ts`):
 ```ts
 {
   totals: { total, transferred, pure },
-  factories: FactoryOverviewCell[],  // 1 cell / factory
+  factories: FactoryOverviewCell[],  // 1 cell / factory — CHỈ xưởng đang giữ đơn trong kỳ
+  factoryOptions: FactoryOption[],   // ĐỦ xưởng đang bật (bảng `factories`, GIỮ cả xưởng US vì tab này không loại) — options cho select "Chuyển xưởng"
   flows: FactoryFlow[],              // origin→current pairs (count > 0, from ≠ to)
   availableFilters: {
     products:    { value, label, count }[],
@@ -691,7 +694,7 @@ Cả 3 đều:
 | Filter chip bar       | `FilterChip` (`Tất cả` + 1 chip/factory) + 4 `SelectFilter`                                                                                                                                                    | Selects auto-reset khi đổi factory chip để tránh combo zero-result.                                                                                                                                                                                                                                                                                                                                                                                                                       |
 | Bulk toolbar          | Toolbar sticky khi `selected.size > 0`                                                                                                                                                                         | Chỉ render khi `canTransfer = isAdmin \|\| has('order.transfer')`. Nút **"Chuyển xưởng"** (mở `TransferDialog`) — bảng này chỉ còn đơn ĐÃ map (đơn unmapped bị loại khỏi tab từ `order.service.ts`, xem `Orders.md §19`) nên không còn nhánh "Gán xưởng" ở đây nữa.                                                                                                                                                                                                                       |
 | Table                 | `Table` với 1 cột "Xưởng (đang / gốc)" + **compact grouped columns** (8 group từ `WORKSHOP_COLS` filtered theo `canViewField`, qua `buildColGroups()`/`<GroupCellContent>` — `Orders.md §10.2a`) + cột History | Row có `originalFactoryId !== factoryId` hiện badge `warning` + `← Gốc: shortName`. Mọi row luôn có xưởng (không còn nhánh "Gán xưởng"/"Chưa map" inline).                                                                                                                                                                                                                                                                                                                                |
-| `TransferDialog`      | `Dialog`                                                                                                                                                                                                       | Select target + Input lý do (max 200). Gọi `bulkTransferOrders({ids, targetFactoryId, reason})`.                                                                                                                                                                                                                                                                                                                                                                                          |
+| `TransferDialog`      | `Dialog`                                                                                                                                                                                                       | Select target + Input lý do (max 200). Gọi `bulkTransferOrders({ids, targetFactoryId, reason})`. Options lấy từ `overview.factoryOptions` (KHÔNG phải `overview.factories`) — nếu không thì xưởng chưa có đơn nào không nằm trong select và không chuyển đơn sang được.                                                                                                                                                                                                                                                                                                                                                                                          |
 | `AssignFactoryDialog` | `Dialog`                                                                                                                                                                                                       | Initial-assign cho đơn UNMAPPED. Single mode: hiển thị `productionId / type / size / qty + link design (target="_blank" → originalUrl)`; Bulk mode: tiêu đề "Gán xưởng cho N đơn đã chọn". Form: 1 select required (Xưởng) + 4 select optional (Loại vải / Phòng / Máy / Tool). Source options: factory ← `overview.factories`, fabric/machine/tool ← `useWorkshopConfigStore` (full catalog), Phòng ← lazy fetch `machineType.getMachineTypes()` lần đầu open. Gọi `bulkAssignOrders()`. |
 
 ### 10.6 Filter mode → query params

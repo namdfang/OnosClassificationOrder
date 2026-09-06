@@ -57,7 +57,7 @@ function AssignSelectField({
  * mặc định) cho đơn UNMAPPED. Dùng chung bởi trang "Không xác định xưởng".
  *  - Form:   factory (required) + 4 optional select (loại vải / phòng / máy / tool).
  *  - Source options:
- *      • factory     ← tự fetch qua `factory.getFactories()` khi dialog mở.
+ *      • factory     ← tự fetch qua `factory.getFactories('?page=1&limit=200')` khi dialog mở.
  *      • fabric/machine/toolResult ← `useWorkshopConfigStore` (full catalog).
  *      • machineType ← fetch on dialog open (machineType.getMachineTypes).
  */
@@ -113,7 +113,7 @@ export function AssignFactoryDialog({
   useEffect(() => {
     if (!open || factories.length > 0) return;
     RepositoryRemote.factory
-      .getFactories()
+      .getFactories('?page=1&limit=200')
       .then((res) => {
         const data = (res.data?.data || []) as Factory[];
         setFactories(data);

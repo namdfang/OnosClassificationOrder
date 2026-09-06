@@ -40,6 +40,9 @@ SidebarCountsZod = {
   designerBacklog: number | null;     // null nếu role ∉ LEADER_ROLES
   toolCheckRework: number | null;     // null nếu role ∉ TOOL_CHECK_ROLES
   toolCheckUnreviewed: number | null;
+  // CÙNG các số trên nhưng TÁCH THEO XƯỞNG — badge cho cụm menu riêng từng xưởng
+  // (`Orders.md §25`). Xưởng không có đơn thì VẮNG key (FE coi như 0, không hiện badge).
+  byFactory: Record<factoryId, { errorLogTodo: number; toolCheckRework: number; toolCheckUnreviewed: number }>;
 }
 // GetSidebarCountsResDto = ResZod + { data: SidebarCountsZod }
 ```
@@ -58,11 +61,12 @@ Nguyên tắc: **mọi con số MIRROR đúng công thức của trang tương �
 - `designerUnassigned` — `countDocuments` mirror match `getAssignBacklog` (cửa sổ 7 ngày VN, `toolResultNote ∉ [null,'','ok']`, designerStatus unassigned/rejected/rework-chưa-ôm, `productionFactoryClause`).
 - `designerBacklog` — scope `'all'` (Admin/Manager/DesignerLeader): aggregate `$expr` = `designerFlowConds().backlogCond` — CÙNG object điều kiện với hàng "Tồn" (`columnTotals.backlog`) của `getDailyOverview` (đã refactor các cond dùng chung vào `designerFlowConds()`); scope `'self'` (Designer): `countDocuments` `assignee=userId` + status ∈ {assigned, in-progress, rework} (mirror `backlogByDesigner`).
 - `toolCheckRework` / `toolCheckUnreviewed` — `countDocuments` mirror `reworkMatch` / `unreviewedMatch` của `getToolCheckOverview` (7 ngày, `alive` = không xóa/hủy + `productionFactoryClause`).
+- `byFactory` — `OrderService.countErrorLogTodoByFactory()` (lại dùng CHUNG `buildErrorLogBaseFilter` rồi `$group` theo `factoryId`) + `DesignerStatsService.getSidebarCountsByFactory()` (2 `$group` cho rework/unreviewed). Mỗi con số MỘT lượt `$group`, không phải mỗi xưởng một lượt đếm. **Khác các số tổng ở chỗ KHÔNG áp `productionFactoryClause`**: cụm menu xưởng US là lọc tường minh nên badge phải khớp số trang đó mở ra, không phải luôn 0 (`Orders.md §21`). Phạm vi theo role thì giữ nguyên như số tổng (Support vẫn không có `errorLogTodo`, role ngoài `TOOL_CHECK_ROLES` không có số soát tool).
 - `DesignerModule` import `OrderModule` (lấy `OrderService.countErrorLogTodo`; không vòng lặp — OrderModule không import DesignerModule).
 
 ## 6. Performance notes
 
-- Endpoint chỉ chạy tối đa 5 query count (4 `countDocuments` + 1 aggregate `$count`) song song qua `Promise.all`, không trả list/populate — payload ~200 byte, đo thực tế vài chục ms (so với gọi 3 endpoint trang cũ: `tool-check-overview` một mình đã chạy ~10 aggregation + 2 list 500 đơn).
+- Endpoint chỉ chạy tối đa 8 query (4 `countDocuments` + 1 aggregate `$count` + 3 aggregate `$group` cho `byFactory`) song song qua `Promise.all`, không trả list/populate — payload ~200 byte, đo thực tế vài chục ms (so với gọi 3 endpoint trang cũ: `tool-check-overview` một mình đã chạy ~10 aggregation + 2 list 500 đơn).
 - Polling 60s × mỗi user đang mở tab; tab ẩn không gọi. Mutation bump debounce 1.2s nên bulk N đơn chỉ tốn 1 lần fetch.
 - Lỗi fetch badge nuốt im lặng (giữ số cũ, không toast) — poll nền không được spam thông báo.
 

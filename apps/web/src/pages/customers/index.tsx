@@ -110,7 +110,7 @@ export default function CustomersPage() {
     (async () => {
       try {
         const [facRes, desRes] = await Promise.all([
-          RepositoryRemote.factory.getFactories(),
+          RepositoryRemote.factory.getFactories('?page=1&limit=200'),
           RepositoryRemote.designer.listTeam(Status.Active),
         ]);
         setFactories((facRes.data?.data || []) as FactoryLite[]);

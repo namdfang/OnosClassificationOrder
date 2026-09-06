@@ -134,23 +134,52 @@ export class DesignerStatsController {
     const roleName = user?.role?.name;
     const designerScope =
       !roleName || !LEADER_ROLES.includes(roleName) ? 'none' : roleName === RoleType.Designer ? 'self' : 'all';
-    const [counts, errorLogTodo] = await Promise.all([
+    const includeToolCheck = !!roleName && TOOL_CHECK_ROLES.includes(roleName);
+    const wantErrorLog = roleName !== RoleType.Support;
+    const [counts, errorLogTodo, errorLogByFactory, toolCheckByFactory] = await Promise.all([
       this.statsService.getSidebarCounts({
         designerScope,
-        includeToolCheck: !!roleName && TOOL_CHECK_ROLES.includes(roleName),
+        includeToolCheck,
         userId: user?._id ? String(user._id) : undefined,
       }),
       // Support: tab Nhật ký bù lỗi bị ẩn (mirror hideForRoles FE) → null.
-      roleName === RoleType.Support
-        ? Promise.resolve(null)
-        : this.orderService.countErrorLogTodo(
+      wantErrorLog
+        ? this.orderService.countErrorLogTodo(
             roleName,
             user?._id ? String(user._id) : undefined,
             user?.factoryId,
             user?.fulfillmentStage,
-          ),
+          )
+        : Promise.resolve(null),
+      // Badge cho cụm menu từng xưởng — cùng phạm vi role như 2 số tổng ở trên,
+      // chỉ khác ở chỗ tách theo `factoryId`.
+      wantErrorLog
+        ? this.orderService.countErrorLogTodoByFactory(
+            roleName,
+            user?._id ? String(user._id) : undefined,
+            user?.factoryId,
+            user?.fulfillmentStage,
+          )
+        : Promise.resolve<Record<string, number>>({}),
+      includeToolCheck
+        ? this.statsService.getSidebarCountsByFactory()
+        : Promise.resolve<Record<string, { toolCheckRework: number; toolCheckUnreviewed: number }>>({}),
     ]);
-    return { success: true, data: { errorLogTodo, ...counts } };
+
+    const byFactory: Record<
+      string,
+      { errorLogTodo: number; toolCheckRework: number; toolCheckUnreviewed: number }
+    > = {};
+    const cell = (id: string) =>
+      (byFactory[id] ||= { errorLogTodo: 0, toolCheckRework: 0, toolCheckUnreviewed: 0 });
+    for (const [id, n] of Object.entries(errorLogByFactory)) cell(id).errorLogTodo = n;
+    for (const [id, c] of Object.entries(toolCheckByFactory)) {
+      const target = cell(id);
+      target.toolCheckRework = c.toolCheckRework;
+      target.toolCheckUnreviewed = c.toolCheckUnreviewed;
+    }
+
+    return { success: true, data: { errorLogTodo, ...counts, byFactory } };
   }
 
   @Get('designer/overdue-alert')

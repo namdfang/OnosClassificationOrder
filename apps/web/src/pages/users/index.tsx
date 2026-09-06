@@ -94,7 +94,7 @@ export default function UsersPage() {
       const [uRes, rRes, fRes] = await Promise.all([
         RepositoryRemote.users.getUsers('?page=1&limit=200'),
         RepositoryRemote.roles.getRoles('?page=1&limit=50'),
-        RepositoryRemote.factory.getFactories(),
+        RepositoryRemote.factory.getFactories('?page=1&limit=200'),
       ]);
       setItems((uRes.data?.data || []) as UserRow[]);
       setRoles((rRes.data?.data || []) as Role[]);

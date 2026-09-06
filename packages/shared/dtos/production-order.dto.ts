@@ -811,6 +811,14 @@ export const GetOrderDashboardZod = z.object({
   endDate: z.string().optional(),
   searchType: z.string().optional(),
   searchUser: z.string().optional(),
+  /**
+   * Lọc TƯỜNG MINH theo xưởng (cụm menu xưởng ở sidebar truyền `?factoryId=`).
+   * Khớp `factoryId` HOẶC `originalFactoryId` để đơn đã chuyển đi vẫn thuộc
+   * xưởng gốc. Lọc tường minh nên **có hiệu lực cả với xưởng ngoài luồng sản
+   * xuất (US)** — xem `Orders.md §21`. Role Fulfillment bị khóa xưởng của họ,
+   * tham số này bị bỏ qua.
+   */
+  factoryId: IDZod.optional(),
 });
 export class GetOrderDashboardDto extends createZodDto(extendApi(GetOrderDashboardZod)) {}
 
@@ -874,6 +882,18 @@ export const FactoryBreakdownZod = z.object({
 export type FactoryBreakdown = z.infer<typeof FactoryBreakdownZod>;
 
 /**
+ * Option xưởng cho MỌI dropdown lọc/chọn xưởng. Nguồn là bảng `factories`
+ * (xưởng đang bật) chứ KHÔNG suy từ đơn — xưởng chưa có đơn nào trong kỳ vẫn
+ * phải chọn được (nếu không thì không ai chuyển đơn sang xưởng mới mở được).
+ */
+export const FactoryOptionZod = z.object({
+  factoryId: z.string(),
+  factoryName: z.string(),
+  factoryShortName: z.string().optional(),
+});
+export type FactoryOption = z.infer<typeof FactoryOptionZod>;
+
+/**
  * Phục vụ bảng pivot "Số lượng theo size mỗi sản phẩm" có lọc theo xưởng.
  * Mỗi row = 1 cặp (factory, type) kèm phân bổ size. FE gom dropdown xưởng từ
  * distinct factoryId, và pivot type × size theo xưởng đang chọn.
@@ -903,6 +923,8 @@ export const OrderDashboardZod = z.object({
   byType: TypeSummaryZod.array(),
   byFactory: FactoryBreakdownZod.array(),
   sizeMatrix: SizeMatrixRowZod.array(),
+  /** Dropdown xưởng của bảng size matrix — ĐỦ xưởng đang bật, kể cả xưởng 0 đơn. */
+  factoryOptions: FactoryOptionZod.array(),
   byUser: UserBreakdownZod.array(),
   filter: z.object({
     startDate: z.string().optional(),
@@ -1539,6 +1561,9 @@ export type FactoryFlow = z.infer<typeof FactoryFlowZod>;
 
 export const FactoryOverviewZod = z.object({
   factories: FactoryOverviewCellZod.array(),
+  /** Danh sách xưởng ĐẦY ĐỦ (bảng `factories`, đang bật) cho các select — thẻ
+   *  `factories` ở trên chỉ có xưởng đang giữ đơn nên không dùng làm option. */
+  factoryOptions: FactoryOptionZod.array(),
   flows: FactoryFlowZod.array(),
   totals: z.object({
     total: z.number(),
@@ -2102,7 +2127,8 @@ export const LifecycleOverviewZod = z.object({
   }),
   /** Line chart: số đơn hoàn thành toàn flow mỗi ngày trong kỳ. */
   completionTimeline: LifecycleTimelineBucketZod.array(),
-  /** Options cho dropdown lọc xưởng (chỉ xưởng có đơn). */
+  /** Options cho dropdown lọc xưởng — ĐỦ xưởng đang bật (trừ xưởng ngoài luồng
+   *  sản xuất), gộp thêm xưởng đang giữ đơn dù đã tắt. */
   factories: z.object({ factoryId: z.string(), factoryName: z.string() }).array(),
   /** Options cho combobox lọc khách (khách có đơn trong scope, nhiều đơn nhất trước, cap 300). */
   customers: z.object({ userSku: z.string(), userEmail: z.string(), count: z.number() }).array(),

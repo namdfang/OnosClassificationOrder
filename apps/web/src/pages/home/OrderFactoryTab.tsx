@@ -2,7 +2,7 @@ import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useSearchParams } from 'react-router-dom';
 import { ArrowRight, Download, Factory, History, Layers, Send } from 'lucide-react';
-import type { FactoryOverview, FactoryOverviewCell } from 'shared';
+import type { FactoryOption, FactoryOverview, FactoryOverviewCell } from 'shared';
 import { toast } from 'sonner';
 
 import { useWorkshopConfigStore } from '@/store/workshopConfigStore';
@@ -93,7 +93,10 @@ function parseFilterModeFromURL(sp: URLSearchParams): FilterMode {
   if (mode === 'print-all' && (stage === 'printed' || stage === 'printing' || stage === 'not-printed')) {
     return { kind: 'print-all', stage };
   }
-  const fid = sp.get('ffactory');
+  // `ffactory` = chip xưởng user tự bấm trong tab. Không có thì rơi về
+  // `factoryId` — param chung của "cụm menu theo xưởng" ở sidebar, để vào tab
+  // là đã lọc sẵn đúng xưởng của cụm vừa bấm.
+  const fid = sp.get('ffactory') || sp.get('factoryId');
   if (!fid) return { kind: 'all' };
   if (stage === 'printed' || stage === 'printing' || stage === 'not-printed') {
     return { kind: 'print', factoryId: fid, stage };
@@ -165,6 +168,20 @@ export default function OrderFactoryTab() {
   });
   const [selected, setSelected] = useState<Set<string>>(new Set());
 
+  // Bấm sang cụm xưởng khác (hoặc về cụm chung) chỉ đổi `factoryId` trên URL —
+  // state của tab thì đã seed từ lần mount đầu, không tự đổi theo. Không có
+  // effect này thì effect đồng bộ URL bên dưới ghi ngược giá trị cũ trở lại và
+  // người dùng thấy "bấm menu mà không có gì xảy ra".
+  const factoryScopeParam = searchParams.get('factoryId') || '';
+  useEffect(() => {
+    setFilterMode((prev) => {
+      const current = 'factoryId' in prev ? prev.factoryId : '';
+      if (current === factoryScopeParam) return prev;
+      return factoryScopeParam ? { kind: 'at', factoryId: factoryScopeParam } : { kind: 'all' };
+    });
+    setPage(1);
+  }, [factoryScopeParam]);
+
   // Sync state → URL (replace để không spam history). Mỗi state đổi → cập
   // nhật URL, F5 sẽ đọc lại đúng. Date LUÔN ghi vào URL (kể cả today) để
   // URL reflect đúng state user thấy; page/size default thì strip để gọn.
@@ -183,6 +200,13 @@ export default function OrderFactoryTab() {
         sp.delete('ffactory');
         sp.delete('fmode');
         sp.delete('fstage');
+        // TUYỆT ĐỐI không đụng tới `factoryId` ở đây: nó do sidebar (cụm menu
+        // xưởng) làm chủ, effect này chỉ ĐỌC. `setSearchParams` của
+        // react-router 6.14 đổi identity mỗi lần URL đổi (memo theo
+        // `location.search`) nên effect chạy lại với closure state CŨ; ghi
+        // `factoryId` ở đây là chiều ghi thứ hai vào cùng một param mà effect
+        // theo dõi phạm vi đang đọc → hai bên đẩy qua đẩy lại, URL nhảy loạn
+        // giữa 2 xưởng không dừng.
         if (filterMode.kind === 'print-all') {
           sp.set('fmode', 'print-all');
           sp.set('fstage', filterMode.stage);
@@ -253,6 +277,22 @@ export default function OrderFactoryTab() {
     if (selectFilters.user) sp.set('userSku', selectFilters.user);
     return sp.toString();
   }, [createdFrom, createdTo, filterMode, selectFilters]);
+
+  // Xưởng đang bị lọc (chip "Đang ở X" / drill-down in / lỗi xưởng). Có lọc
+  // xưởng → chỉ hiện thẻ của xưởng đó, ẩn các xưởng khác cho khỏi rối; chip bar
+  // vẫn liệt kê đủ xưởng nên đổi xưởng / bỏ lọc vẫn bình thường.
+  const scopedFactoryId = 'factoryId' in filterMode ? filterMode.factoryId : undefined;
+  const visibleFactoryCells = useMemo(() => {
+    const cells = overview?.factories || [];
+    return scopedFactoryId ? cells.filter((f) => f.factoryId === scopedFactoryId) : cells;
+  }, [overview, scopedFactoryId]);
+  // Luồng chuyển xưởng: chỉ giữ luồng có dính xưởng đang lọc (đi hoặc đến).
+  const visibleFlows = useMemo(() => {
+    const flows = overview?.flows || [];
+    return scopedFactoryId
+      ? flows.filter((f) => f.fromFactoryId === scopedFactoryId || f.toFactoryId === scopedFactoryId)
+      : flows;
+  }, [overview, scopedFactoryId]);
 
   const fetchOverview = useCallback(async () => {
     try {
@@ -590,7 +630,7 @@ export default function OrderFactoryTab() {
           )
         ) : (
           <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
-            {(overview?.factories || []).map((f) => (
+            {visibleFactoryCells.map((f) => (
               <FactoryCard key={f.factoryId} cell={f} filterMode={filterMode} onFilter={setFilterMode} />
             ))}
             {!overview && overviewLoading && (
@@ -604,7 +644,7 @@ export default function OrderFactoryTab() {
         )}
 
         {/* Flow visualization */}
-        {overview && overview.flows.length > 0 && (
+        {overview && visibleFlows.length > 0 && (
           <div className="rounded-lg border border-border bg-card p-4 space-y-3">
             <div className="flex items-center justify-between">
               <h3 className="text-sm font-semibold flex items-center gap-2">
@@ -613,7 +653,7 @@ export default function OrderFactoryTab() {
               <span className="text-[11px] text-muted-foreground">{t('factoryTab.clickToFilter')}</span>
             </div>
             <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
-              {overview.flows.map((f) => {
+              {visibleFlows.map((f) => {
                 const active = filterMode.kind === 'in' && filterMode.factoryId === f.toFactoryId;
                 return (
                   <button
@@ -651,10 +691,20 @@ export default function OrderFactoryTab() {
         <div className="rounded-lg border border-border bg-card p-3 space-y-2">
           <div className="flex items-center gap-2 flex-wrap">
             <span className="text-xs text-muted-foreground">{t('factoryTab.filterLabel')}:</span>
-            <FilterChip active={filterMode.kind === 'all'} onClick={() => setFilterMode({ kind: 'all' })}>
+            {/* Trong cụm xưởng, "Tất cả" = bỏ drill-down (in / lỗi) chứ KHÔNG bỏ
+                xưởng — bỏ xưởng là việc của sidebar. */}
+            <FilterChip
+              active={filterMode.kind === (factoryScopeParam ? 'at' : 'all')}
+              onClick={() =>
+                setFilterMode(factoryScopeParam ? { kind: 'at', factoryId: factoryScopeParam } : { kind: 'all' })
+              }
+            >
               {t('drillPanel.all')}
             </FilterChip>
+            {/* Đang ở cụm menu của 1 xưởng thì bỏ luôn dãy chip xưởng: phạm vi đã do
+                sidebar quyết, để lại chỉ tổ có 2 chỗ đổi xưởng chọi nhau. */}
             {viewMode === 'by-factory' &&
+              !factoryScopeParam &&
               (overview?.factories || []).map((f) => {
                 // Chip "Đang ở X" hiện active khi user chọn factory chip HOẶC
                 // đang ở print-stage / lỗi-xưởng drill-down của factory đó —
@@ -929,7 +979,10 @@ export default function OrderFactoryTab() {
           open={!!transferDialog}
           onOpenChange={(o) => !o && setTransferDialog(null)}
           ids={transferDialog?.ids || []}
-          factories={overview?.factories || []}
+          // `overview.factories` chỉ có xưởng ĐANG giữ đơn — dùng nó thì không
+          // chuyển đơn sang xưởng chưa có đơn nào được. `factoryOptions` là
+          // danh sách xưởng đầy đủ từ bảng `factories`.
+          factories={overview?.factoryOptions || []}
           onSuccess={onAfterTransfer}
         />
       </div>
@@ -1317,7 +1370,7 @@ function TransferDialog({
   open: boolean;
   onOpenChange: (o: boolean) => void;
   ids: string[];
-  factories: FactoryOverviewCell[];
+  factories: FactoryOption[];
   onSuccess: () => void;
 }) {
   const { t } = useTranslation('dashboard');

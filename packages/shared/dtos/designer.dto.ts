@@ -1089,6 +1089,22 @@ export const SidebarCountsZod = z.object({
   toolCheckRework: z.number().int().nonnegative().nullable(),
   /** Soát tool — đơn chưa soát trong 7 ngày (mirror unreviewedList). */
   toolCheckUnreviewed: z.number().int().nonnegative().nullable(),
+  /**
+   * CÙNG các con số trên nhưng TÁCH THEO XƯỞNG — badge cho cụm menu riêng
+   * của từng xưởng ở sidebar (`Orders.md §25`). Key = `factoryId`; xưởng
+   * không có đơn nào thì VẮNG khỏi map (FE coi như 0, không hiện badge).
+   * Chỉ gồm những mục còn lại trong cụm xưởng — Designer đã bị loại khỏi cụm
+   * nên không có số designer ở đây.
+   */
+  byFactory: z
+    .record(
+      z.object({
+        errorLogTodo: z.number().int().nonnegative(),
+        toolCheckRework: z.number().int().nonnegative(),
+        toolCheckUnreviewed: z.number().int().nonnegative(),
+      }),
+    )
+    .default({}),
 });
 export type SidebarCounts = z.infer<typeof SidebarCountsZod>;
 export class GetSidebarCountsResDto extends createZodDto(extendApi(ResZod.extend({ data: SidebarCountsZod }))) {}

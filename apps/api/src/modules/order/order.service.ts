@@ -45,6 +45,7 @@ import type {
   FactoryBreakdown,
   FactoryBucket,
   FactoryFlow,
+  FactoryOption,
   FactoryOverviewCell,
   ForceCompleteOrderResDto,
   FulfillmentTimelineEntry,
@@ -2143,6 +2144,52 @@ export class OrderService implements OnModuleInit {
    * Mockups are bucketed by URL string — `count > 1` means duplicate (same
    * mockup image used across multiple orders).
    */
+  /**
+   * Options xưởng cho MỌI dropdown lọc/chọn xưởng của Dashboard.
+   *
+   * Đọc THẲNG bảng `factories` (xưởng đang bật) thay vì suy từ đơn: dropdown
+   * dựng bằng `$group` trên orders chỉ có xưởng ĐANG giữ đơn trong kỳ, nên
+   * xưởng mới mở / xưởng vừa hết đơn biến mất khỏi select và không ai chuyển
+   * đơn sang đó được.
+   *
+   * GIỮ CẢ xưởng ngoài luồng sản xuất (US — `excluded-factory.ts`): đơn xưởng
+   * đó bị loại khỏi thống kê MẶC ĐỊNH, nhưng lọc tường minh `factoryId` thì
+   * vẫn xem được (Orders.md §21) — nên nó phải có mặt trong select.
+   */
+  private async listFactoryOptions(): Promise<FactoryOption[]> {
+    const docs = await (
+      this.orderModel.db.collection('factories') as unknown as {
+        find: (q: Record<string, unknown>) => {
+          toArray: () => Promise<Array<{ _id: unknown; name: string; shortName?: string }>>;
+        };
+      }
+    )
+      .find({ isActive: true, deletedAt: { $exists: false } })
+      .toArray();
+    return docs
+      .map((f) => ({ factoryId: String(f._id), factoryName: f.name, factoryShortName: f.shortName }))
+      .sort((a, b) => a.factoryName.localeCompare(b.factoryName));
+  }
+
+  /**
+   * HỢP danh sách xưởng đầy đủ (`listFactoryOptions`) với xưởng suy ra từ đơn
+   * trong kỳ. Xưởng đã tắt nhưng vẫn còn đơn phải giữ lại, nếu không thì đơn
+   * của nó không lọc ra được ở bất kỳ đâu.
+   */
+  private mergeFactoryOptions(
+    options: FactoryOption[],
+    fromOrders: Array<{ factoryId: unknown; factoryName: string }>,
+  ): Array<{ factoryId: string; factoryName: string }> {
+    const map = new Map<string, string>(options.map((f) => [f.factoryId, f.factoryName]));
+    for (const f of fromOrders) {
+      const id = String(f.factoryId);
+      if (!map.has(id)) map.set(id, f.factoryName);
+    }
+    return [...map.entries()]
+      .map(([factoryId, factoryName]) => ({ factoryId, factoryName }))
+      .sort((a, b) => a.factoryName.localeCompare(b.factoryName));
+  }
+
   async getDashboard(
     dto: GetOrderDashboardDto,
     roleName?: RoleType,
@@ -2176,6 +2223,10 @@ export class OrderService implements OnModuleInit {
           $or: [{ factoryId: fulfillmentFactoryId }, { originalFactoryId: fulfillmentFactoryId }],
         });
       }
+    } else if (dto.factoryId) {
+      // Lọc TƯỜNG MINH 1 xưởng (cụm menu xưởng ở sidebar). Ghi đè bộ loại trừ
+      // mặc định — kể cả xưởng US vẫn xem được số liệu (Orders.md §21).
+      andClauses.push({ $or: [{ factoryId: dto.factoryId }, { originalFactoryId: dto.factoryId }] });
     } else {
       // Đơn chưa map xưởng + đơn xưởng US (ngoài luồng sản xuất) bị loại khỏi
       // mọi số liệu Dashboard. Fulfillment ở trên đã tự loại trừ sẵn.
@@ -2540,6 +2591,9 @@ export class OrderService implements OnModuleInit {
         byType,
         byFactory,
         sizeMatrix,
+        // Dropdown xưởng của bảng size matrix — ĐỦ xưởng đang bật, không phụ
+        // thuộc kỳ lọc (xưởng 0 đơn vẫn chọn được, ra bảng rỗng).
+        factoryOptions: await this.listFactoryOptions(),
         byUser,
         filter: {
           startDate: dto.startDate,
@@ -2730,6 +2784,16 @@ export class OrderService implements OnModuleInit {
         count: r.count,
       }),
     );
+    // Chip lọc xưởng phải liệt kê ĐỦ xưởng đang bật kể cả xưởng 0 đơn trong kỳ
+    // (và cả khi đang chọn 1 xưởng — để bấm sang xưởng khác được). Xưởng đang
+    // giữ đơn đã có sẵn ở trên nên chỉ bù phần còn thiếu, count = 0. Xưởng US
+    // count = 0 ở view mặc định là ĐÚNG — bấm vào chip mới lọc tường minh ra đơn.
+    const seenFactoryIds = new Set(factoryBreakdown.map((f) => f.factoryId));
+    for (const opt of await this.listFactoryOptions()) {
+      if (!seenFactoryIds.has(opt.factoryId)) {
+        factoryBreakdown.push({ factoryId: opt.factoryId, name: opt.factoryName, count: 0 });
+      }
+    }
 
     const machineBreakdown: MachineBucket[] = (agg.machineType as Array<{ code: string | null; count: number }>).map(
       (r) => ({
@@ -3470,6 +3534,7 @@ export class OrderService implements OnModuleInit {
       }
     }
 
+    const factoryOptions = await this.listFactoryOptions();
     const cycleRow = agg.totalCycle[0];
     const completionTimeline = (agg.completionTimeline as Array<{ _id: string; completed: number }>).map((r) => ({
       date: r._id,
@@ -3489,10 +3554,14 @@ export class OrderService implements OnModuleInit {
           cancelledInRange,
         },
         completionTimeline,
-        factories: (agg.factories as Array<{ factoryId: unknown; factoryName: string }>).map((f) => ({
-          factoryId: String(f.factoryId),
-          factoryName: f.factoryName,
-        })),
+        // Options xưởng = ĐỦ xưởng đang bật (bảng `factories`, GIỮ cả xưởng US)
+        // HỢP với xưởng đang giữ đơn trong kỳ. Chỉ lấy từ `agg.factories` thì
+        // xưởng chưa có đơn nào biến mất khỏi select; chỉ lấy từ bảng
+        // `factories` thì đơn của xưởng vừa bị tắt lại không lọc ra được.
+        factories: this.mergeFactoryOptions(
+          factoryOptions,
+          agg.factories as Array<{ factoryId: unknown; factoryName: string }>,
+        ),
         customers: (agg.customers as Array<{ userSku: string; userEmail: string; count: number }>) ?? [],
         filter: { factoryId: scopedFactoryId, from: dto.from, to: dto.to },
       },
@@ -4137,6 +4206,10 @@ export class OrderService implements OnModuleInit {
       success: true,
       data: {
         factories: Array.from(cellMap.values()).sort((a, b) => b.total - a.total),
+        // Thẻ `factories` ở trên chỉ có xưởng ĐANG giữ đơn — select "Chuyển
+        // xưởng" phải dùng danh sách đầy đủ này, nếu không thì không chuyển
+        // được sang xưởng chưa có đơn nào.
+        factoryOptions: await this.listFactoryOptions(),
         flows,
         totals: { total: grandTotal, transferred, pure },
         availableFilters: {
@@ -8456,6 +8529,34 @@ export class OrderService implements OnModuleInit {
       fulfillmentStage,
     );
     return this.orderModel.countDocuments(filter);
+  }
+
+  /**
+   * Cùng con số như `countErrorLogTodo` nhưng TÁCH THEO XƯỞNG — badge cho cụm
+   * menu riêng của từng xưởng ở sidebar (`Orders.md §25`). Dùng CHUNG
+   * `buildErrorLogBaseFilter` với badge tổng + trang Nhật ký bù lỗi để 3 con số
+   * không bao giờ lệch nhau; một lần `$group` thay vì mỗi xưởng một lượt đếm.
+   */
+  async countErrorLogTodoByFactory(
+    roleName?: RoleType,
+    assigneeUserId?: string,
+    fulfillmentFactoryId?: string,
+    fulfillmentStage?: string,
+  ): Promise<Record<string, number>> {
+    const filter = this.buildErrorLogBaseFilter(
+      'todo',
+      roleName,
+      assigneeUserId,
+      fulfillmentFactoryId,
+      fulfillmentStage,
+    );
+    const rows = await this.orderModel.aggregate<{ _id: string | null; n: number }>([
+      { $match: { ...filter, factoryId: { $exists: true, $ne: null } } },
+      { $group: { _id: '$factoryId', n: { $sum: 1 } } },
+    ]);
+    const out: Record<string, number> = {};
+    for (const r of rows) if (r._id) out[String(r._id)] = r.n;
+    return out;
   }
 
   /**

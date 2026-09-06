@@ -57,7 +57,7 @@ export default function CustomerAssignmentConfig() {
       try {
         setLoading(true);
         const [facRes, cfgRes] = await Promise.all([
-          RepositoryRemote.factory.getFactories(),
+          RepositoryRemote.factory.getFactories('?page=1&limit=200'),
           RepositoryRemote.customerAssignment.getConfig(),
         ]);
         await loadCustomers();
