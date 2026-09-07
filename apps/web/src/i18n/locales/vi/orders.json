@@ -770,5 +770,63 @@
     "externalIdCaption": "Mã sàn",
     "positionsCaption": "Vị trí in",
     "trackingCaption": "Vận đơn"
+  },
+  "workshopBoard": {
+    "stages": {
+      "tool-check": "Soát tool",
+      "designer": "Thiết kế",
+      "print": "In",
+      "press": "Ép",
+      "qc-post-press": "QC",
+      "sew-in": "May vào",
+      "sew-out": "May ra",
+      "pack": "Đóng hàng",
+      "done": "Đã đóng hàng"
+    },
+    "stageTileTitle": "Chỉ hiện đơn đang ở chặng {{stage}} (bấm lại để bỏ)",
+    "stageAll": "Mọi chặng",
+    "summary": "Tổng {{orders}} đơn · {{types}} loại sản phẩm",
+    "held": "Đang giữ",
+    "cancelled": "Đã hủy",
+    "today": "Hôm nay",
+    "yesterday": "Hôm qua",
+    "tomorrow": "Ngày mai",
+    "anyDate": "Mọi ngày",
+    "prevDay": "Lùi 1 ngày",
+    "nextDay": "Tiến 1 ngày",
+    "pickDate": "Chọn khoảng ngày",
+    "allFactories": "Tất cả",
+    "factoryTitle": "Chỉ hiện đơn của xưởng {{name}}",
+    "filters": "Bộ lọc",
+    "filtersTitle": "Bộ lọc chi tiết",
+    "clearFilters": "Xóa hết lọc",
+    "reload": "Tải lại",
+    "search": "Tìm Production ID / SKU / Order ID / Type…",
+    "pills": {
+      "errorFile": "Lỗi file",
+      "noTool": "Thiếu tool",
+      "unreviewed": "Chưa soát",
+      "priority": "Ưu tiên",
+      "held": "Đang giữ"
+    },
+    "pillTitle": {
+      "errorFile": "Đơn có ít nhất 1 mã file lỗi",
+      "noTool": "Đã soát tool nhưng không có tool",
+      "unreviewed": "Chưa soát tool",
+      "priority": "Đơn có đặt mức ưu tiên",
+      "held": "Đơn đang bị giữ"
+    },
+    "designBacklog": "Tồn thiết kế",
+    "designBacklogTitle": "Mở/đóng bảng tổng hợp designer",
+    "hintBefore": "Tick ô cạnh tên sản phẩm để chọn cả nhóm · giữ",
+    "hintAfter": "để chọn nhanh dải đơn.",
+    "rail": {
+      "search": "Lọc loại sản phẩm…",
+      "all": "Tất cả",
+      "ordersQty": "{{orders}} đơn / {{qty}} sp",
+      "allHeader": "{{orders}} đơn · {{types}} loại sản phẩm",
+      "viewing": "Đang xem {{shown}} / {{total}} đơn của loại này",
+      "empty": "Không có loại sản phẩm nào khớp"
+    }
   }
 }

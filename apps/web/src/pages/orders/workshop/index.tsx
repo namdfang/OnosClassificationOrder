@@ -1,7 +1,7 @@
 import React from 'react';
 import { useTranslation } from 'react-i18next';
-import { ShoppingCart } from 'lucide-react';
 
+import { usePageHeader } from '@/hooks/usePageHeader';
 import { usePermission } from '@/hooks/usePermission';
 
 import { OrderTableWorkshop } from '../OrderTableWorkshop';
@@ -9,6 +9,8 @@ import { OrderTableWorkshop } from '../OrderTableWorkshop';
 export default function OrdersWorkshopPage() {
   const { t } = useTranslation('orders');
   const { canViewWorkshopTable } = usePermission();
+  // Tiêu đề dời lên Header (07/09/2026) — nhường chiều cao cho phễu + bảng.
+  usePageHeader(t('workshopPage.title'), t('workshopPage.subtitle'));
 
   if (!canViewWorkshopTable()) {
     return (
@@ -19,17 +21,8 @@ export default function OrdersWorkshopPage() {
   }
 
   return (
-    <div className="space-y-6">
-      <div className="flex items-center gap-3">
-        <div className="w-10 h-10 rounded-xl bg-emerald-50 dark:bg-emerald-900/20 flex items-center justify-center">
-          <ShoppingCart size={20} className="text-emerald-600" />
-        </div>
-        <div>
-          <h1 className="text-2xl font-bold text-foreground">{t('workshopPage.title')}</h1>
-          <p className="text-sm text-muted-foreground">{t('workshopPage.subtitle')}</p>
-        </div>
-      </div>
-
+    // Chiếm đủ chiều cao còn lại của <main> — bảng tự cuộn, chân bảng đứng yên (Orders.md §10.2c).
+    <div className="flex min-h-0 flex-1 flex-col">
       <OrderTableWorkshop />
     </div>
   );

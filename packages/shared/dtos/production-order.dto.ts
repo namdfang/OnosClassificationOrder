@@ -426,6 +426,20 @@ export type OrderWorkshopField = (typeof ORDER_WORKSHOP_FIELDS)[number];
 export const OrderWorkshopFieldZod = z.enum(ORDER_WORKSHOP_FIELDS);
 
 //
+/** Giá trị hợp lệ của `workshopStage` — 8 chặng vòng đời (`LIFECYCLE_STAGE_KEYS`) + `done`. */
+export const WORKSHOP_STAGE_FILTER_KEYS = [
+  'tool-check',
+  'designer',
+  'print',
+  'press',
+  'qc-post-press',
+  'sew-in',
+  'sew-out',
+  'pack',
+  'done',
+] as const;
+export type WorkshopStageFilterKey = (typeof WORKSHOP_STAGE_FILTER_KEYS)[number];
+
 export const GetProductionOrdersZod = PageQueryZod.extend({
   /**
    * `true` → chỉ đơn ĐÃ map product config; `false` → chỉ đơn CHƯA map. Bỏ qua
@@ -496,8 +510,9 @@ export const GetProductionOrdersZod = PageQueryZod.extend({
   productionError: z.string().optional(),
   /** Comma-separated workshop_config codes for machine (numéro máy). */
   machineNumber: z.string().optional(),
-  /** Lọc theo mức ưu tiên (`order.priority`) — '1'|'2'|'3'. Drill tab Soát tool. */
-  priority: z.enum(['1', '2', '3']).optional(),
+  /** Lọc theo mức ưu tiên (`order.priority`) — '1'|'2'|'3'. Drill tab Soát tool.
+   *  `__any__` = đơn CÓ đặt ưu tiên (bất kỳ mức) — pill "Ưu tiên" trang Đơn hàng theo xưởng. */
+  priority: z.enum(['1', '2', '3', '__any__']).optional(),
   /**
    * Designer state filter — CSV của DesignerStatus value. Hỗ trợ token đặc
    * biệt `__none__` để lọc đơn chưa có designerStatus (data legacy).
@@ -632,6 +647,12 @@ export const GetProductionOrdersZod = PageQueryZod.extend({
    *   watching                        — user đã rework-back, đang chờ quay lại.
    */
   fulfillmentStatus: z.enum(['waiting', 'in-progress', 'rework', 'done', 'fixed', 'watching']).optional(),
+  /**
+   * Lọc theo CHẶNG HIỆN TẠI của đơn — ô phễu trang "Đơn hàng theo xưởng" (Orders.md §10.2b).
+   * Chặng suy ra trong Mongo bằng ĐÚNG luật `computeCurrentStage()` (customer-order.service.ts)
+   * / `getOrderStatusInfo()` (FE) — xem `OrderService.workshopStageExpr()`. `done` = đã đóng hàng.
+   */
+  workshopStage: z.enum(WORKSHOP_STAGE_FILTER_KEYS).optional(),
 
   // Date range on `orderAt` — thời gian khách lên đơn (yyyy-mm-dd). Tên giữ
   // là `createdFrom/createdTo` để URL/bookmark cũ không vỡ. Designer/Fulfillment
@@ -1673,6 +1694,38 @@ export const WorkshopAvailableFiltersResZod = ResZod.extend({
     heldCount: z.number().optional(),
     /** Số đơn ĐÃ HỦY (cancelledAt set) trong scope filter hiện tại — cho toggle "Đã hủy" workshop. */
     cancelledCount: z.number().optional(),
+    /** Số đơn theo CHẶNG hiện tại (khóa `WORKSHOP_STAGE_FILTER_KEYS`), bỏ qua chính filter `workshopStage` — ô phễu. */
+    stageCounts: z.record(z.number()).optional(),
+    /** Số đơn theo xưởng, bỏ qua chính filter `factoryId` — nút chọn xưởng trên thanh công cụ. */
+    factoryCounts: z
+      .array(z.object({ factoryId: z.string(), shortName: z.string().optional(), name: z.string().optional(), count: z.number() }))
+      .optional(),
+    /** Số đếm cho dải pill trạng thái — mỗi số bỏ qua chính filter mà pill đó bật. */
+    pillCounts: z
+      .object({
+        /** errorFile có ít nhất 1 mã. */
+        errorFile: z.number(),
+        /** toolResult đã soát và KHÔNG thuộc nhóm "Có tool" (mirror `useIsNoTool`). */
+        noTool: z.number(),
+        /** toolResult còn trống (chưa soát). */
+        unreviewed: z.number(),
+        /** priority có đặt (1..3). */
+        priority: z.number(),
+        /** designerStatus ∈ assigned / in-progress / rework — nút "Tồn thiết kế". */
+        designBacklog: z.number(),
+      })
+      .optional(),
+    /**
+     * Thống kê theo LOẠI SẢN PHẨM cho rail bên trái (bản 3, Orders.md §10.2c): số đơn, tổng số
+     * lượng, số đơn theo chặng (khóa `WORKSHOP_STAGE_FILTER_KEYS`). Bỏ qua chính filter `type`
+     * (cross-facet) — chọn 1 loại vẫn thấy đủ danh sách loại. `type` rỗng = đơn chưa có tên loại.
+     */
+    typeStats: z
+      .array(z.object({ type: z.string(), orders: z.number(), qty: z.number(), stages: z.record(z.number()) }))
+      .optional(),
+    /** Tổng đơn + số loại sản phẩm khớp TOÀN BỘ filter hiện tại (dòng tổng dưới phễu). */
+    totalOrders: z.number().optional(),
+    totalTypes: z.number().optional(),
   }),
 });
 export class WorkshopAvailableFiltersResDto extends createZodDto(extendApi(WorkshopAvailableFiltersResZod)) {}

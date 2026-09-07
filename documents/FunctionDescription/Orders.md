@@ -1021,6 +1021,59 @@ Mỗi cell tự đọc `canEditField(field)` từ `usePermission()`:
 - **Group checkbox**: mỗi row tiêu đề sản phẩm có 1 checkbox riêng (state `all` / `some` indeterminate / `none`) → tick toàn bộ đơn của nhóm. Badge `N/M chọn` hiển thị khi nhóm có ít nhất 1 đơn được chọn.
 - **Shift+click range** (Excel/Google Sheets style): user click checkbox đầu, giữ `Shift`, click checkbox khác → mọi row giữa 2 vị trí được set theo state mới của row vừa click. Anchor (`lastClickedId`) update mỗi lần click. Range chỉ tính các order ĐANG HIỂN THỊ (group đã collapse → bỏ qua). Thứ tự range đọc từ memo `visibleOrderedIds` phải khớp với thứ tự render xuống body (same sort: `comboCount` desc → key asc).
 
+### 10.2c Bản 2026-09 — phễu chặng · dải pill · thanh công cụ một hàng (`/ffm/orders/workshop`)
+
+> Thiết kế lại theo bản "Bảng điều hành gọn" (Superdesign, draft `216e4ad8`, dữ liệu thật 06/09/2026). Mục tiêu: quản lý xưởng nhìn 1 màn hình biết **hôm nay bao nhiêu đơn, kẹt ở chặng nào, đơn nào cần xử lý**. GIỮ NGUYÊN engine bảng (§10.2/§10.2a: 7 cột gộp, ô sửa inline, chọn nhiều, virtualization, bulk) — chỉ đổi phần KHUNG trên bảng và cách tô hàng.
+
+**Bố cục mới (trên → dưới), file `apps/web/src/pages/orders/`:**
+
+| Khối | Component | Nội dung |
+|---|---|---|
+| Phễu chặng | `workshop/WorkshopStageStrip.tsx` | 8 ô Soát tool → Thiết kế → In → Ép → QC → May vào → May ra → Đóng hàng (`LIFECYCLE_STAGE_KEYS`), số = đơn **đang ở** chặng đó trong phạm vi filter (BE `stageCounts`), thanh tỉ lệ so với ô lớn nhất, ô 0 mờ đi, ô đang chọn viền `primary`. Bấm ô = lọc `workshopStage` (bấm lại bỏ). Dòng dưới: "Tổng N đơn · M loại SP" (`totalOrders`/`totalTypes`), chia theo xưởng (`factoryCounts`), 2 chip toggle **Đang giữ**/**Đã hủy** (thay 2 nút cũ trên thanh lọc, cùng `held`/`cancelled`). |
+| Thanh công cụ | `workshop/WorkshopToolbar.tsx` | Một hàng: ô tìm · nút "Nhiều mã" · **chip ngày** `‹ Hôm nay · 06/09/2026 ›` (mũi tên dịch ±1 ngày khi đang xem 1 ngày, bấm giữa mở `DateRangePicker` inline) · **nút chọn xưởng** (segmented Tất cả/TN/ML… từ `factoryCounts`, ghi `factoryId` lên URL — cùng chỗ với cụm menu theo xưởng §25, ẩn khi ≤1 xưởng hoặc tài khoản Fulfillment) · **"Bộ lọc"** (popover gom 10 facet + badge số facet đang bật, thay lưới facet trải ngang) · tải lại. Hàng dưới: **5 pill** kèm số (`pillCounts`) + nút **"Tồn thiết kế N"** mở/đóng `DesignerSummaryPanel` (mặc định ĐÓNG). |
+| Gợi ý chọn | (inline) | 1 dòng mờ thay hộp 2 dòng cũ. |
+| Bảng | `OrderTableWorkshop.tsx` | Header 36px chữ hoa 11px nền `muted/40`; hàng nhóm sản phẩm nền `card` mỏng + pill "N đơn"/"max ×N"; hàng đơn **không tô nền cả hàng** theo trạng thái nữa — "thiếu tool" (sky) / "đang giữ" (amber) chỉ còn **dải 2px bên trái** + chip, combo nặng nhất giữ badge ×N; nền chỉ đổi khi ĐANG CHỌN; nút Lịch sử/"..." **hiện khi rê chuột** (`group-hover`, giữ hiện khi menu đang mở); phân trang **chỉ ở dưới**. |
+
+**Bản 3 — rail loại sản phẩm (chọn 07/09/2026, draft `32331d8f`, thay thế bố cục bảng nhóm của bản 2):** dưới thanh công cụ, thân trang chia 2 cột:
+
+| Cột | Component | Nội dung |
+|---|---|---|
+| Trái 280px, ghim theo `<main>` | `workshop/WorkshopTypeRail.tsx` | Ô lọc tên loại (client-side) · hàng **"Tất cả · N đơn / M sp"** · mỗi loại sản phẩm 1 hàng: tên (2 dòng), "N đơn / M sp", **thanh mini chia theo chặng** (slate soát tool · sky thiết kế · indigo in · amber ép · violet QC · emerald may · teal đóng · emerald đậm đã xong). Nguồn: BE `typeStats` (bỏ qua chính filter `type` — chọn 1 loại vẫn thấy đủ danh sách). Hàng đang chọn: dải 3px `primary` + nền `primary/5`. |
+| Phải | `OrderTableWorkshop.tsx` | Tiêu đề: tên loại đang chọn + pill "N đơn" + tối đa 4 chip chặng của loại đó (chip trùng ô phễu đang chọn tô `primary`); xem Tất cả → "N đơn · M loại sản phẩm". Chọn 1 loại → BE `type=<tên>` (gửi `append`, token `__none__` cho đơn không tên), bảng **bỏ hàng tiêu đề nhóm**, mở sẵn mọi đơn, chân bảng "Đang xem N / M đơn của loại này" thay phân trang (1 loại = 1 trang của endpoint grouped). Xem Tất cả → giữ bảng nhóm + phân trang theo loại như §10.2a. |
+
+**Rút gọn (07/09/2026):** phễu chỉ còn 8 ô (bỏ hàng tổng/xưởng/chip dưới phễu). Hàng 1 thanh công cụ: Nhiều mã · chip ngày · Bộ lọc · tải lại · **Tồn thiết kế** (nút Tất cả/TN/ML trong trang đã bỏ 07/09/2026 — đổi xưởng bằng bộ chọn toàn cục trên header, §25); hàng 2 chỉ còn 5 pill + chip **Đã hủy**. **Đã bỏ hẳn** thanh chip "Đang lọc"/"Xóa tất cả lọc" và dòng "Tổng N đơn · M loại" (trùng với phễu/rail/pill — bỏ lọc bằng chính pill/ô/rail, hoặc nút Xóa hết lọc trong popover Bộ lọc); hằng `FILTER_CHIP_COLORS`/`fmtChipDate` đã xóa khỏi `OrderTableWorkshop`. Badge chia xưởng (`factoryCounts`) hiện ở tiêu đề bảng phải cạnh tên loại + số đơn (chỉ khi đang chọn 1 loại). Không còn dòng gợi ý chọn nhiều đơn. **Ô tìm kiếm lớn đã bỏ** — tra theo mã đơn qua nút "Nhiều mã" (`productionIds`), URL `wsearch` cũ vẫn được đọc/hiện chip nếu có.
+
+**Tiêu đề trang lên Header (07/09/2026):** `workshop/index.tsx` không còn khối tiêu đề to (icon + h1 + phụ đề) trong thân — gọi `usePageHeader(t('workshopPage.title'), t('workshopPage.subtitle'))` (`apps/web/src/hooks/usePageHeader.ts` → store `apps/web/src/store/pageHeaderStore.ts`), `components/header/index.tsx` render tiêu đề ở góc trái; trang nào không gọi hook thì header trái để trống. Nút thu gọn sidebar cũng dời từ header VÀO thanh logo của `Sidebar.tsx` (prop `onToggleCollapse`, chỉ desktop). Khung cố định: `MainLayout` `h-screen overflow-hidden`, sidebar `h-screen`, chỉ `<main>` cuộn.
+
+**Khung cột cố định trong trang (07/09/2026):** `MainLayout` `<main>` là `flex flex-col`, `motion.div` `flex-1 min-h-0` → trang nào đặt root `flex-1 min-h-0` sẽ chiếm đủ chiều cao còn lại (trang thường không đổi). Trang xưởng: root `flex flex-col gap-4`; phễu + thanh công cụ `shrink-0`; vùng rail|bảng `flex-1 min-h-[260px]`; card bảng = cột flex `overflow-hidden` với thân bảng `ref=tableScrollRef` `flex-1 min-h-0 overflow-auto` (cuộn dọc + ngang), chân bảng (phân trang / "Đang xem") là hàng `shrink-0` luôn thấy — như khối tài khoản ở sidebar. **Virtualizer bám vào `tableScrollRef`** (không còn dùng `<main>` làm scroll parent); `scrollMargin` đo theo cùng container. Rail `h-full` tự cuộn.
+
+**Màu chặng một nguồn:** `workshop/stageColors.ts` (`STAGE_COLORS` bar/dot/chip + `STAGE_BAR_ORDER`) dùng chung cho chấm màu + thanh ô phễu, thanh mini rail, chip chặng tiêu đề bảng phải — lớp Tailwind tường minh (slate soát tool · sky thiết kế · indigo in · amber ép · violet QC · emerald may vào · teal may ra · lime đóng · emerald đậm đã xong); điểm nhấn chọn dùng `indigo-*` vì `bg-primary` của theme là navy. Rail ghi "N đơn", chỉ thêm "/ M sp" khi tổng số lượng khác số đơn.
+
+State `filterType` ↔ URL `wtype`; chip "Đang lọc" màu lime (`FILTER_CHIP_COLORS.type`, cùng màu Classic `ctype`). Không thêm facet `type` vào popover "Bộ lọc" — rail đảm nhiệm.
+
+**5 pill ↔ filter (bật là toggle, tắt là về rỗng; số của mỗi pill bỏ qua chính filter đó):**
+
+| Pill | State/URL | Gửi BE | Đếm (BE) |
+|---|---|---|---|
+| Lỗi file | `filterErrorFile='__any__'` / `werrfile=__any__` | `errorFile=__any__` → `errorFile.0 $exists` | `pillCounts.errorFile` |
+| Thiếu tool | `filterToolResult` = CSV mọi mã toolResult mà `useIsNoTool()` = true | `toolResult=<csv>` | `pillCounts.noTool` = toolResult `$nin [null,'',…toolHasCodes]` |
+| Chưa soát | `filterToolResult='__none__'` | `toolResult=__none__` (sẵn có) | `pillCounts.unreviewed` (= `toolResultNoneCount`) |
+| Ưu tiên | `filterPriority='__any__'` / `wprio` | `priority=__any__` → `priority $exists & $nin [null,0]` | `pillCounts.priority` |
+| Đang giữ | `filterHeld` / `wheld` (sẵn có) | `held=true` | `heldCount` |
+
+`pillCounts.designBacklog` = `designerStatus ∈ {assigned, in-progress, rework}` — chỉ hiện số trên nút "Tồn thiết kế".
+
+**BE (`order.service.ts`, DTO `production-order.dto.ts`):**
+- `GetProductionOrdersZod.workshopStage` — enum `WORKSHOP_STAGE_FILTER_KEYS` (8 chặng + `done`). Áp trong `buildOrderListFilter` qua `workshopStageMatch(stage)` (truy vấn thường). Chặng suy bằng **đúng luật `computeCurrentStage()`** (§24): đã đóng hàng → `done`; có `currentFulfillmentStage` → chặng đó; `designerStatus` ≠ unassigned → `done` thì `print`, còn lại `designer`; `toolResultNote` rỗng → `tool-check`, có → `designer`.
+- `workshopStageExpr()` — cùng luật dạng `$switch`, CHỈ dùng trong aggregate để `$group` đếm phễu. **Bẫy:** Mongoose 7 không cast được `$switch` trong `$expr` ở `find`/`countDocuments` (`cast$expr` ném `Cannot read properties of undefined (reading 'map')`) → lọc phải đi bằng `workshopStageMatch`. Hai hàm phải cho cùng kết quả — kiểm bằng cách so tổng khi `workshopStage=X` với `stageCounts[X]` (đã đối chiếu 9/9 chặng trên dev, cửa sổ 25/08–07/09: 84/193/432/1066/35/23/110/1/3707 = 5.651).
+- `getWorkshopAvailableFilters` trả thêm `stageCounts` (bỏ `workshopStage`), `factoryCounts` (bỏ `factoryId`, kèm `shortName`/`name` từ `factoryRepository`), `pillCounts`, `totalOrders`/`totalTypes` — cùng khuôn cross-facet (`baseWithout()`/`countWith()`), vẫn loại đơn hủy như mọi facet.
+- Token mới: `errorFile=__any__`, `priority=__any__`.
+- `typeStats` (bản 3): 1 aggregate `$group` theo `(type, chặng)` rồi gộp theo `type` (`$arrayToObject`) → `{type, orders, qty, stages}`, sắp theo `orders` giảm dần; cùng luật chặng `workshopStageExpr()`.
+
+**URL param thêm:** `wstage` (chặng), `wprio` (`__any__`), `wtype` (loại sản phẩm — rail bản 3). `wheld`/`wcancel`/`werrfile`/`wtool` tái dùng. Trạng thái mở/đóng bảng designer KHÔNG vào URL.
+
+**Không đổi:** `OrderFilterBar` (vẫn dùng ở ErrorLogTab/OrderFactoryTab/OrderStatusTab/Classic), `WORKSHOP_COLS`/`buildColGroups`, `BulkEditToolbar`, chip "Đang lọc" (thêm chip chặng + ưu tiên), i18n namespace `orders` → khối `workshopBoard`.
+
 ### 10.3 Filter bar
 
 **Đồng bộ via `<OrderFilterBar>` reusable** (`apps/web/src/components/orders/OrderFilterBar.tsx`). Cùng layout dùng ở 4 bảng order: `OrderTableWorkshop` (reference) · `ErrorLogTab` · `OrderFactoryTab` (Dashboard Tab C) · `OrderStatusTab` (Dashboard Tab B). Component:
@@ -1035,6 +1088,8 @@ Mỗi consumer truyền `facets: OrderFilterFacet[]` để cấu hình field set
 - `OrderFactoryTab` — 5 facet factory-specific: type · fabricType · machineTypeId · machineNumber · toolResult (lấy từ `overview.availableFilters`). Search debounce 300ms, thêm vào `getOrders` qua `search` param.
 - `OrderStatusTab` — không dùng facet grid (BreakdownCard grid bên dưới làm role này với multi-select chip). Chỉ search + date + reload + slot extras ("Lỗi cần xử lý" + active chips + Xóa filter) qua `<StatusFilterTopActions>`/`<StatusActiveChips>` (`apps/web/src/pages/home/status/StatusFilterExtras.tsx`).
 - `OrderStatsTab` — không dùng facet grid (stats hiển thị MetricCard + pie chart, không list đơn). Search chính = `searchType` (tên sản phẩm); `searchUser` (SKU/email khách) chèn vào `topActionsRight` vì stats có 2 search term. Cả 2 search debounce 300ms; auto-fetch khi date hoặc debounced search đổi — bỏ nút "Áp dụng" cũ vì pattern đồng bộ.
+
+> Từ bản 2026-09 (§10.2c) `OrderTableWorkshop` KHÔNG render `<OrderFilterBar>` nữa — 10 facet chuyển vào popover "Bộ lọc" của `WorkshopToolbar`, cùng `OrderFilterFacet[]`/`SelectFilter`/`SearchableSelectFilter`; phần dưới đây mô tả hợp đồng facet BE vẫn dùng chung.
 
 **`OrderTableWorkshop` cụ thể** — 10 facet workshop chuẩn từ BE endpoint `GET /v1/orders/workshop-filters` theo **faceted-search pattern**:
 - BE method `getWorkshopAvailableFilters(dto, role, assigneeCode?, fulfillmentFactoryId?)` — với mỗi facet, build `buildOrderListFilter` sau khi strip facet đó khỏi dto, rồi `$group` field tương ứng. Count phản ánh subset đã narrow theo các facet khác đang active.
@@ -1058,6 +1113,9 @@ Filter gửi qua query string `?printStatus=code&fabricType=code&designerStatus=
 | `wfrom` / `wto` | **today** (always-write, kể cả today) | `createdFrom` / `createdTo` |
 | `wprint` | `[]` | CSV `printStatus` codes |
 | `wnote` | `[]` | CSV `toolResultNote` codes |
+| `wstage` | `''` | `workshopStage` — ô phễu chặng (§10.2c) |
+| `wprio` | `''` | `priority=__any__` — pill Ưu tiên (§10.2c) |
+| `wtype` | `''` | `type` (append) — rail loại sản phẩm bản 3 (§10.2c) |
 | `wassign` | `[]` | CSV `assignee` codes |
 | `werror` | `[]` | CSV `productionError` codes (Phase 8) |
 | `wpage` | `1` | trang |
@@ -2076,7 +2134,9 @@ Cột nằm trong group `identity` (`memberKeys: productionId, orderStatus, prio
 
 ---
 
-## 25. Cụm menu theo xưởng ở sidebar — `?factoryId=` là phạm vi dùng chung
+## 25. Phạm vi xưởng — bộ chọn trên header (`?factoryId=` là phạm vi dùng chung)
+
+> **Đổi 07/09/2026:** 5 cụm menu riêng từng xưởng ở sidebar (mỗi xưởng Dashboard/Đơn hàng/Công việc) **đã GỠ** vì lặp 15 dòng. Thay bằng **`apps/web/src/components/header/FactoryScopeSwitch.tsx`** — nút "Xưởng: Tất cả ▾" cạnh tiêu đề trang, chỉ hiện ở `/ffm/*`: chọn xưởng = ghi `?factoryId=` lên URL hiện tại (xóa `wpage`/`cpage`/`page`), `useFactoryScope` VẪN là nơi duy nhất đọc. Cụm sản xuất chung ở sidebar dựng bằng `buildNavGroups(t, factoryScopeId)` → `buildProductionItems(t, id, '', scopeOnly=true)` nên mọi link **mang theo** `?factoryId=` đang chọn (đổi trang không mất phạm vi; `isLinkActive` so `factoryId` hai chiều nên vẫn sáng đúng mục). Badge tồn theo xưởng (`counts.byFactory` — trước treo trên cụm xưởng) nay nằm trong menu thả xuống (đỏ = lỗi cần xử lý, vàng = soát tool tồn); mục "Tất cả xưởng" mang số toàn hệ thống. Tài khoản Fulfillment (khóa xưởng) thấy chip tĩnh tên xưởng, không có menu. Xưởng US vẫn trong danh sách — lối duy nhất xem đơn US (§21). Phần dưới mô tả cơ chế URL/`useFactoryScope`/`FactoryScopeChip` vẫn đúng; đoạn nói về `buildProductionItems` với `keyPrefix`/relabel/hidden chỉ còn là code dự phòng, không còn nơi gọi với `scopeOnly=false`.
 
 > **Yêu cầu (2026-09):** ngoài cụm sản xuất chung (Dashboard / Quản lý đơn / Công việc), **mỗi xưởng có một cụm menu riêng y hệt**; bấm vào là trang mở ra đã lọc sẵn xưởng tương ứng.
 

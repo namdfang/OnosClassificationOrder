@@ -88,3 +88,12 @@ cloudflared/*.json
 # deploy.sh — bản web trước đó + commit trước đó, để lùi khi bản mới hỏng
 apps/web/.dist-prod-prev/
 .deploy-previous-commit
+
+# Superdesign: HTML tạm khi trích component, không commit
+.superdesign/tmp/
+
+# Ảnh clipboard dán vào phiên Claude Code — không commit
+.vibedev-images/
+
+# Superdesign: init snapshot tự sinh từ mã nguồn (tái tạo được), chỉ giữ design-system.md + resume.json
+.superdesign/init/

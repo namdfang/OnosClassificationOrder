@@ -1,7 +1,11 @@
 import { Body, Controller, Get, HttpCode, HttpStatus, Inject, Param, Post, Query, UseFilters, UseGuards } from '@nestjs/common';
 import { ApiOperation, ApiSecurity, ApiTags } from '@nestjs/swagger';
 import { Throttle } from '@nestjs/throttler';
-import type { AgentQueryPayload } from 'shared';
+import type { CeoOverview, CeoReport } from 'shared';
+import {
+  AgentQueryPayload,
+  CeoOverviewQueryDto,
+} from 'shared';
 import {
   AgentQueryDto,
   AgentQueryResDto,
@@ -17,6 +21,8 @@ import { Logger } from 'winston';
 import { Auth } from '@/decorators';
 import { SWAGGER_AGENT_KEY_SECURITY } from '@/setup-swagger';
 
+import { CeoDashboardService } from '../ceo-dashboard/ceo-dashboard.service';
+import { CeoReportService } from '../ceo-dashboard/ceo-report.service';
 import { AGENT_API_RATE_LIMIT_PER_MIN, AGENT_API_RATE_LIMIT_TTL_MS } from './agent-api.constants';
 import { AgentApiKeyGuard } from './agent-api-key.guard';
 import { AgentAuditService } from './agent-audit.service';
@@ -88,6 +94,8 @@ export class AgentApiController {
     private readonly queries: AgentQueryService,
     private readonly docs: AgentDocsService,
     private readonly sellerSupport: AgentSellerSupportService,
+    private readonly ceo: CeoDashboardService,
+    private readonly ceoReports: CeoReportService,
     private readonly audit: AgentAuditService,
     @Inject('winston') private readonly logger: Logger,
   ) {}
@@ -240,6 +248,38 @@ export class AgentApiController {
     });
 
     return { success: true, data };
+  }
+
+  /**
+   * CEO Dashboard cho agent (07/09/2026): CÙNG số với trang `/adm/ceo` — một phản hồi 7 khối +
+   * `findings` theo luật. Agent dùng để báo cáo ngày/tuần/tháng; định nghĩa số ở
+   * `documents/AgentGuide/CeoDashboard.md`. Chỉ đọc.
+   */
+  @Get('ceo-overview')
+  @Auth([], [], { public: true })
+  @Throttle({ default: { limit: AGENT_API_RATE_LIMIT_PER_MIN, ttl: AGENT_API_RATE_LIMIT_TTL_MS } })
+  @ApiOperation({ summary: 'CEO overview — cùng số với dashboard lãnh đạo (from/to yyyy-mm-dd, ≤ 92 ngày)' })
+  @HttpCode(HttpStatus.OK)
+  async getCeoOverview(@Query() q: CeoOverviewQueryDto): Promise<{ success: true; data: CeoOverview }> {
+    const startedAt = Date.now();
+    this.log('GET', '/agent/ceo-overview');
+    const data = await this.ceo.getOverview(q.from, q.to);
+    this.audit.write({ capability: 'ceo_overview', queryDigest: { from: q.from, to: q.to }, returned: 1, durationMs: Date.now() - startedAt, outcome: 'ok' });
+    return { success: true, data };
+  }
+
+  /** Nhận định mới nhất hệ thống đã viết cho kỳ (null nếu chưa có) — agent trích nguyên văn, không tự viết lại số. */
+  @Get('ceo-report')
+  @Auth([], [], { public: true })
+  @Throttle({ default: { limit: AGENT_API_RATE_LIMIT_PER_MIN, ttl: AGENT_API_RATE_LIMIT_TTL_MS } })
+  @ApiOperation({ summary: 'Nhận định mới nhất của hệ thống cho kỳ (from/to) — tiếng Việt, kèm số cốt lõi' })
+  @HttpCode(HttpStatus.OK)
+  async getCeoReport(@Query() q: CeoOverviewQueryDto): Promise<{ success: true; data: { report: CeoReport | null; generating: boolean } }> {
+    const startedAt = Date.now();
+    this.log('GET', '/agent/ceo-report');
+    const report = await this.ceoReports.getLatest(q.from, q.to);
+    this.audit.write({ capability: 'ceo_report', queryDigest: { from: q.from, to: q.to }, returned: report ? 1 : 0, durationMs: Date.now() - startedAt, outcome: 'ok' });
+    return { success: true, data: { report, generating: this.ceoReports.isGenerating(q.from, q.to) } };
   }
 
   @Get('docs')

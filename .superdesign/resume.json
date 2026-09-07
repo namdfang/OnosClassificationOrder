@@ -1,0 +1,101 @@
+{
+  "schemaVersion": 1,
+  "targets": {
+    "/ffm/orders/workshop": {
+      "targetKind": "existing-ui",
+      "projectId": "3eadc782-e31f-4de4-8087-7bc41fb8b6c0",
+      "baselineDraftId": "09ff54b9-d377-4525-83f3-4098f61b9e03",
+      "activeDraftId": "32331d8f-2229-4cad-a8bd-0e66d275b237",
+      "designSystemPath": ".superdesign/design-system.md",
+      "referenceIds": [
+        "apps-web-src-assets-images-logo.png"
+      ],
+      "brandAssets": {
+        "logo": {
+          "assetKey": "apps-web-src-assets-images-logo.png",
+          "url": "https://vgbujcuwptvheqijyjbe.supabase.co/storage/v1/object/public/hmac-uploads/projects/3eadc782-e31f-4de4-8087-7bc41fb8b6c0/brand-assets/apps-web-src-assets-images-logo.png/logo.png",
+          "sourcePath": "apps/web/src/assets/images/logo.png"
+        }
+      },
+      "contextFiles": [
+        ".superdesign/design-system.md",
+        "apps/web/src/theme/globals.css",
+        "apps/web/src/assets/styles/index.css",
+        "apps/web/tailwind.config.js",
+        "apps/web/src/utils/cn.ts",
+        "apps/web/src/layouts/mainLayout/MainLayout.tsx",
+        "apps/web/src/pages/orders/workshop/index.tsx",
+        "apps/web/src/pages/orders/OrderTableWorkshop.tsx:151:262",
+        "apps/web/src/pages/orders/OrderTableWorkshop.tsx:1124:1518",
+        "apps/web/src/components/orders/workshopTableConfig.tsx:328:901",
+        "apps/web/src/components/orders/workshopTableConfig.tsx:930:1111",
+        "apps/web/src/components/orders/OrderFilterBar.tsx",
+        "apps/web/src/pages/orders/DesignerSummaryPanel.tsx",
+        "apps/web/src/components/common/PaginationBar.tsx",
+        "apps/web/src/components/common/FactoryScopeChip.tsx",
+        "apps/web/src/components/orders/HeldBadge.tsx",
+        "apps/web/src/components/orders/CancelledBadge.tsx",
+        "apps/web/src/components/ui/table.tsx",
+        "apps/web/src/components/ui/badge.tsx",
+        "apps/web/src/components/ui/button.tsx",
+        ".superdesign/tmp/workshop-labels-vi.json",
+        ".superdesign/tmp/workshop-real-data-2026-09-06.json"
+      ],
+      "fingerprints": {
+        ".superdesign/design-system.md": "aa242a4b6b74f805f4de7638b9d5d3a52d5ac74773e439c69fedf1187d9f760c",
+        "apps/web/src/theme/globals.css": "6fb1ec9bce00e0cc7d4f93ea16aab781711567b50fe14559700837810d9d20bb",
+        "apps/web/src/assets/styles/index.css": "7dd2cf1390d868bdb32ca65c903b202c2a5ca0cc0b9a7472cfa75b16ae43c3ee",
+        "apps/web/tailwind.config.js": "71327a1c7266dce3e7553426c72a5e7899053629ad7e4972f4583d2a673cd770",
+        "apps/web/src/utils/cn.ts": "74e8fe9d0d680c442ed6adb13e7d119d6c210c19ae6c114313b2a72552be0883",
+        "apps/web/src/layouts/mainLayout/MainLayout.tsx": "660f4d58ae3f7cf78d73cfadaa7476d23657fa478d4444808bdafc3ab559f034",
+        "apps/web/src/pages/orders/workshop/index.tsx": "abccfd44f50bd099eb07790d9d028ca78296f500b0b9ea5ba07f035d54c8e28e",
+        "apps/web/src/pages/orders/OrderTableWorkshop.tsx": "7cab04261a15413df6cdfc008e582d31809cb771739b83694ddf7f6fbc84ba86",
+        "apps/web/src/components/orders/workshopTableConfig.tsx": "f06e8de42bd9bf78402840949d4e2a0e8c3a1615c7cf361fb74effc7e1013a8f",
+        "apps/web/src/components/orders/OrderFilterBar.tsx": "870852e1c3afb8c6394c73ac9c982176b11ee732ee450d99f4950c1ba689fe97",
+        "apps/web/src/pages/orders/DesignerSummaryPanel.tsx": "88fd5a7285091448a4d02ecc51cbfb33e942e4bf01c0165c72bef3491cc76bca",
+        "apps/web/src/components/common/PaginationBar.tsx": "9874a036e92aa91705f71c8bc92cc1b5d781b6670d8b06cd6cda40987867ee7a",
+        "apps/web/src/components/common/FactoryScopeChip.tsx": "b6beab671b51f4639ab682f868d4fc9c8719d070d3015a9614df2cb59e7d29de",
+        "apps/web/src/components/orders/HeldBadge.tsx": "794e38ef3742613ea3450e589a375e0a9aa54aaa9477e449b44a2b6556711dba",
+        "apps/web/src/components/orders/CancelledBadge.tsx": "e36ea5af123d64d3f30da93ce6e12ee2bd03b276456f7e1847cfe1ed6f208382",
+        "apps/web/src/components/ui/table.tsx": "cf5a1224c5e279ae2790adc8a776cd8ba6b01e5e570e6fe695ba60cb4dd1b622",
+        "apps/web/src/components/ui/badge.tsx": "82a7c4927d995c4a6163351acdb725bd07284574f59b69158086f4c76d2bc56c",
+        "apps/web/src/components/ui/button.tsx": "91c3d492592a36a7b1f4691d3ba0a90938fc9002d474b287d155a9994ceac113",
+        ".superdesign/tmp/workshop-labels-vi.json": "5536bd7a38ba010eb3615cb5b0578fdbba114bd41d041b90513f131635e6cab2",
+        ".superdesign/tmp/workshop-real-data-2026-09-06.json": "8e11e51175b5e6fcd76af9f01ba9ee43a23171e4ff3499745ad8d5cd196ada3a"
+      },
+      "components": [
+        {
+          "name": "Sidebar",
+          "id": "4b2ac022-78f6-4891-b658-f836084dddd5",
+          "sourcePath": "apps/web/src/components/sidebar/Sidebar.tsx",
+          "logoAssetKey": "apps-web-src-assets-images-logo.png"
+        },
+        {
+          "name": "Header",
+          "id": "d8c546a9-5d0a-4889-addc-6b8ba49f8f02",
+          "sourcePath": "apps/web/src/components/header/index.tsx"
+        }
+      ],
+      "drafts": {
+        "09ff54b9-d377-4525-83f3-4098f61b9e03": {
+          "title": "Hiện trạng — Đơn hàng theo xưởng (06/09) [tái hiện; v2 = bảng/facet/phân trang vá tay từ nguồn + dữ liệu thật]",
+          "visualDirection": "baseline reproduction of current UI",
+          "currentVersion": 2
+        },
+        "216e4ad8-c96a-46d0-b274-1d80148933d4": {
+          "title": "Bảng điều hành gọn",
+          "visualDirection": "phễu chặng + dải pill trạng thái + 1 bảng gọn 36px",
+          "parentDraftId": "09ff54b9-d377-4525-83f3-4098f61b9e03",
+          "currentVersion": 1
+        },
+        "32331d8f-2229-4cad-a8bd-0e66d275b237": {
+          "title": "Chia cột theo loại sản phẩm",
+          "visualDirection": "cùng phễu/pill, thân trang master–detail rail 34 loại SP",
+          "parentDraftId": "09ff54b9-d377-4525-83f3-4098f61b9e03",
+          "currentVersion": 1
+        }
+      },
+      "updatedAt": "2026-09-06T18:15:20.697032+00:00"
+    }
+  }
+}

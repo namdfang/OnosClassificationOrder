@@ -1,6 +1,7 @@
 import { Module } from '@nestjs/common';
 import { MongooseModule } from '@nestjs/mongoose';
 
+import { CeoDashboardModule } from '../ceo-dashboard/ceo-dashboard.module';
 import { AgentAdminService } from './agent-admin.service';
 import { AgentApiController } from './agent-api.controller';
 import { AgentApiRepository } from './agent-api.repository';
@@ -28,6 +29,8 @@ import { AgentSellerSupportService } from './agent-seller-support.service';
 @Module({
   imports: [
     MongooseModule.forFeature([{ name: AgentApiLogEntity.name, schema: AgentApiLogSchema }]),
+    // CEO Dashboard: agent ĐỌC cùng số + cùng nhận định (không có đường ghi — BR-3 giữ nguyên).
+    CeoDashboardModule,
   ],
   controllers: [AgentApiController, AgentApiAdminController],
   providers: [AgentSellerSupportService, 

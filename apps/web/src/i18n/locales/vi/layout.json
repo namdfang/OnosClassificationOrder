@@ -10,7 +10,8 @@
       "orders": "Đơn hàng",
       "catalog": "Danh mục",
       "personal": "Cá nhân",
-      "admin": "Quản trị"
+      "admin": "Quản trị",
+      "ceo": "Điều hành"
     },
     "dashboard": {
       "title": "Dashboard",
@@ -70,7 +71,8 @@
     "customers": "Khách hàng",
     "impersonate": "Mạo danh",
     "zaloGroups": "Seller Support",
-    "zaloChat": "Chat Zalo"
+    "zaloChat": "Chat Zalo",
+    "ceoDashboard": "CEO Dashboard"
   },
   "header": {
     "toggleSidebar": "Đóng/mở sidebar",
@@ -78,7 +80,15 @@
     "darkMode": "Chế độ tối",
     "myAccount": "Tài khoản của tôi",
     "signOut": "Đăng xuất",
-    "member": "Thành viên"
+    "member": "Thành viên",
+    "factoryScope": {
+      "label": "Xưởng",
+      "all": "Tất cả xưởng",
+      "title": "Chọn xưởng — Dashboard, Đơn hàng, Công việc sẽ lọc theo xưởng này",
+      "badgeError": "Lỗi cần xử lý",
+      "badgeTool": "Soát tool tồn (cần làm lại / chưa soát)",
+      "lockedTitle": "Tài khoản gắn cố định với xưởng này"
+    }
   },
   "overdueAlert": {
     "title": "Quá hạn 2 ngày — đơn từ {{date}} trở về trước vẫn chưa xử lý:",

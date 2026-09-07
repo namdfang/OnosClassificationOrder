@@ -6,6 +6,7 @@ import apiDocsEn from './locales/en/apiDocs.json';
 import authEn from './locales/en/auth.json';
 import careersEn from './locales/en/careers.json';
 import catalogEn from './locales/en/catalog.json';
+import ceoDashboardEn from './locales/en/ceoDashboard.json';
 import commonEn from './locales/en/common.json';
 import customerFactoryAssignmentEn from './locales/en/customerFactoryAssignment.json';
 import customerNotificationsEn from './locales/en/customerNotifications.json';
@@ -30,13 +31,14 @@ import toolCheckWorkflowEn from './locales/en/toolCheckWorkflow.json';
 import trackEn from './locales/en/track.json';
 import vnpShippingEn from './locales/en/vnpShipping.json';
 import workshopConfigEn from './locales/en/workshopConfig.json';
-import zaloGroupsEn from './locales/en/zaloGroups.json';
 import zaloChatEn from './locales/en/zaloChat.json';
+import zaloGroupsEn from './locales/en/zaloGroups.json';
 import agentApiVi from './locales/vi/agentApi.json';
 import apiDocsVi from './locales/vi/apiDocs.json';
 import authVi from './locales/vi/auth.json';
 import careersVi from './locales/vi/careers.json';
 import catalogVi from './locales/vi/catalog.json';
+import ceoDashboardVi from './locales/vi/ceoDashboard.json';
 import commonVi from './locales/vi/common.json';
 import customerFactoryAssignmentVi from './locales/vi/customerFactoryAssignment.json';
 import customerNotificationsVi from './locales/vi/customerNotifications.json';
@@ -61,8 +63,8 @@ import toolCheckWorkflowVi from './locales/vi/toolCheckWorkflow.json';
 import trackVi from './locales/vi/track.json';
 import vnpShippingVi from './locales/vi/vnpShipping.json';
 import workshopConfigVi from './locales/vi/workshopConfig.json';
-import zaloGroupsVi from './locales/vi/zaloGroups.json';
 import zaloChatVi from './locales/vi/zaloChat.json';
+import zaloGroupsVi from './locales/vi/zaloGroups.json';
 
 const STORAGE_KEY = 'onosfactory-language';
 
@@ -117,6 +119,7 @@ export const resources = {
     catalog: catalogVi,
     track: trackVi,
     agentApi: agentApiVi,
+    ceoDashboard: ceoDashboardVi,
     apiDocs: apiDocsVi,
   },
   en: {
@@ -150,6 +153,7 @@ export const resources = {
     catalog: catalogEn,
     track: trackEn,
     agentApi: agentApiEn,
+    ceoDashboard: ceoDashboardEn,
     apiDocs: apiDocsEn,
   },
 } as const;

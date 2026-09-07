@@ -74,3 +74,8 @@ Nguyên tắc: **mọi con số MIRROR đúng công thức của trang tương �
 
 - Endpoint: `@Auth(SIDEBAR_COUNT_ROLES)` — từng số tự `null` theo role (bảng §3), FE ẩn badge khi `null`/0.
 - Hiển thị badge phụ thuộc entry sidebar có hiện không (filter perm sẵn có): `orders-error-log` (ẩn với Support qua `hideForRoles`), `dash-designer` (`page.designer_stats`), `dash-tool-check` (`page.tool_check`).
+
+
+## Ghi chú 07/09/2026 — badge theo xưởng
+
+`counts.byFactory` không còn treo trên cụm menu xưởng ở sidebar (đã gỡ) mà hiện trong menu thả của bộ chọn xưởng trên header (`apps/web/src/components/header/FactoryScopeSwitch.tsx`): mỗi xưởng một dòng, pill đỏ = `errorLogTodo`, pill vàng = `toolCheckRework + toolCheckUnreviewed`. Endpoint và công thức không đổi.

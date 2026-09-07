@@ -1,9 +1,10 @@
 import React from 'react';
 import { useTranslation } from 'react-i18next';
 import { Link, useNavigate } from 'react-router-dom';
-import { Languages, LogOut, Menu as MenuIcon, Moon, PanelLeft, PanelLeftClose, Sun, User } from 'lucide-react';
+import { Languages, LogOut, Menu as MenuIcon, Moon, Sun, User } from 'lucide-react';
 
 import { ImpersonateQuickSwitch } from '@/components/auth/ImpersonateQuickSwitch';
+import { FactoryScopeSwitch } from '@/components/header/FactoryScopeSwitch';
 import { Avatar, AvatarFallback } from '@/components/ui/avatar';
 import { Button } from '@/components/ui/button';
 import {
@@ -19,6 +20,7 @@ import { PATHS } from '../../constants/paths';
 import { RepositoryRemote } from '../../services';
 import { useAuthStore } from '../../store/authStore';
 import { useLanguageStore } from '../../store/languageStore';
+import { usePageHeaderStore } from '../../store/pageHeaderStore';
 import { useThemeStore } from '../../store/themeStore';
 import { handleAxiosError } from '../../utils';
 
@@ -28,12 +30,14 @@ interface HeaderProps {
   isMobile?: boolean;
 }
 
-function Header({ collapsed, changeCollapsed, isMobile }: HeaderProps) {
+function Header({ changeCollapsed, isMobile }: HeaderProps) {
   const navigate = useNavigate();
   const { t } = useTranslation('layout');
   const { profile } = useAuthStore();
   const { mode, toggleMode } = useThemeStore();
   const { language, toggleLanguage } = useLanguageStore();
+  const pageTitle = usePageHeaderStore((s) => s.title);
+  const pageSubtitle = usePageHeaderStore((s) => s.subtitle);
 
   const handleLogout = async () => {
     try {
@@ -47,9 +51,23 @@ function Header({ collapsed, changeCollapsed, isMobile }: HeaderProps) {
 
   return (
     <header className="px-4 h-14 bg-background/80 backdrop-blur border-b border-border sticky top-0 z-10 flex items-center justify-between">
-      <Button variant="ghost" size="icon" onClick={changeCollapsed} aria-label={t('header.toggleSidebar')}>
-        {isMobile ? <MenuIcon size={18} /> : collapsed ? <PanelLeft size={18} /> : <PanelLeftClose size={18} />}
-      </Button>
+      {/* Desktop: nút thu gọn đã dời VÀO sidebar (cạnh logo) — header bên trái dành cho
+          tiêu đề trang (`usePageHeader`). Mobile vẫn giữ nút mở menu. */}
+      <div className="flex min-w-0 items-center gap-2">
+        {isMobile && (
+          <Button variant="ghost" size="icon" onClick={changeCollapsed} aria-label={t('header.toggleSidebar')}>
+            <MenuIcon size={18} />
+          </Button>
+        )}
+        {pageTitle && (
+          <div className="min-w-0 leading-tight">
+            <h1 className="truncate text-sm font-semibold text-foreground">{pageTitle}</h1>
+            {pageSubtitle && <p className="truncate text-[11px] text-muted-foreground">{pageSubtitle}</p>}
+          </div>
+        )}
+        {/* Bộ chọn xưởng toàn cục — chỉ hiện ở /ffm/* (thay 5 cụm menu xưởng ở sidebar). */}
+        <FactoryScopeSwitch />
+      </div>
 
       <div className="flex items-center gap-1.5">
         {/* Lối vào nhanh mạo danh (AUTH-2) — tự ẩn với vai không phải SuperAdmin. */}

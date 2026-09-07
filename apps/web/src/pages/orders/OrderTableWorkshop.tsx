@@ -2,17 +2,12 @@ import React, { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useSta
 import { useTranslation } from 'react-i18next';
 import { useSearchParams } from 'react-router-dom';
 import {
-  Ban,
   CalendarClock,
   ChevronDown,
   ChevronRight,
-  FilterX,
   History,
-  MousePointerClick,
-  PauseCircle,
-  X,
 } from 'lucide-react';
-import type { WorkshopAvailableFilters } from 'shared';
+import type { WorkshopAvailableFilters, WorkshopStageFilterKey } from 'shared';
 import { useVirtualizer } from '@tanstack/react-virtual';
 
 import { PATHS } from '@/constants/paths';
@@ -21,7 +16,6 @@ import { useWorkshopConfigStore } from '@/store/workshopConfigStore';
 
 import { RepositoryRemote } from '@/services';
 
-import { FactoryScopeChip } from '@/components/common/FactoryScopeChip';
 import { ImagePreviewDialog } from '@/components/common/ImagePreviewDialog';
 import { LoadingOverlay } from '@/components/common/LoadingOverlay';
 import { PaginationBar } from '@/components/common/PaginationBar';
@@ -31,7 +25,7 @@ import { CancelledBadge } from '@/components/orders/CancelledBadge';
 import { DesignerBacklogDialog } from '@/components/orders/DesignerBacklogDialog';
 import { HeldBadge } from '@/components/orders/HeldBadge';
 import { OrderDetailDialog } from '@/components/orders/OrderDetailDialog';
-import { OrderFilterBar, type OrderFilterFacet } from '@/components/orders/OrderFilterBar';
+import type { OrderFilterFacet } from '@/components/orders/OrderFilterBar';
 import { OrderLogTimelineDialog } from '@/components/orders/OrderLogTimelineDialog';
 import { OrderRowActionsMenu } from '@/components/orders/OrderRowActionsMenu';
 import {
@@ -60,6 +54,10 @@ import { usePermission } from '@/hooks/usePermission';
 import { useSidebarResetSignal } from '@/hooks/useSidebarResetSignal';
 
 import { DesignerSummaryPanel } from './DesignerSummaryPanel';
+import { STAGE_COLORS } from './workshop/stageColors';
+import { WorkshopStageStrip } from './workshop/WorkshopStageStrip';
+import { type WorkshopPillKey, WorkshopToolbar } from './workshop/WorkshopToolbar';
+import { TYPE_NONE_TOKEN, WorkshopTypeRail } from './workshop/WorkshopTypeRail';
 
 // Types and column config live in workshopTableConfig.tsx (shared with OrdersMiniTable).
 type OrderRow = WorkshopOrderRow;
@@ -70,30 +68,6 @@ const COLS = WORKSHOP_COLS;
 // in the collapsed view; user can drill in via chevron.
 const DEFAULT_PAGE_SIZE = 20;
 
-// Màu chip cho từng filter (full class string — Tailwind cần static để purge).
-const FILTER_CHIP_COLORS: Record<string, string> = {
-  search: 'bg-slate-100 text-slate-700 border-slate-300 dark:bg-slate-800 dark:text-slate-200 dark:border-slate-600',
-  date: 'bg-emerald-100 text-emerald-700 border-emerald-300 dark:bg-emerald-900/30 dark:text-emerald-300 dark:border-emerald-800',
-  fabricType: 'bg-blue-100 text-blue-700 border-blue-300 dark:bg-blue-900/30 dark:text-blue-300 dark:border-blue-800',
-  machineNumber:
-    'bg-violet-100 text-violet-700 border-violet-300 dark:bg-violet-900/30 dark:text-violet-300 dark:border-violet-800',
-  printStatus: 'bg-cyan-100 text-cyan-700 border-cyan-300 dark:bg-cyan-900/30 dark:text-cyan-300 dark:border-cyan-800',
-  toolResult:
-    'bg-amber-100 text-amber-700 border-amber-300 dark:bg-amber-900/30 dark:text-amber-300 dark:border-amber-800',
-  toolResultNote:
-    'bg-orange-100 text-orange-700 border-orange-300 dark:bg-orange-900/30 dark:text-orange-300 dark:border-orange-800',
-  errorFile: 'bg-rose-100 text-rose-700 border-rose-300 dark:bg-rose-900/30 dark:text-rose-300 dark:border-rose-800',
-  assignee:
-    'bg-indigo-100 text-indigo-700 border-indigo-300 dark:bg-indigo-900/30 dark:text-indigo-300 dark:border-indigo-800',
-  designerStatus:
-    'bg-teal-100 text-teal-700 border-teal-300 dark:bg-teal-900/30 dark:text-teal-300 dark:border-teal-800',
-  productionError: 'bg-red-100 text-red-700 border-red-300 dark:bg-red-900/30 dark:text-red-300 dark:border-red-800',
-  userSku:
-    'bg-fuchsia-100 text-fuchsia-700 border-fuchsia-300 dark:bg-fuchsia-900/30 dark:text-fuchsia-300 dark:border-fuchsia-800',
-};
-const FILTER_CHIP_DEFAULT =
-  'bg-zinc-100 text-zinc-700 border-zinc-300 dark:bg-zinc-800 dark:text-zinc-200 dark:border-zinc-600';
-const fmtChipDate = (s: string) => (s ? s.split('-').reverse().slice(0, 2).join('/') : '');
 
 function todayISO(): string {
   // Local date components — KHÔNG dùng toISOString() (UTC) vì sẽ trả hôm
@@ -186,19 +160,18 @@ const ProductRow = React.memo(function ProductRow({
   // BẮT BUỘC màu ĐẶC (không alpha `/NN`) — sticky cell (checkbox/identity/action)
   // dùng chính class này làm nền che nội dung cuộn phía sau; màu có alpha sẽ để
   // lộ chữ của cột khác đè lên khi cuộn ngang (cột "Mã đơn / Ưu tiên" bị xuyên thấu).
-  const rowBgClass = isSelected
-    ? 'bg-indigo-50 dark:bg-indigo-950'
-    : isHeaviest
-      ? 'bg-amber-50 dark:bg-amber-950'
-      : noTool
-        ? 'bg-sky-100 dark:bg-sky-950'
-        : 'bg-card';
+  // Bản 2026-09 (Orders.md §10.2b): KHÔNG tô nền cả hàng theo trạng thái nữa —
+  // "thiếu tool"/"đang giữ" chỉ còn dải 2px bên trái + chip; combo nặng nhất giữ
+  // badge ×N màu cảnh báo. Nền chỉ đổi khi ĐANG CHỌN (cần cho thao tác hàng loạt).
+  const rowBgClass = isSelected ? 'bg-indigo-50 dark:bg-indigo-950' : 'bg-card';
   return (
     <TableRow
       ref={measureRef}
       data-index={dataIndex}
       className={cn(
+        'group',
         rowBgClass,
+        !isSelected && 'hover:bg-muted/30',
         noTool && 'border-l-2 border-l-sky-400 dark:border-l-sky-400/60',
         held && 'border-l-2 border-l-amber-400 dark:border-l-amber-400/60',
         dim && 'opacity-60',
@@ -218,7 +191,7 @@ const ProductRow = React.memo(function ProductRow({
         <TableCell
           key={g.key}
           className={cn(
-            'py-2 align-top',
+            'py-1.5 align-top',
             gi === 0 && cn('sticky left-8 z-10 shadow-[1px_0_0_0_var(--border)]', rowBgClass),
           )}
         >
@@ -244,7 +217,8 @@ const ProductRow = React.memo(function ProductRow({
         </TableCell>
       ))}
       <TableCell className={cn('sticky right-0 z-10', rowBgClass)}>
-        <div className="flex items-center justify-end gap-0.5">
+        {/* Thao tác hàng chỉ hiện khi rê chuột / focus — bảng đỡ rối; menu "..." mở ra vẫn giữ. */}
+        <div className="flex items-center justify-end gap-0.5 opacity-0 transition-opacity group-hover:opacity-100 focus-within:opacity-100 [&:has([data-state=open])]:opacity-100">
           <Button
             variant="ghost"
             size="icon"
@@ -346,6 +320,17 @@ export function OrderTableWorkshop() {
   // Toggle "Đã hủy" — chỉ hiện đơn đã hủy (cancelledAt set). Mặc định tắt: đơn
   // hủy vẫn hiện tô xám trong list nhưng KHÔNG tính vào facet count.
   const [filterCancelled, setFilterCancelled] = useState<boolean>(() => searchParams.get('wcancel') === 'true');
+  // Ô phễu chặng (Orders.md §10.2b) — BE `workshopStage`, URL `wstage`.
+  const [filterStage, setFilterStage] = useState<WorkshopStageFilterKey | ''>(
+    () => (searchParams.get('wstage') as WorkshopStageFilterKey | null) || '',
+  );
+  // Pill "Ưu tiên" — BE `priority=__any__` (đơn có đặt ưu tiên), URL `wprio`.
+  const [filterPriority, setFilterPriority] = useState<string>(() => searchParams.get('wprio') || '');
+  // Rail loại sản phẩm (bản 3): '' = Tất cả, tên loại, hoặc `__none__` — BE `type` (gửi dạng lặp
+  // `append`, KHÔNG `set`, vì tên loại có thể chứa dấu phẩy — mirror Classic `ctype`), URL `wtype`.
+  const [filterType, setFilterType] = useState<string>(() => searchParams.get('wtype') || '');
+  // Bảng tổng hợp designer thu gọn mặc định — mở qua nút "Tồn thiết kế" trên thanh công cụ.
+  const [showDesignerSummary, setShowDesignerSummary] = useState(false);
 
   // Sync state → URL (replace). Strip default/empty values.
   useEffect(() => {
@@ -368,6 +353,9 @@ export function OrderTableWorkshop() {
         filterUserSku ? sp.set('wusersku', filterUserSku) : sp.delete('wusersku');
         filterHeld ? sp.set('wheld', 'true') : sp.delete('wheld');
         filterCancelled ? sp.set('wcancel', 'true') : sp.delete('wcancel');
+        filterStage ? sp.set('wstage', filterStage) : sp.delete('wstage');
+        filterPriority ? sp.set('wprio', filterPriority) : sp.delete('wprio');
+        filterType ? sp.set('wtype', filterType) : sp.delete('wtype');
         page > 1 ? sp.set('wpage', String(page)) : sp.delete('wpage');
         pageSize !== DEFAULT_PAGE_SIZE ? sp.set('wsize', String(pageSize)) : sp.delete('wsize');
         return sp;
@@ -391,6 +379,9 @@ export function OrderTableWorkshop() {
     filterUserSku,
     filterHeld,
     filterCancelled,
+    filterStage,
+    filterPriority,
+    filterType,
     page,
     pageSize,
     setSearchParams,
@@ -435,6 +426,9 @@ export function OrderTableWorkshop() {
     if (filterUserSku) params.set('userSku', filterUserSku);
     if (filterHeld) params.set('held', 'true');
     if (filterCancelled) params.set('cancelled', 'true');
+    if (filterStage) params.set('workshopStage', filterStage);
+    if (filterPriority) params.set('priority', filterPriority);
+    if (filterType) params.append('type', filterType);
     if (createdFrom) params.set('createdFrom', createdFrom);
     if (createdTo) params.set('createdTo', createdTo);
     // Phạm vi xưởng từ "cụm menu theo xưởng" ở sidebar. Lọc TƯỜNG MINH nên đơn
@@ -463,7 +457,8 @@ export function OrderTableWorkshop() {
       // Default: every product section is collapsed. User clicks chevron or
       // "Mở hết" to expand. TRỪ khi mở từ link `?pid=` — mở hết sẵn để thấy
       // ngay đơn cần tìm, không phải tự bấm mở group.
-      setCollapsedTypes(pid.trim() ? new Set() : new Set(grouped.map((g) => g.type || t('tableWorkshop.noTypeName'))));
+      // Chọn 1 loại ở rail → mở sẵn (bảng phải là danh sách đơn của loại đó, không có hàng nhóm).
+      setCollapsedTypes(pid.trim() || filterType ? new Set() : new Set(grouped.map((g) => g.type || t('tableWorkshop.noTypeName'))));
     } catch (err) {
       handleAxiosError(err);
     }
@@ -501,6 +496,9 @@ export function OrderTableWorkshop() {
     filterUserSku,
     filterHeld,
     filterCancelled,
+    filterStage,
+    filterPriority,
+    filterType,
     createdFrom,
     createdTo,
     factoryScope,
@@ -659,7 +657,8 @@ export function OrderTableWorkshop() {
   const flatItems = useMemo<FlatItem[]>(() => {
     const out: FlatItem[] = [];
     for (const g of decoratedGroups) {
-      out.push({ kind: 'header', key: `h:${g.type}`, group: g });
+      // Đang chọn 1 loại ở rail → bỏ hàng tiêu đề nhóm (tiêu đề đã nằm trên đầu bảng phải).
+      if (!filterType) out.push({ kind: 'header', key: `h:${g.type}`, group: g });
       if (collapsedTypes.has(g.type)) continue;
       for (const row of g.sortedOrders) {
         const meta = g.rowMeta.get(row._id);
@@ -674,7 +673,7 @@ export function OrderTableWorkshop() {
       }
     }
     return out;
-  }, [decoratedGroups, collapsedTypes]);
+  }, [decoratedGroups, collapsedTypes, filterType]);
 
   // Group các field liên quan vào 1 cột hiển thị (xem `buildColGroups` trong
   // workshopTableConfig.tsx — dùng chung với OrdersMiniTable/OrderFactoryTab) —
@@ -701,6 +700,8 @@ export function OrderTableWorkshop() {
   // + window resize (sum getBoundingClientRect().top + scrollY ổn định khi
   // cuộn → chỉ cần đo lại lúc layout đổi).
   const rootRef = useRef<HTMLDivElement>(null);
+  /** Vùng cuộn của THÂN BẢNG (dọc + ngang) — virtualizer bám vào đây thay cho <main>. */
+  const tableScrollRef = useRef<HTMLDivElement>(null);
   const scrollElRef = useRef<HTMLElement | null>(null);
   const tbodyRef = useRef<HTMLTableSectionElement>(null);
   const [scrollEl, setScrollEl] = useState<HTMLElement | null>(null);
@@ -708,7 +709,9 @@ export function OrderTableWorkshop() {
 
   // Xác định scroll container thật (main.overflow-auto) sau khi mount.
   useLayoutEffect(() => {
-    const sc = getScrollParent(rootRef.current);
+    // Bảng tự cuộn trong card (07/09/2026) → scroll container là chính div thân bảng; fallback
+    // scroll parent gần nhất nếu vì lý do nào đó ref chưa gắn.
+    const sc = tableScrollRef.current ?? getScrollParent(rootRef.current);
     scrollElRef.current = sc;
     setScrollEl(sc);
   }, []);
@@ -852,6 +855,9 @@ export function OrderTableWorkshop() {
     filterUserSku,
     filterHeld,
     filterCancelled,
+    filterStage,
+    filterPriority,
+    filterType,
   ]);
 
   // Định nghĩa facet 1 lần — dùng cho cả OrderFilterBar lẫn chip "đang lọc".
@@ -937,103 +943,6 @@ export function OrderTableWorkshop() {
     },
   ];
 
-  const isDefaultDate = createdFrom === todayISO() && createdTo === todayISO();
-
-  // Chip "đang lọc" — chỉ facet user thấy được (perm/hidden) + search + date custom.
-  const activeFilters: Array<{
-    key: string;
-    label: string;
-    display: string;
-    color: string;
-    onClear: () => void;
-  }> = [];
-  for (const f of facets) {
-    if (f.hidden || (f.perm && !has(f.perm)) || !f.value) continue;
-    const opt = f.options.find((o) => o.value === f.value);
-    activeFilters.push({
-      key: f.key,
-      label: f.label,
-      display: opt?.label || f.value,
-      color: FILTER_CHIP_COLORS[f.key] || FILTER_CHIP_DEFAULT,
-      onClear: () => {
-        f.onChange('');
-        setPage(1);
-      },
-    });
-  }
-  if (search.trim()) {
-    activeFilters.push({
-      key: 'search',
-      label: t('tableWorkshop.chips.search'),
-      display: search.trim(),
-      color: FILTER_CHIP_COLORS.search,
-      onClear: () => {
-        setSearch('');
-        setPage(1);
-      },
-    });
-  }
-  if (pid.trim()) {
-    activeFilters.push({
-      key: 'pid',
-      label: t('tableWorkshop.chips.pid'),
-      display: pid.trim(),
-      color: FILTER_CHIP_COLORS.search,
-      onClear: () => {
-        setPid('');
-        setPage(1);
-      },
-    });
-  }
-  if (bulkIds.length) {
-    activeFilters.push({
-      key: 'bulkIds',
-      label: t('tableWorkshop.chips.bulkIds'),
-      display: t('listTab.tokenCount', { count: bulkIds.length }),
-      color: FILTER_CHIP_COLORS.search,
-      onClear: () => {
-        setBulkIds([]);
-        setPage(1);
-      },
-    });
-  }
-  if (!isDefaultDate) {
-    activeFilters.push({
-      key: 'date',
-      label: t('tableWorkshop.chips.date'),
-      display: `${fmtChipDate(createdFrom) || '…'} → ${fmtChipDate(createdTo) || '…'}`,
-      color: FILTER_CHIP_COLORS.date,
-      onClear: () => {
-        setCreatedFrom(todayISO());
-        setCreatedTo(todayISO());
-        setPage(1);
-      },
-    });
-  }
-  if (filterHeld) {
-    activeFilters.push({
-      key: 'held',
-      label: t('tableWorkshop.chips.status'),
-      display: t('tableWorkshop.holding'),
-      color: FILTER_CHIP_COLORS.date,
-      onClear: () => {
-        setFilterHeld(false);
-        setPage(1);
-      },
-    });
-  }
-  if (filterCancelled) {
-    activeFilters.push({
-      key: 'cancelled',
-      label: t('tableWorkshop.chips.status'),
-      display: t('tableWorkshop.cancelled'),
-      color: FILTER_CHIP_COLORS.date,
-      onClear: () => {
-        setFilterCancelled(false);
-        setPage(1);
-      },
-    });
-  }
 
   const clearAllFilters = () => {
     setSearch('');
@@ -1052,6 +961,9 @@ export function OrderTableWorkshop() {
     setFilterDesignerStatus('');
     setFilterProductionError('');
     setFilterUserSku('');
+    setFilterStage('');
+    setFilterPriority('');
+    setFilterType('');
     setPage(1);
   };
 
@@ -1121,29 +1033,61 @@ export function OrderTableWorkshop() {
     createdTo,
   ]);
 
+  // Pill "Thiếu tool" = MỌI mã toolResult không thuộc nhóm "Có tool" (mirror
+  // `useIsNoTool`), gửi BE dạng danh sách phẩy — khớp cách BE đếm `pillCounts.noTool`.
+  const noToolCodes = useMemo(
+    () =>
+      (workshopFilters?.toolResult || [])
+        .map((o) => o.value)
+        .filter((v) => v !== '__none__' && isNoTool(v))
+        .join(','),
+    [workshopFilters?.toolResult, isNoTool],
+  );
+  const selectedTypeStat = useMemo(
+    () => (workshopFilters?.typeStats || []).find((r) => (r.type || TYPE_NONE_TOKEN) === filterType),
+    [workshopFilters?.typeStats, filterType],
+  );
+  const activePills: Record<WorkshopPillKey, boolean> = {
+    errorFile: filterErrorFile === '__any__',
+    noTool: !!noToolCodes && filterToolResult === noToolCodes,
+    unreviewed: filterToolResult === '__none__',
+    priority: filterPriority === '__any__',
+    held: filterHeld,
+  };
+  const togglePill = (key: WorkshopPillKey) => {
+    switch (key) {
+      case 'errorFile':
+        setFilterErrorFile((v) => (v === '__any__' ? '' : '__any__'));
+        break;
+      case 'noTool':
+        setFilterToolResult((v) => (v === noToolCodes ? '' : noToolCodes));
+        break;
+      case 'unreviewed':
+        setFilterToolResult((v) => (v === '__none__' ? '' : '__none__'));
+        break;
+      case 'priority':
+        setFilterPriority((v) => (v === '__any__' ? '' : '__any__'));
+        break;
+      case 'held':
+        setFilterHeld((v) => !v);
+        break;
+    }
+    setPage(1);
+  };
   return (
     <TooltipProvider delayDuration={200}>
-      <div className="space-y-4 pb-24" ref={rootRef}>
-        {canSeeDesignerSummary && (
-          <div className="space-y-2">
-            <div className="flex justify-end">
-              <Button variant="outline" size="sm" className="h-8 text-xs" onClick={() => setBacklogOpen(true)}>
-                <CalendarClock size={14} className="mr-1" />
-                {t('tableWorkshop.backlogDetail')}
-              </Button>
-            </div>
-            <DesignerSummaryPanel filterQs={summaryFilterQs} onClickCell={handleSummaryCellClick} refreshKey={summaryRefresh} />
-          </div>
-        )}
-
-        {/* Filter bar — chuẩn cho mọi bảng order. Cùng layout với ErrorLogTab,
-            OrderFactoryTab, OrderStatusTab (extract qua <OrderFilterBar>). */}
-        <OrderFilterBar
-          search={search}
-          onSearchChange={(v) => {
-            setSearch(v);
-            if (v && bulkIds.length) setBulkIds([]); // search thường loại bỏ lọc bulk
+      {/* Khung cột cố định: phễu + thanh công cụ đứng yên, vùng rail|bảng chiếm phần còn lại, CHỈ thân bảng cuộn. */}
+      <div className="flex min-h-0 flex-1 flex-col gap-4" ref={rootRef}>
+        <WorkshopStageStrip
+          filters={workshopFilters}
+          activeStage={filterStage}
+          onStageChange={(st) => {
+            setFilterStage(st);
+            setPage(1);
           }}
+        />
+
+        <WorkshopToolbar
           onBulkApply={(ids) => {
             setSearch(''); // bulk và search thường loại trừ nhau
             setBulkIds(ids);
@@ -1157,141 +1101,114 @@ export function OrderTableWorkshop() {
             setCreatedTo(to);
             setPage(1);
           }}
+          facets={facets}
+          onClearFilters={clearAllFilters}
           onReload={() => {
             setLoading(true);
             bumpSummary();
             Promise.all([fetchData(), fetchFilters()]).finally(() => setLoading(false));
           }}
           loading={loading}
-          topActionsRight={
-            <>
-              <Button
-                variant={filterHeld ? 'default' : 'outline'}
-                size="sm"
-                className="text-xs h-8"
-                onClick={() => {
-                  setFilterHeld((v) => !v);
-                  setPage(1);
-                }}
-                title={t('tableWorkshop.heldOnlyTitle')}
-              >
-                <PauseCircle size={14} className="mr-1" />
-                {t('tableWorkshop.holding')}
-                {typeof workshopFilters?.heldCount === 'number' && workshopFilters.heldCount > 0 && (
-                  <span className="ml-1 rounded-full bg-amber-200 dark:bg-amber-500/30 px-1.5 text-[10px] font-semibold text-amber-800 dark:text-amber-200">
-                    {workshopFilters.heldCount}
-                  </span>
-                )}
-              </Button>
-              <Button
-                variant={filterCancelled ? 'default' : 'outline'}
-                size="sm"
-                className="text-xs h-8"
-                onClick={() => {
-                  setFilterCancelled((v) => !v);
-                  setPage(1);
-                }}
-                title={t('tableWorkshop.cancelledOnlyTitle')}
-              >
-                <Ban size={14} className="mr-1" />
-                {t('tableWorkshop.cancelled')}
-                {typeof workshopFilters?.cancelledCount === 'number' && workshopFilters.cancelledCount > 0 && (
-                  <span className="ml-1 rounded-full bg-rose-200 dark:bg-rose-500/30 px-1.5 text-[10px] font-semibold text-rose-800 dark:text-rose-200">
-                    {workshopFilters.cancelledCount}
-                  </span>
-                )}
-              </Button>
-              {groups.length > 1 && (
-                <Button
-                  variant="ghost"
-                  size="sm"
-                  className="text-xs h-8"
-                  onClick={() => {
-                    const allTypes = new Set(groups.map((g) => g.type || t('tableWorkshop.noTypeName')));
-                    setCollapsedTypes((prev) => (prev.size === allTypes.size ? new Set() : allTypes));
-                  }}
-                >
-                  {collapsedTypes.size === groups.length ? t('tableWorkshop.expandAll') : t('tableWorkshop.collapseAll')}
-                </Button>
-              )}
-            </>
-          }
-          facets={facets}
-          middleRow={<FactoryScopeChip />}
-        />
-
-        {/* Chip "đang lọc" — màu theo từng filter + xoá lẻ + xoá tất cả. */}
-        {activeFilters.length > 0 && (
-          <div className="flex flex-wrap items-center gap-2 rounded-lg border border-border bg-card px-3 py-2">
-            <span className="text-xs font-medium text-muted-foreground">{t('tableWorkshop.filtering')}</span>
-            {activeFilters.map((f) => (
-              <span
-                key={f.key}
-                className={cn(
-                  'inline-flex items-center gap-1 rounded-full border px-2 py-0.5 text-[11px] font-medium',
-                  f.color,
-                )}
-              >
-                <span className="opacity-70">{f.label}:</span>
-                <span className="max-w-[160px] truncate">{f.display}</span>
-                <button
-                  type="button"
-                  onClick={f.onClear}
-                  className="ml-0.5 rounded-full hover:opacity-60"
-                  title={t('tableWorkshop.clearFilterTitle', { label: f.label })}
-                >
-                  <X size={11} />
-                </button>
-              </span>
-            ))}
-            <Button
-              variant="ghost"
-              size="sm"
-              className="ml-auto h-7 text-xs text-muted-foreground hover:text-foreground"
-              onClick={clearAllFilters}
-            >
-              <FilterX size={13} className="mr-1" />
-              {t('tableWorkshop.clearAllFilters')}
-            </Button>
-          </div>
-        )}
-
-        <PaginationBar
-          position="top"
-          page={page}
-          pageSize={pageSize}
-          total={total}
-          loading={loading}
-          onChange={(p, ps) => {
-            setPage(p);
-            setPageSize(ps);
+          pillCounts={workshopFilters?.pillCounts}
+          heldCount={workshopFilters?.heldCount ?? 0}
+          activePills={activePills}
+          onTogglePill={togglePill}
+          cancelledCount={workshopFilters?.cancelledCount ?? 0}
+          filterCancelled={filterCancelled}
+          onToggleCancelled={() => {
+            setFilterCancelled((v) => !v);
+            setPage(1);
           }}
+          designBacklogCount={workshopFilters?.pillCounts?.designBacklog}
+          showDesignerSummary={canSeeDesignerSummary ? showDesignerSummary : undefined}
+          onToggleDesignerSummary={canSeeDesignerSummary ? () => setShowDesignerSummary((v) => !v) : undefined}
         />
 
-        {/* Selection hint — chỉ hiện khi user chưa chọn gì để tránh nhiễu sau
-            khi đã quen với feature. */}
-        {selected.size === 0 && items.length > 0 && (
-          <div className="flex items-start gap-2 rounded-md border border-dashed border-border bg-muted/30 px-3 py-2 text-[11px] text-muted-foreground">
-            <MousePointerClick size={13} className="mt-0.5 shrink-0 text-primary" />
-            <div className="space-y-0.5">
-              <p>
-                <span className="font-medium text-foreground">{t('tableWorkshop.selectionHint.title')}</span>{' '}
-                {t('tableWorkshop.selectionHint.line1')}
-              </p>
-              <p>
-                {t('tableWorkshop.selectionHint.line2Before')}{' '}
-                <kbd className="rounded border border-border bg-background px-1 py-0.5 font-mono text-[10px]">
-                  Shift
-                </kbd>{' '}
-                {t('tableWorkshop.selectionHint.line2After')}
-              </p>
+        {canSeeDesignerSummary && showDesignerSummary && (
+          <div className="space-y-2">
+            <div className="flex justify-end">
+              <Button variant="outline" size="sm" className="h-8 text-xs" onClick={() => setBacklogOpen(true)}>
+                <CalendarClock size={14} className="mr-1" />
+                {t('tableWorkshop.backlogDetail')}
+              </Button>
             </div>
+            <DesignerSummaryPanel filterQs={summaryFilterQs} onClickCell={handleSummaryCellClick} refreshKey={summaryRefresh} />
           </div>
         )}
 
+        {/* Vùng rail|bảng chiếm phần còn lại; tối thiểu 260px (màn thấp thì <main> cuộn thay). */}
+        <div className="flex min-h-[260px] flex-1 items-stretch gap-4">
+          {/* Rail loại sản phẩm — cao bằng vùng bảng, tự cuộn bên trong. */}
+          <WorkshopTypeRail
+            typeStats={workshopFilters?.typeStats || []}
+            totalOrders={workshopFilters?.totalOrders ?? 0}
+            selected={filterType}
+            onSelect={(ty) => {
+              setFilterType(ty);
+              setPage(1);
+            }}
+            className="h-full"
+          />
+          <div className="flex min-h-0 min-w-0 flex-1 flex-col">
         {/* Table */}
-        <LoadingOverlay active={loading && items.length > 0} className="rounded-lg border border-border bg-card overflow-hidden">
-          <div className="overflow-x-auto">
+        {/* Card = cột flex: tiêu đề (shrink-0) · thân bảng (flex-1, cuộn dọc+ngang) · chân bảng (shrink-0, luôn thấy). */}
+        <LoadingOverlay active={loading && items.length > 0} className="flex min-h-0 flex-1 flex-col overflow-hidden rounded-lg border border-border bg-card">
+          {/* Tiêu đề bảng phải: CHỈ khi đang chọn 1 loại (xem Tất cả thì ẩn — tổng đã có ở hàng gộp). */}
+          {filterType && (
+          <div className="flex flex-wrap items-center justify-between gap-2 border-b border-border px-4 py-2.5">
+            <div className="flex min-w-0 items-center gap-2">
+              <h2 className="truncate text-[13px] font-semibold text-foreground">
+                {filterType
+                  ? filterType === TYPE_NONE_TOKEN
+                    ? t('tableWorkshop.noTypeName')
+                    : filterType
+                  : t('workshopBoard.rail.all')}
+              </h2>
+              <span className="inline-flex items-center rounded-full bg-secondary px-2 py-0.5 font-mono text-[11px] font-semibold tabular-nums text-secondary-foreground">
+                {filterType
+                  ? t('tableWorkshop.orderCount', { count: selectedTypeStat?.orders ?? items.length })
+                  : t('workshopBoard.rail.allHeader', {
+                      orders: workshopFilters?.totalOrders ?? 0,
+                      types: workshopFilters?.totalTypes ?? 0,
+                    })}
+              </span>
+              {/* Chia theo xưởng của loại đang chọn (BE `factoryCounts` bỏ qua filter xưởng). */}
+              {(workshopFilters?.factoryCounts || []).length > 0 && (
+                <span className="inline-flex items-center gap-1 rounded-md bg-muted px-2 py-0.5 text-[11px] font-medium text-foreground">
+                  {(workshopFilters?.factoryCounts || []).map((f, i) => (
+                    <React.Fragment key={f.factoryId}>
+                      {i > 0 && <span className="text-muted-foreground">·</span>}
+                      <span className="tabular-nums">
+                        {f.shortName || f.name || '?'} {f.count}
+                      </span>
+                    </React.Fragment>
+                  ))}
+                </span>
+              )}
+            </div>
+            {filterType && selectedTypeStat && (
+              <div className="flex flex-wrap items-center gap-1.5">
+                {Object.entries(selectedTypeStat.stages || {})
+                  .filter(([, n]) => n > 0)
+                  .sort((a, b) => b[1] - a[1])
+                  .slice(0, 4)
+                  .map(([k, n]) => (
+                    <span
+                      key={k}
+                      className={cn(
+                        'inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[11px] font-medium',
+                        STAGE_COLORS[k as keyof typeof STAGE_COLORS]?.chip || 'bg-muted text-muted-foreground',
+                        k === filterStage && 'ring-2 ring-indigo-400',
+                      )}
+                    >
+                      {t(`workshopBoard.stages.${k}`)} <span className="tabular-nums">{n}</span>
+                    </span>
+                  ))}
+              </div>
+            )}
+          </div>
+          )}
+          <div ref={tableScrollRef} className="min-h-0 flex-1 overflow-auto">
             <Table className="table-fixed" style={{ width: totalTableWidth, minWidth: '100%' }}>
               <colgroup>
                 <col style={{ width: CHECKBOX_COL_W }} />
@@ -1301,8 +1218,8 @@ export function OrderTableWorkshop() {
                 <col style={{ width: ACTIONS_COL_W }} />
               </colgroup>
               <TableHeader>
-                <TableRow>
-                  <TableHead className="w-8 sticky left-0 z-30 bg-card">
+                <TableRow className="bg-muted/40 hover:bg-muted/40">
+                  <TableHead className="h-9 w-8 sticky left-0 z-30 bg-card">
                     <input
                       type="checkbox"
                       checked={items.length > 0 && selected.size === items.length}
@@ -1319,7 +1236,7 @@ export function OrderTableWorkshop() {
                         // chuỗi EN dài hơn VI nên tràn ĐÈ sang cột kế bên
                         // ("FACTORY · FABRIC · MACHINEPRINT STATUS"). Cắt bằng …,
                         // nội dung đầy đủ vẫn ở tooltip `title`.
-                        'whitespace-nowrap overflow-hidden text-ellipsis text-xs',
+                        'h-9 whitespace-nowrap overflow-hidden text-ellipsis text-[11px] font-medium uppercase tracking-wide text-muted-foreground',
                         // Group "Mã đơn/Ưu tiên" luôn đứng đầu (i===0) — sticky
                         // cạnh checkbox để khi scroll ngang vẫn nhìn thấy ID.
                         // shadow-r mô phỏng viền cho user biết chỗ sticky kết thúc.
@@ -1330,7 +1247,7 @@ export function OrderTableWorkshop() {
                       {groupTitle(t, g.key, g.title)}
                     </TableHead>
                   ))}
-                  <TableHead className="w-16 sticky right-0 z-30 bg-card"></TableHead>
+                  <TableHead className="h-9 w-16 sticky right-0 z-30 bg-card"></TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody ref={tbodyRef}>
@@ -1367,9 +1284,9 @@ export function OrderTableWorkshop() {
                         key={vi.key}
                         data-index={vi.index}
                         ref={rowVirtualizer.measureElement}
-                        className="bg-muted/40 hover:bg-muted/50"
+                        className="bg-card hover:bg-muted/30"
                       >
-                        <TableCell className="py-1.5 sticky left-0 z-10 bg-muted" onClick={(e) => e.stopPropagation()}>
+                        <TableCell className="py-1.5 sticky left-0 z-10 bg-card" onClick={(e) => e.stopPropagation()}>
                           <input
                             type="checkbox"
                             checked={groupState === 'all'}
@@ -1395,7 +1312,7 @@ export function OrderTableWorkshop() {
                           thông tin khác, kể cả khi đã cuộn ngang.
                         */}
                         <TableCell
-                          className="py-1.5 cursor-pointer sticky left-8 z-10 bg-muted shadow-[1px_0_0_0_var(--border)] overflow-visible"
+                          className="py-1.5 cursor-pointer sticky left-8 z-10 bg-card shadow-[1px_0_0_0_var(--border)] overflow-visible"
                           onClick={() => toggleType(g.type)}
                         >
                           <div className="flex items-center gap-2 text-xs whitespace-nowrap w-max">
@@ -1405,28 +1322,27 @@ export function OrderTableWorkshop() {
                               <ChevronDown size={14} className="text-muted-foreground shrink-0" />
                             )}
                             <span className="font-semibold text-foreground shrink-0 whitespace-nowrap">{g.type}</span>
-                            <Badge variant="secondary" className="font-mono shrink-0">
+                            <span className="shrink-0 rounded-full bg-muted px-1.5 text-[10px] font-medium tabular-nums text-muted-foreground">
                               {t('tableWorkshop.orderCount', { count: g.totalOrders })}
-                            </Badge>
+                            </span>
                             {groupState !== 'none' && (
                               <Badge variant="success" className="font-mono text-[10px] shrink-0">
                                 {t('tableWorkshop.selectedCount', { selected: selCount, total: g.sortedOrders.length })}
                               </Badge>
                             )}
                             {g.maxCombo > 1 && (
-                              <Badge
-                                variant="warning"
-                                className="font-mono text-[10px] shrink-0"
+                              <span
+                                className="shrink-0 rounded-full bg-amber-50 px-1.5 text-[10px] font-medium tabular-nums text-amber-700 ring-1 ring-amber-200 dark:bg-amber-900/30 dark:text-amber-200 dark:ring-amber-700"
                                 title={t('tableWorkshop.maxComboHint')}
                               >
                                 max ×{g.maxCombo}
-                              </Badge>
+                              </span>
                             )}
                           </div>
                         </TableCell>
                         <TableCell
                           colSpan={colGroups.length}
-                          className="py-1.5 cursor-pointer bg-muted/40"
+                          className="py-1.5 cursor-pointer bg-card"
                           onClick={() => toggleType(g.type)}
                         />
                       </TableRow>
@@ -1461,18 +1377,29 @@ export function OrderTableWorkshop() {
             </Table>
           </div>
 
-          <PaginationBar
-            position="bottom"
-            page={page}
-            pageSize={pageSize}
-            total={total}
-            loading={loading}
-            onChange={(p, ps) => {
-              setPage(p);
-              setPageSize(ps);
-            }}
-          />
+          {/* Chân bảng (phân trang / "Đang xem") — hàng riêng dưới vùng cuộn, luôn thấy như khối tài khoản ở sidebar. */}
+          <div className="shrink-0 bg-card">
+          {filterType ? (
+            <div className="border-t border-border px-4 py-2.5 text-[11px] text-muted-foreground">
+              {t('workshopBoard.rail.viewing', { shown: items.length, total: selectedTypeStat?.orders ?? items.length })}
+            </div>
+          ) : (
+            <PaginationBar
+              position="bottom"
+              page={page}
+              pageSize={pageSize}
+              total={total}
+              loading={loading}
+              onChange={(p, ps) => {
+                setPage(p);
+                setPageSize(ps);
+              }}
+            />
+          )}
+          </div>
         </LoadingOverlay>
+          </div>
+        </div>
 
         <BulkEditToolbar
           selectedIds={Array.from(selected)}

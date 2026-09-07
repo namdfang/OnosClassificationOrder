@@ -27,6 +27,7 @@ import { FastifyThrottlerGuard } from './guards/fastify-throttler.guard';
 import { ActionModule } from './modules/actions/action.module';
 import { AgentApiModule } from './modules/agent-api/agent-api.module';
 import { AmqpModule } from './modules/amqp/amqp.module';
+import { CeoDashboardModule } from './modules/ceo-dashboard/ceo-dashboard.module';
 import { CollectionModule } from './modules/collection/collection.module';
 import { CustomerModule } from './modules/customer/customer.module';
 import { CustomerAssignmentModule } from './modules/customer-assignment/customer-assignment.module';
@@ -55,8 +56,8 @@ import { ShippingVnpModule } from './modules/shipping-vnp/shipping-vnp.module';
 import { TelegramNotificationModule } from './modules/telegram-notification/telegram-notification.module';
 import { UploadModule } from './modules/upload/upload.module';
 import { WorkshopConfigModule } from './modules/workshop-config/workshop-config.module';
-import { ZaloGroupModule } from './modules/zalo-group/zalo-group.module';
 import { ZaloChatModule } from './modules/zalo-chat/zalo-chat.module';
+import { ZaloGroupModule } from './modules/zalo-group/zalo-group.module';
 import { ApiConfigService } from './shared/services';
 import { RateLimiterService } from './shared/services/rate-limiter.service';
 import { SharedModule } from './shared/shared.module';
@@ -88,6 +89,7 @@ import { SharedModule } from './shared/shared.module';
     CustomerModule,
     CustomerAssignmentModule,
     AgentApiModule,
+    CeoDashboardModule,
     CustomerNotificationModule,
     CustomerPortalModule,
     // ORD-4 — webhook báo đổi trạng thái đơn cho khách API.
