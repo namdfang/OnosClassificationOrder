@@ -19,7 +19,8 @@ import type {
   UnmatchedOrderType,
   UpdateProductConfigDto,
 } from 'shared';
-import { myNanoid, PRODUCT_FABRIC_TYPE_NONE, ProductConfigStatus, WorkshopConfigCategory } from 'shared';
+import type { ProductLine } from 'shared';
+import { myNanoid, PRODUCT_FABRIC_TYPE_NONE, PRODUCT_LINES, ProductConfigStatus, ProductLine as ProductLineEnum, WorkshopConfigCategory } from 'shared';
 
 import { CollectionService } from '../collection/collection.service';
 import { FactoryService } from '../factory/factory.service';
@@ -31,6 +32,7 @@ import { SystemConfigService } from '../system-config/system-config.service';
 import { WorkshopConfigRepository } from '../workshop-config/workshop-config.repository';
 import { ProductConfigEntity } from './product-config.entity';
 import { ProductConfigRepository } from './product-config.repository';
+import { inferProductLine } from './product-line-migration';
 
 function escapeRegex(s: string): string {
   return s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
@@ -53,6 +55,8 @@ const TOOL_RESULT_NONE = 'no-tool';
  * `design_review_shortname_migration` không còn được đọc/ghi ở bất kỳ đâu.
  */
 const DESIGN_REVIEW_CODE_MIGRATION_KEY = 'design_review_code_migration';
+/** PRD-8 — cờ backfill dòng sản phẩm (xoá cờ để chạy lại từ đầu). */
+const PRODUCT_LINE_BACKFILL_KEY = 'PRD-8:product_line_backfill_v1';
 
 /** Cờ `running` cũ hơn mốc này coi như lần chạy trước đã chết → được nhận lại. */
 const MIGRATION_STALE_MS = 10 * 60 * 1000;
@@ -203,6 +207,7 @@ export class ProductConfigService implements OnModuleInit {
     }
 
     await this.migrateDesignReviewCodes();
+    await this.backfillProductLines();
   }
 
   /**
@@ -221,6 +226,127 @@ export class ProductConfigService implements OnModuleInit {
    * Quy tắc khớp GIỮ NGUYÊN của ORD-3 (fullName trim + lowercase) để mã gán ra
    * không đổi. Idempotent: chạy lần hai không đổi thêm bản ghi nào.
    */
+  /**
+   * PRD-8 — backfill DÒNG SẢN PHẨM một lần (cờ `system_configs` cùng khuôn claim/stale
+   * với `migrateDesignReviewCodes`): sản phẩm chưa có `productLine` → suy theo
+   * collection → xưởng → phòng máy → mã in → mặc định 3d (`inferProductLine`); rồi đóng
+   * dấu lên `orders` (theo từng productConfigId, đơn không map suy theo xưởng/phòng/EMB)
+   * và `customer_orders.items` (arrayFilters theo productConfigId). Sản phẩm rơi vào
+   * `default` được liệt kê ở log + lưu trong cờ để admin gắn lại (lọc
+   * `productLineSource=default`). Không đụng sản phẩm/đơn đã có giá trị.
+   */
+  private async backfillProductLines(): Promise<void> {
+    const db = this.productConfigModel.db;
+    const systemConfigs = db.collection('system_configs');
+    const now = new Date();
+    const claimed = await systemConfigs.updateOne(
+      { key: PRODUCT_LINE_BACKFILL_KEY },
+      {
+        $setOnInsert: {
+          key: PRODUCT_LINE_BACKFILL_KEY,
+          value: { status: 'running', startedAt: now.toISOString() },
+          description: 'PRD-8: backfill productLine (3d/2d/wood/embroidery/led/canvas) cho productConfigs + orders + customer_orders.items',
+          createdAt: now,
+          updatedAt: now,
+        },
+      },
+      { upsert: true },
+    );
+    if (claimed.upsertedCount === 0) {
+      const staleBefore = new Date(now.getTime() - MIGRATION_STALE_MS).toISOString();
+      const takeover = await systemConfigs.updateOne(
+        { key: PRODUCT_LINE_BACKFILL_KEY, 'value.status': 'running', 'value.startedAt': { $lt: staleBefore } },
+        { $set: { value: { status: 'running', startedAt: now.toISOString() }, updatedAt: now } },
+      );
+      if (takeover.modifiedCount === 0) {
+        const flag = await systemConfigs.findOne<{ value?: { status?: string; products?: number; defaulted?: number } }>({ key: PRODUCT_LINE_BACKFILL_KEY });
+        console.log(
+          `[product-line-migration] bỏ qua, cờ '${PRODUCT_LINE_BACKFILL_KEY}' đã ở trạng thái '${flag?.value?.status ?? '?'}' ` +
+            `(lần trước: ${flag?.value?.products ?? 0} sản phẩm, ${flag?.value?.defaulted ?? 0} mặc định)`,
+        );
+        return;
+      }
+      console.warn('[product-line-migration] nhận lại lần chạy trước đã chết');
+    }
+
+    try {
+      const [collections, factories, machineTypes] = await Promise.all([
+        db.collection('collections').find({}, { projection: { name: 1, shortName: 1 } }).toArray(),
+        db.collection('factories').find({}, { projection: { shortName: 1 } }).toArray(),
+        db.collection('machineTypes').find({}, { projection: { shortName: 1 } }).toArray(),
+      ]);
+      const colName = new Map(collections.map((c) => [String(c._id), [String(c.shortName ?? ''), String(c.name ?? '')]]));
+      const facShort = new Map(factories.map((f) => [String(f._id), String(f.shortName ?? '')]));
+      const mtShort = new Map(machineTypes.map((m) => [String(m._id), String(m.shortName ?? '')]));
+
+      // 1) Sản phẩm chưa có dòng.
+      const products = await this.productConfigModel
+        .find({ productLine: { $in: [null, undefined] } }, { fullName: 1, collectionIds: 1, factoryId: 1, machineTypeId: 1, printMethod: 1 })
+        .lean<{ _id: unknown; fullName?: string; collectionIds?: unknown[]; factoryId?: unknown; machineTypeId?: unknown; printMethod?: string }[]>();
+      const defaulted: Array<{ id: string; fullName: string }> = [];
+      const lineByProduct = new Map<string, ProductLine>();
+      for (const p of products) {
+        const inferred = inferProductLine({
+          collections: (p.collectionIds ?? []).flatMap((id) => colName.get(String(id)) ?? []),
+          factoryShortName: p.factoryId ? facShort.get(String(p.factoryId)) : undefined,
+          machineTypeShortName: p.machineTypeId ? mtShort.get(String(p.machineTypeId)) : undefined,
+          printMethod: p.printMethod,
+        });
+        await this.productConfigModel.updateOne(
+          { _id: p._id, productLine: { $in: [null, undefined] } },
+          { $set: { productLine: inferred.productLine, productLineSource: inferred.source } },
+        );
+        lineByProduct.set(String(p._id), inferred.productLine);
+        if (inferred.source === 'default') defaulted.push({ id: String(p._id), fullName: p.fullName ?? '' });
+      }
+      // Sản phẩm ĐÃ có dòng (từ lần trước / admin) — vẫn cần để đóng dấu đơn cũ.
+      const withLine = await this.productConfigModel
+        .find({ productLine: { $in: PRODUCT_LINES } }, { productLine: 1 })
+        .lean<{ _id: unknown; productLine: ProductLine }[]>();
+      for (const p of withLine) lineByProduct.set(String(p._id), p.productLine);
+
+      // 2) Đơn sản xuất: theo từng productConfigId, rồi đơn không map.
+      let orders = 0;
+      for (const [pcId, line] of lineByProduct) {
+        const r = await this.orderModel.updateMany({ productConfigId: pcId, productLine: { $in: [null, undefined] } }, { $set: { productLine: line } });
+        orders += r.modifiedCount;
+      }
+      const unmappedRules: Array<[Record<string, unknown>, ProductLine]> = [
+        [{ printMethod: { $regex: /^(emb|embroidery)$/i } }, ProductLineEnum.Embroidery],
+        [{ factoryId: { $in: [...facShort.entries()].filter(([, s]) => s.toUpperCase() === 'TNW').map(([id]) => id) } }, ProductLineEnum.Wood],
+        [{ factoryId: { $in: [...facShort.entries()].filter(([, s]) => s.toUpperCase() === 'MLDTF').map(([id]) => id) } }, ProductLineEnum.TwoD],
+        [{ machineTypeId: { $in: [...mtShort.entries()].filter(([, s]) => s.toUpperCase() === 'HT').map(([id]) => id) } }, ProductLineEnum.Embroidery],
+        [{}, ProductLineEnum.ThreeD],
+      ];
+      for (const [cond, line] of unmappedRules) {
+        const r = await this.orderModel.updateMany({ ...cond, productLine: { $in: [null, undefined] } }, { $set: { productLine: line } });
+        orders += r.modifiedCount;
+      }
+
+      // 3) Staging items theo productConfigId (item không map → derive lúc đọc từ đơn sản xuất).
+      let items = 0;
+      const staging = db.collection('customer_orders');
+      for (const [pcId, line] of lineByProduct) {
+        const r = await staging.updateMany(
+          { 'items.productConfigId': pcId },
+          { $set: { 'items.$[it].productLine': line } },
+          { arrayFilters: [{ 'it.productConfigId': pcId, 'it.productLine': { $in: [null, undefined] } }] },
+        );
+        items += r.modifiedCount;
+      }
+
+      await systemConfigs.updateOne(
+        { key: PRODUCT_LINE_BACKFILL_KEY },
+        { $set: { value: { status: 'done', finishedAt: new Date().toISOString(), products: products.length, defaulted: defaulted.length, defaultedList: defaulted.slice(0, 200), orders, items }, updatedAt: new Date() } },
+      );
+      console.log(`[product-line-migration] products ${products.length} (defaulted ${defaulted.length}) · orders ${orders} · staging docs ${items}`);
+      if (defaulted.length) console.warn(`[product-line-migration] sản phẩm gán mặc định 3d (admin gắn lại): ${defaulted.map((d) => d.fullName).join(' | ').slice(0, 2000)}`);
+    } catch (e) {
+      await systemConfigs.updateOne({ key: PRODUCT_LINE_BACKFILL_KEY }, { $set: { value: { status: 'failed', error: e instanceof Error ? e.message : String(e), at: new Date().toISOString() } } });
+      console.error(`[product-line-migration] thất bại: ${e instanceof Error ? e.message : String(e)}`);
+    }
+  }
+
   private async migrateDesignReviewCodes(): Promise<void> {
     const systemConfigs = this.productConfigModel.db.collection('system_configs');
     const now = new Date();
@@ -482,6 +608,8 @@ export class ProductConfigService implements OnModuleInit {
       factoryId,
       machineTypeId,
       status,
+      productLine,
+      productLineSource,
     } = dto;
     const filter: Record<string, unknown> = {};
     // `search` (đường cũ, nhiều nơi đang dùng) gộp 3 trường bằng $or — GIỮ NGUYÊN.
@@ -507,6 +635,9 @@ export class ProductConfigService implements OnModuleInit {
     }
     if (factoryId) filter.factoryId = factoryId;
     if (machineTypeId) filter.machineTypeId = machineTypeId;
+    // PRD-8 — dòng sản phẩm; `none` = chưa gắn (doc cũ thiếu field hoặc null).
+    if (productLine) filter.productLine = productLine === 'none' ? { $in: [null, undefined] } : productLine;
+    if (productLineSource) filter.productLineSource = productLineSource;
     // Không truyền status ⇒ mặc định loại Hidden (vẫn thấy Active + Inactive + doc cũ chưa có field này).
     filter.status = status ? status : { $ne: ProductConfigStatus.Hidden };
 
@@ -640,6 +771,8 @@ export class ProductConfigService implements OnModuleInit {
           ...dto,
           ...(dto.shortName ? { shortName: dto.shortName.toUpperCase() } : {}),
           ...(dto.sku ? { sku: dto.sku.trim().toUpperCase() } : {}),
+          // PRD-8 — admin đặt tay dòng sản phẩm → ghi nguồn `manual` để không bị migration/đoán đè.
+          ...(dto.productLine ? { productLineSource: 'manual' as const } : {}),
         },
       );
       if (!p) throw new NotFoundException('ProductConfig not found');

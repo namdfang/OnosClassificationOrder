@@ -26,6 +26,7 @@ import type {
   PlaceCustomerOrderDto,
   PreviewPushCustomerOrdersResDto,
   ProductionOrderShippingAddress,
+  ProductLine,
   ProductPrintArea,
   PushCustomerOrdersDto,
   PushCustomerOrdersResDto,
@@ -50,6 +51,7 @@ import {
   FULFILLMENT_STAGE_ORDER,
   FulfillmentStage,
   LIFECYCLE_STAGE_KEYS,
+  PRODUCT_LINES,
   PRODUCT_PRINT_AREA_LABEL_MAP,
   RoleType,
 } from 'shared';
@@ -106,7 +108,7 @@ export const CUSTOMER_STAGE_LABELS: Record<string, string> = {
 export const PROD_DERIVE_FIELDS =
   'productionId cancelledAt fulfillmentCompletedAt currentFulfillmentStage heldAt holdReason ' +
   'designerStatus productionErrorSource toolResultNote toolCheckedAt ' +
-  'designerAssignedAt designerFirstStartedAt designerCompletedAt fulfillmentStages inProductionAt';
+  'designerAssignedAt designerFirstStartedAt designerCompletedAt fulfillmentStages inProductionAt productLine';
 
 export interface ProdDeriveFields {
   productionId?: string;
@@ -124,6 +126,8 @@ export interface ProdDeriveFields {
   designerCompletedAt?: Date;
   fulfillmentStages?: Record<string, { waitingAt?: Date; startedAt?: Date; completedAt?: Date }>;
   inProductionAt?: Date;
+  /** PRD-8 — để derive dòng sản phẩm cho item cũ chưa stamp. */
+  productLine?: ProductLine;
 }
 
 /**
@@ -199,6 +203,8 @@ interface PricingConfig {
   mockup?: string;
   /** Vị trí in của sản phẩm — dùng để đòi design ở vị trí BẮT BUỘC (ORD-22). */
   printArea?: ProductPrintArea;
+  /** PRD-8 — dòng sản phẩm, stamp lên item lúc tạo/import. */
+  productLine?: ProductLine;
   variations: Array<{
     sku: string;
     attributes?: Array<{ label: string; value: string }>;
@@ -224,6 +230,8 @@ interface QuoteResult {
   error?: string;
   /** Sản phẩm ngừng bán (status != active) — push phân biệt để fail RIÊNG đơn với message rõ. */
   inactive?: boolean;
+  /** PRD-8 — dòng sản phẩm của config đã resolve. */
+  productLine?: ProductLine;
 }
 
 /** Lấy value thuộc tính variation theo tên label (size/color) — attributes tự do key-value. */
@@ -303,7 +311,7 @@ export class CustomerOrderService implements OnModuleInit {
         userEmail: customer.userEmail,
         ...(stagedPids.length > 0 ? { productionId: { $nin: stagedPids } } : {}),
       })
-      .select('productionId orderId type color size quantity mockupUrl printMethod designs shippingAddress productConfigId createdAt')
+      .select('productionId orderId type color size quantity mockupUrl printMethod productLine designs shippingAddress productConfigId createdAt')
       .lean();
     if (missing.length === 0) return 0;
 
@@ -324,6 +332,7 @@ export class CustomerOrderService implements OnModuleInit {
           quantity: o.quantity ?? 1,
           mockupUrl: o.mockupUrl,
           printMethod: o.printMethod,
+          productLine: o.productLine,
           designs: o.designs,
           productConfigId: o.productConfigId ? String(o.productConfigId) : undefined,
           productionId: o.productionId,
@@ -521,6 +530,7 @@ export class CustomerOrderService implements OnModuleInit {
         activeService: it.activeService,
         mockupUrl: it.mockupUrl,
         printMethod: it.printMethod,
+        productLine: it.productLine,
         designs: it.designs,
         tracking: it.tracking,
         priceSnapshot: it.priceSnapshot,
@@ -530,6 +540,8 @@ export class CustomerOrderService implements OnModuleInit {
       const p = prodByPid.get(it.productionId);
       // Đơn nội bộ đã bị xóa (deleteOrder) → coi như hủy.
       if (!p) return { ...base, status: CustomerOrderStatus.Cancelled };
+      // Item cũ chưa stamp dòng → lấy từ đơn sản xuất (migration đã điền).
+      if (!base.productLine && p.productLine) base.productLine = p.productLine;
       const stage = computeCurrentStage(p);
       return {
         ...base,
@@ -573,6 +585,7 @@ export class CustomerOrderService implements OnModuleInit {
       identifier: doc.identifier as string | undefined,
       orderName: doc.orderName as string | undefined,
       source: (doc.source as CustomerStagingOrder['source']) ?? 'form',
+      productLines: [...new Set(items.map((i) => i.productLine).filter((x): x is ProductLine => !!x))],
       status,
       held: items.some((i) => i.held),
       rework: items.some((i) => i.rework),
@@ -609,7 +622,7 @@ export class CustomerOrderService implements OnModuleInit {
 
     const configs = (await this.productConfigModel
       .find({ $or: or })
-      .select('fullName productCategoryId status variations mockup printArea')
+      .select('fullName productCategoryId status variations mockup printArea productLine')
       .lean()) as unknown as Array<PricingConfig & { _id: unknown }>;
     for (const c of configs) {
       const config: PricingConfig = {
@@ -619,6 +632,7 @@ export class CustomerOrderService implements OnModuleInit {
         status: c.status,
         mockup: c.mockup,
         printArea: c.printArea,
+        productLine: c.productLine,
         variations: c.variations || [],
       };
       byType.set(config.fullName.trim().toLowerCase(), config);
@@ -682,6 +696,7 @@ export class CustomerOrderService implements OnModuleInit {
 
     const resolved: QuoteResult = {
       productConfigId: config._id,
+      productLine: config.productLine,
       type: config.fullName,
       size: attrValue(variation?.attributes, SIZE_LABEL) ?? item.size,
       color: attrValue(variation?.attributes, COLOR_LABEL) ?? item.color,
@@ -794,6 +809,7 @@ export class CustomerOrderService implements OnModuleInit {
         shipMethod: DEFAULT_CUSTOMER_SHIP_METHOD,
         mockupUrl: item.mockupUrl,
         printMethod: item.printMethod,
+        productLine: q.productLine,
         weight: item.weight,
         width: item.width,
         height: item.height,
@@ -847,6 +863,10 @@ export class CustomerOrderService implements OnModuleInit {
     }
     if (dto.status) pipeline.push({ $match: { statusDerived: dto.status } });
     if (dto.held) pipeline.push({ $match: { heldAny: true } });
+    // PRD-8 — tab dòng sản phẩm: đơn có ≥1 item thuộc dòng (item đã stamp, hoặc đơn sản xuất đã backfill).
+    if (dto.productLine) {
+      pipeline.push({ $match: { $or: [{ 'items.productLine': dto.productLine }, { 'prodOrders.productLine': dto.productLine }] } });
+    }
     pipeline.push(
       { $sort: { sortAt: -1, _id: -1 } },
       {
@@ -884,9 +904,18 @@ export class CustomerOrderService implements OnModuleInit {
         },
       },
     ];
-    const rows = await this.customerOrderModel.aggregate<{ _id: string; count: number; held: number; rework: number }>(
-      pipeline as never[],
-    );
+    const linePipeline = [
+      ...this.buildDerivePipeline(String(customer._id), cutoff),
+      // Mỗi đơn đếm vào MỌI dòng nó chứa (item đã stamp ∪ đơn sản xuất đã backfill).
+      { $project: { lines: { $setUnion: [{ $ifNull: ['$items.productLine', []] }, { $ifNull: ['$prodOrders.productLine', []] }] } } },
+      { $unwind: '$lines' },
+      { $match: { lines: { $in: PRODUCT_LINES } } },
+      { $group: { _id: '$lines', count: { $sum: 1 } } },
+    ];
+    const [rows, lineRows] = await Promise.all([
+      this.customerOrderModel.aggregate<{ _id: string; count: number; held: number; rework: number }>(pipeline as never[]),
+      this.customerOrderModel.aggregate<{ _id: ProductLine; count: number }>(linePipeline as never[]),
+    ]);
     const counts: CustomerOrderCounts = {
       all: 0,
       pending: 0,
@@ -915,6 +944,7 @@ export class CustomerOrderService implements OnModuleInit {
       counts.held += r.held;
       counts.rework += r.rework;
     }
+    counts.byProductLine = Object.fromEntries(lineRows.map((r) => [r._id, r.count])) as CustomerOrderCounts['byProductLine'];
     return { success: true, data: counts };
   }
 
@@ -1035,6 +1065,7 @@ export class CustomerOrderService implements OnModuleInit {
           activeService: item.activeService,
           mockupUrl: item.mockupUrl,
           printMethod: item.printMethod,
+          productLine: q.productLine,
           weight: item.weight,
           width: item.width,
           height: item.height,
@@ -1438,6 +1469,7 @@ export class CustomerOrderService implements OnModuleInit {
           size: q.size ?? it.size,
           mockupUrl: it.mockupUrl,
           printMethod: it.printMethod,
+          productLine: q.productLine ?? it.productLine,
           weight: it.weight,
           width: it.width,
           height: it.height,

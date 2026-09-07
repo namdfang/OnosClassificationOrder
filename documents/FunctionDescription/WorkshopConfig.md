@@ -177,3 +177,8 @@ useWorkshopConfigStore: {
 | SuperAdmin | ✅ full CRUD |
 | Admin | ✅ full CRUD |
 | Khác | Chỉ đọc (cần để render Order table) |
+
+
+## Ghi chú PRD-8 (07/09/2026)
+
+Category `print_method` (dtg/dtf/sublimation/embroidery) là **kỹ thuật in của xưởng**, KHÔNG phải "dòng sản phẩm" seller nhìn (`ProductConfig.productLine`: 3d/2d/wood/embroidery/led/canvas — Products.md §2.4b). Hai trường sống song song; 2D gồm cả DTG lẫn DTF.

@@ -9,6 +9,7 @@ import type {
   ProductionOrderTracking,
   VnpShipmentInfo,
 } from 'shared';
+import type { ProductLine } from 'shared';
 import {
   DESIGNER_STATUSES,
   DesignerStatus,
@@ -19,6 +20,7 @@ import {
   ORDER_PRIORITIES,
   OrderPriority,
 } from 'shared';
+import { PRODUCT_LINES } from 'shared';
 
 import type { FactoryDocument } from '../factory/factory.entity';
 import type { MachineTypeDocument } from '../machine-type/machine-type.entity';
@@ -78,6 +80,10 @@ export class OrderEntity extends DatabaseEntityAbstract {
 
   @Prop()
   printMethod?: string;
+
+  /** PRD-8 — dòng sản phẩm, stamp lúc import từ ProductConfig (Seller Portal lọc/đếm). */
+  @Prop({ type: String, enum: PRODUCT_LINES, index: true })
+  productLine?: ProductLine;
 
   @Prop()
   weight?: number;

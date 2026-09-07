@@ -2,7 +2,8 @@ import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useNavigate } from 'react-router-dom';
 import { ExternalLink, FilterX, ImageIcon, Pencil, Search, Trash2 } from 'lucide-react';
-import type { ProductItemSpecific, ProductPrintArea, ProductVariation } from 'shared';
+import type { ProductItemSpecific, ProductLine, ProductLineSource,ProductPrintArea, ProductVariation } from 'shared';
+import { PRODUCT_LINE_SOURCES } from 'shared';
 import {
   PRODUCT_FABRIC_TYPE_NONE,
   PRODUCT_LEVEL_MAP,
@@ -29,6 +30,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@
 
 import { handleAxiosError } from '@/utils';
 import { toFullSizeImageUrl } from '@/utils/imageUrl';
+import { PRODUCT_LINE_BADGE_CLASS, PRODUCT_LINE_OPTIONS, productLineLabel } from '@/utils/productLine';
 
 import { useDebounce } from '@/hooks/useDebounce';
 import { useProductWriteAccess } from '@/hooks/useProductWriteAccess';
@@ -79,6 +81,9 @@ export interface ProductConfigRow {
   productCategoryId?: string;
   productCategory?: { name: string; shortName: string };
   printMethod?: string;
+  /** PRD-8 */
+  productLine?: ProductLine;
+  productLineSource?: ProductLineSource;
   printArea?: ProductPrintArea;
   printDocument?: string;
   printTemplate?: string;
@@ -134,6 +139,9 @@ interface ProductConfigFilters {
   fabricType: string;
   /** Rỗng = mặc định BE (loại Hidden, vẫn thấy Active + Inactive). */
   status: '' | ProductConfigStatus;
+  /** PRD-8 — dòng sản phẩm; `none` = chưa gắn. */
+  productLine: '' | ProductLine | 'none';
+  productLineSource: '' | ProductLineSource;
 }
 
 const EMPTY_FILTERS: ProductConfigFilters = {
@@ -144,6 +152,8 @@ const EMPTY_FILTERS: ProductConfigFilters = {
   machineTypeId: '',
   fabricType: '',
   status: '',
+  productLine: '',
+  productLineSource: '',
 };
 
 interface ProductConfigTabProps {
@@ -302,6 +312,8 @@ export function ProductConfigTab({ refreshKey = 0 }: ProductConfigTabProps) {
       if (filters.machineTypeId) params.set('machineTypeId', filters.machineTypeId);
       if (filters.fabricType) params.set('fabricType', filters.fabricType);
       if (filters.status) params.set('status', filters.status);
+      if (filters.productLine) params.set('productLine', filters.productLine);
+      if (filters.productLineSource) params.set('productLineSource', filters.productLineSource);
       const resp = await RepositoryRemote.productConfig.getProductConfigs(`?${params.toString()}`);
       if (requestId !== requestIdRef.current) return;
       const rows: ProductConfigRow[] = resp.data.data || [];
@@ -455,6 +467,37 @@ export function ProductConfigTab({ refreshKey = 0 }: ProductConfigTabProps) {
             </select>
           </FilterField>
 
+          <FilterField label={t('configTab.filters.productLine')}>
+            <select
+              value={filters.productLine}
+              onChange={(e) => setFilterField('productLine', e.target.value as ProductConfigFilters['productLine'])}
+              className={FILTER_SELECT_CLASS}
+            >
+              <option value="">{t('configTab.filters.allProductLines')}</option>
+              <option value="none">{t('configTab.filters.productLineNone')}</option>
+              {PRODUCT_LINE_OPTIONS.map((code) => (
+                <option key={code} value={code}>
+                  {productLineLabel(t, code)}
+                </option>
+              ))}
+            </select>
+          </FilterField>
+
+          <FilterField label={t('configTab.filters.productLineSource')}>
+            <select
+              value={filters.productLineSource}
+              onChange={(e) => setFilterField('productLineSource', e.target.value as ProductConfigFilters['productLineSource'])}
+              className={FILTER_SELECT_CLASS}
+            >
+              <option value="">{t('configTab.filters.allProductLineSources')}</option>
+              {PRODUCT_LINE_SOURCES.map((src) => (
+                <option key={src} value={src}>
+                  {t(`productLineSources.${src}`)}
+                </option>
+              ))}
+            </select>
+          </FilterField>
+
           <FilterField label={t('configTab.filters.fabricType')}>
             <select
               value={filters.fabricType}
@@ -508,6 +551,7 @@ export function ProductConfigTab({ refreshKey = 0 }: ProductConfigTabProps) {
               <TableHead className="w-20">{t('configTab.table.machine')}</TableHead>
               <TableHead>{t('configTab.table.department')}</TableHead>
               <TableHead>{t('configTab.table.factory')}</TableHead>
+              <TableHead className="w-[110px]">{t('configTab.table.productLine')}</TableHead>
               <TableHead className="min-w-[160px]">{t('configTab.table.fabricType')}</TableHead>
               <TableHead className="min-w-[140px]">{t('configTab.table.toolResult')}</TableHead>
               <TableHead className="w-[150px]">{t('configTab.table.level')}</TableHead>
@@ -641,6 +685,19 @@ export function ProductConfigTab({ refreshKey = 0 }: ProductConfigTabProps) {
                       </option>
                     ))}
                   </select>
+                </TableCell>
+                <TableCell>
+                  {it.productLine ? (
+                    <span
+                      className={`inline-flex items-center rounded-md px-2 py-0.5 text-[11px] font-medium ${PRODUCT_LINE_BADGE_CLASS[it.productLine]}`}
+                      title={it.productLineSource ? t('detail.classification.productLineSource', { source: t(`productLineSources.${it.productLineSource}`) }) : undefined}
+                    >
+                      {productLineLabel(t, it.productLine)}
+                      {it.productLineSource === 'default' && <span className="ml-1 text-amber-600">•</span>}
+                    </span>
+                  ) : (
+                    <span className="text-xs text-muted-foreground">{t('productLines.none')}</span>
+                  )}
                 </TableCell>
                 <TableCell>
                   <select

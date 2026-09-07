@@ -1,8 +1,8 @@
 import { Prop, raw, SchemaFactory } from '@nestjs/mongoose';
 import { assertSameType, DatabaseEntity, DatabaseEntityAbstract } from 'core';
 import type { HydratedDocument } from 'mongoose';
-import type { ProductConfig, ProductItemSpecific, ProductPrintArea, ProductVariation } from 'shared';
-import { getObjectValues, PRODUCT_PRINT_AREA_KEYS, ProductConfigStatus, Status } from 'shared';
+import type { ProductConfig, ProductItemSpecific, ProductLine, ProductLineSource, ProductPrintArea, ProductVariation } from 'shared';
+import { getObjectValues, PRODUCT_LINE_SOURCES, PRODUCT_LINES, PRODUCT_PRINT_AREA_KEYS, ProductConfigStatus, Status } from 'shared';
 
 import type { FactoryDocument } from '../factory/factory.entity';
 import type { MachineTypeDocument } from '../machine-type/machine-type.entity';
@@ -98,6 +98,14 @@ export class ProductConfigEntity extends DatabaseEntityAbstract {
   /** workshop_config code (category=print_method). */
   @Prop({ trim: true })
   printMethod?: string;
+
+  /** PRD-8 — dòng sản phẩm seller nhìn; validate enum; index cho tab/lọc/facet. */
+  @Prop({ type: String, enum: PRODUCT_LINES, index: true })
+  productLine?: ProductLine;
+
+  /** PRD-8 — nguồn gán `productLine` (`default` = máy đoán, cần gắn lại). */
+  @Prop({ type: String, enum: PRODUCT_LINE_SOURCES })
+  productLineSource?: ProductLineSource;
 
   /**
    * Danh sách vị trí in — object giàu MIRROR `print_areas[]` hệ cũ, `key` CỐ

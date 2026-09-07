@@ -16,7 +16,7 @@ import {
   Trash2,
   Upload,
 } from 'lucide-react';
-import type { ProductItemSpecific, ProductPrintArea, ProductPrintAreaItem, ProductVariation } from 'shared';
+import type { ProductItemSpecific, ProductLine, ProductPrintArea, ProductPrintAreaItem, ProductVariation } from 'shared';
 import {
   collectVariationSizes,
   PRINT_AREA_MAX_WIDTH_CM,
@@ -45,6 +45,7 @@ import { Switch } from '@/components/ui/switch';
 import { handleAxiosError } from '@/utils';
 import { sortCategoryTree } from '@/utils/categoryTree';
 import { cn } from '@/utils/cn';
+import { PRODUCT_LINE_OPTIONS, productLineLabel } from '@/utils/productLine';
 
 import type { ProductConfigRow, RefItem } from '../ProductConfigTab';
 import { buildStatusMeta } from '../ProductConfigTab';
@@ -337,6 +338,9 @@ interface FormSnapshot {
   factoryId: string;
   machineTypeId: string;
   productCategoryId: string;
+  /** PRD-8 — dòng sản phẩm ('' = chưa gắn). */
+  productLine: string;
+  productLineSource: string;
   collectionIds: string[];
   printMethod: string;
   printArea: ProductPrintArea;
@@ -407,6 +411,8 @@ export default function ProductDetailPage() {
   const [machineTypeId, setMachineTypeId] = useState('');
 
   const [productCategoryId, setProductCategoryId] = useState('');
+  const [productLine, setProductLine] = useState('');
+  const [productLineSource, setProductLineSource] = useState('');
   const [collectionIds, setCollectionIds] = useState<string[]>([]);
   const [printMethod, setPrintMethod] = useState('');
   const [printArea, setPrintArea] = useState<ProductPrintArea>([]);
@@ -486,6 +492,8 @@ export default function ProductDetailPage() {
     factoryId,
     machineTypeId,
     productCategoryId,
+    productLine,
+    productLineSource,
     collectionIds,
     printMethod,
     printArea,
@@ -528,6 +536,8 @@ export default function ProductDetailPage() {
       factoryId: row.factoryId || '',
       machineTypeId: row.machineTypeId || '',
       productCategoryId: row.productCategoryId || '',
+      productLine: row.productLine || '',
+      productLineSource: row.productLineSource || '',
       collectionIds: row.collectionIds || [],
       printMethod: row.printMethod || '',
       printArea: row.printArea || [],
@@ -566,6 +576,8 @@ export default function ProductDetailPage() {
     setFactoryId(s.factoryId);
     setMachineTypeId(s.machineTypeId);
     setProductCategoryId(s.productCategoryId);
+    setProductLine(s.productLine);
+    setProductLineSource(s.productLineSource);
     setCollectionIds(s.collectionIds);
     setPrintMethod(s.printMethod);
     setPrintArea(s.printArea);
@@ -649,6 +661,8 @@ export default function ProductDetailPage() {
       factoryId,
       machineTypeId,
       productCategoryId,
+      productLine,
+      productLineSource,
       collectionIds,
       printMethod,
       printArea,
@@ -999,6 +1013,7 @@ export default function ProductDetailPage() {
       ...(factoryId ? { factoryId } : {}),
       ...(machineTypeId ? { machineTypeId } : {}),
       productCategoryId: productCategoryId || undefined,
+      productLine: (productLine || undefined) as ProductLine | undefined,
       collectionIds,
       printMethod: printMethod || undefined,
       printArea,
@@ -1387,6 +1402,30 @@ export default function ProductDetailPage() {
                       </option>
                     ))}
                   </select>
+                </div>
+                <div className="space-y-1.5">
+                  <Label title={t('detail.classification.productLineHint')}>{t('detail.classification.productLine')}</Label>
+                  <select
+                    value={productLine}
+                    onChange={(e) => {
+                      setProductLine(e.target.value);
+                      // Đổi tay → nguồn thành 'manual' (BE cũng ghi vậy khi lưu).
+                      setProductLineSource(e.target.value ? 'manual' : '');
+                    }}
+                    className={selectCls}
+                  >
+                    <option value="">{t('detail.notSelected')}</option>
+                    {PRODUCT_LINE_OPTIONS.map((code) => (
+                      <option key={code} value={code}>
+                        {productLineLabel(t, code)}
+                      </option>
+                    ))}
+                  </select>
+                  {productLineSource && (
+                    <p className={cn('text-[11px]', productLineSource === 'default' ? 'text-amber-600' : 'text-muted-foreground')}>
+                      {t('detail.classification.productLineSource', { source: t(`productLineSources.${productLineSource}`) })}
+                    </p>
+                  )}
                 </div>
                 <div className="space-y-1.5">
                   <Label>{t('detail.classification.printMethod')}</Label>

@@ -45,7 +45,12 @@
       "allFabrics": "All fabric types",
       "fabricNotSet": "Fabric type not set",
       "status": "Status",
-      "clear": "Clear filters"
+      "clear": "Clear filters",
+      "productLine": "Product line",
+      "allProductLines": "All lines",
+      "productLineNone": "No line yet",
+      "productLineSource": "Line source",
+      "allProductLineSources": "Any source"
     },
     "statusFilter": {
       "title": "Filter by status — hidden products are excluded by default",
@@ -88,7 +93,8 @@
       "notSelected": "— Not selected —",
       "editTitle": "Edit product",
       "deleteTitle": "Delete product (only allowed if it has no orders)",
-      "openMockup": "Open mockup image"
+      "openMockup": "Open mockup image",
+      "productLine": "Line"
     },
     "uploadButton": "Upload config",
     "onospodImport": {
@@ -279,7 +285,10 @@
     "classification": {
       "title": "Classification",
       "productCategory": "Product category",
-      "printMethod": "Print method"
+      "printMethod": "Print method",
+      "productLine": "Product line",
+      "productLineHint": "What sellers see (3D/2D/Wood/Embroidery/LED/Canvas) — distinct from the factory print method",
+      "productLineSource": "Source: {{source}}"
     },
     "customerDisplay": {
       "title": "Customer display",
@@ -594,5 +603,22 @@
     "newBadge": "Create",
     "importSuccess": "Created {{imported}}, updated {{updated}} products ({{skippedCount}} skipped)",
     "importButton": "Import {{count}} products"
+  },
+  "productLines": {
+    "3d": "3D",
+    "2d": "2D",
+    "wood": "Wood",
+    "embroidery": "Embroidery",
+    "led": "LED",
+    "canvas": "Canvas",
+    "none": "No line"
+  },
+  "productLineSources": {
+    "manual": "set manually",
+    "collection": "from collection",
+    "factory": "from factory",
+    "machineType": "from department",
+    "printMethod": "from print method",
+    "default": "auto default — please review"
   }
 }

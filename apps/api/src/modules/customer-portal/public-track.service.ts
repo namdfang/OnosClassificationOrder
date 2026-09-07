@@ -1,7 +1,7 @@
 import { Injectable, NotFoundException } from '@nestjs/common';
 import { InjectModel } from '@nestjs/mongoose';
 import type { Model } from 'mongoose';
-import type { CustomerHoldKind, DesignFields, ProductPrintArea, PublicOrderTrack } from 'shared';
+import type { CustomerHoldKind, DesignFields, ProductLine, ProductPrintArea, PublicOrderTrack } from 'shared';
 import {
   CUSTOMER_ORDER_COMPLETED_DAYS_DEFAULT,
   CUSTOMER_ORDER_COMPLETED_DAYS_KEY,
@@ -35,7 +35,7 @@ const CODE_PATTERN = /^[A-Za-z0-9][A-Za-z0-9-]{2,39}$/;
 
 /** Field OrderEntity trang công khai được phép đọc — cố ý KHÔNG có designer/xưởng/giá. */
 const PUBLIC_ORDER_FIELDS =
-  'productionId externalId orderId type color size quantity mockupUrl printMethod orderAt shippingAddress ' +
+  'productionId externalId orderId type color size quantity mockupUrl printMethod productLine orderAt shippingAddress ' +
   'cancelledAt designs designsOriginal productConfigId ' +
   PROD_DERIVE_FIELDS;
 
@@ -49,6 +49,7 @@ type PublicOrderDoc = ProdDeriveFields & {
   quantity?: number;
   mockupUrl?: string;
   printMethod?: string;
+  productLine?: ProductLine;
   orderAt?: Date;
   shippingAddress?: { city?: string; state?: string; country?: string };
   designs?: DesignFields;
@@ -167,6 +168,7 @@ export class PublicTrackService {
           sku: item?.sku,
           merchantSku: item?.merchantSku,
           printMethod: order?.printMethod ?? item?.printMethod,
+          productLine: order?.productLine ?? item?.productLine,
           mockupUrl: order?.mockupUrl ?? item?.mockupUrl,
         },
 
