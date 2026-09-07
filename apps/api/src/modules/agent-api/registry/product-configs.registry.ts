@@ -34,6 +34,8 @@ export const productConfigsRegistry: AgentTableSpec = {
     slug: plain('string'),
     status: plain('enum'),
     printMethod: plain('string'),
+    productLine: plain('enum', 'PRD-8 — dòng sản phẩm seller nhìn: 3d / 2d (DTG+DTF) / wood / embroidery / led / canvas'),
+    productLineSource: plain('enum', 'Nguồn gán productLine: manual / collection / factory / machineType / printMethod / default'),
     printArea: plain('string', 'Danh sách mã vị trí in của sản phẩm'),
     printDocument: plain('string', 'URL tài liệu hướng dẫn design/template của sản phẩm'),
     printTemplate: plain('string', 'URL template thiết kế chung của sản phẩm'),

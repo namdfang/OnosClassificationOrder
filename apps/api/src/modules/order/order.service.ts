@@ -84,6 +84,7 @@ import type {
   PreviewCuttingFilesDto,
   PreviewCuttingFilesResDto,
   ProductionOrderShippingAddress,
+  ProductLine,
   RecoverHeldOrdersResDto,
   SetProductionErrorDto,
   SetProductionErrorResDto,
@@ -7327,6 +7328,8 @@ export class OrderService implements OnModuleInit {
         let machineTypeId: string | undefined;
         let fabricType: string | undefined;
         let machineNumber: string | undefined;
+        // PRD-8 — dòng sản phẩm: ưu tiên config đã map, không thì theo dòng khách gửi (staging đã stamp).
+        let productLine: ProductLine | undefined = row.productLine;
 
         if (row.type?.trim()) {
           const pc = await this.productConfigRepository.findOne({
@@ -7337,6 +7340,7 @@ export class OrderService implements OnModuleInit {
             productConfigId = pc._id;
             factoryId = pc.factoryId;
             machineTypeId = pc.machineTypeId;
+            if (pc.productLine) productLine = pc.productLine;
             fabricType = pc.fabricType || undefined;
             // KHÔNG copy `toolResult` từ product config nữa — để trống lúc
             // import (API onospod lẫn CSV) để tool tự động soát có thể chạy
@@ -7379,6 +7383,7 @@ export class OrderService implements OnModuleInit {
             return { mockupUrl: raw, mockupOriginalUrl: raw };
           })(),
           printMethod: row.printMethod?.trim(),
+          productLine,
           weight: row.weight,
           width: row.width,
           height: row.height,

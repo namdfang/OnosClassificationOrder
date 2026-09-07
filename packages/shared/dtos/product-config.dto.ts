@@ -1,7 +1,7 @@
 import { createZodDto } from '@anatine/zod-nestjs';
 import { extendApi } from '@anatine/zod-openapi';
 import { PriceZod, PRINT_AREA_MAX_WIDTH_CM, ProductPrintAreaKeyZod } from '@shared/constants';
-import { ProductConfigStatus, Status } from '@shared/enums';
+import { PRODUCT_LINE_SOURCES, PRODUCT_LINES, ProductConfigStatus, Status } from '@shared/enums';
 import { BaseEntityZod, PageQueryZod, PageResZod, ResZod } from '@shared/types';
 import { z } from 'zod';
 
@@ -219,6 +219,10 @@ export const ProductConfigZod = BaseEntityZod.extend({
   productCategoryId: IDZod.optional(),
   /** workshop_config code (category=print_method). */
   printMethod: z.string().max(60).optional(),
+  /** PRD-8 — DÒNG SẢN PHẨM seller nhìn (3d/2d/wood/embroidery/led/canvas), xem `enums/product-line.ts`. */
+  productLine: z.enum(PRODUCT_LINES).optional(),
+  /** PRD-8 — nguồn gán `productLine` (manual/collection/factory/machineType/printMethod/default); `default` = máy đoán không có tín hiệu. */
+  productLineSource: z.enum(PRODUCT_LINE_SOURCES).optional(),
   /** Danh sách vị trí in — object giàu theo key CỐ ĐỊNH (xem `ProductPrintAreaItemZod`). */
   printArea: ProductPrintAreaZod.optional(),
   /** URL trang tài liệu hướng dẫn design/template ("print_document" hệ cũ). */
@@ -292,6 +296,10 @@ export const GetProductConfigsZod = PageQueryZod.extend({
   fabricType: z.string().trim().optional(),
   /** Không truyền ⇒ mặc định loại `Hidden` khỏi danh sách (vẫn thấy Active + Inactive). Truyền cụ thể để xem đúng 1 trạng thái (VD: `hidden` để xem sản phẩm đã ẩn). */
   status: z.enum(getObjectValues(ProductConfigStatus)).optional(),
+  /** PRD-8 — lọc theo dòng sản phẩm; `none` = chưa gắn dòng. */
+  productLine: z.enum([...PRODUCT_LINES, 'none']).optional(),
+  /** PRD-8 — lọc theo nguồn gán (vd `default` = máy đoán, cần admin gắn lại). */
+  productLineSource: z.enum(PRODUCT_LINE_SOURCES).optional(),
 });
 export class GetProductConfigsDto extends createZodDto(extendApi(GetProductConfigsZod)) {}
 
@@ -326,6 +334,7 @@ export const CreateProductConfigZod = z.object({
   guide: ProductConfigZod.shape.guide,
   productCategoryId: ProductConfigZod.shape.productCategoryId,
   printMethod: ProductConfigZod.shape.printMethod,
+  productLine: ProductConfigZod.shape.productLine,
   printArea: ProductConfigZod.shape.printArea,
   printDocument: ProductConfigZod.shape.printDocument,
   printTemplate: ProductConfigZod.shape.printTemplate,
@@ -373,6 +382,7 @@ export const UpdateProductConfigZod = z.object({
   guide: ProductConfigZod.shape.guide,
   productCategoryId: ProductConfigZod.shape.productCategoryId,
   printMethod: ProductConfigZod.shape.printMethod,
+  productLine: ProductConfigZod.shape.productLine,
   printArea: ProductConfigZod.shape.printArea,
   printDocument: ProductConfigZod.shape.printDocument,
   printTemplate: ProductConfigZod.shape.printTemplate,
@@ -455,6 +465,7 @@ export const ImportFullProductZod = z.object({
   /** Tên/viết tắt Collection (nhiều) — resolve exact case-insensitive từng cái. */
   collectionLabels: z.string().max(120).array().max(20).optional(),
   printMethod: ProductConfigZod.shape.printMethod,
+  productLine: ProductConfigZod.shape.productLine,
   mockup: ProductConfigZod.shape.mockup,
   images: ProductConfigZod.shape.images,
   sizeChartUrl: ProductConfigZod.shape.sizeChartUrl,
@@ -680,6 +691,8 @@ export const CustomerCatalogItemZod = z.object({
   /** Tên danh mục đã resolve từ `productCategoryId` (ProductCategory module) — KHÔNG phải id. */
   productCategory: z.string().optional(),
   printMethod: z.string().optional(),
+  /** Dòng sản phẩm — tab/lọc ở Seller Portal. */
+  productLine: z.enum(PRODUCT_LINES).optional(),
   printArea: CustomerCatalogPrintAreaZod.array().optional(),
   /** URL trang tài liệu hướng dẫn design ("print_document" hệ cũ). */
   printDocument: z.string().optional(),
@@ -716,6 +729,7 @@ export type CustomerCatalogItem = z.infer<typeof CustomerCatalogItemZod>;
 export const GetCustomerCatalogZod = PageQueryZod.extend({
   productCategoryId: IDZod.optional(),
   collectionId: IDZod.optional(),
+  productLine: z.enum(PRODUCT_LINES).optional(),
 });
 export class GetCustomerCatalogDto extends createZodDto(extendApi(GetCustomerCatalogZod)) {}
 
@@ -777,6 +791,8 @@ export const GetCustomerCatalogFacetsResZod = ResZod.extend({
   data: z.object({
     categories: CustomerCatalogFacetZod.array(),
     collections: CustomerCatalogFacetZod.array(),
+    /** Số sản phẩm theo dòng (chỉ dòng có ≥1 sản phẩm). */
+    productLines: z.object({ code: z.enum(PRODUCT_LINES), count: z.number() }).array(),
   }),
 });
 export class GetCustomerCatalogFacetsResDto extends createZodDto(extendApi(GetCustomerCatalogFacetsResZod)) {}

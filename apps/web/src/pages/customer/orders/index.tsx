@@ -32,7 +32,7 @@ import { handleAxiosError } from '../../../utils';
 const PAGE_SIZE = 20;
 
 /** Tab bar 8 trạng thái — mirror hệ OnosPod cũ (plan §1). `all` = bỏ filter. */
-const STATUS_TABS: Array<{ value: CustomerOrderStatus | 'all'; countKey: keyof CustomerOrderCounts }> = [
+const STATUS_TABS: Array<{ value: CustomerOrderStatus | 'all'; countKey: Exclude<keyof CustomerOrderCounts, 'byProductLine'> }> = [
   { value: 'all', countKey: 'all' },
   { value: CustomerOrderStatus.Pending, countKey: 'pending' },
   { value: CustomerOrderStatus.Processing, countKey: 'processing' },

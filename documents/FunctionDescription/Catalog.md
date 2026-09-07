@@ -213,3 +213,8 @@ có hậu tố kích thước (ảnh upload tay lưu local-disk) → `mockupLarg
   tài khoản. Nếu cần đổi, sửa `applyPromotions` chứ đừng đổi `getPublicCatalog`
   sang gọi `getCatalog`.
 - Chỉ sản phẩm `Active` (hoặc data cũ chưa có `status`) mới hiện ra ngoài. Sản phẩm chưa có biến thể VẪN hiện, giá để trống.
+
+
+## Ghi chú PRD-8 (07/09/2026) — dòng sản phẩm
+
+`CustomerCatalogItem.productLine`; lọc `?productLine=` ở cả `/customer/catalog` lẫn `/public/catalog`; `GET /customer/catalog/facets` trả thêm `productLines[{code,count}]` (chỉ dòng có ≥1 sản phẩm hiển thị). Định nghĩa: Products.md §2.4b.

@@ -45,7 +45,12 @@
       "allFabrics": "Tất cả loại vải",
       "fabricNotSet": "Chưa đặt loại vải",
       "status": "Trạng thái",
-      "clear": "Xóa bộ lọc"
+      "clear": "Xóa bộ lọc",
+      "productLine": "Dòng sản phẩm",
+      "allProductLines": "Tất cả dòng",
+      "productLineNone": "Chưa gắn dòng",
+      "productLineSource": "Nguồn gán dòng",
+      "allProductLineSources": "Mọi nguồn"
     },
     "statusFilter": {
       "title": "Lọc theo trạng thái — mặc định ẩn các sản phẩm Đã ẩn",
@@ -88,7 +93,8 @@
       "notSelected": "— Chưa chọn —",
       "editTitle": "Chỉnh sửa sản phẩm",
       "deleteTitle": "Xóa sản phẩm (chỉ xóa được nếu không có đơn hàng)",
-      "openMockup": "Mở ảnh mockup"
+      "openMockup": "Mở ảnh mockup",
+      "productLine": "Dòng SP"
     },
     "uploadButton": "Tải config lên",
     "onospodImport": {
@@ -279,7 +285,10 @@
     "classification": {
       "title": "Phân loại",
       "productCategory": "Danh mục sản phẩm",
-      "printMethod": "Phương pháp in"
+      "printMethod": "Phương pháp in",
+      "productLine": "Dòng sản phẩm",
+      "productLineHint": "Trục seller nhìn (3D/2D/Gỗ/Thêu/LED/Canvas) — khác phương pháp in của xưởng",
+      "productLineSource": "Nguồn gán: {{source}}"
     },
     "customerDisplay": {
       "title": "Hiển thị cho khách hàng",
@@ -594,5 +603,22 @@
     "newBadge": "Tạo mới",
     "importSuccess": "Đã tạo {{imported}}, cập nhật {{updated}} sản phẩm ({{skippedCount}} bị bỏ qua)",
     "importButton": "Import {{count}} sản phẩm"
+  },
+  "productLines": {
+    "3d": "3D",
+    "2d": "2D",
+    "wood": "Gỗ",
+    "embroidery": "Thêu",
+    "led": "LED",
+    "canvas": "Canvas",
+    "none": "Chưa gắn dòng"
+  },
+  "productLineSources": {
+    "manual": "đặt tay",
+    "collection": "từ collection",
+    "factory": "từ xưởng",
+    "machineType": "từ phòng máy",
+    "printMethod": "từ phương pháp in",
+    "default": "máy gán mặc định — cần kiểm lại"
   }
 }

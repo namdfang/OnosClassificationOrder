@@ -9,6 +9,7 @@ import type {
   DesignFields,
   ProductionOrderShippingAddress,
 } from 'shared';
+import type { ProductLine } from 'shared';
 import { CUSTOMER_ORDER_SOURCES } from 'shared';
 
 import type { CustomerDocument } from '@/modules/customer/customer.entity';
@@ -33,6 +34,8 @@ export interface CustomerOrderItem {
   activeService?: boolean;
   mockupUrl?: string;
   printMethod?: string;
+  /** PRD-8 — dòng sản phẩm, stamp từ ProductConfig lúc tạo/import (đơn cũ derive từ OrderEntity). */
+  productLine?: ProductLine;
   weight?: number;
   width?: number;
   height?: number;

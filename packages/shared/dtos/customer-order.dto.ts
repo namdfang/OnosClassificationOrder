@@ -1,6 +1,6 @@
 import { createZodDto } from '@anatine/zod-nestjs';
 import { extendApi } from '@anatine/zod-openapi';
-import { CustomerOrderStatus } from '@shared/enums';
+import { CustomerOrderStatus, PRODUCT_LINES } from '@shared/enums';
 import { PageResZod, ResZod } from '@shared/types';
 import { z } from 'zod';
 
@@ -149,6 +149,8 @@ export const CustomerStagingItemZod = z.object({
   activeService: z.boolean().optional(),
   mockupUrl: z.string().optional(),
   printMethod: z.string().optional(),
+  /** Dòng sản phẩm — stamp từ ProductConfig lúc tạo/import; đơn cũ derive từ OrderEntity. */
+  productLine: z.enum(PRODUCT_LINES).optional(),
   designs: DesignFieldsZod.optional(),
   tracking: CustomerOrderTrackingZod.optional(),
   priceSnapshot: CustomerOrderPriceSnapshotZod.optional(),
@@ -184,6 +186,8 @@ export const CustomerStagingOrderZod = z.object({
   note: z.string().optional(),
   shippingAddress: ProductionOrderShippingAddressZod.optional(),
   items: CustomerStagingItemZod.array(),
+  /** Các dòng sản phẩm có trong đơn (distinct từ items) — badge/lọc ở Seller Portal. */
+  productLines: z.enum(PRODUCT_LINES).array().optional(),
   totalQuantity: z.number(),
   /** Tổng snapshot hiện có (tham khảo với pending — "giá chốt khi push"). */
   totalAmount: z.number().optional(),
@@ -207,6 +211,8 @@ export const GetCustomerStagingOrdersZod = z.object({
   held: z.coerce.boolean().optional(),
   /** Search theo orderId / orderName / productionId của item. */
   search: z.string().optional(),
+  /** Tab dòng sản phẩm (Seller Portal) — đơn có ÍT NHẤT 1 item thuộc dòng. */
+  productLine: z.enum(PRODUCT_LINES).optional(),
 });
 export class GetCustomerStagingOrdersDto extends createZodDto(extendApi(GetCustomerStagingOrdersZod)) {}
 
@@ -225,6 +231,8 @@ export const CustomerOrderCountsZod = z.object({
   /** Badge counts (chồng lên các tab, không phải tab). */
   held: z.number(),
   rework: z.number(),
+  /** Số đơn theo dòng sản phẩm (đơn có ≥1 item thuộc dòng; một đơn có thể đếm ở nhiều dòng). */
+  byProductLine: z.record(z.enum(PRODUCT_LINES), z.number()).optional(),
 });
 export type CustomerOrderCounts = z.infer<typeof CustomerOrderCountsZod>;
 export const GetCustomerOrderCountsResZod = ResZod.extend({ data: CustomerOrderCountsZod });
@@ -557,6 +565,7 @@ export const PublicOrderTrackZod = z.object({
     sku: z.string().optional(),
     merchantSku: z.string().optional(),
     printMethod: z.string().optional(),
+    productLine: z.enum(PRODUCT_LINES).optional(),
     /** Ảnh mockup — thứ khách vốn thấy ở portal/catalog, KHÔNG phải file in. */
     mockupUrl: z.string().optional(),
   }),

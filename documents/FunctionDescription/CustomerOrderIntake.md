@@ -253,3 +253,8 @@ Tất cả trong `customer-order.service.ts`:
 - Toàn bộ endpoint `@Auth([RoleType.Customer])` — không dùng permission-catalog nội bộ (pattern Customer Portal sẵn có, `RolesGuard` chặn role Customer khỏi API ngoài prefix `customer/...`).
 - (ORD-4) Public Order API `open-api/orders*` KHÔNG dùng `@Auth`/JWT mà `@UseGuards(ApiKeyGuard)`; ranh giới dữ liệu do chính guard đảm bảo (key ⇄ đúng 1 khách). API key + webhook CRUD vẫn nằm dưới prefix `customer/` với JWT như mọi trang portal khác.
 - Không có trang admin mới đợt này (payment gate OFF — plan §12.1).
+
+
+## Ghi chú PRD-8 (07/09/2026) — dòng sản phẩm
+
+`CustomerOrderItem.productLine` (enum 3d/2d/wood/embroidery/led/canvas) stamp từ `ProductConfig.productLine` lúc `placeOrder`/`importOrdersCsv` (`quoteItem` trả `productLine`), `pushToProduction` chuyển vào `importRows` → `OrderEntity.productLine`. Listing: `GET /customer/orders?productLine=` (đơn có ≥1 item thuộc dòng — khớp `items.productLine` HOẶC `prodOrders.productLine` sau `$lookup`), `CustomerStagingOrder.productLines[]`, `GET /customer/orders/counts` → `byProductLine`. Item cũ chưa stamp derive từ đơn sản xuất (`toStagingOrder`). Định nghĩa + backfill: Products.md §2.4b.

@@ -166,3 +166,8 @@ thay vì để lại một ô vỡ không nói được vì sao.
   định dạng / mã không tồn tại không phân biệt được từ ngoài), và siết nhịp theo IP.
 - Mọi lượt tra đều ghi log Winston (`method`/`url`/`code`/`ip`) để soi được khi có dấu
   hiệu quét mã.
+
+
+## Ghi chú PRD-8 (07/09/2026)
+
+`product.productLine` thêm vào danh sách trắng (`PUBLIC_ORDER_FIELDS`) — dòng sản phẩm không phải thông tin nhạy cảm. Định nghĩa: Products.md §2.4b.

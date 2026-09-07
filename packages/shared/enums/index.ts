@@ -13,6 +13,7 @@ export * from './order-priority';
 export * from './permission-type';
 export * from './product';
 export * from './product-config-status';
+export * from './product-line';
 export * from './provider-code';
 export * from './role-type';
 export * from './tier';

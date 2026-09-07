@@ -1,18 +1,8 @@
 import { Injectable, NotFoundException } from '@nestjs/common';
 import { InjectModel } from '@nestjs/mongoose';
 import { Model } from 'mongoose';
-import type {
-  CustomerCatalogFacet,
-  CustomerCatalogItem,
-  CustomerCatalogPrintArea,
-  CustomerCatalogVariation,
-  GetCustomerCatalogDto,
-  GetCustomerCatalogFacetsResDto,
-  GetCustomerCatalogItemResDto,
-  GetCustomerCatalogResDto,
-  ProductPrintAreaItem,
-} from 'shared';
-import { PRODUCT_PRINT_AREA_LABEL_MAP, ProductConfigStatus, toFullSizeImageUrl } from 'shared';
+import type { CustomerCatalogFacet, CustomerCatalogItem, CustomerCatalogPrintArea, CustomerCatalogVariation, GetCustomerCatalogDto, GetCustomerCatalogFacetsResDto, GetCustomerCatalogItemResDto, GetCustomerCatalogResDto, ProductLine, ProductPrintAreaItem } from 'shared';
+import { PRODUCT_LINES, PRODUCT_PRINT_AREA_LABEL_MAP, ProductConfigStatus, toFullSizeImageUrl } from 'shared';
 
 import { CollectionEntity } from '@/modules/collection/collection.entity';
 import type { CustomerDocument } from '@/modules/customer/customer.entity';
@@ -22,7 +12,7 @@ import { applyPromotionDiscount, promotionMatches, PromotionService } from '@/mo
 import { customerMessage } from '@/shared/i18n/customer-messages';
 
 const CATALOG_ROW_SELECT =
-  'fullName shortName productCategoryId printMethod printArea printDocument printTemplate mockup images usImportTaxPerUnit sizeChartUrl description itemSpecifics variations';
+  'fullName shortName productCategoryId printMethod productLine printArea printDocument printTemplate mockup images usImportTaxPerUnit sizeChartUrl description itemSpecifics variations';
 
 type ActivePromotion = Awaited<ReturnType<PromotionService['getActiveInDateRange']>>[number];
 
@@ -134,6 +124,7 @@ export class CustomerCatalogService {
       shortName: (row.shortName as string | undefined) ?? '',
       productCategory: row.productCategory?.name,
       printMethod: row.printMethod as string | undefined,
+      productLine: row.productLine as ProductLine | undefined,
       printArea,
       printDocument: row.printDocument as string | undefined,
       printTemplate: row.printTemplate as string | undefined,
@@ -176,11 +167,12 @@ export class CustomerCatalogService {
     tier: number | null,
     { applyPromotions = true }: { applyPromotions?: boolean } = {},
   ): Promise<GetCustomerCatalogResDto> {
-    const { page, limit, search, productCategoryId, collectionId } = dto;
+    const { page, limit, search, productCategoryId, collectionId, productLine } = dto;
     const filter: Record<string, unknown> = { ...CustomerCatalogService.VISIBLE_FILTER };
     if (search) filter.fullName = { $regex: search, $options: 'i' };
     if (productCategoryId) filter.productCategoryId = productCategoryId;
     if (collectionId) filter.collectionIds = collectionId;
+    if (productLine) filter.productLine = productLine;
 
     const [rows, total, activePromotions] = await Promise.all([
       this.productConfigModel
@@ -242,7 +234,7 @@ export class CustomerCatalogService {
    */
   async getFacets(): Promise<GetCustomerCatalogFacetsResDto> {
     const visible: Record<string, unknown> = { ...CustomerCatalogService.VISIBLE_FILTER };
-    const [categoryCounts, collectionCounts] = await Promise.all([
+    const [categoryCounts, collectionCounts, lineCounts] = await Promise.all([
       this.productConfigModel.aggregate<{ _id: string; count: number }>([
         { $match: { ...visible, productCategoryId: { $exists: true, $nin: [null, ''] } } },
         { $group: { _id: '$productCategoryId', count: { $sum: 1 } } },
@@ -251,6 +243,11 @@ export class CustomerCatalogService {
         { $match: visible },
         { $unwind: '$collectionIds' },
         { $group: { _id: '$collectionIds', count: { $sum: 1 } } },
+      ]),
+      // PRD-8 — facet dòng sản phẩm (chỉ dòng có ≥1 sản phẩm hiển thị).
+      this.productConfigModel.aggregate<{ _id: string; count: number }>([
+        { $match: { ...visible, productLine: { $in: PRODUCT_LINES } } },
+        { $group: { _id: '$productLine', count: { $sum: 1 } } },
       ]),
     ]);
 
@@ -286,6 +283,7 @@ export class CustomerCatalogService {
       data: {
         categories: categories.map((c) => toFacet(c, categoryCountMap.get(String(c._id)) ?? 0)),
         collections: collections.map((c) => toFacet(c, collectionCountMap.get(String(c._id)) ?? 0)),
+        productLines: PRODUCT_LINES.map((code) => ({ code, count: lineCounts.find((r) => r._id === code)?.count ?? 0 })).filter((r) => r.count > 0),
       },
     };
   }

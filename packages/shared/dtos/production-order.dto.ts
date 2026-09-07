@@ -1,14 +1,6 @@
 import { createZodDto } from '@anatine/zod-nestjs';
 import { extendApi } from '@anatine/zod-openapi';
-import {
-  DesignerStatus,
-  DesignerTransitionAction,
-  FulfillmentStage,
-  FulfillmentStageStatus,
-  FulfillmentTransitionAction,
-  ORDER_PRIORITIES,
-  OrderPriority,
-} from '@shared/enums';
+import { DesignerStatus, DesignerTransitionAction, FulfillmentStage, FulfillmentStageStatus, FulfillmentTransitionAction, ORDER_PRIORITIES, OrderPriority, PRODUCT_LINES } from '@shared/enums';
 import { BaseEntityZod, PageQueryZod, PageResZod, ResZod } from '@shared/types';
 import { z } from 'zod';
 
@@ -224,6 +216,8 @@ export const ProductionOrderZod = BaseEntityZod.extend({
    */
   tempFileUrl: z.string().optional(),
   printMethod: z.string().optional(),
+  /** PRD-8 — dòng sản phẩm (3d/2d/wood/embroidery/led/canvas), trục Seller Portal. */
+  productLine: z.enum(PRODUCT_LINES).optional(),
   weight: z.number().optional(),
   width: z.number().optional(),
   height: z.number().optional(),
@@ -710,6 +704,8 @@ export const ImportProductionOrderRowZod = z.object({
   size: z.string().optional(),
   mockupUrl: z.string().optional(),
   printMethod: z.string().optional(),
+  /** PRD-8 — dòng sản phẩm; import ưu tiên `ProductConfig.productLine` khi map được. */
+  productLine: z.enum(PRODUCT_LINES).optional(),
   weight: z.number().optional(),
   width: z.number().optional(),
   height: z.number().optional(),
@@ -2581,6 +2577,7 @@ export const CustomerOrderSummaryZod = z.object({
   size: z.string().optional(),
   quantity: z.number().optional(),
   mockupUrl: z.string().optional(),
+  productLine: z.enum(PRODUCT_LINES).optional(),
   status: z.string().optional(),
   orderAt: z.coerce.date().optional(),
   cancelledAt: z.coerce.date().optional(),
