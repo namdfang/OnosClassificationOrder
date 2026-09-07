@@ -353,6 +353,20 @@ thành `timeout 0` chỉ chữa được máy đang ngồi, không chữa đư�
 bật, nhưng RabbitMQ chỉ retry chứ không giết process — thủ phạm là client Redis
 của `CACHE_MANAGER` bị Redis đóng vì `timeout 300` trong `D:\dev\redis\redis.conf`.
 
+## 9. ⚠️ Hai bản `@types/react` trong monorepo → pnpm hoist bản CAO NHẤT → app React 18 type-check vỡ
+
+**Triệu chứng (07/09/2026, khi thêm `apps/seller` Next 16/React 19):** `pnpm build-types` ở `apps/web` (React 18) đột nhiên báo `'Outlet' cannot be used as a JSX component` / `'Routes' … not a valid JSX element type` ở mọi chỗ dùng react-router, dù `apps/web` không đổi dòng nào.
+
+**Root cause:** `react-router` (và mọi package khai `react` là peer) không có `@types/react` riêng trong `.pnpm/<pkg>/node_modules` → TS đi lên `node_modules/.pnpm/node_modules/@types/react` (thư mục hoist ẩn của pnpm, `hoist-pattern=*` mặc định). Có 2 phiên bản trong workspace thì pnpm đặt **bản cao nhất** (19) vào đó → d.ts của react-router được đọc bằng React 19 types, còn `apps/web` dùng 18 → hai `ReactNode` khác nhau.
+
+**Rule:** app nào cần khoá phiên bản React types thì ghim trong `tsconfig.json` của app đó:
+
+```json
+"paths": { "react": ["./node_modules/@types/react"], "react-dom": ["./node_modules/@types/react-dom"] }
+```
+
+`paths` áp cho MỌI import trong chương trình (kể cả d.ts trong node_modules) nên react-router cũng bị ghim về 18. Vite không đọc `tsconfig.paths` (alias khai ở `vite.config`) nên runtime không đổi. Không chỉnh `hoist-pattern` toàn workspace — nhiều package khác đang sống nhờ hoist ẩn đó.
+
 ## Khi nào update file này
 
 - Phát hiện bug pattern cross-cutting (ảnh hưởng > 1 module).

@@ -2,6 +2,7 @@ import { BadRequestException, Injectable } from '@nestjs/common';
 import { InjectModel } from '@nestjs/mongoose';
 import { Model } from 'mongoose';
 import type { CeoFinding, CeoOverview } from 'shared';
+import type { ProductLine } from 'shared';
 import { DesignerStatus } from 'shared';
 
 import { productionFactoryClause } from '@/utils/excluded-factory';
@@ -60,13 +61,13 @@ export class CeoDashboardService {
     @InjectModel(UserEntity.name) private readonly userModel: Model<UserEntity>,
   ) {}
 
-  async getOverview(from: string, to: string): Promise<CeoOverview> {
+  async getOverview(from: string, to: string, productLine?: ProductLine): Promise<CeoOverview> {
     const start = vnDayStart(from);
     const end = new Date(vnDayStart(to).getTime() + DAY_MS);
     if (!(end > start)) throw new BadRequestException('`to` phải ≥ `from`');
     const days = Math.round((end.getTime() - start.getTime()) / DAY_MS);
     if (days > MAX_DAYS) throw new BadRequestException(`Khoảng tối đa ${MAX_DAYS} ngày`);
-    const key = `${from}|${to}`;
+    const key = `${from}|${to}|${productLine ?? ''}`;
     const hit = this.cache.get(key);
     if (hit && Date.now() - hit.at < CACHE_TTL_MS) return { ...hit.data, period: { ...hit.data.period, cached: true } };
 
@@ -85,7 +86,12 @@ export class CeoDashboardService {
     // Chuỗi ngày cho biểu đồ: kỳ 1 ngày phủ 7 ngày trước + hôm nay; kỳ dài phủ kỳ trước + kỳ này.
     const prevStart = isDay ? new Date(start.getTime() - 7 * DAY_MS) : cmpStart;
     const weekday = new Date(start.getTime() + 7 * 3_600_000).getUTCDay();
-    const base: Row = { cancelledAt: { $exists: false }, factoryId: productionFactoryClause(this.orderModel.db) };
+    const base: Row = {
+      cancelledAt: { $exists: false },
+      factoryId: productionFactoryClause(this.orderModel.db),
+      // PRD-8 — tab dịch vụ ở Seller Hub Operations: KPI/SLA/chất lượng/xưởng đều theo dòng sản phẩm.
+      ...(productLine ? { productLine } : {}),
+    };
     const inRange = (s: Date, e: Date) => ({ $gte: s, $lt: e });
 
     const cohortGroup = {

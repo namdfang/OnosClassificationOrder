@@ -122,6 +122,10 @@ pm2 monit
 
 ---
 
+### Seller Portal (`apps/seller/ecosystem.config.cjs`) — 07/09/2026
+
+pm2 app `onosfactory-seller`: `next start -p 3017`, `max_memory_restart 1G`, env từ `apps/seller/.env.production`. Dev hub: systemd `onos-seller-dev` (`next dev -p 3017`). Chi tiết `documents/FunctionDescription/SellerPortal.md §8`, `Deployment-Ubuntu-VPS.md §8`.
+
 ## 4. Deployment Flow
 
 ### API Deployment

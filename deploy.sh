@@ -73,6 +73,11 @@ node -e "require.resolve('@zero-126/zalo-sdk/next', { paths: ['$REPO_DIR/apps/ap
   else
     NODE_HEAP_MB=4536 pnpm build:web
   fi
+  # Seller: build lại theo bản cũ (bản Next không cất riêng như web).
+  if [ -f "$REPO_DIR/apps/seller/.env.production" ]; then
+    NODE_OPTIONS=--max-old-space-size=2048 pnpm --filter ./apps/seller build \
+      && (cd apps/seller && NODE_ENV=production pm2 restart ecosystem.config.cjs --update-env && pm2 save >/dev/null)
+  fi
   echo "✅ Đã lùi về $(git rev-parse --short HEAD)"
   exit 0
 fi
@@ -153,6 +158,29 @@ if [ ! -f "$WEB_DIR/index.html" ]; then
   [ -d "$WEB_PREV" ] && cp -r "$WEB_PREV" "$WEB_DIR"
   echo "  API đã ở bản mới, web giữ bản cũ. Chạy ./deploy.sh --rollback để đồng bộ lại."
   exit 1
+fi
+
+# ─── Seller Portal (apps/seller, Next.js, pm2 cổng 3017) ───────────────────
+#
+# Build SAU web để lỡ build web OOM thì seller không dính theo. `next build` tự
+# chạy `prebuild` (đồng bộ i18n từ apps/web). Health = trang /login trả 200.
+# Không có `.env.production` → bỏ qua (server chưa bật seller), không phải lỗi.
+if [ -f "$REPO_DIR/apps/seller/.env.production" ]; then
+  echo "→ Build Seller Portal..."
+  if NODE_OPTIONS=--max-old-space-size=2048 pnpm --filter ./apps/seller build; then
+    (cd apps/seller && NODE_ENV=production pm2 restart ecosystem.config.cjs --update-env && pm2 save >/dev/null)
+    ok=0
+    for i in $(seq 1 12); do
+      code=$(curl -s -o /dev/null -w '%{http_code}' --max-time 5 "http://127.0.0.1:3017/login" || echo 000)
+      if [ "$code" = "200" ]; then ok=1; echo "  → Seller trả 200 sau $((i*5)) giây"; break; fi
+      sleep 5
+    done
+    [ "$ok" = "1" ] || echo "✗ Seller KHÔNG phản hồi ở cổng 3017 — xem: pm2 logs onosfactory-seller --err --lines 50 (API + web đã ở bản mới)."
+  else
+    echo "✗ Build seller thất bại — pm2 vẫn chạy bản seller cũ. API + web đã ở bản mới."
+  fi
+else
+  echo "→ Bỏ qua Seller Portal (chưa có apps/seller/.env.production)."
 fi
 
 echo ""

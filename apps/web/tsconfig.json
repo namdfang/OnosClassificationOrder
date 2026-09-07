@@ -22,6 +22,8 @@
     "outDir": "./dist",
     "paths": {
       "@/*": ["./src/*"],
+      "react": ["./node_modules/@types/react"],
+      "react-dom": ["./node_modules/@types/react-dom"],
       "shared": ["../../packages/shared/index.ts"],
       "@shared/*": ["../../packages/shared/*"],
       "@zero-126/zalo-ui": ["./node_modules/@zero-126/zalo-ui/dist/index.d.ts"],

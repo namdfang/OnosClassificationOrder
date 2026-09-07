@@ -1,0 +1,200 @@
+{
+  "brand": {
+    "title": "Seller Hub",
+    "subtitle": "ONOS FACTORY · ADMIN"
+  },
+  "nav": {
+    "group": "Quản lý seller",
+    "groupOps": "Khác",
+    "dashboard": "Tổng quan",
+    "sellers": "Seller",
+    "orders": "Đơn hàng",
+    "notifications": "Thông báo",
+    "factoryApp": "Vận hành xưởng",
+    "signOut": "Đăng xuất",
+    "ordersAll": "Tất cả dịch vụ",
+    "operations": "Vận hành"
+  },
+  "login": {
+    "title": "Seller Hub",
+    "hint": "Dành cho nhân viên Admin / SuperAdmin.",
+    "email": "Email nhân viên",
+    "password": "Mật khẩu",
+    "remember": "Ghi nhớ đăng nhập",
+    "submit": "Vào khu quản trị",
+    "submitting": "Đang đăng nhập...",
+    "failed": "Email hoặc mật khẩu không đúng.",
+    "forbidden": "Tài khoản này không có quyền vào khu quản trị seller (cần Admin/SuperAdmin).",
+    "generic": "Không đăng nhập được. Vui lòng thử lại.",
+    "footer": "OnosFactory · Khu quản trị seller"
+  },
+  "dashboard": {
+    "title": "Tổng quan seller",
+    "subtitle": "Toàn bộ seller và đơn khách trên hệ thống",
+    "sellers": "Seller có đơn",
+    "orders": "Tổng đơn khách",
+    "pending": "Chờ đẩy SX",
+    "inProduction": "Đang sản xuất",
+    "held": "Đang giữ",
+    "topSellers": "Top seller theo số đơn",
+    "recent": "Đơn mới nhất",
+    "byProductLine": "Đơn theo dòng sản phẩm",
+    "byStatus": "Đơn theo trạng thái",
+    "viewAll": "Xem tất cả"
+  },
+  "sellers": {
+    "title": "Seller",
+    "subtitle": "Tài khoản khách hàng (bảng customers) — sửa hồ sơ, hạng, khóa/mở, reset mật khẩu, xem như seller",
+    "search": "Tìm SKU, email, tên...",
+    "tierAll": "Mọi hạng",
+    "tierNone": "Khách lẻ",
+    "tier": "VIP {{n}}",
+    "hasAccountAll": "Mọi tài khoản",
+    "hasAccountYes": "Đã đăng ký portal",
+    "hasAccountNo": "Chưa đăng ký",
+    "showDeleted": "Đã xóa",
+    "columns": {
+      "seller": "Seller",
+      "tier": "Hạng",
+      "orders": "Số đơn",
+      "lastOrder": "Đơn gần nhất",
+      "status": "Trạng thái",
+      "actions": ""
+    },
+    "viewAs": "Xem như seller",
+    "edit": "Sửa",
+    "resetPassword": "Reset mật khẩu",
+    "lock": "Khóa",
+    "unlock": "Mở khóa",
+    "delete": "Xóa",
+    "restore": "Khôi phục",
+    "active": "Hoạt động",
+    "locked": "Đã khóa",
+    "deleted": "Đã xóa",
+    "noAccount": "Chưa có tài khoản",
+    "empty": "Không có seller nào khớp.",
+    "editTitle": "Sửa seller",
+    "fullName": "Tên",
+    "phone": "Điện thoại",
+    "tierLabel": "Hạng VIP",
+    "save": "Lưu",
+    "cancel": "Hủy",
+    "saved": "Đã lưu.",
+    "resetTitle": "Reset mật khẩu",
+    "resetHint": "Để trống để hệ thống tự sinh mật khẩu — hiện MỘT LẦN, hãy gửi cho khách ngay.",
+    "newPassword": "Mật khẩu mới (tùy chọn)",
+    "resetDone": "Đã đổi mật khẩu.",
+    "generated": "Mật khẩu đã sinh",
+    "lockConfirm": "Khóa tài khoản {{name}}? Khách sẽ không đăng nhập được.",
+    "unlockConfirm": "Mở khóa tài khoản {{name}}?",
+    "deleteConfirm": "Xóa mềm {{name}}? Khách bị ẩn khỏi mọi danh sách và không đăng nhập được; có thể khôi phục.",
+    "statusUpdated": "Đã cập nhật trạng thái.",
+    "deleted_": "Đã xóa.",
+    "restored": "Đã khôi phục.",
+    "ordersOf": "Đơn của seller"
+  },
+  "orders": {
+    "title": "Đơn khách toàn hệ",
+    "subtitle": "Chỉ đọc — muốn thao tác, bấm Xem như seller.",
+    "sellerFilter": "Seller",
+    "allSellers": "Mọi seller",
+    "columns": {
+      "seller": "Seller",
+      "service": "Dịch vụ",
+      "date": "Ngày"
+    },
+    "openAsSeller": "Mở như seller",
+    "subtitleOms": "Đơn khách của mọi seller · 6 dịch vụ · chỉ đọc",
+    "refresh": "Làm mới",
+    "searchPlaceholder": "Tìm mã đơn, SKU, seller...",
+    "totalOrders": "{{count}} đơn",
+    "subtitleLine": "Đơn khách dịch vụ {{line}} của mọi seller · chỉ đọc"
+  },
+  "notifications": {
+    "title": "Thông báo cho khách",
+    "subtitle": "Gửi thông báo tới 1 seller hoặc tất cả; lịch sử đã gửi bên dưới.",
+    "sendTitle": "Gửi thông báo",
+    "recipient": "Người nhận",
+    "broadcast": "Tất cả seller",
+    "titleLabel": "Tiêu đề",
+    "bodyLabel": "Nội dung",
+    "send": "Gửi",
+    "sent": "Đã gửi.",
+    "history": "Đã gửi",
+    "columns": {
+      "when": "Lúc",
+      "to": "Tới",
+      "title": "Tiêu đề",
+      "by": "Người gửi"
+    },
+    "empty": "Chưa gửi thông báo nào.",
+    "systemEvent": "Hệ thống"
+  },
+  "common": {
+    "loading": "Đang tải...",
+    "search": "Tìm...",
+    "confirm": "Xác nhận"
+  },
+  "ops": {
+    "title": "Vận hành sản xuất",
+    "subtitle": "Toàn bộ quy trình từ soát tool đến đóng hàng · góc nhìn quản trị · chỉ đọc",
+    "factoryAll": "Mọi xưởng",
+    "kpi": {
+      "in": "Vào SX",
+      "out": "Ra SX",
+      "active": "Đang chạy",
+      "overdue": "Quá hạn (≥3 ngày)",
+      "n2": "Đúng hẹn N2"
+    },
+    "funnel": {
+      "title": "Phễu 8 chặng",
+      "hint": "Tồn = đơn đang đứng ở chặng · bấm chặng để xem đơn",
+      "backlog": "Tồn",
+      "error": "Lỗi",
+      "rework": "Làm lại",
+      "done": "Xong trong kỳ",
+      "bottleneck": "Nút thắt",
+      "cycle": "Chu kỳ TB {{h}} giờ"
+    },
+    "stageOrders": {
+      "title": "Đơn đang ở chặng {{stage}}",
+      "empty": "Không có đơn ở chặng này.",
+      "openAll": "Mở trong Đơn khách",
+      "age": "{{n}} ngày",
+      "ageCol": "Ở chặng",
+      "allTitle": "Trạng thái sản xuất từng đơn · {{line}}",
+      "stageCol": "Chặng hiện tại"
+    },
+    "sla": {
+      "title": "Đúng hẹn & quá hạn",
+      "overdueByFactory": "Quá hạn theo xưởng",
+      "oldest": "Đơn cũ nhất"
+    },
+    "factory": {
+      "title": "Theo xưởng",
+      "cols": {
+        "factory": "Xưởng",
+        "total": "Tổng",
+        "printed": "Đã in",
+        "printing": "Đang in",
+        "notPrinted": "Chưa in",
+        "errors": "Lỗi",
+        "designUnassigned": "Chưa gán TK"
+      }
+    },
+    "findings": {
+      "title": "Phát hiện & việc cần làm",
+      "empty": "Kỳ này không có gì bất thường."
+    },
+    "openFactoryApp": "Mở app vận hành xưởng"
+  },
+  "internal": {
+    "column": "Nội bộ",
+    "lastLog": "Log",
+    "source": {
+      "designer": "Designer",
+      "factory": "Xưởng",
+      "tool-check": "Soát tool"
+    }
+  }
+}

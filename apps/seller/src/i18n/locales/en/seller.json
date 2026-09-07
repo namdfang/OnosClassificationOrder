@@ -1,0 +1,118 @@
+{
+  "brand": {
+    "title": "Seller Portal",
+    "subtitle": "ONOS FACTORY"
+  },
+  "nav": {
+    "groupMain": "Orders",
+    "groupAccount": "Account",
+    "dashboard": "Dashboard",
+    "orders": "Orders",
+    "createOrder": "New order",
+    "importCsv": "Import CSV",
+    "account": "My account",
+    "signOut": "Sign out",
+    "customer": "Customer",
+    "api": "API & Webhooks"
+  },
+  "login": {
+    "welcome": "Sign in to Seller Portal",
+    "hint": "Use your OnosFactory customer account.",
+    "failed": "Wrong email or password.",
+    "locked": "This account is locked. Contact support.",
+    "generic": "Could not sign in. Please try again.",
+    "submitting": "Signing in...",
+    "sessionExpired": "Your session expired, please sign in again.",
+    "footer": "OnosFactory · Customer portal"
+  },
+  "impersonation": {
+    "banner": "You are viewing as {{name}}",
+    "stop": "Exit view"
+  },
+  "stats": {
+    "total": "Total orders",
+    "pending": "Pending push",
+    "inProduction": "In production",
+    "completed": "Shipped / done",
+    "held": "On hold"
+  },
+  "list": {
+    "pushSelected": "Push {{count}} orders",
+    "selectAllPending": "Select all pending",
+    "lockedHint": "Only orders with at least one {{line}} item.",
+    "viewDetail": "View detail",
+    "items": "{{count}} items",
+    "cancelling": "Cancelling...",
+    "heroSubtitle": "{{count}} orders in this service",
+    "newOrderIn": "New {{line}} order"
+  },
+  "detail": {
+    "back": "Back to list",
+    "title": "Order detail",
+    "notFound": "Order not found.",
+    "productionTitle": "Production progress",
+    "notStarted": "Not in production yet.",
+    "infoTitle": "Order info",
+    "publicLink": "Public tracking link",
+    "designsTitle": "Designs by print area",
+    "mockup": "Mockup",
+    "mockupUrl": "Mockup URL",
+    "save": "Save changes",
+    "saving": "Saving...",
+    "saved": "Saved.",
+    "addressTitle": "Shipping address",
+    "editAddress": "Edit address",
+    "noAddress": "No address yet.",
+    "cancel": "Cancel"
+  },
+  "handoff": {
+    "working": "Opening session...",
+    "failed": "Could not open the session from admin. Try again from the admin app."
+  },
+  "common": {
+    "loading": "Loading...",
+    "retry": "Retry",
+    "error": "Something went wrong.",
+    "search": "Search order id, name, production id...",
+    "language": "Language"
+  },
+  "dashboard": {
+    "byProductLine": "Orders by product line",
+    "byStatus": "Orders by status"
+  },
+  "account": {
+    "subtitle": "Profile, security and integrations",
+    "memberSince": "Member since",
+    "source": "Account source",
+    "integrationsTitle": "API & Webhooks",
+    "integrationsDesc": "API keys and webhooks to connect your systems with OnosFactory (currently on the existing customer portal).",
+    "integrationsOpen": "Open API & Webhooks",
+    "sources": {
+      "register": "Self-registered",
+      "manual": "Created by admin",
+      "sync": "Synced from legacy"
+    }
+  },
+  "api": {
+    "tabKeys": "API keys",
+    "tabWebhooks": "Webhooks",
+    "tabSamples": "Samples"
+  },
+  "dateFilter": {
+    "allTime": "All time",
+    "today": "Today",
+    "yesterday": "Yesterday",
+    "thisWeek": "This week",
+    "thisMonth": "This month",
+    "lastMonth": "Last month",
+    "thisYear": "This year",
+    "custom": "Custom range",
+    "from": "From",
+    "to": "To",
+    "clear": "Clear",
+    "close": "Close",
+    "wholeMonth": "Click to select the whole month",
+    "prevMonth": "Previous month",
+    "nextMonth": "Next month"
+  }
+}

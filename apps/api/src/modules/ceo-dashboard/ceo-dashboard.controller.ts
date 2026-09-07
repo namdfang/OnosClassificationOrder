@@ -21,7 +21,7 @@ export class CeoDashboardController {
   @HttpCode(HttpStatus.OK)
   @ApiOkResponse({ type: CeoOverviewResDto })
   async overview(@Query() q: CeoOverviewQueryDto): Promise<CeoOverviewResDto> {
-    return { success: true, data: await this.service.getOverview(q.from, q.to) };
+    return { success: true, data: await this.service.getOverview(q.from, q.to, q.productLine) };
   }
 
   @Get('report')

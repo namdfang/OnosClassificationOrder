@@ -4,6 +4,16 @@ import { DesignerStatus, DesignerTransitionAction, FulfillmentStage, Fulfillment
 import { BaseEntityZod, PageQueryZod, PageResZod, ResZod } from '@shared/types';
 import { z } from 'zod';
 
+import {
+  DesignFieldsZod,
+  hasProductionOrderTracking,
+  normalizeProductionOrderTracking,
+  ProductionOrderShippingAddressZod,
+  ProductionOrderTrackingZod,
+  type DesignFields,
+  type ProductionOrderShippingAddress,
+  type ProductionOrderTracking,
+} from '../client';
 import { BooleanFlagZod, IDZod } from '../constants/common-zod';
 import { VnpShipmentInfoZod } from './vnp-shipping.dto';
 
@@ -73,47 +83,16 @@ export const FulfillmentTimelineEntryZod = z.object({
 });
 export type FulfillmentTimelineEntry = z.infer<typeof FulfillmentTimelineEntryZod>;
 
-export const DesignFieldsZod = z.object({
-  front: z.string().optional(),
-  back: z.string().optional(),
-  sleeve: z.string().optional(),
-  hood: z.string().optional(),
-  folder: z.string().optional(),
-  placket: z.string().optional(),
-  chestLeft: z.string().optional(),
-  chestRight: z.string().optional(),
-  left: z.string().optional(),
-  right: z.string().optional(),
-  sleeveLeft: z.string().optional(),
-  sleeveRight: z.string().optional(),
-  leftUpperSleeve: z.string().optional(),
-  rightUpperSleeve: z.string().optional(),
-  leftCuff: z.string().optional(),
-  rightCuff: z.string().optional(),
-  frontEmbroidery: z.string().optional(),
-  backEmbroidery: z.string().optional(),
-});
-export type DesignFields = z.infer<typeof DesignFieldsZod>;
+// Nest-free, dời sang `client/design-fields.ts` (apps/seller dùng runtime qua `shared/client`).
+export { DesignFieldsZod, type DesignFields };
 
 /**
  * Địa chỉ ship — mirror field `shipping` trả về từ OnosPod (order API).
  * Dùng để "lấy ngược" địa chỉ khi đơn đang GIỮ chờ khách cập nhật, xem
  * `OrderService.getHeldOrdersForRecovery` + `OnospodOrderLookupService`.
  */
-export const ProductionOrderShippingAddressZod = z.object({
-  firstName: z.string().optional(),
-  lastName: z.string().optional(),
-  company: z.string().optional(),
-  address1: z.string().optional(),
-  address2: z.string().optional(),
-  city: z.string().optional(),
-  state: z.string().optional(),
-  postcode: z.string().optional(),
-  country: z.string().optional(),
-  email: z.string().optional(),
-  phone: z.string().optional(),
-});
-export type ProductionOrderShippingAddress = z.infer<typeof ProductionOrderShippingAddressZod>;
+// Nest-free, dời sang `client/shipping.ts`.
+export { ProductionOrderShippingAddressZod, type ProductionOrderShippingAddress };
 
 /**
  * Vận đơn KHÁCH TỰ CẤP (label mua sẵn bên ngoài — SBTT/hệ cũ/API riêng của
@@ -127,30 +106,8 @@ export type ProductionOrderShippingAddress = z.infer<typeof ProductionOrderShipp
  * đổ về collection `shipments` (module `shipping-vnp`) qua `provider` khác nhau
  * — xem `documents/FunctionDescription/VnpShipping.md §2a`.
  */
-export const ProductionOrderTrackingZod = z.object({
-  number: z.string().max(200).optional(),
-  carrier: z.string().max(100).optional(),
-  url: z.string().max(2000).optional(),
-  labelUrl: z.string().max(2000).optional(),
-});
-export type ProductionOrderTracking = z.infer<typeof ProductionOrderTrackingZod>;
-
-/** Có ít nhất 1 giá trị thật — dùng để KHÔNG ghi đè tracking cũ bằng object rỗng. */
-export function hasProductionOrderTracking(tracking?: ProductionOrderTracking | null): boolean {
-  if (!tracking) return false;
-  return [tracking.number, tracking.carrier, tracking.url, tracking.labelUrl].some((v) => !!v?.trim());
-}
-
-/** Bỏ field rỗng + trim — chuẩn hoá trước khi ghi DB/so sánh. */
-export function normalizeProductionOrderTracking(tracking?: ProductionOrderTracking | null): ProductionOrderTracking | undefined {
-  if (!tracking) return undefined;
-  const out: ProductionOrderTracking = {};
-  if (tracking.number?.trim()) out.number = tracking.number.trim();
-  if (tracking.carrier?.trim()) out.carrier = tracking.carrier.trim();
-  if (tracking.url?.trim()) out.url = tracking.url.trim();
-  if (tracking.labelUrl?.trim()) out.labelUrl = tracking.labelUrl.trim();
-  return Object.keys(out).length > 0 ? out : undefined;
-}
+// Nest-free, dời sang `client/shipping.ts` (+ `hasProductionOrderTracking`/`normalizeProductionOrderTracking`).
+export { ProductionOrderTrackingZod, type ProductionOrderTracking, hasProductionOrderTracking, normalizeProductionOrderTracking };
 
 /** Trạng thái pipeline R2 cho từng vị trí design (Phase 6 Design-R2-Pipeline). */
 export const DesignStatusZod = z.enum(['pending', 'ready', 'failed']);
@@ -2189,6 +2146,8 @@ export const GetLifecycleOverviewZod = z.object({
   factoryId: IDZod.optional(),
   from: z.string().optional(),
   to: z.string().optional(),
+  /** Dòng sản phẩm (PRD-8) — tab dịch vụ ở Seller Hub Operations. */
+  productLine: z.enum(PRODUCT_LINES).optional(),
   /** Lọc theo khách hàng (chọn từ `LifecycleOverviewZod.customers`) — khớp CHÍNH XÁC
    * `userSku` (+ `userEmail` nếu gửi kèm), case-insensitive. */
   userSku: z.string().optional(),
@@ -2588,6 +2547,8 @@ export const CustomerOrderSummaryZod = z.object({
   /** Nhãn chặng sản xuất hiện tại (vd "Đang in", "Đóng hàng"...) — rút gọn từ
    *  LifecycleTrack cho listing; xem `track.tsx` (GET .../track) để có timeline đầy đủ từng chặng. */
   currentStageLabel: z.string().optional(),
+  /** Key chặng (`LIFECYCLE_STAGE_KEYS`) — FE dịch nhãn theo ngôn ngữ (Seller Portal). */
+  currentStageKey: z.string().optional(),
   /** Mốc thời gian vào chặng hiện tại. */
   currentStageAt: z.coerce.date().optional(),
   /** Đơn đã hoàn thành toàn bộ luồng (đóng hàng xong). */

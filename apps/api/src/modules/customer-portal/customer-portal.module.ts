@@ -18,6 +18,7 @@ import { CustomerAuthController } from './customer-auth.controller';
 import { CustomerCatalogController } from './customer-catalog.controller';
 import { CustomerCatalogService } from './customer-catalog.service';
 import { CustomerOpenApiController } from './customer-open-api.controller';
+import { CustomerOrderAdminController } from './customer-order-admin.controller';
 import { CustomerOrderController } from './customer-order.controller';
 import { CustomerOrderEntity, CustomerOrderSchema } from './customer-order.entity';
 import { CustomerOrderService } from './customer-order.service';
@@ -60,6 +61,8 @@ import { PublicTrackService } from './public-track.service';
     // ORD-4 — API keys (portal, JWT) + Public Order API (API key, không JWT).
     CustomerApiKeyController,
     CustomerOpenApiController,
+    // Khu quản trị `/hub` của Seller Portal (Admin đọc đơn mọi seller).
+    CustomerOrderAdminController,
   ],
   providers: [CustomerOrderService, CustomerCatalogService, PublicTrackService],
 })

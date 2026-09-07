@@ -1,0 +1,200 @@
+{
+  "brand": {
+    "title": "Seller Hub",
+    "subtitle": "ONOS FACTORY · ADMIN"
+  },
+  "nav": {
+    "group": "Seller management",
+    "groupOps": "Other",
+    "dashboard": "Overview",
+    "sellers": "Sellers",
+    "orders": "Orders",
+    "notifications": "Notifications",
+    "factoryApp": "Factory operations",
+    "signOut": "Sign out",
+    "ordersAll": "All services",
+    "operations": "Operations"
+  },
+  "login": {
+    "title": "Seller Hub",
+    "hint": "For Admin / SuperAdmin staff.",
+    "email": "Staff email",
+    "password": "Password",
+    "remember": "Remember me",
+    "submit": "Enter admin area",
+    "submitting": "Signing in...",
+    "failed": "Wrong email or password.",
+    "forbidden": "This account cannot access the seller admin area (Admin/SuperAdmin required).",
+    "generic": "Could not sign in. Please try again.",
+    "footer": "OnosFactory · Seller admin area"
+  },
+  "dashboard": {
+    "title": "Seller overview",
+    "subtitle": "All sellers and customer orders in the system",
+    "sellers": "Sellers with orders",
+    "orders": "Customer orders",
+    "pending": "Pending push",
+    "inProduction": "In production",
+    "held": "On hold",
+    "topSellers": "Top sellers by orders",
+    "recent": "Latest orders",
+    "byProductLine": "Orders by product line",
+    "byStatus": "Orders by status",
+    "viewAll": "View all"
+  },
+  "sellers": {
+    "title": "Sellers",
+    "subtitle": "Customer accounts (customers table) — edit profile, tier, lock/unlock, reset password, view as seller",
+    "search": "Search SKU, email, name...",
+    "tierAll": "All tiers",
+    "tierNone": "Retail",
+    "tier": "VIP {{n}}",
+    "hasAccountAll": "All accounts",
+    "hasAccountYes": "Registered on portal",
+    "hasAccountNo": "Not registered",
+    "showDeleted": "Deleted",
+    "columns": {
+      "seller": "Seller",
+      "tier": "Tier",
+      "orders": "Orders",
+      "lastOrder": "Last order",
+      "status": "Status",
+      "actions": ""
+    },
+    "viewAs": "View as seller",
+    "edit": "Edit",
+    "resetPassword": "Reset password",
+    "lock": "Lock",
+    "unlock": "Unlock",
+    "delete": "Delete",
+    "restore": "Restore",
+    "active": "Active",
+    "locked": "Locked",
+    "deleted": "Deleted",
+    "noAccount": "No account",
+    "empty": "No sellers match.",
+    "editTitle": "Edit seller",
+    "fullName": "Name",
+    "phone": "Phone",
+    "tierLabel": "VIP tier",
+    "save": "Save",
+    "cancel": "Cancel",
+    "saved": "Saved.",
+    "resetTitle": "Reset password",
+    "resetHint": "Leave empty to generate a password — shown ONCE, send it to the customer right away.",
+    "newPassword": "New password (optional)",
+    "resetDone": "Password changed.",
+    "generated": "Generated password",
+    "lockConfirm": "Lock account {{name}}? The customer will not be able to sign in.",
+    "unlockConfirm": "Unlock account {{name}}?",
+    "deleteConfirm": "Soft-delete {{name}}? Hidden from all lists and cannot sign in; can be restored.",
+    "statusUpdated": "Status updated.",
+    "deleted_": "Deleted.",
+    "restored": "Restored.",
+    "ordersOf": "Orders of seller"
+  },
+  "orders": {
+    "title": "All customer orders",
+    "subtitle": "Read-only — to act on an order, use View as seller.",
+    "sellerFilter": "Seller",
+    "allSellers": "All sellers",
+    "columns": {
+      "seller": "Seller",
+      "service": "Service",
+      "date": "Date"
+    },
+    "openAsSeller": "Open as seller",
+    "subtitleOms": "Customer orders across all sellers · 6 services · read-only",
+    "refresh": "Refresh",
+    "searchPlaceholder": "Search order id, SKU, seller...",
+    "totalOrders": "{{count}} total orders",
+    "subtitleLine": "{{line}} customer orders across all sellers · read-only"
+  },
+  "notifications": {
+    "title": "Customer notifications",
+    "subtitle": "Send a notification to one seller or all; history below.",
+    "sendTitle": "Send notification",
+    "recipient": "Recipient",
+    "broadcast": "All sellers",
+    "titleLabel": "Title",
+    "bodyLabel": "Body",
+    "send": "Send",
+    "sent": "Sent.",
+    "history": "Sent",
+    "columns": {
+      "when": "When",
+      "to": "To",
+      "title": "Title",
+      "by": "Sent by"
+    },
+    "empty": "No notifications sent yet.",
+    "systemEvent": "System"
+  },
+  "common": {
+    "loading": "Loading...",
+    "search": "Search...",
+    "confirm": "Confirm"
+  },
+  "ops": {
+    "title": "Production operations",
+    "subtitle": "Whole process from tool check to packing · admin view · read-only",
+    "factoryAll": "All factories",
+    "kpi": {
+      "in": "Entered",
+      "out": "Completed",
+      "active": "Active",
+      "overdue": "Overdue (≥3 days)",
+      "n2": "On time N2"
+    },
+    "funnel": {
+      "title": "8-stage funnel",
+      "hint": "Backlog = orders currently at the stage · click a stage to list its orders",
+      "backlog": "Backlog",
+      "error": "Errors",
+      "rework": "Rework",
+      "done": "Done in range",
+      "bottleneck": "Bottleneck",
+      "cycle": "Avg cycle {{h}} h"
+    },
+    "stageOrders": {
+      "title": "Orders at stage {{stage}}",
+      "empty": "No orders at this stage.",
+      "openAll": "Open in Customer orders",
+      "age": "{{n}} d",
+      "ageCol": "At stage",
+      "allTitle": "Production status per order · {{line}}",
+      "stageCol": "Current stage"
+    },
+    "sla": {
+      "title": "On-time & overdue",
+      "overdueByFactory": "Overdue by factory",
+      "oldest": "Oldest orders"
+    },
+    "factory": {
+      "title": "By factory",
+      "cols": {
+        "factory": "Factory",
+        "total": "Total",
+        "printed": "Printed",
+        "printing": "Printing",
+        "notPrinted": "Not printed",
+        "errors": "Errors",
+        "designUnassigned": "Design unassigned"
+      }
+    },
+    "findings": {
+      "title": "Findings & actions",
+      "empty": "Nothing unusual this period."
+    },
+    "openFactoryApp": "Open factory app"
+  },
+  "internal": {
+    "column": "Internal",
+    "lastLog": "Log",
+    "source": {
+      "designer": "Designer",
+      "factory": "Factory",
+      "tool-check": "Tool check"
+    }
+  }
+}

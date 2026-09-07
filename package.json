@@ -38,7 +38,10 @@
     "prepare": "husky install",
     "clean-node-modules": "node -e \"const fs=require('fs');const rm=p=>fs.rmSync(p,{recursive:true,force:true});rm('node_modules');for(const g of ['apps','packages'])for(const d of fs.readdirSync(g))rm(g+'/'+d+'/node_modules')\"",
     "clean-dist": "node -e \"const fs=require('fs');for(const d of fs.readdirSync('packages'))fs.rmSync('packages/'+d+'/dist',{recursive:true,force:true})\"",
-    "reset": "pnpm clean-dist && pnpm --filter ./apps/api i"
+    "reset": "pnpm clean-dist && pnpm --filter ./apps/api i",
+    "dev:seller": "turbo run dev --filter ./apps/seller",
+    "build:seller": "turbo run build --filter ./apps/seller",
+    "start:seller": "pnpm --filter ./apps/seller start"
   },
   "engines": {
     "node": "20.20.2"

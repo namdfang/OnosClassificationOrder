@@ -1,0 +1,49 @@
+{
+  "sender": {
+    "title": "Gửi thông báo cho khách hàng",
+    "subtitle": "Soạn thông báo gửi 1 khách cụ thể hoặc broadcast tất cả — khách xem ở chuông thông báo trên Customer Portal.",
+    "titleLabel": "Tiêu đề",
+    "titlePlaceholder": "VD: Đơn hàng của bạn sắp được giao...",
+    "bodyLabel": "Nội dung (không bắt buộc)",
+    "bodyPlaceholder": "Chi tiết thông báo...",
+    "targetLabel": "Gửi tới",
+    "targetAll": "Tất cả khách hàng",
+    "targetOne": "1 khách cụ thể",
+    "customerSearchPlaceholder": "Tìm theo SKU hoặc email...",
+    "customerNotSelected": "Chưa chọn khách hàng",
+    "changeCustomer": "Đổi khách khác",
+    "send": "Gửi thông báo",
+    "sendSuccess": "Đã gửi thông báo",
+    "titleRequired": "Tiêu đề là bắt buộc",
+    "customerRequired": "Vui lòng chọn 1 khách hàng",
+    "historyTitle": "Lịch sử đã gửi",
+    "historyEmpty": "Chưa gửi thông báo nào.",
+    "columns": {
+      "title": "Tiêu đề",
+      "target": "Gửi tới",
+      "sentBy": "Người gửi",
+      "sentAt": "Thời gian"
+    }
+  },
+  "bell": {
+    "title": "Thông báo",
+    "empty": "Chưa có thông báo nào.",
+    "markAllRead": "Đánh dấu đã đọc",
+    "broadcastLabel": "Thông báo chung",
+    "events": {
+      "pushed": "Đơn {{orderCode}} đã vào sản xuất",
+      "pushedBody": "Xưởng đã tiếp nhận, bạn có thể theo dõi tiến trình trong danh sách đơn.",
+      "completed": "Đơn {{orderCode}} đã sản xuất xong",
+      "completedBody": "Toàn bộ sản phẩm trong đơn đã đóng gói xong.",
+      "held": "Đơn {{orderCode}} đang tạm giữ",
+      "unheld": "Đơn {{orderCode}} đã được tiếp tục sản xuất",
+      "itemCancelled": "Sản phẩm {{productionId}} đã bị hủy",
+      "itemCancelledBody": "Sản phẩm này thuộc đơn {{orderCode}}.",
+      "holdReason": {
+        "waiting-design": "Cần bạn bổ sung file thiết kế để tiếp tục.",
+        "waiting-address": "Cần bạn bổ sung địa chỉ nhận hàng để tiếp tục.",
+        "other": "Liên hệ hỗ trợ để biết thêm chi tiết."
+      }
+    }
+  }
+}

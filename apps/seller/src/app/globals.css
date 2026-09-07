@@ -1,0 +1,147 @@
+@import "tailwindcss";
+
+/* Token Onos — indigo là điểm nhấn (khớp admin `apps/web` primary #6366F1), tím thương hiệu
+   #6f26c2 (landing onosglobal.com = brand.600) cho nút hành động chính. Kiến trúc @theme + .dark
+   giữ nguyên khuôn thghub để kit `components/shared` chạy không sửa. */
+@theme {
+  /* Bảng màu lấy từ logo ONOSPOD chính chủ (app.onosfactory.com/branding/logo.svg):
+     hồng cánh sen #c40c68 (chủ đạo) · đỏ #e01008 · đỏ sẫm #800808 · vàng #f7d21e ·
+     xanh ô-liu #7f9a2b · xanh lá #48a05c. Nền trung tính ngả hồng-ấm rất nhẹ để cùng họ với accent. */
+  /* ── Surface ── */
+  --color-background: #f6edf2;
+  --color-foreground: #1c1520;
+  --color-card: #ffffff;
+  --color-card-hover: #fdf4f8;
+  /* Sidebar tối màu mận (dẫn từ hồng #c40c68 của logo) — chữ/viền trong sidebar dùng token riêng bên dưới */
+  --color-sidebar: #3a0c24;
+  --color-sidebar-fg: #fbe6f0;
+  --color-sidebar-muted: #d59ab9;
+  --color-sidebar-hover: rgba(255, 255, 255, 0.08);
+  --color-sidebar-border: rgba(255, 255, 255, 0.1);
+  --color-surface-muted: #f3e6ec;
+  /* ── Text ── */
+  --color-text-primary: #1c1520;
+  --color-text-secondary: #5c5361;
+  --color-text-muted: #948b99;
+  --color-text-placeholder: #c9c1cd;
+  /* ── Border ── */
+  --color-border1: #e8e0e5;
+  --color-border2: #f0eaee;
+  /* ── Accent — hồng cánh sen của logo (chữ trắng trên nền này đạt 5.6:1) ── */
+  --color-accent: #c40c68;
+  --color-accent-light: #fbe6f0;
+  --color-accent-hover: #a80a58;
+  /* ── CTA — nút hành động: cùng họ hồng, đậm hơn một bậc để phân biệt với mục đang chọn ── */
+  --color-cta: #a80a58;
+  --color-cta-hover: #8f0849;
+  --color-cta-foreground: #ffffff;
+  /* ── Status — lấy đúng xanh/vàng/đỏ của logo ── */
+  --color-success: #3a8a4c;
+  --color-success-bg: #edf7ef;
+  --color-error: #c30d07;
+  --color-error-bg: #fdecec;
+  --color-warning: #9a7a05;
+  --color-warning-bg: #fdf6d6;
+  --color-info: #c40c68;
+  --color-info-bg: #fbe6f0;
+  /* ── Overlay ── */
+  --color-overlay: rgba(28, 21, 32, 0.4);
+  /* ── Chart — 6 màu của logo theo thứ tự nổi bật ── */
+  --color-chart-1: #c40c68;
+  --color-chart-2: #f7d21e;
+  --color-chart-3: #48a05c;
+  --color-chart-4: #e01008;
+  --color-chart-5: #7f9a2b;
+  --color-chart-6: #800808;
+  --shadow-card: 0 1px 3px rgba(28, 21, 32, 0.08), 0 1px 2px rgba(28, 21, 32, 0.05);
+  --shadow-elevated: 0 6px 16px rgba(28, 21, 32, 0.12), 0 2px 6px rgba(28, 21, 32, 0.08);
+  --radius-dash: 0.9rem;
+  /* ── Fonts (khớp apps/web: Inter body, Lexend Deca tiêu đề) ── */
+  --font-sans: var(--font-inter), "Inter", system-ui, sans-serif;
+  --font-display: var(--font-lexend), "Lexend Deca", var(--font-inter), system-ui, sans-serif;
+  --font-mono: ui-monospace, "JetBrains Mono", SFMono-Regular, Menlo, monospace;
+}
+
+.dark {
+  --color-background: #15101a;
+  --color-foreground: #f1e9ee;
+  --color-card: #1f1826;
+  --color-card-hover: #2a2131;
+  --color-sidebar: #200712;
+  --color-sidebar-fg: #fbe6f0;
+  --color-sidebar-muted: #b98aa3;
+  --color-sidebar-hover: rgba(255, 255, 255, 0.07);
+  --color-sidebar-border: rgba(255, 255, 255, 0.08);
+  --color-surface-muted: #261e2d;
+  --color-text-primary: #f1e9ee;
+  --color-text-secondary: #b5a8b3;
+  --color-text-muted: #7d717c;
+  --color-text-placeholder: #574c57;
+  --color-border1: #352a3b;
+  --color-border2: #2c2232;
+  /* Hồng nâng sáng cho nền tối (giữ hue của logo) */
+  --color-accent: #ff4fa3;
+  --color-accent-light: #3b1a2c;
+  --color-accent-hover: #ff7bb9;
+  --color-cta: #ff4fa3;
+  --color-cta-hover: #ff7bb9;
+  --color-cta-foreground: #1c0a13;
+  --color-success: #6fcf85;
+  --color-success-bg: rgba(72, 160, 92, 0.15);
+  --color-error: #ff6b63;
+  --color-error-bg: rgba(224, 16, 8, 0.15);
+  --color-warning: #f7d21e;
+  --color-warning-bg: rgba(247, 210, 30, 0.14);
+  --color-info: #ff4fa3;
+  --color-info-bg: rgba(255, 79, 163, 0.14);
+  --color-overlay: rgba(0, 0, 0, 0.6);
+  --color-chart-1: #ff4fa3;
+  --color-chart-2: #f7d21e;
+  --color-chart-3: #6fcf85;
+  --color-chart-4: #ff6b63;
+  --color-chart-5: #a9c44a;
+  --color-chart-6: #c73a3a;
+  --shadow-card: 0 1px 3px rgba(0, 0, 0, 0.4), 0 1px 2px rgba(0, 0, 0, 0.3);
+  --shadow-elevated: 0 6px 16px rgba(0, 0, 0, 0.5), 0 2px 6px rgba(0, 0, 0, 0.4);
+}
+
+body {
+  background: var(--color-background);
+  color: var(--color-foreground);
+  font-family: var(--font-sans);
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+.font-display {
+  font-family: var(--font-display);
+}
+
+.scrollbar-thin::-webkit-scrollbar { width: 4px; }
+.scrollbar-thin::-webkit-scrollbar-track { background: transparent; }
+.scrollbar-thin::-webkit-scrollbar-thumb { background: #ccc; border-radius: 4px; }
+.scrollbar-thin::-webkit-scrollbar-thumb:hover { background: #aaa; }
+.scrollbar-thin { scrollbar-width: thin; scrollbar-color: #ccc transparent; }
+.dark .scrollbar-thin::-webkit-scrollbar-thumb { background: #555; }
+.dark .scrollbar-thin::-webkit-scrollbar-thumb:hover { background: #777; }
+.dark .scrollbar-thin { scrollbar-color: #555 transparent; }
+
+.font-mono-num { font-family: var(--font-mono); letter-spacing: -0.5px; }
+
+.safe-top { padding-top: env(safe-area-inset-top, 0px); }
+.safe-bottom { padding-bottom: env(safe-area-inset-bottom, 0px); }
+.tap-highlight-none { -webkit-tap-highlight-color: transparent; }
+.translate-z-0 { transform: translateZ(0); }
+.mobile-card-press:active { transform: scale(0.98); transition: transform 0.1s ease-out; }
+
+@keyframes slide-up { from { transform: translateY(100%); } to { transform: translateY(0); } }
+@keyframes fade-in { from { opacity: 0; } to { opacity: 1; } }
+.animate-slide-up { animation: slide-up 0.3s ease-out; }
+.animate-fade-in { animation: fade-in 0.2s ease-out; }
+
+.no-scrollbar::-webkit-scrollbar { display: none; }
+.no-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }
+
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after { animation-duration: 0.01ms !important; transition-duration: 0.01ms !important; }
+}

@@ -1,3 +1,4 @@
+import { designAcceptKeys } from '../client';
 import { createZodDto } from '@anatine/zod-nestjs';
 import { extendApi } from '@anatine/zod-openapi';
 import { PriceZod, PRINT_AREA_MAX_WIDTH_CM, ProductPrintAreaKeyZod } from '@shared/constants';
@@ -108,13 +109,8 @@ export type ProductPrintArea = z.infer<typeof ProductPrintAreaZod>;
  * ORD-22 + push ORD-25) + `resolveImportSkus`, FE form đặt đơn `new.tsx`
  * (`canAddToCart`) + cảnh báo preview import. Sửa luật thì sửa Ở ĐÂY.
  */
-export function designAcceptKeys(areas: Pick<ProductPrintAreaItem, 'key' | 'isRequired'>[] | undefined): string[] {
-  const list = areas ?? [];
-  const required = list.filter((a) => a.isRequired !== false);
-  if (required.length === 0) return [];
-  const frontBack = ['front', 'back'].filter((k) => list.some((a) => a.key === k));
-  return frontBack.length > 0 ? frontBack : required.map((a) => a.key);
-}
+// Nest-free, dời sang `client/print-area.ts` (luật dùng chung web + seller + BE).
+export { designAcceptKeys };
 
 /**
  * Biến thể sản phẩm (VD: màu/size cụ thể, nhưng KHÔNG định nghĩa cứng field

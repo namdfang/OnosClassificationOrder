@@ -3288,6 +3288,12 @@ export class OrderService implements OnModuleInit {
     // Lọc theo khách hàng (chọn từ combobox strip — options do facet `customers`
     // bên dưới trả về) — khớp CHÍNH XÁC userSku (+ userEmail nếu có),
     // case-insensitive. Dùng $and để không đè $or scope xưởng ở trên.
+    // PRD-8 — tab dịch vụ (Seller Hub Operations): chỉ đơn thuộc dòng sản phẩm này.
+    if (dto.productLine) {
+      const and = (match.$and as unknown[] | undefined) ?? [];
+      and.push({ productLine: dto.productLine });
+      match.$and = and;
+    }
     if (dto.userSku?.trim()) {
       const and = (match.$and as unknown[] | undefined) ?? [];
       and.push({ userSku: { $regex: `^${escapeRegex(dto.userSku.trim())}$`, $options: 'i' } });

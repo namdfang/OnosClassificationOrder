@@ -5,6 +5,8 @@
 > **Route:** `/adm/customers` (permission `page.customers` — CHỈ Admin/SuperAdmin)
 > **API:** `/v1/customers` (mở rộng) — tất cả `@Auth([RoleType.Admin])`
 
+> **07/09/2026 — Seller Hub:** các API quản trị khách trong doc này (list/sửa/tier/reset mật khẩu/khóa/xóa mềm) giờ còn được gọi từ khu `/hub/sellers` của cổng seller mới (`apps/seller`, SellerPortal.md §9) qua proxy `/api/hub/v1/customers/*`. Trang `/adm/customers` vẫn chạy; theo định hướng của người dùng, quản lý seller chuyển dần sang `/hub`, `/adm` giữ cho vận hành xưởng.
+
 ## 1. Overview
 
 Trang quản trị khách hàng DUY NHẤT — hợp nhất từ dialog "Danh sách khách" cũ ở

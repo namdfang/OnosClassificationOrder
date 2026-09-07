@@ -6,6 +6,8 @@
 > **API:** `/v1/customer/orders/*`
 > **Plan gốc:** `documents/Plans/CustomerOrderIntake-CSV-API.md` (v3 — đã implement đợt CSV/XLSX; API key + Public API + webhook hoãn Phase 2)
 
+> **PRD-8 `productLine` trên item (07/09/2026):** cả 4 đường tạo item staging — form (`placeOrder`), CSV (`importOrdersCsv`), Public Order API, sửa đơn pending (`updateStagingOrder`) — đều stamp `productLine: q.productLine` từ `quoteItem()` (ProductConfig). Thiếu ở đường nào là đơn pending của đường đó tàng hình khỏi `counts.byProductLine` + filter `productLine` (đơn đã push còn fallback qua `prodOrders.productLine`). Thêm đường tạo item mới → nhớ stamp.
+
 ## 1. Overview
 
 Khách hàng Customer Portal lên đơn theo mô hình **staging 2 pha** thay vì vào thẳng sản xuất:

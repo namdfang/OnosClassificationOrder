@@ -16,4 +16,7 @@ ingress:
     service: http://localhost:5173
   - hostname: api-dev-onos.autonow.vn
     service: http://localhost:3007
+  # Seller Portal (apps/seller, Next 16) — API đi qua proxy same-origin của Next, không cần hostname riêng.
+  - hostname: seller-dev-onos.autonow.vn
+    service: http://localhost:3017
   - service: http_status:404

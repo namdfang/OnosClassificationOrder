@@ -435,6 +435,8 @@ Hàng rào thật vẫn nằm trong service: token khách **thật** không có 
 `impersonatorId` nên bị từ chối ngay — không có đường đổi token khách lấy token
 nhân viên.
 
+**Seller Portal riêng (`apps/seller`, SellerPortal.md §2.3):** khi `VITE_SELLER_URL` khác rỗng, `impersonationStart.ts` KHÔNG ghi token vào `customerAuthStore` nữa mà chuyển sang `${VITE_SELLER_URL}/auth/handoff#token=…&exp=…` (fragment không tới server/log); bên seller đổi thành cookie httpOnly sau khi xác minh qua `customer/auth/me`. Thoát mạo danh từ seller đi qua `POST /api/auth/logout` của Next → `customer/auth/impersonate/stop` (cùng đường 10.4a) → quay về `NEXT_PUBLIC_ADMIN_URL`.
+
 FE chọn đường theo loại phiên trong `apps/web/src/utils/impersonation.ts`
 (`activeImpersonationSession()` + bảng `STOP_PATH`): phiên nào giữ
 `profile.impersonatedBy` ở `customerAuthStore` thì đi đường khách, còn lại đi

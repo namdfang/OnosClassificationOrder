@@ -4,6 +4,19 @@ import { CustomerOrderStatus, PRODUCT_LINES } from '@shared/enums';
 import { PageResZod, ResZod } from '@shared/types';
 import { z } from 'zod';
 
+import {
+  CUSTOMER_SHIP_METHODS,
+  CustomerImportOrderItemZod,
+  CustomerImportOrderZod,
+  CustomerImportShippingAddressZod,
+  CustomerShipMethodZod,
+  DEFAULT_CUSTOMER_SHIP_METHOD,
+  parseCustomerShipMethod,
+  type CustomerImportOrder,
+  type CustomerImportOrderItem,
+  type CustomerImportShippingAddress,
+  type CustomerShipMethod,
+} from '../client';
 import { IDZod } from '..';
 import type {
   ProductionOrderTracking} from './production-order.dto';
@@ -14,6 +27,7 @@ import {
   LifecycleTrackZod,
   ProductionOrderShippingAddressZod,
   ProductionOrderTrackingZod,
+  WORKSHOP_STAGE_FILTER_KEYS,
 } from './production-order.dto';
 
 /**
@@ -34,23 +48,8 @@ export const CUSTOMER_PAYMENT_GATE_KEY = 'customer_payment_gate_enabled';
 // Ship method — giữ ĐỦ 4 giá trị hệ cũ (plan §13.2)
 // ---------------------------------------------------------------------------
 
-export const CUSTOMER_SHIP_METHODS = ['cod', 'express_us', 'economy_us', 'tiktok'] as const;
-export type CustomerShipMethod = (typeof CUSTOMER_SHIP_METHODS)[number];
-export const CustomerShipMethodZod = z.enum(CUSTOMER_SHIP_METHODS);
-/** Khách bỏ trống → express_us (plan §12.4). */
-export const DEFAULT_CUSTOMER_SHIP_METHOD: CustomerShipMethod = 'express_us';
-
-/**
- * Parse giá trị cột `shipping` của template cũ — case-insensitive, alias
- * `SBTT` → `tiktok`; trống → default `express_us`; giá trị lạ → `undefined`
- * (caller báo lỗi dòng). Dùng CHUNG ở FE (parse file) và BE (validate lại).
- */
-export function parseCustomerShipMethod(raw?: string | null): CustomerShipMethod | undefined {
-  const v = (raw || '').trim().toLowerCase();
-  if (!v) return DEFAULT_CUSTOMER_SHIP_METHOD;
-  if (v === 'sbtt') return 'tiktok';
-  return (CUSTOMER_SHIP_METHODS as readonly string[]).includes(v) ? (v as CustomerShipMethod) : undefined;
-}
+// Nest-free, dời sang `client/customer-import.ts`.
+export { CUSTOMER_SHIP_METHODS, CustomerShipMethodZod, DEFAULT_CUSTOMER_SHIP_METHOD, parseCustomerShipMethod, type CustomerShipMethod };
 
 /**
  * Idempotency mức ĐƠN (plan §13.4): chuẩn hóa cặp `(order_id, identifier)`
@@ -161,6 +160,8 @@ export const CustomerStagingItemZod = z.object({
   productionId: z.string().optional(),
   // ---- derive at read-time từ OrderEntity (chỉ có sau push) ----
   status: z.nativeEnum(CustomerOrderStatus).optional(),
+  /** Key chặng (`LIFECYCLE_STAGE_KEYS`) — FE dịch nhãn theo ngôn ngữ người xem (`track.progress.stages.*`). */
+  currentStageKey: z.string().optional(),
   currentStageLabel: z.string().optional(),
   currentStageAt: z.coerce.date().optional(),
   held: z.boolean().optional(),
@@ -235,6 +236,10 @@ export const CustomerOrderCountsZod = z.object({
   byProductLine: z.record(z.enum(PRODUCT_LINES), z.number()).optional(),
 });
 export type CustomerOrderCounts = z.infer<typeof CustomerOrderCountsZod>;
+/** `productLine` → mọi số đếm chỉ tính đơn có ≥1 item thuộc dòng (trang dịch vụ Seller Portal). */
+export const GetCustomerOrderCountsZod = z.object({ productLine: z.enum(PRODUCT_LINES).optional() });
+export class GetCustomerOrderCountsDto extends createZodDto(extendApi(GetCustomerOrderCountsZod)) {}
+
 export const GetCustomerOrderCountsResZod = ResZod.extend({ data: CustomerOrderCountsZod });
 export class GetCustomerOrderCountsResDto extends createZodDto(extendApi(GetCustomerOrderCountsResZod)) {}
 
@@ -246,42 +251,15 @@ export class GetCustomerOrderCountsResDto extends createZodDto(extendApi(GetCust
  * Địa chỉ import CSV — required theo đúng ghi chú template cũ: name, country,
  * address_1, city, state, postcode bắt buộc; telephone/email/company tùy chọn.
  */
-export const CustomerImportShippingAddressZod = ProductionOrderShippingAddressZod.extend({
-  firstName: z.string().min(1).max(200),
-  address1: z.string().min(1).max(500),
-  city: z.string().min(1).max(200),
-  state: z.string().min(1).max(200),
-  country: z.string().min(1).max(100),
-  postcode: z.string().min(1).max(50),
-});
-export type CustomerImportShippingAddress = z.infer<typeof CustomerImportShippingAddressZod>;
-
-/** 1 dòng CSV = 1 item — SKU BẮT BUỘC match `variations[].sku` (plan §13.1). */
-export const CustomerImportOrderItemZod = z.object({
-  sku: z.string().min(1).max(200),
-  merchantSku: z.string().max(200).optional(),
-  quantity: z.coerce.number().int().positive().default(1),
-  shipMethod: CustomerShipMethodZod.default(DEFAULT_CUSTOMER_SHIP_METHOD),
-  activeService: z.boolean().optional(),
-  mockupUrl: z.string().max(2000).optional(),
-  designs: DesignFieldsZod.optional(),
-  tracking: CustomerOrderTrackingZod.optional(),
-  /** Giá trị thô từ file — CHỈ đối chiếu variation (lệch → warning FE), không phải nguồn chân lý. */
-  rawItemName: z.string().max(300).optional(),
-  rawColor: z.string().max(200).optional(),
-  rawSize: z.string().max(200).optional(),
-});
-export type CustomerImportOrderItem = z.infer<typeof CustomerImportOrderItemZod>;
-
-export const CustomerImportOrderZod = z.object({
-  orderId: z.string().min(1).max(200),
-  identifier: z.string().max(200).optional(),
-  orderName: z.string().max(300).optional(),
-  note: z.string().max(1000).optional(),
-  shippingAddress: CustomerImportShippingAddressZod,
-  items: CustomerImportOrderItemZod.array().min(1).max(100),
-});
-export type CustomerImportOrder = z.infer<typeof CustomerImportOrderZod>;
+// Nest-free, dời sang `client/customer-import.ts` — NGUỒN RULE DUY NHẤT cho FE (web + seller) và BE.
+export {
+  CustomerImportShippingAddressZod,
+  CustomerImportOrderItemZod,
+  CustomerImportOrderZod,
+  type CustomerImportShippingAddress,
+  type CustomerImportOrderItem,
+  type CustomerImportOrder,
+};
 
 /** Cap tổng ~500 dòng/lần — validate thêm ở service (tổng items mọi đơn). */
 export const ImportCustomerOrdersZod = z.object({
@@ -624,3 +602,101 @@ export type PublicOrderTrack = z.infer<typeof PublicOrderTrackZod>;
 
 export const GetPublicOrderTrackResZod = ResZod.extend({ data: PublicOrderTrackZod });
 export class GetPublicOrderTrackResDto extends createZodDto(extendApi(GetPublicOrderTrackResZod)) {}
+
+// ---------------------------------------------------------------------------
+// Khu quản trị trong Seller Portal (`/hub`, SellerPortal.md §9) — nhân viên
+// Admin/SuperAdmin đọc đơn staging của MỌI khách. Chỉ đọc; thao tác vẫn qua
+// mạo danh (xem với tư cách seller).
+// ---------------------------------------------------------------------------
+
+/** Trạng thái NỘI BỘ của đơn sản xuất — chỉ admin (`/hub/orders`), KHÔNG bao giờ trả cho khách. */
+export const AdminInternalStatusZod = z.object({
+  /** Khóa chặng hiện tại (`WORKSHOP_STAGE_FILTER_KEYS`), `done` khi đã đóng hàng. */
+  stage: z.string().optional(),
+  factoryShortName: z.string().optional(),
+  factoryName: z.string().optional(),
+  designerName: z.string().optional(),
+  designerStatus: z.string().optional(),
+  priority: z.number().optional(),
+  productionError: z.string().optional(),
+  productionErrorSource: z.string().optional(),
+  productionErrorNote: z.string().optional(),
+  toolResult: z.string().optional(),
+  toolResultNote: z.string().optional(),
+  toolCheckErrorNotes: z.string().array().optional(),
+  errorFileNote: z.string().optional(),
+  printStatusNote: z.string().optional(),
+  designerRejectedReason: z.string().optional(),
+  holdReason: z.string().optional(),
+  /** Nhật ký gần nhất của đơn (`orderLogs`). */
+  lastLog: z
+    .object({ action: z.string(), field: z.string().optional(), userName: z.string().optional(), at: z.coerce.date().optional(), after: z.unknown().optional() })
+    .optional(),
+});
+export type AdminInternalStatus = z.infer<typeof AdminInternalStatusZod>;
+
+export const AdminCustomerStagingItemZod = CustomerStagingItemZod.extend({ internal: AdminInternalStatusZod.optional() });
+export type AdminCustomerStagingItem = z.infer<typeof AdminCustomerStagingItemZod>;
+
+export const AdminCustomerStagingOrderZod = CustomerStagingOrderZod.extend({
+  items: AdminCustomerStagingItemZod.array(),
+  customerId: IDZod,
+  /** Khách sở hữu đơn — `$lookup customers`, để hiện cột Seller. */
+  customer: z
+    .object({
+      userSku: z.string().optional(),
+      userEmail: z.string().optional(),
+      fullName: z.string().optional(),
+      tier: z.number().nullish(),
+    })
+    .optional(),
+});
+export type AdminCustomerStagingOrder = z.infer<typeof AdminCustomerStagingOrderZod>;
+
+/** Khoảng ngày (YYYY-MM-DD, giờ VN) theo mốc `pushedAt ?? createdAt` — cùng mốc sắp xếp listing. */
+export const AdminOrderDateRangeZod = z.object({
+  dateFrom: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional(),
+  dateTo: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional(),
+});
+
+export const GetAdminCustomerOrdersZod = GetCustomerStagingOrdersZod.merge(AdminOrderDateRangeZod).extend({
+  /** Lọc theo 1 seller; bỏ trống = mọi seller. */
+  customerId: IDZod.optional(),
+  /** Chặng sản xuất hiện tại (`WORKSHOP_STAGE_FILTER_KEYS`) — đơn có ≥1 item đang ở chặng này (Operations `/hub/operations`). */
+  stage: z.enum(WORKSHOP_STAGE_FILTER_KEYS).optional(),
+});
+export class GetAdminCustomerOrdersDto extends createZodDto(extendApi(GetAdminCustomerOrdersZod)) {}
+
+export const GetAdminCustomerOrdersResZod = PageResZod.extend({ data: AdminCustomerStagingOrderZod.array() });
+export class GetAdminCustomerOrdersResDto extends createZodDto(extendApi(GetAdminCustomerOrdersResZod)) {}
+
+export const GetAdminCustomerOrderCountsZod = AdminOrderDateRangeZod.extend({ customerId: IDZod.optional(), productLine: z.enum(PRODUCT_LINES).optional() });
+export class GetAdminCustomerOrderCountsDto extends createZodDto(extendApi(GetAdminCustomerOrderCountsZod)) {}
+
+export const AdminSellerStatZod = z.object({
+  customerId: IDZod,
+  userSku: z.string().optional(),
+  userEmail: z.string().optional(),
+  fullName: z.string().optional(),
+  tier: z.number().nullish(),
+  orders: z.number(),
+  pending: z.number(),
+  inProduction: z.number(),
+  held: z.number(),
+  lastOrderAt: z.coerce.date().optional(),
+});
+export type AdminSellerStat = z.infer<typeof AdminSellerStatZod>;
+
+export const AdminCustomerOrderStatsZod = z.object({
+  /** Đếm toàn hệ (cùng công thức `counts` của khách). */
+  counts: CustomerOrderCountsZod,
+  /** Số seller có ít nhất 1 đơn staging. */
+  sellers: z.number(),
+  /** Top seller theo số đơn. */
+  topSellers: AdminSellerStatZod.array(),
+  /** Đơn mới nhất toàn hệ. */
+  recent: AdminCustomerStagingOrderZod.array(),
+});
+export type AdminCustomerOrderStats = z.infer<typeof AdminCustomerOrderStatsZod>;
+export const GetAdminCustomerOrderStatsResZod = ResZod.extend({ data: AdminCustomerOrderStatsZod });
+export class GetAdminCustomerOrderStatsResDto extends createZodDto(extendApi(GetAdminCustomerOrderStatsResZod)) {}

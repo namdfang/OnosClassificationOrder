@@ -14,7 +14,13 @@ import type {
   CustomerStagingOrder,
   CustomerStagingOrderResDto,
   GetCustomerDashboardResDto,
+  GetCustomerOrderCountsDto,
   GetCustomerOrderCountsResDto,
+  GetAdminCustomerOrdersDto,
+  GetAdminCustomerOrdersResDto,
+  GetAdminCustomerOrderCountsDto,
+  GetAdminCustomerOrderStatsResDto,
+  AdminCustomerStagingOrder,
   GetCustomerOrderProductTypesResDto,
   GetCustomerOrderTrackResDto,
   GetCustomerStagingOrdersDto,
@@ -65,6 +71,7 @@ import { ProductConfigEntity } from '@/modules/product-config/product-config.ent
 import { applyPromotionDiscount, promotionMatches, PromotionService } from '@/modules/promotion/promotion.service';
 import { SystemConfigService } from '@/modules/system-config/system-config.service';
 import { customerMessage } from '@/shared/i18n/customer-messages';
+import { workshopStageSwitchExpr } from '@/utils/workshop-stage';
 
 import type { CustomerOrderItem } from './customer-order.entity';
 import { CustomerOrderEntity } from './customer-order.entity';
@@ -108,7 +115,10 @@ export const CUSTOMER_STAGE_LABELS: Record<string, string> = {
 export const PROD_DERIVE_FIELDS =
   'productionId cancelledAt fulfillmentCompletedAt currentFulfillmentStage heldAt holdReason ' +
   'designerStatus productionErrorSource toolResultNote toolCheckedAt ' +
-  'designerAssignedAt designerFirstStartedAt designerCompletedAt fulfillmentStages inProductionAt productLine';
+  'designerAssignedAt designerFirstStartedAt designerCompletedAt fulfillmentStages inProductionAt productLine ' +
+  // Trường NỘI BỘ — chỉ `toAdminStagingOrder` (khu /hub) đọc; `toStagingOrder` cho khách không bao giờ chép ra.
+  'factoryId assignee priority productionError productionErrorNote productionErrorSource toolResult toolResultNote ' +
+  'toolCheckErrorNotes errorFileNote printStatusNote designerRejectedReason';
 
 export interface ProdDeriveFields {
   productionId?: string;
@@ -244,6 +254,12 @@ function attrValue(
 const SIZE_LABEL = /size|kích/i;
 const COLOR_LABEL = /color|colour|màu/i;
 
+interface AdminRefMaps {
+  factories: Map<string, { name?: string; shortName?: string }>;
+  users: Map<string, string>;
+  logs: Map<string, { action: string; field?: string; userName?: string; at?: Date; after?: unknown }>;
+}
+
 @Injectable()
 export class CustomerOrderService implements OnModuleInit {
   constructor(
@@ -266,6 +282,7 @@ export class CustomerOrderService implements OnModuleInit {
   // -------------------------------------------------------------------------
 
   async onModuleInit() {
+    this.warmAdminCache();
     const MARKER = 'customer_orders_backfill_v1';
     try {
       const done = await this.systemConfigService.get<string>(MARKER);
@@ -394,7 +411,8 @@ export class CustomerOrderService implements OnModuleInit {
    * MIRROR logic JS `deriveItemStatus`/`isReworkBadge`/`deriveOrderStatus` —
    * đổi 1 nơi nhớ đổi nơi kia.
    */
-  private buildDerivePipeline(customerId: string, completedCutoff: Date): Record<string, unknown>[] {
+  /** `customerId = null` → không scope theo khách (khu quản trị `/hub` đọc MỌI seller — chỉ Admin gọi). */
+  private buildDerivePipeline(customerId: string | null, completedCutoff: Date): Record<string, unknown>[] {
     const progressExpr = {
       $switch: {
         branches: [
@@ -419,7 +437,7 @@ export class CustomerOrderService implements OnModuleInit {
       ],
     };
     return [
-      { $match: { customerId } },
+      ...(customerId ? [{ $match: { customerId } }] : []),
       {
         // Nối bằng localField/foreignField để DÙNG ĐƯỢC index `productionId_1`.
         // Bản cũ lọc bằng `$expr: { $in: ['$productionId', '$$pids'] }` — `$expr`
@@ -546,6 +564,7 @@ export class CustomerOrderService implements OnModuleInit {
       return {
         ...base,
         status: deriveItemStatus(p, completedCutoff),
+        currentStageKey: p.cancelledAt ? undefined : stage.key,
         currentStageLabel: p.cancelledAt ? undefined : stage.label,
         currentStageAt: p.cancelledAt ? undefined : stage.at,
         held: !!p.heldAt,
@@ -854,33 +873,26 @@ export class CustomerOrderService implements OnModuleInit {
     });
 
     const cutoff = await this.getCompletedCutoff();
-    const pipeline: Record<string, unknown>[] = this.buildDerivePipeline(String(customer._id), cutoff);
-    if (dto.search?.trim()) {
-      const rx = { $regex: escapeRegex(dto.search.trim()), $options: 'i' };
-      pipeline.push({
-        $match: { $or: [{ orderId: rx }, { orderName: rx }, { 'items.productionId': rx }, { 'items.sku': rx }] },
-      });
-    }
-    if (dto.status) pipeline.push({ $match: { statusDerived: dto.status } });
-    if (dto.held) pipeline.push({ $match: { heldAny: true } });
-    // PRD-8 — tab dòng sản phẩm: đơn có ≥1 item thuộc dòng (item đã stamp, hoặc đơn sản xuất đã backfill).
-    if (dto.productLine) {
-      pipeline.push({ $match: { $or: [{ 'items.productLine': dto.productLine }, { 'prodOrders.productLine': dto.productLine }] } });
-    }
-    pipeline.push(
-      { $sort: { sortAt: -1, _id: -1 } },
-      {
-        $facet: {
-          page: [{ $skip: (dto.page - 1) * dto.limit }, { $limit: dto.limit }],
-          total: [{ $count: 'n' }],
-        },
-      },
-    );
+    const search = dto.search?.trim()
+      ? [{ $match: { $or: [{ orderId: { $regex: escapeRegex(dto.search.trim()), $options: 'i' } }, { orderName: { $regex: escapeRegex(dto.search.trim()), $options: 'i' } }, { 'items.productionId': { $regex: escapeRegex(dto.search.trim()), $options: 'i' } }, { 'items.sku': { $regex: escapeRegex(dto.search.trim()), $options: 'i' } }] } }]
+      : [];
+    const candidatePids = await this.loadCandidatePids({ status: dto.status, held: !!dto.held, cutoff });
+    const pipeline = this.buildPagedListPipeline({
+      customerId: String(customer._id),
+      candidatePids,
+      cutoff,
+      preStages: search,
+      productLine: dto.productLine,
+      status: dto.status,
+      held: !!dto.held,
+      skip: (dto.page - 1) * dto.limit,
+      limit: dto.limit,
+    });
 
     const [res] = await this.customerOrderModel.aggregate<{
       page: Array<Record<string, unknown> & { prodOrders?: ProdDeriveFields[] }>;
       total: Array<{ n: number }>;
-    }>(pipeline as never[]);
+    }>(pipeline as never[], { allowDiskUse: true });
 
     const data = (res?.page ?? []).map((doc) => {
       const prodByPid = new Map<string, ProdDeriveFields>(
@@ -891,31 +903,21 @@ export class CustomerOrderService implements OnModuleInit {
     return { success: true, data, total: res?.total?.[0]?.n ?? 0 };
   }
 
-  async getCounts(customer: CustomerDocument): Promise<GetCustomerOrderCountsResDto> {
+  async getCounts(customer: CustomerDocument, dto: GetCustomerOrderCountsDto = {}): Promise<GetCustomerOrderCountsResDto> {
     const cutoff = await this.getCompletedCutoff();
-    const pipeline = [
-      ...this.buildDerivePipeline(String(customer._id), cutoff),
-      {
-        $group: {
-          _id: '$statusDerived',
-          count: { $sum: 1 },
-          held: { $sum: { $cond: ['$heldAny', 1, 0] } },
-          rework: { $sum: { $cond: ['$reworkAny', 1, 0] } },
-        },
-      },
-    ];
-    const linePipeline = [
-      ...this.buildDerivePipeline(String(customer._id), cutoff),
-      // Mỗi đơn đếm vào MỌI dòng nó chứa (item đã stamp ∪ đơn sản xuất đã backfill).
-      { $project: { lines: { $setUnion: [{ $ifNull: ['$items.productLine', []] }, { $ifNull: ['$prodOrders.productLine', []] }] } } },
-      { $unwind: '$lines' },
-      { $match: { lines: { $in: PRODUCT_LINES } } },
-      { $group: { _id: '$lines', count: { $sum: 1 } } },
-    ];
+    const [pipeline, linePipeline] = this.countsPipelines(String(customer._id), cutoff, dto.productLine);
     const [rows, lineRows] = await Promise.all([
       this.customerOrderModel.aggregate<{ _id: string; count: number; held: number; rework: number }>(pipeline as never[]),
       this.customerOrderModel.aggregate<{ _id: ProductLine; count: number }>(linePipeline as never[]),
     ]);
+    return { success: true, data: this.assembleCounts(rows, lineRows) };
+  }
+
+  /** Gom 2 kết quả aggregate (theo trạng thái + theo dòng) thành `CustomerOrderCounts` — dùng chung khách + `/hub`. */
+  private assembleCounts(
+    rows: Array<{ _id: string; count: number; held: number; rework: number }>,
+    lineRows: Array<{ _id: ProductLine; count: number }>,
+  ): CustomerOrderCounts {
     const counts: CustomerOrderCounts = {
       all: 0,
       pending: 0,
@@ -945,7 +947,446 @@ export class CustomerOrderService implements OnModuleInit {
       counts.rework += r.rework;
     }
     counts.byProductLine = Object.fromEntries(lineRows.map((r) => [r._id, r.count])) as CustomerOrderCounts['byProductLine'];
-    return { success: true, data: counts };
+    return counts;
+  }
+
+  /** `productLine` → chỉ đếm đơn có ≥1 item thuộc dòng (cùng điều kiện với filter listing). */
+  private countsPipelines(
+    customerId: string | null,
+    cutoff: Date,
+    productLine?: ProductLine,
+    extraStages: Record<string, unknown>[] = [],
+  ): [Record<string, unknown>[], Record<string, unknown>[]] {
+    // Cùng luật với listing: chỉ `items.productLine` (đã stamp/backfill) — không fallback `prodOrders`, kẻo tab đếm lệch danh sách.
+    const lineMatch: Record<string, unknown>[] = [...extraStages, ...(productLine ? [{ $match: { 'items.productLine': productLine } }] : [])];
+    const byStatus = [
+      ...this.buildDerivePipeline(customerId, cutoff),
+      ...lineMatch,
+      {
+        $group: {
+          _id: '$statusDerived',
+          count: { $sum: 1 },
+          held: { $sum: { $cond: ['$heldAny', 1, 0] } },
+          rework: { $sum: { $cond: ['$reworkAny', 1, 0] } },
+        },
+      },
+    ];
+    const byLine = [
+      ...this.buildDerivePipeline(customerId, cutoff),
+      ...lineMatch,
+      { $project: { lines: { $setUnion: [{ $ifNull: ['$items.productLine', []] }, []] } } },
+      { $unwind: '$lines' },
+      { $match: { lines: { $in: PRODUCT_LINES } } },
+      { $group: { _id: '$lines', count: { $sum: 1 } } },
+    ];
+    return [byStatus, byLine];
+  }
+
+  // -------------------------------------------------------------------------
+  // Khu quản trị `/hub` trong Seller Portal (SellerPortal.md §9) — Admin đọc
+  // đơn staging của MỌI seller. CHỈ ĐỌC: mọi thao tác trên đơn khách vẫn đi
+  // qua mạo danh (token khách) để giữ nguyên rào + audit sẵn có.
+  // -------------------------------------------------------------------------
+
+  /**
+   * Pipeline phân trang dùng chung khách + admin. Hai đường:
+   * - **Nhanh** (không lọc trạng thái/held/chặng): lọc mức document (khách, ngày, tìm, `items.productLine`),
+   *   sắp xếp + cắt trang TRƯỚC, rồi mới `$lookup` đơn sản xuất cho đúng `limit` dòng → ~0,1 s thay vì 6 s
+   *   (trước đây `$lookup` cho toàn bộ 38k đơn staging rồi mới cắt trang — SellerPortal.md §9.2).
+   * - **Đầy đủ** (có `status`/`held`/`stage`): trạng thái dẫn xuất cần `prodOrders` → derive trên tập đã lọc
+   *   mức document (vẫn nặng nhưng nhỏ hơn nhờ lọc trước).
+   * `productLine` chỉ dùng `items.productLine` (đã stamp/backfill PRD-8); không còn fallback `prodOrders.productLine`.
+   */
+  private static readonly CANDIDATE_PIDS_CAP = 20_000;
+
+  /**
+   * "Tra ngược" từ bảng `orders` để thu hẹp tập staging TRƯỚC khi derive (đường đầy đủ phải
+   * `$lookup` + tính trạng thái trên CẢ 38k document ≈ 4,6 s). Mỗi điều kiện lọc suy ra tập
+   * `productionId` của đơn sản xuất có thể làm document thỏa (điều kiện CẦN, không phải đủ —
+   * `$match statusDerived/heldAny/stage` sau derive vẫn chốt kết quả, nên semantics không đổi):
+   * - `stage` → đơn SX chưa hủy đang ở chặng đó (`workshopStageSwitchExpr`);
+   * - `status` in-production → có `currentFulfillmentStage`, chưa xong; processing → chưa vào
+   *   fulfillment; fulfilled → xong sau `cutoff`; held → `heldAt` khác null.
+   * Nhiều điều kiện → giao tập. Trả null khi không có điều kiện áp dụng được hoặc tập quá lớn
+   * (completed/cancelled/refunded → đường đầy đủ).
+   */
+  private async loadCandidatePids(opts: { stage?: string; status?: CustomerOrderStatus; held: boolean; cutoff: Date }): Promise<string[] | null> {
+    const col = this.customerOrderModel.db.collection('orders');
+    const sets: Array<Set<string>> = [];
+    const collect = async (cursor: AsyncIterable<{ productionId?: string }>) => {
+      const set = new Set<string>();
+      for await (const d of cursor) if (d.productionId) set.add(d.productionId);
+      sets.push(set);
+    };
+    if (opts.stage) {
+      await collect(
+        col.aggregate<{ productionId?: string }>([
+          { $match: { cancelledAt: null, productionId: { $ne: null } } },
+          { $addFields: { stageKey: workshopStageSwitchExpr('$') } },
+          { $match: { stageKey: opts.stage } },
+          { $project: { _id: 0, productionId: 1 } },
+        ]),
+      );
+    }
+    const statusFilter: Record<string, unknown> | null =
+      opts.status === CustomerOrderStatus.InProduction
+        ? { cancelledAt: null, fulfillmentCompletedAt: null, currentFulfillmentStage: { $ne: null } }
+        : opts.status === CustomerOrderStatus.Processing
+          ? { cancelledAt: null, fulfillmentCompletedAt: null, currentFulfillmentStage: null }
+          : opts.status === CustomerOrderStatus.Fulfilled
+            ? { cancelledAt: null, fulfillmentCompletedAt: { $gt: opts.cutoff } }
+            : null;
+    if (statusFilter) await collect(col.find<{ productionId?: string }>(statusFilter, { projection: { _id: 0, productionId: 1 } }));
+    if (opts.held) await collect(col.find<{ productionId?: string }>({ cancelledAt: null, heldAt: { $ne: null } }, { projection: { _id: 0, productionId: 1 } }));
+    if (sets.length === 0) return null;
+    const [first, ...rest] = sets;
+    const pids = [...first].filter((id) => rest.every((s) => s.has(id)));
+    return pids.length > CustomerOrderService.CANDIDATE_PIDS_CAP ? null : pids;
+  }
+
+  private buildPagedListPipeline(opts: {
+    customerId: string | null;
+    cutoff: Date;
+    preStages: Record<string, unknown>[];
+    productLine?: ProductLine;
+    status?: CustomerOrderStatus;
+    held: boolean;
+    postDeriveStages?: Record<string, unknown>[];
+    pageTail?: Record<string, unknown>[];
+    /** Tập `productionId` ứng viên (từ `loadCandidatePids`) — thu hẹp Ở MỨC DOCUMENT trước khi derive. null = không thu hẹp. */
+    candidatePids?: string[] | null;
+    skip: number;
+    limit: number;
+  }): Record<string, unknown>[] {
+    const docMatch: Record<string, unknown>[] = [
+      ...(opts.customerId ? [{ $match: { customerId: opts.customerId } }] : []),
+      ...opts.preStages,
+      ...(opts.productLine ? [{ $match: { 'items.productLine': opts.productLine } }] : []),
+    ];
+    const sortStages = [{ $addFields: { sortAt: { $ifNull: ['$pushedAt', '$createdAt'] } } }, { $sort: { sortAt: -1, _id: -1 } }];
+    const derive = this.buildDerivePipeline(null, opts.cutoff);
+    // `pending` suy được ở mức document (mirror `statusDerived`: chưa hủy, chưa hoàn tiền, chưa push) → đường nhanh.
+    if (opts.status === CustomerOrderStatus.Pending) {
+      docMatch.push({ $match: { status: { $ne: 'cancelled' }, refundedAt: null, pushedAt: null } });
+    }
+    if (opts.candidatePids) docMatch.push({ $match: { 'items.productionId': { $in: opts.candidatePids } } });
+    const needsDerive = (!!opts.status && opts.status !== CustomerOrderStatus.Pending) || opts.held || (opts.postDeriveStages?.length ?? 0) > 0;
+    if (!needsDerive) {
+      return [
+        ...docMatch,
+        ...sortStages,
+        {
+          $facet: {
+            page: [{ $skip: opts.skip }, { $limit: opts.limit }, ...derive, ...(opts.pageTail ?? [])],
+            total: [{ $count: 'n' }],
+          },
+        },
+      ];
+    }
+    return [
+      ...docMatch,
+      ...derive,
+      ...(opts.status ? [{ $match: { statusDerived: opts.status } }] : []),
+      ...(opts.held ? [{ $match: { heldAny: true } }] : []),
+      ...(opts.postDeriveStages ?? []),
+      ...sortStages,
+      {
+        $facet: {
+          page: [{ $skip: opts.skip }, { $limit: opts.limit }, ...(opts.pageTail ?? [])],
+          total: [{ $count: 'n' }],
+        },
+      },
+    ];
+  }
+
+  /** Cache ngắn (60 s) cho số đếm/thống kê khu quản trị — quét toàn bộ staging mỗi lần gọi mất ~5 s. */
+  /**
+   * Cache bộ nhớ cho số liệu admin (counts/stats — quét cả `customer_orders` ≈ 5 s).
+   * Kiểu stale-while-revalidate: còn hạn → trả ngay; hết hạn nhưng có bản cũ → trả bản cũ + tính lại NỀN;
+   * chưa có → chờ tính (1 lần, các request trùng key dùng chung promise). Admin F5 không bao giờ chờ 5 s lần 2.
+   */
+  private readonly adminCache = new Map<string, { at: number; value: unknown }>();
+  private readonly adminInflight = new Map<string, Promise<unknown>>();
+  private static readonly ADMIN_CACHE_MS = 60_000;
+  private async cachedAdmin<T>(key: string, load: () => Promise<T>): Promise<T> {
+    const hit = this.adminCache.get(key);
+    const fresh = !!hit && Date.now() - hit.at < CustomerOrderService.ADMIN_CACHE_MS;
+    if (fresh) return hit.value as T;
+    let inflight = this.adminInflight.get(key) as Promise<T> | undefined;
+    if (!inflight) {
+      inflight = load()
+        .then((value) => {
+          this.adminCache.set(key, { at: Date.now(), value });
+          return value;
+        })
+        .finally(() => this.adminInflight.delete(key));
+      this.adminInflight.set(key, inflight);
+    }
+    if (hit) {
+      inflight.catch(() => undefined); // bản cũ vẫn trả được; lỗi tính nền chỉ ghi log ở load()
+      return hit.value as T;
+    }
+    return inflight;
+  }
+
+  /** Làm ấm cache admin sau khi boot (trang `/hub/orders` mở lần đầu không phải chờ counts/stats ≈ 5 s). */
+  private warmAdminCache() {
+    if (process.env.NODE_ENV === 'test') return;
+    setTimeout(() => {
+      void this.getCountsAdmin({}).catch(() => undefined);
+      void this.getStatsAdmin().catch(() => undefined);
+    }, 10_000).unref();
+  }
+
+  /** `$match` khoảng ngày theo `pushedAt ?? createdAt` (giờ VN, cả ngày `dateTo`). Rỗng → []. */
+  private static dateRangeStages(dateFrom?: string, dateTo?: string): Record<string, unknown>[] {
+    if (!dateFrom && !dateTo) return [];
+    const at: Record<string, Date> = {};
+    if (dateFrom) at.$gte = new Date(`${dateFrom}T00:00:00+07:00`);
+    if (dateTo) at.$lte = new Date(`${dateTo}T23:59:59.999+07:00`);
+    return [{ $addFields: { sortAt: { $ifNull: ['$pushedAt', '$createdAt'] } } }, { $match: { sortAt: at } }];
+  }
+
+  /** Tra tên xưởng / designer / log mới nhất cho 1 trang kết quả — 3 truy vấn nhỏ theo tập id, không $lookup trong pipeline lớn. */
+  private async loadAdminRefs(rows: Array<{ prodOrders?: ProdDeriveFields[] }>): Promise<AdminRefMaps> {
+    const prods = rows.flatMap((r) => (r.prodOrders ?? []) as Array<ProdDeriveFields & Record<string, unknown>>);
+    const factoryIds = [...new Set(prods.map((p) => p.factoryId).filter((x): x is string => !!x))];
+    const userIds = [...new Set(prods.map((p) => p.assignee).filter((x): x is string => !!x))];
+    const orderIds = [...new Set(prods.map((p) => String(p._id)))];
+    const db = this.customerOrderModel.db;
+    const [factories, users, logs] = await Promise.all([
+      factoryIds.length ? db.collection('factories').find({ _id: { $in: factoryIds } } as never, { projection: { name: 1, shortName: 1 } }).toArray() : [],
+      userIds.length ? db.collection('users').find({ _id: { $in: userIds } } as never, { projection: { fullName: 1, email: 1 } }).toArray() : [],
+      orderIds.length
+        ? db
+            .collection('orderLogs')
+            .aggregate([
+              { $match: { orderId: { $in: orderIds } } },
+              { $sort: { createdAt: -1 } },
+              { $group: { _id: '$orderId', action: { $first: '$action' }, field: { $first: '$field' }, userName: { $first: '$userName' }, at: { $first: '$createdAt' }, after: { $first: '$after' } } },
+            ])
+            .toArray()
+        : [],
+    ]);
+    return {
+      factories: new Map(factories.map((f) => [String(f._id), { name: f.name as string | undefined, shortName: f.shortName as string | undefined }])),
+      users: new Map(users.map((u) => [String(u._id), ((u.fullName as string | undefined) || (u.email as string | undefined)) ?? ''])),
+      logs: new Map(
+        logs.map((l) => [
+          String(l._id),
+          { action: String(l.action), field: l.field as string | undefined, userName: l.userName as string | undefined, at: l.at as Date | undefined, after: l.after },
+        ]),
+      ),
+    };
+  }
+
+  private static readonly CUSTOMER_LOOKUP: Record<string, unknown>[] = [
+    {
+      $lookup: {
+        from: 'customers',
+        localField: 'customerId',
+        foreignField: '_id',
+        pipeline: [{ $project: { userSku: 1, userEmail: 1, fullName: 1, tier: 1 } }],
+        as: 'customerDocs',
+      },
+    },
+    { $addFields: { customer: { $first: '$customerDocs' } } },
+    { $project: { customerDocs: 0 } },
+  ];
+
+  private toAdminStagingOrder(
+    doc: Record<string, unknown> & { prodOrders?: ProdDeriveFields[]; customer?: Record<string, unknown> },
+    cutoff: Date,
+    refs?: AdminRefMaps,
+  ): AdminCustomerStagingOrder {
+    const prodByPid = new Map<string, ProdDeriveFields>((doc.prodOrders ?? []).map((p) => [p.productionId as string, p]));
+    const c = doc.customer;
+    const base = this.toStagingOrder(doc, prodByPid, cutoff);
+    const items = base.items.map((it) => {
+      const p = it.productionId ? (prodByPid.get(it.productionId) as (ProdDeriveFields & Record<string, unknown>) | undefined) : undefined;
+      if (!p) return it;
+      const stage = computeCurrentStage(p);
+      const factory = p.factoryId ? refs?.factories.get(String(p.factoryId)) : undefined;
+      const log = refs?.logs.get(String(p._id));
+      const str = (v: unknown) => (typeof v === 'string' && v.trim() ? v : undefined);
+      return {
+        ...it,
+        internal: {
+          stage: p.fulfillmentCompletedAt ? 'done' : stage.key,
+          factoryShortName: factory?.shortName,
+          factoryName: factory?.name,
+          designerName: p.assignee ? refs?.users.get(String(p.assignee)) : undefined,
+          designerStatus: str(p.designerStatus),
+          priority: typeof p.priority === 'number' ? p.priority : undefined,
+          productionError: str(p.productionError),
+          productionErrorSource: str(p.productionErrorSource),
+          productionErrorNote: str(p.productionErrorNote),
+          toolResult: str(p.toolResult),
+          toolResultNote: str(p.toolResultNote),
+          toolCheckErrorNotes: Array.isArray(p.toolCheckErrorNotes) ? (p.toolCheckErrorNotes as string[]).filter(Boolean) : undefined,
+          errorFileNote: str(p.errorFileNote),
+          printStatusNote: str(p.printStatusNote),
+          designerRejectedReason: str(p.designerRejectedReason),
+          holdReason: str(p.holdReason),
+          lastLog: log,
+        },
+      };
+    });
+    return {
+      ...base,
+      items,
+      customerId: String(doc.customerId),
+      customer: c
+        ? {
+            userSku: c.userSku as string | undefined,
+            userEmail: c.userEmail as string | undefined,
+            fullName: c.fullName as string | undefined,
+            tier: (c.tier as number | null | undefined) ?? null,
+          }
+        : undefined,
+    };
+  }
+
+  async listOrdersAdmin(dto: GetAdminCustomerOrdersDto): Promise<GetAdminCustomerOrdersResDto> {
+    const cutoff = await this.getCompletedCutoff();
+    const preStages: Record<string, unknown>[] = [...CustomerOrderService.dateRangeStages(dto.dateFrom, dto.dateTo)];
+    if (dto.search?.trim()) {
+      const rx = { $regex: escapeRegex(dto.search.trim()), $options: 'i' };
+      preStages.push({ $match: { $or: [{ orderId: rx }, { orderName: rx }, { 'items.productionId': rx }, { 'items.sku': rx }, { userSku: rx }, { userEmail: rx }] } });
+    }
+    const stageStage: Record<string, unknown>[] = dto.stage
+      ? [
+          {
+            // Chặng hiện tại của từng đơn sản xuất (cùng luật `workshopStageSwitchExpr` với trang xưởng + CEO).
+            $match: {
+              $expr: {
+                $in: [
+                  dto.stage,
+                  {
+                    $map: {
+                      input: { $filter: { input: '$prodOrders', as: 'p', cond: { $eq: [{ $ifNull: ['$$p.cancelledAt', null] }, null] } } },
+                      as: 'p',
+                      in: workshopStageSwitchExpr('$$p.'),
+                    },
+                  },
+                ],
+              },
+            },
+          },
+        ]
+      : [];
+    const candidatePids = await this.loadCandidatePids({ stage: dto.stage, status: dto.status, held: !!dto.held, cutoff });
+    const pipeline = this.buildPagedListPipeline({
+      customerId: dto.customerId ?? null,
+      candidatePids,
+      cutoff,
+      preStages,
+      productLine: dto.productLine,
+      status: dto.status,
+      held: !!dto.held,
+      postDeriveStages: stageStage,
+      pageTail: CustomerOrderService.CUSTOMER_LOOKUP,
+      skip: (dto.page - 1) * dto.limit,
+      limit: dto.limit,
+    });
+    const [res] = await this.customerOrderModel.aggregate<{
+      page: Array<Record<string, unknown> & { prodOrders?: ProdDeriveFields[]; customer?: Record<string, unknown> }>;
+      total: Array<{ n: number }>;
+    }>(pipeline as never[], { allowDiskUse: true });
+    const rows = res?.page ?? [];
+    const refs = await this.loadAdminRefs(rows);
+    return { success: true, data: rows.map((d) => this.toAdminStagingOrder(d, cutoff, refs)), total: res?.total?.[0]?.n ?? 0 };
+  }
+
+  async getCountsAdmin(dto: GetAdminCustomerOrderCountsDto): Promise<GetCustomerOrderCountsResDto> {
+    return this.cachedAdmin(`counts:${JSON.stringify(dto)}`, () => this.computeCountsAdmin(dto));
+  }
+
+  private async computeCountsAdmin(dto: GetAdminCustomerOrderCountsDto): Promise<GetCustomerOrderCountsResDto> {
+    const cutoff = await this.getCompletedCutoff();
+    const [byStatus, byLine] = this.countsPipelines(dto.customerId ?? null, cutoff, dto.productLine, CustomerOrderService.dateRangeStages(dto.dateFrom, dto.dateTo));
+    const [rows, lineRows] = await Promise.all([
+      this.customerOrderModel.aggregate<{ _id: string; count: number; held: number; rework: number }>(byStatus as never[]),
+      this.customerOrderModel.aggregate<{ _id: ProductLine; count: number }>(byLine as never[]),
+    ]);
+    return { success: true, data: this.assembleCounts(rows, lineRows) };
+  }
+
+  async getStatsAdmin(): Promise<GetAdminCustomerOrderStatsResDto> {
+    return this.cachedAdmin('stats', () => this.computeStatsAdmin());
+  }
+
+  private async computeStatsAdmin(): Promise<GetAdminCustomerOrderStatsResDto> {
+    const cutoff = await this.getCompletedCutoff();
+    const [byStatus, byLine] = this.countsPipelines(null, cutoff);
+    const sellerPipeline = [
+      ...this.buildDerivePipeline(null, cutoff),
+      {
+        $group: {
+          _id: '$customerId',
+          orders: { $sum: 1 },
+          pending: { $sum: { $cond: [{ $eq: ['$statusDerived', CustomerOrderStatus.Pending] }, 1, 0] } },
+          inProduction: { $sum: { $cond: [{ $eq: ['$statusDerived', CustomerOrderStatus.InProduction] }, 1, 0] } },
+          held: { $sum: { $cond: ['$heldAny', 1, 0] } },
+          lastOrderAt: { $max: { $ifNull: ['$pushedAt', '$createdAt'] } },
+        },
+      },
+      {
+        $facet: {
+          top: [
+            { $sort: { orders: -1 } },
+            { $limit: 10 },
+            {
+              $lookup: {
+                from: 'customers',
+                localField: '_id',
+                foreignField: '_id',
+                pipeline: [{ $project: { userSku: 1, userEmail: 1, fullName: 1, tier: 1 } }],
+                as: 'c',
+              },
+            },
+            { $addFields: { c: { $first: '$c' } } },
+          ],
+          sellers: [{ $count: 'n' }],
+        },
+      },
+    ];
+    const recentPipeline = [
+      ...this.buildDerivePipeline(null, cutoff),
+      { $addFields: { sortAt: { $ifNull: ['$pushedAt', '$createdAt'] } } },
+      { $sort: { sortAt: -1, _id: -1 } },
+      { $limit: 8 },
+      ...CustomerOrderService.CUSTOMER_LOOKUP,
+    ];
+    const [rows, lineRows, [sellerRes], recent] = await Promise.all([
+      this.customerOrderModel.aggregate<{ _id: string; count: number; held: number; rework: number }>(byStatus as never[]),
+      this.customerOrderModel.aggregate<{ _id: ProductLine; count: number }>(byLine as never[]),
+      this.customerOrderModel.aggregate<{
+        top: Array<{ _id: string; orders: number; pending: number; inProduction: number; held: number; lastOrderAt?: Date; c?: Record<string, unknown> }>;
+        sellers: Array<{ n: number }>;
+      }>(sellerPipeline as never[]),
+      this.customerOrderModel.aggregate<Record<string, unknown> & { prodOrders?: ProdDeriveFields[]; customer?: Record<string, unknown> }>(recentPipeline as never[]),
+    ]);
+    return {
+      success: true,
+      data: {
+        counts: this.assembleCounts(rows, lineRows),
+        sellers: sellerRes?.sellers?.[0]?.n ?? 0,
+        topSellers: (sellerRes?.top ?? []).map((r) => ({
+          customerId: String(r._id),
+          userSku: r.c?.userSku as string | undefined,
+          userEmail: r.c?.userEmail as string | undefined,
+          fullName: r.c?.fullName as string | undefined,
+          tier: (r.c?.tier as number | null | undefined) ?? null,
+          orders: r.orders,
+          pending: r.pending,
+          inProduction: r.inProduction,
+          held: r.held,
+          lastOrderAt: r.lastOrderAt,
+        })),
+        recent: recent.map((d) => this.toAdminStagingOrder(d, cutoff)),
+      },
+    };
   }
 
   // -------------------------------------------------------------------------
@@ -1191,6 +1632,7 @@ export class CustomerOrderService implements OnModuleInit {
           mockupUrl: item.mockupUrl,
           designs: item.designs,
           tracking: item.tracking,
+          productLine: q.productLine,
           priceSnapshot: q.snapshot,
         });
       }
@@ -1650,6 +2092,7 @@ export class CustomerOrderService implements OnModuleInit {
         quantity: i.quantity,
         mockupUrl: i.mockupUrl,
         createdAt: o.createdAt,
+        currentStageKey: i.currentStageKey,
         currentStageLabel: i.currentStageLabel,
         currentStageAt: i.currentStageAt,
         completed: i.status === CustomerOrderStatus.Completed || i.status === CustomerOrderStatus.Fulfilled,
@@ -1757,6 +2200,7 @@ export class CustomerOrderService implements OnModuleInit {
         cancelReason: order.cancelReason,
         createdAt: (order as { createdAt?: Date }).createdAt,
         inProductionAt: order.inProductionAt,
+        currentStageKey: order.cancelledAt ? undefined : stage.key,
         currentStageLabel: order.cancelledAt ? undefined : stage.label,
         currentStageAt: order.cancelledAt ? undefined : stage.at,
         completed: stage.completed,

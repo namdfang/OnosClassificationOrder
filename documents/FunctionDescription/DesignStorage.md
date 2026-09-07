@@ -7,6 +7,8 @@
 > **API:** `/v1/customer/designs/*`
 > **Plan gốc:** [`documents/Plans/DesignStorage-R2-ProcessingWorker.md`](../Plans/DesignStorage-R2-ProcessingWorker.md)
 
+> **CORS bucket R2 (07/09/2026):** upload trực tiếp browser→R2 chạy từ **2 origin**: `https://onosfactory.com` (`apps/web`) và Seller Portal `https://seller.onosfactory.com` (+ dev `https://seller-dev-onos.autonow.vn`, `http://localhost:3017`). Thêm origin seller vào cấu hình CORS của bucket (AllowedMethods PUT, AllowedHeaders `Content-Type`) — thiếu là PUT presigned bị chặn dù presign OK. Xem `SellerPortal.md §2.7`.
+
 ## 1. Overview
 
 Design khách hàng (20–100MB+/file, hàng nghìn đơn/ngày) được lưu trên **Cloudflare R2** (egress $0, CDN qua custom domain) và xử lý bởi **`apps/design-worker`** — app Node riêng chạy trên server thuê ngoài, nhận job qua RabbitMQ. **API server KHÔNG đụng byte nào của file** (bài học từ module `design-image` cũ: sharp + BullMQ in-process làm nghẽn VPS, đã bị tắt bằng comment `[QUEUE-disabled]`):

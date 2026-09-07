@@ -1,0 +1,118 @@
+{
+  "brand": {
+    "title": "Seller Portal",
+    "subtitle": "ONOS FACTORY"
+  },
+  "nav": {
+    "groupMain": "Đơn hàng",
+    "groupAccount": "Tài khoản",
+    "dashboard": "Tổng quan",
+    "orders": "Quản lý đơn",
+    "createOrder": "Đặt đơn mới",
+    "importCsv": "Import CSV",
+    "account": "Tài khoản của tôi",
+    "signOut": "Đăng xuất",
+    "customer": "Khách hàng",
+    "api": "API & Webhook"
+  },
+  "login": {
+    "welcome": "Đăng nhập cổng seller",
+    "hint": "Dùng tài khoản khách hàng OnosFactory.",
+    "failed": "Email hoặc mật khẩu không đúng.",
+    "locked": "Tài khoản đã bị khóa. Liên hệ bộ phận hỗ trợ.",
+    "generic": "Không đăng nhập được. Vui lòng thử lại.",
+    "submitting": "Đang đăng nhập...",
+    "sessionExpired": "Phiên đã hết hạn, vui lòng đăng nhập lại.",
+    "footer": "OnosFactory · Cổng khách hàng"
+  },
+  "impersonation": {
+    "banner": "Bạn đang xem với tư cách {{name}}",
+    "stop": "Thoát chế độ xem"
+  },
+  "stats": {
+    "total": "Tổng đơn",
+    "pending": "Chờ đẩy SX",
+    "inProduction": "Đang sản xuất",
+    "completed": "Đã xuất/hoàn tất",
+    "held": "Đang giữ"
+  },
+  "list": {
+    "pushSelected": "Push {{count}} đơn",
+    "selectAllPending": "Chọn tất cả đơn chờ",
+    "lockedHint": "Chỉ hiện đơn có sản phẩm thuộc dòng {{line}}.",
+    "viewDetail": "Xem chi tiết",
+    "items": "{{count}} sản phẩm",
+    "cancelling": "Đang hủy...",
+    "heroSubtitle": "{{count}} đơn trong dịch vụ này",
+    "newOrderIn": "Đặt đơn {{line}}"
+  },
+  "detail": {
+    "back": "Về danh sách",
+    "title": "Chi tiết đơn",
+    "notFound": "Không tìm thấy đơn này.",
+    "productionTitle": "Tiến trình sản xuất",
+    "notStarted": "Đơn chưa vào sản xuất.",
+    "infoTitle": "Thông tin đơn",
+    "publicLink": "Link tra cứu công khai",
+    "designsTitle": "Thiết kế theo vị trí in",
+    "mockup": "Mockup",
+    "mockupUrl": "Link mockup",
+    "save": "Lưu thay đổi",
+    "saving": "Đang lưu...",
+    "saved": "Đã lưu.",
+    "addressTitle": "Địa chỉ giao hàng",
+    "editAddress": "Sửa địa chỉ",
+    "noAddress": "Chưa có địa chỉ.",
+    "cancel": "Hủy"
+  },
+  "handoff": {
+    "working": "Đang mở phiên...",
+    "failed": "Không mở được phiên từ trang quản trị. Hãy thử lại từ trang admin."
+  },
+  "common": {
+    "loading": "Đang tải...",
+    "retry": "Thử lại",
+    "error": "Có lỗi xảy ra.",
+    "search": "Tìm mã đơn, tên đơn, mã sản xuất...",
+    "language": "Ngôn ngữ"
+  },
+  "dashboard": {
+    "byProductLine": "Đơn theo dòng sản phẩm",
+    "byStatus": "Đơn theo trạng thái"
+  },
+  "account": {
+    "subtitle": "Hồ sơ, bảo mật và tích hợp",
+    "memberSince": "Thành viên từ",
+    "source": "Nguồn tài khoản",
+    "integrationsTitle": "API & Webhook",
+    "integrationsDesc": "Khoá API và webhook để nối hệ thống của bạn với OnosFactory (đang ở cổng khách hàng hiện tại).",
+    "integrationsOpen": "Mở API & Webhook",
+    "sources": {
+      "register": "Tự đăng ký",
+      "manual": "Admin tạo",
+      "sync": "Đồng bộ hệ cũ"
+    }
+  },
+  "api": {
+    "tabKeys": "API key",
+    "tabWebhooks": "Webhook",
+    "tabSamples": "Lệnh mẫu"
+  },
+  "dateFilter": {
+    "allTime": "Mọi thời gian",
+    "today": "Hôm nay",
+    "yesterday": "Hôm qua",
+    "thisWeek": "Tuần này",
+    "thisMonth": "Tháng này",
+    "lastMonth": "Tháng trước",
+    "thisYear": "Năm nay",
+    "custom": "Tùy chọn",
+    "from": "Từ",
+    "to": "Đến",
+    "clear": "Xóa",
+    "close": "Đóng",
+    "wholeMonth": "Bấm để chọn cả tháng",
+    "prevMonth": "Tháng trước",
+    "nextMonth": "Tháng sau"
+  }
+}

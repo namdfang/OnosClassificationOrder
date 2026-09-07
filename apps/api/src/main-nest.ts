@@ -27,6 +27,9 @@ const DEFAULT_ALLOWED_ORIGINS = [
   'http://localhost:5173',
   'https://onosfactory.com',
   'https://api.onosfactory.com',
+  // Seller Portal (apps/seller). Luồng chính đi qua proxy Next server→server (không CORS);
+  // giữ ở đây để upload/preview gọi thẳng khi cần và dev tunnel qua ALLOWED_ORIGINS.
+  'https://seller.onosfactory.com',
 ];
 
 /**
