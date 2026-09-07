@@ -16,6 +16,8 @@ import { fmtUSD } from '@/lib/utils';
 interface OrderCardProps {
   order: Omit<AdminCustomerStagingOrder, 'customerId'> & { customerId?: string };
   adminMode?: boolean;
+  /** Khu `/hub/orders` chỉ đọc: ẩn nút mạo danh. */
+  showViewAs?: boolean;
   selected: boolean;
   onToggle: () => void;
   onPushOne: () => void;
@@ -23,7 +25,7 @@ interface OrderCardProps {
 }
 
 /** Bản THẺ của `OrderRow` cho màn hình < md — cùng dữ liệu, không cuộn ngang. */
-export function OrderCard({ order, adminMode = false, selected, onToggle, onPushOne, onCancel }: OrderCardProps) {
+export function OrderCard({ order, adminMode = false, showViewAs = true, selected, onToggle, onPushOne, onCancel }: OrderCardProps) {
   const { t } = useTranslation(['customerPortal', 'seller', 'hub', 'track']);
   const isPending = order.status === CustomerOrderStatus.Pending;
   const code = orderDisplayCode(order);
@@ -70,7 +72,7 @@ export function OrderCard({ order, adminMode = false, selected, onToggle, onPush
         </div>
         {order.totalAmount != null && <span className="text-xs font-bold tabular-nums text-text-primary shrink-0">{fmtUSD(order.totalAmount)}</span>}
       </div>
-      {(adminMode || isPending) && (
+      {((adminMode && showViewAs) || (!adminMode && isPending)) && (
         <div className="flex justify-end gap-1.5 pt-1 border-t border-border2">
           {adminMode && order.customerId && <ViewAsButton customerId={order.customerId} target={first?.productionId ? `/portal/orders/${encodeURIComponent(first.productionId)}` : '/portal/orders'} />}
           {!adminMode && isPending && (

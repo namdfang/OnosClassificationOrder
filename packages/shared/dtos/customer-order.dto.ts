@@ -622,7 +622,13 @@ export const AdminCustomerStagingOrderZod = CustomerStagingOrderZod.extend({
 });
 export type AdminCustomerStagingOrder = z.infer<typeof AdminCustomerStagingOrderZod>;
 
-export const GetAdminCustomerOrdersZod = GetCustomerStagingOrdersZod.extend({
+/** Khoảng ngày (YYYY-MM-DD, giờ VN) theo mốc `pushedAt ?? createdAt` — cùng mốc sắp xếp listing. */
+export const AdminOrderDateRangeZod = z.object({
+  dateFrom: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional(),
+  dateTo: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional(),
+});
+
+export const GetAdminCustomerOrdersZod = GetCustomerStagingOrdersZod.merge(AdminOrderDateRangeZod).extend({
   /** Lọc theo 1 seller; bỏ trống = mọi seller. */
   customerId: IDZod.optional(),
 });
@@ -631,7 +637,7 @@ export class GetAdminCustomerOrdersDto extends createZodDto(extendApi(GetAdminCu
 export const GetAdminCustomerOrdersResZod = PageResZod.extend({ data: AdminCustomerStagingOrderZod.array() });
 export class GetAdminCustomerOrdersResDto extends createZodDto(extendApi(GetAdminCustomerOrdersResZod)) {}
 
-export const GetAdminCustomerOrderCountsZod = z.object({ customerId: IDZod.optional(), productLine: z.enum(PRODUCT_LINES).optional() });
+export const GetAdminCustomerOrderCountsZod = AdminOrderDateRangeZod.extend({ customerId: IDZod.optional(), productLine: z.enum(PRODUCT_LINES).optional() });
 export class GetAdminCustomerOrderCountsDto extends createZodDto(extendApi(GetAdminCustomerOrderCountsZod)) {}
 
 export const AdminSellerStatZod = z.object({

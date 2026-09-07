@@ -947,10 +947,16 @@ export class CustomerOrderService implements OnModuleInit {
   }
 
   /** `productLine` → chỉ đếm đơn có ≥1 item thuộc dòng (cùng điều kiện với filter listing). */
-  private countsPipelines(customerId: string | null, cutoff: Date, productLine?: ProductLine): [Record<string, unknown>[], Record<string, unknown>[]] {
-    const lineMatch: Record<string, unknown>[] = productLine
-      ? [{ $match: { $or: [{ 'items.productLine': productLine }, { 'prodOrders.productLine': productLine }] } }]
-      : [];
+  private countsPipelines(
+    customerId: string | null,
+    cutoff: Date,
+    productLine?: ProductLine,
+    extraStages: Record<string, unknown>[] = [],
+  ): [Record<string, unknown>[], Record<string, unknown>[]] {
+    const lineMatch: Record<string, unknown>[] = [
+      ...extraStages,
+      ...(productLine ? [{ $match: { $or: [{ 'items.productLine': productLine }, { 'prodOrders.productLine': productLine }] } }] : []),
+    ];
     const byStatus = [
       ...this.buildDerivePipeline(customerId, cutoff),
       ...lineMatch,
@@ -979,6 +985,15 @@ export class CustomerOrderService implements OnModuleInit {
   // đơn staging của MỌI seller. CHỈ ĐỌC: mọi thao tác trên đơn khách vẫn đi
   // qua mạo danh (token khách) để giữ nguyên rào + audit sẵn có.
   // -------------------------------------------------------------------------
+
+  /** `$match` khoảng ngày theo `pushedAt ?? createdAt` (giờ VN, cả ngày `dateTo`). Rỗng → []. */
+  private static dateRangeStages(dateFrom?: string, dateTo?: string): Record<string, unknown>[] {
+    if (!dateFrom && !dateTo) return [];
+    const at: Record<string, Date> = {};
+    if (dateFrom) at.$gte = new Date(`${dateFrom}T00:00:00+07:00`);
+    if (dateTo) at.$lte = new Date(`${dateTo}T23:59:59.999+07:00`);
+    return [{ $addFields: { sortAt: { $ifNull: ['$pushedAt', '$createdAt'] } } }, { $match: { sortAt: at } }];
+  }
 
   private static readonly CUSTOMER_LOOKUP: Record<string, unknown>[] = [
     {
@@ -1016,7 +1031,10 @@ export class CustomerOrderService implements OnModuleInit {
 
   async listOrdersAdmin(dto: GetAdminCustomerOrdersDto): Promise<GetAdminCustomerOrdersResDto> {
     const cutoff = await this.getCompletedCutoff();
-    const pipeline: Record<string, unknown>[] = this.buildDerivePipeline(dto.customerId ?? null, cutoff);
+    const pipeline: Record<string, unknown>[] = [
+      ...this.buildDerivePipeline(dto.customerId ?? null, cutoff),
+      ...CustomerOrderService.dateRangeStages(dto.dateFrom, dto.dateTo),
+    ];
     if (dto.search?.trim()) {
       const rx = { $regex: escapeRegex(dto.search.trim()), $options: 'i' };
       pipeline.push({ $match: { $or: [{ orderId: rx }, { orderName: rx }, { 'items.productionId': rx }, { 'items.sku': rx }, { userSku: rx }, { userEmail: rx }] } });
@@ -1045,7 +1063,7 @@ export class CustomerOrderService implements OnModuleInit {
 
   async getCountsAdmin(dto: GetAdminCustomerOrderCountsDto): Promise<GetCustomerOrderCountsResDto> {
     const cutoff = await this.getCompletedCutoff();
-    const [byStatus, byLine] = this.countsPipelines(dto.customerId ?? null, cutoff, dto.productLine);
+    const [byStatus, byLine] = this.countsPipelines(dto.customerId ?? null, cutoff, dto.productLine, CustomerOrderService.dateRangeStages(dto.dateFrom, dto.dateTo));
     const [rows, lineRows] = await Promise.all([
       this.customerOrderModel.aggregate<{ _id: string; count: number; held: number; rework: number }>(byStatus as never[]),
       this.customerOrderModel.aggregate<{ _id: ProductLine; count: number }>(byLine as never[]),
