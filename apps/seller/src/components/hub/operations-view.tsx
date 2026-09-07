@@ -60,11 +60,12 @@ export function OperationsView() {
   const page = Math.max(1, Number(state.page) || 1);
   const from = state.from || dayjs().subtract(6, 'day').format('YYYY-MM-DD');
   const to = state.to || dayjs().format('YYYY-MM-DD');
-  const dateRange: DateRange = { dateFrom: from, dateTo: to };
+  // Phễu/bảng: KHÔNG giới hạn ngày khi người dùng chưa chọn (hiện tồn thực tại) — CEO KPI vẫn cần kỳ → mặc định 7 ngày.
+  const dateRange: DateRange = { dateFrom: state.from || null, dateTo: state.to || null };
   const factory = state.factory;
   const stage = STAGES.includes(state.stage as (typeof STAGES)[number]) ? state.stage : '';
 
-  const lifecycleQs = useMemo(() => { const p = new URLSearchParams({ from, to }); if (factory) p.set('factoryId', factory); if (line !== 'all') p.set('productLine', line); return p.toString(); }, [from, to, factory, line]);
+  const lifecycleQs = useMemo(() => { const p = new URLSearchParams(); if (state.from) p.set('from', state.from); if (state.to) p.set('to', state.to); if (factory) p.set('factoryId', factory); if (line !== 'all') p.set('productLine', line); return p.toString(); }, [state.from, state.to, factory, line]);
   const { data: lifeRes, loading: lifeLoading } = useApi<ApiRes<LifecycleOverview>>(`/api/hub/v1/orders/lifecycle-overview?${lifecycleQs}`);
   const { data: ceoRes } = useApi<{ data: CeoOverview }>(`/api/hub/v1/ceo/overview?from=${from}&to=${to}`);
   const { data: factoryRes } = useApi<ApiRes<FactoryOverview>>('/api/hub/v1/orders/factory-overview');
