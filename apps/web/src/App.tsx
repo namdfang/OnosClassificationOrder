@@ -1,5 +1,5 @@
 import React, { lazy, Suspense } from 'react';
-import { BrowserRouter, Navigate, Outlet, Route, Routes } from 'react-router-dom';
+import { BrowserRouter, Navigate, Outlet, Route, Routes, useLocation } from 'react-router-dom';
 
 import { RequirePagePermission } from './components/common/RequirePagePermission';
 import Loading from './components/loading';
@@ -44,6 +44,41 @@ function PrivateRoute() {
     return <Navigate to={PATHS.LOGIN} replace />;
   }
 
+  return <Outlet />;
+}
+
+/**
+ * Seller Portal riêng (`apps/seller`, SellerPortal.md §2.7): đặt `VITE_SELLER_URL` là các
+ * route khách SAU ĐĂNG NHẬP chuyển hẳn sang app mới (giữ nguyên :productionId).
+ * Rỗng → mọi thứ chạy như cũ. Catalog/API docs/track/landing vẫn ở đây tới đợt 2.
+ */
+const SELLER_URL = ((import.meta.env.VITE_SELLER_URL as string | undefined) ?? '').replace(/\/+$/, '');
+const SELLER_ROUTE_MAP: Array<[string, string]> = [
+  [PATHS.CUSTOMER_LOGIN, '/login'],
+  [PATHS.CUSTOMER_DASHBOARD, '/portal'],
+  [PATHS.CUSTOMER_ORDER_NEW, '/portal/orders/create'],
+  [PATHS.CUSTOMER_ORDER_IMPORT, '/portal/orders/import'],
+  [PATHS.CUSTOMER_ORDERS, '/portal/orders'],
+  [PATHS.CUSTOMER_ACCOUNT, '/portal/account'],
+];
+function ExternalRedirect({ to }: { to: string }) {
+  React.useEffect(() => {
+    window.location.replace(to);
+  }, [to]);
+  return <Loading />;
+}
+function sellerTargetFor(pathname: string, search: string): string | null {
+  if (!SELLER_URL) return null;
+  const detail = pathname.match(/^\/customer\/orders\/([^/]+)$/);
+  if (detail && detail[1] !== 'new' && detail[1] !== 'import') return `${SELLER_URL}/portal/orders/${detail[1]}`;
+  for (const [from, to] of SELLER_ROUTE_MAP) if (pathname === from) return `${SELLER_URL}${to}${search}`;
+  return null;
+}
+/** Bọc ngoài các route khách: có đích seller → chuyển, không thì render như cũ. */
+function SellerRedirectGate() {
+  const location = useLocation();
+  const target = sellerTargetFor(location.pathname, location.search);
+  if (target) return <ExternalRedirect to={target} />;
   return <Outlet />;
 }
 
@@ -132,6 +167,7 @@ function App() {
         <Route path={PATHS.REGISTER} element={<Register />} />
         <Route path={PATHS.FORGOT_PASSWORD} element={<ForgotPassword />} />
 
+        <Route element={<SellerRedirectGate />}>
         <Route
           path={PATHS.CUSTOMER_LOGIN}
           element={
@@ -232,6 +268,7 @@ function App() {
               }
             />
           </Route>
+        </Route>
         </Route>
 
         <Route path={PATHS.ERROR_404} element={<NotFound />} />

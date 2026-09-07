@@ -7,6 +7,7 @@ import { useTranslation } from 'react-i18next';
 import { Languages, LogOut } from 'lucide-react';
 import { OnosLogo } from '@/components/brand/logo';
 import { CollapsibleNavItem } from '@/components/layout/collapsible-nav-item';
+import { NotificationsBell } from '@/components/layout/notifications-bell';
 import { useLanguage } from '@/components/providers/i18n-provider';
 import { ThemeToggle } from '@/components/shared/theme-toggle';
 import { useMobileSidebar } from '@/context/mobile-sidebar-context';
@@ -42,6 +43,7 @@ export function CustomerSidebar() {
     >
       <div className="px-3 pt-3 pb-2 flex items-center gap-2 shrink-0 border-b border-border1">
         <OnosLogo title={t('brand.title')} subtitle={t('brand.subtitle')} className="flex-1 min-w-0" />
+        <NotificationsBell />
       </div>
 
       <nav className="flex-1 px-1.5 py-1 overflow-y-auto scrollbar-thin">

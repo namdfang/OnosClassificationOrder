@@ -4,6 +4,19 @@ import { CustomerOrderStatus, PRODUCT_LINES } from '@shared/enums';
 import { PageResZod, ResZod } from '@shared/types';
 import { z } from 'zod';
 
+import {
+  CUSTOMER_SHIP_METHODS,
+  CustomerImportOrderItemZod,
+  CustomerImportOrderZod,
+  CustomerImportShippingAddressZod,
+  CustomerShipMethodZod,
+  DEFAULT_CUSTOMER_SHIP_METHOD,
+  parseCustomerShipMethod,
+  type CustomerImportOrder,
+  type CustomerImportOrderItem,
+  type CustomerImportShippingAddress,
+  type CustomerShipMethod,
+} from '../client';
 import { IDZod } from '..';
 import type {
   ProductionOrderTracking} from './production-order.dto';
@@ -34,23 +47,8 @@ export const CUSTOMER_PAYMENT_GATE_KEY = 'customer_payment_gate_enabled';
 // Ship method — giữ ĐỦ 4 giá trị hệ cũ (plan §13.2)
 // ---------------------------------------------------------------------------
 
-export const CUSTOMER_SHIP_METHODS = ['cod', 'express_us', 'economy_us', 'tiktok'] as const;
-export type CustomerShipMethod = (typeof CUSTOMER_SHIP_METHODS)[number];
-export const CustomerShipMethodZod = z.enum(CUSTOMER_SHIP_METHODS);
-/** Khách bỏ trống → express_us (plan §12.4). */
-export const DEFAULT_CUSTOMER_SHIP_METHOD: CustomerShipMethod = 'express_us';
-
-/**
- * Parse giá trị cột `shipping` của template cũ — case-insensitive, alias
- * `SBTT` → `tiktok`; trống → default `express_us`; giá trị lạ → `undefined`
- * (caller báo lỗi dòng). Dùng CHUNG ở FE (parse file) và BE (validate lại).
- */
-export function parseCustomerShipMethod(raw?: string | null): CustomerShipMethod | undefined {
-  const v = (raw || '').trim().toLowerCase();
-  if (!v) return DEFAULT_CUSTOMER_SHIP_METHOD;
-  if (v === 'sbtt') return 'tiktok';
-  return (CUSTOMER_SHIP_METHODS as readonly string[]).includes(v) ? (v as CustomerShipMethod) : undefined;
-}
+// Nest-free, dời sang `client/customer-import.ts`.
+export { CUSTOMER_SHIP_METHODS, CustomerShipMethodZod, DEFAULT_CUSTOMER_SHIP_METHOD, parseCustomerShipMethod, type CustomerShipMethod };
 
 /**
  * Idempotency mức ĐƠN (plan §13.4): chuẩn hóa cặp `(order_id, identifier)`
@@ -246,42 +244,15 @@ export class GetCustomerOrderCountsResDto extends createZodDto(extendApi(GetCust
  * Địa chỉ import CSV — required theo đúng ghi chú template cũ: name, country,
  * address_1, city, state, postcode bắt buộc; telephone/email/company tùy chọn.
  */
-export const CustomerImportShippingAddressZod = ProductionOrderShippingAddressZod.extend({
-  firstName: z.string().min(1).max(200),
-  address1: z.string().min(1).max(500),
-  city: z.string().min(1).max(200),
-  state: z.string().min(1).max(200),
-  country: z.string().min(1).max(100),
-  postcode: z.string().min(1).max(50),
-});
-export type CustomerImportShippingAddress = z.infer<typeof CustomerImportShippingAddressZod>;
-
-/** 1 dòng CSV = 1 item — SKU BẮT BUỘC match `variations[].sku` (plan §13.1). */
-export const CustomerImportOrderItemZod = z.object({
-  sku: z.string().min(1).max(200),
-  merchantSku: z.string().max(200).optional(),
-  quantity: z.coerce.number().int().positive().default(1),
-  shipMethod: CustomerShipMethodZod.default(DEFAULT_CUSTOMER_SHIP_METHOD),
-  activeService: z.boolean().optional(),
-  mockupUrl: z.string().max(2000).optional(),
-  designs: DesignFieldsZod.optional(),
-  tracking: CustomerOrderTrackingZod.optional(),
-  /** Giá trị thô từ file — CHỈ đối chiếu variation (lệch → warning FE), không phải nguồn chân lý. */
-  rawItemName: z.string().max(300).optional(),
-  rawColor: z.string().max(200).optional(),
-  rawSize: z.string().max(200).optional(),
-});
-export type CustomerImportOrderItem = z.infer<typeof CustomerImportOrderItemZod>;
-
-export const CustomerImportOrderZod = z.object({
-  orderId: z.string().min(1).max(200),
-  identifier: z.string().max(200).optional(),
-  orderName: z.string().max(300).optional(),
-  note: z.string().max(1000).optional(),
-  shippingAddress: CustomerImportShippingAddressZod,
-  items: CustomerImportOrderItemZod.array().min(1).max(100),
-});
-export type CustomerImportOrder = z.infer<typeof CustomerImportOrderZod>;
+// Nest-free, dời sang `client/customer-import.ts` — NGUỒN RULE DUY NHẤT cho FE (web + seller) và BE.
+export {
+  CustomerImportShippingAddressZod,
+  CustomerImportOrderItemZod,
+  CustomerImportOrderZod,
+  type CustomerImportShippingAddress,
+  type CustomerImportOrderItem,
+  type CustomerImportOrder,
+};
 
 /** Cap tổng ~500 dòng/lần — validate thêm ở service (tổng items mọi đơn). */
 export const ImportCustomerOrdersZod = z.object({

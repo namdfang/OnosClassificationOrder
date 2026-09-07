@@ -73,8 +73,8 @@
     "search": "Search order id, name, production id...",
     "language": "Language"
   },
-  "comingSoon": {
-    "title": "Coming soon on the new portal",
-    "desc": "This page is being moved to the new portal. Meanwhile it is still available on the current customer portal."
+  "dashboard": {
+    "byProductLine": "Orders by product line",
+    "byStatus": "Orders by status"
   }
 }

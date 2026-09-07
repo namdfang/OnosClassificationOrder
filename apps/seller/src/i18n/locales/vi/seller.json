@@ -73,8 +73,8 @@
     "search": "Tìm mã đơn, tên đơn, mã sản xuất...",
     "language": "Ngôn ngữ"
   },
-  "comingSoon": {
-    "title": "Sắp có ở cổng seller mới",
-    "desc": "Trang này đang được chuyển sang cổng mới. Trong lúc chờ, vẫn dùng được ở cổng khách hàng hiện tại."
+  "dashboard": {
+    "byProductLine": "Đơn theo dòng sản phẩm",
+    "byStatus": "Đơn theo trạng thái"
   }
 }

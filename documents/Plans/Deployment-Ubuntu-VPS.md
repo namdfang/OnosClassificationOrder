@@ -828,3 +828,45 @@ Cron mẫu cho mongodump:
 - [ ] Verify timezone server = `Asia/Ho_Chi_Minh` (`timedatectl`)
 
 mongorestore --uri='mongodb://onosfactory:Dieuanh1108@127.0.0.1:27017/?replicaSet=rs0&authSource=onosfactory-prod' --gzip --drop --nsFrom='onos-classifycation._' --nsTo='onosfactory-prod._' /tmp/onosfactory-\*/
+
+
+## 8. Seller Portal (`apps/seller`, Next.js) — thêm 07/09/2026
+
+Xem `documents/FunctionDescription/SellerPortal.md §8`. Chạy bằng **pm2** cùng cách với API (không Docker).
+
+```bash
+cd /var/www/onosfactory/current
+cp apps/seller/.env.production.example apps/seller/.env.production   # điền API_INTERNAL_URL / NEXT_PUBLIC_*
+NODE_OPTIONS=--max-old-space-size=2048 pnpm --filter ./apps/seller build
+(cd apps/seller && NODE_ENV=production pm2 start ecosystem.config.cjs && pm2 save)
+curl -s -o /dev/null -w '%{http_code}\n' http://127.0.0.1:3017/login   # 200
+```
+
+Từ lần sau `./deploy.sh` tự build + restart seller khi thấy `apps/seller/.env.production`.
+
+### 8.1 Nginx `seller.onosfactory.com`
+
+```nginx
+server {
+    listen 80;
+    server_name seller.onosfactory.com;
+    client_max_body_size 50M;
+    location / {
+        proxy_pass http://127.0.0.1:3017;
+        proxy_http_version 1.1;
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto $scheme;
+        proxy_set_header Upgrade $http_upgrade;
+        proxy_set_header Connection "upgrade";
+        proxy_read_timeout 120s;
+    }
+}
+```
+
+`certbot --nginx -d seller.onosfactory.com`; Cloudflare DNS A `seller` (proxied). API không cần mở thêm gì — seller gọi `127.0.0.1:3007` server→server.
+
+### 8.2 Bật redirect `/customer/*` ở app admin
+
+Sau khi seller chạy ổn: đặt `VITE_SELLER_URL=https://seller.onosfactory.com` trong `apps/web/.env.production` rồi build lại web (`SellerRedirectGate` ở `apps/web/src/App.tsx`). Nút "Xem với tư cách khách" (mạo danh) cũng chuyển sang seller theo biến này.

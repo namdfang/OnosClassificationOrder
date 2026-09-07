@@ -1191,6 +1191,7 @@ export class CustomerOrderService implements OnModuleInit {
           mockupUrl: item.mockupUrl,
           designs: item.designs,
           tracking: item.tracking,
+          productLine: q.productLine,
           priceSnapshot: q.snapshot,
         });
       }

@@ -3,7 +3,7 @@
 > **File FE:** `apps/seller/src/app/{layout,page}.tsx`, `apps/seller/src/app/login/page.tsx`, `apps/seller/src/app/(portal)/layout.tsx`, `apps/seller/src/app/(portal)/portal/orders/{page,[productionId]/page,3d|2d|wood|embroidery|led|canvas/page}.tsx`, `apps/seller/src/app/track/{page,[code]/page}.tsx`, `apps/seller/src/app/auth/handoff/page.tsx`, `apps/seller/src/components/orders/{orders-list-view,order-row,product-line-tabs,orders-status-filter-pills,orders-stats-bar,push-dialog,stage-timeline}.tsx`, `apps/seller/src/components/layout/{customer-sidebar,impersonation-banner}.tsx`, `apps/seller/src/lib/{product-lines,navigation,constants,customer-orders,label-preview}.ts`, `apps/seller/src/context/session-context.tsx`, `apps/seller/src/i18n/{index,constants}.ts` + `locales/{vi,en}/{customerPortal,track,common,seller}.json`
 > **File BE (Next server-side):** `apps/seller/src/app/api/auth/{login,logout,handoff}/route.ts`, `apps/seller/src/app/api/v1/[...path]/route.ts` (proxy), `apps/seller/src/lib/server/api.ts` (cookie), `apps/seller/proxy.ts` (Next 16 middleware)
 > **File BE (NestJS — tái dùng, không endpoint mới):** `apps/api/src/modules/customer-portal/*` (`customer/auth/*`, `customer/orders/*`, `public/track/:code`), `apps/web/src/utils/impersonationStart.ts` (handoff mạo danh)
-> **Route:** `/login`, `/portal` (→ `/portal/orders`), `/portal/orders`, `/portal/orders/{3d,2d,wood,embroidery,led,canvas}`, `/portal/orders/:productionId`, `/track`, `/track/:code`, `/auth/handoff`; placeholder PR-C: `/portal/orders/create`, `/portal/orders/import`, `/portal/account`
+> **Route:** `/login`, `/portal` (dashboard), `/portal/orders`, `/portal/orders/{3d,2d,wood,embroidery,led,canvas}`, `/portal/orders/:productionId`, `/portal/orders/create`, `/portal/orders/import`, `/portal/account`, `/track`, `/track/:code`, `/auth/handoff`
 > **API (same-origin của app seller):** `POST /api/auth/login`, `POST /api/auth/logout`, `POST /api/auth/handoff`, `ANY /api/v1/*` → NestJS `${API_INTERNAL_URL}/*`
 
 ---
@@ -20,7 +20,7 @@ Nguyên tắc cứng:
 - **Token không bao giờ ra JS.** Route handler của Next giữ JWT trong cookie httpOnly; browser chỉ gọi `/api/v1/*` same-origin, proxy gắn Bearer.
 - **Thiếu số/field → thêm ở BE + shared**, không tính ở FE.
 
-Đợt 1 (PR-B, 07/09/2026): login/logout/remember, danh sách đơn + 6 tab dòng sản phẩm + pill trạng thái + chip "Đang giữ", push/hủy đơn pending, chi tiết đơn (timeline 8 chặng, sửa mockup/địa chỉ), `/track/:code` công khai, handoff mạo danh từ admin. Đợt 2 (PR-C): dashboard, đặt đơn, import CSV, tài khoản. Hạ tầng/redirect: PR-D.
+PR-B (07/09/2026): login/logout/remember, danh sách đơn + 6 tab dòng sản phẩm + pill trạng thái + chip "Đang giữ", push/hủy đơn pending, chi tiết đơn (timeline 8 chặng, sửa mockup/địa chỉ), `/track/:code` công khai, handoff mạo danh từ admin. PR-C (cùng ngày): dashboard, đặt đơn (upload R2), import CSV, tài khoản, chuông thông báo. PR-D: pm2/systemd, deploy.sh, cloudflared, CORS, redirect `/customer/*` ở admin (§8).
 
 ## 2. Luồng hoạt động
 
@@ -65,6 +65,20 @@ browser ──GET /api/v1/customer/orders?…──▶ proxy [...path] ──Aut
 
 Không cookie, không sidebar. `GET /api/v1/public/track/:code` → proxy sang `public/track/:code` (PublicOrderTracking.md — danh sách trắng field hẹp, mọi lỗi = 404). Hiện thêm badge dòng sản phẩm (`product.productLine`).
 
+### 2.7 Đặt đơn `/portal/orders/create`
+
+Mirror `apps/web/src/pages/customer/orders/new.tsx`: bộ chọn sản phẩm từ `GET customer/catalog` (search + **tab dòng sản phẩm** `productLine`) → chọn biến thể (`lib/catalog-variant.ts`) → số lượng, mockup (bắt buộc) + design theo `printArea` (luật `designAcceptKeys` từ `shared/client`) → "Thêm vào đơn" → giỏ + 1 địa chỉ ship chung + ghi chú → `POST customer/orders` → về `/portal/orders?status=pending`. Ô file = `components/shared/file-url-or-upload-input.tsx` (dán URL hoặc upload thẳng browser→R2: `presign` → PUT presigned URL → `confirm` → poll `GET customer/designs/:sha`). **R2 bucket phải có CORS cho origin seller** (DesignStorage.md).
+
+### 2.8 Import CSV `/portal/orders/import`
+
+Mirror `apps/web/src/pages/customer/orders/import.tsx`: `xlsx` parse template fulfill OnosPod cũ → group `(order_id, identifier)` → validate từng đơn bằng **`CustomerImportOrderZod` import từ `shared/client`** (cùng schema BE `ImportCustomerOrdersDto`, xem §5) → `POST customer/orders/import/resolve` đối chiếu SKU (ảnh/tên/giá + cảnh báo thiếu design) → `POST customer/orders/import` → bảng kết quả created/duplicated/failed → nút sang tab Chờ đẩy SX. Template tải ở `/customer-order-template.csv` (copy từ `apps/web/public`).
+
+### 2.9 Dashboard `/portal` + tài khoản + chuông
+
+- Dashboard: `GET customer/orders/dashboard` (4 KPI + 5 đơn gần nhất) + `GET customer/orders/counts` → 2 biểu đồ thanh CSS "theo dòng sản phẩm" (`byProductLine`) và "theo trạng thái", bấm là sang danh sách đúng bộ lọc. Không dùng recharts.
+- Tài khoản: `PATCH customer/auth/me` (fullName/phone), `POST customer/auth/change-password`; email/SKU khoá.
+- Chuông (`components/layout/notifications-bell.tsx`, trong sidebar): SWR `GET customer/notifications?page=1&limit=20` poll 60 s, `POST customer/notifications/read`; text thông báo hệ thống dựng từ `event`/`eventData` (mirror `NotificationBell.tsx` của web, namespace `customerNotifications` copy từ `apps/web`).
+
 ## 3. API / Schema
 
 Không có endpoint NestJS mới. Route handler của Next:
@@ -101,6 +115,7 @@ Theme: `globals.css` `@theme` + `.dark` (khuôn thghub) với token Onos — acc
 
 ## 5. Backend logic
 
+- **`packages/shared/client/`** (mới, PR-C): entry **nest-free** `shared/client` (tsup entry + `exports["./client"]`) chứa schema/hàm thuần dùng chung FE/BE mà app browser cần runtime: `DesignFieldsZod`, `ProductionOrderShippingAddressZod`/`ProductionOrderTrackingZod` (+`normalizeProductionOrderTracking`), `CUSTOMER_SHIP_METHODS`/`parseCustomerShipMethod`, `CustomerImportOrderZod` (+ Item/Address), `designAcceptKeys`, `designCdnUrl`/`designVariantUrl`/`extractDesignSha`/`Sha256Zod`. Các file `dtos/*.dto.ts` **re-export** từ đây nên BE và `apps/web` (import `shared`) không đổi. Quy tắc: file trong `client/` chỉ import `zod` và file khác trong `client/`; đã kiểm `dist/client` + chunk dùng chung không có `@nestjs`.
 - Không đổi NestJS. Điểm cần nhớ khi thêm màn mới: endpoint phải dưới `customer/` (RolesGuard, Customers.md §6) hoặc `public/`.
 - `syncLegacyOrdersForCustomer` chỉ chạy trong `listOrders` → xem §2.4 về thứ tự gọi counts.
 
@@ -114,8 +129,21 @@ Theme: `globals.css` `@theme` + `.dark` (khuôn thghub) với token Onos — acc
 
 Chỉ vai `RoleType.Customer` (JWT từ `customer/auth/login` hoặc token mạo danh). Không dùng permission-catalog nội bộ. Trang `/track/*` public.
 
-## 8. Vận hành
+## 8. Vận hành & hạ tầng (PR-D)
 
-- Dev hub: `pnpm dev:seller` (port **3017**; 3100 của thghub đã bị dự án khác chiếm trên hub). Smoke đã chạy 07/09/2026: login sai/đúng, cookie remember 30 ngày, proxy 401, counts + 6 tab khớp list sau lazy-sync, detail + PATCH, `/track` không cookie, handoff mạo danh + logout về admin.
+| Môi trường | Chạy bằng | Env | Vào từ |
+|---|---|---|---|
+| Dev hub | systemd `onos-seller-dev` (`/etc/systemd/system/onos-seller-dev.service`, `pnpm exec next dev -p 3017`, log `/var/log/onos-seller.log`) | `apps/seller/.env.development` (next dev đọc) | cloudflared `seller-dev-onos.autonow.vn` → `localhost:3017` (`cloudflared/config.yml`) |
+| Prod VPS | pm2 `onosfactory-seller` (`apps/seller/ecosystem.config.cjs`, `next start -p 3017`) | `apps/seller/.env.production` (copy từ `.env.production.example`, không commit) | nginx `seller.onosfactory.com` → `127.0.0.1:3017` (Deployment-Ubuntu-VPS.md §8) |
+
+- `deploy.sh`: sau bước web, **nếu có** `apps/seller/.env.production` → `pnpm --filter ./apps/seller build` (heap 2048) → `pm2 restart ecosystem.config.cjs --update-env` → health `GET /login` = 200 (12×5 s); thiếu env → bỏ qua (server chưa bật seller). `--rollback` build lại seller theo bản cũ.
+- CORS API (`main-nest.ts`): thêm `https://seller.onosfactory.com` dự phòng; luồng chính là proxy server→server nên không cần CORS. Dev tunnel thêm vào `ALLOWED_ORIGINS` nếu gọi thẳng.
+- **Redirect `/customer/*` ở admin** (`apps/web/src/App.tsx` `SellerRedirectGate`): khi `VITE_SELLER_URL` khác rỗng, `/customer/login|dashboard|orders|orders/new|orders/import|orders/:productionId|account` chuyển hẳn sang seller (`/login`, `/portal`, `/portal/orders`, `/portal/orders/create|import|:pid`, `/portal/account`, giữ query). Catalog/API docs/`/track`/landing vẫn ở `apps/web` tới đợt 2. Rỗng → chạy như cũ.
+- R2: thêm origin seller (dev + prod) vào CORS bucket trước khi bật upload trực tiếp (DesignStorage.md).
+
+### 8.1 Ghi chú vận hành
+
+- Dev hub: systemd `onos-seller-dev` (`next dev -p 3017`, tự chạy lúc boot; 3100 của thghub đã bị dự án khác chiếm trên hub) → https://seller-dev-onos.autonow.vn (đã route DNS + restart `cloudflared-onos` 07/09/2026). Chạy tay: `pnpm dev:seller`. Smoke đã chạy 07/09/2026: login sai/đúng, cookie remember 30 ngày, proxy 401, counts + 6 tab khớp list sau lazy-sync, detail + PATCH, `/track` không cookie, handoff mạo danh + logout về admin.
+- Smoke PR-C (07/09/2026, khách test `seller-smoke@onos.test`): 4 trang 200; catalog lọc `productLine=2d`; resolve SKU thật/giả; import 1 đơn CSV → created; `PATCH me`; đổi mật khẩu sai → 400; notifications; dashboard. Phát hiện + sửa lỗi PR-A: `importOrdersCsv` và luồng tạo đơn qua API **không stamp `productLine`** vào item → tab đếm/lọc bỏ sót đơn chờ đẩy (đã thêm `productLine: q.productLine` ở 2 đường đó — CustomerOrderIntake.md).
 - Đồng bộ i18n: `pnpm --filter ./apps/seller sync-i18n` (tự chạy ở `prebuild`).
 - Bẫy đã gặp: `@types/react` 19 của seller bị pnpm hoist vào `node_modules/.pnpm/node_modules` → `apps/web` (React 18) type-check vỡ (`'Outlet' cannot be used as a JSX component`) → `apps/web/tsconfig.json` `paths` ghim `react`/`react-dom` về `./node_modules/@types/*` (Common_Pitfalls.md §9).
