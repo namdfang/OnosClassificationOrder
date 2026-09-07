@@ -161,7 +161,9 @@
       "empty": "Không có đơn ở chặng này.",
       "openAll": "Mở trong Đơn khách",
       "age": "{{n}} ngày",
-      "ageCol": "Ở chặng"
+      "ageCol": "Ở chặng",
+      "allTitle": "Trạng thái sản xuất từng đơn · {{line}}",
+      "stageCol": "Chặng hiện tại"
     },
     "sla": {
       "title": "Đúng hẹn & quá hạn",

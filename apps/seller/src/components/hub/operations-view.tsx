@@ -6,6 +6,8 @@ import { useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
 import { AlertTriangle, ArrowDownRight, ArrowUpRight, CheckCircle2, ExternalLink, Info, Loader2 } from 'lucide-react';
 import type { AdminCustomerStagingOrder, CeoOverview, FactoryOverview, LifecycleOverview } from 'shared';
+import { OrdersPagination } from '@/components/orders/orders-pagination';
+import { ProductLineTabs, type ProductLineTabKey } from '@/components/orders/product-line-tabs';
 import { ProductLineBadge, StatusBadge } from '@/components/shared/badge';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/shared/card';
 import { CopyButton } from '@/components/shared/copy-button';
@@ -14,6 +16,8 @@ import { PageHeader } from '@/components/shared/page-header';
 import { useApi } from '@/hooks/use-api';
 import { useUrlState } from '@/hooks/use-url-state';
 import { orderDisplayCode, type ApiRes } from '@/lib/customer-orders';
+import { isProductLine } from '@/lib/product-lines';
+import type { CustomerOrderCounts } from 'shared';
 
 /** 8 chặng vòng đời (`LIFECYCLE_STAGE_KEYS`) — màu theo họ logo, đậm dần theo tiến trình. */
 const STAGES = ['tool-check', 'designer', 'print', 'press', 'qc-post-press', 'sew-in', 'sew-out', 'pack'] as const;
@@ -51,18 +55,28 @@ const delta = (cur: number, prev: number) => (prev > 0 ? ((cur - prev) / prev) *
 
 export function OperationsView() {
   const { t } = useTranslation(['hub', 'ceoDashboard', 'track', 'customerPortal']);
-  const [state, setState] = useUrlState({ from: '', to: '', factory: '', stage: '' });
+  const [state, setState] = useUrlState({ from: '', to: '', factory: '', stage: '', line: '', page: '1' });
+  const line: ProductLineTabKey = isProductLine(state.line) ? state.line : 'all';
+  const page = Math.max(1, Number(state.page) || 1);
   const from = state.from || dayjs().subtract(6, 'day').format('YYYY-MM-DD');
   const to = state.to || dayjs().format('YYYY-MM-DD');
   const dateRange: DateRange = { dateFrom: from, dateTo: to };
   const factory = state.factory;
   const stage = STAGES.includes(state.stage as (typeof STAGES)[number]) ? state.stage : '';
 
-  const lifecycleQs = useMemo(() => { const p = new URLSearchParams({ from, to }); if (factory) p.set('factoryId', factory); return p.toString(); }, [from, to, factory]);
+  const lifecycleQs = useMemo(() => { const p = new URLSearchParams({ from, to }); if (factory) p.set('factoryId', factory); if (line !== 'all') p.set('productLine', line); return p.toString(); }, [from, to, factory, line]);
   const { data: lifeRes, loading: lifeLoading } = useApi<ApiRes<LifecycleOverview>>(`/api/hub/v1/orders/lifecycle-overview?${lifecycleQs}`);
   const { data: ceoRes } = useApi<{ data: CeoOverview }>(`/api/hub/v1/ceo/overview?from=${from}&to=${to}`);
   const { data: factoryRes } = useApi<ApiRes<FactoryOverview>>('/api/hub/v1/orders/factory-overview');
-  const { data: stageOrdersRes, loading: stageLoading } = useApi<ApiRes<AdminCustomerStagingOrder[]>>(stage ? `/api/hub/v1/admin/customer-orders?limit=12&stage=${stage}` : null);
+  const ordersQs = useMemo(() => {
+    const p = new URLSearchParams({ page: String(page), limit: '15' });
+    if (stage) p.set('stage', stage); else p.set('status', 'in-production');
+    if (line !== 'all') p.set('productLine', line);
+    return p.toString();
+  }, [page, stage, line]);
+  const { data: stageOrdersRes, loading: stageLoading } = useApi<ApiRes<AdminCustomerStagingOrder[]>>(`/api/hub/v1/admin/customer-orders?${ordersQs}`);
+  const { data: lineCountsRes } = useApi<ApiRes<CustomerOrderCounts>>('/api/hub/v1/admin/customer-orders/counts');
+  const lineCounts = useMemo(() => { const c = lineCountsRes?.data; return c ? ({ all: c.all, ...(c.byProductLine ?? {}) } as Partial<Record<ProductLineTabKey, number>>) : undefined; }, [lineCountsRes]);
   const life = lifeRes?.data;
   const ceo = ceoRes?.data;
   const fo = factoryRes?.data;
@@ -95,6 +109,9 @@ export function OperationsView() {
         }
       />
 
+      {/* Tab dịch vụ — chọn 1 dòng thì phễu + bảng đơn lọc theo dòng đó (KPI/SLA/xưởng/nhân sự vẫn toàn hệ). */}
+      <ProductLineTabs active={line} counts={lineCounts} onChange={(next) => setState({ line: next === 'all' ? '' : next, stage: '', page: '1' })} />
+
       {/* 1) KPI */}
       <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-2">
         <Kpi label={t('hub:ops.kpi.in')} value={fmt(ceo?.production.in)} prev={ceo ? delta(ceo.production.in, ceo.production.prevIn) : null} color="#7f9a2b" />
@@ -121,7 +138,7 @@ export function OperationsView() {
               const active = stage === k;
               const color = STAGE_COLORS[k];
               return (
-                <button key={k} type="button" onClick={() => setState({ stage: active ? '' : k })} className={`text-left rounded-xl border p-2.5 transition-all ${active ? 'border-accent shadow-card' : 'border-border1 hover:border-accent/60'} ${isBottleneck ? 'bg-error-bg' : 'bg-card'}`}>
+                <button key={k} type="button" onClick={() => setState({ stage: active ? '' : k, page: '1' })} className={`text-left rounded-xl border p-2.5 transition-all ${active ? 'border-accent shadow-card' : 'border-border1 hover:border-accent/60'} ${isBottleneck ? 'bg-error-bg' : 'bg-card'}`}>
                   <div className="flex items-center justify-between gap-1">
                     <span className="text-[10px] font-bold text-text-primary truncate">{stageLabel(k)}</span>
                     {isBottleneck && <span className="text-[8px] font-bold uppercase text-error">{t('hub:ops.funnel.bottleneck')}</span>}
@@ -137,45 +154,55 @@ export function OperationsView() {
               );
             })}
           </div>
-          {stage && (
-            <div className="mt-3 border-t border-border2 pt-3">
-              <div className="flex items-center justify-between gap-2 mb-2">
-                <p className="text-[11px] font-bold text-text-primary">{t('hub:ops.stageOrders.title', { stage: stageLabel(stage) })}</p>
-                <Link href={`/hub/orders?status=in-production`} prefetch={false} className="text-[10px] text-accent hover:underline">{t('hub:ops.stageOrders.openAll')}</Link>
-              </div>
-              {stageLoading ? <Loader2 size={14} className="animate-spin text-accent" /> : (stageOrdersRes?.data ?? []).length === 0 ? (
-                <p className="text-[11px] text-text-muted">{t('hub:ops.stageOrders.empty')}</p>
-              ) : (
-                <div className="overflow-x-auto">
-                  <table className="w-full text-[11px] min-w-[720px]">
-                    <thead className="bg-surface-muted"><tr className="text-[9px] uppercase tracking-wider text-text-muted">
-                      <th className="py-1.5 px-2 text-left font-semibold">{t('customerPortal:orders.columns.order')}</th>
-                      <th className="py-1.5 px-2 text-left font-semibold">{t('hub:orders.columns.seller')}</th>
-                      <th className="py-1.5 px-2 text-left font-semibold">{t('customerPortal:orders.columns.product')}</th>
-                      <th className="py-1.5 px-2 text-left font-semibold">{t('hub:orders.columns.service')}</th>
-                      <th className="py-1.5 px-2 text-left font-semibold">{t('customerPortal:orders.columns.status')}</th>
-                      <th className="py-1.5 px-2 text-right font-semibold">{t('hub:ops.stageOrders.ageCol')}</th>
-                    </tr></thead>
-                    <tbody>
-                      {(stageOrdersRes?.data ?? []).map((o) => {
-                        const code = orderDisplayCode(o); const first = o.items[0];
-                        return (
-                          <tr key={o._id} className="border-t border-border2">
-                            <td className="py-1.5 px-2 font-mono font-bold whitespace-nowrap">#{code} <CopyButton text={code} size={10} /></td>
-                            <td className="py-1.5 px-2">{o.customer?.userSku || '—'}</td>
-                            <td className="py-1.5 px-2 truncate max-w-[260px]">{first?.type || first?.sku || '—'}<span className="text-text-muted"> · {[first?.color, first?.size].filter(Boolean).join('/')}</span></td>
-                            <td className="py-1.5 px-2">{(o.productLines ?? []).map((l) => <ProductLineBadge key={l} line={l} compact />)}</td>
-                            <td className="py-1.5 px-2"><StatusBadge status={o.status} /></td>
-                            <td className="py-1.5 px-2 text-right text-text-muted whitespace-nowrap">{first?.currentStageAt ? t('hub:ops.stageOrders.age', { n: dayjs().diff(dayjs(first.currentStageAt), 'day') }) : '—'}</td>
-                          </tr>
-                        );
-                      })}
-                    </tbody>
-                  </table>
-                </div>
-              )}
+          <div className="mt-3 border-t border-border2 pt-3">
+            <div className="flex items-center justify-between gap-2 mb-2 flex-wrap">
+              <p className="text-[11px] font-bold text-text-primary">
+                {stage ? t('hub:ops.stageOrders.title', { stage: stageLabel(stage) }) : t('hub:ops.stageOrders.allTitle', { line: line === 'all' ? t('hub:ops.factoryAll') : t(`customerPortal:productLines.${line}`) })}
+                <span className="ml-2 text-[10px] font-normal text-text-muted">{fmt(stageOrdersRes?.total)}</span>
+              </p>
+              <Link href={`/hub/orders${line !== 'all' ? `/${line}` : ''}?status=in-production`} prefetch={false} className="text-[10px] text-accent hover:underline">{t('hub:ops.stageOrders.openAll')}</Link>
             </div>
-          )}
+            {stageLoading && !stageOrdersRes ? <Loader2 size={14} className="animate-spin text-accent" /> : (stageOrdersRes?.data ?? []).length === 0 ? (
+              <p className="text-[11px] text-text-muted">{t('hub:ops.stageOrders.empty')}</p>
+            ) : (
+              <div className={`overflow-x-auto ${stageLoading ? 'opacity-60' : ''}`}>
+                <table className="w-full text-[11px] min-w-[820px]">
+                  <thead className="bg-surface-muted"><tr className="text-[9px] uppercase tracking-wider text-text-muted">
+                    <th className="py-1.5 px-2 text-left font-semibold">{t('customerPortal:orders.columns.order')}</th>
+                    <th className="py-1.5 px-2 text-left font-semibold">{t('hub:orders.columns.seller')}</th>
+                    <th className="py-1.5 px-2 text-left font-semibold">{t('customerPortal:orders.columns.product')}</th>
+                    <th className="py-1.5 px-2 text-left font-semibold">{t('hub:orders.columns.service')}</th>
+                    <th className="py-1.5 px-2 text-left font-semibold">{t('hub:ops.stageOrders.stageCol')}</th>
+                    <th className="py-1.5 px-2 text-left font-semibold">{t('customerPortal:orders.columns.status')}</th>
+                    <th className="py-1.5 px-2 text-right font-semibold">{t('hub:ops.stageOrders.ageCol')}</th>
+                  </tr></thead>
+                  <tbody>
+                    {(stageOrdersRes?.data ?? []).map((o) => {
+                      const code = orderDisplayCode(o); const first = o.items[0];
+                      const k = first?.currentStageKey; const color = k ? STAGE_COLORS[k] ?? '#5c5361' : '#5c5361';
+                      return (
+                        <tr key={o._id} className="border-t border-border2 hover:bg-card-hover">
+                          <td className="py-1.5 px-2 font-mono font-bold whitespace-nowrap">#{code} <CopyButton text={code} size={10} /></td>
+                          <td className="py-1.5 px-2">{o.customer?.userSku || '—'}</td>
+                          <td className="py-1.5 px-2 truncate max-w-[240px]">{first?.type || first?.sku || '—'}<span className="text-text-muted"> · {[first?.color, first?.size].filter(Boolean).join('/')}</span></td>
+                          <td className="py-1.5 px-2">{(o.productLines ?? []).map((l) => <ProductLineBadge key={l} line={l} compact />)}</td>
+                          <td className="py-1.5 px-2">
+                            {k ? <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-[10px] font-bold text-white" style={{ background: color }}>{stageLabel(k)}</span> : <span className="text-text-muted">—</span>}
+                            {(o.held || o.rework) && <span className="ml-1 text-[9px] font-semibold text-warning">{o.held ? t('customerPortal:orders.badgeHold') : t('customerPortal:orders.badgeRework')}</span>}
+                          </td>
+                          <td className="py-1.5 px-2"><StatusBadge status={o.status} /></td>
+                          <td className="py-1.5 px-2 text-right text-text-muted whitespace-nowrap">{first?.currentStageAt ? t('hub:ops.stageOrders.age', { n: dayjs().diff(dayjs(first.currentStageAt), 'day') }) : '—'}</td>
+                        </tr>
+                      );
+                    })}
+                  </tbody>
+                </table>
+                {(stageOrdersRes?.total ?? 0) > 15 && (
+                  <OrdersPagination page={page} limit={15} pages={Math.max(1, Math.ceil((stageOrdersRes?.total ?? 0) / 15))} total={stageOrdersRes?.total ?? 0} onChange={(n) => { if (n.page) setState({ page: String(n.page) }); }} />
+                )}
+              </div>
+            )}
+          </div>
         </CardContent>
       </Card>
 

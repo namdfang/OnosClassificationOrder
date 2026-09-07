@@ -161,7 +161,9 @@
       "empty": "No orders at this stage.",
       "openAll": "Open in Customer orders",
       "age": "{{n}} d",
-      "ageCol": "At stage"
+      "ageCol": "At stage",
+      "allTitle": "Production status per order · {{line}}",
+      "stageCol": "Current stage"
     },
     "sla": {
       "title": "On-time & overdue",

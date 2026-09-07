@@ -2146,6 +2146,8 @@ export const GetLifecycleOverviewZod = z.object({
   factoryId: IDZod.optional(),
   from: z.string().optional(),
   to: z.string().optional(),
+  /** Dòng sản phẩm (PRD-8) — tab dịch vụ ở Seller Hub Operations. */
+  productLine: z.enum(PRODUCT_LINES).optional(),
   /** Lọc theo khách hàng (chọn từ `LifecycleOverviewZod.customers`) — khớp CHÍNH XÁC
    * `userSku` (+ `userEmail` nếu gửi kèm), case-insensitive. */
   userSku: z.string().optional(),
