@@ -28,13 +28,13 @@ export const COLORS = {
  */
 export const STATUS_COLORS: Record<string, string> = {
   pending: '#9a7a05',
-  processing: '#0891b2',
-  'in-production': '#7f3fbf',
-  fulfilled: '#2d8a7a',
-  completed: '#3a8a4c',
-  refunded: '#c40c68',
+  processing: '#7f9a2b',
+  'in-production': '#c40c68',
+  fulfilled: '#48a05c',
+  completed: '#2f7a40',
+  refunded: '#800808',
   cancelled: '#6b7280',
-  held: '#c30d07',
+  held: '#e01008',
   rework: '#9a7a05',
 };
 

@@ -2,7 +2,6 @@
 
 import dayjs from 'dayjs';
 import Link from 'next/link';
-import { useParams } from 'next/navigation';
 import { useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { ArrowLeft, ExternalLink, Image as ImageIcon } from 'lucide-react';
@@ -19,6 +18,7 @@ import { useToast } from '@/components/shared/toast';
 import { apiFetch, useApi } from '@/hooks/use-api';
 import type { ApiRes } from '@/lib/customer-orders';
 import { driveThumbnailUrl, driveViewUrl } from '@/lib/label-preview';
+import { productLineHref } from '@/lib/product-lines';
 
 const ADDRESS_FIELDS = ['firstName', 'lastName', 'company', 'phone', 'email', 'address1', 'address2', 'city', 'state', 'postcode', 'country'] as const;
 type AddressField = (typeof ADDRESS_FIELDS)[number];
@@ -36,8 +36,7 @@ function Field({ label, value }: { label: string; value?: React.ReactNode }) {
 
 const dt = (v?: string | Date) => (v ? dayjs(v).format('DD/MM/YYYY HH:mm') : undefined);
 
-export default function OrderDetailPage() {
-  const { productionId } = useParams<{ productionId: string }>();
+export function OrderDetailView({ productionId }: { productionId: string }) {
   const { t } = useTranslation(['seller', 'customerPortal', 'track']);
   const { toast } = useToast();
   const url = `/api/v1/customer/orders/${encodeURIComponent(productionId)}`;
@@ -86,7 +85,7 @@ export default function OrderDetailPage() {
       <EmptyState
         title={t('seller:detail.notFound')}
         action={
-          <Link href="/portal/orders" prefetch={false} className="text-accent text-sm hover:underline">
+          <Link href="/portal" prefetch={false} className="text-accent text-sm hover:underline">
             {t('seller:detail.back')}
           </Link>
         }
@@ -95,12 +94,13 @@ export default function OrderDetailPage() {
   }
 
   const publicLink = `${typeof window !== 'undefined' ? window.location.origin : ''}/track/${encodeURIComponent(order.productionId)}`;
+  const backHref = order.productLine ? productLineHref(order.productLine) : '/portal';
   const thumb = order.mockupUrl ? (driveThumbnailUrl(order.mockupUrl, 400) ?? order.mockupUrl) : null;
   const designs = Object.entries(order.designs ?? {}).filter(([, v]) => !!v) as [string, string][];
 
   return (
     <div className="space-y-4">
-      <Link href="/portal/orders" prefetch={false} className="inline-flex items-center gap-1 text-xs text-text-secondary hover:text-text-primary">
+      <Link href={backHref} prefetch={false} className="inline-flex items-center gap-1 text-xs text-text-secondary hover:text-text-primary">
         <ArrowLeft size={13} /> {t('seller:detail.back')}
       </Link>
       <PageHeader

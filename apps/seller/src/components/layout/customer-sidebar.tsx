@@ -37,11 +37,11 @@ export function CustomerSidebar() {
 
   return (
     <div
-      className={`w-[210px] h-[calc(100vh-var(--viewas-h,0px))] flex flex-col fixed left-0 top-[var(--viewas-h,0px)] z-50 bg-sidebar border-r border-border1 transition-transform duration-300 lg:translate-x-0 ${
+      className={`w-[210px] h-[calc(100vh-var(--viewas-h,0px))] flex flex-col fixed left-0 top-[var(--viewas-h,0px)] z-50 bg-sidebar border-r border-sidebar-border transition-transform duration-300 lg:translate-x-0 ${
         isOpen ? 'translate-x-0' : '-translate-x-full'
       }`}
     >
-      <div className="px-3 pt-3 pb-2 flex items-center gap-2 shrink-0 border-b border-border1">
+      <div className="px-3 pt-3 pb-2 flex items-center gap-2 shrink-0 border-b border-sidebar-border">
         <OnosLogo title={t('brand.title')} subtitle={t('brand.subtitle')} className="flex-1 min-w-0" />
         <NotificationsBell />
       </div>
@@ -49,7 +49,7 @@ export function CustomerSidebar() {
       <nav className="flex-1 px-1.5 py-1 overflow-y-auto scrollbar-thin">
         {navGroups.map((group) => (
           <div key={group.group} className="mb-0.5">
-            <div className="px-2 pt-2 pb-1 text-[8.5px] font-bold text-text-muted uppercase tracking-wider">{group.group}</div>
+            <div className="px-2 pt-2 pb-1 text-[8.5px] font-bold text-sidebar-muted uppercase tracking-wider">{group.group}</div>
             {group.items.map((item) => {
               if (item.children?.length) return <CollapsibleNavItem key={item.id} item={item} onNavigate={close} />;
               const isActive = item.href === hrefChon;
@@ -60,7 +60,7 @@ export function CustomerSidebar() {
                   onClick={close}
                   prefetch={false}
                   className={`w-full flex items-center gap-1.5 px-2.5 py-1.5 rounded-full text-[11px] transition-all no-underline ${
-                    isActive ? 'bg-accent text-white font-bold' : 'text-text-secondary font-medium hover:bg-card-hover'
+                    isActive ? 'bg-accent text-white font-bold shadow-card' : 'text-sidebar-fg font-medium hover:bg-sidebar-hover'
                   }`}
                 >
                   <span className="text-[12px] w-4 text-center">{item.icon}</span>
@@ -72,11 +72,11 @@ export function CustomerSidebar() {
         ))}
       </nav>
 
-      <div className="px-2.5 py-1.5 flex items-center gap-1 border-t border-border1">
+      <div className="px-2.5 py-1.5 flex items-center gap-1 border-t border-sidebar-border">
         <button
           type="button"
           onClick={toggleLanguage}
-          className="flex items-center gap-1 px-2 py-1 rounded-md text-[10px] font-semibold text-text-secondary hover:bg-card-hover"
+          className="flex items-center gap-1 px-2 py-1 rounded-md text-[10px] font-semibold text-sidebar-fg hover:bg-sidebar-hover"
           title={t('common.language')}
         >
           <Languages size={12} />
@@ -86,16 +86,16 @@ export function CustomerSidebar() {
         <ThemeToggle compact />
       </div>
 
-      <div className="px-2.5 py-2 flex items-center gap-2 shrink-0 border-t border-border1">
+      <div className="px-2.5 py-2 flex items-center gap-2 shrink-0 border-t border-sidebar-border">
         <div className="w-6 h-6 rounded-full bg-accent flex items-center justify-center text-white text-[8px] font-bold">{initials || 'S'}</div>
         <div className="flex-1 min-w-0">
-          <div className="text-[10px] font-bold text-text-primary truncate">{name}</div>
-          <div className="text-[7.5px] text-text-muted">{t('nav.customer')}</div>
+          <div className="text-[10px] font-bold text-sidebar-fg truncate">{name}</div>
+          <div className="text-[7.5px] text-sidebar-muted">{t('nav.customer')}</div>
         </div>
         <button
           type="button"
           onClick={() => void signOut()}
-          className="p-1 rounded hover:bg-card-hover transition-colors text-text-muted hover:text-text-secondary"
+          className="p-1 rounded hover:bg-sidebar-hover transition-colors text-sidebar-muted hover:text-sidebar-fg"
           title={t('nav.signOut')}
         >
           <LogOut size={14} />

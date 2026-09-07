@@ -74,7 +74,7 @@ export function NotificationsBell() {
       <button
         type="button"
         onClick={() => { setOpen((o) => !o); if (!open) void mutate(); }}
-        className="relative p-1 rounded text-text-muted hover:text-text-primary hover:bg-card-hover"
+        className="relative p-1 rounded text-sidebar-muted hover:text-sidebar-fg hover:bg-sidebar-hover"
         aria-label={t('bell.title')}
       >
         <Bell size={15} />

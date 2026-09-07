@@ -3,11 +3,10 @@
 import dayjs from 'dayjs';
 import Link from 'next/link';
 import { useTranslation } from 'react-i18next';
-import { CheckCircle2, ClipboardList, Factory, FileUp, PackagePlus, XCircle } from 'lucide-react';
+import { CheckCircle2, ClipboardList, Factory, XCircle } from 'lucide-react';
 import { CUSTOMER_ORDER_STATUSES } from 'shared/enums';
 import type { CustomerDashboard, CustomerOrderCounts } from 'shared';
 import { ProductLineBadge, StatusBadge } from '@/components/shared/badge';
-import { Button } from '@/components/shared/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/shared/card';
 import { CopyButton } from '@/components/shared/copy-button';
 import { PageHeader } from '@/components/shared/page-header';
@@ -77,18 +76,12 @@ export default function DashboardPage() {
       <PageHeader
         title={t('customerPortal:dashboard.title')}
         subtitle={t('customerPortal:dashboard.subtitle')}
-        actions={
-          <div className="flex items-center gap-2">
-            <Link href="/portal/orders/import" prefetch={false}><Button variant="secondary" size="sm"><FileUp size={13} className="mr-1.5" />{t('customerPortal:orders.importCsv')}</Button></Link>
-            <Link href="/portal/orders/create" prefetch={false}><Button variant="primary" size="sm"><PackagePlus size={13} className="mr-1.5" />{t('customerPortal:layout.newOrder')}</Button></Link>
-          </div>
-        }
       />
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
-        <StatCard label={t('customerPortal:dashboard.totalOrders')} value={counts?.all ?? totals.total} icon={<ClipboardList size={18} />} color="#c40c68" href="/portal/orders" />
-        <StatCard label={t('customerPortal:dashboard.processingOrders')} value={counts?.inProduction ?? totals.processing} icon={<Factory size={18} />} color="#7f3fbf" href="/portal/orders?status=in-production" />
-        <StatCard label={t('customerPortal:dashboard.completedOrders')} value={(counts?.fulfilled ?? 0) + (counts?.completed ?? 0) || totals.completed} icon={<CheckCircle2 size={18} />} color="#3a8a4c" href="/portal/orders?status=completed" />
-        <StatCard label={t('customerPortal:dashboard.cancelledOrders')} value={counts?.cancelled ?? totals.cancelled} icon={<XCircle size={18} />} color="#6b7280" href="/portal/orders?status=cancelled" />
+        <StatCard label={t('customerPortal:dashboard.totalOrders')} value={counts?.all ?? totals.total} icon={<ClipboardList size={18} />} color="#c40c68" href="/portal/orders/3d" />
+        <StatCard label={t('customerPortal:dashboard.processingOrders')} value={counts?.inProduction ?? totals.processing} icon={<Factory size={18} />} color="#c40c68" href="/portal" />
+        <StatCard label={t('customerPortal:dashboard.completedOrders')} value={(counts?.fulfilled ?? 0) + (counts?.completed ?? 0) || totals.completed} icon={<CheckCircle2 size={18} />} color="#3a8a4c" href="/portal" />
+        <StatCard label={t('customerPortal:dashboard.cancelledOrders')} value={counts?.cancelled ?? totals.cancelled} icon={<XCircle size={18} />} color="#6b7280" href="/portal" />
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
@@ -115,7 +108,7 @@ export default function DashboardPage() {
                 label: t(`customerPortal:orders.status.${s}`),
                 value: (counts?.[COUNT_KEY[s]] as number | undefined) ?? 0,
                 color: STATUS_COLORS[s] ?? '#6b7280',
-                href: `/portal/orders?status=${s}`,
+                href: '/portal',
               }))}
             />
             {counts && (counts.held > 0 || counts.rework > 0) && (
@@ -131,7 +124,6 @@ export default function DashboardPage() {
         <CardHeader>
           <div className="flex items-center justify-between">
             <CardTitle>{t('customerPortal:dashboard.recentOrders')}</CardTitle>
-            <Link href="/portal/orders" prefetch={false} className="text-xs text-accent hover:underline">{t('customerPortal:dashboard.viewAllOrders')}</Link>
           </div>
         </CardHeader>
         <CardContent>

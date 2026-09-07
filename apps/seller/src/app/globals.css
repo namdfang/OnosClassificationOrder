@@ -8,12 +8,17 @@
      hồng cánh sen #c40c68 (chủ đạo) · đỏ #e01008 · đỏ sẫm #800808 · vàng #f7d21e ·
      xanh ô-liu #7f9a2b · xanh lá #48a05c. Nền trung tính ngả hồng-ấm rất nhẹ để cùng họ với accent. */
   /* ── Surface ── */
-  --color-background: #f7f5f6;
+  --color-background: #f6edf2;
   --color-foreground: #1c1520;
   --color-card: #ffffff;
-  --color-card-hover: #fbf7f9;
-  --color-sidebar: #fdfbfc;
-  --color-surface-muted: #f3eef1;
+  --color-card-hover: #fdf4f8;
+  /* Sidebar tối màu mận (dẫn từ hồng #c40c68 của logo) — chữ/viền trong sidebar dùng token riêng bên dưới */
+  --color-sidebar: #3a0c24;
+  --color-sidebar-fg: #fbe6f0;
+  --color-sidebar-muted: #d59ab9;
+  --color-sidebar-hover: rgba(255, 255, 255, 0.08);
+  --color-sidebar-border: rgba(255, 255, 255, 0.1);
+  --color-surface-muted: #f3e6ec;
   /* ── Text ── */
   --color-text-primary: #1c1520;
   --color-text-secondary: #5c5361;
@@ -62,7 +67,11 @@
   --color-foreground: #f1e9ee;
   --color-card: #1f1826;
   --color-card-hover: #2a2131;
-  --color-sidebar: #1a1420;
+  --color-sidebar: #200712;
+  --color-sidebar-fg: #fbe6f0;
+  --color-sidebar-muted: #b98aa3;
+  --color-sidebar-hover: rgba(255, 255, 255, 0.07);
+  --color-sidebar-border: rgba(255, 255, 255, 0.08);
   --color-surface-muted: #261e2d;
   --color-text-primary: #f1e9ee;
   --color-text-secondary: #b5a8b3;

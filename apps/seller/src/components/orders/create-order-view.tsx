@@ -9,7 +9,6 @@ import type { CustomerCatalogItem, CustomerStagingOrder } from 'shared';
 import { designAcceptKeys } from 'shared/client';
 import { CatalogProductCard } from '@/components/orders/catalog-product-card';
 import { OrdersPagination } from '@/components/orders/orders-pagination';
-import { ProductLineTabs, type ProductLineTabKey } from '@/components/orders/product-line-tabs';
 import { Button } from '@/components/shared/button';
 import { FileUrlOrUploadInput } from '@/components/shared/file-url-or-upload-input';
 import { PageHeader } from '@/components/shared/page-header';
@@ -18,6 +17,7 @@ import { SearchInput } from '@/components/shared/search-input';
 import { useToast } from '@/components/shared/toast';
 import { apiFetch, useApi } from '@/hooks/use-api';
 import { findMatchingVariation, groupAttributeOptions, pickColorSize } from '@/lib/catalog-variant';
+import { productLineHref, type ProductLine } from '@/lib/product-lines';
 import type { ApiRes } from '@/lib/customer-orders';
 import { fmtUSD } from '@/lib/utils';
 
@@ -70,7 +70,7 @@ function useDebounced<T>(value: T, ms: number): T {
 
 const inputCls = 'w-full px-3 py-2 rounded-lg border border-border1 bg-card text-xs text-text-primary outline-none focus:border-accent';
 
-export default function CreateOrderPage() {
+export function CreateOrderView({ line }: { line: ProductLine }) {
   const { t } = useTranslation(['customerPortal', 'seller']);
   const { toast } = useToast();
   const router = useRouter();
@@ -78,13 +78,12 @@ export default function CreateOrderPage() {
   // ── Bộ chọn sản phẩm (catalog theo tier, lọc theo dòng sản phẩm)
   const [search, setSearch] = useState('');
   const q = useDebounced(search.trim(), 300);
-  const [line, setLine] = useState<ProductLineTabKey>('all');
   const [page, setPage] = useState(1);
   const [limit, setLimit] = useState(12);
   const catalogQuery = useMemo(() => {
     const p = new URLSearchParams({ page: String(page), limit: String(limit) });
     if (q) p.set('search', q);
-    if (line !== 'all') p.set('productLine', line);
+    p.set('productLine', line);
     return p.toString();
   }, [page, limit, q, line]);
   const [product, setProduct] = useState<CustomerCatalogItem | null>(null);
@@ -186,7 +185,7 @@ export default function CreateOrderPage() {
         }),
       });
       toast('success', t('customerPortal:orderNew.successPending', { count: res.data?.items?.length ?? cart.length }));
-      router.push('/portal/orders?status=pending');
+      router.push(`${productLineHref(line)}?status=pending`);
     } catch (e) {
       toast('error', (e as Error).message);
     } finally {
@@ -198,10 +197,10 @@ export default function CreateOrderPage() {
 
   return (
     <div className="max-w-6xl mx-auto space-y-4">
-      <Link href="/portal/orders" prefetch={false} className="inline-flex items-center gap-1 text-xs text-text-secondary hover:text-text-primary">
-        <ArrowLeft size={13} /> {t('seller:detail.back')}
+      <Link href={productLineHref(line)} prefetch={false} className="inline-flex items-center gap-1 text-xs text-text-secondary hover:text-text-primary">
+        <ArrowLeft size={13} /> {t('customerPortal:productLines.' + line)}
       </Link>
-      <PageHeader title={t('customerPortal:orderNew.title')} subtitle={t('customerPortal:orderNew.subtitle')} />
+      <PageHeader title={`${t('customerPortal:orderNew.title')} · ${t('customerPortal:productLines.' + line)}`} subtitle={t('customerPortal:orderNew.subtitle')} />
 
       <div className="grid grid-cols-1 lg:grid-cols-[minmax(0,1fr)_360px] gap-5 items-start">
         <div className="space-y-4 min-w-0">
@@ -211,7 +210,6 @@ export default function CreateOrderPage() {
                 <h2 className="text-sm font-bold text-text-primary">{t('customerPortal:orderNew.pickProduct')}</h2>
                 <SearchInput value={search} onChange={(v) => { setSearch(v); setPage(1); }} placeholder={t('customerPortal:orderNew.searchPlaceholder')} className="w-72" />
               </div>
-              <ProductLineTabs active={line} onChange={(l) => { setLine(l); setPage(1); }} />
               {pickerLoading && pickerItems.length === 0 ? (
                 <div className="flex justify-center py-16">
                   <div className="w-6 h-6 border-2 border-accent border-t-transparent rounded-full animate-spin" />

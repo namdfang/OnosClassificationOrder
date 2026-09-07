@@ -2,14 +2,14 @@ import type { LucideIcon } from 'lucide-react';
 import { Image, Layers, Lightbulb, Scissors, Shirt, TreePine } from 'lucide-react';
 import { PRODUCT_LINES, ProductLine } from 'shared/enums';
 
-/** Màu + icon từng dòng sản phẩm — pattern `SERVICE_COLORS/ICONS` của thghub. */
+/** Màu + icon từng dòng sản phẩm — pattern `SERVICE_COLORS/ICONS` của thghub; 6 màu lấy từ logo ONOSPOD (hồng/xanh lá/đỏ sẫm/ô-liu/vàng/đỏ). */
 export const PRODUCT_LINE_META: Record<ProductLine, { color: string; icon: LucideIcon; slug: string }> = {
-  [ProductLine.ThreeD]: { color: '#4338ca', icon: Shirt, slug: '3d' },
-  [ProductLine.TwoD]: { color: '#0e7490', icon: Layers, slug: '2d' },
-  [ProductLine.Wood]: { color: '#92400e', icon: TreePine, slug: 'wood' },
-  [ProductLine.Embroidery]: { color: '#7c3aed', icon: Scissors, slug: 'embroidery' },
-  [ProductLine.Led]: { color: '#b45309', icon: Lightbulb, slug: 'led' },
-  [ProductLine.Canvas]: { color: '#047857', icon: Image, slug: 'canvas' },
+  [ProductLine.ThreeD]: { color: '#c40c68', icon: Shirt, slug: '3d' },
+  [ProductLine.TwoD]: { color: '#48a05c', icon: Layers, slug: '2d' },
+  [ProductLine.Wood]: { color: '#800808', icon: TreePine, slug: 'wood' },
+  [ProductLine.Embroidery]: { color: '#7f9a2b', icon: Scissors, slug: 'embroidery' },
+  [ProductLine.Led]: { color: '#c9a400', icon: Lightbulb, slug: 'led' },
+  [ProductLine.Canvas]: { color: '#e01008', icon: Image, slug: 'canvas' },
 };
 
 export { PRODUCT_LINES, ProductLine };

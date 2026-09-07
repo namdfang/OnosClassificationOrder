@@ -46,8 +46,8 @@ export function CollapsibleNavItem({ item, onNavigate }: CollapsibleNavItemProps
         className="w-full flex items-center gap-1.5 px-2.5 py-1.5 rounded-full text-[11px] transition-all bg-transparent border-none cursor-pointer"
         style={{
           fontWeight: hasActiveChild ? 700 : 500,
-          background: hasActiveChild ? COLORS.accentLight : "transparent",
-          color: hasActiveChild ? COLORS.accent : COLORS.text1,
+          background: hasActiveChild ? "var(--color-sidebar-hover)" : "transparent",
+          color: "var(--color-sidebar-fg)",
         }}
       >
         <span className="text-[12px] w-4 text-center">{item.icon}</span>
@@ -70,7 +70,7 @@ export function CollapsibleNavItem({ item, onNavigate }: CollapsibleNavItemProps
                 style={{
                   fontWeight: isActive ? 700 : 500,
                   background: isActive ? COLORS.accent : "transparent",
-                  color: isActive ? "#ffffff" : COLORS.text1,
+                  color: isActive ? "#ffffff" : "var(--color-sidebar-fg)",
                 }}
               >
                 <span className="text-[12px] w-4 text-center">{child.icon}</span>

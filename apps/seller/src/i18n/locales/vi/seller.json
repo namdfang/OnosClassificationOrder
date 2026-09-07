@@ -41,7 +41,9 @@
     "lockedHint": "Chỉ hiện đơn có sản phẩm thuộc dòng {{line}}.",
     "viewDetail": "Xem chi tiết",
     "items": "{{count}} sản phẩm",
-    "cancelling": "Đang hủy..."
+    "cancelling": "Đang hủy...",
+    "heroSubtitle": "{{count}} đơn trong dịch vụ này",
+    "newOrderIn": "Đặt đơn {{line}}"
   },
   "detail": {
     "back": "Về danh sách",

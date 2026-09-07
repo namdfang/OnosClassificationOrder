@@ -14,7 +14,7 @@ export function ThemeToggle({ compact }: { compact?: boolean }) {
   const { theme, setTheme } = useTheme();
 
   return (
-    <div className="flex items-center gap-0.5 rounded-lg bg-surface-muted p-0.5">
+    <div className="flex items-center gap-0.5 rounded-lg bg-sidebar-hover p-0.5">
       {OPTIONS.map(({ value, icon: Icon, label }) => (
         <button
           key={value}
@@ -22,8 +22,8 @@ export function ThemeToggle({ compact }: { compact?: boolean }) {
           title={label}
           className={`flex items-center gap-1.5 px-2 py-1.5 rounded-md text-[10px] font-medium transition-colors ${
             theme === value
-              ? "bg-card text-text-primary shadow-sm"
-              : "text-text-muted hover:text-text-secondary"
+              ? "bg-accent text-white shadow-sm"
+              : "text-sidebar-muted hover:text-sidebar-fg"
           }`}
         >
           <Icon size={12} />

@@ -45,8 +45,6 @@ export function buildCustomerNav(t: TFunction): NavGroup[] {
             href: productLineHref(line),
           })),
         },
-        { id: 'create', icon: '➕', label: t('nav.createOrder', { ns: 'seller' }), href: '/portal/orders/create' },
-        { id: 'import', icon: '📥', label: t('nav.importCsv', { ns: 'seller' }), href: '/portal/orders/import' },
       ],
     },
     {

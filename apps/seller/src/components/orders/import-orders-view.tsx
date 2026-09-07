@@ -15,6 +15,7 @@ import { useToast } from '@/components/shared/toast';
 import { apiFetch } from '@/hooks/use-api';
 import type { ApiRes } from '@/lib/customer-orders';
 import { driveThumbnailUrl, driveViewUrl } from '@/lib/label-preview';
+import { productLineHref, type ProductLine } from '@/lib/product-lines';
 import { fmtUSD } from '@/lib/utils';
 
 /**
@@ -274,7 +275,7 @@ function PreviewCell({ value, errors }: { value: string; errors?: string[] }) {
   );
 }
 
-export default function ImportOrdersPage() {
+export function ImportOrdersView({ line }: { line: ProductLine }) {
   const { t } = useTranslation(['customerPortal', 'seller']);
   const { toast } = useToast();
   const inputRef = useRef<HTMLInputElement>(null);
@@ -372,7 +373,7 @@ export default function ImportOrdersPage() {
 
   return (
     <div className="space-y-4">
-      <Link href="/portal/orders" prefetch={false} className="inline-flex items-center gap-1 text-xs text-text-secondary hover:text-text-primary">
+      <Link href={productLineHref(line)} prefetch={false} className="inline-flex items-center gap-1 text-xs text-text-secondary hover:text-text-primary">
         <ArrowLeft size={13} /> {t('customerPortal:importCsv.backToOrders')}
       </Link>
       <PageHeader
@@ -471,7 +472,7 @@ export default function ImportOrdersPage() {
             {badge('bg-success-bg text-success', t('customerPortal:importCsv.resultCreated', { count: results.created }))}
             {badge('bg-surface-muted text-text-secondary', t('customerPortal:importCsv.resultDuplicated', { count: results.duplicated }))}
             {badge('bg-error-bg text-error', t('customerPortal:importCsv.resultFailed', { count: results.failed }))}
-            <Link href="/portal/orders?status=pending" prefetch={false} className="ml-auto"><Button variant="primary" size="sm">{t('customerPortal:importCsv.goToPending')}</Button></Link>
+            <Link href={`${productLineHref(line)}?status=pending`} prefetch={false} className="ml-auto"><Button variant="primary" size="sm">{t('customerPortal:importCsv.goToPending')}</Button></Link>
           </div>
           <div className="rounded-xl border border-border1 bg-card divide-y divide-border2">
             {results.results.map((r, i) => (

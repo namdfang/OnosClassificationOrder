@@ -22,7 +22,7 @@ import { useToast } from '@/components/shared/toast';
 import { apiFetch, useApi } from '@/hooks/use-api';
 import { useUrlState } from '@/hooks/use-url-state';
 import { orderDisplayCode, type ApiRes } from '@/lib/customer-orders';
-import { isProductLine, type ProductLine } from '@/lib/product-lines';
+import { isProductLine, PRODUCT_LINE_META, productLineHref, type ProductLine } from '@/lib/product-lines';
 
 interface OrdersListViewProps {
   /** Route `/portal/orders/<line>` khoá dòng — tab không đổi được, filter luôn theo dòng đó. */
@@ -138,36 +138,14 @@ export function OrdersListView({ lockedLine, adminMode = false }: OrdersListView
 
   return (
     <div className="space-y-4">
-      <PageHeader
-        title={adminMode ? t('hub:orders.title') : lockedLine ? t(`customerPortal:productLines.${lockedLine}`) : t('customerPortal:orders.title')}
-        subtitle={
-          adminMode
-            ? `${t('hub:orders.subtitle')}${total > 0 ? ` · ${t('customerPortal:orders.resultsCount', { count: total })}` : ''}`
-            : lockedLine
-              ? t('seller:list.lockedHint', { line: t(`customerPortal:productLines.${lockedLine}`) })
-              : total > 0
-                ? t('customerPortal:orders.resultsCount', { count: total })
-                : undefined
-        }
-        actions={
-          adminMode ? undefined : (
-          <div className="flex items-center gap-2">
-            <Link href="/portal/orders/import" prefetch={false}>
-              <Button variant="secondary" size="sm">
-                <FileUp size={13} className="mr-1.5" />
-                {t('customerPortal:orders.importCsv')}
-              </Button>
-            </Link>
-            <Link href="/portal/orders/create" prefetch={false}>
-              <Button variant="primary" size="sm">
-                <PackagePlus size={13} className="mr-1.5" />
-                {t('customerPortal:layout.newOrder')}
-              </Button>
-            </Link>
-          </div>
-          )
-        }
-      />
+      {adminMode ? (
+        <PageHeader
+          title={t('hub:orders.title')}
+          subtitle={`${t('hub:orders.subtitle')}${total > 0 ? ` · ${t('customerPortal:orders.resultsCount', { count: total })}` : ''}`}
+        />
+      ) : lockedLine ? (
+        <ServiceHero line={lockedLine} total={total} />
+      ) : null}
 
       <OrdersStatsBar counts={counts} />
       {adminMode && state.seller && (
@@ -177,12 +155,14 @@ export function OrdersListView({ lockedLine, adminMode = false }: OrdersListView
         </p>
       )}
 
-      <ProductLineTabs
-        active={line}
-        locked={lockedLine}
-        counts={lineCounts}
-        onChange={(next) => setState({ line: next === 'all' ? '' : next, page: '1' })}
-      />
+      {/* Tab dòng sản phẩm CHỈ ở khu quản trị; seller vào thẳng trang dịch vụ, không có trang tổng. */}
+      {adminMode && (
+        <ProductLineTabs
+          active={line}
+          counts={lineCounts}
+          onChange={(next) => setState({ line: next === 'all' ? '' : next, page: '1' })}
+        />
+      )}
 
       <div className="flex flex-wrap items-center gap-3">
         <OrdersStatusFilterPills
@@ -214,8 +194,8 @@ export function OrdersListView({ lockedLine, adminMode = false }: OrdersListView
               <Button variant="outline" size="sm" onClick={() => { setSearchInput(''); setState({ q: '', held: '', status: '', page: '1' }); }}>
                 {t('customerPortal:orders.clearFilters')}
               </Button>
-            ) : adminMode ? undefined : (
-              <Link href="/portal/orders/create" prefetch={false} className="text-accent text-sm hover:underline">
+            ) : adminMode || !lockedLine ? undefined : (
+              <Link href={`${productLineHref(lockedLine)}/create`} prefetch={false} className="text-accent text-sm hover:underline">
                 {t('customerPortal:orders.placeFirst')}
               </Link>
             )
@@ -293,6 +273,35 @@ export function OrdersListView({ lockedLine, adminMode = false }: OrdersListView
         message={cancelTarget ? t('customerPortal:orders.cancelConfirm', { name: orderDisplayCode(cancelTarget) }) : ''}
         confirmLabel={t('seller:detail.cancel')}
       />
+    </div>
+  );
+}
+
+/** Header dịch vụ: dải màu theo dòng sản phẩm + CTA đặt đơn / import ngay trong trang (không CTA chung). */
+function ServiceHero({ line, total }: { line: ProductLine; total: number }) {
+  const { t } = useTranslation(['customerPortal', 'seller']);
+  const meta = PRODUCT_LINE_META[line];
+  const Icon = meta.icon;
+  return (
+    <div
+      className="rounded-2xl px-5 py-4 sm:px-6 sm:py-5 flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between text-white shadow-elevated"
+      style={{ background: `linear-gradient(135deg, ${meta.color} 0%, var(--color-accent) 100%)` }}
+    >
+      <div className="flex items-center gap-3 min-w-0">
+        <span className="w-12 h-12 rounded-xl bg-white/20 flex items-center justify-center shrink-0"><Icon size={24} /></span>
+        <div className="min-w-0">
+          <h1 className="text-2xl font-extrabold font-display leading-tight">{t(`customerPortal:productLines.${line}`)}</h1>
+          <p className="text-[12px] text-white/80">{t('seller:list.heroSubtitle', { count: total })}</p>
+        </div>
+      </div>
+      <div className="flex flex-wrap items-center gap-2 sm:shrink-0">
+        <Link href={`${productLineHref(line)}/import`} prefetch={false} className="inline-flex items-center gap-1.5 px-3.5 py-2 rounded-lg text-[12px] font-bold bg-white/15 text-white border border-white/40 hover:bg-white/25 no-underline">
+          <FileUp size={14} />{t('customerPortal:orders.importCsv')}
+        </Link>
+        <Link href={`${productLineHref(line)}/create`} prefetch={false} className="inline-flex items-center gap-1.5 px-3.5 py-2 rounded-lg text-[12px] font-bold bg-[#f7d21e] text-[#3a2a00] hover:bg-[#ffe04a] no-underline shadow-card">
+          <PackagePlus size={14} />{t('seller:list.newOrderIn', { line: t(`customerPortal:productLines.${line}`) })}
+        </Link>
+      </div>
     </div>
   );
 }

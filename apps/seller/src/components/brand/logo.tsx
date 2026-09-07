@@ -12,8 +12,8 @@ export function OnosLogo({ title, subtitle, className = '' }: { title: string; s
     <div className={`flex items-center gap-2 ${className}`}>
       <OnosMark className="w-8 h-8 shrink-0" />
       <div className="min-w-0 leading-tight">
-        <div className="text-[12px] font-extrabold text-text-primary truncate font-display">{title}</div>
-        <div className="text-[8px] font-semibold text-text-muted tracking-wider">{subtitle}</div>
+        <div className="text-[12px] font-extrabold truncate font-display" style={{ color: "var(--color-sidebar-fg)" }}>{title}</div>
+        <div className="text-[8px] font-semibold tracking-wider" style={{ color: "var(--color-sidebar-muted)" }}>{subtitle}</div>
       </div>
     </div>
   );

@@ -41,7 +41,9 @@
     "lockedHint": "Only orders with at least one {{line}} item.",
     "viewDetail": "View detail",
     "items": "{{count}} items",
-    "cancelling": "Cancelling..."
+    "cancelling": "Cancelling...",
+    "heroSubtitle": "{{count}} orders in this service",
+    "newOrderIn": "New {{line}} order"
   },
   "detail": {
     "back": "Back to list",
