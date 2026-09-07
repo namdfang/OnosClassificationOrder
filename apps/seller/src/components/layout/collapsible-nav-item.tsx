@@ -14,7 +14,7 @@ import { useState } from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { ChevronDown, ChevronRight } from "lucide-react";
-import type { NavItem } from "@/lib/navigation";
+import { hrefDangChon, type NavItem } from "@/lib/navigation";
 import { COLORS } from "@/lib/constants";
 
 function matchActive(pathname: string, href: string): boolean {
@@ -30,7 +30,9 @@ interface CollapsibleNavItemProps {
 export function CollapsibleNavItem({ item, onNavigate }: CollapsibleNavItemProps) {
   const pathname = usePathname();
   const children = item.children ?? [];
-  const hasActiveChild = children.some((c) => matchActive(pathname, c.href));
+  // Khớp CỤ THỂ NHẤT thắng: `/hub/orders` (Tất cả) không sáng cùng lúc với `/hub/orders/3d`.
+  const activeChild = hrefDangChon(pathname, children.map((c) => c.href));
+  const hasActiveChild = activeChild !== null;
   // Derived state (không dùng effect): mặc định mở theo route active (F5/deep-link
   // tự mở + highlight). User toggle thì manualOpen override. Mỗi lần F5 = mount
   // mới → manualOpen=null → bám theo hasActiveChild.
@@ -59,7 +61,7 @@ export function CollapsibleNavItem({ item, onNavigate }: CollapsibleNavItemProps
       {expanded && (
         <div className="mt-0.5 space-y-0.5">
           {children.map((child) => {
-            const isActive = matchActive(pathname, child.href);
+            const isActive = child.href === activeChild;
             return (
               <Link
                 key={child.id}

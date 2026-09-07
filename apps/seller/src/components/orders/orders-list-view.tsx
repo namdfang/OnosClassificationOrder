@@ -138,7 +138,9 @@ export function OrdersListView({ lockedLine, adminMode = false }: OrdersListView
   const pages = Math.max(1, Math.ceil(total / limit));
 
   return (
-    <div className="space-y-4">
+    // Khung cố định như khu quản trị: đầu trang + lọc đứng yên, chỉ bảng/thẻ cuộn, phân trang neo đáy.
+    <div className="flex flex-col gap-4 h-[calc(100dvh-4.25rem-var(--viewas-h,0px))] lg:h-[calc(100dvh-2.5rem-var(--viewas-h,0px))]">
+      <div className="shrink-0 space-y-4">
       {adminMode ? (
         <PageHeader
           title={t('hub:orders.title')}
@@ -181,7 +183,9 @@ export function OrdersListView({ lockedLine, adminMode = false }: OrdersListView
           </Button>
         )}
       </div>
+      </div>
 
+      <div className="flex-1 min-h-0 flex flex-col gap-3">
       {loading && orders.length === 0 ? (
         <div className="flex justify-center py-16">
           <div className="w-6 h-6 border-2 border-accent border-t-transparent rounded-full animate-spin" />
@@ -205,14 +209,14 @@ export function OrdersListView({ lockedLine, adminMode = false }: OrdersListView
       ) : (
         <>
         {/* < md: thẻ dọc (không cuộn ngang); ≥ md: bảng */}
-        <div className={`md:hidden space-y-2 transition-opacity ${loading ? 'opacity-60' : ''}`}>
+        <div className={`md:hidden space-y-2 flex-1 min-h-0 overflow-y-auto transition-opacity ${loading ? 'opacity-60' : ''}`}>
           {orders.map((o) => (
             <OrderCard key={o._id} order={o} adminMode={adminMode} selected={selected.has(o._id)} onToggle={() => toggle(o._id)} onPushOne={() => setPushIds([o._id])} onCancel={() => setCancelTarget(o)} />
           ))}
         </div>
-        <div className={`hidden md:block bg-card border border-border1 rounded-xl overflow-x-auto transition-opacity ${loading ? 'opacity-60' : ''}`}>
+        <div className={`hidden md:block bg-card border border-border1 rounded-xl flex-1 min-h-0 overflow-auto scrollbar-thin transition-opacity ${loading ? 'opacity-60' : ''}`}>
           <table className="w-full text-left min-w-[960px]">
-            <thead>
+            <thead className="sticky top-0 z-10 bg-surface-muted">
               <tr className="text-[10px] uppercase tracking-wider text-text-muted">
                 <th className="px-3 py-2.5 w-8">
                   {!adminMode && status === CustomerOrderStatus.Pending && pendingOrders.length > 0 && (
@@ -255,14 +259,17 @@ export function OrdersListView({ lockedLine, adminMode = false }: OrdersListView
       )}
 
       {total > 0 && (
-        <OrdersPagination
-          page={page}
-          limit={limit}
-          pages={pages}
-          total={total}
-          onChange={(next) => setState({ ...(next.page ? { page: String(next.page) } : {}), ...(next.limit ? { limit: String(next.limit), page: '1' } : {}) })}
-        />
+        <div className="shrink-0 bg-card border border-border1 rounded-xl">
+          <OrdersPagination
+            page={page}
+            limit={limit}
+            pages={pages}
+            total={total}
+            onChange={(next) => setState({ ...(next.page ? { page: String(next.page) } : {}), ...(next.limit ? { limit: String(next.limit), page: '1' } : {}) })}
+          />
+        </div>
       )}
+      </div>
 
       <PushDialog ids={pushIds} open={pushIds.length > 0} onClose={() => setPushIds([])} onPushed={() => { setSelected(new Set()); refreshAll(); }} />
       <ConfirmModal

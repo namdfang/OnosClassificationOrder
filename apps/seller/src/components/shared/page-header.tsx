@@ -1,7 +1,7 @@
 "use client";
 
 interface PageHeaderProps {
-  title: string;
+  title: React.ReactNode;
   subtitle?: string;
   actions?: React.ReactNode;
   children?: React.ReactNode;

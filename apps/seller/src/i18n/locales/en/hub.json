@@ -8,10 +8,11 @@
     "groupOps": "Other",
     "dashboard": "Overview",
     "sellers": "Sellers",
-    "orders": "Customer orders",
+    "orders": "Orders",
     "notifications": "Notifications",
     "factoryApp": "Factory operations",
-    "signOut": "Sign out"
+    "signOut": "Sign out",
+    "ordersAll": "All services"
   },
   "login": {
     "title": "Seller Hub",
@@ -105,7 +106,8 @@
     "subtitleOms": "Customer orders across all sellers · 6 services · read-only",
     "refresh": "Refresh",
     "searchPlaceholder": "Search order id, SKU, seller...",
-    "totalOrders": "{{count}} total orders"
+    "totalOrders": "{{count}} total orders",
+    "subtitleLine": "{{line}} customer orders across all sellers · read-only"
   },
   "notifications": {
     "title": "Customer notifications",

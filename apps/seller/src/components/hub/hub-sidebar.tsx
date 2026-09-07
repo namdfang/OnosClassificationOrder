@@ -2,14 +2,16 @@
 
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
+import { useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
-import { Bell, ExternalLink, Languages, LayoutDashboard, LogOut, Package, Users } from 'lucide-react';
+import { ExternalLink, Languages, LogOut } from 'lucide-react';
 import { OnosLogo } from '@/components/brand/logo';
+import { CollapsibleNavItem } from '@/components/layout/collapsible-nav-item';
 import { useLanguage } from '@/components/providers/i18n-provider';
 import { ThemeToggle } from '@/components/shared/theme-toggle';
 import { useHubSession } from '@/context/hub-session-context';
 import { useMobileSidebar } from '@/context/mobile-sidebar-context';
-import { hrefDangChon } from '@/lib/navigation';
+import { buildHubNav, hrefDangChon } from '@/lib/navigation';
 
 export function HubSidebar() {
   const { t } = useTranslation('hub');
@@ -17,13 +19,11 @@ export function HubSidebar() {
   const { isOpen, close } = useMobileSidebar();
   const { language, toggleLanguage } = useLanguage();
   const pathname = usePathname();
-  const items = [
-    { href: '/hub', label: t('nav.dashboard'), icon: LayoutDashboard },
-    { href: '/hub/sellers', label: t('nav.sellers'), icon: Users },
-    { href: '/hub/orders', label: t('nav.orders'), icon: Package },
-    { href: '/hub/notifications', label: t('nav.notifications'), icon: Bell },
-  ];
-  const active = hrefDangChon(pathname.replace(/^\/hub$/, '/portal').replace(/^\/hub\//, '/portal/'), items.map((i) => i.href.replace(/^\/hub$/, '/portal').replace(/^\/hub\//, '/portal/')));
+  const navGroups = useMemo(() => buildHubNav(t), [t]);
+  const hrefChon = hrefDangChon(
+    pathname,
+    navGroups.flatMap((g) => g.items.flatMap((i) => [i.href, ...(i.children ?? []).map((c) => c.href)])),
+  );
   const adminUrl = process.env.NEXT_PUBLIC_ADMIN_URL;
   const initials = (user?.fullName || user?.email || 'A').split(/\s+/).filter(Boolean).slice(0, 2).map((s) => s[0]?.toUpperCase()).join('');
 
@@ -33,17 +33,21 @@ export function HubSidebar() {
         <OnosLogo title={t('brand.title')} subtitle={t('brand.subtitle')} className="flex-1 min-w-0" />
       </div>
       <nav className="flex-1 px-1.5 py-2 overflow-y-auto scrollbar-thin">
-        <div className="px-2 pt-1 pb-1 text-[8.5px] font-bold text-sidebar-muted uppercase tracking-wider">{t('nav.group')}</div>
-        {items.map((item) => {
-          const isActive = item.href.replace(/^\/hub$/, '/portal').replace(/^\/hub\//, '/portal/') === active;
-          const Icon = item.icon;
-          return (
-            <Link key={item.href} href={item.href} onClick={close} prefetch={false} className={`w-full flex items-center gap-2 px-2.5 py-1.5 rounded-full text-[11px] transition-all no-underline ${isActive ? 'bg-accent text-white font-bold shadow-card' : 'text-sidebar-fg font-medium hover:bg-sidebar-hover'}`}>
-              <Icon size={13} />
-              <span className="flex-1">{item.label}</span>
-            </Link>
-          );
-        })}
+        {navGroups.map((group) => (
+          <div key={group.group} className="mb-0.5">
+            <div className="px-2 pt-1 pb-1 text-[8.5px] font-bold text-sidebar-muted uppercase tracking-wider">{group.group}</div>
+            {group.items.map((item) => {
+              if (item.children?.length) return <CollapsibleNavItem key={item.id} item={item} onNavigate={close} />;
+              const isActive = item.href === hrefChon;
+              return (
+                <Link key={item.id} href={item.href} onClick={close} prefetch={false} className={`w-full flex items-center gap-1.5 px-2.5 py-1.5 rounded-full text-[11px] transition-all no-underline ${isActive ? 'bg-accent text-white font-bold shadow-card' : 'text-sidebar-fg font-medium hover:bg-sidebar-hover'}`}>
+                  <span className="text-[12px] w-4 text-center">{item.icon}</span>
+                  <span className="flex-1">{item.label}</span>
+                </Link>
+              );
+            })}
+          </div>
+        ))}
         {adminUrl && (
           <>
             <div className="px-2 pt-3 pb-1 text-[8.5px] font-bold text-sidebar-muted uppercase tracking-wider">{t('nav.groupOps')}</div>

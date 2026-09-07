@@ -62,9 +62,38 @@ export function hrefDangChon(pathname: string, hrefs: string[]): string | null {
   let tot: string | null = null;
   for (const h of hrefs) {
     if (!h) continue;
-    const khop = h === '/portal' ? pathname === h : pathname === h || pathname.startsWith(`${h}/`);
+    const khop = h === '/portal' || h === '/hub' || h === '/hub/orders' ? pathname === h : pathname === h || pathname.startsWith(`${h}/`);
     if (!khop) continue;
     if (!tot || h.length > tot.length) tot = h;
   }
   return tot;
+}
+
+/** Nav khu quản trị `/hub` — Orders xổ "Tất cả" + 6 dịch vụ, cùng khuôn với cổng seller. */
+export function buildHubNav(t: TFunction): NavGroup[] {
+  return [
+    {
+      group: t('nav.group', { ns: 'hub' }),
+      items: [
+        { id: 'hub_overview', icon: '📊', label: t('nav.dashboard', { ns: 'hub' }), href: '/hub' },
+        { id: 'hub_sellers', icon: '👥', label: t('nav.sellers', { ns: 'hub' }), href: '/hub/sellers' },
+        {
+          id: 'hub_orders',
+          icon: '📦',
+          label: t('nav.orders', { ns: 'hub' }),
+          href: '/hub/orders',
+          children: [
+            { id: 'hub_orders_all', icon: '🗂️', label: t('nav.ordersAll', { ns: 'hub' }), href: '/hub/orders' },
+            ...PRODUCT_LINES.map((line) => ({
+              id: `hub_orders_${line}`,
+              icon: LINE_ICONS[line] ?? '•',
+              label: t(`productLines.${line}`, { ns: 'customerPortal' }),
+              href: `/hub/orders/${line}`,
+            })),
+          ],
+        },
+        { id: 'hub_notifications', icon: '🔔', label: t('nav.notifications', { ns: 'hub' }), href: '/hub/notifications' },
+      ],
+    },
+  ];
 }

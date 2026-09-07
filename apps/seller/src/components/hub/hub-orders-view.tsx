@@ -22,7 +22,7 @@ import { useApi } from '@/hooks/use-api';
 import { useUrlState } from '@/hooks/use-url-state';
 import { orderDisplayCode, type ApiRes } from '@/lib/customer-orders';
 import { driveThumbnailUrl } from '@/lib/label-preview';
-import { isProductLine } from '@/lib/product-lines';
+import { isProductLine, PRODUCT_LINE_META, type ProductLine } from '@/lib/product-lines';
 import { fmtUSD } from '@/lib/utils';
 
 function useDebounced<T>(value: T, ms: number): T {
@@ -41,14 +41,14 @@ const TH = 'py-2.5 px-2 text-left text-[9px] text-text-muted font-semibold upper
  * header → lọc ngày → thẻ số → tab dịch vụ (6 dòng) → pill trạng thái → tìm/seller → bảng đầu xám
  * + phân trang trong card. CHỈ ĐỌC (SellerPortal.md §9), không CTA mạo danh ở đây.
  */
-export function HubOrdersView() {
+export function HubOrdersView({ lockedLine }: { lockedLine?: ProductLine } = {}) {
   const { t } = useTranslation(['hub', 'customerPortal', 'track']);
   const [state, setState] = useUrlState({ page: '1', limit: '20', status: '', held: '', q: '', line: '', seller: '', from: '', to: '' });
   const page = Math.max(1, Number(state.page) || 1);
   const limit = Math.min(100, Math.max(1, Number(state.limit) || 20));
   const status = state.status || null;
   const heldOnly = state.held === '1';
-  const line: ProductLineTabKey = isProductLine(state.line) ? state.line : 'all';
+  const line: ProductLineTabKey = lockedLine ?? (isProductLine(state.line) ? state.line : 'all');
   const [searchInput, setSearchInput] = useState(state.q);
   const search = useDebounced(searchInput.trim(), 350);
   useEffect(() => {
@@ -93,11 +93,21 @@ export function HubOrdersView() {
   const pages = Math.max(1, Math.ceil(total / limit));
   const noop = () => undefined;
 
+  const lineMeta = lockedLine ? PRODUCT_LINE_META[lockedLine] : null;
+  const LineIcon = lineMeta?.icon;
   return (
-    <div className="space-y-3">
+    // Khung cố định: main không cuộn; phần đầu (header + lọc) đứng yên, chỉ BẢNG cuộn, phân trang neo đáy.
+    <div className="flex flex-col gap-3 h-[calc(100dvh-4.25rem-var(--viewas-h,0px))] lg:h-[calc(100dvh-2.5rem-var(--viewas-h,0px))]">
+      <div className="shrink-0 space-y-3">
       <PageHeader
-        title={t('hub:orders.title')}
-        subtitle={t('hub:orders.subtitleOms')}
+        title={
+          lockedLine && LineIcon ? (
+            <span className="inline-flex items-center gap-2"><span className="w-7 h-7 rounded-lg flex items-center justify-center text-white" style={{ background: lineMeta?.color }}><LineIcon size={15} /></span>{t(`customerPortal:productLines.${lockedLine}`)}</span>
+          ) : (
+            t('hub:orders.title')
+          )
+        }
+        subtitle={lockedLine ? t('hub:orders.subtitleLine', { line: t(`customerPortal:productLines.${lockedLine}`) }) : t('hub:orders.subtitleOms')}
         actions={
           <button type="button" onClick={refetch} className="inline-flex items-center gap-1 px-2.5 py-1.5 rounded-lg border border-border1 bg-card text-[10px] font-bold text-text-secondary hover:bg-card-hover">
             <RefreshCw size={11} className={loading ? 'animate-spin' : ''} />{t('hub:orders.refresh')}
@@ -111,7 +121,7 @@ export function HubOrdersView() {
 
       <OrdersStatsBar counts={counts} />
 
-      <ProductLineTabs active={line} counts={lineCounts} onChange={(next) => setState({ line: next === 'all' ? '' : next, page: '1', status: '' })} />
+      {!lockedLine && <ProductLineTabs active={line} counts={lineCounts} onChange={(next) => setState({ line: next === 'all' ? '' : next, page: '1', status: '' })} />}
 
       <OrdersStatusFilterPills active={status} counts={counts} heldOnly={heldOnly} onToggleHeld={() => setState({ held: heldOnly ? '' : '1', page: '1' })} onChange={(s) => setState({ status: s ?? '', page: '1' })} />
 
@@ -122,22 +132,23 @@ export function HubOrdersView() {
         </div>
         <div className="text-[10px] text-text-muted tabular-nums">{t('hub:orders.totalOrders', { count: total })}</div>
       </div>
+      </div>
 
-      <div className="bg-card border border-border1 rounded-xl overflow-hidden">
+      <div className="bg-card border border-border1 rounded-xl overflow-hidden flex-1 min-h-0 flex flex-col">
         {loading && orders.length === 0 ? (
-          <div className="flex items-center justify-center py-20 text-[13px] text-text-muted"><Loader2 size={16} className="animate-spin mr-2" />{t('hub:common.loading')}</div>
+          <div className="flex-1 flex items-center justify-center py-20 text-[13px] text-text-muted"><Loader2 size={16} className="animate-spin mr-2" />{t('hub:common.loading')}</div>
         ) : orders.length === 0 ? (
-          <EmptyState title={t('customerPortal:orders.emptyFiltered')} icon={<span className="text-[40px]">📦</span>} />
+          <div className="flex-1 flex items-center justify-center"><EmptyState title={t('customerPortal:orders.emptyFiltered')} icon={<span className="text-[40px]">📦</span>} /></div>
         ) : (
           <>
-            <div className={`md:hidden divide-y divide-border2 ${loading ? 'opacity-60' : ''}`}>
+            <div className={`md:hidden divide-y divide-border2 flex-1 min-h-0 overflow-y-auto ${loading ? 'opacity-60' : ''}`}>
               {orders.map((o) => (
                 <div key={o._id} className="p-2"><OrderCard order={o} adminMode showViewAs={false} selected={false} onToggle={noop} onPushOne={noop} onCancel={noop} /></div>
               ))}
             </div>
-            <div className={`hidden md:block overflow-x-auto ${loading ? 'opacity-60' : ''}`}>
+            <div className={`hidden md:block flex-1 min-h-0 overflow-auto scrollbar-thin ${loading ? 'opacity-60' : ''}`}>
               <table className="w-full min-w-[1080px]">
-                <thead className="bg-surface-muted">
+                <thead className="bg-surface-muted sticky top-0 z-10">
                   <tr className="border-b border-border2">
                     <th className={TH}>{t('customerPortal:orders.columns.order')}</th>
                     <th className={TH}>{t('hub:orders.columns.seller')}</th>
@@ -210,7 +221,9 @@ export function HubOrdersView() {
             </div>
           </>
         )}
-        <OrdersPagination page={page} limit={limit} pages={pages} total={total} onChange={(n) => setState({ ...(n.page ? { page: String(n.page) } : {}), ...(n.limit ? { limit: String(n.limit), page: '1' } : {}) })} />
+        <div className="shrink-0 border-t border-border2">
+          <OrdersPagination page={page} limit={limit} pages={pages} total={total} onChange={(n) => setState({ ...(n.page ? { page: String(n.page) } : {}), ...(n.limit ? { limit: String(n.limit), page: '1' } : {}) })} />
+        </div>
       </div>
     </div>
   );
