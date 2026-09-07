@@ -67,7 +67,7 @@ export function OperationsView() {
 
   const lifecycleQs = useMemo(() => { const p = new URLSearchParams(); if (state.from) p.set('from', state.from); if (state.to) p.set('to', state.to); if (factory) p.set('factoryId', factory); if (line !== 'all') p.set('productLine', line); return p.toString(); }, [state.from, state.to, factory, line]);
   const { data: lifeRes, loading: lifeLoading } = useApi<ApiRes<LifecycleOverview>>(`/api/hub/v1/orders/lifecycle-overview?${lifecycleQs}`);
-  const { data: ceoRes } = useApi<{ data: CeoOverview }>(`/api/hub/v1/ceo/overview?from=${from}&to=${to}`);
+  const { data: ceoRes } = useApi<{ data: CeoOverview }>(`/api/hub/v1/ceo/overview?from=${from}&to=${to}${line !== 'all' ? `&productLine=${line}` : ''}`);
   const { data: factoryRes } = useApi<ApiRes<FactoryOverview>>('/api/hub/v1/orders/factory-overview');
   const ordersQs = useMemo(() => {
     const p = new URLSearchParams({ page: String(page), limit: '15' });

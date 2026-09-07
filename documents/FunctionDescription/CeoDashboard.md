@@ -21,6 +21,8 @@ Chỉ SuperAdmin/Admin: sidebar khóa theo vai (`onlyForRoles`), route không g�
 
 ## 3. API / Schema
 
+> 07/09/2026 — `GET /ceo/overview` nhận thêm `productLine?` (PRD-8, 6 giá trị) cho tab dịch vụ ở Seller Hub Operations (`SellerPortal.md` §9.1): `base` match của mọi khối đơn thêm `{ productLine }`, cache key `from|to|productLine`. Trang CEO `/adm/ceo` và Agent API không truyền → hành vi cũ.
+
 `CeoOverviewZod` (`packages/shared/dtos/ceo-dashboard.dto.ts`), rút gọn:
 
 ```ts

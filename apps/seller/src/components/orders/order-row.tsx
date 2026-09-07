@@ -37,11 +37,11 @@ export function OrderRow({ order, adminMode = false, selected, onToggle, onPushO
   const thumb = first?.mockupUrl ? (driveThumbnailUrl(first.mockupUrl, 100) ?? first.mockupUrl) : null;
 
   return (
-    <tr className={`border-t border-border2 hover:bg-card-hover transition-colors ${order.status === CustomerOrderStatus.Cancelled ? 'opacity-60' : ''}`}>
-      <td className="px-3 py-2.5 align-top w-8">
+    <tr className={`group border-t border-border2 hover:bg-card-hover transition-colors ${order.status === CustomerOrderStatus.Cancelled ? 'opacity-60' : ''}`}>
+      <td className="px-2 py-2.5 align-top w-10 min-w-10 sticky left-0 z-[5] bg-card group-hover:bg-card-hover">
         {!adminMode && isPending && <input type="checkbox" checked={selected} onChange={onToggle} className="accent-[var(--color-accent)]" />}
       </td>
-      <td className="px-3 py-2.5 align-top">
+      <td className="px-3 py-2.5 align-top sticky left-10 z-[5] bg-card group-hover:bg-card-hover border-r border-border2">
         <div className="space-y-0.5">
           <span className="inline-flex items-center gap-1">
             {detailHref ? (

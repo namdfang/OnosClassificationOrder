@@ -36,6 +36,10 @@ function useDebounced<T>(value: T, ms: number): T {
 }
 
 const TH = 'py-2 px-2 text-left text-[9px] text-text-muted font-semibold uppercase tracking-wider';
+// Cột "Đơn hàng" cố định bên trái khi cuộn ngang (bảng rộng 1280px+): th/td `sticky left-0`, nền đặc để không lộ chữ phía sau,
+// viền phải làm mép; hàng `group` để ô cố định đổi nền cùng hover.
+const STICKY_TH = 'sticky left-0 z-20 bg-surface-muted border-r border-border2';
+const STICKY_TD = 'sticky left-0 z-[5] bg-card group-hover:bg-card-hover border-r border-border2';
 
 /**
  * Đơn khách toàn hệ — khuôn `components/oms/orders-list-view.tsx` (trang OMS nội bộ của thghub):
@@ -149,7 +153,7 @@ export function HubOrdersView({ lockedLine }: { lockedLine?: ProductLine } = {})
               <table className="w-full min-w-[1280px]">
                 <thead className="bg-surface-muted sticky top-0 z-10">
                   <tr className="border-b border-border2">
-                    <th className={TH}>{t('customerPortal:orders.columns.order')}</th>
+                    <th className={`${TH} ${STICKY_TH}`}>{t('customerPortal:orders.columns.order')}</th>
                     <th className={TH}>{t('hub:orders.columns.seller')}</th>
                     <th className={TH}>{t('customerPortal:orders.columns.product')}</th>
                     <th className={TH}>{t('hub:orders.columns.service')}</th>
@@ -173,8 +177,8 @@ export function HubOrdersView({ lockedLine }: { lockedLine?: ProductLine } = {})
                     const stage = first?.currentStageKey ? t(`track:progress.stages.${first.currentStageKey}`, { defaultValue: first.currentStageLabel ?? '' }) : first?.currentStageLabel;
                     const addr = o.shippingAddress;
                     return (
-                      <tr key={o._id} className={`border-b border-border2 last:border-0 hover:bg-card-hover align-top text-[11px] ${o.status === 'cancelled' ? 'opacity-60' : ''}`}>
-                        <td className="py-2 px-2">
+                      <tr key={o._id} className={`group border-b border-border2 last:border-0 hover:bg-card-hover align-top text-[11px] ${o.status === 'cancelled' ? 'opacity-60' : ''}`}>
+                        <td className={`py-2 px-2 ${STICKY_TD}`}>
                           <span className="inline-flex items-center gap-1 font-mono text-[11px] font-bold text-text-primary whitespace-nowrap">#{code}<CopyButton text={code} size={10} /></span>
                           {o.orderId && o.orderId !== code && <p className="text-[9.5px] text-text-muted truncate max-w-[150px]">{o.orderId}</p>}
                           <p className="text-[9.5px] text-text-muted">{t(`customerPortal:orders.source.${o.source}`)}</p>

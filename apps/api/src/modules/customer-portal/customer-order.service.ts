@@ -876,8 +876,10 @@ export class CustomerOrderService implements OnModuleInit {
     const search = dto.search?.trim()
       ? [{ $match: { $or: [{ orderId: { $regex: escapeRegex(dto.search.trim()), $options: 'i' } }, { orderName: { $regex: escapeRegex(dto.search.trim()), $options: 'i' } }, { 'items.productionId': { $regex: escapeRegex(dto.search.trim()), $options: 'i' } }, { 'items.sku': { $regex: escapeRegex(dto.search.trim()), $options: 'i' } }] } }]
       : [];
+    const candidatePids = await this.loadCandidatePids({ status: dto.status, held: !!dto.held, cutoff });
     const pipeline = this.buildPagedListPipeline({
       customerId: String(customer._id),
+      candidatePids,
       cutoff,
       preStages: search,
       productLine: dto.productLine,
@@ -995,6 +997,53 @@ export class CustomerOrderService implements OnModuleInit {
    *   mức document (vẫn nặng nhưng nhỏ hơn nhờ lọc trước).
    * `productLine` chỉ dùng `items.productLine` (đã stamp/backfill PRD-8); không còn fallback `prodOrders.productLine`.
    */
+  private static readonly CANDIDATE_PIDS_CAP = 20_000;
+
+  /**
+   * "Tra ngược" từ bảng `orders` để thu hẹp tập staging TRƯỚC khi derive (đường đầy đủ phải
+   * `$lookup` + tính trạng thái trên CẢ 38k document ≈ 4,6 s). Mỗi điều kiện lọc suy ra tập
+   * `productionId` của đơn sản xuất có thể làm document thỏa (điều kiện CẦN, không phải đủ —
+   * `$match statusDerived/heldAny/stage` sau derive vẫn chốt kết quả, nên semantics không đổi):
+   * - `stage` → đơn SX chưa hủy đang ở chặng đó (`workshopStageSwitchExpr`);
+   * - `status` in-production → có `currentFulfillmentStage`, chưa xong; processing → chưa vào
+   *   fulfillment; fulfilled → xong sau `cutoff`; held → `heldAt` khác null.
+   * Nhiều điều kiện → giao tập. Trả null khi không có điều kiện áp dụng được hoặc tập quá lớn
+   * (completed/cancelled/refunded → đường đầy đủ).
+   */
+  private async loadCandidatePids(opts: { stage?: string; status?: CustomerOrderStatus; held: boolean; cutoff: Date }): Promise<string[] | null> {
+    const col = this.customerOrderModel.db.collection('orders');
+    const sets: Array<Set<string>> = [];
+    const collect = async (cursor: AsyncIterable<{ productionId?: string }>) => {
+      const set = new Set<string>();
+      for await (const d of cursor) if (d.productionId) set.add(d.productionId);
+      sets.push(set);
+    };
+    if (opts.stage) {
+      await collect(
+        col.aggregate<{ productionId?: string }>([
+          { $match: { cancelledAt: null, productionId: { $ne: null } } },
+          { $addFields: { stageKey: workshopStageSwitchExpr('$') } },
+          { $match: { stageKey: opts.stage } },
+          { $project: { _id: 0, productionId: 1 } },
+        ]),
+      );
+    }
+    const statusFilter: Record<string, unknown> | null =
+      opts.status === CustomerOrderStatus.InProduction
+        ? { cancelledAt: null, fulfillmentCompletedAt: null, currentFulfillmentStage: { $ne: null } }
+        : opts.status === CustomerOrderStatus.Processing
+          ? { cancelledAt: null, fulfillmentCompletedAt: null, currentFulfillmentStage: null }
+          : opts.status === CustomerOrderStatus.Fulfilled
+            ? { cancelledAt: null, fulfillmentCompletedAt: { $gt: opts.cutoff } }
+            : null;
+    if (statusFilter) await collect(col.find<{ productionId?: string }>(statusFilter, { projection: { _id: 0, productionId: 1 } }));
+    if (opts.held) await collect(col.find<{ productionId?: string }>({ cancelledAt: null, heldAt: { $ne: null } }, { projection: { _id: 0, productionId: 1 } }));
+    if (sets.length === 0) return null;
+    const [first, ...rest] = sets;
+    const pids = [...first].filter((id) => rest.every((s) => s.has(id)));
+    return pids.length > CustomerOrderService.CANDIDATE_PIDS_CAP ? null : pids;
+  }
+
   private buildPagedListPipeline(opts: {
     customerId: string | null;
     cutoff: Date;
@@ -1004,6 +1053,8 @@ export class CustomerOrderService implements OnModuleInit {
     held: boolean;
     postDeriveStages?: Record<string, unknown>[];
     pageTail?: Record<string, unknown>[];
+    /** Tập `productionId` ứng viên (từ `loadCandidatePids`) — thu hẹp Ở MỨC DOCUMENT trước khi derive. null = không thu hẹp. */
+    candidatePids?: string[] | null;
     skip: number;
     limit: number;
   }): Record<string, unknown>[] {
@@ -1018,6 +1069,7 @@ export class CustomerOrderService implements OnModuleInit {
     if (opts.status === CustomerOrderStatus.Pending) {
       docMatch.push({ $match: { status: { $ne: 'cancelled' }, refundedAt: null, pushedAt: null } });
     }
+    if (opts.candidatePids) docMatch.push({ $match: { 'items.productionId': { $in: opts.candidatePids } } });
     const needsDerive = (!!opts.status && opts.status !== CustomerOrderStatus.Pending) || opts.held || (opts.postDeriveStages?.length ?? 0) > 0;
     if (!needsDerive) {
       return [
@@ -1223,8 +1275,10 @@ export class CustomerOrderService implements OnModuleInit {
           },
         ]
       : [];
+    const candidatePids = await this.loadCandidatePids({ stage: dto.stage, status: dto.status, held: !!dto.held, cutoff });
     const pipeline = this.buildPagedListPipeline({
       customerId: dto.customerId ?? null,
+      candidatePids,
       cutoff,
       preStages,
       productLine: dto.productLine,

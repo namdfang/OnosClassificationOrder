@@ -1,6 +1,7 @@
 import { createZodDto } from '@anatine/zod-nestjs';
 import { extendApi } from '@anatine/zod-openapi';
 import { z } from 'zod';
+import { PRODUCT_LINES } from '../enums/product-line';
 
 /**
  * CEO Dashboard — `GET /v1/ceo/overview?from&to` (CeoDashboard.md). Một phản hồi gom
@@ -16,6 +17,8 @@ export const CeoOverviewQueryZod = z.object({
   from: DateStr,
   /** Đến hết ngày (yyyy-mm-dd, giờ VN). Tối đa 92 ngày. */
   to: DateStr,
+  /** PRD-8 — chỉ đơn thuộc dòng sản phẩm này (tab dịch vụ ở Seller Hub Operations). Bỏ trống = toàn bộ. */
+  productLine: z.enum(PRODUCT_LINES).optional(),
 });
 export class CeoOverviewQueryDto extends createZodDto(extendApi(CeoOverviewQueryZod)) {}
 

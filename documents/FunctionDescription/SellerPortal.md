@@ -170,6 +170,8 @@ Trang:
 
 ### 9.1 Vận hành sản xuất `/hub/operations` (07/09/2026)
 
+Tab dịch vụ (07/09/2026, sửa sau phản hồi "phễu giống nhau ở mọi dịch vụ"): chọn dịch vụ → `productLine` được truyền vào CẢ 3 nguồn — `orders/lifecycle-overview` (phễu 8 chặng), `admin/customer-orders` (bảng trạng thái từng đơn) VÀ `ceo/overview` (KPI kỳ, SLA, chất lượng, theo xưởng — `CeoOverviewQueryZod.productLine`, `base` match thêm `productLine`, cache key có dòng). Chỉ khối "Nhận định" (`ceo_reports`) và "Nhân sự" là toàn hệ thống. Đã kiểm: thêu `in 93/out 93` vs tất cả `3.486/3.731`.
+
 Góc nhìn quản trị toàn quy trình, **chỉ đọc**, không endpoint tổng hợp mới — gọi 4 API sẵn có qua proxy hub: `GET ceo/overview?from&to` (CeoDashboard.md), `GET orders/lifecycle-overview?from&to&factoryId` (OrderLifecycle.md), `GET orders/factory-overview`, và `GET admin/customer-orders?stage=<chặng>` (filter mới, xem dưới). Bộ lọc trên URL: `from/to` (mặc định 7 ngày gần nhất), `factory`, `line` (tab dịch vụ ngay dưới header — `GET orders/lifecycle-overview` nhận thêm `productLine`, PRD-8), `stage`, `page`. 5 khối (`components/hub/operations-view.tsx`):
 1. **KPI**: vào SX · ra SX (so kỳ trước) · đang chạy (tuổi tồn TB) · quá hạn ≥3 ngày · đúng hẹn N2 (so kỳ trước).
 2. **Phễu 8 chặng**: mỗi chặng tồn + lỗi + làm lại + xong trong kỳ, thanh tỉ lệ, chặng nút thắt (`totals.bottleneckStage`) tô đỏ; **bảng "Trạng thái sản xuất từng đơn"** luôn hiện dưới phễu (15 dòng/trang, phân trang): mặc định đơn đang sản xuất của dịch vụ đang chọn; bấm chặng → lọc đúng chặng; cột chặng hiện tại tô màu chặng + Giữ/Làm lại, cột "Ở chặng" = tuổi từ `currentStageAt`. KPI/SLA/xưởng/nhân sự vẫn là số toàn hệ (CEO overview chưa lọc theo dòng).
@@ -208,7 +210,18 @@ Trước tối ưu, F5 `/hub/orders` chờ ~6 s: `admin/customer-orders` 6,3 s +
 | `admin/customer-orders/stats` | 5,4 s | 5,4 s lần đầu → 0,006 s |
 | `customer/orders` (seller, ~4,9k đơn) | ~1 s | 0,15 s |
 
-Còn chậm (chưa làm): lọc `status`/`held`/`stage` và tính lại counts/stats nền vẫn ≈ 5 s vì phải derive toàn bộ. Hướng cấu trúc nếu cần: ghi **snapshot trạng thái** (`statusSnapshot`/`stageSnapshot`) lên document staging khi push/transition + cron đồng bộ, rồi lọc/đếm bằng index — khi đó mọi đường về < 0,2 s.
+- **Tra ngược từ `orders` để thu hẹp trước khi derive** (`loadCandidatePids()`, 07/09/2026 — cho lọc `stage`/`status` in-production·processing·fulfilled/`held`, cả seller lẫn hub): mỗi điều kiện suy ra tập `productionId` đơn sản xuất CÓ THỂ thỏa (điều kiện cần) bằng find/aggregate thẳng trên `orders` (có index), giao tập nếu nhiều điều kiện, rồi `$match items.productionId $in` ở mức document → derive chỉ chạy trên vài nghìn ứng viên; `$match statusDerived/heldAny/stage` sau derive vẫn giữ nên kết quả khớp từng đơn với đường cũ (đã đối chiếu total 2.769 in-production, 16 chặng In). Trần 20.000 id → vượt (completed ≈ 31k) hoặc `cancelled`/`refunded` thì về đường đầy đủ.
+
+| Lọc (admin, 38k staging) | Trước | Sau |
+|---|---|---|
+| `status=in-production` | 4,7 s | 0,6 s (theo dịch vụ: 0,1 s) |
+| `stage=print` / `tool-check` / `designer` | 4,6 s | 0,2–0,4 s |
+| `status=processing` / `fulfilled` / `held=true` | ~4,6 s | 0,2 / 0,4 / 0,01 s |
+| `status=completed` (31k, vượt trần) | 5,9 s | 5,9 s |
+
+- **Cột "Đơn hàng" cố định bên trái** (07/09/2026): bảng `/hub/orders*` (`STICKY_TH`/`STICKY_TD` trong `hub-orders-view.tsx`) và bảng dịch vụ seller (ô tick + ô đơn, `left-0`/`left-10`, `orders-list-view.tsx` + `order-row.tsx`) dùng `position: sticky` trong khung `overflow-auto` sẵn có; ô cố định có nền đặc + viền phải, hàng `group` để đổi nền khi hover.
+
+Còn chậm (chưa làm): `status=completed` và tính lại counts/stats nền vẫn ≈ 5–6 s vì phải derive toàn bộ. Hướng cấu trúc nếu cần: ghi **snapshot trạng thái** (`statusSnapshot`/`stageSnapshot`) lên document staging khi push/transition + cron đồng bộ, rồi lọc/đếm bằng index — khi đó mọi đường về < 0,2 s.
 
 ## 8. Vận hành & hạ tầng (PR-D)
 

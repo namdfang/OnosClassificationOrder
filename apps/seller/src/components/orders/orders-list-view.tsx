@@ -218,7 +218,7 @@ export function OrdersListView({ lockedLine, adminMode = false }: OrdersListView
           <table className="w-full text-left min-w-[960px]">
             <thead className="sticky top-0 z-10 bg-surface-muted">
               <tr className="text-[10px] uppercase tracking-wider text-text-muted">
-                <th className="px-3 py-2.5 w-8">
+                <th className="px-2 py-2.5 w-10 min-w-10 sticky left-0 z-20 bg-surface-muted">
                   {!adminMode && status === CustomerOrderStatus.Pending && pendingOrders.length > 0 && (
                     <input
                       type="checkbox"
@@ -229,7 +229,7 @@ export function OrdersListView({ lockedLine, adminMode = false }: OrdersListView
                     />
                   )}
                 </th>
-                <th className="px-3 py-2.5 font-semibold">{t('customerPortal:orders.columns.order')}</th>
+                <th className="px-3 py-2.5 font-semibold sticky left-10 z-20 bg-surface-muted border-r border-border2">{t('customerPortal:orders.columns.order')}</th>
                 {adminMode && <th className="px-3 py-2.5 font-semibold">{t('hub:orders.columns.seller')}</th>}
                 <th className="px-3 py-2.5 font-semibold">{t('customerPortal:orders.columns.items')}</th>
                 <th className="px-3 py-2.5 font-semibold">{t('seller:nav.orders')}</th>
