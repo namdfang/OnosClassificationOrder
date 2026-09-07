@@ -22,7 +22,11 @@ export function createProxyHandler({ readToken, onUnauthorized }: ProxyOptions) 
     req.headers.forEach((v, k) => {
       if (!HOP_BY_HOP.has(k.toLowerCase())) headers.set(k, v);
     });
-    const token = await readToken();
+    // API công khai (`public/...`) KHÔNG được mang token: RolesGuard chặn vai Customer khỏi mọi
+    // route ngoài `customer/` kể cả route public (Customers.md §6) → khách đang đăng nhập mở
+    // `/track/:code` sẽ bị 403 nếu proxy gắn Bearer. Không token = đúng nghĩa "public".
+    const isPublic = path[0] === 'public';
+    const token = isPublic ? null : await readToken();
     if (token) headers.set('authorization', `Bearer ${token}`);
     if (!headers.has('accept-language')) headers.set('accept-language', await readLang());
     const hasBody = req.method !== 'GET' && req.method !== 'HEAD';

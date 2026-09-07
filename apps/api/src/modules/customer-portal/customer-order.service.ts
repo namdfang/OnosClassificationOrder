@@ -552,6 +552,7 @@ export class CustomerOrderService implements OnModuleInit {
       return {
         ...base,
         status: deriveItemStatus(p, completedCutoff),
+        currentStageKey: p.cancelledAt ? undefined : stage.key,
         currentStageLabel: p.cancelledAt ? undefined : stage.label,
         currentStageAt: p.cancelledAt ? undefined : stage.at,
         held: !!p.heldAt,
@@ -1839,6 +1840,7 @@ export class CustomerOrderService implements OnModuleInit {
         quantity: i.quantity,
         mockupUrl: i.mockupUrl,
         createdAt: o.createdAt,
+        currentStageKey: i.currentStageKey,
         currentStageLabel: i.currentStageLabel,
         currentStageAt: i.currentStageAt,
         completed: i.status === CustomerOrderStatus.Completed || i.status === CustomerOrderStatus.Fulfilled,
@@ -1946,6 +1948,7 @@ export class CustomerOrderService implements OnModuleInit {
         cancelReason: order.cancelReason,
         createdAt: (order as { createdAt?: Date }).createdAt,
         inProductionAt: order.inProductionAt,
+        currentStageKey: order.cancelledAt ? undefined : stage.key,
         currentStageLabel: order.cancelledAt ? undefined : stage.label,
         currentStageAt: order.cancelledAt ? undefined : stage.at,
         completed: stage.completed,

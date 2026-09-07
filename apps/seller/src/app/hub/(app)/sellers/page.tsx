@@ -113,7 +113,7 @@ function SellersContent() {
             <tbody>
               {rows.map((r) => {
                 const isDeleted = !!r.deletedAt;
-                const locked = String(r.status) !== '1';
+                const locked = r.status != null && String(r.status) === '0';
                 return (
                   <tr key={String(r._id)} className={`border-t border-border2 hover:bg-card-hover ${isDeleted ? 'opacity-60' : ''}`}>
                     <td className="px-3 py-2.5">

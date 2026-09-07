@@ -4,7 +4,9 @@ import { useRouter, useSearchParams } from 'next/navigation';
 import { Suspense, useCallback, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Eye, EyeOff, Lock, Mail } from 'lucide-react';
+import Link from 'next/link';
 import { OnosMark } from '@/components/brand/logo';
+import { useLanguage } from '@/components/providers/i18n-provider';
 import { useSession } from '@/context/session-context';
 
 function safeCallback(raw: string | null): string {
@@ -13,11 +15,12 @@ function safeCallback(raw: string | null): string {
 }
 
 function LoginContent() {
-  const { t } = useTranslation(['customerPortal', 'seller']);
+  const { t } = useTranslation(['customerPortal', 'seller', 'track']);
   const router = useRouter();
   const params = useSearchParams();
   const callbackUrl = safeCallback(params.get('callbackUrl'));
   const { refresh } = useSession();
+  const { language, toggleLanguage } = useLanguage();
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [remember, setRemember] = useState(false);
@@ -126,7 +129,12 @@ function LoginContent() {
           </form>
         </div>
 
-        <p className="text-center text-[10px] text-text-muted mt-6">{t('seller:login.footer')}</p>
+        <div className="mt-6 flex items-center justify-center gap-3 text-[11px] text-text-muted">
+          <Link href="/track" prefetch={false} className="hover:text-accent">{t('customerPortal:layout.nav.track', { defaultValue: t('track:meta.title', { ns: 'track' }) })}</Link>
+          <span>·</span>
+          <button type="button" onClick={toggleLanguage} className="hover:text-accent">{language === 'vi' ? 'English' : 'Tiếng Việt'}</button>
+        </div>
+        <p className="text-center text-[10px] text-text-muted mt-3">{t('seller:login.footer')}</p>
       </div>
     </div>
   );

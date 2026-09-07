@@ -109,7 +109,7 @@ export default function OrderDetailPage() {
         actions={
           <div className="flex items-center gap-2 flex-wrap">
             <ProductLineBadge line={order.productLine} />
-            {order.status && <StatusBadge status={order.status} />}
+            <StatusBadge status={order.cancelledAt ? 'cancelled' : track?.completed ? 'completed' : track?.currentStageKey ? 'in-production' : 'pending'} />
             <CopyButton text={order.productionId} />
           </div>
         }
@@ -167,7 +167,10 @@ export default function OrderDetailPage() {
               <div className="space-y-2.5">
                 <Field label={t('track:dates.orderAt')} value={dt(order.orderAt ?? order.createdAt)} />
                 <Field label={t('track:dates.inProductionAt')} value={dt(order.inProductionAt)} />
-                <Field label={t('track:status.currentStage')} value={order.currentStageLabel} />
+                <Field
+                  label={t('track:status.currentStage')}
+                  value={track?.currentStageKey ? t(`track:progress.stages.${track.currentStageKey}`, { defaultValue: order.currentStageLabel ?? '' }) : track?.completed ? t('track:status.completed') : order.currentStageLabel}
+                />
                 <Field label={t('track:dates.cancelledAt')} value={dt(order.cancelledAt)} />
                 {order.cancelReason && <Field label={t('customerPortal:orderDetail.noteTitle')} value={order.cancelReason} />}
                 <div>

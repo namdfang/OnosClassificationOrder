@@ -26,7 +26,7 @@ interface OrderRowProps {
 
 /** Mirror cột của `apps/web/src/pages/customer/orders/index.tsx` + cột dòng sản phẩm. */
 export function OrderRow({ order, adminMode = false, selected, onToggle, onPushOne, onCancel }: OrderRowProps) {
-  const { t } = useTranslation(['customerPortal', 'seller', 'hub']);
+  const { t } = useTranslation(['customerPortal', 'seller', 'hub', 'track']);
   const isPending = order.status === CustomerOrderStatus.Pending;
   const code = orderDisplayCode(order);
   const first = order.items[0];
@@ -125,7 +125,11 @@ export function OrderRow({ order, adminMode = false, selected, onToggle, onPushO
               )}
             </span>
           )}
-          {first?.currentStageLabel && !isPending && <span className="text-[10px] text-text-muted">{first.currentStageLabel}</span>}
+          {(first?.currentStageKey || first?.currentStageLabel) && !isPending && (
+            <span className="text-[10px] text-text-muted">
+              {first.currentStageKey ? t(`track:progress.stages.${first.currentStageKey}`, { defaultValue: first.currentStageLabel ?? '' }) : first.currentStageLabel}
+            </span>
+          )}
         </div>
       </td>
       <td className="px-3 py-2.5 align-top">

@@ -2545,6 +2545,8 @@ export const CustomerOrderSummaryZod = z.object({
   /** Nhãn chặng sản xuất hiện tại (vd "Đang in", "Đóng hàng"...) — rút gọn từ
    *  LifecycleTrack cho listing; xem `track.tsx` (GET .../track) để có timeline đầy đủ từng chặng. */
   currentStageLabel: z.string().optional(),
+  /** Key chặng (`LIFECYCLE_STAGE_KEYS`) — FE dịch nhãn theo ngôn ngữ (Seller Portal). */
+  currentStageKey: z.string().optional(),
   /** Mốc thời gian vào chặng hiện tại. */
   currentStageAt: z.coerce.date().optional(),
   /** Đơn đã hoàn thành toàn bộ luồng (đóng hàng xong). */

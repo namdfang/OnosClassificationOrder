@@ -57,7 +57,7 @@ function Bars({ rows }: { rows: { key: string; label: React.ReactNode; value: nu
 }
 
 export default function DashboardPage() {
-  const { t } = useTranslation(['customerPortal', 'seller']);
+  const { t } = useTranslation(['customerPortal', 'seller', 'track']);
   const { data: dashRes, loading } = useApi<ApiRes<CustomerDashboard>>('/api/v1/customer/orders/dashboard');
   const { data: countsRes } = useApi<ApiRes<CustomerOrderCounts>>('/api/v1/customer/orders/counts');
   const totals = dashRes?.data.totals ?? { total: 0, processing: 0, completed: 0, cancelled: 0 };
@@ -163,10 +163,12 @@ export default function DashboardPage() {
                       <td className="py-2 pr-3 text-text-secondary">{[o.color, o.size].filter(Boolean).join(' / ') || '—'}</td>
                       <td className="py-2 pr-3 tabular-nums">{o.quantity ?? '—'}</td>
                       <td className="py-2 pr-3">
-                        {o.cancelledAt ? <StatusBadge status="cancelled" /> : o.completed ? <StatusBadge status="completed" /> : o.inProductionAt ? <StatusBadge status="in-production" /> : <StatusBadge status="pending" />}
-                        {o.currentStageLabel && !o.cancelledAt && !o.completed && <span className="ml-1 text-[10px] text-text-muted">{o.currentStageLabel}</span>}
+                        <StatusBadge status={o.cancelledAt ? 'cancelled' : o.completed ? 'completed' : o.currentStageKey || o.currentStageLabel || o.inProductionAt ? 'in-production' : 'pending'} />
+                        {(o.currentStageKey || o.currentStageLabel) && !o.cancelledAt && !o.completed && (
+                          <span className="ml-1 text-[10px] text-text-muted">{o.currentStageKey ? t(`track:progress.stages.${o.currentStageKey}`, { defaultValue: o.currentStageLabel ?? '' }) : o.currentStageLabel}</span>
+                        )}
                       </td>
-                      <td className="py-2 text-text-secondary whitespace-nowrap">{dayjs(o.orderAt ?? o.createdAt).format('DD/MM/YYYY HH:mm')}</td>
+                      <td className="py-2 text-text-secondary whitespace-nowrap">{dayjs(o.orderAt ?? o.inProductionAt ?? o.createdAt).format('DD/MM/YYYY HH:mm')}</td>
                     </tr>
                   ))}
                 </tbody>

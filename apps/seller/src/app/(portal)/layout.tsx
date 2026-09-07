@@ -43,7 +43,8 @@ export default function PortalLayout({ children }: { children: React.ReactNode }
         <SidebarBackdrop />
         <MobileMenuButton />
         <div className="flex-1 ml-0 lg:ml-[210px] flex flex-col min-w-0">
-          <main className="flex-1 p-3 sm:p-4 lg:p-5">{children}</main>
+          {/* Mobile: chừa chỗ cho nút menu fixed góc trái (MobileMenuButton) */}
+          <main className="flex-1 p-3 pt-14 sm:p-4 sm:pt-14 lg:p-5">{children}</main>
         </div>
       </div>
     </div>

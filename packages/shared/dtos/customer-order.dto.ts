@@ -159,6 +159,8 @@ export const CustomerStagingItemZod = z.object({
   productionId: z.string().optional(),
   // ---- derive at read-time từ OrderEntity (chỉ có sau push) ----
   status: z.nativeEnum(CustomerOrderStatus).optional(),
+  /** Key chặng (`LIFECYCLE_STAGE_KEYS`) — FE dịch nhãn theo ngôn ngữ người xem (`track.progress.stages.*`). */
+  currentStageKey: z.string().optional(),
   currentStageLabel: z.string().optional(),
   currentStageAt: z.coerce.date().optional(),
   held: z.boolean().optional(),
