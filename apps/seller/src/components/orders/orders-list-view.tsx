@@ -70,9 +70,10 @@ export function OrdersListView({ lockedLine, adminMode = false }: OrdersListView
   }, [page, limit, status, heldOnly, search, line, adminMode, state.seller]);
 
   const listUrl = adminMode ? `/api/hub/v1/admin/customer-orders?${query}` : `/api/v1/customer/orders?${query}`;
-  const countsUrl = adminMode
-    ? `/api/hub/v1/admin/customer-orders/counts${state.seller ? `?customerId=${encodeURIComponent(state.seller)}` : ''}`
-    : '/api/v1/customer/orders/counts';
+  const countsQs = new URLSearchParams();
+  if (adminMode && state.seller) countsQs.set('customerId', state.seller);
+  if (line !== 'all') countsQs.set('productLine', line);
+  const countsUrl = `${adminMode ? '/api/hub/v1/admin/customer-orders/counts' : '/api/v1/customer/orders/counts'}${countsQs.size ? `?${countsQs}` : ''}`;
   const { data: listRes, loading, refetch } = useApi<ApiRes<AdminCustomerStagingOrder[]>>(listUrl);
   const { data: countsRes, refetch: refetchCounts } = useApi<ApiRes<CustomerOrderCounts>>(countsUrl);
   const orders = useMemo(() => listRes?.data ?? [], [listRes]);

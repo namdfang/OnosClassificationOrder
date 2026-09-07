@@ -55,6 +55,8 @@ Quyết định 07/09/2026 (người dùng): seller cần dịch vụ nào thì 
 
 #### Chi tiết danh sách trong trang dịch vụ
 
+- Thẻ số + pill trạng thái trên trang dịch vụ chỉ đếm đơn CỦA DÒNG ĐÓ: `GET customer/orders/counts?productLine=<line>` (BE `countsPipelines(..., productLine)` thêm `$match` cùng điều kiện với listing; `admin/customer-orders/counts` cũng nhận `productLine`). Đo dev TIKTOKSHOPUS: tổng 4.926 → 2D 301 / 3D 4.625.
+
 `OrdersListView` (dùng chung 7 route): `GET customer/orders?page&limit&status&held&search&productLine` + `GET customer/orders/counts`.
 
 - Tab dòng: `all` + 6 dòng, số đếm từ `counts.byProductLine` (một đơn nhiều dòng đếm ở mọi dòng — D9). Route `/portal/orders/<line>` truyền `lockedLine` → chỉ hiện tab đó, không đổi được.

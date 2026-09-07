@@ -14,6 +14,7 @@ import type {
   CustomerStagingOrder,
   CustomerStagingOrderResDto,
   GetCustomerDashboardResDto,
+  GetCustomerOrderCountsDto,
   GetCustomerOrderCountsResDto,
   GetAdminCustomerOrdersDto,
   GetAdminCustomerOrdersResDto,
@@ -898,27 +899,9 @@ export class CustomerOrderService implements OnModuleInit {
     return { success: true, data, total: res?.total?.[0]?.n ?? 0 };
   }
 
-  async getCounts(customer: CustomerDocument): Promise<GetCustomerOrderCountsResDto> {
+  async getCounts(customer: CustomerDocument, dto: GetCustomerOrderCountsDto = {}): Promise<GetCustomerOrderCountsResDto> {
     const cutoff = await this.getCompletedCutoff();
-    const pipeline = [
-      ...this.buildDerivePipeline(String(customer._id), cutoff),
-      {
-        $group: {
-          _id: '$statusDerived',
-          count: { $sum: 1 },
-          held: { $sum: { $cond: ['$heldAny', 1, 0] } },
-          rework: { $sum: { $cond: ['$reworkAny', 1, 0] } },
-        },
-      },
-    ];
-    const linePipeline = [
-      ...this.buildDerivePipeline(String(customer._id), cutoff),
-      // Mỗi đơn đếm vào MỌI dòng nó chứa (item đã stamp ∪ đơn sản xuất đã backfill).
-      { $project: { lines: { $setUnion: [{ $ifNull: ['$items.productLine', []] }, { $ifNull: ['$prodOrders.productLine', []] }] } } },
-      { $unwind: '$lines' },
-      { $match: { lines: { $in: PRODUCT_LINES } } },
-      { $group: { _id: '$lines', count: { $sum: 1 } } },
-    ];
+    const [pipeline, linePipeline] = this.countsPipelines(String(customer._id), cutoff, dto.productLine);
     const [rows, lineRows] = await Promise.all([
       this.customerOrderModel.aggregate<{ _id: string; count: number; held: number; rework: number }>(pipeline as never[]),
       this.customerOrderModel.aggregate<{ _id: ProductLine; count: number }>(linePipeline as never[]),
@@ -963,9 +946,14 @@ export class CustomerOrderService implements OnModuleInit {
     return counts;
   }
 
-  private countsPipelines(customerId: string | null, cutoff: Date): [Record<string, unknown>[], Record<string, unknown>[]] {
+  /** `productLine` → chỉ đếm đơn có ≥1 item thuộc dòng (cùng điều kiện với filter listing). */
+  private countsPipelines(customerId: string | null, cutoff: Date, productLine?: ProductLine): [Record<string, unknown>[], Record<string, unknown>[]] {
+    const lineMatch: Record<string, unknown>[] = productLine
+      ? [{ $match: { $or: [{ 'items.productLine': productLine }, { 'prodOrders.productLine': productLine }] } }]
+      : [];
     const byStatus = [
       ...this.buildDerivePipeline(customerId, cutoff),
+      ...lineMatch,
       {
         $group: {
           _id: '$statusDerived',
@@ -977,6 +965,7 @@ export class CustomerOrderService implements OnModuleInit {
     ];
     const byLine = [
       ...this.buildDerivePipeline(customerId, cutoff),
+      ...lineMatch,
       { $project: { lines: { $setUnion: [{ $ifNull: ['$items.productLine', []] }, { $ifNull: ['$prodOrders.productLine', []] }] } } },
       { $unwind: '$lines' },
       { $match: { lines: { $in: PRODUCT_LINES } } },
@@ -1056,7 +1045,7 @@ export class CustomerOrderService implements OnModuleInit {
 
   async getCountsAdmin(dto: GetAdminCustomerOrderCountsDto): Promise<GetCustomerOrderCountsResDto> {
     const cutoff = await this.getCompletedCutoff();
-    const [byStatus, byLine] = this.countsPipelines(dto.customerId ?? null, cutoff);
+    const [byStatus, byLine] = this.countsPipelines(dto.customerId ?? null, cutoff, dto.productLine);
     const [rows, lineRows] = await Promise.all([
       this.customerOrderModel.aggregate<{ _id: string; count: number; held: number; rework: number }>(byStatus as never[]),
       this.customerOrderModel.aggregate<{ _id: ProductLine; count: number }>(byLine as never[]),

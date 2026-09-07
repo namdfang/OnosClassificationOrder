@@ -18,6 +18,7 @@ import {
   CancelCustomerStagingOrderDto,
   CustomerStagingOrderResDto,
   GetCustomerDashboardResDto,
+  GetCustomerOrderCountsDto,
   GetCustomerOrderCountsResDto,
   GetCustomerOrderProductTypesResDto,
   GetCustomerOrderTrackResDto,
@@ -85,8 +86,11 @@ export class CustomerOrderController {
   @ApiOperation({ summary: 'Đếm đơn theo 8 trạng thái + badge held/rework (tab bar listing)' })
   @HttpCode(HttpStatus.OK)
   @ApiOkResponse({ type: GetCustomerOrderCountsResDto })
-  async getCounts(@AuthUser() customer: CustomerDocument): Promise<GetCustomerOrderCountsResDto> {
-    return this.customerOrderService.getCounts(customer);
+  async getCounts(
+    @AuthUser() customer: CustomerDocument,
+    @Query() dto: GetCustomerOrderCountsDto,
+  ): Promise<GetCustomerOrderCountsResDto> {
+    return this.customerOrderService.getCounts(customer, dto);
   }
 
   @Get('product-types')

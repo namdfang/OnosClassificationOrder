@@ -235,6 +235,10 @@ export const CustomerOrderCountsZod = z.object({
   byProductLine: z.record(z.enum(PRODUCT_LINES), z.number()).optional(),
 });
 export type CustomerOrderCounts = z.infer<typeof CustomerOrderCountsZod>;
+/** `productLine` → mọi số đếm chỉ tính đơn có ≥1 item thuộc dòng (trang dịch vụ Seller Portal). */
+export const GetCustomerOrderCountsZod = z.object({ productLine: z.enum(PRODUCT_LINES).optional() });
+export class GetCustomerOrderCountsDto extends createZodDto(extendApi(GetCustomerOrderCountsZod)) {}
+
 export const GetCustomerOrderCountsResZod = ResZod.extend({ data: CustomerOrderCountsZod });
 export class GetCustomerOrderCountsResDto extends createZodDto(extendApi(GetCustomerOrderCountsResZod)) {}
 
@@ -627,7 +631,7 @@ export class GetAdminCustomerOrdersDto extends createZodDto(extendApi(GetAdminCu
 export const GetAdminCustomerOrdersResZod = PageResZod.extend({ data: AdminCustomerStagingOrderZod.array() });
 export class GetAdminCustomerOrdersResDto extends createZodDto(extendApi(GetAdminCustomerOrdersResZod)) {}
 
-export const GetAdminCustomerOrderCountsZod = z.object({ customerId: IDZod.optional() });
+export const GetAdminCustomerOrderCountsZod = z.object({ customerId: IDZod.optional(), productLine: z.enum(PRODUCT_LINES).optional() });
 export class GetAdminCustomerOrderCountsDto extends createZodDto(extendApi(GetAdminCustomerOrderCountsZod)) {}
 
 export const AdminSellerStatZod = z.object({
