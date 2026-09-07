@@ -12,6 +12,8 @@ export function proxy(req: NextRequest) {
   const { pathname } = req.nextUrl;
   if (PUBLIC_PREFIXES.some((p) => pathname === p || pathname.startsWith(`${p}/`))) return NextResponse.next();
   if (pathname.startsWith('/api/')) return NextResponse.next(); // proxy tự trả 401
+  // File tĩnh trong `public/` (logo, template CSV, icon…) — không phải trang, không gate.
+  if (/\.[a-z0-9]+$/i.test(pathname)) return NextResponse.next();
   // Khu quản trị `/hub/*` — phiên NHÂN VIÊN (cookie riêng), login riêng.
   if (pathname === '/hub' || pathname.startsWith('/hub/')) {
     if (req.cookies.get(HUB_TOKEN_COOKIE)?.value) return NextResponse.next();
