@@ -78,5 +78,18 @@
   "dashboard": {
     "byProductLine": "Orders by product line",
     "byStatus": "Orders by status"
+  },
+  "account": {
+    "subtitle": "Profile, security and integrations",
+    "memberSince": "Member since",
+    "source": "Account source",
+    "integrationsTitle": "API & Webhooks",
+    "integrationsDesc": "API keys and webhooks to connect your systems with OnosFactory (currently on the existing customer portal).",
+    "integrationsOpen": "Open API & Webhooks",
+    "sources": {
+      "register": "Self-registered",
+      "manual": "Created by admin",
+      "sync": "Synced from legacy"
+    }
   }
 }

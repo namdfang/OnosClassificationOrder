@@ -78,5 +78,18 @@
   "dashboard": {
     "byProductLine": "Đơn theo dòng sản phẩm",
     "byStatus": "Đơn theo trạng thái"
+  },
+  "account": {
+    "subtitle": "Hồ sơ, bảo mật và tích hợp",
+    "memberSince": "Thành viên từ",
+    "source": "Nguồn tài khoản",
+    "integrationsTitle": "API & Webhook",
+    "integrationsDesc": "Khoá API và webhook để nối hệ thống của bạn với OnosFactory (đang ở cổng khách hàng hiện tại).",
+    "integrationsOpen": "Mở API & Webhook",
+    "sources": {
+      "register": "Tự đăng ký",
+      "manual": "Admin tạo",
+      "sync": "Đồng bộ hệ cũ"
+    }
   }
 }

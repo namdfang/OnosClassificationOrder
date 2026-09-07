@@ -19,7 +19,7 @@ export function Button({
   className,
   ...props
 }: ButtonProps) {
-  const baseStyles = "font-semibold rounded-lg transition-all duration-200 focus:outline-none focus:ring-2 focus:ring-offset-2 disabled:opacity-60 disabled:cursor-not-allowed";
+  const baseStyles = "inline-flex items-center justify-center gap-1.5 whitespace-nowrap font-semibold rounded-lg transition-all duration-200 focus:outline-none focus:ring-2 focus:ring-offset-2 disabled:opacity-60 disabled:cursor-not-allowed";
 
   // Dùng token thương hiệu, không dùng màu Tailwind thô: primary trước đây là bg-blue-600 —
   // xanh không thuộc bộ nhận diện nào, lại nằm ngoài mọi token nên đổi nhận diện là sót.
