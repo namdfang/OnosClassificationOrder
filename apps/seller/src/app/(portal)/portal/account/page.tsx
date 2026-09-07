@@ -3,7 +3,8 @@
 import dayjs from 'dayjs';
 import { useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { ExternalLink, KeyRound, Pencil, Save, X } from 'lucide-react';
+import Link from 'next/link';
+import { KeyRound, Pencil, Save, X } from 'lucide-react';
 import { Badge } from '@/components/shared/badge';
 import { Button } from '@/components/shared/button';
 import { PageHeader } from '@/components/shared/page-header';
@@ -51,7 +52,6 @@ export default function AccountPage() {
   const initials = name.split(/\s+/).filter(Boolean).slice(0, 2).map((s) => s[0]?.toUpperCase()).join('') || 'S';
   const tier = profile?.tier ?? null;
   const tierColor = tier == null ? TIER_COLORS[0] : (TIER_COLORS[tier] ?? TIER_COLORS[0]);
-  const adminUrl = process.env.NEXT_PUBLIC_ADMIN_URL;
 
   const startEdit = () => {
     setFullName(profile?.fullName ?? '');
@@ -141,16 +141,9 @@ export default function AccountPage() {
         </div>
       </Section>
 
-      {adminUrl && (
-        <Section label={t('seller:account.integrationsTitle')}>
-          <div className="flex flex-col sm:flex-row sm:items-center gap-3">
-            <p className="text-[11px] text-text-secondary flex-1">{t('seller:account.integrationsDesc')}</p>
-            <a href={`${adminUrl}/customer/api`} target="_blank" rel="noreferrer" className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-border1 text-[11px] font-semibold text-text-primary hover:border-accent hover:text-accent no-underline shrink-0">
-              {t('seller:account.integrationsOpen')} <ExternalLink size={11} />
-            </a>
-          </div>
-        </Section>
-      )}
+      <p className="text-[11px] text-text-muted">
+        <Link href="/portal/api" prefetch={false} className="text-accent hover:underline">{t('seller:account.integrationsOpen')} →</Link>
+      </p>
     </div>
   );
 }

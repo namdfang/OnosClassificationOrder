@@ -49,7 +49,10 @@ export function buildCustomerNav(t: TFunction): NavGroup[] {
     },
     {
       group: t('nav.groupAccount', { ns: 'seller' }),
-      items: [{ id: 'account', icon: '👤', label: t('nav.account', { ns: 'seller' }), href: '/portal/account' }],
+      items: [
+        { id: 'account', icon: '👤', label: t('nav.account', { ns: 'seller' }), href: '/portal/account' },
+        { id: 'api', icon: '🔌', label: t('nav.api', { ns: 'seller' }), href: '/portal/api' },
+      ],
     },
   ];
 }

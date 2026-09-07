@@ -12,7 +12,8 @@
     "importCsv": "Import CSV",
     "account": "Tài khoản của tôi",
     "signOut": "Đăng xuất",
-    "customer": "Khách hàng"
+    "customer": "Khách hàng",
+    "api": "API & Webhook"
   },
   "login": {
     "welcome": "Đăng nhập cổng seller",
@@ -91,5 +92,10 @@
       "manual": "Admin tạo",
       "sync": "Đồng bộ hệ cũ"
     }
+  },
+  "api": {
+    "tabKeys": "API key",
+    "tabWebhooks": "Webhook",
+    "tabSamples": "Lệnh mẫu"
   }
 }

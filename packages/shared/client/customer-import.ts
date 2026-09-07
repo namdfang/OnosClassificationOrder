@@ -71,3 +71,13 @@ export const CustomerImportOrderZod = z.object({
   items: CustomerImportOrderItemZod.array().min(1).max(100),
 });
 export type CustomerImportOrder = z.infer<typeof CustomerImportOrderZod>;
+
+/** Sự kiện webhook khách (ORD-4) — nest-free để app browser render danh sách; `dtos/customer.dto.ts` re-export. */
+export const CUSTOMER_WEBHOOK_EVENTS = [
+  'order.pushed',
+  'order.production_completed',
+  'order.held',
+  'order.unheld',
+  'order.cancelled',
+] as const;
+export type CustomerWebhookEvent = (typeof CUSTOMER_WEBHOOK_EVENTS)[number];

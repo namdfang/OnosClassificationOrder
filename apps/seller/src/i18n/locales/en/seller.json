@@ -12,7 +12,8 @@
     "importCsv": "Import CSV",
     "account": "My account",
     "signOut": "Sign out",
-    "customer": "Customer"
+    "customer": "Customer",
+    "api": "API & Webhooks"
   },
   "login": {
     "welcome": "Sign in to Seller Portal",
@@ -91,5 +92,10 @@
       "manual": "Created by admin",
       "sync": "Synced from legacy"
     }
+  },
+  "api": {
+    "tabKeys": "API keys",
+    "tabWebhooks": "Webhooks",
+    "tabSamples": "Samples"
   }
 }

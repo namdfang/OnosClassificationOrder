@@ -3,7 +3,7 @@
 > **File FE:** `apps/seller/src/app/{layout,page}.tsx`, `apps/seller/src/app/login/page.tsx`, `apps/seller/src/app/(portal)/layout.tsx`, `apps/seller/src/app/(portal)/portal/orders/{page,[productionId]/page,3d|2d|wood|embroidery|led|canvas/page}.tsx`, `apps/seller/src/app/track/{page,[code]/page}.tsx`, `apps/seller/src/app/auth/handoff/page.tsx`, `apps/seller/src/components/orders/{orders-list-view,order-row,product-line-tabs,orders-status-filter-pills,orders-stats-bar,push-dialog,stage-timeline}.tsx`, `apps/seller/src/components/layout/{customer-sidebar,impersonation-banner}.tsx`, `apps/seller/src/lib/{product-lines,navigation,constants,customer-orders,label-preview}.ts`, `apps/seller/src/context/session-context.tsx`, `apps/seller/src/i18n/{index,constants}.ts` + `locales/{vi,en}/{customerPortal,track,common,seller}.json`
 > **File BE (Next server-side):** `apps/seller/src/app/api/auth/{login,logout,handoff}/route.ts`, `apps/seller/src/app/api/v1/[...path]/route.ts` (proxy), `apps/seller/src/lib/server/api.ts` (cookie), `apps/seller/proxy.ts` (Next 16 middleware)
 > **File BE (NestJS — tái dùng, không endpoint mới):** `apps/api/src/modules/customer-portal/*` (`customer/auth/*`, `customer/orders/*`, `public/track/:code`), `apps/web/src/utils/impersonationStart.ts` (handoff mạo danh)
-> **Route:** khách: `/login`, `/portal` (dashboard), `/portal/orders/:slug` (slug = dòng sản phẩm `3d|2d|wood|embroidery|led|canvas` → trang DỊCH VỤ; slug khác → chi tiết đơn `:productionId`), `/portal/orders/:line/create`, `/portal/orders/:line/import`, `/portal/orders?q=` (chỉ điều hướng), `/portal/account`, `/track`, `/track/:code`, `/auth/handoff`; **khu quản trị nhân viên (§9):** `/hub/login`, `/hub`, `/hub/sellers`, `/hub/orders`, `/hub/notifications`
+> **Route:** khách: `/login`, `/portal` (dashboard), `/portal/orders/:slug` (slug = dòng sản phẩm `3d|2d|wood|embroidery|led|canvas` → trang DỊCH VỤ; slug khác → chi tiết đơn `:productionId`), `/portal/orders/:line/create`, `/portal/orders/:line/import`, `/portal/orders?q=` (chỉ điều hướng), `/portal/account`, `/portal/api`, `/track`, `/track/:code`, `/auth/handoff`; **khu quản trị nhân viên (§9):** `/hub/login`, `/hub`, `/hub/sellers`, `/hub/orders`, `/hub/notifications`
 > **API (same-origin của app seller):** `POST /api/auth/login`, `POST /api/auth/logout`, `POST /api/auth/handoff`, `ANY /api/v1/*` → NestJS `${API_INTERNAL_URL}/*`
 
 ---
@@ -81,6 +81,10 @@ Mirror `apps/web/src/pages/customer/orders/new.tsx`: bộ chọn sản phẩm t�
 ### 2.8 Import CSV `/portal/orders/import`
 
 Mirror `apps/web/src/pages/customer/orders/import.tsx`: `xlsx` parse template fulfill OnosPod cũ → group `(order_id, identifier)` → validate từng đơn bằng **`CustomerImportOrderZod` import từ `shared/client`** (cùng schema BE `ImportCustomerOrdersDto`, xem §5) → `POST customer/orders/import/resolve` đối chiếu SKU (ảnh/tên/giá + cảnh báo thiếu design) → `POST customer/orders/import` → bảng kết quả created/duplicated/failed → nút sang tab Chờ đẩy SX. Template tải ở `/customer-order-template.csv` (copy từ `apps/web/public`).
+
+### 2.9a API & Webhook `/portal/api` (tab riêng, 07/09/2026)
+
+Khuôn `portal/api-keys` của thghub: tab bar **API key · Webhook · Lệnh mẫu** trong 1 card, banner vàng hiện key plain **một lần** ghim trên tab bar. Tái dùng `GET/POST/DELETE customer/api-keys` + `customer/webhooks` (ORD-4). Lệnh mẫu dựng từ `NEXT_PUBLIC_OPEN_API_URL` (mặc định `https://api.onosfactory.com/api/v1`). Nút "Tài liệu API" mở `NEXT_PUBLIC_ADMIN_URL/customer/api/docs` (tài liệu đầy đủ chuyển sang seller ở đợt 2). Danh sách sự kiện webhook lấy từ `CUSTOMER_WEBHOOK_EVENTS` — đã dời sang `shared/client` (dto re-export). Trang tài khoản chỉ còn link sang đây.
 
 ### 2.9 Dashboard `/portal` + tài khoản + chuông
 
