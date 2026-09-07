@@ -1,5 +1,6 @@
 import type { OnModuleInit } from '@nestjs/common';
 import { BadRequestException, Injectable, NotFoundException } from '@nestjs/common';
+import { Cron } from '@nestjs/schedule';
 import { InjectModel } from '@nestjs/mongoose';
 import { Model, Types } from 'mongoose';
 import type {
@@ -312,11 +313,15 @@ export class CustomerOrderService implements OnModuleInit {
    * (đơn Luồng A sync từ hệ cũ) — idempotent nhờ unique (customerId, orderKey)
    * + insertMany ordered:false nuốt lỗi trùng. 1 đơn cũ = 1 staging doc 1 item.
    */
-  private async syncLegacyOrdersForCustomer(customer: {
-    _id: unknown;
-    userSku: string;
-    userEmail: string;
-  }): Promise<number> {
+  private async syncLegacyOrdersForCustomer(
+    customer: {
+      _id: unknown;
+      userSku: string;
+      userEmail: string;
+    },
+    /** Chỉ xét đơn `createdAt ≥ since` (đồng bộ tăng dần) — bỏ trống = toàn bộ lịch sử của khách. */
+    since?: Date,
+  ): Promise<number> {
     if (!customer.userSku && !customer.userEmail) return 0;
     const customerId = String(customer._id);
     const stagedPids = (
@@ -325,7 +330,9 @@ export class CustomerOrderService implements OnModuleInit {
     const missing = await this.orderModel
       .find({
         userSku: customer.userSku,
-        userEmail: customer.userEmail,
+        // Bảng `customers` lưu email chữ thường (CustomerService.sync) còn đơn import giữ nguyên chữ hoa/thường.
+        userEmail: customer.userEmail ? { $regex: `^${escapeRegex(customer.userEmail)}$`, $options: 'i' } : customer.userEmail,
+        ...(since ? { createdAt: { $gte: since } } : {}),
         ...(stagedPids.length > 0 ? { productionId: { $nin: stagedPids } } : {}),
       })
       .select('productionId orderId type color size quantity mockupUrl printMethod productLine designs shippingAddress productConfigId createdAt')
@@ -365,6 +372,73 @@ export class CustomerOrderService implements OnModuleInit {
       const inserted = (err as { insertedDocs?: unknown[] }).insertedDocs?.length ?? 0;
       return inserted;
     }
+  }
+
+  private static readonly LEGACY_SYNC_WATERMARK_KEY = 'customer_orders_sync_watermark';
+  private legacySyncInflight: Promise<number> | null = null;
+  private legacySyncAt = 0;
+
+  /**
+   * Đồng bộ TĂNG DẦN đơn Luồng A (import nội bộ) vào staging cho MỌI khách — 07/09/2026.
+   * Trước đây staging chỉ được bồi khi CHÍNH khách đó mở portal (`listOrders`) hoặc 1 lần backfill lúc
+   * boot, nên hub `/hub/orders` lọc "hôm nay" trống dù xưởng nhận gần 200 đơn/ngày. Giờ:
+   * - cron 5 phút + gọi trước mọi lần admin đọc (throttle 60 s, request trùng dùng chung promise);
+   * - chỉ quét `orders.createdAt ≥ watermark − 15 phút` (chồng lấn, idempotent nhờ unique `orderKey`);
+   * - cặp (userSku, email) chưa có trong `customers` → tạo chỗ giữ như `CustomerService.sync` (password '');
+   * - có đơn mới → xoá cache admin để tab/số liệu cập nhật ngay.
+   * Lần đầu (chưa có watermark) lấy từ mốc staging `source='sync'` mới nhất trừ 15 phút (rỗng → 7 ngày).
+   */
+  @Cron('*/5 * * * *', { name: 'customer-orders-legacy-sync' })
+  async syncLegacyOrdersIncremental(force = false): Promise<number> {
+    if (this.legacySyncInflight) return this.legacySyncInflight;
+    if (!force && Date.now() - this.legacySyncAt < 60_000) return 0;
+    this.legacySyncInflight = (async () => {
+      try {
+        const OVERLAP_MS = 15 * 60_000;
+        const wm = await this.systemConfigService.get<string>(CustomerOrderService.LEGACY_SYNC_WATERMARK_KEY);
+        let since: Date;
+        if (wm) since = new Date(new Date(wm).getTime() - OVERLAP_MS);
+        else {
+          const last = await this.customerOrderModel.findOne({ source: 'sync' }).sort({ pushedAt: -1 }).select('pushedAt').lean();
+          since = last?.pushedAt ? new Date(new Date(last.pushedAt).getTime() - OVERLAP_MS) : new Date(Date.now() - 7 * 24 * 3_600_000);
+        }
+        const groups = await this.orderModel.aggregate<{ _id: { userSku: string; userEmail: string }; maxAt: Date }>([
+          { $match: { createdAt: { $gte: since }, userSku: { $nin: [null, ''] } } },
+          { $group: { _id: { userSku: '$userSku', userEmail: { $toLower: { $ifNull: ['$userEmail', ''] } } }, maxAt: { $max: '$createdAt' } } },
+        ]);
+        if (groups.length === 0) return 0;
+        const customers = this.customerOrderModel.db.collection('customers');
+        let total = 0;
+        let maxAt = since;
+        for (const g of groups) {
+          const filter = { userSku: g._id.userSku, userEmail: g._id.userEmail || '' };
+          const found = await customers.findOneAndUpdate(
+            filter,
+            { $setOnInsert: { ...filter, source: 'sync', password: '', createdAt: new Date(), updatedAt: new Date() } },
+            { upsert: true, returnDocument: 'after', projection: { _id: 1, userSku: 1, userEmail: 1, deletedAt: 1 } },
+          );
+          const c = (found && typeof found === 'object' && 'value' in found ? (found as { value: unknown }).value : found) as
+            | { _id: unknown; userSku?: string; userEmail?: string; deletedAt?: Date }
+            | null;
+          if (!c || c.deletedAt) continue;
+          total += await this.syncLegacyOrdersForCustomer({ _id: c._id, userSku: c.userSku || '', userEmail: c.userEmail || '' }, since);
+          if (g.maxAt > maxAt) maxAt = g.maxAt;
+        }
+        await this.systemConfigService.set(CustomerOrderService.LEGACY_SYNC_WATERMARK_KEY, maxAt.toISOString(), 'Mốc createdAt đơn Luồng A đã đồng bộ vào staging customer_orders');
+        if (total > 0) {
+          this.adminCache.clear();
+          console.log(`[customer-orders-sync] +${total} staging rows (${groups.length} khách, từ ${since.toISOString()})`);
+        }
+        return total;
+      } catch (err) {
+        console.error('[customer-orders-sync] failed:', (err as Error).message);
+        return 0;
+      } finally {
+        this.legacySyncAt = Date.now();
+        this.legacySyncInflight = null;
+      }
+    })();
+    return this.legacySyncInflight;
   }
 
   // -------------------------------------------------------------------------
@@ -1248,6 +1322,7 @@ export class CustomerOrderService implements OnModuleInit {
   }
 
   async listOrdersAdmin(dto: GetAdminCustomerOrdersDto): Promise<GetAdminCustomerOrdersResDto> {
+    await this.syncLegacyOrdersIncremental();
     const cutoff = await this.getCompletedCutoff();
     const preStages: Record<string, unknown>[] = [...CustomerOrderService.dateRangeStages(dto.dateFrom, dto.dateTo)];
     if (dto.search?.trim()) {
@@ -1299,6 +1374,7 @@ export class CustomerOrderService implements OnModuleInit {
   }
 
   async getCountsAdmin(dto: GetAdminCustomerOrderCountsDto): Promise<GetCustomerOrderCountsResDto> {
+    await this.syncLegacyOrdersIncremental();
     return this.cachedAdmin(`counts:${JSON.stringify(dto)}`, () => this.computeCountsAdmin(dto));
   }
 
@@ -1313,6 +1389,7 @@ export class CustomerOrderService implements OnModuleInit {
   }
 
   async getStatsAdmin(): Promise<GetAdminCustomerOrderStatsResDto> {
+    await this.syncLegacyOrdersIncremental();
     return this.cachedAdmin('stats', () => this.computeStatsAdmin());
   }
 

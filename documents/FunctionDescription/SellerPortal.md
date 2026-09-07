@@ -191,6 +191,8 @@ Thao tác (gán designer, đổi xưởng, báo lỗi) vẫn ở app xưởng: n
 
 **Bộ lọc ngày dạng pill** (`components/shared/date-range-filter.tsx`, 07/09/2026 — dùng ở `/hub/orders*` + `/hub/operations`): quick filter HIỆN THẲNG thành dải pill "Mọi thời gian · Hôm nay · Hôm qua · Tuần này · Tháng này · Tháng trước · Năm nay" (i18n `seller.dateFilter.*`), pill cuối "Tùy chọn" mở popover từ/đến + bước tháng (bấm tên tháng = cả tháng); khoảng tùy chọn hiện ngay trên pill đó. Không còn nút trigger gộp "All time" phải bấm mở popover. Trang Operations: bộ lọc xưởng + pill ngày nằm HÀNG RIÊNG dưới tiêu đề (nhét vào `actions` của `PageHeader` làm tiêu đề gãy dòng), **khung cố định từ `lg`** (tiêu đề + lọc + tab dịch vụ `shrink-0`, phần dưới `overflow-y-auto`; dưới `lg` để trang cuộn thường vì phần đầu đã chiếm nửa màn).
 
+**Dữ liệu hub luôn mới (07/09/2026):** staging `customer_orders` được bồi tăng dần từ `orders` cho mọi khách (cron 5' + trước mỗi lần admin đọc — `CustomerOrderIntake.md`), nên lọc "Hôm nay" ở `/hub/orders*` có đơn xưởng vừa import, không cần khách mở portal.
+
 ### 9.2 Hiệu năng tải `/hub/orders*` (F5, 07/09/2026)
 
 Trước tối ưu, F5 `/hub/orders` chờ ~6 s: `admin/customer-orders` 6,3 s + `counts` 5 s (×2, cho tab + pill) + `stats` 5,4 s — nguyên nhân là `$lookup orders` + derive trạng thái chạy trên CẢ 38k document staging rồi mới phân trang.
