@@ -609,7 +609,37 @@ export class GetPublicOrderTrackResDto extends createZodDto(extendApi(GetPublicO
 // mạo danh (xem với tư cách seller).
 // ---------------------------------------------------------------------------
 
+/** Trạng thái NỘI BỘ của đơn sản xuất — chỉ admin (`/hub/orders`), KHÔNG bao giờ trả cho khách. */
+export const AdminInternalStatusZod = z.object({
+  /** Khóa chặng hiện tại (`WORKSHOP_STAGE_FILTER_KEYS`), `done` khi đã đóng hàng. */
+  stage: z.string().optional(),
+  factoryShortName: z.string().optional(),
+  factoryName: z.string().optional(),
+  designerName: z.string().optional(),
+  designerStatus: z.string().optional(),
+  priority: z.number().optional(),
+  productionError: z.string().optional(),
+  productionErrorSource: z.string().optional(),
+  productionErrorNote: z.string().optional(),
+  toolResult: z.string().optional(),
+  toolResultNote: z.string().optional(),
+  toolCheckErrorNotes: z.string().array().optional(),
+  errorFileNote: z.string().optional(),
+  printStatusNote: z.string().optional(),
+  designerRejectedReason: z.string().optional(),
+  holdReason: z.string().optional(),
+  /** Nhật ký gần nhất của đơn (`orderLogs`). */
+  lastLog: z
+    .object({ action: z.string(), field: z.string().optional(), userName: z.string().optional(), at: z.coerce.date().optional(), after: z.unknown().optional() })
+    .optional(),
+});
+export type AdminInternalStatus = z.infer<typeof AdminInternalStatusZod>;
+
+export const AdminCustomerStagingItemZod = CustomerStagingItemZod.extend({ internal: AdminInternalStatusZod.optional() });
+export type AdminCustomerStagingItem = z.infer<typeof AdminCustomerStagingItemZod>;
+
 export const AdminCustomerStagingOrderZod = CustomerStagingOrderZod.extend({
+  items: AdminCustomerStagingItemZod.array(),
   customerId: IDZod,
   /** Khách sở hữu đơn — `$lookup customers`, để hiện cột Seller. */
   customer: z

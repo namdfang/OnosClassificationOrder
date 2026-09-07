@@ -115,7 +115,10 @@ export const CUSTOMER_STAGE_LABELS: Record<string, string> = {
 export const PROD_DERIVE_FIELDS =
   'productionId cancelledAt fulfillmentCompletedAt currentFulfillmentStage heldAt holdReason ' +
   'designerStatus productionErrorSource toolResultNote toolCheckedAt ' +
-  'designerAssignedAt designerFirstStartedAt designerCompletedAt fulfillmentStages inProductionAt productLine';
+  'designerAssignedAt designerFirstStartedAt designerCompletedAt fulfillmentStages inProductionAt productLine ' +
+  // Trường NỘI BỘ — chỉ `toAdminStagingOrder` (khu /hub) đọc; `toStagingOrder` cho khách không bao giờ chép ra.
+  'factoryId assignee priority productionError productionErrorNote productionErrorSource toolResult toolResultNote ' +
+  'toolCheckErrorNotes errorFileNote printStatusNote designerRejectedReason';
 
 export interface ProdDeriveFields {
   productionId?: string;
@@ -250,6 +253,12 @@ function attrValue(
 }
 const SIZE_LABEL = /size|kích/i;
 const COLOR_LABEL = /color|colour|màu/i;
+
+interface AdminRefMaps {
+  factories: Map<string, { name?: string; shortName?: string }>;
+  users: Map<string, string>;
+  logs: Map<string, { action: string; field?: string; userName?: string; at?: Date; after?: unknown }>;
+}
 
 @Injectable()
 export class CustomerOrderService implements OnModuleInit {
@@ -996,6 +1005,39 @@ export class CustomerOrderService implements OnModuleInit {
     return [{ $addFields: { sortAt: { $ifNull: ['$pushedAt', '$createdAt'] } } }, { $match: { sortAt: at } }];
   }
 
+  /** Tra tên xưởng / designer / log mới nhất cho 1 trang kết quả — 3 truy vấn nhỏ theo tập id, không $lookup trong pipeline lớn. */
+  private async loadAdminRefs(rows: Array<{ prodOrders?: ProdDeriveFields[] }>): Promise<AdminRefMaps> {
+    const prods = rows.flatMap((r) => (r.prodOrders ?? []) as Array<ProdDeriveFields & Record<string, unknown>>);
+    const factoryIds = [...new Set(prods.map((p) => p.factoryId).filter((x): x is string => !!x))];
+    const userIds = [...new Set(prods.map((p) => p.assignee).filter((x): x is string => !!x))];
+    const orderIds = [...new Set(prods.map((p) => String(p._id)))];
+    const db = this.customerOrderModel.db;
+    const [factories, users, logs] = await Promise.all([
+      factoryIds.length ? db.collection('factories').find({ _id: { $in: factoryIds } } as never, { projection: { name: 1, shortName: 1 } }).toArray() : [],
+      userIds.length ? db.collection('users').find({ _id: { $in: userIds } } as never, { projection: { fullName: 1, email: 1 } }).toArray() : [],
+      orderIds.length
+        ? db
+            .collection('orderLogs')
+            .aggregate([
+              { $match: { orderId: { $in: orderIds } } },
+              { $sort: { createdAt: -1 } },
+              { $group: { _id: '$orderId', action: { $first: '$action' }, field: { $first: '$field' }, userName: { $first: '$userName' }, at: { $first: '$createdAt' }, after: { $first: '$after' } } },
+            ])
+            .toArray()
+        : [],
+    ]);
+    return {
+      factories: new Map(factories.map((f) => [String(f._id), { name: f.name as string | undefined, shortName: f.shortName as string | undefined }])),
+      users: new Map(users.map((u) => [String(u._id), ((u.fullName as string | undefined) || (u.email as string | undefined)) ?? ''])),
+      logs: new Map(
+        logs.map((l) => [
+          String(l._id),
+          { action: String(l.action), field: l.field as string | undefined, userName: l.userName as string | undefined, at: l.at as Date | undefined, after: l.after },
+        ]),
+      ),
+    };
+  }
+
   private static readonly CUSTOMER_LOOKUP: Record<string, unknown>[] = [
     {
       $lookup: {
@@ -1013,11 +1055,44 @@ export class CustomerOrderService implements OnModuleInit {
   private toAdminStagingOrder(
     doc: Record<string, unknown> & { prodOrders?: ProdDeriveFields[]; customer?: Record<string, unknown> },
     cutoff: Date,
+    refs?: AdminRefMaps,
   ): AdminCustomerStagingOrder {
     const prodByPid = new Map<string, ProdDeriveFields>((doc.prodOrders ?? []).map((p) => [p.productionId as string, p]));
     const c = doc.customer;
+    const base = this.toStagingOrder(doc, prodByPid, cutoff);
+    const items = base.items.map((it) => {
+      const p = it.productionId ? (prodByPid.get(it.productionId) as (ProdDeriveFields & Record<string, unknown>) | undefined) : undefined;
+      if (!p) return it;
+      const stage = computeCurrentStage(p);
+      const factory = p.factoryId ? refs?.factories.get(String(p.factoryId)) : undefined;
+      const log = refs?.logs.get(String(p._id));
+      const str = (v: unknown) => (typeof v === 'string' && v.trim() ? v : undefined);
+      return {
+        ...it,
+        internal: {
+          stage: p.fulfillmentCompletedAt ? 'done' : stage.key,
+          factoryShortName: factory?.shortName,
+          factoryName: factory?.name,
+          designerName: p.assignee ? refs?.users.get(String(p.assignee)) : undefined,
+          designerStatus: str(p.designerStatus),
+          priority: typeof p.priority === 'number' ? p.priority : undefined,
+          productionError: str(p.productionError),
+          productionErrorSource: str(p.productionErrorSource),
+          productionErrorNote: str(p.productionErrorNote),
+          toolResult: str(p.toolResult),
+          toolResultNote: str(p.toolResultNote),
+          toolCheckErrorNotes: Array.isArray(p.toolCheckErrorNotes) ? (p.toolCheckErrorNotes as string[]).filter(Boolean) : undefined,
+          errorFileNote: str(p.errorFileNote),
+          printStatusNote: str(p.printStatusNote),
+          designerRejectedReason: str(p.designerRejectedReason),
+          holdReason: str(p.holdReason),
+          lastLog: log,
+        },
+      };
+    });
     return {
-      ...this.toStagingOrder(doc, prodByPid, cutoff),
+      ...base,
+      items,
       customerId: String(doc.customerId),
       customer: c
         ? {
@@ -1078,7 +1153,9 @@ export class CustomerOrderService implements OnModuleInit {
       page: Array<Record<string, unknown> & { prodOrders?: ProdDeriveFields[]; customer?: Record<string, unknown> }>;
       total: Array<{ n: number }>;
     }>(pipeline as never[]);
-    return { success: true, data: (res?.page ?? []).map((d) => this.toAdminStagingOrder(d, cutoff)), total: res?.total?.[0]?.n ?? 0 };
+    const rows = res?.page ?? [];
+    const refs = await this.loadAdminRefs(rows);
+    return { success: true, data: rows.map((d) => this.toAdminStagingOrder(d, cutoff, refs)), total: res?.total?.[0]?.n ?? 0 };
   }
 
   async getCountsAdmin(dto: GetAdminCustomerOrderCountsDto): Promise<GetCustomerOrderCountsResDto> {

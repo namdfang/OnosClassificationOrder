@@ -187,5 +187,14 @@
       "empty": "Nothing unusual this period."
     },
     "openFactoryApp": "Open factory app"
+  },
+  "internal": {
+    "column": "Internal",
+    "lastLog": "Log",
+    "source": {
+      "designer": "Designer",
+      "factory": "Factory",
+      "tool-check": "Tool check"
+    }
   }
 }

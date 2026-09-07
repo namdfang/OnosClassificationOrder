@@ -6,6 +6,7 @@ import { useTranslation } from 'react-i18next';
 import { Image as ImageIcon, PauseCircle, Wrench } from 'lucide-react';
 import { CustomerOrderStatus } from 'shared/enums';
 import type { AdminCustomerStagingOrder } from 'shared';
+import { InternalStatus } from '@/components/hub/internal-status';
 import { ViewAsButton } from '@/components/hub/view-as-button';
 import { ProductLineBadge, StatusBadge } from '@/components/shared/badge';
 import { SafeImage } from '@/components/shared/safe-image';
@@ -72,6 +73,7 @@ export function OrderCard({ order, adminMode = false, showViewAs = true, selecte
         </div>
         {order.totalAmount != null && <span className="text-xs font-bold tabular-nums text-text-primary shrink-0">{fmtUSD(order.totalAmount)}</span>}
       </div>
+      {adminMode && first?.internal && <div className="pt-1 border-t border-border2"><InternalStatus s={first.internal} compact /></div>}
       {((adminMode && showViewAs) || (!adminMode && isPending)) && (
         <div className="flex justify-end gap-1.5 pt-1 border-t border-border2">
           {adminMode && order.customerId && <ViewAsButton customerId={order.customerId} target={first?.productionId ? `/portal/orders/${encodeURIComponent(first.productionId)}` : '/portal/orders'} />}

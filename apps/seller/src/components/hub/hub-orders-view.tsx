@@ -5,6 +5,7 @@ import { useEffect, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Image as ImageIcon, Loader2, PauseCircle, RefreshCw, Wrench } from 'lucide-react';
 import type { AdminCustomerStagingOrder, CustomerOrderCounts } from 'shared';
+import { InternalStatus } from '@/components/hub/internal-status';
 import { SellerFilterPicker } from '@/components/hub/seller-filter-picker';
 import { OrderCard } from '@/components/orders/order-card';
 import { OrdersPagination } from '@/components/orders/orders-pagination';
@@ -145,7 +146,7 @@ export function HubOrdersView({ lockedLine }: { lockedLine?: ProductLine } = {})
               ))}
             </div>
             <div className={`hidden md:block flex-1 min-h-0 overflow-auto scrollbar-thin ${loading ? 'opacity-60' : ''}`}>
-              <table className="w-full min-w-[1080px]">
+              <table className="w-full min-w-[1280px]">
                 <thead className="bg-surface-muted sticky top-0 z-10">
                   <tr className="border-b border-border2">
                     <th className={TH}>{t('customerPortal:orders.columns.order')}</th>
@@ -155,6 +156,7 @@ export function HubOrdersView({ lockedLine }: { lockedLine?: ProductLine } = {})
                     <th className={`${TH} text-right`}>{t('customerPortal:orders.columns.quantity')}</th>
                     <th className={`${TH} text-right`}>{t('customerPortal:orders.columns.total')}</th>
                     <th className={TH}>{t('customerPortal:orders.columns.status')}</th>
+                    <th className={`${TH} min-w-[220px]`}>{t('hub:internal.column')}</th>
                     <th className={TH}>{t('customerPortal:orders.columns.customer')}</th>
                     <th className={TH}>{t('customerPortal:orders.columns.tracking')}</th>
                     <th className={TH}>{t('hub:orders.columns.date')}</th>
@@ -206,6 +208,7 @@ export function HubOrdersView({ lockedLine }: { lockedLine?: ProductLine } = {})
                             {stage && o.status !== 'pending' && <span className="text-[9.5px] text-text-muted">{stage}</span>}
                           </div>
                         </td>
+                        <td className="py-2 px-2"><InternalStatus s={first?.internal} /></td>
                         <td className="py-2 px-2 text-[10.5px]">
                           {addr ? (<><p className="text-text-primary truncate max-w-[140px]">{[addr.firstName, addr.lastName].filter(Boolean).join(' ') || '—'}</p><p className="text-text-muted truncate max-w-[140px]">{[addr.city, addr.state, addr.country].filter(Boolean).join(', ')}</p></>) : <span className="text-text-muted">—</span>}
                         </td>

@@ -187,5 +187,14 @@
       "empty": "Kỳ này không có gì bất thường."
     },
     "openFactoryApp": "Mở app vận hành xưởng"
+  },
+  "internal": {
+    "column": "Nội bộ",
+    "lastLog": "Log",
+    "source": {
+      "designer": "Designer",
+      "factory": "Xưởng",
+      "tool-check": "Soát tool"
+    }
   }
 }
