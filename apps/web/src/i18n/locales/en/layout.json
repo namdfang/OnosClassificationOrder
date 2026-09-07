@@ -10,7 +10,8 @@
       "orders": "Orders",
       "catalog": "Catalog",
       "personal": "Personal",
-      "admin": "Admin"
+      "admin": "Admin",
+      "ceo": "Executive"
     },
     "dashboard": {
       "title": "Dashboard",
@@ -70,7 +71,8 @@
     "customers": "Customers",
     "impersonate": "Impersonate",
     "zaloGroups": "Seller Support",
-    "zaloChat": "Zalo chat"
+    "zaloChat": "Zalo chat",
+    "ceoDashboard": "CEO Dashboard"
   },
   "header": {
     "toggleSidebar": "Toggle sidebar",
@@ -78,7 +80,15 @@
     "darkMode": "Dark mode",
     "myAccount": "My account",
     "signOut": "Sign out",
-    "member": "Member"
+    "member": "Member",
+    "factoryScope": {
+      "label": "Factory",
+      "all": "All factories",
+      "title": "Pick a factory — Dashboard, Orders and Work pages filter by it",
+      "badgeError": "Errors to handle",
+      "badgeTool": "Tool-check backlog (rework / unreviewed)",
+      "lockedTitle": "This account is bound to this factory"
+    }
   },
   "overdueAlert": {
     "title": "2+ days overdue — orders from {{date}} and earlier still pending:",

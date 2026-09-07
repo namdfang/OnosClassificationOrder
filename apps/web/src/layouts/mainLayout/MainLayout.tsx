@@ -10,7 +10,6 @@ import { ImpersonationBanner } from '@/components/auth/ImpersonationBanner';
 
 import { useIsMobile } from '@/hooks/useMediaQuery';
 
-import OverdueAlertBanner from '../../components/common/OverdueAlertBanner';
 import Header from '../../components/header';
 import Sidebar from '../../components/sidebar/Sidebar';
 
@@ -43,9 +42,17 @@ function MainLayout() {
   }, [setProfile]);
 
   return (
-    <div className="flex min-h-screen bg-background">
-      <Sidebar collapsed={collapsed} mobileOpen={mobileOpen} onMobileClose={() => setMobileOpen(false)} />
-      <div className="flex-1 flex flex-col overflow-hidden min-w-0" style={{ height: '100vh' }}>
+    // Khung CỐ ĐỊNH (07/09/2026): root cao đúng màn hình và không cuộn — sidebar +
+    // header đứng yên, CHỈ <main> cuộn. Trước đây `min-h-screen` để sidebar dài hơn
+    // màn hình (nhiều cụm menu theo xưởng) kéo cả trang cuộn, header trôi mất.
+    <div className="flex h-screen overflow-hidden bg-background">
+      <Sidebar
+        collapsed={collapsed}
+        mobileOpen={mobileOpen}
+        onMobileClose={() => setMobileOpen(false)}
+        onToggleCollapse={() => setCollapsed((v) => !v)}
+      />
+      <div className="flex-1 flex flex-col overflow-hidden min-w-0 h-screen">
         {/* Dải cảnh báo mạo danh — trên CÙNG cột nội dung, ĐẨY header xuống chứ
             không phủ đè, để không thể cuộn trôi qua (AUTH-1 BR-7/AC-04). */}
         <ImpersonationBanner source="staff" />
@@ -54,9 +61,11 @@ function MainLayout() {
           collapsed={collapsed}
           isMobile={isMobile}
         />
-        {/* Banner đỏ quá hạn 2 ngày — nằm NGOÀI <main> (vùng cuộn) để luôn trong tầm mắt. */}
-        <OverdueAlertBanner />
-        <main className="flex-1 overflow-auto p-4 md:p-6">
+        {/* Banner đỏ quá hạn 2 ngày (`OverdueAlertBanner`) ĐÃ GỠ khỏi layout 07/09/2026 —
+            component + endpoint giữ nguyên, sẽ đặt ở vị trí khác (OverdueAlertBanner.md). */}
+        {/* `flex flex-col`: trang nào muốn CHIẾM ĐỦ chiều cao (bảng tự cuộn, chân bảng đứng yên) chỉ cần
+            `flex-1 min-h-0` trên root của nó; trang thường vẫn cao theo nội dung và <main> cuộn như cũ. */}
+        <main className="flex flex-1 flex-col overflow-auto p-4 md:p-6">
           {/*
             KHÔNG dùng `exit` animation (trước đây có, đã bỏ) — với
             `AnimatePresence`, khai báo `exit` khiến trang CŨ tiếp tục ở lại
@@ -74,6 +83,7 @@ function MainLayout() {
           <AnimatePresence mode="wait" initial={false}>
             <motion.div
               key={location.pathname}
+              className="flex min-h-0 flex-1 flex-col"
               initial={{ opacity: 0, y: 8 }}
               animate={{ opacity: 1, y: 0 }}
               transition={{ duration: 0.2, ease: [0.4, 0, 0.2, 1] }}

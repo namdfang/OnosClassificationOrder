@@ -1,9 +1,13 @@
 # Overdue Alert Banner (Banner đỏ quá hạn 2 ngày) — Function Description
 
-> **File FE:** `apps/web/src/components/common/OverdueAlertBanner.tsx`, gắn trong `apps/web/src/layouts/mainLayout/MainLayout.tsx`
+> **File FE:** `apps/web/src/components/common/OverdueAlertBanner.tsx`, **ĐÃ GỠ khỏi `apps/web/src/layouts/mainLayout/MainLayout.tsx` ngày 07/09/2026** (theo yêu cầu — sẽ đặt ở vị trí khác; component + endpoint `GET /designer/overdue-alert` giữ nguyên, chưa có nơi nào render)
 > **File BE:** `apps/api/src/modules/designer/designer-stats.service.ts` → `getOverdueAlert()`, `designer-stats.controller.ts`
 > **Route:** không có route riêng — banner hiện trên MỌI trang `/adm` + `/ffm`
 > **API:** `GET /v1/designer/overdue-alert`
+
+## 0. Trạng thái (07/09/2026)
+
+Banner **không còn hiển thị** ở bất kỳ trang nào: đã gỡ `<OverdueAlertBanner/>` khỏi `MainLayout.tsx` khi chuyển sang khung cố định (sidebar/header đứng yên, chỉ `<main>` cuộn). Component, service `overdueAlert`, endpoint và i18n giữ nguyên để gắn lại ở vị trí mới do người dùng chọn. Các mục dưới mô tả hành vi khi được gắn.
 
 ## 1. Overview
 

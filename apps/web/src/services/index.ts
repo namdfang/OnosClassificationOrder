@@ -1,6 +1,7 @@
 import { agentApi } from './agentApi';
 import { auth } from './auth';
 import { cache } from './cache';
+import { ceoDashboard } from './ceo';
 import { collection } from './collection';
 import { customRoles } from './custom-roles';
 import { customer } from './customer';
@@ -39,6 +40,7 @@ import { zaloGroup } from './zaloGroup';
 
 export const RepositoryRemote = {
   agentApi,
+  ceoDashboard,
   auth,
   roles,
   upload,

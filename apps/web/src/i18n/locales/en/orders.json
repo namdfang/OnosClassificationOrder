@@ -770,5 +770,63 @@
     "externalIdCaption": "Platform ID",
     "positionsCaption": "Print areas",
     "trackingCaption": "Tracking"
+  },
+  "workshopBoard": {
+    "stages": {
+      "tool-check": "Tool check",
+      "designer": "Design",
+      "print": "Print",
+      "press": "Press",
+      "qc-post-press": "QC",
+      "sew-in": "Sew in",
+      "sew-out": "Sew out",
+      "pack": "Pack",
+      "done": "Packed"
+    },
+    "stageTileTitle": "Show only orders at stage {{stage}} (click again to clear)",
+    "stageAll": "All stages",
+    "summary": "Total {{orders}} orders · {{types}} product types",
+    "held": "On hold",
+    "cancelled": "Cancelled",
+    "today": "Today",
+    "yesterday": "Yesterday",
+    "tomorrow": "Tomorrow",
+    "anyDate": "Any date",
+    "prevDay": "Previous day",
+    "nextDay": "Next day",
+    "pickDate": "Pick a date range",
+    "allFactories": "All",
+    "factoryTitle": "Show only orders of factory {{name}}",
+    "filters": "Filters",
+    "filtersTitle": "Detailed filters",
+    "clearFilters": "Clear all filters",
+    "reload": "Reload",
+    "search": "Search Production ID / SKU / Order ID / Type…",
+    "pills": {
+      "errorFile": "File errors",
+      "noTool": "No tool",
+      "unreviewed": "Unreviewed",
+      "priority": "Priority",
+      "held": "On hold"
+    },
+    "pillTitle": {
+      "errorFile": "Orders with at least one error-file code",
+      "noTool": "Tool checked but no tool available",
+      "unreviewed": "Tool not checked yet",
+      "priority": "Orders with a priority set",
+      "held": "Orders currently on hold"
+    },
+    "designBacklog": "Design backlog",
+    "designBacklogTitle": "Show/hide the designer summary",
+    "hintBefore": "Tick the box next to a product name to select the whole group · hold",
+    "hintAfter": "to select a range quickly.",
+    "rail": {
+      "search": "Filter product types…",
+      "all": "All",
+      "ordersQty": "{{orders}} orders / {{qty}} pcs",
+      "allHeader": "{{orders}} orders · {{types}} product types",
+      "viewing": "Showing {{shown}} / {{total}} orders of this type",
+      "empty": "No product type matches"
+    }
   }
 }

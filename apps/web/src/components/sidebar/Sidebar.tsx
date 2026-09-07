@@ -1,6 +1,6 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { Link, useLocation, useNavigate } from 'react-router-dom';
+import { Link, useLocation, useNavigate, useSearchParams } from 'react-router-dom';
 import type { TFunction } from 'i18next';
 import {
   AlertTriangle,
@@ -12,6 +12,7 @@ import {
   ChevronDown,
   ChevronRight,
   Contact,
+  Crown,
   Factory,
   FileDown,
   FileSearch,
@@ -23,6 +24,8 @@ import {
   MessagesSquare,
   Package,
   Palette,
+  PanelLeft,
+  PanelLeftClose,
   Rows3,
   ScanLine,
   Scissors,
@@ -50,7 +53,6 @@ import { PATHS } from '../../constants/paths';
 import { useIsMobile } from '../../hooks/useMediaQuery';
 import { RepositoryRemote } from '../../services';
 import { useAuthStore } from '../../store/authStore';
-import { useFactoryOptionsStore } from '../../store/factoryOptionsStore';
 import { useSidebarBadgeStore } from '../../store/sidebarBadgeStore';
 import { useSidebarResetStore } from '../../store/sidebarResetStore';
 import { handleAxiosError } from '../../utils';
@@ -194,8 +196,6 @@ interface NavGroup {
 
 /** `NavGroup.id` của cụm sản xuất chung (toàn bộ xưởng). */
 const PRODUCTION_GROUP_ID = 'production';
-/** `NavGroup.id` của cụm riêng từng xưởng — tiêu đề hiển thị đậm hơn nhóm thường. */
-const FACTORY_GROUP_ID = 'factory-scope';
 
 /**
  * AUTH-7 — bảng tra "đường dẫn trang → mã quyền", dựng TỪ CHÍNH cây menu ở dưới.
@@ -254,7 +254,7 @@ function withFactory(to: string, factoryId?: string): string {
  * Cụm xưởng KHÔNG gắn badge: số badge là số toàn hệ thống, treo lên cụm xưởng
  * sẽ đọc nhầm thành số của riêng xưởng đó.
  */
-function buildProductionItems(t: TFunction<'layout'>, factoryId?: string, keyPrefix = ''): NavItem[] {
+function buildProductionItems(t: TFunction<'layout'>, factoryId?: string, keyPrefix = '', scopeOnly = false): NavItem[] {
   const k = (key: string) => `${keyPrefix}${key}`;
   const to = (path: string) => withFactory(path, factoryId);
   const items: NavItem[] = [
@@ -404,7 +404,9 @@ function buildProductionItems(t: TFunction<'layout'>, factoryId?: string, keyPre
       ],
     },
   ];
-  if (!factoryId) return items;
+  // `scopeOnly` (07/09/2026): cụm sản xuất CHUNG chỉ MANG THEO `?factoryId=` đang chọn ở bộ chọn
+  // xưởng trên header (để đổi trang không mất phạm vi), KHÔNG ẩn/đổi nhãn như cụm riêng từng xưởng cũ.
+  if (!factoryId || scopeOnly) return items;
 
   // Trong cụm của 1 xưởng, các mục này KHÔNG thuộc phạm vi xưởng nào cả: danh
   // mục lỗi công đoạn là danh mục dùng chung, "Không xác định xưởng" theo định
@@ -438,12 +440,13 @@ function buildProductionItems(t: TFunction<'layout'>, factoryId?: string, keyPre
     .filter((it) => !it.children || it.children.length > 0);
 }
 
-function buildNavGroups(t: TFunction<'layout'>): NavGroup[] {
+function buildNavGroups(t: TFunction<'layout'>, factoryScopeId?: string): NavGroup[] {
   return [
     {
       id: PRODUCTION_GROUP_ID,
       title: '',
-      items: buildProductionItems(t),
+      // Link mang theo xưởng đang chọn ở header (`FactoryScopeSwitch`) — xem Orders.md §25.
+      items: buildProductionItems(t, factoryScopeId, '', true),
     },
     {
       // Nhóm menu RIÊNG cho "Đơn hàng" (bảng phẳng, phân trang THẬT, KHÔNG gộp
@@ -500,6 +503,20 @@ function buildNavGroups(t: TFunction<'layout'>): NavGroup[] {
           icon: <Bell size={17} />,
         },
         { key: PATHS.ACCOUNT, label: t('sidebar.account'), to: PATHS.ACCOUNT, icon: <User size={17} /> },
+      ],
+    },
+    {
+      // Bảng điều hành cho lãnh đạo — CHỈ SuperAdmin/Admin (không mã quyền: khóa cứng theo vai,
+      // cùng cách với Chat Zalo). Trang cũng tự chặn vai khác (pages/ceo/index.tsx).
+      title: t('sidebar.groups.ceo'),
+      items: [
+        {
+          key: PATHS.CEO_DASHBOARD,
+          label: t('sidebar.ceoDashboard'),
+          to: PATHS.CEO_DASHBOARD,
+          icon: <Crown size={17} />,
+          onlyForRoles: [RoleType.SuperAdmin, RoleType.Admin],
+        },
       ],
     },
     {
@@ -635,6 +652,8 @@ interface SidebarProps {
   collapsed: boolean;
   mobileOpen: boolean;
   onMobileClose: () => void;
+  /** Thu gọn/mở rộng (desktop) — nút nằm cạnh logo, dời từ header sang 07/09/2026. */
+  onToggleCollapse?: () => void;
 }
 
 function isLinkActive(linkPath: string, currentPath: string, currentSearch: string, matchPrefix = false): boolean {
@@ -805,7 +824,7 @@ function SidebarParent({ item, collapsed, badgeMap }: { item: NavItem; collapsed
   );
 }
 
-function Sidebar({ collapsed, mobileOpen, onMobileClose }: SidebarProps) {
+function Sidebar({ collapsed, mobileOpen, onMobileClose, onToggleCollapse }: SidebarProps) {
   const navigate = useNavigate();
   const { t } = useTranslation('layout');
   const { profile } = useAuthStore();
@@ -817,50 +836,21 @@ function Sidebar({ collapsed, mobileOpen, onMobileClose }: SidebarProps) {
     () => new Set<string>(profile?.role?.permissionCodes || []),
     [profile?.role?.permissionCodes],
   );
-  const baseGroups = useMemo(
-    () => filterMenuByPermissions(buildNavGroups(t), permissionCodes, isAdmin, roleName),
-    [t, permissionCodes, isAdmin, roleName],
+  // Phạm vi xưởng đang chọn (URL `factoryId`, đặt từ bộ chọn ở header) — link cụm sản
+  // xuất mang theo để đổi trang không mất phạm vi. 5 cụm menu riêng từng xưởng đã GỠ
+  // (07/09/2026) — thay bằng `FactoryScopeSwitch` trên header (Orders.md §25).
+  const [searchParams] = useSearchParams();
+  const factoryScopeId = searchParams.get('factoryId') || undefined;
+  const navGroups = useMemo(
+    () => filterMenuByPermissions(buildNavGroups(t, factoryScopeId), permissionCodes, isAdmin, roleName),
+    [t, factoryScopeId, permissionCodes, isAdmin, roleName],
   );
-
-  // Cụm menu theo xưởng: mỗi xưởng 1 cụm y hệt cụm sản xuất chung, mọi link
-  // kèm `?factoryId=` nên bấm vào là trang đã lọc sẵn xưởng đó.
-  const factories = useFactoryOptionsStore((s) => s.factories);
-  const loadFactories = useFactoryOptionsStore((s) => s.load);
-  const myFactoryId = profile?.factoryId;
-  const factoryGroups = useMemo(() => {
-    // Tài khoản bị gán xưởng (Fulfillment) chỉ thấy cụm xưởng của mình — BE
-    // cũng chỉ trả dữ liệu xưởng đó, hiện cụm xưởng khác chỉ tổ bấm ra trang rỗng.
-    const visible = myFactoryId ? factories.filter((f) => f._id === myFactoryId) : factories;
-    return filterMenuByPermissions(
-      visible.map((f) => ({
-        id: FACTORY_GROUP_ID,
-        title: f.shortName ? `${f.shortName} · ${f.name}` : f.name,
-        items: buildProductionItems(t, f._id, `factory-${f._id}-`),
-      })),
-      permissionCodes,
-      isAdmin,
-      roleName,
-    );
-  }, [factories, myFactoryId, t, permissionCodes, isAdmin, roleName]);
-
-  // Chèn ngay SAU cụm sản xuất chung; cụm chung bị quyền lọc mất thì đẩy lên đầu.
-  const navGroups = useMemo(() => {
-    if (!factoryGroups.length) return baseGroups;
-    const at = baseGroups.findIndex((g) => g.id === PRODUCTION_GROUP_ID);
-    if (at < 0) return [...factoryGroups, ...baseGroups];
-    return [...baseGroups.slice(0, at + 1), ...factoryGroups, ...baseGroups.slice(at + 1)];
-  }, [baseGroups, factoryGroups]);
 
   const counts = useSidebarBadgeStore((s) => s.counts);
   const refreshRequestedAt = useSidebarBadgeStore((s) => s.refreshRequestedAt);
   const profileId = profile?._id;
 
   // Polling nhẹ 60s (chỉ khi tab đang hiển thị) — endpoint count-only, vài chục ms.
-  useEffect(() => {
-    if (!profileId) return;
-    void loadFactories();
-  }, [profileId, loadFactories]);
-
   useEffect(() => {
     if (!profileId) return;
     fetchSidebarCounts();
@@ -904,21 +894,6 @@ function Sidebar({ collapsed, mobileOpen, onMobileClose }: SidebarProps) {
     add('dash-tool-check', counts.toolCheckRework, 'amber', t('sidebar.badges.toolCheckRework'));
     add('dash-tool-check', counts.toolCheckUnreviewed, 'red', t('sidebar.badges.toolCheckUnreviewed'));
 
-    // Cụm menu riêng từng xưởng: badge đếm RIÊNG xưởng đó (`counts.byFactory`),
-    // KHÔNG dùng lại số tổng ở trên — treo số toàn hệ thống lên cụm xưởng thì ai
-    // cũng đọc thành số của riêng xưởng đó. Key phải khớp `keyPrefix` ở
-    // `buildProductionItems`.
-    for (const [factoryId, c] of Object.entries(counts.byFactory || {})) {
-      const prefix = `factory-${factoryId}-`;
-      add(
-        `${prefix}orders-error-log`,
-        c.errorLogTodo,
-        'red',
-        personalErrorView ? t('sidebar.badges.errorLogTodo') : t('sidebar.badges.errorLogTodoAll'),
-      );
-      add(`${prefix}dash-tool-check`, c.toolCheckRework, 'amber', t('sidebar.badges.toolCheckRework'));
-      add(`${prefix}dash-tool-check`, c.toolCheckUnreviewed, 'red', t('sidebar.badges.toolCheckUnreviewed'));
-    }
     return map;
   }, [counts, roleName, t]);
 
@@ -940,12 +915,23 @@ function Sidebar({ collapsed, mobileOpen, onMobileClose }: SidebarProps) {
     <TooltipProvider delayDuration={150}>
       <div className="flex flex-col h-full bg-background">
         <div
-          className={cn('flex items-center gap-2.5 h-16 px-4 border-b border-border', !showLabels && 'justify-center')}
+          className={cn('flex items-center gap-2 h-14 border-b border-border', showLabels ? 'px-3' : 'justify-center px-1')}
         >
-          {showLabels ? (
-            <img src={logoUrl} alt="Logo" className="h-7 w-auto object-contain" />
-          ) : (
-            <img src={logoUrl} alt="Logo" className="h-6 w-auto object-contain" />
+          {showLabels && <img src={logoUrl} alt="Logo" className="h-7 w-auto min-w-0 object-contain" />}
+          {/* Nút thu gọn/mở rộng — chỉ desktop (mobile dùng Sheet có nút đóng riêng). */}
+          {!isMobile && onToggleCollapse && (
+            <button
+              type="button"
+              onClick={onToggleCollapse}
+              title={t('header.toggleSidebar')}
+              aria-label={t('header.toggleSidebar')}
+              className={cn(
+                'inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-accent hover:text-foreground bg-transparent border-none cursor-pointer',
+                showLabels && 'ml-auto',
+              )}
+            >
+              {collapsed ? <PanelLeft size={16} /> : <PanelLeftClose size={16} />}
+            </button>
           )}
         </div>
 
@@ -954,14 +940,7 @@ function Sidebar({ collapsed, mobileOpen, onMobileClose }: SidebarProps) {
             <div key={group.title || `group-${idx}`}>
               {showLabels && group.title && (
                 <p
-                  className={cn(
-                    'px-2 mb-2 font-semibold uppercase tracking-wider',
-                    // Tên xưởng là thứ phân biệt các cụm menu trùng hình dạng nhau,
-                    // nên đậm + đậm màu hơn tiêu đề nhóm thường.
-                    group.id === FACTORY_GROUP_ID
-                      ? 'text-[11px] font-bold text-foreground'
-                      : 'text-[10px] text-muted-foreground',
-                  )}
+                  className="px-2 mb-2 text-[10px] font-semibold uppercase tracking-wider text-muted-foreground"
                 >
                   {group.title}
                 </p>
@@ -1010,7 +989,9 @@ function Sidebar({ collapsed, mobileOpen, onMobileClose }: SidebarProps) {
   return (
     <aside
       className={cn(
-        'border-r border-border bg-background transition-[width] duration-200',
+        // Cao đúng màn hình + không tràn: chỉ danh sách menu bên trong cuộn, logo trên
+        // và khối tài khoản dưới ghim cố định (khung cố định — MainLayout).
+        'h-screen shrink-0 overflow-hidden border-r border-border bg-background transition-[width] duration-200',
         collapsed ? 'w-[72px]' : 'w-[240px]',
       )}
     >

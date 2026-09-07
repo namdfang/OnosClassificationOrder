@@ -1,0 +1,222 @@
+{
+  "title": "CEO Dashboard",
+  "subtitle": "Executive overview · live numbers from production",
+  "boards": {
+    "overview": "Overview"
+  },
+  "noPermission": "This page is for SuperAdmin / Admin only.",
+  "range": {
+    "today": "Today",
+    "yesterday": "Yesterday",
+    "last7": "7 days",
+    "last30": "30 days",
+    "prev": "Previous day",
+    "next": "Next day",
+    "label": "Orders entering production from {{from}} to {{to}}"
+  },
+  "kpi": {
+    "in": "Orders in",
+    "out": "Orders out",
+    "revenue": "Order value",
+    "revenueHint": "Sum of order baseCost, USD — not accounting revenue",
+    "n2": "On time (2 days)",
+    "n2Hint": "% of mature orders (in production ≥ 2 days) shipped within 2 days",
+    "errorRate": "Error rate",
+    "backlog": "In the factory",
+    "backlogHint": "Orders not packed yet, right now",
+    "vsPrev": "vs previous",
+    "avgOrder": "avg/order",
+    "ref": "same weekday last week {{sw}} · 7-day avg {{avg}}"
+  },
+  "flow": {
+    "title": "Production flow",
+    "hint": "Each order sits in exactly one stage — click a tile to open those orders",
+    "done": "Packed"
+  },
+  "factory": {
+    "title": "By factory",
+    "hint": "Orders assigned to each factory",
+    "empty": "No orders in this range"
+  },
+  "attention": {
+    "title": "Needs attention",
+    "hint": "Cross-cutting flags — one order may carry several",
+    "errorFile": "Has error file",
+    "noTool": "No tool",
+    "unreviewed": "Tool not checked",
+    "priority": "Has priority",
+    "held": "On hold",
+    "designBacklog": "Design backlog",
+    "open": "Open list"
+  },
+  "types": {
+    "title": "Top product types",
+    "hint": "Top {{n}} by orders, bar split by stage",
+    "orders": "orders",
+    "qty": "pcs",
+    "more": "and {{n}} more types"
+  },
+  "source": {
+    "designer": "Design",
+    "factory": "Factory",
+    "tool-check": "Tool check",
+    "unknown": "Unknown"
+  },
+  "period": {
+    "today": "Today",
+    "week": "7 days",
+    "month": "30 days",
+    "custom": "Custom",
+    "compare": "vs {{from}} → {{to}}",
+    "updated": "updated {{time}}",
+    "cached": "(cached 5 min)",
+    "label": "Orders entering production {{from}} → {{to}}",
+    "compareSameWeekday": "vs same weekday last week ({{from}})",
+    "compareYesterday": "vs yesterday ({{from}})"
+  },
+  "findings": {
+    "title": "Key findings",
+    "empty": "Nothing unusual this period.",
+    "actionsTitle": "Next actions",
+    "noActions": "Nothing urgent — keep the current pace.",
+    "sla_n2_below": "Only {{pct}}% of mature orders shipped within 2 days (target {{target}}%), {{gap}} points short — lowest {{factory}} at {{factoryPct}}%.",
+    "sla_n2_ok": "{{pct}}% of orders shipped within 2 days — on target.",
+    "overdue_orders": "{{n}} overdue orders (3+ days) still open, most at {{factory}} ({{factoryN}}); oldest {{oldest}} days.",
+    "output_up": "Shipped {{out}}, up {{pct}}% vs previous period ({{prev}}).",
+    "output_down": "Shipped {{out}}, down {{pct}}% vs previous period ({{prev}}).",
+    "in_exceeds_out": "{{in}} orders in but only {{out}} out — backlog grew by {{gap}} this period.",
+    "backlog_rising": "Backlog in the factory is {{backlog}} orders, up {{pct}}% since period start ({{prev}}).",
+    "factory_slow_clear": "At current pace these factories need over 3 days to clear backlog: {{factory}}.",
+    "error_rate_high": "Error rate {{pct}}% ({{delta}} pts vs previous); main source {{source}} {{share}}%; most affected type: {{type}}.",
+    "error_rate_down": "Error rate {{pct}}%, down {{delta}} points vs previous period.",
+    "customers_dropping": "{{n}} customers dropped sharply: {{list}}.",
+    "customers_rising": "{{n}} customers growing fast: {{list}}.",
+    "vip_issues": "VIP customers with held/errored orders: {{list}}.",
+    "customer_concentration": "Top 10 customers make {{pct}}% of orders — high concentration.",
+    "designer_overload": "Designers with 30+ open tasks: {{list}}.",
+    "revenue_up": "Order value {{total}} USD, up {{pct}}% vs previous ({{prev}}).",
+    "revenue_down": "Order value {{total}} USD, down {{pct}}% vs previous ({{prev}}).",
+    "weekend_day": "{{day}} is a {{weekday}} — low in/out volume follows the weekly rhythm, not a drop.",
+    "sla_pending": "No mature cohort yet to evaluate on-time (orders from {{cohort}} are under 2 days old).",
+    "output_down_day": "Shipped {{out}}, below yesterday ({{prev}}) and {{pctAvg}}% below the 7-day average ({{avg7}}) — not weekly rhythm.",
+    "output_up_day": "Shipped {{out}}, above yesterday ({{prev}}) and {{pctAvg}}% above the 7-day average ({{avg7}})."
+  },
+  "actions": {
+    "act_unblock_stage": "Meet the {{factory}} shift lead today to unblock the stuck stage",
+    "act_clear_overdue": "Review the 5 oldest overdue orders and commit a ship date for each",
+    "act_check_capacity": "Check capacity: overtime or move orders between factories",
+    "act_rebalance_factory": "Move orders away from the slow-clearing factory",
+    "act_review_design": "Review the design file check process with the designer lead",
+    "act_review_factory": "Review stage errors with the factory against the error catalog",
+    "act_contact_customers": "Sales to contact declining customers this week",
+    "act_vip_followup": "Prioritize held/errored orders of VIP customers",
+    "act_rebalance_design": "Rebalance design work away from overloaded designers"
+  },
+  "ops": {
+    "title": "Daily operations",
+    "hint": "Bars: orders in / out · line: orders with new errors · shaded: current period",
+    "in": "In",
+    "out": "Out",
+    "errors": "Errors"
+  },
+  "sla": {
+    "title": "On-time (SLA)",
+    "hint": "Cohort of orders entering production in the period · targets N0≥30 · N1≥80 · N2=100",
+    "within": "out within N{{n}}",
+    "target": "target {{pct}}%",
+    "mature": "{{n}} mature orders",
+    "dailyTitle": "% on time (N2) by production day",
+    "overdueTitle": "Overdue orders (3+ days)",
+    "none": "No overdue orders",
+    "age": "{{n}} days",
+    "viewAll": "View all",
+    "cohort": "Evaluating orders that entered on {{from}} (mature)",
+    "cohortRange": "Orders entering {{from}} → {{to}}"
+  },
+  "quality": {
+    "title": "Quality",
+    "hint": "Orders with factory errors in this cohort",
+    "bySource": "By error source",
+    "topTypes": "Most affected product types",
+    "ofTotal": "{{count}}/{{total}} orders",
+    "none": "No errored orders"
+  },
+  "customers": {
+    "title": "Customers",
+    "hint": "By orders entering production in the period",
+    "active": "active customers",
+    "new": "new",
+    "share": "top 10 share",
+    "rising": "Rising",
+    "dropping": "Dropping",
+    "cols": {
+      "customer": "Customer",
+      "orders": "Orders",
+      "prev": "Previous",
+      "revenue": "Value",
+      "issues": "Held/err"
+    },
+    "vip": "VIP {{tier}}"
+  },
+  "capacity": {
+    "title": "Capacity",
+    "hint": "End-of-day backlog 30 days · backlog by stage · clearing pace by factory",
+    "avgAge": "avg backlog age {{n}} days",
+    "byStage": "Backlog by stage",
+    "factoryTitle": "By factory",
+    "cols": {
+      "factory": "Factory",
+      "in": "In",
+      "out": "Out",
+      "backlog": "Backlog",
+      "perDay": "Out/day",
+      "clear": "Clear in",
+      "n2": "N2 %",
+      "errors": "Errors"
+    },
+    "days": "{{n}} days",
+    "na": "—",
+    "stale": "{{n}} orders open for over {{days}} days never closed in the system — excluded from backlog/overdue (data debt to clean up)"
+  },
+  "people": {
+    "title": "People",
+    "hint": "Designers: done in period · open · rework. Workers: stages completed in period",
+    "designers": "Designers",
+    "workers": "Workers by stage",
+    "cols": {
+      "name": "Name",
+      "done": "Done",
+      "backlog": "Open",
+      "rework": "Rework",
+      "stage": "Stage"
+    },
+    "none": "No data in this period"
+  },
+  "sourceNote": "Source: GET /ceo/overview — server aggregation over production orders (cancelled, unmapped and US factory excluded). Money = order baseCost, USD.",
+  "report": {
+    "title": "System analysis",
+    "hint": "An agent reads exactly the numbers on this page and writes — automatically 07:00 daily (yesterday), Monday (last week), 1st (last month)",
+    "empty": "No analysis for this period yet.",
+    "generate": "Refresh analysis",
+    "generating": "Generating analysis… (up to 2 min)",
+    "by": "{{model}} · {{time}} · {{trigger}}",
+    "trigger": {
+      "cron": "automatic",
+      "manual": "manual"
+    },
+    "ketLuan": "Conclusions",
+    "viecCanLam": "Next actions",
+    "ruiRo": "Risks if no action",
+    "diemSang": "Highlights",
+    "busy": "A generation for this period is already running — wait and reload."
+  },
+  "weekday": {
+    "0": "Sunday",
+    "1": "Monday",
+    "2": "Tuesday",
+    "3": "Wednesday",
+    "4": "Thursday",
+    "5": "Friday",
+    "6": "Saturday"
+  }
+}

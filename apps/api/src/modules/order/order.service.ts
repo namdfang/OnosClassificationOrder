@@ -109,6 +109,7 @@ import type {
   ProductPrintArea,
   ProductVariation,
 } from 'shared';
+import type { WorkshopStageFilterKey } from 'shared';
 import {
   customerMatchKey,
   DESIGNER_ACTIVE_STATUSES,
@@ -136,6 +137,8 @@ import {
   WorkshopConfigCategory,
 } from 'shared';
 import { Logger } from 'winston';
+
+import { workshopStageSwitchExpr } from '@/utils/workshop-stage';
 
 import { getExcludedFactoryIdSync, loadExcludedFactoryId, productionFactoryClause } from '../../utils/excluded-factory';
 import { getFactoryAutoPackSync, getFactoryFlowTypeSync, loadFactoryFlowTypes } from '../../utils/merged-flow-factory';
@@ -1405,6 +1408,56 @@ export class OrderService implements OnModuleInit {
     }
   }
 
+  /**
+   * Biểu thức aggregation trả KHÓA CHẶNG hiện tại của đơn (`WORKSHOP_STAGE_FILTER_KEYS`)
+   * — MIRROR `computeCurrentStage()` (customer-order.service.ts) và `getOrderStatusInfo()`
+   * (FE `orderStatusLabel.ts`): đã đóng hàng → `done`; có `currentFulfillmentStage` →
+   * chính chặng đó; `designerStatus` khác unassigned → `done` thì `print`, còn lại
+   * `designer`; chưa có `toolResultNote` → `tool-check`, có → `designer`. Đổi luật ở
+   * đây phải đổi cả hai nơi kia. Dùng cho filter `workshopStage` + đếm ô phễu.
+   */
+  private workshopStageExpr(): Record<string, unknown> {
+    // Thân biểu thức ở `utils/workshop-stage.ts` — dùng chung với CEO Dashboard.
+    return workshopStageSwitchExpr();
+  }
+
+  /**
+   * Điều kiện truy vấn THƯỜNG cho 1 chặng — CÙNG luật với `workshopStageExpr()` ở trên
+   * (biểu thức chỉ dùng được trong aggregate). Hai hàm phải cho cùng kết quả: tổng khi
+   * lọc `workshopStage=X` phải bằng đúng số ô X của phễu. Đổi một hàm thì đổi cả hai.
+   */
+  private workshopStageMatch(stage: WorkshopStageFilterKey): Record<string, unknown> {
+    const notCompleted = { fulfillmentCompletedAt: { $in: [null] } }; // missing hoặc null
+    const noStage = { currentFulfillmentStage: { $in: [null, ''] } };
+    const unassigned = { designerStatus: { $in: [null, '', DesignerStatus.Unassigned] } };
+    switch (stage) {
+      case 'done':
+        return { fulfillmentCompletedAt: { $exists: true, $ne: null } };
+      case 'print':
+        // Đang ở chặng In, HOẶC designer đã xong nhưng chưa vào công đoạn nào.
+        return {
+          ...notCompleted,
+          $or: [
+            { currentFulfillmentStage: 'print' },
+            { ...noStage, designerStatus: DesignerStatus.Done },
+          ],
+        };
+      case 'designer':
+        return {
+          ...notCompleted,
+          ...noStage,
+          $or: [
+            { designerStatus: { $nin: [null, '', DesignerStatus.Unassigned, DesignerStatus.Done] } },
+            { ...unassigned, toolResultNote: { $nin: [null, ''] } },
+          ],
+        };
+      case 'tool-check':
+        return { ...notCompleted, ...noStage, ...unassigned, toolResultNote: { $in: [null, ''] } };
+      default:
+        return { ...notCompleted, currentFulfillmentStage: stage };
+    }
+  }
+
   /** Compose the Mongo filter for getOrders + getOrdersGroupedByType. */
   private buildOrderListFilter(
     dto: GetProductionOrdersDto,
@@ -1486,7 +1539,12 @@ export class OrderService implements OnModuleInit {
         filter.toolResultNote = { $in: real };
       }
     }
-    if (dto.errorFile) filter.errorFile = { $in: dto.errorFile.split(',').filter(Boolean) };
+    if (dto.errorFile) {
+      // Token __any__ = đơn có ÍT NHẤT 1 mã file lỗi — pill "Lỗi file" trang xưởng.
+      const codes = dto.errorFile.split(',').filter(Boolean);
+      if (codes.includes('__any__')) filter['errorFile.0'] = { $exists: true };
+      else filter.errorFile = { $in: codes };
+    }
     // Factory tab filters — exact product name / fabric code / tool code.
     if (dto.type) {
       const { names, hasNone } = parseTypeFilter(dto.type);
@@ -1534,7 +1592,8 @@ export class OrderService implements OnModuleInit {
     if (dto.machineNumber) {
       filter.machineNumber = { $in: dto.machineNumber.split(',').filter(Boolean) };
     }
-    if (dto.priority) filter.priority = Number(dto.priority);
+    if (dto.priority === '__any__') filter.priority = { $exists: true, $nin: [null, 0] };
+    else if (dto.priority) filter.priority = Number(dto.priority);
     if (dto.designerStatus) {
       const codes = dto.designerStatus.split(',').filter(Boolean);
       // Token tách "Chưa gán" theo tool (dropdown TT Designer + click KPI panel):
@@ -1637,6 +1696,15 @@ export class OrderService implements OnModuleInit {
       // Sự kiện bàn giao "Không làm được" đi từ user (đếm LẦN ở ma trận/panel;
       // danh sách đơn distinct nên có thể ít hơn con số).
       filter['designerRejections.fromUserId'] = dto.rejectedBy;
+    }
+    if (dto.workshopStage) {
+      // Ô phễu trang xưởng: chặng suy trong Mongo bằng cùng luật với cột "Trạng thái".
+      // Dạng truy vấn thường (không `$expr`): Mongoose 7 không cast được `$switch`
+      // trong `$expr` ở find/countDocuments, và truy vấn thường còn dùng được index.
+      filter.$and = [
+        ...(Array.isArray(filter.$and) ? (filter.$and as unknown[]) : []),
+        this.workshopStageMatch(dto.workshopStage),
+      ];
     }
     if (dto.receivedBy) {
       filter['designerRejections.toUserId'] = dto.receivedBy;
@@ -4274,6 +4342,12 @@ export class OrderService implements OnModuleInit {
       userSku: Array<{ value: string; label: string; count: number }>;
       heldCount: number;
       cancelledCount: number;
+      stageCounts: Record<string, number>;
+      factoryCounts: Array<{ factoryId: string; shortName?: string; name?: string; count: number }>;
+      pillCounts: { errorFile: number; noTool: number; unreviewed: number; priority: number; designBacklog: number };
+      typeStats: Array<{ type: string; orders: number; qty: number; stages: Record<string, number> }>;
+      totalOrders: number;
+      totalTypes: number;
     };
   }> {
     type FacetKey =
@@ -4537,11 +4611,115 @@ export class OrderService implements OnModuleInit {
       return this.orderModel.countDocuments({ ...base, cancelledAt: { $exists: true } });
     })();
 
+    // ── Phễu chặng + nút xưởng + pill trạng thái (trang Đơn hàng theo xưởng, Orders.md §10.2b) ──
+    // Cùng khuôn cross-facet: mỗi số bỏ qua CHÍNH filter mà ô/pill đó bật, giữ mọi filter khác.
+    const baseWithout = (strip: Partial<GetProductionOrdersDto>): Record<string, unknown> => {
+      const base = this.buildOrderListFilter(
+        { ...dto, ...strip } as GetProductionOrdersDto,
+        roleName,
+        assigneeCode,
+        fulfillmentFactoryId,
+        fulfillmentStage,
+        toolHasCodes,
+      );
+      if (dto.fulfillmentStatus) {
+        this.applyFulfillmentStatusFilter(base, dto.fulfillmentStatus, fulfillmentStage, assigneeCode);
+      }
+      return { ...base, ...excludeCancelled };
+    };
+    const countWith = (strip: Partial<GetProductionOrdersDto>, extra: Record<string, unknown>) => {
+      const base = baseWithout(strip);
+      const and = [...(Array.isArray(base.$and) ? (base.$and as Record<string, unknown>[]) : []), extra];
+      return this.orderModel.countDocuments({ ...base, $and: and });
+    };
+    const [stageRows, factoryRows, totalRows, pillErrorFile, pillNoTool, pillPriority, pillDesignBacklog, typeRowsStat] =
+      await Promise.all([
+        this.orderModel.aggregate<{ _id: string; count: number }>([
+          { $match: baseWithout({ workshopStage: undefined }) },
+          { $group: { _id: this.workshopStageExpr(), count: { $sum: 1 } } },
+        ]),
+        this.orderModel.aggregate<{ _id: string; count: number }>([
+          // Đưa điều kiện "có xưởng" vào $and — KHÔNG spread đè `factoryId` của base
+          // (base chứa mệnh đề loại xưởng US ngoài luồng, đè lên là US lọt vào nút xưởng).
+          {
+            $match: (() => {
+              const b = baseWithout({ factoryId: undefined });
+              const and = Array.isArray(b.$and) ? (b.$and as Record<string, unknown>[]) : [];
+              return { ...b, $and: [...and, { factoryId: { $exists: true, $ne: null } }] };
+            })(),
+          },
+          { $group: { _id: '$factoryId', count: { $sum: 1 } } },
+          { $sort: { count: -1 } },
+        ]),
+        this.orderModel.aggregate<{ _id: null; orders: number; types: number }>([
+          { $match: baseWithout({}) },
+          { $group: { _id: { $ifNull: ['$type', ''] }, n: { $sum: 1 } } },
+          { $group: { _id: null, orders: { $sum: '$n' }, types: { $sum: 1 } } },
+        ]),
+        countWith({ errorFile: undefined }, { 'errorFile.0': { $exists: true } }),
+        // "Thiếu tool" = đã soát toolResult và KHÔNG thuộc nhóm "Có tool" (mirror `useIsNoTool` FE).
+        countWith({ toolResult: undefined }, { toolResult: { $nin: [null, '', ...toolHasCodes] } }),
+        countWith({ priority: undefined }, { priority: { $exists: true, $nin: [null, 0] } }),
+        countWith(
+          { designerStatus: undefined },
+          { designerStatus: { $in: [DesignerStatus.Assigned, DesignerStatus.InProgress, DesignerStatus.Rework] } },
+        ),
+        // Rail loại sản phẩm (bản 3): đơn + số lượng + chặng theo từng loại, bỏ qua chính filter `type`.
+        this.orderModel.aggregate<{ _id: string; orders: number; qty: number; stages: Record<string, number> }>([
+          { $match: baseWithout({ type: undefined }) },
+          {
+            $group: {
+              _id: { type: { $ifNull: ['$type', ''] }, stage: this.workshopStageExpr() },
+              n: { $sum: 1 },
+              qty: { $sum: { $ifNull: ['$quantity', 1] } },
+            },
+          },
+          {
+            $group: {
+              _id: '$_id.type',
+              orders: { $sum: '$n' },
+              qty: { $sum: '$qty' },
+              stages: { $push: { k: '$_id.stage', v: '$n' } },
+            },
+          },
+          { $addFields: { stages: { $arrayToObject: '$stages' } } },
+          { $sort: { orders: -1, _id: 1 } },
+        ]),
+      ]);
+    const factoryIds = factoryRows.map((r) => String(r._id));
+    const factoryDocs = factoryIds.length
+      ? await this.factoryRepository.findAll({ _id: { $in: factoryIds } } as Record<string, unknown>)
+      : [];
+    const factoryById = new Map(
+      (factoryDocs as Array<{ _id: unknown; name?: string; shortName?: string }>).map((f) => [String(f._id), f]),
+    );
+    const stageCounts = Object.fromEntries(stageRows.map((r) => [r._id, r.count]));
+    const factoryCounts = factoryRows.map((r) => ({
+      factoryId: String(r._id),
+      shortName: factoryById.get(String(r._id))?.shortName,
+      name: factoryById.get(String(r._id))?.name,
+      count: r.count,
+    }));
+    const typeStats = typeRowsStat.map((r) => ({ type: r._id, orders: r.orders, qty: r.qty, stages: r.stages }));
+    const pillCounts = {
+      errorFile: pillErrorFile,
+      noTool: pillNoTool,
+      unreviewed: toolResultNoneCount,
+      priority: pillPriority,
+      designBacklog: pillDesignBacklog,
+    };
+
     return {
       success: true,
       data: {
         heldCount,
         cancelledCount,
+        stageCounts,
+        factoryCounts,
+        pillCounts,
+        typeStats,
+        totalOrders: totalRows[0]?.orders ?? 0,
+        totalTypes: totalRows[0]?.types ?? 0,
         printStatus: printStatusRows.map(toOption(printStatusMap)),
         toolResultNote: [
           // Prepend "Chưa soát" option. Token __none__ — FE injects nothing nữa.

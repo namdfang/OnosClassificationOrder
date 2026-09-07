@@ -48,6 +48,8 @@ export const PATHS = {
   NOTIFICATIONS: '/adm/notifications',
   /** Mạo danh tài khoản khác — CHỈ SuperAdmin (AUTH-1). */
   IMPERSONATE: '/adm/impersonate',
+  /** CEO Dashboard — bảng điều hành cho lãnh đạo, CHỈ SuperAdmin/Admin (CeoDashboard.md). */
+  CEO_DASHBOARD: '/adm/ceo',
 
   LOGIN: '/adm/login',
   REGISTER: '/adm/register',
