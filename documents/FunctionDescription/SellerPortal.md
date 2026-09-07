@@ -115,7 +115,9 @@ DTO dùng (`import type` từ `shared`): `CustomerStagingOrder` (+`productLines[
 | `providers/i18n-provider.tsx` | `I18nextProvider` + cookie `onos_lang`; root layout (server) đọc cookie → render đúng ngôn ngữ ngay HTML đầu |
 | `context/session-context.tsx` | SWR `customer/auth/me` → `{profile,isImpersonating,refresh,signOut}` |
 
-Theme: `globals.css` `@theme` + `.dark` (khuôn thghub) với token Onos — accent indigo `#6366F1`, CTA tím `#6f26c2`, Inter + Lexend Deca (`next/font/google`).
+Theme: `globals.css` `@theme` + `.dark` (khuôn thghub) với **bảng màu lấy từ logo ONOSPOD chính chủ** (`https://app.onosfactory.com/branding/logo.svg`, lưu ở `public/onos-logo.svg`, cũng là favicon `app/icon.svg`): hồng cánh sen `#c40c68` = accent (mục đang chọn, link, tab), `#a80a58` = CTA (nút hành động), xanh lá `#48a05c`→success, vàng `#f7d21e`→warning, đỏ `#e01008`→error, đỏ sẫm `#800808`/ô-liu `#7f9a2b` cho chart. Nền trung tính ngả hồng-ấm nhẹ. Dark mode nâng sáng hồng `#ff4fa3`. Font Inter + Lexend Deca (`next/font/google`). **Đừng dùng `apps/web/src/assets/images/logo.svg`/`favicon.png` — 2 file đó là ảnh rác ("Hihihi"/icon "fla"), chỉ `logo.png` (onospod) và SVG trên là thật.** Khóa theme localStorage/cookie `onos-theme`.
+
+Responsive (07/09/2026): `PageHeader` xếp dọc dưới `sm`; ô tìm kiếm full-width dưới `sm`; **danh sách đơn và danh sách seller đổi sang dạng THẺ dưới `md`** (`components/orders/order-card.tsx`, khối `md:hidden` trong `sellers/page.tsx`) — không cuộn ngang trên điện thoại; bảng chỉ hiện từ `md`. Đã chụp kiểm ở 1440 / 1024 / 390 px + dark mode bằng Playwright (script tạm trong scratchpad, không commit).
 
 ## 5. Backend logic
 

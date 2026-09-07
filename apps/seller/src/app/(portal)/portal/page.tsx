@@ -85,9 +85,9 @@ export default function DashboardPage() {
         }
       />
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
-        <StatCard label={t('customerPortal:dashboard.totalOrders')} value={counts?.all ?? totals.total} icon={<ClipboardList size={18} />} color="#312e81" href="/portal/orders" />
-        <StatCard label={t('customerPortal:dashboard.processingOrders')} value={counts?.inProduction ?? totals.processing} icon={<Factory size={18} />} color="#4338ca" href="/portal/orders?status=in-production" />
-        <StatCard label={t('customerPortal:dashboard.completedOrders')} value={(counts?.fulfilled ?? 0) + (counts?.completed ?? 0) || totals.completed} icon={<CheckCircle2 size={18} />} color="#15803d" href="/portal/orders?status=completed" />
+        <StatCard label={t('customerPortal:dashboard.totalOrders')} value={counts?.all ?? totals.total} icon={<ClipboardList size={18} />} color="#c40c68" href="/portal/orders" />
+        <StatCard label={t('customerPortal:dashboard.processingOrders')} value={counts?.inProduction ?? totals.processing} icon={<Factory size={18} />} color="#7f3fbf" href="/portal/orders?status=in-production" />
+        <StatCard label={t('customerPortal:dashboard.completedOrders')} value={(counts?.fulfilled ?? 0) + (counts?.completed ?? 0) || totals.completed} icon={<CheckCircle2 size={18} />} color="#3a8a4c" href="/portal/orders?status=completed" />
         <StatCard label={t('customerPortal:dashboard.cancelledOrders')} value={counts?.cancelled ?? totals.cancelled} icon={<XCircle size={18} />} color="#6b7280" href="/portal/orders?status=cancelled" />
       </div>
 

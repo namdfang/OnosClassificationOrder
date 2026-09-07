@@ -80,7 +80,7 @@ function SellersContent() {
     <div className="space-y-4">
       <PageHeader title={t('sellers.title')} subtitle={t('sellers.subtitle')} />
       <div className="flex flex-wrap items-center gap-2">
-        <SearchInput value={searchInput} onChange={(v) => { setSearchInput(v); setState({ q: v, page: '1' }); }} placeholder={t('sellers.search')} className="w-72" />
+        <SearchInput value={searchInput} onChange={(v) => { setSearchInput(v); setState({ q: v, page: '1' }); }} placeholder={t('sellers.search')} className="w-full sm:w-72" />
         <select value={state.tier} onChange={(e) => setState({ tier: e.target.value, page: '1' })} className={selectCls}>
           <option value="">{t('sellers.tierAll')}</option>
           <option value="none">{t('sellers.tierNone')}</option>
@@ -100,7 +100,38 @@ function SellersContent() {
       ) : rows.length === 0 ? (
         <EmptyState title={t('sellers.empty')} />
       ) : (
-        <div className={`bg-card border border-border1 rounded-xl overflow-x-auto ${loading ? 'opacity-60' : ''}`}>
+        <>
+        <div className={`md:hidden space-y-2 ${loading ? 'opacity-60' : ''}`}>
+          {rows.map((r) => {
+            const isDeleted = !!r.deletedAt;
+            const locked = r.status != null && String(r.status) === '0';
+            return (
+              <div key={String(r._id)} className={`bg-card border border-border1 rounded-xl p-3 space-y-2 ${isDeleted ? 'opacity-60' : ''}`}>
+                <div className="flex items-start justify-between gap-2">
+                  <div className="min-w-0">
+                    <p className="text-sm font-bold text-text-primary truncate">{r.userSku || '—'}</p>
+                    <p className="text-[10px] text-text-muted truncate">{r.userEmail}{r.fullName ? ` · ${r.fullName}` : ''}</p>
+                  </div>
+                  <TierBadge tier={r.tier} />
+                </div>
+                <div className="flex items-center justify-between text-[11px]">
+                  <span>{isDeleted ? <Badge bg="#6b728015" color="#6b7280">{t('sellers.deleted')}</Badge> : locked ? <Badge bg="#c30d0715" color="#c30d07">{t('sellers.locked')}</Badge> : <Badge bg="#3a8a4c15" color="#3a8a4c">{t('sellers.active')}</Badge>}</span>
+                  <span className="text-text-secondary">{t('sellers.columns.orders')}: <b className="tabular-nums">{(r.orderCount ?? 0).toLocaleString()}</b>{r.lastOrderAt ? ` · ${dayjs(r.lastOrderAt).format('DD/MM/YYYY')}` : ''}</span>
+                </div>
+                {!isDeleted && (
+                  <div className="flex items-center justify-end gap-1 pt-1 border-t border-border2">
+                    <ViewAsButton customerId={String(r._id)} />
+                    <button type="button" title={t('sellers.edit')} onClick={() => { setEdit(r); setForm({ fullName: r.fullName ?? '', phone: r.phone ?? '', tier: r.tier == null ? '' : String(r.tier) }); }} className="p-1.5 rounded-md text-text-muted hover:text-accent"><Pencil size={14} /></button>
+                    <button type="button" title={t('sellers.resetPassword')} onClick={() => { setReset(r); setNewPw(''); setGenerated(null); }} className="p-1.5 rounded-md text-text-muted hover:text-accent"><KeyRound size={14} /></button>
+                    {locked ? <button type="button" onClick={() => setConfirm({ row: r, kind: 'unlock' })} className="p-1.5 rounded-md text-text-muted hover:text-success"><Unlock size={14} /></button> : <button type="button" onClick={() => setConfirm({ row: r, kind: 'lock' })} className="p-1.5 rounded-md text-text-muted hover:text-warning"><Lock size={14} /></button>}
+                    <button type="button" onClick={() => setConfirm({ row: r, kind: 'delete' })} className="p-1.5 rounded-md text-text-muted hover:text-error"><Trash2 size={14} /></button>
+                  </div>
+                )}
+              </div>
+            );
+          })}
+        </div>
+        <div className={`hidden md:block bg-card border border-border1 rounded-xl overflow-x-auto ${loading ? 'opacity-60' : ''}`}>
           <table className="w-full text-left min-w-[860px]">
             <thead><tr className="text-[10px] uppercase tracking-wider text-text-muted">
               <th className="px-3 py-2.5 font-semibold">{t('sellers.columns.seller')}</th>
@@ -124,7 +155,7 @@ function SellersContent() {
                     <td className="px-3 py-2.5 text-right text-xs tabular-nums"><Link href={`/hub/orders?seller=${String(r._id)}`} prefetch={false} className="text-accent hover:underline font-semibold">{(r.orderCount ?? 0).toLocaleString()}</Link></td>
                     <td className="px-3 py-2.5 text-[11px] text-text-secondary whitespace-nowrap">{r.lastOrderAt ? dayjs(r.lastOrderAt).format('DD/MM/YYYY') : '—'}</td>
                     <td className="px-3 py-2.5">
-                      {isDeleted ? <Badge bg="#6b728015" color="#6b7280">{t('sellers.deleted')}</Badge> : locked ? <Badge bg="#b91c1c15" color="#b91c1c">{t('sellers.locked')}</Badge> : <Badge bg="#15803d15" color="#15803d">{t('sellers.active')}</Badge>}
+                      {isDeleted ? <Badge bg="#6b728015" color="#6b7280">{t('sellers.deleted')}</Badge> : locked ? <Badge bg="#c30d0715" color="#c30d07">{t('sellers.locked')}</Badge> : <Badge bg="#3a8a4c15" color="#3a8a4c">{t('sellers.active')}</Badge>}
                       {r.hasAccount === false && <span className="ml-1 text-[10px] text-text-muted">{t('sellers.noAccount')}</span>}
                     </td>
                     <td className="px-3 py-2.5 text-right whitespace-nowrap">
@@ -146,6 +177,7 @@ function SellersContent() {
             </tbody>
           </table>
         </div>
+        </>
       )}
       {total > 0 && <OrdersPagination page={page} limit={limit} pages={Math.max(1, Math.ceil(total / limit))} total={total} onChange={(n) => setState({ ...(n.page ? { page: String(n.page) } : {}), ...(n.limit ? { limit: String(n.limit), page: '1' } : {}) })} />}
 

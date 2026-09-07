@@ -27,15 +27,15 @@ export const COLORS = {
  * dùng cho pill/badge trạng thái. Held/Rework là cờ chồng (không phải trạng thái).
  */
 export const STATUS_COLORS: Record<string, string> = {
-  pending: '#a16207',
+  pending: '#9a7a05',
   processing: '#0891b2',
-  'in-production': '#4338ca',
-  fulfilled: '#0f766e',
-  completed: '#15803d',
-  refunded: '#be185d',
+  'in-production': '#7f3fbf',
+  fulfilled: '#2d8a7a',
+  completed: '#3a8a4c',
+  refunded: '#c40c68',
   cancelled: '#6b7280',
-  held: '#c2410c',
-  rework: '#b45309',
+  held: '#c30d07',
+  rework: '#9a7a05',
 };
 
 /** Màu badge loại sản phẩm tự do (fallback khi không có dòng sản phẩm). */

@@ -4,49 +4,52 @@
    #6f26c2 (landing onosglobal.com = brand.600) cho nút hành động chính. Kiến trúc @theme + .dark
    giữ nguyên khuôn thghub để kit `components/shared` chạy không sửa. */
 @theme {
+  /* Bảng màu lấy từ logo ONOSPOD chính chủ (app.onosfactory.com/branding/logo.svg):
+     hồng cánh sen #c40c68 (chủ đạo) · đỏ #e01008 · đỏ sẫm #800808 · vàng #f7d21e ·
+     xanh ô-liu #7f9a2b · xanh lá #48a05c. Nền trung tính ngả hồng-ấm rất nhẹ để cùng họ với accent. */
   /* ── Surface ── */
-  --color-background: #f5f5f8;
-  --color-foreground: #14121f;
+  --color-background: #f7f5f6;
+  --color-foreground: #1c1520;
   --color-card: #ffffff;
-  --color-card-hover: #f8f7fc;
-  --color-sidebar: #fbfaff;
-  --color-surface-muted: #f1f0f6;
+  --color-card-hover: #fbf7f9;
+  --color-sidebar: #fdfbfc;
+  --color-surface-muted: #f3eef1;
   /* ── Text ── */
-  --color-text-primary: #14121f;
-  --color-text-secondary: #55526a;
-  --color-text-muted: #8f8ca3;
-  --color-text-placeholder: #c6c4d4;
+  --color-text-primary: #1c1520;
+  --color-text-secondary: #5c5361;
+  --color-text-muted: #948b99;
+  --color-text-placeholder: #c9c1cd;
   /* ── Border ── */
-  --color-border1: #e4e2ee;
-  --color-border2: #eeedf5;
-  /* ── Accent — indigo #6366F1 (admin OnosFactory) ── */
-  --color-accent: #6366f1;
-  --color-accent-light: #eef0fd;
-  --color-accent-hover: #4f52d9;
-  /* ── CTA — tím thương hiệu Onos #6f26c2 (chữ trắng đạt 7.6:1) ── */
-  --color-cta: #6f26c2;
-  --color-cta-hover: #5c1ea3;
+  --color-border1: #e8e0e5;
+  --color-border2: #f0eaee;
+  /* ── Accent — hồng cánh sen của logo (chữ trắng trên nền này đạt 5.6:1) ── */
+  --color-accent: #c40c68;
+  --color-accent-light: #fbe6f0;
+  --color-accent-hover: #a80a58;
+  /* ── CTA — nút hành động: cùng họ hồng, đậm hơn một bậc để phân biệt với mục đang chọn ── */
+  --color-cta: #a80a58;
+  --color-cta-hover: #8f0849;
   --color-cta-foreground: #ffffff;
-  /* ── Status ── */
-  --color-success: #15803d;
-  --color-success-bg: #f0fdf4;
-  --color-error: #b91c1c;
-  --color-error-bg: #fef2f2;
-  --color-warning: #a16207;
-  --color-warning-bg: #fef3c7;
-  --color-info: #4338ca;
-  --color-info-bg: #eef2ff;
+  /* ── Status — lấy đúng xanh/vàng/đỏ của logo ── */
+  --color-success: #3a8a4c;
+  --color-success-bg: #edf7ef;
+  --color-error: #c30d07;
+  --color-error-bg: #fdecec;
+  --color-warning: #9a7a05;
+  --color-warning-bg: #fdf6d6;
+  --color-info: #c40c68;
+  --color-info-bg: #fbe6f0;
   /* ── Overlay ── */
-  --color-overlay: rgba(20, 18, 31, 0.35);
-  /* ── Chart ── */
-  --color-chart-1: #6366f1;
-  --color-chart-2: #6f26c2;
-  --color-chart-3: #0e7490;
-  --color-chart-4: #16a34a;
-  --color-chart-5: #b45309;
-  --color-chart-6: #e11d48;
-  --shadow-card: 0 1px 3px rgba(20, 18, 31, 0.08), 0 1px 2px rgba(20, 18, 31, 0.05);
-  --shadow-elevated: 0 6px 16px rgba(20, 18, 31, 0.12), 0 2px 6px rgba(20, 18, 31, 0.08);
+  --color-overlay: rgba(28, 21, 32, 0.4);
+  /* ── Chart — 6 màu của logo theo thứ tự nổi bật ── */
+  --color-chart-1: #c40c68;
+  --color-chart-2: #f7d21e;
+  --color-chart-3: #48a05c;
+  --color-chart-4: #e01008;
+  --color-chart-5: #7f9a2b;
+  --color-chart-6: #800808;
+  --shadow-card: 0 1px 3px rgba(28, 21, 32, 0.08), 0 1px 2px rgba(28, 21, 32, 0.05);
+  --shadow-elevated: 0 6px 16px rgba(28, 21, 32, 0.12), 0 2px 6px rgba(28, 21, 32, 0.08);
   --radius-dash: 0.9rem;
   /* ── Fonts (khớp apps/web: Inter body, Lexend Deca tiêu đề) ── */
   --font-sans: var(--font-inter), "Inter", system-ui, sans-serif;
@@ -55,39 +58,40 @@
 }
 
 .dark {
-  --color-background: #0f0e15;
-  --color-foreground: #e9e7f1;
-  --color-card: #1a1822;
-  --color-card-hover: #22202c;
-  --color-sidebar: #14121b;
-  --color-surface-muted: #1e1c28;
-  --color-text-primary: #e9e7f1;
-  --color-text-secondary: #a3a0b5;
-  --color-text-muted: #6d6a80;
-  --color-text-placeholder: #4a4859;
-  --color-border1: #2a2836;
-  --color-border2: #222030;
-  --color-accent: #8b8df5;
-  --color-accent-light: #23244a;
-  --color-accent-hover: #a5a7f8;
-  --color-cta: #a56be6;
-  --color-cta-hover: #b98cec;
-  --color-cta-foreground: #14121f;
-  --color-success: #4ade80;
-  --color-success-bg: rgba(21, 128, 61, 0.12);
-  --color-error: #f87171;
-  --color-error-bg: rgba(185, 28, 28, 0.12);
-  --color-warning: #fbbf24;
-  --color-warning-bg: rgba(161, 98, 7, 0.12);
-  --color-info: #8b8df5;
-  --color-info-bg: rgba(139, 141, 245, 0.12);
+  --color-background: #15101a;
+  --color-foreground: #f1e9ee;
+  --color-card: #1f1826;
+  --color-card-hover: #2a2131;
+  --color-sidebar: #1a1420;
+  --color-surface-muted: #261e2d;
+  --color-text-primary: #f1e9ee;
+  --color-text-secondary: #b5a8b3;
+  --color-text-muted: #7d717c;
+  --color-text-placeholder: #574c57;
+  --color-border1: #352a3b;
+  --color-border2: #2c2232;
+  /* Hồng nâng sáng cho nền tối (giữ hue của logo) */
+  --color-accent: #ff4fa3;
+  --color-accent-light: #3b1a2c;
+  --color-accent-hover: #ff7bb9;
+  --color-cta: #ff4fa3;
+  --color-cta-hover: #ff7bb9;
+  --color-cta-foreground: #1c0a13;
+  --color-success: #6fcf85;
+  --color-success-bg: rgba(72, 160, 92, 0.15);
+  --color-error: #ff6b63;
+  --color-error-bg: rgba(224, 16, 8, 0.15);
+  --color-warning: #f7d21e;
+  --color-warning-bg: rgba(247, 210, 30, 0.14);
+  --color-info: #ff4fa3;
+  --color-info-bg: rgba(255, 79, 163, 0.14);
   --color-overlay: rgba(0, 0, 0, 0.6);
-  --color-chart-1: #8b8df5;
-  --color-chart-2: #c39bea;
-  --color-chart-3: #22b8d6;
-  --color-chart-4: #4ade80;
-  --color-chart-5: #fb923c;
-  --color-chart-6: #fb7185;
+  --color-chart-1: #ff4fa3;
+  --color-chart-2: #f7d21e;
+  --color-chart-3: #6fcf85;
+  --color-chart-4: #ff6b63;
+  --color-chart-5: #a9c44a;
+  --color-chart-6: #c73a3a;
   --shadow-card: 0 1px 3px rgba(0, 0, 0, 0.4), 0 1px 2px rgba(0, 0, 0, 0.3);
   --shadow-elevated: 0 6px 16px rgba(0, 0, 0, 0.5), 0 2px 6px rgba(0, 0, 0, 0.4);
 }

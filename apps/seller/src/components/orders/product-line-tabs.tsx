@@ -12,7 +12,7 @@ import { PRODUCT_LINES, PRODUCT_LINE_META, type ProductLine } from '@/lib/produc
 export type ProductLineTabKey = 'all' | ProductLine;
 export const PRODUCT_LINE_TAB_KEYS: readonly ProductLineTabKey[] = ['all', ...PRODUCT_LINES];
 
-const ALL_COLOR = '#312e81';
+const ALL_COLOR = '#c40c68';
 
 interface ProductLineTabsProps {
   active: ProductLineTabKey;

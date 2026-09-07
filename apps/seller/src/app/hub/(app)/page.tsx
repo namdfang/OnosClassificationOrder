@@ -50,11 +50,11 @@ export default function HubDashboardPage() {
     <div className="space-y-4">
       <PageHeader title={t('hub:dashboard.title')} subtitle={t('hub:dashboard.subtitle')} />
       <div className="grid grid-cols-2 lg:grid-cols-5 gap-3">
-        <Stat label={t('hub:dashboard.sellers')} value={s?.sellers ?? 0} icon={<Users size={18} />} color="#6f26c2" href="/hub/sellers" />
-        <Stat label={t('hub:dashboard.orders')} value={c?.all ?? 0} icon={<Package size={18} />} color="#312e81" href="/hub/orders" />
-        <Stat label={t('hub:dashboard.pending')} value={c?.pending ?? 0} icon={<Package size={18} />} color="#a16207" href="/hub/orders?status=pending" />
-        <Stat label={t('hub:dashboard.inProduction')} value={c?.inProduction ?? 0} icon={<Factory size={18} />} color="#4338ca" href="/hub/orders?status=in-production" />
-        <Stat label={t('hub:dashboard.held')} value={c?.held ?? 0} icon={<PauseCircle size={18} />} color="#c2410c" href="/hub/orders?held=1" />
+        <Stat label={t('hub:dashboard.sellers')} value={s?.sellers ?? 0} icon={<Users size={18} />} color="#c40c68" href="/hub/sellers" />
+        <Stat label={t('hub:dashboard.orders')} value={c?.all ?? 0} icon={<Package size={18} />} color="#800808" href="/hub/orders" />
+        <Stat label={t('hub:dashboard.pending')} value={c?.pending ?? 0} icon={<Package size={18} />} color="#9a7a05" href="/hub/orders?status=pending" />
+        <Stat label={t('hub:dashboard.inProduction')} value={c?.inProduction ?? 0} icon={<Factory size={18} />} color="#7f3fbf" href="/hub/orders?status=in-production" />
+        <Stat label={t('hub:dashboard.held')} value={c?.held ?? 0} icon={<PauseCircle size={18} />} color="#c30d07" href="/hub/orders?held=1" />
       </div>
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
         <Card><CardHeader><CardTitle>{t('hub:dashboard.byProductLine')}</CardTitle></CardHeader><CardContent>

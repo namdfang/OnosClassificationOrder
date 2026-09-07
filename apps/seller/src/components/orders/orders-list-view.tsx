@@ -6,6 +6,7 @@ import { useTranslation } from 'react-i18next';
 import { FileUp, PackagePlus, PackageSearch } from 'lucide-react';
 import { CustomerOrderStatus } from 'shared/enums';
 import type { AdminCustomerStagingOrder, CustomerOrderCounts, CustomerStagingOrder } from 'shared';
+import { OrderCard } from '@/components/orders/order-card';
 import { OrderRow } from '@/components/orders/order-row';
 import { OrdersPagination } from '@/components/orders/orders-pagination';
 import { OrdersStatsBar } from '@/components/orders/orders-stats-bar';
@@ -192,7 +193,7 @@ export function OrdersListView({ lockedLine, adminMode = false }: OrdersListView
           onChange={(s) => setState({ status: s ?? '', page: '1' })}
         />
         <div className="flex-1" />
-        <SearchInput value={searchInput} onChange={setSearchInput} placeholder={t('seller:common.search')} className="w-72" />
+        <SearchInput value={searchInput} onChange={setSearchInput} placeholder={t('seller:common.search')} className="w-full sm:w-72" />
         {!adminMode && selected.size > 0 && (
           <Button variant="primary" size="sm" onClick={() => setPushIds([...selected])}>
             {t('seller:list.pushSelected', { count: selected.size })}
@@ -221,7 +222,14 @@ export function OrdersListView({ lockedLine, adminMode = false }: OrdersListView
           }
         />
       ) : (
-        <div className={`bg-card border border-border1 rounded-xl overflow-x-auto transition-opacity ${loading ? 'opacity-60' : ''}`}>
+        <>
+        {/* < md: thẻ dọc (không cuộn ngang); ≥ md: bảng */}
+        <div className={`md:hidden space-y-2 transition-opacity ${loading ? 'opacity-60' : ''}`}>
+          {orders.map((o) => (
+            <OrderCard key={o._id} order={o} adminMode={adminMode} selected={selected.has(o._id)} onToggle={() => toggle(o._id)} onPushOne={() => setPushIds([o._id])} onCancel={() => setCancelTarget(o)} />
+          ))}
+        </div>
+        <div className={`hidden md:block bg-card border border-border1 rounded-xl overflow-x-auto transition-opacity ${loading ? 'opacity-60' : ''}`}>
           <table className="w-full text-left min-w-[960px]">
             <thead>
               <tr className="text-[10px] uppercase tracking-wider text-text-muted">
@@ -262,6 +270,7 @@ export function OrdersListView({ lockedLine, adminMode = false }: OrdersListView
             </tbody>
           </table>
         </div>
+        </>
       )}
 
       {total > 0 && (

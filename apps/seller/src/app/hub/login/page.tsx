@@ -45,7 +45,7 @@ function HubLoginContent() {
     <div className="min-h-screen flex items-center justify-center bg-background p-4">
       <div className="w-full max-w-sm">
         <div className="text-center mb-8">
-          <OnosMark className="inline-flex w-14 h-14 text-2xl mb-4 shadow-elevated" />
+          <OnosMark className="inline-block w-20 h-20 mb-4" />
           <h1 className="text-2xl font-extrabold text-text-primary font-display">{t('login.title')}</h1>
           <p className="text-sm text-text-secondary mt-1">{t('login.hint')}</p>
         </div>

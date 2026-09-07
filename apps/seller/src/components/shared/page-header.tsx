@@ -41,15 +41,17 @@ export function PageHeader({ title, subtitle, actions, children, tone = "plain" 
   }
 
   return (
-    <div className="flex justify-between items-center mb-4">
-      <div>
-        <h1 className="text-lg font-extrabold m-0">{title}</h1>
+    <div className="flex flex-col gap-3 sm:flex-row sm:justify-between sm:items-center mb-4">
+      <div className="min-w-0">
+        <h1 className="text-lg font-extrabold m-0 font-display text-text-primary">{title}</h1>
         {subtitle && <p className="text-[10.5px] text-text-secondary mt-0.5">{subtitle}</p>}
       </div>
-      <div className="flex gap-1.5 items-center">
-        {actions}
-        {children}
-      </div>
+      {(actions || children) && (
+        <div className="flex flex-wrap gap-1.5 items-center sm:shrink-0">
+          {actions}
+          {children}
+        </div>
+      )}
     </div>
   );
 }
