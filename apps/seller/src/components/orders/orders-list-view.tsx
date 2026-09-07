@@ -139,8 +139,8 @@ export function OrdersListView({ lockedLine, adminMode = false }: OrdersListView
 
   return (
     // Khung cố định như khu quản trị: đầu trang + lọc đứng yên, chỉ bảng/thẻ cuộn, phân trang neo đáy.
-    <div className="flex flex-col gap-4 h-[calc(100dvh-4.25rem-var(--viewas-h,0px))] lg:h-[calc(100dvh-2.5rem-var(--viewas-h,0px))]">
-      <div className="shrink-0 space-y-4">
+    <div className="flex flex-col gap-3 h-[calc(100dvh-4.25rem-var(--viewas-h,0px))] lg:h-[calc(100dvh-2.5rem-var(--viewas-h,0px))]">
+      <div className="shrink-0 space-y-3">
       {adminMode ? (
         <PageHeader
           title={t('hub:orders.title')}
@@ -150,7 +150,7 @@ export function OrdersListView({ lockedLine, adminMode = false }: OrdersListView
         <ServiceHero line={lockedLine} total={total} />
       ) : null}
 
-      <OrdersStatsBar counts={counts} />
+      <OrdersStatsBar counts={counts} compact />
       {adminMode && state.seller && (
         <p className="text-[11px] text-text-secondary">
           {t('hub:orders.sellerFilter')}: <b className="font-mono">{orders[0]?.customer?.userSku ?? state.seller}</b>
@@ -292,13 +292,13 @@ function ServiceHero({ line, total }: { line: ProductLine; total: number }) {
   const Icon = meta.icon;
   return (
     <div
-      className="rounded-2xl px-5 py-4 sm:px-6 sm:py-5 flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between text-white shadow-elevated"
+      className="rounded-2xl px-4 py-3 sm:px-5 sm:py-3.5 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between text-white shadow-elevated"
       style={{ background: `linear-gradient(135deg, ${meta.color} 0%, var(--color-accent) 100%)` }}
     >
       <div className="flex items-center gap-3 min-w-0">
-        <span className="w-12 h-12 rounded-xl bg-white/20 flex items-center justify-center shrink-0"><Icon size={24} /></span>
+        <span className="w-10 h-10 rounded-xl bg-white/20 flex items-center justify-center shrink-0"><Icon size={20} /></span>
         <div className="min-w-0">
-          <h1 className="text-2xl font-extrabold font-display leading-tight">{t(`customerPortal:productLines.${line}`)}</h1>
+          <h1 className="text-xl font-extrabold font-display leading-tight">{t(`customerPortal:productLines.${line}`)}</h1>
           <p className="text-[12px] text-white/80">{t('seller:list.heroSubtitle', { count: total })}</p>
         </div>
       </div>

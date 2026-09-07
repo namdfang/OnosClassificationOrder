@@ -34,7 +34,7 @@ function useDebounced<T>(value: T, ms: number): T {
   return v;
 }
 
-const TH = 'py-2.5 px-2 text-left text-[9px] text-text-muted font-semibold uppercase tracking-wider';
+const TH = 'py-2 px-2 text-left text-[9px] text-text-muted font-semibold uppercase tracking-wider';
 
 /**
  * Đơn khách toàn hệ — khuôn `components/oms/orders-list-view.tsx` (trang OMS nội bộ của thghub):
@@ -97,8 +97,8 @@ export function HubOrdersView({ lockedLine }: { lockedLine?: ProductLine } = {})
   const LineIcon = lineMeta?.icon;
   return (
     // Khung cố định: main không cuộn; phần đầu (header + lọc) đứng yên, chỉ BẢNG cuộn, phân trang neo đáy.
-    <div className="flex flex-col gap-3 h-[calc(100dvh-4.25rem-var(--viewas-h,0px))] lg:h-[calc(100dvh-2.5rem-var(--viewas-h,0px))]">
-      <div className="shrink-0 space-y-3">
+    <div className="flex flex-col gap-2 h-[calc(100dvh-4.25rem-var(--viewas-h,0px))] lg:h-[calc(100dvh-2.5rem-var(--viewas-h,0px))]">
+      <div className="shrink-0 space-y-2">
       <PageHeader
         title={
           lockedLine && LineIcon ? (
@@ -108,6 +108,7 @@ export function HubOrdersView({ lockedLine }: { lockedLine?: ProductLine } = {})
           )
         }
         subtitle={lockedLine ? t('hub:orders.subtitleLine', { line: t(`customerPortal:productLines.${lockedLine}`) }) : t('hub:orders.subtitleOms')}
+        compact
         actions={
           <button type="button" onClick={refetch} className="inline-flex items-center gap-1 px-2.5 py-1.5 rounded-lg border border-border1 bg-card text-[10px] font-bold text-text-secondary hover:bg-card-hover">
             <RefreshCw size={11} className={loading ? 'animate-spin' : ''} />{t('hub:orders.refresh')}
@@ -115,11 +116,7 @@ export function HubOrdersView({ lockedLine }: { lockedLine?: ProductLine } = {})
         }
       />
 
-      <div className="flex items-center gap-2 flex-wrap">
-        <DateRangeFilter value={dateRange} onChange={(r) => setState({ from: r.dateFrom ?? '', to: r.dateTo ?? '', page: '1' })} />
-      </div>
-
-      <OrdersStatsBar counts={counts} />
+      <OrdersStatsBar counts={counts} compact />
 
       {!lockedLine && <ProductLineTabs active={line} counts={lineCounts} onChange={(next) => setState({ line: next === 'all' ? '' : next, page: '1', status: '' })} />}
 
@@ -129,6 +126,7 @@ export function HubOrdersView({ lockedLine }: { lockedLine?: ProductLine } = {})
         <div className="flex items-center gap-2 flex-wrap">
           <SearchInput value={searchInput} onChange={setSearchInput} placeholder={t('hub:orders.searchPlaceholder')} className="w-full sm:w-72" />
           <SellerFilterPicker value={state.seller} onChange={(id) => setState({ seller: id, page: '1' })} />
+          <DateRangeFilter value={dateRange} onChange={(r) => setState({ from: r.dateFrom ?? '', to: r.dateTo ?? '', page: '1' })} />
         </div>
         <div className="text-[10px] text-text-muted tabular-nums">{t('hub:orders.totalOrders', { count: total })}</div>
       </div>
@@ -173,17 +171,17 @@ export function HubOrdersView({ lockedLine }: { lockedLine?: ProductLine } = {})
                     const stage = first?.currentStageKey ? t(`track:progress.stages.${first.currentStageKey}`, { defaultValue: first.currentStageLabel ?? '' }) : first?.currentStageLabel;
                     const addr = o.shippingAddress;
                     return (
-                      <tr key={o._id} className={`border-b border-border2 last:border-0 hover:bg-card-hover align-top ${o.status === 'cancelled' ? 'opacity-60' : ''}`}>
-                        <td className="py-2.5 px-2">
+                      <tr key={o._id} className={`border-b border-border2 last:border-0 hover:bg-card-hover align-top text-[11px] ${o.status === 'cancelled' ? 'opacity-60' : ''}`}>
+                        <td className="py-2 px-2">
                           <span className="inline-flex items-center gap-1 font-mono text-[11px] font-bold text-text-primary whitespace-nowrap">#{code}<CopyButton text={code} size={10} /></span>
                           {o.orderId && o.orderId !== code && <p className="text-[9.5px] text-text-muted truncate max-w-[150px]">{o.orderId}</p>}
                           <p className="text-[9.5px] text-text-muted">{t(`customerPortal:orders.source.${o.source}`)}</p>
                         </td>
-                        <td className="py-2.5 px-2">
+                        <td className="py-2 px-2">
                           <button type="button" onClick={() => setState({ seller: o.customerId, page: '1' })} className="text-[11px] font-bold text-text-primary hover:text-accent">{o.customer?.userSku || '—'}</button>
                           <p className="text-[9.5px] text-text-muted truncate max-w-[160px]">{o.customer?.userEmail}{o.customer?.tier != null ? ` · VIP ${o.customer.tier}` : ''}</p>
                         </td>
-                        <td className="py-2.5 px-2">
+                        <td className="py-2 px-2">
                           <div className="flex items-start gap-2">
                             <SafeImage src={thumb} alt="" className="w-9 h-9 rounded object-cover border border-border1 bg-surface-muted shrink-0" fallback={<div className="w-9 h-9 rounded border border-dashed border-border1 flex items-center justify-center text-text-muted shrink-0"><ImageIcon size={11} /></div>} />
                             <div className="min-w-0">
@@ -193,10 +191,10 @@ export function HubOrdersView({ lockedLine }: { lockedLine?: ProductLine } = {})
                             </div>
                           </div>
                         </td>
-                        <td className="py-2.5 px-2"><div className="flex flex-wrap gap-1">{(o.productLines ?? []).map((l) => <ProductLineBadge key={l} line={l} />)}</div></td>
-                        <td className="py-2.5 px-2 text-right text-[11px] tabular-nums">{qty}</td>
-                        <td className="py-2.5 px-2 text-right text-[11px] font-semibold tabular-nums">{o.totalAmount != null ? fmtUSD(o.totalAmount) : '—'}</td>
-                        <td className="py-2.5 px-2">
+                        <td className="py-2 px-2"><div className="flex flex-wrap gap-1">{(o.productLines ?? []).map((l) => <ProductLineBadge key={l} line={l} />)}</div></td>
+                        <td className="py-2 px-2 text-right text-[11px] tabular-nums">{qty}</td>
+                        <td className="py-2 px-2 text-right text-[11px] font-semibold tabular-nums">{o.totalAmount != null ? fmtUSD(o.totalAmount) : '—'}</td>
+                        <td className="py-2 px-2">
                           <div className="flex flex-col items-start gap-0.5">
                             <StatusBadge status={o.status} />
                             {(o.held || o.rework) && (
@@ -208,11 +206,11 @@ export function HubOrdersView({ lockedLine }: { lockedLine?: ProductLine } = {})
                             {stage && o.status !== 'pending' && <span className="text-[9.5px] text-text-muted">{stage}</span>}
                           </div>
                         </td>
-                        <td className="py-2.5 px-2 text-[10.5px]">
+                        <td className="py-2 px-2 text-[10.5px]">
                           {addr ? (<><p className="text-text-primary truncate max-w-[140px]">{[addr.firstName, addr.lastName].filter(Boolean).join(' ') || '—'}</p><p className="text-text-muted truncate max-w-[140px]">{[addr.city, addr.state, addr.country].filter(Boolean).join(', ')}</p></>) : <span className="text-text-muted">—</span>}
                         </td>
-                        <td className="py-2.5 px-2 text-[10.5px]">{tracked?.number ? (<><p className="font-mono text-text-primary">{tracked.number}</p>{tracked.carrier && <p className="text-text-muted">{tracked.carrier}</p>}</>) : <span className="text-text-muted">—</span>}</td>
-                        <td className="py-2.5 px-2 text-[10.5px] text-text-secondary whitespace-nowrap">{dayjs(o.pushedAt ?? o.createdAt).format('DD/MM/YYYY HH:mm')}</td>
+                        <td className="py-2 px-2 text-[10.5px]">{tracked?.number ? (<><p className="font-mono text-text-primary">{tracked.number}</p>{tracked.carrier && <p className="text-text-muted">{tracked.carrier}</p>}</>) : <span className="text-text-muted">—</span>}</td>
+                        <td className="py-2 px-2 text-[10.5px] text-text-secondary whitespace-nowrap">{dayjs(o.pushedAt ?? o.createdAt).format('DD/MM/YYYY HH:mm')}</td>
                       </tr>
                     );
                   })}

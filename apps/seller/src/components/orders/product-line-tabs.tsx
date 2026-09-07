@@ -40,7 +40,7 @@ export function ProductLineTabs({ active, onChange, counts, locked }: ProductLin
             type="button"
             disabled={!!locked}
             onClick={() => onChange(key)}
-            className={`flex items-center gap-2 px-3.5 py-2 rounded-xl text-[12px] font-bold transition-all cursor-pointer disabled:cursor-default ${
+            className={`flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-[11px] font-bold transition-all cursor-pointer disabled:cursor-default ${
               isActive ? 'text-white shadow-md border-none' : 'bg-card border border-border1 hover:bg-card-hover'
             }`}
             style={isActive ? { backgroundColor: color } : { color }}

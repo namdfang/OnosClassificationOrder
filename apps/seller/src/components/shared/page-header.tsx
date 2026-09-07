@@ -12,9 +12,11 @@ interface PageHeaderProps {
    * quan / trang đầu mục, nơi tiêu đề thật sự là điểm nhìn đầu tiên.
    */
   tone?: "plain" | "hero";
+  /** Khu danh sách cần nhiều chỗ cho bảng: bớt margin dưới. */
+  compact?: boolean;
 }
 
-export function PageHeader({ title, subtitle, actions, children, tone = "plain" }: PageHeaderProps) {
+export function PageHeader({ title, subtitle, actions, children, tone = "plain", compact = false }: PageHeaderProps) {
   if (tone === "hero") {
     return (
       <div
@@ -41,7 +43,7 @@ export function PageHeader({ title, subtitle, actions, children, tone = "plain" 
   }
 
   return (
-    <div className="flex flex-col gap-3 sm:flex-row sm:justify-between sm:items-center mb-4">
+    <div className={`flex flex-col gap-3 sm:flex-row sm:justify-between sm:items-center ${compact ? "mb-1" : "mb-4"}`}>
       <div className="min-w-0">
         <h1 className="text-lg font-extrabold m-0 font-display text-text-primary">{title}</h1>
         {subtitle && <p className="text-[10.5px] text-text-secondary mt-0.5">{subtitle}</p>}
