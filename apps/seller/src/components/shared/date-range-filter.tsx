@@ -1,7 +1,8 @@
 "use client";
 
 import { useEffect, useMemo, useRef, useState } from "react";
-import { Calendar, ChevronLeft, ChevronRight, X } from "lucide-react";
+import { Calendar, ChevronLeft, ChevronRight } from "lucide-react";
+import { useTranslation } from "react-i18next";
 
 export interface DateRange {
   dateFrom: string | null; // YYYY-MM-DD
@@ -92,11 +93,9 @@ function detectActivePreset(value: DateRange): PresetKey | null {
   return null;
 }
 
-function formatTriggerLabel(value: DateRange, activePreset: PresetKey | null): string {
-  if (!value.dateFrom && !value.dateTo) return "All time";
-  if (activePreset) {
-    return PRESETS.find((p) => p.key === activePreset)?.label ?? "";
-  }
+/** Nhãn khoảng tùy chọn trên pill "Tùy chọn" (chỉ khi KHÔNG trùng preset). */
+function formatCustomLabel(value: DateRange): string | null {
+  if (!value.dateFrom && !value.dateTo) return null;
   const fmt = (iso: string) => {
     const [y, m, d] = iso.split("-");
     return `${d}/${m}/${y}`;
@@ -106,9 +105,19 @@ function formatTriggerLabel(value: DateRange, activePreset: PresetKey | null): s
       ? fmt(value.dateFrom)
       : `${fmt(value.dateFrom)} – ${fmt(value.dateTo)}`;
   }
-  return value.dateFrom ? `From ${fmt(value.dateFrom)}` : `To ${fmt(value.dateTo!)}`;
+  return value.dateFrom ? `≥ ${fmt(value.dateFrom)}` : `≤ ${fmt(value.dateTo!)}`;
 }
 
+const PILL = "px-2.5 py-1 rounded-full text-[11px] font-semibold border whitespace-nowrap transition-colors";
+const PILL_ON = "bg-accent border-accent text-white";
+const PILL_OFF = "bg-card border-border1 text-text-secondary hover:border-accent/60 hover:text-text-primary";
+
+/**
+ * Bản 07/09/2026 (yêu cầu người dùng): quick filter HIỆN THẲNG thành dải pill
+ * "Mọi thời gian · Hôm nay · Hôm qua · Tuần này · Tháng này · Tháng trước · Năm nay",
+ * cuối dải là pill "Tùy chọn" mở popover chọn từ/đến (+ bước tháng). Không còn nút
+ * trigger gộp — người dùng bấm 1 lần là lọc, không phải mở popover.
+ */
 export function DateRangeFilter({
   value,
   onChange,
@@ -116,8 +125,8 @@ export function DateRangeFilter({
   value: DateRange;
   onChange: (next: DateRange) => void;
 }) {
+  const { t } = useTranslation("seller");
   const [open, setOpen] = useState(false);
-  // Month/year stepper anchor — defaults to the month of dateFrom, or today.
   const [anchor, setAnchor] = useState<{ year: number; month: number }>(() => {
     const seed = value.dateFrom ? new Date(value.dateFrom) : new Date();
     return { year: seed.getFullYear(), month: seed.getMonth() };
@@ -126,26 +135,20 @@ export function DateRangeFilter({
   const triggerRef = useRef<HTMLButtonElement | null>(null);
 
   const activePreset = useMemo(() => detectActivePreset(value), [value]);
-  const triggerLabel = useMemo(() => formatTriggerLabel(value, activePreset), [value, activePreset]);
+  const isAllTime = !value.dateFrom && !value.dateTo;
+  const customLabel = useMemo(() => (activePreset ? null : formatCustomLabel(value)), [value, activePreset]);
 
-  // Close on outside click. Capture phase to beat any stopPropagation
-  // on internal child handlers.
   useEffect(() => {
     if (!open) return;
     const handler = (e: MouseEvent) => {
-      const t = e.target as Node;
-      if (popoverRef.current?.contains(t)) return;
-      if (triggerRef.current?.contains(t)) return;
+      const el = e.target as Node;
+      if (popoverRef.current?.contains(el)) return;
+      if (triggerRef.current?.contains(el)) return;
       setOpen(false);
     };
     document.addEventListener("mousedown", handler);
     return () => document.removeEventListener("mousedown", handler);
   }, [open]);
-
-  const applyPreset = (key: PresetKey) => {
-    onChange(computePresetRange(key));
-    setOpen(false);
-  };
 
   const stepMonth = (delta: number) => {
     setAnchor((a) => {
@@ -153,164 +156,79 @@ export function DateRangeFilter({
       return { year: d.getFullYear(), month: d.getMonth() };
     });
   };
-
   const applyAnchorMonth = () => {
-    // Click center label → set range to that whole month.
     const first = new Date(anchor.year, anchor.month, 1);
     const last = new Date(anchor.year, anchor.month + 1, 0);
     onChange({ dateFrom: toIso(first), dateTo: toIso(last) });
     setOpen(false);
   };
-
   const fromInputChange = (next: string) => {
     const v = next || null;
-    // Validate: from must not exceed to. If user enters from > to, reset
-    // to (matches what most users mean — they're picking a new range).
-    if (v && value.dateTo && v > value.dateTo) {
-      onChange({ dateFrom: v, dateTo: v });
-    } else {
-      onChange({ dateFrom: v, dateTo: value.dateTo });
-    }
+    if (v && value.dateTo && v > value.dateTo) onChange({ dateFrom: v, dateTo: v });
+    else onChange({ dateFrom: v, dateTo: value.dateTo });
   };
-
   const toInputChange = (next: string) => {
     const v = next || null;
-    if (v && value.dateFrom && v < value.dateFrom) {
-      onChange({ dateFrom: v, dateTo: v });
-    } else {
-      onChange({ dateFrom: value.dateFrom, dateTo: v });
-    }
+    if (v && value.dateFrom && v < value.dateFrom) onChange({ dateFrom: v, dateTo: v });
+    else onChange({ dateFrom: value.dateFrom, dateTo: v });
   };
-
   const clear = () => {
     onChange({ dateFrom: null, dateTo: null });
     setOpen(false);
   };
 
   return (
-    <div className="relative inline-block">
+    <div className="relative inline-flex flex-wrap items-center gap-1">
+      <button type="button" onClick={clear} className={`${PILL} ${isAllTime ? PILL_ON : PILL_OFF}`}>
+        {t("dateFilter.allTime")}
+      </button>
+      {PRESETS.map((p) => (
+        <button
+          key={p.key}
+          type="button"
+          onClick={() => onChange(computePresetRange(p.key))}
+          className={`${PILL} ${activePreset === p.key ? PILL_ON : PILL_OFF}`}
+        >
+          {t(`dateFilter.${p.key}`)}
+        </button>
+      ))}
       <button
         ref={triggerRef}
+        type="button"
         onClick={() => setOpen((v) => !v)}
-        className="inline-flex items-center gap-2 px-3 py-1.5 rounded-md border border-border1 bg-card text-[12px] text-text-primary hover:bg-bg-subtle"
+        className={`${PILL} inline-flex items-center gap-1 ${customLabel ? PILL_ON : PILL_OFF}`}
+        aria-expanded={open}
       >
-        <Calendar size={14} className="text-text-muted" />
-        <span className="font-semibold">{triggerLabel}</span>
-        {/* THG-TASK-027: clear "X" KHÔNG được là role="button"/<button> vì nằm
-            TRONG <button> trigger → React 19 báo "button cannot be a descendant
-            of button" (hydration error). Dùng span onClick thuần (phrasing content
-            hợp lệ trong button); stopPropagation chặn toggle. */}
-        {(value.dateFrom || value.dateTo) && (
-          <span
-            onClick={(e) => {
-              e.stopPropagation();
-              clear();
-            }}
-            className="text-text-muted hover:text-text-primary cursor-pointer inline-flex"
-            aria-label="Clear date filter"
-          >
-            <X size={12} />
-          </span>
-        )}
+        <Calendar size={12} />
+        {customLabel ?? t("dateFilter.custom")}
       </button>
 
       {open && (
-        <div
-          ref={popoverRef}
-          className="absolute z-50 top-full mt-1.5 left-0 w-[320px] rounded-lg border border-border1 bg-card shadow-lg p-3 space-y-3"
-        >
-          {/* Quick presets */}
-          <div>
-            <div className="text-[10px] uppercase font-bold text-text-muted mb-1.5">
-              Quick filters
-            </div>
-            <div className="grid grid-cols-3 gap-1">
-              {PRESETS.map((p) => {
-                const active = activePreset === p.key;
-                return (
-                  <button
-                    key={p.key}
-                    onClick={() => applyPreset(p.key)}
-                    className="px-2 py-1.5 rounded text-[11px] font-semibold border"
-                    style={{
-                      background: active ? "var(--color-accent)" : "var(--color-card)",
-                      color: active ? "white" : "var(--color-text-secondary)",
-                      borderColor: active ? "var(--color-accent)" : "var(--color-border1)",
-                    }}
-                  >
-                    {p.label}
-                  </button>
-                );
-              })}
-            </div>
-          </div>
-
-          {/* Month/Year stepper */}
-          <div className="flex items-center justify-between gap-2 pt-2 border-t border-border1">
-            <button
-              onClick={() => stepMonth(-1)}
-              className="p-1 rounded hover:bg-bg-subtle text-text-muted"
-              aria-label="Previous month"
-            >
+        <div ref={popoverRef} className="absolute z-50 top-full mt-1.5 right-0 w-[300px] rounded-lg border border-border1 bg-card shadow-lg p-3 space-y-3">
+          <div className="flex items-center justify-between gap-2">
+            <button type="button" onClick={() => stepMonth(-1)} className="p-1 rounded hover:bg-bg-subtle text-text-muted" aria-label={t("dateFilter.prevMonth")}>
               <ChevronLeft size={14} />
             </button>
-            <button
-              onClick={applyAnchorMonth}
-              className="flex-1 text-center px-2 py-1 rounded hover:bg-bg-subtle text-[12px] font-semibold"
-              title="Click to select the whole month"
-            >
+            <button type="button" onClick={applyAnchorMonth} className="flex-1 text-center px-2 py-1 rounded hover:bg-bg-subtle text-[12px] font-semibold" title={t("dateFilter.wholeMonth")}>
               {`${pad(anchor.month + 1)}/${anchor.year}`}
             </button>
-            <button
-              onClick={() => stepMonth(1)}
-              className="p-1 rounded hover:bg-bg-subtle text-text-muted"
-              aria-label="Next month"
-            >
+            <button type="button" onClick={() => stepMonth(1)} className="p-1 rounded hover:bg-bg-subtle text-text-muted" aria-label={t("dateFilter.nextMonth")}>
               <ChevronRight size={14} />
             </button>
           </div>
-
-          {/* Concrete range inputs */}
-          <div className="pt-2 border-t border-border1">
-            <div className="text-[10px] uppercase font-bold text-text-muted mb-1.5">
-              Custom range
-            </div>
-            <div className="grid grid-cols-2 gap-2 text-[11px]">
-              <label className="flex flex-col gap-0.5">
-                <span className="text-text-muted">From</span>
-                <input
-                  type="date"
-                  value={value.dateFrom ?? ""}
-                  onChange={(e) => fromInputChange(e.target.value)}
-                  className="px-2 py-1 rounded border border-border1 bg-card text-text-primary"
-                />
-              </label>
-              <label className="flex flex-col gap-0.5">
-                <span className="text-text-muted">To</span>
-                <input
-                  type="date"
-                  value={value.dateTo ?? ""}
-                  onChange={(e) => toInputChange(e.target.value)}
-                  className="px-2 py-1 rounded border border-border1 bg-card text-text-primary"
-                />
-              </label>
-            </div>
+          <div className="grid grid-cols-2 gap-2 text-[11px] pt-2 border-t border-border1">
+            <label className="flex flex-col gap-0.5">
+              <span className="text-text-muted">{t("dateFilter.from")}</span>
+              <input type="date" value={value.dateFrom ?? ""} onChange={(e) => fromInputChange(e.target.value)} className="px-2 py-1 rounded border border-border1 bg-card text-text-primary" />
+            </label>
+            <label className="flex flex-col gap-0.5">
+              <span className="text-text-muted">{t("dateFilter.to")}</span>
+              <input type="date" value={value.dateTo ?? ""} onChange={(e) => toInputChange(e.target.value)} className="px-2 py-1 rounded border border-border1 bg-card text-text-primary" />
+            </label>
           </div>
-
-          {/* Footer */}
           <div className="flex justify-between pt-2 border-t border-border1">
-            <button
-              onClick={clear}
-              className="text-[11px] text-text-muted hover:text-text-primary font-semibold"
-            >
-              Clear
-            </button>
-            <button
-              onClick={() => setOpen(false)}
-              className="text-[11px] font-semibold px-3 py-1 rounded bg-cta text-cta-foreground"
-            >
-              Close
-            </button>
+            <button type="button" onClick={clear} className="text-[11px] text-text-muted hover:text-text-primary font-semibold">{t("dateFilter.clear")}</button>
+            <button type="button" onClick={() => setOpen(false)} className="text-[11px] font-semibold px-3 py-1 rounded bg-cta text-cta-foreground">{t("dateFilter.close")}</button>
           </div>
         </div>
       )}

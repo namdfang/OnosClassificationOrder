@@ -97,5 +97,22 @@
     "tabKeys": "API key",
     "tabWebhooks": "Webhook",
     "tabSamples": "Lệnh mẫu"
+  },
+  "dateFilter": {
+    "allTime": "Mọi thời gian",
+    "today": "Hôm nay",
+    "yesterday": "Hôm qua",
+    "thisWeek": "Tuần này",
+    "thisMonth": "Tháng này",
+    "lastMonth": "Tháng trước",
+    "thisYear": "Năm nay",
+    "custom": "Tùy chọn",
+    "from": "Từ",
+    "to": "Đến",
+    "clear": "Xóa",
+    "close": "Đóng",
+    "wholeMonth": "Bấm để chọn cả tháng",
+    "prevMonth": "Tháng trước",
+    "nextMonth": "Tháng sau"
   }
 }

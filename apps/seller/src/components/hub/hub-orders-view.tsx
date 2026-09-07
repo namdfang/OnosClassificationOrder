@@ -127,13 +127,11 @@ export function HubOrdersView({ lockedLine }: { lockedLine?: ProductLine } = {})
 
       <OrdersStatusFilterPills active={status} counts={counts} heldOnly={heldOnly} onToggleHeld={() => setState({ held: heldOnly ? '' : '1', page: '1' })} onChange={(s) => setState({ status: s ?? '', page: '1' })} />
 
-      <div className="flex items-center justify-between gap-3 flex-wrap">
-        <div className="flex items-center gap-2 flex-wrap">
-          <SearchInput value={searchInput} onChange={setSearchInput} placeholder={t('hub:orders.searchPlaceholder')} className="w-full sm:w-72" />
-          <SellerFilterPicker value={state.seller} onChange={(id) => setState({ seller: id, page: '1' })} />
-          <DateRangeFilter value={dateRange} onChange={(r) => setState({ from: r.dateFrom ?? '', to: r.dateTo ?? '', page: '1' })} />
-        </div>
-        <div className="text-[10px] text-text-muted tabular-nums">{t('hub:orders.totalOrders', { count: total })}</div>
+      <div className="flex items-center gap-2 flex-wrap">
+        <SearchInput value={searchInput} onChange={setSearchInput} placeholder={t('hub:orders.searchPlaceholder')} className="w-full sm:w-56" />
+        <SellerFilterPicker value={state.seller} onChange={(id) => setState({ seller: id, page: '1' })} />
+        <DateRangeFilter value={dateRange} onChange={(r) => setState({ from: r.dateFrom ?? '', to: r.dateTo ?? '', page: '1' })} />
+        <div className="ml-auto text-[10px] text-text-muted tabular-nums whitespace-nowrap">{t('hub:orders.totalOrders', { count: total })}</div>
       </div>
       </div>
 

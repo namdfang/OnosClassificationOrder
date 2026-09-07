@@ -97,5 +97,22 @@
     "tabKeys": "API keys",
     "tabWebhooks": "Webhooks",
     "tabSamples": "Samples"
+  },
+  "dateFilter": {
+    "allTime": "All time",
+    "today": "Today",
+    "yesterday": "Yesterday",
+    "thisWeek": "This week",
+    "thisMonth": "This month",
+    "lastMonth": "Last month",
+    "thisYear": "This year",
+    "custom": "Custom range",
+    "from": "From",
+    "to": "To",
+    "clear": "Clear",
+    "close": "Close",
+    "wholeMonth": "Click to select the whole month",
+    "prevMonth": "Previous month",
+    "nextMonth": "Next month"
   }
 }

@@ -89,29 +89,37 @@ export function OperationsView() {
   if (lifeLoading && !life) return <div className="flex justify-center py-16"><Loader2 size={18} className="animate-spin text-accent" /></div>;
 
   return (
-    <div className="space-y-3">
+    // Khung cố định (07/09/2026): tiêu đề + bộ lọc + tab dịch vụ đứng yên, phần dưới (KPI, phễu, bảng…) cuộn riêng —
+    // cùng công thức chiều cao với `hub-orders-view.tsx` (trừ padding layout + banner mạo danh). CHỈ từ `lg`: dưới đó
+    // phần đầu (tiêu đề + pill ngày + 7 tab) đã chiếm nửa màn hình nên để trang cuộn bình thường.
+    <div className="flex flex-col gap-2 lg:h-[calc(100dvh-2.5rem-var(--viewas-h,0px))]">
+      <div className="shrink-0 space-y-2">
       <PageHeader
         title={t('hub:ops.title')}
         subtitle={t('hub:ops.subtitle')}
         compact
         actions={
-          <div className="flex items-center gap-2 flex-wrap">
-            <select value={factory} onChange={(e) => setState({ factory: e.target.value })} className="px-2.5 py-1.5 rounded-lg border border-border1 bg-card text-[11px] font-semibold text-text-secondary outline-none focus:border-accent">
-              <option value="">{t('hub:ops.factoryAll')}</option>
-              {(life?.factories ?? []).map((f) => <option key={f.factoryId} value={f.factoryId}>{f.factoryName}</option>)}
-            </select>
-            <DateRangeFilter value={dateRange} onChange={(r) => setState({ from: r.dateFrom ?? '', to: r.dateTo ?? '' })} />
-            {adminUrl && (
-              <a href={`${adminUrl}/ffm/orders/workshop${factory ? `?factoryId=${factory}` : ''}`} target="_blank" rel="noreferrer" className="inline-flex items-center gap-1 px-2.5 py-1.5 rounded-lg bg-cta text-cta-foreground text-[10px] font-bold no-underline">
-                {t('hub:ops.openFactoryApp')} <ExternalLink size={10} />
-              </a>
-            )}
-          </div>
+          adminUrl ? (
+            <a href={`${adminUrl}/ffm/orders/workshop${factory ? `?factoryId=${factory}` : ''}`} target="_blank" rel="noreferrer" className="inline-flex items-center gap-1 px-2.5 py-1.5 rounded-lg bg-cta text-cta-foreground text-[10px] font-bold no-underline whitespace-nowrap">
+              {t('hub:ops.openFactoryApp')} <ExternalLink size={10} />
+            </a>
+          ) : undefined
         }
       />
+      {/* Hàng bộ lọc riêng (không nhét vào actions của PageHeader — dải pill ngày dài làm tiêu đề gãy dòng). */}
+      <div className="flex items-center gap-2 flex-wrap">
+        <select value={factory} onChange={(e) => setState({ factory: e.target.value })} className="px-2.5 py-1 rounded-full border border-border1 bg-card text-[11px] font-semibold text-text-secondary outline-none focus:border-accent">
+          <option value="">{t('hub:ops.factoryAll')}</option>
+          {(life?.factories ?? []).map((f) => <option key={f.factoryId} value={f.factoryId}>{f.factoryName}</option>)}
+        </select>
+        <DateRangeFilter value={dateRange} onChange={(r) => setState({ from: r.dateFrom ?? '', to: r.dateTo ?? '' })} />
+      </div>
 
       {/* Tab dịch vụ — chọn 1 dòng thì phễu + bảng đơn lọc theo dòng đó (KPI/SLA/xưởng/nhân sự vẫn toàn hệ). */}
       <ProductLineTabs active={line} counts={lineCounts} onChange={(next) => setState({ line: next === 'all' ? '' : next, stage: '', page: '1' })} />
+      </div>
+
+      <div className="space-y-3 pb-2 lg:flex-1 lg:min-h-0 lg:overflow-y-auto scrollbar-thin">
 
       {/* 1) KPI */}
       <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-2">
@@ -377,6 +385,7 @@ export function OperationsView() {
           )}
         </CardContent>
       </Card>
+      </div>
     </div>
   );
 }
