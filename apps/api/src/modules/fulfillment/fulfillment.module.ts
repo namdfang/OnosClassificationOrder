@@ -5,6 +5,7 @@ import { CustomerEventModule } from '../customer-event/customer-event.module';
 import { OrderEntity, OrderSchema } from '../order/order.entity';
 import { OrderModule } from '../order/order.module';
 import { OrderLogModule } from '../order-log/order-log.module';
+import { ShippingVnpModule } from '../shipping-vnp/shipping-vnp.module';
 import { UserEntity, UserSchema } from '../user/user.entity';
 import { FulfillmentTaskController } from './fulfillment-task.controller';
 import { FulfillmentTaskService } from './fulfillment-task.service';
@@ -23,6 +24,9 @@ import { FulfillmentTaskService } from './fulfillment-task.service';
     OrderModule,
     // ORD-4/ORD-5 — sự kiện `order.production_completed` khi đóng hàng xong.
     CustomerEventModule,
+    // Auto mua label VNP khi Đóng hàng xong (toggle Settings — VnpShipping.md
+    // §2d). ShippingVnpModule không import ngược module này → không vòng DI.
+    ShippingVnpModule,
     MongooseModule.forFeature([{ name: OrderEntity.name, schema: OrderSchema }]),
     MongooseModule.forFeature([{ name: UserEntity.name, schema: UserSchema }]),
   ],

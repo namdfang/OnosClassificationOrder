@@ -1,12 +1,15 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { MapPin, Plus, Trash2 } from 'lucide-react';
+import { MapPin, Plus, Trash2, Zap } from 'lucide-react';
+import type { VnpShippingService } from 'shared';
+import { VNP_SHIPPING_SERVICES } from 'shared';
 import { toast } from 'sonner';
 
 import { RepositoryRemote } from '@/services';
 
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
+import { Switch } from '@/components/ui/switch';
 
 import { handleAxiosError } from '@/utils';
 
@@ -24,11 +27,20 @@ interface VnpFromAddress {
   country: string;
 }
 
+interface VnpAutoPurchase {
+  enabled: boolean;
+  defaultWeightGram: number;
+  service: VnpShippingService;
+}
+
 interface VnpConfig {
   addresses: VnpFromAddress[];
   factoryMap: Record<string, string>;
   defaultAddressId?: string;
+  autoPurchase?: VnpAutoPurchase;
 }
+
+const DEFAULT_AUTO_PURCHASE: VnpAutoPurchase = { enabled: false, defaultWeightGram: 300, service: 'Standard' };
 
 interface FactoryRow {
   _id: string;
@@ -61,6 +73,8 @@ export default function VnpShippingConfig() {
   const [dirty, setDirty] = useState(false);
   const [wallet, setWallet] = useState<{ balance?: string; raw?: unknown } | null>(null);
   const [walletBusy, setWalletBusy] = useState(false);
+  const [autoForm, setAutoForm] = useState<VnpAutoPurchase>({ ...DEFAULT_AUTO_PURCHASE });
+  const [autoDirty, setAutoDirty] = useState(false);
 
   const load = async () => {
     try {
@@ -69,7 +83,9 @@ export default function VnpShippingConfig() {
         RepositoryRemote.factory.getFactories('?page=1&limit=200'),
         RepositoryRemote.vnpShipping.getStatus(),
       ]);
-      setConfig((cfgRes.data?.data as VnpConfig) ?? { addresses: [], factoryMap: {} });
+      const cfg = (cfgRes.data?.data as VnpConfig) ?? { addresses: [], factoryMap: {} };
+      setConfig(cfg);
+      setAutoForm(cfg.autoPurchase ? { ...cfg.autoPurchase } : { ...DEFAULT_AUTO_PURCHASE });
       const list = (factoryRes.data?.data as FactoryRow[]) ?? [];
       setFactories(list.filter((f) => f.isActive !== false));
       setStatus(statusRes.data?.data as { configured: boolean; missing: string[] });
@@ -144,6 +160,26 @@ export default function VnpShippingConfig() {
     }
   };
 
+  const doSaveAutoPurchase = async () => {
+    if (!autoForm.defaultWeightGram || autoForm.defaultWeightGram <= 0) {
+      toast.error(t('autoPurchase.weightInvalid'));
+      return;
+    }
+    try {
+      setBusy(true);
+      const res = await RepositoryRemote.vnpShipping.saveAutoPurchase(autoForm);
+      const cfg = res.data?.data as VnpConfig;
+      setConfig(cfg);
+      setAutoForm(cfg.autoPurchase ? { ...cfg.autoPurchase } : { ...DEFAULT_AUTO_PURCHASE });
+      setAutoDirty(false);
+      toast.success(t('autoPurchase.saved'));
+    } catch (err) {
+      handleAxiosError(err);
+    } finally {
+      setBusy(false);
+    }
+  };
+
   const formFields: Array<{ key: keyof typeof emptyForm; required?: boolean }> = [
     { key: 'label', required: true },
     { key: 'name', required: true },
@@ -207,6 +243,59 @@ export default function VnpShippingConfig() {
           <pre className="max-h-40 overflow-auto px-2 pb-2 text-[11px]">{JSON.stringify(wallet.raw, null, 2)}</pre>
         </details>
       )}
+
+      {/* ── Tự động mua label khi Đóng hàng xong ──────────────── */}
+      <section className="rounded-md border border-border p-3 space-y-3">
+        <div className="flex items-center gap-2">
+          <Zap size={16} className="text-amber-500" />
+          <h3 className="text-sm font-semibold">{t('autoPurchase.title')}</h3>
+          <Switch
+            className="ml-auto"
+            checked={autoForm.enabled}
+            onCheckedChange={(v) => {
+              setAutoForm((f) => ({ ...f, enabled: v }));
+              setAutoDirty(true);
+            }}
+          />
+        </div>
+        <p className="text-xs text-muted-foreground whitespace-pre-line">{t('autoPurchase.hint')}</p>
+        <div className="flex flex-wrap items-end gap-3">
+          <label className="text-xs space-y-1">
+            <span className="text-muted-foreground">{t('autoPurchase.weight')}</span>
+            <Input
+              type="number"
+              min={1}
+              className="h-9 w-36"
+              value={autoForm.defaultWeightGram || ''}
+              onChange={(e) => {
+                const n = Number(e.target.value);
+                setAutoForm((f) => ({ ...f, defaultWeightGram: Number.isFinite(n) ? n : 0 }));
+                setAutoDirty(true);
+              }}
+            />
+          </label>
+          <label className="text-xs space-y-1">
+            <span className="text-muted-foreground">{t('autoPurchase.service')}</span>
+            <select
+              className={`${selectCls} block`}
+              value={autoForm.service}
+              onChange={(e) => {
+                setAutoForm((f) => ({ ...f, service: e.target.value as VnpShippingService }));
+                setAutoDirty(true);
+              }}
+            >
+              {VNP_SHIPPING_SERVICES.map((s) => (
+                <option key={s} value={s}>
+                  {s}
+                </option>
+              ))}
+            </select>
+          </label>
+          <Button size="sm" disabled={busy || !autoDirty} onClick={doSaveAutoPurchase}>
+            {t('autoPurchase.save')}
+          </Button>
+        </div>
+      </section>
 
       {/* ── Danh sách địa chỉ gửi ─────────────────────────────── */}
       <section className="space-y-2">

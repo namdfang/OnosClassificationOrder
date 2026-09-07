@@ -6,6 +6,7 @@ import type {
   CreateVnpShipmentDto,
   GetVnpShipmentsDto,
   ProductionOrderShippingAddress,
+  SaveVnpAutoPurchaseDto,
   SaveVnpShippingMapDto,
   VnpShipmentInfo,
   VnpShipmentRecord,
@@ -13,7 +14,7 @@ import type {
   VnpShippingConfig,
   VnpShippingStatus,
 } from 'shared';
-import { SHIPMENT_PROVIDER_VNP, VNP_SHIPMENT_COUNTED_STATUSES, VNP_SHIPPING_CONFIG_KEY } from 'shared';
+import { hasProductionOrderTracking, SHIPMENT_PROVIDER_VNP, VNP_SHIPMENT_COUNTED_STATUSES, VNP_SHIPPING_CONFIG_KEY } from 'shared';
 import { Logger } from 'winston';
 
 import { genCode } from '@/utils/gen-code';
@@ -21,6 +22,7 @@ import { genCode } from '@/utils/gen-code';
 import { ApiConfigService } from '../../shared/services/api-config.service';
 import { OrderEntity } from '../order/order.entity';
 import { SystemConfigService } from '../system-config/system-config.service';
+import { autoPurchaseRequestId, autoPurchaseSkipReason } from './auto-purchase.logic';
 import { buildCarrierPatch, extractStatusText, hasCarrierError, hasCarrierSignal, isCancelledStatusText } from './carrier-status';
 import { digString, interpretVnpLookup, RECONCILE_BATCH, RECONCILE_MIN_AGE_MS } from './purchase-reconcile';
 import { ShipmentDocument, ShipmentEntity } from './shipment.entity';
@@ -28,9 +30,9 @@ import { ShippingPackageEntity } from './shipping-package.entity';
 import { VnpEglobalClient } from './vnp-eglobal.client';
 
 /**
- * Điều phối luồng vận đơn VNP eGlobal cho 1 đơn sản xuất (giai đoạn TEST —
- * kích hoạt tay qua nút "Vận đơn VNP" ở bảng đơn hàng, chưa auto-hook vào
- * công đoạn Đóng hàng).
+ * Điều phối luồng vận đơn VNP eGlobal cho 1 đơn sản xuất: kích hoạt tay qua
+ * nút "Vận đơn VNP" ở bảng đơn hàng, hoặc tự động khi Đóng hàng xong
+ * (`autoPurchaseOnPackComplete` — toggle ở Settings, xem VnpShipping.md §2d).
  *
  * Spec VNP không khai response body → mọi hàm trả kèm `raw` nguyên văn và
  * dùng `digString()` dò các tên field phổ biến để nhặt id/tracking/label.
@@ -144,7 +146,12 @@ export class ShippingVnpService implements OnModuleInit {
       .collection('system_configs')
       .findOne<{ value?: VnpShippingConfig }>({ key: VNP_SHIPPING_CONFIG_KEY });
     const cfg = doc?.value;
-    return { addresses: cfg?.addresses ?? [], factoryMap: cfg?.factoryMap ?? {}, defaultAddressId: cfg?.defaultAddressId };
+    return {
+      addresses: cfg?.addresses ?? [],
+      factoryMap: cfg?.factoryMap ?? {},
+      defaultAddressId: cfg?.defaultAddressId,
+      autoPurchase: cfg?.autoPurchase,
+    };
   }
 
   /** Danh sách địa chỉ đã lưu bên VNP (hub US có sẵn nằm ở đây) — raw. */
@@ -250,6 +257,94 @@ export class ShippingVnpService implements OnModuleInit {
   }
 
   /** Gỡ địa chỉ khỏi blob (không xóa bên VNP) + dọn mapping trỏ vào nó. */
+  /** Lưu cấu hình tự động mua label (chỉ đụng nhánh `autoPurchase` của blob). */
+  async saveAutoPurchaseConfig(dto: SaveVnpAutoPurchaseDto): Promise<VnpShippingConfig> {
+    const config = await this.getShippingConfig();
+    config.autoPurchase = { enabled: dto.enabled, defaultWeightGram: dto.defaultWeightGram, service: dto.service };
+    await this.systemConfigService.set(VNP_SHIPPING_CONFIG_KEY, config);
+    this.logger.info({ message: JSON.stringify({ action: 'vnpSaveAutoPurchase', ...config.autoPurchase }) });
+    return config;
+  }
+
+  /**
+   * Hook tự động mua label khi 1 đơn hoàn thành Đóng hàng — gọi fire-and-forget
+   * từ `FulfillmentTaskService.transition()` tại đúng cạnh set
+   * `fulfillmentCompletedAt` (phủ cả bulk + auto-stage `autoCompletePack` vì
+   * mọi đường đều qua transition).
+   *
+   * KHÔNG BAO GIỜ ném (ShippingLabelPatterns.md §5 — việc phụ không phá việc
+   * chính): mọi lỗi chỉ log warn, KHÔNG retry (chốt với user 2026-09-07 —
+   * đơn fail mua tay ở dialog "Vận đơn VNP" như cũ). Điều kiện đơn ở
+   * `autoPurchaseSkipReason()`; idempotency bằng requestId cố định theo nhóm
+   * (`auto:pack:<groupKey>`) — hook bắn lặp thì `purchaseKey` trả nhãn cũ.
+   */
+  async autoPurchaseOnPackComplete(orderId: string): Promise<void> {
+    try {
+      const config = await this.getShippingConfig();
+      if (!config.autoPurchase?.enabled) return;
+      const order = await this.orderModel.findOne({ _id: orderId });
+      if (!order?.productionId) return;
+      const group = await this.loadGroup(order);
+      // "Đơn lên qua hệ thống" = có item trong staging customer_orders (đọc
+      // thẳng collection như system_configs — tránh kéo module customer-portal
+      // vào đây chỉ vì 1 lookup; index `items.productionId` có sẵn).
+      const staging = await this.orderModel.db
+        .collection('customer_orders')
+        .findOne<{ items?: { productionId?: string; shipMethod?: string }[] }>(
+          { 'items.productionId': order.productionId },
+          { projection: { items: 1 } },
+        );
+      const stagingItem = staging?.items?.find((i) => i.productionId === order.productionId);
+      const skip = autoPurchaseSkipReason({
+        enabled: true,
+        shipMethod: stagingItem?.shipMethod,
+        group: group.map((o) => ({
+          productionId: o.productionId,
+          hasTracking: hasProductionOrderTracking(o.tracking),
+          hasActiveShipment: !!o.vnpShipment?.shipmentId && !o.vnpShipment.cancelledAt,
+          completedAt: (o as unknown as { fulfillmentCompletedAt?: Date | null }).fulfillmentCompletedAt,
+        })),
+      });
+      if (skip) {
+        // Log info để soi được vì sao 1 đơn không có label (fail chỉ log,
+        // không retry). `group-incomplete` là nhịp bình thường — item cuối
+        // cùng của nhóm pack xong sẽ kích lại.
+        this.logger.info({
+          message: JSON.stringify({ action: 'vnpAutoPurchaseSkip', productionId: order.productionId, reason: skip }),
+        });
+        return;
+      }
+      const groupKey = order.orderId?.trim() || `order:${String(order._id)}`;
+      const result = await this.createShipment(
+        String(order._id),
+        {
+          service: config.autoPurchase.service ?? 'Standard',
+          shippingType: 'GDE',
+          requestId: autoPurchaseRequestId(groupKey),
+          weightGram: config.autoPurchase.defaultWeightGram ?? 300,
+          packages: 1,
+        } as CreateVnpShipmentDto,
+        { userName: 'auto:pack-complete' },
+      );
+      this.logger.info({
+        message: JSON.stringify({
+          action: 'vnpAutoPurchaseOk',
+          productionId: order.productionId,
+          groupKey,
+          trackingCode: result.shipment.trackingCode,
+        }),
+      });
+    } catch (err) {
+      this.logger.warn({
+        message: JSON.stringify({
+          action: 'vnpAutoPurchaseFail',
+          orderId,
+          error: (err as Error).message?.slice(0, 1000),
+        }),
+      });
+    }
+  }
+
   async deleteFromAddress(vnpAddressId: string): Promise<VnpShippingConfig> {
     const config = await this.getShippingConfig();
     config.addresses = config.addresses.filter((a) => a.vnpAddressId !== vnpAddressId);

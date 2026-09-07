@@ -38,6 +38,7 @@ import { OrderDocument, OrderEntity } from '../order/order.entity';
 import { OrderService } from '../order/order.service';
 import type { AuditContext } from '../order-log/order-log.service';
 import { OrderLogService } from '../order-log/order-log.service';
+import { ShippingVnpService } from '../shipping-vnp/shipping-vnp.service';
 import { UserDocument, UserEntity } from '../user/user.entity';
 
 /**
@@ -102,6 +103,7 @@ export class FulfillmentTaskService {
     private readonly orderLogService: OrderLogService,
     private readonly orderService: OrderService,
     private readonly customerOrderEventService: CustomerOrderEventService,
+    private readonly shippingVnpService: ShippingVnpService,
   ) {}
 
   // ─── Transition ─────────────────────────────────────────────────
@@ -266,6 +268,10 @@ export class FulfillmentTaskService {
           userEmail: (updated as unknown as { userEmail?: string }).userEmail,
         },
       ]);
+      // Tự động mua label VNP nếu bật ở Settings (VnpShipping.md §2d) —
+      // fire-and-forget, hàm tự nuốt lỗi (§5: fail mua label không được phá
+      // transition Đóng hàng).
+      void this.shippingVnpService.autoPurchaseOnPackComplete(orderId);
     }
 
     return updated;

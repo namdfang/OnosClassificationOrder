@@ -1,4 +1,4 @@
-import type { CreateVnpFromAddressDto, CreateVnpShipmentDto, ImportVnpFromAddressDto, SaveVnpShippingMapDto } from 'shared';
+import type { CreateVnpFromAddressDto, CreateVnpShipmentDto, ImportVnpFromAddressDto, SaveVnpAutoPurchaseDto, SaveVnpShippingMapDto } from 'shared';
 
 import { callApi } from '../apis';
 import { CONFIG } from '../constants';
@@ -31,6 +31,11 @@ const importFromAddress = (data: ImportVnpFromAddressDto) => {
 
 const saveMap = (data: SaveVnpShippingMapDto) => {
   return callApi(`/${CONFIG.API_VERSION}/shipping-vnp/config/map`, 'put', data);
+};
+
+/** Bật/tắt tự động mua label khi Đóng hàng xong (+ cân nặng mặc định, service). */
+const saveAutoPurchase = (data: SaveVnpAutoPurchaseDto) => {
+  return callApi(`/${CONFIG.API_VERSION}/shipping-vnp/config/auto-purchase`, 'put', data);
 };
 
 const deleteFromAddress = (vnpAddressId: string) => {
@@ -94,6 +99,7 @@ export const vnpShipping = {
   getRemoteAddresses,
   importFromAddress,
   saveMap,
+  saveAutoPurchase,
   deleteFromAddress,
   getGroup,
   checkAddress,

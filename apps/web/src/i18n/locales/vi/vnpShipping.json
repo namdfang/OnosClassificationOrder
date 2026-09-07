@@ -56,5 +56,14 @@
     "loading": "Đang tra...",
     "unknown": "(không dò được số dư — xem raw)",
     "raw": "Response thô — availableBalance"
+  },
+  "autoPurchase": {
+    "title": "Tự động mua label khi Đóng hàng xong",
+    "hint": "Bật lên: đơn hoàn thành công đoạn Đóng hàng sẽ tự mua label VNP nếu thoả TẤT CẢ: đơn khách đặt qua hệ thống (portal/CSV/API) với phương thức ship express_us hoặc economy_us; chưa có tracking khách tự cấp; chưa có vận đơn. Đơn nhiều item (cùng mã đơn seller) chỉ mua 1 label khi item cuối cùng đóng xong.\nMua thất bại (địa chỉ lỗi, hết tiền ví...) chỉ ghi log — KHÔNG chặn đóng hàng, KHÔNG tự thử lại; mua tay ở nút \"Vận đơn VNP\" như cũ.",
+    "weight": "Cân nặng mặc định (gram) khi đơn thiếu",
+    "service": "Service",
+    "save": "Lưu cấu hình auto",
+    "saved": "Đã lưu cấu hình tự động mua label",
+    "weightInvalid": "Cân nặng mặc định phải lớn hơn 0"
   }
 }

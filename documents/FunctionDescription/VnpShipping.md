@@ -70,6 +70,14 @@ Chỗ đúng để chứa chúng là **CHÍNH cặp bảng ở §2a**, không ph
   - **Response createShipment thành công**: `{ code:200, result:[{ id (=shipmentId uuid), shipping_cost, zone, shipmentResults:{ id, tracking_code (USPS 30 số), image_url (**LABEL PDF** trên CloudFront) } }] }` — service parse chính xác các field này, digString chỉ còn là fallback.
   - Ví phải ≥ $50 (lỗi "Insufficient wallet balance"). Format lỗi VNP: `{code, message (JSON lồng của carrier), timestamp, details, traceCode}` — `traceCode` gửi Nexo để tra log.
 
+### 2d. Tự động mua label khi Đóng hàng xong (toggle Settings — 2026-09-07)
+
+- **Toggle ở Cài đặt → Vận chuyển VNP** (section "Tự động mua label", lưu vào nhánh `autoPurchase` của cùng blob `vnp_shipping_config` — cũng SỐNG THEO MÔI TRƯỜNG): `{enabled, defaultWeightGram (fallback khi đơn thiếu weight), service}`. Endpoint `PUT /shipping-vnp/config/auto-purchase`.
+- **Điểm móc**: `FulfillmentTaskService.transition()` — đúng cạnh `!wasCompleted && nowCompleted` nơi bắn `order.production_completed` (phủ cả bulk + auto-stage `autoCompletePack` vì mọi đường đều qua transition). Gọi fire-and-forget `ShippingVnpService.autoPurchaseOnPackComplete()` — hàm TỰ NUỐT lỗi (ShippingLabelPatterns.md §5: fail mua label không được phá transition Đóng hàng). `FulfillmentModule` import `ShippingVnpModule` (1 chiều, không vòng DI).
+- **Phạm vi chốt với user 2026-09-07** (`autoPurchaseSkipReason()` — hàm thuần `auto-purchase.logic.ts` + spec `auto-purchase.spec.ts`): CHỈ đơn lên qua hệ thống (có item trong staging `customer_orders` — tra thẳng collection theo `items.productionId`, không kéo module customer-portal vào) với `shipMethod` thuộc `AUTO_PURCHASE_SHIP_METHODS = ['express_us','economy_us']` (giá đã gồm ship — mình lo label; cod/tiktok khách tự lo). Nhóm (cùng `orderId` seller) bị bỏ nếu: có item mang tracking khách tự cấp (ORD-26), có vận đơn active, hoặc **còn item chưa đóng hàng xong** (item CUỐI CÙNG pack xong mới mua — 1 đơn 1 label gộp cả nhóm).
+- **Idempotency**: requestId CỐ ĐỊNH `auto:pack:<groupKey>` (`autoPurchaseRequestId()`) — hook bắn lặp (restart, 2 item pack sát nhau) thì unique index `purchaseKey` quy về đúng 1 label, `replayPurchase()` trả nhãn cũ.
+- **Fail CHỈ LOG, KHÔNG retry** (chốt với user — action log: `vnpAutoPurchaseSkip`/`vnpAutoPurchaseOk`/`vnpAutoPurchaseFail`): đơn fail mua tay ở dialog "Vận đơn VNP" như cũ. KHÔNG check địa chỉ USPS trước (bước check là thủ công); địa chỉ hỏng → VNP từ chối → rơi vào nhánh fail-log; record `purchasing` kẹt (chết giữa chừng) đã có cron `reconcilePurchasing()` dọn.
+
 ## 3. API / Schema
 
 | Method | Path | Mô tả |
@@ -81,6 +89,7 @@ Chỗ đúng để chứa chúng là **CHÍNH cặp bảng ở §2a**, không ph
 | POST | `/v1/shipping-vnp/from-addresses/import` | Thêm địa chỉ ĐÃ TỒN TẠI bên VNP vào config bằng id |
 | GET | `/v1/shipping-vnp/wallet` | Số dư ví VNP (cần ≥ $50 mới tạo được vận đơn) |
 | PUT | `/v1/shipping-vnp/config/map` | Lưu factoryMap + defaultAddressId |
+| PUT | `/v1/shipping-vnp/config/auto-purchase` | Bật/tắt tự động mua label khi Đóng hàng xong (+ cân nặng mặc định, service — §2d) |
 | DELETE | `/v1/shipping-vnp/from-addresses/:vnpAddressId` | Gỡ địa chỉ khỏi config (không xóa bên VNP) |
 | GET | `/v1/shipping-vnp/orders/:orderId/group` | Nhóm item cùng `orderId` seller (1 đơn = 1 label) |
 | POST | `/v1/shipping-vnp/orders/:orderId/check-address` | Bước 1 — USPS checkAddress cho địa chỉ đơn |
@@ -119,6 +128,9 @@ VnpShipmentRecordZod = { _id, packageId, provider, vnpShipmentId?, trackingCode?
 // VNP_SHIPMENT_COUNTED_STATUSES = ['created','in_transit','delivered'] — status tính vào dashboard chi phí
 // VnpTrackingCronResZod thêm `reconcile? {scanned, finalized, failed, unknown}` — kết quả dọn record kẹt purchasing
 GetVnpShipmentsZod = { page, size, search? }
+// §2d — auto mua label: VnpShippingConfigZod thêm autoPurchase? =
+// VnpAutoPurchaseConfigZod { enabled, defaultWeightGram (default 300), service (default Standard) };
+// AUTO_PURCHASE_SHIP_METHODS = ['express_us','economy_us']; SaveVnpAutoPurchaseDto/ResDto
 ```
 
 Env (`apps/api/.env.development.example`): `VNP_EGLOBAL_API_URL` (default staging), `VNP_EGLOBAL_EMAIL`, `VNP_EGLOBAL_PASSWORD`, `VNP_EGLOBAL_SHIPPING_UNIT_ID` (staging: `b47b8c02-5dd0-40cf-9b22-10978d82bdc4`), `VNP_EGLOBAL_FROM_ADDRESS_ID`. Thiếu email/password → `vnpEglobalConfig` getter (api-config.service.ts) trả null, feature tự disable.
@@ -128,6 +140,7 @@ Env (`apps/api/.env.development.example`): `VNP_EGLOBAL_API_URL` (default stagin
 - `VnpShipmentDialog.tsx` — dialog 3 section (địa chỉ / vận đơn / **lịch sử vận đơn** từ `GET orders/:id/shipments`, badge Đang hoạt động/Đã hủy + link label + phí + người tạo), mỗi call hiện `RawBlock` (details/pre collapsible) chứa raw response. Select native styled, i18n namespace `orders` key `vnp.*` (+ `vnp.history*`) + `rowActionsMenu.vnpShipment` (vi/en).
 - `OrderRowActionsMenu.tsx` — item "Vận đơn VNP" (icon Truck), chỉ `isAdmin`, disable khi đơn hủy.
 - `workshopTableConfig.tsx` — `WorkshopOrderRow` thêm `weight`/`shippingAddress`/`vnpShipment`.
+- `VnpShippingConfig.tsx` — thêm section "Tự động mua label khi Đóng hàng xong" (§2d): Switch bật/tắt + input cân nặng mặc định (gram) + select service, nút lưu riêng gọi `PUT config/auto-purchase`; i18n `vnpShipping.autoPurchase.*` (vi/en).
 
 ## 5. Backend logic
 

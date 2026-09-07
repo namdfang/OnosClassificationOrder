@@ -40,6 +40,8 @@ import {
   ImportVnpFromAddressDto,
   RoleType,
   RunVnpTrackingCronResDto,
+  SaveVnpAutoPurchaseDto,
+  SaveVnpAutoPurchaseResDto,
   SaveVnpShippingMapDto,
   SaveVnpShippingMapResDto,
 } from 'shared';
@@ -144,6 +146,21 @@ export class ShippingVnpController {
   async saveMap(@Body() dto: SaveVnpShippingMapDto, @AuthUser() user: UserDocument): Promise<SaveVnpShippingMapResDto> {
     this.logger.info({ message: JSON.stringify({ method: 'PUT', url: '/shipping-vnp/config/map', userId: user._id }) });
     return { success: true, data: await this.shippingVnpService.saveShippingMap(dto) };
+  }
+
+  @Put('config/auto-purchase')
+  @Auth([RoleType.SuperAdmin, RoleType.Admin])
+  @ApiOperation({ summary: 'Bật/tắt tự động mua label khi Đóng hàng xong (+ cân nặng mặc định, service)' })
+  @HttpCode(HttpStatus.OK)
+  @ApiOkResponse({ type: SaveVnpAutoPurchaseResDto })
+  async saveAutoPurchase(
+    @Body() dto: SaveVnpAutoPurchaseDto,
+    @AuthUser() user: UserDocument,
+  ): Promise<SaveVnpAutoPurchaseResDto> {
+    this.logger.info({
+      message: JSON.stringify({ method: 'PUT', url: '/shipping-vnp/config/auto-purchase', userId: user._id }),
+    });
+    return { success: true, data: await this.shippingVnpService.saveAutoPurchaseConfig(dto) };
   }
 
   @Delete('from-addresses/:vnpAddressId')

@@ -93,12 +93,33 @@ export const VnpFromAddressZod = z.object({
 });
 export type VnpFromAddress = z.infer<typeof VnpFromAddressZod>;
 
+/**
+ * Tự động mua label khi đơn hoàn thành Đóng hàng (hook `production_completed`).
+ * Phạm vi CHỐT với user 2026-09-07: CHỈ đơn lên qua Customer Portal (tra
+ * staging `customer_orders` theo `items.productionId`) có `shipMethod` thuộc
+ * `AUTO_PURCHASE_SHIP_METHODS` (giá đã gồm ship — mình lo label), nhóm không
+ * có tracking khách tự cấp + chưa có vận đơn active. Fail → CHỈ log, không
+ * retry (mua tay ở dialog như cũ).
+ */
+export const VnpAutoPurchaseConfigZod = z.object({
+  enabled: z.boolean().default(false),
+  /** Cân nặng fallback (gram) cho item thiếu `order.weight`. */
+  defaultWeightGram: z.number().positive().default(300),
+  service: VnpShippingServiceZod.default('Standard'),
+});
+export type VnpAutoPurchaseConfig = z.infer<typeof VnpAutoPurchaseConfigZod>;
+
+/** shipMethod đơn khách mà bên mình chịu trách nhiệm mua label. */
+export const AUTO_PURCHASE_SHIP_METHODS = ['express_us', 'economy_us'] as const;
+
 export const VnpShippingConfigZod = z.object({
   addresses: z.array(VnpFromAddressZod).default([]),
   /** factoryId → vnpAddressId. */
   factoryMap: z.record(z.string()).default({}),
   /** Địa chỉ gửi mặc định cho xưởng chưa gán / đơn chưa map xưởng. */
   defaultAddressId: z.string().optional(),
+  /** Thiếu (config cũ) = tắt. */
+  autoPurchase: VnpAutoPurchaseConfigZod.optional(),
 });
 export type VnpShippingConfig = z.infer<typeof VnpShippingConfigZod>;
 
@@ -153,6 +174,12 @@ export class SaveVnpShippingMapResDto extends createZodDto(
 ) {}
 
 export class DeleteVnpFromAddressResDto extends createZodDto(
+  extendApi(ResZod.extend({ data: VnpShippingConfigZod })),
+) {}
+
+/** Lưu cấu hình tự động mua label (không đụng addresses/factoryMap). */
+export class SaveVnpAutoPurchaseDto extends createZodDto(extendApi(VnpAutoPurchaseConfigZod)) {}
+export class SaveVnpAutoPurchaseResDto extends createZodDto(
   extendApi(ResZod.extend({ data: VnpShippingConfigZod })),
 ) {}
 

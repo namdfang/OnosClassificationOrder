@@ -56,5 +56,14 @@
     "loading": "Checking...",
     "unknown": "(balance not detected — see raw)",
     "raw": "Raw response — availableBalance"
+  },
+  "autoPurchase": {
+    "title": "Auto-buy label when packing completes",
+    "hint": "When ON: orders that finish the Pack stage automatically get a VNP label if ALL apply: the order was placed through the system (portal/CSV/API) with ship method express_us or economy_us; no customer-provided tracking; no existing shipment. Multi-item orders (same seller order ID) buy one label only after the last item is packed.\nFailed purchases (bad address, empty wallet...) are only logged — packing is NOT blocked and there is NO automatic retry; buy manually via the \"VNP shipment\" button as before.",
+    "weight": "Default weight (gram) when order has none",
+    "service": "Service",
+    "save": "Save auto settings",
+    "saved": "Auto label purchase settings saved",
+    "weightInvalid": "Default weight must be greater than 0"
   }
 }
