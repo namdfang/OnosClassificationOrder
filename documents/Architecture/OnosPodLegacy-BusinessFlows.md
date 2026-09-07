@@ -4,7 +4,7 @@
 >
 > **Độ tin cậy:** phần "Nắm chắc" có số liệu/log chứng minh; phần "Suy ra" ghi rõ; phần "Chưa rõ" liệt kê ở §14 để người vận hành xác nhận.
 >
-> **Bổ sung 08/09/2026:** §7b OnosExpress (hệ vận chuyển riêng của tập đoàn, có API công khai) và §8 công thức giá suy ngược từ 600 đơn thật.
+> **Bổ sung 08/09/2026:** §1b cổng seller `seller.onospod.com`, §7b OnosExpress (hệ vận chuyển riêng của tập đoàn, có API công khai), §8 công thức giá suy ngược từ 600 đơn thật, §11b API công khai cho seller (hợp đồng cần tương thích), §13b chính sách đã công bố (175 thông báo). Bản sao tài liệu API ở `documents/Architecture/reference/`.
 >
 > **Liên quan:** hệ mới đọc dữ liệu OnosPod ở `apps/api/src/modules/order/onospod-order-lookup.service.ts` (tra đơn), `onospod-import.service.ts` (kéo production `PaginateMrpProduct`), `apps/api/src/modules/product-config/onospod-product-import.service.ts` (kéo sản phẩm). **Hệ mới KHÔNG ghi gì ngược về OnosPod.**
 
@@ -18,6 +18,14 @@
 - Lưu trữ file: CDN `cdn.onospod.com` (barcode PDF, invoice xlsx, ảnh sản phẩm), `podorder.sgp1.digitaloceanspaces.com` (mockup), `poddesign.sgp1.cdn.digitaloceanspaces.com` (design), label ở `cdn.onosexpress.com`. Cấu hình S3 ở màn Storage.
 - Thông báo: Telegram bot "Onos Manufacturer Bot" (nhóm `-599424200`) với 5 action bật: `tracking_update` (mention @NyanMew, nhóm ONOS-PODGEEK-Fulfill), `remind_every_day` 06:00 và 13:00, `new_production_request`, `package_done_request`, `production_error`. Cấu hình máy in: tem barcode 6×4.
 - Có API token cho seller (màn "API Token"), log gọi API (`token-access-logs`), chặn IP (`block-logs`), tickets (trống), extensions (tải Chrome extension), system notifications (18 trang thông báo cho seller, tiếng Việt).
+
+## 1b. Cổng seller `seller.onospod.com` (khảo sát 08/09/2026)
+
+App Next.js riêng (next-auth, GraphQL proxy `/graphql`), là giao diện seller thật sự dùng — app `app.onospod.com` là admin/xưởng. Menu: **Dashboard** (số dư, thống kê đơn, Production Avg business days, Fulfilled/Delivered %), **Insights** (top sản phẩm theo đơn vị: tháng 9 4.767 unit, Baseball Jersey No Piping 11%), **Report → SLA** (đơn đẩy vào sản xuất theo ngày, Produced in 2/3/>3 days, Late rate; Ship Out/Delivered/In Transit, Delivered in 5 days), **Affiliate**, **Catalog** (collection 3D/2D/Embroidery, category, tag, technique; trang sản phẩm hiện giá theo phương thức "Express US" vs "Tiktok US Shipping", "IMPORT US TAX $0,42/unit", package gram/cm, size chart, template Drive, tải file SKU), **Orders** (tab Pending/Processing/In Production/Fulfilled/Completed/Refunded/Cancelled; "Issue Orders 99+"; nút **Push To Production**, Export, New order; cột ORDER/ITEMS/SHIPPING/STATUS/PAYMENT/SHIPMENT/NOTE; trạng thái phụ "Scheduled to Process order item design", "Mapping", "Insufficient account balance", "Ignore. Active"), **Import** (CSV theo Google Sheet mẫu), **OEM Orders** (đơn sản xuất số lượng lớn, tách khỏi đơn thường — hiện 0), **Billing** (Invoice 2.197 kỳ, Topup có tỷ giá USD/VND + mã giao dịch + ảnh chứng từ, Withdraw, Transactions), **File Library**, **Support** (FAQ: Manual Order Guide 8 bước, CSV Import Guide, Catalog, API Documentation, Design & Templates, Fast Shipping Service = onosexpress.com, Manual Topup; Freshchat + "Chat With AI Support"), **Tickets**, **Notifications** (system notifications), **Integrations** (Stores WooCommerce: connect, lịch đẩy tracking, delay ngày; Orders từ store), **Extensions**, **API**.
+
+Luồng đặt đơn tay 8 bước (theo FAQ): chọn sản phẩm → chọn size → tải design + mockup → nhập địa chỉ → (tải label + tracking nếu seller tự ship) → chọn phương thức ship → Submit for production → gửi mã đơn cho support khi cần. Form New order có ORDER ACTIVITY (Created → Sent to fulfillment → Manufacturing → Finished → Picked Up → Delivered), bảng PRODUCT/QTY/PRICE/TAX/TOTAL, PACKAGE gram/cm, SUBTOTAL + SHIPPING + TAX (Import Tax + Customs Fee) = TOTAL, PAID, checkbox "I am responsible if the shipping address is incorrect", SHIPPING METHOD (có "No delivery needed, I will do it by myself" = COD), BUYER NOTE, TRACKING.
+
+Hệ mới đã có Seller Portal (`apps/seller`) phủ Dashboard/Orders theo dòng/Create/Import/Account/API; **chưa có**: Insights, SLA report cho seller, Affiliate, OEM, Billing (invoice/topup/withdraw/transactions), File Library, Support/FAQ/Tickets, Integrations store, Extensions, "Push To Production" hàng loạt với kiểm tra số dư.
 
 ## 2. Quy mô (30 ngày tính đến 07/09/2026)
 
@@ -185,11 +193,28 @@ Tab theo collection: 3D · 2D · Grabink · Embroidery · Dropship · Handmade W
 
 **Ghi (chưa gọi, chỉ liệt kê):** `setOrderManufacture(order_id, …)`, `presignOrderShippingMethod(order_id, shipping_id)`, `makeShippingLabel(order_id)`, `chargeOrder`, `trashOrder(ids)`, `mrpProductNextProcessStep(_id)`, `reportMrpError(_id, errors[], note)`, `mrpProductRemoveError(_id)`, `makeMrpBatchProduct(product_ids, params)`, `updateMrpBatchProduct`, `trashMrpBatchProduct`, `printBarcodeMrpProduct/Batch`, `printQRCode*`, `exportBatchProducts`, `scanPackageTracking(tracking)`, `mrpVerifyShipment(V2)(orders[])`, `importShippingPackage(orders[])`, `mrpPackageSplit(_id)`, `mrpProductPackageUpdateExportTime(ids)`, `trashMrpProductPackage`, `maskAsDelivered(_id)`, `exportPickupOrders(account_id)`, `dowloadPackageTracking`, `requestProductionHistory(auth_id)`, `switchUser`, `saveMerchantGroup`, `toggleDesignProduction`, `logisticAuthorize`, `trashLogistic`, `sendRemindTelegram`, `notificationMake`, `saveProductLabel`, `applyOrderProductTags`. Tổng ~230 tên lệnh; danh sách đầy đủ trong scratchpad khảo sát (không commit).
 
+## 11b. API công khai cho seller/đối tác (`api-app.onospod.com/api/v1`) — hợp đồng cần tương thích
+
+Tài liệu Postman công khai "ONOS PUBLIC API" (bản sao sạch: `documents/Architecture/reference/onospod-seller-api.postman.json`). Seller/integration đang dùng hợp đồng này; hệ mới muốn nhận seller API mà không bắt họ sửa code thì Public Order API (ORD-4) nên nhận thêm **đúng hình dạng này** (adapter), ít nhất `order/create`, `order/{id}`, `shipment/events`, webhook `order.updated`.
+
+| Method | Endpoint | Ghi chú |
+|---|---|---|
+| POST | `/login` `{email,password}` | Bearer token |
+| GET | `/products`, `/products/{id}` | id `NZ-98233`, sku, attributes (Size/Color), `attribute_specifics[]{sku, price…}`, `print_areas`, size_chart, `tax_fee` |
+| POST | `/order/create` (và `/order/create/test`) | Khóa duy nhất = (`order_id`, `identifier`); `referent_id`, `reference_id`, `order_name`, `customer_note`, `note`; `items[]{attributes[{name,option}] tối thiểu Size+Color, sku Onos, product_id của khách, name, image (mockup), price, quantity, currency, design_front/back/sleeve/hood/chest_left/chest_right… HOẶC print_areas[{key,value}] (không được trộn 2 kiểu; key phải có trong print_areas của sản phẩm)}`; `shipping_info{full_name,address_1,address_2,city,state,postcode,country,email,phone}`; `shipping_method` **ONOSEXPRESS** (mặc định, line ship Onos) \| **SBTT** (Ship by TikTok do Onos hỗ trợ, cần `tracking{tracking_number,carrier,link_print}` = label seller cấp, Onos dán và ship) \| **COD** (sản xuất xong TRẢ VỀ merchant); `inc_active_service` (kích hoạt tracking USPS, từ 29/04/2025 áp cả SBTT). Lỗi trả `status:false` + `error` (tải link_print thất bại, print_areas sai key…) |
+| GET | `/order/{id}` · `/order?from&to&page&page_size` | chi tiết/danh sách |
+| DELETE | `/order/{id}` | hủy |
+| POST | `/order/tracking-list` `{tracking:[…]}` | tra đơn theo mã vận đơn |
+| GET | `/order/{id}/shipment/events` | lịch sử tracking |
+| GET/POST/DELETE | `/webhooks/` | topic `order.updated` \| `shipment.events`, `endpoint`, `secret` → header `X-Onos-Hmac-SHA256` |
+
+Payload webhook `order.updated` (thật, 03/2026): `id` (mã fulfillment), `order_id` (merchant), `identifier`, `status` Fulfilled, `fulfillment_cost`/`base`/`base_total`/`base_ship_total`/`total`/`base_cost`/`ship_cost`, `items[]{name, product_id, sku, quantity, price, tax, design_*, attributes, fulfilment_attributes}`, `tracking{tracking, carrier, url, shipping_label}`, `production_at`, `shipping{}`, `refunds[]`, `shipping_valid`, `shipping_method`, `active_tracking_day`, `created_at`/`updated_at`/`imported_at`/`paid_at`, `shipment_id` (mã bên OnosExpress `03-26-10069863`). Hệ mới hiện phát `order.pushed/production_completed/held/unheld/cancelled` với `X-Onos-Signature` — tên topic và chữ ký khác, cần lớp tương thích.
+
 ## 12. Đối chiếu với hệ mới OnosFactory
 
 | Khâu | Hệ cũ | Hệ mới | Khoảng trống |
 |---|---|---|---|
-| Lên đơn seller (form/CSV/API), tài khoản, API key, webhook | Có | Có (Seller Portal + Public Order API) | Thiếu: nhập tracking hàng loạt cho label seller tự cấp qua UI (API/CSV đã có), Split/Clone/Keep in stock, RAR |
+| Lên đơn seller (form/CSV/API), tài khoản, API key, webhook | Có (§1b, §11b) | Có (Seller Portal + Public Order API) | **Hợp đồng API khác nhau** (§11b: `order/create` theo attributes/print_areas, `shipping_method` ONOSEXPRESS/SBTT/COD, webhook `order.updated` ký `X-Onos-Hmac-SHA256`) → cần adapter tương thích; thiếu Push To Production kiểm số dư, Insights/SLA seller, OEM, Billing seller, Support/Tickets, Integrations store, nhập tracking hàng loạt qua UI, Split/Clone/Keep in stock, RAR |
 | Catalog, biến thể, giá | 8 loại giá + phụ phí vị trí/mặt in + thuế theo SKU + VIP/partner/unit discount | `cost`/`nonShipCost`/`retailPrice` + Promotion theo tier | **Thiếu công thức giá đầy đủ, thuế nhập, phụ phí vị trí in, giảm giá số lượng** |
 | Ví, trừ tiền, nợ, hóa đơn kỳ, topup, hoàn tiền, đối soát xưởng | Có, là sổ cái | Chỉ có ledger `customer_payments` ghi `waived` | **Thiếu toàn bộ** — điểm chặn lớn nhất |
 | Gán xưởng | Theo sản phẩm (`manufacture_id`) + tay | Product Config + khách→xưởng | Có |
@@ -210,6 +235,16 @@ Tab theo collection: 3D · 2D · Grabink · Embroidery · Dropship · Handmade W
 3. **Label + kiện + bàn giao** ở hệ mới (VNP), chọn mô hình mua label (trước sản xuất như cũ, hay lúc đóng).
 4. **Lô sản xuất theo ngày** nếu xưởng xác nhận cần phiếu theo lô.
 5. Cắt theo dòng sản phẩm: gỡ sản phẩm khỏi catalog cũ (`visible=false`/"Hide product for seller"), seller sang portal mới, tắt tài khoản logistics cũ.
+
+## 13b. Chính sách vận hành đã công bố cho seller (từ 175 thông báo hệ thống, lưu ở `reference/onospod-system-notifications.md`)
+
+- **Thời gian sản xuất chuẩn 2–3 ngày làm việc**, mùa cao điểm 3–4 ngày (5% tới 5 ngày); SLA report cho seller đo Produced in 2/3/>3 days và Delivered in 5 days.
+- **Từ 17/06/2026 sản xuất thẳng theo file seller gửi**, không đối chiếu design với mockup; seller chịu trách nhiệm template/kích thước (tương ứng cờ `skip_design_check` / "Enable design check" theo sản phẩm).
+- **Giá**: bảng giá sản phẩm điều chỉnh nhiều đợt (31/03, 21/04, 30/04, 27/05/2026); ưu đãi hạng thành viên −0,50 $ cho nhóm bikini/hawaiian/pajama từ 14/05; phụ phí USPS tạm thời +0,2 $ (mã WT/YT/UT) và +0,6 $ (HG-18500, SW-18000) từ 26/04/2026 đến 17/01/2027; bảng giá ship mới hiệu lực 01/05/2026 (khớp Pricing OnosExpress "2026-05-01").
+- **Thuế nhập Mỹ**: cập nhật theo CBP (Section 122 → Section 301 từ 24/07/2026, áp từ 01/08/2026); thuế cố định theo SKU (§8).
+- **Ship By TikTok / scan label**: seller phải đặt địa chỉ warehouse TikTok tại CYPRESS, TX 77429 (từ 21/05/2026; trước đó CA), lịch scan thứ 2–7 (nghỉ thứ 6 và CN theo thông báo); sự cố miss-scan, delay chuyến bay HAN→US, hải quan giữ lô (01/08/2026) đều thông báo qua kênh này.
+- **Lịch nghỉ**: lễ VN (30/4–1/5, 2/9) xưởng + vận chuyển VN nghỉ; lễ US (Memorial, Juneteenth, Independence, Labor Day) USPS nghỉ scan/giao.
+- **SKU/template**: mở SKU mới và đổi template liên tục (2–4 lần/tháng), size chart trên trang sản phẩm của cổng seller; sản phẩm tạm đóng khi thiếu vải.
 
 ## 14. Chưa rõ — cần người vận hành xác nhận
 
