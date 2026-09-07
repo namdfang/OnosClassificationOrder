@@ -76,7 +76,6 @@ export function buildHubNav(t: TFunction): NavGroup[] {
       group: t('nav.group', { ns: 'hub' }),
       items: [
         { id: 'hub_overview', icon: '📊', label: t('nav.dashboard', { ns: 'hub' }), href: '/hub' },
-        { id: 'hub_sellers', icon: '👥', label: t('nav.sellers', { ns: 'hub' }), href: '/hub/sellers' },
         {
           id: 'hub_orders',
           icon: '📦',
@@ -92,6 +91,7 @@ export function buildHubNav(t: TFunction): NavGroup[] {
             })),
           ],
         },
+        { id: 'hub_sellers', icon: '👥', label: t('nav.sellers', { ns: 'hub' }), href: '/hub/sellers' },
         { id: 'hub_notifications', icon: '🔔', label: t('nav.notifications', { ns: 'hub' }), href: '/hub/notifications' },
       ],
     },
