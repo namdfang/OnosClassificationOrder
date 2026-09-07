@@ -844,6 +844,8 @@ curl -s -o /dev/null -w '%{http_code}\n' http://127.0.0.1:3017/login   # 200
 
 Từ lần sau `./deploy.sh` tự build + restart seller khi thấy `apps/seller/.env.production`.
 
+> **Đã bật trên prod 07/09/2026:** `apps/seller/.env.production` (3 biến như mẫu), nginx `/etc/nginx/sites-available/onosfactory-seller` (+ symlink sites-enabled), cert Let's Encrypt riêng `seller.onosfactory.com` (certbot `--redirect`), pm2 `onosfactory-seller` (cluster 1, ~190 MB) đã `pm2 save`. Cloudflare DNS A `seller` proxied → 167.71.192.106. Từ nay `./deploy.sh` tự build + restart seller. Chưa làm: CORS bucket R2 thêm origin seller (upload thiết kế từ seller), `VITE_SELLER_URL` cho web prod (redirect `/customer/*`).
+
 ### 8.1 Nginx `seller.onosfactory.com`
 
 ```nginx
