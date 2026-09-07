@@ -12,7 +12,8 @@
     "notifications": "Thông báo",
     "factoryApp": "Vận hành xưởng",
     "signOut": "Đăng xuất",
-    "ordersAll": "Tất cả dịch vụ"
+    "ordersAll": "Tất cả dịch vụ",
+    "operations": "Vận hành"
   },
   "login": {
     "title": "Seller Hub",
@@ -133,5 +134,56 @@
     "loading": "Đang tải...",
     "search": "Tìm...",
     "confirm": "Xác nhận"
+  },
+  "ops": {
+    "title": "Vận hành sản xuất",
+    "subtitle": "Toàn bộ quy trình từ soát tool đến đóng hàng · góc nhìn quản trị · chỉ đọc",
+    "factoryAll": "Mọi xưởng",
+    "kpi": {
+      "in": "Vào SX",
+      "out": "Ra SX",
+      "active": "Đang chạy",
+      "overdue": "Quá hạn (≥3 ngày)",
+      "n2": "Đúng hẹn N2"
+    },
+    "funnel": {
+      "title": "Phễu 8 chặng",
+      "hint": "Tồn = đơn đang đứng ở chặng · bấm chặng để xem đơn",
+      "backlog": "Tồn",
+      "error": "Lỗi",
+      "rework": "Làm lại",
+      "done": "Xong trong kỳ",
+      "bottleneck": "Nút thắt",
+      "cycle": "Chu kỳ TB {{h}} giờ"
+    },
+    "stageOrders": {
+      "title": "Đơn đang ở chặng {{stage}}",
+      "empty": "Không có đơn ở chặng này.",
+      "openAll": "Mở trong Đơn khách",
+      "age": "{{n}} ngày",
+      "ageCol": "Ở chặng"
+    },
+    "sla": {
+      "title": "Đúng hẹn & quá hạn",
+      "overdueByFactory": "Quá hạn theo xưởng",
+      "oldest": "Đơn cũ nhất"
+    },
+    "factory": {
+      "title": "Theo xưởng",
+      "cols": {
+        "factory": "Xưởng",
+        "total": "Tổng",
+        "printed": "Đã in",
+        "printing": "Đang in",
+        "notPrinted": "Chưa in",
+        "errors": "Lỗi",
+        "designUnassigned": "Chưa gán TK"
+      }
+    },
+    "findings": {
+      "title": "Phát hiện & việc cần làm",
+      "empty": "Kỳ này không có gì bất thường."
+    },
+    "openFactoryApp": "Mở app vận hành xưởng"
   }
 }

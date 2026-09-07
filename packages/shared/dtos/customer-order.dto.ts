@@ -27,6 +27,7 @@ import {
   LifecycleTrackZod,
   ProductionOrderShippingAddressZod,
   ProductionOrderTrackingZod,
+  WORKSHOP_STAGE_FILTER_KEYS,
 } from './production-order.dto';
 
 /**
@@ -631,6 +632,8 @@ export const AdminOrderDateRangeZod = z.object({
 export const GetAdminCustomerOrdersZod = GetCustomerStagingOrdersZod.merge(AdminOrderDateRangeZod).extend({
   /** Lọc theo 1 seller; bỏ trống = mọi seller. */
   customerId: IDZod.optional(),
+  /** Chặng sản xuất hiện tại (`WORKSHOP_STAGE_FILTER_KEYS`) — đơn có ≥1 item đang ở chặng này (Operations `/hub/operations`). */
+  stage: z.enum(WORKSHOP_STAGE_FILTER_KEYS).optional(),
 });
 export class GetAdminCustomerOrdersDto extends createZodDto(extendApi(GetAdminCustomerOrdersZod)) {}
 

@@ -12,7 +12,8 @@
     "notifications": "Notifications",
     "factoryApp": "Factory operations",
     "signOut": "Sign out",
-    "ordersAll": "All services"
+    "ordersAll": "All services",
+    "operations": "Operations"
   },
   "login": {
     "title": "Seller Hub",
@@ -133,5 +134,56 @@
     "loading": "Loading...",
     "search": "Search...",
     "confirm": "Confirm"
+  },
+  "ops": {
+    "title": "Production operations",
+    "subtitle": "Whole process from tool check to packing · admin view · read-only",
+    "factoryAll": "All factories",
+    "kpi": {
+      "in": "Entered",
+      "out": "Completed",
+      "active": "Active",
+      "overdue": "Overdue (≥3 days)",
+      "n2": "On time N2"
+    },
+    "funnel": {
+      "title": "8-stage funnel",
+      "hint": "Backlog = orders currently at the stage · click a stage to list its orders",
+      "backlog": "Backlog",
+      "error": "Errors",
+      "rework": "Rework",
+      "done": "Done in range",
+      "bottleneck": "Bottleneck",
+      "cycle": "Avg cycle {{h}} h"
+    },
+    "stageOrders": {
+      "title": "Orders at stage {{stage}}",
+      "empty": "No orders at this stage.",
+      "openAll": "Open in Customer orders",
+      "age": "{{n}} d",
+      "ageCol": "At stage"
+    },
+    "sla": {
+      "title": "On-time & overdue",
+      "overdueByFactory": "Overdue by factory",
+      "oldest": "Oldest orders"
+    },
+    "factory": {
+      "title": "By factory",
+      "cols": {
+        "factory": "Factory",
+        "total": "Total",
+        "printed": "Printed",
+        "printing": "Printing",
+        "notPrinted": "Not printed",
+        "errors": "Errors",
+        "designUnassigned": "Design unassigned"
+      }
+    },
+    "findings": {
+      "title": "Findings & actions",
+      "empty": "Nothing unusual this period."
+    },
+    "openFactoryApp": "Open factory app"
   }
 }

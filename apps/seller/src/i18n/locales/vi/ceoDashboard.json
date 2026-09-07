@@ -1,0 +1,222 @@
+{
+  "title": "CEO Dashboard",
+  "subtitle": "Tổng quan điều hành · số sống từ hệ thống sản xuất",
+  "boards": {
+    "overview": "Tổng quan"
+  },
+  "noPermission": "Trang này chỉ dành cho SuperAdmin / Admin.",
+  "range": {
+    "today": "Hôm nay",
+    "yesterday": "Hôm qua",
+    "last7": "7 ngày",
+    "last30": "30 ngày",
+    "prev": "Lùi 1 ngày",
+    "next": "Tiến 1 ngày",
+    "label": "Đơn vào sản xuất từ {{from}} đến {{to}}"
+  },
+  "kpi": {
+    "in": "Đơn vào",
+    "out": "Đơn ra",
+    "revenue": "Giá trị đơn",
+    "revenueHint": "Theo baseCost đơn sản xuất, USD — chưa phải doanh thu kế toán",
+    "n2": "Đúng hẹn 2 ngày",
+    "n2Hint": "% đơn đủ tuổi (vào SX ≥ 2 ngày) đã ra trong 2 ngày",
+    "errorRate": "Tỉ lệ lỗi",
+    "backlog": "Tồn trong xưởng",
+    "backlogHint": "Đơn chưa đóng hàng tại thời điểm hiện tại",
+    "vsPrev": "so kỳ trước",
+    "avgOrder": "TB/đơn",
+    "ref": "cùng thứ tuần trước {{sw}} · TB 7 ngày {{avg}}"
+  },
+  "flow": {
+    "title": "Dòng chảy sản xuất",
+    "hint": "Mỗi đơn đứng ở đúng một chặng — bấm ô để mở danh sách đơn đang ở chặng đó",
+    "done": "Đã đóng hàng"
+  },
+  "factory": {
+    "title": "Theo xưởng",
+    "hint": "Đơn đang giao cho từng xưởng",
+    "empty": "Không có đơn nào trong khoảng này"
+  },
+  "attention": {
+    "title": "Cần chú ý",
+    "hint": "Cờ cắt ngang — một đơn có thể mang nhiều cờ",
+    "errorFile": "Có file lỗi",
+    "noTool": "Thiếu tool",
+    "unreviewed": "Chưa soát tool",
+    "priority": "Có đặt ưu tiên",
+    "held": "Đang giữ",
+    "designBacklog": "Tồn thiết kế",
+    "open": "Mở danh sách"
+  },
+  "types": {
+    "title": "Loại sản phẩm nhiều đơn nhất",
+    "hint": "Top {{n}} theo số đơn, thanh màu chia theo chặng",
+    "orders": "đơn",
+    "qty": "sp",
+    "more": "và {{n}} loại khác"
+  },
+  "source": {
+    "designer": "Thiết kế",
+    "factory": "Xưởng",
+    "tool-check": "Soát tool",
+    "unknown": "Chưa rõ"
+  },
+  "period": {
+    "today": "Hôm nay",
+    "week": "7 ngày",
+    "month": "30 ngày",
+    "custom": "Tùy chọn",
+    "compare": "so với {{from}} → {{to}}",
+    "updated": "cập nhật {{time}}",
+    "cached": "(đệm 5 phút)",
+    "label": "Đơn vào sản xuất {{from}} → {{to}}",
+    "compareSameWeekday": "so với cùng thứ tuần trước ({{from}})",
+    "compareYesterday": "so với hôm qua ({{from}})"
+  },
+  "findings": {
+    "title": "Kết luận chính",
+    "empty": "Kỳ này không có gì bất thường.",
+    "actionsTitle": "Việc cần làm",
+    "noActions": "Không có việc khẩn — giữ nhịp hiện tại.",
+    "sla_n2_below": "Chỉ {{pct}}% đơn đủ tuổi ra trong 2 ngày (chỉ tiêu {{target}}%), hụt {{gap}} điểm — thấp nhất {{factory}} {{factoryPct}}%.",
+    "sla_n2_ok": "{{pct}}% đơn ra đúng hẹn 2 ngày — đạt chỉ tiêu.",
+    "overdue_orders": "{{n}} đơn quá hạn (từ 3 ngày) đang tồn, nhiều nhất {{factory}} {{factoryN}} đơn; đơn cũ nhất {{oldest}} ngày.",
+    "output_up": "Đơn ra {{out}}, tăng {{pct}}% so kỳ trước ({{prev}}).",
+    "output_down": "Đơn ra {{out}}, giảm {{pct}}% so kỳ trước ({{prev}}).",
+    "in_exceeds_out": "Vào {{in}} đơn nhưng chỉ ra {{out}} — tồn tăng thêm {{gap}} đơn trong kỳ.",
+    "backlog_rising": "Tồn trong xưởng {{backlog}} đơn, tăng {{pct}}% so đầu kỳ ({{prev}}).",
+    "factory_slow_clear": "Theo nhịp hiện tại, xưởng cần trên 3 ngày để xả hết tồn: {{factory}}.",
+    "error_rate_high": "Tỉ lệ đơn lỗi {{pct}}% ({{delta}} điểm so kỳ trước); nguồn chính {{source}} {{share}}%; loại hay lỗi: {{type}}.",
+    "error_rate_down": "Tỉ lệ lỗi {{pct}}%, giảm {{delta}} điểm so kỳ trước.",
+    "customers_dropping": "{{n}} khách giảm mạnh so kỳ trước: {{list}}.",
+    "customers_rising": "{{n}} khách tăng mạnh: {{list}}.",
+    "vip_issues": "Khách VIP đang có đơn giữ/lỗi: {{list}}.",
+    "customer_concentration": "Top 10 khách chiếm {{pct}}% đơn — phụ thuộc cao vào ít khách.",
+    "designer_overload": "Designer tồn từ 30 việc: {{list}}.",
+    "revenue_up": "Giá trị đơn {{total}} USD, tăng {{pct}}% so kỳ trước ({{prev}}).",
+    "revenue_down": "Giá trị đơn {{total}} USD, giảm {{pct}}% so kỳ trước ({{prev}}).",
+    "weekend_day": "Ngày {{day}} là {{weekday}} — đơn vào/ra thấp theo nhịp tuần, không phải sụt giảm.",
+    "sla_pending": "Chưa có lô đơn đủ tuổi để đánh giá đúng hẹn (lô vào {{cohort}} chưa qua 2 ngày).",
+    "output_down_day": "Đơn ra {{out}} thấp hơn hôm qua ({{prev}}) và thấp hơn trung bình 7 ngày ({{avg7}}) {{pctAvg}}% — không phải nhịp tuần.",
+    "output_up_day": "Đơn ra {{out}} cao hơn hôm qua ({{prev}}) và vượt trung bình 7 ngày ({{avg7}}) {{pctAvg}}%."
+  },
+  "actions": {
+    "act_unblock_stage": "Họp trưởng ca xưởng {{factory}} giải kẹt công đoạn ngay hôm nay",
+    "act_clear_overdue": "Duyệt 5 đơn quá hạn cũ nhất, chốt ngày ra cho từng đơn",
+    "act_check_capacity": "Rà công suất: tăng ca hoặc dịch đơn giữa các xưởng",
+    "act_rebalance_factory": "Chuyển bớt đơn khỏi xưởng xả chậm",
+    "act_review_design": "Rà quy trình soát file với leader designer",
+    "act_review_factory": "Rà lỗi công đoạn với xưởng, đối chiếu danh mục lỗi",
+    "act_contact_customers": "Sale liên hệ khách đang giảm đơn trong tuần này",
+    "act_vip_followup": "Ưu tiên xử lý đơn giữ/lỗi của khách VIP",
+    "act_rebalance_design": "Chia lại việc thiết kế cho designer đang tồn cao"
+  },
+  "ops": {
+    "title": "Vận hành theo ngày",
+    "hint": "Cột: đơn vào / đơn ra · đường: đơn phát sinh lỗi · vùng tô: kỳ đang xem",
+    "in": "Vào",
+    "out": "Ra",
+    "errors": "Lỗi"
+  },
+  "sla": {
+    "title": "Đúng hẹn (SLA)",
+    "hint": "Cohort đơn vào sản xuất trong kỳ · chỉ tiêu N0≥30 · N1≥80 · N2=100",
+    "within": "ra trong N{{n}}",
+    "target": "chỉ tiêu {{pct}}%",
+    "mature": "{{n}} đơn đủ tuổi đánh giá",
+    "dailyTitle": "% đúng hẹn N2 theo ngày vào SX",
+    "overdueTitle": "Đơn quá hạn (từ 3 ngày)",
+    "none": "Không có đơn quá hạn",
+    "age": "{{n}} ngày",
+    "viewAll": "Xem tất cả",
+    "cohort": "Đánh giá lô đơn vào {{from}} (đã đủ tuổi)",
+    "cohortRange": "Lô đơn vào {{from}} → {{to}}"
+  },
+  "quality": {
+    "title": "Chất lượng",
+    "hint": "Đơn có lỗi xưởng trong cohort kỳ này",
+    "bySource": "Theo nguồn lỗi",
+    "topTypes": "Loại sản phẩm hay lỗi",
+    "ofTotal": "{{count}}/{{total}} đơn",
+    "none": "Không có đơn lỗi"
+  },
+  "customers": {
+    "title": "Khách hàng",
+    "hint": "Theo đơn vào sản xuất trong kỳ",
+    "active": "khách có đơn",
+    "new": "khách mới",
+    "share": "top 10 chiếm",
+    "rising": "Tăng mạnh",
+    "dropping": "Giảm mạnh",
+    "cols": {
+      "customer": "Khách",
+      "orders": "Đơn",
+      "prev": "Kỳ trước",
+      "revenue": "Giá trị",
+      "issues": "Giữ/lỗi"
+    },
+    "vip": "VIP {{tier}}"
+  },
+  "capacity": {
+    "title": "Năng lực",
+    "hint": "Tồn cuối ngày 30 ngày · tồn theo chặng · nhịp xả theo xưởng",
+    "avgAge": "tuổi tồn TB {{n}} ngày",
+    "byStage": "Tồn theo chặng",
+    "factoryTitle": "Theo xưởng",
+    "cols": {
+      "factory": "Xưởng",
+      "in": "Vào",
+      "out": "Ra",
+      "backlog": "Tồn",
+      "perDay": "Ra/ngày",
+      "clear": "Xả hết",
+      "n2": "N2 %",
+      "errors": "Lỗi"
+    },
+    "days": "{{n}} ngày",
+    "na": "—",
+    "stale": "{{n}} đơn treo quá {{days}} ngày chưa đóng trên hệ thống — không tính vào tồn/quá hạn (nợ dữ liệu, cần dọn)"
+  },
+  "people": {
+    "title": "Nhân sự",
+    "hint": "Designer: xong trong kỳ · đang tồn · làm lại. Công nhân: công đoạn hoàn thành trong kỳ",
+    "designers": "Designer",
+    "workers": "Công nhân theo công đoạn",
+    "cols": {
+      "name": "Tên",
+      "done": "Xong",
+      "backlog": "Tồn",
+      "rework": "Làm lại",
+      "stage": "Công đoạn"
+    },
+    "none": "Chưa có dữ liệu trong kỳ"
+  },
+  "sourceNote": "Nguồn số: GET /ceo/overview — tổng hợp máy chủ từ đơn sản xuất (loại đơn hủy, chưa map xưởng, xưởng US). Tiền = baseCost đơn, USD.",
+  "report": {
+    "title": "Nhận định của hệ thống",
+    "hint": "Agent đọc đúng số liệu trên trang này rồi viết — tự động 07:00 hằng ngày (hôm qua), thứ Hai (tuần trước), mùng 1 (tháng trước)",
+    "empty": "Chưa có nhận định cho kỳ này.",
+    "generate": "Cập nhật nhận định",
+    "generating": "Đang sinh nhận định… (tới 2 phút)",
+    "by": "{{model}} · {{time}} · {{trigger}}",
+    "trigger": {
+      "cron": "tự động",
+      "manual": "thủ công"
+    },
+    "ketLuan": "Kết luận",
+    "viecCanLam": "Việc cần làm",
+    "ruiRo": "Rủi ro nếu không hành động",
+    "diemSang": "Điểm sáng",
+    "busy": "Đang có lượt sinh cho kỳ này — chờ xong rồi tải lại."
+  },
+  "weekday": {
+    "0": "Chủ nhật",
+    "1": "thứ Hai",
+    "2": "thứ Ba",
+    "3": "thứ Tư",
+    "4": "thứ Năm",
+    "5": "thứ Sáu",
+    "6": "thứ Bảy"
+  }
+}

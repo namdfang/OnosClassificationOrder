@@ -91,6 +91,7 @@ export function buildHubNav(t: TFunction): NavGroup[] {
             })),
           ],
         },
+        { id: 'hub_operations', icon: '🏭', label: t('nav.operations', { ns: 'hub' }), href: '/hub/operations' },
         { id: 'hub_sellers', icon: '👥', label: t('nav.sellers', { ns: 'hub' }), href: '/hub/sellers' },
         { id: 'hub_notifications', icon: '🔔', label: t('nav.notifications', { ns: 'hub' }), href: '/hub/notifications' },
       ],

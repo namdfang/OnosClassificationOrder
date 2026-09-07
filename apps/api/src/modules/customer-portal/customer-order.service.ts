@@ -71,6 +71,7 @@ import { ProductConfigEntity } from '@/modules/product-config/product-config.ent
 import { applyPromotionDiscount, promotionMatches, PromotionService } from '@/modules/promotion/promotion.service';
 import { SystemConfigService } from '@/modules/system-config/system-config.service';
 import { customerMessage } from '@/shared/i18n/customer-messages';
+import { workshopStageSwitchExpr } from '@/utils/workshop-stage';
 
 import type { CustomerOrderItem } from './customer-order.entity';
 import { CustomerOrderEntity } from './customer-order.entity';
@@ -1043,6 +1044,25 @@ export class CustomerOrderService implements OnModuleInit {
     if (dto.held) pipeline.push({ $match: { heldAny: true } });
     if (dto.productLine) {
       pipeline.push({ $match: { $or: [{ 'items.productLine': dto.productLine }, { 'prodOrders.productLine': dto.productLine }] } });
+    }
+    if (dto.stage) {
+      // Chặng hiện tại của từng đơn sản xuất (cùng luật `workshopStageSwitchExpr` với trang xưởng + CEO).
+      pipeline.push({
+        $match: {
+          $expr: {
+            $in: [
+              dto.stage,
+              {
+                $map: {
+                  input: { $filter: { input: '$prodOrders', as: 'p', cond: { $eq: [{ $ifNull: ['$$p.cancelledAt', null] }, null] } } },
+                  as: 'p',
+                  in: workshopStageSwitchExpr('$$p.'),
+                },
+              },
+            ],
+          },
+        },
+      });
     }
     pipeline.push(
       { $addFields: { sortAt: { $ifNull: ['$pushedAt', '$createdAt'] } } },

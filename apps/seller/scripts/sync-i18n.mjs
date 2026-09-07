@@ -6,7 +6,7 @@ import { fileURLToPath } from 'node:url';
 const here = dirname(fileURLToPath(import.meta.url));
 const src = resolve(here, '../../web/src/i18n/locales');
 const dst = resolve(here, '../src/i18n/locales');
-const SHARED = ['customerPortal', 'track', 'common', 'customerNotifications'];
+const SHARED = ['customerPortal', 'track', 'common', 'customerNotifications', 'ceoDashboard'];
 for (const lang of ['vi', 'en']) {
   mkdirSync(resolve(dst, lang), { recursive: true });
   for (const ns of SHARED) copyFileSync(resolve(src, lang, `${ns}.json`), resolve(dst, lang, `${ns}.json`));

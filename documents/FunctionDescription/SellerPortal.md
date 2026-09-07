@@ -160,13 +160,26 @@ Người dùng chốt: app `/adm` cũ chỉ còn cho **vận hành xưởng**; m
 | Middleware (`proxy.ts`) | thiếu cookie → `/login` | `/hub/*` thiếu cookie hub → `/hub/login` |
 | `use-api.ts` 401 | → `/login` | đang ở `/hub/*` → `/hub/login` |
 
-Cấu trúc: `src/app/hub/login/page.tsx` (ngoài layout gate) + `src/app/hub/(app)/{layout,page,sellers,orders,notifications}` (layout `HubSessionProvider` + `HubShell` chặn vai khác Admin/SuperAdmin). Sidebar `components/hub/hub-sidebar.tsx` (Tổng quan · Seller · Đơn khách · Thông báo · link "Vận hành xưởng" → `NEXT_PUBLIC_ADMIN_URL`).
+Cấu trúc: `src/app/hub/login/page.tsx` (ngoài layout gate) + `src/app/hub/(app)/{layout,page,sellers,orders,notifications}` (layout `HubSessionProvider` + `HubShell` chặn vai khác Admin/SuperAdmin). Sidebar `components/hub/hub-sidebar.tsx` (`buildHubNav`: Tổng quan · Đơn hàng (xổ 6 dịch vụ) · Vận hành · Seller · Thông báo · link "Vận hành xưởng" → `NEXT_PUBLIC_ADMIN_URL`).
 
 Trang:
 - **`/hub`** — `GET admin/customer-orders/stats`: 5 KPI (seller có đơn, tổng đơn khách, chờ đẩy, đang SX, đang giữ), thanh theo dòng/trạng thái (bấm → `/hub/orders` đúng bộ lọc), top 10 seller (số đơn/chờ/đang SX + nút xem như seller), 8 đơn mới nhất.
 - **`/hub/sellers`** — `GET /customers?page&limit&search&tier&hasAccount&deleted` (API quản trị khách sẵn có, Customers.md): cột seller/hạng/số đơn (link sang `/hub/orders?seller=`)/đơn gần nhất/trạng thái; hành động **Xem như seller**, sửa (tên/điện thoại/hạng — `PATCH /customers/:id`), reset mật khẩu (`POST .../reset-password`, tự sinh → hiện 1 lần), khóa/mở (`PATCH .../status`), xóa mềm/khôi phục.
 - **`/hub/orders`** — trang OMS riêng `components/hub/hub-orders-view.tsx` (khuôn `oms/orders-list-view.tsx` của thghub, 07/09/2026): header + nút làm mới → `DateRangeFilter` (BE `dateFrom/dateTo` theo `pushedAt ?? createdAt`, giờ VN) → thẻ số → **tab 6 dịch vụ** (`ProductLineTabs`, số từ `counts` không lọc dòng) → pill trạng thái (số theo dòng đang chọn) → tìm kiếm + `SellerFilterPicker` (`components/hub/seller-filter-picker.tsx`, gõ tìm seller, bấm tên seller trong bảng cũng khoá theo seller) → bảng đầu xám 10 cột (đơn/seller/sản phẩm/dịch vụ/SL/tổng/trạng thái+chặng/khách nhận/vận đơn/ngày) + phân trang trong card; mobile dùng `OrderCard showViewAs={false}`. **Chỉ đọc, không CTA mạo danh** (mạo danh làm ở `/hub/sellers`). Mọi bộ lọc nằm trên URL (`line,status,held,q,seller,from,to,page,limit`). Sidebar hub: **Orders** xổ "Tất cả dịch vụ" + 6 dịch vụ (`buildHubNav`), mỗi dịch vụ có route `/hub/orders/<line>` (`HubOrdersView lockedLine` — ẩn tab dịch vụ). **Khung cố định** (cả `/hub/orders*` lẫn trang dịch vụ seller): trang cao đúng `100dvh` trừ padding và banner mạo danh (`--viewas-h`), phần đầu + bộ lọc `shrink-0`, bảng `flex-1 overflow-auto` với `thead sticky`, phân trang `shrink-0` neo đáy — header/footer không trôi khi cuộn.
 - **`/hub/notifications`** — `POST /customer-notifications` (1 seller hoặc broadcast) + `GET /customer-notifications/sent`.
+
+### 9.1 Vận hành sản xuất `/hub/operations` (07/09/2026)
+
+Góc nhìn quản trị toàn quy trình, **chỉ đọc**, không endpoint tổng hợp mới — gọi 4 API sẵn có qua proxy hub: `GET ceo/overview?from&to` (CeoDashboard.md), `GET orders/lifecycle-overview?from&to&factoryId` (OrderLifecycle.md), `GET orders/factory-overview`, và `GET admin/customer-orders?stage=<chặng>` (filter mới, xem dưới). Bộ lọc trên URL: `from/to` (mặc định 7 ngày gần nhất), `factory`, `stage`. 5 khối (`components/hub/operations-view.tsx`):
+1. **KPI**: vào SX · ra SX (so kỳ trước) · đang chạy (tuổi tồn TB) · quá hạn ≥3 ngày · đúng hẹn N2 (so kỳ trước).
+2. **Phễu 8 chặng**: mỗi chặng tồn + lỗi + làm lại + xong trong kỳ, thanh tỉ lệ, chặng nút thắt (`totals.bottleneckStage`) tô đỏ; **bấm chặng → bảng 12 đơn đang ở chặng** (cột "Ở chặng" = tuổi từ `currentStageAt`).
+3. **Đúng hẹn & quá hạn**: 3 thanh N0/N1/N2 so mục tiêu, quá hạn theo xưởng, 6 đơn cũ nhất. **Theo xưởng**: bảng vào/ra/tồn/ra-ngày/xả hết/N2/lỗi (CEO) + bảng in/đang in/chưa in/chưa gán thiết kế/lỗi (factory-overview).
+4. **Chất lượng** (tỉ lệ lỗi, theo nguồn, loại SP hay lỗi) + **Nhân sự** (designer xong/tồn/làm lại — tồn ≥30 tô đỏ; công nhân theo công đoạn).
+5. **Phát hiện & việc cần làm**: `findings[]` của CEO overview, câu chữ dịch bằng namespace `ceoDashboard` (copy từ `apps/web` qua `sync-i18n`, `findings.<code>` + `actions.<action>`).
+
+Thao tác (gán designer, đổi xưởng, báo lỗi) vẫn ở app xưởng: nút "Mở app vận hành xưởng" → `NEXT_PUBLIC_ADMIN_URL/ffm/orders/workshop?factoryId=`.
+
+**BE mới:** `GetAdminCustomerOrdersZod.stage` (`WORKSHOP_STAGE_FILTER_KEYS`) — `listOrdersAdmin` `$match` `$expr $in [stage, $map(prodOrders chưa hủy → workshopStageSwitchExpr('$$p.'))]`; `workshopStageSwitchExpr(prefix)` nhận tiền tố để chạy trên mảng `$lookup` (mặc định `'$'`, các nơi gọi cũ không đổi). Đo dev: press 905 · designer 326 · tool-check 975 đơn khách.
 
 **Mạo danh trong app** (`components/hub/view-as-button.tsx`): `POST /api/hub/impersonate` → BE `POST /auth/impersonate` (AUTH-1, chỉ SuperAdmin — Admin thường bị BE từ chối, nút vẫn hiện nhưng báo lỗi) → cookie phiên khách; banner vàng ở `/portal`; nút "Thoát" → `POST /api/auth/logout` thấy còn cookie hub → `customer/auth/impersonate/stop` rồi về **`/hub/sellers`** (không còn cookie hub → về `NEXT_PUBLIC_ADMIN_URL` như trước).
 
