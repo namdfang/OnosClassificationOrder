@@ -5,7 +5,8 @@ import Link from 'next/link';
 import { useTranslation } from 'react-i18next';
 import { Image as ImageIcon, PauseCircle, Wrench } from 'lucide-react';
 import { CustomerOrderStatus } from 'shared/enums';
-import type { CustomerStagingOrder } from 'shared';
+import type { AdminCustomerStagingOrder } from 'shared';
+import { ViewAsButton } from '@/components/hub/view-as-button';
 import { ProductLineBadge, StatusBadge } from '@/components/shared/badge';
 import { CopyButton } from '@/components/shared/copy-button';
 import { SafeImage } from '@/components/shared/safe-image';
@@ -14,7 +15,9 @@ import { driveThumbnailUrl } from '@/lib/label-preview';
 import { fmtUSD } from '@/lib/utils';
 
 interface OrderRowProps {
-  order: CustomerStagingOrder;
+  order: AdminCustomerStagingOrder | (Omit<AdminCustomerStagingOrder, 'customerId'> & { customerId?: string });
+  /** Khu `/hub`: cột Seller + nút "Mở như seller" thay cho link chi tiết/push/hủy. */
+  adminMode?: boolean;
   selected: boolean;
   onToggle: () => void;
   onPushOne: () => void;
@@ -22,21 +25,21 @@ interface OrderRowProps {
 }
 
 /** Mirror cột của `apps/web/src/pages/customer/orders/index.tsx` + cột dòng sản phẩm. */
-export function OrderRow({ order, selected, onToggle, onPushOne, onCancel }: OrderRowProps) {
-  const { t } = useTranslation(['customerPortal', 'seller']);
+export function OrderRow({ order, adminMode = false, selected, onToggle, onPushOne, onCancel }: OrderRowProps) {
+  const { t } = useTranslation(['customerPortal', 'seller', 'hub']);
   const isPending = order.status === CustomerOrderStatus.Pending;
   const code = orderDisplayCode(order);
   const first = order.items[0];
   const extra = order.items.length - 1;
   const addr = order.shippingAddress;
   const tracked = order.items.find((i) => i.tracking?.number)?.tracking;
-  const detailHref = first?.productionId ? `/portal/orders/${encodeURIComponent(first.productionId)}` : null;
+  const detailHref = !adminMode && first?.productionId ? `/portal/orders/${encodeURIComponent(first.productionId)}` : null;
   const thumb = first?.mockupUrl ? (driveThumbnailUrl(first.mockupUrl, 100) ?? first.mockupUrl) : null;
 
   return (
     <tr className={`border-t border-border2 hover:bg-card-hover transition-colors ${order.status === CustomerOrderStatus.Cancelled ? 'opacity-60' : ''}`}>
       <td className="px-3 py-2.5 align-top w-8">
-        {isPending && <input type="checkbox" checked={selected} onChange={onToggle} className="accent-[var(--color-accent)]" />}
+        {!adminMode && isPending && <input type="checkbox" checked={selected} onChange={onToggle} className="accent-[var(--color-accent)]" />}
       </td>
       <td className="px-3 py-2.5 align-top">
         <div className="space-y-0.5">
@@ -60,6 +63,12 @@ export function OrderRow({ order, selected, onToggle, onPushOne, onCancel }: Ord
           </p>
         </div>
       </td>
+      {adminMode && (
+        <td className="px-3 py-2.5 align-top">
+          <p className="text-xs font-semibold text-text-primary">{order.customer?.userSku || '—'}</p>
+          <p className="text-[10px] text-text-muted truncate max-w-[160px]">{order.customer?.userEmail}{order.customer?.tier != null ? ` · VIP ${order.customer.tier}` : ''}</p>
+        </td>
+      )}
       <td className="px-3 py-2.5 align-top">
         <div className="flex items-start gap-2">
           <SafeImage
@@ -133,7 +142,10 @@ export function OrderRow({ order, selected, onToggle, onPushOne, onCancel }: Ord
         {order.totalAmount != null ? fmtUSD(order.totalAmount) : '—'}
       </td>
       <td className="px-3 py-2.5 align-top text-right whitespace-nowrap">
-        {isPending && (
+        {adminMode && order.customerId && (
+          <ViewAsButton customerId={order.customerId} target={first?.productionId ? `/portal/orders/${encodeURIComponent(first.productionId)}` : '/portal/orders'} />
+        )}
+        {!adminMode && isPending && (
           <span className="inline-flex gap-1">
             <button type="button" onClick={onPushOne} className="px-2 py-1 rounded-md text-[10px] font-bold bg-cta text-cta-foreground hover:bg-cta-hover">
               {t('customerPortal:orders.pushOne')}

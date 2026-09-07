@@ -15,6 +15,11 @@ import type {
   CustomerStagingOrderResDto,
   GetCustomerDashboardResDto,
   GetCustomerOrderCountsResDto,
+  GetAdminCustomerOrdersDto,
+  GetAdminCustomerOrdersResDto,
+  GetAdminCustomerOrderCountsDto,
+  GetAdminCustomerOrderStatsResDto,
+  AdminCustomerStagingOrder,
   GetCustomerOrderProductTypesResDto,
   GetCustomerOrderTrackResDto,
   GetCustomerStagingOrdersDto,
@@ -394,7 +399,8 @@ export class CustomerOrderService implements OnModuleInit {
    * MIRROR logic JS `deriveItemStatus`/`isReworkBadge`/`deriveOrderStatus` —
    * đổi 1 nơi nhớ đổi nơi kia.
    */
-  private buildDerivePipeline(customerId: string, completedCutoff: Date): Record<string, unknown>[] {
+  /** `customerId = null` → không scope theo khách (khu quản trị `/hub` đọc MỌI seller — chỉ Admin gọi). */
+  private buildDerivePipeline(customerId: string | null, completedCutoff: Date): Record<string, unknown>[] {
     const progressExpr = {
       $switch: {
         branches: [
@@ -419,7 +425,7 @@ export class CustomerOrderService implements OnModuleInit {
       ],
     };
     return [
-      { $match: { customerId } },
+      ...(customerId ? [{ $match: { customerId } }] : []),
       {
         // Nối bằng localField/foreignField để DÙNG ĐƯỢC index `productionId_1`.
         // Bản cũ lọc bằng `$expr: { $in: ['$productionId', '$$pids'] }` — `$expr`
@@ -916,6 +922,14 @@ export class CustomerOrderService implements OnModuleInit {
       this.customerOrderModel.aggregate<{ _id: string; count: number; held: number; rework: number }>(pipeline as never[]),
       this.customerOrderModel.aggregate<{ _id: ProductLine; count: number }>(linePipeline as never[]),
     ]);
+    return { success: true, data: this.assembleCounts(rows, lineRows) };
+  }
+
+  /** Gom 2 kết quả aggregate (theo trạng thái + theo dòng) thành `CustomerOrderCounts` — dùng chung khách + `/hub`. */
+  private assembleCounts(
+    rows: Array<{ _id: string; count: number; held: number; rework: number }>,
+    lineRows: Array<{ _id: ProductLine; count: number }>,
+  ): CustomerOrderCounts {
     const counts: CustomerOrderCounts = {
       all: 0,
       pending: 0,
@@ -945,7 +959,181 @@ export class CustomerOrderService implements OnModuleInit {
       counts.rework += r.rework;
     }
     counts.byProductLine = Object.fromEntries(lineRows.map((r) => [r._id, r.count])) as CustomerOrderCounts['byProductLine'];
-    return { success: true, data: counts };
+    return counts;
+  }
+
+  private countsPipelines(customerId: string | null, cutoff: Date): [Record<string, unknown>[], Record<string, unknown>[]] {
+    const byStatus = [
+      ...this.buildDerivePipeline(customerId, cutoff),
+      {
+        $group: {
+          _id: '$statusDerived',
+          count: { $sum: 1 },
+          held: { $sum: { $cond: ['$heldAny', 1, 0] } },
+          rework: { $sum: { $cond: ['$reworkAny', 1, 0] } },
+        },
+      },
+    ];
+    const byLine = [
+      ...this.buildDerivePipeline(customerId, cutoff),
+      { $project: { lines: { $setUnion: [{ $ifNull: ['$items.productLine', []] }, { $ifNull: ['$prodOrders.productLine', []] }] } } },
+      { $unwind: '$lines' },
+      { $match: { lines: { $in: PRODUCT_LINES } } },
+      { $group: { _id: '$lines', count: { $sum: 1 } } },
+    ];
+    return [byStatus, byLine];
+  }
+
+  // -------------------------------------------------------------------------
+  // Khu quản trị `/hub` trong Seller Portal (SellerPortal.md §9) — Admin đọc
+  // đơn staging của MỌI seller. CHỈ ĐỌC: mọi thao tác trên đơn khách vẫn đi
+  // qua mạo danh (token khách) để giữ nguyên rào + audit sẵn có.
+  // -------------------------------------------------------------------------
+
+  private static readonly CUSTOMER_LOOKUP: Record<string, unknown>[] = [
+    {
+      $lookup: {
+        from: 'customers',
+        localField: 'customerId',
+        foreignField: '_id',
+        pipeline: [{ $project: { userSku: 1, userEmail: 1, fullName: 1, tier: 1 } }],
+        as: 'customerDocs',
+      },
+    },
+    { $addFields: { customer: { $first: '$customerDocs' } } },
+    { $project: { customerDocs: 0 } },
+  ];
+
+  private toAdminStagingOrder(
+    doc: Record<string, unknown> & { prodOrders?: ProdDeriveFields[]; customer?: Record<string, unknown> },
+    cutoff: Date,
+  ): AdminCustomerStagingOrder {
+    const prodByPid = new Map<string, ProdDeriveFields>((doc.prodOrders ?? []).map((p) => [p.productionId as string, p]));
+    const c = doc.customer;
+    return {
+      ...this.toStagingOrder(doc, prodByPid, cutoff),
+      customerId: String(doc.customerId),
+      customer: c
+        ? {
+            userSku: c.userSku as string | undefined,
+            userEmail: c.userEmail as string | undefined,
+            fullName: c.fullName as string | undefined,
+            tier: (c.tier as number | null | undefined) ?? null,
+          }
+        : undefined,
+    };
+  }
+
+  async listOrdersAdmin(dto: GetAdminCustomerOrdersDto): Promise<GetAdminCustomerOrdersResDto> {
+    const cutoff = await this.getCompletedCutoff();
+    const pipeline: Record<string, unknown>[] = this.buildDerivePipeline(dto.customerId ?? null, cutoff);
+    if (dto.search?.trim()) {
+      const rx = { $regex: escapeRegex(dto.search.trim()), $options: 'i' };
+      pipeline.push({ $match: { $or: [{ orderId: rx }, { orderName: rx }, { 'items.productionId': rx }, { 'items.sku': rx }, { userSku: rx }, { userEmail: rx }] } });
+    }
+    if (dto.status) pipeline.push({ $match: { statusDerived: dto.status } });
+    if (dto.held) pipeline.push({ $match: { heldAny: true } });
+    if (dto.productLine) {
+      pipeline.push({ $match: { $or: [{ 'items.productLine': dto.productLine }, { 'prodOrders.productLine': dto.productLine }] } });
+    }
+    pipeline.push(
+      { $addFields: { sortAt: { $ifNull: ['$pushedAt', '$createdAt'] } } },
+      { $sort: { sortAt: -1, _id: -1 } },
+      {
+        $facet: {
+          page: [{ $skip: (dto.page - 1) * dto.limit }, { $limit: dto.limit }, ...CustomerOrderService.CUSTOMER_LOOKUP],
+          total: [{ $count: 'n' }],
+        },
+      },
+    );
+    const [res] = await this.customerOrderModel.aggregate<{
+      page: Array<Record<string, unknown> & { prodOrders?: ProdDeriveFields[]; customer?: Record<string, unknown> }>;
+      total: Array<{ n: number }>;
+    }>(pipeline as never[]);
+    return { success: true, data: (res?.page ?? []).map((d) => this.toAdminStagingOrder(d, cutoff)), total: res?.total?.[0]?.n ?? 0 };
+  }
+
+  async getCountsAdmin(dto: GetAdminCustomerOrderCountsDto): Promise<GetCustomerOrderCountsResDto> {
+    const cutoff = await this.getCompletedCutoff();
+    const [byStatus, byLine] = this.countsPipelines(dto.customerId ?? null, cutoff);
+    const [rows, lineRows] = await Promise.all([
+      this.customerOrderModel.aggregate<{ _id: string; count: number; held: number; rework: number }>(byStatus as never[]),
+      this.customerOrderModel.aggregate<{ _id: ProductLine; count: number }>(byLine as never[]),
+    ]);
+    return { success: true, data: this.assembleCounts(rows, lineRows) };
+  }
+
+  async getStatsAdmin(): Promise<GetAdminCustomerOrderStatsResDto> {
+    const cutoff = await this.getCompletedCutoff();
+    const [byStatus, byLine] = this.countsPipelines(null, cutoff);
+    const sellerPipeline = [
+      ...this.buildDerivePipeline(null, cutoff),
+      {
+        $group: {
+          _id: '$customerId',
+          orders: { $sum: 1 },
+          pending: { $sum: { $cond: [{ $eq: ['$statusDerived', CustomerOrderStatus.Pending] }, 1, 0] } },
+          inProduction: { $sum: { $cond: [{ $eq: ['$statusDerived', CustomerOrderStatus.InProduction] }, 1, 0] } },
+          held: { $sum: { $cond: ['$heldAny', 1, 0] } },
+          lastOrderAt: { $max: { $ifNull: ['$pushedAt', '$createdAt'] } },
+        },
+      },
+      {
+        $facet: {
+          top: [
+            { $sort: { orders: -1 } },
+            { $limit: 10 },
+            {
+              $lookup: {
+                from: 'customers',
+                localField: '_id',
+                foreignField: '_id',
+                pipeline: [{ $project: { userSku: 1, userEmail: 1, fullName: 1, tier: 1 } }],
+                as: 'c',
+              },
+            },
+            { $addFields: { c: { $first: '$c' } } },
+          ],
+          sellers: [{ $count: 'n' }],
+        },
+      },
+    ];
+    const recentPipeline = [
+      ...this.buildDerivePipeline(null, cutoff),
+      { $addFields: { sortAt: { $ifNull: ['$pushedAt', '$createdAt'] } } },
+      { $sort: { sortAt: -1, _id: -1 } },
+      { $limit: 8 },
+      ...CustomerOrderService.CUSTOMER_LOOKUP,
+    ];
+    const [rows, lineRows, [sellerRes], recent] = await Promise.all([
+      this.customerOrderModel.aggregate<{ _id: string; count: number; held: number; rework: number }>(byStatus as never[]),
+      this.customerOrderModel.aggregate<{ _id: ProductLine; count: number }>(byLine as never[]),
+      this.customerOrderModel.aggregate<{
+        top: Array<{ _id: string; orders: number; pending: number; inProduction: number; held: number; lastOrderAt?: Date; c?: Record<string, unknown> }>;
+        sellers: Array<{ n: number }>;
+      }>(sellerPipeline as never[]),
+      this.customerOrderModel.aggregate<Record<string, unknown> & { prodOrders?: ProdDeriveFields[]; customer?: Record<string, unknown> }>(recentPipeline as never[]),
+    ]);
+    return {
+      success: true,
+      data: {
+        counts: this.assembleCounts(rows, lineRows),
+        sellers: sellerRes?.sellers?.[0]?.n ?? 0,
+        topSellers: (sellerRes?.top ?? []).map((r) => ({
+          customerId: String(r._id),
+          userSku: r.c?.userSku as string | undefined,
+          userEmail: r.c?.userEmail as string | undefined,
+          fullName: r.c?.fullName as string | undefined,
+          tier: (r.c?.tier as number | null | undefined) ?? null,
+          orders: r.orders,
+          pending: r.pending,
+          inProduction: r.inProduction,
+          held: r.held,
+          lastOrderAt: r.lastOrderAt,
+        })),
+        recent: recent.map((d) => this.toAdminStagingOrder(d, cutoff)),
+      },
+    };
   }
 
   // -------------------------------------------------------------------------

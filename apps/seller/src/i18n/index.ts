@@ -4,11 +4,13 @@ import { initReactI18next } from 'react-i18next';
 import commonEn from './locales/en/common.json';
 import customerNotificationsEn from './locales/en/customerNotifications.json';
 import customerPortalEn from './locales/en/customerPortal.json';
+import hubEn from './locales/en/hub.json';
 import sellerEn from './locales/en/seller.json';
 import trackEn from './locales/en/track.json';
 import commonVi from './locales/vi/common.json';
 import customerNotificationsVi from './locales/vi/customerNotifications.json';
 import customerPortalVi from './locales/vi/customerPortal.json';
+import hubVi from './locales/vi/hub.json';
 import sellerVi from './locales/vi/seller.json';
 import trackVi from './locales/vi/track.json';
 
@@ -17,8 +19,8 @@ import { type AppLanguage, DEFAULT_LANGUAGE, LANG_COOKIE, normalizeLanguage } fr
 export { type AppLanguage, DEFAULT_LANGUAGE, LANG_COOKIE, normalizeLanguage };
 
 export const resources = {
-  vi: { common: commonVi, customerPortal: customerPortalVi, track: trackVi, seller: sellerVi, customerNotifications: customerNotificationsVi },
-  en: { common: commonEn, customerPortal: customerPortalEn, track: trackEn, seller: sellerEn, customerNotifications: customerNotificationsEn },
+  vi: { common: commonVi, customerPortal: customerPortalVi, track: trackVi, seller: sellerVi, customerNotifications: customerNotificationsVi, hub: hubVi },
+  en: { common: commonEn, customerPortal: customerPortalEn, track: trackEn, seller: sellerEn, customerNotifications: customerNotificationsEn, hub: hubEn },
 } as const;
 
 export function readLanguageCookie(): AppLanguage {

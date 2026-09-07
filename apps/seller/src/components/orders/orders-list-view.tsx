@@ -5,7 +5,7 @@ import { useCallback, useEffect, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { FileUp, PackagePlus, PackageSearch } from 'lucide-react';
 import { CustomerOrderStatus } from 'shared/enums';
-import type { CustomerOrderCounts, CustomerStagingOrder } from 'shared';
+import type { AdminCustomerStagingOrder, CustomerOrderCounts, CustomerStagingOrder } from 'shared';
 import { OrderRow } from '@/components/orders/order-row';
 import { OrdersPagination } from '@/components/orders/orders-pagination';
 import { OrdersStatsBar } from '@/components/orders/orders-stats-bar';
@@ -26,6 +26,11 @@ import { isProductLine, type ProductLine } from '@/lib/product-lines';
 interface OrdersListViewProps {
   /** Route `/portal/orders/<line>` khoá dòng — tab không đổi được, filter luôn theo dòng đó. */
   lockedLine?: ProductLine;
+  /**
+   * Khu quản trị `/hub/orders` (SellerPortal.md §9): đọc đơn của MỌI seller qua proxy nhân viên
+   * `/api/hub/v1/admin/customer-orders` — thêm cột Seller + lọc seller, ẩn push/hủy/tạo/import.
+   */
+  adminMode?: boolean;
 }
 
 function useDebounced<T>(value: T, ms: number): T {
@@ -37,10 +42,10 @@ function useDebounced<T>(value: T, ms: number): T {
   return v;
 }
 
-export function OrdersListView({ lockedLine }: OrdersListViewProps) {
-  const { t } = useTranslation(['customerPortal', 'seller']);
+export function OrdersListView({ lockedLine, adminMode = false }: OrdersListViewProps) {
+  const { t } = useTranslation(['customerPortal', 'seller', 'hub']);
   const { toast } = useToast();
-  const [state, setState] = useUrlState({ page: '1', limit: '20', status: '', held: '', q: '', line: '' });
+  const [state, setState] = useUrlState({ page: '1', limit: '20', status: '', held: '', q: '', line: '', seller: '' });
   const page = Math.max(1, Number(state.page) || 1);
   const limit = Math.min(100, Math.max(1, Number(state.limit) || 20));
   const status = state.status || null;
@@ -59,11 +64,16 @@ export function OrdersListView({ lockedLine }: OrdersListViewProps) {
     if (heldOnly) p.set('held', 'true');
     if (search) p.set('search', search);
     if (line !== 'all') p.set('productLine', line);
+    if (adminMode && state.seller) p.set('customerId', state.seller);
     return p.toString();
-  }, [page, limit, status, heldOnly, search, line]);
+  }, [page, limit, status, heldOnly, search, line, adminMode, state.seller]);
 
-  const { data: listRes, loading, refetch } = useApi<ApiRes<CustomerStagingOrder[]>>(`/api/v1/customer/orders?${query}`);
-  const { data: countsRes, refetch: refetchCounts } = useApi<ApiRes<CustomerOrderCounts>>('/api/v1/customer/orders/counts');
+  const listUrl = adminMode ? `/api/hub/v1/admin/customer-orders?${query}` : `/api/v1/customer/orders?${query}`;
+  const countsUrl = adminMode
+    ? `/api/hub/v1/admin/customer-orders/counts${state.seller ? `?customerId=${encodeURIComponent(state.seller)}` : ''}`
+    : '/api/v1/customer/orders/counts';
+  const { data: listRes, loading, refetch } = useApi<ApiRes<AdminCustomerStagingOrder[]>>(listUrl);
+  const { data: countsRes, refetch: refetchCounts } = useApi<ApiRes<CustomerOrderCounts>>(countsUrl);
   const orders = useMemo(() => listRes?.data ?? [], [listRes]);
   // `GET customer/orders` chạy lazy-sync đơn hệ cũ TRƯỚC khi list (customer-order.service.ts
   // `syncLegacyOrdersForCustomer`), còn `counts` thì không → gọi song song thì số tab bị cũ.
@@ -128,15 +138,18 @@ export function OrdersListView({ lockedLine }: OrdersListViewProps) {
   return (
     <div className="space-y-4">
       <PageHeader
-        title={lockedLine ? t(`customerPortal:productLines.${lockedLine}`) : t('customerPortal:orders.title')}
+        title={adminMode ? t('hub:orders.title') : lockedLine ? t(`customerPortal:productLines.${lockedLine}`) : t('customerPortal:orders.title')}
         subtitle={
-          lockedLine
-            ? t('seller:list.lockedHint', { line: t(`customerPortal:productLines.${lockedLine}`) })
-            : total > 0
-              ? t('customerPortal:orders.resultsCount', { count: total })
-              : undefined
+          adminMode
+            ? `${t('hub:orders.subtitle')}${total > 0 ? ` · ${t('customerPortal:orders.resultsCount', { count: total })}` : ''}`
+            : lockedLine
+              ? t('seller:list.lockedHint', { line: t(`customerPortal:productLines.${lockedLine}`) })
+              : total > 0
+                ? t('customerPortal:orders.resultsCount', { count: total })
+                : undefined
         }
         actions={
+          adminMode ? undefined : (
           <div className="flex items-center gap-2">
             <Link href="/portal/orders/import" prefetch={false}>
               <Button variant="secondary" size="sm">
@@ -151,10 +164,17 @@ export function OrdersListView({ lockedLine }: OrdersListViewProps) {
               </Button>
             </Link>
           </div>
+          )
         }
       />
 
       <OrdersStatsBar counts={counts} />
+      {adminMode && state.seller && (
+        <p className="text-[11px] text-text-secondary">
+          {t('hub:orders.sellerFilter')}: <b className="font-mono">{orders[0]?.customer?.userSku ?? state.seller}</b>
+          <button type="button" onClick={() => setState({ seller: '', page: '1' })} className="ml-2 text-accent hover:underline">{t('hub:orders.allSellers')}</button>
+        </p>
+      )}
 
       <ProductLineTabs
         active={line}
@@ -173,7 +193,7 @@ export function OrdersListView({ lockedLine }: OrdersListViewProps) {
         />
         <div className="flex-1" />
         <SearchInput value={searchInput} onChange={setSearchInput} placeholder={t('seller:common.search')} className="w-72" />
-        {selected.size > 0 && (
+        {!adminMode && selected.size > 0 && (
           <Button variant="primary" size="sm" onClick={() => setPushIds([...selected])}>
             {t('seller:list.pushSelected', { count: selected.size })}
           </Button>
@@ -193,7 +213,7 @@ export function OrdersListView({ lockedLine }: OrdersListViewProps) {
               <Button variant="outline" size="sm" onClick={() => { setSearchInput(''); setState({ q: '', held: '', status: '', page: '1' }); }}>
                 {t('customerPortal:orders.clearFilters')}
               </Button>
-            ) : (
+            ) : adminMode ? undefined : (
               <Link href="/portal/orders/create" prefetch={false} className="text-accent text-sm hover:underline">
                 {t('customerPortal:orders.placeFirst')}
               </Link>
@@ -206,7 +226,7 @@ export function OrdersListView({ lockedLine }: OrdersListViewProps) {
             <thead>
               <tr className="text-[10px] uppercase tracking-wider text-text-muted">
                 <th className="px-3 py-2.5 w-8">
-                  {status === CustomerOrderStatus.Pending && pendingOrders.length > 0 && (
+                  {!adminMode && status === CustomerOrderStatus.Pending && pendingOrders.length > 0 && (
                     <input
                       type="checkbox"
                       checked={allPendingSelected}
@@ -217,6 +237,7 @@ export function OrdersListView({ lockedLine }: OrdersListViewProps) {
                   )}
                 </th>
                 <th className="px-3 py-2.5 font-semibold">{t('customerPortal:orders.columns.order')}</th>
+                {adminMode && <th className="px-3 py-2.5 font-semibold">{t('hub:orders.columns.seller')}</th>}
                 <th className="px-3 py-2.5 font-semibold">{t('customerPortal:orders.columns.items')}</th>
                 <th className="px-3 py-2.5 font-semibold">{t('seller:nav.orders')}</th>
                 <th className="px-3 py-2.5 font-semibold">{t('customerPortal:orders.columns.customer')}</th>
@@ -231,6 +252,7 @@ export function OrdersListView({ lockedLine }: OrdersListViewProps) {
                 <OrderRow
                   key={o._id}
                   order={o}
+                  adminMode={adminMode}
                   selected={selected.has(o._id)}
                   onToggle={() => toggle(o._id)}
                   onPushOne={() => setPushIds([o._id])}

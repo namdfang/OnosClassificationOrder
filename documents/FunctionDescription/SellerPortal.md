@@ -3,7 +3,7 @@
 > **File FE:** `apps/seller/src/app/{layout,page}.tsx`, `apps/seller/src/app/login/page.tsx`, `apps/seller/src/app/(portal)/layout.tsx`, `apps/seller/src/app/(portal)/portal/orders/{page,[productionId]/page,3d|2d|wood|embroidery|led|canvas/page}.tsx`, `apps/seller/src/app/track/{page,[code]/page}.tsx`, `apps/seller/src/app/auth/handoff/page.tsx`, `apps/seller/src/components/orders/{orders-list-view,order-row,product-line-tabs,orders-status-filter-pills,orders-stats-bar,push-dialog,stage-timeline}.tsx`, `apps/seller/src/components/layout/{customer-sidebar,impersonation-banner}.tsx`, `apps/seller/src/lib/{product-lines,navigation,constants,customer-orders,label-preview}.ts`, `apps/seller/src/context/session-context.tsx`, `apps/seller/src/i18n/{index,constants}.ts` + `locales/{vi,en}/{customerPortal,track,common,seller}.json`
 > **File BE (Next server-side):** `apps/seller/src/app/api/auth/{login,logout,handoff}/route.ts`, `apps/seller/src/app/api/v1/[...path]/route.ts` (proxy), `apps/seller/src/lib/server/api.ts` (cookie), `apps/seller/proxy.ts` (Next 16 middleware)
 > **File BE (NestJS — tái dùng, không endpoint mới):** `apps/api/src/modules/customer-portal/*` (`customer/auth/*`, `customer/orders/*`, `public/track/:code`), `apps/web/src/utils/impersonationStart.ts` (handoff mạo danh)
-> **Route:** `/login`, `/portal` (dashboard), `/portal/orders`, `/portal/orders/{3d,2d,wood,embroidery,led,canvas}`, `/portal/orders/:productionId`, `/portal/orders/create`, `/portal/orders/import`, `/portal/account`, `/track`, `/track/:code`, `/auth/handoff`
+> **Route:** khách: `/login`, `/portal` (dashboard), `/portal/orders`, `/portal/orders/{3d,2d,wood,embroidery,led,canvas}`, `/portal/orders/:productionId`, `/portal/orders/create`, `/portal/orders/import`, `/portal/account`, `/track`, `/track/:code`, `/auth/handoff`; **khu quản trị nhân viên (§9):** `/hub/login`, `/hub`, `/hub/sellers`, `/hub/orders`, `/hub/notifications`
 > **API (same-origin của app seller):** `POST /api/auth/login`, `POST /api/auth/logout`, `POST /api/auth/handoff`, `ANY /api/v1/*` → NestJS `${API_INTERNAL_URL}/*`
 
 ---
@@ -88,7 +88,11 @@ Không có endpoint NestJS mới. Route handler của Next:
 | POST | `/api/auth/login` | body `{userEmail,password,rememberMe}` → gọi `customer/auth/login`, set 2 cookie, trả `{user, expiresIn}`; lỗi BE forward nguyên mã (401 sai mật khẩu, 423 khóa…) |
 | POST | `/api/auth/logout` | xóa cookie (+ `impersonate/stop` nếu đang mạo danh) → `{redirectTo}` |
 | POST | `/api/auth/handoff` | body `{token, exp?}` → xác minh qua `customer/auth/me` → set cookie phiên (không persist) |
-| ANY | `/api/v1/*` | proxy → `${API_INTERNAL_URL}/*` (GET/POST/PATCH/PUT/DELETE), gắn Bearer + Accept-Language, 401 → xóa cookie |
+| ANY | `/api/v1/*` | proxy phiên KHÁCH → `${API_INTERNAL_URL}/*` (GET/POST/PATCH/PUT/DELETE), gắn Bearer + Accept-Language, 401 → xóa cookie (`lib/server/proxy.ts` dùng chung) |
+| POST | `/api/hub/auth/login` | nhân viên: `POST /auth/login` (recaptchaToken rỗng) → kiểm `GET /auth/me` role ∈ {SuperAdmin, Admin} (khác → 403, không ghi cookie) → cookie `onos_hub_token` |
+| POST | `/api/hub/auth/logout` | xóa cookie hub |
+| POST | `/api/hub/impersonate` | body `{customerId}` → `POST /auth/impersonate` bằng token nhân viên → cookie phiên KHÁCH (giữ nguyên cookie hub) → client mở `/portal/...` |
+| ANY | `/api/hub/v1/*` | proxy phiên NHÂN VIÊN (cookie `onos_hub_token`) → NestJS |
 
 Cookie: `onos_seller_token` (httpOnly, SameSite=Lax, Secure khi `NEXT_PUBLIC_APP_URL` là https), `onos_seller_exp`, `onos_lang` (`vi|en`, 1 năm).
 
@@ -128,6 +132,32 @@ Theme: `globals.css` `@theme` + `.dark` (khuôn thghub) với token Onos — acc
 ## 7. Permissions
 
 Chỉ vai `RoleType.Customer` (JWT từ `customer/auth/login` hoặc token mạo danh). Không dùng permission-catalog nội bộ. Trang `/track/*` public.
+
+## 9. Khu quản trị `/hub` — admin quản lý toàn bộ seller (PR-E, 07/09/2026)
+
+Người dùng chốt: app `/adm` cũ chỉ còn cho **vận hành xưởng**; mọi việc quản lý seller làm ở cổng mới với cùng giao diện thghub. `/hub` là khu **nhân viên** (Admin/SuperAdmin) sống chung app với `/portal` (khách) nhưng **phiên riêng, cookie riêng, proxy riêng**:
+
+| | Khách `/portal` | Nhân viên `/hub` |
+|---|---|---|
+| Đăng nhập | `/login` → `customer/auth/login` | `/hub/login` → `auth/login` (+ kiểm role qua `auth/me`) |
+| Cookie | `onos_seller_token` | `onos_hub_token` |
+| Proxy | `/api/v1/*` | `/api/hub/v1/*` |
+| Middleware (`proxy.ts`) | thiếu cookie → `/login` | `/hub/*` thiếu cookie hub → `/hub/login` |
+| `use-api.ts` 401 | → `/login` | đang ở `/hub/*` → `/hub/login` |
+
+Cấu trúc: `src/app/hub/login/page.tsx` (ngoài layout gate) + `src/app/hub/(app)/{layout,page,sellers,orders,notifications}` (layout `HubSessionProvider` + `HubShell` chặn vai khác Admin/SuperAdmin). Sidebar `components/hub/hub-sidebar.tsx` (Tổng quan · Seller · Đơn khách · Thông báo · link "Vận hành xưởng" → `NEXT_PUBLIC_ADMIN_URL`).
+
+Trang:
+- **`/hub`** — `GET admin/customer-orders/stats`: 5 KPI (seller có đơn, tổng đơn khách, chờ đẩy, đang SX, đang giữ), thanh theo dòng/trạng thái (bấm → `/hub/orders` đúng bộ lọc), top 10 seller (số đơn/chờ/đang SX + nút xem như seller), 8 đơn mới nhất.
+- **`/hub/sellers`** — `GET /customers?page&limit&search&tier&hasAccount&deleted` (API quản trị khách sẵn có, Customers.md): cột seller/hạng/số đơn (link sang `/hub/orders?seller=`)/đơn gần nhất/trạng thái; hành động **Xem như seller**, sửa (tên/điện thoại/hạng — `PATCH /customers/:id`), reset mật khẩu (`POST .../reset-password`, tự sinh → hiện 1 lần), khóa/mở (`PATCH .../status`), xóa mềm/khôi phục.
+- **`/hub/orders`** — `OrdersListView adminMode`: `GET admin/customer-orders` + `/counts` (lọc `customerId` từ query `seller`), thêm cột Seller, **chỉ đọc** (ẩn tick/push/hủy/tạo/import); mỗi dòng nút "Mở như seller" → mạo danh rồi mở đúng `/portal/orders/:pid`.
+- **`/hub/notifications`** — `POST /customer-notifications` (1 seller hoặc broadcast) + `GET /customer-notifications/sent`.
+
+**Mạo danh trong app** (`components/hub/view-as-button.tsx`): `POST /api/hub/impersonate` → BE `POST /auth/impersonate` (AUTH-1, chỉ SuperAdmin — Admin thường bị BE từ chối, nút vẫn hiện nhưng báo lỗi) → cookie phiên khách; banner vàng ở `/portal`; nút "Thoát" → `POST /api/auth/logout` thấy còn cookie hub → `customer/auth/impersonate/stop` rồi về **`/hub/sellers`** (không còn cookie hub → về `NEXT_PUBLIC_ADMIN_URL` như trước).
+
+**BE mới (chỉ đọc):** `apps/api/src/modules/customer-portal/customer-order-admin.controller.ts` — `GET admin/customer-orders` (+`/counts`, `/stats`), `@Auth([Admin])` (SuperAdmin qua guard); prefix `admin/...` cố ý không chứa `/customer/` nên token khách bị `RolesGuard` chặn (đã kiểm: 403). Service: `buildDerivePipeline(customerId | null)` — null = không scope khách; `assembleCounts`/`countsPipelines` tách từ `getCounts`; `listOrdersAdmin` (+ `$lookup customers` → `customer{userSku,userEmail,fullName,tier}`), `getCountsAdmin`, `getStatsAdmin` (group theo `customerId`, top 10, `$facet` đếm seller). DTO `AdminCustomerStagingOrderZod`/`GetAdminCustomerOrdersZod`/`AdminCustomerOrderStatsZod` ở `customer-order.dto.ts`. Import enum trong file API phải từ `'shared'` (KHÔNG `@shared/enums` — alias nguồn không tồn tại sau build, API dev sập `Cannot find module`).
+
+Đo dev (07/09/2026): 125 seller có đơn, 38.095 đơn staging; `stats` ≈ 1,5 s (3 aggregate song song trên `customer_orders` + `$lookup orders`), list 20 dòng < 1 s.
 
 ## 8. Vận hành & hạ tầng (PR-D)
 

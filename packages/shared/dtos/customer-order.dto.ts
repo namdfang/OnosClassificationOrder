@@ -595,3 +595,63 @@ export type PublicOrderTrack = z.infer<typeof PublicOrderTrackZod>;
 
 export const GetPublicOrderTrackResZod = ResZod.extend({ data: PublicOrderTrackZod });
 export class GetPublicOrderTrackResDto extends createZodDto(extendApi(GetPublicOrderTrackResZod)) {}
+
+// ---------------------------------------------------------------------------
+// Khu quản trị trong Seller Portal (`/hub`, SellerPortal.md §9) — nhân viên
+// Admin/SuperAdmin đọc đơn staging của MỌI khách. Chỉ đọc; thao tác vẫn qua
+// mạo danh (xem với tư cách seller).
+// ---------------------------------------------------------------------------
+
+export const AdminCustomerStagingOrderZod = CustomerStagingOrderZod.extend({
+  customerId: IDZod,
+  /** Khách sở hữu đơn — `$lookup customers`, để hiện cột Seller. */
+  customer: z
+    .object({
+      userSku: z.string().optional(),
+      userEmail: z.string().optional(),
+      fullName: z.string().optional(),
+      tier: z.number().nullish(),
+    })
+    .optional(),
+});
+export type AdminCustomerStagingOrder = z.infer<typeof AdminCustomerStagingOrderZod>;
+
+export const GetAdminCustomerOrdersZod = GetCustomerStagingOrdersZod.extend({
+  /** Lọc theo 1 seller; bỏ trống = mọi seller. */
+  customerId: IDZod.optional(),
+});
+export class GetAdminCustomerOrdersDto extends createZodDto(extendApi(GetAdminCustomerOrdersZod)) {}
+
+export const GetAdminCustomerOrdersResZod = PageResZod.extend({ data: AdminCustomerStagingOrderZod.array() });
+export class GetAdminCustomerOrdersResDto extends createZodDto(extendApi(GetAdminCustomerOrdersResZod)) {}
+
+export const GetAdminCustomerOrderCountsZod = z.object({ customerId: IDZod.optional() });
+export class GetAdminCustomerOrderCountsDto extends createZodDto(extendApi(GetAdminCustomerOrderCountsZod)) {}
+
+export const AdminSellerStatZod = z.object({
+  customerId: IDZod,
+  userSku: z.string().optional(),
+  userEmail: z.string().optional(),
+  fullName: z.string().optional(),
+  tier: z.number().nullish(),
+  orders: z.number(),
+  pending: z.number(),
+  inProduction: z.number(),
+  held: z.number(),
+  lastOrderAt: z.coerce.date().optional(),
+});
+export type AdminSellerStat = z.infer<typeof AdminSellerStatZod>;
+
+export const AdminCustomerOrderStatsZod = z.object({
+  /** Đếm toàn hệ (cùng công thức `counts` của khách). */
+  counts: CustomerOrderCountsZod,
+  /** Số seller có ít nhất 1 đơn staging. */
+  sellers: z.number(),
+  /** Top seller theo số đơn. */
+  topSellers: AdminSellerStatZod.array(),
+  /** Đơn mới nhất toàn hệ. */
+  recent: AdminCustomerStagingOrderZod.array(),
+});
+export type AdminCustomerOrderStats = z.infer<typeof AdminCustomerOrderStatsZod>;
+export const GetAdminCustomerOrderStatsResZod = ResZod.extend({ data: AdminCustomerOrderStatsZod });
+export class GetAdminCustomerOrderStatsResDto extends createZodDto(extendApi(GetAdminCustomerOrderStatsResZod)) {}

@@ -48,3 +48,27 @@ export async function readLang(): Promise<'vi' | 'en'> {
   const jar = await cookies();
   return jar.get(LANG_COOKIE)?.value === 'vi' ? 'vi' : 'en';
 }
+
+// ── Khu quản trị `/hub` (nhân viên Admin/SuperAdmin) — phiên RIÊNG, cookie riêng ──
+export const HUB_TOKEN_COOKIE = 'onos_hub_token';
+export const HUB_EXP_COOKIE = 'onos_hub_exp';
+
+export async function setHubCookies({ accessToken, expiresIn, persist }: SessionCookieInput) {
+  const jar = await cookies();
+  const ttl = Math.max(60, Math.floor(expiresIn ?? 12 * 60 * 60));
+  const common = { path: '/', sameSite: 'lax' as const, secure: isSecureCookie() };
+  jar.set(HUB_TOKEN_COOKIE, accessToken, { ...common, httpOnly: true, ...(persist ? { maxAge: ttl } : {}) });
+  jar.set(HUB_EXP_COOKIE, String(Date.now() + ttl * 1000), { ...common, httpOnly: false, ...(persist ? { maxAge: ttl } : {}) });
+}
+
+export async function clearHubCookies() {
+  const jar = await cookies();
+  const common = { path: '/', sameSite: 'lax' as const, secure: isSecureCookie(), maxAge: 0 };
+  jar.set(HUB_TOKEN_COOKIE, '', { ...common, httpOnly: true });
+  jar.set(HUB_EXP_COOKIE, '', { ...common, httpOnly: false });
+}
+
+export async function readHubToken(): Promise<string | null> {
+  const jar = await cookies();
+  return jar.get(HUB_TOKEN_COOKIE)?.value || null;
+}

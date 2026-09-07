@@ -8,8 +8,10 @@ import { readJsonOrThrow } from "@/lib/read-json";
 function redirectToLogin() {
   if (typeof window === "undefined") return;
   // Avoid redirect loop: only redirect if not already on login page
-  if (window.location.pathname === "/login") return;
-  window.location.href = `/login?callbackUrl=${encodeURIComponent(window.location.pathname)}`;
+  const inHub = window.location.pathname === "/hub" || window.location.pathname.startsWith("/hub/");
+  const login = inHub ? "/hub/login" : "/login";
+  if (window.location.pathname === login) return;
+  window.location.href = `${login}?callbackUrl=${encodeURIComponent(window.location.pathname)}`;
 }
 
 /**

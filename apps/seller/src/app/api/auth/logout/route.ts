@@ -1,5 +1,5 @@
 import { NextResponse } from 'next/server';
-import { apiBase, clearSessionCookies, readToken } from '@/lib/server/api';
+import { apiBase, clearSessionCookies, readHubToken, readToken } from '@/lib/server/api';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
@@ -24,7 +24,8 @@ export async function POST() {
           headers: { Authorization: `Bearer ${token}` },
           cache: 'no-store',
         }).catch(() => undefined);
-        redirectTo = process.env.NEXT_PUBLIC_ADMIN_URL || '/login';
+        // Mạo danh bắt đầu từ khu `/hub` (cookie nhân viên còn) → về danh sách seller; từ app admin cũ → về đó.
+        redirectTo = (await readHubToken()) ? '/hub/sellers' : process.env.NEXT_PUBLIC_ADMIN_URL || '/login';
       }
     } catch {
       /* BE không trả lời → vẫn xóa cookie phía mình */
